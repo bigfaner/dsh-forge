@@ -49,6 +49,12 @@ domains: [direct-read, read-only, offline, telemetry, migration, orchestration, 
 **Context**: 安全边界划分：凭证生命周期完全归 dsh，产品零接触面。
 **Source**: feature/dsh-forge-p1-mvp BIZ-011（prd-spec §Security Requirements）
 
+### BIZ-product-011: 远程受限面安全基线（默认关闭·官方配对·受限暴露）
+
+**Rule**: 远程暴露面默认关闭（关闭态与既有单机基线完全一致——外部设备不可达任何产品页面）；用户显式开启后，仅经官方 dsh 远程机械（api-remotes 配对认证 + host-webserver 承载，零自建网络机械）的已配对设备可达**受限面**——任务/会话进度只读（forge:remote/progress，复用既有 forge 只读 rpc 口径）与审批动作转发（forge:remote/approval，官方 user-approval 单源，产品不自持审批状态）；完整工作台（会话对话/知识库/文档）永不暴露。
+**Context**: mobile-remote-approval 提案影响范围段修订——「仅本机回环、无远程暴露面」收敛为「默认关闭 + 官方配对 + 受限面」三段基线；关闭远程后已配对设备后续请求即被拒。通道常量 = contracts REMOTE_CHANNELS（host ipc allowlist 校验）。
+**Source**: proposal/mobile-remote-approval §影响范围（安全基线修订）+ §验收 2/3/6/7
+
 ### BIZ-product-006: 零代码新分支、无数据迁移
 
 **Rule**: 零代码新分支宪法——不迁移旧分支数据，新旧并行直至旧线自然废弃；分支不含旧工作台视图 / 投影层代码（白名单 = 壳层基建与可复用工具 + vendor fallback 与打包/CI 资产模式）。

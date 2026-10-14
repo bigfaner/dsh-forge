@@ -1193,6 +1193,54 @@ export interface DocsChannelResponses {
   openExternal: void
 }
 
+// ─────────────────────────── Interface 7（mobile-remote-approval）：远程受限面（forge:remote/*） ───────────────────────────
+
+/** forge:remote/progress 查询（复用既有只读口径：statusFilter 透传 listTasks；排序恒 active——远程受限视图首屏 = 活跃优先） */
+export interface RemoteProgressQuery {
+  projectId: string
+  /** 状态过滤 chips（空/缺省 = 全部） */
+  statusFilter?: TaskStatus[]
+}
+
+/** forge:remote/progress 返回体（同层直读——TaskCard[] + 七态计数，零本地副本） */
+export interface RemoteProgressSnapshot {
+  tasks: TaskCard[]
+  stats: TaskStats
+}
+
+/** 审批决策词汇（受限视图两动作；语义映射归官方 user-approval 面——allowed-once / rejected） */
+export const REMOTE_APPROVAL_DECISIONS = ['allow', 'reject'] as const
+
+export type RemoteApprovalDecision = (typeof REMOTE_APPROVAL_DECISIONS)[number]
+
+/** forge:remote/approval 入参（审批动作转发——requestId = 官方 ApprovalRequestId 原样透传，产品不自持审批状态） */
+export interface RemoteApprovalDecisionInput {
+  /** 官方审批请求 id（user-approval ApprovalRequestId） */
+  requestId: string
+  decision: RemoteApprovalDecision
+  /** 决策说明（可选，转审计 reason） */
+  reason?: string
+}
+
+/** forge:remote/approval 返回体（forwarded=false = 官方审批面缺席/未接线——fail-soft，remote.session 先例同型） */
+export interface RemoteApprovalForwardResult {
+  forwarded: boolean
+  /** forwarded=false 时携带缺席原因词（'unavailable'） */
+  reason?: 'unavailable'
+}
+
+/** forge:remote/* 请求负载（键 = REMOTE_CHANNELS 键） */
+export interface RemoteChannelRequests {
+  progress: RemoteProgressQuery
+  approval: RemoteApprovalDecisionInput
+}
+
+/** forge:remote/* 响应负载（键 = REMOTE_CHANNELS 键） */
+export interface RemoteChannelResponses {
+  progress: RemoteProgressSnapshot
+  approval: RemoteApprovalForwardResult
+}
+
 /** forge:projects/deriveTaskStoreDir 负载映射（P1 五法负载映射在 dto/rpc.ts；M2 扩族键单列——键 = PROJECTS_M2_CHANNELS 键） */
 export interface ProjectsM2ChannelRequests {
   deriveTaskStoreDir: DeriveTaskStoreDirRequest

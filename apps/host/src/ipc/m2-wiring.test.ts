@@ -1,6 +1,7 @@
 // 3.1 M2 接线收口 pin：四族 + derive 扩族注册（服务缺席 fail-soft 记 warn 不注册）+
 // 写推送事件广播（onEvent → webContents.send('forge:events/tasks-changed')——载荷只读）。
 // M3 3.8 扩池：proposals 四通道（Interface 4 drift 修订）+ forge:settings/* 族注册。
+// 1.1 扩池：forge:remote/* 两通道（progress/approval——随 forgeTasks 在场接线）。
 // main.ts 单行编排的装配逻辑全量锚定于此（~100 行纪律的配套测试面）。
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -10,6 +11,7 @@ import {
   FORGE_EVENT_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
   type TasksChangedEvent,
@@ -46,7 +48,7 @@ function fakeHost(services: Partial<DshHostServices>) {
 const stub = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as unknown as never
 
 describe('3.1 registerM2Channels · 通道族注册', () => {
-  it('七服务齐备：七族全量注册（tasks 八 + features 五 + proposals 四 + docs 两 + derive 一 + settings 两 + bugs 一 = 23 通道）', () => {
+  it('七服务齐备：七族全量注册（tasks 八 + remote 两 + features 五 + proposals 四 + docs 两 + derive 一 + settings 两 + bugs 一 = 25 通道）', () => {
     const { ipcMain, handlers } = fakeIpcMain()
     registerM2Channels(
       createForgeIpc(ipcMain),
@@ -65,6 +67,8 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
     expect([...handlers.keys()].sort()).toEqual(
       [
         ...Object.values(TASKS_CHANNELS),
+        // 1.1：远程受限面两通道随 forgeTasks 在场接线
+        ...Object.values(REMOTE_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
         // M3 3.8 扩池：proposals 族四通道全量接线（transition 双面 drift 修订 +
         // setMode UI 专属正门 + listDocs 扫描读——3.1 期 interim「仅 list」已拆除）
@@ -78,7 +82,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(25)
+    expect(handlers).toHaveLength(27)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {

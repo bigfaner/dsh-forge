@@ -10,6 +10,11 @@
 // 恒不上 RPC 的写动词收窄为 addTask/submitTask/createProposal（claimTask 退役并入 dispatchTask，
 // 仅存 core 服务 API）。
 
+// mobile-remote-approval（1.1）增补：forge:remote/* 新族两通道——远程只读进度（progress：
+// 复用既有 forge 只读 rpc 口径，直读 forgeTasks 列表/七态计数，零本地副本）+ 审批动作转发
+// （approval：产品不自持审批状态，官方 user-approval 面经桥转发）；allowlist 36 → 38。
+// 远程默认关闭、可达性由官方 api-remotes 配对认证承载（通道层只定义面，不定义暴露策略）。
+
 /** forge:projects/*（ProjectService 面——P1 五法不动；host 注册面 = projects-rpc.ts 五通道） */
 export const PROJECTS_CHANNELS = {
   register: 'forge:projects/register',
@@ -115,6 +120,20 @@ export const DOCS_CHANNELS = {
 export type DocsChannel = (typeof DOCS_CHANNELS)[keyof typeof DOCS_CHANNELS]
 
 /**
+ * forge:remote/*（mobile-remote-approval 1.1：远程受限面两通道）。
+ * progress = 远程只读进度读面——复用既有 forge 只读 rpc 口径（直读 forgeTasks
+ * listTasks/taskStats，零本地副本）；approval = 审批动作转发（产品不自持审批状态，
+ * 官方 user-approval 面经桥转发——转发器缺席 = fail-soft unavailable，remote.session
+ * 先例同型）。远程开关/配对交互全归官方 api-remotes 机械，本族零认证逻辑。
+ */
+export const REMOTE_CHANNELS = {
+  progress: 'forge:remote/progress',
+  approval: 'forge:remote/approval',
+} as const
+
+export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNELS]
+
+/**
  * invoke 通道全集平铺视图（allowlist 数据单源）。
  * 键约定：P1 三族 + projects 扩族 = 族方法名；M2 四族方法键跨族重名（list/transition/register），
  * 平铺视图内加族前缀键保全键唯一（族权威键面 = 各族 *CHANNELS 常量，dto 负载映射亦键于族常量）。
@@ -148,6 +167,8 @@ export const FORGE_CHANNELS = {
   bugsFileDiff: BUGS_CHANNELS.fileDiff,
   docsRead: DOCS_CHANNELS.read,
   docsOpenExternal: DOCS_CHANNELS.openExternal,
+  remoteProgress: REMOTE_CHANNELS.progress,
+  remoteApproval: REMOTE_CHANNELS.approval,
 } as const
 
 export type ForgeChannel =
@@ -161,6 +182,7 @@ export type ForgeChannel =
   | SettingsChannel
   | BugsChannel
   | DocsChannel
+  | RemoteChannel
 
 /** main 侧 IPC allowlist 唯一源（未知通道拒绝——electron-ipc-security 约定，继承自 1.4） */
 export const FORGE_CHANNEL_ALLOWLIST: readonly ForgeChannel[] = Object.values(FORGE_CHANNELS)

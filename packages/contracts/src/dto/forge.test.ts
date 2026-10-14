@@ -11,6 +11,7 @@ import {
   FORGE_EVENT_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
 } from '../channels.js'
@@ -43,6 +44,12 @@ import type {
   ProjectServiceM2,
   ProposalCard,
   ProposalCreatedPayload,
+  RemoteApprovalDecision,
+  RemoteApprovalDecisionInput,
+  RemoteApprovalForwardResult,
+  RemoteChannelRequests,
+  RemoteChannelResponses,
+  RemoteProgressSnapshot,
   ProposalDocRow,
   ProposalsChannelRequests,
   ProposalRow,
@@ -197,6 +204,14 @@ describe('AC2 通道负载映射键 = 通道族键（三处一体的 DTO 侧）'
     expectTypeOf<SettingsChannelRequests['get']>().toEqualTypeOf<void>()
     expectTypeOf<SettingsChannelResponses['get']>().toEqualTypeOf<ForgeSettings>()
     expectTypeOf<SettingsChannelResponses['set']>().toEqualTypeOf<void>()
+  })
+
+  it('mobile-remote-approval：remote 负载映射两键（progress/approval——键 = REMOTE_CHANNELS 族键；approval 转发缺席 = forwarded:false + reason unavailable）', () => {
+    expectTypeOf<Exclude<keyof RemoteChannelRequests, keyof typeof REMOTE_CHANNELS>>().toEqualTypeOf<never>()
+    expectTypeOf<Exclude<keyof typeof REMOTE_CHANNELS, keyof RemoteChannelRequests>>().toEqualTypeOf<never>()
+    expectTypeOf<RemoteChannelResponses['progress']>().toEqualTypeOf<RemoteProgressSnapshot>()
+    expectTypeOf<RemoteChannelResponses['approval']>().toEqualTypeOf<RemoteApprovalForwardResult>()
+    expectTypeOf<RemoteApprovalDecisionInput['decision']>().toEqualTypeOf<RemoteApprovalDecision>()
   })
 })
 

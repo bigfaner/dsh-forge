@@ -6,8 +6,9 @@
 // 写动词 add/claim/submit/createProposal/transitionProposal 恒不上 RPC（SC7 断言面）。
 // 1.1（M3）增补：Interface 4 扩池——proposals 三新键（transition 双面/setMode/listDocs）+
 // forge:settings/{get,set} 新族；allowlist 28 → 33；transitionProposal 移出 RPC 拒绝集（drift 修订）。
-// fix-bug 增补：forge:bugs/list 新族（Bug 子 tab 列表读面）；allowlist 33 → 34；
-// recordBug/resolveBug 写动词恒不上 RPC（拒绝集 pin 扩充）。
+// fix-bug 增补：forge:bugs/list 新族（Bug 子 tab 列表读面）；recordBug/resolveBug 写动词恒不上 RPC（拒绝集 pin 扩充）。
+// mobile-remote-approval（1.1）增补：forge:remote/* 新族两通道（progress 只读进度 / approval 审批转发）；
+// allowlist 36 → 38；远程受限面零写动词（审批走官方 user-approval 转发语义，不直改 forge 状态）。
 import { describe, expect, it } from 'vitest'
 import {
   BUGS_CHANNELS,
@@ -21,6 +22,7 @@ import {
   PROJECTS_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
+  REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
 } from './channels.js'
@@ -93,9 +95,18 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:bugs/* 单通道（fix-bug：Bug 子 tab 列表读面——recordBug/resolveBug 写径不上 RPC）', () => {
+  it('forge:bugs/* 三通道（fix-bug：list 列表读面 + commitFiles/fileDiff fixed 证据读面——recordBug/resolveBug 写径不上 RPC）', () => {
     expect(BUGS_CHANNELS).toEqual({
       list: 'forge:bugs/list',
+      commitFiles: 'forge:bugs/commitFiles',
+      fileDiff: 'forge:bugs/fileDiff',
+    })
+  })
+
+  it('forge:remote/* 两通道（mobile-remote-approval：progress 只读进度 / approval 审批转发——受限面零写动词族）', () => {
+    expect(REMOTE_CHANNELS).toEqual({
+      progress: 'forge:remote/progress',
+      approval: 'forge:remote/approval',
     })
   })
 
@@ -120,9 +131,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 九 invoke 族 34 通道全列、无重复（fix-bug：+bugs.list；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(34)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(34)
+  it('allowlist = 十一 invoke 族 38 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 两通道；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(38)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(38)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),
@@ -135,6 +146,7 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
         ...Object.values(SETTINGS_CHANNELS),
         ...Object.values(BUGS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
+        ...Object.values(REMOTE_CHANNELS),
       ].sort(),
     )
   })
@@ -168,6 +180,7 @@ describe('AC2 面分治 pin（写动词不上 RPC + 推送面不入 invoke）', 
       SETTINGS_CHANNELS,
       BUGS_CHANNELS,
       DOCS_CHANNELS,
+      REMOTE_CHANNELS,
     ]
     const writeVerbs = [
       'addTask',
