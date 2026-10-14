@@ -1142,6 +1142,17 @@ export interface ForgeMarketplaceSourceFace {
   }
   refresh(): Promise<void>
   install(): Promise<boolean>
+  /**
+   * 目录动作面（1.3——全走官方 dsh-plugin-manager 链，零产品 rpc）：list = listBundles
+   * 原始行集；install = installBundle(spec)；setEnabled/remove = setBundleEnabled/
+   * removeBundle。反射面缺席 = 方法收敛失败 Promise（views fail-soft 收敛不可用态）。
+   */
+  readonly catalog?: {
+    list(): Promise<unknown>
+    install(spec: string): Promise<boolean>
+    setEnabled(name: string, enabled: boolean): Promise<boolean>
+    remove(name: string): Promise<boolean>
+  }
 }
 
 /** listBundles 行集 → 相位（纯函数——views marketplacePhaseOf 结构同型镜像；行形状漂移/异常 = 'absent' fail-soft） */
@@ -1220,6 +1231,49 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
           },
         )
         .then((ok) => face.refresh().then(() => ok))
+    },
+    catalog: {
+      list: () => {
+        const listBundles = managerSvc()?.['listBundles'] as (() => Promise<unknown>) | undefined
+        if (typeof listBundles !== 'function') return Promise.reject(new Error('官方插件管理面缺席（宿主未装配 pluginManager）'))
+        return Promise.resolve().then(() => listBundles.call(managerSvc()))
+      },
+      install: (spec: string) => {
+        const installBundle = managerSvc()?.['installBundle'] as
+          | ((spec: string) => Promise<unknown>)
+          | undefined
+        if (typeof installBundle !== 'function') return Promise.resolve(false)
+        return Promise.resolve()
+          .then(() => installBundle.call(managerSvc(), spec))
+          .then(
+            () => true,
+            () => false,
+          )
+      },
+      setEnabled: (name: string, enabled: boolean) => {
+        const setBundleEnabled = managerSvc()?.['setBundleEnabled'] as
+          | ((name: string, enabled: boolean) => Promise<unknown>)
+          | undefined
+        if (typeof setBundleEnabled !== 'function') return Promise.resolve(false)
+        return Promise.resolve()
+          .then(() => setBundleEnabled.call(managerSvc(), name, enabled))
+          .then(
+            () => true,
+            () => false,
+          )
+      },
+      remove: (name: string) => {
+        const removeBundle = managerSvc()?.['removeBundle'] as
+          | ((name: string) => Promise<unknown>)
+          | undefined
+        if (typeof removeBundle !== 'function') return Promise.resolve(false)
+        return Promise.resolve()
+          .then(() => removeBundle.call(managerSvc(), name))
+          .then(
+            () => true,
+            () => false,
+          )
+      },
     },
   }
   return face

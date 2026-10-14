@@ -144,3 +144,61 @@
   font: var(--dsw-font-xxxs-strong-11);
   color: var(--dsw-alias-state-error-primary);
 }
+
+/* ── 插件市场目录面（dsh-plugin-marketplace 1.3——官方清单浏览 + 动作行） ── */
+.dswf-fs-mkt-cat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xxs-12-line-height);
+}
+
+.dswf-fs-mkt-cat-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xxs-12-line-height);
+}
+
+.dswf-fs-mkt-cat-group-title {
+  margin: 0;
+  font: var(--dsw-font-xxs-12-strong);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-fs-mkt-cat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dsw-font-xxs-12-line-height);
+  padding: var(--dsw-font-xxs-12-line-height);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-fill-secondary);
+}
+
+.dswf-fs-mkt-cat-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dswf-fs-mkt-cat-name {
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-fs-mkt-cat-ver {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-fs-mkt-cat-desc {
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dswf-fs-mkt-cat-actions {
+  display: flex;
+  flex: none;
+  gap: var(--dsw-font-xxs-12-line-height);
+}

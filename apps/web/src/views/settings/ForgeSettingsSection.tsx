@@ -32,7 +32,8 @@ import { RpcClientError } from '../../rpc/errors.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
 // dsh-plugin-marketplace 1.2：插件市场安装入口小节（可选注入面——缺席不渲染，
 // 初始装配零「插件市场」面 = 负样例缺席态）
-import { MarketplaceEntry, type ForgeMarketplaceSource } from '../marketplace/MarketplaceEntry.js'
+import { MarketplaceEntry, withCatalog, type ForgeMarketplaceSource } from '../marketplace/MarketplaceEntry.js'
+import { MarketplaceCatalog } from '../marketplace/MarketplaceCatalog.js'
 import './forge-settings.css'
 
 // ─────────────────────────── 展示常量（apps/web 层——持久域为自由字符串） ───────────────────────────
@@ -501,6 +502,7 @@ export function ForgeSettingsSectionBody({
   const showUnconfigured = ready && saved === undefined && !isWorkerDraftComplete(draft)
   const saveLabel = saving ? '保存中…' : savedFlash ? '已保存 ✓' : '保存'
   const savePhase = saving ? 'saving' : savedFlash ? 'saved' : 'idle'
+  const catalogSource = withCatalog(marketplace)
   return (
     <div className="dswf-fs" data-dswf-fs="">
       <div className="dswf-fs-title" data-dswf-fs-title="">
@@ -599,6 +601,10 @@ export function ForgeSettingsSectionBody({
         <section className="dswf-fs-part" data-dswf-fs-part="marketplace">
           <h4 className="dswf-fs-part-title">插件市场</h4>
           <MarketplaceEntry source={marketplace} />
+          {/* dsh-plugin-marketplace 1.3：目录功能面（浏览 + 安装/启停/移除——全走官方链）。
+              动作面缺席 = 不渲染（1.2 装配负样例不变）；清单不可达 = 分区内降级不可用态
+              （fail-soft——设置其余分区零影响）。 */}
+          {catalogSource !== undefined ? <MarketplaceCatalog source={catalogSource} /> : null}
         </section>
       ) : null}
     </div>

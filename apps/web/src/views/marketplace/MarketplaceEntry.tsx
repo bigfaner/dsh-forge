@@ -16,6 +16,23 @@ import {
 } from './marketplace-model.js'
 
 /**
+ * 目录动作面（dsh-plugin-marketplace 1.3——全走官方 dsh-plugin-manager 链，零产品 rpc）：
+ * list = listBundles 原始行集（浏览）；install = installBundle(spec)（官方链安装 + 宿主
+ * reconcile + reload）；setEnabled/remove = setBundleEnabled/removeBundle（启停/移除）。
+ * 可选注入：缺席 = 目录面不渲染（1.2 装配负样例不变）。
+ */
+export interface ForgeMarketplaceCatalogActions {
+  /** 官方清单原始行集（listBundles——窄镜像与分组在 views 纯模型） */
+  list(): Promise<unknown>
+  /** 安装清单内插件（官方链；true = 调用收敛未抛） */
+  install(spec: string): Promise<boolean>
+  /** 启停已安装插件（profile 层持久——宿主 reconcile + reload） */
+  setEnabled(name: string, enabled: boolean): Promise<boolean>
+  /** 移除已安装插件（removable 行限定） */
+  remove(name: string): Promise<boolean>
+}
+
+/**
  * 插件 inject face（client-plugin/plugin.ts buildMarketplaceSource 递达；逐位缺席 fail-soft
  * ——source 缺席 = 入口不渲染，宿主未装配官方 pluginManager 反射面 = 灰态缺席）。
  */
@@ -29,6 +46,8 @@ export interface ForgeMarketplaceSource {
   refresh(): Promise<void>
   /** 安装官方「插件市场」插件（官方链 install_bundle + 宿主 reconcile + reload；true = 已入启用态） */
   install(): Promise<boolean>
+  /** 目录动作面（1.3——缺席 = 目录面不渲染，仅存安装入口） */
+  readonly catalog?: ForgeMarketplaceCatalogActions
 }
 
 /** 安装钮标签三态（相位 → 文案） */
@@ -36,6 +55,22 @@ export function marketplaceActionLabel(phase: MarketplacePhase): string {
   if (phase === 'installing') return '安装中…'
   if (phase === 'enabled') return '已启用 ✓'
   return '安装'
+}
+
+/** 目录面入参契约（catalog 动作面非空收窄——dsh-plugin-marketplace 1.3） */
+export type ForgeMarketplaceSourceWithCatalog = ForgeMarketplaceSource & {
+  readonly catalog: ForgeMarketplaceCatalogActions
+}
+
+/**
+ * catalog 动作面收窄守卫（渲染装配用）：动作面在场 = 返回收窄入参（目录面可挂）；
+ * 缺席 = undefined（目录面不渲染——1.2 装配负样例不变）。TS 不因属性检查收窄父对象
+ * 赋值类型，收窄经此单点显式完成。
+ */
+export function withCatalog(
+  source: ForgeMarketplaceSource | undefined,
+): ForgeMarketplaceSourceWithCatalog | undefined {
+  return source?.catalog !== undefined ? (source as ForgeMarketplaceSourceWithCatalog) : undefined
 }
 
 /** 启用相位注记行（分区出现指引） */
