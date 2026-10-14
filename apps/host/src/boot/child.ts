@@ -32,7 +32,7 @@ import {
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf } from './manifest.js'
-import { PAIRING_TTL_MS, createPairingIssuer } from './pairing.js'
+import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -166,6 +166,9 @@ async function main(): Promise<void> {
   // 每 TTL 定时强推 pair 消息（run.ts 刷新 manifest——桌面 QR 倒计时到期重取即得新 token）。
   // 全卡绑定 × 局域网 IPv4 在场才启用；回环绑定 / 无 LAN = 缺席（UI 空态回退，不自造地址）。
   const issuer = createPairingIssuer()
+  // dsh-mobile-tunnel：PIN 层（官方 /pair/verify 同位扩展——隧道模式手机输入 6 位 PIN 换
+  // 会话；签发/校验/限速/TTL 全语义在 pairing.ts 纯逻辑面，此处只装配路由）。
+  const pinIssuer = createPinIssuer()
   const pairPort = ctx.webServer.port
   const pairGrant = issuer.current()
   let remotePairUrl: string | undefined
@@ -193,6 +196,42 @@ async function main(): Promise<void> {
           const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
           res.writeHead(302, { location: target })
           res.end()
+        },
+      })
+      // dsh-mobile-tunnel：/pair/verify（官方锚 :1199-1215/:1231-1234 同语义）——POST
+      // {pin}（JSON body；query ?pin= 兜底）→ PIN 正确 = 同 /pair 成功语义（pair-connected
+      // + 302 官方认证 URL）；错误/超时失效/限速锁定 = 403。限速状态机归 pinIssuer。
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/pair/verify',
+        handler: (req, res) => {
+          const chunks: Buffer[] = []
+          req.on('data', (chunk: Buffer) => chunks.push(chunk))
+          req.on('end', () => {
+            const authority =
+              typeof req.headers.host === 'string' && req.headers.host !== ''
+                ? req.headers.host
+                : `${lanIpv4}:${pairPort}`
+            let pin = new URL(req.url ?? '/', `http://${authority}`).searchParams.get('pin') ?? ''
+            if (pin === '') {
+              try {
+                const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+                const raw = (body as Record<string, unknown> | null)?.['pin']
+                if (typeof raw === 'string') pin = raw
+              } catch {
+                // 畸形 body → pin 保持空串（走 verify false 面）
+              }
+            }
+            if (!pinIssuer.verify(pin)) {
+              res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+              res.end('PIN 错误、已过期或尝试过于频繁——请在桌面端获取最新 PIN')
+              return
+            }
+            send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）
+            const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
+            res.writeHead(302, { location: target })
+            res.end()
+          })
         },
       })
       remotePairUrl = remotePairUrlOf(lanIpv4, pairPort, pairGrant.token)

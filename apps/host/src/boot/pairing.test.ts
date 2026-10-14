@@ -2,7 +2,17 @@
 // （DSH Desktop 0.10.0 app.asar out/main/index.js：PAIRING_TTL_MS=5min、token =
 // randomBytes(32) base64url、timingSafeEqual 恒时校验）。纯逻辑面：时钟注入替身驱动。
 import { describe, expect, it } from 'vitest'
-import { createPairingIssuer, PAIRING_TTL_MS } from './pairing.js'
+import {
+  createPairingIssuer,
+  createPinIssuer,
+  PAIRING_FACES,
+  PAIRING_TTL_MS,
+  PIN_LENGTH,
+  PIN_LOCKOUT_MS,
+  PIN_MAX_FAILURES,
+  PIN_RATE_WINDOW_MS,
+  PIN_TTL_MS,
+} from './pairing.js'
 
 describe('fix-6 配对令牌签发器（官方 /pair 协议对齐）', () => {
   it('常量：TTL = 整 5 分钟（300_000ms——官方 PAIRING_TTL_MS 同值，零抖动）', () => {
@@ -60,5 +70,112 @@ describe('fix-6 配对令牌签发器（官方 /pair 协议对齐）', () => {
   it('verify：从未签发（cold issuer）= false（不炸不抛）', () => {
     const issuer = createPairingIssuer(() => 0)
     expect(issuer.verify('A'.repeat(43))).toBe(false)
+  })
+})
+
+describe('dsh-mobile-tunnel PIN 签发器（官方 /pair/verify 对齐：6 位·TTL 5min·失败限速）', () => {
+  it('常量：PIN_TTL_MS = 整 5 分钟（单源 = PAIRING_TTL_MS，零抖动）', () => {
+    expect(PIN_TTL_MS).toBe(PAIRING_TTL_MS)
+    expect(PIN_TTL_MS).toBe(300_000)
+    expect(PIN_LENGTH).toBe(6)
+    expect(PIN_MAX_FAILURES).toBeGreaterThan(0)
+    expect(PIN_RATE_WINDOW_MS).toBeGreaterThan(0)
+    expect(PIN_LOCKOUT_MS).toBeGreaterThan(0)
+  })
+
+  it('常量：PAIRING_FACES = 隧道反代目标只含配对面（/pair + /pair/verify，单源）', () => {
+    expect(PAIRING_FACES).toEqual(['/pair', '/pair/verify'])
+  })
+
+  it('签发：6 位数字字符集（官方 6 位 PIN），expiresAt = now + PIN_TTL_MS；重复读 = 同一 PIN', () => {
+    let now = 1_000_000
+    const issuer = createPinIssuer(() => now)
+    const grant = issuer.current()
+    expect(grant.pin).toMatch(/^[0-9]{6}$/)
+    expect(grant.pin).toHaveLength(PIN_LENGTH)
+    expect(grant.expiresAt).toBe(now + PIN_TTL_MS)
+    expect(issuer.current().pin).toBe(grant.pin)
+  })
+
+  it('rotate() = 强制换签（新 PIN + 新到期时刻）', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    issuer.current()
+    now = 1
+    const rotated = issuer.rotate()
+    expect(rotated.pin).toMatch(/^[0-9]{6}$/)
+    expect(rotated.expiresAt).toBe(1 + PIN_TTL_MS)
+    expect(issuer.current().pin).toBe(rotated.pin)
+  })
+
+  it('校验：正确 PIN = true；错误 PIN = false（timingSafeEqual 恒时）；异长度/非数字输入 = false 不抛', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    const { pin } = issuer.current()
+    expect(issuer.verify(pin)).toBe(true)
+    expect(issuer.verify('000000'.replace(/0/g, pin === '000000' ? '1' : '0'))).toBe(false)
+    expect(issuer.verify('12345')).toBe(false)
+    expect(issuer.verify('1234567')).toBe(false)
+    expect(issuer.verify('')).toBe(false)
+    expect(issuer.verify('abcdef')).toBe(false)
+  })
+
+  it('TTL：超时 PIN 失效（verify = false）；current() 惰性重签新 PIN', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    const first = issuer.current()
+    now = first.expiresAt - 1
+    expect(issuer.verify(first.pin)).toBe(true)
+    now = first.expiresAt
+    expect(issuer.verify(first.pin)).toBe(false)
+    const second = issuer.current()
+    expect(second.expiresAt).toBe(now + PIN_TTL_MS)
+  })
+
+  it('限速：窗口内连续失败计满阈值 → 锁定窗内正确 PIN 也拒绝（拒绝一段时间）；锁定到期恢复', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    const { pin } = issuer.current()
+    for (let i = 0; i < PIN_MAX_FAILURES; i += 1) {
+      expect(issuer.verify('999999' === pin ? '000000' : '999999')).toBe(false)
+    }
+    expect(issuer.verify(pin)).toBe(false) // 锁定窗内正确 PIN 也拒绝
+    now = PIN_LOCKOUT_MS - 1
+    expect(issuer.verify(pin)).toBe(false)
+    now = PIN_LOCKOUT_MS
+    const fresh = issuer.current() // 锁定到期即解禁（此刻旧 PIN 恰同刻 TTL 到期——惰性重签）
+    expect(issuer.verify(fresh.pin)).toBe(true)
+  })
+
+  it('限速：失败滑出窗口后计数衰减（稀疏失败不触发锁定）', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    const wrong = '000000'
+    const { pin } = issuer.current()
+    const w = wrong === pin ? '111111' : wrong
+    for (let i = 0; i < PIN_MAX_FAILURES - 1; i += 1) {
+      expect(issuer.verify(w)).toBe(false)
+      now += PIN_RATE_WINDOW_MS - 1 // 每次失败间隔近窗口期——旧失败陆续滑出
+    }
+    expect(issuer.verify(w)).toBe(false) // 计满前最后一次仍在窗口内→不锁（计数 ≤ 阈值-1 衰减后）
+    now += 1
+    expect(issuer.verify(pin)).toBe(true) // 未锁定：正确 PIN 通过
+  })
+
+  it('校验成功重置失败计数（通过后再新一轮失败才可能触发限速）', () => {
+    let now = 0
+    const issuer = createPinIssuer(() => now)
+    const { pin } = issuer.current()
+    const wrong = pin === '000000' ? '111111' : '000000'
+    for (let i = 0; i < PIN_MAX_FAILURES - 1; i += 1) expect(issuer.verify(wrong)).toBe(false)
+    expect(issuer.verify(pin)).toBe(true) // 成功清零
+    for (let i = 0; i < PIN_MAX_FAILURES - 1; i += 1) expect(issuer.verify(wrong)).toBe(false)
+    now += PIN_RATE_WINDOW_MS - 1
+    expect(issuer.verify(pin)).toBe(true) // 未达阈值不锁
+  })
+
+  it('cold issuer：从未签发 verify = false 不抛', () => {
+    const issuer = createPinIssuer(() => 0)
+    expect(issuer.verify('123456')).toBe(false)
   })
 })

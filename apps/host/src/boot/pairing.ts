@@ -3,10 +3,84 @@
 // token = randomBytes(32) base64url（:1504）、timingSafeEqual 恒时校验（:2054）、
 // reload 轮换（:1313-1315）。npm 零可复用组件（路线 B 裁决 2026-10-14）——产品胶水实现
 // 逐位对照官方语义。纯模块（时钟注入可测），child.ts 消费。
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 
 /** 官方 PAIRING_TTL_MS 同值：配对令牌 TTL = 整 5 分钟（零抖动）。 */
 export const PAIRING_TTL_MS = 5 * 60 * 1000
+
+// dsh-mobile-tunnel PIN 层（官方 /pair/verify 锚 :1199-1215/:1231-1234 同语义：6 位数字
+// PIN、PIN_TTL_MS 5min、失败限速）。仅 PIN——长效密码属提案排除项。
+/** 官方 6 位 PIN 位数（数字字符集 0-9）。 */
+export const PIN_LENGTH = 6
+/** PIN TTL 常量单源：与配对令牌同刻度 = PAIRING_TTL_MS（官方 PIN_TTL_MS 同值 5min）。 */
+export const PIN_TTL_MS = PAIRING_TTL_MS
+/** 限速：滑窗（PIN_RATE_WINDOW_MS）内失败计数达阈值 → 锁定 PIN_LOCKOUT_MS。 */
+export const PIN_MAX_FAILURES = 5
+export const PIN_RATE_WINDOW_MS = 60 * 1000
+export const PIN_LOCKOUT_MS = 5 * 60 * 1000
+/** 隧道反代目标单源：host webserver 经隧道只暴露配对面（其余路径恒不暴露公网）。 */
+export const PAIRING_FACES: readonly string[] = ['/pair', '/pair/verify']
+
+/** 一次 PIN 签发：6 位数字 PIN + 到期时刻（epoch ms）。 */
+export interface PinGrant {
+  readonly pin: string
+  readonly expiresAt: number
+}
+
+export interface PinIssuer {
+  /** 当前 PIN（缺席或已到期 = 惰性重签新 PIN——超时自动换签）。 */
+  current(): PinGrant
+  /** 强制换签。 */
+  rotate(): PinGrant
+  /**
+   * 恒时校验：未锁定、当前 PIN 在场未到期且逐位相等才 true。成功清空失败计数；
+   * 失败计入滑窗，窗内计满阈值即锁定（锁定窗内正确 PIN 也拒绝）。
+   */
+  verify(pin: string): boolean
+}
+
+/**
+ * 6 位 PIN 签发器（时钟注入可测）。pin = randomInt(0,10) 逐位均匀取样（无模偏差）。
+ */
+export function createPinIssuer(now: () => number = Date.now): PinIssuer {
+  let grant: PinGrant | undefined
+  let failures: number[] = []
+  let lockUntil = 0
+  const issue = (): PinGrant => {
+    let pin = ''
+    for (let i = 0; i < PIN_LENGTH; i += 1) pin += String(randomInt(0, 10))
+    grant = { pin, expiresAt: now() + PIN_TTL_MS }
+    return grant
+  }
+  return {
+    current(): PinGrant {
+      const at = now()
+      if (grant === undefined || grant.expiresAt <= at) return issue()
+      return grant
+    },
+    rotate: issue,
+    verify(pin: string): boolean {
+      const at = now()
+      const cur = grant
+      if (lockUntil > at) return false
+      if (cur === undefined || cur.expiresAt <= at) return false
+      const a = Buffer.from(typeof pin === 'string' ? pin : '', 'utf8')
+      const b = Buffer.from(cur.pin, 'utf8')
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        failures = failures.filter((t) => t > at - PIN_RATE_WINDOW_MS)
+        failures.push(at)
+        if (failures.length >= PIN_MAX_FAILURES) {
+          lockUntil = at + PIN_LOCKOUT_MS
+          failures = []
+        }
+        return false
+      }
+      failures = []
+      lockUntil = 0
+      return true
+    },
+  }
+}
 
 /** 一次配对签发：token（base64url 43 字符）+ 到期时刻（epoch ms——桌面倒计时单源）。 */
 export interface PairingGrant {
