@@ -65,8 +65,8 @@ export function parseListTasksArgs(args: unknown): ListTasksToolArgs {
 }
 
 /**
- * ListTasks 返回体的注册面输出 schema（TaskCard[] 宽松镜像——prerequisites 保持 core
- * 三字段摘要原样；localId 数组投影只落渲染层 + 失败支）。
+ * ListTasks 返回体的注册面输出 schema（TaskCard[] 投影镜像——prerequisites 为渲染层
+ * 投影后的 localId 字符串数组（projectCards 单源）；localId 投影与卡对象层宽容 + 失败支）。
  */
 export const LIST_TASKS_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
@@ -87,16 +87,8 @@ export const LIST_TASKS_OUTPUT_SCHEMA = withFailureVariant({
           estimatedTime: { type: 'string' },
           prerequisites: {
             type: 'array',
-            description: 'Prerequisite summaries (natural key + current status).',
-            items: {
-              type: 'object',
-              properties: {
-                slug: { type: 'string' },
-                localId: { type: 'string' },
-                taskStatus: { type: 'string' },
-              },
-              required: ['slug', 'localId', 'taskStatus'],
-            },
+            description: 'Prerequisite local ids (same-container natural keys — render-layer projection of core TaskPrerequisiteSummary).',
+            items: { type: 'string' },
           },
           sessionCount: { type: 'number' },
           sourceTask: { type: 'object', description: 'Fix-chain source task ref (absent for non-fix tasks).' },

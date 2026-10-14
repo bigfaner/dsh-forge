@@ -10,6 +10,7 @@ import type { ForgeToolDefinition, ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
 import { optionalString, requireArgsObject, requiredEnum, requiredString } from './args.js'
 import { callToolFace, formatFailure, formatOk, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
+import { BUG_CARD_SUCCESS_SCHEMA } from './record-bug.js'
 import { requireProjectId, requireSessionId, sessionContextOf } from './session.js'
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
@@ -48,21 +49,8 @@ export function parseResolveBugArgs(args: unknown): ResolveBugToolArgs {
   return out
 }
 
-/** resolveBug 返回（BugCard）的注册面输出 schema（+ 失败支） */
-const RESOLVE_BUG_OUTPUT_SCHEMA = withFailureVariant({
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    bugId: { type: 'string' },
-    bugStatus: { type: 'string', description: "'fixed' | 'unresolved' — the chosen terminal state." },
-    commitHash: { type: 'string', description: 'fixed evidence (agent-captured atomic commit hash).' },
-    worktree: { type: 'string', description: 'fixed evidence (hash-anchored worktree reverse lookup; absent when unresolved).' },
-    branch: { type: 'string', description: 'fixed evidence (hash-anchored branch reverse lookup; absent when unresolved).' },
-    unresolvedReason: { type: 'string', description: 'unresolved backfill cause (absent when fixed).' },
-    fixer: { type: 'string', description: 'Server-resolved git identity (user.name, fallback user.email).' },
-  },
-  required: ['bugId', 'bugStatus'],
-})
+/** resolveBug 返回（BugCard）的注册面输出 schema（recordBug 共用全卡镜像 + 失败支） */
+const RESOLVE_BUG_OUTPUT_SCHEMA = withFailureVariant(BUG_CARD_SUCCESS_SCHEMA)
 
 /** BugCard → 模型可见文本（formatOk 双友好：✓ + 终态/证据键值行） */
 function renderResolveBugResult(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {

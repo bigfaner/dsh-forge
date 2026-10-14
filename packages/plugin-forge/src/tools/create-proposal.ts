@@ -67,6 +67,7 @@ export const PROPOSAL_ROW_OUTPUT_SCHEMA = withFailureVariant({
     title: { type: 'string' },
     proposalStatus: { type: 'string' },
     relPath: { type: 'string' },
+    author: { type: 'string', description: 'Author identity (row full-shape mirror of ProposalRow).' },
     decidedAt: { type: 'string' },
     mode: { type: 'string', description: 'expedition or blitz (absent = NULL placeholder).' },
     supersededBy: { type: 'string', description: 'Superseding proposal id (superseded lineage).' },

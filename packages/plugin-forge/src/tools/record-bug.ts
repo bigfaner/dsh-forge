@@ -61,17 +61,40 @@ export function parseRecordBugArgs(args: unknown): RecordBugToolArgs {
   return out
 }
 
-/** registerBug 返回（BugCard）的注册面输出 schema（+ 失败支） */
-const RECORD_BUG_OUTPUT_SCHEMA = withFailureVariant({
+/**
+ * BugCard 成功支 schema（recordBug/resolveBug 共用——全字段镜像 contracts BugCard，
+ * 值 = core 返回的全卡；顶层 additionalProperties:false 白名单必须覆盖全部 19 键）。
+ */
+export const BUG_CARD_SUCCESS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
     bugId: { type: 'string', description: 'uuid proxy key (resolveBug 回填引用锚).' },
-    bugStatus: { type: 'string', description: "'open' — registration always lands an open record." },
+    summary: { type: 'string', description: 'One-line summary (max 50 chars).' },
+    bugDesc: { type: 'string', description: 'Bug: full description of the defect.' },
+    triggerDesc: { type: 'string', description: 'Trigger: reproduction steps / input.' },
+    expected: { type: 'string', description: 'Expected: correct behavior.' },
+    actual: { type: 'string', description: 'Actual: observed behavior.' },
+    suspected: { type: 'string', description: 'Suspected location (file:line) — repair lead for open records.' },
+    errorType: { type: 'string', description: 'Free-form error type label (stats dimension).' },
+    bugStatus: { type: 'string', description: "'open' (recordBug) | 'fixed' | 'unresolved' (resolveBug)." },
+    commitHash: { type: 'string', description: 'fixed evidence (atomic commit hash anchor).' },
+    worktree: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
+    branch: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
+    unresolvedReason: { type: 'string', description: 'unresolved backfill cause (HARD-GATE stop).' },
+    sourceTaskId: { type: 'string', description: 'coding-fix delegating source task (absent on standalone paths).' },
+    reportSessionId: { type: 'string', description: 'Registering (executing) session.' },
+    fixSessionId: { type: 'string', description: 'Fixing session (written on fixed backfill).' },
     reporter: { type: 'string', description: 'Server-resolved git identity (user.name, fallback user.email).' },
+    fixer: { type: 'string', description: 'Server-resolved fixer git identity (fixed backfill).' },
+    createdAt: { type: 'string', description: 'Registration time (ISO-8601).' },
+    updatedAt: { type: 'string', description: 'Backfill time (ISO-8601; equals createdAt until backfilled).' },
   },
-  required: ['bugId', 'bugStatus', 'reporter'],
-})
+  required: ['bugId', 'summary', 'bugDesc', 'triggerDesc', 'expected', 'actual', 'bugStatus', 'reporter', 'createdAt', 'updatedAt'],
+}
+
+/** registerBug 返回（BugCard）的注册面输出 schema（+ 失败支） */
+const RECORD_BUG_OUTPUT_SCHEMA = withFailureVariant(BUG_CARD_SUCCESS_SCHEMA)
 
 /** BugCard → 模型可见文本（formatOk 双友好：✓ + bugId 键值行） */
 function renderRecordBugResult(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {

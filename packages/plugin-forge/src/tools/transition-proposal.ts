@@ -42,6 +42,7 @@ const TRANSITION_PROPOSAL_OUTPUT_SCHEMA = withFailureVariant({
     title: { type: 'string' },
     proposalStatus: { type: 'string', description: 'Status after the transition.' },
     relPath: { type: 'string' },
+    author: { type: 'string', description: 'Author identity (row full-shape mirror of ProposalRow).' },
     decidedAt: { type: 'string', description: 'Set when the transition is a verdict (accepted/rejected).' },
     mode: { type: 'string' },
     supersededBy: { type: 'string' },

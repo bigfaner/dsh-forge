@@ -190,7 +190,15 @@ const SUBMIT_TASK_OUTPUT_SCHEMA = withFailureVariant({
     status: { type: 'string', description: 'Task status after the submit (completed or blocked).' },
     restored: {
       type: 'array',
-      items: { type: 'string' },
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          localId: { type: 'string' },
+        },
+        required: ['slug', 'localId'],
+        description: 'TaskRef natural key.',
+      },
       description: 'slug/localId natural keys auto-restored by the recovery hook (source tasks whose fix completed).',
     },
   },
