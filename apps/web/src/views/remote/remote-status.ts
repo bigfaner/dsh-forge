@@ -37,28 +37,20 @@ export function remotePhaseOf(input: {
   return input.devicesConnected === true ? 'connected' : 'listening'
 }
 
-/**
- * 局域网展示地址派生（纯函数）：监听中（全卡绑定实况）→ `http://<hostname>:<port>`
- * （宿主机名 = 当前页面 hostname——本 GUI 即宿主 webserver 承载，同一监听面；端口 =
- * boot manifest.url 读数）；非监听/缺 port = undefined（面板地址行回退提示语）。
- */
-export function remoteLanAddressOf(
-  input: { exposureActive: boolean; port?: number },
-  hostname: string,
-): string | undefined {
-  if (!input.exposureActive || input.port === undefined) return undefined
-  return `http://${hostname}:${input.port}`
-}
-
-/** boot manifest 读数切片（dshForge.getBootManifest 消费面——url 端口 + remoteHost） */
+/** boot manifest 读数切片（dshForge.getBootManifest 消费面——remoteHost + remotePairUrl） */
 export interface BootManifestRead {
   readonly url?: string
   readonly remoteHost?: string
+  /** fix-5：官方配对/连接地址（宿主 authenticatedUrl 构造——LAN IPv4 + 端口 + Host 令牌；
+   *  缺席 = 旧 child / 无局域网 IPv4 降级，面板回退提示——不自造地址） */
+  readonly remotePairUrl?: string
 }
 
 /**
  * 产品配置意图 + boot manifest 实况 → 快照（纯映射——插件 remote-face 消费）。
  * 配置读数缺席（undefined——读面失败/畸形）= fail-soft off 快照，不虚报不炸装配。
+ * fix-5 地址缝：真宿主载体为自定 scheme（location.hostname 非可达地址）——lanAddress 只认
+ * manifest.remotePairUrl（官方配对地址单源），不再由页面 location 自造拼接。
  */
 export function remoteSnapshotOf(
   enabled: boolean | undefined,
@@ -68,15 +60,6 @@ export function remoteSnapshotOf(
   const exposureActive = manifest?.remoteHost === '0.0.0.0'
   const phase = remotePhaseOf({ enabled, exposureActive })
   if (phase !== 'listening') return { phase }
-  let port: number | undefined
-  try {
-    const parsed = manifest?.url !== undefined ? new URL(manifest.url) : undefined
-    const numeric = parsed !== undefined ? Number(parsed.port) : NaN
-    port = Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
-  } catch {
-    port = undefined
-  }
-  const loc = (globalThis as { location?: { hostname?: string } }).location
-  const hostname = typeof loc?.hostname === 'string' ? loc.hostname : 'localhost'
-  return { phase, lanAddress: remoteLanAddressOf({ exposureActive, port }, hostname) }
+  const pairUrl = manifest?.remotePairUrl
+  return { phase, lanAddress: typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined }
 }

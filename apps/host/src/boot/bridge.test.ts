@@ -259,6 +259,31 @@ describe('asReadyMessage（ready 守卫）', () => {
     expect(asReadyMessage({ ...base, tools: ['ok', 42] })?.tools).toBeUndefined() // 畸形降级
     expect(asReadyMessage({ ...base, tools: 'addTask' })?.tools).toBeUndefined()
   })
+
+  it('fix-5：remotePairUrl 可选透传（官方配对地址单源）；缺席（旧 child）/非串/空串 = 降级不阻 ready', () => {
+    const base = {
+      type: 'ready',
+      url: 'http://127.0.0.1:1/#t',
+      injections: [],
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+        forgeSettings: true,
+        forgeBugs: true,
+        approval: true,
+      },
+    } as const
+    expect(asReadyMessage({ ...base, remotePairUrl: 'http://192.168.1.7:1/?token=t' })?.remotePairUrl).toBe(
+      'http://192.168.1.7:1/?token=t',
+    )
+    expect(asReadyMessage(base)?.remotePairUrl).toBeUndefined()
+    expect(asReadyMessage({ ...base, remotePairUrl: '' })?.remotePairUrl).toBeUndefined()
+    expect(asReadyMessage({ ...base, remotePairUrl: 42 })?.remotePairUrl).toBeUndefined()
+  })
 })
 
 // ── 3.1 桥事件信封（G1-09 pin：信封形状 + channel 常量） ──

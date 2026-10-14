@@ -2,7 +2,7 @@
 // 双源，pending = 待重启生效缝）+ 局域网地址派生 + 快照映射（状态单源纪律：模型只做
 // 「产品配置 + boot manifest 读数 → 相位」纯映射）。
 import { describe, expect, it } from 'vitest'
-import { remoteLanAddressOf, remotePhaseOf, remoteSnapshotOf } from './remote-status.js'
+import { remotePhaseOf, remoteSnapshotOf } from './remote-status.js'
 
 describe('remotePhaseOf 相位派生（fix-3 重启生效形态）', () => {
   it('配置关 × 未暴露 = off（默认形制；历史残留 devices 读数不抬相位）', () => {
@@ -30,27 +30,26 @@ describe('remotePhaseOf 相位派生（fix-3 重启生效形态）', () => {
   })
 })
 
-describe('remoteLanAddressOf 地址派生', () => {
-  it('监听实况 → http://<当前主机名>:<port>', () => {
-    expect(remoteLanAddressOf({ exposureActive: true, port: 8787 }, '192.168.1.7')).toBe('http://192.168.1.7:8787')
-  })
-
-  it('非监听/缺 port = undefined（面板地址行回退提示语）', () => {
-    expect(remoteLanAddressOf({ exposureActive: false, port: 8787 }, '192.168.1.7')).toBeUndefined()
-    expect(remoteLanAddressOf({ exposureActive: true }, '192.168.1.7')).toBeUndefined()
-  })
-})
-
 describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () => {
   it('配置缺席（undefined）= fail-soft off 快照（读面失败/畸形不虚报不炸装配）', () => {
     expect(remoteSnapshotOf(undefined, { url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' })).toEqual({ phase: 'off' })
     expect(remoteSnapshotOf(undefined, undefined)).toEqual({ phase: 'off' })
   })
 
-  it('配置开 × remoteHost 0.0.0.0 = listening + 局域网地址（manifest.url 端口 + 页面 hostname）', () => {
-    const snapshot = remoteSnapshotOf(true, { url: 'http://127.0.0.1:19400/#token', remoteHost: '0.0.0.0' })
+  it('fix-5：配置开 × remoteHost 0.0.0.0 × remotePairUrl 在场 = listening + lanAddress = 官方配对地址单源（不再自造 location 拼接）', () => {
+    const snapshot = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/#token',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/?token=v1.x',
+    })
     expect(snapshot.phase).toBe('listening')
-    expect(snapshot.lanAddress).toContain(':19400')
+    expect(snapshot.lanAddress).toBe('http://192.168.1.7:19400/?token=v1.x')
+  })
+
+  it('fix-5：remotePairUrl 缺席（旧 child/无局域网 IPv4 降级）= listening 但地址缺席（面板回退提示——不自造地址）', () => {
+    const snapshot = remoteSnapshotOf(true, { url: 'http://127.0.0.1:19400/', remoteHost: '0.0.0.0' })
+    expect(snapshot.phase).toBe('listening')
+    expect(snapshot.lanAddress).toBeUndefined()
   })
 
   it('配置开 × 回环实况 = pending（待重启生效——开关后未重启的实机态）', () => {
@@ -63,7 +62,7 @@ describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () =
     expect(remoteSnapshotOf(false, { url: 'http://127.0.0.1:1/', remoteHost: '127.0.0.1' })).toEqual({ phase: 'off' })
   })
 
-  it('manifest.url 畸形/缺端口 = listening 但地址缺席（面板回退提示——地址行不炸）', () => {
+  it('manifest.url 畸形 = 相位判读不受阻（remoteHost 单源；地址只认 remotePairUrl）', () => {
     const snapshot = remoteSnapshotOf(true, { url: 'not a url', remoteHost: '0.0.0.0' })
     expect(snapshot.phase).toBe('listening')
     expect(snapshot.lanAddress).toBeUndefined()

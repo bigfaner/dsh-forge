@@ -1049,9 +1049,6 @@ function registerSettingsSection(
           // m3.1 D25：模型目录装载器（remote.session.modelCatalog 惰性反射——缺席/失败 =
           // undefined，组件面静态目录回退）；settings get/set 仍 preload RPC 单门自足
           loadModelCatalog: buildModelCatalogLoader(ctx),
-          // dsh-plugin-marketplace 1.2：插件市场安装入口反射源（remote.pluginManager——
-          // 两段式启用：缺席 = 安装入口；安装后官方件自注册「插件市场」分区）
-          marketplace: buildMarketplaceSource(ctx),
         }),
       },
       views.ForgeSettingsSection,

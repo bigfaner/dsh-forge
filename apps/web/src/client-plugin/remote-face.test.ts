@@ -14,7 +14,7 @@ afterEach(() => {
 
 function fakeBridge(overrides: {
   readonly settings?: unknown
-  readonly manifest?: { url?: string; remoteHost?: string }
+  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string }
   readonly invokeFail?: boolean
   readonly written?: { channel: string; payload: unknown }[]
 }): ForgeClientCtx {
@@ -40,16 +40,32 @@ describe('sidebar.footer.action 槽常量', () => {
 })
 
 describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
-  it('配置开 × 全卡绑定实况 → listening 快照（manifest.url 端口入局域网地址）', async () => {
+  it('配置开 × 全卡绑定实况 → listening 快照（fix-5：lanAddress = manifest.remotePairUrl 官方配对地址单源）', async () => {
     const remote = buildRemoteStatusSource(
       fakeBridge({
         settings: { remoteApproval: { enabled: true } },
-        manifest: { url: 'http://127.0.0.1:19400/#token', remoteHost: '0.0.0.0' },
+        manifest: {
+          url: 'http://127.0.0.1:19400/#token',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/?token=v1.x',
+        },
       }),
     )
     await remote.refresh()
     expect(remote.source.getSnapshot().phase).toBe('listening')
-    expect(remote.source.getSnapshot().lanAddress).toContain(':19400')
+    expect(remote.source.getSnapshot().lanAddress).toBe('http://192.168.1.7:19400/?token=v1.x')
+  })
+
+  it('fix-5：remotePairUrl 缺席（真宿主自造 hostname 读数缝降级）= listening 但 lanAddress 缺席（不自造地址）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: { url: 'http://127.0.0.1:19400/', remoteHost: '0.0.0.0' },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().phase).toBe('listening')
+    expect(remote.source.getSnapshot().lanAddress).toBeUndefined()
   })
 
   it('配置开 × 回环实况 → pending（待重启生效——不伪装 listening）', async () => {

@@ -95,6 +95,9 @@ export interface BridgeReadyMessage {
   /** fix-3：webserver 实际绑定 host（装配期 remoteApproval.enabled 读数的结果面——UI
    *  pending/listening 判读单源；可选：旧 child 缺席 = undefined，不阻 ready 守卫） */
   readonly remoteHost?: string
+  /** fix-5：官方配对/连接地址（authenticatedUrl 构造——LAN IPv4 + 端口 + Host 令牌；
+   *  可选：回环绑定/无局域网 IPv4/旧 child = 缺席，不阻 ready 守卫） */
+  readonly remotePairUrl?: string
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -395,6 +398,9 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     : undefined
   // fix-3 绑定 host：可选字段——在场须为非空 string（畸形视为缺席降级，同 tools 口径）
   const remoteHost = typeof m.remoteHost === 'string' && m.remoteHost !== '' ? m.remoteHost : undefined
+  // fix-5 官方配对地址：可选字段——同口径（非空 string 才透传）
+  const remotePairUrl =
+    typeof m.remotePairUrl === 'string' && m.remotePairUrl !== '' ? m.remotePairUrl : undefined
   return {
     type: 'ready',
     url: m.url,
@@ -402,6 +408,7 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     services: bits as Record<BridgeServiceName, boolean>,
     ...(tools !== undefined ? { tools } : {}),
     ...(remoteHost !== undefined ? { remoteHost } : {}),
+    ...(remotePairUrl !== undefined ? { remotePairUrl } : {}),
   }
 }
 

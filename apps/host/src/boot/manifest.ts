@@ -9,10 +9,39 @@ export interface BootManifest {
   /** fix-3：webserver 实际绑定 host（'127.0.0.1' | '0.0.0.0'——UI 远程 pending/listening
    *  判读单源；可选：旧 child / 读取降级 = 缺席） */
   remoteHost?: string
+  /** fix-5：官方配对/连接地址（ctx.connection.authenticatedUrl 构造——LAN IPv4 + 端口 +
+   *  Host 令牌；真宿主载体自定 scheme，页面 location.hostname 非可达地址——UI QR/地址行
+   *  单源消费；可选：回环绑定 / 无局域网 IPv4 / 旧 child = 缺席） */
+  remotePairUrl?: string
+}
+
+/** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
+export interface NetInterfaceRead {
+  readonly family: unknown
+  readonly address: string
+  readonly internal: boolean
+}
+
+/**
+ * fix-5 官方配对地址宿主选址（纯函数）：首个非回环 IPv4（排除 link-local 169.254.*）；
+ * 无 = undefined（remotePairUrl 缺席——UI 空态回退，不自造地址）。
+ */
+export function lanIpv4Of(interfaces: readonly (readonly NetInterfaceRead[] | undefined)[]): string | undefined {
+  for (const list of interfaces) {
+    for (const net of list ?? []) {
+      if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('169.254.')) return net.address
+    }
+  }
+  return undefined
 }
 
 /** 组装 boot manifest（纯函数：校验 url/injections 基本形状后冻结返回） */
-export function buildBootManifest(url: string, injections: readonly unknown[], remoteHost?: string): BootManifest {
+export function buildBootManifest(
+  url: string,
+  injections: readonly unknown[],
+  remoteHost?: string,
+  remotePairUrl?: string,
+): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
   }
@@ -23,5 +52,6 @@ export function buildBootManifest(url: string, injections: readonly unknown[], r
     url,
     injections: Object.freeze([...injections]),
     ...(typeof remoteHost === 'string' && remoteHost !== '' ? { remoteHost } : {}),
+    ...(typeof remotePairUrl === 'string' && remotePairUrl !== '' ? { remotePairUrl } : {}),
   })
 }

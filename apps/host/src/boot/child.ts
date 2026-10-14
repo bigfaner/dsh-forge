@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
+import { networkInterfaces } from 'node:os'
 import {
   approvalWaterfallAnswer,
   createApprovalRelay,
@@ -30,6 +31,7 @@ import {
 } from './bridge.js'
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
+import { lanIpv4Of } from './manifest.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -150,6 +152,14 @@ async function main(): Promise<void> {
   // fix-3：实际绑定 host（快照面单源——UI pending/listening 判读 = 产品配置意图 × 本值；
   // 经 ready 消息 → boot manifest 透传 renderer）
   const remoteHost = ctx.webServer.host
+  // fix-5 官方配对地址：真宿主载体为自定 scheme（页面 location.hostname 非可达地址）——
+  // 全卡绑定实况下由宿主构造 authenticatedUrl（LAN IPv4 + 端口 + Host 令牌）作 UI QR/
+  // 地址行单源；回环绑定 / 无局域网 IPv4 = 缺席（UI 空态回退，不自造地址）。
+  const lanIpv4 = lanIpv4Of(Object.values(networkInterfaces()))
+  const remotePairUrl =
+    remoteHost === '0.0.0.0' && lanIpv4 !== undefined
+      ? ctx.connection.authenticatedUrl(`http://${lanIpv4}:${ctx.webServer.port}`)
+      : undefined
   const injections = ctx.webServer.collectIndexInjections()
   const servicesFace = ctx as unknown as ServiceGetFace
   // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
@@ -195,6 +205,7 @@ async function main(): Promise<void> {
     url,
     injections,
     remoteHost, // fix-3：实际绑定 host（装配期读 remoteApproval.enabled 的结果——UI 判读单源）
+    ...(remotePairUrl !== undefined ? { remotePairUrl } : {}), // fix-5：官方配对地址（全卡绑定 × 局域网 IPv4 在场才透传）
     services: {
       forgeProjects: services.forgeProjects !== undefined,
       forgeKnowledge: services.forgeKnowledge !== undefined,
