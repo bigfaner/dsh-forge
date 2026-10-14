@@ -7,9 +7,7 @@ description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 
 
 纯叙事提取——不做代码侦察。每条用户工作流成为一份 Journey 文档，描述 happy path +边界用例 + 不变式。
 
-<HARD-GATE>
-本技能只生成 Journey 叙事文档。契约、测试脚本与代码属下游技能 `gen-contracts` 与 `gen-test-scripts`。
-</HARD-GATE>
+<HARD-GATE> 本技能只生成 Journey 叙事文档。契约、测试脚本与代码属下游技能 `gen-contracts` 与 `gen-test-scripts`。 </HARD-GATE>
 
 ## State-Layer Discipline (boundary)
 

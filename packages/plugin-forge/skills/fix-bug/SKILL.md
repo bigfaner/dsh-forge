@@ -70,9 +70,7 @@ Suspected: <疑似位置 file:line 或模块>
 - 先跑基线测试套件，确认全绿（无既有失败掩盖 bug）。
 - 在基线之上重现 bug，把确切复现步骤记录下来。
 
-<HARD-GATE>
-无法复现 → **STOP**。不得为未确认的 bug 写测试或改代码。向用户报告排查发现，并调用 `resolveBug`（outcome=unresolved，附 unresolved_reason——写明停机原因，通常即 Step 1 排查结论）。流程到此为止。
-</HARD-GATE>
+<HARD-GATE> 无法复现 → **STOP**。不得为未确认的 bug 写测试或改代码。向用户报告排查发现，并调用 `resolveBug`（outcome=unresolved，附 unresolved_reason——写明停机原因，通常即 Step 1 排查结论）。流程到此为止。 </HARD-GATE>
 
 ---
 
@@ -84,9 +82,7 @@ Suspected: <疑似位置 file:line 或模块>
 
 运行单元测试——**修复前必须失败**：
 
-<HARD-RULE>
-修复前新测试就通过 = 测试没有捕获 bug。修改测试直到它因正确的原因失败。
-</HARD-RULE>
+<HARD-RULE> 修复前新测试就通过 = 测试没有捕获 bug。修改测试直到它因正确的原因失败。 </HARD-RULE>
 
 **表面级测试**：仅当 bug 在 API / CLI / UI / mobile / TUI 表面可观察时补加——放入对应 surface 的旅程测试目录，同样修复前必须失败。纯内部缺陷不需要。
 
@@ -122,9 +118,7 @@ Suspected: <疑似位置 file:line 或模块>
 
 Step 3 写了表面级测试的，一并运行。验证清单：新测试全过；既有测试零回归；构建成功（如适用）。
 
-<HARD-GATE>
-任何既有测试新失败 → 不得进入提交。先排查是否修复引入了回归。
-</HARD-GATE>
+<HARD-GATE> 任何既有测试新失败 → 不得进入提交。先排查是否修复引入了回归。 </HARD-GATE>
 
 ---
 

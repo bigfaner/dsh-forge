@@ -6,7 +6,7 @@ user-invocable: false
 
 # 结算任务（Submit Task）
 
-只结算你亲手执行的那个任务，以容器 `slug` + `local_id` 定位。只结算一次，且如实结算：`submitTask` 是 agent 唯一能离开 `in_progress` 的出口，而记录是一份审计工件。工具负责执行机制——各路径要求哪些字段、gate 布尔量的全有或全无、AC 证据门、gate 任务的 summary——所以本技能讲的是工具无法替你做的判断：那些字段里*填什么*。
+只结算你亲手执行的那个任务，以容器 `slug` + `local_id` 定位。只结算一次，且如实结算：`submitTask` 是 agent 唯一能离开 `in_progress` 的出口，而记录是一份审计工件。本技能讲的是工具无法替你做的判断：那些字段里*填什么*。
 
 ## 成功路径——组织记录
 
@@ -21,8 +21,8 @@ user-invocable: false
 
 带 `acceptance_criteria` 创建的任务，只有当 `gate_test: true` 站在一次叫得出名字的真实测试运行之上时才过证据门。每条标准以三元组提交到配对数组 `ac_criteria` / `ac_met` / `ac_evidence`：
 
-- `ac_criteria`——标准字符串，与任务定义同序同措辞（工具会用定义侧交叉核对镜像）；
-- `ac_met`——每条标准一个布尔（带任何 `false` 的 `success` 会被拒绝）；
+- `ac_criteria`——标准字符串，与任务定义同序同措辞；
+- `ac_met`——每条标准一个布尔；
 - `ac_evidence`——每条标准一行证据：覆盖用例/命令 + 其结果（"AC-2 由 `dispatch-task.test.ts` 的 describe 块 'pool verdict' 覆盖——通过"）。证据输出过长时，按工件归档约定归档，叙述里只引用子目录路径。某条 AC 没有覆盖测试即不构成 success——要么补测试，要么以 blocked 结算并点名未覆盖的标准。
 
 ### 结算清单
@@ -41,7 +41,7 @@ user-invocable: false
 
 无论哪种：只暂存**显式文件路径**——绝不 `git add -A` / `git add .` / `git add --all`（大范围暂存会把无关改动卷进提交）；只提交与本任务相关的文件，绝不提交无关的既有改动。
 
-**git 缺失**——若 `git` 不可用（命令不存在、不是仓库），不伪造 `commit_hash`：以 reason `git unavailable: <detail>` 结算 `result=blocked`，交给 fix 链或用户处理。状态层本身从不依赖 git。
+**git 缺失**——若 `git` 不可用（命令不存在、不是仓库），不伪造 `commit_hash`：以 reason `git unavailable: <detail>` 结算 `result=blocked`，交给 fix 链或用户处理。
 
 ## Blocked 路径
 

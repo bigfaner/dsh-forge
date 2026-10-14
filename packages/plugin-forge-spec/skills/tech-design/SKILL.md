@@ -7,9 +7,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 在设计期消解技术不确定性，避免实现期返工。PRD 刻意不做技术选型——所有技术决策从这里开始，输入条件是 PRD 的非功能约束与项目现状。
 
-<HARD-GATE>
-设计获批之前不得写任何实现代码——本技能的产出只有设计文档。
-</HARD-GATE>
+<HARD-GATE> 设计获批之前不得写任何实现代码——本技能的产出只有设计文档。 </HARD-GATE>
 
 ## 前置条件
 
@@ -20,7 +18,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 状态层纪律
 
-设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工重注册——见 forge:spec 系统提示段；注册推进相位至 `design`）。路径按 `<slug>` feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →再 `upsertFeatureDoc` 注册。
+设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工重注册——见 forge:spec 系统提示段）。路径按 `<slug>` feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →再 `upsertFeatureDoc` 注册。
 
 | 工件 | 注册方式 |
 |---|---|
@@ -83,7 +81,7 @@ brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此
    - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
      + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。
 5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；手册按表面：`api-handbook.md`（api）、`cli-handbook.md`（cli/tui）、`page-map.md`（web）、`screen-map.md`（mobile）。表面探测：读仓库自身的表面配置（`docs/conventions/testing/` 的测试约定、既有任务 surface 字段、UI 函数平台）——不许猜；交互语境问，任务语境依简报。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
-6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的知识沉降动作，认为有必要时向用户提议，不擅自执行。
+6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的长期归档动作，认为有必要时向用户提议，不擅自执行。
 
 ## 方法论速查
 

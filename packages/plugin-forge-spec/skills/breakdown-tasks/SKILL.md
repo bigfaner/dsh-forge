@@ -7,9 +7,7 @@ description: 把定稿的技术设计拆解为可执行任务图（经 addTask�
 
 把技术设计拆解为可执行任务——每个任务 1-4 小时、依赖清晰、验收标准可客观核验——全程只经 `addTask` 工具作用于 feature 容器。任务活在状态层。
 
-<HARD-RULE>
-不得创建任务文件、`index.json`、阶段门文件或任何逐任务 markdown——那是旧的文件形态。每条任务、每条依赖、每个 gate 都是经 `addTask` 创建的状态层行。任务一旦存在，feature 相位自动推进。
-</HARD-RULE>
+<HARD-RULE> 不得创建任务文件、`index.json`、阶段门文件或任何逐任务 markdown——那是旧的文件形态。每条任务、每条依赖、每个 gate 都是经 `addTask` 创建的状态层行。 </HARD-RULE>
 
 ## 目标导向拆解原则
 
@@ -27,7 +25,7 @@ description: 把定稿的技术设计拆解为可执行任务图（经 addTask�
 | `prd/prd-spec.md`（注册为 `prd-spec`） | 先跑 `write-prd` |
 | `design/tech-design.md`（注册为 `tech-design`） | 先跑 `tech-design` |
 
-此处不调 `registerFeature`——本技能作用于已存在的 feature 容器（远征链在提案被接受时注册它；两类显式链接边界——mode 设定后的 NULL-mode 提案、已接受的升级——由持有提案裁决的会话处理，不在拆解期处理）。
+此处不调 `registerFeature`——本技能作用于已存在的 feature 容器（两类显式链接边界——mode 设定后的 NULL-mode 提案、已接受的升级——由持有提案裁决的会话处理，不在拆解期处理）。
 
 ## 任务创建协议（addTask）
 
@@ -43,7 +41,7 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 
 - `title` = 动词先行的业务措辞；`task_desc` = 工作描述。
 - `acceptance_criteria` = 可客观核验的清单项（提交时 AC 证据门逐项对照此清单——每项都必须可核验）。
-- `depends_on` = 同容器前置任务的自然键 localId（仅同 feature 内的边；环被服务端拒收）。
+- `depends_on` = 同容器前置任务的自然键 localId（仅同 feature 内的边）。
 - 正文不写跨容器等待：`task_desc` / `acceptance_criteria` 绝不说"等另一个容器的任务落地"——管线看不见、守不住、也恢复不了这种等待（它退化为 worker 级阻塞加人工裁决）。若后续工作需要另一容器的更早交付物（同文件、分层产出），停下来交用户裁决：合并进同一容器，或排序派发（前一个落定后才注册依赖容器）。绝不创建等待型任务。
 - 改共享接口/模型/契约（含增量式接口变更）时 `breaking: true`。
 - `vars` 以 KEY=VALUE 条目承载结构化上下文（`SOURCE_FILES`、`TEST_SCRIPT`…）。

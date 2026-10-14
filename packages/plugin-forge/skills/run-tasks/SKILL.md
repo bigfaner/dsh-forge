@@ -15,7 +15,6 @@ description: Forge 派发循环——后台派发直到 no-task，经 job_output
 
 1. 先一次性解析容器类别并在每次调用时携带：slug 是 feature 目录则为 `feature`，是 proposal slug 则为 `proposal`（对容器任一任务 queryTask 会报告容器类别）。类别解析不出就问用户——绝不猜。
 2. 循环的每一次 dispatchTask 调用都传 `source_kind` + `source_slug`（两者同传或同缺）。范围化认领：只选该容器就绪任务；会话重入也只恢复同容器的 in_progress 任务——本会话此前全池认领的外容器任务不会被范围化循环恢复。
-3. 没有独立的归因参数：无任务就绪时，no-task 事件自动归因到 `source_slug`（`logs/<slug>.jsonl`）；缺 source 对则回退 `logs/_pool.jsonl`。
 
 不携带 source 对时，dispatchTask 全池认领（程序/RPC 调用方，以及确实未绑定容器的循环），池快照也是全池口径。携带 source 对时，快照四项计数只覆盖该容器——上述裁决只针对该容器，外来工作不出现在数字里。范围化循环拿到 `no-task` 且容器快照全部落定，即该容器完成，即使池内他处仍有待办；报告为该容器已收尾，而非全池完成。
 
@@ -33,9 +32,9 @@ description: Forge 派发循环——后台派发直到 no-task，经 job_output
 
 ### 1. `dispatched` · 后台回执
 
-调用立即返回——其中没有结算：回执行（`▸ dispatched <slug>/<localId> — job <id>`）、常驻收取行（`collect the settlement when the worker settles: job_output <id>`）与池快照。记下 jobId 并再次调用 `dispatchTask`。结算本体（自然键、类型、mode 血统、摘要、如有提交哈希）稍后送达——完成通知告诉你 worker 已落定，抽干的 `job_output <id>` 读取携带该块。
+调用立即返回——其中没有结算：回执行（`▸ dispatched <slug>/<localId> — job <id>`）、常驻收取行（`collect the settlement when the worker settles: job_output <id>`）与池快照。记下 jobId 并再次调用 `dispatchTask`。结算本体（自然键、类型、mode、摘要、如有提交哈希）稍后送达——完成通知告诉你 worker 已落定，抽干的 `job_output <id>` 读取携带该块。
 
-回执以 `▸ re-entered dispatched <slug>/<localId> — job <id>` 开头即重复生成绊线：被认领任务对本会话已是 `in_progress`，本轮触发时上一笔派发仍未落定——一个任务上并行两个 worker 正是此警示针对的失败形态。按铁律 2，不要再为该任务调用 `dispatchTask`——等在途 job 的结算（完成通知 / `job_output`）并从那里恢复派发；回执自带的指引行说的也是同一件事。节奏良好的循环不会见到此回执：它只在上轮同任务 job 仍存活时又派发了一轮才出现。
+回执以 `▸ re-entered dispatched <slug>/<localId> — job <id>` 开头即重复生成警示：被认领任务对本会话已是 `in_progress`，本轮触发时上一笔派发仍未落定——一个任务上并行两个 worker 正是此警示针对的失败形态。按铁律 2，不要再为该任务调用 `dispatchTask`——等在途 job 的结算（完成通知 / `job_output`）并从那里恢复派发；回执自带的指引行说的也是同一件事。节奏良好的循环不会见到此回执：它只在上轮同任务 job 仍存活时又派发了一轮才出现。
 
 ### 2. `spawned` · 受阻
 
@@ -55,7 +54,7 @@ worker 以某原因落定为 blocked；若生成了后续 fix 任务会一并列
 
 ### 4. `halted` — 会话粘滞的生成守卫
 
-连续三次 worker 生成失败即粘住本会话：下一次 `dispatchTask` 入口立即返回 `halted`。失败在 worker 的 job 内部落定，守卫按结算顺序计数——一笔抽干的成功即清零连败，job 杀除永不计数。守卫无自解锁——重置方式是**新派发会话**（冷启动清零计数器）。把原因报告用户并停止；建议经派发入口重入，它会在容器的模式下开启新会话。不要试图从本会话绕过。
+连续三次 worker 生成失败即粘住本会话：下一次 `dispatchTask` 入口立即返回 `halted`。守卫无自解锁——重置方式是**新派发会话**。把原因报告用户并停止；建议经派发入口重入，它会在容器的模式下开启新会话。不要试图从本会话绕过。
 
 ### 生成失败（`✗ ERR_SPAWN_FAILED`）
 
@@ -63,7 +62,7 @@ worker 以某原因落定为 blocked；若生成了后续 fix 任务会一并列
 
 ## 模式错配守卫（可见，绝不阻断）
 
-结算携带容器的 mode 血统（`expedition` / `blitz`）。若被派发容器的 mode 与本会话 preset 不符（如远征会话派发突击 proposal 的任务），该轮打印一行可见提示——例如：
+结算携带容器的 mode（`expedition` / `blitz`）。若被派发容器的 mode 与本会话 preset 不符（如远征会话派发突击 proposal 的任务），该轮打印一行可见提示——例如：
 
 > 模式错配：容器 `<slug>` 是 `blitz`，本会话运行 `expedition` preset——
 > 继续执行、不予阻断。平台在首轮后锁定 preset，开启与容器模式对齐的会话

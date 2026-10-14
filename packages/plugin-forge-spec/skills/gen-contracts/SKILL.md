@@ -7,9 +7,7 @@ description: 从 Journey 文档与代码侦察生成 Contract 规格——六维
 
 每个 Journey Step 得到一份 Contract：六维度声明配**语义描述符**（表达业务意图的自然语言——regex 与框架断言推迟到 `gen-test-scripts`）。存在设计手册时，Contract frontmatter 携带**技术锚点**（endpoint / command / page / screen），把设计意图桥接到测试代码。
 
-<HARD-GATE>
-本技能只写 `testing/<journey>/contracts/`（feature 目录下——存储布局见 forge-pipeline 系统提示段「文档位置」）。不写测试脚本、不执行、不碰其他路径。
-</HARD-GATE>
+<HARD-GATE> 本技能只写 `testing/<journey>/contracts/`（feature 目录下——存储布局见 forge-pipeline 系统提示段「文档位置」）。不写测试脚本、不执行、不碰其他路径。 </HARD-GATE>
 
 ## 前置条件
 

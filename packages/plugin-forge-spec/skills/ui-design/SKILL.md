@@ -7,9 +7,7 @@ description: 从 PRD 的 ui-functions 文档出发产出 UI 设计规格与 HTML
 
 定义界面"长什么样、如何表现"，与 PRD 的"做什么"相分离。
 
-<HARD-GATE>
-不得编写实现代码（HTML 原型是唯一例外）。本技能只产出设计规格文档与原型文件。
-</HARD-GATE>
+<HARD-GATE> 不得编写实现代码（HTML 原型是唯一例外）。本技能只产出设计规格文档与原型文件。 </HARD-GATE>
 
 ## State-Layer Discipline (boundary)
 
