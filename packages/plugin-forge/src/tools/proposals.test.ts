@@ -53,36 +53,15 @@ function depsWithCapture() {
 }
 
 describe('createProposal', () => {
-  it('parse：slug/title 必填；status/mode 词表收窄；rel_path 可选', () => {
+  it('parse：slug/title 必填；status 词表收窄；rel_path 可选；mode 不在参数面（传入即忽略）', () => {
     expect(parseCreateProposalArgs({ slug: 'idea', title: 'T' })).toEqual({ slug: 'idea', title: 'T' })
     expect(() => parseCreateProposalArgs({ slug: 'idea', title: 'T', status: 'approved' })).toThrow(
       /status must be one of/,
     )
-    expect(() => parseCreateProposalArgs({ slug: 'idea', title: 'T', mode: 'epic' })).toThrow(/mode must be one of/)
+    expect(parseCreateProposalArgs({ slug: 'idea', title: 'T', mode: 'blitz' })).toEqual({ slug: 'idea', title: 'T' })
     expect(parseCreateProposalArgs({ slug: 'idea', title: 'T', rel_path: 'proposals/idea/proposal.md' })).toMatchObject({
       rel_path: 'proposals/idea/proposal.md',
     })
-  })
-
-  it('mode 透传（M3 溯源——显式参优先）：expedition/blitz 两态映射', async () => {
-    const { deps, created } = depsWithCapture()
-    const tool = createCreateProposalTool(deps)
-    await tool.execute({ slug: 'idea', title: 'T', mode: 'blitz' }, EXEC)
-    await tool.execute(
-      { slug: 'idea2', title: 'T2', mode: 'expedition', rel_path: 'proposals/idea2/proposal.md', status: 'under-review' },
-      EXEC,
-    )
-    expect(created).toEqual([
-      { projectId: 'p-1', slug: 'idea', title: 'T', mode: 'blitz' },
-      {
-        projectId: 'p-1',
-        slug: 'idea2',
-        title: 'T2',
-        mode: 'expedition',
-        relPath: 'proposals/idea2/proposal.md',
-        status: 'under-review',
-      },
-    ])
   })
 
   it('mode 缺省 → 按会话当前预设自动填充（出生头——未切换会话的回退源）', async () => {
@@ -112,11 +91,11 @@ describe('createProposal', () => {
     expect(created[0]?.mode).toBe('blitz')
   })
 
-  it('显式 mode 优先于会话预设（跨容器提案——override 仍可达）', async () => {
+  it('工具面传入 mode 被忽略（参数面已移除——溯源一律取会话当前预设）', async () => {
     const { deps, created } = depsWithCapture()
     const tool = createCreateProposalTool(deps)
     await tool.execute({ slug: 'x', title: 'T', mode: 'expedition' }, execWithPreset('blitz'))
-    expect(created[0]?.mode).toBe('expedition')
+    expect(created[0]?.mode).toBe('blitz')
   })
 
   it('预设缺席或词表外值（自定义预设）→ 不填充（NULL 占位——成链门按 NULL 边界）', async () => {

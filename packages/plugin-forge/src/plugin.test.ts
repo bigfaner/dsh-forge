@@ -160,8 +160,8 @@ describe('注册面集合 pin（十一 tool：M3 九员 + recordBug/resolveBug �
     expect(addTask?.parameters.properties).toHaveProperty('source_kind')
     expect(addTask?.parameters.properties).toHaveProperty('source_slug')
     expect(addTask?.parameters.required).toEqual(['source_kind', 'source_slug', 'title', 'type'])
-    // createProposal mode 透传 / transitionProposal superseded_by 透传
-    expect(byName.get('createProposal')?.parameters.properties).toHaveProperty('mode')
+    // createProposal mode 预设自动填充（参数面不收 mode——所处容器即溯源）/ transitionProposal superseded_by 透传
+    expect(byName.get('createProposal')?.parameters.properties).not.toHaveProperty('mode')
     expect(byName.get('transitionProposal')?.parameters.properties).toHaveProperty('superseded_by')
     // 任务定位两显式参口径
     expect(byName.get('submitTask')?.parameters.required).toEqual(['slug', 'local_id', 'result'])

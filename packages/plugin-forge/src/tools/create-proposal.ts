@@ -1,10 +1,10 @@
 // createProposal tool 定义（定位：业务——M3 终态六动词之一；写动词 tool 专属
 // ——不上 RPC，Interface 4 面 SC7 断言）。参数 snake_case；status 缺省 draft
-//（core 侧 DEFAULT 同值）；mode = M3 模式溯源（远征/突击——显式参优先；
-// 缺省时按会话**当前**预设自动填充：'agent-preset/selected' 事件回放 > 出生头
-//（sessionContextOf 投影同径——出生头在切换后过期），命中 MODES 词表即取
-//（brainstorm/quick-tasks 技能不再手工透传——所处容器即溯源）；预设缺席或
-// 词表外值 = 不填充，NULL 占位，成链门按 NULL 边界处理——tech-design Interface 1）。
+//（core 侧 DEFAULT 同值）；mode = M3 模式溯源（远征/突击——工具面不收显式
+// mode 参，一律按会话**当前**预设自动填充：'agent-preset/selected' 事件回放
+// > 出生头（sessionContextOf 投影同径——出生头在切换后过期），命中 MODES
+// 词表即取（所处容器即溯源）；预设缺席或词表外值 = 不填充，NULL 占位，
+// 成链门按 NULL 边界处理——tech-design Interface 1）。
 // 返回 = contracts ProposalRow 透传。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + 键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话 + 违规清单逐行——format.ts 单源）。
@@ -25,14 +25,12 @@ export interface CreateProposalToolArgs {
   /** proposal.md 相对 forge_dir；缺省 = 未挂文档 */
   readonly rel_path?: string
   readonly status?: ProposalStatus
-  /** 模式溯源（expedition = 远征全管线 / blitz = 突击直挂；显式参优先，缺省按会话预设填充） */
-  readonly mode?: Mode
 }
 
 /** 参数防御性收窄 */
 export function parseCreateProposalArgs(args: unknown): CreateProposalToolArgs {
   const a = requireArgsObject(args, TOOL)
-  const out: { slug: string; title: string; rel_path?: string; status?: ProposalStatus; mode?: Mode } = {
+  const out: { slug: string; title: string; rel_path?: string; status?: ProposalStatus } = {
     slug: requiredString(a, 'slug', TOOL),
     title: requiredString(a, 'title', TOOL),
   }
@@ -40,8 +38,6 @@ export function parseCreateProposalArgs(args: unknown): CreateProposalToolArgs {
   if (relPath !== undefined) out.rel_path = relPath
   const status = optionalEnum(a, 'status', PROPOSAL_STATUSES, TOOL)
   if (status !== undefined) out.status = status
-  const mode = optionalEnum(a, 'mode', MODES, TOOL)
-  if (mode !== undefined) out.mode = mode
   return out
 }
 
@@ -99,7 +95,7 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
   return {
     name: TOOL,
     description:
-      'Register a proposal row in the forge pipeline (identity and name are separate: the slug can be renamed later, links use proposalId). rel_path points at the proposal document relative to the workspace docs root. mode records the lineage (expedition = full pipeline via PRD/design/breakdown, blitz = direct-attached tasks once accepted). When omitted, mode is auto-filled from the session\'s current agent preset (expedition/blitz session container; selected-event replay over the birth header); pass it explicitly only to override the session context. Verdicts (accept/reject) happen through transitionProposal only when the user decides.',
+      'Register a proposal row in the forge pipeline (identity and name are separate: the slug can be renamed later, links use proposalId). rel_path points at the proposal document relative to the workspace docs root. mode records the lineage (expedition = full pipeline via PRD/design/breakdown, blitz = direct-attached tasks once accepted) and is always auto-filled from the session\'s current agent preset (selected-event replay over the birth header; no preset context = undecided placeholder). Verdicts (accept/reject) happen through transitionProposal only when the user decides.',
     parameters: {
       type: 'object',
       properties: {
@@ -107,7 +103,6 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
         title: { type: 'string', description: 'Proposal title.' },
         rel_path: { type: 'string', description: "Proposal document path relative to the workspace docs root, forward slashes (e.g. 'proposals/<slug>/proposal.md')." },
         status: { type: 'string', description: `Initial status, one of: ${PROPOSAL_STATUSES.join(', ')} (default draft).` },
-        mode: { type: 'string', description: `Lineage mode, one of: ${MODES.join(', ')} (omit to inherit the session's current agent preset; no preset context = undecided placeholder).` },
       },
       required: ['slug', 'title'],
     },
@@ -123,8 +118,8 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
       return callToolFace(async () => {
         const parsed = parseCreateProposalArgs(args)
         const projectId = requireProjectId(deps.resolveProjectId, session)
-        // mode 溯源优先级：显式参 > 会话当前预设（selected 事件回放 > 出生头，命中 MODES 词表）> NULL 占位
-        const mode = parsed.mode ?? presetModeOf(session.agentPreset)
+        // mode 溯源：会话当前预设（selected 事件回放 > 出生头，命中 MODES 词表）> NULL 占位（无显式参——所处容器即溯源）
+        const mode = presetModeOf(session.agentPreset)
         const input: CreateProposalInput = {
           projectId,
           slug: parsed.slug,
