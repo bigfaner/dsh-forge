@@ -98,6 +98,7 @@
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere; /* 长 token（路径/哈希）防溢出，正常文本不折行 */
+  white-space: pre-line; /* 保留生成侧换行——fix-bug 字段内的步骤列表/分列原样呈现 */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
