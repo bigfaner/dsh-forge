@@ -223,10 +223,12 @@ describe('AC2 ensureOpen 惰性链（openDatabase 参数化 → 版本门 → �
     store.dispose()
   })
 
-  it('版本门（独立版本线）：库内 version=2 → ERR_WORKSPACE_DB_UNAVAILABLE（cause=UnsupportedSchemaVersionError）', () => {
+  it('版本门（独立版本线）：库内 version 超出上限 → ERR_WORKSPACE_DB_UNAVAILABLE（cause=UnsupportedSchemaVersionError）', () => {
     const ws = wsDir()
     const db = openWorkspaceDb(join(ws, 'forge.db'))
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (2, '2099-01-01T00:00:00.000Z')`).run()
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, '2099-01-01T00:00:00.000Z')`).run(
+      FORGE_DB_SCHEMA_VERSION + 1,
+    )
     db.close()
 
     const store = createWorkspaceStore({ resolveDir: () => ws })
@@ -319,8 +321,8 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (update)'); END`)
   })
 })
 
-describe('AC3 库文件缺席 → 新建 v1 + 发现面扫描协作者挂点（1.3 接线）', () => {
-  it('缺席补建：新建 v1 + onFirstCreate 恰好一次（projectId + 句柄）；句柄缓存后不再触发', () => {
+describe('AC3 库文件缺席 → 新建全版本序列 + 发现面扫描协作者挂点（1.3 接线）', () => {
+  it('缺席补建：新建全版本（v1…FORGE_DB_SCHEMA_VERSION）+ onFirstCreate 恰好一次（projectId + 句柄）；句柄缓存后不再触发', () => {
     const ws = wsDir()
     const hook = vi.fn()
     const store = createWorkspaceStore({ resolveDir: () => ws, onFirstCreate: hook })
@@ -328,7 +330,9 @@ describe('AC3 库文件缺席 → 新建 v1 + 发现面扫描协作者挂点（1
     const db = store.ensureOpen('p1')
     expect(hook).toHaveBeenCalledTimes(1)
     expect(hook).toHaveBeenCalledWith('p1', db)
-    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(
+      FORGE_DB_SCHEMA_VERSION,
+    )
 
     store.ensureOpen('p1')
     expect(hook).toHaveBeenCalledTimes(1)

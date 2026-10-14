@@ -308,6 +308,11 @@ export function BugDialog({ bug, onClose, onOpenSession, sessionTitleOf, project
             {bug.unresolvedReason}
           </FormRow>
         ) : null}
+        {bug.bugStatus === 'fixed' && bug.fixApproach !== undefined ? (
+          <FormRow label="修复方案" data="fix-approach">
+            {bug.fixApproach}
+          </FormRow>
+        ) : null}
         <div className="dswf-ov-bdialog-row" data-dswf-ov-bdialog-people="">
           <span className="dswf-ov-bdialog-label">发现</span>
           <span className="dswf-ov-bdialog-value">

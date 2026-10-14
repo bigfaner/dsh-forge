@@ -38,6 +38,8 @@ export interface BugCard {
   branch?: string
   /** unresolved 原因（回填时写） */
   unresolvedReason?: string
+  /** 修复方案总结（fixed 回填时写——采用了什么修法、为何此修法；一段话，台账审查面） */
+  fixApproach?: string
   /** coding-fix 委托来源任务（uuid；standalone 路径缺席） */
   sourceTaskId?: string
   /** 发现会话（登记时写） */

@@ -35,6 +35,7 @@ interface CapturedInput {
   outcome: string
   commitHash?: string
   unresolvedReason?: string
+  fixApproach?: string
   fixSessionId?: string
 }
 
@@ -51,6 +52,7 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
         outcome: input.outcome,
         commitHash: input.commitHash,
         unresolvedReason: input.unresolvedReason,
+        fixApproach: input.fixApproach,
         fixSessionId: input.fixSessionId,
       })
       return resolve(captured[captured.length - 1]!)
@@ -66,11 +68,14 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
 }
 
 describe('parseResolveBugArgs（防御收窄）', () => {
-  it('fixed 最小集：bug_id + outcome 解析；commit_hash/unresolved_reason 可选透传', () => {
-    expect(parseResolveBugArgs({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d' })).toEqual({
+  it('fixed 最小集：bug_id + outcome 解析；commit_hash/fix_approach/unresolved_reason 可选透传', () => {
+    expect(
+      parseResolveBugArgs({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: '事实落库取代启发式' }),
+    ).toEqual({
       bug_id: 'bug-1',
       outcome: 'fixed',
       commit_hash: 'a1b2c3d',
+      fix_approach: '事实落库取代启发式',
     })
     expect(parseResolveBugArgs({ bug_id: 'bug-1', outcome: 'unresolved', unresolved_reason: '不可复现' })).toEqual({
       bug_id: 'bug-1',
@@ -78,6 +83,7 @@ describe('parseResolveBugArgs（防御收窄）', () => {
       unresolved_reason: '不可复现',
     })
     expect(parseResolveBugArgs({ bug_id: 'bug-1', outcome: 'fixed' })).not.toHaveProperty('commit_hash')
+    expect(parseResolveBugArgs({ bug_id: 'bug-1', outcome: 'fixed' })).not.toHaveProperty('fix_approach')
   })
 
   it('bug_id/outcome 必填；outcome 词表收窄；非对象根拒', () => {
@@ -89,12 +95,22 @@ describe('parseResolveBugArgs（防御收窄）', () => {
 })
 
 describe('resolveBug execute（路由 + 服务端解析径）', () => {
-  it('fixed：snake_case → camelCase 映射 + fix_session_id 执行会话注入', async () => {
+  it('fixed：snake_case → camelCase 映射 + fix_session_id 执行会话注入（fix_approach 同映射透传）', async () => {
     const { tool, captured } = toolWithCapture(async () => fixedCard())
-    const result = await tool.execute({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d' }, EXEC)
+    const result = await tool.execute(
+      { bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: '最小外科修复' },
+      EXEC,
+    )
     expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'fixed', commitHash: 'a1b2c3d' })
     expect(captured).toEqual([
-      { projectId: 'p-1', bugId: 'bug-1', outcome: 'fixed', commitHash: 'a1b2c3d', fixSessionId: 'sess-1' },
+      {
+        projectId: 'p-1',
+        bugId: 'bug-1',
+        outcome: 'fixed',
+        commitHash: 'a1b2c3d',
+        fixApproach: '最小外科修复',
+        fixSessionId: 'sess-1',
+      },
     ])
   })
 

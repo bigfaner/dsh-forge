@@ -28,6 +28,8 @@ export interface ResolveBugToolArgs {
   readonly commit_hash?: string
   /** unresolved：HARD-GATE 停机原因 */
   readonly unresolved_reason?: string
+  /** fixed：修复方案总结（采用了什么修法、为何此修法——一段话，台账审查面） */
+  readonly fix_approach?: string
 }
 
 /** 参数防御性收窄（执行点自证） */
@@ -38,6 +40,7 @@ export function parseResolveBugArgs(args: unknown): ResolveBugToolArgs {
     outcome: (typeof BUG_OUTCOMES)[number]
     commit_hash?: string
     unresolved_reason?: string
+    fix_approach?: string
   } = {
     bug_id: requiredString(a, 'bug_id', TOOL),
     outcome: requiredEnum(a, 'outcome', BUG_OUTCOMES, TOOL),
@@ -46,6 +49,8 @@ export function parseResolveBugArgs(args: unknown): ResolveBugToolArgs {
   if (commitHash !== undefined) out.commit_hash = commitHash
   const reason = optionalString(a, 'unresolved_reason', TOOL)
   if (reason !== undefined) out.unresolved_reason = reason
+  const approach = optionalString(a, 'fix_approach', TOOL)
+  if (approach !== undefined) out.fix_approach = approach
   return out
 }
 
@@ -61,6 +66,7 @@ function renderResolveBugResult(_args: unknown, value: unknown): readonly { type
     lines.push(`- commit: ${v.commitHash ?? '(not recorded)'}`)
     if (v.worktree !== undefined) lines.push(`- worktree: ${v.worktree}`)
     if (v.branch !== undefined) lines.push(`- branch: ${v.branch}`)
+    if (v.fixApproach !== undefined) lines.push(`- approach: ${v.fixApproach}`)
   } else if (v.unresolvedReason !== undefined) {
     lines.push(`- reason: ${v.unresolvedReason}`)
   }
@@ -72,7 +78,7 @@ export function createResolveBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      "Backfill the terminal state of a registered bug (open → fixed | unresolved, one-way — history is immutable). Agent submits bug_id + the outcome + one semantic field: for 'fixed' the commit_hash captured right after the fix+tests atomic commit (git rev-parse HEAD — the concurrency-safe anchor; the server reverse-looks-up worktree/branch from it), for 'unresolved' the reason the bug could not be reproduced (HARD-GATE stop). fixer identity and fix session are resolved server-side. Use after the fix lands per the fix-bug flow, referencing the bug_id returned by recordBug.",
+      "Backfill the terminal state of a registered bug (open → fixed | unresolved, one-way — history is immutable). Agent submits bug_id + the outcome + one semantic field: for 'fixed' the commit_hash captured right after the fix+tests atomic commit (git rev-parse HEAD — the concurrency-safe anchor; the server reverse-looks-up worktree/branch from it) and the fix_approach summary (what was fixed and why this approach — the ledger review surface), for 'unresolved' the reason the bug could not be reproduced (HARD-GATE stop). fixer identity and fix session are resolved server-side. Use after the fix lands per the fix-bug flow, referencing the bug_id returned by recordBug.",
     parameters: {
       type: 'object',
       properties: {
@@ -85,6 +91,10 @@ export function createResolveBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
         unresolved_reason: {
           type: 'string',
           description: "For outcome='unresolved': why the bug could not be reproduced/fixed (HARD-GATE stop cause).",
+        },
+        fix_approach: {
+          type: 'string',
+          description: "For outcome='fixed': one-paragraph summary of the adopted fix approach (what was changed and why this approach over alternatives) — the ledger review surface.",
         },
       },
       required: ['bug_id', 'outcome'],
@@ -103,6 +113,7 @@ export function createResolveBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
           outcome: parsed.outcome,
           ...(parsed.commit_hash !== undefined ? { commitHash: parsed.commit_hash } : {}),
           ...(parsed.unresolved_reason !== undefined ? { unresolvedReason: parsed.unresolved_reason } : {}),
+          ...(parsed.fix_approach !== undefined ? { fixApproach: parsed.fix_approach } : {}),
           fixSessionId: sessionId,
         })
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))

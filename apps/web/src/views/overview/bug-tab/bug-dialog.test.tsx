@@ -97,6 +97,14 @@ describe('BugDialog（证据区/未修原因显隐）', () => {
     expect(markup).not.toContain('data-dswf-ov-bdialog-evidence')
   })
 
+  it('fixed + fixApproach：修复方案行呈现（台账审查面）；open/fixed 缺席双隐', () => {
+    const markup = markupOf(bug('fixed', { fixApproach: '事实落库取代 UI 启发式——spawn 审计行' }))
+    expect(markup).toContain('data-dswf-ov-bdialog-fix-approach')
+    expect(markup).toContain('事实落库取代 UI 启发式——spawn 审计行')
+    expect(markupOf(bug('fixed'))).not.toContain('data-dswf-ov-bdialog-fix-approach')
+    expect(markupOf(bug('open'))).not.toContain('data-dswf-ov-bdialog-fix-approach')
+  })
+
   it('open：证据区与未修原因双隐', () => {
     const markup = markupOf(bug('open'))
     expect(markup).not.toContain('data-dswf-ov-bdialog-evidence')

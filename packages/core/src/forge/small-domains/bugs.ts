@@ -252,6 +252,7 @@ interface BugStorageRow {
   worktree: string | null
   branch: string | null
   unresolved_reason: string | null
+  fix_approach: string | null
   source_task_id: string | null
   report_session_id: string | null
   fix_session_id: string | null
@@ -263,7 +264,7 @@ interface BugStorageRow {
 
 const SELECT_BUG =
   `SELECT id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type, bug_status,
-          commit_hash, worktree, branch, unresolved_reason, source_task_id, report_session_id,
+          commit_hash, worktree, branch, unresolved_reason, fix_approach, source_task_id, report_session_id,
           fix_session_id, reporter, fixer, created_at, updated_at
    FROM bugs`
 
@@ -284,6 +285,7 @@ function toBugCard(row: BugStorageRow): BugCard {
     ...(row.worktree !== null ? { worktree: row.worktree } : {}),
     ...(row.branch !== null ? { branch: row.branch } : {}),
     ...(row.unresolved_reason !== null ? { unresolvedReason: row.unresolved_reason } : {}),
+    ...(row.fix_approach !== null ? { fixApproach: row.fix_approach } : {}),
     ...(row.source_task_id !== null ? { sourceTaskId: row.source_task_id } : {}),
     ...(row.report_session_id !== null ? { reportSessionId: row.report_session_id } : {}),
     ...(row.fix_session_id !== null ? { fixSessionId: row.fix_session_id } : {}),
@@ -317,6 +319,8 @@ export interface ResolveBugInput {
   readonly commitHash?: string
   /** unresolved：HARD-GATE 停机原因 */
   readonly unresolvedReason?: string
+  /** fixed：修复方案总结（采用了什么修法、为何此修法——一段话，台账审查面） */
+  readonly fixApproach?: string
   readonly fixSessionId?: string
 }
 
@@ -438,13 +442,14 @@ export function createBugsService(deps: BugsServiceDeps) {
           }
           db.prepare(
             `UPDATE bugs SET bug_status = 'fixed', commit_hash = ?, worktree = ?, branch = ?,
-                             fix_session_id = ?, fixer = ?, updated_at = ? WHERE id = ?`,
+                             fix_session_id = ?, fixer = ?, fix_approach = ?, updated_at = ? WHERE id = ?`,
           ).run(
             commitHash,
             evidence.worktree ?? null,
             evidence.branch ?? null,
             input.fixSessionId ?? null,
             fixer,
+            input.fixApproach?.trim() || null,
             now,
             input.bugId,
           )

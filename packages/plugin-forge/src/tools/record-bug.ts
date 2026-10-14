@@ -63,7 +63,7 @@ export function parseRecordBugArgs(args: unknown): RecordBugToolArgs {
 
 /**
  * BugCard 成功支 schema（recordBug/resolveBug 共用——全字段镜像 contracts BugCard，
- * 值 = core 返回的全卡；顶层 additionalProperties:false 白名单必须覆盖全部 19 键）。
+ * 值 = core 返回的全卡；顶层 additionalProperties:false 白名单必须覆盖全部 20 键）。
  */
 export const BUG_CARD_SUCCESS_SCHEMA = {
   type: 'object',
@@ -82,6 +82,7 @@ export const BUG_CARD_SUCCESS_SCHEMA = {
     worktree: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
     branch: { type: 'string', description: 'fixed evidence (hash-anchored reverse lookup).' },
     unresolvedReason: { type: 'string', description: 'unresolved backfill cause (HARD-GATE stop).' },
+    fixApproach: { type: 'string', description: 'Adopted fix approach summary (fixed backfill — ledger review surface).' },
     sourceTaskId: { type: 'string', description: 'coding-fix delegating source task (absent on standalone paths).' },
     reportSessionId: { type: 'string', description: 'Registering (executing) session.' },
     fixSessionId: { type: 'string', description: 'Fixing session (written on fixed backfill).' },

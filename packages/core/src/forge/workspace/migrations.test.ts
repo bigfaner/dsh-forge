@@ -47,6 +47,9 @@ const BUGS_DDL = [
   `CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)`,
 ]
 
+/** v2（fix-approach-review）：bugs +fix_approach 前向 ALTER 追加段（活库零废弃） */
+const BUGS_V2_DDL = [`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`]
+
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
   s
@@ -81,8 +84,8 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(existsSync(resolve(ROOT, BLUEPRINT))).toBe(true)
   })
 
-  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；fix-bug：+提案 bugs DDL 追加段）', () => {
-    const expected = [...blueprintStatements(), ...BUGS_DDL.map(norm)]
+  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；fix-bug：+提案 bugs DDL 追加段 + v2 ALTER 段）', () => {
+    const expected = [...blueprintStatements(), ...BUGS_DDL.map(norm), ...BUGS_V2_DDL.map(norm)]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(norm))
     expect(actual).toEqual(expected)
   })
@@ -149,7 +152,12 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(1)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(2)
+  })
+
+  it('v2：bugs +fix_approach 单列前向 ALTER（活库零废弃——fix-approach-review 台账审查面）', () => {
+    const v2 = WORKSPACE_MIGRATIONS.find((m) => m.version === 2)
+    expect(v2?.statements.map(norm)).toEqual([`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`])
   })
 
   it('FK 一律无 ON DELETE（Hard Rule——M2 无删除动词）', () => {

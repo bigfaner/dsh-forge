@@ -23,7 +23,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 1
+export const FORGE_DB_SCHEMA_VERSION = 2
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -207,5 +207,12 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
 )`,
       `CREATE INDEX idx_bugs_status ON bugs(bug_status, created_at)`,
     ],
+  },
+  {
+    // v2（fix-approach-review）：bugs +fix_approach（修复方案总结——fixed 回填时写，
+    // 台账审查面）。首例前向 ALTER 追加（v1 直改惯例 = 存量库废弃；活库在跑不可废弃，
+    // 单列 ADD COLUMN 前向兼容 v1 存量库——bugs 表无触发器，零 R12 顾虑）。
+    version: 2,
+    statements: [`ALTER TABLE bugs ADD COLUMN fix_approach TEXT`],
   },
 ]

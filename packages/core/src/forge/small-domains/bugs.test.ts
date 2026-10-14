@@ -174,6 +174,29 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     expect(h.events.emitted.length).toBe(2)
   })
 
+  it('fixed + fix_approach：修复方案总结随终态落行（台账审查面）；缺席 = 键缺席', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile })
+    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    expect(open.fixApproach).toBeUndefined()
+    const fixed = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: open.bugId,
+      outcome: 'fixed',
+      commitHash: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      fixApproach: '  最小外科修复：反查加任务键前缀判别，回退 updatedAt 启发式  ',
+    })
+    expect(fixed.fixApproach).toBe('最小外科修复：反查加任务键前缀判别，回退 updatedAt 启发式') // trim 落库
+    const absent = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '另一登记' })).bugId,
+      outcome: 'fixed',
+      commitHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+    expect(absent.fixApproach).toBeUndefined() // 缺席回填 = NULL → 键缺席
+  })
+
   it('AC2 反查径回退钉住：porcelain 未命中 → branch --contains 反查 branch、worktree 置空', async () => {
     h = createHarness()
     const { execFile, calls } = stubExecFile({
