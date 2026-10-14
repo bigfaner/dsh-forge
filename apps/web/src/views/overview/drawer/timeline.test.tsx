@@ -26,6 +26,7 @@ describe('verb 六值穷尽路由（AC5 + Implementation Notes）', () => {
     expect(new Set(Object.keys(TASK_VERB_KIND))).toEqual(new Set(TASK_RECORD_VERBS))
     expect(recordVerbLabel('add', 'coding-feature')).toBe('创建')
     expect(recordVerbLabel('claim', 'coding-feature')).toBe('领取')
+    expect(recordVerbLabel('spawn', 'coding-feature')).toBe('派发执行')
     expect(recordVerbLabel('submit', 'coding-feature')).toBe('提交')
     expect(recordVerbLabel('transition', 'coding-feature')).toBe('人工转移')
     expect(recordVerbLabel('auto-restore', 'coding-feature')).toBe('自动恢复')

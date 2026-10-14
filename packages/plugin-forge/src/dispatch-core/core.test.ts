@@ -99,9 +99,10 @@ function harness(
   } = {},
 ): Harness {
   const { sink, events } = sinkStub()
-  const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0 }
+  const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0, spawnRecord: 0 }
   const claimInputs: unknown[] = []
   const statsInputs: unknown[] = []
+  const spawnRecords: unknown[] = []
   const spawnRequests: SpawnWorkerRequest[] = []
   let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest: 'digestabc123', reclaimed: false }
   let queryResult: QueryTaskResult = {
@@ -150,6 +151,10 @@ function harness(
       calls.submit += 1
       throw new Error('dispatchCore must not submit on any path (spawn failure leaves in_progress)')
     },
+    recordSpawn: async (input: unknown) => {
+      calls.spawnRecord += 1
+      spawnRecords.push(input)
+    },
   } as unknown as ForgeTasksService
   const deps: DispatchCoreDeps = {
     tasks,
@@ -166,6 +171,7 @@ function harness(
     claimInputs,
     statsInputs,
     spawnRequests,
+    spawnRecords,
     setClaim: (r) => {
       claimResult = r
     },
@@ -274,6 +280,9 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     expect(req.parent).toBe(parent)
     expect(req.signal).toBeInstanceOf(AbortSignal)
     expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'subagent_fork', 'queryTask', 'dispatchTask']))
+    // spawn 审计（执行会话事实诞生即入库——fail-soft 前的单调用断言）
+    expect(h.calls.spawnRecord).toBe(1)
+    expect(h.spawnRecords[0]).toEqual({ projectId: 'p-1', taskId: 't-1', sessionId: 'worker-1' })
     // 事件发射：三连信封 sessionId = identity.sessionId、slug = 任务容器
     expect(h.events.map((e) => e.type)).toEqual(['task-claimed', 'task-spawned', 'task-worker-done'])
     const [claimed, spawned, done] = h.events as unknown as [

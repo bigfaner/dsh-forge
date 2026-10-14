@@ -121,6 +121,7 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       for (const method of [
         'addTask',
         'claimTask',
+        'recordSpawn',
         'submitTask',
         'transitionTask',
         'updateTask',

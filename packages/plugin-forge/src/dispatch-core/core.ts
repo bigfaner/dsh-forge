@@ -354,6 +354,14 @@ export async function spawnClaimed(
   }
   // 来源任务登记（fix-bug——recordBug 的 source_task_id 派发上下文注入源；结算核注销）
   rememberWorkerSourceTask(handle.workerSessionId, task.taskId)
+  // spawn 审计（执行会话事实诞生即入库——verb='spawn'，session_id = worker 子会话；
+  // UI ⟞ 打开链的库侧单源，进行中任务不再依赖账本父反查启发式）。fail-soft：审计行
+  // 缺席仅损失库侧精确解析（UI 兜底径仍在），不阻派发主链。
+  try {
+    await deps.tasks.recordSpawn({ projectId: options.scope.projectId, taskId: task.taskId, sessionId: handle.workerSessionId })
+  } catch {
+    // fail-soft（同上——库写失败不外溢）
+  }
   emit('task-spawned', task.slug, {
     taskKey,
     workerSessionId: handle.workerSessionId,

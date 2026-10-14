@@ -17,6 +17,7 @@ import type {
   ListTasksQuery,
   QueryTaskInput,
   QueryTaskResult,
+  RecordSpawnInput,
   ReconcileInterruptedInput,
   ReconcileInterruptedResult,
   SessionLinksQuery,
@@ -46,6 +47,7 @@ import { listTasks, taskGraph, taskStats } from './list.js'
 import { queryTask } from './query.js'
 import { reconcileInterrupted } from './reconcile.js'
 import { sessionLinks } from './session-links.js'
+import { recordSpawn } from './spawn.js'
 import { submitTask } from './submit.js'
 import { transitionTask } from './transition.js'
 import { updateTask } from './update.js'
@@ -77,6 +79,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult> {
       return submitTask(deps, input)
+    },
+    async recordSpawn(input: RecordSpawnInput): Promise<void> {
+      return recordSpawn(deps, input)
     },
     async reconcileInterrupted(input: ReconcileInterruptedInput): Promise<ReconcileInterruptedResult> {
       return reconcileInterrupted(deps, input)

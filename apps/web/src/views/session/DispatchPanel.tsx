@@ -343,15 +343,20 @@ export function dispatchPanelExpandGeometry(
 
 /**
  * worker 执行会话解析（纯函数——D6 ⟞）：任务挂接双源卡中 record 源且不在 link 派发集的
- * 会话（claim 审计行 session = 派发会话本身 → 排除；submit/transition 审计行 = 执行会话）。
- * 无执行会话（未派发执行/纯派发）= null（⟞ 调用面 no-op）。
+ * 会话（claim 审计行 session = 派发会话本身 → 排除；spawn/submit 审计行 = 执行会话）。
+ * 取**最后**命中（卡片按 createdAt 序——claim 重入再派发时旧行保留，最新行 = 当前执行
+ * 会话；spawn 行诞生即落库，进行中任务库侧即精确）。无执行会话（未派发执行/纯派发）=
+ * null（⟞ 调用面 no-op）。
  */
 export function workerSessionOf(sessions: readonly SessionTaskLinkCard[]): string | null {
   const dispatchSessions = new Set(
     sessions.filter((session) => session.source === 'link').map((session) => session.sessionId),
   )
-  const worker = sessions.find((session) => session.source === 'record' && !dispatchSessions.has(session.sessionId))
-  return worker?.sessionId ?? null
+  let worker: string | null = null
+  for (const session of sessions) {
+    if (session.source === 'record' && !dispatchSessions.has(session.sessionId)) worker = session.sessionId
+  }
+  return worker
 }
 
 /**

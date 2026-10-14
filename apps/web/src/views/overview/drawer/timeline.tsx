@@ -17,6 +17,7 @@ export { evalScoreOf } from './detail-model.js' // 现状条「得分+严重度�
 export const TASK_VERB_KIND: Readonly<Record<TaskRecordVerb, string>> = {
   add: 'v-add',
   claim: 'v-claim',
+  spawn: 'v-claim',
   submit: 'v-submit',
   transition: 'v-human',
   updateTask: 'v-add',
@@ -24,7 +25,7 @@ export const TASK_VERB_KIND: Readonly<Record<TaskRecordVerb, string>> = {
   'auto-block': 'v-block',
 }
 
-/** verb 标签（六值穷尽；eval 族 submit → 「评估」——呈现路由非词汇变更） */
+/** verb 标签（七值穷尽；eval 族 submit → 「评估」——呈现路由非词汇变更） */
 export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string {
   if (verb === 'submit' && templateFamilyOf(taskType) === 'eval') return '评估'
   switch (verb) {
@@ -32,6 +33,8 @@ export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string 
       return '创建'
     case 'claim':
       return '领取'
+    case 'spawn':
+      return '派发执行'
     case 'submit':
       return '提交'
     case 'transition':
@@ -406,6 +409,29 @@ function eventWeaves(
         <>
           {record.summary !== undefined || record.reason !== undefined ? (
             <Note>{record.summary ?? record.reason}</Note>
+          ) : null}
+        </>
+      )
+    case 'spawn':
+      return (
+        <>
+          <Note>执行会话诞生（worker 子会话——进行中即可打开）</Note>
+          {record.sessionId !== undefined ? (
+            <Note>
+              <SessionPill
+                session={{
+                  taskId: detail.taskId,
+                  slug: detail.slug,
+                  localId: detail.localId,
+                  title: detail.title,
+                  taskStatus: detail.taskStatus,
+                  sessionId: record.sessionId,
+                  source: 'record',
+                }}
+                onOpenSession={onOpenSession}
+                sessionTitleOf={sessionTitleOf}
+              />
+            </Note>
           ) : null}
         </>
       )

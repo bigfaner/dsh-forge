@@ -178,6 +178,7 @@ export type KnowledgeWhitelistCoverage = AssertNever<Exclude<keyof BrowseKnowled
 export const TASKS_SERVICE_METHODS = [
   'addTask',
   'claimTask',
+  'recordSpawn',
   'submitTask',
   'reconcileInterrupted',
   'transitionTask',

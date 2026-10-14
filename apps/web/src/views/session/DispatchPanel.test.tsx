@@ -372,6 +372,22 @@ describe('workerSessionOf 执行会话解析（record 源 ∉ link 派发集）'
     ]
     expect(workerSessionOf(sessions)).toBe('worker-9')
   })
+  it('spawn 行诞生即解析（进行中任务无 submit 审计行——库侧精确径）', () => {
+    const sessions = [
+      card({ source: 'link', sessionId: 'dispatch-1' }),
+      card({ source: 'record', sessionId: 'dispatch-1' }), // claim 审计行 = 派发会话本身 → 排除
+      card({ source: 'record', sessionId: 'worker-9' }), // spawn 审计行（worker 子会话诞生即记）
+    ]
+    expect(workerSessionOf(sessions)).toBe('worker-9')
+  })
+  it('claim 重入再派发（旧行保留 append-only）→ 取最新 record 源行（当前执行会话）', () => {
+    const sessions = [
+      card({ source: 'link', sessionId: 'dispatch-1' }),
+      card({ source: 'record', sessionId: 'worker-old' }), // 首次 spawn（已死——中断恢复场景）
+      card({ source: 'record', sessionId: 'worker-new' }), // 重派 spawn + submit
+    ]
+    expect(workerSessionOf(sessions)).toBe('worker-new')
+  })
   it('纯派发（record 仅 claim 审计）/ 零挂接 → null（无执行子会话）', () => {
     expect(workerSessionOf([card({ source: 'link', sessionId: 'd' }), card({ source: 'record', sessionId: 'd' })])).toBeNull()
     expect(workerSessionOf([])).toBeNull()

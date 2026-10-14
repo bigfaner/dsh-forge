@@ -58,10 +58,11 @@ export type TaskPriority = 'P0' | 'P1' | 'P2'
 /** tasks.complexity CHECK 三值 */
 export type TaskComplexity = 'low' | 'medium' | 'high'
 
-/** task_records.verb 六值（TS 单源无 CHECK——§6-32③；append-only 行的动词面） */
+/** task_records.verb 七值（TS 单源无 CHECK——§6-32③；append-only 行的动词面） */
 export const TASK_RECORD_VERBS = [
   'add',
   'claim',
+  'spawn',
   'submit',
   'transition',
   'updateTask',
@@ -263,7 +264,10 @@ export interface TaskRecordEntry {
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
-  /** claim = 派发会话 / submit = 执行会话（两形态混存，相异判勿前缀判型——S8） */
+  /**
+   * claim = 派发会话 / submit·spawn = 执行会话（两形态混存，相异判勿前缀判型——S8；
+   * spawn = worker 子会话诞生即记，claim 重入再派发时旧行保留、执行会话解析取最新行）
+   */
   sessionId?: string
   /** ISO-8601 */
   createdAt: string
@@ -636,12 +640,28 @@ export interface SessionLinksQuery {
   sessionId: string
 }
 
+/** recordSpawn 入参（dispatchTask spawn 成功即记——执行会话事实诞生即入库） */
+export interface RecordSpawnInput {
+  projectId: string
+  /** 任务 id（tasks.id 主键——claim 返回快照携带） */
+  taskId: string
+  /** worker 执行子会话 id（spawn 句柄对账锚——持久化单源） */
+  sessionId: string
+}
+
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks） */
 export interface ForgeTasksService {
   /** tasks 行 + edges 行 + records 行单事务全成全败（增量环校验 + 两级去重 + 相位重算） */
   addTask(input: AddTaskInput): Promise<AddTaskResult>
   /** 守卫（依赖全 ∈ {completed, skipped}）+ 就绪选择（分支延续优先 → priority → 创建序）+ links + dispatchPrompt 合成 */
   claimTask(input: ClaimTaskInput): Promise<ClaimTaskResult>
+  /**
+   * spawn 审计（dispatchTask spawn 成功即记——verb='spawn'，from/to 空，actor='plugin-tool'，
+   * session_id = worker 执行子会话 id）：执行会话事实的库侧单源（此前 submit 才首次落——
+   * 进行中任务无执行会话行，⟞ 打开链只能账本父反查启发式）。零状态效应（不转移不重算相位）；
+   * 未命中 ERR_TASK_NOT_FOUND。agent 面专用（dispatchTask 内部径），不入 RPC/tool 面。
+   */
+  recordSpawn(input: RecordSpawnInput): Promise<void>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
   /**
