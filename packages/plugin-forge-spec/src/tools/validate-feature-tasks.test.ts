@@ -6,7 +6,6 @@ import type { ForgeTasksService, ValidateFeatureTasksInput, ValidateReport } fro
 import type { ToolExecFace } from '../faces.js'
 import { createValidateFeatureTasksTool, parseValidateFeatureTasksArgs } from './validate-feature-tasks.js'
 import type { ForgeSpecToolDeps } from './index.js'
-import { WorkspaceNotRegisteredError } from './session.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
@@ -41,13 +40,12 @@ describe('validateFeatureTasks', () => {
     expect(validated).toEqual([{ projectId: 'p-1', featureSlug: 'feat-x' }])
   })
 
-  it('cwd 未命中 → WorkspaceNotRegisteredError（typed 错误信封）', async () => {
+  it('cwd 未命中 → 失败 DTO 返回面（ok:false + ERR_WORKSPACE_NOT_REGISTERED）', async () => {
     const healthy: ValidateReport = { violations: [], checked: { featureSlug: 'feat-x', tasks: 0 } }
     const { deps } = depsReturning(healthy)
     const tool = createValidateFeatureTasksTool(deps)
-    await expect(
-      tool.execute({ feature_slug: 'a' }, { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } }),
-    ).rejects.toThrow(WorkspaceNotRegisteredError)
+    const out = await tool.execute({ feature_slug: 'a' }, { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } })
+    expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED', violations: [] })
   })
 
   it('render：全绿 ✓ 快照（覆盖面行——feature slug + 任务数）', async () => {

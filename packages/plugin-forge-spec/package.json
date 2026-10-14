@@ -23,6 +23,7 @@
     "@dsh-forge/path-key": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "24.19.0"
+    "@types/node": "24.19.0",
+    "ajv": "8.20.0"
   }
 }

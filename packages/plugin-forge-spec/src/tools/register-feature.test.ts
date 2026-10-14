@@ -8,7 +8,6 @@ import type { FeatureRow, ForgeFeaturesService, RegisterFeatureInput } from '@ds
 import type { ToolExecFace } from '../faces.js'
 import { createRegisterFeatureTool, parseRegisterFeatureArgs } from './register-feature.js'
 import type { ForgeSpecToolDeps } from './index.js'
-import { WorkspaceNotRegisteredError } from './session.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
@@ -68,16 +67,17 @@ describe('registerFeature', () => {
     ])
   })
 
-  it('cwd 未命中 → WorkspaceNotRegisteredError（typed 错误信封·code 承载）', async () => {
+  it('cwd 未命中 → 失败 DTO 返回面（ok:false + code 承载 + ✗ 渲染）', async () => {
     const { deps } = depsWithCapture()
     const tool = createRegisterFeatureTool(deps)
     const miss = { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\other' } } } }
-    await expect(tool.execute({ slug: 'a', title: 'T' }, miss)).rejects.toThrow(WorkspaceNotRegisteredError)
+    const out = await tool.execute({ slug: 'a', title: 'T' }, miss)
+    expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED', violations: [] })
+    const text = tool.output.render({}, out)[0]?.text ?? ''
+    expect(text).toContain('✗ ERR_WORKSPACE_NOT_REGISTERED —')
     const bare = { agent: undefined }
-    await expect(tool.execute({ slug: 'a', title: 'T' }, bare)).rejects.toMatchObject({
-      code: 'ERR_WORKSPACE_NOT_REGISTERED',
-      data: {},
-    })
+    const out2 = await tool.execute({ slug: 'a', title: 'T' }, bare)
+    expect(out2).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED' })
   })
 
   it('render：formatOk 双友好快照——首行 ✓ + 键值行（featureId/summary/proposalId）', async () => {

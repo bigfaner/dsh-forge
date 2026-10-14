@@ -7,7 +7,6 @@ import type { FeatureDocumentRow, ForgeFeaturesService, UpsertFeatureDocInput } 
 import type { ToolExecFace } from '../faces.js'
 import { createUpsertFeatureDocTool, parseUpsertFeatureDocArgs } from './upsert-feature-doc.js'
 import type { ForgeSpecToolDeps } from './index.js'
-import { WorkspaceNotRegisteredError } from './session.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
@@ -72,15 +71,14 @@ describe('upsertFeatureDoc', () => {
     ])
   })
 
-  it('cwd 未命中 → WorkspaceNotRegisteredError（typed 错误信封）', async () => {
+  it('cwd 未命中 → 失败 DTO 返回面（ok:false + ERR_WORKSPACE_NOT_REGISTERED）', async () => {
     const { deps } = depsWithCapture()
     const tool = createUpsertFeatureDocTool(deps)
-    await expect(
-      tool.execute(
-        { feature_slug: 'a', doc_kind: 'prd-spec', rel_path: 'x.md' },
-        { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } },
-      ),
-    ).rejects.toThrow(WorkspaceNotRegisteredError)
+    const out = await tool.execute(
+      { feature_slug: 'a', doc_kind: 'prd-spec', rel_path: 'x.md' },
+      { agent: { session: { id: 's', header: { cwd: 'C:\\ws\\x' } } } },
+    )
+    expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED', violations: [] })
   })
 
   it('render：formatOk 双友好快照——首行 ✓ + relPath/summary/updatedAt 行', async () => {

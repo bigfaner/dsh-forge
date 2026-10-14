@@ -130,10 +130,12 @@ describe('AC1/AC5 注册面：三 tool（名 = 动词透传）+ transitionFeatur
     const exec = { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\bound' } } } }
     await register?.execute({ slug: 'feat-a', title: 'T' }, exec)
     expect(routed).toBe('p-9')
-    // 绑定缺席：同表下其它 cwd → typed 拒（ERR_WORKSPACE_NOT_REGISTERED）
-    await expect(
-      register?.execute({ slug: 'feat-a', title: 'T' }, { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\other' } } } }),
-    ).rejects.toThrow(/not bound to a registered project/)
+    // 绑定缺席：同表下其它 cwd → 失败 DTO 返回面（typed 拒 ERR_WORKSPACE_NOT_REGISTERED）
+    const missOut = await register?.execute(
+      { slug: 'feat-a', title: 'T' },
+      { agent: { session: { id: 's1', header: { cwd: 'C:\\ws\\other' } } } },
+    )
+    expect(missOut).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED' })
     dispose()
   })
 })

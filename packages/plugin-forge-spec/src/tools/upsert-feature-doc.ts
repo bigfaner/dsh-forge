@@ -5,10 +5,12 @@
 // 落状态层——「经 tool 读写」纪律的文档径。参数 snake_case；容器定位 = feature_slug
 // 自然键（服务内 slug→id 解析——Interface 1 签名单源，uuid 锚不进 agent 面）；
 // 返回 = contracts FeatureDocumentRow 透传 + formatOk 双友好渲染（3.5 统一收口对齐）。
+// typed 服务错误 → 失败 DTO 返回面（callToolFace——✗ code + 人话）。
 import { DOC_KINDS, type DocKind, type FeatureDocumentRow, type UpsertFeatureDocInput } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeSpecToolDeps } from './index.js'
 import { optionalString, requireArgsObject, requiredEnum, requiredString } from './args.js'
+import { callToolFace, formatFailure, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
 
 const TOOL = 'upsertFeatureDoc'
@@ -36,8 +38,8 @@ export function parseUpsertFeatureDocArgs(args: unknown): UpsertFeatureDocToolAr
   return out
 }
 
-/** FeatureDocumentRow 的注册面输出 schema */
-const UPSERT_FEATURE_DOC_OUTPUT_SCHEMA = {
+/** FeatureDocumentRow 的注册面输出 schema（+ 失败支） */
+const UPSERT_FEATURE_DOC_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -49,7 +51,7 @@ const UPSERT_FEATURE_DOC_OUTPUT_SCHEMA = {
     updatedAt: { type: 'string' },
   },
   required: ['featureId', 'docKind', 'relPath', 'createdAt', 'updatedAt'],
-} as const
+})
 
 /** FeatureDocumentRow → 模型可见文本（formatOk 双友好：首行 ✓ + 键值行） */
 export function renderFeatureDocumentRow(v: FeatureDocumentRow): readonly TextContentBlock[] {
@@ -78,19 +80,25 @@ export function createUpsertFeatureDocTool(deps: ForgeSpecToolDeps): ForgeToolDe
       },
       required: ['feature_slug', 'doc_kind', 'rel_path'],
     },
-    output: { schema: UPSERT_FEATURE_DOC_OUTPUT_SCHEMA, render: (_a, value) => renderFeatureDocumentRow(value as FeatureDocumentRow) },
-    async execute(args: unknown, exec: ToolExecFace): Promise<FeatureDocumentRow> {
-      const parsed = parseUpsertFeatureDocArgs(args)
+    output: {
+      schema: UPSERT_FEATURE_DOC_OUTPUT_SCHEMA,
+      render: (_a, value) =>
+        isForgeToolFailure(value) ? formatFailure(value) : renderFeatureDocumentRow(value as FeatureDocumentRow),
+    },
+    async execute(args: unknown, exec: ToolExecFace): Promise<FeatureDocumentRow | ForgeToolFailure> {
       const session = sessionContextOf(exec)
-      const projectId = requireProjectId(deps.resolveProjectId, session)
-      const input: UpsertFeatureDocInput = {
-        projectId,
-        featureSlug: parsed.feature_slug,
-        docKind: parsed.doc_kind,
-        relPath: parsed.rel_path,
-        ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
-      }
-      return deps.features.upsertFeatureDoc(input)
+      return callToolFace(async () => {
+        const parsed = parseUpsertFeatureDocArgs(args)
+        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const input: UpsertFeatureDocInput = {
+          projectId,
+          featureSlug: parsed.feature_slug,
+          docKind: parsed.doc_kind,
+          relPath: parsed.rel_path,
+          ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
+        }
+        return deps.features.upsertFeatureDoc(input)
+      })
     },
   }
 }

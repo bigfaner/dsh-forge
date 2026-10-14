@@ -356,6 +356,9 @@ importers:
       '@types/node':
         specifier: 24.19.0
         version: 24.19.0
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   packages/plugins/md-mermaid:
     dependencies:

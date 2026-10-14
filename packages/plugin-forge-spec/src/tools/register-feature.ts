@@ -4,10 +4,13 @@
 // 升级远征已 accepted 提案（不重走成链门）两条边界径（tech-design §边界注记）。
 // 参数 snake_case；返回 = contracts FeatureRow 透传 + formatOk 双友好渲染
 // （成功首行 ✓ + 键值行——M3 裁决⑨；本插件局部实现，3.5 统一收口对齐）。
+// typed 服务错误 → 失败 DTO 返回面（callToolFace——✗ code + 人话；抛错通道仅留
+// 无 code 意外错误 fail-loud）。
 import type { FeatureRow, RegisterFeatureInput } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeSpecToolDeps } from './index.js'
 import { optionalString, requireArgsObject, requiredString } from './args.js'
+import { callToolFace, formatFailure, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
 
 const TOOL = 'registerFeature'
@@ -36,8 +39,8 @@ export function parseRegisterFeatureArgs(args: unknown): RegisterFeatureToolArgs
   return out
 }
 
-/** FeatureRow 的注册面输出 schema（身份与名称分离——关联走 featureId） */
-const REGISTER_FEATURE_OUTPUT_SCHEMA = {
+/** FeatureRow 的注册面输出 schema（身份与名称分离——关联走 featureId；+ 失败支） */
+const REGISTER_FEATURE_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -51,7 +54,7 @@ const REGISTER_FEATURE_OUTPUT_SCHEMA = {
     updatedAt: { type: 'string' },
   },
   required: ['featureId', 'slug', 'title', 'featureStatus', 'createdAt', 'updatedAt'],
-} as const
+})
 
 /** FeatureRow → 模型可见文本（formatOk 双友好：首行 ✓ + 键值行） */
 export function renderFeatureRow(v: FeatureRow): readonly TextContentBlock[] {
@@ -81,19 +84,25 @@ export function createRegisterFeatureTool(deps: ForgeSpecToolDeps): ForgeToolDef
       },
       required: ['slug', 'title'],
     },
-    output: { schema: REGISTER_FEATURE_OUTPUT_SCHEMA, render: (_a, value) => renderFeatureRow(value as FeatureRow) },
-    async execute(args: unknown, exec: ToolExecFace): Promise<FeatureRow> {
-      const parsed = parseRegisterFeatureArgs(args)
+    output: {
+      schema: REGISTER_FEATURE_OUTPUT_SCHEMA,
+      render: (_a, value) =>
+        isForgeToolFailure(value) ? formatFailure(value) : renderFeatureRow(value as FeatureRow),
+    },
+    async execute(args: unknown, exec: ToolExecFace): Promise<FeatureRow | ForgeToolFailure> {
       const session = sessionContextOf(exec)
-      const projectId = requireProjectId(deps.resolveProjectId, session)
-      const input: RegisterFeatureInput = {
-        projectId,
-        slug: parsed.slug,
-        title: parsed.title,
-        ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
-        ...(parsed.proposal_id !== undefined ? { proposalId: parsed.proposal_id } : {}),
-      }
-      return deps.features.registerFeature(input)
+      return callToolFace(async () => {
+        const parsed = parseRegisterFeatureArgs(args)
+        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const input: RegisterFeatureInput = {
+          projectId,
+          slug: parsed.slug,
+          title: parsed.title,
+          ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
+          ...(parsed.proposal_id !== undefined ? { proposalId: parsed.proposal_id } : {}),
+        }
+        return deps.features.registerFeature(input)
+      })
     },
   }
 }

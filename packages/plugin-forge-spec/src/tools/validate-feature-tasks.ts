@@ -4,10 +4,12 @@
 // 突击容器无入口（proposal 直挂无相位域）。渲染 = formatOk/formatErr 逐项双友好文本
 // （裁决⑨：全绿首行 ✓ + 覆盖面行；有违规首行 ✗ + 违规逐行——含任务键 slug/localId，
 // agent 可直达修复）。只读零写入——诊断两路（UF-3「发送给 agent」）的消息数据源同族。
+// typed 服务错误 → 失败 DTO 返回面（callToolFace——✗ code + 人话）。
 import type { TaskRef, ValidateFeatureTasksInput, ValidateReport, Violation } from '@dsh-forge/contracts'
 import type { ForgeToolDefinition, TextContentBlock, ToolExecFace } from '../faces.js'
 import type { ForgeSpecToolDeps } from './index.js'
 import { requireArgsObject, requiredString } from './args.js'
+import { callToolFace, formatFailure, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
 
 const TOOL = 'validateFeatureTasks'
@@ -24,8 +26,8 @@ export function parseValidateFeatureTasksArgs(args: unknown): ValidateFeatureTas
   return { feature_slug: requiredString(a, 'feature_slug', TOOL) }
 }
 
-/** ValidateReport 的注册面输出 schema（violations 可空数组；checked 恒在场） */
-const VALIDATE_FEATURE_TASKS_OUTPUT_SCHEMA = {
+/** ValidateReport 的注册面输出 schema（violations 可空数组；checked 恒在场；+ 失败支） */
+const VALIDATE_FEATURE_TASKS_OUTPUT_SCHEMA = withFailureVariant({
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -48,7 +50,7 @@ const VALIDATE_FEATURE_TASKS_OUTPUT_SCHEMA = {
     },
   },
   required: ['violations', 'checked'],
-} as const
+})
 
 /** 任务自然键呈现（slug/localId——agent 面识别键，修复直达锚） */
 function taskKeyOf(taskRef: TaskRef): string {
@@ -83,16 +85,22 @@ export function createValidateFeatureTasksTool(deps: ForgeSpecToolDeps): ForgeTo
       },
       required: ['feature_slug'],
     },
-    output: { schema: VALIDATE_FEATURE_TASKS_OUTPUT_SCHEMA, render: (_a, value) => renderValidateReport(value as ValidateReport) },
-    async execute(args: unknown, exec: ToolExecFace): Promise<ValidateReport> {
-      const parsed = parseValidateFeatureTasksArgs(args)
+    output: {
+      schema: VALIDATE_FEATURE_TASKS_OUTPUT_SCHEMA,
+      render: (_a, value) =>
+        isForgeToolFailure(value) ? formatFailure(value) : renderValidateReport(value as ValidateReport),
+    },
+    async execute(args: unknown, exec: ToolExecFace): Promise<ValidateReport | ForgeToolFailure> {
       const session = sessionContextOf(exec)
-      const projectId = requireProjectId(deps.resolveProjectId, session)
-      const input: ValidateFeatureTasksInput = {
-        projectId,
-        featureSlug: parsed.feature_slug,
-      }
-      return deps.tasks.validateFeatureTasks(input)
+      return callToolFace(async () => {
+        const parsed = parseValidateFeatureTasksArgs(args)
+        const projectId = requireProjectId(deps.resolveProjectId, session)
+        const input: ValidateFeatureTasksInput = {
+          projectId,
+          featureSlug: parsed.feature_slug,
+        }
+        return deps.tasks.validateFeatureTasks(input)
+      })
     },
   }
 }
