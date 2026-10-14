@@ -104,7 +104,7 @@ export function renderVerdict(value: SourceVerdict | DocVerdict): readonly TextC
   return [{ type: 'text', text: lines.join('\n') }]
 }
 
-/** 注册面输出 schema（source 裁决 | doc 裁决 | 零 fence doc 三支 oneOf） */
+/** 注册面输出 schema（source 裁决 | doc 裁决两支 oneOf——零 fence doc = fences 空数组命中第二支） */
 const VALIDATE_MERMAID_OUTPUT_SCHEMA = {
   oneOf: [
     {
