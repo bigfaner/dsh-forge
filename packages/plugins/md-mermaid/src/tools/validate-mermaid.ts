@@ -178,11 +178,14 @@ export function createValidateMermaidTool(deps: ValidateMermaidToolDeps = {}): M
         try {
           doc = readDocFile(docRel)
         } catch (e) {
-          // Root cause: 文件不存在属入参问题，此前与引擎错同兜底裸抛 ENOENT，调用方无从自纠。
-          if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+          // Root cause: 读取失败（文件缺席/权限拒绝——macOS 700 目录现场 errno 形态不定，
+          // ENOENT 不必然意味着不存在）此前与引擎错同兜底裸抛或断言「文件不存在」；
+          // 不按 errno 猜在性，统一如实报不可读并附 errno，由调用方核对路径与目录权限。
+          const errno = (e as NodeJS.ErrnoException).code
+          if (errno === 'ENOENT' || errno === 'EACCES' || errno === 'EPERM') {
             throw new ValidateMermaidError(
               'ERR_INVALID_ARGS',
-              `${MERMAID_TOOL_NAME}: document not found: ${docRel} — docRel resolves relative to the workspace root`,
+              `${MERMAID_TOOL_NAME}: cannot read document: ${docRel} — not found or not readable (check the path relative to the workspace root and directory permissions; errno ${errno})`,
             )
           }
           throw e

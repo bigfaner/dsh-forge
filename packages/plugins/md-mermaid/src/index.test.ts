@@ -152,17 +152,37 @@ describe('AC4 入参形状校验（双模互斥）与 typed error 归一', () =>
     dispose()
   })
 
-  it('bug: docRel 文件不存在 → ERR_INVALID_ARGS「document not found」而非 ERR_MERMAID_ENGINE 裸 ENOENT', async () => {
+  it('bug: docRel 读取失败（不存在/权限拒绝）→ ERR_INVALID_ARGS「cannot read document」附 errno，不断言在性', async () => {
     const rt = new TempRuntime()
     const dispose = mdMermaidPlugin(rt.ctx())
     const tool = rt.registeredTools[0]
+    // 真实 node:fs：文件确实不存在（ENOENT）——文案不得断言「不存在」（权限拒绝同冒 ENOENT，macOS 700 目录现场）
     await expect(
       tool?.execute({ docRel: '.forge/docs/probes/__nonexistent-dir__/probe.md' }),
     ).rejects.toSatisfy(
       (e: unknown) =>
         isValidateMermaidError(e) &&
         e.code === 'ERR_INVALID_ARGS' &&
-        /document not found: \.forge\/docs\/probes\/__nonexistent-dir__\/probe\.md/.test(e.message),
+        /cannot read document: \.forge\/docs\/probes\/__nonexistent-dir__\/probe\.md/.test(e.message) &&
+        /errno ENOENT/.test(e.message),
+    )
+    dispose()
+  })
+
+  it('bug: 权限拒绝（EACCES，macOS 700 目录现场）→ ERR_INVALID_ARGS「cannot read document」而非 ERR_MERMAID_ENGINE', async () => {
+    const rt = new TempRuntime()
+    const dispose = mdMermaidPlugin(rt.ctx(), {
+      readDocFile: () => {
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }) as NodeJS.ErrnoException
+      },
+    })
+    const tool = rt.registeredTools[0]
+    await expect(tool?.execute({ docRel: '.forge/docs/probes/param-edit-direct-command/probe.md' })).rejects.toSatisfy(
+      (e: unknown) =>
+        isValidateMermaidError(e) &&
+        e.code === 'ERR_INVALID_ARGS' &&
+        /cannot read document: \.forge\/docs\/probes\/param-edit-direct-command\/probe\.md/.test(e.message) &&
+        /errno EACCES/.test(e.message),
     )
     dispose()
   })
