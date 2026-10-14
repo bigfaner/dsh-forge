@@ -7,6 +7,50 @@
   flex: none;
 }
 
+/* ── fix-4（bug d025a0da）：底行行内合并——手机图标与设置图标同一行 ──
+ * 官方 DOM 实测（e2e 探针 bbox 取证）：官方 ui-sidebar footArea = column——
+ * footer.action 槽行（footerActions，槽锚 display:contents 后组件根即行内项）与
+ * settings 触发行（settingsArea）上下两行堆叠，手机图标自占一行悬在设置行上方。
+ * 官方包禁改——产品侧结构性对冲（wco.css 同径锚：[data-slot='sidebar'] > div >
+ * div:last-child = 官方 footArea；[data-sidebar-collapsed='true'] 在场 = 收起轨）：
+ * 展开态两行合并为一行（设置触发行居左占满、手机图标 order 尾随居右）；收起轨
+ * 回归官方 column 居中堆叠（零行级覆写）。 */
+[data-slot='sidebar'] > div > div:last-child {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px; /* dsw-raw 行内缝（局部刻度） */
+}
+
+[data-slot='sidebar'] > div > div:last-child > div:first-child {
+  order: 2; /* 手机图标尾随设置行右侧（提案 1.2：设置居左、手机居右） */
+  flex: none;
+  width: auto;
+  margin-left: auto;
+}
+
+[data-slot='sidebar'] > div > div:last-child > div:last-child {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* 收起轨：回归官方收起态 column 居中堆叠（官方 .collapsed 刻度，零覆写） */
+[data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:last-child {
+  flex-direction: column;
+  gap: 0;
+}
+
+[data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:last-child > div:first-child {
+  order: 0;
+  width: auto;
+  margin-left: 0;
+}
+
+[data-sidebar-collapsed='true'] [data-slot='sidebar'] > div > div:last-child > div:last-child {
+  flex: none;
+  width: auto;
+}
+
 /* 入口钮（官方 .iconButton 同型刻度——dsh-client-ui-sidebar lib/client.js 源码核验同径） */
 .dswf-remote-entry {
   display: inline-flex;

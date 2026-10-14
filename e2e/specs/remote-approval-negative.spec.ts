@@ -124,6 +124,24 @@ test('负样例①：默认关闭不可达——初始形态外部访问宿主�
     await expect(page.locator(REMOTE_ENTRY), '默认态手机图标在 footer.action 槽（相位入口）').toBeAttached({ timeout: 15_000 })
     expect(await remoteConfigEnabledOf(page), '默认态产品配置 remoteApproval 未开启').toBe(false)
     await expect(page.locator(REMOTE_ENTRY), '默认态 = 灰（off）').toHaveAttribute('data-phase', 'off')
+    // fix-4（bug d025a0da）：手机图标与设置图标同一行——官方 foot 底行行内形态
+    // （footer.action 槽行内项与 settings 触发行同排，设置居左/手机居右）。
+    // 判据 = 两图标 bbox 垂直中心差 ≤ 8px（28px 图标对 42px 触发行，同排中心对齐）。
+    const rowBox = await page.evaluate(() => {
+      const box = (el: Element | null) => {
+        if (el === null) return null
+        const r = el.getBoundingClientRect()
+        return { cy: r.top + r.height / 2 }
+      }
+      return {
+        entry: box(document.querySelector('.dswf-remote-entry')),
+        gear: box(document.querySelector('[aria-label="设置"]')),
+      }
+    })
+    expect(rowBox.entry, '手机图标 bbox 在场').not.toBeNull()
+    expect(rowBox.gear, '设置图标 bbox 在场').not.toBeNull()
+    const rowDelta = Math.abs(rowBox.entry!.cy - rowBox.gear!.cy)
+    expect(rowDelta, `手机/设置图标同一行（bbox 中心差 ${rowDelta.toFixed(1)}px ≤ 8）`).toBeLessThanOrEqual(8)
     const port = await hostPortOf(page)
     const lanUrl = `http://${lanIp as string}:${port}/`
     const probe = await probeReachable(lanUrl)
