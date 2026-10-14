@@ -1,18 +1,36 @@
-// 远程状态注入面单测（mobile-remote-approval 1.2——plugin.ts buildRemoteStatusSource）：
-// 官方 remote.settings 反射面 → 三态快照；缺席/失败 = fail-soft off；setEnabled 官方
-// settings.update 回写 + 即时 refresh（开关切换 → 图标态即时变化，状态单源零本地轮询）。
-import { describe, expect, it } from 'vitest'
+// 远程状态注入面单测（mobile-remote-approval 1.2/fix-3——plugin.ts buildRemoteStatusSource）：
+// 产品自有配置（forge:settings/get remoteApproval.enabled）× boot manifest（remoteHost 实际
+// 绑定）双源 → 相位快照（配置↔实况不一致 = pending 待重启生效）；桥缺席/失败 = fail-soft
+// off；setEnabled = forge:settings/set remoteApproval 分节覆写 + 即时 refresh。
+import { afterEach, describe, expect, it } from 'vitest'
 import { SIDEBAR_FOOTER_ACTION_SLOT, buildRemoteStatusSource, type ForgeClientCtx } from './plugin.js'
 
-const OK_HOST = (host: string, revision = 3) => ({
-  ok: true,
-  value: { namespaces: [{ ns: 'webserver', value: { host, port: 8787 }, revision }] },
+/** dshForge 桥替身安装面（globalThis.dshForge——preloadBridgeOf 读取面；用后还原） */
+let installed: unknown
+afterEach(() => {
+  ;(globalThis as { dshForge?: unknown }).dshForge = installed
+  installed = undefined
 })
 
-function fakeCtx(face: Record<string, unknown> | undefined): ForgeClientCtx {
-  return {
-    reflect: { get: (name: string) => (name === 'remote.settings' ? face : undefined) },
-  } as unknown as ForgeClientCtx
+function fakeBridge(overrides: {
+  readonly settings?: unknown
+  readonly manifest?: { url?: string; remoteHost?: string }
+  readonly invokeFail?: boolean
+  readonly written?: { channel: string; payload: unknown }[]
+}): ForgeClientCtx {
+  installed = (globalThis as { dshForge?: unknown }).dshForge
+  const bridge = {
+    invoke: (channel: string, payload?: unknown) => {
+      overrides.written?.push({ channel, payload })
+      if (overrides.invokeFail === true) return Promise.reject(new Error('boom'))
+      if (channel === 'forge:settings/get') return Promise.resolve({ ok: true, data: overrides.settings })
+      if (channel === 'forge:settings/set') return Promise.resolve({ ok: true, data: null })
+      return Promise.reject(new Error(`unexpected channel ${channel}`))
+    },
+    getBootManifest: () => Promise.resolve(overrides.manifest ?? {}),
+  }
+  ;(globalThis as { dshForge?: unknown }).dshForge = bridge
+  return {} as unknown as ForgeClientCtx
 }
 
 describe('sidebar.footer.action 槽常量', () => {
@@ -21,59 +39,99 @@ describe('sidebar.footer.action 槽常量', () => {
   })
 })
 
-describe('buildRemoteStatusSource', () => {
-  it('describe 信封 → 快照三态（enabled 读数单源）', async () => {
-    const remote = buildRemoteStatusSource(fakeCtx({ describe: () => Promise.resolve(OK_HOST('0.0.0.0')) }))
+describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
+  it('配置开 × 全卡绑定实况 → listening 快照（manifest.url 端口入局域网地址）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: { url: 'http://127.0.0.1:19400/#token', remoteHost: '0.0.0.0' },
+      }),
+    )
     await remote.refresh()
     expect(remote.source.getSnapshot().phase).toBe('listening')
-    expect(remote.source.getSnapshot().lanAddress).toContain(':8787')
-
-    const off = buildRemoteStatusSource(fakeCtx({ describe: () => Promise.resolve(OK_HOST('127.0.0.1')) }))
-    await off.refresh()
-    expect(off.source.getSnapshot().phase).toBe('off')
+    expect(remote.source.getSnapshot().lanAddress).toContain(':19400')
   })
 
-  it('反射面缺席/调用失败 = fail-soft off 快照（不炸装配）', async () => {
-    const absent = buildRemoteStatusSource(fakeCtx(undefined))
+  it('配置开 × 回环实况 → pending（待重启生效——不伪装 listening）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: { url: 'http://127.0.0.1:1/', remoteHost: '127.0.0.1' },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().phase).toBe('pending')
+  })
+
+  it('配置关 × 回环实况 → off；配置关 × 全卡实况 → pending（关闭待重启收回）', async () => {
+    const off = buildRemoteStatusSource(
+      fakeBridge({
+        settings: {},
+        manifest: { url: 'http://127.0.0.1:1/', remoteHost: '127.0.0.1' },
+      }),
+    )
+    await off.refresh()
+    expect(off.source.getSnapshot().phase).toBe('off')
+
+    const pending = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: false } },
+        manifest: { url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' },
+      }),
+    )
+    await pending.refresh()
+    expect(pending.source.getSnapshot().phase).toBe('pending')
+  })
+
+  it('桥缺席 / 配置读失败 = fail-soft off 快照（不炸装配）', async () => {
+    delete (globalThis as { dshForge?: unknown }).dshForge
+    const absent = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
     await absent.refresh()
     expect(absent.source.getSnapshot().phase).toBe('off')
 
-    const boom = buildRemoteStatusSource(fakeCtx({ describe: () => Promise.reject(new Error('boom')) }))
+    const boom = buildRemoteStatusSource(fakeBridge({ invokeFail: true }))
     await boom.refresh()
     expect(boom.source.getSnapshot().phase).toBe('off')
   })
 
-  it('setEnabled 回写官方 settings.update（host 翻转 + expectedRevision）并即时 refresh', async () => {
-    let host = '127.0.0.1'
-    const writes: unknown[] = []
-    const remote = buildRemoteStatusSource(
-      fakeCtx({
-        describe: () => Promise.resolve(OK_HOST(host)),
-        update: (ns: string, patch: Record<string, unknown>, expectedRevision: number | undefined) => {
-          writes.push({ ns, patch, expectedRevision })
-          host = String(patch['host'])
-          return Promise.resolve({ ok: true, value: { ns } })
-        },
-      }),
-    )
+  it('setEnabled 回写 forge:settings/set（只携 remoteApproval 节——worker 段不被冲掉）并即时 refresh', async () => {
+    const written: { channel: string; payload: unknown }[] = []
+    let settings: Record<string, unknown> = { worker: { provider: 'p', model: 'm', reasoning: 'high' } }
+    installed = (globalThis as { dshForge?: unknown }).dshForge
+    const bridge = {
+      invoke: (channel: string, payload?: unknown) => {
+        written.push({ channel, payload })
+        if (channel === 'forge:settings/get') return Promise.resolve({ ok: true, data: settings })
+        if (channel === 'forge:settings/set') {
+          settings = { ...settings, ...(payload as Record<string, unknown>) }
+          return Promise.resolve({ ok: true, data: null })
+        }
+        return Promise.reject(new Error(`unexpected channel ${channel}`))
+      },
+      getBootManifest: () => Promise.resolve({ url: 'http://127.0.0.1:1/', remoteHost: '127.0.0.1' }),
+    }
+    ;(globalThis as { dshForge?: unknown }).dshForge = bridge
+    const remote = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
     await remote.refresh()
-    const before = remote.source.getSnapshot().phase
+    expect(remote.source.getSnapshot().phase).toBe('off')
     const ok = await remote.setEnabled(true)
     expect(ok).toBe(true)
-    expect(writes[0]).toEqual({ ns: 'webserver', patch: { host: '0.0.0.0' }, expectedRevision: 3 })
-    expect(before).toBe('off')
-    expect(remote.source.getSnapshot().phase).toBe('listening')
+    const setCall = written.find((w) => w.channel === 'forge:settings/set')
+    expect(setCall).toEqual({ channel: 'forge:settings/set', payload: { remoteApproval: { enabled: true } } })
+    expect(settings['worker']).toEqual({ provider: 'p', model: 'm', reasoning: 'high' }) // 分节覆写——worker 段保留
+    expect(remote.source.getSnapshot().phase).toBe('pending') // 配置已开 × 绑定仍回环 = 待重启
   })
 
-  it('官方 update 缺席/失败 = setEnabled false（fail-soft，不改快照断言）', async () => {
-    const remote = buildRemoteStatusSource(fakeCtx({ describe: () => Promise.resolve(OK_HOST('127.0.0.1')) }))
+  it('桥缺席 = setEnabled false（fail-soft，不改快照）', async () => {
+    delete (globalThis as { dshForge?: unknown }).dshForge
+    const remote = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
     await remote.refresh()
     expect(await remote.setEnabled(true)).toBe(false)
     expect(remote.source.getSnapshot().phase).toBe('off')
   })
 
   it('订阅面：refresh 后通知订阅者（useSyncExternalStore 直连契约）', async () => {
-    const remote = buildRemoteStatusSource(fakeCtx({ describe: () => Promise.resolve(OK_HOST('127.0.0.1')) }))
+    const remote = buildRemoteStatusSource(fakeBridge({ settings: {} }))
     let notified = 0
     const dispose = remote.source.subscribe(() => {
       notified += 1
