@@ -52,21 +52,47 @@
   color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
 }
 
-/* 面板（底行左侧弹出卡——固定定位不随侧栏裁剪） */
+/* 面板（1.7 配对面——面板体改挂官方 Modal 卡内：静态流式，定宽即弹层内容宽） */
+.dswf-remote-modal {
+  width: 316px; /* dsw-raw 弹层内容宽（面板 264 + Modal 内距余量——局部刻度） */
+}
+
 .dswf-remote-panel {
-  position: fixed;
-  bottom: 48px;
-  left: 12px;
-  z-index: 60;
   display: flex;
   flex-direction: column;
   gap: 10px; /* dsw-raw 面板纵向行距（面板局部刻度，无对应 spacing 令牌） */
-  width: 264px; /* dsw-raw 面板宽度（底行弹出卡局部刻度） */
-  padding: 12px; /* dsw-raw 面板内距（面板局部刻度） */
+  width: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dswf-remote-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* dsw-raw 配对面纵向行距（局部刻度） */
+}
+
+/* QR 载体（白底衬保证扫码对比度——暗色主题下同样可扫） */
+.dswf-remote-qr {
+  display: inline-flex;
+  padding: 8px; /* dsw-raw QR 静区（局部刻度） */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-elevation-prominent);
+  line-height: 0;
+}
+
+.dswf-remote-empty {
+  width: 100%;
+  margin: 0;
+  padding: 24px 12px; /* dsw-raw 配对空态内距（局部刻度） */
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
 }
 
 .dswf-remote-panel-head {

@@ -14,6 +14,43 @@ function sourceOf(snapshot: RemoteStatusSnapshot): SnapshotSource<RemoteStatusSn
 
 const LISTENING: RemoteStatusSnapshot = { phase: 'listening', lanAddress: 'http://192.168.1.7:8787' }
 
+describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 官方配对/连接地址）', () => {
+  it('监听中：QR 锚在场（data-value pin 连接地址）+ svg 载体 + 地址文本兜底', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(html).toContain('data-testid="dswf-remote-qr"')
+    expect(html).toContain('data-value="http://192.168.1.7:8787"')
+    expect(html).toMatch(/<svg/)
+    expect(html).toContain('http://192.168.1.7:8787') // 地址文本兜底
+  })
+
+  it('有设备已连接：QR 同样在场（扫码连接不因已连接收回）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'connected', lanAddress: 'http://192.168.1.7:8787' }} onToggle={() => undefined} />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-qr"')
+    expect(html).toContain('data-value="http://192.168.1.7:8787"')
+  })
+
+  it('远程关 = 空态替代 QR（不渲染二维码锚）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'off' }} onToggle={() => undefined} />)
+    expect(html).toContain('data-dswf-remote-empty')
+    expect(html).not.toContain('dswf-remote-qr')
+  })
+
+  it('待重启生效 = 空态替代 QR + 重启提示（不伪装已监听）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />)
+    expect(html).toContain('data-dswf-remote-empty')
+    expect(html).not.toContain('dswf-remote-qr')
+    expect(html).toMatch(/重启宿主后/)
+  })
+
+  it('监听中但地址读数缺席 = 空态回退（不渲染空值 QR）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'listening' }} onToggle={() => undefined} />)
+    expect(html).toContain('data-dswf-remote-empty')
+    expect(html).not.toContain('dswf-remote-qr')
+  })
+})
+
 describe('ForgeRemoteEntry 图标三态', () => {
   it('远程关 = data-phase off（灰态）', () => {
     const html = renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'off' })} />)
