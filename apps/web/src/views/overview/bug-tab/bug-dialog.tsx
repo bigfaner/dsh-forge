@@ -3,15 +3,15 @@
 // drawer 先例：taskDrawerHeadDragProps / drawerPositionFromDrag / useTaskDrawerEscape）。
 // 布局 = 双列表单（label 定宽列左 / value 弹性列右，overflow-wrap 只断长 token——少换行）
 // + 纵向滚动（body overflow-y——内容多不溢出）；宽 880 = 440 任务弹窗两倍（2026-10-14
-// 用户裁决）。行集：摘要/状态/错误类型/五字段/修复证据(fixed)/未修原因(unresolved)/
-// 发现·修复(会话 pill)/来源/登记时间(带年份 fullStampOf)。会话 pill 沿
+// 用户裁决）。头部 = 摘要（无 label 独立行左对齐）+ 状态·错误类型 chips（右对齐）；
+// 表单行集：五字段/修复证据(fixed)/未修原因(unresolved)/发现·修复(会话 pill)/来源/
+// 登记时间(带年份 fullStampOf)。会话 pill 沿
 // sessionTitleOfOrId 契约：命中 = 可点击 title（onOpenSession 跳转 + 关弹框）；缺席 =
 // fail-soft 回退 sessionId 不可点击。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { BUG_STATUS_LABELS, type BugCard } from '@dsh-forge/contracts'
-import { Button, IconCloseFillRegular, StateDot, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconCloseFillRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { fullStampOf } from '../message-format.js'
-import { BUG_STATUS_DOT_STATE } from './bug-list.js'
 import {
   defaultDrawerPosition,
   drawerPositionFromDrag,
@@ -176,22 +176,19 @@ export function BugDialog({ bug, onClose, onOpenSession, sessionTitleOf }: BugDi
         </Button>
       </div>
       <div className="dswf-ov-bdialog-body" data-dswf-ov-bdialog-body="">
-        <FormRow label="摘要">
-          <span data-dswf-ov-bdialog-summary="">{bug.summary}</span>
-        </FormRow>
-        <FormRow label="状态">
-          <span className="dswf-ov-bdialog-metavals" data-dswf-ov-bdialog-status={bug.bugStatus}>
-            <StateDot state={BUG_STATUS_DOT_STATE[bug.bugStatus]} size={8} />
-            {BUG_STATUS_LABELS[bug.bugStatus].zh}
-          </span>
-        </FormRow>
-        {bug.errorType !== undefined ? (
-          <FormRow label="错误类型">
-            <span data-dswf-ov-bdialog-type={bug.errorType}>
-              <Tag tone="neutral">{bug.errorType}</Tag>
+        <div className="dswf-ov-bdialog-summaryline">
+          <span className="dswf-ov-bdialog-summarytext" data-dswf-ov-bdialog-summary="">{bug.summary}</span>
+          <span className="dswf-ov-bdialog-chips">
+            <span data-dswf-ov-bdialog-status={bug.bugStatus}>
+              <Tag tone="neutral">{BUG_STATUS_LABELS[bug.bugStatus].zh}</Tag>
             </span>
-          </FormRow>
-        ) : null}
+            {bug.errorType !== undefined ? (
+              <span data-dswf-ov-bdialog-type={bug.errorType}>
+                <Tag tone="neutral">{bug.errorType}</Tag>
+              </span>
+            ) : null}
+          </span>
+        </div>
         {KV_FIELDS.map(({ key, label }) => (
           <FormRow key={key} label={label} kv={key}>
             {kvValueOf(bug, key)}

@@ -40,6 +40,9 @@ describe('BugDialog（真 dialog 表单线框）', () => {
     expect(markup).toContain('data-dswf-ov-bdialog-body') // 滚动主区
     expect(markup).toContain('Bug 详情')
     expect(markup).toContain('data-dswf-ov-bdialog-close')
+    // 摘要独立行（无 label 左对齐）+ 状态·错误类型 chips 右靠（表单行之外）
+    expect(markup).toContain('dswf-ov-bdialog-summaryline')
+    expect(markup).not.toContain('dswf-ov-bdialog-kv="summary"')
   })
 
   it('双列表单：摘要/状态/错误类型/五字段/登记时间（带年份）逐行 label+value', () => {

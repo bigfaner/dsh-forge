@@ -45,14 +45,38 @@
   flex: 1;
 }
 
-/* ── 表单体：纵向滚动主区（唯一滚动面——内容多不出壳） ── */
+/* ── 表单体：纵向滚动主区（唯一滚动面——内容多不出壳）；行距 = 整行高令牌（段落间隔加大——用户裁决） ── */
 .dswf-ov-bdialog-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
   padding: var(--dsw-font-s-14-line-height);
+}
+
+/* ── 摘要行：无 label 独立行左对齐 + 状态·错误类型 chips 右靠（提案行头同构） ── */
+.dswf-ov-bdialog-summaryline {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-summarytext {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ov-bdialog-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  flex: none;
 }
 
 /* ── 双列表单行：label 定宽列（容四字中文标签） + value 弹性列（只断长 token——少换行） ── */
@@ -81,12 +105,6 @@
 /* 行内多值（发现/修复 = 人员 + 会话 pill） */
 .dswf-ov-bdialog-value > * + * {
   margin-left: var(--dsw-font-xs-13-line-height);
-}
-
-.dswf-ov-bdialog-metavals {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dsw-font-xs-13-line-height);
 }
 
 /* 会话跳转链接（命中 title = 可点击；令牌 link 色同应用链接语言） */
