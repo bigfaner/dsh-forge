@@ -263,6 +263,9 @@ export interface BugSourceDeps {
   /** 当前会话所属项目（接线面递达会话锚；未绑定 = undefined——Bug 组空候选 fail-soft。
    * 1.2 起 sessionId 可选入参：candidates 锚定会话精确解析，serialize 无会话位 = '' 走唯一项目兜底） */
   readonly projectId: (sessionId?: string) => string | undefined
+  /** 注册项目全集（serialize 跨项目有界回退——锚定/唯一项目兜底落空时按缓存遍历现查；
+   * 缺席 = 不遍历，退回最小块） */
+  readonly projectIds?: () => readonly string[]
   readonly listBugs: BugListFn
   /** 时钟（缺省 Date.now） */
   readonly now?: () => number
@@ -377,10 +380,24 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
           // 快照优先（全量卡——bugDesc 真值在即视为全卡；undefined/空串均不冒充，bug 27ab222b）
           const snapshotted = snapshots.get(bugId)
           if (snapshotted !== undefined && snapshotted.bugDesc) return serializeBugCard(snapshotted)
-          // 现查回退（最小卡 / 无快照时补全字段块——serialize 无会话位，锚定走 ''）
+          // 现查回退一：锚定径（serialize 无会话位，锚定走 '' 的唯一项目兜底）
+          const tried = new Set<string>()
           const projectId = deps.projectId('')
           if (projectId !== undefined) {
+            tried.add(projectId)
             const bugs = await deps.listBugs({ projectId })
+            const found = bugs.find((bug) => bug.bugId === bugId)
+            if (found !== undefined) {
+              snapshots.set(bugId, found)
+              return serializeBugCard(found)
+            }
+          }
+          // 现查回退二：跨项目有界遍历（时序/跨项目洞——锚定落空或未命中时按注册项目
+          // 缓存逐项目查，首命中即全卡；缺席 = 不遍历）
+          for (const candidateId of deps.projectIds?.() ?? []) {
+            if (tried.has(candidateId)) continue
+            tried.add(candidateId)
+            const bugs = await deps.listBugs({ projectId: candidateId })
             const found = bugs.find((bug) => bug.bugId === bugId)
             if (found !== undefined) {
               snapshots.set(bugId, found)

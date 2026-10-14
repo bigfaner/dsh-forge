@@ -256,6 +256,34 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     expect(block).toContain('  summary: 修复后段一目录选取双开对话框')
   })
 
+  it('跨项目有界回退：锚定落空时按项目缓存遍历现查，首命中即全卡（时序/跨项目洞收口）', async () => {
+    const listBugs = vi.fn((q: unknown) => {
+      const projectId = (q as { projectId: string }).projectId
+      return Promise.resolve(projectId === 'p-2' ? [card()] : [])
+    })
+    const source = createBugReferenceSource({
+      projectId: () => undefined, // 无会话位 + 多项目：锚定与唯一项目兜底均落空
+      projectIds: () => ['p-1', 'p-2'],
+      listBugs: listBugs as unknown as (q: unknown) => Promise<readonly BugCardSource[]>,
+      now: () => NOW,
+    })
+    const block = await source.codec.serialize('bug:b-42', SIGNAL)
+    expect(block).toContain('  bugDesc: ')
+    expect(block).not.toContain('bug 详情不可用')
+    expect(listBugs).toHaveBeenCalledWith({ projectId: 'p-1' })
+    expect(listBugs).toHaveBeenCalledWith({ projectId: 'p-2' })
+  })
+
+  it('跨项目回退遍历尽无命中 → id 最小块（不抛错不阻断发送）', async () => {
+    const source = createBugReferenceSource({
+      projectId: () => undefined,
+      projectIds: () => ['p-1'],
+      listBugs: vi.fn(() => Promise.resolve([])) as unknown as (q: unknown) => Promise<readonly BugCardSource[]>,
+      now: () => NOW,
+    })
+    await expect(source.codec.serialize('bug:ghost', SIGNAL)).resolves.toBe('<bug bugId="ghost">\n  summary: （bug 详情不可用）\n</bug>')
+  })
+
   it('现查回退：无快照时 serialize 走 listBugs 命中', async () => {
     const { listBugs, source } = deps()
     const block = await source.codec.serialize('bug:b-7', SIGNAL)

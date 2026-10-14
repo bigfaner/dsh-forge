@@ -1242,6 +1242,9 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
   const source = createBugReferenceSource({
     name: FORGE_BUG_SOURCE_NAME,
     projectId: projectIdOf,
+    // 跨项目有界回退（刷新后 warm 种子未落/跨项目 chip）：注册项目缓存全集——
+    // refreshProjects（登记期 + warm 期）填充，serialize 锚定落空时逐项目现查
+    projectIds: () => projects.map((row) => row.id),
     listBugs: (query) => {
       if (invoke === undefined) {
         return Promise.reject(new Error('dsh-forge web-client: dshForge.invoke 缺席（Bug 组 fail-soft 零候选）'))
