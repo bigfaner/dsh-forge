@@ -11,6 +11,7 @@
 // 内联图/回退卡 = 纯呈现（1.8 方案 A：成功态内联无头「图即内容」，回退卡形制原样保留）。
 import { useEffect, useState, type ReactNode } from 'react'
 
+import { applyOpenArrowheads } from './arrowheads.js'
 import { MERMAID_THEME_VARIABLES } from './theme.js'
 
 /** mermaid 引擎窄面（消费的最小 API——真身类型经动态 import 推断，此处收敛调用面） */
@@ -71,7 +72,10 @@ export async function renderMermaidDiagram(
     const engine = await load()
     const { svg } = await engine.render(id, source)
     if (typeof svg !== 'string' || svg.length === 0) return { ok: false }
-    return { ok: true, svg }
+    // 1.14 管线单点收口：SVG 后处理（箭头开放化）后再返回——React 件与 DOM 增强器两消费
+    // 面均经本函数，自动继承。零命中（上游改几何）原样返回——安全回归实心箭头。
+    // 生产面 marker id 经 nextMermaidId 每渲染唯一，无同文档 -open 后缀去重需求（预览页双拷贝工件，注记即可）。
+    return { ok: true, svg: applyOpenArrowheads(svg) }
   } catch {
     return { ok: false }
   }

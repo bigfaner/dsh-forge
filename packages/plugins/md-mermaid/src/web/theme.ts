@@ -43,6 +43,7 @@ export const MERMAID_THEME_VARIABLES = {
   labelBackgroundColor: '#ffffff', // dsw-raw 官方 --dsw-static-neutral-bluish-00 实值（标签底——白净）
   clusterBkg: '#f9fafb', // dsw-raw 官方 --dsw-static-neutral-bluish-50 实值（簇底，B₁）
   clusterBorder: '#e1e5ee', // dsw-raw 官方 --dsw-static-neutral-bluish-200 实值（簇边，B₁）
+  signalColor: '#adb2b8', // dsw-raw 官方 --dsw-static-neutral-bluish-400 实值（时序消息线——与连线同源；缺席回落 textColor 蓝染，1.14 收口）
   activationBorderColor: '#cfd3d6', // dsw-raw 官方 --dsw-static-neutral-bluish-300 实值（激活描边——保持 1.11 档）
   sequenceNumberColor: '#61666b', // dsw-raw 官方 --dsw-static-neutral-bluish-700 实值（khroma 派生禁 var()——回退缺陷定性 fix-8）
   loopTextColor: '#61666b', // dsw-raw 官方 --dsw-static-neutral-bluish-700 实值（同上）

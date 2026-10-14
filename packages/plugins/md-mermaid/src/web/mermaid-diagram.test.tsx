@@ -73,6 +73,7 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
       'clusterBorder',
       'activationBorderColor',
       'sequenceNumberColor',
+      'signalColor',
       'loopTextColor',
     ] as const
     for (const key of colorKeys) {
@@ -90,6 +91,9 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
     expect(MERMAID_THEME_VARIABLES.clusterBorder, '簇边 = neutral-bluish-200 实值').toBe('#e1e5ee')
     expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = neutral-bluish-400 实值（灰阶——B₁）').toBe('#adb2b8')
     expect(MERMAID_THEME_VARIABLES.arrowheadColor, '箭头色 = neutral-bluish-400 实值（与连线同源）').toBe('#adb2b8')
+    expect(MERMAID_THEME_VARIABLES.signalColor, '时序消息线 = neutral-bluish-400 实值（与连线同源——缺席回落 textColor 蓝染）').toBe(
+      '#adb2b8',
+    )
     expect(MERMAID_THEME_VARIABLES.edgeLabelBackground, '边标签底 = neutral-bluish-00 实值（白净——B₁）').toBe('#ffffff')
     expect(MERMAID_THEME_VARIABLES.primaryTextColor, '节点内文字 = brand-deepseek-450 实值（亮蓝——边浅字亮同族两阶）').toBe('#5686fe')
     expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = brand-deepseek-450 实值（亮蓝）').toBe('#5686fe')
