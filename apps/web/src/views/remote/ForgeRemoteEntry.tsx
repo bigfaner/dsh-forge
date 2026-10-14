@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
-import type { RemotePhase, RemoteStatusSnapshot } from './remote-status.js'
+import type { RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
 import './remote.css'
 
 /** sidebar.footer.action 占用者注入面（插件 remote-face 递达；逐位缺席 fail-soft） */
@@ -92,16 +92,125 @@ function CopyGlyph(): ReactNode {
   )
 }
 
-/** 双模式 tab（fix-7 官方对照：局域网 / 互联网「即将支持」占位——隧道另立项不入本面） */
-function ModeTabs(): ReactNode {
+/** 双模式 tab（1.4 互联网真实启用——替换 fix-7 disabled 占位；受控 active + onSelect 缝） */
+function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => void }): ReactNode {
+  const { active, onSelect } = props
   return (
     <div className="dswf-remote-tabs" role="tablist" aria-label="连接方式">
-      <button type="button" role="tab" aria-selected="true" className="dswf-remote-tab" data-testid="dswf-remote-tab-lan" data-active="true">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === 'lan'}
+        className="dswf-remote-tab"
+        data-testid="dswf-remote-tab-lan"
+        data-active={active === 'lan'}
+        onClick={() => onSelect('lan')}
+      >
         局域网
       </button>
-      <button type="button" role="tab" aria-selected="false" className="dswf-remote-tab" data-testid="dswf-remote-tab-internet" disabled>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === 'internet'}
+        className="dswf-remote-tab"
+        data-testid="dswf-remote-tab-internet"
+        data-active={active === 'internet'}
+        onClick={() => onSelect('internet')}
+      >
         互联网
-        <span className="dswf-remote-tab-badge">即将支持</span>
+      </button>
+    </div>
+  )
+}
+
+// ── dsh-mobile-tunnel 1.4：互联网 tab 隧道面（状态/换线/横幅/PIN/QR） ──
+
+/** 连接模式（双 tab 受控缝——测试/装配可控，缺省组件内自持） */
+export type RemoteMode = 'lan' | 'internet'
+
+/** 隧道相位（四态：启动中 / 在线 / 换线中 / 失败——状态卡 data-phase 单源） */
+export type TunnelPhase = 'starting' | 'online' | 'switching' | 'failed'
+
+/** 链路类型标签（官方交互词汇对照——状态卡链路行单源） */
+export const TUNNEL_PROVIDER_LABEL: Record<TunnelProvider, string> = {
+  cloudflared: 'Cloudflare 快速隧道',
+  pinggy: 'Pinggy 隧道',
+}
+
+/** TTL 余分钟（纯函数——manifest tunnelExpiresAt 读数驱动；缺席/过期收敛 0） */
+export function tunnelMinutesLeftOf(expiresAt: number | undefined, now: number): number {
+  if (expiresAt === undefined) return 0
+  return Math.max(0, Math.ceil((expiresAt - now) / 60_000))
+}
+
+/** TTL 横幅文案（官方语义——「约 N 分钟后失效」） */
+export function tunnelBannerText(minutes: number): string {
+  return `约 ${minutes} 分钟后失效`
+}
+
+/** 隧道相位派生（纯函数）：换线中优先；读数缺席 = 启动中；TTL 过期 = 失败；其余 = 在线 */
+export function tunnelPhaseOf(
+  input: { url?: string; expiresAt?: number; switching?: boolean },
+  now: number,
+): TunnelPhase {
+  if (input.switching === true) return 'switching'
+  if (typeof input.url !== 'string' || input.url === '') return 'starting'
+  if (input.expiresAt !== undefined && input.expiresAt <= now) return 'failed'
+  return 'online'
+}
+
+/** 隧道状态卡（互联网 tab 载体——四态 + 隧道 URL QR（复用既有 QR 机械）+ Pinggy TTL
+ *  横幅 + PIN 引导 + 换线钮（onFallback 缝——缺席 = 禁用态） */
+export function TunnelCard(props: {
+  readonly phase: TunnelPhase
+  readonly url?: string
+  readonly provider?: TunnelProvider
+  /** TTL 余分钟（Pinggy 链路在场——横幅读数；cloudflared = 缺席零横幅） */
+  readonly minutesLeft?: number
+  /** fallback 缝（换线动作——缺席 = 钮禁用） */
+  readonly onFallback?: () => Promise<void> | void
+}): ReactNode {
+  const { phase, url, provider, minutesLeft, onFallback } = props
+  const online = phase === 'online'
+  return (
+    <div className="dswf-remote-tunnel" data-phase={phase} data-testid="dswf-remote-tunnel">
+      <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
+        {phase === 'starting' && '正在建立隧道……'}
+        {phase === 'switching' && '换线中——正在切换备用链路……'}
+        {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
+        {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
+      </p>
+      {online && url !== undefined && (
+        <div
+          className="dswf-remote-qr"
+          data-testid="dswf-remote-tunnel-qr"
+          data-value={url}
+          title="手机扫码打开隧道配对地址"
+        >
+          {/* 复用既有 QR 机械（react-qr-code 2.2.0 pin——LAN 面同款白底静区载体） */}
+          <QRCode value={url} size={PAIRING_QR_SIZE} />
+        </div>
+      )}
+      {online && provider === 'pinggy' && minutesLeft !== undefined && (
+        <p className="dswf-remote-tunnel-banner" data-testid="dswf-remote-tunnel-ttl">
+          {tunnelBannerText(minutesLeft)}
+        </p>
+      )}
+      {online && (
+        <p className="dswf-remote-panel-note" data-testid="dswf-remote-tunnel-pin-hint">
+          手机扫码打开上方地址，在手机端输入 6 位 PIN 完成认证（PIN 5 分钟内有效，超时自动换新）。
+        </p>
+      )}
+      <button
+        type="button"
+        className="dswf-remote-tunnel-fallback"
+        data-testid="dswf-remote-tunnel-fallback"
+        aria-label="换线"
+        title="换线"
+        disabled={onFallback === undefined || phase === 'switching'}
+        onClick={() => onFallback?.()}
+      >
+        换线
       </button>
     </div>
   )
@@ -118,6 +227,10 @@ export function RemotePanel(props: {
   readonly busy?: boolean
   /** QR 倒计时到期自动刷新（重取 boot manifest——新 token 随快照回流；缺席 = 倒计时停在 0） */
   readonly onRefresh?: () => void
+  /** 1.4 受控模式缝（测试/装配可控——缺省组件内自持局域网起始） */
+  readonly mode?: RemoteMode
+  /** 1.4 fallback 缝（换线动作透传——缺席 = 换线钮禁用态） */
+  readonly onFallback?: () => Promise<void> | void
 }): ReactNode {
   const { snapshot, onToggle, busy, onRefresh } = props
   const checked = snapshot.phase !== 'off'
@@ -128,18 +241,43 @@ export function RemotePanel(props: {
     [onToggle],
   )
   const pairValue = remotePairQrOf(snapshot)
-  // fix-6 倒计时：1s interval 渲染「二维码将在 N 秒后刷新」；到期触发 onRefresh 重取
-  // （新 token 经快照回流后 countdown 自动重置——interval 存续期 = QR 在场期）。
+  // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
+  const [modeState, setModeState] = useState<RemoteMode>('lan')
+  const mode = props.mode ?? modeState
+  const [switching, setSwitching] = useState(false)
+  const handleFallback = useCallback(() => {
+    if (props.onFallback === undefined) return
+    setSwitching(true)
+    void Promise.resolve(props.onFallback())
+      .catch(() => undefined)
+      .then(() => setSwitching(false))
+  }, [props.onFallback])
+  // 1.4 隧道相位派生（manifest 隧道面单源——换线中优先；TTL 过期 = 失败）
+  const tunnel: TunnelFace | undefined = snapshot.tunnel
   const [nowTs, setNowTs] = useState(() => Date.now())
+  const tunnelPhase = tunnelPhaseOf(
+    { url: tunnel?.url, expiresAt: tunnel?.expiresAt, switching },
+    nowTs,
+  )
+  const tunnelMinutesLeft =
+    tunnel?.expiresAt !== undefined ? tunnelMinutesLeftOf(tunnel.expiresAt, nowTs) : undefined
   const secondsLeft = secondsLeftOf(snapshot.pairExpiresAt, nowTs)
+  // fix-6/1.4 倒计时：1s interval 渲染读数（LAN QR 倒计时 / 隧道 TTL 横幅同刻度）；
+  // 到期触发 onRefresh 重取（新 token/TTL 随快照回流——官方刷新机制对齐）。
+  const ttlLive = mode === 'internet' && tunnelPhase === 'online' && tunnel?.expiresAt !== undefined
   useEffect(() => {
-    if (pairValue === undefined) return
+    if (pairValue === undefined && !ttlLive) return
     const timer = setInterval(() => setNowTs(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [pairValue])
+  }, [pairValue, ttlLive])
   useEffect(() => {
     if (pairValue !== undefined && secondsLeft <= 0) onRefresh?.()
   }, [pairValue, secondsLeft, onRefresh])
+  useEffect(() => {
+    if (ttlLive && tunnel !== undefined && tunnel.expiresAt !== undefined && tunnel.expiresAt <= nowTs) {
+      onRefresh?.()
+    }
+  }, [ttlLive, tunnel, nowTs, onRefresh])
   // fix-6 复制反馈：「已复制」1.8s 自动消退（writeClipboard = 官方 primitives 既有件）。
   const [copied, setCopied] = useState(false)
   useEffect(() => {
@@ -163,7 +301,16 @@ export function RemotePanel(props: {
         </div>
       ) : (
         <>
-          <ModeTabs />
+        <ModeTabs active={mode} onSelect={setModeState} />
+        {mode === 'internet' ? (
+          <TunnelCard
+            phase={tunnelPhase}
+            url={tunnel?.url}
+            provider={tunnel?.provider}
+            minutesLeft={tunnelMinutesLeft}
+            onFallback={handleFallback}
+          />
+        ) : (
           <div className="dswf-remote-pair">
             {pairValue !== undefined ? (
               <>
@@ -192,6 +339,7 @@ export function RemotePanel(props: {
               </p>
             )}
           </div>
+        )}
         </>
       )}
       <label className="dswf-remote-panel-row">

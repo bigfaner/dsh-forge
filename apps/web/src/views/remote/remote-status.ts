@@ -14,6 +14,17 @@
 /** 远程入口相位（图标 data-phase 与面板状态行同源） */
 export type RemotePhase = 'off' | 'pending' | 'listening' | 'connected'
 
+/** dsh-mobile-tunnel：隧道链路类型（host manifest 透传——cloudflared 首选 / pinggy 兜底） */
+export type TunnelProvider = 'cloudflared' | 'pinggy'
+
+/** dsh-mobile-tunnel：隧道面（互联网 tab 状态卡单源——manifest tunnel 三字段收拢） */
+export interface TunnelFace {
+  readonly url: string
+  readonly provider: TunnelProvider
+  /** Pinggy TTL 到期时刻（epoch ms——「约 N 分钟后失效」横幅读数；cloudflared = 缺席） */
+  readonly expiresAt?: number
+}
+
 /** 远程状态快照（插件注入面 remote-face 产出——组件 useSyncExternalStore 直读） */
 export interface RemoteStatusSnapshot {
   readonly phase: RemotePhase
@@ -21,6 +32,8 @@ export interface RemoteStatusSnapshot {
   readonly lanAddress?: string
   /** fix-6：配对令牌到期时刻（epoch ms——QR 倒计时单源；与 lanAddress 同生同灭） */
   readonly pairExpiresAt?: number
+  /** dsh-mobile-tunnel：隧道面（manifest tunnelUrl/链路类型/TTL 在场才携带——缺席 = 空态） */
+  readonly tunnel?: TunnelFace
 }
 /**
  * 相位派生（纯函数——配置意图 × 实际绑定双源）：意图（产品配置 enabled）与实况（本 boot
@@ -49,6 +62,12 @@ export interface BootManifestRead {
   readonly remotePairExpiresAt?: number
   /** fix-7：/pair 握手成功读数（host manifest 透传——true = 手机已连接粘性位） */
   readonly remoteDeviceConnected?: boolean
+  /** dsh-mobile-tunnel：隧道配对地址（`${tunnelUrl}/pair?token=` 形状——与 LAN 同一 /pair 协议） */
+  readonly tunnelUrl?: string
+  /** dsh-mobile-tunnel：当前链路类型（与 tunnelUrl 同生同灭） */
+  readonly tunnelProvider?: TunnelProvider
+  /** dsh-mobile-tunnel：Pinggy TTL 到期时刻（epoch ms——UI「约 N 分钟后失效」横幅读数） */
+  readonly tunnelExpiresAt?: number
 }
 
 /**
@@ -68,7 +87,24 @@ export function remoteSnapshotOf(
     exposureActive,
     devicesConnected: manifest?.remoteDeviceConnected === true, // fix-7：/pair 握手成功读数抬 connected
   })
-  if (phase !== 'listening') return { phase }
+  // dsh-mobile-tunnel：隧道面收拢（url 非空串 × 链路类型合法齐备才携带——缺席/畸形 = 字段不出现）
+  const tunnelUrl = manifest?.tunnelUrl
+  const tunnelProvider = manifest?.tunnelProvider
+  const tunnel =
+    typeof tunnelUrl === 'string' && tunnelUrl !== '' && (tunnelProvider === 'cloudflared' || tunnelProvider === 'pinggy')
+      ? ({
+          url: tunnelUrl,
+          provider: tunnelProvider,
+          ...(typeof manifest?.tunnelExpiresAt === 'number' &&
+          Number.isFinite(manifest.tunnelExpiresAt) &&
+          manifest.tunnelExpiresAt > 0
+            ? { expiresAt: manifest.tunnelExpiresAt }
+            : {}),
+        } satisfies TunnelFace)
+      : undefined
+  if (phase !== 'listening') {
+    return { phase, ...(tunnel !== undefined ? { tunnel } : {}) }
+  }
   const pairUrl = manifest?.remotePairUrl
   const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
   const expiresAt = manifest?.remotePairExpiresAt
@@ -78,5 +114,6 @@ export function remoteSnapshotOf(
     phase,
     lanAddress,
     ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
+    ...(tunnel !== undefined ? { tunnel } : {}),
   }
 }

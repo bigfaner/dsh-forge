@@ -362,7 +362,7 @@
 
 /* ── fix-7 配对独立窗（bug 9fd9b6b1 ①③——布局逐位对照官方 DSH Desktop 0.10.0） ── */
 
-/* 双模式 tab 卡（局域网 active / 互联网「即将支持」占位——隧道另立项） */
+/* 双模式 tab 卡（1.4 互联网真实启用——双 tab 均可激活，active 白底高亮） */
 .dswf-remote-tabs {
   display: flex;
   gap: 4px; /* dsw-raw tab 行内缝（局部刻度） */
@@ -395,12 +395,63 @@
   cursor: default;
 }
 
-.dswf-remote-tab-badge {
-  padding: 1px 6px; /* dsw-raw 徽标内距（局部刻度） */
-  border-radius: 999px; /* dsw-raw 胶囊徽标全圆角（局部刻度——官方「即将支持」徽标形态） */
-  background: var(--dsw-alias-bg-layer-2);
-  font: var(--dsw-font-xxs-12, var(--dsw-font-xs-13));
-  color: var(--dsw-alias-label-tertiary);
+/* ── dsh-mobile-tunnel 1.4：互联网 tab 隧道面（状态卡 / TTL 横幅 / 换线钮） ── */
+
+.dswf-remote-tunnel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px; /* dsw-raw 隧道卡纵向行距（配对面同款局部刻度） */
+  width: 100%;
+}
+
+.dswf-remote-tunnel-status {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-remote-tunnel[data-phase='online'] .dswf-remote-tunnel-status {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-remote-tunnel[data-phase='switching'] .dswf-remote-tunnel-status {
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+}
+
+.dswf-remote-tunnel[data-phase='failed'] .dswf-remote-tunnel-status {
+  color: var(--dsw-alias-state-danger-primary, var(--dsw-alias-label-secondary));
+}
+
+/* Pinggy TTL 失效横幅（「约 N 分钟后失效」——琥珀警示带） */
+.dswf-remote-tunnel-banner {
+  width: 100%;
+  margin: 0;
+  padding: 6px 10px; /* dsw-raw 横幅内距（局部刻度） */
+  border: 1px dashed var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l2));
+  border-radius: var(--dsw-radius-sm);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+  text-align: center;
+}
+
+.dswf-remote-tunnel-fallback {
+  padding: 5px 14px; /* dsw-raw 换线钮内距（受限视图动作钮同款局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-tunnel-fallback:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dswf-remote-tunnel-fallback:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* 「手机已连接」态卡（fix-7 官方连接态——connected 收回 QR） */

@@ -10,10 +10,15 @@ import {
   PAIRING_QR_SIZE,
   RemotePanel,
   REMOTE_DIALOG_TITLE,
+  TUNNEL_PROVIDER_LABEL,
+  TunnelCard,
   pairCountdownText,
   secondsLeftOf,
+  tunnelBannerText,
+  tunnelMinutesLeftOf,
+  tunnelPhaseOf,
 } from './ForgeRemoteEntry.js'
-import type { RemoteStatusSnapshot } from './remote-status.js'
+import type { RemoteStatusSnapshot, TunnelFace } from './remote-status.js'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
 
 function sourceOf(snapshot: RemoteStatusSnapshot): SnapshotSource<RemoteStatusSnapshot> {
@@ -60,11 +65,24 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-7：双模式 tab 卡在场——「局域网」active + 「互联网」tab「即将支持」占位（隧道另立项）', () => {
+  it('fix-7：双模式 tab 卡在场——「局域网」active + 「互联网」tab；1.4 互联网真实启用（去掉「即将支持」占位）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
     expect(html).toMatch(/data-testid="dswf-remote-tab-lan"/)
     expect(html).toMatch(/data-testid="dswf-remote-tab-internet"/)
-    expect(html).toMatch(/即将支持/)
+    expect(html).not.toMatch(/即将支持/)
+    expect(html).not.toMatch(/disabled/)
+  })
+
+  it('1.4：双 tab aria-selected/data-active 语义随受控 mode 缝切换（局域网默认 / 互联网激活）', () => {
+    const lan = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(lan).toMatch(/aria-selected="true"[^>]*dswf-remote-tab-lan/)
+    expect(lan).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-internet/)
+    const net = renderToStaticMarkup(
+      <RemotePanel snapshot={LISTENING} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(net).toMatch(/aria-selected="true"[^>]*dswf-remote-tab-internet/)
+    expect(net).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-lan/)
+    expect(net).toMatch(/dswf-remote-tab-internet[^>]*data-active="true"/)
   })
 
   it('远程关 = 空态替代 QR（不渲染二维码锚）', () => {
@@ -184,5 +202,149 @@ describe('RemotePanel 面板', () => {
     )
     expect(html).not.toContain('dswf-remote-modal')
     expect(html).not.toContain('dialog')
+  })
+})
+
+// ── dsh-mobile-tunnel 1.4：互联网 tab 隧道面（状态卡 / TTL 横幅 / PIN 引导 / 换线） ──
+
+const TUNNEL_URL = 'https://x.pinggy.link/pair?token=t'
+const TUNNEL_PINGGY: TunnelFace = {
+  url: TUNNEL_URL,
+  provider: 'pinggy',
+  expiresAt: Date.now() + 60 * 60 * 1000, // 60min 后失效 → 横幅「约 60 分钟后失效」
+}
+const TUNNEL_CF: TunnelFace = { url: 'https://x.trycloudflare.com/pair?token=t', provider: 'cloudflared' }
+
+describe('隧道纯函数（状态相位 / TTL 分钟读数 / 横幅文案）', () => {
+  it('tunnelPhaseOf：读数缺席 = starting；在线 = online；TTL 过期 = failed；换线中优先', () => {
+    expect(tunnelPhaseOf({}, 1_000)).toBe('starting')
+    expect(tunnelPhaseOf({ url: TUNNEL_URL }, 1_000)).toBe('online')
+    expect(tunnelPhaseOf({ url: TUNNEL_URL, expiresAt: 1_000 }, 1_000)).toBe('failed')
+    expect(tunnelPhaseOf({ url: TUNNEL_URL, expiresAt: 1_001 }, 1_000)).toBe('online')
+    expect(tunnelPhaseOf({ switching: true }, 1_000)).toBe('switching')
+    expect(tunnelPhaseOf({ url: TUNNEL_URL, switching: true }, 1_000)).toBe('switching')
+  })
+
+  it('tunnelMinutesLeftOf：缺席 = 0；ceil 分钟刻度；过期收敛 0', () => {
+    expect(tunnelMinutesLeftOf(undefined, 0)).toBe(0)
+    expect(tunnelMinutesLeftOf(90_500, 0)).toBe(2)
+    expect(tunnelMinutesLeftOf(60_000, 0)).toBe(1)
+    expect(tunnelMinutesLeftOf(0, 0)).toBe(0)
+    expect(tunnelMinutesLeftOf(-1, 0)).toBe(0)
+  })
+
+  it('tunnelBannerText = 「约 N 分钟后失效」；链路类型标签（官方词汇对照）', () => {
+    expect(tunnelBannerText(60)).toBe('约 60 分钟后失效')
+    expect(TUNNEL_PROVIDER_LABEL.cloudflared).toBe('Cloudflare 快速隧道')
+    expect(TUNNEL_PROVIDER_LABEL.pinggy).toBe('Pinggy 隧道')
+  })
+})
+
+describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
+  it('局域网 tab 默认激活：隧道读数在场也不渲染隧道卡', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
+        onToggle={() => undefined}
+      />,
+    )
+    expect(html).not.toContain('dswf-remote-tunnel')
+  })
+
+  it('启动中：隧道读数缺席 = starting 态卡（正在建立隧道，零 QR 零横幅）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={LISTENING} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="starting"/)
+    expect(html).toMatch(/正在建立隧道/)
+    expect(html).not.toContain('dswf-remote-tunnel-qr')
+    expect(html).not.toContain('dswf-remote-tunnel-ttl')
+  })
+
+  it('在线（Pinggy）：QR（data-value = 隧道 URL，复用 react-qr-code 载体）+ TTL 横幅 + 链路标签 + PIN 引导 + 换线钮', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="online"/)
+    expect(html).toContain('data-testid="dswf-remote-tunnel-qr"')
+    expect(html).toContain(`data-value="${TUNNEL_URL}"`)
+    expect(html).toMatch(/<svg/)
+    expect(html).toMatch(/dswf-remote-tunnel-ttl[^>]*>约 60 分钟后失效/)
+    expect(html).toMatch(/Pinggy 隧道/)
+    expect(html).toMatch(/dswf-remote-tunnel-pin-hint[^>]*>[\s\S]*6 位 PIN/)
+    expect(html).toMatch(/5 分钟/)
+    expect(html).toMatch(/data-testid="dswf-remote-tunnel-fallback"/)
+    expect(html).toMatch(/换线/)
+  })
+
+  it('在线（cloudflared）：无 TTL 语义 = 零横幅；链路标签 Cloudflare 快速隧道', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, tunnel: TUNNEL_CF }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(html).toMatch(/data-phase="online"/)
+    expect(html).not.toContain('dswf-remote-tunnel-ttl')
+    expect(html).toMatch(/Cloudflare 快速隧道/)
+  })
+
+  it('失败：TTL 过期（expiresAt ≤ now）= failed 态卡（零 QR；失效文案 + 换线重试去向）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{
+          ...LISTENING,
+          tunnel: { url: TUNNEL_URL, provider: 'pinggy', expiresAt: Date.now() - 1 },
+        }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="failed"/)
+    expect(html).toMatch(/隧道已失效/)
+    expect(html).not.toContain('dswf-remote-tunnel-qr')
+    expect(html).not.toContain('dswf-remote-tunnel-ttl')
+  })
+
+  it('换线中：switching 相位 = 换线中文案（零 QR——换线期间不呈现旧链路面）', () => {
+    const html = renderToStaticMarkup(
+      <TunnelCard phase="switching" onFallback={() => undefined} />,
+    )
+    expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="switching"/)
+    expect(html).toMatch(/换线中/)
+    expect(html).not.toContain('dswf-remote-tunnel-qr')
+  })
+
+  it('换线钮：onFallback 缺席 = 禁用态（有缝才可触发 fallback 语义）', () => {
+    const withSeam = renderToStaticMarkup(
+      <TunnelCard phase="online" url={TUNNEL_URL} provider="pinggy" onFallback={() => undefined} />,
+    )
+    expect(withSeam).toMatch(/data-testid="dswf-remote-tunnel-fallback"[^>]*aria-label="换线"/)
+    expect(withSeam).not.toMatch(/dswf-remote-tunnel-fallback[^>]*disabled/)
+    const noSeam = renderToStaticMarkup(<TunnelCard phase="online" url={TUNNEL_URL} provider="pinggy" />)
+    expect(noSeam).toMatch(/dswf-remote-tunnel-fallback[^>]*disabled/)
+  })
+
+  it('PIN 引导文案在互联网 tab 在场、局域网 tab 不在场', () => {
+    const net = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(net).toContain('dswf-remote-tunnel-pin-hint')
+    const lan = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
+        onToggle={() => undefined}
+      />,
+    )
+    expect(lan).not.toContain('dswf-remote-tunnel-pin-hint')
   })
 })
