@@ -177,7 +177,7 @@ describe('BugDialog（变更文件区——fixed 证据 commit 的文件清单 +
     const markup = renderToStaticMarkup(
       <BugDialog bug={bug('fixed', { commitHash: 'a1b2c3d' })} onClose={() => {}} projectId="p-1" makeClient={makeClient} />,
     )
-    expect(markup).toContain('已编辑文件') // SSR 静态面未拉取——清单计数待展开首拍
+    expect(markup).toContain('变更内容') // SSR 静态面未拉取——清单计数待展开首拍
     expect(markup).toContain('data-dswf-ov-bdialog-files-toggle')
   })
 })

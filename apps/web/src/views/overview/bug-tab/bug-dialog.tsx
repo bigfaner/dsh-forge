@@ -273,8 +273,8 @@ export function BugDialog({ bug, onClose, onOpenSession, sessionTitleOf, project
             <span className="dswf-ov-bdialog-value dswf-ov-bdialog-fileswrap">
               <button type="button" className="dswf-ov-bdialog-sesslink" data-dswf-ov-bdialog-files-toggle="" onClick={toggleFiles}>
                 {filesState.files === null
-                  ? `${filesState.open ? '▾' : '▸'} 已编辑文件`
-                  : `${filesState.open ? '▾' : '▸'} 已编辑 ${filesState.files.length} 个文件`}
+                  ? `${filesState.open ? '▾' : '▸'} 变更内容`
+                  : `${filesState.open ? '▾' : '▸'} 变更内容（${filesState.files.length}）`}
               </button>
               {filesState.open && filesState.files === null && filesState.error === null ? <span>加载中…</span> : null}
               {filesState.open && filesState.error !== null ? <span>加载失败：{filesState.error}</span> : null}
