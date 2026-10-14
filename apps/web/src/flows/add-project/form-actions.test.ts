@@ -124,24 +124,28 @@ describe('外部换选（relinkExternal：2.10 返回上一步重选工作区）
 })
 
 describe('原生浏览改选（fix-14 nativeBrowseAction：三 target 同桥直选）', () => {
-  /** 手动放行的选取桩 + 记录面（busy/error/apply 事件序列） */
+  /** 手动放行的选取桩 + 记录面（busy/error/apply 事件序列 + pick 收到的 startDir） */
   function nativeHarness(canonical: string): {
-    readonly action: (target: BrowseTarget) => void
+    readonly action: (target: BrowseTarget, startDir?: string) => void
     readonly events: readonly string[]
     readonly dirCalls: readonly string[]
+    readonly pickArgs: Array<string | undefined>
     readonly settle: (outcome: string | null | Error) => void
   } {
     const events: string[] = []
     const dirCalls: string[] = []
+    const pickArgs: Array<string | undefined> = []
     let release: ((outcome: string | null | Error) => void) | null = null
     const action = nativeBrowseAction({
-      pick: () =>
-        new Promise<string | null>((resolve, reject) => {
+      pick: (startDir?: string) => {
+        pickArgs.push(startDir)
+        return new Promise<string | null>((resolve, reject) => {
           release = (outcome) => {
             if (outcome instanceof Error) reject(outcome)
             else resolve(outcome)
           }
-        }),
+        })
+      },
       dirSource: async (dirPath) => {
         dirCalls.push(dirPath ?? '')
         return { path: canonical, parentPath: null, entries: [] }
@@ -156,8 +160,21 @@ describe('原生浏览改选（fix-14 nativeBrowseAction：三 target 同桥直�
         events.push(`error:${message ?? 'null'}`)
       },
     })
-    return { action, events, dirCalls, settle: (outcome) => { release?.(outcome) } }
+    return { action, events, dirCalls, pickArgs, settle: (outcome) => { release?.(outcome) } }
   }
+
+  it('bug db7af09a：startDir 形参 → pick 收到起始目录（系统对话框 defaultPath 接线）；缺省 → undefined', async () => {
+    const n = nativeHarness('D:\\work\\alpha')
+    n.action('forgeDir', 'Z:\\project')
+    n.settle(null)
+    await Promise.resolve()
+    expect(n.pickArgs).toEqual(['Z:\\project'])
+    const m = nativeHarness('X:')
+    m.action('knowledgeDir')
+    m.settle(null)
+    await Promise.resolve()
+    expect(m.pickArgs).toEqual([undefined])
+  })
 
   it('选中 → canonical 对账后 applyPick 目标字段（BrowsePanel 确认同径唯一落值口）', async () => {
     const n = nativeHarness('D:\\work\\ALPHA') // host canonical 化（大小写对账）

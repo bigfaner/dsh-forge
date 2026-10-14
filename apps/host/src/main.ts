@@ -80,10 +80,15 @@ void (async () => {
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url, injections} 注入 renderer（壳消费）
     // fix-14/fix-21：官方目录选取桥 main 半边——openDirectory 单选 + parent 窗口模态/置顶（缺席 fail-soft 回退无 parent）。
+    // bug db7af09a：defaultPath 形参（renderer 下发起始目录——表单浏览改选传值父目录；缺省 = OS 口径零变化）。
     const pickDialogOptions: OpenDialogOptions = { properties: ['openDirectory'], title: DIRECTORY_PICKER_DIALOG_TITLE }
-    const showPickDialog = (parent: unknown) => (parent === null
-      ? dialog.showOpenDialog(pickDialogOptions)
-      : dialog.showOpenDialog(parent as BrowserWindow, pickDialogOptions))
+    const showPickDialog = (parent: unknown, defaultPath?: string) => {
+      const options: OpenDialogOptions =
+        defaultPath === undefined ? pickDialogOptions : { ...pickDialogOptions, defaultPath }
+      return parent === null
+        ? dialog.showOpenDialog(options)
+        : dialog.showOpenDialog(parent as BrowserWindow, options)
+    }
     registerDirectoryPickerChannel(ipcMain, showPickDialog, (sender) => BrowserWindow.fromWebContents(sender as WebContents))
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })

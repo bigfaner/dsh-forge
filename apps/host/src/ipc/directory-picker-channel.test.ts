@@ -97,3 +97,52 @@ describe('fix-21：parent 窗口形参（对话框前台/模态语义）', () =>
     expect(DIRECTORY_PICKER_DIALOG_TITLE).toBe('Select Workspace Directory')
   })
 })
+
+describe('defaultPath 起始目录形参（bug db7af09a——系统对话框起始目录接线）', () => {
+  it('pickDirectory：defaultPath 原样传入 open（第二形参）', async () => {
+    const seen: Array<[unknown, string | undefined]> = []
+    const open: OpenDirectoryDialog = async (parent, defaultPath) => {
+      seen.push([parent, defaultPath])
+      return { canceled: false, filePaths: ['D:\\work\\alpha'] }
+    }
+    await pickDirectory(open, 'win', 'Z:\\project')
+    expect(seen).toEqual([['win', 'Z:\\project']])
+  })
+
+  it('invoke 携带 defaultPath → 透传 open；缺省 invoke → undefined（OS 缺省口径零变化）', async () => {
+    const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+    const ipcMain: IpcMainLike = {
+      handle: (channel, listener) => void handlers.set(channel, listener),
+      removeHandler: (channel) => void handlers.delete(channel),
+    }
+    const seen: Array<[unknown, string | undefined]> = []
+    const open: OpenDirectoryDialog = async (parent, defaultPath) => {
+      seen.push([parent, defaultPath])
+      return { canceled: false, filePaths: ['D:\\work\\alpha'] }
+    }
+    registerDirectoryPickerChannel(ipcMain, open, () => 'win')
+    await handlers.get(DIRECTORY_PICKER_CHANNEL)!({ sender: 'wc' }, 'Z:\\project')
+    await handlers.get(DIRECTORY_PICKER_CHANNEL)!({ sender: 'wc' })
+    expect(seen).toEqual([
+      ['win', 'Z:\\project'],
+      ['win', undefined],
+    ])
+  })
+
+  it('invoke 携带非字符串/空串 defaultPath → 丢弃（undefined = OS 缺省，不喂脏值）', async () => {
+    const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+    const ipcMain: IpcMainLike = {
+      handle: (channel, listener) => void handlers.set(channel, listener),
+      removeHandler: (channel) => void handlers.delete(channel),
+    }
+    const seen: Array<string | undefined> = []
+    const open: OpenDirectoryDialog = async (_parent, defaultPath) => {
+      seen.push(defaultPath)
+      return { canceled: false, filePaths: ['D:\\work\\alpha'] }
+    }
+    registerDirectoryPickerChannel(ipcMain, open, () => null)
+    await handlers.get(DIRECTORY_PICKER_CHANNEL)!(undefined, 42)
+    await handlers.get(DIRECTORY_PICKER_CHANNEL)!(undefined, '')
+    expect(seen).toEqual([undefined, undefined])
+  })
+})

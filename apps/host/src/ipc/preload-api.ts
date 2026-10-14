@@ -90,18 +90,20 @@ export type DshForgePreloadApi = ReturnType<typeof createDshForgePreloadApi>
 
 /**
  * 官方 __DSH_DIRECTORY_PICKER__ 桥形状（fix-14——与 dsh-client-ui-directory-picker-native
- * lib/client.js:62-76 消费面逐字同形 pin，不自创 API）：pick() = 选中绝对路径 / 取消 null /
- * reject 错误面。web 侧结构同型镜像（apps/web flows/add-project/dir-picker.ts——运行期边界
- * 禁互引源码）。
+ * lib/client.js:62-76 消费面同形 pin）：pick() = 选中绝对路径 / 取消 null / reject 错误面。
+ * bug db7af09a 可选形参扩展：pick(defaultPath?) 传起始目录（官方零参调用兼容——多余实参
+ * 被官方消费面忽略，不破坏逐字同形；web 侧结构同型镜像 apps/web flows/add-project/dir-picker.ts
+ * ——运行期边界禁互引源码）。
  */
 export interface DshDirectoryPickerBridge {
-  pick(): Promise<string | null>
+  pick(defaultPath?: string): Promise<string | null>
 }
 
-/** 桥成员构造：pick → DIRECTORY_PICKER_CHANNEL 直转（payload 面 = 零参） */
+/** 桥成员构造：pick → DIRECTORY_PICKER_CHANNEL 直转（零参 = null payload——OS 缺省口径） */
 export function createDirectoryPickerBridge(invokeFace: PreloadInvokeFace): DshDirectoryPickerBridge {
   return {
-    pick: () => invokeFace.invoke(DIRECTORY_PICKER_CHANNEL) as Promise<string | null>,
+    pick: (defaultPath?: string) =>
+      invokeFace.invoke(DIRECTORY_PICKER_CHANNEL, defaultPath ?? null) as Promise<string | null>,
   }
 }
 

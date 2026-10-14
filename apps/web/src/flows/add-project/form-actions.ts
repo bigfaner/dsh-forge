@@ -87,17 +87,19 @@ export interface NativeBrowseDeps {
  * 原生浏览改选动作（「浏览…」/「重新选择」三 target 同桥复用）：取消零副作用（值不变）；
  * 选中经 dirSource canonical 对账后落值（与 BrowsePanel 确认同径——applyPick 唯一落值口）；
  * 失败回落表单 + 错误文案（不改值）。同步在途守卫 = 双击第二击 no-op（防双开系统对话框）。
+ * bug db7af09a：startDir 形参 → pick 透传（系统对话框 defaultPath = 值父目录口径，
+ * 与 BrowsePanel 回退面 browseStartDirOf 同源——装配壳调用点计算）。
  */
-export function nativeBrowseAction(deps: NativeBrowseDeps): (target: BrowseTarget) => void {
+export function nativeBrowseAction(deps: NativeBrowseDeps): (target: BrowseTarget, startDir?: string) => void {
   let inFlight = false // 同步守卫（setState 异步批处理不可靠——双击竞态在 ref 语义前拦截）
-  return (target) => {
+  return (target, startDir) => {
     if (inFlight) return
     inFlight = true
     deps.onError?.(null)
     deps.onBusy?.(true)
     void (async () => {
       try {
-        const picked = await deps.pick()
+        const picked = await deps.pick(startDir)
         if (picked !== null) {
           const listing = await deps.dirSource(picked) // canonical 对账（不可达 = 失败错误面）
           deps.applyPick(target, listing.path)

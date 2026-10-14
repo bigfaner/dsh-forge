@@ -386,8 +386,8 @@ export function RegisterForm({
         browseBusy={nativeBusy}
         nativePickError={nativeError}
         onEdit={actions.edit}
-        onRepick={() => { nativeBrowse('workspace') }}
-        onBrowse={(target) => { nativeBrowse(target) }}
+        onRepick={() => { nativeBrowse('workspace', browseStartDirOf('workspace', form.values)) }}
+        onBrowse={(target) => { nativeBrowse(target, browseStartDirOf(target, form.values)) }}
         onSubmit={issues.length > 0 ? undefined : () => { onSubmit?.(toRegisterInput(form.values)) }}
       />
     )

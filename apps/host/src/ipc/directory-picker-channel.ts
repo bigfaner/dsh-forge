@@ -28,8 +28,9 @@ export interface DirectoryDialogResult {
  * 语义 = 对话框对父窗模态 + 正确 z-order/前台——Windows 前台激活权不在手也置顶；官方
  * host-directory-picker-native 合成 Alt 前台工程面向无窗口宿主，Electron main 等价机制
  * 即 parent 形参）。null → 无 parent 形参回退（fail-soft，不比 fix-14 现状差）。
+ * bug db7af09a：defaultPath 形参（renderer 下发起始目录——表单浏览改选传值父目录）。
  */
-export type OpenDirectoryDialog = (parent: unknown) => Promise<DirectoryDialogResult>
+export type OpenDirectoryDialog = (parent: unknown, defaultPath?: string) => Promise<DirectoryDialogResult>
 
 /**
  * fix-21：sender → 父窗解析器（main 绑定 electron BrowserWindow.fromWebContents）。
@@ -43,8 +44,12 @@ export type ParentWindowResolver = (sender: unknown) => unknown
  * tsc 对照 Electron OpenDialogOptions 编译期 pin）：取消/零选 → null；选中 → 首个绝对路径；
  * 对话框异常原样 reject（官方契约错误面——渲染侧 onError 分支承载）。
  */
-export async function pickDirectory(open: OpenDirectoryDialog, parent: unknown = null): Promise<string | null> {
-  const result = await open(parent)
+export async function pickDirectory(
+  open: OpenDirectoryDialog,
+  parent: unknown = null,
+  defaultPath?: string,
+): Promise<string | null> {
+  const result = await open(parent, defaultPath)
   return result.canceled || result.filePaths.length === 0 ? null : (result.filePaths[0] as string)
 }
 
@@ -53,8 +58,12 @@ export function registerDirectoryPickerChannel(
   open: OpenDirectoryDialog,
   resolveParent: ParentWindowResolver = () => null,
 ): void {
-  ipcMain.handle(DIRECTORY_PICKER_CHANNEL, (event) => {
+  ipcMain.handle(DIRECTORY_PICKER_CHANNEL, (event, ...args) => {
     const sender = (event as { sender?: unknown } | undefined)?.sender
-    return pickDirectory(open, resolveParent(sender) ?? null)
+    const raw = args[0]
+    // Root cause（bug db7af09a）：通道不携带 defaultPath 时对话框起始目录完全失控
+    // （OS 进程记忆口径）——renderer 下发的起始目录经此单口注入，脏值丢弃回 OS 缺省。
+    const defaultPath = typeof raw === 'string' && raw !== '' ? raw : undefined
+    return pickDirectory(open, resolveParent(sender) ?? null, defaultPath)
   })
 }

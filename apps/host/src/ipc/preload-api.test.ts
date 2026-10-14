@@ -138,12 +138,14 @@ describe('事件订阅面 onForgeTasksChanged（allowlist 守卫 + 载荷形状�
 })
 
 describe('目录选取桥（window.__DSH_DIRECTORY_PICKER__——fix-14 官方契约同形）', () => {
-  it('形状 pin：唯一成员 pick()（零参）→ DIRECTORY_PICKER_CHANNEL 直转（结构同型 client.js:62-76 消费面）', async () => {
+  it('形状 pin：唯一成员 pick（可选 defaultPath 形参）→ DIRECTORY_PICKER_CHANNEL 直转（官方零参调用兼容）', async () => {
     const face = { invoke: vi.fn().mockResolvedValue('D:\\work\\alpha') satisfies PreloadInvokeFace['invoke'] }
     const bridge = createDirectoryPickerBridge(face)
     expect(Object.keys(bridge)).toEqual(['pick']) // 唯一成员——不自创 API
     await expect(bridge.pick()).resolves.toBe('D:\\work\\alpha')
-    expect(face.invoke).toHaveBeenCalledWith(DIRECTORY_PICKER_CHANNEL)
+    expect(face.invoke).toHaveBeenCalledWith(DIRECTORY_PICKER_CHANNEL, null) // 零参 → null payload
+    await expect(bridge.pick('Z:\\project')).resolves.toBe('D:\\work\\alpha')
+    expect(face.invoke).toHaveBeenCalledWith(DIRECTORY_PICKER_CHANNEL, 'Z:\\project')
   })
 
   it('pick 语义：null（取消）/ string（选中）/ reject（错误面）均 invoke 原样透传（桥零解释）', async () => {
