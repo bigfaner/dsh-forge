@@ -30,6 +30,9 @@ import {
 import { rpcUiState, type RpcUiStateKind } from '../../rpc/ui-state.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import { preloadRpcClientFactory, type ForgeRpcClient, type RpcClientFactory } from '../../rpc/index.js'
+// dsh-plugin-marketplace 1.2：插件市场安装入口小节（可选注入面——缺席不渲染，
+// 初始装配零「插件市场」面 = 负样例缺席态）
+import { MarketplaceEntry, type ForgeMarketplaceSource } from '../marketplace/MarketplaceEntry.js'
 import './forge-settings.css'
 
 // ─────────────────────────── 展示常量（apps/web 层——持久域为自由字符串） ───────────────────────────
@@ -464,6 +467,11 @@ export interface ForgeSettingsSectionBodyProps {
   readonly onEditReasoning: (level: ReasoningLevel) => void
   readonly onSave: () => void
   readonly onRetryLoad: () => void
+  /**
+   * 插件市场安装入口注入面（dsh-plugin-marketplace 1.2——插件 buildMarketplaceSource 递达；
+   * 缺席 = 小节不渲染：初始装配负样例态，设置对话框零「插件市场」分区/入口）。
+   */
+  readonly marketplace?: ForgeMarketplaceSource
 }
 
 /**
@@ -485,6 +493,7 @@ export function ForgeSettingsSectionBody({
   onEditReasoning,
   onSave,
   onRetryLoad,
+  marketplace,
 }: ForgeSettingsSectionBodyProps): ReactNode {
   const ready = load === 'ready'
   const editing = saving || !ready
@@ -586,6 +595,12 @@ export function ForgeSettingsSectionBody({
           </>
         )}
       </section>
+      {marketplace !== undefined ? (
+        <section className="dswf-fs-part" data-dswf-fs-part="marketplace">
+          <h4 className="dswf-fs-part-title">插件市场</h4>
+          <MarketplaceEntry source={marketplace} />
+        </section>
+      ) : null}
     </div>
   )
 }
@@ -606,6 +621,11 @@ export interface ForgeSettingsSectionProps {
    * 解信封 → [{provider, models}]；缺席/失败 = undefined → 静态目录回退面）。
    */
   readonly loadModelCatalog?: () => Promise<readonly WorkerProviderEntry[] | undefined>
+  /**
+   * 插件市场安装入口注入面（dsh-plugin-marketplace 1.2：插件 inject face——remote
+   * .pluginManager 反射源；缺席 = 插件市场小节不渲染）。
+   */
+  readonly marketplace?: ForgeMarketplaceSource
 }
 
 /**
@@ -616,6 +636,7 @@ export interface ForgeSettingsSectionProps {
 export function ForgeSettingsSection({
   makeClient = preloadRpcClientFactory,
   loadModelCatalog,
+  marketplace,
 }: ForgeSettingsSectionProps): ReactNode {
   const [state, setState] = useState<ForgeSettingsUiState>(initialForgeSettingsUiState)
   const [reloadNonce, setReloadNonce] = useState(0)
@@ -645,6 +666,7 @@ export function ForgeSettingsSection({
       saving={state.saving}
       savedFlash={state.savedFlash}
       error={state.error}
+      marketplace={marketplace}
       onEditProvider={(provider) => {
         setState((prev) => editWorkerDraft(prev, { provider }))
       }}

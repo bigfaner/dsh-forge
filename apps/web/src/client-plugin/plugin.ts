@@ -979,6 +979,9 @@ function registerSettingsSection(
           // m3.1 D25：模型目录装载器（remote.session.modelCatalog 惰性反射——缺席/失败 =
           // undefined，组件面静态目录回退）；settings get/set 仍 preload RPC 单门自足
           loadModelCatalog: buildModelCatalogLoader(ctx),
+          // dsh-plugin-marketplace 1.2：插件市场安装入口反射源（remote.pluginManager——
+          // 两段式启用：缺席 = 安装入口；安装后官方件自注册「插件市场」分区）
+          marketplace: buildMarketplaceSource(ctx),
         }),
       },
       views.ForgeSettingsSection,
@@ -1090,8 +1093,7 @@ function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[
  * 模型目录装载器（m3.1 D25 = blitz 1.2 结果性承接）：惰性 ctx.reflect.get('remote.session')
  * （'remote' 嵌套双径）→ modelCatalog() 解信封 → [{provider, models}]。服务缺席 / 调用
  * 拒绝 / 信封失败 = resolve(undefined)——组件面静默回退静态目录，不炸设置分区装载。
- */
-function buildModelCatalogLoader(
+ */function buildModelCatalogLoader(
   ctx: ForgeClientCtx,
 ): () => Promise<readonly ModelCatalogEntry[] | undefined> {
   return () => {
@@ -1108,8 +1110,122 @@ function buildModelCatalogLoader(
   }
 }
 
+// ─────────────────────────── 插件市场两段式启用面（dsh-plugin-marketplace 1.2） ───────────────────────────
+
 /**
- * 手机远程状态注入面（mobile-remote-approval 1.2——状态单源 = 官方反射面）：惰性
+ * 官方「插件市场」插件 npm spec（= install_bundle spec = listBundles 行 name 包名）。
+ * 与 views/marketplace/marketplace-model.ts MARKETPLACE_PLUGIN_SPEC 字面量同源（两侧 pin
+ * ——client bundle 自持禁跨 chunk import，镜像先例同 remote-status）。
+ */
+export const MARKETPLACE_PLUGIN_SPEC = '@deepseek-ai/dsh-plugin-marketplace'
+
+/** 相位（views/marketplace/marketplace-model.ts 结构同型镜像——bundle 自持禁跨 chunk import） */
+export type ForgeMarketplacePhase = 'absent' | 'installing' | 'enabled'
+
+/** 快照（views MarketplaceSnapshot 同型镜像） */
+export interface ForgeMarketplaceSnapshot {
+  readonly phase: ForgeMarketplacePhase
+  readonly error?: string
+}
+
+/**
+ * 插件市场注入面（views MarketplaceEntry ForgeMarketplaceSource 结构同型镜像——经
+ * settings.section inject face 递达 ForgeSettingsSection 小节）。两段式启用：缺席相位 =
+ * 设置内安装入口（install_bundle 官方链——宿主侧自动 reconcile + reload 生命周期，fix-20
+ * 双形态实证）；启用相位 = 官方市场插件 client 半自注册「插件市场」settings.section 分区
+ * （UF-2 同机械——产品零自绘分区，探针点②结论：官方 client UI 件直用成立，无兜底复刻件）。
+ */
+export interface ForgeMarketplaceSourceFace {
+  readonly source: {
+    getSnapshot(): ForgeMarketplaceSnapshot
+    subscribe(listener: () => void): () => void
+  }
+  refresh(): Promise<void>
+  install(): Promise<boolean>
+}
+
+/** listBundles 行集 → 相位（纯函数——views marketplacePhaseOf 结构同型镜像；行形状漂移/异常 = 'absent' fail-soft） */
+export function forgeMarketplacePhaseOf(bundles: unknown): ForgeMarketplacePhase {
+  if (!Array.isArray(bundles)) return 'absent'
+  for (const row of bundles) {
+    if (typeof row !== 'object' || row === null) continue
+    const record = row as Record<string, unknown>
+    if (record['name'] !== MARKETPLACE_PLUGIN_SPEC) continue
+    return record['enabled'] === true ? 'enabled' : 'absent'
+  }
+  return 'absent'
+}
+
+/**
+ * 插件市场反射源组装（测试与 registerSettingsSection 同源；探针点①结论——client 反射官方
+ * `remote.pluginManager`（'remote' 嵌套双径，remote.session 先例同型），零产品 rpc 通道）：
+ * refresh = listBundles() 相位回读；install = 相位置 installing → installBundle(spec)（安装
+ * 默认启用 + 宿主 reconcile + reload 生命周期官方自持）→ refresh 回读。反射面缺席 / 调用
+ * 失败 = fail-soft：快照收敛缺席相位（install 失败留 error 行），不炸设置分区装配。
+ */
+export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketplaceSourceFace {
+  const listeners = new Set<() => void>()
+  let snapshot: ForgeMarketplaceSnapshot = { phase: 'absent' }
+  const notify = (): void => {
+    for (const listener of listeners) listener()
+  }
+  const managerSvc = (): Record<string, unknown> | undefined =>
+    asRecord(reflectServiceGet(clientCtx, 'remote.pluginManager')) ??
+    asRecord(asRecord(reflectServiceGet(clientCtx, 'remote'))?.['pluginManager'])
+  const setSnapshot = (next: ForgeMarketplaceSnapshot): void => {
+    snapshot = next
+    notify()
+  }
+  const face: ForgeMarketplaceSourceFace = {
+    source: {
+      getSnapshot: () => snapshot,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    },
+    refresh: () => {
+      const listBundles = managerSvc()?.['listBundles'] as (() => Promise<unknown>) | undefined
+      if (typeof listBundles !== 'function') {
+        setSnapshot({ phase: 'absent' })
+        return Promise.resolve()
+      }
+      return Promise.resolve()
+        .then(() => listBundles.call(managerSvc()))
+        .then(
+          (bundles) => setSnapshot({ phase: forgeMarketplacePhaseOf(bundles) }),
+          () => setSnapshot({ phase: 'absent' }),
+        )
+    },
+    install: () => {
+      if (snapshot.phase === 'installing') return Promise.resolve(false)
+      const installBundle = managerSvc()?.['installBundle'] as
+        | ((spec: string) => Promise<unknown>)
+        | undefined
+      if (typeof installBundle !== 'function') {
+        setSnapshot({ phase: 'absent', error: '官方插件管理面缺席（宿主未装配 pluginManager）' })
+        return Promise.resolve(false)
+      }
+      setSnapshot({ phase: 'installing' })
+      return Promise.resolve()
+        .then(() => installBundle.call(managerSvc(), MARKETPLACE_PLUGIN_SPEC))
+        .then(
+          () => true,
+          (cause: unknown) => {
+            const message = cause instanceof Error ? cause.message : String(cause)
+            setSnapshot({ phase: 'absent', error: message })
+            return false
+          },
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+  }
+  return face
+}
+
+/**
  * `ctx.reflect.get('remote.settings')`（'remote' 嵌套双径，remote.session 先例同型）→
  * `describe()` 信封解析（webserver 命名空间 host 读数——views/remote/remote-status.ts
  * remoteSettingsProbeOf 结构同型镜像，bundle 自持禁跨 chunk import 纪律）→ 快照三态。

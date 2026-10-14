@@ -14,6 +14,9 @@ import {
   DOC_TAB_KIND,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
+  MARKETPLACE_PLUGIN_SPEC,
+  buildMarketplaceSource,
+  forgeMarketplacePhaseOf,
   FORGE_LOCALE_NS,
   HERO_PANEL_KEY,
   HERO_WORKSPACE_SLOT,
@@ -1273,6 +1276,62 @@ describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.secti
       faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.reject(new Error('boom')) } : undefined)).loadModelCatalog(),
     ).resolves.toBeUndefined()
     unpublishViews()
+  })
+
+  it('插件市场 inject face（dsh-plugin-marketplace 1.2）：install/listBundles 反射源在场 + 两段式态机——缺席/安装中/启用；服务缺席 = fail-soft 缺席相位', async () => {
+    const faceOf = (reflectGet: (name: string) => unknown) => {
+      publishFakeViews()
+      const run = fakeClientCtx({ get: reflectGet })
+      forgeClientPlugin().apply(run.ctx)
+      const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)
+      if (forge === undefined) throw new Error('settings.section 登记缺席（发布面/装载面断裂）')
+      return (forge.options.inject!() as { marketplace: ReturnType<typeof buildMarketplaceSource> })
+        .marketplace
+    }
+    // 初始：settings.section inject 携 marketplace 反射源（快照缺席相位起步）
+    const absentFace = faceOf(() => undefined)
+    expect(absentFace.source.getSnapshot().phase).toBe('absent')
+    // 服务缺席：install fail-soft——错误留场 + 相位回缺席（不炸设置分区装配）
+    await expect(absentFace.install()).resolves.toBe(false)
+    expect(absentFace.source.getSnapshot()).toMatchObject({ phase: 'absent', error: expect.any(String) })
+    // 启用：listBundles 行在场且 enabled → refresh 回读启用相位（官方件自注册分区出现）
+    const bundles = [{ name: MARKETPLACE_PLUGIN_SPEC, enabled: true, installed: true }]
+    const enabledFace = faceOf((name) =>
+      name === 'remote.pluginManager'
+        ? { listBundles: () => Promise.resolve(bundles), installBundle: () => Promise.resolve({}) }
+        : undefined,
+    )
+    await enabledFace.refresh()
+    expect(enabledFace.source.getSnapshot().phase).toBe('enabled')
+    // 两段式闭环：缺席 → install（installing 在途）→ 启用相位回读（官方链 reconcile+reload 宿主自持）
+    const liveBundles: unknown[] = []
+    const installingFace = faceOf((name) =>
+      name === 'remote.pluginManager'
+        ? {
+            listBundles: () => Promise.resolve(liveBundles),
+            installBundle: (spec: string) => {
+              expect(spec).toBe(MARKETPLACE_PLUGIN_SPEC)
+              return new Promise<void>((resolve) => {
+                expect(installingFace.source.getSnapshot().phase).toBe('installing')
+                liveBundles.push(...bundles)
+                resolve()
+              })
+            },
+          }
+        : undefined,
+    )
+    await installingFace.refresh()
+    expect(installingFace.source.getSnapshot().phase).toBe('absent')
+    await expect(installingFace.install()).resolves.toBe(true)
+    expect(installingFace.source.getSnapshot().phase).toBe('enabled')
+    unpublishViews()
+  })
+
+  it('forgeMarketplacePhaseOf：行集判定——enabled 行 = 启用；未启用/缺席/漂移 = 缺席（fail-soft）', () => {
+    expect(forgeMarketplacePhaseOf([{ name: MARKETPLACE_PLUGIN_SPEC, enabled: true }])).toBe('enabled')
+    expect(forgeMarketplacePhaseOf([{ name: MARKETPLACE_PLUGIN_SPEC, enabled: false }])).toBe('absent')
+    expect(forgeMarketplacePhaseOf(undefined)).toBe('absent')
+    expect(forgeMarketplacePhaseOf('junk')).toBe('absent')
   })
 
   it('loadModelCatalog 档位兼容能力面：efforts 缺席/畸形/空集 = 不记该模型能力（组件面不过滤不判）', async () => {
