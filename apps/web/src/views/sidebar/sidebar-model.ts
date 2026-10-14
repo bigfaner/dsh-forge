@@ -32,6 +32,11 @@ export interface LedgerSessionRow {
   /** 父会话在场 = 子代理行，不入顶层列表（官方顶层行口径） */
   readonly parentId?: string
   /**
+   * 会话代际保留计数切片（官方 SessionSummary 自带——当前会话判读锚，bug 51e94b84）：
+   * mainView > 0 = 主视图在留（ui-session publishMain 同径）。
+   */
+  readonly retainedBy?: { readonly mainView?: number }
+  /**
    * 宿主投影整值（上游账本行 projectionValues 消费切片——session.list 逐行 hints 块
    * 经 ProjectionValueStore 落值；S7 派发循环徽标窄读键 = 'forge-dispatch-loop'）。
    * 键缺席 = 能力缺席（上游既定语义），形状漂移 = 徽标不渲染（sessionLoopBadge 防御读）。
@@ -44,7 +49,6 @@ export interface LedgerSessionsSnapshot {
   /** Host 列表序（面包屑专用行已被上游排除） */
   readonly ids: readonly string[]
   readonly byId: Readonly<Record<string, LedgerSessionRow>>
-  readonly current?: string
   /** 'pending' = 账本尚未就绪（行级骨架相位） */
   readonly phase: 'pending' | 'ready'
 }
@@ -190,6 +194,21 @@ export interface SidebarTree {
 }
 
 /**
+ * 当前会话判读（纯函数——bug 51e94b84 修正）：官方 SessionListState 无 current 字段
+ * （view selection 在 Controller 之外）；正本 = ui-session publishMain 同径——byId 行
+ * `retainedBy.mainView > 0` 即主视图在留。无在留行/形状漂移 = null。
+ */
+// Root cause: 虚构了快照 current 字段（同 bug 15faa6f0 根因家族）——判读恒 null，
+// 空白会话行（含当前正开者）被 sessionVisible 全量隐藏。
+export function currentSessionIdOfLedger(sessions: LedgerSessionsSnapshot): string | null {
+  for (const row of Object.values(sessions.byId)) {
+    const mainView = row.retainedBy?.mainView
+    if (typeof row.id === 'string' && typeof mainView === 'number' && mainView > 0) return row.id
+  }
+  return null
+}
+
+/**
  * 派生左栏树（纯函数，零快照持有）：项目序 = forge:projects/list 返回序；
  * 每项目会话 = 其 workspaceId 的 sessionIds 顺序（workspace 自有排列序）∩ 账本 byId，
  * D45：置顶行（registry 级 pinned 集）领先置前（置顶集序 = 最近置顶在前，官方
@@ -203,7 +222,7 @@ export function buildSidebarTree(input: {
   readonly sessions: LedgerSessionsSnapshot
   readonly workspaces: LedgerWorkspacesSnapshot
 }): SidebarTree {
-  const currentSessionId = input.sessions.current ?? null
+  const currentSessionId = currentSessionIdOfLedger(input.sessions)
   const rowsByWorkspace = new Map<string, readonly string[]>()
   for (const workspace of input.workspaces.items) {
     rowsByWorkspace.set(workspace.workspaceId, workspace.sessionIds)

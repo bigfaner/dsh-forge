@@ -127,25 +127,23 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
   })
 
-  it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径）', () => {
+  it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径——retainedBy.mainView 锚，bug 51e94b84 修正）', () => {
     const out = buildSidebarTree({
       projects: [project('p1', 'w1')],
-      sessions: ledger(
-        [
-          ledgerRow('s1'),
-          ledgerRow('child', { parentId: 's1' }),
-          ledgerRow('blank-a', { blank: true }),
-          ledgerRow('blank-cur', { blank: true }),
-        ],
-        { current: 'blank-cur' },
-      ),
+      sessions: ledger([
+        ledgerRow('s1'),
+        ledgerRow('child', { parentId: 's1' }),
+        ledgerRow('blank-a', { blank: true }),
+        // 当前会话正本 = 官方 publishMain 同径：byId 行 retainedBy.mainView > 0
+        ledgerRow('blank-cur', { blank: true, retainedBy: { mainView: 1 } }),
+      ]),
       workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 'child', 'blank-a', 'blank-cur'] }]),
     })
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1', 'blank-cur'])
     expect(out.currentSessionId).toBe('blank-cur')
   })
 
-  it('phase pending → loading 骨架相位；current 缺席 → null', () => {
+  it('phase pending → loading 骨架相位；无 mainView 在留行 → currentSessionId null', () => {
     const out = buildSidebarTree({
       projects: [project('p1', 'w1')],
       sessions: ledger([], { phase: 'pending' }),
@@ -250,10 +248,10 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
   it('选中态不变（PRD UF-1 Validation）：过滤隐藏当前选中会话行不重置锚——currentSessionId 与过滤正交', () => {
     const built = buildSidebarTree({
       projects: [project('p1', 'w1', { name: '支付网关' })],
-      sessions: ledger(
-        [ledgerRow('s1', { displayTitle: '登录修复' }), ledgerRow('s2', { displayTitle: '索引重建' })],
-        { current: 's1' },
-      ),
+      sessions: ledger([
+        ledgerRow('s1', { displayTitle: '登录修复', retainedBy: { mainView: 1 } }),
+        ledgerRow('s2', { displayTitle: '索引重建' }),
+      ]),
       workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
     })
     const visible = sidebarFilterOf('索引', built.tree)
