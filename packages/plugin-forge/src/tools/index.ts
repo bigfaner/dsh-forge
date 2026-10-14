@@ -53,6 +53,7 @@ export interface ForgeBugsToolFace {
     readonly outcome: 'fixed' | 'unresolved'
     readonly commitHash?: string
     readonly unresolvedReason?: string
+    readonly fixApproach?: string
     readonly fixSessionId?: string
   }): Promise<BugCard>
 }

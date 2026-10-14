@@ -19,16 +19,12 @@ import { closeApp, launchHost, waitShellReady, ROOT } from '../../support/launch
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { WORKBENCH } from '../../support/anchors.js'
 
-/** 官方「插件市场」插件 npm spec（marketplace-model MARKETPLACE_PLUGIN_SPEC 同源字面量） */
-const MARKETPLACE_SPEC = '@deepseek-ai/dsh-plugin-marketplace'
-
 /** 产品分区/目录锚（apps/web data-dswf-fs-* 台账字面量——组件渲染面单源） */
 const FORGE_PART = '[data-dswf-fs-part]'
 const MARKETPLACE_PART = '[data-dswf-fs-part="marketplace"]'
 const MARKET_INSTALL = '[data-dswf-fs-mkt-install]'
 const MARKET_ENABLED_NOTE = '[data-dswf-fs-mkt-enabled]'
 const MARKET_CAT = '[data-dswf-fs-mkt-cat]'
-const catalogInstallRow = (name: string): string => `[data-dswf-fs-mkt-install-row="${name}"]`
 const catalogRowOf = (name: string): string => `[data-dswf-fs-mkt-row="${name}"]`
 const catalogToggleOf = (name: string): string => `[data-dswf-fs-mkt-toggle="${name}"]`
 

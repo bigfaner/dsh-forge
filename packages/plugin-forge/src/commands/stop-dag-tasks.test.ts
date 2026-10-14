@@ -29,6 +29,7 @@ function driverStub(activeRecord?: LoopRecord) {
     }),
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
     activeAll: vi.fn(() => [...loops.values()]),
+    dispose: vi.fn(() => {}),
   }
   return { driver, stopInputs, loops }
 }

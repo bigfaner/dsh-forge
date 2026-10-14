@@ -80,10 +80,11 @@ function okHandle(workerSessionId = 'worker-1'): SpawnWorkerHandle {
 interface Harness {
   deps: DispatchCoreDeps
   events: ForgePluginEvent[]
-  calls: { claim: number; stats: number; query: number; list: number; submit: number }
+  calls: { claim: number; stats: number; query: number; list: number; submit: number; spawnRecord: number }
   claimInputs: unknown[]
   statsInputs: unknown[]
   spawnRequests: SpawnWorkerRequest[]
+  spawnRecords: unknown[]
   setClaim(result: ClaimTaskResult): void
   setQuery(result: QueryTaskResult): void
   setStats(stats: TaskStats): void

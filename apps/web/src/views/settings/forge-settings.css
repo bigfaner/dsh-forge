@@ -177,7 +177,7 @@
 .dswf-fs-mkt-cat-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 2px; /* dsw-raw 官方行语言 2px 刻度——主题无间距标尺令牌（2.7 sidebar 先例） */
   min-width: 0;
 }
 
