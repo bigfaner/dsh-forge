@@ -42,11 +42,31 @@ function outputTextOf(output: readonly unknown[]): string {
 export function createInProcessDriverSpawn(): SpawnWorker {
   return async (request) => {
     const { startInProcessRun } = await import('@deepseek-ai/dsh-subagent-in-process-driver')
+    // Root cause: 驱动器把 onAbort 监听器直挂调用方 signal，abort 送达已处置的子代理时
+    // child.cancel 抛「projection registration is not active」，而 Node 的 abort 事件分发
+    // 中监听器抛错不可捕获（必上报 uncaughtException）→ 宿主 fatal 白屏（ctrl+r 刷新即
+    // 「先处置、后 abort」时序）。上游 pinned 不可改，本缝解法：驱动器挂永不 abort 的
+    // 中继信号（仅入口已 abort 时 abort 以保留创建期拒绝语义）；abort 转发 = 同步直调
+    // localAgent.cancel 并就地捕获——已处置子代理的取消抛错就地吞掉（此时取消本无意义），
+    // 正常路径取消语义与 stopReason 投影（cancelled → 'aborted'）不回退。
+    const relay = new AbortController()
+    if (request.signal.aborted) relay.abort(request.signal.reason)
+    let cancelled = request.signal.aborted
+    let child: { cancel(cause: { kind: 'parent' }): void } | undefined
+    const forward = (): void => {
+      cancelled = true
+      try {
+        child?.cancel({ kind: 'parent' })
+      } catch {
+        // 子代理已处置（projection 已注销）——取消无操作，不炸宿主
+      }
+    }
+    if (!request.signal.aborted) request.signal.addEventListener('abort', forward, { once: true })
     const run = await startInProcessRun(
       {
         prompt: textPrompt(request.prompt),
         parent: request.parent, // 派发 agent 透传（真 Agent——lineage/工作目录/深度派生源）
-        signal: request.signal,
+        signal: relay.signal,
         ...(request.label !== undefined ? { label: request.label } : {}),
         toolFilter: { deny: [...request.toolFilter.deny] },
         ...(request.agentOptions !== undefined ? { agentOptions: { ...request.agentOptions } } : {}),
@@ -62,10 +82,20 @@ export function createInProcessDriverSpawn(): SpawnWorker {
       } as unknown as Parameters<typeof startInProcessRun>[0],
       {},
     )
+    child = run.localAgent // 驱动器发布的子代理（abort 转发的 cancel 直调目标）
+    if (cancelled) forward() // 创建窗口内已 abort 的补投（子代理现身后立即取消）
     const handle: SpawnWorkerHandle = {
       workerSessionId: run.id,
-      result: run.result.then((r) => ({ stopReason: r.stopReason, output: outputTextOf(r.output) })),
-      dispose: () => run.dispose(),
+      result: run.result.then((r) => ({
+        // cancelled → 'aborted'（驱动器 flags.cancelled 投影的缝内等价——绕开驱动器
+        // signal 通道后由本缝承担；completed 终态不覆写，与上游同式）
+        stopReason: cancelled && r.stopReason !== 'completed' ? 'aborted' : r.stopReason,
+        output: outputTextOf(r.output),
+      })),
+      dispose: () => {
+        request.signal.removeEventListener('abort', forward) // 中继监听随句柄收尾（未触发的转发不留挂）
+        return run.dispose()
+      },
     }
     return handle
   }

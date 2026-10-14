@@ -47,7 +47,8 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     expect(options).toEqual({})
     expect(request.prompt).toEqual([{ type: 'text', text: 'BRIEFING FULL TEXT' }])
     expect(request.parent).toBe(parent)
-    expect(request.signal).toBe(signal)
+    expect(request.signal).not.toBe(signal) // 中继解耦（bug 修复）——驱动器不直挂调用方 signal
+    expect((request.signal as AbortSignal).aborted).toBe(false)
     expect(request.label).toBe('feat-x/2.5')
     expect(request.toolFilter).toEqual({ deny: ['ask-user', 'queryTask'] })
     expect(request.agentOptions).toEqual({ provider: 'deepseek', model: 'reasoner', reasoningEffort: 'high' })
@@ -107,6 +108,54 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     expect(result).toEqual({ stopReason: 'max-tokens', output: 'part one\npart two' })
     await handle.dispose()
     expect(run.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('bug: abort 送达已处置的子代理时，cancel 抛错不得炸穿宿主（ctrl+r 刷新白屏——uncaught fatal）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    const upstream = new AbortController()
+    // 桩复刻上游真行为（child.cancel → inbox.clear → projection 已注销时抛错——线上
+    // 同款报错原文）：abort 后转发直调 localAgent.cancel，抛错必须被缝内就地吞掉
+    const run = runStub()
+    ;(run as { localAgent?: unknown }).localAgent = {
+      cancel: () => {
+        throw new Error(`agent "182ae054" cannot read inbox state: its projection registration is not active`)
+      },
+    }
+    startInProcessRun.mockResolvedValueOnce(run)
+    await spawn({ prompt: 'P', parent: {}, signal: upstream.signal, toolFilter: { deny: [] } })
+    expect(() => upstream.abort('refresh')).not.toThrow()
+    // abort 已送达（cancel 被调用过且抛错被吞）——再 abort 幂等无操作
+    expect(() => upstream.abort('refresh-again')).not.toThrow()
+  })
+
+  it('abort 转发：上游 signal abort → 直调 localAgent.cancel（正常取消路径不回退）；驱动器信号永不 abort', async () => {
+    const spawn = createInProcessDriverSpawn()
+    const upstream = new AbortController()
+    let driverSignal: AbortSignal | undefined
+    const cancel = vi.fn()
+    let settle!: (r: { output: { type: 'text'; text: string }[]; stopReason: string }) => void
+    startInProcessRun.mockImplementationOnce(async (request: { signal: AbortSignal }) => {
+      driverSignal = request.signal
+      // 受控结算：result 挂起，测试在 abort 之后才 settle——映射在结算时读 cancelled（真时序）
+      const run = {
+        id: 'worker-session-7',
+        result: new Promise<{ output: { type: 'text'; text: string }[]; stopReason: string }>((resolve) => {
+          settle = resolve
+        }),
+        dispose: async () => {},
+        localAgent: { cancel },
+      }
+      return run
+    })
+    const handle = await spawn({ prompt: 'P', parent: {}, signal: upstream.signal, toolFilter: { deny: [] } })
+    expect(driverSignal).toBeDefined()
+    expect(driverSignal!.aborted).toBe(false)
+    upstream.abort()
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(cancel).toHaveBeenCalledWith({ kind: 'parent' })
+    expect(driverSignal!.aborted).toBe(false) // 中继信号永不 abort（驱动器监听器不再有炸点）
+    settle({ output: [{ type: 'text', text: 'worker final answer' }], stopReason: 'max-tokens' })
+    expect((await handle.result).stopReason).toBe('aborted') // cancelled → 'aborted' 缝内投影
   })
 
   it('驱动器 start 拒绝 = spawn 拒绝面（dispatchTask ERR_SPAWN_FAILED 防线承接）', async () => {
