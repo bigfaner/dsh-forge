@@ -1294,10 +1294,10 @@ export function registerBugReferenceSource(
   workspaces: ForgeWorkspacesService,
   sidebarRight: ForgeSidebarRightService,
   diagnostics: { registered?: string[] },
-): void {
+): BugSourceWithOpenReference | undefined {
   const inputTriggers = asRecord(reflectServiceGet(ctx, 'inputTriggers'))
   const registerSource = inputTriggers?.['registerSource']
-  if (typeof registerSource !== 'function') return
+  if (typeof registerSource !== 'function') return undefined
   const source = buildBugReferenceSource({ workspaces, sidebarRight, bugIcon: views.ForgeBugGlyph })
   try {
     const dispose = (registerSource as (src: unknown) => unknown).call(inputTriggers, source)
@@ -1312,8 +1312,10 @@ export function registerBugReferenceSource(
     // 锚定会话场景仍以 scope 出生 warm 为准）
     source.warm({ sessionId: '' })
   } catch {
-    // 注册被拒（duplicate 等）——fail-soft 不炸 apply
+    // 注册被拒（duplicate 等）——fail-soft 不炸 apply；source 仍返回（快照缓存面无害：
+    // 未注册的 source 无 chip 产出，cacheBugSnapshot 不可能被路由到 serialize）
   }
+  return source
 }
 
 /** 目录条目形状（组件面 WorkerProviderEntry 结构同型——bundle 自持纪律禁跨 chunk import） */
@@ -1678,6 +1680,8 @@ export function buildBugQuickAdder(
   clientCtx: ForgeClientCtx,
   sessions: ForgeSessionsService,
   orchestrator: OpenSessionOrchestrator,
+  /** 插入时快照落缓存（bug 27ab222b——dock 递达的 BugCard 全字段经此喂给 source；缺席 = 不落） */
+  noteInserted?: (bug: BugQuickAddInput) => void,
 ): BugQuickAddFn {
   const services: ReferenceInsertServices = {
     sessions: {
@@ -1711,6 +1715,9 @@ export function buildBugQuickAdder(
       ),
   }
   return async (bug, workspaceId) => {
+    // 外部插入径快照（bug 27ab222b）：dock 递达的是完整 BugCard（BugQuickAddInput 的
+    // 结构超集——运行期全字段原样透传），不经 onPick 也能让 serialize 命中全卡
+    noteInserted?.(bug)
     // chip 构造单一事实源（T1 bugReferenceInsertOf——@ 菜单 pick 产物同构）
     const reference: ReferenceInsertMirror = bugReferenceInsertOf(bug, FORGE_BUG_SOURCE_NAME)
     const active = activeSessionIdOf(sessions.list)
@@ -1744,6 +1751,8 @@ function registerDockTabs(
   t: (key: string) => string,
   sidebarRightTabs: ForgeSidebarRightTabsService,
   diagnostics: { registered?: string[] },
+  /** Bug 引用 source 快照落缓存面（bug 27ab222b——按钮插入径喂全卡；缺席 = 不落） */
+  noteBugInserted?: (bug: BugQuickAddInput) => void,
 ): () => void {
   const disposeOverviewType = sidebarRightTabs.register({
     id: OVERVIEW_TAB_KIND,
@@ -1806,6 +1815,7 @@ function registerDockTabs(
             ctx,
             sessions,
             buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
+            noteBugInserted,
           ),
         }),
       },
@@ -1921,6 +1931,11 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeLocale()
         }
 
+        // Bug 引用 source（composer-bug-reference 1.2）：官方 inputTriggers 挂 @ Bug 组——
+        // 惰性 fail-soft（服务/传输缺席 = 零登记零报错，其余登记行不受累）。先于 dock 注册
+        // （bug 27ab222b：source 快照面穿线给按钮快速路径——插入即落全卡）
+        const bugSource = registerBugReferenceSource(clientCtx, views, workspaces, sidebarRight, viewsDiagnostics)
+
         // dock tab 族（4.1 两段注册：类型定义 + keyed body；撤销面归 apply catch 与
         // overlay 洞 dispose 两径——基础撤销闭包已立在先，此处叠加 tab 类型面：半途失败
         //（首个 pane.tab inject 即断）仍撤桥与词典，步步已注册资源均可撤）
@@ -1933,6 +1948,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           t,
           sidebarRightTabs,
           dockDiagnostics,
+          bugSource !== undefined ? (bug) => bugSource.cacheBugSnapshot(bug) : undefined,
         )
         // 1.9 DOM 增强器挂接：apply 期启动（@dsh-forge/md-mermaid ./web enhancer 经壳
         // bundle 发布面递达——凡 .md-code-block 全 DOM 扫描增强，门控 + parse 确认 +
@@ -1955,9 +1971,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
-        // Bug 引用 source（composer-bug-reference 1.2）：官方 inputTriggers 挂 @ Bug 组——
-        // 惰性 fail-soft（服务/传输缺席 = 零登记零报错，其余登记行不受累）
-        registerBugReferenceSource(clientCtx, views, workspaces, sidebarRight, viewsDiagnostics)
+        // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主

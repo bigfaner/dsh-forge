@@ -1,4 +1,4 @@
-﻿// client-plugin 单测 —— 产品 client 插件形状 + 槽位路线 A 注册面（2.7 AC1）+
+// client-plugin 单测 —— 产品 client 插件形状 + 槽位路线 A 注册面（2.7 AC1）+
 // 官方基座降位登记族（fix-25：main 面板 roster + conversation.view 页签 roster +
 // sidebar.panellist 行 + shell.overlay 常驻壳宿主）。
 // 装载/激活链（掌舵 → 注册 → 物化 → Loader 激活）由 e2e（web-shell.spec / workbench-sc1.spec）自证；
@@ -1894,7 +1894,7 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
   const BUG = { bugId: 'b-42', summary: '修复双开对话框' }
   const CLIP = '@[修复双开对话框](bug:b-42)'
 
-  function fixture(options?: { active?: string; bailResult?: unknown; faceState?: { draft: string; draftRev: number } }) {
+  function fixture(options?: { active?: string; bailResult?: unknown; faceState?: { draft: string; draftRev: number }; noteInserted?: (bug: unknown) => void }) {
     const face = {
       focus: vi.fn(),
       ...(options?.faceState !== undefined ? { state: { getSnapshot: () => options.faceState! } } : {}),
@@ -1918,7 +1918,7 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
       Promise.resolve({ ok: true as const, sessionId: 's-new', presetApplied: false, sent: false }),
     )
     const orchestrator = { openSessionWithPreset, openExistingSession: vi.fn() }
-    return { addBugToSession: buildBugQuickAdder(clientCtx, sessions as never, orchestrator as never), bail: actx.bail, face, openSessionWithPreset }
+    return { addBugToSession: buildBugQuickAdder(clientCtx, sessions as never, orchestrator as never, options?.noteInserted as never), bail: actx.bail, face, openSessionWithPreset }
   }
 
   it('有活跃会话 + bail true：scoped 事件收 T1 同构 reference + 末尾 span-CAS，聚焦 composer，不走编排器', async () => {
@@ -1947,6 +1947,24 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
     const f = fixture({ active: 's-live', faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
     await f.addBugToSession(BUG, 'ws-1')
     expect(f.openSessionWithPreset).toHaveBeenCalledWith({ workspaceId: 'ws-1', prefill: CLIP })
+  })
+
+  it('noteInserted（bug 27ab222b）：按钮径插入时以完整入参落快照（dock 递达 BugCard 全字段透传）', async () => {
+    const noteInserted = vi.fn()
+    const f = fixture({ active: 's-live', faceState: { draft: '', draftRev: 1 }, noteInserted })
+    const fullCard = {
+      ...BUG,
+      bugDesc: '完整描述',
+      triggerDesc: '步骤',
+      expected: '期望',
+      actual: '实际',
+      bugStatus: 'open',
+      reporter: 'faner',
+      createdAt: '',
+      updatedAt: '',
+    }
+    await f.addBugToSession(fullCard, 'ws-1')
+    expect(noteInserted).toHaveBeenCalledWith(fullCard)
   })
 
   it('无活跃会话且 workspaceId 缺席（null = 无锚）：fail-soft no-op 不外溢', async () => {

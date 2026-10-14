@@ -123,6 +123,12 @@ export interface BugReferenceSource {
   bugStatusScope(): BugStatusScope
   /** 切换状态口径（crumb pick / 调用面） */
   setBugStatusScope(scope: BugStatusScope): void
+  /**
+   * 外部插入径快照落缓存（bug 27ab222b——按钮快速路径等不经 onPick 的插入面）：
+   * 全卡（bugDesc 非空）即被 serialize 全卡门命中；最小切片（仅 id+摘要）不冒充全卡，
+   * serialize 照走现查/回退链。
+   */
+  cacheBugSnapshot(card: BugSnapshotInput): void
   /** 引用 codec（clipboardText + serialize——官方 ReferenceCodec 同签名） */
   readonly codec: {
     clipboardText(ref: string): string
@@ -192,9 +198,10 @@ export function serializeBugCard(bug: BugCardSource): string {
   return lines.join('\n')
 }
 
-/** 末级回退最小块（id + 占位摘要——永不抛错口径的兜底形态） */
-export function minimalBugBlock(bugId: string): string {
-  return `<bug bugId="${bugId}">\n  summary: （bug 详情不可用）\n</bug>`
+/** 末级回退最小块（id + 摘要——快照有真摘要用真值，无快照占位；永不抛错口径的兜底形态） */
+export function minimalBugBlock(bugId: string, summary?: string): string {
+  const label = summary !== undefined && summary !== '' ? summary : '（bug 详情不可用）'
+  return `<bug bugId="${bugId}">\n  summary: ${label}\n</bug>`
 }
 
 /** 登记相对时间（分级：刚刚/分钟/小时/天/月/年；非法时刻回退原串） */
@@ -243,6 +250,9 @@ export function bugCandidates(
 /** 快照缓存（pick 时落 Map——serialize/clipboardText 快照优先） */
 export type BugSnapshotCache = Map<string, BugCardSource>
 
+/** 外部插入径快照入参（全卡或最小切片——全卡判据 = bugDesc 非空，serialize 门同据） */
+export type BugSnapshotInput = Pick<BugCardSource, 'bugId' | 'summary'> & Partial<Omit<BugCardSource, 'bugId' | 'summary'>>
+
 /** 工厂依赖（projectId 解析 + RPC 注入缝 + 时钟注入——纯函数可测） */
 export interface BugSourceDeps {
   /** 当前会话所属项目（接线面递达会话锚；未绑定 = undefined——Bug 组空候选 fail-soft。
@@ -267,6 +277,8 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
   let scope: BugStatusScope = 'all'
   /** 最近一次 candidates 取数全卡（pick 时据此落全量快照） */
   let lastFetched: readonly BugCardSource[] = []
+  /** 取数代次（bug 27ab222b 竞态守卫——旧查询慢返回不得覆盖新结果/pick 快照底） */
+  let fetchSeq = 0
 
   function scopeQuery(): { status?: BugStatusMirror[] } {
     return scope === 'all' ? {} : { status: [scope] }
@@ -280,6 +292,7 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
       if (req.quoted === true) return []
       const projectId = deps.projectId(session.sessionId)
       if (projectId === undefined) return []
+      const seq = ++fetchSeq
       let bugs: readonly BugCardSource[]
       try {
         const query: BugListQuerySource = { projectId, ...scopeQuery() }
@@ -288,6 +301,9 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
       } catch {
         return []
       }
+      // 竞态守卫：已被更新的查询取代（或官方 signal 已弃置）= 本代结果作废——既不出候选
+      // 也不污染 lastFetched 快照底（bug 27ab222b：旧慢返回覆盖新结果致 pick 落最小卡）
+      if (seq !== fetchSeq || req.signal.aborted) return []
       lastFetched = bugs
       return bugCandidates(bugs, { statusScope: 'all', nowMs: now() })
     },
@@ -331,6 +347,10 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
     setBugStatusScope(next) {
       scope = next
     },
+    cacheBugSnapshot(card) {
+      // Root cause: 按钮径直插 ReferenceInsert 不经 onPick，快照恒空致 serialize 落占位块——外部插入面以同一缓存补齐。
+      snapshots.set(card.bugId, card as BugCardSource)
+    },
     codec: {
       clipboardText(ref) {
         const bugId = bugIdOfRef(ref)
@@ -342,9 +362,9 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
         const bugId = bugIdOfRef(ref)
         if (bugId === undefined) return ''
         try {
-          // 快照优先（全量卡——bugDesc 恒在即视为全卡）
+          // 快照优先（全量卡——bugDesc 真值在即视为全卡；undefined/空串均不冒充，bug 27ab222b）
           const snapshotted = snapshots.get(bugId)
-          if (snapshotted !== undefined && snapshotted.bugDesc !== '') return serializeBugCard(snapshotted)
+          if (snapshotted !== undefined && snapshotted.bugDesc) return serializeBugCard(snapshotted)
           // 现查回退（最小卡 / 无快照时补全字段块——serialize 无会话位，锚定走 ''）
           const projectId = deps.projectId('')
           if (projectId !== undefined) {
@@ -355,10 +375,10 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
               return serializeBugCard(found)
             }
           }
-          // 末级回退：id + 摘要最小块（摘要来自快照的 summary 或占位）
-          return minimalBugBlock(bugId)
+          // 末级回退：id + 摘要最小块（摘要来自快照的 summary 或占位——bug 27ab222b）
+          return minimalBugBlock(bugId, snapshots.get(bugId)?.summary)
         } catch {
-          return minimalBugBlock(bugId)
+          return minimalBugBlock(bugId, snapshots.get(bugId)?.summary)
         }
       },
     },

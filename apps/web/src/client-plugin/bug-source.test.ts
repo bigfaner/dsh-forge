@@ -222,6 +222,23 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     expect(block).toContain('  actual: ')
   })
 
+  it('cacheBugSnapshot（bug 27ab222b）：外部插入径（按钮快速路径）直落全卡快照——serialize 命中全字段块，listBugs 拒绝也不落占位', async () => {
+    const { source } = deps({ listBugs: vi.fn(() => Promise.reject(new Error('rpc down'))) })
+    source.cacheBugSnapshot(card())
+    const block = await source.codec.serialize('bug:b-42', SIGNAL)
+    expect(block).toContain('<bug bugId="b-42">')
+    expect(block).toContain('  summary: 修复后段一目录选取双开对话框')
+    expect(block).toContain('  bugDesc: ')
+    expect(block).not.toContain('bug 详情不可用')
+  })
+
+  it('cacheBugSnapshot 最小入参（仅 bugId+summary，bugDesc 缺席）不冒充全卡——serialize 照走现查/回退链', async () => {
+    const { source } = deps({ listBugs: vi.fn(() => Promise.resolve([card()])) })
+    source.cacheBugSnapshot({ bugId: 'b-42', summary: '修复后段一目录选取双开对话框' })
+    const block = await source.codec.serialize('bug:b-42', SIGNAL)
+    expect(block).toContain('  bugDesc: ')
+  })
+
   it('现查回退：无快照时 serialize 走 listBugs 命中', async () => {
     const { listBugs, source } = deps()
     const block = await source.codec.serialize('bug:b-7', SIGNAL)
@@ -241,6 +258,30 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     source.onPick({ candidate: at(rows, 0), session: SESSION, position: 'inline', via: 'menu', action: 'pick' })
     expect(source.codec.clipboardText('bug:b-42')).toBe('@[修复后段一目录选取双开对话框](bug:b-42)')
     expect(source.codec.clipboardText('bug:ghost')).toBe('@[ghost](bug:ghost)')
+  })
+
+  it('取数竞态守卫（bug 27ab222b）：旧查询慢返回作废——不出候选、不污染快照底，pick 仍落全卡', async () => {
+    function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+      let resolve!: (v: T) => void
+      const promise = new Promise<T>((r) => { resolve = r })
+      return { promise, resolve }
+    }
+    const older = deferred<readonly BugCardSource[]>()
+    const newer = deferred<readonly BugCardSource[]>()
+    let call = 0
+    const listBugs = vi.fn((): Promise<readonly BugCardSource[]> => (++call === 1 ? older.promise : newer.promise))
+    const source = createBugReferenceSource({ projectId: () => 'p-1', listBugs: listBugs as unknown as (q: unknown) => Promise<readonly BugCardSource[]>, now: () => NOW })
+    const p1 = source.candidates(SESSION, request({ query: '双开' }))
+    const p2 = source.candidates(SESSION, request({ query: '' }))
+    newer.resolve([card()])
+    older.resolve([card({ bugId: 'b-stale', summary: '旧慢结果' })])
+    const [rows1, rows2] = await Promise.all([p1, p2])
+    expect(rows1).toEqual([]) // 旧代作废——不渲染不落快照底
+    expect(rows2.map((r) => r.name)).toEqual(['b-42'])
+    source.onPick({ candidate: at(rows2, 0), session: SESSION, position: 'inline', via: 'menu', action: 'pick' })
+    const block = await source.codec.serialize('bug:b-42', SIGNAL)
+    expect(block).toContain('  bugDesc: ')
+    expect(block).not.toContain('bug 详情不可用')
   })
 
   it('状态面包屑 crumb pick（action=drill）：切换状态口径并 handled', async () => {
