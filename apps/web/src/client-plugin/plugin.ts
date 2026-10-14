@@ -58,7 +58,7 @@ import {
 } from './open-session.js'
 // composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
 // bundle 自含纪律不破；本文件做注册行 + 接线面）
-import { createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
+import { bugIdOfRef, createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -102,6 +102,28 @@ export const OVERVIEW_TAB_KIND = 'dswf-overview'
 export const DOC_TAB_KIND = 'dswf-doc'
 /** 文档 tab 资源地址前缀（dsh-resource:// 资源面——openResource 去重键 = 地址本身；与 dock-tabs DSWF_DOC_ADDRESS_PREFIX 同源 pin） */
 export const DOC_ADDRESS_PREFIX = 'dsh-resource://dswf-doc/'
+/**
+ * Bug 台账 tab 类型 kind（composer-bug-reference 1.3——`sidebar.right.pane.tab` keyed
+ * body dispatch 键；与 views/bug-reference/BugPreview.tsx DSWF_BUG_TAB_KIND 字面量同源 pin）
+ */
+export const BUG_TAB_KIND = 'dswf-bug'
+/** Bug 台账资源地址前缀（openResource 去重键 = 地址本身；与 BugPreview.tsx DSWF_BUG_ADDRESS_PREFIX 字面量同源 pin） */
+export const BUG_ADDRESS_PREFIX = `dsh-resource://${BUG_TAB_KIND}/`
+
+/** Bug tab 地址（= 去重键 contentId：同 projectId+bugId 同 tab、异地址新开；BugPreview.forgeBugAddress 同构镜像） */
+export function bugAddressOf(projectId: string, bugId: string): string {
+  return `${BUG_ADDRESS_PREFIX}${projectId}/${bugId}`
+}
+
+/** Bug tab 地址解析（纯函数）：前缀 + `<projectId>/<bugId>` 取 bugId 段；形状非法 → undefined */
+export function bugIdOfAddress(address: string): string | undefined {
+  if (!address.startsWith(BUG_ADDRESS_PREFIX)) return undefined
+  const rest = address.slice(BUG_ADDRESS_PREFIX.length)
+  const slash = rest.indexOf('/')
+  if (slash <= 0 || slash === rest.length - 1) return undefined
+  const bugId = rest.slice(slash + 1)
+  return bugId === '' ? undefined : bugId
+}
 // 1.8/1.9 渲染链退役收口：官方预览径 md mermaid 扩展注册链（定义元数据 + keyed body 槽
 // + 惰性两段注册）整体退役，sidebar md 预览回归官方 builtin；mermaid 出图改经 DOM 增强
 // 器（1.9 挂接——apply 期 start，随插件 fiber 卸载级联 stop）。
@@ -682,6 +704,8 @@ export interface ForgeViewsGlobal {
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
     ForgeBugGlyph?: unknown
+    /** Bug 台账 tab body（composer-bug-reference 1.3——sidebar.right.pane.tab keyed 'dswf-bug' 占用者） */
+    ForgeBugPreview?: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
@@ -1134,11 +1158,24 @@ export interface BugSourceWiringDeps {
   readonly invoke?: ForgeInvokeTransport
   /** 候选行图标件（发布面 ForgeBugGlyph——IconProps 组件；缺席 = 行零 icon 键） */
   readonly bugIcon?: unknown
+  /** 官方右栏服务（1.3 openReference 路由——openResource 开 Bug 台账 pane；缺席 = 引用点击返回 false 不拦截官方手势） */
+  readonly sidebarRight?: ForgeSidebarRightService
 }
 
 /** Bug source + warm 面（官方 InputTriggerSource warm 槽——scope 出生预热，fire-and-forget） */
 export interface BugSourceWithWarm extends BugReferenceSource {
   readonly warm: (session: { readonly sessionId: string }) => void
+}
+
+/**
+ * Bug source + openReference 面（1.3——官方 chip 点击路由缝）：`openReference(session,
+ * {ref})` 只认本 source 的 bug ref（`bug:<bugId>`），非 bug 引用 = false（官方手势不被
+ * 拦截）；命中 = 会话锚解析项目 → `sidebarRight.openResource(bugAddress, {kind})` 开
+ * Bug 台账 pane（地址 = 去重键，同地址 reveal 既有 tab）→ true；官方面异常（无在场面
+ * 抛错等）= false fail-soft 不外溢。
+ */
+export interface BugSourceWithOpenReference extends BugSourceWithWarm {
+  openReference(session: { readonly sessionId: string }, ref: { readonly ref: string }): boolean
 }
 
 /**
@@ -1151,7 +1188,7 @@ export interface BugSourceWithWarm extends BugReferenceSource {
  *  - warm = scope 出生预热：projects.list 先落缓存，随后一次 bugs.list 预取（锚定项目
  *    口径——T1 lastFetched 快照底随取随新；全程 fire-and-forget 静默）。
  */
-export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWithWarm {
+export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWithOpenReference {
   const invoke = deps.invoke ?? forgeInvokeTransport()
   let projects: readonly BugProjectRow[] = []
 
@@ -1185,6 +1222,19 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
     },
   })
 
+  /** 1.3 chip 点击 → Bug 台账 pane（官方 openReference 路由缝——见 BugSourceWithOpenReference） */
+  const openReference = (session: { readonly sessionId: string }, ref: { readonly ref: string }): boolean => {
+    const bugId = bugIdOfRef(ref?.ref ?? '')
+    if (bugId === undefined || deps.sidebarRight === undefined) return false
+    try {
+      // 项目锚缺席 = '' 地址段（pane 现查失败呈现缺省态——不阻断点击路由）
+      deps.sidebarRight.openResource(bugAddressOf(projectIdOf(session?.sessionId ?? '') ?? '', bugId), { kind: BUG_TAB_KIND })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   return {
     ...source,
     order: FORGE_BUG_SOURCE_ORDER,
@@ -1200,6 +1250,7 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
         })
         .catch(() => undefined)
     },
+    openReference,
   }
 }
 
@@ -1213,12 +1264,13 @@ export function registerBugReferenceSource(
   ctx: ForgeClientCtx,
   views: PublishedViews,
   workspaces: ForgeWorkspacesService,
+  sidebarRight: ForgeSidebarRightService,
   diagnostics: { registered?: string[] },
 ): void {
   const inputTriggers = asRecord(reflectServiceGet(ctx, 'inputTriggers'))
   const registerSource = inputTriggers?.['registerSource']
   if (typeof registerSource !== 'function') return
-  const source = buildBugReferenceSource({ workspaces, bugIcon: views.ForgeBugGlyph })
+  const source = buildBugReferenceSource({ workspaces, sidebarRight, bugIcon: views.ForgeBugGlyph })
   try {
     const dispose = (registerSource as (src: unknown) => unknown).call(inputTriggers, source)
     diagnostics.registered = [...(diagnostics.registered ?? []), `input-triggers:${FORGE_BUG_SOURCE_NAME}`]
@@ -1783,7 +1835,20 @@ function registerDockTabs(
     canOpen: (address: string): boolean => address.startsWith(DOC_ADDRESS_PREFIX),
     title: docTabTitle,
   })
-  diagnostics.registered = [...(diagnostics.registered ?? []), OVERVIEW_TAB_KIND, DOC_TAB_KIND]
+  // composer-bug-reference 1.3：Bug 台账资源型（multiple + 地址去重——dswf-doc 同构；
+  // 地址 = `dsh-resource://dswf-bug/<projectId>/<bugId>`，openReference 路由开出）
+  const disposeBugType = sidebarRightTabs.register({
+    id: BUG_TAB_KIND,
+    kind: BUG_TAB_KIND,
+    multiple: true,
+    patterns: [`${BUG_ADDRESS_PREFIX}**`],
+    canOpen: (address: string): boolean => address.startsWith(BUG_ADDRESS_PREFIX),
+    title: (address: string): string => {
+      const bugId = bugIdOfAddress(address)
+      return bugId === undefined ? t('tab.bug') : `Bug ${bugId}`
+    },
+  })
+  diagnostics.registered = [...(diagnostics.registered ?? []), OVERVIEW_TAB_KIND, DOC_TAB_KIND, BUG_TAB_KIND]
   registerSlotEntry(ctx, SIDEBAR_RIGHT_PANE_TAB_SLOT, diagnostics, () =>
     ctx.slots.register(
       {
@@ -1812,7 +1877,12 @@ function registerDockTabs(
   registerSlotEntry(ctx, SIDEBAR_RIGHT_PANE_TAB_SLOT, diagnostics, () =>
     ctx.slots.register({ name: SIDEBAR_RIGHT_PANE_TAB_SLOT, key: DOC_TAB_KIND }, views.ForgeDocsTab),
   )
+  registerSlotEntry(ctx, SIDEBAR_RIGHT_PANE_TAB_SLOT, diagnostics, () =>
+    // Bug 台账 body 自足（useTabInfo 由 seat 声明递达——dswf-doc body 同径；1.3）
+    ctx.slots.register({ name: SIDEBAR_RIGHT_PANE_TAB_SLOT, key: BUG_TAB_KIND }, views.ForgeBugPreview),
+  )
   return () => {
+    disposeBugType()
     disposeDocType()
     disposeOverviewType()
   }
@@ -1862,6 +1932,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'panel.knowledge': '知识库',
             'view.recall': '知识召回',
             'tab.overview': '项目概览',
+            'tab.bug': 'Bug 台账',
             'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
             'settings.forge': 'Forge设置',
             'remote.entry': '手机远程',
@@ -1878,6 +1949,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'panel.knowledge': 'Knowledge',
             'view.recall': 'Recall',
             'tab.overview': 'Overview',
+            'tab.bug': 'Bug ledger',
             'guide.overview.desc': 'Features, tasks, proposals and docs',
             'settings.forge': 'Forge Settings',
             'remote.entry': 'Mobile Remote',
@@ -1947,7 +2019,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source（composer-bug-reference 1.2）：官方 inputTriggers 挂 @ Bug 组——
         // 惰性 fail-soft（服务/传输缺席 = 零登记零报错，其余登记行不受累）
-        registerBugReferenceSource(clientCtx, views, workspaces, viewsDiagnostics)
+        registerBugReferenceSource(clientCtx, views, workspaces, sidebarRight, viewsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主

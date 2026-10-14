@@ -8,6 +8,8 @@
 // import 共享——bundle 自含纪律，main.ts id 同源同形制）。
 import { describe, expect, it, vi } from 'vitest'
 import {
+  BUG_ADDRESS_PREFIX,
+  BUG_TAB_KIND,
   CONVERSATION_VIEW_SLOT,
   DISPATCH_TASK_TOOL_KEY,
   DOC_ADDRESS_PREFIX,
@@ -42,6 +44,8 @@ import {
   SIDEBAR_WORKSPACES_SLOT,
   TOOL_CALL_TOOLVIEW_SLOT,
   makeSessionTitleResolver,
+  bugAddressOf,
+  bugIdOfAddress,
   resolveWorkerChildSession,
   sessionParentIdOf,
   sessionRowInLedger,
@@ -66,6 +70,11 @@ import {
   forgeDocAddress,
   parseForgeDocAddress,
 } from '../workbench/dock-tabs.js'
+import {
+  DSWF_BUG_ADDRESS_PREFIX as BUG_PREVIEW_BUG_ADDRESS_PREFIX,
+  DSWF_BUG_TAB_KIND as BUG_PREVIEW_BUG_TAB_KIND,
+  forgeBugAddress,
+} from '../views/bug-reference/BugPreview.js'
 import type { ModuleLoaderFacade, ModuleLoaderRegistration } from '../shell/dsh-globals.js'
 
 /** 注册记录（fake slots 服务收集） */
@@ -171,6 +180,7 @@ function fakeClientCtx(
   start: ReturnType<typeof vi.fn>
   rightToggle: ReturnType<typeof vi.fn>
   openTab: ReturnType<typeof vi.fn>
+  openResource: ReturnType<typeof vi.fn>
   selectPanel: ReturnType<typeof vi.fn>
   locale: ReturnType<typeof fakeLocale>
   tabTypes: ReturnType<typeof fakeSidebarRightTabs>
@@ -221,8 +231,10 @@ function fakeClientCtx(
   }
   const uiWorkspace = { openSession: open, startSession: start, ...sessionFaces?.uiWorkspaceExtra }
   const workspaces = { list: { tag: 'workspaces-list' } }
-  // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）
-  const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle, openTab }
+  // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）；
+  // 1.3 增 openResource 资源面（Bug source openReference → Bug 台账 pane 路由）
+  const openResource = vi.fn()
+  const sidebarRight = { isExpanded: () => false, toggleExpanded: rightToggle, openTab, openResource }
   // 4.1：官方右栏 tab 类型注册表（两段注册第一段）
   const tabTypes = fakeSidebarRightTabs()
   // fix-25：官方面板选择窄面（LayoutController 切片）
@@ -260,7 +272,7 @@ function fakeClientCtx(
     // m3.1 D25：reflect 面（ ForgeClientCtx 窄面外——插件真身经 cast 读取，同径注入）
     ...(reflect !== undefined ? { reflect } : {}),
   } as ForgeClientCtx
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, openResource, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions }
 }
 
 /** 假 md-mermaid DOM 增强器（1.9——启停调用记账面；stop 幂等语义镜像真身——重复 stop 不重复记账） */
@@ -303,6 +315,7 @@ function publishFakeViews() {
     ForgeSettingsSection: 'COMP:settings-section',
     ForgeRemoteEntry: 'COMP:remote-entry',
     ForgeBugGlyph: 'COMP:bug-glyph',
+    ForgeBugPreview: 'COMP:bug-preview',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
@@ -401,6 +414,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     expect(injectedKeys).toEqual([
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT, // 1.3 Bug 台账 keyed body（composer-bug-reference）
       // 1.8 渲染链退役：md mermaid 预览声明等待（DOCUMENT_PREVIEW_BODY_SLOT inject）已随
       // 注册链退役——注入清单零预览槽。
       SIDEBAR_WORKSPACES_SLOT,
@@ -859,7 +873,7 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     publishFakeViews()
     const { ctx, tabTypes, locale } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    expect(tabTypes.calls).toHaveLength(2)
+    expect(tabTypes.calls).toHaveLength(3)
     const overview = tabTypes.calls.find((c) => c.id === OVERVIEW_TAB_KIND)!
     expect(overview.kind).toBe(OVERVIEW_TAB_KIND)
     expect(overview.patterns).toBeUndefined() // 页型（按 kind 开——无地址识别）
@@ -894,11 +908,13 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     const { ctx, registers, open } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const bodies = registers.filter((r) => r.key === SIDEBAR_RIGHT_PANE_TAB_SLOT)
-    expect(bodies).toHaveLength(2)
+    expect(bodies).toHaveLength(3)
     const overview = bodies.find((r) => r.options.key === OVERVIEW_TAB_KIND)!
     const doc = bodies.find((r) => r.options.key === DOC_TAB_KIND)!
+    const bugBody = bodies.find((r) => r.options.key === BUG_TAB_KIND)!
     expect(overview.component).toBe(views.ForgeOverviewTab)
     expect(doc.component).toBe(views.ForgeDocsTab)
+    expect(bugBody.component).toBe(views.ForgeBugPreview) // composer-bug-reference 1.3
     const face = overview.options.inject!() as {
       bridge: unknown
       onOpenSession: (sessionId: string) => void
@@ -911,11 +927,29 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     expect(marker?.dock?.registered).toEqual([
       OVERVIEW_TAB_KIND,
       DOC_TAB_KIND,
+      BUG_TAB_KIND,
+      SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
       SIDEBAR_RIGHT_PANE_TAB_SLOT,
     ])
     // 1.8 渲染链退役：预览注册链零改动面——dock 诊断 error 恒缺席（零 absent 记账）
     expect(marker?.dock?.error).toBeUndefined()
+    unpublishViews()
+  })
+
+  it('第一段 Bug 台账资源型（composer-bug-reference 1.3）：multiple + patterns 整地址 glob + canOpen 前缀防御 + 标题 = Bug <bugId>', () => {
+    publishFakeViews()
+    const { ctx, tabTypes } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const bugType = tabTypes.calls.find((c) => c.id === BUG_TAB_KIND)!
+    expect(bugType.kind).toBe(BUG_TAB_KIND)
+    expect(bugType.multiple).toBe(true) // 异地址各自成 tab（同 dswf-doc 资源型先例）
+    expect(bugType.patterns).toEqual([`${BUG_ADDRESS_PREFIX}**`])
+    expect(bugType.guide).toBeUndefined() // openReference 路由开出——不上开始页
+    expect(bugType.canOpen?.(bugAddressOf('p1', 'b-42'))).toBe(true)
+    expect(bugType.canOpen?.('dsh-resource://dswf-doc/p1/a.md')).toBe(false) // 前缀外防御拒绝
+    expect(bugType.title(bugAddressOf('p1', 'b-42'))).toBe('Bug b-42')
+    expect(bugType.title(BUG_ADDRESS_PREFIX)).toBe('Bug 台账') // 形状漂移兜底（locale 词条）
     unpublishViews()
   })
 
@@ -932,6 +966,12 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
       projectId: 'p1',
       docRel: 'docs/a b/tech-design.md',
     })
+    // composer-bug-reference 1.3：Bug 地址编解码同源（plugin.ts 镜像 ↔ BugPreview.tsx 正本）
+    expect(BUG_TAB_KIND).toBe(BUG_PREVIEW_BUG_TAB_KIND)
+    expect(BUG_ADDRESS_PREFIX).toBe(BUG_PREVIEW_BUG_ADDRESS_PREFIX)
+    expect(bugAddressOf('p1', 'b-42')).toBe(forgeBugAddress('p1', 'b-42'))
+    expect(bugIdOfAddress(forgeBugAddress('p1', 'b-42'))).toBe('b-42')
+    expect(bugIdOfAddress('dsh-resource://dswf-bug/p1/')).toBeUndefined()
     unpublishViews()
   })
 
@@ -942,7 +982,7 @@ describe('dock tab 族两段注册（4.1 AC1-3 + G1-16 镜像面）', () => {
     forgeClientPlugin().apply(ctx)
     expect(tabTypes.disposedIds).toEqual([])
     injectDisposers.get(SHELL_OVERLAY_SLOT)!()
-    expect([...tabTypes.disposedIds].sort()).toEqual([DOC_TAB_KIND, OVERVIEW_TAB_KIND])
+    expect([...tabTypes.disposedIds].sort()).toEqual([BUG_TAB_KIND, DOC_TAB_KIND, OVERVIEW_TAB_KIND])
     unpublishViews()
     if (marker === undefined) delete (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__
     else (globalThis as { __DSH_FORGE_CLIENT__?: unknown }).__DSH_FORGE_CLIENT__ = marker
@@ -1819,5 +1859,37 @@ describe('Bug 引用 source 注册（composer-bug-reference 1.2）', () => {
       'warm 预取：projects 缓存就绪后一次 bugs.list（锚定项目口径）',
     ).toBe(true)
     unstub()
+  })
+
+  it('openReference（1.3）：bug ref → sidebarRight.openResource 开 Bug 台账 pane（地址 = 会话锚项目 + bugId，kind dswf-bug）→ true；非 bug 引用 → false 零路由；官方面抛错 → false', async () => {
+    const views = publishFakeViews()
+    const fixture = bugFixture({
+      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
+      'forge:bugs/list': () => ({ ok: true, data: BUG_FIXTURE_BUGS }),
+    })
+    const { ctx, openResource } = fakeClientCtx(fixture.reflect)
+    ;(ctx.get('workspaces') as { list: unknown }).list = {
+      getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }),
+    }
+    forgeClientPlugin().apply(ctx)
+    await bugFlush() // 注册期 warm 落 projects 缓存（openReference 会话锚解析前提）
+    const src = fixture.registered[0] as Record<string, unknown>
+    const openRef = src['openReference'] as (session: { sessionId: string }, ref: { ref: string }) => boolean
+    expect(typeof openRef).toBe('function')
+    // ① bug ref：会话锚解析项目 → openResource（地址 = 去重键，kind 具名）
+    expect(openRef({ sessionId: 's1' }, { ref: 'bug:b-42' })).toBe(true)
+    expect(openResource).toHaveBeenCalledTimes(1)
+    expect(openResource).toHaveBeenCalledWith('dsh-resource://dswf-bug/p1/b-42', { kind: BUG_TAB_KIND })
+    // ② 非 bug 引用（官方文件/会话组 ref 误路由）→ false：官方手势不被拦截
+    expect(openRef({ sessionId: 's1' }, { ref: 'file:src/a.ts' })).toBe(false)
+    expect(openRef({ sessionId: 's1' }, { ref: '' })).toBe(false)
+    expect(openResource).toHaveBeenCalledTimes(1)
+    // ③ 官方面异常（无在场面抛错）→ false fail-soft 不外溢
+    openResource.mockImplementationOnce(() => {
+      throw new Error('no active pane')
+    })
+    expect(openRef({ sessionId: 's1' }, { ref: 'bug:b-42' })).toBe(false)
+    void views
+    fixture.unstub()
   })
 })

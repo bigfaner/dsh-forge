@@ -1,0 +1,59 @@
+/* Bug 台账右栏预览样式（composer-bug-reference 1.3——bug-dialog.css 行语言 pane 化：
+ * 双列表单 + 摘要行 + 徽标；官方令牌零裸值——lint-tokens 机械面；pane 体随右栏宽自适应，
+ * 零 dialog 壳/拖移）。 */
+
+/* ── pane 壳：纵向滚动主区（唯一滚动面——内容多不出 pane） ── */
+.dswf-br {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-s-14-line-height);
+  padding: var(--dsw-font-s-14-line-height);
+  overflow-y: auto;
+}
+
+/* ── 摘要行：无 label 独立行左对齐 + 状态·错误类型徽标右靠（bug-dialog 摘要行同构） ── */
+.dswf-br-summaryline {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-br-summarytext {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-s-14-strong);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-br-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  flex: none;
+}
+
+/* ── 双列表单行：label 定宽列（容四字中文标签） + value 弹性列（只断长 token） ── */
+.dswf-br-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dsw-font-xs-13-line-height);
+  padding: 2px 0; /* dsw-raw 原型行距刻度（bug-dialog 行同值） */
+  min-width: 0;
+}
+
+.dswf-br-label {
+  flex: 0 0 88px; /* 结构刻度：四字中文标签列（bug-dialog label 列同值） */
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-br-value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere; /* 长 token（路径/哈希）防溢出 */
+  white-space: pre-line; /* 保留生成侧换行——bug-dialog 值列同口径 */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
