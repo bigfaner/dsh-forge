@@ -129,6 +129,11 @@ export interface BugReferenceSource {
    * serialize 照走现查/回退链。
    */
   cacheBugSnapshot(card: BugSnapshotInput): void
+  /**
+   * warm 预取全量台账种快照（bug 476b2d3d——持久化还原径无插入事件，快照恒空）：
+   * 只补缺席、不覆盖既有快照（pick/按钮径的卡优先）；仅种全卡（bugDesc 真值）。
+   */
+  seedSnapshots(cards: readonly BugCardSource[]): void
   /** 引用 codec（clipboardText + serialize——官方 ReferenceCodec 同签名） */
   readonly codec: {
     clipboardText(ref: string): string
@@ -350,6 +355,13 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
     cacheBugSnapshot(card) {
       // Root cause: 按钮径直插 ReferenceInsert 不经 onPick，快照恒空致 serialize 落占位块——外部插入面以同一缓存补齐。
       snapshots.set(card.bugId, card as BugCardSource)
+    },
+    seedSnapshots(cards) {
+      // Root cause: 持久化还原 chip 无插入事件（bug 476b2d3d）——warm 全量预取种底，
+      // 会话项目内任意 bug 的 serialize 恒命中全卡；只补缺席，pick 径快照优先。
+      for (const card of cards) {
+        if (card.bugDesc && !snapshots.has(card.bugId)) snapshots.set(card.bugId, card)
+      }
     },
     codec: {
       clipboardText(ref) {

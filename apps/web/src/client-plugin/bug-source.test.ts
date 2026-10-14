@@ -239,6 +239,23 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     expect(block).toContain('  bugDesc: ')
   })
 
+  it('seedSnapshots（bug 476b2d3d）：warm 预取全量台账种快照——还原 chip（无任何插入事件）serialize 恒命中全卡', async () => {
+    const { source } = deps({ listBugs: vi.fn(() => Promise.reject(new Error('rpc down'))) })
+    source.seedSnapshots([card(), card({ bugId: 'b-7', summary: '旧 bug', bugStatus: 'fixed' })])
+    const block = await source.codec.serialize('bug:b-7', SIGNAL)
+    expect(block).toContain('<bug bugId="b-7">')
+    expect(block).toContain('  bugDesc: ')
+    expect(block).not.toContain('bug 详情不可用')
+  })
+
+  it('seedSnapshots 不覆盖既有快照（pick 的卡优先——种子只补缺席）', async () => {
+    const { source } = deps({ listBugs: vi.fn(() => Promise.reject(new Error('rpc down'))) })
+    source.cacheBugSnapshot(card())
+    source.seedSnapshots([card({ bugId: 'b-42', summary: '种子旧标题' })])
+    const block = await source.codec.serialize('bug:b-42', SIGNAL)
+    expect(block).toContain('  summary: 修复后段一目录选取双开对话框')
+  })
+
   it('现查回退：无快照时 serialize 走 listBugs 命中', async () => {
     const { listBugs, source } = deps()
     const block = await source.codec.serialize('bug:b-7', SIGNAL)

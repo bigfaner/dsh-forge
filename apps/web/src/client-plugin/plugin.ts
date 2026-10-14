@@ -61,7 +61,7 @@ import {
 } from './open-session.js'
 // composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
 // bundle 自含纪律不破；本文件做注册行 + 接线面；1.4 chip 构造单一事实源同径复用）
-import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
+import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from './bug-source.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -1274,7 +1274,14 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
       void refreshProjects()
         .then(() => {
           const projectId = projectIdOf(session.sessionId)
-          return projectId !== undefined && invoke !== undefined ? invoke(BUGS_LIST_CHANNEL, { projectId }) : undefined
+          if (projectId === undefined || invoke === undefined) return undefined
+          // bug 476b2d3d：预取不再丢弃——全量台账种进快照（持久化还原 chip 无插入事件，
+          // serialize 依赖此种子命中全卡）；行集直信传输与 deps.listBugs 同口径
+          return unwrapRpcEnvelope<readonly BugCardSource[]>(invoke(BUGS_LIST_CHANNEL, { projectId }))
+            .then((rows) => {
+              source.seedSnapshots(Array.isArray(rows) ? rows : [])
+            })
+            .catch(() => undefined)
         })
         .catch(() => undefined)
     },
