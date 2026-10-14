@@ -96,10 +96,12 @@ export const SETTINGS_CHANNELS = {
 
 export type SettingsChannel = (typeof SETTINGS_CHANNELS)[keyof typeof SETTINGS_CHANNELS]
 
-/** forge:bugs/*（fix-bug：Bug 子 tab 列表读面——listBugs 服务端搜索/状态过滤/排序；
- *  recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC） */
+/** forge:bugs/*（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——fixed 证据
+ *  的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC） */
 export const BUGS_CHANNELS = {
   list: 'forge:bugs/list',
+  commitFiles: 'forge:bugs/commitFiles',
+  fileDiff: 'forge:bugs/fileDiff',
 } as const
 
 export type BugsChannel = (typeof BUGS_CHANNELS)[keyof typeof BUGS_CHANNELS]
@@ -142,6 +144,8 @@ export const FORGE_CHANNELS = {
   settingsGet: SETTINGS_CHANNELS.get,
   settingsSet: SETTINGS_CHANNELS.set,
   bugsList: BUGS_CHANNELS.list,
+  bugsCommitFiles: BUGS_CHANNELS.commitFiles,
+  bugsFileDiff: BUGS_CHANNELS.fileDiff,
   docsRead: DOCS_CHANNELS.read,
   docsOpenExternal: DOCS_CHANNELS.openExternal,
 } as const

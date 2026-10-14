@@ -78,7 +78,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(23)
+    expect(handlers).toHaveLength(25)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {

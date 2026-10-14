@@ -29,6 +29,9 @@ import {
   type EntryDetail,
   type EntryDetailQuery,
   type BugCard,
+  type BugCommitFile,
+  type BugCommitFilesQuery,
+  type BugFileDiffQuery,
   type FeatureCard,
   type FeatureDocumentRow,
   type FeatureRow,
@@ -179,11 +182,13 @@ export interface ForgeProposalsRpc {
 }
 
 /**
- * forge:bugs/* 面方法集（fix-bug：Bug 子 tab 列表读面——listBugs 服务端搜索/状态过滤/排序；
- * recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
+ * forge:bugs/* 面方法集（fix-bug：list 列表读面 + commitFiles/fileDiff 变更内容读面——
+ * fixed 证据的文件清单与单文件 diff；recordBug/resolveBug 写动词 = agent tool 专属，恒不上 RPC）。
  */
 export interface ForgeBugsRpc {
   list(q: ListBugsQuery): Promise<BugCard[]>
+  commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]>
+  fileDiff(q: BugFileDiffQuery): Promise<{ diff: string }>
 }
 
 /** forge:docs/* 面方法集（Interface 7 两通道——read 工作区文档读 / openExternal main 侧执行） */
@@ -270,6 +275,8 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
     },
     bugs: {
       list: (q) => invokeRpc<BugCard[]>(transport, BUGS_CHANNELS.list, q),
+      commitFiles: (q) => invokeRpc<BugCommitFile[]>(transport, BUGS_CHANNELS.commitFiles, q),
+      fileDiff: (q) => invokeRpc<{ diff: string }>(transport, BUGS_CHANNELS.fileDiff, q),
     },
     docs: {
       read: (q) => invokeRpc<DocContent>(transport, DOCS_CHANNELS.read, q),

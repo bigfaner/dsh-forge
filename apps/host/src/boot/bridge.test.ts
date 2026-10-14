@@ -458,8 +458,8 @@ describe('createBridgeProxy（主侧代理）', () => {
     ])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
     expect([...SETTINGS_SERVICE_METHODS]).toEqual(['get', 'set'])
-    // fix-bug：bug 域单读面（listBugs——recordBug/resolveBug 写径不上 RPC）
-    expect([...BUGS_SERVICE_METHODS]).toEqual(['listBugs'])
+    // fix-bug：bug 域三读面（listBugs/commitFiles/fileDiff——recordBug/resolveBug 写径不上 RPC）
+    expect([...BUGS_SERVICE_METHODS]).toEqual(['listBugs', 'commitFiles', 'fileDiff'])
     expect([...PROJECTS_M2_SERVICE_METHODS]).toEqual(['deriveTaskStoreDir'])
     expect([...BRIDGE_SERVICE_NAMES]).toEqual([
       'forgeProjects',
@@ -555,7 +555,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(SETTINGS_SERVICE_METHODS).toHaveLength(2)
-    expect(BUGS_SERVICE_METHODS).toHaveLength(1) // fix-bug +listBugs
+    expect(BUGS_SERVICE_METHODS).toHaveLength(3) // fix-bug +listBugs/commitFiles/fileDiff
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
     expect(BRIDGE_SERVICE_NAMES).toHaveLength(8)
   })

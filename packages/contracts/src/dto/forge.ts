@@ -13,7 +13,7 @@
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
-import type { BugCard, ListBugsQuery } from './bugs.js'
+import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
 import type { ProjectService } from './project.js'
 
 // ─────────────────────────── 词汇与枚举（schema 单源对齐） ───────────────────────────
@@ -940,10 +940,14 @@ export interface ForgeSettingsService {
   set(input: SetForgeSettingsInput): Promise<void>
 }
 
-/** Interface 1（fix-bug）：core · forge bug 域服务面（ctx.forgeBugs——listBugs 为 RPC 读面；
- *  recordBug/resolveBug 两写径 = agent tool 专属，恒不上 RPC——channels.ts 面分治纪律） */
+/** Interface 1（fix-bug）：core · forge bug 域服务面（ctx.forgeBugs——listBugs/commitFiles/
+ *  fileDiff 为 RPC 读面；recordBug/resolveBug 两写径 = agent tool 专属，恒不上 RPC——
+ *  channels.ts 面分治纪律）。commitFiles/fileDiff = fixed 证据的变更内容读面（只读 git
+ *  show——主仓 cwd 跨 worktree 同对象库）。 */
 export interface ForgeBugsService {
   listBugs(q: ListBugsQuery): Promise<BugCard[]>
+  commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]>
+  fileDiff(q: BugFileDiffQuery): Promise<{ diff: string }>
 }
 
 // ─────────────────────────── Interface 5：项目域扩展（ctx.forgeProjects，P1 五法不动） ───────────────────────────

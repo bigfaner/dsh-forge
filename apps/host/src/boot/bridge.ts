@@ -229,9 +229,9 @@ export type SettingsWhitelistCoverage = AssertNever<Exclude<keyof ForgeSettingsS
 
 /**
  * bug 域服务方法白名单（fix-bug——Interface 1 扩池第八服务；桥白名单 = 代理可达面全集锚，
- * listBugs 单法透传；recordBug/resolveBug 两写径不上 RPC 面）。
+ * listBugs/commitFiles/fileDiff 三读法透传；recordBug/resolveBug 两写径不上 RPC 面）。
  */
-export const BUGS_SERVICE_METHODS = ['listBugs'] as const satisfies readonly (keyof ForgeBugsService)[]
+export const BUGS_SERVICE_METHODS = ['listBugs', 'commitFiles', 'fileDiff'] as const satisfies readonly (keyof ForgeBugsService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeBugsService 方法在此编译期点名） */
 export type BugsWhitelistCoverage = AssertNever<Exclude<keyof ForgeBugsService, (typeof BUGS_SERVICE_METHODS)[number]>>

@@ -283,7 +283,7 @@ describe('OverviewFrame Bug 子 tab（fix-bug 第 4 子 tab——列表视图）
     counts: { open: 3, fixed: 12, unresolved: 0 },
   }
 
-  it('bugs 子 tab：三态 chips（列表之上）+ Bug 行（summary 主行 + 错误类型 + 时间）', () => {
+  it('bugs 子 tab：三态 chips（列表之上）+ Bug 行（提案行同构：summary 左 + 错误类型 chip 右；无状态文字/无时间）', () => {
     const filter = { ...initialOverviewFilter(), subtab: 'bugs' as const }
     const markup = frame({ filter, list: BUGS_LIST })
     expect(markup).toContain('data-dswf-ov-bugpage')
@@ -294,7 +294,7 @@ describe('OverviewFrame Bug 子 tab（fix-bug 第 4 子 tab——列表视图）
     expect(listAt).toBeGreaterThan(chipsAt)
     expect(markup).toContain('登录接口 500')
     expect(markup).toContain('data-dswf-ov-bugrow-type="api"')
-    expect(markup).toContain('10-01 08:00')
+    expect(markup).not.toContain('08:00') // 时间退场（状态文字同退——色归圆点）
   })
 
   it('搜索在场 + 空结果 = 无匹配空态（帧侧注入空标题）', () => {

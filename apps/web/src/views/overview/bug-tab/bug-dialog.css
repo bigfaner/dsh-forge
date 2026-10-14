@@ -118,3 +118,38 @@
   overflow-wrap: anywhere;
   text-align: start;
 }
+
+/* ── 变更文件区（fixed 证据——展开清单 + 点文件看 diff；dsw ChatView「已编辑 N 个文件」同语言） ── */
+.dswf-ov-bdialog-fileswrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--dsw-font-xs-13-line-height);
+}
+
+.dswf-ov-bdialog-filelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-fileitem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-diff {
+  margin: 0;
+  padding: var(--dsw-font-xs-13-line-height);
+  max-height: 40vh; /* 结构刻度：长 diff 滚动呈现（不撑爆弹框） */
+  overflow: auto;
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre;
+}

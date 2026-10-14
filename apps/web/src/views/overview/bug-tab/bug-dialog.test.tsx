@@ -128,6 +128,60 @@ describe('BugDialog（会话 pill 两态——sessionTitleOfOrId 契约）', () 
   })
 })
 
+describe('BugDialog（变更文件区——fixed 证据 commit 的文件清单 + 单文件 diff）', () => {
+  const FILES = [
+    { status: 'M', path: 'apps/web/src/a.tsx' },
+    { status: 'A', path: 'apps/web/src/b.tsx' },
+  ]
+  const DIFF = 'diff --git a/a.tsx b/a.tsx\n+console.log(1)'
+
+  /** fake rpc client（bugs.commitFiles/fileDiff 受控；makeClient 注入径——完整面桩缺省抛） */
+  function fakeMakeClient(over: { files?: typeof FILES; diff?: string } = {}) {
+    const calls: string[] = []
+    const client = {
+      bugs: {
+        list: async () => [] as BugCard[],
+        commitFiles: async (q: { commitHash: string }) => {
+          calls.push(`commitFiles:${q.commitHash}`)
+          return over.files ?? FILES
+        },
+        fileDiff: async (q: { path: string }) => {
+          calls.push(`fileDiff:${q.path}`)
+          return { diff: over.diff ?? DIFF }
+        },
+      },
+    }
+    return { makeClient: (() => client) as unknown as import('../../../rpc/index.js').RpcClientFactory, calls }
+  }
+
+  function renderFixed(props: { projectId?: string; makeClient?: import('../../../rpc/index.js').RpcClientFactory } = {}): string {
+    return renderToStaticMarkup(
+      <BugDialog
+        bug={bug('fixed', { commitHash: 'a1b2c3d' })}
+        onClose={() => {}}
+        {...props}
+      />,
+    )
+  }
+
+  it('fixed + projectId = 变更控件在场；open/缺席 projectId = 不呈现（SSR 静态面零拉取）', () => {
+    expect(renderFixed({ projectId: 'p-1' })).toContain('data-dswf-ov-bdialog-files')
+    expect(renderFixed()).not.toContain('data-dswf-ov-bdialog-files')
+    expect(renderToStaticMarkup(<BugDialog bug={bug('open', { commitHash: 'a1b2c3d' })} onClose={() => {}} projectId="p-1" />)).not.toContain(
+      'data-dswf-ov-bdialog-files',
+    )
+  })
+
+  it('拖移钳制纯函数与变更控件共存（既有拖移模型零回归——静态面锚）', () => {
+    const { makeClient } = fakeMakeClient()
+    const markup = renderToStaticMarkup(
+      <BugDialog bug={bug('fixed', { commitHash: 'a1b2c3d' })} onClose={() => {}} projectId="p-1" makeClient={makeClient} />,
+    )
+    expect(markup).toContain('已编辑文件') // SSR 静态面未拉取——清单计数待展开首拍
+    expect(markup).toContain('data-dswf-ov-bdialog-files-toggle')
+  })
+})
+
 describe('BugDialog（拖移钳制——drawerPositionFromDrag 同刻度复用）', () => {
   it('视口钳制 4px 边距 + 标题栏恒可见（复用 drawer/collapse 刻度）', () => {
     const dragged = drawerPositionFromDrag({ left: 200, top: 100 }, 0, 0, -10_000, -10_000, 800, 600, 440)

@@ -311,3 +311,44 @@ describe('listBugs：search（summary/error_type/状态中文标签）+ status �
     expect((await s.listBugs({ projectId: h.projectId, status: [] })).length).toBe(3)
   })
 })
+
+describe('commitFiles/fileDiff：fixed 证据变更内容读面（git show 只读；fail-soft 空集/空串）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  it('commitFiles：name-status 解析（R 双路径取新路径）；hash 形脏/git 失败 = 空集', async () => {
+    h = createHarness()
+    const { execFile, calls } = stubExecFile({
+      'show --name-status --format= a1b2c3d': 'M\tpackages/core/src/a.ts\nA\tpackages/web/src/b.tsx\nR100\told.ts\tnew.ts',
+    })
+    const s = makeService(h, { execFile })
+    expect(await s.commitFiles({ projectId: h.projectId, commitHash: 'a1b2c3d' })).toEqual([
+      { status: 'M', path: 'packages/core/src/a.ts' },
+      { status: 'A', path: 'packages/web/src/b.tsx' },
+      { status: 'R100', path: 'new.ts' },
+    ])
+    expect(calls.some((c) => c.startsWith('show --name-status'))).toBe(true)
+    // hash 形脏（注入防御）→ 空集且零 git 调用
+    const before = calls.length
+    expect(await s.commitFiles({ projectId: h.projectId, commitHash: 'bad;rm -rf' })).toEqual([])
+    expect(calls.length).toBe(before)
+    // git 失败 → 空集 fail-soft
+    const fail = stubExecFile({ 'show --name-status --format= deadbeef': null })
+    expect(await makeService(h, { execFile: fail.execFile }).commitFiles({ projectId: h.projectId, commitHash: 'deadbeef' })).toEqual([])
+  })
+
+  it('fileDiff：单文件 unified diff 原样；path 越界/git 失败 = 空串', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({
+      'show --format= a1b2c3d -- packages/core/src/a.ts': 'diff --git a/a.ts b/a.ts\n+line',
+    })
+    const s = makeService(h, { execFile })
+    expect(await s.fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: 'packages/core/src/a.ts' })).toEqual({
+      diff: 'diff --git a/a.ts b/a.ts\n+line',
+    })
+    expect(await s.fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: '../escape' })).toEqual({ diff: '' })
+    expect(await s.fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: '/abs/path' })).toEqual({ diff: '' })
+    const fail = stubExecFile({})
+    expect(await makeService(h, { execFile: fail.execFile }).fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: 'x' })).toEqual({ diff: '' })
+  })
+})

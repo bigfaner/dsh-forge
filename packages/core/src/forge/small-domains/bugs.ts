@@ -22,6 +22,9 @@ import { randomUUID } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
 import type {
   BugCard,
+  BugCommitFile,
+  BugCommitFilesQuery,
+  BugFileDiffQuery,
   BugStatus,
   ListBugsQuery,
 } from '@dsh-forge/contracts'
@@ -34,11 +37,17 @@ import { matchesSearch, sortByActiveThenCreated } from './list-utils.js'
 
 // ── git 解析径（只读封闭子命令集） ──
 
-/** git 只读子命令封闭集（本域用 config/worktree/branch——均只读语义） */
-export const GIT_BUG_SUBCOMMANDS = ['config', 'worktree', 'branch'] as const
+/** git 只读子命令封闭集（本域用 config/worktree/branch/show——均只读语义） */
+export const GIT_BUG_SUBCOMMANDS = ['config', 'worktree', 'branch', 'show'] as const
 
 /** 只读查找超时（git-lookup 同刻度 2s） */
 export const GIT_BUG_TIMEOUT_MS = 2000
+
+/** commit hash 形校验（7-40 位十六进制——RPC 读面入参防脏） */
+const COMMIT_HASH_RE = /^[0-9a-fA-F]{7,40}$/
+
+/** diff 载荷上限（200KB——超大 diff 截断防护，UI 侧滚动呈现） */
+export const BUG_DIFF_MAX_CHARS = 200_000
 
 /** 双缺席身份占位（reporter/fixer NOT NULL——git 可选依赖 fail-soft 落值） */
 export const GIT_IDENTITY_FALLBACK = '(unknown)'
@@ -461,6 +470,43 @@ export function createBugsService(deps: BugsServiceDeps) {
         createdAt: (c) => c.createdAt,
         id: (c) => c.bugId,
       })
+    },
+
+    /** commit 变更文件清单（fixed 证据读面——git show --name-status；主仓 cwd 跨 worktree
+     *  同对象库。git 缺席/失败/hash 形脏 = 空集 fail-soft——呈现面降级不炸） */
+    async commitFiles(q: BugCommitFilesQuery): Promise<BugCommitFile[]> {
+      if (!COMMIT_HASH_RE.test(q.commitHash)) return []
+      const out = await runGit(execFile, deps.resolveWsPath(q.projectId), [
+        'show',
+        '--name-status',
+        '--format=',
+        q.commitHash,
+      ])
+      if (out === null) return []
+      return out
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map((line) => {
+          const parts = line.split('\t')
+          return { status: (parts[0] ?? '').trim(), path: (parts[parts.length - 1] ?? '').trim() }
+        })
+        .filter((f) => f.path !== '')
+    },
+
+    /** 单文件 unified diff（git show -- <path>；200KB 截断防护；fail-soft 空串同上） */
+    async fileDiff(q: BugFileDiffQuery): Promise<{ diff: string }> {
+      if (!COMMIT_HASH_RE.test(q.commitHash) || q.path.includes('..') || q.path.startsWith('/')) {
+        return { diff: '' }
+      }
+      const out = await runGit(execFile, deps.resolveWsPath(q.projectId), [
+        'show',
+        '--format=',
+        q.commitHash,
+        '--',
+        q.path,
+      ])
+      if (out === null) return { diff: '' }
+      return { diff: out.length > BUG_DIFF_MAX_CHARS ? `${out.slice(0, BUG_DIFF_MAX_CHARS)}\n…（已截断）` : out }
     },
   }
 }

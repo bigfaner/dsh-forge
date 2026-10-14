@@ -390,16 +390,19 @@ export function openBugCardOf(list: OverviewListData | undefined, openBugId: str
 
 /** Bug 弹框挂载位（OverviewTab 装配体——bug 子 tab 行点击开合；无选中 = 不渲染）。
  *  注入面 sessionTitleOf/onOpenSession = ShellHost 递达缝（任务抽屉同缝——键缺席
- *  fail-soft 不递达）；Escape 关闭径随 BugDialog 内 useTaskDrawerEscape（同款）。 */
+ *  fail-soft 不递达）；projectId/makeClient = fixed 证据变更文件拉取面（缺席 = 控件不
+ *  呈现）；Escape 关闭径随 BugDialog 内 useTaskDrawerEscape（同款）。 */
 export interface OverviewBugDialogMountProps {
   readonly list: OverviewListData | undefined
   readonly openBugId: string | null
   readonly onClose: () => void
   readonly onOpenSession?: (sessionId: string) => void
   readonly sessionTitleOf?: (sessionId: string) => string | undefined
+  readonly projectId?: string
+  readonly makeClient?: RpcClientFactory
 }
 
-export function OverviewBugDialogMount({ list, openBugId, onClose, onOpenSession, sessionTitleOf }: OverviewBugDialogMountProps): ReactNode {
+export function OverviewBugDialogMount({ list, openBugId, onClose, onOpenSession, sessionTitleOf, projectId, makeClient }: OverviewBugDialogMountProps): ReactNode {
   const bug = openBugCardOf(list, openBugId)
   if (bug === undefined) return null
   return (
@@ -408,6 +411,8 @@ export function OverviewBugDialogMount({ list, openBugId, onClose, onOpenSession
       onClose={onClose}
       {...(onOpenSession !== undefined ? { onOpenSession } : {})}
       {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
+      {...(projectId !== undefined ? { projectId } : {})}
+      {...(makeClient !== undefined ? { makeClient } : {})}
     />
   )
 }
@@ -553,6 +558,8 @@ export function OverviewTab({
         onClose={handleCloseBug}
         {...(onOpenSession !== undefined ? { onOpenSession } : {})}
         {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
+        projectId={projectId}
+        {...(makeClient !== undefined ? { makeClient } : {})}
       />
     </>
   )

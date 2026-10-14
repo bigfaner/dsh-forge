@@ -68,12 +68,36 @@ export interface ListBugsQuery {
   sort?: 'active' | 'created'
 }
 
+/** commit 变更文件行（git show --name-status 解析——fixed 证据的变更内容呈现） */
+export interface BugCommitFile {
+  path: string
+  /** git name-status 字母（A/M/D/R…；R 取新路径） */
+  status: string
+}
+
+/** commitFiles 查询（变更文件清单——只读 git show，主仓 cwd 跨 worktree 同对象库） */
+export interface BugCommitFilesQuery {
+  projectId: string
+  commitHash: string
+}
+
+/** fileDiff 查询（单文件 unified diff） */
+export interface BugFileDiffQuery {
+  projectId: string
+  commitHash: string
+  path: string
+}
+
 /** forge:bugs/* 请求负载（键 = BUGS_CHANNELS 键；recordBug/resolveBug 写动词不上 RPC） */
 export interface BugsChannelRequests {
   list: ListBugsQuery
+  commitFiles: BugCommitFilesQuery
+  fileDiff: BugFileDiffQuery
 }
 
 /** forge:bugs/* 响应负载（键 = BUGS_CHANNELS 键） */
 export interface BugsChannelResponses {
   list: BugCard[]
+  commitFiles: BugCommitFile[]
+  fileDiff: { diff: string }
 }
