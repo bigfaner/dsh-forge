@@ -69,6 +69,8 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
       'arrowheadColor',
       'edgeLabelBackground',
       'labelBackgroundColor',
+      'clusterBkg',
+      'clusterBorder',
       'activationBorderColor',
       'sequenceNumberColor',
       'loopTextColor',
@@ -77,14 +79,20 @@ describe('loadMermaidEngine（懒加载 + strict 安全边界 + 1.8 主题化）
       const v = MERMAID_THEME_VARIABLES[key]
       expect(v, `${key} 为 khroma 派生输入——必须 concrete 静态实值（var() 抛 Unsupported color format）`).toMatch(/^#[0-9a-fA-F]{3,8}$/)
     }
-    // 1.11 调优 pin：对比度层次——节点底 200/100/50 三档差异化；边框/连线 solid 静态令牌（过淡半透明黑档退役）
-    expect(MERMAID_THEME_VARIABLES.primaryColor, '主节点底 = neutral-bluish-200 实值（层次最强档）').toBe('#e1e5ee')
-    expect(MERMAID_THEME_VARIABLES.secondaryColor, '次级底 = neutral-bluish-100 实值（中间档）').toBe('#ebeef2')
+    // 1.13 终版 pin（B₁ 柔蓝 + 亮蓝字）：白底浮起 + deepseek 品牌蓝描边/文字 + 灰阶边线/簇层次
+    expect(MERMAID_THEME_VARIABLES.primaryColor, '主节点底 = neutral-bluish-00 实值（白底浮起——B₁）').toBe('#ffffff')
+    expect(MERMAID_THEME_VARIABLES.secondaryColor, '次级底 = neutral-bluish-60 实值').toBe('#f5f6f7')
     expect(MERMAID_THEME_VARIABLES.tertiaryColor, '簇底 = neutral-bluish-50 实值（最浅档）').toBe('#f9fafb')
-    expect(MERMAID_THEME_VARIABLES.primaryBorderColor, '主边框 = neutral-bluish-300 实值（对比度提升）').toBe('#cfd3d6')
-    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = neutral-bluish-400 实值（对比度提升——1.11 调优）').toBe('#adb2b8')
+    expect(MERMAID_THEME_VARIABLES.primaryBorderColor, '主描边 = brand-deepseek-400 实值（品牌蓝——B₁）').toBe('#7aaaff')
+    expect(MERMAID_THEME_VARIABLES.secondaryBorderColor, '次级边框 = neutral-bluish-400 实值（灰阶）').toBe('#adb2b8')
+    expect(MERMAID_THEME_VARIABLES.tertiaryBorderColor, '簇边 = neutral-bluish-200 实值').toBe('#e1e5ee')
+    expect(MERMAID_THEME_VARIABLES.clusterBkg, '簇底 = neutral-bluish-50 实值').toBe('#f9fafb')
+    expect(MERMAID_THEME_VARIABLES.clusterBorder, '簇边 = neutral-bluish-200 实值').toBe('#e1e5ee')
+    expect(MERMAID_THEME_VARIABLES.lineColor, '线条色 = neutral-bluish-400 实值（灰阶——B₁）').toBe('#adb2b8')
     expect(MERMAID_THEME_VARIABLES.arrowheadColor, '箭头色 = neutral-bluish-400 实值（与连线同源）').toBe('#adb2b8')
-    expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = 官方 label-primary 实值镜像（neutral-bluish-1000）').toBe('#0f1115') // dsw-raw 官方令牌实值镜像 pin
+    expect(MERMAID_THEME_VARIABLES.edgeLabelBackground, '边标签底 = neutral-bluish-00 实值（白净——B₁）').toBe('#ffffff')
+    expect(MERMAID_THEME_VARIABLES.primaryTextColor, '节点内文字 = brand-deepseek-450 实值（亮蓝——边浅字亮同族两阶）').toBe('#5686fe')
+    expect(MERMAID_THEME_VARIABLES.textColor, '页面文字 = brand-deepseek-450 实值（亮蓝）').toBe('#5686fe')
   })
 })
 
