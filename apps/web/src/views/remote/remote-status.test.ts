@@ -67,4 +67,20 @@ describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () =
     expect(snapshot.phase).toBe('listening')
     expect(snapshot.lanAddress).toBeUndefined()
   })
+
+  it('fix-6：remotePairExpiresAt 在场 = 快照 pairExpiresAt 读数透传（倒计时单源）；缺席 = 字段不出现', () => {
+    const withTtl = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+      remotePairExpiresAt: 1_234_567,
+    })
+    expect(withTtl.pairExpiresAt).toBe(1_234_567)
+    const withoutTtl = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+    })
+    expect('pairExpiresAt' in withoutTtl).toBe(false)
+  })
 })

@@ -8,7 +8,8 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
-import { createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { applyPairMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { buildBootManifest } from './manifest.js'
 
 const MODULE_URL = 'file:///Z:/worktrees/redesign/apps/host/dist/boot/run.js'
 let dir: string
@@ -98,6 +99,29 @@ describe('createBridgeChannel · event 分支（交互二事件链中段——G1
     child.emit('message', { type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 'p-10' } })
     expect(a).toEqual(['p-9'])
     expect(b).toEqual(['p-9', 'p-10'])
+  })
+})
+
+describe('applyPairMessage（fix-6 配对轮换——pair 推送刷新 manifest 面）', () => {
+  const base = () => buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000)
+
+  it('pair 消息 → manifest 换新 token + TTL 读数（旧 URL/绑定 host 保留——QR 倒计时到期重取单源）', () => {
+    const next = applyPairMessage(base(), { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(next.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=new')
+    expect(next.remotePairExpiresAt).toBe(2000)
+    expect(next.url).toBe('http://127.0.0.1:1/#t')
+    expect(next.remoteHost).toBe('0.0.0.0')
+  })
+
+  it('非 pair 消息 → manifest 原样返回（零重build）', () => {
+    const m = base()
+    expect(applyPairMessage(m, { type: 'event', channel: 'forge:events/tasks-changed', payload: { projectId: 'p' } })).toBe(m)
+    expect(applyPairMessage(m, undefined)).toBe(m)
+  })
+
+  it('畸形 pair 消息（TTL 缺席）→ manifest 原样返回（静默忽略）', () => {
+    const m = base()
+    expect(applyPairMessage(m, { type: 'pair', remotePairUrl: 'http://x/pair?token=t' })).toBe(m)
   })
 })
 

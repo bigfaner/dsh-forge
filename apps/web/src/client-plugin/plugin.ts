@@ -1432,7 +1432,12 @@ export interface ForgeRemoteStatusFace {
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
 interface ForgePreloadBridge {
   invoke(channel: string, payload?: unknown): Promise<unknown>
-  getBootManifest(): Promise<{ url?: string; remoteHost?: string; remotePairUrl?: string }>
+  getBootManifest(): Promise<{
+    url?: string
+    remoteHost?: string
+    remotePairUrl?: string
+    remotePairExpiresAt?: number
+  }>
 }
 
 /** dshForge 桥读取（缺席/形状不符 = undefined——fail-soft off 面，不炸装配） */
@@ -1480,18 +1485,27 @@ function isOkEnvelope(envelope: unknown): boolean {
  */
 function snapshotOfReads(
   enabled: boolean | undefined,
-  manifest: { url?: string; remoteHost?: string; remotePairUrl?: string } | undefined,
+  manifest: {
+    url?: string
+    remoteHost?: string
+    remotePairUrl?: string
+    remotePairExpiresAt?: number
+  } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
   const exposureActive = manifest?.remoteHost === '0.0.0.0'
   if (enabled !== exposureActive) return { phase: 'pending' }
   if (!enabled) return { phase: 'off' }
   // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
-  // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 authenticatedUrl 构造的
-  // 官方配对地址单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
+  // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 /pair?token= 官方配对地址
+  // 单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
   const pairUrl = manifest?.remotePairUrl
   const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
-  return { phase: 'listening', lanAddress }
+  // fix-6 倒计时缝（镜像口径）：token TTL 读数透传（桌面 QR 倒计时单源）。
+  const expiresAt = manifest?.remotePairExpiresAt
+  const pairExpiresAt =
+    typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
+  return { phase: 'listening', lanAddress, ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}) }
 }
 
 /** 手机远程状态注入面构造（测试与 registerRemoteEntry 同源；快照读数细节见类型注释） */

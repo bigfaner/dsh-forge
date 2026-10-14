@@ -12,6 +12,7 @@ import {
   approvalWaterfallAnswer,
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
+  asPairMessage,
   asReadyMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
@@ -283,6 +284,51 @@ describe('asReadyMessage（ready 守卫）', () => {
     expect(asReadyMessage(base)?.remotePairUrl).toBeUndefined()
     expect(asReadyMessage({ ...base, remotePairUrl: '' })?.remotePairUrl).toBeUndefined()
     expect(asReadyMessage({ ...base, remotePairUrl: 42 })?.remotePairUrl).toBeUndefined()
+  })
+
+  it('fix-6：remotePairExpiresAt 可选透传（token TTL 读数——桌面倒计时单源）；缺席/非正数 = 降级不阻 ready', () => {
+    const base = {
+      type: 'ready',
+      url: 'http://127.0.0.1:1/#t',
+      injections: [],
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+        forgeSettings: true,
+        forgeBugs: true,
+        approval: true,
+      },
+    } as const
+    expect(asReadyMessage({ ...base, remotePairExpiresAt: 123456 })?.remotePairExpiresAt).toBe(123456)
+    expect(asReadyMessage(base)?.remotePairExpiresAt).toBeUndefined()
+    expect(asReadyMessage({ ...base, remotePairExpiresAt: 0 })?.remotePairExpiresAt).toBeUndefined()
+    expect(asReadyMessage({ ...base, remotePairExpiresAt: -5 })?.remotePairExpiresAt).toBeUndefined()
+    expect(asReadyMessage({ ...base, remotePairExpiresAt: 'soon' })?.remotePairExpiresAt).toBeUndefined()
+  })
+})
+
+// ── fix-6 配对令牌轮换推送（child → 主单向——官方 reload 轮换的桥载体） ──
+
+describe('asPairMessage（pair 消息守卫——run.ts 轮换分支消费）', () => {
+  it('形状齐备 → pair 消息（remotePairUrl 非空串 + remotePairExpiresAt 正数）', () => {
+    expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=t', remotePairExpiresAt: 300_000 })).toEqual({
+      type: 'pair',
+      remotePairUrl: 'http://192.168.1.7:1/pair?token=t',
+      remotePairExpiresAt: 300_000,
+    })
+  })
+
+  it('非 pair 消息 / URL 残缺 / TTL 非正数 → undefined（静默忽略不转发）', () => {
+    expect(asPairMessage({ type: 'ready', url: 'x', injections: [], services: {} })).toBeUndefined()
+    expect(asPairMessage({ type: 'event', channel: 'forge:events/tasks-changed', payload: { projectId: 'p' } })).toBeUndefined()
+    expect(asPairMessage({ type: 'pair', remotePairUrl: '', remotePairExpiresAt: 1 })).toBeUndefined()
+    expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t' })).toBeUndefined()
+    expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 0 })).toBeUndefined()
+    expect(asPairMessage({ type: 'pair', remotePairUrl: 42, remotePairExpiresAt: 1 })).toBeUndefined()
   })
 })
 

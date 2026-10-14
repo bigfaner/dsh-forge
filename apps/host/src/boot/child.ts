@@ -31,7 +31,8 @@ import {
 } from './bridge.js'
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
-import { lanIpv4Of } from './manifest.js'
+import { lanIpv4Of, remotePairUrlOf } from './manifest.js'
+import { PAIRING_TTL_MS, createPairingIssuer } from './pairing.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -156,10 +157,56 @@ async function main(): Promise<void> {
   // 全卡绑定实况下由宿主构造 authenticatedUrl（LAN IPv4 + 端口 + Host 令牌）作 UI QR/
   // 地址行单源；回环绑定 / 无局域网 IPv4 = 缺席（UI 空态回退，不自造地址）。
   const lanIpv4 = lanIpv4Of(Object.values(networkInterfaces()))
-  const remotePairUrl =
-    remoteHost === '0.0.0.0' && lanIpv4 !== undefined
-      ? ctx.connection.authenticatedUrl(`http://${lanIpv4}:${ctx.webServer.port}`)
-      : undefined
+  // fix-6 路线 B（用户裁决 2026-10-14）：官方 /pair 配对协议缝——替代 fix-5 的 host 认证
+  // URL 直通。语义逐位对照官方 LanMobileBridge（DSH Desktop 0.10.0 闭源壳 bundle，npm 零
+  // 可复用组件）：签发 randomBytes(32) base64url token、TTL 整 5min、timingSafeEqual 恒时
+  // 校验；扫码 GET /pair?token= 校验通过 → 302 官方认证 URL（ctx.connection.
+  // authenticatedUrl）→ 官方 BrowserAuth 铸 HttpOnly SameSite=Strict 会话 cookie（官方
+  // dsh_mobile 同语义——会话 cookie 归官方既有机制，产品零自持）。轮换：签发器惰性过期 +
+  // 每 TTL 定时强推 pair 消息（run.ts 刷新 manifest——桌面 QR 倒计时到期重取即得新 token）。
+  // 全卡绑定 × 局域网 IPv4 在场才启用；回环绑定 / 无 LAN = 缺席（UI 空态回退，不自造地址）。
+  const issuer = createPairingIssuer()
+  const pairPort = ctx.webServer.port
+  const pairGrant = issuer.current()
+  let remotePairUrl: string | undefined
+  if (remoteHost === '0.0.0.0' && lanIpv4 !== undefined) {
+    try {
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/pair',
+        handler: (req, res) => {
+          const hostHeader = typeof req.headers.host === 'string' ? req.headers.host : ''
+          // 同源锚定：只认 LAN 权威（Host 头畸形/异源回退构造地址——零开放重定向面）
+          const authority =
+            hostHeader === `${lanIpv4}:${pairPort}` ? hostHeader : `${lanIpv4}:${pairPort}`
+          const token =
+            new URL(req.url ?? '/', `http://${authority}`).searchParams.get('token') ?? ''
+          if (!issuer.verify(token)) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+            res.end('配对二维码已过期——请在桌面端重新扫码')
+            return
+          }
+          // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 回干净 ./
+          const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
+          res.writeHead(302, { location: target })
+          res.end()
+        },
+      })
+      remotePairUrl = remotePairUrlOf(lanIpv4, pairPort, pairGrant.token)
+      const rotationTimer = setInterval(() => {
+        const rotated = issuer.rotate()
+        send({
+          type: 'pair',
+          remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, rotated.token),
+          remotePairExpiresAt: rotated.expiresAt,
+        })
+      }, PAIRING_TTL_MS)
+      rotationTimer.unref?.() // 轮换器不阻进程退出（shutdown 面归 ProcessShutdown 既有链）
+    } catch {
+      remotePairUrl = undefined // /pair 缝注册失败 → 配对面降级缺席（UI 空态回退），boot 不受阻
+    }
+  }
+  const remotePairExpiresAt = remotePairUrl !== undefined ? pairGrant.expiresAt : undefined
   const injections = ctx.webServer.collectIndexInjections()
   const servicesFace = ctx as unknown as ServiceGetFace
   // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
@@ -205,7 +252,9 @@ async function main(): Promise<void> {
     url,
     injections,
     remoteHost, // fix-3：实际绑定 host（装配期读 remoteApproval.enabled 的结果——UI 判读单源）
-    ...(remotePairUrl !== undefined ? { remotePairUrl } : {}), // fix-5：官方配对地址（全卡绑定 × 局域网 IPv4 在场才透传）
+    ...(remotePairUrl !== undefined
+      ? { remotePairUrl, remotePairExpiresAt } // fix-6：/pair?token= 形状 + TTL 读数（全卡绑定 × 局域网 IPv4 在场才透传）
+      : {}), // fix-5：官方配对地址（单源透传）
     services: {
       forgeProjects: services.forgeProjects !== undefined,
       forgeKnowledge: services.forgeKnowledge !== undefined,

@@ -14,7 +14,7 @@ afterEach(() => {
 
 function fakeBridge(overrides: {
   readonly settings?: unknown
-  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string }
+  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number }
   readonly invokeFail?: boolean
   readonly written?: { channel: string; payload: unknown }[]
 }): ForgeClientCtx {
@@ -66,6 +66,35 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     await remote.refresh()
     expect(remote.source.getSnapshot().phase).toBe('listening')
     expect(remote.source.getSnapshot().lanAddress).toBeUndefined()
+  })
+
+  it('fix-6：remotePairExpiresAt 在场 = 快照 pairExpiresAt 透传（倒计时单源；缺席镜像 = 字段不出现）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:19400/',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+          remotePairExpiresAt: 1_234_567,
+        },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().pairExpiresAt).toBe(1_234_567)
+
+    const absent = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:19400/',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+        },
+      }),
+    )
+    await absent.refresh()
+    expect('pairExpiresAt' in absent.source.getSnapshot()).toBe(false)
   })
 
   it('配置开 × 回环实况 → pending（待重启生效——不伪装 listening）', async () => {

@@ -19,6 +19,8 @@ export interface RemoteStatusSnapshot {
   readonly phase: RemotePhase
   /** 局域网展示地址（监听中且端口读数在场；其余相位缺席 → 面板回退提示） */
   readonly lanAddress?: string
+  /** fix-6：配对令牌到期时刻（epoch ms——QR 倒计时单源；与 lanAddress 同生同灭） */
+  readonly pairExpiresAt?: number
 }
 
 /**
@@ -41,9 +43,11 @@ export function remotePhaseOf(input: {
 export interface BootManifestRead {
   readonly url?: string
   readonly remoteHost?: string
-  /** fix-5：官方配对/连接地址（宿主 authenticatedUrl 构造——LAN IPv4 + 端口 + Host 令牌；
+  /** fix-5：官方配对/连接地址（宿主 /pair?token= 形状——LAN IPv4 + 端口 + 配对令牌；
    *  缺席 = 旧 child / 无局域网 IPv4 降级，面板回退提示——不自造地址） */
   readonly remotePairUrl?: string
+  /** fix-6：配对令牌到期时刻（epoch ms——QR 倒计时单源；可选缺席降级） */
+  readonly remotePairExpiresAt?: number
 }
 
 /**
@@ -61,5 +65,13 @@ export function remoteSnapshotOf(
   const phase = remotePhaseOf({ enabled, exposureActive })
   if (phase !== 'listening') return { phase }
   const pairUrl = manifest?.remotePairUrl
-  return { phase, lanAddress: typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined }
+  const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
+  const expiresAt = manifest?.remotePairExpiresAt
+  const pairExpiresAt =
+    typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
+  return {
+    phase,
+    lanAddress,
+    ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
+  }
 }

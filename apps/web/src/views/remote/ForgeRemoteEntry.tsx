@@ -34,6 +34,27 @@ export function remotePhaseLabel(phase: RemotePhase): string {
   return '远程已关闭'
 }
 
+// fix-6 官方对齐常量（DSH Desktop 0.10.0「连接移动设备」dialog 实机逐位对照——文案常量
+// 锚 = 闭源壳 bundle :1119-1151）：dialog 标题 / QR 显示尺寸 220×220 / 倒计时缺省 300s
+// （官方 PAIRING_TTL_MS=5min 同刻度）。
+/** 官方配对 dialog 标题 */
+export const REMOTE_DIALOG_TITLE = '连接移动设备'
+/** QR 显示尺寸（官方实机 220×220） */
+export const PAIRING_QR_SIZE = 220
+/** 倒计时缺省秒数（token TTL 读数缺席时的兜底刻度 = 官方 5min） */
+export const PAIRING_COUNTDOWN_SECONDS = 300
+
+/** 倒计时余秒（纯函数——token TTL 读数驱动；缺席 = 官方 300s 兜底；过期收敛 0） */
+export function secondsLeftOf(pairExpiresAt: number | undefined, now: number): number {
+  if (pairExpiresAt === undefined) return PAIRING_COUNTDOWN_SECONDS
+  return Math.max(0, Math.ceil((pairExpiresAt - now) / 1000))
+}
+
+/** 倒计时文案（官方常量对照——「二维码将在 N 秒后刷新」） */
+export function pairCountdownText(seconds: number): string {
+  return `二维码将在 ${seconds} 秒后刷新`
+}
+
 /** QR 可编码判定（纯函数——监听/已连接 × 连接地址读数在场才编码；空值 QR 不渲染） */
 export function remotePairQrOf(snapshot: RemoteStatusSnapshot): string | undefined {
   if (snapshot.phase !== 'listening' && snapshot.phase !== 'connected') return undefined
@@ -57,13 +78,18 @@ function PhoneGlyph(): ReactNode {
   )
 }
 
-/** 配对面（受控呈现——入口 open 态经官方 Modal 挂载；测试静态面同源直出） */
+/** 配对面（受控呈现——入口 open 态经官方 Modal 挂载；测试静态面同源直出）。
+ * fix-6 官方对齐：QR 220×220 + 官方文案 + 倒计时（1s interval）到期自动刷新
+ * （onRefresh = 重取 boot manifest 换 token——宿主轮换推送经 refresh 单源回流）+
+ * 地址条复制完整 pairingUrl（「已复制」1.8s 反馈）。 */
 export function RemotePanel(props: {
   readonly snapshot: RemoteStatusSnapshot
   readonly onToggle?: (next: boolean) => Promise<void> | void
   readonly busy?: boolean
+  /** QR 倒计时到期自动刷新（重取 boot manifest——新 token 随快照回流；缺席 = 倒计时停在 0） */
+  readonly onRefresh?: () => void
 }): ReactNode {
-  const { snapshot, onToggle, busy } = props
+  const { snapshot, onToggle, busy, onRefresh } = props
   const checked = snapshot.phase !== 'off'
   const onSwitch = useCallback(
     (event: { currentTarget: { checked: boolean } }) => {
@@ -72,6 +98,25 @@ export function RemotePanel(props: {
     [onToggle],
   )
   const pairValue = remotePairQrOf(snapshot)
+  // fix-6 倒计时：1s interval 渲染「二维码将在 N 秒后刷新」；到期触发 onRefresh 重取
+  // （新 token 经快照回流后 countdown 自动重置——interval 存续期 = QR 在场期）。
+  const [nowTs, setNowTs] = useState(() => Date.now())
+  const secondsLeft = secondsLeftOf(snapshot.pairExpiresAt, nowTs)
+  useEffect(() => {
+    if (pairValue === undefined) return
+    const timer = setInterval(() => setNowTs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [pairValue])
+  useEffect(() => {
+    if (pairValue !== undefined && secondsLeft <= 0) onRefresh?.()
+  }, [pairValue, secondsLeft, onRefresh])
+  // fix-6 复制反馈：「已复制」1.8s 自动消退（writeClipboard = 官方 primitives 既有件）。
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1800)
+    return () => clearTimeout(timer)
+  }, [copied])
   return (
     <div className="dswf-remote-panel" aria-label="手机远程">
       <div className="dswf-remote-panel-head">
@@ -82,16 +127,21 @@ export function RemotePanel(props: {
       </div>
       <div className="dswf-remote-pair">
         {pairValue !== undefined ? (
-          <div
-            className="dswf-remote-qr"
-            data-testid="dswf-remote-qr"
-            data-value={pairValue}
-            title="手机扫码打开配对地址"
-          >
-            {/* react-qr-code（2.2.0 pin）——纯 SVG 同步渲染，零弹层零网络机械；
-                底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
-            <QRCode value={pairValue} size={132} />
-          </div>
+          <>
+            <div
+              className="dswf-remote-qr"
+              data-testid="dswf-remote-qr"
+              data-value={pairValue}
+              title="手机扫码打开配对地址"
+            >
+              {/* react-qr-code（2.2.0 pin）——纯 SVG 同步渲染，零弹层零网络机械；
+                  底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
+              <QRCode value={pairValue} size={PAIRING_QR_SIZE} />
+            </div>
+            <p className="dswf-remote-panel-note" data-testid="dswf-remote-countdown">
+              {pairCountdownText(secondsLeft)}
+            </p>
+          </>
         ) : (
           <p className="dswf-remote-empty" data-dswf-remote-empty="">
             {remotePairEmptyText(snapshot)}
@@ -115,22 +165,18 @@ export function RemotePanel(props: {
           aria-label="远程访问开关"
         />
       </label>
-      <div className="dswf-remote-panel-row">
-        <span>配对</span>
-        <span className="dswf-remote-panel-hint">
-          {snapshot.lanAddress !== undefined
-            ? '手机扫码连接（或打开以下地址按官方配对流程认证）'
-            : '开启并重启宿主后显示局域网地址'}
-        </span>
-      </div>
+      <p className="dswf-remote-panel-note">扫码即可连接。移动设备与电脑需连接至同一 WiFi。</p>
       {snapshot.lanAddress !== undefined && (
         <button
           type="button"
           className="dswf-remote-address"
           title="点击复制地址"
-          onClick={() => writeClipboard(snapshot.lanAddress ?? '')}
+          onClick={() => {
+            writeClipboard(snapshot.lanAddress ?? '')
+            setCopied(true)
+          }}
         >
-          {snapshot.lanAddress}
+          {copied ? '已复制' : snapshot.lanAddress}
         </button>
       )}
       <p className="dswf-remote-panel-note">未配对设备不可见任何内容；关闭远程后通道即断。</p>
@@ -164,8 +210,12 @@ export function ForgeRemoteEntry({ status, onToggle, refresh }: ForgeRemoteEntry
       </button>
       {/* 官方 Modal（Esc/遮罩/portal 生命周期归官方件——零新弹层机械；开态才挂载） */}
       {open && (
-        <Modal open onClose={close} title="手机远程" closeLabel="关闭" contentClassName="dswf-remote-modal">
-          <RemotePanel snapshot={snapshot} onToggle={onToggle} />
+        <Modal open onClose={close} title={REMOTE_DIALOG_TITLE} closeLabel="关闭" contentClassName="dswf-remote-modal">
+          <RemotePanel
+            snapshot={snapshot}
+            onToggle={onToggle}
+            onRefresh={refresh !== undefined ? () => void refresh() : undefined}
+          />
         </Modal>
       )}
     </div>

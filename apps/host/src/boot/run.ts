@@ -28,6 +28,7 @@ import type {
 import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
+  asPairMessage,
   asReadyMessage,
   createBridgeProxy,
   DOCS_SERVICE_METHODS,
@@ -217,8 +218,22 @@ export async function bootDshHost(
   const channel = createBridgeChannel(child) // 消息监听先于 ready 挂上（事件零丢失窗）
   const ready = await waitForReady(child)
   const call = channel.call
+  // fix-6 配对令牌轮换：child 每 TTL 推 pair 消息 → manifest 原位换新（getBootManifest
+  // 每调读最新——桌面 QR 倒计时到期重取即得新 token；官方 reload 轮换的桥载体）。
+  let manifest = buildBootManifest(
+    ready.url,
+    ready.injections,
+    ready.remoteHost,
+    ready.remotePairUrl,
+    ready.remotePairExpiresAt,
+  )
+  child.on('message', (message: unknown) => {
+    manifest = applyPairMessage(manifest, message)
+  })
   return {
-    manifest: buildBootManifest(ready.url, ready.injections, ready.remoteHost, ready.remotePairUrl),
+    get manifest() {
+      return manifest
+    },
     toolNames: ready.tools ?? [],
     services: {
       forgeProjects: ready.services.forgeProjects
@@ -340,4 +355,20 @@ function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildM
   } catch {
     return false
   }
+}
+
+/**
+ * fix-6 pair 消息消费（纯函数）：配对令牌轮换推送 → 以旧 manifest 面（url/injections/
+ * remoteHost 不变）重建携新 token + TTL 读数的 manifest；非 pair / 畸形 = 原样返回。
+ */
+export function applyPairMessage(manifest: BootManifest, message: unknown): BootManifest {
+  const pair = asPairMessage(message)
+  if (pair === undefined) return manifest
+  return buildBootManifest(
+    manifest.url,
+    manifest.injections,
+    manifest.remoteHost,
+    pair.remotePairUrl,
+    pair.remotePairExpiresAt,
+  )
 }

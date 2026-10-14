@@ -1,6 +1,6 @@
 // G1 契约面清单第 1 项 pin：boot manifest 注入格式 {url, injections}。
 import { describe, expect, it } from 'vitest'
-import { buildBootManifest, lanIpv4Of } from './manifest.js'
+import { buildBootManifest, lanIpv4Of, remotePairUrlOf } from './manifest.js'
 
 describe('buildBootManifest', () => {
   it('组装 {url, injections} 且冻结', () => {
@@ -40,6 +40,24 @@ describe('buildBootManifest', () => {
     )
     expect('remotePairUrl' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0')).toBe(false)
     expect('remotePairUrl' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', '')).toBe(false)
+  })
+
+  it('fix-6：remotePairExpiresAt 在场透传（token TTL 读数——桌面倒计时单源）；缺席/非正数 = 字段不出现', () => {
+    expect(
+      buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=t', 123456)
+        .remotePairExpiresAt,
+    ).toBe(123456)
+    expect('remotePairExpiresAt' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0')).toBe(false)
+    expect(
+      'remotePairExpiresAt' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=t', 0),
+    ).toBe(false)
+    expect(
+      'remotePairExpiresAt' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=t', -1),
+    ).toBe(false)
+  })
+
+  it('fix-6：remotePairUrlOf 产官方 /pair 形状——`http://<lan-ip>:<port>/pair?token=<token>`（URL 形状单源）', () => {
+    expect(remotePairUrlOf('192.168.1.7', 19400, 'abc_-X')).toBe('http://192.168.1.7:19400/pair?token=abc_-X')
   })
 
   it('fix-5：lanIpv4Of 网卡读数选址——首个非回环 IPv4（排除 link-local 169.254.*）；无 = undefined', () => {

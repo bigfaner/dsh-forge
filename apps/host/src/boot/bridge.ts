@@ -95,15 +95,27 @@ export interface BridgeReadyMessage {
   /** fix-3：webserver 实际绑定 host（装配期 remoteApproval.enabled 读数的结果面——UI
    *  pending/listening 判读单源；可选：旧 child 缺席 = undefined，不阻 ready 守卫） */
   readonly remoteHost?: string
-  /** fix-5：官方配对/连接地址（authenticatedUrl 构造——LAN IPv4 + 端口 + Host 令牌；
+  /** fix-5：官方配对/连接地址（fix-6 起 /pair?token= 形状；
    *  可选：回环绑定/无局域网 IPv4/旧 child = 缺席，不阻 ready 守卫） */
   readonly remotePairUrl?: string
+  /** fix-6：配对令牌到期时刻（epoch ms——桌面 QR 倒计时单源；可选缺席降级不阻 ready） */
+  readonly remotePairExpiresAt?: number
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
 export interface BridgeFatalMessage {
   readonly type: 'fatal'
   readonly message: string
+}
+
+/**
+ * fix-6 子 → 主：配对令牌轮换推送（child 定时器每 TTL 驱动——官方 reload 轮换的桥载体；
+ * run.ts 消费刷新 boot manifest，桌面 QR 倒计时到期经 BOOT_CHANNEL 重取即得新 token）。
+ */
+export interface BridgePairMessage {
+  readonly type: 'pair'
+  readonly remotePairUrl: string
+  readonly remotePairExpiresAt: number
 }
 
 /**
@@ -131,6 +143,7 @@ export type ChildToMainMessage =
   | BridgeFatalMessage
   | BridgeRpcResultMessage
   | BridgeEventMessage
+  | BridgePairMessage
 
 // 桥事件信封唯一源 = contracts BridgeEventMessage（1.1 定稿；Interface 6——G1-09 pin）。
 // 子侧发射 = core workspace/events.ts 写动词闭包尾部 sendGuarded（direct 形态 IPC 缺席
@@ -401,6 +414,11 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
   // fix-5 官方配对地址：可选字段——同口径（非空 string 才透传）
   const remotePairUrl =
     typeof m.remotePairUrl === 'string' && m.remotePairUrl !== '' ? m.remotePairUrl : undefined
+  // fix-6 配对令牌到期时刻：可选字段——正有限数才透传（同降级口径）
+  const remotePairExpiresAt =
+    typeof m.remotePairExpiresAt === 'number' && Number.isFinite(m.remotePairExpiresAt) && m.remotePairExpiresAt > 0
+      ? m.remotePairExpiresAt
+      : undefined
   return {
     type: 'ready',
     url: m.url,
@@ -409,7 +427,27 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(tools !== undefined ? { tools } : {}),
     ...(remoteHost !== undefined ? { remoteHost } : {}),
     ...(remotePairUrl !== undefined ? { remotePairUrl } : {}),
+    ...(remotePairExpiresAt !== undefined ? { remotePairExpiresAt } : {}),
   }
+}
+
+/**
+ * fix-6 pair 消息守卫（子 → 主轮换推送分流——run.ts 消费）。remotePairUrl 须非空串、
+ * remotePairExpiresAt 须正有限数；他形（ready/event/rpc-result 等）= undefined 静默忽略。
+ */
+export function asPairMessage(message: unknown): BridgePairMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const m = message as Record<string, unknown>
+  if (m.type !== 'pair') return undefined
+  if (typeof m.remotePairUrl !== 'string' || m.remotePairUrl === '') return undefined
+  if (
+    typeof m.remotePairExpiresAt !== 'number' ||
+    !Number.isFinite(m.remotePairExpiresAt) ||
+    m.remotePairExpiresAt <= 0
+  ) {
+    return undefined
+  }
+  return { type: 'pair', remotePairUrl: m.remotePairUrl, remotePairExpiresAt: m.remotePairExpiresAt }
 }
 
 /**
