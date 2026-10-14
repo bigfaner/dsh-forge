@@ -15,6 +15,7 @@ import {
   asPairMessage,
   asPairConnectedMessage,
   asReadyMessage,
+  asTunnelMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
   createApprovalRelay,
@@ -342,6 +343,39 @@ describe('asPairMessage（pair 消息守卫——run.ts 轮换分支消费）', 
     expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t' })).toBeUndefined()
     expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 0 })).toBeUndefined()
     expect(asPairMessage({ type: 'pair', remotePairUrl: 42, remotePairExpiresAt: 1 })).toBeUndefined()
+  })
+})
+
+// ── dsh-mobile-tunnel 隧道状态推送（child → 主单向——manifest 隧道面单源载体） ──
+
+describe('asTunnelMessage（tunnel 消息守卫——run.ts tunnel 分支消费）', () => {
+  it('激活态：tunnelUrl 非空串 + provider ∈ {cloudflared, pinggy} → 消息对象（expiresAt 可选透传）', () => {
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x.trycloudflare.com/pair?token=t', tunnelProvider: 'cloudflared' }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x.trycloudflare.com/pair?token=t', tunnelProvider: 'cloudflared' })
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy', tunnelExpiresAt: 360_000 }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy', tunnelExpiresAt: 360_000 })
+  })
+
+  it('关闭/失效态：零载荷 {type: tunnel} → 消息对象（无 url——manifest 隧道字段撤除面）', () => {
+    expect(asTunnelMessage({ type: 'tunnel' })).toEqual({ type: 'tunnel' })
+  })
+
+  it('畸形 → undefined（静默忽略不转发）', () => {
+    expect(asTunnelMessage({ type: 'tunnel', tunnelUrl: '' , tunnelProvider: 'pinggy' })).toBeUndefined()
+    expect(asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t' })).toBeUndefined() // url 在场缺 provider
+    expect(asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'evil' })).toBeUndefined()
+    expect(asTunnelMessage({ type: 'tunnel', tunnelProvider: 'pinggy' })).toBeUndefined() // provider 在场缺 url
+    // TTL 非法 = 字段降级缺席（不阻消息——与 ready 可选字段同降级口径）
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy', tunnelExpiresAt: 0 }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy', tunnelExpiresAt: 'soon' }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
+    expect(asTunnelMessage({ type: 'pair', remotePairUrl: 'x', remotePairExpiresAt: 1 })).toBeUndefined()
+    expect(asTunnelMessage(null)).toBeUndefined()
   })
 })
 

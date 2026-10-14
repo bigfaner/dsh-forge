@@ -15,8 +15,13 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
-import { readFileSync } from 'node:fs'
-import { networkInterfaces } from 'node:os'
+import { spawn as nodeSpawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { chmod, writeFile } from 'node:fs/promises'
+import { existsSync, readFileSync } from 'node:fs'
+import { networkInterfaces, tmpdir } from 'node:os'
+import { createInterface } from 'node:readline'
+import { TunnelManager, type TunnelDeps, type TunnelProcessHandle, type TunnelState } from '../tunnel/index.js'
 import {
   approvalWaterfallAnswer,
   createApprovalRelay,
@@ -31,7 +36,7 @@ import {
 } from './bridge.js'
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
-import { lanIpv4Of, remotePairUrlOf } from './manifest.js'
+import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
@@ -75,6 +80,8 @@ process.on('message', (message: unknown) => {
 // 主进程消亡（IPC 断开）→ 有界优雅关停（已 boot：ProcessShutdown.shutdown 自带 5s
 // 升级强退；未 boot：直接退出——不留孤儿 webserver 持端口）。
 let shutdownTree: (() => Promise<void>) | undefined
+// dsh-mobile-tunnel：隧道停机缝（装配在场时由分支内赋值——有界杀当前句柄，无孤儿）
+let tunnelStop: () => Promise<void> = async () => {}
 process.on('disconnect', () => {
   // fix-36：拒绝面补 catch——shutdown 链 reject 不落 unhandled rejection（仅记日志；
   // 5s 强退升级若也已失效，孤儿回收归 OS 进程树清理，不再额外改退出码）
@@ -98,6 +105,45 @@ function remoteApprovalEnabledOf(settingsFile: string | undefined): boolean {
     return (section as Record<string, unknown> | undefined)?.['enabled'] === true
   } catch {
     return false
+  }
+}
+
+/**
+ * dsh-mobile-tunnel 隧道层 node 依赖面装配（TunnelDeps 全真实实现——下载/哈希/缓存/
+ * 子进程/stdout 逐行捕获；外部依赖面单点收口归隧道层，此处只装配不实现语义）。
+ */
+function createNodeTunnelDeps(): TunnelDeps {
+  return {
+    fetch: async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer()),
+    sha256: (data) => createHash('sha256').update(data).digest('hex'),
+    fs: {
+      exists: (path) => existsSync(path),
+      writeFile: (path, data) => writeFile(path, data),
+      chmod: (path, mode) => chmod(path, mode),
+    },
+    tmpDir: () => tmpdir(),
+    spawn: (command, args) => {
+      const child = nodeSpawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const handle: TunnelProcessHandle = {
+        pid: child.pid,
+        onLine: (listener) => {
+          void (async () => {
+            for await (const line of createInterface({ input: child.stdout! })) listener(line)
+          })()
+        },
+        onExit: (listener) => {
+          child.once('exit', (code) => listener(code))
+        },
+        kill: () =>
+          new Promise<void>((resolve) => {
+            if (child.exitCode !== null) return resolve()
+            child.once('exit', () => resolve())
+            child.kill()
+          }),
+      }
+      return handle
+    },
+    now: Date.now,
   }
 }
 
@@ -171,6 +217,7 @@ async function main(): Promise<void> {
   const pinIssuer = createPinIssuer()
   const pairPort = ctx.webServer.port
   const pairGrant = issuer.current()
+  let currentPairToken = pairGrant.token // dsh-mobile-tunnel：隧道 URL 换签锚（随轮换换新）
   let remotePairUrl: string | undefined
   if (remoteHost === '0.0.0.0' && lanIpv4 !== undefined) {
     try {
@@ -235,13 +282,42 @@ async function main(): Promise<void> {
         },
       })
       remotePairUrl = remotePairUrlOf(lanIpv4, pairPort, pairGrant.token)
+      // dsh-mobile-tunnel：隧道管理器装配（互联网连接模式——隧道 URL 与 LAN remotePairUrl
+      // 并存同一 /pair 缝）。TunnelManager 状态事件 → tunnel 消息推送（run.ts 原位重建
+      // manifest 隧道面：激活/换线即换新，关闭/失效即撤除——WiFi 面不受影响）；token 轮换
+      // → 隧道 URL 换签重推（Pinggy TTL 读数随 pair 旋转刷新——fix-7 pair 通道同形态）。
+      let tunnelManager: TunnelManager | undefined
+      const sendTunnelState = (state: TunnelState | undefined): void => {
+        if (state === undefined || state.remainingTtlMs === 0) {
+          send({ type: 'tunnel' }) // 零载荷 = 关闭/失效撤除面
+          return
+        }
+        send({
+          type: 'tunnel',
+          tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
+          tunnelProvider: state.provider,
+          ...(state.remainingTtlMs !== undefined
+            ? { tunnelExpiresAt: Date.now() + state.remainingTtlMs }
+            : {}),
+        })
+      }
+      try {
+        tunnelManager = new TunnelManager(createNodeTunnelDeps(), { localPort: pairPort })
+        tunnelManager.onEvent(sendTunnelState)
+        void tunnelManager.start().catch(() => sendTunnelState(undefined)) // 双链路皆不可用 → 撤除面
+      } catch {
+        tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
+      }
+      tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
       const rotationTimer = setInterval(() => {
         const rotated = issuer.rotate()
+        currentPairToken = rotated.token
         send({
           type: 'pair',
           remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, rotated.token),
           remotePairExpiresAt: rotated.expiresAt,
         })
+        sendTunnelState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
       }, PAIRING_TTL_MS)
       rotationTimer.unref?.() // 轮换器不阻进程退出（shutdown 面归 ProcessShutdown 既有链）
     } catch {
@@ -310,7 +386,14 @@ async function main(): Promise<void> {
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })
-  shutdownTree = () => processShutdown.shutdown(0)
+  shutdownTree = async () => {
+    try {
+      await tunnelStop()
+    } catch {
+      // 隧道停机失败不阻 boot 关停链（进程退出由 ProcessShutdown 既有链承担）
+    }
+    await processShutdown.shutdown(0)
+  }
   handleMessage = (message) => {
     if (message?.type === 'shutdown') {
       void processShutdown.shutdown(0)

@@ -32,6 +32,7 @@ import {
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
+import type { TunnelProvider } from '../tunnel/index.js'
 import type { BootDshOptions } from './run.js'
 
 /**
@@ -127,6 +128,19 @@ export interface BridgePairConnectedMessage {
 }
 
 /**
+ * dsh-mobile-tunnel 子 → 主：隧道状态推送（child 侧 TunnelManager 事件/pair 轮换驱动——
+ * run.ts 消费重建 manifest 隧道面）。激活态携 tunnelUrl（`${tunnelUrl}/pair?token=` 形状，
+ * token 随 pair 轮换换新）+ 链路类型 + Pinggy TTL 到期时刻；零载荷 `{type:'tunnel'}` =
+ * 关闭/失效（manifest 隧道字段撤除面——WiFi 面不受影响）。
+ */
+export interface BridgeTunnelMessage {
+  readonly type: 'tunnel'
+  readonly tunnelUrl?: string
+  readonly tunnelProvider?: TunnelProvider
+  readonly tunnelExpiresAt?: number
+}
+
+/**
  * 桥错误结构化形态（fix-28：typed error 过桥保真）。code ∈ contracts 六码（子侧判型
  * 保证）；data = RpcErrorPayload.data 同源附载。string 旧形态 = 非 typed（fail-loud
  * 语义——不捏造结构化）。
@@ -153,6 +167,7 @@ export type ChildToMainMessage =
   | BridgeEventMessage
   | BridgePairMessage
   | BridgePairConnectedMessage
+  | BridgeTunnelMessage
 
 // 桥事件信封唯一源 = contracts BridgeEventMessage（1.1 定稿；Interface 6——G1-09 pin）。
 // 子侧发射 = core workspace/events.ts 写动词闭包尾部 sendGuarded（direct 形态 IPC 缺席
@@ -467,6 +482,33 @@ export function asPairConnectedMessage(message: unknown): BridgePairConnectedMes
   if (typeof message !== 'object' || message === null) return undefined
   if ((message as Record<string, unknown>).type !== 'pair-connected') return undefined
   return { type: 'pair-connected' }
+}
+
+/**
+ * dsh-mobile-tunnel tunnel 消息守卫（子 → 主隧道状态推送分流——run.ts tunnel 分支消费）。
+ * 激活态：tunnelUrl 非空串 + tunnelProvider ∈ {cloudflared, pinggy} 齐备（expiresAt 正有限
+ * 数可选）；零载荷 = 关闭/失效撤除面；畸形（单边在场/provider 越域/TTL 非法）→ undefined
+ * 静默忽略。
+ */
+export function asTunnelMessage(message: unknown): BridgeTunnelMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const m = message as Record<string, unknown>
+  if (m.type !== 'tunnel') return undefined
+  const hasUrl = typeof m.tunnelUrl === 'string' && m.tunnelUrl !== ''
+  const hasProvider =
+    m.tunnelProvider === 'cloudflared' || m.tunnelProvider === 'pinggy'
+  if (!hasUrl && !hasProvider) return { type: 'tunnel' } // 零载荷 = 关闭/失效撤除面
+  if (!hasUrl || !hasProvider) return undefined // 单边在场 = 畸形
+  const expiresAt =
+    typeof m.tunnelExpiresAt === 'number' && Number.isFinite(m.tunnelExpiresAt) && m.tunnelExpiresAt > 0
+      ? m.tunnelExpiresAt
+      : undefined
+  return {
+    type: 'tunnel',
+    tunnelUrl: m.tunnelUrl as string,
+    tunnelProvider: m.tunnelProvider as TunnelProvider,
+    ...(expiresAt !== undefined ? { tunnelExpiresAt: expiresAt } : {}),
+  }
 }
 
 /**

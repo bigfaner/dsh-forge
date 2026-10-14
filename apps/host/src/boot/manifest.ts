@@ -1,6 +1,8 @@
 // boot manifest 形状（G1 契约面清单第 1 项：`{url, injections}` 注入格式；定位：基础）。
 // injections 行形状归 dsh（dsh-host-webserver IndexInjection——style/script 等），
 // host 只运输不解释；apps/web 壳内核（1.5）以 applyIndexInjections 同形消费。
+import type { TunnelProvider } from '../tunnel/index.js'
+
 export interface BootManifest {
   /** 已认证 web 面 URL（ctx.connection.authenticatedUrl 构造） */
   url: string
@@ -18,6 +20,15 @@ export interface BootManifest {
   /** fix-7：/pair 握手成功读数（扫码连接完成——UI「手机已连接」态卡单源；粘性 until 宿主
    *  重启；缺席/false = 未连接，不虚报） */
   remoteDeviceConnected?: boolean
+  /** dsh-mobile-tunnel：隧道配对地址（`${tunnelUrl}/pair?token=<token>` 形状——与 LAN
+   *  remotePairUrl 并存同一 /pair 协议；UI 互联网面单源消费；隧道关闭/失效 = 撤除） */
+  tunnelUrl?: string
+  /** dsh-mobile-tunnel：当前链路类型（cloudflared 首选 / pinggy 兜底——UI 换线呈现单源；
+   *  与 tunnelUrl 同生同灭） */
+  tunnelProvider?: TunnelProvider
+  /** dsh-mobile-tunnel：Pinggy 链路 TTL 到期时刻（epoch ms——UI「约 N 分钟后失效」倒计时
+   *  单源；随 pair 旋转隧道消息刷新；cloudflared 无 TTL 语义 = 缺席） */
+  tunnelExpiresAt?: number
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -25,6 +36,16 @@ export interface NetInterfaceRead {
   readonly family: unknown
   readonly address: string
   readonly internal: boolean
+}
+
+/** dsh-mobile-tunnel 隧道 manifest 面（buildBootManifest 第七参隧道载荷——三字段同生同灭） */
+export interface TunnelManifestState {
+  /** 隧道配对地址（tunnelPairUrlOf 产物——`${tunnelUrl}/pair?token=<token>` 形状） */
+  readonly url: string
+  /** 当前链路类型 */
+  readonly provider: TunnelProvider
+  /** Pinggy TTL 到期时刻（epoch ms；cloudflared = 缺席） */
+  readonly expiresAt?: number
 }
 
 /**
@@ -50,7 +71,26 @@ export function remotePairUrlOf(lanIpv4: string, port: number, token: string): s
   return `http://${lanIpv4}:${port}/pair?token=${token}`
 }
 
-/** 组装 boot manifest（纯函数：校验 url/injections 基本形状后冻结返回） */
+/**
+ * dsh-mobile-tunnel 隧道配对地址形状（纯函数——与 LAN 同一 /pair 协议，URL 形状单源）：
+ * `${tunnelUrl}/pair?token=<token>`。手机经公网隧道 GET 该地址 → 同一 /pair 缝校验握手。
+ */
+export function tunnelPairUrlOf(tunnelBaseUrl: string, token: string): string {
+  return `${tunnelBaseUrl}/pair?token=${token}`
+}
+
+/** manifest 隧道面回读（run.ts 轮换/connected 重建保隧道面——单一提取避免三处漂移） */
+export function tunnelStateOf(manifest: BootManifest): TunnelManifestState | undefined {
+  if (manifest.tunnelUrl === undefined || manifest.tunnelProvider === undefined) return undefined
+  return {
+    url: manifest.tunnelUrl,
+    provider: manifest.tunnelProvider,
+    ...(manifest.tunnelExpiresAt !== undefined ? { expiresAt: manifest.tunnelExpiresAt } : {}),
+  }
+}
+
+/** 组装 boot manifest（纯函数：校验 url/injections 基本形状后冻结返回；tunnel 载荷 =
+ *  隧道激活态，undefined = 隧道面撤除——WiFi 面不受影响） */
 export function buildBootManifest(
   url: string,
   injections: readonly unknown[],
@@ -58,6 +98,7 @@ export function buildBootManifest(
   remotePairUrl?: string,
   remotePairExpiresAt?: number,
   remoteDeviceConnected?: boolean,
+  tunnel?: TunnelManifestState,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -74,5 +115,14 @@ export function buildBootManifest(
       ? { remotePairExpiresAt }
       : {}),
     ...(remoteDeviceConnected === true ? { remoteDeviceConnected: true } : {}),
+    ...(tunnel !== undefined
+      ? {
+          tunnelUrl: tunnel.url,
+          tunnelProvider: tunnel.provider,
+          ...(typeof tunnel.expiresAt === 'number' && Number.isFinite(tunnel.expiresAt) && tunnel.expiresAt > 0
+            ? { tunnelExpiresAt: tunnel.expiresAt }
+            : {}),
+        }
+      : {}),
   })
 }

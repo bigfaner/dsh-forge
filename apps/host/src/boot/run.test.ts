@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
-import { applyPairConnected, applyPairMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { applyPairConnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
 import { buildBootManifest } from './manifest.js'
 
 const MODULE_URL = 'file:///Z:/worktrees/redesign/apps/host/dist/boot/run.js'
@@ -139,6 +139,79 @@ describe('applyPairMessage（fix-6 配对轮换——pair 推送刷新 manifest 
   it('畸形 pair 消息（TTL 缺席）→ manifest 原样返回（静默忽略）', () => {
     const m = base()
     expect(applyPairMessage(m, { type: 'pair', remotePairUrl: 'http://x/pair?token=t' })).toBe(m)
+  })
+})
+
+describe('applyTunnelMessage（dsh-mobile-tunnel 隧道状态推送——manifest 隧道面单源消费）', () => {
+  const base = () => buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=t', 1000)
+
+  it('激活推送 → manifest 携带 tunnelUrl/链路类型/TTL（LAN remotePairUrl 并存——单源消费）', () => {
+    const next = applyTunnelMessage(base(), {
+      type: 'tunnel',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+      tunnelProvider: 'pinggy',
+      tunnelExpiresAt: 3600_000,
+    })
+    expect(next.tunnelUrl).toBe('https://x.pinggy.link/pair?token=t')
+    expect(next.tunnelProvider).toBe('pinggy')
+    expect(next.tunnelExpiresAt).toBe(3600_000)
+    // WiFi 面不受影响
+    expect(next.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=t')
+    expect(next.remotePairExpiresAt).toBe(1000)
+  })
+
+  it('关闭/失效推送（零载荷）→ manifest 隧道字段撤除（WiFi 面保留）', () => {
+    const withTunnel = applyTunnelMessage(base(), {
+      type: 'tunnel',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+      tunnelProvider: 'pinggy',
+      tunnelExpiresAt: 1,
+    })
+    const closed = applyTunnelMessage(withTunnel, { type: 'tunnel' })
+    expect('tunnelUrl' in closed).toBe(false)
+    expect('tunnelProvider' in closed).toBe(false)
+    expect('tunnelExpiresAt' in closed).toBe(false)
+    expect(closed.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=t')
+    expect(closed.remoteHost).toBe('0.0.0.0')
+  })
+
+  it('换线：cloudflared → pinggy 激活推送 → 链路类型/TTL 原位换新（url 保留面不动）', () => {
+    const cf = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x.trycloudflare.com/pair?token=t', tunnelProvider: 'cloudflared' })
+    expect(cf.tunnelProvider).toBe('cloudflared')
+    const pg = applyTunnelMessage(cf, { type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy', tunnelExpiresAt: 5 })
+    expect(pg.tunnelUrl).toBe('https://x.pinggy.link/pair?token=t')
+    expect(pg.tunnelProvider).toBe('pinggy')
+    expect(pg.tunnelExpiresAt).toBe(5)
+    expect(pg.url).toBe('http://127.0.0.1:1/#t')
+  })
+
+  it('畸形 tunnel 消息 → manifest 原样返回（静默忽略）', () => {
+    const m = base()
+    expect(applyTunnelMessage(m, { type: 'tunnel', tunnelProvider: 'pinggy' })).toBe(m)
+    expect(applyTunnelMessage(m, { type: 'tunnel', tunnelUrl: 'x', tunnelProvider: 'evil' })).toBe(m)
+    expect(applyTunnelMessage(m, undefined)).toBe(m)
+  })
+
+  it('token 轮换（pair 消息）→ 隧道面保留（不因 pair 重建丢态；新 URL 由后续 tunnel 推送换新）', () => {
+    const withTunnel = applyTunnelMessage(base(), {
+      type: 'tunnel',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=old',
+      tunnelProvider: 'pinggy',
+      tunnelExpiresAt: 100,
+    })
+    const rotated = applyPairMessage(withTunnel, { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(rotated.tunnelUrl).toBe('https://x.pinggy.link/pair?token=old')
+    expect(rotated.tunnelProvider).toBe('pinggy')
+    expect(rotated.tunnelExpiresAt).toBe(100)
+    expect(rotated.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=new')
+  })
+
+  it('pair-connected（握手成功）→ 隧道面保留（connected 粘性位与隧道面共存）', () => {
+    const withTunnel = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy' })
+    const connected = applyPairConnected(withTunnel)
+    expect(connected.remoteDeviceConnected).toBe(true)
+    expect(connected.tunnelUrl).toBe('https://x.pinggy.link/pair?token=t')
+    expect(connected.tunnelProvider).toBe('pinggy')
   })
 })
 

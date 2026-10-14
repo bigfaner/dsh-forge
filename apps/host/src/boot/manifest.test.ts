@@ -1,6 +1,6 @@
 // G1 契约面清单第 1 项 pin：boot manifest 注入格式 {url, injections}。
 import { describe, expect, it } from 'vitest'
-import { buildBootManifest, lanIpv4Of, remotePairUrlOf } from './manifest.js'
+import { buildBootManifest, lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 
 describe('buildBootManifest', () => {
   it('组装 {url, injections} 且冻结', () => {
@@ -65,6 +65,36 @@ describe('buildBootManifest', () => {
     expect(
       'remoteDeviceConnected' in buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, false),
     ).toBe(false)
+  })
+
+  it('dsh-mobile-tunnel：tunnel 面在场透传（tunnelUrl = ${tunnelUrl}/pair?token= 形状 + 链路类型 + Pinggy TTL 读数）；缺席 = 字段不出现', () => {
+    const withTunnel = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, {
+      url: 'https://example.pinggy.link/pair?token=tok',
+      provider: 'pinggy',
+      expiresAt: 360000,
+    })
+    expect(withTunnel.tunnelUrl).toBe('https://example.pinggy.link/pair?token=tok')
+    expect(withTunnel.tunnelProvider).toBe('pinggy')
+    expect(withTunnel.tunnelExpiresAt).toBe(360000)
+    // cloudflared 无 TTL 语义 = expiresAt 缺席
+    const cf = buildBootManifest('http://127.0.0.1:1/', [], undefined, undefined, undefined, undefined, {
+      url: 'https://x.trycloudflare.com/pair?token=tok',
+      provider: 'cloudflared',
+    })
+    expect(cf.tunnelProvider).toBe('cloudflared')
+    expect('tunnelExpiresAt' in cf).toBe(false)
+    // 隧道关闭/失效 = tunnel 缺席 → 三字段全不出现（WiFi 面不受影响）
+    const plain = buildBootManifest('http://127.0.0.1:1/', [])
+    expect('tunnelUrl' in plain).toBe(false)
+    expect('tunnelProvider' in plain).toBe(false)
+    expect('tunnelExpiresAt' in plain).toBe(false)
+    expect(plain.remotePairUrl).toBeUndefined()
+  })
+
+  it('dsh-mobile-tunnel：tunnelPairUrlOf 产隧道 /pair 形状——`${tunnelUrl}/pair?token=<token>`（与 LAN 同协议，URL 形状单源）', () => {
+    expect(tunnelPairUrlOf('https://x.trycloudflare.com', 'abc_-X')).toBe(
+      'https://x.trycloudflare.com/pair?token=abc_-X',
+    )
   })
 
   it('fix-6：remotePairUrlOf 产官方 /pair 形状——`http://<lan-ip>:<port>/pair?token=<token>`（URL 形状单源）', () => {

@@ -31,6 +31,7 @@ import {
   asPairConnectedMessage,
   asPairMessage,
   asReadyMessage,
+  asTunnelMessage,
   createBridgeProxy,
   DOCS_SERVICE_METHODS,
   FEATURES_SERVICE_METHODS,
@@ -49,7 +50,7 @@ import {
   type BridgeServiceName,
   type MainToChildMessage,
 } from './bridge.js'
-import { buildBootManifest, type BootManifest } from './manifest.js'
+import { buildBootManifest, tunnelStateOf, type BootManifest } from './manifest.js'
 
 export interface BootDshOptions {
   profileDir: string
@@ -235,6 +236,11 @@ export async function bootDshHost(
       manifest = applyPairConnected(manifest)
       return
     }
+    // dsh-mobile-tunnel：隧道状态推送（激活/换线/TTL 旋转/关闭撤除）→ manifest 隧道面原位重建
+    if (asTunnelMessage(message) !== undefined) {
+      manifest = applyTunnelMessage(manifest, message)
+      return
+    }
     manifest = applyPairMessage(manifest, message)
   })
   return {
@@ -378,6 +384,7 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     pair.remotePairUrl,
     pair.remotePairExpiresAt,
     manifest.remoteDeviceConnected, // fix-7：轮换重建保留 connected 读数（粘性 until 重启）
+    tunnelStateOf(manifest), // dsh-mobile-tunnel：轮换重建保留隧道面（新 token URL 由后续 tunnel 推送换新）
   )
 }
 
@@ -393,5 +400,31 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     manifest.remotePairUrl,
     manifest.remotePairExpiresAt,
     true,
+    tunnelStateOf(manifest), // dsh-mobile-tunnel：connected 重建保留隧道面
+  )
+}
+
+/**
+ * dsh-mobile-tunnel tunnel 消息消费（纯函数）：激活态推送 → 以旧 manifest 面重建携隧道
+ * 三字段（tunnelUrl / 链路类型 / Pinggy TTL——LAN remotePairUrl 并存不受影响）；零载荷
+ * （关闭/失效）→ 隧道字段撤除（WiFi 面保留）；非 tunnel / 畸形 = 原样返回。
+ */
+export function applyTunnelMessage(manifest: BootManifest, message: unknown): BootManifest {
+  const tunnel = asTunnelMessage(message)
+  if (tunnel === undefined) return manifest
+  return buildBootManifest(
+    manifest.url,
+    manifest.injections,
+    manifest.remoteHost,
+    manifest.remotePairUrl,
+    manifest.remotePairExpiresAt,
+    manifest.remoteDeviceConnected,
+    tunnel.tunnelUrl !== undefined && tunnel.tunnelProvider !== undefined
+      ? {
+          url: tunnel.tunnelUrl,
+          provider: tunnel.tunnelProvider,
+          ...(tunnel.tunnelExpiresAt !== undefined ? { expiresAt: tunnel.tunnelExpiresAt } : {}),
+        }
+      : undefined,
   )
 }
