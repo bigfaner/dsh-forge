@@ -56,6 +56,9 @@ import {
   type OpenSessionServices,
   type PresetSelectResult,
 } from './open-session.js'
+// composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
+// bundle 自含纪律不破；本文件做注册行 + 接线面）
+import { createBugReferenceSource, type BugReferenceSource } from './bug-source.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -677,6 +680,8 @@ export interface ForgeViewsGlobal {
     ForgeHeroWorkspacePicker: unknown
     ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
+    /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
+    ForgeBugGlyph?: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
@@ -1029,6 +1034,203 @@ function registerRemoteEntry(
       views.ForgeRemoteEntry,
     ),
   )
+}
+
+// ============================================================================
+// Bug 引用 source 注册（composer-bug-reference 1.2）：官方 input-trigger 管线挂 T1
+// Bug source（trigger '@'，组名唯一，order 排在文件/会话组后）。
+// ============================================================================
+
+/** Bug 组名（@ 菜单独立组标题行——唯一性由官方 registerSource duplicate throw 硬守卫） */
+export const FORGE_BUG_SOURCE_NAME = 'dswf-bug'
+/** Bug 组排序（官方 @reference 组缺省 0 → 30 = 文件/会话组之后） */
+export const FORGE_BUG_SOURCE_ORDER = 30
+
+/**
+ * forge RPC 通道字面量（contracts BUGS_CHANNELS.list / PROJECTS_CHANNELS.list 同源镜像
+ * ——bundle 自持禁跨 chunk import：rpc/client 为壳树共享模块，rollup 会拆公共 chunk 破坏
+ * forge-client.js classic script 形状[client-bundle-shape.test 同源教训]，故不走 preload
+ * RPC client，经页内 dshForge.invoke 直达 + 信封拆装镜像）。
+ */
+export const BUGS_LIST_CHANNEL = 'forge:bugs/list'
+export const PROJECTS_LIST_CHANNEL = 'forge:projects/list'
+
+/** forge RPC 传输窄缝（rpc/transport ForgeTransport 结构同型镜像） */
+export type ForgeInvokeTransport = (channel: string, payload?: unknown) => Promise<unknown>
+
+/** 页内传输读取（window.dshForge.invoke——缺席/非函数 = undefined：非 Electron 载体 fail-soft） */
+export function forgeInvokeTransport(): ForgeInvokeTransport | undefined {
+  const bridge = (globalThis as { dshForge?: { invoke?: ForgeInvokeTransport } }).dshForge
+  const invoke = bridge?.invoke
+  return typeof invoke === 'function' ? (channel, payload) => invoke(channel, payload) : undefined
+}
+
+/** RPC 信封拆装（rpc/client.invokeRpc 结构同型镜像：RpcOk → data；!ok/形状非法 = throw——调用面 catch 消费 fail-soft） */
+export async function unwrapRpcEnvelope<T>(call: Promise<unknown>): Promise<T> {
+  const raw = await call
+  if (raw === null || typeof raw !== 'object' || !('ok' in raw)) {
+    throw new Error('dsh-forge web-client: RPC 信封形状非法（期望 contracts RpcResult 信封）')
+  }
+  const result = raw as { ok: boolean; data?: T }
+  if (!result.ok) throw new Error('dsh-forge web-client: RPC 信封 !ok')
+  return result.data as T
+}
+
+/** 项目锚行窄形状（contracts ProjectSummary 消费切片：id + 必填 workspaceId——fix-33 ⑨） */
+export interface BugProjectRow {
+  readonly id: string
+  readonly workspaceId: string
+}
+
+/** projects.list 行集正规化（形状漂移行剔除——非对象/缺键不记） */
+export function bugProjectsFromRows(rows: unknown): BugProjectRow[] {
+  if (!Array.isArray(rows)) return []
+  const out: BugProjectRow[] = []
+  for (const row of rows) {
+    const record = asRecord(row)
+    const id = record?.['id']
+    const workspaceId = record?.['workspaceId']
+    if (typeof id === 'string' && id !== '' && typeof workspaceId === 'string' && workspaceId !== '') {
+      out.push({ id, workspaceId })
+    }
+  }
+  return out
+}
+
+/**
+ * 会话 → 项目锚（workbench/panel-model.projectAnchorOf 裁决同型镜像——panel-model 为壳树
+ * 共享模块禁跨 chunk import，故本文件逐字镜像裁决）：会话锚在场 → 会话归属 workspace
+ * （sessionIds 成员）→ 该 workspace 名下项目；未匹配 → 唯一项目兜底（单人工作台 P1 常见
+ * 无歧义相位）；多项目无锚 = undefined（不猜首个）。workspaces 快照缺席/异常 = 无锚同径。
+ */
+export function bugProjectIdOf(
+  sessionId: string,
+  workspacesSnapshot: unknown,
+  projects: readonly BugProjectRow[],
+): string | undefined {
+  const items = asRecord(workspacesSnapshot)?.['items']
+  if (sessionId !== '' && Array.isArray(items)) {
+    for (const item of items) {
+      const ws = asRecord(item)
+      const workspaceId = ws?.['workspaceId']
+      const sessionIds = ws?.['sessionIds']
+      if (typeof workspaceId !== 'string' || !Array.isArray(sessionIds)) continue
+      if (!sessionIds.includes(sessionId)) continue
+      const match = projects.find((project) => project.workspaceId === workspaceId)
+      if (match !== undefined) return match.id
+    }
+  }
+  if (projects.length === 1) return projects[0]!.id
+  return undefined
+}
+
+/** Bug source 接线依赖（注入面——测试替身/生产缺省两径） */
+export interface BugSourceWiringDeps {
+  readonly workspaces: ForgeWorkspacesService
+  /** 页内 RPC 传输（缺省 forgeInvokeTransport()） */
+  readonly invoke?: ForgeInvokeTransport
+  /** 候选行图标件（发布面 ForgeBugGlyph——IconProps 组件；缺席 = 行零 icon 键） */
+  readonly bugIcon?: unknown
+}
+
+/** Bug source + warm 面（官方 InputTriggerSource warm 槽——scope 出生预热，fire-and-forget） */
+export interface BugSourceWithWarm extends BugReferenceSource {
+  readonly warm: (session: { readonly sessionId: string }) => void
+}
+
+/**
+ * Bug source 接线装配（T1 createBugReferenceSource 的运行时依赖注入面）：
+ *  - projectId = 会话↔项目绑定事实（workspaces 快照成员归属 + projects.list 缓存，
+ *    bugProjectIdOf 裁决）；projects 缓存经 refreshProjects 填充（登记期 + warm 期）。
+ *  - listBugs = forge:bugs/list 传输递达（信封拆装镜像；传输缺席 = reject——T1 factory
+ *    catch 消费为空候选 fail-soft）。
+ *  - 图标件 = deps.bugIcon 投影（候选行 icon 键；缺席逐字透传不添键）。
+ *  - warm = scope 出生预热：projects.list 先落缓存，随后一次 bugs.list 预取（锚定项目
+ *    口径——T1 lastFetched 快照底随取随新；全程 fire-and-forget 静默）。
+ */
+export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWithWarm {
+  const invoke = deps.invoke ?? forgeInvokeTransport()
+  let projects: readonly BugProjectRow[] = []
+
+  const workspaceSnapshot = (): unknown => {
+    try {
+      const list = deps.workspaces.list as { getSnapshot?: () => unknown } | undefined
+      return typeof list?.getSnapshot === 'function' ? list.getSnapshot() : undefined
+    } catch {
+      return undefined
+    }
+  }
+  const projectIdOf = (sessionId?: string): string | undefined =>
+    bugProjectIdOf(sessionId ?? '', workspaceSnapshot(), projects)
+  const refreshProjects = (): Promise<void> => {
+    if (invoke === undefined) return Promise.resolve()
+    return unwrapRpcEnvelope<unknown>(invoke(PROJECTS_LIST_CHANNEL))
+      .then((rows) => {
+        projects = bugProjectsFromRows(rows)
+      })
+      .catch(() => undefined)
+  }
+
+  const source = createBugReferenceSource({
+    name: FORGE_BUG_SOURCE_NAME,
+    projectId: projectIdOf,
+    listBugs: (query) => {
+      if (invoke === undefined) {
+        return Promise.reject(new Error('dsh-forge web-client: dshForge.invoke 缺席（Bug 组 fail-soft 零候选）'))
+      }
+      return unwrapRpcEnvelope(invoke(BUGS_LIST_CHANNEL, query))
+    },
+  })
+
+  return {
+    ...source,
+    order: FORGE_BUG_SOURCE_ORDER,
+    candidates: async (session, req) => {
+      const rows = await source.candidates(session, req)
+      return deps.bugIcon === undefined ? rows : rows.map((row) => ({ ...row, icon: deps.bugIcon }))
+    },
+    warm: (session) => {
+      void refreshProjects()
+        .then(() => {
+          const projectId = projectIdOf(session.sessionId)
+          return projectId !== undefined && invoke !== undefined ? invoke(BUGS_LIST_CHANNEL, { projectId }) : undefined
+        })
+        .catch(() => undefined)
+    },
+  }
+}
+
+/**
+ * Bug 引用 source 登记行（apply 编排）：官方 `ctx.inputTriggers.registerSource` 挂 T1
+ * Bug source——服务取法 = reflectServiceGet 惰性 fail-soft 先例（5.2 e2e 勘误配方同径）：
+ * 缺席/异常 = 不注册、不报错、不影响其余登记行；duplicate throw（官方守卫）= 吞掉不炸。
+ * 撤销面 = ctx.effect 级联（官方 ui-reference 同径；effect 面缺席 = 跳过——登记本身仍成立）。
+ */
+export function registerBugReferenceSource(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  workspaces: ForgeWorkspacesService,
+  diagnostics: { registered?: string[] },
+): void {
+  const inputTriggers = asRecord(reflectServiceGet(ctx, 'inputTriggers'))
+  const registerSource = inputTriggers?.['registerSource']
+  if (typeof registerSource !== 'function') return
+  const source = buildBugReferenceSource({ workspaces, bugIcon: views.ForgeBugGlyph })
+  try {
+    const dispose = (registerSource as (src: unknown) => unknown).call(inputTriggers, source)
+    diagnostics.registered = [...(diagnostics.registered ?? []), `input-triggers:${FORGE_BUG_SOURCE_NAME}`]
+    const effect = (ctx as { effect?: (cb: () => (() => void) | undefined, label?: string) => unknown }).effect
+    effect?.call(
+      ctx,
+      () => (typeof dispose === 'function' ? (dispose as () => void) : undefined),
+      'dswf-bug: input trigger source',
+    )
+    // 登记期预热：projects 缓存先行（首个 @ hit 在 controller warm 前也大概率有锚——
+    // 锚定会话场景仍以 scope 出生 warm 为准）
+    source.warm({ sessionId: '' })
+  } catch {
+    // 注册被拒（duplicate 等）——fail-soft 不炸 apply
+  }
 }
 
 /** 目录条目形状（组件面 WorkerProviderEntry 结构同型——bundle 自持纪律禁跨 chunk import） */
@@ -1723,6 +1925,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
+        // Bug 引用 source（composer-bug-reference 1.2）：官方 inputTriggers 挂 @ Bug 组——
+        // 惰性 fail-soft（服务/传输缺席 = 零登记零报错，其余登记行不受累）
+        registerBugReferenceSource(clientCtx, views, workspaces, viewsDiagnostics)
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主

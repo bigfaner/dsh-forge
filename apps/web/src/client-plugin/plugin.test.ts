@@ -12,6 +12,8 @@ import {
   DISPATCH_TASK_TOOL_KEY,
   DOC_ADDRESS_PREFIX,
   DOC_TAB_KIND,
+  FORGE_BUG_SOURCE_NAME,
+  FORGE_BUG_SOURCE_ORDER,
   FORGE_CLIENT_INJECT,
   FORGE_CLIENT_PLUGIN_ID,
   MARKETPLACE_PLUGIN_SPEC,
@@ -300,6 +302,7 @@ function publishFakeViews() {
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     ForgeSettingsSection: 'COMP:settings-section',
     ForgeRemoteEntry: 'COMP:remote-entry',
+    ForgeBugGlyph: 'COMP:bug-glyph',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
@@ -1588,5 +1591,233 @@ describe('注册面', () => {
     const views = publishFakeViews()
     expect(publishedViews()).toBe(views)
     unpublishViews()
+  })
+})
+
+// ============================================================================
+// Bug 引用 source 注册（composer-bug-reference 1.2）：官方 inputTriggers 挂 T1
+// Bug source（trigger '@' / 组名 'dswf-bug' 唯一 / order 30 = 官方 reference 组后）。
+// 接线面 pin：reflect 惰性 fail-soft 取法 · bugs.list RPC 递达（projectId = 会话↔workspace
+// 绑定锚）· 状态面包屑 drill 切 status 口径 · bug 图标件（发布面 ForgeBugGlyph）·
+// lexicon/subscribeLexicon 缺席（纯 chip 形态——@<name> 纯文本装饰零参与）。
+// ============================================================================
+
+/** Bug 组测试夹具：reflect 带 inputTriggers 注册收集器 + 页内 dshForge 传输替身 */
+function bugFixture(routes: Partial<Record<string, (payload?: unknown) => unknown>> = {}): {
+  registered: unknown[]
+  calls: { channel: string; payload?: unknown }[]
+  reflect: { get: (name: string) => unknown }
+  unstub: () => void
+} {
+  const registered: unknown[] = []
+  const calls: { channel: string; payload?: unknown }[] = []
+  const svc = {
+    registerSource: (src: unknown) => {
+      registered.push(src)
+      return () => {}
+    },
+  }
+  ;(globalThis as { dshForge?: unknown }).dshForge = {
+    invoke: (channel: string, payload?: unknown) => {
+      calls.push({ channel, payload })
+      const route = routes[channel]
+      return Promise.resolve(route === undefined ? { ok: false, error: { code: 'NO_ROUTE', message: 'no route' } } : route(payload))
+    },
+  }
+  return {
+    registered,
+    calls,
+    reflect: { get: (name: string) => (name === 'inputTriggers' ? svc : undefined) },
+    unstub: () => {
+      delete (globalThis as { dshForge?: unknown }).dshForge
+    },
+  }
+}
+
+const BUG_FIXTURE_PROJECTS = [
+  { id: 'p1', workspaceId: 'w1' },
+  { id: 'p2', workspaceId: 'w2' },
+]
+const BUG_FIXTURE_NOW = '2026-10-14T00:00:00.000Z'
+const BUG_FIXTURE_BUGS = [
+  { bugId: 'b-2', summary: '已修一条', bugStatus: 'fixed', bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a', reporter: 'r', createdAt: BUG_FIXTURE_NOW, updatedAt: BUG_FIXTURE_NOW },
+  { bugId: 'b-1', summary: '在修一条', bugStatus: 'open', bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a', reporter: 'r', createdAt: BUG_FIXTURE_NOW, updatedAt: BUG_FIXTURE_NOW },
+]
+const BUG_SIGNAL = new AbortController().signal
+/** 微任务排干（fire-and-forget RPC 链落地——注册期/预热期 projects 缓存就绪） */
+async function bugFlush(): Promise<void> {
+  for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+}
+/** 注册一次 Bug source 并返回（接线面测试的公共前置） */
+function appliedBugSource(
+  routes: Partial<Record<string, (payload?: unknown) => unknown>> = {},
+  opts?: { readonly omitGlyph?: boolean },
+): { source: Record<string, unknown>; calls: { channel: string; payload?: unknown }[]; unstub: () => void } {
+  const views = publishFakeViews()
+  if (opts?.omitGlyph === true) delete (views as Record<string, unknown>)['ForgeBugGlyph']
+  const fx = bugFixture(routes)
+  const { ctx } = fakeClientCtx(fx.reflect)
+  ;(ctx.get('workspaces') as { list: unknown }).list = {
+    getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'] }] }),
+  }
+  forgeClientPlugin().apply(ctx)
+  void views
+  return { source: fx.registered[0] as Record<string, unknown>, calls: fx.calls, unstub: fx.unstub }
+}
+
+describe('Bug 引用 source 注册（composer-bug-reference 1.2）', () => {
+  it('注册行 pin：apply 经 reflect.get(\'inputTriggers\') 恰挂一 source——trigger \'@\' / name \'dswf-bug\' / order 30（官方 reference 组缺省 0 之后）/ candidates·header·onPick·codec 方法面在位 / lexicon·subscribeLexicon 缺席', () => {
+    const { source, unstub } = appliedBugSource()
+    expect(source['trigger']).toBe('@')
+    expect(source['name']).toBe(FORGE_BUG_SOURCE_NAME)
+    expect(source['name']).toBe('dswf-bug')
+    expect(source['order']).toBe(FORGE_BUG_SOURCE_ORDER)
+    expect(source['order']).toBe(30)
+    expect(typeof source['candidates']).toBe('function')
+    expect(typeof source['header']).toBe('function')
+    expect(typeof source['onPick']).toBe('function')
+    const codec = source['codec'] as Record<string, unknown>
+    expect(typeof codec?.['clipboardText']).toBe('function')
+    expect(typeof codec?.['serialize']).toBe('function')
+    // 共存约束②：不实现 lexicon/subscribeLexicon（引用只以原子 chip 形态存在）
+    expect(source['lexicon']).toBeUndefined()
+    expect(source['subscribeLexicon']).toBeUndefined()
+    unstub()
+  })
+
+  it('inputTriggers 缺席（reflect 无此名）/ reflect 缺席 / registerSource throw：均不注册不报错，其余登记行不受累', () => {
+    publishFakeViews()
+    // reflect 在场但服务缺席
+    const a = fakeClientCtx({ get: () => undefined })
+    expect(() => forgeClientPlugin().apply(a.ctx)).not.toThrow()
+    // reflect 缺席
+    const b = fakeClientCtx()
+    expect(() => forgeClientPlugin().apply(b.ctx)).not.toThrow()
+    // duplicate throw（官方守卫）——apply 吞掉不炸
+    const c = fakeClientCtx({
+      get: (name: string) => (name === 'inputTriggers' ? { registerSource: () => { throw new Error('duplicate trigger/name') } } : undefined),
+    })
+    expect(() => forgeClientPlugin().apply(c.ctx)).not.toThrow()
+    expect(c.registers.find((r) => r.key === SHELL_OVERLAY_SLOT)).toBeDefined()
+    unpublishViews()
+  })
+
+  it('candidates 递达 bugs.list：projectId 沿会话↔workspace 绑定锚解析，query 透传 search 入参，open 优先排序', async () => {
+    const { source, calls, unstub } = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: BUG_FIXTURE_PROJECTS }),
+      // 服务端 search 语义替身：summary 命中过滤（产品侧零前端全量筛——透传即口径）
+      'forge:bugs/list': (payload) => ({
+        ok: true,
+        data: BUG_FIXTURE_BUGS.filter((b) => b.summary.includes((payload as { search?: string }).search ?? '')),
+      }),
+    })
+    await bugFlush()
+    const rows = (await (source['candidates'] as (session: unknown, req: { query: string; position: 'inline'; drilled: boolean; signal: AbortSignal }) => Promise<{ name: string }[]>)(
+      { sessionId: 's1' },
+      { query: '在修', position: 'inline', drilled: false, signal: BUG_SIGNAL },
+    )) as { name: string }[]
+    expect(rows.map((r) => r.name)).toEqual(['b-1']) // search 服务端命中（'在修' ∈ summary）
+    expect(
+      calls.some((c) => c.channel === 'forge:bugs/list' && JSON.stringify(c.payload) === JSON.stringify({ projectId: 'p1', search: '在修' })),
+      'bugs.list 透传：projectId=会话锚所属项目 + search=查询串',
+    ).toBe(true)
+    unstub()
+  })
+
+  it('状态面包屑：header 四 crumb（全部/open/fixed/unresolved，current 标当前）；crumb pick 经 onPick action:\'drill\' 切口径后 candidates 以 status 入参重拉（一次 RPC 一口径）', async () => {
+    const { source, unstub } = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: BUG_FIXTURE_PROJECTS }),
+      'forge:bugs/list': (payload) => {
+        const status = (payload as { status?: string[] }).status
+        return { ok: true, data: status === undefined ? BUG_FIXTURE_BUGS : BUG_FIXTURE_BUGS.filter((b) => status.includes(b.bugStatus)) }
+      },
+    })
+    await bugFlush()
+    const header = source['header'] as (session: unknown, req: { query: string; drilled: boolean }) => readonly { label: string; value: string; current?: boolean }[]
+    const crumbs = header({ sessionId: 's1' }, { query: '', drilled: false })
+    expect(crumbs.map((c) => c.label)).toEqual(['全部', 'open', 'fixed', 'unresolved'])
+    expect(crumbs.find((c) => c.label === '全部')?.current).toBe(true)
+    const outcome = (source['onPick'] as (pick: unknown) => unknown)({
+      candidate: { name: 'scope:fixed', value: crumbs.find((c) => c.label === 'fixed')!.value },
+      session: { sessionId: 's1' },
+      position: 'inline',
+      via: 'menu',
+      action: 'drill',
+    })
+    expect(outcome).toBe('handled')
+    // 切口径后：current=fixed；重拉以 status 入参（一次 RPC 一口径——search 未变不带脏键）
+    expect(header({ sessionId: 's1' }, { query: '', drilled: true }).find((c) => c.label === 'fixed')?.current).toBe(true)
+    const rows = (await (source['candidates'] as (session: unknown, req: { query: string; position: 'leading'; drilled: boolean; signal: AbortSignal }) => Promise<{ name: string }[]>)(
+      { sessionId: 's1' },
+      { query: '', position: 'leading', drilled: true, signal: BUG_SIGNAL },
+    )) as { name: string }[]
+    expect(rows.map((r) => r.name)).toEqual(['b-2']) // status=['fixed'] 子集
+    unstub()
+  })
+
+  it('fail-soft：@" 引号态空候选（bugs.list 零调用）；无 dshForge（传输缺席）→ 零候选不抛', async () => {
+    // 引号态：文件路径专属语义——T1 source quoted=true 短路
+    const quoted = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: BUG_FIXTURE_PROJECTS }),
+      'forge:bugs/list': () => ({ ok: true, data: BUG_FIXTURE_BUGS }),
+    })
+    await bugFlush()
+    const quotedRows = (await (quoted.source['candidates'] as (session: unknown, req: { query: string; quoted?: boolean; position: 'inline'; drilled: boolean; signal: AbortSignal }) => Promise<readonly unknown[]>)(
+      { sessionId: 's1' },
+      { query: '任意', quoted: true, position: 'inline', drilled: false, signal: BUG_SIGNAL },
+    )) as unknown[]
+    expect(quotedRows).toEqual([])
+    quoted.unstub()
+    // 无 dshForge（非 Electron 载体）：登记期零传输可达——candidates 零候选不抛
+    const noTransport = appliedBugSource()
+    const rows = (await (noTransport.source['candidates'] as (session: unknown, req: { query: string; position: 'inline'; drilled: boolean; signal: AbortSignal }) => Promise<readonly unknown[]>)(
+      { sessionId: 's1' },
+      { query: '', position: 'inline', drilled: false, signal: BUG_SIGNAL },
+    )) as unknown[]
+    expect(rows).toEqual([])
+    noTransport.unstub()
+  })
+
+  it('bug 图标件：发布面 ForgeBugGlyph 递达 → 候选行 icon = 发布件；发布面缺席 → 行零 icon 键（官方 icon set 无 bug 几何——自带 IconProps 组件居壳 bundle）', async () => {
+    const withGlyph = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
+      'forge:bugs/list': () => ({ ok: true, data: BUG_FIXTURE_BUGS }),
+    })
+    await bugFlush()
+    const withGlyphRows = (await (withGlyph.source['candidates'] as (session: unknown, req: { query: string; position: 'inline'; drilled: boolean; signal: AbortSignal }) => Promise<{ name: string; icon?: unknown }[]>)(
+      { sessionId: 's1' },
+      { query: '', position: 'inline', drilled: false, signal: BUG_SIGNAL },
+    )) as { name: string; icon?: unknown }[]
+    expect(withGlyphRows).toHaveLength(2)
+    expect(withGlyphRows.every((r) => r.icon === 'COMP:bug-glyph')).toBe(true)
+    withGlyph.unstub()
+    // 发布面缺席（形状漂移/旧壳）= 行零 icon 键——菜单无图标呈现，不炸
+    const noGlyph = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p1', workspaceId: 'w1' }] }),
+      'forge:bugs/list': () => ({ ok: true, data: BUG_FIXTURE_BUGS }),
+    }, { omitGlyph: true })
+    await bugFlush()
+    const noGlyphRows = (await (noGlyph.source['candidates'] as (session: unknown, req: { query: string; position: 'inline'; drilled: boolean; signal: AbortSignal }) => Promise<{ name: string; icon?: unknown }[]>)(
+      { sessionId: 's1' },
+      { query: '', position: 'inline', drilled: false, signal: BUG_SIGNAL },
+    )) as { name: string; icon?: unknown }[]
+    expect(noGlyphRows.every((r) => !('icon' in r))).toBe(true)
+    noGlyph.unstub()
+  })
+
+  it('warm：scope 出生预热——projects.list 先落缓存随后 bugs.list 预取（fire-and-forget，锚定项目口径）', async () => {
+    const { source, calls, unstub } = appliedBugSource({
+      'forge:projects/list': () => ({ ok: true, data: [{ id: 'p9', workspaceId: 'w9' }] }),
+      'forge:bugs/list': () => ({ ok: true, data: [] }),
+    })
+    const warmSource = source as unknown as { warm?: (session: { sessionId: string }) => void }
+    expect(typeof warmSource.warm).toBe('function')
+    warmSource.warm!({ sessionId: 's9' })
+    await bugFlush()
+    expect(
+      calls.some((c) => c.channel === 'forge:bugs/list' && JSON.stringify(c.payload) === JSON.stringify({ projectId: 'p9' })),
+      'warm 预取：projects 缓存就绪后一次 bugs.list（锚定项目口径）',
+    ).toBe(true)
+    unstub()
   })
 })

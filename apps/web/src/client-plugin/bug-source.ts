@@ -228,8 +228,9 @@ export type BugSnapshotCache = Map<string, BugCardSource>
 
 /** 工厂依赖（projectId 解析 + RPC 注入缝 + 时钟注入——纯函数可测） */
 export interface BugSourceDeps {
-  /** 当前会话所属项目（未绑定 = undefined——Bug 组空候选 fail-soft） */
-  readonly projectId: () => string | undefined
+  /** 当前会话所属项目（接线面递达会话锚；未绑定 = undefined——Bug 组空候选 fail-soft。
+   * 1.2 起 sessionId 可选入参：candidates 锚定会话精确解析，serialize 无会话位 = '' 走唯一项目兜底） */
+  readonly projectId: (sessionId?: string) => string | undefined
   readonly listBugs: BugListFn
   /** 时钟（缺省 Date.now） */
   readonly now?: () => number
@@ -258,9 +259,9 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
     trigger: '@',
     name,
     order: 30,
-    async candidates(_session, req) {
+    async candidates(session, req) {
       if (req.quoted === true) return []
-      const projectId = deps.projectId()
+      const projectId = deps.projectId(session.sessionId)
       if (projectId === undefined) return []
       let bugs: readonly BugCardSource[]
       try {
@@ -333,8 +334,8 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
           // 快照优先（全量卡——bugDesc 恒在即视为全卡）
           const snapshotted = snapshots.get(bugId)
           if (snapshotted !== undefined && snapshotted.bugDesc !== '') return serializeBugCard(snapshotted)
-          // 现查回退（最小卡 / 无快照时补全字段块）
-          const projectId = deps.projectId()
+          // 现查回退（最小卡 / 无快照时补全字段块——serialize 无会话位，锚定走 ''）
+          const projectId = deps.projectId('')
           if (projectId !== undefined) {
             const bugs = await deps.listBugs({ projectId })
             const found = bugs.find((bug) => bug.bugId === bugId)

@@ -54,6 +54,7 @@ import {
   ForgeRemoteEntry,
   type ForgeRemoteEntryProps,
 } from './views/remote/ForgeRemoteEntry.js'
+import { ForgeBugGlyph, type ForgeBugGlyphProps } from './views/session/BugGlyph.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
@@ -88,6 +89,8 @@ export interface ForgePublishedViews {
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
   readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
+  /** Bug 组行图标件（composer-bug-reference 1.2——@ 菜单 Bug 组候选行 icon；官方 icon set 无 bug 几何，自带 IconProps 组件） */
+  readonly ForgeBugGlyph: ComponentType<ForgeBugGlyphProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
   /** md-mermaid DOM 增强器工厂（1.9——@dsh-forge/md-mermaid ./web 出口；插件 apply 期 start/卸载 stop） */
@@ -115,6 +118,7 @@ declare global {
   ForgeHeroWorkspacePicker,
   ForgeSettingsSection,
   ForgeRemoteEntry,
+  ForgeBugGlyph,
   createWorkbenchBridge,
   createMermaidEnhancer,
 }
