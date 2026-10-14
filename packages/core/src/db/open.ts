@@ -1,6 +1,8 @@
 // SQLite 句柄唯一落点（L1 单写者纪律）：better-sqlite3 句柄只经 openDatabase 产出，
 // 全包（及全应用 host 侧）唯一创建口。一切 SQL 走 prepared statements（Hard Rule）——
 // pragma 走 better-sqlite3 官方 pragma API，DDL/查询一律 db.prepare()。
+// 迁移纪律与机制规范（指纹守卫 / 迁移前备份 / defer_foreign_keys / 守卫语句 / 数据迁移配方）
+// 单一来源：docs/conventions/db-migrations.md——本文件只承载实现，不复述规范。
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -114,12 +116,8 @@ function backupBeforeMigrations(db: Database.Database, file: string, targetVersi
  * - version = SCHEMA_VERSION → 直接可用（打开幂等，不重复迁移/插入）；
  * - version > SCHEMA_VERSION → 明确拒绝打开（UnsupportedSchemaVersionError，句柄已关闭）。
  *
- * 加固（migration-hardening）：
- * - 迁移指纹守卫：migration_digests 随库记录各版本语句集 sha-256；已录指纹与代码哈希不一致
- *   抛 MigrationTamperedError；缺席（历史库）一次性回填（幂等 bootstrap）；
- * - 迁移事务统一 defer_foreign_keys（FK 校验延迟到 COMMIT，表重建配方的前提）；
- * - 数据零丢失·备份：存在待应用迁移且库文件已存在时先 VACUUM INTO 落
- *   `{file}.bak-{日期}-pre-v{目标版本}`（按目标版本覆盖），备份失败 fail-closed 不应用任何迁移。
+ * 加固语义（指纹守卫 / 迁移前 VACUUM INTO 备份 fail-closed / defer_foreign_keys）见
+ * docs/conventions/db-migrations.md §3——此处只承载实现。
  */
 export function openDatabase(file: string, options: OpenDatabaseOptions = {}): Database.Database {
   const migrations = options.migrations ?? MIGRATIONS

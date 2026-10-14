@@ -1,10 +1,8 @@
-// 工作区任务库（forge.db）schema 迁移序列（migration-hardening 收敛化）。
-// 迁移纪律（取代 v1 直改惯例）：已发布迁移禁改语句——只能追加新版本 Migration；直改已发布
-// 语句会在开库指纹守卫（migration_digests）处 MigrationTamperedError 明确拒开。
-// 独立版本线：FORGE_DB_SCHEMA_VERSION 与中央 state.db 迁移互不相干（schema.sql 头注）；
+// 工作区任务库（forge.db）schema 迁移序列。迁移纪律、改 schema 检查清单与数据迁移配方
+// 单一来源：docs/conventions/db-migrations.md（已发布迁移禁改语句，只能追加新版本）。
 // Hard Rule——本序列经 openDatabase 参数化传入（db/open.ts options），中央 MIGRATIONS 硬编码 import 勿照抄。
-// 前向单向：只追加新版本 Migration（全 CREATE 无 ALTER）；保留字已清剿（task_type/task_status 等，禁 key/type/status/description）。
-// PRAGMA（WAL / foreign_keys）在 openDatabase 打开时设置，不入迁移语句。
+// 保留字已清剿（task_type/task_status 等，禁 key/type/status/description）；PRAGMA（WAL / foreign_keys）
+// 在 openDatabase 打开时设置，不入迁移语句。
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
