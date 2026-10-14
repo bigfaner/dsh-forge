@@ -192,6 +192,14 @@ export function diagStampOf(iso: string): string {
   return `${m[2]}-${m[3]} ${m[4]}:${m[5]}`
 }
 
+/** ISO-8601 → `YYYY-MM-DD HH:mm`（带年份全刻度——Bug 详情弹框登记时间展示单源；
+ *  同一口径直取零时区换算，与 diagStampOf 同防御形——不匹配原样返回） */
+export function fullStampOf(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso)
+  if (m === null) return iso
+  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`
+}
+
 /** 消息体内部消费（同形改名引用——零行为变化） */
 const stampOf = diagStampOf
 

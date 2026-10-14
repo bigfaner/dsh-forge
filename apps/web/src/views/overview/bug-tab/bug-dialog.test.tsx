@@ -31,26 +31,31 @@ function markupOf(card: BugCard, sessionTitleOf?: (sessionId: string) => string 
   )
 }
 
-describe('BugDialog（结构线框）', () => {
-  it('头部 = Bug 详情 + ✕ 关闭锚；状态行 = 状态点 + error_type + 时间；summary 大字', () => {
+describe('BugDialog（真 dialog 表单线框）', () => {
+  it('壳 = dswf-ov-bdialog（非 drawer 皮）+ 宽 880 + 纵向滚动体；头 = Bug 详情 + ✕ 关闭锚', () => {
     const markup = markupOf(bug('open', { errorType: 'api' }))
+    expect(markup).toContain('dswf-ov-bdialog')
+    expect(markup).not.toContain('dswf-td-') // 真 dialog 自持皮——零 drawer 视觉类
+    expect(markup).toContain('width:880px') // 440 两倍（用户裁决）
+    expect(markup).toContain('data-dswf-ov-bdialog-body') // 滚动主区
     expect(markup).toContain('Bug 详情')
     expect(markup).toContain('data-dswf-ov-bdialog-close')
-    expect(markup).toContain('data-dswf-ov-bdialog-status="open"')
-    expect(markup).toContain('data-dswf-ov-bdialog-type="api"')
-    expect(markup).toContain('10-13 09:30')
-    expect(markup).toContain('data-dswf-ov-bdialog-summary')
-    expect(markup).toContain('登录接口 500')
   })
 
-  it('五字段 kv 区（Bug/Trigger/Expected/Actual/Suspected——suspected 缺席 = —）', () => {
-    const markup = markupOf(bug('open'))
+  it('双列表单：摘要/状态/错误类型/五字段/登记时间（带年份）逐行 label+value', () => {
+    const markup = markupOf(bug('open', { errorType: 'api' }))
+    expect(markup).toContain('data-dswf-ov-bdialog-summary')
+    expect(markup).toContain('登录接口 500')
+    expect(markup).toContain('data-dswf-ov-bdialog-status="open"')
+    expect(markup).toContain('data-dswf-ov-bdialog-type="api"')
     expect(markup).toContain('登录接口偶发 500，空 body 时必现')
     expect(markup).toContain('POST /login 空 body')
     expect(markup).toContain('400 参数错误')
     expect(markup).toContain('500 内部错误')
     expect(markup).toContain('data-dswf-ov-bdialog-kv="suspected"')
     expect(markup).toContain('—')
+    expect(markup).toContain('2026-10-13 09:30') // 登记时间带年份（fullStampOf）
+    expect(markup).not.toContain('dswf-td-kv-chip') // 旧 kv-chip 形态退役
   })
 
   it('发现人员 + 来源任务标识在场；fixer 缺席 = 修复行不渲染', () => {

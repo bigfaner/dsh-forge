@@ -1,5 +1,6 @@
 // bug-list 单测（fix-bug Bug 子 tab 列表视图）—— chips 三态计数/0 计数 disabled/清过滤 +
-// 行形态（状态点 + summary 主行 + error_type tag + 时间）+ 行点击上抛 + 空态双标题。
+// 行形态（提案行同构：状态点色 + summary 标题左 + error_type chip 右；无状态文字/无时间）+
+// 行点击上抛 + 空态双标题。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BugCard, BugStatus } from '@dsh-forge/contracts'
@@ -59,15 +60,19 @@ describe('BugStatusChips（三态计数 + 0 计数 disabled——同任务 chips
 describe('BugList（行形态 + 空态 + 行点击上抛）', () => {
   const handlers = { onToggleStatus: () => {} }
 
-  it('行 = 状态点 + summary 主行 + error_type tag + 时间（MM-DD HH:mm 刻度）', () => {
+  it('行 = 提案行同构：状态点[色区分] + summary 标题左 + error_type chip 右；无状态文字/无时间', () => {
     const markup = renderToStaticMarkup(
       <BugList bugs={[bug('b1', 'open', 'api'), bug('b2', 'fixed')]} counts={COUNTS} activeStatuses={new Set()} {...handlers} />,
     )
     expect(markup).toContain('data-dswf-ov-bugrow="b1"')
+    expect(markup).toContain('dswf-ov-parent-title')
     expect(markup).toContain('登录接口 500（b1）')
     expect(markup).toContain('data-dswf-ov-bugrow-type="api"')
-    expect(markup).toContain('10-13 09:30')
-    // errorType 缺席行零 tag
+    expect(markup).toContain('dswf-ov-parent-chip') // error_type chip 右靠（提案行 chip 位）
+    // 状态文字退场（色归圆点）；时间退场
+    expect(markup).not.toContain('data-dswf-ov-bugrow-status')
+    expect(markup).not.toContain('09:30')
+    // errorType 缺席行零 chip
     const b2At = markup.indexOf('data-dswf-ov-bugrow="b2"')
     const b2End = markup.indexOf('data-dswf-ov-bugrow', b2At + 1)
     expect(markup.slice(b2At, b2End === -1 ? undefined : b2End)).not.toContain('data-dswf-ov-bugrow-type')

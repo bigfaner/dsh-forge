@@ -1,13 +1,13 @@
-// Bug 子 tab 列表视图（定位：业务——fix-bug 概览第 4 子 tab；任务列表视图同语言：
-// 行 = 状态点 + summary 主行 + error_type tag + 时间；行不展开——点击整行上抛 onOpenBug
-// （详情弹框归后续切片）。chips 三态计数 0 计数 disabled（同任务 chips 语义）；
-// 搜索/排序控件归 sticky-bar（帧侧统一），本组件仅承载 chips 过滤 + 行集呈现。
+// Bug 子 tab 列表视图（定位：业务——fix-bug 概览第 4 子 tab；行样式对齐提案行体系
+// （dswf-ov-item/parent——标题左 + 状态圆点色区分[无状态文字] + error_type chip 右靠，
+// 时间不呈现）；行不展开——点击整行上抛 onOpenBug（详情弹框）。chips 三态计数 0 计数
+// disabled（同任务 chips 语义）；搜索/排序控件归 sticky-bar（帧侧统一），本组件仅承载
+// chips 过滤 + 行集呈现。
 // Hard Rule「搜索过滤服务端承载」：本组件零本地过滤——bugs 行集即服务端过滤后结果。
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { BUG_STATUSES, BUG_STATUS_LABELS, type BugCard, type BugStatus } from '@dsh-forge/contracts'
 import { StateDot, Tag, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { EmptyState } from '../../../components/index.js'
-import { diagStampOf } from '../message-format.js'
 import { hasActiveStatusFilter, isChipDisabled } from '../overview-model.js'
 
 /** BugStatus → 官方 StateDot 语义（open 待修复 = error；fixed 已修复 = done；unresolved 无法复现 = idle） */
@@ -70,8 +70,9 @@ export function BugStatusChips({ counts, active, onToggle, onClear }: BugStatusC
   )
 }
 
-/** 单 Bug 行（状态点 + summary 主行 + error_type tag + 时间——行不展开；onOpenBug 在场 =
- *  整行可点 role=button 键盘可达，点击上抛开详情弹框；缺席 = 静态呈现） */
+/** 单 Bug 行（提案行同构——dswf-ov-item/parent flex：状态点[色区分状态] + summary 标题
+ *  靠左 + error_type chip 右靠；无展开/无状态文字/无时间。onOpenBug 在场 = 整行可点
+ *  role=button 键盘可达，点击上抛开详情弹框；缺席 = 静态呈现） */
 function BugRow({ bug, onOpenBug }: { readonly bug: BugCard; readonly onOpenBug?: (bugId: string) => void }): ReactNode {
   const handleKey = (event: ReactKeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -81,21 +82,21 @@ function BugRow({ bug, onOpenBug }: { readonly bug: BugCard; readonly onOpenBug?
   }
   return (
     <div
-      className="dswf-ov-bugrow"
+      className="dswf-ov-item"
       data-dswf-ov-bugrow={bug.bugId}
       {...(onOpenBug !== undefined
         ? { role: 'button', tabIndex: 0, onClick: () => onOpenBug(bug.bugId), onKeyDown: handleKey }
         : {})}
     >
-      <StateDot state={BUG_STATUS_DOT_STATE[bug.bugStatus]} size={8} />
-      <span className="dswf-ov-bugrow-summary">{bug.summary}</span>
-      <span className="dswf-ov-bugrow-status">{BUG_STATUS_LABELS[bug.bugStatus].zh}</span>
-      {bug.errorType !== undefined ? (
-        <span className="dswf-ov-bugrow-typewrap" data-dswf-ov-bugrow-type={bug.errorType}>
-          <Tag tone="neutral" className="dswf-ov-bugrow-type">{bug.errorType}</Tag>
-        </span>
-      ) : null}
-      <span className="dswf-ov-bugrow-time">{diagStampOf(bug.createdAt)}</span>
+      <div className="dswf-ov-parent">
+        <StateDot state={BUG_STATUS_DOT_STATE[bug.bugStatus]} size={8} />
+        <span className="dswf-ov-parent-title">{bug.summary}</span>
+        {bug.errorType !== undefined ? (
+          <span data-dswf-ov-bugrow-type={bug.errorType}>
+            <Tag tone="neutral" className="dswf-ov-parent-chip">{bug.errorType}</Tag>
+          </span>
+        ) : null}
+      </div>
     </div>
   )
 }
