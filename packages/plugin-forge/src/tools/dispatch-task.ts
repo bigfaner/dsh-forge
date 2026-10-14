@@ -120,6 +120,11 @@ const DISPATCH_TASK_OUTPUT_SCHEMA = withFailureVariant({
         summary: { type: 'string' },
         reason: { type: 'string' },
         commitHash: { type: 'string' },
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Changed files (flat union) from the worker submit record — settle injects when files_json present.',
+        },
         followUp: TASK_REF_SCHEMA,
         pool: POOL_SCHEMA,
       },

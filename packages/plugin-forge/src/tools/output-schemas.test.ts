@@ -255,6 +255,7 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
       digest: 'abc123',
       summary: 'ok',
       commitHash: '3b0f41f9224a41c798fa977522cbc25f98519254',
+      files: ['e2e/specs/blitz/md-mermaid-plugin.spec.ts'],
       pool: POOL,
     })
     expectValid('dispatchTask:no-task', schema, { kind: 'no-task', pool: POOL })
