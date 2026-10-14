@@ -5,8 +5,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 # 技术设计（tech-design）
 
-在设计期消解技术不确定性，避免实现期返工。PRD 刻意不做技术选型——所有技术决策从这里
-开始，输入条件是 PRD 的非功能约束与项目现状。
+在设计期消解技术不确定性，避免实现期返工。PRD 刻意不做技术选型——所有技术决策从这里开始，输入条件是 PRD 的非功能约束与项目现状。
 
 <HARD-GATE>
 设计获批之前不得写任何实现代码——本技能的产出只有设计文档。
@@ -21,11 +20,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 
 ## 状态层纪律
 
-设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工
-重注册——见 forge:spec 系统提示段；注册推进相位至 `design`）。路径按 `<slug>`
-feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段
-「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →
-再 `upsertFeatureDoc` 注册。
+设计工件落盘后即用 `upsertFeatureDoc` 注册（状态层机制语义——事实源/单调推进/返工重注册——见 forge:spec 系统提示段；注册推进相位至 `design`）。路径按 `<slug>` feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline 系统提示段「文档位置/目录树」。含 mermaid 图的工件自检纪律：图写完 → `validateMermaid` 自检 →再 `upsertFeatureDoc` 注册。
 
 | 工件 | 注册方式 |
 |---|---|
@@ -34,18 +29,15 @@ feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline
 | SQL schema | `upsertFeatureDoc` `doc_kind: sql-schema` |
 | 页面地图（web 表面） | `upsertFeatureDoc` `doc_kind: page-map` |
 
-`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**
-——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
+`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
 
 ## 意图适配
 
-读 brainstorm 提案文档的 `intent` frontmatter（`<slug>` proposal 目录相对约定，
-见系统提示段目录树）；缺失 → `new-feature`。
+读 brainstorm 提案文档的 `intent` frontmatter（`<slug>` proposal 目录相对约定，见系统提示段目录树）；缺失 → `new-feature`。
 
 - `new-feature`：全量设计——所有段落；用户故事即 AC 清单。
 - `enhancement`：聚焦内部架构；改进目标替代用户故事作清单；手册/ER 仅覆盖信号触发。
-- `refactor` / `cleanup` / `fix`：仅内部架构（模块重组、依赖调整、行为不变量、回归
-  风险）；无 ER 图、无用户故事；PRD 的 Verification Criteria 即 AC 清单。
+- `refactor` / `cleanup` / `fix`：仅内部架构（模块重组、依赖调整、行为不变量、回归风险）；无 ER 图、无用户故事；PRD 的 Verification Criteria 即 AC 清单。
 - `doc`：极简——改什么、为什么；无架构/接口/数据段。
 
 ## 硬性段
@@ -53,22 +45,17 @@ feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline
 设计文档**必列**两段，任何意图不豁免：
 
 - **改动范围**：受影响的包/模块/文件（包粒度），具体路径。
-- **影响范围**：下游消费方（接口调用者、依赖本包的模块、契约/测试面）与运行时影响
-  （表面、构建、schema），未触及的写"无"并说明判据。
+- **影响范围**：下游消费方（接口调用者、依赖本包的模块、契约/测试面）与运行时影响（表面、构建、schema），未触及的写"无"并说明判据。
 
 ## 技术栈选型步骤
 
 1. **候选并列**——每个决策点（框架/库/语言特性/工具）列出 ≥2 个候选，不预设答案。
-2. **评估**——按 PRD 非功能约束与项目现状（既有依赖、团队约定、维护成本）构建**权衡
-   矩阵**：行=候选，列=约束维度（性能/兼容/生态/迁移成本…），格内定性打分。
-3. **决策与理由留存**——写入设计文档：选中者、矩阵结论、放弃候选的原因（一句话即可，
-   但必须留痕）。
+2. **评估**——按 PRD 非功能约束与项目现状（既有依赖、团队约定、维护成本）构建**权衡矩阵**：行=候选，列=约束维度（性能/兼容/生态/迁移成本…），格内定性打分。
+3. **决策与理由留存**——写入设计文档：选中者、矩阵结论、放弃候选的原因（一句话即可，但必须留痕）。
 
 ## 技术架构决策
 
-架构级决策（分层、事件模型、持久化策略等）逐条成段，ADR 风格：**候选并列 → 权衡（矩阵
-或逐维对比）→ 决策记录，含弃选原因**。留痕判据：三个月后新人只读文档能回答"为什么当时
-不选 X"。
+架构级决策（分层、事件模型、持久化策略等）逐条成段，ADR 风格：**候选并列 → 权衡（矩阵或逐维对比）→ 决策记录，含弃选原因**。留痕判据：三个月后新人只读文档能回答"为什么当时不选 X"。
 
 ## 模块/包设计
 
@@ -84,32 +71,19 @@ feature 目录相对约定（`design/<name>`）；存储布局见 forge-pipeline
 brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此处精确设计**三要素**：
 
 1. **流程时序**：跨模块流程配 mermaid `sequenceDiagram`（参与方、消息序、失败分支）。
-2. **交互方式**：同步调用/异步事件/消息队列等，写明选型理由（一致性要求、耦合容忍、
-   失败语义）。
-3. **契约数据模型**：请求/响应/事件的 schema（字段、类型、必填性），与 Interfaces 段
-   衔接，不另起炉灶。
+2. **交互方式**：同步调用/异步事件/消息队列等，写明选型理由（一致性要求、耦合容忍、失败语义）。
+3. **契约数据模型**：请求/响应/事件的 schema（字段、类型、必填性），与 Interfaces 段衔接，不另起炉灶。
 
 ## 工作流
 
-1. **读 PRD**（含用户故事或其意图替代物）；摘录非功能约束——它们是选型的输入条件；
-   提取 `db-schema` frontmatter 值供 DB 分支。
-2. **探索上下文**——既有架构与决策文档（`docs/ARCHITECTURE.md`、`docs/decisions/`）、
-   历史特性的业务规则与约定、包管理器文件的现有依赖、源码目录的既有模式。
-3. **识别决策**——架构适配、接口、数据模型、依赖、错误处理、测试策略、安全、本地开发。
-   真正不确定处问用户；派发任务语境依简报决断并记录理由。
-4. **逐节起草并逐节获批**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互
-   契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。逐节自检并产出命名节
-   **PRD Coverage Map**（breakdown-tasks 的核对输入）：每条 PRD AC 映射到
-   设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
+1. **读 PRD**（含用户故事或其意图替代物）；摘录非功能约束——它们是选型的输入条件；提取 `db-schema` frontmatter 值供 DB 分支。
+2. **探索上下文**——既有架构与决策文档（`docs/ARCHITECTURE.md`、`docs/decisions/`）、历史特性的业务规则与约定、包管理器文件的现有依赖、源码目录的既有模式。
+3. **识别决策**——架构适配、接口、数据模型、依赖、错误处理、测试策略、安全、本地开发。真正不确定处问用户；派发任务语境依简报决断并记录理由。
+4. **逐节起草并逐节获批**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。逐节自检并产出命名节**PRD Coverage Map**（breakdown-tasks 的核对输入）：每条 PRD AC 映射到设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
    - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
      + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。
-5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；手册按表面：
-   `api-handbook.md`（api）、`cli-handbook.md`（cli/tui）、`page-map.md`（web）、
-   `screen-map.md`（mobile）。表面探测：读仓库自身的表面配置（`docs/conventions/testing/`
-   的测试约定、既有任务 surface 字段、UI 函数平台）——不许猜；交互语境问，任务语境依简报。
-   手册带 `created` frontmatter 时间戳供下游新鲜度检查。
-6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的
-   知识沉降动作，认为有必要时向用户提议，不擅自执行。
+5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；手册按表面：`api-handbook.md`（api）、`cli-handbook.md`（cli/tui）、`page-map.md`（web）、`screen-map.md`（mobile）。表面探测：读仓库自身的表面配置（`docs/conventions/testing/` 的测试约定、既有任务 surface 字段、UI 函数平台）——不许猜；交互语境问，任务语境依简报。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
+6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的知识沉降动作，认为有必要时向用户提议，不擅自执行。
 
 ## 方法论速查
 
