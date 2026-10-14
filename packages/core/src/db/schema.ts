@@ -2,10 +2,22 @@
 // 前向单向：只追加新版本 Migration（全 CREATE 无 ALTER），旧应用打开新 schema 由版本门明确拒绝。
 // 本文件为机制层零域语义代码：表名/列名是蓝本蓝图本身，不含任何表消费逻辑。
 
-/** 一次前向迁移 = 一个版本号 + 一组 DDL 语句（单事务原子应用）。 */
+/**
+ * 守卫语句：SQLite 无 ADD COLUMN IF NOT EXISTS——columnGuard 命中（table.column 已在场）时
+ * 跳过该语句不执行，未命中才执行（收敛式迁移：同一语句可安全落在多谱系库上）。
+ */
+export interface GuardedStatement {
+  readonly sql: string
+  readonly columnGuard?: { readonly table: string; readonly column: string }
+}
+
+/** 单条迁移语句：裸 SQL 或带列守卫的收敛语句。 */
+export type MigrationStatement = string | GuardedStatement
+
+/** 一次前向迁移 = 一个版本号 + 一组语句（单事务原子应用）。 */
 export interface Migration {
   readonly version: number
-  readonly statements: readonly string[]
+  readonly statements: readonly MigrationStatement[]
 }
 
 /** 本应用支持的 schema 版本上限（版本门：库内 version 超出即拒绝打开）。 */

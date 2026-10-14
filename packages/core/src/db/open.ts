@@ -1,11 +1,12 @@
 // SQLite 句柄唯一落点（L1 单写者纪律）：better-sqlite3 句柄只经 openDatabase 产出，
 // 全包（及全应用 host 侧）唯一创建口。一切 SQL 走 prepared statements（Hard Rule）——
 // pragma 走 better-sqlite3 官方 pragma API，DDL/查询一律 db.prepare()。
-import { mkdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
-import { UnsupportedSchemaVersionError } from './errors.js'
-import { MIGRATIONS, SCHEMA_VERSION, type Migration } from './schema.js'
+import { MigrationTamperedError, UnsupportedSchemaVersionError } from './errors.js'
+import { MIGRATIONS, SCHEMA_VERSION, type GuardedStatement, type Migration } from './schema.js'
 
 /**
  * 开库参数（M2 1.2 参数化缝——Hard Rule：工作区迁移序列经参数传入，禁硬编码 import 中央序列）。
@@ -30,28 +31,100 @@ function readCurrentVersion(db: Database.Database): number {
   return row?.v ?? 0
 }
 
-/** 单事务原子应用一条迁移：全部 DDL + schema_meta 版本行，任一步失败整体回滚。 */
+/** 语句集指纹：sha-256（语句序列的 JSON 序列化——守卫形态的 sql 与 columnGuard 都参与哈希）。 */
+function digestOf(migration: Migration): string {
+  return createHash('sha256').update(JSON.stringify(migration.statements)).digest('hex')
+}
+
+/** 基建表 migration_digests（机制级，不占迁移版本号；IF NOT EXISTS 幂等）。 */
+function ensureDigestTable(db: Database.Database): void {
+  db.prepare(
+    `CREATE TABLE IF NOT EXISTS migration_digests (
+    version INTEGER PRIMARY KEY,
+    digest  TEXT    NOT NULL
+)`,
+  ).run()
+}
+
+/**
+ * 指纹守卫：对库内已应用的每个版本校验当前代码语句集指纹。
+ * - 缺席（历史库）→ 按当前代码一次性回填（bootstrap，接受现状为正典）；
+ * - 不一致 → MigrationTamperedError（已发布迁移被直改，明确拒开）。
+ */
+function verifyAndBootstrapDigests(db: Database.Database, migrations: readonly Migration[], current: number): void {
+  const applied = migrations.filter((m) => m.version <= current)
+  for (const migration of applied) {
+    const digest = digestOf(migration)
+    const row = db.prepare<unknown[], { digest: string }>(
+      `SELECT digest FROM migration_digests WHERE version = ?`,
+    ).get(migration.version)
+    if (!row) {
+      db.prepare(`INSERT INTO migration_digests (version, digest) VALUES (?, ?)`).run(migration.version, digest)
+    } else if (row.digest !== digest) {
+      throw new MigrationTamperedError(migration.version)
+    }
+  }
+}
+
+/** columnGuard 命中判定：表存在且列已在场 → 跳过该语句。 */
+function columnExists(db: Database.Database, guard: NonNullable<GuardedStatement['columnGuard']>): boolean {
+  const columns = db.pragma(`table_info('${guard.table}')`) as Array<{ name: string }>
+  return columns.some((c) => c.name === guard.column)
+}
+
+/**
+ * 单事务原子应用一条迁移：
+ * - 事务开头机制级 `PRAGMA defer_foreign_keys = ON`（FK 校验延迟到 COMMIT——表重建期间允许暂态引用悬空）；
+ * - columnGuard 命中（列已在场）的语句跳过，其余依序执行；
+ * - 成功后同事务记录语句集 sha-256 指纹 + schema_meta 版本行，任一步失败整体回滚。
+ */
 function applyMigration(db: Database.Database, migration: Migration): void {
   db.transaction(() => {
-    for (const stmt of migration.statements) db.prepare(stmt).run()
+    db.pragma('defer_foreign_keys = ON')
+    for (const stmt of migration.statements) {
+      if (typeof stmt !== 'string' && stmt.columnGuard && columnExists(db, stmt.columnGuard)) continue
+      db.prepare(typeof stmt === 'string' ? stmt : stmt.sql).run()
+    }
     db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, ?)`).run(
       migration.version,
       new Date().toISOString(),
     )
+    db.prepare(`INSERT INTO migration_digests (version, digest) VALUES (?, ?)`).run(migration.version, digestOf(migration))
   })()
+}
+
+/**
+ * 迁移前自动备份：`VACUUM INTO '{file}.bak-{日期}-pre-v{目标版本}'`（按目标版本覆盖保留一份）。
+ * 用 VACUUM INTO 而非裸拷贝：库开 WAL，裸拷主文件丢最近事务；VACUUM INTO 产出含全部已提交数据的完整快照。
+ * 失败 fail-closed：抛错，不应用任何迁移。
+ */
+function backupBeforeMigrations(db: Database.Database, file: string, targetVersion: number): void {
+  const today = new Date().toISOString().slice(0, 10)
+  const backupFile = `${file}.bak-${today}-pre-v${targetVersion}`
+  if (existsSync(backupFile)) unlinkSync(backupFile)
+  const escaped = backupFile.replaceAll("'", "''")
+  db.exec(`VACUUM INTO '${escaped}'`)
 }
 
 /**
  * 打开（或创建）应用状态库并校验/推进 schema 版本。
  *
  * 前向门语义（schema.sql 头注）：
- * - 空库 / version < SCHEMA_VERSION → 依序应用待补迁移（前向单向，全 CREATE 无 ALTER）；
+ * - 空库 / version < SCHEMA_VERSION → 依序应用待补迁移（前向单向）；
  * - version = SCHEMA_VERSION → 直接可用（打开幂等，不重复迁移/插入）；
  * - version > SCHEMA_VERSION → 明确拒绝打开（UnsupportedSchemaVersionError，句柄已关闭）。
+ *
+ * 加固（migration-hardening）：
+ * - 迁移指纹守卫：migration_digests 随库记录各版本语句集 sha-256；已录指纹与代码哈希不一致
+ *   抛 MigrationTamperedError；缺席（历史库）一次性回填（幂等 bootstrap）；
+ * - 迁移事务统一 defer_foreign_keys（FK 校验延迟到 COMMIT，表重建配方的前提）；
+ * - 数据零丢失·备份：存在待应用迁移且库文件已存在时先 VACUUM INTO 落
+ *   `{file}.bak-{日期}-pre-v{目标版本}`（按目标版本覆盖），备份失败 fail-closed 不应用任何迁移。
  */
 export function openDatabase(file: string, options: OpenDatabaseOptions = {}): Database.Database {
   const migrations = options.migrations ?? MIGRATIONS
   const schemaVersion = options.schemaVersion ?? SCHEMA_VERSION
+  const fileExisted = existsSync(file)
   mkdirSync(dirname(file), { recursive: true })
   const db = new Database(file)
   try {
@@ -62,9 +135,14 @@ export function openDatabase(file: string, options: OpenDatabaseOptions = {}): D
     if (current > schemaVersion) {
       throw new UnsupportedSchemaVersionError(current, schemaVersion)
     }
-    for (const migration of migrations) {
-      if (migration.version > current) applyMigration(db, migration)
+    ensureDigestTable(db)
+    verifyAndBootstrapDigests(db, migrations, current)
+
+    const pending = migrations.filter((m) => m.version > current && m.version <= schemaVersion)
+    if (pending.length > 0 && fileExisted) {
+      backupBeforeMigrations(db, file, Math.max(...pending.map((m) => m.version)))
     }
+    for (const migration of pending) applyMigration(db, migration)
     return db
   } catch (e) {
     db.close()

@@ -1,11 +1,11 @@
 // 任务 2.1 测试 —— openDatabase 行为面（AC1 DDL 零错+索引 / AC2 FK+CHECK 负样例 /
 // AC3 schema_meta 前向门 / 事务助手 / WAL）。临时库执行（vitest，Node 直跑 better-sqlite3）。
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
+import { isMigrationTamperedError, MigrationTamperedError, UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 import { openDatabase } from './open.js'
 import { withTransaction } from './transaction.js'
 import { isParseableDateStyle } from '../testutil/date-assertions.js'
@@ -38,6 +38,7 @@ describe('AC1 全 DDL 在临时库执行零错（五表 + 七索引 + FK pragma�
       'app_key_logs',
       'knowledge_entries',
       'knowledge_recall_logs',
+      'migration_digests',
       'projects',
       'schema_meta',
     ])
@@ -226,6 +227,7 @@ describe('AC3 schema_meta 前向门', () => {
       'app_key_logs',
       'knowledge_entries',
       'knowledge_recall_logs',
+      'migration_digests',
       'projects',
       'schema_meta',
     ])
@@ -259,7 +261,7 @@ describe('openDatabase 参数化迁移序列（M2 1.2：工作区库独立版本
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
       .all()
       .map((r) => r.name)
-    expect(tables).toEqual(['alt_widgets', 'schema_meta'])
+    expect(tables).toEqual(['alt_widgets', 'migration_digests', 'schema_meta'])
     expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
     db.close()
   })
@@ -305,6 +307,209 @@ describe('事务助手 withTransaction', () => {
       }),
     ).toThrowError('rollback-me')
     expect(db.prepare(`SELECT COUNT(*) AS n FROM app_key_logs`).get()).toEqual({ n: 0 })
+    db.close()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// migration-hardening 1.1：守卫语句 + 迁移指纹守卫 + 迁移前备份 + 原子性
+// ---------------------------------------------------------------------------
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+/** 独立版本线测试序列：v1 建表 + v2 守卫式加列（与中央五表相异，形制契约同中央）。 */
+const guardMigrations = [
+  {
+    version: 1,
+    statements: [
+      `CREATE TABLE schema_meta (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT    NOT NULL
+)`,
+      `CREATE TABLE alt_widgets (
+    id    TEXT PRIMARY KEY,
+    label TEXT NOT NULL
+)`,
+      `CREATE INDEX idx_alt_widgets_label ON alt_widgets(label)`,
+    ],
+  },
+  {
+    version: 2,
+    statements: [
+      { sql: `ALTER TABLE alt_widgets ADD COLUMN extra TEXT`, columnGuard: { table: 'alt_widgets', column: 'extra' } },
+    ],
+  },
+] as const
+
+describe('守卫语句：columnGuard 命中跳过 / 未命中执行', () => {
+  it('未命中（列缺席）：守卫语句执行，列被补上', () => {
+    const db = openDatabase(dbPath(), { migrations: guardMigrations, schemaVersion: 2 })
+    const columns = db.pragma(`table_info('alt_widgets')`) as Array<{ name: string }>
+    expect(columns.map((c) => c.name)).toContain('extra')
+    db.close()
+  })
+
+  it('命中（列已在场）：守卫语句跳过不报错（多谱系收敛）', () => {
+    // 直接构造「列已在场」的 v2 库（模拟另一谱系），守卫 ALTER 若执行必炸（duplicate column）。
+    const path = dbPath()
+    const raw = new Database(path)
+    raw.exec(`
+      CREATE TABLE schema_meta (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO schema_meta VALUES (1, '2026-10-02T00:00:00.000Z'), (2, '2026-10-02T00:00:00.000Z');
+      CREATE TABLE alt_widgets (id TEXT PRIMARY KEY, label TEXT NOT NULL, extra TEXT);
+    `)
+    raw.close()
+
+    const db = openDatabase(path, { migrations: guardMigrations, schemaVersion: 2 })
+    expect(db.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(2)
+    const columns = db.pragma(`table_info('alt_widgets')`) as Array<{ name: string }>
+    expect(columns.filter((c) => c.name === 'extra')).toHaveLength(1)
+    db.close()
+  })
+})
+
+describe('迁移指纹守卫：记录 / 校验 / 篡改拒开 / 回填幂等', () => {
+  it('迁移应用成功 → 同事务记录语句集 sha-256 指纹', () => {
+    const db = openDatabase(dbPath())
+    const rows = db.prepare<unknown[], { version: number; digest: string }>(
+      `SELECT version, digest FROM migration_digests`,
+    ).all()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.version).toBe(1)
+    expect(rows[0]?.digest).toMatch(/^[0-9a-f]{64}$/)
+    db.close()
+  })
+
+  it('已录指纹与代码哈希不一致 → MigrationTamperedError（含版本号 + 处置指引），不做任何半套迁移', () => {
+    const path = dbPath()
+    const db = openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 })
+    db.close()
+
+    // 同版本直改语句（v1 的建表语句被篡改）+ 携带待应用 v2 → 开库必须在版本门处明确拒开
+    const tampered = [
+      { ...guardMigrations[0], statements: [...guardMigrations[0].statements.slice(0, 1), `CREATE TABLE alt_widgets (id TEXT PRIMARY KEY, label TEXT NOT NULL, renamed TEXT)`] },
+      guardMigrations[1],
+    ]
+    expect(() => openDatabase(path, { migrations: tampered, schemaVersion: 2 })).toThrowError(MigrationTamperedError)
+    try {
+      openDatabase(path, { migrations: tampered, schemaVersion: 2 })
+    } catch (e) {
+      expect(isMigrationTamperedError(e)).toBe(true)
+      expect((e as MigrationTamperedError).version).toBe(1)
+      expect(e instanceof Error && e.message).toContain('1')
+      expect(e instanceof Error && e.message).toContain('恢复')
+    }
+
+    // 半套校验：v2 未被应用（守卫先于迁移执行），库仍为 v1 原状；原序列可正常打开
+    const check = new Database(path)
+    expect(check.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+    const columns = check.pragma(`table_info('alt_widgets')`) as Array<{ name: string }>
+    expect(columns.map((c) => c.name)).not.toContain('extra')
+    check.close()
+    const ok = openDatabase(path, { migrations: guardMigrations, schemaVersion: 2 })
+    ok.close()
+  })
+
+  it('历史库（指纹缺席）首开按当前代码回填，幂等：重开不再回填、不报错', () => {
+    const path = dbPath()
+    // 模拟历史库：无 migration_digests 表的 v1 库
+    const raw = new Database(path)
+    raw.exec(`
+      CREATE TABLE schema_meta (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO schema_meta VALUES (1, '2026-10-02T00:00:00.000Z');
+      CREATE TABLE alt_widgets (id TEXT PRIMARY KEY, label TEXT NOT NULL);
+    `)
+    raw.close()
+
+    const db1 = openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 })
+    const rows = db1.prepare<unknown[], { version: number }>(`SELECT version FROM migration_digests`).all()
+    expect(rows).toEqual([{ version: 1 }])
+    db1.close()
+
+    const db2 = openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 })
+    expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM migration_digests`).get()).toEqual({ n: 1 })
+    db2.close()
+  })
+})
+
+describe('迁移前自动备份（VACUUM INTO，按目标版本覆盖，失败 fail-closed）', () => {
+  it('存在待应用迁移的既有库：先落 {file}.bak-{日期}-pre-v{目标版本}', () => {
+    const path = dbPath()
+    openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 }).close()
+    const db = openDatabase(path, { migrations: guardMigrations, schemaVersion: 2 })
+    db.close()
+    expect(existsSync(`${path}.bak-${today()}-pre-v2`)).toBe(true)
+  })
+
+  it('备份按目标版本覆盖保留一份（VACUUM INTO 全量快照替换旧内容）', () => {
+    const path = dbPath()
+    openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 }).close()
+    writeFileSync(`${path}.bak-${today()}-pre-v2`, 'stale-marker')
+    const db = openDatabase(path, { migrations: guardMigrations, schemaVersion: 2 })
+    db.close()
+    // 快照为合法 SQLite 库（非 stale 文本），且含源库数据
+    const bak = new Database(`${path}.bak-${today()}-pre-v2`, { readonly: true })
+    expect(bak.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM schema_meta`).get()?.n).toBe(1)
+    bak.close()
+  })
+
+  it('备份失败 → fail-closed：不应用任何迁移，库文件原状', () => {
+    const path = dbPath()
+    openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 }).close()
+    // 占据备份目标路径：VACUUM INTO 必失败 → 整体拒开
+    mkdirSync(`${path}.bak-${today()}-pre-v2`)
+    expect(() => openDatabase(path, { migrations: guardMigrations, schemaVersion: 2 })).toThrowError()
+
+    const check = new Database(path)
+    expect(check.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+    expect(check.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM pragma_table_info('alt_widgets') WHERE name='extra'`).get()?.n).toBe(0)
+    check.close()
+  })
+})
+
+describe('迁移原子性 + defer_foreign_keys', () => {
+  it('语句中途失败 → 整体回滚：无半套结构与版本行，业务数据原状', () => {
+    const path = dbPath()
+    const seed = openDatabase(path, { migrations: guardMigrations, schemaVersion: 1 })
+    seed.prepare(`INSERT INTO alt_widgets (id, label) VALUES ('w1', 'keep-me')`).run()
+    seed.close()
+
+    const broken = [
+      guardMigrations[0],
+      {
+        version: 2,
+        statements: [
+          `CREATE TABLE alt_gadgets (id TEXT PRIMARY KEY)`,
+          `THIS IS NOT VALID SQL`,
+        ],
+      },
+    ]
+    expect(() => openDatabase(path, { migrations: broken, schemaVersion: 2 })).toThrowError()
+
+    const check = new Database(path)
+    expect(check.prepare<unknown[], { v: number }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+    expect(check.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM sqlite_master WHERE name='alt_gadgets'`).get()?.n).toBe(0)
+    expect(check.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM alt_widgets WHERE id='w1'`).get()?.n).toBe(1)
+    expect(check.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM migration_digests WHERE version=2`).get()?.n).toBe(0)
+    check.close()
+  })
+
+  it('迁移事务 defer_foreign_keys = ON：暂态 FK 悬空允许，COMMIT 时校验通过', () => {
+    // 子表先建 + 子行先插（引用尚未存在的父表），父表随后建——defer 下 COMMIT 才校验，全通过。
+    const deferred = [
+      guardMigrations[0],
+      {
+        version: 2,
+        statements: [
+          `CREATE TABLE alt_children (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES alt_parents(id))`,
+          `CREATE TABLE alt_parents (id TEXT PRIMARY KEY)`,
+          `INSERT INTO alt_children (id, parent_id) VALUES ('c1', 'p1')`,
+          `INSERT INTO alt_parents (id) VALUES ('p1')`,
+        ],
+      },
+    ]
+    const db = openDatabase(dbPath(), { migrations: deferred, schemaVersion: 2 })
+    expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM pragma_foreign_key_check`).get()?.n).toBe(0)
     db.close()
   })
 })

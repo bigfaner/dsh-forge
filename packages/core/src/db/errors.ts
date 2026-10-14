@@ -16,6 +16,28 @@ export class UnsupportedSchemaVersionError extends Error {
   }
 }
 
+/**
+ * 已应用迁移的语句指纹与当前代码不一致（已发布迁移被直改——多谱系库的根源，明确拒开）。
+ * 处置指引：恢复原语句，或重建库（删除库文件让迁移全量重放）。
+ */
+export class MigrationTamperedError extends Error {
+  readonly version: number
+
+  constructor(version: number) {
+    super(
+      `迁移版本 ${version} 的语句指纹与库内已录指纹不一致（已发布迁移被修改）——已拒绝打开。` +
+        `处置：恢复该版本原语句，或删除库文件重建（数据如需保留，请先手工备份后按指引迁移）`,
+    )
+    this.name = 'MigrationTamperedError'
+    this.version = version
+  }
+}
+
+/** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
+export function isMigrationTamperedError(e: unknown): e is MigrationTamperedError {
+  return e instanceof MigrationTamperedError
+}
+
 /** 运行期判别（跨 IPC / 日志附载后仍可识别）。 */
 export function isUnsupportedSchemaVersionError(e: unknown): e is UnsupportedSchemaVersionError {
   return e instanceof UnsupportedSchemaVersionError
