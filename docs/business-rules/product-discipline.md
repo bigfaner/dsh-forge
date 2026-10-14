@@ -31,9 +31,9 @@ domains: [direct-read, read-only, offline, telemetry, migration, orchestration, 
 
 ### BIZ-product-003: 离线自足（SC-NFR）
 
-**Rule**: 应用自身静态资源与运行时不依赖网络分发——无远程脚本 / 字体 / 样式请求（断言）；agent 模型调用属 dsh 会话域，不在此列。**插件市场分发例外**：目录浏览与插件包获取仅经官方链（`dsh-plugin-package-inventory` 清单 + `dsh-plugin-manager` 安装，registry fallback 内置）且仅在用户显式安装行为时发生——应用壳零网络分发不变，零自建目录与安装机械。
-**Context**: 单机桌面产品的信任基线；也排除 CDN 供应链面。例外面由官方准入边界承载（官方目录所列即 v1 安全边界），网络面单源官方、用户显式触发。
-**Source**: feature/dsh-forge-p1-mvp BIZ-009（proposal §Non-Functional Requirements / SC-NFR）+ proposal/dsh-plugin-marketplace §影响范围（分发例外修订，探针结论 2026-10-14）
+**Rule**: 应用自身静态资源与运行时不依赖网络分发——无远程脚本 / 字体 / 样式请求（断言）；agent 模型调用属 dsh 会话域，不在此列。
+**Context**: 单机桌面产品的信任基线；也排除 CDN 供应链面。
+**Source**: feature/dsh-forge-p1-mvp BIZ-009（proposal §Non-Functional Requirements / SC-NFR）
 
 ## 数据面边界
 
