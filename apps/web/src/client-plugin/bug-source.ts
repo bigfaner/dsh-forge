@@ -405,8 +405,25 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
             }
           }
           // 末级回退：id + 摘要最小块（摘要来自快照的 summary 或占位——bug 27ab222b）
+          // 诊断（2d5434d1 指纹裁决补落）：末级命中即打三段链取证——哪段断了一看便知
+          try {
+            console.warn('[dswf-bug] serialize minimal fallback', {
+              bugId,
+              hasSnapshot: snapshots.has(bugId),
+              anchoredProjectId: deps.projectId('') ?? null,
+              traversalProjectIds: deps.projectIds?.() ?? null,
+            })
+          } catch {
+            // 诊断面零风险
+          }
           return minimalBugBlock(bugId, snapshots.get(bugId)?.summary)
-        } catch {
+        } catch (error) {
+          // 诊断：现查链中途抛错（传输/信封）同样取证
+          try {
+            console.warn('[dswf-bug] serialize error fallback', { bugId, error: String(error) })
+          } catch {
+            // 诊断面零风险
+          }
           return minimalBugBlock(bugId, snapshots.get(bugId)?.summary)
         }
       },
