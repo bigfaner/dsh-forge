@@ -5,13 +5,17 @@
 // 不变（fail-loud）/ 主侧双形态解码重建——信封面（rpcEnvelope 判型）衔接见 rpc-envelope.test.ts。
 // fix-33：子侧 send 防护（sendGuarded 序列化失败保 id 降级）+ 白名单类型锚
 // （satisfies/覆盖完备性——服务面改名/漂移编译期显形）。
-import { assertType, describe, expect, it } from 'vitest'
-import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
+import { assertType, describe, expect, it, vi } from 'vitest'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval/types'
+import { FORGE_EVENT_CHANNELS, type RemoteApprovalDecisionInput } from '@dsh-forge/contracts'
 import {
+  approvalWaterfallAnswer,
+  APPROVAL_SERVICE_METHODS,
   asEventMessage,
   asReadyMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
+  createApprovalRelay,
   createBridgeProxy,
   decodeWire,
   dispatchRpc,
@@ -30,6 +34,7 @@ import {
   SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
   type BridgeRpcRequest,
+  type ApprovalWhitelistCoverage,
   type BugsWhitelistCoverage,
   type ChildToMainMessage,
   type DocsWhitelistCoverage,
@@ -186,6 +191,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: false,
         forgeBugs: true,
+        approval: true,
       },
     })
     expect(ready).toEqual({
@@ -201,12 +207,13 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: false,
         forgeBugs: true,
+        approval: true,
       },
     })
   })
 
-  it('M2 四域 + M3 设置域 + bugs 域在场位缺席任一 → undefined（八位齐备才可作 manifest 面）', () => {
-    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs'] as const) {
+  it('M2 四域 + M3 设置域 + bugs 域 + approval 位缺席任一 → undefined（九位齐备才可作 manifest 面）', () => {
+    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs', 'approval'] as const) {
       const services = {
         forgeProjects: true,
         forgeKnowledge: true,
@@ -216,6 +223,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        approval: true,
         [missing]: undefined,
       }
       expect(asReadyMessage({ type: 'ready', url: 'http://x', injections: [], services })).toBeUndefined()
@@ -243,6 +251,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        approval: true,
       },
     } as const
     expect(asReadyMessage({ ...base, tools: ['addTask', 'claimTask'] })?.tools).toEqual(['addTask', 'claimTask'])
@@ -470,7 +479,67 @@ describe('createBridgeProxy（主侧代理）', () => {
       'forgeDocs',
       'forgeSettings',
       'forgeBugs',
+      // mobile-remote-approval fix-2：审批决策中继面（main → worker 单向 deposit）
+      'approval',
     ])
+  })
+})
+
+// ── mobile-remote-approval fix-2 审批桥（跨进程审批决策中继 + waterfall fail-open 应答） ──
+
+describe('createApprovalRelay（worker 侧审批决策中继表）', () => {
+  it('deposit → forwarded:true（中继面在场即受理——产品不自持审批状态，仅内存转交）', async () => {
+    const relay = createApprovalRelay()
+    await expect(
+      relay.deposit({ requestId: 'req-1', decision: 'allow', reason: '远程批准' }),
+    ).resolves.toEqual({ forwarded: true })
+  })
+
+  it('take：FIFO 消费（deposit 序 = 消费序）；空表 → undefined（未命中）', async () => {
+    const relay = createApprovalRelay()
+    expect(relay.take()).toBeUndefined()
+    const a: RemoteApprovalDecisionInput = { requestId: 'req-a', decision: 'allow' }
+    const b: RemoteApprovalDecisionInput = { requestId: 'req-b', decision: 'reject' }
+    await relay.deposit(a)
+    await relay.deposit(b)
+    expect(relay.take()).toEqual(a)
+    expect(relay.take()).toEqual(b)
+    expect(relay.take()).toBeUndefined()
+  })
+})
+
+describe('approvalWaterfallAnswer（approval/request waterfall 应答——fail-open 语义，用户裁决 2026-10-14）', () => {
+  it('deposit 未命中 → 不消费：透传 next()（放行桌面工作台 answerer / 官方 fallback）', async () => {
+    const relay = createApprovalRelay()
+    const next = vi.fn(async (): Promise<ApprovalOutcome> => 'rejected')
+    await expect(approvalWaterfallAnswer(relay, next)).resolves.toBe('rejected')
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('deposit 命中 allow → 返回 allowed-once 且不触 next（不与桌面 answerer 竞争）', async () => {
+    const relay = createApprovalRelay()
+    await relay.deposit({ requestId: 'req-1', decision: 'allow' })
+    const next = vi.fn(async (): Promise<ApprovalOutcome> => 'unavailable')
+    await expect(approvalWaterfallAnswer(relay, next)).resolves.toBe('allowed-once')
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('deposit 命中 reject → 返回 rejected 且不触 next', async () => {
+    const relay = createApprovalRelay()
+    await relay.deposit({ requestId: 'req-2', decision: 'reject' })
+    const next = vi.fn(async (): Promise<ApprovalOutcome> => 'allowed-once')
+    await expect(approvalWaterfallAnswer(relay, next)).resolves.toBe('rejected')
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('中继面经桥 RPC 可达（dispatchRpc approval.deposit——白名单通路端到端）', async () => {
+    const relay = createApprovalRelay()
+    const result = await dispatchRpc(
+      { approval: relay as unknown as object },
+      { type: 'rpc', id: 1, service: 'approval', method: 'deposit', args: [{ requestId: 'r', decision: 'allow' }] },
+    )
+    expect(result).toMatchObject({ type: 'rpc-result', id: 1, ok: true, data: { forwarded: true } })
+    expect(relay.take()).toEqual({ requestId: 'r', decision: 'allow' })
   })
 })
 
@@ -515,6 +584,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
       forgeDocs: true,
       forgeSettings: true,
       forgeBugs: true,
+      approval: true,
     }
     expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
     expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
@@ -547,6 +617,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as SettingsWhitelistCoverage)
     assertType<never>(undefined as BugsWhitelistCoverage)
     assertType<never>(undefined as ProjectsM2WhitelistCoverage)
+    assertType<never>(undefined as ApprovalWhitelistCoverage) // fix-2 审批桥白名单覆盖完备性
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
@@ -556,7 +627,8 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(SETTINGS_SERVICE_METHODS).toHaveLength(2)
     expect(BUGS_SERVICE_METHODS).toHaveLength(3) // fix-bug +listBugs/commitFiles/fileDiff
+    expect(APPROVAL_SERVICE_METHODS).toHaveLength(1) // fix-2 审批桥 +deposit
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
-    expect(BRIDGE_SERVICE_NAMES).toHaveLength(8)
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(9) // fix-2 审批桥 +approval
   })
 })

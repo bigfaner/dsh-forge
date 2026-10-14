@@ -27,8 +27,11 @@ import {
   type ForgeTasksService,
   type ProjectService,
   type ProjectServiceM2,
+  type RemoteApprovalDecisionInput,
+  type RemoteApprovalForwardResult,
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { BootDshOptions } from './run.js'
 
 /**
@@ -46,6 +49,7 @@ export type BridgeServiceName =
   | 'forgeDocs'
   | 'forgeSettings'
   | 'forgeBugs'
+  | 'approval'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
@@ -57,6 +61,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeDocs',
   'forgeSettings',
   'forgeBugs',
+  'approval',
 ] as const satisfies readonly BridgeServiceName[]
 
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
@@ -246,6 +251,62 @@ export const PROJECTS_M2_SERVICE_METHODS = ['deriveTaskStoreDir'] as const satis
 export type ProjectsM2WhitelistCoverage = AssertNever<
   Exclude<keyof ProjectServiceM2, (typeof PROJECT_SERVICE_METHODS)[number] | (typeof PROJECTS_M2_SERVICE_METHODS)[number]>
 >
+
+/**
+ * 审批决策中继面（mobile-remote-approval fix-2——官方 user-approval 桥接）：
+ * main 侧 forge:remote/approval 转发器经桥 rpc 调 worker 侧中继 deposit，把手机决策
+ * 存入内存待答表（产品不自持审批状态——仅转交，不持久化）；worker 侧 approval/request
+ * waterfall 应答监听器（child.ts 注册）经 take() 消费。类型 = contracts RemoteApproval*
+ * 单一来源（RemoteChannelService 转发器注入缝同型）。
+ */
+export interface BridgeApprovalRelay {
+  deposit(input: RemoteApprovalDecisionInput): Promise<RemoteApprovalForwardResult>
+}
+
+/** 审批中继方法白名单（main → worker 单向决策通路；覆盖完备性经 ApprovalWhitelistCoverage 收敛 never） */
+export const APPROVAL_SERVICE_METHODS = ['deposit'] as const satisfies readonly (keyof BridgeApprovalRelay)[]
+
+/** 白名单覆盖完备性（= never：BridgeApprovalRelay 新增方法未入白名单在此编译期点名） */
+export type ApprovalWhitelistCoverage = AssertNever<Exclude<keyof BridgeApprovalRelay, (typeof APPROVAL_SERVICE_METHODS)[number]>>
+
+/** worker 侧审批中继运行时面（child.ts waterfall 应答监听器消费半边） */
+export interface ApprovalRelay extends BridgeApprovalRelay {
+  /** FIFO 消费一笔已受理决策；空表（手机决策未在场）→ undefined（未命中 → fail-open） */
+  take(): RemoteApprovalDecisionInput | undefined
+}
+
+/**
+ * 创建 worker 侧审批中继（mobile-remote-approval fix-2 纯逻辑——child.ts 装配、
+ * bridge.test.ts 锚定）。deposit = 中继面在场即受理（forwarded:true，决策入内存表）；
+ * take = FIFO 消费。决策→outcome 词汇映射（contracts 'allow'/'reject' → 官方
+ * ApprovalOutcome 'allowed-once'/'rejected'）在 approvalWaterfallAnswer。
+ */
+export function createApprovalRelay(): ApprovalRelay {
+  const pending: RemoteApprovalDecisionInput[] = []
+  return {
+    deposit: async (input) => {
+      pending.push(input)
+      return { forwarded: true }
+    },
+    take: () => pending.shift(),
+  }
+}
+
+/**
+ * approval/request waterfall 应答（fail-open 语义，用户裁决 2026-10-14）：
+ * 手机决策未命中（deposit 表空）→ 不消费请求，透传 next() 放行后续 answerer
+ * （桌面工作台 / 官方 fallback——手机不在场时桌面审批恒可用）；命中 → 消费一笔
+ * 决策并映射为官方 ApprovalOutcome 词汇返回（不触 next，不与桌面 answerer 竞争）。
+ * child.ts 以 (req, next) => approvalWaterfallAnswer(relay, next) 注册监听器。
+ */
+export async function approvalWaterfallAnswer(
+  relay: Pick<ApprovalRelay, 'take'>,
+  next: () => Promise<ApprovalOutcome>,
+): Promise<ApprovalOutcome> {
+  const decision = relay.take()
+  if (decision === undefined) return next()
+  return decision.decision === 'allow' ? 'allowed-once' : 'rejected'
+}
 
 /** Map wire 信封键（产品 DTO 面无此键——碰撞面为零） */
 const MAP_ENVELOPE = '__dshForgeMap__'

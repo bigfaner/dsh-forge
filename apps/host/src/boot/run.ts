@@ -26,6 +26,7 @@ import type {
   TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import {
+  APPROVAL_SERVICE_METHODS,
   asEventMessage,
   asReadyMessage,
   createBridgeProxy,
@@ -39,6 +40,7 @@ import {
   BUGS_SERVICE_METHODS,
   SETTINGS_SERVICE_METHODS,
   TASKS_SERVICE_METHODS,
+  type BridgeApprovalRelay,
   type BridgeFatalMessage,
   type BridgeReadyMessage,
   type BridgeRpcResultMessage,
@@ -92,6 +94,9 @@ export interface DshHostServices {
   forgeSettings: ForgeSettingsService
   /** fix-bug bug 域（Interface 1 扩池；tasksHome 注入时 core provide，缺席 = bugs 面降级 undefined） */
   forgeBugs: ForgeBugsService
+  /** mobile-remote-approval fix-2 审批桥（官方 ctx.approval 在场时 worker provide 内存中继——
+   *  缺席 = 审批转发面降级 undefined，forge:remote/approval fail-soft unavailable） */
+  approval: BridgeApprovalRelay
 }
 
 export interface DshHostHandle {
@@ -243,6 +248,10 @@ export async function bootDshHost(
         : undefined,
       forgeBugs: ready.services.forgeBugs
         ? createBridgeProxy<DshHostServices['forgeBugs']>('forgeBugs', BUGS_SERVICE_METHODS, call)
+        : undefined,
+      // fix-2 审批桥：worker 侧中继 deposit 代理（forge:remote/approval 转发器注入源）
+      approval: ready.services.approval
+        ? createBridgeProxy<DshHostServices['approval']>('approval', APPROVAL_SERVICE_METHODS, call)
         : undefined,
     },
     onEvent: channel.onEvent,

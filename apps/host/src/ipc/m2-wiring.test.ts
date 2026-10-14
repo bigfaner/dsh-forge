@@ -111,6 +111,41 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
   })
 })
 
+describe('1.1 registerM2Channels · forge:remote/approval 转发器条件注入（fix-2 审批桥）', () => {
+  it('services.approval 在场：决策经 deposit 透传（中继面接线——产品不自持审批状态）', async () => {
+    const { ipcMain, handlers } = fakeIpcMain()
+    const deposit = vi.fn(async () => ({ forwarded: true as const }))
+    registerM2Channels(
+      createForgeIpc(ipcMain),
+      fakeHost({ forgeProjects: stub, forgeTasks: stub, approval: { deposit } }),
+      () => undefined,
+      vi.fn(async () => ''),
+    )
+    const envelope = (await handlers.get(REMOTE_CHANNELS.approval)!(undefined, {
+      requestId: 'req-1',
+      decision: 'allow',
+    })) as { ok: boolean; data: unknown }
+    expect(envelope).toEqual({ ok: true, data: { forwarded: true } })
+    expect(deposit).toHaveBeenCalledWith({ requestId: 'req-1', decision: 'allow' })
+  })
+
+  it('services.approval 缺席（worker 审批面降级）：approval 通道仍注册但转发器缺席 = fail-soft unavailable', async () => {
+    const { ipcMain, handlers } = fakeIpcMain()
+    registerM2Channels(
+      createForgeIpc(ipcMain),
+      fakeHost({ forgeProjects: stub, forgeTasks: stub }),
+      () => undefined,
+      vi.fn(async () => ''),
+    )
+    expect(handlers.has(REMOTE_CHANNELS.approval)).toBe(true)
+    const envelope = (await handlers.get(REMOTE_CHANNELS.approval)!(undefined, {
+      requestId: 'req-1',
+      decision: 'reject',
+    })) as { ok: boolean; data: unknown }
+    expect(envelope).toEqual({ ok: true, data: { forwarded: false, reason: 'unavailable' } })
+  })
+})
+
 describe('3.1 registerM2Channels · 写推送事件广播（交互二事件链末段）', () => {
   it("onEvent 事件 → webContents.send('forge:events/tasks-changed', { projectId })——通道常量本尊", () => {
     const { ipcMain } = fakeIpcMain()

@@ -43,8 +43,14 @@ export function registerM2Channels(
   if (services.forgeTasks !== undefined) {
     registerTasksChannels(ipc, services.forgeTasks)
     // 1.1：远程受限面两通道随 forgeTasks 在场接线（progress 复用其只读口径；approval
-    // 转发器缺席 = 通道内 fail-soft unavailable——官方 user-approval 桥接归后续任务）
-    registerRemoteChannels(ipc, services.forgeTasks)
+    // 转发器条件注入——fix-2 审批桥：worker 侧中继在场才接线，缺席 = 通道内
+    // fail-soft unavailable（waterfall fail-open 语义，手机不在场时桌面审批恒可用））
+    const approval = services.approval
+    registerRemoteChannels(
+      ipc,
+      services.forgeTasks,
+      approval !== undefined ? (input) => approval.deposit(input) : undefined,
+    )
   } else warn('forgeTasks 服务缺席（tasksHome 未配置/插件行未装载）——forge:tasks/* 与 forge:remote/* 通道未注册')
   if (services.forgeFeatures !== undefined) registerFeaturesChannels(ipc, services.forgeFeatures)
   else warn('forgeFeatures 服务缺席（tasksHome 未配置/插件行未装载）——forge:features/* 通道未注册')

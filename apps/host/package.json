@@ -10,12 +10,6 @@
     "start": "electron ."
   },
   "dependencies": {
-    "@dsh-forge/contracts": "workspace:*",
-    "@dsh-forge/core": "workspace:*",
-    "@dsh-forge/knowledge": "workspace:*",
-    "@dsh-forge/md-mermaid": "workspace:*",
-    "@dsh-forge/plugin-forge": "workspace:*",
-    "@dsh-forge/plugin-forge-spec": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/cordis-plugin-group": "1.0.4",
     "@deepseek-ai/cordis-plugin-include": "1.0.9",
@@ -44,9 +38,16 @@
     "@deepseek-ai/dsh-spill": "0.2.0-rc.2",
     "@deepseek-ai/dsh-subagent-in-process-driver": "0.2.0-rc.2",
     "@deepseek-ai/dsh-system-prompt": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
     "@deepseek-ai/dsh-util-time": "0.2.0-rc.2",
     "@deepseek-ai/dsh-workflow": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-workspace": "0.2.0-rc.2"
+    "@deepseek-ai/dsh-workspace": "0.2.0-rc.2",
+    "@dsh-forge/contracts": "workspace:*",
+    "@dsh-forge/core": "workspace:*",
+    "@dsh-forge/knowledge": "workspace:*",
+    "@dsh-forge/md-mermaid": "workspace:*",
+    "@dsh-forge/plugin-forge": "workspace:*",
+    "@dsh-forge/plugin-forge-spec": "workspace:*"
   },
   "devDependencies": {
     "electron": "44.0.0"

@@ -11,12 +11,18 @@
 // 以下 type-only 引入仅为拉入 cordis Context 模块增强（ctx.connection / ctx.webServer 类型）
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+// mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
+// 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
+import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
 import {
+  approvalWaterfallAnswer,
+  createApprovalRelay,
   dispatchRpc,
   extraPatchFiles,
   parseChildOptions,
   sendGuarded,
+  type ApprovalRelay,
   type BridgeServiceName,
   type ChildToMainMessage,
   type MainToChildMessage,
@@ -118,6 +124,26 @@ async function main(): Promise<void> {
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
   const injections = ctx.webServer.collectIndexInjections()
   const servicesFace = ctx as unknown as ServiceGetFace
+  // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
+  // 运行期存在性检查承担 fail-soft；缺席 = approval ready 位 false，main 侧转发器不接线，
+  // forge:remote/approval 保持 fail-soft unavailable）。fail-open 语义（用户裁决
+  // 2026-10-14）：approval/request waterfall 应答监听器在手机决策未命中时透传 next()
+  // 放行桌面工作台 answerer——global 注册使其在任意 agent scope 的 waterfall 可达。
+  let approvalRelay: ApprovalRelay | undefined
+  try {
+    const approval = ctx.approval
+    if (approval !== undefined && typeof approval === 'object') {
+      const relay = createApprovalRelay()
+      ctx.on(
+        'approval/request',
+        (_req, next) => approvalWaterfallAnswer(relay, next),
+        { global: true },
+      )
+      approvalRelay = relay
+    }
+  } catch {
+    approvalRelay = undefined // 官方审批服务缺席/监听器注册失败 → 桥面降级不接线
+  }
   const services: Partial<Record<BridgeServiceName, object>> = {
     forgeProjects: (servicesFace.get('forgeProjects') as object | undefined) ?? undefined,
     forgeKnowledge: (servicesFace.get('forgeKnowledge') as object | undefined) ?? undefined,
@@ -130,6 +156,8 @@ async function main(): Promise<void> {
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
     // fix-bug bug 域（tasksHome 注入时 core provide——缺席 = bugs 面降级）
     forgeBugs: (servicesFace.get('forgeBugs') as object | undefined) ?? undefined,
+    // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
+    approval: approvalRelay,
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
@@ -147,6 +175,7 @@ async function main(): Promise<void> {
       forgeDocs: services.forgeDocs !== undefined,
       forgeSettings: services.forgeSettings !== undefined,
       forgeBugs: services.forgeBugs !== undefined,
+      approval: services.approval !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })
