@@ -426,6 +426,112 @@ describe('AC4 开库/迁移失败 = 工作区隔离（不抛断用户流程；�
   })
 })
 
+describe('AC4.5 隔离重试窗（迁移修复后免重启恢复；时钟注入不真实 sleep）', () => {
+  /** 可控时钟（deps.now 注入 seam） */
+  function makeClock(): { now: () => number; advance: (ms: number) => void } {
+    let t = 1_000_000
+    return { now: () => t, advance: (ms) => (t += ms) }
+  }
+
+  it('窗内（<30s）重复触达抛同一 error 实例：不重开库、不重复记账', () => {
+    const ws = wsDir()
+    const db = openWorkspaceDb(join(ws, 'forge.db'))
+    db.exec(`DROP TABLE tasks`)
+    db.close()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const clock = makeClock()
+    const store = createWorkspaceStore({ resolveDir: () => ws, now: clock.now })
+
+    let first: unknown
+    try {
+      store.ensureOpen('p1')
+    } catch (e) {
+      first = e
+    }
+    clock.advance(29_999) // 窗内
+    expect(() => store.ensureOpen('p1')).toThrowError(first as Error)
+    expect(() => store.ensureOpen('p1')).toThrowError(first as Error)
+    // 单事件单条：隔离记账仍只有首开那一条
+    const raw = new Database(join(ws, 'forge.db'))
+    const rows = raw.prepare(`SELECT id FROM app_key_logs`).all()
+    raw.close()
+    expect(rows).toHaveLength(1)
+    store.dispose()
+  })
+
+  it('窗外首次触达触发重试开库：库已修复 → 新句柄、隔离清除、后续触达返回同句柄', () => {
+    const ws = wsDir()
+    const db = openWorkspaceDb(join(ws, 'forge.db'))
+    db.exec(`DROP TABLE tasks`)
+    db.close()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const clock = makeClock()
+    const store = createWorkspaceStore({ resolveDir: () => ws, now: clock.now })
+    expect(() => store.ensureOpen('p1')).toThrowError(WorkspaceDbUnavailableError)
+
+    // 迁移修复：重建健全库
+    rmSync(join(ws, 'forge.db'), { force: true })
+    openWorkspaceDb(join(ws, 'forge.db')).close()
+
+    clock.advance(30_000) // 窗外
+    const fixed = store.ensureOpen('p1')
+    expect(fixed.open).toBe(true)
+    expect(fixed.prepare<unknown[], { n: string }>(`SELECT name AS n FROM sqlite_master WHERE name='tasks'`).get()).toEqual({
+      n: 'tasks',
+    })
+    expect(store.ensureOpen('p1')).toBe(fixed) // 隔离条目已清除，缓存句柄
+    store.dispose()
+  })
+
+  it('重试仍失败：抛新 typed error 并刷新隔离时刻（新窗内 fail-fast 同一实例），不重复记账', () => {
+    const ws = wsDir()
+    writeCorruptDb(ws)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const clock = makeClock()
+    const store = createWorkspaceStore({ resolveDir: () => ws, now: clock.now })
+
+    let first: unknown
+    try {
+      store.ensureOpen('p1')
+    } catch (e) {
+      first = e
+    }
+    clock.advance(30_000) // 窗外 → 重试仍失败
+    let second: unknown
+    try {
+      store.ensureOpen('p1')
+    } catch (e) {
+      second = e
+    }
+    expect(second).toBeInstanceOf(WorkspaceDbUnavailableError)
+    expect(second).not.toBe(first) // 重试失败 = 新 typed error
+    clock.advance(29_999) // 新窗内（相对刷新后的隔离时刻）
+    expect(() => store.ensureOpen('p1')).toThrowError(second as Error)
+    // 两次隔离各一条降级记账，窗内触达不追加
+    expect(warn).toHaveBeenCalledTimes(2)
+    store.dispose()
+  })
+
+  it('dispose 后重试窗状态清零：窗内触达也立即重试，重开行为与首开一致', () => {
+    const ws = wsDir()
+    const db = openWorkspaceDb(join(ws, 'forge.db'))
+    db.exec(`DROP TABLE tasks`)
+    db.close()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const clock = makeClock()
+    const store = createWorkspaceStore({ resolveDir: () => ws, now: clock.now })
+    expect(() => store.ensureOpen('p1')).toThrowError(WorkspaceDbUnavailableError)
+
+    rmSync(join(ws, 'forge.db'), { force: true })
+    openWorkspaceDb(join(ws, 'forge.db')).close()
+
+    store.dispose()
+    const reopened = store.ensureOpen('p1') // 未 advance——隔离状态已清零，直接重开
+    expect(reopened.open).toBe(true)
+    store.dispose()
+  })
+})
+
 describe('AC5 store.dispose（进程内常驻句柄统一关闭；3.4 接插件 disposer host 侧收口）', () => {
   it('dispose 关闭全部句柄；此后 ensureOpen 重开新句柄', () => {
     const dirs = new Map<string, string>([

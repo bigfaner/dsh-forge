@@ -8,7 +8,8 @@
 //
 // 失败 = 工作区隔离（不抛断用户流程）：typed ERR_WORKSPACE_DB_UNAVAILABLE + 工作区
 // app_key_logs 记账（scope: tasks——中央 ck_akl_scope 四值不含，写中央必炸 CHECK）+
-// 该工作区隔离（fail-fast 同一 error 实例，单事件单条不重复记账），其余库照常。
+// 该工作区带重试窗隔离（窗内 fail-fast 同一 error 实例、单事件单条不重复记账；窗外触达
+// 重试开库——迁移修复后免重启恢复），其余库照常。
 // 记账降级口径：句柄已关（openDatabase 内部失败类：损坏/版本门拒绝）库不可写 → child 控制台
 // （stdio 继承回流宿主——alignWorkspaceTitle 同径）；句柄在手（健全性检查失败类）写后关闭。
 //
@@ -42,10 +43,12 @@ export interface WorkspaceStoreDeps {
   readonly resolveDir: WorkspaceDirResolver
   /** 首建协作者（可选；1.3 发现面扫描接线） */
   readonly onFirstCreate?: WorkspaceFirstCreateHook
+  /** 时钟（可选；隔离重试窗测试注入——默认 Date.now） */
+  readonly now?: () => number
 }
 
 export interface ForgeWorkspaceStore {
-  /** 惰性开库（幂等：已开返回常驻句柄；已隔离 fail-fast 抛同一 error 实例） */
+  /** 惰性开库（幂等：已开返回常驻句柄；隔离窗内 fail-fast 抛同一 error 实例，窗外重试开库） */
   ensureOpen(projectId: string): Database.Database
   /** 进程内常驻句柄统一关闭（幂等；dispose 后 ensureOpen 重开新句柄） */
   dispose(): void
@@ -82,6 +85,15 @@ const EXPECTED_COLUMNS: Readonly<Record<string, readonly string[]>> = {
 
 /** 隔离处置文案（记账 data_json 与 typed error message 同源单份） */
 const ISOLATED_DISPOSITION = '工作区隔离——本进程内该工作区任务域不可用，其余工作区照常'
+
+/** 隔离重试窗（ms）：窗内 fail-fast 同一实例；窗外触达重试开库（迁移修复后免重启恢复） */
+const ISOLATED_RETRY_WINDOW_MS = 30_000
+
+/** 隔离条目（typed error + 隔离时刻——重试窗判定基准） */
+interface IsolatedEntry {
+  error: WorkspaceDbUnavailableError
+  isolatedAt: number
+}
 
 /**
  * 结构健全性检查（开库断言，恒轻量）：版本 + foreign_key_check + 表在场。
@@ -147,17 +159,23 @@ function runFirstCreate(deps: WorkspaceStoreDeps, projectId: string, db: Databas
   }
 }
 
-/** 建 ForgeWorkspaceStore（装配单例：句柄表 + 隔离表 + 首建协作者闭包） */
+/** 建 ForgeWorkspaceStore（装配单例：句柄表 + 隔离表（带重试窗）+ 首建协作者闭包） */
 export function createWorkspaceStore(deps: WorkspaceStoreDeps): ForgeWorkspaceStore {
   const handles = new Map<string, Database.Database>()
-  const isolated = new Map<string, WorkspaceDbUnavailableError>()
+  const isolated = new Map<string, IsolatedEntry>()
+  const now = deps.now ?? Date.now
 
   return {
     ensureOpen(projectId: string): Database.Database {
       const open = handles.get(projectId)
       if (open !== undefined) return open
       const failure = isolated.get(projectId)
-      if (failure !== undefined) throw failure // 隔离 fail-fast（同一实例）
+      if (failure !== undefined) {
+        // 重试窗：窗内 fail-fast 同一实例（不重开库、不重复记账）；窗外触达重试开库——
+        // 先除名，成功即恢复（迁移修复后免重启），失败由 throwIsolated 重新标记（新 error + 刷新时刻）
+        if (now() - failure.isolatedAt < ISOLATED_RETRY_WINDOW_MS) throw failure.error
+        isolated.delete(projectId)
+      }
 
       const dir = deps.resolveDir(projectId)
       const file = join(dir, FORGE_DB_FILENAME)
@@ -168,7 +186,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps): ForgeWorkspaceSt
         db = openDatabase(file, { migrations: WORKSPACE_MIGRATIONS, schemaVersion: FORGE_DB_SCHEMA_VERSION })
         assertStructureSound(db)
       } catch (cause) {
-        throwIsolated(isolated, projectId, dir, db, cause)
+        throwIsolated(isolated, now, projectId, dir, db, cause)
       }
       // 句柄先入表再跑首建协作者：协作者失败 fail-soft，健全句柄不弃（AC3/AC4 分层）
       handles.set(projectId, db)
@@ -185,11 +203,13 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps): ForgeWorkspaceSt
 }
 
 /**
- * 隔离收口（never 返回——调用点即 throw 点）：标记隔离 → best-effort 记账 → 关句柄 → typed throw。
- * 先标记隔离（fail-fast 同一实例；单事件单条——重复触达不重复记账），记账自身失败降级 child 控制台。
+ * 隔离收口（never 返回——调用点即 throw 点）：标记隔离（error + 时刻，重试窗基准）→
+ * best-effort 记账 → 关句柄 → typed throw。先标记隔离（窗内 fail-fast 同一实例；
+ * 单事件单条——窗内重复触达不重复记账），记账自身失败降级 child 控制台。
  */
 function throwIsolated(
-  isolated: Map<string, WorkspaceDbUnavailableError>,
+  isolated: Map<string, IsolatedEntry>,
+  now: () => number,
   projectId: string,
   dir: string,
   db: Database.Database | undefined,
@@ -197,7 +217,7 @@ function throwIsolated(
 ): never {
   const data: WorkspaceDbUnavailableData = { projectId, dir, error: errMessage(cause), disposition: ISOLATED_DISPOSITION }
   const error = new WorkspaceDbUnavailableError(data, cause)
-  isolated.set(projectId, error)
+  isolated.set(projectId, { error, isolatedAt: now() })
   if (db !== undefined && db.open) {
     // 句柄在手（结构健全性检查失败类）：记账写工作区库（scope=tasks）后关闭。
     // 记账可炸——误指中央形态库时 app_key_logs 命中 ck_akl_scope 四值 CHECK（AC 对偶证明），降级不吞 typed error。
