@@ -35,6 +35,9 @@
 // 运行期锚（e2e 实证，2.7）：插件长活依赖 profile 置停 client-hmr——其全图 sync 会以宿主
 // 最新图对账掉壳掌舵追加的本行，见 apps/host profile cordis.patch.yml 的 client-hmr 行。
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
+// mobile-remote-approval 1.2：远程状态快照/读数窄类型（type-only——bundle 自含纪律不破；
+// 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
+import type { RemoteSettingsProbe, RemoteStatusSnapshot } from '../views/remote/remote-status.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -134,6 +137,18 @@ export const FORGE_SETTINGS_SECTION_ID = 'dswf-forge-settings'
  * 模型之上（ui-design UF-2 Placement「通用设置分区下方」；DOM 序 = nav 行升序直出）。
  */
 export const FORGE_SETTINGS_SECTION_ORDER = 5
+
+/**
+ * 洞名：官方侧栏底行扩展槽（dsh-client-ui-sidebar SlotMap——kind list / scope root，声明
+ * 语义「Optional actions beside Settings at the sidebar foot」；pin-06 探针锚同源）。
+ * 产品占用一行：'dswf-remote'（手机远程入口——设置按钮同排右侧；mobile-remote-approval
+ * 1.2，探针点①结论驱动——官方槽在场即用之，无自造槽位）。
+ */
+export const SIDEBAR_FOOTER_ACTION_SLOT = 'sidebar.footer.action'
+/** 手机远程入口登记 id（list 槽行键） */
+export const FORGE_REMOTE_ENTRY_ID = 'dswf-remote'
+/** 手机远程入口登记序（官方设置钮为底行本体——产品行排其右，order 取 10 留序） */
+export const FORGE_REMOTE_ENTRY_ORDER = 10
 
 /**
  * 插件依赖的服务名（cordis inject——apply 等待八服务在场；与官方 ui-workspace 同型先例）。
@@ -651,6 +666,7 @@ export interface ForgeViewsGlobal {
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
     ForgeSettingsSection: unknown
+    ForgeRemoteEntry: unknown
     createWorkbenchBridge: (nav: {
       showKnowledge(): void
       showSession(): void
@@ -970,6 +986,38 @@ function registerSettingsSection(
   )
 }
 
+/**
+ * 底行手机远程入口登记（mobile-remote-approval 1.2）：官方 `sidebar.footer.action` 扩展槽
+ * （探针点①结论——现成槽位，设置按钮同排）list 行 'dswf-remote'。注入面 = 状态快照源
+ * （官方 remote.settings 反射——buildRemoteStatusSource 单源）+ 开关动作（官方
+ * settings.update 回写）；label 经 locale NS thunk（fix-33 ⑧）。反射面缺席 = 组件
+ * fail-soft 灰态（源恒在场，快照 off）。
+ */
+function registerRemoteEntry(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  t: (key: string) => string,
+  diagnostics: { registered?: string[] },
+): void {
+  const remote = buildRemoteStatusSource(ctx)
+  registerSlotEntry(ctx, SIDEBAR_FOOTER_ACTION_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SIDEBAR_FOOTER_ACTION_SLOT,
+        id: FORGE_REMOTE_ENTRY_ID,
+        order: FORGE_REMOTE_ENTRY_ORDER,
+        locale: FORGE_LOCALE_NS,
+        label: (): string => t('remote.entry'),
+        inject: () => ({
+          status: remote.source,
+          onToggle: (next: boolean): Promise<void> => remote.setEnabled(next).then(() => undefined),
+        }),
+      },
+      views.ForgeRemoteEntry,
+    ),
+  )
+}
+
 /** 目录条目形状（组件面 WorkerProviderEntry 结构同型——bundle 自持纪律禁跨 chunk import） */
 interface ModelCatalogEntry {
   readonly provider: string
@@ -1058,6 +1106,144 @@ function buildModelCatalogLoader(
       return Promise.resolve(undefined)
     }
   }
+}
+
+/**
+ * 手机远程状态注入面（mobile-remote-approval 1.2——状态单源 = 官方反射面）：惰性
+ * `ctx.reflect.get('remote.settings')`（'remote' 嵌套双径，remote.session 先例同型）→
+ * `describe()` 信封解析（webserver 命名空间 host 读数——views/remote/remote-status.ts
+ * remoteSettingsProbeOf 结构同型镜像，bundle 自持禁跨 chunk import 纪律）→ 快照三态。
+ * 反射面缺席 / 调用失败 / 信封畸形 = fail-soft off 快照（图标灰态，不虚报不炸装配）。
+ * setEnabled = 官方 `settings.update` 回写（host 翻转 + expectedRevision 乐观锁）+ 即时
+ * refresh（开关切换 → 图标态即时变化；零本地副本零轮询——SC2 纪律）。
+ * connected 相位：官方装配无设备连接反射命名空间（pin-06 探针结论——配对/设备管理归
+ * 官方网关机械）→ 恒缺席，相位止步 listening（缺席 = fail-soft，不虚报已连接）。
+ */
+export interface ForgeRemoteStatusFace {
+  /** 快照源（ForgeRemoteEntry useSyncExternalStore 直连契约） */
+  readonly source: {
+    getSnapshot(): RemoteStatusSnapshot
+    subscribe(listener: () => void): () => void
+  }
+  /** 重新读官方反射面（成功/失败均收敛为合法快照并通知订阅者） */
+  refresh(): Promise<void>
+  /** 开关回写（官方 settings.update；成功 → refresh 后 true；缺席/失败 = false fail-soft） */
+  setEnabled(next: boolean): Promise<boolean>
+}
+
+/** describe 信封 → webserver 读数（remoteSettingsProbeOf 结构同型镜像——注释见彼处） */
+function mapRemoteSettingsEnvelope(envelope: unknown): RemoteSettingsProbe | undefined {
+  if (typeof envelope !== 'object' || envelope === null) return undefined
+  const record = envelope as Record<string, unknown>
+  if (record['ok'] !== true) return undefined
+  const namespaces = (record['value'] as Record<string, unknown> | undefined)?.['namespaces']
+  if (!Array.isArray(namespaces)) return undefined
+  let shapeFallback: RemoteSettingsProbe | undefined
+  for (const entry of namespaces) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const ns = entry as Record<string, unknown>
+    const name = ns['ns']
+    const value = ns['value']
+    if (typeof name !== 'string' || typeof value !== 'object' || value === null) continue
+    const section = value as Record<string, unknown>
+    const host = section['host']
+    if (host !== '127.0.0.1' && host !== '0.0.0.0') continue
+    const probe: RemoteSettingsProbe = {
+      ns: name,
+      enabled: host === '0.0.0.0',
+      host,
+      port: typeof section['port'] === 'number' ? section['port'] : undefined,
+      revision: typeof ns['revision'] === 'number' ? ns['revision'] : undefined,
+    }
+    if (name.includes('webserver')) return probe
+    shapeFallback ??= probe
+  }
+  return shapeFallback
+}
+
+/** 读数 → 快照（局域网地址 = 当前页面 hostname——本 GUI 即宿主 webserver 同一监听面） */
+function snapshotOfProbe(probe: RemoteSettingsProbe | undefined): RemoteStatusSnapshot {
+  if (probe === undefined) return { phase: 'off' }
+  if (!probe.enabled) return { phase: 'off' }
+  const loc = (globalThis as { location?: { hostname?: string } }).location
+  const hostname = typeof loc?.hostname === 'string' ? loc.hostname : 'localhost'
+  const lanAddress =
+    probe.host === '0.0.0.0' && probe.port !== undefined ? `http://${hostname}:${probe.port}` : undefined
+  return { phase: 'listening', lanAddress }
+}
+
+/** 手机远程状态注入面构造（测试与 registerRemoteEntry 同源；快照读数细节见类型注释） */
+export function buildRemoteStatusSource(clientCtx: ForgeClientCtx): ForgeRemoteStatusFace {
+  const listeners = new Set<() => void>()
+  let snapshot: RemoteStatusSnapshot = { phase: 'off' }
+  const settingsSvc = (): Record<string, unknown> | undefined =>
+    asRecord(reflectServiceGet(clientCtx, 'remote.settings')) ??
+    asRecord(asRecord(reflectServiceGet(clientCtx, 'remote'))?.['settings'])
+  const face: ForgeRemoteStatusFace = {
+    source: {
+      getSnapshot: () => snapshot,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    },
+    refresh: () => {
+      const describe = settingsSvc()?.['describe'] as (() => Promise<unknown>) | undefined
+      if (typeof describe !== 'function') {
+        snapshot = { phase: 'off' }
+        for (const listener of listeners) listener()
+        return Promise.resolve()
+      }
+      return Promise.resolve()
+        .then(() => describe.call(settingsSvc()))
+        .then(
+          (envelope) => {
+            snapshot = snapshotOfProbe(mapRemoteSettingsEnvelope(envelope))
+          },
+          () => {
+            snapshot = { phase: 'off' }
+          },
+        )
+        .then(() => {
+          for (const listener of listeners) listener()
+        })
+    },
+    setEnabled: (next) => {
+      const svc = settingsSvc()
+      const update = svc?.['update'] as
+        | ((ns: string, patch: Record<string, unknown>, expectedRevision: number | undefined) => Promise<unknown>)
+        | undefined
+      if (typeof update !== 'function') return Promise.resolve(false)
+      const describe = settingsSvc()?.['describe'] as (() => Promise<unknown>) | undefined
+      if (typeof describe !== 'function') return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => describe.call(svc))
+        .then(mapRemoteSettingsEnvelope)
+        .then((probeRead) => {
+          if (probeRead === undefined) return false
+          return Promise.resolve(
+            update.call(
+              svc,
+              probeRead.ns,
+              { host: next ? '0.0.0.0' : '127.0.0.1' },
+              probeRead.revision,
+            ),
+          )
+            .then(
+              () => true,
+              () => false,
+            )
+            .then((ok) => face.refresh().then(() => ok))
+        })
+        .then(
+          (ok) => ok,
+          () => false,
+        )
+    },
+  }
+  return face
 }
 
 /**
@@ -1276,6 +1462,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': '项目概览',
             'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
             'settings.forge': 'Forge设置',
+            'remote.entry': '手机远程',
             // dispatchTask 对话工具行（toolview 行内 t 座——文案对齐官方通用行用词）
             'tool.dispatchTask.title': '工具调用',
             'tool.dispatchTask.preparing': '正在准备调用',
@@ -1291,6 +1478,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': 'Overview',
             'guide.overview.desc': 'Features, tasks, proposals and docs',
             'settings.forge': 'Forge Settings',
+            'remote.entry': 'Mobile Remote',
             'tool.dispatchTask.title': 'Tool call',
             'tool.dispatchTask.preparing': 'Preparing call',
             'tool.dispatchTask.running': 'Running',
@@ -1351,6 +1539,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // （4.7 settings 族）+ 常驻壳宿主。m3.1 D5：会话头挂接 pill 登记退役
         // （conversation.session.header.actions 零产品登记——官方动作带不受扰）。
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
+        registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)

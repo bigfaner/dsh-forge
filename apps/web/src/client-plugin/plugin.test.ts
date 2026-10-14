@@ -25,6 +25,9 @@ import {
   SETTINGS_SECTION_SLOT,
   FORGE_SETTINGS_SECTION_ID,
   FORGE_SETTINGS_SECTION_ORDER,
+  FORGE_REMOTE_ENTRY_ID,
+  FORGE_REMOTE_ENTRY_ORDER,
+  SIDEBAR_FOOTER_ACTION_SLOT,
   SHELL_OVERLAY_SLOT,
   SIDEBAR_BRAND_MARK_SLOT,
   SIDEBAR_BRAND_NAME_SLOT,
@@ -293,6 +296,7 @@ function publishFakeViews() {
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     ForgeSettingsSection: 'COMP:settings-section',
+    ForgeRemoteEntry: 'COMP:remote-entry',
     createWorkbenchBridge: (nav: { showKnowledge(): void; showSession(): void }) => {
       // 结构同型镜像真身（workbench-bridge.createWorkbenchBridge）：nav 透传 + 页内全局发布
       let focusNonce = 0
@@ -396,6 +400,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       SIDEBAR_WORKSPACES_SLOT,
       SIDEBAR_BRAND_MARK_SLOT,
       SIDEBAR_BRAND_NAME_SLOT,
+      SIDEBAR_FOOTER_ACTION_SLOT, // 1.2 手机远程入口（官方底行扩展槽——探针点①结论）
       MAIN_SLOT,
       MAIN_SLOT,
       SIDEBAR_PANELLIST_SLOT,
@@ -415,10 +420,15 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const name = registers.find((r) => r.key === SIDEBAR_BRAND_NAME_SLOT)
     expect(mark!.component).toBe(views.ForgeBrandMark)
     expect(name!.component).toBe(views.ForgeBrandName)
-    // 诊断面：三洞位落座 + 无错误（e2e 排障锚）
+    // 诊断面：三洞位 + 手机远程入口落座 + 无错误（e2e 排障锚）
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { sidebar?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT])
+    expect(marker?.sidebar?.registered).toEqual([SIDEBAR_WORKSPACES_SLOT, SIDEBAR_BRAND_MARK_SLOT, SIDEBAR_BRAND_NAME_SLOT, SIDEBAR_FOOTER_ACTION_SLOT])
     expect(marker?.sidebar?.error).toBeUndefined()
+    const remoteRow = registers.find((r) => r.key === SIDEBAR_FOOTER_ACTION_SLOT)
+    expect(remoteRow).toBeDefined()
+    expect(remoteRow!.options.id).toBe(FORGE_REMOTE_ENTRY_ID)
+    expect(remoteRow!.options.order).toBe(FORGE_REMOTE_ENTRY_ORDER)
+    expect(remoteRow!.component).toBe(views.ForgeRemoteEntry)
     unpublishViews()
   })
 

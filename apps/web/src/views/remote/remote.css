@@ -1,0 +1,125 @@
+/* 手机远程入口 + 面板（mobile-remote-approval 1.2——官方 ui-sidebar iconButton 刻度逐值
+ * 同款：28 命中区 / radius-sm / 16 图标；三态着色 off 灰 / listening 绿 / connected 亮） */
+
+.dswf-remote-root {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+/* 入口钮（官方 .iconButton 同型刻度——dsh-client-ui-sidebar lib/client.js 源码核验同径） */
+.dswf-remote-entry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* dsw-raw 官方 ui-sidebar iconButton 刻度 */
+  height: 28px; /* dsw-raw 官方 ui-sidebar iconButton 刻度 */
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-entry:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-remote-glyph {
+  display: block;
+}
+
+/* 三态（提案验收 1：关 = 灰 / 监听中 = 绿 / 有设备已连接 = 亮态） */
+.dswf-remote-entry[data-phase='off'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-remote-entry[data-phase='listening'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-remote-entry[data-phase='connected'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* 面板（底行左侧弹出卡——固定定位不随侧栏裁剪） */
+.dswf-remote-panel {
+  position: fixed;
+  bottom: 48px;
+  left: 12px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* dsw-raw 面板纵向行距（面板局部刻度，无对应 spacing 令牌） */
+  width: 264px; /* dsw-raw 面板宽度（底行弹出卡局部刻度） */
+  padding: 12px; /* dsw-raw 面板内距（面板局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+.dswf-remote-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dswf-remote-panel-title {
+  font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-remote-panel-phase {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-remote-panel-phase[data-phase='listening'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-remote-panel-phase[data-phase='connected'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.dswf-remote-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px; /* dsw-raw 行内间距（面板局部刻度） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-remote-panel-hint {
+  color: var(--dsw-alias-label-tertiary);
+  text-align: right;
+}
+
+.dswf-remote-switch {
+  flex: none;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-address {
+  padding: 6px 8px; /* dsw-raw 地址行内距（面板局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  text-align: left;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  overflow-wrap: anywhere;
+}
+
+.dswf-remote-panel-note {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}

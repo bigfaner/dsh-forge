@@ -50,6 +50,10 @@ import {
   ForgeSettingsSection,
   type ForgeSettingsSectionProps,
 } from './views/settings/ForgeSettingsSection.js'
+import {
+  ForgeRemoteEntry,
+  type ForgeRemoteEntryProps,
+} from './views/remote/ForgeRemoteEntry.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
@@ -82,6 +86,8 @@ export interface ForgePublishedViews {
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
+  /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
+  readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
   /** 工作台桥工厂（插件 apply 期调用——nav 闭包绑定官方 layout.selectPanel 后发布） */
   readonly createWorkbenchBridge: (nav: ForgeCenterNav) => WorkbenchBridge
   /** md-mermaid DOM 增强器工厂（1.9——@dsh-forge/md-mermaid ./web 出口；插件 apply 期 start/卸载 stop） */
@@ -108,6 +114,7 @@ declare global {
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,
   ForgeSettingsSection,
+  ForgeRemoteEntry,
   createWorkbenchBridge,
   createMermaidEnhancer,
 }
