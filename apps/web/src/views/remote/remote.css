@@ -243,3 +243,50 @@
   color: var(--dsw-alias-label-tertiary);
   text-align: center;
 }
+
+/* ── 审批动作区（mobile-remote-approval 1.4——待审批行内批准/拒绝 + 三态反馈） ── */
+
+.dswf-rview-appr {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* dsw-raw 动作区行内间距（受限视图局部刻度） */
+}
+
+.dswf-rview-appr-btn {
+  padding: 6px 14px; /* dsw-raw 动作钮内距（受限视图局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-rview-appr-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.dswf-rview-appr-btn--allow:not(:disabled) {
+  border-color: var(--dsw-alias-state-success-primary, var(--dsw-alias-border-l2));
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary));
+}
+
+.dswf-rview-appr-btn--reject:not(:disabled) {
+  border-color: var(--dsw-alias-state-danger-primary, var(--dsw-alias-border-l2));
+  color: var(--dsw-alias-state-danger-primary, var(--dsw-alias-label-primary));
+}
+
+.dswf-rview-appr-note {
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-rview-appr-note--success {
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-secondary));
+}
+
+.dswf-rview-appr-note--error {
+  color: var(--dsw-alias-state-danger-primary, var(--dsw-alias-label-secondary));
+  overflow-wrap: anywhere;
+}

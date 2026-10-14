@@ -4,7 +4,8 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
-import { ForgeRemoteView, RemotePairingGuide, RemoteProgressList } from './ForgeRemoteView.js'
+import { ForgeRemoteView, RemoteApprovalActionsView, RemotePairingGuide, RemoteProgressList } from './ForgeRemoteView.js'
+import { beginApproval, initialApprovalState, resolveApproval } from './remote-approval-model.js'
 import { remoteListRowsOf } from './remote-view-model.js'
 
 function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStatus' | 'title'>): TaskCard {
@@ -71,6 +72,67 @@ describe('RemoteProgressList 空态', () => {
     const html = renderToStaticMarkup(<RemoteProgressList rows={[]} stats={SNAPSHOT([]).stats} />)
     expect(html).toMatch(/暂无任务/)
     expect(html).not.toMatch(/dswf-rview-row /)
+  })
+})
+
+describe('远程审批面板（1.4——待审批行批准/拒绝 + 三态反馈）', () => {
+  const IDLE = { requestId: 't-9', state: initialApprovalState(), onDecide: () => {} }
+
+  it('idle：批准/拒绝两动作在场（data 锚 + decision 载荷）', () => {
+    const html = renderToStaticMarkup(<RemoteApprovalActionsView {...IDLE} />)
+    expect(html).toMatch(/data-dswf-rv-approval="idle"/)
+    expect(html).toMatch(/data-dswf-rv-decision="allow"/)
+    expect(html).toMatch(/data-dswf-rv-decision="reject"/)
+    expect(html).toMatch(/批准/)
+    expect(html).toMatch(/拒绝/)
+  })
+
+  it('submitting：动作冻结（disabled）+ 审批中锚', () => {
+    const state = beginApproval(initialApprovalState(), 't-9', 'allow')
+    const html = renderToStaticMarkup(<RemoteApprovalActionsView {...IDLE} state={state} />)
+    expect(html).toMatch(/data-dswf-rv-approval="submitting"/)
+    expect(html).toMatch(/审批中/)
+    expect(html).toMatch(/disabled/)
+  })
+
+  it('success：成功回显（role=status）', () => {
+    const state = resolveApproval(beginApproval(initialApprovalState(), 't-9', 'allow'), { ok: true })
+    const html = renderToStaticMarkup(<RemoteApprovalActionsView {...IDLE} state={state} />)
+    expect(html).toMatch(/data-dswf-rv-approval="success"/)
+    expect(html).toMatch(/role="status"/)
+    expect(html).toMatch(/已提交/)
+  })
+
+  it('error：错误回显（role=alert + 文案）+ 动作恢复可重试（无 disabled）', () => {
+    const state = resolveApproval(beginApproval(initialApprovalState(), 't-9', 'allow'), {
+      ok: false,
+      message: '审批通道不可用',
+    })
+    const html = renderToStaticMarkup(<RemoteApprovalActionsView {...IDLE} state={state} />)
+    expect(html).toMatch(/data-dswf-rv-approval="error"/)
+    expect(html).toMatch(/role="alert"/)
+    expect(html).toContain('审批通道不可用')
+    expect(html).not.toMatch(/disabled/)
+  })
+
+  it('接线：待审批行（approval 带）在列表内渲染审批动作区，非审批行不渲染', () => {
+    const rows = remoteListRowsOf(
+      SNAPSHOT([
+        taskOf({ taskId: 'c', title: '等审批任务', taskStatus: 'blocked' }),
+        taskOf({ taskId: 'b', title: '跑批中任务', taskStatus: 'in_progress' }),
+      ]),
+    )
+    const html = renderToStaticMarkup(
+      <RemoteProgressList
+        rows={rows}
+        stats={SNAPSHOT(rows.map((r) => r.task)).stats}
+        renderApprovalActions={(row) => (
+          <RemoteApprovalActionsView requestId={row.task.taskId} state={initialApprovalState()} onDecide={() => {}} />
+        )}
+      />,
+    )
+    expect(html).toMatch(/data-dswf-rv-approval="idle"/)
+    expect(html.indexOf('data-dswf-rv-approval')).toBeLessThan(html.indexOf('跑批中任务'))
   })
 })
 

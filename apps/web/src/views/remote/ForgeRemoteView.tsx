@@ -3,20 +3,30 @@
 // （官方配对流承载——产品不自建配对协议，官方机械拦截未配对设备，本页只呈现引导）；配对
 // 后 = 进度列表（数据 = forge:remote/progress 只读通道[1.1]，服务端直读 forgeTasks——
 // 与桌面工作台同一状态层，零本地副本）。待审批项（blocked 带高亮置顶）排序/分组派生归
-// remote-view-model 单源。暴露面边界（提案验收 6）：本页零会话对话/知识库/文档入口——
-// 渲染面仅进度列表，ForgeRemoteView.test 边界断言钉死。
+// remote-view-model 单源。1.4 审批面板：待审批行内嵌批准/拒绝动作，决策经 1.1 官方转发
+// 通道 forge:remote/approval 上行（产品不自持审批状态），成功后触发进度重 poll——手机侧
+// 与桌面工作台同读同一状态层（结果一致性单源）。暴露面边界（提案验收 6）：本页零会话对
+// 话/知识库/文档入口——渲染面仅进度列表 + 审批动作，ForgeRemoteView.test 边界断言钉死。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   PROJECTS_CHANNELS,
   REMOTE_CHANNELS,
+  REMOTE_APPROVAL_DECISIONS,
   TASK_STATUS_LABELS,
   type ProjectSummary,
+  type RemoteApprovalDecision,
   type RemoteProgressSnapshot,
   type RpcResult,
   type TaskStats,
 } from '@dsh-forge/contracts'
 import { StateChip } from '../../components/index.js'
 import type { ForgeTransport } from '../../rpc/transport.js'
+import {
+  initialApprovalState,
+  resetApproval,
+  runApprovalDecision,
+  type RemoteApprovalState,
+} from './remote-approval-model.js'
 import { remoteListRowsOf, type RemoteListRow } from './remote-view-model.js'
 import './remote.css'
 
@@ -75,13 +85,94 @@ export function RemotePairingGuide({ lanAddress }: { readonly lanAddress?: strin
   )
 }
 
-/** 进度列表（待审批高亮置顶 + 进行中派发 + 其余；空态呈现） */
+/**
+ * 审批动作区（纯呈现面——三态反馈：idle 双动作 / submitting 冻结 / success·error 回显；
+ * 态单源 = RemoteApprovalState，交互径归 RemoteApprovalActions）。
+ */
+export function RemoteApprovalActionsView({
+  requestId,
+  state,
+  onDecide,
+}: {
+  readonly requestId: string
+  readonly state: RemoteApprovalState
+  readonly onDecide: (decision: RemoteApprovalDecision) => void
+}): ReactNode {
+  const frozen = state.phase === 'submitting'
+  return (
+    <div className="dswf-rview-appr" data-dswf-rv-approval={state.phase} data-dswf-rv-request={requestId}>
+      {REMOTE_APPROVAL_DECISIONS.map((decision) => (
+        <button
+          key={decision}
+          type="button"
+          className={`dswf-rview-appr-btn dswf-rview-appr-btn--${decision}`}
+          data-dswf-rv-decision={decision}
+          disabled={frozen}
+          onClick={() => onDecide(decision)}
+        >
+          {decision === 'allow' ? '批准' : '拒绝'}
+        </button>
+      ))}
+      {state.phase === 'submitting' && (
+        <span className="dswf-rview-appr-note" role="status">
+          审批中…
+        </span>
+      )}
+      {state.phase === 'success' && (
+        <span className="dswf-rview-appr-note dswf-rview-appr-note--success" role="status">
+          已提交
+        </span>
+      )}
+      {state.phase === 'error' && (
+        <span className="dswf-rview-appr-note dswf-rview-appr-note--error" role="alert">
+          {state.message}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** 成功回显自动复位（settings savedFlash 同型——闪示后归 idle，不残留终态） */
+const APPROVAL_SUCCESS_FLASH_MS = 1_500
+
+/**
+ * 审批动作区（交互装配面——决策经 1.1 官方转发通道 forge:remote/approval 上行，产品不
+ * 自持审批状态；成功后回调 onDecided 触发进度重 poll——桌面工作台同一审批项状态同步）。
+ * requestId = 审批转发载荷原样透传槽（本层取 blocked 任务 taskId——官方 ApprovalRequestId
+ * 的映射归 host 转发器注入缝单点承接，1.1 缝口径不变）。
+ */
+export function RemoteApprovalActions({
+  transport,
+  requestId,
+  onDecided,
+}: {
+  readonly transport: ForgeTransport
+  readonly requestId: string
+  readonly onDecided: () => void
+}): ReactNode {
+  const [state, setState] = useState<RemoteApprovalState>(initialApprovalState)
+  useEffect(() => {
+    if (state.phase !== 'success') return undefined
+    const timer = window.setTimeout(() => setState(resetApproval), APPROVAL_SUCCESS_FLASH_MS)
+    return () => window.clearTimeout(timer)
+  }, [state.phase])
+  const decide = (decision: RemoteApprovalDecision): void => {
+    if (state.phase === 'submitting') return // 提交冻结：在途决策禁重复提交
+    void runApprovalDecision(transport, requestId, decision, { onState: setState, onDecided })
+  }
+  return <RemoteApprovalActionsView requestId={requestId} state={state} onDecide={decide} />
+}
+
+/** 进度列表（待审批高亮置顶 + 进行中派发 + 其余；空态呈现；审批动作区经 render 缝注入） */
 export function RemoteProgressList({
   rows,
   stats,
+  renderApprovalActions,
 }: {
   readonly rows: readonly RemoteListRow[]
   readonly stats: TaskStats
+  /** 待审批行动作区注入缝（缺席 = 纯进度列表——1.3 形态不变） */
+  readonly renderApprovalActions?: (row: RemoteListRow) => ReactNode
 }): ReactNode {
   if (rows.length === 0) {
     return (
@@ -109,6 +200,7 @@ export function RemoteProgressList({
               {row.task.slug}/{row.task.localId}
             </span>
           </div>
+          {row.band === 'approval' && renderApprovalActions?.(row)}
         </div>
       ))}
       <p className="dswf-rview-count">
@@ -120,7 +212,8 @@ export function RemoteProgressList({
 
 /**
  * 受限单页本体（装配组件——数据自足：缺省 preload 传输面，15s 轮询 + 失败回引导相位；
- * 测试面注入 transport/lanAddress 直驱静态渲染）。
+ * 测试面注入 transport/lanAddress 直驱静态渲染。审批成功后 tick 自增即刻重 poll——
+ * 桌面工作台同一状态层同读，结果一致反映）。
  */
 export function ForgeRemoteView({
   transport,
@@ -133,6 +226,7 @@ export function ForgeRemoteView({
 }): ReactNode {
   const resolved = useMemo(() => resolveTransport(transport), [transport])
   const [snapshot, setSnapshot] = useState<RemoteProgressSnapshot | undefined>(undefined)
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     if (resolved === undefined) return undefined
     let alive = true
@@ -154,12 +248,24 @@ export function ForgeRemoteView({
       alive = false
       window.clearInterval(timer)
     }
-  }, [resolved])
+  }, [resolved, tick])
   if (snapshot === undefined) return <RemotePairingGuide lanAddress={lanAddress} />
   return (
     <main className="dswf-rview" role="main" aria-label="任务进度">
       <h1 className="dswf-rview-title">任务进度</h1>
-      <RemoteProgressList rows={remoteListRowsOf(snapshot)} stats={snapshot.stats} />
+      <RemoteProgressList
+        rows={remoteListRowsOf(snapshot)}
+        stats={snapshot.stats}
+        renderApprovalActions={(row) =>
+          resolved !== undefined ? (
+            <RemoteApprovalActions
+              transport={resolved}
+              requestId={row.task.taskId}
+              onDecided={() => setTick((value) => value + 1)}
+            />
+          ) : undefined
+        }
+      />
     </main>
   )
 }
