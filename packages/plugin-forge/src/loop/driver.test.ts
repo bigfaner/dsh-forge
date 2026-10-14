@@ -991,6 +991,37 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
   })
 
+  it('dispose（fiber 卸载收口）：在飞循环同步终态注销 + 独占摘除 + 零真化零叙述（对账归下次装配 reconcile）+ 零异常 warn', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const built = build({ claim: [claimed()] })
+      built.spawn.setBehavior(parkedSpawn) // 永不结算——两循环均挂在 await worker.result（卸载窗形态）
+      await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await built.driver.start({ source: { kind: 'proposal', slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
+      await vi.waitFor(
+        () => {
+          expect(built.driver.activeAll()).toHaveLength(2)
+          expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+        },
+        { timeout: 2000, interval: 5 },
+      )
+      built.driver.dispose()
+      // 同步终态：登记表清空 + S1c 独占注销（新 fiber 可再启）
+      expect(built.driver.activeAll()).toEqual([])
+      expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+      expect(exclusiveLoopSourceOf({ kind: 'proposal', slug: 'other' })).toBeUndefined()
+      // 静默收口：不真化 in-flight（遗留对账归 reconcileInterrupted）；dispose 后零新增叙述（启动叙述除外）、零异常 warn
+      expect(built.h.transitions).toEqual([])
+      const callsAtDispose = built.calls.length
+      await new Promise((r) => setTimeout(r, 20))
+      expect(built.calls).toHaveLength(callsAtDispose)
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('terminated abnormally'), expect.anything())
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('The database connection is not open'))
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   it('停止竞态（claim 通知窗口被叫停）：stop 面接管真化——循环醒来让渡，零 spawn 零续领', async () => {
     let stopPromise: Promise<unknown> | undefined
     const channelCalls: NarrationCall[] = []

@@ -398,6 +398,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
+      () => loopDriverBase.dispose(), // fiber 卸载收口：活循环同步终态（不收口则 DB 关闭后循环异常终止——fix-bug ea86ea00）
     ]
     return () => {
       for (const dispose of disposers) dispose()

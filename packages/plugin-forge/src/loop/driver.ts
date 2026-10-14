@@ -275,6 +275,14 @@ export interface LoopDriver {
   activeOf(ownerSessionId: string): LoopRecord | undefined
   /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
   activeAll(): readonly LoopRecord[]
+  /**
+   * fiber 卸载收口（装配 disposer 消费）：全部活循环同步终态注销——控制器 abort（在飞回合
+   * 于下一个 bail 点让渡）+ 登记表/S1c 独占注销。静默径：不真化 in-flight、零叙述（通道随
+   * fiber 消亡；遗留 in_progress 由下次装配 reconcileInterrupted 对账——S3 既有语义，同
+   * 进程重启形态）。缺此收口时循环存活越过分家卸载，DB 句柄关闭后循环异常终止
+   * （「The database connection is not open」——fix-bug ea86ea00）。
+   */
+  dispose(): void
 }
 
 // ─────────────────────────── 活循环内部状态（登记表行 + 运行时计数） ───────────────────────────
@@ -503,6 +511,17 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
 
     activeAll(): readonly LoopRecord[] {
       return registry.all()
+    },
+
+    dispose(): void {
+      // Root cause: 循环生命周期此前长于 fiber/DB 句柄生命周期——fiber 卸载后下一轮 DB 访问
+      // 撞已关句柄异常终态；卸载即同步终态收口（静默——对账归 reconcileInterrupted）。
+      for (const [id, loop] of live) { // Map 迭代中删当前条目安全——无需快照
+        loop.controller.abort('loop disposed with fiber')
+        registry.remove(id)
+        clearExclusiveLoopSource(loop.source, id)
+        live.delete(id)
+      }
     },
   }
 }
