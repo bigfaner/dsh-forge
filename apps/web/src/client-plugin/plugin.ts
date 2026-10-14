@@ -35,9 +35,9 @@
 // 运行期锚（e2e 实证，2.7）：插件长活依赖 profile 置停 client-hmr——其全图 sync 会以宿主
 // 最新图对账掉壳掌舵追加的本行，见 apps/host profile cordis.patch.yml 的 client-hmr 行。
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
-// mobile-remote-approval 1.2：远程状态快照/读数窄类型（type-only——bundle 自含纪律不破；
+// mobile-remote-approval 1.2：远程状态快照窄类型（type-only——bundle 自含纪律不破；
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
-import type { RemoteSettingsProbe, RemoteStatusSnapshot } from '../views/remote/remote-status.js'
+import type { RemoteStatusSnapshot } from '../views/remote/remote-status.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -1005,11 +1005,11 @@ function registerSettingsSection(
 }
 
 /**
- * 底行手机远程入口登记（mobile-remote-approval 1.2）：官方 `sidebar.footer.action` 扩展槽
- * （探针点①结论——现成槽位，设置按钮同排）list 行 'dswf-remote'。注入面 = 状态快照源
- * （官方 remote.settings 反射——buildRemoteStatusSource 单源）+ 开关动作（官方
- * settings.update 回写）；label 经 locale NS thunk（fix-33 ⑧）。反射面缺席 = 组件
- * fail-soft 灰态（源恒在场，快照 off）。
+ * 底行手机远程入口登记（mobile-remote-approval 1.2/fix-3）：官方 `sidebar.footer.action`
+ * 扩展槽（探针点①结论——现成槽位，设置按钮同排）list 行 'dswf-remote'。注入面 = 状态
+ * 快照源（产品自有配置 × boot manifest 双源——buildRemoteStatusSource 单源，fix-3 重启
+ * 生效形态）+ 开关动作（forge:settings/set remoteApproval 分节回写）；label 经 locale NS
+ * thunk（fix-33 ⑧）。配置面缺席 = 组件 fail-soft 灰态（源恒在场，快照 off）。
  */
 function registerRemoteEntry(
   ctx: ForgeClientCtx,
@@ -1029,6 +1029,9 @@ function registerRemoteEntry(
         inject: () => ({
           status: remote.source,
           onToggle: (next: boolean): Promise<void> => remote.setEnabled(next).then(() => undefined),
+          // fix-3 挂载期初刷（重启生效形态）：重启后装配期绑定变化只能在挂载时捕获——
+          // 组件 mount useEffect 消费（缺席 = 兼容旧组件面，快照保默认 off）
+          refresh: (): Promise<void> => remote.refresh(),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1492,14 +1495,16 @@ export function buildMarketplaceSource(clientCtx: ForgeClientCtx): ForgeMarketpl
 }
 
 /**
- * `ctx.reflect.get('remote.settings')`（'remote' 嵌套双径，remote.session 先例同型）→
- * `describe()` 信封解析（webserver 命名空间 host 读数——views/remote/remote-status.ts
- * remoteSettingsProbeOf 结构同型镜像，bundle 自持禁跨 chunk import 纪律）→ 快照三态。
- * 反射面缺席 / 调用失败 / 信封畸形 = fail-soft off 快照（图标灰态，不虚报不炸装配）。
- * setEnabled = 官方 `settings.update` 回写（host 翻转 + expectedRevision 乐观锁）+ 即时
- * refresh（开关切换 → 图标态即时变化；零本地副本零轮询——SC2 纪律）。
- * connected 相位：官方装配无设备连接反射命名空间（pin-06 探针结论——配对/设备管理归
- * 官方网关机械）→ 恒缺席，相位止步 listening（缺席 = fail-soft，不虚报已连接）。
+ * 手机远程状态面（fix-3 重启生效形态——用户裁决 2026-10-14）：开关改写产品自有配置
+ * （forge-settings.json remoteApproval.enabled，经 preload RPC forge:settings/* 单门——
+ * 官方 remote.settings 无 webserver 可写命名空间[dsh-settings volatileForm 整行排除]且
+ * 上游明文拒绝运行期 rebind[dsh-web-app startup.js:40]）。快照相位 = 配置意图 × 实际
+ * 绑定 host（boot manifest.remoteHost——宿主装配期读同一配置的结果面，经 ready 消息透传）
+ * 双源纯派生（views/remote/remote-status.ts remoteSnapshotOf 结构同型镜像，bundle 自持
+ * 禁跨 chunk import 纪律）：配置↔实况不一致 = pending（「待重启生效」提示态——不伪装
+ * listening）。dshForge 桥缺席（非 Electron 载体）/调用失败/信封畸形 = fail-soft off
+ * 快照（不虚报不炸装配）；setEnabled = forge:settings/set 分节覆写（只携 remoteApproval
+ * 节——core 读-改-写保留 worker 段）+ 即时 refresh。
  */
 export interface ForgeRemoteStatusFace {
   /** 快照源（ForgeRemoteEntry useSyncExternalStore 直连契约） */
@@ -1507,60 +1512,91 @@ export interface ForgeRemoteStatusFace {
     getSnapshot(): RemoteStatusSnapshot
     subscribe(listener: () => void): () => void
   }
-  /** 重新读官方反射面（成功/失败均收敛为合法快照并通知订阅者） */
+  /** 重新读产品配置 + boot manifest（成功/失败均收敛为合法快照并通知订阅者） */
   refresh(): Promise<void>
-  /** 开关回写（官方 settings.update；成功 → refresh 后 true；缺席/失败 = false fail-soft） */
+  /** 开关回写（forge:settings/set remoteApproval 分节；成功 → refresh 后 true；缺席/失败 = false fail-soft） */
   setEnabled(next: boolean): Promise<boolean>
 }
 
-/** describe 信封 → webserver 读数（remoteSettingsProbeOf 结构同型镜像——注释见彼处） */
-function mapRemoteSettingsEnvelope(envelope: unknown): RemoteSettingsProbe | undefined {
-  if (typeof envelope !== 'object' || envelope === null) return undefined
-  const record = envelope as Record<string, unknown>
-  if (record['ok'] !== true) return undefined
-  const namespaces = (record['value'] as Record<string, unknown> | undefined)?.['namespaces']
-  if (!Array.isArray(namespaces)) return undefined
-  let shapeFallback: RemoteSettingsProbe | undefined
-  for (const entry of namespaces) {
-    if (typeof entry !== 'object' || entry === null) continue
-    const ns = entry as Record<string, unknown>
-    const name = ns['ns']
-    const value = ns['value']
-    if (typeof name !== 'string' || typeof value !== 'object' || value === null) continue
-    const section = value as Record<string, unknown>
-    const host = section['host']
-    if (host !== '127.0.0.1' && host !== '0.0.0.0') continue
-    const probe: RemoteSettingsProbe = {
-      ns: name,
-      enabled: host === '0.0.0.0',
-      host,
-      port: typeof section['port'] === 'number' ? section['port'] : undefined,
-      revision: typeof ns['revision'] === 'number' ? ns['revision'] : undefined,
-    }
-    if (name.includes('webserver')) return probe
-    shapeFallback ??= probe
-  }
-  return shapeFallback
+/** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
+interface ForgePreloadBridge {
+  invoke(channel: string, payload?: unknown): Promise<unknown>
+  getBootManifest(): Promise<{ url?: string; remoteHost?: string }>
 }
 
-/** 读数 → 快照（局域网地址 = 当前页面 hostname——本 GUI 即宿主 webserver 同一监听面） */
-function snapshotOfProbe(probe: RemoteSettingsProbe | undefined): RemoteStatusSnapshot {
-  if (probe === undefined) return { phase: 'off' }
-  if (!probe.enabled) return { phase: 'off' }
+/** dshForge 桥读取（缺席/形状不符 = undefined——fail-soft off 面，不炸装配） */
+function preloadBridgeOf(): ForgePreloadBridge | undefined {
+  const bridge = (globalThis as { dshForge?: unknown }).dshForge
+  if (typeof bridge !== 'object' || bridge === null) return undefined
+  const record = bridge as Record<string, unknown>
+  if (typeof record['invoke'] !== 'function' || typeof record['getBootManifest'] !== 'function') {
+    return undefined
+  }
+  return bridge as ForgePreloadBridge
+}
+
+/** RPC 信封 → 载荷（{ok:true,data} 窄判——他形 = undefined fail-soft） */
+function rpcDataOf(envelope: unknown): unknown {
+  if (typeof envelope !== 'object' || envelope === null) return undefined
+  const record = envelope as Record<string, unknown>
+  return record['ok'] === true ? record['data'] : undefined
+}
+
+/** 配置载荷 → remoteApproval.enabled 读数（键缺席/畸形 = undefined——未配置 ≠ 关？缺席
+ *  按关判：宿主装配期 remoteApprovalEnabledOf 同口径严格 === true 才开） */
+function remoteApprovalEnabledOf(settings: unknown): boolean | undefined {
+  if (typeof settings !== 'object' || settings === null) return false
+  const section = (settings as Record<string, unknown>)['remoteApproval']
+  if (section === undefined) return false
+  if (typeof section !== 'object' || section === null) return undefined
+  const enabled = (section as Record<string, unknown>)['enabled']
+  return typeof enabled === 'boolean' ? enabled : undefined
+}
+
+/** forge:settings/* 通道字面量（contracts SETTINGS_CHANNELS 同源镜像——bundle 零外部 import） */
+const SETTINGS_CHANNEL_GET = 'forge:settings/get'
+const SETTINGS_CHANNEL_SET = 'forge:settings/set'
+
+/** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
+function isOkEnvelope(envelope: unknown): boolean {
+  return typeof envelope === 'object' && envelope !== null &&
+    (envelope as Record<string, unknown>)['ok'] === true
+}
+
+/**
+ * 配置意图 + boot manifest 实况 → 快照（views/remote/remote-status.ts remoteSnapshotOf
+ * 结构同型镜像——bundle 自持禁跨 chunk import 纪律；语义与判据见彼处注释）。
+ */
+function snapshotOfReads(
+  enabled: boolean | undefined,
+  manifest: { url?: string; remoteHost?: string } | undefined,
+): RemoteStatusSnapshot {
+  if (enabled === undefined) return { phase: 'off' }
+  const exposureActive = manifest?.remoteHost === '0.0.0.0'
+  if (enabled !== exposureActive) return { phase: 'pending' }
+  if (!enabled) return { phase: 'off' }
+  let port: number | undefined
+  try {
+    const parsed = manifest?.url !== undefined ? new URL(manifest.url) : undefined
+    const numeric = parsed !== undefined ? Number(parsed.port) : NaN
+    port = Number.isFinite(numeric) && numeric > 0 ? numeric : undefined
+  } catch {
+    port = undefined
+  }
   const loc = (globalThis as { location?: { hostname?: string } }).location
   const hostname = typeof loc?.hostname === 'string' ? loc.hostname : 'localhost'
   const lanAddress =
-    probe.host === '0.0.0.0' && probe.port !== undefined ? `http://${hostname}:${probe.port}` : undefined
+    port !== undefined ? `http://${hostname}:${port}` : undefined
   return { phase: 'listening', lanAddress }
 }
 
 /** 手机远程状态注入面构造（测试与 registerRemoteEntry 同源；快照读数细节见类型注释） */
-export function buildRemoteStatusSource(clientCtx: ForgeClientCtx): ForgeRemoteStatusFace {
+export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemoteStatusFace {
   const listeners = new Set<() => void>()
   let snapshot: RemoteStatusSnapshot = { phase: 'off' }
-  const settingsSvc = (): Record<string, unknown> | undefined =>
-    asRecord(reflectServiceGet(clientCtx, 'remote.settings')) ??
-    asRecord(asRecord(reflectServiceGet(clientCtx, 'remote'))?.['settings'])
+  const publish = (): void => {
+    for (const listener of listeners) listener()
+  }
   const face: ForgeRemoteStatusFace = {
     source: {
       getSnapshot: () => snapshot,
@@ -1572,57 +1608,41 @@ export function buildRemoteStatusSource(clientCtx: ForgeClientCtx): ForgeRemoteS
       },
     },
     refresh: () => {
-      const describe = settingsSvc()?.['describe'] as (() => Promise<unknown>) | undefined
-      if (typeof describe !== 'function') {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) {
         snapshot = { phase: 'off' }
-        for (const listener of listeners) listener()
+        publish()
         return Promise.resolve()
       }
-      return Promise.resolve()
-        .then(() => describe.call(settingsSvc()))
+      const readConfig = Promise.resolve()
+        .then(() => bridge.invoke(SETTINGS_CHANNEL_GET))
         .then(
-          (envelope) => {
-            snapshot = snapshotOfProbe(mapRemoteSettingsEnvelope(envelope))
-          },
-          () => {
-            snapshot = { phase: 'off' }
-          },
+          (envelope) => remoteApprovalEnabledOf(rpcDataOf(envelope)),
+          () => undefined,
         )
-        .then(() => {
-          for (const listener of listeners) listener()
+      const readManifest = Promise.resolve()
+        .then(() => bridge.getBootManifest())
+        .then(
+          (manifest) => (typeof manifest === 'object' && manifest !== null ? manifest : undefined),
+          () => undefined,
+        )
+      return Promise.all([readConfig, readManifest])
+        .then(([enabled, manifest]) => {
+          // 镜像口径（remoteSnapshotOf——views/remote/remote-status.ts，禁跨 chunk import）：
+          snapshot = snapshotOfReads(enabled, manifest)
         })
+        .then(publish, publish)
     },
     setEnabled: (next) => {
-      const svc = settingsSvc()
-      const update = svc?.['update'] as
-        | ((ns: string, patch: Record<string, unknown>, expectedRevision: number | undefined) => Promise<unknown>)
-        | undefined
-      if (typeof update !== 'function') return Promise.resolve(false)
-      const describe = settingsSvc()?.['describe'] as (() => Promise<unknown>) | undefined
-      if (typeof describe !== 'function') return Promise.resolve(false)
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => describe.call(svc))
-        .then(mapRemoteSettingsEnvelope)
-        .then((probeRead) => {
-          if (probeRead === undefined) return false
-          return Promise.resolve(
-            update.call(
-              svc,
-              probeRead.ns,
-              { host: next ? '0.0.0.0' : '127.0.0.1' },
-              probeRead.revision,
-            ),
-          )
-            .then(
-              () => true,
-              () => false,
-            )
-            .then((ok) => face.refresh().then(() => ok))
-        })
+        .then(() => bridge.invoke(SETTINGS_CHANNEL_SET, { remoteApproval: { enabled: next } }))
         .then(
-          (ok) => ok,
+          isOkEnvelope,
           () => false,
         )
+        .then((ok) => face.refresh().then(() => ok))
     },
   }
   return face

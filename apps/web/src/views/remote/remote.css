@@ -43,6 +43,15 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
+/* 待重启生效（fix-3 重启生效形态——配置↔实际绑定不一致提示态：琥珀警示，不伪装监听） */
+.dswf-remote-entry[data-phase='pending'] {
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+}
+
+.dswf-remote-panel-phase[data-phase='pending'] {
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+}
+
 /* 面板（底行左侧弹出卡——固定定位不随侧栏裁剪） */
 .dswf-remote-panel {
   position: fixed;

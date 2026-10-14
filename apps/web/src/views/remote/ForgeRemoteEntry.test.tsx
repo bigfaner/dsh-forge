@@ -33,6 +33,12 @@ describe('ForgeRemoteEntry 图标三态', () => {
     expect(html).toMatch(/设备已连接/)
   })
 
+  it('fix-3 待重启生效 = data-phase pending（提示态——不伪装 listening）', () => {
+    const html = renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'pending' })} />)
+    expect(html).toContain('data-phase="pending"')
+    expect(html).toMatch(/待重启生效/)
+  })
+
   it('反射面缺席（status undefined）= fail-soft 灰态 off，不炸装配', () => {
     const html = renderToStaticMarkup(<ForgeRemoteEntry />)
     expect(html).toContain('data-phase="off"')
@@ -46,7 +52,8 @@ describe('RemotePanel 面板', () => {
     )
     expect(html).toMatch(/type="checkbox"/)
     expect(html).not.toMatch(/checked/)
-    expect(html).toMatch(/开启后显示局域网地址/)
+    expect(html).toMatch(/开启并重启宿主后显示局域网地址/)
+    expect(html).not.toMatch(/待重启生效提示/)
   })
 
   it('监听中：开关选中 + 配对入口 + 局域网地址展示', () => {
@@ -56,9 +63,22 @@ describe('RemotePanel 面板', () => {
     expect(html).toContain('http://192.168.1.7:8787')
   })
 
-  it('状态行语言随相位（关闭/监听中/设备已连接）', () => {
+  it('fix-3 待重启生效：开关选中 + 重启提示行（不呈现局域网地址——不伪装已监听）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />,
+    )
+    expect(html).toMatch(/checked/)
+    expect(html).toContain('dswf-remote-pending-hint')
+    expect(html).toMatch(/重启宿主后生效/)
+    expect(html).not.toContain('http://')
+  })
+
+  it('状态行语言随相位（关闭/待重启/监听中/设备已连接）', () => {
     expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />)).toMatch(
       /设备已连接/,
+    )
+    expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />)).toMatch(
+      /待重启生效/,
     )
   })
 })

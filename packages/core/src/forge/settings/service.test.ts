@@ -64,6 +64,35 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
     await svc.set({ worker: defaulted })
     await expect(svc.get()).resolves.toEqual({ worker: defaulted })
   })
+
+  // ── fix-3（mobile-remote-approval）：remoteApproval 分节（重启生效形态——开关写产品自有配置） ──
+  it('fix-3 分节覆写：只 set remoteApproval → worker 段保留（读-改-写分节合并——手机远程开关单节写不冲掉 worker 配置）', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await svc.set({ remoteApproval: { enabled: true } })
+    await expect(svc.get()).resolves.toEqual({ worker, remoteApproval: { enabled: true } })
+    await svc.set({ remoteApproval: { enabled: false } })
+    await expect(svc.get()).resolves.toEqual({ worker, remoteApproval: { enabled: false } })
+  })
+
+  it('fix-3 空配置开关写入：未配置文件 + 只 set remoteApproval → get 只含该节', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ remoteApproval: { enabled: true } })
+    await expect(svc.get()).resolves.toEqual({ remoteApproval: { enabled: true } })
+  })
+
+  it('fix-3 写校验：remoteApproval.enabled 非布尔 / 两节全缺 → InvalidSettingsInputError，既有文件不被触碰', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await expect(
+      svc.set({ remoteApproval: { enabled: 'yes' as never } }),
+    ).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({} as never)).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ worker })
+  })
 })
 
 describe('2.7 forgeSettings：原子写 + 写校验', () => {

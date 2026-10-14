@@ -218,7 +218,7 @@ export async function bootDshHost(
   const ready = await waitForReady(child)
   const call = channel.call
   return {
-    manifest: buildBootManifest(ready.url, ready.injections),
+    manifest: buildBootManifest(ready.url, ready.injections, ready.remoteHost),
     toolNames: ready.tools ?? [],
     services: {
       forgeProjects: ready.services.forgeProjects

@@ -6,15 +6,22 @@ export interface BootManifest {
   url: string
   /** 官方 ui-* client bundle 与产品插件注入行（ctx.webServer.collectIndexInjections 原样） */
   injections: readonly unknown[]
+  /** fix-3：webserver 实际绑定 host（'127.0.0.1' | '0.0.0.0'——UI 远程 pending/listening
+   *  判读单源；可选：旧 child / 读取降级 = 缺席） */
+  remoteHost?: string
 }
 
 /** 组装 boot manifest（纯函数：校验 url/injections 基本形状后冻结返回） */
-export function buildBootManifest(url: string, injections: readonly unknown[]): BootManifest {
+export function buildBootManifest(url: string, injections: readonly unknown[], remoteHost?: string): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
   }
   if (!Array.isArray(injections)) {
     throw new Error('[host:boot] manifest.injections 须为数组（collectIndexInjections 原样）')
   }
-  return Object.freeze({ url, injections: Object.freeze([...injections]) })
+  return Object.freeze({
+    url,
+    injections: Object.freeze([...injections]),
+    ...(typeof remoteHost === 'string' && remoteHost !== '' ? { remoteHost } : {}),
+  })
 }

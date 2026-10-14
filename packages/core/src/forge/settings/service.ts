@@ -18,6 +18,7 @@ import {
   REASONING_LEVELS,
   type ForgeSettings,
   type ForgeSettingsService,
+  type RemoteApprovalSettings,
   type SetForgeSettingsInput,
   type WorkerSettings,
 } from '@dsh-forge/contracts'
@@ -66,19 +67,32 @@ function readSettingsFile(file: string): Record<string, unknown> {
   }
 }
 
-/** set 入参形状校验（RPC 边界防御——运行期值不受编译期类型约束，typeof 三查 + 三档枚举） */
+/** set 入参形状校验（RPC 边界防御——运行期值不受编译期类型约束，分节三查 + 枚举）：
+ *  worker 携带时三项全查；remoteApproval 携带时 enabled 布尔查；至少携带一节。 */
 function assertValidInput(input: SetForgeSettingsInput): void {
   const w: unknown = input.worker
-  if (typeof w !== 'object' || w === null) throw new InvalidSettingsInputError('worker 段缺失')
-  const { provider, model, reasoning } = w as Record<string, unknown>
-  if (typeof provider !== 'string' || provider.trim() === '') {
-    throw new InvalidSettingsInputError('provider 必须为非空白字符串')
+  if (w !== undefined) {
+    if (typeof w !== 'object' || w === null) throw new InvalidSettingsInputError('worker 段缺失')
+    const { provider, model, reasoning } = w as Record<string, unknown>
+    if (typeof provider !== 'string' || provider.trim() === '') {
+      throw new InvalidSettingsInputError('provider 必须为非空白字符串')
+    }
+    if (typeof model !== 'string' || model.trim() === '') {
+      throw new InvalidSettingsInputError('model 必须为非空白字符串')
+    }
+    if (typeof reasoning !== 'string' || !(REASONING_LEVELS as readonly string[]).includes(reasoning)) {
+      throw new InvalidSettingsInputError(`reasoning 必须 ∈ ${REASONING_LEVELS.join('|')}（收到 ${String(reasoning)}）`)
+    }
   }
-  if (typeof model !== 'string' || model.trim() === '') {
-    throw new InvalidSettingsInputError('model 必须为非空白字符串')
+  const ra: unknown = input.remoteApproval
+  if (ra !== undefined) {
+    if (typeof ra !== 'object' || ra === null) throw new InvalidSettingsInputError('remoteApproval 段缺失')
+    if (typeof (ra as Record<string, unknown>)['enabled'] !== 'boolean') {
+      throw new InvalidSettingsInputError('remoteApproval.enabled 必须为布尔')
+    }
   }
-  if (typeof reasoning !== 'string' || !(REASONING_LEVELS as readonly string[]).includes(reasoning)) {
-    throw new InvalidSettingsInputError(`reasoning 必须 ∈ ${REASONING_LEVELS.join('|')}（收到 ${String(reasoning)}）`)
+  if (w === undefined && ra === undefined) {
+    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval）')
   }
 }
 
@@ -92,13 +106,23 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
   return {
     async get(): Promise<ForgeSettings> {
       const parsed = readSettingsFile(deps.settingsFile)
-      const worker = parsed.worker
-      return worker === undefined ? {} : { worker: worker as WorkerSettings }
+      const next: ForgeSettings = {}
+      if (parsed.worker !== undefined) next.worker = parsed.worker as WorkerSettings
+      if (parsed.remoteApproval !== undefined) {
+        next.remoteApproval = parsed.remoteApproval as RemoteApprovalSettings
+      }
+      return next
     },
     async set(input: SetForgeSettingsInput): Promise<void> {
       assertValidInput(input)
-      // 读-改-写：整体覆写 worker 段、保留其余顶层键（文件形状对多小节可扩展——UI 4.5 分区底注）
-      const next = { ...readSettingsFile(deps.settingsFile), worker: input.worker }
+      // 读-改-写：分节覆写（只覆写携带的节）、保留其余顶层键（文件形状对多小节可扩展——
+      // fix-3：remoteApproval 分节供手机远程开关单节写，不冲掉 worker 配置）
+      const prev = readSettingsFile(deps.settingsFile)
+      const next = {
+        ...prev,
+        ...(input.worker !== undefined ? { worker: input.worker } : {}),
+        ...(input.remoteApproval !== undefined ? { remoteApproval: input.remoteApproval } : {}),
+      }
       // 原子写：同目录 tmp + rename（Windows MoveFileEx REPLACE_EXISTING 语义——崩溃无半写）
       const tmp = `${deps.settingsFile}.${randomUUID()}.tmp`
       try {

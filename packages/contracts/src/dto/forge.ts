@@ -942,15 +942,25 @@ export interface WorkerSettings {
   reasoning: ReasoningLevel
 }
 
+/** 远程审批（手机远程）段——mobile-remote-approval fix-3 重启生效形态：开关写产品自有
+ *  配置（官方 remote.settings 无 webserver 可写命名空间且拒绝运行期 rebind），宿主装配期
+ *  （boot overlay webserver 行覆写）读之决定全卡绑定暴露，下次启动生效 */
+export interface RemoteApprovalSettings {
+  enabled: boolean
+}
+
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
  *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
   worker?: WorkerSettings
+  remoteApproval?: RemoteApprovalSettings
 }
 
-/** forgeSettings.set 入参（整体覆写 worker 段——UI 设置分区保存脏态） */
+/** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
+ *  至少携带一节） */
 export interface SetForgeSettingsInput {
-  worker: WorkerSettings
+  worker?: WorkerSettings
+  remoteApproval?: RemoteApprovalSettings
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，

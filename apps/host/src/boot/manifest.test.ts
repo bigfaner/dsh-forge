@@ -27,4 +27,10 @@ describe('buildBootManifest', () => {
   it('injections 非数组拒绝', () => {
     expect(() => buildBootManifest('http://127.0.0.1:1/', undefined as unknown as [])).toThrow(/数组/)
   })
+
+  it('fix-3：remoteHost 在场透传（绑定 host 判读单源）；缺席/空串 = 字段不出现', () => {
+    expect(buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0').remoteHost).toBe('0.0.0.0')
+    expect('remoteHost' in buildBootManifest('http://127.0.0.1:1/', [])).toBe(false)
+    expect('remoteHost' in buildBootManifest('http://127.0.0.1:1/', [], '')).toBe(false)
+  })
 })

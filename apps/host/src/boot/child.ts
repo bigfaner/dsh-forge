@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import {
   approvalWaterfallAnswer,
   createApprovalRelay,
@@ -81,6 +82,22 @@ process.on('disconnect', () => {
   } else process.exit(0)
 })
 
+/**
+ * 手机远程暴露开关装配期读数（fix-3）：直读 forge-settings.json 顶层 remoteApproval.enabled
+ * （严格 === true 才开——畸形值 = 关；文件缺席/读失败 = 关 fail-soft）。只读不建文件不抛
+ * （装配期失败不阻 boot——远程暴露缺省回环形制）。
+ */
+function remoteApprovalEnabledOf(settingsFile: string | undefined): boolean {
+  if (settingsFile === undefined) return false
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(settingsFile, 'utf8'))
+    const section = (parsed as Record<string, unknown> | null)?.['remoteApproval']
+    return (section as Record<string, unknown> | undefined)?.['enabled'] === true
+  } catch {
+    return false
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseChildOptions(process.argv)
   if (options === undefined) {
@@ -97,12 +114,20 @@ async function main(): Promise<void> {
   // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
   // skill-filesystem 行（forge 技能/工具仅预设组合，标准模式零 forge 面）。
   const presetPatches = loadPresetPatches()
+  // mobile-remote-approval fix-3（重启生效形态）：手机远程暴露开关 = 产品自有配置
+  // forge-settings.json 的 remoteApproval.enabled（官方 remote.settings 无 webserver 可写
+  // 命名空间且拒绝运行期 rebind——开关写产品配置，宿主装配期读之决定绑定，下次启动生效）。
+  // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
+  // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
+  const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
+    remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
+    port: options.port, // fix-3 webserver 覆写行 port 字面量单源（boot 实参）
     ...(presetPatches !== undefined
       ? {
           presets: {
@@ -122,6 +147,9 @@ async function main(): Promise<void> {
     args: ['--no-open', '--port', String(options.port)],
   })
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
+  // fix-3：实际绑定 host（快照面单源——UI pending/listening 判读 = 产品配置意图 × 本值；
+  // 经 ready 消息 → boot manifest 透传 renderer）
+  const remoteHost = ctx.webServer.host
   const injections = ctx.webServer.collectIndexInjections()
   const servicesFace = ctx as unknown as ServiceGetFace
   // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
@@ -166,6 +194,7 @@ async function main(): Promise<void> {
     type: 'ready',
     url,
     injections,
+    remoteHost, // fix-3：实际绑定 host（装配期读 remoteApproval.enabled 的结果——UI 判读单源）
     services: {
       forgeProjects: services.forgeProjects !== undefined,
       forgeKnowledge: services.forgeKnowledge !== undefined,

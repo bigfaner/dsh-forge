@@ -92,6 +92,9 @@ export interface BridgeReadyMessage {
   readonly injections: readonly unknown[]
   readonly services: Readonly<Record<BridgeServiceName, boolean>>
   readonly tools?: readonly string[]
+  /** fix-3：webserver 实际绑定 host（装配期 remoteApproval.enabled 读数的结果面——UI
+   *  pending/listening 判读单源；可选：旧 child 缺席 = undefined，不阻 ready 守卫） */
+  readonly remoteHost?: string
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -390,12 +393,15 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
   const tools = Array.isArray(m.tools) && m.tools.every((t) => typeof t === 'string')
     ? (m.tools as string[])
     : undefined
+  // fix-3 绑定 host：可选字段——在场须为非空 string（畸形视为缺席降级，同 tools 口径）
+  const remoteHost = typeof m.remoteHost === 'string' && m.remoteHost !== '' ? m.remoteHost : undefined
   return {
     type: 'ready',
     url: m.url,
     injections: m.injections,
     services: bits as Record<BridgeServiceName, boolean>,
     ...(tools !== undefined ? { tools } : {}),
+    ...(remoteHost !== undefined ? { remoteHost } : {}),
   }
 }
 

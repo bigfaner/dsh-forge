@@ -59,6 +59,13 @@ export interface BootOverlayInput {
   readonly credentialsPath?: string
   /** M3 预设装配（3.7）：三底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
   readonly presets?: PresetOverlayInput
+  /** 手机远程暴露（mobile-remote-approval fix-3 重启生效形态）：true = 注 webserver 行
+   *  覆写（host 0.0.0.0 全卡绑定——装配期 patch 叠层即官方既有缝，非运行期 rebind）；
+   *  缺席/false = 不注行（回环绑定默认形制零变化）。取数源 = forge-settings.json
+   *  remoteApproval.enabled（child 启动期直读——产品自有配置单源） */
+  readonly remoteExpose?: boolean
+  /** boot 监听端口（main 侧解析实参——remoteExpose 行 port 字面量单源；缺席 = 0[OS 择空]） */
+  readonly port?: number
 }
 
 /** 预设装配输入（3.7）：三底稿全文 + customSkillDirs 双目录物化锚 + bindingsFile 物化锚（fix-1） */
@@ -182,6 +189,23 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     '- id: ui-settings-general',
     '  config:',
     `    welcomeNoticeVersion: ${yamlQuote(WELCOME_NOTICE_ACK_VERSION)}`,
+    // mobile-remote-approval fix-3（重启生效形态）：remoteExpose 时注 webserver 行覆写
+    // （patch 叠层按 row id 整体替换 config——官方 bundle 行的全键重述，port 取 boot
+    //  实参字面量避免 !!js 表达式形制[打包形态不可解析，预设物化裁决同径]；host 0.0.0.0
+    //  = 官方 Config schema 两个 const 字面量之一，LAN trust 由 web-runtime 激活期采样
+    //  实际绑定自行携带；未配对请求仍被官方令牌门拒——安全语义不变）。缺省不注行 =
+    //  回环绑定官方默认形制零变化。
+    ...(input.remoteExpose === true
+      ? [
+          '- id: webserver',
+          '  config:',
+          `    host: "0.0.0.0"`,
+          `    port: ${input.port ?? 0}`,
+          '    compression: gzip',
+          '    compressionLevel: 1',
+          '    compressionThresholdBytes: 1024',
+        ]
+      : []),
     // M3 预设装配（3.7）：registry 覆写 + 远征/突击双预设行——每启注行产品工件
     //（customSkillDirs 已物化当形态绝对路径；预设组合用户不可经 UI 改）
     ...(input.presets !== undefined

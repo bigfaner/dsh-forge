@@ -128,6 +128,28 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('customSkillDirs')
     expect(text).not.toContain('includeDefaultRoots')
   })
+
+  it('fix-3 远程暴露缝：remoteExpose:true → webserver 行覆写（host 0.0.0.0 全卡绑定 + port 字面量 + 官方 bundle 行全键重述——patch 按 row id 整体替换 config）', () => {
+    const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', remoteExpose: true, port: 19400 })
+    expect(text).toContain(
+      [
+        '- id: webserver',
+        '  config:',
+        '    host: "0.0.0.0"',
+        '    port: 19400',
+        '    compression: gzip',
+        '    compressionLevel: 1',
+        '    compressionThresholdBytes: 1024',
+      ].join('\n'),
+    )
+  })
+
+  it('fix-3 缺省门：remoteExpose 缺席/false → 无 webserver 行（回环绑定官方默认形制零变化）', () => {
+    expect(renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })).not.toContain('- id: webserver')
+    expect(
+      renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json', remoteExpose: false }),
+    ).not.toContain('- id: webserver')
+  })
 })
 
 describe('welcome ack 常量 pin（fix-12——上游升级窗口机械核查）', () => {

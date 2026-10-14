@@ -339,7 +339,9 @@ export async function submitWorkerSettings(
 ): Promise<WorkerSettingsSaveOutcome> {
   try {
     await client.settings.set(input)
-    return { ok: true, saved: input.worker }
+    // fix-3：SetForgeSettingsInput 双节可选化后 worker 为可缺省——本分区提交恒携 worker 节
+    //（设置域唯一写面），缺席 = 调用方形状违约，回显 undefined 不成立 → 显式 narrow。
+    return { ok: true, saved: input.worker as WorkerSettings }
   } catch (error) {
     if (error instanceof RpcClientError) {
       return { ok: false, error: { message: error.message, uiState: rpcUiState(error.code) } }
