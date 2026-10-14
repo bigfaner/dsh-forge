@@ -6,6 +6,8 @@
 // product-views.js（求值期发布 __DSH_FORGE_VIEWS__）：client 插件槽位注册的组件源——
 // 必先于插件 bundle 装载（同步 import 序保证）。
 import '@deepseek-ai/dsh-client-ui-theme/brand-font.css'
+import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
 import './styles/global.css'
 import './styles/brand.css'
@@ -13,6 +15,8 @@ import './styles/wco.css'
 import './styles/cursors.css'
 import './product-views.js'
 import { bootShell, type ProductClientEntry } from './shell/index.js'
+import { ForgeRemoteView } from './views/remote/ForgeRemoteView.js'
+import { isRestrictedRemoteViewLocation } from './views/remote/remote-view-model.js'
 
 // 产品 client 插件掌舵入图描述（bundle = vite 第二入口产物 forge-client.js；rev = 构建戳）。
 // id 字面量与 client-plugin/plugin.ts 的 FORGE_CLIENT_PLUGIN_ID 同源——不经 import 共享
@@ -27,6 +31,13 @@ const productClient: ProductClientEntry = {
 const el = document.getElementById('root')
 if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 
-const entry = new AppWebEntry(el)
-void bootShell(productClient)
-void entry.run()
+// 手机受限视图分支（mobile-remote-approval 1.3）：`?forgeRemote=1` = 独立单页直挂——
+// 不进官方壳（无侧栏/dock/对话，暴露面边界 = 渲染范围本身）；未配对/数据面不可达由
+// 组件内回退配对引导页（官方配对流承载）。
+if (isRestrictedRemoteViewLocation(window.location)) {
+  createRoot(el).render(createElement(ForgeRemoteView))
+} else {
+  const entry = new AppWebEntry(el)
+  void bootShell(productClient)
+  void entry.run()
+}

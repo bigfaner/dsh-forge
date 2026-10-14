@@ -123,3 +123,123 @@
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* ── 手机受限视图（mobile-remote-approval 1.3——独立单页，无侧栏/dock/对话） ── */
+
+.dswf-rview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* dsw-raw 受限单页纵向行距（局部刻度，无对应 spacing 令牌） */
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px; /* dsw-raw 受限单页内距（局部刻度） */
+  font-family: inherit;
+}
+
+.dswf-rview-title {
+  margin: 0;
+  font: var(--dsw-font-m-strong-16, var(--dsw-font-s-14));
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-rview-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* dsw-raw 引导步骤行距（受限视图局部刻度） */
+  margin: 0;
+  padding-left: 20px; /* dsw-raw 引导步骤缩进（局部刻度） */
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-rview-address {
+  margin: 0;
+  padding: 8px 10px; /* dsw-raw 地址行内距（局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary-bluish);
+  overflow-wrap: anywhere;
+}
+
+.dswf-rview-note {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-rview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* dsw-raw 进度行间距（局部刻度） */
+}
+
+.dswf-rview-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* dsw-raw 进度行内行距（局部刻度） */
+  padding: 10px 12px; /* dsw-raw 进度行内距（受限视图局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* 待审批高亮置顶带（提案验收 3——高亮边与状态色） */
+.dswf-rview-row--approval {
+  border-color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-border-l2));
+}
+
+.dswf-rview-row--active {
+  border-color: var(--dsw-alias-state-success-primary, var(--dsw-alias-border-l2));
+}
+
+.dswf-rview-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px; /* dsw-raw 行头内距（受限视图局部刻度） */
+}
+
+.dswf-rview-row-title {
+  font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.dswf-rview-flag {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+}
+
+.dswf-rview-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* dsw-raw 行内间距（受限视图局部刻度） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-rview-row-key {
+  overflow-wrap: anywhere;
+}
+
+.dswf-rview-state {
+  flex: none;
+}
+
+.dswf-rview-count {
+  margin: 4px 0 0; /* dsw-raw 计数行上距（受限视图局部刻度） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.dswf-rview-empty {
+  padding: 32px 16px; /* dsw-raw 空态内距（受限视图局部刻度） */
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
