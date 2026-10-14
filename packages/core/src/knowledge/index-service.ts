@@ -5,10 +5,11 @@
 // 派生缓存口径（Hard Rule 2 / SC2 豁免）：缓存只落应用库 knowledge_entries，知识目录零写入。
 // 服务面：本任务仅 rebuildIndex（Pick 收窄）；search/readAbstract 归 3.2，浏览面归 3.3，
 // 届时并齐 contracts KnowledgeService 全七法后由 service.ts 装配注册 ctx.forgeKnowledge。
-import { mkdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import type Database from 'better-sqlite3'
 import type { IndexReport, KnowledgeService } from '@dsh-forge/contracts'
 import { withTransaction } from '../db/index.js'
+import { ensureDirReadable } from '../fs-ensure.js'
 import { parseKnowledgeFile } from './parser.js'
 import { scanKnowledgeDir } from './scan.js'
 
@@ -71,7 +72,8 @@ export function createKnowledgeIndexService(deps: KnowledgeIndexServiceDeps): Kn
       // scan 前置门按现行口径收口——六码语义收窄为「路径存在但非法/不可达」，缺失态不再
       // 触达用户（scan 保持错误唯一权威 + 只读件零建目录，自愈只在服务层前置门）。
       try {
-        mkdirSync(project.knowledge_dir, { recursive: true })
+        // ensureDirReadable 同注册径：显式 chmod 0o755（umask 免疫——700 目录 validator 读取被拒现场）
+        ensureDirReadable(project.knowledge_dir)
       } catch {
         // 静默交还 scanKnowledgeDir 统一收口（InvalidKnowledgeDirError typed 面不变）
       }

@@ -48,6 +48,7 @@ import type {
 } from '@dsh-forge/contracts'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { errMessage } from '../util.js'
+import { ensureDirReadable } from '../fs-ensure.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
@@ -242,8 +243,10 @@ function ensureRegistrationDirs(input: RegisterProjectInput): void {
     throw new WorkspaceCreateError(input.workspaceDir, cause)
   }
   try {
-    mkdirSync(input.forgeDir, { recursive: true })
-    mkdirSync(input.knowledgeDir, { recursive: true })
+    // ensureDirReadable：显式 chmod 0o755——umask 0077 环境下裸 mkdir 落 700，事后非属主
+    // 读取（validateMermaid 等）被拒（macOS 现场）。workspaceDir 不动（用户自有目录，非本产品落盘面）。
+    ensureDirReadable(input.forgeDir)
+    ensureDirReadable(input.knowledgeDir)
   } catch (cause) {
     throw new ProjectWriteError({ wsPath: input.workspaceDir }, cause)
   }
