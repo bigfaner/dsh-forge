@@ -65,6 +65,28 @@ export function dirSeparatorOf(path: string): '\\' | '/' {
   return isWindowsStylePath(path) || /^[A-Za-z]:$/.test(norm) ? '\\' : '/'
 }
 
+/**
+ * 浏览改选起始目录（「浏览…」回退面——RegisterForm BrowsePanel 相位消费）：
+ * 两目录目标 = 输入框值的父目录（落在容器平级浏览改选，而非目标目录内部）；
+ * workspace 目标（重新选择）= 工作区自身（无输入框改选语境，口径不变）。
+ * 值为空 → undefined = 浏览器缺省口径（用户主目录）；根级值开根目录
+ * （`Z:\.forge` → `Z:\` 裸盘符回写分隔符；`/x` → `/` POSIX 根）。
+ * Root cause: 旧实现把输入框当前值原样作 startDir——起始落在目标目录内部，
+ * 改选需逐级向上导航；父目录推导缺席是根因诞生地（startDir 语义未显式决定）。
+ */
+export function browseStartDirOf(target: BrowseTarget, values: FormValues): string | undefined {
+  if (target === 'workspace') return values.workspaceDir
+  const raw = values[target].trim()
+  if (raw === '') return undefined
+  const sep = dirSeparatorOf(raw)
+  const norm = normalizeDirPath(raw)
+  const idx = norm.lastIndexOf(sep)
+  if (idx < 0) return undefined
+  if (idx === 0) return sep // POSIX 根（`/x` → `/`）
+  const parent = norm.slice(0, idx)
+  return /^[A-Za-z]:$/.test(parent) ? `${parent}${sep}` : parent
+}
+
 /** 工作区目录 → 文件夹名（末段；盘符根 → `Z:`，UNC → 末 share 段，POSIX → 末段） */
 export function folderNameOf(workspaceDir: string): string {
   const norm = normalizeDirPath(workspaceDir)

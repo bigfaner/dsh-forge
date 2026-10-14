@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserSelection } from './browser-model.js'
 import {
+  browseStartDirOf,
   deriveForgeDir,
   deriveKnowledgeDir,
   dirSeparatorOf,
@@ -184,6 +185,32 @@ describe('AC5 表单态校验（validateFormValues：非法路径拦截于表单
     expect(isAbsolutePath('x\\y')).toBe(false)
     expect(isAbsolutePath('Z:x')).toBe(false)
     expect(isAbsolutePath('')).toBe(false)
+  })
+})
+
+describe('浏览改选起始目录（browseStartDirOf）', () => {
+  const BASE = initialFormState(SELECTION).values
+
+  it('bug: 两目录浏览起始 = 输入框值的父目录（非值本身——落在容器可平级改选）', () => {
+    expect(browseStartDirOf('forgeDir', BASE)).toBe('Z:\\project\\dsh')
+    expect(browseStartDirOf('knowledgeDir', BASE)).toBe('Z:\\project\\dsh')
+  })
+
+  it('workspace 目标（重新选择）起始 = 工作区自身（无输入框改选语境，口径不变）', () => {
+    expect(browseStartDirOf('workspace', BASE)).toBe('Z:\\project\\dsh')
+  })
+
+  it('尾分隔符值取父不受干扰；POSIX 风格随 `/` 推导', () => {
+    expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: 'Z:\\proj\\x\\.forge\\' })).toBe('Z:\\proj\\x')
+    expect(
+      browseStartDirOf('knowledgeDir', { ...BASE, knowledgeDir: '/home/u/ws/.knowledge' }),
+    ).toBe('/home/u/ws')
+  })
+
+  it('空值 → undefined（浏览器缺省主目录）；根级值开根目录（盘符根回写分隔符 / POSIX 根）', () => {
+    expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: '' })).toBeUndefined()
+    expect(browseStartDirOf('forgeDir', { ...BASE, forgeDir: 'Z:\\.forge' })).toBe('Z:\\')
+    expect(browseStartDirOf('knowledgeDir', { ...BASE, knowledgeDir: '/x' })).toBe('/')
   })
 })
 

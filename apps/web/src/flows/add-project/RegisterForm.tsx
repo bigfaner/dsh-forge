@@ -27,6 +27,7 @@ import { fetchDerivePhase, rpcDeriveSource, type DeriveSource } from './derive-s
 import { formActions, nativeBrowseAction } from './form-actions.js'
 import {
   initialFormState,
+  browseStartDirOf,
   isForgeDirExternal,
   toRegisterInput,
   validateFormValues,
@@ -393,7 +394,8 @@ export function RegisterForm({
   }
 
   if (browsing !== null) {
-    const startDir = browsing === 'workspace' ? form.values.workspaceDir : form.values[browsing]
+    // 起始目录 = browseStartDirOf（两目录 = 值父目录平级改选；workspace = 自身；空/无父 = 浏览器缺省主目录）
+    const startDir = browseStartDirOf(browsing, form.values)
     return (
       <BrowsePanel target={browsing} onBack={actions.cancelBrowse}>
         <DirectoryBrowser
