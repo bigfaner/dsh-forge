@@ -228,6 +228,11 @@ export interface ForgeContextFace {
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */
   systemPrompt: SystemPromptSectionFace
+  /**
+   * dsh ctx.on 事件注册收窄面（bug-mention-prestep——'agent/pre-step' waterfall 单事件；
+   * 结构化消费面定义于 agent/bug-mention-prestep.ts。可选：缺席 = pre-step 不挂接 fail-soft）。
+   */
+  readonly on?: import('./agent/bug-mention-prestep.js').PreStepRegisterFace['on']
 }
 
 // ─────────────────────────── dsh commands 注册表收窄面（S2——run-tasks-host-command 指令两枚） ───────────────────────────

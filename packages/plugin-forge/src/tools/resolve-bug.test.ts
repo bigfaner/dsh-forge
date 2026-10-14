@@ -57,6 +57,9 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
       })
       return resolve(captured[captured.length - 1]!)
     },
+    listBugs: async () => {
+      throw new Error('not used')
+    },
   }
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
@@ -155,6 +158,7 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
             data: { bugId: 'bug-1' },
           })
         },
+        listBugs: async () => [],
       },
       resolveProjectId: () => 'p-1',
     }

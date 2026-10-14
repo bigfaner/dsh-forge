@@ -25,6 +25,7 @@ import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, SessionActivationFace } from './faces.js'
+import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
@@ -270,6 +271,20 @@ const forgePlugin: ForgePlugin = Object.assign(
       },
     }
     const resolveProjectId = createProjectResolver(config.projects ?? [], config.bindingsFile)
+    // bug mention 发送期展开 pre-step（bug-mention-prestep——'agent/pre-step' waterfall
+    // global 挂接，approval relay 同径）：扫描直接用户消息 @[…](bug:<uuid36>)，台账现查
+    // （cwd→projectId 绑定优先 + 注册项目有界遍历）后追加九字段块；幂等 + fail-soft。
+    // ctx.on 缺席/注册抛错 = 不挂接 fail-soft（同 commands/agents 防御读取先例）。
+    let disposePrestep: (() => void) | undefined
+    try {
+      disposePrestep = attachBugMentionPrestep(ctx, {
+        bugs: ctx.forgeBugs,
+        projects: ctx.forgeProjects,
+        resolveProjectId,
+      })
+    } catch {
+      disposePrestep = undefined
+    }
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
@@ -398,6 +413,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
+      ...(disposePrestep !== undefined ? [disposePrestep] : []), // bug mention pre-step（ctx.on 面在场时）
       () => loopDriverBase.dispose(), // fiber 卸载收口：活循环同步终态（不收口则 DB 关闭后循环异常终止——fix-bug ea86ea00）
     ]
     return () => {
@@ -424,6 +440,25 @@ export type { ForgePipelineMode, ForgePipelineSectionVars } from './prompt/index
 // tool 面 emit 点已接线（dispatchTask 五事件 + submitTask task-submitted + 全 tool-error）。
 export { assertForgeEventEnvelope, createForgeEventBus } from './events/bus.js'
 export type { ForgeEventBus, ForgeEventHandler } from './events/bus.js'
+// bug mention 发送期展开 pre-step（'agent/pre-step' waterfall——扫描/投影/取数纯函数 + 挂接）。
+export {
+  attachBugMentionPrestep,
+  expandBugMentions,
+  hasBugBlock,
+  scanBugMentions,
+  serializeBugCardBlock,
+  UUID36_PATTERN_SOURCE,
+} from './agent/bug-mention-prestep.js'
+export type {
+  BugMentionLookupFace,
+  BugMentionPrestepDeps,
+  BugMentionProjectsFace,
+  PreStepDecisionFace,
+  PreStepRegisterFace,
+  PrestepAgentFace,
+  PrestepPayloadFace,
+  PrestepUserMessageFace,
+} from './agent/bug-mention-prestep.js'
 export {
   attachForgeLogListener,
   createForgeLogListener,

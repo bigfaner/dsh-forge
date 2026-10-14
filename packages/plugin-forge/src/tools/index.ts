@@ -56,6 +56,11 @@ export interface ForgeBugsToolFace {
     readonly fixApproach?: string
     readonly fixSessionId?: string
   }): Promise<BugCard>
+  /**
+   * 台账读面（bug-mention-prestep 发送期展开的现查源——core listBugs 结构兼容；
+   * ListBugsQuery 消费子集：projectId 必带，search/status/sort 不用于按 id 现查）。
+   */
+  listBugs(q: { readonly projectId: string }): Promise<readonly BugCard[]>
 }
 
 /** tool 共享的执行期依赖（index.ts 装配注入） */

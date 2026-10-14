@@ -50,6 +50,9 @@ function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; capt
     resolveBug: async () => {
       throw new Error('not used')
     },
+    listBugs: async () => {
+      throw new Error('not used')
+    },
   }
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
@@ -142,6 +145,7 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
         resolveBug: async () => {
           throw new Error('not used')
         },
+        listBugs: async () => [],
       },
       resolveProjectId: () => 'p-1',
     }
