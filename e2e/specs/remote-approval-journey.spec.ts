@@ -167,6 +167,23 @@ test('远程配对→监控→审批旅程：默认关→开启(待重启)→重
     const bodyText = await page.locator('body').innerText()
     expect(bodyText, '受限页无知识库入口文案').not.toContain('知识库')
     expect(bodyText, '受限页无文档入口文案').not.toContain('文档')
+    // 路由不可达（1.9 暴露面边界②）：受限单页对任意路由态均不进壳——
+    // ①hash 路由态（官方壳路由面形态）携入口参数仍收敛受限单页；
+    for (const route of ['#/sessions', '#/knowledge', '#/docs']) {
+      await page.goto(`${origin}/?forgeRemote=1${route}`)
+      await expect(page.locator('.dswf-rview-title'), `${route} 路由态仍受限单页标题`).toHaveText('任务进度', { timeout: 15_000 })
+      await expect(
+        page.locator('[data-dswf-workbench], [data-dswf-sidebar], [data-dswf-session]').first(),
+        `${route} 路由态无任何工作台/侧栏/会话元素`,
+      ).toHaveCount(0)
+    }
+    // ②运行期逃逸禁断：history.pushState 摘除入口参数不触发壳挂载（受限单页无通往
+    //   完整工作台的路由——壳只经全新加载 + 分支判定进入，运行期无软逃逸缝）。
+    await page.evaluate((o) => { history.pushState({}, '', o) }, origin + '/')
+    await page.waitForTimeout(1_500)
+    await expect(page.locator('[data-dswf-workbench]'), 'pushState 摘参后官方壳仍不挂载').toHaveCount(0)
+    await expect(page.locator(COMPOSER_INPUT), 'pushState 摘参后无对话 composer').toHaveCount(0)
+    await expect(page.locator('.dswf-rview-title'), '受限单页仍在场（运行期恒受限）').toBeAttached()
 
     // ── 旅程④审批决策上行（验收 5：走官方审批流——host 转发缝）──
     const approval = await page.evaluate(async () => {
