@@ -66,7 +66,7 @@ export const PROPOSAL_ROW_OUTPUT_SCHEMA = withFailureVariant({
     author: { type: 'string', description: 'Author identity (row full-shape mirror of ProposalRow).' },
     decidedAt: { type: 'string' },
     mode: { type: 'string', description: 'expedition or blitz (absent = NULL placeholder).' },
-    supersededBy: { type: 'string', description: 'Superseding proposal id (superseded lineage).' },
+    supersededBy: { type: 'string', description: 'Superseding proposal id (the proposal that replaces this one).' },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
   },
@@ -95,7 +95,7 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
   return {
     name: TOOL,
     description:
-      'Register a proposal row in the forge pipeline (identity and name are separate: the slug can be renamed later, links use proposalId). rel_path points at the proposal document relative to the workspace docs root. mode records the lineage (expedition = full pipeline via PRD/design/breakdown, blitz = direct-attached tasks once accepted) and is always auto-filled from the session\'s current agent preset (selected-event replay over the birth header; no preset context = undecided placeholder). Verdicts (accept/reject) happen through transitionProposal only when the user decides.',
+      'Register a proposal row in the forge pipeline (identity and name are separate: the slug can be renamed later, links use proposalId). rel_path points at the proposal document relative to the workspace docs root. mode records which pipeline this proposal belongs to (expedition = full pipeline via PRD/design/breakdown, blitz = direct-attached tasks once accepted) and is always auto-filled from the session\'s current agent preset (selected-event replay over the birth header; no preset context = undecided placeholder). Verdicts (accept/reject) happen through transitionProposal only when the user decides.',
     parameters: {
       type: 'object',
       properties: {

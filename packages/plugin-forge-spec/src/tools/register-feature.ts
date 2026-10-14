@@ -80,7 +80,7 @@ export function createRegisterFeatureTool(deps: ForgeSpecToolDeps): ForgeToolDef
         slug: { type: 'string', description: 'Feature slug (unique; matches the feature directory name).' },
         title: { type: 'string', description: 'Feature title.' },
         summary: { type: 'string', description: 'One-line summary (injected into agent context later).' },
-        proposal_id: { type: 'string', description: 'Source proposal uuid for lineage linking (omit when the feature has no proposal origin).' },
+        proposal_id: { type: 'string', description: 'Source proposal uuid for linking the feature to its proposal origin (omit when the feature has no proposal origin).' },
       },
       required: ['slug', 'title'],
     },
