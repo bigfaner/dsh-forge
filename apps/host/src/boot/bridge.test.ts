@@ -33,6 +33,7 @@ import {
   FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
   parseChildOptions,
+  isTunnelHost,
   pairRedirectOf,
   remoteViewFilePathOf,
   remoteViewIndexTap,
@@ -920,6 +921,26 @@ describe('pairRedirectOf（fix-16 隧道域尊重 Host 头）', () => {
     expect(pairRedirectOf('[::1]:8787', LAN, PORT)).toEqual(fallback)
     expect(pairRedirectOf('', LAN, PORT)).toEqual(fallback)
     expect(pairRedirectOf(undefined, LAN, PORT)).toEqual(fallback)
+  })
+})
+
+// fix-28 隧道 Host 判定（纯化可测——/pair PIN 门消费面：隧道域强制 PIN 第二因子）
+describe('isTunnelHost（fix-28 隧道域判定）', () => {
+  const LAN = '192.168.1.7'
+
+  it('隧道域（公网域名/非 LAN 非回环 host）= true', () => {
+    expect(isTunnelHost('swift-words.trycloudflare.com', LAN)).toBe(true)
+    expect(isTunnelHost('abc.pinggy.io', LAN)).toBe(true)
+    expect(isTunnelHost('203.0.113.9:8787', LAN)).toBe(true)
+  })
+
+  it('回环/LAN 本身/空/缺席 = false（LAN 信任直连语义保持）', () => {
+    expect(isTunnelHost('localhost:8787', LAN)).toBe(false)
+    expect(isTunnelHost('127.0.0.1:8787', LAN)).toBe(false)
+    expect(isTunnelHost('[::1]:8787', LAN)).toBe(false)
+    expect(isTunnelHost(`${LAN}:8787`, LAN)).toBe(false)
+    expect(isTunnelHost('', LAN)).toBe(false)
+    expect(isTunnelHost(undefined, LAN)).toBe(false)
   })
 })
 

@@ -27,6 +27,51 @@ export interface PinGrant {
   readonly expiresAt: number
 }
 
+/**
+ * fix-28 PIN 输入页（官方 renderPairingPinPage :1198 同位）：/pair 对隧道 Host 的 token
+ * 校验通过后呈此页（不直接 302 落地——公网 URL 持有者还须 PIN 第二因子）。表单 POST
+ * /pair/verify（既有 PIN 校验/TTL/限速语义全归 pinIssuer）；凭据零嵌入（纯静态页）。
+ */
+export function renderPairingPinPage(): string {
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN"><head><meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>输入 PIN 完成配对</title></head>',
+    '<body><h1>输入 PIN 完成配对</h1>',
+    '<p>请输入桌面端显示的 6 位 PIN。</p>',
+    '<form action="/pair/verify" method="post">',
+    '<input name="pin" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>',
+    '<button type="submit">验证</button>',
+    '</form></body></html>',
+  ].join('')
+}
+
+/**
+ * fix-28 bug cad43954：/pair/verify PIN 提交解析单源（query 优先 → JSON body →
+ * urlencoded 表单体——renderPairingPinPage 原生 form POST 即 urlencoded）。Root cause:
+ * 处理器只吃 query/JSON，表单 urlencoded 体解析不到 pin → 正确 PIN 恒 403。
+ * 畸形 body = 空串不抛（fail-soft，走 verify false 面）。
+ */
+export function pinOfSubmission(queryPin: string, rawBody: string): string {
+  if (queryPin !== '') return queryPin
+  const body = rawBody.trim()
+  if (body === '') return ''
+  if (body.startsWith('{')) {
+    try {
+      const raw = (JSON.parse(body) as Record<string, unknown> | null)?.['pin']
+      return typeof raw === 'string' ? raw : ''
+    } catch {
+      return ''
+    }
+  }
+  try {
+    return new URLSearchParams(body).get('pin') ?? ''
+  } catch {
+    return ''
+  }
+}
+
 export interface PinIssuer {
   /** 当前 PIN（缺席或已到期 = 惰性重签新 PIN——超时自动换签；durable 态 = 冻结签发）。 */
   current(): PinGrant

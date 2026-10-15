@@ -12,6 +12,8 @@ import {
   PIN_MAX_FAILURES,
   PIN_RATE_WINDOW_MS,
   PIN_TTL_MS,
+  pinOfSubmission,
+  renderPairingPinPage,
 } from './pairing.js'
 
 describe('fix-6 配对令牌签发器（官方 /pair 协议对齐）', () => {
@@ -177,6 +179,47 @@ describe('dsh-mobile-tunnel PIN 签发器（官方 /pair/verify 对齐：6 位·
   it('cold issuer：从未签发 verify = false 不抛', () => {
     const issuer = createPinIssuer(() => 0)
     expect(issuer.verify('123456')).toBe(false)
+  })
+})
+
+// ── fix-28 PIN 输入页（官方 renderPairingPinPage :1198 同位——/pair 隧道 Host 呈页门） ──
+
+describe('fix-28 renderPairingPinPage（/pair 隧道 Host PIN 输入页）', () => {
+  const page = renderPairingPinPage()
+
+  it('表单 POST /pair/verify + 6 位 PIN 输入（数字键盘）', () => {
+    expect(page).toContain('action="/pair/verify"')
+    expect(page).toContain('method="post"')
+    expect(page).toContain('name="pin"')
+    expect(page).toContain('inputmode="numeric"')
+    expect(page).toContain('maxlength="6"')
+  })
+
+  it('不携带 token/pin 等敏感凭据（凭据零嵌入——verify 由 PIN 单独守门）', () => {
+    expect(page).not.toMatch(/token/i)
+    expect(page).not.toMatch(/[0-9]{6}/)
+  })
+})
+
+// ── fix-28 bug cad43954：PIN 提交解析（query + JSON/urlencoded body 单源——表单原生
+// 提交是 application/x-www-form-urlencoded，/pair/verify 必须吃得下） ──
+
+describe('fix-28 pinOfSubmission（/pair/verify PIN 提交解析单源）', () => {
+  it('urlencoded 表单体（renderPairingPinPage 原生 form POST）→ pin 解出', () => {
+    expect(pinOfSubmission('', 'pin=123456')).toBe('123456')
+    expect(pinOfSubmission('', 'pin=012345&other=x')).toBe('012345')
+    expect(pinOfSubmission('', 'pin=12%33456')).toBe('123456') // percent-encoding 解码
+  })
+
+  it('JSON body → pin 解出（既有语义保持）；畸形 body = 空串不抛', () => {
+    expect(pinOfSubmission('', '{"pin":"654321"}')).toBe('654321')
+    expect(pinOfSubmission('', 'not-json')).toBe('')
+    expect(pinOfSubmission('', '')).toBe('')
+    expect(pinOfSubmission('', '{"pin":123}')).toBe('') // 非字符串 = 空串
+  })
+
+  it('query ?pin= 优先于 body（既有语义：query 非空时 body 不参与）', () => {
+    expect(pinOfSubmission('111111', 'pin=222222')).toBe('111111')
   })
 })
 

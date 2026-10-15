@@ -808,18 +808,25 @@ export function sendGuarded(message: ChildToMainMessage, send: (message: ChildTo
  *     LAN 权威（本地扫码/畸形 Host 缺席兜底）。authority 仅取自本次请求 Host——零开放重定向。
  *   · origin scheme 按到达域判定：隧道域 → https；LAN/回环 → http。
  */
+/**
+ * fix-28 隧道 Host 判定（纯化可测——pairRedirectOf 与 /pair PIN 门共用单源）：
+ * Host 头非空、非回环、非 LAN 本身 = 隧道域（公网可达——PIN 第二因子强制面）。
+ */
+export function isTunnelHost(hostHeader: string | undefined, lanIpv4: string): boolean {
+  const host = typeof hostHeader === 'string' ? hostHeader.trim() : ''
+  const hostname = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase()
+  const loopback = hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  return host !== '' && !loopback && hostname !== lanIpv4.toLowerCase()
+}
+
 export function pairRedirectOf(
   hostHeader: string | undefined,
   lanIpv4: string,
   pairPort: number,
 ): { authority: string; origin: string } {
   const fallback = `${lanIpv4}:${pairPort}`
-  const host = typeof hostHeader === 'string' ? hostHeader.trim() : ''
-  const hostname = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase()
-  const loopback = hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
-  const lanItself = hostname === lanIpv4.toLowerCase()
-  const tunnel = host !== '' && !loopback && !lanItself
-  const authority = tunnel ? host : fallback
+  const tunnel = isTunnelHost(hostHeader, lanIpv4)
+  const authority = tunnel ? (hostHeader as string).trim() : fallback
   return { authority, origin: `${tunnel ? 'https' : 'http'}://${authority}` }
 }
 

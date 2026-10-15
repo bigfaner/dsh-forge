@@ -29,6 +29,7 @@ import {
   extraPatchFiles,
   parseChildOptions,
   pairRedirectOf,
+  isTunnelHost,
   redactTokenQuery,
   remoteViewFilePathOf,
   remoteViewIndexTap,
@@ -43,7 +44,13 @@ import {
 import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
-import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
+import {
+  PAIRING_TTL_MS,
+  createPairingIssuer,
+  createPinIssuer,
+  pinOfSubmission,
+  renderPairingPinPage,
+} from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import type { ProjectService } from '@dsh-forge/contracts'
@@ -288,6 +295,17 @@ async function main(): Promise<void> {
             res.end('配对二维码已过期——请在桌面端重新扫码')
             return
           }
+          // fix-28（bug 1025e719 安全级）：隧道 Host（公网可达）token 通过后不直接 302 落地
+          // ——呈官方 renderPairingPinPage 同位 PIN 输入页，/pair/verify（TTL/限速既有）
+          // 通过才铸会话（第二因子强制）；LAN Host（同网段信任，官方同形）保持直连 302。
+          // Root cause: /pair 对隧道域 token 校验通过即 302 authenticatedUrl——隧道 URL 任何
+          // 持有者绕过 PIN 直接入受限视图，PIN 第二因子在隧道模式失效。
+          if (tokenOk && isTunnelHost(req.headers.host, lanIpv4)) {
+            diag(`[pair-diag] /pair tunnel host → PIN page（第二因子强制）`)
+            res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(renderPairingPinPage())
+            return
+          }
           // fix-7：握手成功 → 主侧抬 manifest remoteDeviceConnected（粘性位——UI「手机已
           // 连接」态卡单源；guard 路径外发，重复扫码重复发亦幂等）
           send({ type: 'pair-connected' })
@@ -434,16 +452,10 @@ async function main(): Promise<void> {
           req.on('end', () => {
             // fix-16：同 /pair——authority 尊重请求 Host 头 + scheme 按到达域判定
             const { origin } = pairRedirectOf(req.headers.host, lanIpv4, pairPort)
-            let pin = new URL(req.url ?? '/', origin).searchParams.get('pin') ?? ''
-            if (pin === '') {
-              try {
-                const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
-                const raw = (body as Record<string, unknown> | null)?.['pin']
-                if (typeof raw === 'string') pin = raw
-              } catch {
-                // 畸形 body → pin 保持空串（走 verify false 面）
-              }
-            }
+            const queryPin = new URL(req.url ?? '/', origin).searchParams.get('pin') ?? ''
+            // fix-28 bug cad43954：解析单源 pinOfSubmission——query 优先 → JSON → urlencoded
+            // 表单体（renderPairingPinPage 原生 form POST 即 urlencoded；畸形 = 空串不抛）
+            const pin = pinOfSubmission(queryPin, Buffer.concat(chunks).toString('utf8'))
             const pinOk = pinIssuer.verify(pin)
             // fix-22 诊断日志面②：PIN 校验读数（不携 pin 值本体）
             diag(`[pair-diag] /pair/verify host=${JSON.stringify(req.headers.host ?? '')} pinVerify=${pinOk ? 'pass' : 'fail'}`)
