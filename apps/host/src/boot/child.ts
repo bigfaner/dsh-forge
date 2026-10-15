@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmod, writeFile } from 'node:fs/promises'
+import { chmod, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { createInterface } from 'node:readline'
@@ -109,6 +109,20 @@ function remoteApprovalEnabledOf(settingsFile: string | undefined): boolean {
 }
 
 /**
+ * dsh-desktop cloudflared 种子候选（userData/bin——main.js:22502 `join(app.getPath
+ * ("userData"), "bin")`；二进制名 win32=cloudflared.exe 其余=cloudflared，:578）。仅作字节
+ * 来源：sha256 对 pin 清单校验一致才拷贝进产品缓存；缺席环境（无 APPDATA/未装 dsh）=
+ * 空候选，纯下载链自洽。
+ */
+export function officialCloudflaredSeedCandidates(): string[] {
+  const roaming = process.env['APPDATA']
+  if (roaming === undefined || roaming === '') return []
+  const bin = `${roaming.replace(/[\\/]+$/, '')}\\dsh-desktop\\bin`
+  const name = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
+  return [`${bin}\\${name}`]
+}
+
+/**
  * dsh-mobile-tunnel 隧道层 node 依赖面装配（TunnelDeps 全真实实现——下载/哈希/缓存/
  * 子进程/stdout 逐行捕获；外部依赖面单点收口归隧道层，此处只装配不实现语义）。
  */
@@ -118,6 +132,7 @@ function createNodeTunnelDeps(): TunnelDeps {
     sha256: (data) => createHash('sha256').update(data).digest('hex'),
     fs: {
       exists: (path) => existsSync(path),
+      readFile: (path) => readFile(path),
       writeFile: (path, data) => writeFile(path, data),
       chmod: (path, mode) => chmod(path, mode),
     },
@@ -305,7 +320,12 @@ async function main(): Promise<void> {
         })
       }
       try {
-        tunnelManager = new TunnelManager(createNodeTunnelDeps(), { localPort: pairPort })
+        tunnelManager = new TunnelManager(createNodeTunnelDeps(), {
+          localPort: pairPort,
+          // bug be04ce95：dsh-desktop 已下载的 cloudflared 作种子（sha256 对 pin 清单校验
+          // 一致才拷贝进产品自身缓存——非运行期引用，用户无 dsh 时纯下载链自洽）
+          externalSeeds: officialCloudflaredSeedCandidates(),
+        })
         tunnelManager.onEvent(sendTunnelState)
         void tunnelManager.start().catch(() => sendTunnelState(undefined)) // 双链路皆不可用 → 撤除面
       } catch {

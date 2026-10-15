@@ -7,6 +7,7 @@ import {
   CLOUDFLARED_VERSION,
   TunnelProcessExitError,
   cachedBinaryPath,
+  cloudflaredAsset,
   cloudflaredDownloadUrl,
   ensureCloudflaredBinary,
   startCloudflaredTunnel,
@@ -79,6 +80,7 @@ function makeDeps(): {
     sha256: () => CLOUDFLARED_SHA256[ASSET] ?? GOOD_SHA,
     fs: {
       exists: (p) => files.has(p),
+      readFile: async (p) => files.get(p) ?? new Uint8Array(),
       writeFile: async (p, d) => {
         files.set(p, d)
       },
@@ -122,6 +124,85 @@ async function untilSpawn(t: ReturnType<typeof makeDeps>, n = 1): Promise<FakePr
 }
 
 const ASSET = 'cloudflared-windows-amd64.exe'
+
+// ── bug be04ce95：sha256 清单占位全零 → cloudflared 首选链路任何网络下必败（官方锚对齐） ──
+describe('bug be04ce95：清单真值防回归（官方锚 = DSH Desktop 0.10.0 main.js:508-535）', () => {
+  it('pin 版本 = 官方锚 2026.8.2（占位 2024.8.0 必红）', () => {
+    expect(CLOUDFLARED_VERSION).toBe('2026.8.2')
+  })
+
+  it('五资产 sha256 真值：64 位 hex、非全零占位、互异（占位清单必红）', () => {
+    const entries = Object.entries(CLOUDFLARED_SHA256)
+    expect(entries.length).toBeGreaterThanOrEqual(5)
+    const seen = new Set<string>()
+    for (const [asset, digest] of entries) {
+      expect(digest, `${asset} 摘要形状`).toMatch(/^[0-9a-f]{64}$/)
+      expect(digest === '0'.repeat(64), `${asset} 占位全零——真实环境校验必败`).toBe(false)
+      expect(seen.has(digest), `${asset} 摘要与前者重复`).toBe(false)
+      seen.add(digest)
+    }
+  })
+
+  it('win32-x64 真值钉官方 asar 锚（main.js:524 逐字）', () => {
+    expect(CLOUDFLARED_SHA256['cloudflared-windows-amd64.exe']).toBe(
+      'c29eee2b121f5436a642eed69fd9767da7e7b8c510fa50aaa130337f931357b5',
+    )
+  })
+
+  it('darwin 资产名 = 官方 .tgz 形态（main.js:512-519——无 .tgz 名 404 必红）', () => {
+    expect(cloudflaredAsset('darwin', 'arm64')).toBe('cloudflared-darwin-arm64.tgz')
+    expect(cloudflaredAsset('darwin', 'x64')).toBe('cloudflared-darwin-amd64.tgz')
+  })
+
+  it('darwin tgz 下载校验后经 tar 解包落缓存（官方 :601-603 同径）', async () => {
+    const t = makeDeps()
+    // fake sha256 缺省恒返 win 资产摘要——darwin 用例覆写为对应 tgz 摘要（模拟「内容与清单匹配」）
+    t.deps.sha256 = () => CLOUDFLARED_SHA256['cloudflared-darwin-arm64.tgz'] ?? GOOD_SHA
+    t.setBody(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, 'cloudflared-darwin-arm64.tgz'), new Uint8Array([1]))
+    const pending = ensureCloudflaredBinary(t.deps, 'darwin', 'arm64')
+    await untilSpawn(t, 1) // tar 派生后喂成功退出码（fake 进程不自行退出）
+    spawnOf(t).exit(0)
+    const path = await pending
+    expect(t.spawnCalls[0]?.cmd).toBe('tar')
+    expect(t.spawnCalls[0]?.args[0]).toBe('-xzf')
+    expect(path).toBe(cachedBinaryPath(TMP, 'cloudflared-darwin-arm64')) // 解包产物名（去 .tgz）
+  })
+
+  it('dsh-desktop 已下载的 cloudflared 作种子：sha256 对 pin 清单校验一致 → 拷贝进产品缓存（零下载、非运行期引用）', async () => {
+    const t = makeDeps()
+    const seed = 'C:/Users/x/AppData/Roaming/dsh-desktop/bin/cloudflared.exe'
+    t.files.set(seed, new Uint8Array([1])) // dsh 缓存在盘；fake sha256 缺省返回清单值 = 校验一致
+    const path = await ensureCloudflaredBinary(t.deps, 'win32', 'x64', [seed])
+    expect(path).toBe(cachedBinaryPath(TMP, ASSET)) // 返回产品自身缓存路径
+    expect(t.files.has(path)).toBe(true) // 字节已拷贝进产品缓存
+    expect(t.files.get(path)).toEqual(new Uint8Array([1]))
+    expect(t.fetchCalls).toHaveLength(0) // 不下载——GitHub 不可达环境也能就位
+  })
+
+  it('种子校验不过（版本漂移）→ 跳过收编落回下载链', async () => {
+    const t = makeDeps()
+    const seed = 'C:/Users/x/AppData/Roaming/dsh-desktop/bin/cloudflared.exe'
+    t.files.set(seed, new Uint8Array([1]))
+    let calls = 0
+    t.deps.sha256 = () => {
+      calls += 1
+      return calls === 1 ? 'b'.repeat(64) : (CLOUDFLARED_SHA256[ASSET] ?? GOOD_SHA) // 首次=种子（不符），二次=下载（过）
+    }
+    t.setBody(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, ASSET), new Uint8Array([2, 3]))
+    const path = await ensureCloudflaredBinary(t.deps, 'win32', 'x64', [seed])
+    expect(path).toBe(cachedBinaryPath(TMP, ASSET))
+    expect(t.fetchCalls).toHaveLength(1) // 落回下载
+    expect(t.files.get(path)).toEqual(new Uint8Array([2, 3])) // 缓存 = 下载内容（非种子字节）
+  })
+
+  it('外部种子缺席 → 纯下载链自洽（用户未装 dsh 形态）', async () => {
+    const t = makeDeps()
+    t.setBody(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, ASSET), new Uint8Array([1, 2, 3]))
+    const path = await ensureCloudflaredBinary(t.deps, 'win32', 'x64', ['C:/不存在/cloudflared.exe'])
+    expect(path).toBe(cachedBinaryPath(TMP, ASSET))
+    expect(t.fetchCalls).toHaveLength(1)
+  })
+})
 
 describe('cloudflared 二进制下载（pin 版本 + sha256 + 缓存）', () => {
   it('按 pin 版本从 GitHub releases 下载并写缓存', async () => {

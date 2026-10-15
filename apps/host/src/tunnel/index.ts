@@ -23,6 +23,8 @@ export interface TunnelManagerOptions {
   /** 反代目标 = 本机配对面端口（/pair 缝所在桥接服务器；host webserver 恒不暴露） */
   localPort: number
   captureTimeoutMs?: number
+  /** cloudflared 种子候选（官方 DSH Desktop 已下载二进制——校验一致则拷贝进产品缓存，非运行期引用） */
+  externalSeeds?: readonly string[]
 }
 
 export interface TunnelHandle {
@@ -40,6 +42,7 @@ export class TunnelManager {
   private readonly listeners = new Set<TunnelEventListener>()
   private readonly captureTimeoutMs: number
   private readonly localPort: number
+  private readonly externalSeeds: readonly string[]
 
   constructor(
     private readonly deps: TunnelDeps,
@@ -47,6 +50,7 @@ export class TunnelManager {
   ) {
     this.localPort = options.localPort
     this.captureTimeoutMs = options.captureTimeoutMs ?? 15_000
+    this.externalSeeds = options.externalSeeds ?? []
   }
 
   /** 当前链路状态（未启动/已停 = undefined） */
@@ -87,7 +91,7 @@ export class TunnelManager {
   }
 
   private async startCloudflared(): Promise<TunnelState> {
-    const binaryPath = await ensureCloudflaredBinary(this.deps)
+    const binaryPath = await ensureCloudflaredBinary(this.deps, process.platform, process.arch, this.externalSeeds)
     const tunnel = await startCloudflaredTunnel(
       binaryPath,
       this.localPort,

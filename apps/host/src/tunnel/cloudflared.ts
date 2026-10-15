@@ -20,9 +20,10 @@ export type ProcessSpawner = (command: string, args: readonly string[]) => Tunne
 /** 二进制下载缝（真实实现 = fetch → arrayBuffer，测试 = fake server/内存） */
 export type BinaryFetcher = (url: string) => Promise<Uint8Array>
 
-/** 缓存文件系统缝（存在性/写入/执行位；真实实现 = node:fs） */
+/** 缓存文件系统缝（存在性/读取/写入/执行位；真实实现 = node:fs） */
 export interface TunnelFs {
   exists(path: string): boolean
+  readFile(path: string): Promise<Uint8Array>
   writeFile(path: string, data: Uint8Array): Promise<void>
   /** POSIX 执行位（win32 实现可 no-op） */
   chmod(path: string, mode: number): Promise<void>
@@ -38,66 +39,104 @@ export interface TunnelDeps {
   now(): number
 }
 
-/** cloudflared pin 版本（版本漂移风险收敛于此单点 + sha256 清单同步） */
-export const CLOUDFLARED_VERSION = '2024.8.0'
+/** cloudflared pin 版本（官方锚 DSH Desktop 0.10.0 main.js:508 = 2026.8.2；版本漂移风险收敛于此单点 + sha256 清单同步） */
+export const CLOUDFLARED_VERSION = '2026.8.2'
 
-/** 平台架构 → release 资产名 */
+/** 平台架构 → release 资产名（darwin = 官方 .tgz 形态——下载后经 tar 解包；win-arm64 上游无资产 = 官方同款不支持；main.js:511-535） */
 export function cloudflaredAsset(platform: string, arch: string): string {
-  if (platform === 'win32') return `cloudflared-windows-${arch === 'arm64' ? 'arm64' : 'amd64'}.exe`
-  if (platform === 'darwin') return `cloudflared-darwin-${arch === 'arm64' ? 'arm64' : 'amd64'}`
+  if (platform === 'win32') {
+    if (arch === 'arm64') throw new Error(`cloudflared 不支持的平台：${platform}/${arch}（上游无 win-arm64 资产）`)
+    return 'cloudflared-windows-amd64.exe'
+  }
+  if (platform === 'darwin') return `cloudflared-darwin-${arch === 'arm64' ? 'arm64' : 'amd64'}.tgz`
   if (platform === 'linux') return `cloudflared-linux-${arch === 'arm64' ? 'arm64' : 'amd64'}`
   throw new Error(`cloudflared 不支持的平台：${platform}/${arch}`)
 }
 
 /**
- * pin 版本 sha256 清单（平台-架构 → 资产摘要；版本升级时与 release 清单同步替换）。
- * 校验不过即拒用——不落缓存、不启动。
+ * pin 版本 sha256 清单（资产名 → 摘要；官方锚 main.js:511-535 逐字）。
+ * darwin 为 .tgz 压缩包摘要（校验后解包）；校验不过即拒用——不落缓存、不启动。
+ * // Root cause: be04ce95 前清单为占位全零——下载后校验必然 mismatch，首选链路恒败。
  */
 export const CLOUDFLARED_SHA256: Readonly<Record<string, string>> = {
   'cloudflared-windows-amd64.exe':
-    '0000000000000000000000000000000000000000000000000000000000000000',
-  'cloudflared-windows-arm64.exe':
-    '0000000000000000000000000000000000000000000000000000000000000000',
-  'cloudflared-darwin-amd64':
-    '0000000000000000000000000000000000000000000000000000000000000000',
-  'cloudflared-darwin-arm64':
-    '0000000000000000000000000000000000000000000000000000000000000000',
+    'c29eee2b121f5436a642eed69fd9767da7e7b8c510fa50aaa130337f931357b5',
+  'cloudflared-darwin-arm64.tgz':
+    '9042c2c5d8b2de78e60f313d5fb31b6c5c1cebde787a3caf1f2c9588084ac442',
+  'cloudflared-darwin-amd64.tgz':
+    'f1727723c586500e2092368ae21871b3df7ddfd2cb097f22d81bee4a9c458bb4',
   'cloudflared-linux-amd64':
-    '0000000000000000000000000000000000000000000000000000000000000000',
+    'fcfb02b575a52ca1af2e3267af4e1517bcdeb30ac48c834c69abaed3c0576ad2',
   'cloudflared-linux-arm64':
-    '0000000000000000000000000000000000000000000000000000000000000000',
+    '7747d94570fb390cf47dcb4f9555c193c6355cda9793f0d878d9049e5d6a7790',
 }
 
 export function cloudflaredDownloadUrl(version: string, asset: string): string {
   return `https://github.com/cloudflare/cloudflared/releases/download/${version}/${asset}`
 }
 
+/** 缓存目录（tmpdir()/dsh-cloudflared——官方同款约定；tar -C 目标） */
+export function cacheDirOf(tmpDir: string): string {
+  const sep = tmpDir.includes('\\') ? '\\' : '/'
+  return `${tmpDir.replace(/[\\/]+$/, '')}${sep}dsh-cloudflared`
+}
+
 /** 缓存路径（官方同款约定：tmpdir()/dsh-cloudflared/<asset>） */
 export function cachedBinaryPath(tmpDir: string, asset: string): string {
   const sep = tmpDir.includes('\\') ? '\\' : '/'
-  return `${tmpDir.replace(/[\\/]+$/, '')}${sep}dsh-cloudflared${sep}${asset}`
+  return `${cacheDirOf(tmpDir)}${sep}${asset}`
 }
 
 /**
- * 确保 pin 版本 cloudflared 二进制就位并返回路径：
- * 缓存命中（fs.exists）→ 不下载；未命中 → 下载 → sha256 校验（不过即抛错拒用、不落盘）
- * → 写缓存。二次启动（fs.exists 命中）零下载。
+ * 确保 pin 版本 cloudflared 二进制就位并返回路径（产品自洽链——用户可无 dsh）：
+ * ①产品自身缓存（fs.exists）→ 不下载；②种子收编：externalSeeds 候选（官方 DSH Desktop
+ * `userData/bin/cloudflared[.exe]` 已下载二进制）在盘 → 读字节 + sha256 对 pin 清单校验
+ * （不过即跳过——版本漂移不收编）→ **拷贝进产品自身缓存**（不引用不搬移 dsh 目录）；
+ * ③下载 → sha256 校验（不过即抛错拒用、不落盘）→ 落缓存。darwin .tgz 资产校验后经
+ * `tar -xzf` 解包到缓存目录（官方 :601-603 同径），产物名 = 资产名去 .tgz；非 tgz 直接
+ * 写缓存。二次启动（fs.exists 命中）零下载零收编。
  */
 export async function ensureCloudflaredBinary(
   deps: TunnelDeps,
   platform: string = process.platform,
   arch: string = process.arch,
+  externalSeeds: readonly string[] = [],
 ): Promise<string> {
   const asset = cloudflaredAsset(platform, arch)
-  const path = cachedBinaryPath(deps.tmpDir(), asset)
+  const isTarGz = asset.endsWith('.tgz')
+  // 缓存判定/产物名：tgz → 解包产物（去 .tgz）；否则 = 资产名本身
+  const cacheName = isTarGz ? asset.replace(/\.tgz$/, '') : asset
+  const path = cachedBinaryPath(deps.tmpDir(), cacheName)
   if (deps.fs.exists(path)) return path
+  // 种子收编：与 pin 清单校验一致才拷贝进产品缓存（dsh 缓存只是字节来源，非运行期依赖）
+  if (!isTarGz) {
+    const expected = CLOUDFLARED_SHA256[asset]
+    for (const seed of externalSeeds) {
+      if (!deps.fs.exists(seed)) continue
+      const bytes = await deps.fs.readFile(seed)
+      if (deps.sha256(bytes) === expected) {
+        await deps.fs.writeFile(path, bytes)
+        return path
+      }
+    }
+  }
   const data = await deps.fetch(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, asset))
   const expected = CLOUDFLARED_SHA256[asset]
   const actual = deps.sha256(data)
   if (actual !== expected) {
     throw new Error(`cloudflared sha256 校验不过（expected=${expected} actual=${actual}）——拒用`)
   }
-  await deps.fs.writeFile(path, data)
+  if (isTarGz) {
+    // tgz：先落临时压缩包 → tar 解包到缓存目录（产物名 = 压缩包内成员名 = cacheName）
+    const tgzPath = cachedBinaryPath(deps.tmpDir(), asset)
+    await deps.fs.writeFile(tgzPath, data)
+    const tar = deps.spawn('tar', ['-xzf', tgzPath, '-C', cacheDirOf(deps.tmpDir())])
+    await new Promise<void>((resolve, reject) => {
+      tar.onExit((code) => (code === 0 ? resolve() : reject(new Error(`tar 解包失败（code=${String(code)}）`))))
+    })
+  } else {
+    await deps.fs.writeFile(path, data)
+  }
   if (platform !== 'win32') await deps.fs.chmod(path, 0o755)
   return path
 }
