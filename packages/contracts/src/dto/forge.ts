@@ -1259,16 +1259,23 @@ export interface RemoteApprovalForwardResult {
   reason?: 'unavailable'
 }
 
+/** forge:remote/disconnect 返回体（revoked=false = 会话撤销缝缺席——fail-soft，boot 旧 child 同型） */
+export interface RemoteDisconnectResult {
+  revoked: boolean
+}
+
 /** forge:remote/* 请求负载（键 = REMOTE_CHANNELS 键） */
 export interface RemoteChannelRequests {
   progress: RemoteProgressQuery
   approval: RemoteApprovalDecisionInput
+  disconnect: null
 }
 
 /** forge:remote/* 响应负载（键 = REMOTE_CHANNELS 键） */
 export interface RemoteChannelResponses {
   progress: RemoteProgressSnapshot
   approval: RemoteApprovalForwardResult
+  disconnect: RemoteDisconnectResult
 }
 
 /** forge:projects/deriveTaskStoreDir 负载映射（P1 五法负载映射在 dto/rpc.ts；M2 扩族键单列——键 = PROJECTS_M2_CHANNELS 键） */

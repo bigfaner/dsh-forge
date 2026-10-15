@@ -522,7 +522,7 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* 「手机已连接」态卡（fix-7 官方连接态——connected 收回 QR） */
+/* 「手机已连接」态卡（fix-10 官方连接成功态——锚 main.js:1176：绿色成功卡 ✓ 手机已连接 */
 .dswf-remote-connected {
   display: flex;
   align-items: center;
@@ -533,6 +533,40 @@
   border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary));
   font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
+}
+
+/* fix-10 连接成功态整体（绿卡 + 后台保持文案 + 断开连接/完成双钮行——纵向排布同面板行距） */
+.dswf-remote-connected-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* dsw-raw 面板纵向行距（面板局部刻度同源） */
+}
+
+.dswf-remote-connected-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; /* dsw-raw 成功勾徽标（局部刻度——同行文字高齐平） */
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 999px; /* dsw-raw 胶囊圆（官方 Tag/999 同值） */
+  font: var(--dsw-font-xxs-12); /* dsw-raw 12px 刻度（xxs 同值令牌） */
+  line-height: 1;
+}
+
+.dswf-remote-connected-note {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+}
+
+/* fix-10 双钮行（断开连接 outline / 完成 primary——官方 Button 件，行内右对齐官方 dialog footer 形） */
+.dswf-remote-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px; /* dsw-raw 行内钮距（局部刻度） */
 }
 
 /* 地址条带（fix-9 ⑤：pill 胶囊 + 等宽字体 + 右侧独立复制图标钮（官方 IconCopyOutline）） */

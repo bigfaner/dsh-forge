@@ -129,6 +129,8 @@ export type DocsChannel = (typeof DOCS_CHANNELS)[keyof typeof DOCS_CHANNELS]
 export const REMOTE_CHANNELS = {
   progress: 'forge:remote/progress',
   approval: 'forge:remote/approval',
+  /** fix-10：断开连接（撤该设备会话——connected 粘性位收回；缺席缝 = fail-soft revoked:false） */
+  disconnect: 'forge:remote/disconnect',
 } as const
 
 export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNELS]
@@ -169,6 +171,7 @@ export const FORGE_CHANNELS = {
   docsOpenExternal: DOCS_CHANNELS.openExternal,
   remoteProgress: REMOTE_CHANNELS.progress,
   remoteApproval: REMOTE_CHANNELS.approval,
+  remoteDisconnect: REMOTE_CHANNELS.disconnect,
 } as const
 
 export type ForgeChannel =

@@ -67,7 +67,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
     expect([...handlers.keys()].sort()).toEqual(
       [
         ...Object.values(TASKS_CHANNELS),
-        // 1.1：远程受限面两通道随 forgeTasks 在场接线
+        // 1.1：远程受限面三通道随 forgeTasks 在场接线（progress/approval + fix-10 disconnect）
         ...Object.values(REMOTE_CHANNELS),
         ...Object.values(FEATURES_CHANNELS),
         // M3 3.8 扩池：proposals 族四通道全量接线（transition 双面 drift 修订 +
@@ -82,7 +82,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
         .slice()
         .sort(),
     )
-    expect(handlers).toHaveLength(27)
+    expect(handlers).toHaveLength(28)
   })
 
   it('服务缺席（M2 面降级）：缺席族不注册 + 逐族 warn（fail-soft 不抛）', () => {

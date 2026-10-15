@@ -37,7 +37,7 @@
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // mobile-remote-approval 1.2：远程状态快照窄类型（type-only——bundle 自含纪律不破；
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
-import type { RemoteStatusSnapshot } from '../views/remote/remote-status.js'
+import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -1090,6 +1090,9 @@ function registerRemoteEntry(
           // fix-3 挂载期初刷（重启生效形态）：重启后装配期绑定变化只能在挂载时捕获——
           // 组件 mount useEffect 消费（缺席 = 兼容旧组件面，快照保默认 off）
           refresh: (): Promise<void> => remote.refresh(),
+          // fix-10：断开连接（官方锚 :1176 outline 钮——forge:remote/disconnect 撤该设备
+          // 会话缝 + 即时 refresh；成功后快照回等待扫码）
+          onDisconnect: (): Promise<void> => remote.disconnectDevice().then(() => undefined),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1445,6 +1448,8 @@ export interface ForgeRemoteStatusFace {
   refresh(): Promise<void>
   /** 开关回写（forge:settings/set remoteApproval 分节；成功 → refresh 后 true；缺席/失败 = false fail-soft） */
   setEnabled(next: boolean): Promise<boolean>
+  /** fix-10：断开连接（forge:remote/disconnect 撤该设备会话 + 即时 refresh；缺席/失败 = false） */
+  disconnectDevice(): Promise<boolean>
 }
 
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
@@ -1456,6 +1461,9 @@ interface ForgePreloadBridge {
     remotePairUrl?: string
     remotePairExpiresAt?: number
     remoteDeviceConnected?: boolean
+    tunnelUrl?: string
+    tunnelProvider?: string
+    tunnelExpiresAt?: number
   }>
 }
 
@@ -1492,6 +1500,9 @@ function remoteApprovalEnabledOf(settings: unknown): boolean | undefined {
 const SETTINGS_CHANNEL_GET = 'forge:settings/get'
 const SETTINGS_CHANNEL_SET = 'forge:settings/set'
 
+/** fix-10 断开连接通道字面量（contracts REMOTE_CHANNELS.disconnect 同源镜像——bundle 零外部 import） */
+const REMOTE_CHANNEL_DISCONNECT = 'forge:remote/disconnect'
+
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
   return typeof envelope === 'object' && envelope !== null &&
@@ -1510,15 +1521,36 @@ function snapshotOfReads(
     remotePairUrl?: string
     remotePairExpiresAt?: number
     remoteDeviceConnected?: boolean
+    tunnelUrl?: string
+    tunnelProvider?: string
+    tunnelExpiresAt?: number
   } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
   const exposureActive = manifest?.remoteHost === '0.0.0.0'
   const devicesConnected = manifest?.remoteDeviceConnected === true
-  if (enabled !== exposureActive) return { phase: 'pending' }
+  // fix-10（bug e7234823）：隧道面收拢镜像（remoteSnapshotOf 同口径——url 非空串 × 链路类型
+  // 合法齐备才携带；缺席/畸形 = 字段不出现，互联网 tab 空态收敛不再恒 starting）
+  const tunnelUrl = manifest?.tunnelUrl
+  const tunnelProviderRaw = manifest?.tunnelProvider
+  const tunnelProvider: TunnelProvider | undefined =
+    tunnelProviderRaw === 'cloudflared' || tunnelProviderRaw === 'pinggy' ? tunnelProviderRaw : undefined
+  const tunnel =
+    typeof tunnelUrl === 'string' && tunnelUrl !== '' && tunnelProvider !== undefined
+      ? {
+          url: tunnelUrl,
+          provider: tunnelProvider,
+          ...(typeof manifest?.tunnelExpiresAt === 'number' &&
+          Number.isFinite(manifest.tunnelExpiresAt) &&
+          manifest.tunnelExpiresAt > 0
+            ? { expiresAt: manifest.tunnelExpiresAt }
+            : {}),
+        }
+      : undefined
+  if (enabled !== exposureActive) return { phase: 'pending', ...(tunnel !== undefined ? { tunnel } : {}) }
   if (!enabled) return { phase: 'off' }
   // fix-7：/pair 握手成功读数抬 connected（等待扫码 → 手机已连接——remoteSnapshotOf 镜像口径）
-  if (devicesConnected) return { phase: 'connected' }
+  if (devicesConnected) return { phase: 'connected', ...(tunnel !== undefined ? { tunnel } : {}) }
   // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
   // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 /pair?token= 官方配对地址
   // 单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
@@ -1528,7 +1560,12 @@ function snapshotOfReads(
   const expiresAt = manifest?.remotePairExpiresAt
   const pairExpiresAt =
     typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
-  return { phase: 'listening', lanAddress, ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}) }
+  return {
+    phase: 'listening',
+    lanAddress,
+    ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
+    ...(tunnel !== undefined ? { tunnel } : {}),
+  }
 }
 
 /** 手机远程状态注入面构造（测试与 registerRemoteEntry 同源；快照读数细节见类型注释） */
@@ -1579,6 +1616,17 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
       if (bridge === undefined) return Promise.resolve(false)
       return Promise.resolve()
         .then(() => bridge.invoke(SETTINGS_CHANNEL_SET, { remoteApproval: { enabled: next } }))
+        .then(
+          isOkEnvelope,
+          () => false,
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+    disconnectDevice: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => bridge.invoke(REMOTE_CHANNEL_DISCONNECT, null))
         .then(
           isOkEnvelope,
           () => false,

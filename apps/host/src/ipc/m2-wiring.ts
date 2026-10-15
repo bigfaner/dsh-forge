@@ -31,7 +31,7 @@ export type EventTargetFace = { send?(channel: string, ...args: unknown[]): unkn
  */
 export function registerM2Channels(
   ipc: ForgeIpc,
-  host: Pick<DshHostHandle, 'services' | 'onEvent'>,
+  host: Pick<DshHostHandle, 'services' | 'onEvent' | 'clearRemoteDeviceConnected'>,
   getEventTarget: () => EventTargetFace,
   openPath: (target: string) => Promise<string>,
   warn: (message: string) => void = console.warn,
@@ -50,6 +50,10 @@ export function registerM2Channels(
       ipc,
       services.forgeTasks,
       approval !== undefined ? (input) => approval.deposit(input) : undefined,
+      // fix-10 断开连接缝：boot handle connected 粘性位收回（缺席 = 通道内 fail-soft）
+      host.clearRemoteDeviceConnected !== undefined
+        ? async () => host.clearRemoteDeviceConnected?.()
+        : undefined,
     )
   } else warn('forgeTasks 服务缺席（tasksHome 未配置/插件行未装载）——forge:tasks/* 与 forge:remote/* 通道未注册')
   if (services.forgeFeatures !== undefined) registerFeaturesChannels(ipc, services.forgeFeatures)

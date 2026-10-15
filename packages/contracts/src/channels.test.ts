@@ -103,10 +103,11 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:remote/* 两通道（mobile-remote-approval：progress 只读进度 / approval 审批转发——受限面零写动词族）', () => {
+  it('forge:remote/* 三通道（mobile-remote-approval：progress 只读进度 / approval 审批转发 / fix-10 disconnect 断开连接）', () => {
     expect(REMOTE_CHANNELS).toEqual({
       progress: 'forge:remote/progress',
       approval: 'forge:remote/approval',
+      disconnect: 'forge:remote/disconnect',
     })
   })
 
@@ -131,9 +132,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十一 invoke 族 38 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 两通道；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(38)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(38)
+  it('allowlist = 十一 invoke 族 39 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(39)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(39)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),

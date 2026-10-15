@@ -117,6 +117,11 @@ export interface DshHostHandle {
    * 订阅方异常隔离（不阻断其余订阅与 RPC 面）。
    */
   onEvent: (listener: (payload: TasksChangedEvent) => void) => () => void
+  /**
+   * fix-10：断开连接缝（forge:remote/disconnect 消费——connected 粘性位收回，UI 回等待
+   * 扫码）。缺席 = 旧 boot 会话/降级（remote rpc fail-soft revoked:false）。
+   */
+  clearRemoteDeviceConnected?(): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
 }
@@ -246,6 +251,10 @@ export async function bootDshHost(
   return {
     get manifest() {
       return manifest
+    },
+    // fix-10：断开连接缝——connected 粘性位收回（url/绑定/配对/隧道面全保留）
+    clearRemoteDeviceConnected: () => {
+      manifest = applyPairDisconnected(manifest)
     },
     toolNames: ready.tools ?? [],
     services: {
@@ -401,6 +410,22 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     manifest.remotePairExpiresAt,
     true,
     tunnelStateOf(manifest), // dsh-mobile-tunnel：connected 重建保留隧道面
+  )
+}
+
+/**
+ * fix-10 断开连接消费（纯函数）：以旧 manifest 面重建并收回 remoteDeviceConnected 粘性位
+ * （url/injections/绑定/配对/隧道面全保留——UI 回等待扫码；官方锚 :1176 断开连接钮语义）。
+ */
+export function applyPairDisconnected(manifest: BootManifest): BootManifest {
+  return buildBootManifest(
+    manifest.url,
+    manifest.injections,
+    manifest.remoteHost,
+    manifest.remotePairUrl,
+    manifest.remotePairExpiresAt,
+    undefined,
+    tunnelStateOf(manifest),
   )
 }
 

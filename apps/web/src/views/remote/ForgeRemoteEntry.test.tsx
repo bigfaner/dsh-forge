@@ -11,6 +11,7 @@ import {
   RemoteDialogHead,
   RemotePanel,
   REMOTE_DIALOG_TITLE,
+  REMOTE_STATUS_POLL_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
   pairCountdownText,
@@ -66,23 +67,24 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-9 ②：胶囊分段 tab——「WiFi连接模式」选中 + 「互联网连接模式」禁用态带「即将支持」徽标（隧道另立项）', () => {
-    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(html).toMatch(/data-testid="dswf-remote-tab-lan"[^>]*>WiFi连接模式/)
-    expect(html).toMatch(/data-testid="dswf-remote-tab-internet"[^>]*disabled[^>]*>[\s\S]*互联网连接模式/)
-    expect(html).toMatch(/即将支持/)
+  it('fix-10（bug ec239552 反转）：互联网 tab 真实可用——可选中双 tab（「即将支持」禁用徽标退役）', () => {
+    const lan = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(lan).toMatch(/data-testid="dswf-remote-tab-lan"[^>]*>WiFi连接模式/)
+    expect(lan).toMatch(/data-testid="dswf-remote-tab-lan"[^>]*aria-selected="true"|aria-selected="true"[^>]*data-testid="dswf-remote-tab-lan"/)
+    expect(lan).toMatch(/data-testid="dswf-remote-tab-internet"[^>]*>[\s\S]*?互联网连接模式/)
+    expect(lan).not.toMatch(/dswf-remote-tab-internet[^>]*disabled/)
+    expect(lan).not.toContain('即将支持')
   })
 
-  it('fix-9 ②：禁用 internet tab 不响应选择（aria-selected 恒 false）；受控 mode 缝仍可呈现隧道面', () => {
-    const lan = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(lan).toMatch(/aria-selected="true"[^>]*dswf-remote-tab-lan/)
-    expect(lan).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-internet/)
+  it('fix-10：互联网 tab 隧道面缺席 = 空态文案收敛（撤面后不得停留「正在建立隧道」无限进行态）', () => {
     const net = renderToStaticMarkup(
       <RemotePanel snapshot={LISTENING} onToggle={() => undefined} mode="internet" />,
     )
-    expect(net).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-lan/)
-    expect(net).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-internet/)
-    expect(net).toMatch(/dswf-remote-tunnel[^>]*data-phase="starting"/)
+    expect(net).toMatch(/data-testid="dswf-remote-tab-lan"/)
+    expect(net).toMatch(/dswf-remote-tab-internet/)
+    expect(net).toContain('data-testid="dswf-remote-tunnel-empty"')
+    expect(net).toMatch(/隧道暂不可用/)
+    expect(net).not.toContain('正在建立隧道')
   })
 
   it('远程关 = 空态替代 QR（不渲染二维码锚）', () => {
@@ -243,6 +245,46 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).toMatch(/role="switch"[\s\S]*aria-checked="true"/)
     expect(html).not.toMatch(/type="checkbox"/)
   })
+
+  it('fix-10（bug ec239552）：连接成功态绿卡——✓ 手机已连接 + 后台保持文案 + 断开连接/完成双钮（官方锚 main.js:1176）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ phase: 'connected' }}
+        onToggle={() => undefined}
+        onClose={() => undefined}
+        onDisconnect={() => undefined}
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-connected"')
+    expect(html).toMatch(/✓[\s\S]*手机已连接/)
+    expect(html).toMatch(/连接会在后台保持，现在可以关闭此窗口。/)
+    expect(html).toMatch(/data-testid="dswf-remote-disconnect"[^>]*>[\s\S]*断开连接/)
+    expect(html).toMatch(/data-testid="dswf-remote-done"[^>]*>[\s\S]*完成/)
+    expect(html).not.toContain('dswf-remote-qr')
+  })
+
+  it('fix-10：完成钮 = onClose 缝；断开连接钮 = onDisconnect 缝（撤该设备会话动作）', () => {
+    const calls: string[] = []
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ phase: 'connected' }}
+        onToggle={() => undefined}
+        onClose={() => calls.push('close')}
+        onDisconnect={() => {
+          calls.push('disconnect')
+          return undefined
+        }}
+      />,
+    )
+    expect(html).toMatch(/dswf-remote-disconnect/)
+    expect(html).toMatch(/dswf-remote-done/)
+    // 静态渲染钉缝在场；交互断言在插件装配面（remote-face）承载
+    expect(calls).toEqual([])
+  })
+
+  it('fix-10：轮询刻度常量 = 800ms（官方锚 main.js:1194——dialog 开启期状态轮询单源）', () => {
+    expect(REMOTE_STATUS_POLL_MS).toBe(800)
+  })
 })
 
 // ── dsh-mobile-tunnel 1.4：互联网 tab 隧道面（状态卡 / TTL 横幅 / PIN 引导 / 换线） ──
@@ -291,12 +333,13 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).not.toContain('dswf-remote-tunnel')
   })
 
-  it('启动中：隧道读数缺席 = starting 态卡（正在建立隧道，零 QR 零横幅）', () => {
+  it('fix-10（隧道卡死收敛）：隧道面缺席 = 互联网 tab 空态（非 starting 无限进行态——读数缝断裂/撤面均收敛空态）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={LISTENING} onToggle={() => undefined} mode="internet" />,
     )
-    expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="starting"/)
-    expect(html).toMatch(/正在建立隧道/)
+    expect(html).toContain('data-testid="dswf-remote-tunnel-empty"')
+    expect(html).toMatch(/隧道暂不可用/)
+    expect(html).not.toContain('正在建立隧道')
     expect(html).not.toContain('dswf-remote-tunnel-qr')
     expect(html).not.toContain('dswf-remote-tunnel-ttl')
   })

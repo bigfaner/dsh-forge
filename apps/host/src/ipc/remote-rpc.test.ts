@@ -35,15 +35,15 @@ function fakeService(): RemoteChannelService {
   }
 }
 
-function setup(forwardApproval?: Parameters<typeof registerRemoteChannels>[2]) {
+function setup(forwardApproval?: Parameters<typeof registerRemoteChannels>[2], revokeSession?: Parameters<typeof registerRemoteChannels>[3]) {
   const { ipcMain, handlers } = fakeIpcMain()
   const service = fakeService()
-  registerRemoteChannels(createForgeIpc(ipcMain), service, forwardApproval)
+  registerRemoteChannels(createForgeIpc(ipcMain), service, forwardApproval, revokeSession)
   return { service, handlers }
 }
 
 describe('1.1 forge:remote/* 注册面（allowlist 正/负样例）', () => {
-  it('正样例：注册面恰两通道 = REMOTE_CHANNELS 全集（progress/approval——allowlist 校验通过）', () => {
+  it('正样例：注册面恰三通道 = REMOTE_CHANNELS 全集（progress/approval/disconnect——allowlist 校验通过）', () => {
     const { handlers } = setup()
     expect([...handlers.keys()].sort()).toEqual(Object.values(REMOTE_CHANNELS).sort())
   })
@@ -81,5 +81,20 @@ describe('1.1 forge:remote/* 注册面（allowlist 正/负样例）', () => {
     const input = { requestId: 'req-1', decision: 'reject' as const, reason: '不批' }
     await expect(handler(undefined, input)).resolves.toEqual({ ok: true, data: { forwarded: true } })
     expect(forwardApproval).toHaveBeenCalledWith(input)
+  })
+
+  it('fix-10 disconnect：会话撤销缝在场 → 调用并回 {revoked:true} 信封；缺席 = fail-soft {revoked:false}', async () => {
+    const revoke = vi.fn(async () => undefined)
+    const withSeam = setup(undefined, revoke)
+    await expect(withSeam.handlers.get(REMOTE_CHANNELS.disconnect)!(undefined, null)).resolves.toEqual({
+      ok: true,
+      data: { revoked: true },
+    })
+    expect(revoke).toHaveBeenCalledTimes(1)
+    const withoutSeam = setup()
+    await expect(withoutSeam.handlers.get(REMOTE_CHANNELS.disconnect)!(undefined, null)).resolves.toEqual({
+      ok: true,
+      data: { revoked: false },
+    })
   })
 })

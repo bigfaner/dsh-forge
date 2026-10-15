@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
-import { applyPairConnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
 import { buildBootManifest } from './manifest.js'
 
 const MODULE_URL = 'file:///Z:/worktrees/redesign/apps/host/dist/boot/run.js'
@@ -116,6 +116,17 @@ describe('applyPairConnected（fix-7 /pair 握手成功——connected 读数入
     const rotated = applyPairMessage(connected, { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
     expect(rotated.remoteDeviceConnected).toBe(true)
     expect(rotated.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=new')
+  })
+})
+
+describe('applyPairDisconnected（fix-10 断开连接——connected 粘性位收回）', () => {
+  const base = () => applyPairConnected(buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000))
+  it('断开连接 → remoteDeviceConnected 收回（UI 回等待扫码——其余面全保留）', () => {
+    expect(base().remoteDeviceConnected).toBe(true)
+    const next = applyPairDisconnected(base())
+    expect('remoteDeviceConnected' in next).toBe(false)
+    expect(next.remotePairUrl).toBe('http://192.168.1.7:1/pair?token=old')
+    expect(next.remoteHost).toBe('0.0.0.0')
   })
 })
 

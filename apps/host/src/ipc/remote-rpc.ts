@@ -9,6 +9,7 @@ import {
   type ForgeTasksService,
   type RemoteApprovalDecisionInput,
   type RemoteApprovalForwardResult,
+  type RemoteDisconnectResult,
   type RemoteProgressQuery,
   type RemoteProgressSnapshot,
 } from '@dsh-forge/contracts'
@@ -23,11 +24,15 @@ export type RemoteApprovalForwarder = (
   input: RemoteApprovalDecisionInput,
 ) => Promise<RemoteApprovalForwardResult>
 
+/** 会话撤销缝（fix-10 断开连接——boot handle clearRemoteDeviceConnected；缺席 = fail-soft revoked:false） */
+export type RemoteSessionRevoker = () => Promise<void>
+
 /** 通道注册（负载映射 = contracts RemoteChannelRequests/Responses，键键对应） */
 export function registerRemoteChannels(
   ipc: ForgeIpc,
   service: RemoteChannelService,
   forwardApproval?: RemoteApprovalForwarder,
+  revokeSession?: RemoteSessionRevoker,
 ): void {
   ipc.register(
     REMOTE_CHANNELS.progress,
@@ -46,5 +51,14 @@ export function registerRemoteChannels(
         ? forwardApproval(input)
         : Promise.resolve({ forwarded: false, reason: 'unavailable' }),
     ),
+  )
+  // fix-10 断开连接（官方锚 :1176 outline 钮——connected 粘性位收回；缝缺席 fail-soft）
+  ipc.register(
+    REMOTE_CHANNELS.disconnect,
+    rpcEnvelope(async (): Promise<RemoteDisconnectResult> => {
+      if (revokeSession === undefined) return { revoked: false }
+      await revokeSession()
+      return { revoked: true }
+    }),
   )
 }

@@ -14,7 +14,7 @@
 // ——重启生效形态，onToggle 由插件注入）+ 地址条带（复制图标按钮）+ 状态态。待重启生效
 // （pending）/ 远程关（off）/ 地址读数缺席 = 对应空态而非 QR——不伪装已监听（fix-3 用户裁决）。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Modal, BrandWordmark, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Modal, BrandWordmark, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
 import type { RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
@@ -28,6 +28,8 @@ export interface ForgeRemoteEntryProps {
   readonly onToggle?: (next: boolean) => Promise<void> | void
   /** 挂载期初刷（fix-3 重启生效形态——装配期绑定变化只能在挂载时捕获；缺席 = no-op） */
   readonly refresh?: () => unknown
+  /** fix-10：断开连接动作（forge:remote/disconnect 撤该设备会话 + refresh——缺席 = 钮禁用） */
+  readonly onDisconnect?: () => Promise<void> | void
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -52,6 +54,16 @@ export const REMOTE_DIALOG_TITLE = '连接移动设备'
 export const PAIRING_QR_SIZE = 220
 /** 倒计时缺省秒数（token TTL 读数缺席时的兜底刻度 = 官方 5min） */
 export const PAIRING_COUNTDOWN_SECONDS = 300
+
+/** fix-10：dialog 开启期状态轮询刻度（官方锚 main.js:1194 800ms 轮询——隧道激活/撤面与
+ *  connected 位变化经 refresh → getBootManifest 单源回流，任何失败路径可收敛不冻结） */
+export const REMOTE_STATUS_POLL_MS = 800
+
+/** 隧道空态文案（fix-10：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——互联网 tab
+ *  内空态收敛，不禁用 tab、不停留「正在建立隧道」无限进行态） */
+export function tunnelEmptyText(): string {
+  return '隧道暂不可用——宿主建立公网隧道失败或已关闭。可稍后重开此面板重试，或使用 WiFi 连接模式。'
+}
 
 /** 倒计时余秒（纯函数——token TTL 读数驱动；缺席 = 官方 300s 兜底；过期收敛 0） */
 export function secondsLeftOf(pairExpiresAt: number | undefined, now: number): number {
@@ -90,7 +102,8 @@ function PhoneGlyph(): ReactNode {
 // fix-9 ⑤：复制字形退役——官方 IconCopyOutlineRegular 在场件接管（官方图标零自绘）。
 
 /** 双模式 tab（fix-9 ②：胶囊分段——官方 SegmentedTabs 刻度自绘；选中项白底 pill。
- *  互联网「即将支持」禁用态（隧道另立项裁决）；受控 mode 缝保留——测试/装配仍可控呈现隧道面） */
+ *  fix-10 反转：互联网 tab 真实可用（禁用占位/「即将支持」徽标退役——dsh-mobile-tunnel
+ *  manifest 隧道面单源驱动；受控 mode 缝保留——测试/装配仍可控）。 */
 function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => void }): ReactNode {
   const { active, onSelect } = props
   return (
@@ -109,15 +122,13 @@ function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => v
       <button
         type="button"
         role="tab"
-        aria-selected={false}
+        aria-selected={active === 'internet'}
         className="dswf-remote-tab"
         data-testid="dswf-remote-tab-internet"
-        data-active={false}
-        disabled
-        aria-disabled={true}
-        title="即将支持"
+        data-active={active === 'internet'}
+        onClick={() => onSelect('internet')}
       >
-        互联网连接模式<span className="dswf-remote-tab-soon">即将支持</span>
+        互联网连接模式
       </button>
     </div>
   )
@@ -231,6 +242,10 @@ export function RemotePanel(props: {
   readonly mode?: RemoteMode
   /** 1.4 fallback 缝（换线动作透传——缺席 = 换线钮禁用态） */
   readonly onFallback?: () => Promise<void> | void
+  /** fix-10：完成钮缝（关 dialog——连接成功态官方锚 main.js:1176 双钮之 primary） */
+  readonly onClose?: () => void
+  /** fix-10：断开连接缝（撤该设备会话——官方锚 :1176 双钮之 outline；缺席 = 钮禁用） */
+  readonly onDisconnect?: () => Promise<void> | void
 }): ReactNode {
   const { snapshot, onToggle, busy, onRefresh } = props
   const checked = snapshot.phase !== 'off'
@@ -288,22 +303,55 @@ export function RemotePanel(props: {
         </span>
       </div>
       {snapshot.phase === 'connected' ? (
-        // fix-7 官方连接态卡：/pair 握手成功 → 「手机已连接」态卡收回 QR（等待扫码语义闭环）
-        <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
-          <PhoneGlyph />
-          <span>手机已连接</span>
+        // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
+        // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
+        // 完成（primary——关 dialog）双钮。
+        <div className="dswf-remote-connected-wrap">
+          <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
+            <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
+            <span>手机已连接</span>
+          </div>
+          <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
+          <div className="dswf-remote-actions">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="dswf-remote-disconnect"
+              disabled={props.onDisconnect === undefined}
+              onClick={() => void props.onDisconnect?.()}
+            >
+              断开连接
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              data-testid="dswf-remote-done"
+              disabled={props.onClose === undefined}
+              onClick={() => props.onClose?.()}
+            >
+              完成
+            </Button>
+          </div>
         </div>
       ) : (
         <>
         <ModeTabs active={mode} onSelect={setModeState} />
         {mode === 'internet' ? (
-          <TunnelCard
-            phase={tunnelPhase}
-            url={tunnel?.url}
-            provider={tunnel?.provider}
-            minutesLeft={tunnelMinutesLeft}
-            onFallback={handleFallback}
-          />
+          snapshot.tunnel === undefined ? (
+            // fix-10（隧道卡死收敛）：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——
+            // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）
+            <p className="dswf-remote-empty" data-testid="dswf-remote-tunnel-empty">
+              {tunnelEmptyText()}
+            </p>
+          ) : (
+            <TunnelCard
+              phase={tunnelPhase}
+              url={tunnel?.url}
+              provider={tunnel?.provider}
+              minutesLeft={tunnelMinutesLeft}
+              onFallback={handleFallback}
+            />
+          )
         ) : (
           <div className="dswf-remote-pair">
             {pairValue !== undefined ? (
@@ -405,6 +453,8 @@ export function ForgeRemoteDialog(props: {
   readonly busy?: boolean
   /** fix-6 倒计时到期自动刷新（重取 boot manifest 换 token；缺席 = 倒计时停在 0） */
   readonly onRefresh?: () => void
+  /** fix-10：断开连接缝（透传 RemotePanel——官方锚 :1176 outline 钮） */
+  readonly onDisconnect?: () => Promise<void> | void
 }): ReactNode {
   return (
     <Modal
@@ -420,6 +470,8 @@ export function ForgeRemoteDialog(props: {
         onToggle={props.onToggle}
         busy={props.busy}
         onRefresh={props.onRefresh}
+        onClose={props.onClose}
+        onDisconnect={props.onDisconnect}
       />
     </Modal>
   )
@@ -427,7 +479,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const subscribe = useCallback((onChange: () => void) => status?.subscribe(onChange) ?? (() => {}), [status])
@@ -438,6 +490,16 @@ export function ForgeRemoteEntry({ status, onToggle, refresh }: ForgeRemoteEntry
     void refresh?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载一次性（refresh 闭包随注入面生命周期稳定）
   }, [])
+  // fix-10：dialog 开启期 800ms 状态轮询（官方锚 main.js:1194 同刻度）——隧道激活/撤面与
+  // connected 位变化经 refresh → getBootManifest 单源回流；关闭即停（非开启期零轮询）。
+  useEffect(() => {
+    if (!open || refresh === undefined) return
+    const timer = setInterval(() => {
+      void refresh()
+    }, REMOTE_STATUS_POLL_MS)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 开启态驱动的轮询（refresh 闭包随注入面生命周期稳定）
+  }, [open])
   return (
     <div className="dswf-remote-root">
       <button
@@ -459,6 +521,7 @@ export function ForgeRemoteEntry({ status, onToggle, refresh }: ForgeRemoteEntry
         snapshot={snapshot}
         onToggle={onToggle}
         onRefresh={refresh !== undefined ? () => { void refresh() } : undefined}
+        onDisconnect={onDisconnect}
       />
     </div>
   )

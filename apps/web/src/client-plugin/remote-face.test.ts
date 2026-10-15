@@ -18,7 +18,7 @@ afterEach(() => {
 
 function fakeBridge(overrides: {
   readonly settings?: unknown
-  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number; remoteDeviceConnected?: boolean }
+  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number; remoteDeviceConnected?: boolean; tunnelUrl?: string; tunnelProvider?: string; tunnelExpiresAt?: number }
   readonly invokeFail?: boolean
   readonly written?: { channel: string; payload: unknown }[]
 }): ForgeClientCtx {
@@ -58,6 +58,74 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     )
     await remote.refresh()
     expect(remote.source.getSnapshot().phase).toBe('connected')
+  })
+
+  it('fix-10（bug e7234823）：manifest 隧道面透传快照.tunnel（互联网 tab 读数缝——镜像 remote-status 口径）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:1/',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+          tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+          tunnelProvider: 'pinggy',
+          tunnelExpiresAt: 1_234_567,
+        },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().tunnel).toEqual({
+      url: 'https://x.pinggy.link/pair?token=t',
+      provider: 'pinggy',
+      expiresAt: 1_234_567,
+    })
+  })
+
+  it('fix-10：隧道撤面（tunnelUrl 缺席/畸形）= 快照.tunnel 不出现（空态收敛单源——不再恒 starting）', async () => {
+    const absent = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: { url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' },
+      }),
+    )
+    await absent.refresh()
+    expect('tunnel' in absent.source.getSnapshot()).toBe(false)
+
+    const malformed = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:1/',
+          remoteHost: '0.0.0.0',
+          tunnelUrl: 'https://x/pair?token=t',
+          tunnelProvider: 'evil',
+        },
+      }),
+    )
+    await malformed.refresh()
+    expect('tunnel' in malformed.source.getSnapshot()).toBe(false)
+  })
+
+  it('fix-10：disconnectDevice 上行 forge:remote/disconnect 并即时 refresh（撤该设备会话缝）', async () => {
+    const written: { channel: string; payload?: unknown }[] = []
+    installed = (globalThis as { dshForge?: unknown }).dshForge
+    const bridge = {
+      invoke: (channel: string, payload?: unknown) => {
+        written.push({ channel, payload })
+        if (channel === 'forge:settings/get') return Promise.resolve({ ok: true, data: { remoteApproval: { enabled: true } } })
+        if (channel === 'forge:remote/disconnect') return Promise.resolve({ ok: true, data: { revoked: true } })
+        return Promise.reject(new Error(`unexpected channel ${channel}`))
+      },
+      getBootManifest: () =>
+        Promise.resolve({ url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' }),
+    }
+    ;(globalThis as { dshForge?: unknown }).dshForge = bridge
+    const remote = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
+    await remote.refresh()
+    const ok = await remote.disconnectDevice()
+    expect(ok).toBe(true)
+    expect(written.map((w) => w.channel)).toContain('forge:remote/disconnect')
   })
 
   it('配置开 × 全卡绑定实况 → listening 快照（fix-5：lanAddress = manifest.remotePairUrl 官方配对地址单源）', async () => {

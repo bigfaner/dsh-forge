@@ -239,8 +239,10 @@ async function main(): Promise<void> {
           // fix-7：握手成功 → 主侧抬 manifest remoteDeviceConnected（粘性位——UI「手机已
           // 连接」态卡单源；guard 路径外发，重复扫码重复发亦幂等）
           send({ type: 'pair-connected' })
-          // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 回干净 ./
-          const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
+          // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 重定向进
+          // 产品受限移动视图（fix-10 bug 3620685f：`?forgeRemote=1` 分支——不得落完整
+          // 工作台；官方 BrowserAuth 对既有查询参数透明，认证参数追加重写不丢分支位）
+          const target = ctx.connection.authenticatedUrl(`http://${authority}/?forgeRemote=1`)
           res.writeHead(302, { location: target })
           res.end()
         },
@@ -275,7 +277,8 @@ async function main(): Promise<void> {
               return
             }
             send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）
-            const target = ctx.connection.authenticatedUrl(`http://${authority}/`)
+            // fix-10 bug 3620685f：PIN 认证成功同 /pair 语义——落地受限移动视图（不落完整工作台）
+            const target = ctx.connection.authenticatedUrl(`http://${authority}/?forgeRemote=1`)
             res.writeHead(302, { location: target })
             res.end()
           })
