@@ -7,6 +7,10 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     passWithNoTests: true,
+    // 并发上限（16C/32GB 实测 OOM 收口）：默认按核数（15 worker）起 fork，每 worker 独立
+    // Node + vite 转换管道（web 池还内联 dsh-client-* 五包），峰值内存远超物理内存——
+    // Zone Allocation FATAL。压到 4 worker 后单 worker 内存余量充足，全量跑稳定。
+    maxWorkers: 4,
     projects: [
       { test: { name: 'structure', include: ['tests/structure/**/*.test.ts'] } },
       // 契约面 pin 回归池（G1，2.13 起步）：pin 对象 = 上游 @deepseek-ai/* 精确 pin 版本
@@ -43,6 +47,11 @@ export default defineConfig({
               ],
             },
           },
+          // web 池文件级串行（系统 commit charge 瓶颈实测：物理内存充足但页文件仅 ~4.9GB、
+          // 整机 commit 被 IDE/浏览器等占满，多 web worker 并发时 fork 起不来或 Zone
+          // Allocation FATAL——且 flaky 轮会静默少跑测试文件）。单文件独占 worker 峰值
+          // 承诺最小；web 单测本身毫秒级，串行总耗时可忽略。根治 = 页文件扩容（bug 台账）。
+          fileParallelism: false,
         },
       },
     ],
