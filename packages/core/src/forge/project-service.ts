@@ -53,6 +53,7 @@ import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './er
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
 import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from './workspace/derive-dir.js'
+import { selectMainWorktree, sameAnchor, type GitIdentityPort, type MainWorktreeCandidate } from './workspace/identity-anchor.js'
 import { SuspectedMoveError } from './workspace/errors.js'
 
 /**
@@ -90,6 +91,13 @@ export interface ProjectServiceDeps {
    * （AC4：建库/扫描失败与开库失败同语义——记账隔离态归闭包自身）。
    */
   onRegistered?: (project: RegisteredProject) => void
+  /**
+   * 1.5 身份归并锚端口（可选注入——M2 tasksHome 同型降级：缺席 = 归并层缺席，注册
+   * 行为零变化）。注入后：注册输入为同锚 worktree 路径（common dir realpath 锚）时
+   * 解析到主项目既有行——attachExistingRow 之前（其按 ws_path 比对不会命中 worktree
+   * 路径）；含存量双行仲裁归档与主 worktree 缺失降级。任何失败 fail-soft 降级现行链。
+   */
+  gitIdentity?: GitIdentityPort
 }
 
 /** Interface 5 服务面（P1 五法不动 + deriveTaskStoreDir 第六动词——ctx.forgeProjects M2 形状） */
@@ -341,6 +349,14 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     knowledgeDir: await canonicalizeDir(input.knowledgeDir),
   }
 
+  // 1.5 身份归并层（attachExistingRow 之前——其按 ws_path 比对不会命中 worktree 路径）：
+  // 同锚 worktree 路径 → 主项目既有行；非 git / 首注册（无同锚行）/ 主 worktree 缺失降级
+  // → undefined 走现行链。gitIdentity 缺席 = 归并层缺席，注册行为零变化。
+  if (deps.gitIdentity !== undefined) {
+    const merged = await mergeSameAnchorProject(deps, canonicalInput)
+    if (merged !== undefined) return merged
+  }
+
   // fix-27 自愈防御（① 前）：重注册（既有行在场）→ 幂等成功 / 悬空引用自愈，绝不撞
   // UNIQUE(ws_path)（详见 attachExistingRow 块注——预检只查 dsh 注册表，行在场时 INSERT 恒炸）
   const reattached = await attachExistingRow(deps, canonicalInput)
@@ -416,6 +432,131 @@ function isUniqueWsPathViolation(cause: unknown): boolean {
     (cause as { code?: unknown }).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
     cause.message.includes('projects.ws_path')
   )
+}
+
+/**
+ * 归并层读面投影（projects 全量最小列——同锚比对逐行做，行级小表 JS 侧比对同 attachExistingRow 口径）
+ */
+interface AnchorRow {
+  id: string
+  workspace_id: string
+  ws_path: string
+  archived: number
+  created_at: string | null
+  name: string
+}
+
+/**
+ * 1.5 身份归并（提案流程一；注册链内插于 attachExistingRow 之前）：
+ *   输入 P（已 canonical）→ common dir realpath 锚 → 与各行 ws_path 锚比对：
+ *   · P 非 git（锚 null）→ undefined 退现行为（按 ws_path 独立项目）；
+ *   · 无同锚行 → undefined（首注册——走既有 registerProject 链落库）；
+ *   · 有同锚行 → 主 worktree 判定（selectMainWorktree 纯判定——短路唯一行 / origin/HEAD
+ *     检出优先 / main > master / 首观察时间最早，判定只在本锚 worktree 集内做）：
+ *       - 主行不在场（不在 git worktree list）→ 弹明确记账（「主 worktree 缺失」显式
+ *         识别，不落泛化 reconcile error）+ undefined 降级独立项目现行为；
+ *       - 主行在场 → 解析到主项目既有行：同锚其它活跃行提示并归档（updateProject 同径
+ *         UPDATE archived=1——仲裁只决定归并目标行，不触发资产迁移），引用不健康则单项
+ *         修复（reconcileProjectRef 复用），标题对齐后幂等返回（attachedToExisting=true，
+ *         不经 runRegistered——挂接语义同 attachExistingRow 幂等径）。
+ *   子模块 worktree：锚 = 子模块自身 common dir → 天然归并到子模块项目而非父项目。
+ *   全程失败（读库/git 探针异常）→ warn 记账后 undefined 降级现行链（③ 写入失败面承接）。
+ */
+async function mergeSameAnchorProject(
+  deps: ProjectServiceDeps,
+  input: RegisterProjectInput,
+): Promise<RegisterResult | undefined> {
+  const git = deps.gitIdentity
+  if (git === undefined) return undefined
+  try {
+    const anchor = await git.commonDirAnchor(input.workspaceDir)
+    if (anchor === null) return undefined // 非 git / git 探测失败 → 现行为（能力位 false）
+    const rows = deps.db
+      .prepare<unknown[], AnchorRow>(
+        `SELECT id, workspace_id, ws_path, archived, created_at, name FROM projects ORDER BY created_at, id`,
+      )
+      .all()
+    const worktrees = await git.worktrees(input.workspaceDir)
+    const live = new Map((worktrees ?? []).map((wt) => [normalizeFsPath(wt.path), wt]))
+    const candidates: { row: AnchorRow; branch: string | null }[] = []
+    for (const row of rows) {
+      const rowAnchor = await git.commonDirAnchor(row.ws_path)
+      if (rowAnchor === null || !sameAnchor(rowAnchor, anchor)) continue
+      candidates.push({ row, branch: live.get(normalizeFsPath(row.ws_path))?.branch ?? null })
+    }
+    if (candidates.length === 0) return undefined // 首注册（无同锚行）→ 既有链
+    const active = candidates.filter((c) => c.row.archived !== 1)
+    if (active.length === 0) return undefined // 同锚行全 archived → 现行为（新路径新行）
+    const probe: MainWorktreeCandidate[] = active.map((c) => ({
+      id: c.row.id,
+      branch: c.branch,
+      createdAt: c.row.created_at,
+    }))
+    const now = new Date().toISOString()
+    const mainId = selectMainWorktree(probe, {
+      originDefaultBranch: await git.originDefaultBranch(input.workspaceDir),
+      now,
+    })
+    const main = active.find((c) => c.row.id === mainId)
+    if (main === undefined) return undefined // 不可达兜底（判定空/null）——降级现行链
+    if (!live.has(normalizeFsPath(main.row.ws_path))) {
+      // 主 worktree 缺失：显式识别降级径（不落泛化 error）——本次按独立项目现行为注册
+      recordKeyLog(deps.db, {
+        level: 'warn',
+        scope: 'reconcile',
+        message: `主 worktree 缺失（身份归并降级）：锚 ${anchor} 的主行 ${main.row.ws_path}（${main.row.id}）不在 git worktree list——本次按独立项目现行为注册`,
+        data: {
+          anchor,
+          mainProjectId: main.row.id,
+          mainWsPath: main.row.ws_path,
+          disposition: '主 worktree 缺失 → 降级独立项目现行为（归并失效，交用户处置）',
+        },
+      })
+      return undefined
+    }
+    // 存量同锚其它活跃行：提示并归档（仲裁只决定归并目标行，不触发资产迁移）
+    for (const c of active) {
+      if (c.row.id === main.row.id) continue
+      deps.db.prepare(`UPDATE projects SET archived = 1, updated_at = ? WHERE id = ?`).run(now, c.row.id)
+      recordKeyLog(deps.db, {
+        level: 'warn',
+        scope: 'reconcile',
+        message: `存量双行归并归档：项目 ${c.row.id}（${c.row.ws_path}）未命中主 worktree 判定——归并入主项目 ${main.row.id}（${main.row.ws_path}），管线数据以主行为准`,
+        data: {
+          anchor,
+          mainProjectId: main.row.id,
+          archivedProjectId: c.row.id,
+          archivedWsPath: c.row.ws_path,
+          disposition: '未命中主判定行已归档（updateProject archived 同径）——不触发资产迁移',
+        },
+      })
+    }
+    // 引用健康保障复用（悬空 → relink/recreate 单向修引用），失败由外层 catch 降级
+    const refRow = { id: main.row.id, workspace_id: main.row.workspace_id, ws_path: main.row.ws_path }
+    if (!isRefHealthy(deps.registry, refRow)) {
+      await reconcileProjectRef(deps, refRow, { repaired: [], orphans: [] })
+    }
+    const after = getRow(deps, main.row.id)
+    if (after === undefined) return undefined // 不可达兜底（单写者无并发删除）
+    await alignWorkspaceTitle(deps, after.workspace_id, after.name)
+    return { projectId: after.id, workspaceId: after.workspace_id, attachedToExisting: true }
+  } catch (cause) {
+    try {
+      recordKeyLog(deps.db, {
+        level: 'warn',
+        scope: 'reconcile',
+        message: `身份归并层失败（已降级现行链）：${input.workspaceDir}——${errMessage(cause)}`,
+        data: {
+          wsPath: input.workspaceDir,
+          error: errMessage(cause),
+          disposition: '降级现行链——归并放弃，注册由既有链承接',
+        },
+      })
+    } catch {
+      // 库不可用时记账亦不可行：吞掉——降级语义零变化
+    }
+    return undefined
+  }
 }
 
 /**

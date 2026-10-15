@@ -10,6 +10,8 @@ import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { createProjectService, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
 import { deriveDirName } from './workspace/derive-dir.js'
+import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from './workspace/identity-anchor.js'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import { SuspectedMoveError } from './workspace/errors.js'
 import type { WorkspaceRenamePort } from './registry.js'
 // registry 桩（G1 pin 4 语义）——fix-34 收编 testutil 单份（注入面 superset）；
@@ -50,12 +52,12 @@ class StubRename implements WorkspaceRenamePort {
   }
 }
 
-function setup() {
+function setup(gitIdentity?: GitIdentityPort) {
   const db = openDatabase(dbPath())
   dbs.push(db)
   const registry = new StubRegistry()
   const rename = new StubRename()
-  const service = createProjectService({ db, registry, rename } satisfies ProjectServiceDeps)
+  const service = createProjectService({ db, registry, rename, gitIdentity } satisfies ProjectServiceDeps)
   return { db, registry, rename, service }
 }
 
@@ -854,5 +856,185 @@ describe('1.4 deriveTaskStoreDir 动词（Interface 5 表单预检位——纯�
     expect(err).toBeInstanceOf(Error)
     expect(err).not.toBeInstanceOf(SuspectedMoveError)
     expect((err as Error).message).toContain('tasksHome')
+  })
+})
+
+// ── 1.5 集成层身份归并（common dir 锚 → 主项目行；插 attachExistingRow 之前） ──
+
+/** git 身份探针桩：按锚声明仓库（path→锚映射 + 在场 worktree 清单 + origin 默认分支） */
+class StubGitIdentity implements GitIdentityPort {
+  fail?: Error
+  private readonly pathAnchor = new Map<string, string>()
+  private readonly repos = new Map<string, { worktrees: WorktreeEntry[]; origin: string | null }>()
+
+  repo(
+    anchor: string,
+    o: { worktrees: WorktreeEntry[]; removed?: string[]; origin?: string | null },
+  ): this {
+    for (const e of [...o.worktrees, ...(o.removed ?? []).map((p) => ({ path: p, branch: null as string | null }))]) {
+      this.pathAnchor.set(normalizeFsPath(e.path), anchor)
+    }
+    this.repos.set(anchor, { worktrees: o.worktrees, origin: o.origin ?? null })
+    return this
+  }
+
+  async commonDirAnchor(dir: string): Promise<string | null> {
+    if (this.fail !== undefined) throw this.fail
+    return this.pathAnchor.get(normalizeFsPath(dir)) ?? null
+  }
+
+  async worktrees(dir: string): Promise<WorktreeEntry[] | null> {
+    if (this.fail !== undefined) throw this.fail
+    const anchor = this.pathAnchor.get(normalizeFsPath(dir))
+    return anchor === undefined ? null : (this.repos.get(anchor)?.worktrees ?? null)
+  }
+
+  async originDefaultBranch(dir: string): Promise<string | null> {
+    const anchor = this.pathAnchor.get(normalizeFsPath(dir))
+    return anchor === undefined ? null : (this.repos.get(anchor)?.origin ?? null)
+  }
+}
+
+const ROOT = resolve(join(WS, 'repo-root')) // 主 worktree（根）
+const WTA = resolve(join(WS, 'wt-a')) // 附属 worktree
+const ANCHOR = resolve(join(WS, '.git-common')) // 仓库锚（桩内任意恒同值）
+
+describe('1.5 selectMainWorktree 纯判定（短路唯一 / origin 优先 / main>master / 首观察时间）', () => {
+  const c = (id: string, branch: string | null, createdAt: string | null = null) => ({ id, branch, createdAt })
+  const opts = (origin: string | null = null, now = '2026-06-01T00:00:00.000Z') => ({
+    originDefaultBranch: origin,
+    now,
+  })
+
+  it('① 同锚活跃行唯一 → 短路即主（单行根 worktree 切分支后不误判缺失）', () => {
+    expect(selectMainWorktree([c('root', 'feat/x')], opts('main'))).toBe('root')
+  })
+
+  it('② 检出 origin 默认分支者优先（origin/HEAD 解析）', () => {
+    const candidates = [c('a', 'feat/a', '2020-01-01'), c('b', 'main', '2021-01-01')]
+    expect(selectMainWorktree(candidates, opts('main'))).toBe('b')
+  })
+
+  it('③ 无 origin/HEAD → 本地 main 检出 > master 检出', () => {
+    const candidates = [c('a', 'master', '2020-01-01'), c('b', 'main', '2021-01-01')]
+    expect(selectMainWorktree(candidates, opts())).toBe('b')
+    expect(selectMainWorktree([c('a', 'master', '2021-01-01'), c('b', 'dev', '2020-01-01')], opts())).toBe('a')
+  })
+
+  it('④ 退首观察时间最早；created_at 缺省 = 当前时间（git 无创建时间字段）', () => {
+    const candidates = [c('new', 'dev'), c('old', 'feat', '2020-01-01')]
+    expect(selectMainWorktree(candidates, opts())).toBe('old')
+    expect(selectMainWorktree([c('a', 'dev'), c('b', 'feat')], opts())).toBe('a') // 双缺省 → 行序首个
+  })
+
+  it('空候选集 → null', () => {
+    expect(selectMainWorktree([], opts())).toBeNull()
+  })
+})
+
+describe('1.5 身份归并层（注册链 attachExistingRow 之前——同锚 worktree 解析主项目行）', () => {
+  it('同锚 worktree 路径注册 → 解析主项目既有行：不新增行、不撞 UNIQUE(ws_path)、零 create（短路唯一行——根切分支不误判缺失）', async () => {
+    const git = new StubGitIdentity().repo(ANCHOR, {
+      worktrees: [
+        { path: ROOT, branch: 'feat/x' }, // 根 worktree 已切非默认分支
+        { path: WTA, branch: 'feat/a' },
+      ],
+    })
+    const { db, registry, service } = setup(git)
+    const existing = registry.seed(ROOT)
+    seedProjectRow(db, { id: 'root', workspaceId: existing.id, wsPath: ROOT })
+    const result = await service.registerProject(input({ workspaceDir: WTA }))
+    expect(result).toEqual({ projectId: 'root', workspaceId: existing.id, attachedToExisting: true })
+    expect(registry.createCalls).toEqual([]) // 归并挂接——零新建工作区
+    expect(readRows(db)).toHaveLength(1) // 不新增行
+    expect(keyLogs(db)).toEqual([]) // 成功归并零记账
+  })
+
+  it('存量双行归并：origin 默认分支检出行为主，未命中行提示并归档（archived=1），主行管线数据可见', async () => {
+    const git = new StubGitIdentity().repo(ANCHOR, {
+      worktrees: [
+        { path: ROOT, branch: 'main' },
+        { path: WTA, branch: 'feat/a' },
+      ],
+      origin: 'main',
+    })
+    const { db, registry, service } = setup(git)
+    const rootWs = registry.seed(ROOT)
+    const wtaWs = registry.seed(WTA)
+    seedProjectRow(db, { id: 'root', workspaceId: rootWs.id, wsPath: ROOT, createdAt: '2026-01-01T00:00:00.000Z' })
+    seedProjectRow(db, { id: 'wta', workspaceId: wtaWs.id, wsPath: WTA, createdAt: '2026-02-01T00:00:00.000Z' })
+    // 经 wt-a 自身路径重注册（会命中既有 wt-a 行——归并层在 attachExistingRow 之前截住）
+    const result = await service.registerProject(input({ workspaceDir: WTA }))
+    expect(result).toEqual({ projectId: 'root', workspaceId: rootWs.id, attachedToExisting: true })
+    const rows = readRows(db)
+    expect(rows).toHaveLength(2) // 归档不删行
+    expect(rows.find((r) => r.id === 'root')).toMatchObject({ archived: 0 })
+    expect(rows.find((r) => r.id === 'wta')).toMatchObject({ archived: 1 })
+    const logs = keyLogs(db)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({ level: 'warn', scope: 'reconcile' })
+    expect(logs[0]?.message).toContain('归档')
+  })
+
+  it('主 worktree 缺失（主行不在 git worktree list）→ 弹明确记账 + 降级独立项目现行为（新行落库）', async () => {
+    const git = new StubGitIdentity().repo(ANCHOR, {
+      worktrees: [{ path: WTA, branch: 'feat/a' }],
+      removed: [ROOT], // 根 worktree 已被删除/修剪
+    })
+    const { db, service } = setup(git)
+    seedProjectRow(db, { id: 'root', workspaceId: 'ws-root', wsPath: ROOT })
+    const result = await service.registerProject(input({ workspaceDir: WTA }))
+    expect(result.projectId).not.toBe('root') // 降级：独立新项目
+    expect(result.attachedToExisting).toBe(false)
+    const rows = readRows(db)
+    expect(rows).toHaveLength(2)
+    expect(rows.find((r) => r.id === 'root')).toMatchObject({ archived: 0 }) // 降级不误归档
+    const logs = keyLogs(db)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]?.message).toContain('主 worktree 缺失')
+    expect(logs[0]?.message).not.toContain('启动对账整体失败') // 显式识别，非泛化 error
+  })
+
+  it('非 git 路径（锚 null）→ 现行为独立项目；同仓库首注册（无同锚行）→ 现行为', async () => {
+    const { db, registry, service } = setup(new StubGitIdentity()) // 桩空映射 = 全 null
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(false)
+    expect(registry.createCalls).toEqual([input().workspaceDir])
+    expect(readRows(db)).toHaveLength(1)
+
+    const { db: db2, registry: reg2, service: svc2 } = setup(
+      new StubGitIdentity().repo(ANCHOR, { worktrees: [{ path: WTA, branch: 'feat/a' }] }),
+    )
+    const r2 = await svc2.registerProject(input({ workspaceDir: WTA }))
+    expect(r2.attachedToExisting).toBe(false) // 首注册无同锚行 → 既有链
+    expect(readRows(db2)).toHaveLength(1)
+    expect(reg2.createCalls).toHaveLength(1)
+  })
+
+  it('子模块 worktree（自锚 B ≠ 父仓锚 A）→ 归并到子模块项目而非父项目（无同锚行 → 现行为新行）', async () => {
+    const subAnchor = resolve(join(WS, 'submodule/.git'))
+    const sub = resolve(join(WS, 'submodule-wt'))
+    const git = new StubGitIdentity()
+      .repo(ANCHOR, { worktrees: [{ path: ROOT, branch: 'main' }], origin: 'main' })
+      .repo(subAnchor, { worktrees: [{ path: sub, branch: 'main' }] })
+    const { db, registry, service } = setup(git)
+    const rootWs = registry.seed(ROOT)
+    seedProjectRow(db, { id: 'root', workspaceId: rootWs.id, wsPath: ROOT })
+    const result = await service.registerProject(input({ workspaceDir: sub }))
+    expect(result.projectId).not.toBe('root') // 不归并进父项目
+    expect(result.attachedToExisting).toBe(false)
+    expect(readRows(db)).toHaveLength(2) // 子模块项目独立成行
+  })
+
+  it('归并层失败（探针抛错）→ warn 记账 + 降级现行链（注册不受阻）', async () => {
+    const git = new StubGitIdentity()
+    git.fail = new Error('git probe exploded')
+    const { db, service } = setup(git)
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(false)
+    const logs = keyLogs(db)
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({ level: 'warn', scope: 'reconcile' })
+    expect(logs[0]?.message).toContain('身份归并层失败')
   })
 })
