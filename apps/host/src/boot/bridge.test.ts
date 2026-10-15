@@ -454,6 +454,15 @@ describe('asTunnelMessage（tunnel 消息守卫——run.ts tunnel 分支消费�
     expect(asTunnelMessage({ type: 'pair', remotePairUrl: 'x', remotePairExpiresAt: 1 })).toBeUndefined()
     expect(asTunnelMessage(null)).toBeUndefined()
   })
+
+  it('fix-19 ⑦：unexpectedlyClosed 透传（意外死亡撤面事件携位——UI 自动重开守卫单源）；健康面不携位', () => {
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy', unexpectedlyClosed: true }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t', tunnelProvider: 'pinggy', unexpectedlyClosed: true })
+    expect(
+      asTunnelMessage({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' }),
+    ).toEqual({ type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
+  })
 })
 
 // ── 3.1 桥事件信封（G1-09 pin：信封形状 + channel 常量） ──

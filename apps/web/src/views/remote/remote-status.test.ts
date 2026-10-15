@@ -173,3 +173,23 @@ describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () =
     }
   })
 })
+
+describe('fix-19 ⑦ 意外死亡位透传（manifest tunnelUnexpectedlyClosed → 快照 tunnel.unexpectedlyClosed——UI 自动重开单源）', () => {
+  it('死亡位随隧道面收拢携带；健康面不携带', () => {
+    const dead = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+      tunnelProvider: 'pinggy',
+      tunnelUnexpectedlyClosed: true,
+    })
+    expect(dead.tunnel?.unexpectedlyClosed).toBe(true)
+    const healthy = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+      tunnelProvider: 'pinggy',
+    })
+    expect(healthy.tunnel?.unexpectedlyClosed).toBeUndefined()
+  })
+})

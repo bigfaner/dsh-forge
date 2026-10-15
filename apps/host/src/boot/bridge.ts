@@ -175,6 +175,8 @@ export interface BridgeTunnelMessage {
   readonly tunnelUrl?: string
   readonly tunnelProvider?: TunnelProvider
   readonly tunnelExpiresAt?: number
+  /** fix-19 ⑦：意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开隧道单源） */
+  readonly unexpectedlyClosed?: true
 }
 
 /**
@@ -571,6 +573,8 @@ export function asTunnelMessage(message: unknown): BridgeTunnelMessage | undefin
     tunnelUrl: m.tunnelUrl as string,
     tunnelProvider: m.tunnelProvider as TunnelProvider,
     ...(expiresAt !== undefined ? { tunnelExpiresAt: expiresAt } : {}),
+    // fix-19 ⑦：意外死亡位透传（撤面事件携位——web 自动重开守卫判定单源）
+    ...(m.unexpectedlyClosed === true ? { unexpectedlyClosed: true as const } : {}),
   }
 }
 

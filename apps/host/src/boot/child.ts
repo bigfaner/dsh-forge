@@ -312,8 +312,20 @@ async function main(): Promise<void> {
       // → 隧道 URL 换签重推（Pinggy TTL 读数随 pair 旋转刷新——fix-7 pair 通道同形态）。
       let tunnelManager: TunnelManager | undefined
       const sendTunnelState = (state: TunnelState | undefined): void => {
-        if (state === undefined || state.remainingTtlMs === 0) {
+        if (state === undefined) {
           send({ type: 'tunnel' }) // 零载荷 = 关闭/失效撤除面
+          return
+        }
+        if (state.remainingTtlMs === 0) {
+          // fix-19 ⑦（Root cause：remainingTtlMs===0 唯一来源 = TunnelManager 自动兜底双链路
+          // 皆败的死亡 emit——即官方 :1188 unexpectedlyClosed 语义）：意外死亡撤面事件携位，
+          // UI 一次性守卫（reopeningDeadPinggy 形态）据此自动重开隧道。
+          send({
+            type: 'tunnel',
+            tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
+            tunnelProvider: state.provider,
+            unexpectedlyClosed: true,
+          })
           return
         }
         send({

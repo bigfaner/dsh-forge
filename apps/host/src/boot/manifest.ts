@@ -33,6 +33,9 @@ export interface BootManifest {
   remotePin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 有效期倒计时单源；随轮换换新） */
   remotePinExpiresAt?: number
+  /** fix-19 ⑦：隧道意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源；
+   *  健康面推送即清除） */
+  tunnelUnexpectedlyClosed?: boolean
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -50,6 +53,8 @@ export interface TunnelManifestState {
   readonly provider: TunnelProvider
   /** Pinggy TTL 到期时刻（epoch ms；cloudflared = 缺席） */
   readonly expiresAt?: number
+  /** fix-19 ⑦：意外死亡位（官方 :1188 unexpectedlyClosed 同语义——随隧道面透传） */
+  readonly unexpectedlyClosed?: boolean
 }
 
 /**
@@ -90,6 +95,7 @@ export function tunnelStateOf(manifest: BootManifest): TunnelManifestState | und
     url: manifest.tunnelUrl,
     provider: manifest.tunnelProvider,
     ...(manifest.tunnelExpiresAt !== undefined ? { expiresAt: manifest.tunnelExpiresAt } : {}),
+    ...(manifest.tunnelUnexpectedlyClosed === true ? { unexpectedlyClosed: true } : {}),
   }
 }
 
@@ -128,6 +134,8 @@ export function buildBootManifest(
           ...(typeof tunnel.expiresAt === 'number' && Number.isFinite(tunnel.expiresAt) && tunnel.expiresAt > 0
             ? { tunnelExpiresAt: tunnel.expiresAt }
             : {}),
+          // fix-19 ⑦：意外死亡位透传（健康面重建不携位 = 位随新面自然清除）
+          ...(tunnel.unexpectedlyClosed === true ? { tunnelUnexpectedlyClosed: true } : {}),
         }
       : {}),
     // fix-17 ③：PIN 读数透传（6 位数字 × 正有限 TTL 齐备才携带——畸形 = 字段不出现）

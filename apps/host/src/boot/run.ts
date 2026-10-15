@@ -486,6 +486,8 @@ export function applyTunnelMessage(manifest: BootManifest, message: unknown): Bo
           url: tunnel.tunnelUrl,
           provider: tunnel.tunnelProvider,
           ...(tunnel.tunnelExpiresAt !== undefined ? { expiresAt: tunnel.tunnelExpiresAt } : {}),
+          // fix-19 ⑦：意外死亡位透传（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开）
+          ...(tunnel.unexpectedlyClosed === true ? { unexpectedlyClosed: true } : {}),
         }
       : undefined,
     manifest.remotePin, // fix-17 ③：隧道重建保留 PIN 读数

@@ -102,6 +102,45 @@ export const PIN_RESET_TEXT = '重置密码'
  *  「取消长效密码」避免语义虚指；低风险假设记 summary） */
 export const PIN_CANCEL_TEXT = '取消'
 
+// ── fix-19 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
+
+/** fix-19 ⑥ 已连接态标题（官方 manageHeading——§1 逐字；dialog 标题随相位切换单源） */
+export const REMOTE_MANAGE_TITLE = '管理手机连接'
+/** fix-19 ⑨ 互联网说明文案（官方 tunnelHint——§1 逐字；产品旧语义近似文案退役） */
+export const TUNNEL_HINT_TEXT =
+  '移动设备通过互联网（如 4G/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等'
+/** fix-19 ⑨ 隧道建立中文案（官方 tunnelLoading——§1 逐字） */
+export const TUNNEL_LOADING_TEXT = '正在建立全球网络链接'
+/** fix-19 ⑨ LAN 切换 loading 文案（官方 lanLoading——§1 逐字） */
+export const LAN_LOADING_TEXT = '正在切换至 WiFi 连接模式'
+/** fix-19 ⑧ QR 过期过渡文案（官方 expired——§1 逐字；刷新完成前保持该态） */
+export const QR_EXPIRED_TEXT = '二维码已过期，正在自动刷新…'
+
+/** dialog 标题相位派生（纯函数——⑥ 已连接态切「管理手机连接」，其余配对态 = 配对标题） */
+export function remoteDialogTitleOf(phase: RemotePhase): string {
+  return phase === 'connected' ? REMOTE_MANAGE_TITLE : REMOTE_DIALOG_TITLE
+}
+
+/** QR 倒计时行文案（纯函数——⑧ 到 0 = 过渡文案，刷新完成（新 token 倒计时 >0）即恢复） */
+export function pairCountdownLineOf(seconds: number): string {
+  return seconds <= 0 ? QR_EXPIRED_TEXT : pairCountdownText(seconds)
+}
+
+/**
+ * fix-19 ⑦ Pinggy 意外断线自动重开判定（纯函数——官方 :1188 reopeningDeadPinggy 形态单源）：
+ * 互联网 tab × 未连接 × 非切换中 × 隧道面携 unexpectedlyClosed × 一次性守卫未开 = 重开。
+ */
+export function tunnelAutoReopenOf(
+  input: { mode: RemoteMode; phase: RemotePhase; switching: boolean; tunnel?: TunnelFace },
+  guardOpen: boolean,
+): boolean {
+  if (guardOpen) return false
+  if (input.mode !== 'internet') return false
+  if (input.phase === 'connected') return false
+  if (input.switching) return false
+  return input.tunnel?.unexpectedlyClosed === true
+}
+
 /**
  * fix-17 ② tab 切换重连动作派生（纯函数——官方 :1187 模式切换语义单源）：
  * internet × 隧道非在线 = ensure（触发建立）；internet × 在线 = refresh（刷新读数）；
@@ -372,7 +411,8 @@ export function TunnelCard(props: {
   return (
     <div className="dswf-remote-tunnel" data-phase={phase} data-testid="dswf-remote-tunnel">
       <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
-        {phase === 'starting' && '正在建立隧道……'}
+        {/* fix-19 ⑨：建立中文案 = 官方 tunnelLoading 逐字（「正在建立全球网络链接」） */}
+        {phase === 'starting' && TUNNEL_LOADING_TEXT + '……'}
         {phase === 'switching' && FALLBACK_LOADING_TEXT + '……'}
         {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
         {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
@@ -402,7 +442,8 @@ export function TunnelCard(props: {
       {/* fix-17 ①：QR 倒计时读数对齐 token TTL（官方 :1145-1147/:1196——轮换推送换 token/QR 即时重绘） */}
       {online && secondsLeft !== undefined && (
         <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-tunnel-countdown">
-          {pairCountdownText(secondsLeft)}
+          {/* fix-19 ⑧：到 0 = 过渡文案（官方 expired——刷新完成前保持） */}
+          {pairCountdownLineOf(secondsLeft)}
         </p>
       )}
       {online && (
@@ -451,6 +492,8 @@ export function RemotePanel(props: {
   readonly onClose?: () => void
   /** fix-10：断开连接缝（撤该设备会话——官方锚 :1176 双钮之 outline；缺席 = 钮禁用） */
   readonly onDisconnect?: () => Promise<void> | void
+  /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——隐藏 closeHint 与「完成」钮） */
+  readonly manageConnected?: boolean
 }): ReactNode {
   const { snapshot, onToggle, busy, onRefresh } = props
   const checked = snapshot.phase !== 'off'
@@ -529,6 +572,28 @@ export function RemotePanel(props: {
   useEffect(() => {
     if (pairValue !== undefined && secondsLeft <= 0) onRefresh?.()
   }, [pairValue, secondsLeft, onRefresh])
+  // fix-19 ⑦：Pinggy 意外断线自动重开（官方 :1188 reopeningDeadPinggy 形态）——撤面事件携
+  // unexpectedlyClosed 且当前互联网 tab、未连接、非切换中 → 一次性守卫触发 tunnelEnsure 重开；
+  // 健康面到达即守卫复位（下次意外死亡可再重开），判定全归 tunnelAutoReopenOf 单源。
+  const reopenGuardRef = useRef(false)
+  useEffect(() => {
+    if (snapshot.tunnel !== undefined && snapshot.tunnel.unexpectedlyClosed !== true) {
+      reopenGuardRef.current = false
+    }
+  }, [snapshot.tunnel])
+  useEffect(() => {
+    if (props.onTunnelEnsure === undefined) return
+    if (
+      !tunnelAutoReopenOf(
+        { mode, phase: snapshot.phase, switching, tunnel: snapshot.tunnel },
+        reopenGuardRef.current,
+      )
+    ) {
+      return
+    }
+    reopenGuardRef.current = true
+    void Promise.resolve(props.onTunnelEnsure()).catch(() => undefined)
+  }, [mode, snapshot.phase, snapshot.tunnel, switching, props.onTunnelEnsure])
   // fix-17 ③：PIN 到期 → 重取 manifest（新 PIN 随轮换回流——官方 TTL 5min 换新语义）
   useEffect(() => {
     if (pinLive && pinSecondsLeft <= 0) onRefresh?.()
@@ -559,12 +624,16 @@ export function RemotePanel(props: {
         // 完成（primary——关 dialog）双钮。
         // fix-18 ①：连接态独占——配对面（tab/QR/倒计时/地址条/PIN/说明卡）整体退场
         // （官方 .pairing-content display:none + tab disabled 同语义），仅态卡 + 双钮。
+        // fix-19 ⑥：manage-connected 二级态收窄——隐藏 closeHint 与「完成」钮只留「断开连接」
+        // （官方 manage 态语义：连接已在前台保持过，无需再提示关窗）。
         <div className="dswf-remote-connected-wrap">
           <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
             <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
             <span>手机已连接</span>
           </div>
-          <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
+          {props.manageConnected !== true && (
+            <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
+          )}
           <div className="dswf-remote-actions">
             <Button
               variant="outline"
@@ -575,15 +644,17 @@ export function RemotePanel(props: {
             >
               断开连接
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              data-testid="dswf-remote-done"
-              disabled={props.onClose === undefined}
-              onClick={() => props.onClose?.()}
-            >
-              完成
-            </Button>
+            {props.manageConnected !== true && (
+              <Button
+                variant="primary"
+                size="sm"
+                data-testid="dswf-remote-done"
+                disabled={props.onClose === undefined}
+                onClick={() => props.onClose?.()}
+              >
+                完成
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -648,6 +719,7 @@ export function RemotePanel(props: {
             {pairValue !== undefined ? (
               <>
                 <Tooltip label="手机扫码打开配对地址" portal>
+                <div className="dswf-remote-qr-wrap">
                   <div
                     className="dswf-remote-qr"
                     data-testid="dswf-remote-qr"
@@ -657,10 +729,19 @@ export function RemotePanel(props: {
                         底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
                     <QRCode value={pairValue} size={PAIRING_QR_SIZE} />
                   </div>
-                </Tooltip>
-                <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-countdown">
-                  {pairCountdownText(secondsLeft)}
-                </p>
+                  {/* fix-19 ⑨：LAN 切换 loading（官方 lanLoading「正在切换至 WiFi 连接模式」
+                      ——遮罩复用 fix-18 ④ 既有机械，切换态收敛即解遮） */}
+                  {switching && (
+                    <div className="dswf-remote-qr-overlay" data-testid="dswf-remote-qr-overlay" role="status">
+                      {LAN_LOADING_TEXT}
+                    </div>
+                  )}
+                </div>
+              </Tooltip>
+              <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-countdown">
+                {/* fix-19 ⑧：到 0 = 过渡文案（官方 expired——刷新完成前保持） */}
+                {pairCountdownLineOf(secondsLeft)}
+              </p>
               </>
             ) : (
               <p className="dswf-remote-empty" data-dswf-remote-empty="">
@@ -689,7 +770,8 @@ export function RemotePanel(props: {
         {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
             internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
         {mode === 'internet' ? (
-          <p className="dswf-remote-note-card">无需同一 WiFi——通过公共隧道连接，实时性略低。</p>
+          // fix-19 ⑨：互联网说明 = 官方 tunnelHint 逐字（§1——产品旧语义近似文案退役）
+          <p className="dswf-remote-note-card">{TUNNEL_HINT_TEXT}</p>
         ) : (
           <>
             {/* fix-9 ③：说明文案居中置圆角卡内 */}
@@ -728,6 +810,8 @@ export function RemoteDialogHead(props: {
   readonly onClose: () => void
   /** fix-12：Harness 菜单动作缝（缺席 = 菜单禁用态 fail-soft） */
   readonly harness?: DshForgeHarnessBridge
+  /** fix-19 ⑥：标题读数（缺省 = 配对标题——已连接态由 ForgeRemoteDialog 传管理标题） */
+  readonly title?: string
 }): ReactNode {
   return (
     <div className="dswf-remote-dialog">
@@ -740,7 +824,7 @@ export function RemoteDialogHead(props: {
       >
         <IconCloseOutlineRegular size={16} />
       </button>
-      <h2 className="dswf-remote-dialog-title">{REMOTE_DIALOG_TITLE}</h2>
+      <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
     </div>
   )
 }
@@ -764,16 +848,20 @@ export function ForgeRemoteDialog(props: {
   readonly onFallback?: () => Promise<void> | void
   /** fix-18 ③：PIN 重置缝（透传 RemotePanel——PIN 方框「重置密码」触发） */
   readonly onPinReset?: () => Promise<void> | void
+  /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——透传 RemotePanel） */
+  readonly manageConnected?: boolean
 }): ReactNode {
+  // fix-19 ⑥：标题随相位切换（已连接态 = 「管理手机连接」——官方 manageHeading 单源）
+  const title = remoteDialogTitleOf(props.snapshot.phase)
   return (
     <Modal
       open={props.open}
       onClose={props.onClose}
-      title={REMOTE_DIALOG_TITLE}
+      title={title}
       headless
       className="dswf-remote-modal"
     >
-      <RemoteDialogHead onClose={props.onClose} harness={harnessBridgeOf()} />
+      <RemoteDialogHead onClose={props.onClose} harness={harnessBridgeOf()} title={title} />
       <RemotePanel
         snapshot={props.snapshot}
         onToggle={props.onToggle}
@@ -784,6 +872,7 @@ export function ForgeRemoteDialog(props: {
         onTunnelEnsure={props.onTunnelEnsure}
         onFallback={props.onFallback}
         onPinReset={props.onPinReset}
+        manageConnected={props.manageConnected}
       />
     </Modal>
   )
@@ -793,6 +882,9 @@ export function ForgeRemoteDialog(props: {
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
 export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
+  // fix-19 ⑥：manage-connected 判定（dialog 打开时刻已连接 = 管理形态——closeHint/完成收窄；
+  // 打开后即时达成连接 = 官方连接全形态，零收窄）
+  const [manageConnected, setManageConnected] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const subscribe = useCallback((onChange: () => void) => status?.subscribe(onChange) ?? (() => {}), [status])
   const read = useCallback(() => status?.getSnapshot() ?? ({ phase: 'off' } satisfies RemoteStatusSnapshot), [status])
@@ -825,7 +917,13 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
           aria-label={`手机远程（${remotePhaseLabel(snapshot.phase)}）`}
           aria-haspopup="dialog"
           aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          onClick={() =>
+            setOpen((value) => {
+              const next = !value
+              if (next) setManageConnected(snapshot.phase === 'connected')
+              return next
+            })
+          }
         >
           <PhoneGlyph />
           {/* fix-12：右上角状态圆点（off = 无圆点零渲染） */}
@@ -843,6 +941,7 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
         onTunnelEnsure={onTunnelEnsure}
         onFallback={onFallback}
         onPinReset={onPinReset}
+        manageConnected={manageConnected}
       />
     </div>
   )

@@ -1476,6 +1476,7 @@ interface ForgePreloadBridge {
     tunnelUrl?: string
     tunnelProvider?: string
     tunnelExpiresAt?: number
+    tunnelUnexpectedlyClosed?: boolean
     remotePin?: string
     remotePinExpiresAt?: number
   }>
@@ -1547,6 +1548,7 @@ function snapshotOfReads(
     tunnelUrl?: string
     tunnelProvider?: string
     tunnelExpiresAt?: number
+    tunnelUnexpectedlyClosed?: boolean
     remotePin?: string
     remotePinExpiresAt?: number
   } | undefined,
@@ -1570,6 +1572,8 @@ function snapshotOfReads(
           manifest.tunnelExpiresAt > 0
             ? { expiresAt: manifest.tunnelExpiresAt }
             : {}),
+          // fix-19 ⑦：意外死亡位透传（remoteSnapshotOf 镜像口径——UI 一次性守卫自动重开单源）
+          ...(manifest?.tunnelUnexpectedlyClosed === true ? { unexpectedlyClosed: true as const } : {}),
         }
       : undefined
   if (enabled !== exposureActive) return { phase: 'pending', ...(tunnel !== undefined ? { tunnel } : {}) }

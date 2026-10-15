@@ -186,6 +186,19 @@ describe('applyTunnelMessage（dsh-mobile-tunnel 隧道状态推送——manifes
     expect(closed.remoteHost).toBe('0.0.0.0')
   })
 
+  it('fix-19 ⑦：意外死亡推送 → 隧道面保留 + tunnelUnexpectedlyClosed 位（UI 自动重开单源）；健康推送清位', () => {
+    const dead = applyTunnelMessage(base(), {
+      type: 'tunnel',
+      tunnelUrl: 'https://x.pinggy.link/pair?token=t',
+      tunnelProvider: 'pinggy',
+      unexpectedlyClosed: true,
+    })
+    expect(dead.tunnelUrl).toBe('https://x.pinggy.link/pair?token=t')
+    expect(dead.tunnelUnexpectedlyClosed).toBe(true)
+    const healthy = applyTunnelMessage(dead, { type: 'tunnel', tunnelUrl: 'https://x.pinggy.link/pair?token=t2', tunnelProvider: 'pinggy' })
+    expect('tunnelUnexpectedlyClosed' in healthy).toBe(false)
+  })
+
   it('换线：cloudflared → pinggy 激活推送 → 链路类型/TTL 原位换新（url 保留面不动）', () => {
     const cf = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x.trycloudflare.com/pair?token=t', tunnelProvider: 'cloudflared' })
     expect(cf.tunnelProvider).toBe('cloudflared')

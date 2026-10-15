@@ -19,7 +19,10 @@ import {
   harnessMenuFocusLeft,
   harnessMenuPointerOutside,
   modeSelectEffectOf,
+  pairCountdownLineOf,
   pairCountdownText,
+  remoteDialogTitleOf,
+  tunnelAutoReopenOf,
   pinCountdownText,
   secondsLeftOf,
   tunnelBannerText,
@@ -666,11 +669,12 @@ describe('fix-16 RemotePanel tab 内容随模式切换', () => {
     expect(html).toContain('http://192.168.1.7:8787')
   })
 
-  it('internet 模式 = 互联网说明文案；无 WiFi 文案/LAN 地址条残留', () => {
+  it('fix-19 ⑨ internet 模式 = 官方 tunnelHint 逐字（单源 §1）；无 WiFi 文案/LAN 地址条残留', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={LAN_SNAPSHOT} onToggle={() => undefined} mode="internet" />,
     )
-    expect(html).toMatch(/无需同一 WiFi/)
+    expect(html).toMatch(/移动设备通过互联网（如 4G\/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等/)
+    expect(html).not.toMatch(/无需同一 WiFi/)
     expect(html).not.toMatch(/同一 WiFi，同步实时性高/)
     expect(html).not.toContain('dswf-remote-address')
     expect(html).not.toContain('http://192.168.1.7:8787')
@@ -783,5 +787,106 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
   it('onPinReset 缺席 = 重置动作禁用态（缝缺席 fail-soft）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
     expect(html).toMatch(/dswf-remote-pin-reset[^>]*disabled/)
+  })
+})
+
+// ── fix-19：规格差值清尾 ⑥-⑨（单源规格 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
+
+describe('fix-19 ⑥ 已连接态标题与 manage-connected 二级形态（官方 §2）', () => {
+  it('remoteDialogTitleOf：connected = 「管理手机连接」；其余 = 「连接移动设备」', () => {
+    expect(remoteDialogTitleOf('connected')).toBe('管理手机连接')
+    expect(remoteDialogTitleOf('listening')).toBe('连接移动设备')
+    expect(remoteDialogTitleOf('pending')).toBe('连接移动设备')
+    expect(remoteDialogTitleOf('off')).toBe('连接移动设备')
+  })
+
+  it('manageConnected：隐藏 closeHint 与「完成」钮，只留「断开连接」（官方 manage 态收窄）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ phase: 'connected' }}
+        manageConnected
+        onClose={() => undefined}
+        onDisconnect={() => undefined}
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-connected"')
+    expect(html).not.toContain('连接会在后台保持')
+    expect(html).not.toContain('data-testid="dswf-remote-done"')
+    expect(html).not.toContain('>完成<')
+    expect(html).toContain('data-testid="dswf-remote-disconnect"')
+    expect(html).toContain('断开连接')
+  })
+
+  it('非 manage（连接即时达成）：closeHint + 断开连接/完成双钮全保留（官方连接态全形态）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'connected' }} onClose={() => undefined} onDisconnect={() => undefined} />,
+    )
+    expect(html).toContain('连接会在后台保持')
+    expect(html).toContain('data-testid="dswf-remote-done"')
+    expect(html).toContain('data-testid="dswf-remote-disconnect"')
+  })
+})
+
+describe('fix-19 ⑦ Pinggy 意外断线自动重开判定（官方 :1188 reopeningDeadPinggy 形态——纯函数单源）', () => {
+  const deadTunnel: TunnelFace = { url: 'https://x.pinggy.link/pair?token=t', provider: 'pinggy', unexpectedlyClosed: true }
+
+  it('互联网 tab × 未连接 × 非切换 × 意外死亡 × 守卫未开 = 重开', () => {
+    expect(
+      tunnelAutoReopenOf({ mode: 'internet', phase: 'listening', switching: false, tunnel: deadTunnel }, false),
+    ).toBe(true)
+  })
+
+  it('守卫已开（一次性）/ lan tab / 已连接 / 切换中 / 健康隧道 / 隧道缺席 = 不重开', () => {
+    const base = { mode: 'internet', phase: 'listening', switching: false, tunnel: deadTunnel } as const
+    expect(tunnelAutoReopenOf(base, true)).toBe(false)
+    expect(tunnelAutoReopenOf({ ...base, mode: 'lan' }, false)).toBe(false)
+    expect(tunnelAutoReopenOf({ ...base, phase: 'connected' }, false)).toBe(false)
+    expect(tunnelAutoReopenOf({ ...base, switching: true }, false)).toBe(false)
+    expect(
+      tunnelAutoReopenOf(
+        { ...base, tunnel: { url: 'https://x/pair?token=t', provider: 'pinggy', expiresAt: Date.now() + 1_000 } },
+        false,
+      ),
+    ).toBe(false)
+    expect(tunnelAutoReopenOf({ ...base, tunnel: undefined }, false)).toBe(false)
+  })
+})
+
+describe('fix-19 ⑧ QR 过期过渡文案（官方 §3：到 0 → 「二维码已过期，正在自动刷新…」）', () => {
+  it('pairCountdownLineOf：>0 = 正常倒计时；到 0 = 过渡文案（刷新完成前保持）', () => {
+    expect(pairCountdownLineOf(120)).toBe('二维码将在 120 秒后刷新')
+    expect(pairCountdownLineOf(0)).toBe('二维码已过期，正在自动刷新…')
+    expect(pairCountdownLineOf(-1)).toBe('二维码已过期，正在自动刷新…')
+  })
+
+  it('倒计时到 0：倒计时行呈现过渡文案（LAN 与互联网 tab 同源）', () => {
+    const expired: RemoteStatusSnapshot = { ...LISTENING, pairExpiresAt: Date.now() - 1_000 }
+    const lan = renderToStaticMarkup(<RemotePanel snapshot={expired} onToggle={() => undefined} />)
+    expect(lan).toContain('二维码已过期，正在自动刷新…')
+    const net = renderToStaticMarkup(
+      <RemotePanel snapshot={{ ...expired, tunnel: TUNNEL_ONLINE.tunnel }} mode="internet" onToggle={() => undefined} />,
+    )
+    expect(net).toContain('二维码已过期，正在自动刷新…')
+  })
+})
+
+describe('fix-19 ⑨ 文案逐字（官方 §1）', () => {
+  it('隧道建立中 = 「正在建立全球网络链接」（官方 tunnelLoading）', () => {
+    const html = renderToStaticMarkup(<TunnelCard phase="starting" url={undefined} provider="pinggy" />)
+    expect(html).toContain('正在建立全球网络链接')
+    expect(html).not.toContain('正在建立隧道')
+  })
+
+  it('LAN 切换中 = 「正在切换至 WiFi 连接模式」遮罩（官方 lanLoading）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...LISTENING, pairExpiresAt: Date.now() + 120_000 }}
+        mode="lan"
+        switching
+        onToggle={() => undefined}
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-qr-overlay"')
+    expect(html).toContain('正在切换至 WiFi 连接模式')
   })
 })

@@ -23,6 +23,8 @@ export interface TunnelFace {
   readonly provider: TunnelProvider
   /** Pinggy TTL 到期时刻（epoch ms——「约 N 分钟后失效」横幅读数；cloudflared = 缺席） */
   readonly expiresAt?: number
+  /** fix-19 ⑦：意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源） */
+  readonly unexpectedlyClosed?: boolean
 }
 
 /** 远程状态快照（插件注入面 remote-face 产出——组件 useSyncExternalStore 直读） */
@@ -100,6 +102,8 @@ export interface BootManifestRead {
   readonly remotePin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 有效期倒计时单源；随轮换换新） */
   readonly remotePinExpiresAt?: number
+  /** fix-19 ⑦：隧道意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源） */
+  readonly tunnelUnexpectedlyClosed?: boolean
 }
 
 /**
@@ -132,6 +136,8 @@ export function remoteSnapshotOf(
           manifest.tunnelExpiresAt > 0
             ? { expiresAt: manifest.tunnelExpiresAt }
             : {}),
+          // fix-19 ⑦：意外死亡位透传（官方 :1188——UI 一次性守卫自动重开单源）
+          ...(manifest?.tunnelUnexpectedlyClosed === true ? { unexpectedlyClosed: true } : {}),
         } satisfies TunnelFace)
       : undefined
   if (phase !== 'listening') {
