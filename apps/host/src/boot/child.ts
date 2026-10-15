@@ -17,7 +17,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join } from 'node:path'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmod, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { createInterface } from 'node:readline'
@@ -134,6 +134,9 @@ function createNodeTunnelDeps(): TunnelDeps {
       exists: (path) => existsSync(path),
       readFile: (path) => readFile(path),
       writeFile: (path, data) => writeFile(path, data),
+      mkdir: async (path) => {
+        await mkdir(path, { recursive: true })
+      },
       chmod: (path, mode) => chmod(path, mode),
     },
     tmpDir: () => tmpdir(),

@@ -20,11 +20,13 @@ export type ProcessSpawner = (command: string, args: readonly string[]) => Tunne
 /** 二进制下载缝（真实实现 = fetch → arrayBuffer，测试 = fake server/内存） */
 export type BinaryFetcher = (url: string) => Promise<Uint8Array>
 
-/** 缓存文件系统缝（存在性/读取/写入/执行位；真实实现 = node:fs） */
+/** 缓存文件系统缝（存在性/读取/写入/建目录/执行位；真实实现 = node:fs） */
 export interface TunnelFs {
   exists(path: string): boolean
   readFile(path: string): Promise<Uint8Array>
   writeFile(path: string, data: Uint8Array): Promise<void>
+  /** 递归建目录（缓存目录先于 writeFile 建立——官方 :583 mkdir recursive 同径） */
+  mkdir(path: string): Promise<void>
   /** POSIX 执行位（win32 实现可 no-op） */
   chmod(path: string, mode: number): Promise<void>
 }
@@ -108,6 +110,8 @@ export async function ensureCloudflaredBinary(
   const cacheName = isTarGz ? asset.replace(/\.tgz$/, '') : asset
   const path = cachedBinaryPath(deps.tmpDir(), cacheName)
   if (deps.fs.exists(path)) return path
+  // bug a98a4cda：缓存目录先于一切落盘建立（node writeFile 不建父目录——官方 :583 同径）
+  await deps.fs.mkdir(cacheDirOf(deps.tmpDir()))
   // 种子收编：与 pin 清单校验一致才拷贝进产品缓存（dsh 缓存只是字节来源，非运行期依赖）
   if (!isTarGz) {
     const expected = CLOUDFLARED_SHA256[asset]

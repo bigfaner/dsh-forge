@@ -6,6 +6,7 @@ import {
   CLOUDFLARED_SHA256,
   CLOUDFLARED_VERSION,
   TunnelProcessExitError,
+  cacheDirOf,
   cachedBinaryPath,
   cloudflaredAsset,
   cloudflaredDownloadUrl,
@@ -59,12 +60,14 @@ function makeDeps(): {
   spawned: FakeProcess[]
   fetchCalls: string[]
   files: Map<string, Uint8Array>
+  mkdirs: string[]
   spawnCalls: Array<{ cmd: string; args: readonly string[] }>
   setBody(url: string, data: Uint8Array): void
   tick(ms: number): void
 } {
   const bodies = new Map<string, Uint8Array>()
   const files = new Map<string, Uint8Array>()
+  const mkdirs: string[] = []
   const spawned: FakeProcess[] = []
   const spawnCalls: Array<{ cmd: string; args: readonly string[] }> = []
   const fetchCalls: string[] = []
@@ -84,6 +87,9 @@ function makeDeps(): {
       writeFile: async (p, d) => {
         files.set(p, d)
       },
+      mkdir: async (p) => {
+        mkdirs.push(p)
+      },
       chmod: async () => {},
     },
     tmpDir: () => TMP,
@@ -100,6 +106,7 @@ function makeDeps(): {
     spawned,
     fetchCalls,
     files,
+    mkdirs,
     spawnCalls,
     setBody: (url, data) => bodies.set(url, data),
     tick: (ms) => {
@@ -177,6 +184,13 @@ describe('bug be04ce95：清单真值防回归（官方锚 = DSH Desktop 0.10.0 
     expect(t.files.has(path)).toBe(true) // 字节已拷贝进产品缓存
     expect(t.files.get(path)).toEqual(new Uint8Array([1]))
     expect(t.fetchCalls).toHaveLength(0) // 不下载——GitHub 不可达环境也能就位
+  })
+
+  it('bug a98a4cda：落盘前必建缓存目录（mkdir 缓存目录——缺此步 writeFile ENOENT 必败，官方 :583 同径）', async () => {
+    const t = makeDeps()
+    t.setBody(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, ASSET), new Uint8Array([1, 2]))
+    await ensureCloudflaredBinary(t.deps, 'win32', 'x64')
+    expect(t.mkdirs).toContain(cacheDirOf(TMP)) // 目录先于 writeFile 建立
   })
 
   it('种子校验不过（版本漂移）→ 跳过收编落回下载链', async () => {
