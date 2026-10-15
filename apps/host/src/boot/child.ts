@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 // mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -30,6 +30,9 @@ import {
   parseChildOptions,
   pairRedirectOf,
   redactTokenQuery,
+  remoteViewFilePathOf,
+  remoteViewIndexTap,
+  REMOTE_VIEW_MOUNT,
   sanitizeLogLine,
   sendGuarded,
   type ApprovalRelay,
@@ -41,6 +44,7 @@ import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
+import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -275,12 +279,11 @@ async function main(): Promise<void> {
           // fix-7：握手成功 → 主侧抬 manifest remoteDeviceConnected（粘性位——UI「手机已
           // 连接」态卡单源；guard 路径外发，重复扫码重复发亦幂等）
           send({ type: 'pair-connected' })
-          // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 重定向进
-          // 产品受限移动视图（fix-10 bug 3620685f：`?forgeRemote=1` 分支——不得落完整
-          // 工作台；官方 BrowserAuth 对既有查询参数透明，认证参数追加重写不丢分支位）。
-          // fix-18 ⑤：补 Set-Cookie——官方 authorizeIndex 303 "./" 会剥掉查询串，分支位
-          // 经 cookie 跨重定向存活（根因见 REMOTE_VIEW_COOKIE 注）。
-          const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
+          // 302 移动面入口（fix-22 真机修复 bug cbb9131e）：authenticatedUrl 包住 /remote/——
+          // token 认证语义经官方 BrowserAuth 保持（authorizeIndex 只认 GET /，/remote/ 携
+          // token 到达 → 302 官方根交换；官方 303 "/" 后 tapIndex 弹射脚本跳回 /remote/）。
+          // dswf_forge_remote cookie 跨重定向存活，产品 bundle 内 viaCookie 命中受限视图。
+          const target = ctx.connection.authenticatedUrl(`${origin}${REMOTE_VIEW_MOUNT}/`)
           // fix-22 诊断日志面①：302 目标（token 脱敏）+ 签发 cookie 属性（不含敏感值）
           diag(`[pair-diag] /pair ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
           res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
@@ -301,6 +304,90 @@ async function main(): Promise<void> {
           res.end()
         },
       })
+      // fix-22 真机修复（bug cbb9131e 架构级根因：产品 dist 仅经 dsh-forge://app 自定义协议
+      // 在主窗分发——webServer 面 fallback 服务的是官方 web 前端，手机 302 链落地「桌面版」
+      // 实为官方工作台，beacon 零到达）。①/remote 前缀路由 = webserver 移动面静态服务产品
+      // dist（dist 根 resolveWebDistDir 同源口径——env 透传经 spawn 继承 + resourcesDir 兜底）；
+      // ②官方 index tapIndex 弹射（dswf cookie 在场 → /remote/——根交换落 "/" 后的唯一合缝
+      // 跳转点，不改写官方面行为）；③入口 HTML no-store（防手机端缓存旧态）。
+      const webDistRoot = resolveWebDistDir({
+        ...process.env,
+        ...(options.resourcesDir !== undefined && options.resourcesDir !== ''
+          ? { DSH_FORGE_RESOURCES_DIR: options.resourcesDir }
+          : {}),
+      })
+      ctx.webServer.register({
+        kind: 'prefix',
+        path: REMOTE_VIEW_MOUNT,
+        handler: (req, res) => {
+          const method = req.method ?? 'GET'
+          const requestUrl = req.url ?? '/'
+          // 携 token 到达 = 认证交换腿——官方 authorizeIndex 只认 GET /，302 回官方根交换
+          // （无效 token 由官方 401 面；本路由不自行验证 launch token——认证语义零自持）
+          let token: string | null = null
+          try {
+            token = new URL(requestUrl, 'http://dsh.invalid').searchParams.get('token')
+          } catch {
+            token = null
+          }
+          if (token !== null && token !== '') {
+            let origin = `http://${lanIpv4}:${pairPort}`
+            try {
+              origin = pairRedirectOf(req.headers.host, lanIpv4, pairPort).origin
+            } catch {
+              // Host 头畸形 → 回退 LAN 权威（pairRedirectOf 本身不抛，防御面）
+            }
+            const exchangeTarget = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
+            diag(`[pair-diag] /remote token → 302 ${redactTokenQuery(exchangeTarget)}`)
+            res.writeHead(302, { location: exchangeTarget, 'cache-control': 'no-store' })
+            res.end()
+            return
+          }
+          // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth——零自持；
+          // 已认证 = true 且不拥有响应，未认证 = 官方 401 面已写毕）
+          if (!ctx.connection.authorizeIndex(req, res)) return
+          if (!['GET', 'HEAD'].includes(method)) {
+            res.writeHead(405, { 'content-type': 'text/plain; charset=utf-8' })
+            res.end()
+            return
+          }
+          const rel = remoteViewFilePathOf(requestUrl)
+          if (rel === undefined) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+            res.end()
+            return
+          }
+          const target = join(webDistRoot, rel)
+          if (!target.startsWith(webDistRoot + sep)) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+            res.end()
+            return
+          }
+          readFile(target)
+            .then((body) => {
+              const isIndex = rel === 'index.html'
+              const ext = target.slice(target.lastIndexOf('.'))
+              res.writeHead(200, {
+                'content-type': MIME[ext] ?? 'application/octet-stream',
+                // 入口 HTML no-store（④）；hash 命名资产默认缓存（content-type 已按扩展名钉）
+                ...(isIndex ? { 'cache-control': 'no-store' } : {}),
+              })
+              res.end(method === 'HEAD' ? undefined : body)
+            })
+            .catch((error: unknown) => {
+              if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+                res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+                res.end()
+                return
+              }
+              res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+              res.end()
+            })
+        },
+      })
+      // ②官方 index 弹射注入（tapIndex 由官方 fallback owner 在每次 index 渲染时应用——
+      // dsh-host-webserver 契约面；非 dswf cookie 访客官方面行为零变化）
+      ctx.webServer.tapIndex(remoteViewIndexTap)
       // dsh-mobile-tunnel：/pair/verify（官方锚 :1199-1215/:1231-1234 同语义）——POST
       // {pin}（JSON body；query ?pin= 兜底）→ PIN 正确 = 同 /pair 成功语义（pair-connected
       // + 302 官方认证 URL）；错误/超时失效/限速锁定 = 403。限速状态机归 pinIssuer。
@@ -333,8 +420,8 @@ async function main(): Promise<void> {
             }
             send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）
             // fix-10 bug 3620685f：PIN 认证成功同 /pair 语义——落地受限移动视图（不落完整工作台）
-            // fix-18 ⑤：同 /pair 补 Set-Cookie（官方 303 "./" 剥查询串——分支位走 cookie）
-            const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
+            // fix-22 真机修复：302 目标同 /pair——authenticatedUrl 包住 /remote/ 移动面入口。
+            const target = ctx.connection.authenticatedUrl(`${origin}${REMOTE_VIEW_MOUNT}/`)
             // fix-22 诊断日志面②：同 /pair——302 目标（脱敏）+ cookie 属性
             diag(`[pair-diag] /pair/verify ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
             res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })

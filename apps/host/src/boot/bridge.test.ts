@@ -33,6 +33,9 @@ import {
   KNOWLEDGE_SERVICE_METHODS,
   parseChildOptions,
   pairRedirectOf,
+  remoteViewFilePathOf,
+  remoteViewIndexTap,
+  REMOTE_VIEW_BOUNCE_MARKUP,
   PROJECT_SERVICE_METHODS,
   PROJECTS_M2_SERVICE_METHODS,
   PROPOSALS_SERVICE_METHODS,
@@ -906,5 +909,47 @@ describe('asDiagMessage（fix-23 diag 桥消息守卫）', () => {
     expect(asDiagMessage({ type: 'event', line: 'x' })).toBeUndefined()
     expect(asDiagMessage(null)).toBeUndefined()
     expect(asDiagMessage('diag')).toBeUndefined()
+  })
+})
+
+// fix-22 真机修复（bug cbb9131e 架构级根因）：webserver 移动面静态服务纯逻辑——挂载点路径
+// 映射（dist 相对路径）与官方 index 弹射脚本注入（tapIndex 消费）。
+describe('remoteViewFilePathOf（/remote 移动面路径映射）', () => {
+  it('挂载点本体与尾斜杠 → index.html', () => {
+    expect(remoteViewFilePathOf('/remote')).toBe('index.html')
+    expect(remoteViewFilePathOf('/remote/')).toBe('index.html')
+    expect(remoteViewFilePathOf('/remote/?x=1')).toBe('index.html')
+  })
+  it('挂载点下相对路径原样透出（dist 相对形态）', () => {
+    expect(remoteViewFilePathOf('/remote/assets/index-abc123.js')).toBe('assets/index-abc123.js')
+    expect(remoteViewFilePathOf('/remote/favicon.ico')).toBe('favicon.ico')
+  })
+  it('挂载点外 → undefined（webserver 面其余路由不受扰）', () => {
+    expect(remoteViewFilePathOf('/')).toBeUndefined()
+    expect(remoteViewFilePathOf('/pair')).toBeUndefined()
+    expect(remoteViewFilePathOf('/remoteize/x')).toBeUndefined()
+    expect(remoteViewFilePathOf('/remotex')).toBeUndefined()
+  })
+  it('路径逃逸与畸形 → undefined（逃逸守卫前置）', () => {
+    expect(remoteViewFilePathOf('/remote/..%2f..%2fsecret')).toBeUndefined()
+    expect(remoteViewFilePathOf('/remote/%00')).toBeUndefined()
+    expect(remoteViewFilePathOf('::bad::')).toBeUndefined()
+  })
+})
+
+describe('remoteViewIndexTap（官方 index 弹射注入）', () => {
+  it('<head> 后注入弹射脚本（dswf cookie 在场 → /remote/）', () => {
+    const out = remoteViewIndexTap('<!doctype html><html><head><meta charset=utf-8></head><body></body></html>')
+    expect(out).toContain('<head>')
+    const headEnd = out.indexOf('<head>') + '<head>'.length
+    expect(out.slice(headEnd, headEnd + REMOTE_VIEW_BOUNCE_MARKUP.length)).toBe(REMOTE_VIEW_BOUNCE_MARKUP)
+  })
+  it('无 <head> → 原样返回（fail-soft 不改写）', () => {
+    const html = '<html><body>x</body></html>'
+    expect(remoteViewIndexTap(html)).toBe(html)
+  })
+  it('弹射脚本形态 pin：仅 dswf_forge_remote=1 命中且 replace 到挂载点', () => {
+    expect(REMOTE_VIEW_BOUNCE_MARKUP).toContain('dswf_forge_remote=1')
+    expect(REMOTE_VIEW_BOUNCE_MARKUP).toContain('location.replace("/remote/")')
   })
 })

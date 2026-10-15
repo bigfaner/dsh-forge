@@ -818,3 +818,42 @@ export function sanitizeLogLine(text: string): string {
   const oneLine = text.replace(/[\r\n\t\0]+/g, ' ').replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '')
   return oneLine.length > 302 ? oneLine.slice(0, 302) : oneLine
 }
+
+/**
+ * fix-22 真机修复（bug cbb9131e 架构级根因：产品 dist 仅经 dsh-forge://app 自定义协议在主窗
+ * 分发，webserver 面从未服务产品 bundle——手机 302 链落地官方 web 前端）。/remote 移动面
+ * 挂载点：/pair 与 /pair/verify 302 目标（authenticatedUrl 包住）+ webserver 前缀路由静态
+ * 服务产品 dist。
+ */
+export const REMOTE_VIEW_MOUNT = '/remote'
+
+/**
+ * fix-22：请求 URL → dist 相对路径映射（挂载点外/路径逃逸/畸形 = undefined，服务侧 403/404）。
+ * 仅认挂载点前缀；index 形态（挂载点本体/尾斜杠）= 'index.html'。
+ */
+export function remoteViewFilePathOf(requestUrl: string): string | undefined {
+  let pathname: string
+  try {
+    pathname = decodeURIComponent(new URL(requestUrl, 'http://dsh.invalid').pathname)
+  } catch {
+    return undefined
+  }
+  if (pathname !== REMOTE_VIEW_MOUNT && !pathname.startsWith(`${REMOTE_VIEW_MOUNT}/`)) return undefined
+  const rel = pathname === REMOTE_VIEW_MOUNT ? '' : pathname.slice(REMOTE_VIEW_MOUNT.length + 1)
+  if (rel === '') return 'index.html'
+  if (rel.includes('\\') || rel.includes('\0') || rel.includes('../')) return undefined
+  return rel
+}
+
+/**
+ * fix-22：官方 index 弹射脚本（webServer.tapIndex 注入官方 web 前端 index.html——官方
+ * BrowserAuth 根交换只落在 "/"，tapIndex 是不改写官方面行为的唯一合缝跳转点）。dswf
+ * cookie 在场（/pair 成功面所设，非 HttpOnly 可读）→ replace 到 /remote/ 移动面。
+ */
+export const REMOTE_VIEW_BOUNCE_MARKUP =
+  '<script>if(/(?:^|; )dswf_forge_remote=1(?:;|$)/.test(document.cookie))location.replace("/remote/")</script>'
+
+/** fix-22：tapIndex 纯变换——<head> 开标签后注入弹射脚本（无 <head> = 原样返回 fail-soft）。 */
+export function remoteViewIndexTap(html: string): string {
+  return html.replace(/<head(?:\s[^>]*)?>/i, (open) => `${open}${REMOTE_VIEW_BOUNCE_MARKUP}`)
+}

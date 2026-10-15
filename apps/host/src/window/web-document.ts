@@ -20,7 +20,8 @@ export const SHELL_ENTRY_URL = `${SHELL_PAGE_ORIGIN}/`
 /** 就绪门预建脚本（母本同款：异步注入表生效前建门，bootShell ??= 兜底同门） */
 const BOOT_READY_MARKUP = '<script>globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()</script>'
 
-const MIME: Readonly<Record<string, string>> = {
+/** 资产扩展名 → content-type（web-document 本面 + fix-22 webserver /remote 移动面共用单源） */
+export const MIME: Readonly<Record<string, string>> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
