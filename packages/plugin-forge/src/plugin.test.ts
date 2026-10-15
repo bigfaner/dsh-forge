@@ -255,6 +255,14 @@ describe('注册面集合 pin（十一 tool：M3 九员 + recordBug/resolveBug �
   })
 })
 
+/** forge:pipeline 段 text 求值（官方函数形态——按装配上下文 agent.id 分会话） */
+function pipelineTextOf(rt: TempRuntime, agentId: string | undefined): string {
+  const section = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
+  const text = section?.text
+  if (typeof text !== 'function') throw new Error(`forge:pipeline 段 text 应为按装配求值的函数，实际 ${typeof text}`)
+  return (text as (context: { agent?: { id?: string } }) => string)({ agent: { id: agentId } })
+}
+
 describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511）', () => {
   it('默认装配：双段（pipeline + doc-style，name/order/text 三件在场）', () => {
     const rt = new TempRuntime()
@@ -263,27 +271,25 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     const pipeline = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
     const docStyle = rt.sections.find((s) => s.name === 'forge:doc-style')
     expect(pipeline?.order).toBe(510)
-    expect(pipeline?.text).toContain('forge-pipeline')
+    expect(pipelineTextOf(rt, undefined)).toContain('forge-pipeline')
     // doc-style 独立段（dual-mode-overhaul：文档风格公约拆段——双模式共用注入，段注册无条件）
     expect(docStyle?.order).toBe(511)
     expect(docStyle?.text).toContain('doc-style')
     expect(docStyle?.text).toContain('文档风格公约')
     // pipeline 段本体不再携带公约（拆段后单一归属）
-    expect(pipeline?.text).not.toContain('文档风格公约')
+    expect(pipelineTextOf(rt, undefined)).not.toContain('文档风格公约')
     dispose()
   })
 
   it('config.mode 双模式渲染：blitz → 突击模板；缺省/未知 → 远征回退', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin(rt1.ctx(), { mode: 'blitz' })
-    const p1 = rt1.sections.find((s) => s.name === FORGE_SECTION_NAME)
-    expect(p1?.text).toContain('## Forge 任务管线（突击模式）')
-    expect(p1?.text).toContain('B -->|"accept"| C[quick-tasks]')
+    expect(pipelineTextOf(rt1, undefined)).toContain('## Forge 任务管线（突击模式）')
+    expect(pipelineTextOf(rt1, undefined)).toContain('B -->|"accept"| C[quick-tasks]')
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.ctx(), { mode: 'unknown-mode' })
-    const p2 = rt2.sections.find((s) => s.name === FORGE_SECTION_NAME)
-    expect(p2?.text).toContain('## Forge 任务管线（远征模式）')
+    expect(pipelineTextOf(rt2, undefined)).toContain('## Forge 任务管线（远征模式）')
     d2()
   })
 
@@ -295,50 +301,66 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
   })
 })
 
-describe('1.16 段 forgeDir 注入（中央 projects 行——外部化 forgeDir 取实际值）', () => {
-  /** 绑定项目 forgeProjects 桩（getProject 返回给定行/未注册 null） */
-  function projectsWith(project: { forgeDir: string } | null) {
+describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960：多项目下不得取首个绑定项目）', () => {
+  /** 两绑定项目（首行 learn / 次行 demo——次序即 bug 触发条件）+ 按 id 分流的 getProject 桩 */
+  const ROWS = [
+    { wsPath: 'C:\\ws\\learn', projectId: 'p-1', forgeDir: 'C:/ws/learn/.forge' },
+    { wsPath: 'C:\\ws\\demo', projectId: 'p-2', forgeDir: 'C:/ws/demo/.forge' },
+  ]
+  function projectsWith(rows: typeof ROWS | null) {
     return {
       deriveTaskStoreDir: async () => ({ dir: DEMO_CONTAINER_DIR }),
-      getProject: async () => project,
+      ...(rows === null ? {} : { getProject: async (id: string) => rows.find((r) => r.projectId === id) ?? null }),
     } as Pick<ProjectServiceM2, 'deriveTaskStoreDir' | 'getProject'> as ProjectServiceM2
   }
-  const BOUND = { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] }
+  const BOUND = { projects: ROWS.map(({ wsPath, projectId }) => ({ wsPath, projectId })) }
 
-  it('绑定项目 forge_dir 解析命中：段重注册升级，注入值出现在段文本（含目录树段）', async () => {
+  /** 装配 + 捕获事件监听面（session/created 由此发炮） */
+  function assembleWith(projects: ProjectServiceM2) {
     const rt = new TempRuntime()
-    const ctx = { ...rt.ctx(), forgeProjects: projectsWith({ forgeDir: 'Z:/external/ws/.forge' }) }
+    const listeners = new Map<string, ((session: unknown) => void)[]>()
+    const ctx = {
+      ...rt.ctx(),
+      forgeProjects: projects,
+      on: (name: string, cb: (session: unknown) => void) => {
+        const list = listeners.get(name) ?? []
+        list.push(cb)
+        listeners.set(name, list)
+        return () => {}
+      },
+    }
     const dispose = forgePlugin(ctx, BOUND)
+    const emit = (name: string, session: unknown) => {
+      for (const cb of listeners.get(name) ?? []) cb(session)
+    }
+    return { rt, dispose, emit }
+  }
+
+  /** 段 text 求值走模块级 pipelineTextOf（函数形态——按装配上下文 agent.id 分会话） */
+  it('bug 复现面：第二绑定项目的会话拿到自己的 forgeDir（不落入首行 learn 项目）', async () => {
+    const { rt, dispose, emit } = assembleWith(projectsWith(ROWS))
+    emit('session/created', { id: 'sess-demo', header: { cwd: 'C:\\ws\\demo' } })
+    emit('session/created', { id: 'sess-learn', header: { cwd: 'C:\\ws\\learn' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(3) // 缺省 pipeline 段 + doc-style 段 + forge_dir 升级段
-    const upgraded = rt.sections[2]
-    expect(upgraded?.name).toBe('forge:pipeline')
-    expect(upgraded?.order).toBe(510)
-    expect(upgraded?.text).toContain('Z:/external/ws/.forge\\docs')
-    expect(upgraded?.text).toContain('文档位置与存储约束')
-    expect(upgraded?.text).toContain('proposals/{slug}/')
+    expect(pipelineTextOf(rt, 'sess-demo')).toContain('C:/ws/demo/.forge\\docs')
+    expect(pipelineTextOf(rt, 'sess-learn')).toContain('C:/ws/learn/.forge\\docs')
     dispose()
-    // 重注册升级面：新旧 pipeline 注销器 + doc-style 注销器各恰一次
-    expect(rt.disposedCounts()).toEqual({ tools: 11, sections: 3 })
   })
 
-  it('项目未注册（getProject → null）：缺省段原样（无目录树段，单段，回退不炸）', async () => {
-    const rt = new TempRuntime()
-    const ctx = { ...rt.ctx(), forgeProjects: projectsWith(null) }
-    const dispose = forgePlugin(ctx, BOUND)
+  it('会话未预热（缓存缺席）/ 项目未注册：缺省段（无文档位置，不注入他人路径）', async () => {
+    const { rt, dispose, emit } = assembleWith(projectsWith(ROWS))
+    expect(pipelineTextOf(rt, 'sess-cold')).not.toContain('文档位置')
+    emit('session/created', { id: 'sess-null', header: { cwd: 'C:\\ws\\unregistered' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(2)
-    expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
+    expect(pipelineTextOf(rt, 'sess-null')).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 11, sections: 2 })
   })
 
-  it('无绑定项目 / forgeProjects 面缺 getProject：缺省段原样（fail-soft 零外抛）', async () => {
-    const rt = new TempRuntime()
-    const dispose = forgePlugin(rt.ctx())
+  it('forgeProjects 面缺 getProject / 无绑定：缺省段原样（fail-soft 零外抛）', async () => {
+    const { rt, dispose, emit } = assembleWith(projectsWith(null))
+    emit('session/created', { id: 'sess-x', header: { cwd: 'C:\\ws\\demo' } })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(rt.sections).toHaveLength(2)
-    expect(rt.sections.find((s) => s.name === FORGE_SECTION_NAME)?.text).not.toContain('文档位置')
+    expect(pipelineTextOf(rt, 'sess-x')).not.toContain('文档位置')
     dispose()
     expect(rt.disposedCounts()).toEqual({ tools: 11, sections: 2 })
   })

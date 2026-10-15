@@ -111,12 +111,22 @@ export interface SystemPromptSectionFace {
   section(section: ForgePromptSection): () => void
 }
 
-/** forge:pipeline 段形状（Interface 8：name/order/text） */
+/**
+ * 官方 AssembleContext 运行期子面（结构收窄——声明面仅 scope/signal，运行期由
+ * dsh-agent assembleContextFor 携带 agent，agent.id = SessionId）。
+ */
+export interface ForgeAssembleContext {
+  readonly scope?: unknown
+  readonly agent?: { readonly id?: string }
+}
+
+/** forge:pipeline 段形状（Interface 8：name/order/text；text 官方函数形态 = 按装配求值） */
 export interface ForgePromptSection {
   readonly name: string
   /** 升序拼接；同 order 按名称码序（knowledge 500 → forge:pipeline 510） */
   readonly order: number
-  readonly text: string
+  /** 静态文本或按装配求值的函数（官方 PromptSection 函数形态）；文本禁用裸 {{ */
+  readonly text: string | ((context: ForgeAssembleContext) => string)
 }
 
 // ─────────────────────────── dsh jobs 注册表收窄面（async-dispatch §7——dispatch 后台形态注入面） ───────────────────────────
@@ -229,10 +239,33 @@ export interface ForgeContextFace {
   /** dsh 官方系统提示词面 */
   systemPrompt: SystemPromptSectionFace
   /**
-   * dsh ctx.on 事件注册收窄面（bug-mention-prestep——'agent/pre-step' waterfall 单事件；
-   * 结构化消费面定义于 agent/bug-mention-prestep.ts。可选：缺席 = pre-step 不挂接 fail-soft）。
+   * dsh ctx.on 事件注册收窄面（两消费点共享一方法重载面）：bug-mention-prestep 的
+   * 'agent/pre-step' waterfall（结构化消费面定义于 agent/bug-mention-prestep.ts）与
+   * forge:pipeline 段预热面的 'session/created'/'session/disposed' 生命周期事件
+   * （ForgeSessionLifecycleFace——官方 dsh-session Session 消费子面）。可选：
+   * 缺席 = 两挂接面各自 fail-soft。
    */
-  readonly on?: import('./agent/bug-mention-prestep.js').PreStepRegisterFace['on']
+  readonly on?: ForgeEventRegisterFace
+}
+
+/** 官方 dsh-session Session 公告事件消费子面（header.cwd = 会话工作区根读位） */
+export interface ForgeSessionLifecycleFace {
+  readonly id?: unknown
+  readonly header?: { readonly cwd?: unknown }
+}
+
+/** dsh ctx.on 双事件面收窄（官方 Context.on 重载消费——均为全局派发监听） */
+export interface ForgeEventRegisterFace {
+  (
+    event: 'agent/pre-step',
+    listener: Parameters<NonNullable<import('./agent/bug-mention-prestep.js').PreStepRegisterFace['on']>>[1],
+    options?: { readonly global?: boolean },
+  ): () => void
+  (
+    event: 'session/created' | 'session/disposed',
+    listener: (session: ForgeSessionLifecycleFace) => void,
+    options?: { readonly global?: boolean },
+  ): () => void
 }
 
 // ─────────────────────────── dsh commands 注册表收窄面（S2——run-tasks-host-command 指令两枚） ───────────────────────────

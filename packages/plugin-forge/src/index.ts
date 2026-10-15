@@ -355,43 +355,58 @@ const forgePlugin: ForgePlugin = Object.assign(
         warnReconcileDegraded(projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
-    // 1.16 文档位置动态注入 + dual-mode-overhaul 双模式键：段文本以模板渲染，forgeDir 由
-    // 中央 projects 行程序化注入，mode 由 preset yml plugin-forge 行 config 注入（缺省回退
-    // 远征）。装配同步径先以缺省注册（缺省 = 省略文档位置/目录树段）；绑定项目 forge_dir
-    // 异步解析命中后重注册升级（外部化 forgeDir 取实际值，不假设 <ws>/.forge；解析失败/
-    // 项目未注册/面缺席 = 缺省段原样，fail-soft 不炸渲染）。sectionRef 持有当前注销器，
-    // 插件 disposer 统一经其注销恰一份现行段。doc-style 独立段双模式共用注入（常量文本，
-    // 一次注册不重注册）。
+    // 1.16 文档位置按会话工作区注入（bug 5adb5960 根治：段此前取 boundProjectIds[0]
+    // 首个绑定项目，多项目宿主下所有会话共享同一（错误项目的）文档根）：段 text 用
+    // 官方 PromptSection 函数形态——每次 system prompt 装配按上下文 agent.id（SessionId）
+    // 查 session/created 预热的 sessionId→forgeDir 缓存求值；缓存缺席（预热未完成/
+    // 项目未注册/面缺席）= 缺省段（省略文档位置，绝不注入其他项目的路径，fail-soft）。
+    // mode 仍由 preset yml plugin-forge 行 config 注入（缺省回退远征）。doc-style
+    // 独立段常量文本双模式共用（一次注册不重注册）。
+    // Root cause: 段是进程级单文本，forgeDir 却是每会话事实——首个绑定项目被当成了全宿主默认。
     const pipelineMode = modeOf(config.mode)
-    const sectionRef: { dispose: () => void } = {
-      dispose: ctx.systemPrompt.section({
-        name: FORGE_SECTION_NAME,
-        order: FORGE_SECTION_ORDER,
-        text: renderForgePipelineSection({ mode: pipelineMode }),
-      }),
+    const sessionForgeDirs = new Map<string, string>()
+    const warmSessionForgeDir = (session: { id?: unknown; header?: { cwd?: unknown } }): void => {
+      try {
+        const id = session?.id
+        const cwd = session?.header?.cwd
+        if (typeof id !== 'string' || typeof cwd !== 'string') return
+        const projectId = resolveProjectId(cwd)
+        if (projectId === undefined) return
+        void (async () => {
+          try {
+            const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
+            if (typeof projects.getProject !== 'function') return
+            const project = await projects.getProject(projectId)
+            const forgeDir = project?.forgeDir
+            if (typeof forgeDir === 'string' && forgeDir.trim() !== '') sessionForgeDirs.set(id, forgeDir)
+          } catch {
+            /* 预热失败 = 该会话回落缺省段（fail-soft 零外抛） */
+          }
+        })()
+      } catch {
+        /* 事件面形状异常 = 忽略（fail-soft） */
+      }
+    }
+    if (typeof ctx.on === 'function') {
+      ctx.on('session/created', warmSessionForgeDir)
+      ctx.on('session/disposed', (session: { id?: unknown }) => {
+        if (typeof session?.id === 'string') sessionForgeDirs.delete(session.id)
+      })
     }
     const disposeDocStyle = ctx.systemPrompt.section({
       name: FORGE_DOC_STYLE_SECTION_NAME,
       order: FORGE_DOC_STYLE_SECTION_ORDER,
       text: renderDocStyleSection(),
     })
-    void (async () => {
-      const projectId = boundProjectIds[0]
-      if (projectId === undefined) return
-      const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
-      if (typeof projects.getProject !== 'function') return
-      const project = await projects.getProject(projectId)
-      if (project === null) return
-      const forgeDir = project.forgeDir
-      if (typeof forgeDir !== 'string' || forgeDir.trim() === '') return
-      const text = renderForgePipelineSection({ forgeDir, mode: pipelineMode })
-      sectionRef.dispose()
-      sectionRef.dispose = ctx.systemPrompt.section({
-        name: FORGE_SECTION_NAME,
-        order: FORGE_SECTION_ORDER,
-        text,
-      })
-    })().catch(() => {})
+    const disposePipeline = ctx.systemPrompt.section({
+      name: FORGE_SECTION_NAME,
+      order: FORGE_SECTION_ORDER,
+      text: (context) =>
+        renderForgePipelineSection({
+          forgeDir: context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id),
+          mode: pipelineMode,
+        }),
+    })
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),
@@ -407,9 +422,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
-      // 1.16 起经 sectionRef 注销现行段（缺省注册 + forge_dir 命中后的重注册升级）；
-      // doc-style 独立段双模式共用（disposeDocStyle 恰一份）。
-      () => sectionRef.dispose(),
+      // pipeline 段函数形态单次注册（按装配求值，无重注册升级面）；doc-style
+      // 独立段双模式共用（disposeDocStyle 恰一份）。
+      () => disposePipeline(),
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
