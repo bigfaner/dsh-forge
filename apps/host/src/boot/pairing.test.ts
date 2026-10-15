@@ -13,6 +13,7 @@ import {
   PIN_RATE_WINDOW_MS,
   PIN_TTL_MS,
   pinOfSubmission,
+  renderPairingPinErrorPage,
   renderPairingPinPage,
 } from './pairing.js'
 
@@ -196,6 +197,54 @@ describe('fix-28 renderPairingPinPage（/pair 隧道 Host PIN 输入页）', () 
   })
 
   it('不携带 token/pin 等敏感凭据（凭据零嵌入——verify 由 PIN 单独守门）', () => {
+    expect(page).not.toMatch(/token/i)
+    expect(page).not.toMatch(/[0-9]{6}/)
+  })
+})
+
+// ── fix-29 PIN 页样式对齐（官方 renderPairingPinPage 主配对页同族：居中 wrap/brand 头/
+// h1/面板卡/PIN 大字/提交钮——官方源缺席处按 DESIGN.md 令牌映射实现，dsw-raw 记账） ──
+
+describe('fix-29 renderPairingPinPage 样式对齐（DESIGN.md 令牌族）', () => {
+  const page = renderPairingPinPage()
+
+  it('移动 viewport + 居中 wrap（页面级 flex 居中）', () => {
+    expect(page).toContain('name="viewport"')
+    expect(page).toMatch(/display:\s*flex[^}]*justify-content:\s*center/s)
+    expect(page).toMatch(/align-items:\s*center/)
+  })
+
+  it('brand 头「Harness」纯文字（DESIGN.md dialog chrome 同词）+ h1 面板大标', () => {
+    expect(page).toContain('Harness')
+    expect(page).toMatch(/<h1>/)
+  })
+
+  it('面板卡（layer-2 面 + 0.5px border-l4 描边 + md 圆角 + lv2 阴影）', () => {
+    expect(page).toMatch(/border:\s*0\.5px solid/) // border-l4 #00000029（dsw-raw 行注记账）
+    expect(page).toMatch(/border-radius:\s*12px/) // --dsw-radius-md
+    expect(page).toMatch(/box-shadow:/) // elevation lv2 双层微阴影
+  })
+
+  it('PIN 大字输入（居中大号 + 数字字距）+ 主色提交钮（近黑 fill 反差面）', () => {
+    expect(page).toMatch(/text-align:\s*center/)
+    expect(page).toMatch(/font-size:\s*24px/) // display 档大字
+    expect(page).toMatch(/letter-spacing:/)
+    expect(page).toMatch(/background:\s*#0f1115/) // --dsw-alias-button-primary-fill（dsw-raw 行注）
+  })
+})
+
+// ── fix-29 错 PIN 403 页内反馈（同族样式错误卡——替代裸 text/plain 403） ──
+
+describe('fix-29 renderPairingPinErrorPage（403 同族错误卡）', () => {
+  const page = renderPairingPinErrorPage()
+
+  it('403 语义文案在场（PIN 错误/过期/限速三态合一）', () => {
+    expect(page).toContain('PIN 错误、已过期或尝试过于频繁')
+  })
+
+  it('同族居中卡样式（与 PIN 页同 wrap/卡/描边刻度）+ 零凭据嵌入', () => {
+    expect(page).toMatch(/display:\s*flex[^}]*justify-content:\s*center/s)
+    expect(page).toMatch(/border-radius:\s*12px/)
     expect(page).not.toMatch(/token/i)
     expect(page).not.toMatch(/[0-9]{6}/)
   })

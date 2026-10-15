@@ -49,6 +49,7 @@ import {
   createPairingIssuer,
   createPinIssuer,
   pinOfSubmission,
+  renderPairingPinErrorPage,
   renderPairingPinPage,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
@@ -460,8 +461,9 @@ async function main(): Promise<void> {
             // fix-22 诊断日志面②：PIN 校验读数（不携 pin 值本体）
             diag(`[pair-diag] /pair/verify host=${JSON.stringify(req.headers.host ?? '')} pinVerify=${pinOk ? 'pass' : 'fail'}`)
             if (!pinOk) {
-              res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
-              res.end('PIN 错误、已过期或尝试过于频繁——请在桌面端获取最新 PIN')
+              // fix-29：403 页内反馈（同族错误卡替代裸 text/plain——状态语义不变）
+              res.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+              res.end(renderPairingPinErrorPage())
               return
             }
             send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）

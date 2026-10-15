@@ -28,23 +28,72 @@ export interface PinGrant {
 }
 
 /**
- * fix-28 PIN 输入页（官方 renderPairingPinPage :1198 同位）：/pair 对隧道 Host 的 token
- * 校验通过后呈此页（不直接 302 落地——公网 URL 持有者还须 PIN 第二因子）。表单 POST
- * /pair/verify（既有 PIN 校验/TTL/限速语义全归 pinIssuer）；凭据零嵌入（纯静态页）。
+ * fix-29 PIN 输入页样式（官方 renderPairingPinPage :1198 主配对页同族：居中 wrap/brand 头/
+ * h1/面板卡/PIN 大字/提交钮）。官方源在本机缺席（asar 不可达）——按 DESIGN.md 令牌映射实现，
+ * 裸值逐行 dsw-raw 记账（独立离线页不载官方主题表，var() 不可用）。凭据零嵌入（纯静态页）。
  */
-export function renderPairingPinPage(): string {
+const PIN_PAGE_STYLE = [
+  // dsw-raw：bg-base light #ffffff；label-primary #0f1115；官方字体族 --dsw-font-family
+  'body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;',
+  'background:#ffffff;color:#0f1115;',
+  'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}',
+  // dsw-raw：面板卡 = bg-layer-2 + 0.5px border-l4(rgba(0,0,0,.16)=#00000029) + --dsw-radius-md 12px + elevation lv2 双层微阴影
+  '.card{background:#ffffff;border:0.5px solid rgba(0,0,0,.16);border-radius:12px;',
+  'box-shadow:0 4px 12px 0 rgba(0,0,0,.02),0 2px 8px 0 rgba(0,0,0,.04);',
+  'padding:24px;width:min(320px,calc(100vw - 32px));box-sizing:border-box;text-align:center}',
+  // dsw-raw：brand 头纯文字（DESIGN.md dialog chrome——Harness 同词），caption 刻度 label-secondary
+  '.brand{font-size:13px;font-weight:500;color:#61666b;margin-bottom:16px}',
+  // dsw-raw：h1 = --dsw-font-l-20（500/20/28 面板大标）
+  'h1{font-size:20px;line-height:28px;font-weight:500;margin:0 0 8px}',
+  // dsw-raw：说明文 = --dsw-font-s-14（400/14/22）+ label-secondary
+  '.hint{font-size:14px;line-height:22px;color:#61666b;margin:0 0 20px}',
+  // dsw-raw：输入 = specific-input-major 白底 + 0.5px border-l2(rgba(0,0,0,.1)=#0000001a) + --dsw-radius-sm 8px；PIN 大字 = display 档 24px/600 + 字距；focus ring 2px business-primary #4176e6
+  'input{width:100%;box-sizing:border-box;padding:12px;font-size:24px;font-weight:600;',
+  'letter-spacing:8px;text-indent:8px;text-align:center;background:#ffffff;',
+  'border:0.5px solid rgba(0,0,0,.1);border-radius:8px;color:#0f1115;outline:none}',
+  'input:focus-visible{outline:2px solid #4176e6;outline-offset:0}',
+  // dsw-raw：主钮 = --dsw-alias-button-primary-fill 近黑反差面（light #0f1115）+ radius-sm 8px
+  'button{width:100%;margin-top:16px;padding:10px 16px;background:#0f1115;color:#ffffff;',
+  'border:none;border-radius:8px;font-size:14px;font-weight:500;font-family:inherit;cursor:pointer}',
+]
+
+/** fix-29 同族壳：PIN 页与 403 错误卡共用的居中 wrap + brand 头 + 面板卡文档骨架。 */
+function pinPageDocument(title: string, body: string): string {
   return [
     '<!doctype html>',
     '<html lang="zh-CN"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<title>输入 PIN 完成配对</title></head>',
-    '<body><h1>输入 PIN 完成配对</h1>',
-    '<p>请输入桌面端显示的 6 位 PIN。</p>',
+    `<title>${title}</title>`,
+    `<style>${PIN_PAGE_STYLE.join('')}</style></head>`,
+    `<body><div class="card"><div class="brand">Harness</div>${body}</div></body></html>`,
+  ].join('')
+}
+
+/**
+ * fix-28/29 PIN 输入页（官方 renderPairingPinPage :1198 同位）：/pair 对隧道 Host 的 token
+ * 校验通过后呈此页（不直接 302 落地——公网 URL 持有者还须 PIN 第二因子）。表单 POST
+ * /pair/verify（既有 PIN 校验/TTL/限速语义全归 pinIssuer）。
+ */
+export function renderPairingPinPage(): string {
+  return pinPageDocument('输入 PIN 完成配对', [
+    '<h1>输入 PIN 完成配对</h1>',
+    '<p class="hint">请输入桌面端显示的 6 位 PIN。</p>',
     '<form action="/pair/verify" method="post">',
     '<input name="pin" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>',
     '<button type="submit">验证</button>',
-    '</form></body></html>',
-  ].join('')
+    '</form>',
+  ].join(''))
+}
+
+/**
+ * fix-29 错 PIN 403 页内反馈（替代裸 text/plain 403——同族样式错误卡，PIN 校验失败/
+ * 过期/限速锁定三态合一文案；HTTP 状态仍 403，语义不变）。
+ */
+export function renderPairingPinErrorPage(): string {
+  return pinPageDocument('验证未通过', [
+    '<h1>验证未通过</h1>',
+    '<p class="hint">PIN 错误、已过期或尝试过于频繁——请在桌面端获取最新 PIN 后重试。</p>',
+  ].join(''))
 }
 
 /**
