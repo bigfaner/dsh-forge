@@ -61,3 +61,31 @@ body[data-ds-dark-theme] [data-conversation-content]::after {
 [data-conversation-content] :has([data-trajectory-scroll]) {
   background-color: transparent;
 }
+
+/* ── hero 大标产品覆写（2026-10-16 用户裁决：徽标文案改「知识就是力量」+ 大标上移
+ * 让位背景鲸鱼/书海）。官方 HeroShell（dsh-client-ui-conversation@0.2.0-rc.2）的
+ * headline/徽标为硬编码渲染（无插槽缝；locale 同命名空间重复注册抛错——非覆写缝），
+ * 故走 brand.css 结构锚先例（hash 类名不落锚，逐跳 = 源码核验的结构子）：
+ *   [data-composer-seat] > composerStack(div) > HeroShell root(div:first-child)
+ *   > .stack(div:first-child) > .headline(div:first-child) > .titleGroup(span:last-child)
+ *   > .previewBadge(span:last-child)
+ * 仅 hero 相位命中；升级窗口结构漂移即失效（选择器整链断裂零副作用——回落官方形态）。 */
+
+/* 徽标文案换装：官方文案节点 font-size:0 收隐 + ::after 注入品牌语（徽标胶囊
+ * padding/border/背景随官方样式原样保留）。zh 命中中文语；其余语言（en 等）
+ * 官方徽标本位（"Preview"）——locale 运行时同步 <html lang>。 */
+[data-conversation-content][data-content-phase='hero'] [data-composer-seat] > div:first-child > div:first-child > div:first-child > div:first-child > span:last-child > span:last-child {
+  font-size: 0;
+}
+html[lang^='zh'] [data-conversation-content][data-content-phase='hero'] [data-composer-seat] > div:first-child > div:first-child > div:first-child > div:first-child > span:last-child > span:last-child::after {
+  content: '知识就是力量';
+  font-size: 12px; /* 官方徽标字号刻度（font/weight/行高随胶囊类继承） */
+}
+
+/* 大标上移让位插画：HeroShell root 官方垂直居中（justify-content:center）与
+ * 「鲸游书海」插画不透明带（容器 ~47% 起全不透明——见上方遮罩刻度注）相压，
+ * 视觉上移 ~7vh 落渐隐带内；transform 纯视觉位移——composer 座/工作区行/输入
+ * 卡布局零扰动。 */
+[data-conversation-content][data-content-phase='hero'] [data-composer-seat] > div:first-child > div:first-child {
+  transform: translateY(-7vh);
+}
