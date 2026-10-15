@@ -1,6 +1,6 @@
 /* 手机远程入口 + 面板（mobile-remote-approval 1.2——官方 ui-sidebar iconButton 刻度逐值
- * 同款：28 命中区 / radius-sm / 16 图标；fix-11 三态着色：off 灰 / listening+pending 橙 /
- * connected 绿——DESIGN.md 语义色表 Warning #f59e0b / Success #22c55e） */
+ * 同款：28 命中区 / radius-sm / 16 图标；fix-12 状态指示 = 图标本体恒 currentColor +
+ * 右上角小圆点四态（无/橙/绿/红）——DESIGN.md 语义色令牌） */
 
 .dswf-remote-root {
   position: relative;
@@ -75,22 +75,33 @@
   display: block;
 }
 
-/* fix-11 三态（用户裁决 2026-10-14：未启用 = 灰 / 已启用未连接（listening/pending）= 橙 /
- * 已启用已连接 = 绿——DESIGN.md 语义色令牌） */
-.dswf-remote-entry[data-phase='off'] {
-  color: var(--dsw-alias-label-tertiary);
+/* fix-12（用户纠正 2026-10-14，翻转 fix-11 ③旧口径）：图标本体恒 currentColor 不变色，
+ * 状态由右上角小圆点承载四态——off 无圆点（零渲染）/ listening+pending 橙 / connected 绿 /
+ * listening × 隧道失效红（DESIGN.md 语义色令牌） */
+.dswf-remote-entry {
+  position: relative;
 }
 
-.dswf-remote-entry[data-phase='listening'] {
-  color: var(--dsw-alias-state-warning-primary);
+.dswf-remote-dot {
+  position: absolute;
+  top: 3px; /* dsw-raw 圆点落点（28 命中区右上角，局部刻度） */
+  right: 3px; /* dsw-raw 圆点落点（同上） */
+  width: 6px; /* dsw-raw 状态圆点直径（局部刻度） */
+  height: 6px; /* dsw-raw 状态圆点直径（同上） */
+  border-radius: 999px; /* dsw-raw 胶囊圆（官方 Tag/999 同值） */
+  pointer-events: none;
 }
 
-.dswf-remote-entry[data-phase='pending'] {
-  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
+.dswf-remote-dot[data-state='warning'] {
+  background: var(--dsw-alias-state-warning-primary);
 }
 
-.dswf-remote-entry[data-phase='connected'] {
-  color: var(--dsw-alias-state-success-primary);
+.dswf-remote-dot[data-state='success'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-remote-dot[data-state='error'] {
+  background: var(--dsw-alias-state-error-primary);
 }
 
 .dswf-remote-panel-phase[data-phase='pending'] {
@@ -128,6 +139,76 @@
 }
 
 .dswf-remote-dialog-close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* ── fix-12 B：Harness 菜单（dialog 左上角下拉——官方应用菜单 Harness 族 web 同位搬运；
+ *    刻度 = 官方 ui-sidebar iconButton 同型 28px 命中区 + radius-sm + 菜单项文字按钮） ── */
+.dswf-remote-harness {
+  position: absolute;
+  top: 18px; /* dsw-raw 与右上关闭钮同垂直落点 */
+  left: -24px; /* dsw-raw 回到卡左缘（抵消卡侧内距 24px——close 右缘同径镜像） */
+}
+
+.dswf-remote-harness-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* dsw-raw 官方 Modal .close 刻度同款 */
+  height: 28px; /* dsw-raw 官方 Modal .close 刻度同款 */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-harness-trigger:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-remote-harness-trigger:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-remote-harness-menu {
+  display: none; /* 关合态零占位（下拉就地展开） */
+  position: absolute;
+  top: 30px; /* dsw-raw 触发钮下沿 + 2px 缝（局部刻度） */
+  left: 0;
+  z-index: 1;
+  min-width: 160px; /* dsw-raw 菜单最小宽（三项中文文案单行，局部刻度） */
+  padding: 4px; /* dsw-raw 菜单内距（官方弹层同款局部刻度） */
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-base));
+  box-shadow: var(--dsw-alias-shadow-overlay, 0 4px 16px rgb(0 0 0 / 0.16)); /* dsw-raw 弹层阴影 */
+}
+
+.dswf-remote-harness[data-open='true'] .dswf-remote-harness-menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-remote-harness-menu button {
+  padding: 6px 10px; /* dsw-raw 菜单项内距（局部刻度） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-s-14);
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  white-space: nowrap;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-harness-menu button:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-remote-harness-menu button:not(:disabled):hover {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 

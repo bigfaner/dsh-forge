@@ -17,7 +17,8 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
 import { Modal, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
-import type { RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
+import type { RemoteDotState, RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
+import { remoteDotStateOf } from './remote-status.js'
 import './remote.css'
 
 /** sidebar.footer.action 占用者注入面（插件 remote-face 递达；逐位缺席 fail-soft） */
@@ -74,6 +75,105 @@ export function secondsLeftOf(pairExpiresAt: number | undefined, now: number): n
 /** 倒计时文案（官方常量对照——「二维码将在 N 秒后刷新」） */
 export function pairCountdownText(seconds: number): string {
   return `二维码将在 ${seconds} 秒后刷新`
+}
+
+// ── fix-12 B：Harness 菜单三项（DSH Desktop 0.10.0 main.js:22317-22336 文案逐字搬运；
+//    菜单动作 = host 侧 dshForge 三缝（relaunch / safe-mode relaunch / showItemInFolder
+//    harness.log）——域外直转面先例同制，不进 forge RPC allowlist） ──
+
+/** Harness 菜单三项官方文案（逐字——zh 形态；en = Restart Harness / Restart as Safe Mode… / Show Harness Log） */
+export const HARNESS_MENU_ITEMS = {
+  relaunch: '重启 Harness',
+  safeMode: '以安全模式重启…',
+  showLog: '查看 Harness 日志',
+} as const
+
+/** host dshForge 桥 Harness 缝窄面（preload-api 同名三成员结构同型镜像） */
+export interface DshForgeHarnessBridge {
+  relaunchHarness(): Promise<unknown>
+  relaunchSafeMode(): Promise<unknown>
+  showHarnessLog(): Promise<unknown>
+}
+
+/** dshForge 桥 Harness 缝读取（缺席/形状不符 = undefined——菜单项禁用态 fail-soft） */
+export function harnessBridgeOf(
+  globalObject: { dshForge?: unknown } = globalThis as { dshForge?: unknown },
+): DshForgeHarnessBridge | undefined {
+  const bridge = globalObject.dshForge as
+    | { relaunchHarness?: unknown; relaunchSafeMode?: unknown; showHarnessLog?: unknown }
+    | undefined
+  if (
+    bridge !== undefined &&
+    typeof bridge.relaunchHarness === 'function' &&
+    typeof bridge.relaunchSafeMode === 'function' &&
+    typeof bridge.showHarnessLog === 'function'
+  ) {
+    return bridge as DshForgeHarnessBridge
+  }
+  return undefined
+}
+
+/** Harness 菜单（dialog 左上角下拉——官方应用菜单 Harness 族 web 同位搬运；桥缺席 =
+ *  触发钮禁用 + 三项禁用态呈现）。交互 = 本组件自持开合（零弹层机械——下拉就地展开）。 */
+export function HarnessMenu(props: { readonly harness?: DshForgeHarnessBridge }): ReactNode {
+  const [open, setOpen] = useState(false)
+  const harness = props.harness
+  const disabled = harness === undefined
+  return (
+    <div className="dswf-remote-harness" data-open={open}>
+      <button
+        type="button"
+        className="dswf-remote-harness-trigger"
+        data-testid="dswf-remote-harness-trigger"
+        aria-label="Harness 菜单"
+        title="Harness"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        ⋯
+      </button>
+      <div className="dswf-remote-harness-menu" role="menu" aria-label="Harness">
+        <button
+          type="button"
+          role="menuitem"
+          data-testid="dswf-remote-harness-relaunch"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(false)
+            void harness?.relaunchHarness()
+          }}
+        >
+          {HARNESS_MENU_ITEMS.relaunch}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          data-testid="dswf-remote-harness-safe-mode"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(false)
+            void harness?.relaunchSafeMode()
+          }}
+        >
+          {HARNESS_MENU_ITEMS.safeMode}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          data-testid="dswf-remote-harness-show-log"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(false)
+            void harness?.showHarnessLog()
+          }}
+        >
+          {HARNESS_MENU_ITEMS.showLog}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 /** QR 可编码判定（纯函数——等待扫码 × 连接地址读数在场才编码；空值 QR 不渲染） */
@@ -421,10 +521,16 @@ export function RemotePanel(props: {
 }
 
 /** dialog 头（fix-11 ①：brand 头退役——BrandWordmark 不在场，标题「连接移动设备」保留为
- *  dialog 标题；居中大标题 + 右上关闭钮；官方 Modal headless 组合件，遮罩/Esc 恒归 Modal） */
-export function RemoteDialogHead(props: { readonly onClose: () => void }): ReactNode {
+ *  dialog 标题；居中大标题 + 右上关闭钮 + fix-12 左上角 Harness 菜单；官方 Modal headless
+ *  组合件，遮罩/Esc 恒归 Modal） */
+export function RemoteDialogHead(props: {
+  readonly onClose: () => void
+  /** fix-12：Harness 菜单动作缝（缺席 = 菜单禁用态 fail-soft） */
+  readonly harness?: DshForgeHarnessBridge
+}): ReactNode {
   return (
     <div className="dswf-remote-dialog">
+      <HarnessMenu harness={props.harness} />
       <button
         type="button"
         className="dswf-remote-dialog-close"
@@ -461,7 +567,7 @@ export function ForgeRemoteDialog(props: {
       headless
       className="dswf-remote-modal"
     >
-      <RemoteDialogHead onClose={props.onClose} />
+      <RemoteDialogHead onClose={props.onClose} harness={harnessBridgeOf()} />
       <RemotePanel
         snapshot={props.snapshot}
         onToggle={props.onToggle}
@@ -482,6 +588,9 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: Fo
   const subscribe = useCallback((onChange: () => void) => status?.subscribe(onChange) ?? (() => {}), [status])
   const read = useCallback(() => status?.getSnapshot() ?? ({ phase: 'off' } satisfies RemoteStatusSnapshot), [status])
   const snapshot = useSyncExternalStore(subscribe, read, read)
+  // fix-12 圆点态（纯派生——图标本体恒 currentColor，右上角小圆点承载四态；now 取渲染
+  // 时刻——面板开启期 800ms 轮询与挂载初刷驱动收敛，关闭期随快照事件刷新）
+  const dot: RemoteDotState = remoteDotStateOf(snapshot, Date.now())
   // fix-3 挂载期初刷：重启后装配期绑定只在挂载时捕获一次（一次性——零轮询，SC2 纪律）
   useEffect(() => {
     void refresh?.()
@@ -510,6 +619,8 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: Fo
         onClick={() => setOpen((value) => !value)}
       >
         <PhoneGlyph />
+        {/* fix-12：右上角状态圆点（off = 无圆点零渲染） */}
+        {dot !== 'none' && <span className="dswf-remote-dot" data-state={dot} aria-hidden="true" />}
       </button>
       {/* fix-8 官方 Modal dialog（关态 = 官方件自身返回 null；开合/Esc/遮罩归官方机械） */}
       <ForgeRemoteDialog

@@ -12,6 +12,11 @@ import {
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
+import {
+  HARNESS_RELAUNCH_CHANNEL,
+  HARNESS_SAFE_MODE_CHANNEL,
+  HARNESS_SHOW_LOG_CHANNEL,
+} from './harness-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import type { BootManifest } from '../boot/index.js'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../window/titlebar.js'
@@ -58,6 +63,14 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     getBootManifest: (): Promise<BootManifest> =>
       invokeFace.invoke(BOOT_CHANNEL) as Promise<BootManifest>,
     // fix-8：openPairingWindow 缝退役（配对面承载改回 web 官方 Modal dialog）。
+    /**
+     * fix-12 B：Harness 菜单三缝（域外直转面先例同制——不进 forge RPC allowlist）：
+     * relaunchHarness = app.relaunch + exit（重启 Harness）；relaunchSafeMode = 安全模式
+     * 标志置位 + relaunch；showHarnessLog = shell.showItemInFolder(harness.log)。
+     */
+    relaunchHarness: (): Promise<void> => invokeFace.invoke(HARNESS_RELAUNCH_CHANNEL) as Promise<void>,
+    relaunchSafeMode: (): Promise<void> => invokeFace.invoke(HARNESS_SAFE_MODE_CHANNEL) as Promise<void>,
+    showHarnessLog: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_LOG_CHANNEL) as Promise<boolean>,
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝） */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {

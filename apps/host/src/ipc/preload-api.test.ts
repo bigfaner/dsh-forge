@@ -8,6 +8,11 @@ import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import {
+  HARNESS_RELAUNCH_CHANNEL,
+  HARNESS_SAFE_MODE_CHANNEL,
+  HARNESS_SHOW_LOG_CHANNEL,
+} from './harness-channel.js'
+import {
   createDirectoryPickerBridge,
   createDshForgePreloadApi,
   directoryPickerEnabled,
@@ -51,6 +56,17 @@ describe('preload 暴露面（window.dshForge）', () => {
     const api = createDshForgePreloadApi(face)
     await api.getBootManifest()
     expect(face.invoke).toHaveBeenCalledWith(BOOT_CHANNEL)
+  })
+
+  it('fix-12 B：Harness 三缝成员 → 三直转通道原样转发（零负载；不进 forge invoke allowlist）', async () => {
+    const face = fakeFace()
+    const api = createDshForgePreloadApi(face)
+    await api.relaunchHarness()
+    await api.relaunchSafeMode()
+    await api.showHarnessLog()
+    expect(face.invoke).toHaveBeenNthCalledWith(1, HARNESS_RELAUNCH_CHANNEL)
+    expect(face.invoke).toHaveBeenNthCalledWith(2, HARNESS_SAFE_MODE_CHANNEL)
+    expect(face.invoke).toHaveBeenNthCalledWith(3, HARNESS_SHOW_LOG_CHANNEL)
   })
 
   it('invoke：allowlist 通道 + 负载原样转发，返回RpcResult', async () => {

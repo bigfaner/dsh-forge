@@ -2,7 +2,47 @@
 // 双源，pending = 待重启生效缝）+ 局域网地址派生 + 快照映射（状态单源纪律：模型只做
 // 「产品配置 + boot manifest 读数 → 相位」纯映射）。
 import { describe, expect, it } from 'vitest'
-import { remotePhaseOf, remoteSnapshotOf } from './remote-status.js'
+import { remoteDotStateOf, remotePhaseOf, remoteSnapshotOf } from './remote-status.js'
+import type { RemoteStatusSnapshot } from './remote-status.js'
+
+describe('remoteDotStateOf 图标圆点四态（fix-12 用户纠正：本体恒 currentColor，右上角圆点承载状态）', () => {
+  const NOW = 1_000_000
+
+  it('未启用（off）= 无圆点（none——零视觉噪声）', () => {
+    expect(remoteDotStateOf({ phase: 'off' }, NOW)).toBe('none')
+  })
+
+  it('已启用未连接（listening / pending）= 橙（warning）', () => {
+    expect(remoteDotStateOf({ phase: 'listening' }, NOW)).toBe('warning')
+    expect(remoteDotStateOf({ phase: 'pending' }, NOW)).toBe('warning')
+  })
+
+  it('已启用且连接成功（connected）= 绿（success）', () => {
+    expect(remoteDotStateOf({ phase: 'connected' }, NOW)).toBe('success')
+  })
+
+  it('连接失败 = 红（error）——listening × 隧道面 TTL 已到期（隧道失效 = 双链路失败撤面前的失败读数）', () => {
+    const snapshot: RemoteStatusSnapshot = {
+      phase: 'listening',
+      lanAddress: 'http://192.168.1.7:8787',
+      tunnel: { url: 'https://t.example/', provider: 'pinggy', expiresAt: NOW - 1 },
+    }
+    expect(remoteDotStateOf(snapshot, NOW)).toBe('error')
+  })
+
+  it('隧道在线（TTL 未到期/缺席）不误报红——读数缺席不虚报失败（fail-soft 口径）', () => {
+    const live: RemoteStatusSnapshot = {
+      phase: 'listening',
+      tunnel: { url: 'https://t.example/', provider: 'cloudflared' },
+    }
+    const alive: RemoteStatusSnapshot = {
+      phase: 'listening',
+      tunnel: { url: 'https://t.example/', provider: 'pinggy', expiresAt: NOW + 60_000 },
+    }
+    expect(remoteDotStateOf(live, NOW)).toBe('warning')
+    expect(remoteDotStateOf(alive, NOW)).toBe('warning')
+  })
+})
 
 describe('remotePhaseOf 相位派生（fix-3 重启生效形态）', () => {
   it('配置关 × 未暴露 = off（默认形制；历史残留 devices 读数不抬相位）', () => {

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   ForgeRemoteEntry,
+  HARNESS_MENU_ITEMS,
   PAIRING_COUNTDOWN_SECONDS,
   PAIRING_QR_SIZE,
   RemoteDialogHead,
@@ -14,6 +15,7 @@ import {
   REMOTE_STATUS_POLL_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
+  harnessBridgeOf,
   pairCountdownText,
   secondsLeftOf,
   tunnelBannerText,
@@ -455,13 +457,88 @@ describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.
     expect(css).toMatch(/\.dswf-remote-copy\s*\{[^}]*flex:\s*none/)
   })
 
-  it('③三态色：off 灰（label-tertiary）/ listening+pending 橙（state-warning-primary）/ connected 绿（state-success-primary）', () => {
-    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='off'\]\s*\{[^}]*label-tertiary/)
-    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='listening'\]\s*\{[^}]*state-warning-primary/)
-    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='pending'\]\s*\{[^}]*state-warning-primary/)
-    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='connected'\]\s*\{[^}]*state-success-primary/)
-    // 退役语义：listening 不得再绿、connected 不得再用 business 蓝
-    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='listening'\]\s*\{[^}]*state-success/)
-    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='connected'\]\s*\{[^}]*state-business/)
+  it('③fix-12 翻转：图标本体恒 currentColor（零 per-phase 着色）+ 圆点四态令牌（无/橙/绿/红）', () => {
+    // 旧口径退役：入口钮不再按 phase 整体变色
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='off'\]/)
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='listening'\]/)
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='pending'\]/)
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='connected'\]/)
+    // 圆点三色令牌（off = 零渲染无样式态）
+    expect(css).toMatch(/\.dswf-remote-dot\[data-state='warning'\]\s*\{[^}]*state-warning-primary/)
+    expect(css).toMatch(/\.dswf-remote-dot\[data-state='success'\]\s*\{[^}]*state-success-primary/)
+    expect(css).toMatch(/\.dswf-remote-dot\[data-state='error'\]\s*\{[^}]*state-error-primary/)
+  })
+})
+
+// ── fix-12：圆点四态渲染 + Harness 菜单三项（官方文案逐字 main.js:22317-22336） ──
+
+describe('fix-12 图标圆点渲染（本体恒 currentColor）', () => {
+  it('off = 无圆点（零渲染）', () => {
+    const html = renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'off' })} />)
+    expect(html).not.toContain('dswf-remote-dot')
+  })
+
+  it('listening = 圆点 warning / connected = success / pending = warning（data-state 单源）', () => {
+    expect(renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf(LISTENING)} />)).toMatch(
+      /dswf-remote-dot" data-state="warning"/,
+    )
+    expect(
+      renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'connected' })} />),
+    ).toMatch(/dswf-remote-dot" data-state="success"/)
+    expect(renderToStaticMarkup(<ForgeRemoteEntry status={sourceOf({ phase: 'pending' })} />)).toMatch(
+      /dswf-remote-dot" data-state="warning"/,
+    )
+  })
+
+  it('listening × 隧道 TTL 已到期 = 圆点 error（红）', () => {
+    const html = renderToStaticMarkup(
+      <ForgeRemoteEntry
+        status={sourceOf({
+          phase: 'listening',
+          tunnel: { url: 'https://t.example/', provider: 'pinggy', expiresAt: Date.now() - 1_000 },
+        })}
+      />,
+    )
+    expect(html).toMatch(/dswf-remote-dot" data-state="error"/)
+  })
+})
+
+describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐官方）', () => {
+  const harness = {
+    relaunchHarness: async () => undefined,
+    relaunchSafeMode: async () => undefined,
+    showHarnessLog: async () => undefined,
+  }
+
+  it('菜单触发钮在场（aria-label Harness 菜单）+ 三项文案逐字（官方 main.js:22317-22336 zh 形态）', () => {
+    const html = renderToStaticMarkup(
+      <RemoteDialogHead onClose={() => undefined} harness={harness} />,
+    )
+    expect(html).toMatch(/aria-label="Harness 菜单"/)
+    expect(html).toContain('重启 Harness')
+    expect(html).toContain('以安全模式重启…')
+    expect(html).toContain('查看 Harness 日志')
+  })
+
+  it('HARNESS_MENU_ITEMS 常量逐字 pin（文案单源）', () => {
+    expect(HARNESS_MENU_ITEMS).toEqual({
+      relaunch: '重启 Harness',
+      safeMode: '以安全模式重启…',
+      showLog: '查看 Harness 日志',
+    })
+  })
+
+  it('桥缺席（harness undefined）= 三项禁用态 fail-soft（触发钮禁用、菜单不炸装配）', () => {
+    const html = renderToStaticMarkup(<RemoteDialogHead onClose={() => undefined} />)
+    expect(html).toMatch(/aria-label="Harness 菜单"[^>]*disabled/)
+    expect(html).toMatch(/dswf-remote-harness-relaunch[^>]*disabled/)
+    expect(html).toMatch(/dswf-remote-harness-safe-mode[^>]*disabled/)
+    expect(html).toMatch(/dswf-remote-harness-show-log[^>]*disabled/)
+  })
+
+  it('harnessBridgeOf：dshForge 三成员齐备才可用；缺席/形状不符 = undefined', () => {
+    expect(harnessBridgeOf({})).toBeUndefined()
+    expect(harnessBridgeOf({ dshForge: { invoke: () => undefined } })).toBeUndefined()
+    expect(harnessBridgeOf({ dshForge: harness })).toBe(harness)
   })
 })

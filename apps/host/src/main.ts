@@ -4,14 +4,17 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell, type OpenDialogOptions, type WebContents } from 'electron'
 import { bootDshHost } from './boot/index.js'
 import {
-  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE, refreshKnowledgeBindings,
-  registerBootChannel, registerDirectoryPickerChannel, registerFsChannels, registerKnowledgeChannels,
-  registerM2Channels, registerProjectsChannels, runStartupReconcile, withKnowledgeBindingsRefresh,
+  BOOT_CHANNEL, createForgeIpc, DIRECTORY_PICKER_CHANNEL, DIRECTORY_PICKER_DIALOG_TITLE,
+  HARNESS_SAFE_MODE_ENV, noteHarnessLog, refreshKnowledgeBindings, registerBootChannel,
+  registerDirectoryPickerChannel, registerFsChannels, registerHarnessChannels,
+  registerKnowledgeChannels, registerM2Channels, registerProjectsChannels, removeHarnessChannels,
+  runStartupReconcile, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
-import { ensureProfileMaterialized, resolveHostPaths } from './profile/index.js'
+import { ensureProfileMaterialized, ensureSafeModeProfile, resolveHostPaths } from './profile/index.js'
 import {
   acquireSingleInstance, authenticateWebHost, createMainWindow, createShellProtocolHandler,
   installShellStreamRewrite, registerShellScheme, resolveWebDistDir, SHELL_ENTRY_URL,
@@ -35,7 +38,16 @@ void (async () => {
     const paths = resolveHostPaths(process.env, app.getPath('userData'))
     if (process.env.DSH_HOME) console.warn(`[host] shell 继承 DSH_HOME=${process.env.DSH_HOME} 压过 fix-26 缺省隔离（paths.ts 第三层）——确认有意（调试/特殊布局）`)
     process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-26：缺省隔离 {userData}/dsh-home 数据两界，凭据经 overlay 桥真 home）
-    if (paths.form === 'packaged') {
+    // fix-12 B：安全模式启动（HARNESS_SAFE_MODE_ENV 置位跨进程存活——relaunch 环境承载
+    // profile 切换；bootDshHost profileDir 参数即官方 runtime.start(launchDirectory, profile)
+    // 第二参对位）。安全模式 = 官方基座三件套隔离区（{dshHome}/profiles/desktop-safe-mode），
+    // 跳过用户层与第三方 bundle（官方 main.js:2697-2732 ensureSafeModeProfile 语义对位）。
+    let profileDir = paths.profileDir
+    if (process.env[HARNESS_SAFE_MODE_ENV] === '1') {
+      profileDir = ensureSafeModeProfile(paths.dshHome).directory
+      console.warn(`[host] safe mode：以安全模式 profile 启动 dir=${profileDir}（用户层/第三方 bundle 跳过）`)
+    }
+    if (paths.form === 'packaged' && profileDir === paths.profileDir) {
       const landed = ensureProfileMaterialized(paths.profileDir)
       console.log(`[host] profile(${paths.form}) dir=${paths.profileDir} created=${landed.created.length}`)
       // e2e 首启自证钩子：仅落地不 boot，保活等待外部关闭（避免与 Playwright 握手竞速）
@@ -44,7 +56,7 @@ void (async () => {
     const envPort = Number(process.env.DSH_FORGE_PORT ?? '')
     const port = Number.isInteger(envPort) && envPort > 0 ? envPort : PORT_FALLBACK.base + (process.pid % PORT_FALLBACK.span)
     const host = await bootDshHost({
-      profileDir: paths.profileDir,
+      profileDir,
       installAnchor: paths.installAnchor,
       port,
       stateDb: paths.stateDb,
@@ -90,6 +102,32 @@ void (async () => {
         : dialog.showOpenDialog(parent as BrowserWindow, options)
     }
     registerDirectoryPickerChannel(ipcMain, showPickDialog, (sender) => BrowserWindow.fromWebContents(sender as WebContents))
+    // fix-12 B：Harness 菜单三通道 main 半边（官方 Harness 族 web 同位搬运——relaunch /
+    // 安全模式 relaunch / showItemInFolder(harness.log)；域外直转面不进 forge allowlist）。
+    // 薄宿主进程即 runtime（无官方 stop 链）：重启 = app.relaunch + exit(0)，新进程自
+    // resolveHostPaths 起按安全模式标志落 profile。harness.log = 官方 :22336 对位
+    // （app.getPath('logs')/harness.log——宿主里程碑 + 菜单动作留痕经 noteHarnessLog 落盘）。
+    const harnessLogPath = join(app.getPath('logs'), 'harness.log')
+    noteHarnessLog(harnessLogPath, `[host] 启动（form=${paths.form} profile=${profileDir} safeMode=${process.env[HARNESS_SAFE_MODE_ENV] === '1' ? '是' : '否'}）`)
+    registerHarnessChannels(ipcMain, {
+      relaunch: () => {
+        noteHarnessLog(harnessLogPath, '[host] 重启 Harness（菜单触发）')
+        delete process.env[HARNESS_SAFE_MODE_ENV] // 正常重启：安全模式标志回收
+        app.relaunch()
+        app.exit(0)
+      },
+      relaunchSafeMode: () => {
+        noteHarnessLog(harnessLogPath, '[host] 以安全模式重启（菜单触发）')
+        process.env[HARNESS_SAFE_MODE_ENV] = '1'
+        app.relaunch()
+        app.exit(0)
+      },
+      showLog: () => {
+        noteHarnessLog(harnessLogPath, '[host] 查看 Harness 日志（菜单触发）') // 保底落一行：文件恒可达
+        shell.showItemInFolder(harnessLogPath)
+        return true
+      },
+    })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     if (!app.isPackaged) { // 开发态 devtools 面：F12 按需开关（用户裁决 2026-10-13：boot 不自动
@@ -104,6 +142,7 @@ void (async () => {
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
       for (const channel of [BOOT_CHANNEL, DIRECTORY_PICKER_CHANNEL]) ipcMain.removeHandler(channel)
+      removeHarnessChannels(ipcMain) // fix-12 B：Harness 三通道注销（与目录选取同制）
       hostRef = undefined
       void host.shutdown()
     })

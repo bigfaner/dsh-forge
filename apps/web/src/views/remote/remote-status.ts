@@ -51,6 +51,30 @@ export function remotePhaseOf(input: {
   return input.devicesConnected === true ? 'connected' : 'listening'
 }
 
+/**
+ * fix-12 图标圆点四态派生（纯函数——快照 × now 驱动；图标本体恒 currentColor，状态全由
+ * 右上角小圆点承载）：off = 无圆点（none）；listening/pending = 橙（warning）；connected =
+ * 绿（success）；listening × 隧道面 TTL 已到期 = 红（error——隧道失效 = 双链路失败撤面前
+ * 的失败读数，与面板隧道卡 failed 相位同源同判）。配对握手异常：boot manifest 无失败读数
+ * 源（仅 remoteDeviceConnected 正向粘性位）——缺席不虚报失败（fail-soft 单源纪律）。
+ */
+export type RemoteDotState = 'none' | 'warning' | 'success' | 'error'
+
+export function remoteDotStateOf(snapshot: RemoteStatusSnapshot, now: number): RemoteDotState {
+  if (snapshot.phase === 'off') return 'none'
+  if (snapshot.phase === 'connected') return 'success'
+  const tunnel = snapshot.tunnel
+  if (
+    snapshot.phase === 'listening' &&
+    tunnel !== undefined &&
+    tunnel.expiresAt !== undefined &&
+    tunnel.expiresAt <= now
+  ) {
+    return 'error'
+  }
+  return 'warning'
+}
+
 /** boot manifest 读数切片（dshForge.getBootManifest 消费面——remoteHost + remotePairUrl） */
 export interface BootManifestRead {
   readonly url?: string
