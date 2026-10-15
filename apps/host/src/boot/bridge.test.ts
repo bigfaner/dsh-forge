@@ -12,6 +12,7 @@ import {
   approvalWaterfallAnswer,
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
+  asDiagMessage,
   asPairMessage,
   asPairConnectedMessage,
   asReadyMessage,
@@ -887,5 +888,23 @@ describe('redactTokenQuery / sanitizeLogLine（fix-22 诊断日志面）', () =>
     expect(sanitizeLogLine('a\r\nb\tc\0d')).toBe('a b c d')
     expect(sanitizeLogLine('中文\x01ok')).toBe('中文ok')
     expect(sanitizeLogLine('x'.repeat(400)).length).toBe(302)
+  })
+})
+
+// fix-23 诊断日志落盘链：diag 消息守卫（子 → 主诊断行分流——run.ts/main.ts 消费落 harness.log）
+describe('asDiagMessage（fix-23 diag 桥消息守卫）', () => {
+  it('type=diag 且 line 非空 → 透传 {type, line}', () => {
+    expect(asDiagMessage({ type: 'diag', line: '[pair-diag] /pair tokenVerify=pass' })).toEqual({
+      type: 'diag',
+      line: '[pair-diag] /pair tokenVerify=pass',
+    })
+  })
+  it('他形（非 diag / line 缺席 / line 非串 / line 空串）→ undefined 静默忽略', () => {
+    expect(asDiagMessage({ type: 'diag', line: '' })).toBeUndefined()
+    expect(asDiagMessage({ type: 'diag' })).toBeUndefined()
+    expect(asDiagMessage({ type: 'diag', line: 42 })).toBeUndefined()
+    expect(asDiagMessage({ type: 'event', line: 'x' })).toBeUndefined()
+    expect(asDiagMessage(null)).toBeUndefined()
+    expect(asDiagMessage('diag')).toBeUndefined()
   })
 })

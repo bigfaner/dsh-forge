@@ -28,6 +28,7 @@ import type {
 import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
+  asDiagMessage,
   asPairConnectedMessage,
   asPairMessage,
   asReadyMessage,
@@ -118,6 +119,11 @@ export interface DshHostHandle {
    */
   onEvent: (listener: (payload: TasksChangedEvent) => void) => () => void
   /**
+   * fix-23：诊断日志行订阅（child [pair-diag] 决策链经桥消息回流——main.ts 消费
+   * noteHarnessLog 落 harness.log；返回退订器；订阅方异常隔离）。
+   */
+  onDiag: (listener: (line: string) => void) => () => void
+  /**
    * fix-10：断开连接缝（forge:remote/disconnect 消费——connected 粘性位收回，UI 回等待
    * 扫码）。缺席 = 旧 boot 会话/降级（remote rpc fail-soft revoked:false）。
    */
@@ -161,6 +167,8 @@ export interface BridgeChannel {
   call(service: BridgeServiceName, method: string, args: readonly unknown[]): Promise<unknown>
   /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者扇出） */
   onEvent(listener: (payload: TasksChangedEvent) => void): () => void
+  /** fix-23 子 → 主诊断行订阅（diag 分支——[pair-diag] 决策链落 harness.log 的通道半边） */
+  onDiag(listener: (line: string) => void): () => void
 }
 
 /**
@@ -174,7 +182,20 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
+  const diagListeners = new Set<(line: string) => void>()
   child.on('message', (message) => {
+    // fix-23 diag 分支：诊断日志行 → onDiag 订阅方扇出（main.ts → harness.log；畸形信封静默忽略）
+    const diag = asDiagMessage(message)
+    if (diag !== undefined) {
+      for (const listener of diagListeners) {
+        try {
+          listener(diag.line)
+        } catch {
+          // 订阅方异常隔离——落盘链失败不阻 boot/RPC 面
+        }
+      }
+      return
+    }
     // event 分支（3.1 交互二）：写推送事件 → onEvent 订阅方扇出（畸形信封静默忽略）
     const event = asEventMessage(message)
     if (event !== undefined) {
@@ -213,6 +234,12 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
       eventListeners.add(listener)
       return () => {
         eventListeners.delete(listener)
+      }
+    },
+    onDiag: (listener) => {
+      diagListeners.add(listener)
+      return () => {
+        diagListeners.delete(listener)
       }
     },
   }
@@ -323,6 +350,7 @@ export async function bootDshHost(
         : undefined,
     },
     onEvent: channel.onEvent,
+    onDiag: channel.onDiag,
     shutdown: () => shutdownChild(child),
   }
 }

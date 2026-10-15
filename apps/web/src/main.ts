@@ -39,14 +39,15 @@ if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 // 组件内回退配对引导页（官方配对流承载）。
 // fix-8：`?forgePair=1` 配对独立窗分支退役（配对面承载改回主窗内官方 Modal dialog）。
 // fix-22 诊断日志面②：落地判定决策行——两分支都记（branch/viaLocation/viaCookie +
-// search/hash/referrer 读数），console 落浏览器面、POST /forge-remote-log（host child.ts
-// 信箱路由，官方 admit 鉴权）落宿主日志文件——手机扫码一次 = 完整决策链可回放。
+// search/hash/referrer 读数），console 落浏览器面；fix-23 改 beacon 上报：GET /__rvdiag
+// （host child.ts 只读上报端点，无鉴权依赖）fire-and-forget——手机浏览器 console 不可
+// 回传，落地决策行经宿主落 harness.log 才可达。
 // fix-18 ⑤：并联 cookie 读数缝——官方 BrowserAuth 303 "./" 剥查询串，/pair 成功面设
 // dswf_forge_remote=1（host child.ts 单源）跨重定向存活，手机扫码恒落受限移动视图。
 const decision = remoteViewDecisionOf(window.location, document.cookie)
 const decisionLine = remoteViewDecisionLine(decision, window.location, document.referrer)
 console.warn('[remote-view-diag]', decisionLine)
-void fetch('/forge-remote-log', { method: 'POST', body: decisionLine }).catch(() => {})
+void fetch(`/__rvdiag?line=${encodeURIComponent(decisionLine)}`, { method: 'GET', keepalive: true }).catch(() => {})
 if (decision.branch === 'restricted') {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {

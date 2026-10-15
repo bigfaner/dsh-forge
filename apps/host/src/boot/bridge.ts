@@ -190,6 +190,15 @@ export interface BridgeErrorPayload {
   readonly data?: unknown
 }
 
+/**
+ * fix-23 子 → 主：诊断日志行（[pair-diag] 决策链——console.log 无落盘链的修复载体：
+ * child 侧经桥消息送达主进程，main.ts 消费 → noteHarnessLog 落 harness.log）。
+ */
+export interface BridgeDiagMessage {
+  readonly type: 'diag'
+  readonly line: string
+}
+
 /** 子 → 主：RPC 结果（ok=false 时 error 承载服务失败信息——双形态：string = 非 typed / 结构化 = typed） */
 export interface BridgeRpcResultMessage {
   readonly type: 'rpc-result'
@@ -207,6 +216,7 @@ export type ChildToMainMessage =
   | BridgePairMessage
   | BridgePairConnectedMessage
   | BridgeTunnelMessage
+  | BridgeDiagMessage
 
 // 桥事件信封唯一源 = contracts BridgeEventMessage（1.1 定稿；Interface 6——G1-09 pin）。
 // 子侧发射 = core workspace/events.ts 写动词闭包尾部 sendGuarded（direct 形态 IPC 缺席
@@ -606,6 +616,17 @@ export function asPinResetMessage(message: unknown): BridgePinResetRequest | und
   if (typeof message !== 'object' || message === null) return undefined
   if ((message as Record<string, unknown>).type !== 'pin-reset') return undefined
   return { type: 'pin-reset' }
+}
+
+/**
+ * fix-23 diag 消息守卫（子 → 主诊断行分流——createBridgeChannel diag 分支消费）。
+ * line 须非空 string；他形 = undefined 静默忽略。
+ */
+export function asDiagMessage(message: unknown): BridgeDiagMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const m = message as Record<string, unknown>
+  if (m.type !== 'diag' || typeof m.line !== 'string' || m.line === '') return undefined
+  return { type: 'diag', line: m.line }
 }
 
 /**

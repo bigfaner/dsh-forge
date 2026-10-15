@@ -86,7 +86,12 @@ void (async () => {
     } else console.warn('[host] forgeKnowledge 服务缺席（core 插件行未装载）——forge:knowledge/* 通道未注册')
     registerBootChannel(ipcMain, () => host.manifest) // {url,injections} 注入 renderer（壳消费）
     registerDirectoryPickerChannel(ipcMain, electronDirectoryDialog, parentWindowOf) // fix-14/fix-21/bug db7af09a：Electron 实装下沉 electron-bindings
-    const harnessLogPath = harnessLogPathOf(app) // fix-12 B：Harness 菜单三通道（relaunch/安全模式/showLog——实装下沉 electron-bindings）
+    let harnessLogPath: string | undefined // 先声明后赋值：diag 订阅先挂（child 早到诊断行零丢失窗）
+    // fix-23 诊断日志落盘链：child [pair-diag] 决策行经桥 diag 消息回流 → harness.log 同链
+    host.onDiag((line) => {
+      if (harnessLogPath !== undefined) noteHarnessLog(harnessLogPath, line)
+    })
+    harnessLogPath = harnessLogPathOf(app) // fix-12 B：Harness 菜单三通道（relaunch/安全模式/showLog——实装下沉 electron-bindings）
     noteHarnessLog(harnessLogPath, `[host] 启动（form=${paths.form} profile=${profileDir} safeMode=${process.env[HARNESS_SAFE_MODE_ENV] === '1' ? '是' : '否'}）`)
     registerHarnessChannels(ipcMain, electronHarnessActions(app, harnessLogPath))
     // fix-17 ② + fix-18：tab 重连/换线/PIN 重置三缝（dshForge 直转面——转发对应消息至 boot child）

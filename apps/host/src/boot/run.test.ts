@@ -102,6 +102,34 @@ describe('createBridgeChannel · event 分支（交互二事件链中段——G1
   })
 })
 
+describe('createBridgeChannel · diag 分支（fix-23 诊断日志落盘链）', () => {
+  it("diag 消息 → onDiag 订阅方收 line（harness.log 落盘链的通道半边）", () => {
+    const { child } = fakeChild()
+    const channel = createBridgeChannel(child)
+    const received: string[] = []
+    channel.onDiag((line) => received.push(line))
+    child.emit('message', { type: 'diag', line: '[pair-diag] /pair tokenVerify=pass' })
+    expect(received).toEqual(['[pair-diag] /pair tokenVerify=pass'])
+  })
+
+  it('畸形 diag 信封静默忽略；退订生效；订阅方异常不阻断其余订阅', () => {
+    const { child } = fakeChild()
+    const channel = createBridgeChannel(child)
+    const received: string[] = []
+    const off = channel.onDiag((line) => received.push(line))
+    channel.onDiag(() => {
+      throw new Error('listener exploded')
+    })
+    child.emit('message', { type: 'diag', line: '' })
+    child.emit('message', { type: 'rpc-result', id: 1, ok: true, data: 1 })
+    child.emit('message', { type: 'diag', line: '[pair-diag] web-entry branch=restricted' })
+    expect(received).toEqual(['[pair-diag] web-entry branch=restricted'])
+    off()
+    child.emit('message', { type: 'diag', line: '[pair-diag] after-off' })
+    expect(received).toEqual(['[pair-diag] web-entry branch=restricted'])
+  })
+})
+
 describe('applyPairConnected（fix-7 /pair 握手成功——connected 读数入 manifest）', () => {
   const base = () => buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000)
   it('pair-connected 事实 → manifest 抬 remoteDeviceConnected（url/绑定/配对面保留——粘性 until 重启）', () => {

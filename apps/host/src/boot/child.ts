@@ -73,6 +73,15 @@ const send = (message: ChildToMainMessage): void => {
   sendGuarded(message, (m) => process.send?.(m))
 }
 
+// fix-23 诊断日志落盘链（Root cause: fix-22 的 [pair-diag] 用 console.log——child stdio
+// inherit 只回流主控台，打包 GUI 形态无控制台亦无任何写盘链，harness.log 恒零记录）。
+// 修法 = 产品日志 sink：诊断行经桥 diag 消息送达主进程（main.ts → noteHarnessLog 落
+// harness.log），console 保留供 dev 形态观测（双写，零成本）。
+const diag = (line: string): void => {
+  send({ type: 'diag', line })
+  console.log(line)
+}
+
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），
 // boot 完成后置换为真处理器；listen 常驻不拆（消息零丢失窗）。
 let handleMessage: (message: MainToChildMessage) => void = () => {}
@@ -257,7 +266,7 @@ async function main(): Promise<void> {
             new URL(req.url ?? '/', origin).searchParams.get('token') ?? ''
           const tokenOk = issuer.verify(token)
           // fix-22 诊断日志面①：握手决策链（token 校验读数——手机扫码一次全链可回放）
-          console.log(`[pair-diag] /pair host=${JSON.stringify(req.headers.host ?? '')} tokenVerify=${tokenOk ? 'pass' : 'fail'}`)
+          diag(`[pair-diag] /pair host=${JSON.stringify(req.headers.host ?? '')} tokenVerify=${tokenOk ? 'pass' : 'fail'}`)
           if (!tokenOk) {
             res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
             res.end('配对二维码已过期——请在桌面端重新扫码')
@@ -273,35 +282,23 @@ async function main(): Promise<void> {
           // 经 cookie 跨重定向存活（根因见 REMOTE_VIEW_COOKIE 注）。
           const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
           // fix-22 诊断日志面①：302 目标（token 脱敏）+ 签发 cookie 属性（不含敏感值）
-          console.log(`[pair-diag] /pair ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
+          diag(`[pair-diag] /pair ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
           res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
           res.end()
         },
       })
-      // fix-22 诊断日志面③：BrowserAuth 兑现链观测信箱——受限单页 web 入口（main.ts）落地
-      // 判定经 POST 回传一行消毒文本（鉴权走官方 admit 缝：dsh 会话 cookie 不在场 = 401，
-      // 零绕过认证语义；体长 2KB 上限 + sanitizeLogLine 消毒 → 宿主日志文件）。
+      // fix-22 诊断日志面③（fix-23 改造：POST /forge-remote-log + admit 鉴权 → GET /__rvdiag
+      // 只读上报端点——beacon 在手机落地任何认证态都可达，鉴权信箱是落地诊断的盲区）。
+      // 受限单页 web 入口（main.ts）落地判定经 GET /__rvdiag?line=… fire-and-forget 上报；
+      // 载荷经 sanitizeLogLine 消毒 → harness.log（diag 桥）。只读：不碰任何状态、不掷 Cookie。
       ctx.webServer.register({
         kind: 'exact',
-        path: '/forge-remote-log',
+        path: '/__rvdiag',
         handler: (req, res) => {
-          const admission = ctx.connection.admit({ headers: req.headers })
-          if ('rejection' in admission) {
-            res.writeHead(admission.rejection)
-            res.end()
-            return
-          }
-          const chunks: Buffer[] = []
-          let total = 0
-          req.on('data', (chunk: Buffer) => {
-            total += chunk.length
-            if (total <= 2048) chunks.push(chunk)
-          })
-          req.on('end', () => {
-            console.log(`[pair-diag] web-entry ${sanitizeLogLine(Buffer.concat(chunks).toString('utf8'))}`)
-            res.writeHead(204)
-            res.end()
-          })
+          const raw = new URL(req.url ?? '/', 'http://diag.invalid').searchParams.get('line') ?? ''
+          diag(`[pair-diag] web-entry ${sanitizeLogLine(raw)}`)
+          res.writeHead(204)
+          res.end()
         },
       })
       // dsh-mobile-tunnel：/pair/verify（官方锚 :1199-1215/:1231-1234 同语义）——POST
@@ -328,7 +325,7 @@ async function main(): Promise<void> {
             }
             const pinOk = pinIssuer.verify(pin)
             // fix-22 诊断日志面②：PIN 校验读数（不携 pin 值本体）
-            console.log(`[pair-diag] /pair/verify host=${JSON.stringify(req.headers.host ?? '')} pinVerify=${pinOk ? 'pass' : 'fail'}`)
+            diag(`[pair-diag] /pair/verify host=${JSON.stringify(req.headers.host ?? '')} pinVerify=${pinOk ? 'pass' : 'fail'}`)
             if (!pinOk) {
               res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
               res.end('PIN 错误、已过期或尝试过于频繁——请在桌面端获取最新 PIN')
@@ -339,7 +336,7 @@ async function main(): Promise<void> {
             // fix-18 ⑤：同 /pair 补 Set-Cookie（官方 303 "./" 剥查询串——分支位走 cookie）
             const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
             // fix-22 诊断日志面②：同 /pair——302 目标（脱敏）+ cookie 属性
-            console.log(`[pair-diag] /pair/verify ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
+            diag(`[pair-diag] /pair/verify ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
             res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
             res.end()
           })
