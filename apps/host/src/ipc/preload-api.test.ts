@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
-import { OPEN_PAIRING_WINDOW_CHANNEL } from './pairing-window-channel.js'
 import {
   createDirectoryPickerBridge,
   createDshForgePreloadApi,
@@ -52,13 +51,6 @@ describe('preload 暴露面（window.dshForge）', () => {
     const api = createDshForgePreloadApi(face)
     await api.getBootManifest()
     expect(face.invoke).toHaveBeenCalledWith(BOOT_CHANNEL)
-  })
-
-  it('fix-7：openPairingWindow → OPEN_PAIRING_WINDOW_CHANNEL 转发（配对独立窗 IPC 缝——域外直转面，不入 allowlist）', async () => {
-    const face = fakeFace()
-    const api = createDshForgePreloadApi(face)
-    await api.openPairingWindow()
-    expect(face.invoke).toHaveBeenCalledWith(OPEN_PAIRING_WINDOW_CHANNEL)
   })
 
   it('invoke：allowlist 通道 + 负载原样转发，返回RpcResult', async () => {

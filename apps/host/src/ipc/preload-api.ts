@@ -13,7 +13,6 @@ import {
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
-import { OPEN_PAIRING_WINDOW_CHANNEL } from './pairing-window-channel.js'
 import type { BootManifest } from '../boot/index.js'
 import { WINDOWS_TITLEBAR_HEIGHT } from '../window/titlebar.js'
 
@@ -58,11 +57,7 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
   return {
     getBootManifest: (): Promise<BootManifest> =>
       invokeFace.invoke(BOOT_CHANNEL) as Promise<BootManifest>,
-    /**
-     * fix-7 配对独立窗开启缝（directory-picker 同制：域外直转面，不入 forge allowlist）——
-     * 侧栏手机图标点击 → main 侧开/聚焦「连接移动设备」独立窗。
-     */
-    openPairingWindow: (): Promise<unknown> => invokeFace.invoke(OPEN_PAIRING_WINDOW_CHANNEL),
+    // fix-8：openPairingWindow 缝退役（配对面承载改回 web 官方 Modal dialog）。
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝） */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {

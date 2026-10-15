@@ -196,12 +196,17 @@ describe('RemotePanel 面板', () => {
     )
   })
 
-  it('fix-7：Modal 承载退役——入口组件零弹层渲染（开窗归 host 独立配对窗）', () => {
+  it('fix-8（用户裁决 2026-10-14）：配对面承载改回 dialog——图标触发器带 aria-haspopup="dialog"（官方 Modal 由点击开合，独立窗退役）', () => {
     const html = renderToStaticMarkup(
-      <ForgeRemoteEntry status={sourceOf(LISTENING)} onOpenPairing={() => undefined} />,
+      <ForgeRemoteEntry status={sourceOf(LISTENING)} />,
     )
-    expect(html).not.toContain('dswf-remote-modal')
-    expect(html).not.toContain('dialog')
+    expect(html).toMatch(/aria-haspopup="dialog"/)
+    expect(html).not.toContain('dswf-remote-pairing-page')
+    expect(html).not.toContain('forgePair')
+  })
+
+  it('fix-8：dialog 标题常量 = REMOTE_DIALOG_TITLE（「连接移动设备」——官方 Modal title 单源）', () => {
+    expect(REMOTE_DIALOG_TITLE).toBe('连接移动设备')
   })
 })
 

@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   SIDEBAR_FOOTER_ACTION_SLOT,
   buildRemoteStatusSource,
-  openPairingWindowViaBridge,
   type ForgeClientCtx,
 } from './plugin.js'
 
@@ -59,15 +58,6 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     )
     await remote.refresh()
     expect(remote.source.getSnapshot().phase).toBe('connected')
-  })
-
-  it('fix-7：openPairingWindowViaBridge → dshForge.openPairingWindow 直转（true）；桥/成员缺席 = false（fail-soft 不炸入口）', () => {
-    let called = 0
-    ;(globalThis as { dshForge?: unknown }).dshForge = { openPairingWindow: () => { called += 1 } }
-    expect(openPairingWindowViaBridge()).toBe(true)
-    expect(called).toBe(1)
-    ;(globalThis as { dshForge?: unknown }).dshForge = undefined
-    expect(openPairingWindowViaBridge()).toBe(false)
   })
 
   it('配置开 × 全卡绑定实况 → listening 快照（fix-5：lanAddress = manifest.remotePairUrl 官方配对地址单源）', async () => {

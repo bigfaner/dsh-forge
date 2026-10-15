@@ -67,7 +67,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
 
 /** 构建指纹（手工递增——运行期与源码版本对账用，2d5434d1 指纹裁决） */
-export const FORGE_CLIENT_BUILD_TAG = '2026-10-15.2'
+export const FORGE_CLIENT_BUILD_TAG = '2026-10-15.3'
 
 /** 洞名：官方 sidebar 壳的工作区浏览区（本项目树 + 会话列表占用此洞——AC1 替换目标） */
 export const SIDEBAR_WORKSPACES_SLOT = 'sidebar.workspaces'
@@ -1084,11 +1084,9 @@ function registerRemoteEntry(
         inject: () => ({
           status: remote.source,
           onToggle: (next: boolean): Promise<void> => remote.setEnabled(next).then(() => undefined),
-          // fix-7：图标点击 → host 开「连接移动设备」独立窗（Modal 承载退役——
-          // dshForge.openPairingWindow 缝；桥缺席 = no-op fail-soft 不炸入口）
-          onOpenPairing: (): void => {
-            openPairingWindowViaBridge()
-          },
+          // fix-8（用户裁决 2026-10-14）：配对面承载改回官方 Modal dialog——fix-7 的
+          // onOpenPairing 注入缝（dshForge.openPairingWindow → host 独立配对窗）整体退役，
+          // 图标点击开合入口组件内 dialog（ForgeRemoteEntry 自持 open 态）
           // fix-3 挂载期初刷（重启生效形态）：重启后装配期绑定变化只能在挂载时捕获——
           // 组件 mount useEffect 消费（缺席 = 兼容旧组件面，快照保默认 off）
           refresh: (): Promise<void> => remote.refresh(),
@@ -1477,23 +1475,6 @@ function rpcDataOf(envelope: unknown): unknown {
   if (typeof envelope !== 'object' || envelope === null) return undefined
   const record = envelope as Record<string, unknown>
   return record['ok'] === true ? record['data'] : undefined
-}
-
-/**
- * fix-7 配对独立窗开启（侧栏手机图标点击去向——Modal 承载退役）：dshForge.openPairingWindow
- * 直转（host ipc dsh-forge:open-pairing-window 通道）；桥/成员缺席或调用异常 = false
- * fail-soft（入口点击不炸装配——配对窗亦可经应用菜单「连接手机... Ctrl+Shift+M」到达）。
- */
-export function openPairingWindowViaBridge(): boolean {
-  const bridge = (globalThis as { dshForge?: unknown }).dshForge
-  const open = (bridge as { openPairingWindow?: () => unknown } | null)?.openPairingWindow
-  if (typeof open !== 'function') return false
-  try {
-    open.call(bridge)
-    return true
-  } catch {
-    return false
-  }
 }
 
 /** 配置载荷 → remoteApproval.enabled 读数（键缺席/畸形 = undefined——未配置 ≠ 关？缺席

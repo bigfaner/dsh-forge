@@ -360,7 +360,8 @@
   overflow-wrap: anywhere;
 }
 
-/* ── fix-7 配对独立窗（bug 9fd9b6b1 ①③——布局逐位对照官方 DSH Desktop 0.10.0） ── */
+/* ── fix-7 配对面布局（bug 9fd9b6b1 ③——布局逐位对照官方 DSH Desktop 0.10.0；
+ *    fix-8 承载改回官方 Modal dialog，样式随壳上下文加载，本节零回退） ── */
 
 /* 双模式 tab 卡（1.4 互联网真实启用——双 tab 均可激活，active 白底高亮） */
 .dswf-remote-tabs {
@@ -503,20 +504,3 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* 配对独立窗页面（?forgePair=1——host「连接移动设备」窗载体） */
-.dswf-pairing-page {
-  display: flex;
-  flex-direction: column;
-  gap: 12px; /* dsw-raw 配对页纵向行距（局部刻度） */
-  max-width: 460px;
-  margin: 0 auto;
-  padding: 20px 16px; /* dsw-raw 配对页内距（局部刻度） */
-  font-family: inherit;
-}
-
-.dswf-pairing-title {
-  margin: 0;
-  font: var(--dsw-font-l-20, var(--dsw-font-m-strong-16, var(--dsw-font-s-14)));
-  color: var(--dsw-alias-label-primary);
-  text-align: center;
-}
