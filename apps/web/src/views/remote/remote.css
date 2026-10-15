@@ -125,7 +125,7 @@
 .dswf-remote-dialog-close {
   position: absolute;
   top: 18px; /* dsw-raw 关闭钮垂直落点（22 header 上距 − 钮半高微调） */
-  right: -24px; /* dsw-raw 回到卡右缘（抵消卡侧内距 24px） */
+  right: -10px; /* dsw-raw 官方 Modal .header 右内距 14px——关钮右缘距卡缘 14px（24 − 14） */
   display: inline-flex;
   align-items: center;
   justify-content: center;

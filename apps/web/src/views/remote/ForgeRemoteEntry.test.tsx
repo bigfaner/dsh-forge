@@ -457,6 +457,12 @@ describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.
     expect(css).toMatch(/\.dswf-remote-copy\s*\{[^}]*flex:\s*none/)
   })
 
+  it('fix-13 关闭钮不贴边：右缘距卡缘留白 = 官方 Modal .header 右内距 14px', () => {
+    // 官方 Modal.module.css .header { padding: 22px 14px 12px 24px } —— 关钮右缘距卡缘 14px
+    expect(css).toMatch(/\.dswf-remote-dialog-close\s*\{[^}]*right:\s*-10px/)
+    expect(css).not.toMatch(/\.dswf-remote-dialog-close\s*\{[^}]*right:\s*-24px/)
+  })
+
   it('③fix-12 翻转：图标本体恒 currentColor（零 per-phase 着色）+ 圆点四态令牌（无/橙/绿/红）', () => {
     // 旧口径退役：入口钮不再按 phase 整体变色
     expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='off'\]/)
