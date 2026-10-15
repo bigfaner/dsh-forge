@@ -1,5 +1,9 @@
 # Workspace Conventions
 
+## External dependency verification
+
+- **外部依赖装配面结算门 = 真机端到端取证**（用户裁决 2026-10-15）：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。
+
 ## UI/engineering alignment conventions
 
 - **完全对齐官方 dsh 逻辑，尽量复用官方组件**（用户裁决 2026-10-14）：本项目自建 host 与 UI 层，组合官方组件需要写的**胶水代码**（装配、透传、状态缝合）是允许且预期的交付物；但**不自行编写组件**——官方已有同语义组件/机械（Modal、Switch、dialog 形态、配对/认证流程等）一律复用官方件，产品层只做组合与注入。
