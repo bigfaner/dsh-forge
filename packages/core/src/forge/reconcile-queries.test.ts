@@ -208,6 +208,7 @@ describe('AC4 查询面：list/get/update 与 Interface 1 一致（archived 过�
       forgeDir: resolve(a.path, '.forge'),
       forgeDirExternal: false,
       knowledgeDir: resolve(a.path, '.knowledge'),
+      worktreeDir: '', // v2 前种子行 DEFAULT ''（生产链恒回填/注册供真值——列 NOT NULL）
       archived: false,
       createdAt: T0,
       updatedAt: T0,

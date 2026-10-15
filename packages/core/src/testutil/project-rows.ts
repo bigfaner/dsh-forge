@@ -12,6 +12,7 @@ export interface ProjectRow {
   forge_dir: string
   forge_dir_external: number
   knowledge_dir: string
+  worktree_dir: string
   archived: number
   created_at: string
   updated_at: string

@@ -7,6 +7,8 @@ import { afterAll, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import { isMigrationTamperedError, MigrationTamperedError, UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 import { openDatabase } from './open.js'
+import { MIGRATIONS } from './schema.js'
+
 import { withTransaction } from './transaction.js'
 import { isParseableDateStyle } from '../testutil/date-assertions.js'
 
@@ -175,26 +177,25 @@ describe('AC2 CHECK 约束负样例（verb / level / scope / forge_dir_external�
 })
 
 describe('AC3 schema_meta 前向门', () => {
-  it('v1 写入 applied_at（ISO-8601）；重开幂等不重复插入', () => {
+  it('v1/v2 写入 applied_at（ISO-8601）；重开幂等不重复插入', () => {
     const path = dbPath()
     const db = openDatabase(path)
     const rows = db.prepare<unknown[], { version: number; applied_at: string }>(
       `SELECT version, applied_at FROM schema_meta`,
     ).all()
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.version).toBe(1)
-    expect(isParseableDateStyle(rows[0]?.applied_at ?? '')).toBe(true)
+    expect(rows.map((r) => r.version)).toEqual([1, 2])
+    for (const r of rows) expect(isParseableDateStyle(r.applied_at)).toBe(true)
     db.close()
 
     const db2 = openDatabase(path)
-    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 1 })
+    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 2 })
     db2.close()
   })
 
   it('version 超支持上限 → 明确拒绝打开（含两端版本号的 typed error）', () => {
     const path = dbPath()
     const db = openDatabase(path)
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (2, '2099-01-01T00:00:00.000Z')`).run()
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (3, '2099-01-01T00:00:00.000Z')`).run()
     db.close()
 
     expect(() => openDatabase(path)).toThrowError(UnsupportedSchemaVersionError)
@@ -203,22 +204,22 @@ describe('AC3 schema_meta 前向门', () => {
     } catch (e) {
       expect(isUnsupportedSchemaVersionError(e)).toBe(true)
       const err = e as UnsupportedSchemaVersionError
-      expect(err.currentVersion).toBe(2)
-      expect(err.supportedVersion).toBe(1)
+      expect(err.currentVersion).toBe(3)
+      expect(err.supportedVersion).toBe(2)
+      expect(err.message).toContain('3')
       expect(err.message).toContain('2')
-      expect(err.message).toContain('1')
     }
   })
 
-  it('无 schema_meta 的裸库文件 → 视为 v0 并前向迁移到 v1（current < 最新版路径）', () => {
+  it('无 schema_meta 的裸库文件 → 视为 v0 并前向迁移到最新版（current < 最新版路径）', () => {
     const path = dbPath()
     // 直接用 better-sqlite3 建一个零表库文件（模拟 v0：任何未记版本的库），
-    // openDatabase 须补齐全部迁移（全 CREATE 无 ALTER）。
+    // openDatabase 须补齐全部迁移。
     const raw = new Database(path)
     raw.close()
 
     const db = openDatabase(path)
-    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 1 })
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 2 })
     const tables = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
       .all()
@@ -269,10 +270,10 @@ describe('openDatabase 参数化迁移序列（M2 1.2：工作区库独立版本
   it('参数序列的版本门独立于中央版本：库内 version 超出参数上限即拒绝', () => {
     const path = dbPath()
     const db = openDatabase(path, { migrations: altMigrations, schemaVersion: 1 })
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (2, '2099-01-01T00:00:00.000Z')`).run()
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (3, '2099-01-01T00:00:00.000Z')`).run()
     db.close()
 
-    // 同一库：中央默认（支持上限同为 1）与参数序列同拒；typed error 两端版本号可见
+    // 同一库：中央默认与参数序列各自按自身上限拒绝（typed error 版本门独立）
     expect(() => openDatabase(path, { migrations: altMigrations, schemaVersion: 1 })).toThrowError(UnsupportedSchemaVersionError)
     expect(() => openDatabase(path)).toThrowError(UnsupportedSchemaVersionError)
   })
@@ -368,15 +369,73 @@ describe('守卫语句：columnGuard 命中跳过 / 未命中执行', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// worktree-branch-management 1.6：projects.worktree_dir NOT NULL 列迁移（v2）
+// ---------------------------------------------------------------------------
+
+describe('v2 worktree_dir 列迁移（守卫式 ALTER + 存量回填默认绝对路径）', () => {
+  it('全新库：v2 补列（NOT NULL 在场，零行回填 no-op），INSERT 未供列 → DEFAULT 落值', () => {
+    const db = openDatabase(dbPath())
+    const columns = db.pragma(`table_info('projects')`) as Array<{ name: string; notnull: number; dflt_value: string | null }>
+    const col = columns.find((c) => c.name === 'worktree_dir')
+    expect(col?.notnull).toBe(1)
+    expect(col?.dflt_value).toBe(`''`)
+    db.prepare(
+      `INSERT INTO projects (id, workspace_id, ws_path, name, forge_dir, knowledge_dir, created_at, updated_at)
+       VALUES ('pn', 'ws-pn', 'C:\\ws\\pn', 'pn', 'C:\\ws\\pn\\.forge', 'C:\\ws\\pn\\.knowledge', '2026-10-02T00:00:00.000Z', '2026-10-02T00:00:00.000Z')`,
+    ).run()
+    const row = db.prepare<unknown[], { worktree_dir: string }>(`SELECT worktree_dir FROM projects WHERE id='pn'`).get()
+    expect(row?.worktree_dir).toBe('')
+    db.close()
+  })
+
+  it('v1 存量库前向迁移：存量行回填 = ws_path 解析的 .forge/worktrees 绝对路径（Windows 反斜杠口径）', () => {
+    const path = dbPath()
+    const v1 = openDatabase(path, { migrations: [MIGRATIONS[0]!], schemaVersion: 1 })
+    insertProject(v1, 'p1', 'C:\\ws\\p1')
+    insertProject(v1, 'p2', 'Z:/repo/demo')
+    v1.close()
+
+    const db = openDatabase(path)
+    const rows = db.prepare<unknown[], { id: string; worktree_dir: string }>(
+      `SELECT id, worktree_dir FROM projects ORDER BY id`,
+    ).all()
+    expect(rows).toEqual([
+      { id: 'p1', worktree_dir: 'C:\\ws\\p1\\.forge\\worktrees' },
+      { id: 'p2', worktree_dir: 'Z:/repo/demo/.forge/worktrees' },
+    ])
+    db.close()
+  })
+
+  it('守卫命中谱系（列已在场）：v2 重放不报错（收敛式多谱系）', () => {
+    const path = dbPath()
+    const raw = new Database(path)
+    raw.exec(`
+      CREATE TABLE schema_meta (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+      INSERT INTO schema_meta VALUES (1, '2026-10-02T00:00:00.000Z'), (2, '2026-10-02T00:00:00.000Z');
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL UNIQUE, ws_path TEXT NOT NULL, name TEXT NOT NULL,
+        forge_dir TEXT NOT NULL, forge_dir_external INTEGER NOT NULL DEFAULT 0, knowledge_dir TEXT NOT NULL,
+        archived INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        worktree_dir TEXT NOT NULL DEFAULT ''
+      );
+    `)
+    raw.close()
+    const db = openDatabase(path)
+    const columns = db.pragma(`table_info('projects')`) as Array<{ name: string }>
+    expect(columns.filter((c) => c.name === 'worktree_dir')).toHaveLength(1)
+    db.close()
+  })
+})
+
 describe('迁移指纹守卫：记录 / 校验 / 篡改拒开 / 回填幂等', () => {
   it('迁移应用成功 → 同事务记录语句集 sha-256 指纹', () => {
     const db = openDatabase(dbPath())
     const rows = db.prepare<unknown[], { version: number; digest: string }>(
       `SELECT version, digest FROM migration_digests`,
     ).all()
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.version).toBe(1)
-    expect(rows[0]?.digest).toMatch(/^[0-9a-f]{64}$/)
+    expect(rows.map((r) => r.version)).toEqual([1, 2])
+    for (const r of rows) expect(r.digest).toMatch(/^[0-9a-f]{64}$/)
     db.close()
   })
 

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { MIGRATIONS, SCHEMA_VERSION } from './schema.js'
+import { MIGRATIONS, SCHEMA_VERSION, WORKTREE_DIR_BACKFILL_SQL } from './schema.js'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../')
 const BLUEPRINT = 'docs/features/dsh-forge-p1-mvp/design/schema.sql'
@@ -31,15 +31,34 @@ function blueprintStatements(): string[] {
     .filter((s) => /^CREATE (TABLE|UNIQUE INDEX|INDEX)/i.test(s))
 }
 
+/** v2 收敛式语句的 SQL 文本 pin（守卫字段不在文本面——守卫语义由 db.test.ts 行为锁死）。 */
+const PROJECTS_V2_SQL = [
+  `ALTER TABLE projects ADD COLUMN worktree_dir TEXT NOT NULL DEFAULT ''`,
+  WORKTREE_DIR_BACKFILL_SQL,
+]
+
 describe('AC4 迁移 DDL 与 design/schema.sql 单一来源对齐', () => {
   it('蓝本文件在库内可解析（pin 前置条件）', () => {
     expect(existsSync(resolve(ROOT, BLUEPRINT))).toBe(true)
   })
 
-  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移）', () => {
+  it('蓝本语句集 = v1 迁移语句集（逐条精确匹配，防漂移；v2 收敛段另行 pin）', () => {
     const expected = blueprintStatements()
-    const actual = MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
+    const actual = MIGRATIONS.find((m) => m.version === 1)!.statements.map(stmtText)
     expect(actual).toEqual(expected)
+  })
+
+  it('v2 收敛式：守卫式 ALTER 补 worktree_dir NOT NULL（projects）+ 存量回填（ws_path 解析 .forge/worktrees）', () => {
+    const v2 = MIGRATIONS.find((m) => m.version === 2)
+    expect(v2?.statements.map(stmtText)).toEqual(PROJECTS_V2_SQL.map(norm))
+    const stmts = v2!.statements
+    expect(stmts[0]).toEqual({
+      sql: `ALTER TABLE projects ADD COLUMN worktree_dir TEXT NOT NULL DEFAULT ''`,
+      columnGuard: { table: 'projects', column: 'worktree_dir' },
+    })
+    expect(stmtText(stmts[1]!)).toContain(`'.forge'`)
+    expect(stmtText(stmts[1]!)).toContain(`'worktrees'`)
+    expect(stmtText(stmts[1]!)).toMatch(/WHERE worktree_dir = ''$/)
   })
 
   it('五表 + 七索引全量承载（DDL executes / indexes created 合并覆盖 AC1）', () => {

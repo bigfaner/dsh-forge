@@ -146,6 +146,9 @@ importers:
       '@dsh-forge/md-mermaid':
         specifier: workspace:*
         version: link:../../packages/plugins/md-mermaid
+      '@dsh-forge/path-key':
+        specifier: workspace:*
+        version: link:../../packages/path-key
       '@dsh-forge/plugin-forge':
         specifier: workspace:*
         version: link:../../packages/plugin-forge

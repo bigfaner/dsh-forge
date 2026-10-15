@@ -32,7 +32,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
-import { isAbsolute, relative, sep } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import type Database from 'better-sqlite3'
 import type {
   DeriveTaskStoreDirRequest,
@@ -98,6 +98,15 @@ export interface ProjectServiceDeps {
    * 路径）；含存量双行仲裁归档与主 worktree 缺失降级。任何失败 fail-soft 降级现行链。
    */
   gitIdentity?: GitIdentityPort
+}
+
+/**
+ * worktree 存放目录默认派生（1.6——提案「取值恒非空」裁决）：`<wsPath>/.forge/worktrees/`
+ * 绝对路径（node:path join——与 ws_path canonical 同口径；与中央迁移 v2 回填 SQL 同语义，
+ * 分隔符随平台 join）。单一来源 = 本函数（注册链未输入即落此默认）。
+ */
+export function defaultWorktreeDir(wsPath: string): string {
+  return join(wsPath, '.forge', 'worktrees')
 }
 
 /** Interface 5 服务面（P1 五法不动 + deriveTaskStoreDir 第六动词——ctx.forgeProjects M2 形状） */
@@ -260,15 +269,17 @@ function ensureRegistrationDirs(input: RegisterProjectInput): void {
   }
 }
 
-/** ③ 写 projects 行（ws_path 以 registry 返回的 canonical path 为准——非用户拼写原样；单语句原子） */
+/** ③ 写 projects 行（ws_path 以 registry 返回的 canonical path 为准——非用户拼写原样；单语句原子）。
+ * worktree_dir 取值恒非空（1.6）：输入在场存输入（canonical 口径），未输入即落
+ * defaultWorktreeDir(canonical ws_path)——默认值演进时存量行不漂移（提案裁决）。 */
 function writeProjectRow(
   db: Database.Database,
   o: { projectId: string; workspace: WorkspaceLike; input: RegisterProjectInput; now: string },
 ): void {
   db.prepare(
     `INSERT INTO projects (
-       id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+       id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
   ).run(
     o.projectId,
     o.workspace.id,
@@ -277,6 +288,7 @@ function writeProjectRow(
     o.input.forgeDir,
     isForgeDirExternal(o.workspace.path, o.input.forgeDir) ? 1 : 0,
     o.input.knowledgeDir,
+    o.input.worktreeDir ?? defaultWorktreeDir(o.workspace.path),
     o.now,
     o.now,
   )
@@ -347,6 +359,9 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
     workspaceDir: await canonicalizeDir(input.workspaceDir),
     forgeDir: await canonicalizeDir(input.forgeDir),
     knowledgeDir: await canonicalizeDir(input.knowledgeDir),
+    // 1.6：worktree 目录配置透传（可达则 realpath 同归一口径）；未输入 = undefined——
+    // 默认值落库归 ③（以 ② registry canonical ws_path 派生，杜绝默认值演进漂移）。
+    worktreeDir: input.worktreeDir === undefined ? undefined : await canonicalizeDir(input.worktreeDir),
   }
 
   // 1.5 身份归并层（attachExistingRow 之前——其按 ws_path 比对不会命中 worktree 路径）：
@@ -651,12 +666,13 @@ interface ProjectRow {
   forge_dir: string
   forge_dir_external: number
   knowledge_dir: string
+  worktree_dir: string | null
   archived: number
   created_at: string
   updated_at: string
 }
 
-const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, archived, created_at, updated_at FROM projects`
+const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, created_at, updated_at FROM projects`
 
 function toProject(row: ProjectRow): Project {
   return {
@@ -667,6 +683,7 @@ function toProject(row: ProjectRow): Project {
     forgeDir: row.forge_dir,
     forgeDirExternal: row.forge_dir_external === 1,
     knowledgeDir: row.knowledge_dir,
+    worktreeDir: row.worktree_dir ?? undefined,
     archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -699,7 +716,7 @@ function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch
     // 非六码 typed error（Error Handling 表无 project-not-found 行）：RPC 边界 fail-loud 原样上抛
     throw new Error(`项目不存在：updateProject(${id})——id 未命中 projects 行`)
   }
-  // patch 仅 name/archived（接口类型收窄 + 白名单建句双重执行；多余键忽略零写）
+  // patch 仅 name/archived/worktreeDir（接口类型收窄 + 白名单建句双重执行；多余键忽略零写）
   const sets: string[] = []
   const params: unknown[] = []
   if (patch.name !== undefined) {
@@ -709,6 +726,11 @@ function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch
   if (patch.archived !== undefined) {
     sets.push('archived = ?')
     params.push(patch.archived ? 1 : 0)
+  }
+  if (patch.worktreeDir !== undefined) {
+    // 1.6：worktree 目录配置更新（注册链同面透传——存绝对路径，归一口径同注册输入）
+    sets.push('worktree_dir = ?')
+    params.push(patch.worktreeDir)
   }
   if (sets.length > 0) {
     // 单语句 UPDATE 原子（fix-35 去单语句事务样板）

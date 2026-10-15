@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import Database from 'better-sqlite3'
 import { openDatabase } from '../db/index.js'
 import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
-import { createProjectService, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
+import { createProjectService, defaultWorktreeDir, type ProjectServiceDeps, type RegisteredProject } from './project-service.js'
 import { deriveDirName } from './workspace/derive-dir.js'
 import { selectMainWorktree, type GitIdentityPort, type WorktreeEntry } from './workspace/identity-anchor.js'
 import { normalizeFsPath } from '@dsh-forge/path-key'
@@ -64,11 +64,12 @@ function setup(gitIdentity?: GitIdentityPort) {
 /** 种入陈旧 projects 行 + ③ 失败注入载体：经 testutil/db-seeds 单源（fix-37——与
  *  reconcile-queries/e2e 同源；触发器名 e2e_fail_projects_insert） */
 
-const input = (o: { workspaceDir?: string; forgeDir?: string } = {}) => ({
+const input = (o: { workspaceDir?: string; forgeDir?: string; worktreeDir?: string } = {}) => ({
   workspaceDir: o.workspaceDir ?? join(WS, 'proj'),
   name: 'proj',
   forgeDir: o.forgeDir ?? join(WS, 'proj', '.forge'),
   knowledgeDir: join(WS, 'proj', '.knowledge'),
+  ...(o.worktreeDir === undefined ? {} : { worktreeDir: o.worktreeDir }),
 })
 
 // ── AC1 新建路径全链成功 ──
@@ -112,6 +113,39 @@ describe('AC1 新建路径全链成功：create + 行落库 + attachedToExisting
     // fix-39：注册链会真实建 forge 目录——仓外路径取临时根内工作区外位置（不触真实盘符）
     await service.registerProject(input({ forgeDir: join(WS_ROOT, 'elsewhere-forge') }))
     expect(readRows(db)[0]?.forge_dir_external).toBe(1)
+  })
+})
+
+// ── 1.6 worktree_dir 注册链配置（提案「取值恒非空」裁决） ──
+
+describe('1.6 worktree_dir 注册链：未输入落默认绝对路径 / 输入透传 / updateProject patch', () => {
+  it('未输入 worktree_dir → 落默认值绝对路径（<canonical ws_path>/.forge/worktrees，与 ws_path canonical 同口径）', async () => {
+    const { db, service } = setup()
+    await service.registerProject(input())
+    expect(readRows(db)[0]?.worktree_dir).toBe(join(resolve(join(WS, 'proj')), '.forge', 'worktrees'))
+  })
+
+  it('输入 worktreeDir → 原值落库（canonical 归一口径可达则 realpath）', async () => {
+    const { db, service } = setup()
+    const wt = join(WS_ROOT, 'custom-wts')
+    mkdirSync(wt, { recursive: true })
+    await service.registerProject(input({ worktreeDir: wt }))
+    expect(readRows(db)[0]?.worktree_dir).toBe(realpathSync(wt))
+  })
+
+  it('getProject 返回 worktreeDir；updateProject patch worktreeDir 生效（白名单面）', async () => {
+    const { service } = setup()
+    const { projectId } = await service.registerProject(input())
+    const before = await service.getProject(projectId)
+    expect(before?.worktreeDir).toBe(join(resolve(join(WS, 'proj')), '.forge', 'worktrees'))
+    const wt = join(WS_ROOT, 'reconfigured-wts')
+    mkdirSync(wt, { recursive: true })
+    const after = await service.updateProject(projectId, { worktreeDir: realpathSync(wt) })
+    expect(after.worktreeDir).toBe(realpathSync(wt))
+  })
+
+  it('默认派生单一来源：defaultWorktreeDir = join(wsPath, .forge, worktrees)', async () => {
+    expect(defaultWorktreeDir('C:\\ws\\proj')).toBe(join('C:\\ws\\proj', '.forge', 'worktrees'))
   })
 })
 

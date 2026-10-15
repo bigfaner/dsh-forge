@@ -44,6 +44,10 @@ export {
   CODING_STRATEGY_TYPES,
 } from './forge/tasks/prompt/persona.js'
 
+// git 身份探针默认实现（1.6——host bindings 刷新面 worktree→projectId 行的
+// `git worktree list` 现算派生数据源；git 缺席/非 git 目录全 null fail-soft）。
+export { createGitIdentityPort } from './forge/workspace/identity-anchor.js'
+
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
   dbFile: string

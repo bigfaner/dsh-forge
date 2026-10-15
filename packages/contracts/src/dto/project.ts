@@ -18,6 +18,11 @@ export interface Project {
   forgeDirExternal: boolean
   /** 知识库目录（绝对路径，默认 `<工作区>/.knowledge`） */
   knowledgeDir: string
+  /**
+   * worktree 存放目录（绝对路径；NOT NULL——注册未输入即落默认 `<工作区>/.forge/worktrees/`，
+   * 与 ws_path canonical 同口径；存量行迁移回填同口径。DTO 可选容忍旧读面——非空保证锚 DB 列）。
+   */
+  worktreeDir?: string
   /** 归档态（P1 仅承载字段） */
   archived: boolean
   /** ISO-8601 */
@@ -45,6 +50,8 @@ export interface RegisterProjectInput {
   forgeDir: string
   /** 知识库目录（绝对路径） */
   knowledgeDir: string
+  /** worktree 存放目录（绝对路径；缺省 = 注册链落默认 `<工作区>/.forge/worktrees/`） */
+  worktreeDir?: string
 }
 
 /**
@@ -67,8 +74,8 @@ export interface RegisterResult {
   attachedToExisting: boolean
 }
 
-/** updateProject patch 面（仅 name / archived） */
-export type ProjectPatch = Partial<Pick<Project, 'name' | 'archived'>>
+/** updateProject patch 面（仅 name / archived / worktreeDir） */
+export type ProjectPatch = Partial<Pick<Project, 'name' | 'archived' | 'worktreeDir'>>
 
 /** getProject 入参 */
 export interface GetProjectRequest {
