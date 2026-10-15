@@ -214,9 +214,13 @@ export const SESSION_PILL_STATUS_DOT: Readonly<Record<SessionTaskLinkCard['taskS
   rejected: 'error',
 }
 
-/** 面板宽（dsw-raw D34 裁决刻度 400——原型 #m31-dp 324 加宽；介于原型与任务详情简要档
- *  440 之间。锚定 left/拖移钳制 maxLeft 均吃本常量——新刻度单源自适应） */
-export const DP_WIDTH = 400
+/** 面板宽（fix bug 570fa4e2 刻度 480——D34 裁决 400 再加宽：标题/键长行尽量不出横向
+ *  滚动条。锚定 left/拖移钳制 maxLeft 均吃本常量——新刻度单源自适应） */
+export const DP_WIDTH = 480
+/** 折叠角标宽（fix bug 570fa4e2——CSS 定宽 52px 同值单源：右对齐几何不随计数内容漂移） */
+export const DP_BADGE_WIDTH = 52
+/** 默认折叠（fix bug 570fa4e2：打开会话默认悬浮球——不默认展开遮挡消息内容） */
+export const DP_DEFAULT_COLLAPSED = true
 /** 对话列右缘间距（dsw-raw 原型 right 16 刻度） */
 export const DP_RIGHT_GAP = 16
 /** 工具栏下间距（dsw-raw 原型 tabs 下 8 刻度） */
@@ -313,6 +317,15 @@ export function dispatchBadgePointerIsClick(
   return (
     Math.abs(point.x - start.x) <= DP_BADGE_CLICK_SLOP && Math.abs(point.y - start.y) <= DP_BADGE_CLICK_SLOP
   )
+}
+
+/**
+ * 折叠角标默认锚（纯函数——fix bug 570fa4e2）：面板锚右上角——left = 面板右缘 -
+ * 角标宽、top 同面板顶。悬浮球落在对话框右上角初始位（不落 400+ 宽面板左缘、不遮挡
+ * 消息内容）；dock 展开/收起随面板锚联动同位移。
+ */
+export function dispatchPanelBadgeAnchor(panelAnchor: DispatchPanelGeometry): DispatchPanelGeometry {
+  return { left: panelAnchor.left + DP_WIDTH - DP_BADGE_WIDTH, top: panelAnchor.top }
 }
 
 /**
@@ -688,7 +701,8 @@ interface DispatchPanelDragSession {
  * 悬浮面板装载壳：useSessionTaskPills（sessionLinks + 写推送刷新）→ link 行集（D34 ③
  * 行序：in_progress 置顶 + 领取时间倒序）→ 纯渲染体；几何 = 锚定（自动左移）或拖移位
  * （面板头/⟡N 角标双拖移对象——拖后停自动锚定；展开承接角标拖移位，全未拖过回默认锚
- * ——D34 ②）；折叠/拖移 = 会话内本地态（装载点 key=sessionId——切会话整体重置）。
+ * ——D34 ②）；默认折叠 = 悬浮球（fix bug 570fa4e2：角标锚 = 对话框右上角初始位，收起
+ * 丢弃角标拖移位回初始位）；折叠/拖移 = 会话内本地态（装载点 key=sessionId——切会话整体重置）。
  */
 export function DispatchPanel(props: DispatchPanelProps): ReactNode {
   const makeClient = props.makeClient ?? preloadRpcClientFactory
@@ -696,7 +710,7 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
   const rows = dispatchPanelRows(state.pills)
   const active = rows.length > 0
   const anchor = useDispatchAnchor(active)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(DP_DEFAULT_COLLAPSED)
   const [dragged, setDragged] = useState(false)
   const [dragPos, setDragPos] = useState<DispatchPanelGeometry | null>(null)
   const [badgePos, setBadgePos] = useState<DispatchPanelGeometry | null>(null)
@@ -734,7 +748,7 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
       dragRef.current = {
         x: event.clientX,
         y: event.clientY,
-        start: dispatchPanelBadgeGeometry(badgePos, anchor),
+        start: dispatchPanelBadgeGeometry(badgePos, dispatchPanelBadgeAnchor(anchor)),
         kind: 'badge',
       }
       return
@@ -790,10 +804,14 @@ export function DispatchPanel(props: DispatchPanelProps): ReactNode {
     >
       <DispatchPanelBody
         rows={rows}
-        geometry={collapsed ? dispatchPanelBadgeGeometry(badgePos, anchor) : geometry}
+        geometry={collapsed ? dispatchPanelBadgeGeometry(badgePos, dispatchPanelBadgeAnchor(anchor)) : geometry}
         collapsed={collapsed}
         dragged={dragged}
-        onCollapse={() => setCollapsed(true)}
+        onCollapse={() => {
+          // fix bug 570fa4e2：收起 = 悬浮球回对话框右上角初始位（丢弃角标拖移位）
+          setCollapsed(true)
+          setBadgePos(null)
+        }}
         onExpand={handleExpand}
         onOpenTask={props.onOpenTask}
         onOpenWorkerSession={handleWorkerOpen}

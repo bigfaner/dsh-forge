@@ -16,7 +16,7 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: 400px; /* dsw-raw D34 裁决刻度（原型 #m31-dp 324 加宽——DispatchPanel.tsx DP_WIDTH 同值） */
+  width: 480px; /* fix bug 570fa4e2（D34 刻度 400 再加宽——标题/键长行尽量不出横向滚动条；DispatchPanel.tsx DP_WIDTH 同值） */
   max-width: calc(100vw - 48px); /* dsw-raw 窄视口防越（两侧各 24 余量） */
   overflow: hidden;
   z-index: var(--dsh-dockkit-float-layer, 60); /* dsw-raw 官方 dockkit 浮层层级令牌（弹窗同径；DOM 序在弹窗后 = 弹窗压上层） */
@@ -55,6 +55,9 @@
   min-width: 0;
   font: var(--dsw-font-xxs-strong-12);
   color: var(--dsw-alias-label-secondary);
+  overflow: hidden; /* fix bug 570fa4e2：头标题不换行——超宽省略（行内标题同款约束见下行覆盖） */
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dswf-dp-count {
@@ -145,11 +148,13 @@
 /* ── ⟡N 折叠角标（同锚定右上位——胶囊形态，原型 .m31-dp-badge）── */
 .dswf-dp-badge {
   position: fixed;
+  box-sizing: border-box; /* fix bug 570fa4e2：定宽 52 = 含边框内距的渲染宽（右对齐几何单源） */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--dsw-font-xxxs-11-line-height);
   height: 26px; /* dsw-raw 原型角标高刻度 */
+  width: 52px; /* fix bug 570fa4e2：定宽（DispatchPanel.tsx DP_BADGE_WIDTH 同值——右上锚右对齐不随计数内容漂移） */
   padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */

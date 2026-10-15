@@ -17,6 +17,8 @@ import type { SessionTaskLinkCard, TaskDetail } from '@dsh-forge/contracts'
 import type { ForgeRpcClient } from '../../rpc/index.js'
 import { RpcClientError } from '../../rpc/errors.js'
 import {
+  DP_BADGE_WIDTH,
+  DP_DEFAULT_COLLAPSED,
   DP_WIDTH,
   DispatchPanel,
   DispatchPanelBody,
@@ -24,6 +26,7 @@ import {
   dispatchAnchorRectsOf,
   dispatchBadgePointerIsClick,
   dispatchPanelAnchor,
+  dispatchPanelBadgeAnchor,
   dispatchPanelBadgeGeometry,
   dispatchPanelDragPosition,
   dispatchPanelExpandGeometry,
@@ -238,10 +241,10 @@ describe('dispatchPanelRows 行序（D34 ③：in_progress 置顶；组内领取
 
 // ─────────────────── 加宽（D34 ①：面板宽新裁决刻度） ───────────────────
 
-describe('DP_WIDTH 面板加宽（D34 ①：324 → 400 刻度——锚定/拖移钳制单源自适应）', () => {
-  it('DP_WIDTH = 400（> 324 原刻度——dsw-raw D34 裁决记账；介于原型与任务详情简要档 440 之间）', () => {
-    expect(DP_WIDTH).toBe(400)
-    expect(DP_WIDTH).toBeGreaterThan(324)
+describe('DP_WIDTH 面板加宽（fix bug 570fa4e2：400 → 480——避免行内容横向滚动）', () => {
+  it('DP_WIDTH = 480（> 400 旧刻度——标题/键长行尽量不出横向滚动条）', () => {
+    expect(DP_WIDTH).toBe(480)
+    expect(DP_WIDTH).toBeGreaterThan(400)
   })
   it('拖移钳制 maxLeft 与锚定 left 随新宽（既有纯函数零改——DP_WIDTH 单源）', () => {
     expect(
@@ -250,6 +253,24 @@ describe('DP_WIDTH 面板加宽（D34 ①：324 → 400 刻度——锚定/拖�
     expect(dispatchPanelAnchor({ convRight: 1280, convTop: 40, tabsBottom: 88, viewportWidth: 1280 }).left).toBe(
       1280 - 16 - DP_WIDTH,
     )
+  })
+})
+
+// ─────────────────── 默认悬浮球 + 角标右上锚（fix bug 570fa4e2） ───────────────────
+
+describe('DP_DEFAULT_COLLAPSED 默认折叠（fix：打开会话默认悬浮球——不默认展开遮挡消息）', () => {
+  it('默认折叠 = true（面板不默认展开；悬浮球不遮挡消息内容）', () => {
+    expect(DP_DEFAULT_COLLAPSED).toBe(true)
+  })
+})
+
+describe('dispatchPanelBadgeAnchor 角标右上锚（fix：折叠悬浮球 = 对话框右上角初始位）', () => {
+  it('角标默认位 = 面板锚右上角（left = 面板右缘 - 角标宽；top 同面板顶）——不落 400+ 宽面板左缘', () => {
+    const panelAnchor: DispatchPanelGeometry = { left: 1280 - 16 - DP_WIDTH, top: 96 }
+    const badge = dispatchPanelBadgeAnchor(panelAnchor)
+    expect(badge.top).toBe(panelAnchor.top)
+    expect(badge.left + DP_BADGE_WIDTH).toBe(panelAnchor.left + DP_WIDTH) // 右缘对齐
+    expect(badge.left).toBeGreaterThan(panelAnchor.left + 300) // 不在面板左缘（旧缺陷形即红）
   })
 })
 
@@ -300,10 +321,10 @@ describe('dispatchPanelAnchor 默认锚定（对话列内 · 工具栏之下右�
 })
 
 describe('dispatchPanelDragPosition 拖移几何（拖后停自动锚定——位保持用户控制）', () => {
-  const start: DispatchPanelGeometry = { left: 900, top: 96 }
+  const start: DispatchPanelGeometry = { left: 700, top: 96 } // fix bug 570fa4e2：480 宽下合法内部点（900 旧起点 > maxLeft 796 会被钳制——非本用例意图）
   it('位移原样应用（左移/下移）', () => {
     expect(dispatchPanelDragPosition(start, { x: 100, y: 100 }, { x: 40, y: 140 }, { width: 1280, height: 800 })).toEqual({
-      left: 840,
+      left: 640,
       top: 136,
     })
   })

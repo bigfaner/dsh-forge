@@ -170,6 +170,14 @@ async function linkedTask(
   return { added, sessionId }
 }
 
+/** 展开派发面板（fix bug 570fa4e2：默认折叠悬浮球——行/面板断言前先点 ⟡N 展开） */
+async function expandDispatchPanel(page: Page): Promise<void> {
+  const badge = page.locator(DP_BADGE).first()
+  await expect(badge, '默认折叠悬浮球在场（不默认展开遮挡消息）').toBeVisible({ timeout: 30_000 })
+  await expect(page.locator(DP_PANEL), '默认零展开面板（悬浮球形态）').toHaveCount(0)
+  await badge.click()
+}
+
 test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + 面板行 + 行点击弹窗零跳转）', async () => {
   test.setTimeout(600_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tsl-'))
@@ -223,6 +231,7 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     expect(realCards.every((c) => c.sessionId === sessionId), '两卡均 = 真实 dispatcher 会话（与执行会话相异可判）').toBe(true)
 
     // ── Step 3：dispatcher 悬浮面板（link 源行——record 卡过滤恒单行）──
+    await expandDispatchPanel(page)
     const row = page.locator(dpRowOf(added.taskId)).first()
     await expect(page.locator(DP_PANEL).first(), '悬浮面板在场（对话列内浮层）').toBeVisible({ timeout: 30_000 })
     await expect(row, '派发任务行在场（挂接表源）').toBeVisible({ timeout: 30_000 })
@@ -256,6 +265,7 @@ test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + �
     await expect(page.locator(DP_PANEL), 'worker 会话零面板（link 源过滤——面板仅本会话派发）').toHaveCount(0, { timeout: 15_000 })
     // 回派发会话 A → 面板复现 + 行点击重开弹窗（默认简要——D22 不记忆展开态）→ dispatcher pill 跳回
     await page.locator(sessionRowOf(sessionId)).first().click()
+    await expandDispatchPanel(page)
     await expect(page.locator(DP_PANEL).first(), '回派发会话 → 面板复现（主视图会话锚驱动）').toBeVisible({ timeout: 30_000 })
     await page.locator(dpRowOf(added.taskId)).first().click()
     await expect(page.locator(TD_DRAWER).first(), '重开弹窗在场').toBeVisible({ timeout: 15_000 })
@@ -296,6 +306,7 @@ test('@web-e2e @m2 挂接双侧·Step3 派发类行：挂接表源过滤（recor
       summary: 'dp：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC_SESSION,
     })
 
+    await expandDispatchPanel(page)
     const row = page.locator(dpRowOf(added.taskId)).first()
     await expect(row, '面板行在场（link 源——挂接表）').toBeVisible({ timeout: 30_000 })
     await expect(row, '行状态文本（结算后已完成）').toContainText('已完成')
@@ -340,6 +351,7 @@ test('@web-e2e @m2 挂接双侧·Step3b 多任务：全量行呈现 + 计数角�
       tasks.push(added)
     }
 
+    await expandDispatchPanel(page)
     await expect(page.locator(DP_ROW_ANY), '三任务 = 三行全量呈现（滚动列表无截员）').toHaveCount(3, { timeout: 30_000 })
     await expect(page.locator('[data-dswf-dp-count]').first(), '行计数 = 3（⟡N 角标同源计数）').toHaveText('3')
     for (const task of tasks) {
@@ -382,8 +394,9 @@ test('@web-e2e @m2 挂接双侧·Step3c 恰 2：两行全量 + 零角标（off-b
       await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: added.slug, localId: added.localId }, sessionId })
     }
 
+    await expandDispatchPanel(page)
     await expect(page.locator(DP_ROW_ANY), '恰 2 = 两行全量展示').toHaveCount(2, { timeout: 30_000 })
-    await expect(page.locator(DP_BADGE), '零折叠角标（面板展开态）').toHaveCount(0)
+    await expect(page.locator(DP_BADGE), '展开态零折叠角标').toHaveCount(0)
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
     expect(cards, '库行双源四卡（读面——行集 = link 过滤投影）').toHaveLength(4)
   } finally {
@@ -415,6 +428,7 @@ test('@web-e2e @m2 挂接双侧·Step3d 重领去重：幂等重入单一行（U
     })) as ClaimTaskResult
     expect(reentry.reclaimed, '二次 claim = 幂等重入').toBe(true)
 
+    await expandDispatchPanel(page)
     await expect(page.locator(dpRowOf(added.taskId)).first(), '任务 T 派发行在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(DP_ROW_ANY), '恒单行（重领不增——record 审计卡过滤）').toHaveCount(1)
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
@@ -463,7 +477,8 @@ test('@web-e2e @m2 挂接双侧·Step3e 活体挂接：claim 后行即时出现�
     // 数据面即时判据：写入返回后单发重取即见新值（事件订阅驱动的数据前提）
     const cards = await refetchOnce<SessionTaskLinkCard[]>(page, TASKS_CHANNELS.sessionLinks, { projectId, sessionId })
     expect(cards.map((c) => c.taskId), '单发重取即见 X 挂接（双源两卡同任务——§6-24④）').toEqual([x.taskId, x.taskId])
-    // UI 面：行出现在当前视图（事件驱动渲染收敛）
+    // UI 面：默认折叠悬浮球出现 → 展开后行呈现（事件驱动渲染收敛——fix bug 570fa4e2）
+    await expandDispatchPanel(page)
     await expect(page.locator(dpRowOf(x.taskId)).first(), 'X 行在当前视图出现（即时刷新）').toBeVisible({ timeout: 15_000 })
     await expect(page.locator(DP_ROW_ANY), '面板恰单行（link——record 审计卡过滤）').toHaveCount(1)
   } finally {
@@ -558,8 +573,27 @@ test('@web-e2e @m2 挂接双侧·m3.1 D6 悬浮面板几何与交互：默认落
       projectId, taskRef: { slug: added.slug, localId: added.localId }, result: 'success',
       summary: 'geo：执行会话结算', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: workerSession,
     })
-    // 回派发会话 A（面板断言面）
+    // 回派发会话 A（面板断言面）——默认折叠悬浮球（fix bug 570fa4e2：不默认展开遮挡消息）
     await page.locator(sessionRowOf(sessionId)).first().click()
+    const badge0 = page.locator(DP_BADGE).first()
+    await expect(badge0, '默认折叠 = 悬浮球在场').toBeVisible({ timeout: 30_000 })
+    await expect(page.locator(DP_PANEL), '默认零展开面板').toHaveCount(0)
+    // 悬浮球 = 对话框右上角初始位（右缘 = 对话面右缘内收 16；顶 = 页签行下 + 8——不遮挡消息）
+    const badge0Box = await badge0.boundingBox()
+    const convBoxB = await page.locator(CONVERSATION_SCROLL).first().boundingBox()
+    const tabsBoxB = await page.locator(TABS_ROW).first().boundingBox()
+    expect(badge0Box, '悬浮球几何在场').not.toBeNull()
+    expect(convBoxB, '对话滚动面几何在场（真盒锚）').not.toBeNull()
+    expect(tabsBoxB, '页签行几何在场').not.toBeNull()
+    expect(
+      Math.abs(badge0Box!.x + badge0Box!.width - (convBoxB!.x + convBoxB!.width - 16)),
+      `悬浮球右缘 = 对话面右缘内收 16（差 ≤2：${Math.round(badge0Box!.x + badge0Box!.width)} vs ${Math.round(convBoxB!.x + convBoxB!.width - 16)}）`,
+    ).toBeLessThanOrEqual(2)
+    expect(
+      Math.abs(badge0Box!.y - (tabsBoxB!.y + tabsBoxB!.height + 8)),
+      `悬浮球顶 = 页签行下沿 + 8（${Math.round(badge0Box!.y)} vs ${Math.round(tabsBoxB!.y + tabsBoxB!.height + 8)}）`,
+    ).toBeLessThanOrEqual(2)
+    await badge0.click()
 
     const panel = page.locator(DP_PANEL).first()
     await expect(panel, '悬浮面板在场').toBeVisible({ timeout: 30_000 })
@@ -582,6 +616,25 @@ test('@web-e2e @m2 挂接双侧·m3.1 D6 悬浮面板几何与交互：默认落
       Math.abs(dpBox0!.y - (tabsBox!.y + tabsBox!.height + 8)),
       `面板顶 = 页签行下沿 + 8（${Math.round(dpBox0!.y)} vs ${Math.round(tabsBox!.y + tabsBox!.height + 8)}）`,
     ).toBeLessThanOrEqual(2)
+
+    // ── ▁ 折叠 ⟡N 角标往返（fix bug 570fa4e2：收起 = 悬浮球回对话框右上角初始位）──
+    await page.locator(DP_COLLAPSE).first().click()
+    await expect(panel, '折叠 = 面板退场').toHaveCount(0)
+    const badge = page.locator(DP_BADGE).first()
+    await expect(badge, '折叠角标在场（⟡N）').toBeVisible()
+    await expect(badge.locator('[data-dswf-dp-badge-count]'), '角标计数 = 1').toHaveText('1')
+    // 收起回初始位：右缘 = 对话面右缘内收 16 + 顶 = 页签行下 + 8（角标拖移位丢弃回锚）
+    const badgeBox = await badge.boundingBox()
+    const convBoxR = await page.locator(CONVERSATION_SCROLL).first().boundingBox()
+    const tabsBoxR = await page.locator(TABS_ROW).first().boundingBox()
+    expect(badgeBox, '收起后悬浮球几何在场').not.toBeNull()
+    expect(
+      Math.abs(badgeBox!.x + badgeBox!.width - (convBoxR!.x + convBoxR!.width - 16)),
+      '收起回初始位：右缘 = 对话面右缘内收 16',
+    ).toBeLessThanOrEqual(2)
+    expect(Math.abs(badgeBox!.y - (tabsBoxR!.y + tabsBoxR!.height + 8)), '收起回初始位：顶 = 页签行下沿 + 8').toBeLessThanOrEqual(2)
+    await badge.click()
+    await expect(page.locator(DP_PANEL).first(), '角标点击展开（面板复现）').toBeVisible({ timeout: 15_000 })
 
     // ── dock 展开自动左移（对话列收窄 → 面板随之左移，右缘随对话面右缘实时联动——真 rect 上生效）──
     await expect(page.locator(RIGHTBAR_COLLAPSED).first(), '右栏基线收起').toBeAttached()
@@ -618,15 +671,6 @@ test('@web-e2e @m2 挂接双侧·m3.1 D6 悬浮面板几何与交互：默认落
     const afterCollapseBox = await panel.boundingBox()
     expect(afterCollapseBox, '收起后面板几何在场').not.toBeNull()
     expect(Math.round(afterCollapseBox!.x), '拖后停自动锚定（收起右栏零回锚）').toBe(Math.round(draggedBox!.x))
-
-    // ── ▁ 折叠 ⟡N 角标往返 ──
-    await page.locator(DP_COLLAPSE).first().click()
-    await expect(panel, '折叠 = 面板退场').toHaveCount(0)
-    const badge = page.locator(DP_BADGE).first()
-    await expect(badge, '折叠角标在场（⟡N）').toBeVisible()
-    await expect(badge.locator('[data-dswf-dp-badge-count]'), '角标计数 = 1').toHaveText('1')
-    await badge.click()
-    await expect(page.locator(DP_PANEL).first(), '角标点击展开（面板复现）').toBeVisible({ timeout: 15_000 })
 
     // ── 行尾 ⟞ = 打开 worker 执行子会话 + 树零联动 ──
     const treeRowsBefore = await page.locator(SESSION_ROW_ANY).count()
