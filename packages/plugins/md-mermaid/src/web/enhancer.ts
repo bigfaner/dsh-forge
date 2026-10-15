@@ -29,7 +29,9 @@ export interface EnhancerElement {
   querySelector(selectors: string): EnhancerElement | null
   readonly parentElement: EnhancerElement | null
   readonly nextElementSibling: EnhancerElement | null
-  insertBefore(child: EnhancerElement, ref: EnhancerElement | null): EnhancerElement
+  /** 下一兄弟节点（含文本节点——官方 MarkdownText 把 raw HTML 段渲为同容器文本节点） */
+  readonly nextSibling: unknown
+  insertBefore(child: EnhancerElement, ref: unknown): EnhancerElement
   appendChild(child: EnhancerElement): EnhancerElement
   readonly textContent: string
   readonly style: { display?: string }
@@ -163,7 +165,10 @@ export function createMermaidEnhancer(opts: Partial<MermaidEnhancerOptions> = {}
       const canvas = doc.createElement('div')
       canvas.setAttribute('class', 'dswf-doc-mermaid-canvas')
       figure.appendChild(canvas)
-      block.parentElement?.insertBefore(figure, block.nextElementSibling)
+      // 旁插锚 = nextSibling（bug f4e197a0）：nextElementSibling 会跳过 raw-HTML 文本节点
+      // 把 figure 跨插到后段元素前（视觉落入后续段）；节点级锚保证 figure 紧跟本块
+      // （null = 块即末位，insertBefore append 同义）。
+      block.parentElement?.insertBefore(figure, block.nextSibling ?? null)
     }
     figure.setAttribute(MD_MERMAID_FIGURE_FLAG, hash)
     const canvas = figure.querySelector(CANVAS_SELECTOR)

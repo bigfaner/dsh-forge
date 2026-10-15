@@ -26,7 +26,7 @@ function matches(el: StubEl, sel: string): boolean {
 }
 
 class StubEl {
-  readonly children: StubEl[] = []
+  readonly children: Array<StubEl | StubTextNode> = []
   parent: StubEl | null = null
   readonly style: Record<string, string | undefined> = {}
   innerHTML = ''
@@ -39,10 +39,22 @@ class StubEl {
     return this.parent
   }
 
+  /** 元型兄弟（跳过文本节点——真实 DOM nextElementSibling 语义） */
   get nextElementSibling(): StubEl | null {
     if (!this.parent) return null
-    const i = this.parent.children.indexOf(this)
-    return this.parent.children[i + 1] ?? null
+    const sibs = this.parent.children
+    for (let i = sibs.indexOf(this) + 1; i < sibs.length; i++) {
+      const s = sibs[i]
+      if (s instanceof StubEl) return s
+    }
+    return null
+  }
+
+  /** 下一兄弟节点（含文本节点——真实 DOM nextSibling 语义） */
+  get nextSibling(): StubEl | StubTextNode | null {
+    if (!this.parent) return null
+    const sibs = this.parent.children
+    return sibs[sibs.indexOf(this) + 1] ?? null
   }
 
   getAttribute(name: string): string | null {
@@ -57,13 +69,13 @@ class StubEl {
     this.attrs.set(name, value)
   }
 
-  appendChild(child: StubEl): StubEl {
+  appendChild(child: StubEl | StubTextNode): StubEl | StubTextNode {
     child.parent = this
     this.children.push(child)
     return child
   }
 
-  insertBefore(child: StubEl, ref: StubEl | null): StubEl {
+  insertBefore(child: StubEl | StubTextNode, ref: StubEl | StubTextNode | null): StubEl | StubTextNode {
     child.parent = this
     const i = ref === null ? -1 : this.children.indexOf(ref)
     if (i < 0) this.children.push(child)
@@ -73,6 +85,7 @@ class StubEl {
 
   querySelector(sel: string): StubEl | null {
     for (const c of this.children) {
+      if (!(c instanceof StubEl)) continue
       if (matches(c, sel)) return c
       const d = c.querySelector(sel)
       if (d !== null) return d
@@ -84,6 +97,7 @@ class StubEl {
     const out: StubEl[] = []
     const walk = (el: StubEl): void => {
       for (const c of el.children) {
+        if (!(c instanceof StubEl)) continue
         if (matches(c, sel)) out.push(c)
         walk(c)
       }
@@ -91,6 +105,13 @@ class StubEl {
     walk(this)
     return out
   }
+}
+
+/** 文本节点替身（nodeType 3——官方 MarkdownText 把 raw HTML 段渲为同容器文本节点） */
+class StubTextNode {
+  readonly nodeType = 3 as const
+  parent: StubEl | null = null
+  constructor(readonly textContent: string) {}
 }
 
 class StubDoc {
@@ -105,6 +126,7 @@ class StubDoc {
     const out: StubEl[] = []
     const walk = (el: StubEl): void => {
       for (const c of el.children) {
+        if (!(c instanceof StubEl)) continue
         if (matches(c, sel)) out.push(c)
         walk(c)
       }
@@ -208,6 +230,30 @@ function makeEnhancer(doc: StubDoc, harness: ReturnType<typeof makeEngine>, sche
   })
   return { enhancer, fireMutation: () => observerCbs.forEach((cb) => cb()) }
 }
+
+describe('bug f4e197a0：figure 旁插锚 = nextSibling（不得跳过文本节点跨插到后段元素前）', () => {
+  it('块后跟 raw-HTML 文本节点 + 后段元素（轨迹系统提示词形态）：figure 落在块与文本节点之间', async () => {
+    const doc = new StubDoc()
+    const harness = makeEngine()
+    const scheduler = makeScheduler()
+    const block = makeCodeBlock(doc, VALID)
+    // 官方 MarkdownText 形态：mermaid 块之后是 raw-HTML 文本节点（</forge-pipeline> <doc-style>），
+    // 再后才是 doc-style 段的 h2 元素——nextElementSibling 会跨过文本节点把 figure 插到 h2 前
+    const tagsText = new StubTextNode('</forge-pipeline>\n\n<doc-style>')
+    const h2 = doc.createElement('h2')
+    h2.textContent = '文档风格公约'
+    doc.documentElement.appendChild(tagsText)
+    doc.documentElement.appendChild(h2)
+    const { enhancer } = makeEnhancer(doc, harness, scheduler)
+
+    await enhancer.scan()
+    const sibs = doc.documentElement.children
+    const figureIndex = sibs.findIndex((s) => s instanceof StubEl && s.hasAttribute(MD_MERMAID_FIGURE_FLAG))
+    const blockIndex = sibs.indexOf(block)
+    expect(figureIndex).toBe(blockIndex + 1) // 紧跟本块——先于 raw-HTML 文本节点，不跨插到 h2 前
+    expect(sibs[figureIndex + 1]).toBe(tagsText)
+  })
+})
 
 describe('门控 + 懒加载纪律（无关键字块零引擎装载）', () => {
   it('无关键字块：load 零调用（零动态 import 径触发）、零 figure、原块原样', async () => {
