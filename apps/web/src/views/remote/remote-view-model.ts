@@ -59,3 +59,31 @@ export function isRestrictedRemoteViewLocation(location: { search: string; hash:
 export function isRestrictedRemoteViewCookie(cookie: string): boolean {
   return /(?:^|;\s*)dswf_forge_remote=1(?:;|$)/.test(cookie)
 }
+
+/**
+ * fix-22 诊断日志面②：web 入口分流判定读数（纯派生——命中分支 + 双谓词各自命中位，
+ * main.ts 落判定行用）。两谓词并联消费，判定只读不改变 main.ts 分支语义。
+ */
+export function remoteViewDecisionOf(
+  location: { search: string; hash: string },
+  cookie: string,
+): { branch: 'restricted' | 'shell'; viaLocation: boolean; viaCookie: boolean } {
+  const viaLocation = isRestrictedRemoteViewLocation(location)
+  const viaCookie = isRestrictedRemoteViewCookie(cookie)
+  return { branch: viaLocation || viaCookie ? 'restricted' : 'shell', viaLocation, viaCookie }
+}
+
+/**
+ * fix-22 诊断日志面②：决策行文本（单行——控制字符剥离 + 260 字符上限，宿主侧
+ * sanitizeLogLine 二次消毒兜底）。带 search/hash 读数与 referrer（BrowserAuth 303 带
+ * no-referrer——referrer 空值本身即兑现链证据位）。
+ */
+export function remoteViewDecisionLine(
+  decision: ReturnType<typeof remoteViewDecisionOf>,
+  location: { search: string; hash: string },
+  referrer: string,
+): string {
+  const oneLine = (value: string): string => value.replace(/[\r\n\t\0]+/g, ' ')
+  const raw = `branch=${decision.branch} viaLocation=${decision.viaLocation} viaCookie=${decision.viaCookie} search=${oneLine(location.search)} hash=${oneLine(location.hash)} referrer=${oneLine(referrer)}`
+  return raw.length > 260 ? raw.slice(0, 260) : raw
+}

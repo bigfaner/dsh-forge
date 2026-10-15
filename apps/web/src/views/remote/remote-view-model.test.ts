@@ -2,7 +2,7 @@
 // 受限入口判定、进度信封 → 视图快照派生（零本地副本——信封原样读数）。
 import { describe, expect, it } from 'vitest'
 import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
-import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, remoteListRowsOf } from './remote-view-model.js'
+import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, remoteListRowsOf, remoteViewDecisionLine, remoteViewDecisionOf } from './remote-view-model.js'
 
 function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStatus'>): TaskCard {
   return {
@@ -79,5 +79,41 @@ describe('isRestrictedRemoteViewCookie 受限入口 cookie 读数缝（fix-18 �
     expect(isRestrictedRemoteViewCookie('other=2')).toBe(false)
     expect(isRestrictedRemoteViewCookie('dswf_forge_remote=0')).toBe(false)
     expect(isRestrictedRemoteViewCookie('fake_dswf_forge_remote=1')).toBe(false)
+  })
+})
+
+// fix-22 诊断日志面②：web 入口分流判定读数 + 决策行文本（main.ts 落日志消费面）
+describe('remoteViewDecisionOf / remoteViewDecisionLine（fix-22 诊断日志面）', () => {
+  it('query 命中 = restricted + viaLocation', () => {
+    expect(remoteViewDecisionOf({ search: '?forgeRemote=1', hash: '' }, '')).toEqual({
+      branch: 'restricted',
+      viaLocation: true,
+      viaCookie: false,
+    })
+  })
+  it('cookie 命中 = restricted + viaCookie（303 剥查询串后的落地形态）', () => {
+    expect(remoteViewDecisionOf({ search: '', hash: '#/sessions' }, 'dswf-auth-x=v1; dswf_forge_remote=1')).toEqual({
+      branch: 'restricted',
+      viaLocation: false,
+      viaCookie: true,
+    })
+  })
+  it('双缺席 = shell（完整壳分支）', () => {
+    expect(remoteViewDecisionOf({ search: '?tab=overview', hash: '' }, 'other=2')).toEqual({
+      branch: 'shell',
+      viaLocation: false,
+      viaCookie: false,
+    })
+  })
+  it('决策行单行化：换行/制表剥离，超长截断 260', () => {
+    const line = remoteViewDecisionLine(
+      { branch: 'restricted', viaLocation: false, viaCookie: true },
+      { search: '', hash: '#a\r\n#b\t#c' },
+      '',
+    )
+    expect(line).not.toMatch(/[\r\n\t]/)
+    expect(line).toContain('branch=restricted')
+    expect(line).toContain('viaCookie=true')
+    expect(line.length).toBeLessThanOrEqual(260)
   })
 })

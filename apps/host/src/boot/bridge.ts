@@ -771,3 +771,29 @@ export function pairRedirectOf(
   const authority = tunnel ? host : fallback
   return { authority, origin: `${tunnel ? 'https' : 'http'}://${authority}` }
 }
+
+/**
+ * fix-22 诊断日志面：URL 行脱敏（token/pin 查询参数值 → '***'——决策链日志可落宿主日志
+ * 文件而不携带敏感凭据）。解析失败 = '(unparsable-url)' 占位（不抛——日志面 fail-soft）。
+ */
+export function redactTokenQuery(url: string): string {
+  try {
+    const u = new URL(url)
+    // set() 就地替换值不改键集（键序不变）——live 迭代安全，无需快照
+    for (const key of u.searchParams.keys()) {
+      if (key === 'token' || key === 'pin') u.searchParams.set(key, '***')
+    }
+    return u.href
+  } catch {
+    return '(unparsable-url)'
+  }
+}
+
+/**
+ * fix-22 诊断日志面：单行化 + 控制字符剥离 + 长度截断（beacon 体是浏览器侧任意文本——
+ * 落日志前先消毒，零日志注入面）。302 字符上限（一条决策行足量）。
+ */
+export function sanitizeLogLine(text: string): string {
+  const oneLine = text.replace(/[\r\n\t\0]+/g, ' ').replace(/[^\x20-\x7E\u4e00-\u9fff]/g, '')
+  return oneLine.length > 302 ? oneLine.slice(0, 302) : oneLine
+}

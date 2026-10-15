@@ -36,6 +36,8 @@ import {
   PROJECTS_M2_SERVICE_METHODS,
   PROPOSALS_SERVICE_METHODS,
   rebuildBridgeError,
+  redactTokenQuery,
+  sanitizeLogLine,
   sendGuarded,
   serializeBridgeError,
   SETTINGS_SERVICE_METHODS,
@@ -866,5 +868,24 @@ describe('pairRedirectOf（fix-16 隧道域尊重 Host 头）', () => {
     expect(pairRedirectOf('[::1]:8787', LAN, PORT)).toEqual(fallback)
     expect(pairRedirectOf('', LAN, PORT)).toEqual(fallback)
     expect(pairRedirectOf(undefined, LAN, PORT)).toEqual(fallback)
+  })
+})
+
+// fix-22 诊断日志面：URL 行脱敏 + 单行消毒（/pair 决策链日志与 /forge-remote-log 信箱的消费面）
+describe('redactTokenQuery / sanitizeLogLine（fix-22 诊断日志面）', () => {
+  it('token/pin 查询参数值 → ***（键与 he 值域外参数原样保留）', () => {
+    expect(redactTokenQuery('http://192.168.1.7:8787/?forgeRemote=1&token=v1.secret')).toBe(
+      'http://192.168.1.7:8787/?forgeRemote=1&token=***',
+    )
+    expect(redactTokenQuery('http://h/pair/verify?pin=123456')).toBe('http://h/pair/verify?pin=***')
+    expect(redactTokenQuery('http://h/?a=1&b=2')).toBe('http://h/?a=1&b=2')
+  })
+  it('非法 URL = 占位不抛（日志面 fail-soft）', () => {
+    expect(redactTokenQuery('::not-a-url::')).toBe('(unparsable-url)')
+  })
+  it('单行化：CR/LF/TAB/NUL 剥空格，非打印剔除，超 302 截断', () => {
+    expect(sanitizeLogLine('a\r\nb\tc\0d')).toBe('a b c d')
+    expect(sanitizeLogLine('中文\x01ok')).toBe('中文ok')
+    expect(sanitizeLogLine('x'.repeat(400)).length).toBe(302)
   })
 })

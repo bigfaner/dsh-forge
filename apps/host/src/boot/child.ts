@@ -29,6 +29,8 @@ import {
   extraPatchFiles,
   parseChildOptions,
   pairRedirectOf,
+  redactTokenQuery,
+  sanitizeLogLine,
   sendGuarded,
   type ApprovalRelay,
   type BridgeServiceName,
@@ -98,6 +100,8 @@ let pinRotate: () => void = () => {}
  * 30 天（手机书签重开仍落手机版——产品预期形态）。
  */
 const REMOTE_VIEW_COOKIE = 'dswf_forge_remote=1; Path=/; Max-Age=2592000; SameSite=Lax'
+// fix-22 诊断日志面：cookie 属性描述（日志行用——不携值本体之外的敏感面）
+const REMOTE_VIEW_COOKIE_DESC = 'dswf_forge_remote=1(Path=/;Max-Age=2592000;SameSite=Lax)'
 process.on('disconnect', () => {
   // fix-36：拒绝面补 catch——shutdown 链 reject 不落 unhandled rejection（仅记日志；
   // 5s 强退升级若也已失效，孤儿回收归 OS 进程树清理，不再额外改退出码）
@@ -251,7 +255,10 @@ async function main(): Promise<void> {
           const { origin } = pairRedirectOf(req.headers.host, lanIpv4, pairPort)
           const token =
             new URL(req.url ?? '/', origin).searchParams.get('token') ?? ''
-          if (!issuer.verify(token)) {
+          const tokenOk = issuer.verify(token)
+          // fix-22 诊断日志面①：握手决策链（token 校验读数——手机扫码一次全链可回放）
+          console.log(`[pair-diag] /pair host=${JSON.stringify(req.headers.host ?? '')} tokenVerify=${tokenOk ? 'pass' : 'fail'}`)
+          if (!tokenOk) {
             res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
             res.end('配对二维码已过期——请在桌面端重新扫码')
             return
@@ -265,8 +272,36 @@ async function main(): Promise<void> {
           // fix-18 ⑤：补 Set-Cookie——官方 authorizeIndex 303 "./" 会剥掉查询串，分支位
           // 经 cookie 跨重定向存活（根因见 REMOTE_VIEW_COOKIE 注）。
           const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
+          // fix-22 诊断日志面①：302 目标（token 脱敏）+ 签发 cookie 属性（不含敏感值）
+          console.log(`[pair-diag] /pair ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
           res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
           res.end()
+        },
+      })
+      // fix-22 诊断日志面③：BrowserAuth 兑现链观测信箱——受限单页 web 入口（main.ts）落地
+      // 判定经 POST 回传一行消毒文本（鉴权走官方 admit 缝：dsh 会话 cookie 不在场 = 401，
+      // 零绕过认证语义；体长 2KB 上限 + sanitizeLogLine 消毒 → 宿主日志文件）。
+      ctx.webServer.register({
+        kind: 'exact',
+        path: '/forge-remote-log',
+        handler: (req, res) => {
+          const admission = ctx.connection.admit({ headers: req.headers })
+          if ('rejection' in admission) {
+            res.writeHead(admission.rejection)
+            res.end()
+            return
+          }
+          const chunks: Buffer[] = []
+          let total = 0
+          req.on('data', (chunk: Buffer) => {
+            total += chunk.length
+            if (total <= 2048) chunks.push(chunk)
+          })
+          req.on('end', () => {
+            console.log(`[pair-diag] web-entry ${sanitizeLogLine(Buffer.concat(chunks).toString('utf8'))}`)
+            res.writeHead(204)
+            res.end()
+          })
         },
       })
       // dsh-mobile-tunnel：/pair/verify（官方锚 :1199-1215/:1231-1234 同语义）——POST
@@ -291,7 +326,10 @@ async function main(): Promise<void> {
                 // 畸形 body → pin 保持空串（走 verify false 面）
               }
             }
-            if (!pinIssuer.verify(pin)) {
+            const pinOk = pinIssuer.verify(pin)
+            // fix-22 诊断日志面②：PIN 校验读数（不携 pin 值本体）
+            console.log(`[pair-diag] /pair/verify host=${JSON.stringify(req.headers.host ?? '')} pinVerify=${pinOk ? 'pass' : 'fail'}`)
+            if (!pinOk) {
               res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
               res.end('PIN 错误、已过期或尝试过于频繁——请在桌面端获取最新 PIN')
               return
@@ -300,6 +338,8 @@ async function main(): Promise<void> {
             // fix-10 bug 3620685f：PIN 认证成功同 /pair 语义——落地受限移动视图（不落完整工作台）
             // fix-18 ⑤：同 /pair 补 Set-Cookie（官方 303 "./" 剥查询串——分支位走 cookie）
             const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
+            // fix-22 诊断日志面②：同 /pair——302 目标（脱敏）+ cookie 属性
+            console.log(`[pair-diag] /pair/verify ok → 302 ${redactTokenQuery(target)} set-cookie ${REMOTE_VIEW_COOKIE_DESC}`)
             res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
             res.end()
           })
