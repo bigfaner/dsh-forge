@@ -132,6 +132,29 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 
 动效：`--ds-ease-in-out: cubic-bezier(.4,0,.2,1)`；时长 fast .1s / 默认 .2s / slow .3s。
 
+## Icon 资源与复用纪律（用户裁决 2026-10-16）
+
+- **先复用，后自造**：需要图标时先查下方清单（官方 `@deepseek-ai/dsh-client-ui-primitives` 图标库）；官方已有同语义 glyph 一律直接 import（`Icon<Name>OutlineRegular/Medium`），**零 emoji 占位、零近似绘制**。
+- **无则自造同风格**：官方缺件时才自绘，刻度对齐官方同型件：16px viewBox、1px 描边（Medium 1.3px）、`currentColor`、`fill: none`、圆角线帽；自造 glyph 须回写进本清单并标注「自绘」与官方参照件。
+- **命名随官方**：`Icon<语义><Outline|Fill><Regular|Medium>` 三段式；产品侧统一经一个图标出口模块导出，禁止散落内联 SVG。
+
+### 图标资源清单（官方已有，88 glyph）
+
+命名规则：下表为 glyph 基名，实际导出 = 基名 + `OutlineRegular` / `OutlineMedium`（Fill 类只有标注的变体）。来源：`@deepseek-ai/dsh-client-ui-primitives` `lib/types/icons`。
+
+| 语义组 | glyph |
+|---|---|
+| 会话/输入 | NewChat / Send / PaperPlane / Paperclip / Stop(Fill) / Microphone / Think / Enhance / Queue |
+| 浏览/引用 | Browse / Search / Link / RightUp / Globe / Share / Copy / Download |
+| 状态/反馈 | Check / CheckCircle(/Fill) / Close(/Fill/CircleFill) / Warning / WarningTriangle / Info / Question / Loading / TriangleRight(Fill) |
+| 分支/版本 ⭐ | **Branch** / Refresh / Clock |
+| 文件/目录 | FolderClose / FolderOpen / Code / DeliverDoc / TreeCorner |
+| 导航/布局 | Chevron(Up/Down/Left/Right) / ChevronsUpDown / PanelLeft / Fullscreen / Ellipsis / CompareSplit / FlatList / WrapLines / Wrap(Fill) / Nowrap(Fill) / Compact |
+| 编辑/操作 | Edit / Plus / Trash ⭐ / Pin(/Fill) / Play / Pause / Archive / Unarchive / ArchiveCheck / ArchiveOff / ListPen / Checklist / SlidersTwo |
+| 产品域 | AgentPreset / Skill / Goal / Plan / WorkspaceTree / ProjectAdd / ContextInjection / CordisPlugin / PluginPinwheel / Sparkle / Shield / Api / Database / Data / Gauge / Inspect / Users / User / Personalization / Settings / Light / Dark / Followsystem / AlarmClock / Like(/Fill) / Dislike(/Fill) |
+
+（⭐ = worktree-branch-management 已裁决消费：`IconBranchOutlineRegular` 分支行/chip、`IconTrashOutlineRegular` 行内删除、`IconFolderCloseRegular` 项目行、`IconPlusOutlineRegular` 新建、`IconWarningTriangleOutlineRegular` 封存警示。）
+
 ## Do's and Don'ts
 
 | Do | Don't |
@@ -141,6 +164,7 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 | 色/字/距一律消费 `--dsw-*` 令牌 | 禁裸值（hex/px 间距）——lint-tokens 机械拦截 |
 | 描边 0.5px + 微阴影表达层次 | 不用重阴影/彩色阴影 |
 | 语义色取 alias（state-*/interactive-*/label-*） | 不直引 static 原始色板 |
+| 图标先查「图标资源清单」复用官方件；缺件按官方刻度自造并回写清单 | 不用 emoji 占位、不近似绘制官方已有 glyph、不散落内联 SVG |
 | 暗色适配写 `body[data-ds-dark-theme]` 锚 | 不用 media query 模拟暗色 |
 | 无间距令牌处取排版行高刻度 | 不引入平行间距体系 |
 
