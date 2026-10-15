@@ -20,8 +20,8 @@ import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
-import { createInterface } from 'node:readline'
-import { TunnelManager, type TunnelDeps, type TunnelProcessHandle, type TunnelState } from '../tunnel/index.js'
+import { TunnelManager, type TunnelDeps, type TunnelState } from '../tunnel/index.js'
+import { createChildProcessHandle } from '../tunnel/process-handle.js'
 import {
   approvalWaterfallAnswer,
   createApprovalRelay,
@@ -142,24 +142,8 @@ function createNodeTunnelDeps(): TunnelDeps {
     tmpDir: () => tmpdir(),
     spawn: (command, args) => {
       const child = nodeSpawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-      const handle: TunnelProcessHandle = {
-        pid: child.pid,
-        onLine: (listener) => {
-          void (async () => {
-            for await (const line of createInterface({ input: child.stdout! })) listener(line)
-          })()
-        },
-        onExit: (listener) => {
-          child.once('exit', (code) => listener(code))
-        },
-        kill: () =>
-          new Promise<void>((resolve) => {
-            if (child.exitCode !== null) return resolve()
-            child.once('exit', () => resolve())
-            child.kill()
-          }),
-      }
-      return handle
+      // bug 3c98e297：URL 行在 stderr（cloudflared 实测 stdout 零行）——双流合并句柄
+      return createChildProcessHandle(child)
     },
     now: Date.now,
   }
