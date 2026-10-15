@@ -39,9 +39,10 @@ export interface ComposerInputFace {
   focus(): void
   /**
    * 输入状态快照源（官方 InputState 消费切片——draft/draftRev；1.4 快速路径 span-CAS
-   * 构造单源）。窄面缺席（上游面漂移/旧面）= undefined——引用插入判不可用。
+   * 构造单源；occurrences = 症状级防御复核面——bug 2d5434d1 bail 返回值漂移检测）。
+   * 窄面缺席（上游面漂移/旧面）= undefined——引用插入判不可用。
    */
-  readonly state?: { getSnapshot(): { readonly draft: string; readonly draftRev: number } }
+  readonly state?: { getSnapshot(): { readonly draft: string; readonly draftRev: number; readonly occurrences?: readonly unknown[] } }
 }
 
 // ─────────────────────────── Bug 快速路径（composer-bug-reference 1.4） ───────────────────────────
@@ -85,9 +86,21 @@ export function tailSpanOf(state: { readonly draft: string; readonly draftRev: n
  * 活跃会话草稿末尾插入原子引用（纯编排——官方 scoped 事件径，不直捅 editor 内部 API）：
  * binding 解析会话作用域 actx → input.for(actx) 取 state 快照 → tail span-CAS →
  * actx.bail('slash/input-insert-reference', {reference, span})。bail 返回 true（编辑器
- * 已应用）= 聚焦归还 composer 并返回 true；binding 缺席 / 面缺席或抛错 / state 窄面
- * 缺席 / bail 未获 true = false（调用方 fail-soft 兜底）。
+ * 已应用）= 聚焦归还 composer 并返回 true；bail 未回 true 时症状级复核（bug 2d5434d1：
+ * 插入事实已落但返回值漂移——再取一帧快照，occurrences 增长或草稿尾接 clipboardText
+ * 投影 = 已应用，同判 true，切断「插了 chip 又开新会话」双效链）。binding 缺席 /
+ * 面缺席或抛错 / state 窄面缺席 / bail 未获 true 且复核无变化 = false（调用方 fail-soft 兜底）。
  */
+function referenceApplied(
+  before: { readonly draft: string; readonly occurrences?: readonly unknown[] },
+  after: { readonly draft: string; readonly occurrences?: readonly unknown[] },
+  clipboardText: string,
+): boolean {
+  if (after.occurrences !== undefined && before.occurrences !== undefined
+    && after.occurrences.length > before.occurrences.length) return true
+  return clipboardText.length > 0 && after.draft.endsWith(clipboardText)
+}
+
 export function insertReferenceAtTail(
   services: ReferenceInsertServices,
   sessionId: string,
@@ -112,7 +125,16 @@ export function insertReferenceAtTail(
   } catch {
     return false
   }
-  if (applied !== true) return false
+  if (applied !== true) {
+    // 症状级复核（bug 2d5434d1）：bail 返回值漂移但插入事实已落——再取一帧快照比对。
+    let after: { readonly draft: string; readonly draftRev: number; readonly occurrences?: readonly unknown[] } | undefined
+    try {
+      after = face.state?.getSnapshot()
+    } catch {
+      return false
+    }
+    if (after === undefined || !referenceApplied(state, after, reference.clipboardText)) return false
+  }
   try {
     face.focus()
   } catch {

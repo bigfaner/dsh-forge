@@ -270,14 +270,20 @@ describe('insertReferenceAtTail（官方 scoped 事件径——span-CAS 插入 +
   function fixture(options?: {
     currentBinding?: boolean
     faceState?: { draft: string; draftRev: number }
+    /** bail 后快照序列（症状级防御复核面——首帧 = bail 前基线） */
+    faceStates?: { draft: string; draftRev: number; occurrences?: readonly unknown[] }[]
     bailResult?: unknown
     bailThrows?: boolean
     forThrows?: boolean
   }) {
+    let seq = options?.faceStates !== undefined ? [...options.faceStates] : undefined
     const face = {
       focus: vi.fn(),
       ...(options?.faceState !== undefined
         ? { state: { getSnapshot: () => options.faceState! } }
+        : {}),
+      ...(seq !== undefined
+        ? { state: { getSnapshot: () => (seq!.length > 1 ? seq!.shift()! : seq![0]!) } }
         : {}),
     }
     const actx = { tag: 'actx' }
@@ -330,6 +336,41 @@ describe('insertReferenceAtTail（官方 scoped 事件径——span-CAS 插入 +
 
   it('bail 未获 true（相位守卫拒/span-CAS 失）= false 且不聚焦', () => {
     const f = fixture({ faceState: { draft: 'x', draftRev: 1 }, bailResult: undefined })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(false)
+    expect(f.face.focus).not.toHaveBeenCalled()
+  })
+
+  it('症状级防御（bug 2d5434d1）：bail 未回 true 但快照复核证实已应用（occurrences 增长）→ 判 true 且聚焦', () => {
+    const f = fixture({
+      bailResult: undefined,
+      faceStates: [
+        { draft: 'x', draftRev: 1, occurrences: [{ ref: 'other' }] },
+        { draft: 'x' + REFERENCE.clipboardText, draftRev: 2, occurrences: [{ ref: 'other' }, { ref: REFERENCE.ref }] },
+      ],
+    })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(true)
+    expect(f.face.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('症状级防御——occurrences 形状漂移时草稿尾接投影兜底：bail 未回 true 但 draft 尾 = clipboardText → 判 true', () => {
+    const f = fixture({
+      bailResult: undefined,
+      faceStates: [
+        { draft: '/fix-bug ', draftRev: 5 },
+        { draft: '/fix-bug ' + REFERENCE.clipboardText, draftRev: 6 },
+      ],
+    })
+    expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(true)
+  })
+
+  it('症状级防御不放大：bail 未回 true 且复核无变化（occurrences 未增、尾不接投影）= false 走兜底', () => {
+    const f = fixture({
+      bailResult: undefined,
+      faceStates: [
+        { draft: 'x', draftRev: 1, occurrences: [{ ref: 'other' }] },
+        { draft: 'x', draftRev: 1, occurrences: [{ ref: 'other' }] },
+      ],
+    })
     expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(false)
     expect(f.face.focus).not.toHaveBeenCalled()
   })
