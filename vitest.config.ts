@@ -27,7 +27,19 @@ export default defineConfig({
       // md-mermaid 插件包（校验面单测 + 真引擎 headless parse 集成）
       { test: { name: 'md-mermaid', include: ['packages/plugins/md-mermaid/src/**/*.test.{ts,tsx}'] } },
       // git-worktree 插件包（在场性检测 + 扩展点契约单测）
-      { test: { name: 'git-worktree', include: ['packages/plugins/git-worktree/src/**/*.test.ts'] } },
+      // git-worktree 插件包（在场性检测 + 扩展点契约单测 + client UI 单测）；
+      // client UI 消费官方 primitives——css 副产物走 vite 转换管道（server.deps.inline）
+      {
+        test: {
+          name: 'git-worktree',
+          include: ['packages/plugins/git-worktree/src/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）
