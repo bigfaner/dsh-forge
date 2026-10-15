@@ -22,6 +22,8 @@ import {
 } from './ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelFace } from './remote-status.js'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
+// @ts-expect-error —— web tsconfig types 仅 vite/client；node:fs 仅测试内读取样式表源文
+import { readFileSync } from 'node:fs'
 
 function sourceOf(snapshot: RemoteStatusSnapshot): SnapshotSource<RemoteStatusSnapshot> {
   return { getSnapshot: () => snapshot, subscribe: () => () => {} }
@@ -216,9 +218,10 @@ describe('RemotePanel 面板', () => {
 // ── fix-9（bug d9affbdf）：配对 dialog 样式逐位对齐官方实机七点差清单 ──
 
 describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
-  it('①品牌头：官方 BrandWordmark 在场 + 居中大标题「连接移动设备」+ 右上关闭钮（headless Modal 自绘壳——headless 走 portal 归 e2e 面）', () => {
+  it('fix-11 反转①：brand 头退役——BrandWordmark/dswf-remote-brand 不在场；标题「连接移动设备」+ 右上关闭钮保留（headless Modal 自绘壳——headless 走 portal 归 e2e 面）', () => {
     const html = renderToStaticMarkup(<RemoteDialogHead onClose={() => undefined} />)
-    expect(html).toContain('dswf-remote-brand')
+    expect(html).not.toContain('dswf-remote-brand')
+    expect(html).not.toContain('BrandWordmark')
     expect(html).toContain('dswf-remote-dialog-title')
     expect(html).toMatch(/dswf-remote-dialog-title[^>]*>[\s\S]*连接移动设备/)
     expect(html).toMatch(/aria-label="关闭"/)
@@ -429,5 +432,36 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
       />,
     )
     expect(lan).not.toContain('dswf-remote-tunnel-pin-hint')
+  })
+})
+
+// ── fix-11（用户裁决 2026-10-14）：去 brand 头 + 宽度翻倍不换行 + 手机图标三态色 ──
+// CSS 面用例以样式表源文断言（静态标记不含 CSS；令牌取值按 DESIGN.md 语义色表：
+// Warning #f59e0b = state-warning-primary / Success #22c55e = state-success-primary）
+
+describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.css 源文断言）', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('②宽度翻倍：dialog 卡宽 696px（348 ×2）', () => {
+    expect(css).toMatch(/\.dswf-remote-modal\s*\{[^}]*width:\s*696px/)
+  })
+
+  it('②不换行：说明/倒计时/说明行单行 + 地址 pill 单行溢出省略（复制钮 flex:none 不受挤压）', () => {
+    expect(css).toMatch(/\.dswf-remote-note-card\s*\{[^}]*white-space:\s*nowrap/)
+    expect(css).toMatch(/\.dswf-remote-panel-note\s*\{[^}]*white-space:\s*nowrap/)
+    expect(css).toMatch(
+      /\.dswf-remote-address-text\s*\{[^}]*white-space:\s*nowrap[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis/,
+    )
+    expect(css).toMatch(/\.dswf-remote-copy\s*\{[^}]*flex:\s*none/)
+  })
+
+  it('③三态色：off 灰（label-tertiary）/ listening+pending 橙（state-warning-primary）/ connected 绿（state-success-primary）', () => {
+    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='off'\]\s*\{[^}]*label-tertiary/)
+    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='listening'\]\s*\{[^}]*state-warning-primary/)
+    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='pending'\]\s*\{[^}]*state-warning-primary/)
+    expect(css).toMatch(/\.dswf-remote-entry\[data-phase='connected'\]\s*\{[^}]*state-success-primary/)
+    // 退役语义：listening 不得再绿、connected 不得再用 business 蓝
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='listening'\]\s*\{[^}]*state-success/)
+    expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='connected'\]\s*\{[^}]*state-business/)
   })
 })

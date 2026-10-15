@@ -14,7 +14,7 @@
 // ——重启生效形态，onToggle 由插件注入）+ 地址条带（复制图标按钮）+ 状态态。待重启生效
 // （pending）/ 远程关（off）/ 地址读数缺席 = 对应空态而非 QR——不伪装已监听（fix-3 用户裁决）。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Modal, BrandWordmark, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Modal, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
 import type { RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
@@ -420,8 +420,8 @@ export function RemotePanel(props: {
   )
 }
 
-/** fix-9 ①品牌头（独立导出 = 静态测试缝——居中 BrandWordmark 官方件 + 居中大标题 +
- *  右上关闭钮；官方 Modal headless 组合件，遮罩/Esc 恒归 Modal） */
+/** dialog 头（fix-11 ①：brand 头退役——BrandWordmark 不在场，标题「连接移动设备」保留为
+ *  dialog 标题；居中大标题 + 右上关闭钮；官方 Modal headless 组合件，遮罩/Esc 恒归 Modal） */
 export function RemoteDialogHead(props: { readonly onClose: () => void }): ReactNode {
   return (
     <div className="dswf-remote-dialog">
@@ -434,15 +434,12 @@ export function RemoteDialogHead(props: { readonly onClose: () => void }): React
       >
         <IconCloseOutlineRegular size={16} />
       </button>
-      <div className="dswf-remote-brand">
-        <BrandWordmark size={24} />
-      </div>
       <h2 className="dswf-remote-dialog-title">{REMOTE_DIALOG_TITLE}</h2>
     </div>
   )
 }
 
-/** 配对面 dialog（fix-8 官方 Modal 承载；fix-9 ①品牌头——headless 模式下产品组合官方件）。
+/** 配对面 dialog（fix-8 官方 Modal 承载；fix-11 ① brand 头退役——标题即 dialog 头）。
  *  内容面 = RemotePanel 既有件（fix-7 逐位布局 + fix-6 倒计时刷新缝 onRefresh 透传）。
  *  独立导出 = 静态测试/复用缝。 */
 export function ForgeRemoteDialog(props: {
