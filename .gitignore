@@ -84,7 +84,9 @@ tmp/
 .forge/docs/**/*.zip
 .forge/docs/**/*.har
 .forge/docs/**/*.trace.zip
-.forge/docs/**/*/walkthrough/
+.forge/docs/**/*/walkthrough/*
+# walkthrough 内的高保真原型 html = 提案实现基准（可提交；截图等过程产物仍忽略）
+!.forge/docs/**/*/walkthrough/*.html
 .vitest/
 .forge/docs/probes/
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/app.js
@@ -102,3 +104,5 @@ tmp/
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/whale-book-sea-bg.svg
 .forge/docs/proposals/worker-lean-execution/tasks-backup-20261011.md
 logs/
+docs/proposals/dsh-forge-redesign/redesign/
+docs/proposals/dsh-forge-redesign/prototype-v2/

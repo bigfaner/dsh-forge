@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>worktree-branch-management · UI 效果稿</title>
+<style>
+  /* —— DESIGN.md 令牌（light / dark 双主题）—— */
+  :root {
+    --bg-base: #ffffff; --l1: #ffffff; --l2: #ffffff; --l3: #ffffff;
+    --sidebar: #f9fafb; --module: #f5f6f7;
+    --border-l1: #0000000a; --border-l2: #0000001a; --border-l3: #0000001f; --border-l4: #00000029;
+    --text-1: #0f1115; --text-2: #61666b; --text-3: #81858c; --caption: #adb2b8;
+    --accent: #4176e6; --accent-100: #dbe5fb;
+    --hover: #2631480f; --active: #2631481a;
+    --warn: #f59e0b; --error: #ec1313; --success: #22c55e;
+    --code-bg: #f9fafb; --toast: #353638;
+    --elev-menu: 0 4px 12px 0 #00000005, 0 2px 8px 0 #0000000a;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, "PingFang SC", "Microsoft YaHei";
+  }
+  body[data-ds-dark-theme] {
+    --bg-base: #151517; --l1: #232324; --l2: #2c2c2e; --l3: #353638;
+    --sidebar: #1b1b1c; --module: #353638;
+    --border-l1: #ffffff0f; --border-l2: #ffffff1f; --border-l3: #ffffff29; --border-l4: #ffffff4d;
+    --text-1: #f9fafb; --text-2: #cfd3d6; --text-3: #adb2b8; --caption: #81858c;
+    --accent: #7aaaff; --accent-100: #22335e;
+    --hover: #ffffff14; --active: #ffffff24;
+    --code-bg: #1b1b1c; --toast: #43454a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg-base); color: var(--text-1); padding: 32px 40px 64px; }
+  h1 { font-size: 20px; font-weight: 500; line-height: 28px; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--text-2); line-height: 20px; margin-bottom: 28px; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 28px; }
+  .scene { border: 0.5px solid var(--border-l4); border-radius: 16px; background: var(--l1); padding: 20px; box-shadow: 0 3px 8px #00000008, 0 0 16px #00000005; }
+  .scene > .tag { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 16px; }
+
+  /* —— chip（胶囊 999px 官方 Tag 同值；h28 hero 触发器刻度）—— */
+  .chiprow { display: flex; gap: 8px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 0.5px solid var(--border-l2); background: var(--l1); font-size: 13px; color: var(--text-2); cursor: pointer; }
+  .chip:hover { border-color: var(--border-l3); background: var(--hover); }
+  .chip .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+
+  /* —— 会话头动作带（conversation.session.header.actions 槽）—— */
+  .sesshead { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 0.5px solid var(--border-l2); margin-bottom: 14px; }
+  .sesshead .title { font-size: 14px; font-weight: 500; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .wt-chip { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px; border-radius: 999px; border: 0.5px solid var(--border-l2); font-size: 12px; color: var(--text-2); background: var(--l1); }
+  .wt-chip .mono { font-family: var(--mono); color: var(--text-1); }
+  .wt-chip .sep { color: var(--caption); }
+  .wt-chip .lead { font-size: 11px; color: var(--caption); }
+  .wt-chip.dead { border-color: var(--error); color: var(--error); text-decoration: line-through; cursor: help; }
+  .wt-chip.dead .mono, .wt-chip.dead .sep { color: var(--error); }
+
+  /* —— Menu 弹层（官方 Menu：portal + footer + selectedId）—— */
+  .menu { margin-top: 6px; width: 340px; background: var(--l2); border: 0.5px solid var(--border-l4); border-radius: 12px; box-shadow: var(--elev-menu); overflow: hidden; }
+  .menu .row { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+  .menu .row:hover { background: var(--hover); }
+  .menu .row.sel { background: var(--module); }
+  .menu .row.sel::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--accent); margin-left: -8px; }
+  .menu .branch { font-family: var(--mono); font-size: 12px; color: var(--text-1); }
+  .menu .wtname { font-size: 12px; color: var(--text-3); }
+  .menu .badge { display: flex; gap: 6px; align-items: center; font-family: var(--mono); font-size: 11px; }
+  .badge .ab-up { color: var(--success); } .badge .ab-down { color: var(--warn); }
+  .badge .src { color: var(--caption); border: 0.5px solid var(--border-l2); border-radius: 999px; padding: 0 6px; font-family: var(--font); }
+  .menu .row .del { margin-left: auto; opacity: 0; color: var(--text-3); transition: opacity .15s cubic-bezier(.4,0,.2,1); }
+  .menu .row:hover .del { opacity: 1; }
+  .menu .row .del:hover { color: var(--error); }
+  .menu .row .spacer { flex: 1; }
+  .menu .row.dead { opacity: .45; cursor: not-allowed; }
+  .menu .row.dead .note { margin-left: auto; font-size: 11px; color: var(--error); }
+  .menu .foot::before { content: ""; display: block; height: 0.5px; margin: 3px 2px; background: var(--border-l2); }
+  .menu .foot .row { color: var(--text-2); }
+
+  /* —— composer —— */
+  .composer { margin-top: 10px; border: 0.5px solid var(--border-l2); border-radius: 16px; background: var(--l2); padding: 12px 14px; }
+  .composer .ph { font-size: 14px; color: var(--text-3); line-height: 22px; }
+  .composer.disabled { background: var(--module); border-style: dashed; }
+  .composer.disabled .ph { color: var(--caption); }
+
+  /* —— notice banner（官方 notice 形态；封存态贴消息流顶部分界线）—— */
+  .notice { display: flex; gap: 10px; align-items: flex-start; border: 0.5px solid var(--warn); border-top: none; background: color-mix(in srgb, var(--warn) 8%, transparent); border-radius: 0 0 12px 12px; padding: 10px 14px; margin: -15px -20px 12px; font-size: 13px; line-height: 20px; color: var(--text-1); }
+  .notice .ico { color: var(--warn); display: inline-flex; }
+  .notice .x { margin-left: auto; color: var(--text-3); cursor: pointer; }
+
+  /* —— 消息流示意 —— */
+  .bubble { max-width: 76%; font-size: 14px; line-height: 22px; padding: 8px 12px; border-radius: 12px; margin-bottom: 10px; }
+  .bubble.user { background: var(--module); margin-left: auto; }
+  .bubble.assistant { border: 0.5px solid var(--border-l1); }
+
+  .hint { margin-top: 12px; font-size: 12px; color: var(--caption); line-height: 18px; }
+  .hint b { color: var(--text-3); font-weight: 500; }
+  .toolbar { position: fixed; top: 16px; right: 24px; display: flex; gap: 8px; }
+  .toolbar button { font-family: var(--font); font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 0.5px solid var(--border-l2); background: var(--l1); color: var(--text-2); cursor: pointer; }
+
+  /* —— 官方图标线稿（@deepseek-ai/dsh-client-ui-primitives 同 path，1px 描边 currentColor）—— */
+  .ic { display: inline-flex; flex: none; }
+  .ic svg { display: block; }
+
+  /* —— Modal（官方 Modal：lv3 阴影 + 头部 14px 内距）—— */
+  .overlay { position: relative; border-radius: 16px; background: color-mix(in srgb, var(--text-1) 4%, var(--l1)); padding: 40px 0; display: flex; justify-content: center; }
+  .modal { width: 400px; background: var(--l2); border: 0.5px solid var(--border-l4); border-radius: 16px; box-shadow: 0 0 1px 0 #0003, 0 0 4px 0 #00000005, 0 12px 32px 0 #00000014; overflow: hidden; }
+  .modal header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 0.5px solid var(--border-l2); }
+  .modal header .t { font-size: 15px; font-weight: 500; }
+  .modal header .x { color: var(--text-3); cursor: pointer; }
+  .modal .body { padding: 16px; font-size: 13px; line-height: 20px; }
+  .modal .body .lead { color: var(--text-2); margin-bottom: 12px; }
+  .modal .body .lead .mono { font-family: var(--mono); color: var(--text-1); }
+  .checks { display: flex; flex-direction: column; gap: 8px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 0.5px solid var(--border-l2); border-radius: 8px; }
+  .check.ok { border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+  .check.bad { border-color: var(--error); background: color-mix(in srgb, var(--error) 6%, transparent); }
+  .check .sig { font-size: 13px; } .check.ok .sig { color: var(--success); } .check.bad .sig { color: var(--error); }
+  .check .k { font-weight: 500; }
+  .check .d { color: var(--text-2); font-size: 12px; line-height: 18px; }
+  .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 0.5px solid var(--border-l2); }
+  .btn { font-family: var(--font); font-size: 13px; height: 30px; padding: 0 14px; border-radius: 8px; cursor: pointer; border: 0.5px solid var(--border-l2); background: var(--l1); color: var(--text-1); }
+  .btn.primary { background: var(--text-1); color: var(--bg-base); border-color: transparent; }
+  .btn.danger { background: var(--error); color: #fff; border-color: transparent; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* —— 新建 worktree 表单（官方 Modal + Input/字段行形态）—— */
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 13px; font-weight: 500; color: var(--text-1); }
+  .field label .opt { font-weight: 400; color: var(--caption); font-size: 12px; }
+  .field .input { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0.5px solid var(--border-l2); border-radius: 8px; background: var(--l1); font-family: var(--mono); font-size: 13px; color: var(--text-1); }
+  .field .base { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 0.5px solid var(--border-l2); border-radius: 8px; background: var(--l1); font-size: 13px; color: var(--text-1); }
+  .field .base .mono { font-family: var(--mono); }
+  .field .base .chev { margin-left: auto; color: var(--text-3); font-size: 11px; }
+  .field .derived { font-size: 12px; color: var(--text-3); }
+  .field .derived .mono { font-family: var(--mono); color: var(--text-2); }
+  .field .derived .lnk { color: var(--accent); cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="document.body.toggleAttribute('data-ds-dark-theme')">切换 Light / Dark</button></div>
+
+<!-- 官方图标库（IconFolderCloseRegular / IconBranchOutlineRegular / IconPlusOutlineRegular / IconTrashOutlineRegular / IconWarningTriangleOutlineRegular 原始 path） -->
+<svg style="display:none">
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.50439 3.11059C1.50439 2.55831 1.95211 2.1106 2.50439 2.1106H5.43389C5.67773 2.1106 5.91318 2.19969 6.09593 2.36113L7.71649 3.79265C7.89924 3.95409 8.1347 4.04319 8.3785 4.04319H13.4958C14.0481 4.04319 14.4958 4.4909 14.4958 5.04319V12.8894C14.4958 13.4417 14.0481 13.8894 13.4958 13.8894H2.50439C1.95211 13.8894 1.50439 13.4417 1.50439 12.8894V4.04319V3.11059Z"/><path d="M3.63501 7.66614H12.3647"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 16 16"><path d="M1.01503 8.0001L5.6964 8.0001C6.41913 8.0001 6.78049 8.0001 7.12115 7.91951C7.4232 7.84804 7.71233 7.73014 7.97821 7.57C8.27809 7.38939 8.5364 7.13669 9.05303 6.63129L11.3281 4.40564"/><path d="M1.01221 7.9999L5.6964 7.9999C6.41913 7.9999 6.78049 7.9999 7.12115 8.08049C7.4232 8.15196 7.71233 8.26986 7.97821 8.43C8.27809 8.61061 8.5364 8.86331 9.05303 9.36871L11.3281 11.5944"/><circle cx="12.4502" cy="3.3079" r="1.56962"/><circle cx="12.4502" cy="12.6921" r="1.56962"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 2V14"/><path d="M2 8H14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M1.28149 3.88831H14.7187"/><path d="M5.41602 3.88833V2.47962C5.41602 2.29282 5.52492 2.11366 5.71876 1.98157C5.9126 1.84948 6.17551 1.77527 6.44964 1.77527H9.55053C9.82466 1.77527 10.0876 1.84948 10.2814 1.98157C10.4753 2.11366 10.5842 2.29282 10.5842 2.47962V3.88833"/><path d="M2.57349 3.88831L3.19366 13.2943C3.21937 13.5502 3.33952 13.7872 3.53065 13.9593C3.72178 14.1313 3.97016 14.2259 4.22729 14.2246H11.7728C12.0299 14.2259 12.2783 14.1313 12.4694 13.9593C12.6605 13.7872 12.7807 13.5502 12.8064 13.2943L13.4266 3.88831"/><path d="M6.44946 6.98926V11.1238"/><path d="M9.55054 6.98926V11.1238"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M6.87 2.6a1.33 1.33 0 0 1 2.26 0l5.34 9.33A1.33 1.33 0 0 1 13.33 14H2.67a1.33 1.33 0 0 1-1.14-2.07Z"/><path d="M8 6v3m0 2.33h.01"/></symbol>
+</svg>
+<script>
+  function icon(id, size = 16) {
+    return `<span class="ic"><svg width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><use href="#${id}"/></svg></span>`
+  }
+  document.querySelectorAll("[data-ic]").forEach((el) => {
+    el.insertAdjacentHTML("afterbegin", icon(el.dataset.ic, el.dataset.size || 16))
+  })
+</script>
+
+<h1>worktree-branch-management · UI 效果稿</h1>
+<p class="sub">状态对照 · 令牌取自 DESIGN.md（--dsw-* 同值）· 交互词汇对齐官方 Menu / Tag / notice 形态</p>
+
+<div class="board">
+
+  <!-- 新会话 hero（选择控件展开态） -->
+  <div class="scene">
+    <div class="tag">新会话 · hero 输入框上方 · 双 chip + 展开的 worktree 选择菜单</div>
+    <div class="chiprow">
+      <div class="chip" data-ic="i-folder"> dsh-forge</div>
+      <div class="chip sel"><span class="dot"></span><span data-ic="i-branch" data-size="14"></span> feat/api · wt-api</div>
+    </div>
+    <div class="menu">
+      <div class="row"><span data-ic="i-branch" data-size="14"></span><span class="branch">main</span><span class="wtname">dsh-forge（主 worktree）</span><span class="spacer"></span><span class="badge"><span class="src">主</span></span></div>
+      <div class="row sel"><span data-ic="i-branch" data-size="14"></span><span class="branch">feat/api</span><span class="wtname">wt-api</span><span class="spacer"></span><span class="badge"><span class="ab-up">↑2</span><span class="ab-down">↓1</span><span class="src">DSH</span></span><span class="del" data-ic="i-trash" data-size="14"></span></div>
+      <div class="row"><span data-ic="i-branch" data-size="14"></span><span class="branch">fix/login</span><span class="wtname">wt-login</span><span class="spacer"></span><span class="badge"><span class="ab-down">↓4</span><span class="src">DSH</span></span><span class="del" data-ic="i-trash" data-size="14"></span></div>
+      <div class="row"><span data-ic="i-branch" data-size="14"></span><span class="branch">experiment/ui</span><span class="wtname">../scratch/ui-lab</span><span class="spacer"></span><span class="del" data-ic="i-trash" data-size="14"></span></div>
+      <div class="row dead"><span data-ic="i-branch" data-size="14"></span><span class="branch">spike/old</span><span class="wtname">wt-old</span><span class="note">盘上失配</span></div>
+      <div class="foot">
+        <div class="row" data-ic="i-plus" data-size="14"> 新建 worktree…</div>
+      </div>
+    </div>
+    <div class="composer"><div class="ph">给 feat/api · wt-api 发消息…（未发送前可换 worktree）</div></div>
+    <div class="hint"><b>裁决映射</b>：一 worktree 一行、分支名为行属性（一体两属性）；新建入口只说一个名词「新建 worktree…」，弹窗主输入 = 分支名、worktree 名自动派生——一体感由交互承载；ahead/behind 行内徽标（懒加载）；「DSH」= 所配 worktree 目录内路径推断；自定义路径无标记；失配行置灰；主 worktree 只展示、无删除图标；删除 = 行右侧图标（hover 显现），经二次确认弹窗。</div>
+  </div>
+
+  <!-- 已发会话 · 会话头只读 chip -->
+  <div class="scene">
+    <div class="tag">已发会话 · 会话头 actions 槽 · 只读一体 chip + ahead/behind 次级小字</div>
+    <div class="sesshead">
+      <div class="title">修复 projects 注册幂等</div>
+      <div class="actions">
+        <div class="wt-chip"><span class="mono">feat/api</span><span class="sep">·</span><span class="mono">wt-api</span><span class="lead">↑2 ↓1</span></div>
+      </div>
+    </div>
+    <div class="bubble user">继续修这个用例，跑一遍质量门。</div>
+    <div class="bubble assistant">已修复并全绿：编译 / 格式 / lint / 测试一次过，commit <span style="font-family:var(--mono)">8cf5509</span>。</div>
+    <div class="composer"><div class="ph">给 dsh-forge 发消息…</div></div>
+    <div class="hint"><b>裁决映射</b>：无切换入口（chip 不可点出菜单）；ahead/behind 以次级小字低频刷新；不进消息流。</div>
+  </div>
+
+  <!-- 封存态 -->
+  <div class="scene">
+    <div class="tag">封存态 · worktree 被删（含 git 命令）· 三通道提示</div>
+    <div class="sesshead">
+      <div class="title">修复 projects 注册幂等</div>
+      <div class="actions">
+        <div class="wt-chip dead" title="worktree 已被删除"><span class="mono">feat/api</span><span class="sep">·</span><span class="mono">wt-api</span></div>
+      </div>
+    </div>
+    <div class="notice"><span class="ico" data-ic="i-warn" data-size="15"></span> 该会话挂靠的 worktree <b style="font-family:var(--mono)">wt-api</b> 已被删除，会话已封存——可查看历史，不可发送消息。<span class="x">✕</span></div>
+    <div class="bubble user">继续修这个用例，跑一遍质量门。</div>
+    <div class="bubble assistant">已修复并全绿……</div>
+    <div class="composer disabled"><div class="ph">worktree 已删除，会话已封存——可查看历史</div></div>
+    <div class="hint"><b>裁决映射</b>：① chip 失效态（警示色 + 删除线 + tooltip）；② composer 禁用 + 占位文案；③ 消息流顶部一次性 notice banner。历史可滚动查看。</div>
+  </div>
+
+  <!-- 非 git 项目 -->
+  <div class="scene">
+    <div class="tag">非 git 项目 · 能力位条件渲染 · 退回现状</div>
+    <div class="chiprow">
+      <div class="chip" data-ic="i-folder"> notes-vault（非 git）</div>
+    </div>
+    <div style="height: 96px; border: 0.5px dashed var(--border-l2); border-radius: 12px; margin-top: 10px; display: flex; align-items: center; justify-content: center; color: var(--caption); font-size: 12px;">（无 worktree / 分支 chip——hero 区与菜单均不注入）</div>
+    <div class="composer"><div class="ph">给 notes-vault 发消息…</div></div>
+    <div class="hint"><b>裁决映射</b>：非 git = 无 worktree/分支 chip（不置灰、不占位），会话头 actions 槽同样零注入；能力位由身份归并层产出，UI 只消费。</div>
+  </div>
+
+  <!-- 删除二次确认 -->
+  <div class="scene">
+    <div class="tag">删除二次确认 · 危险操作 · 状态清单（有拦截项即拦）</div>
+    <div class="overlay">
+      <div class="modal">
+        <header><span class="t">删除 worktree</span><span class="x">✕</span></header>
+        <div class="body">
+          <div class="lead">即将删除 <span class="mono">wt-api</span>（分支 <span class="mono">feat/api</span>，位于 <span class="mono">.forge/worktrees/wt-api</span>）。删除前请确认以下状态：</div>
+          <div class="checks">
+            <div class="check ok"><span class="sig">✓</span><div><div class="k">未提交变更</div><div class="d">工作区干净（0 个文件修改）</div></div></div>
+            <div class="check bad"><span class="sig">✕</span><div><div class="k">未 push 提交</div><div class="d">分支 <span style="font-family:var(--mono)">feat/api</span> 领先远端 2 个提交——删除后仅存于本地 ref（git 原生保留），界面不再列出</div></div></div>
+            <div class="check bad"><span class="sig">✕</span><div><div class="k">挂靠会话</div><div class="d">1 个会话正挂靠本 worktree——存在挂靠会话（含 in-progress 任务）时删除被拦截</div></div></div>
+          </div>
+        </div>
+        <footer>
+          <button class="btn">取消</button>
+          <button class="btn danger" disabled>确认删除</button>
+        </footer>
+      </div>
+    </div>
+    <div class="hint"><b>裁决映射</b>：危险操作二次确认；确认框展示分支/worktree 状态 + 未提交修改 + 未 push 提交 + 挂靠会话。存在未提交变更或挂靠会话（含 in-progress 任务）→ 确认钮禁用即拦截；仅未 push 提交 → 警示展示（本地 ref 仍可找回）但可确认。主 worktree 无删除图标。</div>
+  </div>
+
+  <!-- 新建 worktree 弹窗 -->
+  <div class="scene">
+    <div class="tag">点击「新建 worktree…」· 创建弹窗 · 主输入 = 分支名，worktree 名自动派生</div>
+    <div class="overlay">
+      <div class="modal">
+        <header><span class="t">新建 worktree</span><span class="x">✕</span></header>
+        <div class="body">
+          <div class="field">
+            <label>基准分支 <span class="opt">（新分支的起点）</span></label>
+            <div class="base"><span data-ic="i-branch" data-size="14"></span><span class="mono">main</span><span class="chev">▾</span></div>
+          </div>
+          <div class="field">
+            <label>分支</label>
+            <div class="input">feat/remote-approval</div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>worktree <span class="opt">（自动派生，可改）</span></label>
+            <div class="input">wt-remote-approval</div>
+            <div class="derived">将创建于 <span class="mono">.forge/worktrees/wt-remote-approval</span>　<span class="lnk">自定义路径…</span></div>
+          </div>
+        </div>
+        <footer>
+          <button class="btn">取消</button>
+          <button class="btn primary">创建</button>
+        </footer>
+      </div>
+    </div>
+    <div class="hint"><b>裁决映射</b>：入口只说一个名词，分支名为唯一主输入；worktree 名从分支名派生（feat/ 前缀映射 wt-，可改）；路径默认 = 所配 worktree 目录；「基于分支」下拉决定新分支起点（默认 main——从主线起步）；确认后 git 一体创建并立即出现在选择列表。</div>
+  </div>
+
+</div>
+</body>
+</html>
