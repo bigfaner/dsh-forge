@@ -40,7 +40,7 @@ export function createForgeCommands(deps: ForgeCommandsDeps): ForgeCommands {
     runDagTasks: {
       name: RUN_DAG_TASKS_NAME,
       description: '派发任务——自动逐个执行一个任务源里的任务直到全部完成',
-      input: { hint: '[<source-slug>]' },
+      input: { hint: '[<slug>]' },
       handler: createRunDagTasksHandler(deps),
     },
     stopDagTasks: {

@@ -18,7 +18,7 @@ import { DISPATCH_COMMAND_PREFIX } from '../message-format.js'
 import { hasNonTerminalTask } from './terminal-state.js'
 import './task-tab.css'
 
-/** 派发指令单行（S5 缓切：`/run-dag-tasks <source-slug>`——known command 路由 command plane 执行宿主派发循环） */
+/** 派发指令单行（S5 缓切：`/run-dag-tasks <slug>`——known command 路由 command plane 执行宿主派发循环） */
 export function dispatchCommandOf(containerSlug: string): string {
   return `${DISPATCH_COMMAND_PREFIX}${containerSlug}`
 }

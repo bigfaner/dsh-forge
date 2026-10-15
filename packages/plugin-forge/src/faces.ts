@@ -283,7 +283,7 @@ export interface ForgeCommandResult {
 export interface ForgeCommandInvocation {
   /** 敲指令会话（官方 Agent 结构子面：id = ownerSessionId 锚——decisions #20 stop 作用域键） */
   readonly agent: ToolAgentFace
-  /** 指令名后原文（<source-slug> 直通参数；无参 = 空白） */
+  /** 指令名后原文（<slug> 直通参数；无参 = 空白） */
   readonly rawInput: string
   /** 派发 UI 请求的取消信号（官方 invocation.signal——问询透传；缺席 = 无取消通道） */
   readonly signal?: AbortSignal
@@ -295,7 +295,7 @@ export interface ForgeCommandDefinition {
   readonly name: string
   /** 发现 UI 的人类可读摘要 */
   readonly description: string
-  /** 可选自由输入提示（hint 展示于 composer——`[<source-slug>]`） */
+  /** 可选自由输入提示（hint 展示于 composer——`[<slug>]`） */
   readonly input?: { readonly hint: string }
   /** 对接收 agent 执行、零模型回合（UI command plane 语义） */
   handler(invocation: ForgeCommandInvocation): ForgeCommandResult | Promise<ForgeCommandResult>

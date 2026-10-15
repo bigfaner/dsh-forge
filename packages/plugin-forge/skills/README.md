@@ -11,7 +11,7 @@
 
 已移除：`git-commit/`（Out of Scope #12——M2 条目 M3 删除；复活触发 = 真实消费者出现。commit 纪律两态由 submit-task 承载）。
 
-> **S5 缓切注记（run-tasks-host-command）**：宿主指令 `/run-dag-tasks <source-slug>`（UI command plane 执行宿主派发循环）已接管 GUI 派发按钮入口；本技能 `/run-tasks <slug>` 手动入口与指令**不同名并存**——会话内手动触发照常（循环仍由 dispatchTask 每轮单调用承载），技能退役另案收口。
+> **S5 缓切注记（run-tasks-host-command）**：宿主指令 `/run-dag-tasks <slug>`（UI command plane 执行宿主派发循环）已接管 GUI 派发按钮入口；本技能 `/run-tasks <slug>` 手动入口与指令**不同名并存**——会话内手动触发照常（循环仍由 dispatchTask 每轮单调用承载），技能退役另案收口。
 
 ## 风格公约·方法论落位·双模式边界
 

@@ -257,7 +257,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     expect(stub.startInputs).toHaveLength(0)
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('未选择任务源')
-    expect((out as { text?: string }).text).toContain('/run-dag-tasks <source-slug>')
+    expect((out as { text?: string }).text).toContain('/run-dag-tasks <slug>')
   })
 
   it('问询通道故障（NO_PROVIDER/异常）：error 回执带原因与 slug 指引，不启动不静默', async () => {
@@ -269,7 +269,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     expect(out.kind).toBe('error')
     expect((out as { text: string }).text).toContain('问询通道故障')
     expect((out as { text: string }).text).toContain('no user-questions answerer accepted the request')
-    expect((out as { text: string }).text).toContain('/run-dag-tasks <source-slug>')
+    expect((out as { text: string }).text).toContain('/run-dag-tasks <slug>')
   })
 
   it('非活根（assertLiveRoot 拒绝 CALLER_NOT_LIVE）：归故障路 error 回执，原因码不静默', async () => {
@@ -293,7 +293,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
 
 // ─────────────────────────── 带参直通 ───────────────────────────
 
-describe('带参 <source-slug> 直通（AC）', () => {
+describe('带参 <slug> 直通（AC）', () => {
   const cards = [
     card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending'),
     card({ kind: 'proposal', slug: 'blitz-y' }, '1.1', 'pending'),
@@ -319,6 +319,66 @@ describe('带参 <source-slug> 直通（AC）', () => {
     expect(out.kind).toBe('error')
     expect((out as { text: string }).text).toContain('ghost')
     expect(stub.startInputs).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────── 带参模糊过滤（子串包含） ───────────────────────────
+
+describe('带参 <slug> 模糊过滤（子串包含；精确优先，命中即启动/弹选项/报错）', () => {
+  const cards = [
+    card({ kind: 'feature', slug: 'dsh-forge-m2-pipeline' }, '2.5', 'pending'),
+    card({ kind: 'feature', slug: 'dsh-forge-m3-ui' }, '3.1', 'pending'),
+    card({ kind: 'proposal', slug: 'legacy-eval' }, '1.1', 'pending'),
+  ]
+
+  it('唯一子串命中：零问询直通启动（如 m3 → dsh-forge-m3-ui）', async () => {
+    const ask = askStub(answerLabel('不应被触达'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const agent = agentOf(SESSION, CWD, () => {}) as never
+    const out = await d.handler({ agent, rawInput: 'm3' })
+    expect(ask.requests).toHaveLength(0)
+    expect(stub.startInputs).toEqual([
+      { source: { kind: 'feature', slug: 'dsh-forge-m3-ui' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+    ])
+    expect(out.kind).toBe('success')
+  })
+
+  it('多命中：弹选项列出命中源，选中即启动', async () => {
+    const ask = askStub(answerLabel('legacy-eval'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const agent = agentOf(SESSION, CWD, () => {}) as never
+    const out = await d.handler({ agent, rawInput: 'e' }) // 命中 dsh-forge-m2-pipeline / legacy-eval…（含 m3-ui）
+    expect(ask.requests).toHaveLength(1)
+    const question = (ask.requests[0] as { questions: { options?: { label: string }[] }[] }).questions[0]
+    expect(question?.options?.map((o) => o.label)).toEqual(['dsh-forge-m2-pipeline', 'dsh-forge-m3-ui', 'legacy-eval']) // 候选序 = 未完成量降序 + slug 稳定决胜
+    expect(stub.startInputs).toEqual([
+      { source: { kind: 'proposal', slug: 'legacy-eval' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+    ])
+    expect(out.kind).toBe('success')
+  })
+
+  it('多命中但问询缺席：error 回执列出命中 slug，不启动', async () => {
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver })
+    const out = await d.handler({ agent: agentOf() as never, rawInput: 'dsh-forge' })
+    expect(out.kind).toBe('error')
+    const text = (out as { text: string }).text
+    expect(text).toContain('dsh-forge-m2-pipeline')
+    expect(text).toContain('dsh-forge-m3-ui')
+    expect(stub.startInputs).toHaveLength(0)
+  })
+
+  it('精确命中优先于模糊（同串精确存在时零模糊路径）', async () => {
+    const ask = askStub(answerLabel('不应被触达'))
+    const stub = driverStub()
+    const d = depsOf({ cards, driver: stub.driver, ask: ask.face })
+    const agent = agentOf(SESSION, CWD, () => {}) as never
+    const out = await d.handler({ agent, rawInput: 'dsh-forge-m2-pipeline' })
+    expect(ask.requests).toHaveLength(0)
+    expect(stub.startInputs[0]?.source).toEqual({ kind: 'feature', slug: 'dsh-forge-m2-pipeline' })
+    expect(out.kind).toBe('success')
   })
 })
 

@@ -23,7 +23,7 @@ import { awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
 const WS_NAME = 'ws-sc5'
 const PROP = 'sc5-expedition'
-/** 派发指令单行（S5 缓切 `/run-dag-tasks <source-slug>`——command plane 执行宿主派发循环） */
+/** 派发指令单行（S5 缓切 `/run-dag-tasks <slug>`——command plane 执行宿主派发循环） */
 const DISPATCH_CMD = `/run-dag-tasks ${PROP}`
 
 test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → 任务 → 派发入口 → 四域全景一致', async () => {

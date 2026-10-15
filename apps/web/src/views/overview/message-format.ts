@@ -62,7 +62,7 @@ export const FAILURE_STATUS_PHRASES: Readonly<Partial<Record<TaskStatus, string>
   rejected: '已拒绝',
 }
 
-/** 派发指令前缀（S5 缓切换值——宿主指令 `/run-dag-tasks <source-slug>` 单行 = 前缀 + 标识，4.4 派发按钮消费） */
+/** 派发指令前缀（S5 缓切换值——宿主指令 `/run-dag-tasks <slug>` 单行 = 前缀 + 标识，4.4 派发按钮消费） */
 export const DISPATCH_COMMAND_PREFIX = '/run-dag-tasks '
 
 /**

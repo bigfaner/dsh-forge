@@ -2,7 +2,7 @@
 // decisions #19/#20/#21）。UI command plane 执行、零模型消息（registry submits nothing）：
 // 无参 → forgeTasks.listTasks 单查询派生「尚有非终态任务的任务源」清单（feature + blitz
 // 提案双轨——TaskCard.source 判别）→ userQuestions.ask 弹选项（与 ask_user_question 同渲染
-// 面）；带参 <source-slug> 直通（同单查询解析 kind）；跑动中再触发 → 查看/停止/替换问询。
+// 面）；带参 <slug> 直通（同单查询解析 kind）；跑动中再触发 → 查看/停止/替换问询。
 // 启动 = loopDriver.start——派发/继续判定与启动模板叙述（①从头/②接续中断/③接续在飞）归
 // 循环驱动器（S1b announceStartup，经 S4 notify 模块）；本 handler 只做枚举/问询/启动编排，
 // 外加启动链前段的派发指令单行提交（commitDispatchLine——/plan producer 先例，known command
@@ -46,12 +46,12 @@ export interface RunDagTasksDeps {
   /** userQuestions.ask 最小面（可选——缺席 = 无参枚举/跑动中问询降级为指引文本，R3 fail-soft 同源） */
   readonly ask?: EscalationAskFace
   /** 会话 id → agentsRegistry 活根解析（可选——1.18 指令单行 followup 目标解析；缺席 = 退回
-   * ctx.parent fallback，向后兼容。与 escalation/narration 同款装配形态：registry 命中 =
-   * 活根，followup 实证可收件） */
+   *  ctx.parent fallback，向后兼容。与 escalation/narration 同款装配形态：registry 命中 =
+   *  活根，followup 实证可收件） */
   readonly resolveAgent?: (ownerSessionId: string) => unknown
   /** 未进入会话激活面（1.19——host sessionController.resolveAgent 活根进入；可选——缺席 =
-   * 激活不可达，保持 1.18 回执指引语义）。返回活根 agent（registry 可 get 命中）或
-   * undefined（激活失败/面故障——调用方落入既有 registryMissed 回执路）。 */
+   *  激活不可达，保持 1.18 回执指引语义）。返回活根 agent（registry 可 get 命中）或
+   *  undefined（激活失败/面故障——调用方落入既有 registryMissed 回执路）。 */
   readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>
 }
 
@@ -168,12 +168,57 @@ function sameSourceBusy(deps: RunDagTasksDeps, source: ContainerRef): LoopRecord
     .find((record) => record.source.kind === source.kind && record.source.slug === source.slug)
 }
 
-/** 带参直通：解析 slug → 同源占用判定 → 启动（未知 slug = 错误回执 + 无参指引） */
+/** 带参直通：精确 slug → 模糊子串过滤（唯一命中直通；多命中弹选项；零命中 = 错误回执 + 指引） */
 async function startWithSlug(deps: RunDagTasksDeps, ctx: InvokeContext, slug: string): Promise<ForgeCommandResult> {
   const source = await resolveSourceBySlug(deps.tasks, ctx.projectId, slug)
-  if (source === undefined) {
+  if (source !== undefined) {
+    return startResolved(deps, ctx, source, slug)
+  }
+  // 模糊过滤（子串包含）：候选 = 尚有非终态任务的任务源（在跑源已排除——同 pickAndStart 口径）
+  const all = nonTerminalSourcesOf(await deps.tasks.listTasks({ projectId: ctx.projectId }))
+  const busyKeys = new Set(deps.driver.activeAll().map((record) => `${record.source.kind}/${record.source.slug}`))
+  const matches = all.filter(
+    (candidate) => candidate.source.slug.includes(slug) && !busyKeys.has(`${candidate.source.kind}/${candidate.source.slug}`),
+  )
+  if (matches.length === 0) {
     return { kind: 'error', text: `没有找到任务源 ${slug}——可执行无参 /run-dag-tasks 查看可派发的任务源` }
   }
+  if (matches.length === 1) {
+    const [only] = matches
+    if (only !== undefined) {
+      return startResolved(deps, ctx, only.source, slug)
+    }
+  }
+  if (deps.ask === undefined) {
+    const labels = matches.map((candidate) => candidate.label).join('、')
+    return { kind: 'error', text: `「${slug}」模糊命中多个任务源（${labels}）——问询通道不可用，请带完整 slug 直通：/run-dag-tasks <slug>` }
+  }
+  const outcome = await askOption(
+    deps.ask,
+    {
+      id: SOURCE_QUESTION_ID,
+      header: '派发任务',
+      question: `「${slug}」模糊命中 ${matches.length} 个任务源，选择要派发的`,
+      detail: '选中后自动开始派发循环，任务逐一执行直到该任务源全部完成。',
+      options: matches.map((candidate) => ({ label: candidate.label, description: candidate.description })),
+    },
+    ctx.signal,
+    ctx.parent,
+  )
+  if (outcome.kind === 'selected') {
+    const selected = matches.find((candidate) => candidate.label === outcome.label)
+    if (selected !== undefined) {
+      return startResolved(deps, ctx, selected.source, slug)
+    }
+  }
+  if (outcome.kind === 'failed') {
+    return { kind: 'error', text: `任务源问询通道故障（${outcome.reason}）——可带完整任务源 slug 直通：/run-dag-tasks <slug>` }
+  }
+  return { kind: 'success', text: '未选择任务源，未启动派发循环——可带完整 slug 直通：/run-dag-tasks <slug>' }
+}
+
+/** 已解析源收口：同源占用判定 → 启动 */
+async function startResolved(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef, slug: string): Promise<ForgeCommandResult> {
   const busy = sameSourceBusy(deps, source)
   if (busy !== undefined) {
     return foreignLoopNotice(busy, slug)
@@ -198,7 +243,7 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
     return { kind: 'success', text: '没有未完成的任务，无需派发' }
   }
   if (deps.ask === undefined) {
-    return { kind: 'success', text: '当前没有可用的问询通道——请带任务源 slug 执行 /run-dag-tasks <source-slug>' }
+    return { kind: 'success', text: '当前没有可用的问询通道——请带任务源 slug 执行 /run-dag-tasks <slug>' }
   }
   const outcome = await askOption(
     deps.ask,
@@ -220,9 +265,9 @@ async function pickAndStart(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<
   }
   if (outcome.kind === 'failed') {
     // 问询通道故障（NO_PROVIDER/异常/非活根）≠ 用户取消——error 回执 + slug 直通指引，不静默
-    return { kind: 'error', text: `任务源问询通道故障（${outcome.reason}）——可带任务源 slug 直通：/run-dag-tasks <source-slug>` }
+    return { kind: 'error', text: `任务源问询通道故障（${outcome.reason}）——可带任务源 slug 直通：/run-dag-tasks <slug>` }
   }
-  return { kind: 'success', text: '未选择任务源，未启动派发循环——可带 slug 直通：/run-dag-tasks <source-slug>' }
+  return { kind: 'success', text: '未选择任务源，未启动派发循环——可带 slug 直通：/run-dag-tasks <slug>' }
 }
 
 /** 跑动中再触发：查看/停止/替换问询（停止/替换恒经本会话作用域——decisions #20）
@@ -263,7 +308,7 @@ async function handleRunning(deps: RunDagTasksDeps, ctx: InvokeContext, running:
     // 问询通道故障 ≠ 用户取消——error 回执不静默（循环保持原状），附替代指引
     return {
       kind: 'error',
-      text: `派发问询通道故障（${outcome.reason}）——停止可执行 /stop-dag-tasks，或带任务源 slug 直通：/run-dag-tasks <source-slug>`,
+      text: `派发问询通道故障（${outcome.reason}）——停止可执行 /stop-dag-tasks，或带任务源 slug 直通：/run-dag-tasks <slug>`,
     }
   }
   return { kind: 'success', text: '未选择操作，派发循环保持不变' }

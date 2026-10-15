@@ -582,14 +582,14 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
 
 // ─────────────────────────── S2 指令两枚注册（run-tasks-host-command——reflect.get 防御读取 fail-soft） ───────────────────────────
 describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command plane 零模型消息）', () => {
-  it('commands 面在场：两指令注册（FORGE_COMMAND_NAMES 名序 pin）+ run-dag-tasks 带 <source-slug> hint + stop 无 input 描述符', () => {
+  it('commands 面在场：两指令注册（FORGE_COMMAND_NAMES 名序 pin）+ run-dag-tasks 带 <slug> hint + stop 无 input 描述符', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.withReflect({ commands: rt.commandsFace() }))
     expect(rt.registeredCommands.map((c) => c.name)).toEqual([...FORGE_COMMAND_NAMES])
     expect([...FORGE_COMMAND_NAMES]).toEqual(['run-dag-tasks', 'stop-dag-tasks'])
     const run = rt.registeredCommands.find((c) => c.name === 'run-dag-tasks')
     const stop = rt.registeredCommands.find((c) => c.name === 'stop-dag-tasks')
-    expect(run?.input?.hint).toBe('[<source-slug>]')
+    expect(run?.input?.hint).toBe('[<slug>]')
     expect(run?.description.length).toBeGreaterThan(4)
     expect(stop?.input).toBeUndefined() // 无参指令——composer 零占位
     expect(typeof run?.handler).toBe('function')
