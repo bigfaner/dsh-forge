@@ -67,6 +67,21 @@ const WATCH_RULES = [
 const FORBIDDEN_MODULE_NAME_RE = /(watch|backflow|reflux|resync|snapshot[-_]?sync|sync[-_]?back)/i
 
 /**
+ * 锚①豁免清单（SC2 禁令对象 = forge 状态投影的常驻重扫/回流；非 forge 状态面的
+ * UI/宿主定时器不在此列——新增豁免须附一句定性，禁静默扩池）：
+ *   · ForgeRemoteEntry/ForgeRemoteView：手机远程面的 renderer 状态刷新（REMOTE_STATUS_POLL_MS
+ *     轮询 boot manifest 快照 + 倒计时秒进）——消费面轮询非投影重建；
+ *   · boot/child.ts：宿主子进程日志轮转计时器——进程管理面，与 forge 状态无关。
+ */
+const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
+  'apps/web/src/views/remote/ForgeRemoteEntry.tsx',
+  'apps/web/src/views/remote/ForgeRemoteView.tsx',
+  'apps/host/src/boot/child.ts',
+]
+
+const isExempt = (relFile: string): boolean => WATCH_RULE_EXEMPT_FILES.some((f) => relFile === f)
+
+/**
  * 锚①：core forge 域（+产品运行时源）禁 watch/回流/快照同步/轮询守护。
  * SC2 直读纪律：状态全部从库直读，重建只经用户显式触发——常驻监听/定时回流 = 违规。
  */
@@ -75,7 +90,7 @@ export function auditForgeNoWatchBackflow(root: string = REPO_ROOT): AuditFindin
   for (const dir of WATCH_SCAN_DIRS) {
     const absDir = join(root, dir)
     if (!pathExists(absDir)) continue
-    findings.push(...hitsToFindings('sc2-no-watch', scanFilesForRules(root, listSourceFiles(absDir), WATCH_RULES)))
+    findings.push(...hitsToFindings('sc2-no-watch', scanFilesForRules(root, listSourceFiles(absDir), WATCH_RULES).filter((h) => !isExempt(h.file))))
   }
   const forgeDir = join(root, 'packages/core/src/forge')
   for (const abs of listSourceFiles(forgeDir)) {
