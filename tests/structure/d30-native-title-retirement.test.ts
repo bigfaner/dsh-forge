@@ -148,12 +148,14 @@ const TOOLTIP_FILES = [
 
 /** 组件标题 prop 排除清单（标题文本 prop 非悬浮提示位——D30 记账；计数冻结） */
 const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
-  // 空态标题（文案标题非 tooltip）×15：feature-tab/proposal-tab/task-tab×2/KnowledgeView/
-  // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel
-  EmptyState: 15,
-  // 对话框标题（Modal 头部标题文本）×6：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
-  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog
-  Modal: 6,
+  // 空态标题（文案标题非 tooltip）×18：feature-tab/proposal-tab/task-tab×2/KnowledgeView/
+  // RecallTab/docs/drawer/KnowledgeCardGrid×3/dock-tabs×2/EntryDrawer/ForgeWorkspacePanel +
+  // bug 域新面：bug-reference/BugPreview×2、overview/bug-tab/bug-list×1
+  EmptyState: 18,
+  // 对话框标题（Modal 头部标题文本）×7：ForgeWorkspacePanel×3（项目改名 + D45 会话改名
+  // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog +
+  // remote/ForgeRemoteEntry×1（手机远程 dialog 头）
+  Modal: 7,
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；1.17 扩记：
   // ForgeProgressNode 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位）
   DisclosureRow: 2,

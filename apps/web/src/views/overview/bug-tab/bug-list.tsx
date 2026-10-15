@@ -114,7 +114,6 @@ function BugRow({
             type="button"
             className="dswf-ov-bugrow-add"
             data-dswf-ov-bugrow-add=""
-            title={`把该 Bug 引用添加到会话输入（${bug.bugId}）`}
             onClick={(event) => {
               stop(event)
               onAddBugToSession(bug)
