@@ -463,6 +463,11 @@ describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.
     expect(css).not.toMatch(/\.dswf-remote-dialog-close\s*\{[^}]*right:\s*-24px/)
   })
 
+  it('fix-14 Harness 菜单左缘不贴边：触发钮与 dialog 左缘留白 = 14px 内距刻度（关闭钮 right 侧对称镜像）', () => {
+    expect(css).toMatch(/\.dswf-remote-harness\s*\{[^}]*left:\s*-10px/)
+    expect(css).not.toMatch(/\.dswf-remote-harness\s*\{[^}]*left:\s*-24px/)
+  })
+
   it('③fix-12 翻转：图标本体恒 currentColor（零 per-phase 着色）+ 圆点四态令牌（无/橙/绿/红）', () => {
     // 旧口径退役：入口钮不再按 phase 整体变色
     expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='off'\]/)
@@ -521,6 +526,8 @@ describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐
       <RemoteDialogHead onClose={() => undefined} harness={harness} />,
     )
     expect(html).toMatch(/aria-label="Harness 菜单"/)
+    // fix-14（DESIGN.md Dialog chrome 裁决）：触发器 = 纯文字「Harness」弃图标（官方菜单栏同词）
+    expect(html).toMatch(/dswf-remote-harness-trigger[^>]*>Harness<\/button>/)
     expect(html).toContain('重启 Harness')
     expect(html).toContain('以安全模式重启…')
     expect(html).toContain('查看 Harness 日志')

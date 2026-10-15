@@ -14,7 +14,7 @@
 // ——重启生效形态，onToggle 由插件注入）+ 地址条带（复制图标按钮）+ 状态态。待重启生效
 // （pending）/ 远程关（off）/ 地址读数缺席 = 对应空态而非 QR——不伪装已监听（fix-3 用户裁决）。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Modal, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Modal, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, Tooltip, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
 import type { RemoteDotState, RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
@@ -126,13 +126,12 @@ export function HarnessMenu(props: { readonly harness?: DshForgeHarnessBridge })
         className="dswf-remote-harness-trigger"
         data-testid="dswf-remote-harness-trigger"
         aria-label="Harness 菜单"
-        title="Harness"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
       >
-        ⋯
+        Harness
       </button>
       <div className="dswf-remote-harness-menu" role="menu" aria-label="Harness">
         <button
@@ -296,7 +295,6 @@ export function TunnelCard(props: {
           className="dswf-remote-qr"
           data-testid="dswf-remote-tunnel-qr"
           data-value={url}
-          title="手机扫码打开隧道配对地址"
         >
           {/* 复用既有 QR 机械（react-qr-code 2.2.0 pin——LAN 面同款白底静区载体） */}
           <QRCode value={url} size={PAIRING_QR_SIZE} />
@@ -317,7 +315,6 @@ export function TunnelCard(props: {
         className="dswf-remote-tunnel-fallback"
         data-testid="dswf-remote-tunnel-fallback"
         aria-label="换线"
-        title="换线"
         disabled={onFallback === undefined || phase === 'switching'}
         onClick={() => onFallback?.()}
       >
@@ -456,16 +453,17 @@ export function RemotePanel(props: {
           <div className="dswf-remote-pair">
             {pairValue !== undefined ? (
               <>
-                <div
-                  className="dswf-remote-qr"
-                  data-testid="dswf-remote-qr"
-                  data-value={pairValue}
-                  title="手机扫码打开配对地址"
-                >
-                  {/* react-qr-code（2.2.0 pin）——纯 SVG 同步渲染，零弹层零网络机械；
-                      底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
-                  <QRCode value={pairValue} size={PAIRING_QR_SIZE} />
-                </div>
+                <Tooltip label="手机扫码打开配对地址" portal>
+                  <div
+                    className="dswf-remote-qr"
+                    data-testid="dswf-remote-qr"
+                    data-value={pairValue}
+                  >
+                    {/* react-qr-code（2.2.0 pin）——纯 SVG 同步渲染，零弹层零网络机械；
+                        底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
+                    <QRCode value={pairValue} size={PAIRING_QR_SIZE} />
+                  </div>
+                </Tooltip>
                 <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-countdown">
                   {pairCountdownText(secondsLeft)}
                 </p>
@@ -501,18 +499,19 @@ export function RemotePanel(props: {
       {snapshot.lanAddress !== undefined && (
         <div className="dswf-remote-address dswf-remote-pill">
           <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
-          <button
-            type="button"
-            className="dswf-remote-copy"
-            aria-label="复制地址"
-            title="复制地址"
-            onClick={() => {
-              writeClipboard(snapshot.lanAddress ?? '')
-              setCopied(true)
-            }}
-          >
-            {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
-          </button>
+          <Tooltip label="复制地址" portal>
+            <button
+              type="button"
+              className="dswf-remote-copy"
+              aria-label="复制地址"
+              onClick={() => {
+                writeClipboard(snapshot.lanAddress ?? '')
+                setCopied(true)
+              }}
+            >
+              {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
+            </button>
+          </Tooltip>
         </div>
       )}
       <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
@@ -535,7 +534,6 @@ export function RemoteDialogHead(props: {
         type="button"
         className="dswf-remote-dialog-close"
         aria-label="关闭"
-        title="关闭"
         onClick={props.onClose}
       >
         <IconCloseOutlineRegular size={16} />
@@ -608,20 +606,21 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: Fo
   }, [open])
   return (
     <div className="dswf-remote-root">
-      <button
-        type="button"
-        className="dswf-remote-entry"
-        data-phase={snapshot.phase}
-        aria-label={`手机远程（${remotePhaseLabel(snapshot.phase)}）`}
-        title={`手机远程（${remotePhaseLabel(snapshot.phase)}）`}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <PhoneGlyph />
-        {/* fix-12：右上角状态圆点（off = 无圆点零渲染） */}
-        {dot !== 'none' && <span className="dswf-remote-dot" data-state={dot} aria-hidden="true" />}
-      </button>
+      <Tooltip label={`手机远程（${remotePhaseLabel(snapshot.phase)}）`} portal>
+        <button
+          type="button"
+          className="dswf-remote-entry"
+          data-phase={snapshot.phase}
+          aria-label={`手机远程（${remotePhaseLabel(snapshot.phase)}）`}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <PhoneGlyph />
+          {/* fix-12：右上角状态圆点（off = 无圆点零渲染） */}
+          {dot !== 'none' && <span className="dswf-remote-dot" data-state={dot} aria-hidden="true" />}
+        </button>
+      </Tooltip>
       {/* fix-8 官方 Modal dialog（关态 = 官方件自身返回 null；开合/Esc/遮罩归官方机械） */}
       <ForgeRemoteDialog
         open={open}

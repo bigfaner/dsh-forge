@@ -147,18 +147,19 @@
 .dswf-remote-harness {
   position: absolute;
   top: 18px; /* dsw-raw 与右上关闭钮同垂直落点 */
-  left: -24px; /* dsw-raw 回到卡左缘（抵消卡侧内距 24px——close 右缘同径镜像） */
+  left: -10px; /* dsw-raw 官方 Modal .header 左内距 14px——触发钮左缘距卡缘 14px（close 右侧同刻度镜像） */
 }
 
 .dswf-remote-harness-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px; /* dsw-raw 官方 Modal .close 刻度同款 */
   height: 28px; /* dsw-raw 官方 Modal .close 刻度同款 */
+  padding: 0 6px; /* dsw-raw 文字触发钮水平微内距（关闭钮 28px 命中区文字态同径局部刻度） */
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
+  font: var(--dsw-font-s-14);
   color: var(--dsw-alias-label-secondary);
   cursor: var(--dsh-cursor-pointer, pointer);
 }
