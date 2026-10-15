@@ -30,7 +30,7 @@ export interface DirectoryDialogResult {
  * 即 parent 形参）。null → 无 parent 形参回退（fail-soft，不比 fix-14 现状差）。
  * bug db7af09a：defaultPath 形参（renderer 下发起始目录——表单浏览改选传值父目录）。
  */
-export type OpenDirectoryDialog = (parent: unknown, defaultPath?: string) => Promise<DirectoryDialogResult>
+export type OpenDirectoryDialog = (parent?: unknown, defaultPath?: string) => Promise<DirectoryDialogResult>
 
 /**
  * fix-21：sender → 父窗解析器（main 绑定 electron BrowserWindow.fromWebContents）。

@@ -18,3 +18,17 @@ export function acquireSingleInstance(appLike: {
 export function wireWindowLifecycle(appLike: AppLike): void {
   appLike.on('window-all-closed', () => appLike.quit())
 }
+
+/**
+ * 开发态 devtools 面（用户裁决 2026-10-13：boot 不自动开分离窗——窗口可见、能力在场、
+ * 零打扰；打包形态零面，main 据调用时机守卫）：F12 按需开关。fail-soft——webContents
+ * 形状漂移（toggleDevTools 缺席）时静默不接。
+ */
+export function wireDevToolsToggle(webContents: unknown): void {
+  const wc = webContents as { on?(e: 'before-input-event', l: (event: unknown, input: { type: string; key: string }) => void): void; toggleDevTools?(): void }
+  if (typeof wc.on !== 'function' || typeof wc.toggleDevTools !== 'function') return
+  // 方法须以 wc 为 receiver 调用（解构后裸调丢 this → node:events _events undefined 实测崩）
+  wc.on('before-input-event', (_event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') wc.toggleDevTools?.()
+  })
+}
