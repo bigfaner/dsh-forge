@@ -28,6 +28,7 @@ import {
   dispatchRpc,
   extraPatchFiles,
   parseChildOptions,
+  pairRedirectOf,
   sendGuarded,
   type ApprovalRelay,
   type BridgeServiceName,
@@ -176,6 +177,7 @@ async function main(): Promise<void> {
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
+    knowledgeRow: existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json')), // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
     port: options.port, // fix-3 webserver 覆写行 port 字面量单源（boot 实参）
@@ -227,12 +229,11 @@ async function main(): Promise<void> {
         kind: 'exact',
         path: '/pair',
         handler: (req, res) => {
-          const hostHeader = typeof req.headers.host === 'string' ? req.headers.host : ''
-          // 同源锚定：只认 LAN 权威（Host 头畸形/异源回退构造地址——零开放重定向面）
-          const authority =
-            hostHeader === `${lanIpv4}:${pairPort}` ? hostHeader : `${lanIpv4}:${pairPort}`
+          // fix-16：authority 尊重请求 Host 头（官方 main.js:1489 同形）——隧道域 → https；
+          // 回环/LAN 本身/缺席 → 回退构造 LAN 权威 + http（零开放重定向：authority 仅取自本次请求 Host）
+          const { origin } = pairRedirectOf(req.headers.host, lanIpv4, pairPort)
           const token =
-            new URL(req.url ?? '/', `http://${authority}`).searchParams.get('token') ?? ''
+            new URL(req.url ?? '/', origin).searchParams.get('token') ?? ''
           if (!issuer.verify(token)) {
             res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
             res.end('配对二维码已过期——请在桌面端重新扫码')
@@ -244,7 +245,7 @@ async function main(): Promise<void> {
           // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 重定向进
           // 产品受限移动视图（fix-10 bug 3620685f：`?forgeRemote=1` 分支——不得落完整
           // 工作台；官方 BrowserAuth 对既有查询参数透明，认证参数追加重写不丢分支位）
-          const target = ctx.connection.authenticatedUrl(`http://${authority}/?forgeRemote=1`)
+          const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
           res.writeHead(302, { location: target })
           res.end()
         },
@@ -259,11 +260,9 @@ async function main(): Promise<void> {
           const chunks: Buffer[] = []
           req.on('data', (chunk: Buffer) => chunks.push(chunk))
           req.on('end', () => {
-            const authority =
-              typeof req.headers.host === 'string' && req.headers.host !== ''
-                ? req.headers.host
-                : `${lanIpv4}:${pairPort}`
-            let pin = new URL(req.url ?? '/', `http://${authority}`).searchParams.get('pin') ?? ''
+            // fix-16：同 /pair——authority 尊重请求 Host 头 + scheme 按到达域判定
+            const { origin } = pairRedirectOf(req.headers.host, lanIpv4, pairPort)
+            let pin = new URL(req.url ?? '/', origin).searchParams.get('pin') ?? ''
             if (pin === '') {
               try {
                 const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
@@ -280,7 +279,7 @@ async function main(): Promise<void> {
             }
             send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）
             // fix-10 bug 3620685f：PIN 认证成功同 /pair 语义——落地受限移动视图（不落完整工作台）
-            const target = ctx.connection.authenticatedUrl(`http://${authority}/?forgeRemote=1`)
+            const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
             res.writeHead(302, { location: target })
             res.end()
           })

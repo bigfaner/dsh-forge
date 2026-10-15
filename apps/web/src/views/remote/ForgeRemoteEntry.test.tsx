@@ -578,3 +578,31 @@ describe('fix-15 Harness 菜单失焦收起判定（纯函数）', () => {
     expect(harnessMenuPointerOutside(inside, null)).toBe(true)
   })
 })
+
+// ── fix-16（tab 内容随模式切换）：说明文案与 LAN 地址条移入 mode 分流——lan = WiFi 文案 +
+//    LAN 地址条（现状）；internet = 互联网说明文案，无 WiFi/LAN 残留。 ──
+describe('fix-16 RemotePanel tab 内容随模式切换', () => {
+  const LAN_SNAPSHOT: RemoteStatusSnapshot = {
+    ...LISTENING,
+    pairExpiresAt: Date.now() + 120_000,
+  }
+
+  it('lan 模式 = WiFi 文案 + LAN 地址条在场（现状保持）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={LAN_SNAPSHOT} onToggle={() => undefined} mode="lan" />,
+    )
+    expect(html).toMatch(/同一 WiFi/)
+    expect(html).toContain('dswf-remote-address')
+    expect(html).toContain('http://192.168.1.7:8787')
+  })
+
+  it('internet 模式 = 互联网说明文案；无 WiFi 文案/LAN 地址条残留', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={LAN_SNAPSHOT} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(html).toMatch(/无需同一 WiFi/)
+    expect(html).not.toMatch(/同一 WiFi，同步实时性高/)
+    expect(html).not.toContain('dswf-remote-address')
+    expect(html).not.toContain('http://192.168.1.7:8787')
+  })
+})

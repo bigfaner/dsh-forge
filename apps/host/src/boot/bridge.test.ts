@@ -28,6 +28,7 @@ import {
   FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
   parseChildOptions,
+  pairRedirectOf,
   PROJECT_SERVICE_METHODS,
   PROJECTS_M2_SERVICE_METHODS,
   PROPOSALS_SERVICE_METHODS,
@@ -750,5 +751,35 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(APPROVAL_SERVICE_METHODS).toHaveLength(1) // fix-2 审批桥 +deposit
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
     expect(BRIDGE_SERVICE_NAMES).toHaveLength(9) // fix-2 审批桥 +approval
+  })
+})
+
+// fix-16 配对 302 重定向权威面（官方 main.js:1489 同形——authority 尊重请求 Host 头，
+// scheme 按到达域判定；Location 由产品构造，authority 仅取自本次请求 Host——零开放重定向面）
+describe('pairRedirectOf（fix-16 隧道域尊重 Host 头）', () => {
+  const LAN = '192.168.1.7'
+  const PORT = 8787
+
+  it('隧道域 Host 头 → https + 原样 authority（不再强制回退 LAN）', () => {
+    expect(pairRedirectOf('swift-words.trycloudflare.com', LAN, PORT)).toEqual({
+      authority: 'swift-words.trycloudflare.com',
+      origin: 'https://swift-words.trycloudflare.com',
+    })
+  })
+
+  it('LAN Host 头 → http + LAN 权威（本地扫码路径不回归）', () => {
+    expect(pairRedirectOf(`${LAN}:${PORT}`, LAN, PORT)).toEqual({
+      authority: `${LAN}:${PORT}`,
+      origin: `http://${LAN}:${PORT}`,
+    })
+  })
+
+  it('回环/空/缺席 Host 头 → 回退构造 LAN 权威 + http（零开放重定向语义保持）', () => {
+    const fallback = { authority: `${LAN}:${PORT}`, origin: `http://${LAN}:${PORT}` }
+    expect(pairRedirectOf('localhost:8787', LAN, PORT)).toEqual(fallback)
+    expect(pairRedirectOf('127.0.0.1:8787', LAN, PORT)).toEqual(fallback)
+    expect(pairRedirectOf('[::1]:8787', LAN, PORT)).toEqual(fallback)
+    expect(pairRedirectOf('', LAN, PORT)).toEqual(fallback)
+    expect(pairRedirectOf(undefined, LAN, PORT)).toEqual(fallback)
   })
 })

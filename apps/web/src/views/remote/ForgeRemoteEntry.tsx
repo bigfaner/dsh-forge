@@ -537,25 +537,33 @@ export function RemotePanel(props: {
           }}
         />
       </div>
-      {/* fix-9 ③：说明文案居中置圆角卡内 */}
-      <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
-      {snapshot.lanAddress !== undefined && (
-        <div className="dswf-remote-address dswf-remote-pill">
-          <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
-          <Tooltip label="复制地址" portal>
-            <button
-              type="button"
-              className="dswf-remote-copy"
-              aria-label="复制地址"
-              onClick={() => {
-                writeClipboard(snapshot.lanAddress ?? '')
-                setCopied(true)
-              }}
-            >
-              {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
-            </button>
-          </Tooltip>
-        </div>
+      {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
+          internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
+      {mode === 'internet' ? (
+        <p className="dswf-remote-note-card">无需同一 WiFi——通过公共隧道连接，实时性略低。</p>
+      ) : (
+        <>
+          {/* fix-9 ③：说明文案居中置圆角卡内 */}
+          <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
+          {snapshot.lanAddress !== undefined && (
+            <div className="dswf-remote-address dswf-remote-pill">
+              <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
+              <Tooltip label="复制地址" portal>
+                <button
+                  type="button"
+                  className="dswf-remote-copy"
+                  aria-label="复制地址"
+                  onClick={() => {
+                    writeClipboard(snapshot.lanAddress ?? '')
+                    setCopied(true)
+                  }}
+                >
+                  {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
+                </button>
+              </Tooltip>
+            </div>
+          )}
+        </>
       )}
       <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
     </div>

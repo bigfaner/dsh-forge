@@ -651,3 +651,26 @@ export function sendGuarded(message: ChildToMainMessage, send: (message: ChildTo
     }
   }
 }
+
+/**
+ * fix-16 配对 302 重定向权威面（官方 main.js:1489 同形——Location 由到达请求的 Host 头
+ * 构造）。Root cause: 原 /pair 把 authority 强制回退 `${lanIpv4}:${pairPort}` 且 scheme
+ * 硬编码 http——经隧道域扫码的手机被 302 到不可达的局域网地址。
+ *   · authority：Host 头非空且非回环、非 LAN 本身 → 原样取之（隧道域路径）；否则回退构造
+ *     LAN 权威（本地扫码/畸形 Host 缺席兜底）。authority 仅取自本次请求 Host——零开放重定向。
+ *   · origin scheme 按到达域判定：隧道域 → https；LAN/回环 → http。
+ */
+export function pairRedirectOf(
+  hostHeader: string | undefined,
+  lanIpv4: string,
+  pairPort: number,
+): { authority: string; origin: string } {
+  const fallback = `${lanIpv4}:${pairPort}`
+  const host = typeof hostHeader === 'string' ? hostHeader.trim() : ''
+  const hostname = host.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase()
+  const loopback = hostname === '' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  const lanItself = hostname === lanIpv4.toLowerCase()
+  const tunnel = host !== '' && !loopback && !lanItself
+  const authority = tunnel ? host : fallback
+  return { authority, origin: `${tunnel ? 'https' : 'http'}://${authority}` }
+}
