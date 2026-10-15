@@ -16,6 +16,8 @@ import {
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
   harnessBridgeOf,
+  harnessMenuFocusLeft,
+  harnessMenuPointerOutside,
   pairCountdownText,
   secondsLeftOf,
   tunnelBannerText,
@@ -553,5 +555,26 @@ describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐
     expect(harnessBridgeOf({})).toBeUndefined()
     expect(harnessBridgeOf({ dshForge: { invoke: () => undefined } })).toBeUndefined()
     expect(harnessBridgeOf({ dshForge: harness })).toBe(harness)
+  })
+})
+
+// ── fix-15（bug f4b55bb9）：Harness 菜单失焦自动收起（官方 Menu/dropdown 惯例——焦点离开
+//    即关）。容器内焦点移动/容器内 pointerdown 不收；焦点离容器、容器外按下、窗口失焦即收。 ──
+describe('fix-15 Harness 菜单失焦收起判定（纯函数）', () => {
+  const inside = { id: 'inside' }
+  const outside = { id: 'outside' }
+  const container = { contains: (node: unknown) => node === inside }
+
+  it('focusout：relatedTarget 在容器外或缺席 = 收；容器内移动 = 不收', () => {
+    expect(harnessMenuFocusLeft(outside, container)).toBe(true)
+    expect(harnessMenuFocusLeft(null, container)).toBe(true)
+    expect(harnessMenuFocusLeft(inside, container)).toBe(false)
+  })
+
+  it('pointerdown：目标在容器外或缺席 = 收；容器内（触发钮/菜单项）= 不收', () => {
+    expect(harnessMenuPointerOutside(outside, container)).toBe(true)
+    expect(harnessMenuPointerOutside(null, container)).toBe(true)
+    expect(harnessMenuPointerOutside(inside, container)).toBe(false)
+    expect(harnessMenuPointerOutside(inside, null)).toBe(true)
   })
 })

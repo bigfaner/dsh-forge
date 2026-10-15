@@ -13,7 +13,7 @@
 // react-qr-code 2.2.0 精确 pin。面板 = 开关（默认关，回写产品自有配置 forge:settings/set
 // ——重启生效形态，onToggle 由插件注入）+ 地址条带（复制图标按钮）+ 状态态。待重启生效
 // （pending）/ 远程关（off）/ 地址读数缺席 = 对应空态而非 QR——不伪装已监听（fix-3 用户裁决）。
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { Modal, Button, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, Tooltip, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
@@ -113,14 +113,57 @@ export function harnessBridgeOf(
   return undefined
 }
 
+/** fix-15 失焦收起判定（纯函数——focusout relatedTarget 离容器或缺席 = 真失焦；
+ *  容器内焦点移动（触发钮↔菜单项）不收） */
+export function harnessMenuFocusLeft(
+  relatedTarget: unknown,
+  container: { contains(node: unknown): boolean } | null,
+): boolean {
+  return container === null || relatedTarget === null || !container.contains(relatedTarget)
+}
+
+/** fix-15 外点收起判定（纯函数——pointerdown 目标在容器外或缺席 = 收） */
+export function harnessMenuPointerOutside(
+  target: unknown,
+  container: { contains(node: unknown): boolean } | null,
+): boolean {
+  return container === null || target === null || !container.contains(target)
+}
+
 /** Harness 菜单（dialog 左上角下拉——官方应用菜单 Harness 族 web 同位搬运；桥缺席 =
- *  触发钮禁用 + 三项禁用态呈现）。交互 = 本组件自持开合（零弹层机械——下拉就地展开）。 */
+ *  触发钮禁用 + 三项禁用态呈现）。交互 = 本组件自持开合（零弹层机械——下拉就地展开）。
+ *  fix-15（bug f4b55bb9）：对齐官方 Menu/dropdown 失焦即收惯例——开启期监听 document
+ *  focusout/pointerdown（capture）+ window blur，判定落在容器外即收；关闭期零监听，
+ *  卸载/关闭即清理（禁全局监听泄漏）。 */
 export function HarnessMenu(props: { readonly harness?: DshForgeHarnessBridge }): ReactNode {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const harness = props.harness
   const disabled = harness === undefined
+  // Root cause: 菜单开合此前只有触发钮 toggle 与菜单项点击两条收起路径，缺焦点收口——
+  // 官方下拉惯例是焦点离开即关，需在组件层补失焦/外点/窗口失焦三缝。
+  useEffect(() => {
+    if (!open) return
+    const root = rootRef.current
+    if (root === null) return
+    const onFocusOut = (event: FocusEvent) => {
+      if (harnessMenuFocusLeft(event.relatedTarget, root)) setOpen(false)
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (harnessMenuPointerOutside(event.target, root)) setOpen(false)
+    }
+    const onWindowBlur = () => setOpen(false)
+    document.addEventListener('focusout', onFocusOut, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('blur', onWindowBlur)
+    return () => {
+      document.removeEventListener('focusout', onFocusOut, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('blur', onWindowBlur)
+    }
+  }, [open])
   return (
-    <div className="dswf-remote-harness" data-open={open}>
+    <div ref={rootRef} className="dswf-remote-harness" data-open={open}>
       <button
         type="button"
         className="dswf-remote-harness-trigger"

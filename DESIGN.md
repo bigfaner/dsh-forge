@@ -96,6 +96,13 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 - 胶囊 999px（官方 Tag 同值）、h20、`font-xs-13`、label-secondary、hover 出 border-l2
 - 模式点 7px 圆点，色随语义（expedition 蓝 / blitz 琥珀）
 
+### Dialog chrome（配对 dialog 等 Modal 头部，用户裁决 2026-10-15）
+
+- **Harness 菜单 = 纯文字「Harness」**，不采用图标（官方菜单栏同词）；
+- **头部控件不贴边**：关闭钮（X）与 Harness 菜单文字均与 dialog 边缘保持正常内距（官方 Modal 头部 14px 内距刻度）；
+- 头部左右控件对称呼吸：左 Harness 菜单、右关闭钮，同刻度留白；
+- **下拉失焦即收**：Harness 菜单开启期，焦点离开菜单容器（含 dialog 内外点击）或窗口失焦即收起（官方 Menu/dropdown 惯例）。
+
 ## Layout
 
 - Radius 标尺：`--dsw-radius-xs/sm/md/lg/xl/panel` = 4 / 8 / 12 / 16 / 20 / 28px；胶囊 999px
