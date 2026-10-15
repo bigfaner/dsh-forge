@@ -247,9 +247,9 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).not.toContain('已复制')
   })
 
-  it('⑦远程访问开关 = 官方 Switch 件（role="switch" aria-checked 全托管）', () => {
+  it('⑦远程访问开关 = 官方 Switch 件（role="switch" aria-checked 全托管；fix-18 ① 起连接态独占——开关行属配对面，判读取 listening 态）', () => {
     const html = renderToStaticMarkup(
-      <RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />,
+      <RemotePanel snapshot={LISTENING} onToggle={() => undefined} />,
     )
     expect(html).toMatch(/role="switch"[\s\S]*aria-checked="true"/)
     expect(html).not.toMatch(/type="checkbox"/)
@@ -353,7 +353,7 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).not.toContain('dswf-remote-tunnel-ttl')
   })
 
-  it('在线（Pinggy）：QR（data-value = 隧道 URL，复用 react-qr-code 载体）+ TTL 横幅 + 链路标签 + PIN 引导 + 换线钮', () => {
+  it('在线（Pinggy）：QR（data-value = 隧道 URL，复用 react-qr-code 载体）+ TTL 横幅 + 链路标签 + PIN 引导（fix-18 ② 起无换线链接——链接为 cloudflared 专属）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
@@ -369,8 +369,7 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).toMatch(/Pinggy 隧道/)
     expect(html).toMatch(/dswf-remote-tunnel-pin-hint[^>]*>[\s\S]*6 位 PIN/)
     expect(html).toMatch(/5 分钟/)
-    expect(html).toMatch(/data-testid="dswf-remote-tunnel-fallback"/)
-    expect(html).toMatch(/换线/)
+    expect(html).not.toContain('dswf-remote-fallback-link')
   })
 
   it('在线（cloudflared）：无 TTL 语义 = 零横幅；链路标签 Cloudflare 快速隧道', () => {
@@ -403,23 +402,22 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).not.toContain('dswf-remote-tunnel-ttl')
   })
 
-  it('换线中：switching 相位 = 换线中文案（零 QR——换线期间不呈现旧链路面）', () => {
+  it('换线中：switching 相位 = 官方 fallbackLoading 文案（fix-18 ④——遮罩见专项组）', () => {
     const html = renderToStaticMarkup(
       <TunnelCard phase="switching" onFallback={() => undefined} />,
     )
     expect(html).toMatch(/dswf-remote-tunnel[^>]*data-phase="switching"/)
-    expect(html).toMatch(/换线中/)
+    expect(html).toMatch(/正在切换备用线路/)
     expect(html).not.toContain('dswf-remote-tunnel-qr')
   })
 
-  it('换线钮：onFallback 缺席 = 禁用态（有缝才可触发 fallback 语义）', () => {
+  it('fix-18 ② 换线链接显示条件（官方三因子）：pinggy 链路 = 不呈现（链接为 cloudflared 专属）', () => {
     const withSeam = renderToStaticMarkup(
       <TunnelCard phase="online" url={TUNNEL_URL} provider="pinggy" onFallback={() => undefined} />,
     )
-    expect(withSeam).toMatch(/data-testid="dswf-remote-tunnel-fallback"[^>]*aria-label="换线"/)
-    expect(withSeam).not.toMatch(/dswf-remote-tunnel-fallback[^>]*disabled/)
+    expect(withSeam).not.toContain('dswf-remote-fallback-link')
     const noSeam = renderToStaticMarkup(<TunnelCard phase="online" url={TUNNEL_URL} provider="pinggy" />)
-    expect(noSeam).toMatch(/dswf-remote-tunnel-fallback[^>]*disabled/)
+    expect(noSeam).not.toContain('dswf-remote-fallback-link')
   })
 
   it('PIN 引导文案在互联网 tab 在场、局域网 tab 不在场', () => {
@@ -676,5 +674,114 @@ describe('fix-16 RemotePanel tab 内容随模式切换', () => {
     expect(html).not.toMatch(/同一 WiFi，同步实时性高/)
     expect(html).not.toContain('dswf-remote-address')
     expect(html).not.toContain('http://192.168.1.7:8787')
+  })
+})
+
+// ── fix-18：连接态独占 / 换线链接 / PIN 方框重置取消 / 切换遮罩（实机五项走查 2026-10-15；
+//    官方单源对照 = .forge/docs/probes/official-pairing-page-spec.md） ──
+
+/** 互联网 tab 在线快照（cloudflared 隧道 + PIN 读数齐备——五项测试共用载体） */
+const TUNNEL_ONLINE: RemoteStatusSnapshot = {
+  ...LISTENING,
+  pin: '654321',
+  pinExpiresAt: Date.now() + 300_000,
+  tunnel: {
+    url: 'https://x.trycloudflare.com/pair?token=t',
+    provider: 'cloudflared',
+    expiresAt: Date.now() + 3_600_000,
+  },
+}
+
+describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :1176 连接态卡）', () => {
+  it('connected：仅连接卡+说明+双钮——tab/隧道卡/PIN/说明卡/地址条全部退场', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ phase: 'connected', tunnel: TUNNEL_ONLINE.tunnel, pin: '654321', pinExpiresAt: TUNNEL_ONLINE.pinExpiresAt }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-connected"')
+    expect(html).not.toContain('dswf-remote-tab-lan')
+    expect(html).not.toContain('dswf-remote-tab-internet')
+    expect(html).not.toContain('data-testid="dswf-remote-tunnel"')
+    expect(html).not.toContain('data-testid="dswf-remote-pin"')
+    expect(html).not.toContain('dswf-remote-note-card')
+    expect(html).not.toContain('dswf-remote-address')
+    expect(html).not.toContain('data-testid="dswf-remote-countdown"')
+  })
+})
+
+describe('fix-18 ② 换线 = 官方下划线链接「扫码打不开？换一条线路」（fallback-link 形态）', () => {
+  it('online × cloudflared × 缝在场 = 链接呈现（旧「换线」按钮退役）', () => {
+    const html = renderToStaticMarkup(
+      <TunnelCard phase="online" url="https://x/pair?token=t" provider="cloudflared" onFallback={() => undefined} />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-fallback-link"')
+    expect(html).toContain('扫码打不开？换一条线路')
+    expect(html).not.toContain('dswf-remote-tunnel-fallback')
+  })
+
+  it('pinggy 链路 / switching 中 / 缝缺席 = 链接不呈现（官方显示三因子）', () => {
+    expect(
+      renderToStaticMarkup(<TunnelCard phase="online" url="u" provider="pinggy" onFallback={() => undefined} />),
+    ).not.toContain('dswf-remote-fallback-link')
+    expect(
+      renderToStaticMarkup(<TunnelCard phase="switching" url="u" provider="cloudflared" onFallback={() => undefined} />),
+    ).not.toContain('dswf-remote-fallback-link')
+    expect(
+      renderToStaticMarkup(<TunnelCard phase="online" url="u" provider="cloudflared" />),
+    ).not.toContain('dswf-remote-fallback-link')
+  })
+})
+
+describe('fix-18 ④ 切换中 QR 灰色半透明遮罩 + tab 防重入', () => {
+  it('switching：QR 保留并覆盖遮罩（「正在切换备用线路」进行态文案）', () => {
+    const html = renderToStaticMarkup(
+      <TunnelCard phase="switching" url="https://x/pair?token=t" provider="cloudflared" onFallback={() => undefined} />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-tunnel-qr"')
+    expect(html).toContain('data-testid="dswf-remote-qr-overlay"')
+    expect(html).toContain('正在切换备用线路')
+  })
+
+  it('online：遮罩不呈现（零切换零遮罩）', () => {
+    const html = renderToStaticMarkup(
+      <TunnelCard phase="online" url="https://x/pair?token=t" provider="cloudflared" onFallback={() => undefined} />,
+    )
+    expect(html).not.toContain('dswf-remote-qr-overlay')
+  })
+
+  it('switching 受控缝：ModeTabs 双 tab 禁用（防重入）；常态不禁用', () => {
+    const switching = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" switching onFallback={() => undefined} />,
+    )
+    expect(switching).toMatch(/dswf-remote-tab-lan[^>]*disabled/)
+    expect(switching).toMatch(/dswf-remote-tab-internet[^>]*disabled/)
+    expect(switching).toContain('data-testid="dswf-remote-qr-overlay"')
+    const idle = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onFallback={() => undefined} />,
+    )
+    expect(idle).not.toMatch(/dswf-remote-tab-lan[^>]*disabled/)
+  })
+})
+
+describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作', () => {
+  it('PIN 读数在场：方框卡（label「连接密码」+ 大字值 + 倒计时 + 重置密码/取消双动作）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onPinReset={() => undefined} />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-pin"')
+    expect(html).toContain('连接密码')
+    expect(html).toContain('654321')
+    expect(html).toContain('data-testid="dswf-remote-pin-reset"')
+    expect(html).toContain('重置密码')
+    expect(html).toContain('data-testid="dswf-remote-pin-cancel"')
+    expect(html).toMatch(/dswf-remote-pin-cancel[^>]*>取消</)
+  })
+
+  it('onPinReset 缺席 = 重置动作禁用态（缝缺席 fail-soft）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
+    expect(html).toMatch(/dswf-remote-pin-reset[^>]*disabled/)
   })
 })

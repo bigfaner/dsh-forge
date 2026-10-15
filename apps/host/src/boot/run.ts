@@ -127,6 +127,16 @@ export interface DshHostHandle {
    * 消息至 child 侧隧道分支；缺席 = 旧 boot 会话降级，UI fail-soft）。
    */
   toggleTunnel?(): void
+  /**
+   * fix-18：显式换线缝（UI 换线链接触发——转发 tunnel-fallback 消息至 child 侧隧道分支；
+   * 缺席 = 旧 boot 会话降级，UI fail-soft）。
+   */
+  fallbackTunnel?(): void
+  /**
+   * fix-18：连接密码重置缝（UI PIN 方框「重置密码」触发——转发 pin-reset 消息至 child
+   * 侧 pinIssuer.rotate 缝；缺席 = 旧 boot 会话降级，UI fail-soft）。
+   */
+  resetPin?(): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
 }
@@ -268,6 +278,14 @@ export async function bootDshHost(
     // fix-17 ②：tab 重连缝——tunnel-toggle 转发 child（通道已关 = 发送失败静默，UI refresh 收敛）
     toggleTunnel: () => {
       sendToChild(child, { type: 'tunnel-toggle' })
+    },
+    // fix-18：显式换线缝——tunnel-fallback 转发 child（结果经 tunnel 推送 + manifest 轮询单源回流）
+    fallbackTunnel: () => {
+      sendToChild(child, { type: 'tunnel-fallback' })
+    },
+    // fix-18：PIN 重置缝——pin-reset 转发 child（新 PIN 经 pair 消息换新回推 manifest）
+    resetPin: () => {
+      sendToChild(child, { type: 'pin-reset' })
     },
     toolNames: ready.tools ?? [],
     services: {

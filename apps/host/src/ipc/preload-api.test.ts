@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
-import { TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
+import { PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import {
   HARNESS_RELAUNCH_CHANNEL,
@@ -76,6 +76,17 @@ describe('preload 暴露面（window.dshForge）', () => {
     await api.tunnelToggle()
     expect(face.invoke).toHaveBeenCalledWith(TUNNEL_TOGGLE_CHANNEL)
     expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(TUNNEL_TOGGLE_CHANNEL)).toBe(false)
+  })
+
+  it('fix-18：tunnelFallback / pinReset → 对应直转通道原样转发（不进 forge invoke allowlist）', async () => {
+    const face = fakeFace()
+    const api = createDshForgePreloadApi(face)
+    await api.tunnelFallback()
+    await api.pinReset()
+    expect(face.invoke).toHaveBeenNthCalledWith(1, TUNNEL_FALLBACK_CHANNEL)
+    expect(face.invoke).toHaveBeenNthCalledWith(2, PIN_RESET_CHANNEL)
+    expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(TUNNEL_FALLBACK_CHANNEL)).toBe(false)
+    expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(PIN_RESET_CHANNEL)).toBe(false)
   })
 
   it('invoke：allowlist 通道 + 负载原样转发，返回RpcResult', async () => {

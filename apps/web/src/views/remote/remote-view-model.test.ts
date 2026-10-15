@@ -2,7 +2,7 @@
 // 受限入口判定、进度信封 → 视图快照派生（零本地副本——信封原样读数）。
 import { describe, expect, it } from 'vitest'
 import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
-import { isRestrictedRemoteViewLocation, remoteListRowsOf } from './remote-view-model.js'
+import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, remoteListRowsOf } from './remote-view-model.js'
 
 function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStatus'>): TaskCard {
   return {
@@ -62,5 +62,22 @@ describe('isRestrictedRemoteViewLocation 受限入口判定', () => {
   })
   it('其他查询参数不命中', () => {
     expect(isRestrictedRemoteViewLocation({ search: '?tab=overview', hash: '' } as Location)).toBe(false)
+  })
+})
+
+// fix-18 ⑤：手机扫互联网码落受限视图——官方 BrowserAuth 对携 token 的 GET / 铸 cookie 后
+// 303 重定向到 "./"，查询串（forgeRemote=1）被结构性剥除；/pair 成功面改设第一方 cookie
+// 跨重定向存活，受限视图判定补 cookie 读数缝（main.ts 分支消费）。
+describe('isRestrictedRemoteViewCookie 受限入口 cookie 读数缝（fix-18 ⑤）', () => {
+  it('dswf_forge_remote=1 在场（单值/多值串）= 命中', () => {
+    expect(isRestrictedRemoteViewCookie('dswf_forge_remote=1')).toBe(true)
+    expect(isRestrictedRemoteViewCookie('other=2; dswf_forge_remote=1')).toBe(true)
+    expect(isRestrictedRemoteViewCookie('dswf_forge_remote=1; session=abc')).toBe(true)
+  })
+  it('cookie 缺席 / 他值 = 不命中', () => {
+    expect(isRestrictedRemoteViewCookie('')).toBe(false)
+    expect(isRestrictedRemoteViewCookie('other=2')).toBe(false)
+    expect(isRestrictedRemoteViewCookie('dswf_forge_remote=0')).toBe(false)
+    expect(isRestrictedRemoteViewCookie('fake_dswf_forge_remote=1')).toBe(false)
   })
 })

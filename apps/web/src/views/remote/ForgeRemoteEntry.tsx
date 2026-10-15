@@ -33,6 +33,10 @@ export interface ForgeRemoteEntryProps {
   readonly onDisconnect?: () => Promise<void> | void
   /** fix-17 ②：tab 切换重连动作（切互联网 tab 隧道不在线时触发建立——缺席 = 仅刷新读数） */
   readonly onTunnelEnsure?: () => Promise<void> | void
+  /** fix-18 ②：换线动作（互联网 tab 换线链接触发——缺席 = 链接不呈现） */
+  readonly onFallback?: () => Promise<void> | void
+  /** fix-18 ③：PIN 重置动作（PIN 方框「重置密码」触发——缺席 = 动作禁用态） */
+  readonly onPinReset?: () => Promise<void> | void
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -83,6 +87,20 @@ export function pairCountdownText(seconds: number): string {
 export function pinCountdownText(seconds: number): string {
   return `PIN 有效期还剩 ${seconds} 秒`
 }
+
+// ── fix-18 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1） ──
+
+/** 换线链接逐字文案（官方 fallbackLink——下划线文本链接形态） */
+export const FALLBACK_LINK_TEXT = '扫码打不开？换一条线路'
+/** 换线进行中文案（官方 fallbackLoading——遮罩承载） */
+export const FALLBACK_LOADING_TEXT = '正在切换备用线路'
+/** PIN 方框 label（官方 pinLabel） */
+export const PIN_LABEL_TEXT = '连接密码'
+/** PIN 重置动作逐字文案（官方 pinReset——pinIssuer rotate 缝触发） */
+export const PIN_RESET_TEXT = '重置密码'
+/** PIN 取消动作文案（关闭 PIN 卡回默认态——官方 durable 机制产品未立项，不照抄
+ *  「取消长效密码」避免语义虚指；低风险假设记 summary） */
+export const PIN_CANCEL_TEXT = '取消'
 
 /**
  * fix-17 ② tab 切换重连动作派生（纯函数——官方 :1187 模式切换语义单源）：
@@ -262,9 +280,10 @@ function PhoneGlyph(): ReactNode {
 
 /** 双模式 tab（fix-9 ②：胶囊分段——官方 SegmentedTabs 刻度自绘；选中项白底 pill。
  *  fix-10 反转：互联网 tab 真实可用（禁用占位/「即将支持」徽标退役——dsh-mobile-tunnel
- *  manifest 隧道面单源驱动；受控 mode 缝保留——测试/装配仍可控）。 */
-function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => void }): ReactNode {
-  const { active, onSelect } = props
+ *  manifest 隧道面单源驱动；受控 mode 缝保留——测试/装配仍可控）。
+ *  fix-18 ④：链路切换进行中双 tab 禁用（官方 modeSwitching 锁同语义——防重入）。 */
+function ModeTabs(props: { active: RemoteMode; disabled?: boolean; onSelect: (mode: RemoteMode) => void }): ReactNode {
+  const { active, disabled, onSelect } = props
   return (
     <div className="dswf-remote-tabs" role="tablist" aria-label="连接方式">
       <button
@@ -274,6 +293,7 @@ function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => v
         className="dswf-remote-tab"
         data-testid="dswf-remote-tab-lan"
         data-active={active === 'lan'}
+        disabled={disabled === true}
         onClick={() => onSelect('lan')}
       >
         WiFi连接模式
@@ -285,6 +305,7 @@ function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => v
         className="dswf-remote-tab"
         data-testid="dswf-remote-tab-internet"
         data-active={active === 'internet'}
+        disabled={disabled === true}
         onClick={() => onSelect('internet')}
       >
         互联网连接模式
@@ -330,7 +351,8 @@ export function tunnelPhaseOf(
 }
 
 /** 隧道状态卡（互联网 tab 载体——四态 + 隧道 URL QR（复用既有 QR 机械）+ Pinggy TTL
- *  横幅 + PIN 引导 + 换线钮（onFallback 缝——缺席 = 禁用态） */
+ *  横幅 + PIN 引导 + fix-18 ②换线链接（官方 fallback-link 形态——online × cloudflared ×
+ *  缝在场才呈现，switching 中隐藏）+ fix-18 ④切换中 QR 灰色半透明遮罩） */
 export function TunnelCard(props: {
   readonly phase: TunnelPhase
   readonly url?: string
@@ -339,27 +361,37 @@ export function TunnelCard(props: {
   readonly minutesLeft?: number
   /** fix-17 ①：token TTL 余秒（QR 倒计时读数——对齐官方 5min；缺席 = 零倒计时行） */
   readonly secondsLeft?: number
-  /** fallback 缝（换线动作——缺席 = 钮禁用） */
+  /** fallback 缝（换线动作——缺席 = 链接不呈现） */
   readonly onFallback?: () => Promise<void> | void
 }): ReactNode {
   const { phase, url, provider, minutesLeft, secondsLeft, onFallback } = props
   const online = phase === 'online'
+  // fix-18 ④：切换中 QR 保留 + 灰色半透明遮罩（官方 .qr-loading 全覆盖语义——产品接真
+  // 切换态：tunnel-fallback 返回/tunnel 推送到达即 phase 收敛解遮）
+  const showQr = (online || phase === 'switching') && url !== undefined
   return (
     <div className="dswf-remote-tunnel" data-phase={phase} data-testid="dswf-remote-tunnel">
       <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
         {phase === 'starting' && '正在建立隧道……'}
-        {phase === 'switching' && '换线中——正在切换备用链路……'}
+        {phase === 'switching' && FALLBACK_LOADING_TEXT + '……'}
         {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
         {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
       </p>
-      {online && url !== undefined && (
-        <div
-          className="dswf-remote-qr"
-          data-testid="dswf-remote-tunnel-qr"
-          data-value={url}
-        >
-          {/* 复用既有 QR 机械（react-qr-code 2.2.0 pin——LAN 面同款白底静区载体） */}
-          <QRCode value={url} size={PAIRING_QR_SIZE} />
+      {showQr && (
+        <div className="dswf-remote-qr-wrap">
+          <div
+            className="dswf-remote-qr"
+            data-testid="dswf-remote-tunnel-qr"
+            data-value={url}
+          >
+            {/* 复用既有 QR 机械（react-qr-code 2.2.0 pin——LAN 面同款白底静区载体） */}
+            <QRCode value={url} size={PAIRING_QR_SIZE} />
+          </div>
+          {phase === 'switching' && (
+            <div className="dswf-remote-qr-overlay" data-testid="dswf-remote-qr-overlay" role="status">
+              {FALLBACK_LOADING_TEXT}
+            </div>
+          )}
         </div>
       )}
       {online && provider === 'pinggy' && minutesLeft !== undefined && (
@@ -378,16 +410,18 @@ export function TunnelCard(props: {
           手机扫码打开上方地址，在手机端输入 6 位 PIN 完成认证（PIN 5 分钟内有效，超时自动换新）。
         </p>
       )}
-      <button
-        type="button"
-        className="dswf-remote-tunnel-fallback"
-        data-testid="dswf-remote-tunnel-fallback"
-        aria-label="换线"
-        disabled={onFallback === undefined || phase === 'switching'}
-        onClick={() => onFallback?.()}
-      >
-        换线
-      </button>
+      {/* fix-18 ②：换线 = 官方下划线文本链接（fallback-link）——显示三因子：online ×
+          cloudflared × 缝在场；switching 中隐藏（官方显示条件同源） */}
+      {online && provider === 'cloudflared' && onFallback !== undefined && (
+        <button
+          type="button"
+          className="dswf-remote-fallback-link"
+          data-testid="dswf-remote-fallback-link"
+          onClick={() => onFallback()}
+        >
+          {FALLBACK_LINK_TEXT}
+        </button>
+      )}
     </div>
   )
 }
@@ -405,8 +439,12 @@ export function RemotePanel(props: {
   readonly onRefresh?: () => void
   /** 1.4 受控模式缝（测试/装配可控——缺省组件内自持局域网起始） */
   readonly mode?: RemoteMode
-  /** 1.4 fallback 缝（换线动作透传——缺席 = 换线钮禁用态） */
+  /** fix-18 ②：fallback 缝（换线动作透传——缺席 = 换线链接不呈现） */
   readonly onFallback?: () => Promise<void> | void
+  /** fix-18 ③：PIN 重置缝（host pinIssuer rotate——缺席 = 重置动作禁用态） */
+  readonly onPinReset?: () => Promise<void> | void
+  /** fix-18 ④：受控 switching 缝（测试/装配可控——缺省组件内自持） */
+  readonly switching?: boolean
   /** fix-17 ②：tab 切换重连缝（切互联网 tab 隧道不在线时触发建立——缺席 = 仅刷新读数） */
   readonly onTunnelEnsure?: () => Promise<void> | void
   /** fix-10：完成钮缝（关 dialog——连接成功态官方锚 main.js:1176 双钮之 primary） */
@@ -420,13 +458,23 @@ export function RemotePanel(props: {
   // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
   const [modeState, setModeState] = useState<RemoteMode>('lan')
   const mode = props.mode ?? modeState
-  const [switching, setSwitching] = useState(false)
+  // fix-18 ④：切换进行态（受控缝优先——fallback/tab-ensure 在途 = true；遮罩 + tab 禁用单源）
+  const [switchingState, setSwitchingState] = useState(false)
+  const switching = props.switching ?? switchingState
+  // fix-18 ③：PIN 卡取消态（「取消」收卡回默认态；新 PIN 读数到达即复位重呈现）
+  const [pinDismissed, setPinDismissed] = useState(false)
+  const pinValue = snapshot.pin
+  useEffect(() => {
+    setPinDismissed(false)
+  }, [pinValue])
   // fix-17 ②：tab 切换重连（官方 :1187 模式切换语义）——internet 非在线 = 触发建立后
   // 刷新读数；online/lan = 直接刷新读数。效果派生归 modeSelectEffectOf 单源（测试锚）。
+  // fix-18 ④：切换中防重入（switching 在途拒绝再触发）+ ensure 在途期收 switching 态。
   const handleModeSelect = useCallback(
     (next: RemoteMode) => {
       setModeState(next)
       if (props.mode !== undefined) return // 受控模式 = 装配侧自驱（测试/装配缝不抢动作）
+      if (switching) return // fix-18 ④：防重入
       const phase = tunnelPhaseOf(
         {
           url: snapshot.tunnel?.url,
@@ -437,9 +485,11 @@ export function RemotePanel(props: {
       )
       const effect = modeSelectEffectOf(next, phase)
       if (effect === 'ensure') {
+        setSwitchingState(true)
         void Promise.resolve(props.onTunnelEnsure?.())
           .catch(() => undefined)
           .then(() => onRefresh?.())
+          .finally(() => setSwitchingState(false))
         return
       }
       onRefresh?.()
@@ -447,13 +497,14 @@ export function RemotePanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 派生读数取当值（切换时刻判定），依赖面刻意收窄
     [props.mode, props.onTunnelEnsure, onRefresh, snapshot.tunnel, switching],
   )
+  // fix-18 ②：换线链接触发——置 switching 态（QR 遮罩 + tab 禁用），动作结算即解遮。
   const handleFallback = useCallback(() => {
-    if (props.onFallback === undefined) return
-    setSwitching(true)
+    if (props.onFallback === undefined || switching) return
+    setSwitchingState(true)
     void Promise.resolve(props.onFallback())
       .catch(() => undefined)
-      .then(() => setSwitching(false))
-  }, [props.onFallback])
+      .then(() => setSwitchingState(false))
+  }, [props.onFallback, switching])
   // 1.4 隧道相位派生（manifest 隧道面单源——换线中优先；TTL 过期 = 失败）
   const tunnel: TunnelFace | undefined = snapshot.tunnel
   const [nowTs, setNowTs] = useState(() => Date.now())
@@ -506,6 +557,8 @@ export function RemotePanel(props: {
         // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
         // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
         // 完成（primary——关 dialog）双钮。
+        // fix-18 ①：连接态独占——配对面（tab/QR/倒计时/地址条/PIN/说明卡）整体退场
+        // （官方 .pairing-content display:none + tab disabled 同语义），仅态卡 + 双钮。
         <div className="dswf-remote-connected-wrap">
           <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
             <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
@@ -535,7 +588,7 @@ export function RemotePanel(props: {
         </div>
       ) : (
         <>
-        <ModeTabs active={mode} onSelect={handleModeSelect} />
+        <ModeTabs active={mode} disabled={switching} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
           <>
           {snapshot.tunnel === undefined ? (
@@ -558,14 +611,35 @@ export function RemotePanel(props: {
               onFallback={handleFallback}
             />
           )}
-          {/* fix-17 ③：连接密码 PIN 卡（官方 :1199-1215——大字号 6 位 + 有效期倒计时；
-              读数随 manifest 轮换换新；缺席 = 卡不呈现，不占位不伪装 */}
-          {snapshot.pin !== undefined && (
+          {/* fix-18 ③：连接密码 PIN 独立方框卡（官方 :1171 布局——label + 大字 mono 值 +
+              有效期倒计时 + 重置/取消双动作；「取消」收卡回默认态，新 PIN 读数到达即重呈现；
+              读数缺席 = 卡不呈现，不占位不伪装） */}
+          {snapshot.pin !== undefined && !pinDismissed && (
             <div className="dswf-remote-pin" data-testid="dswf-remote-pin">
+              <span className="dswf-remote-pin-label">{PIN_LABEL_TEXT}</span>
               <span className="dswf-remote-pin-value">{snapshot.pin}</span>
               <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-countdown">
                 {pinCountdownText(pinSecondsLeft)}
               </span>
+              <div className="dswf-remote-pin-actions">
+                <button
+                  type="button"
+                  className="dswf-remote-pin-action"
+                  data-testid="dswf-remote-pin-reset"
+                  disabled={props.onPinReset === undefined}
+                  onClick={() => void props.onPinReset?.()}
+                >
+                  {PIN_RESET_TEXT}
+                </button>
+                <button
+                  type="button"
+                  className="dswf-remote-pin-action"
+                  data-testid="dswf-remote-pin-cancel"
+                  onClick={() => setPinDismissed(true)}
+                >
+                  {PIN_CANCEL_TEXT}
+                </button>
+              </div>
             </div>
           )}
           </>
@@ -600,49 +674,49 @@ export function RemotePanel(props: {
             )}
           </div>
         )}
+        {/* fix-9 ⑦：官方 Switch 件（dsh-client-ui-primitives 在场——弃原生 checkbox） */}
+        <div className="dswf-remote-panel-row">
+          <span>远程访问</span>
+          <Switch
+            checked={checked}
+            disabled={onToggle === undefined || busy === true}
+            label="远程访问开关"
+            onChange={(next) => {
+              void onToggle?.(next)
+            }}
+          />
+        </div>
+        {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
+            internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
+        {mode === 'internet' ? (
+          <p className="dswf-remote-note-card">无需同一 WiFi——通过公共隧道连接，实时性略低。</p>
+        ) : (
+          <>
+            {/* fix-9 ③：说明文案居中置圆角卡内 */}
+            <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
+            {snapshot.lanAddress !== undefined && (
+              <div className="dswf-remote-address dswf-remote-pill">
+                <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
+                <Tooltip label="复制地址" portal>
+                  <button
+                    type="button"
+                    className="dswf-remote-copy"
+                    aria-label="复制地址"
+                    onClick={() => {
+                      writeClipboard(snapshot.lanAddress ?? '')
+                      setCopied(true)
+                    }}
+                  >
+                    {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
+                  </button>
+                </Tooltip>
+              </div>
+            )}
+          </>
+        )}
+        <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
         </>
       )}
-      {/* fix-9 ⑦：官方 Switch 件（dsh-client-ui-primitives 在场——弃原生 checkbox） */}
-      <div className="dswf-remote-panel-row">
-        <span>远程访问</span>
-        <Switch
-          checked={checked}
-          disabled={onToggle === undefined || busy === true}
-          label="远程访问开关"
-          onChange={(next) => {
-            void onToggle?.(next)
-          }}
-        />
-      </div>
-      {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
-          internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
-      {mode === 'internet' ? (
-        <p className="dswf-remote-note-card">无需同一 WiFi——通过公共隧道连接，实时性略低。</p>
-      ) : (
-        <>
-          {/* fix-9 ③：说明文案居中置圆角卡内 */}
-          <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
-          {snapshot.lanAddress !== undefined && (
-            <div className="dswf-remote-address dswf-remote-pill">
-              <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
-              <Tooltip label="复制地址" portal>
-                <button
-                  type="button"
-                  className="dswf-remote-copy"
-                  aria-label="复制地址"
-                  onClick={() => {
-                    writeClipboard(snapshot.lanAddress ?? '')
-                    setCopied(true)
-                  }}
-                >
-                  {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
-                </button>
-              </Tooltip>
-            </div>
-          )}
-        </>
-      )}
-      <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
     </div>
   )
 }
@@ -686,6 +760,10 @@ export function ForgeRemoteDialog(props: {
   readonly onDisconnect?: () => Promise<void> | void
   /** fix-17 ②：tab 切换重连缝（透传 RemotePanel——切互联网 tab 隧道不在线时触发建立） */
   readonly onTunnelEnsure?: () => Promise<void> | void
+  /** fix-18 ②：换线缝（透传 RemotePanel——互联网 tab 换线链接触发） */
+  readonly onFallback?: () => Promise<void> | void
+  /** fix-18 ③：PIN 重置缝（透传 RemotePanel——PIN 方框「重置密码」触发） */
+  readonly onPinReset?: () => Promise<void> | void
 }): ReactNode {
   return (
     <Modal
@@ -704,6 +782,8 @@ export function ForgeRemoteDialog(props: {
         onClose={props.onClose}
         onDisconnect={props.onDisconnect}
         onTunnelEnsure={props.onTunnelEnsure}
+        onFallback={props.onFallback}
+        onPinReset={props.onPinReset}
       />
     </Modal>
   )
@@ -711,7 +791,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const subscribe = useCallback((onChange: () => void) => status?.subscribe(onChange) ?? (() => {}), [status])
@@ -761,6 +841,8 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
         onRefresh={refresh !== undefined ? () => { void refresh() } : undefined}
         onDisconnect={onDisconnect}
         onTunnelEnsure={onTunnelEnsure}
+        onFallback={onFallback}
+        onPinReset={onPinReset}
       />
     </div>
   )

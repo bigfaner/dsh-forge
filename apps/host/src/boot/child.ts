@@ -85,6 +85,19 @@ let shutdownTree: (() => Promise<void>) | undefined
 let tunnelStop: () => Promise<void> = async () => {}
 // fix-17 ②：tab 切换重连缝（装配在场时由分支内赋值——隧道离线即建立，在线重推读数）
 let tunnelToggle: () => void = () => {}
+// fix-18：显式换线缝（装配在场时由分支内赋值——TunnelManager.fallback 停旧链起新链）
+let tunnelFallback: () => void = () => {}
+// fix-18：PIN 重置缝（装配在场时由分支内赋值——pinIssuer.rotate 新 PIN 经 pair 消息回推）
+let pinRotate: () => void = () => {}
+
+/**
+ * fix-18 ⑤：手机受限视图入口 cookie（/pair 与 /pair/verify 成功面 Set-Cookie）。官方
+ * BrowserAuth 对携 token 的 GET / 铸会话 cookie 后 303 重定向到 "./"——查询串（含产品
+ * forgeRemote=1 分支位）被结构性剥除，手机落地桌面版；第一方 cookie 跨重定向存活，
+ * web 入口（main.ts isRestrictedRemoteViewCookie）据此分流受限移动视图。Host-only +
+ * 30 天（手机书签重开仍落手机版——产品预期形态）。
+ */
+const REMOTE_VIEW_COOKIE = 'dswf_forge_remote=1; Path=/; Max-Age=2592000; SameSite=Lax'
 process.on('disconnect', () => {
   // fix-36：拒绝面补 catch——shutdown 链 reject 不落 unhandled rejection（仅记日志；
   // 5s 强退升级若也已失效，孤儿回收归 OS 进程树清理，不再额外改退出码）
@@ -248,9 +261,11 @@ async function main(): Promise<void> {
           send({ type: 'pair-connected' })
           // 302 官方认证 URL：launch token 兑现 → BrowserAuth 铸会话 cookie → 重定向进
           // 产品受限移动视图（fix-10 bug 3620685f：`?forgeRemote=1` 分支——不得落完整
-          // 工作台；官方 BrowserAuth 对既有查询参数透明，认证参数追加重写不丢分支位）
+          // 工作台；官方 BrowserAuth 对既有查询参数透明，认证参数追加重写不丢分支位）。
+          // fix-18 ⑤：补 Set-Cookie——官方 authorizeIndex 303 "./" 会剥掉查询串，分支位
+          // 经 cookie 跨重定向存活（根因见 REMOTE_VIEW_COOKIE 注）。
           const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
-          res.writeHead(302, { location: target })
+          res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
           res.end()
         },
       })
@@ -283,8 +298,9 @@ async function main(): Promise<void> {
             }
             send({ type: 'pair-connected' }) // fix-7 同语义：握手成功粘性位（幂等）
             // fix-10 bug 3620685f：PIN 认证成功同 /pair 语义——落地受限移动视图（不落完整工作台）
+            // fix-18 ⑤：同 /pair 补 Set-Cookie（官方 303 "./" 剥查询串——分支位走 cookie）
             const target = ctx.connection.authenticatedUrl(`${origin}/?forgeRemote=1`)
-            res.writeHead(302, { location: target })
+            res.writeHead(302, { location: target, 'set-cookie': REMOTE_VIEW_COOKIE })
             res.end()
           })
         },
@@ -331,6 +347,25 @@ async function main(): Promise<void> {
           return
         }
         sendTunnelState(tunnelManager.state)
+      }
+      // fix-18：显式换线缝——TunnelManager.fallback（停旧链起新链；状态事件/回推经
+      // onEvent + then 双面送达，UI 遮罩随 switching 收敛）
+      tunnelFallback = () => {
+        if (tunnelManager === undefined) return
+        void tunnelManager.fallback().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+      }
+      // fix-18：PIN 重置缝——pinIssuer.rotate 换新 6 位并经 pair 消息回推（配对 token 面
+      // 保留现值——官方 POST /desktop/pin/reset 仅换 PIN 全量回推同语义）。
+      pinRotate = () => {
+        const rotated = pinIssuer.rotate()
+        const grant = issuer.current()
+        send({
+          type: 'pair',
+          remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, currentPairToken),
+          remotePairExpiresAt: grant.expiresAt,
+          remotePin: rotated.pin,
+          remotePinExpiresAt: rotated.expiresAt,
+        })
       }
       const rotationTimer = setInterval(() => {
         const rotated = issuer.rotate()
@@ -434,6 +469,16 @@ async function main(): Promise<void> {
     if (message?.type === 'tunnel-toggle') {
       // fix-17 ②：tab 重连缝消费（见 tunnelToggle 装配注释）
       tunnelToggle()
+      return
+    }
+    if (message?.type === 'tunnel-fallback') {
+      // fix-18：显式换线缝消费（见 tunnelFallback 装配注释）
+      tunnelFallback()
+      return
+    }
+    if (message?.type === 'pin-reset') {
+      // fix-18：PIN 重置缝消费（见 pinRotate 装配注释）
+      pinRotate()
       return
     }
     if (message?.type === 'rpc') {

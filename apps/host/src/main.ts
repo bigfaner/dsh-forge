@@ -128,8 +128,12 @@ void (async () => {
         return true
       },
     })
-    // fix-17 ②：tab 切换重连缝（dshForge 直转面——转发 tunnel-toggle 至 boot child）
-    registerTunnelChannel(ipcMain, { toggle: () => host.toggleTunnel?.() })
+    // fix-17 ② + fix-18：tab 重连/换线/PIN 重置三缝（dshForge 直转面——转发对应消息至 boot child）
+    registerTunnelChannel(ipcMain, {
+      toggle: () => host.toggleTunnel?.(),
+      fallback: () => host.fallbackTunnel?.(),
+      pinReset: () => host.resetPin?.(),
+    })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     if (!app.isPackaged) { // 开发态 devtools 面：F12 按需开关（用户裁决 2026-10-13：boot 不自动

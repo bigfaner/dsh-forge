@@ -90,7 +90,28 @@ export interface BridgeTunnelToggleRequest {
   readonly type: 'tunnel-toggle'
 }
 
-export type MainToChildMessage = BridgeRpcRequest | BridgeShutdownRequest | BridgeTunnelToggleRequest
+/**
+ * fix-18 主 → 子：隧道显式换线（UI 换线链接触发——child 侧 tunnel-fallback 分支消费；
+ * dshForge 域外直转面先例同制，不进 forge RPC allowlist）。
+ */
+export interface BridgeTunnelFallbackRequest {
+  readonly type: 'tunnel-fallback'
+}
+
+/**
+ * fix-18 主 → 子：连接密码（PIN）重置（UI PIN 方框「重置密码」触发——child 侧 pin-reset
+ * 分支消费 pinIssuer.rotate 并经 pair 消息换新回推；同制不进 forge RPC allowlist）。
+ */
+export interface BridgePinResetRequest {
+  readonly type: 'pin-reset'
+}
+
+export type MainToChildMessage =
+  | BridgeRpcRequest
+  | BridgeShutdownRequest
+  | BridgeTunnelToggleRequest
+  | BridgeTunnelFallbackRequest
+  | BridgePinResetRequest
 
 /** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池；
  *  tools = ToolRuntime 已注册 tool 名清单（3.4 冒烟观测面——plugin-forge tool 面可达性经 spawn
@@ -561,6 +582,26 @@ export function asTunnelToggleMessage(message: unknown): BridgeTunnelToggleReque
   if (typeof message !== 'object' || message === null) return undefined
   if ((message as Record<string, unknown>).type !== 'tunnel-toggle') return undefined
   return { type: 'tunnel-toggle' }
+}
+
+/**
+ * fix-18 tunnel-fallback 消息守卫（主 → 子显式换线分流——child.ts 隧道分支消费）。
+ * 零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asTunnelFallbackMessage(message: unknown): BridgeTunnelFallbackRequest | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'tunnel-fallback') return undefined
+  return { type: 'tunnel-fallback' }
+}
+
+/**
+ * fix-18 pin-reset 消息守卫（主 → 子 PIN 重置分流——child.ts pinIssuer.rotate 缝消费）。
+ * 零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asPinResetMessage(message: unknown): BridgePinResetRequest | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'pin-reset') return undefined
+  return { type: 'pin-reset' }
 }
 
 /**

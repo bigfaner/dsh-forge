@@ -582,24 +582,8 @@
   text-align: center;
 }
 
-.dswf-remote-tunnel-fallback {
-  padding: 5px 14px; /* dsw-raw 换线钮内距（受限视图动作钮同款局部刻度） */
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
-  font: var(--dsw-font-s-14);
-  color: var(--dsw-alias-label-primary);
-  cursor: var(--dsh-cursor-pointer, pointer);
-}
-
-.dswf-remote-tunnel-fallback:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.dswf-remote-tunnel-fallback:not(:disabled):hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
+/* （fix-18 ②：旧 .dswf-remote-tunnel-fallback 按钮形态退役——换线改官方 fallback-link
+ *    下划线文本链接，样式见文件尾段） */
 
 /* 「手机已连接」态卡（fix-10 官方连接成功态——锚 main.js:1176：绿色成功卡 ✓ 手机已连接 */
 .dswf-remote-connected {
@@ -692,18 +676,98 @@
 }
 
 
-/* fix-17 ③ 互联网 tab 连接密码 PIN 卡（官方 :1199-1215——大字号 6 位 + 有效期倒计时居中） */
+/* fix-17 ③ 互联网 tab 连接密码 PIN 卡（fix-18 ③ 独立方框——官方 :1171 布局：方框/
+ * 16px 内距/14px 圆角/panel 底/描边；label 11px uppercase 弱色 + 值 40px mono + 动作行） */
 .dswf-remote-pin {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px; /* dsw-raw 卡内行缝（面板局部刻度） */
+  gap: 6px; /* dsw-raw 卡内行缝（面板局部刻度） */
+  width: 100%;
+  padding: 16px; /* dsw-raw 官方 PIN 方框内距同值 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dswf-remote-pin-label {
+  font-size: 11px; /* dsw-raw 官方 pinLabel 11px uppercase 弱色（局部刻度） */
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .dswf-remote-pin-value {
-  font-size: 32px; /* dsw-raw PIN 大字号读数（官方 PIN 卡同刻度，无对应字号令牌） */
+  font-size: 40px; /* dsw-raw 官方 PIN 值 40px mono（无对应字号令牌——局部刻度） */
   font-weight: 600;
-  letter-spacing: 8px; /* dsw-raw 6 位分隔刻度（同上局部） */
+  font-family: var(--ds-font-family-code);
+  letter-spacing: 0.18em; /* dsw-raw 官方字距 .18em */
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* fix-18 ③ PIN 动作行（重置密码 / 取消——官方 pin-actions 同位；文字钮形态） */
+.dswf-remote-pin-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* dsw-raw 动作行内距（局部刻度） */
+}
+
+.dswf-remote-pin-action {
+  padding: 4px 10px; /* dsw-raw 文字动作钮内距（局部刻度） */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-pin-action:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0.55;
+}
+
+.dswf-remote-pin-action:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* ── fix-18 ② 换线链接（官方 fallback-link：无边框下划线文本链接 12.5px muted 色） ── */
+.dswf-remote-fallback-link {
+  padding: 2px 4px; /* dsw-raw 链接命中区微距（局部刻度） */
+  border: none;
+  background: transparent;
+  font-size: 12.5px; /* dsw-raw 官方 fallback-link 12.5px（局部刻度） */
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-fallback-link:hover {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── fix-18 ④ 切换中 QR 灰色半透明遮罩（官方 .qr-loading 全覆盖 + loading 文案语义——
+ *    产品接真切换态：tunnel-fallback 返回/推送到达即解遮） ── */
+.dswf-remote-qr-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.dswf-remote-qr-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--dsw-radius-lg); /* 与 QR 卡圆角同值（全覆盖不露角） */
+  background: rgb(128 128 128 / 0.55); /* dsw-raw 灰色半透明遮罩（目标口径——中性灰） */
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-primary);
+  pointer-events: none;
 }

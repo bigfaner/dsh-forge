@@ -17,6 +17,8 @@ import {
   asReadyMessage,
   asTunnelMessage,
   asTunnelToggleMessage,
+  asTunnelFallbackMessage,
+  asPinResetMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
   createApprovalRelay,
@@ -398,6 +400,26 @@ describe('asTunnelToggleMessage（tunnel-toggle 守卫——child.ts tab 重连�
     expect(asTunnelToggleMessage({ type: 'tunnel' })).toBeUndefined()
     expect(asTunnelToggleMessage(null)).toBeUndefined()
     expect(asTunnelToggleMessage(undefined)).toBeUndefined()
+  })
+})
+
+// ── fix-18：tunnel-fallback / pin-reset 主 → 子消息（换线遮罩缝 + PIN 重置缝载体） ──
+
+describe('asTunnelFallbackMessage（tunnel-fallback 守卫——child.ts 换线分支消费）', () => {
+  it('{type: tunnel-fallback} → 消息对象；他形 → undefined', () => {
+    expect(asTunnelFallbackMessage({ type: 'tunnel-fallback' })).toEqual({ type: 'tunnel-fallback' })
+    expect(asTunnelFallbackMessage({ type: 'tunnel-toggle' })).toBeUndefined()
+    expect(asTunnelFallbackMessage(null)).toBeUndefined()
+    expect(asTunnelFallbackMessage(undefined)).toBeUndefined()
+  })
+})
+
+describe('asPinResetMessage（pin-reset 守卫——child.ts PIN 重置分支消费）', () => {
+  it('{type: pin-reset} → 消息对象；他形 → undefined', () => {
+    expect(asPinResetMessage({ type: 'pin-reset' })).toEqual({ type: 'pin-reset' })
+    expect(asPinResetMessage({ type: 'tunnel-toggle' })).toBeUndefined()
+    expect(asPinResetMessage(null)).toBeUndefined()
+    expect(asPinResetMessage(undefined)).toBeUndefined()
   })
 })
 

@@ -48,3 +48,14 @@ export function remoteListRowsOf(snapshot: RemoteProgressSnapshot | undefined): 
 export function isRestrictedRemoteViewLocation(location: { search: string; hash: string }): boolean {
   return /(?:^\?|&)(?:forgeRemote=1)(?:&|$)/.test(location.search)
 }
+
+/**
+ * fix-18 ⑤ 受限单页入口 cookie 读数缝：`dswf_forge_remote=1`（/pair 与 /pair/verify 成功面
+ * Set-Cookie——host child.ts REMOTE_VIEW_COOKIE 单源）。官方 BrowserAuth 对携 token 的
+ * GET / 铸会话 cookie 后 303 重定向到 "./"，查询串（forgeRemote=1）被结构性剥除——分支位
+ * 改经第一方 cookie 跨重定向存活，本谓词与 isRestrictedRemoteViewLocation 并联消费
+ * （main.ts 分支）。严格 =1 判定（他值/前缀相似键不命中）。
+ */
+export function isRestrictedRemoteViewCookie(cookie: string): boolean {
+  return /(?:^|;\s*)dswf_forge_remote=1(?:;|$)/.test(cookie)
+}

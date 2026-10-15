@@ -1095,6 +1095,10 @@ function registerRemoteEntry(
           onDisconnect: (): Promise<void> => remote.disconnectDevice().then(() => undefined),
           // fix-17 ②：tab 切换重连（切互联网 tab 隧道不在线 → tunnel-toggle 触发建立 + refresh）
           onTunnelEnsure: (): Promise<void> => remote.tunnelEnsure().then(() => undefined),
+          // fix-18 ②：换线（互联网 tab 换线链接 → tunnel-fallback 触发显式换线 + refresh）
+          onFallback: (): Promise<void> => remote.tunnelFallback().then(() => undefined),
+          // fix-18 ③：PIN 重置（PIN 方框「重置密码」→ pin-reset 触发 pinIssuer.rotate + refresh）
+          onPinReset: (): Promise<void> => remote.pinReset().then(() => undefined),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1454,6 +1458,10 @@ export interface ForgeRemoteStatusFace {
   disconnectDevice(): Promise<boolean>
   /** fix-17 ②：tab 切换重连（dsh-forge:remote/tunnel-toggle 触发隧道建立/读数刷新 + refresh；桥缺席/失败 = false） */
   tunnelEnsure(): Promise<boolean>
+  /** fix-18 ②：显式换线（dsh-forge:remote/tunnel-fallback 触发 TunnelManager.fallback + refresh；桥缺席/失败 = false） */
+  tunnelFallback(): Promise<boolean>
+  /** fix-18 ③：PIN 重置（dsh-forge:remote/pin-reset 触发 pinIssuer.rotate + refresh——新 PIN 随 manifest 回流；桥缺席/失败 = false） */
+  pinReset(): Promise<boolean>
 }
 
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
@@ -1511,6 +1519,12 @@ const REMOTE_CHANNEL_DISCONNECT = 'forge:remote/disconnect'
 
 /** fix-17 ② tab 重连通道字面量（host ipc/tunnel-channel.ts TUNNEL_TOGGLE_CHANNEL 同源镜像——dshForge 域外直转面） */
 const TUNNEL_TOGGLE_CHANNEL = 'dsh-forge:remote/tunnel-toggle'
+
+/** fix-18 换线通道字面量（host ipc/tunnel-channel.ts TUNNEL_FALLBACK_CHANNEL 同源镜像——dshForge 域外直转面） */
+const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
+
+/** fix-18 PIN 重置通道字面量（host ipc/tunnel-channel.ts PIN_RESET_CHANNEL 同源镜像——dshForge 域外直转面） */
+const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
 
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
@@ -1659,6 +1673,30 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
       if (bridge === undefined) return Promise.resolve(false)
       return Promise.resolve()
         .then(() => bridge.invoke(TUNNEL_TOGGLE_CHANNEL))
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+    // fix-18 ②：显式换线（tunnel-fallback 直转——新链路经 tunnel 推送 + manifest 轮询单源回流）
+    tunnelFallback: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => bridge.invoke(TUNNEL_FALLBACK_CHANNEL))
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+    // fix-18 ③：PIN 重置（pin-reset 直转——新 PIN 经 pair 推送 + manifest 轮询单源回流）
+    pinReset: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => bridge.invoke(PIN_RESET_CHANNEL))
         .then(
           () => true,
           () => false,

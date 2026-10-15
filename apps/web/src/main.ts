@@ -16,7 +16,7 @@ import './styles/cursors.css'
 import './product-views.js'
 import { bootShell, type ProductClientEntry } from './shell/index.js'
 import { ForgeRemoteView } from './views/remote/ForgeRemoteView.js'
-import { isRestrictedRemoteViewLocation } from './views/remote/remote-view-model.js'
+import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation } from './views/remote/remote-view-model.js'
 
 // 产品 client 插件掌舵入图描述（bundle = vite 第二入口产物 forge-client.js；rev = 构建戳）。
 // id 字面量与 client-plugin/plugin.ts 的 FORGE_CLIENT_PLUGIN_ID 同源——不经 import 共享
@@ -35,7 +35,9 @@ if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 // 不进官方壳（无侧栏/dock/对话，暴露面边界 = 渲染范围本身）；未配对/数据面不可达由
 // 组件内回退配对引导页（官方配对流承载）。
 // fix-8：`?forgePair=1` 配对独立窗分支退役（配对面承载改回主窗内官方 Modal dialog）。
-if (isRestrictedRemoteViewLocation(window.location)) {
+// fix-18 ⑤：并联 cookie 读数缝——官方 BrowserAuth 303 "./" 剥查询串，/pair 成功面设
+// dswf_forge_remote=1（host child.ts 单源）跨重定向存活，手机扫码恒落受限移动视图。
+if (isRestrictedRemoteViewLocation(window.location) || isRestrictedRemoteViewCookie(document.cookie)) {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {
   const entry = new AppWebEntry(el)
