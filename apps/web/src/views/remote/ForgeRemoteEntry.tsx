@@ -389,6 +389,22 @@ export function tunnelPhaseOf(
   return 'online'
 }
 
+/**
+ * fix-20（bug a50db966）切换冻结展示面派生（纯函数——官方 §2：底层 QR 恒挂载、遮罩
+ * .qr-loading absolute 覆盖承载中间态）：切换进行中恒取冻结面——live 撤面先到/新面未到
+ * 均不落空态分支（QR 卸载重排 = 闪屏）；切换收敛 = 恒 live 面（新面原子换新，冻结零残留）。
+ * Root cause: 面板渲染以 snapshot.tunnel 在场为分支条件，切换中间态（撤面事件先到/新面
+ * 未到）瞬时清空即落空态分支，QR 整体卸载再重挂——布局重排即用户可见闪屏。
+ */
+export function tunnelDisplayFaceOf(
+  live: TunnelFace | undefined,
+  switching: boolean,
+  frozen: TunnelFace | undefined,
+): TunnelFace | undefined {
+  if (switching && frozen !== undefined) return frozen
+  return live
+}
+
 /** 隧道状态卡（互联网 tab 载体——四态 + 隧道 URL QR（复用既有 QR 机械）+ Pinggy TTL
  *  横幅 + PIN 引导 + fix-18 ②换线链接（官方 fallback-link 形态——online × cloudflared ×
  *  缝在场才呈现，switching 中隐藏）+ fix-18 ④切换中 QR 灰色半透明遮罩） */
@@ -486,6 +502,8 @@ export function RemotePanel(props: {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-18 ④：受控 switching 缝（测试/装配可控——缺省组件内自持） */
   readonly switching?: boolean
+  /** fix-20：受控冻结隧道面缝（switching 态冻结展示面——测试/装配可控；缺省组件内自持） */
+  readonly frozenTunnel?: TunnelFace
   /** fix-17 ②：tab 切换重连缝（切互联网 tab 隧道不在线时触发建立——缺席 = 仅刷新读数） */
   readonly onTunnelEnsure?: () => Promise<void> | void
   /** fix-10：完成钮缝（关 dialog——连接成功态官方锚 main.js:1176 双钮之 primary） */
@@ -504,6 +522,19 @@ export function RemotePanel(props: {
   // fix-18 ④：切换进行态（受控缝优先——fallback/tab-ensure 在途 = true；遮罩 + tab 禁用单源）
   const [switchingState, setSwitchingState] = useState(false)
   const switching = props.switching ?? switchingState
+  // fix-20：切换冻结展示面（受控缝优先）——换线/tab-ensure 触发时同步捕获当时 live 面；
+  // switching 期快照隧道面瞬时清空（撤面先到/新面未到）回退冻结面（QR 恒挂载 + 遮罩承载，
+  // 官方 §2 .qr-loading 覆盖同形），切换收敛清冻结（新面原子换新，冻结零残留）。
+  const [frozenTunnelState, setFrozenTunnelState] = useState<TunnelFace | undefined>(undefined)
+  const frozenTunnel = props.frozenTunnel ?? frozenTunnelState
+  useEffect(() => {
+    if (!switching) {
+      setFrozenTunnelState(undefined)
+      return
+    }
+    const live = snapshot.tunnel
+    if (live?.url !== undefined && live.url !== '') setFrozenTunnelState(live)
+  }, [switching, snapshot.tunnel])
   // fix-18 ③：PIN 卡取消态（「取消」收卡回默认态；新 PIN 读数到达即复位重呈现）
   const [pinDismissed, setPinDismissed] = useState(false)
   const pinValue = snapshot.pin
@@ -529,6 +560,7 @@ export function RemotePanel(props: {
       const effect = modeSelectEffectOf(next, phase)
       if (effect === 'ensure') {
         setSwitchingState(true)
+        setFrozenTunnelState(snapshot.tunnel) // fix-20：切换起点同步冻结 live 面
         void Promise.resolve(props.onTunnelEnsure?.())
           .catch(() => undefined)
           .then(() => onRefresh?.())
@@ -544,10 +576,11 @@ export function RemotePanel(props: {
   const handleFallback = useCallback(() => {
     if (props.onFallback === undefined || switching) return
     setSwitchingState(true)
+    setFrozenTunnelState(snapshot.tunnel) // fix-20：切换起点同步冻结 live 面
     void Promise.resolve(props.onFallback())
       .catch(() => undefined)
       .then(() => setSwitchingState(false))
-  }, [props.onFallback, switching])
+  }, [props.onFallback, switching, snapshot.tunnel])
   // 1.4 隧道相位派生（manifest 隧道面单源——换线中优先；TTL 过期 = 失败）
   const tunnel: TunnelFace | undefined = snapshot.tunnel
   const [nowTs, setNowTs] = useState(() => Date.now())
@@ -555,8 +588,10 @@ export function RemotePanel(props: {
     { url: tunnel?.url, expiresAt: tunnel?.expiresAt, switching },
     nowTs,
   )
+  // fix-20：展示面 = 冻结派生单源（switching 在途恒冻结面；切换收敛即 live 原子换新）
+  const displayTunnel = tunnelDisplayFaceOf(tunnel, switching, frozenTunnel)
   const tunnelMinutesLeft =
-    tunnel?.expiresAt !== undefined ? tunnelMinutesLeftOf(tunnel.expiresAt, nowTs) : undefined
+    displayTunnel?.expiresAt !== undefined ? tunnelMinutesLeftOf(displayTunnel.expiresAt, nowTs) : undefined
   const secondsLeft = secondsLeftOf(snapshot.pairExpiresAt, nowTs)
   // fix-17 ③：PIN 倒计时读数（同刻度 1s interval——pinExpiresAt 单源）
   const pinSecondsLeft = secondsLeftOf(snapshot.pinExpiresAt, nowTs)
@@ -662,17 +697,18 @@ export function RemotePanel(props: {
         <ModeTabs active={mode} disabled={switching} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
           <>
-          {snapshot.tunnel === undefined ? (
+          {displayTunnel === undefined ? (
             // fix-10（隧道卡死收敛）：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——
-            // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）
+            // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）。
+            // fix-20：切换进行中经 displayTunnel 冻结派生不落此分支（QR 恒挂载防闪屏）
             <p className="dswf-remote-empty" data-testid="dswf-remote-tunnel-empty">
               {tunnelEmptyText()}
             </p>
           ) : (
             <TunnelCard
               phase={tunnelPhase}
-              url={tunnel?.url}
-              provider={tunnel?.provider}
+              url={displayTunnel.url}
+              provider={displayTunnel.provider}
               minutesLeft={tunnelMinutesLeft}
               secondsLeft={
                 mode === 'internet' && tunnelPhase === 'online' && snapshot.pairExpiresAt !== undefined

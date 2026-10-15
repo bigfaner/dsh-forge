@@ -26,6 +26,7 @@ import {
   pinCountdownText,
   secondsLeftOf,
   tunnelBannerText,
+  tunnelDisplayFaceOf,
   tunnelMinutesLeftOf,
   tunnelPhaseOf,
 } from './ForgeRemoteEntry.js'
@@ -888,5 +889,51 @@ describe('fix-19 ⑨ 文案逐字（官方 §1）', () => {
     )
     expect(html).toContain('data-testid="dswf-remote-qr-overlay"')
     expect(html).toContain('正在切换至 WiFi 连接模式')
+  })
+})
+
+// fix-20（bug a50db966）：换线闪屏——切换中快照隧道面瞬时清空（撤面先到/新面未到）落入
+// 空态分支，QR 整体卸载重排。官方 §2 语义 = 底层 QR 恒挂载、遮罩（.qr-loading absolute
+// 覆盖）承载中间态；切换态冻结展示面，切换收敛才原子换新。
+describe('fix-20 切换稳定性：switching 冻结展示面（遮罩承载，中间态禁落空态分支）', () => {
+  const OLD_FACE: TunnelFace = {
+    url: 'https://old.trycloudflare.com/pair?token=a',
+    provider: 'cloudflared',
+    expiresAt: Date.now() + 3_600_000,
+  }
+  const NEW_FACE: TunnelFace = { ...OLD_FACE, url: 'https://new.trycloudflare.com/pair?token=b' }
+
+  it('tunnelDisplayFaceOf：切换中 live 面瞬时清空（撤面先到）= 冻结旧面（QR 恒挂载）', () => {
+    expect(tunnelDisplayFaceOf(undefined, true, OLD_FACE)).toBe(OLD_FACE)
+  })
+
+  it('切换中恒冻结面（新面中途到达不换绘——切换收敛才原子换新）', () => {
+    expect(tunnelDisplayFaceOf(NEW_FACE, true, OLD_FACE)).toBe(OLD_FACE)
+  })
+
+  it('非切换态恒 live 面（切换收敛即换新；冻结零残留）', () => {
+    expect(tunnelDisplayFaceOf(NEW_FACE, false, OLD_FACE)).toBe(NEW_FACE)
+    expect(tunnelDisplayFaceOf(undefined, false, OLD_FACE)).toBe(undefined)
+  })
+
+  it('切换中无冻结可保（首切前无 QR）= 落回 live（空态分支仅此处合法）', () => {
+    expect(tunnelDisplayFaceOf(undefined, true, undefined)).toBe(undefined)
+  })
+
+  it('面板回归钉：切换中快照隧道面清空 = QR 恒挂载 + 遮罩承载，零空态分支', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...TUNNEL_ONLINE, tunnel: undefined }}
+        mode="internet"
+        switching
+        frozenTunnel={OLD_FACE}
+        onFallback={() => undefined}
+        onToggle={() => undefined}
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-tunnel-qr"')
+    expect(html).toContain('data-testid="dswf-remote-qr-overlay"')
+    expect(html).toContain('data-value="https://old.trycloudflare.com/pair?token=a"')
+    expect(html).not.toContain('dswf-remote-tunnel-empty')
   })
 })
