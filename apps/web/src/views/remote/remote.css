@@ -104,9 +104,7 @@
   background: var(--dsw-alias-state-error-primary);
 }
 
-.dswf-remote-panel-phase[data-phase='pending'] {
-  color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
-}
+/* （fix-26 ②：面板相位行退役——状态语义由入口圆点承载） */
 
 /* 面板（1.7 配对面——面板体挂官方 Modal 卡内。fix-11 ②：brand 头退役 + 卡宽翻倍
  * 696px——说明/地址/倒计时单行呈现；内距随官方 Modal body 同款） */
@@ -238,12 +236,12 @@
   gap: 8px; /* dsw-raw 配对面纵向行距（局部刻度） */
 }
 
-/* QR 卡（fix-21 §2②：官方 .qr-card 逐值——244px 白底/12px 内距/16px 圆角/1px line 描边；
- * SVG 220×220 保持（244 − 2×12 内距）） */
+/* QR 卡（fix-21 §2② 官方形态 + fix-26 ①走查定稿收缩——204px 白底/12px 内距/16px 圆角/
+ * 1px line 描边；SVG 180×180 走查对照官方观感定稿） */
 .dswf-remote-qr {
-  box-sizing: border-box; /* 内距计入 244px（12px 内距 + 220 SVG = 官方 244 白卡） */
+  box-sizing: border-box; /* 内距计入 204px（12px 内距 + 180 SVG = fix-26 定稿白卡） */
   display: inline-flex;
-  width: 244px; /* dsw-raw 官方 QR 卡 244px */
+  width: 204px; /* fix-26 ①走查定稿：QR 卡 204px（180 SVG + 2×12 内距） */
   padding: 12px; /* dsw-raw 官方 12px 内距 */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 16px; /* dsw-raw 官方 16px（radius 标尺无等价令牌） */
@@ -262,29 +260,8 @@
   text-align: center;
 }
 
-.dswf-remote-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.dswf-remote-panel-title {
-  font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
-  color: var(--dsw-alias-label-primary);
-}
-
-.dswf-remote-panel-phase {
-  font: var(--dsw-font-xs-13);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.dswf-remote-panel-phase[data-phase='listening'] {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.dswf-remote-panel-phase[data-phase='connected'] {
-  color: var(--dsw-alias-state-business-primary);
-}
+/* （fix-26 ②：面板头文字退役——头/标题/相位行规则随 JSX 一并撤除；状态语义由入口圆点
+ *  与连接态卡承载） */
 
 .dswf-remote-panel-row {
   display: flex;

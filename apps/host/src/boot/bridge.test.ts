@@ -19,6 +19,7 @@ import {
   asTunnelMessage,
   asTunnelToggleMessage,
   asTunnelFallbackMessage,
+  asPinConsentMessage,
   asPinResetMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
@@ -426,6 +427,53 @@ describe('asPinResetMessage（pin-reset 守卫——child.ts PIN 重置分支消
     expect(asPinResetMessage({ type: 'tunnel-toggle' })).toBeUndefined()
     expect(asPinResetMessage(null)).toBeUndefined()
     expect(asPinResetMessage(undefined)).toBeUndefined()
+  })
+})
+
+// ── fix-26：pin-consent 主 → 子消息（长效密码开关——child.ts durable 缝消费） ──
+
+describe('asPinConsentMessage（pin-consent 守卫——child.ts setDurable 分支消费）', () => {
+  it('{type: pin-consent, consent: boolean} → 消息对象；consent 非布尔/他形 → undefined', () => {
+    expect(asPinConsentMessage({ type: 'pin-consent', consent: true })).toEqual({ type: 'pin-consent', consent: true })
+    expect(asPinConsentMessage({ type: 'pin-consent', consent: false })).toEqual({ type: 'pin-consent', consent: false })
+    expect(asPinConsentMessage({ type: 'pin-consent' })).toBeUndefined()
+    expect(asPinConsentMessage({ type: 'pin-consent', consent: 'yes' })).toBeUndefined()
+    expect(asPinConsentMessage({ type: 'pin-reset' })).toBeUndefined()
+    expect(asPinConsentMessage(null)).toBeUndefined()
+    expect(asPinConsentMessage(undefined)).toBeUndefined()
+  })
+})
+
+describe('fix-26 ready/pair：remotePinDurable 透传（长效位——UI hint 双态单源）', () => {
+  const base = {
+    type: 'ready',
+    url: 'http://127.0.0.1:19400/',
+    injections: [],
+    services: {
+      forgeProjects: true,
+      forgeKnowledge: true,
+      forgeTasks: true,
+      forgeFeatures: true,
+      forgeProposals: true,
+      forgeDocs: true,
+      forgeSettings: true,
+      forgeBugs: true,
+      approval: true,
+    },
+  } as Record<string, unknown>
+
+  it('ready：remotePinDurable === true 透传；他值 = 降级缺席', () => {
+    const durable = asReadyMessage({ ...base, remotePin: '482913', remotePinDurable: true })
+    expect(durable?.remotePinDurable).toBe(true)
+    expect(asReadyMessage({ ...base, remotePin: '482913', remotePinDurable: false })?.remotePinDurable).toBeUndefined()
+    expect(asReadyMessage(base)?.remotePinDurable).toBeUndefined()
+  })
+
+  it('pair：remotePinDurable === true 透传（随 consent 轮换回推）；他值 = 降级缺席', () => {
+    const pairBase = { type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1 }
+    const durable = asPairMessage({ ...pairBase, remotePin: '482913', remotePinDurable: true })
+    expect(durable?.remotePinDurable).toBe(true)
+    expect(asPairMessage(pairBase)?.remotePinDurable).toBeUndefined()
   })
 })
 

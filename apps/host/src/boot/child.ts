@@ -107,6 +107,10 @@ let tunnelToggle: () => void = () => {}
 let tunnelFallback: () => void = () => {}
 // fix-18：PIN 重置缝（装配在场时由分支内赋值——pinIssuer.rotate 新 PIN 经 pair 消息回推）
 let pinRotate: () => void = () => {}
+// fix-26：长效密码开关缝（装配在场时由分支内赋值——setDurable + pair 消息回推）
+let pinConsentToggle: (consent: boolean) => void = () => {}
+// fix-26：长效密码位（pin-consent 缝驱动——pair/ready 载荷 PIN 面双态单源）
+let pinDurable = false
 // fix-25：worker 侧审批中继（fix-2 桥——/remote/__rpc 审批端点与 main 侧 forge:remote/
 // approval 转发器共用同一中继单源；装配段赋值，缺席 = 端点内 fail-soft unavailable）
 let approvalRelay: ApprovalRelay | undefined
@@ -517,31 +521,52 @@ async function main(): Promise<void> {
         if (tunnelManager === undefined) return
         void tunnelManager.fallback().then(sendTunnelState).catch(() => sendTunnelState(undefined))
       }
-      // fix-18：PIN 重置缝——pinIssuer.rotate 换新 6 位并经 pair 消息回推（配对 token 面
-      // 保留现值——官方 POST /desktop/pin/reset 仅换 PIN 全量回推同语义）。
-      pinRotate = () => {
-        const rotated = pinIssuer.rotate()
-        const grant = issuer.current()
+      // fix-26：pair 消息 PIN 面统一构造（durable = PIN + 长效位、零 TTL；临时 = PIN + TTL——
+      // UI hint 双态单源：长效无倒计时、临时实时秒倒计时）
+      const sendPairState = (tokenGrant: { token: string; expiresAt: number }, pinGrantNow: { pin: string; expiresAt: number }): void => {
         send({
           type: 'pair',
-          remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, currentPairToken),
-          remotePairExpiresAt: grant.expiresAt,
-          remotePin: rotated.pin,
-          remotePinExpiresAt: rotated.expiresAt,
+          remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, tokenGrant.token),
+          remotePairExpiresAt: tokenGrant.expiresAt,
+          remotePin: pinGrantNow.pin,
+          ...(pinDurable ? { remotePinDurable: true } : { remotePinExpiresAt: pinGrantNow.expiresAt }),
         })
+      }
+      // fix-18 + fix-26：PIN 重置缝——pinIssuer.rotate 换新 6 位 + 配对 token 轮换 + 隧道
+      // 重连（⑥走查：重置/取消长效 → 断开隧道并刷新二维码——QR/URL 全量换新）+ pair 消息
+      // 全量回推（官方 POST /desktop/pin/reset 新 PIN 回推超集：长效机制下 QR 同步换新）。
+      pinRotate = () => {
+        const rotated = pinIssuer.rotate()
+        const rotatedToken = issuer.rotate()
+        currentPairToken = rotatedToken.token
+        // fix-26 ⑥：断开隧道重连（停旧链起新链——隧道面经 onEvent/then 双面换新回推）
+        if (tunnelManager !== undefined) {
+          void tunnelManager
+            .stop()
+            .then(() => tunnelManager?.start())
+            .then(sendTunnelState)
+            .catch(() => sendTunnelState(undefined))
+        }
+        sendPairState(rotatedToken, rotated)
+      }
+      // fix-26：长效密码开关（consent 开 = 冻结当前 PIN + pair 回推长效面；关 = 回临时 PIN
+      // + pinRotate（⑥：断开隧道重连 + QR 全量换新））
+      pinConsentToggle = (consent) => {
+        pinDurable = consent
+        pinIssuer.setDurable(consent)
+        if (consent) {
+          sendPairState({ token: currentPairToken, expiresAt: issuer.current().expiresAt }, pinIssuer.current())
+        } else {
+          pinRotate()
+        }
       }
       const rotationTimer = setInterval(() => {
         const rotated = issuer.rotate()
         currentPairToken = rotated.token
-        // fix-17 ③：PIN 随 token 同拍轮换（桌面 PIN 卡读数换新——官方 :1199-1215 TTL 5min 语义）
+        // fix-17 ③：PIN 随 token 同拍轮换（桌面 PIN 卡读数换新——官方 :1199-1215 TTL 5min 语义；
+        // fix-26：长效态 pinIssuer.rotate 零换签——PIN 面保持 durable 位不携 TTL）
         const rotatedPin = pinIssuer.rotate()
-        send({
-          type: 'pair',
-          remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, rotated.token),
-          remotePairExpiresAt: rotated.expiresAt,
-          remotePin: rotatedPin.pin,
-          remotePinExpiresAt: rotatedPin.expiresAt,
-        })
+        sendPairState(rotated, rotatedPin)
         sendTunnelState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
       }, PAIRING_TTL_MS)
       rotationTimer.unref?.() // 轮换器不阻进程退出（shutdown 面归 ProcessShutdown 既有链）
@@ -638,8 +663,14 @@ async function main(): Promise<void> {
       return
     }
     if (message?.type === 'pin-reset') {
-      // fix-18：PIN 重置缝消费（见 pinRotate 装配注释）
+      // fix-18：PIN 重置缝消费（见 pinRotate 装配注释——fix-26 起兼隧道重连 + token 轮换）
       pinRotate()
+      return
+    }
+    if (message?.type === 'pin-consent') {
+      // fix-26：长效密码开关缝消费（官方 POST /desktop/pin/consent {consent} 同语义——见
+      // pinConsentToggle 装配注释：开 = durable 冻结；关 = 回临时 PIN + 隧道重连/QR 换新）。
+      pinConsentToggle(message.consent)
       return
     }
     if (message?.type === 'rpc') {

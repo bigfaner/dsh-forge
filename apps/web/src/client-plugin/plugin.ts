@@ -1099,6 +1099,8 @@ function registerRemoteEntry(
           onFallback: (): Promise<void> => remote.tunnelFallback().then(() => undefined),
           // fix-18 ③：PIN 重置（PIN 方框「重置密码」→ pin-reset 触发 pinIssuer.rotate + refresh）
           onPinReset: (): Promise<void> => remote.pinReset().then(() => undefined),
+          // fix-26：长效密码开关（consent checkbox/「取消长效密码」→ pin-consent 触发 setDurable + refresh）
+          onPinConsent: (consent: boolean): Promise<void> => remote.pinConsent(consent).then(() => undefined),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1462,6 +1464,8 @@ export interface ForgeRemoteStatusFace {
   tunnelFallback(): Promise<boolean>
   /** fix-18 ③：PIN 重置（dsh-forge:remote/pin-reset 触发 pinIssuer.rotate + refresh——新 PIN 随 manifest 回流；桥缺席/失败 = false） */
   pinReset(): Promise<boolean>
+  /** fix-26：长效密码开关（dsh-forge:remote/pin-consent 触发 pinIssuer.setDurable + refresh——durable 面随 manifest 回流；桥缺席/失败 = false） */
+  pinConsent(consent: boolean): Promise<boolean>
 }
 
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
@@ -1479,6 +1483,7 @@ interface ForgePreloadBridge {
     tunnelUnexpectedlyClosed?: boolean
     remotePin?: string
     remotePinExpiresAt?: number
+    remotePinDurable?: boolean
   }>
 }
 
@@ -1526,6 +1531,8 @@ const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
 
 /** fix-18 PIN 重置通道字面量（host ipc/tunnel-channel.ts PIN_RESET_CHANNEL 同源镜像——dshForge 域外直转面） */
 const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
+/** fix-26 长效密码开关通道字面量（host ipc/tunnel-channel.ts PIN_CONSENT_CHANNEL 同源镜像——dshForge 域外直转面） */
+const PIN_CONSENT_CHANNEL = 'dsh-forge:remote/pin-consent'
 
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
@@ -1701,6 +1708,18 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
       if (bridge === undefined) return Promise.resolve(false)
       return Promise.resolve()
         .then(() => bridge.invoke(PIN_RESET_CHANNEL))
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+    // fix-26：长效密码开关（pin-consent 直转——durable 面经 pair 推送 + manifest 轮询单源回流）
+    pinConsent: (consent: boolean) => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => bridge.invoke(PIN_CONSENT_CHANNEL, consent))
         .then(
           () => true,
           () => false,

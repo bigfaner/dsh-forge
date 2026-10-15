@@ -1,7 +1,7 @@
 // fix-17 ②：隧道 tab 重连缝 IPC 通道单测（registerTunnelChannel/removeTunnelChannel——
 // dshForge 域外直转面先例同制：harness-channel 同构，不进 forge invoke allowlist）。
 import { describe, expect, it } from 'vitest'
-import { PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL, registerTunnelChannel, removeTunnelChannel } from './tunnel-channel.js'
+import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL, registerTunnelChannel, removeTunnelChannel } from './tunnel-channel.js'
 
 /** ipcMain 替身（handle/removeHandler 收集——forge-channels IpcMainLike 消费切片） */
 function fakeIpcMain() {
@@ -35,6 +35,7 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
       },
       fallback: () => true,
       pinReset: () => true,
+      consentPin: () => undefined,
     })
     expect(ipcMain.handles.has(TUNNEL_TOGGLE_CHANNEL)).toBe(true)
     await ipcMain.handles.get(TUNNEL_TOGGLE_CHANNEL)!.call(undefined)
@@ -48,6 +49,7 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
       toggle: () => void calls.push('toggle'),
       fallback: () => void calls.push('fallback'),
       pinReset: () => void calls.push('pinReset'),
+      consentPin: () => void calls.push('consentPin'),
     })
     expect(ipcMain.handles.has(TUNNEL_TOGGLE_CHANNEL)).toBe(true)
     expect(ipcMain.handles.has(TUNNEL_FALLBACK_CHANNEL)).toBe(true)
@@ -59,11 +61,11 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
 
   it('removeTunnelChannel → handler 撤除（before-quit 清理面——fix-18 起三缝同撤）', () => {
     const ipcMain = fakeIpcMain()
-    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true })
+    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true, consentPin: () => undefined })
     removeTunnelChannel(ipcMain)
     expect(ipcMain.handles.size).toBe(0)
     expect([...ipcMain.removed]).toEqual(
-      expect.arrayContaining([TUNNEL_TOGGLE_CHANNEL, TUNNEL_FALLBACK_CHANNEL, PIN_RESET_CHANNEL]),
+      expect.arrayContaining([TUNNEL_TOGGLE_CHANNEL, TUNNEL_FALLBACK_CHANNEL, PIN_RESET_CHANNEL, PIN_CONSENT_CHANNEL]),
     )
   })
 })
@@ -72,5 +74,37 @@ describe('fix-18 通道名（dshForge 直转面命名制）', () => {
   it('tunnel-fallback / pin-reset 通道字面量 pin', () => {
     expect(TUNNEL_FALLBACK_CHANNEL).toBe('dsh-forge:remote/tunnel-fallback')
     expect(PIN_RESET_CHANNEL).toBe('dsh-forge:remote/pin-reset')
+  })
+})
+
+describe('fix-26 pin-consent 通道（长效密码开关——官方 POST /desktop/pin/consent 直转缝）', () => {
+  it('invoke pin-consent → actions.consentPin(consent) 直转（载荷布尔原样）', async () => {
+    const ipcMain = fakeIpcMain()
+    const calls: unknown[] = []
+    registerTunnelChannel(ipcMain, {
+      toggle: () => true,
+      fallback: () => true,
+      pinReset: () => true,
+      consentPin: (consent) => {
+        calls.push(consent)
+      },
+    })
+    await ipcMain.handles.get(PIN_CONSENT_CHANNEL)?.(undefined, true)
+    await ipcMain.handles.get(PIN_CONSENT_CHANNEL)?.(undefined, false)
+    expect(calls).toEqual([true, false])
+  })
+
+  it('removeTunnelChannel 四缝同撤（含 pin-consent）；通道字面量 pin', () => {
+    const ipcMain = fakeIpcMain()
+    registerTunnelChannel(ipcMain, {
+      toggle: () => true,
+      fallback: () => true,
+      pinReset: () => true,
+      consentPin: () => undefined,
+    })
+    removeTunnelChannel(ipcMain)
+    expect(ipcMain.handles.size).toBe(0)
+    expect(PIN_CONSENT_CHANNEL).toBe('dsh-forge:remote/pin-consent')
+    expect([...ipcMain.removed]).toContain(PIN_CONSENT_CHANNEL)
   })
 })

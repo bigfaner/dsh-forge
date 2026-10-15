@@ -12,7 +12,7 @@ import {
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
-import { PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
+import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import {
   HARNESS_RELAUNCH_CHANNEL,
   HARNESS_SAFE_MODE_CHANNEL,
@@ -88,6 +88,12 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
      * 新 PIN 经 pair 消息换新回推（UI PIN 方框「重置密码」读数随 manifest 轮询换新）。
      */
     pinReset: (): Promise<void> => invokeFace.invoke(PIN_RESET_CHANNEL) as Promise<void>,
+    /**
+     * fix-26：长效密码开关缝（dshForge 域外直转面同制）：触发 child 侧 pinIssuer.setDurable，
+     * durable 面经 pair 消息回推（UI PIN hint 双态随 manifest 轮询单源回流）。
+     */
+    pinConsent: (consent: boolean): Promise<void> =>
+      invokeFace.invoke(PIN_CONSENT_CHANNEL, consent) as Promise<void>,
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝） */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {

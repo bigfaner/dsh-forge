@@ -37,6 +37,8 @@ export interface ForgeRemoteEntryProps {
   readonly onFallback?: () => Promise<void> | void
   /** fix-18 ③：PIN 重置动作（PIN 方框「重置密码」触发——缺席 = 动作禁用态） */
   readonly onPinReset?: () => Promise<void> | void
+  /** fix-26：长效密码开关动作（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
+  readonly onPinConsent?: (consent: boolean) => Promise<void> | void
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -49,7 +51,8 @@ export function remotePhaseLabel(phase: RemotePhase): string {
 }
 
 // fix-6/fix-7 官方对齐常量（DSH Desktop 0.10.0「连接移动设备」实机逐位对照）：dialog 标题 /
-// QR 显示尺寸 220×220 / 倒计时缺省 300s（官方 PAIRING_TTL_MS=5min 同刻度）。
+// QR 显示尺寸 180×180（fix-26 ①走查定稿——容器 204 同步收缩）/ 倒计时缺省 300s（官方
+// PAIRING_TTL_MS=5min 同刻度）。
 // fix-9（bug d9affbdf）：dialog 内容面样式逐位对齐官方——headless Modal 自绘品牌头（官方
 // BrandWordmark 件 + 居中大标题）+ 胶囊分段 tab（官方 SegmentedTabs 刻度；互联网「即将支持」
 // 禁用——隧道另立项）+ 说明文案圆角卡居中 + QR 圆角卡 + pill 地址条（mono + 官方复制图标）
@@ -57,8 +60,8 @@ export function remotePhaseLabel(phase: RemotePhase): string {
 // 复制 / 四态语义照旧。
 /** 官方 dialog 标题（fix-8 Modal title + 图标 aria 同源单源） */
 export const REMOTE_DIALOG_TITLE = '连接移动设备'
-/** QR 显示尺寸（官方实机 220×220） */
-export const PAIRING_QR_SIZE = 220
+/** QR 显示尺寸（fix-26 ①走查定稿 180×180——容器 204 相应收缩） */
+export const PAIRING_QR_SIZE = 180
 /** 倒计时缺省秒数（token TTL 读数缺席时的兜底刻度 = 官方 5min） */
 export const PAIRING_COUNTDOWN_SECONDS = 300
 
@@ -83,9 +86,9 @@ export function pairCountdownText(seconds: number): string {
   return `二维码将在 ${seconds} 秒后刷新`
 }
 
-/** PIN 倒计时文案（fix-17 ③——官方 :1199-1215 TTL 语义） */
+/** PIN 临时 hint 文案（fix-26 ⑧——官方 pinHintTemp 逐字 + ` (Ns)` 实时秒倒计时后缀） */
 export function pinCountdownText(seconds: number): string {
-  return `PIN 有效期还剩 ${seconds} 秒`
+  return `${PIN_HINT_TEMP_TEXT} (${seconds}s)`
 }
 
 // ── fix-18 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1） ──
@@ -96,11 +99,14 @@ export const FALLBACK_LINK_TEXT = '扫码打不开？换一条线路'
 export const FALLBACK_LOADING_TEXT = '正在切换备用线路'
 /** PIN 方框 label（官方 pinLabel） */
 export const PIN_LABEL_TEXT = '连接密码'
+/** PIN 临时 hint 前段（官方 pinHintTemp——§1 逐字；后缀 ` (Ns)` 实时秒倒计时 fix-26 ⑧） */
+export const PIN_HINT_TEMP_TEXT = '5 分钟内有效，过期后需重新扫码。'
+/** PIN 长效 hint（官方 pinHintDurable——§1 逐字；fix-26 ⑦） */
+export const PIN_HINT_DURABLE_TEXT = '长效密码保存在本机，可随时重置或取消。'
 /** PIN 重置动作逐字文案（官方 pinReset——pinIssuer rotate 缝触发） */
 export const PIN_RESET_TEXT = '重置密码'
-/** PIN 取消动作文案（关闭 PIN 卡回默认态——官方 durable 机制产品未立项，不照抄
- *  「取消长效密码」避免语义虚指；低风险假设记 summary） */
-export const PIN_CANCEL_TEXT = '取消'
+/** PIN 取消动作逐字文案（官方 pinCancel——fix-26 ⑤ 对齐：解除长效回临时 PIN + QR 换新） */
+export const PIN_CANCEL_TEXT = '取消长效密码'
 /** PIN consent checkbox label（官方 pinConsent——§1 逐字；fix-21 §2⑥ 样式对齐面，
  *  durable 后端机制 host 端点缺（§4 差值③在途）——本任务只落展示行） */
 export const PIN_CONSENT_TEXT = '生成长期有效的连接密码'
@@ -438,11 +444,11 @@ export function TunnelCard(props: {
           状态行不重复呈现（官方 .qr-loading 形态）；遮罩缺席（starting/failed/无 QR）= 状态行保留 */}
       {!showQr || phase !== 'switching' ? (
         <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
-          {/* fix-19 ⑨：建立中文案 = 官方 tunnelLoading 逐字（「正在建立全球网络链接」） */}
+          {/* fix-19 ⑨：建立中文案 = 官方 tunnelLoading 逐字（「正在建立全球网络链接」）；
+              fix-26 ③：online 态链路类型行退役（「Cloudflare 快速隧道」不渲染） */}
           {phase === 'starting' && TUNNEL_LOADING_TEXT + '……'}
           {phase === 'switching' && FALLBACK_LOADING_TEXT + '……'}
           {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
-          {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
         </p>
       ) : null}
       {showQr && (
@@ -476,11 +482,8 @@ export function TunnelCard(props: {
           {pairCountdownLineOf(secondsLeft)}
         </p>
       )}
-      {online && (
-        <p className="dswf-remote-panel-note" data-testid="dswf-remote-tunnel-pin-hint">
-          手机扫码打开上方地址，在手机端输入 6 位 PIN 完成认证（PIN 5 分钟内有效，超时自动换新）。
-        </p>
-      )}
+      {/* fix-26 ③：PIN 引导 hint 退役（「手机扫码打开上方地址…」——官方无此行，PIN 语义由
+          PIN 方框卡单源承载） */}
       {/* fix-18 ②：换线 = 官方下划线文本链接（fallback-link）——显示三因子：online ×
           cloudflared × 缝在场；switching 中隐藏（官方显示条件同源） */}
       {online && provider === 'cloudflared' && onFallback !== undefined && (
@@ -514,6 +517,8 @@ export function RemotePanel(props: {
   readonly onFallback?: () => Promise<void> | void
   /** fix-18 ③：PIN 重置缝（host pinIssuer rotate——缺席 = 重置动作禁用态） */
   readonly onPinReset?: () => Promise<void> | void
+  /** fix-26：长效密码开关缝（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
+  readonly onPinConsent?: (consent: boolean) => Promise<void> | void
   /** fix-18 ④：受控 switching 缝（测试/装配可控——缺省组件内自持） */
   readonly switching?: boolean
   /** fix-20：受控冻结隧道面缝（switching 态冻结展示面——测试/装配可控；缺省组件内自持） */
@@ -549,15 +554,14 @@ export function RemotePanel(props: {
     const live = snapshot.tunnel
     if (live?.url !== undefined && live.url !== '') setFrozenTunnelState(live)
   }, [switching, snapshot.tunnel])
-  // fix-18 ③：PIN 卡取消态（「取消」收卡回默认态；新 PIN 读数到达即复位重呈现）
-  const [pinDismissed, setPinDismissed] = useState(false)
-  const pinValue = snapshot.pin
-  // fix-21 §2⑥：consent checkbox 展示行（官方 pinConsent/pinPrivacy 形态——durable 后端
-  // 机制 host 端点缺（§4 差值③在途），本任务只落展示行、checkbox 本地态）
+  // fix-26：长效 consent 态（checkbox 本地乐观态 + 快照 durable 位双源——官方 consent
+  // checkbox/pin-actions 仅 consent 态呈现语义；新 PIN 读数到达即随快照复位）
   const [pinConsent, setPinConsent] = useState(false)
+  const pinDurable = snapshot.pinDurable === true
+  const pinConsentOn = pinDurable || pinConsent
   useEffect(() => {
-    setPinDismissed(false)
-  }, [pinValue])
+    setPinConsent(pinDurable)
+  }, [pinDurable, snapshot.pin])
   // fix-17 ②：tab 切换重连（官方 :1187 模式切换语义）——internet 非在线 = 触发建立后
   // 刷新读数；online/lan = 直接刷新读数。效果派生归 modeSelectEffectOf 单源（测试锚）。
   // fix-18 ④：切换中防重入（switching 在途拒绝再触发）+ ensure 在途期收 switching 态。
@@ -664,12 +668,8 @@ export function RemotePanel(props: {
   }, [copied])
   return (
     <div className="dswf-remote-panel" aria-label="手机远程">
-      <div className="dswf-remote-panel-head">
-        <span className="dswf-remote-panel-title">手机远程</span>
-        <span className="dswf-remote-panel-phase" data-phase={snapshot.phase}>
-          {remotePhaseLabel(snapshot.phase)}
-        </span>
-      </div>
+      {/* fix-26 ②：面板头（「手机远程」标题 + 相位文字行）退役——状态语义由入口圆点与
+          连接态卡承载，官方页面无此头 */}
       {snapshot.phase === 'connected' ? (
         // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
         // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
@@ -735,45 +735,60 @@ export function RemotePanel(props: {
               onFallback={handleFallback}
             />
           )}
-          {/* fix-18 ③：连接密码 PIN 独立方框卡（官方 :1171 布局——label + 大字 mono 值 +
-              有效期倒计时 + 重置/取消双动作；「取消」收卡回默认态，新 PIN 读数到达即重呈现；
+          {/* fix-18 ③ + fix-26：连接密码 PIN 独立方框卡（官方 :1171 布局——label + 大字 mono
+              值 + hint 双态（长效 = pinHintDurable ⑦ / 临时 = pinHintTemp + (Ns) 实时秒倒计时 ⑧）
+              + consent checkbox + pin-actions 双钮（仅 consent 态呈现 ④——重置密码 / 取消长效
+              密码；⑥：两动作经 host 缝断开隧道重连 + pair token 轮换——QR/URL 全量换新）；
               读数缺席 = 卡不呈现，不占位不伪装） */}
-          {snapshot.pin !== undefined && !pinDismissed && (
+          {snapshot.pin !== undefined && (
             <div className="dswf-remote-pin" data-testid="dswf-remote-pin">
               <span className="dswf-remote-pin-label">{PIN_LABEL_TEXT}</span>
               <span className="dswf-remote-pin-value">{snapshot.pin}</span>
-              <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-countdown">
-                {pinCountdownText(pinSecondsLeft)}
+              <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-hint">
+                {pinConsentOn ? PIN_HINT_DURABLE_TEXT : pinCountdownText(pinSecondsLeft)}
               </span>
-              {/* fix-21 §2⑥：官方 consent checkbox 行（label + 隐私 small 字） */}
+              {/* fix-21 §2⑥ + fix-26 ④：官方 consent checkbox 行（label + 隐私 small 字）——
+                  勾选 = 长效机制（pin-consent 缝触发 setDurable，PIN 长期生效不轮换） */}
               <label className="dswf-remote-pin-consent">
                 <input
                   type="checkbox"
-                  checked={pinConsent}
-                  onChange={(event) => setPinConsent(event.target.checked)}
+                  checked={pinConsentOn}
+                  onChange={(event) => {
+                    const next = event.target.checked
+                    setPinConsent(next)
+                    void props.onPinConsent?.(next)
+                  }}
                 />
                 <span>{PIN_CONSENT_TEXT}</span>
               </label>
               <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
-              <div className="dswf-remote-pin-actions">
-                <button
-                  type="button"
-                  className="dswf-remote-pin-action"
-                  data-testid="dswf-remote-pin-reset"
-                  disabled={props.onPinReset === undefined}
-                  onClick={() => void props.onPinReset?.()}
-                >
-                  {PIN_RESET_TEXT}
-                </button>
-                <button
-                  type="button"
-                  className="dswf-remote-pin-action"
-                  data-testid="dswf-remote-pin-cancel"
-                  onClick={() => setPinDismissed(true)}
-                >
-                  {PIN_CANCEL_TEXT}
-                </button>
-              </div>
+              {/* fix-26 ④⑤：pin-actions 仅 consent 态呈现（官方 :1190 同语义）——取消 =
+                  解除长效回临时 PIN（onPinConsent(false) 缝），按钮/label 刻度归 §2 样式 */}
+              {pinConsentOn && (
+                <div className="dswf-remote-pin-actions">
+                  <button
+                    type="button"
+                    className="dswf-remote-pin-action"
+                    data-testid="dswf-remote-pin-reset"
+                    disabled={props.onPinReset === undefined}
+                    onClick={() => void props.onPinReset?.()}
+                  >
+                    {PIN_RESET_TEXT}
+                  </button>
+                  <button
+                    type="button"
+                    className="dswf-remote-pin-action"
+                    data-testid="dswf-remote-pin-cancel"
+                    disabled={props.onPinConsent === undefined}
+                    onClick={() => {
+                      setPinConsent(false)
+                      void props.onPinConsent?.(false)
+                    }}
+                  >
+                    {PIN_CANCEL_TEXT}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           </>
@@ -918,6 +933,8 @@ export function ForgeRemoteDialog(props: {
   readonly onFallback?: () => Promise<void> | void
   /** fix-18 ③：PIN 重置缝（透传 RemotePanel——PIN 方框「重置密码」触发） */
   readonly onPinReset?: () => Promise<void> | void
+  /** fix-26：长效密码开关缝（透传 RemotePanel——consent checkbox/「取消长效密码」触发） */
+  readonly onPinConsent?: (consent: boolean) => Promise<void> | void
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——透传 RemotePanel） */
   readonly manageConnected?: boolean
 }): ReactNode {
@@ -942,6 +959,7 @@ export function ForgeRemoteDialog(props: {
         onTunnelEnsure={props.onTunnelEnsure}
         onFallback={props.onFallback}
         onPinReset={props.onPinReset}
+        onPinConsent={props.onPinConsent}
         manageConnected={props.manageConnected}
       />
     </Modal>
@@ -950,7 +968,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset, onPinConsent }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   // fix-19 ⑥：manage-connected 判定（dialog 打开时刻已连接 = 管理形态——closeHint/完成收窄；
   // 打开后即时达成连接 = 官方连接全形态，零收窄）
@@ -1011,6 +1029,7 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
         onTunnelEnsure={onTunnelEnsure}
         onFallback={onFallback}
         onPinReset={onPinReset}
+        onPinConsent={onPinConsent}
         manageConnected={manageConnected}
       />
     </div>

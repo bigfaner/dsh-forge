@@ -179,3 +179,31 @@ describe('dsh-mobile-tunnel PIN 签发器（官方 /pair/verify 对齐：6 位·
     expect(issuer.verify('123456')).toBe(false)
   })
 })
+
+// ── fix-26 durable PIN（长效密码机制——官方 /desktop/pin/consent 同语义） ──
+
+describe('fix-26 durable PIN（setDurable 冻结/解冻——长效不轮换）', () => {
+  it('setDurable(true)：当前 PIN 冻结——超 TTL verify 仍通过、rotate 零换签（长期生效不轮换）', () => {
+    let now = 1_000
+    const issuer = createPinIssuer(() => now)
+    const before = issuer.current()
+    const durable = issuer.setDurable(true)
+    expect(durable.pin).toBe(before.pin)
+    now += PIN_TTL_MS * 10
+    expect(issuer.rotate().pin).toBe(before.pin) // 长效：rotate 零换签
+    expect(issuer.current().pin).toBe(before.pin)
+    expect(issuer.verify(before.pin)).toBe(true) // 无 TTL 失效
+  })
+
+  it('setDurable(false)：回临时 PIN——新签 5min TTL（旧 durable PIN 立即失效）', () => {
+    let now = 1_000
+    const issuer = createPinIssuer(() => now)
+    const durable = issuer.setDurable(true)
+    now += 1
+    const temp = issuer.setDurable(false)
+    expect(temp.pin).not.toBe(durable.pin)
+    expect(temp.expiresAt).toBe(now + PIN_TTL_MS)
+    expect(issuer.verify(durable.pin)).toBe(false)
+    expect(issuer.verify(temp.pin)).toBe(true)
+  })
+})

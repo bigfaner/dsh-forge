@@ -33,6 +33,8 @@ export interface BootManifest {
   remotePin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 有效期倒计时单源；随轮换换新） */
   remotePinExpiresAt?: number
+  /** fix-26：长效密码位（true = PIN 长期生效不轮换——UI hint 双态单源；与 remotePin 同生） */
+  remotePinDurable?: boolean
   /** fix-19 ⑦：隧道意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源；
    *  健康面推送即清除） */
   tunnelUnexpectedlyClosed?: boolean
@@ -111,6 +113,7 @@ export function buildBootManifest(
   tunnel?: TunnelManifestState,
   remotePin?: string,
   remotePinExpiresAt?: number,
+  remotePinDurable?: boolean,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -143,5 +146,7 @@ export function buildBootManifest(
     ...(typeof remotePinExpiresAt === 'number' && Number.isFinite(remotePinExpiresAt) && remotePinExpiresAt > 0
       ? { remotePinExpiresAt }
       : {}),
+    // fix-26：长效位透传（严格 === true 才携带）
+    ...(remotePinDurable === true ? { remotePinDurable: true } : {}),
   })
 }

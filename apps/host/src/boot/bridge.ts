@@ -106,12 +106,23 @@ export interface BridgePinResetRequest {
   readonly type: 'pin-reset'
 }
 
+/**
+ * fix-26 主 → 子：长效密码开关（UI PIN 方框 consent checkbox 触发——官方 POST
+ * /desktop/pin/consent {consent} 同语义；child 侧 pinIssuer.setDurable 分支消费；
+ * 同制不进 forge RPC allowlist）。
+ */
+export interface BridgePinConsentRequest {
+  readonly type: 'pin-consent'
+  readonly consent: boolean
+}
+
 export type MainToChildMessage =
   | BridgeRpcRequest
   | BridgeShutdownRequest
   | BridgeTunnelToggleRequest
   | BridgeTunnelFallbackRequest
   | BridgePinResetRequest
+  | BridgePinConsentRequest
 
 /** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池；
  *  tools = ToolRuntime 已注册 tool 名清单（3.4 冒烟观测面——plugin-forge tool 面可达性经 spawn
@@ -134,6 +145,8 @@ export interface BridgeReadyMessage {
   readonly remotePin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 倒计时单源；与 remotePin 同生同灭） */
   readonly remotePinExpiresAt?: number
+  /** fix-26：长效密码位（true = PIN 长期生效不轮换；可选：临时态/旧 child = 缺席） */
+  readonly remotePinDurable?: boolean
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -154,6 +167,8 @@ export interface BridgePairMessage {
   readonly remotePin?: string
   /** fix-17 ③：新 PIN 到期时刻（epoch ms；与 remotePin 同生同灭） */
   readonly remotePinExpiresAt?: number
+  /** fix-26：长效密码位（true = 新 PIN 长期生效；可选——临时态 = 缺席） */
+  readonly remotePinDurable?: boolean
 }
 
 /**
@@ -506,6 +521,8 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(remotePairExpiresAt !== undefined ? { remotePairExpiresAt } : {}),
     ...(remotePin !== undefined ? { remotePin } : {}),
     ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
+    // fix-26：长效位透传（严格 === true 才携带）
+    ...(m.remotePinDurable === true ? { remotePinDurable: true as const } : {}),
   }
 }
 
@@ -546,6 +563,8 @@ export function asPairMessage(message: unknown): BridgePairMessage | undefined {
     remotePairExpiresAt: m.remotePairExpiresAt,
     ...(remotePin !== undefined ? { remotePin } : {}),
     ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
+    // fix-26：长效位透传（严格 === true 才携带）
+    ...(m.remotePinDurable === true ? { remotePinDurable: true as const } : {}),
   }
 }
 
@@ -616,6 +635,17 @@ export function asPinResetMessage(message: unknown): BridgePinResetRequest | und
   if (typeof message !== 'object' || message === null) return undefined
   if ((message as Record<string, unknown>).type !== 'pin-reset') return undefined
   return { type: 'pin-reset' }
+}
+
+/**
+ * fix-26 pin-consent 消息守卫（主 → 子长效密码开关分流——child.ts setDurable 缝消费）。
+ * consent 须布尔；他形 = undefined 静默忽略。
+ */
+export function asPinConsentMessage(message: unknown): BridgePinConsentRequest | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  const m = message as Record<string, unknown>
+  if (m.type !== 'pin-consent' || typeof m.consent !== 'boolean') return undefined
+  return { type: 'pin-consent', consent: m.consent }
 }
 
 /**

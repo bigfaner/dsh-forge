@@ -94,11 +94,12 @@ void (async () => {
     harnessLogPath = harnessLogPathOf(app) // fix-12 B：Harness 菜单三通道（relaunch/安全模式/showLog——实装下沉 electron-bindings）
     noteHarnessLog(harnessLogPath, `[host] 启动（form=${paths.form} profile=${profileDir} safeMode=${process.env[HARNESS_SAFE_MODE_ENV] === '1' ? '是' : '否'}）`)
     registerHarnessChannels(ipcMain, electronHarnessActions(app, harnessLogPath))
-    // fix-17 ② + fix-18：tab 重连/换线/PIN 重置三缝（dshForge 直转面——转发对应消息至 boot child）
+    // fix-17 ② + fix-18 + fix-26：tab 重连/换线/PIN 重置/长效开关四缝（dshForge 直转面）
     registerTunnelChannel(ipcMain, {
       toggle: () => host.toggleTunnel?.(),
       fallback: () => host.fallbackTunnel?.(),
       pinReset: () => host.resetPin?.(),
+      consentPin: (consent) => host.consentPin?.(consent),
     })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })

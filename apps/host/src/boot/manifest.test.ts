@@ -107,6 +107,17 @@ describe('buildBootManifest', () => {
     expect('remotePinExpiresAt' in badTtl).toBe(false)
   })
 
+  it('fix-26：remotePinDurable = true 透传（长效位——UI hint 双态单源）；他值/缺省 = 字段不出现', () => {
+    const durable = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, '482913', undefined, true)
+    expect(durable.remotePin).toBe('482913')
+    expect(durable.remotePinDurable).toBe(true)
+    expect('remotePinExpiresAt' in durable).toBe(false)
+    const plain = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, '482913', 123456)
+    expect('remotePinDurable' in plain).toBe(false)
+    const off = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, '482913', undefined, false)
+    expect('remotePinDurable' in off).toBe(false)
+  })
+
   it('dsh-mobile-tunnel：tunnelPairUrlOf 产隧道 /pair 形状——`${tunnelUrl}/pair?token=<token>`（与 LAN 同协议，URL 形状单源）', () => {
     expect(tunnelPairUrlOf('https://x.trycloudflare.com', 'abc_-X')).toBe(
       'https://x.trycloudflare.com/pair?token=abc_-X',

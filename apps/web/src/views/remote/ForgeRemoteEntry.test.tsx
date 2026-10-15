@@ -21,6 +21,9 @@ import {
   modeSelectEffectOf,
   pairCountdownLineOf,
   pairCountdownText,
+  PIN_CANCEL_TEXT,
+  PIN_HINT_DURABLE_TEXT,
+  PIN_HINT_TEMP_TEXT,
   remoteDialogTitleOf,
   tunnelAutoReopenOf,
   pinCountdownText,
@@ -42,9 +45,9 @@ function sourceOf(snapshot: RemoteStatusSnapshot): SnapshotSource<RemoteStatusSn
 const LISTENING: RemoteStatusSnapshot = { phase: 'listening', lanAddress: 'http://192.168.1.7:8787' }
 
 describe('fix-6 官方对齐常量与倒计时纯函数', () => {
-  it('官方 dialog 标题 = 「连接移动设备」；QR 显示尺寸 = 220×220（官方实机逐位对照）', () => {
+  it('官方 dialog 标题 = 「连接移动设备」；QR 显示尺寸 = 180×180（fix-26 ①走查定稿）', () => {
     expect(REMOTE_DIALOG_TITLE).toBe('连接移动设备')
-    expect(PAIRING_QR_SIZE).toBe(220)
+    expect(PAIRING_QR_SIZE).toBe(180)
   })
 
   it('倒计时缺省 = 300 秒（官方 5min TTL 同刻度）；读数驱动 = ceil((expiresAt-now)/1000) 收敛 0', () => {
@@ -118,7 +121,7 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-6：官方文案（「扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。」）+ 倒计时行在场 + QR 220', () => {
+  it('fix-6：官方文案（「扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。」）+ 倒计时行在场 + QR 180（fix-26 ①）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, pairExpiresAt: Date.now() + 120_000 }}
@@ -127,7 +130,7 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     )
     expect(html).toMatch(/扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。/)
     expect(html).toMatch(/二维码将在 \d+ 秒后刷新/)
-    expect(html).toMatch(/width="220"/)
+    expect(html).toMatch(/width="180"/)
   })
 
   it('fix-7：地址条带 + 复制图标按钮（aria-label 复制地址——独立钮不再整条可点）', () => {
@@ -202,13 +205,16 @@ describe('RemotePanel 面板', () => {
     expect(html).not.toContain('http://')
   })
 
-  it('状态行语言随相位（关闭/待重启/等待扫码/手机已连接）', () => {
-    expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'listening' }} onToggle={() => undefined} />)).toMatch(
-      /等待扫码/,
+  it('fix-26 ②：面板头「手机远程」「等待扫码」文字退役（状态语义由圆点/连接卡承载——面板头不渲染）', () => {
+    const listening = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'listening' }} onToggle={() => undefined} />,
     )
-    expect(renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />)).toMatch(
-      /待重启生效/,
-    )
+    expect(listening).not.toContain('dswf-remote-panel-head')
+    expect(listening).not.toContain('dswf-remote-panel-title')
+    expect(listening).not.toContain('dswf-remote-panel-phase')
+    const off = renderToStaticMarkup(<RemotePanel snapshot={{ phase: 'off' }} onToggle={() => undefined} />)
+    expect(off).not.toContain('dswf-remote-panel-head')
+    expect(off).not.toMatch(/>手机远程</)
   })
 
   it('fix-8（用户裁决 2026-10-14）：配对面承载改回 dialog——图标触发器带 aria-haspopup="dialog"（官方 Modal 由点击开合，独立窗退役）', () => {
@@ -357,7 +363,7 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).not.toContain('dswf-remote-tunnel-ttl')
   })
 
-  it('在线（Pinggy）：QR（data-value = 隧道 URL，复用 react-qr-code 载体）+ TTL 横幅 + 链路标签 + PIN 引导（fix-18 ② 起无换线链接——链接为 cloudflared 专属）', () => {
+  it('在线（Pinggy）：QR（data-value = 隧道 URL）+ TTL 横幅（fix-26 ③——链路类型行与 PIN 引导 hint 退役）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
@@ -370,13 +376,13 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(html).toContain(`data-value="${TUNNEL_URL}"`)
     expect(html).toMatch(/<svg/)
     expect(html).toMatch(/dswf-remote-tunnel-ttl[^>]*>约 60 分钟后失效/)
-    expect(html).toMatch(/Pinggy 隧道/)
-    expect(html).toMatch(/dswf-remote-tunnel-pin-hint[^>]*>[\s\S]*6 位 PIN/)
-    expect(html).toMatch(/5 分钟/)
+    expect(html).not.toContain('Pinggy 隧道')
+    expect(html).not.toContain('dswf-remote-tunnel-pin-hint')
+    expect(html).not.toContain('6 位 PIN')
     expect(html).not.toContain('dswf-remote-fallback-link')
   })
 
-  it('在线（cloudflared）：无 TTL 语义 = 零横幅；链路标签 Cloudflare 快速隧道', () => {
+  it('在线（cloudflared）：无 TTL 语义 = 零横幅；链路类型行退役（fix-26 ③——「Cloudflare 快速隧道」不渲染）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, tunnel: TUNNEL_CF }}
@@ -386,7 +392,7 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     )
     expect(html).toMatch(/data-phase="online"/)
     expect(html).not.toContain('dswf-remote-tunnel-ttl')
-    expect(html).toMatch(/Cloudflare 快速隧道/)
+    expect(html).not.toContain('Cloudflare 快速隧道')
   })
 
   it('失败：TTL 过期（expiresAt ≤ now）= failed 态卡（零 QR；失效文案 + 换线重试去向）', () => {
@@ -424,7 +430,7 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
     expect(noSeam).not.toContain('dswf-remote-fallback-link')
   })
 
-  it('PIN 引导文案在互联网 tab 在场、局域网 tab 不在场', () => {
+  it('fix-26 ③：PIN 引导 hint 互联网 tab 也不在场（退役——「手机扫码打开上方地址…」不渲染）', () => {
     const net = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
@@ -432,7 +438,8 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
         mode="internet"
       />,
     )
-    expect(net).toContain('dswf-remote-tunnel-pin-hint')
+    expect(net).not.toContain('dswf-remote-tunnel-pin-hint')
+    expect(net).not.toContain('在手机端输入 6 位 PIN')
     const lan = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }}
@@ -483,7 +490,8 @@ describe('fix-17 ③ 互联网 tab 连接密码 PIN 卡（官方 :1199-1215—�
     )
     expect(net).toContain('data-testid="dswf-remote-pin"')
     expect(net).toMatch(/482913/)
-    expect(net).toMatch(/PIN 有效期还剩 \d+ 秒/)
+    expect(net).toMatch(/5 分钟内有效，过期后需重新扫码。 \(\d+s\)/)
+    expect(net).not.toContain('PIN 有效期还剩')
     const lan = renderToStaticMarkup(
       <RemotePanel snapshot={snapshot} onToggle={() => undefined} mode="lan" />,
     )
@@ -497,8 +505,9 @@ describe('fix-17 ③ 互联网 tab 连接密码 PIN 卡（官方 :1199-1215—�
     expect(html).not.toContain('dswf-remote-pin')
   })
 
-  it('PIN 倒计时纯函数 pinCountdownText = 「PIN 有效期还剩 N 秒」', () => {
-    expect(pinCountdownText(240)).toBe('PIN 有效期还剩 240 秒')
+  it('fix-26 ⑧：PIN 临时 hint 纯函数 = 「5 分钟内有效，过期后需重新扫码。 (Ns)」（官方 pinHintTemp 逐字 + 实时秒倒计时）', () => {
+    expect(pinCountdownText(240)).toBe('5 分钟内有效，过期后需重新扫码。 (240s)')
+    expect(pinCountdownText(1)).toBe('5 分钟内有效，过期后需重新扫码。 (1s)')
   })
 })
 
@@ -772,22 +781,66 @@ describe('fix-18 ④ 切换中 QR 灰色半透明遮罩 + tab 防重入', () => 
 })
 
 describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作', () => {
-  it('PIN 读数在场：方框卡（label「连接密码」+ 大字值 + 倒计时 + 重置密码/取消双动作）', () => {
+  it('PIN 读数在场：方框卡（label「连接密码」+ 大字值 + 倒计时）；非 consent 态零双钮（fix-26 ④ pin-actions 仅 consent 态显示）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onPinReset={() => undefined} />,
     )
     expect(html).toContain('data-testid="dswf-remote-pin"')
     expect(html).toContain('连接密码')
     expect(html).toContain('654321')
+    expect(html).not.toContain('data-testid="dswf-remote-pin-reset"')
+    expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
+  })
+
+  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 双钮呈现（重置密码/取消长效密码）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }}
+        mode="internet"
+        onPinReset={() => undefined}
+        onPinConsent={() => undefined}
+      />,
+    )
+    expect(html).toMatch(/长效密码保存在本机，可随时重置或取消。/)
+    expect(html).not.toMatch(/\(\d+s\)/)
+    expect(html).toMatch(/dswf-remote-pin-consent[^>]*>[\s\S]*?checked/)
     expect(html).toContain('data-testid="dswf-remote-pin-reset"')
     expect(html).toContain('重置密码')
     expect(html).toContain('data-testid="dswf-remote-pin-cancel"')
-    expect(html).toMatch(/dswf-remote-pin-cancel[^>]*>取消</)
+    expect(html).toContain('取消长效密码')
   })
 
-  it('onPinReset 缺席 = 重置动作禁用态（缝缺席 fail-soft）', () => {
-    const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
+  it('fix-26 ⑤⑧：取消钮文案 = 「取消长效密码」（官方 pinCancel 逐字）；onPinReset/onPinConsent 缺席 = 双钮禁用态（缝缺席 fail-soft）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }} mode="internet" />,
+    )
     expect(html).toMatch(/dswf-remote-pin-reset[^>]*disabled/)
+    expect(html).toMatch(/dswf-remote-pin-cancel[^>]*disabled/)
+  })
+})
+
+// ── fix-26 配对 dialog 走查八点批次（QR 缩小/去状态行/长效密码机制对齐官方 §1-§2） ──
+
+describe('fix-26 走查批次（八点）', () => {
+  it('①②：QR 卡收缩 204px（180 SVG + 12px×2 内距）；面板头文字退役', () => {
+    const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*width:\s*204px/)
+    expect(css).not.toMatch(/\.dswf-remote-panel-head/)
+    expect(css).not.toMatch(/\.dswf-remote-panel-phase/)
+  })
+
+  it('⑦⑧：hint 文案常量逐字（官方 pinHintDurable/pinHintTemp §1）', () => {
+    expect(PIN_HINT_DURABLE_TEXT).toBe('长效密码保存在本机，可随时重置或取消。')
+    expect(PIN_HINT_TEMP_TEXT).toBe('5 分钟内有效，过期后需重新扫码。')
+    expect(PIN_CANCEL_TEXT).toBe('取消长效密码')
+  })
+
+  it('④ 非长效：PIN 正下方 hint = 「5 分钟内有效，过期后需重新扫码。 (Ns)」实时秒倒计时', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onPinReset={() => undefined} />,
+    )
+    expect(html).toMatch(/dswf-remote-pin-hint[^>]*>[\s\S]*?5 分钟内有效，过期后需重新扫码。 \(\d+s\)/)
+    expect(html).not.toContain('长效密码保存在本机')
   })
 })
 
@@ -979,11 +1032,11 @@ describe('fix-21 §2① mode-panel + 分段器 + mode-btn（remote.css 源文断
   })
 })
 
-describe('fix-21 §2② QR 卡 244px 白底 + 白 .94 遮罩 + 假进度条', () => {
+describe('fix-21 §2② QR 卡白底 + 白 .94 遮罩 + 假进度条（fix-26 ① 卡面收缩 204px）', () => {
   const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
 
-  it('QR 卡：244px / 白底 / 12px 内距 / 16px 圆角 / 1px line 描边（SVG 220×220 既有 PAIRING_QR_SIZE）', () => {
-    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*width:\s*244px/)
+  it('QR 卡：204px / 白底 / 12px 内距 / 16px 圆角 / 1px line 描边（SVG 180×180 fix-26 ① PAIRING_QR_SIZE）', () => {
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*width:\s*204px/)
     expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*padding:\s*12px/)
     expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*border-radius:\s*16px/)
     expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*border:\s*1px solid var\(--dsw-alias-border-l2\)/)

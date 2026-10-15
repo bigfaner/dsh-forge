@@ -143,6 +143,11 @@ export interface DshHostHandle {
    * 侧 pinIssuer.rotate 缝；缺席 = 旧 boot 会话降级，UI fail-soft）。
    */
   resetPin?(): void
+  /**
+   * fix-26：长效密码开关缝（UI consent checkbox 触发——转发 pin-consent 消息至 child
+   * 侧 pinIssuer.setDurable 缝；缺席 = 旧 boot 会话降级，UI fail-soft）。
+   */
+  consentPin?(consent: boolean): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
 }
@@ -279,6 +284,7 @@ export async function bootDshHost(
     undefined,
     ready.remotePin, // fix-17 ③：PIN 读数入 manifest（互联网 tab PIN 卡单源）
     ready.remotePinExpiresAt,
+    ready.remotePinDurable === true, // fix-26：长效位入 manifest（UI hint 双态单源）
   )
   child.on('message', (message: unknown) => {
     // fix-7：/pair 握手成功推送 → manifest 抬 remoteDeviceConnected（粘性 until 重启——
@@ -313,6 +319,10 @@ export async function bootDshHost(
     // fix-18：PIN 重置缝——pin-reset 转发 child（新 PIN 经 pair 消息换新回推 manifest）
     resetPin: () => {
       sendToChild(child, { type: 'pin-reset' })
+    },
+    // fix-26：长效密码开关缝——pin-consent 转发 child（durable 面经 pair 消息回推 manifest）
+    consentPin: (consent: boolean) => {
+      sendToChild(child, { type: 'pin-consent', consent })
     },
     toolNames: ready.tools ?? [],
     services: {
@@ -455,6 +465,7 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     tunnelStateOf(manifest), // dsh-mobile-tunnel：轮换重建保留隧道面（新 token URL 由后续 tunnel 推送换新）
     pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
     pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
+    pair.remotePinDurable ?? manifest.remotePinDurable === true, // fix-26：长效位随轮换换新/保留
   )
 }
 
@@ -473,6 +484,7 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     tunnelStateOf(manifest), // dsh-mobile-tunnel：connected 重建保留隧道面
     manifest.remotePin, // fix-17 ③：PIN 读数保留
     manifest.remotePinExpiresAt,
+    manifest.remotePinDurable === true, // fix-26：长效位保留
   )
 }
 
@@ -491,6 +503,7 @@ export function applyPairDisconnected(manifest: BootManifest): BootManifest {
     tunnelStateOf(manifest),
     manifest.remotePin, // fix-17 ③：PIN 读数保留
     manifest.remotePinExpiresAt,
+    manifest.remotePinDurable === true, // fix-26：长效位保留
   )
 }
 
@@ -520,5 +533,6 @@ export function applyTunnelMessage(manifest: BootManifest, message: unknown): Bo
       : undefined,
     manifest.remotePin, // fix-17 ③：隧道重建保留 PIN 读数
     manifest.remotePinExpiresAt,
+    manifest.remotePinDurable === true, // fix-26：长效位保留
   )
 }

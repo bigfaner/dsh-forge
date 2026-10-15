@@ -40,6 +40,8 @@ export interface RemoteStatusSnapshot {
   readonly pin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 倒计时单源） */
   readonly pinExpiresAt?: number
+  /** fix-26：长效密码位（true = PIN 长期生效不轮换——hint 双态/pin-actions 呈现单源） */
+  readonly pinDurable?: boolean
 }
 /**
  * 相位派生（纯函数——配置意图 × 实际绑定双源）：意图（产品配置 enabled）与实况（本 boot
@@ -102,6 +104,8 @@ export interface BootManifestRead {
   readonly remotePin?: string
   /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 有效期倒计时单源；随轮换换新） */
   readonly remotePinExpiresAt?: number
+  /** fix-26：长效密码位（true = PIN 长期生效不轮换；随 pair/ready 透传） */
+  readonly remotePinDurable?: boolean
   /** fix-19 ⑦：隧道意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源） */
   readonly tunnelUnexpectedlyClosed?: boolean
 }
@@ -148,9 +152,11 @@ export function remoteSnapshotOf(
   const expiresAt = manifest?.remotePairExpiresAt
   const pairExpiresAt =
     typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
-  // fix-17 ③：PIN 读数收拢（6 位数字 × 正有限 TTL 齐备才携带——畸形 = 字段不出现）
+  // fix-17 ③ + fix-26：PIN 读数收拢（6 位数字 ×（TTL 或长效位齐备）才携带——畸形 = 字段不出现；
+  // 长效面零 TTL——UI hint 双态单源）
   const pin =
     typeof manifest?.remotePin === 'string' && /^\d{6}$/.test(manifest.remotePin) ? manifest.remotePin : undefined
+  const pinDurable = manifest?.remotePinDurable === true
   const pinExpiresAtRaw = manifest?.remotePinExpiresAt
   const pinExpiresAt =
     typeof pinExpiresAtRaw === 'number' && Number.isFinite(pinExpiresAtRaw) && pinExpiresAtRaw > 0
@@ -161,6 +167,12 @@ export function remoteSnapshotOf(
     lanAddress,
     ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
     ...(tunnel !== undefined ? { tunnel } : {}),
-    ...(pin !== undefined && pinExpiresAt !== undefined ? { pin, pinExpiresAt } : {}),
+    ...(pin !== undefined && (pinExpiresAt !== undefined || pinDurable)
+      ? {
+          pin,
+          ...(pinExpiresAt !== undefined ? { pinExpiresAt } : {}),
+          ...(pinDurable ? { pinDurable: true } : {}),
+        }
+      : {}),
   }
 }

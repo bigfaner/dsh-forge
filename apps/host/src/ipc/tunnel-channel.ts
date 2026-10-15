@@ -12,14 +12,18 @@ export const TUNNEL_TOGGLE_CHANNEL = 'dsh-forge:remote/tunnel-toggle'
 export const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
 /** fix-18：连接密码重置通道（官方 POST /desktop/pin/reset 同语义） */
 export const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
+/** fix-26：长效密码开关通道（官方 POST /desktop/pin/consent {consent} 同语义） */
+export const PIN_CONSENT_CHANNEL = 'dsh-forge:remote/pin-consent'
 
-/** 隧道直转动作面（main.ts 注入 host 三缝——缺席由调用侧守卫） */
+/** 隧道直转动作面（main.ts 注入 host 缝——缺席由调用侧守卫） */
 export interface TunnelToggleActions {
   toggle(): void
   /** fix-18：显式换线（TunnelManager.fallback——停当前链路起另一条） */
   fallback(): void
   /** fix-18：连接密码重置（pinIssuer.rotate——新 PIN 经 pair 消息回推 manifest） */
   pinReset(): void
+  /** fix-26：长效密码开关（child pinIssuer.setDurable——durable 面经 pair 消息回推 manifest） */
+  consentPin(consent: boolean): void
 }
 
 /** 注册 handler（invoke → 各 actions 直转——fire-and-forget，结果面走推送回流） */
@@ -27,11 +31,13 @@ export function registerTunnelChannel(ipcMain: IpcMainLike, actions: TunnelToggl
   ipcMain.handle(TUNNEL_TOGGLE_CHANNEL, () => actions.toggle())
   ipcMain.handle(TUNNEL_FALLBACK_CHANNEL, () => actions.fallback())
   ipcMain.handle(PIN_RESET_CHANNEL, () => actions.pinReset())
+  ipcMain.handle(PIN_CONSENT_CHANNEL, (_event, consent: unknown) => actions.consentPin(consent === true))
 }
 
-/** 撤除 handler（before-quit 清理面——harness-channel 同构；三缝同撤） */
+/** 撤除 handler（before-quit 清理面——harness-channel 同构；四缝同撤） */
 export function removeTunnelChannel(ipcMain: Pick<IpcMainLike, 'removeHandler'>): void {
   ipcMain.removeHandler(TUNNEL_TOGGLE_CHANNEL)
   ipcMain.removeHandler(TUNNEL_FALLBACK_CHANNEL)
   ipcMain.removeHandler(PIN_RESET_CHANNEL)
+  ipcMain.removeHandler(PIN_CONSENT_CHANNEL)
 }

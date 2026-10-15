@@ -193,3 +193,39 @@ describe('fix-19 ⑦ 意外死亡位透传（manifest tunnelUnexpectedlyClosed �
     expect(healthy.tunnel?.unexpectedlyClosed).toBeUndefined()
   })
 })
+
+// ── fix-26 durable PIN 读数（长效位透传——UI hint 双态单源） ──
+
+describe('fix-26 remoteSnapshotOf：remotePinDurable 透传（长效 PIN）', () => {
+  it('durable = true：pin 在场 + pinDurable 位；pinExpiresAt 缺席不阻 PIN 卡（长效无 TTL）', () => {
+    const snap = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePin: '482913',
+      remotePinDurable: true,
+    })
+    expect(snap.phase).toBe('listening')
+    expect(snap.pin).toBe('482913')
+    expect(snap.pinDurable).toBe(true)
+    expect(snap.pinExpiresAt).toBeUndefined()
+  })
+
+  it('临时 PIN 面不变：无 durable 位 + TTL 齐备才携带（既有口径零回退）', () => {
+    const snap = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePin: '482913',
+      remotePinExpiresAt: Date.now() + 240_000,
+    })
+    expect(snap.pin).toBe('482913')
+    expect(snap.pinDurable).toBeUndefined()
+    expect(snap.pinExpiresAt).toBeDefined()
+    // durable 读数缺席但 TTL 缺席 = 既有降级（PIN 不呈现）——机制面不变
+    const noTtl = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePin: '482913',
+    })
+    expect(noTtl.pin).toBeUndefined()
+  })
+})
