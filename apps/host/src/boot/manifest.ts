@@ -29,6 +29,10 @@ export interface BootManifest {
   /** dsh-mobile-tunnel：Pinggy 链路 TTL 到期时刻（epoch ms——UI「约 N 分钟后失效」倒计时
    *  单源；随 pair 旋转隧道消息刷新；cloudflared 无 TTL 语义 = 缺席） */
   tunnelExpiresAt?: number
+  /** fix-17 ③：连接密码 PIN（官方 6 位数字——互联网 tab PIN 卡单源；与 /pair/verify 同源） */
+  remotePin?: string
+  /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 有效期倒计时单源；随轮换换新） */
+  remotePinExpiresAt?: number
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -99,6 +103,8 @@ export function buildBootManifest(
   remotePairExpiresAt?: number,
   remoteDeviceConnected?: boolean,
   tunnel?: TunnelManifestState,
+  remotePin?: string,
+  remotePinExpiresAt?: number,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -123,6 +129,11 @@ export function buildBootManifest(
             ? { tunnelExpiresAt: tunnel.expiresAt }
             : {}),
         }
+      : {}),
+    // fix-17 ③：PIN 读数透传（6 位数字 × 正有限 TTL 齐备才携带——畸形 = 字段不出现）
+    ...(typeof remotePin === 'string' && /^\d{6}$/.test(remotePin) ? { remotePin } : {}),
+    ...(typeof remotePinExpiresAt === 'number' && Number.isFinite(remotePinExpiresAt) && remotePinExpiresAt > 0
+      ? { remotePinExpiresAt }
       : {}),
   })
 }

@@ -18,7 +18,9 @@ import {
   harnessBridgeOf,
   harnessMenuFocusLeft,
   harnessMenuPointerOutside,
+  modeSelectEffectOf,
   pairCountdownText,
+  pinCountdownText,
   secondsLeftOf,
   tunnelBannerText,
   tunnelMinutesLeftOf,
@@ -436,6 +438,76 @@ describe('RemotePanel 互联网 tab 隧道面（1.4）', () => {
       />,
     )
     expect(lan).not.toContain('dswf-remote-tunnel-pin-hint')
+  })
+})
+
+// ── fix-17：官方交互复刻（QR 隧道面倒计时 / tab 切换重连 / 互联网 PIN 卡） ──
+
+describe('fix-17 ① 隧道面 QR 倒计时（官方 :1145-1147/:1196——倒计时读数对齐 token TTL 5min）', () => {
+  it('互联网 tab 在线态：QR 下方 token TTL 倒计时行（「二维码将在 N 秒后刷新」——与 LAN 面同文案单源）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{
+          ...LISTENING,
+          tunnel: TUNNEL_PINGGY,
+          pairExpiresAt: Date.now() + 120_000,
+        }}
+        onToggle={() => undefined}
+        mode="internet"
+      />,
+    )
+    expect(html).toContain('data-testid="dswf-remote-tunnel-countdown"')
+    expect(html).toMatch(/二维码将在 \d+ 秒后刷新/)
+  })
+
+  it('隧道读数/倒计时缺席 = 零倒计时行（不伪装）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ ...LISTENING, tunnel: TUNNEL_CF }} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(html).not.toContain('dswf-remote-tunnel-countdown')
+  })
+})
+
+describe('fix-17 ③ 互联网 tab 连接密码 PIN 卡（官方 :1199-1215——6 位数字 + 有效期倒计时）', () => {
+  it('internet tab：PIN 卡在场（大字号 6 位 + 倒计时行）；lan tab 不呈现', () => {
+    const snapshot: RemoteStatusSnapshot = {
+      ...LISTENING,
+      tunnel: TUNNEL_PINGGY,
+      pin: '482913',
+      pinExpiresAt: Date.now() + 240_000,
+    }
+    const net = renderToStaticMarkup(
+      <RemotePanel snapshot={snapshot} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(net).toContain('data-testid="dswf-remote-pin"')
+    expect(net).toMatch(/482913/)
+    expect(net).toMatch(/PIN 有效期还剩 \d+ 秒/)
+    const lan = renderToStaticMarkup(
+      <RemotePanel snapshot={snapshot} onToggle={() => undefined} mode="lan" />,
+    )
+    expect(lan).not.toContain('dswf-remote-pin')
+  })
+
+  it('PIN 读数缺席 = 零 PIN 卡（不伪装、不占位）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ ...LISTENING, tunnel: TUNNEL_PINGGY }} onToggle={() => undefined} mode="internet" />,
+    )
+    expect(html).not.toContain('dswf-remote-pin')
+  })
+
+  it('PIN 倒计时纯函数 pinCountdownText = 「PIN 有效期还剩 N 秒」', () => {
+    expect(pinCountdownText(240)).toBe('PIN 有效期还剩 240 秒')
+  })
+})
+
+describe('fix-17 ② tab 切换重连缝（官方 :1187 模式切换语义——纯函数单源）', () => {
+  it('modeSelectEffectOf：internet × 隧道在线 = refresh；internet × 非在线 = ensure；lan = refresh', () => {
+    expect(modeSelectEffectOf('internet', 'online')).toBe('refresh')
+    expect(modeSelectEffectOf('internet', 'starting')).toBe('ensure')
+    expect(modeSelectEffectOf('internet', 'failed')).toBe('ensure')
+    expect(modeSelectEffectOf('internet', 'switching')).toBe('ensure')
+    expect(modeSelectEffectOf('lan', 'online')).toBe('refresh')
+    expect(modeSelectEffectOf('lan', 'starting')).toBe('refresh')
   })
 })
 

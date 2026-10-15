@@ -4,8 +4,9 @@
 // 3.1 事件订阅面 onForgeTasksChanged（Interface 7 forge:events/*——allowlist 守卫 +
 // 载荷形状守卫 + 退订）。
 import { describe, expect, it, vi } from 'vitest'
-import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
+import { FORGE_CHANNEL_ALLOWLIST, FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
+import { TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import {
   HARNESS_RELAUNCH_CHANNEL,
@@ -67,6 +68,14 @@ describe('preload 暴露面（window.dshForge）', () => {
     expect(face.invoke).toHaveBeenNthCalledWith(1, HARNESS_RELAUNCH_CHANNEL)
     expect(face.invoke).toHaveBeenNthCalledWith(2, HARNESS_SAFE_MODE_CHANNEL)
     expect(face.invoke).toHaveBeenNthCalledWith(3, HARNESS_SHOW_LOG_CHANNEL)
+  })
+
+  it('fix-17 ②：tunnelToggle → dsh-forge:remote/tunnel-toggle 直转（tab 重连缝——域外直转面先例同制，不进 forge invoke allowlist）', async () => {
+    const face = fakeFace()
+    const api = createDshForgePreloadApi(face)
+    await api.tunnelToggle()
+    expect(face.invoke).toHaveBeenCalledWith(TUNNEL_TOGGLE_CHANNEL)
+    expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(TUNNEL_TOGGLE_CHANNEL)).toBe(false)
   })
 
   it('invoke：allowlist 通道 + 负载原样转发，返回RpcResult', async () => {

@@ -83,6 +83,8 @@ process.on('message', (message: unknown) => {
 let shutdownTree: (() => Promise<void>) | undefined
 // dsh-mobile-tunnel：隧道停机缝（装配在场时由分支内赋值——有界杀当前句柄，无孤儿）
 let tunnelStop: () => Promise<void> = async () => {}
+// fix-17 ②：tab 切换重连缝（装配在场时由分支内赋值——隧道离线即建立，在线重推读数）
+let tunnelToggle: () => void = () => {}
 process.on('disconnect', () => {
   // fix-36：拒绝面补 catch——shutdown 链 reject 不落 unhandled rejection（仅记日志；
   // 5s 强退升级若也已失效，孤儿回收归 OS 进程树清理，不再额外改退出码）
@@ -221,6 +223,8 @@ async function main(): Promise<void> {
   const pinIssuer = createPinIssuer()
   const pairPort = ctx.webServer.port
   const pairGrant = issuer.current()
+  // fix-17 ③：PIN 签发读数（与 token 同刻度 5min——ready/轮换随 manifest 透传 UI PIN 卡）
+  const pinGrant = pinIssuer.current()
   let currentPairToken = pairGrant.token // dsh-mobile-tunnel：隧道 URL 换签锚（随轮换换新）
   let remotePairUrl: string | undefined
   if (remoteHost === '0.0.0.0' && lanIpv4 !== undefined) {
@@ -318,13 +322,27 @@ async function main(): Promise<void> {
         tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
       }
       tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
+      // fix-17 ②：tab 切换重连缝——隧道离线（无活动句柄）即触发建立；在线 = 重推当前
+      // 状态（读数刷新面）。start/stop/fallback 语义全在 TunnelManager，此处只装配触发。
+      tunnelToggle = () => {
+        if (tunnelManager === undefined) return
+        if (tunnelManager.state === undefined) {
+          void tunnelManager.start().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+          return
+        }
+        sendTunnelState(tunnelManager.state)
+      }
       const rotationTimer = setInterval(() => {
         const rotated = issuer.rotate()
         currentPairToken = rotated.token
+        // fix-17 ③：PIN 随 token 同拍轮换（桌面 PIN 卡读数换新——官方 :1199-1215 TTL 5min 语义）
+        const rotatedPin = pinIssuer.rotate()
         send({
           type: 'pair',
           remotePairUrl: remotePairUrlOf(lanIpv4, pairPort, rotated.token),
           remotePairExpiresAt: rotated.expiresAt,
+          remotePin: rotatedPin.pin,
+          remotePinExpiresAt: rotatedPin.expiresAt,
         })
         sendTunnelState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
       }, PAIRING_TTL_MS)
@@ -380,7 +398,12 @@ async function main(): Promise<void> {
     injections,
     remoteHost, // fix-3：实际绑定 host（装配期读 remoteApproval.enabled 的结果——UI 判读单源）
     ...(remotePairUrl !== undefined
-      ? { remotePairUrl, remotePairExpiresAt } // fix-6：/pair?token= 形状 + TTL 读数（全卡绑定 × 局域网 IPv4 在场才透传）
+      ? {
+          remotePairUrl,
+          remotePairExpiresAt, // fix-6：/pair?token= 形状 + TTL 读数（全卡绑定 × 局域网 IPv4 在场才透传）
+          remotePin: pinGrant.pin, // fix-17 ③：6 位 PIN + TTL 读数（互联网 tab PIN 卡单源）
+          remotePinExpiresAt: pinGrant.expiresAt,
+        }
       : {}), // fix-5：官方配对地址（单源透传）
     services: {
       forgeProjects: services.forgeProjects !== undefined,
@@ -406,6 +429,11 @@ async function main(): Promise<void> {
   handleMessage = (message) => {
     if (message?.type === 'shutdown') {
       void processShutdown.shutdown(0)
+      return
+    }
+    if (message?.type === 'tunnel-toggle') {
+      // fix-17 ②：tab 重连缝消费（见 tunnelToggle 装配注释）
+      tunnelToggle()
       return
     }
     if (message?.type === 'rpc') {

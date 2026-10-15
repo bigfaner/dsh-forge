@@ -16,6 +16,7 @@ import {
   asPairConnectedMessage,
   asReadyMessage,
   asTunnelMessage,
+  asTunnelToggleMessage,
   BRIDGE_SERVICE_NAMES,
   BUGS_SERVICE_METHODS,
   createApprovalRelay,
@@ -344,6 +345,59 @@ describe('asPairMessage（pair 消息守卫——run.ts 轮换分支消费）', 
     expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t' })).toBeUndefined()
     expect(asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 0 })).toBeUndefined()
     expect(asPairMessage({ type: 'pair', remotePairUrl: 42, remotePairExpiresAt: 1 })).toBeUndefined()
+  })
+})
+
+// ── fix-17：PIN 读数透传（官方 6 位 PIN + TTL——互联网 tab PIN 卡单源） ──
+
+describe('asReadyMessage/asPairMessage PIN 读数透传（fix-17 ③）', () => {
+  const base = {
+    type: 'ready',
+    url: 'http://127.0.0.1:1/#t',
+    injections: [],
+    services: {
+      forgeProjects: true,
+      forgeKnowledge: true,
+      forgeTasks: true,
+      forgeFeatures: true,
+      forgeProposals: true,
+      forgeDocs: true,
+      forgeSettings: true,
+      forgeBugs: true,
+      approval: true,
+    },
+  } as const
+
+  it('ready：remotePin（6 位数字）+ remotePinExpiresAt（正数）透传；畸形 = 降级不阻 ready', () => {
+    const withPin = asReadyMessage({ ...base, remotePin: '482913', remotePinExpiresAt: 123456 })
+    expect(withPin?.remotePin).toBe('482913')
+    expect(withPin?.remotePinExpiresAt).toBe(123456)
+    expect(asReadyMessage(base)?.remotePin).toBeUndefined()
+    for (const badPin of ['', '12345', '1234567', 'abcdef', 42]) {
+      expect(asReadyMessage({ ...base, remotePin: badPin })?.remotePin).toBeUndefined()
+    }
+    expect(asReadyMessage({ ...base, remotePin: '482913', remotePinExpiresAt: 0 })?.remotePinExpiresAt).toBeUndefined()
+  })
+
+  it('pair：remotePin/remotePinExpiresAt 可选透传（随轮换换新）；畸形降级缺席', () => {
+    const withPin = asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1, remotePin: '654321', remotePinExpiresAt: 2 })
+    expect(withPin).toEqual({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1, remotePin: '654321', remotePinExpiresAt: 2 })
+    const without = asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1 })
+    expect(without).toEqual({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1 })
+    const bad = asPairMessage({ type: 'pair', remotePairUrl: 'http://x/pair?token=t', remotePairExpiresAt: 1, remotePin: 'abc', remotePinExpiresAt: 2 })
+    expect('remotePin' in (bad ?? {})).toBe(false)
+  })
+})
+
+// ── fix-17 ②：tunnel-toggle 主 → 子消息（tab 切换重连缝载体） ──
+
+describe('asTunnelToggleMessage（tunnel-toggle 守卫——child.ts tab 重连分支消费）', () => {
+  it('{type: tunnel-toggle} → 消息对象；他形 → undefined', () => {
+    expect(asTunnelToggleMessage({ type: 'tunnel-toggle' })).toEqual({ type: 'tunnel-toggle' })
+    expect(asTunnelToggleMessage({ type: 'shutdown' })).toBeUndefined()
+    expect(asTunnelToggleMessage({ type: 'tunnel' })).toBeUndefined()
+    expect(asTunnelToggleMessage(null)).toBeUndefined()
+    expect(asTunnelToggleMessage(undefined)).toBeUndefined()
   })
 })
 

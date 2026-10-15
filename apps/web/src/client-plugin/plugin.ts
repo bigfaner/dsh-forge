@@ -1093,6 +1093,8 @@ function registerRemoteEntry(
           // fix-10：断开连接（官方锚 :1176 outline 钮——forge:remote/disconnect 撤该设备
           // 会话缝 + 即时 refresh；成功后快照回等待扫码）
           onDisconnect: (): Promise<void> => remote.disconnectDevice().then(() => undefined),
+          // fix-17 ②：tab 切换重连（切互联网 tab 隧道不在线 → tunnel-toggle 触发建立 + refresh）
+          onTunnelEnsure: (): Promise<void> => remote.tunnelEnsure().then(() => undefined),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1450,6 +1452,8 @@ export interface ForgeRemoteStatusFace {
   setEnabled(next: boolean): Promise<boolean>
   /** fix-10：断开连接（forge:remote/disconnect 撤该设备会话 + 即时 refresh；缺席/失败 = false） */
   disconnectDevice(): Promise<boolean>
+  /** fix-17 ②：tab 切换重连（dsh-forge:remote/tunnel-toggle 触发隧道建立/读数刷新 + refresh；桥缺席/失败 = false） */
+  tunnelEnsure(): Promise<boolean>
 }
 
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
@@ -1464,6 +1468,8 @@ interface ForgePreloadBridge {
     tunnelUrl?: string
     tunnelProvider?: string
     tunnelExpiresAt?: number
+    remotePin?: string
+    remotePinExpiresAt?: number
   }>
 }
 
@@ -1503,6 +1509,9 @@ const SETTINGS_CHANNEL_SET = 'forge:settings/set'
 /** fix-10 断开连接通道字面量（contracts REMOTE_CHANNELS.disconnect 同源镜像——bundle 零外部 import） */
 const REMOTE_CHANNEL_DISCONNECT = 'forge:remote/disconnect'
 
+/** fix-17 ② tab 重连通道字面量（host ipc/tunnel-channel.ts TUNNEL_TOGGLE_CHANNEL 同源镜像——dshForge 域外直转面） */
+const TUNNEL_TOGGLE_CHANNEL = 'dsh-forge:remote/tunnel-toggle'
+
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
   return typeof envelope === 'object' && envelope !== null &&
@@ -1524,6 +1533,8 @@ function snapshotOfReads(
     tunnelUrl?: string
     tunnelProvider?: string
     tunnelExpiresAt?: number
+    remotePin?: string
+    remotePinExpiresAt?: number
   } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
@@ -1560,11 +1571,20 @@ function snapshotOfReads(
   const expiresAt = manifest?.remotePairExpiresAt
   const pairExpiresAt =
     typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
+  // fix-17 ③ PIN 缝（镜像口径）：6 位数字 × 正有限 TTL 齐备才携带（remote-status 同判）。
+  const pin =
+    typeof manifest?.remotePin === 'string' && /^\d{6}$/.test(manifest.remotePin) ? manifest.remotePin : undefined
+  const pinExpiresAtRaw = manifest?.remotePinExpiresAt
+  const pinExpiresAt =
+    typeof pinExpiresAtRaw === 'number' && Number.isFinite(pinExpiresAtRaw) && pinExpiresAtRaw > 0
+      ? pinExpiresAtRaw
+      : undefined
   return {
     phase: 'listening',
     lanAddress,
     ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
     ...(tunnel !== undefined ? { tunnel } : {}),
+    ...(pin !== undefined && pinExpiresAt !== undefined ? { pin, pinExpiresAt } : {}),
   }
 }
 
@@ -1629,6 +1649,18 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
         .then(() => bridge.invoke(REMOTE_CHANNEL_DISCONNECT, null))
         .then(
           isOkEnvelope,
+          () => false,
+        )
+        .then((ok) => face.refresh().then(() => ok))
+    },
+    // fix-17 ②：tab 切换重连（tunnel-toggle 直转——结果经 manifest 轮询单源回流；失败 = false fail-soft）
+    tunnelEnsure: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(false)
+      return Promise.resolve()
+        .then(() => bridge.invoke(TUNNEL_TOGGLE_CHANNEL))
+        .then(
+          () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))

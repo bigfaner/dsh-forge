@@ -18,7 +18,7 @@ afterEach(() => {
 
 function fakeBridge(overrides: {
   readonly settings?: unknown
-  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number; remoteDeviceConnected?: boolean; tunnelUrl?: string; tunnelProvider?: string; tunnelExpiresAt?: number }
+  readonly manifest?: { url?: string; remoteHost?: string; remotePairUrl?: string; remotePairExpiresAt?: number; remoteDeviceConnected?: boolean; tunnelUrl?: string; tunnelProvider?: string; tunnelExpiresAt?: number; remotePin?: string; remotePinExpiresAt?: number }
   readonly invokeFail?: boolean
   readonly written?: { channel: string; payload: unknown }[]
 }): ForgeClientCtx {
@@ -261,6 +261,58 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     await remote.refresh()
     expect(await remote.setEnabled(true)).toBe(false)
     expect(remote.source.getSnapshot().phase).toBe('off')
+  })
+
+  it('fix-17 ③：manifest.remotePin/remotePinExpiresAt 透传快照 pin/pinExpiresAt（互联网 tab PIN 卡单源——镜像 remote-status 口径）', async () => {
+    const remote = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: {
+          url: 'http://127.0.0.1:1/',
+          remoteHost: '0.0.0.0',
+          remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+          remotePin: '482913',
+          remotePinExpiresAt: 1_234_567,
+        },
+      }),
+    )
+    await remote.refresh()
+    expect(remote.source.getSnapshot().pin).toBe('482913')
+    expect(remote.source.getSnapshot().pinExpiresAt).toBe(1_234_567)
+
+    const absent = buildRemoteStatusSource(
+      fakeBridge({
+        settings: { remoteApproval: { enabled: true } },
+        manifest: { url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' },
+      }),
+    )
+    await absent.refresh()
+    expect('pin' in absent.source.getSnapshot()).toBe(false)
+  })
+
+  it('fix-17 ②：tunnelEnsure 上行 dsh-forge:remote/tunnel-toggle 并即时 refresh（tab 切换重连缝）', async () => {
+    const written: { channel: string; payload?: unknown }[] = []
+    installed = (globalThis as { dshForge?: unknown }).dshForge
+    const bridge = {
+      invoke: (channel: string, payload?: unknown) => {
+        written.push({ channel, payload })
+        if (channel === 'forge:settings/get') return Promise.resolve({ ok: true, data: { remoteApproval: { enabled: true } } })
+        if (channel === 'dsh-forge:remote/tunnel-toggle') return Promise.resolve(true)
+        return Promise.reject(new Error(`unexpected channel ${channel}`))
+      },
+      getBootManifest: () => Promise.resolve({ url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' }),
+    }
+    ;(globalThis as { dshForge?: unknown }).dshForge = bridge
+    const remote = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
+    await remote.refresh()
+    await expect(remote.tunnelEnsure()).resolves.toBe(true)
+    expect(written.map((w) => w.channel)).toContain('dsh-forge:remote/tunnel-toggle')
+  })
+
+  it('fix-17 ②：桥缺席/通道失败 = tunnelEnsure false（fail-soft 不炸 tab 切换）', async () => {
+    delete (globalThis as { dshForge?: unknown }).dshForge
+    const remote = buildRemoteStatusSource({} as unknown as ForgeClientCtx)
+    await expect(remote.tunnelEnsure()).resolves.toBe(false)
   })
 
   it('订阅面：refresh 后通知订阅者（useSyncExternalStore 直连契约）', async () => {

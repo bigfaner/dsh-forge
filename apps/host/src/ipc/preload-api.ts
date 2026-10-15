@@ -12,6 +12,7 @@ import {
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
+import { TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import {
   HARNESS_RELAUNCH_CHANNEL,
   HARNESS_SAFE_MODE_CHANNEL,
@@ -71,6 +72,12 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     relaunchHarness: (): Promise<void> => invokeFace.invoke(HARNESS_RELAUNCH_CHANNEL) as Promise<void>,
     relaunchSafeMode: (): Promise<void> => invokeFace.invoke(HARNESS_SAFE_MODE_CHANNEL) as Promise<void>,
     showHarnessLog: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_LOG_CHANNEL) as Promise<boolean>,
+    /**
+     * fix-17 ②：tab 切换重连缝（dshForge 域外直转面先例同制——不进 forge invoke allowlist）：
+     * 触发 host 侧隧道建立/读数刷新（child 侧 tunnel-toggle 分支消费），结果经 boot
+     * manifest 轮询单源回流。
+     */
+    tunnelToggle: (): Promise<void> => invokeFace.invoke(TUNNEL_TOGGLE_CHANNEL) as Promise<void>,
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝） */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {

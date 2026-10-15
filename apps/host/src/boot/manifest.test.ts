@@ -91,6 +91,22 @@ describe('buildBootManifest', () => {
     expect(plain.remotePairUrl).toBeUndefined()
   })
 
+  it('fix-17 ③：remotePin/remotePinExpiresAt 在场透传（官方 6 位 PIN + TTL 读数——互联网 tab PIN 卡单源）；畸形 = 字段不出现', () => {
+    const withPin = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, '482913', 123456)
+    expect(withPin.remotePin).toBe('482913')
+    expect(withPin.remotePinExpiresAt).toBe(123456)
+    const plain = buildBootManifest('http://127.0.0.1:1/', [])
+    expect('remotePin' in plain).toBe(false)
+    expect('remotePinExpiresAt' in plain).toBe(false)
+    // 非 6 位数字 / TTL 非正数 = 降级缺席
+    for (const badPin of ['', '12345', '1234567', 'abcdef', 42 as unknown as string]) {
+      const m = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, badPin, 123456)
+      expect('remotePin' in m).toBe(false)
+    }
+    const badTtl = buildBootManifest('http://127.0.0.1:1/', [], '0.0.0.0', undefined, undefined, undefined, undefined, '482913', 0)
+    expect('remotePinExpiresAt' in badTtl).toBe(false)
+  })
+
   it('dsh-mobile-tunnel：tunnelPairUrlOf 产隧道 /pair 形状——`${tunnelUrl}/pair?token=<token>`（与 LAN 同协议，URL 形状单源）', () => {
     expect(tunnelPairUrlOf('https://x.trycloudflare.com', 'abc_-X')).toBe(
       'https://x.trycloudflare.com/pair?token=abc_-X',

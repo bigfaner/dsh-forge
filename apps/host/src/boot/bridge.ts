@@ -82,7 +82,15 @@ export interface BridgeShutdownRequest {
   readonly type: 'shutdown'
 }
 
-export type MainToChildMessage = BridgeRpcRequest | BridgeShutdownRequest
+/**
+ * fix-17 ② 主 → 子：隧道 tab 重连缝（UI 切互联网 tab 隧道不在线时触发——child 侧
+ * tunnel-toggle 分支消费；dshForge 域外直转面先例同制，不进 forge RPC allowlist）。
+ */
+export interface BridgeTunnelToggleRequest {
+  readonly type: 'tunnel-toggle'
+}
+
+export type MainToChildMessage = BridgeRpcRequest | BridgeShutdownRequest | BridgeTunnelToggleRequest
 
 /** 子 → 主：boot 就绪（manifest 面 {url, injections} + 六服务在场位——Interface 6 ready 位 ×4 扩池；
  *  tools = ToolRuntime 已注册 tool 名清单（3.4 冒烟观测面——plugin-forge tool 面可达性经 spawn
@@ -101,6 +109,10 @@ export interface BridgeReadyMessage {
   readonly remotePairUrl?: string
   /** fix-6：配对令牌到期时刻（epoch ms——桌面 QR 倒计时单源；可选缺席降级不阻 ready） */
   readonly remotePairExpiresAt?: number
+  /** fix-17 ③：连接密码 PIN（官方 6 位数字——互联网 tab PIN 卡单源；可选缺席降级不阻 ready） */
+  readonly remotePin?: string
+  /** fix-17 ③：PIN 到期时刻（epoch ms——PIN 倒计时单源；与 remotePin 同生同灭） */
+  readonly remotePinExpiresAt?: number
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -117,6 +129,10 @@ export interface BridgePairMessage {
   readonly type: 'pair'
   readonly remotePairUrl: string
   readonly remotePairExpiresAt: number
+  /** fix-17 ③：新 PIN（6 位数字——随轮换换新；可选——旧 child 零 PIN 载荷兼容） */
+  readonly remotePin?: string
+  /** fix-17 ③：新 PIN 到期时刻（epoch ms；与 remotePin 同生同灭） */
+  readonly remotePinExpiresAt?: number
 }
 
 /**
@@ -443,6 +459,9 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     typeof m.remotePairExpiresAt === 'number' && Number.isFinite(m.remotePairExpiresAt) && m.remotePairExpiresAt > 0
       ? m.remotePairExpiresAt
       : undefined
+  // fix-17 ③ PIN 读数：可选字段——pin 须 6 位数字、expiresAt 正有限数（同降级口径）
+  const remotePin = typeof m.remotePin === 'string' && /^\d{6}$/.test(m.remotePin) ? m.remotePin : undefined
+  const remotePinExpiresAt = positiveTsOf(m.remotePinExpiresAt)
   return {
     type: 'ready',
     url: m.url,
@@ -452,7 +471,21 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(remoteHost !== undefined ? { remoteHost } : {}),
     ...(remotePairUrl !== undefined ? { remotePairUrl } : {}),
     ...(remotePairExpiresAt !== undefined ? { remotePairExpiresAt } : {}),
+    ...(remotePin !== undefined ? { remotePin } : {}),
+    ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
   }
+}
+
+/**
+ * fix-17 ③ PIN 形状守卫（官方 6 位数字——畸形 = undefined 降级缺席）。
+ */
+function pinOf(value: unknown): string | undefined {
+  return typeof value === 'string' && /^\d{6}$/.test(value) ? value : undefined
+}
+
+/** fix-17 ③ 正有限时刻守卫（remotePairExpiresAt 同口径——可选读数统一降级面） */
+function positiveTsOf(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
 /**
@@ -471,7 +504,16 @@ export function asPairMessage(message: unknown): BridgePairMessage | undefined {
   ) {
     return undefined
   }
-  return { type: 'pair', remotePairUrl: m.remotePairUrl, remotePairExpiresAt: m.remotePairExpiresAt }
+  // fix-17 ③：PIN 读数可选透传（随轮换换新；畸形 = 字段缺席——零载荷兼容旧 child）
+  const remotePin = pinOf(m.remotePin)
+  const remotePinExpiresAt = positiveTsOf(m.remotePinExpiresAt)
+  return {
+    type: 'pair',
+    remotePairUrl: m.remotePairUrl,
+    remotePairExpiresAt: m.remotePairExpiresAt,
+    ...(remotePin !== undefined ? { remotePin } : {}),
+    ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
+  }
 }
 
 /**
@@ -509,6 +551,16 @@ export function asTunnelMessage(message: unknown): BridgeTunnelMessage | undefin
     tunnelProvider: m.tunnelProvider as TunnelProvider,
     ...(expiresAt !== undefined ? { tunnelExpiresAt: expiresAt } : {}),
   }
+}
+
+/**
+ * fix-17 ② tunnel-toggle 消息守卫（主 → 子 tab 重连请求分流——child.ts 隧道分支消费）。
+ * 零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asTunnelToggleMessage(message: unknown): BridgeTunnelToggleRequest | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'tunnel-toggle') return undefined
+  return { type: 'tunnel-toggle' }
 }
 
 /**

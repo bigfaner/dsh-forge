@@ -12,7 +12,7 @@ import {
   HARNESS_SAFE_MODE_ENV, noteHarnessLog, refreshKnowledgeBindings, registerBootChannel,
   registerDirectoryPickerChannel, registerFsChannels, registerHarnessChannels,
   registerKnowledgeChannels, registerM2Channels, registerProjectsChannels, removeHarnessChannels,
-  runStartupReconcile, withKnowledgeBindingsRefresh,
+  registerTunnelChannel, removeTunnelChannel, runStartupReconcile, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
 import { ensureProfileMaterialized, ensureSafeModeProfile, resolveHostPaths } from './profile/index.js'
 import {
@@ -128,6 +128,8 @@ void (async () => {
         return true
       },
     })
+    // fix-17 ②：tab 切换重连缝（dshForge 直转面——转发 tunnel-toggle 至 boot child）
+    registerTunnelChannel(ipcMain, { toggle: () => host.toggleTunnel?.() })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
     if (!app.isPackaged) { // 开发态 devtools 面：F12 按需开关（用户裁决 2026-10-13：boot 不自动
@@ -143,6 +145,7 @@ void (async () => {
       forgeIpc.unregisterAll()
       for (const channel of [BOOT_CHANNEL, DIRECTORY_PICKER_CHANNEL]) ipcMain.removeHandler(channel)
       removeHarnessChannels(ipcMain) // fix-12 B：Harness 三通道注销（与目录选取同制）
+      removeTunnelChannel(ipcMain) // fix-17 ②：隧道重连缝清理面
       hostRef = undefined
       void host.shutdown()
     })

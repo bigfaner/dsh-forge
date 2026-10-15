@@ -122,6 +122,11 @@ export interface DshHostHandle {
    * 扫码）。缺席 = 旧 boot 会话/降级（remote rpc fail-soft revoked:false）。
    */
   clearRemoteDeviceConnected?(): void
+  /**
+   * fix-17 ②：tab 切换重连缝（UI 切互联网 tab 隧道不在线时消费——转发 tunnel-toggle
+   * 消息至 child 侧隧道分支；缺席 = 旧 boot 会话降级，UI fail-soft）。
+   */
+  toggleTunnel?(): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
 }
@@ -233,6 +238,10 @@ export async function bootDshHost(
     ready.remoteHost,
     ready.remotePairUrl,
     ready.remotePairExpiresAt,
+    undefined,
+    undefined,
+    ready.remotePin, // fix-17 ③：PIN 读数入 manifest（互联网 tab PIN 卡单源）
+    ready.remotePinExpiresAt,
   )
   child.on('message', (message: unknown) => {
     // fix-7：/pair 握手成功推送 → manifest 抬 remoteDeviceConnected（粘性 until 重启——
@@ -255,6 +264,10 @@ export async function bootDshHost(
     // fix-10：断开连接缝——connected 粘性位收回（url/绑定/配对/隧道面全保留）
     clearRemoteDeviceConnected: () => {
       manifest = applyPairDisconnected(manifest)
+    },
+    // fix-17 ②：tab 重连缝——tunnel-toggle 转发 child（通道已关 = 发送失败静默，UI refresh 收敛）
+    toggleTunnel: () => {
+      sendToChild(child, { type: 'tunnel-toggle' })
     },
     toolNames: ready.tools ?? [],
     services: {
@@ -394,6 +407,8 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     pair.remotePairExpiresAt,
     manifest.remoteDeviceConnected, // fix-7：轮换重建保留 connected 读数（粘性 until 重启）
     tunnelStateOf(manifest), // dsh-mobile-tunnel：轮换重建保留隧道面（新 token URL 由后续 tunnel 推送换新）
+    pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
+    pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
   )
 }
 
@@ -410,6 +425,8 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     manifest.remotePairExpiresAt,
     true,
     tunnelStateOf(manifest), // dsh-mobile-tunnel：connected 重建保留隧道面
+    manifest.remotePin, // fix-17 ③：PIN 读数保留
+    manifest.remotePinExpiresAt,
   )
 }
 
@@ -426,6 +443,8 @@ export function applyPairDisconnected(manifest: BootManifest): BootManifest {
     manifest.remotePairExpiresAt,
     undefined,
     tunnelStateOf(manifest),
+    manifest.remotePin, // fix-17 ③：PIN 读数保留
+    manifest.remotePinExpiresAt,
   )
 }
 
@@ -451,5 +470,7 @@ export function applyTunnelMessage(manifest: BootManifest, message: unknown): Bo
           ...(tunnel.tunnelExpiresAt !== undefined ? { expiresAt: tunnel.tunnelExpiresAt } : {}),
         }
       : undefined,
+    manifest.remotePin, // fix-17 ③：隧道重建保留 PIN 读数
+    manifest.remotePinExpiresAt,
   )
 }

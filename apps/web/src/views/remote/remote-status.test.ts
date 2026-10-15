@@ -143,4 +143,33 @@ describe('remoteSnapshotOf 快照映射（配置 + manifest → 快照）', () =
     })
     expect('pairExpiresAt' in withoutTtl).toBe(false)
   })
+
+  it('fix-17 ③：remotePin/remotePinExpiresAt 在场 = 快照 pin/pinExpiresAt 透传（互联网 tab PIN 卡单源）；畸形 = 字段不出现', () => {
+    const withPin = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+      remotePin: '482913',
+      remotePinExpiresAt: 1_234_567,
+    })
+    expect(withPin.pin).toBe('482913')
+    expect(withPin.pinExpiresAt).toBe(1_234_567)
+    const withoutPin = remoteSnapshotOf(true, {
+      url: 'http://127.0.0.1:19400/',
+      remoteHost: '0.0.0.0',
+      remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+    })
+    expect('pin' in withoutPin).toBe(false)
+    expect('pinExpiresAt' in withoutPin).toBe(false)
+    for (const badPin of ['12345', 'abcdef', 42 as unknown as string]) {
+      const bad = remoteSnapshotOf(true, {
+        url: 'http://127.0.0.1:19400/',
+        remoteHost: '0.0.0.0',
+        remotePairUrl: 'http://192.168.1.7:19400/pair?token=t',
+        remotePin: badPin,
+        remotePinExpiresAt: 1,
+      })
+      expect('pin' in bad).toBe(false)
+    }
+  })
 })

@@ -691,3 +691,19 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+
+/* fix-17 ③ 互联网 tab 连接密码 PIN 卡（官方 :1199-1215——大字号 6 位 + 有效期倒计时居中） */
+.dswf-remote-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px; /* dsw-raw 卡内行缝（面板局部刻度） */
+}
+
+.dswf-remote-pin-value {
+  font-size: 32px; /* dsw-raw PIN 大字号读数（官方 PIN 卡同刻度，无对应字号令牌） */
+  font-weight: 600;
+  letter-spacing: 8px; /* dsw-raw 6 位分隔刻度（同上局部） */
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}

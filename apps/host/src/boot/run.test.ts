@@ -226,6 +226,38 @@ describe('applyTunnelMessage（dsh-mobile-tunnel 隧道状态推送——manifes
   })
 })
 
+describe('fix-17 ③ PIN 读数 manifest 面（轮换换新 / 重建保留）', () => {
+  const base = () =>
+    buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, '111111', 5000)
+
+  it('pair 轮换消息携 PIN 读数 → manifest PIN 换新（隧道/连接位保留）', () => {
+    const next = applyPairMessage(base(), {
+      type: 'pair',
+      remotePairUrl: 'http://192.168.1.7:1/pair?token=new',
+      remotePairExpiresAt: 2000,
+      remotePin: '222222',
+      remotePinExpiresAt: 8000,
+    })
+    expect(next.remotePin).toBe('222222')
+    expect(next.remotePinExpiresAt).toBe(8000)
+    expect(next.remotePairExpiresAt).toBe(2000)
+  })
+
+  it('pair 轮换消息零 PIN 载荷 → 保留旧 PIN 读数（旧 child 兼容）', () => {
+    const next = applyPairMessage(base(), { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(next.remotePin).toBe('111111')
+    expect(next.remotePinExpiresAt).toBe(5000)
+  })
+
+  it('connected/断开/隧道重建 → PIN 读数保留（粘性面不动）', () => {
+    expect(applyPairConnected(base()).remotePin).toBe('111111')
+    expect(applyPairDisconnected(base()).remotePinExpiresAt).toBe(5000)
+    const withTunnel = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
+    expect(withTunnel.remotePin).toBe('111111')
+    expect(withTunnel.tunnelProvider).toBe('pinggy')
+  })
+})
+
 describe('createBridgeChannel · RPC 结算面（既有语义回归——提取重构零漂移）', () => {
   it('call → rpc 请求出站（id 递增）；ok 结果按 id 结算', async () => {
     const { child, sent } = fakeChild()

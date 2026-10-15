@@ -31,6 +31,8 @@ export interface ForgeRemoteEntryProps {
   readonly refresh?: () => unknown
   /** fix-10：断开连接动作（forge:remote/disconnect 撤该设备会话 + refresh——缺席 = 钮禁用） */
   readonly onDisconnect?: () => Promise<void> | void
+  /** fix-17 ②：tab 切换重连动作（切互联网 tab 隧道不在线时触发建立——缺席 = 仅刷新读数） */
+  readonly onTunnelEnsure?: () => Promise<void> | void
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -75,6 +77,21 @@ export function secondsLeftOf(pairExpiresAt: number | undefined, now: number): n
 /** 倒计时文案（官方常量对照——「二维码将在 N 秒后刷新」） */
 export function pairCountdownText(seconds: number): string {
   return `二维码将在 ${seconds} 秒后刷新`
+}
+
+/** PIN 倒计时文案（fix-17 ③——官方 :1199-1215 TTL 语义） */
+export function pinCountdownText(seconds: number): string {
+  return `PIN 有效期还剩 ${seconds} 秒`
+}
+
+/**
+ * fix-17 ② tab 切换重连动作派生（纯函数——官方 :1187 模式切换语义单源）：
+ * internet × 隧道非在线 = ensure（触发建立）；internet × 在线 = refresh（刷新读数）；
+ * lan = refresh（webserver 常在无需重连——刷新 LAN 读数即可）。
+ */
+export function modeSelectEffectOf(mode: RemoteMode, tunnelPhase: TunnelPhase): 'refresh' | 'ensure' {
+  if (mode === 'lan') return 'refresh'
+  return tunnelPhase === 'online' ? 'refresh' : 'ensure'
 }
 
 // ── fix-12 B：Harness 菜单三项（DSH Desktop 0.10.0 main.js:22317-22336 文案逐字搬运；
@@ -320,10 +337,12 @@ export function TunnelCard(props: {
   readonly provider?: TunnelProvider
   /** TTL 余分钟（Pinggy 链路在场——横幅读数；cloudflared = 缺席零横幅） */
   readonly minutesLeft?: number
+  /** fix-17 ①：token TTL 余秒（QR 倒计时读数——对齐官方 5min；缺席 = 零倒计时行） */
+  readonly secondsLeft?: number
   /** fallback 缝（换线动作——缺席 = 钮禁用） */
   readonly onFallback?: () => Promise<void> | void
 }): ReactNode {
-  const { phase, url, provider, minutesLeft, onFallback } = props
+  const { phase, url, provider, minutesLeft, secondsLeft, onFallback } = props
   const online = phase === 'online'
   return (
     <div className="dswf-remote-tunnel" data-phase={phase} data-testid="dswf-remote-tunnel">
@@ -346,6 +365,12 @@ export function TunnelCard(props: {
       {online && provider === 'pinggy' && minutesLeft !== undefined && (
         <p className="dswf-remote-tunnel-banner" data-testid="dswf-remote-tunnel-ttl">
           {tunnelBannerText(minutesLeft)}
+        </p>
+      )}
+      {/* fix-17 ①：QR 倒计时读数对齐 token TTL（官方 :1145-1147/:1196——轮换推送换 token/QR 即时重绘） */}
+      {online && secondsLeft !== undefined && (
+        <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-tunnel-countdown">
+          {pairCountdownText(secondsLeft)}
         </p>
       )}
       {online && (
@@ -382,6 +407,8 @@ export function RemotePanel(props: {
   readonly mode?: RemoteMode
   /** 1.4 fallback 缝（换线动作透传——缺席 = 换线钮禁用态） */
   readonly onFallback?: () => Promise<void> | void
+  /** fix-17 ②：tab 切换重连缝（切互联网 tab 隧道不在线时触发建立——缺席 = 仅刷新读数） */
+  readonly onTunnelEnsure?: () => Promise<void> | void
   /** fix-10：完成钮缝（关 dialog——连接成功态官方锚 main.js:1176 双钮之 primary） */
   readonly onClose?: () => void
   /** fix-10：断开连接缝（撤该设备会话——官方锚 :1176 双钮之 outline；缺席 = 钮禁用） */
@@ -394,6 +421,32 @@ export function RemotePanel(props: {
   const [modeState, setModeState] = useState<RemoteMode>('lan')
   const mode = props.mode ?? modeState
   const [switching, setSwitching] = useState(false)
+  // fix-17 ②：tab 切换重连（官方 :1187 模式切换语义）——internet 非在线 = 触发建立后
+  // 刷新读数；online/lan = 直接刷新读数。效果派生归 modeSelectEffectOf 单源（测试锚）。
+  const handleModeSelect = useCallback(
+    (next: RemoteMode) => {
+      setModeState(next)
+      if (props.mode !== undefined) return // 受控模式 = 装配侧自驱（测试/装配缝不抢动作）
+      const phase = tunnelPhaseOf(
+        {
+          url: snapshot.tunnel?.url,
+          expiresAt: snapshot.tunnel?.expiresAt,
+          switching,
+        },
+        Date.now(),
+      )
+      const effect = modeSelectEffectOf(next, phase)
+      if (effect === 'ensure') {
+        void Promise.resolve(props.onTunnelEnsure?.())
+          .catch(() => undefined)
+          .then(() => onRefresh?.())
+        return
+      }
+      onRefresh?.()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 派生读数取当值（切换时刻判定），依赖面刻意收窄
+    [props.mode, props.onTunnelEnsure, onRefresh, snapshot.tunnel, switching],
+  )
   const handleFallback = useCallback(() => {
     if (props.onFallback === undefined) return
     setSwitching(true)
@@ -411,17 +464,24 @@ export function RemotePanel(props: {
   const tunnelMinutesLeft =
     tunnel?.expiresAt !== undefined ? tunnelMinutesLeftOf(tunnel.expiresAt, nowTs) : undefined
   const secondsLeft = secondsLeftOf(snapshot.pairExpiresAt, nowTs)
-  // fix-6/1.4 倒计时：1s interval 渲染读数（LAN QR 倒计时 / 隧道 TTL 横幅同刻度）；
-  // 到期触发 onRefresh 重取（新 token/TTL 随快照回流——官方刷新机制对齐）。
+  // fix-17 ③：PIN 倒计时读数（同刻度 1s interval——pinExpiresAt 单源）
+  const pinSecondsLeft = secondsLeftOf(snapshot.pinExpiresAt, nowTs)
+  // fix-6/1.4/fix-17 倒计时：1s interval 渲染读数（LAN QR 倒计时 / 隧道 TTL 横幅 / PIN 倒
+  // 计时同刻度）；到期触发 onRefresh 重取（新 token/TTL/PIN 随快照回流——官方刷新机制对齐）。
+  const pinLive = snapshot.pin !== undefined
   const ttlLive = mode === 'internet' && tunnelPhase === 'online' && tunnel?.expiresAt !== undefined
   useEffect(() => {
-    if (pairValue === undefined && !ttlLive) return
+    if (pairValue === undefined && !ttlLive && !pinLive) return
     const timer = setInterval(() => setNowTs(Date.now()), 1000)
     return () => clearInterval(timer)
-  }, [pairValue, ttlLive])
+  }, [pairValue, ttlLive, pinLive])
   useEffect(() => {
     if (pairValue !== undefined && secondsLeft <= 0) onRefresh?.()
   }, [pairValue, secondsLeft, onRefresh])
+  // fix-17 ③：PIN 到期 → 重取 manifest（新 PIN 随轮换回流——官方 TTL 5min 换新语义）
+  useEffect(() => {
+    if (pinLive && pinSecondsLeft <= 0) onRefresh?.()
+  }, [pinLive, pinSecondsLeft, onRefresh])
   useEffect(() => {
     if (ttlLive && tunnel !== undefined && tunnel.expiresAt !== undefined && tunnel.expiresAt <= nowTs) {
       onRefresh?.()
@@ -475,9 +535,10 @@ export function RemotePanel(props: {
         </div>
       ) : (
         <>
-        <ModeTabs active={mode} onSelect={setModeState} />
+        <ModeTabs active={mode} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
-          snapshot.tunnel === undefined ? (
+          <>
+          {snapshot.tunnel === undefined ? (
             // fix-10（隧道卡死收敛）：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——
             // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）
             <p className="dswf-remote-empty" data-testid="dswf-remote-tunnel-empty">
@@ -489,9 +550,25 @@ export function RemotePanel(props: {
               url={tunnel?.url}
               provider={tunnel?.provider}
               minutesLeft={tunnelMinutesLeft}
+              secondsLeft={
+                mode === 'internet' && tunnelPhase === 'online' && snapshot.pairExpiresAt !== undefined
+                  ? secondsLeft // fix-17 ①：token TTL 读数在场才渲染倒计时（缺席 = 零行不伪装）
+                  : undefined
+              }
               onFallback={handleFallback}
             />
-          )
+          )}
+          {/* fix-17 ③：连接密码 PIN 卡（官方 :1199-1215——大字号 6 位 + 有效期倒计时；
+              读数随 manifest 轮换换新；缺席 = 卡不呈现，不占位不伪装 */}
+          {snapshot.pin !== undefined && (
+            <div className="dswf-remote-pin" data-testid="dswf-remote-pin">
+              <span className="dswf-remote-pin-value">{snapshot.pin}</span>
+              <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-countdown">
+                {pinCountdownText(pinSecondsLeft)}
+              </span>
+            </div>
+          )}
+          </>
         ) : (
           <div className="dswf-remote-pair">
             {pairValue !== undefined ? (
@@ -607,6 +684,8 @@ export function ForgeRemoteDialog(props: {
   readonly onRefresh?: () => void
   /** fix-10：断开连接缝（透传 RemotePanel——官方锚 :1176 outline 钮） */
   readonly onDisconnect?: () => Promise<void> | void
+  /** fix-17 ②：tab 切换重连缝（透传 RemotePanel——切互联网 tab 隧道不在线时触发建立） */
+  readonly onTunnelEnsure?: () => Promise<void> | void
 }): ReactNode {
   return (
     <Modal
@@ -624,6 +703,7 @@ export function ForgeRemoteDialog(props: {
         onRefresh={props.onRefresh}
         onClose={props.onClose}
         onDisconnect={props.onDisconnect}
+        onTunnelEnsure={props.onTunnelEnsure}
       />
     </Modal>
   )
@@ -631,7 +711,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const subscribe = useCallback((onChange: () => void) => status?.subscribe(onChange) ?? (() => {}), [status])
@@ -680,6 +760,7 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect }: Fo
         onToggle={onToggle}
         onRefresh={refresh !== undefined ? () => { void refresh() } : undefined}
         onDisconnect={onDisconnect}
+        onTunnelEnsure={onTunnelEnsure}
       />
     </div>
   )
