@@ -3,7 +3,9 @@
 // 无 __DSH_BOOT__ 注入；宿主载 build dist，1.5 起 watch 迭代）+ `tsc -b --watch`（全拓扑）
 // + electron（指 dev profile：DSH_FORGE_DEV_PROFILE=dev，开发 profile 直链
 // workspace 构建产物，免整包组装——1.4 接线消费该环境变量）。
-// electron 面守卫：apps/host/dist/main.js 就绪后才拉起（1.4 落地宿主前仅跑前两者）。
+// electron 面守卫：apps/host/dist/main.js 就绪后才拉起（1.4 落地宿主前仅跑前两者）；
+// 起跑前 ensure-host-dist 新鲜度自检（2026-10-15 事故：tsbuildinfo 与输出脱节后
+// tsc -b/--watch 永判 up-to-date 零 emit——半新半旧 dist 令 electron ESM 崩）。
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -50,6 +52,16 @@ function start(name, cmd, env = {}) {
   })
   console.log(`[dev] ${name}: ${cmd}`)
   return p
+}
+
+// host dist 新鲜度自检须先于两 watch：tsc watch 初始 pass 信 tsbuildinfo，脱节状态零
+// emit 不自愈；后置则与其 emit 竞写同一 dist。失败不拦 dev（fail-soft 沿 vite+tsc 继续，
+// electron 由下方 existsSync 守卫兜底不拉起）。
+const ensureHostDist = spawnSync(process.execPath, [join(ROOT, 'scripts', 'ensure-host-dist.mjs')], {
+  stdio: 'inherit',
+})
+if (ensureHostDist.status !== 0) {
+  console.error('[dev] host dist 新鲜度自检/重建失败——electron 将不启动（仅 vite + tsc watch）')
 }
 
 start('vite', 'pnpm -C apps/web watch')
