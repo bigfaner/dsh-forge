@@ -23,7 +23,7 @@ function freshPair(): { tasksHome: string; workspaceDir: string } {
 }
 
 describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）', () => {
-  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 十表（M3 八域表）+ schema v1 + busy_timeout', () => {
+  it('缺席建库：{tasksHome}/{flatten}@{hash8}/forge.db 落位 + 十二表（八域表 + bugs + 基建表）+ schema v2 + busy_timeout', () => {
     const { tasksHome, workspaceDir } = freshPair()
     const db = openForgeDb(tasksHome, workspaceDir)
     try {
@@ -36,9 +36,11 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
         .map((r) => r.name)
       expect(tables).toEqual([
         'app_key_logs',
+        'bugs',
         'feature_documents',
         'feature_records',
         'features',
+        'migration_digests',
         'proposals',
         'schema_meta',
         'task_edges',
@@ -46,7 +48,7 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
         'task_session_links',
         'tasks',
       ])
-      expect(db.prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(1)
+      expect(db.prepare<unknown[], { v: number | null }>(`SELECT MAX(version) AS v FROM schema_meta`).get()?.v).toBe(2)
       expect(db.pragma('busy_timeout', { simple: true })).toBe(5000)
       expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
     } finally {
@@ -60,7 +62,7 @@ describe('5.1 openForgeDb · core testutil 形制建库（派生目录单源）'
     first.close()
     const second = openForgeDb(tasksHome, workspaceDir)
     try {
-      expect(second.prepare<unknown[], { c: number }>(`SELECT COUNT(*) AS c FROM schema_meta`).get()?.c).toBe(1)
+      expect(second.prepare<unknown[], { c: number }>(`SELECT COUNT(*) AS c FROM schema_meta`).get()?.c).toBe(2)
     } finally {
       second.close()
     }
