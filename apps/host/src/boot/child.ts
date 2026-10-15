@@ -44,6 +44,9 @@ import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
+import { handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+import type { RemoteChannelService } from '../ipc/remote-rpc.js'
+import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
@@ -104,6 +107,9 @@ let tunnelToggle: () => void = () => {}
 let tunnelFallback: () => void = () => {}
 // fix-18：PIN 重置缝（装配在场时由分支内赋值——pinIssuer.rotate 新 PIN 经 pair 消息回推）
 let pinRotate: () => void = () => {}
+// fix-25：worker 侧审批中继（fix-2 桥——/remote/__rpc 审批端点与 main 侧 forge:remote/
+// approval 转发器共用同一中继单源；装配段赋值，缺席 = 端点内 fail-soft unavailable）
+let approvalRelay: ApprovalRelay | undefined
 
 /**
  * fix-18 ⑤：手机受限视图入口 cookie（/pair 与 /pair/verify 成功面 Set-Cookie）。官方
@@ -232,6 +238,8 @@ async function main(): Promise<void> {
     args: ['--no-open', '--port', String(options.port)],
   })
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
+  // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
+  const servicesFace = ctx as unknown as ServiceGetFace
   // fix-3：实际绑定 host（快照面单源——UI pending/listening 判读 = 产品配置意图 × 本值；
   // 经 ready 消息 → boot manifest 透传 renderer）
   const remoteHost = ctx.webServer.host
@@ -341,6 +349,25 @@ async function main(): Promise<void> {
             diag(`[pair-diag] /remote token → 302 ${redactTokenQuery(exchangeTarget)}`)
             res.writeHead(302, { location: exchangeTarget, 'cache-control': 'no-store' })
             res.end()
+            return
+          }
+          // fix-25 webserver HTTP RPC 桥分诊（POST /remote/__rpc——受限只读 + 审批端点：
+          // progress = listTasks/taskStats 装配只读、projects/list = 项目上下文只读、
+          // approval = 决策转发——与 forge:remote/* 通道同语义。鉴权 = 会话 cookie 在场
+          // 才可达（官方 BrowserAuth 会话，未配对官方 401/403）；请求经 diag 落 harness.log）
+          if (isRemoteHttpRpcRequest(method, requestUrl)) {
+            void handleRemoteHttpRpc(req, res, {
+              get tasks() {
+                return servicesFace.get('forgeTasks') as RemoteChannelService | undefined
+              },
+              get projects() {
+                return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
+              },
+              forwardApproval: (input) =>
+                approvalRelay?.deposit(input) ?? Promise.resolve({ forwarded: false, reason: 'unavailable' as const }),
+              authorize: (rq, rs) => ctx.connection.authorizeIndex(rq as Parameters<typeof ctx.connection.authorizeIndex>[0], rs as Parameters<typeof ctx.connection.authorizeIndex>[1]),
+              diag,
+            })
             return
           }
           // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth——零自持；
@@ -524,13 +551,11 @@ async function main(): Promise<void> {
   }
   const remotePairExpiresAt = remotePairUrl !== undefined ? pairGrant.expiresAt : undefined
   const injections = ctx.webServer.collectIndexInjections()
-  const servicesFace = ctx as unknown as ServiceGetFace
   // mobile-remote-approval fix-2：官方审批桥 worker 侧（ctx.approval 在场才建中继——
   // 运行期存在性检查承担 fail-soft；缺席 = approval ready 位 false，main 侧转发器不接线，
   // forge:remote/approval 保持 fail-soft unavailable）。fail-open 语义（用户裁决
   // 2026-10-14）：approval/request waterfall 应答监听器在手机决策未命中时透传 next()
   // 放行桌面工作台 answerer——global 注册使其在任意 agent scope 的 waterfall 可达。
-  let approvalRelay: ApprovalRelay | undefined
   try {
     const approval = ctx.approval
     if (approval !== undefined && typeof approval === 'object') {

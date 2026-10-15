@@ -153,10 +153,11 @@ describe('暴露面边界（提案验收 6——组件层断言）', () => {
     }
   })
 
-  it('数据面不可达（transport 拒绝/缺席）= 配对引导页（官方配对流承载）', () => {
+  it('数据面不可达判据 = 重试后仍失败（fix-25）：首败呈 connecting（不回退引导页——首请求竞态不回退）', () => {
     const html = renderToStaticMarkup(
       <ForgeRemoteView transport={() => Promise.reject(new Error('unpaired'))} />,
     )
-    expect(html).toMatch(/配对/)
+    expect(html).toMatch(/正在连接/)
+    expect(html).not.toMatch(/dswf-rview-steps/)
   })
 })

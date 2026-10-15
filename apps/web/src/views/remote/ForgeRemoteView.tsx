@@ -28,6 +28,12 @@ import {
   type RemoteApprovalState,
 } from './remote-approval-model.js'
 import { remoteListRowsOf, type RemoteListRow } from './remote-view-model.js'
+import {
+  initialRemoteFaceState,
+  remoteFacePhaseOf,
+  resolveRemoteTransport,
+  type RemoteFaceState,
+} from './remote-transport.js'
 import './remote.css'
 
 /** forge:projects/list → 首个项目（受限视图上下文项目——单工作区产品形态；无项目 = undefined） */
@@ -47,24 +53,9 @@ async function progressSnapshotOf(
   return raw.data
 }
 
-/** 取受限视图传输面：注入优先；缺省 preload 真身（缺席 = undefined → 引导相位，不炸单页） */
+/** 取受限视图传输面：传输选择单源 = remote-transport（注入 > preload[桌面] > fetch[手机]） */
 function resolveTransport(injected?: ForgeTransport): ForgeTransport | undefined {
-  if (injected !== undefined) return injected
-  try {
-    // 惰性引入面（bundle 已同包——直接 import 会在非 Electron 载体构造期抛，此处延迟到调用期）
-    return preloadTransportSafe()
-  } catch {
-    return undefined
-  }
-}
-
-function preloadTransportSafe(): ForgeTransport {
-  const bridge = (globalThis as { dshForge?: { invoke(channel: string, payload?: unknown): Promise<unknown> } })
-    .dshForge
-  if (bridge === undefined || typeof bridge.invoke !== 'function') {
-    throw new Error('dsh-forge web: window.dshForge.invoke 缺席——受限页传输面不可达（官方配对流未放行）')
-  }
-  return (channel, payload) => bridge.invoke(channel, payload)
+  return resolveRemoteTransport(injected)
 }
 
 /** 配对引导页（官方配对流承载——产品只呈现引导，不渲染任何受限内容） */
@@ -226,6 +217,9 @@ export function ForgeRemoteView({
 }): ReactNode {
   const resolved = useMemo(() => resolveTransport(transport), [transport])
   const [snapshot, setSnapshot] = useState<RemoteProgressSnapshot | undefined>(undefined)
+  // fix-25 回退判定校准：数据面不可达的判据 = 传输失败重试后仍失败（remote-transport
+  // 状态机单源）——connecting 相位不回退引导页（首请求竞态不闪引导），unreachable 才回退。
+  const [face, setFace] = useState<RemoteFaceState>(initialRemoteFaceState)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     if (resolved === undefined) return undefined
@@ -235,10 +229,14 @@ export function ForgeRemoteView({
         .then((project) => (project === undefined ? undefined : progressSnapshotOf(resolved, project.id)))
         .then(
           (data) => {
-            if (alive) setSnapshot(data)
+            if (!alive) return
+            setSnapshot(data)
+            setFace((state) => remoteFacePhaseOf(state, data === undefined ? 'fail' : 'ok'))
           },
           () => {
-            if (alive) setSnapshot(undefined)
+            if (!alive) return
+            setSnapshot(undefined)
+            setFace((state) => remoteFacePhaseOf(state, 'fail'))
           },
         )
     }
@@ -249,7 +247,14 @@ export function ForgeRemoteView({
       window.clearInterval(timer)
     }
   }, [resolved, tick])
-  if (snapshot === undefined) return <RemotePairingGuide lanAddress={lanAddress} />
+  if (resolved === undefined || face.phase === 'unreachable') return <RemotePairingGuide lanAddress={lanAddress} />
+  if (snapshot === undefined) {
+    return (
+      <main className="dswf-rview" role="status" aria-label="正在连接">
+        <h1 className="dswf-rview-title">正在连接…</h1>
+      </main>
+    )
+  }
   return (
     <main className="dswf-rview" role="main" aria-label="任务进度">
       <h1 className="dswf-rview-title">任务进度</h1>
