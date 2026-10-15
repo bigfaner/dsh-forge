@@ -8,6 +8,7 @@ import {
   ForgeRemoteEntry,
   PAIRING_COUNTDOWN_SECONDS,
   PAIRING_QR_SIZE,
+  RemoteDialogHead,
   RemotePanel,
   REMOTE_DIALOG_TITLE,
   TUNNEL_PROVIDER_LABEL,
@@ -65,24 +66,23 @@ describe('RemotePanel 配对二维码（1.7 扫码对齐官方——QR 内容 = 
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-7：双模式 tab 卡在场——「局域网」active + 「互联网」tab；1.4 互联网真实启用（去掉「即将支持」占位）', () => {
+  it('fix-9 ②：胶囊分段 tab——「WiFi连接模式」选中 + 「互联网连接模式」禁用态带「即将支持」徽标（隧道另立项）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(html).toMatch(/data-testid="dswf-remote-tab-lan"/)
-    expect(html).toMatch(/data-testid="dswf-remote-tab-internet"/)
-    expect(html).not.toMatch(/即将支持/)
-    expect(html).not.toMatch(/disabled/)
+    expect(html).toMatch(/data-testid="dswf-remote-tab-lan"[^>]*>WiFi连接模式/)
+    expect(html).toMatch(/data-testid="dswf-remote-tab-internet"[^>]*disabled[^>]*>[\s\S]*互联网连接模式/)
+    expect(html).toMatch(/即将支持/)
   })
 
-  it('1.4：双 tab aria-selected/data-active 语义随受控 mode 缝切换（局域网默认 / 互联网激活）', () => {
+  it('fix-9 ②：禁用 internet tab 不响应选择（aria-selected 恒 false）；受控 mode 缝仍可呈现隧道面', () => {
     const lan = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
     expect(lan).toMatch(/aria-selected="true"[^>]*dswf-remote-tab-lan/)
     expect(lan).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-internet/)
     const net = renderToStaticMarkup(
       <RemotePanel snapshot={LISTENING} onToggle={() => undefined} mode="internet" />,
     )
-    expect(net).toMatch(/aria-selected="true"[^>]*dswf-remote-tab-internet/)
     expect(net).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-lan/)
-    expect(net).toMatch(/dswf-remote-tab-internet[^>]*data-active="true"/)
+    expect(net).toMatch(/aria-selected="false"[^>]*dswf-remote-tab-internet/)
+    expect(net).toMatch(/dswf-remote-tunnel[^>]*data-phase="starting"/)
   })
 
   it('远程关 = 空态替代 QR（不渲染二维码锚）', () => {
@@ -163,8 +163,9 @@ describe('RemotePanel 面板', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={{ phase: 'off' }} onToggle={() => undefined} />,
     )
-    expect(html).toMatch(/type="checkbox"/)
-    expect(html).not.toMatch(/checked/)
+    expect(html).toMatch(/role="switch"/)
+    expect(html).toMatch(/aria-checked="false"/)
+    expect(html).not.toMatch(/type="checkbox"/)
     expect(html).toMatch(/远程已关闭——开启远程并重启宿主后生成配对二维码/)
     expect(html).not.toContain('dswf-remote-address')
     expect(html).not.toMatch(/待重启生效提示/)
@@ -172,7 +173,7 @@ describe('RemotePanel 面板', () => {
 
   it('监听中：开关选中 + 官方连接文案 + 局域网地址展示', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(html).toMatch(/checked/)
+    expect(html).toMatch(/aria-checked="true"/)
     expect(html).toMatch(/扫码即可连接/)
     expect(html).toContain('http://192.168.1.7:8787')
   })
@@ -207,6 +208,40 @@ describe('RemotePanel 面板', () => {
 
   it('fix-8：dialog 标题常量 = REMOTE_DIALOG_TITLE（「连接移动设备」——官方 Modal title 单源）', () => {
     expect(REMOTE_DIALOG_TITLE).toBe('连接移动设备')
+  })
+})
+
+// ── fix-9（bug d9affbdf）：配对 dialog 样式逐位对齐官方实机七点差清单 ──
+
+describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
+  it('①品牌头：官方 BrandWordmark 在场 + 居中大标题「连接移动设备」+ 右上关闭钮（headless Modal 自绘壳——headless 走 portal 归 e2e 面）', () => {
+    const html = renderToStaticMarkup(<RemoteDialogHead onClose={() => undefined} />)
+    expect(html).toContain('dswf-remote-brand')
+    expect(html).toContain('dswf-remote-dialog-title')
+    expect(html).toMatch(/dswf-remote-dialog-title[^>]*>[\s\S]*连接移动设备/)
+    expect(html).toMatch(/aria-label="关闭"/)
+  })
+
+  it('③说明文案居中置圆角卡内；⑥倒计时文案居中', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(html).toMatch(/dswf-remote-note-card[^>]*>[\s\S]*扫码即可连接/)
+    expect(html).toContain('dswf-remote-countdown')
+  })
+
+  it('⑤地址条 = pill 胶囊 + 等宽字体载体类 + 官方复制图标（aria-label 复制地址保留）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(html).toMatch(/dswf-remote-address dswf-remote-pill/)
+    expect(html).toContain('dswf-remote-address-text')
+    expect(html).toMatch(/aria-label="复制地址"/)
+    expect(html).not.toContain('已复制')
+  })
+
+  it('⑦远程访问开关 = 官方 Switch 件（role="switch" aria-checked 全托管）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />,
+    )
+    expect(html).toMatch(/role="switch"[\s\S]*aria-checked="true"/)
+    expect(html).not.toMatch(/type="checkbox"/)
   })
 })
 

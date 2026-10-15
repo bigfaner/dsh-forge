@@ -96,9 +96,51 @@
   color: var(--dsw-alias-state-warning-primary, var(--dsw-alias-label-secondary));
 }
 
-/* 面板（1.7 配对面——面板体改挂官方 Modal 卡内：静态流式，定宽即弹层内容宽） */
+/* 面板（1.7 配对面——面板体挂官方 Modal 卡内。fix-9：headless 官方 Modal +
+ * 产品组合品牌头；卡宽与内距在 dialog 卡类上，内容面随卡内距） */
 .dswf-remote-modal {
-  width: 316px; /* dsw-raw 弹层内容宽（面板 264 + Modal 内距余量——局部刻度） */
+  width: 348px; /* dsw-raw 弹层卡宽（品牌头 + 胶囊 tab 行需要的内容宽——局部刻度） */
+  padding: 0 24px 24px; /* dsw-raw 官方 Modal body 同款侧/底内距（Modal.module.css .body 24px） */
+}
+
+/* fix-9 ①品牌头（官方 Modal headless——居中 BrandWordmark 官方件 + 居中大标题 + 右上关闭钮；
+ * 关闭钮刻度 = 官方 Modal .close 同款 28px/radius-sm/14 图标） */
+.dswf-remote-dialog {
+  position: relative;
+  padding-top: 22px; /* dsw-raw 官方 Modal .header 上距同值 */
+}
+
+.dswf-remote-dialog-close {
+  position: absolute;
+  top: 18px; /* dsw-raw 关闭钮垂直落点（22 header 上距 − 钮半高微调） */
+  right: -24px; /* dsw-raw 回到卡右缘（抵消卡侧内距 24px） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; /* dsw-raw 官方 Modal .close 刻度 */
+  height: 28px; /* dsw-raw 官方 Modal .close 刻度 */
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-remote-dialog-close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-remote-brand {
+  display: flex;
+  justify-content: center;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-remote-dialog-title {
+  margin: 8px 0 0; /* dsw-raw 品牌头标题上距（排版行高刻度） */
+  font: var(--dsw-font-l-20);
+  color: var(--dsw-alias-label-primary);
+  text-align: center;
 }
 
 .dswf-remote-panel {
@@ -119,12 +161,12 @@
   gap: 8px; /* dsw-raw 配对面纵向行距（局部刻度） */
 }
 
-/* QR 载体（白底衬保证扫码对比度——暗色主题下同样可扫） */
+/* QR 卡（fix-9 ④：圆角容器化 + 官方留白节奏——220×220 QR 保持） */
 .dswf-remote-qr {
   display: inline-flex;
-  padding: 8px; /* dsw-raw QR 静区（局部刻度） */
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
+  padding: 12px; /* dsw-raw QR 静区留白（局部刻度） */
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
   line-height: 0;
 }
 
@@ -177,12 +219,20 @@
   text-align: right;
 }
 
-.dswf-remote-switch {
-  flex: none;
-  width: 28px;
-  height: 16px;
+/* fix-9 ⑥：倒计时等说明行居中（官方实机对照——倒计时居中排） */
+.dswf-remote-countdown {
+  text-align: center;
+}
+
+/* fix-9 ③：说明文案圆角卡（居中排——官方实机说明卡形态） */
+.dswf-remote-note-card {
   margin: 0;
-  cursor: var(--dsh-cursor-pointer, pointer);
+  padding: 10px 12px; /* dsw-raw 说明卡内距（局部刻度） */
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
 }
 
 /* （fix-7 旧 .dswf-remote-address 按钮形态退役——地址条带 + 复制图标按钮见文件尾段） */
@@ -363,37 +413,54 @@
 /* ── fix-7 配对面布局（bug 9fd9b6b1 ③——布局逐位对照官方 DSH Desktop 0.10.0；
  *    fix-8 承载改回官方 Modal dialog，样式随壳上下文加载，本节零回退） ── */
 
-/* 双模式 tab 卡（1.4 互联网真实启用——双 tab 均可激活，active 白底高亮） */
+/* 双模式 tab（fix-9 ②：胶囊分段——刻度逐值取官方 SegmentedTabs.module.css 原值：
+ * 容器 padding 4 / radius-lg / bg-module-platform；pill radius-md / 白底 bg-layer-3 /
+ * 0.5px border-l3；tab 14/20、h34、padding 0 12） */
 .dswf-remote-tabs {
   display: flex;
-  gap: 4px; /* dsw-raw tab 行内缝（局部刻度） */
-  padding: 2px; /* dsw-raw tab 卡内距（局部刻度） */
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-surface-module-platform, var(--dsw-alias-bg-layer-2));
+  padding: 4px; /* dsw-raw 官方 SegmentedTabs .tabs 同值 */
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-surface-module-platform, var(--dsw-alias-bg-layer-2)));
 }
 
 .dswf-remote-tab {
+  position: relative;
   display: inline-flex;
   flex: 1;
   align-items: center;
   justify-content: center;
-  gap: 6px; /* dsw-raw tab 徽标间距（局部刻度） */
-  padding: 5px 10px; /* dsw-raw tab 内距（局部刻度） */
+  gap: 6px; /* dsw-raw tab 与徽标缝（局部刻度） */
+  height: 34px; /* dsw-raw 官方 SegmentedTabs .tab 同值 */
+  padding: 0 12px; /* dsw-raw 官方 SegmentedTabs .tab 同值 */
   border: none;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-md);
   background: transparent;
-  font: var(--dsw-font-xs-13);
+  font-size: 14px; /* dsw-raw 官方 SegmentedTabs .tab 同值 */
+  line-height: 20px; /* dsw-raw 官方 SegmentedTabs .tab 同值 */
   color: var(--dsw-alias-label-secondary);
   cursor: var(--dsh-cursor-pointer, pointer);
 }
 
 .dswf-remote-tab[data-active='true'] {
-  background: var(--dsw-alias-bg-base);
+  border: 0.5px solid var(--dsw-alias-border-l3); /* dsw-raw 官方 SegmentedTabs .indicator 同值 */
+  background: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-base));
+  font-weight: 600;
   color: var(--dsw-alias-label-primary);
 }
 
 .dswf-remote-tab:disabled {
   cursor: default;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 「即将支持」禁用徽标（胶囊 999px——官方 Tag 同值；xxs-12 刻度） */
+.dswf-remote-tab-soon {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px; /* dsw-raw 徽标内距（局部刻度） */
+  border-radius: 999px; /* dsw-raw 胶囊（官方 Tag 同值） */
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 /* ── dsh-mobile-tunnel 1.4：互联网 tab 隧道面（状态卡 / TTL 横幅 / 换线钮） ── */
@@ -468,20 +535,25 @@
   font: var(--dsw-font-s-strong-14, var(--dsw-font-s-14));
 }
 
-/* 地址条带 + 复制图标按钮（fix-7——整条可点改图标钮承载复制） */
+/* 地址条带（fix-9 ⑤：pill 胶囊 + 等宽字体 + 右侧独立复制图标钮（官方 IconCopyOutline）） */
 .dswf-remote-address {
   display: flex;
   align-items: center;
   gap: 6px; /* dsw-raw 条带行内缝（局部刻度） */
-  padding: 6px 8px; /* dsw-raw 条带内距（局部刻度） */
+  padding: 6px 12px; /* dsw-raw pill 内距（局部刻度） */
   border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  font: var(--dsw-font-xs-13);
+}
+
+.dswf-remote-pill {
+  border-radius: 999px; /* dsw-raw 胶囊（官方 Tag/999 同值） */
 }
 
 .dswf-remote-address-text {
   flex: 1;
   min-width: 0;
+  font-family: var(--ds-font-family-code); /* 等宽字体——官方实机地址排 */
+  font-size: 12px; /* dsw-raw 地址读数刻度（xxs-12 同值） */
+  line-height: 18px; /* dsw-raw 排版行高刻度（xxs 同值） */
   color: var(--dsw-alias-label-primary-bluish);
   overflow-wrap: anywhere;
 }

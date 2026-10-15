@@ -14,7 +14,7 @@
 // ——重启生效形态，onToggle 由插件注入）+ 地址条带（复制图标按钮）+ 状态态。待重启生效
 // （pending）/ 远程关（off）/ 地址读数缺席 = 对应空态而非 QR——不伪装已监听（fix-3 用户裁决）。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Modal, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Modal, BrandWordmark, IconCloseOutlineRegular, IconCopyOutlineRegular, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import QRCode from 'react-qr-code'
 import type { SnapshotSource } from '../sidebar/sidebar-model.js'
 import type { RemotePhase, RemoteStatusSnapshot, TunnelFace, TunnelProvider } from './remote-status.js'
@@ -41,6 +41,11 @@ export function remotePhaseLabel(phase: RemotePhase): string {
 
 // fix-6/fix-7 官方对齐常量（DSH Desktop 0.10.0「连接移动设备」实机逐位对照）：dialog 标题 /
 // QR 显示尺寸 220×220 / 倒计时缺省 300s（官方 PAIRING_TTL_MS=5min 同刻度）。
+// fix-9（bug d9affbdf）：dialog 内容面样式逐位对齐官方——headless Modal 自绘品牌头（官方
+// BrandWordmark 件 + 居中大标题）+ 胶囊分段 tab（官方 SegmentedTabs 刻度；互联网「即将支持」
+// 禁用——隧道另立项）+ 说明文案圆角卡居中 + QR 圆角卡 + pill 地址条（mono + 官方复制图标）
+// + 倒计时居中 + 官方 Switch 件（弃原生 checkbox）。功能面零回退：/pair 协议 / 300s 倒计时 /
+// 复制 / 四态语义照旧。
 /** 官方 dialog 标题（fix-8 Modal title + 图标 aria 同源单源） */
 export const REMOTE_DIALOG_TITLE = '连接移动设备'
 /** QR 显示尺寸（官方实机 220×220） */
@@ -82,17 +87,10 @@ function PhoneGlyph(): ReactNode {
   )
 }
 
-/** 复制字形（产品自绘 14 刻度——地址条带复制图标按钮载体） */
-function CopyGlyph(): ReactNode {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="4.5" y="4.5" width="7" height="7" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M9.5 4.5v-1a1.2 1.2 0 0 0-1.2-1.2H3.7A1.2 1.2 0 0 0 2.5 3.5v4.6A1.2 1.2 0 0 0 3.7 9.3h.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
+// fix-9 ⑤：复制字形退役——官方 IconCopyOutlineRegular 在场件接管（官方图标零自绘）。
 
-/** 双模式 tab（1.4 互联网真实启用——替换 fix-7 disabled 占位；受控 active + onSelect 缝） */
+/** 双模式 tab（fix-9 ②：胶囊分段——官方 SegmentedTabs 刻度自绘；选中项白底 pill。
+ *  互联网「即将支持」禁用态（隧道另立项裁决）；受控 mode 缝保留——测试/装配仍可控呈现隧道面） */
 function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => void }): ReactNode {
   const { active, onSelect } = props
   return (
@@ -106,18 +104,20 @@ function ModeTabs(props: { active: RemoteMode; onSelect: (mode: RemoteMode) => v
         data-active={active === 'lan'}
         onClick={() => onSelect('lan')}
       >
-        局域网
+        WiFi连接模式
       </button>
       <button
         type="button"
         role="tab"
-        aria-selected={active === 'internet'}
+        aria-selected={false}
         className="dswf-remote-tab"
         data-testid="dswf-remote-tab-internet"
-        data-active={active === 'internet'}
-        onClick={() => onSelect('internet')}
+        data-active={false}
+        disabled
+        aria-disabled={true}
+        title="即将支持"
       >
-        互联网
+        互联网连接模式<span className="dswf-remote-tab-soon">即将支持</span>
       </button>
     </div>
   )
@@ -234,12 +234,6 @@ export function RemotePanel(props: {
 }): ReactNode {
   const { snapshot, onToggle, busy, onRefresh } = props
   const checked = snapshot.phase !== 'off'
-  const onSwitch = useCallback(
-    (event: { currentTarget: { checked: boolean } }) => {
-      void onToggle?.(event.currentTarget.checked)
-    },
-    [onToggle],
-  )
   const pairValue = remotePairQrOf(snapshot)
   // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
   const [modeState, setModeState] = useState<RemoteMode>('lan')
@@ -324,7 +318,7 @@ export function RemotePanel(props: {
                       底色/前景取依赖默认（白底黑码——扫码器需固定浅色静区，随主题会破坏扫码） */}
                   <QRCode value={pairValue} size={PAIRING_QR_SIZE} />
                 </div>
-                <p className="dswf-remote-panel-note" data-testid="dswf-remote-countdown">
+                <p className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-countdown">
                   {pairCountdownText(secondsLeft)}
                 </p>
               </>
@@ -342,21 +336,22 @@ export function RemotePanel(props: {
         )}
         </>
       )}
-      <label className="dswf-remote-panel-row">
+      {/* fix-9 ⑦：官方 Switch 件（dsh-client-ui-primitives 在场——弃原生 checkbox） */}
+      <div className="dswf-remote-panel-row">
         <span>远程访问</span>
-        {/* native checkbox（官方 Switch 依赖官方壳上下文——受限面零 fork，native 刻度对齐） */}
-        <input
-          type="checkbox"
-          className="dswf-remote-switch"
+        <Switch
           checked={checked}
           disabled={onToggle === undefined || busy === true}
-          onChange={onSwitch}
-          aria-label="远程访问开关"
+          label="远程访问开关"
+          onChange={(next) => {
+            void onToggle?.(next)
+          }}
         />
-      </label>
-      <p className="dswf-remote-panel-note">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
+      </div>
+      {/* fix-9 ③：说明文案居中置圆角卡内 */}
+      <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
       {snapshot.lanAddress !== undefined && (
-        <div className="dswf-remote-address">
+        <div className="dswf-remote-address dswf-remote-pill">
           <span className="dswf-remote-address-text">{snapshot.lanAddress}</span>
           <button
             type="button"
@@ -368,18 +363,40 @@ export function RemotePanel(props: {
               setCopied(true)
             }}
           >
-            {copied ? '已复制' : <CopyGlyph />}
+            {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
           </button>
         </div>
       )}
-      <p className="dswf-remote-panel-note">未配对设备不可见任何内容；关闭远程后通道即断。</p>
+      <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
     </div>
   )
 }
 
-/** 配对面 dialog（fix-8——官方 Modal 承载恢复；open 态由入口自持，Esc/遮罩/portal 生命
- *  周期恒归官方件）。内容面 = RemotePanel 既有件（fix-7 逐位布局 + fix-6 倒计时刷新缝
- *  onRefresh 透传）。独立导出 = 静态测试/复用缝。 */
+/** fix-9 ①品牌头（独立导出 = 静态测试缝——居中 BrandWordmark 官方件 + 居中大标题 +
+ *  右上关闭钮；官方 Modal headless 组合件，遮罩/Esc 恒归 Modal） */
+export function RemoteDialogHead(props: { readonly onClose: () => void }): ReactNode {
+  return (
+    <div className="dswf-remote-dialog">
+      <button
+        type="button"
+        className="dswf-remote-dialog-close"
+        aria-label="关闭"
+        title="关闭"
+        onClick={props.onClose}
+      >
+        <IconCloseOutlineRegular size={16} />
+      </button>
+      <div className="dswf-remote-brand">
+        <BrandWordmark size={24} />
+      </div>
+      <h2 className="dswf-remote-dialog-title">{REMOTE_DIALOG_TITLE}</h2>
+    </div>
+  )
+}
+
+/** 配对面 dialog（fix-8 官方 Modal 承载；fix-9 ①品牌头——headless 模式下产品组合官方件）。
+ *  内容面 = RemotePanel 既有件（fix-7 逐位布局 + fix-6 倒计时刷新缝 onRefresh 透传）。
+ *  独立导出 = 静态测试/复用缝。 */
 export function ForgeRemoteDialog(props: {
   readonly open: boolean
   readonly onClose: () => void
@@ -394,9 +411,10 @@ export function ForgeRemoteDialog(props: {
       open={props.open}
       onClose={props.onClose}
       title={REMOTE_DIALOG_TITLE}
-      closeLabel="关闭"
-      contentClassName="dswf-remote-modal"
+      headless
+      className="dswf-remote-modal"
     >
+      <RemoteDialogHead onClose={props.onClose} />
       <RemotePanel
         snapshot={props.snapshot}
         onToggle={props.onToggle}
