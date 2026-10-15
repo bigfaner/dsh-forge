@@ -38,12 +38,13 @@ export const EMPTY_REGISTERED: ReadonlySet<string> = new Set()
 /**
  * 原生选取源解析（纯函数，fix-36 收敛——RegisterForm/AddProjectFlow 两装配壳同判据）：
  * 显式注入优先（undefined = 探测桥；null = 强制回退内嵌浏览器面——回退面测试口径）；
- * 桥在场包一层 `() => bridge.pick()`（探测一次，非每调用探测）。
+ * 桥在场包一层转发包装（探测一次，非每调用探测）。bug db7af09a：包装必须转发 startDir
+ * （零参闭包会把系统对话框 defaultPath 丢弃在装配层——主路径起始目录失控的直接漏点）。
  */
 export function resolveNativePickSource(
   nativePicker: NativePickSource | null | undefined,
 ): NativePickSource | null {
   if (nativePicker !== undefined) return nativePicker
   const bridge = directoryPickerBridgeOf()
-  return bridge === undefined ? null : () => bridge.pick()
+  return bridge === undefined ? null : (startDir) => bridge.pick(startDir)
 }

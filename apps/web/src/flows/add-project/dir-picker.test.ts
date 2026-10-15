@@ -1,8 +1,8 @@
 // dir-picker 单测 —— fix-14 官方 __DSH_DIRECTORY_PICKER__ 桥契约 pin（防官方漂移）：
 // 形状与 pick 语义对照 @deepseek-ai/dsh-client-ui-directory-picker-native lib/client.js:62-76
 // 消费面（desktop = globalThis.__DSH_DIRECTORY_PICKER__；缺席 → undefined → 回退浏览器）。
-import { describe, expect, it } from 'vitest'
-import { directoryPickerBridgeOf, type DshDirectoryPickerBridge } from './dir-picker.js'
+import { describe, expect, it, vi } from 'vitest'
+import { directoryPickerBridgeOf, resolveNativePickSource, type DshDirectoryPickerBridge } from './dir-picker.js'
 
 const REAL_BRIDGE: DshDirectoryPickerBridge = { pick: () => Promise.resolve('D:\\work\\alpha') }
 
@@ -21,5 +21,26 @@ describe('桥契约 pin（client.js:62-76 同形）', () => {
     expect(directoryPickerBridgeOf({ __DSH_DIRECTORY_PICKER__: 'x' })).toBeUndefined()
     expect(directoryPickerBridgeOf({ __DSH_DIRECTORY_PICKER__: {} })).toBeUndefined()
     expect(directoryPickerBridgeOf({ __DSH_DIRECTORY_PICKER__: { pick: 'not-fn' } })).toBeUndefined()
+  })
+})
+
+describe('桥探测包装（resolveNativePickSource）', () => {
+  it('bug db7af09a：globalThis 桥探测径转发 startDir（零参闭包丢参 = 修复前症状）', async () => {
+    const pick = vi.fn(() => Promise.resolve('D:\\work\\alpha'))
+    vi.stubGlobal('__DSH_DIRECTORY_PICKER__', { pick })
+    try {
+      const source = resolveNativePickSource(undefined) // undefined = 探测桥（装配壳缺省径）
+      expect(source).not.toBeNull()
+      await source?.('Z:\\project')
+      expect(pick).toHaveBeenCalledWith('Z:\\project')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('显式注入源原样返回（null 强制回退 / 测试桩直通——既有口径零变化）', () => {
+    const stub = () => Promise.resolve('X:')
+    expect(resolveNativePickSource(stub)).toBe(stub)
+    expect(resolveNativePickSource(null)).toBeNull()
   })
 })
