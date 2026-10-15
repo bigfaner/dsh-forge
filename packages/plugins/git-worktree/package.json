@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/git-worktree",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "git-worktree cordis 插件（通用层）：worktree/branch 管理域骨架——git 在场性启动检测 + 扩展点契约（resolveProject / worktree 目录提供者，均有默认实现）。零 dsh-forge 依赖。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}
