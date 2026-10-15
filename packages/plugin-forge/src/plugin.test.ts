@@ -315,14 +315,18 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
   }
   const BOUND = { projects: ROWS.map(({ wsPath, projectId }) => ({ wsPath, projectId })) }
 
-  /** 装配 + 捕获事件监听面（session/created 由此发炮） */
+  /** 装配 + 捕获事件监听面（session/created 由此发炮；注册参数全量记账） */
+  const sessionEventRegistrations: () => { event: string; options?: { global?: boolean } }[] = () => registrationsRef
+  let registrationsRef: { event: string; options?: { global?: boolean } }[] = []
   function assembleWith(projects: ProjectServiceM2) {
     const rt = new TempRuntime()
     const listeners = new Map<string, ((session: unknown) => void)[]>()
+    registrationsRef = []
     const ctx = {
       ...rt.ctx(),
       forgeProjects: projects,
-      on: (name: string, cb: (session: unknown) => void) => {
+      on: (name: string, cb: (session: unknown) => void, options?: { global?: boolean }) => {
+        registrationsRef.push({ event: name, ...(options !== undefined ? { options } : {}) })
         const list = listeners.get(name) ?? []
         list.push(cb)
         listeners.set(name, list)
@@ -335,6 +339,14 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
     }
     return { rt, dispose, emit }
   }
+
+  it('bug 4e9bf600：session/created·disposed 监听注册必须携带 { global: true }（scope carrier 过滤派发——不带则收不到他作用域会话）', () => {
+    const { dispose } = assembleWith(projectsWith(ROWS))
+    const registrations = sessionEventRegistrations()
+    expect(registrations).toContainEqual({ event: 'session/created', options: { global: true } })
+    expect(registrations).toContainEqual({ event: 'session/disposed', options: { global: true } })
+    dispose()
+  })
 
   /** 段 text 求值走模块级 pipelineTextOf（函数形态——按装配上下文 agent.id 分会话） */
   it('bug 复现面：第二绑定项目的会话拿到自己的 forgeDir（不落入首行 learn 项目）', async () => {

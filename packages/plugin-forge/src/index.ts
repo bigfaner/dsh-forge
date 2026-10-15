@@ -388,10 +388,17 @@ const forgePlugin: ForgePlugin = Object.assign(
       }
     }
     if (typeof ctx.on === 'function') {
-      ctx.on('session/created', warmSessionForgeDir)
-      ctx.on('session/disposed', (session: { id?: unknown }) => {
-        if (typeof session?.id === 'string') sessionForgeDirs.delete(session.id)
-      })
+      // { global: true }（bug 4e9bf600）：session/* 经 scope carrier 过滤派发，插件装配 ctx
+      // 携带作用域标签时，不带 global 的监听收不到他作用域会话——预热缓存恒空（同插件
+      // prestep 与 dsh-session invariant 同径先例）。
+      ctx.on('session/created', warmSessionForgeDir, { global: true })
+      ctx.on(
+        'session/disposed',
+        (session: { id?: unknown }) => {
+          if (typeof session?.id === 'string') sessionForgeDirs.delete(session.id)
+        },
+        { global: true },
+      )
     }
     const disposeDocStyle = ctx.systemPrompt.section({
       name: FORGE_DOC_STYLE_SECTION_NAME,
