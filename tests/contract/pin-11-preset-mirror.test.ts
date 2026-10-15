@@ -48,7 +48,7 @@ const upstreamRows = pluginRowBlocks(upstreamText)
 
 /** 产品分叉行（镜像 diff 豁免）与产品增量行（上游没有）——口径与 3.7 presets.test.ts 一致 */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
-const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec'])
+const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec', 'md-mermaid'])
 
 describe('pin ⑲ 前置（环境门——上游物化树在场）', () => {
   it('上游 standard.patch.yml 在场且行集非空（缺席 = 环境缺口，先 pnpm -C apps/host/profile.dev install）', () => {

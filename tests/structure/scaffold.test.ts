@@ -71,7 +71,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
     ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge']],
-    ['apps/web', ['packages/contracts']],
+    ['apps/web', ['packages/contracts', 'packages/plugins/md-mermaid']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }
