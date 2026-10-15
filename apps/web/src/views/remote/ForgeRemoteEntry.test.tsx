@@ -937,3 +937,158 @@ describe('fix-20 切换稳定性：switching 冻结展示面（遮罩承载，�
     expect(html).not.toContain('dswf-remote-tunnel-empty')
   })
 })
+
+// ── fix-21（bug ee8e5708）：配对 dialog 样式逐位对齐官方（单源规格 =
+// .forge/docs/probes/official-pairing-page-spec.md §2 八组刻度——remote.css 源文断言，
+// 取值经 DESIGN.md 令牌映射，无等价令牌官方原值 dsw-raw 注记） ──
+
+describe('fix-21 §2① mode-panel + 分段器 + mode-btn（remote.css 源文断言）', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('容器：410px / 15px 圆角 / panel 底 / 5px 8px 10px 内距 / 1px line 描边', () => {
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*width:\s*410px/)
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*padding:\s*5px 8px 10px/)
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*border-radius:\s*15px/)
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*border:\s*1px solid var\(--dsw-alias-border-l2\)/)
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
+  })
+
+  it('分段器 3px 内距 / 11px 圆角 / gap 3；mode-btn 34px 高 / 9px 圆角 / 13px·550', () => {
+    expect(css).toMatch(/\.dswf-remote-tabs\s*\{[^}]*padding:\s*3px/)
+    expect(css).toMatch(/\.dswf-remote-tabs\s*\{[^}]*border-radius:\s*11px/)
+    expect(css).toMatch(/\.dswf-remote-tabs\s*\{[^}]*gap:\s*3px/)
+    expect(css).toMatch(/\.dswf-remote-tab\s*\{[^}]*height:\s*34px/)
+    expect(css).toMatch(/\.dswf-remote-tab\s*\{[^}]*border-radius:\s*9px/)
+    expect(css).toMatch(/\.dswf-remote-tab\s*\{[^}]*font-size:\s*13px/)
+    expect(css).toMatch(/\.dswf-remote-tab\s*\{[^}]*font-weight:\s*550/)
+  })
+
+  it('选中 = surface 底 + 官方选中阴影（0 1px 4px 黑 .08）；:active 色变', () => {
+    expect(css).toMatch(
+      /\.dswf-remote-tab\[data-active='true'\]\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-3/,
+    )
+    expect(css).toMatch(
+      /\.dswf-remote-tab\[data-active='true'\]\s*\{[^}]*box-shadow:\s*0 1px 4px rgb\(0 0 0 \/ 0\.08\)/, // dsw-raw 断言官方原值阴影
+    )
+    expect(css).toMatch(/\.dswf-remote-tab:not\(\[data-active='true'\]\):active\s*\{[^}]*color:/)
+  })
+
+  it('mode-panel 容器在场（ModeTabs 包裹容器）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(html).toContain('dswf-remote-mode-panel')
+  })
+})
+
+describe('fix-21 §2② QR 卡 244px 白底 + 白 .94 遮罩 + 假进度条', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('QR 卡：244px / 白底 / 12px 内距 / 16px 圆角 / 1px line 描边（SVG 220×220 既有 PAIRING_QR_SIZE）', () => {
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*width:\s*244px/)
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*padding:\s*12px/)
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*border-radius:\s*16px/)
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*border:\s*1px solid var\(--dsw-alias-border-l2\)/)
+    expect(css).toMatch(/\.dswf-remote-qr\s*\{[^}]*background:\s*#fff/)
+  })
+
+  it('遮罩：白 .94 + loading 13px·550 + 假进度条 5px/999px/brand 色/4.5s·0.8s 50ms 步进 + reduced-motion 关动画', () => {
+    expect(css).toMatch(/\.dswf-remote-qr-overlay\s*\{[^}]*background:\s*rgb\(255 255 255 \/ 0\.94\)/)
+    expect(css).toMatch(/\.dswf-remote-qr-overlay\s*\{[^}]*font-size:\s*13px/)
+    expect(css).toMatch(/\.dswf-remote-qr-overlay\s*\{[^}]*font-weight:\s*550/)
+    expect(css).toMatch(/\.dswf-remote-qr-progress\s*\{[^}]*height:\s*5px/)
+    expect(css).toMatch(/\.dswf-remote-qr-progress\s*\{[^}]*border-radius:\s*999px/)
+    expect(css).toMatch(/\.dswf-remote-qr-progress\s*\{[^}]*background:\s*var\(--dsw-alias-state-business-primary\)/)
+    expect(css).toMatch(/\.dswf-remote-qr-progress\s*\{[^}]*animation:[^;]*4\.5s steps\(90/)
+    expect(css).toMatch(/\.dswf-remote-qr-progress\[data-speed='lan'\]\s*\{[^}]*animation-duration:\s*0\.8s/)
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*dswf-remote-qr-progress/)
+  })
+
+  it('遮罩携带进度条元素：隧道档 data-speed="tunnel" / LAN 档 data-speed="lan"', () => {
+    const tunnel = renderToStaticMarkup(
+      <TunnelCard phase="switching" url="u" provider="cloudflared" onFallback={() => undefined} />,
+    )
+    expect(tunnel).toMatch(/dswf-remote-qr-progress" data-speed="tunnel"/)
+    const lan = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} switching onToggle={() => undefined} />)
+    expect(lan).toMatch(/dswf-remote-qr-progress" data-speed="lan"/)
+  })
+})
+
+describe('fix-21 §2③④⑤ 地址 pill + 换线链接 + 倒计时行', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('地址 pill：mono 12px / 1.35 行高 / 9px 圆角 / panel 底 / ellipsis；复制钮 28px；done = 绿圆勾', () => {
+    expect(css).toMatch(/\.dswf-remote-pill\s*\{[^}]*border-radius:\s*9px/)
+    expect(css).toMatch(/\.dswf-remote-address\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
+    expect(css).toMatch(/\.dswf-remote-address-text\s*\{[^}]*font-size:\s*12px/)
+    expect(css).toMatch(/\.dswf-remote-address-text\s*\{[^}]*line-height:\s*1\.35/)
+    expect(css).toMatch(/\.dswf-remote-copy\s*\{[^}]*width:\s*28px/)
+    expect(css).toMatch(/\.dswf-remote-copy\s*\{[^}]*height:\s*28px/)
+    expect(css).toMatch(
+      /\.dswf-remote-copy-done\s*\{[^}]*background:\s*var\(--dsw-alias-state-success-primary\)/,
+    )
+  })
+
+  it('done 态 = 绿圆勾徽（「已复制」文字退役——1.8s 反馈逻辑保持）', () => {
+    const tsx = readFileSync(new URL('./ForgeRemoteEntry.tsx', import.meta.url), 'utf8')
+    expect(tsx).toContain('dswf-remote-copy-done')
+    expect(tsx).not.toContain('已复制')
+  })
+
+  it('④ 换线链接 12.5px / muted / underline-offset 2px；⑤ 倒计时行 12px', () => {
+    expect(css).toMatch(/\.dswf-remote-fallback-link\s*\{[^}]*font-size:\s*12\.5px/)
+    expect(css).toMatch(/\.dswf-remote-fallback-link\s*\{[^}]*color:\s*var\(--dsw-alias-label-tertiary\)/)
+    expect(css).toMatch(/\.dswf-remote-fallback-link\s*\{[^}]*text-underline-offset:\s*2px/)
+    expect(css).toMatch(
+      /\.dswf-remote-panel-note\.dswf-remote-countdown\s*\{[^}]*font:\s*var\(--dsw-font-xxs-12\)/,
+    )
+  })
+})
+
+describe('fix-21 §2⑥⑦⑧ PIN 方框 + 连接卡 + 说明 hint 行', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('PIN 方框：410px / 16px 内距 / 14px 圆角 / panel 底 / 1px 描边；label 11px·600 uppercase .08em；值 40px mono .18em；双钮 9px 圆角', () => {
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*width:\s*410px/)
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*padding:\s*16px/)
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*border-radius:\s*14px/)
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*border:\s*1px solid var\(--dsw-alias-border-l2\)/)
+    expect(css).toMatch(/\.dswf-remote-pin-label\s*\{[^}]*font-weight:\s*600/)
+    expect(css).toMatch(/\.dswf-remote-pin-label\s*\{[^}]*letter-spacing:\s*0\.08em/)
+    expect(css).toMatch(/\.dswf-remote-pin-value\s*\{[^}]*font-size:\s*40px/)
+    expect(css).toMatch(/\.dswf-remote-pin-value\s*\{[^}]*letter-spacing:\s*0\.18em/)
+    expect(css).toMatch(/\.dswf-remote-pin-action\s*\{[^}]*border-radius:\s*9px/)
+  })
+
+  it('consent checkbox 行渲染（官方 label + 隐私 small 字）', () => {
+    const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
+    expect(html).toContain('dswf-remote-pin-consent')
+    expect(html).toContain('生成长期有效的连接密码')
+    expect(html).toContain('不上云、不写入二维码')
+  })
+
+  it('连接卡：success 三色 + ✓ 圆徽 24px #35a867 + 标题 16px·600 + closeHint 13px muted + 双钮 94px min / 9px 圆角', () => {
+    expect(css).toMatch(
+      /\.dswf-remote-connected\s*\{[^}]*background:\s*var\(--dsw-alias-state-success-tertiary\)/,
+    )
+    expect(css).toMatch(/\.dswf-remote-connected-check\s*\{[^}]*width:\s*24px/)
+    expect(css).toMatch(/\.dswf-remote-connected-check\s*\{[^}]*background:\s*#35a867/)
+    expect(css).toMatch(/\.dswf-remote-connected-title\s*\{[^}]*font-size:\s*16px/)
+    expect(css).toMatch(/\.dswf-remote-connected-title\s*\{[^}]*font-weight:\s*600/)
+    expect(css).toMatch(/\.dswf-remote-connected-note\s*\{[^}]*font:\s*var\(--dsw-font-xs-13\)/)
+    expect(css).toMatch(/\.dswf-remote-actions button\s*\{[^}]*min-width:\s*94px/)
+    expect(css).toMatch(/\.dswf-remote-actions button\s*\{[^}]*border-radius:\s*9px/)
+  })
+
+  it('连接卡 DOM：✓ 徽 + 标题 span 单源', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={{ phase: 'connected' }} onToggle={() => undefined} />,
+    )
+    expect(html).toContain('dswf-remote-connected-title')
+  })
+
+  it('⑧ 说明 hint 行：12.5px / 38px min-height 居中', () => {
+    expect(css).toMatch(/\.dswf-remote-note-card\s*\{[^}]*font-size:\s*12\.5px/)
+    expect(css).toMatch(/\.dswf-remote-note-card\s*\{[^}]*min-height:\s*38px/)
+    expect(css).toMatch(/\.dswf-remote-note-card\s*\{[^}]*display:\s*flex/)
+  })
+})

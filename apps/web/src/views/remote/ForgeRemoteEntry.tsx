@@ -101,6 +101,11 @@ export const PIN_RESET_TEXT = '重置密码'
 /** PIN 取消动作文案（关闭 PIN 卡回默认态——官方 durable 机制产品未立项，不照抄
  *  「取消长效密码」避免语义虚指；低风险假设记 summary） */
 export const PIN_CANCEL_TEXT = '取消'
+/** PIN consent checkbox label（官方 pinConsent——§1 逐字；fix-21 §2⑥ 样式对齐面，
+ *  durable 后端机制 host 端点缺（§4 差值③在途）——本任务只落展示行） */
+export const PIN_CONSENT_TEXT = '生成长期有效的连接密码'
+/** PIN consent 隐私 small 字（官方 pinPrivacy——§1 逐字） */
+export const PIN_PRIVACY_TEXT = '长效密码只保存在本机，不上云、不写入二维码，可随时重置或取消。'
 
 // ── fix-19 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
 
@@ -324,7 +329,9 @@ function PhoneGlyph(): ReactNode {
 function ModeTabs(props: { active: RemoteMode; disabled?: boolean; onSelect: (mode: RemoteMode) => void }): ReactNode {
   const { active, disabled, onSelect } = props
   return (
-    <div className="dswf-remote-tabs" role="tablist" aria-label="连接方式">
+    // fix-21 §2①：官方 mode-panel 容器（410px/15px 圆角/panel 底/1px 描边）包裹分段器
+    <div className="dswf-remote-mode-panel">
+      <div className="dswf-remote-tabs" role="tablist" aria-label="连接方式">
       <button
         type="button"
         role="tab"
@@ -349,6 +356,7 @@ function ModeTabs(props: { active: RemoteMode; disabled?: boolean; onSelect: (mo
       >
         互联网连接模式
       </button>
+      </div>
     </div>
   )
 }
@@ -446,6 +454,8 @@ export function TunnelCard(props: {
           {phase === 'switching' && (
             <div className="dswf-remote-qr-overlay" data-testid="dswf-remote-qr-overlay" role="status">
               {FALLBACK_LOADING_TEXT}
+              {/* fix-21 §2②：官方假进度条（5px/999px/brand 色——隧道切换 4.5s 档） */}
+              <span className="dswf-remote-qr-progress" data-speed="tunnel" aria-hidden="true" />
             </div>
           )}
         </div>
@@ -487,7 +497,7 @@ export function TunnelCard(props: {
  * fix-6 保留：QR 220×220 + 官方文案 + 倒计时（1s interval）到期自动刷新（onRefresh =
  * 重取 boot manifest 换 token——宿主轮换推送经 refresh 单源回流）。
  * fix-7 对齐（零回退）：双模式 tab 卡 + 「手机已连接」态卡（connected 收回 QR）+ 地址条带 +
- * 复制图标按钮（「已复制」1.8s 反馈）+ 官方说明文案。 */
+ * 复制图标按钮（复制成功绿圆勾徽 1.8s 反馈）+ 官方说明文案。 */
 export function RemotePanel(props: {
   readonly snapshot: RemoteStatusSnapshot
   readonly onToggle?: (next: boolean) => Promise<void> | void
@@ -538,6 +548,9 @@ export function RemotePanel(props: {
   // fix-18 ③：PIN 卡取消态（「取消」收卡回默认态；新 PIN 读数到达即复位重呈现）
   const [pinDismissed, setPinDismissed] = useState(false)
   const pinValue = snapshot.pin
+  // fix-21 §2⑥：consent checkbox 展示行（官方 pinConsent/pinPrivacy 形态——durable 后端
+  // 机制 host 端点缺（§4 差值③在途），本任务只落展示行、checkbox 本地态）
+  const [pinConsent, setPinConsent] = useState(false)
   useEffect(() => {
     setPinDismissed(false)
   }, [pinValue])
@@ -638,7 +651,7 @@ export function RemotePanel(props: {
       onRefresh?.()
     }
   }, [ttlLive, tunnel, nowTs, onRefresh])
-  // fix-6 复制反馈：「已复制」1.8s 自动消退（writeClipboard = 官方 primitives 既有件）。
+  // fix-6/fix-21 复制反馈：绿圆勾徽 1.8s 自动消退（writeClipboard = 官方 primitives 既有件）。
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
@@ -664,7 +677,7 @@ export function RemotePanel(props: {
         <div className="dswf-remote-connected-wrap">
           <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
             <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
-            <span>手机已连接</span>
+            <span className="dswf-remote-connected-title">手机已连接</span>
           </div>
           {props.manageConnected !== true && (
             <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
@@ -728,6 +741,16 @@ export function RemotePanel(props: {
               <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-countdown">
                 {pinCountdownText(pinSecondsLeft)}
               </span>
+              {/* fix-21 §2⑥：官方 consent checkbox 行（label + 隐私 small 字） */}
+              <label className="dswf-remote-pin-consent">
+                <input
+                  type="checkbox"
+                  checked={pinConsent}
+                  onChange={(event) => setPinConsent(event.target.checked)}
+                />
+                <span>{PIN_CONSENT_TEXT}</span>
+              </label>
+              <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
               <div className="dswf-remote-pin-actions">
                 <button
                   type="button"
@@ -770,6 +793,8 @@ export function RemotePanel(props: {
                   {switching && (
                     <div className="dswf-remote-qr-overlay" data-testid="dswf-remote-qr-overlay" role="status">
                       {LAN_LOADING_TEXT}
+                      {/* fix-21 §2②：官方假进度条（LAN 切换 0.8s 档——50ms 步进同刻度） */}
+                      <span className="dswf-remote-qr-progress" data-speed="lan" aria-hidden="true" />
                     </div>
                   )}
                 </div>
@@ -825,7 +850,12 @@ export function RemotePanel(props: {
                       setCopied(true)
                     }}
                   >
-                    {copied ? '已复制' : <IconCopyOutlineRegular size={14} />}
+                    {/* fix-21 §2③：done 态 = 绿圆勾徽（官方复制成功形态——1.8s 反馈逻辑保持） */}
+                    {copied ? (
+                      <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+                    ) : (
+                      <IconCopyOutlineRegular size={14} />
+                    )}
                   </button>
                 </Tooltip>
               </div>
