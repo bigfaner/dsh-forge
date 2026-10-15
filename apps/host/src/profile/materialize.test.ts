@@ -1,5 +1,6 @@
 // 1.4 AC2 pin：profile 模板首启落地 {profile-dir} + 幂等不重写 + 模板内容形状
-//（官方行 + @dsh-forge/core / @dsh-forge/knowledge 行）+ dev 形态文件同步。
+//（官方行 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生——knowledge 现值关：知识库
+// 功能不完整，打包形态不开放，dev 形态仍含）+ dev 形态文件同步。
 // M3 3.7 增：ui-settings 开关行首启预置（模板补行 + 增量补行 id 键控——此后归用户运行时）。
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,6 +8,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ensureProfileMaterialized } from './materialize.js'
 import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, UI_SETTINGS_PRESET_ROW } from './template.js'
+import { PRODUCT_PLUGINS } from '../../../../packages/contracts/src/product-plugins.js'
 
 let dir: string
 beforeAll(() => {
@@ -41,26 +43,29 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
   })
 
-  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + @dsh-forge/{core,knowledge} 产品行（产品裁决 2026-10-09：plugin-forge 移出用户层——标准模式零 forge 面，仅预设组合携带）', () => {
+  it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生（单一配置源：userLayerRow 门——翻转布尔即行增减，不改模板代码；现值 core 开 / knowledge 关——知识库功能不完整暂不开放）', () => {
     const patch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(patch).toContain('- id: system-prompt')
     // client-hmr 置停（2.7）：全图 sync 对账掉掌舵产品行——S2 残留 #3 的 profile 面处置
     expect(patch).toContain('- id: client-hmr')
     expect(patch).toContain('disabled: true')
-    // 产品两行启用（4.2 转正）：insert 块无 disabled；行 config 不在用户层书写
-    // （dbFile / tasksHome / bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
-    expect(patch).toContain(
-      [
-        '- insert:',
-        '    - id: dsh-forge-core',
-        "      name: '@dsh-forge/core'",
-        '    - id: dsh-forge-knowledge',
-        "      name: '@dsh-forge/knowledge'",
-      ].join('\n'),
-    )
-    // plugin-forge 行已移出（全局用户层行对一切组合生效＝泄漏进标准会话；预设底稿行内自带）
+    // insert 块 = 配置派生全集（行 config 不在用户层书写——dbFile / tasksHome /
+    // bindingsFile / skills 挂载目录 = boot overlay 装配期注入）
+    const expectedRows = Object.entries(PRODUCT_PLUGINS)
+      .filter(([, toggle]) => toggle.userLayerRow)
+      .flatMap(([key]) => {
+        const short = key.split('/').pop()!
+        return [`    - id: dsh-forge-${short}`, `      name: '@dsh-forge/${short}'`]
+      })
+    expect(expectedRows.length, '配置应至少含一个 userLayerRow 行（全关 = 打包形态零产品服务——疑配置误改）').toBeGreaterThan(0)
+    expect(patch).toContain(['- insert:', ...expectedRows].join('\n'))
+    // 现值 pin：knowledge 关（重开放 = 改 contracts PRODUCT_PLUGINS + 本 pin 反转）
+    expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: false, staged: false })
+    expect(patch).not.toContain("name: '@dsh-forge/knowledge'")
+    // 预设携带插件不入配置表（行在预设底稿内——产品裁决 2026-10-09 标准模式零 forge
+    // 面；staging 由 assemble 从底稿扫描 + 依赖闭包自动推导）
+    expect(PRODUCT_PLUGINS).not.toHaveProperty('plugin-forge')
     expect(patch).not.toContain("name: '@dsh-forge/plugin-forge'")
-    expect(patch).not.toContain('disabled: true\n    - id: dsh-forge-knowledge')
   })
 
   it('pnpm-workspace.yaml 模板：hoisted + autoInstallPeers false（S1 pin 形状）', () => {
@@ -186,12 +191,15 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     expect(dev.dependencies['better-sqlite3']).toBe('13.0.3')
     expect(dev.dependencies['gray-matter']).toBe('4.0.3')
   })
-  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + 两产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层，仅 core/knowledge）', () => {
+  it('cordis.patch.yml 语义一致（官方行 + client-hmr 置停 + core 产品行启用——4.2 转正；产品裁决 2026-10-09：plugin-forge 移出用户层，仅 core；产品裁决：knowledge 行 = dev 独有——打包模板暂不含，知识库功能不完整不开放）', () => {
     const dev = readFileSync(join(devDir, 'cordis.patch.yml'), 'utf8')
+    const packagedPatch = PROFILE_TEMPLATE_FILES['cordis.patch.yml']!
     expect(dev).toContain('- id: system-prompt')
     expect(dev).toContain('- id: client-hmr')
     expect(dev).toContain("name: '@dsh-forge/core'")
+    // knowledge 行 = dev 独有（开发时可用；打包模板不含——上方模板测试已 pin 缺席）
     expect(dev).toContain("name: '@dsh-forge/knowledge'")
+    expect(packagedPatch).not.toContain("name: '@dsh-forge/knowledge'")
     // plugin-forge 行移出（标准模式零 forge 面——forge 工具/技能仅预设组合携带）
     expect(dev).not.toContain("name: '@dsh-forge/plugin-forge'")
     expect(dev).not.toMatch(/dsh-forge-(core|knowledge)[\s\S]{0,80}disabled/)

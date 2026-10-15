@@ -49,6 +49,12 @@ export interface BootOverlayInput {
   readonly stateDb: string
   /** knowledge 插件 bindingsFile（会话 cwd → projectId 绑定表） */
   readonly bindingsFile: string
+  /** knowledge 插件行注行门（产品裁决：知识库功能不完整，打包形态不开放——行缺席
+   *  时用户层无 dsh-forge-knowledge 行，patch 按 id 整体替换无的放矢；true = 该插件
+   *  确在 profile 树装载（child 按 profileDir/node_modules/@dsh-forge/knowledge 在场
+   *  判定——dev 形态 link 在场 / 打包形态暂不含），方注 bindingsFile 行。绑定表文件
+   *  本体与刷新面不动：预设行内 plugin-forge 行仍消费同一 bindingsFile（单源）。 */
+  readonly knowledgeRow?: boolean
   /** M2 派生根（3.4：core 行 config.tasksHome 注入——缺席 = M2 四域整体降级） */
   readonly tasksHome?: string
   /** 设置域存储文件（M3 3.8：core 行 config.settingsFile 注入——{userData}/forge-settings.json；
@@ -178,9 +184,10 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     `    dbFile: ${yamlQuote(input.stateDb)}`,
     ...(input.tasksHome !== undefined ? [`    tasksHome: ${yamlQuote(input.tasksHome)}`] : []),
     ...(input.settingsFile !== undefined ? [`    settingsFile: ${yamlQuote(input.settingsFile)}`] : []),
-    '- id: dsh-forge-knowledge',
-    '  config:',
-    `    bindingsFile: ${yamlQuote(input.bindingsFile)}`,
+    // knowledge 行 config 注入（条件化——见 BootOverlayInput.knowledgeRow；缺席不注行）
+    ...(input.knowledgeRow === true
+      ? ['- id: dsh-forge-knowledge', '  config:', `    bindingsFile: ${yamlQuote(input.bindingsFile)}`]
+      : []),
     // 产品裁决（2026-10-09：标准模式零 forge 面）：无全局 plugin-forge 行、无全局
     // skill-filesystem 行——forge 工具/技能仅预设组合携带（预设底稿行内增量行，下方）。
     ...(input.credentialsPath !== undefined

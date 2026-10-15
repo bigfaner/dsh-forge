@@ -2,7 +2,8 @@
 // 用户层之后应用，按 row id 整体替换 config；YAML 双引号标量承载 Windows 路径）。
 // fix-12：welcome ack 预置行形状 + 上游版本常量 pin（升级窗口机械核查）。
 // fix-26：凭据桥行形状（credentialsPath 在场注入 / 缺席不桥）+ 官方缝 pin。
-// 3.4 M2 装配缝两面：core 行 tasksHome / knowledge 行 bindingsFile。产品裁决
+// 3.4 M2 装配缝两面：core 行 tasksHome / knowledge 行 bindingsFile（产品裁决：knowledge
+// 行条件化——打包形态暂不含知识库插件，knowledgeRow 门控注行；dev 形态在场才注）。产品裁决
 // （2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem 行
 // 废除——forge 工具/技能仅远征/突击预设组合携带（预设行内增量行 + customSkillDirs）。
 // M3 3.7 预设装配：registry default 覆写 + 远征/突击双预设行每启注行（物化分叉——
@@ -16,7 +17,7 @@ import { hostRoot } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 describe('renderBootOverlay（纯函数形状）', () => {
-  it('两产品行 config 注入：dbFile / bindingsFile 双引号标量（反斜杠转义）', () => {
+  it('产品行 config 注入：core 行 dbFile 双引号标量（反斜杠转义）；knowledge 行缺席（默认 knowledgeRow 门关——打包形态暂不含知识库插件）', () => {
     const text = renderBootOverlay({
       stateDb: 'C:\\app-data\\dsh-forge\\state.db',
       bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
@@ -27,9 +28,6 @@ describe('renderBootOverlay（纯函数形状）', () => {
         '- id: dsh-forge-core',
         '  config:',
         '    dbFile: "C:\\\\app-data\\\\dsh-forge\\\\state.db"',
-        '- id: dsh-forge-knowledge',
-        '  config:',
-        '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"',
         '- id: ui-settings-general',
         '  config:',
         `    welcomeNoticeVersion: "${WELCOME_NOTICE_ACK_VERSION}"`,
@@ -38,10 +36,22 @@ describe('renderBootOverlay（纯函数形状）', () => {
     )
   })
 
+  it('knowledge 行注行门（产品裁决：知识库功能不完整，打包形态不开放）：knowledgeRow: true（dev 形态 profile 树在场）→ bindingsFile 行注入（双引号标量）', () => {
+    const text = renderBootOverlay({
+      stateDb: 'C:\\app-data\\dsh-forge\\state.db',
+      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
+      knowledgeRow: true,
+    })
+    expect(text).toContain(
+      ['- id: dsh-forge-knowledge', '  config:', '    bindingsFile: "C:\\\\app-data\\\\dsh-forge\\\\knowledge-bindings.json"'].join('\n'),
+    )
+    expect(text).toContain('- id: dsh-forge-core') // core 行不受门控（恒注）
+  })
+
   it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）；全局零 forge 面（产品裁决 2026-10-09：plugin-forge/skill-filesystem 全局行废除——标准模式不带 forge 工具/技能，仅预设组合携带）', () => {
     const text = renderBootOverlay({ stateDb: '/x/state.db', bindingsFile: '/x/b.json' })
     expect(text).toContain('- id: dsh-forge-core')
-    expect(text).toContain('- id: dsh-forge-knowledge')
+    expect(text).not.toContain('- id: dsh-forge-knowledge') // 默认门关（打包形态——用户层无该行）
     expect(text).not.toContain('dsh-forge-plugin-forge')
     expect(text).not.toContain('plugin-forge')
     expect(text).not.toContain('skill-filesystem')
@@ -214,6 +224,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const patches = loadPresetPatches()!
   const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string } = {}) => ({
     ...base,
+    knowledgeRow: true, // dev 形态口径（profile.dev 树在场——knowledge 行注行）
     presets: {
       ...patches,
       coreSkillsDir: '/c/skills',
@@ -262,8 +273,8 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       ].join('\n')
     expect(text).toContain(row('plugin-forge'))
     expect(text).toContain(row('plugin-forge-spec'))
-    // 同值行计数：knowledge 全局一行 + 远征行内 plugin-forge/plugin-forge-spec 两行 +
-    // 突击行内 plugin-forge 一行 = 恰 4（全局 plugin-forge 行废除——预设会话行内实例
+    // 同值行计数：knowledge 全局一行（knowledgeRow: true——dev 形态口径）+ 远征行内
+    // plugin-forge/plugin-forge-spec 两行 + 突击行内 plugin-forge 一行 = 恰 4（全局 plugin-forge 行废除——预设会话行内实例
     // 自足 cwd 路由，标准组合零 forge 面）
     expect(text.split('\n').filter((l) => l.trim() === 'bindingsFile: "/x/b.json"')).toHaveLength(4)
     expect(text).not.toContain('{{plugin-forge-bindings}}')

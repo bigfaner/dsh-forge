@@ -178,13 +178,14 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     expect(manifest.injections.length).toBeGreaterThan(0)
     await expect(page.locator(WORKBENCH).first()).toBeVisible({ timeout: 60_000 })
     // 首启落地 profile（安装形态真实落地链回归——fix-37 ④ 归并面：4.3 套件的插件行内容
-    // 断言随迁：patch 含 @dsh-forge/core / @dsh-forge/knowledge 产品行）
+    // 断言随迁：patch 含 @dsh-forge/core 产品行；knowledge 行暂不含——产品裁决：知识库
+    // 功能不完整，打包形态不开放）
     for (const f of PROFILE_FILES) {
       expect(existsSync(join(userData, 'profile', f)), `首启落地 profile/${f}`).toBe(true)
     }
     const patch = readFileSync(join(userData, 'profile', 'cordis.patch.yml'), 'utf8')
     expect(patch, 'profile patch 含 @dsh-forge/core 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/core'")
-    expect(patch, 'profile patch 含 @dsh-forge/knowledge 产品插件行（4.3 归并断言）').toContain("name: '@dsh-forge/knowledge'")
+    expect(patch, 'profile patch 不含 @dsh-forge/knowledge 插件行（暂不开放）').not.toContain("name: '@dsh-forge/knowledge'")
     expect(existsSync(join(userData, 'state.db')), 'state.db 落盘（SQLite 句柄已开）').toBe(true)
 
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──

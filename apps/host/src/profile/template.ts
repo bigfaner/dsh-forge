@@ -1,12 +1,23 @@
 // profile 模板（打包形态首启落地的唯一内容源；定位：基础）。
 // 权威：tech-design「profile 组装与插件分发」——产品 profile 模板（cordis.patch.yml：
-// 官方行 + @dsh-forge/core / @dsh-forge/knowledge 行）随应用资源分发，首启落地
+// 官方行 + 产品插件 insert 行）随应用资源分发，首启落地
 // {app-data}/dsh-forge/profile/，此后每次启动 loadProfileDirectory 加载。
+// 插件行成员 = 配置化单一源 PRODUCT_PLUGINS（@dsh-forge/contracts——userLayerRow 门）：
+// 某插件进不进打包用户层 = 只翻配置布尔，不改本文件（现值：core 开 / knowledge 关——
+// 知识库功能不完整，打包形态暂不开放，dev 形态 profile.dev 仍含）。
 // dev 形态同义文件 = apps/host/profile.dev/（pnpm 需真实可安装目录，两处由
 // materialize.test.ts 同步 pin 机械对齐）。
+import { PRODUCT_PLUGINS } from '@dsh-forge/contracts'
 
 /** 上游 dsh 公开栈精确 pin（tech-design Dependencies：P1 期不开升级窗口） */
 export const DSH_STACK_VERSION = '0.2.0-rc.2'
+
+/**
+ * 打包用户层 insert 行成员（PRODUCT_PLUGINS userLayerRow 门派生——配置化单一源；
+ * 键序 = 行序）。行形制：id = dsh-forge-<短名>，name = @dsh-forge/<短名>（键含
+ * packages/ 子路径时取 basename 短名——plugins/md-mermaid 先例）。
+ */
+const USER_LAYER_ROW_PLUGINS = Object.entries(PRODUCT_PLUGINS).filter(([, toggle]) => toggle.userLayerRow)
 
 /**
  * ui-settings 开关行首启预置（M3 3.7）：hero 预设座位显示开关（上游 ui-settings 单字段
@@ -60,18 +71,18 @@ export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
     '  disabled: true',
     '',
     '# ── 产品插件行（4.2 转正启用——SMOKE-LEDGER §5 转正条件落位）──',
-    '# core = 单 SQLite 句柄双服务（ctx.forgeProjects / ctx.forgeKnowledge；M2 起 tasksHome',
-    '# 注入时增四域服务）；knowledge = 召回 tool 双件 + forge:knowledge 系统提示词段。',
+    '# 行成员 = PRODUCT_PLUGINS 配置（contracts——userLayerRow 门；core = 单 SQLite 句柄',
+    '# 双服务 ctx.forgeProjects / ctx.forgeKnowledge，M2 起 tasksHome 注入时增四域服务）。',
     '# plugin-forge 行已移出用户层（产品裁决 2026-10-09：标准模式零 forge 面——用户层/',
     '# overlay 全局行对一切组合生效（含 dsh 出厂标准预设）＝泄漏；forge 工具/技能仅',
     '# 远征/突击预设组合携带，预设底稿行内增量行自带 bindingsFile config，自足）。',
     '# config 不在用户层书写（dbFile / tasksHome / bindingsFile 与 skills 物理挂载目录',
     '# 均属应用装配期路径——boot overlay 按 userData/形态逐启生成）。',
     '- insert:',
-    '    - id: dsh-forge-core',
-    "      name: '@dsh-forge/core'",
-    '    - id: dsh-forge-knowledge',
-    "      name: '@dsh-forge/knowledge'",
+    ...USER_LAYER_ROW_PLUGINS.flatMap(([key]) => {
+      const short = key.split('/').pop()!
+      return [`    - id: dsh-forge-${short}`, `      name: '@dsh-forge/${short}'`]
+    }),
     '',
     // M3 3.7：ui-settings 开关行首启预置（行所有权用户侧径——见 UI_SETTINGS_PRESET_ROW）
     `${UI_SETTINGS_PRESET_ROW}`,

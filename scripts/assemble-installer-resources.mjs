@@ -14,7 +14,8 @@
  *                             dsh-app-boot resolution BFS 以它为根遍历出全量 entries
  *       node_modules/         完整 hoisted 真实文件运行时树（源 = apps/host/profile.install，
  *                             autoInstallPeers: true 补全 peer-only 包）+ @dsh-forge/* 产品插件
- *                             真实拷贝（packages/{contracts,path-key,core,knowledge,plugin-forge,plugins/md-mermaid} 的 package.json+dist）
+ *                             真实拷贝（成员 = contracts PRODUCT_PLUGINS staged 门配置派生——
+ *                             knowledge 暂不含：知识库功能不完整，打包形态不开放）
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
@@ -47,59 +48,124 @@ const RUNTIME = join(STAGING, 'runtime')
 const APP_DIR = join(ROOT, 'release', 'app')
 const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 /**
- * 产品插件物化清单（3.4 增 plugin-forge；3.8 增 plugin-forge-spec；path-key = 产品包
- * @dsh-forge/* 运行时依赖闭包成员——e791a46 起补列：漏列致打包形态 boot child ESM 解析
- * '@dsh-forge/path-key' 落空，插件不装载、服务未 provide、main fail-soft 不注册 forge:* 通道，
- * 注册报 "No handler registered for 'forge:projects/register'"）。每包必物化内容
- * （源 = packages/<name>）：清单 + 构建产物（不携带 src/测试）；两产品插件另携
- * skills/——customSkillDirs 物理挂载源（boot overlay 注 skill-filesystem 行），缺席即
- * 技能面静默缺失，故必物化 fail-loud（plugin-forge = 3.4；plugin-forge-spec = 3.2
- * 规格技能迁移落地，3.8 曾注记「随 3.2 落地后补列」——本次兑现）。md-mermaid =
- * md-mermaid-plugin（无 skills 面——预防/渲染能力零技能目录，键含 packages/ 子路径）。
+ * 产品插件物化 = 配置意图开关 + 自动推导（单一源 = @dsh-forge/contracts
+ * PRODUCT_PLUGINS——本脚本零硬编码插件清单，新增产品包零配置）：
+ *   staging 集合 = 种子（userLayerRow 插件 ∪ 预设底稿携带插件 ∪ staged:true 覆写）
+ *   的 @dsh-forge/* 运行时依赖闭包（packages/<dir>/package.json BFS），剔除
+ *   staged:false kill-switch。contracts/path-key 等闭包成员自动随包——「忘列」
+ *   类缺陷（e791a46 path-key）结构性消除。
+ * 每包必物化内容（源 = packages/<dir>）：清单 + 构建产物（不携带 src/测试）；
+ * 带技能面的插件另携 skills/——customSkillDirs 物理挂载源（boot overlay 注
+ * skill-filesystem 行），缺席即技能面静默缺失，故必物化 fail-loud（STAGING_EXTRAS）。
  * README.md 全员可选（contracts 无 README——携带与否不影响运行）。
- * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段——产品包新增
- * @dsh-forge/* 运行时依赖须随包同步补列。
+ * 现值注记：knowledge kill-switch——知识库功能不完整，打包形态暂不开放（dev 形态
+ * profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS）。
+ * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
-const PRODUCT_PACKAGES = {
-  contracts: ['package.json', 'dist'],
-  'path-key': ['package.json', 'dist'],
-  core: ['package.json', 'dist'],
-  knowledge: ['package.json', 'dist'],
-  'plugin-forge': ['package.json', 'dist', 'skills'],
-  'plugin-forge-spec': ['package.json', 'dist', 'skills'],
-  'plugins/md-mermaid': ['package.json', 'dist'],
+/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
+const STAGING_EXTRAS = {
+  'plugin-forge': { files: ['skills'], keyFiles: ['skills/run-tasks/SKILL.md'] },
+  'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 
-/** --check 断言的安装包关键文件（resources 相对路径；4.3 冒烟对安装后 resources 同口径复用） */
-export const REQUIRED_KEY_FILES = [
-  'runtime/package.json',
-  'web-dist/index.html',
-  'icon.png',
-  'app/main.js',
-  'app/package.json',
-  'runtime/host-dist/main.js',
-  'runtime/host-dist/boot/child.js',
-  'runtime/node_modules/@deepseek-ai/dsh/package.json',
-  'runtime/node_modules/@deepseek-ai/dsh-base/package.json',
-  'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
-  'runtime/node_modules/@dsh-forge/contracts/package.json',
-  'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
-  'runtime/node_modules/@dsh-forge/path-key/package.json',
-  'runtime/node_modules/@dsh-forge/path-key/dist/index.js',
-  'runtime/node_modules/@dsh-forge/core/package.json',
-  'runtime/node_modules/@dsh-forge/core/dist/index.js',
-  'runtime/node_modules/@dsh-forge/knowledge/package.json',
-  'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
-  'runtime/node_modules/@dsh-forge/plugin-forge/package.json',
-  'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-  'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
-  'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
-  'runtime/node_modules/@dsh-forge/plugin-forge-spec/dist/index.js',
-  'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
-  'runtime/node_modules/better-sqlite3/package.json',
-  'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
-]
+/** 包短名 → packages/ 子路径（平铺优先；plugins/ 子居所探测——md-mermaid 先例；缺席 undefined） */
+function packageDirOf(root, short) {
+  if (existsSync(join(root, 'packages', short, 'package.json'))) return short
+  if (existsSync(join(root, 'packages', 'plugins', short, 'package.json'))) return `plugins/${short}`
+  return undefined
+}
+
+/** 预设底稿携带插件（apps/host/src/profile/presets/*.patch.yml `name: '@dsh-forge/<短名>'` 行扫描——预设组合装载面真源） */
+export function presetCarriedPlugins(root = ROOT) {
+  const dir = join(root, 'apps', 'host', 'src', 'profile', 'presets')
+  const names = new Set()
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith('.yml')) continue
+    for (const hit of readFileSync(join(dir, file), 'utf8').matchAll(/'@dsh-forge\/([a-z0-9-]+)'/g)) names.add(hit[1])
+  }
+  return [...names].sort()
+}
+
+/**
+ * staging 插件物化清单（自动推导，key = packages/ 子路径 → 必物化文件集）：
+ * 种子 = userLayerRow 插件 ∪ 预设携带插件 ∪ staged:true 覆写 → @dsh-forge/* 依赖
+ * 闭包 BFS → 剔除 staged:false。插件缺席 packages/ 树（配置误写/包未建）= fail-loud。
+ */
+export function stagedProductPackages(plugins, root = ROOT) {
+  const seeds = new Set(
+    Object.entries(plugins)
+      .filter(([, toggle]) => toggle.userLayerRow || toggle.staged === true)
+      .map(([name]) => name),
+  )
+  for (const name of presetCarriedPlugins(root)) seeds.add(name)
+  const stagedDirs = new Map() // packages 子路径 → 短名
+  const queue = [...seeds]
+  while (queue.length > 0) {
+    const short = queue.shift()
+    if ([...stagedDirs.values()].includes(short)) continue
+    const dir = packageDirOf(root, short)
+    if (dir === undefined) {
+      if (Object.hasOwn(plugins, short) && plugins[short].staged === true) {
+        fail(`PRODUCT_PLUGINS staged:true 覆写指向缺席的包：packages/${short}（或 packages/plugins/${short}）不存在`)
+      }
+      continue // 预设/依赖扫描到的非包名（如已被 kill-switch 的引用目标）静默跳过
+    }
+    stagedDirs.set(dir, short)
+    const manifest = JSON.parse(readFileSync(join(root, 'packages', dir, 'package.json'), 'utf8'))
+    for (const dep of Object.keys(manifest.dependencies ?? {})) {
+      if (dep.startsWith('@dsh-forge/')) queue.push(dep.slice('@dsh-forge/'.length))
+    }
+  }
+  const out = {}
+  for (const [dir, short] of [...stagedDirs].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (Object.hasOwn(plugins, short) && plugins[short].staged === false) continue // kill-switch
+    out[dir] = ['package.json', 'dist', ...(STAGING_EXTRAS[short]?.files ?? [])]
+  }
+  return out
+}
+
+/**
+ * --check 断言的安装包关键文件（resources 相对路径；4.3 冒烟对安装后 resources 同口径
+ * 复用）。插件条目 = stagedProductPackages 推导：package.json + dist 入口 +
+ * STAGING_EXTRAS 附加关键文件（技能面）。
+ */
+export function requiredKeyFiles(plugins) {
+  const files = [
+    'runtime/package.json',
+    'web-dist/index.html',
+    'icon.png',
+    'app/main.js',
+    'app/package.json',
+    'runtime/host-dist/main.js',
+    'runtime/host-dist/boot/child.js',
+    'runtime/node_modules/@deepseek-ai/dsh/package.json',
+    'runtime/node_modules/@deepseek-ai/dsh-base/package.json',
+    'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
+    'runtime/node_modules/better-sqlite3/package.json',
+    'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
+  ]
+  for (const [dir] of Object.entries(stagedProductPackages(plugins))) {
+    const short = dir.split('/').pop()
+    files.push(
+      `runtime/node_modules/@dsh-forge/${short}/package.json`,
+      `runtime/node_modules/@dsh-forge/${short}/dist/index.js`,
+      ...(STAGING_EXTRAS[short]?.keyFiles ?? []).map((f) => `runtime/node_modules/@dsh-forge/${short}/${f}`),
+    )
+  }
+  return files
+}
+
+/** 产品插件启停配置装载（单一源 = contracts dist；前置 = pnpm build——本就 fail-loud 前置） */
+async function loadProductPlugins() {
+  try {
+    const contracts = await import('../packages/contracts/dist/index.js')
+    if (contracts.PRODUCT_PLUGINS === undefined) throw new Error('PRODUCT_PLUGINS 未导出')
+    return contracts.PRODUCT_PLUGINS
+  } catch (cause) {
+    fail(`产品插件配置装载失败（packages/contracts/dist——先执行：pnpm build（tsc -b 全拓扑））：${String(cause)}`)
+  }
+}
 
 export function parseArgs(argv) {
   const args = { check: false, root: undefined }
@@ -158,27 +224,26 @@ function fail(message) {
   process.exit(1)
 }
 
-/** 物化前置：workspace 构建产物 + 打包安装树就位（错即停，提示补救命令）。 */
-function assertPreconditions() {
+/** 物化前置：workspace 构建产物 + 打包安装树就位（错即停，提示补救命令）。
+ *  插件产物前置 = stagedProductPackages 派生（dist 入口 + STAGING_EXTRAS 关键文件——
+ *  配置翻转后前置面随之增减，无硬编码插件行）。 */
+function assertPreconditions(plugins) {
   const wants = [
     [join(ROOT, 'apps/host/dist/main.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/host/dist/boot/child.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/web/dist/index.html'), 'pnpm build（vite 壳 dist）'],
-    [join(ROOT, 'packages/contracts/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
-    [join(ROOT, 'packages/path-key/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
-    [join(ROOT, 'packages/core/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
-    [join(ROOT, 'packages/knowledge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
-    [join(ROOT, 'packages/plugin-forge/dist/index.js'), 'pnpm build（tsc -b 全拓扑）'],
-    [join(ROOT, 'packages/plugin-forge/skills/run-tasks/SKILL.md'), 'packages/plugin-forge/skills 技能面（3.4 customSkillDirs 挂载源——缺席即技能面静默缺失）'],
-    [join(ROOT, 'packages/plugin-forge-spec/dist/index.js'), 'pnpm build（tsc -b 全拓扑——M3 3.8 packaging 三处同步：缺席即打包形态 boot ESM 解析断裂，远征预设行装载失败）'],
-    [join(ROOT, 'packages/plugin-forge-spec/skills/write-prd/SKILL.md'), 'packages/plugin-forge-spec/skills 技能面（M3 3.2 规格技能迁移——customSkillDirs[spec] 挂载源，缺席即远征技能面静默缺失）'],
-    [join(ROOT, 'packages/plugins/md-mermaid/dist/index.js'), 'pnpm build（tsc -b 全拓扑——md-mermaid-plugin：缺席即打包形态 boot ESM 解析断裂，双组合预设行装载失败）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, 'better-sqlite3/prebuilds/win32-x64.node'), 'pnpm -C apps/host/profile.install install（prebuilds 随包分发，缺席即包损坏）'],
     [join(ROOT, 'build', 'icon.png'), 'node tmp-ui-review/gen-whale-brand-v3.mjs --emit icon（fix-45 应用图标——窗口图标打包形态随包）'],
   ]
+  for (const [key, files] of Object.entries(stagedProductPackages(plugins))) {
+    wants.push([join(ROOT, 'packages', key, 'dist', 'index.js'), `pnpm build（tsc -b 全拓扑——packages/${key} staged 插件产物）`])
+    for (const file of files.filter((f) => f !== 'dist' && f !== 'package.json')) {
+      wants.push([join(ROOT, 'packages', key, file), `packages/${key} 技能面（customSkillDirs 挂载源——缺席即技能面静默缺失）`])
+    }
+  }
   for (const [path, remedy] of wants) if (!existsSync(path)) fail(`${path} 未就位 —— 先执行：${remedy}`)
 }
 
@@ -207,12 +272,14 @@ function measureTree(root) {
   return { files, bytes }
 }
 
-function stage() {
-  assertPreconditions()
+async function stage() {
+  const plugins = await loadProductPlugins()
+  assertPreconditions(plugins)
+  const productPackages = stagedProductPackages(plugins)
   const rootVersion = readJson(join(ROOT, 'package.json'), 'root manifest').version ?? '0.0.0'
   const installManifest = readJson(join(ROOT, 'apps/host/profile.install/package.json'), 'profile.install manifest')
   const productVersions = {}
-  for (const name of Object.keys(PRODUCT_PACKAGES)) {
+  for (const name of Object.keys(productPackages)) {
     // 键可含 packages/ 子路径（plugins/md-mermaid）——dest/版本键取 basename 短名
     const short = name.split('/').pop()
     const manifest = readJson(join(ROOT, 'packages', name, 'package.json'), `packages/${name} manifest`)
@@ -233,7 +300,7 @@ function stage() {
   const sections = {}
   copyTree(INSTALL_NM, join(RUNTIME, 'node_modules'))
   mkdirSync(join(RUNTIME, 'node_modules', '@dsh-forge'), { recursive: true })
-  for (const [key, requiredFiles] of Object.entries(PRODUCT_PACKAGES)) {
+  for (const [key, requiredFiles] of Object.entries(productPackages)) {
     const short = key.split('/').pop()
     const dest = join(RUNTIME, 'node_modules', '@dsh-forge', short)
     mkdirSync(dest, { recursive: true })
@@ -273,8 +340,8 @@ function stage() {
   writeFileSync(join(APP_DIR, 'package.json'), `${JSON.stringify(buildAppManifest(rootVersion), null, 2)}\n`, 'utf8')
   sections.appLoader = { files: 1, bytes: statSync(loader).size }
 
-  // 6) 关键文件自证 + manifest 落盘
-  const problems = checkKeyFiles(STAGING, join(APP_DIR))
+  // 6) 关键文件自证 + manifest 落盘（口径 = requiredKeyFiles(plugins) 配置派生）
+  const problems = checkKeyFiles(STAGING, join(APP_DIR), requiredKeyFiles(plugins))
   const manifest = {
     generatedAt: new Date().toISOString(),
     sections,
@@ -299,17 +366,17 @@ function statFileSync(path) {
 
 /** --check：对 staging（或安装后 resources 目录，经位置参数传入）断言关键文件。
  *  app/* 条目解析到 appDistRoot——staging 形态 = release/app（同级），安装形态 = {root}/app。 */
-function checkKeyFiles(root, appDistRoot) {
+function checkKeyFiles(root, appDistRoot, keyFiles) {
   const problems = []
-  for (const rel of REQUIRED_KEY_FILES) {
+  for (const rel of keyFiles) {
     const path = rel.startsWith('app/') ? join(appDistRoot, rel.slice('app/'.length)) : join(root, rel)
     if (!existsSync(path)) problems.push(rel)
   }
   return problems
 }
 
-function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app')) {
-  const problems = checkKeyFiles(root, appDistRoot)
+async function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app')) {
+  const problems = checkKeyFiles(root, appDistRoot, requiredKeyFiles(await loadProductPlugins()))
   if (problems.length > 0) {
     console.error(`CHECK FAILED: ${problems.join('; ')}`)
     process.exit(1)
@@ -327,14 +394,14 @@ function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app')) {
   console.log('STAGING_CHECK_OK (no manifest — external resources root)')
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2))
   if (args.check) {
     // 默认对 release/staging 自校验；位置参数 = 安装后 resources 根（4.3 冒烟复用）
-    if (args.root !== undefined) check(args.root, join(args.root, 'app'))
-    else check()
-  } else stage()
+    if (args.root !== undefined) await check(args.root, join(args.root, 'app'))
+    else await check()
+  } else await stage()
 }
 
 // CLI 直跑才执行（被 vitest 结构测试 import 时仅取导出，无副作用）
-if (process.argv[1] === fileURLToPath(import.meta.url)) main()
+if (process.argv[1] === fileURLToPath(import.meta.url)) void main()

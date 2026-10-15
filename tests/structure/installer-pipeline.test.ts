@@ -8,12 +8,15 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { RUNTIME_PACKAGES } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, REQUIRED_KEY_FILES } from '../../scripts/assemble-installer-resources.mjs'
+import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages } from '../../scripts/assemble-installer-resources.mjs'
+import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
 const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 const readJson = (p: string) => JSON.parse(readFileSync(join(ROOT, p), 'utf8')) as Record<string, unknown>
+/** 关键文件口径（配置派生——与 stage/--check 运行期同源 PRODUCT_PLUGINS） */
+const KEY_FILES = requiredKeyFiles(PRODUCT_PLUGINS)
 
 describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）', () => {
   const config = createElectronBuilderConfig('9.9.9') as Record<string, unknown>
@@ -162,8 +165,9 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'runtime/node_modules/@deepseek-ai/dsh-base/package.json',
       'runtime/node_modules/@deepseek-ai/dsh-web-app/package.json',
       'runtime/node_modules/@dsh-forge/core/dist/index.js',
-      'runtime/node_modules/@dsh-forge/knowledge/dist/index.js',
       'runtime/node_modules/@dsh-forge/contracts/dist/index.js',
+      // knowledge 暂不含（产品裁决：知识库功能不完整，打包形态不开放——dev 形态仍含；
+      // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
@@ -179,40 +183,62 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'app/main.js',
       'app/package.json',
     ]
-    for (const rel of must) expect(REQUIRED_KEY_FILES, `关键文件口径缺席 ${rel}`).toContain(rel)
+    for (const rel of must) expect(KEY_FILES, `关键文件口径缺席 ${rel}`).toContain(rel)
+  })
+
+  it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步）', () => {
+    const stagedNames = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
+    const keyFileNames = new Set(
+      KEY_FILES.flatMap((rel) => {
+        const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
+        return hit === null ? [] : [hit[1]]
+      }),
+    )
+    expect([...stagedNames].sort()).toEqual([...keyFileNames].sort())
   })
 })
 
 describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化——打包形态 boot child ESM 解析链）', () => {
-  /** staging 口径内产品包集合（REQUIRED_KEY_FILES 路径提取——与 --check / PRODUCT_PACKAGES 同源漂移） */
+  /** staging 口径内产品包集合（KEY_FILES 路径提取——与 --check / stagedProductPackages 同源漂移） */
   const stagedPackages = new Set(
-    REQUIRED_KEY_FILES.flatMap((rel) => {
+    KEY_FILES.flatMap((rel) => {
       const hit = /^runtime\/node_modules\/@dsh-forge\/([^/]+)\//.exec(rel)
       return hit === null ? [] : [hit[1]]
     }),
   )
 
-  it('bug: 已 staging 产品包的 @dsh-forge/* 运行时依赖缺席 staging（boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {
+  it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
+    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid——远征/突击组合行）
+    expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
+    // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
+    expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/md-mermaid'].sort(),
+    )
+  })
+
+  it('闭包自洽：已 staging 产品包的 @dsh-forge/* 运行时依赖均在场（kill-switch 误伤即红——boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {
     // Root cause 实证（安装版 Electron 实测）：core dist import '@dsh-forge/path-key' 落空——
-    // runtime/node_modules 仅物化 PRODUCT_PACKAGES 硬编码三件，fix-30 新增的 path-key 漏列。
+    // 历史病理 = staging 硬编码清单漏列闭包成员；推导制下本断言守 kill-switch 不误伤。
     const missing: string[] = []
     for (const name of [...stagedPackages].sort()) {
-      const manifest = readJson(`packages/${name}/package.json`) as { dependencies?: Record<string, string> }
+      // 键可含 packages/ 子路径（md-mermaid 居 packages/plugins/——runtime-packages 同源映射）
+      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
       for (const dep of Object.keys(manifest.dependencies ?? {})) {
         if (dep.startsWith('@dsh-forge/') && !stagedPackages.has(dep.slice('@dsh-forge/'.length))) {
           missing.push(`${name} → ${dep}`)
         }
       }
     }
-    expect(missing, `staging 闭包缺口（PRODUCT_PACKAGES/REQUIRED_KEY_FILES 需补列）：${missing.join('; ')}`).toEqual([])
+    expect(missing, `staging 闭包缺口（staged:false kill-switch 误伤依赖成员？）：${missing.join('; ')}`).toEqual([])
   })
 
   it('闭包成员物化口径完整：package.json + dist 双件随包（--check 断言可达）', () => {
     for (const name of [...stagedPackages].sort()) {
-      expect(REQUIRED_KEY_FILES, `${name} package.json 口径缺席`).toContain(
+      expect(KEY_FILES, `${name} package.json 口径缺席`).toContain(
         `runtime/node_modules/@dsh-forge/${name}/package.json`,
       )
-      expect(REQUIRED_KEY_FILES, `${name} dist 入口口径缺席`).toContain(
+      expect(KEY_FILES, `${name} dist 入口口径缺席`).toContain(
         `runtime/node_modules/@dsh-forge/${name}/dist/index.js`,
       )
     }
@@ -220,8 +246,14 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
 
   it('M3 3.8+3.2：plugin-forge-spec 入闭包（PRODUCT_PACKAGES 物化 + --check 口径双件全 + skills 技能面（3.2 规格技能迁移落地补列））', () => {
     expect(stagedPackages.has('plugin-forge-spec'), 'plugin-forge-spec 缺席 staging 闭包（TECH-packaging-001：漏列即打包形态 boot ESM 解析断裂）').toBe(true)
-    expect(REQUIRED_KEY_FILES, 'plugin-forge-spec skills 技能面口径缺席（远征组合 customSkillDirs[spec] 挂载源）').toContain(
+    expect(KEY_FILES, 'plugin-forge-spec skills 技能面口径缺席（远征组合 customSkillDirs[spec] 挂载源）').toContain(
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
     )
+  })
+
+  it('knowledge 暂不开放 pin（产品裁决：知识库功能不完整，打包形态不开放——dev 形态 profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS knowledge 行，本 pin 同步反转）', () => {
+    expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为关（userLayerRow:false + staged:false kill-switch）').toEqual({ userLayerRow: false, staged: false })
+    expect(stagedPackages.has('knowledge'), 'knowledge 应暂缺席 staging（推导制下无种子 + kill-switch 双保险）').toBe(false)
+    expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径不应含 knowledge 行（暂不开放）').toBe(false)
   })
 })

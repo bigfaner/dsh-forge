@@ -53,10 +53,11 @@ test('AC2 packaged 形态：首启落地模板且二次启动幂等不重写', a
       } finally {
         await closeApp(app)
       }
-      // 首启：模板三件（官方行 + @dsh-forge/core / @dsh-forge/knowledge 行）+ cordis.yml 空根
+      // 首启：模板三件（官方行 + @dsh-forge/core 行；knowledge 行暂不含——产品裁决：
+      // 知识库功能不完整，打包形态不开放）+ cordis.yml 空根
       const patch = readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')
       expect(patch, `round ${String(round)}`).toContain("name: '@dsh-forge/core'")
-      expect(patch, `round ${String(round)}`).toContain("name: '@dsh-forge/knowledge'")
+      expect(patch, `round ${String(round)}`).not.toContain("name: '@dsh-forge/knowledge'")
       const pkg = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) as {
         dsh: { profile: { bundles: string[] } }
       }
