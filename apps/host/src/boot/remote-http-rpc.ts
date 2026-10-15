@@ -88,6 +88,32 @@ function channelTableOf(deps: RemoteHttpRpcDeps): Record<string, ChannelHandler>
   }
 }
 
+/**
+ * dswf 受限视图入口 cookie 在场判定（自持配对语义——child.ts /pair、/pair/verify 成功面
+ * Set-Cookie dswf_forge_remote=1；在场 = 配对握手已认证。只判名不读值）。
+ */
+export function hasRemoteViewCookie(headers: unknown): boolean {
+  const raw = (headers as { cookie?: unknown } | null | undefined)?.cookie
+  if (typeof raw !== 'string') return false
+  return raw.split(';').some((segment) => segment.trim().startsWith(`${REMOTE_VIEW_COOKIE_NAME}=`))
+}
+
+/** dswf 受限视图入口 cookie 名（child.ts REMOTE_VIEW_COOKIE 同名单源） */
+export const REMOTE_VIEW_COOKIE_NAME = 'dswf_forge_remote'
+
+/**
+ * POST /remote/__rpc 专供门（fix-27 bug b9bfb9d3）：官方 authorizeIndex 放行优先（零自持
+ * 语义保持）；官方会话 cookie 拒绝时，dswf_forge_remote cookie 在场即放行——配对握手
+ * （/pair token 或 /pair/verify PIN）已认证语义，官方会话门仅用于 GET 页面。Root cause:
+ * 官方 BrowserAuth 会话 cookie 按 Host authority 绑定（isAuthenticated 逐字比对），隧道域
+ * 下手机 POST 被拒而 GET 页面通过的三类断点（authority 派生不一致/fetch cookie 缺席/官方
+ * POST 分支语义）皆由自持兜底覆盖，真断点由 401 诊断行在真机日志定位。
+ */
+export function authorizeRemoteRpc(req: unknown, res: unknown, authorizeIndex: (req: unknown, res: unknown) => boolean): boolean {
+  if (authorizeIndex(req, res)) return true
+  return hasRemoteViewCookie((req as { headers?: unknown } | null | undefined)?.headers)
+}
+
 /** 请求体读取（chunk 收集单面） */
 function readBody(req: { on(event: string, cb: (chunk: unknown) => void): unknown }): Promise<string> {
   return new Promise((resolve) => {
@@ -106,9 +132,16 @@ export async function handleRemoteHttpRpc(
   res: RpcResFace,
   deps: RemoteHttpRpcDeps,
 ): Promise<void> {
-  // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth——零自持；
-  // false = 官方 401/403 面已写毕，本 handler 静默返回）
-  if (!deps.authorize(req, res)) return
+  // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth）；false = 官方
+  // 401/403 面已写毕，本 handler 静默返回——但先落一行诊断（fix-27 bug b9bfb9d3：401
+  // 路径零日志是诊断盲区；method/host/cookie 有无，不含值）
+  if (!deps.authorize(req, res)) {
+    const { method, headers } = req as { method?: unknown; headers?: Record<string, unknown> }
+    deps.diag(
+      `[pair-diag] ${REMOTE_HTTP_RPC_PATH} method=${String(method ?? '')} host=${JSON.stringify(String(headers?.['host'] ?? ''))} cookie=${typeof headers?.['cookie'] === 'string' ? 'present' : 'absent'} status=unauthorized`,
+    )
+    return
+  }
   let channel = ''
   let payload: unknown
   try {

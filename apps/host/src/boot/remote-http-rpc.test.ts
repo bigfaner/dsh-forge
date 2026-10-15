@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { REMOTE_CHANNELS, type RemoteProgressSnapshot } from '@dsh-forge/contracts'
 import {
   REMOTE_HTTP_RPC_PATH,
+  authorizeRemoteRpc,
   handleRemoteHttpRpc,
+  hasRemoteViewCookie,
   isRemoteHttpRpcRequest,
   type FakeRes,
 } from './remote-http-rpc.js'
@@ -72,6 +74,58 @@ describe('handleRemoteHttpRpc 会话门', () => {
     expect(touched).toBe(true)
     expect(res.status).toBe(0)
     expect(res.body).toBe('')
+  })
+
+  // fix-27 bug b9bfb9d3：401 静默零日志（诊断盲区）——会话门 false 分支必须落一行
+  // diag（method/host/cookie 有无，不含值）后再静默返回（官方 401 面仍归官方面）。
+  it('authorize=false：落 401 诊断行（method/host/cookie 有无——不含 cookie 值）', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    const req = fakeReq({ channel: REMOTE_CHANNELS.progress }) as never as { headers: Record<string, unknown> }
+    req.headers = { host: 'tunnel.example', cookie: 'secret=value; other=1' }
+    await handleRemoteHttpRpc(req, res, deps({ authorize: () => false, diag: (line) => lines.push(line) }))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('status=unauthorized')
+    expect(lines[0]).toContain('method=POST')
+    expect(lines[0]).toContain('tunnel.example')
+    expect(lines[0]).toContain('cookie=present')
+    expect(lines[0]).not.toContain('secret=value')
+  })
+
+  it('authorize=false 且无 cookie 头：诊断行 cookie=absent', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: REMOTE_CHANNELS.progress }) as never,
+      res,
+      deps({ authorize: () => false, diag: (line) => lines.push(line) }),
+    )
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('cookie=absent')
+  })
+})
+
+describe('authorizeRemoteRpc（fix-27 自持兜底门——POST __rpc 专供）', () => {
+  const res = fakeRes()
+  it('官方 authorizeIndex true → 放行（零自持语义保持）', () => {
+    expect(authorizeRemoteRpc({ headers: {} } as never, res, () => true)).toBe(true)
+  })
+  it('官方 false + dswf_forge_remote cookie 在场 → 放行（配对握手已认证语义）', () => {
+    expect(authorizeRemoteRpc({ headers: { cookie: 'dswf_forge_remote=1; other=x' } } as never, res, () => false)).toBe(true)
+  })
+  it('官方 false 且 dswf cookie 缺席 → 拒绝', () => {
+    expect(authorizeRemoteRpc({ headers: { cookie: 'other=x' } } as never, res, () => false)).toBe(false)
+    expect(authorizeRemoteRpc({ headers: {} } as never, res, () => false)).toBe(false)
+  })
+})
+
+describe('hasRemoteViewCookie（dswf 受限视图 cookie 在场判定）', () => {
+  it('命中/缺席/无 cookie 头', () => {
+    expect(hasRemoteViewCookie({ cookie: 'dswf_forge_remote=1' })).toBe(true)
+    expect(hasRemoteViewCookie({ cookie: 'a=b; dswf_forge_remote=1; c=d' })).toBe(true)
+    expect(hasRemoteViewCookie({ cookie: 'a=b' })).toBe(false)
+    expect(hasRemoteViewCookie({})).toBe(false)
+    expect(hasRemoteViewCookie(undefined)).toBe(false)
   })
 })
 

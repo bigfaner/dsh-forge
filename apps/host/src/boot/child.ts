@@ -44,7 +44,7 @@ import { loadBootChain } from './boot-chain.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 import { PAIRING_TTL_MS, createPairingIssuer, createPinIssuer } from './pairing.js'
-import { handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
@@ -369,7 +369,10 @@ async function main(): Promise<void> {
               },
               forwardApproval: (input) =>
                 approvalRelay?.deposit(input) ?? Promise.resolve({ forwarded: false, reason: 'unavailable' as const }),
-              authorize: (rq, rs) => ctx.connection.authorizeIndex(rq as Parameters<typeof ctx.connection.authorizeIndex>[0], rs as Parameters<typeof ctx.connection.authorizeIndex>[1]),
+              // fix-27 bug b9bfb9d3：__rpc 门 = 官方 authorizeIndex 优先 + dswf_forge_remote
+              // cookie 自持兜底（配对握手已认证语义；官方会话门仅用于 GET 页面——隧道域下
+              // 手机 POST 被官方 Host 绑定会话门拒绝，真断点由 401 诊断行真机定位）
+              authorize: (rq, rs) => authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1])),
               diag,
             })
             return
