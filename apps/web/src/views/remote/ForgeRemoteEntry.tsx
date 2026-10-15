@@ -434,13 +434,17 @@ export function TunnelCard(props: {
   const showQr = (online || phase === 'switching') && url !== undefined
   return (
     <div className="dswf-remote-tunnel" data-phase={phase} data-testid="dswf-remote-tunnel">
-      <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
-        {/* fix-19 ⑨：建立中文案 = 官方 tunnelLoading 逐字（「正在建立全球网络链接」） */}
-        {phase === 'starting' && TUNNEL_LOADING_TEXT + '……'}
-        {phase === 'switching' && FALLBACK_LOADING_TEXT + '……'}
-        {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
-        {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
-      </p>
+      {/* fix-24（bug d8986cac）：遮罩在场（switching × QR）= loading 文案由遮罩单源承载——
+          状态行不重复呈现（官方 .qr-loading 形态）；遮罩缺席（starting/failed/无 QR）= 状态行保留 */}
+      {!showQr || phase !== 'switching' ? (
+        <p className="dswf-remote-tunnel-status" data-testid="dswf-remote-tunnel-status">
+          {/* fix-19 ⑨：建立中文案 = 官方 tunnelLoading 逐字（「正在建立全球网络链接」） */}
+          {phase === 'starting' && TUNNEL_LOADING_TEXT + '……'}
+          {phase === 'switching' && FALLBACK_LOADING_TEXT + '……'}
+          {phase === 'failed' && '隧道已失效——点击换线重试建立连接。'}
+          {online && provider !== undefined && TUNNEL_PROVIDER_LABEL[provider]}
+        </p>
+      ) : null}
       {showQr && (
         <div className="dswf-remote-qr-wrap">
           <div

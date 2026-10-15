@@ -1092,3 +1092,33 @@ describe('fix-21 §2⑥⑦⑧ PIN 方框 + 连接卡 + 说明 hint 行', () => {
     expect(css).toMatch(/\.dswf-remote-note-card\s*\{[^}]*display:\s*flex/)
   })
 })
+
+// ── fix-24（bug d8986cac）：互联网 tab 样式乱——TunnelCard/PIN 面与规格化刻度冲突收口
+// （headless 三形态实渲染取证：.forge/docs/proposals/mobile-remote-approval/walkthrough/fix-24/） ──
+
+describe('fix-24（bug d8986cac）互联网 tab 分段器/容器/居中/遮罩文案去重', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('分段器充满 mode-panel 容器（flex:1——tab 文案单行不换行）', () => {
+    expect(css).toMatch(/\.dswf-remote-tabs\s*\{[^}]*flex:\s*1/)
+  })
+
+  it('mode-panel 容器 border-box（410px 总宽含内距描边——不破官方刻度）', () => {
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*box-sizing:\s*border-box/)
+  })
+
+  it('mode-panel 与 PIN 方框面板列内居中（与 QR 同轴）', () => {
+    expect(css).toMatch(/\.dswf-remote-mode-panel\s*\{[^}]*align-self:\s*center/)
+    expect(css).toMatch(/\.dswf-remote-pin\s*\{[^}]*align-self:\s*center/)
+  })
+
+  it('switching 中遮罩在场 = 状态行 loading 文案不重复（遮罩单源承载；遮罩缺席 = 状态行保留）', () => {
+    const masked = renderToStaticMarkup(
+      <TunnelCard phase="switching" url="https://x/pair?token=t" provider="cloudflared" onFallback={() => undefined} />,
+    )
+    expect(masked).not.toMatch(/dswf-remote-tunnel-status/)
+    expect(masked).toContain('正在切换备用线路') // 遮罩内文案仍在
+    const bare = renderToStaticMarkup(<TunnelCard phase="switching" onFallback={() => undefined} />)
+    expect(bare).toMatch(/dswf-remote-tunnel-status/)
+  })
+})

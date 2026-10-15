@@ -512,6 +512,8 @@
  *    11px 圆角 gap3；mode-btn 34px 高/9px 圆角/13px·550 字/选中 surface 底 + 阴影） ── */
 .dswf-remote-mode-panel {
   display: flex;
+  box-sizing: border-box; /* fix-24：410px = 官方总宽（内距描边计入——content-box 撑到 428） */
+  align-self: center; /* fix-24：面板列内居中（与 QR 同轴——官方整列居中） */
   width: 410px; /* dsw-raw 官方 mode-panel 容器 410px */
   padding: 5px 8px 10px; /* dsw-raw 官方 mode-panel 内距（5px 8px 10px） */
   border: 1px solid var(--dsw-alias-border-l2);
@@ -521,6 +523,7 @@
 
 .dswf-remote-tabs {
   display: flex;
+  flex: 1; /* fix-24：充满容器（缺省内容宽 227px——tab 文案两行换行） */
   gap: 3px; /* dsw-raw 官方分段器 gap 3 */
   padding: 3px; /* dsw-raw 官方分段器内距 3px */
   border-radius: 11px; /* dsw-raw 官方 11px（无等价令牌） */
@@ -746,6 +749,7 @@
 .dswf-remote-pin {
   box-sizing: border-box;
   display: flex;
+  align-self: center; /* fix-24：面板列内居中（与 QR/mode-panel 同轴） */
   flex-direction: column;
   align-items: center;
   gap: 6px; /* dsw-raw 卡内行缝（面板局部刻度） */
