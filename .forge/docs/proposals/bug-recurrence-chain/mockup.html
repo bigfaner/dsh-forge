@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>bug 复发链 mockup — 列表折叠 + 详情链时间线</title>
+<style>
+  :root{
+    --bg:#ffffff; --bg-hover:#f5f5f5; --border:#e5e5e5;
+    --label-1:#1f1f1f; --label-2:#595959; --label-3:#8c8c8c;
+    --link:#4c6ef5; --error:#e5484d; --done:#30a46c; --idle:#b8bbbe;
+    --radius:8px; --shadow:0 8px 24px rgba(0,0,0,.14);
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font:14px/1.6 -apple-system,"Segoe UI",sans-serif;color:var(--label-1);background:#f0f1f3;padding:32px;display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start}
+  h2{font-size:15px;margin-bottom:12px;color:var(--label-2)}
+  .panel{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;width:520px}
+  /* chips */
+  .chips{display:flex;gap:8px;margin-bottom:12px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--label-2)}
+  .chip .n{color:var(--label-3)}
+  .chip.on{border-color:var(--link);color:var(--link)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+  .dot.error{background:var(--error)} .dot.done{background:var(--done)} .dot.idle{background:var(--idle)}
+  /* list rows */
+  .list{display:flex;flex-direction:column}
+  .row{display:flex;align-items:center;gap:8px;padding:7px 4px;border-radius:6px;cursor:pointer}
+  .row:hover{background:var(--bg-hover)}
+  .row .title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tag{font-size:12px;padding:1px 8px;border:1px solid var(--border);border-radius:4px;color:var(--label-2);background:#fafafa;flex:none}
+  /* recurrence badge */
+  .rbadge{flex:none;font-size:12px;padding:1px 8px;border-radius:999px;background:#fff1f0;border:1px solid #ffccc7;color:#cf1322}
+  .chev{flex:none;color:var(--label-3);width:14px;text-align:center}
+  /* expanded chain children */
+  .children{display:flex;flex-direction:column;margin:2px 0 6px 22px;padding-left:12px;border-left:2px solid var(--border)}
+  .children .row{padding:5px 4px}
+  .children .title{font-size:13px;color:var(--label-2)}
+  /* dialog */
+  .dialog{width:680px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .dhead{display:flex;align-items:center;gap:8px;min-height:30px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--bg-hover);cursor:move;user-select:none}
+  .dhead .sp{flex:1}
+  .x{border:none;background:transparent;color:var(--label-3);cursor:pointer;font-size:13px}
+  .dbody{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+  .sumline{display:flex;align-items:center;gap:8px}
+  .sumline .s{flex:1;font-weight:600}
+  /* chain timeline */
+  .chain{border:1px solid var(--border);border-radius:6px;padding:10px 12px;background:#fafafa}
+  .chain-title{font-size:12px;color:var(--label-3);margin-bottom:8px}
+  .tl{display:flex;flex-direction:column}
+  .node{display:flex;gap:10px;position:relative;padding:0 0 12px 0}
+  .node:last-child{padding-bottom:0}
+  .node .rail{display:flex;flex-direction:column;align-items:center;flex:none}
+  .node .rail::after{content:"";width:2px;flex:1;background:var(--border);margin-top:3px}
+  .node:last-child .rail::after{display:none}
+  .node .nb{flex:1;min-width:0}
+  .node .nrow{display:flex;align-items:center;gap:8px}
+  .node .nsum{font-size:13px;color:var(--label-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .node .nmeta{font-size:12px;color:var(--label-3);margin-top:1px}
+  .node .nmeta b{color:var(--label-2);font-weight:500}
+  .node.cur .nsum{color:var(--label-1);font-weight:600}
+  .node.cur .nb{background:#eef2ff;border-radius:6px;padding:4px 8px;margin:-4px -8px}
+  .node .kind{font-size:11px;color:var(--link);border:1px solid var(--border);border-radius:4px;padding:0 4px;flex:none}
+  .pill{color:var(--link);cursor:pointer}
+  /* kv rows */
+  .kv{display:flex;gap:10px;align-items:baseline}
+  .kv .k{flex:0 0 88px;font-size:12px;font-weight:600;color:var(--label-3)}
+  .kv .v{flex:1;font-size:13px;color:var(--label-2);white-space:pre-line}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ ① Bug 子 tab 列表（链折叠） ═══════════ -->
+<div>
+<h2>① Bug 子 tab 列表 — 链折叠 + 复发徽标</h2>
+<div class="panel">
+  <div class="chips">
+    <span class="chip on"><span class="dot error"></span>待修复 <span class="n">1</span></span>
+    <span class="chip"><span class="dot done"></span>已修复 <span class="n">2</span></span>
+    <span class="chip"><span class="dot idle"></span>无法复现 <span class="n">1</span></span>
+    <span class="chip">✕ 重置</span>
+  </div>
+  <div class="list">
+
+    <!-- 链折叠行（链根代表整链；状态点 = 链当前态：链上任一 open 即 error） -->
+    <div class="row" title="点击整链展开/收起；行点击开详情弹框（链时间线）">
+      <span class="chev">▾</span>
+      <span class="dot error"></span>
+      <span class="title">dispatch 派发循环偶发死锁</span>
+      <span class="rbadge">复发 2 次</span>
+      <span class="tag">concurrency</span>
+    </div>
+    <!-- 展开的链成员（时间正序：链根在上——与详情弹框时间线同序） -->
+    <div class="children">
+      <div class="row">
+        <span class="dot done"></span>
+        <span class="title">链根：worker spawn 失败计数误增 · 10-08 已修 c0a1e93</span>
+      </div>
+      <div class="row">
+        <span class="dot done"></span>
+        <span class="title">复发①：job_output 抽干竞态 · 10-12 已修 c0b2f1a</span>
+      </div>
+      <div class="row">
+        <span class="dot error"></span>
+        <span class="title">复发②：结算抽取后再挂起 · 今日 14:02</span>
+        <span class="tag">concurrency</span>
+      </div>
+    </div>
+
+    <!-- 普通单条 bug（零链 — 现状行语言不变） -->
+    <div class="row">
+      <span class="chev" style="visibility:hidden"></span>
+      <span class="dot done"></span>
+      <span class="title">resolveBug 双缺席 git 身份回退缺失</span>
+      <span class="tag">core</span>
+    </div>
+    <div class="row">
+      <span class="chev" style="visibility:hidden"></span>
+      <span class="dot idle"></span>
+      <span class="title">Web 端偶发首帧白屏（未能复现）</span>
+      <span class="tag">ui</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ ② Bug 详情弹框（链时间线） ═══════════ -->
+<div>
+<h2>② Bug 详情弹框 — 链时间线（新「链」区 + 既有表单行）</h2>
+<div class="dialog">
+  <div class="dhead"><span>⠿</span><span>Bug 详情</span><span class="sp"></span><button class="x">✕</button></div>
+  <div class="dbody">
+    <div class="sumline">
+      <span class="s">dispatch 派发循环偶发死锁 — 复发②</span>
+      <span class="chip"><span class="dot error"></span>待修复</span>
+      <span class="tag">concurrency</span>
+    </div>
+
+    <!-- ★ 新增：链时间线区（沿 recurrenceOf 回溯；当前条高亮；点其他节点切换详情） -->
+    <div class="chain">
+      <div class="chain-title">复发链（3 条 · 沿 recurrenceOf 回溯）</div>
+      <div class="tl">
+        <div class="node">
+          <span class="rail"><span class="dot done"></span></span>
+          <span class="nb">
+            <span class="nrow"><span class="nsum">链根 · worker spawn 失败计数误增</span><span class="tag">已修复</span></span>
+            <span class="nmeta">10-08 · <b>c0a1e93</b> · 修法：spawn 失败守卫改 3 连败停机</span>
+          </span>
+        </div>
+        <div class="node">
+          <span class="rail"><span class="dot done"></span></span>
+          <span class="nb">
+            <span class="nrow"><span class="nsum">复发① · job_output 抽干竞态</span><span class="tag">已修复</span></span>
+            <span class="nmeta">10-12 · <b>c0b2f1a</b> · 修法：结算序号守卫旧拍不落点</span>
+          </span>
+        </div>
+        <div class="node cur">
+          <span class="rail"><span class="dot error"></span></span>
+          <span class="nb">
+            <span class="nrow"><span class="nsum">复发② · 结算抽取后再挂起</span><span class="tag">待修复</span><span class="kind">本条</span></span>
+            <span class="nmeta">今日 14:02 · recurrenceOf → 复发① · <span class="pill">⟞ 发现会话</span></span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 既有表单行（不变，节选） -->
+    <div class="kv"><span class="k">Bug</span><span class="v">结算 job_output 抽干后 worker 会话再挂起，派发循环空转……</span></div>
+    <div class="kv"><span class="k">Trigger</span><span class="v">连续派发 3+ 后台任务并中断其中一个</span></div>
+    <div class="kv"><span class="k">Expected</span><span class="v">中断的任务结算后池计数归位，继续派发</span></div>
+    <div class="kv"><span class="k">Actual</span><span class="v">池快照恒显示 in-progress 1，no-task 判定失效</span></div>
+    <div class="kv"><span class="k">Suspected</span><span class="v">dispatch-core/core.ts:355</span></div>
+    <div class="kv"><span class="k">发现</span><span class="v">faner <span class="pill">⟞ 修死锁复发</span></span></div>
+    <div class="kv"><span class="k">登记时间</span><span class="v">2026-10-15 14:02:37</span></div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

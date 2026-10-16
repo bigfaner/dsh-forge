@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@ Bug 引用 · 可交互示例（composer-bug-reference）</title>
+<style>
+  :root {
+    --bg:#1a1b1e; --panel:#212226; --panel-2:#26272c; --line:#33353c;
+    --fg:#e8e9ec; --fg-dim:#9a9da6; --fg-faint:#6b6e78;
+    --accent:#4f8ef7; --bug:#e5484d; --bug-dim:#f2999c;
+    --chip-bg:#2b2d33; --hl:rgba(79,142,247,.16);
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--fg); font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif; padding:28px; max-width:1000px; margin:0 auto; }
+  h1 { font-size:18px; margin-bottom:4px; }
+  .sub { color:var(--fg-dim); font-size:13px; margin-bottom:8px; }
+  .tips { background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; font-size:12.5px; color:var(--fg-dim); margin-bottom:18px; }
+  .tips b { color:var(--fg); }
+  kbd { background:var(--chip-bg); border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 5px; font-size:11px; }
+
+  .win { border:1px solid var(--line); border-radius:10px; background:var(--panel); overflow:hidden; }
+  .win-bar { padding:8px 14px; border-bottom:1px solid var(--line); color:var(--fg-faint); font-size:12px; display:flex; gap:8px; align-items:center; }
+  .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .split { display:flex; }
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .messages { padding:16px 18px 4px; flex:1; min-height:70px; }
+  .msg { margin-bottom:12px; }
+  .msg .who { font-size:12px; color:var(--fg-faint); margin-bottom:2px; }
+  .msg .body { white-space:pre-wrap; }
+  .composer-wrap { position:relative; padding:8px 18px 14px; }
+  .composer {
+    border:1px solid var(--line); border-radius:8px; background:var(--panel-2);
+    padding:9px 12px; min-height:42px; outline:none; cursor:text; line-height:1.9;
+  }
+  .composer:focus { border-color:var(--accent); }
+  .composer .ph { color:var(--fg-faint); pointer-events:none; }
+  .token { color:var(--accent); }
+  .chip {
+    display:inline-flex; align-items:center; gap:5px; background:var(--chip-bg);
+    border:1px solid var(--line); border-radius:6px; padding:0 8px; font-size:13px;
+    cursor:pointer; white-space:nowrap; user-select:none; vertical-align:middle;
+  }
+  .chip:hover { border-color:var(--bug); }
+  .chip.sel { outline:2px solid var(--accent); }
+  .chip .ic { color:var(--bug); font-weight:700; }
+  .chip.file .ic { color:var(--accent); font-weight:400; }
+  .chip.sess .ic { color:#b083f0; font-weight:400; }
+
+  .menu {
+    position:absolute; left:20px; bottom:64px; width:480px; z-index:5; display:none;
+    background:#26272c; border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.5); overflow-y:auto; max-height:300px; font-size:13px;
+  }
+  .menu.on { display:block; }
+  .menu .grp { padding:7px 12px 3px; color:var(--fg-faint); font-size:11.5px; letter-spacing:.04em; }
+  .row { display:flex; align-items:center; gap:8px; padding:6px 12px; cursor:pointer; }
+  .row .ic { width:17px; text-align:center; flex:none; }
+  .row.bug .ic { color:var(--bug); }
+  .row .name { color:var(--fg-dim); font-size:12px; flex:none; }
+  .row .label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .desc { color:var(--fg-faint); font-size:11.5px; flex:none; }
+  .row .hint { margin-left:auto; color:var(--fg-faint); font-size:11.5px; flex:none; padding-left:8px; }
+  .row.hl { background:var(--hl); }
+  .row.hl .ic { color:var(--bug); }
+  .crumbs { display:flex; gap:6px; align-items:center; padding:5px 12px 2px; font-size:11.5px; color:var(--fg-faint); }
+  .crumbs .cb { background:var(--chip-bg); border:1px solid var(--line); border-radius:10px; padding:0 9px; line-height:19px; cursor:pointer; }
+  .crumbs .cb:hover { border-color:var(--bug); color:var(--fg); }
+  .crumbs .cb.on { background:rgba(229,72,77,.16); border-color:var(--bug); color:var(--bug-dim); }
+  .menu .empty { padding:10px 12px; color:var(--fg-faint); font-size:12px; }
+  .st { display:inline-block; padding:0 6px; border-radius:4px; font-size:11px; line-height:17px; flex:none; }
+  .st.open { background:rgba(229,72,77,.18); color:var(--bug-dim); }
+  .st.fixed { background:rgba(70,167,88,.16); color:#7ed492; }
+  .st.unresolved { background:rgba(245,166,35,.15); color:#f0be6a; }
+  .sendbar { display:flex; justify-content:flex-end; padding:0 18px 12px; }
+  button.send { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:5px 16px; font-size:13px; cursor:pointer; }
+  button.send:disabled { opacity:.4; cursor:default; }
+  .bugtab { border-top:1px solid var(--line); background:#1e1f23; padding:8px 14px; font-size:12.5px; }
+  .bugtab .bt-head { color:var(--fg-faint); font-size:11.5px; margin-bottom:6px; letter-spacing:.04em; }
+  .bugtab .bt-row { display:flex; align-items:center; gap:10px; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .bugtab .bt-row:last-child { border-bottom:0; }
+  .bugtab .bt-sum { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg-dim); }
+  .bugtab .bt-add { background:var(--chip-bg); color:var(--bug-dim); border:1px solid var(--line); border-radius:5px; padding:1px 9px; font-size:12px; cursor:pointer; flex:none; }
+  .bugtab .bt-add:hover { border-color:var(--bug); color:var(--fg); }
+  .bugtab .bt-add:disabled { opacity:.35; cursor:default; }
+
+  .pane { width:320px; flex:none; border-left:1px solid var(--line); background:var(--panel-2); padding:14px 16px; font-size:13px; display:none; }
+  .pane.on { display:block; }
+  .pane h3 { font-size:13px; display:flex; align-items:center; gap:8px; }
+  .pane .pid { color:var(--fg-faint); font-size:11.5px; margin:2px 0 8px; }
+  .kv { display:grid; grid-template-columns:76px 1fr; gap:4px 10px; margin-top:8px; }
+  .kv dt { color:var(--fg-faint); }
+  .kv dd { word-break:break-all; }
+  .pane .close { float:right; cursor:pointer; color:var(--fg-faint); }
+  .pane .close:hover { color:var(--fg); }
+
+  h2 { font-size:15px; margin:26px 0 8px; color:var(--accent); }
+  .ser { background:#141518; border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+    font:12px/1.7 Consolas,monospace; color:#c9cbd1; white-space:pre-wrap; word-break:break-all; }
+  .ser .tag { color:var(--bug-dim); } .ser .key { color:#8ab4f8; } .ser .cm { color:#5c5f68; }
+  .ser-head { color:var(--fg-faint); font-size:12px; margin:0 0 6px; }
+</style>
+</head>
+<body>
+
+<h1>@ Bug 引用 · 可交互示例</h1>
+<p class="sub">composer-bug-reference · 在下面输入框里真实操作（数据为样例台账）</p>
+<div class="tips">
+  <b>试一遍：</b>① 点输入框，输入 <kbd>@</kbd> —— 出现 文件/会话/Bug 三组菜单；主路径 = 输入摘要词（如 <kbd>游标</kbd> <kbd>对话框</kbd>）过滤，uuid 主键不需记忆；② Bug 组上方<b>状态面包屑</b>（全部/open/fixed/unresolved）点击即切片；③ ↑↓ 移高亮、<kbd>Enter</kbd> 或点击行插入 chip；④ 输入 <kbd>/fix-bug </kbd> 后再 <kbd>@</kbd> 选 bug —— inline 组合；⑤ 点已插入的 bug chip → 右栏台账预览；⑥ <b>发送</b> → 下方查看模型实际收到的结构化字段块。
+</div>
+
+<div class="win">
+  <div class="win-bar"><span class="dot" style="background:#e5484d"></span><span class="dot" style="background:#f5a623"></span><span class="dot" style="background:#46a758"></span>&nbsp;dsh-forge · 会话「修 dswf 1.9 渲染链」 · 项目 dsh-forge</div>
+  <div class="split">
+    <div class="main">
+      <div class="messages" id="messages">
+        <div class="msg"><div class="who">assistant</div><div class="body">会话已就绪。试试在输入框用 @ 引用一个 bug，或从下方 Bug 子 tab 一键添加。</div></div>
+      </div>
+      <div class="composer-wrap">
+        <div class="menu" id="menu"></div>
+        <div class="composer" id="composer" contenteditable="true" spellcheck="false"><span class="ph">输入消息，@ 引用文件/会话/Bug…</span></div>
+        <div class="sendbar"><button class="send" id="sendBtn" disabled>发送</button></div>
+      </div>
+      <div class="bugtab">
+        <div class="bt-head">BUG 子 TAB（Overview）·「添加到会话中」= scoped 事件插入同一原子引用；无活跃会话则开新会话预填（本演示恒有会话，行为同左）</div>
+        <div id="bugtabRows"></div>
+      </div>
+    </div>
+    <div class="pane" id="pane"></div>
+  </div>
+</div>
+
+<h2>发送后 · 模型可见内容（实时生成）</h2>
+<p class="ser-head" id="serHead">（尚未发送）</p>
+<div class="ser" id="serOut">// 发送一条含 bug 引用的消息后，这里显示 serialize 的输出</div>
+
+<script>
+'use strict';
+// ── 样例数据（bug = BugCard 投影；snapshot = pick 时刻快照，resolve 后发送不回查）──
+const BUGS = [
+  { id:'b-42', summary:'修复后段一目录选取双开对话框（游标守卫缺失）', status:'open', errorType:'concurrency', time:'3 天前',
+    desc:'NativePick 在途态守卫缺失，双击「浏览…」连开两个系统对话框。',
+    trigger:'段一表单点「浏览…」，对话框在途时再次快速单击同钮。',
+    expected:'在途态内后续单击被吞，恒至多一个对话框。', actual:'连开两个对话框，后开者选中结果覆盖先开者。',
+    suspected:'apps/web/src/flows/add-project/browser-actions.ts:120' },
+  { id:'b-17', summary:'终端面板游标闪烁抖动（高频重绘）', status:'fixed', errorType:'perf', time:'上周',
+    desc:'caret 节点随输入每键全量重渲染。', trigger:'长草稿中连续输入。', expected:'局部更新。',
+    actual:'整行重排掉帧。', suspected:'apps/web/src/components/time-label.ts:33',
+    commit:'d32e1f9', worktree:'main', branch:'main' },
+  { id:'b-08', summary:'知识域树展开后游标位置丢失', status:'unresolved', errorType:'ux', time:'2 周前',
+    desc:'展开节点后焦点回落文档头。', trigger:'域树展开任意节点。', expected:'焦点保持。',
+    actual:'跳回头部。', unresolvedReason:'无法稳定复现——仅特定缩放级别出现' },
+];
+const FILES = [
+  { path:'apps/web/src/views/overview/bug-tab/bug-dialog.tsx' },
+  { path:'apps/web/src/components/time-label.ts' },
+  { path:'packages/contracts/src/dto/bugs.ts' },
+];
+const SESSIONS = [ { title:'排查游标 pointer 声明漂移', time:'2 小时前' }, { title:'bug 台账引用设计讨论', time:'昨天' } ];
+const STATUS_LABEL = { open:'open', fixed:'fixed', unresolved:'unresolved' };
+
+const composer = document.getElementById('composer');
+const menu = document.getElementById('menu');
+const pane = document.getElementById('pane');
+const sendBtn = document.getElementById('sendBtn');
+const serOut = document.getElementById('serOut');
+const serHead = document.getElementById('serHead');
+const messages = document.getElementById('messages');
+
+let rows = [];          // 扁平候选 {kind, el, data}
+let hl = -1;            // 高亮下标
+let token = null;       // {startNode,startOff,query} —— @ 起点与查询
+let statusFilter = 'all';   // 状态面包屑口径（drill 事实由本 source 记忆）
+const snapshots = new Map(); // bugId → pick 时刻卡片（serialize 快照优先的演示）
+
+// ── 占位符 ──
+function syncPlaceholder() {
+  const has = composer.querySelector('.ph');
+  if (composer.textContent.trim() === '' && !composer.querySelector('.chip')) {
+    if (!has) { const s = document.createElement('span'); s.className = 'ph'; s.textContent = '输入消息，@ 引用文件/会话/Bug…'; composer.prepend(s); }
+  } else if (has) has.remove();
+  sendBtn.disabled = !hasContent();
+}
+function hasContent() { return !!(composer.querySelector('.chip') || composer.textContent.trim()); }
+
+// ── @ token 检测（光标向前找 @…查询串）──
+function detectToken() {
+  const sel = getSelection(); if (!sel.rangeCount) return null;
+  const r = sel.getRangeAt(0); if (!r.collapsed) return null;
+  const node = r.startContainer; if (node.nodeType !== 3) return null;
+  const before = node.textContent.slice(0, r.startOffset);
+  const m = before.match(/(^|[\s（(，。])@([^@\s]{0,30})$/);
+  if (!m) return null;
+  return { node, caretOff: r.startOffset, atOff: r.startOffset - m[2].length - 1, query: m[2] };
+}
+
+// ── 候选过滤 + 菜单渲染 ──
+function esc(s) { return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function hlq(s, q) {
+  if (!q) return esc(s);
+  const i = s.toLowerCase().indexOf(q.toLowerCase());
+  return i < 0 ? esc(s) : esc(s.slice(0,i)) + '<mark>' + esc(s.slice(i,i+q.length)) + '</mark>' + esc(s.slice(i+q.length));
+}
+function buildRows(query) {
+  const q = query.toLowerCase(); const out = [];
+  const f = FILES.filter(x => x.path.toLowerCase().includes(q));
+  if (f.length) { out.push({grp:'文件'}); f.forEach(x => out.push({kind:'file', data:x})); }
+  const s = SESSIONS.filter(x => x.title.toLowerCase().includes(q));
+  if (s.length) { out.push({grp:'会话'}); s.forEach(x => out.push({kind:'sess', data:x})); }
+  const b = BUGS.filter(x => x.summary.toLowerCase().includes(q) || x.id.toLowerCase().includes(q) || (x.errorType||'').includes(q))
+    .filter(x => statusFilter === 'all' || x.status === statusFilter);
+  if (b.length || statusFilter !== 'all') { out.push({grp:'bug-crumbs'}); b.forEach(x => out.push({kind:'bug', data:x})); }
+  return out;
+}
+const CRUMBS = [ ['all','全部'], ['open','open'], ['fixed','fixed'], ['unresolved','unresolved'] ];
+function crumbsHtml() {
+  return '<div class="crumbs">Bug: ' + CRUMBS.map(([v, t]) =>
+    '<span class="cb' + (statusFilter === v ? ' on' : '') + '" data-crumb="' + v + '">' + t + '</span>').join(' ') + '</div>';
+}
+function rowHtml(r, query) {
+  if (r.grp === 'bug-crumbs') return crumbsHtml();
+  if (r.grp) return '<div class="grp">' + esc(r.grp) + '</div>';
+  if (r.kind === 'file') return '<span class="ic">📄</span><span class="label">' + hlq(r.data.path, query) + '</span><span class="hint">apps/web</span>';
+  if (r.kind === 'sess') return '<span class="ic">💬</span><span class="label">' + hlq(r.data.title, query) + '</span><span class="hint">' + esc(r.data.time) + '</span>';
+  const d = r.data;
+  return '<span class="ic">🐛</span><span class="name">' + hlq(d.id, query) + '</span><span class="label">' + hlq(d.summary, query) + '</span>'
+       + '<span class="desc"><span class="st ' + d.status + '">' + STATUS_LABEL[d.status] + '</span>' + (d.errorType ? ' · ' + esc(d.errorType) : '') + '</span><span class="hint">' + esc(d.time) + '</span>';
+}
+function renderMenu() {
+  token = detectToken();
+  if (!token) { closeMenu(); return; }
+  rows = buildRows(token.query);
+  if (!rows.some(r => !r.grp)) {
+    menu.innerHTML = '<div class="empty">（查询「' + esc(token.query) + '」无候选' + (token.query.includes('"') ? '——引号态为文件路径专属，Bug 组不出候选' : '') + '）</div>';
+  } else {
+    menu.innerHTML = rows.map((r, i) => r.grp ? rowHtml(r) : '<div class="row ' + r.kind + '" data-i="' + i + '">' + rowHtml(r, token.query) + '</div>').join('');
+    hl = rows.findIndex(r => !r.grp); paint();
+    menu.querySelectorAll('.row').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); pick(+el.dataset.i); });
+    });
+    // crumb 点击 = 状态切片（drill 缝演示）：切口径重渲染，查询继续生效
+    menu.querySelectorAll('.cb').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault(); e.stopPropagation();
+        statusFilter = el.dataset.crumb; renderMenu();
+      });
+    });
+  }
+  menu.classList.add('on');
+}
+function paint() { menu.querySelectorAll('.row').forEach(el => el.classList.toggle('hl', +el.dataset.i === hl)); }
+function closeMenu() { menu.classList.remove('on'); rows = []; hl = -1; token = null; }
+
+// ── pick：替换 @token 为 chip ──
+function pick(i) {
+  const r = rows[i]; if (!r || r.grp) return;
+  const { node, atOff, caretOff } = token;
+  const text = node.textContent;
+  node.textContent = text.slice(0, atOff) + text.slice(caretOff);   // 删除 @query
+  const chip = document.createElement('span');
+  chip.className = 'chip ' + r.kind; chip.contentEditable = 'false';
+  if (r.kind === 'bug') {
+    snapshots.set(r.data.id, { ...r.data });                        // 快照（serialize 演示口径）
+    chip.dataset.bugId = r.data.id;
+    chip.title = 'bug:' + r.data.id + '（点击 → 右栏预览）';
+    chip.innerHTML = '<span class="ic">🐛</span>' + esc(r.data.summary);
+  } else if (r.kind === 'file') {
+    chip.dataset.path = r.data.path; chip.title = r.data.path;
+    chip.innerHTML = '<span class="ic">📄</span>' + esc(r.data.path);
+  } else {
+    chip.title = 'dsh-session:…'; chip.innerHTML = '<span class="ic">💬</span>' + esc(r.data.title);
+  }
+  node.after(chip);
+  const tail = document.createTextNode('\u00A0'); chip.after(tail);
+  const sel = getSelection(); const rg = document.createRange();
+  rg.setStart(tail, 1); rg.collapse(true); sel.removeAllRanges(); sel.addRange(rg);
+  closeMenu(); syncPlaceholder();
+}
+
+// ── chip 点击 → 右栏预览（openReference 演示）──
+function makeBugChip(d) {                     // 与 @ 菜单 pick 同构的 chip 构造（scoped 事件插入的即此物）
+  snapshots.set(d.id, { ...d });              // scoped 路径同样落 pick 时刻快照
+  const chip = document.createElement('span');
+  chip.className = 'chip bug'; chip.contentEditable = 'false';
+  chip.dataset.bugId = d.id;
+  chip.title = 'bug:' + d.id + '（点击 → 右栏预览）';
+  chip.innerHTML = '<span class="ic">🐛</span>' + esc(d.summary);
+  return chip;
+}
+function insertBugRef(d) {                    // 「添加到会话中」：草稿末尾 span-CAS 插入（演示直append）+ 还焦
+  closeMenu();
+  const ph = composer.querySelector('.ph'); if (ph) ph.remove();
+  const chip = makeBugChip(d);
+  composer.appendChild(chip);
+  const tail = document.createTextNode('\u00A0');
+  composer.appendChild(tail);
+  const sel = getSelection(); const rg = document.createRange();
+  rg.setStart(tail, 1); rg.collapse(true); sel.removeAllRanges(); sel.addRange(rg);
+  composer.focus(); syncPlaceholder();
+}
+// Bug 子 tab 行按钮（scoped 事件 slash/input-insert-reference 的演示替身）
+const bugtabRows = document.getElementById('bugtabRows');
+BUGS.forEach(d => {
+  const row = document.createElement('div'); row.className = 'bt-row';
+  row.innerHTML = '<span class="name">' + esc(d.id) + '</span><span class="st ' + d.status + '">' + d.status + '</span>'
+    + '<span class="bt-sum">' + esc(d.summary) + '</span>';
+  const btn = document.createElement('button'); btn.className = 'bt-add'; btn.textContent = '添加到会话中';
+  btn.addEventListener('click', () => insertBugRef(d));
+  row.appendChild(btn); bugtabRows.appendChild(row);
+});
+
+composer.addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  composer.querySelectorAll('.chip.sel').forEach(c => c.classList.remove('sel'));
+  if (chip && chip.dataset.bugId) {
+    chip.classList.add('sel');
+    const b = snapshots.get(chip.dataset.bugId) || BUGS.find(x => x.id === chip.dataset.bugId);
+    pane.innerHTML = '<span class="close" onclick="pane.classList.remove(\'on\')">✕</span>'
+      + '<h3>🐛 ' + esc(b.summary) + ' <span class="st ' + b.status + '">' + b.status + '</span></h3>'
+      + '<div class="pid">' + esc(b.id) + ' · ' + esc(b.errorType || '—') + ' · ' + esc(b.time) + ' · reporter: faner</div>'
+      + '<dl class="kv"><dt>Bug</dt><dd>' + esc(b.desc) + '</dd><dt>Trigger</dt><dd>' + esc(b.trigger) + '</dd>'
+      + '<dt>Expected</dt><dd>' + esc(b.expected) + '</dd><dt>Actual</dt><dd>' + esc(b.actual) + '</dd>'
+      + (b.suspected ? '<dt>Suspected</dt><dd>' + esc(b.suspected) + '</dd>' : '')
+      + (b.status === 'fixed' ? '<dt>Evidence</dt><dd>commit ' + esc(b.commit) + ' @ ' + esc(b.branch) + '</dd>' : '')
+      + (b.status === 'unresolved' ? '<dt>Unresolved</dt><dd>' + esc(b.unresolvedReason) + '</dd>' : '') + '</dl>';
+    pane.classList.add('on');
+  }
+});
+
+// ── 序列化（发送时逐 chip；bug = 结构化字段块，快照优先）──
+function serializeBug(b) {
+  const lines = ['  summary: ' + b.summary, '  bugStatus: ' + b.status];
+  if (b.errorType) lines.push('  errorType: ' + b.errorType);
+  lines.push('  bugDesc: ' + b.desc, '  triggerDesc: ' + b.trigger, '  expected: ' + b.expected, '  actual: ' + b.actual);
+  if (b.suspected) lines.push('  suspected: ' + b.suspected);
+  return '<bug bugId="' + b.id + '">\n' + lines.join('\n') + '\n</bug>';
+}
+function serializeDraft() {
+  let out = '';
+  composer.childNodes.forEach(n => {
+    if (n.nodeType === 3) out += n.textContent;
+    else if (n.classList && n.classList.contains('ph')) { /* skip */ }
+    else if (n.classList && n.classList.contains('chip')) {
+      if (n.dataset.bugId) {
+        const b = snapshots.get(n.dataset.bugId);          // 快照优先；未命中回退台账（演示合并口径）
+        out += serializeBug(b || BUGS.find(x => x.id === n.dataset.bugId));
+      } else if (n.dataset.path) out += '@' + n.dataset.path;
+      else out += '@[' + n.textContent.replace(/^[^A-Za-z\u4e00-\u9fa5]+/, '') + '](dsh-session:…)';
+    }
+  });
+  return out.replace(/\u00A0/g, ' ').trim();
+}
+
+// ── 发送 ──
+sendBtn.addEventListener('click', () => {
+  const text = serializeDraft();
+  const msg = document.createElement('div'); msg.className = 'msg';
+  msg.innerHTML = '<div class="who">user</div>';
+  const body = document.createElement('div'); body.className = 'body'; body.textContent = text; msg.appendChild(body);
+  messages.appendChild(msg); messages.scrollTop = messages.scrollHeight;
+  serHead.textContent = '消息已发送 · 下列为模型收到的内容（bug 引用处 = 结构化字段块）：';
+  serOut.innerHTML = esc(text)
+    .replace(/&lt;bug bugId="([^"]+)"&gt;/g, '<span class="tag">&lt;bug bugId="$1"&gt;</span>')
+    .replace(/&lt;\/bug&gt;/g, '<span class="tag">&lt;/bug&gt;</span>')
+    .replace(/^(\s*)(summary|bugStatus|errorType|bugDesc|triggerDesc|expected|actual|suspected):/gm, '$1<span class="key">$2</span>:');
+  composer.innerHTML = ''; syncPlaceholder(); pane.classList.remove('on');
+});
+
+// ── 键盘：↑↓/Enter/Esc/空格裁决演示 ──
+composer.addEventListener('keydown', e => {
+  const live = menu.classList.contains('on');
+  if (live && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    const dir = e.key === 'ArrowDown' ? 1 : -1;
+    let n = hl;
+    do { n = (n + dir + rows.length) % rows.length; } while (rows[n].grp);
+    hl = n; paint(); menu.children[hl] && menu.children[hl].scrollIntoView({ block:'nearest' });
+  } else if (live && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (hl >= 0) pick(hl); else { submitLine(); }
+  } else if (live && e.key === 'Escape') { e.preventDefault(); closeMenu(); }
+});
+function submitLine() { if (hasContent()) sendBtn.click(); }
+
+composer.addEventListener('input', () => { syncPlaceholder(); renderMenu(); });
+composer.addEventListener('keyup', renderMenu);
+composer.addEventListener('focus', renderMenu);
+document.addEventListener('mousedown', e => { if (!menu.contains(e.target) && e.target !== composer) closeMenu(); });
+syncPlaceholder();
+</script>
+</body>
+</html>

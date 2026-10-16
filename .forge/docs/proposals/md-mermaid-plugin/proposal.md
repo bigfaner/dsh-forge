@@ -238,12 +238,15 @@ validateMermaid 恒在场，`FORGE_DENY_IN_WORKER` 增员恒安全（装配面 p
 md-mermaid：tsc -b（contracts 先例），三面出口各自可独立消费。plugin-forge：仅
 assemble.ts deny 名单 + 单测同步。apps/web：mermaid 直接依赖退役。
 
-### H. 主题调优方向
+### H. 主题调优（终案裁决链 2026-10-13，任务 1.11 + 1.13 落地）
 
-现行 MERMAID_THEME_VARIABLES（2026-10-11 Codex 式中性灰蓝裁决）观感偏淡。调优方向：
-节点底色层次（primary/secondary/tertiary 差异化）、边框与连线对比度提升（现
-`#0000001f` 过淡）、文字层级保持；浅主题先行 + 深主题可读校验；实值仍取官方静态令
-牌镜像（khroma 派生禁 var() 既有约束不变）。
+多轮 Chromium 实渲染评审收敛（证据：walkthrough/theme-design-review.html）：白节点
+（bluish-00）浮于簇底 + **柔蓝描边 #7aaaff（deepseek-400，品牌蓝降一档）** + 柔灰线
+#adb2b8（bluish-400）/ 簇边 #e1e5ee（200）三级层次 + **亮蓝文字 #5686fe
+（deepseek-450）** + 白净边标签。约束不变：实值取官方静态令牌镜像（khroma 派生禁
+var()）；浅主题先行，深主题可读校验（联动属后续面）。评审否决项：深灰节点分层版
+（1.11 首落）、纯灰阶 A、全强度品牌蓝 #4176e6 描边、蓝文字 #4176e6/#4868b2（不够
+亮）与 #7aaaff（越可读底线）。
 
 ## 整合来源
 
