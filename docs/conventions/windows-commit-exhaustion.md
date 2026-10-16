@@ -34,8 +34,8 @@ Get-CimInstance Win32_Process -Filter "Name='node.exe' or Name='tsc.exe'" |
 | 层 | 措施 | 状态 |
 |---|---|---|
 | 纪律（即刻生效） | 任务执行/质量门一律 run-once 命令，**禁用 `--watch` 形态**；worker 简报携带本条 | 本规范即正本 |
-| 弹性（系统设置） | pagefile 由固定 4.8GB 改为系统管理或扩大上限（如初始 8GB / 上限 32GB）——commit limit 获得缓冲，单泄漏不再瞬间全局崩 | 待用户设置（需重启生效） |
-| 根治（工程改进） | 派发 worker 进程树挂 Windows Job Object（`KILL_ON_JOB_CLOSE`）——worker 无论正常结算还是中断，整树随之回收 | 待立项（候选：dispatch-loop-hardening 扩展） |
+| 弹性（系统设置） | pagefile 由固定 4.8GB 改为系统管理或扩大上限（如初始 8GB / 上限 32GB）——commit limit 获得缓冲，单泄漏不再瞬间全局崩 | 暂缓（用户裁决 2026-10-16：记录不实施） |
+| 根治（工程改进） | 派发 worker 进程树挂 Windows Job Object（`KILL_ON_JOB_CLOSE`）——worker 无论正常结算还是中断，整树随之回收 | 已入 `dispatch-loop-hardening` 提案改进 4（用户裁决 2026-10-16：进提案） |
 | 可观测 | 原生崩溃报错文案提示检查 commit charge（宿主面改进，待立项） | 待立项 |
 
 ## 判例记录

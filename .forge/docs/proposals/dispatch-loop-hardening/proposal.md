@@ -38,12 +38,14 @@ flowchart LR
   - 循环生命周期与**会话解耦**——编排层新派的任务（如 fix-2）在循环存活期内自动续派，不再要求用户重开指令；
   - 池裁决中需要人的分支（死锁、外部容器等待）转为通知/问询机制，不再依赖 loop agent 的判断力；
   - 「不造工作、一任务一 worker、halted 守卫」等铁律成为核心行为而非提示词约定。
+- **改进 4 · worker 进程树 Job Object 回收（孤儿子进程根治，用户裁决 2026-10-16 进提案）**：派发 worker 的全部子进程挂 Windows Job Object（`KILL_ON_JOB_CLOSE`）——worker 无论正常结算、blocked 还是 interrupted，其进程树（含 vite/tsc/git 等孙进程）整树随之回收。实证背景：worker 遗留的 `vite build --watch`（2.1GB）与 `tsc -b --watch`（1.4GB）孤儿进程耗尽 commit charge（36.7/36.9 GB），后续任意进程原生崩溃被连环误诊（判例 `docs/conventions/windows-commit-exhaustion.md`）。与禁 watch 纪律（AGENTS.md）互补：纪律防「活着等人」，Job Object 兜底「忘了杀也活不成」。
 - **暂不做（记录裁决）**：关键路径优先（下游解锁数/最长链排序）——改进 2 落地后边际收益小；「从头执行」文案与增量恢复语义出入——纯文案不影响行为。两项留观察。
 
 ## 改动范围
 
 - 改进 1/2：`@dsh-forge/plugin-forge` 派发器——blocked 结算路径加「fix-chain 在场则静默」分支 + 日志留痕；就绪选择函数加 fix 优先稳定排序。
 - 改进 3：派发核心循环化（派发器 + 指令/工具入口归一）+ `run-tasks` skill 退役（协议正本迁入核心，skill 降级为薄说明或删除）。
+- 改进 4：worker spawn 面（子进程生成路径）挂 Job Object + `KILL_ON_JOB_CLOSE`，worker 终态（含中断）触发整树回收。
 - **排除**：关键路径调度、任务模型/表结构变更、blocked 处置权下放给循环（三权分立不变：循环机械执行、编排层规划、用户终裁）。
 
 ## 影响范围
@@ -61,3 +63,4 @@ flowchart LR
 4. 既有派发循环回归（正常结算/fix 解阻/池快照口径）全绿。
 5. （改进 3）循环存活期内编排层新派的任务被自动续派，无需用户重开指令。
 6. （改进 3）`/run-dag-tasks` 与 `dispatchTask` 后台模式产出同构回执与结算语义；run-tasks skill 已退役且协议正本可在派发核心文档中溯源。
+7. （改进 4）worker 以任意终态结束（success/blocked/interrupted）后，其启动的子进程（含 `--watch` 形态）在有限时间内整树退出，commit charge 无孤儿占用残留。

@@ -4,6 +4,11 @@
 
 - **外部依赖装配面结算门 = 真机端到端取证**（用户裁决 2026-10-15）：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。
 
+## Windows commit 内存纪律（用户裁决 2026-10-16）
+
+- **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
+- **任何原生内存崩溃先查 commit charge 再定位进程**：症状族（exit 3221226505 / heap OOM / PowerShell 0x800705AF）在 commit ≥ 95% limit 时是环境级耗尽，崩在哪个进程纯看运气——对具体进程做配方排查即误诊。诊断命令与清理流程正本见 `docs/conventions/windows-commit-exhaustion.md`。根治（worker 进程树 Job Object 回收）已入 `dispatch-loop-hardening` 提案改进 4；pagefile 扩容记录暂缓（用户裁决：记录不实施）。
+
 ## UI/engineering alignment conventions
 
 - **完全对齐官方 dsh 逻辑，尽量复用官方组件**（用户裁决 2026-10-14）：本项目自建 host 与 UI 层，组合官方组件需要写的**胶水代码**（装配、透传、状态缝合）是允许且预期的交付物；但**不自行编写组件**——官方已有同语义组件/机械（Modal、Switch、dialog 形态、配对/认证流程等）一律复用官方件，产品层只做组合与注入。
