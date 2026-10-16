@@ -100,22 +100,21 @@ export function ForgeHeroWorkspacePicker({
   // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
   const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
 
-  // 挂靠确认编排（选择控件确认时——唯一写入口调用点在 host attach 通道内封装）：
-  // 建会话（meta.cwd 注入 = SessionHeader.cwd 定死）→ 写挂靠事件 → 官方 openSession 呈现。
+  // 挂靠确认编排（选择控件确认时——1.16 预铸采纳单 RPC：host 侧预铸会话 + 挂靠事件
+  // seq 0 + controller.create adopt 原子完成，UI 不再二次调 attach 另开写句柄）：
+  // 单 RPC 返回 sessionId → 官方 openSession 呈现。
   const onWorktreeSelect = useCallback(
     (path: string): void => {
       if (worktree === undefined) return
       const rpc = makeRpc()
       rpc.worktree
-        .sessionCreate({ cwd: path })
-        .then(({ sessionId }) =>
-          rpc.worktree.attach({ sessionId, worktreePath: path }).then(() => {
-            onClose()
-            worktree.openSession(sessionId)
-          }),
-        )
+        .sessionCreate({ worktreePath: path })
+        .then(({ sessionId }) => {
+          onClose()
+          worktree.openSession(sessionId)
+        })
         .catch(() => {
-          // 建会话/写入口失败 fail-soft：不外溢不炸 hero（重选即重试）
+          // 预铸/采纳失败 fail-soft：不外溢不炸 hero（重选即重试）
         })
     },
     [worktree, makeRpc, onClose],

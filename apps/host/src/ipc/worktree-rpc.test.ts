@@ -31,30 +31,41 @@ const fakeExt = {
   }),
 }
 
-/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面 */
+/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获 */
 function fakePersistence(events: Record<string, readonly unknown[]>) {
   const appended: Array<{ id: string; events: readonly unknown[] }> = []
+  const created: Array<{ header: Record<string, unknown> }> = []
+  const closedFor: Record<string, boolean> = {}
+  const makeHandle = (id: string, access: 'read' | 'write') => ({
+    read: async () => ({ events: events[id] ?? [] }),
+    append: async (batch: readonly unknown[]) => {
+      if (access !== 'write') throw new Error('read-only handle')
+      appended.push({ id, events: batch })
+    },
+    flush: async () => {},
+    close: async () => {
+      closedFor[`${id}:${access}`] = true
+    },
+  })
   const persistence: SessionPersistenceFace = {
-    open: (async (id: string, access: 'read' | 'write') => ({
-      read: async () => ({ events: events[id] ?? [] }),
-      append: async (batch: readonly unknown[]) => {
-        if (access !== 'write') throw new Error('read-only handle')
-        appended.push({ id, events: batch })
-      },
-      flush: async () => {},
-      close: async () => {},
-    })) as SessionPersistenceFace['open'],
+    open: (async (id: string, access: 'read' | 'write') => makeHandle(id, access)) as SessionPersistenceFace['open'],
+    create: (async (header: { id: string }) => {
+      created.push({ header })
+      return makeHandle(header.id, 'write')
+    }) as SessionPersistenceFace['create'],
+    // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）
+    list: (async () => Object.keys(events).map((id) => ({ header: { id } }))) as never,
   }
-  return { persistence, appended }
+  return { persistence, appended, created, closedFor }
 }
 
 function fakeController() {
-  const calls: Array<{ cwd?: string }> = []
+  const calls: Array<{ sessionId?: string; cwd?: string }> = []
   const prompts: Array<unknown> = []
   const controller: SessionControllerFace = {
     create: async (request) => {
-      calls.push({ cwd: request.cwd })
-      return { sessionId: 's-created' }
+      calls.push({ sessionId: request.sessionId, cwd: request.cwd })
+      return { sessionId: request.sessionId ?? 's-created' }
     },
     prompt: async (request) => {
       prompts.push(request)
@@ -90,12 +101,71 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(event.data).toEqual({ worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
   })
 
-  it('sessionCreate：cwd 单门透传 sessionController.create（meta.cwd 注入——绑定不可切换）', async () => {
+  it('sessionCreate：预铸（persistence.create 自铸 id + cwd 头 → 句柄写挂靠事件 seq 0 + flush + close）→ controller.create({sessionId, cwd}) 采纳——写句柄生命周期零交叠', async () => {
     const { controller, calls } = fakeController()
-    const service = createWorktreeRpcService({ sessionController: controller })
-    const result = await service.sessionCreate({ cwd: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(result).toEqual({ sessionId: 's-created' })
-    expect(calls).toEqual([{ cwd: 'C:/repo/.forge/worktrees/wt-a' }])
+    const { persistence, appended, created, closedFor } = fakePersistence({})
+    const order: string[] = []
+    const trackingPersistence: SessionPersistenceFace = {
+      ...persistence,
+      create: (async (header: { id: string }) => {
+        order.push('precast')
+        return (persistence.create as (h: { id: string }) => Promise<unknown>)(header)
+      }) as SessionPersistenceFace['create'],
+    }
+    const trackingController: SessionControllerFace = {
+      ...controller,
+      create: async (request) => {
+        order.push('adopt')
+        // 单写者铁律：controller.create 起句柄归 agent loop——此刻预铸写句柄必须已关闭
+        expect(closedFor[`${request.sessionId}:write`]).toBe(true)
+        return (controller.create as (r: { sessionId: string }) => Promise<{ sessionId: string }>)(request)
+      },
+    }
+    const service = createWorktreeRpcService({
+      sessionController: trackingController,
+      sessionPersistence: trackingPersistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    // 自铸 id（session-<uuid> 形态）且 header 极薄契约（id/createdAt/cwd）
+    expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
+    expect(created).toHaveLength(1)
+    expect(created[0]!.header).toMatchObject({ id: result.sessionId, cwd: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(typeof created[0]!.header.createdAt).toBe('number')
+    // 挂靠事件在预铸句柄上落盘：seq 0 + ignorable:true
+    expect(appended).toHaveLength(1)
+    expect(appended[0]!.id).toBe(result.sessionId)
+    const event = appended[0]!.events[0] as { type: string; seq: number; ignorable?: boolean; data: unknown }
+    expect(event).toMatchObject({
+      type: 'forge/worktree-attach',
+      seq: 0,
+      ignorable: true,
+      data: { worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' },
+    })
+    // 编排序：预铸在前、采纳在后（单写者零交叠）
+    expect(order).toEqual(['precast', 'adopt'])
+    expect(calls).toEqual([{ sessionId: result.sessionId, cwd: 'C:/repo/.forge/worktrees/wt-a' }])
+    expect(result.branch).toBe('feat/a')
+  })
+
+  it('sessionCreate：sessionPersistence 缺席 / 无 create 面 → 明确错误（不做半截预铸）', async () => {
+    const { controller } = fakeController()
+    const bare = createWorktreeRpcService({ sessionController: controller })
+    await expect(bare.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
+    const legacy = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: { open: (async () => ({})) as SessionPersistenceFace['open'] },
+    })
+    await expect(legacy.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
+  })
+
+  it('checks：attachedSessions 反查（snapshot list 形态 header.id + 挂靠事件归并）', async () => {
+    const { persistence } = fakePersistence({
+      's-pre': [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' } }],
+    })
+    const service = createWorktreeRpcService({ gitWorktree: fakeExt, sessionPersistence: persistence })
+    const result = await service.checks({ projectRoot: 'C:/repo', path: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(result.attachedSessions).toBe(1)
   })
 
   it('seal：挂靠 worktree 不在场 → sealed（worktree-missing）；在场 → false；无绑定 → 零注入面', async () => {

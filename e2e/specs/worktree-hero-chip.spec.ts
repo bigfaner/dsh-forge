@@ -65,6 +65,31 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
         }
       }, { timeout: 60_000, message: `项目注册未就绪：${registerError}` })
       .toBe(true)
+    // AC（1.16 预铸采纳）：host 直调 sessionCreate 单 RPC——预铸挂靠事件真机落盘闭环
+    const preseed = (await forgeRpc(page, 'forge:worktree/session-create', {
+      worktreePath: wsDir,
+    })) as { sessionId?: string; branch?: string; data?: { sessionId?: string }; error?: unknown } | null
+    const preseedId = preseed?.data?.sessionId ?? preseed?.sessionId
+    if (typeof preseedId !== 'string') {
+      throw new Error(`sessionCreate 直调未返回 sessionId：${JSON.stringify(preseed)?.slice(0, 400)}`)
+    }
+    await expect
+      .poll(async () => {
+        const raw = (await forgeRpc(page, 'forge:worktree/checks', {
+          projectRoot: wsDir,
+          path: wsDir,
+        })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
+        return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+      }, { timeout: 30_000, message: 'checks 未读到预铸挂靠会话（预铸挂靠事件未落盘）' })
+      .toBeGreaterThanOrEqual(1)
+    // AC（1.16）：seal 判定读到预铸挂靠事件（绑定回读）
+    const seal = (await forgeRpc(page, 'forge:worktree/seal', { sessionId: preseedId })) as {
+      sealed?: boolean
+      binding?: { worktreePath?: string; branch?: string } | null
+      data?: { sealed?: boolean; binding?: { worktreePath?: string; branch?: string } | null }
+    } | null
+    const sealData = seal?.data ?? seal
+    expect(sealData?.binding?.worktreePath, `seal 未读到预铸绑定：${JSON.stringify(seal)?.slice(0, 400)}`).toBeTruthy()
     // AC：hero 第二 chip 真机可见（list isGit:true → ForgeHeroWorktreeMount 注入）
     const chip = page.locator('[data-dswt-hero-trigger]')
     await expect(chip, 'hero worktree chip 未注入（能力链断裂——本任务根因）').toBeVisible({ timeout: 30_000 })
@@ -88,6 +113,16 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
       })
       .toMatch(/·/)
     expect(await backfilled.first().textContent()).not.toContain('选择 worktree…')
+    // AC（1.16 预铸采纳）：预铸挂靠事件真机闭环——checks attachedSessions 读到挂靠事件（≥1）
+    await expect
+      .poll(async () => {
+        const raw = (await forgeRpc(page, 'forge:worktree/checks', {
+          projectRoot: wsDir,
+          path: wsDir,
+        })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
+        return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+      }, { timeout: 30_000, message: 'checks 未读到预铸挂靠会话（预铸挂靠事件未落盘）' })
+      .toBeGreaterThanOrEqual(1)
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })

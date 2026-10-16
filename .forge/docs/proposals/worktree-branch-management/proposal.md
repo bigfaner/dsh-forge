@@ -266,3 +266,9 @@ flowchart TD
 
 双向核对通过：验收 1↔流程一身份归并与存量归并、2/3↔全量纳管与选择控件、4↔数据集中与会话挂靠、5/9/10↔流程二绑定不可切换、封存态与 UI 展示形态（挂靠事件重放）、6↔流程三删除双条件拦截、7↔降级而非拦截、8↔不提供合并、11↔架构分层边界（通用层独立运行 + 集成层注入全量成立）；每条纳入项均有验收覆盖，无互相冲突条目。
 
+
+## 挂靠写入配方（现行口径，1.16）
+
+- **建会话即挂靠（活会话唯一路径）**：orge:worktree/session-create 单 RPC 原子完成——host 预铸会话（persistence.create({id: session-<uuid>, createdAt, cwd: worktreePath, version: SESSION_FORMAT_VERSION, isSeeded: false})）→ 初始写句柄落挂靠事件（orge/worktree-attach，seq 0，ignorable: true）→ flush + close → controller.create({sessionId, cwd}) 官方 adopt/resume。写句柄生命周期零交叠，单写者铁律满足。UI hero 流程只调此一通道。探针：.forge/docs/probes/worktree-preseed-adopt/。
+- **旧 orge:worktree/attach 通道口径**：保留——仅对非活会话（无 agent loop 持写句柄）合法（幂等绑定回写/补录面）。活会话上该通道结构性不可用（官方句柄持有，写打开即 SessionAlreadyOwnedError）；UI 不再调用。
+- **反查口径**：checks.attachedSessions / seal 判定经 sessionPersistence.list()（SessionPersistenceSnapshot[]，header.id）全量扫尾部读挂靠事件。

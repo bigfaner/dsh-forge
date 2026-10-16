@@ -5,7 +5,8 @@
 //   永久毒化（open 即 SessionFormatUnsupportedError）。因此本模块是自定义事件唯一写入口：
 //   信封构造收敛在模块内部，强制 ignorable:true、seq 自管理（先读 cursor 再追加），
 //   不导出任何通用 append / 信封构造器（封装面由 session-attach.test.ts 锁定）。
-import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { randomUUID } from 'node:crypto'
+import { SESSION_FORMAT_VERSION, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 
 /** 挂靠事件类型词表项（未知类型 + ignorable:true → 持久化读回 / surface 重放 / v3→v4 迁移均安全跳过） */
@@ -49,28 +50,39 @@ export interface WorktreeAttachWriter {
 }
 
 /**
+ * 在调用方已持有的写句柄上落一条挂靠事件（append + flush；close 由调用方负责）。
+ * 模块内部面——不导出（封装面锁定：唯一写入口之外无自定义事件写通道）。
+ */
+async function appendAttachEvent(
+  handle: Pick<SessionHandle, 'read' | 'append' | 'flush'>,
+  binding: WorktreeAttachData,
+): Promise<WorktreeAttachEvent> {
+  const worktreePath = requireNonEmpty(binding?.worktreePath, 'worktreePath')
+  const branch = requireNonEmpty(binding?.branch, 'branch')
+  const events = (await handle.read()).events
+  const nextSeq = events.length > 0 ? events[events.length - 1]!.seq + 1 : 0
+  const event = {
+    type: WORKTREE_ATTACH_EVENT_TYPE,
+    seq: SessionSeq(nextSeq),
+    time: Date.now(),
+    data: { worktreePath, branch },
+    ignorable: true as const,
+  }
+  await handle.append([event])
+  await handle.flush() // flush 才承诺落盘（探针 §5 配方）
+  return { seq: nextSeq, worktreePath, branch }
+}
+
+/**
  * 唯一写入口封装：信封构造不外泄——调用方只能给「绑定语义」，写不出任意自定义事件。
  * seq 自管理：先读全量取 cursor，next-seq = 末事件 seq + 1（两步间不得有其他写入者，写句柄单写者语义）。
  */
 export function createWorktreeAttachWriter(handles: SessionWriteHandleFactory): WorktreeAttachWriter {
   return {
     async attach(sessionId: string, binding: WorktreeAttachData): Promise<WorktreeAttachEvent> {
-      const worktreePath = requireNonEmpty(binding?.worktreePath, 'worktreePath')
-      const branch = requireNonEmpty(binding?.branch, 'branch')
       const handle = await handles.openWrite(sessionId)
       try {
-        const events = (await handle.read()).events
-        const nextSeq = events.length > 0 ? events[events.length - 1]!.seq + 1 : 0
-        const event = {
-          type: WORKTREE_ATTACH_EVENT_TYPE,
-          seq: SessionSeq(nextSeq),
-          time: Date.now(),
-          data: { worktreePath, branch },
-          ignorable: true as const,
-        }
-        await handle.append([event])
-        await handle.flush() // flush 才承诺落盘（探针 §5 配方）
-        return { seq: nextSeq, worktreePath, branch }
+        return await appendAttachEvent(handle, binding)
       } finally {
         await handle.close()
       }
@@ -127,4 +139,53 @@ function requireNonEmpty(value: string | undefined, field: string): string {
     throw new TypeError(`forge/worktree-attach: ${field} 必须为非空字符串`)
   }
   return value
+}
+
+/** 预铸面（persistence.create 切片——header 契约：JSON 可序列化 + createdAt 非负安全整数 + version 当前格式版） */
+export interface SessionPersistenceCreateFace {
+  create(header: {
+    readonly id: string
+    readonly createdAt: number
+    readonly cwd: string
+    readonly version: number
+    readonly isSeeded: boolean
+  }): Promise<SessionHandle>
+}
+
+/** 预铸结果：自铸会话 id + 落盘挂靠事件 */
+export interface WorktreePreseedResult {
+  readonly sessionId: string
+  readonly seq: number
+  readonly worktreePath: string
+  readonly branch: string
+}
+
+/**
+ * 预铸挂靠会话（worktree-branch-management 1.16 预铸采纳配方的预铸半程）：
+ * mint session-<uuid> → persistence.create（cwd 头 = SessionHeader.cwd 定死，官方
+ * adopt 校验 header.cwd 相等）→ 初始写句柄落挂靠事件（seq 0, ignorable:true）→
+ * flush + close。写句柄即开即闭、零交叠——调用方随后 controller.create({sessionId, cwd})
+ * 走官方 adopt/resume，单写者铁律满足。信封构造仍收敛本模块内部。
+ */
+export async function preseedWorktreeSession(
+  persistence: SessionPersistenceCreateFace,
+  binding: WorktreeAttachData,
+  mintId: () => string = () => `session-${randomUUID()}`,
+): Promise<WorktreePreseedResult> {
+  const worktreePath = requireNonEmpty(binding?.worktreePath, 'worktreePath')
+  const branch = requireNonEmpty(binding?.branch, 'branch')
+  const sessionId = mintId()
+  const handle = await persistence.create({
+    id: sessionId,
+    createdAt: Date.now(),
+    cwd: worktreePath,
+    version: SESSION_FORMAT_VERSION, // 读取侧 assertVersion 门槛
+    isSeeded: false, // v4 header 必填（探针 run2 实测缺拒）
+  })
+  try {
+    const event = await appendAttachEvent(handle, { worktreePath, branch })
+    return { sessionId, ...event }
+  } finally {
+    await handle.close()
+  }
 }

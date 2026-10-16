@@ -46,10 +46,12 @@ export {
 } from './worktree-ops.js'
 export {
   createWorktreeAttachWriter,
+  preseedWorktreeSession,
   latestAttachEvent,
   readLatestAttach,
   withWorktreeCwd,
   WORKTREE_ATTACH_EVENT_TYPE,
+  type SessionPersistenceCreateFace,
   type SessionReadHandleFactory,
   type SessionWriteHandleFactory,
   type WorktreeAttachData,

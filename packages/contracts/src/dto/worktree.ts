@@ -102,13 +102,20 @@ export interface WorktreeAttachResult {
   readonly seq: number
 }
 
-/** forge:worktree/session-create（建会话 meta.cwd 注入——sessionController.create({cwd})） */
+/**
+ * forge:worktree/session-create（1.16 预铸采纳配方——单 RPC 原子）：
+ * host 预铸会话（persistence.create 自铸 id + worktreePath cwd 头 → 初始句柄写挂靠事件
+ * seq 0 → close）→ controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄生命
+ * 周期零交叠，单写者铁律满足（活会话上不再另开写句柄）。
+ */
 export interface WorktreeSessionCreateRequest {
-  /** 挂靠 worktree 绝对路径（SessionHeader.cwd 定死——绑定不可切换） */
-  readonly cwd: string
+  /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */
+  readonly worktreePath: string
 }
 export interface WorktreeSessionCreateResult {
   readonly sessionId: string
+  /** 挂靠分支（host 自查 worktree list——预铸挂靠事件内同一值） */
+  readonly branch: string
 }
 
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */

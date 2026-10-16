@@ -4,7 +4,8 @@
 // ipc 装配透传（typed 载荷直通插件域，零业务逻辑停留）。
 // 三职责：
 //   · WorktreeRpcService（child 侧服务本体）：ops 封装 + 挂靠事件唯一写入口调用点 +
-//     建会话 meta.cwd 注入（sessionController.create({cwd}) 单门）+ 封存判定快照；
+//     建会话预铸采纳（persistence.create 预铸 + controller.create adopt——1.16，单写者
+//     零交叠）+ 封存判定快照；
 //   · registerWorktreeChannels（main 侧 ipc 注册——m2-wiring 单行编排位）；
 //   · interceptSessionSends（child 侧发送拦截——assertSendable 接入 host 消息处理链：
 //     sessionController.prompt/updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示）。
@@ -33,6 +34,8 @@ import {
 import {
   createWorktree,
   createWorktreeAttachWriter,
+  preseedWorktreeSession,
+  type SessionPersistenceCreateFace,
   defaultBranch as defaultBranchOp,
   deleteWorktree,
   aheadBehind as aheadBehindOp,
@@ -52,14 +55,26 @@ export interface GitWorktreeServiceFace {
   getExtensionPoints(): GitWorktreeExtensionPoints
 }
 
-/** 官方 SessionPersistence.open 消费切片（结构化窄面——零官方包 import） */
+/** 官方 SessionPersistence.open 消费切片（结构化窄面——零官方包 import；create = 1.16 预铸面） */
 export interface SessionPersistenceFace {
   open(id: string, access: 'read' | 'write'): Promise<unknown>
+  /** 预铸新持久会话（header 契约：id + createdAt + cwd + version 当前格式版 + isSeeded:false；返回初始写句柄） */
+  create(header: {
+    readonly id: string
+    readonly createdAt: number
+    readonly cwd: string
+    readonly version: number
+    readonly isSeeded: boolean
+  }): Promise<unknown>
 }
 
-/** 官方 SessionController 消费切片（create = meta.cwd 注入单门；prompt/updateQueue = 发送链） */
+/** 官方 SessionController 消费切片（create = sessionId 携带即官方 adopt/resume 单门；prompt/updateQueue = 发送链） */
 export interface SessionControllerFace {
-  create(request: { readonly cwd?: string; readonly workspaceId?: string }): Promise<{ readonly sessionId: string }>
+  create(request: {
+    readonly sessionId?: string
+    readonly cwd?: string
+    readonly workspaceId?: string
+  }): Promise<{ readonly sessionId: string }>
   prompt(request: unknown, signal?: AbortSignal): Promise<unknown>
   updateQueue?(request: unknown): Promise<unknown>
 }
@@ -109,6 +124,8 @@ export function createWorktreeRpcService(deps: {
   readonly sessionPersistence?: SessionPersistenceFace | undefined
   /** 在场清单注入缝（单测替身；缺省 = 插件域 listWorktrees 真机 git） */
   readonly listPresent?: ((projectRoot: string) => Promise<readonly string[]>) | undefined
+  /** worktree 清单注入缝（branch 解析面——缺省 = 插件域 listWorktrees 真机 git） */
+  readonly listWorktreeEntries?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null }[]>) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
@@ -142,11 +159,17 @@ export function createWorktreeRpcService(deps: {
 
   /** 挂靠会话反查（checks/seal 共用——sessionPersistence.list 全量扫尾部，best-effort cap 200） */
   const attachedSessionsOf = async (path: string): Promise<number> => {
-    const persistence = deps.sessionPersistence as { list?: () => Promise<{ ids?: readonly string[] }> } | undefined
+    const persistence = deps.sessionPersistence as { list?: () => Promise<unknown> } | undefined
     if (persistence === undefined || typeof persistence.list !== 'function') return 0
     try {
       const listed = await persistence.list()
-      const ids = (Array.isArray(listed) ? listed : (listed?.ids ?? [])) as readonly string[]
+      // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）；
+      // 兼容 {ids} 形态（历史替身）。
+      const ids = (
+        Array.isArray(listed)
+          ? listed.map((row) => (row as { header?: { id?: unknown } } | null)?.header?.id ?? row)
+          : ((listed as { ids?: readonly unknown[] } | null)?.ids ?? [])
+      ) as readonly unknown[]
       let count = 0
       for (const id of ids.slice(0, 200)) {
         const binding = await readLatestAttach(String(id), readFactory).catch(() => null)
@@ -174,6 +197,15 @@ export function createWorktreeRpcService(deps: {
       projectRoot: resolution.projectRoot,
       worktreeName: worktreeNameOf(binding.worktreePath),
     }
+  }
+
+  /** worktree 分支解析（attach/sessionCreate 共源——分支缺省自查 worktree list） */
+  const resolveBranch = async (worktreePath: string, branch?: string): Promise<string> => {
+    if (branch !== undefined && branch !== '') return branch
+    const resolution = await ext().resolveProject(worktreePath).catch(() => null)
+    const root = resolution?.projectRoot ?? worktreePath
+    const entries = await (deps.listWorktreeEntries ?? listWorktrees)(root).catch(() => [])
+    return entries.find((row) => norm(row.path) === norm(worktreePath))?.branch ?? ''
   }
 
   return {
@@ -239,13 +271,7 @@ export function createWorktreeRpcService(deps: {
     },
 
     async attach(request) {
-      let branch = request.branch
-      if (branch === undefined || branch === '') {
-        const resolution = await ext().resolveProject(request.worktreePath).catch(() => null)
-        const root = resolution?.projectRoot ?? request.worktreePath
-        const entries = await listWorktrees(root).catch(() => [])
-        branch = entries.find((row) => norm(row.path) === norm(request.worktreePath))?.branch ?? ''
-      }
+      const branch = await resolveBranch(request.worktreePath, request.branch)
       const event = await writer.attach(request.sessionId, { worktreePath: request.worktreePath, branch })
       return { attached: true, branch: event.branch, seq: event.seq }
     },
@@ -253,8 +279,22 @@ export function createWorktreeRpcService(deps: {
     async sessionCreate(request) {
       const controller = deps.sessionController
       if (controller === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法以 worktree cwd 建会话')
-      const created = await controller.create({ cwd: request.cwd })
-      return { sessionId: created.sessionId }
+      const persistence: SessionPersistenceFace | undefined = deps.sessionPersistence
+      if (persistence === undefined || typeof persistence.create !== 'function') {
+        throw new Error('sessionPersistence 缺席或缺 create 面（host 装配漂移）——预铸采纳配方不可用')
+      }
+      const branch = await resolveBranch(request.worktreePath)
+      // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
+      // 唯一写句柄——建会话后另开写句柄补写挂靠事件在活会话上结构性不可行）。改为：先
+      // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
+      // → flush + close，再 controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄
+      // 生命周期零交叠，单写者铁律满足。
+      const preseeded = await preseedWorktreeSession(persistence as unknown as SessionPersistenceCreateFace, {
+        worktreePath: request.worktreePath,
+        branch,
+      })
+      await controller.create({ sessionId: preseeded.sessionId, cwd: request.worktreePath })
+      return { sessionId: preseeded.sessionId, branch }
     },
 
     seal: sealStateOf,
