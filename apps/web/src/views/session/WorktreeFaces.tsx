@@ -62,6 +62,20 @@ const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: []
 const lastSelectedWorktreePaths = new Map<string, string>()
 
 /**
+ * hero 默认回填锚定链（1.17 refinement 裁决——纯函数单源）：主行（isMain）当前检出分支
+ * → rows 中检出同分支的行（分支只检出于一个树，分支→worktree 映射唯一；不硬编码
+ * main/主行——主行检出 feature 分支时默认即指向该分支所在树，含主行自身检出场景）。
+ * 锚定失败（主行 branch null / 映射行缺失 / 非 git 不进本函数）= undefined 退回占位现状。
+ */
+export function anchorDefaultWorktreePath(
+  rows: readonly { readonly path: string; readonly branch: string | null; readonly isMain: boolean }[],
+): string | undefined {
+  const mainBranch = rows.find((row) => row.isMain)?.branch
+  if (mainBranch === null || mainBranch === undefined) return undefined
+  return rows.find((row) => row.branch === mainBranch)?.path
+}
+
+/**
  * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
@@ -102,6 +116,13 @@ export function ForgeHeroWorktreeMount({
     },
     [projectRoot, onSelect],
   )
+
+  // 1.17 默认回填（纯展示零编排）：清单就绪且无用户记忆/显式回填（localSelectedPath 初值
+  // 已含记忆与 selectedPath，prev 在场即让位）时按锚定链回填本地选中态——不触发任何编排
+  useEffect(() => {
+    if (phase.state !== 'ready' || !phase.isGit) return
+    setLocalSelectedPath((prev) => prev ?? anchorDefaultWorktreePath(phase.rows))
+  }, [phase])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
