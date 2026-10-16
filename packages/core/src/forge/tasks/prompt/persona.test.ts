@@ -244,6 +244,7 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
         'grep', 'glob', 'write', 'ls', 'git', 'status', 'diff', 'lint', 'just', 'run-tests',
         'gen-journeys', 'gen-contracts', 'gen-test-scripts', // test-gen 三型装载目标技能名（与 run-tests 同类协议词）
         'fix-bug', 'recordBug', 'resolveBug', 'unresolved', // coding-fix 强制委托目标技能名 + 两阶段落库工具/终态词（fix-bug 委托）
+        'getBug', 'recurrenceOf', 'bug_id', // 复发挂链指引（bug-recurrence-chain）：链详情工具 + 前驱字段/键
         'gate', 'coding', 'doc', 'doc-review', 'test', 'e2e', 'trace', 'error-context', 'fix',
         'summary', 'reason', 'Step', 'completed', 'false', 'logs', 'slug', 'taskKey', 'seq', 'event-type',
         'testsPassed', 'testsFailed', 'coverage', 'nnn', 'readme', 'task-local-id', 'issue-key',
@@ -315,6 +316,10 @@ describe('persona 组成矩阵（×20 类型 ×3 复杂度）', () => {
       expect(persona, cx).toContain('两阶段落库')
       expect(persona, cx).toContain('recordBug')
       expect(persona, cx).toContain('resolveBug')
+      // 复发挂链指引（提案 bug-recurrence-chain 验收 5）：一切分级在场
+      expect(persona, cx).toContain('诊断疑似同一问题复发时，先经简报候选/getBug 确认前驱 bug_id')
+      expect(persona, cx).toContain('recordBug 以 recurrenceOf 挂链')
+      expect(persona, cx).toContain('首次发生不填')
     }
     // 其余 coding 族不携带委托（只改 coding-fix 变体，不外溢）
     expect(composePersona('coding-feature', 'high')).not.toContain('fix-bug')

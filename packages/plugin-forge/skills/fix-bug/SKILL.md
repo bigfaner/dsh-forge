@@ -51,6 +51,8 @@ Suspected: <疑似位置 file:line 或模块>
 
 **落库（第一阶段）**：Bug Summary 成文后立即调用 `recordBug` 登记——summary（一句话 ≤50 字）+ 五字段 + 可选错误类型标注；记录返回的 bug_id，Step 6 回填时引用。身份、会话与仓库态由工具自行解析，不要手填。
 
+**复发挂链（recurrenceOf，可选）**：诊断判定疑似同一问题复发时，先确认前驱 bug_id——优先用派发简报注入的链候选，详情存疑再 `getBug` 深查（主 agent 侧亦可用 listBugs 检索候选）——然后 `recordBug` 以 recurrenceOf 指向前驱 bug_id 挂链；**首次发生不填**。挂链凭 agent 判定 + 显式引用，不做自动匹配；指向不存在的 bug_id 会被拒写。
+
 ---
 
 ## Step 2: 复现
