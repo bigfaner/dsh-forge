@@ -1013,6 +1013,16 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     unpublishViews()
   })
 
+  it('bug 2026-10-16：list 槽 register 必带 id——conversation.input.overlay 行携 dswf-worktree-seal（官方校验 requires options.id，缺 id 即 apply 中断回滚）', () => {
+    publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const overlayRows = registers.filter((r) => r.key === CONVERSATION_INPUT_OVERLAY_SLOT)
+    expect(overlayRows, '封存 overlay 槽唯一登记').toHaveLength(1)
+    expect(overlayRows[0]!.options.id).toBe('dswf-worktree-seal')
+    unpublishViews()
+  })
+
   it('D6 ⟞ 开面：onOpenWorkerSession → 账本 parentId 在场 = 官方 SubagentAddress 形（openChild 同径）；缺席 = 平开会话 id', () => {
     publishFakeViews()
     const { ctx, registers, sessionsById, open } = fakeClientCtx()

@@ -67,7 +67,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
 
 /** 构建指纹（手工递增——运行期与源码版本对账用，2d5434d1 指纹裁决） */
-export const FORGE_CLIENT_BUILD_TAG = '2026-10-15.3'
+export const FORGE_CLIENT_BUILD_TAG = '2026-10-16.1'
 
 /** 洞名：官方 sidebar 壳的工作区浏览区（本项目树 + 会话列表占用此洞——AC1 替换目标） */
 export const SIDEBAR_WORKSPACES_SLOT = 'sidebar.workspaces'
@@ -1045,7 +1045,9 @@ function registerWorktreeFaces(
   )
   registerSlotEntry(ctx, CONVERSATION_INPUT_OVERLAY_SLOT, diagnostics, () =>
     ctx.slots.register(
-      { name: CONVERSATION_INPUT_OVERLAY_SLOT },
+      // list 槽官方校验必带 id（Root cause: fix-2 漏 id → apply 中断静默回滚，
+      // Forge 设置/dock/词典齐失——bug 判例 2026-10-16）
+      { name: CONVERSATION_INPUT_OVERLAY_SLOT, id: 'dswf-worktree-seal' },
       views.ForgeWorktreeSealOverlay,
     ),
   )
@@ -2281,6 +2283,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 重复登记；tab 类型残留占官方注册表 kind）
         revokeBridgeAndLocale?.()
         const message = error instanceof Error ? error.message : String(error)
+        // 诊断增强（2026-10-16）：apply 中断曾静默吞错——Forge 设置/dock/词典齐失而
+        // console 无声，只能靠症状考古。回滚语义不变，补一行 loud 报错。
+        console.error('[dswf-client] apply 中断（已回滚桥/词典/tab 类型）：', error)
         sidebarDiagnostics.error = message
         centerDiagnostics.error = message
         viewsDiagnostics.error = message
