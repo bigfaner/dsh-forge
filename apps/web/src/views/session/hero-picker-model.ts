@@ -45,3 +45,20 @@ export function selectedProjectOf(
   if (selectedId === undefined) return undefined
   return rows.find((row) => row.id === selectedId)
 }
+
+/**
+ * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正）：
+ * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
+ * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底；全无 → null（chip 零注入退回现状）。
+ * bug 10833861 Root cause: 原推导以 project.id 比对 workspaceId 恒 miss，fallback 又取
+ * 全量首行（created_at 最早的归档项目，如非 git 的 learn）→ isGit=false 全零注入。
+ */
+export function selectedProjectRootOf(
+  projects: readonly ProjectSummary[],
+  selectedId: string | undefined,
+): string | null {
+  const byWorkspace =
+    selectedId !== undefined ? projects.find((project) => project.workspaceId === selectedId) : undefined
+  if (byWorkspace !== undefined && byWorkspace.wsPath !== '') return byWorkspace.wsPath
+  return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
+}

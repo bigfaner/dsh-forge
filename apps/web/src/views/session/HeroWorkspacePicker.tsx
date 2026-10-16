@@ -21,7 +21,7 @@ import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
-import { heroPickerPlan, selectedProjectOf } from './hero-picker-model.js'
+import { heroPickerPlan, selectedProjectOf, selectedProjectRootOf } from './hero-picker-model.js'
 import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
@@ -96,10 +96,9 @@ export function ForgeHeroWorkspacePicker({
     if (open) silentRefresh()
   }, [open, silentRefresh])
 
-  // worktree 第二 chip 数据锚：选中项目的 ws_path（list/ops 执行 cwd；未选中 = null 零注入）。
-  // projects 行集 = RPC 源本体（heroPickerPlan 行 {id,name} 超集——wsPath 取自原行）。
-  const selectedProjectRoot =
-    projects.find((project) => project.id === selectedId)?.wsPath ?? projects.find((p) => p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
+  // worktree 第二 chip 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——bug 10833861
+  // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
+  const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
 
   // 挂靠确认编排（选择控件确认时——唯一写入口调用点在 host attach 通道内封装）：
   // 建会话（meta.cwd 注入 = SessionHeader.cwd 定死）→ 写挂靠事件 → 官方 openSession 呈现。

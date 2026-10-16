@@ -2,7 +2,7 @@
 // workspaceId↔project 映射 / archived 排除 / 空集（添加唯一入口 + 直达判据）。
 import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { heroPickerPlan, selectedProjectOf } from './hero-picker-model.js'
+import { heroPickerPlan, selectedProjectOf, selectedProjectRootOf } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
   id: o.id,
@@ -71,5 +71,25 @@ describe('selectedProjectOf（workspaceId ↔ 项目映射——owner selectedId
 
   it('selectedId 缺席（无 pending 无会话归属）→ undefined', () => {
     expect(selectedProjectOf(heroPickerPlan(PROJECTS, true).rows, undefined)).toBeUndefined()
+  })
+})
+
+describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 10833861）', () => {
+  it('selectedId（workspaceId 官方语义）经 workspaceId 回查命中 → 该项目 ws_path（直接比对 project.id 的类型错配不复存在）', () => {
+    expect(selectedProjectRootOf(PROJECTS, 'w-2')).toBe('C:\\ws\\p2')
+  })
+
+  it('未选中/未命中 → 活跃首个有 ws_path 行兜底；归档行不参与（created_at 最早的归档项目不得成为数据根）', () => {
+    const archivedFirst = [
+      project({ id: 'p-learn', workspaceId: 'w-learn', name: 'learn', archived: true }),
+      project({ id: 'p-main', workspaceId: 'w-main', name: 'main' }),
+    ]
+    expect(selectedProjectRootOf(archivedFirst, undefined)).toBe('C:\\ws\\p-main')
+    expect(selectedProjectRootOf(archivedFirst, 'w-unknown')).toBe('C:\\ws\\p-main')
+  })
+
+  it('全归档/空集 → null（chip 零注入退回现状）', () => {
+    expect(selectedProjectRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })], undefined)).toBeNull()
+    expect(selectedProjectRootOf([], 'w-1')).toBeNull()
   })
 })
