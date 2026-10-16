@@ -47,15 +47,16 @@ function fakePersistence(events: Record<string, readonly unknown[]>) {
       closedFor[`${id}:${access}`] = true
     },
   })
-  const persistence: SessionPersistenceFace = {
+  const persistence = {
     open: (async (id: string, access: 'read' | 'write') => makeHandle(id, access)) as SessionPersistenceFace['open'],
-    create: (async (header: { id: string }) => {
-      created.push({ header })
+    create: (async (header: Parameters<SessionPersistenceFace['create']>[0]) => {
+      created.push({ header: { ...header } })
       return makeHandle(header.id, 'write')
     }) as SessionPersistenceFace['create'],
-    // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）
+    // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）——运行期
+    // 探测缝（attachedSessionsOf as {list?}），不在 SessionPersistenceFace 类型面
     list: (async () => Object.keys(events).map((id) => ({ header: { id } }))) as never,
-  }
+  } as unknown as SessionPersistenceFace
   return { persistence, appended, created, closedFor }
 }
 
@@ -107,9 +108,9 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     const order: string[] = []
     const trackingPersistence: SessionPersistenceFace = {
       ...persistence,
-      create: (async (header: { id: string }) => {
+      create: (async (header: Parameters<SessionPersistenceFace['create']>[0]) => {
         order.push('precast')
-        return (persistence.create as (h: { id: string }) => Promise<unknown>)(header)
+        return (persistence.create as (h: Parameters<SessionPersistenceFace['create']>[0]) => Promise<unknown>)(header)
       }) as SessionPersistenceFace['create'],
     }
     const trackingController: SessionControllerFace = {
@@ -118,7 +119,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
         order.push('adopt')
         // 单写者铁律：controller.create 起句柄归 agent loop——此刻预铸写句柄必须已关闭
         expect(closedFor[`${request.sessionId}:write`]).toBe(true)
-        return (controller.create as (r: { sessionId: string }) => Promise<{ sessionId: string }>)(request)
+        return (controller.create as (r: { sessionId: string; cwd?: string }) => Promise<{ sessionId: string }>)({ sessionId: request.sessionId as string, cwd: request.cwd })
       },
     }
     const service = createWorktreeRpcService({
@@ -154,7 +155,8 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     await expect(bare.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
     const legacy = createWorktreeRpcService({
       sessionController: controller,
-      sessionPersistence: { open: (async () => ({})) as SessionPersistenceFace['open'] },
+      // 无 create 面桩（运行期契约探测面——1.16 预铸缝缺席即明确错误；类型断言豁免编译面）
+      sessionPersistence: { open: (async () => ({})) as SessionPersistenceFace['open'] } as unknown as SessionPersistenceFace,
     })
     await expect(legacy.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
   })
