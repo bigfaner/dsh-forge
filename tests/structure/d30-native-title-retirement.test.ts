@@ -156,11 +156,15 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   // + D45 停止并归档确认）/AddProjectFlow/ModeDialog/VerdictDialog +
   // remote/ForgeRemoteEntry×1（手机远程 dialog 头）
   Modal: 7,
+  // 自绘 dialog 头标题文本 prop ×1（remote/ForgeRemoteEntry RemoteDialogHead——fix-19 ⑥
+  // 标题读数，标题文本非悬浮提示位）
   // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；1.17 扩记：
   // ForgeProgressNode 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位）
   DisclosureRow: 2,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
   DrawerSection: 2,
+  // 自绘 dialog 头标题 prop（fix-19 ⑥——标题文本非悬浮提示位）
+  RemoteDialogHead: 1,
 }
 
 /** D36 ⑤ + D37 Tooltip 退役锚（采纳锚位 1:1 对位迁移——零 Tooltip 在场；29 walk 位恒数：
