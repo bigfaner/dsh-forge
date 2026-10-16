@@ -13,24 +13,27 @@ import gitWorktreePlugin, {
   resolveExtensionPoints,
 } from './index.js'
 
-/** reflect 桩：provide 记录 + get 可编程 */
-function ctxStub(opts: { injected?: unknown; provideFail?: boolean } = {}) {
+/** ctx 桩：官方 provide 面（ctx.mixin——fix-4 具名服务正道）记录 + reflect.get 可编程 */
+function ctxStub(opts: { injected?: unknown; provideFail?: boolean; omitProvide?: boolean } = {}) {
   const provided: { name: string; value: unknown }[] = []
-  const ctx = {
+  const diagLines: string[] = []
+  const ctx: Record<string, unknown> = {
     reflect: {
       get: (name: string) => {
         if (name !== GIT_WORKTREE_IDENTITY_SERVICE) return undefined
         if (opts.injected === 'throw') throw new Error('boom')
         return opts.injected
       },
-      provide: (name: string, value: unknown) => {
-        if (opts.provideFail) throw new Error('provide boom')
-        provided.push({ name, value })
-        return () => provided.pop()
-      },
     },
   }
-  return { ctx, provided }
+  if (!opts.omitProvide) {
+    ctx['provide'] = (name: string, value: unknown) => {
+      if (opts.provideFail) throw new Error('provide boom')
+      provided.push({ name, value })
+      return () => provided.pop()
+    }
+  }
+  return { ctx: ctx as never, provided, diagLines }
 }
 
 const mergeImpl = async (cwd: string) => ({ projectId: 'p-main', projectRoot: cwd, isGit: true })
@@ -77,7 +80,7 @@ describe('resolveExtensionPoints（注入缝解析）', () => {
 })
 
 describe('插件激活（git 在场性门 + 能力服务 provide）', () => {
-  it('git 在场（stub）→ provide gitWorktree 能力服务；getExtensionPoints 惰性取到晚注入的集成层实现', async () => {
+  it('git 在场（stub）→ 经官方 provide 面 provide gitWorktree 具名能力服务；getExtensionPoints 惰性取到晚注入的集成层实现', async () => {
     const { ctx, provided } = ctxStub()
     const dispose = gitWorktreePlugin(ctx, { checkGit: async () => true })
     await vi.waitFor(() => expect(provided).toHaveLength(1))
@@ -85,7 +88,7 @@ describe('插件激活（git 在场性门 + 能力服务 provide）', () => {
     // 激活时注入缝还空（host 装配方晚于 runProfile provide）——调用期先取先得
     const svc = provided[0]!.value as { getExtensionPoints: () => ReturnType<typeof createDefaultExtensionPoints> }
     expect(svc.getExtensionPoints().resolveProject).toBe(defaultResolveProject)
-    ;(ctx.reflect as { get: (n: string) => unknown }).get = () => ({ resolveProject: mergeImpl })
+    ;(ctx as { reflect: { get: (n: string) => unknown } }).reflect.get = () => ({ resolveProject: mergeImpl })
     expect(svc.getExtensionPoints().resolveProject).toBe(mergeImpl)
     dispose() // 幂等注销
     dispose()
@@ -105,17 +108,20 @@ describe('插件激活（git 在场性门 + 能力服务 provide）', () => {
     expect(provided).toHaveLength(0)
   })
 
-  it('provide 抛异常 → 能力面降级，激活不抛、disposer 安全', async () => {
-    const { ctx } = ctxStub({ provideFail: true })
-    const dispose = gitWorktreePlugin(ctx, { checkGit: async () => true })
+  it('provide 抛异常 → 能力面降级 + diag 留痕（fix-4 不静默），激活不抛、disposer 安全', async () => {
+    const { ctx, diagLines } = ctxStub({ provideFail: true })
+    const dispose = gitWorktreePlugin(ctx, { checkGit: async () => true, diag: (l) => diagLines.push(l) })
     await new Promise((r) => setTimeout(r, 20))
     expect(() => dispose()).not.toThrow()
+    expect(diagLines.some((l) => l.includes('[git-worktree]') && l.includes('provide 失败'))).toBe(true)
   })
 
-  it('ctx 无 reflect 面（非 cordis 嵌入）→ 激活/disposer 均不抛', async () => {
-    const dispose = gitWorktreePlugin({}, { checkGit: async () => true })
+  it('ctx 无官方 provide 面（非 cordis 嵌入）→ diag 留痕、激活/disposer 均不抛', async () => {
+    const { ctx, diagLines } = ctxStub({ omitProvide: true })
+    const dispose = gitWorktreePlugin(ctx, { checkGit: async () => true, diag: (l) => diagLines.push(l) })
     await new Promise((r) => setTimeout(r, 20))
     expect(() => dispose()).not.toThrow()
+    expect(diagLines.some((l) => l.includes('[git-worktree]') && l.includes('官方面缺席'))).toBe(true)
   })
 })
 

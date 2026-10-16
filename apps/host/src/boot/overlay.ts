@@ -199,8 +199,10 @@ export function renderBootOverlay(input: BootOverlayInput): string {
       : []),
     // worktree-branch-management 1.7：git-worktree 插件行（门控注行——插件独立/集成双态，
     // 扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft 不生效语义归插件启动检测）
+    // fix-4（Root cause：新 id 裸行被 loader 补丁按 unknown target 静默跳过——插件从未装载，
+    // RPC 恒独立模式）：须以 insert 形态注行（用户层 cordis.patch.yml 同款语义）。
     ...(input.gitWorktreeRow === true
-      ? ['- id: dsh-forge-git-worktree', "  name: '@dsh-forge/git-worktree'"]
+      ? ['- insert:', '    - id: dsh-forge-git-worktree', "      name: '@dsh-forge/git-worktree'"]
       : []),
     '- id: ui-settings-general',
     '  config:',
