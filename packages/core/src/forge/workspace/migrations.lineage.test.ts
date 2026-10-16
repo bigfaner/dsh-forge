@@ -106,8 +106,9 @@ function assertConverged(
   expect(tables).toContain('bugs')
   expect(tables).toContain('migration_digests')
   const bugCols = (db.pragma(`table_info('bugs')`) as Array<{ name: string }>).map((c) => c.name)
-  expect(bugCols).toHaveLength(21)
-  expect(bugCols[bugCols.length - 1]).toBe('fix_approach')
+  expect(bugCols).toHaveLength(22)
+  expect(bugCols[bugCols.length - 2]).toBe('fix_approach')
+  expect(bugCols[bugCols.length - 1]).toBe('recurrence_of')
   // 业务行全保留（全新库无既有业务行——行数断言按谱系预期）
   const biz = opts.businessRows === false ? 0 : 1
   expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features`).get()?.n).toBe(biz)
@@ -135,10 +136,15 @@ describe('三谱系夹具收敛回归（v2 收敛式：任一 version=1 谱系 �
     assertConverged(db, { bugRows: 1 })
     const bug = db
       .prepare<unknown[], { id: string; fix_approach: string | null }>(
-        `SELECT id, fix_approach FROM bugs WHERE id = 'b1'`,
+        `SELECT id, fix_approach, recurrence_of FROM bugs WHERE id = 'b1'`,
       )
       .get()
-    expect(bug).toEqual({ id: 'b1', fix_approach: null })
+    expect(bug).toEqual({ id: 'b1', fix_approach: null, recurrence_of: null })
+    // 既有扁平台账行在新列上照常读写（新列可空——v3 无损断言）
+    db.prepare(`UPDATE bugs SET recurrence_of = 'b1' WHERE id = 'b1'`).run()
+    expect(
+      db.prepare<unknown[], { recurrence_of: string | null }>(`SELECT recurrence_of FROM bugs WHERE id = 'b1'`).get(),
+    ).toEqual({ recurrence_of: 'b1' })
     store.dispose()
   })
 

@@ -335,6 +335,123 @@ describe('listBugs：search（summary/error_type/状态中文标签）+ status �
   })
 })
 
+describe('registerBug recurrenceOf：挂链落库 + 悬空拒写 + 链根缺省', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  it('AC1 带 recurrenceOf 落库（一次写入）；缺席 = 键缺席（链根）', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const root = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    expect('recurrenceOf' in root).toBe(false) // 链根缺省
+    const relapse = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '又犯了', recurrenceOf: root.bugId })
+    expect(relapse.recurrenceOf).toBe(root.bugId)
+  })
+
+  it('AC1 悬空引用拒写（ERR_BUG_RECURRENCE_DANGLING 新错误码）——零行零事件', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    await expect(
+      s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, recurrenceOf: 'no-such-bug' }),
+    ).rejects.toMatchObject({ code: 'ERR_BUG_RECURRENCE_DANGLING', data: { recurrenceOf: 'no-such-bug' } })
+    const db = h.store.ensureOpen(h.projectId)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM bugs').get()).toEqual({ n: 0 })
+    expect(h.events.emitted).toEqual([])
+  })
+})
+
+describe('getBug：全卡 + 链上下文（沿前驱指针回溯全链，时间正序）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  it('AC3 孤条（无前驱无后继）= chain 缺席；全卡字段全量', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const bug = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, errorType: 'api' })
+    const got = await s.getBug({ projectId: h.projectId, bugId: bug.bugId })
+    expect(got.card).toEqual(bug)
+    expect(got.chain).toBeUndefined()
+    await expect(s.getBug({ projectId: h.projectId, bugId: 'nope' })).rejects.toMatchObject({
+      code: 'ERR_BUG_NOT_FOUND',
+    })
+  })
+
+  it('AC3 三节链：entries 时间正序（链根在前）、currentIndex 定位本条、rootBugId = 链根', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const root = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '链根' })
+    const r1 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', recurrenceOf: root.bugId })
+    const r2 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })
+    // 同毫秒注册拉开 created_at（时间正序断言确定性）
+    const stamp = (id: string, at: string): void => {
+      h!.wsDb.prepare('UPDATE bugs SET created_at = ? WHERE id = ?').run(at, id)
+    }
+    stamp(root.bugId, '2026-01-01T00:00:00.000Z')
+    stamp(r1.bugId, '2026-01-02T00:00:00.000Z')
+    stamp(r2.bugId, '2026-01-03T00:00:00.000Z')
+
+    const fromMiddle = await s.getBug({ projectId: h.projectId, bugId: r1.bugId })
+    expect(fromMiddle.chain?.entries.map((e) => e.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    expect(fromMiddle.chain?.currentIndex).toBe(1)
+    expect(fromMiddle.chain?.length).toBe(3)
+    expect(fromMiddle.chain?.rootBugId).toBe(root.bugId)
+    // 尾节与链根同链快照
+    const fromRoot = await s.getBug({ projectId: h.projectId, bugId: root.bugId })
+    expect(fromRoot.chain?.currentIndex).toBe(0)
+    expect(fromRoot.chain?.entries.map((e) => e.recurrenceOf)).toEqual([undefined, root.bugId, r1.bugId])
+  })
+})
+
+describe('listBugs：六字段 search + offset/limit 分页（排序后切片，稳定）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  it('AC2 关键词命中六字段任一（bugDesc/triggerDesc/expected/actual/errorType）', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const b1 = await s.registerBug({
+      projectId: h.projectId,
+      summary: '甲',
+      bugDesc: '游标越界偶发',
+      triggerDesc: '触发词甲',
+      expected: '期望词甲',
+      actual: '实际词甲',
+      errorType: 'paging',
+    })
+    await s.registerBug({ projectId: h.projectId, summary: '乙', bugDesc: 'x', triggerDesc: 'y', expected: 'z', actual: 'w' })
+    for (const q of ['游标越界', '触发词甲', '期望词甲', '实际词甲', 'paging']) {
+      const hit = await s.listBugs({ projectId: h.projectId, search: q })
+      expect(hit.map((b) => b.bugId)).toEqual([b1.bugId])
+    }
+  })
+
+  it('AC2 offset/limit 切片（服务端排序后）；越界 = 空集', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const ids: string[] = []
+    for (let i = 0; i < 5; i++) {
+      const b = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: `bug-${i}` })
+      ids.push(b.bugId)
+      h.wsDb.prepare('UPDATE bugs SET created_at = ? WHERE id = ?').run(`2026-01-0${i + 1}T00:00:00.000Z`, b.bugId)
+    }
+    const newestFirst = [...ids].reverse() // created 降序
+    expect((await s.listBugs({ projectId: h.projectId, sort: 'created', limit: 2 })).map((b) => b.bugId))
+      .toEqual(newestFirst.slice(0, 2))
+    expect((await s.listBugs({ projectId: h.projectId, sort: 'created', offset: 2, limit: 2 })).map((b) => b.bugId))
+      .toEqual(newestFirst.slice(2, 4))
+    expect((await s.listBugs({ projectId: h.projectId, sort: 'created', offset: 4, limit: 10 })).map((b) => b.bugId))
+      .toEqual([newestFirst[4]])
+    expect(await s.listBugs({ projectId: h.projectId, sort: 'created', offset: 9 })).toEqual([])
+    expect((await s.listBugs({ projectId: h.projectId })).length).toBe(5) // 缺省全量
+  })
+})
+
 describe('commitFiles/fileDiff：fixed 证据变更内容读面（git show 只读；fail-soft 空集/空串）', () => {
   let h: SmallDomainHarness | undefined
   afterEach(() => h?.dispose())

@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 2
+export const FORGE_DB_SCHEMA_VERSION = 3
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -231,6 +231,19 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
       {
         sql: `ALTER TABLE bugs ADD COLUMN fix_approach TEXT`,
         columnGuard: { table: 'bugs', column: 'fix_approach' },
+      },
+    ],
+  },
+  {
+    // v3（bug-recurrence-chain）：守卫式 ALTER TABLE bugs ADD COLUMN recurrence_of TEXT——
+    // 复发链前驱指针（本条登记时链上时间最近一条的 bug_id；可空 = 链根，悬空引用由域服务
+    // 校验拒写，不落 FK 约束）。v2 谱系先例同构：列已在场跳过，既有扁平台账行无损读写，
+    // 三谱系终态一致（migrations.lineage.test.ts 夹具回归锁死）。
+    version: 3,
+    statements: [
+      {
+        sql: `ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`,
+        columnGuard: { table: 'bugs', column: 'recurrence_of' },
       },
     ],
   },

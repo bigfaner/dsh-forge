@@ -81,6 +81,9 @@ const BUGS_V2_SQL = [
   `ALTER TABLE bugs ADD COLUMN fix_approach TEXT`,
 ]
 
+/** v3（bug-recurrence-chain）：守卫式 ALTER bugs ADD COLUMN recurrence_of（v2 谱系先例同构） */
+const BUGS_V3_SQL = [`ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`]
+
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
   s
@@ -119,7 +122,12 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
   })
 
   it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段）', () => {
-    const expected = [...blueprintStatements(), ...BUGS_DDL.map(norm), ...BUGS_V2_SQL.map(norm)]
+    const expected = [
+      ...blueprintStatements(),
+      ...BUGS_DDL.map(norm),
+      ...BUGS_V2_SQL.map(norm),
+      ...BUGS_V3_SQL.map(norm),
+    ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
   })
@@ -186,7 +194,18 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(2)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(3)
+  })
+
+  it('v3：守卫式 ALTER bugs ADD COLUMN recurrence_of（可空前驱指针——既有扁平台账行无损）', () => {
+    const v3 = WORKSPACE_MIGRATIONS.find((m) => m.version === 3)
+    expect(v3?.statements.map(stmtText)).toEqual(BUGS_V3_SQL.map(norm))
+    const stmts = v3!.statements
+    expect(stmts).toHaveLength(1)
+    expect(stmts[0]).toEqual({
+      sql: `ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`,
+      columnGuard: { table: 'bugs', column: 'recurrence_of' },
+    })
   })
 
   it('v2 收敛式：CREATE IF NOT EXISTS bugs（21 列含 fix_approach 内联）+ CREATE INDEX IF NOT EXISTS + 守卫式 ALTER 补列', () => {

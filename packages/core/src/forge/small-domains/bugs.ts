@@ -16,16 +16,24 @@
 // summary ≤50 字超长拒写（ERR_BUG_SUMMARY_TOO_LONG——校验先于写）；fixed 必带
 // commit_hash（ERR_COMMIT_HASH_REQUIRED——并发安全：agent 原子提交后立即捕获，工具不自取
 // HEAD）；unresolved 必带因（ERR_REASON_REQUIRED 复用——resolveBug 空 reason 同语义）。
-// bugId 未命中 ERR_BUG_NOT_FOUND（404）。写动词闭包尾部 emitTasksChanged(projectId)
-// （四域 emit 模式——子 tab 刷新依赖；事务提交后发射）。一切 SQL prepared statements。
+// bugId 未命中 ERR_BUG_NOT_FOUND（404）。复发链（proposal「落库模型」节为契约）：registerBug
+// 可带 recurrenceOf 前驱指针（登记时一次写入；悬空引用 ERR_BUG_RECURRENCE_DANGLING 拒写；
+// 链根缺省）；getBug 按前驱指针反向回溯全链（BugChainContext 时间正序，孤条 chain 缺席）。
+// listBugs 六字段 search + offset/limit 分页（排序后切片）。写动词闭包尾部
+// emitTasksChanged(projectId)（四域 emit 模式——子 tab 刷新依赖；事务提交后发射）。
+// 一切 SQL prepared statements。
 import { randomUUID } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
 import type {
   BugCard,
+  BugChainContext,
   BugCommitFile,
   BugCommitFilesQuery,
   BugFileDiffQuery,
+  BugRecurrenceDanglingData,
   BugStatus,
+  GetBugQuery,
+  GetBugResponse,
   ListBugsQuery,
 } from '@dsh-forge/contracts'
 import { BUG_STATUS_LABELS } from '@dsh-forge/contracts'
@@ -221,6 +229,18 @@ export class CommitHashRequiredError extends Error {
   }
 }
 
+/** ERR_BUG_RECURRENCE_DANGLING：registerBug recurrenceOf 指向不存在的 bug_id（拒写零副作用） */
+export class BugRecurrenceDanglingError extends Error {
+  readonly code = 'ERR_BUG_RECURRENCE_DANGLING' as const
+  readonly data: BugRecurrenceDanglingData
+
+  constructor(data: BugRecurrenceDanglingData) {
+    super(`recurrenceOf 悬空引用拒绝：${data.recurrenceOf} 不存在（挂链零副作用）`)
+    this.name = 'BugRecurrenceDanglingError'
+    this.data = data
+  }
+}
+
 // ── 服务面 ──
 
 /** summary 字数上限（字 = Unicode 码点——全角汉字一字一计） */
@@ -258,14 +278,15 @@ interface BugStorageRow {
   fix_session_id: string | null
   reporter: string
   fixer: string | null
+  recurrence_of: string | null
   created_at: string
   updated_at: string
 }
 
 const SELECT_BUG =
   `SELECT id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type, bug_status,
-          commit_hash, worktree, branch, unresolved_reason, fix_approach, source_task_id, report_session_id,
-          fix_session_id, reporter, fixer, created_at, updated_at
+           commit_hash, worktree, branch, unresolved_reason, fix_approach, source_task_id, report_session_id,
+           fix_session_id, reporter, fixer, recurrence_of, created_at, updated_at
    FROM bugs`
 
 /** bugs 行 → BugCard DTO。NULL 列条件展开 = 键缺席（tool 返回面 lossless JSON 合规——
@@ -291,6 +312,7 @@ function toBugCard(row: BugStorageRow): BugCard {
     ...(row.fix_session_id !== null ? { fixSessionId: row.fix_session_id } : {}),
     reporter: row.reporter,
     ...(row.fixer !== null ? { fixer: row.fixer } : {}),
+    ...(row.recurrence_of !== null ? { recurrenceOf: row.recurrence_of } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -308,6 +330,8 @@ export interface RegisterBugInput {
   readonly errorType?: string
   readonly sourceTaskId?: string
   readonly reportSessionId?: string
+  /** 复发链前驱指针：本条登记时链上时间最近一条 bug_id（链根缺省；悬空引用拒写；登记时一次写入） */
+  readonly recurrenceOf?: string
 }
 
 /** resolveBug 入参（outcome 两终态择一；fixed 必带 commit_hash / unresolved 必带因） */
@@ -324,10 +348,17 @@ export interface ResolveBugInput {
   readonly fixSessionId?: string
 }
 
-/** bug 卡 search 键集（summary 主行 + error_type + 状态中英标签——searchPlaceholder 同构） */
+/**
+ * bug 卡 search 键集（六字段任一命中——summary / bugDesc / triggerDesc / expected / actual /
+ * errorType；另携状态中英标签——列表标签命中同构）。
+ */
 export function bugSearchKeys(card: BugCard): readonly string[] {
   return [
     card.summary,
+    card.bugDesc,
+    card.triggerDesc,
+    card.expected,
+    card.actual,
     ...(card.errorType !== undefined ? [card.errorType] : []),
     BUG_STATUS_LABELS[card.bugStatus].zh,
     BUG_STATUS_LABELS[card.bugStatus].en,
@@ -347,13 +378,21 @@ export function createBugsService(deps: BugsServiceDeps) {
       const db = deps.store.ensureOpen(input.projectId)
       const cwd = deps.resolveWsPath(input.projectId)
       const reporter = await resolveGitIdentity(execFile, cwd)
+      const recurrenceOf = input.recurrenceOf?.trim() || undefined
+      if (recurrenceOf !== undefined) {
+        // 悬空引用拒写（校验先于写——bugs 无删除动词，事务外预检无 TOCTOU 窗口）
+        const prior = db.prepare<unknown[], { id: string }>('SELECT id FROM bugs WHERE id = ?').get(recurrenceOf)
+        if (prior === undefined) {
+          throw new BugRecurrenceDanglingError({ recurrenceOf })
+        }
+      }
       const bugId = randomUUID()
       const now = new Date().toISOString()
       withTransaction(db, () => {
         db.prepare(
           `INSERT INTO bugs (id, summary, bug_desc, trigger_desc, expected, actual, suspected, error_type,
-                             bug_status, source_task_id, report_session_id, reporter, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+                             bug_status, source_task_id, report_session_id, recurrence_of, reporter, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         ).run(
           bugId,
           summary,
@@ -365,6 +404,7 @@ export function createBugsService(deps: BugsServiceDeps) {
           input.errorType ?? null,
           input.sourceTaskId ?? null,
           input.reportSessionId ?? null,
+          recurrenceOf ?? null,
           reporter,
           now,
           now,
@@ -474,7 +514,53 @@ export function createBugsService(deps: BugsServiceDeps) {
         isTerminal: (c) => c.bugStatus !== 'open', // fixed|unresolved 均终态——open 活跃优先
         createdAt: (c) => c.createdAt,
         id: (c) => c.bugId,
-      })
+      }).slice(Math.max(q.offset ?? 0, 0), q.limit === undefined ? undefined : Math.max(q.offset ?? 0, 0) + q.limit)
+    },
+
+    /**
+     * 单条全卡读法（主 + worker 面）：BugCard 全量 + 链上下文——沿前驱指针反向回溯至链根，
+     * 再沿引用正向收齐后继，entries 时间正序（链根在前）；孤条（无前驱无后继）chain 缺席
+     * （单条 bug 弹框语言不变）。
+     */
+    async getBug(q: GetBugQuery): Promise<GetBugResponse> {
+      const db = deps.store.ensureOpen(q.projectId)
+      const rows = db.prepare<unknown[], BugStorageRow>(`${SELECT_BUG}`).all() as BugStorageRow[]
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const current = byId.get(q.bugId)
+      if (current === undefined) {
+        throw new BugNotFoundError({ projectId: q.projectId, bugId: q.bugId })
+      }
+      const chainIds: string[] = []
+      for (let cursor: BugStorageRow | undefined = current; cursor !== undefined; ) {
+        chainIds.unshift(cursor.id) // 反向回溯——链根推到队首
+        cursor = cursor.recurrence_of !== null ? byId.get(cursor.recurrence_of) : undefined
+      }
+      const childrenByParent = new Map<string, string[]>()
+      for (const r of rows) {
+        if (r.recurrence_of === null) continue
+        const bucket = childrenByParent.get(r.recurrence_of) ?? []
+        bucket.push(r.id)
+        childrenByParent.set(r.recurrence_of, bucket)
+      }
+      for (let frontier = childrenByParent.get(chainIds[chainIds.length - 1]!) ?? []; frontier.length > 0; ) {
+        chainIds.push(...frontier)
+        frontier = frontier.flatMap((id) => childrenByParent.get(id) ?? [])
+      }
+      const unique = [...new Set(chainIds)]
+      if (unique.length <= 1) {
+        return { card: toBugCard(current) } // 孤条不入投影
+      }
+      const entries = unique
+        .map((id) => byId.get(id)!)
+        .sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1))
+        .map(toBugCard)
+      const chain: BugChainContext = {
+        entries,
+        currentIndex: unique.indexOf(q.bugId),
+        length: entries.length,
+        rootBugId: unique[0]!,
+      }
+      return { card: toBugCard(current), chain }
     },
 
     /** commit 变更文件清单（fixed 证据读面——git show --name-status；主仓 cwd 跨 worktree
