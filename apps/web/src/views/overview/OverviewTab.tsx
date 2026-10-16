@@ -48,7 +48,7 @@ import { phaseCounts } from './feature-tab/PhaseChips.js'
 import { OverviewHead } from './ov-head.js'
 import { StickyBar } from './sticky-bar.js'
 import { StatusChips } from './status-chips.js'
-import { BugList } from './bug-tab/bug-list.js'
+import { BugList, bugChainGroups } from './bug-tab/bug-list.js'
 import { BugDialog } from './bug-tab/index.js'
 import { ProposalsTab } from './proposal-tab.js'
 import { FeaturesTab } from './feature-tab.js'
@@ -409,10 +409,15 @@ export interface OverviewBugDialogMountProps {
 export function OverviewBugDialogMount({ list, openBugId, onClose, onOpenSession, sessionTitleOf, projectId, makeClient }: OverviewBugDialogMountProps): ReactNode {
   const bug = openBugCardOf(list, openBugId)
   if (bug === undefined) return null
+  // 链注入（bug-recurrence-chain——bugs 行集链投影递达弹框；孤条 = chain 缺席零链区）
+  const { chains, memberRootOf } = bugChainGroups(list !== undefined && list.kind === 'bugs' ? list.bugs : [])
+  const rootBugId = memberRootOf.get(bug.bugId)
+  const chain = rootBugId !== undefined ? chains.get(rootBugId) : undefined
   return (
     <BugDialog
       bug={bug}
       onClose={onClose}
+      {...(chain !== undefined ? { chain } : {})}
       {...(onOpenSession !== undefined ? { onOpenSession } : {})}
       {...(sessionTitleOf !== undefined ? { sessionTitleOf } : {})}
       {...(projectId !== undefined ? { projectId } : {})}

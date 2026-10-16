@@ -1,7 +1,11 @@
 // bug-dialog 单测（fix-bug Bug 详情弹框）—— 结构线框（状态行/summary/五字段 kv/证据区/
 // 未修原因/人员/来源）+ 证据区·未修原因显隐 + 会话 pill 两态（命中 title 可点击 / 缺席
-// fail-soft 回退 sessionId 不可点击）+ 拖移钳制纯函数复用（drawer/collapse 同刻度）。
+// fail-soft 回退 sessionId 不可点击）+ 拖移钳制纯函数复用（drawer/collapse 同刻度）
+// + 链时间线区（bug-recurrence-chain 1.7——mockup ②区逐位对照：题头/垂直轨道/定位词/
+// 当前条高亮「本条」/recurrenceOf→前一条标注/同框切换锚/末节点无轨）。
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error —— web tsconfig types 仅 vite/client；node:fs 仅测试内读取样式表源文
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { BugCard, BugStatus } from '@dsh-forge/contracts'
 import { DRAWER_DRAG_MARGIN, DRAWER_DRAG_TOP_FLOOR, drawerPositionFromDrag } from '../drawer/collapse.js'
@@ -203,5 +207,104 @@ describe('BugDialog（拖移钳制——drawerPositionFromDrag 同刻度复用�
     const markup = markupOf(bug('open'))
     expect(markup).toContain('role="dialog"')
     expect(markup).toContain('data-dswf-ov-bdialog-head')
+  })
+})
+
+describe('BugDialog 链时间线（bug-recurrence-chain 1.7——mockup ②区逐位对照）', () => {
+  const rootCard = bug('fixed', {
+    bugId: 'b-root',
+    summary: 'worker spawn 失败计数误增',
+    createdAt: '2026-10-08T10:00:00.000Z',
+    commitHash: 'c0a1e93abcdef',
+    fixApproach: 'spawn 失败守卫改 3 连败停机\n后续审计行',
+  })
+  const r1Card = bug('fixed', {
+    bugId: 'b-r1',
+    recurrenceOf: 'b-root',
+    summary: 'job_output 抽干竞态',
+    createdAt: '2026-10-12T10:00:00.000Z',
+    commitHash: 'c0b2f1aabcdef',
+    fixApproach: '结算序号守卫旧拍不落点',
+  })
+  const r2Card = bug('open', {
+    bugId: 'b-r2',
+    recurrenceOf: 'b-r1',
+    summary: '结算抽取后再挂起',
+    createdAt: '2026-10-15T14:02:00.000Z',
+  })
+  const CHAIN = [rootCard, r1Card, r2Card]
+
+  function chainMarkupOf(card: BugCard): string {
+    return renderToStaticMarkup(<BugDialog bug={card} onClose={() => {}} chain={CHAIN} />)
+  }
+
+  it('单条 bug 零链区——既有表单行/880 宽零变化（现状语言不变）', () => {
+    const markup = markupOf(bug('open'))
+    expect(markup).not.toContain('data-dswf-ov-bdialog-chain')
+    expect(markup).not.toContain('复发链')
+    expect(markup).toContain('data-dswf-ov-bdialog-kv="bug"') // 五字段表单行原样
+    expect(markup).toContain('width:880px')
+  })
+
+  it('链区位于摘要行下：题头「复发链（3 条 · 沿 recurrenceOf 回溯）」+ 垂直时间线（链根在上）', () => {
+    const markup = chainMarkupOf(r2Card)
+    expect(markup).toContain('复发链（3 条 · 沿 recurrenceOf 回溯）')
+    expect(markup).toContain('data-dswf-ov-bdialog-chain')
+    // 三节点 + 时间正序（链根在前）
+    expect(markup).toContain('data-dswf-ov-bdialog-chain-node="b-root"')
+    expect(markup).toContain('data-dswf-ov-bdialog-chain-node="b-r1"')
+    expect(markup).toContain('data-dswf-ov-bdialog-chain-node="b-r2"')
+    expect(markup.indexOf('data-dswf-ov-bdialog-chain-node="b-root"')).toBeLessThan(markup.indexOf('data-dswf-ov-bdialog-chain-node="b-r1"'))
+    expect(markup.indexOf('data-dswf-ov-bdialog-chain-node="b-r1"')).toBeLessThan(markup.indexOf('data-dswf-ov-bdialog-chain-node="b-r2"'))
+  })
+
+  it('节点 = 状态点 + summary（定位词前缀）+ 状态 Tag + 日期 + commit 短哈希 + fixApproach 首行', () => {
+    const markup = chainMarkupOf(r2Card)
+    expect(markup).toContain('链根 · worker spawn 失败计数误增')
+    expect(markup).toContain('复发① · job_output 抽干竞态')
+    expect(markup).toContain('复发② · 结算抽取后再挂起')
+    expect(markup).toContain('已修复')
+    expect(markup).toContain('待修复')
+    expect(markup).toContain('10-08 10:00')
+    expect(markup).toContain('10-12 10:00')
+    expect(markup).toContain('10-15 14:02')
+    expect(markup).toContain('c0a1e93') // 7 位短哈希
+    expect(markup).toContain('c0b2f1a')
+    expect(markup).toContain('修法：spawn 失败守卫改 3 连败停机') // 首行（第二行不呈现）
+    expect(markup).not.toContain('后续审计行')
+    expect(markup).toContain('修法：结算序号守卫旧拍不落点')
+  })
+
+  it('当前条 = 打开条：底色高亮（is-cur）+「本条」标记 + recurrenceOf → 前一条定位词标注', () => {
+    const markup = chainMarkupOf(r2Card)
+    expect(markup).toContain('data-dswf-ov-bdialog-node-cur')
+    expect(markup).toContain('is-cur')
+    expect(markup).toContain('本条')
+    expect(markup).toContain('recurrenceOf → 复发①')
+    // 非当前条无「本条」/无 recurrenceOf 标注（仅一处分段安全断言：链根节点段内无）
+    const rootAt = markup.indexOf('data-dswf-ov-bdialog-chain-node="b-root"')
+    const rootSeg = markup.slice(rootAt, markup.indexOf('data-dswf-ov-bdialog-chain-node="b-r1"'))
+    expect(rootSeg).not.toContain('本条')
+  })
+
+  it('同框切换：点其他节点切该条全卡（当前条随打开条重算——summary 行/kv 全量换卡）', () => {
+    // 静态面：换打开条重渲染 = 链区当前条重算 + 全卡字段随该条（点击锚 role=button 键盘可达）
+    const r1Markup = chainMarkupOf(r1Card)
+    expect(r1Markup).toContain('data-dswf-ov-bdialog-node-cur="b-r1"')
+    const markup = r1Markup
+    expect(markup).toContain('job_output 抽干竞态')
+    expect(markup).toContain('recurrenceOf → 链根') // 当前条前一条 = 链根
+    const rootMarkup = chainMarkupOf(rootCard)
+    expect(rootMarkup).toContain('data-dswf-ov-bdialog-node-cur="b-root"')
+    expect(rootMarkup).not.toContain('recurrenceOf →') // 链根无前驱标注
+    // 节点可点锚（同框切换交互词汇 = 行点击同款 role=button）
+    expect(markup).toContain('data-dswf-ov-bdialog-chain-node="b-root" role="button"')
+  })
+
+  it('末节点无轨（css：rail ::after 末节点 display:none）+ 节点间 2px 竖轨', () => {
+    const css = readFileSync(new URL('./bug-dialog.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.dswf-ov-bdialog-rail::after\s*\{[^}]*width:\s*2px/)
+    expect(css).toMatch(/\.dswf-ov-bdialog-chain-node:last-child \.dswf-ov-bdialog-rail::after\s*\{[^}]*display:\s*none/)
+    expect(css).toMatch(/\.dswf-ov-bdialog-chain-node\.is-cur \.dswf-ov-bdialog-nodebody\s*\{[^}]*background:\s*var\(/)
   })
 })

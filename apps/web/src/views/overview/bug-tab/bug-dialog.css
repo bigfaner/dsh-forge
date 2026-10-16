@@ -1,13 +1,12 @@
-/* Bug 详情弹框样式（fix-bug——真 dialog 自持皮：双列表单 + 纵向滚动 + 可拖动；不借
- * drawer 视觉类）。视觉一律官方令牌（drawer.css 同纪律——色/字/距/圆角零裸值，lint-tokens
- * 机械面）；布局尺寸 = 结构刻度豁免先例（宽 880 = 440 任务弹窗两倍——2026-10-14 用户
- * 裁决「宽度放大一倍，减少换行」；label 列 88px 容四字中文标签；body 最大高 80vh）。 */
+﻿/* Bug 璇︽儏寮规鏍峰紡锛坒ix-bug鈥斺€旂湡 dialog 鑷寔鐨細鍙屽垪琛ㄥ崟 + 绾靛悜婊氬姩 + 鍙嫋鍔紱涓嶅€? * drawer 瑙嗚绫伙級銆傝瑙変竴寰嬪畼鏂逛护鐗岋紙drawer.css 鍚岀邯寰嬧€斺€旇壊/瀛?璺?鍦嗚闆惰８鍊硷紝lint-tokens
+ * 鏈烘闈級锛涘竷灞€灏哄 = 缁撴瀯鍒诲害璞佸厤鍏堜緥锛堝 880 = 440 浠诲姟寮圭獥涓ゅ€嶁€斺€?026-10-14 鐢ㄦ埛
+ * 瑁佸喅銆屽搴︽斁澶т竴鍊嶏紝鍑忓皯鎹㈣銆嶏紱label 鍒?88px 瀹瑰洓瀛椾腑鏂囨爣绛撅紱body 鏈€澶ч珮 80vh锛夈€?*/
 
-/* ── 弹框壳：可拖动浮窗（宽/左/上经 style 注入；逐开本地态——关闭即弃回默认起始位） ──
- * 起始位缺省（style 未注入前）= CSS 居中兜底（水平居中 + 14vh）。 */
+/* 鈹€鈹€ 寮规澹筹細鍙嫋鍔ㄦ诞绐楋紙瀹?宸?涓婄粡 style 娉ㄥ叆锛涢€愬紑鏈湴鎬佲€斺€斿叧闂嵆寮冨洖榛樿璧峰浣嶏級 鈹€鈹€
+ * 璧峰浣嶇己鐪侊紙style 鏈敞鍏ュ墠锛? CSS 灞呬腑鍏滃簳锛堟按骞冲眳涓?+ 14vh锛夈€?*/
 .dswf-ov-bdialog {
   position: fixed;
-  left: 50%; /* 起始位缺省（效应注入 inline left/top 前的居中兜底——任务弹窗同刻度） */
+  left: 50%; /* 璧峰浣嶇己鐪侊紙鏁堝簲娉ㄥ叆 inline left/top 鍓嶇殑灞呬腑鍏滃簳鈥斺€斾换鍔″脊绐楀悓鍒诲害锛?*/
   top: 14vh;
   transform: translateX(-50%);
   z-index: var(--dsh-dockkit-float-layer, 60);
@@ -15,9 +14,9 @@
   flex-direction: column;
   box-sizing: border-box;
   overflow: hidden;
-  width: 880px; /* 结构刻度：440 任务弹窗两倍（长文本少换行——用户裁决） */
-  max-width: 92vw; /* 窄屏防越（任务弹窗同口径） */
-  max-height: 80vh; /* 纵向滚动上限——内容多不溢出视口 */
+  width: 880px; /* 缁撴瀯鍒诲害锛?40 浠诲姟寮圭獥涓ゅ€嶏紙闀挎枃鏈皯鎹㈣鈥斺€旂敤鎴疯鍐筹級 */
+  max-width: 92vw; /* 绐勫睆闃茶秺锛堜换鍔″脊绐楀悓鍙ｅ緞锛?*/
+  max-height: 80vh; /* 绾靛悜婊氬姩涓婇檺鈥斺€斿唴瀹瑰涓嶆孩鍑鸿鍙?*/
   pointer-events: auto;
   background: var(--dsw-alias-bg-base);
   border: 1px solid var(--dsw-alias-border-l2);
@@ -26,13 +25,12 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
-/* ── 标题栏：全窗拖移手柄（cursor move；按钮命中不劫持——组件面守卫；高度/配色沿
- * 任务弹窗标题栏同刻度——应用整体一致） ── */
+/* 鈹€鈹€ 鏍囬鏍忥細鍏ㄧ獥鎷栫Щ鎵嬫焺锛坈ursor move锛涙寜閽懡涓笉鍔寔鈥斺€旂粍浠堕潰瀹堝崼锛涢珮搴?閰嶈壊娌? * 浠诲姟寮圭獥鏍囬鏍忓悓鍒诲害鈥斺€斿簲鐢ㄦ暣浣撲竴鑷达級 鈹€鈹€ */
 .dswf-ov-bdialog-head {
   display: flex;
   align-items: center;
   gap: var(--dsw-font-xs-13-line-height);
-  min-height: 30px; /* 任务弹窗标题栏收紧刻度（D43 同值） */
+  min-height: 30px; /* 浠诲姟寮圭獥鏍囬鏍忔敹绱у埢搴︼紙D43 鍚屽€硷級 */
   padding-inline: var(--dsw-font-xs-13-line-height);
   border-bottom: 1px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-interactive-bg-hover);
@@ -45,7 +43,7 @@
   flex: 1;
 }
 
-/* ── 表单体：纵向滚动主区（唯一滚动面——内容多不出壳）；行距 = 整行高令牌（段落间隔加大——用户裁决） ── */
+/* 鈹€鈹€ 琛ㄥ崟浣擄細绾靛悜婊氬姩涓诲尯锛堝敮涓€婊氬姩闈⑩€斺€斿唴瀹瑰涓嶅嚭澹筹級锛涜璺?= 鏁磋楂樹护鐗岋紙娈佃惤闂撮殧鍔犲ぇ鈥斺€旂敤鎴疯鍐筹級 鈹€鈹€ */
 .dswf-ov-bdialog-body {
   flex: 1;
   min-height: 0;
@@ -56,7 +54,7 @@
   padding: var(--dsw-font-s-14-line-height);
 }
 
-/* ── 摘要行：无 label 独立行左对齐 + 状态·错误类型 chips 右靠（提案行头同构） ── */
+/* 鈹€鈹€ 鎽樿琛岋細鏃?label 鐙珛琛屽乏瀵归綈 + 鐘舵€伮烽敊璇被鍨?chips 鍙抽潬锛堟彁妗堣澶村悓鏋勶級 鈹€鈹€ */
 .dswf-ov-bdialog-summaryline {
   display: flex;
   align-items: center;
@@ -79,17 +77,17 @@
   flex: none;
 }
 
-/* ── 双列表单行：label 定宽列（容四字中文标签） + value 弹性列（只断长 token——少换行） ── */
+/* 鈹€鈹€ 鍙屽垪琛ㄥ崟琛岋細label 瀹氬鍒楋紙瀹瑰洓瀛椾腑鏂囨爣绛撅級 + value 寮规€у垪锛堝彧鏂暱 token鈥斺€斿皯鎹㈣锛?鈹€鈹€ */
 .dswf-ov-bdialog-row {
   display: flex;
   align-items: baseline;
   gap: var(--dsw-font-xs-13-line-height);
-  padding: 2px 0; /* dsw-raw 原型行距刻度（任务弹窗 brow 同值） */
+  padding: 2px 0; /* dsw-raw 鍘熷瀷琛岃窛鍒诲害锛堜换鍔″脊绐?brow 鍚屽€硷級 */
   min-width: 0;
 }
 
 .dswf-ov-bdialog-label {
-  flex: 0 0 88px; /* 结构刻度：四字中文标签列（修复证据/登记时间不折行） */
+  flex: 0 0 88px; /* 缁撴瀯鍒诲害锛氬洓瀛椾腑鏂囨爣绛惧垪锛堜慨澶嶈瘉鎹?鐧昏鏃堕棿涓嶆姌琛岋級 */
   font: var(--dsw-font-xs-strong-13);
   color: var(--dsw-alias-label-tertiary);
 }
@@ -97,18 +95,128 @@
 .dswf-ov-bdialog-value {
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere; /* 长 token（路径/哈希）防溢出，正常文本不折行 */
-  white-space: pre-line; /* 保留生成侧换行——fix-bug 字段内的步骤列表/分列原样呈现 */
+  overflow-wrap: anywhere; /* 闀?token锛堣矾寰?鍝堝笇锛夐槻婧㈠嚭锛屾甯告枃鏈笉鎶樿 */
+  white-space: pre-line; /* 淇濈暀鐢熸垚渚ф崲琛屸€斺€攆ix-bug 瀛楁鍐呯殑姝ラ鍒楄〃/鍒嗗垪鍘熸牱鍛堢幇 */
   font: var(--dsw-font-xs-13);
   color: var(--dsw-alias-label-secondary);
 }
 
-/* 行内多值（发现/修复 = 人员 + 会话 pill） */
+/* 琛屽唴澶氬€硷紙鍙戠幇/淇 = 浜哄憳 + 浼氳瘽 pill锛?*/
 .dswf-ov-bdialog-value > * + * {
   margin-left: var(--dsw-font-xs-13-line-height);
 }
 
-/* 会话跳转链接（命中 title = 可点击；令牌 link 色同应用链接语言） */
+/* 鈹€鈹€ 閾炬椂闂寸嚎鍖猴紙bug-recurrence-chain鈥斺€攎ockup 鈶″尯閫愪綅瀵圭収锛夛細鎽樿琛屼笅娴呭簳鍦嗚鍧楋紱
+ *  鍨傜洿杞ㄩ亾 = 鑺傜偣 rail ::after 2px 绔栫嚎锛堟湯鑺傜偣鏃犺建锛夛紱褰撳墠鏉?is-cur 搴曡壊楂樹寒銆?鈹€鈹€ */
+.dswf-ov-bdialog-chain {
+  padding: var(--dsw-font-xs-13-line-height);
+  background: var(--dsw-alias-interactive-bg-hover);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-chain-title {
+  margin-bottom: var(--dsw-font-xs-13-line-height);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-ov-bdialog-tl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-chain-node {
+  display: flex;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+  padding-bottom: var(--dsw-font-xs-13-line-height);
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-ov-bdialog-chain-node:last-child {
+  padding-bottom: 0;
+}
+
+.dswf-ov-bdialog-chain-node:focus-visible {
+  outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+}
+
+.dswf-ov-bdialog-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+}
+
+.dswf-ov-bdialog-rail::after {
+  content: '';
+  width: 2px;
+  flex: 1;
+  margin-top: 3px; /* dsw-raw：状态点→竖轨对齐刻度（mockup ②区） */
+  background: var(--dsw-alias-border-l2);
+}
+
+.dswf-ov-bdialog-chain-node:last-child .dswf-ov-bdialog-rail::after {
+  display: none;
+}
+
+.dswf-ov-bdialog-nodebody {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--dsw-radius-md);
+}
+
+.dswf-ov-bdialog-chain-node.is-cur .dswf-ov-bdialog-nodebody {
+  margin: -4px -8px; /* dsw-raw：高亮块负缩进贴节点（mockup ②区刻度） */
+  padding: 4px 8px; /* dsw-raw：高亮块内衬刻度（mockup ②区） */
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dswf-ov-bdialog-noderow {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xs-13-line-height);
+  min-width: 0;
+}
+
+.dswf-ov-bdialog-nodesum {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-bdialog-chain-node.is-cur .dswf-ov-bdialog-nodesum {
+  font: var(--dsw-font-xs-strong-13);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dswf-ov-bdialog-nodekind {
+  flex: none;
+  padding: 0 4px; /* dsw-raw：「本条」小徽标刻度（mockup ②区） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-link);
+}
+
+.dswf-ov-bdialog-nodemeta {
+  display: block;
+  margin-top: 1px; /* dsw-raw：meta 行贴 summary 刻度（mockup ②区） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 浼氳瘽璺宠浆閾炬帴锛堝懡涓?title = 鍙偣鍑伙紱浠ょ墝 link 鑹插悓搴旂敤閾炬帴璇█锛?*/
 .dswf-ov-bdialog-sesslink {
   padding: 0;
   border: none;
@@ -120,7 +228,7 @@
   text-align: start;
 }
 
-/* ── 变更文件区（fixed 证据——展开清单 + 点文件看 diff；dsw ChatView「已编辑 N 个文件」同语言） ── */
+/* 鈹€鈹€ 鍙樻洿鏂囦欢鍖猴紙fixed 璇佹嵁鈥斺€斿睍寮€娓呭崟 + 鐐规枃浠剁湅 diff锛沝sw ChatView銆屽凡缂栬緫 N 涓枃浠躲€嶅悓璇█锛?鈹€鈹€ */
 .dswf-ov-bdialog-fileswrap {
   display: flex;
   flex-direction: column;
@@ -145,7 +253,7 @@
 .dswf-ov-bdialog-diff {
   margin: 0;
   padding: var(--dsw-font-xs-13-line-height);
-  max-height: 40vh; /* 结构刻度：长 diff 滚动呈现（不撑爆弹框） */
+  max-height: 40vh; /* 缁撴瀯鍒诲害锛氶暱 diff 婊氬姩鍛堢幇锛堜笉鎾戠垎寮规锛?*/
   overflow: auto;
   background: var(--dsw-alias-interactive-bg-hover);
   border: 1px solid var(--dsw-alias-border-l2);
