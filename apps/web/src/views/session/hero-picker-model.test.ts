@@ -2,7 +2,13 @@
 // workspaceId↔project 映射 / archived 排除 / 空集（添加唯一入口 + 直达判据）。
 import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
-import { heroPickerPlan, selectedProjectOf, selectedProjectRootOf } from './hero-picker-model.js'
+import {
+  heroPickerPlan,
+  selectedProjectOf,
+  selectedProjectRootOf,
+  worktreeFaceUnavailableNotice,
+  worktreeOrchestrationNotice,
+} from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
   id: o.id,
@@ -91,5 +97,26 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
   it('全归档/空集 → null（chip 零注入退回现状）', () => {
     expect(selectedProjectRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })], undefined)).toBeNull()
     expect(selectedProjectRootOf([], 'w-1')).toBeNull()
+  })
+})
+
+// 1.25（bug af65c0a9）双静默路显式化——文案纯函数单源。
+describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
+  it('注入面缺席 → 明示「编排面不可用」（旧插件面/装配降级，不静默 no-op）', () => {
+    const text = worktreeFaceUnavailableNotice()
+    expect(text).toContain('编排面不可用')
+    expect(text).toContain('插件版本陈旧')
+  })
+
+  it('编排失败文案带环节语义：sessionCreate 失败 → 「创建挂靠会话」+ 原因', () => {
+    const text = worktreeOrchestrationNotice('create', 'repo not found')
+    expect(text).toContain('创建挂靠会话')
+    expect(text).toContain('repo not found')
+  })
+
+  it('编排失败文案带环节语义：openSession 失败 → 「打开会话」+ 原因', () => {
+    const text = worktreeOrchestrationNotice('open', 'session unloaded')
+    expect(text).toContain('打开会话')
+    expect(text).toContain('session unloaded')
   })
 })

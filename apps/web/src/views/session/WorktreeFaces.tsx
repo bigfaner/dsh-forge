@@ -81,7 +81,8 @@ export function anchorDefaultWorktreePath(
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
  * 选中态在本面闭环（bug 907225f2——根因：装配面未持/未传 selectedPath，chip 恒占位）：
- * onSelect 包装先落本地态+选中记忆再上行编排，Menu selectedId 与 chip 回填同源。
+ * onSelect 包装在上行编排成功后回填本地态+选中记忆（1.25 起失败不回填），Menu selectedId
+ * 与 chip 回填同源。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
@@ -92,8 +93,9 @@ export function ForgeHeroWorktreeMount({
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
   readonly selectedPath?: string | undefined
-  /** 挂靠确认动作（选择控件确认时——父面承接建会话/attach/openSession 编排） */
-  readonly onSelect: (path: string) => void
+  /** 挂靠确认动作（选择控件确认时——父面承接建会话/attach/openSession 编排；返回
+   * false = 编排失败（错误已由父面 Toast 呈现），本面选中回填不落） */
+  readonly onSelect: (path: string) => void | boolean | Promise<boolean | void>
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -108,12 +110,18 @@ export function ForgeHeroWorktreeMount({
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
     () => (projectRoot !== null ? lastSelectedWorktreePaths.get(projectRoot) : undefined) ?? selectedPath,
   )
-  // 选择确认：先回填（本地态 + 记忆）再上行编排——编排成败不影响回填，重选即覆盖
+  // 选择确认：上行编排成功（outcome 非 false）才回填（本地态 + 记忆）——1.25（bug
+  // af65c0a9）口径：编排失败时回填不落，chip 不产生「已选中」假象；错误呈现由编排面
+  // Toast 承载。旧行为（1.14 确认即回填、成败均回填）由本判定取代；重选即覆盖不变。
   const onSelectConfirmed = useCallback(
     (path: string): void => {
-      if (projectRoot !== null) lastSelectedWorktreePaths.set(projectRoot, path)
-      setLocalSelectedPath(path)
-      onSelect(path)
+      void Promise.resolve(onSelect(path))
+        .then((outcome) => {
+          if (outcome === false) return
+          if (projectRoot !== null) lastSelectedWorktreePaths.set(projectRoot, path)
+          setLocalSelectedPath(path)
+        })
+        .catch(() => {})
     },
     [projectRoot, onSelect],
   )

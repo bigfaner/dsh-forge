@@ -62,3 +62,20 @@ export function selectedProjectRootOf(
   if (byWorkspace !== undefined && byWorkspace.wsPath !== '') return byWorkspace.wsPath
   return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
 }
+
+// ───────────── 1.25（bug af65c0a9）双静默路显式化：提示文案纯函数单源 ─────────────
+
+/** worktree 注入面缺席提示（旧插件面/装配降级——不静默 no-op，官方 Toast 呈现） */
+export function worktreeFaceUnavailableNotice(): string {
+  return 'worktree 编排面不可用（插件版本陈旧？），未能进入所选 worktree'
+}
+
+/**
+ * worktree 挂靠编排失败提示（含环节语义——sessionCreate / openSession 两步；
+ * bug af65c0a9 Root cause: 原 onWorktreeSelect 编排失败 `.catch(() => {})` 静默吞错，
+ * 用户点选后以为已进入 worktree，实际仍在默认主树会话里。
+ */
+export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: string): string {
+  const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
+  return `worktree 挂靠失败（${stageText}）：${cause}，当前会话未切换`
+}

@@ -16,12 +16,18 @@
 // ui-slots single 槽 lowest-renders 语义），其 children 声明持续供养
 // conversation.hero.workspace.directoryFlow 子洞——本影子行不重声明 children（ui-slots
 // register 对已声明子槽重声明即 throw，fix-23 runtime 实证），产品添加径亦不经该子洞。
-import { useCallback, useEffect, type ReactNode } from 'react'
-import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
-import { heroPickerPlan, selectedProjectOf, selectedProjectRootOf } from './hero-picker-model.js'
+import {
+  heroPickerPlan,
+  selectedProjectOf,
+  selectedProjectRootOf,
+  worktreeFaceUnavailableNotice,
+  worktreeOrchestrationNotice,
+} from './hero-picker-model.js'
 import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
@@ -48,7 +54,7 @@ export interface ForgeHeroWorkspacePickerProps {
   /**
    * worktree 挂靠编排缝（fix-2 槽位 inject face——client 插件注册时递达）：选择控件确认时
    * 的「建会话（meta.cwd 注入）→ 挂靠事件唯一写入口 → 官方 openSession」编排。缺席 =
-   * 选择动作 no-op fail-soft（旧插件面/降级装配）。
+   * 官方 Toast 明示「编排面不可用」（1.25——不再静默 no-op；旧插件面/降级装配场景）。
    */
   readonly worktree?: { readonly openSession: (sessionId: string) => void } | undefined
   /** RPC 构造器（测试替身注入；缺省 preload 真身） */
@@ -103,19 +109,42 @@ export function ForgeHeroWorkspacePicker({
   // 挂靠确认编排（选择控件确认时——1.16 预铸采纳单 RPC：host 侧预铸会话 + 挂靠事件
   // seq 0 + controller.create adopt 原子完成，UI 不再二次调 attach 另开写句柄）：
   // 单 RPC 返回 sessionId → 官方 openSession 呈现。
+  // 1.25（bug af65c0a9）双静默路显式化：face 缺席 / 编排任一步失败 → 官方 Toast 呈现
+  // （含环节语义）；会话不切换、向挂载面回 false —— 选中回填不落（不产生「已选中」假象）。
+  const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
   const onWorktreeSelect = useCallback(
     (path: string): void => {
-      if (worktree === undefined) return
-      const rpc = makeRpc()
-      rpc.worktree
-        .sessionCreate({ worktreePath: path })
-        .then(({ sessionId }) => {
-          onClose()
+      void (async (): Promise<boolean> => {
+        if (worktree === undefined) {
+          // 注入面缺席（旧插件面/装配降级）——显式提示，不再静默 no-op（1.25①）
+          setWorktreeNotice((prev) => ({ text: worktreeFaceUnavailableNotice(), seq: (prev?.seq ?? 0) + 1 }))
+          return false
+        }
+        const rpc = makeRpc()
+        let sessionId: string
+        try {
+          ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
+        } catch (error) {
+          setWorktreeNotice((prev) => ({
+            text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
+            seq: (prev?.seq ?? 0) + 1,
+          }))
+          return false
+        }
+        try {
           worktree.openSession(sessionId)
-        })
-        .catch(() => {
-          // 预铸/采纳失败 fail-soft：不外溢不炸 hero（重选即重试）
-        })
+        } catch (error) {
+          setWorktreeNotice((prev) => ({
+            text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
+            seq: (prev?.seq ?? 0) + 1,
+          }))
+          return false
+        }
+        onClose()
+        return true
+      })()
+        // Promise 链自身不外溢：失败口径已由上方 Toast 承载（防御性兜住意外 reject）
+        .catch(() => {})
     },
     [worktree, makeRpc, onClose],
   )
@@ -165,6 +194,15 @@ export function ForgeHeroWorkspacePicker({
         listClassName="dswf-hero-picker-list"
       />
       {workspacesAnchor}
+      {/* 1.25 编排失败/face 缺席提示（官方 Toast——body portal 顶部横幅，失败档长驻 5s） */}
+      {worktreeNotice !== undefined && (
+        <Toast
+          key={worktreeNotice.seq}
+          text={worktreeNotice.text}
+          holdMs={5000}
+          onDone={() => setWorktreeNotice(undefined)}
+        />
+      )}
       {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
           两 chip」构图；非 git / 未选中项目零注入整体退回现状） */}
       <ForgeHeroWorktreeMount
