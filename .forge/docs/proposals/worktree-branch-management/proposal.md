@@ -212,6 +212,8 @@ flowchart TD
 - **数据模型近零变更**：不新增逻辑项目实体/表；worktree 清单运行期从 `git worktree list` 派生，不落库。worktree 目录与文档目录同型可配置——projects 行新增 `worktree_dir` 列（对齐 `forge_dir` 先例）。**取值恒非空**：用户未输入时落库即存默认值（`.forge/worktrees/` 解析后的绝对路径，与 `ws_path` canonical 口径一致）——杜绝未来默认值演进时存量行与实际目录对不上。来源标记 = 路径推断（所配 worktree 目录内 = DSH 创建；自定义路径不标——git 无创建者元数据）。
 - **数据集中**：管线 DB、forge 文档根只存主项目一份；worktree 仅是执行 cwd，资产为项目作用域，worktree 间自动共享，无复制无双写。
 - **一 worktree 一分支**：不在既有 worktree 内切换分支。新建入口文案 = 「新建 worktree…」（只说一个名词）；弹窗三字段自上而下 = 基准分支（业界通用 base branch 语义，默认 main，下拉可选）→ 分支（主输入）→ worktree（自动派生，可改）——分支与 worktree 一体感由交互承载，不做双概念并列文案。
+- **分支名输入 = 手写 + slug 智能下拉**（用户裁决 2026-10-16）：主输入可自由手写；下拉候选 = 本项目提案与 feature 的 slug（**未完成的排前**，去重），输入时自动过滤匹配项。**同名冲突拒绝**：输入分支名与既有分支同名、或派生 worktree 名与既有 worktree 同名 → 表单内告警并禁用创建（进 git 前拦截）。
+- **chip/表单对齐**（用户裁决 2026-10-16）：hero 第二 chip 视觉与官方项目 chip 同规格（尺寸/描边/字号/图标位——DESIGN.md 令牌 + 官方 Tag 形态）；新建弹窗三输入框等宽左右对齐（同一列宽基准）。
 - **会话与 worktree 绑定，不可切换**：挂靠即绑定（cwd 建会话时定死，SessionHeader 不可变）；worktree 被删（含经 git 命令）后，挂靠会话进入**封存态**——可查看历史、不可发送。「不可发送」的硬保证 = **host 发送拦截面拒绝 + 错误提示**（官方 composer 无禁用 API，UI 硬禁用属侵入，不做）；检测时机 = 会话打开/切换时比对在场性；UI 三通道（chip 失效态、占位文案、notice banner）为提示性视觉。主 worktree 被删另走流程一降级径。
 - **全量纳管 + 自动归并**：同锚的其它 worktree（含手工创建的）打开即自动归并到主项目行，无需逐个注册、不产生新行——经既有注册链仅为解析归属，不是建新项目。
 - **不提供合并**：提交后用户自行走命令行/PR；界面只读展示 ahead/behind（懒加载/缓存，避免展开即全量 rev-list）。
@@ -250,7 +252,7 @@ flowchart TD
 
 1. 在同一仓库的 worktree 路径（含手工创建的）上执行注册/打开，解析到主项目既有行（不产生新项目行、表结构不变）；主项目管线数据可见。存量双行按 common dir 归并：主项目取主 worktree 判定（短路唯一行；以 origin 为准：origin/HEAD 默认分支检出者优先，退 main > master > 首观察时间最早）命中者，未命中行提示并归档。
 2. 会话输入框上方出现 worktree/分支选择控件；列出 `git worktree list` 全量条目（所配 worktree 目录内的条目标 DSH 创建，盘上失配的置灰并提示清理）及其分支与 ahead/behind。
-3. 通过控件内「新建 worktree…」可一体创建新分支 + 新 worktree：弹窗三字段 = 基准分支（默认 main，可下拉）→ 分支（主输入）→ worktree（自动派生，可改），落项目所配 worktree 目录（默认 `.forge/worktrees/`，添加项目时可配置；亦可自定义路径），创建后立即出现在选择列表中。
+3. 通过控件内「新建 worktree…」可一体创建新分支 + 新 worktree：弹窗三字段 = 基准分支（默认 main，可下拉）→ 分支（主输入：手写 + slug 智能下拉——提案/feature slug 候选、未完成排前、去重、输入过滤；与既有分支或 worktree 同名 → 告警并禁用创建）→ worktree（自动派生，可改），三输入框等宽对齐；落项目所配 worktree 目录（默认 `.forge/worktrees/`，添加项目时可配置；亦可自定义路径），创建后立即出现在选择列表中。
 4. 新会话选中某 worktree 后，agent 执行 cwd 为该 worktree 路径；产生的任务/提案状态落入主项目管线。
 5. 已发送消息的会话仅只读展示分支/worktree，无切换入口；会话恢复/重启后展示不丢（挂靠事件随日志重放）。
 6. 删除 worktree 走行右侧删除图标 + 二次确认弹窗（展示未提交变更、未 push 提交、挂靠会话状态清单）；存在未提交变更或挂靠会话（含 in-progress 任务）时确认钮禁用即拦截；双清时删除成功。主 worktree 行无删除图标。
