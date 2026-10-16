@@ -115,8 +115,14 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
     expect(WORKER_GLOBAL_DENY_TOOLS).not.toContain('subagent')
   })
 
-  it('forge 面 = 四动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径——fix-bug coding-fix worker 放行；claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
-    expect(WORKER_FORGE_TOOLS).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug'])
+  it('forge 面 = 五动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 挂链深查；claimTask/queryTask/dispatchTask 不入 worker 面）', () => {
+    expect(WORKER_FORGE_TOOLS).toEqual([
+      'submitTask',
+      'addTask',
+      'recordBug',
+      'resolveBug',
+      'getBug',
+    ])
     expect(WORKER_FORGE_TOOLS).not.toContain('claimTask')
     expect(WORKER_FORGE_TOOLS).not.toContain('queryTask')
     expect(WORKER_FORGE_TOOLS).not.toContain('dispatchTask')
@@ -124,11 +130,12 @@ describe('AC2 全局拒绝集 + forge 面两动词（worker 面不含派发动�
 })
 
 describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 standard 组合实面枚举核对）', () => {
-  it('全表 19 名 = forge 四动词 + 五上游族逐名（机械核对记录归 G1 pin #20）', () => {
+  it('全表 20 名 = forge 五动词 + 五上游族逐名（机械核对记录归 G1 pin #20）', () => {
     expect(Object.keys(WORKER_TOOL_NAME_FAMILY).sort()).toEqual([
       'addTask',
       'bash',
       'edit',
+      'getBug',
       'glob',
       'grep',
       'job_kill',
@@ -146,12 +153,12 @@ describe('AC2 工具名映射表（OQ#2 兑现·5.1——上游 0.2.0-rc.2 stand
     ].sort())
   })
 
-  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 四）', () => {
+  it('族归属逐名（fs 六 / shell 二含平台行 / jobs 三 / read-image 一 / web 二 / forge 五）', () => {
     const byFamily = new Map<WorkerToolFamily, string[]>()
     for (const [name, family] of Object.entries(WORKER_TOOL_NAME_FAMILY)) {
       byFamily.set(family, [...(byFamily.get(family) ?? []), name].sort())
     }
-    expect(byFamily.get('forge')).toEqual(['addTask', 'recordBug', 'resolveBug', 'submitTask'])
+    expect(byFamily.get('forge')).toEqual(['addTask', 'getBug', 'recordBug', 'resolveBug', 'submitTask'])
     expect(byFamily.get('fs')).toEqual(['edit', 'glob', 'grep', 'read', 'write'])
     expect(byFamily.get('shell')).toEqual(['bash', 'pwsh'])
     expect(byFamily.get('jobs')).toEqual(['job_kill', 'job_list', 'job_output'])

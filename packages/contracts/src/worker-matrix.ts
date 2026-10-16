@@ -85,11 +85,17 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
 ] as const
 
 /**
- * forge 工具族的面 = 四动词（submitTask + addTask 两既有动词 + recordBug/resolveBug 两 bug
- * 写径——fix-bug coding-fix worker 放行；claimTask/queryTask/dispatchTask 不入 worker
- * 面——SC7/SC2 断言）。
+ * forge 工具族的面 = 五动词（submitTask + addTask 两既有动词 + recordBug/resolveBug 两 bug
+ * 写径 + getBug 单条全卡/链上下文读径——fix-bug coding-fix worker 挂链深查；面分治：
+ * listBugs 查询仅主 agent，claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言）。
  */
-export const WORKER_FORGE_TOOLS = ['submitTask', 'addTask', 'recordBug', 'resolveBug'] as const
+export const WORKER_FORGE_TOOLS = [
+  'submitTask',
+  'addTask',
+  'recordBug',
+  'resolveBug',
+  'getBug',
+] as const
 
 /**
  * 工具名 → 工具族映射表（OQ#2 兑现·5.1：上游 0.2.0-rc.2 standard 预设组合实面枚举核对入表；
@@ -101,18 +107,20 @@ export const WORKER_FORGE_TOOLS = ['submitTask', 'addTask', 'recordBug', 'resolv
  *   jobs ← dsh-tool-jobs（job_list/job_output/job_kill）
  *   read-image ← dsh-tool-fs 的 read_image（独立族——矩阵单独收窄）
  *   web ← dsh-tool-web（web_fetch/web_search）
- *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/addTask/recordBug/resolveBug）
+ *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/addTask/recordBug/resolveBug/getBug）
  * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ plan-mode exit_plan_mode /
  * todo_write（解禁——WORKER_GLOBAL_DENY_TOOLS 注释）/ goal 三命令与 delegation 族、
  * ask-user/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
  * 注册面——provider 缺席即不在场，刻意不 deny 亦不入族）。
  */
 export const WORKER_TOOL_NAME_FAMILY: Readonly<Record<string, WorkerToolFamily>> = {
-  // forge 面（我方——WORKER_FORGE_TOOLS 单源子集；recordBug/resolveBug = fix-bug bug 写径两动词）
+  // forge 面（我方——WORKER_FORGE_TOOLS 单源子集；recordBug/resolveBug = fix-bug bug 写径两动词，
+  // getBug = bug 单条全卡/链上下文读径）
   submitTask: 'forge',
   addTask: 'forge',
   recordBug: 'forge',
   resolveBug: 'forge',
+  getBug: 'forge',
   // fs 读写/搜索（上游 dsh-tool-fs / dsh-tool-fs-search）
   read: 'fs',
   write: 'fs',

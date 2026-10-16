@@ -50,6 +50,8 @@ export const ERROR_CODES = [
   'ERR_BUG_SUMMARY_TOO_LONG', // → BugSummaryTooLongError：registerBug summary 超 50 字拒写（400）
   'ERR_BUG_ALREADY_RESOLVED', // → BugAlreadyResolvedError：终态再迁移拒绝（open→fixed｜unresolved 单向——409）
   'ERR_COMMIT_HASH_REQUIRED', // → CommitHashRequiredError：resolveBug(fixed) 缺 agent 捕获的 commit_hash（400）
+  // ── bug-recurrence-chain（复发链挂链写径） ──
+  'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -119,4 +121,10 @@ export interface FilesUnionMismatchData {
   files: readonly string[]
   created: readonly string[]
   modified: readonly string[]
+}
+
+/** ERR_BUG_RECURRENCE_DANGLING data 载荷：悬空前驱引用（挂链拒写零副作用） */
+export interface BugRecurrenceDanglingData {
+  /** 指向不存在 bug 的 recurrenceOf 值 */
+  recurrenceOf: string
 }

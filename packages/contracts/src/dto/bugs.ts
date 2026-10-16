@@ -54,20 +54,59 @@ export interface BugCard {
   createdAt: string
   /** 回填时刻（未回填 = createdAt；ISO-8601） */
   updatedAt: string
+  /**
+   * 复发链前驱指针：本条登记时链上时间最近一条的 bug_id（链表式——读作「本条是 X 的复发」）。
+   * 登记时写入、终态后不可改；链根缺省；指向的 bug_id 必须存在（悬空引用拒写）。
+   */
+  recurrenceOf?: string
 }
 
 /**
- * listBugs 查询（服务端承载——search 命中 summary 主行面；status 状态 chips 过滤；
- * sort 三既有子 tab 同构：active = 活跃优先 / created = 最新创建）。
+ * 链上下文投影（getBug 链区 + 列表链折叠共载体）：沿 recurrenceOf 前驱指针反向展开后的
+ * 链快照——时间正序（链根在前），当前条位置由索引定位；孤条（无前驱无后继）不入投影。
+ */
+export interface BugChainContext {
+  /** 链上全部条目（时间正序，链根 = [0]） */
+  entries: BugCard[]
+  /** 本条在链上序位（0-based；entries[currentIndex] = 本条） */
+  currentIndex: number
+  /** 链上条数 = entries.length（复发次数 = 链上条数 − 1，派生值不落字段） */
+  length: number
+  /** 链根 bug_id（= entries[0].bugId） */
+  rootBugId: string
+}
+
+/**
+ * listBugs 查询（主 agent 专属查询工具——服务端承载；sort 三既有子 tab 同构：
+ * active = 活跃优先 / created = 最新创建）。
  */
 export interface ListBugsQuery {
   projectId: string
-  /** 搜索词（summary 匹配；缺省 = 不过滤） */
+  /**
+   * 搜索词：关键词命中六字段任一（summary / bugDesc / triggerDesc / expected / actual /
+   * errorType）即返回该行；缺省 = 不过滤。
+   */
   search?: string
   /** 状态过滤 chips（空/缺省 = 全部三态） */
   status?: BugStatus[]
   /** 活跃优先 / 最新创建 */
   sort?: 'active' | 'created'
+  /** 分页偏移（服务端排序后切片；缺省 = 0） */
+  offset?: number
+  /** 分页页大小（缺省 = 全量返回） */
+  limit?: number
+}
+
+/** getBug 查询（主 + worker 面——按 bug_id 取单条全卡与链上下文） */
+export interface GetBugQuery {
+  projectId: string
+  bugId: string
+}
+
+/** getBug 响应（全卡 + 链上下文；孤条 chain 缺席——单条 bug 弹框语言不变） */
+export interface GetBugResponse {
+  card: BugCard
+  chain?: BugChainContext
 }
 
 /** commit 变更文件行（git show --name-status 解析——fixed 证据的变更内容呈现） */
@@ -90,7 +129,8 @@ export interface BugFileDiffQuery {
   path: string
 }
 
-/** forge:bugs/* 请求负载（键 = BUGS_CHANNELS 键；recordBug/resolveBug 写动词不上 RPC） */
+/** forge:bugs/* 请求负载（键 = BUGS_CHANNELS 键；recordBug/resolveBug 写动词不上 RPC；
+ *  getBug = worker forge 面 agent tool 读径，不走 RPC——channels.ts 面分治纪律） */
 export interface BugsChannelRequests {
   list: ListBugsQuery
   commitFiles: BugCommitFilesQuery

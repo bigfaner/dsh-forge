@@ -81,21 +81,22 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 33 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补', () => {
-    expect([...ERROR_CODES]).toHaveLength(33)
+  it('ERROR_CODES = 34 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码', () => {
+    expect([...ERROR_CODES]).toHaveLength(34)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
-    expect([...ERROR_CODES].slice(29)).toEqual([
+    expect([...ERROR_CODES].slice(29, 33)).toEqual([
       'ERR_BUG_NOT_FOUND',
       'ERR_BUG_SUMMARY_TOO_LONG',
       'ERR_BUG_ALREADY_RESOLVED',
       'ERR_COMMIT_HASH_REQUIRED',
     ])
-    expect(new Set(ERROR_CODES).size).toBe(33)
+    expect([...ERROR_CODES].slice(33)).toEqual(['ERR_BUG_RECURRENCE_DANGLING'])
+    expect(new Set(ERROR_CODES).size).toBe(34)
   })
 
-  it('M3/S3/工具面/fix-bug 新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
+  it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
     for (const code of ERROR_CODES.slice(21)) {
       expect(code.startsWith('ERR_')).toBe(true)
     }
