@@ -54,20 +54,25 @@ export function nextLastReadyCount(prev: number | null, projects: {
  * = 保持 null 不猜首个，空态文案分流见 KnowledgeView.anchorlessCopy）。
  * fix-33 ⑨：projects 行 workspaceId 收紧为必填（contracts Project/ProjectSummary 镜像
  * ——原可选放宽无消费面，属漂移面）。
+ * bug 1e761ada：锚定只在活跃（非归档）行内进行——行可选携带 archived（ProjectSummary
+ * 同形；缺席 = 活跃，既有调用形状零变化）。归档行参与兜底计数曾致「5 归档 + 1 活跃」
+ * 恒无锚：宿主重启落开始页（无主会话）时概览谎称未注册、入口卡消失（左栏自滤归档故
+ * 正常，形成分裂）。
  */
 export function projectAnchorOf(input: {
   readonly sessionId: string | null
   readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
-  readonly projects: readonly { readonly id: string; readonly workspaceId: string }[]
+  readonly projects: readonly { readonly id: string; readonly workspaceId: string; readonly archived?: boolean }[]
 }): string | null {
+  const active = input.projects.filter((p) => p.archived !== true)
   if (input.sessionId !== null && input.workspaces !== null) {
     const home = input.workspaces.items.find((ws) => ws.sessionIds.includes(input.sessionId as string))
     if (home !== undefined) {
-      const byWorkspace = input.projects.find((p) => p.workspaceId === home.workspaceId)
+      const byWorkspace = active.find((p) => p.workspaceId === home.workspaceId)
       if (byWorkspace !== undefined) return byWorkspace.id
     }
   }
-  if (input.projects.length === 1) return input.projects[0]!.id
+  if (active.length === 1) return active[0]!.id
   return null
 }
 
@@ -80,7 +85,7 @@ export function projectAnchorOf(input: {
 export function anchoredOverviewContext(input: {
   readonly mainSessionId: string | null
   readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
-  readonly projects: readonly { readonly id: string; readonly workspaceId: string }[]
+  readonly projects: readonly { readonly id: string; readonly workspaceId: string; readonly archived?: boolean }[]
 }): { readonly projectId: string | null; readonly workspaceId: string | null; readonly sessionCount?: number } {
   const projectId = projectAnchorOf({ sessionId: input.mainSessionId, workspaces: input.workspaces, projects: input.projects })
   if (projectId === null) return { projectId: null, workspaceId: null }

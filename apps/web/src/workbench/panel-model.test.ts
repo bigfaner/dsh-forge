@@ -146,6 +146,36 @@ describe('anchoredOverviewContext 概览项目上下文（4.1 AC4：knowledge-an
       workspaceId: 'ws-gone',
     })
   })
+
+  // ── bug 1e761ada：锚定链未滤归档项目行致唯一项目兜底失效 ──
+  it('bug 1e761ada ①：归档行在场时唯一活跃项目兜底仍成立（宿主重启落开始页 hero 态——左栏有项目、概览不得谎称未注册）', () => {
+    const rows = [
+      { id: 'arch-1', workspaceId: 'ws-a', archived: true },
+      { id: 'only-active', workspaceId: 'ws-2', archived: false },
+    ]
+    expect(anchoredOverviewContext({ mainSessionId: null, workspaces, projects: rows })).toEqual({
+      projectId: 'only-active',
+      workspaceId: 'ws-2',
+      sessionCount: 1,
+    })
+  })
+
+  it('bug 1e761ada ②：会话归属 workspace 只命中归档项目 → 视同未命中原归属，落唯一活跃兜底（既有兜底相位语义——归档行不可锚定）', () => {
+    const rows = [
+      { id: 'arch-1', workspaceId: 'ws-1', archived: true },
+      { id: 'other', workspaceId: 'ws-2', archived: false },
+    ]
+    // s-1 属 ws-1（归档项目）→ 归档行不可锚定；唯一活跃行兜底（与「命中 workspace 但无项目」同径）
+    expect(anchoredOverviewContext({ mainSessionId: 's-1', workspaces, projects: rows })).toEqual({
+      projectId: 'other',
+      workspaceId: 'ws-2',
+      sessionCount: 1,
+    })
+  })
+
+  it('归档行不带 archived 字段（既有调用形状）→ 行为不变（全部按活跃计）', () => {
+    expect(anchoredOverviewContext({ mainSessionId: null, workspaces, projects })).toEqual({ projectId: null, workspaceId: null })
+  })
 })
 
 describe('centerViewOf 官方面板态 → 产品视图镜像（fix-25 新面）', () => {
