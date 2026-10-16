@@ -93,7 +93,8 @@ describe('pin 18-2 /pair/verify 路由 + 限速常量单源', () => {
     const src = hostSrc('boot/child.ts')
     expect(src).toMatch(/kind:\s*'exact',\s*\n\s*path:\s*'\/pair\/verify',/)
     expect(src.match(/path:\s*'\/pair\/verify'/g)).toHaveLength(1)
-    expect(src).toMatch(/const pinIssuer = createPinIssuer\(\)/)
+    // fix-30③/fix-31 起装配面注入时钟 + 文件持久缝（remote-pin.json）——pin 对齐现状
+    expect(src).toMatch(/const pinIssuer = createPinIssuer\(/)
     expect(src).toMatch(/pinIssuer\.verify\(pin\)/)
     expect(src, '限速状态机不得在装配面复制（failures/lockUntil 私有于 pinIssuer）').not.toMatch(
       /\blockUntil\b|\bfailures\b/,
@@ -109,11 +110,14 @@ describe('pin 18-3 互联网 tab 非 disabled 占位（testid 在场 + 受控缝
     expect(src).toContain("onSelect('lan')")
   })
 
-  it('双 tab 按钮块零 disabled 属性（fix-7 disabled 占位不得回潮）', () => {
+  it('双 tab 按钮块零静态 disabled 占位（fix-7 占位不得回潮；fix-18④ 受控防重入锁 = disabled={disabled === true} 在场为合法）', () => {
     const src = webSrc('views/remote/ForgeRemoteEntry.tsx')
     const tabs = src.match(/<div className="dswf-remote-tabs"[\s\S]*?<\/div>\s*\n\s*\)/)
     expect(tabs, 'dswf-remote-tabs 块未找到').toBeTruthy()
-    expect(tabs?.[0] ?? '').not.toContain('disabled')
+    const block = tabs?.[0] ?? ''
+    // 受控锁（表达式绑定）在场 = fix-18④ 防重入缝；静态裸 disabled（无值占位）= 回潮即红
+    expect(block).toMatch(/disabled=\{disabled === true\}/)
+    expect(block).not.toMatch(/disabled(?!\s*=)/)
   })
 })
 
