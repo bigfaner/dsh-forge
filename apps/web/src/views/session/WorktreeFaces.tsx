@@ -56,10 +56,16 @@ interface WorktreeListPhase {
 
 const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
 
+/** 会话粒度选中记忆（模块级，同 dismissedSealSessions 刻度——bug 907225f2：确认即回填，
+ *  编排成败均回填（编排失败重选覆盖；编排成功跳转后重入 hero 仍回填），重选/换项目即覆盖） */
+const lastSelectedWorktreePaths = new Map<string, string>()
+
 /**
  * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
+ * 选中态在本面闭环（bug 907225f2——根因：装配面未持/未传 selectedPath，chip 恒占位）：
+ * onSelect 包装先落本地态+选中记忆再上行编排，Menu selectedId 与 chip 回填同源。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
@@ -82,6 +88,19 @@ export function ForgeHeroWorktreeMount({
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
+  // 选中态本地闭环（初值 = 选中记忆 → owner 显式 selectedPath 兜底）
+  const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
+    () => (projectRoot !== null ? lastSelectedWorktreePaths.get(projectRoot) : undefined) ?? selectedPath,
+  )
+  // 选择确认：先回填（本地态 + 记忆）再上行编排——编排成败不影响回填，重选即覆盖
+  const onSelectConfirmed = useCallback(
+    (path: string): void => {
+      if (projectRoot !== null) lastSelectedWorktreePaths.set(projectRoot, path)
+      setLocalSelectedPath(path)
+      onSelect(path)
+    },
+    [projectRoot, onSelect],
+  )
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -206,8 +225,8 @@ export function ForgeHeroWorktreeMount({
         isGit={phase.isGit}
         rows={phase.rows}
         worktreeDir={phase.worktreeDir}
-        selectedPath={selectedPath}
-        onSelect={onSelect}
+        selectedPath={localSelectedPath}
+        onSelect={onSelectConfirmed}
         onCreate={() => setCreateOpen(true)}
         onDelete={openDelete}
         loadAheadBehind={loadAheadBehind}

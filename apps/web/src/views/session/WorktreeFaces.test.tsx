@@ -40,4 +40,7 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
     )
     expect(markup).not.toContain('data-dswt-hero-trigger')
   })
+  // 注：选中态回填（selectedPath → chip 一体两属性）的相位数据面 SSR 不可达（list 为效应
+  // 回调——本文件头注口径）；透传锚归 packages git-worktree hero-worktree-picker.test
+  // （selectedPath 在册即回填 feat/api · wt-api），选中闭环交互归 e2e worktree-hero-chip。
 })

@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeApp, launchElectron } from '../support/launch.js'
+import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 /** 隔离 git 仓库夹具（真 git CLI——list/resolveProject 数据源） */
@@ -44,6 +45,7 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
   try {
     const page: Page = await app.firstWindow()
     await page.waitForLoadState('domcontentloaded')
+    await dismissOnboardingModals(page) // 新 profile API Key 引导模态收口（拦指针——support 既有纪律）
     // 注册 git 仓为主项目（renderer RPC 真身——注册链 canonical 化 + 身份归并锚）
     let registerError = ''
     await expect
@@ -71,6 +73,21 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
     const menu = page.locator('.dswt-hero-menu')
     await expect(menu, 'worktree 选择弹层未呈现').toBeVisible({ timeout: 15_000 })
     await expect(menu.locator('text=/dsh-forge-fix4-ui-repo/').first()).toBeVisible()
+    // AC（bug 907225f2）：选择确认后 chip 回填所选行（分支 · worktree 名）——不再恒占位。
+    // 编排成功 → 会话面接管；经官方「新会话」入口重入 hero，选中记忆仍回填（确认即回填口径）
+    await menu.locator('[role="menuitem"]').filter({ hasText: 'dsh-forge-fix4-ui-repo' }).first().click()
+    await page.getByRole('button', { name: /新会话|新建会话/ }).first().click({ timeout: 30_000 })
+    const backfilled = page.locator('[data-dswt-hero-trigger]')
+    await expect
+      .poll(async () => {
+        const count = await backfilled.count()
+        return count > 0 ? await backfilled.first().textContent() : `chip-absent(${count})`
+      }, {
+        timeout: 30_000,
+        message: '选择确认后 chip 未回填所选行（挂载面缺 selectedPath 闭环——bug 907225f2）',
+      })
+      .toMatch(/·/)
+    expect(await backfilled.first().textContent()).not.toContain('选择 worktree…')
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
