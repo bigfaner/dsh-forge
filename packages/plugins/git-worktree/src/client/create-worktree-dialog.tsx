@@ -9,10 +9,10 @@
 // 表单状态面（CreateWorktreeFields/initialCreateForm）Modal 外提——单测直测
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径）。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Input, Menu, Modal, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, Menu, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
 import { WorktreeRiskConfirmation } from './risk-confirmation.js'
-import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, type CreateConflict, type SlugCandidate } from './model.js'
+import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, joinWorktreePath, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */
 export interface CreateWorktreeRequest {
@@ -63,9 +63,9 @@ export function deriveFormWorktreeName(form: CreateWorktreeFormValue): string {
   return isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched) ? form.branch : form.worktreeName
 }
 
-/** 路径预览（自定义路径开且非空 = 自定义值；否则 = 所配目录/派生名） */
+/** 路径预览（自定义路径开且非空 = 自定义值；否则 = 所配目录/派生名——joinWorktreePath 归一反斜杠口径） */
 export function createFormPathPreview(form: CreateWorktreeFormValue, worktreeDir: string): string {
-  return form.customPathOpen && form.customPath !== '' ? form.customPath : `${worktreeDir}/${form.worktreeName}`
+  return form.customPathOpen && form.customPath !== '' ? form.customPath : joinWorktreePath(worktreeDir, form.worktreeName)
 }
 
 export interface CreateWorktreeFieldsProps {
@@ -155,6 +155,12 @@ export function CreateWorktreeFields({
 }: CreateWorktreeFieldsProps): ReactNode {
   const baseItems = useMemo(() => branches.map((id) => ({ id, label: id })), [branches])
   const worktreeName = deriveFormWorktreeName(form)
+  const previewPath = createFormPathPreview({ ...form, worktreeName }, worktreeDir)
+  // 目录/尾段两分（官方 PathLabel pathPartsOf 同语义——最后一个分隔符处切）：目录段
+  // label-tertiary、尾段 label-primary = 官方 PathLabel 同规格色阶（可见段全程标准对比）
+  const lastSep = Math.max(previewPath.lastIndexOf('\\'), previewPath.lastIndexOf('/'))
+  const pathDirectory = lastSep === -1 ? '' : previewPath.slice(0, lastSep + 1)
+  const pathName = lastSep === -1 ? previewPath : previewPath.slice(lastSep + 1)
   // 分支变化（手写/候选回填/组合框）：跟随态（含用户值清回同名）下复位手改标记——
   // worktree 名继续同名跟随；已脱离跟随则保留用户值（判定单源 isWorktreeNameFollowing）
   const changeBranch = (branch: string): void => {
@@ -315,36 +321,39 @@ export function CreateWorktreeFields({
             style={inputStyle}
           />
         </div>
-        {/* 官方 PathLabel：目录段弱化/单行左缘渐隐裁剪/悬浮全值自带——说明行单行不换行，
-            超长截断；「将创建于」与入口锚 flexShrink:0，路径标签吃剩余宽（官方路径风格） */}
+        {/* 路径呈现对齐官方 PathLabel 规格：目录段弱化/尾段主色、单行 overflow 裁剪、
+            flex-end 保尾段（文件名）可见——无左缘 mask 渐隐段（1.21 可见段全对比）；
+            悬浮全文 = 官方 Tooltip（portal 逃逸弹窗裁剪/层叠，形态/令牌/时序与系统一致；
+            PathLabel 内建原生 title 灰盒随本面退役——1.21 用户裁决）。
+            「将创建于」与入口锚 flexShrink:0，路径标签吃剩余宽（官方路径风格） */}
         <div
           data-dswt-path-preview=""
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 4,
-            fontSize: 12,
-            color: 'var(--dsw-alias-label-tertiary)',
-            marginTop: 6,
-            whiteSpace: 'nowrap',
-          }}
+          style={{ display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12, marginTop: 6, whiteSpace: 'nowrap' }}
         >
           <span style={{ flexShrink: 0 }}>将创建于</span>
-          <PathLabel path={createFormPathPreview({ ...form, worktreeName }, worktreeDir)} style={{ minWidth: 0, flex: '0 1 auto' }} />
+          <Tooltip label={previewPath} portal side="top">
+            <span
+              data-dswt-path-value=""
+              style={{ display: 'flex', justifyContent: 'flex-end', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', flex: '0 1 auto' }}
+            >
+              <span style={{ flex: 'none', marginRight: 'auto' }}>
+                <span style={{ color: 'var(--dsw-alias-label-tertiary)' }}>{pathDirectory}</span>
+                <span style={{ color: 'var(--dsw-alias-label-primary)' }}>{pathName}</span>
+              </span>
+            </span>
+          </Tooltip>
           {form.customPathOpen ? null : (
-            <>
-              <a
-                href="#custom-path"
-                data-dswt-custom-path=""
-                onClick={(event) => {
-                  event.preventDefault()
-                  onChange({ ...form, customPathOpen: true })
-                }}
-                style={{ flexShrink: 0, color: 'var(--dsw-alias-state-business-primary)', cursor: 'pointer' }}
-              >
-                自定义路径…
-              </a>
-            </>
+            <a
+              href="#custom-path"
+              data-dswt-custom-path=""
+              onClick={(event) => {
+                event.preventDefault()
+                onChange({ ...form, customPathOpen: true })
+              }}
+              style={{ flexShrink: 0, color: 'var(--dsw-alias-state-business-primary)', cursor: 'pointer' }}
+            >
+              自定义路径…
+            </a>
           )}
         </div>
         {form.customPathOpen && (

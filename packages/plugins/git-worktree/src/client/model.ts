@@ -92,6 +92,17 @@ export function isCreateReady(branch: string, worktreeName: string): boolean {
 }
 
 /**
+ * 路径拼接单点（1.21 用户裁决——分隔符归一）：全串统一反斜杠系统口径（Windows 实机），
+ * 目录尾分隔符（正/反、多枚）与尾段前导分隔符一并归一，杜绝 `${dir}/${name}` 正反混拼。
+ * Root cause: 预览与装配两处各自手拼且口径不一（模板串正斜杠 × 系统反斜杠目录）。
+ */
+export function joinWorktreePath(dir: string, name: string): string {
+  const base = dir.replaceAll('/', '\\').replace(/[\\/]+$/, '')
+  const tail = name.replaceAll('/', '\\').replace(/^[\\/]+/, '')
+  return base === '' || tail === '' ? `${base}${tail}` : `${base}\\${tail}`
+}
+
+/**
  * 跨分支风险判定（1.19 纯函数单源——hero chip 改选与新建基准分支两处确认框共用）：
  * 目标分支 ≠ 主树当前检出分支 → 需要风险确认（worktree 业务上下文跨分支，主树上下文
  * 不随行）。trim + 大小写不敏感（refs 保守口径）；任一侧未知（null）= 保守判风险。

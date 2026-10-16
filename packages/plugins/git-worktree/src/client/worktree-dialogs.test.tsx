@@ -3,6 +3,7 @@
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径惯例）；
 // 弹窗壳闭态 + 拦截/派生纯函数同源覆盖。
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   CreateWorktreeFields,
@@ -56,10 +57,13 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
     expect(markup).toContain('>main<')
   })
 
-  it('路径预览行 = 所配 worktree 目录 + 「自定义路径…」入口（收起态无输入）', () => {
-    const markup = renderFields()
+  it('路径预览行 = 所配 worktree 目录 + 「自定义路径…」入口（收起态无输入；全串反斜杠口径）', () => {
+    const markup = renderFields({ branch: 'feat/a', worktreeName: 'feat/a' })
     expect(markup).toContain('将创建于')
-    expect(markup).toContain('Z:/proj/.forge/worktrees/')
+    expect(markup).toContain('data-dswt-path-value')
+    expect(markup).toContain('Z:\\proj\\.forge\\worktrees\\feat\\') // 目录段（归一反斜杠——1.21）
+    expect(markup).toContain('>a</span>') // 尾段（官方 PathLabel 同规格两分呈现）
+    expect(markup).not.toContain('title=') // 1.21：PathLabel 内建原生 title 退役（官方 Tooltip 承载悬浮全文）
     expect(markup).toContain('data-dswt-custom-path')
     expect(markup).not.toContain('data-dswt-custom-path-input')
   })
@@ -69,6 +73,17 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
     expect(markup).toContain('data-dswt-custom-path-input')
     expect(markup).toContain('D:/scratch/lab')
     expect(createFormPathPreview({ ...FORM, customPathOpen: true, customPath: 'D:/scratch/lab' }, 'Z:/proj/.forge/worktrees')).toBe('D:/scratch/lab')
+  })
+
+  it('默认预览路径 = joinWorktreePath 归一（正斜杠目录输入 → 全串反斜杠——1.21 分隔符归一）', () => {
+    expect(createFormPathPreview({ ...FORM, branch: 'feat/a', worktreeName: 'feat/a' }, 'Z:/proj/.forge/worktrees')).toBe('Z:\\proj\\.forge\\worktrees\\feat\\a')
+  })
+
+  it('说明行悬浮全文 = 官方 Tooltip（portal）+ PathLabel 退役（源面结构锚——读文件法，静态标记零气泡）', () => {
+    const src = readFileSync(new URL('./create-worktree-dialog.tsx', import.meta.url), 'utf8')
+    expect(src).toContain('<Tooltip')
+    expect(src).toContain('portal')
+    expect(src).not.toContain('<PathLabel')
   })
 })
 

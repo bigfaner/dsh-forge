@@ -179,6 +179,7 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 |----|-------|
 | **样式尽量跟 dsh 对齐**：官方有的形态/刻度/交互一律取官方原值，逐位对照实机 | 不自创近似形态，「语义近似」不算对齐 |
 | 复用官方组件（Button/Input/Modal/Menu/Tag…），产品层只组合注入 | 不重写官方已有同语义组件 |
+| 悬浮全文提示一律官方 `Tooltip`（label 承载全值；弹窗/滚动容器内加 `portal` 逃逸裁剪与层叠上下文；路径/长文本分段呈现对齐官方 PathLabel 规格——目录段 `label-tertiary`、尾段 `label-primary`、单行 overflow 裁剪无渐隐） | 禁用原生 `title` 属性（灰盒气泡形态/令牌/时序不可控，与系统 Tooltip 不一致） |
 | 色/字/距一律消费 `--dsw-*` 令牌 | 禁裸值（hex/px 间距）——lint-tokens 机械拦截 |
 | 描边 0.5px + 微阴影表达层次 | 不用重阴影/彩色阴影 |
 | 语义色取 alias（state-*/interactive-*/label-*） | 不直引 static 原始色板 |

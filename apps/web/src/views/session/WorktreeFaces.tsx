@@ -17,6 +17,7 @@ import {
   SealNotice,
   SealedComposerPlaceholder,
   SessionWorktreeChip,
+  joinWorktreePath,
   type CreateWorktreeRequest,
   type DeleteChecks,
 } from '@dsh-forge/git-worktree/client'
@@ -203,11 +204,12 @@ export function ForgeHeroWorktreeMount({
     (request: CreateWorktreeRequest): void => {
       if (projectRoot === null) return
       // 弹窗产物（baseBranch/branch/worktreeName/customPath）→ create 载荷：
-      // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认）
+      // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认；
+      // joinWorktreePath 单点归一反斜杠系统口径——1.21 分隔符归一）
       const baseDir = phase.worktreeDir ?? ''
       const path = request.customPath !== undefined && request.customPath !== ''
         ? request.customPath
-        : `${baseDir.replaceAll('\\', '/').replace(/\/+$/, '')}/${request.worktreeName}`
+        : joinWorktreePath(baseDir, request.worktreeName)
       makeRpc()
         .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
         .then(() => {

@@ -34,6 +34,7 @@ export {
   isCreateReady,
   isCrossBranchRisk,
   isDeleteBlocked,
+  joinWorktreePath,
   pendingAheadBehindPaths,
   type AheadBehindSegments,
   type CreateConflict,

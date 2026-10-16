@@ -11,6 +11,7 @@ import {
   inferSource,
   isCrossBranchRisk,
   isDeleteBlocked,
+  joinWorktreePath,
   pendingAheadBehindPaths,
   type SlugCandidate,
   type WorktreeRow,
@@ -164,5 +165,23 @@ describe('createConflicts（同名冲突判定：分支 vs branches、worktree v
   })
   it('空输入（未填）不判冲突', () => {
     expect(createConflicts('', '', ['main'], ['wt-a'])).toEqual([])
+  })
+})
+
+describe('joinWorktreePath（1.21 分隔符归一单点——统一反斜杠系统口径，杜绝正反混拼）', () => {
+  it('反斜杠目录 + 尾段拼接 = 全串反斜杠（含目录尾斜杠归一）', () => {
+    expect(joinWorktreePath('Z:\\proj\\.forge\\worktrees', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+    expect(joinWorktreePath('Z:\\proj\\.forge\\worktrees\\', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+  })
+  it('正斜杠目录输入 → 输出仍全串反斜杠（不产混拼串）', () => {
+    expect(joinWorktreePath('Z:/proj/.forge/worktrees/', 'wt-a')).toBe('Z:\\proj\\.forge\\worktrees\\wt-a')
+  })
+  it('尾段含分支式斜杠（同名默认跟随分支名）→ 一并归一', () => {
+    expect(joinWorktreePath('Z:\\p\\wt', 'feat/my-branch')).toBe('Z:\\p\\wt\\feat\\my-branch')
+  })
+  it('尾段前置分隔符不双拼；空目录 = 纯尾段；空尾段 = 归一目录', () => {
+    expect(joinWorktreePath('Z:\\p\\wt\\', '/wt-a')).toBe('Z:\\p\\wt\\wt-a')
+    expect(joinWorktreePath('', 'wt-a')).toBe('wt-a')
+    expect(joinWorktreePath('Z:\\p\\wt\\', '')).toBe('Z:\\p\\wt')
   })
 })
