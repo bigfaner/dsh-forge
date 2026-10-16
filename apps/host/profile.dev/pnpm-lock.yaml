@@ -23,6 +23,9 @@ importers:
       '@dsh-forge/core':
         specifier: link:../../../packages/core
         version: link:../../../packages/core
+      '@dsh-forge/git-worktree':
+        specifier: link:../../../packages/plugins/git-worktree
+        version: link:../../../packages/plugins/git-worktree
       '@dsh-forge/knowledge':
         specifier: link:../../../packages/knowledge
         version: link:../../../packages/knowledge
@@ -3421,8 +3424,8 @@ packages:
   resolve-alpn@1.2.1:
     resolution: {integrity: sha512-0a1F4l73/ZFZOakJnQ3FvkJ2+gSTQWz/r2KE5OdDY0TxPm5h4GkqkWWfM47T7HsbnOtcJVEF4epCVy6u7Q3K+g==}
 
-  resolve.exports@2.0.3:
-    resolution: {integrity: sha512-OcXjMsGdhL4XnbShKpAcSqPMzQoYkYyhbEaeSko47MjRP9NfEQMhZkXL1DoFlt9LWQn4YttrdnV6X2OiyzBi+A==}
+  resolve.exports@2.0.4:
+    resolution: {integrity: sha512-zepuGL0ulf+nt+XaFrlKeaiTJeyPFPLLY62+ncq1/VTHBdt3HsfXOH60priZ6tnXQozdGcDeIF5JVTanvIcYWQ==}
     engines: {node: '>=10'}
 
   responselike@4.0.2:
@@ -4099,7 +4102,7 @@ snapshots:
       ajv: 8.20.0
       js-yaml: 4.3.2
       node-addon-require-builtin: 0.1.7
-      resolve.exports: 2.0.3
+      resolve.exports: 2.0.4
       semver: 7.8.5
 
   '@deepseek-ai/dsh-atomic-write@0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)':
@@ -7608,7 +7611,7 @@ snapshots:
 
   resolve-alpn@1.2.1: {}
 
-  resolve.exports@2.0.3: {}
+  resolve.exports@2.0.4: {}
 
   responselike@4.0.2:
     dependencies:

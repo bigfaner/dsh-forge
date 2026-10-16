@@ -54,6 +54,7 @@ import {
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
+import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -222,12 +223,15 @@ async function main(): Promise<void> {
   // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
   // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
   const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
+  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）
+  const gitWorktreeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json'))
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     knowledgeRow: existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json')), // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
+    gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
     port: options.port, // fix-3 webserver 覆写行 port 字面量单源（boot 实参）
@@ -252,6 +256,31 @@ async function main(): Promise<void> {
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
+  // worktree-branch-management 1.7 扩展点注入装配：插件行在 profile 树时，把归并实现 +
+  // worktree_dir 提供者注入插件缝服务（函数值扩展点不可经 YAML config 承载——cordis ctx
+  // 服务面唯一跨插件缝；插件惰性 reflect.get 消费，激活早于本 provide 不受阻）。
+  // forgeProjects 缺席 / provide 失败 = 零注入 fail-soft（插件退默认实现 = 独立 worktree 模式）。
+  if (gitWorktreeRow) {
+    try {
+      const forgeProjects = servicesFace.get('forgeProjects') as
+        | Pick<ProjectService, 'listProjects' | 'getProject'>
+        | undefined
+      const provide = (
+        ctx as unknown as { reflect?: { provide?: (name: string, value?: unknown) => unknown } }
+      ).reflect?.provide
+      if (forgeProjects !== undefined && typeof provide === 'function') {
+        provide.call(
+          (ctx as unknown as { reflect: object }).reflect,
+          GIT_WORKTREE_IDENTITY_SERVICE,
+          createWorktreeIdentity(forgeProjects, undefined, (line) => diag(line)),
+        )
+      } else {
+        diag('[git-worktree] forgeProjects 缺席或 reflect.provide 不可用——扩展点零注入（插件退独立模式）')
+      }
+    } catch (cause) {
+      diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
+    }
+  }
   // fix-3：实际绑定 host（快照面单源——UI pending/listening 判读 = 产品配置意图 × 本值；
   // 经 ready 消息 → boot manifest 透传 renderer）
   const remoteHost = ctx.webServer.host

@@ -48,6 +48,20 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).toContain('- id: dsh-forge-core') // core 行不受门控（恒注）
   })
 
+  it('git-worktree 插件行注行门（worktree-branch-management 1.7）：gitWorktreeRow: true → loader 行注入；默认门关零注行（config-less——扩展点注入走 ctx 服务缝非 config）', () => {
+    const on = renderBootOverlay({
+      stateDb: 'C:\\app-data\\dsh-forge\\state.db',
+      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
+      gitWorktreeRow: true,
+    })
+    expect(on).toContain(`- id: dsh-forge-git-worktree\n  name: '@dsh-forge/git-worktree'`)
+    const off = renderBootOverlay({
+      stateDb: 'C:\\app-data\\dsh-forge\\state.db',
+      bindingsFile: 'C:\\app-data\\dsh-forge\\knowledge-bindings.json',
+    })
+    expect(off).not.toContain('git-worktree')
+  })
+
   it('行 id 定位用户层产品行（patch 按 row id 整体替换 config——非 insert 新行）；全局零 forge 面（产品裁决 2026-10-09：plugin-forge/skill-filesystem 全局行废除——标准模式不带 forge 工具/技能，仅预设组合携带）', () => {
     const text = renderBootOverlay({ stateDb: '/x/state.db', bindingsFile: '/x/b.json' })
     expect(text).toContain('- id: dsh-forge-core')
