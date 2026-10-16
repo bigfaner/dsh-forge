@@ -28,3 +28,8 @@
 - `time-label.ts` —— 相对时间标签单一来源（fix-36 收敛）：官方 `relativeTime` 桶化 →
   zh 文案的切换源（`timeLabelZh` 毫秒面 / `isoTimeLabelZh` ISO 面）；sidebar/knowledge/
   recall 三域模型委托，文案口径唯一权威（P1 单语，多语归 M 系列主题化）。
+- `EditableCombobox.tsx` + `combobox-model.ts` —— 通用可输入过滤组合框：官方 `Input`
+  （输入面）+ `Menu`（浮层与选项行）胶水装配，零自绘样式；受控 value/onChange/options/
+  onFilter/placeholder/disabled，键盘 ↑↓ 选择 / Enter 回填 / Esc 关闭，失焦与点击外部关闭
+  （失焦守卫放行浮层行取焦）。交互语义权威源 = combobox-model 纯函数面（过滤/键盘/环绕/
+  回填/守卫五件套）；首消费方 = worktree 新建弹窗分支行（slot 注入，合并形态）。

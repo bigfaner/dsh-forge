@@ -23,7 +23,16 @@ import {
 import type { AheadBehind } from '@dsh-forge/git-worktree'
 import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
 import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
+import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
+
+/** 分支组合框输入面样式（同表单其余 Input 等宽基准——caption 字号令牌 + mono + 34px/100%） */
+const branchInputStyle: React.CSSProperties = {
+  font: 'var(--dsw-font-xs-13)',
+  fontFamily: 'var(--ds-font-family-code, monospace)',
+  height: 34,
+  width: '100%',
+}
 
 /** list 结果 → 行渲染模型（WorktreeRow 同形——DTO 即行源，零二次派生） */
 const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>) =>
@@ -211,6 +220,16 @@ export function ForgeHeroWorktreeMount({
         worktreeDir={phase.worktreeDir ?? ''}
         onClose={() => setCreateOpen(false)}
         onCreate={onCreate}
+        // 分支行合并形态：通用 EditableCombobox 经 slot 注入（输入即过滤 slug 候选；
+        // 走查锚 data-dswt-branch-input 与等宽基准在本面装配）
+        BranchCombobox={(props) => (
+          <EditableCombobox
+            {...props}
+            inputData={{ 'data-dswt-branch-input': '' }}
+            inputStyle={branchInputStyle}
+            listClassName="dswt-branch-slug-menu"
+          />
+        )}
       />
       <DeleteWorktreeDialog
         open={deleteTarget !== null}

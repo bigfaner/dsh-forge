@@ -88,6 +88,53 @@ describe('分支 slug 下拉 + 同名冲突告警（提案裁决 2026-10-16）',
   })
 })
 
+describe('分支组合框插槽（合并形态——slot 注入通用组合框，apps/web EditableCombobox 同形）', () => {
+  const FakeCombobox = (props: { value: string; options: readonly { id: string }[] }): string =>
+    renderToStaticMarkup(<div data-fake-combobox={props.value}>{props.options.map((option) => option.id).join(',')}</div>)
+
+  it('注入 slot：分支行走组合框（全量候选 + placeholder 透传），无分离触发器', () => {
+    const markup = renderToStaticMarkup(
+      <CreateWorktreeFields
+        value={FORM}
+        branches={['main']}
+        slugCandidates={[
+          { slug: 'wt-a', done: false },
+          { slug: 'old-proposal', done: true },
+        ]}
+        worktreeDir="Z:/p/.forge/worktrees"
+        onChange={() => {}}
+        BranchCombobox={FakeCombobox}
+      />,
+    )
+    expect(markup).toContain('data-fake-combobox')
+    expect(markup).toContain('wt-a,old-proposal')
+    expect(markup).toContain('data-dswt-field-branch')
+    expect(markup).not.toContain('data-dswt-branch-trigger')
+  })
+
+  it('过滤经 onFilter 注入（slot 收过滤回调而非预过滤清单）', () => {
+    let filtered: string | null = null
+    const ProbeCombobox = (props: { onFilter?: (query: string) => readonly { id: string }[] }): string => {
+      filtered = (props.onFilter?.('wt') ?? []).map((option) => option.id).join(',')
+      return ''
+    }
+    renderToStaticMarkup(
+      <CreateWorktreeFields
+        value={FORM}
+        branches={['main']}
+        slugCandidates={[
+          { slug: 'wt-a', done: false },
+          { slug: 'unrelated', done: true },
+        ]}
+        worktreeDir="Z:/p"
+        onChange={() => {}}
+        BranchCombobox={ProbeCombobox}
+      />,
+    )
+    expect(filtered).toBe('wt-a')
+  })
+})
+
 describe('派生规约（纯函数）', () => {
   it('feat/remote-approval → wt-remote-approval（未手改跟随派生）', () => {
     expect(deriveWorktreeName('feat/remote-approval')).toBe('wt-remote-approval')

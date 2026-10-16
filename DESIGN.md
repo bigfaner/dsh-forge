@@ -77,6 +77,7 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 | `EmptyState` | 全令牌自绘（官方无空态件） | 统一空态（标题+描述+引导插槽） |
 | `ErrorBar` | 零样式持有 JSX 源 | 错误条共享件（`role=alert` + 可选重试钮） |
 | `SkeletonRows` | 零样式持有 JSX 源 | 骨架行占位共享件 |
+| `EditableCombobox` | 官方 `Input` + `Menu` 胶水装配 | 可输入过滤组合框（↑↓ 选择 / Enter 回填 / Esc·失焦·外点关闭；过滤语义 `combobox-model.ts` 纯函数面） |
 | `time-label.ts` | 官方 `relativeTime` 桶化 | 相对时间文案单一来源 |
 
 官方组件查证口径：`@deepseek-ai/dsh-client-ui-primitives`（33 组件）+ `dsh-client-web`——判定「官方缺件」前先实查这两包，不凭记忆断言。
