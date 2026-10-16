@@ -206,6 +206,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: false,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
       },
     })
@@ -222,6 +223,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: false,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
       },
     })
@@ -238,6 +240,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
         [missing]: undefined,
       }
@@ -266,6 +269,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
       },
     } as const
@@ -289,6 +293,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
       },
     } as const
@@ -314,6 +319,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeDocs: true,
         forgeSettings: true,
         forgeBugs: true,
+        forgeWorktree: true,
         approval: true,
       },
     } as const
@@ -374,6 +380,7 @@ describe('asReadyMessage/asPairMessage PIN 读数透传（fix-17 ③）', () => 
       forgeDocs: true,
       forgeSettings: true,
       forgeBugs: true,
+      forgeWorktree: true,
       approval: true,
     },
   } as const
@@ -459,6 +466,7 @@ describe('fix-26 ready/pair：remotePinDurable 透传（长效位——UI hint �
       forgeDocs: true,
       forgeSettings: true,
       forgeBugs: true,
+      forgeWorktree: true,
       approval: true,
     },
   } as Record<string, unknown>
@@ -740,6 +748,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       'forgeDocs',
       'forgeSettings',
       'forgeBugs',
+      // worktree-branch-management fix-2：worktree RPC 域（九法——ipc/worktree-rpc 白名单）
+      'forgeWorktree',
       // mobile-remote-approval fix-2：审批决策中继面（main → worker 单向 deposit）
       'approval',
     ])
@@ -845,6 +855,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
       forgeDocs: true,
       forgeSettings: true,
       forgeBugs: true,
+      forgeWorktree: true,
       approval: true,
     }
     expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
@@ -890,7 +901,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(BUGS_SERVICE_METHODS).toHaveLength(3) // fix-bug +listBugs/commitFiles/fileDiff
     expect(APPROVAL_SERVICE_METHODS).toHaveLength(1) // fix-2 审批桥 +deposit
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
-    expect(BRIDGE_SERVICE_NAMES).toHaveLength(9) // fix-2 审批桥 +approval
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(10) // fix-2 worktree RPC 域 +forgeWorktree、审批桥 +approval
   })
 })
 

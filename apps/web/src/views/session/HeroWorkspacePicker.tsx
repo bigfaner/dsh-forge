@@ -20,7 +20,9 @@ import { useCallback, useEffect, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
+import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import { heroPickerPlan, selectedProjectOf } from './hero-picker-model.js'
+import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
 /** 「添加项目…」行 id（菜单内保留字——项目行 id 恒为 dsh workspace uuid，无碰撞面） */
@@ -43,6 +45,14 @@ export interface ForgeHeroWorkspacePickerProps {
   readonly onClose: () => void
   /** workspace 归属观察钩子（root 作用域标准 prop——项目重拉锚，外部注册后快照身份变化） */
   readonly useWorkspaces?: KitSelectorHook
+  /**
+   * worktree 挂靠编排缝（fix-2 槽位 inject face——client 插件注册时递达）：选择控件确认时
+   * 的「建会话（meta.cwd 注入）→ 挂靠事件唯一写入口 → 官方 openSession」编排。缺席 =
+   * 选择动作 no-op fail-soft（旧插件面/降级装配）。
+   */
+  readonly worktree?: { readonly openSession: (sessionId: string) => void } | undefined
+  /** RPC 构造器（测试替身注入；缺省 preload 真身） */
+  readonly makeRpc?: () => ForgeRpcClient
 }
 
 /**
@@ -57,6 +67,8 @@ export function ForgeHeroWorkspacePicker({
   onPick,
   onClose,
   useWorkspaces,
+  worktree,
+  makeRpc = preloadRpcClientFactory,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
   // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）
@@ -83,6 +95,32 @@ export function ForgeHeroWorkspacePicker({
   useEffect(() => {
     if (open) silentRefresh()
   }, [open, silentRefresh])
+
+  // worktree 第二 chip 数据锚：选中项目的 ws_path（list/ops 执行 cwd；未选中 = null 零注入）。
+  // projects 行集 = RPC 源本体（heroPickerPlan 行 {id,name} 超集——wsPath 取自原行）。
+  const selectedProjectRoot =
+    projects.find((project) => project.id === selectedId)?.wsPath ?? projects.find((p) => p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
+
+  // 挂靠确认编排（选择控件确认时——唯一写入口调用点在 host attach 通道内封装）：
+  // 建会话（meta.cwd 注入 = SessionHeader.cwd 定死）→ 写挂靠事件 → 官方 openSession 呈现。
+  const onWorktreeSelect = useCallback(
+    (path: string): void => {
+      if (worktree === undefined) return
+      const rpc = makeRpc()
+      rpc.worktree
+        .sessionCreate({ cwd: path })
+        .then(({ sessionId }) =>
+          rpc.worktree.attach({ sessionId, worktreePath: path }).then(() => {
+            onClose()
+            worktree.openSession(sessionId)
+          }),
+        )
+        .catch(() => {
+          // 建会话/写入口失败 fail-soft：不外溢不炸 hero（重选即重试）
+        })
+    },
+    [worktree, makeRpc, onClose],
+  )
 
   const onSelect = useCallback(
     (id: string) => {
@@ -129,6 +167,13 @@ export function ForgeHeroWorkspacePicker({
         listClassName="dswf-hero-picker-list"
       />
       {workspacesAnchor}
+      {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
+          两 chip」构图；非 git / 未选中项目零注入整体退回现状） */}
+      <ForgeHeroWorktreeMount
+        projectRoot={selectedProjectRoot}
+        onSelect={onWorktreeSelect}
+        makeRpc={makeRpc}
+      />
     </>
   )
 }

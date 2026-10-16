@@ -55,6 +55,14 @@ import {
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
+import {
+  createWorktreeRpcService,
+  interceptSessionSends,
+  type SessionControllerFace,
+  type SessionPersistenceFace,
+  type WorktreeRpcService,
+} from '../ipc/worktree-rpc.js'
+import { GIT_WORKTREE_SERVICE } from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -123,6 +131,8 @@ let pinDurable = false
 // fix-25：worker 侧审批中继（fix-2 桥——/remote/__rpc 审批端点与 main 侧 forge:remote/
 // approval 转发器共用同一中继单源；装配段赋值，缺席 = 端点内 fail-soft unavailable）
 let approvalRelay: ApprovalRelay | undefined
+// fix-2 worktree 发送拦截补撤销缝（装配段赋值——shutdownTree 关停链消费）
+let revokeWorktreeSendGuard: (() => void) | undefined
 
 /**
  * fix-18 ⑤：手机受限视图入口 cookie（/pair 与 /pair/verify 成功面 Set-Cookie）。官方
@@ -256,10 +266,19 @@ async function main(): Promise<void> {
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
+  // fix-2：worktree RPC 域服务（gitWorktree 行在场时装配段构造——见下方装配块）
+  let worktreeRpcService: WorktreeRpcService | undefined
   // worktree-branch-management 1.7 扩展点注入装配：插件行在 profile 树时，把归并实现 +
   // worktree_dir 提供者注入插件缝服务（函数值扩展点不可经 YAML config 承载——cordis ctx
   // 服务面唯一跨插件缝；插件惰性 reflect.get 消费，激活早于本 provide 不受阻）。
   // forgeProjects 缺席 / provide 失败 = 零注入 fail-soft（插件退默认实现 = 独立 worktree 模式）。
+  // 1.7 扩展点注入装配（见上）+ fix-2 装配缺口承接（同门单源）：
+  //   ① forgeWorktree 桥服务——worktree RPC 通道域本体（ipc/worktree-rpc 透传插件域 ops
+  //      + 挂靠事件唯一写入口 + 建会话 meta.cwd 注入 + 封存判定快照）；gitWorktree 能力
+  //      服务惰性取法（在场性探测后台收口——provide 晚于本装配段可达）。
+  //   ② 发送拦截——assertSendable 接入 host 消息处理链（sessionController.prompt/
+  //      updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示——「不可发送」硬保证）。
+  //   缺席/失败 = 零装配 fail-soft（通道未注册、拦截不接线——宿主不受影响）。
   if (gitWorktreeRow) {
     try {
       const forgeProjects = servicesFace.get('forgeProjects') as
@@ -279,6 +298,36 @@ async function main(): Promise<void> {
       }
     } catch (cause) {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
+    }
+    try {
+      const getGitWorktree = (): unknown => {
+        try {
+          return servicesFace.get(GIT_WORKTREE_SERVICE)
+        } catch {
+          return undefined // 服务未 provide（探测未收口/插件未激活）——独立模式面
+        }
+      }
+      const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
+      const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
+      const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
+        gitWorktree: getGitWorktree as never,
+        sessionController,
+        sessionPersistence,
+        warn: (line) => diag(line),
+      })
+      worktreeRpcService = worktreeRpc
+
+      if (sessionController !== undefined) {
+        revokeWorktreeSendGuard = interceptSessionSends(
+          sessionController,
+          (sessionId) => worktreeRpc.seal({ sessionId }),
+          (line) => diag(line),
+        )
+      } else {
+        diag('[git-worktree] sessionController 缺席——发送拦截未接线（封存硬保证降级）')
+      }
+    } catch (cause) {
+      diag(`[git-worktree] forgeWorktree 服务装配失败（RPC/拦截零装配，宿主不受影响）：${String(cause)}`)
     }
   }
   // fix-3：实际绑定 host（快照面单源——UI pending/listening 判读 = 产品配置意图 × 本值；
@@ -653,6 +702,8 @@ async function main(): Promise<void> {
     forgeSettings: (servicesFace.get('forgeSettings') as object | undefined) ?? undefined,
     // fix-bug bug 域（tasksHome 注入时 core provide——缺席 = bugs 面降级）
     forgeBugs: (servicesFace.get('forgeBugs') as object | undefined) ?? undefined,
+    // fix-2 worktree RPC 域（gitWorktree 插件行在场时装配段 provide——缺席 = 通道未注册）
+    forgeWorktree: worktreeRpcService ?? undefined,
     // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
     approval: approvalRelay,
   }
@@ -681,11 +732,17 @@ async function main(): Promise<void> {
       forgeDocs: services.forgeDocs !== undefined,
       forgeSettings: services.forgeSettings !== undefined,
       forgeBugs: services.forgeBugs !== undefined,
+      forgeWorktree: worktreeRpcService !== undefined,
       approval: services.approval !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
   })
   shutdownTree = async () => {
+    try {
+      revokeWorktreeSendGuard?.()
+    } catch {
+      // 拦截撤销失败不阻关停链
+    }
     try {
       await tunnelStop()
     } catch {

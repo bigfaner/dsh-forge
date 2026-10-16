@@ -51,6 +51,7 @@ import {
   type BridgeServiceName,
   type MainToChildMessage,
 } from './bridge.js'
+import { WORKTREE_RPC_METHODS, type WorktreeRpcService } from '../ipc/worktree-rpc.js'
 import { buildBootManifest, tunnelStateOf, type BootManifest } from './manifest.js'
 
 export interface BootDshOptions {
@@ -101,6 +102,8 @@ export interface DshHostServices {
   /** mobile-remote-approval fix-2 审批桥（官方 ctx.approval 在场时 worker provide 内存中继——
    *  缺席 = 审批转发面降级 undefined，forge:remote/approval fail-soft unavailable） */
   approval: BridgeApprovalRelay
+  /** fix-2 worktree RPC 域（gitWorktree 插件行在场时 worker 侧装配——缺席 = 通道族未注册） */
+  forgeWorktree: WorktreeRpcService
 }
 
 export interface DshHostHandle {
@@ -357,6 +360,10 @@ export async function bootDshHost(
       // fix-2 审批桥：worker 侧中继 deposit 代理（forge:remote/approval 转发器注入源）
       approval: ready.services.approval
         ? createBridgeProxy<DshHostServices['approval']>('approval', APPROVAL_SERVICE_METHODS, call)
+        : undefined,
+      // fix-2 worktree RPC 域（九法白名单 = WORKTREE_RPC_METHODS）
+      forgeWorktree: ready.services.forgeWorktree
+        ? createBridgeProxy<DshHostServices['forgeWorktree']>('forgeWorktree', WORKTREE_RPC_METHODS, call)
         : undefined,
     },
     onEvent: channel.onEvent,

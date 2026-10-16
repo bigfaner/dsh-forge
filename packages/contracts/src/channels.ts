@@ -136,6 +136,26 @@ export const REMOTE_CHANNELS = {
 export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNELS]
 
 /**
+ * forge:worktree/*（worktree-branch-management fix-2：worktree/branch 管理域 + 会话绑定面）。
+ * 域实现 = packages/plugins/git-worktree（通用层），host ipc/worktree-rpc 装配透传；
+ * attach = 挂靠事件唯一写入口的 UI 调用点；session-create = 建会话 meta.cwd 注入单门；
+ * seal = 封存判定快照（三通道提示数据源）。封闭写集仅 create/delete（提案「命令面」裁决）。
+ */
+export const WORKTREE_CHANNELS = {
+  list: 'forge:worktree/list',
+  create: 'forge:worktree/create',
+  delete: 'forge:worktree/delete',
+  aheadBehind: 'forge:worktree/ahead-behind',
+  branches: 'forge:worktree/branches',
+  checks: 'forge:worktree/checks',
+  attach: 'forge:worktree/attach',
+  sessionCreate: 'forge:worktree/session-create',
+  seal: 'forge:worktree/seal',
+} as const
+
+export type WorktreeChannel = (typeof WORKTREE_CHANNELS)[keyof typeof WORKTREE_CHANNELS]
+
+/**
  * invoke 通道全集平铺视图（allowlist 数据单源）。
  * 键约定：P1 三族 + projects 扩族 = 族方法名；M2 四族方法键跨族重名（list/transition/register），
  * 平铺视图内加族前缀键保全键唯一（族权威键面 = 各族 *CHANNELS 常量，dto 负载映射亦键于族常量）。
@@ -172,6 +192,15 @@ export const FORGE_CHANNELS = {
   remoteProgress: REMOTE_CHANNELS.progress,
   remoteApproval: REMOTE_CHANNELS.approval,
   remoteDisconnect: REMOTE_CHANNELS.disconnect,
+  worktreeList: WORKTREE_CHANNELS.list,
+  worktreeCreate: WORKTREE_CHANNELS.create,
+  worktreeDelete: WORKTREE_CHANNELS.delete,
+  worktreeAheadBehind: WORKTREE_CHANNELS.aheadBehind,
+  worktreeBranches: WORKTREE_CHANNELS.branches,
+  worktreeChecks: WORKTREE_CHANNELS.checks,
+  worktreeAttach: WORKTREE_CHANNELS.attach,
+  worktreeSessionCreate: WORKTREE_CHANNELS.sessionCreate,
+  worktreeSeal: WORKTREE_CHANNELS.seal,
 } as const
 
 export type ForgeChannel =
@@ -186,6 +215,7 @@ export type ForgeChannel =
   | BugsChannel
   | DocsChannel
   | RemoteChannel
+  | WorktreeChannel
 
 /** main 侧 IPC allowlist 唯一源（未知通道拒绝——electron-ipc-security 约定，继承自 1.4） */
 export const FORGE_CHANNEL_ALLOWLIST: readonly ForgeChannel[] = Object.values(FORGE_CHANNELS)

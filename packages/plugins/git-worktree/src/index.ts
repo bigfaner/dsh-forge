@@ -25,6 +25,44 @@ export const GIT_WORKTREE_IDENTITY_SERVICE = 'forgeWorktreeIdentity' as const
 export const GIT_WORKTREE_SERVICE = 'gitWorktree' as const
 
 export { checkGitPresence, type GitCommandRunner, type GitCommandResult } from './git-presence.js'
+// fix-2 装配透传面（host ipc/worktree-rpc 消费——ops/绑定/封存三域出口收口包根）
+export {
+  createWorktree,
+  CreateWorktreeError,
+  deleteWorktree,
+  aheadBehind,
+  worktreeStatus,
+  listBranches,
+  defaultBranch,
+  listWorktrees,
+  parseWorktreeListPorcelain,
+  type AheadBehind,
+  type CreateWorktreeOptions,
+  type DeleteConfirmationContext,
+  type DeleteWorktreeResult,
+  type WorktreeEntry,
+  type WorktreeStatus,
+} from './worktree-ops.js'
+export {
+  createWorktreeAttachWriter,
+  latestAttachEvent,
+  readLatestAttach,
+  withWorktreeCwd,
+  WORKTREE_ATTACH_EVENT_TYPE,
+  type SessionReadHandleFactory,
+  type SessionWriteHandleFactory,
+  type WorktreeAttachData,
+  type WorktreeAttachEvent,
+  type WorktreeAttachWriter,
+} from './session-attach.js'
+export {
+  assertSendable,
+  evaluateSeal,
+  normalizePathForCompare,
+  SessionSealedError,
+  type SealDecision,
+  type SessionBinding,
+} from './seal-guard.js'
 export {
   createDefaultExtensionPoints,
   defaultGetWorktreeDir,

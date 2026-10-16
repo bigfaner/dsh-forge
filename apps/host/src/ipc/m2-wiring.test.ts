@@ -99,7 +99,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
     ).not.toThrow()
     expect(handlers.has(PROJECTS_M2_CHANNELS.deriveTaskStoreDir)).toBe(true)
     expect(handlers.has(TASKS_CHANNELS.list)).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(6) // M2 四域 + M3 设置域 + bugs 域缺席各一条（forgeProjects 在场不计）
+    expect(warn).toHaveBeenCalledTimes(7) // M2 四域 + M3 设置域 + bugs 域 + fix-2 worktree 域缺席各一条（forgeProjects 在场不计）
     expect(warn.mock.calls.map((c) => String(c[0]))).toEqual([
       expect.stringContaining('forgeTasks 服务缺席'),
       expect.stringContaining('forgeFeatures 服务缺席'),
@@ -107,6 +107,7 @@ describe('3.1 registerM2Channels · 通道族注册', () => {
       expect.stringContaining('forgeDocs 服务缺席'),
       expect.stringContaining('forgeSettings 服务缺席'),
       expect.stringContaining('forgeBugs 服务缺席'),
+      expect.stringContaining('forgeWorktree 服务缺席'),
     ])
   })
 })

@@ -50,6 +50,7 @@ export type BridgeServiceName =
   | 'forgeDocs'
   | 'forgeSettings'
   | 'forgeBugs'
+  | 'forgeWorktree'
   | 'approval'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
@@ -62,6 +63,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeDocs',
   'forgeSettings',
   'forgeBugs',
+  'forgeWorktree',
   'approval',
 ] as const satisfies readonly BridgeServiceName[]
 

@@ -96,6 +96,13 @@ export const CONVERSATION_VIEW_SLOT = 'conversation.view'
 export const HERO_WORKSPACE_SLOT = 'conversation.hero.workspace'
 /** 洞名：AppFrame root 五子槽——常驻覆盖层（壳宿主挂点，不随 main 面板互换卸载） */
 export const SHELL_OVERLAY_SLOT = 'shell.overlay'
+/** 洞名：官方 composer 区 overlay 缝（InputBar overlayAnchor——input 元素上方官方缝；
+ * fix-2 worktree 封存提示通道挂载位：SealNotice 一次性 + composer 占位文案并列呈现） */
+export const CONVERSATION_INPUT_OVERLAY_SLOT = 'conversation.input.overlay'
+/** worktree 会话头 chip 登记 id（SESSION_HEADER_ACTIONS_SLOT list 槽行键） */
+export const WORKTREE_CHIP_ENTRY_ID = 'dswf-worktree-chip'
+/** worktree 会话头 chip 登记序（官方带 -30/-20/-10/20 → -60 = 产品带内居前、不与旧 pill 位冲突） */
+export const WORKTREE_CHIP_ORDER = -60
 /**
  * 洞名：官方右栏 tab 体 keyed 槽（ui-sidebar-right seat——dispatch 键 = tab 类型定义
  * id）。产品占用两键：'dswf-overview' / 'dswf-doc'（4.1 两段注册的第二段；第一段 =
@@ -734,6 +741,10 @@ export interface ForgeViewsGlobal {
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
+    /** fix-2：conversation.session.header.actions 槽只读 chip（worktree 绑定展示/封存失效态） */
+    ForgeSessionWorktreeChip: unknown
+    /** fix-2：conversation.input.overlay 槽封存提示（notice 一次性 + composer 占位文案） */
+    ForgeWorktreeSealOverlay: unknown
     ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
@@ -955,6 +966,7 @@ function registerConversationViews(
   bridge: PublishedBridge,
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
+  uiWorkspace: ForgeUiWorkspaceService,
 ): void {
   registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
     ctx.slots.register(
@@ -975,7 +987,23 @@ function registerConversationViews(
   )
   registerSlotEntry(ctx, HERO_WORKSPACE_SLOT, diagnostics, () =>
     ctx.slots.register(
-      { name: HERO_WORKSPACE_SLOT, priority: SIDEBAR_SHADOW_PRIORITY },
+      {
+        name: HERO_WORKSPACE_SLOT,
+        priority: SIDEBAR_SHADOW_PRIORITY,
+        // fix-2：worktree 挂靠编排缝（选择控件确认 → 建会话 meta.cwd 注入 → 唯一写入口
+        // attach → 官方 openSession——ForgeHeroWorkspacePicker worktree face 消费）
+        inject: () => ({
+          worktree: {
+            openSession: (sessionId: string): void => {
+              try {
+                uiWorkspace.openSession(sessionId)
+              } catch {
+                // 官方导航面异常（会话卸载瞬态）fail-soft 不外溢
+              }
+            },
+          },
+        }),
+      },
       views.ForgeHeroWorkspacePicker,
     ),
   )
@@ -989,6 +1017,38 @@ function registerConversationViews(
     ),
   )
   registerProgressNode(ctx, views, diagnostics)
+}
+
+/**
+ * worktree 六卡挂载登记（fix-2——装配缺口承接②）：两槽位注册——
+ *   · `conversation.session.header.actions` list 行 'dswf-worktree-chip'（会话头只读 chip
+ *     ——绑定展示/封存失效态；sessionId 标准货币由槽 runtime 递达，job-list 同径先例）；
+ *   · `conversation.input.overlay` 官方 composer 区 overlay 缝（封存提示双通道：SealNotice
+ *     一次性 + composer 占位文案；均提示性视觉——硬保证在 host 发送拦截面）。
+ * hero 第二 chip 挂载不占新槽位（难点 A 落法③：ForgeHeroWorkspacePicker 影子渲染面就地
+ * 并列——取证见 walkthrough/hero-second-chip-decision.md，inject 编排缝在其登记行）。
+ */
+function registerWorktreeFaces(
+  ctx: ForgeClientCtx,
+  views: PublishedViews,
+  diagnostics: { registered?: string[] },
+): void {
+  registerSlotEntry(ctx, SESSION_HEADER_ACTIONS_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      {
+        name: SESSION_HEADER_ACTIONS_SLOT,
+        id: WORKTREE_CHIP_ENTRY_ID,
+        order: WORKTREE_CHIP_ORDER,
+      },
+      views.ForgeSessionWorktreeChip,
+    ),
+  )
+  registerSlotEntry(ctx, CONVERSATION_INPUT_OVERLAY_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      { name: CONVERSATION_INPUT_OVERLAY_SLOT },
+      views.ForgeWorktreeSealOverlay,
+    ),
+  )
 }
 
 /**
@@ -2133,7 +2193,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace)
+        registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
 

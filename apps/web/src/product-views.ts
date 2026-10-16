@@ -47,6 +47,10 @@ import {
   type ForgeHeroWorkspacePickerProps,
 } from './views/session/HeroWorkspacePicker.js'
 import {
+  ForgeSessionWorktreeChip,
+  ForgeWorktreeSealOverlay,
+} from './views/session/WorktreeFaces.js'
+import {
   ForgeSettingsSection,
   type ForgeSettingsSectionProps,
 } from './views/settings/ForgeSettingsSection.js'
@@ -89,6 +93,10 @@ export interface ForgePublishedViews {
   readonly ForgeDocsTab: ComponentType<ForgeDocsTabProps>
   /** conversation.hero.workspace 影子占用者（fix-24 ①——新会话输入框上方控件改列项目） */
   readonly ForgeHeroWorkspacePicker: ComponentType<ForgeHeroWorkspacePickerProps>
+  /** conversation.session.header.actions 槽只读 chip（fix-2——worktree 绑定展示/封存失效态） */
+  readonly ForgeSessionWorktreeChip: ComponentType<{ sessionId?: string | undefined }>
+  /** conversation.input.overlay 槽封存提示（fix-2——SealNotice 一次性 + composer 占位文案） */
+  readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
@@ -122,6 +130,8 @@ declare global {
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,
+  ForgeSessionWorktreeChip,
+  ForgeWorktreeSealOverlay,
   ForgeSettingsSection,
   ForgeRemoteEntry,
   ForgeBugGlyph,

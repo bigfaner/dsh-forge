@@ -44,6 +44,7 @@
     "@deepseek-ai/dsh-workspace": "0.2.0-rc.2",
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/core": "workspace:*",
+    "@dsh-forge/git-worktree": "workspace:*",
     "@dsh-forge/knowledge": "workspace:*",
     "@dsh-forge/md-mermaid": "workspace:*",
     "@dsh-forge/path-key": "workspace:*",

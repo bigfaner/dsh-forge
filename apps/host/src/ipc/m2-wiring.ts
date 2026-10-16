@@ -21,6 +21,7 @@ import { registerRemoteChannels } from './remote-rpc.js'
 import { registerSettingsChannels } from './settings-rpc.js'
 import { registerTasksChannels } from './tasks-rpc.js'
 import { registerTestBridge } from './test-bridge.js'
+import { registerWorktreeChannels } from './worktree-rpc.js'
 
 /** 广播目标面（Electron WebContents 结构子集——BrowserWindowLike.webContents 同形；缺席 = 窗口未建/已毁静默跳过） */
 export type EventTargetFace = { send?(channel: string, ...args: unknown[]): unknown } | undefined
@@ -66,6 +67,8 @@ export function registerM2Channels(
   else warn('forgeSettings 服务缺席（settingsFile 未配置/插件行未装载）——forge:settings/* 通道未注册')
   if (services.forgeBugs !== undefined) registerBugsChannels(ipc, services.forgeBugs)
   else warn('forgeBugs 服务缺席（tasksHome 未配置/插件行未装载）——forge:bugs/* 通道未注册')
+  if (services.forgeWorktree !== undefined) registerWorktreeChannels(ipc, services.forgeWorktree)
+  else warn('forgeWorktree 服务缺席（git-worktree 插件行未装载）——forge:worktree/* 通道未注册')
   host.onEvent((payload) => getEventTarget()?.send?.(FORGE_EVENT_CHANNELS.tasksChanged, payload))
   registerTestBridge(host, testEnv) // 5.1：env 门控测试钩子（缺席 = 零注册零痕迹）
 }

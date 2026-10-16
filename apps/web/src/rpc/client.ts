@@ -22,6 +22,25 @@ import {
   PROPOSALS_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
+  WORKTREE_CHANNELS,
+  type WorktreeAheadBehindRequest,
+  type WorktreeAheadBehindResult,
+  type WorktreeAttachRequest,
+  type WorktreeAttachResult,
+  type WorktreeBranchesRequest,
+  type WorktreeBranchesResult,
+  type WorktreeChecksRequest,
+  type WorktreeChecksResult,
+  type WorktreeCreateRequest,
+  type WorktreeCreateResult,
+  type WorktreeDeleteRequest,
+  type WorktreeDeleteResult,
+  type WorktreeListRequest,
+  type WorktreeListResult,
+  type WorktreeSealRequest,
+  type WorktreeSealResult,
+  type WorktreeSessionCreateRequest,
+  type WorktreeSessionCreateResult,
   type DeriveTaskStoreDirRequest,
   type DeriveTaskStoreDirResult,
   type DirListing,
@@ -206,6 +225,23 @@ export interface ForgeSettingsRpc {
   set(input: SetForgeSettingsInput): Promise<void>
 }
 
+/**
+ * forge:worktree/* 面方法集（worktree-branch-management fix-2——九通道；域实现 =
+ * packages/plugins/git-worktree，host ipc/worktree-rpc 装配透传。attach/session-create/seal
+ * = 会话绑定三面：唯一写入口调用点 / meta.cwd 建会话 / 封存判定快照）。
+ */
+export interface ForgeWorktreeRpc {
+  list(q: WorktreeListRequest): Promise<WorktreeListResult>
+  create(q: WorktreeCreateRequest): Promise<WorktreeCreateResult>
+  delete(q: WorktreeDeleteRequest): Promise<WorktreeDeleteResult>
+  aheadBehind(q: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
+  branches(q: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
+  checks(q: WorktreeChecksRequest): Promise<WorktreeChecksResult>
+  attach(q: WorktreeAttachRequest): Promise<WorktreeAttachResult>
+  sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
+  seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
+}
+
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
 export interface ForgeRpcClient {
   readonly projects: ForgeProjectsRpc
@@ -217,6 +253,7 @@ export interface ForgeRpcClient {
   readonly bugs: ForgeBugsRpc
   readonly docs: ForgeDocsRpc
   readonly settings: ForgeSettingsRpc
+  readonly worktree: ForgeWorktreeRpc
 }
 
 export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient {
@@ -285,6 +322,17 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
     settings: {
       get: () => invokeRpc<ForgeSettings>(transport, SETTINGS_CHANNELS.get),
       set: (input) => invokeRpc<void>(transport, SETTINGS_CHANNELS.set, input),
+    },
+    worktree: {
+      list: (q) => invokeRpc<WorktreeListResult>(transport, WORKTREE_CHANNELS.list, q),
+      create: (q) => invokeRpc<WorktreeCreateResult>(transport, WORKTREE_CHANNELS.create, q),
+      delete: (q) => invokeRpc<WorktreeDeleteResult>(transport, WORKTREE_CHANNELS.delete, q),
+      aheadBehind: (q) => invokeRpc<WorktreeAheadBehindResult>(transport, WORKTREE_CHANNELS.aheadBehind, q),
+      branches: (q) => invokeRpc<WorktreeBranchesResult>(transport, WORKTREE_CHANNELS.branches, q),
+      checks: (q) => invokeRpc<WorktreeChecksResult>(transport, WORKTREE_CHANNELS.checks, q),
+      attach: (q) => invokeRpc<WorktreeAttachResult>(transport, WORKTREE_CHANNELS.attach, q),
+      sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
+      seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
     },
   }
 }

@@ -86,6 +86,7 @@ function recordingClient(
       get: mark('settings.get', () => Promise.resolve({})),
       set: mark('settings.set', () => Promise.resolve(undefined)),
     },
+    worktree: {} as unknown as ForgeRpcClient['worktree'],
   } as ForgeRpcClient
   return { client, calls }
 }

@@ -11,6 +11,7 @@
 // allowlist 36 → 38；远程受限面零写动词（审批走官方 user-approval 转发语义，不直改 forge 状态）。
 import { describe, expect, it } from 'vitest'
 import {
+  WORKTREE_CHANNELS,
   BUGS_CHANNELS,
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
@@ -132,9 +133,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十一 invoke 族 39 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(39)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(39)
+  it('allowlist = 十二 invoke 族 48 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道 + worktree 九通道；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(48)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(48)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),
@@ -148,6 +149,7 @@ describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
         ...Object.values(BUGS_CHANNELS),
         ...Object.values(DOCS_CHANNELS),
         ...Object.values(REMOTE_CHANNELS),
+        ...Object.values(WORKTREE_CHANNELS),
       ].sort(),
     )
   })
