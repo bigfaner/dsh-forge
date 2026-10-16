@@ -60,6 +60,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
+  // ── bug-recurrence-chain（复发链挂链写径）──
+  // 挂链引用悬空 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在改参重试）
+  ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
 }
 
 /**

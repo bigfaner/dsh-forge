@@ -45,6 +45,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_SUMMARY_TOO_LONG: 'error-bar',
   ERR_BUG_ALREADY_RESOLVED: 'error-bar',
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
+  // bug-recurrence-chain（复发链挂链写径）——悬空引用错误条
+  ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

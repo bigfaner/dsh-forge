@@ -405,6 +405,80 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* ── Bug 链折叠（bug-recurrence-chain 1.6——mockup ①区逐位对照） ── */
+
+/* chevron 展开位（链行 ▸/▾；零链行 is-hidden 留白对齐——同 dswf-ov-caret 款式族） */
+.dswf-ov-bugrow-chev {
+  flex: none;
+  width: var(--dsw-font-s-14-line-height);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  text-align: center;
+}
+
+.dswf-ov-bugrow-chev.is-hidden {
+  visibility: hidden;
+}
+
+/* 复发徽标「复发 N 次」红系胶囊（红 = error 语义 alias 三件套——上游无 error-tertiary
+ * 软底令牌，底取 danger 软底最近语义 rejected chip 同先例）；置于 errorType chip 左 */
+.dswf-ov-bugrow-rbadge {
+  flex: none;
+  padding: 0 var(--dsw-font-xs-13-line-height);
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值（复发徽标红系胶囊——mockup ①区） */
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 展开区（缩进 + 左竖线子行集——mockup children 刻度） */
+.dswf-ov-bugrow-children {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 6px 22px; /* dsw-raw mockup 子行缩进刻度（chevron 位宽 + 竖线内距对齐） */
+  padding-left: 12px; /* dsw-raw mockup 竖线内距刻度 */
+  border-left: 2px solid var(--dsw-alias-border-l2);
+}
+
+/* 子行（轻量行——状态点 + 定位词 + summary 摘录 + 日期 + 已修短哈希；整行命中面） */
+.dswf-ov-bugrow-child {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* dsw-raw mockup 子行 gap 刻度（卡头 gap 同族） */
+  min-width: 0;
+  padding: 4px 8px; /* dsw-raw mockup 子行内距刻度 */
+  border-radius: var(--dsw-radius-xs);
+}
+
+.dswf-ov-bugrow-child:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-ov-bugrow-child[role='button'] {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-ov-bugrow-child-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-bugrow-child-kind {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-ov-bugrow-child-meta {
+  flex: none;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* meta 块（展开态——原型 m31-meta）：顶分隔线 + bg-3 灰底 + 内距刻度（卡内第二段） */
 .dswf-ov-meta {
   display: flex;
