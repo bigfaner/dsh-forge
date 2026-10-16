@@ -30,8 +30,9 @@ describe('AC1 回填与默认值（initialFormState / derive）', () => {
       name: 'dsh',
       forgeDir: 'Z:\\project\\dsh\\.forge',
       knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
+      worktreeDir: '',
     })
-    expect(state.touched).toEqual({ name: false, forgeDir: false, knowledgeDir: false })
+    expect(state.touched).toEqual({ name: false, forgeDir: false, knowledgeDir: false, worktreeDir: false })
   })
 
   it('folderNameOf 边界：尾分隔符 / 盘符根 / UNC / POSIX', () => {
@@ -63,6 +64,7 @@ describe('AC1 回填与默认值（initialFormState / derive）', () => {
       name: 'proj',
       forgeDir: '/Users/panda/proj/.forge',
       knowledgeDir: '/Users/panda/proj/.knowledge',
+      worktreeDir: '',
     })
     expect(validateFormValues(posixState.values)).toEqual([])
   })
@@ -110,7 +112,20 @@ describe('AC4 换选工作区联动（relinkWorkspace 两分支）', () => {
       name: 'alpha',
       forgeDir: 'D:\\work\\alpha\\.forge',
       knowledgeDir: 'D:\\work\\alpha\\.knowledge',
+      worktreeDir: '',
     })
+  })
+
+  it('worktree 目录：留空 = 缺省（空值跨换选保持，不随工作区派生——默认绝对路径由 core 注册链落）', () => {
+    const next = relinkWorkspace(initialFormState(SELECTION), NEW_WS)
+    expect(next.values.worktreeDir).toBe('')
+  })
+
+  it('worktree 目录手改/浏览选定：换选保留（touched 判据同型）', () => {
+    const edited = editFieldValue(initialFormState(SELECTION), 'worktreeDir', 'E:\\wt\\dsh')
+    const next = relinkWorkspace(edited, NEW_WS)
+    expect(next.values.worktreeDir).toBe('E:\\wt\\dsh')
+    expect(next.touched.worktreeDir).toBe(true)
   })
 
   it('仅项目名手改：name 保留，两目录随新工作区重构', () => {
@@ -134,15 +149,17 @@ describe('AC4 换选工作区联动（relinkWorkspace 两分支）', () => {
     state = editFieldValue(state, 'name', '自定义名')
     state = editFieldValue(state, 'forgeDir', 'E:\\docs\\dsh')
     state = editFieldValue(state, 'knowledgeDir', 'E:\\kn\\dsh')
+    state = editFieldValue(state, 'worktreeDir', 'E:\\wt\\dsh')
     const next = relinkWorkspace(state, NEW_WS)
     expect(next.values).toEqual({
       workspaceDir: NEW_WS,
       name: '自定义名',
       forgeDir: 'E:\\docs\\dsh',
       knowledgeDir: 'E:\\kn\\dsh',
+      worktreeDir: 'E:\\wt\\dsh',
     })
     // 手改标记在换选后保持（后续再换选仍保留）
-    expect(next.touched).toEqual({ name: true, forgeDir: true, knowledgeDir: true })
+    expect(next.touched).toEqual({ name: true, forgeDir: true, knowledgeDir: true, worktreeDir: true })
   })
 })
 
@@ -174,6 +191,14 @@ describe('AC5 表单态校验（validateFormValues：非法路径拦截于表单
     ])
     expect(validateFormValues({ ...base, knowledgeDir: '' })).toEqual([
       { field: 'knowledgeDir', message: '知识库目录不能为空' },
+    ])
+  })
+
+  it('worktree 目录：空 = 缺省合法（默认由 core 落）；非空需绝对路径', () => {
+    const base = initialFormState(SELECTION).values
+    expect(validateFormValues({ ...base, worktreeDir: '' })).toEqual([])
+    expect(validateFormValues({ ...base, worktreeDir: 'relative\\wt' })).toEqual([
+      { field: 'worktreeDir', message: 'worktree 目录需为绝对路径（留空使用默认 .forge/worktrees/）' },
     ])
   })
 
@@ -214,13 +239,14 @@ describe('浏览改选起始目录（browseStartDirOf）', () => {
   })
 })
 
-describe('采集载荷（toRegisterInput → RegisterProjectInput 四字段）', () => {
+describe('采集载荷（toRegisterInput → RegisterProjectInput）', () => {
   it('首尾空白剪除后按 contracts 形状输出（采集面 = 提交面，无额外字段）', () => {
     const input = toRegisterInput({
       workspaceDir: 'Z:\\project\\dsh ',
       name: ' dsh ',
       forgeDir: ' Z:\\project\\dsh\\.forge',
       knowledgeDir: 'Z:\\project\\dsh\\.knowledge ',
+      worktreeDir: '',
     })
     expect(input).toEqual({
       workspaceDir: 'Z:\\project\\dsh',
@@ -228,5 +254,13 @@ describe('采集载荷（toRegisterInput → RegisterProjectInput 四字段）',
       forgeDir: 'Z:\\project\\dsh\\.forge',
       knowledgeDir: 'Z:\\project\\dsh\\.knowledge',
     })
+  })
+
+  it('worktree 目录透传：非空 = worktreeDir 载荷（绝对路径）；空 = 缺省（字段省略——core 注册链落默认绝对路径）', () => {
+    const base = initialFormState(SELECTION).values
+    expect(toRegisterInput({ ...base, worktreeDir: ' E:\\wt\\dsh ' })).toMatchObject({
+      worktreeDir: 'E:\\wt\\dsh',
+    })
+    expect(toRegisterInput(base).worktreeDir).toBeUndefined()
   })
 })

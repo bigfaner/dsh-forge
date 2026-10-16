@@ -39,7 +39,7 @@ describe('直输改（edit：值更新 + touched 置位——AC4 手改判据）
     const h = harness()
     h.actions.edit('name', '我的项目')
     expect(h.form.values.name).toBe('我的项目')
-    expect(h.form.touched).toEqual({ name: true, forgeDir: false, knowledgeDir: false })
+    expect(h.form.touched).toEqual({ name: true, forgeDir: false, knowledgeDir: false, worktreeDir: false })
   })
 
   it('直输改 forge 目录 → touched 置位（后续换选工作区保留的判据）', () => {
@@ -72,7 +72,7 @@ describe('浏览相位（repick / browse / cancelBrowse）', () => {
 })
 
 describe('浏览确认落值（applyPick：AC4 两分支的动作级走查）', () => {
-  it('工作区改选：未手改字段随新工作区重构（name/forge/kn = 新默认值）', () => {
+  it('工作区改选：未手改字段随新工作区重构（name/forge/kn = 新默认值；worktree 留空 = 缺省）', () => {
     const h = harness()
     h.actions.applyPick('workspace', NEW_WS)
     expect(h.browsing).toBeNull()
@@ -81,6 +81,7 @@ describe('浏览确认落值（applyPick：AC4 两分支的动作级走查）', 
       name: 'alpha',
       forgeDir: 'D:\\work\\alpha\\.forge',
       knowledgeDir: 'D:\\work\\alpha\\.knowledge',
+      worktreeDir: '',
     })
   })
 

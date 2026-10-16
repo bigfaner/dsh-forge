@@ -47,6 +47,7 @@ export const BROWSE_TITLES: Readonly<Record<BrowseTarget, string>> = {
   workspace: '选择工作区目录',
   forgeDir: '选择 forge 目录（文档位置）',
   knowledgeDir: '选择知识库目录',
+  worktreeDir: '选择 worktree 目录',
 }
 
 /** 浏览面板底部提示（DirectoryBrowser hint 参数化） */
@@ -54,6 +55,7 @@ const BROWSE_HINTS: Readonly<Record<BrowseTarget, string>> = {
   workspace: '单击选中，双击进入；选定后回填工作区目录，未手改字段随新工作区重构。',
   forgeDir: '单击选中，双击进入；选定后回填「文档位置 · forge 目录」（不再随工作区自动重构）。',
   knowledgeDir: '单击选中，双击进入；选定后回填「知识库目录」（不再随工作区自动重构）。',
+  worktreeDir: '单击选中，双击进入；选定后回填「worktree 目录」（不再随工作区自动重构）。',
 }
 
 /** RegisterFormView props（纯渲染面——静态标记可测；2.10 模态壳内嵌本体） */
@@ -159,6 +161,7 @@ export function RegisterFormView({
   const nameIssue = issueOf('name')
   const forgeIssue = issueOf('forgeDir')
   const knowledgeIssue = issueOf('knowledgeDir')
+  const worktreeIssue = issueOf('worktreeDir')
   const editHandler =
     onEdit === undefined
       ? undefined
@@ -229,6 +232,14 @@ export function RegisterFormView({
         side={browseBtn('knowledgeDir')}
         hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;/.knowledge；可直接输入或浏览改选仓外目录；目录不存在时将自动创建</p>}
         issue={knowledgeIssue ? <FieldIssue issue={knowledgeIssue} /> : undefined}
+      />
+      <FormRow
+        id="dswf-rf-wt"
+        label="worktree 目录"
+        input={<input id="dswf-rf-wt" className="dswf-rf-input" data-dswf-rf-wt type="text" placeholder=".forge/worktrees/" value={values.worktreeDir} onChange={editHandler?.('worktreeDir')} />}
+        side={browseBtn('worktreeDir')}
+        hint={<p className="dswf-rf-hint">默认 = &lt;工作区&gt;/.forge/worktrees/；留空即用默认（注册时解析为绝对路径）；可直接输入或浏览改选</p>}
+        issue={worktreeIssue ? <FieldIssue issue={worktreeIssue} /> : undefined}
       />
       {nativePickError === null ? null : (
         <p className="dswf-rf-issue" role="alert" data-dswf-rf-np-error>
