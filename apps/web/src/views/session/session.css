@@ -211,3 +211,20 @@ button.dswf-recall-rowbtn:hover {
 .dswf-recall-retry:hover {
   color: var(--dsw-alias-link);
 }
+
+/* ── 新建 worktree 弹窗（1.12）：卡面放宽一档容纳路径说明行；下拉浮层与输入框同宽 ── */
+
+/* 官方 Modal 卡面 .dialog width: min(380px, 100%) → 放宽一档 432px（1.9 实测三输入
+ * 332px 等宽基准同步放宽至 ~384px；等宽不回退——三输入共用同一列宽基准） */
+.dswt-create-modal {
+  width: min(432px, 100%);
+}
+
+/* 官方 Menu 浮层卡 .list 随内容撑宽（min 144 / max 360）→ 钉为锚宽：绝对定位以
+ * .root（被 fieldStretch 拉满列宽 = 输入框宽）为包含块，width:100% = 输入框宽，
+ * 不随最长选项撑宽、不窄于输入框（基准分支下拉与 slug 组合框共用） */
+.dswt-base-branch-menu,
+.dswt-branch-slug-menu {
+  width: 100%;
+  max-width: none;
+}

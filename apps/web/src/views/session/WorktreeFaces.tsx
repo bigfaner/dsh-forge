@@ -25,6 +25,8 @@ import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
 import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
+// 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
+import './session.css'
 
 /** 分支组合框输入面样式（同表单其余 Input 等宽基准——caption 字号令牌 + mono + 34px/100%） */
 const branchInputStyle: React.CSSProperties = {
