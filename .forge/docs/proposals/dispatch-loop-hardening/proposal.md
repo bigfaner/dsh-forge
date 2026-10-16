@@ -40,6 +40,7 @@ flowchart LR
   - 「不造工作、一任务一 worker、halted 守卫」等铁律成为核心行为而非提示词约定。
 - **改进 4 · worker 进程树 Job Object 回收（孤儿子进程根治，用户裁决 2026-10-16 进提案）**：派发 worker 的全部子进程挂 Windows Job Object（`KILL_ON_JOB_CLOSE`）——worker 无论正常结算、blocked 还是 interrupted，其进程树（含 vite/tsc/git 等孙进程）整树随之回收。实证背景：worker 遗留的 `vite build --watch`（2.1GB）与 `tsc -b --watch`（1.4GB）孤儿进程耗尽 commit charge（36.7/36.9 GB），后续任意进程原生崩溃被连环误诊（判例 `docs/conventions/windows-commit-exhaustion.md`）。与禁 watch 纪律（AGENTS.md）互补：纪律防「活着等人」，Job Object 兜底「忘了杀也活不成」。
 - **暂不做（记录裁决）**：关键路径优先（下游解锁数/最长链排序）——改进 2 落地后边际收益小；「从头执行」文案与增量恢复语义出入——纯文案不影响行为。两项留观察。
+- **模式 B · 一任务一 worktree（记录待研，用户裁决 2026-10-16）**：派发 worker 在独立 worktree 工作、结果收敛回共用基分支。git 硬约束：同一分支不能被两个 worktree 同时检出——并行形态必须每树挂临时分支（`wt/<task-id>`），结算时主会话顺序合并回基分支，冲突判 blocked 派 fix。前置依赖：改进 4（Job Object 回收）落地 + commit 水位可控（并行 N 份质量门内存翻倍），第一版限并发 2。与模式 A（池共用一树串行，姊妹形态）同属「worker 文件树隔离」命题，一并裁决。
 
 ## 改动范围
 
