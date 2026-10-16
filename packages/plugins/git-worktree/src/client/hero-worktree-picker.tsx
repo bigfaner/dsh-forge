@@ -9,7 +9,7 @@
 // apps/web HeroWorkspacePicker.test 同口径惯例），开弹层交互归 e2e。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconBranchOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular } from './icons.js'
+import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular } from './icons.js'
 import {
   aheadBehindSegments,
   inferSource,
@@ -87,35 +87,61 @@ const mono = {
   fontFamily: 'var(--ds-font-family-code, monospace)',
 } satisfies React.CSSProperties
 
-/** 触发 chip（h28 胶囊 999px——官方 Tag 同值；hover 出 border-l3；点击开合 owner 态） */
-function triggerChip(row: WorktreeRow | undefined, onToggle: () => void): ReactNode {
+/**
+ * 触发 chip（官方 WorkspaceChip 实机规格逐位对照——HeroShell.module.css `.workspace`：
+ * 透明底 + radius-sm、hover/展开 `interactive-bg-hover` 填充、min-height 28、padding 0 8、
+ * gap 4、13px/500/20px label-primary、前分支图标 16（对位官方文件夹 16）+ 尾 chevron 12
+ * caption 色、label 溢出省略、max-width min(100%,360px)；最大区别于旧胶囊自绘面）。
+ */
+function TriggerChip({
+  row,
+  open,
+  onToggle,
+}: {
+  readonly row: WorktreeRow | undefined
+  readonly open: boolean
+  readonly onToggle: () => void
+}): ReactNode {
+  const [hover, setHover] = useState(false)
   return (
     <button
       type="button"
       data-dswt-hero-trigger=""
+      aria-haspopup="menu"
+      aria-expanded={open}
       onClick={onToggle}
+      onMouseEnter={() => {
+        setHover(true)
+      }}
+      onMouseLeave={() => {
+        setHover(false)
+      }}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
-        height: 28,
-        padding: '0 10px',
-        borderRadius: 999,
-        border: '0.5px solid var(--dsw-alias-border-l2)',
-        background: 'var(--dsw-alias-bg-layer-1)',
+        gap: 4,
+        minHeight: 28,
+        maxWidth: 'min(100%, 360px)',
+        padding: '0 8px',
+        borderRadius: 'var(--dsw-radius-sm)',
+        border: 'none',
+        background: hover || open ? 'var(--dsw-alias-interactive-bg-hover)' : 'transparent',
         fontSize: 13,
-        color: 'var(--dsw-alias-label-secondary)',
+        fontWeight: 500,
+        lineHeight: '20px',
+        color: 'var(--dsw-alias-label-primary)',
         cursor: 'pointer',
         fontFamily: 'inherit',
       }}
     >
-      <span
-        style={{ width: 7, height: 7, borderRadius: 999, background: 'var(--dsw-alias-state-business-primary)' }}
-        aria-hidden="true"
-      />
-      <IconBranchOutlineRegular size={14} />
-      <span style={{ color: 'var(--dsw-alias-label-secondary)' }}>
+      <span style={{ display: 'inline-flex', flex: 'none', color: 'var(--dsw-alias-label-primary)' }}>
+        <IconBranchOutlineRegular size={16} />
+      </span>
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {row ? `${row.branch ?? ''} · ${row.worktreeName}` : '选择 worktree…'}
+      </span>
+      <span style={{ display: 'inline-flex', flex: 'none', color: 'var(--dsw-alias-label-caption)' }}>
+        <IconChevronDownOutlineRegular size={12} />
       </span>
     </button>
   )
@@ -248,9 +274,9 @@ export function HeroWorktreePicker({
   return (
     <Menu
       open={open}
-      anchor={triggerChip(selected, () => {
+      anchor={<TriggerChip row={selected} open={open} onToggle={() => {
         setOpen((value) => !value)
-      })}
+      }} />}
       items={items}
       footer={[{ id: CREATE_ITEM_ID, label: '新建 worktree…', icon: <IconPlusOutlineRegular size={14} /> }]}
       selectedId={selectedPath}

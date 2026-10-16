@@ -80,6 +80,10 @@ const fieldOpt: React.CSSProperties = {
 }
 const mono = { fontFamily: 'var(--ds-font-family-code, monospace)' } satisfies React.CSSProperties
 const inputStyle: React.CSSProperties = { ...mono, height: 34, width: '100%', fontSize: 13 }
+/** 等宽拉伸面：官方 Input 的 style 落在内部 <input>，可见描边盒是外层 inline-flex
+ * .wrap span（shrink-to-fit）——列向 flex 面内 stretch 把 .wrap 拉满容器宽，三字段
+ * 与基准分支触发器共用同一列宽基准（等宽 + 左缘对齐；Menu 根 inline-flex 同理）。 */
+const fieldStretch: React.CSSProperties = { display: 'flex', flexDirection: 'column' }
 
 /** 三字段表单体（官方 Input/Menu 形态——弹窗 body 内容，Modal 外提单测面） */
 export function CreateWorktreeFields({
@@ -96,75 +100,82 @@ export function CreateWorktreeFields({
         <div style={fieldLabel}>
           基准分支 <span style={fieldOpt}>（新分支的起点）</span>
         </div>
-        <Menu
-          open={form.baseOpen}
-          anchor={
-            <button
-              type="button"
-              data-dswt-base-trigger=""
-              onClick={() => {
-                onChange({ ...form, baseOpen: !form.baseOpen })
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                height: 34,
-                padding: '0 10px',
-                border: '0.5px solid var(--dsw-alias-border-l2)',
-                borderRadius: 8,
-                background: 'var(--dsw-alias-bg-layer-1)',
-                fontSize: 13,
-                color: 'var(--dsw-alias-label-primary)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              <IconBranchOutlineRegular size={14} />
-              <span style={mono}>{form.baseBranch}</span>
-              <span style={{ marginLeft: 'auto', display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' }}>
-                <IconChevronDownOutlineRegular size={14} />
-              </span>
-            </button>
-          }
-          items={baseItems}
-          selectedId={form.baseBranch}
-          onSelect={(id) => {
-            onChange({ ...form, baseBranch: id, baseOpen: false })
-          }}
-          onClose={() => {
-            onChange({ ...form, baseOpen: false })
-          }}
-          listClassName="dswt-base-branch-menu"
-        />
+        {/* 官方 Menu 根为 inline-flex（Menu.module.css .root）——fieldStretch 拉满容器宽 */}
+        <div style={fieldStretch}>
+          <Menu
+            open={form.baseOpen}
+            anchor={
+              <button
+                type="button"
+                data-dswt-base-trigger=""
+                onClick={() => {
+                  onChange({ ...form, baseOpen: !form.baseOpen })
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  height: 34,
+                  padding: '0 10px',
+                  border: '0.5px solid var(--dsw-alias-border-l2)',
+                  borderRadius: 8,
+                  background: 'var(--dsw-alias-bg-layer-1)',
+                  fontSize: 13,
+                  color: 'var(--dsw-alias-label-primary)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <IconBranchOutlineRegular size={14} />
+                <span style={mono}>{form.baseBranch}</span>
+                <span style={{ marginLeft: 'auto', display: 'inline-flex', color: 'var(--dsw-alias-label-tertiary)' }}>
+                  <IconChevronDownOutlineRegular size={14} />
+                </span>
+              </button>
+            }
+            items={baseItems}
+            selectedId={form.baseBranch}
+            onSelect={(id) => {
+              onChange({ ...form, baseBranch: id, baseOpen: false })
+            }}
+            onClose={() => {
+              onChange({ ...form, baseOpen: false })
+            }}
+            listClassName="dswt-base-branch-menu"
+          />
+        </div>
       </div>
 
       <div data-dswt-field-branch="" style={{ marginBottom: 14 }}>
         <div style={fieldLabel}>分支</div>
-        <Input
-          data-dswt-branch-input=""
-          value={form.branch}
-          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            onChange({ ...form, branch: event.currentTarget.value })
-          }}
-          style={inputStyle}
-          placeholder="feat/my-branch"
-        />
+        <div style={fieldStretch}>
+          <Input
+            data-dswt-branch-input=""
+            value={form.branch}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+              onChange({ ...form, branch: event.currentTarget.value })
+            }}
+            style={inputStyle}
+            placeholder="feat/my-branch"
+          />
+        </div>
       </div>
 
       <div data-dswt-field-worktree="">
         <div style={fieldLabel}>
           worktree <span style={fieldOpt}>（自动派生，可改）</span>
         </div>
-        <Input
-          data-dswt-worktree-input=""
-          value={worktreeName}
-          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-            onChange({ ...form, worktreeName: event.currentTarget.value, worktreeTouched: true })
-          }}
-          style={inputStyle}
-        />
+        <div style={fieldStretch}>
+          <Input
+            data-dswt-worktree-input=""
+            value={worktreeName}
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+              onChange({ ...form, worktreeName: event.currentTarget.value, worktreeTouched: true })
+            }}
+            style={inputStyle}
+          />
+        </div>
         <div data-dswt-path-preview="" style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)', marginTop: 6 }}>
           将创建于{' '}
           <span style={{ ...mono, color: 'var(--dsw-alias-label-secondary)' }}>
@@ -188,15 +199,17 @@ export function CreateWorktreeFields({
           )}
         </div>
         {form.customPathOpen && (
-          <Input
-            data-dswt-custom-path-input=""
-            value={form.customPath}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-              onChange({ ...form, customPath: event.currentTarget.value })
-            }}
-            placeholder="自定义 worktree 路径"
-            style={{ ...inputStyle, marginTop: 6 }}
-          />
+          <div style={{ ...fieldStretch, marginTop: 6 }}>
+            <Input
+              data-dswt-custom-path-input=""
+              value={form.customPath}
+              onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                onChange({ ...form, customPath: event.currentTarget.value })
+              }}
+              placeholder="自定义 worktree 路径"
+              style={inputStyle}
+            />
+          </div>
         )}
       </div>
     </>

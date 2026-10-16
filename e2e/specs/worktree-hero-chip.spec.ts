@@ -4,7 +4,7 @@
 // forge:worktree/list isGit:true → HeroWorktreeMount 注入。
 // data 锚：chip = [data-dswt-hero-trigger]；弹层卡 = .dswt-hero-menu（hero-worktree-picker）。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeApp, launchElectron } from '../support/launch.js'
