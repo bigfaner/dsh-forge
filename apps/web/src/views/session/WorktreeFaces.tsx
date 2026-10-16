@@ -203,7 +203,7 @@ export function ForgeHeroWorktreeMount({
     (request: CreateWorktreeRequest): void => {
       if (projectRoot === null) return
       // 弹窗产物（baseBranch/branch/worktreeName/customPath）→ create 载荷：
-      // path = 自定义路径优先，否则落所配 worktree 目录（deriveWorktreeName 派生名拼尾段）
+      // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认）
       const baseDir = phase.worktreeDir ?? ''
       const path = request.customPath !== undefined && request.customPath !== ''
         ? request.customPath

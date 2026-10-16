@@ -1,6 +1,6 @@
 // @dsh-forge/git-worktree client —— 新建 worktree 弹窗（原型第六卡逐位对照）：
 // 官方 Modal + 三字段自上而下——① 基准分支（默认 main，可下拉）→ ② 分支（主输入）→
-// ③ worktree（自动派生，可改）；路径行 = 所配 worktree 目录预览 + 「自定义路径…」；
+// ③ worktree（默认与分支同名跟随，可改）；路径行 = 所配 worktree 目录预览 + 「自定义路径…」；
 // 入口只说一个名词「新建 worktree…」——分支与 worktree 一体感由派生交互承载。
 // 分支主输入 = 自由手写 + slug 智能下拉（提案/feature slug 候选、未完成排前、去重、
 // 输入过滤）；合并形态经 BranchCombobox slot 注入通用组合框（apps/web EditableCombobox），
@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, Menu, Modal, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
 import { WorktreeRiskConfirmation } from './risk-confirmation.js'
-import { createConflicts, deriveWorktreeName, filterSlugCandidates, isCreateReady, isCrossBranchRisk, type CreateConflict, type SlugCandidate } from './model.js'
+import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */
 export interface CreateWorktreeRequest {
@@ -56,11 +56,11 @@ export function initialCreateForm(defaultBranch: string | undefined, branches: r
 }
 
 /**
- * 派生规约（纯函数）：worktree 名未手改前跟随分支名派生（feat/ 前缀映射 wt-，尾段
- * 补前缀）；用户改过即停跟随（派生可改）。
+ * 派生规约（纯函数，1.20 用户裁决：同名默认）：worktree 名未手改前与分支名同名跟随；
+ * 手改后脱离跟随以用户值为准（判定单源 isWorktreeNameFollowing——回同名值即恢复跟随）。
  */
 export function deriveFormWorktreeName(form: CreateWorktreeFormValue): string {
-  return form.worktreeTouched ? form.worktreeName : deriveWorktreeName(form.branch)
+  return isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched) ? form.branch : form.worktreeName
 }
 
 /** 路径预览（自定义路径开且非空 = 自定义值；否则 = 所配目录/派生名） */
@@ -155,6 +155,12 @@ export function CreateWorktreeFields({
 }: CreateWorktreeFieldsProps): ReactNode {
   const baseItems = useMemo(() => branches.map((id) => ({ id, label: id })), [branches])
   const worktreeName = deriveFormWorktreeName(form)
+  // 分支变化（手写/候选回填/组合框）：跟随态（含用户值清回同名）下复位手改标记——
+  // worktree 名继续同名跟随；已脱离跟随则保留用户值（判定单源 isWorktreeNameFollowing）
+  const changeBranch = (branch: string): void => {
+    const following = isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched)
+    onChange({ ...form, branch, worktreeTouched: following ? false : form.worktreeTouched })
+  }
   const slugItems = useMemo(
     () =>
       slugCandidates.map((candidate) => ({
@@ -231,9 +237,7 @@ export function CreateWorktreeFields({
           <div style={fieldStretch}>
             <BranchCombobox
               value={form.branch}
-              onChange={(branch) => {
-                onChange({ ...form, branch })
-              }}
+              onChange={changeBranch}
               options={slugItems}
               onFilter={filterItems}
               placeholder="feat/my-branch"
@@ -251,7 +255,7 @@ export function CreateWorktreeFields({
                       data-dswt-branch-input=""
                       value={form.branch}
                       onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                        onChange({ ...form, branch: event.currentTarget.value })
+                        changeBranch(event.currentTarget.value)
                       }}
                       style={inputStyle}
                       placeholder="feat/my-branch"
@@ -284,7 +288,8 @@ export function CreateWorktreeFields({
               }
               items={filterItems(form.branch)}
               onSelect={(id) => {
-                onChange({ ...form, branch: id, branchOpen: false })
+                changeBranch(id)
+                onChange({ ...form, branchOpen: false })
               }}
               onClose={() => {
                 onChange({ ...form, branchOpen: false })
@@ -298,7 +303,7 @@ export function CreateWorktreeFields({
 
       <div data-dswt-field-worktree="">
         <div style={fieldLabel}>
-          worktree <span style={fieldOpt}>（自动派生，可改）</span>
+          worktree <span style={fieldOpt}>（默认与分支同名，可改）</span>
         </div>
         <div style={fieldStretch}>
           <Input

@@ -13,7 +13,7 @@ import {
   type CreateWorktreeFormValue,
 } from './create-worktree-dialog.js'
 import { DeleteChecksList, DeleteWorktreeDialog } from './delete-worktree-dialog.js'
-import { createConflicts, deriveWorktreeName, isCreateReady, isDeleteBlocked } from './model.js'
+import { createConflicts, isCreateReady, isDeleteBlocked, isWorktreeNameFollowing } from './model.js'
 
 const FORM: CreateWorktreeFormValue = initialCreateForm('main', ['main', 'feat/a'])
 
@@ -52,7 +52,7 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
     expect(markup).toContain('data-dswt-field-worktree')
     expect(markup).toContain('基准分支')
     expect(markup).toContain('（新分支的起点）')
-    expect(markup).toContain('（自动派生，可改）')
+    expect(markup).toContain('（默认与分支同名，可改）')
     expect(markup).toContain('>main<')
   })
 
@@ -88,7 +88,7 @@ describe('分支 slug 下拉 + 同名冲突告警（提案裁决 2026-10-16）',
   it('worktree 名同名冲突：表单内告警行（worktree-exists → data-dswt-conflict-worktree）', () => {
     const markup = renderFields({ branch: 'feat/a' }, ['worktree-exists'])
     expect(markup).toContain('data-dswt-conflict-worktree')
-    expect(markup).toContain('worktree wt-a 已存在')
+    expect(markup).toContain('worktree feat/a 已存在')
   })
 
   it('无冲突：零告警行（拦截语义只对命中生效）', () => {
@@ -151,20 +151,31 @@ describe('分支组合框插槽（合并形态——slot 注入通用组合框�
   })
 })
 
-describe('派生规约（纯函数）', () => {
-  it('feat/remote-approval → wt-remote-approval（未手改跟随派生）', () => {
-    expect(deriveWorktreeName('feat/remote-approval')).toBe('wt-remote-approval')
+describe('同名默认跟随/脱离判定（1.20 纯函数单源 isWorktreeNameFollowing）', () => {
+  it('未手改：worktree 名 = 分支名同名跟随（分支变化即同步）', () => {
     const form = { ...FORM, branch: 'feat/remote-approval' }
-    expect(deriveFormWorktreeName(form)).toBe('wt-remote-approval')
+    expect(isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched)).toBe(true)
+    expect(deriveFormWorktreeName(form)).toBe('feat/remote-approval')
+    expect(deriveFormWorktreeName({ ...form, branch: 'feat/other' })).toBe('feat/other')
   })
-  it('手改 worktree 名即停跟随（派生可改）', () => {
+  it('手改 worktree 名 → 脱离跟随（以用户值为准）', () => {
     const form = { ...FORM, branch: 'feat/remote-approval', worktreeName: 'my-lab', worktreeTouched: true }
+    expect(isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched)).toBe(false)
     expect(deriveFormWorktreeName(form)).toBe('my-lab')
+  })
+  it('手改后清回分支同名值 → 恢复跟随判定（值 = 分支名）', () => {
+    const form = { ...FORM, branch: 'feat/remote-approval', worktreeName: 'feat/remote-approval', worktreeTouched: true }
+    expect(isWorktreeNameFollowing(form.branch, form.worktreeName, form.worktreeTouched)).toBe(true)
+    expect(deriveFormWorktreeName(form)).toBe('feat/remote-approval')
+    // 分支变化经 changeBranch（跟随态复位手改标记）→ worktree 名继续同名跟随
+    const afterBranchChange = { ...form, branch: 'feat/next', worktreeTouched: false }
+    expect(isWorktreeNameFollowing(afterBranchChange.branch, afterBranchChange.worktreeName, afterBranchChange.worktreeTouched)).toBe(true)
+    expect(deriveFormWorktreeName(afterBranchChange)).toBe('feat/next')
   })
   it('创建钮门：分支名 + worktree 名齐备才 ready', () => {
     expect(isCreateReady('', 'wt-a')).toBe(false)
     expect(isCreateReady('feat/a', '')).toBe(false)
-    expect(isCreateReady('feat/a', 'wt-a')).toBe(true)
+    expect(isCreateReady('feat/a', 'feat/a')).toBe(true)
   })
 })
 

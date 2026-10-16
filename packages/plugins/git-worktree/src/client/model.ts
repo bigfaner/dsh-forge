@@ -38,6 +38,15 @@ export function deriveWorktreeName(branch: string): string {
   return tail === '' ? '' : `wt-${tail}`
 }
 
+/**
+ * worktree 名跟随/脱离判定（1.20 纯函数单源——新建弹窗同名默认跟随）：
+ * 未手动编辑过 worktree 名 → 跟随分支（默认值 = 分支名同名）；手动编辑过 → 脱离跟随、
+ * 以用户值为准；但用户值清回与分支名同名（trim 口径）→ 恢复跟随判定。
+ */
+export function isWorktreeNameFollowing(branch: string, worktreeName: string, touched: boolean): boolean {
+  return !touched || worktreeName.trim() === branch.trim()
+}
+
 /** ahead/behind 徽标段（懒加载后填充；零值段省略；无 upstream 全省略） */
 export interface AheadBehindSegments {
   readonly ahead: string | null

@@ -159,7 +159,7 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await expect(baseRiskDialog(page)).toBeVisible()
     await acknowledgeAndConfirm(page, baseRiskDialog(page))
     await expect
-      .poll(async () => (await listNames(page, wsDir)).includes('wt-new'), { timeout: 30_000, message: '确认后应创建 wt-new' })
+      .poll(async () => (await listNames(page, wsDir)).includes('feat/new'), { timeout: 30_000, message: '确认后应创建同名 worktree feat/new' })
       .toBe(true)
     await snap(page, 'create-confirmed.png')
 
