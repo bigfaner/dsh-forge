@@ -188,12 +188,13 @@ describe('dsh-mobile-tunnel PIN 签发器（官方 /pair/verify 对齐：6 位·
 describe('fix-28 renderPairingPinPage（/pair 隧道 Host PIN 输入页）', () => {
   const page = renderPairingPinPage()
 
-  it('表单 POST /pair/verify + 6 位 PIN 输入（数字键盘）', () => {
+  it('表单 POST /pair/verify + 6 位 PIN 输入（数字键盘——fix-30 ①起为六格单位格）', () => {
     expect(page).toContain('action="/pair/verify"')
     expect(page).toContain('method="post"')
     expect(page).toContain('name="pin"')
     expect(page).toContain('inputmode="numeric"')
-    expect(page).toContain('maxlength="6"')
+    expect(page).toContain('maxlength="1"')
+    expect(page).not.toContain('maxlength="6"')
   })
 
   it('不携带 token/pin 等敏感凭据（凭据零嵌入——verify 由 PIN 单独守门）', () => {
@@ -225,10 +226,10 @@ describe('fix-29 renderPairingPinPage 样式对齐（DESIGN.md 令牌族）', ()
     expect(page).toMatch(/box-shadow:/) // elevation lv2 双层微阴影
   })
 
-  it('PIN 大字输入（居中大号 + 数字字距）+ 主色提交钮（近黑 fill 反差面）', () => {
+  it('PIN 大字输入（居中大号，fix-30 ①起字距由六格分位承载）+ 主色提交钮（近黑 fill 反差面）', () => {
     expect(page).toMatch(/text-align:\s*center/)
-    expect(page).toMatch(/font-size:\s*24px/) // display 档大字
-    expect(page).toMatch(/letter-spacing:/)
+    expect(page).toMatch(/font-size:\s*24px/) // display 档大字（pin-cell）
+    expect(page).toMatch(/\.pin-cells\{/) // 六格行容器（分位取代单框字距）
     expect(page).toMatch(/background:\s*#0f1115/) // --dsw-alias-button-primary-fill（dsw-raw 行注）
   })
 })
@@ -269,6 +270,82 @@ describe('fix-28 pinOfSubmission（/pair/verify PIN 提交解析单源）', () =
 
   it('query ?pin= 优先于 body（既有语义：query 非空时 body 不参与）', () => {
     expect(pinOfSubmission('111111', 'pin=222222')).toBe('111111')
+  })
+})
+
+// ── fix-30 ①：PIN 六格独立方框输入页（常见 OTP 输入形态——每位一格） ──
+
+describe('fix-30 ① renderPairingPinPage：PIN 六格输入', () => {
+  const page = renderPairingPinPage()
+
+  it('6 个独立单位格 input（data-pin-cell × 6，inputmode=numeric maxlength=1）', () => {
+    const cells = page.match(/<input[^>]*data-pin-cell[^>]*>/g) ?? []
+    expect(cells).toHaveLength(6)
+    for (const cell of cells) {
+      expect(cell).toMatch(/inputmode="numeric"/)
+      expect(cell).toMatch(/maxlength="1"/)
+    }
+  })
+
+  it('隐藏 pin 汇聚域 + 原生表单 POST /pair/verify（后端 pinOfSubmission 解析零变化）', () => {
+    expect(page).toMatch(/<form action="\/pair\/verify" method="post">/)
+    expect(page).toMatch(/<input[^>]*type="hidden"[^>]*name="pin"/)
+  })
+
+  it('脚本面：自动跳格 + 退格回退 + 粘贴分发（行为标记在场）+ 提交前同步汇聚域', () => {
+    expect(page).toMatch(/paste/)
+    expect(page).toMatch(/Backspace/)
+    expect(page).toMatch(/\.focus\(\)/)
+    expect(page).toMatch(/addEventListener\('submit'/)
+  })
+})
+
+// ── fix-30 ③：durable PIN 持久化（跨 boot worker 存活——官方语义：长效密码保存在本机） ──
+
+describe('fix-30 ③ createPinIssuer durable 持久化', () => {
+  function memoryPersist() {
+    let saved: { pin: string; durable: boolean } | undefined
+    return {
+      state: () => saved,
+      load: () => saved,
+      save: (s: { pin: string; durable: boolean }) => {
+        saved = s
+      },
+    }
+  }
+
+  it('setDurable(true)：持久面写入 {pin, durable:true}', () => {
+    const persist = memoryPersist()
+    const issuer = createPinIssuer(() => 1_000, persist)
+    const durable = issuer.setDurable(true)
+    expect(persist.state()).toEqual({ pin: durable.pin, durable: true })
+  })
+
+  it('重启模拟：新签发器自持久面恢复长效 PIN——verify 通过 + rotate 零换签（断开/重启不动长效）', () => {
+    const persist = memoryPersist()
+    const first = createPinIssuer(() => 1_000, persist)
+    const durable = first.setDurable(true)
+    const second = createPinIssuer(() => 1_000, persist) // 新 boot worker
+    expect(second.current().pin).toBe(durable.pin)
+    expect(second.verify(durable.pin)).toBe(true)
+    expect(second.rotate().pin).toBe(durable.pin)
+  })
+
+  it('setDurable(false)：持久面写入 durable:false——重启后回临时 PIN（旧长效失效）', () => {
+    const persist = memoryPersist()
+    const first = createPinIssuer(() => 1_000, persist)
+    const durable = first.setDurable(true)
+    first.setDurable(false)
+    expect(persist.state()?.durable).toBe(false)
+    const second = createPinIssuer(() => 2_000, persist)
+    expect(second.current().pin).not.toBe(durable.pin)
+    expect(second.verify(durable.pin)).toBe(false)
+  })
+
+  it('未持久化（load undefined）= 既有内存语义零变化', () => {
+    const issuer = createPinIssuer(() => 1_000, memoryPersist())
+    const grant = issuer.current()
+    expect(issuer.verify(grant.pin)).toBe(true)
   })
 })
 

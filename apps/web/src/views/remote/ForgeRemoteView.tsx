@@ -27,7 +27,7 @@ import {
   runApprovalDecision,
   type RemoteApprovalState,
 } from './remote-approval-model.js'
-import { remoteListRowsOf, type RemoteListRow } from './remote-view-model.js'
+import { remoteListRowsOf, mergeRemoteSnapshots, type RemoteListRow } from './remote-view-model.js'
 import {
   initialRemoteFaceState,
   remoteFacePhaseOf,
@@ -36,11 +36,20 @@ import {
 } from './remote-transport.js'
 import './remote.css'
 
-/** forge:projects/list → 首个项目（受限视图上下文项目——单工作区产品形态；无项目 = undefined） */
-async function firstProjectOf(transport: ForgeTransport): Promise<ProjectSummary | undefined> {
+/**
+ * fix-30 ④：受限视图进度快照装载（全项目聚合）——非 archived 项目逐个查 progress 后
+ * mergeRemoteSnapshots 合并（数据层同一只读通道，零本地副本：只拼接不判读）。
+ * Root cause: 原实现锚定 projects/list 首项为唯一 projectId——多项目场景查错库恒空。
+ * projects/list 失败 = undefined（数据面不可达语义不变）；空项目集 = 零快照（空态呈现）。
+ */
+export async function loadRemoteSnapshot(transport: ForgeTransport): Promise<RemoteProgressSnapshot | undefined> {
   const raw = (await transport(PROJECTS_CHANNELS.list)) as RpcResult<ProjectSummary[]>
   if (raw === null || typeof raw !== 'object' || raw.ok !== true) return undefined
-  return raw.data[0]
+  const projects = (Array.isArray(raw.data) ? raw.data : []).filter((p) => p.archived !== true)
+  const snapshots = await Promise.all(
+    projects.map((p) => progressSnapshotOf(transport, p.id).catch(() => undefined)),
+  )
+  return mergeRemoteSnapshots(snapshots)
 }
 
 /** forge:remote/progress → 进度快照（通道/信封失败 = undefined——配对引导相位回退） */
@@ -225,8 +234,7 @@ export function ForgeRemoteView({
     if (resolved === undefined) return undefined
     let alive = true
     const load = (): void => {
-      void firstProjectOf(resolved)
-        .then((project) => (project === undefined ? undefined : progressSnapshotOf(resolved, project.id)))
+      void loadRemoteSnapshot(resolved)
         .then(
           (data) => {
             if (!alive) return

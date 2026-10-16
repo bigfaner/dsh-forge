@@ -79,7 +79,7 @@ body[data-ds-dark-theme] [data-conversation-content]::after {
 }
 html[lang^='zh'] [data-conversation-content][data-content-phase='hero'] [data-composer-seat] > div:first-child > div:first-child > div:first-child > div:first-child > span:last-child > span:last-child::after {
   content: '知识就是力量';
-  font-size: 12px; /* 官方徽标字号刻度（font/weight/行高随胶囊类继承） */
+  font-size: 12px; /* dsw-raw：官方徽标字号刻度 12px（font/weight/行高随胶囊类继承——官方 Preview 位实测值，无 --dsw-* 对应令牌） */
 }
 
 /* 大标上移让位插画：HeroShell root 官方垂直居中（justify-content:center）与

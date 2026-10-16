@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
-import type { ForgeCommandDefinition } from './faces.js'
+import type { ForgeCommandDefinition, ForgeEventRegisterFace } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
 import { FORGE_SECTION_NAME } from './prompt/index.js'
 import type { ForgePromptSection, ForgeToolDefinition, ForgeToolDeps } from './tools/index.js'
@@ -320,18 +320,21 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
   let registrationsRef: { event: string; options?: { global?: boolean } }[] = []
   function assembleWith(projects: ProjectServiceM2) {
     const rt = new TempRuntime()
-    const listeners = new Map<string, ((session: unknown) => void)[]>()
+    const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
     registrationsRef = []
+    // 桩面：ctx.on 双重载（agent/pre-step waterfall + session 生命周期）——stub 以宽参收拢，
+    // 断言面按 ForgeEventRegisterFace 形状结算（emit 侧逐事件分发）
+    const onImpl = (name: string, cb: (...args: unknown[]) => void, options?: { global?: boolean }): (() => void) => {
+      registrationsRef.push({ event: name, ...(options !== undefined ? { options } : {}) })
+      const list = listeners.get(name) ?? []
+      list.push(cb)
+      listeners.set(name, list)
+      return () => {}
+    }
     const ctx = {
       ...rt.ctx(),
       forgeProjects: projects,
-      on: (name: string, cb: (session: unknown) => void, options?: { global?: boolean }) => {
-        registrationsRef.push({ event: name, ...(options !== undefined ? { options } : {}) })
-        const list = listeners.get(name) ?? []
-        list.push(cb)
-        listeners.set(name, list)
-        return () => {}
-      },
+      on: onImpl as unknown as ForgeEventRegisterFace,
     }
     const dispose = forgePlugin(ctx, BOUND)
     const emit = (name: string, session: unknown) => {

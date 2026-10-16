@@ -18,7 +18,7 @@ import { dirname, join, sep } from 'node:path'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { TunnelManager, type TunnelDeps, type TunnelState } from '../tunnel/index.js'
 import { createChildProcessHandle } from '../tunnel/process-handle.js'
@@ -51,6 +51,7 @@ import {
   pinOfSubmission,
   renderPairingPinErrorPage,
   renderPairingPinPage,
+  type PinPersist,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
@@ -62,7 +63,9 @@ import {
   type SessionPersistenceFace,
   type WorktreeRpcService,
 } from '../ipc/worktree-rpc.js'
-import { GIT_WORKTREE_SERVICE } from '@dsh-forge/git-worktree'
+// fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
+// @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
+import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -211,6 +214,36 @@ function createNodeTunnelDeps(): TunnelDeps {
   }
 }
 
+/**
+ * fix-30 ③：durable PIN 持久缝文件实现（本机文件 = dsh-home 根 remote-pin.json，0600 +
+ * tmp/rename 原子换新；读写失败 fail-soft = 回内存语义，不阻配对面装配）。官方语义锚
+ * main.js:1138/1140-1143——长效密码保存在本机，断开不动；断开/隧道路径零触碰（无重置调用）。
+ */
+function createFilePinPersist(file: string): PinPersist {
+  return {
+    load: () => {
+      try {
+        const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
+        const pin = (parsed as Record<string, unknown> | null)?.['pin']
+        const durable = (parsed as Record<string, unknown> | null)?.['durable']
+        if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) return undefined
+        return { pin, durable: durable === true }
+      } catch {
+        return undefined // 文件缺席/畸形 = 无长效态（fail-soft）
+      }
+    },
+    save: (state) => {
+      const tmp = `${file}.tmp`
+      try {
+        writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 })
+        renameSync(tmp, file)
+      } catch {
+        // 持久面写失败不阻配对面——durable 退回 worker 内存语义
+      }
+    },
+  }
+}
+
 async function main(): Promise<void> {
   const options = parseChildOptions(process.argv)
   if (options === undefined) {
@@ -300,13 +333,30 @@ async function main(): Promise<void> {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
     }
     try {
+      // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
+      // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
+      // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
+      // 可达——惰性取法；具名访问在服务缺席时由 ctx proxy 抛错 → catch 降级独立模式）。
+      let capabilitySeen = false
       const getGitWorktree = (): unknown => {
         try {
-          return servicesFace.get(GIT_WORKTREE_SERVICE)
+          const capability: unknown = ctx.gitWorktree
+          if (capability !== undefined && capability !== null && !capabilitySeen) {
+            capabilitySeen = true
+            diag('[git-worktree] gitWorktree 能力服务已解析（具名消费）')
+          }
+          return capability ?? undefined
         } catch {
-          return undefined // 服务未 provide（探测未收口/插件未激活）——独立模式面
+          return undefined // 服务未 provide（探测未收口/插件未装载）——独立模式面
         }
       }
+      // fix-4 解析留痕：装配 8s 后仍缺席 → diag 留痕（harness.log 可见——插件行未装载/
+      // git 缺席/provide 失败三态共因收口，不再静默恒独立模式）
+      setTimeout(() => {
+        if (!capabilitySeen) {
+          diag('[git-worktree] gitWorktree 能力服务未解析（插件未装载/git 缺席/provide 失败）——worktree RPC 恒独立模式')
+        }
+      }, 8_000).unref?.()
       const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
       const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
       const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
@@ -348,7 +398,8 @@ async function main(): Promise<void> {
   const issuer = createPairingIssuer()
   // dsh-mobile-tunnel：PIN 层（官方 /pair/verify 同位扩展——隧道模式手机输入 6 位 PIN 换
   // 会话；签发/校验/限速/TTL 全语义在 pairing.ts 纯逻辑面，此处只装配路由）。
-  const pinIssuer = createPinIssuer()
+  // fix-30 ③：durable 态持久化到 dsh-home（跨 boot worker 存活——断开/重启不动长效）。
+  const pinIssuer = createPinIssuer(Date.now, createFilePinPersist(join(dirname(options.stateDb), 'remote-pin.json')))
   const pairPort = ctx.webServer.port
   const pairGrant = issuer.current()
   // fix-17 ③：PIN 签发读数（与 token 同刻度 5min——ready/轮换随 manifest 透传 UI PIN 卡）

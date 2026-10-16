@@ -5,7 +5,7 @@
 // 仅决策转发、产品不自持审批状态）→ 待审批项 = taskStatus 'blocked'（阻塞等待人工处置），
 // 高亮置顶；正式审批请求高亮面待 1.4 审批桥接落地后由通道扩面承接，本层排序键单点替换。
 
-import type { RemoteProgressSnapshot, TaskCard, TaskStatus } from '@dsh-forge/contracts'
+import { TASK_STATUSES, type RemoteProgressSnapshot, type TaskCard, type TaskStatus } from '@dsh-forge/contracts'
 
 /** 受限视图行带（待审批高亮置顶 / 进行中派发 / 其余） */
 export type RemoteRowBand = 'approval' | 'active' | 'rest'
@@ -39,6 +39,40 @@ export function remoteListRowsOf(snapshot: RemoteProgressSnapshot | undefined): 
       if (rank[a.band] !== rank[b.band]) return rank[a.band] - rank[b.band]
       return keyOf(b.task).localeCompare(keyOf(a.task))
     })
+}
+
+/**
+ * fix-30 ④：多项目进度快照合并（纯派生）：任务拼接 + stats 逐字段求和（七态全键）。
+ * 缺席项跳过；全缺席 = undefined（数据面失败语义保持）；空项目集 = 零快照（空态呈现）。
+ * Root cause: 受限视图此前锚定 projects/list 首项（created_at 最旧且含 archived）为唯一
+ * projectId 查 progress——多项目场景查错库，桌面有任务手机恒「暂无任务」。
+ */
+export function mergeRemoteSnapshots(
+  snapshots: readonly (RemoteProgressSnapshot | undefined)[],
+): RemoteProgressSnapshot | undefined {
+  const present = snapshots.filter((s): s is RemoteProgressSnapshot => s !== undefined)
+  if (snapshots.length === 0) {
+    return {
+      tasks: [],
+      stats: {
+        total: 0,
+        byStatus: Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>,
+        unmetPending: 0,
+      },
+    }
+  }
+  if (present.length === 0) return undefined
+  const byStatus = Object.fromEntries(TASK_STATUSES.map((s) => [s, 0])) as Record<TaskStatus, number>
+  let unmetPending = 0
+  let total = 0
+  for (const snapshot of present) {
+    for (const status of TASK_STATUSES) {
+      byStatus[status] += snapshot.stats?.byStatus?.[status] ?? 0
+    }
+    unmetPending += snapshot.stats?.unmetPending ?? 0
+    total += snapshot.stats?.total ?? 0
+  }
+  return { tasks: present.flatMap((snapshot) => snapshot.tasks ?? []), stats: { total, byStatus, unmetPending } }
 }
 
 /**

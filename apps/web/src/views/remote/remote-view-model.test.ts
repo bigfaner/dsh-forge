@@ -2,7 +2,7 @@
 // 受限入口判定、进度信封 → 视图快照派生（零本地副本——信封原样读数）。
 import { describe, expect, it } from 'vitest'
 import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
-import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, remoteListRowsOf, remoteViewDecisionLine, remoteViewDecisionOf } from './remote-view-model.js'
+import { isRestrictedRemoteViewCookie, isRestrictedRemoteViewLocation, mergeRemoteSnapshots, remoteListRowsOf, remoteViewDecisionLine, remoteViewDecisionOf } from './remote-view-model.js'
 
 function taskOf(partial: Partial<TaskCard> & Pick<TaskCard, 'taskId' | 'taskStatus'>): TaskCard {
   return {
@@ -115,5 +115,34 @@ describe('remoteViewDecisionOf / remoteViewDecisionLine（fix-22 诊断日志面
     expect(line).toContain('branch=restricted')
     expect(line).toContain('viaCookie=true')
     expect(line.length).toBeLessThanOrEqual(260)
+  })
+})
+
+// ── fix-30 ④：多项目进度快照合并（手机受限视图不再锚定首个项目——有任务即可见） ──
+
+describe('mergeRemoteSnapshots 多项目合并', () => {
+  it('多项目任务拼接 + stats 求和（total/byStatus/unmetPending）', () => {
+    const a = SNAPSHOT([taskOf({ taskId: 'a1', taskStatus: 'in_progress' })])
+    const b: RemoteProgressSnapshot = {
+      tasks: [taskOf({ taskId: 'b1', taskStatus: 'blocked', slug: 'prop-y', localId: '2' })],
+      stats: { total: 2, byStatus: { blocked: 1 } as never, unmetPending: 1 },
+    }
+    const merged = mergeRemoteSnapshots([a, b])
+    expect(merged?.tasks.map((t) => t.taskId)).toEqual(['a1', 'b1'])
+    expect(merged?.stats.total).toBe(3)
+    expect(merged?.stats.byStatus.blocked).toBe(1)
+    expect(merged?.stats.unmetPending).toBe(1)
+  })
+
+  it('缺席项跳过；全缺席 = undefined（数据面失败语义保持）', () => {
+    const a = SNAPSHOT([taskOf({ taskId: 'a1', taskStatus: 'pending' })])
+    expect(mergeRemoteSnapshots([undefined, a, undefined])?.tasks).toHaveLength(1)
+    expect(mergeRemoteSnapshots([undefined, undefined])).toBeUndefined()
+  })
+
+  it('空项目集 = 零快照（空态呈现，非失败）', () => {
+    const merged = mergeRemoteSnapshots([])
+    expect(merged?.tasks).toEqual([])
+    expect(merged?.stats.total).toBe(0)
   })
 })

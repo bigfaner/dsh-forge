@@ -48,10 +48,13 @@ const PIN_PAGE_STYLE = [
   // dsw-raw：说明文 = --dsw-font-s-14（400/14/22）+ label-secondary
   '.hint{font-size:14px;line-height:22px;color:#61666b;margin:0 0 20px}',
   // dsw-raw：输入 = specific-input-major 白底 + 0.5px border-l2(rgba(0,0,0,.1)=#0000001a) + --dsw-radius-sm 8px；PIN 大字 = display 档 24px/600 + 字距；focus ring 2px business-primary #4176e6
-  'input{width:100%;box-sizing:border-box;padding:12px;font-size:24px;font-weight:600;',
-  'letter-spacing:8px;text-indent:8px;text-align:center;background:#ffffff;',
-  'border:0.5px solid rgba(0,0,0,.1);border-radius:8px;color:#0f1115;outline:none}',
-  'input:focus-visible{outline:2px solid #4176e6;outline-offset:0}',
+  // fix-30 ①：PIN 六格独立方框（常见 OTP 形态——每位一格 44×56 居中，同令牌族）
+  '.pin-cells{display:flex;gap:8px;justify-content:center;margin-bottom:4px}',
+  '.pin-cell{width:44px;height:56px;box-sizing:border-box;padding:0;text-align:center;',
+  'font-size:24px;font-weight:600;line-height:56px;background:#ffffff;',
+  'border:0.5px solid rgba(0,0,0,.1);border-radius:8px;color:#0f1115;outline:none;',
+  'caret-color:#4176e6}',
+  '.pin-cell:focus-visible{outline:2px solid #4176e6;outline-offset:0}',
   // dsw-raw：主钮 = --dsw-alias-button-primary-fill 近黑反差面（light #0f1115）+ radius-sm 8px
   'button{width:100%;margin-top:16px;padding:10px 16px;background:#0f1115;color:#ffffff;',
   'border:none;border-radius:8px;font-size:14px;font-weight:500;font-family:inherit;cursor:pointer}',
@@ -70,17 +73,47 @@ function pinPageDocument(title: string, body: string): string {
 }
 
 /**
+ * fix-30 ①：PIN 六格输入脚本（常见 OTP 形态——自动跳格 / 退格回退 / 粘贴逐位分发；
+ * 提交前把六格值同步进隐藏 pin 域——后端 pinOfSubmission 解析零变化）。裸 ES5 单行
+ * （独立离线页无构建链）。
+ */
+const PIN_PAGE_SCRIPT = [
+  '(function(){',
+  "var c=[].slice.call(document.querySelectorAll('[data-pin-cell]'));",
+  "var f=document.querySelector('form');",
+  "var h=f.querySelector('input[name=pin]');",
+  'function sync(){h.value=c.map(function(x){return x.value}).join(\'\')}',
+  'c.forEach(function(el,i){',
+  "el.addEventListener('input',function(){var v=el.value.replace(/\\D/g,'');el.value=v.slice(-1);",
+  'if(el.value&&i<5)c[i+1].focus();sync()});',
+  "el.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!el.value&&i>0){",
+  'c[i-1].value=\'\';c[i-1].focus();sync();e.preventDefault()}});',
+  "el.addEventListener('paste',function(e){var t=(e.clipboardData||window.clipboardData).getData('text')||'';",
+  "t=t.replace(/\\D/g,'');if(!t)return;e.preventDefault();",
+  'for(var k=0;k<6;k++)c[k].value=t[k]||\'\';',
+  'c[Math.min(t.length,5)].focus();sync()});',
+  "el.addEventListener('focus',function(){el.select()});",
+  '});',
+  "f.addEventListener('submit',sync);",
+  '})()',
+].join('')
+
+/**
  * fix-28/29 PIN 输入页（官方 renderPairingPinPage :1198 同位）：/pair 对隧道 Host 的 token
  * 校验通过后呈此页（不直接 302 落地——公网 URL 持有者还须 PIN 第二因子）。表单 POST
- * /pair/verify（既有 PIN 校验/TTL/限速语义全归 pinIssuer）。
+ * /pair/verify（既有 PIN 校验/TTL/限速语义全归 pinIssuer）。fix-30 ①：六格独立方框
+ * （每位一格 + 自动跳格/粘贴分发/退格回退——PIN_PAGE_SCRIPT 承载）。
  */
 export function renderPairingPinPage(): string {
+  const cell = '<input class="pin-cell" data-pin-cell type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" pattern="[0-9]" required>'
   return pinPageDocument('输入 PIN 完成配对', [
     '<h1>输入 PIN 完成配对</h1>',
     '<p class="hint">请输入桌面端显示的 6 位 PIN。</p>',
     '<form action="/pair/verify" method="post">',
-    '<input name="pin" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>',
+    `<div class="pin-cells">${cell.repeat(PIN_LENGTH)}</div>`,
+    '<input type="hidden" name="pin">',
     '<button type="submit">验证</button>',
+    '<scr' + `ipt>${PIN_PAGE_SCRIPT}</` + 'script>',
     '</form>',
   ].join(''))
 }
@@ -139,14 +172,36 @@ export interface PinIssuer {
   verify(pin: string): boolean
 }
 
+/** fix-30 ③：durable 持久面状态（长效 PIN + 长效位——保存在本机文件，官方 main.js:1138 同语义）。 */
+export interface PersistedPinState {
+  readonly pin: string
+  readonly durable: boolean
+}
+
+/** fix-30 ③：durable 持久缝（读写本机文件——child.ts 注入文件实现；测试注入内存替身）。 */
+export interface PinPersist {
+  load(): PersistedPinState | undefined
+  save(state: PersistedPinState): void
+}
+
 /**
  * 6 位 PIN 签发器（时钟注入可测）。pin = randomInt(0,10) 逐位均匀取样（无模偏差）。
+ * fix-30 ③：persist 在场时 durable 态跨 boot worker 存活——setDurable 落盘、构造时恢复
+ * （Root cause: durable 原仅存活于 child worker 闭包内存，宿主/child 重启即被"自动取消"
+ * ——官方语义为长效密码保存在本机、断开不动）。持久面读写失败归实现方 fail-soft。
  */
-export function createPinIssuer(now: () => number = Date.now): PinIssuer {
+export function createPinIssuer(now: () => number = Date.now, persist?: PinPersist): PinIssuer {
   let grant: PinGrant | undefined
   let durable = false
   let failures: number[] = []
   let lockUntil = 0
+  if (persist !== undefined) {
+    const saved = persist.load()
+    if (saved?.durable === true && /^\d{6}$/.test(saved.pin)) {
+      grant = { pin: saved.pin, expiresAt: Number.MAX_SAFE_INTEGER } // 恢复长效冻结态
+      durable = true
+    }
+  }
   const issue = (): PinGrant => {
     let pin = ''
     for (let i = 0; i < PIN_LENGTH; i += 1) pin += String(randomInt(0, 10))
@@ -165,8 +220,13 @@ export function createPinIssuer(now: () => number = Date.now): PinIssuer {
     },
     setDurable(next: boolean): PinGrant {
       durable = next
-      if (!next) return issue() // 解除长效 → 回临时 PIN（旧长效立即失效）
+      if (!next) {
+        const temp = issue() // 解除长效 → 回临时 PIN（旧长效立即失效）
+        persist?.save({ pin: temp.pin, durable: false })
+        return temp
+      }
       grant = { pin: (grant ?? issue()).pin, expiresAt: Number.MAX_SAFE_INTEGER } // 冻结当前 PIN
+      persist?.save({ pin: grant.pin, durable: true })
       return grant
     },
     verify(pin: string): boolean {

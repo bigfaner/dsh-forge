@@ -3,8 +3,8 @@
 // 断言（无会话对话、知识库、文档入口——提案验收 6 的组件层承载）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { RemoteProgressSnapshot, TaskCard } from '@dsh-forge/contracts'
-import { ForgeRemoteView, RemoteApprovalActionsView, RemotePairingGuide, RemoteProgressList } from './ForgeRemoteView.js'
+import { PROJECTS_CHANNELS, REMOTE_CHANNELS, type ProjectSummary, type RemoteProgressSnapshot, type RpcResult, type TaskCard } from '@dsh-forge/contracts'
+import { ForgeRemoteView, loadRemoteSnapshot, RemoteApprovalActionsView, RemotePairingGuide, RemoteProgressList } from './ForgeRemoteView.js'
 import { beginApproval, initialApprovalState, resolveApproval } from './remote-approval-model.js'
 import { remoteListRowsOf } from './remote-view-model.js'
 
@@ -159,5 +159,53 @@ describe('暴露面边界（提案验收 6——组件层断言）', () => {
     )
     expect(html).toMatch(/正在连接/)
     expect(html).not.toMatch(/dswf-rview-steps/)
+  })
+})
+
+// ── fix-30 ④：全项目聚合取数（手机受限视图不再锚定首个项目——有任务即任务可见） ──
+
+describe('loadRemoteSnapshot 全项目聚合', () => {
+  const project = (id: string, archived = false): ProjectSummary => ({ id, workspaceId: 'w', name: id, wsPath: `Z:/${id}`, archived })
+  type Transport = Parameters<typeof loadRemoteSnapshot>[0]
+
+  function transportOf(projects: ProjectSummary[], progress: Record<string, RemoteProgressSnapshot>, calls: string[] = []): Transport {
+    return (async (channel: string, payload?: unknown) => {
+      calls.push(`${channel}:${JSON.stringify(payload ?? null)}`)
+      if (channel === PROJECTS_CHANNELS.list) return { ok: true, data: projects } satisfies RpcResult<ProjectSummary[]>
+      if (channel === REMOTE_CHANNELS.progress) {
+        const snap = progress[(payload as { projectId: string }).projectId]
+        return snap !== undefined
+          ? ({ ok: true, data: snap } satisfies RpcResult<RemoteProgressSnapshot>)
+          : ({ ok: false, error: { code: 'ERR_TASK_NOT_FOUND', message: 'empty' } } satisfies RpcResult<RemoteProgressSnapshot>)
+      }
+      return { ok: false, error: { code: 'ERR_TASK_NOT_FOUND', message: 'unknown channel' } } satisfies RpcResult<never>
+    }) as Transport
+  }
+
+  it('非 archived 项目逐个查 progress 并合并——首个项目空库不再遮蔽后续项目任务（bug 在场：现状仅查首项）', async () => {
+    const calls: string[] = []
+    const transport = transportOf(
+      [project('p-old'), project('p-active')],
+      {
+        'p-old': SNAPSHOT([]),
+        'p-active': SNAPSHOT([taskOf({ taskId: 't1', title: '可见任务', taskStatus: 'in_progress' })]),
+      },
+      calls,
+    )
+    const snap = await loadRemoteSnapshot(transport)
+    expect(snap?.tasks.map((t) => t.taskId)).toEqual(['t1'])
+    expect(calls.some((c) => c.includes('p-active'))).toBe(true)
+  })
+
+  it('archived 项目不参与查询', async () => {
+    const calls: string[] = []
+    const transport = transportOf([project('p-archived', true), project('p-live')], { 'p-live': SNAPSHOT([]) }, calls)
+    await loadRemoteSnapshot(transport)
+    expect(calls.some((c) => c.includes('p-archived'))).toBe(false)
+  })
+
+  it('projects/list 信封失败 = undefined（数据面不可达语义不变）', async () => {
+    const transport = (async () => ({ ok: false, error: { code: 'ERR_TASK_NOT_FOUND', message: 'down' } })) as unknown as Transport
+    await expect(loadRemoteSnapshot(transport)).resolves.toBeUndefined()
   })
 })

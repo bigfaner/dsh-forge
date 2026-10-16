@@ -2,7 +2,15 @@
 // 会话门（authorize=false 不触服务）/ 通道 allowlist / progress 装配 / approval 转发 /
 // diag 落链 / 错误归一信封。
 import { describe, expect, it } from 'vitest'
-import { REMOTE_CHANNELS, type RemoteProgressSnapshot } from '@dsh-forge/contracts'
+import {
+  REMOTE_CHANNELS,
+  type ForgeTasksService,
+  type ProjectService,
+  type ProjectSummary,
+  type RemoteProgressSnapshot,
+  type TaskCard,
+  type TaskStats,
+} from '@dsh-forge/contracts'
 import {
   REMOTE_HTTP_RPC_PATH,
   authorizeRemoteRpc,
@@ -34,15 +42,28 @@ function fakeReq(body: unknown, url = REMOTE_HTTP_RPC_PATH, method = 'POST') {
 
 /** fake 响应（writeHead/end 捕获面） */
 function fakeRes(): FakeRes {
-  const res: FakeRes = { status: 0, headers: {}, body: '', writeHead(code, headers) { res.status = code; res.headers = headers ?? {} }, end(text) { res.body = text ?? '' } }
+  const res: FakeRes = {
+    status: 0,
+    headers: {},
+    body: '',
+    writeHead(code, headers?: Record<string, unknown>) {
+      res.status = code
+      res.headers = headers ?? {}
+    },
+    end(text) {
+      res.body = text ?? ''
+    },
+  }
   return res
 }
 
-const TASKS = {
-  listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' }],
-  taskStats: async () => ({ total: 1, byStatus: {}, unmetPending: 0 }),
+const TASKS: Pick<ForgeTasksService, 'listTasks' | 'taskStats'> = {
+  listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
+  taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0 }),
 }
-const PROJECTS = { listProjects: async () => [{ id: 'p-1', name: 'demo' }] }
+const PROJECTS: Pick<ProjectService, 'listProjects'> = {
+  listProjects: async () => [{ id: 'p-1', name: 'demo' } as ProjectSummary],
+}
 
 function deps(overrides: Partial<Parameters<typeof handleRemoteHttpRpc>[2]> = {}) {
   return {
@@ -81,9 +102,9 @@ describe('handleRemoteHttpRpc 会话门', () => {
   it('authorize=false：落 401 诊断行（method/host/cookie 有无——不含 cookie 值）', async () => {
     const res = fakeRes()
     const lines: string[] = []
-    const req = fakeReq({ channel: REMOTE_CHANNELS.progress }) as never as { headers: Record<string, unknown> }
+    const req = fakeReq({ channel: REMOTE_CHANNELS.progress })
     req.headers = { host: 'tunnel.example', cookie: 'secret=value; other=1' }
-    await handleRemoteHttpRpc(req, res, deps({ authorize: () => false, diag: (line) => lines.push(line) }))
+    await handleRemoteHttpRpc(req as never, res, deps({ authorize: () => false, diag: (line) => lines.push(line) }))
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('status=unauthorized')
     expect(lines[0]).toContain('method=POST')
@@ -203,7 +224,7 @@ describe('handleRemoteHttpRpc 边界', () => {
     await handleRemoteHttpRpc(
       fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-x' } }) as never,
       res,
-      deps({ tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {}, unmetPending: 0 }) } }),
+      deps({ tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0 }) } }),
     )
     expect(res.status).toBe(200)
     const parsed = JSON.parse(res.body) as { ok: boolean; error: { message: string } }
