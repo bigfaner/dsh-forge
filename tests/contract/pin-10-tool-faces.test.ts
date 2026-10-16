@@ -36,7 +36,7 @@ function toolNameLiterals(dir: string): Map<string, string> {
 describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写落定——drift #1）', () => {
   const coreLiterals = toolNameLiterals(CORE_TOOLS_DIR)
 
-  it('核心包常量面 = 十一员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径）', () => {
+  it('核心包常量面 = 十三员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径）', () => {
     expect([...FORGE_TOOL_NAMES]).toEqual([
       'addTask',
       'submitTask',
@@ -49,6 +49,8 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
       'listTasks',
       'recordBug',
       'resolveBug',
+      'listBugs',
+      'getBug',
     ])
     expect(FORGE_TOOL_NAMES).toContain('dispatchTask')
   })
@@ -65,7 +67,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     }
   })
 
-  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心十一 / spec 三）', () => {
+  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心十三 / spec 三）', () => {
     expect([...coreLiterals.values()].sort()).toEqual([...FORGE_TOOL_NAMES].sort())
     expect([...toolNameLiterals(SPEC_TOOLS_DIR).values()].sort()).toEqual([...FORGE_SPEC_TOOL_NAMES].sort())
   })
@@ -76,7 +78,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     expect(files).not.toContain('spawn-worker.ts')
   })
 
-  it('注册块逐行对账：plugin index.ts 恰注册十一员（tools.<name> 形——名面 = FORGE_TOOL_NAMES）', () => {
+  it('注册块逐行对账：plugin index.ts 恰注册十三员（tools.<name> 形——名面 = FORGE_TOOL_NAMES）', () => {
     const index = readFileSync(join(ROOT, 'packages/plugin-forge/src/index.ts'), 'utf8')
     for (const name of FORGE_TOOL_NAMES) {
       expect(index, `index.ts 应含 ctx.tools.register(tools.${name})`).toContain(`ctx.tools.register(tools.${name})`)

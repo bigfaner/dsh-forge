@@ -321,7 +321,7 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局十 + forge 闭环八（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid）为共同底座；
+    // 全局十 + forge 闭环九（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid）为共同底座；
     // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
     const base = [
       'ask_user_question',
@@ -331,6 +331,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'get_goal',
       'interrupt_agent',
       'list_agents',
+      'listBugs',
       'listTasks',
       'present',
       'queryTask',
@@ -344,11 +345,12 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'workflow',
     ]
     // coding：web ✗（fs/shell/jobs/read-image ✓）——fix-bug 两 bug 写径（recordBug/resolveBug）
-    // coding-fix worker 放行（forge 族 ✓——收窄面不含 deny 两工具）
+    // + getBug 链上下文读径 coding-fix worker 放行（forge 族 ✓——收窄面不含 deny 三工具）
     const codingFixDeny = deriveWorkerToolFilter('coding-fix').deny.sort()
     expect(codingFixDeny).toEqual([...base, 'web_fetch', 'web_search'].sort())
     expect(codingFixDeny).not.toContain('recordBug')
     expect(codingFixDeny).not.toContain('resolveBug')
+    expect(codingFixDeny).not.toContain('getBug')
     // doc：jobs ✗ / read-image ✗ / web ✗
     expect(deriveWorkerToolFilter('doc').deny.sort()).toEqual(
       [...base, 'job_kill', 'job_list', 'job_output', 'read_image', 'web_fetch', 'web_search'].sort(),
@@ -381,16 +383,20 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
-      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
+      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族五动词之外不可见）`).toBe(true)
       expect(triageDeny.has(name), `${name} 应入 triage deny（仅主 agent 面）`).toBe(true)
     }
     expect(workerDeny.has('submitTask')).toBe(false)
     expect(workerDeny.has('addTask')).toBe(false)
-    // fix-bug 两 bug 写径：worker 面（forge 族四动词）+ triage 面（仅决策不执行——deny）分治
+    // fix-bug 两 bug 写径 + 链上下文读径：worker 面（forge 族五动词）+ triage 面（仅决策不执行——deny）分治
     expect(workerDeny.has('recordBug')).toBe(false)
     expect(workerDeny.has('resolveBug')).toBe(false)
+    expect(workerDeny.has('getBug')).toBe(false)
+    // listBugs 台账查询面分治：仅主 agent——worker/triage 两面均 deny
+    expect(workerDeny.has('listBugs')).toBe(true)
     expect(triageDeny.has('recordBug')).toBe(true)
     expect(triageDeny.has('resolveBug')).toBe(true)
+    expect(triageDeny.has('getBug')).toBe(true)
   })
 
   it('validateMermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {
@@ -400,8 +406,8 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveTriageToolFilter().deny).toContain('validateMermaid')
   })
 
-  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 四动词（submitTask/addTask + 两 bug 写径）——fix-bug worker 放行钉住', () => {
-    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug'])
+  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 五动词（submitTask/addTask + 两 bug 写径 + getBug 读径）——bug-recurrence-chain worker 放行钉住', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug'])
   })
 })
 

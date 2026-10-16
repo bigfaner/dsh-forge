@@ -77,6 +77,23 @@ export function optionalFraction(a: Record<string, unknown>, key: string, tool: 
   return v
 }
 
+/** 可选非负整数参数（分页 offset 形——负数/非整数/非 number 拒） */
+export function optionalNonNegativeInteger(a: Record<string, unknown>, key: string, tool: string): number | undefined {
+  const v = a[key]
+  if (v === undefined) return undefined
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
+    throw new Error(`${tool}: ${key} must be a non-negative integer`)
+  }
+  return v
+}
+
+/** 可选正整数参数（分页 limit 形——0/负数/非整数/非 number 拒） */
+export function optionalPositiveInteger(a: Record<string, unknown>, key: string, tool: string): number | undefined {
+  const v = optionalNonNegativeInteger(a, key, tool)
+  if (v !== undefined && v === 0) throw new Error(`${tool}: ${key} must be a positive integer (>= 1)`)
+  return v
+}
+
 /**
  * 成对显式参数（本插件「两显式参」纪律的完整性检查：a_key 与 b_key 同给或同缺，
  * 禁半对——半对 = 拼接歧义的另一形态）。

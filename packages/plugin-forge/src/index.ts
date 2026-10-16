@@ -426,6 +426,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.listTasks),
       ctx.tools.register(tools.recordBug),
       ctx.tools.register(tools.resolveBug),
+      ctx.tools.register(tools.listBugs),
+      ctx.tools.register(tools.getBug),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；

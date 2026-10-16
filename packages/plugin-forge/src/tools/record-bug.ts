@@ -34,6 +34,8 @@ export interface RecordBugToolArgs {
   readonly suspected?: string
   /** 错误类型（自由标注——可空） */
   readonly error_type?: string
+  /** 复发链前驱 bug_id（bug-recurrence-chain——首次发生不填；悬空引用拒写） */
+  readonly recurrence_of?: string
 }
 
 /** 参数防御性收窄（执行点自证——五必填 + 两可选） */
@@ -47,6 +49,7 @@ export function parseRecordBugArgs(args: unknown): RecordBugToolArgs {
     actual: string
     suspected?: string
     error_type?: string
+    recurrence_of?: string
   } = {
     summary: requiredString(a, 'summary', TOOL),
     bug_desc: requiredString(a, 'bug_desc', TOOL),
@@ -58,6 +61,8 @@ export function parseRecordBugArgs(args: unknown): RecordBugToolArgs {
   if (suspected !== undefined) out.suspected = suspected
   const errorType = optionalString(a, 'error_type', TOOL)
   if (errorType !== undefined) out.error_type = errorType
+  const recurrenceOf = optionalString(a, 'recurrence_of', TOOL)
+  if (recurrenceOf !== undefined) out.recurrence_of = recurrenceOf
   return out
 }
 
@@ -112,7 +117,7 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Register a bug in the forge bug ledger (lands an open record and returns its bug_id). Agent submits semantic fields only: a one-line summary (max 50 chars — longer is rejected), the five Bug Summary fields (bug_desc / trigger_desc / expected / actual; suspected location and error_type optional). Identity, session and repo state are resolved server-side: report_session_id comes from the executing session, reporter from git config, and source_task_id from the dispatch context (absent on standalone paths). Use at diagnosis time per the fix-bug flow; backfill the outcome later via resolveBug.',
+      'Register a bug in the forge bug ledger (lands an open record and returns its bug_id). Agent submits semantic fields only: a one-line summary (max 50 chars — longer is rejected), the five Bug Summary fields (bug_desc / trigger_desc / expected / actual; suspected location and error_type optional), and an optional recurrence_of predecessor bug_id when this is a recurrence of a known problem (omit on first occurrence; use listBugs to find candidates). Identity, session and repo state are resolved server-side: report_session_id comes from the executing session, reporter from git config, and source_task_id from the dispatch context (absent on standalone paths). Use at diagnosis time per the fix-bug flow; backfill the outcome later via resolveBug.',
     parameters: {
       type: 'object',
       properties: {
@@ -123,6 +128,11 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
         actual: { type: 'string', description: 'Actual: observed behavior.' },
         suspected: { type: 'string', description: 'Suspected location (file:line) — optional repair lead for open records.' },
         error_type: { type: 'string', description: 'Free-form error type label — optional, stats dimension.' },
+        recurrence_of: {
+          type: 'string',
+          description:
+            'Recurrence-chain predecessor: the bug_id of the most recent prior record of the SAME problem (this new record reads as "a recurrence of X"). Omit on first occurrence of a problem. To find candidate predecessors, use the main agent listBugs query tool (keyword search over the six text fields) — agent judgment + explicit reference, no auto-matching. Written once at registration and immutable after; must reference an existing bug (dangling reference is rejected).',
+        },
       },
       required: ['summary', 'bug_desc', 'trigger_desc', 'expected', 'actual'],
     },
@@ -145,6 +155,7 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
           actual: parsed.actual,
           ...(parsed.suspected !== undefined ? { suspected: parsed.suspected } : {}),
           ...(parsed.error_type !== undefined ? { errorType: parsed.error_type } : {}),
+          ...(parsed.recurrence_of !== undefined ? { recurrenceOf: parsed.recurrence_of } : {}),
           reportSessionId: sessionId,
           ...(sourceTaskId !== undefined ? { sourceTaskId } : {}),
         })

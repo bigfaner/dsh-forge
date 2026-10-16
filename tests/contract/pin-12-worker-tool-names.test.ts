@@ -10,7 +10,7 @@
 //     jobs        job_list/job_output/job_kill（dsh-tool-jobs）
 //     read-image  read_image（dsh-tool-fs——独立族）
 //     web         web_fetch/web_search（dsh-tool-web）
-//     forge       submitTask/addTask/recordBug/resolveBug（我方 WORKER_FORGE_TOOLS——fix-bug 两写径放行）
+//     forge       submitTask/addTask/recordBug/resolveBug/getBug（我方 WORKER_FORGE_TOOLS——fix-bug 写径 + 链读径放行）
 //   全局拒绝（WORKER_GLOBAL_DENY_TOOLS——fix-1/drift #10 实面实名 + worker-lean-execution
 //   S5 迁移：todo_write 解禁 / goal 三件套入拒）：
 //     ask_user_question（tool-ask-user）· subagent_fork（delegation 行 provider:fork 的
@@ -331,7 +331,7 @@ describe('pin ⑳-5 收窄矩阵常量（Interface 2 逐格——G1 层常驻复
     expect(Object.keys(WORKER_TASK_FAMILY_BY_TYPE).sort()).toEqual([...TASK_TYPES].sort())
   })
 
-  it('worker forge 面 = 四动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径——fix-bug coding-fix worker 放行；dispatchTask/queryTask 不入 worker 面）', () => {
-    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug'])
+  it('worker forge 面 = 五动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 放行；dispatchTask/queryTask/listBugs 不入 worker 面）', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug'])
   })
 })

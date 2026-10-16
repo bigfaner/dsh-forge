@@ -17,6 +17,8 @@ import { createTaskStatsTool } from './task-stats.js'
 import { createSubmitTaskTool } from './submit-task.js'
 import { createRecordBugTool } from './record-bug.js'
 import { createResolveBugTool } from './resolve-bug.js'
+import { createListBugsTool } from './list-bugs.js'
+import { createGetBugTool } from './get-bug.js'
 import { createCreateProposalTool } from './create-proposal.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
@@ -211,6 +213,29 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
 
   it('resolveBug：BugCard 回填面全形（fixed 证据）', () => {
     expectValid('resolveBug', schemaOf(createResolveBugTool(DEPS)), BUG_CARD_FIXED)
+  })
+
+  it('listBugs：{bugs: BugCard[]} 行集（含 recurrenceOf 链列可选）', () => {
+    expectValid('listBugs', schemaOf(createListBugsTool(DEPS)), {
+      bugs: [{ ...BUG_CARD_OPEN, recurrenceOf: 'b-0' }],
+    })
+  })
+
+  it('getBug：全卡 + 链上下文（孤条 chain 键缺席两形均验）', () => {
+    const schema = schemaOf(createGetBugTool(DEPS))
+    expectValid('getBug 孤条', schema, { card: BUG_CARD_OPEN })
+    expectValid('getBug 链上', schema, {
+      card: { ...BUG_CARD_OPEN, recurrenceOf: 'b-0' },
+      chain: {
+        entries: [
+          { bugId: 'b-0', summary: '根', bugStatus: 'fixed', commitHash: 'c0', createdAt: '2026-10-15T00:00:00.000Z' },
+          { bugId: 'b-1', summary: '复发①', bugStatus: 'open', createdAt: '2026-10-16T00:00:00.000Z' },
+        ],
+        currentIndex: 1,
+        length: 2,
+        rootBugId: 'b-0',
+      },
+    })
   })
 
   it('createProposal：ProposalRow 全形（含 author）', () => {

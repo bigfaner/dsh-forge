@@ -57,7 +57,8 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
       })
       return resolve(captured[captured.length - 1]!)
     },
-    listBugs: async () => {
+    listBugs: async () => [],
+    getBug: async () => {
       throw new Error('not used')
     },
   }
@@ -159,6 +160,9 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
           })
         },
         listBugs: async () => [],
+        getBug: async () => {
+          throw new Error('not used')
+        },
       },
       resolveProjectId: () => 'p-1',
     }

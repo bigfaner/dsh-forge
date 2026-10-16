@@ -10,6 +10,20 @@ import type { ToolExecFace } from '../faces.js'
 import { createRecordBugTool, parseRecordBugArgs } from './record-bug.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
 
+/** ForgeBugsToolFace 桩（getBug/listBugs 缺席用例——recordBug 用例不触） */
+function stubBugsFace(registerBug: ForgeBugsToolFace['registerBug']): ForgeBugsToolFace {
+  return {
+    registerBug,
+    resolveBug: async () => {
+      throw new Error('not used')
+    },
+    listBugs: async () => [],
+    getBug: async () => {
+      throw new Error('not used')
+    },
+  }
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 /** registerBug 服务返回面（open 行投影） */
@@ -31,29 +45,23 @@ function openCard(summary: string): BugCard {
 interface CapturedInput {
   projectId: string
   summary: string
+  recurrenceOf?: string
   reportSessionId?: string
   sourceTaskId?: string
 }
 
 function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; captured: CapturedInput[] } {
   const captured: CapturedInput[] = []
-  const bugs: ForgeBugsToolFace = {
-    registerBug: async (input) => {
-      captured.push({
-        projectId: input.projectId,
-        summary: input.summary,
-        reportSessionId: input.reportSessionId,
-        sourceTaskId: input.sourceTaskId,
-      })
-      return openCard(input.summary)
-    },
-    resolveBug: async () => {
-      throw new Error('not used')
-    },
-    listBugs: async () => {
-      throw new Error('not used')
-    },
-  }
+  const bugs = stubBugsFace(async (input) => {
+    captured.push({
+      projectId: input.projectId,
+      summary: input.summary,
+      recurrenceOf: input.recurrenceOf,
+      reportSessionId: input.reportSessionId,
+      sourceTaskId: input.sourceTaskId,
+    })
+    return openCard(input.summary)
+  })
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals: {} as ForgeToolDeps['proposals'],
@@ -100,6 +108,29 @@ describe('parseRecordBugArgs（防御收窄）', () => {
     // 未知键不进输出（parse 面零透传——白名单形制）
     expect(parseRecordBugArgs({ ...BASE, report_session_id: 's' } as object)).not.toHaveProperty('report_session_id')
   })
+
+  it('recurrence_of 可选：缺席 = 键缺席；在场即透传（挂链前驱——bug-recurrence-chain）', () => {
+    expect(parseRecordBugArgs(BASE)).not.toHaveProperty('recurrence_of')
+    expect(parseRecordBugArgs({ ...BASE, recurrence_of: 'bug-root-uuid' })).toEqual({
+      ...BASE,
+      recurrence_of: 'bug-root-uuid',
+    })
+    expect(() => parseRecordBugArgs({ ...BASE, recurrence_of: '' })).not.toThrow() // 空串 = 缺省（optionalString 语义）
+  })
+
+  it('schema description 含前驱语义定义句（裁决⑮——前驱 bug_id / 首次不填 / 检索候选指引）', () => {
+    const { tool } = toolWithCapture()
+    const desc = (tool.parameters.properties as Record<string, { description?: string }>).recurrence_of?.description ?? ''
+    expect(desc).toContain('bug_id of the most recent prior record')
+    expect(desc).toContain('Omit on first occurrence')
+    expect(desc).toContain('listBugs')
+  })
+
+  it('recurrence_of 路由：snake_case → registerBug 入参 recurrenceOf（camelCase 挂链）', async () => {
+    const { tool, captured } = toolWithCapture()
+    await tool.execute({ ...BASE, recurrence_of: 'bug-root-uuid' }, EXEC)
+    expect(captured[0]).toMatchObject({ recurrenceOf: 'bug-root-uuid' })
+  })
 })
 
 describe('recordBug execute（路由 + 服务端注入径）', () => {
@@ -135,18 +166,12 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
     const deps: ForgeToolDeps = {
       tasks: {} as ForgeToolDeps['tasks'],
       proposals: {} as ForgeToolDeps['proposals'],
-      bugs: {
-        registerBug: async () => {
-          throw Object.assign(new Error('summary 超长拒绝：50 字上限，实际 51 字'), {
-            code: 'ERR_BUG_SUMMARY_TOO_LONG',
-            data: { summary: 'x'.repeat(51), max: 50 },
-          })
-        },
-        resolveBug: async () => {
-          throw new Error('not used')
-        },
-        listBugs: async () => [],
-      },
+      bugs: stubBugsFace(async () => {
+        throw Object.assign(new Error('summary 超长拒绝：50 字上限，实际 51 字'), {
+          code: 'ERR_BUG_SUMMARY_TOO_LONG',
+          data: { summary: 'x'.repeat(51), max: 50 },
+        })
+      }),
       resolveProjectId: () => 'p-1',
     }
     const tool = createRecordBugTool(deps)

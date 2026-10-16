@@ -13,13 +13,15 @@
 // 会话目录记忆（→ 3.3 总线/监听器）；deps.settings = forgeSettings 服务面（可选——
 // 缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）。
 import type { ForgeProposalsService, ForgeSettingsService, ForgeTasksService } from '@dsh-forge/contracts'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
 import { createCreateProposalTool } from './create-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
+import { createGetBugTool } from './get-bug.js'
+import { createListBugsTool } from './list-bugs.js'
 import { createListTasksTool } from './list-tasks.js'
 import { createQueryTaskTool } from './query-task.js'
 import { createRecordBugTool } from './record-bug.js'
@@ -44,6 +46,8 @@ export interface ForgeBugsToolFace {
     readonly actual: string
     readonly suspected?: string
     readonly errorType?: string
+    /** 复发链前驱指针（bug-recurrence-chain——登记时一次写入；悬空引用拒写） */
+    readonly recurrenceOf?: string
     readonly sourceTaskId?: string
     readonly reportSessionId?: string
   }): Promise<BugCard>
@@ -57,11 +61,16 @@ export interface ForgeBugsToolFace {
     readonly fixSessionId?: string
   }): Promise<BugCard>
   /**
-   * 台账读面（bug-mention-prestep 发送期展开的现查源——core listBugs 结构兼容；
-   * ListBugsQuery 消费子集：projectId 必带，search/status/sort 不用于按 id 现查）。
+   * 台账查询面（bug-recurrence-chain：listBugs tool 六字段 search/状态 chips/sort/
+   * offset+limit 分页——core listBugs 结构兼容；bug-mention-prestep 仅传 projectId 子集）。
    */
-  listBugs(q: { readonly projectId: string }): Promise<readonly BugCard[]>
+  listBugs(q: ListBugsQuery): Promise<readonly BugCard[]>
+  /** 单条全卡 + 链上下文（getBug tool——主 + worker 面；core getBug 结构兼容） */
+  getBug(q: { readonly projectId: string; readonly bugId: string }): Promise<GetBugResponse>
 }
+
+/** 链上下文投影重导出（getBug 响应载荷形状——工具面注释引用） */
+export type { BugChainContext }
 
 /** tool 共享的执行期依赖（index.ts 装配注入） */
 export interface ForgeToolDeps {
@@ -91,7 +100,7 @@ export interface ForgeToolDeps {
   jobs?: DispatchJobsFace
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——十一员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——十三员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -104,10 +113,13 @@ export interface ForgeTools {
   readonly listTasks: ReturnType<typeof createListTasksTool>
   readonly recordBug: ReturnType<typeof createRecordBugTool>
   readonly resolveBug: ReturnType<typeof createResolveBugTool>
+  readonly listBugs: ReturnType<typeof createListBugsTool>
+  readonly getBug: ReturnType<typeof createGetBugTool>
 }
 
-/** 注册面全集（十一 tool——M3 九员 + recordBug/resolveBug 两 bug 写径；主 agent +
- *  coding-fix worker 放行——WORKER_FORGE_TOOLS 四动词） */
+/** 注册面全集（十三 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+ *  两 bug 读径；面分治：listBugs 仅主 agent，getBug 主 + worker——WORKER_FORGE_TOOLS
+ *  五动词，其余八员 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -120,6 +132,8 @@ export const FORGE_TOOL_NAMES = [
   'listTasks',
   'recordBug',
   'resolveBug',
+  'listBugs',
+  'getBug',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -140,6 +154,8 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     listTasks: createListTasksTool(deps),
     recordBug: createRecordBugTool(deps),
     resolveBug: createResolveBugTool(deps),
+    listBugs: createListBugsTool(deps),
+    getBug: createGetBugTool(deps),
   }
 }
 
@@ -192,6 +208,10 @@ export { parseRecordBugArgs } from './record-bug.js'
 export type { RecordBugToolArgs } from './record-bug.js'
 export { parseResolveBugArgs } from './resolve-bug.js'
 export type { ResolveBugToolArgs } from './resolve-bug.js'
+export { parseListBugsArgs, LIST_BUGS_OUTPUT_SCHEMA } from './list-bugs.js'
+export type { ListBugsToolArgs } from './list-bugs.js'
+export { parseGetBugArgs, GET_BUG_OUTPUT_SCHEMA } from './get-bug.js'
+export type { GetBugToolArgs } from './get-bug.js'
 export { parseListTasksArgs } from './list-tasks.js'
 export type { ListTasksToolArgs } from './list-tasks.js'
 export {
