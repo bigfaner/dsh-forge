@@ -4,12 +4,17 @@
 填充：2.6。边界：禁 import `views/`、`flows/`（依赖铁律①）与 `rpc/`、`@dsh-forge/contracts`
 （零业务语义，tests/structure/web-shell.test.ts 机械 pin）。
 
+> 复用纪律（用户裁决 2026-10-16）：写 UI 前先查 `DESIGN.md`「自建组件清单」与下方条目——
+> 已有同语义件一律复用；新自建件落地时须回写两处（清单 + 本 README）。
+
 - `MarkdownDoc.tsx` —— **Markdown 渲染唯一包装入口**（Hard Rule 渲染纪律：产品内禁直用官方
   `MarkdownText` 裸渲染器——结构 pin 机械执行）。职责：剥离开头 frontmatter 块（正文与元数据
   分离，UF-6「正文区不含 frontmatter 字段」）+ 供默认 labels（模块级冻结常量，引用稳定）+
   variant 透传（`body` 详情抽屉正文 / `compact` M4 嵌入预览预留——官方原生双形态）。
 - `StateChip.tsx` —— 状态徽章：官方 `Tag`（neutral tone）复用不自绘；P1 仅承载展示，
   阈值配色 M4/M5 在包装内扩展（消费方零改动）。
+- `ModeChip.tsx` —— 模式徽章（远征/突击）：全令牌自绘胶囊（999px = 官方 Tag 同值），
+  语义点色见 DESIGN.md「Chips」。
 - `HeatBadge.tsx` —— 热度徽章：热度 = 事件计数原样展示（UF-6 断言「热度数字 = 使用事件计数」）；
   官方 `Tag`（quiet tone）复用；可见性策略归消费方。
 - `EmptyState.tsx` + `components.css` —— 统一空态简版（P1；M8 打磨）：标题 + 可选描述 +

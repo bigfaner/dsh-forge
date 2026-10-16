@@ -64,6 +64,23 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 
 官方件（Button / Input / Modal / Menu / Tag / Tooltip / Switch 等）复用 `@deepseek-ai/dsh-client-ui-*`，产品层零重写；以下为组件消费要点与自绘面。
 
+### 自建组件清单（复用优先，用户裁决 2026-10-16）
+
+**写任何 UI 前先查本清单**：已有同语义自建件一律复用，不自建平行件；新自建件落地时**必须回写本清单**（构成 = 基于哪些官方件组合 / 用途 / 交互要点），并在 `apps/web/src/components/README.md` 同步条目——两处是 Agent 复用检索面。通用件落 `apps/web/src/components/`（零业务语义，结构 pin 机械约束），领域件归 `views/` 与插件 client（不入本清单）。
+
+| 组件 | 构成 | 用途 |
+|---|---|---|
+| `MarkdownDoc` | 官方 `MarkdownText` 包装 | Markdown 渲染唯一入口（frontmatter 剥离 + variant） |
+| `StateChip` | 官方 `Tag`（neutral） | 状态徽章 |
+| `HeatBadge` | 官方 `Tag`（quiet） | 热度徽章（计数原样展示） |
+| `ModeChip` | 全令牌自绘胶囊 | 模式徽章（远征蓝/突击琥珀语义点色） |
+| `EmptyState` | 全令牌自绘（官方无空态件） | 统一空态（标题+描述+引导插槽） |
+| `ErrorBar` | 零样式持有 JSX 源 | 错误条共享件（`role=alert` + 可选重试钮） |
+| `SkeletonRows` | 零样式持有 JSX 源 | 骨架行占位共享件 |
+| `time-label.ts` | 官方 `relativeTime` 桶化 | 相对时间文案单一来源 |
+
+官方组件查证口径：`@deepseek-ai/dsh-client-ui-primitives`（33 组件）+ `dsh-client-web`——判定「官方缺件」前先实查这两包，不凭记忆断言。
+
 ### Buttons
 
 - **Primary**: `--dsw-alias-button-primary-fill`（light #0f1115 / dark #f9fafb，近黑/近白反差面），hover `button-primary-hover`（dark: bluish-750 / light: bluish-100）
