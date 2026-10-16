@@ -55,8 +55,17 @@ export interface ForgeHeroWorkspacePickerProps {
    * worktree 挂靠编排缝（fix-2 槽位 inject face——client 插件注册时递达）：选择控件确认时
    * 的「建会话（meta.cwd 注入）→ 挂靠事件唯一写入口 → 官方 openSession」编排。缺席 =
    * 官方 Toast 明示「编排面不可用」（1.25——不再静默 no-op；旧插件面/降级装配场景）。
+   * 1.26 编排默认增两账本面（缺席各自 fail-soft）：blankSessionByCwd = 空白会话按 cwd
+   * 反查（reuse-or-create——双路不重复建会话）；sessionsList = 账本快照源（mount
+   * useSyncExternalStore 直读当前会话 cwd——arm 去重与跨会话重消费的活源）。
    */
-  readonly worktree?: { readonly openSession: (sessionId: string) => void } | undefined
+  readonly worktree?:
+    | {
+        readonly openSession: (sessionId: string) => void
+        readonly blankSessionByCwd?: (cwd: string) => string | undefined
+        readonly sessionsList?: unknown
+      }
+    | undefined
   /** RPC 构造器（测试替身注入；缺省 preload 真身） */
   readonly makeRpc?: () => ForgeRpcClient
 }
@@ -113,14 +122,32 @@ export function ForgeHeroWorkspacePicker({
   // （含环节语义）；会话不切换、向挂载面回 false —— 选中回填不落（不产生「已选中」假象）。
   const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
   const onWorktreeSelect = useCallback(
-    (path: string): void => {
-      void (async (): Promise<boolean> => {
+    (path: string): Promise<boolean> => {
+      // 返回真实编排结果（1.26——挂载面按 outcome 决定选中回填/清退，1.25「失败不落
+      // 假象」须 outcome 可判；意外 reject = false，失败口径已由上方 Toast 承载）
+      return (async (): Promise<boolean> => {
         if (worktree === undefined) {
           // 注入面缺席（旧插件面/装配降级）——显式提示，不再静默 no-op（1.25①）
           setWorktreeNotice((prev) => ({ text: worktreeFaceUnavailableNotice(), seq: (prev?.seq ?? 0) + 1 }))
           return false
         }
         const rpc = makeRpc()
+        // 1.26 双路不重复建会话：该 cwd 已有空白会话（点选/编排默认 arm 先前已建）→
+        // 直接打开复用，不再走预铸新建（官方 reuseOrCreateBlank 语义同构）
+        const reuseSessionId = worktree.blankSessionByCwd?.(path)
+        if (reuseSessionId !== undefined) {
+          try {
+            worktree.openSession(reuseSessionId)
+          } catch (error) {
+            setWorktreeNotice((prev) => ({
+              text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
+              seq: (prev?.seq ?? 0) + 1,
+            }))
+            return false
+          }
+          onClose()
+          return true
+        }
         let sessionId: string
         try {
           ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
@@ -142,9 +169,7 @@ export function ForgeHeroWorkspacePicker({
         }
         onClose()
         return true
-      })()
-        // Promise 链自身不外溢：失败口径已由上方 Toast 承载（防御性兜住意外 reject）
-        .catch(() => {})
+      })().catch(() => false)
     },
     [worktree, makeRpc, onClose],
   )
@@ -208,6 +233,7 @@ export function ForgeHeroWorkspacePicker({
       <ForgeHeroWorktreeMount
         projectRoot={selectedProjectRoot}
         onSelect={onWorktreeSelect}
+        sessionsList={worktree?.sessionsList}
         makeRpc={makeRpc}
       />
     </>

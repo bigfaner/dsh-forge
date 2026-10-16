@@ -45,6 +45,8 @@ import {
   bugAddressOf,
   bugIdOfAddress,
   activeSessionIdOf,
+  activeSessionCwdOf,
+  blankSessionIdByCwdOf,
   buildBugQuickAdder,
   resolveWorkerChildSession,
   sessionParentIdOf,
@@ -636,8 +638,17 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
     expect(hero.options.children).toBeUndefined()
     expect(typeof hero.options.inject).toBe('function') // fix-2：inject = worktree 挂靠编排缝（openSession 官方导航闭包）
-    const heroFace = hero.options.inject!() as { worktree?: { openSession: (id: string) => void } }
+    const heroFace = hero.options.inject!() as {
+      worktree?: {
+        openSession: (id: string) => void
+        blankSessionByCwd?: (cwd: string) => string | undefined
+        sessionsList?: unknown
+      }
+    }
     expect(typeof heroFace.worktree?.openSession).toBe('function')
+    // 1.26 编排默认两账本面（reuse-or-create 去重 + 账本快照源——mount 订阅驱动 arm cwd）
+    expect(typeof heroFace.worktree?.blankSessionByCwd).toBe('function')
+    expect(heroFace.worktree?.sessionsList).toBeDefined()
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
@@ -1903,6 +1914,31 @@ describe('activeSessionIdOf（官方快照形状——retainedBy.mainView 锚，
     expect(activeSessionIdOf(ledger({ a: { retainedBy: { mainView: 2 } } }))).toBeUndefined()
     expect(activeSessionIdOf(ledger({ a: { id: '', retainedBy: { mainView: 2 } } }))).toBeUndefined()
     expect(activeSessionIdOf(ledger({ a: { id: 's-x', retainedBy: { mainView: '2' } } }))).toBeUndefined()
+  })
+})
+
+describe('1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByCwdOf）', () => {
+  /** 官方 SessionListState 真形窄搭（activeSessionIdOf describe 同款） */
+  function ledger(rows: Record<string, unknown>): unknown {
+    return { getSnapshot: () => ({ ids: Object.keys(rows), byId: rows, phase: 'ready', projectionsBySession: {} }) }
+  }
+
+  it('activeSessionCwdOf：mainView 在留行的 cwd 命中；漂移/缺席 = undefined', () => {
+    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 1 }, cwd: 'C:/repo' } }))).toBe('C:/repo')
+    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 0 }, cwd: 'C:/repo' } }))).toBeUndefined()
+    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 1 }, cwd: '' } }))).toBeUndefined()
+    expect(activeSessionCwdOf(undefined)).toBeUndefined()
+  })
+
+  it('blankSessionIdByCwdOf：blank + cwd 归一命中（反斜杠/尾斜杠/大小写跨源）；非 blank 不命中', () => {
+    const rows = {
+      a: { id: 'a', blank: true, cwd: 'C:\\Repo\\wt-a\\' },
+      b: { id: 'b', blank: false, cwd: 'C:/repo/wt-a' },
+    }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'c:/repo/wt-a')).toBe('a')
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a/')).toBe('a')
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo')).toBeUndefined()
+    expect(blankSessionIdByCwdOf(undefined, 'C:/repo')).toBeUndefined()
   })
 })
 

@@ -79,3 +79,58 @@ export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: str
   const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
   return `worktree 挂靠失败（${stageText}）：${cause}，当前会话未切换`
 }
+
+// ───────────── 1.26 编排默认：账本快照读面（纯函数——plugin.ts 重导出单源） ─────────────
+
+/**
+ * worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对单源）：
+ * 反斜杠→正斜杠 + 去尾斜杠 + 小写。
+ */
+export function worktreeCwdKey(path: string): string {
+  return path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+}
+
+/** 账本快照窄读单步（getSnapshot 调用 + byId 取行——快照缺席/形状漂移 = undefined fail-soft） */
+function ledgerRowsOf(list: unknown): Record<string, unknown> | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  const byId = (snapshot as { byId?: unknown } | null)?.byId
+  return typeof byId === 'object' && byId !== null ? (byId as Record<string, unknown>) : undefined
+}
+
+/**
+ * 主视图在留会话 cwd 解析（1.26 编排默认 arm 去重判定——`retainedBy.mainView > 0` 官方
+ * publishMain 同判据，加读 cwd 字段）。快照缺席/形状漂移/无在留行 = undefined。
+ */
+export function activeSessionCwdOf(list: unknown): string | undefined {
+  for (const row of Object.values(ledgerRowsOf(list) ?? {})) {
+    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
+    const cwd = (row as { cwd?: unknown } | null)?.cwd
+    if (typeof mainView === 'number' && mainView > 0 && typeof cwd === 'string' && cwd !== '') return cwd
+  }
+  return undefined
+}
+
+/**
+ * 按 cwd 反查空白会话 id（1.26 双路不重复建会话——点选/arm 前 reuse-or-create 判定，
+ * 官方 reuseOrCreateBlank 语义同构：`blank && cwd` 归一命中即复用，不再新建）。
+ * 无命中/快照漂移 = undefined。
+ */
+export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | undefined {
+  const key = worktreeCwdKey(cwd)
+  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
+    const blank = (row as { blank?: unknown } | null)?.blank
+    const rowCwd = (row as { cwd?: unknown } | null)?.cwd
+    if (blank === true && typeof rowCwd === 'string' && worktreeCwdKey(rowCwd) === key) {
+      return id !== '' ? id : undefined
+    }
+  }
+  return undefined
+}

@@ -213,6 +213,67 @@ export const FORGE_CLIENT_INJECT = [
 /** 产品 locale 命名空间（官方 locale 服务词典登记键——LOCALE_IDS = zh/en） */
 export const FORGE_LOCALE_NS = 'dsh-forge'
 
+/**
+ * 1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByCwdOf / worktreeCwdKey）。
+ * 跨 bundle 双本体注记：forge-client = classic script 自含 bundle（含 import/export 即
+ * 构建失败——2026-10-17 实证），不得 import app bundle 模块；同一组纯函数的 app 侧本体
+ * 在 views/session/hero-picker-model.ts（hero worktree mount 消费），两侧行为由各自
+ * 单测 pin（plugin.test 账本读面 describe / hero-picker-model.test）。
+ */
+
+/**
+ * worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对单源）：
+ * 反斜杠→正斜杠 + 去尾斜杠 + 小写。
+ */
+export function worktreeCwdKey(path: string): string {
+  return path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+}
+
+/** 账本快照窄读单步（getSnapshot 调用 + byId 取行——快照缺席/形状漂移 = undefined fail-soft） */
+function ledgerRowsOf(list: unknown): Record<string, unknown> | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  const byId = (snapshot as { byId?: unknown } | null)?.byId
+  return typeof byId === 'object' && byId !== null ? (byId as Record<string, unknown>) : undefined
+}
+
+/**
+ * 主视图在留会话 cwd 解析（1.26 编排默认 arm 去重判定——activeSessionIdOf 同判据
+ * `retainedBy.mainView > 0`，加读 cwd 字段）。快照缺席/形状漂移/无在留行 = undefined。
+ */
+export function activeSessionCwdOf(list: unknown): string | undefined {
+  for (const row of Object.values(ledgerRowsOf(list) ?? {})) {
+    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
+    const cwd = (row as { cwd?: unknown } | null)?.cwd
+    if (typeof mainView === 'number' && mainView > 0 && typeof cwd === 'string' && cwd !== '') return cwd
+  }
+  return undefined
+}
+
+/**
+ * 按 cwd 反查空白会话 id（1.26 双路不重复建会话——点选/编排默认 arm 前 reuse-or-create
+ * 判定，官方 reuseOrCreateBlank 语义同构：`blank && cwd` 归一命中即复用，不再新建）。
+ * 归一比对经 worktreeCwdKey（1.24 分隔符口径）；无命中/快照漂移 = undefined。
+ */
+export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | undefined {
+  const key = worktreeCwdKey(cwd)
+  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
+    const blank = (row as { blank?: unknown } | null)?.blank
+    const rowCwd = (row as { cwd?: unknown } | null)?.cwd
+    if (blank === true && typeof rowCwd === 'string' && worktreeCwdKey(rowCwd) === key) {
+      return id !== '' ? id : undefined
+    }
+  }
+  return undefined
+}
+
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
 export interface ForgeSlotsService {
   /** 依赖洞位声明：声明在场（或入座）即装 cb；cb 返回即释放器（随 fiber 卸载级联） */
@@ -967,6 +1028,7 @@ function registerConversationViews(
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
   uiWorkspace: ForgeUiWorkspaceService,
+  sessions: ForgeSessionsService,
 ): void {
   registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
     ctx.slots.register(
@@ -991,7 +1053,10 @@ function registerConversationViews(
         name: HERO_WORKSPACE_SLOT,
         priority: SIDEBAR_SHADOW_PRIORITY,
         // fix-2：worktree 挂靠编排缝（选择控件确认 → 建会话 meta.cwd 注入 → 唯一写入口
-        // attach → 官方 openSession——ForgeHeroWorkspacePicker worktree face 消费）
+        // attach → 官方 openSession——ForgeHeroWorkspacePicker worktree face 消费）。
+        // 1.26 编排默认增两账本面：blankSessionByCwd（reuse-or-create 判定——双路不重复
+        // 建会话）+ sessionsList（账本快照源——mount useSyncExternalStore 直读当前会话
+        // cwd 驱动 arm 去重/重消费；root 作用域影子不随会话切换重渲，订阅是唯一活源）。
         inject: () => ({
           worktree: {
             openSession: (sessionId: string): void => {
@@ -1001,6 +1066,8 @@ function registerConversationViews(
                 // 官方导航面异常（会话卸载瞬态）fail-soft 不外溢
               }
             },
+            blankSessionByCwd: (cwd: string): string | undefined => blankSessionIdByCwdOf(sessions.list, cwd),
+            sessionsList: sessions.list,
           },
         }),
       },
@@ -2195,7 +2262,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace, sessions)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
