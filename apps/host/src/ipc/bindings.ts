@@ -36,7 +36,9 @@ export const defaultWorktreeLister: WorktreeLister = async (wsPath) => {
   return entries === null ? null : entries.map((wt) => wt.path)
 }
 
-/** 单项目 worktree 绑定行现算派生（主行路径去重——git worktree list 含主 worktree 本身；失败 null）。 */
+/** 单项目 worktree 绑定行现算派生（主行路径去重——git worktree list 含主 worktree 本身；失败 null）。
+ * bug 3e0426a0：落盘键恒 normalizeFsPath 归一形态（git 输出天然正斜杠，原样落盘会与存量
+ * canonical 行键空间分裂——消费面归一后 Map 后写覆盖即错绑）。 */
 async function worktreeRowsOf(
   project: ProjectSummary,
   listWorktrees: WorktreeLister,
@@ -46,21 +48,25 @@ async function worktreeRowsOf(
   const mainKey = normalizeFsPath(project.wsPath)
   return paths
     .filter((p) => normalizeFsPath(p) !== mainKey)
-    .map((p) => ({ wsPath: p, projectId: project.id }))
+    .map((p) => ({ wsPath: normalizeFsPath(p), projectId: project.id }))
 }
 
-/** 项目摘要 + worktree 现算派生 → 绑定表（纯映射；wsPath = canonical path 同口径） */
+/** 项目摘要 + worktree 现算派生 → 绑定表（纯映射；wsPath = canonical path 同口径）
+ * bug 3e0426a0：归档项目整行不参与（主行与派生行）——同锚归档行（历史 worktree 独立
+ * 注册）的 git 清单含主仓与全部兄弟 worktree，参与派生会把主仓路径错绑到归档 projectId；
+ * 消费面解析到归档项目 = 任务源空 + UI 面隐藏。 */
 export async function bindingsOf(
   projects: readonly ProjectSummary[],
   listWorktrees: WorktreeLister = defaultWorktreeLister,
 ): Promise<KnowledgeBindingsFile> {
+  const active = projects.filter((p) => !p.archived)
   const worktreeRows = (
-    await Promise.all(projects.map((p) => worktreeRowsOf(p, listWorktrees).catch(() => [])))
+    await Promise.all(active.map((p) => worktreeRowsOf(p, listWorktrees).catch(() => [])))
   ).flat()
   return {
     version: 1,
     projects: [
-      ...projects.map((p) => ({ wsPath: p.wsPath, projectId: p.id })),
+      ...active.map((p) => ({ wsPath: p.wsPath, projectId: p.id })),
       ...worktreeRows,
     ],
   }

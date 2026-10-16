@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProjectService, ProjectSummary, RegisterResult } from '@dsh-forge/contracts'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import {
   bindingsOf,
   refreshKnowledgeBindings,
@@ -16,12 +17,12 @@ import {
   type WorktreeLister,
 } from './bindings.js'
 
-const summary = (id: string, wsPath: string): ProjectSummary => ({
+const summary = (id: string, wsPath: string, archived = false): ProjectSummary => ({
   id,
   workspaceId: `ws-${id}`,
   name: id,
   wsPath,
-  archived: false,
+  archived,
 })
 
 /** 无 worktree 派生端口（主行形状锚定用——零 worktree 行注入） */
@@ -52,14 +53,14 @@ describe('bindingsOf / serializeBindings（文件形状）', () => {
 })
 
 describe('bindingsOf（1.6 worktree → 主 projectId 行现算派生）', () => {
-  it('worktree list 端口在场 → 附加 worktree 行（行形与主行同形；主行路径去重）', async () => {
+  it('worktree list 端口在场 → 附加 worktree 行（键 = 归一形态 bug 3e0426a0；主行路径去重）', async () => {
     const lister: WorktreeLister = async (wsPath) =>
       wsPath === 'C:\\ws\\a' ? ['C:\\ws\\a', 'C:\\wt\\a-feat'] : null
     await expect(bindingsOf([summary('p1', 'C:\\ws\\a')], lister)).resolves.toEqual({
       version: 1,
       projects: [
         { wsPath: 'C:\\ws\\a', projectId: 'p1' },
-        { wsPath: 'C:\\wt\\a-feat', projectId: 'p1' },
+        { wsPath: normalizeFsPath('C:\\wt\\a-feat'), projectId: 'p1' },
       ],
     })
   })
@@ -85,6 +86,33 @@ describe('bindingsOf（1.6 worktree → 主 projectId 行现算派生）', () =>
       version: 1,
       projects: [{ wsPath: 'C:\\ws\\a', projectId: 'p1' }],
     })
+  })
+
+  // ── bug 3e0426a0：worktree 派生行错绑归档项目 + 正斜杠键与存量键空间分裂 ──
+  it('bug 3e0426a0 ①：归档项目整行不参与（主行与派生行）——同锚归档行的 git 清单不得把主仓路径绑到归档 id', async () => {
+    // 现场形态：活跃主行（反斜杠 canonical）+ 已归档的 redesign 行（同锚 worktree 注册）
+    const active = summary('p-main', 'Z:\\repo')
+    const archived = summary('p-archived', 'Z:\\repo\\.forge\\worktrees\\redesign', true)
+    // git worktree list 对任一同仓路径返回全仓清单（git 输出天然正斜杠，含主仓本身）
+    const lister: WorktreeLister = async () => ['Z:/repo', 'Z:/repo/.forge/worktrees/redesign']
+    await expect(bindingsOf([active, archived], lister)).resolves.toEqual({
+      version: 1,
+      projects: [
+        { wsPath: 'Z:\\repo', projectId: 'p-main' },
+        { wsPath: normalizeFsPath('Z:/repo/.forge/worktrees/redesign'), projectId: 'p-main' },
+      ],
+    })
+  })
+
+  it('bug 3e0426a0 ②：worktree 派生行落盘键 canonical 化（归一键形态，杜绝正/反斜杠双键分裂）', async () => {
+    const lister: WorktreeLister = async () => ['Z:/repo', 'Z:/repo/.forge/worktrees/feat-x']
+    const file = await bindingsOf([summary('p1', 'Z:\\repo')], lister)
+    expect(file.projects).toContainEqual({
+      wsPath: normalizeFsPath('Z:/repo/.forge/worktrees/feat-x'),
+      projectId: 'p1',
+    })
+    // 主仓本身在清单内 → 去重不产生第二主键行
+    expect(file.projects.filter((r) => normalizeFsPath(r.wsPath) === normalizeFsPath('Z:/repo'))).toHaveLength(1)
   })
 })
 
