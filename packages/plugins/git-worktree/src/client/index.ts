@@ -21,15 +21,20 @@ export { SealNotice, SealedComposerPlaceholder, type SealNoticeProps } from './s
 export { HeroWorktreePicker, heroWorktreeRows, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
 export {
   aheadBehindSegments,
+  collectSlugCandidates,
+  createConflicts,
   deleteBlockers,
   deriveWorktreeName,
+  filterSlugCandidates,
   inferSource,
   isCreateReady,
   isDeleteBlocked,
   pendingAheadBehindPaths,
   type AheadBehindSegments,
+  type CreateConflict,
   type DeleteBlocker,
   type DeleteChecks,
+  type SlugCandidate,
   type WorktreeRow,
   type WorktreeSource,
 } from './model.js'

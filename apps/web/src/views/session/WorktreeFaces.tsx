@@ -21,6 +21,8 @@ import {
   type DeleteChecks,
 } from '@dsh-forge/git-worktree/client'
 import type { AheadBehind } from '@dsh-forge/git-worktree'
+import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
+import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 
 /** list 结果 → 行渲染模型（WorktreeRow 同形——DTO 即行源，零二次派生） */
@@ -65,6 +67,8 @@ export function ForgeHeroWorktreeMount({
   const [aheadBehind, setAheadBehind] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
   const [createOpen, setCreateOpen] = useState(false)
   const [branches, setBranches] = useState<{ readonly defaultBranch: string; readonly names: readonly string[] }>({ defaultBranch: 'main', names: [] })
+  // 分支下拉 slug 候选（提案/feature slug——proposals.list + features.list RPC；挂载面归一为 {slug, done}）
+  const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
 
@@ -95,6 +99,28 @@ export function ForgeHeroWorktreeMount({
       .worktree.branches({ projectRoot })
       .then((result) => setBranches({ defaultBranch: result.defaultBranch, names: result.branches }))
       .catch(() => {})
+    // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），proposals/features 并读——
+    // 终态归一（提案 rejected/superseded、feature completed/archived = done）
+    const key = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+    makeRpc()
+      .projects.list()
+      .then((projects) => {
+        const project = projects.find((summary) => key(summary.wsPath) === key(projectRoot))
+        if (project === undefined) return []
+        const isDoneProposal = (status: string): boolean => status === 'rejected' || status === 'superseded'
+        const isDoneFeature = (status: string): boolean => status === 'completed' || status === 'archived'
+        return Promise.all([
+          makeRpc().proposals.list({ projectId: project.id }),
+          makeRpc().features.list({ projectId: project.id }),
+        ]).then(([proposalCards, featureCards]) =>
+          collectSlugCandidates(
+            proposalCards.map((card) => ({ slug: card.slug, done: isDoneProposal(card.proposalStatus) })),
+            featureCards.map((card) => ({ slug: card.slug, done: isDoneFeature(card.featureStatus) })),
+          ),
+        )
+      })
+      .then((candidates) => setSlugCandidates(candidates))
+      .catch(() => setSlugCandidates([]))
   }, [createOpen, projectRoot, makeRpc])
 
   // ahead/behind 懒加载器（组件展开才拉 + 本面缓存共享）
@@ -179,6 +205,8 @@ export function ForgeHeroWorktreeMount({
       <CreateWorktreeDialog
         open={createOpen}
         branches={branches.names}
+        existingWorktreeNames={phase.rows.map((row) => row.worktreeName)}
+        slugCandidates={slugCandidates}
         defaultBranch={branches.defaultBranch}
         worktreeDir={phase.worktreeDir ?? ''}
         onClose={() => setCreateOpen(false)}

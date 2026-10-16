@@ -2,12 +2,15 @@
 // 官方 Modal + 三字段自上而下——① 基准分支（默认 main，可下拉）→ ② 分支（主输入）→
 // ③ worktree（自动派生，可改）；路径行 = 所配 worktree 目录预览 + 「自定义路径…」；
 // 入口只说一个名词「新建 worktree…」——分支与 worktree 一体感由派生交互承载。
+// 分支主输入 = 自由手写 + slug 智能下拉（提案/feature slug 候选、未完成排前、去重、
+// 输入过滤）；同名冲突（分支 vs branches RPC、worktree 名 vs list RPC）→ 表单内告警
+// + 创建钮禁用（进 git 前拦截）。
 // 表单状态面（CreateWorktreeFields/initialCreateForm）Modal 外提——单测直测
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径）。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { IconBranchOutlineRegular, IconChevronDownOutlineRegular } from './icons.js'
-import { deriveWorktreeName, isCreateReady } from './model.js'
+import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
+import { createConflicts, deriveWorktreeName, filterSlugCandidates, isCreateReady, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */
 export interface CreateWorktreeRequest {
@@ -21,7 +24,7 @@ export interface CreateWorktreeRequest {
   readonly customPath?: string | undefined
 }
 
-/** 表单状态（三字段 + 自定义路径开合/值——受控面，弹窗与单测共用） */
+/** 表单状态（三字段 + 自定义路径开合/值 + 两下拉开合——受控面，弹窗与单测共用） */
 export interface CreateWorktreeFormValue {
   readonly baseBranch: string
   readonly branch: string
@@ -30,6 +33,7 @@ export interface CreateWorktreeFormValue {
   readonly customPathOpen: boolean
   readonly customPath: string
   readonly baseOpen: boolean
+  readonly branchOpen: boolean
 }
 
 /** 初始表单（弹窗打开即重置——基准分支回默认、派生链复位） */
@@ -42,6 +46,7 @@ export function initialCreateForm(defaultBranch: string | undefined, branches: r
     customPathOpen: false,
     customPath: '',
     baseOpen: false,
+    branchOpen: false,
   }
 }
 
@@ -60,8 +65,12 @@ export function createFormPathPreview(form: CreateWorktreeFormValue, worktreeDir
 
 export interface CreateWorktreeFieldsProps {
   readonly value: CreateWorktreeFormValue
-  /** 分支清单（基准分支下拉数据源——git for-each-ref refs/heads） */
+  /** 分支清单（基准分支下拉数据源 + 分支同名冲突源——git for-each-ref refs/heads） */
   readonly branches: readonly string[]
+  /** slug 候选（分支下拉——提案/feature slug，未完成排前去重后由挂载面给定） */
+  readonly slugCandidates?: readonly SlugCandidate[]
+  /** 同名冲突集（弹窗层算定传入——Fields 只呈现告警） */
+  readonly conflicts?: readonly CreateConflict[]
   /** 所配 worktree 目录（路径预览行——未自定义时「将创建于 …」） */
   readonly worktreeDir: string
   readonly onChange: (value: CreateWorktreeFormValue) => void
@@ -84,16 +93,55 @@ const inputStyle: React.CSSProperties = { ...mono, height: 34, width: '100%', fo
  * .wrap span（shrink-to-fit）——列向 flex 面内 stretch 把 .wrap 拉满容器宽，三字段
  * 与基准分支触发器共用同一列宽基准（等宽 + 左缘对齐；Menu 根 inline-flex 同理）。 */
 const fieldStretch: React.CSSProperties = { display: 'flex', flexDirection: 'column' }
+/** 冲突告警行（表单内——进 git 前拦截的提示通道） */
+const conflictStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  marginTop: 6,
+  fontSize: 12,
+  color: 'var(--dsw-alias-state-error-primary, var(--dsw-alias-state-business-primary))',
+}
+
+/** 同名冲突告警行（data-dswt-conflict-* 走查锚） */
+function ConflictWarning({ kind, name }: { kind: 'branch' | 'worktree'; name: string }): ReactNode {
+  return (
+    <div {...{ [`data-dswt-conflict-${kind}`]: '' } as React.HTMLAttributes<HTMLDivElement>} style={conflictStyle}>
+      <IconWarningTriangleOutlineRegular size={14} />
+      <span>{kind === 'branch' ? `分支 ${name} 已存在` : `worktree ${name} 已存在`}</span>
+    </div>
+  )
+}
 
 /** 三字段表单体（官方 Input/Menu 形态——弹窗 body 内容，Modal 外提单测面） */
 export function CreateWorktreeFields({
   value: form,
   branches,
+  slugCandidates = [],
+  conflicts = [],
   worktreeDir,
   onChange,
 }: CreateWorktreeFieldsProps): ReactNode {
   const baseItems = useMemo(() => branches.map((id) => ({ id, label: id })), [branches])
   const worktreeName = deriveFormWorktreeName(form)
+  // 分支下拉候选：随输入自动过滤（大小写不敏感子串；空输入 = 全量）
+  const branchCandidates = useMemo(
+    () => filterSlugCandidates(slugCandidates, form.branch),
+    [slugCandidates, form.branch],
+  )
+  const candidateItems = useMemo(
+    () =>
+      branchCandidates.map((candidate) => ({
+        id: candidate.slug,
+        label: (
+          <span style={{ ...mono, fontSize: 13 }}>
+            {candidate.slug}
+            {candidate.done ? <span style={{ ...fieldOpt }}>　已完成</span> : null}
+          </span>
+        ),
+      })),
+    [branchCandidates],
+  )
   return (
     <>
       <div data-dswt-field-base="" style={{ marginBottom: 14 }}>
@@ -149,17 +197,59 @@ export function CreateWorktreeFields({
 
       <div data-dswt-field-branch="" style={{ marginBottom: 14 }}>
         <div style={fieldLabel}>分支</div>
+        {/* 自由手写 + slug 下拉：输入行 = Input（手写）+ 触发器（候选清单）——官方 Menu 锚定 */}
         <div style={fieldStretch}>
-          <Input
-            data-dswt-branch-input=""
-            value={form.branch}
-            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-              onChange({ ...form, branch: event.currentTarget.value })
+          <Menu
+            open={form.branchOpen}
+            anchor={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                <div style={{ flex: 1 }}>
+                  <Input
+                    data-dswt-branch-input=""
+                    value={form.branch}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                      onChange({ ...form, branch: event.currentTarget.value })
+                    }}
+                    style={inputStyle}
+                    placeholder="feat/my-branch"
+                  />
+                </div>
+                <button
+                  type="button"
+                  data-dswt-branch-trigger=""
+                  aria-label="slug 候选"
+                  onClick={() => {
+                    onChange({ ...form, branchOpen: !form.branchOpen })
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 34,
+                    height: 34,
+                    flexShrink: 0,
+                    border: '0.5px solid var(--dsw-alias-border-l2)',
+                    borderRadius: 8,
+                    background: 'var(--dsw-alias-bg-layer-1)',
+                    color: 'var(--dsw-alias-label-tertiary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <IconChevronDownOutlineRegular size={14} />
+                </button>
+              </div>
+            }
+            items={candidateItems}
+            onSelect={(id) => {
+              onChange({ ...form, branch: id, branchOpen: false })
             }}
-            style={inputStyle}
-            placeholder="feat/my-branch"
+            onClose={() => {
+              onChange({ ...form, branchOpen: false })
+            }}
+            listClassName="dswt-branch-slug-menu"
           />
         </div>
+        {conflicts.includes('branch-exists') && <ConflictWarning kind="branch" name={form.branch.trim()} />}
       </div>
 
       <div data-dswt-field-worktree="">
@@ -211,6 +301,7 @@ export function CreateWorktreeFields({
             />
           </div>
         )}
+        {conflicts.includes('worktree-exists') && <ConflictWarning kind="worktree" name={worktreeName.trim()} />}
       </div>
     </>
   )
@@ -219,6 +310,10 @@ export function CreateWorktreeFields({
 export interface CreateWorktreeDialogProps {
   readonly open: boolean
   readonly branches: readonly string[]
+  /** 既有 worktree 名（同名冲突源——list RPC 行名集；缺省 = 不判 worktree 冲突） */
+  readonly existingWorktreeNames?: readonly string[]
+  /** slug 候选（分支下拉——提案/feature slug，未完成排前去重；缺省 = 无候选） */
+  readonly slugCandidates?: readonly SlugCandidate[]
   /** 基准分支默认值（主 worktree 判定/origin 默认分支——装配层给） */
   readonly defaultBranch?: string | undefined
   /** 所配 worktree 目录（路径预览行——未自定义时「将创建于 …」） */
@@ -229,11 +324,13 @@ export interface CreateWorktreeDialogProps {
 
 /**
  * 新建 worktree 弹窗（官方 Modal；contentClassName = .dswt-create-dialog 走查锚）。
- * 「创建」钮门 = isCreateReady（分支名 + worktree 名齐备）。
+ * 「创建」钮门 = isCreateReady（分支名 + worktree 名齐备）∧ 零同名冲突（进 git 前拦截）。
  */
 export function CreateWorktreeDialog({
   open,
   branches,
+  existingWorktreeNames = [],
+  slugCandidates = [],
   defaultBranch,
   worktreeDir,
   onClose,
@@ -244,7 +341,11 @@ export function CreateWorktreeDialog({
     if (open) setForm(initialCreateForm(defaultBranch, branches))
   }, [open, defaultBranch, branches])
   const worktreeName = deriveFormWorktreeName(form)
-  const ready = isCreateReady(form.branch, worktreeName)
+  const conflicts = useMemo(
+    () => createConflicts(form.branch, worktreeName, branches, existingWorktreeNames),
+    [form.branch, worktreeName, branches, existingWorktreeNames],
+  )
+  const ready = isCreateReady(form.branch, worktreeName) && conflicts.length === 0
   return (
     <Modal
       open={open}
@@ -275,7 +376,14 @@ export function CreateWorktreeDialog({
         </>
       }
     >
-      <CreateWorktreeFields value={form} branches={branches} worktreeDir={worktreeDir} onChange={setForm} />
+      <CreateWorktreeFields
+        value={form}
+        branches={branches}
+        slugCandidates={slugCandidates}
+        conflicts={conflicts}
+        worktreeDir={worktreeDir}
+        onChange={setForm}
+      />
     </Modal>
   )
 }

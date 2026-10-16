@@ -3,11 +3,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   aheadBehindSegments,
+  collectSlugCandidates,
+  createConflicts,
   deleteBlockers,
   deriveWorktreeName,
+  filterSlugCandidates,
   inferSource,
   isDeleteBlocked,
   pendingAheadBehindPaths,
+  type SlugCandidate,
   type WorktreeRow,
 } from './model.js'
 
@@ -90,5 +94,60 @@ describe('pendingAheadBehindPaths（懒加载待拉清单：展开才拉、缓�
   it('缓存命中不重拉（懒加载 + 缓存纪律）', () => {
     const cache = new Map([['Z:/proj', { ahead: 0, behind: 0 }]])
     expect(pendingAheadBehindPaths(true, rows, cache)).toEqual(['Z:/proj/.forge/worktrees/wt-a'])
+  })
+})
+
+describe('collectSlugCandidates（slug 候选：去重 + 未完成排前）', () => {
+  it('提案与 feature slug 合并；同 slug 去重（任一未完成即未完成）；未完成排前、组内保持输入序', () => {
+    const proposals: SlugCandidate[] = [
+      { slug: 'done-proposal', done: true },
+      { slug: 'open-proposal', done: false },
+      { slug: 'shared', done: true },
+    ]
+    const features: SlugCandidate[] = [
+      { slug: 'open-feature', done: false },
+      { slug: 'done-feature', done: true },
+      { slug: 'shared', done: false },
+    ]
+    expect(collectSlugCandidates(proposals, features)).toEqual([
+      { slug: 'open-feature', done: false },
+      { slug: 'shared', done: false },
+      { slug: 'open-proposal', done: false },
+      { slug: 'done-feature', done: true },
+      { slug: 'done-proposal', done: true },
+    ])
+  })
+  it('空输入 = 空候选', () => {
+    expect(collectSlugCandidates([], [])).toEqual([])
+  })
+})
+
+describe('filterSlugCandidates（输入过滤：大小写不敏感子串匹配；空输入 = 全量）', () => {
+  const cands: SlugCandidate[] = [
+    { slug: 'worktree-branch-management', done: false },
+    { slug: 'mobile-remote-approval', done: true },
+  ]
+  it('子串命中（大小写不敏感）', () => {
+    expect(filterSlugCandidates(cands, 'WORKTREE')).toEqual([{ slug: 'worktree-branch-management', done: false }])
+    expect(filterSlugCandidates(cands, 'remote')).toEqual([{ slug: 'mobile-remote-approval', done: true }])
+  })
+  it('空查询 = 全量；无命中 = 空', () => {
+    expect(filterSlugCandidates(cands, '  ')).toEqual(cands)
+    expect(filterSlugCandidates(cands, 'zzz')).toEqual([])
+  })
+})
+
+describe('createConflicts（同名冲突判定：分支 vs branches、worktree vs 既有名——进 git 前拦截）', () => {
+  it('分支同名命中 branch-exists；worktree 名同名命中 worktree-exists；双中皆报', () => {
+    expect(createConflicts('feat/a', 'wt-new', ['main', 'feat/a'], ['wt-b'])).toEqual(['branch-exists'])
+    expect(createConflicts('feat/c', 'wt-a', ['main'], ['wt-a', 'wt-b'])).toEqual(['worktree-exists'])
+    expect(createConflicts('feat/a', 'wt-a', ['feat/a'], ['wt-a'])).toEqual(['branch-exists', 'worktree-exists'])
+  })
+  it('无冲突 = 空；空白归一（trim + 大小写不敏感——Windows 路径保守口径）', () => {
+    expect(createConflicts('feat/new', 'wt-new', ['main'], ['wt-a'])).toEqual([])
+    expect(createConflicts('  feat/a ', ' WT-B ', ['main', 'feat/a'], ['wt-b'])).toEqual(['branch-exists', 'worktree-exists'])
+  })
+  it('空输入（未填）不判冲突', () => {
+    expect(createConflicts('', '', ['main'], ['wt-a'])).toEqual([])
   })
 })

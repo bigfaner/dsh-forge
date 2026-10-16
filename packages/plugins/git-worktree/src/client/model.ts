@@ -83,6 +83,65 @@ export function isCreateReady(branch: string, worktreeName: string): boolean {
 }
 
 /**
+ * slug 候选（新建弹窗分支下拉数据源——通用层零 dsh-forge 依赖，提案/feature 行在
+ * 挂载面归一为 {slug, done} 两字段后进本函数）：并集去重（同 slug 任一未完成即未完成）、
+ * 未完成（非终态）排前、组内保持输入序。
+ */
+export interface SlugCandidate {
+  readonly slug: string
+  /** 终态（提案 rejected/superseded；feature completed/archived）= true */
+  readonly done: boolean
+}
+
+export function collectSlugCandidates(
+  proposals: readonly SlugCandidate[],
+  features: readonly SlugCandidate[],
+): readonly SlugCandidate[] {
+  const bySlug = new Map<string, SlugCandidate>()
+  for (const candidate of [...features, ...proposals]) {
+    const previous = bySlug.get(candidate.slug)
+    bySlug.set(candidate.slug, previous ? { slug: candidate.slug, done: previous.done && candidate.done } : candidate)
+  }
+  const all = [...bySlug.values()]
+  return [...all.filter((candidate) => !candidate.done), ...all.filter((candidate) => candidate.done)]
+}
+
+/** 输入过滤（大小写不敏感子串匹配；空查询 = 全量候选） */
+export function filterSlugCandidates(
+  candidates: readonly SlugCandidate[],
+  query: string,
+): readonly SlugCandidate[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return candidates
+  return candidates.filter((candidate) => candidate.slug.toLowerCase().includes(needle))
+}
+
+/** 同名冲突项（命中任一 → 表单告警 + 创建禁用，进 git 前拦截） */
+export type CreateConflict = 'branch-exists' | 'worktree-exists'
+
+/**
+ * 同名冲突判定：输入分支名 vs 既有分支（branches RPC）、派生/手改 worktree 名 vs 既有
+ * 条目（list RPC）。trim + 大小写不敏感（Windows 路径/refs 保守口径）；空输入不判。
+ */
+export function createConflicts(
+  branch: string,
+  worktreeName: string,
+  existingBranches: readonly string[],
+  existingWorktreeNames: readonly string[],
+): readonly CreateConflict[] {
+  const conflicts: CreateConflict[] = []
+  const branchName = branch.trim().toLowerCase()
+  const wtName = worktreeName.trim().toLowerCase()
+  if (branchName !== '' && existingBranches.some((name) => name.trim().toLowerCase() === branchName)) {
+    conflicts.push('branch-exists')
+  }
+  if (wtName !== '' && existingWorktreeNames.some((name) => name.trim().toLowerCase() === wtName)) {
+    conflicts.push('worktree-exists')
+  }
+  return conflicts
+}
+
+/**
  * ahead/behind 懒加载待拉清单：菜单展开（open）才拉；缓存已命中的不重拉；
  * 失配行不在场不拉。收起态恒空清单（收起不触发任何拉取）。
  */

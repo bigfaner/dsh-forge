@@ -13,13 +13,19 @@ import {
   type CreateWorktreeFormValue,
 } from './create-worktree-dialog.js'
 import { DeleteChecksList, DeleteWorktreeDialog } from './delete-worktree-dialog.js'
-import { deriveWorktreeName, isCreateReady, isDeleteBlocked } from './model.js'
+import { createConflicts, deriveWorktreeName, isCreateReady, isDeleteBlocked } from './model.js'
 
 const FORM: CreateWorktreeFormValue = initialCreateForm('main', ['main', 'feat/a'])
 
-const renderFields = (over: Partial<CreateWorktreeFormValue> = {}): string =>
+const renderFields = (over: Partial<CreateWorktreeFormValue> = {}, conflicts: readonly string[] = []): string =>
   renderToStaticMarkup(
-    <CreateWorktreeFields value={{ ...FORM, ...over }} branches={['main', 'feat/a', 'release/1.0']} worktreeDir="Z:/proj/.forge/worktrees" onChange={() => {}} />,
+    <CreateWorktreeFields
+      value={{ ...FORM, ...over }}
+      branches={['main', 'feat/a', 'release/1.0']}
+      conflicts={conflicts as never}
+      worktreeDir="Z:/proj/.forge/worktrees"
+      onChange={() => {}}
+    />,
   )
 
 describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', () => {
@@ -47,6 +53,38 @@ describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', ()
     expect(markup).toContain('data-dswt-custom-path-input')
     expect(markup).toContain('D:/scratch/lab')
     expect(createFormPathPreview({ ...FORM, customPathOpen: true, customPath: 'D:/scratch/lab' }, 'Z:/proj/.forge/worktrees')).toBe('D:/scratch/lab')
+  })
+})
+
+describe('分支 slug 下拉 + 同名冲突告警（提案裁决 2026-10-16）', () => {
+  it('分支主输入 = 自由手写 Input + slug 下拉触发器（官方 Menu 锚定）', () => {
+    const markup = renderFields()
+    expect(markup).toContain('data-dswt-branch-input')
+    expect(markup).toContain('data-dswt-branch-trigger')
+  })
+
+  it('分支同名冲突：表单内告警行（branch-exists → data-dswt-conflict-branch + 已存在）', () => {
+    const markup = renderFields({ branch: 'feat/a' }, ['branch-exists'])
+    expect(markup).toContain('data-dswt-conflict-branch')
+    expect(markup).toContain('分支 feat/a 已存在')
+  })
+
+  it('worktree 名同名冲突：表单内告警行（worktree-exists → data-dswt-conflict-worktree）', () => {
+    const markup = renderFields({ branch: 'feat/a' }, ['worktree-exists'])
+    expect(markup).toContain('data-dswt-conflict-worktree')
+    expect(markup).toContain('worktree wt-a 已存在')
+  })
+
+  it('无冲突：零告警行（拦截语义只对命中生效）', () => {
+    const markup = renderFields({ branch: 'feat/new' })
+    expect(markup).not.toContain('data-dswt-conflict-branch')
+    expect(markup).not.toContain('data-dswt-conflict-worktree')
+  })
+
+  it('创建钮门：齐备 ∧ 零冲突（isCreateReady × createConflicts 组合）', () => {
+    expect(isCreateReady('feat/a', 'wt-a') && createConflicts('feat/a', 'wt-a', ['feat/a'], []).length === 0).toBe(false)
+    expect(isCreateReady('feat/b', 'wt-a') && createConflicts('feat/b', 'wt-a', ['feat/a'], ['wt-a']).length === 0).toBe(false)
+    expect(isCreateReady('feat/b', 'wt-b') && createConflicts('feat/b', 'wt-b', ['feat/a'], ['wt-a']).length === 0).toBe(true)
   })
 })
 
