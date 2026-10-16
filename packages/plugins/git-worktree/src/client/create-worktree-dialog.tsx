@@ -11,7 +11,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, Menu, Modal, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
-import { createConflicts, deriveWorktreeName, filterSlugCandidates, isCreateReady, type CreateConflict, type SlugCandidate } from './model.js'
+import { WorktreeRiskConfirmation } from './risk-confirmation.js'
+import { createConflicts, deriveWorktreeName, filterSlugCandidates, isCreateReady, isCrossBranchRisk, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */
 export interface CreateWorktreeRequest {
@@ -369,6 +370,8 @@ export interface CreateWorktreeDialogProps {
   readonly slugCandidates?: readonly SlugCandidate[]
   /** 基准分支默认值（主 worktree 判定/origin 默认分支——装配层给） */
   readonly defaultBranch?: string | undefined
+  /** 主树当前检出分支（1.19 风险确认判定基准——装配层从清单主行给；缺省 = 保守判风险） */
+  readonly mainBranch?: string | null | undefined
   /** 所配 worktree 目录（路径预览行——未自定义时「将创建于 …」） */
   readonly worktreeDir: string
   readonly onClose: () => void
@@ -387,14 +390,28 @@ export function CreateWorktreeDialog({
   existingWorktreeNames = [],
   slugCandidates = [],
   defaultBranch,
+  mainBranch = null,
   worktreeDir,
   onClose,
   onCreate,
   BranchCombobox,
 }: CreateWorktreeDialogProps): ReactNode {
   const [form, setForm] = useState<CreateWorktreeFormValue>(() => initialCreateForm(defaultBranch, branches))
+  // 1.19 基准分支跨分支风险确认（确认才进 git，取消不创建）
+  const [riskOpen, setRiskOpen] = useState(false)
+  // 打开即重置（默认值取当下快照）；defaults 异步到达（branches RPC 晚于 open）不清空用户输入——
+  // 重置与默认值更新分两个 effect：后者仅在用户未输入时回填基准分支（1.19 e2e 实证输入中竞态）
   useEffect(() => {
     if (open) setForm(initialCreateForm(defaultBranch, branches))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 重置只在 open 跳变沿；defaults 到达走下方守卫 effect
+  }, [open])
+  useEffect(() => {
+    if (!open) return
+    setForm((prev) => {
+      if (prev.branch !== '' || prev.worktreeTouched) return prev // 用户已输入——不清空
+      const fresh = initialCreateForm(defaultBranch, branches)
+      return prev.baseBranch === fresh.baseBranch ? prev : { ...prev, baseBranch: fresh.baseBranch }
+    })
   }, [open, defaultBranch, branches])
   const worktreeName = deriveFormWorktreeName(form)
   const conflicts = useMemo(
@@ -402,6 +419,14 @@ export function CreateWorktreeDialog({
     [form.branch, worktreeName, branches, existingWorktreeNames],
   )
   const ready = isCreateReady(form.branch, worktreeName) && conflicts.length === 0
+  const proceed = () => {
+    onCreate({
+      baseBranch: form.baseBranch,
+      branch: form.branch.trim(),
+      worktreeName: worktreeName.trim(),
+      customPath: form.customPathOpen && form.customPath.trim() !== '' ? form.customPath.trim() : undefined,
+    })
+  }
   return (
     <Modal
       open={open}
@@ -422,12 +447,11 @@ export function CreateWorktreeDialog({
             data-dswt-create-submit=""
             disabled={!ready}
             onClick={() => {
-              onCreate({
-                baseBranch: form.baseBranch,
-                branch: form.branch.trim(),
-                worktreeName: worktreeName.trim(),
-                customPath: form.customPathOpen && form.customPath.trim() !== '' ? form.customPath.trim() : undefined,
-              })
+              if (isCrossBranchRisk(form.baseBranch, mainBranch)) {
+                setRiskOpen(true)
+                return
+              }
+              proceed()
             }}
           >
             创建
@@ -443,6 +467,19 @@ export function CreateWorktreeDialog({
         worktreeDir={worktreeDir}
         onChange={setForm}
         BranchCombobox={BranchCombobox}
+      />
+      <WorktreeRiskConfirmation
+        open={riskOpen}
+        targetBranch={form.baseBranch}
+        currentBranch={mainBranch}
+        title="基准分支跨分支确认"
+        onCancel={() => {
+          setRiskOpen(false) // 取消：不创建（零 git 写）
+        }}
+        onConfirm={() => {
+          setRiskOpen(false)
+          proceed()
+        }}
       />
     </Modal>
   )

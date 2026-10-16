@@ -60,8 +60,10 @@ export {
 } from './session-attach.js'
 export {
   assertSendable,
+  assertSessionCwdMatches,
   evaluateSeal,
   normalizePathForCompare,
+  SessionCwdMismatchError,
   SessionSealedError,
   type SealDecision,
   type SessionBinding,

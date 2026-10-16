@@ -17,7 +17,7 @@ import {
   readLatestAttach,
   withWorktreeCwd,
 } from './session-attach.js'
-import { SessionSealedError, assertSendable, evaluateSeal } from './seal-guard.js'
+import { SessionCwdMismatchError, SessionSealedError, assertSendable, assertSessionCwdMatches, evaluateSeal } from './seal-guard.js'
 
 let root: string
 let ctx: Context
@@ -46,12 +46,18 @@ afterAll(async () => {
   rmSync(root, { recursive: true, force: true })
 })
 
-const header = (id: string) => ({ id, createdAt: Date.now(), isSeeded: false as const, version: 4 as const })
+const header = (id: string, cwd?: string) => ({
+  id,
+  createdAt: Date.now(),
+  isSeeded: false as const,
+  version: 4 as const,
+  ...(cwd !== undefined ? { cwd } : {}),
+})
 
-/** 建立一个已落盘（空日志）的会话，返回其 id */
-async function seedSession(prefix: string): Promise<string> {
+/** 建立一个已落盘（空日志）的会话，返回其 id（cwd = SessionHeader.cwd，cwd 守护测试用） */
+async function seedSession(prefix: string, cwd?: string): Promise<string> {
   const id = `${prefix}-${Math.random().toString(36).slice(2, 8)}`
-  const h = await persistence.create(header(id))
+  const h = await persistence.create(header(id, cwd))
   await h.flush()
   await h.close()
   return id
@@ -130,7 +136,8 @@ describe('挂靠事件唯一写入口（createWorktreeAttachWriter）', () => {
 
 describe('读尾部挂靠事件（会话绑定反查）', () => {
   it('latestAttachEvent / readLatestAttach 反查最近一次绑定的 worktree 与分支', async () => {
-    const id = await seedSession('tail')
+    // cwd 守护基准：header.cwd = 最新绑定树（预铸配方形态）
+    const id = await seedSession('tail', 'C:/wt/new')
     const writer = createWorktreeAttachWriter({
       openWrite: (sid) => persistence.open(sid, 'write'),
     })
@@ -153,6 +160,32 @@ describe('读尾部挂靠事件（会话绑定反查）', () => {
     const id = await seedSession('empty')
     await expect(latestAttachEvent(await readAll(id))).toBeNull()
     await expect(readLatestAttach(id, { openRead: (sid) => persistence.open(sid, 'read') })).resolves.toBeNull()
+  })
+})
+
+describe('挂靠会话 cwd 强制守护（1.19）', () => {
+  it('assertSessionCwdMatches：归一比对一致放行；不一致抛 SessionCwdMismatchError；缺席（历史会话）放行', () => {
+    expect(() => assertSessionCwdMatches('C:/wt/a', 'C:\\WT\\A')).not.toThrow()
+    expect(() => assertSessionCwdMatches('C:/wt/b', 'C:/wt/a')).toThrow(SessionCwdMismatchError)
+    expect(() => assertSessionCwdMatches(undefined, 'C:/wt/a')).not.toThrow()
+    expect(() => assertSessionCwdMatches('  ', 'C:/wt/a')).not.toThrow()
+  })
+
+  it('readLatestAttach：header.cwd = 绑定树 → 放行；漂移（绑定 A 树跑在 B 树）→ 显式报错不静默', async () => {
+    const writer = createWorktreeAttachWriter({
+      openWrite: (sid) => persistence.open(sid, 'write'),
+    })
+    const ok = await seedSession('cwd-ok', 'Z:/repo/.forge/worktrees/wt-a')
+    await writer.attach(ok, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+    await expect(readLatestAttach(ok, { openRead: (sid) => persistence.open(sid, 'read') })).resolves.toMatchObject({
+      worktreePath: 'Z:/repo/.forge/worktrees/wt-a',
+    })
+
+    const drift = await seedSession('cwd-drift', 'Z:/repo')
+    await writer.attach(drift, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+    await expect(
+      readLatestAttach(drift, { openRead: (sid) => persistence.open(sid, 'read') }),
+    ).rejects.toThrow(SessionCwdMismatchError)
   })
 })
 

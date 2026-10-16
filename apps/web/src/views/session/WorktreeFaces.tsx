@@ -149,7 +149,15 @@ export function ForgeHeroWorktreeMount({
     if (!createOpen || projectRoot === null) return
     makeRpc()
       .worktree.branches({ projectRoot })
-      .then((result) => setBranches({ defaultBranch: result.defaultBranch, names: result.branches }))
+      // 弹窗打开即拉取；数据不变时保持旧引用（弹窗 reset effect 以 branches 身份为 dep——
+      // 新对象会在用户输入中途清空表单，1.19 e2e 实证竞态）
+      .then((result) =>
+        setBranches((prev) =>
+          prev.defaultBranch === result.defaultBranch && prev.names.join('\u0000') === result.branches.join('\u0000')
+            ? prev
+            : { defaultBranch: result.defaultBranch, names: result.branches },
+        ),
+      )
       .catch(() => {})
     // slug 候选拉取：projects.list 解析 ws_path → projectId（归一比对），proposals/features 并读——
     // 终态归一（提案 rejected/superseded、feature completed/archived = done）
@@ -260,6 +268,7 @@ export function ForgeHeroWorktreeMount({
         existingWorktreeNames={phase.rows.map((row) => row.worktreeName)}
         slugCandidates={slugCandidates}
         defaultBranch={branches.defaultBranch}
+        mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
         worktreeDir={phase.worktreeDir ?? ''}
         onClose={() => setCreateOpen(false)}
         onCreate={onCreate}

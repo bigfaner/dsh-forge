@@ -87,6 +87,8 @@ tmp/
 .forge/docs/**/*/walkthrough/*
 # walkthrough 内的高保真原型 html = 提案实现基准（可提交；截图等过程产物仍忽略）
 !.forge/docs/**/*/walkthrough/*.html
+# walkthrough 内走查/审计记录 md = 文档（可提交；截图等过程产物仍忽略）
+!.forge/docs/**/*/walkthrough/*.md
 .vitest/
 .forge/docs/probes/
 .forge/docs/proposals/dsh-forge-m3.1-ui-alignment/prototype/app.js

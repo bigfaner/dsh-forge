@@ -10,9 +10,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconPlusOutlineRegular, IconTrashOutlineRegular } from './icons.js'
+import { WorktreeRiskConfirmation } from './risk-confirmation.js'
 import {
   aheadBehindSegments,
   inferSource,
+  isCrossBranchRisk,
   pendingAheadBehindPaths,
   type WorktreeRow,
 } from './model.js'
@@ -231,6 +233,8 @@ export function HeroWorktreePicker({
 }: HeroWorktreePickerProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [lazyCache, setLazyCache] = useState<ReadonlyMap<string, AheadBehind>>(new Map())
+  // 1.19 风险确认待决行（跨分支改选——确认才走挂靠编排，取消保持原选）
+  const [riskPath, setRiskPath] = useState<string | null>(null)
 
   // ahead/behind 懒加载：菜单展开才拉（收起恒不拉）；外部缓存优先，内部缓存兜重拉。
   const cache = useMemo(
@@ -252,6 +256,9 @@ export function HeroWorktreePicker({
   if (!isGit) return null // 非 git 项目：hero 区零注入（能力位条件渲染，UI 只消费）
 
   const selected = rows.find((row) => row.path === selectedPath)
+  // 1.19 主树当前检出分支（跨分支风险判定基准——主行 branch，detached/bare = null 保守判风险）
+  const mainBranch = rows.find((row) => row.isMain)?.branch ?? null
+  const riskRow = riskPath !== null ? rows.find((row) => row.path === riskPath) : undefined
 
   const items = heroWorktreeRows(rows, worktreeDir, cache).map((row) => ({
     id: row.path,
@@ -272,6 +279,7 @@ export function HeroWorktreePicker({
   }))
 
   return (
+    <>
     <Menu
       open={open}
       anchor={<TriggerChip row={selected} open={open} onToggle={() => {
@@ -291,10 +299,33 @@ export function HeroWorktreePicker({
           return
         }
         setOpen(false)
+        // 1.19 风险确认门：目标行分支 ≠ 主树当前检出分支 → 先弹确认框，确认才走挂靠编排；
+        // 同分支重选不弹框直接切换（isCrossBranchRisk 纯函数单源）。
+        const target = rows.find((row) => row.path === id)?.branch ?? null
+        if (isCrossBranchRisk(target, mainBranch)) {
+          setRiskPath(id)
+          return
+        }
         onSelect(id)
       }}
       listClassName="dswt-hero-menu"
       className="dswt-hero-anchor"
     />
+    {riskRow !== undefined && (
+      <WorktreeRiskConfirmation
+        open={riskPath !== null}
+        targetBranch={riskRow.branch}
+        currentBranch={mainBranch}
+        onCancel={() => {
+          setRiskPath(null) // 取消：保持原选（零编排）
+        }}
+        onConfirm={() => {
+          const path = riskPath
+          setRiskPath(null)
+          if (path !== null) onSelect(path)
+        }}
+      />
+    )}
+    </>
   )
 }

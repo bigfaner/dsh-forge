@@ -182,9 +182,14 @@ export function createWorktreeRpcService(deps: {
     }
   }
 
-  /** 封存判定快照（seal 通道 + 发送拦截共源） */
+  /** 封存判定快照（seal 通道 + 发送拦截共源）。
+   *  cwd 强制守护（1.19）：readLatestAttach 校验 SessionHeader.cwd ≡ 绑定 worktreePath，
+   *  漂移即 SessionCwdMismatchError 显式上抛（RPC 错误面回传 web）——不做静默降级。 */
   const sealStateOf = async (request: WorktreeSealRequest): Promise<WorktreeSealResult> => {
-    const binding = await readLatestAttach(request.sessionId, readFactory).catch(() => null)
+    const binding = await readLatestAttach(request.sessionId, readFactory).catch((cause: unknown) => {
+      if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause
+      return null
+    })
     if (binding === null) return { isGit: false, sealed: false, binding: null }
     const resolution = await ext().resolveProject(binding.worktreePath).catch(() => null)
     if (resolution === null) return { isGit: false, sealed: false, binding: { worktreePath: binding.worktreePath, branch: binding.branch } }
@@ -241,7 +246,8 @@ export function createWorktreeRpcService(deps: {
       const entries = await listWorktrees(request.projectRoot)
       const entry = entries.find((row) => norm(row.path) === norm(request.path))
       if (entry === undefined || entry.branch === null) return { counts: null }
-      const counts = await aheadBehindOp(request.projectRoot, entry.branch).catch(() => null)
+      // cwd 纪律（1.19 审计）：ahead/behind = 树级操作——cwd = 目标 worktree 路径
+      const counts = await aheadBehindOp(request.path, entry.branch).catch(() => null)
       return { counts }
     },
 
@@ -261,7 +267,8 @@ export function createWorktreeRpcService(deps: {
       ])
       const entry = entries.find((row) => norm(row.path) === norm(request.path))
       const ahead = entry?.branch !== undefined && entry?.branch !== null
-        ? await aheadBehindOp(request.projectRoot, entry.branch).catch(() => null)
+        // cwd 纪律（1.19 审计）：ahead/behind = 树级操作——cwd = 目标 worktree 路径
+        ? await aheadBehindOp(request.path, entry.branch).catch(() => null)
         : null
       return {
         dirtyCount: status.dirtyCount,

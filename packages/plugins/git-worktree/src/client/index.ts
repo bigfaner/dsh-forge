@@ -20,6 +20,7 @@ export {
   type DeleteWorktreeDialogProps,
 } from './delete-worktree-dialog.js'
 export { SessionWorktreeChip, type SessionWorktreeChipProps } from './session-worktree-chip.js'
+export { WorktreeRiskConfirmation, type WorktreeRiskConfirmationProps } from './risk-confirmation.js'
 export { SealNotice, SealedComposerPlaceholder, type SealNoticeProps } from './seal-notice.js'
 export { HeroWorktreePicker, heroWorktreeRows, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
 export {
@@ -31,6 +32,7 @@ export {
   filterSlugCandidates,
   inferSource,
   isCreateReady,
+  isCrossBranchRisk,
   isDeleteBlocked,
   pendingAheadBehindPaths,
   type AheadBehindSegments,

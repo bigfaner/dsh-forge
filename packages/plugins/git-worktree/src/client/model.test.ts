@@ -9,6 +9,7 @@ import {
   deriveWorktreeName,
   filterSlugCandidates,
   inferSource,
+  isCrossBranchRisk,
   isDeleteBlocked,
   pendingAheadBehindPaths,
   type SlugCandidate,
@@ -54,6 +55,20 @@ describe('aheadBehindSegments（徽标拆分：零值段省略）', () => {
     expect(aheadBehindSegments({ ahead: 2, behind: 1 })).toEqual({ ahead: '↑2', behind: '↓1' })
     expect(aheadBehindSegments({ ahead: 0, behind: 4 })).toEqual({ ahead: null, behind: '↓4' })
     expect(aheadBehindSegments({ ahead: 0, behind: 0 })).toEqual({ ahead: null, behind: null })
+  })
+})
+
+describe('isCrossBranchRisk（1.19 跨分支风险判定——hero 改选与新建基准共用）', () => {
+  it('目标分支 ≠ 主树检出分支 → 需要确认；同分支（含大小写/空白差异）→ 不弹', () => {
+    expect(isCrossBranchRisk('feat/a', 'main')).toBe(true)
+    expect(isCrossBranchRisk('main', 'main')).toBe(false)
+    expect(isCrossBranchRisk(' Main ', 'main')).toBe(false)
+  })
+  it('任一侧未知（null/空）→ 保守判风险', () => {
+    expect(isCrossBranchRisk(null, 'main')).toBe(true)
+    expect(isCrossBranchRisk('feat/a', null)).toBe(true)
+    expect(isCrossBranchRisk(null, null)).toBe(true)
+    expect(isCrossBranchRisk('feat/a', '  ')).toBe(true)
   })
 })
 

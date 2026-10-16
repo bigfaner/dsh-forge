@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto'
 import { SESSION_FORMAT_VERSION, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
+import { assertSessionCwdMatches } from './seal-guard.js'
 
 /** 挂靠事件类型词表项（未知类型 + ignorable:true → 持久化读回 / surface 重放 / v3→v4 迁移均安全跳过） */
 export const WORKTREE_ATTACH_EVENT_TYPE = 'forge/worktree-attach' as const
@@ -106,7 +107,10 @@ export function latestAttachEvent(events: readonly SessionEvent[]): WorktreeAtta
   return null
 }
 
-/** 读尾部（读句柄面）：反查会话绑定的 worktree 与分支；无挂靠事件返回 null */
+/** 读尾部（读句柄面）：反查会话绑定的 worktree 与分支；无挂靠事件返回 null。
+ *  守护面（1.19 cwd 强制）：读得绑定即校验 SessionHeader.cwd ≡ 绑定 worktreePath
+ *  （归一比对，seal-guard.assertSessionCwdMatches）——不一致抛 SessionCwdMismatchError
+ *  显式报错，不留「绑定 A 树、实际跑在 B 树」的静默漂移。 */
 export async function readLatestAttach(
   sessionId: string,
   handles: SessionReadHandleFactory,
@@ -114,6 +118,11 @@ export async function readLatestAttach(
   const handle = await handles.openRead(sessionId)
   try {
     const found = latestAttachEvent((await handle.read()).events)
+    if (found !== null) {
+      // SessionHandle.header（官方只读头，固定于 create/open）——fake 替身可缺席（守护只对可判定面生效）
+      const headerCwd = (handle as { header?: { cwd?: string } }).header?.cwd
+      assertSessionCwdMatches(headerCwd, found.worktreePath)
+    }
     return found ? { worktreePath: found.worktreePath, branch: found.branch } : null
   } finally {
     await handle.close()

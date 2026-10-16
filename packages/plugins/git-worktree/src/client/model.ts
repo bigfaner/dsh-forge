@@ -83,6 +83,16 @@ export function isCreateReady(branch: string, worktreeName: string): boolean {
 }
 
 /**
+ * 跨分支风险判定（1.19 纯函数单源——hero chip 改选与新建基准分支两处确认框共用）：
+ * 目标分支 ≠ 主树当前检出分支 → 需要风险确认（worktree 业务上下文跨分支，主树上下文
+ * 不随行）。trim + 大小写不敏感（refs 保守口径）；任一侧未知（null）= 保守判风险。
+ */
+export function isCrossBranchRisk(targetBranch: string | null, currentBranch: string | null): boolean {
+  if (targetBranch === null || currentBranch === null) return true
+  return targetBranch.trim().toLowerCase() !== currentBranch.trim().toLowerCase()
+}
+
+/**
  * slug 候选（新建弹窗分支下拉数据源——通用层零 dsh-forge 依赖，提案/feature 行在
  * 挂载面归一为 {slug, done} 两字段后进本函数）：并集去重（同 slug 任一未完成即未完成）、
  * 未完成（非终态）排前、组内保持输入序。
