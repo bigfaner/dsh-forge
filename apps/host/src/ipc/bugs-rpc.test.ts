@@ -1,6 +1,7 @@
 // fix-bug forge:bugs/* 注册 pin：三通道（list + commitFiles/fileDiff——列表读面与 fixed
 // 证据读面）+ 面分治（recordBug/resolveBug = agent tool 专属恒不上 RPC）+ 负载映射端到端
-// （替身层）：ListBugsQuery 查询参透传（search/status/sort）+ 错误面（typed 六码信封 / 非 typed fail-loud）。
+// （替身层）：ListBugsQuery 查询参透传（search/status/sort + offset/limit 分页参——
+// bug-recurrence-chain 随动）+ 链上下文读面（行载 recurrenceOf 前驱指针透传）+ 错误面（typed 六码信封 / 非 typed fail-loud）。
 // 本测试面只行使 list 读法——commitFiles/fileDiff 证据读法语义在 core bugs 域测试，
 // 此处以 no-op 桩补齐 BugsChannelService 全面（d4644b86 扩面后的类型补齐）。
 import { describe, expect, it, vi } from 'vitest'
@@ -65,6 +66,28 @@ describe('fix-bug forge:bugs/* 注册面（Bug 子 tab 列表读面）', () => {
     const q = { projectId: 'p-1', search: '游标', status: ['open'] as const, sort: 'created' as const }
     await expect(handler(undefined, q)).resolves.toEqual({ ok: true, data: [bugCard] })
     expect(listBugs).toHaveBeenCalledWith(q)
+  })
+
+  it('list：分页查询参 offset/limit 原样透传（服务端排序后切片——bug-recurrence-chain 查询参随动）', async () => {
+    const listBugs = vi.fn().mockResolvedValue([])
+    const handlers = setup(bugsService(listBugs))
+    const handler = handlers.get(BUGS_CHANNELS.list)!
+    const q = { projectId: 'p-1', sort: 'created' as const, offset: 20, limit: 50 }
+    await expect(handler(undefined, q)).resolves.toEqual({ ok: true, data: [] })
+    expect(listBugs).toHaveBeenCalledWith(q)
+  })
+
+  it('list：链上下文读面——行载 recurrenceOf 前驱指针原样透传（列表链折叠共载体，零服务端改写）', async () => {
+    const relapse: BugCard = { ...bugCard, bugId: 'bg-2', summary: '又犯了', recurrenceOf: 'bg-1' }
+    const listBugs = vi.fn().mockResolvedValue([bugCard, relapse])
+    const handlers = setup(bugsService(listBugs))
+    const handler = handlers.get(BUGS_CHANNELS.list)!
+    await expect(handler(undefined, { projectId: 'p-1' })).resolves.toEqual({
+      ok: true,
+      data: [bugCard, relapse],
+    })
+    expect((await listBugs.mock.results[0]!.value as BugCard[])[1]!.recurrenceOf).toBe('bg-1')
+    expect('recurrenceOf' in bugCard).toBe(false) // 链根 = 键缺席
   })
 
   it('list：缺省查询（仅 projectId）原样透传——键缺席语义不变', async () => {
