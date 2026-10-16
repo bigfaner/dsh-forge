@@ -36,6 +36,7 @@ export {
   isDeleteBlocked,
   joinWorktreePath,
   pendingAheadBehindPaths,
+  worktreeLabelSegments,
   type AheadBehindSegments,
   type CreateConflict,
   type DeleteBlocker,

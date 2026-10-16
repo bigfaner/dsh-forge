@@ -16,6 +16,7 @@ import {
   inferSource,
   isCrossBranchRisk,
   pendingAheadBehindPaths,
+  worktreeLabelSegments,
   type WorktreeRow,
 } from './model.js'
 import type { AheadBehind } from '../worktree-ops.js'
@@ -140,7 +141,15 @@ function TriggerChip({
         <IconBranchOutlineRegular size={16} />
       </span>
       <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {row ? `${row.branch ?? ''} · ${row.worktreeName}` : '选择 worktree…'}
+        {/* 1.24 同名去重：branch 与 worktreeName 同名 → 单一名称（worktreeLabelSegments 单源） */}
+        {row
+          ? (() => {
+              const segments = worktreeLabelSegments(row.branch, row.worktreeName)
+              return segments.worktreeName === null
+                ? segments.branch
+                : `${segments.branch} · ${segments.worktreeName}`
+            })()
+          : '选择 worktree…'}
       </span>
       <span style={{ display: 'inline-flex', flex: 'none', color: 'var(--dsw-alias-label-caption)' }}>
         <IconChevronDownOutlineRegular size={12} />
@@ -154,10 +163,13 @@ function rowLabel(
   row: WorktreeMenuRow,
   onDelete: () => void,
 ): ReactNode {
+  const segments = worktreeLabelSegments(row.branch, row.worktreeName)
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: '100%', minWidth: 0 }}>
-      <span style={{ ...mono, fontSize: 12, color: 'var(--dsw-alias-label-primary)' }}>{row.branch ?? ''}</span>
-      <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' }}>{row.worktreeName}</span>
+      <span style={{ ...mono, fontSize: 12, color: 'var(--dsw-alias-label-primary)' }}>{segments.branch}</span>
+      {segments.worktreeName !== null && (
+        <span style={{ fontSize: 12, color: 'var(--dsw-alias-label-tertiary)' }}>{segments.worktreeName}</span>
+      )}
       <span style={{ flex: 1 }} />
       {row.ahead !== null && (
         <span data-dswt-ab-ahead="" style={{ ...mono, fontSize: 11, color: 'var(--dsw-alias-state-success-primary)' }}>
@@ -267,7 +279,9 @@ export function HeroWorktreePicker({
       : (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: '100%' }}>
           <span style={{ ...mono, fontSize: 12 }}>{row.branch ?? ''}</span>
-          <span style={{ fontSize: 12 }}>{row.worktreeName}</span>
+          {worktreeLabelSegments(row.branch, row.worktreeName).worktreeName !== null && (
+            <span style={{ fontSize: 12 }}>{row.worktreeName}</span>
+          )}
           <span style={{ flex: 1 }} />
           <span data-dswt-dead-note="" style={{ fontSize: 11, color: 'var(--dsw-alias-state-error-primary)' }}>
             盘上失配

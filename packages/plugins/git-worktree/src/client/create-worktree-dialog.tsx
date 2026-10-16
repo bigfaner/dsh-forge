@@ -403,6 +403,8 @@ export interface CreateWorktreeDialogProps {
   readonly mainBranch?: string | null | undefined
   /** 所配 worktree 目录（路径预览行——未自定义时「将创建于 …」） */
   readonly worktreeDir: string
+  /** 创建失败错误（装配层 catch 产出——表单内错误呈现面，不静默吞错；undefined = 无错） */
+  readonly error?: string | undefined
   readonly onClose: () => void
   readonly onCreate: (request: CreateWorktreeRequest) => void
   /** 分支组合框插槽（合并形态注入——Fields 同名 prop 透传；缺省 = 既有分离实现） */
@@ -421,6 +423,7 @@ export function CreateWorktreeDialog({
   defaultBranch,
   mainBranch = null,
   worktreeDir,
+  error,
   onClose,
   onCreate,
   BranchCombobox,
@@ -499,6 +502,13 @@ export function CreateWorktreeDialog({
         onChange={setForm}
         BranchCombobox={BranchCombobox}
       />
+      {/* 1.24 创建失败错误呈现面（表单保持打开——不静默吞错；官方冲突告警同形态令牌） */}
+      {error !== undefined && error !== '' && (
+        <div data-dswt-create-error="" role="alert" style={{ ...conflictStyle, marginTop: 12 }}>
+          <IconWarningTriangleOutlineRegular size={14} />
+          <span>{error}</span>
+        </div>
+      )}
       <WorktreeRiskConfirmation
         open={riskOpen}
         targetBranch={form.baseBranch}

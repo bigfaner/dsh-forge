@@ -14,6 +14,7 @@ import {
   joinWorktreePath,
   pendingAheadBehindPaths,
   sortBaseBranchOptions,
+  worktreeLabelSegments,
   type SlugCandidate,
   type WorktreeRow,
 } from './model.js'
@@ -215,5 +216,23 @@ describe('sortBaseBranchOptions（1.22 基准分支选项排序——main > mast
   })
   it('defaultBranch 不在分支集内 → 不影响其余位次（1.13 校验链外分支无效）', () => {
     expect(sortBaseBranchOptions(['b', 'a'], 'ghost', null)).toEqual(['a', 'b'])
+  })
+})
+
+describe('worktreeLabelSegments（1.24 同名去重——行标签段单源）', () => {
+  it('branch 与 worktreeName 同名 → 单段（worktreeName 段 null，不再「x · x」）', () => {
+    expect(worktreeLabelSegments('bug-recurrence-chain', 'bug-recurrence-chain')).toEqual({
+      branch: 'bug-recurrence-chain',
+      worktreeName: null,
+    })
+  })
+  it('trim 后同名 → 仍单段（大小写不敏感同 refs 保守口径）', () => {
+    expect(worktreeLabelSegments('Topic-A ', ' topic-a')).toEqual({ branch: 'Topic-A ', worktreeName: null })
+  })
+  it('异名 → 双段保持（branch 段 + worktreeName 段）', () => {
+    expect(worktreeLabelSegments('feat/a', 'wt-a')).toEqual({ branch: 'feat/a', worktreeName: 'wt-a' })
+  })
+  it('branch null（detached）→ 只剩 worktreeName 段（不做空串同名误并）', () => {
+    expect(worktreeLabelSegments(null, 'wt-a')).toEqual({ branch: '', worktreeName: 'wt-a' })
   })
 })

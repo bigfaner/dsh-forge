@@ -47,6 +47,20 @@ export function isWorktreeNameFollowing(branch: string, worktreeName: string, to
   return !touched || worktreeName.trim() === branch.trim()
 }
 
+/**
+ * 行标签段（1.24 用户裁决——同名去重）：branch 与 worktreeName 同名（trim + 大小写不敏感
+ * 同 refs 保守口径）→ 单段展示（worktreeName 段 null），不再「x · x」；异名保持双段。
+ * hero chip 与菜单行两处共用同一单源。
+ */
+export function worktreeLabelSegments(
+  branch: string | null,
+  worktreeName: string,
+): { readonly branch: string; readonly worktreeName: string | null } {
+  const name = branch ?? ''
+  const same = name !== '' && name.trim().toLowerCase() === worktreeName.trim().toLowerCase()
+  return { branch: name, worktreeName: same ? null : worktreeName }
+}
+
 /** ahead/behind 徽标段（懒加载后填充；零值段省略；无 upstream 全省略） */
 export interface AheadBehindSegments {
   readonly ahead: string | null

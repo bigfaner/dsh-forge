@@ -200,9 +200,11 @@ export function ForgeHeroWorktreeMount({
   )
 
   // 新建（封闭写集①）与删除（封闭写集②——确认门 = isDeleteBlocked 由弹窗内部消费 checks）
+  const [createError, setCreateError] = useState<string | undefined>(undefined)
   const onCreate = useCallback(
     (request: CreateWorktreeRequest): void => {
       if (projectRoot === null) return
+      setCreateError(undefined)
       // 弹窗产物（baseBranch/branch/worktreeName/customPath）→ create 载荷：
       // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认；
       // joinWorktreePath 单点归一反斜杠系统口径——1.21 分隔符归一）
@@ -212,13 +214,23 @@ export function ForgeHeroWorktreeMount({
         : joinWorktreePath(baseDir, request.worktreeName)
       makeRpc()
         .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
-        .then(() => {
+        .then((result) => {
           setCreateOpen(false)
+          // 1.19 钉死口径「自动跟进」：创建成功 hero 选中态自动切到新 worktree
+          // （onSelectConfirmed = 项目粒度选中记忆写入 + 本地回填 + 挂靠编排——后续新会话
+          // 即进入新树 cwd）；主树 HEAD 不动（worktree add 新树内检出新分支，零 checkout）。
+          // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
+          // 行匹配 path === selectedPath 用精确等值；1.24 实证本地拼串反斜杠 ≠ 清单正斜杠）
+          const createdPath = result.entry?.path ?? path
+          onSelectConfirmed(createdPath)
           refresh()
         })
-        .catch(() => {})
+        .catch((error: unknown) => {
+          // 1.24 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
+          setCreateError(error instanceof Error && error.message !== '' ? `创建失败：${error.message}` : '创建失败：git worktree 创建未成功，请检查分支名与路径')
+        })
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, onSelectConfirmed],
   )
   const openDelete = useCallback(
     (path: string): void => {
@@ -259,7 +271,10 @@ export function ForgeHeroWorktreeMount({
         worktreeDir={phase.worktreeDir}
         selectedPath={localSelectedPath}
         onSelect={onSelectConfirmed}
-        onCreate={() => setCreateOpen(true)}
+        onCreate={() => {
+          setCreateError(undefined) // 重新打开即清上一轮错误（1.24 失败呈现只在当场留场）
+          setCreateOpen(true)
+        }}
         onDelete={openDelete}
         loadAheadBehind={loadAheadBehind}
         aheadBehind={aheadBehind}
@@ -272,7 +287,11 @@ export function ForgeHeroWorktreeMount({
         defaultBranch={branches.defaultBranch}
         mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
         worktreeDir={phase.worktreeDir ?? ''}
-        onClose={() => setCreateOpen(false)}
+        error={createError}
+        onClose={() => {
+          setCreateError(undefined)
+          setCreateOpen(false)
+        }}
         onCreate={onCreate}
         // 分支行合并形态：通用 EditableCombobox 经 slot 注入（输入即过滤 slug 候选；
         // 走查锚 data-dswt-branch-input 与等宽基准在本面装配）
