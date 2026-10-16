@@ -1,8 +1,9 @@
-// worktree-branch-management 1.22 真机 UI e2e：新建表单基准分支选项排序
+// worktree-branch-management 1.22/1.23 真机 UI e2e：新建表单基准分支选项排序 + 默认选中同源
 //   · 用户裁决 2026-10-16：main > master > {default branch} > {current branch} > 其余（字母序）
 //   · default branch = branches RPC defaultBranch（1.13 存在性校验链——fixture 以
 //     init.defaultBranch=trunk + 本地 trunk 分支产出）；current branch = 主行检出 main；
 //   · 去重：current=main 与 default 各归其位，一分支一槽（不重复出现）。
+//   · 1.23 用户裁决：基准分支默认选中 = 排序后首项（默认与排序同源——本 fixture 即 main）。
 // data 锚：基准分支触发器 = [data-dswt-base-trigger]；菜单 = .dswt-base-branch-menu（行 role=menuitem）。
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -13,7 +14,7 @@ import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.22/001-base-branch-order'
+  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.23/001-base-default-first'
 
 /** 隔离 git 仓库夹具（真 git CLI——主树检出 main；default branch 经 init.defaultBranch=trunk） */
 function makeGitRepo(): string {
@@ -93,6 +94,10 @@ test('1.22 UI：新建表单基准分支选项排序 main > master > default > c
     await expect(rows.first()).toBeVisible()
     const order = (await rows.allTextContents()).map((text) => text.trim())
     writeFileSync(join(EVIDENCE_DIR, 'base-branch-order.json'), JSON.stringify(order, null, 2))
+    // 1.23 默认选中 = 排序首项（默认值与排序同源）：收起态触发器文案即选中项
+    const triggerText = (await dialog.locator('[data-dswt-base-trigger]').textContent())?.trim() ?? ''
+    writeFileSync(join(EVIDENCE_DIR, 'base-branch-default.json'), JSON.stringify({ default: triggerText }, null, 2))
+    expect(triggerText, '基准分支默认选中 = 排序首项').toBe(order[0])
     try {
       // 元素级截图（菜单面）——页面级截图在 electron 收尾动画期偶发超时，逐级兜底
       await rows.screenshot({ path: join(EVIDENCE_DIR, 'base-branch-order.png'), animations: 'disabled', timeout: 10_000 })

@@ -14,7 +14,7 @@ import {
   type CreateWorktreeFormValue,
 } from './create-worktree-dialog.js'
 import { DeleteChecksList, DeleteWorktreeDialog } from './delete-worktree-dialog.js'
-import { createConflicts, isCreateReady, isDeleteBlocked, isWorktreeNameFollowing } from './model.js'
+import { createConflicts, isCreateReady, isDeleteBlocked, isWorktreeNameFollowing, sortBaseBranchOptions } from './model.js'
 
 const FORM: CreateWorktreeFormValue = initialCreateForm('main', ['main', 'feat/a'])
 
@@ -29,18 +29,26 @@ const renderFields = (over: Partial<CreateWorktreeFormValue> = {}, conflicts: re
     />,
   )
 
-describe('initialCreateForm（默认基准分支与本地分支集交叉校验——bug 75726bd0）', () => {
-  it('defaultBranch 不在分支集 → 回退分支集首项', () => {
-    expect(initialCreateForm('master', ['main', 'feat/a']).baseBranch).toBe('main')
-    expect(initialCreateForm('master', ['feat/a', 'feat/b']).baseBranch).toBe('feat/a')
+describe('initialCreateForm（默认基准分支 = sortBaseBranchOptions 排序首项——1.23 默认与排序同源）', () => {
+  it('defaultBranch 位序低于 main → 取排序首项 main（1.23 截图场景：不再单独取 defaultBranch/current）', () => {
+    expect(initialCreateForm('trunk', ['main', 'trunk']).baseBranch).toBe('main')
   })
 
-  it('defaultBranch 在分支集内 → 照用', () => {
-    expect(initialCreateForm('feat/a', ['main', 'feat/a']).baseBranch).toBe('feat/a')
+  it('current branch 非排序首项 → 默认不落到 current（同源断言：与排序产出首项逐位一致）', () => {
+    const branches = ['dsh-forge-m1', 'main']
+    expect(initialCreateForm(undefined, branches, 'dsh-forge-m1').baseBranch).toBe(
+      sortBaseBranchOptions(branches, undefined, 'dsh-forge-m1')[0],
+    )
+    expect(initialCreateForm(undefined, branches, 'dsh-forge-m1').baseBranch).toBe('main')
   })
 
-  it('defaultBranch 缺席 → 分支集首项；全空 → main 兜底', () => {
-    expect(initialCreateForm(undefined, ['feat/a', 'main']).baseBranch).toBe('feat/a')
+  it('main/master 缺席 → default 身份位生效：defaultBranch 在集内即排序首项', () => {
+    expect(initialCreateForm('trunk', ['develop', 'trunk']).baseBranch).toBe('trunk')
+    expect(initialCreateForm('feat/a', ['feat/a', 'feat/b']).baseBranch).toBe('feat/a')
+  })
+
+  it('defaultBranch 缺席 → 排序首项（main 优先于其余）；空清单 → main 占位', () => {
+    expect(initialCreateForm(undefined, ['feat/a', 'main']).baseBranch).toBe('main')
     expect(initialCreateForm(undefined, []).baseBranch).toBe('main')
   })
 })

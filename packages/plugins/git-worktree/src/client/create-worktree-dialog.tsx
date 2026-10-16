@@ -38,11 +38,16 @@ export interface CreateWorktreeFormValue {
   readonly branchOpen: boolean
 }
 
-/** 初始表单（弹窗打开即重置——基准分支回默认、派生链复位）；defaultBranch 与
- * 本地分支集交叉校验（bug 75726bd0：不在分支集内不产出不存在分支，回退分支集
- * 首项，末位 main 兜底）。 */
-export function initialCreateForm(defaultBranch: string | undefined, branches: readonly string[]): CreateWorktreeFormValue {
-  const baseBranch = defaultBranch !== undefined && branches.includes(defaultBranch) ? defaultBranch : (branches[0] ?? 'main')
+/** 初始表单（弹窗打开即重置——基准分支回默认、派生链复位）。默认基准分支与下拉排序
+ * 同源单点（1.23 用户裁决）：baseBranch = sortBaseBranchOptions(...) 排序后首项，
+ * 删独立 defaultBranch 取值分叉；空清单退 main 占位。defaultBranch 仍作为排序身份位
+ * 消费（1.13 存在性校验链不废）。 */
+export function initialCreateForm(
+  defaultBranch: string | undefined,
+  branches: readonly string[],
+  currentBranch?: string | null | undefined,
+): CreateWorktreeFormValue {
+  const baseBranch = sortBaseBranchOptions(branches, defaultBranch, currentBranch)[0] ?? 'main'
   return {
     baseBranch,
     branch: '',
@@ -420,23 +425,23 @@ export function CreateWorktreeDialog({
   onCreate,
   BranchCombobox,
 }: CreateWorktreeDialogProps): ReactNode {
-  const [form, setForm] = useState<CreateWorktreeFormValue>(() => initialCreateForm(defaultBranch, branches))
+  const [form, setForm] = useState<CreateWorktreeFormValue>(() => initialCreateForm(defaultBranch, branches, mainBranch))
   // 1.19 基准分支跨分支风险确认（确认才进 git，取消不创建）
   const [riskOpen, setRiskOpen] = useState(false)
   // 打开即重置（默认值取当下快照）；defaults 异步到达（branches RPC 晚于 open）不清空用户输入——
   // 重置与默认值更新分两个 effect：后者仅在用户未输入时回填基准分支（1.19 e2e 实证输入中竞态）
   useEffect(() => {
-    if (open) setForm(initialCreateForm(defaultBranch, branches))
+    if (open) setForm(initialCreateForm(defaultBranch, branches, mainBranch))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 重置只在 open 跳变沿；defaults 到达走下方守卫 effect
   }, [open])
   useEffect(() => {
     if (!open) return
     setForm((prev) => {
       if (prev.branch !== '' || prev.worktreeTouched) return prev // 用户已输入——不清空
-      const fresh = initialCreateForm(defaultBranch, branches)
+      const fresh = initialCreateForm(defaultBranch, branches, mainBranch)
       return prev.baseBranch === fresh.baseBranch ? prev : { ...prev, baseBranch: fresh.baseBranch }
     })
-  }, [open, defaultBranch, branches])
+  }, [open, defaultBranch, branches, mainBranch])
   const worktreeName = deriveFormWorktreeName(form)
   const conflicts = useMemo(
     () => createConflicts(form.branch, worktreeName, branches, existingWorktreeNames),
