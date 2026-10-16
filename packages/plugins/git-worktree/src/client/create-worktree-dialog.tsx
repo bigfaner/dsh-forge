@@ -192,16 +192,11 @@ export function CreateWorktreeFields({
                 onClick={() => {
                   onChange({ ...form, baseOpen: !form.baseOpen })
                 }}
+                // 盒模型（width/height/padding/border/radius/background）= .dswt-field-control
+                // 共享规则（session.css 1.15 段——等宽基准单一来源，与组合框输入壳同源）
+                className="dswt-field-control"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
                   gap: 8,
-                  width: '100%',
-                  height: 34,
-                  padding: '0 10px',
-                  border: '0.5px solid var(--dsw-alias-border-l2)',
-                  borderRadius: 8,
-                  background: 'var(--dsw-alias-bg-layer-1)',
                   fontSize: 13,
                   color: 'var(--dsw-alias-label-primary)',
                   cursor: 'pointer',

@@ -23,6 +23,9 @@ export interface EditableComboboxProps {
   readonly inputData?: Readonly<Record<string, string>>
   /** 输入面样式透传（等宽基准归消费方——官方 Input style 落内部原生 input） */
   readonly inputStyle?: CSSProperties
+  /** 输入壳类名透传（官方 Input className 落外层 .wrap 可见描边盒——宽度基准归消费方：
+   * .wrap 是 inline-flex shrink-to-fit，等宽须由消费方类在其上钉宽） */
+  readonly inputWrapClassName?: string
   /** 浮层卡类名透传（官方 Menu listClassName——消费方走查锚） */
   readonly listClassName?: string
 }
@@ -37,6 +40,7 @@ export function EditableCombobox({
   disabled,
   inputData,
   inputStyle,
+  inputWrapClassName,
   listClassName,
 }: EditableComboboxProps): ReactNode {
   const [open, setOpen] = useState(false)
@@ -77,6 +81,7 @@ export function EditableCombobox({
         <Input
           data-dswf-combobox-input=""
           {...inputData}
+          className={inputWrapClassName}
           role="combobox"
           aria-expanded={open}
           aria-autocomplete="list"

@@ -36,4 +36,7 @@ describe('EditableCombobox 官方 Input + Menu 装配面', () => {
   it('inputStyle 落输入面（等宽基准归消费方）', () => {
     expect(render({ inputStyle: { height: 34 } })).toContain('height:34px')
   })
+  it('inputWrapClassName 落官方 Input 外层 .wrap 可见描边盒（宽度基准归消费方）', () => {
+    expect(render({ inputWrapClassName: 'dswt-field-control' })).toContain('dswt-field-control')
+  })
 })

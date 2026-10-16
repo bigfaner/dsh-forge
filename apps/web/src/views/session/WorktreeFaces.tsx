@@ -28,12 +28,13 @@ import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.j
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
 import './session.css'
 
-/** 分支组合框输入面样式（同表单其余 Input 等宽基准——caption 字号令牌 + mono + 34px/100%） */
+/**
+ * 分支组合框输入面样式（字体令牌 + mono——盒模型不在此处：宽度/内距/边框由
+ * .dswt-field-control 共享规则承载在官方 Input 外层 .wrap 上，与基准分支触发器同源等宽）
+ */
 const branchInputStyle: React.CSSProperties = {
   font: 'var(--dsw-font-xs-13)',
   fontFamily: 'var(--ds-font-family-code, monospace)',
-  height: 34,
-  width: '100%',
 }
 
 /** list 结果 → 行渲染模型（WorktreeRow 同形——DTO 即行源，零二次派生） */
@@ -248,6 +249,7 @@ export function ForgeHeroWorktreeMount({
             {...props}
             inputData={{ 'data-dswt-branch-input': '' }}
             inputStyle={branchInputStyle}
+            inputWrapClassName="dswt-field-control"
             listClassName="dswt-branch-slug-menu"
           />
         )}
