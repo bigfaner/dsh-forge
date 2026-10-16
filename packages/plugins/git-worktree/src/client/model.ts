@@ -172,6 +172,39 @@ export function createConflicts(
 }
 
 /**
+ * 基准分支选项排序（1.22 用户裁决——新建弹窗基准分支下拉 items 生成）：
+ * 身份位序表 = [main, master, {defaultBranch}, {currentBranch}]，命中越靠前位次越高
+ * （defaultBranch = branches RPC defaultBranch——1.13 存在性校验链产出；currentBranch =
+ * 主行 isMain 检出 branch）；一分支多身份命中只取最优先位（去重天然成立——输出每分支
+ * 恰一次）；全部未命中/缺省 → 其余分支，同级任务内定**按字母序**（大小写不敏感，
+ * refs 保守口径同 isCrossBranchRisk/createConflicts——清单序不保证确定故取字母序）。
+ * slug 分支输入候选排序（1.10 未完成排前）不受影响。
+ */
+export function sortBaseBranchOptions(
+  branches: readonly string[],
+  defaultBranch: string | null | undefined,
+  currentBranch: string | null | undefined,
+): readonly string[] {
+  const key = (name: string): string => name.trim().toLowerCase()
+  const identities = [
+    'main',
+    'master',
+    ...(defaultBranch !== null && defaultBranch !== undefined && defaultBranch.trim() !== '' ? [key(defaultBranch)] : []),
+    ...(currentBranch !== null && currentBranch !== undefined && currentBranch.trim() !== '' ? [key(currentBranch)] : []),
+  ]
+  const rankOf = (name: string): number => {
+    const index = identities.indexOf(key(name))
+    return index === -1 ? identities.length : index
+  }
+  return [...branches].sort((a, b) => {
+    const rankDelta = rankOf(a) - rankOf(b)
+    if (rankDelta !== 0) return rankDelta
+    const [ka, kb] = [key(a), key(b)]
+    return ka < kb ? -1 : ka > kb ? 1 : 0
+  })
+}
+
+/**
  * ahead/behind 懒加载待拉清单：菜单展开（open）才拉；缓存已命中的不重拉；
  * 失配行不在场不拉。收起态恒空清单（收起不触发任何拉取）。
  */

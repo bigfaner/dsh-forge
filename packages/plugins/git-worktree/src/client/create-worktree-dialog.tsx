@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, Menu, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
 import { WorktreeRiskConfirmation } from './risk-confirmation.js'
-import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, joinWorktreePath, type CreateConflict, type SlugCandidate } from './model.js'
+import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, joinWorktreePath, sortBaseBranchOptions, type CreateConflict, type SlugCandidate } from './model.js'
 
 /** 创建请求（git 一体创建 = 新分支 + 新 worktree 一次落位） */
 export interface CreateWorktreeRequest {
@@ -78,6 +78,10 @@ export interface CreateWorktreeFieldsProps {
   readonly conflicts?: readonly CreateConflict[]
   /** 所配 worktree 目录（路径预览行——未自定义时「将创建于 …」） */
   readonly worktreeDir: string
+  /** 默认分支（branches RPC defaultBranch——1.13 校验链；基准分支下拉排序身份位） */
+  readonly defaultBranch?: string | undefined
+  /** 主树当前检出分支（主行 isMain——基准分支下拉排序身份位；缺省 = 不参与位序表） */
+  readonly currentBranch?: string | null | undefined
   readonly onChange: (value: CreateWorktreeFormValue) => void
   /**
    * 分支组合框插槽（可选——合并形态：单一可输入过滤组合框替代 Input+分离下拉）。
@@ -150,10 +154,16 @@ export function CreateWorktreeFields({
   slugCandidates = [],
   conflicts = [],
   worktreeDir,
+  defaultBranch,
+  currentBranch,
   onChange,
   BranchCombobox,
 }: CreateWorktreeFieldsProps): ReactNode {
-  const baseItems = useMemo(() => branches.map((id) => ({ id, label: id })), [branches])
+  // 1.22 用户裁决：基准分支选项排序 main > master > default > current > 其余（字母序兜底）
+  const baseItems = useMemo(
+    () => sortBaseBranchOptions(branches, defaultBranch, currentBranch).map((id) => ({ id, label: id })),
+    [branches, defaultBranch, currentBranch],
+  )
   const worktreeName = deriveFormWorktreeName(form)
   const previewPath = createFormPathPreview({ ...form, worktreeName }, worktreeDir)
   // 目录/尾段两分（官方 PathLabel pathPartsOf 同语义——最后一个分隔符处切）：目录段
@@ -479,6 +489,8 @@ export function CreateWorktreeDialog({
         slugCandidates={slugCandidates}
         conflicts={conflicts}
         worktreeDir={worktreeDir}
+        defaultBranch={defaultBranch}
+        currentBranch={mainBranch}
         onChange={setForm}
         BranchCombobox={BranchCombobox}
       />

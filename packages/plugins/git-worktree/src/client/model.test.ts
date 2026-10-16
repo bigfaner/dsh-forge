@@ -13,6 +13,7 @@ import {
   isDeleteBlocked,
   joinWorktreePath,
   pendingAheadBehindPaths,
+  sortBaseBranchOptions,
   type SlugCandidate,
   type WorktreeRow,
 } from './model.js'
@@ -183,5 +184,36 @@ describe('joinWorktreePath（1.21 分隔符归一单点——统一反斜杠系�
     expect(joinWorktreePath('Z:\\p\\wt\\', '/wt-a')).toBe('Z:\\p\\wt\\wt-a')
     expect(joinWorktreePath('', 'wt-a')).toBe('wt-a')
     expect(joinWorktreePath('Z:\\p\\wt\\', '')).toBe('Z:\\p\\wt')
+  })
+})
+
+describe('sortBaseBranchOptions（1.22 基准分支选项排序——main > master > default > current > 其余字母序）', () => {
+  it('身份位序全命中：main > master > defaultBranch > currentBranch > 其余', () => {
+    expect(sortBaseBranchOptions(['zeta', 'current-b', 'master', 'release', 'main', 'default-b'], 'default-b', 'current-b')).toEqual([
+      'main',
+      'master',
+      'default-b',
+      'current-b',
+      'release',
+      'zeta',
+    ])
+  })
+  it('一分支多身份命中只取最优先位（default = main、current = main 均不重复出现）', () => {
+    expect(sortBaseBranchOptions(['develop', 'main'], 'main', 'main')).toEqual(['main', 'develop'])
+    expect(sortBaseBranchOptions(['master', 'main'], 'main', 'master')).toEqual(['main', 'master'])
+  })
+  it('其余分支同级按字母序兜底（大小写不敏感）；缺省身份位不占位', () => {
+    expect(sortBaseBranchOptions(['b2', 'A1', 'c3'], null, null)).toEqual(['A1', 'b2', 'c3'])
+    expect(sortBaseBranchOptions(['b2', 'A1', 'c3'], undefined, undefined)).toEqual(['A1', 'b2', 'c3'])
+  })
+  it('default/current 与 main/master 同名时该分支归并到固定位（不产重复身份位）', () => {
+    expect(sortBaseBranchOptions(['x', 'master'], 'master', 'master')).toEqual(['master', 'x'])
+    expect(sortBaseBranchOptions(['x', 'main'], 'main', null)).toEqual(['main', 'x'])
+  })
+  it('空清单边界 → 空数组', () => {
+    expect(sortBaseBranchOptions([], 'main', 'main')).toEqual([])
+  })
+  it('defaultBranch 不在分支集内 → 不影响其余位次（1.13 校验链外分支无效）', () => {
+    expect(sortBaseBranchOptions(['b', 'a'], 'ghost', null)).toEqual(['a', 'b'])
   })
 })
