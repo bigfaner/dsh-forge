@@ -265,17 +265,36 @@ describe('listBranches（for-each-ref refs/heads）', () => {
   })
 })
 
-describe('defaultBranch（branch -r origin/HEAD → init.defaultBranch → main）', () => {
+describe('defaultBranch（branch -r origin/HEAD → init.defaultBranch → 检出分支 → 本地首分支 → main，均带本地存在性校验）', () => {
   it('有 origin/HEAD → 解析其指向分支', async () => {
     const { clone } = makeRemoteRepo('db-head')
     git(clone, 'remote', 'set-head', 'origin', '-a')
     expect(await defaultBranch(clone)).toBe('main')
   })
 
-  it('无 remote → 退 init.defaultBranch', async () => {
+  it('origin/HEAD 指向分支本地不存在 → 跳过，退 init.defaultBranch', async () => {
+    const { origin, clone } = makeRemoteRepo('db-head-ghost')
+    git(clone, 'branch', 'local-b')
+    git(clone, 'config', 'init.defaultBranch', 'local-b')
+    // 远端造一条 clone 未拉取的分支，并令 origin/HEAD 指向它（本地无对应分支）
+    git(join(root, 'db-head-ghost-seed'), 'branch', 'trunk')
+    git(join(root, 'db-head-ghost-seed'), 'push', origin, 'trunk')
+    git(clone, 'fetch', 'origin', 'trunk')
+    git(clone, 'remote', 'set-head', 'origin', 'trunk')
+    expect(await defaultBranch(clone)).toBe('local-b')
+  })
+
+  it('无 remote → init.defaultBranch 存在于本地分支集 → 退之', async () => {
     const repo = makeLocalRepo('db-config')
+    git(repo, 'branch', 'trunk')
     git(repo, 'config', 'init.defaultBranch', 'trunk')
     expect(await defaultBranch(repo)).toBe('trunk')
+  })
+
+  it('bug 75726bd0：origin/HEAD 缺失 + init.defaultBranch 指向不存在分支 → 退当前检出分支', async () => {
+    const repo = makeLocalRepo('db-invalid-config')
+    git(repo, 'config', 'init.defaultBranch', 'master')
+    expect(await defaultBranch(repo)).toBe('main')
   })
 
   it('无 remote 无配置 → 退 main（隔离机器 global/system git 配置）', async () => {

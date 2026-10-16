@@ -37,10 +37,13 @@ export interface CreateWorktreeFormValue {
   readonly branchOpen: boolean
 }
 
-/** 初始表单（弹窗打开即重置——基准分支回默认、派生链复位） */
+/** 初始表单（弹窗打开即重置——基准分支回默认、派生链复位）；defaultBranch 与
+ * 本地分支集交叉校验（bug 75726bd0：不在分支集内不产出不存在分支，回退分支集
+ * 首项，末位 main 兜底）。 */
 export function initialCreateForm(defaultBranch: string | undefined, branches: readonly string[]): CreateWorktreeFormValue {
+  const baseBranch = defaultBranch !== undefined && branches.includes(defaultBranch) ? defaultBranch : (branches[0] ?? 'main')
   return {
-    baseBranch: defaultBranch ?? branches[0] ?? 'main',
+    baseBranch,
     branch: '',
     worktreeName: '',
     worktreeTouched: false,

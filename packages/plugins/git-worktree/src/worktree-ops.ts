@@ -175,24 +175,33 @@ export async function listBranches(cwd: string, runner?: GitRunner): Promise<str
 }
 
 /**
- * 默认分支：`git branch -r` 解析 `origin/HEAD -> origin/<分支>` 行；
- * 无 remote 退 `git config init.defaultBranch`，再退 `main`。
+ * 默认分支：`git branch -r` 解析 `origin/HEAD -> origin/<分支>` 行 →
+ * `git config init.defaultBranch` → 当前检出分支（rev-parse --abbrev-ref HEAD）→
+ * 本地首分支 → `main`。前两级候选均须存在于本地分支集（Root cause: 只信配置不做
+ * 存在性校验，本地无该分支时 `git worktree add ... <分支>` 直接 fatal）；检出分支
+ * 即其所属线（非 main worktree 下语义正确），detached（HEAD）/解析失败再落本地首分支。
  */
 export async function defaultBranch(cwd: string, runner?: GitRunner): Promise<string> {
+  const locals = new Set(await listBranches(cwd, runner))
   const remote = await runGitLoose(['branch', '-r'], cwd, runner)
   if (remote.code === 0) {
     for (const line of remote.stdout.split('\n')) {
       const match = line.trim().match(/^origin\/HEAD\s*->\s*origin\/(\S+)$/)
       const name = match?.[1]
-      if (name) return name
+      if (name && locals.has(name)) return name
     }
   }
   const configured = await runGitLoose(['config', '--get', 'init.defaultBranch'], cwd, runner)
   if (configured.code === 0) {
     const value = configured.stdout.trim()
-    if (value !== '') return value
+    if (value !== '' && locals.has(value)) return value
   }
-  return 'main'
+  const head = await runGitLoose(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, runner)
+  if (head.code === 0) {
+    const value = head.stdout.trim()
+    if (value !== '' && value !== 'HEAD' && locals.has(value)) return value
+  }
+  return locals.values().next().value ?? 'main'
 }
 
 /** 低层执行：非零退出返回结果对象不抛（预检/best-effort 面） */

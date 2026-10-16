@@ -28,6 +28,22 @@ const renderFields = (over: Partial<CreateWorktreeFormValue> = {}, conflicts: re
     />,
   )
 
+describe('initialCreateForm（默认基准分支与本地分支集交叉校验——bug 75726bd0）', () => {
+  it('defaultBranch 不在分支集 → 回退分支集首项', () => {
+    expect(initialCreateForm('master', ['main', 'feat/a']).baseBranch).toBe('main')
+    expect(initialCreateForm('master', ['feat/a', 'feat/b']).baseBranch).toBe('feat/a')
+  })
+
+  it('defaultBranch 在分支集内 → 照用', () => {
+    expect(initialCreateForm('feat/a', ['main', 'feat/a']).baseBranch).toBe('feat/a')
+  })
+
+  it('defaultBranch 缺席 → 分支集首项；全空 → main 兜底', () => {
+    expect(initialCreateForm(undefined, ['feat/a', 'main']).baseBranch).toBe('feat/a')
+    expect(initialCreateForm(undefined, []).baseBranch).toBe('main')
+  })
+})
+
 describe('CreateWorktreeFields（原型「新建 worktree」卡三字段）', () => {
   it('三字段齐备：基准分支（默认 main + 下拉触发器）→ 分支主输入 → worktree 输入', () => {
     const markup = renderFields()
