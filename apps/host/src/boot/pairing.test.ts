@@ -331,6 +331,27 @@ describe('fix-30 ③ createPinIssuer durable 持久化', () => {
     expect(second.rotate().pin).toBe(durable.pin)
   })
 
+  // fix-31 bug df86240d：重启后长效位读数缝——child ready/pair 载荷双态单源（isDurable）。
+  // Root cause: 构造回读只恢复 grant，长效位读数缺席 → ready 恒发临时面（假 TTL + 无
+  // remotePinDurable）→ manifest/UI 重启后恒未勾选 = 用户视角「重开长效被取消」。
+  it('重启模拟：新签发器 isDurable() 回读持久长效位（true）', () => {
+    const persist = memoryPersist()
+    const first = createPinIssuer(() => 1_000, persist)
+    first.setDurable(true)
+    const second = createPinIssuer(() => 1_000, persist) // 新 boot worker
+    expect(second.isDurable()).toBe(true)
+  })
+
+  it('isDurable()：同进程开关随 setDurable 双向翻转；未恢复 = false', () => {
+    const persist = memoryPersist()
+    const issuer = createPinIssuer(() => 1_000, persist)
+    expect(issuer.isDurable()).toBe(false)
+    issuer.setDurable(true)
+    expect(issuer.isDurable()).toBe(true)
+    issuer.setDurable(false)
+    expect(issuer.isDurable()).toBe(false)
+  })
+
   it('setDurable(false)：持久面写入 durable:false——重启后回临时 PIN（旧长效失效）', () => {
     const persist = memoryPersist()
     const first = createPinIssuer(() => 1_000, persist)

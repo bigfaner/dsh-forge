@@ -166,6 +166,11 @@ export interface PinIssuer {
    */
   setDurable(durable: boolean): PinGrant
   /**
+   * fix-31 bug df86240d：当前长效位读数（构造回读持久态 / setDurable 更新后的真值单源
+   * ——child ready/pair 载荷双态双源消除：重启后长效面经此恢复，不再恒发临时假 TTL）。
+   */
+  isDurable(): boolean
+  /**
    * 恒时校验：未锁定、当前 PIN 在场未到期且逐位相等才 true。成功清空失败计数；
    * 失败计入滑窗，窗内计满阈值即锁定（锁定窗内正确 PIN 也拒绝）。
    */
@@ -229,6 +234,7 @@ export function createPinIssuer(now: () => number = Date.now, persist?: PinPersi
       persist?.save({ pin: grant.pin, durable: true })
       return grant
     },
+    isDurable: () => durable,
     verify(pin: string): boolean {
       const at = now()
       const cur = grant

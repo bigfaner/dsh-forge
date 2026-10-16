@@ -400,6 +400,10 @@ async function main(): Promise<void> {
   // 会话；签发/校验/限速/TTL 全语义在 pairing.ts 纯逻辑面，此处只装配路由）。
   // fix-30 ③：durable 态持久化到 dsh-home（跨 boot worker 存活——断开/重启不动长效）。
   const pinIssuer = createPinIssuer(Date.now, createFilePinPersist(join(dirname(options.stateDb), 'remote-pin.json')))
+  // fix-31 bug df86240d：长效位自持久态回读（Root cause: pinDurable 模块变量默认 false 且
+  // ready 恒发临时面——重启后 issuer 虽回读文件恢复长效 grant，manifest 长效位仍恒 false
+  // + remotePinExpiresAt = 假 TTL，UI 重启/重开恒未勾选 = 用户视角「长效被取消」）。
+  pinDurable = pinIssuer.isDurable()
   const pairPort = ctx.webServer.port
   const pairGrant = issuer.current()
   // fix-17 ③：PIN 签发读数（与 token 同刻度 5min——ready/轮换随 manifest 透传 UI PIN 卡）
@@ -771,7 +775,11 @@ async function main(): Promise<void> {
           remotePairUrl,
           remotePairExpiresAt, // fix-6：/pair?token= 形状 + TTL 读数（全卡绑定 × 局域网 IPv4 在场才透传）
           remotePin: pinGrant.pin, // fix-17 ③：6 位 PIN + TTL 读数（互联网 tab PIN 卡单源）
-          remotePinExpiresAt: pinGrant.expiresAt,
+          // fix-31 bug df86240d：PIN 面双态与 pair 载荷同源（pinDurable 自持久态回读）——
+          // 长效位携 remotePinDurable、零假 TTL；临时面才携 remotePinExpiresAt。
+          ...(pinDurable
+            ? { remotePinDurable: true as const }
+            : { remotePinExpiresAt: pinGrant.expiresAt }),
         }
       : {}), // fix-5：官方配对地址（单源透传）
     services: {
