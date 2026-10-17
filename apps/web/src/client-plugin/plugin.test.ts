@@ -2258,4 +2258,30 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(await treeOf(undefined, rows)).toBeNull()
     expect(await treeOf({ sessionId: 's' }, rows)).toBeNull()
   })
+
+  // 移动端语义契约钉（mobile-ui 一致逻辑——提案 §移动端一致逻辑：判定单源在 host，
+  // 两端共享的只有语义契约与 API 协议，非代码共享）。钉双语义：
+  //   ① 预铸优先：命中资格即首选 forge:worktree/session-create 预铸（worktreePath 显式树）；
+  //   ② fail-open 回退：预铸链任何失败 → 回退官方原流（桌面 = original，移动端 = 官方
+  //      /api/rpc session.create——同④出口语义）；无绑定产物由 host guard 首条消息兜底。
+  // 本用例即共享契约的断言单源：mobile-ui 侧契约测试须钉同两条（通道字面量
+  // forge:worktree/session-create + 失败回退），实现归 mobile-ui 工程。
+  it('移动端 hero 预铸优先 + fail-open 回退——语义契约钉（与桌面 wrap ④ 出口同语义）', async () => {
+    // ① 预铸优先：资格命中 = sessionCreate 恰一调先行，官方原流零调用
+    const prefer = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    expect(await prefer.sessions.create({ workspaceId: WS })).toBe('Y-precast')
+    expect(prefer.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(prefer.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    expect(prefer.original).not.toHaveBeenCalled()
+    // ② fail-open 回退：预铸失败 = 官方原流（回退语义与④出口同源）
+    const rejectSessionCreate = vi.fn((_tree: string) => Promise.reject(new Error('预铸失败')))
+    const fallback = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      sessionCreate: rejectSessionCreate,
+    })
+    expect(await fallback.sessions.create({ workspaceId: WS })).toBe('X-official')
+    expect(fallback.original).toHaveBeenCalledTimes(1)
+    // 协议钉：改道载荷 = {worktreePath: 显式树}（移动端透传同协议）；通道字面量上方已钉
+    expect(rejectSessionCreate.mock.calls[0]![0]!).toBe(WS_PATH)
+  })
 })
