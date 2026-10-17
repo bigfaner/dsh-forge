@@ -10,7 +10,7 @@ created: 2026-10-17
 
 ### 1.0 指令动作 = 用户消息（无专用通道）
 
-派发/暂停按钮**不是专用通道**，但也不是裸 `session.prompt`（**dsh 源码核实 2026-10-17 证伪**：slash 仲裁在 interactive UI adapter——官方 `CommandUiRuntime` 自述「the '/' command source…Every execute addresses the session's agent by sessionId」，`session.prompt` 路径零 command 引用；官方手机页 70KB 源码 command/slash 零命中 = 官方手机页本无指令面）。**落法（方案 A）**：手机页 composer 承担官方 UI-adapter 契约级仲裁——输入以 `/` 开头 → 解析 name/args → 经**官方指令执行远程面**（`CommandRuntime` extends `TypertRemoteService`，注册表本身远程可调；桌面浏览器 composer 同径）执行 `/run-dag-tasks <slug>`、`/stop-dag-tasks`；未命中指令目录 → 按字面消息经 `session.prompt` 发送。执行 RPC 端点名/载荷 = 批次①录制抓样钉死（桌面浏览器调指令时的 catalog/execute RPC 形状）。回执 = `command/executed` 语义的指令结果 + 会话内回执文本；loop-active 拒绝同桌面。此仲裁非业务逻辑——是官方 UI adapter 契约的忠实履行。stale 置灰数据驱动。
+派发/暂停按钮**不是专用通道**，但也不是裸 `session.prompt`（**dsh 源码核实 2026-10-17 证伪**：slash 仲裁在 interactive UI adapter——官方 `CommandUiRuntime` 自述「the '/' command source…Every execute addresses the session's agent by sessionId」，`session.prompt` 路径零 command 引用；官方手机页 70KB 源码 command/slash 零命中 = 官方手机页本无指令面）。**落法（方案 A）**：手机页 composer 承担官方 UI-adapter 契约级仲裁——输入以 `/` 开头 → 解析 name/args → 经**官方指令执行远程面**（派发指令发**用户当前浏览会话**——裁决 F5-甲：零映射需求，同源独占守卫防重复）（`CommandRuntime` extends `TypertRemoteService`，注册表本身远程可调；桌面浏览器 composer 同径）执行 `/run-dag-tasks <slug>`、`/stop-dag-tasks`；未命中指令目录 → 按字面消息经 `session.prompt` 发送。执行 RPC 端点名/载荷 = 批次①录制抓样钉死（桌面浏览器调指令时的 catalog/execute RPC 形状）。回执 = `command/executed` 语义的指令结果 + 会话内回执文本；loop-active 拒绝同桌面。此仲裁非业务逻辑——是官方 UI adapter 契约的忠实履行。stale 置灰数据驱动。
 
 ### 1.1 `forge:remote/read-state`（已读游标，host 共享——唯一新增薄方法）
 

@@ -155,4 +155,5 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - **F1 unread 口径统一**：= host append 监听按**可见事件白名单**（投影 A/B 档类型）维护的计数器；非 `tailSeq−lastReadSeq` 事件差（含 turn/step 机械事件会虚大）。重放重建 = 按 seq 范围数可见事件。
 - **F2 多 run chips 数据源**：progress 返回的 tasks 按 `source_slug` 分组派生（loops 撤销后的替代口径）。
 - **F3 循环卡色条映射**：kind（dispatch 蓝/followup 浅蓝/state 灰/done 绿）↔ `forge/progress.verb` 值集映射，批次③实现时从 `loop/driver.ts` 取 verb 全集对齐（实证仅见 claim）。
+- **F5 派发寻址（用户裁决 2026-10-17·甲）**：dispatch 指令发用户当前浏览会话——零映射需求（同源独占守卫防重复）；不建专用 dispatch 会话映射。
 - **F4 唯一剩余实现级未知**：typert `commands` 服务（list/execute）的 **wire 暴露形态**——能否经 `/api/rpc {method:"commands.list"}` 直调未实证（官方手机页只用 session.* 族 JSON 面）——批次①录制桌面浏览器调指令的真实请求钉死（任务 1.1 AC 已含）。
