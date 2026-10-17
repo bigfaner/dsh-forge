@@ -90,13 +90,18 @@ function fakeController() {
   return { controller, calls, prompts }
 }
 
-/** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession 捕获） */
-function fakeWorkspaceRegistry(attachError?: Error) {
-  const created: string[] = []
+/** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession 捕获；titles = resolveByPath
+ *  项目 title 映射——bug 4eab48ea 继承命名面） */
+function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, string> = {}) {
+  const created: Array<{ path: string; title?: string }> = []
   const attached: Array<{ path: string; sessionId: string }> = []
   const registry = {
-    create: async (path: string) => {
-      created.push(path)
+    resolveByPath: async (path: string) => {
+      const title = titles[path]
+      return title === undefined ? undefined : { title }
+    },
+    create: async (path: string, title?: string) => {
+      created.push({ path, title })
       return {
         attachSession: async (sessionId: string) => {
           if (attachError !== undefined) throw attachError
@@ -145,7 +150,9 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       workspaceRegistry: registry,
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(created, '树路径未 find-or-create 工作区（bug 在场）').toEqual(['C:/repo/.forge/worktrees/wt-a'])
+    expect(created.map((row) => row.path), '树路径未 find-or-create 工作区（bug 在场）').toEqual([
+      'C:/repo/.forge/worktrees/wt-a',
+    ])
     expect(attached, '预铸会话无工作区归属（bug 在场）').toEqual([
       { path: 'C:/repo/.forge/worktrees/wt-a', sessionId: result.sessionId },
     ])
@@ -163,7 +170,72 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
-    expect(created).toEqual(['C:/repo/.forge/worktrees/wt-a'])
+    expect(created.map((row) => row.path)).toEqual(['C:/repo/.forge/worktrees/wt-a'])
+  })
+
+  it('bug 4eab48ea：树工作区标题继承项目命名（resolveByPath(项目根).title 单源）——hero 项目 chip 恒显项目名；映射缺席回退树名', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry, created } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge' })
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+    })
+    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(created[0]!.title, '树工作区未继承项目名（bug 在场——hero 项目 chip 跟随树名）').toBe('dsh-forge')
+  })
+
+  it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const bare = {
+      create: async (_path: string, _title?: string) => ({ attachSession: async () => {} }),
+    }
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: bare,
+    })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
+      sessionId: expect.stringMatching(/^session-[0-9a-f-]{36}$/),
+    })
+  })
+
+  it('bug eae18b5c：预铸头携带默认 agentPreset（官方 composeAgent 同源——模式标签只读自 SessionHeader.agentPreset）；resolver 缺席 = 头缺席零猜测', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      resolveDefaultPreset: async () => 'expedition',
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(created[0]!.header, '预铸头缺 agentPreset（bug 在场——模式标签消失）').toMatchObject({
+      id: result.sessionId,
+      agentPreset: 'expedition',
+    })
+  })
+
+  it('bug eae18b5c：resolveDefaultPreset 缺席/拒绝 → 预铸头零 agentPreset（零猜测，不阻断预铸主链）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      resolveDefaultPreset: async () => {
+        throw new Error('registry absent')
+      },
+    })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
+      sessionId: expect.stringMatching(/^session-/),
+    })
+    expect(created[0]!.header.agentPreset).toBeUndefined()
   })
 
   it('workspaceRegistry 缺席（旧环境）→ sessionCreate 照常（零归属面降级，不抛错）', async () => {

@@ -375,6 +375,19 @@ async function main(): Promise<void> {
         sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
+        // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
+        // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
+        resolveDefaultPreset: async () => {
+          let presets: unknown
+          try {
+            presets = (ctx as unknown as { agentPresets?: unknown }).agentPresets
+          } catch {
+            return undefined
+          }
+          const resolve = (presets as { resolve?: (id?: string) => Promise<{ id: string }> } | undefined)?.resolve
+          if (typeof resolve !== 'function') return undefined
+          return (await resolve.call(presets, undefined)).id
+        },
         warn: (line) => diag(line),
       })
       worktreeRpcService = worktreeRpc

@@ -168,6 +168,8 @@ export interface SessionPersistenceCreateFace {
     readonly cwd: string
     readonly version: number
     readonly isSeeded: boolean
+    /** 官方 SessionHeader.agentPreset（可选）——缺席 = 官方 composeAgent 同径缺失时的零猜测 */
+    readonly agentPreset?: string
   }): Promise<SessionHandle>
 }
 
@@ -190,6 +192,7 @@ export async function preseedWorktreeSession(
   persistence: SessionPersistenceCreateFace,
   binding: WorktreeAttachData,
   mintId: () => string = () => `session-${randomUUID()}`,
+  options?: { readonly agentPreset?: string },
 ): Promise<WorktreePreseedResult> {
   const worktreePath = requireNonEmpty(binding?.worktreePath, 'worktreePath')
   const branch = requireNonEmpty(binding?.branch, 'branch')
@@ -200,6 +203,9 @@ export async function preseedWorktreeSession(
     cwd: worktreePath,
     version: SESSION_FORMAT_VERSION, // 读取侧 assertVersion 门槛
     isSeeded: false, // v4 header 必填（探针 run2 实测缺拒）
+    // bug eae18b5c：官方 composeAgent 经 meta.agentPreset 注入（registry defaultId 兜底），
+    // 预铸旁路该链必须自携——SessionHeader.agentPreset 是模式标签的唯一只读源，缺席即消失。
+    ...(options?.agentPreset === undefined ? {} : { agentPreset: options.agentPreset }),
   })
   try {
     const event = await appendAttachEvent(handle, { worktreePath, branch })

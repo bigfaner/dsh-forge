@@ -61,13 +61,14 @@ export interface GitWorktreeServiceFace {
 /** 官方 SessionPersistence.open 消费切片（结构化窄面——零官方包 import；create = 1.16 预铸面） */
 export interface SessionPersistenceFace {
   open(id: string, access: 'read' | 'write'): Promise<unknown>
-  /** 预铸新持久会话（header 契约：id + createdAt + cwd + version 当前格式版 + isSeeded:false；返回初始写句柄） */
+  /** 预铸新持久会话（header 契约：id + createdAt + cwd + version 当前格式版 + isSeeded:false + agentPreset 可选；返回初始写句柄） */
   create(header: {
     readonly id: string
     readonly createdAt: number
     readonly cwd: string
     readonly version: number
     readonly isSeeded: boolean
+    readonly agentPreset?: string
   }): Promise<unknown>
 }
 
@@ -128,6 +129,8 @@ export interface WorkspaceEntityFace {
 export interface WorkspaceRegistryFace {
   /** find-or-create：realpath 归一比对，同规范路径已存在即复用（官方 registry 面） */
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
+  /** 按规范路径只读解析（不建不改——bug 4eab48ea 项目命名继承源）；缺席 = 旧替身/降级面 */
+  resolveByPath?(path: string): Promise<{ readonly title: string } | undefined>
 }
 
 const noGit: WorktreeListResult = { isGit: false, entries: [] }
@@ -158,6 +161,8 @@ export function createWorktreeRpcService(deps: {
   readonly listPresent?: ((projectRoot: string) => Promise<readonly string[]>) | undefined
   /** worktree 清单注入缝（branch 解析面——缺省 = 插件域 listWorktrees 真机 git） */
   readonly listWorktreeEntries?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null }[]>) | undefined
+  /** 默认 agentPreset 解析缝（官方 agentPresets registry——缺席/拒绝 = 头缺席零猜测，bug eae18b5c） */
+  readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
@@ -245,7 +250,15 @@ export function createWorktreeRpcService(deps: {
     const registry = resolveWorkspaceRegistry()
     if (registry === undefined) return
     try {
-      const workspace = await registry.create(worktreePath, worktreeNameOf(worktreePath))
+      // bug 4eab48ea：树工作区标题继承项目命名——官方 chip 文案 = workspace.title（槽外不可
+      // 改制），主工作区 title = 项目名（fix-24 ② 链），resolveByPath(项目根) 只读取同源；
+      // 映射缺席回退树名（旧行为零猜测）。
+      const projectRoot = (await cachedResolve(worktreePath).catch(() => null))?.projectRoot
+      const mainTitle =
+        projectRoot !== undefined
+          ? await registry.resolveByPath?.(projectRoot).then((row) => row?.title).catch(() => undefined)
+          : undefined
+      const workspace = await registry.create(worktreePath, mainTitle ?? worktreeNameOf(worktreePath))
       await workspace.attachSession(sessionId)
     } catch (cause) {
       warn(`[git-worktree] 工作区归属挂接失败（会话本体不受影响）：${String(cause)}`)
@@ -483,10 +496,18 @@ export function createWorktreeRpcService(deps: {
     // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
     // → flush + close，再 controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄
     // 生命周期零交叠，单写者铁律满足。
-    const preseeded = await preseedWorktreeSession(persistence as unknown as SessionPersistenceCreateFace, {
-      worktreePath: cwd,
-      branch,
-    })
+    // bug eae18b5c：预铸头自携默认 agentPreset（官方 composeAgent 同径——registry defaultId）；
+    // 解析失败零猜测（头缺席），不阻断预铸主链。
+    const agentPreset = await deps.resolveDefaultPreset?.().catch(() => undefined)
+    const preseeded = await preseedWorktreeSession(
+      persistence as unknown as SessionPersistenceCreateFace,
+      {
+        worktreePath: cwd,
+        branch,
+      },
+      undefined,
+      agentPreset === undefined ? undefined : { agentPreset },
+    )
     await controller.create({ sessionId: preseeded.sessionId, cwd })
     // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
     await attachWorkspace(cwd, preseeded.sessionId)
