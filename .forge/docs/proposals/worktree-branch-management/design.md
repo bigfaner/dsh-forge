@@ -26,13 +26,13 @@ flowchart TB
     end
     subgraph F["集成层（dsh-forge 装配胶水）"]
         ID["身份归并：git-common-dir 锚 → projectId<br/>（文档根/任务池中央单源在主树）"]
-        RPC["worktree-rpc 九通道<br/>list / create / delete / ahead-behind / branches / checks /<br/>session-create（预铸采纳）/ seal / select"]
+        RPC["worktree-rpc 十通道<br/>list / create / delete / ahead-behind / branches / checks /<br/>session-create（预铸采纳）/ seal / select / resolve（归属解析）"]
         FACES["WorktreeFaces 六卡挂载 + hero 影子槽"]
     end
     G --> F
 ```
 
-九通道清单：`list` / `create` / `delete` / `ahead-behind` / `branches` / `checks` / `session-create` / `seal` / `select`。**绑定写面唯一时点 = session-create 预铸**——活会话补写被单写者铁律禁止，无其它写挂靠事件的路径。
+十通道清单：`list` / `create` / `delete` / `ahead-behind` / `branches` / `checks` / `session-create` / `seal` / `select` / `resolve`。**绑定写面唯一时点 = session-create 预铸**——活会话补写被单写者铁律禁止，无其它写挂靠事件的路径。`resolve` = 批量归属解析（web 归属消费面——侧栏分组等——加载时一次梳理，客户端零仲裁副本）。
 
 ## 3. 身份与数据源
 
