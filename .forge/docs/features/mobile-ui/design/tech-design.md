@@ -298,7 +298,7 @@ sequenceDiagram
     participant RPC as /remote/__rpc
     participant H as host 守卫
     P->>RPC: {channel:'forge:remote/task-action', payload:{taskId, action:'pause'}}
-    RPC->>H: allowlist 分发 → transitionTask（白名单限 suspended/pending）
+    RPC->>H: allowlist 分发 → 包装指令（dispatch=run-dag-tasks / pause=stop-dag-tasks）
     alt 校验通过
         H-->>RPC: {ok:true, data:{task}}
         RPC-->>P: 刷新任务卡
@@ -318,7 +318,7 @@ sequenceDiagram
 |---|---|---|---|
 | `forge:remote/progress`（已有） | 读 | `RemoteProgressQuery` → `{tasks, stats}` | 不变 |
 | `forge:remote/approval`（已有） | 意图 | `RemoteApprovalDecisionInput` → `RemoteApprovalForwardResult` | 不变 |
-| `forge:remote/task-action`（新） | 意图 | `{taskId, action:'pause'│'dispatch'}` → `{task}` | `transitionTask` 白名单限 suspended/pending |
+| `forge:remote/task-action`（新） | 意图 | `{action, slug?, ownerSessionId?}` → `{result}` | **包装 `/run-dag-tasks` 与 `/stop-dag-tasks` 指令**（用户裁决 2026-10-17）——同源独占/loop-active 等守卫全部继承，薄方法零新判定 |
 | `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`（透传） | 读/意图 | 桥上已有通道透传 | child.ts 桥直通 |
 | `forge:remote/session-links`（新薄方法） | 读 | `{branch, worktree}` → `{running:[{taskId,slug,title}], blocked:bool}` | `sessionLinks`+`listTasks` 组合反查（分支切换校验） |
 | `forge:remote/read-state`（新薄方法） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
@@ -384,7 +384,7 @@ sequenceDiagram
 | 位置 | 改动 |
 |---|---|
 | `apps/mobile/`（新） | 源码 core/views/widgets、esbuild 构建脚本、tsconfig、package.json |
-| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（transitionTask/worktree 桥/read-state/workers/disconnect） |
+| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（指令包装器：run/stop-dag-tasks；worktree 桥/read-state/workers/disconnect） |
 | `apps/host/src/boot/remote-http-rpc.ts` | channelTable allowlist 扩充 + 薄方法 handler（纯函数，fake 可测） |
 | `apps/host/src/boot/read-state-domain.ts`（新） | read-state DomainSpec 注册 + 薄方法 handler + tailSeq 监听（官方存储缝） |
 | `packages/contracts/` | 新通道名与 payload 类型（`REMOTE_CHANNELS` 扩充） |

@@ -12,11 +12,11 @@ created: 2026-10-17
 
 | | |
 |---|---|
-| payload | `{taskId: string, action: 'pause' \| 'dispatch'}` |
-| data | `{task: TaskRow}`（动作后的任务行快照，供直接刷新卡片） |
-| 守卫 | `transitionTask` 白名单：`pause` 仅 `suspended` 态、`dispatch` 仅 `pending` 态；其余 → `error.code='invalid-state'` |
-| 失败码 | `invalid-state`（状态冲突——手机端弹确认框）、`not-found`（taskId 不存在）、`stale`（携带的 taskId 不在当前池） |
-| 要点 | **只转发意图，零执行逻辑在手机端**；动作合法性判定完全在 host（AD-1） |
+| payload | `{action: 'pause' \| 'dispatch', slug?: string, ownerSessionId?: string}`（dispatch 附任务源 slug；pause 附循环归属会话） |
+| data | `{result: ForgeCommandResult}`（指令回执原样——run-dag-tasks/stop-dag-tasks 的结果信封） |
+| 守卫 | **包装 `/run-dag-tasks` 与 `/stop-dag-tasks` 指令**（用户裁决 2026-10-17）：`dispatch` → run-dag-tasks（同源独占/loop-active 拒绝等既有守卫全部继承）；`pause` → stop-dag-tasks（按 ownerSessionId 停循环）；零新执行逻辑——薄方法只做参数装配与指令调用 |
+| 失败码 | `invalid-state`（loop-active 同源占用等指令拒绝——手机端弹确认框）、`not-found`（slug/循环不存在）、`stale`（数据过期） |
+| 要点 | **只转发意图，零执行逻辑在手机端**；动作合法性判定完全在指令既有守卫（AD-1）——薄方法不复制任何判定 |
 
 ### 1.2 `forge:remote/session-links`（分支切换校验薄方法）
 
