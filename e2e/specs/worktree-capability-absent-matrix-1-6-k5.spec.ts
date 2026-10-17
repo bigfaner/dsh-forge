@@ -1,7 +1,8 @@
 // session-binding-guarantee 1.6 口径 5 真机 UI e2e：W2 能力缺席矩阵——git 入口显式拒绝、
-// 非 git 照常（零行为差异）。
-//   · 场景 A（先行——场景 B 注入不可逆）：真非 git 目录注册 → 选中 → 首条消息照常发送
-//     落盘（官方原流零拒绝），页面零「能力缺席」拒绝呈现（W2 拒绝面只对 git 项目生效）；
+// 非 git 照常（零行为差异）。两场景各自独立 app 实例（场景 A 零注入前提、场景 B 注入不可
+// 逆——不共实例即无需跨会话切项目）。
+//   · 场景 A：真非 git 目录注册 → 选中 → 首条消息照常发送落盘（官方原流零拒绝），页面零
+//     「能力缺席」拒绝呈现（W2 拒绝面只对 git 项目生效）；
 //   · 场景 B（typed 信封注入）：forge:worktree/session-create 通道换装返回
 //     ERR_WORKTREE_CAPABILITY_ABSENT typed 信封（contracts RpcResult 带内返回——rpcEnvelope
 //     同构；renderer 消费链真身 RpcClientError → 专用拒绝文案「能力缺席…拒绝」显式呈现，
@@ -203,10 +204,28 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.6 口径 5 UI：W2 能力缺席矩阵——非 git 照常（零拒绝零差异）+ git 入口显式拒绝（零挂靠）', async () => {
-  test.setTimeout(360_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-7-k5-ud-'))
-  const gitDir = makeGitRepo()
+/** 收尾统一面（判读留痕双落 + app/夹具清理） */
+async function teardown(
+  app: { readonly app: ElectronApplication },
+  consoleLog: readonly string[],
+  userData: string,
+  fixtureDirs: readonly string[],
+): Promise<void> {
+  // eslint-disable-next-line no-console -- 判读留痕：runner stdout（Tee 日志）+ 证据目录双落
+  console.log('[renderer-console]\n' + consoleLog.join('\n'))
+  try {
+    writeFileSync(join(EVIDENCE_DIR, `renderer-console-${Date.now()}.log`), consoleLog.join('\n'), 'utf8')
+  } catch {
+    // 留痕失败不影响清理
+  }
+  await closeApp(app.app)
+  rmSync(userData, { recursive: true, force: true })
+  for (const dir of fixtureDirs) rmSync(dir, { recursive: true, force: true })
+}
+
+test('1.6 口径 5 UI 场景 A：真非 git → 官方原流零拒绝（照常）', async () => {
+  test.setTimeout(300_000)
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-7-k5-ud-a-'))
   const plainDir = makePlainDir()
   const app = await launchHost({ userData })
   const consoleLog: string[] = []
@@ -214,10 +233,8 @@ test('1.6 口径 5 UI：W2 能力缺席矩阵——非 git 照常（零拒绝零
     const { page } = app
     page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
     await dismissOnboardingModals(page)
-    await registerProject(page, gitDir, 'k5-git-repo')
     await registerProject(page, plainDir, 'k5-plain-ws')
-
-    // ── 场景 A（先行——场景 B 注入不可逆）：真非 git → 官方原流零拒绝（照常）──
+    // 真·非 git：官方原流零拒绝（照常）——选中 → 首条消息发送落盘
     await selectWorkspace(page, 'k5-plain-ws')
     const MARKER_A = '1-7-k5-plain-first-message'
     await typeDraft(page, MARKER_A)
@@ -227,8 +244,23 @@ test('1.6 口径 5 UI：W2 能力缺席矩阵——非 git 照常（零拒绝零
     // 非 git 零差异：零「能力缺席」拒绝呈现（W2 拒绝面不触碰非 git 项目）
     await expect(page.getByText('能力缺席'), '非 git 项目零能力缺席拒绝呈现（照常）').toHaveCount(0)
     await snap(page, 'scene-a-plain-unaffected.png')
+  } finally {
+    await teardown(app, consoleLog, userData, [plainDir])
+  }
+})
 
-    // ── 场景 B：typed 注入（ERR_WORKTREE_CAPABILITY_ABSENT）→ git 项目显式拒绝 ──
+test('1.6 口径 5 UI 场景 B：git 入口显式拒绝（typed 能力缺席注入）——零挂靠零假绑定', async () => {
+  test.setTimeout(300_000)
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-7-k5-ud-b-'))
+  const gitDir = makeGitRepo()
+  const app = await launchHost({ userData })
+  const consoleLog: string[] = []
+  try {
+    const { page } = app
+    page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
+    await dismissOnboardingModals(page)
+    await registerProject(page, gitDir, 'k5-git-repo')
+    // ── 注入先行（独立 app 实例——场景 A 已在专职实例完成其「零注入」前提）：typed 信封 ──
     await injectCapabilityAbsentFinal(page, app.app)
     console.log('[k5-scene-b] capability-absent typed injection active')
     await selectWorkspace(page, 'k5-git-repo')
@@ -248,16 +280,6 @@ test('1.6 口径 5 UI：W2 能力缺席矩阵——非 git 照常（零拒绝零
     await page.waitForTimeout(10_000)
     expect(await attachedSessions(page, gitDir, gitDir), '显式拒绝后 git 项目零挂靠会话（不假绑定）').toBe(0)
   } finally {
-    // eslint-disable-next-line no-console -- 判读留痕：runner stdout（Tee 日志）+ 证据目录双落
-    console.log('[renderer-console]\n' + consoleLog.join('\n'))
-    try {
-      writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
-    } catch {
-      // 留痕失败不影响清理
-    }
-    await closeApp(app.app)
-    rmSync(userData, { recursive: true, force: true })
-    rmSync(gitDir, { recursive: true, force: true })
-    rmSync(plainDir, { recursive: true, force: true })
+    await teardown(app, consoleLog, userData, [gitDir])
   }
 })
