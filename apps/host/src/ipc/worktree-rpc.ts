@@ -119,12 +119,14 @@ export interface RequiredBindingGuardFace {
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
 export interface WorkspaceEntityFace {
   attachSession(sessionId: string): Promise<void>
+  /** 官方 Workspace.setTitle（durable 改名）——存量树工作区 title 回写缝；替身可缺席 */
+  setTitle?(title: string): Promise<void>
 }
 
 export interface WorkspaceRegistryFace {
-  /** find-or-create：realpath 归一比对，同规范路径已存在即复用（官方 registry 面） */
+  /** find-or-create：realpath 归一比对，同规范路径已存在即复用不改 title（官方 registry 面） */
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
-  /** 按规范路径只读解析（不建不改——bug 4eab48ea 项目命名继承源）；缺席 = 旧替身/降级面 */
+  /** 按规范路径只读解析（项目命名继承源）；缺席 = 旧替身/降级面 */
   resolveByPath?(path: string): Promise<{ readonly title: string } | undefined>
 }
 
@@ -250,6 +252,9 @@ export function createWorktreeRpcService(deps: {
           ? await registry.resolveByPath?.(projectRoot).then((row) => row?.title).catch(() => undefined)
           : undefined
       const workspace = await registry.create(worktreePath, mainTitle ?? worktreeNameOf(worktreePath))
+      // 存量 healing：create 对已存在工作区复用不改 title（官方语义）——项目命名继承须
+      // 经 setTitle 显式回写，否则修复前建的树工作区永久树名（hero 项目 chip 跟随树名）。
+      if (mainTitle !== undefined) await workspace.setTitle?.(mainTitle)
       await workspace.attachSession(sessionId)
     } catch (cause) {
       warn(`[git-worktree] 工作区归属挂接失败（会话本体不受影响）：${String(cause)}`)

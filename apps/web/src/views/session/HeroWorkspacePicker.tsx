@@ -103,7 +103,7 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
       return sessionId
     })().catch((error: unknown) => {
       // 安全网兜底（内部各失败径已自呈提示）——意外异常不静默：同一 Toast 面呈现
-      onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
+      deps.onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
       return null
     })
   }

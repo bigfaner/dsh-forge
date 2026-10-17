@@ -89,11 +89,12 @@ function fakeController() {
   return { controller, calls, prompts }
 }
 
-/** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession 捕获；titles = resolveByPath
- *  项目 title 映射——bug 4eab48ea 继承命名面） */
+/** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
+ *  titles = resolveByPath 项目 title 映射——继承命名面） */
 function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, string> = {}) {
   const created: Array<{ path: string; title?: string }> = []
   const attached: Array<{ path: string; sessionId: string }> = []
+  const titled: Array<{ path: string; title: string }> = []
   const registry = {
     resolveByPath: async (path: string) => {
       const title = titles[path]
@@ -106,10 +107,13 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
           if (attachError !== undefined) throw attachError
           attached.push({ path, sessionId })
         },
+        setTitle: async (next: string) => {
+          titled.push({ path, title: next })
+        },
       }
     },
   }
-  return { registry, created, attached }
+  return { registry, created, attached, titled }
 }
 
 describe('createWorktreeRpcService（child 侧服务本体——透传插件域）', () => {
@@ -172,7 +176,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(created.map((row) => row.path)).toEqual(['C:/repo/.forge/worktrees/wt-a'])
   })
 
-  it('bug 4eab48ea：树工作区标题继承项目命名（resolveByPath(项目根).title 单源）——hero 项目 chip 恒显项目名；映射缺席回退树名', async () => {
+  it('树工作区标题继承项目命名（resolveByPath(项目根).title 单源）——hero 项目 chip 恒显项目名；映射缺席回退树名', async () => {
     const { controller } = fakeController()
     const { persistence } = fakePersistence({})
     const { registry, created } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge' })
@@ -184,7 +188,22 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       workspaceRegistry: registry,
     })
     await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(created[0]!.title, '树工作区未继承项目名（bug 在场——hero 项目 chip 跟随树名）').toBe('dsh-forge')
+    expect(created[0]!.title, '树工作区未继承项目名（hero 项目 chip 跟随树名）').toBe('dsh-forge')
+  })
+
+  it('存量树工作区 healing：create 复用不改 title（官方语义）→ setTitle 显式回写项目名', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry, titled } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge' })
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+    })
+    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(titled).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' }])
   })
 
   it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {
