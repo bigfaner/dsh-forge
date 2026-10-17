@@ -168,4 +168,15 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 | 4 | `/remote/` 挂载适配（已落地 commit `7921232d`） | ✅ 三缝：index 经 `renderIndexInjections` 注入官方行（facade + 组合脚本 + `__DSH_BOOT__`；tapIndex 弹射跳过——弹射终点即本页）；`/remote/plugins/*` 302 → 官方 `/plugins` 组合路由；`/remote/api/*` 307 → 官方 `/api` 通道（client http transport 发文档相对 URL；302 会降级 POST） |
 | 5 | client 半装载（mobile 页） | ✅ 最小路径实证：facade queue 模式下 app 组合 factory 入 `pendingQueue`（boot 只预载不执行）——按需补加载组合 `<script>` 后从队列直取 `@deepseek-ai/dsh-client-connection` factory 物化（bundle 自包含）；`installConnection` 缺省 web transport 同源直连 |
 | 6 | 认证 | ✅ 配对链 302→302→303 铸官方 `dsh-auth-*` cookie（BrowserAuth，绑定 authority）；`_request` 上下文域由官方 typert client 运行时注入——手搓 payload 到不了（`gateway/arguments-invalid` 实证），**session.prompt 等业务单呼必须经官方 client 运行时** |
-| 7 | 架构裁决 | **方案 B（官方协议）成立且比原估便宜**：host 只需挂载适配（#4，已落地）+ 组合行（#3）；1.3 的 `rpc.ts`/`sse.ts` 替换为官方 client 薄包装（wire 投影/store/router/views 不动）；`/api/rpc`+SSE 假设全部作废（批次② messages 视图的数据源随 1.3b 替换面微调） |
+| 7 | 架构裁决 | ~~方案 B（官方协议）~~ **R12 已改向**（见下） |
+
+## R12 最终裁决（2026-10-17：`/api` 官方 RPC 面整体放弃——安全裁决）
+
+| # | 项 | 结论 |
+|---|---|---|
+| 1 | 裁决 | **mobile 不使用 `/api` 官方 RPC 面**（含 LAN）：不在组合启用官方 api 控制器（组合行撤销）、mobile 不 boot 官方 client 运行时。配对后手机可触达面 = forge allowlist 窄清单——**攻击面收窄即安全收益** |
+| 2 | 数据通道（唯一） | `POST /remote/__rpc` 单通道 + PSK v3 安全层（tunnel-psk.md）：`forge:proxy/*`（官方能力 in-process 代理——同 ctx 直调 sessionController/typert 服务类方法，参数校验 = contracts DTO zod，`_request` 问题不存在）+ `forge:remote/*`（forge 原生） |
+| 3 | 流式（唯一） | 加密 SSE `GET /remote/forge-stream`（forge 侧订阅 host 事件镜像：api-session/*、approval、任务进度逐帧 AEAD 推送）——LAN/隧道同通道，隧道恢复推送能力 |
+| 4 | 用户的疑问收敛 | ①`_request` 问题随「不经 typert 网关」消失；②`session/follow` 流由 forge-stream 镜像等价承载；③官方 client-connection 的 client 半**不再引入 mobile**（handle/退避等能力由自研 stream.ts 轮询+SSE 重连承担——v1 设计残留复用）；④`dsh-client-connection` 在 mobile 的角色退为「协议形状参照 + 静态签名验证对端」 |
+| 5 | 由此作废 | 1.29 旧口径（官方 client 引导）、fix-3 旧目标（boot 核销）、1.11 typert 化、todo #74 现行推进（typert 化转 shelved 远期——若未来桌面统一协议可重启）、R11 #5/#6/#7 中与 typert/client-boot 相关的结论 |
+| 6 | PSK v3 不受影响 | tunnel-psk.md v3 全部有效（PSK/PIN-KDF/签名/逐渠道规范/forge-stream/静态签名）——它本来就设计在 `__rpc` 通道上 |

@@ -119,9 +119,9 @@ declare module '@deepseek-ai/dsh-llm' {
 
 官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 各官方包 `typert.host.js` invocations 表（逐文件核销 2026-10-17，见 6.2）+ 批次①回放录制补参数级细节。归组归属键实证：`SessionSummary.cwd` 在官方摘要内（optional）——归组零二级解析。
 
-### 6.0 forge 面：typert 化后的 `forge/projects/grouped`（drawer 一次调用取项目 → worktree → sessions）
+### 6.0 forge 面：`forge:proxy/*` 代理通道（mobile 唯一数据通道，LAN/隧道同构）
 
-> 通道裁决（2026-10-17）：forge mobile 直接采用 typert——forge 远程面注册为 typert 服务，gateway 认领 `/api/forge/*`，与官方面**同一 client 同一信封**（`connection.rpc.call('/api','forge/projects/grouped',…)`）；`/remote/__rpc` 桥保留供桌面 `remote-transport` 消费（并存，桌面迁移另案）。
+> 通道裁决（2026-10-17 R12 终版）：**mobile 不使用 `/api` 官方 RPC 面**——forge 数据面 = `POST /remote/__rpc` 单通道 + PSK v3 安全层。`forge:proxy/*` 通道族 in-process 直调 sessionController/typert 服务（不经网关，参数校验 = contracts DTO zod）；事件流 = 加密 SSE `GET /remote/forge-stream`（host 事件镜像逐帧 AEAD 推送）。`/remote/__rpc` 桥与桌面 remote-transport 兼容不动；组合不启用官方 api 控制器（攻击面收窄）。
 
 ```jsonc
 {

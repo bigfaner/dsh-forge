@@ -32,14 +32,6 @@
       name: '@dsh-forge/core'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
-    # ── mobile-ui（R9 证伪续作）：手机受限视图的官方 session/workspace Remote 面——
-    #    dsh-base 组合只挂 typert-gateway，api-*-controller 出厂缺席（探针 405 实证）；
-    #    官方包启用行 = 组合层标准缝（与 forge 插件行同构）。服务依赖（session/agent/
-    #    persistence/typert-gateway）均 dsh-base 既有行，零新增配置。
-    - id: api-session-controller
-      name: '@deepseek-ai/dsh-api-session-controller'
-    - id: api-workspace-controller
-      name: '@deepseek-ai/dsh-api-workspace-controller'
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:
