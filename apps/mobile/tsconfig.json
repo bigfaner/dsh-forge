@@ -9,6 +9,7 @@
       "DOM.Iterable"
     ],
     "types": [],
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": [
