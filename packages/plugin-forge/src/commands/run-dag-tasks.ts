@@ -361,8 +361,8 @@ async function stopOwn(deps: RunDagTasksDeps, ctx: InvokeContext): Promise<Forge
  */
 async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: ContainerRef): Promise<ForgeCommandResult> {
   // 1.22 新会话门控（用户裁决 2026-10-12「当且仅当新会话，才 followup」）：既有会话已物化，
-  // followup 反而把指令单行当 user 消息投给活 agent——其读令即加载 run-tasks skill /
-  // dispatchTask 自跑一轮（与宿主循环同径冲突）。既有会话 = 零 followup 直接启动（指令面
+  // followup 反而把指令单行当 user 消息投给活 agent——其自行 dispatchTask 跑单轮派发
+  // （与宿主循环同径冲突）。既有会话 = 零 followup 直接启动（指令面
   // 本身已转录，物化无职责）。判定面见 isNewSession。
   const materialized = !isNewSession(ctx.parent)
   // 1.19 修复序（深层根因：owner 会话 agent 未进入运行时 → followup 内件 undefined.send）：

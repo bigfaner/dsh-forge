@@ -193,7 +193,7 @@ export interface TasksEmptyInput {
 export function tasksEmptyView(input: TasksEmptyInput): { readonly title: string; readonly description?: string } | undefined {
   if (input.cards.length > 0) return undefined
   if (input.total === 0) {
-    return { title: '本容器暂无任务', description: '任务由 run-tasks 派发 / add_task 产生' }
+    return { title: '本容器暂无任务', description: '任务由 add_task 产生' }
   }
   if (input.searchActive) {
     return { title: `无匹配「${input.search.trim()}」的任务` }

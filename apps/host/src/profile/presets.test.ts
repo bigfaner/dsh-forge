@@ -131,7 +131,7 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(persona).toContain('clean code')
       expect(persona).toContain('行为纪律：')
       expect(persona).toContain('反模式禁令：')
-      // 分工纪律单一归属技能层：persona 仅一句引用，不重复 run-tasks 铁律 3 表述
+      // 分工纪律单一归属技能层：persona 仅一句引用，不重复各技能自身铁律表述
       expect(persona).toContain('分工纪律按各技能自身铁律执行')
       const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
       expect(bodyLines).toHaveLength(6) // 身份定位/作风/思维习惯/行为纪律/反模式禁令/分工引用——prefix 总行数 7 ≤ 12

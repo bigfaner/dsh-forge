@@ -5,8 +5,9 @@
 // 会话 id；循环消费者 = LoopInstanceId）、callToolFace 失败信封与五态渲染，其余全数委托
 // dispatchCore。schema 与外部语义零变化（纯内部分层重构——既有契约测试不修改即通过）。
 //
-// 依赖方向硬约束：壳 → 核单向（核心面零 import 本文件/tools 面）——文件边界即未来
-// run-tasks skill 退役时的下线边界（工具面整体移除而核心面/循环/核心单测零波及）。
+// 依赖方向硬约束：壳 → 核单向（核心面零 import 本文件/tools 面）——文件边界即工具壳下线
+// 边界（run-tasks skill 已退役——dispatch-loop-hardening 3a；工具面整体移除而核心面/循环/
+// 核心单测零波及）。
 // 兼容再导出面：分层前的公共符号（池快照/组装纯函数/spawn 契约/结果类型）经本壳继续
 // 可达（tools/index.ts barrel 与 e2e worker-face 单测的既有 import 面零波及）。
 import { CONTAINER_KINDS } from '@dsh-forge/contracts'

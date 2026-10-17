@@ -39,6 +39,6 @@ description: 面向 `test-run` 任务的表面级测试编排——识别 surfac
 按 submit-task 纪律结算：
 
 - 全绿 → `submitTask result=success`，报告作为 summary。
-- 任何失败 → `submitTask result=blocked`，reason 写明失败的旅程与用例；随后可按 fix 链协议派生修复任务（正本在 run-tasks 中）。
+- 任何失败 → `submitTask result=blocked`，reason 写明失败的旅程与用例；随后由主会话/循环处置层按 fix 链协议派生修复任务（协议正本：`docs/business-rules/task-pipeline.md` BIZ-task-003/014 + 处置注入模板 `src/triage/prompt.ts`）。
 
 这里绝不允许为强行通过而编辑测试脚本——因此此处没有任何可供提交的改动。

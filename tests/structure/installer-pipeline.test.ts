@@ -169,7 +169,7 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // knowledge 暂不含（产品裁决：知识库功能不完整，打包形态不开放——dev 形态仍含；
       // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',

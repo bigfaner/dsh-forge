@@ -64,7 +64,7 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  */
 /** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
 const STAGING_EXTRAS = {
-  'plugin-forge': { files: ['skills'], keyFiles: ['skills/run-tasks/SKILL.md'] },
+  'plugin-forge': { files: ['skills'], keyFiles: ['skills/submit-task/SKILL.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']

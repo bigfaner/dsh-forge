@@ -17,7 +17,8 @@
 // earliest interrupted 的径）。
 //
 // 依赖方向硬约束：工具壳 → 核心面单向；核心面零 import 工具壳（tools/**）——文件边界即
-// 未来 run-tasks skill 退役时的下线边界（工具面整体移除而核心面/循环/核心单测零波及）。
+// 工具壳下线边界（run-tasks skill 已退役——dispatch-loop-hardening 3a；工具面整体移除而
+// 核心面/循环/核心单测零波及）。
 // 核心面对插件内共享基础设施的合法依赖：contracts / events/sink（事件发射面——非工具壳）/
 // faces（结构化最小面类型——非工具壳）。
 import type {

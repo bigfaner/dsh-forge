@@ -3,7 +3,7 @@
 // 双份逐字重复（允许重复，人类可读性优先）；docs 块为函数内局部 const、插值自占一行、
 // 尾部单换行（forgeDir 缺省时整体省略，至多多一个空行）；渲染入口纯胶水。
 // 文本口径：总纲四规则（状态库+查询为准 / 自然键 / 提案裁决 / 环间确认）——执行协议与
-// 受限面零回渗（操作正本在 run-tasks / submit-task 技能）；双 mermaid 含用户裁决节点、
+// 受限面零回渗（操作正本在派发核心文档 docs/business-rules/task-pipeline.md / submit-task 技能）；双 mermaid 含用户裁决节点、
 // 各步固定产物标于箭头、终节点=交付、无 worker 内部节点。
 // 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
 import { XML_TAGS } from '@dsh-forge/contracts'

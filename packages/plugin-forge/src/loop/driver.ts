@@ -130,7 +130,7 @@ export type LoopTriageDecision =
       readonly action: 'add-fix'
       /** fix 任务标题（缺省 = `Fix: <任务名>`） */
       readonly title?: string
-      /** fix 任务类型（缺省 = coding-fix——run-tasks SKILL.md fix-chain 映射的缺省族） */
+      /** fix 任务类型（缺省 = coding-fix——fix 链协议缺省族，正本 = task-pipeline.md BIZ-task-003 / triage 注入模板） */
       readonly type?: TaskType
       readonly taskDesc?: string
       /** ⑧ 叙述的修复内容摘要（系统动作行括注） */

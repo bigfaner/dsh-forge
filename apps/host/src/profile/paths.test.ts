@@ -67,7 +67,7 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(paths.skillsDir).toBeDefined()
     expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
     expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
-    expect(existsSync(join(paths.skillsDir!, 'run-tasks', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.skillsDir!, 'submit-task', 'SKILL.md'))).toBe(true)
   })
 
   it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {

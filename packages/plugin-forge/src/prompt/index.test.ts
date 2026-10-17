@@ -63,7 +63,7 @@ describe('总纲四条核心规则（双模式逐字在场——允许重复、�
     expect(renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge' })).toContain(rule)
   })
 
-  it('执行协议与受限面零回渗（领取/结算/fix 链细节不出现——正本在 run-tasks / submit-task 技能）', () => {
+  it('执行协议与受限面零回渗（领取/结算/fix 链细节不出现——正本在派发核心文档 / submit-task 技能）', () => {
     for (const v of [text, renderForgePipelineSection({ mode: 'blitz' })]) {
       expect(v).not.toContain('执行协议')
       expect(v).not.toContain('受限面')
