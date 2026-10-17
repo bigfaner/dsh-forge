@@ -11,8 +11,8 @@ CREATE TABLE session_read_state (
 
 -- 未读计算（对齐 dsh 消息体——seq 单调，无时钟依赖）：
 --   host 进程内监听 session append → tailSeq[sessionId] + 可见事件计数（内存，零持久化）
---   unread = tailSeq − lastReadSeq  （O(1)）
---   host 重启后：由 session store 按 seq > last_read_seq 范围重放重建计数
+--   unread = host 按「可见事件白名单」维护的计数器（A/B 档投影类型才计数；O(1)）
+--   host 重启后：由 session store 按 seq > last_read_seq 范围数可见事件重建计数
 
 -- 命名映射：DDL 蛇形（session_read_state / last_read_seq）= 域声明驼峰（表 sessionReadState / 值 {lastReadSeq}）——同一契约两视角，实现以 DomainSpec 驼峰为准。
 -- 读写契约（forge:remote/read-state 薄方法；写走 KvTable.update 原子 RMW（putIfAfter，单调守卫在此实现）域写链原子落盘）：

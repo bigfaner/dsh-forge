@@ -149,3 +149,10 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 | 4 | storage 挂载在场性 | ✅ **`dsh-base` bundle cordis.patch.yml 显式挂载三行**：`storage`（hub）/ `storage-json`（**config.root 已指 `dshHomePath('storages')`**）/ `storage-domain`（域 facility）。我们 host profile.dev bundles 含 dsh-base → **存储缝已挂载到位，无需补挂**；host profile.dev pnpm-lock 已含 dsh-storage-domain@0.2.0-rc.2（传递依赖已装） |
 | 5 | 配对域 session.list 可见范围 | ✅ 官方口径 = **全量可见会话**：`ApiSessionList.list` 文档「Read every visible attached and persisted Session」，无 per-connection 过滤参数；官方手机页配对后 `rpc('session.list',{})` 即渲染全量列表——受限视图与桌面同域可见 |
 | 6 | tool/result.meta | ✅ 会话数据实证 **2600 条**：载荷 = 工具私有 JSON（read：`{path,offset,lines,totalLines,lang}`；fs-search：`{shape,files,truncated,total}`）——通道确证可用；deliverable 类工具的具体 meta 形状批次③随文档卡探针核对 |
+
+## R10 自审补充（2026-10-17 模糊点清零）
+
+- **F1 unread 口径统一**：= host append 监听按**可见事件白名单**（投影 A/B 档类型）维护的计数器；非 `tailSeq−lastReadSeq` 事件差（含 turn/step 机械事件会虚大）。重放重建 = 按 seq 范围数可见事件。
+- **F2 多 run chips 数据源**：progress 返回的 tasks 按 `source_slug` 分组派生（loops 撤销后的替代口径）。
+- **F3 循环卡色条映射**：kind（dispatch 蓝/followup 浅蓝/state 灰/done 绿）↔ `forge/progress.verb` 值集映射，批次③实现时从 `loop/driver.ts` 取 verb 全集对齐（实证仅见 claim）。
+- **F4 唯一剩余实现级未知**：typert `commands` 服务（list/execute）的 **wire 暴露形态**——能否经 `/api/rpc {method:"commands.list"}` 直调未实证（官方手机页只用 session.* 族 JSON 面）——批次①录制桌面浏览器调指令的真实请求钉死（任务 1.1 AC 已含）。

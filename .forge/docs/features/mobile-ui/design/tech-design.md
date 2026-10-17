@@ -96,7 +96,7 @@ flowchart LR
 ### AD-6 未读 = seq 游标（read-state），非时间戳
 
 - 候选：①时间戳 lastSeen（对比新消息 time）；②seq 游标 lastReadSeq（对比 SessionEvent.seq）。
-- 权衡：①时钟依赖、乱序敏感，且 dsh 消息体的排序/守卫正本本就是单调 seq；②O(1) 计算（`unread = tailSeq − lastReadSeq`）、与 revision 守卫同源、host 重启可由 session store 按 seq 范围重放重建。
+- 权衡：①时钟依赖、乱序敏感，且 dsh 消息体的排序/守卫正本本就是单调 seq；②O(1) 计算（**unread = host append 监听按可见事件白名单维护的计数器**——A/B 档投影类型才计，机械事件不计防虚大）、与 revision 守卫同源（seq 重放重建）。
 - 决策：**②**。命名随之正名为 `read-state`（`forge:remote/read-state` 通道 / `ReadStateEntry`——lastseen 的时间戳词不再名不副实）。host 进程内监听 session append 维护 `tailSeq` 与可见事件计数（内存，零持久化）；持久侧只存游标（载体见 AD-7）。
 - **计算单源纪律**：`unread` 只在 host 计算（tailSeq 监听仅在 host 进程可达）；移动端/桌面端一律经通道读结果，**不各自独立计算**——移动端「触底后本地置 0」仅为显示层乐观更新，下次读即对账，不构成第二计算源（与 AD-1 无双源真值同纪律）。
 
@@ -328,7 +328,7 @@ sequenceDiagram
 
 ## 数据模型（db-schema: yes）
 
-持久化仅一处：per-session `lastReadSeq`（已读游标），载体 = **官方 `dsh-storage-domain` 域表**（`read-state` domain / 表 `sessionReadState`；JSON backend 落 dsh-home storages，原子写链与 change 事件由存储缝提供，零自持文件）。**定位 = host 共享数据能力，不绑定移动端**：通道与 DomainSpec 注册在 host 侧 contracts，桌面端（web-app/IPC）可直接复用同一域表与通道。未读 = `tailSeq − lastReadSeq`（AD-6，对齐 dsh 消息体的单调 seq，无时钟依赖）。ER 与结构声明见 [er-diagram.md](er-diagram.md) / [schema.sql](schema.sql)（独立评审单元）。
+持久化仅一处：per-session `lastReadSeq`（已读游标），载体 = **官方 `dsh-storage-domain` 域表**（`read-state` domain / 表 `sessionReadState`；JSON backend 落 dsh-home storages，原子写链与 change 事件由存储缝提供，零自持文件）。**定位 = host 共享数据能力，不绑定移动端**：通道与 DomainSpec 注册在 host 侧 contracts，桌面端（web-app/IPC）可直接复用同一域表与通道。未读 = **可见事件计数器**（AD-6：host append 监听按可见类型白名单计数；重放重建按 seq 范围数可见事件）。ER 与结构声明见 [er-diagram.md](er-diagram.md) / [schema.sql](schema.sql)（独立评审单元）。
 
 ## 错误处理（FMEA 摘要）
 
@@ -409,7 +409,7 @@ sequenceDiagram
 | US-4 模型切换 | views/settings+models（`session.rpc` 模型面 + localStorage 最近使用） |
 | US-5 抽屉未读 | views/drawer；`forge:remote/read-state` 薄方法（AD-6 seq 游标；双级未读） |
 | US-6 hero | views/hero；`forge:worktree/*` 透传；乐观切换 + 建会话守卫回执 → 确认框（session-links 延后可选） |
-| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + 指令经 UI-adapter 仲裁走官方指令执行面（时序 2） |
+| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress`（**多 run chips = tasks 按 source_slug 分组派生**）+ 指令经 UI-adapter 仲裁走官方指令执行面（时序 2） |
 | US-8 worker 会话 | views/worker；官方面派生（`session.list` parentSessionId 过滤 + `subagent/catalog` 事件投影；`mode` 定只读/可续聊） |
 | US-9 循环卡/文档 | AD-4 source.kind 判别；widgets 循环卡家族；文档卡 `meta` 通道（批次③探针确认）+ views/reader |
 | US-10 宿主守卫 | AD-1 意图信封唯一动作通道；stale 置灰 = 数据驱动 |
