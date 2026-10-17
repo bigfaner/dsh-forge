@@ -14,6 +14,24 @@ vi.mock('@deepseek-ai/dsh-subagent-in-process-driver', () => ({
 }))
 
 import { createInProcessDriverSpawn } from './in-process-driver.js'
+import type { WorkerTreeGuard } from './job-tree.js'
+
+/** 守卫桩工厂（reclaim 调用计数——改进 4 终态可达断言） */
+function guardSpy() {
+  const reclaims: number[] = []
+  const guard: WorkerTreeGuard = {
+    keeperPid: 4242,
+    whenReady: Promise.resolve(),
+    exclude: () => {},
+    reclaim: async () => {
+      reclaims.push(Date.now())
+      return true
+    },
+  }
+  return { guard, reclaims, factory: () => guard }
+}
+
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 /** 官方 SubagentRun 桩（真形状子集——id/result/dispose） */
 function runStub(over: Partial<{ id: string; stopReason: string; output: { type: 'text'; text: string }[] }> = {}) {
@@ -164,5 +182,50 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     await expect(
       spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } }),
     ).rejects.toThrow(/agent factory rejected/)
+  })
+})
+
+describe('进程树守卫接线（改进 4——清理路径全部终态可达）', () => {
+  const requestOf = () => ({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+
+  it('result 终态（completed）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn(requestOf())
+    await handle.result
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('result 异常拒绝（异常终止）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockResolvedValueOnce({ ...runStub(), result: Promise.reject(new Error('worker crashed')) })
+    const handle = await spawn(requestOf())
+    await expect(handle.result).rejects.toThrow(/worker crashed/)
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('dispose（终态前置收尾）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    const run = runStub()
+    startInProcessRun.mockResolvedValueOnce(run)
+    const handle = await spawn(requestOf())
+    await handle.dispose()
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+    expect(run.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('start 失败径 → reclaim 可达 + 拒绝照旧上抛', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockRejectedValueOnce(new Error('agent factory rejected'))
+    await expect(spawn(requestOf())).rejects.toThrow(/agent factory rejected/)
+    await flush()
+    expect(reclaims.length).toBe(1)
   })
 })

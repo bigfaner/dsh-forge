@@ -36,6 +36,7 @@ import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
+import { defaultWorkerTreeGuard } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
@@ -191,6 +192,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     // worker 同产品写路径——SC7 会话链断言结构保留）， fabricated 会话上下文：
     // sessionId = 回放 worker 裸 uuid、cwd = 计划工作区根（绑定表路由 projectId）。
     let forgeToolsRef: ReturnType<typeof createForgeTools> | undefined
+    // 进程树守卫真装配（dispatch-loop-hardening 改进 4）：worker 任意终态 Job Object
+    // 整树回收——真机绑定 defaultWorkerTreeGuard（fail-soft：非 win32/装配失败 = no-op）
+    const treeGuard = (): ReturnType<typeof defaultWorkerTreeGuard> => defaultWorkerTreeGuard()
     const replayPlan = loadReplayPlanFromEnv()
     const planSpawn: SpawnWorker | undefined =
       replayPlan !== undefined
@@ -204,9 +208,9 @@ const forgePlugin: ForgePlugin = Object.assign(
             return def.execute(args, {
               agent: { session: { id: sessionId, header: { cwd: replayPlan.workspaceDir } } },
             })
-          })
+          }, { treeGuard })
         : undefined
-    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn({ treeGuard }) // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
     // 容器目录解析缝（projectId→workspaceDir 反向解析——incident-log 落盘面，1.11 收口）：
     // 装配期逐绑定项目预热 + 未命中懒解析记忆化（faces.createProjectContainerDirs——解析链
     // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
