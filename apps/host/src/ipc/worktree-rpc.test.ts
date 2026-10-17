@@ -683,6 +683,52 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(warnings.some((line) => line.includes('绑定表刷新锚失败'))).toBe(true)
   })
 
+  // ── 权限补钉锚（bug e5059ee1——adopt 钉档绕过 defaultPreset，装配方经官方 permissionPresets.set 补钉）──
+  it('权限补钉：全新 sessionCreate 成功后触发 onSessionAdopted 恰一次（产物已活——controller.create 已返回）；blank 复用不重触发', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const adopted: string[] = []
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      onSessionAdopted: async (sessionId) => {
+        adopted.push(sessionId)
+      },
+    })
+    const [a, b] = await Promise.all([
+      service.sessionCreate({ worktreePath: WT_A }),
+      service.sessionCreate({ worktreePath: WT_A }),
+    ])
+    expect(a.sessionId).toBe(b.sessionId)
+    expect(adopted, '并发共享同链 + 复用不重触发——恰一次').toEqual([a.sessionId])
+    await service.sessionCreate({ worktreePath: WT_A })
+    expect(adopted).toHaveLength(1)
+  })
+
+  it('权限补钉 fail-soft：onSessionAdopted 抛错不改写产物、不阻断绑定表锚（两者独立）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const warnings: string[] = []
+    let refreshed = 0
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      onWorktreeSetChanged: async () => {
+        refreshed += 1
+      },
+      onSessionAdopted: async () => {
+        throw new Error('pin boom')
+      },
+      warn: (line) => warnings.push(line),
+    })
+    const result = await service.sessionCreate({ worktreePath: WT_A })
+    expect(result.sessionId).toMatch(/^session-/)
+    expect(warnings.some((line) => line.includes('权限补钉失败'))).toBe(true)
+    expect(refreshed).toBe(1) // 绑定表锚不受影响
+  })
+
   it('G7② seal 判序反转：request.cwd 命中非 git 能力缓存 → 零会话日志读', async () => {
     const opens = { value: 0 }
     const { persistence } = fakePersistence({ s1: attachEvent(WT_A) }, { s1: { cwd: 'C:/foreign/x' } }, opens)

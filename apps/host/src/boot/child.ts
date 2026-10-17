@@ -389,6 +389,35 @@ async function main(): Promise<void> {
           if (projects === undefined) return
           await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
         },
+        // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
+        // adopt = resume 既有日志 → 官方恢复链补 end-seed → permission 钉档走「已种子化」
+        // 分支按组合缺省落档，绕过 defaultPreset（设置>通用>权限）。官方正缝修正：live
+        // session 上经 permissionPresets.set（UI 选择器同径公共 API）补钉解析后的用户缺省
+        // 档；服务/会话缺席、已同档或 custom = no-op fail-soft。
+        onSessionAdopted: async (sessionId: string) => {
+          let presets: unknown
+          let sessions: unknown
+          try {
+            presets = servicesFace.get('permissionPresets')
+            sessions = servicesFace.get('sessions')
+          } catch {
+            return
+          }
+          const face = presets as
+            | {
+                readonly defaultPreset: string
+                current(session: unknown): string
+                set(session: unknown, name: string): void
+              }
+            | undefined
+          const store = sessions as { get(id: string): unknown } | undefined
+          if (face === undefined || store === undefined) return
+          const session = store.get(sessionId)
+          if (session === undefined) return
+          const target = face.defaultPreset
+          if (target === 'custom' || face.current(session) === target) return
+          face.set(session, target)
+        },
         // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
         // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
         resolveDefaultPreset: async () => {

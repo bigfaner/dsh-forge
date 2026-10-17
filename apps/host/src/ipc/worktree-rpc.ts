@@ -193,6 +193,10 @@ export function createWorktreeRpcService(deps: {
    * 挂会话时点触发；装配方接 refreshKnowledgeBindings 全量现算重写 knowledge-bindings。
    * fail-soft：锚缺席/抛错只记 warn，不影响建删树/编排结果） */
   readonly onWorktreeSetChanged?: (() => Promise<void> | void) | undefined
+  /** 会话采纳锚（bug e5059ee1——controller.create adopt 成功后触发恰一次；装配方经官方
+   * permissionPresets.set 补钉 defaultPreset（resume 钉档走「已种子化」分支落组合缺省，
+   * 绕过用户缺省档）。fail-soft：缺席/抛错只记 warn不改写产物） */
+  readonly onSessionAdopted?: ((sessionId: string) => Promise<void> | void) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
@@ -203,6 +207,15 @@ export function createWorktreeRpcService(deps: {
       await deps.onWorktreeSetChanged()
     } catch (cause) {
       warn(`[git-worktree] 绑定表刷新锚失败（fail-soft——表停旧快照，下次 boot/注册自愈）：${String(cause)}`)
+    }
+  }
+  // 权限补钉锚薄封装（恒不抛——补钉失败 = 会话保持组合缺省档，用户可手切）
+  const pinAdoptedPermission = async (sessionId: string): Promise<void> => {
+    if (deps.onSessionAdopted === undefined) return
+    try {
+      await deps.onSessionAdopted(sessionId)
+    } catch (cause) {
+      warn(`[git-worktree] 权限补钉失败（fail-soft——会话保持组合缺省档，可手切）：${String(cause)}`)
     }
   }
   const listPresent =
@@ -605,6 +618,9 @@ export function createWorktreeRpcService(deps: {
       agentPreset === undefined ? {} : { agentPreset },
     )
     await controller.create({ sessionId: preseeded.sessionId, cwd })
+    // bug e5059ee1：adopt（= resume 既有日志）后官方 permission 钉档走「已种子化」分支落
+    // 组合缺省，绕过 defaultPreset——装配方经官方 permissionPresets.set 补钉用户缺省档
+    await pinAdoptedPermission(preseeded.sessionId)
     // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
     await attachWorkspace(cwd, preseeded.sessionId)
     return { sessionId: preseeded.sessionId, branch }
