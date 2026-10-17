@@ -169,8 +169,8 @@ md的FRONTMATTER渲染成表格，跟github一样
 - 手机端适配：循环叙述卡判别只消费 `source.kind`（tech-design 投影白名单 B 档），send 语义（next-turn/next-step、wakeup 与否、cancel parked）不影响渲染契约；惰性续轮（send('next-turn', wakeup:false)）为可选增强。
 - 上下文：mobile-ui tech-design.md AD-4 / 投影白名单；官方正本 dsh-agent runtime-types.d.ts（send/steer/followup/inject 全收显式 UserMessage）。
 
-## 74. forge 只读面 typert 化：`/remote/__rpc` 迁入官方 `/api` 传输（mobile-ui R11）
-- **进展（2026-10-17 裁决改向）：提前至批次②执行——任务 mobile-ui/1.11 已改向「forge 远程面 typert 化（/api/forge/*）」**；subagent 评估裁决后**首批收敛为 5 端点**：progress（链路探针）→ projects/grouped → approval（前置：真机核销官方 admit 隧道行为，不成立则 __rpc 并存保底）→ disconnect（pair-disconnected 事件对偶补 child→main 缝）→ read-state（前置：域基建 defineDomain/KvTable 现存性核销）。生成器 `@deepseek-ai/dsh-typert-generator`（npm 0.0.1-rc.1，已核实可得）；实现锚点 = `dsh-commands` typert 形态。
-- **移出首批（评估裁决）**：workers（session/list 官方面派生即全量）、task-action（官方 commands/execute + session/prompt 承载，零新增写面）、session-links（延后可选增强）。
-- 后续（非阻塞）：桌面 `remote-transport` 的 `forge:remote/*` 消费迁移同一协议；mobile `rpc.ts` 删除收口单 client。
-- 关键核销点：审批写入端点的守卫等价性——**可行性评估（2026-10-17）结构性结论：隧道实际反代整个 webserver（PAIRING_FACES「只暴露配对面」无运行时消费方，文档与实现矛盾待修），但官方信任门 Host/cookie authority 绑定 + fix-27 先例实证隧道域 POST 被拒 → 隧道模式 /api 大概率不可达，预期结论「LAN 可用、隧道降级 __rpc 保底」**；生成器 CLI 输入格式；PeerScope 身份字段；生成器 pin（0.0.1-rc.1 vs 0.1.0-rc.8 与 protocol 0.2.0-rc.2 代差兼容，首日试跑定）。
+## 74. forge 只读面 typert 化：`/remote/__rpc` 迁入官方 `/api` 传输（mobile-ui R11；shelved，R12 后重启形态已定）
+- **R12（2026-10-17）：mobile 放弃 `/api` 面（安全收窄），typert 化搁置。重启形态已定 = 「`createSharedFetchHandler` 换口」**：forge 服务 typert 化后端点照常认领 `/api` 注册表，但 HTTP 入口挂**自持路由** `/remote/rpc/forge/*`（门 = authorizeIndex OR dswf + PSK v3，与 `__rpc` 同水位），内部调用 `HostConnectionService.createSharedFetchHandler('/api')`（公开方法，产出**不含 admit 围栏**的 fetch handler，Host 头写 `dsh.internal`）——围栏结构性约束消解，typert 全部能力（声明式校验/FaceModel 生成/类型化契约）保留。
+- 重启条件：桌面端决定统一迁 `/api` 官方协议（届时必须 boot typert client，forge 面搭车）；或 mobile 需要零成本获得官方 client 生态兼容。
+- 接入链（评估已核销）：`@deepseek-ai/dsh-typert-generator`（首日核销 0.1.0-rc.8 代差兼容）+ `dsh-typert-protocol`（在位）；实现锚点 = `dsh-commands` typert 形态；`_request` 由代理侧注入（逐端点核对描述符）。
+- 关键核销点：生成器 CLI 输入格式；PeerScope 身份字段；mobile 信封换 `client-request` 形状的迁移成本。
