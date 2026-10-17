@@ -145,6 +145,28 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
   })
 
+  it('同锚残留归档行不劫持分组：归档行清单覆盖全仓（git worktree list 仓库级）——树会话归活跃主行；精确 ws_path 命中优先', () => {
+    const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
+    const oldTreePath = 'Z:/w/p1/.forge/worktrees/redesign'
+    const out = buildSidebarTree({
+      // 归档残留行在前（created_at 序），活跃主行在后——与真机 state.db 残留形态同构
+      projects: [project('p-old', 'w-old', { wsPath: oldTreePath, archived: true }), project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([ledgerRow('s-tree'), ledgerRow('s-old')]),
+      workspaces: workspaces([
+        { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
+        // 精确命中：redesign 树工作区 ws_path ≡ 归档行注册根 → 归档项目自有会话仍归其组
+        { workspaceId: 'w-old', path: oldTreePath, sessionIds: ['s-old'] },
+      ]),
+      worktreePaths: new Map([
+        ['p-old', new Set([normalizeFsPath(treePath), normalizeFsPath(oldTreePath)])], // 同锚清单覆盖全仓
+        ['p1', new Set([normalizeFsPath(treePath), normalizeFsPath(oldTreePath)])],
+      ]),
+    })
+    const byId = Object.fromEntries(out.tree.map((n) => [n.projectId, n]))
+    expect(byId['p1']!.sessions.map((r) => r.sessionId)).toEqual(['s-tree'])
+    expect(byId['p-old']!.sessions.map((r) => r.sessionId)).toEqual(['s-old'])
+  })
+
   it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径——retainedBy.mainView 锚，bug 51e94b84 修正）', () => {
     const out = buildSidebarTree({
       projects: [project('p1', 'w1')],
