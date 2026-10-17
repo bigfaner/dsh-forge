@@ -17,6 +17,7 @@ import {
   riskLatchReselect,
   shouldArmSelectedRow,
   worktreeCwdKey,
+  worktreeCapabilityAbsentNotice,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
 } from './hero-picker-model.js'
@@ -193,6 +194,13 @@ describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
     const text = worktreeOrchestrationNotice('open', 'session unloaded')
     expect(text).toContain('打开会话')
     expect(text).toContain('session unloaded')
+  })
+
+  it('W2 能力缺席拒绝文案：显式拒绝语义 + 不含「将落主树」误导（host fail-closed——消息不会落主树）', () => {
+    const text = worktreeCapabilityAbsentNotice()
+    expect(text).toContain('能力缺席')
+    expect(text).toContain('拒绝')
+    expect(text).not.toContain('将落主树')
   })
 })
 

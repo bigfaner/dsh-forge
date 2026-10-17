@@ -52,6 +52,8 @@ export const ERROR_CODES = [
   'ERR_COMMIT_HASH_REQUIRED', // → CommitHashRequiredError：resolveBug(fixed) 缺 agent 捕获的 commit_hash（400）
   // ── bug-recurrence-chain（复发链挂链写径） ──
   'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
+  // ── session-binding-guarantee W2（host 能力缺席显式拒绝——fail-closed 收口） ──
+  'ERR_WORKTREE_CAPABILITY_ABSENT', // → WorktreeCapabilityAbsentError：gitWorktree 能力缺席（60s 放弃）+ git 探针有锚——sessionCreate 入口显式拒绝（prompt 入口同因走 SessionSealedError 先例稳定 name 面）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

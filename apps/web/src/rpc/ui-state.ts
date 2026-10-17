@@ -63,6 +63,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── bug-recurrence-chain（复发链挂链写径）──
   // 挂链引用悬空 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在改参重试）
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  // ── session-binding-guarantee W2（host 能力缺席显式拒绝）──
+  // git 绑定能力缺席拒绝 → 错误条（创建/发送语境原地反馈——检查插件装配后重启）
+  ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
 }
 
 /**

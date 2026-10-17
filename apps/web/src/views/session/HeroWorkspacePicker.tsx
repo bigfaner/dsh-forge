@@ -27,12 +27,14 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
+  worktreeCapabilityAbsentNotice,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
   worktreeUnselectedProjectNotice,
   type HeroWorktreeFace,
   type WorktreeOrchestrateFn,
 } from './hero-picker-model.js'
+import { RpcClientError } from '../../rpc/errors.js'
 import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
@@ -54,6 +56,13 @@ export interface WorktreeOrchestrationDeps {
 
 const noticeText = (error: unknown): string =>
   error instanceof Error && error.message !== '' ? error.message : String(error)
+
+/** create 失败提示归一：W2 typed 拒绝码（ERR_WORKTREE_CAPABILITY_ABSENT）走专用文案
+ *  （host fail-closed——消息不会落主树，不得套用「将落主树」误导）；其余照常环节语义 */
+const createNoticeOf = (error: unknown): string =>
+  error instanceof RpcClientError && error.code === 'ERR_WORKTREE_CAPABILITY_ABSENT'
+    ? worktreeCapabilityAbsentNotice()
+    : worktreeOrchestrationNotice('create', noticeText(error))
 
 /**
  * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7 语义；bug e678ca5f 主行 reuse 零补绑定）：
@@ -92,7 +101,7 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
       try {
         ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
       } catch (error) {
-        onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
+        onNotice(createNoticeOf(error))
         return null
       }
       try {
@@ -104,7 +113,7 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
       return sessionId
     })().catch((error: unknown) => {
       // 安全网兜底（内部各失败径已自呈提示）——意外异常不静默：同一 Toast 面呈现
-      deps.onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
+      deps.onNotice(createNoticeOf(error))
       return null
     })
   }

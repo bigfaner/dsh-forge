@@ -117,6 +117,14 @@ export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: str
   return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
 }
 
+/**
+ * W2 能力缺席显式拒绝提示（typed code ERR_WORKTREE_CAPABILITY_ABSENT——host fail-closed：
+ * 创建与首条消息均被显式拒绝，不会落主树——不得套用「将落主树」文案误导）。
+ */
+export function worktreeCapabilityAbsentNotice(): string {
+  return 'git 绑定能力缺席（git-worktree 插件未装载），git 项目的会话创建与消息发送已被拒绝——请检查插件装配后重启应用'
+}
+
 /** A7——编排数据根缺席提示（selectedId 未命中项目行——渲染兜底不进编排，显式呈现不静默） */
 export function worktreeUnselectedProjectNotice(): string {
   return '当前会话未选中 forge 项目，worktree 编排默认停用——首条消息将落主树'

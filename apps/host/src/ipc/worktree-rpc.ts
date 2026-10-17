@@ -54,6 +54,22 @@ import {
 } from '@dsh-forge/git-worktree'
 import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
+import { createGitIdentityPort } from '@dsh-forge/core'
+
+/**
+ * W2 能力缺席显式拒绝（fail-closed 收口）：gitWorktree 能力缺席（child 60s 放弃盖
+ * guardState:'absent'）且 core git 探针有锚（= git 项目）时，sessionCreate / prompt 两入口
+ * 同抛本错误——code ∈ contracts ERROR_CODES（sessionCreate 径经 rpcEnvelope 序列化 → 前端
+ * RpcClientError → Toast）；prompt 径经官方 Remote 错误面进 composer（SessionSealedError
+ * 先例：Error + 可读中文 message + 稳定 name）。
+ */
+export class WorktreeCapabilityAbsentError extends Error {
+  readonly code = 'ERR_WORKTREE_CAPABILITY_ABSENT'
+  constructor(cwd: string) {
+    super(`git 绑定能力缺席（git-worktree 插件未装载），git 项目「${cwd}」的会话创建与消息发送已拒绝——请检查插件装配后重启应用`)
+    this.name = 'WorktreeCapabilityAbsentError'
+  }
+}
 
 /** 插件域扩展点消费窄面（ctx `gitWorktree` 能力服务形状——缺省退独立模式默认实现） */
 export interface GitWorktreeServiceFace {
@@ -197,6 +213,12 @@ export function createWorktreeRpcService(deps: {
    * permissionPresets.set 补钉 defaultPreset（resume 钉档走「已种子化」分支落组合缺省，
    * 绕过用户缺省档）。fail-soft：缺席/抛错只记 warn不改写产物） */
   readonly onSessionAdopted?: ((sessionId: string) => Promise<void> | void) | undefined
+  /** W2 缺席拒绝面判定源：child boot 60s 能力轮询放弃路径盖 'absent'（能力在场/瞬态窗口
+   *  = undefined——瞬态 fail-open 分支维持现状，D1 拆分不捆绑收紧）。 */
+  readonly guardState?: () => 'absent' | undefined
+  /** W2 git 探针注入缝（缺省 = @dsh-forge/core createGitIdentityPort().commonDirAnchor；
+   *  逐次现跑、零缓存——git 仓库可被移除，判定结果不作会话期记忆；测试注入桩） */
+  readonly probeGitAnchor?: ((dir: string) => Promise<string | null>) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
@@ -230,6 +252,21 @@ export function createWorktreeRpcService(deps: {
     }
   const readFactory = {
     openRead: async (sessionId: string) => deps.sessionPersistence?.open(sessionId, 'read') as never,
+  }
+
+  /**
+   * W2 能力缺席判定核（fail-closed 收口）：入口同步查 resolveGitWorktree() === undefined
+   * （粘性能力位）→ 缺席且 60s 放弃位已盖（guardState 'absent'；瞬态窗口 = undefined →
+   * fail-open 现状，D1 拆分）→ 跑 core git 探针——有锚 = git = 显式拒绝；null = 真非 git
+   * = 官方原流。探针逐次现跑、零缓存（创建入口非热路径；git 仓库可被移除，判定结果不作
+   * 会话期记忆）。能力在场路径恒 false = 零改动（非介入面零固定税维持）。
+   */
+  const absentGitProbe = async (dir: string): Promise<boolean> => {
+    if (resolveGitWorktree() !== undefined) return false
+    if (deps.guardState?.() !== 'absent') return false
+    const probe = deps.probeGitAnchor ?? ((path: string) => createGitIdentityPort().commonDirAnchor(path))
+    const anchor = await probe(dir).catch(() => null)
+    return anchor !== null
   }
 
   const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
@@ -537,6 +574,9 @@ export function createWorktreeRpcService(deps: {
     },
 
     async sessionCreate(request) {
+      // W2 能力缺席显式拒绝（fail-closed）：git 项目 × 能力缺席 → typed error（rpcEnvelope
+      // 序列化 → 前端 RpcClientError → Toast）；非 git / 瞬态窗口 → 官方原流零差异。
+      if (await absentGitProbe(request.worktreePath)) throw new WorktreeCapabilityAbsentError(request.worktreePath)
       const key = norm(request.worktreePath)
       // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用
       for (;;) {
@@ -599,6 +639,9 @@ export function createWorktreeRpcService(deps: {
           if (header.parentSession !== undefined) return 'pass' // 子会话零重路由（非 hero 人口）
           const cwd = header.cwd
           if (cwd === undefined || cwd === '') return 'pass'
+          // W2 能力缺席显式拒绝（fail-closed）：git 项目 × 能力缺席 → 稳定 name 错误上抛
+          // （经官方 Remote 错误面进 composer）；非 git / 瞬态窗口 → fail-open 现状放行。
+          if (await absentGitProbe(cwd)) throw new WorktreeCapabilityAbsentError(cwd)
           const resolution = await cachedResolve(cwd)
           if (resolution === null) return 'pass' // 非 git：零行为差异（G7 分流）
           let binding: { worktreePath: string; branch: string } | null
@@ -764,7 +807,7 @@ export function interceptRequiredBinding(
         }
       } catch (cause) {
         const name = (cause as Error)?.name
-        if (name === 'SessionCwdMismatchError') throw cause // A5：拒绝不放行
+        if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
         warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
       }
     }
