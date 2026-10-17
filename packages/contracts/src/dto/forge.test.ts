@@ -274,6 +274,10 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expectTypeOf<ForgeSettingsService['get']>().toBeCallableWith()
     expectTypeOf<ReturnType<ForgeSettingsService['get']>>().toEqualTypeOf<Promise<ForgeSettings>>()
     expectTypeOf<ReturnType<ForgeSettingsService['set']>>().toEqualTypeOf<Promise<void>>()
+    // worktree 分节：跨分支风险「不再提示」持久化（可选布尔，键缺席 = 未配置不抑制）
+    const worktreeSettings: ForgeSettings = { worktree: { crossBranchRiskDismissed: true } }
+    expect(worktreeSettings.worktree?.crossBranchRiskDismissed).toBe(true)
+    expectTypeOf<NonNullable<ForgeSettings['worktree']>['crossBranchRiskDismissed']>().toEqualTypeOf<boolean | undefined>()
   })
 })
 

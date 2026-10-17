@@ -93,6 +93,27 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
     await expect(svc.set({} as never)).rejects.toBeInstanceOf(InvalidSettingsInputError)
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ worker })
   })
+
+  // ── worktree 分节（跨分支风险「不再提示」持久化）──
+  it('worktree 分节覆写：只 set worktree → worker/remoteApproval 段保留（分节合并同 fix-3 口径）；get 往返一致', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await svc.set({ worktree: { crossBranchRiskDismissed: true } })
+    await expect(svc.get()).resolves.toEqual({ worker, worktree: { crossBranchRiskDismissed: true } })
+    await svc.set({ worktree: { crossBranchRiskDismissed: false } })
+    await expect(svc.get()).resolves.toEqual({ worker, worktree: { crossBranchRiskDismissed: false } })
+  })
+
+  it('worktree 写校验：crossBranchRiskDismissed 非布尔 → InvalidSettingsInputError，既有文件不被触碰', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await expect(
+      svc.set({ worktree: { crossBranchRiskDismissed: 'yes' as never } }),
+    ).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ worker })
+  })
 })
 
 describe('2.7 forgeSettings：原子写 + 写校验', () => {

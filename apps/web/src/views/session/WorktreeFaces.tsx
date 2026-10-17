@@ -209,6 +209,22 @@ export function ForgeHeroWorktreeMount({
   // 首条消息时点，点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话
   // 阶段消费，历史会话打开不进 hero 面）。
   const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
+  // 跨分支确认「不再提示」（forge settings worktree.crossBranchRiskDismissed 持久化——
+  // 用户级一票：装载读 + 勾选确认写；装载缺席/通道失败 = false 不抑制，fail-soft）
+  const [riskDismissed, setRiskDismissed] = useState(false)
+  const [riskDismissChecked, setRiskDismissChecked] = useState(false)
+  useEffect(() => {
+    let alive = true
+    makeRpc()
+      .settings.get()
+      .then((settings) => {
+        if (alive) setRiskDismissed(settings.worktree?.crossBranchRiskDismissed === true)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [makeRpc])
   // 1.34 确认闩锁（bug ccfcc103——每键重弹修复）：确认后置位，arm 效应每键重评估时弹框
   // 判定消费闩锁（已确认 = 零重弹，编排照常 carryDraft 完成）；生命周期 = 换目标重选清
   // （riskLatchReselect）+ 编排失败清退（riskLatchFailureClear）。取消路径不混用（A3
@@ -336,15 +352,16 @@ export function ForgeHeroWorktreeMount({
       return
     }
     const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
-    // 1.34 确认闩锁消费：已确认（闩锁命中）→ 跨分支也直通编排（续字/再发零重弹）
-    if (isCrossBranchRisk(row.branch, mainBranch) && riskDialogNeeded(path, riskConfirmedLatch)) {
+    // 1.34 确认闩锁消费：已确认（闩锁命中）或用户勾选「不再提示」（settings 持久化）
+    // → 跨分支也直通编排（续字/再发零重弹）
+    if (isCrossBranchRisk(row.branch, mainBranch) && !riskDismissed && riskDialogNeeded(path, riskConfirmedLatch)) {
       setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排（消息未发出）
       return
     }
     armDefault(path, draftText, currentSessionId)
     // draftText/currentCwd/currentSessionId 入 deps：首条消息意图出现、官方新会话流落回
     // 他树后（当前会话变化），编排默认（重新）消费
-  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, riskConfirmedLatch, draftText, currentCwd, currentSessionId, armDefault])
+  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, riskConfirmedLatch, riskDismissed, draftText, currentCwd, currentSessionId, armDefault])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -553,9 +570,12 @@ export function ForgeHeroWorktreeMount({
           open
           targetBranch={phase.rows.find((candidate) => candidate.path === defaultRiskPath)?.branch ?? null}
           currentBranch={phase.rows.find((candidate) => candidate.isMain)?.branch ?? null}
+          dismissChecked={riskDismissChecked}
+          onDismissChange={setRiskDismissChecked}
           onCancel={() => {
             const path = defaultRiskPath
             setDefaultRiskPath(null)
+            setRiskDismissChecked(false)
             // A3：取消写取消抑制（非失败抑制集）——显式重选同树即清除，确认框可重弹
             setCancelSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
             // 取消编排默认 = 不落假象：回填态与选中记忆同清（chip 退回占位），消息走官方原流
@@ -566,6 +586,15 @@ export function ForgeHeroWorktreeMount({
           onConfirm={() => {
             const path = defaultRiskPath
             setDefaultRiskPath(null)
+            // 勾选「不再提示」→ forge settings 持久化（fire-and-forget，失败不阻断编排——
+            // 本轮已直通；下轮装载失败 = false 重问，fail-soft）
+            if (riskDismissChecked) {
+              setRiskDismissed(true)
+              void makeRpc()
+                .settings.set({ worktree: { crossBranchRiskDismissed: true } })
+                .catch(() => {})
+            }
+            setRiskDismissChecked(false)
             // 1.34 确认闩锁置位：同一次选中意图只弹一次——续字/再发零重弹，编排照常完成
             if (path !== null) setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
             if (path !== null) armDefault(path, draftText, currentSessionId)

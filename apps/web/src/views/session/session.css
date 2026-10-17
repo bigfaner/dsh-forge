@@ -220,6 +220,13 @@ button.dswf-recall-rowbtn:hover {
   width: min(432px, 100%);
 }
 
+/* ── 跨分支风险确认框（1.35）：卡面同官方 RiskConfirmation 宽度刻度（官方
+ * RiskConfirmation.module.css .confirmation = min(440px, 100%)——组合面走官方 Modal，
+ * 宽度随复刻口径钉同值） ── */
+.dswt-risk-modal {
+  width: min(440px, 100%);
+}
+
 /* 官方 Menu 浮层卡 .list 随内容撑宽（min 144 / max 360）→ 钉为锚宽：绝对定位以
  * .root（被 fieldStretch 拉满列宽 = 输入框宽）为包含块，width:100% = 输入框宽，
  * 不随最长选项撑宽、不窄于输入框（基准分支下拉与 slug 组合框共用） */

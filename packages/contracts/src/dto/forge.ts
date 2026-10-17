@@ -949,11 +949,18 @@ export interface RemoteApprovalSettings {
   enabled: boolean
 }
 
+/** worktree 段——跨分支风险确认「不再提示」持久化（用户级一票：勾选确认后全项目
+ *  的首条消息编排不再弹跨分支确认框，直通编排） */
+export interface WorktreeSettings {
+  crossBranchRiskDismissed?: boolean
+}
+
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
  *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
+  worktree?: WorktreeSettings
 }
 
 /** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
@@ -961,6 +968,7 @@ export interface ForgeSettings {
 export interface SetForgeSettingsInput {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
+  worktree?: WorktreeSettings
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，

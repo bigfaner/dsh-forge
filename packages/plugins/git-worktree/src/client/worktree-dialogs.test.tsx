@@ -14,6 +14,7 @@ import {
   type CreateWorktreeFormValue,
 } from './create-worktree-dialog.js'
 import { DeleteChecksList, DeleteWorktreeDialog } from './delete-worktree-dialog.js'
+import { WorktreeRiskConfirmationBody } from './risk-confirmation.js'
 import { createConflicts, isCreateReady, isDeleteBlocked, isWorktreeNameFollowing, sortBaseBranchOptions } from './model.js'
 
 const FORM: CreateWorktreeFormValue = initialCreateForm('main', ['main', 'feat/a'])
@@ -276,5 +277,37 @@ describe('DeleteWorktreeDialog（弹窗壳）', () => {
         />,
       ),
     ).toBe('')
+  })
+})
+
+// ── 1.35 WorktreeRiskConfirmationBody（官方 Modal 外提纯渲染体——组合复刻官方 RiskConfirmation 形制） ──
+
+describe('WorktreeRiskConfirmationBody', () => {
+  const renderBody = (over: Partial<Parameters<typeof WorktreeRiskConfirmationBody>[0]> = {}): string =>
+    renderToStaticMarkup(
+      <WorktreeRiskConfirmationBody
+        text="目标分支 test-02 与主树当前检出分支 main 不同：会话上下文与文件视图将切换。"
+        acknowledged={false}
+        onAcknowledgedChange={() => {}}
+        {...over}
+      />,
+    )
+
+  it('默认形：警示文案 + 单勾选行（data-modal-autofocus 官方自动聚焦标记在场）', () => {
+    const markup = renderBody()
+    expect(markup).toContain('目标分支 test-02')
+    expect(markup).toContain('我已了解跨分支上下文风险')
+    expect(markup).toContain('data-modal-autofocus')
+    expect(markup).not.toContain('不再提示')
+  })
+
+  it('可选装第二勾选行：「我了解相关风险，不再提示」（无官方自动聚焦标记——首勾选行独占）', () => {
+    const markup = renderBody({ dismissChecked: false, onDismissChange: () => {} })
+    expect(markup).toContain('我了解相关风险，不再提示')
+    expect(markup.match(/data-modal-autofocus/g)?.length).toBe(1)
+  })
+
+  it('dismissChecked=true → 第二勾选行选中态回写（受控）', () => {
+    expect(renderBody({ dismissChecked: true, onDismissChange: () => {} })).toContain('checked')
   })
 })

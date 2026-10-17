@@ -20,6 +20,7 @@ import {
   type ForgeSettingsService,
   type RemoteApprovalSettings,
   type SetForgeSettingsInput,
+  type WorktreeSettings,
   type WorkerSettings,
 } from '@dsh-forge/contracts'
 import { errMessage } from '../../util.js'
@@ -91,8 +92,16 @@ function assertValidInput(input: SetForgeSettingsInput): void {
       throw new InvalidSettingsInputError('remoteApproval.enabled 必须为布尔')
     }
   }
-  if (w === undefined && ra === undefined) {
-    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval）')
+  const wt: unknown = input.worktree
+  if (wt !== undefined) {
+    if (typeof wt !== 'object' || wt === null) throw new InvalidSettingsInputError('worktree 段缺失')
+    const dismissed = (wt as Record<string, unknown>)['crossBranchRiskDismissed']
+    if (dismissed !== undefined && typeof dismissed !== 'boolean') {
+      throw new InvalidSettingsInputError('worktree.crossBranchRiskDismissed 必须为布尔')
+    }
+  }
+  if (w === undefined && ra === undefined && wt === undefined) {
+    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval / worktree）')
   }
 }
 
@@ -111,6 +120,9 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
       if (parsed.remoteApproval !== undefined) {
         next.remoteApproval = parsed.remoteApproval as RemoteApprovalSettings
       }
+      if (parsed.worktree !== undefined) {
+        next.worktree = parsed.worktree as WorktreeSettings
+      }
       return next
     },
     async set(input: SetForgeSettingsInput): Promise<void> {
@@ -122,6 +134,7 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
         ...prev,
         ...(input.worker !== undefined ? { worker: input.worker } : {}),
         ...(input.remoteApproval !== undefined ? { remoteApproval: input.remoteApproval } : {}),
+        ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
       }
       // 原子写：同目录 tmp + rename（Windows MoveFileEx REPLACE_EXISTING 语义——崩溃无半写）
       const tmp = `${deps.settingsFile}.${randomUUID()}.tmp`
