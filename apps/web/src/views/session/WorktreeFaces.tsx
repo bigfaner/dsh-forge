@@ -629,11 +629,15 @@ export function ForgeSessionWorktreeChip({
 }): ReactNode {
   const phase = useWorktreeSeal(sessionId, makeRpc)
   const [aheadBehind, setAheadBehind] = useState<AheadBehind | undefined>(undefined)
+  const [info, setInfo] = useState<{ readonly worktreePath: string; readonly projectRoot: string } | undefined>(undefined)
   useEffect(() => {
     if (sessionId === undefined || phase.branch === null || phase.sealed) return
     makeRpc()
       .worktree.seal({ sessionId })
       .then((result) => {
+        if (result.projectRoot !== undefined && result.binding !== null) {
+          setInfo({ worktreePath: result.binding.worktreePath, projectRoot: result.projectRoot })
+        }
         if (result.projectRoot === undefined || result.binding === null) return
         return makeRpc()
           .worktree.aheadBehind({ projectRoot: result.projectRoot, path: result.binding.worktreePath })
@@ -647,6 +651,8 @@ export function ForgeSessionWorktreeChip({
       isGit
       branch={phase.branch}
       worktreeName={phase.worktreeName}
+      worktreePath={info?.worktreePath}
+      projectRoot={info?.projectRoot}
       aheadBehind={aheadBehind}
       sealed={phase.sealed}
     />
