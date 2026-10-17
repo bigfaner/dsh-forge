@@ -135,7 +135,7 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 
 官方手机页 `renderBlock` 直接消费自带的 **`markdown(text)` + `inlineMarkdown(...)`** 函数（vanilla 自绘轻量实现，非外部库；`.markdown`/`.thinking-body.markdown` 样式族配套）——**此前「官方无 vanilla md、须自写」的审计结论有漏**。修正：
 
-- **md 渲染 = 照搬官方手机页 `markdown()`/`inlineMarkdown()` 实现**（同构分叉原则下的最大化复用——与 SSE 引擎照搬同地位），不自写新函数、不引外部库；
+- **md 渲染 = 实现照搬、样式以原型为准（用户裁决 2026-10-17：UI&UX 以 mobile-ui-mockup-final.html 为准）**：照搬官方手机页 `markdown()`/`inlineMarkdown()` 的**渲染语义**（标签白名单、块级结构、inline 规则——复用官方机械），**视觉样式取我们原型的 DESIGN.md 令牌集**（行内码/代码块底、链接色、暗色锚、表格居中、横滚/缩放增强——不照抄官方 CSS 值）；
 - thinking 折叠卡结构同源实证：官方页 summary = `activity-leading/title/dot/summary/chevron`——与 mockup `.think` 结构一致；
 - 全屏阅读页（reader）复用同一实现（mermaid 增强器仍走 `@dsh-forge/md-mermaid` 动态 import）。
 
