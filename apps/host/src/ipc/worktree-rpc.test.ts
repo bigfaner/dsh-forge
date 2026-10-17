@@ -76,11 +76,92 @@ function fakeController() {
   return { controller, calls, prompts }
 }
 
+/** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession 捕获） */
+function fakeWorkspaceRegistry(attachError?: Error) {
+  const created: string[] = []
+  const attached: Array<{ path: string; sessionId: string }> = []
+  const registry = {
+    create: async (path: string) => {
+      created.push(path)
+      return {
+        attachSession: async (sessionId: string) => {
+          if (attachError !== undefined) throw attachError
+          attached.push({ path, sessionId })
+        },
+      }
+    },
+  }
+  return { registry, created, attached }
+}
+
 describe('createWorktreeRpcService（child 侧服务本体——透传插件域）', () => {
   it('list：非 git / 未注册路径 → isGit false 零清单（能力位条件渲染单源）', async () => {
     const service = createWorktreeRpcService({ gitWorktree: fakeExt })
     const result = await service.list({ projectRoot: 'C:/foreign' } satisfies WorktreeListRequest)
     expect(result).toEqual({ isGit: false, entries: [] })
+  })
+
+  it('bug 925c96d5 / G8：list isGit:false 结果按 projectRoot 会话期缓存——二次调用不再起 git 探测（resolveProject 只跑一次）', async () => {
+    let resolveCalls = 0
+    const countingExt = {
+      getExtensionPoints: () => ({
+        resolveProject: async (_cwd: string) => {
+          resolveCalls += 1
+          return null
+        },
+        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
+      }),
+    }
+    const service = createWorktreeRpcService({ gitWorktree: countingExt })
+    const first = await service.list({ projectRoot: 'C:/plain' } satisfies WorktreeListRequest)
+    const second = await service.list({ projectRoot: 'C:/plain' } satisfies WorktreeListRequest)
+    expect(first).toEqual({ isGit: false, entries: [] })
+    expect(second).toEqual({ isGit: false, entries: [] })
+    expect(resolveCalls, '非 git 结果未缓存——弹窗/挂载每次白跑 git 子进程（bug 在场）').toBe(1)
+  })
+
+  it('bug 925c96d5：sessionCreate 后 find-or-create 树路径工作区 + attachSession（官方 registry 面——composer 门控/侧栏归属单源）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry, created, attached } = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(created, '树路径未 find-or-create 工作区（bug 在场）').toEqual(['C:/repo/.forge/worktrees/wt-a'])
+    expect(attached, '预铸会话无工作区归属（bug 在场）').toEqual([
+      { path: 'C:/repo/.forge/worktrees/wt-a', sessionId: result.sessionId },
+    ])
+  })
+
+  it('bug 925c96d5：workspace attach 失败 fail-soft——sessionCreate 仍返回 sessionId（不因归属面阻断预铸采纳主链）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry, created } = fakeWorkspaceRegistry(new Error('cwd 漂移'))
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
+    expect(created).toEqual(['C:/repo/.forge/worktrees/wt-a'])
+  })
+
+  it('workspaceRegistry 缺席（旧环境）→ sessionCreate 照常（零归属面降级，不抛错）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
   })
 
   it('attach：唯一写入口信封（type forge/worktree-attach + ignorable true + seq 自管理）且分支缺省自查透传', async () => {

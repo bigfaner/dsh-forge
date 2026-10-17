@@ -359,10 +359,21 @@ async function main(): Promise<void> {
       }, 8_000).unref?.()
       const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
       const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
+      // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
+      // ——AGENTS.md Cordis 可选具名服务取法裁决同径）；缺席 = 零归属面降级（宿主不受影响）。
+      const getWorkspaceRegistry = (): unknown => {
+        try {
+          const registry: unknown = (ctx as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
+          return registry ?? undefined
+        } catch {
+          return undefined // 服务未装载（旧环境/插件行缺席）——零归属面
+        }
+      }
       const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
         gitWorktree: getGitWorktree as never,
         sessionController,
         sessionPersistence,
+        workspaceRegistry: getWorkspaceRegistry as never,
         warn: (line) => diag(line),
       })
       worktreeRpcService = worktreeRpc

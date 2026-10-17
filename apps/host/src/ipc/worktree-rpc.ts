@@ -105,7 +105,22 @@ export interface WorktreeRpcService {
   seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
 }
 
+/** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
+export interface WorkspaceEntityFace {
+  attachSession(sessionId: string): Promise<void>
+}
+
+export interface WorkspaceRegistryFace {
+  /** find-or-create：realpath 归一比对，同规范路径已存在即复用（官方 registry 面） */
+  create(path: string, title?: string): Promise<WorkspaceEntityFace>
+}
+
 const noGit: WorktreeListResult = { isGit: false, entries: [] }
+
+/** G8 分流（bug 925c96d5 核验补强）：list isGit:false 负结果按 projectRoot 会话期缓存——
+ *  非 git 项目 hero 挂载/弹窗关闭不再每次白跑 git 子进程（resolveProject 探测）。
+ *  只缓存负结果：isGit:true 面保持实时（worktree 清单必须新鲜）。 */
+const noGitCache = new Map<string, WorktreeListResult>()
 
 const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
 
@@ -122,6 +137,8 @@ export function createWorktreeRpcService(deps: {
   readonly gitWorktree?: (() => GitWorktreeServiceFace | undefined) | GitWorktreeServiceFace | undefined
   readonly sessionController?: SessionControllerFace | undefined
   readonly sessionPersistence?: SessionPersistenceFace | undefined
+  /** 官方 workspaceRegistry（惰性取法注入缝；缺席 = 旧环境零归属面降级） */
+  readonly workspaceRegistry?: (() => WorkspaceRegistryFace | undefined) | WorkspaceRegistryFace | undefined
   /** 在场清单注入缝（单测替身；缺省 = 插件域 listWorktrees 真机 git） */
   readonly listPresent?: ((projectRoot: string) => Promise<readonly string[]>) | undefined
   /** worktree 清单注入缝（branch 解析面——缺省 = 插件域 listWorktrees 真机 git） */
@@ -146,6 +163,24 @@ export function createWorktreeRpcService(deps: {
     openWrite: async (sessionId: string) => deps.sessionPersistence?.open(sessionId, 'write') as never,
   }
   const writer = createWorktreeAttachWriter(writeFactory)
+
+  const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
+    typeof deps.workspaceRegistry === 'function' ? deps.workspaceRegistry() : deps.workspaceRegistry
+
+  /** 会话工作区归属（bug 925c96d5 根因级修复）：以树路径 find-or-create 官方工作区
+   *  （registry.create realpath 归一比对——契约条件 header.cwd realpath ≡ workspace.path
+   *  对 cwd=树路径的会话天然成立）→ attachSession。主行（cwd=项目根）同径挂主工作区。
+   *  fail-soft：registry 缺席/失败只 warn——不阻断预铸采纳主链（会话本体已可用）。 */
+  const attachWorkspace = async (worktreePath: string, sessionId: string): Promise<void> => {
+    const registry = resolveWorkspaceRegistry()
+    if (registry === undefined) return
+    try {
+      const workspace = await registry.create(worktreePath, worktreeNameOf(worktreePath))
+      await workspace.attachSession(sessionId)
+    } catch (cause) {
+      warn(`[git-worktree] 工作区归属挂接失败（会话本体不受影响）：${String(cause)}`)
+    }
+  }
 
   const entryToDto = (entry: { path: string; branch: string | null; detached: boolean; bare: boolean }, projectRoot: string): WorktreeEntryDto => ({
     path: entry.path,
@@ -215,8 +250,14 @@ export function createWorktreeRpcService(deps: {
 
   return {
     async list(request) {
+      const cacheKey = norm(request.projectRoot)
+      const cached = noGitCache.get(cacheKey)
+      if (cached !== undefined) return cached
       const resolution = await ext().resolveProject(request.projectRoot).catch(() => null)
-      if (resolution === null) return noGit
+      if (resolution === null) {
+        noGitCache.set(cacheKey, noGit)
+        return noGit
+      }
       const [entries, dir] = await Promise.all([
         listWorktrees(resolution.projectRoot),
         Promise.resolve(ext().getWorktreeDir(resolution.projectRoot)),
@@ -301,6 +342,8 @@ export function createWorktreeRpcService(deps: {
         branch,
       })
       await controller.create({ sessionId: preseeded.sessionId, cwd: request.worktreePath })
+      // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
+      await attachWorkspace(request.worktreePath, preseeded.sessionId)
       return { sessionId: preseeded.sessionId, branch }
     },
 
