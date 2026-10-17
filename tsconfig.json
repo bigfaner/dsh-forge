@@ -7,6 +7,8 @@
     { "path": "packages/knowledge" },
     { "path": "packages/plugin-forge" },
     { "path": "packages/plugin-forge-spec" },
+    { "path": "packages/plugins/git-worktree" },
+    { "path": "packages/plugins/md-mermaid" },
     { "path": "apps/host" },
     { "path": "apps/web" }
   ]

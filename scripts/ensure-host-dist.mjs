@@ -7,17 +7,26 @@
 // → electron ESM 加载即崩(dev.mjs existsSync 守卫查在场不查新鲜,脏 dist 照样放行)。
 // 对拍口径绕开 tsbuildinfo:src 逐文件(ts→js、mts→mjs;*.test.ts 随 tsconfig exclude
 // 无输出)mtime 须 ≤ 对应输出 mtime;dist *.js/*.mjs 无 src 对应 = 孤儿输出(退役
-// 模块残留)。任一不符 → 清 dist 全量重建(tsc -b apps/host 连 reference 闭包;清
-// dist 连腐化 tsbuildinfo 一并出局,重建后 watch 沿净状态起步)。
+// 模块残留)。任一不符 → 清该 dist 全量重建(tsc -b 全图——根 references 含全部构建包;
+// 清 dist 连腐化 tsbuildinfo 一并出局,重建后 watch 沿净状态起步)。
 import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const HOST = join(ROOT, 'apps', 'host')
-const SRC = join(HOST, 'src')
-const DIST = join(HOST, 'dist')
+/** 守卫面：host + 全部 workspace 构建包（packages/plugins/* 曾游离 tsc -b 图外致 stale
+ * dist——2026-10-17 git-worktree 事故；拓扑接入后此处对拍同步覆盖，防同一脱节病） */
+const GUARDS = [
+  { name: 'apps/host', src: join(ROOT, 'apps', 'host', 'src'), dist: join(ROOT, 'apps', 'host', 'dist') },
+  ...readdirSync(join(ROOT, 'packages', 'plugins'), { withFileTypes: true })
+    .filter((row) => row.isDirectory() && existsSync(join(ROOT, 'packages', 'plugins', row.name, 'tsconfig.json')))
+    .map((row) => ({
+      name: `packages/plugins/${row.name}`,
+      src: join(ROOT, 'packages', 'plugins', row.name, 'src'),
+      dist: join(ROOT, 'packages', 'plugins', row.name, 'dist'),
+    })),
+]
 
 /** 递归收集目录下全部文件的 rel 路径(POSIX 分隔符,跨 Windows)。 */
 function walkRel(dir, base = dir, acc = []) {
@@ -44,36 +53,44 @@ function sourceOf(outRel) {
   return undefined
 }
 
-const srcRels = existsSync(SRC) ? walkRel(SRC) : []
-const reasons = []
-for (const rel of srcRels) {
-  const outRel = outputOf(rel)
-  if (outRel === undefined) continue
-  const outPath = join(DIST, outRel)
-  if (!existsSync(outPath)) {
-    reasons.push(`缺输出 ${outRel}`)
-    continue
+const stale = [] // { name, dist, reasons[] }
+for (const guard of GUARDS) {
+  const reasons = []
+  const srcRels = existsSync(guard.src) ? walkRel(guard.src) : []
+  for (const rel of srcRels) {
+    const outRel = outputOf(rel)
+    if (outRel === undefined) continue
+    const outPath = join(guard.dist, outRel)
+    if (!existsSync(outPath)) {
+      reasons.push(`缺输出 ${outRel}`)
+      continue
+    }
+    if (statSync(join(guard.src, rel)).mtimeMs > statSync(outPath).mtimeMs) reasons.push(`输出落后 ${rel} → ${outRel}`)
   }
-  if (statSync(join(SRC, rel)).mtimeMs > statSync(outPath).mtimeMs) reasons.push(`输出落后 ${rel} → ${outRel}`)
-}
-if (existsSync(DIST)) {
-  const srcSet = new Set(srcRels)
-  for (const outRel of walkRel(DIST)) {
-    const srcRel = sourceOf(outRel)
-    if (srcRel === undefined || srcSet.has(srcRel)) continue
-    reasons.push(`孤儿输出 ${outRel}(src 无 ${srcRel})`)
+  if (existsSync(guard.dist)) {
+    const srcSet = new Set(srcRels)
+    for (const outRel of walkRel(guard.dist)) {
+      const srcRel = sourceOf(outRel)
+      if (srcRel === undefined || srcSet.has(srcRel)) continue
+      reasons.push(`孤儿输出 ${outRel}(src 无 ${srcRel})`)
+    }
   }
+  if (reasons.length > 0) stale.push({ ...guard, reasons })
 }
-if (reasons.length === 0) process.exit(0) // 新鲜——零输出零动作
+if (stale.length === 0) process.exit(0) // 新鲜——零输出零动作
 
 console.warn('[ensure-host-dist] dist 陈旧(tsc -b 信 tsbuildinfo 不自愈)——清 dist 全量重建:')
-for (const reason of reasons) console.warn(`  - ${reason}`)
-try {
-  // maxRetries:electron 持锁输出文件的瞬时 EBUSY 缓冲(dev 重启竞速窗口)
-  rmSync(DIST, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
-} catch (err) {
-  console.error(`[ensure-host-dist] 清 dist 失败(文件被占用?先停 dev/electron):${err.message}`)
-  process.exit(1)
+for (const guard of stale) {
+  console.warn(`  [${guard.name}]`)
+  for (const reason of guard.reasons) console.warn(`    - ${reason}`)
+  try {
+    // maxRetries:electron 持锁输出文件的瞬时 EBUSY 缓冲(dev 重启竞速窗口)
+    rmSync(guard.dist, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  } catch (err) {
+    console.error(`[ensure-host-dist] 清 dist 失败(文件被占用?先停 dev/electron):${err.message}`)
+    process.exit(1)
+  }
 }
-const build = spawnSync('pnpm exec tsc -b apps/host', { shell: true, stdio: 'inherit', cwd: ROOT })
+// 全图重建（根 references 已含 plugins——tsc -b 一次性更新所有 dist，防部分 stale）
+const build = spawnSync('pnpm exec tsc -b', { shell: true, stdio: 'inherit', cwd: ROOT })
 process.exit(build.status ?? 1)

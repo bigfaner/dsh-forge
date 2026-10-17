@@ -11,6 +11,7 @@
   "references": [
     { "path": "../../packages/contracts" },
     { "path": "../../packages/core" },
-    { "path": "../../packages/knowledge" }
+    { "path": "../../packages/knowledge" },
+    { "path": "../../packages/plugins/git-worktree" }
   ]
 }
