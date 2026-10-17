@@ -69,6 +69,11 @@ export interface DispatchCoreArgs {
   /** adopt 定向领取（S3——循环恢复径：接管既有 in_progress/interrupted，忽略 session links；
    *  工具壳不携带——dispatchTask schema 零变化，循环驱动器传 listTasks 中断序首项） */
   readonly adopt?: TaskRef
+  /**
+   * e2e 红灯基线清单（改进7——循环入场基线门产出；透传 claimTask → dispatchPrompt
+   * E2E_BASELINE_RED 行递达 worker。缺席 = 机制关闭，行为零变化）。
+   */
+  readonly e2eBaselineRed?: readonly string[]
   /** 后台派发（工具壳 run_in_background 参数直映射——jobs 包装结算后置；循环不携带） */
   readonly runInBackground?: boolean
 }
@@ -306,6 +311,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(args.source !== undefined ? { source: args.source } : {}),
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
+    ...(args.e2eBaselineRed !== undefined ? { e2eBaselineRed: args.e2eBaselineRed } : {}),
     ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })
   const task = claimed.task

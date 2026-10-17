@@ -158,6 +158,8 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       ...(input.testsFailed !== undefined ? { testsFailed: input.testsFailed } : {}),
       ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
+      // 改进7（e2e 取证债）：实现态部分结算声明原样落账——欠账 test-run 任务由结算核生成
+      ...(input.evidenceDebt !== undefined ? { evidenceDebt: input.evidenceDebt } : {}),
     }
     const hasRecordFields = Object.keys(recordFields).length > 0
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(toStatus, now, row.id)

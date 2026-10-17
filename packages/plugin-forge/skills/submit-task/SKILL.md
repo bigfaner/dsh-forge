@@ -25,6 +25,12 @@ user-invocable: false
 - `ac_met`——每条标准一个布尔；
 - `ac_evidence`——每条标准一行证据：覆盖用例/命令 + 其结果（"AC-2 由 `dispatch-task.test.ts` 的 describe 块 'pool verdict' 覆盖——通过"）。证据输出过长时，按工件归档约定归档，叙述里只引用子目录路径。某条 AC 没有覆盖测试即不构成 success——要么补测试，要么以 blocked 结算并点名未覆盖的标准。
 
+### e2e 取证债——实现态部分结算，不为欠账 blocked
+
+真机 e2e 断言取证是外部依赖装配面的结算门，但它不挂死实现卡：实现 + 单测绿、唯一缺口是真机 e2e 断言取证时，以 `evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）声明欠账并照常 `success` 结算（实现态）——欠账 test-run 任务由循环自动生成（依赖你的实现卡），取证在后继卡完成。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」；单测/门禁没绿就不许走这条路（那是 blocked）。
+
+简报带 `E2E_BASELINE_RED` 行时：清单内 spec 的失败 = e2e 套件入场前既有失败，机械判定为非本任务回归——比对归因，不顺手修；只有清单外的新红灯才可能归因到你的改动。
+
 ### 结算清单
 
 1. `submitTask` 前 **todo 全部 `completed`**——提交时不允许残留未关闭的 todo（两步以内的琐碎任务可整体跳过 todo 纪律）。

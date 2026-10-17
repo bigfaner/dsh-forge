@@ -272,6 +272,8 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
       ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
       ...(evidencePointer !== undefined ? { evidencePointer } : {}),
+      // 改进7（e2e 取证债）：红灯基线清单随简报递达——调用方（循环入场基线门）领取瞬间传入
+      ...(input.e2eBaselineRed !== undefined ? { e2eBaselineRed: input.e2eBaselineRed } : {}),
     })
     const digest = dispatchDigest(dispatchPrompt)
 

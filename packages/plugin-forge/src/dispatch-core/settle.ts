@@ -3,6 +3,8 @@
 // await handle.result（传递性含 worker submitTask + 落账——F10 无竞态）→ disposeQuietly →
 // queryTask 只读结算读 → 三_case 判定（settled：spawned 分支字段面全量构建；failed：
 // run 拒绝/无结算同归防线径，kill 由调用方 taxonomy 判定）。
+// 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
+// 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
@@ -39,6 +41,43 @@ export async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
     await handle.dispose()
   } catch {
     // 收尾异常吞没：结算/失败面已定
+  }
+}
+
+/**
+ * e2e 取证债欠账任务（改进7）：success 结算 submit record 携带 evidenceDebt = 实现态
+ * 部分结算——同容器自动生成独立 test-run 欠账任务（dependsOn 实现卡 localId，不阻塞
+ * 源卡——实现卡已 completed）。落库失败 fail-soft（console.warn——取证欠账丢失留痕，
+ * 不回滚已定结算）。
+ */
+async function createE2eDebtTask(
+  tasks: ForgeTasksService,
+  ctx: { readonly projectId: string; readonly task: TaskSnapshot },
+  debt: NonNullable<TaskRecordEntry['evidenceDebt']>,
+): Promise<DispatchSpawnedResult['evidenceDebt']> {
+  try {
+    const specsLine = debt.specs.join(', ')
+    const added = await tasks.addTask({
+      projectId: ctx.projectId,
+      source: ctx.task.source,
+      title: `e2e 取证债：${ctx.task.title}`,
+      type: 'test-run',
+      taskDesc: [
+        `实现卡 ${ctx.task.slug}/${ctx.task.localId} 已按实现态结算（实现+单测绿），本卡承接其真机 e2e 断言取证欠账。`,
+        `取证套件：${debt.suite}；欠账 spec：${specsLine}。`,
+        ...(debt.note !== undefined ? [`欠账说明：${debt.note}`] : []),
+        '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。',
+      ].join('\n'),
+      dependsOn: [ctx.task.localId],
+      priority: 'P1',
+      vars: { E2E_DEBT_SOURCE: `${ctx.task.slug}/${ctx.task.localId}`, E2E_DEBT_SPECS: specsLine },
+    })
+    return { taskRef: { slug: added.slug, localId: added.localId }, suite: debt.suite, specs: debt.specs }
+  } catch (cause) {
+    console.warn(
+      `forge settle: e2e debt test-run task failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return undefined
   }
 }
 
@@ -101,6 +140,11 @@ export async function settleWorkerRun(
   const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
   const submitRecord = lastSubmitRecordOf(settled.records)
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
+  // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
+  const evidenceDebt =
+    outcome === 'success' && submitRecord?.evidenceDebt !== undefined
+      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt)
+      : undefined
   const pool: PoolSnapshot = poolOf(
     await deps.tasks.taskStats({
       projectId: ctx.projectId,
@@ -124,6 +168,7 @@ export async function settleWorkerRun(
       ...(submitRecord?.commitHash !== undefined ? { commitHash: submitRecord.commitHash } : {}),
       ...(submitRecord?.files !== undefined ? { files: submitRecord.files } : {}),
       ...(followUp !== undefined ? { followUp } : {}),
+      ...(evidenceDebt !== undefined ? { evidenceDebt } : {}),
       pool,
     },
   }

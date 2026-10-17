@@ -43,6 +43,7 @@ import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
+import { attributionTaskInput, runE2eBaseline } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -319,6 +320,13 @@ export interface LoopDriverDeps {
    * 缺席退化现状（fail-soft——装配面未接线时不阻塞处置阶梯）。
    */
   readonly knownContainers?: (projectId: string) => Promise<readonly string[]>
+  /**
+   * e2e 红灯基线门（改进7——可选；缺席 = 机制关闭，简报零 E2E_BASELINE_RED 行）。
+   * runSuite = e2e 套件全量执行命令（返回 reporter 输出——`FAIL <spec>` 行被解析为红灯
+   * 清单）。循环启动时跑一次：红灯随本实例全部简报递达 worker，且逐一生成归因卡
+   * （环境/陈旧断言/真回归三分流）；套件执行故障 fail-soft（空清单 + warn），循环不阻。
+   */
+  readonly e2eBaseline?: { readonly runSuite: () => Promise<string> }
   /** 机械时延注入（测试缝——缺省生产值；quiescence = 3c 宽限窗基长/轮询间隔） */
   readonly delays?: {
     readonly backoffBaseMs?: number
@@ -385,6 +393,8 @@ interface ActiveLoop {
   waitRounds: number
   /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
   readonly dispositions: Map<string, DispositionBook>
+  /** e2e 红灯基线清单（改进7——启动基线门产物；缺席/空 = 基线全绿或机制关闭，简报零行） */
+  e2eBaselineRed?: readonly string[]
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -705,6 +715,26 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         registry.remove(id)
         return { ok: true, loopId: id }
       }
+      // e2e 红灯基线门（改进7——入场前跑批，fail-soft）：红灯清单挂本循环实例（逐简报
+      // 递达 worker——机械判定「基线红灯 ≠ 本任务回归」），并逐一生成归因卡（三分流）。
+      // 套件执行故障 = 空清单 + warn（机制静默关闭，循环派发不受阻）；归因卡落库失败
+      // fail-soft（warn——红灯清单仍在简报面承担机械判定）。
+      if (deps.e2eBaseline !== undefined) {
+        const baseline = await runE2eBaseline(deps.e2eBaseline.runSuite)
+        loop.e2eBaselineRed = baseline.redSpecs
+        if (baseline.error !== undefined) {
+          console.warn(`forge loop e2e baseline failed (${input.source.slug}): ${baseline.error}`)
+        }
+        for (const spec of baseline.redSpecs) {
+          try {
+            await deps.tasks.addTask(attributionTaskInput(source, spec, { projectId }))
+          } catch (cause) {
+            console.warn(
+              `forge loop e2e baseline attribution card failed (${spec}): ${cause instanceof Error ? cause.message : String(cause)}`,
+            )
+          }
+        }
+      }
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
       return { ok: true, loopId: id }
     },
@@ -887,6 +917,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     projectId: scope.projectId,
     source,
     ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
+    // 改进7：红灯基线清单随本实例全部简报递达（claim 领取瞬间注入 E2E_BASELINE_RED 行）
+    ...(loop.e2eBaselineRed !== undefined && loop.e2eBaselineRed.length > 0
+      ? { e2eBaselineRed: loop.e2eBaselineRed }
+      : {}),
   })
   // 停止竞态收口（claim 已落而循环被叫停）：本实例未接管的孤儿 in_progress → 真化 interrupted
   if (await bailIfAborted(loop, claim.kind === 'claimed' ? claim : undefined)) return 'terminal'

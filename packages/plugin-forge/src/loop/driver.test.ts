@@ -255,6 +255,8 @@ function build(options: {
   limits?: { readonly maxRounds?: number }
   /** 3c 宽限窗基长注入（缺省 1ms——立即收敛；窗内叫停用例注入大值保持确定性） */
   quiescenceWindowMs?: number
+  /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出 */
+  e2eBaseline?: { runSuite: () => Promise<string> }
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -300,6 +302,7 @@ function build(options: {
     ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
     ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
     ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
+    ...(options.e2eBaseline !== undefined ? { e2eBaseline: options.e2eBaseline } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -408,6 +411,63 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
       workerSessionId: 'worker-1',
     })
     await running.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 改进7 · e2e 红灯基线门 ───────────────────────────
+
+describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
+  const FULL_FLOW = {
+    claim: [claimed(), NO_TASK],
+    stats: [
+      statsOf({ pending: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ in_progress: 1 }),
+      statsOf({ completed: 1 }),
+      statsOf({ completed: 1 }),
+    ],
+  }
+
+  it('基线红灯：启动即生成归因卡（逐红灯 spec 一张 test-run）+ 红灯清单随 claim 简报入参递达', async () => {
+    const built = build({
+      ...FULL_FLOW,
+      e2eBaseline: {
+        runSuite: async () =>
+          ['FAIL e2e/specs/b.spec.ts > suite', 'FAIL e2e/specs/a.spec.ts > suite', 'PASS e2e/specs/green.spec.ts'].join('\n'),
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 归因卡：逐红灯 spec 一张（parseE2eRedSpecs 字母序——a 先 b 后），type=test-run + 三分流指示
+    expect(built.h.addTaskInputs).toHaveLength(2)
+    expect(built.h.addTaskInputs[0]).toMatchObject({
+      projectId: PROJECT,
+      source: SOURCE,
+      title: 'e2e 基线红灯归因：e2e/specs/a.spec.ts',
+      type: 'test-run',
+      priority: 'P1',
+      vars: { BASELINE_SPEC: 'e2e/specs/a.spec.ts' },
+    })
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('环境')
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('陈旧断言')
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('真回归')
+    // 红灯清单随本实例全部 claim 简报入参递达（机械判定载体——首轮 claim + 次轮 no-task 领取尝试同带）
+    expect(built.h.claimInputs).toHaveLength(2)
+    expect(built.h.claimInputs[0]).toMatchObject({
+      e2eBaselineRed: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
+    })
+  })
+
+  it('基线套件执行故障：fail-soft 空清单（零归因卡、简报零基线行）——循环派发不受阻', async () => {
+    const built = build({
+      ...FULL_FLOW,
+      e2eBaseline: { runSuite: async () => { throw new Error('e2e harness missing') } },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
   })
 })
 
