@@ -434,6 +434,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       FORGE_PROGRESS_NODE_SLOT, // 1.17 'forge/progress' keyed node body
       SESSION_HEADER_ACTIONS_SLOT, // fix-2 worktree 会话头只读 chip
       CONVERSATION_INPUT_OVERLAY_SLOT, // fix-2 封存提示 overlay（composer 区官方缝）
+      CONVERSATION_INPUT_OVERLAY_SLOT, // bug 4b34e5d8 chip 重建缝（零视觉效应行）
       SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
@@ -620,7 +621,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.17 progress 节点；fix-2 增会话头 worktree chip + composer overlay 封存提示两登记
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.17 progress 节点；fix-2 封存提示；bug 4b34e5d8 chip 重建效应行
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -656,7 +657,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // bug 4b34e5d8 起双 overlay 登记口径
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -1028,13 +1029,29 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     unpublishViews()
   })
 
-  it('bug 2026-10-16：list 槽 register 必带 id——conversation.input.overlay 行携 dswf-worktree-seal（官方校验 requires options.id，缺 id 即 apply 中断回滚）', () => {
+  it('bug 2026-10-16：list 槽 register 必带 id——conversation.input.overlay 行携 dswf-worktree-seal + dswf-bug-chip-restore（官方校验 requires options.id，缺 id 即 apply 中断回滚）', () => {
     publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const overlayRows = registers.filter((r) => r.key === CONVERSATION_INPUT_OVERLAY_SLOT)
-    expect(overlayRows, '封存 overlay 槽唯一登记').toHaveLength(1)
+    expect(overlayRows, 'overlay 槽两登记（封存提示 + bug 4b34e5d8 chip 重建）').toHaveLength(2)
     expect(overlayRows[0]!.options.id).toBe('dswf-worktree-seal')
+    expect(overlayRows[1]!.options.id).toBe('dswf-bug-chip-restore')
+    unpublishViews()
+  })
+
+  it('bug 4b34e5d8：chip 重建缝发布——页面全局 restorer 在场；binding 有但 state 窄面缺席 = no-op（fail-soft）', () => {
+    publishFakeViews()
+    const { ctx, sessionsById } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const restore = (globalThis as { __DSH_FORGE_BUG_CHIP_RESTORE__?: (sessionId: string) => (() => void) | void })
+      .__DSH_FORGE_BUG_CHIP_RESTORE__
+    expect(restore, '重建闭包已发布').toBeTypeOf('function')
+    sessionsById['s-live'] = {}
+    const dispose = restore?.('s-live')
+    expect(dispose, '缝缺席 = no-op disposer（函数——可安全解绑）').toBeTypeOf('function')
+    dispose?.()
+    // 摘除对称性随 fix-33 ⑥ revokeBridgeAndLocale 链（apply catch + overlay 洞 dispose 两径）
     unpublishViews()
   })
 
@@ -1274,12 +1291,12 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     unpublishViews()
   })
 
-  it('诊断面：views 族登记数组 = 页签 + hero 影子 + worktree chip/overlay（fix-2 起会话头带 = worktree 只读 chip）', () => {
+  it('诊断面：views 族登记数组 = 页签 + hero 影子 + worktree chip/双 overlay（fix-2 封存提示 + bug 4b34e5d8 chip 重建）', () => {
     publishFakeViews()
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

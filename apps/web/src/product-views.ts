@@ -63,6 +63,9 @@ import {
   ForgeBugPreview,
   type ForgeBugPreviewProps,
 } from './views/bug-reference/BugPreview.js'
+import {
+  ForgeBugChipRestoreOverlay,
+} from './views/bug-reference/ChipRestoreOverlay.js'
 import { createWorkbenchBridge, type ForgeCenterNav, type WorkbenchBridge } from './workbench/workbench-bridge.js'
 
 /** 发布面形状（client-plugin/plugin.ts 结构同型镜像——bundle 自持纪律，禁跨 chunk import） */
@@ -97,6 +100,8 @@ export interface ForgePublishedViews {
   readonly ForgeSessionWorktreeChip: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽封存提示（fix-2——SealNotice 一次性 + composer 占位文案） */
   readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
+  /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点，纯文本草稿 → chip 还原订阅） */
+  readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
   readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
@@ -132,6 +137,7 @@ declare global {
   ForgeHeroWorkspacePicker,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeBugChipRestoreOverlay,
   ForgeSettingsSection,
   ForgeRemoteEntry,
   ForgeBugGlyph,

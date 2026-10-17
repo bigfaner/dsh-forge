@@ -62,12 +62,14 @@ import {
 // composer-bug-reference 1.2 Bug 引用 source 纯模型（T1——bug-source.ts 零外部 import，
 // bundle 自含纪律不破；本文件做注册行 + 接线面；1.4 chip 构造单一事实源同径复用）
 import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from './bug-source.js'
+// bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
+import { watchBugChipRestore } from './chip-restore.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
 
 /** 构建指纹（手工递增——运行期与源码版本对账用，2d5434d1 指纹裁决） */
-export const FORGE_CLIENT_BUILD_TAG = '2026-10-16.1'
+export const FORGE_CLIENT_BUILD_TAG = '2026-10-17.1'
 
 /** 洞名：官方 sidebar 壳的工作区浏览区（本项目树 + 会话列表占用此洞——AC1 替换目标） */
 export const SIDEBAR_WORKSPACES_SLOT = 'sidebar.workspaces'
@@ -874,6 +876,8 @@ export interface ForgeViewsGlobal {
     ForgeSessionWorktreeChip: unknown
     /** fix-2：conversation.input.overlay 槽封存提示（notice 一次性 + composer 占位文案） */
     ForgeWorktreeSealOverlay: unknown
+    /** bug 4b34e5d8：conversation.input.overlay 槽 chip 重建（零视觉效应挂载点） */
+    ForgeBugChipRestoreOverlay: unknown
     ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
@@ -1186,7 +1190,17 @@ function registerWorktreeFaces(
       views.ForgeWorktreeSealOverlay,
     ),
   )
+  registerSlotEntry(ctx, CONVERSATION_INPUT_OVERLAY_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // bug 4b34e5d8：零视觉效应行——会话作用域挂载即接「纯文本草稿 → chip 重建」订阅缝
+      { name: CONVERSATION_INPUT_OVERLAY_SLOT, id: BUG_CHIP_RESTORE_ENTRY_ID },
+      views.ForgeBugChipRestoreOverlay,
+    ),
+  )
 }
+
+/** Bug chip 重建缝 overlay 登记 id（conversation.input.overlay list 槽行键） */
+export const BUG_CHIP_RESTORE_ENTRY_ID = 'dswf-bug-chip-restore'
 
 /**
  * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册
@@ -2026,23 +2040,12 @@ export interface BugQuickAddInput {
 export type BugQuickAddFn = (bug: BugQuickAddInput, workspaceId: string | null) => Promise<void>
 
 /**
- * Bug 快速路径组装（composer-bug-reference 1.4）：有活跃会话（账本快照 current 锚）→
- * 官方 scoped 事件 `slash/input-insert-reference`（span-CAS 基于 InputState.draftRev +
- * 草稿末尾——insertReferenceAtTail 单源）插入 T1 同构原子引用并还焦 composer；插入未获
- * 应用（缝缺席/相位守卫拒——韧性兜底同 open-session 兜底裁决刻度）或无活跃会话 → 既有
- * open-session 编排器开新会话，首条草稿预填该引用剪贴板投影（@[摘要](bug:<bugId>)——
- * 预填走 setDraft 既有缝，chip 形态由 @ 菜单/粘贴官方链承接）。conversation 服务调用期
- * 惰性解析（buildOpenSessionOrchestrator 同配方）；workspaceId 缺席 = 无锚不编排（点击
- * fail-soft 不外溢）。
+ * Bug 引用插入服务切片组装（scoped 事件发射三件套——sessions.binding / conversation.input.for /
+ * actx.bail；1.4 快速路径与 bug 4b34e5d8 chip 重建缝共用：conversation 服务调用期惰性解析，
+ * bail 面缺席 = undefined 返回 → 判未应用走各自兜底）。
  */
-export function buildBugQuickAdder(
-  clientCtx: ForgeClientCtx,
-  sessions: ForgeSessionsService,
-  orchestrator: OpenSessionOrchestrator,
-  /** 插入时快照落缓存（bug 27ab222b——dock 递达的 BugCard 全字段经此喂给 source；缺席 = 不落） */
-  noteInserted?: (bug: BugQuickAddInput) => void,
-): BugQuickAddFn {
-  const services: ReferenceInsertServices = {
+function bugReferenceServicesOf(clientCtx: ForgeClientCtx, sessions: ForgeSessionsService): ReferenceInsertServices {
+  return {
     sessions: {
       binding: (sessionId) =>
         (sessions as unknown as { binding?: (sessionId: string) => unknown }).binding?.(sessionId) as
@@ -2073,6 +2076,26 @@ export function buildBugQuickAdder(
         payload,
       ),
   }
+}
+
+/**
+ * Bug 快速路径组装（composer-bug-reference 1.4）：有活跃会话（账本快照 current 锚）→
+ * 官方 scoped 事件 `slash/input-insert-reference`（span-CAS 基于 InputState.draftRev +
+ * 草稿末尾——insertReferenceAtTail 单源）插入 T1 同构原子引用并还焦 composer；插入未获
+ * 应用（缝缺席/相位守卫拒——韧性兜底同 open-session 兜底裁决刻度）或无活跃会话 → 既有
+ * open-session 编排器开新会话，首条草稿预填该引用剪贴板投影（@[摘要](bug:<bugId>)——
+ * 预填走 setDraft 既有缝，chip 形态由 @ 菜单/粘贴官方链承接）。conversation 服务调用期
+ * 惰性解析（buildOpenSessionOrchestrator 同配方）；workspaceId 缺席 = 无锚不编排（点击
+ * fail-soft 不外溢）。
+ */
+export function buildBugQuickAdder(
+  clientCtx: ForgeClientCtx,
+  sessions: ForgeSessionsService,
+  orchestrator: OpenSessionOrchestrator,
+  /** 插入时快照落缓存（bug 27ab222b——dock 递达的 BugCard 全字段经此喂给 source；缺席 = 不落） */
+  noteInserted?: (bug: BugQuickAddInput) => void,
+): BugQuickAddFn {
+  const services = bugReferenceServicesOf(clientCtx, sessions)
   return async (bug, workspaceId) => {
     // 外部插入径快照（bug 27ab222b）：dock 递达的是完整 BugCard（BugQuickAddInput 的
     // 结构超集——运行期全字段原样透传），不经 onPick 也能让 serialize 命中全卡
@@ -2289,6 +2312,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         })
         revokeBridgeAndLocale = (): void => {
           ;(globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__ = undefined
+          ;(globalThis as { __DSH_FORGE_BUG_CHIP_RESTORE__?: unknown }).__DSH_FORGE_BUG_CHIP_RESTORE__ = undefined
           disposeLocale()
         }
 
@@ -2296,6 +2320,12 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 惰性 fail-soft（服务/传输缺席 = 零登记零报错，其余登记行不受累）。先于 dock 注册
         // （bug 27ab222b：source 快照面穿线给按钮快速路径——插入即落全卡）
         const bugSource = registerBugReferenceSource(clientCtx, views, workspaces, sidebarRight, viewsDiagnostics)
+
+        // bug 4b34e5d8 chip 重建缝发布（页面全局缝——overlay 槽零视觉行消费；会话作用域
+        // 挂载即接「纯文本草稿 → chip」订阅，撤销随桥/词典 revoke 对称摘除）
+        ;(globalThis as { __DSH_FORGE_BUG_CHIP_RESTORE__?: unknown }).__DSH_FORGE_BUG_CHIP_RESTORE__ = (
+          sessionId: string,
+        ): (() => void) | void => watchBugChipRestore(bugReferenceServicesOf(clientCtx, sessions), sessionId)
 
         // dock tab 族（4.1 两段注册：类型定义 + keyed body；撤销面归 apply catch 与
         // overlay 洞 dispose 两径——基础撤销闭包已立在先，此处叠加 tab 类型面：半途失败

@@ -430,3 +430,62 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
     },
   }
 }
+
+// ─────────────────────────── 纯文本草稿重建 span（bug 4b34e5d8） ───────────────────────────
+
+/** 未 chip 化 bug 引用投影（官方草稿搬迁/持久化种子只搬文本——重建缝的命中物） */
+export interface BugChipRestoreSpan {
+  /** clipboard 投影坐标 [start, end) */
+  readonly start: number
+  readonly end: number
+  readonly bugId: string
+  readonly label: string
+  /** 逐字等于命中文本——重建后投影不变（收敛零环路的承重不变量） */
+  readonly clipboardText: string
+}
+
+/** 草稿剪贴板投影中的 bug 引用 wire 形态（clipboardTextOf 产物逐字） */
+export const BUG_WIRE_RE = /@\[([^\]\n]+)\]\(bug:([^)\s]+)\)/gu
+
+/** occurrence 覆盖面消费切片（offset/length 数值有效才参与覆盖——形状漂移防御） */
+interface OccurrenceSpan {
+  readonly offset: number
+  readonly length: number
+}
+
+function occurrenceSpansOf(occurrences: readonly unknown[] | undefined): readonly OccurrenceSpan[] {
+  if (occurrences === undefined) return []
+  const spans: OccurrenceSpan[] = []
+  for (const item of occurrences) {
+    if (typeof item !== 'object' || item === null) continue
+    const record = item as Record<string, unknown>
+    if (typeof record['offset'] !== 'number' || typeof record['length'] !== 'number') continue
+    spans.push({ offset: record['offset'], length: record['length'] })
+  }
+  return spans
+}
+
+/**
+ * 纯文本草稿中未 chip 化的 bug 引用重建 span（bug 4b34e5d8）：官方草稿搬迁/持久化种子
+ * 两缝都只落 clipboard 投影纯文本（@[摘要](bug:<id>)），chip 节点不随迁——本函数扫出
+ * 未被 occurrence 覆盖的命中段，交重建缝逐段还原为 chip。已被 chip 覆盖的投影段不重建
+ * （收敛零环路：重建后投影逐字不变、occurrences 覆盖命中段）。
+ */
+export function pendingBugChipRestores(state: {
+  readonly draft: string
+  readonly occurrences?: readonly unknown[]
+}): readonly BugChipRestoreSpan[] {
+  const covered = occurrenceSpansOf(state.occurrences)
+  const spans: BugChipRestoreSpan[] = []
+  const re = new RegExp(BUG_WIRE_RE.source, 'gu')
+  let match: RegExpExecArray | null
+  while ((match = re.exec(state.draft)) !== null) {
+    const start = match.index
+    const end = start + match[0].length
+    const bugId = match[2] ?? ''
+    if (bugId === '') continue
+    if (covered.some((o) => start < o.offset + o.length && o.offset < end)) continue
+    spans.push({ start, end, bugId, label: match[1] ?? bugId, clipboardText: match[0] })
+  }
+  return spans
+}

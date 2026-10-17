@@ -40,9 +40,13 @@ export interface ComposerInputFace {
   /**
    * 输入状态快照源（官方 InputState 消费切片——draft/draftRev；1.4 快速路径 span-CAS
    * 构造单源；occurrences = 症状级防御复核面——bug 2d5434d1 bail 返回值漂移检测）。
+   * subscribe 在场 = 快照店变更通知（bug 4b34e5d8 重建缝订阅驱动；缺席 = 只做一次性重建）。
    * 窄面缺席（上游面漂移/旧面）= undefined——引用插入判不可用。
    */
-  readonly state?: { getSnapshot(): { readonly draft: string; readonly draftRev: number; readonly occurrences?: readonly unknown[] } }
+  readonly state?: {
+    getSnapshot(): { readonly draft: string; readonly draftRev: number; readonly occurrences?: readonly unknown[] }
+    subscribe?(listener: () => void): () => void
+  }
 }
 
 // ─────────────────────────── Bug 快速路径（composer-bug-reference 1.4） ───────────────────────────
@@ -91,7 +95,7 @@ export function tailSpanOf(state: { readonly draft: string; readonly draftRev: n
  * 投影 = 已应用，同判 true，切断「插了 chip 又开新会话」双效链）。binding 缺席 /
  * 面缺席或抛错 / state 窄面缺席 / bail 未获 true 且复核无变化 = false（调用方 fail-soft 兜底）。
  */
-function referenceApplied(
+export function referenceApplied(
   before: { readonly draft: string; readonly occurrences?: readonly unknown[] },
   after: { readonly draft: string; readonly occurrences?: readonly unknown[] },
   clipboardText: string,

@@ -7,6 +7,7 @@ import {
   clipboardTextOf,
   createBugReferenceSource,
   filterBugsByScope,
+  pendingBugChipRestores,
   relativeTime,
   serializeBugCard,
   type BugCardSource,
@@ -363,5 +364,40 @@ describe('bugReferenceInsertOf（chip 构造单一事实源——composer-bug-re
     expect(outcome).toEqual({
       insert: bugReferenceInsertOf({ bugId: 'b-42', summary: '修复后段一目录选取双开对话框' }, source.name),
     })
+  })
+})
+
+describe('pendingBugChipRestores（bug 4b34e5d8——纯文本草稿中未 chip 化 bug 引用重建 span）', () => {
+  it('明文 @[摘要](bug:id) 命中：span/bugId/label/clipboardText 逐字', () => {
+    const draft = '前缀文字 @[修 bug](bug:bg-1) 后缀'
+    const spans = pendingBugChipRestores({ draft })
+    expect(spans).toHaveLength(1)
+    expect(at(spans, 0)).toEqual({
+      start: 5,
+      end: 5 + '@[修 bug](bug:bg-1)'.length,
+      bugId: 'bg-1',
+      label: '修 bug',
+      clipboardText: '@[修 bug](bug:bg-1)',
+    })
+  })
+
+  it('已被 occurrence 覆盖的投影不重建（chip 在场 = 零 pending——收敛零环路）', () => {
+    const draft = 'x @[修 bug](bug:bg-1) y'
+    const start = draft.indexOf('@[修 bug]')
+    const spans = pendingBugChipRestores({
+      draft,
+      occurrences: [{ offset: start, length: '@[修 bug](bug:bg-1)'.length }],
+    })
+    expect(spans).toEqual([])
+  })
+
+  it('多命中全报；形状非法的 occurrence 项不参与覆盖（防御不外溢）', () => {
+    const draft = '@[a](bug:bg-1) 中 @[b](bug:bg-2)'
+    const spans = pendingBugChipRestores({ draft, occurrences: [{ nonsense: true }, 'x', null] })
+    expect(spans.map((s) => s.bugId)).toEqual(['bg-1', 'bg-2'])
+  })
+
+  it('非 bug 引用 / bug: 空 id 不命中', () => {
+    expect(pendingBugChipRestores({ draft: '@[a](dsh-session:s1) @[b](bug:) @[c](file:x)' })).toEqual([])
   })
 })
