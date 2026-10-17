@@ -12,15 +12,7 @@ created: 2026-10-17
 
 派发/暂停按钮**不是通道**：指令是特殊格式的 user message（`command/run` 事件实证 `source.kind:'user'`），与发送普通消息同一条流。手机端组装指令文本（`/run-dag-tasks <slug>`、`/stop-dag-tasks`）经**官方 `session.prompt`** 发到对应会话——dispatch 发当前/新建 dispatch 会话（对齐桌面 todo#32 语义），pause 发循环 ownerSessionId 会话。loop-active 拒绝以指令回执文本出现在会话内（桌面 foreignLoopNotice 同款），无专用确认框信封。stale 置灰仍数据驱动。
 
-### 1.1 `forge:remote/loops`（活循环只读——pause 指令寻址）
-
-| | |
-|---|---|
-| payload | `{}` |
-| data | `{loops: [{sourceSlug, ownerSessionId}]}`——`driver.activeAll()` 投影（既有数据面，零新逻辑） |
-| 要点 | 手机端 stop 指令的寻址数据源；dispatch 会话定位 = sourceSlug ↔ dispatch 会话映射（progress 数据交叉） |
-
-### 1.2 `forge:remote/session-links`（分支切换校验薄方法）
+### 1.1 `forge:remote/session-links`（分支切换校验薄方法）
 
 | | |
 |---|---|
