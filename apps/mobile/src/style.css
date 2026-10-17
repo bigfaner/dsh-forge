@@ -967,3 +967,166 @@ body[data-ds-dark-theme] .setbtn {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---- ask 分页面板（一屏一题 · 序号/总数 · 上一个/跳过/提交） ---- */
+.ask-view {
+  padding: 12px;
+  gap: 12px;
+}
+.ask-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  background: #fff;
+}
+.dark .ask-card {
+  border-color: #2a2a2c;
+  background: #1e1e20;
+}
+.ask-counter {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8e8e93;
+}
+.ask-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4176e6;
+}
+.ask-question {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #1a1a1a;
+}
+.dark .ask-question {
+  color: #f2f2f2;
+}
+.ask-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ask-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.dark .ask-option {
+  border-color: #2a2a2c;
+  color: inherit;
+}
+.ask-option.picked {
+  border-color: #4176e6;
+  background: rgba(65, 118, 230, 0.07);
+}
+.ask-option .mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid #c7c7cc;
+  font-size: 11px;
+  color: #fff;
+}
+.ask-option .mark.radio {
+  border-radius: 50%;
+}
+.ask-option .mark.box {
+  border-radius: 5px;
+}
+.ask-option.picked .mark {
+  border-color: #4176e6;
+  background: #4176e6;
+}
+.opt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.opt-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ask-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(65, 118, 230, 0.12);
+  color: #4176e6;
+  font-size: 11px;
+  font-weight: 600;
+}
+.opt-desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #8e8e93;
+}
+.ask-custom {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  resize: vertical;
+}
+.dark .ask-custom {
+  border-color: #2a2a2c;
+}
+.ask-custom:focus {
+  outline: none;
+  border-color: #4176e6;
+}
+.ask-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.ask-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 11px;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-btn.ghost {
+  flex: 1;
+  background: #f2f2f7;
+  color: #3c3c43;
+}
+.dark .ask-btn.ghost {
+  background: #2a2a2c;
+  color: #d0d0d4;
+}
+.ask-btn.primary {
+  flex: 1.4;
+  background: #4176e6;
+  color: #fff;
+}
+.ask-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
