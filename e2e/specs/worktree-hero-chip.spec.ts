@@ -113,7 +113,8 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
       })
       .toMatch(/·/)
     expect(await backfilled.first().textContent()).not.toContain('选择 worktree…')
-    // AC（1.16 预铸采纳）：预铸挂靠事件真机闭环——checks attachedSessions 读到挂靠事件（≥1）
+    // AC（1.29 点选纯选中态）：选择确认零会话副作用——checks attachedSessions 恒 0
+    //（1.14「点选即建会话」即时编排语义废除；挂靠会话只在首条消息时点产生）
     await expect
       .poll(async () => {
         const raw = (await forgeRpc(page, 'forge:worktree/checks', {
@@ -121,8 +122,8 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
           path: wsDir,
         })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
         return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
-      }, { timeout: 30_000, message: 'checks 未读到预铸挂靠会话（预铸挂靠事件未落盘）' })
-      .toBeGreaterThanOrEqual(1)
+      }, { timeout: 30_000, message: '点选后不应产生挂靠会话（纯选中态）' })
+      .toBe(0)
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })

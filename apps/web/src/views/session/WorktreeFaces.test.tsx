@@ -29,7 +29,7 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
 
   it('hero mount：projectRoot null（未选中项目）→ 零注入退回现状', () => {
     const markup = renderToStaticMarkup(
-      <ForgeHeroWorktreeMount projectRoot={null} onSelect={() => {}} makeRpc={fakeRpc({})} />,
+      <ForgeHeroWorktreeMount projectRoot={null} makeRpc={fakeRpc({})} />,
     )
     expect(markup).toBe('')
   })
@@ -37,7 +37,7 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
   it('hero mount：非 git 项目（list isGit false 相位）→ 触发 chip 不呈现', () => {
     const rpc = fakeRpc({ list: async () => ({ isGit: false, entries: [] }) })
     const markup = renderToStaticMarkup(
-      <ForgeHeroWorktreeMount projectRoot="C:/foreign" onSelect={() => {}} makeRpc={rpc} />,
+      <ForgeHeroWorktreeMount projectRoot="C:/foreign" makeRpc={rpc} />,
     )
     expect(markup).not.toContain('data-dswt-hero-trigger')
   })

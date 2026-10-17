@@ -153,15 +153,16 @@ test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', a
     await snap(page, 'menu-row-dedup.png')
     await page.keyboard.press('Escape')
 
-    // 选中记忆 + 挂靠编排：新 worktree 挂靠会话在场（attachedSessions ≥ 1）
+    // 选中记忆（1.29 纯选中态——自动跟进零挂靠编排）：新 worktree 挂靠会话恒 0，
+    // 会话创建唯一时机 = 首条消息
     const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'dup-row')
     expect(created, '新 worktree 路径在场').toBeTruthy()
     await expect
       .poll(async () => attachedSessions(page, wsDir, created!.path), {
         timeout: 30_000,
-        message: '新 worktree 应有挂靠会话（自动跟进编排）',
+        message: '自动跟进不应产生挂靠会话（1.29 纯选中态）',
       })
-      .toBeGreaterThanOrEqual(1)
+      .toBe(0)
 
     // 零 checkout 语义不回归：主树 HEAD 恒 = main
     expect(headBranch(wsDir), '主树 HEAD 不动').toBe('main')

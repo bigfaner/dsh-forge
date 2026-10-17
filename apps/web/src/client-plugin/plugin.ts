@@ -214,6 +214,74 @@ export const FORGE_CLIENT_INJECT = [
 export const FORGE_LOCALE_NS = 'dsh-forge'
 
 /**
+ * composer 草稿缝（1.29——会话创建唯一时机 = 首条消息的意图源 + arm 后草稿搬运）：
+ * sourceOf = 会话 id 经官方 `sessions.binding(id).ctx` → `conversation.input.for(actx).state`
+ * 快照 store（InputState.draft 消费切片；binding 未就绪/缝缺席 = undefined fail-soft）；
+ * carryDraft = arm 换会话后把已键入首条消息 `setDraft` 到产物会话（binding 物化轮询等待
+ * ——open-session 适配层同配方），并 best-effort 清原会话草稿防幻影。跨 bundle 双本体
+ * 注记同上（纯函数本体在 hero-picker-model——此处只做服务装配）。
+ */
+function composerDraftFace(
+  ctx: ForgeClientCtx,
+  sessions: ForgeSessionsService,
+): {
+  sourceOf: (sessionId: string) => { getSnapshot?: () => unknown; subscribe?: (cb: () => void) => () => void } | undefined
+  carryDraft: (sessionId: string, text: string, previousSessionId?: string) => Promise<boolean>
+} {
+  const bindingCtxOf = (sessionId: string): { ctx?: unknown } | null | undefined =>
+    (sessions as unknown as { binding?: (id: string) => unknown }).binding?.(sessionId) as
+      | { ctx?: unknown }
+      | null
+      | undefined
+  const inputFaceOf = (actx: unknown): Record<string, unknown> | undefined => {
+    const resolved = (asRecord(reflectServiceGet(ctx, 'conversation'))?.['input'] as
+      | { for?: (a: unknown) => unknown }
+      | undefined)?.['for']?.(actx)
+    return asRecord(resolved)
+  }
+  return {
+    sourceOf: (sessionId) => {
+      try {
+        const actx = bindingCtxOf(sessionId)?.ctx
+        if (actx === undefined || actx === null) return undefined
+        const state = inputFaceOf(actx)?.['state']
+        if (state === undefined || typeof (state as { getSnapshot?: unknown })?.getSnapshot !== 'function') return undefined
+        return state as { getSnapshot?: () => unknown; subscribe?: (cb: () => void) => () => void }
+      } catch {
+        return undefined
+      }
+    },
+    carryDraft: async (sessionId, text, previousSessionId) => {
+      // binding 物化轮询等待（open-session 适配层同配方——会话作用域 fiber 容错），超时
+      // 5s = false（草稿留在原会话不丢）
+      const deadline = Date.now() + 5_000
+      const writeDraft = (id: string, value: string): boolean => {
+        try {
+          const actx = bindingCtxOf(id)?.ctx
+          if (actx === undefined || actx === null) return false
+          const face = inputFaceOf(actx)
+          const setDraft = face?.['setDraft']
+          if (typeof setDraft !== 'function') return false
+          setDraft.call(face, value)
+          return true
+        } catch {
+          return false
+        }
+      }
+      while (Date.now() < deadline) {
+        if (writeDraft(sessionId, text)) {
+          // 原会话草稿清退（best-effort——防切回旧 blank 会话见幻影草稿；失败不回滚搬运）
+          if (previousSessionId !== undefined) writeDraft(previousSessionId, '')
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      return false
+    },
+  }
+}
+
+/**
  * 1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByCwdOf / worktreeCwdKey）。
  * 跨 bundle 双本体注记：forge-client = classic script 自含 bundle（含 import/export 即
  * 构建失败——2026-10-17 实证），不得 import app bundle 模块；同一组纯函数的 app 侧本体
@@ -1052,11 +1120,10 @@ function registerConversationViews(
       {
         name: HERO_WORKSPACE_SLOT,
         priority: SIDEBAR_SHADOW_PRIORITY,
-        // fix-2：worktree 挂靠编排缝（选择控件确认 → 建会话 meta.cwd 注入 → 唯一写入口
-        // attach → 官方 openSession——ForgeHeroWorkspacePicker worktree face 消费）。
-        // 1.26 编排默认增两账本面：blankSessionByCwd（reuse-or-create 判定——双路不重复
-        // 建会话）+ sessionsList（账本快照源——mount useSyncExternalStore 直读当前会话
-        // cwd 驱动 arm 去重/重消费；root 作用域影子不随会话切换重渲，订阅是唯一活源）。
+        // fix-2：worktree 挂靠编排缝。1.29 时序裁决：点选 = 纯选中态（挂载面本地闭环，
+        // 零编排）；本 face 只剩 arm 消费点（会话创建唯一时机 = 首条消息）——openSession、
+        // blankSessionByCwd（reuse-or-create）、sessionsList（账本活源）与 composerDraft
+        // （首条消息意图源 + arm 后草稿搬运）。
         inject: () => ({
           worktree: {
             openSession: (sessionId: string): void => {
@@ -1068,6 +1135,7 @@ function registerConversationViews(
             },
             blankSessionByCwd: (cwd: string): string | undefined => blankSessionIdByCwdOf(sessions.list, cwd),
             sessionsList: sessions.list,
+            composerDraft: composerDraftFace(ctx, sessions),
           },
         }),
       },

@@ -28,6 +28,8 @@ import {
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
+  type HeroWorktreeFace,
+  type WorktreeOrchestrateFn,
 } from './hero-picker-model.js'
 import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
@@ -53,20 +55,12 @@ export interface ForgeHeroWorkspacePickerProps {
   /** workspace 归属观察钩子（root 作用域标准 prop——项目重拉锚，外部注册后快照身份变化） */
   readonly useWorkspaces?: KitSelectorHook
   /**
-   * worktree 挂靠编排缝（fix-2 槽位 inject face——client 插件注册时递达）：选择控件确认时
-   * 的「建会话（meta.cwd 注入）→ 挂靠事件唯一写入口 → 官方 openSession」编排。缺席 =
-   * 官方 Toast 明示「编排面不可用」（1.25——不再静默 no-op；旧插件面/降级装配场景）。
-   * 1.26 编排默认增两账本面（缺席各自 fail-soft）：blankSessionByCwd = 空白会话按 cwd
-   * 反查（reuse-or-create——双路不重复建会话）；sessionsList = 账本快照源（mount
-   * useSyncExternalStore 直读当前会话 cwd——arm 去重与跨会话重消费的活源）。
+   * worktree 挂靠缝（fix-2 槽位 inject face——client 插件注册时递达）。1.29 时序裁决：
+   * 点选 worktree 行 = 纯选中态（chip 回填 + 项目粒度记忆，挂载面本地闭环）——本 face
+   * 只剩 arm 消费点（首条消息时点）消费的编排与账本面。缺席 = 编排降级（arm 时 1.25
+   * Toast 明示；旧插件面/降级装配场景）。face 细节见 HeroWorktreeFace（model 单源）。
    */
-  readonly worktree?:
-    | {
-        readonly openSession: (sessionId: string) => void
-        readonly blankSessionByCwd?: (cwd: string) => string | undefined
-        readonly sessionsList?: unknown
-      }
-    | undefined
+  readonly worktree?: HeroWorktreeFace | undefined
   /** RPC 构造器（测试替身注入；缺省 preload 真身） */
   readonly makeRpc?: () => ForgeRpcClient
 }
@@ -116,32 +110,28 @@ export function ForgeHeroWorkspacePicker({
   // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
   const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
 
-  // 挂靠确认编排（选择控件确认时——1.16 预铸采纳单 RPC：host 侧预铸会话 + 挂靠事件
-  // seq 0 + controller.create adopt 原子完成，UI 不再二次调 attach 另开写句柄）：
-  // 单 RPC 返回 sessionId → 官方 openSession 呈现。
-  // 1.25（bug af65c0a9）双静默路显式化：face 缺席 / 编排任一步失败 → 官方 Toast 呈现
-  // （含环节语义）；会话不切换、向挂载面回 false —— 选中回填不落（不产生「已选中」假象）。
+  // 1.25 编排失败/face 缺席提示态（Toast 只在首条消息时点的 arm 失败出现——1.29 点选
+  // 纯选中态无失败面）
   const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
-  const onWorktreeSelect = useCallback(
-    (path: string): Promise<boolean> => {
-      // 返回真实编排结果（1.26——挂载面按 outcome 决定选中回填/清退，1.25「失败不落
-      // 假象」须 outcome 可判；意外 reject = false，失败口径已由上方 Toast 承载）
-      return (async (): Promise<boolean> => {
+  // 挂靠编排缝（1.29——arm 消费点唯一消费；点选不再触达本缝）：1.16 预铸采纳单 RPC
+  // （host 侧预铸会话 + 挂靠事件 seq 0 + controller.create adopt 原子完成，UI 不二次调
+  // attach 另开写句柄）。返回产物 sessionId（草稿搬运落点）；任一步失败 → 1.25 Toast
+  // （含环节语义）+ null（挂载面选中态同清——不产生「已选中」假象）。
+  // 1.27 必绑收紧保留：主行（路径归一 ≡ 项目根）走主树绑定径——git 项目不存在无绑定
+  // 新会话；reuse 命中补写挂靠事件绑定之（attach 通道对非活会话合法、幂等）；无 blank
+  // 命中 → 预铸 sessionCreate 原径（worktreePath = 项目根，host 侧 isMain 绑定同配方）。
+  const orchestrate: WorktreeOrchestrateFn = useCallback(
+    (path: string): Promise<string | null> => {
+      return (async (): Promise<string | null> => {
         if (worktree === undefined) {
           // 注入面缺席（旧插件面/装配降级）——显式提示，不再静默 no-op（1.25①）
           setWorktreeNotice((prev) => ({ text: worktreeFaceUnavailableNotice(), seq: (prev?.seq ?? 0) + 1 }))
-          return false
+          return null
         }
         const rpc = makeRpc()
-        // 1.27 必绑收紧：主行（路径归一 ≡ 项目根）走主树绑定径——git 项目不存在无绑定
-        // 新会话。官方新会话流的 blank 恒落项目根 cwd 且无绑定，reuse 命中时不再「只
-        // 打开」（那会保留无绑定会话），改为补写挂靠事件绑定之（attach 通道对非活会话
-        // 合法、幂等；已绑定经 seal 读面判读零重复写）；无 blank 命中 → 预铸
-        // sessionCreate 原径（worktreePath = 项目根，host 侧 isMain 绑定同配方）。
-        // 既有无绑定历史会话不回填——本编排只在 hero/新会话选择时触发（生效路径注记）。
         const isMainPath = selectedProjectRoot !== null && worktreeCwdKey(path) === worktreeCwdKey(selectedProjectRoot)
-        // 1.26 双路不重复建会话：该 cwd 已有空白会话（点选/编排默认 arm 先前已建）→
-        // 直接打开复用，不再走预铸新建（官方 reuseOrCreateBlank 语义同构）
+        // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank
+        // 语义同构）；主行 reuse 命中补绑定（只打开会保留无绑定会话——1.27 口径）
         const reuseSessionId = worktree.blankSessionByCwd?.(path)
         if (reuseSessionId !== undefined && isMainPath) {
           try {
@@ -154,7 +144,7 @@ export function ForgeHeroWorkspacePicker({
               text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
               seq: (prev?.seq ?? 0) + 1,
             }))
-            return false
+            return null
           }
           try {
             worktree.openSession(reuseSessionId)
@@ -163,10 +153,9 @@ export function ForgeHeroWorkspacePicker({
               text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
               seq: (prev?.seq ?? 0) + 1,
             }))
-            return false
+            return null
           }
-          onClose()
-          return true
+          return reuseSessionId
         }
         if (reuseSessionId !== undefined) {
           try {
@@ -176,10 +165,9 @@ export function ForgeHeroWorkspacePicker({
               text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
               seq: (prev?.seq ?? 0) + 1,
             }))
-            return false
+            return null
           }
-          onClose()
-          return true
+          return reuseSessionId
         }
         let sessionId: string
         try {
@@ -189,7 +177,7 @@ export function ForgeHeroWorkspacePicker({
             text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
             seq: (prev?.seq ?? 0) + 1,
           }))
-          return false
+          return null
         }
         try {
           worktree.openSession(sessionId)
@@ -198,13 +186,12 @@ export function ForgeHeroWorkspacePicker({
             text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
             seq: (prev?.seq ?? 0) + 1,
           }))
-          return false
+          return null
         }
-        onClose()
-        return true
-      })().catch(() => false)
+        return sessionId
+      })().catch(() => null)
     },
-    [worktree, makeRpc, onClose, selectedProjectRoot],
+    [worktree, makeRpc, selectedProjectRoot],
   )
 
   const onSelect = useCallback(
@@ -262,11 +249,11 @@ export function ForgeHeroWorkspacePicker({
         />
       )}
       {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
-          两 chip」构图；非 git / 未选中项目零注入整体退回现状） */}
+          两 chip」构图；非 git / 未选中项目零注入整体退回现状）。1.29：点选纯选中态在
+          挂载面本地闭环；编排缝只递达 arm 消费点。 */}
       <ForgeHeroWorktreeMount
         projectRoot={selectedProjectRoot}
-        onSelect={onWorktreeSelect}
-        sessionsList={worktree?.sessionsList}
+        worktree={worktree !== undefined ? { ...worktree, orchestrate } : undefined}
         makeRpc={makeRpc}
       />
     </>

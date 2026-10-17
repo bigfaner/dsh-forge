@@ -80,6 +80,37 @@ async function pickMenuRow(page: Page, text: string): Promise<void> {
   await heroMenu(page).getByText(text, { exact: false }).first().click()
 }
 
+/** 挂靠会话计数（checks RPC——编排判定共用源） */
+async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
+  const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
+    data?: { attachedSessions?: number }
+    attachedSessions?: number
+  } | null
+  return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+}
+
+/** composer 键入（首条消息意图——Lexical 配方：contenteditable 收敛门 + insertText + 回显重试） */
+async function typeDraft(page: Page, text: string): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
+        return els.length > 0 && [...els].every((el) => el.isContentEditable)
+      },
+      undefined,
+      { timeout: 60_000 },
+    )
+    .catch(() => undefined)
+  const composer = page.locator('[data-composer-input]').first()
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await composer.click()
+    await page.keyboard.insertText(text)
+    const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
+    if (echoed.includes(text)) return
+    await page.waitForTimeout(5_000)
+  }
+}
+
 /** 走查截图（非关键路径——动画收尾期 page.screenshot 可能超时，失败不阻塞断言链） */
 async function snap(page: Page, name: string): Promise<void> {
   try {
@@ -117,19 +148,31 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
       timeout: 30_000,
     }).toContain('main')
 
-    // ── AC1：hero chip 改选跨分支行（feat-a ≠ main）→ 先弹风险框；取消保持原选 ──
+    // ── AC1：hero chip 改选跨分支行（feat-a ≠ main）——1.29 点选纯选中态：点选零确认框；
+    // 首条消息意图（草稿键入）才弹风险框；取消保持原选（选中态清退回锚定默认）──
     await pickMenuRow(page, 'feat-a')
-    await expect(heroRiskDialog(page), '跨分支改选应先弹官方 RiskConfirmation').toBeVisible()
+    await expect(heroRiskDialog(page), '点选不应弹确认框（1.29 时机随编排后移）').not.toBeVisible({ timeout: 8_000 })
+    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
+      .toContain('feat-a')
+    await typeDraft(page, '1-19 risk first message')
+    await expect(heroRiskDialog(page), '首条消息意图应弹官方 RiskConfirmation（时机后移）').toBeVisible({ timeout: 30_000 })
     await snap(page, 'hero-risk-dialog.png')
     await heroRiskDialog(page).getByRole('button', { name: '取消', exact: true }).click()
     await expect(heroRiskDialog(page)).toBeHidden()
-    expect(await chip(page).first().textContent(), '取消后 chip 保持原选（main）').toContain('main')
+    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
+      .not.toContain('feat-a')
 
-    // ── AC1 确认路径：勾选知悉 → 确认才走挂靠编排 ──
+    // ── AC1 确认路径：重新选中 → 首条消息意图 → 勾选知悉 → 确认才走挂靠编排 ──
     await pickMenuRow(page, 'feat-a')
-    await expect(heroRiskDialog(page)).toBeVisible()
+    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
+      .toContain('feat-a')
+    await typeDraft(page, '1-19 risk confirm first message')
+    await expect(heroRiskDialog(page)).toBeVisible({ timeout: 30_000 })
     await acknowledgeAndConfirm(page, heroRiskDialog(page))
     await expect(heroRiskDialog(page)).toBeHidden()
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后应产生 wt-a 挂靠会话（首条消息时点编排）' })
+      .toBe(1)
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
 

@@ -28,7 +28,7 @@ import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
 import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
-import { activeSessionCwdOf, shouldArmSelectedRow } from './hero-picker-model.js'
+import { activeSessionRowOf, shouldArmSelectedRow, type HeroWorktreeFace } from './hero-picker-model.js'
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
 import './session.css'
 
@@ -132,27 +132,20 @@ export function anchorDefaultWorktreePath(
  * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
- * 选中态在本面闭环（bug 907225f2——根因：装配面未持/未传 selectedPath，chip 恒占位）：
- * onSelect 包装在上行编排成功后回填本地态+选中记忆（1.25 起失败不回填），Menu selectedId
- * 与 chip 回填同源。
+ * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（1.29 裁决——chip 回填 + 项目粒度
+ * 记忆写入，零编排零确认框零会话副作用；1.14「点选即建会话」即时编排语义废除）。
+ * 编排唯一消费点 = arm 效应（首条消息时点——composer 草稿非空驱动），见下。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
-  selectedPath,
-  onSelect,
-  sessionsList,
+  worktree,
   makeRpc = preloadRpcClientFactory,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
-  readonly selectedPath?: string | undefined
-  /** 挂靠确认动作（选择控件确认时——父面承接建会话/attach/openSession 编排；返回
-   * false = 编排失败（错误已由父面 Toast 呈现），本面选中回填不落） */
-  readonly onSelect: (path: string) => void | boolean | Promise<boolean | void>
-  /** 账本快照源（1.26 编排默认——inject 缝递达；useSyncExternalStore 直读当前主视图
-   * 会话 cwd 驱动 arm 去重/跨会话重消费。缺席 = fail-soft：arm 照走，去重交由上行
-   * reuse 通道承担） */
-  readonly sessionsList?: unknown
+  /** hero worktree inject face（编排缝 + 账本源 + composer 草稿缝——HeroWorktreeFace
+   * 单源；缺席 = arm 不消费，选中态照常闭环） */
+  readonly worktree?: HeroWorktreeFace | undefined
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -163,41 +156,28 @@ export function ForgeHeroWorktreeMount({
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
-  // 选中态本地闭环（初值 = 选中记忆 → owner 显式 selectedPath 兜底）
+  // 选中态本地闭环（初值 = 选中记忆——1.29 点选纯选中态，无 owner 显式回填面）
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
-    () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined) ?? selectedPath,
+    () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined),
   )
-  // 选择确认：上行编排成功（outcome 非 false）才回填（本地态 + 记忆）——1.25（bug
-  // af65c0a9）口径：编排失败时回填不落，chip 不产生「已选中」假象；错误呈现由编排面
-  // Toast 承载。1.26 加严：失败同时清既有回填态与选中记忆（chip 退回占位——显示层
-  // 与执行层脱节零残留），该路径压制后续 arm 重试（失败循环零重入）；重选即覆盖不变。
+  // 失败/取消抑制集（arm 失败/确认取消路径零重试——1.25/1.26 口径；点选零失败面）
   const [armSuppressed, setArmSuppressed] = useState<readonly string[]>([])
-  // 编排在途闸（点选/arm 共用——async 编排窗口内 arm 效应零重入；结束后解锁，
-  // 当前会话再落回他树时编排默认可重新消费——mount 为 root 作用域影子，跨会话常驻）
+  // 编排在途闸（arm 专用——async 编排窗口内 arm 效应零重入；结束后解锁，当前会话再落
+  // 回他树时编排默认可重新消费——mount 为 root 作用域影子，跨会话常驻）
   const orchestrationInFlightRef = useRef(false)
+  // 最近一次 arm 成功产物（armed 去重——产物即当前会话且选中路径未变时零重入，键入续字
+  // 不抖；改选他行即重新消费）
+  const armedRef = useRef<{ readonly path: string; readonly sessionId: string } | undefined>(undefined)
+  // 点选 = 纯选中态（1.29）：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
+  // 冷却窗照写——若用户先键入后点选（草稿已非空），冷却把点选触发的 arm 压 8s，保住
+  // 「点选不建会话」的短窗语义。
   const onSelectConfirmed = useCallback(
     (path: string): void => {
-      orchestrationInFlightRef.current = true
       writeArmCooldown()
-      // 确认即回填（本地态 + 记忆先落——1.14 口径）：挂靠会话采纳会引发会话面整域重载
-      // （1.26 实机实证——成功路径的 promise 永不 settle），记忆必须先于编排持久化；
-      // 失败路径无重载、settle 可达 → outcome false 清退（1.25 不落假象口径不变）。
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       setLocalSelectedPath(path)
-      void Promise.resolve(onSelect(path))
-        .then((outcome) => {
-          if (outcome === false) {
-            if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
-            setLocalSelectedPath(undefined)
-            setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
-          }
-        })
-        .catch(() => {})
-        .finally(() => {
-          orchestrationInFlightRef.current = false
-        })
     },
-    [projectRoot, onSelect],
+    [projectRoot],
   )
 
   // 1.17 默认回填（展示层回填；1.26 起回填态升级为编排默认——arm 效应见下）：清单就绪
@@ -214,67 +194,102 @@ export function ForgeHeroWorktreeMount({
     )
   }, [phase, projectRoot])
 
-  // ── 1.26 编排默认（hero 选中态升级：chip 显示哪，首条消息就落哪——所见即所得）──
-  // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：回填/记忆选中指向某行时，
-  // 首条消息按官方原流会落主树 cwd（显示与执行脱节——bug af65c0a9 语义缺口）。arm 效应
-  // 在首条消息发出前把当前会话换成选中行的挂靠会话：复用 1.16 预铸配方编排缝
-  // （onSelectConfirmed = sessionCreate + attach + openSession 一体）。
-  // 1.27 必绑收紧：**主行同样进编排**（选中主行 → worktreePath = 项目根的 isMain 绑定，
-  // git 项目不存在无绑定新会话——官方原流口子堵死）。去重三闸：armedRef（本挂载期已
-  // arm 同径）、currentSessionCwd（树内行已开——点选编排已建，双路不重复建会话；cwd
-  // 去重经 shouldArmSelectedRow 纯函数单源，主行不适用——官方 blank 落根恰是待绑定态）、
-  // armSuppressed（失败/取消路径零重试）。跨分支风险 = 1.19 确认框同款（判定源 = 主行
-  // branch vs 选中树 branch；主行自绑定同分支零风险直通）。既有无绑定历史会话不回填
-  // （本效应只在 hero/新会话阶段消费，历史会话打开不进 hero 面）。
+  // ── 1.29 编排默认（会话创建唯一时机 = 首条消息——所见即所得的唯一执行面）──
+  // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：选中态指向某行时，首条消息按
+  // 官方原流会落主树 cwd（显示与执行脱节）。arm 效应由 composer 首条消息意图驱动
+  // （draft 空 → 非空）：复用 1.16 预铸配方编排缝（orchestrate = sessionCreate + attach
+  // + openSession 一体），成功后把已键入草稿搬运到产物会话（carryDraft——确认前消息
+  // 不发出，草稿始终留在 composer，不丢）。
+  // 1.27 必绑收紧保留：主行同样进编排（选中主行 → worktreePath = 项目根的 isMain 绑定，
+  // git 项目不存在无绑定新会话——官方原流口子堵死）。去重闸：cwd 去重（树内行已开）、
+  // armed 去重（本轮编排产物即当前会话——键入续字零重入；官方新会话流另起新 id 自然
+  // 失效）、armSuppressed（失败/取消路径零重试）、在途闸与冷却窗。draft 意图与全部
+  // 判读经 shouldArmSelectedRow 纯函数单源。跨分支风险 = 1.19 确认框同款（判定源 = 主行
+  // branch vs 选中树 branch；主行自绑定同分支零风险直通）——时机随编排后移至首条消息
+  // 时点（1.29），点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话阶段
+  // 消费，历史会话打开不进 hero 面）。
   const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
   // 账本订阅（useSyncExternalStore 直读——闭包绑定 face：dsh 快照源 = 类方法，裸引用
-  // 脱离 this 即崩，ForgeSidebarSlot 同口径）。当前主视图会话 cwd 是 arm 去重/重消费的
-  // 活源：官方新会话流落回他树 → cwd 变化 → 效应重跑 → 编排默认重新消费。
+  // 脱离 this 即崩，ForgeSidebarSlot 同口径）。当前主视图会话（id + cwd）是 arm 去重/
+  // 重消费与草稿源寻址的活源：官方新会话流落回他树 → 变化 → 效应重跑 → 编排默认重新消费。
   const subscribeLedger = useCallback(
     (onChange: () => void): (() => void) => {
-      const store = sessionsList as { subscribe?: (cb: () => void) => () => void } | undefined
+      const store = worktree?.sessionsList as { subscribe?: (cb: () => void) => () => void } | undefined
       try {
         return store?.subscribe?.(onChange) ?? (() => {})
       } catch {
         return () => {}
       }
     },
-    [sessionsList],
+    [worktree],
   )
   const readLedger = useCallback((): unknown => {
-    const store = sessionsList as { getSnapshot?: () => unknown } | undefined
+    const store = worktree?.sessionsList as { getSnapshot?: () => unknown } | undefined
     try {
       return store?.getSnapshot?.()
     } catch {
       return undefined
     }
-  }, [sessionsList])
+  }, [worktree])
   const ledgerSnapshot = useSyncExternalStore(subscribeLedger, readLedger, readLedger)
-  const currentCwd = useMemo(
-    () => (ledgerSnapshot !== undefined ? activeSessionCwdOf({ getSnapshot: () => ledgerSnapshot }) : undefined),
+  const activeRow = useMemo(
+    () => (ledgerSnapshot !== undefined ? activeSessionRowOf({ getSnapshot: () => ledgerSnapshot }) : undefined),
     [ledgerSnapshot],
   )
+  const currentCwd = activeRow?.cwd
+  const currentSessionId = activeRow?.id
+  // composer 草稿源（首条消息意图——官方 InputState 快照 store，经 sourceOf 会话寻址；
+  // 缺席/形状漂移 = fail-soft 空串，arm 不消费）
+  const draftStore = useMemo(
+    () => (currentSessionId !== undefined ? worktree?.composerDraft?.sourceOf?.(currentSessionId) ?? undefined : undefined),
+    [currentSessionId, worktree],
+  )
+  const subscribeDraft = useCallback(
+    (onChange: () => void): (() => void) => {
+      try {
+        return draftStore?.subscribe?.(onChange) ?? (() => {})
+      } catch {
+        return () => {}
+      }
+    },
+    [draftStore],
+  )
+  const readDraft = useCallback((): string => {
+    try {
+      const draft = (draftStore?.getSnapshot?.() as { draft?: unknown } | null | undefined)?.draft
+      return typeof draft === 'string' ? draft : ''
+    } catch {
+      return ''
+    }
+  }, [draftStore])
+  const draftText = useSyncExternalStore(subscribeDraft, readDraft, readDraft)
   const armDefault = useCallback(
-    (path: string): void => {
-      // 编排默认径（与点选径共用上行编排，但自带一次延迟重试）：arm 常与官方导航并发
+    (path: string, draftAtTrigger: string, previousSessionId: string | undefined): void => {
+      // 编排默认径（1.29——唯一编排消费点，自带一次延迟重试）：arm 常与官方导航并发
       // （官方新会话流落主树的窗口内）——openSession 撞导航瞬态抛错属可重试失败，一次
-      // 重试后仍失败才落 1.25 口径（Toast 已由上行呈现 + 选中态清退不落假象）。
+      // 重试后仍失败才落 1.25 口径（Toast 已由编排缝呈现 + 选中态清退不落假象）。
       orchestrationInFlightRef.current = true
       writeArmCooldown()
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       setLocalSelectedPath(path)
       const attempt = (left: number): void => {
-        void Promise.resolve(onSelect(path))
-          .then((outcome) => {
-            if (outcome === false && left > 0) {
+        void Promise.resolve(worktree?.orchestrate?.(path) ?? null)
+          .then((sessionId) => {
+            if ((sessionId === null || sessionId === undefined) && left > 0) {
               setTimeout(() => attempt(left - 1), 1_500)
               return
             }
-            if (outcome === false) {
+            if (sessionId === null || sessionId === undefined) {
               if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
               setLocalSelectedPath(undefined)
               setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
+              return
             }
+            // 成功：armed 去重登记 + 已键入首条消息搬运到产物会话（best-effort——失败
+            // = 草稿留在原会话不丢）
+            armedRef.current = { path, sessionId }
+            const draft = draftAtTrigger.trim()
+            if (draft !== '') void worktree?.composerDraft?.carryDraft?.(sessionId, draft, previousSessionId)
           })
           .catch(() => {})
           .finally(() => {
@@ -283,25 +298,44 @@ export function ForgeHeroWorktreeMount({
       }
       attempt(1)
     },
-    [projectRoot, onSelect],
+    [projectRoot, worktree],
   )
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit) return
     const path = localSelectedPath
     if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
-    if (readArmCooldownActive()) return // 编排后冷却窗——cwd 收敛滞后抑噪
+    if (readArmCooldownActive()) return // 编排后/点选后冷却窗——cwd 收敛滞后抑噪
     const row = phase.rows.find((candidate) => candidate.path === path)
     if (row === undefined) return
-    // 1.27 必绑收紧：主行同样编排；cwd 去重仅对树内行生效（纯函数 shouldArmSelectedRow 单源）
-    if (!shouldArmSelectedRow({ phaseReadyGit: true, path, suppressed: armSuppressed, rowPresent: row.present, isMain: row.isMain, currentCwd })) return
-    const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
-    if (isCrossBranchRisk(row.branch, mainBranch)) {
-      setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排
+    // 1.29 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）——主行
+    // （1.27 必绑）同样只在该时点进编排
+    const draftIntent = draftText.trim() !== ''
+    // 1.27 必绑收紧：主行同样编排；cwd/armed 去重判读（纯函数 shouldArmSelectedRow 单源）
+    if (
+      !shouldArmSelectedRow({
+        phaseReadyGit: true,
+        path,
+        suppressed: armSuppressed,
+        rowPresent: row.present,
+        isMain: row.isMain,
+        currentCwd,
+        draftIntent,
+        currentSessionId,
+        armedSessionId: armedRef.current?.sessionId,
+        armedPath: armedRef.current?.path,
+      })
+    ) {
       return
     }
-    armDefault(path)
-    // currentCwd 入 deps：官方新会话流落回他树后（当前 cwd ≠ 选中树），编排默认重新消费
-  }, [phase, localSelectedPath, armSuppressed, currentCwd, armDefault])
+    const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
+    if (isCrossBranchRisk(row.branch, mainBranch)) {
+      setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排（消息未发出）
+      return
+    }
+    armDefault(path, draftText, currentSessionId)
+    // draftText/currentCwd/currentSessionId 入 deps：首条消息意图出现、官方新会话流落回
+    // 他树后（当前会话变化），编排默认（重新）消费
+  }, [phase, localSelectedPath, armSuppressed, draftText, currentCwd, currentSessionId, armDefault])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -395,8 +429,9 @@ export function ForgeHeroWorktreeMount({
         .then((result) => {
           setCreateOpen(false)
           // 1.19 钉死口径「自动跟进」：创建成功 hero 选中态自动切到新 worktree
-          // （onSelectConfirmed = 项目粒度选中记忆写入 + 本地回填 + 挂靠编排——后续新会话
-          // 即进入新树 cwd）；主树 HEAD 不动（worktree add 新树内检出新分支，零 checkout）。
+          // （onSelectConfirmed = 项目粒度选中记忆写入 + 本地回填——1.29 纯选中态，
+          // 挂靠编排留给首条消息时点的 arm 消费）；主树 HEAD 不动（worktree add 新树内
+          // 检出新分支，零 checkout）。
           // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
           // 行匹配 path === selectedPath 用精确等值；1.24 实证本地拼串反斜杠 ≠ 清单正斜杠）
           const createdPath = result.entry?.path ?? path
@@ -493,8 +528,10 @@ export function ForgeHeroWorktreeMount({
         onClose={() => setDeleteTarget(null)}
         onConfirm={onConfirmDelete}
       />
-      {/* 1.26 编排默认跨分支风险确认框（1.19 官方 RiskConfirmation 同款——回填/记忆选中
-          指向非主行树且跨分支时确认才编排；取消 = 选中态退回占位走官方原流） */}
+      {/* 1.29 首条消息时点跨分支风险确认框（1.19 官方 RiskConfirmation 同款——选中态
+          指向非主行树且跨分支、且首条消息意图出现时确认才编排；点选不再弹框。确认前
+          消息不发出：草稿留在 composer，arm 未完成无发送面。取消 = 选中态退回占位走
+          官方原流） */}
       {defaultRiskPath !== null && (
         <WorktreeRiskConfirmation
           open
@@ -511,7 +548,7 @@ export function ForgeHeroWorktreeMount({
           onConfirm={() => {
             const path = defaultRiskPath
             setDefaultRiskPath(null)
-            if (path !== null) armDefault(path)
+            if (path !== null) armDefault(path, draftText, currentSessionId)
           }}
         />
       )}

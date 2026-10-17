@@ -61,6 +61,28 @@ async function registerProject(page: Page, wsDir: string): Promise<void> {
 }
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
+
+/** composer 键入（首条消息意图——Lexical 配方：contenteditable 收敛门 + insertText + 回显重试） */
+async function typeDraft(page: Page, text: string): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
+        return els.length > 0 && [...els].every((el) => el.isContentEditable)
+      },
+      undefined,
+      { timeout: 60_000 },
+    )
+    .catch(() => undefined)
+  const composer = page.locator('[data-composer-input]').first()
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await composer.click()
+    await page.keyboard.insertText(text)
+    const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
+    if (echoed.includes(text)) return
+    await page.waitForTimeout(5_000)
+  }
+}
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
 
 async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
@@ -118,14 +140,15 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
 
-    // ── 场景 B（先行——故障注入不可逆）：选主树行 → 编排成功 ──
+    // ── 场景 B（先行——故障注入不可逆）：选主树行（纯选中态）→ 首条消息意图 → 编排成功 ──
     await chip(page).first().click()
     await heroMenu(page).getByText('orch-repo', { exact: false }).first().click()
+    await typeDraft(page, '1-25 scene-b first message')
     // 挂靠事件在场（checks attachedSessions ≥ 1——header.cwd = worktree 根的宿主绑定面）
     await expect
       .poll(async () => attachedSessions(page, wsDir, wsDir), {
-        timeout: 30_000,
-        message: '主树应有挂靠会话（编排成功）',
+        timeout: 60_000,
+        message: '主树应有挂靠会话（首条消息时点编排成功）',
       })
       .toBeGreaterThanOrEqual(1)
     // seal 绑定回读（会话头 cwd 语义的宿主真相）：从 dshHome 会话账本定位预铸会话 id
@@ -176,13 +199,16 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
     }
     await snap(page, 'orchestration-success-session-chip.png')
 
-    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 再选 worktree 行 → Toast 显式报错 ──
+    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 再选 worktree 行（纯选中态）→
+    // 首条消息意图触发编排 → 失败 Toast 显式呈现（1.29 失败面只在首条消息时点）──
     await injectSessionCreateFaultFinal(page, app.app)
     const chipBefore = await chip(page).first().textContent()
     await chip(page).first().click()
     await heroMenu(page).getByText('orch-repo', { exact: false }).first().click()
+    await expect(page.getByText(/worktree 挂靠失败/), '点选零编排零 Toast（纯选中态）').toHaveCount(0)
+    await typeDraft(page, '1-25 scene-a first message')
     const failToast = page.getByText(/worktree 挂靠失败（创建挂靠会话）/)
-    await expect(failToast.first(), '编排失败官方 Toast 显式呈现（含环节语义）').toBeVisible({ timeout: 15_000 })
+    await expect(failToast.first(), '编排失败官方 Toast 显式呈现（含环节语义，首条消息时点）').toBeVisible({ timeout: 30_000 })
     console.log('[1.25-scene-a] toast =', await failToast.first().textContent())
     await snap(page, 'orchestration-failure-toast.png')
     // 会话不切换：wt-a 零新增挂靠（仍只有前置挂靠面）

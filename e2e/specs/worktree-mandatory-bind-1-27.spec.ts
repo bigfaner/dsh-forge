@@ -1,10 +1,10 @@
-// worktree-branch-management 1.27 真机 UI e2e：git 仓库会话必绑分支（对 1.26 的必绑收紧
-// ——选中主行同样走编排，git 项目不存在无绑定新会话）。
-//   · 场景 B（主树绑定）：默认锚定主行 → arm 编排自动消费（官方原流口子堵死）——
+// worktree-branch-management 1.27 真机 UI e2e（1.29 时序随动——会话创建唯一时机 = 首条
+// 消息）：git 仓库会话必绑分支——选中主行同样走编排，git 项目不存在无绑定新会话。
+//   · 场景 B（主树绑定）：默认锚定主行 → 首条消息意图（草稿键入）触发 arm 编排——
 //     seal 绑定回读 worktreePath = 项目根、branch = main、恒不封存；会话落盘目录 = 项目根
-//     cwd 分组；会话头 chip 呈现 main；双路防重（零重复建会话）；
-//   · 场景 A（树内会话）：选 wt-a（跨分支）→ 1.19 确认框 → 预铸编排——会话落盘目录含
-//     wt-a（cwd 各就各位）+ 会话头 chip 呈现 feat-a。
+//     cwd 分组；双路防重（零重复建会话）；
+//   · 场景 A（树内会话）：点选 wt-a = 纯选中态（零确认框零会话）→ 首条消息意图 →
+//     1.19 确认框 → 预铸编排——会话落盘目录含 wt-a（cwd 各就各位）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；会话头 chip =
 // [data-dswt-session-chip]；风险框 = role dialog「跨分支风险确认」。
 import { execFileSync } from 'node:child_process'
@@ -139,15 +139,41 @@ test('1.27 UI：git 项目会话必绑分支——主行锚定自动编排绑定
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
 
-    // ── 场景 B（先行——零交互即触发）：默认锚定主行 → 1.27 必绑收紧：主行同样进编排 ──
+    // ── 场景 B（主树绑定）：默认锚定主行（回填零会话）→ 首条消息意图触发 arm 编排 ──
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
-    // 主行 arm 编排自动消费：主树挂靠会话在场（官方原流口子堵死——不存在无绑定新会话）
+    // 1.29：挂载/回填零会话副作用（会话创建唯一时机 = 首条消息）
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wsDir), {
+        timeout: 30_000,
+        message: '回填不应预建主树挂靠会话（1.29 唯一时机）',
+      })
+      .toBe(0)
+    // 首条消息意图（主行同分支零风险——无确认框直通 arm）：键入触发主树绑定编排
+    await page
+      .waitForFunction(
+        () => {
+          const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
+          return els.length > 0 && [...els].every((el) => el.isContentEditable)
+        },
+        undefined,
+        { timeout: 60_000 },
+      )
+      .catch(() => undefined)
+    const sceneBComposer = page.locator('[data-composer-input]').first()
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await sceneBComposer.click()
+      await page.keyboard.insertText('1-27 scene-b first message')
+      const echoed = await sceneBComposer.evaluate((el) => (el as HTMLElement).textContent ?? '')
+      if (echoed.includes('1-27 scene-b first message')) break
+      await page.waitForTimeout(5_000)
+    }
+    // 主行 arm 编排消费：主树挂靠会话在场（官方原流口子堵死——不存在无绑定新会话）
     await expect
       .poll(async () => attachedSessions(page, wsDir, wsDir), {
         timeout: 60_000,
-        message: '主行锚定应编排绑定主树（1.27 必绑收紧）',
+        message: '首条消息意图应触发主行编排绑定主树（1.27 必绑收紧 @ 1.29 时点）',
       })
       .toBeGreaterThanOrEqual(1)
     // seal 绑定回读：worktreePath = 项目根 + branch = main + 恒不封存（主树恒在场）；
@@ -188,16 +214,31 @@ test('1.27 UI：git 项目会话必绑分支——主行锚定自动编排绑定
     }
     await snap(page, 'scene-b-main-tree-bound.png')
 
-    // ── 场景 A（树内会话）：选 wt-a（跨分支）→ 1.19 确认框 → 预铸编排（cwd = wt-a）──
+    // ── 场景 A（树内会话）：点选 wt-a = 纯选中态（1.29——零确认框零会话）→ 首条消息
+    // 意图 → 1.19 确认框 → 预铸编排（cwd = wt-a）──
+    await expect(heroRiskDialog(page), '点选不应弹确认框（1.29 时机后移）').not.toBeVisible({ timeout: 8_000 })
     await chip(page).first().click()
     await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
-    await expect(heroRiskDialog(page), '跨分支选中应先弹官方 RiskConfirmation').toBeVisible()
-    await snap(page, 'scene-a-risk-dialog.png')
-    await acknowledgeUntilSettled(page)
+    await expect(heroRiskDialog(page), '点选纯选中态——零确认框').not.toBeVisible({ timeout: 8_000 })
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '确认后应产生 wt-a 挂靠会话' })
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选不应产生 wt-a 挂靠会话（纯选中态）' })
+      .toBe(0)
+    // 首条消息意图：跨分支 → 确认框 → 确认才编排
+    const sceneAComposer = page.locator('[data-composer-input]').first()
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await sceneAComposer.click()
+      await page.keyboard.insertText('1-27 scene-a first message')
+      const echoed = await sceneAComposer.evaluate((el) => (el as HTMLElement).textContent ?? '')
+      if (echoed.includes('1-27 scene-a first message')) break
+      await page.waitForTimeout(5_000)
+    }
+    await expect(heroRiskDialog(page), '首条消息意图应触发跨分支确认框（时机后移）').toBeVisible({ timeout: 30_000 })
+    await snap(page, 'scene-a-risk-dialog.png')
+    await acknowledgeUntilSettled(page)
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后应产生 wt-a 挂靠会话（首条消息时点）' })
       .toBe(1)
     // cwd 各就各位：会话落盘目录含 wt-a（cwd = worktree 根）
     await expect

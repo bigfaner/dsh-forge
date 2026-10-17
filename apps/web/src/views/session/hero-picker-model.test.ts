@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
+  activeSessionIdOf,
+  activeSessionRowOf,
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
@@ -102,6 +104,29 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
   })
 })
 
+// 1.29——主视图在留会话行解析（id + cwd 双字段：草稿源寻址 + arm 去重判读）。
+describe('activeSessionRowOf / activeSessionIdOf（账本活源读面）', () => {
+  const ledger = (rows: Record<string, unknown>): { getSnapshot: () => { byId: Record<string, unknown> } } => ({
+    getSnapshot: () => ({ byId: rows }),
+  })
+
+  it('mainView > 0 的行 → id + cwd 双读（首行命中即返回）', () => {
+    const list = ledger({
+      's-a': { retainedBy: { mainView: 0 } },
+      's-b': { retainedBy: { mainView: 1 }, cwd: 'C:\\repo\\wt-a' },
+    })
+    expect(activeSessionRowOf(list)).toEqual({ id: 's-b', cwd: 'C:\\repo\\wt-a' })
+    expect(activeSessionIdOf(list)).toBe('s-b')
+  })
+
+  it('无在留行 / cwd 空 → cwd undefined、id 照读；空账本 = undefined', () => {
+    const noCwd = ledger({ 's-a': { retainedBy: { mainView: 2 } } })
+    expect(activeSessionRowOf(noCwd)).toEqual({ id: 's-a', cwd: undefined })
+    expect(activeSessionRowOf(ledger({}))).toBeUndefined()
+    expect(activeSessionIdOf(undefined)).toBeUndefined()
+  })
+})
+
 // 1.25（bug af65c0a9）双静默路显式化——文案纯函数单源。
 describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
   it('注入面缺席 → 明示「编排面不可用」（旧插件面/装配降级，不静默 no-op）', () => {
@@ -123,8 +148,8 @@ describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
   })
 })
 
-// 1.27 必绑收紧——arm 闸纯函数（主行同样进编排）。
-describe('shouldArmSelectedRow（1.27 主行编排默认）', () => {
+// 1.29——arm 闸纯函数（会话创建唯一时机 = 首条消息；主行 1.27 必绑同在该时点）。
+describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
   const input = (over: Partial<Parameters<typeof shouldArmSelectedRow>[0]> = {}) => ({
     phaseReadyGit: true,
     path: 'C:/repo/.forge/worktrees/wt-a',
@@ -132,15 +157,35 @@ describe('shouldArmSelectedRow（1.27 主行编排默认）', () => {
     rowPresent: true,
     isMain: false,
     currentCwd: 'C:/repo/.forge/worktrees/wt-a',
+    draftIntent: true,
+    currentSessionId: 's-cur',
+    armedSessionId: undefined,
+    armedPath: undefined,
     ...over,
   })
 
-  it('树内行当前 cwd 已在选中树 → 不 arm（双路不重复建会话——1.26 现状保留）', () => {
+  it('草稿空（无首条消息意图）→ 不 arm——点选/回填零会话副作用（1.29 唯一时机闸门）', () => {
+    expect(shouldArmSelectedRow(input({ draftIntent: false }))).toBe(false)
+  })
+
+  it('树内行当前 cwd 已在选中树 → 不 arm（已在该会话，零重复建）', () => {
     expect(shouldArmSelectedRow(input())).toBe(false)
   })
 
-  it('树内行 cwd 在别处 → arm（官方新会话流落回主树后重消费——1.26 现状保留）', () => {
+  it('树内行 cwd 在别处 → arm（官方新会话流落回主树后重消费）', () => {
     expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere' }))).toBe(true)
+  })
+
+  it('armed 去重：arm 产物即当前会话且选中路径未变 → 不 arm（键入续字零重入）', () => {
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-cur', armedPath: 'C:/repo/.forge/worktrees/wt-a' }))).toBe(false)
+  })
+
+  it('armed 去重失效：改选他行（armedPath ≠ path）→ 重新 arm', () => {
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-cur', armedPath: 'C:/repo' }))).toBe(true)
+  })
+
+  it('armed 去重失效：官方新会话流另起新 id → 重新 arm', () => {
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-old', armedPath: 'C:/repo/.forge/worktrees/wt-a', currentSessionId: 's-new' }))).toBe(true)
   })
 
   it('主行 cwd 恒等于项目根（官方 blank 落根、无绑定）→ 仍 arm（1.27：cwd 去重对主行不适用）', () => {

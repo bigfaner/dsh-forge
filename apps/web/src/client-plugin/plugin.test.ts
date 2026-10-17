@@ -643,12 +643,16 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
         openSession: (id: string) => void
         blankSessionByCwd?: (cwd: string) => string | undefined
         sessionsList?: unknown
+        composerDraft?: { sourceOf?: unknown; carryDraft?: unknown }
       }
     }
     expect(typeof heroFace.worktree?.openSession).toBe('function')
-    // 1.26 编排默认两账本面（reuse-or-create 去重 + 账本快照源——mount 订阅驱动 arm cwd）
+    // 编排默认账本面（reuse-or-create 去重 + 账本快照源——mount 订阅驱动 arm 去重）
     expect(typeof heroFace.worktree?.blankSessionByCwd).toBe('function')
     expect(heroFace.worktree?.sessionsList).toBeDefined()
+    // 1.29 首条消息意图缝（composer 草稿源 + arm 后草稿搬运——会话创建唯一时机的闸门）
+    expect(typeof heroFace.worktree?.composerDraft?.sourceOf).toBe('function')
+    expect(typeof heroFace.worktree?.composerDraft?.carryDraft).toBe('function')
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__

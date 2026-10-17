@@ -63,24 +63,30 @@ export function selectedProjectRootOf(
   return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
 }
 
-// ───────────── 1.25（bug af65c0a9）双静默路显式化：提示文案纯函数单源 ─────────────
+// ───────────── 1.25（bug af65c0a9）失败显式化：提示文案纯函数单源（1.29——失败面只在
+// 首条消息时点发生：点选纯选中态无编排可失败，编排失败呈现走 arm 消费点的 Toast） ─────────────
 
 /** worktree 注入面缺席提示（旧插件面/装配降级——不静默 no-op，官方 Toast 呈现） */
 export function worktreeFaceUnavailableNotice(): string {
-  return 'worktree 编排面不可用（插件版本陈旧？），未能进入所选 worktree'
+  return 'worktree 编排面不可用（插件版本陈旧？），首条消息将落主树'
 }
 
 /**
  * worktree 挂靠编排失败提示（含环节语义——sessionCreate / openSession 两步；
- * bug af65c0a9 Root cause: 原 onWorktreeSelect 编排失败 `.catch(() => {})` 静默吞错，
- * 用户点选后以为已进入 worktree，实际仍在默认主树会话里。
+ * bug af65c0a9 Root cause: 编排失败静默吞错，以为已在选中 worktree，实际仍在主树会话）。
+ * 1.29 时点注记：本提示只在首条消息时点（arm 消费点）出现。
  */
 export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: string): string {
   const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
-  return `worktree 挂靠失败（${stageText}）：${cause}，当前会话未切换`
+  return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
 }
 
 // ───────────── 1.26 编排默认：账本快照读面（纯函数——plugin.ts 重导出单源） ─────────────
+//
+// 1.29 时序裁决（点选去编排化）：会话创建唯一时机 = 首条消息——点选 worktree 行只更新
+// 选中态（chip 回填 + 项目粒度记忆），零编排零确认框；1.26 编排默认（arm）消费点唯一化，
+// 由 composer 首条消息意图（draft 非空）驱动。1.25 失败 Toast 与 1.19 跨分支确认框随
+// 编排同移至该时点（确认前消息不发出——草稿留在 composer，arm 未完成无发送面）。
 
 /**
  * worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对单源）：
@@ -106,20 +112,71 @@ function ledgerRowsOf(list: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * 主视图在留会话 cwd 解析（1.26 编排默认 arm 去重判定——`retainedBy.mainView > 0` 官方
- * publishMain 同判据，加读 cwd 字段）。快照缺席/形状漂移/无在留行 = undefined。
+ * 主视图在留会话行解析（1.29——`retainedBy.mainView > 0` 官方 publishMain 同判据，读 id +
+ * cwd 双字段：id 驱动 composer 草稿源寻址与 arm 后去重，cwd 驱动 arm 去重）。无在留行 =
+ * undefined。
  */
-export function activeSessionCwdOf(list: unknown): string | undefined {
-  for (const row of Object.values(ledgerRowsOf(list) ?? {})) {
+export function activeSessionRowOf(list: unknown): { readonly id: string; readonly cwd?: string } | undefined {
+  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
     const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
-    const cwd = (row as { cwd?: unknown } | null)?.cwd
-    if (typeof mainView === 'number' && mainView > 0 && typeof cwd === 'string' && cwd !== '') return cwd
+    if (typeof mainView === 'number' && mainView > 0 && id !== '') {
+      const cwd = (row as { cwd?: unknown } | null)?.cwd
+      return { id, cwd: typeof cwd === 'string' && cwd !== '' ? cwd : undefined }
+    }
   }
   return undefined
 }
 
+/** 主视图在留会话 id（activeSessionRowOf 投影） */
+export function activeSessionIdOf(list: unknown): string | undefined {
+  return activeSessionRowOf(list)?.id
+}
+
+/** arm 闸输入（挂载面效应读数的窄投影——判读单源，WorktreeFaces arm 效应消费） */
+export interface ArmGateInput {
+  /** 清单就绪且 isGit（能力位真） */
+  readonly phaseReadyGit: boolean
+  readonly path: string | undefined
+  /** 失败/取消抑制集（1.25/1.26——失败循环零重入） */
+  readonly suppressed: readonly string[]
+  readonly rowPresent: boolean
+  readonly isMain: boolean
+  /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
+  readonly currentCwd: string | undefined
+  /** 首条消息意图（1.29——composer 草稿非空；会话创建唯一时机的闸门） */
+  readonly draftIntent: boolean
+  /** 当前主视图会话 id（armed 去重——arm 已把当前会话换成本编排产物时零重入） */
+  readonly currentSessionId: string | undefined
+  /** 最近一次 arm 成功产物会话 id（undefined = 本挂载期尚未 arm） */
+  readonly armedSessionId: string | undefined
+  /** 最近一次 arm 成功的选中路径（armed 去重按路径生效——改选他行即重新消费） */
+  readonly armedPath: string | undefined
+}
+
 /**
- * 按 cwd 反查空白会话 id（1.26 双路不重复建会话——点选/arm 前 reuse-or-create 判定，
+ * 编排默认 arm 闸（1.29 首条消息时点）：选中行在场 + 首条消息意图（draft 非空）即候选。
+ * 树内行沿用 1.26 cwd 去重——当前 cwd 已在选中树 = 已在选中会话（双路不重复建会话）；
+ * **主行不适用 cwd 去重**：官方新会话流的 blank 恒落项目根 cwd 且无绑定，「cwd 已在根」
+ * 恰是须补绑定的待编排态，而非「已建」证据。armed 去重（1.29）：arm 产物即当前会话 =
+ * 本轮编排已消费（键入续字零重入）；官方新会话流另起新 id → 去重自然失效，编排默认
+ * 重新消费。既有无绑定历史会话不回填——本闸只在 hero/新会话阶段被消费，历史会话打开
+ * 不进 hero 面（生效路径注记：仅对新建会话生效）。
+ */
+export function shouldArmSelectedRow(input: ArmGateInput): boolean {
+  if (!input.phaseReadyGit) return false
+  if (input.path === undefined) return false
+  if (input.suppressed.includes(input.path)) return false
+  if (!input.rowPresent) return false
+  if (!input.draftIntent) return false
+  if (input.armedSessionId !== undefined && input.armedPath === input.path && input.currentSessionId === input.armedSessionId) return false
+  if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话，
  * 官方 reuseOrCreateBlank 语义同构：`blank && cwd` 归一命中即复用，不再新建）。
  * 无命中/快照漂移 = undefined。
  */
@@ -135,35 +192,41 @@ export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | unde
   return undefined
 }
 
-// ───────────── 1.27 必绑收紧：编排默认 arm 闸纯函数（主行同样进编排） ─────────────
+// ───────────── 1.29 composer 草稿缝（首条消息意图源 + arm 后草稿搬运——plugin.ts 注入） ─────────────
 
-/** arm 闸输入（挂载面效应读数的窄投影——判读单源，WorktreeFaces arm 效应消费） */
-export interface ArmGateInput {
-  /** 清单就绪且 isGit（能力位真） */
-  readonly phaseReadyGit: boolean
-  readonly path: string | undefined
-  /** 失败/取消抑制集（1.25/1.26——失败循环零重入） */
-  readonly suppressed: readonly string[]
-  readonly rowPresent: boolean
-  readonly isMain: boolean
-  /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
-  readonly currentCwd: string | undefined
+/** 官方 InputState 快照窄读切片（draft 消费——形状漂移 = fail-soft 空串） */
+export type DraftSourceFace = {
+  readonly getSnapshot?: () => unknown
+  readonly subscribe?: (onChange: () => void) => () => void
+}
+
+/** composer 草稿缝（plugin.ts inject 递达；缺席 = fail-soft 无意图源——arm 不消费） */
+export interface WorktreeComposerDraftFace {
+  /** 会话 id → InputState 快照源（binding 未就绪/缝缺席 = undefined） */
+  readonly sourceOf?: (sessionId: string) => DraftSourceFace | undefined
+  /** 草稿搬运（arm 换会话后把已键入首条消息 setDraft 到产物会话；previousSessionId
+   * 在场时顺带清原会话草稿防幻影——均 best-effort，失败 = 草稿留在原会话不丢） */
+  readonly carryDraft?: (sessionId: string, text: string, previousSessionId?: string) => Promise<boolean>
+}
+
+/** hero worktree inject face（1.29 形态——编排缝仅剩 arm 消费点；点选零编排） */
+export interface HeroWorktreeFace {
+  /** 官方 openSession（arm 换会话呈现） */
+  readonly openSession: (sessionId: string) => void
+  /** 空白会话按 cwd 反查（reuse-or-create——arm 重复消费不重复建会话） */
+  readonly blankSessionByCwd?: (cwd: string) => string | undefined
+  /** 账本快照源（arm 去重/重消费活源） */
+  readonly sessionsList?: unknown
+  /** composer 草稿缝（首条消息意图源 + 草稿搬运；缺席 = arm 不消费） */
+  readonly composerDraft?: WorktreeComposerDraftFace
+  /** 挂靠编排缝（arm 唯一消费点——sessionCreate/attach/openSession 一体；失败已由
+   * 编排面 1.25 Toast 呈现，返回 null） */
+  readonly orchestrate?: WorktreeOrchestrateFn
 }
 
 /**
- * 编排默认 arm 闸（1.27 必绑收紧）：选中行在场即候选。树内行沿用 1.26 cwd 去重——
- * 当前 cwd 已在选中树 = 点选/先前编排已建（双路不重复建会话）；**主行不适用 cwd 去重**：
- * 官方新会话流的 blank 恒落项目根 cwd 且无绑定，「cwd 已在根」恰是须补绑定的待编排态，
- * 而非「已建」证据。既有无绑定历史会话不回填——本闸只在 hero/新会话阶段被消费，
- * 历史会话打开不进 hero 面（生效路径注记：仅对新建会话生效）。
+ * 编排缝消费结果（arm 唯一消费点——点选不再触达）：sessionId = 编排产物（已 openSession，
+ * 草稿搬运落点）；null = 失败（错误已由编排面 1.25 Toast 呈现，选中态同清）。
  */
-export function shouldArmSelectedRow(input: ArmGateInput): boolean {
-  if (!input.phaseReadyGit) return false
-  if (input.path === undefined) return false
-  if (input.suppressed.includes(input.path)) return false
-  if (!input.rowPresent) return false
-  if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
-    return false
-  }
-  return true
-}
+export type WorktreeOrchestrateOutcome = string | null
+export type WorktreeOrchestrateFn = (path: string) => Promise<WorktreeOrchestrateOutcome>
