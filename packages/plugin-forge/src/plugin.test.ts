@@ -265,11 +265,11 @@ function pipelineTextOf(rt: TempRuntime, agentId: string | undefined): string {
   return (text as (context: { agent?: { id?: string } }) => string)({ agent: { id: agentId } })
 }
 
-describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511）', () => {
-  it('默认装配：双段（pipeline + doc-style，name/order/text 三件在场）', () => {
+describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511 + forge:dispatch-loop / order 512）', () => {
+  it('默认装配：三段（pipeline + doc-style + dispatch-loop，name/order/text 三件在场）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.sections).toHaveLength(2)
+    expect(rt.sections).toHaveLength(3)
     const pipeline = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
     const docStyle = rt.sections.find((s) => s.name === 'forge:doc-style')
     expect(pipeline?.order).toBe(510)
@@ -280,6 +280,12 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     expect(docStyle?.text).toContain('文档风格公约')
     // pipeline 段本体不再携带公约（拆段后单一归属）
     expect(pipelineTextOf(rt, undefined)).not.toContain('文档风格公约')
+    // 3b dispatch-loop 段（registry 单例闭包注入——无活登记 = 空串零固定税）
+    const dispatchLoop = rt.sections.find((s) => s.name === 'forge:dispatch-loop')
+    expect(dispatchLoop?.order).toBe(512)
+    expect(typeof dispatchLoop?.text).toBe('function')
+    const dispatchLoopText = dispatchLoop?.text as (context: { agent?: { id?: string } }) => string
+    expect(dispatchLoopText({ agent: { id: 'sess-a1' } })).toBe('')
     dispose()
   })
 
@@ -295,11 +301,11 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     d2()
   })
 
-  it('disposer 全注销（tool×13 + 段×2，各恰一次）', () => {
+  it('disposer 全注销（tool×13 + 段×3，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 13, sections: 2 })
+    expect(rt.disposedCounts()).toEqual({ tools: 13, sections: 3 })
   })
 })
 
@@ -379,7 +385,7 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(pipelineTextOf(rt, 'sess-x')).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 13, sections: 2 })
+    expect(rt.disposedCounts()).toEqual({ tools: 13, sections: 3 })
   })
 })
 

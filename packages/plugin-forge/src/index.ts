@@ -31,6 +31,8 @@ import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
+import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
+import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
@@ -249,7 +251,12 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       knownContainers = undefined
     }
+    // 3b 注入面 registry 单例（装配方持有——驱动器 deps 注入共享同一登记表；section 回调
+    // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
+    // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
+    const loopRegistry = createLoopRegistry()
     const loopDriverBase = createLoopDriver({
+      registry: loopRegistry,
       tasks: ctx.forgeTasks,
       spawn,
       narrator,
@@ -440,6 +447,14 @@ const forgePlugin: ForgePlugin = Object.assign(
           mode: pipelineMode,
         }),
     })
+    // 3b 协作面驻留段（P1 驻留 / 挂起 P3+P9——injection-spec 载体分配：P1/P9 永走系统提示词）。
+    // 段 text 每回合现调：agent.id 缺席 = 空串；registry 投影无命中 = 空串（零固定税——
+    // 协作外会话提示词与无此插件时逐字节一致）；占位符残留段 fail-soft 跳段（injection.ts 落盘告警）。
+    const disposeDispatchLoop = ctx.systemPrompt.section({
+      name: FORGE_DISPATCH_LOOP_SECTION_NAME,
+      order: FORGE_DOC_STYLE_SECTION_ORDER + FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, // 512（doc-style 511 之后——forge 段族次序稳定）
+      text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry)),
+    })
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),
@@ -460,6 +475,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       // pipeline 段函数形态单次注册（按装配求值，无重注册升级面）；doc-style
       // 独立段双模式共用（disposeDocStyle 恰一份）。
       () => disposePipeline(),
+      () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
