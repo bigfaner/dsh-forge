@@ -75,7 +75,8 @@ flowchart LR
 | `GET /remote/forge-stream`（v3 新增加密 SSE 推送） | 路径、信封头 `v/sid/epoch/iv/seq` | **每帧事件体**（api-session/*、approval、forge/progress 推送镜像） | 同上（s2c 方向） | host Ed25519 逐帧 |
 | 官方 `/api/*` 单呼 + `WS /api/remote.mux`（LAN） | 官方信封原样 | **不加密**——本机网络边界 + IP 围栏 + cookie 即安全边界（裁决 5） | — | — |
 | `/remote/`、`/pair*`（页面/配对） | HTML/token/PIN | 不加密（**残余风险显式接受**——PIN 窗口极小） | — | — |
-| 文件下载（隧道，v3/§6.4） | 路径、块信封头 | **分块 AEAD**（每块独立 seq，断点安全） | 同上 | host Ed25519 逐块（清单模式：块 hash 清单首块签名） |
+| **静态资源**（dist html/css/js/组合脚本，v3.1） | 路径、`X-Forge-Sig`/`X-Forge-Key-Id` 签名头 | **不加密**（公开产物） | — | **host Ed25519 签名**（mobile 运行时验证——见 §4.5） |
+| 文件下载（隧道，v3/§4.4） | 路径、块信封头 | **分块 AEAD**（每块独立 seq，断点安全） | 同上 | host Ed25519 逐块（清单模式：块 hash 清单首块签名） |
 | 文件/消息体（LAN） | 官方原样 | 不加密 | — | — |
 
 ### 4.2 签名层（v3——独立于 AEAD 的完整性/身份层）
@@ -92,7 +93,15 @@ flowchart LR
 - **信封纪律（AC 固定）**：外层除 v/sid/epoch/iv/seq/ct/sig 外**零明文语义字段**；v 仅升不降。
 - **加密 SSE 推送通道（v3）**：`GET /remote/forge-stream`（PSK 信封头认证）——forge 侧订阅 host 事件（含 `api-session/*`、`approval/request`、forge 任务进度）经 typert/服务 in-process 直调后**逐帧 AEAD 加密**推送。作用：隧道模式从 v2 的轮询降级**恢复推送能力**（会话变更/审批到达/任务进度实时到达，帧体加密）。
 
-## 4.3 性能预算（v3——数据量评估）
+## 4.5 静态资源签名（v3.1——不加密，但要签名）
+
+- **host 侧**：全部 `/remote/` 静态响应（dist html/css/js、`/plugins` 组合脚本、资源文件）统一附 `X-Forge-Sig: base64(Ed25519.sign(sk, path ‖ body))` + `X-Forge-Key-Id`（对应 mobile 手中的 host 公钥）。
+- **mobile 侧验证分层**：
+  - **动态资源（必须验签后才执行）**：已受信页面加载的懒加载脚本/组合脚本/视图 chunk——`fetch → Ed25519 验签 → 再 import/eval`。**boot 组合脚本必经此通道**（组合脚本被篡改 = PSK 加密层运行在被污染代码里——PSK 完整性的根）。
+  - **入口 HTML（结构性残余风险，显式声明）**：首个 HTML 无法自证（篡改页的 JS 先于任何验证代码执行）。缓解 = 首次激活经 LAN 访问建立受信基线（入口缓存 + host 公钥录入同窗完成）；隧道直连首次访问且无基线 = 接受风险并提示用户。
+- host 公钥与 PSK 同窗带外录入（mobile 设置面同屏两字段：PSK + host 公钥指纹）。
+
+## 4.6 性能预算（v3——数据量评估）
 
 | 负载 | 规模 | AES-256-GCM 开销（AES-NI） | 结论 |
 |---|---|---|---|
@@ -218,3 +227,4 @@ sequenceDiagram
 | 11 | 签名层独立于 AEAD：s2c host Ed25519、c2s 设备 Ed25519（注册后），失效域分离（v3/§4.2） |
 | 12 | 隧道推送 = 加密 SSE `forge-stream`（forge 侧订阅 host 事件镜像），隧道模式恢复推送（v3） |
 | 13 | 性能纪律 = 列表整包单信封、逐帧仅限流式语义、文件分块 AEAD（v3/§4.3-4.4） |
+| 14 | 静态资源不加密 + host Ed25519 签名；动态加载脚本验签后才执行；入口 HTML 首访信任 = 显式残余风险，缓解 = LAN 首激活建立基线（v3.1/§4.5） |
