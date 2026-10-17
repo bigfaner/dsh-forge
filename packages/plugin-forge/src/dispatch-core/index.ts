@@ -4,7 +4,7 @@
 // 下线边界（工具面整体移除而核心面/循环/核心单测零波及，decisions #10）。
 export { dispatchCore } from './core.js'
 // S1b 三段阶段面（runRound 交错点——循环驱动器逐段消费同一实现；依赖方向：loop/ → 本面单向）
-export { claimForDispatch, settleClaimed, spawnClaimed } from './core.js'
+export { claimForDispatch, settleClaimed, spawnClaimed, findLiveSuccessor } from './core.js'
 export type {
   ClaimStageResult,
   ClaimedDispatch,

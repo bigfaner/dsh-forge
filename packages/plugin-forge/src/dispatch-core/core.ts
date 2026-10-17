@@ -27,6 +27,7 @@ import type {
   ForgeSettingsService,
   ForgeTasksService,
   Mode,
+  TaskCard,
   TaskProgressPhase,
   TaskRef,
   TaskSnapshot,
@@ -211,6 +212,37 @@ function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: 
       return failureDto(taskKey, message)
     },
   }
+}
+
+// ─────────────────────────── 后继任务活性判定（dispatch-loop-hardening 改进 1） ───────────────────────────
+
+/**
+ * 活的后继任务判定（blocked 静默边界——循环 driver blocked 结算径消费）：后继 = sourceTask
+ * 挂接该任务的派生 fix/继任卡；活 = pending/in_progress，或 blocked 且其自有后继递归存在活者。
+ * rejected/skipped/completed = 断链（不展开）。容器内单次 listTasks 现读 + 内存遍历（visited
+ * 防环——fix 链深 ≤6 结构性有界，visited 仅防御性兜底）。返回首个活后继卡（ref 键载体）；
+ * 无活后继 = undefined（调用方退化为现状问询径）。
+ */
+export async function findLiveSuccessor(
+  tasks: ForgeTasksService,
+  projectId: string,
+  source: ContainerRef,
+  task: TaskRef,
+): Promise<TaskCard | undefined> {
+  const cards = await tasks.listTasks({ projectId, source })
+  const successorsOf = (ref: TaskRef): TaskCard[] =>
+    cards.filter((card) => card.sourceTask !== undefined && card.sourceTask.slug === ref.slug && card.sourceTask.localId === ref.localId)
+  const seen = new Set([`${task.slug}/${task.localId}`])
+  const stack = [...successorsOf(task)]
+  while (stack.length > 0) {
+    const card = stack.pop() as TaskCard
+    const key = `${card.slug}/${card.localId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (card.taskStatus === 'pending' || card.taskStatus === 'in_progress') return card
+    if (card.taskStatus === 'blocked') stack.push(...successorsOf({ slug: card.slug, localId: card.localId }))
+  }
+  return undefined
 }
 
 // ─────────────────────────── 阶段一：claim（守卫 + 领取 + 事件） ───────────────────────────

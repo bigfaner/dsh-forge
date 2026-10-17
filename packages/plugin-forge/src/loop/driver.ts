@@ -25,7 +25,7 @@
 import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
-import { claimForDispatch, classifyPool, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
+import { claimForDispatch, classifyPool, findLiveSuccessor, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
 import type {
   ClaimedDispatch,
   DispatchChainScope,
@@ -756,11 +756,17 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue' // 续领下一轮
   }
 
-  // blocked：worker 侧已 spawn fix → 机械续领不升级（fix ready 自然被领——decisions #22）
+  // blocked 静默边界（dispatch-loop-hardening 改进 1）：静默条件收窄为「存在活的后继任务」
+  //（blockSource 挂接本任务的派生 fix/继任处于 pending/in_progress；blocked 后继须自有活后继；
+  // rejected/skipped/completed = 断链）。活后继在场 → 非阻塞 notify（notice 径——reason 摘要 +
+  // 后继任务键进叙述与折叠位）+ 事件子文件夹留痕，不上浮问询、续领后继。
+  // 后继死了（自身 blocked 无再下级活后继 / rejected / skipped）或无后继 → 不静默，照旧落
+  // 下方无进展硬停门与 triage 阶梯（问询恢复上浮；活性查询漏判/故障退化为现状问询）。
   const meta = { projectId: scope.projectId, taskKey: task.localId, reason: settlement.reason ?? '', settlement }
   const reason = settlement.reason ?? ''
-  if (settlement.followUp !== undefined) {
-    await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: settlement.followUp.localId }, meta)
+  const liveSuccessor = await findLiveSuccessor(deps.tasks, scope.projectId, source, { slug: task.slug, localId: task.localId })
+  if (liveSuccessor !== undefined) {
+    await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: liveSuccessor.localId }, meta)
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue'
   }

@@ -554,6 +554,72 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
   })
 
+  it('静默边界（改进 1）：后继任务自身 blocked 且无再下级活后继 → 问询恢复上浮（triage ask-user 升级终局）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'ask-user' }),
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 死后继不静默：blocked-with-fix notice 零出现，blocked-ask-user followup + 升级在场
+    expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    expect(built.escalations.map((e) => e.kind)).toEqual(['blocked-ask-user'])
+    expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
+  })
+
+  it('静默边界（改进 1）：后继任务被 rejected → 问询恢复上浮', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'ask-user' }),
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'rejected' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    expect(built.escalations.map((e) => e.kind)).toEqual(['blocked-ask-user'])
+  })
+
+  it('静默边界（改进 1）：后继 blocked 但其自有活后继在场（fix-2 pending）→ 静默 notify（后继键进叙述）+ 零升级', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 0, blocked: 2 }),
+        statsOf({ pending: 0, blocked: 2 }),
+      ],
+      query: [queryOf('blocked')],
+    })
+    built.h.lists.created = [
+      card('feat-x', 'fix-2', { sourceTask: { slug: 'feat-x', localId: 'fix-1' }, taskStatus: 'pending' }),
+      card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' }),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 非阻塞 notify 在场：reason 摘要 + 活后继键（fix-2，递归穿越 blocked 后继）
+    const blockedNotice = built.calls.find((c) => c.text.includes('[forge·阻塞]'))
+    expect(blockedNotice?.text).toContain('tests hang on flaky selector')
+    expect(blockedNotice?.text).toContain('fix-2')
+    // 零问询升级（blocked-pool 池终局以外的处置升级缺席）
+    expect(built.escalations.filter((e) => e.kind === 'blocked-ask-user')).toEqual([])
+  })
+
   it('blocked 无 follow-up + 处置钩子 add-fix：钩子收到任务/reason 全文 → 宿主 addTask（blockSource 链）→ ⑧ 叙述 → 续领', async () => {
     const built = build({
       claim: [claimed('2.5'), NO_TASK],
