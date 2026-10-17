@@ -29,7 +29,7 @@ import {
 const fakeExt = {
   getExtensionPoints: () => ({
     resolveProject: async (cwd: string) =>
-      cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true },
+      cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true, projectName: 'dsh-forge' },
     getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
   }),
 }
@@ -98,7 +98,8 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
   const registry = {
     resolveByPath: async (path: string) => {
       const title = titles[path]
-      return title === undefined ? undefined : { title }
+      if (title === undefined) return undefined
+      return { title, setTitle: async (next: string) => titled.push({ path, title: next }) }
     },
     create: async (path: string, title?: string) => {
       created.push({ path, title })
@@ -204,6 +205,26 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     })
     await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(titled).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' }])
+  })
+
+  it('存量 healing 第二触发点：list 顺带对齐树工作区 title（主行跳过；已在途打开/选择的旧工作区自愈）', async () => {
+    const { registry, titled } = fakeWorkspaceRegistry(undefined, {
+      'C:/repo/.forge/worktrees/wt-a': 'redesign', // 旧工作区残留错误 title
+    })
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [
+        { path: 'C:/repo', branch: 'main', detached: false, bare: false },
+        { path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a', detached: false, bare: false },
+      ],
+      workspaceRegistry: registry,
+    })
+    const result = await service.list({ projectRoot: 'C:/repo' })
+    expect(result.isGit).toBe(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0)) // heal 为 fire-and-forget——让微任务排空
+    expect(titled, '旧工作区未随 list 自愈（存量边界）').toEqual([
+      { path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' },
+    ])
   })
 
   it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {

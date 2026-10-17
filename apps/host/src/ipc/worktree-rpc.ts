@@ -126,8 +126,8 @@ export interface WorkspaceEntityFace {
 export interface WorkspaceRegistryFace {
   /** find-or-create：realpath 归一比对，同规范路径已存在即复用不改 title（官方 registry 面） */
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
-  /** 按规范路径只读解析（项目命名继承源）；缺席 = 旧替身/降级面 */
-  resolveByPath?(path: string): Promise<{ readonly title: string } | undefined>
+  /** 按规范路径只读解析（项目命名继承源 + 存量 title 对齐读面）；缺席 = 旧替身/降级面 */
+  resolveByPath?(path: string): Promise<{ readonly title: string; setTitle?(title: string): Promise<void> } | undefined>
 }
 
 const noGit: WorktreeListResult = { isGit: false, entries: [] }
@@ -158,6 +158,8 @@ export function createWorktreeRpcService(deps: {
   readonly listPresent?: ((projectRoot: string) => Promise<readonly string[]>) | undefined
   /** worktree 清单注入缝（branch 解析面——缺省 = 插件域 listWorktrees 真机 git） */
   readonly listWorktreeEntries?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null }[]>) | undefined
+  /** worktree 清单行注入缝（list 通道本体——缺省 = 插件域 listWorktrees 真机 git） */
+  readonly listWorktreeRows?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null; detached: boolean; bare: boolean }[]>) | undefined
   /** 默认 agentPreset 解析缝（官方 agentPresets registry——缺席/拒绝 = 头缺席零猜测，bug eae18b5c） */
   readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
   readonly warn?: (message: string) => void
@@ -265,6 +267,32 @@ export function createWorktreeRpcService(deps: {
     }
   }
 
+  /**
+   * 存量树工作区 title 对齐（list 通道顺带 healing——attach 只在编排新建会话时触发，
+   * 修复前建的树工作区若只被打开/选择将永无回写时机；list = hero 挂载/刷新必经之路）。
+   * 幂等：title 已等于项目名即零写；主行跳过（用户命名面）；失败 fail-soft 零扰清单。
+   */
+  const healWorkspaceTitles = (
+    resolution: { projectRoot: string; projectName?: string },
+    dtos: readonly WorktreeEntryDto[],
+  ): void => {
+    const registry = resolveWorkspaceRegistry()
+    const projectName = resolution.projectName
+    if (registry === undefined || projectName === undefined || projectName === '') return
+    for (const entry of dtos) {
+      if (entry.isMain) continue
+      void (async (): Promise<void> => {
+        try {
+          const workspace = await registry.resolveByPath?.(entry.path)
+          if (workspace === undefined || workspace.title === projectName) return
+          await workspace.setTitle?.(projectName)
+        } catch (cause) {
+          warn(`[git-worktree] 树工作区 title 对齐失败（fail-soft）：${entry.worktreeName}：${String(cause)}`)
+        }
+      })()
+    }
+  }
+
   const entryToDto = (entry: { path: string; branch: string | null; detached: boolean; bare: boolean }, projectRoot: string): WorktreeEntryDto => ({
     path: entry.path,
     branch: entry.branch,
@@ -348,13 +376,15 @@ export function createWorktreeRpcService(deps: {
         return noGit
       }
       const [entries, dir] = await Promise.all([
-        listWorktrees(resolution.projectRoot),
+        (deps.listWorktreeRows ?? listWorktrees)(resolution.projectRoot),
         Promise.resolve(ext().getWorktreeDir(resolution.projectRoot)),
       ])
+      const dtos = entries.map((entry) => entryToDto(entry, resolution.projectRoot))
+      healWorkspaceTitles(resolution, dtos)
       return {
         isGit: true,
         worktreeDir: dir,
-        entries: entries.map((entry) => entryToDto(entry, resolution.projectRoot)),
+        entries: dtos,
       }
     },
 
