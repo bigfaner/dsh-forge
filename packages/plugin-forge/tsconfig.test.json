@@ -9,6 +9,6 @@
     "incremental": false,
     "rootDir": "../"
   },
-  "include": ["src"],
+  "include": ["src", "tests", "e2e"],
   "exclude": []
 }

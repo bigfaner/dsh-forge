@@ -38,6 +38,8 @@ import type {
 import { clearExclusiveLoopSource, ownerSingleActiveRejection, setExclusiveLoopSource } from '../dispatch-core/index.js'
 import { renderHeadline, renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
+import { renderEndOfLoop } from './injection.js'
+import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
@@ -541,7 +543,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', taskKey: captured.taskKey })
     }
     const stats = await statsFailSoft(loop)
-    await deps.narrator.followup(
+    // ⑰ 停止收口 = settlement 形态（3b④——dispatch-loop-settled source + 三径投递）
+    await deps.narrator.settle(
       record.ownerSessionId,
       renderNarrative('stopped-by-command', {
         sourceSlug: record.source.slug,
@@ -1198,16 +1201,29 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutcome> {
   const verdict = classifyPool(pool)
   if (verdict === 'done') {
-    // 任务源 settled → 收口叙述（⑯ 结束·全部完成）+ 循环终态
+    // 任务源 settled → settlement 收口（3b④：⑯ 骨架文 + P8 评审指示段追加——四重点逐字在文，
+    // source {kind:'dispatch-loop-settled'} 持久 user message 三径投递）
     const stats = await statsFailSoft(loop)
-    await loop.deps.narrator.followup(
+    const settledPayload: InjectionPayload = {
+      slug: loop.record.source.slug,
+      ownerSessionId: loop.record.ownerSessionId,
+      taskKey: '',
+      reason: '',
+      history: '',
+      completed: stats.byStatus.completed,
+      blocked: stats.byStatus.blocked,
+    }
+    await loop.deps.narrator.settle(
       loop.record.ownerSessionId,
-      renderNarrative('finished-all', {
-        sourceSlug: loop.record.source.slug,
-        completed: stats.byStatus.completed,
-        blocked: stats.byStatus.blocked,
-        instruction: LOOP_INSTRUCTION_ALL_DONE,
-      }),
+      [
+        renderNarrative('finished-all', {
+          sourceSlug: loop.record.source.slug,
+          completed: stats.byStatus.completed,
+          blocked: stats.byStatus.blocked,
+          instruction: LOOP_INSTRUCTION_ALL_DONE,
+        }),
+        renderEndOfLoop('finished-all', settledPayload),
+      ].join('\n\n'),
     )
     return 'terminal'
   }
@@ -1233,7 +1249,8 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
   loop.waitRounds += 1
   if (loop.waitRounds >= LOOP_PATIENCE_MAX_WAIT_ROUNDS) {
     const stats = await statsFailSoft(loop)
-    await loop.deps.narrator.followup(
+    // ⑮ 等待超时收口 = settlement 形态（3b④）
+    await loop.deps.narrator.settle(
       loop.record.ownerSessionId,
       renderNarrative('finished-timeout', {
         sourceSlug: loop.record.source.slug,
@@ -1254,8 +1271,8 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
  *  第三层问询」；同实例不自动复活：登记表即删，复活 = 新实例新 guard 计数，decisions #18） */
 async function haltLoop(loop: ActiveLoop): Promise<RoundOutcome> {
   const { deps, record } = loop
-  // ⑬ 终局叙述先行（问询另行发起——与 ⑩ 同序：叙述在前、问询随后）
-  await deps.narrator.followup(
+  // ⑬ 终局叙述先行（问询另行发起——与 ⑩ 同序：叙述在前、问询随后）；settlement 形态（3b④）
+  await deps.narrator.settle(
     record.ownerSessionId,
     renderNarrative('spawn-failed-halted', {
       sourceSlug: record.source.slug,

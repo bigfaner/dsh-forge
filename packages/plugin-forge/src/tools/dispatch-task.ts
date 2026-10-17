@@ -271,8 +271,9 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
               // 响应再次携带摘要，零死锁零重开）
               const isOwner = record.ownerSessionId === sessionId
               if (!isOwner) record.takeoverSessions.add(sessionId)
-              const resumed = driver.resume({ loopId: record.id })
+              // 摘要先取（P3 同源挂起摘要）——resume 清 record.suspended 后载荷投影即失真
               const payload = payloadOf(record)
+              const resumed = driver.resume({ loopId: record.id })
               return {
                 kind: 'suspended',
                 loopId: record.id,

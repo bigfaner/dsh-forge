@@ -363,6 +363,33 @@ export function forgeCommandLineMessage(text: string): unknown {
   }
 }
 
+/** forge 结算 user message 的 source kind（GUI 对该 source 补投影渲染——回程对 GUI 用户可见） */
+export const FORGE_SETTLED_SOURCE_KIND = 'dispatch-loop-settled'
+
+/** 结算文本 → 持久 user message（settlement 形态——source {kind:'dispatch-loop-settled'}，3b④） */
+function forgeSettleMessage(text: string): unknown {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: [{ type: 'text', text }],
+    source: { kind: FORGE_SETTLED_SOURCE_KIND },
+  }
+}
+
+/** 结算必达告警（会话失活/投递面缺席时落盘——不投死信，降级为任意会话凭 slug 认领处置） */
+function warnSettleUndelivered(sessionId: string, text: string, reason: string): void {
+  console.warn(
+    `[forge·必达告警] 结算通知未送达（会话 ${sessionId} ${reason}）——挂起/结束处置已降级为任意会话凭容器 slug 认领（dispatchTask）。原文：${text.split('\n')[0] ?? ''}`,
+  )
+}
+
+/** 上游 agent 结算投递面收窄（followup/steer/isBusy 鸭子——结构化最小面，零上游 import） */
+interface SettleAgentFace {
+  followup?: (message: unknown) => void
+  steer?: (message: unknown) => void
+  isBusy?: () => boolean
+}
+
 /**
  * 适配层：agents 注册表 → 叙述双通道（S2 装配方消费——decisions #17/#28 分流：
  * notice = agent.inject（零模型回合、不唤醒）；followup = agent.followup（完整消息开新回合））。
@@ -379,6 +406,22 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationCh
     followup(sessionId: string, text: string): Promise<void> {
       const agent = agents.get(sessionId) as { followup?(message: unknown): void } | undefined
       if (typeof agent?.followup === 'function') agent.followup(forgeUserMessage(text, 'followup'))
+      return Promise.resolve()
+    },
+    settle(sessionId: string, text: string): Promise<void> {
+      // settlement 三径（3b④）：空闲→followup（完整消息开新回合）/ 运行中→steer（在途回合
+      // 插队投递）/ 会话失活（无活根）→不投死信 + 必达告警——降级为任意会话凭 slug 认领处置。
+      // steer 面缺席的运行中会话回退 followup（投递完整性优先于路径精确）。
+      const agent = agents.get(sessionId) as SettleAgentFace | undefined
+      if (agent === undefined) {
+        warnSettleUndelivered(sessionId, text, '已失活/无活根')
+        return Promise.resolve()
+      }
+      const message = forgeSettleMessage(text)
+      const busy = typeof agent.isBusy === 'function' && agent.isBusy() === true
+      if (busy && typeof agent.steer === 'function') agent.steer(message)
+      else if (typeof agent.followup === 'function') agent.followup(message)
+      else warnSettleUndelivered(sessionId, text, '投递面缺席')
       return Promise.resolve()
     },
   }

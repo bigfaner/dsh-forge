@@ -42,6 +42,13 @@ export interface Narrator {
   notice(sessionId: string, text: string, headline?: string): Promise<void>
   /** 终局事件（样例 ⑬-⑰，每循环 1–2 条）——followup 通道（完整消息）；fail-soft */
   followup(sessionId: string, text: string): Promise<void>
+  /**
+   * 结算投递（3b④ settlement 形态——dispatch-loop-hardening 1.11）：循环终局（settled/
+   * halted/timeout/stopped）经 settlement 通道投递——持久 user message（source
+   * {kind:'dispatch-loop-settled'}）+ 空闲→followup/运行中→steer/失活→必达告警三径由
+   * 装配通道兑现；通道缺席回退 followup（向后兼容）。fail-soft 同纪律。
+   */
+  settle(sessionId: string, text: string): Promise<void>
   /** 阻塞族发射（⑦-⑨ 中段 notice 零模型注入；⑩ 终局 followup 唤醒主 agent 分析——裁决仍
    * 走问询 UI，decisions #16）：reason 全文落盘 → 摘要 + 子文件夹路径进叙述 */
   blocked<S extends BlockedScenarioId>(
@@ -66,6 +73,9 @@ export function createNarrator(deps: NarratorDeps): Narrator {
     },
     followup(sessionId: string, text: string): Promise<void> {
       return safe.followup(sessionId, `${text}\n${localDateTimeLine()}`)
+    },
+    settle(sessionId: string, text: string): Promise<void> {
+      return safe.settle(sessionId, `${text}\n${localDateTimeLine()}`)
     },
     async blocked<S extends BlockedScenarioId>(
       sessionId: string,
