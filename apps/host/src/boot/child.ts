@@ -61,6 +61,7 @@ import {
   createWorktreeRpcService,
   interceptRequiredBinding,
   interceptSessionSends,
+  verifySendGuardInstalled,
   type SessionControllerFace,
   type SessionPersistenceFace,
   type WorktreeRpcService,
@@ -451,6 +452,8 @@ async function main(): Promise<void> {
           return
         }
         const disposers: Array<() => void> = []
+        // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
+        const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
         disposers.push(
           interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), (line) => diag(line)),
         )
@@ -470,6 +473,10 @@ async function main(): Promise<void> {
             }
           }
         }
+        // W4 装载自证（session-binding-guarantee §W4）：wrap 换芯读回——controller.prompt 已换
+        // （≠ 装配前留底）+ 必绑 guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛
+        // （不静默降级为无拦截宿主）。
+        verifySendGuardInstalled(sessionController, { promptBefore, guardPresent: guard !== undefined })
       }
       const wrapGate = setInterval(() => {
         if (getGitWorktree() !== undefined) {

@@ -234,6 +234,8 @@ export interface ForgeSlotsService {
     locale?: string
     inject?: () => object
   }, component: unknown): () => void
+  /** 洞位 entries 快照（官方 SlotCore.entries 消费切片——W4 看门计数探针；形状漂移容忍缺席） */
+  entries?(key: string): readonly unknown[]
 }
 
 /** dsh 会话服务窄面（ISessions 消费切片：账本快照源——Session Controller client 无 open 面） */
@@ -797,6 +799,8 @@ export interface ForgeClientCtx {
       | 'conversation'
       | 'uiConversation',
   ): unknown
+  /** cordis 事件监听缝（W4：'internal/service' 服务注销信号消费；形状漂移容忍缺席） */
+  on?(name: 'internal/service', listener: (serviceName: string, value: unknown) => void): () => void
 }
 
 /** cordis 插件最小结构面（免引 cordis 运行时——bundle 零外部 import，保 classic script 形状） */
@@ -828,6 +832,29 @@ export interface ForgeClientActiveMarker {
   readonly dock?: SlotRegistrationDiagnostics
   /** 官方设置对话框分区族（4.7：settings.section——UF-2 Forge设置 分区） */
   readonly settings?: SlotRegistrationDiagnostics
+  /** W4 激活自证（RPC 轻探 + wrap 换芯证据——失败 fail-loud：console.error + 本面呈现） */
+  readonly selfCheck?: ClientSelfCheckDiagnostics
+}
+
+/** W4 激活自证诊断面（e2e/UI 态消费——值为 'ok'/'verified' 或失败因一行） */
+export interface ClientSelfCheckDiagnostics {
+  /** forge:worktree/list RPC 试呼轻探：'ok' | 'absent（非 Electron 载体）' | 失败因 */
+  rpcProbe?: string
+  /** sessions.create wrap 换芯证据：'verified' | 'absent（非 Electron 载体零安装）' | 失败因 */
+  wrap?: string
+}
+
+/**
+ * W4 行存续看门健康探测面（apply 期发布 `__DSH_FORGE_HEALTH__`；壳 bundle 全局看门
+ * prune-watchdog.ts 轮询消费——closure 持官方 ctx，插件 fiber 死后 slots 服务仍存活，
+ * entries 计数回落 = 占用者被回收）。与 shell/prune-watchdog.ts ForgeHealthProbeGlobal
+ * 结构同型镜像（bundle 自含禁跨 chunk import 同纪律）。
+ */
+export interface ForgeHealthProbeGlobal {
+  /** forge 占用洞位 entries 计数（官方 ctx.slots.entries 求和——插件 fiber 外仍可读） */
+  readonly slotCount: () => number
+  /** 看门主动核查入口（internal/service 事件监听转发消费——与壳轮询共用判读核） */
+  readonly check: () => void
 }
 
 /** 洞位注册一行（注入面经 make 产出；落座后回填诊断） */
@@ -1194,6 +1221,39 @@ export const FORGE_BUG_SOURCE_ORDER = 30
  */
 export const BUGS_LIST_CHANNEL = 'forge:bugs/list'
 export const PROJECTS_LIST_CHANNEL = 'forge:projects/list'
+/** forge:worktree/list 通道字面量（contracts WORKTREE_CHANNELS.list 同源镜像——W4 激活自证轻探） */
+export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+
+/**
+ * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
+ * prune 回收 = 计数回落，检测面覆盖产品行与官方行两侧。
+ */
+export const FORGE_HEALTH_SLOT_KEYS = [
+  SIDEBAR_WORKSPACES_SLOT,
+  SIDEBAR_BRAND_MARK_SLOT,
+  SIDEBAR_BRAND_NAME_SLOT,
+  SIDEBAR_FOOTER_ACTION_SLOT,
+  MAIN_SLOT,
+  SIDEBAR_PANELLIST_SLOT,
+  CONVERSATION_VIEW_SLOT,
+  HERO_WORKSPACE_SLOT,
+  TOOL_CALL_TOOLVIEW_SLOT,
+  FORGE_PROGRESS_NODE_SLOT,
+  SESSION_HEADER_ACTIONS_SLOT,
+  CONVERSATION_INPUT_OVERLAY_SLOT,
+  SETTINGS_SECTION_SLOT,
+  SHELL_OVERLAY_SLOT,
+] as const
+
+/** 看门计数探针（官方 ctx.slots.entries 求和——entries 面缺席[形状漂移] = 该洞零计容忍） */
+export function forgeSlotCountOf(slots: ForgeSlotsService, keys: readonly string[]): number {
+  let count = 0
+  for (const key of keys) {
+    const entries = slots.entries?.(key)
+    if (Array.isArray(entries)) count += entries.length
+  }
+  return count
+}
 
 /** forge RPC 传输窄缝（rpc/transport ForgeTransport 结构同型镜像） */
 export type ForgeInvokeTransport = (channel: string, payload?: unknown) => Promise<unknown>
@@ -2089,6 +2149,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       const shellDiagnostics: { registered?: string[]; error?: string } = {}
       const dockDiagnostics: { registered?: string[]; error?: string } = {}
       const settingsDiagnostics: { registered?: string[]; error?: string } = {}
+      const selfCheck: ClientSelfCheckDiagnostics = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
         activatedAt: Date.now(),
@@ -2098,6 +2159,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         shell: shellDiagnostics,
         dock: dockDiagnostics,
         settings: settingsDiagnostics,
+        selfCheck,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
       const clientCtx = ctx as ForgeClientCtx
@@ -2120,6 +2182,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 异常 fail-open 透传官方原流，original 永不落改道 try 域）。transport 缺席
         // （非 Electron 载体）= 零安装；撤销随桥/词典 revoke 链与 overlay 洞 dispose 两径。
         const forgeInvoke = forgeInvokeTransport()
+        const createBefore = (sessions as unknown as Record<string, unknown>)['create']
         const disposeSessionCreateWrap =
           forgeInvoke === undefined
             ? undefined
@@ -2141,6 +2204,62 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                   },
                 },
               )
+
+        // W4 激活自证①（wrap 换芯证据）：装配前 create 面在场时，装配后读回必须 ≠ 原引用
+        // （host verifySendGuardInstalled 同判）；未换芯 = wrap 静默残缺 → fail-loud
+        // （console.error + 上抛 → apply catch 全族 error UI 态 + 回滚）。官方 create 面
+        // 本身缺席（上游面漂移）= installSessionCreateWrap 既定 fail-soft 零安装——自证记
+        // 缺席面呈现，不另判失败（与零传输同径，不夸大失败因）。
+        if (forgeInvoke === undefined) {
+          selfCheck.wrap = 'absent（非 Electron 载体零安装）'
+        } else if (typeof createBefore !== 'function') {
+          selfCheck.wrap = 'absent（官方 create 面缺席——零安装 fail-soft）'
+        } else {
+          const createAfter = (sessions as unknown as Record<string, unknown>)['create']
+          if (typeof createAfter !== 'function' || createAfter === createBefore) {
+            const message = 'dsh-forge web-client: 激活自证失败——sessions.create wrap 未换芯（wrap 代理证据缺席）'
+            console.error(message)
+            selfCheck.wrap = message
+            throw new Error(message)
+          }
+          selfCheck.wrap = 'verified'
+        }
+
+        // W4 激活自证②（RPC 试呼轻探）：forge:worktree/list 空 projectRoot = 零副作用读面
+        // （host resolveProject('') → null → isGit:false 空清单）——信封往返通 = IPC 装配链通。
+        // 异步 fire-and-forget：失败 console.error + selfCheck 呈现（UI 态），不阻断激活主链。
+        if (forgeInvoke === undefined) {
+          selfCheck.rpcProbe = 'absent（非 Electron 载体）'
+        } else {
+          void unwrapRpcEnvelope<unknown>(forgeInvoke(WORKTREE_LIST_CHANNEL, { projectRoot: '' }))
+            .then(() => {
+              selfCheck.rpcProbe = 'ok'
+            })
+            .catch((cause: unknown) => {
+              const line = `dsh-forge web-client: 激活自证失败——forge:worktree/list 轻探不通（IPC 链断裂）：${String(cause)}`
+              console.error(line)
+              selfCheck.rpcProbe = line
+            })
+        }
+
+        // W4 行存续看门探测面发布（壳 bundle 全局看门轮询消费——插件 fiber 内看门随插件
+        // 同殁，检不出 prune；closure 持官方 ctx，fiber 死后 slots 服务仍存活）。
+        const health: ForgeHealthProbeGlobal = {
+          slotCount: () => forgeSlotCountOf(clientCtx.slots, FORGE_HEALTH_SLOT_KEYS),
+          // 官方信号源（cordis `internal/service`——reflect.notify 服务注销 emit）转发：
+          // sessions 注销 = prune 级联回收官方信号 → 触发壳看门主动核查（事件 + 轮询双保险）。
+          check: () => {
+            const hook = (globalThis as { __DSH_FORGE_PRUNE_CHECK__?: () => void }).__DSH_FORGE_PRUNE_CHECK__
+            hook?.()
+          },
+        }
+        ;(globalThis as { __DSH_FORGE_HEALTH__?: ForgeHealthProbeGlobal }).__DSH_FORGE_HEALTH__ = health
+        const disposeServiceListener =
+          typeof clientCtx.on === 'function'
+            ? clientCtx.on('internal/service', (name, value) => {
+                if (name === 'sessions' && value === undefined) health.check()
+              })
+            : undefined
 
         // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
         // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
@@ -2238,6 +2357,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeDockTabs()
           mermaidEnhancer.stop()
           disposeSessionCreateWrap?.()
+          disposeServiceListener?.()
+          ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -2327,6 +2448,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             disposeDockTabs()
             mermaidEnhancer.stop()
             disposeSessionCreateWrap?.()
+            disposeServiceListener?.()
+            ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
           }
         })
       } catch (error) {

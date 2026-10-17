@@ -14,7 +14,7 @@ import './styles/brand.css'
 import './styles/wco.css'
 import './styles/cursors.css'
 import './product-views.js'
-import { bootShell, type ProductClientEntry } from './shell/index.js'
+import { bootShell, installPruneWatchdog, type ProductClientEntry } from './shell/index.js'
 import { ForgeRemoteView } from './views/remote/ForgeRemoteView.js'
 import {
   remoteViewDecisionLine,
@@ -53,5 +53,11 @@ if (decision.branch === 'restricted') {
 } else {
   const entry = new AppWebEntry(el)
   void bootShell(productClient)
+  // W4 行存续看门（session-binding-guarantee §W4）：活在壳 bundle 全局面——插件 fiber 内
+  // 看门随插件同殁，检不出 prune。周期查 __DSH_FORGE_CLIENT__ 激活标记 + forge 洞位
+  // ctx.slots.entries 计数（经插件发布的 __DSH_FORGE_HEALTH__ 探针）；插件侧 cordis
+  // `internal/service` 事件（sessions 注销 = prune 级联回收官方信号）转发主动核查——
+  // 事件 + 轮询双保险。失效 = fail-loud（console + 页面显式横幅），不静默。
+  installPruneWatchdog({})
   void entry.run()
 }

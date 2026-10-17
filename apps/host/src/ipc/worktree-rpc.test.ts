@@ -23,6 +23,7 @@ import {
   interceptRequiredBinding,
   interceptSessionSends,
   registerWorktreeChannels,
+  verifySendGuardInstalled,
   WorktreeCapabilityAbsentError,
   type SessionControllerFace,
   type SessionPersistenceFace,
@@ -932,5 +933,40 @@ describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
     await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).resolves.toEqual({ accepted: true })
     dispose()
     expect(prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
+  })
+})
+
+// ── W4 装载自证（session-binding-guarantee §W4）——wrap 换芯读回判读核 ──────────────────
+describe('verifySendGuardInstalled（成功路径自证：prompt 已换 + guard 非空，失败 fail-loud）', () => {
+  const fakeController = (prompt: unknown): SessionControllerFace =>
+    ({ prompt }) as unknown as SessionControllerFace
+
+  it('换芯（prompt ≠ 装配前留底）+ guard 在场 → 通过不抛', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    const wrapped = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: true }),
+    ).not.toThrow()
+  })
+
+  it('prompt 未换芯（= 装配前留底）→ 抛 fail-loud（不静默残缺）', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(original), { promptBefore: original, guardPresent: true }),
+    ).toThrow(/未换芯/)
+  })
+
+  it('必绑 guard 缺席（sessionPersistence 缺席）→ 抛 fail-loud', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    const wrapped = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: false }),
+    ).toThrow(/guard 缺席/)
+  })
+
+  it('装配前留底非函数（prompt 面漂移）→ 抛 fail-loud', () => {
+    expect(() =>
+      verifySendGuardInstalled(fakeController(undefined), { promptBefore: undefined, guardPresent: true }),
+    ).toThrow(/留底缺席/)
   })
 })

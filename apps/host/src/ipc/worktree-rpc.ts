@@ -818,3 +818,26 @@ export function interceptRequiredBinding(
     ;(controller as unknown as Record<string, unknown>)['prompt'] = original
   }
 }
+
+/**
+ * W4 装载自证（session-binding-guarantee §W4）：installSendGuard 成功路径的 wrap 换芯读回
+ * ——两层拦截均为属性替换缝，装配后 controller.prompt 引用必须已换（≠ 装配前留底）且必绑
+ * guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛（不静默降级为无拦截宿主）。
+ * 纯判读函数（child.ts 装配方消费，单测直注替身 controller）。
+ */
+export function verifySendGuardInstalled(
+  controller: SessionControllerFace,
+  input: { readonly promptBefore: unknown; readonly guardPresent: boolean },
+): void {
+  const record = controller as unknown as Record<string, unknown>
+  const detail =
+    typeof input.promptBefore !== 'function'
+      ? 'controller.prompt 装配前留底缺席'
+      : record['prompt'] === input.promptBefore
+        ? 'controller.prompt 未换芯（wrap 未生效）'
+        : input.guardPresent
+          ? undefined
+          : '必绑 guard 缺席（sessionPersistence 缺席）'
+  if (detail === undefined) return
+  throw new Error(`[git-worktree] 发送拦截装载自证失败（${detail}）——fail-loud 不静默残缺`)
+}

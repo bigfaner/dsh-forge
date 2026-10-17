@@ -6,7 +6,7 @@
 // 洞名/影子优先级/注入面 = G1 契约面清单第 3 项（S2 残留 #1——2.7 清点入池）的常量 pin；
 // 面板 key 字面量同源 pin = workbench/panel-model.ts（plugin 侧常量 ↔ 壳侧常量，不经
 // import 共享——bundle 自含纪律，main.ts id 同源同形制）。
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BUG_ADDRESS_PREFIX,
   BUG_TAB_KIND,
@@ -2213,5 +2213,180 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(fallback.original).toHaveBeenCalledTimes(1)
     // 协议钉：改道载荷 = {worktreePath: 显式树}（移动端透传同协议）；通道字面量上方已钉
     expect(rejectSessionCreate.mock.calls[0]![0]!).toBe(WS_PATH)
+  })
+})
+
+// ── W4 装载自证 + 行存续看门（session-binding-guarantee §W4）──────────────────────────
+describe('W4 激活自证（RPC 轻探 + wrap 换芯证据）+ 看门探测面', () => {
+  const g = () =>
+    globalThis as {
+      dshForge?: unknown
+      __DSH_FORGE_CLIENT__?: unknown
+      __DSH_FORGE_HEALTH__?: { slotCount: () => number; check: () => void }
+      __DSH_FORGE_PRUNE_CHECK__?: unknown
+    }
+  const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+
+  afterEach(() => {
+    delete g().dshForge
+    delete g().__DSH_FORGE_HEALTH__
+    delete g().__DSH_FORGE_PRUNE_CHECK__
+  })
+
+  function fakeInvoke(): ReturnType<typeof vi.fn> {
+    const invoke = vi.fn((channel: string) => {
+      if (channel === WORKTREE_LIST_CHANNEL) {
+        return Promise.resolve({ ok: true, data: { isGit: false, entries: [] } })
+      }
+      return Promise.resolve({ ok: true, data: [] }) // forge:projects/list 等读面
+    })
+    g().dshForge = { invoke }
+    return invoke
+  }
+
+  function augmentCtx(ctx: ForgeClientCtx): {
+    listeners: Array<(name: string, value: unknown) => void>
+    slotsEntries: Map<string, readonly unknown[]>
+  } {
+    const listeners: Array<(name: string, value: unknown) => void> = []
+    const slotsEntries = new Map<string, readonly unknown[]>([
+      [SHELL_OVERLAY_SLOT, ['entry-1']],
+      [MAIN_SLOT, ['entry-2', 'entry-3']],
+    ])
+    ;(ctx as unknown as { on: unknown }).on = (name: string, cb: (n: string, v: unknown) => void) => {
+      listeners.push(cb)
+      return () => {}
+    }
+    ;(ctx.slots as { entries?: (key: string) => readonly unknown[] }).entries = (key: string) =>
+      slotsEntries.get(key) ?? []
+    return { listeners, slotsEntries }
+  }
+
+  it('零传输（非 Electron 载体）：自证缺席面呈现（不 fail）+ 看门探测面发布 + overlay dispose 对称清收', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx, injectDisposers } = fakeClientCtx()
+    const { listeners } = augmentCtx(ctx)
+    forgeClientPlugin().apply(ctx)
+    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { wrap?: string; rpcProbe?: string } }
+    expect(marker?.selfCheck?.wrap).toBe('absent（非 Electron 载体零安装）')
+    expect(marker?.selfCheck?.rpcProbe).toBe('absent（非 Electron 载体）')
+    // 看门探测面：entries 求和（shell.overlay 1 + main 2 = 3）+ 事件转发钩接线
+    const health = g().__DSH_FORGE_HEALTH__
+    expect(health?.slotCount()).toBe(3)
+    expect(listeners).toHaveLength(1)
+    // overlay dispose = 卸载级联回收面：探测面对称清收
+    injectDisposers.get(SHELL_OVERLAY_SLOT)?.()
+    expect(g().__DSH_FORGE_HEALTH__).toBeUndefined()
+    // 恢复外层标记
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
+  })
+
+  it('传输在场：wrap 换芯证据 verified（sessions.create 已换）+ RPC 轻探 ok', async () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const invoke = fakeInvoke()
+    const { ctx } = fakeClientCtx()
+    augmentCtx(ctx)
+    const sessions = ctx.get('sessions') as { create?: unknown }
+    const original = (): Promise<string> => Promise.resolve('X-official')
+    sessions.create = original
+    forgeClientPlugin().apply(ctx)
+    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { wrap?: string; rpcProbe?: string } }
+    expect(marker?.selfCheck?.wrap).toBe('verified')
+    expect(sessions.create).not.toBe(original) // 换芯读回（host verifySendGuardInstalled 同判）
+    expect(invoke).toHaveBeenCalledWith(WORKTREE_LIST_CHANNEL, { projectRoot: '' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(marker?.selfCheck?.rpcProbe).toBe('ok')
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
+  })
+
+  it('wrap 未换芯 = fail-loud：console.error + selfCheck 失败因 + apply catch 全族 error UI 态（回滚）', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    fakeInvoke()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { ctx } = fakeClientCtx()
+      augmentCtx(ctx)
+      // sessions.create 装配前在场但写不进（getter 替身——属性替换被吞）→ 读回 = 原引用
+      // = 未换芯（installSessionCreateWrap 写面失效的替身建模）
+      const sessions = ctx.get('sessions') as Record<string, unknown>
+      const original = (): Promise<string> => Promise.resolve('X-official')
+      Object.defineProperty(sessions, 'create', { get: () => original, set: () => {}, configurable: true })
+      forgeClientPlugin().apply(ctx)
+      const marker = g().__DSH_FORGE_CLIENT__ as {
+        selfCheck?: { wrap?: string }
+        sidebar?: { error?: string }
+      }
+      expect(marker?.selfCheck?.wrap).toContain('未换芯')
+      expect(marker?.sidebar?.error).toContain('未换芯') // apply catch 全族 error = UI 态
+      expect(err.mock.calls.some((call) => String(call[0]).includes('未换芯'))).toBe(true)
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
+  })
+
+  it('RPC 轻探不通 = fail-loud 呈现：selfCheck.rpcProbe 失败因 + console.error（不阻断激活主链）', async () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const invoke = vi.fn((channel: string) =>
+        channel === WORKTREE_LIST_CHANNEL
+          ? Promise.reject(new Error('IPC 链断裂'))
+          : Promise.resolve({ ok: true, data: [] }),
+      )
+      g().dshForge = { invoke }
+      const { ctx } = fakeClientCtx()
+      augmentCtx(ctx)
+      const sessions = ctx.get('sessions') as { create?: unknown }
+      sessions.create = (): Promise<string> => Promise.resolve('X')
+      forgeClientPlugin().apply(ctx)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string; wrap?: string } }
+      expect(marker?.selfCheck?.wrap).toBe('verified') // 主链不受累
+      expect(marker?.selfCheck?.rpcProbe).toContain('轻探不通')
+      expect(err.mock.calls.some((call) => String(call[0]).includes('轻探不通'))).toBe(true)
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
+  })
+
+  it('internal/service 事件（sessions 注销 = prune 官方信号）转发看门核查钩；他服务/在场值不转发', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx } = fakeClientCtx()
+    const { listeners } = augmentCtx(ctx)
+    forgeClientPlugin().apply(ctx)
+    const hook = vi.fn()
+    g().__DSH_FORGE_PRUNE_CHECK__ = hook
+    const health = g().__DSH_FORGE_HEALTH__!
+    const emit = listeners[0]!
+    emit('other', undefined)
+    emit('sessions', { alive: true })
+    expect(hook).not.toHaveBeenCalled()
+    emit('sessions', undefined) // 官方注销信号（reflect.notify value undefined）
+    expect(hook).toHaveBeenCalledTimes(1)
+    health.check() // 事件转发入口 = 探测面 check
+    expect(hook).toHaveBeenCalledTimes(2)
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
   })
 })

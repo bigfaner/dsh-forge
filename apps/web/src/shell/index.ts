@@ -5,3 +5,4 @@
 export * from './bridge.js'
 export * from './carrier.js'
 export * from './boot.js'
+export * from './prune-watchdog.js'
