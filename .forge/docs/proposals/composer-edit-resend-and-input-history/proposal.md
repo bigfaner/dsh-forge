@@ -148,22 +148,24 @@ sequenceDiagram
 
 ## 改动影响范围
 
+独立插件承载（用户裁决 2026-10-17）：本功能自成一体，不进 apps/web client-plugin 内嵌面——新建 `packages/plugins/composer-correction`（`@dsh-forge/composer-correction`，cordis 插件，零 dsh-forge 依赖，面向一切 dsh 规范应用），宿主只做 wiring。
+
 ```text
-apps/web/src/client-plugin/     ← 编辑重发编排 + 方向键历史（client 侧全部）
-apps/host/src/ipc/              ← 作废提交通道窄面 + host 复核（单点闸门）
-官方包（@deepseek-ai/*）        ← 零改动，只消费其机械与缝
+packages/plugins/composer-correction/  ← 独立插件（host 面 + client 面，全部业务）
+apps/host + apps/web                   ← 仅 wiring（通道注册 / service provide / 客户端装配）
+官方包（@deepseek-ai/*）               ← 零改动，只消费其机械与缝
 ```
 
 ### 改动点清单（file 粒度）
 
 | 层 | 位置 | 改动 | 性质 |
 |---|---|---|---|
-| client-plugin | `apps/web/src/client-plugin/edit-resend.ts`（新） | 锚点编排：悬停动作接线、pendingEdit 侧车 store（官方 dsh-client-store persist 机械）、提交携带 anchorSeq、失败恢复 | 新增 |
-| client-plugin | `apps/web/src/client-plugin/input-history.ts`（新） | 会话内历史源（订阅 user/message 事件）、readline 键位判定（空草稿/首行行首）、草稿暂存恢复 | 新增 |
-| client-plugin | `apps/web/src/client-plugin/plugin.ts`（改） | 装配接线：两项特性挂入既有插件域；快捷键注册走官方缝 | 修改 |
-| transcript 呈现 | client-plugin 内新模块 | ①用户消息行「修改」动作注入；②被作废整轮折叠行——两处注入点须先核销官方 Chat 留出的合法缝（槽位影子/inject face），无合法缝则回到 tech-design 重议呈现方案 | 新增 |
-| host | `apps/host/src/ipc/edit-resend-rpc.ts`（新，命名裁决：名词域-rpc 对齐仓内 11 个兄弟通道 + client 侧 edit-resend.ts 对称） | 作废提交通道窄面：接收 {文本, anchorSeq}，复核（锚=最后一条用户消息·其轮空闲或流式中·区间完整），流式中先经官方 `session/cancel` 停止并待 `turn/end` 闭合，组装 surfaceOp replace 交官方 session 机械追加；**通道形态 = 官方 `dsh-typert`**（FaceModel 声明 face `editResend` + method `submit`，id 形如 `dsh-forge#editResend/submit`——face 名词/method camelCase 动词对齐官方 `#session/fork` 同构；typert.host 生成 host 面 / typert.remote-client 生成 client 面，schema 校验由 typert 机械承担）。注：本仓 apps/host 现有通道均 ForgeIpc+rpcEnvelope，此为首例 typert 通道（用户裁决 2026-02-14） | 新增 |
-| host | `apps/host/src/ipc/bindings.ts` / `forge-channels.ts`（改） | 新通道注册 wiring | 修改 |
+| 插件 host 面 | `packages/plugins/composer-correction/src/index.ts`（新） | cordis 插件入口：**typert face `editResend/submit`**（FaceModel 声明，typert.host 生成 host 面 / typert.remote-client 生成 client 面，id 形如 `dsh-forge#editResend/submit`——face 名词/method camelCase 动词对齐官方 `#session/fork` 形态，schema 校验由 typert 机械承担）；复核（锚=最后一条用户消息·其轮空闲或流式中·区间完整），流式中先经官方 `session/cancel` 停止并待 `turn/end` 闭合，组装 surfaceOp replace 交官方 session 机械追加。注：本仓 apps/host 现有通道均 ForgeIpc+rpcEnvelope，此为首例 typert 通道（用户裁决 2026-02-14） | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/edit-resend.ts`（新） | 锚点编排：悬停动作接线、pendingEdit 侧车 store（官方 dsh-client-store persist 机械）、提交携带 anchorSeq、失败恢复 | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/input-history.ts`（新） | 会话内历史源（订阅 user/message 事件）、readline 键位判定（空草稿/首行行首）、草稿暂存恢复 | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/voided-transcript.ts`（新） | ①用户消息行「修改」动作注入；②被作废整轮折叠行——两处注入点须先核销官方 Chat 留出的合法缝（槽位影子/inject face），无合法缝则回到 tech-design 重议呈现方案 | 新增 |
+| 宿主 wiring | `apps/host/src/ipc/bindings.ts` / `forge-channels.ts`（改） | 插件 host 面装配（通道注册单行编排位，同 worktree 插件 wiring 模式） | 修改 |
+| 宿主 wiring | `apps/web/src/client-plugin/plugin.ts`（改） | 插件 client 面装载接线（不内嵌业务逻辑） | 修改 |
 | 官方机械消费 | 不落盘改动 | `dsh-client-store`（persist 侧车）、`dsh-session` surface（replace 语义）、官方 keymap/快捷键缝——import 消费，零 vendor 零改制 | 只读 |
 
 ### 影响点与边界
