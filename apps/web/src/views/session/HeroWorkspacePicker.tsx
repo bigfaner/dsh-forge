@@ -26,10 +26,8 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
-  worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
-  worktreeReuseBindDegradedNotice,
   worktreeUnselectedProjectNotice,
   type HeroWorktreeFace,
   type WorktreeOrchestrateFn,
@@ -57,12 +55,12 @@ const noticeText = (error: unknown): string =>
   error instanceof Error && error.message !== '' ? error.message : String(error)
 
 /**
- * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7/A8 语义）：
+ * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7 语义；bug e678ca5f 主行 reuse 零补绑定）：
  *   · A7——orchestrateRoot null（selectedId 无命中项目行）→ 提示 + null：渲染兜底
  *     （selectedProjectRootOf fallback）仅供 chip 渲染，禁止泄漏为绑定数据源；
- *   · 1.27 必绑保留：主行（路径归一 ≡ 编排根）reuse 命中补写挂靠事件绑定；
- *   · A8——补绑定失败（seal 判读/attach 抛错）不返回无绑定会话：降级 sessionCreate
- *     直建（预铸自带绑定），失败路径仍产可用发送目标；sessionCreate 再败 → Toast + null。
+ *   · 主行/树行 blank reuse 均直接打开：活跃会话写句柄被官方 agent loop 持有（单写者
+ *     铁律），客户端补写挂靠事件结构性必败——绑定正确性由 host 侧必绑拦截单点保证
+ *     （judge 'route' → 预铸采纳重路由，挂靠事件随预铸落盘）。
  */
 export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): WorktreeOrchestrateFn {
   return (path: string): Promise<string | null> => {
@@ -77,23 +75,10 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
         return null
       }
       const rpc = makeRpc()
-      const isMainPath = worktreeCwdKey(path) === worktreeCwdKey(orchestrateRoot)
-      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构）
+      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构；
+      // bug e678ca5f：零补绑定——首条消息时点由 host 必绑拦截保证绑定）
       const reuseSessionId = worktree.blankSessionByCwd?.(path)
-      let reuseBound = false
-      if (reuseSessionId !== undefined && isMainPath) {
-        try {
-          const seal = await rpc.worktree.seal({ sessionId: reuseSessionId })
-          if (seal.binding === null) {
-            await rpc.worktree.attach({ sessionId: reuseSessionId, worktreePath: path })
-          }
-          reuseBound = true
-        } catch (error) {
-          // A8：补绑定失败——降级 sessionCreate 直建绑定会话（不返回无绑定 blank）
-          onNotice(worktreeReuseBindDegradedNotice(noticeText(error)))
-        }
-      }
-      if (reuseSessionId !== undefined && (reuseBound || !isMainPath)) {
+      if (reuseSessionId !== undefined) {
         try {
           worktree.openSession(reuseSessionId)
         } catch (error) {

@@ -18,7 +18,6 @@ import {
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
-  worktreeReuseBindDegradedNotice,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -244,16 +243,6 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
 
   it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
     expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
-  })
-})
-
-// A8——reuse 补绑定失败降级提示文案（不落「将落主树」假象——降级产物自带绑定）。
-describe('worktreeReuseBindDegradedNotice（A8 降级语义）', () => {
-  it('文案含降级语义与原因（补绑定失败 → 降级新建挂靠会话，非放弃编排）', () => {
-    const text = worktreeReuseBindDegradedNotice('seal rpc timeout')
-    expect(text).toContain('补绑定失败')
-    expect(text).toContain('seal rpc timeout')
-    expect(text).toContain('降级')
   })
 })
 

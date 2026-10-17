@@ -97,11 +97,6 @@ export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: str
   return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
 }
 
-/** A8——主行 reuse 补绑定失败降级提示（降级产物 sessionCreate 自带绑定，非「将落主树」假象） */
-export function worktreeReuseBindDegradedNotice(cause: string): string {
-  return `主树空白会话补绑定失败（${cause}），已降级新建挂靠会话`
-}
-
 /** A7——编排数据根缺席提示（selectedId 未命中项目行——渲染兜底不进编排，显式呈现不静默） */
 export function worktreeUnselectedProjectNotice(): string {
   return '当前会话未选中 forge 项目，worktree 编排默认停用——首条消息将落主树'
