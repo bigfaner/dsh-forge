@@ -117,7 +117,30 @@ declare module '@deepseek-ai/dsh-llm' {
 - md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态不可复用；**官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（R8 实证）——照搬之**，mermaid 增强器复用 `@dsh-forge/md-mermaid`。
 - `/`、`@` 触发面：数据全走官方远程面（CommandRuntime=TypertRemoteService；dsh-api-workspace-files remote-client；session.list）——tech-research R7。
 
-官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 各官方包 `typert.host.js` invocations 表（逐文件核销 2026-10-17，见 6.2）+ 批次①回放录制补参数级细节。
+官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 各官方包 `typert.host.js` invocations 表（逐文件核销 2026-10-17，见 6.2）+ 批次①回放录制补参数级细节。归组归属键实证：`SessionSummary.cwd` 在官方摘要内（optional）——归组零二级解析。
+
+### 6.0 forge 面：`forge:remote/projects/grouped` 响应体（drawer 一次调用取项目 → worktree → sessions）
+
+```jsonc
+{
+  "ok": true,
+  "data": {
+    "generatedAt": 1760700000000,
+    "projects": [{
+      "id": "9f1c…", "name": "dsh-forge", "wsPath": "Z:/project/dsh/dsh-forge", "archived": false,
+      "worktrees": [
+        { "path": "…/dsh-forge",                            "branch": "main",      "worktreeName": null,        "isMain": true,  "present": true },
+        { "path": "…/.forge/worktrees/mobile-ui",           "branch": "mobile-ui", "worktreeName": "mobile-ui", "isMain": false, "present": true },
+        { "path": "…/.forge/worktrees/wt-old",              "branch": "spike/old", "worktreeName": "wt-old",    "isMain": false, "present": false }
+      ],
+      "sessions": [ /* SessionSummary 官方原样透传（sessionId/title/cwd/running/blank/updatedAt/agentAvailable/origin?/parentSessionId?/agentPreset/modelSelection），cwd ∈ wsPath ∪ worktreeDir 子树，updatedAt 降序 */ ]
+    }],
+    "unassigned": [ /* cwd 不属任何在册项目的会话，SessionSummary 同形 */ ]
+  }
+}
+```
+
+口径：sessions 按项目平铺不按 worktree 二层嵌套（worktree 徽标由 UI 对照 `worktrees[].path` 挂）；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。失败 = `__rpc` 既有 `{ok:false,error:{code,message}}`。
 
 ### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
 
