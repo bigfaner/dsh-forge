@@ -11,6 +11,12 @@ importers:
       '@deepseek-ai/dsh':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(d089160f3c7d88525eab91e3a6692a27)
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(0b5b7303893538148e8edc4a2e932cb6)
+      '@deepseek-ai/dsh-api-workspace-controller':
+        specifier: 0.2.0-rc.2
+        version: 0.2.0-rc.2(9ae835405f80411a2d41b30951975127)
       '@deepseek-ai/dsh-base':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(81e103cfceff317cdded786ff8030228)

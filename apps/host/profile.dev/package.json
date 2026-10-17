@@ -7,6 +7,8 @@
     "@deepseek-ai/dsh": "0.2.0-rc.2",
     "@deepseek-ai/dsh-base": "0.2.0-rc.2",
     "@deepseek-ai/dsh-web-app": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-api-workspace-controller": "0.2.0-rc.2",
     "@dsh-forge/contracts": "link:../../../packages/contracts",
     "@dsh-forge/core": "link:../../../packages/core",
     "@dsh-forge/git-worktree": "link:../../../packages/plugins/git-worktree",
