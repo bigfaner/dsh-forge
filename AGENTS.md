@@ -4,6 +4,12 @@
 
 - **外部依赖装配面结算门 = 真机端到端取证**（用户裁决 2026-10-15）：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。
 
+## 官方机械拦截与改造约束（用户裁决 2026-10-17）
+
+- **只插孔，不改制**：对官方 dsh 机械（会话/工作区/发送链等）的任何拦截、包装、扩展，只允许落在官方留出的合法缝（槽位影子、inject face、adopt 正门、ignorable 事件直写、方法 wrap）；承重假设依赖前必须到官方包源码核销。正本见 `docs/conventions/official-mechanics-interception.md`（合法缝清单、六条硬约束、决策流程、交付要求）。
+- 关键硬约束速记：单写者铁律（禁建后补写会话日志）、header 不可变（落点决策做在创建时点）、正确性必须 host 单点保证（客户端竞速只算体验优化）、非介入面零行为差异且零固定税（分流优先装配期）。
+
+
 ## Windows commit 内存纪律（用户裁决 2026-10-16）
 
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
