@@ -211,6 +211,36 @@ export function shouldArmSelectedRow(input: ArmGateInput): boolean {
   return true
 }
 
+// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103）─────────────
+// Root cause: 1.29 确认框由 arm 效应驱动（deps 含 draftText），每键重评估时跨分支判定
+// 恒真而「已确认」无持久化痕迹（确认动作是一次性回调），故每键重弹。闩锁 = per 选中行
+// 单值态：确认置位（续字/再发零重弹）、换目标重选清退（重新判定）、编排失败清退（Toast
+// 后可重试重问）。取消路径不混用（1.31 A3 cancelSuppressed 独立语义——取消时闩锁必为
+// null，显式重选由取消抑制清除后重问）。
+
+/** 确认闩锁态（选中行唯一 → 单值即 per 选中行）：path = 已确认 | null = 无闩锁 */
+export type RiskConfirmLatch = string | null
+
+/** 置位（确认回调消费——幂等；换确认目标覆盖） */
+export function riskLatchConfirm(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
+  return path
+}
+
+/** 换目标重选清退（点选回调消费——同行重选保留闩锁：确认后点 chip 续字不重弹） */
+export function riskLatchReselect(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
+  return prev !== null && prev !== path ? null : prev
+}
+
+/** 编排失败清退（arm 失败分支消费——Toast 已呈现，闩锁清退允许重试重问；他行失败不误清） */
+export function riskLatchFailureClear(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
+  return prev === path ? null : prev
+}
+
+/** 弹框判定消费闩锁（闩锁只旁路弹框分支——armed 去重/在途闸照常，非 arm 旁路）：true = 需弹框 */
+export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean {
+  return latch !== path
+}
+
 /**
  * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
  * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17：blank ∧ summary.cwd ===

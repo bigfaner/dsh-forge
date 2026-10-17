@@ -28,7 +28,16 @@ import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
 import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
-import { activeSessionRowOf, shouldArmSelectedRow, type HeroWorktreeFace } from './hero-picker-model.js'
+import {
+  activeSessionRowOf,
+  riskDialogNeeded,
+  riskLatchConfirm,
+  riskLatchFailureClear,
+  riskLatchReselect,
+  shouldArmSelectedRow,
+  type HeroWorktreeFace,
+  type RiskConfirmLatch,
+} from './hero-picker-model.js'
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
 import './session.css'
 
@@ -189,6 +198,8 @@ export function ForgeHeroWorktreeMount({
   const onSelectConfirmed = useCallback(
     (path: string): void => {
       writeArmCooldown()
+      // 1.34 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 续字零重弹）
+      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
       setCancelSuppressed((prev) => (prev.includes(path) ? prev.filter((row) => row !== path) : prev))
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       pushSelection(path)
@@ -226,6 +237,11 @@ export function ForgeHeroWorktreeMount({
   // 时点（1.29），点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话阶段
   // 消费，历史会话打开不进 hero 面）。
   const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
+  // 1.34 确认闩锁（bug ccfcc103——每键重弹修复）：确认后置位，arm 效应每键重评估时弹框
+  // 判定消费闩锁（已确认 = 零重弹，编排照常 carryDraft 完成）；生命周期 = 换目标重选清
+  // （riskLatchReselect）+ 编排失败清退（riskLatchFailureClear）。取消路径不混用（A3
+  // cancelSuppressed——取消时闩锁必为 null，显式重选由取消抑制清除后重问）。
+  const [riskConfirmedLatch, setRiskConfirmedLatch] = useState<RiskConfirmLatch>(null)
   // 账本订阅（useSyncExternalStore 直读——闭包绑定 face：dsh 快照源 = 类方法，裸引用
   // 脱离 this 即崩，ForgeSidebarSlot 同口径）。当前主视图会话（id + cwd）是 arm 去重/
   // 重消费与草稿源寻址的活源：官方新会话流落回他树 → 变化 → 效应重跑 → 编排默认重新消费。
@@ -302,6 +318,8 @@ export function ForgeHeroWorktreeMount({
               pushSelection(undefined) // host 选中记忆同清（重路由目标不落假象）
               setLocalSelectedPath(undefined)
               setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
+              // 1.34 确认闩锁清退：编排失败 → Toast（1.25）已呈现，允许重试重问
+              setRiskConfirmedLatch((prev) => riskLatchFailureClear(prev, path))
               return
             }
             // 成功：armed 去重登记 + 已键入首条消息搬运到产物会话（best-effort——失败
@@ -350,14 +368,15 @@ export function ForgeHeroWorktreeMount({
       return
     }
     const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
-    if (isCrossBranchRisk(row.branch, mainBranch)) {
+    // 1.34 确认闩锁消费：已确认（闩锁命中）→ 跨分支也直通编排（续字/再发零重弹）
+    if (isCrossBranchRisk(row.branch, mainBranch) && riskDialogNeeded(path, riskConfirmedLatch)) {
       setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排（消息未发出）
       return
     }
     armDefault(path, draftText, currentSessionId)
     // draftText/currentCwd/currentSessionId 入 deps：首条消息意图出现、官方新会话流落回
     // 他树后（当前会话变化），编排默认（重新）消费
-  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, draftText, currentCwd, currentSessionId, armDefault])
+  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, riskConfirmedLatch, draftText, currentCwd, currentSessionId, armDefault])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -573,6 +592,8 @@ export function ForgeHeroWorktreeMount({
           onConfirm={() => {
             const path = defaultRiskPath
             setDefaultRiskPath(null)
+            // 1.34 确认闩锁置位：同一次选中意图只弹一次——续字/再发零重弹，编排照常完成
+            if (path !== null) setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
             if (path !== null) armDefault(path, draftText, currentSessionId)
           }}
         />

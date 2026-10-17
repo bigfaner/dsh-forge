@@ -10,6 +10,10 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
+  riskDialogNeeded,
+  riskLatchConfirm,
+  riskLatchFailureClear,
+  riskLatchReselect,
   shouldArmSelectedRow,
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
@@ -250,6 +254,48 @@ describe('worktreeReuseBindDegradedNotice（A8 降级语义）', () => {
     expect(text).toContain('补绑定失败')
     expect(text).toContain('seal rpc timeout')
     expect(text).toContain('降级')
+  })
+})
+
+// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103——每键重弹修复）三组：
+// ① 置位 ② 清退 ③ 确认续跑（含 armed 去重协同口径 pin） ─────────────
+describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/确认续跑）', () => {
+  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+
+  it('置位：确认即置位（null→path），重复确认幂等（零重弹锚点）', () => {
+    expect(riskLatchConfirm(null, WT_A)).toBe(WT_A)
+    expect(riskLatchConfirm(WT_A, WT_A)).toBe(WT_A)
+    expect(riskLatchConfirm('C:/other', WT_A)).toBe(WT_A) // 换确认目标覆盖
+  })
+
+  it('清退：换目标重选即清（重新判定）；同行重选保留（续字零重弹）；编排失败清退允许重试', () => {
+    expect(riskLatchReselect(WT_A, WT_A)).toBe(WT_A) // 同行重选不清——确认后点 chip 不重弹
+    expect(riskLatchReselect(WT_A, 'C:/other')).toBeNull() // 换目标 → 清，重新判定
+    expect(riskLatchReselect(null, WT_A)).toBeNull()
+    expect(riskLatchFailureClear(WT_A, WT_A)).toBeNull() // 编排失败 → 闩锁清退（Toast 后可重试重问）
+    expect(riskLatchFailureClear(WT_A, 'C:/other')).toBe(WT_A) // 他行失败不误清
+  })
+
+  it('确认续跑：闩锁在位 → 弹框判定为不需要（续字/再发零重弹）；未闩 → 需弹框；闩锁只旁路弹框分支，armed 去重照常生效（协同 pin）', () => {
+    expect(riskDialogNeeded(WT_A, null)).toBe(true) // 未确认 → 弹框
+    expect(riskDialogNeeded(WT_A, WT_A)).toBe(false) // 已确认闩锁 → 零重弹
+    expect(riskDialogNeeded(WT_A, 'C:/other')).toBe(true) // 闩锁他行 → 仍弹框
+    // 协同口径：闩锁不是 arm 旁路——确认后续字若 armed 去重命中，闸照旧否决（不重复编排）
+    expect(
+      shouldArmSelectedRow({
+        phaseReadyGit: true,
+        path: WT_A,
+        suppressed: [],
+        riskConfirmationOpen: false,
+        rowPresent: true,
+        isMain: false,
+        currentCwd: 'C:/elsewhere',
+        draftIntent: true,
+        currentSessionId: 's-armed',
+        armedSessionId: 's-armed',
+        armedPath: WT_A,
+      }),
+    ).toBe(false)
   })
 })
 
