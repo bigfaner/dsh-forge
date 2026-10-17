@@ -31,9 +31,9 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 
 ### BIZ-task-004: 就绪选择与防双派发
 
-**Rule**: 就绪选择仅扫 pending 池，序 = 分支延续优先 → priority → 创建序；in_progress 幂等重入仅限显式 taskRef 或 links 已含本会话——无 taskRef 的盲选不领 in_progress（双 dispatcher 并发不双派发）。
-**Context**: 并发与重入域收敛：claim 语义在多会话并发下保持单执行者。
-**Source**: feature/dsh-forge-m2-pipeline BIZ-004（tech-design §Interface 1 动词内聚不变量）
+**Rule**: 就绪选择仅扫 pending 池，序 = block_source 挂接 fix 优先（仅同轮就绪集内比较——不跨轮饿死）→ 分支延续优先 → priority → 创建序；in_progress 幂等重入仅限显式 taskRef 或 links 已含本会话——无 taskRef 的盲选不领 in_progress（双 dispatcher 并发不双派发）。
+**Context**: 并发与重入域收敛：claim 语义在多会话并发下保持单执行者；fix 与旁支叶子同轮就绪时 fix 先领，防 fix 滞留堵塞下游整链（dispatch-loop-hardening 改进 2）。
+**Source**: feature/dsh-forge-m2-pipeline BIZ-004（tech-design §Interface 1 动词内聚不变量）+ dispatch-loop-hardening 改进 2（packages/core/src/forge/tasks/claim.ts 排序键）
 
 ### BIZ-task-005: 中断恢复 = 幂等重入
 
@@ -103,12 +103,12 @@ domains: [task, state-machine, dispatch, audit, fix-chain, worker, ac-gate]
 
 ### BIZ-task-014: worker 授权收窄与逃生通道
 
-**Rule**: 一切 worker 全局拒绝交互/委派/待办/呈现四语义族（ask-user / delegation / todo / present——实名表见 conventions/task-domain.md TECH-task-006）；worker 的 forge 工具面 = submitTask + addTask 恰两动词（claimTask/queryTask/dispatchTask 不入 worker 面）；skill 不拒（组合继承目录按需加载）；worker 遇重大问题经 addTask 逃生通道——前缀按语义二分：disc-N（独立问题，不阻塞源任务）/ fix-N（走 fix 链协议：block_source 单事务、链深 ≤6、恢复钩子——M2 机制回归），自身任务以 blocked 收尾并引用新任务。
-**Context**: worker 既能干活又不越权（不问用户、不派生子代）；受阻上报径完整。
-**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-009（prd-spec §In Scope ①·§Flow Description 流程四 5 / prd-user-stories Story 5）
+**Rule**: 一切 worker 全局拒绝交互/委派/目标/呈现四语义族（ask-user / delegation / goal / present——实名表见 conventions/task-domain.md TECH-task-006；todo_write 解禁）；worker 的 forge 工具面 = WORKER_FORGE_TOOLS 五动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径；claimTask/queryTask/dispatchTask/stopTaskLoop/listBugs 不入 worker 面）；addTask 按 caller 身份分流——loopSourced spawn 的 worker 会话拒收（响应自解释：任务派生权在主会话与循环 triage 层）；worker blocked 结算只如实提交（原因 + 证据），不自派 fix——后继 fix 任务由 triage 阶梯/主会话派生（add-fix 带 block_source）；skill 不拒（组合继承目录按需加载）。
+**Context**: worker 既能干活又不越权（不问用户、不自派任务）；调度权收敛三权分立——循环机械执行、编排层规划、用户终裁（dispatch-loop-hardening 改进 5）；受阻上报径 = blocked 结算留痕，修复任务派生时延为零（同一结算序列内）。
+**Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-009（prd-spec §In Scope ①·§Flow Description 流程四 5 / prd-user-stories Story 5）；dispatch-loop-hardening 改写（改进 5——addTask 身份分流 / worker 不自派 fix；bug-recurrence-chain——WORKER_FORGE_TOOLS 五动词）
 
 ### BIZ-task-015: 派发按 DAG 就绪序——容器绑定认领（source 限定），无单任务直接执行入口
 
-**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序）；**`/run-dag-tasks <任务源 slug>` 绑定容器只派该容器**（宿主派发循环唯一入口——dispatchTask 携带 source_kind+source_slug 成对参数——claim 限定该容器就绪池 + 会话重入仅同容器 in_progress + 无任务事件归属随 source_slug（context_slug 入参已退役）；用户裁决 2026-10-08 同日改判）；source 缺席 = 全库 DAG 就绪盲选缺省（程序/RPC 面兜底）；容器内仍无指定单个任务直接执行的入口（UI 与 tool 面同语义）。
+**Rule**: 任务派发只支持按 DAG 依赖顺序领取就绪任务（dispatchTask 就绪选择机械序——含 fix 优先键，见 BIZ-task-004）；**`/run-dag-tasks <任务源 slug>` 绑定容器只派该容器**（宿主派发循环唯一入口——dispatchTask 携带 source_kind+source_slug 成对必填参数——schema 强制缺失即拒绝，claim 限定该容器就绪池 + 会话重入仅同容器 in_progress + 无任务事件归属随 source_slug；用户裁决 2026-10-08 同日改判）；容器内无指定单个任务直接执行的入口（UI 与 tool 面同语义）；停止入口 = `stopTaskLoop` 工具 + `/stop-dag-tasks` 指令（运行中仅 owner 可停、挂起态任意会话可停，被拒场景自解释）。
 **Context**: 消灭跳序执行旁路（DAG 序不变）；容器绑定消灭跨容器误领（事件归属由 source_slug 兼任——无独立归属参数）；派发入口两途（GUI 派发按钮 / 会话内 `/run-dag-tasks` 指令）汇入同一宿主派发循环——run-tasks 会话技能已退役（dispatch-loop-hardening 3a），派发循环协议正本 = 本文档（BIZ-task-003 fix 链 / BIZ-task-014 worker 授权）+ 处置注入模板 `packages/plugin-forge/src/triage/prompt.ts`。
 **Source**: feature/dsh-forge-m3-bootstrap-presets BIZ-010（prd-spec §In Scope ②·§Flow Description 流程四 1 / prd-user-stories Story 4A）；改判 = proposal/dispatch-container-scoped-claim（2026-10-08，core M3 2.4 容器限定盲选管道接线）

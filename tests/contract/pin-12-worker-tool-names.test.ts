@@ -334,4 +334,9 @@ describe('pin ⑳-5 收窄矩阵常量（Interface 2 逐格——G1 层常驻复
   it('worker forge 面 = 五动词（submitTask + addTask + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径——fix-bug coding-fix worker 放行；dispatchTask/queryTask/listBugs 不入 worker 面）', () => {
     expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug'])
   })
+
+  it('主 agent 专用新工具面不入 worker 面（3b stopTaskLoop 停止入口——WORKER_TOOL_NAME_FAMILY 与 WORKER_FORGE_TOOLS 均不含；worker deny 由 FORGE_DENY_IN_WORKER 同步守护）', () => {
+    expect(WORKER_TOOL_NAME_FAMILY).not.toHaveProperty('stopTaskLoop')
+    expect(WORKER_FORGE_TOOLS).not.toContain('stopTaskLoop')
+  })
 })

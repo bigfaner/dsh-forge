@@ -21,7 +21,7 @@
 ## Windows commit 内存纪律（用户裁决 2026-10-16）
 
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
-- **任何原生内存崩溃先查 commit charge 再定位进程**：症状族（exit 3221226505 / heap OOM / PowerShell 0x800705AF）在 commit ≥ 95% limit 时是环境级耗尽，崩在哪个进程纯看运气——对具体进程做配方排查即误诊。诊断命令与清理流程正本见 `docs/conventions/windows-commit-exhaustion.md`。根治（worker 进程树 Job Object 回收）已入 `dispatch-loop-hardening` 提案改进 4；pagefile 扩容记录暂缓（用户裁决：记录不实施）。
+- **任何原生内存崩溃先查 commit charge 再定位进程**：症状族（exit 3221226505 / heap OOM / PowerShell 0x800705AF）在 commit ≥ 95% limit 时是环境级耗尽，崩在哪个进程纯看运气——对具体进程做配方排查即误诊。诊断命令与清理流程正本见 `docs/conventions/windows-commit-exhaustion.md`。根治已落地：worker 任意终态经进程树 Job Object 整树回收（`packages/plugin-forge/src/spawn/job-tree.ts`——孙进程逐个 assign、终态 TerminateJobObject，忘杀也活不成）；pagefile 扩容记录暂缓（用户裁决：记录不实施）。
 
 ## UI/engineering alignment conventions
 
