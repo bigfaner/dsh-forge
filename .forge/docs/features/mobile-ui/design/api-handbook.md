@@ -6,22 +6,13 @@ created: 2026-10-17
 
 统一信封（既有口径不变）：`POST /remote/__rpc`，body `{channel, payload}` → `{ok:true, data}` | `{ok:false, error:{code, reason}}`。鉴权：官方 `authorizeIndex` 放行优先，`dswf_forge_remote` cookie 自持兜底（`authorizeRemoteRpc`，零改动）。通道 = allowlist 精确匹配，未列通道 fail-soft 错误信封。
 
-## 一、新增通道（3 薄方法 + 1 只读 + 透传；task-action 已撤销）
+## 一、新增通道（收敛为 1 薄方法 + 透传；用户裁决 2026-10-17 评估收敛）
 
-### 1.0 指令动作 = 用户消息（无专用通道，用户裁决 2026-10-17）
+### 1.0 指令动作 = 用户消息（无专用通道）
 
-派发/暂停按钮**不是通道**：指令是特殊格式的 user message（`command/run` 事件实证 `source.kind:'user'`），与发送普通消息同一条流。手机端组装指令文本（`/run-dag-tasks <slug>`、`/stop-dag-tasks`）经**官方 `session.prompt`** 发到对应会话——dispatch 发当前/新建 dispatch 会话（对齐桌面 todo#32 语义），pause 发循环 ownerSessionId 会话。loop-active 拒绝以指令回执文本出现在会话内（桌面 foreignLoopNotice 同款），无专用确认框信封。stale 置灰仍数据驱动。
+派发/暂停按钮**不是通道**：指令是特殊格式的 user message（`command/run` 事件实证 `source.kind:'user'`），与发送普通消息同一条流。手机端只组装指令文本（`/run-dag-tasks <slug>`、`/stop-dag-tasks`）经**官方 `session.prompt`** 发出——**寻址、归属判定、执行全部由 host 侧既有指令机制处理**（移动端只是 view 层，不介入任何逻辑，含寻址）。回执（含 loop-active 拒绝、无活循环提示）以指令回执文本出现在会话内，无专用信封。stale 置灰数据驱动。
 
-### 1.1 `forge:remote/session-links`（分支切换校验薄方法）
-
-| | |
-|---|---|
-| payload | `{branch: string, worktree: string}` |
-| data | `{running: [{taskId, slug, title}], blocked: boolean}`——目标分支/worktree 上运行中任务反查结果 |
-| 守卫 | 只读组合：`sessionLinks` + `listTasks` 反查；无写副作用 |
-| 要点 | hero 分支切换的**预检数据源**：host 返回事实，手机端据此弹确认框（选回/仍要切换）——「选回/仍要」的裁决仍由用户做，host 不替用户决定 |
-
-### 1.3 `forge:remote/read-state`（已读游标，host 共享）
+### 1.1 `forge:remote/read-state`（已读游标，host 共享——唯一新增薄方法）
 
 | | |
 |---|---|
@@ -31,18 +22,18 @@ created: 2026-10-17
 | 写 data | `{seq, unread}`（归零成功）或 `{seq: 保持值, unread: >0}`（单调守卫拒绝回退时返回现值，**不报错**——显示层对账语义） |
 | 守卫 | **单调**：写仅在 `seq > 当前 lastReadSeq` 时落盘（`KvTable.update` 原子 RMW 内实现，见 tech-research R6.4）；`seq > tailSeq` clamp 至 tailSeq |
 | 失败码 | `not-found`（会话不存在） |
-| 要点 | 计算单源在 host（`unread = tailSeq − lastReadSeq`）；两动作**拆分为同通道双语义**：payload 含 `seq` 即写、不含即读（保持单端点、无 op 字段的歧义） |
+| 要点 | 计算单源在 host（`unread = tailSeq − lastReadSeq`）；payload 含 `seq` 即写、不含即读（单端点双语义）；官方无未读面（实证零命中），PRD 硬需求 |
 
-### 1.4 `forge:remote/workers`（worker 会话目录切片）
+### 1.2 已撤销/延后的候选通道（评估结论留痕）
 
-| | |
-|---|---|
-| payload | `{parentSessionId: string}` |
-| data | `{workers: [{id, mode: 'one-shot'│'continuable', activity: 'running'│'inactive', label?, hasChildren}]}`——`id` 即 SessionId（worker 路由键 `#/worker/:id`）；wire 实证字段（subagent/catalog 样本），`label` 在 one-shot 分支可选 |
-| 守卫 | 只读：父会话 catalog 投影（`listChildren` 口径）；越权访问非本会话子孙 → 空列表（不泄露） |
-| 要点 | `mode` 定 worker 只读/可续聊（US-8）；`activity` 定状态徽标 |
+| 候选 | 结论 | 依据 |
+|---|---|---|
+| `task-action` | **撤销** | 指令 = user message（1.0 节） |
+| `loops` | **撤销** | 寻址也是逻辑，归 host 指令机制 |
+| `workers` | **撤销** | 官方面完整派生：`session.list`（`SessionSummary.parentSessionId` + `origin:'subagent'` + `running`）视图过滤 + 父会话日志 `subagent/catalog` 持久事件（`{childId, mode, label}`，wire-samples 实证）投影——`mode`/`label`/`activity` 三字段全有源 |
+| `session-links` | **延后（可选增强）** | hero 已是乐观切换 + host 建会话守卫回执兜底（确认框由回执驱动）；预检组合（sessionLinks×listTasks）是唯一新增业务判定，收益/侵入比最低——确认框需要更充分信息时再加 |
 
-### 1.5 透传通道（零新增 host 逻辑）
+### 1.3 透传通道（零新增 host 逻辑）
 
 `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`——桥上已有通道白名单放行，payload/data 由既有 worktree 桥契约定义（child.ts 直通）；`sessionCreate` 属意图转发，host 侧照旧校验。
 

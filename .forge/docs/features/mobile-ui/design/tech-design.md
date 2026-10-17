@@ -179,7 +179,7 @@ apps/host/src/boot/
 └─ read-state-domain.ts        # 新：read-state DomainSpec + 薄方法 handler（官方存储缝；host 共享能力，非 mobile 专属）
 
 packages/contracts/src/
-└─ remote-channels.ts          # 改：REMOTE_CHANNELS 扩充（session-links/read-state/workers）
+└─ remote-channels.ts          # 改：REMOTE_CHANNELS 扩充（read-state）
 ```
 
 ### 关键逻辑 UML
@@ -321,9 +321,9 @@ sequenceDiagram
 
 | 指令动作（**无通道**，用户裁决 2026-10-17） | 意图 | 指令文本经官方 `session.prompt`（`/run-dag-tasks <slug>`、`/stop-dag-tasks`） | 零新 host 代码——指令=特殊格式 user message，与发消息同流 |
 | `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`（透传） | 读/意图 | 桥上已有通道透传 | child.ts 桥直通 |
-| `forge:remote/session-links`（新薄方法） | 读 | `{branch, worktree}` → `{running:[{taskId,slug,title}], blocked:bool}` | `sessionLinks`+`listTasks` 组合反查（分支切换校验） |
-| `forge:remote/read-state`（新薄方法） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
-| `forge:remote/workers`（新薄方法） | 读 | `{parentSessionId}` → catalog 切片 `[{id(=SessionId，worker 路由键), mode:'one-shot'│'continuable', activity, label?, hasChildren}]` | wire 实证字段投影（subagent/catalog 样本实证；label 在 one-shot 分支可选） |
+| ~~`forge:remote/session-links`~~（**延后可选**） | 读 | —— | hero 乐观切换 + 建会话守卫回执兜底；预检组合收益/侵入比最低（api-handbook 1.2） |
+| `forge:remote/read-state`（**唯一新增薄方法**） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
+| ~~`forge:remote/workers`~~（**撤销——官方面派生**） | 读 | —— | `session.list`（parentSessionId/origin/running）视图过滤 + 父会话 `subagent/catalog` 持久事件投影（mode/label）；见 api-handbook 1.2 |
 | `forge:remote/disconnect`（已有）+ 状态读 | 意图/读 | — | 不变 |
 
 ## 数据模型（db-schema: yes）
@@ -385,7 +385,7 @@ sequenceDiagram
 | 位置 | 改动 |
 |---|---|
 | `apps/mobile/`（新） | 源码 core/views/widgets、esbuild 构建脚本、tsconfig、package.json |
-| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（worktree 桥/read-state/workers/disconnect） |
+| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（worktree 桥/read-state/disconnect） |
 | `apps/host/src/boot/remote-http-rpc.ts` | channelTable allowlist 扩充 + 薄方法 handler（纯函数，fake 可测） |
 | `apps/host/src/boot/read-state-domain.ts`（新） | read-state DomainSpec 注册 + 薄方法 handler + tailSeq 监听（官方存储缝） |
 | `packages/contracts/` | 新通道名与 payload 类型（`REMOTE_CHANNELS` 扩充） |
@@ -408,8 +408,8 @@ sequenceDiagram
 | US-3 ask 面板（单选即选/多选/other） | views/ask（`interaction.answer` 直连官方面）；选项语义状态（T1 单测覆盖） |
 | US-4 模型切换 | views/settings+models（`session.rpc` 模型面 + localStorage 最近使用） |
 | US-5 抽屉未读 | views/drawer；`forge:remote/read-state` 薄方法（AD-6 seq 游标；双级未读） |
-| US-6 hero | views/hero；`forge:worktree/*` 透传 + `forge:remote/session-links` 校验薄方法 → 确认框 |
+| US-6 hero | views/hero；`forge:worktree/*` 透传；乐观切换 + 建会话守卫回执 → 确认框（session-links 延后可选） |
 | US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + 指令文本经官方 `session.prompt`（寻址/执行全在 host 指令机制——时序 2） |
-| US-8 worker 会话 | views/worker；`forge:remote/workers` catalog 切片（`mode` 定只读/可续聊） |
+| US-8 worker 会话 | views/worker；官方面派生（`session.list` parentSessionId 过滤 + `subagent/catalog` 事件投影；`mode` 定只读/可续聊） |
 | US-9 循环卡/文档 | AD-4 source.kind 判别；widgets 循环卡家族；文档卡 `meta` 通道（批次③探针确认）+ views/reader |
 | US-10 宿主守卫 | AD-1 意图信封唯一动作通道；stale 置灰 = 数据驱动 |

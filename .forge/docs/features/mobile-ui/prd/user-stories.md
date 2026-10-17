@@ -55,7 +55,7 @@ source-proposal: mobile-ui
 **当** 我在 hero 新建会话时，**我要** 默认落在当前分支/worktree 与突击模式并可乐观切换，**以便** 快速开工且不被强制切环境。
 
 - Given 打开 hero → When 初始状态 → Then 默认模式=突击、分支=当前所在分支/worktree，不强制切换。
-- Given 我选择切换分支 → When host 校验失败 → Then 弹确认框（选回/仍要切换），UI 无预检说明文本。
+- Given 我选择切换分支 → When host 建会话守卫拒绝 → Then 弹确认框（选回/仍要切换；回执驱动，无预检调用），UI 无预检说明文本。
 
 ### US-7 查看任务进度（批次③）
 
