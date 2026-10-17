@@ -14,6 +14,10 @@
 
 - **装配缝归属插件域**：插件包（`packages/plugins/*`，如 git-worktree）的装配缝（编排逻辑、与官方机械的缝合面）属于插件自身——插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge。宿主只做 wiring（通道注册 / service provide / Face 注入）。正本见 `docs/conventions/plugin-portability.md`（目标分层、判据、现状漂移面）。
 
+## 复用优先：不自造机制（用户裁决 2026-10）
+
+- **不要自己造机制，优先复用 dsh 的机制**：需要能力时先核销官方同语义机械（ctx 服务键/事件/slot/loader/plugin-manager 等），有则复用；确需自建须在提案/技术设计记录「官方缺什么、为何不自建进官方」。装配缝合优先走官方缝（cordis inject 服务键、官方 loader、plugin-manager 安装通道），不发明平行注入机制。正本见 `docs/conventions/reuse-official-mechanisms.md`。
+
 ## Windows commit 内存纪律（用户裁决 2026-10-16）
 
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
