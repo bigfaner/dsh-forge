@@ -9,7 +9,7 @@
 // 表单状态面（CreateWorktreeFields/initialCreateForm）Modal 外提——单测直测
 // （官方 Modal 门户壳 SSR 不可达——apps/web AddProjectFlow.test 头注同口径）。
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Input, Menu, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Input, Menu, Modal, StateDot, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconWarningTriangleOutlineRegular } from './icons.js'
 import { WorktreeRiskConfirmation } from './risk-confirmation.js'
 import { createConflicts, filterSlugCandidates, isCreateReady, isCrossBranchRisk, isWorktreeNameFollowing, joinWorktreePath, sortBaseBranchOptions, type CreateConflict, type SlugCandidate } from './model.js'
@@ -405,6 +405,8 @@ export interface CreateWorktreeDialogProps {
   readonly worktreeDir: string
   /** 创建失败错误（装配层 catch 产出——表单内错误呈现面，不静默吞错；undefined = 无错） */
   readonly error?: string | undefined
+  /** 创建在途（git worktree add 秒级耗时）——提交钮进旋转指示 + 禁用，防反复点击 */
+  readonly submitting?: boolean
   readonly onClose: () => void
   readonly onCreate: (request: CreateWorktreeRequest) => void
   /** 分支组合框插槽（合并形态注入——Fields 同名 prop 透传；缺省 = 既有分离实现） */
@@ -424,6 +426,7 @@ export function CreateWorktreeDialog({
   mainBranch = null,
   worktreeDir,
   error,
+  submitting = false,
   onClose,
   onCreate,
   BranchCombobox,
@@ -477,8 +480,9 @@ export function CreateWorktreeDialog({
           <Button
             variant="primary"
             data-dswt-create-submit=""
-            disabled={!ready}
+            disabled={!ready || submitting}
             onClick={() => {
+              if (submitting) return
               if (isCrossBranchRisk(form.baseBranch, mainBranch)) {
                 setRiskOpen(true)
                 return
@@ -486,7 +490,14 @@ export function CreateWorktreeDialog({
               proceed()
             }}
           >
-            创建
+            {submitting ? (
+              <>
+                <StateDot state="ongoing" size={14} />
+                创建中…
+              </>
+            ) : (
+              '创建'
+            )}
           </Button>
         </>
       }

@@ -422,10 +422,14 @@ export function ForgeHeroWorktreeMount({
 
   // 新建（封闭写集①）与删除（封闭写集②——确认门 = isDeleteBlocked 由弹窗内部消费 checks）
   const [createError, setCreateError] = useState<string | undefined>(undefined)
+  // 创建在途闸：git worktree add 秒级耗时——按钮进 submitting（官方 StateDot ongoing
+  // 旋转指示 + 禁用），防「以为没点上」的反复点击撞分支已存在。
+  const [creating, setCreating] = useState(false)
   const onCreate = useCallback(
     (request: CreateWorktreeRequest): void => {
-      if (projectRoot === null) return
+      if (projectRoot === null || creating) return
       setCreateError(undefined)
+      setCreating(true)
       // 弹窗产物（baseBranch/branch/worktreeName/customPath）→ create 载荷：
       // path = 自定义路径优先，否则落所配 worktree 目录（弹窗 worktree 名拼尾段——同名默认；
       // joinWorktreePath 单点归一反斜杠系统口径——1.21 分隔符归一）
@@ -433,26 +437,27 @@ export function ForgeHeroWorktreeMount({
       const path = request.customPath !== undefined && request.customPath !== ''
         ? request.customPath
         : joinWorktreePath(baseDir, request.worktreeName)
+      const settle = (): void => setCreating(false)
       makeRpc()
         .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
         .then((result) => {
           setCreateOpen(false)
-          // 1.19 钉死口径「自动跟进」：创建成功 hero 选中态自动切到新 worktree
-          // （onSelectConfirmed = 项目粒度选中记忆写入 + 本地回填——1.29 纯选中态，
+          // 创建成功 hero 选中态自动切到新 worktree（项目粒度选中记忆写入 + 本地回填；
           // 挂靠编排留给首条消息时点的 arm 消费）；主树 HEAD 不动（worktree add 新树内
           // 检出新分支，零 checkout）。
           // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
-          // 行匹配 path === selectedPath 用精确等值；1.24 实证本地拼串反斜杠 ≠ 清单正斜杠）
+          // 行匹配 path === selectedPath 用精确等值；本地拼串反斜杠 ≠ 清单正斜杠实证）
           const createdPath = result.entry?.path ?? path
           onSelectConfirmed(createdPath)
           refresh()
         })
         .catch((error: unknown) => {
-          // 1.24 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
+          // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
           setCreateError(error instanceof Error && error.message !== '' ? `创建失败：${error.message}` : '创建失败：git worktree 创建未成功，请检查分支名与路径')
         })
+        .finally(settle)
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh, onSelectConfirmed],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, onSelectConfirmed, creating],
   )
   const openDelete = useCallback(
     (path: string): void => {
@@ -510,6 +515,7 @@ export function ForgeHeroWorktreeMount({
         mainBranch={phase.rows.find((row) => row.isMain)?.branch ?? null}
         worktreeDir={phase.worktreeDir ?? ''}
         error={createError}
+        submitting={creating}
         onClose={() => {
           setCreateError(undefined)
           setCreateOpen(false)
