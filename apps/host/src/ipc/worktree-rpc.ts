@@ -183,12 +183,12 @@ export function createWorktreeRpcService(deps: {
   // ── G7② 项目能力缓存（resolveProject 结果按 projectRoot 会话期记忆化）──
   // 只在 gitWorktree 能力服务在场时缓存（默认独立模式扩展点恒 null——缓存会把「能力未到」
   // 冻结成永久非 git）。判非 git 直接短路 = 零会话日志读、零 git 子进程。
-  const projectCache = new Map<string, Promise<{ projectRoot: string } | null>>()
-  const cachedResolve = (path: string): Promise<{ projectRoot: string } | null> => {
+  const projectCache = new Map<string, Promise<{ projectRoot: string; projectName?: string } | null>>()
+  const cachedResolve = (path: string): Promise<{ projectRoot: string; projectName?: string } | null> => {
     const key = norm(path)
     const cached = projectCache.get(key)
     if (cached !== undefined) return cached
-    const pending = ext().resolveProject(path).catch(() => null) as Promise<{ projectRoot: string } | null>
+    const pending = ext().resolveProject(path).catch(() => null) as Promise<{ projectRoot: string; projectName?: string } | null>
     if (resolveGitWorktree() !== undefined) projectCache.set(key, pending)
     return pending
   }
@@ -243,14 +243,18 @@ export function createWorktreeRpcService(deps: {
     const registry = resolveWorkspaceRegistry()
     if (registry === undefined) return
     try {
-      // bug 4eab48ea：树工作区标题继承项目命名——官方 chip 文案 = workspace.title（槽外不可
-      // 改制），主工作区 title = 项目名（fix-24 ② 链），resolveByPath(项目根) 只读取同源；
-      // 映射缺席回退树名（旧行为零猜测）。
-      const projectRoot = (await cachedResolve(worktreePath).catch(() => null))?.projectRoot
-      const mainTitle =
-        projectRoot !== undefined
-          ? await registry.resolveByPath?.(projectRoot).then((row) => row?.title).catch(() => undefined)
-          : undefined
+      // 树工作区标题继承项目命名——官方 chip 文案 = workspace.title（槽外不可改制）。
+      // title 源 = 活跃项目行 name（hero 项目行同源；工作区 title 是用户可改名的易变字段
+      // 不作源）。主行（cwd=项目根）不回写——主工作区 title 是用户命名面。映射缺席回退树名。
+      const resolution = await cachedResolve(worktreePath).catch(() => null)
+      const projectRoot = resolution?.projectRoot
+      const isMainRow = projectRoot !== undefined && norm(worktreePath) === norm(projectRoot)
+      const mainTitle = isMainRow
+        ? undefined
+        : (resolution?.projectName ??
+          (projectRoot !== undefined
+            ? await registry.resolveByPath?.(projectRoot).then((row) => row?.title).catch(() => undefined)
+            : undefined))
       const workspace = await registry.create(worktreePath, mainTitle ?? worktreeNameOf(worktreePath))
       // 存量 healing：create 对已存在工作区复用不改 title（官方语义）——项目命名继承须
       // 经 setTitle 显式回写，否则修复前建的树工作区永久树名（hero 项目 chip 跟随树名）。

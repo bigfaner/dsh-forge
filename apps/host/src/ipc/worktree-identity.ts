@@ -24,11 +24,13 @@ interface GitAnchorFace {
 /** 注入缝服务名（boot/child.ts provide ↔ 插件惰性 get——双侧同锚常量，各自本地声明） */
 export const GIT_WORKTREE_IDENTITY_SERVICE = 'forgeWorktreeIdentity'
 
-/** 路径归属解析结果（= 通用层 ProjectResolution 同形——结构化面零包依赖） */
+/** 路径归属解析结果（= 通用层 ProjectResolution 同形 + 项目名——工作区命名继承源） */
 export interface WorktreeProjectResolution {
   readonly projectId: string
   readonly projectRoot: string
   readonly isGit: boolean
+  /** 项目名（projects.name——hero 项目行同源；缺席 = 旧行形状） */
+  readonly projectName?: string
 }
 
 /** 两扩展点覆写集（形状 = 通用层 GitWorktreeExtensionPointOverrides 同形） */
@@ -84,6 +86,7 @@ export function createWorktreeIdentity(
       const rows: readonly ProjectSummary[] = await projects.listProjects().catch(() => [])
       let hit: ProjectSummary | undefined
       for (const row of rows) {
+        if (row.archived) continue // 归档行不参与归属（同锚存量双行按 created_at 序，归档行在前会劫持解析）
         // 精确命中（cwd 即注册根）短路——退路 = 同锚首行（存量双行归 core 注册链仲裁归档，读面不重判）
         if (normalizeFsPath(row.wsPath) === normalizeFsPath(cwd)) {
           hit = row
@@ -91,12 +94,19 @@ export function createWorktreeIdentity(
         }
         const rowAnchor = await git.commonDirAnchor(row.wsPath)
         if (rowAnchor !== null && normalizeFsPath(rowAnchor) === anchorKey) {
+          // 主树行必胜仲裁：锚 = realpath(git-common-dir) 恒坐落在主树内（<主树>/.git）——
+          // 「锚目录在该行 ws_path 之下」即主行。同锚多行时 worktree 行按 created_at 序可排
+          // 在主行之前（main-old→redesign→main 演进残留）——树行根/title 会劫持项目归属。
+          if (anchorKey.startsWith(`${normalizeFsPath(row.wsPath)}/`)) {
+            hit = row
+            break
+          }
           hit ??= row
         }
       }
       if (hit === undefined) return null // 无同锚活跃行 → 归并失效（未注册仓库）
       await refresh().catch(() => false) // 顺带刷新目录快照（同步提供者取数缓存——随归并自愈）
-      return { projectId: hit.id, projectRoot: hit.wsPath, isGit: true }
+      return { projectId: hit.id, projectRoot: hit.wsPath, isGit: true, projectName: hit.name }
     } catch (cause) {
       log(`[git-worktree] resolveProject 归并失败（fail-soft null）：${String(cause)}`)
       return null

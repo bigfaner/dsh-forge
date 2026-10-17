@@ -15,6 +15,7 @@ const run = promisify(execFile)
 let ROOT: string
 let REPO: string // 主 worktree（注册根）
 let WTA: string // 附属 worktree（feat/a）
+let WTB: string // 附属 worktree（feat/b——不在注册行集，模拟「未注册树 cwd」）
 let NONGIT: string
 
 const git = async (cwd: string, args: string[]): Promise<string> => {
@@ -26,6 +27,7 @@ beforeAll(async () => {
   ROOT = mkdtempSync(join(tmpdir(), 'dsh-forge-wt-identity-'))
   REPO = join(ROOT, 'repo')
   WTA = join(ROOT, 'wt-a')
+  WTB = join(ROOT, 'wt-b')
   NONGIT = join(ROOT, 'nongit')
   mkdirSync(REPO, { recursive: true })
   mkdirSync(NONGIT, { recursive: true })
@@ -34,6 +36,7 @@ beforeAll(async () => {
   await git(REPO, ['add', '.'])
   await git(REPO, ['-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-m', 'init'])
   await git(REPO, ['worktree', 'add', '-b', 'feat/a', WTA])
+  await git(REPO, ['worktree', 'add', '-b', 'feat/b', WTB])
 }, 60_000)
 
 afterAll(() => {
@@ -41,10 +44,18 @@ afterAll(() => {
 })
 
 /** forgeProjects 行集桩（形状 = contracts 面；行集 = 本测试注册态） */
-function stubProjects(rows: { id: string; wsPath: string; worktreeDir?: string }[]): ForgeProjectsIdentityFace {
+function stubProjects(
+  rows: { id: string; wsPath: string; worktreeDir?: string; name?: string; archived?: boolean }[],
+): ForgeProjectsIdentityFace {
   return {
     async listProjects() {
-      return rows.map((r) => ({ id: r.id, workspaceId: 'w', name: 'n', wsPath: r.wsPath, archived: false }))
+      return rows.map((r) => ({
+        id: r.id,
+        workspaceId: 'w',
+        name: r.name ?? 'n',
+        wsPath: r.wsPath,
+        archived: r.archived ?? false,
+      }))
     },
     async getProject(id: string) {
       const r = rows.find((x) => x.id === id)
@@ -54,12 +65,12 @@ function stubProjects(rows: { id: string; wsPath: string; worktreeDir?: string }
             id: r.id,
             workspaceId: 'w',
             wsPath: r.wsPath,
-            name: 'n',
+            name: r.name ?? 'n',
             forgeDir: join(r.wsPath, '.forge'),
             forgeDirExternal: false,
             knowledgeDir: join(r.wsPath, '.knowledge'),
             ...(r.worktreeDir !== undefined ? { worktreeDir: r.worktreeDir } : {}),
-            archived: false,
+            archived: r.archived ?? false,
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           }
@@ -84,6 +95,34 @@ describe('1.7 扩展点注入装配（集成层实现——真机 git 链）', (
     mkdirSync(other, { recursive: true })
     await git(other, ['init', '-b', 'main'])
     expect(await identity.resolveProject(other)).toBeNull()
+  })
+
+  it('同锚多行仲裁：主树行（ws_path ≡ 锚）必胜——created_at 更早的同锚 worktree 行不劫持归属', async () => {
+    // 残留演进形态（redesign→main 切换）：同锚 worktree 行在前（created_at 序），主行在后；
+    // cwd = 未注册树（无精确命中）→ 走锚匹配，主行必胜
+    const rows = [
+      { id: 'p-old-worktree', wsPath: WTA, name: 'old-worktree' }, // 同锚 worktree 行，created_at 序在前
+      { id: 'p-main', wsPath: REPO, name: 'dsh-forge' },
+    ]
+    const identity = createWorktreeIdentity(stubProjects(rows), createGitIdentityPort())
+    const resolved = await identity.resolveProject(WTB)
+    expect(resolved).toMatchObject({
+      projectId: 'p-main',
+      projectRoot: REPO,
+      projectName: 'dsh-forge',
+    })
+    expect(await identity.resolveProject(REPO)).toMatchObject({ projectId: 'p-main', projectName: 'dsh-forge' })
+  })
+
+  it('归档行不参与归属：同锚 archived 行在前 → 活跃主行胜出', async () => {
+    const identity = createWorktreeIdentity(
+      stubProjects([
+        { id: 'p-archived', wsPath: WTA, name: 'redesign', archived: true },
+        { id: 'p-main', wsPath: REPO, name: 'dsh-forge' },
+      ]),
+      createGitIdentityPort(),
+    )
+    expect(await identity.resolveProject(WTB)).toMatchObject({ projectId: 'p-main', projectName: 'dsh-forge' })
   })
 
   it('AC2：getWorktreeDir 提供 worktree_dir 列值（每项目可配）；未配置/未注册退默认 <root>/.forge/worktrees', async () => {
