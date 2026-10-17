@@ -18,6 +18,12 @@ describe('SessionWorktreeChip（会话头 actions 槽一体 chip）', () => {
     expect(markup).toContain('wt-api')
   })
 
+  it('同名去重（hero chip 同口径）：branch ≡ worktree 名 → 单段展示零分隔点', () => {
+    const markup = chip({ branch: 'test-02', worktreeName: 'test-02' })
+    expect(markup).toContain('test-02')
+    expect(markup).not.toContain('·')
+  })
+
   it('样式对齐官方模式标签：button 触发面 + 分支图标（一体化展示）+ 完整信息卡触发语义', () => {
     const markup = chip({ worktreePath: 'Z:/repo/.forge/worktrees/wt-api', projectRoot: 'Z:/repo' })
     expect(markup).toContain('<button')
@@ -72,6 +78,8 @@ describe('SessionWorktreeInfoCard（点击展示的完整信息卡）', () => {
     expect(markup).toContain('Z:/repo/.forge/worktrees/wt-api')
     expect(markup).toContain('Z:/repo')
     expect(markup).toContain('↑2 ↓1')
+    expect(markup).toContain('max-content') // 卡片随内容加宽——路径不换行
+    expect(markup).toContain('nowrap')
   })
 
   it('封存警示行：worktree 已删除 + 不可发送提示', () => {

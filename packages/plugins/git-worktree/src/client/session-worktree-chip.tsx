@@ -42,7 +42,7 @@ export function SessionWorktreeInfoCard({
   const row = (label: string, value: ReactNode): ReactNode => (
     <div key={label} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
       <span style={{ flex: 'none', color: 'var(--dsw-alias-label-tertiary)', fontSize: 12 }}>{label}</span>
-      <span style={{ ...mono, color: 'var(--dsw-alias-label-primary)', fontSize: 12, wordBreak: 'break-all' }}>{value}</span>
+      <span style={{ ...mono, color: 'var(--dsw-alias-label-primary)', fontSize: 12, whiteSpace: 'nowrap' }}>{value}</span>
     </div>
   )
   return (
@@ -53,8 +53,8 @@ export function SessionWorktreeInfoCard({
         top: 'calc(100% + 6px)',
         left: 0,
         zIndex: 30,
-        minWidth: 280,
-        maxWidth: 420,
+        width: 'max-content',
+        maxWidth: 'min(640px, 72vw)',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
@@ -82,9 +82,9 @@ export function SessionWorktreeInfoCard({
 
 /**
  * 会话头只读一体 chip（注入 `conversation.session.header.actions` 槽——官方动作带，
- * 样式基准 = 官方 AgentPresetLabel 模式标签）。点击展示完整信息卡；失焦 1 秒自动
- * 消失（焦点在 chip/卡片内部不断开——出入卡片移动指针零闪烁）。data 锚：
- * data-dswt-session-chip / data-dswt-session-chip-popover。
+ * 样式基准 = 官方 AgentPresetLabel 模式标签）。同名去重（branch ≡ worktree 名 = 单段
+ * 展示，hero chip 同口径）。点击展示完整信息卡；光标离开 chip/卡片即消失，失焦 1 秒
+ * 兜底（焦点导航路径）。data 锚：data-dswt-session-chip / data-dswt-session-chip-popover。
  */
 export function SessionWorktreeChip({
   isGit,
@@ -101,6 +101,7 @@ export function SessionWorktreeChip({
   if (!isGit) return null // 非 git 项目：会话头 actions 槽零注入
   const segments = aheadBehind !== undefined && !sealed ? aheadBehindSegments(aheadBehind) : null
   const errorColor = 'var(--dsw-alias-state-error-primary)'
+  const deduped = branch === worktreeName // 同名去重（hero chip 同口径——默认派生名恒等）
   const cancelClose = (): void => {
     if (closeTimer.current !== undefined) {
       clearTimeout(closeTimer.current)
@@ -111,6 +112,10 @@ export function SessionWorktreeChip({
     <span
       ref={wrapRef}
       style={{ position: 'relative', display: 'inline-flex' }}
+      onMouseLeave={() => {
+        cancelClose()
+        setOpen(false)
+      }}
       onFocusCapture={cancelClose}
       onBlurCapture={(event) => {
         // 焦点移入 chip/卡片内部（React onBlur 冒泡）不断开；真失焦 → 1 秒后自动消失
@@ -152,13 +157,7 @@ export function SessionWorktreeChip({
           <IconBranchOutlineRegular size={14} />
         </span>
         <span style={{ ...mono, color: sealed ? errorColor : 'var(--dsw-alias-label-primary)', textDecoration: sealed ? 'line-through' : undefined }}>
-          {branch}
-        </span>
-        <span aria-hidden="true" style={{ color: 'var(--dsw-alias-label-caption)' }}>
-          ·
-        </span>
-        <span style={{ ...mono, color: sealed ? errorColor : 'var(--dsw-alias-label-primary)', textDecoration: sealed ? 'line-through' : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {worktreeName}
+          {deduped ? branch : `${branch} · ${worktreeName}`}
         </span>
         {segments !== null && (segments.ahead !== null || segments.behind !== null) && (
           <span data-dswt-chip-ab="" style={{ fontSize: 11, color: 'var(--dsw-alias-label-caption)' }}>
