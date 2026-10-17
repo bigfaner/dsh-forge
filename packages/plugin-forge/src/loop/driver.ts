@@ -104,6 +104,17 @@ export interface LoopTriageInput {
   readonly reason: string
   /** 结算载荷（落盘 settlement.json 同源） */
   readonly settlement: unknown
+  /** 改进 6① 重试回灌——上次处置失败的输出/错误摘要（首次处置缺席） */
+  readonly lastFailure?: string
+  /** 改进 6④ fix 链深余量（driver 沿 sourceTask 链现算；缺席 = 链数据不可得） */
+  readonly fixChain?: LoopTriageFixChain
+}
+
+/** fix 链深余量（改进 6④——remaining = limit - depth；remaining < 1 = add-fix 结构性被拒） */
+export interface LoopTriageFixChain {
+  readonly depth: number
+  readonly limit: number
+  readonly remaining: number
 }
 
 /**
@@ -263,6 +274,12 @@ export interface LoopDriverDeps {
   readonly registry?: LoopRegistry
   readonly triage?: LoopTriageHook
   readonly escalation?: LoopEscalationHook
+  /**
+   * 已知容器集读面（改进 6⑤——wait-external.externalSlug 存在性校验的宿主数据源；
+   * 返回该 projectId 下全部已知容器 slug（feature + proposal 双轨并集）。缺席 = 校验
+   * 缺席退化现状（fail-soft——装配面未接线时不阻塞处置阶梯）。
+   */
+  readonly knownContainers?: (projectId: string) => Promise<readonly string[]>
   /** 机械时延注入（测试缝——缺省生产值） */
   readonly delays?: { readonly backoffBaseMs?: number; readonly patiencePauseMs?: number }
 }
@@ -314,6 +331,13 @@ interface ActiveLoop {
 interface DispositionBook {
   attempts: number
   history: string[]
+  /** 改进 6① 上次处置失败摘要（回灌——下一轮 triage 输入 lastFailure） */
+  lastFailure?: string
+  /**
+   * 改进 6③ 决策缓存（决策与执行分离）：通过解析与宿主校验的决策在此缓存——落库失败后
+   * 再遇同任务 blocked 时重放执行不重跑分析；执行成功/重放再败即清账。
+   */
+  decision?: LoopTriageDecision
 }
 
 /** 处置簿取账（get-or-create——per-task 生命周期 = 循环实例存活期，结算成功清账） */
@@ -332,6 +356,64 @@ function triageDecisionNote(decision: LoopTriageDecision): string {
   if (decision.action === 'wait-external') return `决定等待 ${decision.externalSlug} 先完成`
   if (decision.action === 'split-remainder') return `决定分割剩余范围为继任任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
   return '决定请求人工裁决'
+}
+
+// ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
+
+/**
+ * fix 链深上限（改进 6④——core addTask C6 `FIX_CHAIN_DEPTH_LIMIT` 的宿主镜像值）：
+ * 余量 = 上限 − 当前任务链深；余量 < 1 时 add-fix 结构性被拒（创建必 ERR_CHAIN_DEPTH_EXCEEDED）。
+ */
+export const TRIAGE_FIX_CHAIN_DEPTH_LIMIT = 6
+
+/** 处置失败摘要（回灌/历史行用）：TriageDecisionInvalidError 携 rawSummary（模型原始输出摘要），
+ *  其余取 error message——结构化识别不 import triage 面（依赖方向：triage → loop 单向） */
+export function triageFailureSummary(cause: unknown): string {
+  const raw = (cause as { rawSummary?: unknown } | null)?.rawSummary
+  if (typeof raw === 'string' && raw.length > 0) return raw
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
+/** 模型输出无效判别（改进 6② 分流键——结构性识别 TriageDecisionInvalidError，不 import triage 面） */
+export function isTriageInvalidOutput(cause: unknown): boolean {
+  return (cause as { name?: unknown } | null)?.name === 'TriageDecisionInvalidError'
+}
+
+/** 宿主执行前置校验拒绝（改进 6④⑤——结构同 TriageDecisionInvalidError：立即重试 + 回灌摘要） */
+function hostRejection(message: string, rawSummary: string): Error {
+  return Object.assign(new Error(`处置决策无效——${message}`), {
+    name: 'TriageDecisionInvalidError',
+    rawSummary: `${message}；原始决策: ${rawSummary}`,
+  })
+}
+
+/**
+ * fix 链深余量现算（改进 6④——沿 sourceTask 自然键链上溯计数；fail-soft：读面故障/任务
+ * 不在列表 = undefined，提示词省略该节、宿主余量守卫缺席，退化为现状）。
+ */
+async function fixChainOf(
+  tasks: ForgeTasksService,
+  projectId: string,
+  source: LoopSourceRef,
+  task: TaskSnapshot,
+): Promise<LoopTriageFixChain | undefined> {
+  try {
+    const cards = await tasks.listTasks({ projectId, source: { kind: source.kind, slug: source.slug } })
+    const byKey = new Map(cards.map((c) => [`${c.slug}/${c.localId}`, c] as const))
+    let depth = 0
+    let ref: { slug: string; localId: string } = { slug: task.slug, localId: task.localId }
+    for (;;) {
+      const card = byKey.get(`${ref.slug}/${ref.localId}`)
+      if (card === undefined) break
+      depth += 1
+      if (card.sourceTask === undefined) break
+      ref = { slug: card.sourceTask.slug, localId: card.sourceTask.localId }
+    }
+    if (depth === 0) return undefined
+    return { depth, limit: TRIAGE_FIX_CHAIN_DEPTH_LIMIT, remaining: TRIAGE_FIX_CHAIN_DEPTH_LIMIT - depth }
+  } catch {
+    return undefined
+  }
 }
 
 /** 每轮判定返回（continue = 续派下一轮；terminal = 终局收口出循环） */
@@ -796,30 +878,69 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue'
   }
 
-  // 处置阶梯（decisions #16/#22 + R2）：同任务处置计数封顶强制升级；无效/越权输出计处置
-  // 失败入重试上限（有界重试轮次——模型失误爆炸半径 = LOOP_TRIAGE_MAX_ATTEMPTS）。
+  // 处置阶梯（decisions #16/#22 + R2 + 改进 6）：同任务处置计数封顶强制升级；无效/越权输出
+  // 计处置失败入重试上限（有界重试轮次——模型失误爆炸半径 = LOOP_TRIAGE_MAX_ATTEMPTS）。
+  // 改进 6①②④⑤：失败摘要回灌重试、无效输出立即重试 vs 基建故障 spawn 同款 backoff、
+  // fix 链深余量入参 + 余量不足拒 add-fix、externalSlug 存在性校验（无效计失败并回灌）。
+  // 改进 6③：缓存决策直接重放执行（落库失败后的再遇 blocked——不重跑分析）。
   const book = dispositionBookOf(loop, taskKey)
+  const fixChain = await fixChainOf(deps.tasks, scope.projectId, source, task)
   let decision: LoopTriageDecision | undefined
-  while (decision === undefined && book.attempts < LOOP_TRIAGE_MAX_ATTEMPTS) {
-    book.attempts += 1
-    try {
-      decision = await deps.triage.run({
-        projectId: scope.projectId,
-        source: record.source,
-        ownerSessionId: owner,
-        parent: exec.parent,
-        signal,
-        task,
-        reason,
-        settlement,
-      })
-      book.history.push(`第${book.attempts}次处置——${triageDecisionNote(decision)}`)
-    } catch (cause) {
-      // 处置失败（无效/越权结构化输出、代理基建故障）——入重试上限，立即同结算重试
-      book.history.push(`第${book.attempts}次处置——分析未得出结论`)
-      console.warn(
-        `forge loop triage failed (${taskKey} attempt ${book.attempts}/${LOOP_TRIAGE_MAX_ATTEMPTS}): ${cause instanceof Error ? cause.message : String(cause)}`,
-      )
+  let replayed = false
+  if (book.decision !== undefined) {
+    decision = book.decision
+    replayed = true
+    book.history.push('重放已缓存处置决策（不重跑分析）——执行')
+  } else {
+    while (decision === undefined && book.attempts < LOOP_TRIAGE_MAX_ATTEMPTS) {
+      book.attempts += 1
+      try {
+        const candidate = await deps.triage.run({
+          projectId: scope.projectId,
+          source: record.source,
+          ownerSessionId: owner,
+          parent: exec.parent,
+          signal,
+          task,
+          reason,
+          settlement,
+          ...(book.lastFailure !== undefined ? { lastFailure: book.lastFailure } : {}),
+          ...(fixChain !== undefined ? { fixChain } : {}),
+        })
+        // 宿主执行前置校验（拒绝 = 计处置失败并回灌，同无效输出径）
+        if (candidate.action === 'add-fix' && fixChain !== undefined && fixChain.remaining < 1) {
+          throw hostRejection(
+            `add-fix 被拒——fix 链余量不足（链深 ${fixChain.depth}/上限 ${fixChain.limit}，余量 ${fixChain.remaining}）；应选 split-remainder 或 ask-user`,
+            JSON.stringify(candidate),
+          )
+        }
+        if (candidate.action === 'wait-external' && deps.knownContainers !== undefined) {
+          const known = await deps.knownContainers(scope.projectId)
+          if (!known.includes(candidate.externalSlug)) {
+            throw hostRejection(
+              `wait-external.externalSlug 无效——${candidate.externalSlug} 不在已知容器集（feature/proposal 双轨）`,
+              JSON.stringify(candidate),
+            )
+          }
+        }
+        decision = candidate
+        book.lastFailure = undefined // 决策通过——回灌摘要清账
+        book.history.push(`第${book.attempts}次处置——${triageDecisionNote(decision)}`)
+      } catch (cause) {
+        // 处置失败——入重试上限；改进 6① 失败摘要回灌（下一轮 prompt lastFailure）；
+        // 改进 6② 分流：模型输出无效 → 立即重试；基建故障 → spawn 同款 backoff 退避
+        const summary = triageFailureSummary(cause)
+        book.lastFailure = summary
+        const invalid = isTriageInvalidOutput(cause)
+        book.history.push(`第${book.attempts}次处置——分析未得出结论${invalid ? `（输出摘要: ${summary}）` : ''}`)
+        console.warn(
+          `forge loop triage failed (${taskKey} attempt ${book.attempts}/${LOOP_TRIAGE_MAX_ATTEMPTS}): ${summary}`,
+        )
+        if (!invalid) {
+          const paused = await sleepOrAbort(signal, backoffDelayMs(loop.delays.backoffBaseMs, book.attempts))
+          if (!paused) return 'terminal' // 退避途中被叫停——让渡终止收口
+        }
+      }
     }
   }
   if (decision === undefined) {
@@ -837,6 +958,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     })
     return 'terminal'
   }
+  book.decision = decision // 改进 6③ 决策缓存（执行成功/重放再败即清账）
 
   if (decision.action === 'add-fix') {
     try {
@@ -849,6 +971,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         sourceTask: { slug: task.slug, localId: task.localId },
         blockSource: true, // 单事务同置源 blocked + fix 完成自动恢复（addTask 机械面）
       })
+      book.decision = undefined // 执行成功——缓存清账（防陈旧决策跨结算重放）
       await deps.narrator.blocked(
         owner,
         'blocked-auto-fixed',
@@ -859,6 +982,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     } catch (cause) {
       if ((cause as { code?: unknown }).code === 'ERR_CHAIN_DEPTH_EXCEEDED') {
         // fix 链深 ≤6 到顶（C6/addTask 权威校验）→ 第三层升级（⑩ 叙述 + 问询）——终局
+        book.decision = undefined
         const depthData = (cause as { data?: { depth?: number; limit?: number } }).data
         book.history.push(`第${book.attempts}次处置——修复任务创建被拒（修复链已达上限）`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
@@ -874,7 +998,24 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         })
         return 'terminal'
       }
-      // add-fix 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
+      // 改进 6③ 落库失败 fail-soft：首次失败保留决策缓存（再遇 blocked 重放执行不重跑分析）；
+      // 重放再败 → 清缓存升级第三层（有界——防无限重放同失败径）
+      if (replayed) {
+        book.decision = undefined
+        book.history.push('重放执行再次失败——缓存清账，交人工裁决')
+        console.warn(`forge loop triage add-fix replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
+        await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
+        await deps.escalation?.escalate({
+          kind: 'blocked-ask-user',
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          history: [...book.history],
+        })
+        return 'terminal'
+      }
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     }
@@ -893,6 +1034,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         sourceTask: { slug: task.slug, localId: task.localId },
         blockSource: false,
       })
+      book.decision = undefined // 执行成功——缓存清账（防陈旧决策跨结算重放）
       await deps.narrator.blocked(
         owner,
         'blocked-split',
@@ -901,13 +1043,30 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       )
       emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     } catch (cause) {
-      // split 落库失败 fail-soft：落盘留证、循环续领（不因处置径故障弃循环）
+      // split 落库失败 fail-soft（改进 6③ 缓存语义同 add-fix：首次保缓存待重放、重放再败清账升级）
+      if (replayed) {
+        book.decision = undefined
+        book.history.push('重放执行再次失败——缓存清账，交人工裁决')
+        console.warn(`forge loop triage split-remainder replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
+        await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
+        await deps.escalation?.escalate({
+          kind: 'blocked-ask-user',
+          ownerSessionId: owner,
+          source: record.source,
+          task,
+          reason,
+          history: [...book.history],
+        })
+        return 'terminal'
+      }
       console.warn(`forge loop triage split-remainder failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
     }
     return 'continue'
   }
   if (decision.action === 'wait-external') {
+    book.decision = undefined // 执行（记录等待）即清账——后续 blocked 再入阶梯重跑分析
     await deps.narrator.blocked(owner, 'blocked-wait-external', { sourceSlug: slug, taskLabel: label, externalSlug: decision.externalSlug }, meta)
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）

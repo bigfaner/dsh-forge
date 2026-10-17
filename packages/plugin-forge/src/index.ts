@@ -228,6 +228,27 @@ const forgePlugin: ForgePlugin = Object.assign(
     // ——启动包装在循环启动时点以 projectId 反解容器库目录直记 sink，logs/<slug>.jsonl
     // 里程碑（task-claimed/tool-error 族）不再整流丢弃。解析未命中 = 不记忆（sink fail-soft
     // 丢行原语义不变）。stop/activeOf 直通原驱动器——落位记忆只属启动径。
+    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：feature +
+    // proposal 双轨 slug 并集，逐调用现读（fail-soft：任一读面故障 = 空并集——校验按缺席
+    // 处理见 driver）；forgeFeatures 服务经 reflect 防御读取（同 forgeSettings 配方——
+    // core 装配同块恒提供，缺席形态仅剩降级容错）
+    let knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined
+    try {
+      const features = ctx.reflect?.get('forgeFeatures') as
+        | { listFeatures?(q: { projectId: string }): Promise<readonly { slug: string }[]> }
+        | undefined
+      if (typeof features?.listFeatures === 'function') {
+        knownContainers = async (projectId) => {
+          const [featureRows, proposalRows] = await Promise.all([
+            features.listFeatures!({ projectId }).catch(() => []),
+            ctx.forgeProposals.listProposals({ projectId }).catch(() => []),
+          ])
+          return [...featureRows.map((r) => r.slug), ...proposalRows.map((r) => r.slug)]
+        }
+      }
+    } catch {
+      knownContainers = undefined
+    }
     const loopDriverBase = createLoopDriver({
       tasks: ctx.forgeTasks,
       spawn,
@@ -236,6 +257,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      ...(knownContainers !== undefined ? { knownContainers } : {}),
       triage: createTriageHook({
         tasks: ctx.forgeTasks,
         spawn,

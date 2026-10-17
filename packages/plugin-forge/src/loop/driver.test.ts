@@ -22,12 +22,12 @@ import type {
 } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
-import { backoffDelayMs, LOOP_TRIAGE_MAX_ATTEMPTS } from './driver.js'
+import { backoffDelayMs, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import type { ForgeProgressEventData } from '../progress/index.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import { createTriageHook } from '../triage/index.js'
+import { createTriageHook, TriageDecisionInvalidError } from '../triage/index.js'
 import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../dispatch-core/index.js'
 import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../dispatch-core/index.js'
 
@@ -245,6 +245,10 @@ function build(options: {
   /** 事件仓桩（blocked 族落盘委派观察——projectId 解析缝载体断言） */
   incidents?: IncidentStore
   spawnBehavior?: (h: ReturnType<typeof trackedSpawn>) => void
+  /** 改进 6⑤ 已知容器集读面桩（wait-external.externalSlug 存在性校验） */
+  knownContainers?: (projectId: string) => Promise<readonly string[]>
+  /** 改进 6② 退避基长注入（缺省 1ms——立即重试径的节奏断言用大值区分两径） */
+  backoffBaseMs?: number
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -289,12 +293,13 @@ function build(options: {
     },
     ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
     ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
+    ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
       },
     },
-    delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    delays: { backoffBaseMs: options.backoffBaseMs ?? 1, patiencePauseMs: 1 },
   }
   return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls }
 }
@@ -1505,5 +1510,236 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     await driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(driver)
     expect(driver.activeOf(OWNER)).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
+
+describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/链深余量/slug 校验/升级载荷）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  function queryOfBlocked(): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    }
+  }
+
+  const BASE_STATS = [
+    statsOf({ pending: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+  ]
+
+  it('①失败回灌 + ⑥升级载荷：无效输出 ×2 后 ask-user——重试输入携 rawSummary，处置历史行含各次输出摘要', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length <= 2) throw new TriageDecisionInvalidError('输出不含 JSON 决策（封闭四动作契约）', 'RAW-MODEL-OUTPUT-SNIPPET')
+        return { action: 'ask-user' }
+      },
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // ① 回灌：第二次处置输入携上次失败摘要
+    expect(inputs[0]?.lastFailure).toBeUndefined()
+    expect(inputs[1]?.lastFailure).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    // ⑥ 升级载荷 history 行含各次原始输出摘要
+    const history = (built.escalations[0] as { kind: string; history: readonly string[] }).history
+    expect(built.escalations[0]?.kind).toBe('blocked-ask-user')
+    expect(history[0]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    expect(history[1]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
+    expect(history[2]).toContain('决定请求人工裁决')
+    expect(built.h.claimInputs).toHaveLength(1)
+  })
+
+  it('②错误类别分流（纯函数）：TriageDecisionInvalidError 判无效；摘要取 rawSummary 优先', () => {
+    const invalid = new TriageDecisionInvalidError('决策 JSON 解析失败', 'raw-snippet')
+    expect(isTriageInvalidOutput(invalid)).toBe(true)
+    expect(isTriageInvalidOutput(new Error('spawn boom'))).toBe(false)
+    expect(triageFailureSummary(invalid)).toBe('raw-snippet')
+    expect(triageFailureSummary(new Error('spawn boom'))).toBe('spawn boom')
+    expect(triageFailureSummary('flat')).toBe('flat')
+  })
+
+  it('②模型输出无效 → 立即重试（大退避基长下三连无效快速封顶升级——零 backoff 等待的机械证据）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: () => Promise.reject(new TriageDecisionInvalidError('输出不含 JSON 决策', 'bad output')),
+      backoffBaseMs: 60_000, // 无效径若误走 backoff，本用例将超时——绿 = 立即重试
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.escalations[0]).toMatchObject({ kind: 'disposition-over-limit', attempts: LOOP_TRIAGE_MAX_ATTEMPTS })
+  })
+
+  it('②基建故障 → spawn 同款 backoff 退避（base×N 间隔——耗时 ≥ 退避序列和的机械证据）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: () => Promise.reject(new Error('subagent factory rejected')),
+      backoffBaseMs: 60,
+    })
+    blockedScript(built)
+    const startedAt = Date.now()
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    const elapsed = Date.now() - startedAt
+    expect(elapsed).toBeGreaterThanOrEqual(backoffDelayMs(60, 1) + backoffDelayMs(60, 2) + backoffDelayMs(60, 3) - 10)
+  })
+
+  it('③决策缓存重放：add-fix 落库失败首次保缓存——再遇 blocked 重放执行（triage 零二调）不重跑分析', async () => {
+    let triageCalls = 0
+    let addTaskCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async (input: AddTaskInput) => {
+      addTaskCalls += 1
+      if (addTaskCalls === 1) throw new Error('db busy') // 首次落库失败——缓存保留
+      return { taskId: 'fix-uuid', slug: input.source.slug, localId: 'fix-2', reused: false }
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 分析恰好一次；执行两次（首败 + 重放成功）
+    expect(triageCalls).toBe(1)
+    expect(addTaskCalls).toBe(2)
+    expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务 fix-2'))).toBe(true)
+    expect(built.escalations).toEqual([])
+  })
+
+  it('③重放再败有界收口：缓存清账 + 第三层问询升级（防无限重放同失败径）', async () => {
+    let triageCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async () => {
+      throw new Error('db busy')
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(triageCalls).toBe(1)
+    expect(built.escalations).toEqual([
+      {
+        kind: 'blocked-ask-user',
+        ownerSessionId: OWNER,
+        source: SOURCE,
+        task: expect.objectContaining({ localId: '2.5' }),
+        reason: 'tests hang on flaky selector',
+        history: [
+          '第1次处置——决定创建修复任务（修选择器等待）',
+          '重放已缓存处置决策（不重跑分析）——执行',
+          '重放执行再次失败——缓存清账，交人工裁决',
+        ],
+      },
+    ])
+  })
+
+  it('④链深余量入参：triage 输入携带 depth/limit/remaining（沿 sourceTask 链上溯现算）', async () => {
+    let captured: LoopTriageInput | undefined
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ pending: 0, blocked: 1 }), statsOf({ pending: 0, blocked: 1 })],
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        captured = input
+        return { action: 'wait-external', externalSlug: 'feat-y' }
+      },
+    })
+    built.h.lists.created = [
+      card('feat-x', '2.5', { sourceTask: { slug: 'feat-x', localId: '2.4' } }),
+      card('feat-x', '2.4'),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(captured?.fixChain).toEqual({ depth: 2, limit: 6, remaining: 4 })
+  })
+
+  it('④余量不足拒 add-fix：宿主前置校验计失败并回灌——不产 add-fix 执行（改选 ask-user 收口）', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length === 1) return { action: 'add-fix', title: 'Fix: flaky selector' }
+        return { action: 'ask-user' }
+      },
+    })
+    // 六节点链（2.5→fix-1→…→fix-5）：remaining = 0——add-fix 结构性被拒
+    built.h.lists.created = [
+      card('feat-x', '2.5', { sourceTask: { slug: 'feat-x', localId: 'fix-1' } }),
+      card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: 'fix-2' } }),
+      card('feat-x', 'fix-2', { sourceTask: { slug: 'feat-x', localId: 'fix-3' } }),
+      card('feat-x', 'fix-3', { sourceTask: { slug: 'feat-x', localId: 'fix-4' } }),
+      card('feat-x', 'fix-4', { sourceTask: { slug: 'feat-x', localId: 'fix-5' } }),
+      card('feat-x', 'fix-5'),
+    ]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(inputs[0]?.fixChain).toEqual({ depth: 6, limit: 6, remaining: 0 })
+    expect(inputs[1]?.lastFailure).toContain('余量不足')
+    expect(built.h.addTaskInputs).toEqual([]) // add-fix 未被执行（宿主拒绝）
+    expect(built.escalations[0]?.kind).toBe('blocked-ask-user')
+    expect((built.escalations[0] as { history: readonly string[] }).history[0]).toContain('余量不足')
+  })
+
+  it('⑤externalSlug 存在性校验：编造 slug 计处置失败并回灌（有效 slug 照常执行）', async () => {
+    const inputs: LoopTriageInput[] = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async (input) => {
+        inputs.push(input)
+        if (inputs.length === 1) return { action: 'wait-external', externalSlug: 'ghost-slug' }
+        return { action: 'wait-external', externalSlug: 'feat-real' }
+      },
+      knownContainers: async () => ['feat-x', 'feat-real', 'prop-b'],
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(inputs[1]?.lastFailure).toContain('ghost-slug')
+    // 编造 slug 零执行（零等待叙述）；有效 slug 照常等待叙述
+    expect(built.calls.some((c) => c.text.includes('等待 ghost-slug 先完成'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('等待 feat-real 先完成'))).toBe(true)
   })
 })
