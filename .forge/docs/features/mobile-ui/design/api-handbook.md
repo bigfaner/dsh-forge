@@ -156,7 +156,7 @@ declare module '@deepseek-ai/dsh-llm' {
 | `commands/change` | emit | 斜杠目录缓存失效 |
 | `settings/document-updated` / `goal/activation-changed` / `schedule/changed` / `credentials/*` / `deepseek-account/*` / `llm/adapters-updated` / `permission-presets/catalog-changed` / `plugin-manager/*` / `cordis/*` | emit | settings/goal/schedule 屏失效信号（批次③） |
 
-**复用评估矩阵（reuse-first 结论）**：连接/信封/退避/会话 CRUD/流式/ask/模型/指令/审批到达/会话推送 = **全部复用既有**（connection handle + typert 端点 + `$events`）；**唯一新增域 = forge 任务域**（`forge/progress·projects/grouped·read-state·workers·session-links·task-action·approval·disconnect`——1.11 typert 化；进度推送沿用 15s 轮询，forge 事件进 `$events` 转发表属上游改动不可行，后续可评估 typert stream 端点）。
+**复用评估矩阵（reuse-first 结论）**：连接/信封/退避/会话 CRUD/流式/ask/模型/指令/审批到达/会话推送 = **全部复用既有**（connection handle + typert 端点 + `$events`）；**唯一新增域 = forge 任务域**（1.11 typert 化，**subagent 评估后首批 5 端点**：`forge/progress` → `forge/projects/grouped` → `forge/approval` → `forge/disconnect` → `forge/read-state`；workers/task-action/session-links 移出——官方面派生或官方端点承载；进度推送沿用 15s 轮询，forge 事件进 `$events` 转发表属上游改动不可行，后续可评估 typert stream 端点）。
 
 ### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
 

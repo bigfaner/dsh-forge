@@ -170,6 +170,7 @@ md的FRONTMATTER渲染成表格，跟github一样
 - 上下文：mobile-ui tech-design.md AD-4 / 投影白名单；官方正本 dsh-agent runtime-types.d.ts（send/steer/followup/inject 全收显式 UserMessage）。
 
 ## 74. forge 只读面 typert 化：`/remote/__rpc` 迁入官方 `/api` 传输（mobile-ui R11）
-- **进展（2026-10-17 裁决改向）：提前至批次②执行——任务 mobile-ui/1.11 已改向「forge 远程面 typert 化（/api/forge/*）」**，首批端点：progress / projects/grouped / read-state / workers / session-links / task-action / approval / disconnect；生成器 `@deepseek-ai/dsh-typert-generator`（npm 0.0.1-rc.1，已核实可得）；实现锚点 = `dsh-commands` typert 形态。
+- **进展（2026-10-17 裁决改向）：提前至批次②执行——任务 mobile-ui/1.11 已改向「forge 远程面 typert 化（/api/forge/*）」**；subagent 评估裁决后**首批收敛为 5 端点**：progress（链路探针）→ projects/grouped → approval（前置：真机核销官方 admit 隧道行为，不成立则 __rpc 并存保底）→ disconnect（pair-disconnected 事件对偶补 child→main 缝）→ read-state（前置：域基建 defineDomain/KvTable 现存性核销）。生成器 `@deepseek-ai/dsh-typert-generator`（npm 0.0.1-rc.1，已核实可得）；实现锚点 = `dsh-commands` typert 形态。
+- **移出首批（评估裁决）**：workers（session/list 官方面派生即全量）、task-action（官方 commands/execute + session/prompt 承载，零新增写面）、session-links（延后可选增强）。
 - 后续（非阻塞）：桌面 `remote-transport` 的 `forge:remote/*` 消费迁移同一协议；mobile `rpc.ts` 删除收口单 client。
-- 关键核销点：审批写入端点（task-action/approval）的守卫语义从 allowlist+authorizeIndex+dswf cookie 迁到 operator peer 的等价性论证（write 面不降级）。
+- 关键核销点：审批写入端点的守卫等价性（隧道域 dswf cookie 兜底 vs /api admit——真机核销，write 面不降级）；生成器 CLI 输入格式；PeerScope 身份字段。
