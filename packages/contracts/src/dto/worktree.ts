@@ -121,6 +121,8 @@ export interface WorktreeSessionCreateResult {
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */
 export interface WorktreeSealRequest {
   readonly sessionId: string
+  /** 会话 cwd（host 必绑拦截判读的 cwd 探测缝——web 已知时随请求携带；缺席 = host 自探） */
+  readonly cwd?: string
 }
 export interface WorktreeSealResult {
   /** 能力位（会话 cwd 归并产出；false = chip/notice/占位全零注入） */
@@ -131,4 +133,17 @@ export interface WorktreeSealResult {
   /** 归并项目根（ahead/behind 懒加载 cwd；无绑定 = 缺席） */
   readonly projectRoot?: string
   readonly worktreeName?: string
+}
+
+/**
+ * forge:worktree/select（1.30 重路由的选中树推送缝）：hero 选中态变更时 web fire-and-forget
+ * 推送——host 必绑拦截拒绝后重路由目标 = 该项目最近选中树（缺席回退会话 cwd 树）。
+ */
+export interface WorktreeSelectRequest {
+  readonly projectRoot: string
+  /** 选中 worktree 路径；缺席 = 清除该项目选中记忆（取消/失败路径） */
+  readonly path?: string
+}
+export interface WorktreeSelectResult {
+  readonly ok: true
 }

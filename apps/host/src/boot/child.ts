@@ -58,6 +58,7 @@ import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
   createWorktreeRpcService,
+  interceptRequiredBinding,
   interceptSessionSends,
   type SessionControllerFace,
   type SessionPersistenceFace,
@@ -378,15 +379,51 @@ async function main(): Promise<void> {
       })
       worktreeRpcService = worktreeRpc
 
-      if (sessionController !== undefined) {
-        revokeWorktreeSendGuard = interceptSessionSends(
-          sessionController,
-          (sessionId) => worktreeRpc.seal({ sessionId }),
-          (line) => diag(line),
+      // G7① wrap 装配门（1.30）：拦截 wrap 只在 gitWorktree 能力解析成功后装配——git 缺席
+      // 宿主零 wrap、零每消息开销（非介入面零固定税）。能力 provide 异步晚于本装配段可达：
+      // 轮询探测，60s 仍未解析 = 放弃（保持零 wrap，diag 留痕）。
+      let sendGuardInstalled = false
+      const installSendGuard = (): void => {
+        if (sendGuardInstalled) return
+        sendGuardInstalled = true
+        if (sessionController === undefined) {
+          diag('[git-worktree] sessionController 缺席——发送拦截未接线（封存硬保证降级）')
+          return
+        }
+        const disposers: Array<() => void> = []
+        disposers.push(
+          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), (line) => diag(line)),
         )
-      } else {
-        diag('[git-worktree] sessionController 缺席——发送拦截未接线（封存硬保证降级）')
+        // 1.30 第二层必绑拦截（A2/G2 拒绝 + 编排重路由；A5 cwd 漂移拒绝）——叠加封存层之上
+        const guard = worktreeRpc.requiredBindingGuard()
+        if (guard !== undefined) {
+          disposers.push(interceptRequiredBinding(sessionController, guard, (line) => diag(line)))
+        } else {
+          diag('[git-worktree] 必绑拦截 guard 缺席（sessionPersistence 缺席）——仅封存层接线')
+        }
+        revokeWorktreeSendGuard = () => {
+          for (const dispose of disposers) {
+            try {
+              dispose()
+            } catch {
+              // 拦截撤销失败不阻关停链
+            }
+          }
+        }
       }
+      const wrapGate = setInterval(() => {
+        if (getGitWorktree() !== undefined) {
+          clearInterval(wrapGate)
+          installSendGuard()
+        }
+      }, 250)
+      wrapGate.unref?.()
+      setTimeout(() => {
+        clearInterval(wrapGate)
+        if (!sendGuardInstalled) {
+          diag('[git-worktree] gitWorktree 能力未解析——发送拦截零 wrap（git 缺席宿主零开销）')
+        }
+      }, 60_000).unref?.()
     } catch (cause) {
       diag(`[git-worktree] forgeWorktree 服务装配失败（RPC/拦截零装配，宿主不受影响）：${String(cause)}`)
     }

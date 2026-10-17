@@ -168,6 +168,18 @@ export function ForgeHeroWorktreeMount({
   // 最近一次 arm 成功产物（armed 去重——产物即当前会话且选中路径未变时零重入，键入续字
   // 不抖；改选他行即重新消费）
   const armedRef = useRef<{ readonly path: string; readonly sessionId: string } | undefined>(undefined)
+  // 1.30 选中树推送（forge:worktree/select——host 必绑拦截重路由目标单源；fire-and-forget，
+  // path 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft 不扰选中态。
+  const pushSelection = useCallback(
+    (path: string | undefined): void => {
+      if (projectRoot === null) return
+      void makeRpc()
+        .worktree.select({ projectRoot, ...(path !== undefined ? { path } : {}) })
+        .catch(() => {})
+    },
+    [projectRoot, makeRpc],
+  )
+
   // 点选 = 纯选中态（1.29）：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
   // 冷却窗照写——若用户先键入后点选（草稿已非空），冷却把点选触发的 arm 压 8s，保住
   // 「点选不建会话」的短窗语义。
@@ -175,9 +187,10 @@ export function ForgeHeroWorktreeMount({
     (path: string): void => {
       writeArmCooldown()
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
+      pushSelection(path)
       setLocalSelectedPath(path)
     },
-    [projectRoot],
+    [projectRoot, pushSelection],
   )
 
   // 1.17 默认回填（展示层回填；1.26 起回填态升级为编排默认——arm 效应见下）：清单就绪
@@ -271,6 +284,7 @@ export function ForgeHeroWorktreeMount({
       orchestrationInFlightRef.current = true
       writeArmCooldown()
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
+      pushSelection(path)
       setLocalSelectedPath(path)
       const attempt = (left: number): void => {
         void Promise.resolve(worktree?.orchestrate?.(path) ?? null)
@@ -281,6 +295,7 @@ export function ForgeHeroWorktreeMount({
             }
             if (sessionId === null || sessionId === undefined) {
               if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
+              pushSelection(undefined) // host 选中记忆同清（重路由目标不落假象）
               setLocalSelectedPath(undefined)
               setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
               return
@@ -298,7 +313,7 @@ export function ForgeHeroWorktreeMount({
       }
       attempt(1)
     },
-    [projectRoot, worktree],
+    [projectRoot, worktree, pushSelection],
   )
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit) return
@@ -543,6 +558,7 @@ export function ForgeHeroWorktreeMount({
             setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
             // 取消编排默认 = 不落假象：回填态与选中记忆同清（chip 退回占位），消息走官方原流
             if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
+            pushSelection(undefined)
             setLocalSelectedPath(undefined)
           }}
           onConfirm={() => {

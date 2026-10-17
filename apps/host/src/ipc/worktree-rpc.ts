@@ -28,6 +28,8 @@ import {
   type WorktreeListResult,
   type WorktreeSealRequest,
   type WorktreeSealResult,
+  type WorktreeSelectRequest,
+  type WorktreeSelectResult,
   type WorktreeSessionCreateRequest,
   type WorktreeSessionCreateResult,
 } from '@dsh-forge/contracts'
@@ -35,13 +37,13 @@ import {
   createWorktree,
   createWorktreeAttachWriter,
   preseedWorktreeSession,
+  readLatestAttach,
   type SessionPersistenceCreateFace,
   defaultBranch as defaultBranchOp,
   deleteWorktree,
   aheadBehind as aheadBehindOp,
   listBranches,
   listWorktrees,
-  readLatestAttach,
   worktreeStatus,
   assertSendable,
   evaluateSeal,
@@ -90,6 +92,7 @@ export const WORKTREE_RPC_METHODS = [
   'attach',
   'sessionCreate',
   'seal',
+  'select',
 ] as const
 
 /** forge:worktree/* RPC 服务面（child 侧本体 / main 侧桥代理同形） */
@@ -103,6 +106,17 @@ export interface WorktreeRpcService {
   attach(request: WorktreeAttachRequest): Promise<WorktreeAttachResult>
   sessionCreate(request: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
+  select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  /** host 必绑拦截 guard 面（1.30——非 RPC：sessionController/sessionPersistence 在场才有） */
+  requiredBindingGuard(): RequiredBindingGuardFace | undefined
+}
+
+/** 必绑拦截 guard 面（judge/reroute——interceptRequiredBinding 消费） */
+export interface RequiredBindingGuardFace {
+  /** 'pass' = 放行；'route' = 无绑定 blank（必绑拦截命中）→ reroute */
+  judge(sessionId: string): Promise<'pass' | 'route'>
+  /** 编排（等待既有在途产物）+ 以原消息内容 prompt 产物会话；失败显式报错 */
+  reroute(sessionId: string, request: unknown): Promise<unknown>
 }
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
@@ -167,6 +181,61 @@ export function createWorktreeRpcService(deps: {
   const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
     typeof deps.workspaceRegistry === 'function' ? deps.workspaceRegistry() : deps.workspaceRegistry
 
+  // ── G7② 项目能力缓存（resolveProject 结果按 projectRoot 会话期记忆化）──
+  // 只在 gitWorktree 能力服务在场时缓存（默认独立模式扩展点恒 null——缓存会把「能力未到」
+  // 冻结成永久非 git）。判非 git 直接短路 = 零会话日志读、零 git 子进程。
+  const projectCache = new Map<string, Promise<{ projectRoot: string } | null>>()
+  const cachedResolve = (path: string): Promise<{ projectRoot: string } | null> => {
+    const key = norm(path)
+    const cached = projectCache.get(key)
+    if (cached !== undefined) return cached
+    const pending = ext().resolveProject(path).catch(() => null) as Promise<{ projectRoot: string } | null>
+    if (resolveGitWorktree() !== undefined) projectCache.set(key, pending)
+    return pending
+  }
+
+  // 会话 cwd 记忆（读句柄 header 消费切片——零事件读；逐会话一次，其后零开销）
+  const cwdMemo = new Map<string, string | undefined>()
+  const sessionCwdOf = async (sessionId: string): Promise<string | undefined> => {
+    if (cwdMemo.has(sessionId)) return cwdMemo.get(sessionId)
+    let cwd: string | undefined
+    try {
+      const handle = (await deps.sessionPersistence?.open(sessionId, 'read')) as
+        | { header?: { cwd?: string }; close?: () => Promise<void> }
+        | undefined
+      cwd = handle?.header?.cwd
+      await handle?.close?.()
+    } catch {
+      cwd = undefined
+    }
+    cwdMemo.set(sessionId, cwd)
+    return cwd
+  }
+
+  /** blank 判读（设计 §11 假设 5：blank = 首个 turn/start 前的投影语义——日志内全部事件
+   *  ignorable 即 blank；预铸挂靠事件会话天然命中）。读失败 = 非 blank（fail-closed 不误重路由）。 */
+  const blankOf = async (sessionId: string): Promise<boolean> => {
+    try {
+      const handle = await readFactory.openRead(sessionId)
+      try {
+        const events = (await (handle as { read?: () => Promise<{ events?: readonly unknown[] }> }).read?.())?.events ?? []
+        return events.every((event) => (event as { ignorable?: boolean } | null)?.ignorable === true)
+      } finally {
+        await (handle as { close?: () => Promise<void> }).close?.()
+      }
+    } catch {
+      return false
+    }
+  }
+
+  // hero 选中树记忆（select 通道推送——重路由目标单源；键 = 归一 projectRoot）
+  const lastSelection = new Map<string, string>()
+
+  // G3 双建互斥（host 重路由 × client arm 共享互斥面）：sessionCreate 按 cwd 归一键记忆
+  // 产物 Promise——并发调用共享同一在途编排（等待编排完成），已产物 blank 会话直接复用
+  // （每 cwd 至多一个 blank 产物）；产物已非 blank（真实使用过）→ 除名允许新建。
+  const sessionProducts = new Map<string, Promise<WorktreeSessionCreateResult>>()
+
   /** 会话工作区归属（bug 925c96d5 根因级修复）：以树路径 find-or-create 官方工作区
    *  （registry.create realpath 归一比对——契约条件 header.cwd realpath ≡ workspace.path
    *  对 cwd=树路径的会话天然成立）→ attachSession。主行（cwd=项目根）同径挂主工作区。
@@ -219,14 +288,20 @@ export function createWorktreeRpcService(deps: {
 
   /** 封存判定快照（seal 通道 + 发送拦截共源）。
    *  cwd 强制守护（1.19）：readLatestAttach 校验 SessionHeader.cwd ≡ 绑定 worktreePath，
-   *  漂移即 SessionCwdMismatchError 显式上抛（RPC 错误面回传 web）——不做静默降级。 */
+   *  漂移即 SessionCwdMismatchError 显式上抛（RPC 错误面回传 web）——不做静默降级。
+   *  G7② 判序反转：request.cwd 在场时先查项目能力缓存——判非 git 直接返回（零会话日志读）；
+   *  有绑定会话仍先读日志（绑定即 git 事实）。 */
   const sealStateOf = async (request: WorktreeSealRequest): Promise<WorktreeSealResult> => {
+    if (request.cwd !== undefined) {
+      const resolution = await cachedResolve(request.cwd)
+      if (resolution === null) return { isGit: false, sealed: false, binding: null }
+    }
     const binding = await readLatestAttach(request.sessionId, readFactory).catch((cause: unknown) => {
       if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause
       return null
     })
     if (binding === null) return { isGit: false, sealed: false, binding: null }
-    const resolution = await ext().resolveProject(binding.worktreePath).catch(() => null)
+    const resolution = await cachedResolve(binding.worktreePath)
     if (resolution === null) return { isGit: false, sealed: false, binding: { worktreePath: binding.worktreePath, branch: binding.branch } }
     const present = await listPresent(resolution.projectRoot).catch(() => [] as string[])
     const decision = evaluateSeal(binding, present)
@@ -248,12 +323,12 @@ export function createWorktreeRpcService(deps: {
     return entries.find((row) => norm(row.path) === norm(worktreePath))?.branch ?? ''
   }
 
-  return {
+  const service: WorktreeRpcService = {
     async list(request) {
       const cacheKey = norm(request.projectRoot)
       const cached = noGitCache.get(cacheKey)
       if (cached !== undefined) return cached
-      const resolution = await ext().resolveProject(request.projectRoot).catch(() => null)
+      const resolution = await cachedResolve(request.projectRoot)
       if (resolution === null) {
         noGitCache.set(cacheKey, noGit)
         return noGit
@@ -325,30 +400,95 @@ export function createWorktreeRpcService(deps: {
     },
 
     async sessionCreate(request) {
-      const controller = deps.sessionController
-      if (controller === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法以 worktree cwd 建会话')
-      const persistence: SessionPersistenceFace | undefined = deps.sessionPersistence
-      if (persistence === undefined || typeof persistence.create !== 'function') {
-        throw new Error('sessionPersistence 缺席或缺 create 面（host 装配漂移）——预铸采纳配方不可用')
+      const key = norm(request.worktreePath)
+      // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用
+      for (;;) {
+        const existing = sessionProducts.get(key)
+        if (existing === undefined) break
+        const reused = await existing
+        if (await blankOf(reused.sessionId)) return reused
+        sessionProducts.delete(key) // 产物已被真实使用（非 blank）→ 允许新建
       }
-      const branch = await resolveBranch(request.worktreePath)
-      // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
-      // 唯一写句柄——建会话后另开写句柄补写挂靠事件在活会话上结构性不可行）。改为：先
-      // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
-      // → flush + close，再 controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄
-      // 生命周期零交叠，单写者铁律满足。
-      const preseeded = await preseedWorktreeSession(persistence as unknown as SessionPersistenceCreateFace, {
-        worktreePath: request.worktreePath,
-        branch,
-      })
-      await controller.create({ sessionId: preseeded.sessionId, cwd: request.worktreePath })
-      // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
-      await attachWorkspace(request.worktreePath, preseeded.sessionId)
-      return { sessionId: preseeded.sessionId, branch }
+      const pending = doSessionCreate(request)
+      sessionProducts.set(key, pending)
+      try {
+        return await pending
+      } catch (cause) {
+        sessionProducts.delete(key)
+        throw cause
+      }
+    },
+
+    async select(request) {
+      const key = norm(request.projectRoot)
+      if (request.path === undefined || request.path === '') lastSelection.delete(key)
+      else lastSelection.set(key, request.path)
+      return { ok: true }
+    },
+
+    requiredBindingGuard() {
+      if (deps.sessionController === undefined || deps.sessionPersistence === undefined) return undefined
+      const controller = deps.sessionController
+      return {
+        // 判据（设计 §7）：git 项目 ∧ 目标会话 blank ∧ 无绑定（G2 同树也不放行）；
+        // cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）；非 blank 既有会话零打扰。
+        judge: async (sessionId) => {
+          const cwd = await sessionCwdOf(sessionId)
+          if (cwd === undefined || cwd === '') return 'pass'
+          const resolution = await cachedResolve(cwd)
+          if (resolution === null) return 'pass' // 非 git：零行为差异（G7 分流）
+          let binding: { worktreePath: string; branch: string } | null
+          try {
+            binding = await readLatestAttach(sessionId, readFactory)
+          } catch (cause) {
+            if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause // A5 拒绝
+            return 'pass' // 判读链异常 fail-open（正确性不依赖此径）
+          }
+          if (binding !== null) return 'pass'
+          return (await blankOf(sessionId)) ? 'route' : 'pass'
+        },
+        // 编排（与 client arm 共享 sessionCreate 互斥面——在途即等待）+ 重路由：
+        // 目标 = hero 选中树（select 推送记忆）缺席回退会话 cwd 树；原消息内容保真换绑。
+        reroute: async (sessionId, request) => {
+          const cwd = await sessionCwdOf(sessionId)
+          const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
+          const selected = resolution !== null ? lastSelection.get(norm(resolution.projectRoot)) : undefined
+          const target = selected ?? (cwd !== undefined && cwd !== '' ? cwd : undefined)
+          if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
+          const product = await doSessionCreate({ worktreePath: target })
+          return controller.prompt({ ...(request as Record<string, unknown>), sessionId: product.sessionId })
+        },
+      }
     },
 
     seal: sealStateOf,
   }
+
+  /** 预铸采纳单会话创建（1.16 配方本体——G3 互斥面与 guard 共用的原始创建径） */
+  async function doSessionCreate(request: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult> {
+    const controller = deps.sessionController
+    if (controller === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法以 worktree cwd 建会话')
+    const persistence: SessionPersistenceFace | undefined = deps.sessionPersistence
+    if (persistence === undefined || typeof persistence.create !== 'function') {
+      throw new Error('sessionPersistence 缺席或缺 create 面（host 装配漂移）——预铸采纳配方不可用')
+    }
+    const branch = await resolveBranch(request.worktreePath)
+    // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
+    // 唯一写句柄——建会话后另开写句柄补写挂靠事件在活会话上结构性不可行）。改为：先
+    // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
+    // → flush + close，再 controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄
+    // 生命周期零交叠，单写者铁律满足。
+    const preseeded = await preseedWorktreeSession(persistence as unknown as SessionPersistenceCreateFace, {
+      worktreePath: request.worktreePath,
+      branch,
+    })
+    await controller.create({ sessionId: preseeded.sessionId, cwd: request.worktreePath })
+    // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
+    await attachWorkspace(request.worktreePath, preseeded.sessionId)
+    return { sessionId: preseeded.sessionId, branch }
+  }
+
+  return service
 }
 
 /** forge:worktree/* 通道注册（负载映射 = contracts dto/worktree.ts，键键对应） */
@@ -362,6 +502,7 @@ export function registerWorktreeChannels(ipc: ForgeIpc, service: WorktreeRpcServ
   ipc.register(WORKTREE_CHANNELS.attach, rpcEnvelope((q: WorktreeAttachRequest) => service.attach(q)))
   ipc.register(WORKTREE_CHANNELS.sessionCreate, rpcEnvelope((q: WorktreeSessionCreateRequest) => service.sessionCreate(q)))
   ipc.register(WORKTREE_CHANNELS.seal, rpcEnvelope((q: WorktreeSealRequest) => service.seal(q)))
+  ipc.register(WORKTREE_CHANNELS.select, rpcEnvelope((q: WorktreeSelectRequest) => service.select(q)))
 }
 
 /**
@@ -389,8 +530,10 @@ export function interceptSessionSends(
           const state = await sealOf(sessionId)
           assertSendable({ sealed: state.sealed })
         } catch (cause) {
-          // SessionSealedError 原样上抛（明确错误提示）；判读链异常 fail-open 放行
-          if ((cause as Error)?.name === 'SessionSealedError') throw cause
+          // SessionSealedError / SessionCwdMismatchError 原样上抛（明确错误提示——A5：cwd
+          // 漂移改拒绝不放行）；其余判读链异常 fail-open 放行
+          const name = (cause as Error)?.name
+          if (name === 'SessionSealedError' || name === 'SessionCwdMismatchError') throw cause
           warn(`[git-worktree] 发送拦截判读失败（fail-open 放行）：${String(cause)}`)
         }
       }
@@ -405,5 +548,42 @@ export function interceptSessionSends(
     for (const [name, original] of originals) {
       ;(controller as unknown as Record<string, unknown>)[name] = original
     }
+  }
+}
+
+/**
+ * 1.30 第二层 prompt 拦截（必绑 + 重路由）——叠加现役 interceptSessionSends 之上（官方
+ * commands.prompt 调用时属性查找：本层先于封存层执行，judge 'route' 时以 guard.reroute
+ * 的 promise 替代原发送；dispose 恢复封存层包装 = 逆序撤销安全）。
+ * 判读链异常 fail-open 放行；SessionCwdMismatchError（A5）与重路由失败显式拒绝。
+ */
+export function interceptRequiredBinding(
+  controller: SessionControllerFace,
+  guard: RequiredBindingGuardFace,
+  warn: (message: string) => void = console.warn,
+): () => void {
+  const original = (controller as unknown as Record<string, unknown>)['prompt']
+  if (typeof original !== 'function') return () => {}
+  const bound = (original as (...args: unknown[]) => unknown).bind(controller)
+  const wrapped = async (...args: unknown[]): Promise<unknown> => {
+    const request = args[0] as { sessionId?: unknown } | undefined
+    const sessionId = typeof request?.sessionId === 'string' ? request.sessionId : undefined
+    if (sessionId !== undefined) {
+      try {
+        if ((await guard.judge(sessionId)) === 'route') {
+          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话
+          return guard.reroute(sessionId, request)
+        }
+      } catch (cause) {
+        const name = (cause as Error)?.name
+        if (name === 'SessionCwdMismatchError') throw cause // A5：拒绝不放行
+        warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
+      }
+    }
+    return bound(...args)
+  }
+  ;(controller as unknown as Record<string, unknown>)['prompt'] = wrapped
+  return () => {
+    ;(controller as unknown as Record<string, unknown>)['prompt'] = original
   }
 }

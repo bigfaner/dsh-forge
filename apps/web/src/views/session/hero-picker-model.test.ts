@@ -5,6 +5,7 @@ import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   activeSessionIdOf,
   activeSessionRowOf,
+  blankSessionIdByCwdOf,
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
@@ -207,5 +208,18 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
 
   it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
     expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
+  })
+})
+
+describe('blankSessionIdByCwdOf（G4 官方四件套——与 plugin.ts 镜像同语义 pin）', () => {
+  const ledger = (rows: Record<string, unknown>): unknown => ({ getSnapshot: () => ({ ids: Object.keys(rows), byId: rows }) })
+
+  it('blank + cwd 归一命中 + workspace 归属 + 非归档；漂移件各自否决', () => {
+    const rows = { a: { id: 'a', blank: true, cwd: 'C:/repo/wt-a' } }
+    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: [] }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/Repo/WT-A/', ws)).toBe('a')
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', { ...ws, archivedSessionIds: ['a'] })).toBeUndefined()
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', { ...ws, items: [{ path: 'C:/repo/wt-a', sessionIds: ['x'] }] })).toBeUndefined()
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a')).toBeUndefined() // 快照缺席 fail-closed
   })
 })

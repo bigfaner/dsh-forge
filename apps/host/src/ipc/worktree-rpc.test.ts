@@ -12,10 +12,11 @@ import {
   type WorktreeListRequest,
   type WorktreeSealRequest,
 } from '@dsh-forge/contracts'
-import { SessionSealedError } from '@dsh-forge/git-worktree'
+import { SessionCwdMismatchError, SessionSealedError } from '@dsh-forge/git-worktree'
 import type { ForgeIpc } from './forge-channels.js'
 import {
   createWorktreeRpcService,
+  interceptRequiredBinding,
   interceptSessionSends,
   registerWorktreeChannels,
   type SessionControllerFace,
@@ -31,12 +32,19 @@ const fakeExt = {
   }),
 }
 
-/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获 */
-function fakePersistence(events: Record<string, readonly unknown[]>) {
+/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获；
+ *  headers 表驱动（sessionId → SessionHeader.cwd——读句柄 header 消费切片）；
+ *  opts.countOpens = open 调用计数器（G7② 性能钉：非 git 判读零日志读）。 */
+function fakePersistence(
+  events: Record<string, readonly unknown[]>,
+  headers: Record<string, { cwd: string }> = {},
+  countOpens?: { value: number },
+) {
   const appended: Array<{ id: string; events: readonly unknown[] }> = []
   const created: Array<{ header: Record<string, unknown> }> = []
   const closedFor: Record<string, boolean> = {}
   const makeHandle = (id: string, access: 'read' | 'write') => ({
+    header: headers[id],
     read: async () => ({ events: events[id] ?? [] }),
     append: async (batch: readonly unknown[]) => {
       if (access !== 'write') throw new Error('read-only handle')
@@ -48,7 +56,10 @@ function fakePersistence(events: Record<string, readonly unknown[]>) {
     },
   })
   const persistence = {
-    open: (async (id: string, access: 'read' | 'write') => makeHandle(id, access)) as SessionPersistenceFace['open'],
+    open: (async (id: string, access: 'read' | 'write') => {
+      if (countOpens !== undefined) countOpens.value += 1
+      return makeHandle(id, access)
+    }) as SessionPersistenceFace['open'],
     create: (async (header: Parameters<SessionPersistenceFace['create']>[0]) => {
       created.push({ header: { ...header } })
       return makeHandle(header.id, 'write')
@@ -289,7 +300,7 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
     expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(9)
+    expect(registered).toHaveLength(10) // 九通道 + 1.30 select（选中树推送缝）
   })
 })
 
@@ -324,5 +335,165 @@ describe('interceptSessionSends（发送拦截——「不可发送」硬保证�
     dispose()
     await expect(controller.prompt({ sessionId: 's1' })).resolves.toEqual({ accepted: true })
     expect(prompts).toHaveLength(1)
+  })
+})
+
+// ───────────── 1.30 host 必绑拦截 + 重路由（A2/A5 + G2/G3/G7）─────────────
+describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦截）', () => {
+  const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
+  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+
+  /** 被测装配桩：git 项目（resolveProject 计数）+ 会话持久化 + 控制器 */
+  function guardRig(input: {
+    events: Record<string, readonly unknown[]>
+    headers: Record<string, { cwd: string }>
+  }) {
+    const opens = { value: 0 }
+    let resolveCalls = 0
+    const countingExt = {
+      getExtensionPoints: () => ({
+        resolveProject: async (cwd: string) => {
+          resolveCalls += 1
+          return cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true }
+        },
+        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
+      }),
+    }
+    const { persistence } = fakePersistence(input.events, input.headers, opens)
+    const { controller, calls, prompts } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: countingExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [
+        { path: 'C:/repo', branch: 'main' },
+        { path: WT_A, branch: 'feat/a' },
+      ],
+    })
+    return { service, controller, prompts, calls, opens, resolveCallsOf: () => resolveCalls }
+  }
+
+  it('A2 竞速败窗：git 项目无绑定 blank 会话 prompt → 原发送拒绝 + 编排产物重路由（原消息内容保真）', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    const guard = rig.service.requiredBindingGuard()
+    expect(guard).toBeDefined()
+    const dispose = interceptRequiredBinding(rig.controller, guard!)
+    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
+    dispose()
+    // 原会话零直发；产物会话收到原消息内容（sessionId 换绑）
+    expect(rig.prompts).toHaveLength(1)
+    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank'), text: 'hello' })
+    // 产物 = 预铸采纳的挂靠会话（cwd = 重路由目标树）
+    expect(rig.calls).toHaveLength(1)
+  })
+
+  it('G2 同树也不放行：无选中（selection 缺席）无绑定 blank → 重路由目标 = 会话 cwd 树（主行绑定）', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.calls[0]?.cwd).toBe('C:/repo')
+  })
+
+  it('重路由目标 = hero 选中树（select 推送 → 编排目标树随选中）', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.calls[0]?.cwd).toBe(WT_A)
+  })
+
+  it('有绑定会话放行（原 prompt 直通，零重路由）；非 blank 无绑定既有会话零打扰放行', async () => {
+    const bound = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
+    const disposeBound = interceptRequiredBinding(bound.controller, bound.service.requiredBindingGuard()!)
+    await expect(bound.controller.prompt({ sessionId: 's1', text: 'hi' })).resolves.toEqual({ accepted: true })
+    disposeBound()
+    expect(bound.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
+    expect(bound.calls).toHaveLength(0)
+
+    const used = guardRig({ events: { s2: [{ type: 'user', seq: 1 }] }, headers: { s2: { cwd: 'C:/repo' } } })
+    const disposeUsed = interceptRequiredBinding(used.controller, used.service.requiredBindingGuard()!)
+    await expect(used.controller.prompt({ sessionId: 's2', text: 'hi' })).resolves.toEqual({ accepted: true })
+    disposeUsed()
+    expect(used.prompts).toEqual([{ sessionId: 's2', text: 'hi' }])
+    expect(used.calls).toHaveLength(0)
+  })
+
+  it('G7② 性能钉：非 git 项目 prompt 零 git 探测扩散、会话日志读只有 cwd 探测一次（逐会话记忆后零读）', async () => {
+    const rig = guardRig({ events: { f1: [] }, headers: { f1: { cwd: 'C:/foreign/plain' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'f1', text: 'a' })
+    await rig.controller.prompt({ sessionId: 'f1', text: 'b' })
+    dispose()
+    expect(rig.prompts).toHaveLength(2) // 非 git 零行为差异：两次都原会话直发
+    expect(rig.resolveCallsOf(), '非 git 判读未按 projectRoot 记忆化（每消息 git 子进程固定税）').toBe(1)
+    expect(rig.opens.value, '非 git 项目会话日志被反复读（cwd 记忆缺席）').toBe(1)
+  })
+
+  it('A5：SessionCwdMismatchError 拦截面拒绝不放行（不再 fail-open）', async () => {
+    const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: 'C:/elsewhere' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await expect(rig.controller.prompt({ sessionId: 's1', text: 'hi' })).rejects.toThrow(SessionCwdMismatchError)
+    dispose()
+    expect(rig.prompts).toHaveLength(0)
+  })
+
+  it('重路由失败显式报错（编排失败不静默丢消息）', async () => {
+    const opens = { value: 0 }
+    const { persistence } = fakePersistence({ blank: [] }, { blank: { cwd: 'C:/repo' } }, opens)
+    const { controller, prompts } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => {
+        throw new Error('git crashed')
+      },
+    })
+    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
+    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toThrow()
+    dispose()
+    expect(prompts as unknown[]).toHaveLength(0) // 原会话零直发（失败显式报错，不静默丢消息）
+  })
+
+  it('G3 双建互斥：并发 sessionCreate 同 cwd 单产物；后续调用复用产物（每 cwd 至多一个 blank 产物）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+    })
+    const [a, b] = await Promise.all([
+      service.sessionCreate({ worktreePath: WT_A }),
+      service.sessionCreate({ worktreePath: WT_A }),
+    ])
+    expect(a.sessionId).toBe(b.sessionId)
+    expect(created, '并发双建：同一 cwd 产出两个预铸会话').toHaveLength(1)
+    const c = await service.sessionCreate({ worktreePath: WT_A })
+    expect(c.sessionId).toBe(a.sessionId)
+    expect(created).toHaveLength(1)
+  })
+
+  it('G7② seal 判序反转：request.cwd 命中非 git 能力缓存 → 零会话日志读', async () => {
+    const opens = { value: 0 }
+    const { persistence } = fakePersistence({ s1: attachEvent(WT_A) }, { s1: { cwd: 'C:/foreign/x' } }, opens)
+    const service = createWorktreeRpcService({ gitWorktree: fakeExt, sessionPersistence: persistence })
+    await service.seal({ sessionId: 's1', cwd: 'C:/foreign/x' })
+    await service.seal({ sessionId: 's1', cwd: 'C:/foreign/x' })
+    expect(opens.value, '非 git 封存判定仍全量读会话日志（判序未反转）').toBe(0)
+  })
+
+  it('逆序撤销安全：外层 dispose 后内层封存拦截仍在', async () => {
+    const { controller, prompts } = fakeController()
+    interceptSessionSends(controller, async () => ({ isGit: true, sealed: true, binding: { worktreePath: 'x', branch: 'b' } }))
+    const outer = interceptRequiredBinding(controller, {
+      judge: async () => 'pass',
+      reroute: async () => undefined,
+    })
+    outer()
+    await expect(controller.prompt({ sessionId: 's1' })).rejects.toThrow(SessionSealedError)
+    expect(prompts).toHaveLength(0)
   })
 })

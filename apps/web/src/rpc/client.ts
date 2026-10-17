@@ -38,6 +38,8 @@ import {
   type WorktreeListRequest,
   type WorktreeListResult,
   type WorktreeSealRequest,
+  type WorktreeSelectRequest,
+  type WorktreeSelectResult,
   type WorktreeSealResult,
   type WorktreeSessionCreateRequest,
   type WorktreeSessionCreateResult,
@@ -240,6 +242,7 @@ export interface ForgeWorktreeRpc {
   attach(q: WorktreeAttachRequest): Promise<WorktreeAttachResult>
   sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
+  select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
 }
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
@@ -333,6 +336,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       attach: (q) => invokeRpc<WorktreeAttachResult>(transport, WORKTREE_CHANNELS.attach, q),
       sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
       seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
+      select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
     },
   }
 }

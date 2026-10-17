@@ -1956,10 +1956,41 @@ describe('1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByC
       a: { id: 'a', blank: true, cwd: 'C:\\Repo\\wt-a\\' },
       b: { id: 'b', blank: false, cwd: 'C:/repo/wt-a' },
     }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'c:/repo/wt-a')).toBe('a')
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a/')).toBe('a')
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo')).toBeUndefined()
-    expect(blankSessionIdByCwdOf(undefined, 'C:/repo')).toBeUndefined()
+    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a', 'b'] }], archivedSessionIds: [] }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'c:/repo/wt-a', ws)).toBe('a')
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a/', ws)).toBe('a')
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo', ws)).toBeUndefined()
+    expect(blankSessionIdByCwdOf(undefined, 'C:/repo', ws)).toBeUndefined()
+  })
+
+  it('G4 官方四件套：reuse 判据补齐 workspace 归属 + 非归档（reuseOrCreateBlank 语义对齐）', () => {
+    const rows = {
+      a: { id: 'a', blank: true, cwd: 'C:/repo/wt-a' },
+      c: { id: 'c', blank: true, cwd: 'C:/repo/wt-a' },
+    }
+    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: [] }
+    // 归属件：cwd 命中但 session 不在该 workspace → 不复用
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', ws)).toBe('a')
+    const foreignMember = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['x'] }], archivedSessionIds: [] }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', foreignMember)).toBeUndefined()
+    // 归档件：archivedSessionIds 含 id → 不复用
+    const archived = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: ['a'] }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', archived)).toBeUndefined()
+    // workspace 快照缺席/漂移 = fail-closed 不复用（宁可走 host 互斥面，不误复用他树会话）
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a')).toBeUndefined()
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', {})).toBeUndefined()
+    const noWorkspaceRow = { items: [], archivedSessionIds: [] }
+    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', noWorkspaceRow)).toBeUndefined()
+  })
+
+  it('A6 carryDraft 增量搬运（carryDraftTextOf——落笔前重读，已发送文本不回填）', async () => {
+    const { carryDraftTextOf } = await import('./plugin.js')
+    // 官方发送清空草稿 → 重读空串 = 不搬运（双发根因消除）
+    expect(carryDraftTextOf('hello', '')).toBe('')
+    // 重读可得（用户续字）→ 以重读为准（增量）
+    expect(carryDraftTextOf('hello', 'hello world')).toBe('hello world')
+    // 重读不可得（缝缺席/漂移）→ 退触发时快照
+    expect(carryDraftTextOf('hello', undefined)).toBe('hello')
   })
 })
 

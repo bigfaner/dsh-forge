@@ -270,8 +270,26 @@ function composerDraftFace(
           return false
         }
       }
+      // A6 重读面：会话当前草稿快照（缝缺席/漂移 = undefined——调用方退触发时快照）
+      const draftTextOf = (id: string): string | undefined => {
+        try {
+          const actx = bindingCtxOf(id)?.ctx
+          if (actx === undefined || actx === null) return undefined
+          const state = inputFaceOf(actx)?.['state']
+          const draft = (state as { getSnapshot?: () => unknown } | undefined)?.getSnapshot?.() as
+            | { draft?: unknown }
+            | undefined
+          return typeof draft?.draft === 'string' ? draft.draft : undefined
+        } catch {
+          return undefined
+        }
+      }
       while (Date.now() < deadline) {
         if (writeDraft(sessionId, text)) {
+          // A6 增量搬运（落笔前重读）：重读原会话当前草稿为准——官方发送清空草稿时重读
+          // 空串 = 已发送文本不回填（双发根因消除）；重读不可得退回触发时快照。
+          const reread = previousSessionId !== undefined ? draftTextOf(previousSessionId) : undefined
+          void writeDraft(sessionId, carryDraftTextOf(text, reread))
           // 原会话草稿清退（best-effort——防切回旧 blank 会话见幻影草稿；失败不回滚搬运）
           if (previousSessionId !== undefined) writeDraft(previousSessionId, '')
           return true
@@ -328,20 +346,52 @@ export function activeSessionCwdOf(list: unknown): string | undefined {
 }
 
 /**
- * 按 cwd 反查空白会话 id（1.26 双路不重复建会话——点选/编排默认 arm 前 reuse-or-create
- * 判定，官方 reuseOrCreateBlank 语义同构：`blank && cwd` 归一命中即复用，不再新建）。
- * 归一比对经 worktreeCwdKey（1.24 分隔符口径）；无命中/快照漂移 = undefined。
+ * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
+ * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17）：blank ∧ cwd 归一命中 ∧
+ * workspace 归属（workspace.sessionIds 含 id）∧ 非归档（archivedSessionIds 不含 id）。
+ * workspaces 快照缺席/漂移 = fail-closed 不复用（宁可走 host sessionCreate 互斥面重用产物，
+ * 不误复用他树会话）。
  */
-export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | undefined {
+export function blankSessionIdByCwdOf(list: unknown, cwd: string, workspaces?: unknown): string | undefined {
   const key = worktreeCwdKey(cwd)
+  const snapshot = asRecord(workspaces)
+  const archived = Array.isArray(snapshot?.['archivedSessionIds']) ? (snapshot['archivedSessionIds'] as readonly unknown[]) : undefined
+  const items = Array.isArray(snapshot?.['items']) ? (snapshot['items'] as readonly unknown[]) : undefined
+  if (archived === undefined || items === undefined) return undefined
+  const workspace = items.find((row) => {
+    const path = asRecord(row)?.['path']
+    return typeof path === 'string' && worktreeCwdKey(path) === key
+  })
+  const members = Array.isArray(asRecord(workspace)?.['sessionIds']) ? (asRecord(workspace)?.['sessionIds'] as readonly unknown[]) : undefined
+  if (members === undefined) return undefined
   for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
-    const blank = (row as { blank?: unknown } | null)?.blank
+    if (id === '') continue
+    if ((row as { blank?: unknown } | null)?.blank !== true) continue
     const rowCwd = (row as { cwd?: unknown } | null)?.cwd
-    if (blank === true && typeof rowCwd === 'string' && worktreeCwdKey(rowCwd) === key) {
-      return id !== '' ? id : undefined
-    }
+    if (typeof rowCwd !== 'string' || worktreeCwdKey(rowCwd) !== key) continue
+    if (!members.includes(id) || archived.includes(id)) continue
+    return id
   }
   return undefined
+}
+
+/** 官方 workspaces.list 快照窄读（G4 归属/归档两件数据源；快照缺席 = undefined fail-closed） */
+function workspacesSnapshotOf(list: unknown): unknown {
+  try {
+    return (list as { getSnapshot?: () => unknown } | null | undefined)?.getSnapshot?.()
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * A6 carryDraft 增量搬运落笔值（纯函数单源）：落笔前重读原会话草稿——重读可得即以重读为
+ * 准（官方发送清空草稿 → 重读空串 = 已发送文本不回填，双发根因消除）；重读不可得（缝
+ * 缺席/快照漂移）退回触发时快照。
+ */
+export function carryDraftTextOf(text: string, reread: string | undefined): string {
+  if (typeof reread !== 'string') return text.trim()
+  return reread.trim()
 }
 
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
@@ -1101,6 +1151,7 @@ function registerConversationViews(
   diagnostics: { registered?: string[] },
   uiWorkspace: ForgeUiWorkspaceService,
   sessions: ForgeSessionsService,
+  workspaces: ForgeWorkspacesService,
 ): void {
   registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
     ctx.slots.register(
@@ -1137,7 +1188,10 @@ function registerConversationViews(
                 // 官方导航面异常（会话卸载瞬态）fail-soft 不外溢
               }
             },
-            blankSessionByCwd: (cwd: string): string | undefined => blankSessionIdByCwdOf(sessions.list, cwd),
+            // G4 官方四件套：reuse 判据补齐 workspace 归属 + 非归档两件（官方
+            // reuseOrCreateBlank 语义对齐；workspaces 快照缺席 = fail-closed 不复用）
+            blankSessionByCwd: (cwd: string): string | undefined =>
+              blankSessionIdByCwdOf(sessions.list, cwd, workspacesSnapshotOf(workspaces.list)),
             sessionsList: sessions.list,
             composerDraft: composerDraftFace(ctx, sessions),
           },
@@ -2360,7 +2414,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace, sessions)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace, sessions, workspaces)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）

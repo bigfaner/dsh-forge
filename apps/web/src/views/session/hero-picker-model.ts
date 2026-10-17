@@ -176,18 +176,36 @@ export function shouldArmSelectedRow(input: ArmGateInput): boolean {
 }
 
 /**
- * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话，
- * 官方 reuseOrCreateBlank 语义同构：`blank && cwd` 归一命中即复用，不再新建）。
- * 无命中/快照漂移 = undefined。
+ * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
+ * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17：blank ∧ summary.cwd ===
+ * workspace.path ∧ workspace.sessionIds.includes(id) ∧ !archived.includes(id)）——
+ * 归属/归档两件数据源 = workspaces.list 快照（缺席/漂移 = fail-closed 不复用）。
+ * plugin.ts 同式镜像（bundle 自含禁跨 chunk import——两侧行为由各自单测 pin）。
  */
-export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | undefined {
+export function blankSessionIdByCwdOf(list: unknown, cwd: string, workspaces?: unknown): string | undefined {
   const key = worktreeCwdKey(cwd)
+  const snapshot = (typeof workspaces === 'object' && workspaces !== null ? workspaces : undefined) as
+    | { archivedSessionIds?: unknown; items?: unknown }
+    | undefined
+  const archived = Array.isArray(snapshot?.archivedSessionIds) ? snapshot.archivedSessionIds : undefined
+  const items = Array.isArray(snapshot?.items) ? snapshot.items : undefined
+  if (archived === undefined || items === undefined) return undefined
+  const workspace = items.find((row) => {
+    const path = (typeof row === 'object' && row !== null ? (row as { path?: unknown }).path : undefined)
+    return typeof path === 'string' && worktreeCwdKey(path) === key
+  })
+  const members =
+    Array.isArray((typeof workspace === 'object' && workspace !== null ? (workspace as { sessionIds?: unknown }).sessionIds : undefined))
+      ? (workspace as { sessionIds: readonly unknown[] }).sessionIds
+      : undefined
+  if (members === undefined) return undefined
   for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
-    const blank = (row as { blank?: unknown } | null)?.blank
+    if (id === '') continue
+    if ((row as { blank?: unknown } | null)?.blank !== true) continue
     const rowCwd = (row as { cwd?: unknown } | null)?.cwd
-    if (blank === true && typeof rowCwd === 'string' && worktreeCwdKey(rowCwd) === key) {
-      return id !== '' ? id : undefined
-    }
+    if (typeof rowCwd !== 'string' || worktreeCwdKey(rowCwd) !== key) continue
+    if (!members.includes(id) || archived.includes(id)) continue
+    return id
   }
   return undefined
 }
