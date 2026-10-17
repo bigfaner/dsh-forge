@@ -1130,3 +1130,318 @@ body[data-ds-dark-theme] .setbtn {
   opacity: 0.45;
   cursor: default;
 }
+
+/* ---- 设置最小化面板（浮层 sheet，mockup 屏⑦）+ 模型列表（#/models，屏⑧） ---- */
+.sheet-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: flex-end;
+  z-index: 9;
+}
+.sheet {
+  width: 100%;
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  padding: 8px 16px 20px;
+  max-height: 74%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 133, 140, 0.4) transparent;
+}
+.sheet::-webkit-scrollbar {
+  width: 3px;
+}
+.sheet::-webkit-scrollbar-thumb {
+  background: rgba(129, 133, 140, 0.4);
+  border-radius: 99px;
+}
+.dark .sheet,
+body[data-ds-dark-theme] .sheet {
+  background: #1d1d20;
+}
+.sheet .grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 99px;
+  background: #dadce0;
+  margin: 4px auto 10px;
+}
+.dark .sheet .grab,
+body[data-ds-dark-theme] .sheet .grab {
+  background: #444746;
+}
+.sheet .grp-title,
+.setrow .lbl {
+  font-size: 13px;
+  font-weight: 550;
+  color: #5f6368;
+  margin: 12px 2px 6px;
+  letter-spacing: 0.02em;
+}
+.dark .sheet .grp-title,
+.dark .setrow .lbl,
+body[data-ds-dark-theme] .sheet .grp-title,
+body[data-ds-dark-theme] .setrow .lbl {
+  color: #9aa0a6;
+}
+.setrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 4px;
+  font-size: 14px;
+  color: #0f1115;
+  cursor: pointer;
+  border-bottom: 0.5px solid #e5e7eb;
+}
+.dark .setrow,
+body[data-ds-dark-theme] .setrow {
+  color: #f5f5f6;
+  border-color: #303034;
+}
+.setrow .lbl {
+  flex: none;
+  color: #5f6368;
+  font-size: 13px;
+  margin: 0;
+}
+.dark .setrow .lbl,
+body[data-ds-dark-theme] .setrow .lbl {
+  color: #9aa0a6;
+}
+.setrow .val {
+  margin-left: auto;
+  font-weight: 550;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.setrow .chev-r {
+  flex: none;
+  color: #81858c;
+  display: flex;
+}
+.setrow .chev-r svg.ic {
+  width: 14px;
+  height: 14px;
+}
+/* 推理等级：分段控件（选档即生效；不支持隐藏整段） */
+.seg {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.seg button {
+  flex: 1;
+  height: 40px;
+  border-radius: 12px;
+  border: 0.5px solid #dadce0;
+  background: #fbfbfc;
+  color: #0f1115;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.dark .seg button,
+body[data-ds-dark-theme] .seg button {
+  background: #232324;
+  border-color: #444746;
+  color: #f5f5f6;
+}
+.seg button.picked {
+  border-color: #4176e6;
+  background: rgba(65, 118, 230, 0.07);
+  color: #1a56c4;
+}
+.dark .seg button.picked,
+body[data-ds-dark-theme] .seg button.picked {
+  border-color: #7aaaff;
+  background: rgba(122, 170, 255, 0.1);
+  color: #9db8ff;
+}
+.seg button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* 模型列表子视图（路由整页）：头行 sticky + 恒高滚动面（3px 滚动条） */
+.models-root {
+  background: #fff;
+}
+.dark .models-root,
+body[data-ds-dark-theme] .models-root {
+  background: #151517;
+}
+.models-root .srow {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: inherit;
+  padding: 8px 12px 8px;
+  flex: none;
+}
+.bkbtn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f3f4;
+  color: #0f1115;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.dark .bkbtn,
+body[data-ds-dark-theme] .bkbtn {
+  background: #2c2c2e;
+  color: #f5f5f6;
+}
+.bkbtn svg.ic {
+  width: 18px;
+  height: 18px;
+}
+.msearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  border-radius: 20px;
+  background: #f1f3f4;
+  padding: 0 14px;
+  color: #81858c;
+  font-size: 13.5px;
+  flex: 1;
+}
+.dark .msearch,
+body[data-ds-dark-theme] .msearch {
+  background: #2c2c2e;
+}
+.msearch svg.ic {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.msearch-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13.5px;
+}
+.mlist {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 133, 140, 0.4) transparent;
+}
+.mlist::-webkit-scrollbar {
+  width: 3px;
+}
+.mlist::-webkit-scrollbar-thumb {
+  background: rgba(129, 133, 140, 0.4);
+  border-radius: 99px;
+}
+.mgroup {
+  margin-bottom: 4px;
+}
+.pv {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 2px 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f6368;
+  cursor: pointer;
+}
+.dark .pv,
+body[data-ds-dark-theme] .pv {
+  color: #9aa0a6;
+}
+.pv svg.ic {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.4;
+  flex: none;
+  transition: transform 0.14s;
+}
+.pv.closed svg.ic {
+  transform: rotate(-90deg);
+}
+.pv .cnt {
+  margin-left: auto;
+  font-weight: 400;
+  color: #81858c;
+}
+.pv.recent {
+  cursor: default;
+}
+.pv.recent svg.ic {
+  display: none;
+}
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #0f1115;
+  cursor: pointer;
+  border: 0.5px solid transparent;
+  margin-bottom: 4px;
+  width: 100%;
+  background: transparent;
+  text-align: left;
+}
+.dark .mrow,
+body[data-ds-dark-theme] .mrow {
+  color: #f5f5f6;
+}
+.mrow:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+.mrow.picked {
+  background: rgba(65, 118, 230, 0.07);
+  border-color: #4176e6;
+}
+.dark .mrow.picked,
+body[data-ds-dark-theme] .mrow.picked {
+  background: rgba(122, 170, 255, 0.1);
+  border-color: #7aaaff;
+}
+.mrow .chk {
+  margin-left: auto;
+  color: #4176e6;
+  display: flex;
+  flex: none;
+}
+.dark .mrow .chk,
+body[data-ds-dark-theme] .mrow .chk {
+  color: #7aaaff;
+}
+.mrow .chk svg.ic {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+}
+.msearch-hint {
+  font-size: 11px;
+  color: #81858c;
+  text-align: center;
+  padding: 8px 0 2px;
+}
+.msearch-hint.err {
+  color: #e5484d;
+}
