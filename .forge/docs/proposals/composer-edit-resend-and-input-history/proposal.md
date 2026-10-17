@@ -160,7 +160,7 @@ apps/host + apps/web                   ← 仅 wiring（通道注册 / service p
 
 | 层 | 位置 | 改动 | 性质 |
 |---|---|---|---|
-| 插件 host 面 | `packages/plugins/composer-correction/src/index.ts`（新） | cordis 插件入口：**typert face `editResend/submit`**（FaceModel 声明，typert.host 生成 host 面 / typert.remote-client 生成 client 面，id 形如 `dsh-forge#editResend/submit`——face 名词/method camelCase 动词对齐官方 `#session/fork` 形态，schema 校验由 typert 机械承担）；复核（锚=最后一条用户消息·其轮空闲或流式中·区间完整），流式中先经官方 `session/cancel` 停止并待 `turn/end` 闭合，组装 surfaceOp replace 交官方 session 机械追加。注：本仓 apps/host 现有通道均 ForgeIpc+rpcEnvelope，此为首例 typert 通道（用户裁决 2026-02-14） | 新增 |
+| 插件 host 面 | `packages/plugins/composer-correction/src/index.ts`（新） | cordis 插件入口：**typert face `editResend/submit`**（FaceModel 声明，typert.host 生成 host 面 / typert.remote-client 生成 client 面，id `@dsh-forge/composer-correction#editResend/submit`——face 名词/method camelCase 动词对齐官方 `#session/fork` 形态，包名命名空间保双宿主不碰撞，schema 校验由 typert 机械承担）；复核（锚=最后一条用户消息·其轮空闲或流式中·区间完整），流式中先经官方 `session/cancel` 停止并待 `turn/end` 闭合，组装 surfaceOp replace 交官方 session 机械追加。注：本仓 apps/host 现有通道均 ForgeIpc+rpcEnvelope，此为首例 typert 通道（用户裁决 2026-02-14） | 新增 |
 | 插件 client 面 | `packages/plugins/composer-correction/src/client/edit-resend.ts`（新） | 锚点编排：悬停动作接线、pendingEdit 侧车 store（官方 dsh-client-store persist 机械）、提交携带 anchorSeq、失败恢复 | 新增 |
 | 插件 client 面 | `packages/plugins/composer-correction/src/client/input-history.ts`（新） | 会话内历史源（订阅 user/message 事件）、readline 键位判定（空草稿/首行行首）、草稿暂存恢复 | 新增 |
 | 插件 client 面 | `packages/plugins/composer-correction/src/client/voided-transcript.ts`（新） | ①用户消息行「修改」动作注入；②被作废整轮折叠行——两处注入点须先核销官方 Chat 留出的合法缝（槽位影子/inject face），无合法缝则回到 tech-design 重议呈现方案 | 新增 |
@@ -169,6 +169,8 @@ apps/host + apps/web                   ← 仅 wiring（通道注册 / service p
 | 官方机械消费 | 不落盘改动 | `dsh-client-store`（persist 侧车）、`dsh-session` surface（replace 语义）、官方 keymap/快捷键缝——import 消费，零 vendor 零改制 | 只读 |
 
 ### 影响点与边界
+
+- **双宿主兼容目标**（用户裁决 2026-10-17 追补）：插件面向 dsh-forge 与官方 dsh 双宿主——dsh-forge 侧经宿主 wiring 装配；官方 dsh 侧可经官方 plugin-manager 安装通道直接装载。为此：零 dsh-forge 依赖（既有裁决），全部能力只消费官方机械（typert face / dsh-session surface / dsh-client-store / 官方槽位缝），typert face id 以包名命名空间（`@dsh-forge/composer-correction#editResend/submit`）避免宿主碰撞；两宿主下行为一致，dsh-forge 专属 wiring 不进插件本体。
 
 - **承重假设待核销**（落 tech-design 首项）：官方 Chat 用户消息行动作注入缝、transcript 折叠渲染缝是否存在且合法——这是唯一可能反噬呈现方案的点。
 - **不触碰**：官方 QueueDock（排队编辑走官方原生）、fork 链路、会话日志单写者路径（新消息仍经官方追加机械，本提案不直写日志）。
