@@ -56,6 +56,7 @@ import {
   type PinPersist,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
@@ -300,6 +301,18 @@ async function main(): Promise<void> {
     args: ['--no-open', '--port', String(options.port)],
   })
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
+  // 1.32 /api 非回环拦截（connection/request waterfall 硬化）：remoteExpose（fix-3 行覆写
+  // 0.0.0.0）使 /api 面 LAN 可达——官方围栏自动信任 IP 字面量 Host + 会话 cookie 明文可嗅。
+  // 官方多听者插槽 `connection/request`（dsh-client-connection README「Browser authentication
+  // and request trust」节，桌面安装锁同缝先例；勿用 registerInterceptor 单槽——组合内已有
+  // 占用风险）：时序 = 官方 admit（围栏 + 认证）之后、body 之前——围栏 403 与本拦截双保险
+  // （trustedHosts/隧道域被围栏放行的非回环形态由本面恒定 403 收口）。回环 → next() 放行，
+  // 桌面 /api 零影响；/__rpc、/remote、/pair 走 webserver 具名路由不经此 waterfall，不受扰。
+  try {
+    ctx.on('connection/request', apiLoopbackGuardListener(diag))
+  } catch {
+    // 监听器注册失败 = 拦截面缺席（围栏仍在），boot 不受阻——fail-soft 同 /pair 缝先例
+  }
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
   // fix-2：worktree RPC 域服务（gitWorktree 行在场时装配段构造——见下方装配块）
