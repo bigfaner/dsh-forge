@@ -8,9 +8,18 @@
 //（project-service canonicalizeDir，fail-soft），不进本键（保持零依赖/浏览器安全）。
 // 规则（与 knowledge 原 session.ts normalizePath 逐字等价——本包即其同源收编）：
 //   反斜杠 → 正斜杠；去尾分隔符（含重复）；win32 折叠大小写（其余平台大小写敏感）。
+/** 平台探测：node 环境走 process.platform；浏览器捆包（process 缺席）退 navigator
+ *  平台/UA 串的 Win 探测——web 面与 host 侧键必须同源（否则大小写折叠分裂）。 */
+function platformOf(): string | undefined {
+  const proc = (globalThis as { process?: { platform?: string } }).process
+  if (proc?.platform !== undefined) return proc.platform
+  const nav = (globalThis as { navigator?: { platform?: string; userAgent?: string } }).navigator
+  if (nav === undefined) return undefined
+  const ua = `${nav.platform ?? ''} ${nav.userAgent ?? ''}`
+  return /win/i.test(ua) ? 'win32' : undefined
+}
+
 export function normalizeFsPath(p: string): string {
   const slashed = p.replace(/\\/g, '/').replace(/\/+$/, '')
-  // 平台探测走 globalThis 探针（不 import node:process——本包须可进浏览器捆包图）
-  const platform = (globalThis as { process?: { platform?: string } }).process?.platform
-  return platform === 'win32' ? slashed.toLowerCase() : slashed
+  return platformOf() === 'win32' ? slashed.toLowerCase() : slashed
 }

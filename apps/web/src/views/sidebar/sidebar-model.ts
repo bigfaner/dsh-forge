@@ -8,6 +8,7 @@
 // 状态点四态 = 官方 StateDot 语义（warning 用户注意 / done 完成 / ongoing 进行 / idle 静默）。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import { timeLabelZh } from '../../components/index.js'
 
 /** 快照源窄形状（dsh ObservableSnapshot 结构同型；React useSyncExternalStore 直连） */
@@ -53,10 +54,12 @@ export interface LedgerSessionsSnapshot {
   readonly phase: 'pending' | 'ready'
 }
 
-/** dsh workspace 行窄形状（会话归属 = workspace.sessionIds，上游 WorkspaceView 消费切片） */
+/** dsh workspace 行窄形状（会话归属 = workspace.sessionIds，上游 WorkspaceView 消费切片；
+ *  path = 官方快照字段（client-ui-workspace 消费实证）——树工作区入项目分组的归并键） */
 export interface LedgerWorkspaceRow {
   readonly workspaceId: string
   readonly sessionIds: readonly string[]
+  readonly path?: string
 }
 
 /**
@@ -221,18 +224,47 @@ export function buildSidebarTree(input: {
   readonly projects: readonly ProjectSummary[]
   readonly sessions: LedgerSessionsSnapshot
   readonly workspaces: LedgerWorkspacesSnapshot
+  /** 项目 → worktree 清单路径归一键集（forge:worktree/list 真值——树工作区会话入项目
+   *  分组的归并依据；缺席 = 退主工作区分组现状，树会话不入组） */
+  readonly worktreePaths?: ReadonlyMap<string, ReadonlySet<string>>
 }): SidebarTree {
   const currentSessionId = currentSessionIdOfLedger(input.sessions)
   const rowsByWorkspace = new Map<string, readonly string[]>()
   for (const workspace of input.workspaces.items) {
     rowsByWorkspace.set(workspace.workspaceId, workspace.sessionIds)
   }
+  // 树工作区 → 项目归并（路径 ∈ 该项目 worktree 清单——权威真值非前缀猜测）
+  const treeSessionsByProject = new Map<string, readonly string[]>()
+  if (input.worktreePaths !== undefined) {
+    for (const workspace of input.workspaces.items) {
+      if (typeof workspace.path !== 'string' || workspace.path === '') continue
+      const key = normalizeFsPath(workspace.path)
+      for (const [projectId, paths] of input.worktreePaths) {
+        if (!paths.has(key)) continue
+        const prev = treeSessionsByProject.get(projectId) ?? []
+        treeSessionsByProject.set(projectId, [...prev, ...workspace.sessionIds])
+        break
+      }
+    }
+  }
   const pinnedOrder = new Map<string, number>()
   input.workspaces.pinnedSessionIds?.forEach((id, index) => pinnedOrder.set(id, index))
   const archivedIds = new Set(input.workspaces.archivedSessionIds ?? [])
   const tree: SidebarProjectNode[] = []
   for (const project of input.projects) {
-    const memberIds = rowsByWorkspace.get(project.workspaceId) ?? []
+    // 成员 = 主工作区会话 ∪ 树工作区会话（主区序在前，树区随快照序；跨源去重保序）
+    const seen = new Set<string>()
+    const memberIds: string[] = []
+    for (const sessionId of rowsByWorkspace.get(project.workspaceId) ?? []) {
+      if (seen.has(sessionId)) continue
+      seen.add(sessionId)
+      memberIds.push(sessionId)
+    }
+    for (const sessionId of treeSessionsByProject.get(project.id) ?? []) {
+      if (seen.has(sessionId)) continue
+      seen.add(sessionId)
+      memberIds.push(sessionId)
+    }
     const rows: SidebarSessionRow[] = []
     for (const sessionId of memberIds) {
       const row = input.sessions.byId[sessionId]

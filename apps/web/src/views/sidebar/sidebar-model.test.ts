@@ -1,6 +1,7 @@
 // sidebar-model 单测 —— UF-1 项目树/会话列表派生（AC2：项目树读 forge:projects/list、
 // 会话列表实时读 dsh 账本；AC5：空态判据输入）。纯函数面：快照进、视图行出、零持有。
 import { describe, expect, it } from 'vitest'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   buildSidebarTree,
@@ -48,7 +49,7 @@ function ledger(rows: readonly LedgerSessionRow[], overrides: Partial<LedgerSess
 }
 
 function workspaces(
-  items: readonly { workspaceId: string; sessionIds: string[] }[],
+  items: readonly { workspaceId: string; sessionIds: string[]; path?: string }[],
   overrides: Partial<LedgerWorkspacesSnapshot> = {},
 ): LedgerWorkspacesSnapshot {
   return { items, ...overrides }
@@ -125,6 +126,23 @@ describe('buildSidebarTree（项目树派生）', () => {
     })
     expect(out.tree).toHaveLength(1)
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
+  })
+
+  it('bug ef8b3a45：树工作区会话入项目分组（worktree 清单路径精确归并——1.28 每树一工作区）', () => {
+    const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([ledgerRow('s-main'), ledgerRow('s-tree')]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s-main'] },
+        // 树会话挂树工作区（1.28 契约强制——主工作区 sessionIds 恒不含它）
+        { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
+        // 清单外树工作区（他项目/未匹配）不入组
+        { workspaceId: 'wt-x', path: 'Z:/elsewhere/wt', sessionIds: ['s-orphan'] },
+      ]),
+      worktreePaths: new Map([['p1', new Set([normalizeFsPath(treePath)])]]),
+    })
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
   })
 
   it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径——retainedBy.mainView 锚，bug 51e94b84 修正）', () => {

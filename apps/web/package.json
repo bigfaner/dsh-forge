@@ -12,6 +12,7 @@
     "@dsh-forge/contracts": "workspace:*",
     "@dsh-forge/git-worktree": "workspace:*",
     "@dsh-forge/md-mermaid": "workspace:*",
+    "@dsh-forge/path-key": "workspace:*",
     "react-qr-code": "2.2.0"
   },
   "devDependencies": {

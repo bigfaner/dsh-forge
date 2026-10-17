@@ -14,7 +14,8 @@
 // ——会话行打开即官方回会话面板）。
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
-import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { preloadRpcClientFactory } from '../../rpc/index.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
@@ -93,6 +94,37 @@ export function ForgeSidebarSlot({
   const sessionsSnap = useSyncExternalStore(subscribeSessions, readSessions, readSessions)
   const workspacesSnap = useSyncExternalStore(subscribeWorkspaces, readWorkspaces, readWorkspaces)
   const [projectsState, retryProjects, silentRefreshProjects] = useForgeProjects(workspacesSnap)
+  // 树工作区清单索引（bug ef8b3a45——树会话入项目分组的归并依据）：每项目一次
+  // forge:worktree/list（git worktree list 真值），路径归一键集喂 buildSidebarTree。
+  // 项目集变化/重拉时刷新；失败 fail-soft（退主工作区分组现状，树会话不入组）。
+  const readyProjects = projectsState.phase === 'ready' ? projectsState.projects : []
+  const [worktreePaths, setWorktreePaths] = useState<Map<string, Set<string>>>(new Map())
+  useEffect(() => {
+    if (readyProjects.length === 0) {
+      setWorktreePaths(new Map())
+      return
+    }
+    let alive = true
+    const rpc = preloadRpcClientFactory()
+    void Promise.all(
+      readyProjects.map(async (project) => {
+        try {
+          const result = await rpc.worktree.list({ projectRoot: project.wsPath })
+          return [
+            project.id,
+            new Set(result.entries.filter((entry) => !entry.isMain).map((entry) => normalizeFsPath(entry.path))),
+          ] as const
+        } catch {
+          return [project.id, new Set<string>()] as const
+        }
+      }),
+    ).then((rows) => {
+      if (alive) setWorktreePaths(new Map(rows))
+    })
+    return () => {
+      alive = false
+    }
+  }, [readyProjects])
   const actions = sidebarActions({
     openSession,
     startSession,
@@ -114,6 +146,7 @@ export function ForgeSidebarSlot({
     projects: projectsState.phase === 'ready' ? projectsState.projects : [],
     sessions: sessionsSnap,
     workspaces: workspacesSnap,
+    worktreePaths,
   })
   return (
     <ForgeWorkspacePanel

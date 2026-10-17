@@ -1,6 +1,6 @@
 // fix-30 单测 —— 比对归一键口径 pin（core 注册链与 knowledge 绑定表的同源契约面）。
 // 变体矩阵 = 两消费方共同承诺：同一拼写变体在 core 命中既有行 ⟺ 在 knowledge 命中绑定行。
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { normalizeFsPath } from './index.js'
 
 describe('normalizeFsPath（比对归一键）', () => {
@@ -24,5 +24,22 @@ describe('normalizeFsPath（比对归一键）', () => {
   it('等价变体收敛同键（比对语义核心：变体 ⟺ 同键 ⟺ 同一工作区）', () => {
     expect(normalizeFsPath('Z:\\learn')).toBe(normalizeFsPath('z:\\learn\\'))
     expect(normalizeFsPath('Z:\\learn')).toBe(normalizeFsPath('Z:/LEARN/'))
+  })
+
+  it('浏览器捆包（无 process）经 navigator 探测 win32 折叠——web 侧键与 host 键同源', () => {
+    const realProcess = globalThis.process
+    try {
+      // 模拟浏览器：process 缺席 + Windows UA
+      ;(globalThis as { process?: unknown }).process = undefined
+      vi.stubGlobal('navigator', { platform: 'Win32', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
+      expect(normalizeFsPath('C:\\WS\\Demo')).toBe('c:/ws/demo')
+      expect(normalizeFsPath('Z:\\Learn\\Test-01')).toBe(normalizeFsPath('z:\\learn\\TEST-01\\'))
+      // 非 Windows UA → 大小写敏感
+      vi.stubGlobal('navigator', { platform: 'MacIntel', userAgent: 'Mozilla/5.0 (Macintosh)' })
+      expect(normalizeFsPath('/WS/Demo')).toBe('/WS/Demo')
+    } finally {
+      vi.unstubAllGlobals()
+      ;(globalThis as { process?: unknown }).process = realProcess
+    }
   })
 })
