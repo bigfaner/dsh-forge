@@ -162,3 +162,9 @@ md的FRONTMATTER渲染成表格，跟github一样
 
 1、能不能撤回/修改用户最近输入的消息、
 2、方向键浏览当前会话中的用户之前输入的消息。
+
+## 73. 任务循环注入改用 agent.send（mobile-ui 技术设计裁决，未来演进）
+- 任务循环注入统一切到底层原语 `agent.send(message, target: 'next-turn'|'next-step', wakeup)`（现走 followup/inject 便捷方法）。
+- 桌面端适配：`packages/plugin-forge/src/faces.ts`（forgeUserMessage）与 `notify/` 通道注入点、`run-dag-tasks.ts` 指令单行 followup 改走 send，并保留 `source.kind:'forge-loop'` 声明合并（mobile-ui tech-design AD-4）。
+- 手机端适配：循环叙述卡判别只消费 `source.kind`（tech-design 投影白名单 B 档），send 语义（next-turn/next-step、wakeup 与否、cancel parked）不影响渲染契约；惰性续轮（send('next-turn', wakeup:false)）为可选增强。
+- 上下文：mobile-ui tech-design.md AD-4 / 投影白名单；官方正本 dsh-agent runtime-types.d.ts（send/steer/followup/inject 全收显式 UserMessage）。
