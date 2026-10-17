@@ -25,7 +25,7 @@
 import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
-import { claimForDispatch, classifyPool, findLiveSuccessor, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
+import { claimForDispatch, classifyPool, findLiveSuccessor, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
 import type {
   ClaimedDispatch,
   DispatchChainScope,
@@ -59,6 +59,22 @@ export function backoffDelayMs(baseMs: number, attempt: number): number {
 
 /** no-task 等待判词的轮间停顿（毫秒——bounded patience 的 patience） */
 export const LOOP_PATIENCE_PAUSE_MS = 30_000
+
+/**
+ * 3c 续派静默窗基长（毫秒——done 判词收口前的 wait-for-quiescence 宽限窗：窗内编排层
+ * 新派任务（pending 出现）即自动续派，窗满静默才 ⑯ 收口；与 bounded patience 是两个
+ * 机制——前者 = 结束前等新任务的静默宽限，后者 = 池无任务可领的重试上限）。
+ */
+export const LOOP_QUIESCENCE_WINDOW_MS = 30_000
+
+/** 3c 宽限窗内池态轮询间隔（毫秒——窗内分段睡眠逐次现读池快照，新任务即到即续） */
+export const LOOP_QUIESCENCE_POLL_MS = 5_000
+
+/**
+ * 3c 最大轮次封顶（runRound 连续轮数上限——超限按 ⑮ 结束叙述收口，防异常驱动下无限
+ * 空转；结算成功复位不适用——轮数是生命周期总量而非连击）。
+ */
+export const LOOP_MAX_ROUNDS = 200
 
 /** bounded patience 封顶（连续 wait 判词轮数——耗尽收口建议重派，不无限空转） */
 export const LOOP_PATIENCE_MAX_WAIT_ROUNDS = 3
@@ -303,8 +319,15 @@ export interface LoopDriverDeps {
    * 缺席退化现状（fail-soft——装配面未接线时不阻塞处置阶梯）。
    */
   readonly knownContainers?: (projectId: string) => Promise<readonly string[]>
-  /** 机械时延注入（测试缝——缺省生产值） */
-  readonly delays?: { readonly backoffBaseMs?: number; readonly patiencePauseMs?: number }
+  /** 机械时延注入（测试缝——缺省生产值；quiescence = 3c 宽限窗基长/轮询间隔） */
+  readonly delays?: {
+    readonly backoffBaseMs?: number
+    readonly patiencePauseMs?: number
+    readonly quiescenceWindowMs?: number
+    readonly quiescencePollMs?: number
+  }
+  /** 机械上限注入（测试缝——缺省生产值；maxRounds = 3c 最大轮次封顶） */
+  readonly limits?: { readonly maxRounds?: number }
 }
 
 /** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/全量活循环读数） */
@@ -351,7 +374,9 @@ interface ActiveLoop {
   readonly core: DispatchCoreDeps
   readonly exec: DispatchCoreExec
   readonly scope: DispatchChainScope
-  readonly delays: { readonly backoffBaseMs: number; readonly patiencePauseMs: number }
+  readonly delays: { readonly backoffBaseMs: number; readonly patiencePauseMs: number; readonly quiescenceWindowMs: number; readonly quiescencePollMs: number }
+  /** 3c 最大轮次封顶（runRound 轮数上限——limits.maxRounds ?? LOOP_MAX_ROUNDS） */
+  readonly maxRounds: number
   /** spawn 失败连败计数（⑪ 次数——×3 粘住由 dispatch-core guard 按 LoopInstanceId 兑现） */
   spawnFailures: number
   /** worker 异常终止连败计数（⑫ 次数——bounded 重入，超限第三层；结算成功复位） */
@@ -453,6 +478,29 @@ async function fixChainOf(
 
 /** 每轮判定返回（continue = 续派下一轮；suspend = 升级点挂起待裁决（3b）；terminal = 终局收口出循环） */
 type RoundOutcome = 'continue' | 'suspend' | 'terminal'
+
+/**
+ * 3c 宽限窗判词（done 收口前的 wait-for-quiescence）：continue = 窗内编排层新派任务
+ * （池 pending/in_progress 出现——自动续派）；settle = 窗满静默（照常收口）；
+ * terminal = 窗内循环被叫停（用户终止——收口归停止径，零结束叙述）。
+ */
+type QuiescenceOutcome = 'continue' | 'settle' | 'terminal'
+
+/** 3c 续派静默窗（分段睡眠 + 池快照现读——新任务窗内即到即续；窗内叫停立即让渡终止收口） */
+async function waitForQuiescence(loop: ActiveLoop): Promise<QuiescenceOutcome> {
+  const signal = loop.controller.signal
+  const windowMs = loop.delays.quiescenceWindowMs
+  const pollMs = loop.delays.quiescencePollMs
+  let waited = 0
+  for (;;) {
+    const pool = poolOf(await statsFailSoft(loop))
+    if (pool.pending > 0 || pool.inProgress > 0) return 'continue'
+    if (waited >= windowMs) return 'settle'
+    const slice = Math.min(pollMs, windowMs - waited)
+    if (!(await sleepOrAbort(signal, slice))) return 'terminal'
+    waited += slice
+  }
+}
 
 /**
  * 升级点挂起（3b——原 escalate→terminal 的语义反转处）：写 `record.suspended`（在场即挂起
@@ -628,7 +676,10 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         delays: {
           backoffBaseMs: deps.delays?.backoffBaseMs ?? LOOP_BACKOFF_BASE_MS,
           patiencePauseMs: deps.delays?.patiencePauseMs ?? LOOP_PATIENCE_PAUSE_MS,
+          quiescenceWindowMs: deps.delays?.quiescenceWindowMs ?? LOOP_QUIESCENCE_WINDOW_MS,
+          quiescencePollMs: deps.delays?.quiescencePollMs ?? LOOP_QUIESCENCE_POLL_MS,
         },
+        maxRounds: deps.limits?.maxRounds ?? LOOP_MAX_ROUNDS,
         spawnFailures: 0,
         workerAborts: 0,
         waitRounds: 0,
@@ -765,8 +816,26 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
 async function runLoop(loop: ActiveLoop): Promise<void> {
   const { record } = loop
   let suspended = false
+  let rounds = 0 // 3c 轮数总量计数（生命周期总量——非连击，无复位）
   try {
     while (!loop.controller.signal.aborted) {
+      // 3c 最大轮次封顶（终止条件全集之一）：达上限按 ⑮ 结束叙述收口（建议重派），不再续领
+      if (rounds >= loop.maxRounds) {
+        const stats = await statsFailSoft(loop)
+        await loop.deps.narrator.settle(
+          record.ownerSessionId,
+          renderNarrative('finished-timeout', {
+            sourceSlug: record.source.slug,
+            reason: '达到最大轮次上限',
+            completed: stats.byStatus.completed,
+            blocked: stats.byStatus.blocked,
+            pending: stats.byStatus.pending,
+            instruction: loopInstructionOf('timeout', record.source.slug),
+          }),
+        )
+        break
+      }
+      rounds += 1
       const outcome = await runRound(loop)
       if (outcome === 'suspend') {
         suspended = true // 挂起待裁决——登记在场、投影挂起、等 re-entry
@@ -1201,6 +1270,11 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutcome> {
   const verdict = classifyPool(pool)
   if (verdict === 'done') {
+    // 3c 续派静默窗：⑯ 收口前 wait-for-quiescence——编排层窗内新派任务即自动续派；
+    // 窗满静默才收口；窗内叫停 = 用户终止径（收口归停止径，零结束叙述）。
+    const quiescence = await waitForQuiescence(loop)
+    if (quiescence === 'continue') return 'continue'
+    if (quiescence === 'terminal') return 'terminal'
     // 任务源 settled → settlement 收口（3b④：⑯ 骨架文 + P8 评审指示段追加——四重点逐字在文，
     // source {kind:'dispatch-loop-settled'} 持久 user message 三径投递）
     const stats = await statsFailSoft(loop)

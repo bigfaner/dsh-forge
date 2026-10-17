@@ -251,6 +251,10 @@ function build(options: {
   knownContainers?: (projectId: string) => Promise<readonly string[]>
   /** 改进 6② 退避基长注入（缺省 1ms——立即重试径的节奏断言用大值区分两径） */
   backoffBaseMs?: number
+  /** 3c 最大轮次上限注入（缺省 LOOP_MAX_ROUNDS——生产值；测试注入小值触发终局） */
+  limits?: { readonly maxRounds?: number }
+  /** 3c 宽限窗基长注入（缺省 1ms——立即收敛；窗内叫停用例注入大值保持确定性） */
+  quiescenceWindowMs?: number
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -301,7 +305,13 @@ function build(options: {
         escalations.push(e)
       },
     },
-    delays: { backoffBaseMs: options.backoffBaseMs ?? 1, patiencePauseMs: 1 },
+    delays: {
+      backoffBaseMs: options.backoffBaseMs ?? 1,
+      patiencePauseMs: 1,
+      quiescenceWindowMs: options.quiescenceWindowMs ?? 1,
+      quiescencePollMs: 1,
+    },
+    ...(options.limits !== undefined ? { limits: options.limits } : {}),
   }
   return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls }
 }
@@ -1537,7 +1547,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       tasks: h.tasks,
       spawn: trackedSpawn().spawn,
       narrator: createNarrator({ channel }),
-      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1, quiescenceWindowMs: 1, quiescencePollMs: 1 },
       // progress 缺席——零发射不外溢
     })
     await driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -1983,5 +1993,129 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: false })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+})
+
+// ─────────────────────────── 3c · 续派静默窗（宽限窗）与终止条件全集（dispatch-loop-hardening 1.12） ───────────────────────────
+
+describe('3c wait-for-quiescence 宽限窗（done 判词收口前——编排层新派任务窗内自动续派）', () => {
+  it('宽限窗内编排层新派任务（pending 出现）→ 不收口，自动续派领取并完成新任务后才 settled 收口', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK, claimed('2.6'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读（2.5）
+        statsOf({ in_progress: 1 }), // 结算读（2.5）
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // 静默窗 poll #1（窗初——无新任务）
+        statsOf({ pending: 1 }), // 静默窗 poll #2（编排层新派任务在窗内出现）
+        statsOf({ in_progress: 1 }), // 领取通知读（2.6）
+        statsOf({ in_progress: 1 }), // 结算读（2.6）
+        statsOf({ completed: 2 }), // 次轮 no-task 池读（done 判词）
+        statsOf({ completed: 2 }), // 次轮静默窗 poll（窗内无新任务）
+        statsOf({ completed: 2 }), // ⑯ 收口读
+      ],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    // 四次领取：2.5 → no-task（宽限窗续派判定）→ 2.6 → no-task（窗内无新任务 → 收口）
+    expect(built.h.claimInputs).toHaveLength(4)
+    // 新任务被自动续派领取并完成
+    expect(built.calls.some((c) => c.text.includes('2.6 Implement the thing'))).toBe(true)
+    // 收口叙述恰好一次，且发生在新任务完成之后（settle 在 calls 尾部）
+    const ends = built.calls.filter((c) => c.text.includes('[forge·结束]'))
+    expect(ends).toHaveLength(1)
+    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+  })
+
+  it('宽限窗内无新任务 → 窗满照常 ⑯ 收口（现状保持——claim 不多领）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // 静默窗 poll（窗内无新任务）
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(2) // 2.5 + no-task（窗内零新领）
+    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+  })
+
+  it('宽限窗内循环被叫停（用户终止窗径）→ 终局收口、零结束叙述（叙述归停止径）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）→ 入宽限窗
+        statsOf({ completed: 1 }), // 窗内 poll（大窗驻留，等待被 stop 打断）
+      ],
+      quiescenceWindowMs: 5_000,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    // 等待循环进入宽限窗（no-task 池读已完成 = 窗 poll 即将开始）
+    await vi.waitFor(
+      () => {
+        expect(built.h.statsInputs.length).toBeGreaterThanOrEqual(4)
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    // 窗内叫停：零 ⑯ 结束叙述（收口叙述归停止径 ⑰）
+    expect(built.calls.some((c) => c.text.includes('[forge·结束]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('[forge·停止]'))).toBe(true)
+  })
+})
+
+describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮次——各有触发路径）', () => {
+  it('最大轮次：连续成功轮达上限 → ⑮ 结束叙述（达到最大轮次上限），不再续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), claimed('2.7'), claimed('2.8'), claimed('2.9')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      limits: { maxRounds: 3 },
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(started).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(3) // 恰好 maxRounds 轮——不多领
+    const end = built.calls.at(-1)
+    expect(end?.text).toContain('[forge·结束]')
+    expect(end?.text).toContain('达到最大轮次上限')
+  })
+})
+
+describe('3c 回归：循环生命周期归属会话无关（host registry 独立——现状保持）', () => {
+  it('owner 会话失活后挂起循环照常存活登记，resume（会话无关入口）续接至 settled 收口', async () => {
+    /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+    const queryBlockedNoProgress = (): QueryTaskResult => ({
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+    })
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
+      stats: [statsOf({ pending: 2 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 2 })],
+      query: [queryBlockedNoProgress(), queryOf('completed')],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    // 会话关闭模拟（进程内无会话生命周期事件——登记与循环体不感知会话存续）：
+    // 登记仍带原 owner 归属，resume 入口不携会话参数即可续接
+    const record = built.driver.activeAll().find((r) => r.id === loopId)
+    expect(record?.ownerSessionId).toBe(OWNER)
+    expect(record?.suspended).toBeDefined()
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
   })
 })
