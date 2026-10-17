@@ -55,6 +55,9 @@ import {
   workerChildSessionOf,
   workerOpenTarget,
   forgeClientPlugin,
+  installSessionCreateWrap,
+  treeOf,
+  SESSION_CREATE_CHANNEL,
   moduleLoaderFacade,
   publishedViews,
   registerForgeClient,
@@ -63,6 +66,7 @@ import {
   type ForgeSidebarRightTabsService,
   type ForgeSlotsService,
 } from './plugin.js'
+import type { SessionCreateWrapDeps } from './create-wrap.js'
 import { FORGE_PROGRESS_NODE_KIND, FORGE_PROGRESS_NODE_SLOT, forgeProgressDefinition } from './progress-node.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
 import {
@@ -2076,5 +2080,182 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
     await f.addBugToSession(BUG, null)
     expect(f.openSessionWithPreset).not.toHaveBeenCalled()
     expect(f.bail).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================================
+// W3 sessions.create wrap（体验层主径——资格门矩阵 + fail-open 出口 + dispose 恢复）。
+// 三铁律钉：内部零触碰（只有整调用改道/透传）、判定逐次独立（项目行逐次现查零缓存）、
+// fail-open 透传（original 永不落改道 try 域——官方自身错误原样上抛不吞不重调）。
+// ============================================================================
+describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail-open）', () => {
+  const WS = 'ws-git'
+  const WS_PATH = 'C:/repo'
+
+  /** 项目行 fixture（ProjectSummary 消费切片：id/workspaceId/wsPath/archived） */
+  function rowsFixture(rows: Array<{ workspaceId?: string; wsPath?: string; archived?: boolean }>): unknown[] {
+    return rows.map((row, i) => ({
+      id: `p-${i}`,
+      workspaceId: row.workspaceId ?? 'ws-other',
+      name: `n-${i}`,
+      wsPath: row.wsPath ?? 'C:/elsewhere',
+      archived: row.archived ?? false,
+    }))
+  }
+
+  /** wrap 装配 harness：官方 create spy + 项目行现查 spy + sessionCreate RPC spy */
+  function fixture(options?: {
+    rows?: unknown[] | (() => unknown[] | Promise<unknown[]>) | Error
+    sessionCreate?: (tree: string) => Promise<string>
+    create?: (opts?: { sessionId?: string; workspaceId?: string; cwd?: string }) => Promise<string>
+  }) {
+    const original = options?.create ?? vi.fn(() => Promise.resolve('X-official'))
+    const sessions = { create: original } as { create: unknown }
+    const projectRows = vi.fn(() => {
+      if (options?.rows instanceof Error) return Promise.reject(options.rows)
+      const value = typeof options?.rows === 'function' ? options.rows() : (options?.rows ?? [])
+      return Promise.resolve(value)
+    })
+    const sessionCreate = options?.sessionCreate ?? vi.fn(() => Promise.resolve('Y-precast'))
+    const deps: SessionCreateWrapDeps = {
+      sessionCreate: sessionCreate as (tree: string) => Promise<string>,
+      projectRows: projectRows as unknown as SessionCreateWrapDeps['projectRows'],
+      warn: vi.fn(),
+    }
+    const dispose = installSessionCreateWrap(
+      sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
+      deps,
+    )
+    return {
+      sessions: sessions as { create: (opts?: Record<string, string>) => Promise<string> },
+      original: original as ReturnType<typeof vi.fn>,
+      projectRows,
+      sessionCreate,
+      deps,
+      dispose,
+    }
+  }
+
+  it('① adopt 径直通：带 sessionId = 官方复用采纳，零判定零改道（original 透传、零 RPC）', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    const out = await f.sessions.create({ sessionId: 's-adopt', workspaceId: WS })
+    expect(out).toBe('X-official')
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.projectRows).not.toHaveBeenCalled()
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门命中（workspaceId → 注册项目 ws_path）：改道预铸返回 Y，官方 create 零调用', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('Y-precast')
+    expect(f.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    expect(f.original).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门命中（cwd 命中注册行 ws_path）：改道预铸（跨源反斜杠/大小写归一命中）', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: 'C:\\Repo\\' }]) })
+    const out = await f.sessions.create({ cwd: 'c:/repo' })
+    expect(out).toBe('Y-precast')
+    expect(f.sessionCreate).toHaveBeenCalledWith('c:/repo')
+    expect(f.original).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门不命中矩阵：未注册 workspaceId / 归档行 / cwd 未注册 / 双缺（零参）→ 官方原流零介入', async () => {
+    const rows = rowsFixture([
+      { workspaceId: WS, wsPath: WS_PATH },
+      { workspaceId: 'ws-arch', wsPath: 'C:/arch', archived: true },
+    ])
+    for (const opts of [
+      { workspaceId: 'ws-unknown' },
+      { workspaceId: 'ws-arch' },
+      { cwd: 'C:/not-registered' },
+      {},
+      undefined,
+    ]) {
+      const f = fixture({ rows })
+      const out = await f.sessions.create(opts as Record<string, string> | undefined)
+      expect(out).toBe('X-official')
+      expect(f.sessionCreate).not.toHaveBeenCalled()
+      expect(f.original).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('② 判定逐次独立（零缓存）：两次创建各现查项目行恰一次（首次未注册原流、次次注册改道）', async () => {
+    let call = 0
+    const f = fixture({
+      rows: () => {
+        call += 1
+        return call === 1 ? [] : rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }])
+      },
+    })
+    await f.sessions.create({ workspaceId: WS })
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+    await f.sessions.create({ workspaceId: WS })
+    expect(f.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(f.projectRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('④ fail-open（RPC 拒/产物缺 sessionId/项目行现查异常）：全部回退官方原流 + warn 一行', async () => {
+    for (const overrides of [
+      { sessionCreate: () => Promise.reject(new Error('host 判非 git')) },
+      { sessionCreate: () => Promise.resolve(undefined as unknown as string) },
+    ] as const) {
+      const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]), ...overrides })
+      const out = await f.sessions.create({ workspaceId: WS })
+      expect(out).toBe('X-official')
+      expect(f.original).toHaveBeenCalledTimes(1)
+      expect(f.deps.warn).toHaveBeenCalled()
+    }
+    // 项目行现查异常（列表 RPC 失败）→ fail-open 透传（② 出口）
+    const f = fixture({ rows: new Error('list 拉取失败') })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('X-official')
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('三铁律①②：original 永不落改道 try 域——官方自身抛错原样上抛（不吞、不双调）', async () => {
+    const boom = new Error('官方 create 自身错误')
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      create: vi.fn(() => Promise.reject(boom)),
+      sessionCreate: vi.fn(() => Promise.reject(new Error('host 判非 git'))),
+    })
+    await expect(f.sessions.create({ sessionId: 's-adopt' })).rejects.toBe(boom)
+    await expect(f.sessions.create({ workspaceId: 'ws-unknown' })).rejects.toBe(boom)
+    await expect(f.sessions.create({ workspaceId: WS })).rejects.toBe(boom) // 改道径异常回退 → original 错误上抛
+    expect(f.original).toHaveBeenCalledTimes(3) // 每次恰一调（无 catch 吞后重调）
+  })
+
+  it('dispose 恢复原方法（host interceptRequiredBinding 同配方）且幂等；缺席 create 面 = no-op 安装', async () => {
+    const f = fixture()
+    f.dispose()
+    f.dispose()
+    expect(f.sessions.create).toBe(f.original)
+    // 缺席 create 面（上游面漂移）= 零安装零抛
+    const bare = {} as Parameters<typeof installSessionCreateWrap>[0]
+    expect(() => installSessionCreateWrap(bare, f.deps)).not.toThrow()
+  })
+
+  it('SESSION_CREATE_CHANNEL 通道字面量同源（contracts WORKTREE_CHANNELS.sessionCreate 镜像）', () => {
+    expect(SESSION_CREATE_CHANNEL).toBe('forge:worktree/session-create')
+  })
+
+  it('treeOf 纯函数矩阵（行正规化：非对象/缺键剔除；archived 排除）', async () => {
+    const rows = [
+      null,
+      42,
+      { workspaceId: WS }, // 缺 wsPath
+      { wsPath: WS_PATH }, // 缺 workspaceId
+      { workspaceId: WS, wsPath: WS_PATH, archived: true },
+      { workspaceId: WS, wsPath: WS_PATH },
+    ]
+    expect(await treeOf({ workspaceId: WS }, rows)).toBe(WS_PATH)
+    expect(await treeOf({ workspaceId: WS }, [])).toBeNull()
+    expect(await treeOf(undefined, rows)).toBeNull()
+    expect(await treeOf({ sessionId: 's' }, rows)).toBeNull()
   })
 })

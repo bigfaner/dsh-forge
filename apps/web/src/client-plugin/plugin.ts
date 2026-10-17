@@ -64,6 +64,8 @@ import {
 import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from './bug-source.js'
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
+import { SESSION_CREATE_CHANNEL, installSessionCreateWrap } from './create-wrap.js'
+export { SESSION_CREATE_CHANNEL, installSessionCreateWrap, treeOf } from './create-wrap.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
 export const FORGE_CLIENT_PLUGIN_ID = '@dsh-forge/web-client'
@@ -2311,6 +2313,34 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const layout = clientCtx.get('layout') as ForgeLayoutService
         const locale = clientCtx.get('locale') as ForgeLocaleService
 
+        // W3 体验层主径（session-binding-guarantee）：sessions.create wrap——创建时点预铸
+        // 采纳改道（资格门 = 全新创建 ∧ workspaceId/cwd 命中注册项目行，逐次现查零缓存；
+        // 改道 = forge:worktree/session-create，git 实质判定在 host 逐次现跑；改道链任何
+        // 异常 fail-open 透传官方原流，original 永不落改道 try 域）。transport 缺席
+        // （非 Electron 载体）= 零安装；撤销随桥/词典 revoke 链与 overlay 洞 dispose 两径。
+        const forgeInvoke = forgeInvokeTransport()
+        const disposeSessionCreateWrap =
+          forgeInvoke === undefined
+            ? undefined
+            : installSessionCreateWrap(
+                sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
+                {
+                  sessionCreate: (tree) =>
+                    unwrapRpcEnvelope<{ sessionId?: unknown }>(
+                      forgeInvoke(SESSION_CREATE_CHANNEL, { worktreePath: tree }),
+                    ).then((product) => {
+                      if (typeof product?.sessionId !== 'string' || product.sessionId === '') {
+                        throw new Error('dsh-forge web-client: sessionCreate 产物缺 sessionId（形状漂移）')
+                      }
+                      return product.sessionId
+                    }),
+                  projectRows: async () => {
+                    const data = await unwrapRpcEnvelope<unknown>(forgeInvoke(PROJECTS_LIST_CHANNEL))
+                    return Array.isArray(data) ? data : []
+                  },
+                },
+              )
+
         // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
         // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
         const disposeLocale = locale.register(FORGE_LOCALE_NS, {
@@ -2406,6 +2436,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           revokeBase()
           disposeDockTabs()
           mermaidEnhancer.stop()
+          disposeSessionCreateWrap?.()
         }
 
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
@@ -2494,6 +2525,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             disposeLocale()
             disposeDockTabs()
             mermaidEnhancer.stop()
+            disposeSessionCreateWrap?.()
           }
         })
       } catch (error) {
