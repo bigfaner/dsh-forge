@@ -203,9 +203,34 @@ flowchart LR
 
 - 历史无绑定会话不回填（仅新建会话进必绑）；
 - 预铸会话 `agentPreset` 缺席（历史数据）不回填——header 不可变；
-- 树工作区 title 继承项目名（`resolveByPath`(项目根)）只对新建工作区生效，已存在不回写；
+- 树工作区 title 继承项目名（`resolveByPath`(项目根)）+ 存量回写（`Workspace.setTitle`，attach 时点触发）；
 - 非 git 项目 / worktree 注入面缺席：官方原流 + 显式提示（fail-open 限此两类场景）；
 - 多树并行质量门受宿主 commit 内存水位约束（与 dispatch-loop-hardening 改进 4 配套）；
 - 预铸薄头依赖官方 resume 宽容度，格式演进需跟随（探针基线在 `../probes/worktree-preseed-adopt/`）；
 - **fork/子代理派生会话的绑定继承未验证**（核验 G6）：官方 fork 若整日志复制则携带挂靠事件，若仅 meta 继承则树内 cwd 无绑定新会话（chip/删除门/seal 反查失明）——待探针定性后决定补 fork 面挂靠回写或显式声明边界；
 - **每树一工作区引入的新撞车面**（核验 G2）：官方 `reuseOrCreateBlank` 在树工作区可产 cwd=树路径的无绑定 blank——由 host 必绑拦截判据「无绑定」分量收口。
+
+## 13. 遗留事项与决策点
+
+**决策点（需裁决后实施）**
+
+| # | 事项 | 现状 | 选项 |
+|---|---|---|---|
+| D1 | 发送拦截判读链异常的放行口径 | 判读链异常（非 cwd 漂移）fail-open 放行——超出拦截约束第 4 条白名单（仅能力缺席可 fail-open） | a) 维持可用性优先；b) 全量 fail-closed（瞬态误伤发送）；c) 折中：封存判定（树删除面）异常 fail-closed，必绑重路由判读异常维持 fail-open |
+| D2 | 路径归一键收敛口径 | 同一归一公式 7 处镜像（host/seal-guard/web×4/client model）；现成单源 `@dsh-forge/path-key#normalizeFsPath` 的 `process.platform` 探测在浏览器捆包失效（win32 大小写折叠丢失） | a) 跨端显式双探针（navigator + process）统一口径；b) worktree 域承认仅 Windows 场景、无条件折叠。口径定后 7 处收敛为机械活 |
+
+**结构重构（建议立卡派发）**
+
+- `WorktreeFaces.tsx`（约 700 行）拆分：`useWorktreeArm` hook / chip+overlay 独立文件 / slug 拉取 hook；
+- arm 闸收敛：`cancelSuppressed` 与 `riskConfirmedLatch` 语义重叠（均 per-path「用户已表态」）→ 单张 `Map<path, 'confirmed' \| 'cancelled'>` 决策表，闸 7→4；
+- armDefault 递归重试对不可重试失败盲试 + 二次 Toast（orchestrate 返回 null 语义过载）——失败分类后按边沿触发。
+
+**cleanup 第二梯队（可打包一卡）**
+
+- `WorktreeEntryDto.present` 恒 true 的死分支（host 恒 true，UI 保留失配置灰语义）——删字段或恢复真实检测；
+- `noGitCache`/`projectCache` 会话期负缓存不清理——进程内 git init 后恒判非 git；
+- `resolveBranch` 解析失败返回空串写入挂靠事件——应显式报错；
+- app 侧死函数（`activeSessionCwdOf`/`activeSessionIdOf`/`blankSessionIdByCwdOf` 镜像副本）与账本读面双份镜像；
+- 会话头 chip 二次 seal RPC（`WorktreeSealPhase` 缺 projectRoot/path 所致）可合并；
+- `SlugCandidate` 管线语义与 `'dsh'` 来源标记留在通用层（两层架构灰区）——宜上移挂载面；
+- `getWorktreeDir` 默认实现双份（worktree-rpc 内联 vs `defaultGetWorktreeDir`）。
