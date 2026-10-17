@@ -117,7 +117,31 @@ declare module '@deepseek-ai/dsh-llm' {
 - md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态不可复用；**官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（R8 实证）——照搬之**，mermaid 增强器复用 `@dsh-forge/md-mermaid`。
 - `/`、`@` 触发面：数据全走官方远程面（CommandRuntime=TypertRemoteService；dsh-api-workspace-files remote-client；session.list）——tech-research R7。
 
-官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）：`session/list·create·history·prompt·cancel`、`interaction/pending·answer·cancel`、`commands/list·execute`；事件流 = `WS /api/remote.mux` 逻辑流（`$events` generation 源，事件帧形状见 tech-research R11）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 官方包 `@deepseek-ai/dsh-api-session-controller` `Remote()` 装饰 + 批次①回放录制。
+官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 各官方包 `typert.host.js` invocations 表（逐文件核销 2026-10-17，见 6.2）+ 批次①回放录制补参数级细节。
+
+### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
+
+**session 服务**（`dsh-api-session-controller`，移动端相关 12 单呼）：
+
+| 端点 | 参数（wire 实证） | 消费点 |
+|---|---|---|
+| `session/list` | 仅 `_request`（零业务参数） | drawer 全量源 → host 归组薄方法内部 |
+| `session/create` | `{workspaceId?\|cwd?, sessionId?, agentPreset?}` 互斥 | hero 新会话 |
+| `session/prompt` | `{sessionId,…}`（字段录制钉） | composer 发送 |
+| `session/cancel` | `{sessionId}` → `{accepted:true}` | 中断钮 |
+| `session/page` | 历史窗口翻页 | chat 历史上翻（**替代原假设的 session.history**） |
+| `session/projections` | 投影读 → `UserQuestionProjectionView{active,settled}` | **ask 面的 pending 来源**（无独立 pending 端点） |
+| `session/rename` / `session/fork` / `session/search` | `{sessionId,…}` / `{query}` | drawer 菜单（批次③） |
+| `session/selectModel` / `session/modelCatalog` | 模型选档/目录 | settings / models 两屏 |
+| `session/attachment` | `{sessionId, attachmentId}` → base64+尺寸 | 文档卡（批次③） |
+| `session/updateQueue` | 消息排队管理 | composer 排队态（批次③） |
+| `session/openWorkspacePath` 族 | 桌面打开路径族 | **移动端排除** |
+
+**stream 端点**（mux 逻辑流）：`session/follow`（单会话事件流——**替代原 SSE snapshot/event 假设**，chat 实时流）、`session/control`（`SessionControlFrame` 基线+投影增量，chat 初始基线）、`userQuestions/attachWait`（ask 题目到达等待腿）、`$events`（generation 源 + 全局事件）。
+
+**其他服务**：`userQuestions/answer`（ask 提交——**本组合无 interaction 服务**，原 R1 清单的 `interaction/*` 系产品 dsh 服务器独有，证伪）；`commands/list·execute`（`{agentId,…}`，探针实证缺 agentId 即 arguments-invalid）；`skills/list`、`fileReferences/list`（`/`·`@` 触发面，批次③）。
+
+**不存在/排除**：`/api/rpc`、`/api/session/stream` SSE、`interaction/*`、独立 `workspace/list`/`models`/`agentPreset` 服务（模型走 `session/modelCatalog`，工作区归 forge 薄方法）。
 
 ### 6.1 `dsh-client-connection` client 半可复用 API 清单（源码级核对，core/connection.ts 消费面）
 
