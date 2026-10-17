@@ -179,7 +179,7 @@ apps/host/src/boot/
 └─ read-state-domain.ts        # 新：read-state DomainSpec + 薄方法 handler（官方存储缝；host 共享能力，非 mobile 专属）
 
 packages/contracts/src/
-└─ remote-channels.ts          # 改：REMOTE_CHANNELS 扩充（task-action/session-links/read-state/workers）
+└─ remote-channels.ts          # 改：REMOTE_CHANNELS 扩充（loops/session-links/read-state/workers）
 ```
 
 ### 关键逻辑 UML
@@ -297,8 +297,8 @@ sequenceDiagram
     participant P as 手机页
     participant RPC as /remote/__rpc
     participant H as host 守卫
-    P->>RPC: {channel:'forge:remote/task-action', payload:{taskId, action:'pause'}}
-    RPC->>H: allowlist 分发 → 包装指令（dispatch=run-dag-tasks / pause=stop-dag-tasks）
+    P->>API: session.prompt 指令文本（pause 例：/stop-dag-tasks——发往 ownerSessionId 会话）
+    P->>API: session.prompt 指令文本（/run-dag-tasks、/stop-dag-tasks——与发消息同流）
     alt 校验通过
         H-->>RPC: {ok:true, data:{task}}
         RPC-->>P: 刷新任务卡
@@ -318,7 +318,8 @@ sequenceDiagram
 |---|---|---|---|
 | `forge:remote/progress`（已有） | 读 | `RemoteProgressQuery` → `{tasks, stats}` | 不变 |
 | `forge:remote/approval`（已有） | 意图 | `RemoteApprovalDecisionInput` → `RemoteApprovalForwardResult` | 不变 |
-| `forge:remote/task-action`（新） | 意图 | `{action, slug?, ownerSessionId?}` → `{result}` | **包装 `/run-dag-tasks` 与 `/stop-dag-tasks` 指令**（用户裁决 2026-10-17）——同源独占/loop-active 等守卫全部继承，薄方法零新判定 |
+| `forge:remote/loops`（新只读） | 读 | `{}` → `{loops:[{sourceSlug, ownerSessionId}]}` | `driver.activeAll()` 投影——pause 指令寻址 |
+| 指令动作（**无通道**，用户裁决 2026-10-17） | 意图 | 指令文本经官方 `session.prompt`（`/run-dag-tasks <slug>`、`/stop-dag-tasks`） | 零新 host 代码——指令=特殊格式 user message，与发消息同流 |
 | `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`（透传） | 读/意图 | 桥上已有通道透传 | child.ts 桥直通 |
 | `forge:remote/session-links`（新薄方法） | 读 | `{branch, worktree}` → `{running:[{taskId,slug,title}], blocked:bool}` | `sessionLinks`+`listTasks` 组合反查（分支切换校验） |
 | `forge:remote/read-state`（新薄方法） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
@@ -384,7 +385,7 @@ sequenceDiagram
 | 位置 | 改动 |
 |---|---|
 | `apps/mobile/`（新） | 源码 core/views/widgets、esbuild 构建脚本、tsconfig、package.json |
-| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（指令包装器：run/stop-dag-tasks；worktree 桥/read-state/workers/disconnect） |
+| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（loops 读=activeAll；worktree 桥/read-state/workers/disconnect） |
 | `apps/host/src/boot/remote-http-rpc.ts` | channelTable allowlist 扩充 + 薄方法 handler（纯函数，fake 可测） |
 | `apps/host/src/boot/read-state-domain.ts`（新） | read-state DomainSpec 注册 + 薄方法 handler + tailSeq 监听（官方存储缝） |
 | `packages/contracts/` | 新通道名与 payload 类型（`REMOTE_CHANNELS` 扩充） |
@@ -408,7 +409,7 @@ sequenceDiagram
 | US-4 模型切换 | views/settings+models（`session.rpc` 模型面 + localStorage 最近使用） |
 | US-5 抽屉未读 | views/drawer；`forge:remote/read-state` 薄方法（AD-6 seq 游标；双级未读） |
 | US-6 hero | views/hero；`forge:worktree/*` 透传 + `forge:remote/session-links` 校验薄方法 → 确认框 |
-| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + `task-action` 意图信封（时序 2） |
+| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + `forge:remote/loops` 寻址 + 指令文本经官方 `session.prompt`（时序 2） |
 | US-8 worker 会话 | views/worker；`forge:remote/workers` catalog 切片（`mode` 定只读/可续聊） |
 | US-9 循环卡/文档 | AD-4 source.kind 判别；widgets 循环卡家族；文档卡 `meta` 通道（批次③探针确认）+ views/reader |
 | US-10 宿主守卫 | AD-1 意图信封唯一动作通道；stale 置灰 = 数据驱动 |

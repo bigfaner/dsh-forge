@@ -6,17 +6,19 @@ created: 2026-10-17
 
 统一信封（既有口径不变）：`POST /remote/__rpc`，body `{channel, payload}` → `{ok:true, data}` | `{ok:false, error:{code, reason}}`。鉴权：官方 `authorizeIndex` 放行优先，`dswf_forge_remote` cookie 自持兜底（`authorizeRemoteRpc`，零改动）。通道 = allowlist 精确匹配，未列通道 fail-soft 错误信封。
 
-## 一、新增通道（4 个薄方法 + 1 个动作转发）
+## 一、新增通道（3 薄方法 + 1 只读 + 透传；task-action 已撤销）
 
-### 1.1 `forge:remote/task-action`（任务动作意图转发）
+### 1.0 指令动作 = 用户消息（无专用通道，用户裁决 2026-10-17）
+
+派发/暂停按钮**不是通道**：指令是特殊格式的 user message（`command/run` 事件实证 `source.kind:'user'`），与发送普通消息同一条流。手机端组装指令文本（`/run-dag-tasks <slug>`、`/stop-dag-tasks`）经**官方 `session.prompt`** 发到对应会话——dispatch 发当前/新建 dispatch 会话（对齐桌面 todo#32 语义），pause 发循环 ownerSessionId 会话。loop-active 拒绝以指令回执文本出现在会话内（桌面 foreignLoopNotice 同款），无专用确认框信封。stale 置灰仍数据驱动。
+
+### 1.1 `forge:remote/loops`（活循环只读——pause 指令寻址）
 
 | | |
 |---|---|
-| payload | `{action: 'pause' \| 'dispatch', slug?: string, ownerSessionId?: string}`（dispatch 附任务源 slug；pause 附循环归属会话） |
-| data | `{result: ForgeCommandResult}`（指令回执原样——run-dag-tasks/stop-dag-tasks 的结果信封） |
-| 守卫 | **包装 `/run-dag-tasks` 与 `/stop-dag-tasks` 指令**（用户裁决 2026-10-17）：`dispatch` → run-dag-tasks（同源独占/loop-active 拒绝等既有守卫全部继承）；`pause` → stop-dag-tasks（按 ownerSessionId 停循环）；零新执行逻辑——薄方法只做参数装配与指令调用 |
-| 失败码 | `invalid-state`（loop-active 同源占用等指令拒绝——手机端弹确认框）、`not-found`（slug/循环不存在）、`stale`（数据过期） |
-| 要点 | **只转发意图，零执行逻辑在手机端**；动作合法性判定完全在指令既有守卫（AD-1）——薄方法不复制任何判定 |
+| payload | `{}` |
+| data | `{loops: [{sourceSlug, ownerSessionId}]}`——`driver.activeAll()` 投影（既有数据面，零新逻辑） |
+| 要点 | 手机端 stop 指令的寻址数据源；dispatch 会话定位 = sourceSlug ↔ dispatch 会话映射（progress 数据交叉） |
 
 ### 1.2 `forge:remote/session-links`（分支切换校验薄方法）
 
@@ -66,7 +68,7 @@ created: 2026-10-17
 
 | code | 语义 | 手机端处置 |
 |---|---|---|
-| `invalid-state` | 状态机不允许该动作（如 pause 非 suspended） | 确认框/提示 + 刷新任务卡 |
+| `invalid-state` | 请求动作与当前状态冲突（薄方法侧） | 提示 + 刷新 |
 | `not-found` | 目标对象不存在 | 列表刷新（对象已消失） |
 | `stale` | 请求基于过期数据 | 静默刷新 + 按钮置灰 |
 | `unavailable` | 依赖服务缺席（fail-soft 既有码） | 面板不可用态，对话不受影响 |
@@ -123,5 +125,12 @@ declare module '@deepseek-ai/dsh-llm' {
 ```
 
 ## 五、官方 API 消费面（非本设计新增，手机端消费清单）
+
+**指令动作也走此面**：`session.prompt` 发送 `/run-dag-tasks <slug>`、`/stop-dag-tasks` 指令文本（1.0 节口径）。
+
+## 六、类型复用纪律（复用审计 2026-10-17）
+
+- `core/wire.ts` 判别集：**type-only import** `@deepseek-ai/dsh-session`（SessionEvent 判别）与 `dsh-api-session-controller`（SessionEventWindow/change）类型——契约类型单源，不手写重声明（零运行时依赖不受影响）。
+- md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态（已核实不可复用于 vanilla 页）；自写轻量 md 维持（官方手机页同构），mermaid 增强器复用 `@dsh-forge/md-mermaid`。
 
 `POST /api/rpc`：`session.list/models/selectModel/create/history/prompt/cancel`、`interaction.pending/answer/cancel`、`workspace.list`、`agentPreset.list/select`；SSE `GET /api/session/stream?sessionId=…`（命名事件 `snapshot`/`event`，帧形状见 tech-research R1）；`GET /api/status`（心跳 + tunnelExpiresAt）。端点形状正本 = 官方手机页源码（probes/official-mobile-page.js.txt），批次①回放录制钉死。
