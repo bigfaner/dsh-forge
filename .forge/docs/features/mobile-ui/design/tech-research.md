@@ -174,7 +174,7 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 
 | # | 项 | 结论 |
 |---|---|---|
-| 1 | 裁决 | **mobile 不使用 `/api` 官方 RPC 面**（含 LAN）：不在组合启用官方 api 控制器（组合行撤销）、mobile 不 boot 官方 client 运行时。配对后手机可触达面 = forge allowlist 窄清单——**攻击面收窄即安全收益** |
+| 1 | 裁决 | **mobile 不消费 `/api` 官方 RPC 面**（含 LAN）：不 boot 官方 client 运行时、不引入 typert client。**事实修正（可行性检查 73726851）**：api 控制器经 `dsh-web-app` 组合行本就激活（桌面 /api 面依赖，dsh-web-app/cordis.patch.yml:121/147/230）——「组合行撤销=攻击面收窄」不成立已撤回，**组合不动**；R12 安全语义 = mobile 自有单一通道（`__rpc` + PSK）+ 传输面简化（官方 client boot 的全部复杂度退役） |
 | 2 | 数据通道（唯一） | `POST /remote/__rpc` 单通道 + PSK v3 安全层（tunnel-psk.md）：`forge:proxy/*`（官方能力 in-process 代理——同 ctx 直调 sessionController/typert 服务类方法，参数校验 = contracts DTO zod，`_request` 问题不存在）+ `forge:remote/*`（forge 原生） |
 | 3 | 流式（唯一） | 加密 SSE `GET /remote/forge-stream`（forge 侧订阅 host 事件镜像：api-session/*、approval、任务进度逐帧 AEAD 推送）——LAN/隧道同通道，隧道恢复推送能力 |
 | 4 | 用户的疑问收敛 | ①`_request` 问题随「不经 typert 网关」消失；②`session/follow` 流由 forge-stream 镜像等价承载；③官方 client-connection 的 client 半**不再引入 mobile**（handle/退避等能力由自研 stream.ts 轮询+SSE 重连承担——v1 设计残留复用）；④`dsh-client-connection` 在 mobile 的角色退为「协议形状参照 + 静态签名验证对端」 |

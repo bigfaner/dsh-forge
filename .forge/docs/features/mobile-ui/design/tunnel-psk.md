@@ -20,11 +20,11 @@ C1/C2/H1/H4 修复完成前**不进入实现**；H2/H3 随实现一并落 AC；M
 
 | | LAN 模式 | 隧道模式 |
 |---|---|---|
-| 探测 | `connection.rpc.call('/api','session/list')` → 200 | → 403/连接失败 |
-| 业务单呼 | 官方 client 直连 `/api/*` | `__rpc` `forge:proxy/*` / `forge:remote/*` 通道，**PSK 拦截器加解密（强制，见 §5）** |
-| 事件推送 | `$events`（mux）+ `session/follow` | 无——轮询降级（15s 档） |
-| assistant 流式 | `session/follow` 帧 | `session/page` 轮询 assistant-stream baseline 兜底 |
-| 认证 | BrowserAuth cookie | **PSK 强制（数据 POST 面）** + dswf/authorizeIndex 仅 GET 页面 |
+| 探测 | `location.hostname` IP 字面量 / `GET /remote/forge-stream` 可达（200/401 语义） | 域名形态 / forge-stream 按 PSK 门响应 |
+| 业务单呼 | `__rpc` `forge:proxy/*` / `forge:remote/*`（LAN 明文旧门或 PSK 叠加均可） | 同通道，**PSK 拦截器强制（见 §5）** |
+| 事件推送 | forge-stream（host 事件镜像 SSE） | 同通道（PSK 逐帧加密——隧道恢复推送） |
+| assistant 流式 | forge-stream sessionQuery 镜像帧 + `forge:proxy/session-page` 轮询兜底 | 同左 |
+| 认证 | 旧门（authorizeIndex/dswf——本机网络边界） | **PSK 强制（隧道域数据 POST 面）** + dswf/authorizeIndex 仅 GET 页面 |
 
 ## 3. 密钥生命周期
 
@@ -143,7 +143,7 @@ flowchart TB
     end
 ```
 
-- **模式强制位（v2/C1+H4）**：host 存在 PSK 配置 ⇒ `__rpc` **一切数据 POST 必须有效 PSK 信封**——无信封/验签失败一律 401，dswf/authorizeIndex 放行也拒（**无明文降级路径**）；mobile 隧道无 PSK = 只读闸门提示面。PSK 未配置（纯 LAN 用户）⇒ 旧门语义过渡。
+- **模式强制位（v2/C1+H4；生效域 2026-10-17 A3 裁决）**：host 存在 PSK 配置 ⇒ **隧道域请求**（Host 非 loopback/非 IP 字面量）的 `__rpc` 数据 POST 必须有效 PSK 信封——无信封/验签失败一律 401，dswf/authorizeIndex 放行也拒（**隧道无明文降级路径**）；LAN/回环请求维持旧门（桌面 fetch 兜底面不受影响；桌面 Electron 主路径走 preload IPC 本不经 HTTP）。mobile 隧道无 PSK = 只读闸门提示面。
 - **dswf cookie 降级（v2/C1）**：`dswf_forge_remote` 仅用于 **GET 页面**用途；POST 数据面不再凭它放行。
 - **错误归一（v2/H2）**：隧道+PSK 模式下**全部失败路径（门/版本/tag/seq/未知通道）唯一 owner = __rpc 入口拦截器**，统一 401 + 恒定响应体 + 响应填充至固定时长（抗时序侧信道）；解密前的 channel 字面量**不进 diag 日志**（定长标记替代，防日志注入）。
 - **官方面（LAN）**：官方协议原样（本机网络边界 + 围栏 + cookie 为安全边界），不纳入 PSK。
@@ -221,7 +221,7 @@ sequenceDiagram
 | 5 | 官方面 `/api`（LAN）不纳入 PSK |
 | 6 | 密钥 UI = 远程控制 dialog（连接密码下方）；再生成 = 撤销 + ≤5min 宽限期 |
 | 7 | 隧道模式 UX = 全功能轮询降级；无 PSK = 只读闸门 |
-| 8 | 模式强制位 = PSK 配置在场 ⇒ 数据 POST 必验签（v2/C1+H4） |
+| 8 | 模式强制位 = PSK 配置在场 ⇒ **隧道域**数据 POST 必验签（生效域 A3 裁决：LAN/回环维持旧门） |
 | 9 | host 密钥文件 DPAPI/safeStorage 加密；mobile non-extractable CryptoKey（v2/M2/M3） |
 | 10 | PIN 入 KDF（双因子派生）；PIN 变更 = 密钥重派生即旧密文作废（v3） |
 | 11 | 签名层独立于 AEAD：s2c host Ed25519、c2s 设备 Ed25519（注册后），失效域分离（v3/§4.2） |

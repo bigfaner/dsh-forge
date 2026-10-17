@@ -121,7 +121,7 @@ declare module '@deepseek-ai/dsh-llm' {
 
 ### 6.0 forge 面：`forge:proxy/*` 代理通道（mobile 唯一数据通道，LAN/隧道同构）
 
-> 通道裁决（2026-10-17 R12 终版）：**mobile 不使用 `/api` 官方 RPC 面**——forge 数据面 = `POST /remote/__rpc` 单通道 + PSK v3 安全层。`forge:proxy/*` 通道族 in-process 直调 sessionController/typert 服务（不经网关，参数校验 = contracts DTO zod）；事件流 = 加密 SSE `GET /remote/forge-stream`（host 事件镜像逐帧 AEAD 推送）。`/remote/__rpc` 桥与桌面 remote-transport 兼容不动；组合不启用官方 api 控制器（攻击面收窄）。
+> 通道裁决（2026-10-17 R12 终版 + 可行性检查修正）：**mobile 不消费 `/api` 官方 RPC 面**——数据面 = `POST /remote/__rpc` 单通道（`forge:proxy/*` 官方能力 in-process 代理 + `forge:remote/*` forge 原生）+ 加密 SSE `GET /remote/forge-stream`（host 事件镜像逐帧推送；assistant 流式 = sessionQuery 镜像）。api 控制器经 dsh-web-app 组合行本就激活（桌面依赖），组合不动——R12 语义 = mobile 侧通道简化，非组合裁撤。官方端点（§6.2 清单）降为**形状参照**（消费经 forge:proxy in-process 直调类方法）。
 
 ```jsonc
 {
