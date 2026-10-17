@@ -1,6 +1,6 @@
-# 隧道模式 RPC+PSK 安全方案 v2（forge mobile）
+# 隧道模式 RPC+PSK 安全方案 v3（forge mobile）
 
-状态：v2（2026-10-17，红队对抗评审收敛版）。v1 的「统一 401 无 oracle」「双端高水位」「旧密钥即时失效」三条在评审中被证伪/证不完整，v2 已按 C1/C2/H1-H4 修复口径重写。传输面正本 = tech-research R11；端点清单 = api-handbook §6.0/6.2。
+状态：v3（2026-10-17）。v2 = 红队评审收敛（C1/C2/H1-H4 修复口径）；v3 新增 = PIN 入 KDF、全通道加解密规范（§4.1）、签名层、性能预算（§6.3）、文件传输策略（§6.4）。传输面正本 = tech-research R11；端点清单 = api-handbook §6.0/6.2。
 
 ## 0. 可交付判定门槛（红队评审结论）
 
@@ -41,10 +41,11 @@ flowchart LR
     G -.-> I[宽限期窗口 ≤5min：new+old 并行验证<br/>旧方向只验证不加密]
 ```
 
+- **密钥派生（v3/PIN 因子）**：实际通信密钥 = `HKDF-SHA256(ikm=PSK‖PIN, salt=pairingId, info="forge-psk-v3")`——**双因子**（持有 PSK + 知道当前 PIN）；PIN 轮换（官方 PIN TTL/再生成）= 通信密钥重派生，旧密文自动作废；PIN 校验失败次数限速沿用官方 /pair/verify 限速语义。分发仍 = 带外（PSK 手输 + PIN 用户自知识）。
 - **生成**：host 侧 CSPRNG（`randomBytes(32)`），展示 = base32 分组 + 校验段；**展示默认掩码、点击显隐**（防肩窥/截图）；提示勿走剪贴板云同步。
 - **分发**：带外手工（抄写/扫码），零网络暴露。
 - **存储**：host = userData 文件经 **DPAPI/electron safeStorage 加密**（明文落盘禁止）；mobile = **non-extractable CryptoKey**（WebCrypto `extractable:false`，明文串输入后立即从 DOM/内存清除）。
-- **轮换/撤销**：host 再生成 = 旧密钥失效；**宽限期 ≤5min 双密钥并行验证**（v2/H3——手工分发两端切换必然不同步），宽限期内 mobile 收 401 呈「请在桌面端确认新密钥」引导而非裸断连。
+- **轮换/撤销**：host 再生成 = 旧密钥失效；**宽限期 ≤5min 双密钥并行验证**（v2/H3——手工分发两端切换必然不同步），宽限期内 mobile 收 401 呈「请在桌面端确认新密钥」引导而非裸断连。PIN 变更 = 即时重派生（无宽限——PIN 由用户自知，无分发延迟）。
 - **UI 位置**：桌面**远程控制 dialog**，连接密码字段下方。
 
 ## 4. PSK 信封格式 v2（多设备 + 持久化语义）
@@ -52,22 +53,65 @@ flowchart LR
 ```jsonc
 // 请求/响应体（forge:proxy/* 与 forge:remote/* 通道体）
 {
-  "v": 1,                              // 算法版本（仅升不降，无多版本并存回退）
-  "sid": "<base64 设备会话标识>",       // v2 新增：per-sender 随机 128-bit（首联注册）
-  "epoch": 3,                          // v2 新增：sender epoch（页面刷新/重连自增）
+  "v": 3,                              // 算法版本（仅升不降，无多版本并存回退）
+  "sid": "<base64 设备会话标识>",       // per-sender 随机 128-bit（首联注册）
+  "epoch": 3,                          // sender epoch（页面刷新/重连自增）
   "iv": "<base64 96-bit 随机>",
   "seq": 42,                           // (sid,epoch) 内单调
-  "ct": "<base64 AES-256-GCM 密文>"
+  "ct": "<base64 AES-256-GCM 密文>",
+  "sig": "<base64 Ed25519 签名>"       // v3：覆盖 ct‖iv‖seq（见 §4.2）
 }
-// 密钥 = HKDF(PSK, sid) 派生的 per-device 子密钥（v2/C2——多设备互不干扰）
-// AAD  = ASCII("forge-psk-v2") || direction || sid || epoch || seq
+// 密钥 = HKDF-SHA256(ikm=PSK‖PIN, salt=pairingId, info="forge-psk-v3")（v3：PIN 入 KDF）
+// 每设备子密钥 = HKDF(通信密钥, sid)
+// AAD  = ASCII("forge-psk-v3") || direction || sid || epoch || seq
 // 明文 = 原通道 JSON 体（channel 在信封内层；外层零明文语义字段——AC 固定）
 ```
+
+### 4.1 逐渠道加解密规范（v3——哪些字段加密、哪些保持明文）
+
+| 渠道 | 外层明文（路由必需） | 加密域（AEAD 密文内） | 密钥 | 签名 |
+|---|---|---|---|---|
+| `POST /remote/__rpc`（forge:proxy/* + forge:remote/*，隧道） | 路径 `/remote/__rpc`、信封 `v/sid/epoch/iv/seq` | **整个通道体**：`{channel,payload}`（channel 名也保密） | HKDF(PSK‖PIN, sid) | c2s=设备 Ed25519 / s2c=host Ed25519 |
+| `GET /remote/forge-stream`（v3 新增加密 SSE 推送） | 路径、信封头 `v/sid/epoch/iv/seq` | **每帧事件体**（api-session/*、approval、forge/progress 推送镜像） | 同上（s2c 方向） | host Ed25519 逐帧 |
+| 官方 `/api/*` 单呼 + `WS /api/remote.mux`（LAN） | 官方信封原样 | **不加密**——本机网络边界 + IP 围栏 + cookie 即安全边界（裁决 5） | — | — |
+| `/remote/`、`/pair*`（页面/配对） | HTML/token/PIN | 不加密（**残余风险显式接受**——PIN 窗口极小） | — | — |
+| 文件下载（隧道，v3/§6.4） | 路径、块信封头 | **分块 AEAD**（每块独立 seq，断点安全） | 同上 | host Ed25519 逐块（清单模式：块 hash 清单首块签名） |
+| 文件/消息体（LAN） | 官方原样 | 不加密 | — | — |
+
+### 4.2 签名层（v3——独立于 AEAD 的完整性/身份层）
+
+- **s2c（host→mobile）**：host 持 Ed25519 密钥对（随隧道启用生成），**公钥随 PSK 材料带外分发**；每信封 `sig = Ed25519.sign(sk, ct‖iv‖seq‖AAD)`。作用：①防「PSK 泄露后伪造 host 下发审批诱导帧」（AEAD 对称密钥失窃即双向失守——签名把完整性锚在非对称钥上）；②mobile 可验证「对端确为配对 host」。
+- **c2s（mobile→host）**：mobile 设备密钥对（输入 PSK 时生成），公钥经**首个 AEAD 注册调用**提交 host 绑定到 sid；此后请求签名。注册前请求仅 AEAD（PSK 持有即信任）。
+- 语义：AEAD 保证「PSK 未泄露时的防篡改」；签名保证「PSK 泄露后 host→mobile 方向仍防伪造、并具备不可否认性」。两层独立失效域。
+
+### 4.2.1 会话/水位/信封纪律（v2 沿用）
 
 - **设备会话（v2/C2）**：每设备/每标签页持随机 `sid`，首联向 host 注册（PSK 验签通过即注册），host 按 `(sid, epoch)` 维护**独立高水位**——多设备/多标签页互不误杀。
 - **高水位持久化（v2/H1）**：host 水位持久化到 userData（防 host 重启重放窗）；mobile `sid`/`epoch` 持久化到 localStorage（防刷新归零）；**epoch 陈旧（TTL 超限）的水位记录自动清理**——设备长期静默后重连 = 新 epoch 从零起算，天然重同步，无需「再生成」。
 - **单密钥消息数上限**（红队 L 项）：同 PSK 下 AEAD 消息计数阈值触发「建议再生成」提示（GCM 随机 IV birthday 界保健）。
-- **信封纪律（AC 固定）**：外层除 v/sid/epoch/iv/seq/ct 外**零明文语义字段**；v 仅升不降。
+- **信封纪律（AC 固定）**：外层除 v/sid/epoch/iv/seq/ct/sig 外**零明文语义字段**；v 仅升不降。
+- **加密 SSE 推送通道（v3）**：`GET /remote/forge-stream`（PSK 信封头认证）——forge 侧订阅 host 事件（含 `api-session/*`、`approval/request`、forge 任务进度）经 typert/服务 in-process 直调后**逐帧 AEAD 加密**推送。作用：隧道模式从 v2 的轮询降级**恢复推送能力**（会话变更/审批到达/任务进度实时到达，帧体加密）。
+
+## 4.3 性能预算（v3——数据量评估）
+
+| 负载 | 规模 | AES-256-GCM 开销（AES-NI） | 结论 |
+|---|---|---|---|
+| 会话列表（grouped，数百会话） | ~100KB | <1ms（任一端） | 可忽略 |
+| **chat 历史整包**（数百条消息，单信封整包加密） | ~1MB/页 | host 1-3ms / mobile WebCrypto 5-15ms | **列表类一律整包单信封**（不做逐条信封——500 条 × 逐条 AEAD = 500 次调用 + 500×~50B 头开销，无安全增益） |
+| 流式帧（assistant delta，逐帧） | ~100B-2KB/帧，秒级数帧 | 每帧 <0.1ms | 可忽略 |
+| 加密 SSE 推送（隧道） | 事件粒度，低频 | 可忽略 | — |
+| 文件分块（§6.4） | 64KB/块 | 每块 <1ms | 大文件线性 |
+
+WebCrypto async 开销：批量解密用单 `decrypt` 调用（整包）而非逐条 Promise——mobile 主线程不阻塞（必要时 worker）。**结论：数百条消息量级无性能风险；纪律 = 整包优先、逐帧仅在流式语义必须处。**
+
+## 4.4 文件传输策略（v3）
+
+| 场景 | 通道 | 策略 |
+|---|---|---|
+| agent 生成 md/文本文档 | **随会话消息体**（message content 内联） | 已在信封加密域内，零额外处理 |
+| 独立文件下载（附件图片/导出物，隧道模式） | `forge:proxy/file` 通道（**分块 AEAD 流**：64KB/块，块 seq 进 AAD，末块带全文件 SHA-256 清单签名） | 加密 + 防拼接重排 |
+| 大文件（>10MB） | 同上分块流 | WebCrypto 分块增量解密，内存可控 |
+| LAN 模式文件 | 官方原样 | 不加密 |
 
 ## 5. 门与拦截器（v2/C1 + H2 + H4）
 
@@ -151,6 +195,8 @@ sequenceDiagram
 | 凭据明文穿隧道 | **残余风险，显式接受**（PIN 窗口极小；数据面已 PSK 覆盖）——§1 |
 | 元数据画像 | 接受 + 审批通道定长填充（缓解） |
 | 轮换竞态 | 宽限期双密钥并行验证 ≤5min（v2/H3） |
+| PSK 泄露后的伪造 | Ed25519 签名层（完整性锚非对称钥，v3/§4.2） |
+| PIN 猜测辅助解密 | PIN 入 KDF——无 PSK 时 PIN 无用，有 PSK 无 PIN 亦无用（双因子，v3） |
 | XSS 窃钥 | non-extractable CryptoKey（明文串不落 storage） |
 | 日志注入 | 解密前 channel 字面量不进 diag |
 | URL 泄漏 | 无 cookie/dswf/PSK → 统一 401 |
@@ -168,3 +214,7 @@ sequenceDiagram
 | 7 | 隧道模式 UX = 全功能轮询降级；无 PSK = 只读闸门 |
 | 8 | 模式强制位 = PSK 配置在场 ⇒ 数据 POST 必验签（v2/C1+H4） |
 | 9 | host 密钥文件 DPAPI/safeStorage 加密；mobile non-extractable CryptoKey（v2/M2/M3） |
+| 10 | PIN 入 KDF（双因子派生）；PIN 变更 = 密钥重派生即旧密文作废（v3） |
+| 11 | 签名层独立于 AEAD：s2c host Ed25519、c2s 设备 Ed25519（注册后），失效域分离（v3/§4.2） |
+| 12 | 隧道推送 = 加密 SSE `forge-stream`（forge 侧订阅 host 事件镜像），隧道模式恢复推送（v3） |
+| 13 | 性能纪律 = 列表整包单信封、逐帧仅限流式语义、文件分块 AEAD（v3/§4.3-4.4） |
