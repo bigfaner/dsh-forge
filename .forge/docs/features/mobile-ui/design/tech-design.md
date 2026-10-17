@@ -297,7 +297,7 @@ sequenceDiagram
     participant P as 手机页
     participant RPC as /remote/__rpc
     participant H as host 守卫
-    P->>API: session.prompt 指令文本（/run-dag-tasks、/stop-dag-tasks——寻址与执行全在 host 侧）
+    P->>API: 官方指令执行远程面（/ 前缀仲裁后——CommandRuntime 同径）
     P->>API: session.prompt 指令文本（/run-dag-tasks、/stop-dag-tasks——与发消息同流）
     alt 校验通过
         H-->>RPC: {ok:true, data:{task}}
@@ -319,7 +319,7 @@ sequenceDiagram
 | `forge:remote/progress`（已有） | 读 | `RemoteProgressQuery` → `{tasks, stats}` | 不变 |
 | `forge:remote/approval`（已有） | 意图 | `RemoteApprovalDecisionInput` → `RemoteApprovalForwardResult` | 不变 |
 
-| 指令动作（**无通道**，用户裁决 2026-10-17） | 意图 | 指令文本经官方 `session.prompt`（`/run-dag-tasks <slug>`、`/stop-dag-tasks`） | 零新 host 代码——指令=特殊格式 user message，与发消息同流 |
+| 指令动作（**无专用通道**，源码核实修正 2026-10-17） | 意图 | 手机端 UI-adapter 仲裁：`/` 前缀解析 → 官方指令执行远程面（CommandRuntime=TypertRemoteService）；未命中目录 → 字面消息 | slash 仲裁本就在 interactive UI adapter（官方 CommandUiRuntime 契约）——手机页履行同契约，host 零新代码；执行 RPC 形状批次①录制钉死 |
 | `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`（透传） | 读/意图 | 桥上已有通道透传 | child.ts 桥直通 |
 | ~~`forge:remote/session-links`~~（**延后可选**） | 读 | —— | hero 乐观切换 + 建会话守卫回执兜底；预检组合收益/侵入比最低（api-handbook 1.2） |
 | `forge:remote/read-state`（**唯一新增薄方法**） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
@@ -409,7 +409,7 @@ sequenceDiagram
 | US-4 模型切换 | views/settings+models（`session.rpc` 模型面 + localStorage 最近使用） |
 | US-5 抽屉未读 | views/drawer；`forge:remote/read-state` 薄方法（AD-6 seq 游标；双级未读） |
 | US-6 hero | views/hero；`forge:worktree/*` 透传；乐观切换 + 建会话守卫回执 → 确认框（session-links 延后可选） |
-| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + 指令文本经官方 `session.prompt`（寻址/执行全在 host 指令机制——时序 2） |
+| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress` + 指令经 UI-adapter 仲裁走官方指令执行面（时序 2） |
 | US-8 worker 会话 | views/worker；官方面派生（`session.list` parentSessionId 过滤 + `subagent/catalog` 事件投影；`mode` 定只读/可续聊） |
 | US-9 循环卡/文档 | AD-4 source.kind 判别；widgets 循环卡家族；文档卡 `meta` 通道（批次③探针确认）+ views/reader |
 | US-10 宿主守卫 | AD-1 意图信封唯一动作通道；stale 置灰 = 数据驱动 |
