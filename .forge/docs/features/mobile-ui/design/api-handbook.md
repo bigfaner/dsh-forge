@@ -144,6 +144,20 @@ declare module '@deepseek-ai/dsh-llm' {
 
 口径：sessions 按项目平铺不按 worktree 二层嵌套；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。**worktree 徽标暂不显示**（2026-10-17 裁决——响应仍携带 worktrees[]，前端不渲染徽标，后续启用零数据面改动）。失败 = 官方信封 `{ok:false,error:{code,message}}`（`gateway/*` 族）。
 
+### 6.2.1 `$events` generation 源与转发事件目录（`dsh-api-remotes` 源码核销 2026-10-17）
+
+`$events` = mux 上的全局逻辑事件流，由 `dsh-api-remotes` 注册为 **connection 唯一 generation 源**：① 连接生命周期锚（ready 帧前基线不抢跑；断流 → 官方三值退避重连）；② host 全局事件推送。转发清单 = `API_REMOTE_FORWARDED_EVENTS`（官方硬编码，forge 事件不在内）：
+
+| 事件 | mode | mobile 消费 |
+|---|---|---|
+| `api-session/added·removed·status·activity·error` | emit | drawer/chat 会话变更**推送驱动**（`session/list` 仅首屏 + 失效兜底） |
+| `approval/request` | waterfall | 审批到达推送（裁决回传端点归属 1.11 实现时核销） |
+| `user-questions/request` | waterfall | ask 到达推送（与 projections/attachWait 互补） |
+| `commands/change` | emit | 斜杠目录缓存失效 |
+| `settings/document-updated` / `goal/activation-changed` / `schedule/changed` / `credentials/*` / `deepseek-account/*` / `llm/adapters-updated` / `permission-presets/catalog-changed` / `plugin-manager/*` / `cordis/*` | emit | settings/goal/schedule 屏失效信号（批次③） |
+
+**复用评估矩阵（reuse-first 结论）**：连接/信封/退避/会话 CRUD/流式/ask/模型/指令/审批到达/会话推送 = **全部复用既有**（connection handle + typert 端点 + `$events`）；**唯一新增域 = forge 任务域**（`forge/progress·projects/grouped·read-state·workers·session-links·task-action·approval·disconnect`——1.11 typert 化；进度推送沿用 15s 轮询，forge 事件进 `$events` 转发表属上游改动不可行，后续可评估 typert stream 端点）。
+
 ### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
 
 **session 服务**（`dsh-api-session-controller`，移动端相关 12 单呼）：
