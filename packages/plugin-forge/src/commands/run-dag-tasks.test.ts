@@ -78,6 +78,7 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
     source: { kind: 'feature', slug },
     ownerSessionId,
     projectId: PROJECT,
+    takeoverSessions: new Set<string>(),
   })
   const driver: LoopDriver = {
     start: vi.fn(async (input: LoopStartInput) => {
@@ -109,6 +110,7 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
     }),
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
     activeAll: vi.fn(() => [...loops.values()]),
+    resume: vi.fn(() => ({ ok: false, code: 'no-active-loop' }) as const),
     dispose: vi.fn(() => {}),
   }
   return { driver, startInputs, stopInputs, loops, recordOf }
@@ -182,6 +184,7 @@ const ACTIVE: LoopRecord = {
   ownerSessionId: SESSION,
   projectId: PROJECT,
   inFlight: { taskRef: { slug: 'feat-x', localId: '2.5' }, taskKey: 'feat-x/2.5', taskId: 't-1', title: 'Implement the thing' },
+  takeoverSessions: new Set<string>(),
 }
 
 // ─────────────────────────── 无参枚举（单查询→双轨候选→问询） ───────────────────────────

@@ -19,6 +19,7 @@ export type {
   LoopDriverDeps,
   LoopEscalation,
   LoopEscalationHook,
+  LoopResumeResult,
   LoopStartInput,
   LoopStartResult,
   LoopStopResult,
@@ -37,4 +38,4 @@ export type {
   UserQuestionsEscalationDeps,
 } from './escalation.js'
 export { createLoopRegistry } from './registry.js'
-export type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef } from './registry.js'
+export type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'

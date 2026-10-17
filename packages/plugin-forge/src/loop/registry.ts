@@ -5,9 +5,19 @@
 // LoopInstanceId：启动时 crypto.randomUUID() 生成（每次启动 = 新实例）；作用 = 登记表键 +
 // guard 粘性载体 + stop/替换定位。持久痕迹 = claim 记录循环来源标记（S3 已落地，非本表职责）。
 import type { TaskRef } from '@dsh-forge/contracts'
+// 类型单向依赖（type-only——运行期零 import，不成环）：挂起载荷承载升级事件全文
+import type { LoopEscalation } from './driver.js'
 
 /** 循环实例 id（UUID——decisions #18：登记表键 + guard 粘性载体 + stop/替换定位） */
 export type LoopInstanceId = string
+
+/** 挂起载荷（3b——升级点挂起的投影事实：升级事件全文 + 挂起时刻；处置回流清除） */
+export interface SuspendedPayload {
+  /** 升级载荷全文（kind/reason/history/taskKey——P3/P9 渲染与裁决文档同源） */
+  readonly escalation: LoopEscalation
+  /** 挂起时刻（毫秒——叙述用） */
+  readonly since: number
+}
 
 /** 任务源（decisions #21 用词——feature 目录 | 提案 slug；ContainerRef 同形结构子集） */
 export interface LoopSourceRef {
@@ -37,6 +47,10 @@ export interface LoopRecord {
   readonly ownerSessionId: string
   readonly projectId: string
   inFlight?: LoopInFlight
+  /** 在场即挂起态（3b——suspendForVerdict 写入、处置回流清除；投影按此分流 P1 vs P3+P9） */
+  suspended?: SuspendedPayload
+  /** 接管会话集（3b——挂起循环的其它会话触达资格；registry.remove 随登记整体蒸发） */
+  readonly takeoverSessions: Set<string>
 }
 
 /** 登记表面（进程内唯一——装配单例持有；驱动器经 deps 注入共享） */

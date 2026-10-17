@@ -29,6 +29,7 @@ function driverStub(activeRecord?: LoopRecord) {
     }),
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
     activeAll: vi.fn(() => [...loops.values()]),
+    resume: vi.fn(() => ({ ok: false, code: 'no-active-loop' }) as const),
     dispose: vi.fn(() => {}),
   }
   return { driver, stopInputs, loops }
@@ -39,6 +40,7 @@ const OWN: LoopRecord = {
   source: { kind: 'proposal', slug: 'blitz-y' },
   ownerSessionId: SESSION,
   projectId: 'p-9',
+  takeoverSessions: new Set<string>(),
 }
 
 describe('stop-dag-tasks handler（decisions #20 作用域）', () => {

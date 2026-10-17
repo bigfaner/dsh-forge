@@ -40,7 +40,7 @@ import { renderHeadline, renderNarrative, summarizeReason } from '../notify/inde
 import type { Narrator } from '../notify/index.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
-import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef } from './registry.js'
+import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -293,6 +293,12 @@ export interface LoopDriver {
   /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
   activeAll(): readonly LoopRecord[]
   /**
+   * 处置回流（3b re-entry）：清 `record.suspended` 回落 active 并从留存点续跑（ActiveLoop
+   * 运行时状态——处置簿/计数——挂起期保留）。无活登记 = no-active-loop；未挂起 = not-suspended。
+   */
+  resume(input: { readonly loopId: LoopInstanceId }): LoopResumeResult
+
+  /**
    * fiber 卸载收口（装配 disposer 消费）：全部活循环同步终态注销——控制器 abort（在飞回合
    * 于下一个 bail 点让渡）+ 登记表/S1c 独占注销。静默径：不真化 in-flight、零叙述（通道随
    * fiber 消亡；遗留 in_progress 由下次装配 reconcileInterrupted 对账——S3 既有语义，同
@@ -416,8 +422,25 @@ async function fixChainOf(
   }
 }
 
-/** 每轮判定返回（continue = 续派下一轮；terminal = 终局收口出循环） */
-type RoundOutcome = 'continue' | 'terminal'
+/** 每轮判定返回（continue = 续派下一轮；suspend = 升级点挂起待裁决（3b）；terminal = 终局收口出循环） */
+type RoundOutcome = 'continue' | 'suspend' | 'terminal'
+
+/**
+ * 升级点挂起（3b——原 escalate→terminal 的语义反转处）：写 `record.suspended`（在场即挂起
+ * 投影）并返回 suspend 判词——runLoop 保留登记与运行时状态退出，等待处置回流 re-entry
+ * （driver.resume 清 suspended 从留存点续跑）。升级事件全文承载在挂起载荷内，裁决改经
+ * owner 对话面（P3），不再走 userQuestions 问询径（halted 除外——保持结束 + P6 问询）。
+ */
+function suspendForVerdict(loop: ActiveLoop, escalation: LoopEscalation): RoundOutcome {
+  const payload: SuspendedPayload = { escalation, since: Date.now() }
+  loop.record.suspended = payload // 写点①：挂起即投影挂起
+  return 'suspend'
+}
+
+/** 处置回流返回（re-entry——无活登记 / 非挂起态拒绝） */
+export type LoopResumeResult =
+  | { readonly ok: true; readonly loopId: LoopInstanceId }
+  | { readonly ok: false; readonly code: 'no-active-loop' | 'not-suspended' }
 
 /** 呈现任务行（「localId 任务名」——notification-samples ④「2.8 诊断弹窗装配（Apps web）」口径） */
 function taskLabelOf(task: TaskSnapshot): string {
@@ -497,6 +520,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         source,
         ownerSessionId: input.ownerSessionId,
         projectId,
+        takeoverSessions: new Set<string>(), // 3b 接管集（登记绑定——remove 随之蒸发）
       }
       const controller = new AbortController()
       const loop: ActiveLoop = {
@@ -595,6 +619,15 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       return registry.all()
     },
 
+    resume(input: { readonly loopId: LoopInstanceId }): LoopResumeResult {
+      const loop = live.get(input.loopId)
+      if (loop === undefined) return { ok: false, code: 'no-active-loop' }
+      if (loop.record.suspended === undefined) return { ok: false, code: 'not-suspended' }
+      loop.record.suspended = undefined // 写点②：处置回流——清挂起回落 active
+      void runLoop(loop) // 从留存点续跑（ActiveLoop 运行时状态挂起期保留）
+      return { ok: true, loopId: loop.record.id }
+    },
+
     dispose(): void {
       // Root cause: 循环生命周期此前长于 fiber/DB 句柄生命周期——fiber 卸载后下一轮 DB 访问
       // 撞已关句柄异常终态；卸载即同步终态收口（静默——对账归 reconcileInterrupted）。
@@ -655,12 +688,18 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
   )
 }
 
-/** 循环体（启动后 fire-and-forget——异常兜底告警 + 终局登记注销双保证） */
+/** 循环体（启动后 fire-and-forget——异常兜底告警 + 终局登记注销双保证；3b 挂起退出 =
+ *  保留登记与运行时状态，终局收口（登记注销）仅在非挂起退出时执行） */
 async function runLoop(loop: ActiveLoop): Promise<void> {
   const { record } = loop
+  let suspended = false
   try {
     while (!loop.controller.signal.aborted) {
       const outcome = await runRound(loop)
+      if (outcome === 'suspend') {
+        suspended = true // 挂起待裁决——登记在场、投影挂起、等 re-entry
+        break
+      }
       if (outcome !== 'continue') break
     }
   } catch (cause) {
@@ -668,9 +707,11 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
       `forge dispatch loop terminated abnormally (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   } finally {
-    loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
-    clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
-    loop.live.delete(record.id)
+    if (!suspended) {
+      loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
+      clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
+      loop.live.delete(record.id)
+    }
   }
 }
 
@@ -799,14 +840,14 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     const attempt = loop.workerAborts
     loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
     if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
-      await loop.deps.escalation?.escalate({
+      // 3b 裁决①：worker-abort-over-limit → 挂起待裁决（执行面反复崩溃需人裁决——非终局）
+      return suspendForVerdict(loop, {
         kind: 'worker-abort-over-limit',
         ownerSessionId: owner,
         source: record.source,
         taskKey,
         attempts: attempt,
       })
-      return 'terminal'
     }
     const abortedPayload = { sourceSlug: slug, taskKey: task.localId, attempt, maxAttempts: LOOP_WORKER_ABORT_MAX_RETRIES }
     await loop.deps.narrator.notice(
@@ -860,7 +901,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   if (settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0)) {
     await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
-    await deps.escalation?.escalate({
+    // 3b 裁决②：无进展硬停 → 挂起待裁决（原因全文在挂起载荷——owner 对话面处置）
+    return suspendForVerdict(loop, {
       kind: 'blocked-ask-user',
       ownerSessionId: owner,
       source: record.source,
@@ -868,7 +910,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       reason,
       history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
     })
-    return 'terminal'
   }
 
   // blocked 无 follow-up（修复路径缺位）→ 第二层处置代理（S1c 实装；钩子缺席 = 装配降级：
@@ -944,10 +985,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     }
   }
   if (decision === undefined) {
-    // 处置重试超限（同任务计数封顶）→ 第三层（⑩ 叙述 + 问询附 reason 全文与处置历史）——终局
+    // 处置重试超限（同任务计数封顶）→ ⑩ 叙述 + 3b 裁决③：挂起待裁决（reason 全文与处置历史进挂起载荷）
     await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
-    await deps.escalation?.escalate({
+    return suspendForVerdict(loop, {
       kind: 'disposition-over-limit',
       ownerSessionId: owner,
       source: record.source,
@@ -956,7 +997,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       attempts: book.attempts,
       history: [...book.history],
     })
-    return 'terminal'
   }
   book.decision = decision // 改进 6③ 决策缓存（执行成功/重放再败即清账）
 
@@ -981,12 +1021,12 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     } catch (cause) {
       if ((cause as { code?: unknown }).code === 'ERR_CHAIN_DEPTH_EXCEEDED') {
-        // fix 链深 ≤6 到顶（C6/addTask 权威校验）→ 第三层升级（⑩ 叙述 + 问询）——终局
+        // fix 链深 ≤6 到顶（C6/addTask 权威校验）→ ⑩ 叙述 + 3b 裁决④：挂起待裁决
         book.decision = undefined
         const depthData = (cause as { data?: { depth?: number; limit?: number } }).data
         book.history.push(`第${book.attempts}次处置——修复任务创建被拒（修复链已达上限）`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
-        await deps.escalation?.escalate({
+        return suspendForVerdict(loop, {
           kind: 'fix-chain-over-limit',
           ownerSessionId: owner,
           source: record.source,
@@ -996,7 +1036,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
           ...(depthData?.limit !== undefined ? { limit: depthData.limit } : {}),
           history: [...book.history],
         })
-        return 'terminal'
       }
       // 改进 6③ 落库失败 fail-soft：首次失败保留决策缓存（再遇 blocked 重放执行不重跑分析）；
       // 重放再败 → 清缓存升级第三层（有界——防无限重放同失败径）
@@ -1006,7 +1045,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         console.warn(`forge loop triage add-fix replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
         emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
-        await deps.escalation?.escalate({
+        // 3b 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
+        return suspendForVerdict(loop, {
           kind: 'blocked-ask-user',
           ownerSessionId: owner,
           source: record.source,
@@ -1014,7 +1054,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
           reason,
           history: [...book.history],
         })
-        return 'terminal'
       }
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
@@ -1050,7 +1089,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         console.warn(`forge loop triage split-remainder replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
         emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
-        await deps.escalation?.escalate({
+        // 3b 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
+        return suspendForVerdict(loop, {
           kind: 'blocked-ask-user',
           ownerSessionId: owner,
           source: record.source,
@@ -1058,7 +1098,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
           reason,
           history: [...book.history],
         })
-        return 'terminal'
       }
       console.warn(`forge loop triage split-remainder failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
       deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
@@ -1071,11 +1110,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
-  // ask-user → 第三层（⑩ 叙述已告知问询另行发起；裁决不经主会话，decisions #16）——终局
-  // （处置历史已由阶梯循环记录本决策行——不重复追加）
+  // ask-user → ⑩ 叙述 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
   emitProgress(loop, { verb: 'settle', status: 'blocked', taskKey })
-  await deps.escalation?.escalate({
+  return suspendForVerdict(loop, {
     kind: 'blocked-ask-user',
     ownerSessionId: owner,
     source: record.source,
@@ -1083,7 +1121,6 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     reason,
     history: [...book.history],
   })
-  return 'terminal'
 }
 
 // ─────────────────────────── no-task 三态判词与终局收口 ───────────────────────────
@@ -1115,13 +1152,13 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       loop.record.ownerSessionId,
       renderNarrative('blocked-pool', { sourceSlug: loop.record.source.slug, blockedItems }),
     )
-    await loop.deps.escalation?.escalate({
+    // 3b 裁决⑧：deadlock-suspected → 挂起待裁决（阻塞清单在挂起载荷——处置后 re-entry 续跑）
+    return suspendForVerdict(loop, {
       kind: 'deadlock',
       ownerSessionId: loop.record.ownerSessionId,
       source: loop.record.source,
       blockedItems,
     })
-    return 'terminal'
   }
   // wait：在飞未结 / 前置未满足 → bounded patience（轮间停顿后重试；连续 wait 封顶收口建议重派）
   loop.waitRounds += 1

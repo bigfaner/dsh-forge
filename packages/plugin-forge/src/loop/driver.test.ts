@@ -22,6 +22,7 @@ import type {
 } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
+import type { LoopRecord } from './registry.js'
 import { backoffDelayMs, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
@@ -314,6 +315,17 @@ async function untilSettled(driver: LoopDriver): Promise<void> {
   )
 }
 
+/** 等待循环挂起（3b——record.suspended 在场 = 挂起唯一机械信号）；返回挂起载荷供断言 */
+async function untilSuspended(driver: LoopDriver): Promise<NonNullable<LoopRecord['suspended']>> {
+  await vi.waitFor(
+    () => {
+      expect(driver.activeOf(OWNER)?.suspended).toBeDefined()
+    },
+    { timeout: 2000, interval: 5 },
+  )
+  return driver.activeOf(OWNER)!.suspended!
+}
+
 // ─────────────────────────── 每轮流转全链（SC2） ───────────────────────────
 
 describe('runRound 全链（领取→领取通知→spawn→结算→结果通知→判定→续派）', () => {
@@ -472,7 +484,7 @@ describe('blocked 结算分支（图 C）', () => {
     }
   }
 
-  it('无进展硬停门：blocked 零 commit hash 且零 files 增量 → 处置阶梯零调用 + ⑩ followup 问询升级 → 终局', async () => {
+  it('无进展硬停门：blocked 零 commit hash 且零 files 增量 → 处置阶梯零调用 + ⑩ followup 问询升级 → 挂起待裁决（3b）', async () => {
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
       stats: [
@@ -487,24 +499,24 @@ describe('blocked 结算分支（图 C）', () => {
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     // 处置阶梯零调用：triage 钩子抛错即失败（用例绿 = 零调用）；宿主零 addTask（零 fix 链）
     expect(built.h.addTaskInputs).toEqual([])
-    // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 终局族通道）
+    // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 挂起族通道）
     const ask = built.calls.find((c) => c.method === 'followup')
     expect(ask?.text).toContain('无法自动处理——已向你发起问询')
-    // 直达升级：blocked-ask-user + 无进展处置历史（跳过阶梯的机械证据）
-    expect(built.escalations).toEqual([
-      {
-        kind: 'blocked-ask-user',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
-      },
-    ])
-    expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
+    // 直达挂起：blocked-ask-user + 无进展处置历史（跳过阶梯的机械证据）进挂起载荷
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+    })
+    expect(suspended.since).toEqual(expect.any(Number))
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    await built.driver.stop({ ownerSessionId: OWNER }) // 断言后收口
   })
 
   it('无进展门放行：带 commit hash（零 files）的 blocked 结算照常入处置阶梯', async () => {
@@ -526,9 +538,11 @@ describe('blocked 结算分支（图 C）', () => {
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    // 3b：wait-external 记录等待后续领（NO_TASK）；池 blocked 无 pending → deadlock 挂起待裁决
+    await untilSuspended(built.driver)
     expect(triageCalls).toBe(1)
     expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('blocked 且结算携带 followUp → ⑦ 叙述 + 机械续领 fix（不升级）', async () => {
@@ -559,7 +573,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
   })
 
-  it('静默边界（改进 1）：后继任务自身 blocked 且无再下级活后继 → 问询恢复上浮（triage ask-user 升级终局）', async () => {
+  it('静默边界（改进 1）：后继任务自身 blocked 且无再下级活后继 → 问询恢复上浮（triage ask-user 挂起待裁决）', async () => {
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
       stats: [
@@ -572,12 +586,13 @@ describe('blocked 结算分支（图 C）', () => {
     })
     built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
-    // 死后继不静默：blocked-with-fix notice 零出现，blocked-ask-user followup + 升级在场
+    const suspended = await untilSuspended(built.driver)
+    // 死后继不静默：blocked-with-fix notice 零出现，blocked-ask-user followup + 挂起在场
     expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
-    expect(built.escalations.map((e) => e.kind)).toEqual(['blocked-ask-user'])
-    expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('静默边界（改进 1）：后继任务被 rejected → 问询恢复上浮', async () => {
@@ -593,10 +608,11 @@ describe('blocked 结算分支（图 C）', () => {
     })
     built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'rejected' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
-    expect(built.escalations.map((e) => e.kind)).toEqual(['blocked-ask-user'])
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('静默边界（改进 1）：后继 blocked 但其自有活后继在场（fix-2 pending）→ 静默 notify（后继键进叙述）+ 零升级', async () => {
@@ -616,13 +632,15 @@ describe('blocked 结算分支（图 C）', () => {
       card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' }),
     ]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    // 3b：静默 notify 后续领（NO_TASK）；池 blocked 无 pending → deadlock 挂起待裁决
+    await untilSuspended(built.driver)
     // 非阻塞 notify 在场：reason 摘要 + 活后继键（fix-2，递归穿越 blocked 后继）
     const blockedNotice = built.calls.find((c) => c.text.includes('[forge·阻塞]'))
     expect(blockedNotice?.text).toContain('tests hang on flaky selector')
     expect(blockedNotice?.text).toContain('fix-2')
-    // 零问询升级（blocked-pool 池终局以外的处置升级缺席）
-    expect(built.escalations.filter((e) => e.kind === 'blocked-ask-user')).toEqual([])
+    // 零 blocked-ask-user 挂起（静默径——挂起为 deadlock 族）
+    expect(built.driver.activeOf(OWNER)?.suspended?.escalation.kind).toBe('deadlock')
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('blocked 无 follow-up + 处置钩子 add-fix：钩子收到任务/reason 全文 → 宿主 addTask（blockSource 链）→ ⑧ 叙述 → 续领', async () => {
@@ -698,7 +716,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.h.claimInputs.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领', async () => {
+  it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领（后池 blocked → deadlock 挂起，3b）', async () => {
     const built = build({
       claim: [claimed('2.5'), NO_TASK],
       stats: [
@@ -713,11 +731,13 @@ describe('blocked 结算分支（图 C）', () => {
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    await untilSuspended(built.driver)
     expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(true)
+    expect(built.h.claimInputs).toHaveLength(2) // 续领发生过（wait-external → 下一轮）
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
-  it('blocked 无 follow-up + 处置钩子 ask-user → ⑩ 叙述 + 第三层裁决钩子触发 → 循环终局（不再续领）', async () => {
+  it('blocked 无 follow-up + 处置钩子 ask-user → ⑩ 叙述 + 挂起待裁决（3b——不再续领）', async () => {
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
       stats: [
@@ -730,19 +750,18 @@ describe('blocked 结算分支（图 C）', () => {
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
-    expect(built.escalations).toEqual([
-      {
-        kind: 'blocked-ask-user',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        history: ['第1次处置——决定请求人工裁决'],
-      },
-    ])
-    expect(built.h.claimInputs).toHaveLength(1) // 终局——零续领
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: ['第1次处置——决定请求人工裁决'],
+    })
+    expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('blocked 无 follow-up 且处置钩子缺席（S1c 前桩位缺省）：仅落盘续领——零 ⑧⑨⑩ 叙述，池态判词受阻收口', async () => {
@@ -760,14 +779,18 @@ describe('blocked 结算分支（图 C）', () => {
     blockedScript(built)
     built.h.lists.blocked = [card('feat-x', '2.5', { taskStatus: 'blocked' })] // ⑭ 阻塞清单数据源
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     // 缺席 = 静默续领：零处置叙述（⑧⑨⑩描述的动作未发生——不发）；blocked 无 pending 通路
-    // → 池态判词机械接管 = ⑭ 受阻终局 + 第三层裁决钩子
+    // → 池态判词机械接管 = ⑭ 受阻叙述 + 挂起待裁决（3b）
     expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('没有可执行的任务，且有任务阻塞中'))).toBe(true)
-    expect(built.escalations).toEqual([
-      { kind: 'deadlock', ownerSessionId: OWNER, source: SOURCE, blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }] },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'deadlock',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      blockedItems: [{ taskKey: '2.5', note: 'Task 2.5' }],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
 
@@ -934,7 +957,7 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     expect(recovery.calls.some((c) => c.text.includes('[forge·完成]'))).toBe(true)
   })
 
-  it('worker 异常终止（结算失败）：⑫ bounded 立即重入（第 1/3…3/3）→ 超限第三层裁决钩子 → 终局；零防线计数零 tool-error', async () => {
+  it('worker 异常终止（结算失败）：⑫ bounded 立即重入（第 1/3…3/3）→ 超限挂起待裁决（3b）；零防线计数零 tool-error', async () => {
     const built = build({
       claim: [claimed(), claimed(), claimed(), claimed()],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
@@ -948,44 +971,48 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
       }
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
-    // 四次运行（3 次 bounded 重入 + 第 4 次触发超限升级），⑫ ×3
+    const suspended = await untilSuspended(built.driver)
+    // 四次运行（3 次 bounded 重入 + 第 4 次触发超限挂起），⑫ ×3
     expect(built.spawn.requests).toHaveLength(4)
     const retries = built.calls.filter((c) => c.text.includes('子代理异常退出'))
     expect(retries).toHaveLength(3)
     expect(retries[0]?.text).toContain('自动重新执行（第 1/3 次）')
     expect(retries[2]?.text).toContain('自动重新执行（第 3/3 次）')
-    expect(built.escalations).toEqual([
-      { kind: 'worker-abort-over-limit', ownerSessionId: OWNER, source: SOURCE, taskKey: 'feat-x/2.5', attempts: 4 },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'worker-abort-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/2.5',
+      attempts: 4,
+    })
     // 执行受阻 ≠ spawn 机制故障：零 guard 计数、零 tool-error 留档（循环自有 bounded 阶梯）
     expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
 
 // ─────────────────────────── no-task 三态判词 ───────────────────────────
 
 describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
-  it('deadlock-suspected：⑭ 受阻终局叙述 + 第三层裁决钩子（附阻塞清单）→ 终局', async () => {
+  it('deadlock-suspected：⑭ 受阻叙述 + 挂起待裁决（附阻塞清单，3b）', async () => {
     const built = build({
       claim: [NO_TASK],
       stats: [statsOf({ blocked: 2 }), statsOf({ blocked: 2 }), statsOf({ blocked: 2, completed: 4 })],
     })
     built.h.lists.blocked = [card('feat-x', '3.1', { taskStatus: 'blocked' }), card('feat-x', '4.1', { taskStatus: 'blocked' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     const blocked = built.calls.find((c) => c.method === 'followup')
     expect(blocked?.text).toContain('没有可执行的任务，且有任务阻塞中')
     expect(blocked?.text).toContain('3.1（Task 3.1）· 4.1（Task 4.1）')
-    expect(built.escalations).toEqual([
-      {
-        kind: 'deadlock',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        blockedItems: [{ taskKey: '3.1', note: 'Task 3.1' }, { taskKey: '4.1', note: 'Task 4.1' }],
-      },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'deadlock',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      blockedItems: [{ taskKey: '3.1', note: 'Task 3.1' }, { taskKey: '4.1', note: 'Task 4.1' }],
+    })
     expect(built.h.claimInputs).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('bounded patience：连续 wait 判词 3 轮封顶 → ⑮ 收口建议重派（claim 恰 3 次——不无限空转）', async () => {
@@ -1165,7 +1192,7 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
     built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
   }
 
-  it('处置重试超限：无效输出 ×3 → 第三层 disposition-over-limit（附 reason 全文与处置历史）→ 终局', async () => {
+  it('处置重试超限：无效输出 ×3 → disposition-over-limit 挂起待裁决（附 reason 全文与处置历史，3b）', async () => {
     const built = build({
       claim: [claimed('2.5')],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
@@ -1174,26 +1201,25 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
-    // 同结算内三次重试（处置上限 LOOP_TRIAGE_MAX_ATTEMPTS）——超限即升级
+    const suspended = await untilSuspended(built.driver)
+    // 同结算内三次重试（处置上限 LOOP_TRIAGE_MAX_ATTEMPTS）——超限即挂起
     expect(built.h.claimInputs).toHaveLength(1)
-    expect(built.escalations).toEqual([
-      {
-        kind: 'disposition-over-limit',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
-        history: [
-          '第1次处置——分析未得出结论',
-          '第2次处置——分析未得出结论',
-          '第3次处置——分析未得出结论',
-        ],
-      },
-    ])
-    // ⑩ 叙述（问询已另行发起）
+    expect(suspended.escalation).toEqual({
+      kind: 'disposition-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+      history: [
+        '第1次处置——分析未得出结论',
+        '第2次处置——分析未得出结论',
+        '第3次处置——分析未得出结论',
+      ],
+    })
+    // ⑩ 叙述（挂起后 owner 对话面处置）
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('处置失败后重试成功：前两次无效、第三次 add-fix → 宿主执行，零升级', async () => {
@@ -1240,28 +1266,27 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     // 三次结算各处置一次（add-fix 续领后同任务再次 blocked）；第四次触簿即封顶——不再调模型
     expect(calls).toBe(LOOP_TRIAGE_MAX_ATTEMPTS)
     expect(built.h.claimInputs).toHaveLength(4)
-    expect(built.escalations).toEqual([
-      {
-        kind: 'disposition-over-limit',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
-        history: [
-          '第1次处置——决定创建修复任务（第1次修复）',
-          '第2次处置——决定创建修复任务（第2次修复）',
-          '第3次处置——决定创建修复任务（第3次修复）',
-        ],
-      },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'disposition-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      attempts: LOOP_TRIAGE_MAX_ATTEMPTS,
+      history: [
+        '第1次处置——决定创建修复任务（第1次修复）',
+        '第2次处置——决定创建修复任务（第2次修复）',
+        '第3次处置——决定创建修复任务（第3次修复）',
+      ],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
-  it('fix 链深 ≤6 到顶：addTask ERR_CHAIN_DEPTH_EXCEEDED → 第三层 fix-chain-over-limit（附深度/上限/历史）→ 终局', async () => {
+  it('fix 链深 ≤6 到顶：addTask ERR_CHAIN_DEPTH_EXCEEDED → fix-chain-over-limit 挂起待裁决（附深度/上限/历史，3b）', async () => {
     const built = build({
       claim: [claimed('2.5')],
       stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
@@ -1273,21 +1298,20 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
       throw Object.assign(new Error('fix 链深超限'), { code: 'ERR_CHAIN_DEPTH_EXCEEDED', data: { depth: 7, limit: 6 } })
     }
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     expect(built.h.claimInputs).toHaveLength(1)
-    expect(built.escalations).toEqual([
-      {
-        kind: 'fix-chain-over-limit',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        depth: 7,
-        limit: 6,
-        history: ['第1次处置——决定创建修复任务（修选择器等待）', '第1次处置——修复任务创建被拒（修复链已达上限）'],
-      },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'fix-chain-over-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      depth: 7,
+      limit: 6,
+      history: ['第1次处置——决定创建修复任务（修选择器等待）', '第1次处置——修复任务创建被拒（修复链已达上限）'],
+    })
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('第三层问询载荷含 reason 原文与处置历史；主会话叙述仅摘要（断言不含全文）', async () => {
@@ -1312,22 +1336,21 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
-    // 问询载荷 = reason 原文（含第二行）
-    expect(built.escalations).toEqual([
-      {
-        kind: 'blocked-ask-user',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: fullReason,
-        history: ['第1次处置——决定请求人工裁决'],
-      },
-    ])
+    const suspended = await untilSuspended(built.driver)
+    // 挂起载荷 = reason 原文（含第二行）
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: fullReason,
+      history: ['第1次处置——决定请求人工裁决'],
+    })
     // 主会话叙述 = 摘要（首行截断）——全文零出现（decisions #24 分级呈现）
     const notice = built.calls.find((c) => c.text.includes('无法自动处理——已向你发起问询'))
     expect(notice?.text).toContain('第一行构建环境缺失')
     expect(notice?.text).not.toContain('SHADOW-SECRET-VALUE')
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
 
@@ -1490,8 +1513,9 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       ],
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
     expect(built.progressCalls[1]).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5' })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('面缺席 = 零发射 fail-soft（可选依赖——叙述四连零回归）', async () => {
@@ -1536,7 +1560,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     statsOf({ in_progress: 1, blocked: 1 }),
   ]
 
-  it('①失败回灌 + ⑥升级载荷：无效输出 ×2 后 ask-user——重试输入携 rawSummary，处置历史行含各次输出摘要', async () => {
+  it('①失败回灌 + ⑥挂起载荷：无效输出 ×2 后 ask-user——重试输入携 rawSummary，处置历史行含各次输出摘要（3b 挂起）', async () => {
     const inputs: LoopTriageInput[] = []
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
@@ -1550,17 +1574,18 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     // ① 回灌：第二次处置输入携上次失败摘要
     expect(inputs[0]?.lastFailure).toBeUndefined()
     expect(inputs[1]?.lastFailure).toContain('RAW-MODEL-OUTPUT-SNIPPET')
-    // ⑥ 升级载荷 history 行含各次原始输出摘要
-    const history = (built.escalations[0] as { kind: string; history: readonly string[] }).history
-    expect(built.escalations[0]?.kind).toBe('blocked-ask-user')
+    // ⑥ 挂起载荷 history 行含各次原始输出摘要
+    const history = (suspended.escalation as { kind: string; history: readonly string[] }).history
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
     expect(history[0]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
     expect(history[1]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
     expect(history[2]).toContain('决定请求人工裁决')
     expect(built.h.claimInputs).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('②错误类别分流（纯函数）：TriageDecisionInvalidError 判无效；摘要取 rawSummary 优先', () => {
@@ -1582,8 +1607,9 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
-    expect(built.escalations[0]).toMatchObject({ kind: 'disposition-over-limit', attempts: LOOP_TRIAGE_MAX_ATTEMPTS })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'disposition-over-limit', attempts: LOOP_TRIAGE_MAX_ATTEMPTS })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('②基建故障 → spawn 同款 backoff 退避（base×N 间隔——耗时 ≥ 退避序列和的机械证据）', async () => {
@@ -1597,9 +1623,10 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     blockedScript(built)
     const startedAt = Date.now()
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    await untilSuspended(built.driver)
     const elapsed = Date.now() - startedAt
     expect(elapsed).toBeGreaterThanOrEqual(backoffDelayMs(60, 1) + backoffDelayMs(60, 2) + backoffDelayMs(60, 3) - 10)
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('③决策缓存重放：add-fix 落库失败首次保缓存——再遇 blocked 重放执行（triage 零二调）不重跑分析', async () => {
@@ -1637,7 +1664,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     expect(built.escalations).toEqual([])
   })
 
-  it('③重放再败有界收口：缓存清账 + 第三层问询升级（防无限重放同失败径）', async () => {
+  it('③重放再败有界收口：缓存清账 + 挂起待裁决（防无限重放同失败径，3b）', async () => {
     let triageCalls = 0
     const built = build({
       claim: [claimed('2.5'), claimed('2.5')],
@@ -1653,22 +1680,21 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
       throw new Error('db busy')
     }
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     expect(triageCalls).toBe(1)
-    expect(built.escalations).toEqual([
-      {
-        kind: 'blocked-ask-user',
-        ownerSessionId: OWNER,
-        source: SOURCE,
-        task: expect.objectContaining({ localId: '2.5' }),
-        reason: 'tests hang on flaky selector',
-        history: [
-          '第1次处置——决定创建修复任务（修选择器等待）',
-          '重放已缓存处置决策（不重跑分析）——执行',
-          '重放执行再次失败——缓存清账，交人工裁决',
-        ],
-      },
-    ])
+    expect(suspended.escalation).toEqual({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: expect.objectContaining({ localId: '2.5' }),
+      reason: 'tests hang on flaky selector',
+      history: [
+        '第1次处置——决定创建修复任务（修选择器等待）',
+        '重放已缓存处置决策（不重跑分析）——执行',
+        '重放执行再次失败——缓存清账，交人工裁决',
+      ],
+    })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('④链深余量入参：triage 输入携带 depth/limit/remaining（沿 sourceTask 链上溯现算）', async () => {
@@ -1687,8 +1713,9 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
       card('feat-x', '2.4'),
     ]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
     expect(captured?.fixChain).toEqual({ depth: 2, limit: 6, remaining: 4 })
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('④余量不足拒 add-fix：宿主前置校验计失败并回灌——不产 add-fix 执行（改选 ask-user 收口）', async () => {
@@ -1713,12 +1740,13 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
       card('feat-x', 'fix-5'),
     ]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    const suspended = await untilSuspended(built.driver)
     expect(inputs[0]?.fixChain).toEqual({ depth: 6, limit: 6, remaining: 0 })
     expect(inputs[1]?.lastFailure).toContain('余量不足')
     expect(built.h.addTaskInputs).toEqual([]) // add-fix 未被执行（宿主拒绝）
-    expect(built.escalations[0]?.kind).toBe('blocked-ask-user')
-    expect((built.escalations[0] as { history: readonly string[] }).history[0]).toContain('余量不足')
+    expect(suspended.escalation.kind).toBe('blocked-ask-user')
+    expect((suspended.escalation as { history: readonly string[] }).history[0]).toContain('余量不足')
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('⑤externalSlug 存在性校验：编造 slug 计处置失败并回灌（有效 slug 照常执行）', async () => {
@@ -1736,10 +1764,80 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSettled(built.driver)
+    await untilSuspended(built.driver) // 3b：wait-external 有效续领后池 blocked → deadlock 挂起
     expect(inputs[1]?.lastFailure).toContain('ghost-slug')
     // 编造 slug 零执行（零等待叙述）；有效 slug 照常等待叙述
     expect(built.calls.some((c) => c.text.includes('等待 ghost-slug 先完成'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('等待 feat-real 先完成'))).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 3b · 升级点挂起与 re-entry 回落（dispatch-loop-hardening 1.8） ───────────────────────────
+
+describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清挂起回落续跑）', () => {
+  /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+  function queryOfBlockedNoProgress(): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    }
+  }
+
+  it('升级点挂起：suspended 在场（升级事件全文 + since）、登记/独占保留、runLoop 停驻零续领；resume 清 suspended 从留存点续跑到 settled 收口', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
+      stats: [statsOf({ pending: 2 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 2 }), statsOf({ completed: 2 })],
+      query: [queryOfBlockedNoProgress(), queryOf('completed')],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    const suspended = await untilSuspended(built.driver)
+    // 写点①：挂起即投影挂起——升级事件全文 + 挂起时刻
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'needs human verdict' })
+    expect(suspended.since).toEqual(expect.any(Number))
+    expect(built.driver.activeOf(OWNER)).toBeDefined() // 登记保留（挂起 ≠ 终局）
+    expect(exclusiveLoopSourceOf(SOURCE)).toEqual({ loopId }) // S1c 独占保留
+    expect(built.h.claimInputs).toHaveLength(1) // runLoop 停驻——零续领
+    // re-entry（写点②）：清 suspended 回落 active，从留存点续跑
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    expect(built.driver.activeOf(OWNER)?.suspended).toBeUndefined()
+    await untilSettled(built.driver)
+    expect(built.driver.activeOf(OWNER)).toBeUndefined() // 续跑后 settled 终局注销
+    expect(built.h.claimInputs).toHaveLength(3) // 2.5（挂起前）→ 2.6 → no-task
+    expect(built.calls.some((c) => c.text.includes('[forge·完成]'))).toBe(true)
+    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+  })
+
+  it('resume 错误径：无活登记 = no-active-loop；未挂起（在飞运行中）= not-suspended；挂起态 stop 走终局径收口，resume 随后 no-active-loop', async () => {
+    // 未挂起（在飞运行中）→ not-suspended
+    const running = build({ claim: [claimed()] })
+    running.spawn.setBehavior(parkedSpawn)
+    const started = await running.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await vi.waitFor(
+      () => {
+        expect(running.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    expect(running.driver.resume({ loopId })).toEqual({ ok: false, code: 'not-suspended' })
+    // 无活登记 → no-active-loop
+    expect(running.driver.resume({ loopId: 'ghost-loop' })).toEqual({ ok: false, code: 'no-active-loop' })
+    await running.driver.stop({ ownerSessionId: OWNER })
+    // 挂起态 stop：终局径收口（登记注销）→ resume no-active-loop
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOfBlockedNoProgress()],
+    })
+    const started2 = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId2 = started2.ok ? started2.loopId : ''
+    await untilSuspended(built.driver)
+    expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.resume({ loopId: loopId2 })).toEqual({ ok: false, code: 'no-active-loop' })
   })
 })
