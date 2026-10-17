@@ -63,6 +63,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── bug-recurrence-chain（复发链挂链写径）──
   // 挂链引用悬空 → 错误条（recordBug 语境原地反馈——前驱 bug_id 不存在改参重试）
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  // ── dispatch-loop-hardening 改进 5（addTask caller 身份分流）──
+  // worker 会话 addTask 拒收 → 错误条（自解释文案带正确动作——submitTask result=blocked 如实结算）
+  ERR_WORKER_ADDTASK_DENIED: 'error-bar',
 }
 
 /**

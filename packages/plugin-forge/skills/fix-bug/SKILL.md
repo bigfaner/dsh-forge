@@ -152,3 +152,4 @@ Commit:  <hash>
 
 - 琐碎修复（错字/配置，无行为面）可裁断跳过 Step 1-3 的完整分析，但台账两阶段与原子提交（硬规则 4）不豁免。
 - 全量跑 exit code 非零不径直判失败：先看测试汇总行，环境噪音与结果分离判读。
+- **不自派 fix/后继任务**：bug 台账（recordBug/resolveBug）在 worker 会话可用，任务派生权限归主会话与循环处置层——blocked/unresolved 只如实结算（submitTask result=blocked / resolveBug unresolved），需要派后续任务时交处置方；worker 会话调用 `addTask` 会被拒（`ERR_WORKER_ADDTASK_DENIED`）。
