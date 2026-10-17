@@ -1,11 +1,11 @@
 // @dsh-forge/contracts —— worktree/branch 管理 DTO。
-// 通道族 forge:worktree/*（九通道：list/create/delete/ahead-behind/branches/checks/
-// session-create/seal/select）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
+// 通道族 forge:worktree/*（十通道：list/create/delete/ahead-behind/branches/checks/
+// session-create/seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
 // → host ipc worktree-rpc；域实现 = packages/plugins/git-worktree——host ipc 装配透传）。
 // 面分治：list/create/delete/ahead-behind/branches/checks = 管理域读+封闭写集（create/delete
 // ——提案「数据源与命令面」）；session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘，
 // 绑定写面唯一时点）；seal = 封存判定快照（chip 失效态 / notice / composer 占位数据源）；
-// select = hero 选中树推送（host 重路由目标记忆）。
+// select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
 
 /** worktree 清单条目（= 插件域 WorktreeEntry + 行渲染派生面） */
 export interface WorktreeEntryDto {
@@ -135,4 +135,22 @@ export interface WorktreeSelectRequest {
 }
 export interface WorktreeSelectResult {
   readonly ok: true
+}
+
+/**
+ * forge:worktree/resolve（批量归属解析——身份归并单点）：路径集 → 各自归属项目
+ * （identity resolveProject：git common-dir 锚 + 主树行必胜仲裁 + 归档行跳过，
+ * 与 hero 编排/必绑拦截同一归属判断基础设施）。未解析（非 git/未注册）不出现在结果。
+ */
+export interface WorktreeResolveRequest {
+  readonly paths: readonly string[]
+}
+export interface WorktreeResolveEntry {
+  readonly path: string
+  readonly projectId: string
+  readonly projectRoot: string
+  readonly projectName: string
+}
+export interface WorktreeResolveResult {
+  readonly resolved: readonly WorktreeResolveEntry[]
 }

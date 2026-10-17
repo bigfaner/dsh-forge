@@ -38,6 +38,8 @@ import {
   type WorktreeSealRequest,
   type WorktreeSelectRequest,
   type WorktreeSelectResult,
+  type WorktreeResolveRequest,
+  type WorktreeResolveResult,
   type WorktreeSealResult,
   type WorktreeSessionCreateRequest,
   type WorktreeSessionCreateResult,
@@ -226,9 +228,9 @@ export interface ForgeSettingsRpc {
 }
 
 /**
- * forge:worktree/* 面方法集（九通道；域实现 = packages/plugins/git-worktree，
+ * forge:worktree/* 面方法集（十通道；域实现 = packages/plugins/git-worktree，
  * host ipc/worktree-rpc 装配透传。session-create = 预铸采纳单门（绑定写面唯一时点）；
- * seal = 封存判定快照；select = hero 选中树推送）。
+ * seal = 封存判定快照；select = hero 选中树推送；resolve = 批量归属解析）。
  */
 export interface ForgeWorktreeRpc {
   list(q: WorktreeListRequest): Promise<WorktreeListResult>
@@ -240,6 +242,7 @@ export interface ForgeWorktreeRpc {
   sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
 }
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
@@ -333,6 +336,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
       seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
       select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
+      resolve: (q) => invokeRpc<WorktreeResolveResult>(transport, WORKTREE_CHANNELS.resolve, q),
     },
   }
 }

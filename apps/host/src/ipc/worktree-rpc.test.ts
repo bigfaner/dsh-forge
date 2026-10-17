@@ -402,6 +402,17 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     })
     expect(await unboundSvc.seal({ sessionId: 's1' })).toEqual({ isGit: false, sealed: false, binding: null })
   })
+
+  it('resolve：批量归属解析（身份归并单点）——命中带 projectId/projectName，未命中不进结果', async () => {
+    const service = createWorktreeRpcService({ gitWorktree: fakeExt })
+    const result = await service.resolve({
+      paths: ['C:/repo/.forge/worktrees/wt-a', 'C:/foreign/x', 'C:/repo/.forge/worktrees/wt-b'],
+    })
+    expect(result.resolved).toEqual([
+      { path: 'C:/repo/.forge/worktrees/wt-a', projectId: 'p1', projectRoot: 'C:/repo', projectName: 'dsh-forge' },
+      { path: 'C:/repo/.forge/worktrees/wt-b', projectId: 'p1', projectRoot: 'C:/repo', projectName: 'dsh-forge' },
+    ])
+  })
 })
 
 describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
@@ -417,7 +428,7 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
     expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(9) // 全通道键键对应（attach 已废——绑定写面唯一时点 = 预铸）
+    expect(registered).toHaveLength(10) // 九通道 + resolve（批量归属解析——身份归并单点）
   })
 })
 

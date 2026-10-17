@@ -224,44 +224,25 @@ export function buildSidebarTree(input: {
   readonly projects: readonly ProjectSummary[]
   readonly sessions: LedgerSessionsSnapshot
   readonly workspaces: LedgerWorkspacesSnapshot
-  /** 项目 → worktree 清单路径归一键集（forge:worktree/list 真值——树工作区会话入项目
-   *  分组的归并依据；缺席 = 退主工作区分组现状，树会话不入组） */
-  readonly worktreePaths?: ReadonlyMap<string, ReadonlySet<string>>
+  /** 工作区路径（归一键）→ 归属项目 id——host 身份归并单点裁决（forge:worktree/resolve
+   *  批量通道，与 hero 编排/必绑拦截同一 resolveProject 基础设施）。客户端零仲裁副本：
+   *  只按映射分组渲染；缺席条目（未解析）不入组。 */
+  readonly workspaceProject?: ReadonlyMap<string, string>
 }): SidebarTree {
   const currentSessionId = currentSessionIdOfLedger(input.sessions)
   const rowsByWorkspace = new Map<string, readonly string[]>()
   for (const workspace of input.workspaces.items) {
     rowsByWorkspace.set(workspace.workspaceId, workspace.sessionIds)
   }
-  // 树工作区 → 项目归并（两级仲裁）：① 精确 ws_path 命中（该工作区 = 某项目注册根本体）
-  // 优先；② worktree 清单匹配跳过归档行——归档残留行的 git worktree list 覆盖全仓，
-  // 不跳过则树会话被劫持进归档组（真机 redesign 残留形态）。
+  // 树工作区 → 项目归并（host 裁决映射直读——客户端零仲裁）
   const treeSessionsByProject = new Map<string, readonly string[]>()
-  const assignTreeSessions = (projectId: string, sessionIds: readonly string[]): void => {
-    const prev = treeSessionsByProject.get(projectId) ?? []
-    treeSessionsByProject.set(projectId, [...prev, ...sessionIds])
-  }
-  const exactProjectByWs = new Map<string, string>()
-  for (const project of input.projects) {
-    const key = normalizeFsPath(project.wsPath)
-    if (!exactProjectByWs.has(key)) exactProjectByWs.set(key, project.id)
-  }
-  if (input.worktreePaths !== undefined) {
+  if (input.workspaceProject !== undefined) {
     for (const workspace of input.workspaces.items) {
       if (typeof workspace.path !== 'string' || workspace.path === '') continue
-      const key = normalizeFsPath(workspace.path)
-      const exact = exactProjectByWs.get(key)
-      if (exact !== undefined) {
-        assignTreeSessions(exact, workspace.sessionIds)
-        continue
-      }
-      for (const [projectId, paths] of input.worktreePaths) {
-        if (!paths.has(key)) continue
-        const project = input.projects.find((row) => row.id === projectId)
-        if (project?.archived === true) continue // 归档行清单覆盖全仓——不劫持活跃行分组
-        assignTreeSessions(projectId, workspace.sessionIds)
-        break
-      }
+      const projectId = input.workspaceProject.get(normalizeFsPath(workspace.path))
+      if (projectId === undefined) continue
+      const prev = treeSessionsByProject.get(projectId) ?? []
+      treeSessionsByProject.set(projectId, [...prev, ...workspace.sessionIds])
     }
   }
   const pinnedOrder = new Map<string, number>()

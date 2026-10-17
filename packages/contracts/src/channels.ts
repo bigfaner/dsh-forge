@@ -152,6 +152,7 @@ export const WORKTREE_CHANNELS = {
   sessionCreate: 'forge:worktree/session-create',
   seal: 'forge:worktree/seal',
   select: 'forge:worktree/select',
+  resolve: 'forge:worktree/resolve',
 } as const
 
 export type WorktreeChannel = (typeof WORKTREE_CHANNELS)[keyof typeof WORKTREE_CHANNELS]
@@ -202,6 +203,7 @@ export const FORGE_CHANNELS = {
   worktreeSessionCreate: WORKTREE_CHANNELS.sessionCreate,
   worktreeSeal: WORKTREE_CHANNELS.seal,
   worktreeSelect: WORKTREE_CHANNELS.select,
+  worktreeResolve: WORKTREE_CHANNELS.resolve,
 } as const
 
 export type ForgeChannel =

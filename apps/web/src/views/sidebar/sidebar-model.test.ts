@@ -128,7 +128,7 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s1'])
   })
 
-  it('bug ef8b3a45：树工作区会话入项目分组（worktree 清单路径精确归并——1.28 每树一工作区）', () => {
+  it('bug ef8b3a45：树工作区会话入项目分组——host 裁决映射直读（客户端零仲裁副本）', () => {
     const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
     const out = buildSidebarTree({
       projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
@@ -137,34 +137,21 @@ describe('buildSidebarTree（项目树派生）', () => {
         { workspaceId: 'w1', sessionIds: ['s-main'] },
         // 树会话挂树工作区（1.28 契约强制——主工作区 sessionIds 恒不含它）
         { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
-        // 清单外树工作区（他项目/未匹配）不入组
-        { workspaceId: 'wt-x', path: 'Z:/elsewhere/wt', sessionIds: ['s-orphan'] },
       ]),
-      worktreePaths: new Map([['p1', new Set([normalizeFsPath(treePath)])]]),
+      // host resolveProject 裁决结果（forge:worktree/resolve）：归一工作区路径 → 项目 id
+      workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
     })
     expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main', 's-tree'])
   })
 
-  it('同锚残留归档行不劫持分组：归档行清单覆盖全仓（git worktree list 仓库级）——树会话归活跃主行；精确 ws_path 命中优先', () => {
-    const treePath = 'Z:/w/p1/.forge/worktrees/test-02'
-    const oldTreePath = 'Z:/w/p1/.forge/worktrees/redesign'
+  it('映射缺席条目不入组（未解析路径——非 git/未注册，fail-closed 零猜测）', () => {
     const out = buildSidebarTree({
-      // 归档残留行在前（created_at 序），活跃主行在后——与真机 state.db 残留形态同构
-      projects: [project('p-old', 'w-old', { wsPath: oldTreePath, archived: true }), project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
-      sessions: ledger([ledgerRow('s-tree'), ledgerRow('s-old')]),
-      workspaces: workspaces([
-        { workspaceId: 'wt-02', path: treePath, sessionIds: ['s-tree'] },
-        // 精确命中：redesign 树工作区 ws_path ≡ 归档行注册根 → 归档项目自有会话仍归其组
-        { workspaceId: 'w-old', path: oldTreePath, sessionIds: ['s-old'] },
-      ]),
-      worktreePaths: new Map([
-        ['p-old', new Set([normalizeFsPath(treePath), normalizeFsPath(oldTreePath)])], // 同锚清单覆盖全仓
-        ['p1', new Set([normalizeFsPath(treePath), normalizeFsPath(oldTreePath)])],
-      ]),
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([ledgerRow('s-x')]),
+      workspaces: workspaces([{ workspaceId: 'wt-x', path: 'Z:/elsewhere/wt', sessionIds: ['s-x'] }]),
+      workspaceProject: new Map(), // host 未裁决该路径
     })
-    const byId = Object.fromEntries(out.tree.map((n) => [n.projectId, n]))
-    expect(byId['p1']!.sessions.map((r) => r.sessionId)).toEqual(['s-tree'])
-    expect(byId['p-old']!.sessions.map((r) => r.sessionId)).toEqual(['s-old'])
+    expect(out.tree[0]!.sessions).toEqual([])
   })
 
   it('子代理行不入顶层；空白会话仅显示被选中者（官方浏览器口径——retainedBy.mainView 锚，bug 51e94b84 修正）', () => {
