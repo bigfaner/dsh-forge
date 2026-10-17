@@ -140,7 +140,7 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 ```
 
-口径：sessions 按项目平铺不按 worktree 二层嵌套（worktree 徽标由 UI 对照 `worktrees[].path` 挂）；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。失败 = `__rpc` 既有 `{ok:false,error:{code,message}}`。
+口径：sessions 按项目平铺不按 worktree 二层嵌套；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。**worktree 徽标暂不显示**（2026-10-17 裁决——响应仍携带 worktrees[]，前端不渲染徽标，后续启用零数据面改动）。失败 = `__rpc` 既有 `{ok:false,error:{code,message}}`。
 
 ### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
 
