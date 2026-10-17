@@ -248,37 +248,76 @@ export function createWorktreeRpcService(deps: {
     return pending
   }
 
-  // 会话 cwd 记忆（读句柄 header 消费切片——零事件读；逐会话一次，其后零开销）
-  const cwdMemo = new Map<string, string | undefined>()
-  const sessionCwdOf = async (sessionId: string): Promise<string | undefined> => {
-    if (cwdMemo.has(sessionId)) return cwdMemo.get(sessionId)
-    let cwd: string | undefined
+  // 会话 header 消费切片记忆（cwd + parentSession 单读双取——零事件读；逐会话一次，其后零开销）
+  const headerMemo = new Map<string, { cwd?: string; parentSession?: string }>()
+  const headerOf = async (sessionId: string): Promise<{ cwd?: string; parentSession?: string }> => {
+    const memo = headerMemo.get(sessionId)
+    if (memo !== undefined) return memo
+    let header: { cwd?: string; parentSession?: string } = {}
     try {
       const handle = (await deps.sessionPersistence?.open(sessionId, 'read')) as
-        | { header?: { cwd?: string }; close?: () => Promise<void> }
+        | { header?: { cwd?: string; parentSession?: string }; close?: () => Promise<void> }
         | undefined
-      cwd = handle?.header?.cwd
+      const cwd = handle?.header?.cwd
+      const parentSession = handle?.header?.parentSession
+      header = {
+        ...(typeof cwd === 'string' ? { cwd } : {}),
+        ...(typeof parentSession === 'string' && parentSession !== '' ? { parentSession } : {}),
+      }
       await handle?.close?.()
     } catch {
-      cwd = undefined
+      header = {}
     }
-    cwdMemo.set(sessionId, cwd)
-    return cwd
+    headerMemo.set(sessionId, header)
+    return header
   }
 
-  /** blank 判读（设计 §11 假设 5：blank = 首个 turn/start 前的投影语义——日志内全部事件
-   *  ignorable 即 blank；预铸挂靠事件会话天然命中）。读失败 = 非 blank（fail-closed 不误重路由）。 */
+  /**
+   * blank 判读（设计 §11 假设 5：blank = 首个 turn/start 前的投影语义）。判据 = 官方
+   * sessionListMetadata 投影折叠同式（api-session-controller 核销 2026-10-17：init true，
+   * 仅 `turn/start` 清位——种子事件 permission/sandbox/approval 不构成「已用」）。旧判据
+   * 「全部事件 ignorable」对官方直建会话恒 false（bug 82cab5fe：创建链先写非 ignorable
+   * 种子事件 → 必绑重路由结构性死路）。读失败 = 非 blank（fail-closed 不误重路由）。
+   */
   const blankOf = async (sessionId: string): Promise<boolean> => {
     try {
       const handle = await readFactory.openRead(sessionId)
       try {
         const events = (await (handle as { read?: () => Promise<{ events?: readonly unknown[] }> }).read?.())?.events ?? []
-        return events.every((event) => (event as { ignorable?: boolean } | null)?.ignorable === true)
+        return !events.some((event) => (event as { type?: unknown } | null)?.type === 'turn/start')
       } finally {
         await (handle as { close?: () => Promise<void> }).close?.()
       }
     } catch {
       return false
+    }
+  }
+
+  /**
+   * 源会话 agentPreset 折叠读（bug 82cab5fe 重路由模式随档）：官方 agentPreset 投影同式
+   * （agent-preset-registry 核销 2026-10-17——init = header.agentPreset ?? null，按
+   * agent-preset/selected 事件顺序推进；blank 会话仅 select 事件，折叠即现值）。读失败
+   * = undefined（零猜测，回落 registry 默认——eae18b5c 同径 fail-soft）。
+   */
+  const sourcePresetOf = async (sessionId: string): Promise<string | undefined> => {
+    try {
+      const handle = await readFactory.openRead(sessionId)
+      try {
+        const header = (handle as { header?: { agentPreset?: unknown } }).header
+        let preset = typeof header?.agentPreset === 'string' ? header.agentPreset : undefined
+        const events = (await (handle as { read?: () => Promise<{ events?: readonly unknown[] }> }).read?.())?.events ?? []
+        for (const event of events) {
+          const typed = event as { type?: unknown; data?: { agentPreset?: unknown } } | null
+          if (typed?.type !== 'agent-preset/selected') continue
+          const next = typed.data?.agentPreset
+          if (typeof next === 'string') preset = next
+        }
+        return preset
+      } finally {
+        await (handle as { close?: () => Promise<void> }).close?.()
+      }
+    } catch {
+      return undefined
     }
   }
 
@@ -552,10 +591,13 @@ export function createWorktreeRpcService(deps: {
       if (deps.sessionController === undefined || deps.sessionPersistence === undefined) return undefined
       const controller = deps.sessionController
       return {
-        // 判据（设计 §7）：git 项目 ∧ 目标会话 blank ∧ 无绑定（G2 同树也不放行）；
+        // 判据（设计 §7 + bug 82cab5fe 修订）：git 项目 ∧ 目标会话 blank ∧ 无绑定 ∧ 顶层
+        // 会话（header.parentSession 缺席——worker/fork 子会话归官方子代理机械所有，恒放行）；
         // cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）；非 blank 既有会话零打扰。
         judge: async (sessionId) => {
-          const cwd = await sessionCwdOf(sessionId)
+          const header = await headerOf(sessionId)
+          if (header.parentSession !== undefined) return 'pass' // 子会话零重路由（非 hero 人口）
+          const cwd = header.cwd
           if (cwd === undefined || cwd === '') return 'pass'
           const resolution = await cachedResolve(cwd)
           if (resolution === null) return 'pass' // 非 git：零行为差异（G7 分流）
@@ -570,16 +612,22 @@ export function createWorktreeRpcService(deps: {
           return (await blankOf(sessionId)) ? 'route' : 'pass'
         },
         // 编排（与 client arm 共享 sessionCreate 互斥面——在途即等待）+ 重路由：
-        // 目标 = hero 选中树（select 推送记忆）缺席回退会话 cwd 树；原消息内容保真换绑。
+        // 目标 = hero 选中树（select 推送记忆）缺席回退会话 cwd 树；原消息内容保真换绑；
+        // 模式随档（bug 82cab5fe——源会话 preset 折叠值显式入请求，registry 默认不覆盖源档）。
         reroute: async (sessionId, request) => {
-          const cwd = await sessionCwdOf(sessionId)
+          const header = await headerOf(sessionId)
+          const cwd = header.cwd
           const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
           const selected = resolution !== null ? lastSelection.get(norm(resolution.projectRoot)) : undefined
           const target = selected ?? (cwd !== undefined && cwd !== '' ? cwd : undefined)
           if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
           // 走 sessionCreate 公开面（G3 双建互斥：在途共享、产物 blank 复用）——直调
           // doSessionCreate 会绕过互斥，与 client arm 并发时同 cwd 双建。
-          const product = await service.sessionCreate({ worktreePath: target })
+          const preset = await sourcePresetOf(sessionId)
+          const product = await service.sessionCreate({
+            worktreePath: target,
+            ...(preset === undefined ? {} : { agentPreset: preset }),
+          })
           return controller.prompt({ ...(request as Record<string, unknown>), sessionId: product.sessionId })
         },
       }
@@ -608,7 +656,9 @@ export function createWorktreeRpcService(deps: {
     // 生命周期零交叠，单写者铁律满足。
     // bug eae18b5c：预铸头自携默认 agentPreset（官方 composeAgent 同径——registry defaultId）；
     // 解析失败零猜测（头缺席），不阻断预铸主链。
-    const agentPreset = await deps.resolveDefaultPreset?.().catch(() => undefined)
+    // bug 82cab5fe：请求显式档（重路由源会话折叠值）优先——registry 默认不覆盖源档。
+    const agentPreset =
+      request.agentPreset ?? (await deps.resolveDefaultPreset?.().catch(() => undefined))
     const preseeded = await preseedWorktreeSession(
       persistence as unknown as SessionPersistenceCreateFace,
       {

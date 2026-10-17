@@ -100,6 +100,11 @@ export interface WorktreeChecksResult {
 export interface WorktreeSessionCreateRequest {
   /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */
   readonly worktreePath: string
+  /**
+   * 预铸头 agentPreset 显式档（bug 82cab5fe 重路由模式随档——源会话 preset 折叠值优先于
+   * registry 默认；缺席 = resolveDefaultPreset registry 单源，bug eae18b5c 同径）。
+   */
+  readonly agentPreset?: string
 }
 export interface WorktreeSessionCreateResult {
   readonly sessionId: string

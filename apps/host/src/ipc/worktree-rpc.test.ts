@@ -35,11 +35,11 @@ const fakeExt = {
 }
 
 /** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获；
- *  headers 表驱动（sessionId → SessionHeader.cwd——读句柄 header 消费切片）；
+ *  headers 表驱动（sessionId → SessionHeader 消费切片：cwd + agentPreset/parentSession 选填）；
  *  opts.countOpens = open 调用计数器（G7② 性能钉：非 git 判读零日志读）。 */
 function fakePersistence(
   events: Record<string, readonly unknown[]>,
-  headers: Record<string, { cwd: string }> = {},
+  headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }> = {},
   countOpens?: { value: number },
 ) {
   const appended: Array<{ id: string; events: readonly unknown[] }> = []
@@ -99,7 +99,12 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
     resolveByPath: async (path: string) => {
       const title = titles[path]
       if (title === undefined) return undefined
-      return { title, setTitle: async (next: string) => titled.push({ path, title: next }) }
+      return {
+        title,
+        setTitle: async (next: string): Promise<void> => {
+          titled.push({ path, title: next })
+        },
+      }
     },
     create: async (path: string, title?: string) => {
       created.push({ path, title })
@@ -512,7 +517,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
   /** 被测装配桩：git 项目（resolveProject 计数）+ 会话持久化 + 控制器 */
   function guardRig(input: {
     events: Record<string, readonly unknown[]>
-    headers: Record<string, { cwd: string }>
+    headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }>
   }) {
     const opens = { value: 0 }
     let resolveCalls = 0
@@ -525,7 +530,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
         getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
       }),
     }
-    const { persistence } = fakePersistence(input.events, input.headers, opens)
+    const { persistence, created } = fakePersistence(input.events, input.headers, opens)
     const { controller, calls, prompts } = fakeController()
     const service = createWorktreeRpcService({
       gitWorktree: countingExt,
@@ -536,7 +541,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
         { path: WT_A, branch: 'feat/a' },
       ],
     })
-    return { service, controller, prompts, calls, opens, resolveCallsOf: () => resolveCalls }
+    return { service, controller, prompts, calls, opens, created, resolveCallsOf: () => resolveCalls }
   }
 
   it('A2 竞速败窗：git 项目无绑定 blank 会话 prompt → 原发送拒绝 + 编排产物重路由（原消息内容保真）', async () => {
@@ -578,7 +583,10 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(bound.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
     expect(bound.calls).toHaveLength(0)
 
-    const used = guardRig({ events: { s2: [{ type: 'user', seq: 1 }] }, headers: { s2: { cwd: 'C:/repo' } } })
+    const used = guardRig({
+      events: { s2: [{ type: 'turn/start', seq: 1, data: { turn: 1 } }, { type: 'user/message', seq: 2, data: {} }] },
+      headers: { s2: { cwd: 'C:/repo' } },
+    })
     const disposeUsed = interceptRequiredBinding(used.controller, used.service.requiredBindingGuard()!)
     await expect(used.controller.prompt({ sessionId: 's2', text: 'hi' })).resolves.toEqual({ accepted: true })
     disposeUsed()
@@ -621,6 +629,66 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toThrow()
     dispose()
     expect(prompts as unknown[]).toHaveLength(0) // 原会话零直发（失败显式报错，不静默丢消息）
+  })
+
+  // ── bug 82cab5fe：官方直建会话（首回合前种子事件非 ignorable）blank 判据 + 模式随档 ──
+  const officialSeedEvents = [
+    { type: 'permission/preset', seq: 0, data: { preset: 'danger-full-access' } },
+    { type: 'sandbox/mode', seq: 1, data: { mode: 'danger-full-access' } },
+    { type: 'approval/policy', seq: 2, data: { policy: 'never' } },
+  ]
+
+  it('bug 82cab5fe：官方直建会话（种子事件非 ignorable、无 turn/start）→ 必绑重路由进预铸链（官方投影 blank 语义：种子事件 ≠ 已用）', async () => {
+    const rig = guardRig({ events: { seeded: officialSeedEvents }, headers: { seeded: { cwd: 'C:/repo' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'seeded', text: '你好' })
+    dispose()
+    expect(rig.calls, '官方直建 blank 会话应重路由绑定（bug 在场 = blankOf 恒 false 恒 pass 永无绑定）').toHaveLength(1)
+    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('seeded'), text: '你好' })
+  })
+
+  it('bug 82cab5fe 模式随档：源会话 selected 事件 blitz → 产物预铸头随 blitz（registry 默认不覆盖源档）', async () => {
+    const rig = guardRig({
+      events: { src: [{ type: 'agent-preset/selected', seq: 0, data: { agentPreset: 'blitz' } }] },
+      headers: { src: { cwd: 'C:/repo', agentPreset: 'expedition' } },
+    })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'src', text: 'hi' })
+    dispose()
+    expect(rig.created[0]?.header, '重路由产物丢源档 = 模式 chip 顾此失彼').toMatchObject({ agentPreset: 'blitz' })
+  })
+
+  it('bug 82cab5fe 模式随档：源会话头 agentPreset（无 selected 事件）→ 产物预铸头随同值', async () => {
+    const rig = guardRig({ events: { src: [] }, headers: { src: { cwd: 'C:/repo', agentPreset: 'expedition' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'src', text: 'hi' })
+    dispose()
+    expect(rig.created[0]?.header).toMatchObject({ agentPreset: 'expedition' })
+  })
+
+  it('子会话（header.parentSession 在场——worker/fork）恒放行零重路由（官方子代理机械所有，非 hero 人口）', async () => {
+    const rig = guardRig({
+      events: { child: [] },
+      headers: { child: { cwd: 'C:/repo', parentSession: 'session-parent' } },
+    })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'child', text: 'hi' })
+    dispose()
+    expect(rig.calls, '子会话不得被重路由绑树').toHaveLength(0)
+    expect(rig.prompts).toEqual([{ sessionId: 'child', text: 'hi' }])
+  })
+
+  it('显式 agentPreset 请求覆盖 registry 默认（sessionCreate 请求面——源档 > 默认单源）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      resolveDefaultPreset: async () => 'expedition',
+    })
+    await service.sessionCreate({ worktreePath: WT_A, agentPreset: 'blitz' })
+    expect(created[0]?.header, '请求显式档缺席 = 重路由随档面无处落地').toMatchObject({ agentPreset: 'blitz' })
   })
 
   it('G3 双建互斥：并发 sessionCreate 同 cwd 单产物；后续调用复用产物（每 cwd 至多一个 blank 产物）', async () => {
