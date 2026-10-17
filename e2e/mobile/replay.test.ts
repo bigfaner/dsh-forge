@@ -25,14 +25,14 @@ function httpGetBody(url: string): Promise<{ body: string; at: number[] }> {
 describe('startTimedSseServer', () => {
   it('按 t 偏移分帧下发（命名事件原文重放 + 时序保持）', async () => {
     const sse: ReplaySse = {
-      start: { kind: 'sse-start', t: 0, url: '/api/session/stream?sessionId=s1', status: 200 },
+      start: { kind: 'sse-start', t: 0, url: '/remote/forge-stream', status: 200 },
       frames: [
         { kind: 'sse-frame', t: 10, event: 'snapshot', data: '{"records":[]}' },
         { kind: 'sse-frame', t: 120, event: 'event', data: '{"event":{"type":"user/message"}}' },
       ],
     }
     const port = await startTimedSseServer(sse, 80)
-    const { body, at } = await httpGetBody(`http://127.0.0.1:${port}/api/session/stream?sessionId=s1`)
+    const { body, at } = await httpGetBody(`http://127.0.0.1:${port}/remote/forge-stream`)
     expect(body).toContain('event: snapshot\ndata: {"records":[]}\n\n')
     expect(body).toContain('event: event\ndata: {"event":{"type":"user/message"}}\n\n')
     expect(at.length).toBe(2)
@@ -43,14 +43,14 @@ describe('startTimedSseServer', () => {
 describe('loadRpcEntries / loadSse', () => {
   it('按 kind 过滤录制行；SSE 读回 start+帧', () => {
     const dir = mkdtempSync(join(tmpdir(), 'replay-test-'))
-    appendRecordLine(join(dir, 'api-rpc.jsonl'), { kind: 'rpc', t: 1, method: 'POST', url: '/api/rpc', status: 200, request: { method: 'session.list', payload: {} }, response: { ok: true, value: { items: [] } } })
-    appendRecordLine(join(dir, 'remote-rpc.jsonl'), { kind: 'remote-rpc', t: 2, method: 'POST', url: '/remote/__rpc', status: 200, request: { channel: 'forge:remote/progress', payload: {} }, response: { ok: true, data: {} } })
-    appendRecordLine(join(dir, 'sse-session-stream.jsonl'), { kind: 'sse-start', t: 3, url: '/api/session/stream?sessionId=s1', status: 200 })
-    appendRecordLine(join(dir, 'sse-session-stream.jsonl'), { kind: 'sse-frame', t: 40, event: 'snapshot', data: '{}' })
+    appendRecordLine(join(dir, 'proxy-rpc.jsonl'), { kind: 'proxy', t: 1, method: 'POST', url: '/remote/__rpc', status: 200, request: { channel: 'forge:proxy/session-list', payload: {} }, response: { ok: true, data: {} } })
+    appendRecordLine(join(dir, 'api-ref.jsonl'), { kind: 'api-ref', t: 2, method: 'POST', url: '/api/session/list', status: 200, request: { type: 'client-request', rpcId: 'rec-1', method: 'session/list', payload: { args: { _request: {} } } }, response: { ok: true, value: { items: [] } } })
+    appendRecordLine(join(dir, 'forge-stream.jsonl'), { kind: 'sse-start', t: 3, url: '/remote/forge-stream', status: 200 })
+    appendRecordLine(join(dir, 'forge-stream.jsonl'), { kind: 'sse-frame', t: 40, event: 'snapshot', data: '{}' })
 
-    expect(loadRpcEntries(dir, 'rpc')).toHaveLength(1)
-    expect(loadRpcEntries(dir, 'rpc')[0]!.request).toEqual({ method: 'session.list', payload: {} })
-    expect(loadRpcEntries(dir, 'remote-rpc')[0]!.request).toEqual({ channel: 'forge:remote/progress', payload: {} })
+    expect(loadRpcEntries(dir, 'proxy')).toHaveLength(1)
+    expect(loadRpcEntries(dir, 'proxy')[0]!.request).toEqual({ channel: 'forge:proxy/session-list', payload: {} })
+    expect(loadRpcEntries(dir, 'api-ref')[0]!.request).toEqual({ type: 'client-request', rpcId: 'rec-1', method: 'session/list', payload: { args: { _request: {} } } })
     const sse = loadSse(dir)
     expect(sse?.start.status).toBe(200)
     expect(sse?.frames).toEqual([{ kind: 'sse-frame', t: 40, event: 'snapshot', data: '{}' }])

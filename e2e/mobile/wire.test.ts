@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { appendRecordLine, parseSseBlocks, readRecordLines, type RpcRecord, type SseFrameRecord } from './wire.js'
+import { PROXY_CHANNELS, REMOTE_PROXY_CHANNELS, appendRecordLine, parseSseBlocks, readRecordLines, type RpcRecord, type SseFrameRecord } from './wire.js'
 
 describe('parseSseBlocks', () => {
   it('完整块：命名事件 + 多 data 行拼接', () => {
@@ -36,22 +36,24 @@ describe('parseSseBlocks', () => {
 })
 
 describe('JSONL 往返', () => {
-  it('append → read 原样往返（两类记录行混写）', () => {
+  it('append → read 原样往返（proxy/api-ref + sse 记录行混写）', () => {
     const dir = mkdtempSync(join(tmpdir(), 'wire-test-'))
-    const file = join(dir, 'api-rpc.jsonl')
-    const rpc: RpcRecord = { kind: 'rpc', t: 12, method: 'POST', url: '/api/rpc', status: 200, request: { method: 'session.list', payload: {} }, response: { ok: true, value: { items: [] } } }
+    const file = join(dir, 'proxy-rpc.jsonl')
+    const rpc: RpcRecord = { kind: 'proxy', t: 12, method: 'POST', url: '/remote/__rpc', status: 200, envelope: 'plain', request: { channel: PROXY_CHANNELS.sessionList, payload: {} }, response: { ok: false, error: { message: '通道不在受限 allowlist' } } }
+    const psk: RpcRecord = { kind: 'proxy', t: 14, method: 'POST', url: '/remote/__rpc', status: 200, envelope: 'psk', request: { channel: REMOTE_PROXY_CHANNELS.progress, payload: {} }, response: { ok: true, data: {} } }
     const frame: SseFrameRecord = { kind: 'sse-frame', t: 34, event: 'snapshot', data: '{"records":[]}' }
     appendRecordLine(file, rpc)
+    appendRecordLine(file, psk)
     appendRecordLine(file, frame)
-    expect(readRecordLines(file)).toEqual([rpc, frame])
+    expect(readRecordLines(file)).toEqual([rpc, psk, frame])
   })
 
   it('坏行（录制中断半行）跳过不抛；缺席文件 = 空数组', () => {
     const dir = mkdtempSync(join(tmpdir(), 'wire-test-'))
     const file = join(dir, 'broken.jsonl')
-    writeFileSync(file, '{"kind":"rpc","t":1}\n{"kind":"sse-fr', 'utf8')
+    writeFileSync(file, '{"kind":"proxy","t":1}\n{"kind":"sse-fr', 'utf8')
     const rows = readRecordLines(file)
-    expect(rows).toEqual([{ kind: 'rpc', t: 1 }])
+    expect(rows).toEqual([{ kind: 'proxy', t: 1 }])
     expect(readRecordLines(join(dir, 'absent.jsonl'))).toEqual([])
   })
 })

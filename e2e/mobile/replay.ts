@@ -1,5 +1,5 @@
-// 回放器（1.1——后续 mobile e2e 一律 page.route 回放：/api/rpc 与 /remote/__rpc 按录制
-// 交换原样 fulfill；SSE 起本地 timed 流服务按 fixture 的 t 序列重放，经 route.fulfill
+// 回放器（1.1 R12——后续 mobile e2e 一律 page.route 回放：/remote/__rpc proxy 通道与 /api
+// 参照腿按录制交换原样 fulfill；SSE 起本地 timed 流服务按 fixture 的 t 序列重放，经 route.fulfill
 // {response: APIResponse} 透传流式体——route.fulfill 直填 body 无分帧时序，AC 明确 timed）。
 import { createServer, type Server } from 'node:http'
 import type { Page, Route } from '@playwright/test'
@@ -10,15 +10,15 @@ export interface ReplaySse {
   readonly frames: readonly SseFrameRecord[]
 }
 
-/** 读 api 面 RPC 交换（按 kind 过滤；录制序保持） */
-export function loadRpcEntries(dir: string, kind: 'rpc' | 'remote-rpc'): RpcRecord[] {
-  const file = kind === 'rpc' ? `${dir}/api-rpc.jsonl` : `${dir}/remote-rpc.jsonl`
+/** 读 RPC 交换（kind = proxy（mobile 消费面）| api-ref（官方参照腿）；录制序保持） */
+export function loadRpcEntries(dir: string, kind: RpcRecord['kind']): RpcRecord[] {
+  const file = kind === 'proxy' ? `${dir}/proxy-rpc.jsonl` : `${dir}/api-ref.jsonl`
   return readRecordLines(file).filter((r): r is RpcRecord => r.kind === kind)
 }
 
 /** 读 SSE 流（start 行 + 帧序列；缺席 = undefined） */
 export function loadSse(dir: string): ReplaySse | undefined {
-  const lines = readRecordLines(`${dir}/sse-session-stream.jsonl`)
+  const lines = readRecordLines(`${dir}/forge-stream.jsonl`)
   const start = lines.find((r): r is SseStartRecord => r.kind === 'sse-start')
   if (start === undefined) return undefined
   return { start, frames: lines.filter((r): r is SseFrameRecord => r.kind === 'sse-frame') }
@@ -63,13 +63,13 @@ export function startTimedSseServer(sse: ReplaySse, holdMs = 500): Promise<numbe
 }
 
 /**
- * 全量回放装配：api/forge RPC 按请求体 method（api）/channel（forge）匹配录制条目、
- * 同名 FIFO 依次 fulfill（同方法多次调用按录制序重放；未录方法 = 404 JSON——缺口显性化，
- * 不静默空成功）；SSE route → 本地 timed 服务透传。CORS 头放开（回放页跨源取数冒烟）。
+ * 全量回放装配：proxy 面按请求体 channel、api 参照腿按请求体 method 匹配录制条目、同名 FIFO
+ * 依次 fulfill（未录方法/通道 = 404 JSON——缺口显性化，不静默空成功）；SSE route → 本地
+ * timed 服务透传（forge-stream 与 session/stream 两 URL 同源帧序列）。CORS 头放开。
  */
 export async function installReplay(page: Page, fixtureDir: string): Promise<void> {
-  const apiEntries = loadRpcEntries(fixtureDir, 'rpc')
-  const remoteEntries = loadRpcEntries(fixtureDir, 'remote-rpc')
+  const proxyEntries = loadRpcEntries(fixtureDir, 'proxy')
+  const apiEntries = loadRpcEntries(fixtureDir, 'api-ref')
 
   const serveRpc = (entries: RpcRecord[], keyOf: (request: unknown) => string) =>
     entries.reduce((table, entry) => {
@@ -78,26 +78,27 @@ export async function installReplay(page: Page, fixtureDir: string): Promise<voi
       return table
     }, {} as Record<string, RpcRecord[]>)
 
+  const proxyTable = serveRpc(proxyEntries, (request) => {
+    const c = (request as { channel?: unknown }).channel
+    return typeof c === 'string' ? c : '(none)'
+  })
   const apiTable = serveRpc(apiEntries, (request) => {
     const m = (request as { method?: unknown }).method
     return typeof m === 'string' ? m : '(none)'
   })
-  const remoteTable = serveRpc(remoteEntries, (request) => {
-    const c = (request as { channel?: unknown }).channel
-    return typeof c === 'string' ? c : '(none)'
-  })
 
-  const rpcHandler = (table: Record<string, RpcRecord[]>) => async (route: Route) => {
+  const rpcHandler = (table: Record<string, RpcRecord[]>, keyField: 'channel' | 'method') => async (route: Route) => {
     const raw = route.request().postData()
-    let body: { method?: string; channel?: string } | null = null
-    try {
-      body = raw === null ? null : (JSON.parse(raw) as { method?: string; channel?: string })
-    } catch {
-      body = null
+    let key = '(none)'
+    if (raw !== null) {
+      try {
+        const body = JSON.parse(raw) as Record<string, unknown>
+        if (typeof body[keyField] === 'string') key = body[keyField] as string
+      } catch {
+        key = '(none)'
+      }
     }
-    const key = typeof body?.method === 'string' ? body.method : typeof body?.channel === 'string' ? body.channel : '(none)'
-    const queue = table[key]
-    const entry = queue?.shift()
+    const entry = table[key]?.shift()
     if (entry === undefined) {
       await route.fulfill({
         status: 404,
@@ -115,16 +116,27 @@ export async function installReplay(page: Page, fixtureDir: string): Promise<voi
     })
   }
 
-  await page.route('**/api/rpc', rpcHandler(apiTable))
-  await page.route('**/remote/__rpc', rpcHandler(remoteTable))
+  await page.route('**/remote/__rpc', rpcHandler(proxyTable, 'channel'))
+  await page.route('**/api/**', (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    return rpcHandler(apiTable, 'method')(route)
+  })
 
   const sse = loadSse(fixtureDir)
   if (sse !== undefined && sse.frames.length > 0) {
     const port = await startTimedSseServer(sse)
-    const replayUrl = `http://127.0.0.1:${port}/api/session/stream`
-    await page.route('**/api/session/stream**', async (route) => {
-      const response = await page.context().request.get(replayUrl)
-      await route.fulfill({ response, headers: { 'access-control-allow-origin': '*' } })
-    })
+    const replayUrl = `http://127.0.0.1:${port}${sse.start.url}`
+    await page.route('**/remote/forge-stream**', (route) => replaySse(page, replayUrl, route))
+    await page.route('**/api/session/stream**', (route) => replaySse(page, replayUrl, route))
   }
+}
+
+async function replaySse(page: Page, replayUrl: string, route: Route): Promise<void> {
+  const response = await page.context().request.get(replayUrl)
+  // headers 显式全覆盖（fulfill 传 headers 时覆盖 response 头——content-type 缺失会被
+  // EventSource 以 MIME 不是 text/event-stream 拒连，实测取证）
+  await route.fulfill({
+    response,
+    headers: { 'access-control-allow-origin': '*', 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+  })
 }
