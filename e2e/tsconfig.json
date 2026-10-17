@@ -15,6 +15,7 @@
   "include": [
     "playwright.config.ts",
     "specs/**/*.ts",
-    "support/**/*.ts"
+    "support/**/*.ts",
+    "mobile/**/*.ts"
   ]
 }
