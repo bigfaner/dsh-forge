@@ -169,8 +169,7 @@ md的FRONTMATTER渲染成表格，跟github一样
 - 手机端适配：循环叙述卡判别只消费 `source.kind`（tech-design 投影白名单 B 档），send 语义（next-turn/next-step、wakeup 与否、cancel parked）不影响渲染契约；惰性续轮（send('next-turn', wakeup:false)）为可选增强。
 - 上下文：mobile-ui tech-design.md AD-4 / 投影白名单；官方正本 dsh-agent runtime-types.d.ts（send/steer/followup/inject 全收显式 UserMessage）。
 
-## 74. forge 只读面 typert 化：`/remote/__rpc` 迁入官方 `/api` 传输（mobile-ui R11 两步走第二步）
-- 把 forge 只读面（forge:remote/progress、projects/grouped、read-state、workers、session-links、worktree/* 等）改造为 typert Remote 服务（`@Remote` 装饰 + `TypertRemoteService`，与 `dsh-commands` 同构），gateway 自动认领 `/api/forge/...`。
-- 收益：mobile 单一官方 client（`rpc.ts` 整体删除）；`_request` 注入/信封校验/鉴权全走官方机制；桌面端未来可迁同一协议。
-- 关键核销点：审批写入端点（task-action/approval）的守卫语义从 allowlist+authorizeIndex+dswf cookie 迁到 operator peer 的等价性论证（write 面不降级）；桌面端兼容期两套并存或同步迁移。
-- 前置：批次②按双通道交付（rpc.ts 保留），本项为非阻塞优化，验证「endpoint claimed + `_request` 注入」后再切单 client。
+## 74. forge 只读面 typert 化：`/remote/__rpc` 迁入官方 `/api` 传输（mobile-ui R11）
+- **进展（2026-10-17 裁决改向）：提前至批次②执行——任务 mobile-ui/1.11 已改向「forge 远程面 typert 化（/api/forge/*）」**，首批端点：progress / projects/grouped / read-state / workers / session-links / task-action / approval / disconnect；生成器 `@deepseek-ai/dsh-typert-generator`（npm 0.0.1-rc.1，已核实可得）；实现锚点 = `dsh-commands` typert 形态。
+- 后续（非阻塞）：桌面 `remote-transport` 的 `forge:remote/*` 消费迁移同一协议；mobile `rpc.ts` 删除收口单 client。
+- 关键核销点：审批写入端点（task-action/approval）的守卫语义从 allowlist+authorizeIndex+dswf cookie 迁到 operator peer 的等价性论证（write 面不降级）。

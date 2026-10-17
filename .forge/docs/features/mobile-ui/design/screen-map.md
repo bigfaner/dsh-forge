@@ -9,7 +9,7 @@ created: 2026-10-17
 | # | Screen | 路由/形态 | mockup 屏 | 关键交互 | 数据源 |
 |---|---|---|---|---|---|
 | 1 | chat 对话主视图（根） | `#/chat/:sessionId` | ①②③ | 仅消息区滚动、滚动到底（未读计数）、composer 底行（模式/worktree/滑杆/发送） | 官方 `$events` 流 + `session/history` |
-| 2 | drawer 抽屉会话列表 | 浮层（☰） | ④ | 项目树折叠、置顶、双级未读、连接状态弹层（断开） | `forge:remote/projects` 分组视图（项目 → worktree → sessions，host 侧 inferSource 归属）、`forge:remote/read-state`、`forge:remote/disconnect` |
+| 2 | drawer 抽屉会话列表 | 浮层（☰） | ④ | 项目树折叠、置顶、双级未读、连接状态弹层（断开） | `forge/projects/grouped`（typert 面，项目 → worktree → sessions，host 侧 inferSource 归属）、`forge/read-state`、`forge/disconnect` |
 | 3 | hero 新会话 | `#/new` | ⑤ | 模式/分支乐观切换、host 拒绝确认框 | `forge:worktree/*`、`forge:remote/session-links`、`session.create` |
 | 4 | ask 分页面板 | `#/ask` | ⑥ | 一屏一题、序号/总数、上一个/提交/下一个 | `interaction.pending/answer` |
 | 5 | settings 最小化面板 | 浮层（滑杆钮） | ⑦ | 模型行、推理等级分段（选档即生效） | `session.rpc` 模型/effort 面 |

@@ -119,7 +119,9 @@ declare module '@deepseek-ai/dsh-llm' {
 
 官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 各官方包 `typert.host.js` invocations 表（逐文件核销 2026-10-17，见 6.2）+ 批次①回放录制补参数级细节。归组归属键实证：`SessionSummary.cwd` 在官方摘要内（optional）——归组零二级解析。
 
-### 6.0 forge 面：`forge:remote/projects/grouped` 响应体（drawer 一次调用取项目 → worktree → sessions）
+### 6.0 forge 面：typert 化后的 `forge/projects/grouped`（drawer 一次调用取项目 → worktree → sessions）
+
+> 通道裁决（2026-10-17）：forge mobile 直接采用 typert——forge 远程面注册为 typert 服务，gateway 认领 `/api/forge/*`，与官方面**同一 client 同一信封**（`connection.rpc.call('/api','forge/projects/grouped',…)`）；`/remote/__rpc` 桥保留供桌面 `remote-transport` 消费（并存，桌面迁移另案）。
 
 ```jsonc
 {
@@ -140,7 +142,7 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 ```
 
-口径：sessions 按项目平铺不按 worktree 二层嵌套；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。**worktree 徽标暂不显示**（2026-10-17 裁决——响应仍携带 worktrees[]，前端不渲染徽标，后续启用零数据面改动）。失败 = `__rpc` 既有 `{ok:false,error:{code,message}}`。
+口径：sessions 按项目平铺不按 worktree 二层嵌套；字段官方原样不裁剪；`origin:'subagent'` = worker/派发会话次级筛选源；`running`/`updatedAt` 支撑「运行中排前 + 最近 24h top10」。**worktree 徽标暂不显示**（2026-10-17 裁决——响应仍携带 worktrees[]，前端不渲染徽标，后续启用零数据面改动）。失败 = 官方信封 `{ok:false,error:{code,message}}`（`gateway/*` 族）。
 
 ### 6.2 官方端点逐条清单（typert.host.js 核销 2026-10-17）
 
