@@ -55,6 +55,7 @@ import {
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
+import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
   createWorktreeRpcService,
@@ -375,6 +376,19 @@ async function main(): Promise<void> {
         sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
+        // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
+        // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
+        // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
+        onWorktreeSetChanged: async () => {
+          let projects: Pick<ProjectService, 'listProjects'> | undefined
+          try {
+            projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
+          } catch {
+            projects = undefined
+          }
+          if (projects === undefined) return
+          await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
+        },
         // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
         // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
         resolveDefaultPreset: async () => {

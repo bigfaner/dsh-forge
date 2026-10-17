@@ -189,9 +189,22 @@ export function createWorktreeRpcService(deps: {
   readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
   /** 目录 ACL 预防性补权缝（bug 4209c531——缺省 = win32 icacls 当前用户 FullControl；测试注入桩） */
   readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
+  /** worktree 集合变化锚（绑定表失效通知——create/remove 建删树 + sessionCreate 树首次
+   * 挂会话时点触发；装配方接 refreshKnowledgeBindings 全量现算重写 knowledge-bindings。
+   * fail-soft：锚缺席/抛错只记 warn，不影响建删树/编排结果） */
+  readonly onWorktreeSetChanged?: (() => Promise<void> | void) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
+  // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）
+  const notifyWorktreeSetChanged = async (): Promise<void> => {
+    if (deps.onWorktreeSetChanged === undefined) return
+    try {
+      await deps.onWorktreeSetChanged()
+    } catch (cause) {
+      warn(`[git-worktree] 绑定表刷新锚失败（fail-soft——表停旧快照，下次 boot/注册自愈）：${String(cause)}`)
+    }
+  }
   const listPresent =
     deps.listPresent ??
     ((root: string) => listWorktrees(root).then((entries) => entries.map((entry) => entry.path)))
@@ -426,11 +439,13 @@ export function createWorktreeRpcService(deps: {
         path: request.path,
         base: request.base,
       })
+      await notifyWorktreeSetChanged() // 绑定表失效锚：新树路径即需路由行
       return { entry: entryToDto(entry, request.projectRoot) }
     },
 
     async remove(request) {
       const result = await deleteWorktree(request.projectRoot, request.path, async () => true)
+      await notifyWorktreeSetChanged() // 绑定表失效锚：被删路径旧行随全量重写即时消失
       return { removed: result.removed }
     },
 
@@ -479,7 +494,12 @@ export function createWorktreeRpcService(deps: {
         if (await blankOf(reused.sessionId)) return reused
         sessionProducts.delete(key) // 产物已被真实使用（非 blank）→ 允许新建
       }
-      const pending = doSessionCreate(request)
+      // 绑定表失效锚进 pending 链（首次挂会话时点恰一次——外部裸建树首次使用即入表；
+      // G3 并发等待者共享同链不重复触发；fail-soft 恒不改写产物）
+      const pending = doSessionCreate(request).then(async (result) => {
+        await notifyWorktreeSetChanged()
+        return result
+      })
       sessionProducts.set(key, pending)
       try {
         return await pending

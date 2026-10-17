@@ -642,6 +642,47 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(created).toHaveLength(1)
   })
 
+  // ── 绑定表失效锚（onWorktreeSetChanged——外部裸建树首次使用即入表的 sessionCreate 锚）──
+  it('锚恰一次：全新 sessionCreate 成功后触发 onWorktreeSetChanged 恰一次（进 pending 链——G3 并发等待者不重复触发）；blank 复用不重触发', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    let fired = 0
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      onWorktreeSetChanged: async () => {
+        fired += 1
+      },
+    })
+    const [a, b] = await Promise.all([
+      service.sessionCreate({ worktreePath: WT_A }),
+      service.sessionCreate({ worktreePath: WT_A }),
+    ])
+    expect(a.sessionId).toBe(b.sessionId)
+    expect(fired, '并发共享同链——锚恰一次').toBe(1)
+    await service.sessionCreate({ worktreePath: WT_A }) // blank 复用径
+    expect(fired, '复用不重触发').toBe(1)
+  })
+
+  it('锚 fail-soft：onWorktreeSetChanged 抛错不改写 sessionCreate 产物（只记 warn）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const warnings: string[] = []
+    const service = createWorktreeRpcService({
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      onWorktreeSetChanged: async () => {
+        throw new Error('refresh boom')
+      },
+      warn: (line) => warnings.push(line),
+    })
+    const result = await service.sessionCreate({ worktreePath: WT_A })
+    expect(result.sessionId).toBe(created[0]?.header.id) // 产物原样返回
+    expect(warnings.some((line) => line.includes('绑定表刷新锚失败'))).toBe(true)
+  })
+
   it('G7② seal 判序反转：request.cwd 命中非 git 能力缓存 → 零会话日志读', async () => {
     const opens = { value: 0 }
     const { persistence } = fakePersistence({ s1: attachEvent(WT_A) }, { s1: { cwd: 'C:/foreign/x' } }, opens)
