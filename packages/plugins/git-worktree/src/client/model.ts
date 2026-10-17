@@ -85,18 +85,19 @@ export interface DeleteChecks {
 }
 
 /** 拦截项 id（命中任一 → 确认钮禁用即拦截） */
-export type DeleteBlocker = 'uncommitted-changes' | 'attached-sessions'
+export type DeleteBlocker = 'uncommitted-changes' | 'attached-sessions' | 'checks-unavailable'
 
-/** 命中的拦截项（双清 = 空数组） */
-export function deleteBlockers(checks: DeleteChecks): readonly DeleteBlocker[] {
+/** 命中的拦截项（双清 = 空数组；A11：checks 缺席 = 保守拦截——破坏性操作 fail-closed） */
+export function deleteBlockers(checks: DeleteChecks | null): readonly DeleteBlocker[] {
+  if (checks === null) return ['checks-unavailable']
   const blockers: DeleteBlocker[] = []
   if (checks.dirtyCount > 0) blockers.push('uncommitted-changes')
   if (checks.attachedSessions > 0) blockers.push('attached-sessions')
   return blockers
 }
 
-/** 确认钮禁用判定（未提交变更 or 挂靠会话命中即拦；仅未 push 提交放行） */
-export function isDeleteBlocked(checks: DeleteChecks): boolean {
+/** 确认钮禁用判定（未提交变更 or 挂靠会话命中即拦；checks 拉取失败/进行中拦；仅未 push 提交放行） */
+export function isDeleteBlocked(checks: DeleteChecks | null): boolean {
   return deleteBlockers(checks).length > 0
 }
 

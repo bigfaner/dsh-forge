@@ -16,8 +16,8 @@ export interface DeleteWorktreeDialogProps {
   readonly branch: string | null
   /** worktree 路径（引述所在位置） */
   readonly path: string
-  /** 状态清单（装配层经管理域拉取后传入） */
-  readonly checks: DeleteChecks
+  /** 状态清单（装配层经管理域拉取后传入；null = 拉取失败/进行中——A11 确认钮禁用即拦截） */
+  readonly checks: DeleteChecks | null
   readonly onClose: () => void
   readonly onConfirm: () => void
 }
@@ -72,9 +72,20 @@ function CheckRow({
   )
 }
 
-/** 状态清单体（三检查项——弹窗 body 内容，Modal 外提单测面） */
-export function DeleteChecksList({ checks, branch }: { checks: DeleteChecks; branch: string | null }): ReactNode {
+/** 状态清单体（三检查项——弹窗 body 内容，Modal 外提单测面；A11：checks 缺席 = block 行保守拦截） */
+export function DeleteChecksList({ checks, branch }: { checks: DeleteChecks | null; branch: string | null }): ReactNode {
   const branchLabel = branch ?? '(detached)'
+  if (checks === null) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <CheckRow
+          tone="block"
+          title="状态清单不可用"
+          detail="worktree 状态拉取失败或进行中——删除为破坏性操作，拉到状态清单后才可确认"
+        />
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <CheckRow

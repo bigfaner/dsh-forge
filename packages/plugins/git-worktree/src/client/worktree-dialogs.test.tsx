@@ -246,6 +246,13 @@ describe('DeleteChecksList（原型「删除二次确认」状态清单）', () 
     expect(isDeleteBlocked({ dirtyCount: 0, aheadCount: 0, attachedSessions: 1 })).toBe(true)
   })
 
+  it('A11：checks 缺席（拉取失败/进行中）→ block 行保守拦截（确认钮禁用）', () => {
+    const markup = render(null)
+    expect(markup).toContain('data-dswt-check="block"')
+    expect(markup).toContain('状态清单不可用')
+    expect(isDeleteBlocked(null)).toBe(true)
+  })
+
   it('detached 分支引述（branch=null → (detached)）', () => {
     const markup = renderToStaticMarkup(
       <DeleteChecksList branch={null} checks={{ dirtyCount: 0, aheadCount: 1, attachedSessions: 0 }} />,

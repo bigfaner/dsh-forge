@@ -86,6 +86,10 @@ describe('删除拦截判定（未提交变更/挂靠会话命中即拦；仅未
     expect(deleteBlockers(checks)).toEqual([])
     expect(isDeleteBlocked(checks)).toBe(false)
   })
+  it('A11：checks 缺席（拉取失败/进行中）= checks-unavailable 拦截——破坏性操作 fail-closed', () => {
+    expect(deleteBlockers(null)).toEqual(['checks-unavailable'])
+    expect(isDeleteBlocked(null)).toBe(true)
+  })
   it('未提交变更 / 挂靠会话各自命中即拦截；同命中去重', () => {
     expect(isDeleteBlocked({ dirtyCount: 1, aheadCount: 0, attachedSessions: 0 })).toBe(true)
     expect(isDeleteBlocked({ dirtyCount: 0, aheadCount: 0, attachedSessions: 1 })).toBe(true)

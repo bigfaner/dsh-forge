@@ -9,6 +9,7 @@
 //   · registerWorktreeChannels（main 侧 ipc 注册——m2-wiring 单行编排位）；
 //   · interceptSessionSends（child 侧发送拦截——assertSendable 接入 host 消息处理链：
 //     sessionController.prompt/updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示）。
+import { realpath } from 'node:fs/promises'
 import {
   WORKTREE_CHANNELS,
   type WorktreeAheadBehindRequest,
@@ -472,19 +473,23 @@ export function createWorktreeRpcService(deps: {
     if (persistence === undefined || typeof persistence.create !== 'function') {
       throw new Error('sessionPersistence 缺席或缺 create 面（host 装配漂移）——预铸采纳配方不可用')
     }
-    const branch = await resolveBranch(request.worktreePath)
+    // A12 入头前 realpath 归一（第四维）：subst/junction/symlink/8.3 短名/大小写拼写收敛为
+    // 磁盘真值——与官方 attachSession「header.cwd realpath ≡ workspace.path」比对口径对齐，
+    // 预铸头与后续比对不再漂移。可达则归一、失败 fail-soft 回退原拼写（canonicalizeDir 同判）。
+    const cwd = await realpath(request.worktreePath).catch(() => request.worktreePath)
+    const branch = await resolveBranch(cwd)
     // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
     // 唯一写句柄——建会话后另开写句柄补写挂靠事件在活会话上结构性不可行）。改为：先
     // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
     // → flush + close，再 controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄
     // 生命周期零交叠，单写者铁律满足。
     const preseeded = await preseedWorktreeSession(persistence as unknown as SessionPersistenceCreateFace, {
-      worktreePath: request.worktreePath,
+      worktreePath: cwd,
       branch,
     })
-    await controller.create({ sessionId: preseeded.sessionId, cwd: request.worktreePath })
+    await controller.create({ sessionId: preseeded.sessionId, cwd })
     // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
-    await attachWorkspace(request.worktreePath, preseeded.sessionId)
+    await attachWorkspace(cwd, preseeded.sessionId)
     return { sessionId: preseeded.sessionId, branch }
   }
 

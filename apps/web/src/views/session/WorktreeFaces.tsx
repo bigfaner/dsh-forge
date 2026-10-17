@@ -545,8 +545,9 @@ export function ForgeHeroWorktreeMount({
         worktreeName={deleteTarget?.worktreeName ?? ''}
         branch={deleteTarget?.branch ?? null}
         path={deleteTarget?.path ?? ''}
-        // checks 未拉到（拉取中/失败）= 全零保守面：不误拦（拦截语义只对确认数据生效）
-        checks={deleteChecks ?? { dirtyCount: 0, aheadCount: 0, attachedSessions: 0 }}
+        // A11 破坏性操作 fail-closed：checks 拉取失败/进行中（null）→ 弹窗 block 行 + 确认钮禁用；
+        // 拉到数据才按三清单判定放行（不再全零兜底放行）
+        checks={deleteChecks}
         onClose={() => setDeleteTarget(null)}
         onConfirm={onConfirmDelete}
       />

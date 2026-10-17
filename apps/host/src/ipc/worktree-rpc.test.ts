@@ -5,6 +5,9 @@
 //   · interceptSessionSends——assertSendable 接入 host 消息处理链（封存拒绝 + 明确错误；
 //     未绑定/未封存放行；判读异常 fail-open）。
 // ops 真机 git 面归独立模式走查（1.8 e2e 记录）——本文件全 fake 注入，零 git 依赖。
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_CHANNELS,
@@ -239,6 +242,28 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(order).toEqual(['precast', 'adopt'])
     expect(calls).toEqual([{ sessionId: result.sessionId, cwd: 'C:/repo/.forge/worktrees/wt-a' }])
     expect(result.branch).toBe('feat/a')
+  })
+
+  it('A12：sessionCreate 预铸头 cwd realpath 归一（第四维——链接/短名/../拼写形态收敛磁盘真值，controller.create 同口径；不可达 fail-soft 回退原拼写）', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'wt-a12-')))
+    try {
+      const variant = `${join(dir, 'sub')}${sep}..` // 可达但非磁盘真值拼写（join 不折叠尾 '..'——realpath 收敛）
+      const { persistence, created } = fakePersistence({})
+      const { controller, calls } = fakeController()
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        sessionController: controller,
+        sessionPersistence: persistence,
+        // git worktree list 本就返回 canonical 拼写——realpath 归一前置使变体拼写也能命中清单分支
+        listWorktreeEntries: async () => [{ path: dir, branch: 'feat/a' }],
+      })
+      const result = await service.sessionCreate({ worktreePath: variant })
+      expect(created[0]!.header.cwd).toBe(dir)
+      expect(calls[0]!.cwd).toBe(dir)
+      expect(result.sessionId).toBe(created[0]!.header.id)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('sessionCreate：sessionPersistence 缺席 / 无 create 面 → 明确错误（不做半截预铸）', async () => {
