@@ -1,10 +1,11 @@
-// @dsh-forge/contracts —— worktree/branch 管理 DTO（worktree-branch-management fix-2）。
-// 通道族 forge:worktree/*（九通道）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
+// @dsh-forge/contracts —— worktree/branch 管理 DTO。
+// 通道族 forge:worktree/*（九通道：list/create/delete/ahead-behind/branches/checks/
+// session-create/seal/select）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
 // → host ipc worktree-rpc；域实现 = packages/plugins/git-worktree——host ipc 装配透传）。
 // 面分治：list/create/delete/ahead-behind/branches/checks = 管理域读+封闭写集（create/delete
-// ——提案「数据源与命令面」）；attach = 挂靠事件唯一写入口的 UI 调用点；session-create =
-// 建会话 meta.cwd 注入（sessionController.create({cwd}) 单门）；seal = 封存判定快照
-// （chip 失效态 / notice / composer 占位三通道数据源）。
+// ——提案「数据源与命令面」）；session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘，
+// 绑定写面唯一时点）；seal = 封存判定快照（chip 失效态 / notice / composer 占位数据源）；
+// select = hero 选中树推送（host 重路由目标记忆）。
 
 /** worktree 清单条目（= 插件域 WorktreeEntry + 行渲染派生面） */
 export interface WorktreeEntryDto {
@@ -89,24 +90,12 @@ export interface WorktreeChecksResult {
   readonly attachedSessions: number
 }
 
-/** forge:worktree/attach（挂靠事件唯一写入口的 UI 调用点——选择控件确认时） */
-export interface WorktreeAttachRequest {
-  readonly sessionId: string
-  readonly worktreePath: string
-  /** 分支（清单行携带；缺省 = host 自查 worktree list） */
-  readonly branch?: string
-}
-export interface WorktreeAttachResult {
-  readonly attached: true
-  readonly branch: string
-  readonly seq: number
-}
-
 /**
  * forge:worktree/session-create（1.16 预铸采纳配方——单 RPC 原子）：
  * host 预铸会话（persistence.create 自铸 id + worktreePath cwd 头 → 初始句柄写挂靠事件
  * seq 0 → close）→ controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄生命
- * 周期零交叠，单写者铁律满足（活会话上不再另开写句柄）。
+ * 周期零交叠，单写者铁律满足（活会话上不再另开写句柄；原 attach 通道已废——绑定写面
+ * 唯一时点 = 预铸）。
  */
 export interface WorktreeSessionCreateRequest {
   /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */

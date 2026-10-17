@@ -54,7 +54,6 @@ describe('createWorktreeOrchestrator（挂靠编排缝——React 解耦的可�
     const onNotice = over.onNotice ?? vi.fn()
     const worktreeRpc = {
       seal: vi.fn().mockResolvedValue({ isGit: true, sealed: false, binding: null }),
-      attach: vi.fn().mockResolvedValue({ seq: 0, worktreePath: ROOT, branch: 'main' }),
       sessionCreate: vi.fn().mockResolvedValue({ sessionId: 's-new' }),
       ...over.rpc,
     }
@@ -75,7 +74,6 @@ describe('createWorktreeOrchestrator（挂靠编排缝——React 解耦的可�
     const sessionId = await createWorktreeOrchestrator(d)(ROOT)
     expect(sessionId).toBe('s-blank')
     expect(worktreeRpc.seal).not.toHaveBeenCalled()
-    expect(worktreeRpc.attach).not.toHaveBeenCalled()
     expect(worktreeRpc.sessionCreate).not.toHaveBeenCalled()
     expect(d.worktree.openSession).toHaveBeenCalledWith('s-blank')
     expect(onNotice).not.toHaveBeenCalled()
@@ -86,7 +84,6 @@ describe('createWorktreeOrchestrator（挂靠编排缝——React 解耦的可�
     const { deps: d, worktreeRpc } = deps()
     const sessionId = await createWorktreeOrchestrator(d)(treePath)
     expect(sessionId).toBe('s-blank')
-    expect(worktreeRpc.attach).not.toHaveBeenCalled()
     expect(worktreeRpc.sessionCreate).not.toHaveBeenCalled()
     expect(d.worktree.openSession).toHaveBeenCalledWith('s-blank')
   })

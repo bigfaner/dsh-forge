@@ -194,12 +194,6 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
     expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', cancelSuppressed: ['C:/other'] }))).toBe(true)
   })
 
-  // A1——冷却窗判据加 draftIntent 维度：只压「点选引发」（draft 空），发送意图不被冷却挡
-  it('冷却窗 + draft 空 → 不 arm（点选引发的短窗语义保留）；冷却窗 + draft 非空 → 照常 arm（唯一编排时机不被冷却杀）', () => {
-    expect(shouldArmSelectedRow(input({ cooldownActive: true, draftIntent: false }))).toBe(false)
-    expect(shouldArmSelectedRow(input({ cooldownActive: true, currentCwd: 'C:/elsewhere' }))).toBe(true)
-  })
-
   it('草稿空（无首条消息意图）→ 不 arm——点选/回填零会话副作用（1.29 唯一时机闸门）', () => {
     expect(shouldArmSelectedRow(input({ draftIntent: false }))).toBe(false)
   })

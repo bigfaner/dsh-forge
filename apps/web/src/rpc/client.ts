@@ -25,8 +25,6 @@ import {
   WORKTREE_CHANNELS,
   type WorktreeAheadBehindRequest,
   type WorktreeAheadBehindResult,
-  type WorktreeAttachRequest,
-  type WorktreeAttachResult,
   type WorktreeBranchesRequest,
   type WorktreeBranchesResult,
   type WorktreeChecksRequest,
@@ -228,9 +226,9 @@ export interface ForgeSettingsRpc {
 }
 
 /**
- * forge:worktree/* 面方法集（worktree-branch-management fix-2——九通道；域实现 =
- * packages/plugins/git-worktree，host ipc/worktree-rpc 装配透传。attach/session-create/seal
- * = 会话绑定三面：唯一写入口调用点 / meta.cwd 建会话 / 封存判定快照）。
+ * forge:worktree/* 面方法集（九通道；域实现 = packages/plugins/git-worktree，
+ * host ipc/worktree-rpc 装配透传。session-create = 预铸采纳单门（绑定写面唯一时点）；
+ * seal = 封存判定快照；select = hero 选中树推送）。
  */
 export interface ForgeWorktreeRpc {
   list(q: WorktreeListRequest): Promise<WorktreeListResult>
@@ -239,7 +237,6 @@ export interface ForgeWorktreeRpc {
   aheadBehind(q: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
   branches(q: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
   checks(q: WorktreeChecksRequest): Promise<WorktreeChecksResult>
-  attach(q: WorktreeAttachRequest): Promise<WorktreeAttachResult>
   sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
@@ -333,7 +330,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       aheadBehind: (q) => invokeRpc<WorktreeAheadBehindResult>(transport, WORKTREE_CHANNELS.aheadBehind, q),
       branches: (q) => invokeRpc<WorktreeBranchesResult>(transport, WORKTREE_CHANNELS.branches, q),
       checks: (q) => invokeRpc<WorktreeChecksResult>(transport, WORKTREE_CHANNELS.checks, q),
-      attach: (q) => invokeRpc<WorktreeAttachResult>(transport, WORKTREE_CHANNELS.attach, q),
       sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
       seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
       select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),

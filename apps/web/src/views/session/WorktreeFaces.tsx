@@ -101,30 +101,7 @@ function writeSelectedMemory(projectRoot: string, path: string | undefined): voi
 }
 
 /**
- * arm 冷却窗（点选/编排成功后 8s 内不再自发 arm——账本 cwd 对挂靠树的收敛存在滞后，
- * 滞后窗口内 arm 会把「刚编排完」误判为「当前不在选中树」而弹确认框扰断 1.19 单页流；
- * 跨重挂存活故随 sessionStorage。冷却只是抑噪：其后 cwd 仍 ≠ 选中树时编排默认照常消费）。
- */
-const ARM_COOLDOWN_MS = 8_000
-
-function writeArmCooldown(): void {
-  try {
-    window.sessionStorage.setItem('dswt.armCooldownUntil', String(Date.now() + ARM_COOLDOWN_MS))
-  } catch {
-    // fail-soft：无冷却 = 抑噪退化，语义不受影响
-  }
-}
-
-function readArmCooldownActive(): boolean {
-  try {
-    return Date.now() < (Number(window.sessionStorage.getItem('dswt.armCooldownUntil')) || 0)
-  } catch {
-    return false
-  }
-}
-
-/**
- * hero 默认回填锚定链（1.17 refinement 裁决——纯函数单源）：主行（isMain）当前检出分支
+ * hero 默认回填锚定链（纯函数单源）：主行（isMain）当前检出分支
  * → rows 中检出同分支的行（分支只检出于一个树，分支→worktree 映射唯一；不硬编码
  * main/主行——主行检出 feature 分支时默认即指向该分支所在树，含主行自身检出场景）。
  * 锚定失败（主行 branch null / 映射行缺失 / 非 git 不进本函数）= undefined 退回占位现状。
@@ -191,14 +168,11 @@ export function ForgeHeroWorktreeMount({
     [projectRoot, makeRpc],
   )
 
-  // 点选 = 纯选中态（1.29）：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
-  // 冷却窗照写——若用户先键入后点选（草稿已非空），1.31 A1 判据下冷却不再挡发送意图的
-  // arm（唯一编排时机保住）；「点选引发」（draft 空）的 arm 仍压 8s 短窗语义。
-  // A3：显式重选 = 用户再次表达意图——清除该行的取消抑制（确认框可重弹）。
+  // 点选 = 纯选中态：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
+  // 显式重选 = 用户再次表达意图——清除该行的取消抑制（确认框可重弹）。
   const onSelectConfirmed = useCallback(
     (path: string): void => {
-      writeArmCooldown()
-      // 1.34 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 续字零重弹）
+      // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 续字零重弹）
       setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
       setCancelSuppressed((prev) => (prev.includes(path) ? prev.filter((row) => row !== path) : prev))
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
@@ -225,17 +199,15 @@ export function ForgeHeroWorktreeMount({
   // ── 1.29 编排默认（会话创建唯一时机 = 首条消息——所见即所得的唯一执行面）──
   // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：选中态指向某行时，首条消息按
   // 官方原流会落主树 cwd（显示与执行脱节）。arm 效应由 composer 首条消息意图驱动
-  // （draft 空 → 非空）：复用 1.16 预铸配方编排缝（orchestrate = sessionCreate + attach
-  // + openSession 一体），成功后把已键入草稿搬运到产物会话（carryDraft——确认前消息
-  // 不发出，草稿始终留在 composer，不丢）。
-  // 1.27 必绑收紧保留：主行同样进编排（选中主行 → worktreePath = 项目根的 isMain 绑定，
-  // git 项目不存在无绑定新会话——官方原流口子堵死）。去重闸：cwd 去重（树内行已开）、
-  // armed 去重（本轮编排产物即当前会话——键入续字零重入；官方新会话流另起新 id 自然
-  // 失效）、armSuppressed（失败/取消路径零重试）、在途闸与冷却窗。draft 意图与全部
-  // 判读经 shouldArmSelectedRow 纯函数单源。跨分支风险 = 1.19 确认框同款（判定源 = 主行
-  // branch vs 选中树 branch；主行自绑定同分支零风险直通）——时机随编排后移至首条消息
-  // 时点（1.29），点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话阶段
-  // 消费，历史会话打开不进 hero 面）。
+  // （draft 空 → 非空）：走预铸采纳编排缝（sessionCreate + openSession），成功后把
+  // 已键入草稿搬运到产物会话（carryDraft——确认前消息不发出，草稿始终留在 composer）。
+  // 主行同样进编排（worktreePath = 项目根，git 项目不存在无绑定新会话）。去重闸：
+  // cwd 去重（树内行已开）、armed 去重（本轮编排产物即当前会话——键入续字零重入；
+  // 官方新会话流另起新 id 自然失效）、armSuppressed（失败/取消路径零重试）、在途闸。
+  // draft 意图与全部判读经 shouldArmSelectedRow 纯函数单源。跨分支风险 = 确认框
+  // （判定源 = 主行 branch vs 选中树 branch；同分支零风险直通）——时机随编排后移至
+  // 首条消息时点，点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话
+  // 阶段消费，历史会话打开不进 hero 面）。
   const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
   // 1.34 确认闩锁（bug ccfcc103——每键重弹修复）：确认后置位，arm 效应每键重评估时弹框
   // 判定消费闩锁（已确认 = 零重弹，编排照常 carryDraft 完成）；生命周期 = 换目标重选清
@@ -302,7 +274,6 @@ export function ForgeHeroWorktreeMount({
       // （官方新会话流落主树的窗口内）——openSession 撞导航瞬态抛错属可重试失败，一次
       // 重试后仍失败才落 1.25 口径（Toast 已由编排缝呈现 + 选中态清退不落假象）。
       orchestrationInFlightRef.current = true
-      writeArmCooldown()
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       pushSelection(path)
       setLocalSelectedPath(path)
@@ -343,11 +314,9 @@ export function ForgeHeroWorktreeMount({
     if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
     const row = phase.rows.find((candidate) => candidate.path === path)
     if (row === undefined) return
-    // 1.29 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）——主行
-    // （1.27 必绑）同样只在该时点进编排
+    // 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）；主行同样只在该
+    // 时点进编排。cwd/armed 去重 + 取消抑制 + 确认框闸（shouldArmSelectedRow 单源）
     const draftIntent = draftText.trim() !== ''
-    // 1.27 必绑收紧：主行同样编排；cwd/armed 去重 + A3 取消抑制 + A4 确认框闸 + A1
-    // 冷却窗 draftIntent 维度判读（纯函数 shouldArmSelectedRow 单源）
     if (
       !shouldArmSelectedRow({
         phaseReadyGit: true,
@@ -355,7 +324,6 @@ export function ForgeHeroWorktreeMount({
         suppressed: armSuppressed,
         cancelSuppressed,
         riskConfirmationOpen: defaultRiskPath !== null,
-        cooldownActive: readArmCooldownActive(),
         rowPresent: row.present,
         isMain: row.isMain,
         currentCwd,

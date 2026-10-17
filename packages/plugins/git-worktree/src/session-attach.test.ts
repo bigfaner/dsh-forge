@@ -1,7 +1,9 @@
-// @dsh-forge/git-worktree —— 会话绑定面单测（挂靠事件唯一写入口 + 读尾部 + meta.cwd 注入 + 封存判定）。
+// @dsh-forge/git-worktree —— 会话绑定面单测（挂靠事件写入格式 + 读尾部反查 + 预铸挂靠会话 + 封存判定）。
 // 外部依赖取证门（AGENTS.md）：写入/读回/恢复全部跑真实官方包——
 // @deepseek-ai/cordis + dsh-session-persistence-jsonl（真 JSONL 落盘）+ dsh-session（SessionStore 恢复路径）。
 // 配方依据：探针报告 .forge/docs/probes/worktree-attach-event/probe-report.md。
+// 写入造数 = 裸 SessionHandle.append（生产写入唯一时点 = preseedWorktreeSession 预铸半程；
+// 活会话补写被单写者铁律禁止，写入口不再单独暴露——格式/恢复面钉仍在此锁定）。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,10 +14,9 @@ import { SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import {
   WORKTREE_ATTACH_EVENT_TYPE,
-  createWorktreeAttachWriter,
   latestAttachEvent,
+  preseedWorktreeSession,
   readLatestAttach,
-  withWorktreeCwd,
 } from './session-attach.js'
 import { SessionCwdMismatchError, SessionSealedError, assertSendable, assertSessionCwdMatches, evaluateSeal } from './seal-guard.js'
 
@@ -63,6 +64,41 @@ async function seedSession(prefix: string, cwd?: string): Promise<string> {
   return id
 }
 
+/** 测试造数：在已持有的写句柄上落一条挂靠事件（与生产 appendAttachEvent 同信封） */
+async function appendAttach(
+  handle: Pick<SessionHandle, 'read' | 'append' | 'flush'>,
+  binding: { worktreePath: string; branch: string },
+): Promise<void> {
+  const events = (await handle.read()).events
+  const nextSeq = events.length > 0 ? events[events.length - 1]!.seq + 1 : 0
+  await handle.append([
+    {
+      type: WORKTREE_ATTACH_EVENT_TYPE,
+      seq: nextSeq,
+      time: Date.now(),
+      data: { worktreePath: binding.worktreePath, branch: binding.branch },
+      ignorable: true,
+    },
+  ])
+  await handle.flush()
+}
+
+/** 落盘会话 + 写挂靠事件一步到位（cwd = SessionHeader.cwd） */
+async function seedWithAttach(
+  prefix: string,
+  cwd: string,
+  binding: { worktreePath: string; branch: string },
+): Promise<string> {
+  const id = `${prefix}-${Math.random().toString(36).slice(2, 8)}`
+  const h = await persistence.create(header(id, cwd))
+  try {
+    await appendAttach(h, binding)
+  } finally {
+    await h.close()
+  }
+  return id
+}
+
 /** 读取全会话事件 */
 async function readAll(id: string): Promise<readonly SessionEvent[]> {
   const h = await persistence.open(id, 'read')
@@ -73,14 +109,16 @@ async function readAll(id: string): Promise<readonly SessionEvent[]> {
   }
 }
 
-describe('挂靠事件唯一写入口（createWorktreeAttachWriter）', () => {
+describe('挂靠事件落盘格式（裸句柄写入——预铸半程同信封）', () => {
   it('经 SessionHandle.append 直写 forge/worktree-attach：ignorable:true、data 可序列化、seq 自管理连续', async () => {
     const id = await seedSession('seq')
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
-    })
-    await writer.attach(id, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
-    await writer.attach(id, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+    const h = await persistence.open(id, 'write')
+    try {
+      await appendAttach(h, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+      await appendAttach(h, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+    } finally {
+      await h.close()
+    }
 
     const events = await readAll(id)
     const attachEvents = events.filter((e) => e.type === WORKTREE_ATTACH_EVENT_TYPE)
@@ -96,22 +134,13 @@ describe('挂靠事件唯一写入口（createWorktreeAttachWriter）', () => {
   })
 
   it('写入后重新 open/read 会话日志成功且事件保留（非 ignorable 毒化面被封装挡住）', async () => {
-    const id = await seedSession('reopen')
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
-    })
-    await writer.attach(id, { worktreePath: 'C:/wt/b', branch: 'feat/b' })
-
+    const id = await seedWithAttach('reopen', 'C:/wt/b', { worktreePath: 'C:/wt/b', branch: 'feat/b' })
     const events = await readAll(id) // fresh open：validateStoredEvents 放行 ignorable
     expect(events.some((e) => e.type === WORKTREE_ATTACH_EVENT_TYPE && e.ignorable === true)).toBe(true)
   })
 
   it('会话恢复路径安全跳过：SessionStore seed 含 ignorable 挂靠事件可恢复且事件保留', async () => {
-    const id = await seedSession('restore')
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
-    })
-    await writer.attach(id, { worktreePath: 'C:/wt/c', branch: 'feat/c' })
+    const id = await seedWithAttach('restore', 'C:/wt/c', { worktreePath: 'C:/wt/c', branch: 'feat/c' })
     const stored = await readAll(id)
 
     const restored = store.create(`${id}-child`, { seed: structuredClone([...stored]) })
@@ -119,30 +148,18 @@ describe('挂靠事件唯一写入口（createWorktreeAttachWriter）', () => {
     const attach = snapshot.find((e) => e.type === WORKTREE_ATTACH_EVENT_TYPE)
     expect(attach?.ignorable).toBe(true) // 未知类型 + ignorable → surface 恢复安全跳过（不入 surface、保留 opaque）
   })
-
-  it('封装面锁定：唯一写入口之外无自定义事件写通道', async () => {
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
-    })
-    // 写入口只暴露 attach：不泄漏 append/信封构造，调用方无法写任意自定义事件
-    expect(Object.keys(writer).sort()).toEqual(['attach'])
-    // 模块公开面不含通用 append/信封构造器
-    const module = await import('./session-attach.js')
-    for (const key of Object.keys(module)) {
-      expect(key.startsWith('append') || key.includes('Envelope')).toBe(false)
-    }
-  })
 })
 
 describe('读尾部挂靠事件（会话绑定反查）', () => {
   it('latestAttachEvent / readLatestAttach 反查最近一次绑定的 worktree 与分支', async () => {
     // cwd 守护基准：header.cwd = 最新绑定树（预铸配方形态）
-    const id = await seedSession('tail', 'C:/wt/new')
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
-    })
-    await writer.attach(id, { worktreePath: 'C:/wt/old', branch: 'feat/old' })
-    await writer.attach(id, { worktreePath: 'C:/wt/new', branch: 'feat/new' })
+    const id = await seedWithAttach('tail', 'C:/wt/new', { worktreePath: 'C:/wt/old', branch: 'feat/old' })
+    const h = await persistence.open(id, 'write')
+    try {
+      await appendAttach(h, { worktreePath: 'C:/wt/new', branch: 'feat/new' })
+    } finally {
+      await h.close()
+    }
 
     const events = await readAll(id)
     expect(latestAttachEvent(events)).toEqual({
@@ -180,7 +197,53 @@ describe('读尾部挂靠事件（会话绑定反查）', () => {
   })
 })
 
-describe('挂靠会话 cwd 强制守护（1.19）', () => {
+describe('预铸挂靠会话（preseedWorktreeSession——1.16 配方预铸半程）', () => {
+  it('薄头契约落盘：自铸 id + cwd/version/isSeeded 头 + 挂靠事件 seq 0（ignorable）+ 句柄即开即闭', async () => {
+    const result = await preseedWorktreeSession(
+      persistence as never,
+      { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' },
+      { mintId: () => 'session-fixed-id' },
+    )
+    expect(result).toMatchObject({ sessionId: 'session-fixed-id', seq: 0, branch: 'feat/a' })
+
+    const h = await persistence.open(result.sessionId, 'read')
+    try {
+      expect(h.header.cwd).toBe('Z:/repo/.forge/worktrees/wt-a')
+      const events = (await h.read()).events
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({ type: WORKTREE_ATTACH_EVENT_TYPE, seq: 0, ignorable: true })
+    } finally {
+      await h.close()
+    }
+  })
+
+  it('agentPreset 随头定死（SessionHeader.agentPreset = 模式标签唯一只读源）；缺席 = 头缺席零猜测', async () => {
+    const withPreset = await preseedWorktreeSession(
+      persistence as never,
+      { worktreePath: 'C:/wt/preset', branch: 'feat/p' },
+      { agentPreset: 'expedition' },
+    )
+    const hPreset = await persistence.open(withPreset.sessionId, 'read')
+    try {
+      expect((hPreset.header as { agentPreset?: string }).agentPreset).toBe('expedition')
+    } finally {
+      await hPreset.close()
+    }
+
+    const noPreset = await preseedWorktreeSession(persistence as never, {
+      worktreePath: 'C:/wt/bare',
+      branch: 'feat/b',
+    })
+    const hBare = await persistence.open(noPreset.sessionId, 'read')
+    try {
+      expect((hBare.header as { agentPreset?: string }).agentPreset).toBeUndefined()
+    } finally {
+      await hBare.close()
+    }
+  })
+})
+
+describe('挂靠会话 cwd 强制守护', () => {
   it('assertSessionCwdMatches：归一比对一致放行；不一致抛 SessionCwdMismatchError；缺席（历史会话）放行', () => {
     expect(() => assertSessionCwdMatches('C:/wt/a', 'C:\\WT\\A')).not.toThrow()
     expect(() => assertSessionCwdMatches('C:/wt/b', 'C:/wt/a')).toThrow(SessionCwdMismatchError)
@@ -189,32 +252,21 @@ describe('挂靠会话 cwd 强制守护（1.19）', () => {
   })
 
   it('readLatestAttach：header.cwd = 绑定树 → 放行；漂移（绑定 A 树跑在 B 树）→ 显式报错不静默', async () => {
-    const writer = createWorktreeAttachWriter({
-      openWrite: (sid) => persistence.open(sid, 'write'),
+    const ok = await seedWithAttach('cwd-ok', 'Z:/repo/.forge/worktrees/wt-a', {
+      worktreePath: 'Z:/repo/.forge/worktrees/wt-a',
+      branch: 'feat/a',
     })
-    const ok = await seedSession('cwd-ok', 'Z:/repo/.forge/worktrees/wt-a')
-    await writer.attach(ok, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
     await expect(readLatestAttach(ok, { openRead: (sid) => persistence.open(sid, 'read') })).resolves.toMatchObject({
       worktreePath: 'Z:/repo/.forge/worktrees/wt-a',
     })
 
-    const drift = await seedSession('cwd-drift', 'Z:/repo')
-    await writer.attach(drift, { worktreePath: 'Z:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
+    const drift = await seedWithAttach('cwd-drift', 'Z:/repo', {
+      worktreePath: 'Z:/repo/.forge/worktrees/wt-a',
+      branch: 'feat/a',
+    })
     await expect(
       readLatestAttach(drift, { openRead: (sid) => persistence.open(sid, 'read') }),
     ).rejects.toThrow(SessionCwdMismatchError)
-  })
-})
-
-describe('建会话 meta.cwd 注入（withWorktreeCwd）', () => {
-  it('SessionHeader.cwd 生效：注入所选 worktree 路径', () => {
-    const session = store.create('cwd-session', withWorktreeCwd({}, 'Z:/repo/.forge/worktrees/wt-a'))
-    expect(session.header.cwd).toBe('Z:/repo/.forge/worktrees/wt-a')
-  })
-
-  it('既有 meta 字段保留，cwd 不覆盖调用方已设值之外的键', () => {
-    const options = withWorktreeCwd({ meta: { agentPreset: 'p1' } }, 'C:/wt/x')
-    expect(options).toMatchObject({ meta: { agentPreset: 'p1', cwd: 'C:/wt/x' } })
   })
 })
 
@@ -236,7 +288,7 @@ describe('封存判定 + 发送拦截面（seal-guard）', () => {
     expect(evaluateSeal(null, [])).toEqual({ sealed: false })
   })
 
-  it('1.27 主树绑定恒不封存（主树恒在场——worktreePath = 项目根在全量在场集内）', () => {
+  it('主树绑定恒不封存（主树恒在场——worktreePath = 项目根在全量在场集内）', () => {
     // git worktree list 恒含主树本身 → 项目根绑定的封存判定恒假
     expect(evaluateSeal({ worktreePath: 'C:/repo', branch: 'main' }, ['C:/repo', 'C:/repo/.forge/worktrees/wt-a'])).toEqual({
       sealed: false,

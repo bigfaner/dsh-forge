@@ -101,7 +101,11 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
         return null
       }
       return sessionId
-    })().catch(() => null)
+    })().catch((error: unknown) => {
+      // 安全网兜底（内部各失败径已自呈提示）——意外异常不静默：同一 Toast 面呈现
+      onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
+      return null
+    })
   }
 }
 
@@ -184,8 +188,6 @@ export function ForgeHeroWorkspacePicker({
   // + null（挂载面选中态同清——不产生「已选中」假象）。
   // A7（1.31）：编排数据根 = selectedId 严格命中（selectedProjectRootStrictOf）——渲染
   // 兜底（selectedProjectRootOf fallback）禁止泄漏为绑定语义：无命中 → 提示 + null 不编排。
-  // A8（1.31）：主行 reuse 补绑定失败（seal 判读/attach 抛错）不返回无绑定会话——降级
-  // sessionCreate 直建（预铸自带绑定，失败路径仍产可用发送目标）。
   const orchestrateRoot = selectedProjectRootStrictOf(projects, selectedId)
   const orchestrate = useMemo(
     () =>

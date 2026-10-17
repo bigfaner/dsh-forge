@@ -1,7 +1,7 @@
-// forge:worktree/* 装配面单测（worktree-branch-management fix-2）：
-//   · createWorktreeRpcService——挂靠事件唯一写入口（ignorable 信封 + seq 自管理）/
-//     建会话 meta.cwd 注入单门 / 封存判定快照（在场性比对）/ 非 git 零清单；
-//   · registerWorktreeChannels——九通道 allowlist 注册（键键对应 contracts WORKTREE_CHANNELS）；
+// forge:worktree/* 装配面单测：
+//   · createWorktreeRpcService——预铸采纳（persistence.create 自铸 id + cwd/agentPreset 头 +
+//     挂靠事件 seq 0）/ 封存判定快照（在场性比对）/ 非 git 零清单 / 必绑拦截 guard；
+//   · registerWorktreeChannels——allowlist 注册（键键对应 contracts WORKTREE_CHANNELS）；
 //   · interceptSessionSends——assertSendable 接入 host 消息处理链（封存拒绝 + 明确错误；
 //     未绑定/未封存放行；判读异常 fail-open）。
 // ops 真机 git 面归独立模式走查（1.8 e2e 记录）——本文件全 fake 注入，零 git 依赖。
@@ -11,7 +11,6 @@ import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_CHANNELS,
-  type WorktreeAttachRequest,
   type WorktreeListRequest,
   type WorktreeSealRequest,
 } from '@dsh-forge/contracts'
@@ -250,25 +249,6 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
   })
 
-  it('attach：唯一写入口信封（type forge/worktree-attach + ignorable true + seq 自管理）且分支缺省自查透传', async () => {
-    const { persistence, appended } = fakePersistence({
-      's1': [{ type: 'user', seq: 3 }],
-    })
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionPersistence: persistence,
-    })
-    const request: WorktreeAttachRequest = { sessionId: 's1', worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }
-    const result = await service.attach(request)
-    expect(result).toEqual({ attached: true, branch: 'feat/a', seq: 4 })
-    expect(appended).toHaveLength(1)
-    const event = appended[0]!.events[0] as { type: string; seq: number; ignorable?: boolean; data: unknown }
-    expect(event.type).toBe('forge/worktree-attach')
-    expect(event.ignorable).toBe(true)
-    expect(event.seq).toBe(4)
-    expect(event.data).toEqual({ worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' })
-  })
-
   it('sessionCreate：预铸（persistence.create 自铸 id + cwd 头 → 句柄写挂靠事件 seq 0 + flush + close）→ controller.create({sessionId, cwd}) 采纳——写句柄生命周期零交叠', async () => {
     const { controller, calls } = fakeController()
     const { persistence, appended, created, closedFor } = fakePersistence({})
@@ -385,7 +365,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
 })
 
 describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
-  it('九通道键键对应 contracts WORKTREE_CHANNELS 且全部注册', () => {
+  it('通道键键对应 contracts WORKTREE_CHANNELS 且全部注册', () => {
     const registered: string[] = []
     const ipc: ForgeIpc = {
       register: (channel) => {
@@ -397,7 +377,7 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
     expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(10) // 九通道 + 1.30 select（选中树推送缝）
+    expect(registered).toHaveLength(9) // 全通道键键对应（attach 已废——绑定写面唯一时点 = 预铸）
   })
 })
 

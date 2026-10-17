@@ -14,8 +14,6 @@ import {
   WORKTREE_CHANNELS,
   type WorktreeAheadBehindRequest,
   type WorktreeAheadBehindResult,
-  type WorktreeAttachRequest,
-  type WorktreeAttachResult,
   type WorktreeBranchesRequest,
   type WorktreeBranchesResult,
   type WorktreeChecksRequest,
@@ -36,7 +34,6 @@ import {
 } from '@dsh-forge/contracts'
 import {
   createWorktree,
-  createWorktreeAttachWriter,
   preseedWorktreeSession,
   readLatestAttach,
   type SessionPersistenceCreateFace,
@@ -91,7 +88,6 @@ export const WORKTREE_RPC_METHODS = [
   'aheadBehind',
   'branches',
   'checks',
-  'attach',
   'sessionCreate',
   'seal',
   'select',
@@ -105,7 +101,6 @@ export interface WorktreeRpcService {
   aheadBehind(request: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
   branches(request: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
   checks(request: WorktreeChecksRequest): Promise<WorktreeChecksResult>
-  attach(request: WorktreeAttachRequest): Promise<WorktreeAttachResult>
   sessionCreate(request: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
@@ -179,10 +174,6 @@ export function createWorktreeRpcService(deps: {
   const readFactory = {
     openRead: async (sessionId: string) => deps.sessionPersistence?.open(sessionId, 'read') as never,
   }
-  const writeFactory = {
-    openWrite: async (sessionId: string) => deps.sessionPersistence?.open(sessionId, 'write') as never,
-  }
-  const writer = createWorktreeAttachWriter(writeFactory)
 
   const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
     typeof deps.workspaceRegistry === 'function' ? deps.workspaceRegistry() : deps.workspaceRegistry
@@ -407,12 +398,6 @@ export function createWorktreeRpcService(deps: {
       }
     },
 
-    async attach(request) {
-      const branch = await resolveBranch(request.worktreePath, request.branch)
-      const event = await writer.attach(request.sessionId, { worktreePath: request.worktreePath, branch })
-      return { attached: true, branch: event.branch, seq: event.seq }
-    },
-
     async sessionCreate(request) {
       const key = norm(request.worktreePath)
       // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用
@@ -469,7 +454,9 @@ export function createWorktreeRpcService(deps: {
           const selected = resolution !== null ? lastSelection.get(norm(resolution.projectRoot)) : undefined
           const target = selected ?? (cwd !== undefined && cwd !== '' ? cwd : undefined)
           if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
-          const product = await doSessionCreate({ worktreePath: target })
+          // 走 sessionCreate 公开面（G3 双建互斥：在途共享、产物 blank 复用）——直调
+          // doSessionCreate 会绕过互斥，与 client arm 并发时同 cwd 双建。
+          const product = await service.sessionCreate({ worktreePath: target })
           return controller.prompt({ ...(request as Record<string, unknown>), sessionId: product.sessionId })
         },
       }
@@ -505,8 +492,7 @@ export function createWorktreeRpcService(deps: {
         worktreePath: cwd,
         branch,
       },
-      undefined,
-      agentPreset === undefined ? undefined : { agentPreset },
+      agentPreset === undefined ? {} : { agentPreset },
     )
     await controller.create({ sessionId: preseeded.sessionId, cwd })
     // bug 925c96d5：预铸采纳后即挂工作区归属（composer 门控/模式/侧栏可见性的官方单源）
@@ -525,7 +511,6 @@ export function registerWorktreeChannels(ipc: ForgeIpc, service: WorktreeRpcServ
   ipc.register(WORKTREE_CHANNELS.aheadBehind, rpcEnvelope((q: WorktreeAheadBehindRequest) => service.aheadBehind(q)))
   ipc.register(WORKTREE_CHANNELS.branches, rpcEnvelope((q: WorktreeBranchesRequest) => service.branches(q)))
   ipc.register(WORKTREE_CHANNELS.checks, rpcEnvelope((q: WorktreeChecksRequest) => service.checks(q)))
-  ipc.register(WORKTREE_CHANNELS.attach, rpcEnvelope((q: WorktreeAttachRequest) => service.attach(q)))
   ipc.register(WORKTREE_CHANNELS.sessionCreate, rpcEnvelope((q: WorktreeSessionCreateRequest) => service.sessionCreate(q)))
   ipc.register(WORKTREE_CHANNELS.seal, rpcEnvelope((q: WorktreeSealRequest) => service.seal(q)))
   ipc.register(WORKTREE_CHANNELS.select, rpcEnvelope((q: WorktreeSelectRequest) => service.select(q)))

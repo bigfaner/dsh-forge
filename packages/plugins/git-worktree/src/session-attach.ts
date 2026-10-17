@@ -1,10 +1,11 @@
-// @dsh-forge/git-worktree —— 会话绑定面：挂靠事件唯一写入口 + 读尾部反查 + 建会话 meta.cwd 注入。
+// @dsh-forge/git-worktree —— 会话绑定面：挂靠事件写入 + 读尾部反查 + 预铸挂靠会话。
 // 写入配方依据（探针实测）：.forge/docs/probes/worktree-attach-event/probe-report.md §5——
 //   Session.append() 无 ignorable 通道；唯一合法直写 = SessionHandle.append（原样接受完整事件对象，
 //   仅校验 JSON 快照 + seq 连续性）。写入面不校验未知类型：漏写 ignorable:true 会把整条会话日志
 //   永久毒化（open 即 SessionFormatUnsupportedError）。因此本模块是自定义事件唯一写入口：
-//   信封构造收敛在模块内部，强制 ignorable:true、seq 自管理（先读 cursor 再追加），
-//   不导出任何通用 append / 信封构造器（封装面由 session-attach.test.ts 锁定）。
+//   信封构造收敛在模块内部（不导出），强制 ignorable:true、seq 自管理（先读 cursor 再追加）。
+//   唯一写入时点 = 预铸（preseedWorktreeSession）——活会话写句柄被官方 agent loop 独占
+//   （单写者铁律），建后补写在结构上不可行。
 import { randomUUID } from 'node:crypto'
 import { SESSION_FORMAT_VERSION, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
@@ -34,25 +35,14 @@ export interface WorktreeAttachEvent extends WorktreeAttachData {
   readonly seq: number
 }
 
-/** 会话写句柄工厂（host 装配层注入：`sessionPersistence.open(id, 'write')`） */
-export interface SessionWriteHandleFactory {
-  openWrite(sessionId: string): Promise<SessionHandle>
-}
-
 /** 会话读句柄工厂（host 装配层注入：`sessionPersistence.open(id, 'read')`） */
 export interface SessionReadHandleFactory {
   openRead(sessionId: string): Promise<SessionHandle>
 }
 
-/** 挂靠事件唯一写入口 */
-export interface WorktreeAttachWriter {
-  /** 为会话写入一条挂靠事件（append + flush 落盘；句柄即开即闭） */
-  attach(sessionId: string, binding: WorktreeAttachData): Promise<WorktreeAttachEvent>
-}
-
 /**
  * 在调用方已持有的写句柄上落一条挂靠事件（append + flush；close 由调用方负责）。
- * 模块内部面——不导出（封装面锁定：唯一写入口之外无自定义事件写通道）。
+ * 模块内部面——不导出（信封构造不外泄：调用方只能给「绑定语义」）。
  */
 async function appendAttachEvent(
   handle: Pick<SessionHandle, 'read' | 'append' | 'flush'>,
@@ -75,27 +65,9 @@ async function appendAttachEvent(
 }
 
 /**
- * 唯一写入口封装：信封构造不外泄——调用方只能给「绑定语义」，写不出任意自定义事件。
- * seq 自管理：先读全量取 cursor，next-seq = 末事件 seq + 1（两步间不得有其他写入者，写句柄单写者语义）。
- */
-export function createWorktreeAttachWriter(handles: SessionWriteHandleFactory): WorktreeAttachWriter {
-  return {
-    async attach(sessionId: string, binding: WorktreeAttachData): Promise<WorktreeAttachEvent> {
-      const handle = await handles.openWrite(sessionId)
-      try {
-        return await appendAttachEvent(handle, binding)
-      } finally {
-        await handle.close()
-      }
-    },
-  }
-}
-
-/**
- * 挂靠事件 type 双形态识别（1.31 搭车——审计假设7）：官方 v3→v4 迁移
- * （dsh-session-format-v3-to-v4 lib/index.js:1304）把未知事件 type 改写为
- * `plugin:${type}`——迁移后的旧会话读回为 plugin:forge/worktree-attach，
- * 按字面读即绑定反查失效。双形态等价识别。
+ * 挂靠事件 type 双形态识别：官方 v3→v4 迁移（dsh-session-format-v3-to-v4
+ * lib/index.js:1304）把未知事件 type 改写为 `plugin:${type}`——迁移后的旧会话读回为
+ * plugin:forge/worktree-attach，按字面读即绑定反查失效。双形态等价识别。
  */
 export function isWorktreeAttachEventType(type: string): boolean {
   return type === WORKTREE_ATTACH_EVENT_TYPE || type === `plugin:${WORKTREE_ATTACH_EVENT_TYPE}`
@@ -118,7 +90,7 @@ export function latestAttachEvent(events: readonly SessionEvent[]): WorktreeAtta
 }
 
 /** 读尾部（读句柄面）：反查会话绑定的 worktree 与分支；无挂靠事件返回 null。
- *  守护面（1.19 cwd 强制）：读得绑定即校验 SessionHeader.cwd ≡ 绑定 worktreePath
+ *  守护面（cwd 强制）：读得绑定即校验 SessionHeader.cwd ≡ 绑定 worktreePath
  *  （归一比对，seal-guard.assertSessionCwdMatches）——不一致抛 SessionCwdMismatchError
  *  显式报错，不留「绑定 A 树、实际跑在 B 树」的静默漂移。 */
 export async function readLatestAttach(
@@ -137,20 +109,6 @@ export async function readLatestAttach(
   } finally {
     await handle.close()
   }
-}
-
-/** 建会话选项的最小结构面（对齐官方 CreateSessionOptions.meta） */
-interface SessionCreateMeta {
-  readonly meta?: { readonly cwd?: string }
-}
-
-/**
- * 建会话 meta.cwd 注入：把所选 worktree 路径折入 CreateSessionOptions.meta.cwd
- * （SessionHeader.cwd 生效、不可变——挂靠即绑定，cwd 建会话时定死）。
- */
-export function withWorktreeCwd<O extends SessionCreateMeta>(options: O, worktreePath: string): O {
-  requireNonEmpty(worktreePath, 'worktreePath')
-  return { ...options, meta: { ...options.meta, cwd: worktreePath } }
 }
 
 function requireNonEmpty(value: string | undefined, field: string): string {
@@ -181,31 +139,35 @@ export interface WorktreePreseedResult {
   readonly branch: string
 }
 
+/** 预铸选项（id 铸造器默认 randomUUID——测试钉固定 id；agentPreset 缺席 = 头缺席零猜测） */
+export interface WorktreePreseedOptions {
+  readonly mintId?: () => string
+  readonly agentPreset?: string
+}
+
 /**
- * 预铸挂靠会话（worktree-branch-management 1.16 预铸采纳配方的预铸半程）：
- * mint session-<uuid> → persistence.create（cwd 头 = SessionHeader.cwd 定死，官方
- * adopt 校验 header.cwd 相等）→ 初始写句柄落挂靠事件（seq 0, ignorable:true）→
- * flush + close。写句柄即开即闭、零交叠——调用方随后 controller.create({sessionId, cwd})
- * 走官方 adopt/resume，单写者铁律满足。信封构造仍收敛本模块内部。
+ * 预铸挂靠会话（预铸采纳配方的预铸半程）：mint session-<uuid> → persistence.create
+ * （cwd 头 = SessionHeader.cwd 定死，官方 adopt 校验 header.cwd 相等）→ 初始写句柄落
+ * 挂靠事件（seq 0, ignorable:true）→ flush + close。写句柄即开即闭、零交叠——调用方随后
+ * controller.create({sessionId, cwd}) 走官方 adopt/resume，单写者铁律满足。
+ * agentPreset 随头定死（官方 composeAgent 经 meta.agentPreset 注入，registry defaultId
+ * 兜底——预铸旁路该链必须自携，SessionHeader.agentPreset 是模式标签的唯一只读源）。
  */
 export async function preseedWorktreeSession(
   persistence: SessionPersistenceCreateFace,
   binding: WorktreeAttachData,
-  mintId: () => string = () => `session-${randomUUID()}`,
-  options?: { readonly agentPreset?: string },
+  options: WorktreePreseedOptions = {},
 ): Promise<WorktreePreseedResult> {
   const worktreePath = requireNonEmpty(binding?.worktreePath, 'worktreePath')
   const branch = requireNonEmpty(binding?.branch, 'branch')
-  const sessionId = mintId()
+  const sessionId = options.mintId?.() ?? `session-${randomUUID()}`
   const handle = await persistence.create({
     id: sessionId,
     createdAt: Date.now(),
     cwd: worktreePath,
     version: SESSION_FORMAT_VERSION, // 读取侧 assertVersion 门槛
     isSeeded: false, // v4 header 必填（探针 run2 实测缺拒）
-    // bug eae18b5c：官方 composeAgent 经 meta.agentPreset 注入（registry defaultId 兜底），
-    // 预铸旁路该链必须自携——SessionHeader.agentPreset 是模式标签的唯一只读源，缺席即消失。
-    ...(options?.agentPreset === undefined ? {} : { agentPreset: options.agentPreset }),
+    ...(options.agentPreset === undefined ? {} : { agentPreset: options.agentPreset }),
   })
   try {
     const event = await appendAttachEvent(handle, { worktreePath, branch })

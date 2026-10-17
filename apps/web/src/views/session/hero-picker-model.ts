@@ -164,9 +164,6 @@ export interface ArmGateInput {
   readonly cancelSuppressed?: readonly string[]
   /** 跨分支确认框待决（1.31 A4——框开着期间效应守卫零重入，防双编排竞态） */
   readonly riskConfirmationOpen: boolean
-  /** arm 冷却窗在窗（1.31 A1——判据加 draftIntent 维度：只压「点选引发」即 draft 空的
-   * arm；发送意图引发的 arm 不受冷却约束） */
-  readonly cooldownActive?: boolean
   readonly rowPresent: boolean
   readonly isMain: boolean
   /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
@@ -198,7 +195,6 @@ export function shouldArmSelectedRow(input: ArmGateInput): boolean {
   if (input.cancelSuppressed?.includes(input.path)) return false // A3：取消抑制独立判读
   if (!input.rowPresent) return false
   if (!input.draftIntent) return false
-  if (input.cooldownActive === true && !input.draftIntent) return false // A1：冷却只压点选引发的 arm
   if (input.armedSessionId !== undefined && input.armedPath === input.path && input.currentSessionId === input.armedSessionId) return false
   if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
     return false

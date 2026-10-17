@@ -45,18 +45,16 @@ export {
   type WorktreeStatus,
 } from './worktree-ops.js'
 export {
-  createWorktreeAttachWriter,
   preseedWorktreeSession,
   latestAttachEvent,
   readLatestAttach,
-  withWorktreeCwd,
+  isWorktreeAttachEventType,
   WORKTREE_ATTACH_EVENT_TYPE,
   type SessionPersistenceCreateFace,
   type SessionReadHandleFactory,
-  type SessionWriteHandleFactory,
+  type WorktreePreseedOptions,
   type WorktreeAttachData,
   type WorktreeAttachEvent,
-  type WorktreeAttachWriter,
 } from './session-attach.js'
 export {
   assertSendable,
