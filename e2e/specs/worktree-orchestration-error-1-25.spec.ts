@@ -139,6 +139,10 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
     await dismissOnboardingModals(page)
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+    // A7 前置：选中项目工作区（arm 编排数据根 = selectedId 严格命中项目行——1.31 同配方；
+    // 未选中项目时编排默认停用正是 A7 语义）
+    await page.locator('button[aria-label="选择工作区"]').first().click()
+    await page.locator('.dswf-hero-picker-list').getByText('orch-repo', { exact: false }).first().click()
 
     // ── 场景 B（先行——故障注入不可逆）：选主树行（纯选中态）→ 首条消息意图 → 编排成功 ──
     await chip(page).first().click()
@@ -199,14 +203,53 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
     }
     await snap(page, 'orchestration-success-session-chip.png')
 
-    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 再选 worktree 行（纯选中态）→
-    // 首条消息意图触发编排 → 失败 Toast 显式呈现（1.29 失败面只在首条消息时点）──
+    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 官方新建弹窗建 wt-a（worktree.create
+    // 通道不在注入面）→ 首条消息意图触发树内行预铸创建径 → 失败 Toast 显式呈现。
+    // 注：主行 arm 走 blank 复用径（零 sessionCreate 调用），故障旅程必须在树内行观测 ──
     await injectSessionCreateFaultFinal(page, app.app)
-    const chipBefore = await chip(page).first().textContent()
     await chip(page).first().click()
-    await heroMenu(page).getByText('orch-repo', { exact: false }).first().click()
-    await expect(page.getByText(/worktree 挂靠失败/), '点选零编排零 Toast（纯选中态）').toHaveCount(0)
-    await typeDraft(page, '1-25 scene-a first message')
+    await heroMenu(page).getByText('新建 worktree…', { exact: false }).first().click()
+    const createDialog = page.getByRole('dialog', { name: '新建 worktree' })
+    await expect(createDialog).toBeVisible({ timeout: 30_000 })
+    const branchInput = createDialog.locator('input[placeholder="feat/my-branch"]')
+    // 分支输入可能被弹窗 reset effect 竞态清空（1.19 判例）——回读重试直至值稳定
+    for (let i = 0; i < 5; i += 1) {
+      await branchInput.fill('feat-a')
+      await page.waitForTimeout(1_000)
+      if ((await branchInput.inputValue().catch(() => '')) === 'feat-a') break
+    }
+    console.log('[1.25-scene-a] branch value =', await branchInput.inputValue().catch(() => '?'))
+    await createDialog.locator('[data-dswt-create-submit]').click()
+    // 创建受理判读：基准分支跨分支确认框立现（base ≠ main）或创建完成自动跟进——两态皆为受理
+    const baseRisk = page.getByRole('dialog', { name: '基准分支跨分支确认' })
+    let accepted = 'pending'
+    await expect
+      .poll(async () => {
+        if (await baseRisk.isVisible().catch(() => false)) return (accepted = 'risk')
+        if (((await chip(page).first().textContent().catch(() => '')) ?? '').includes('feat-a')) return (accepted = 'followed')
+        return 'pending'
+      }, { timeout: 30_000, message: '创建未受理（风险框未现且 chip 未跟进）' })
+      .not.toBe('pending')
+    console.log('[1.25-scene-a] create accepted =', accepted)
+    if (await baseRisk.isVisible().catch(() => false)) {
+      await baseRisk.locator('input[type="checkbox"]').first().check()
+      await baseRisk.getByRole('button', { name: '确认继续' }).click()
+    }
+    // 创建成功自动跟进（纯选中态——零挂靠零 Toast）
+    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
+      .toContain('feat-a')
+    // 树内行选中在场（残留 draft 非空时首条消息意图即时重开跨分支确认框——待决期零编排零
+    // Toast；框缺席则由下方显式改选+键入触发）→ 确认 → arm 预铸创建 → 注入故障 → 失败 Toast
+    const heroRisk = page.getByRole('dialog', { name: '跨分支风险确认' })
+    if (!(await heroRisk.isVisible().catch(() => false))) {
+      await chip(page).first().click()
+      await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
+      if (!(await heroRisk.isVisible().catch(() => false))) await typeDraft(page, '1-25 scene-a first message')
+    }
+    await expect(heroRisk, '首条消息意图应触发跨分支确认框').toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/worktree 挂靠失败/), '待决期零编排零 Toast').toHaveCount(0)
+    await heroRisk.locator('input[type="checkbox"]').first().check()
+    await heroRisk.getByRole('button', { name: '确认继续' }).click()
     const failToast = page.getByText(/worktree 挂靠失败（创建挂靠会话）/)
     await expect(failToast.first(), '编排失败官方 Toast 显式呈现（含环节语义，首条消息时点）').toBeVisible({ timeout: 30_000 })
     console.log('[1.25-scene-a] toast =', await failToast.first().textContent())
@@ -218,8 +261,10 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
         message: '主树挂靠计数不变（失败 = 不切换）',
       })
       .toBe(1)
-    // 选中态不产生「已选中」假象：chip 文本不变（失败回填不落——1.25 口径）
-    expect(await chip(page).first().textContent()).toBe(chipBefore)
+    // 选中态不产生「已选中」假象：失败回填不落（1.29 口径——选中态清退还占位，chip 不保持 feat-a 已选形态）
+    const chipAfterFail = await chip(page).first().textContent()
+    console.log('[1.25-scene-a] chip after fail =', chipAfterFail)
+    expect(chipAfterFail ?? '', '失败后 chip 不保持 feat-a 已选假象').not.toContain('feat-a')
   } finally {
     await closeApp(app.app)
   }

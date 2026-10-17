@@ -102,7 +102,7 @@ export function announcePruneLapse(reason: string): void {
   bar.textContent = 'dsh-forge 客户端插件被回收（prune）——绑定体验层失守，host 守卫兜底中；请刷新页面'
   bar.setAttribute(
     'style',
-    'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:8px 16px;' +
+    'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:8px 16px;' + // dsw-raw（应急横幅兜底呈现面，非产品 UI 自绘：间距无标尺令牌，DESIGN.md）
       'background:#5c1a1a;color:#fff;font:12px/1.6 system-ui,sans-serif;text-align:center;',
   )
   document.body.append(bar)

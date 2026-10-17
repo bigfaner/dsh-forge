@@ -64,7 +64,7 @@ const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分�
 
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -76,6 +76,8 @@ async function pickMenuRow(page: Page, text: string): Promise<void> {
 }
 
 async function typeDraft(page: Page, text: string): Promise<void> {
+  // 风险框已在场（draft 非空下重选即时重开）= 首条消息意图已被消费——键入面被 mask 拦截，直接返回
+  if (await heroRiskDialog(page).isVisible().catch(() => false)) return
   await page
     .waitForFunction(
       () => {
@@ -149,7 +151,12 @@ test('1.31 UI：A1 冷却窗维度拆分 + A3 取消抑制显式重选清除 + A
         .catch(() => false)
       if (!dialogShown) {
         await pickMenuRow(page, 'feat-a')
-        await typeDraft(page, ' 1-31')
+        // pick 本身即可弹框（draft 非空下改选即时重开）——弹了就不必再键入
+        dialogShown = await heroRiskDialog(page)
+          .waitFor({ state: 'visible', timeout: 4_000 })
+          .then(() => true)
+          .catch(() => false)
+        if (!dialogShown) await typeDraft(page, ' 1-31')
       }
     }
     await expect(

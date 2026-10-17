@@ -217,6 +217,185 @@ export const FORGE_CLIENT_INJECT = [
 /** 产品 locale 命名空间（官方 locale 服务词典登记键——LOCALE_IDS = zh/en） */
 export const FORGE_LOCALE_NS = 'dsh-forge'
 
+/**
+ * composer 草稿缝（1.29——会话创建唯一时机 = 首条消息的意图源 + arm 后草稿搬运）：
+ * sourceOf = 会话 id 经官方 `sessions.binding(id).ctx` → `conversation.input.for(actx).state`
+ * 快照 store（InputState.draft 消费切片；binding 未就绪/缝缺席 = undefined fail-soft）；
+ * carryDraft = arm 换会话后把已键入首条消息 `setDraft` 到产物会话（binding 物化轮询等待
+ * ——open-session 适配层同配方），并 best-effort 清原会话草稿防幻影。跨 bundle 双本体
+ * 注记同上（纯函数本体在 hero-picker-model——此处只做服务装配）。
+ */
+function composerDraftFace(
+  ctx: ForgeClientCtx,
+  sessions: ForgeSessionsService,
+): {
+  sourceOf: (sessionId: string) => { getSnapshot?: () => unknown; subscribe?: (cb: () => void) => () => void } | undefined
+  carryDraft: (sessionId: string, text: string, previousSessionId?: string) => Promise<boolean>
+} {
+  const bindingCtxOf = (sessionId: string): { ctx?: unknown } | null | undefined =>
+    (sessions as unknown as { binding?: (id: string) => unknown }).binding?.(sessionId) as
+      | { ctx?: unknown }
+      | null
+      | undefined
+  const inputFaceOf = (actx: unknown): Record<string, unknown> | undefined => {
+    const resolved = (asRecord(reflectServiceGet(ctx, 'conversation'))?.['input'] as
+      | { for?: (a: unknown) => unknown }
+      | undefined)?.['for']?.(actx)
+    return asRecord(resolved)
+  }
+  return {
+    sourceOf: (sessionId) => {
+      try {
+        const actx = bindingCtxOf(sessionId)?.ctx
+        if (actx === undefined || actx === null) return undefined
+        const state = inputFaceOf(actx)?.['state']
+        if (state === undefined || typeof (state as { getSnapshot?: unknown })?.getSnapshot !== 'function') return undefined
+        return state as { getSnapshot?: () => unknown; subscribe?: (cb: () => void) => () => void }
+      } catch {
+        return undefined
+      }
+    },
+    carryDraft: async (sessionId, text, previousSessionId) => {
+      // binding 物化轮询等待（open-session 适配层同配方——会话作用域 fiber 容错），超时
+      // 5s = false（草稿留在原会话不丢）
+      const deadline = Date.now() + 5_000
+      const writeDraft = (id: string, value: string): boolean => {
+        try {
+          const actx = bindingCtxOf(id)?.ctx
+          if (actx === undefined || actx === null) return false
+          const face = inputFaceOf(actx)
+          const setDraft = face?.['setDraft']
+          if (typeof setDraft !== 'function') return false
+          setDraft.call(face, value)
+          return true
+        } catch {
+          return false
+        }
+      }
+      // A6 重读面：会话当前草稿快照（缝缺席/漂移 = undefined——调用方退触发时快照）
+      const draftTextOf = (id: string): string | undefined => {
+        try {
+          const actx = bindingCtxOf(id)?.ctx
+          if (actx === undefined || actx === null) return undefined
+          const state = inputFaceOf(actx)?.['state']
+          const draft = (state as { getSnapshot?: () => unknown } | undefined)?.getSnapshot?.() as
+            | { draft?: unknown }
+            | undefined
+          return typeof draft?.draft === 'string' ? draft.draft : undefined
+        } catch {
+          return undefined
+        }
+      }
+      while (Date.now() < deadline) {
+        if (writeDraft(sessionId, text)) {
+          // A6 增量搬运（落笔前重读）：重读原会话当前草稿为准——官方发送清空草稿时重读
+          // 空串 = 已发送文本不回填（双发根因消除）；重读不可得退回触发时快照。
+          const reread = previousSessionId !== undefined ? draftTextOf(previousSessionId) : undefined
+          void writeDraft(sessionId, carryDraftTextOf(text, reread))
+          // 原会话草稿清退（best-effort——防切回旧 blank 会话见幻影草稿；失败不回滚搬运）
+          if (previousSessionId !== undefined) writeDraft(previousSessionId, '')
+          return true
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      return false
+    },
+  }
+}
+
+/**
+ * 1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByCwdOf / worktreeCwdKey）。
+ * 跨 bundle 双本体注记：forge-client = classic script 自含 bundle（含 import/export 即
+ * 构建失败——2026-10-17 实证），不得 import app bundle 模块；同一组纯函数的 app 侧本体
+ * 在 views/session/hero-picker-model.ts（hero worktree mount 消费），两侧行为由各自
+ * 单测 pin（plugin.test 账本读面 describe / hero-picker-model.test）。
+ */
+
+/**
+ * worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对单源）：
+ * 反斜杠→正斜杠 + 去尾斜杠 + 小写。
+ */
+export function worktreeCwdKey(path: string): string {
+  return path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+}
+
+/** 账本快照窄读单步（getSnapshot 调用 + byId 取行——快照缺席/形状漂移 = undefined fail-soft） */
+function ledgerRowsOf(list: unknown): Record<string, unknown> | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  const byId = (snapshot as { byId?: unknown } | null)?.byId
+  return typeof byId === 'object' && byId !== null ? (byId as Record<string, unknown>) : undefined
+}
+
+/**
+ * 主视图在留会话 cwd 解析（1.26 编排默认 arm 去重判定——activeSessionIdOf 同判据
+ * `retainedBy.mainView > 0`，加读 cwd 字段）。快照缺席/形状漂移/无在留行 = undefined。
+ */
+export function activeSessionCwdOf(list: unknown): string | undefined {
+  for (const row of Object.values(ledgerRowsOf(list) ?? {})) {
+    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
+    const cwd = (row as { cwd?: unknown } | null)?.cwd
+    if (typeof mainView === 'number' && mainView > 0 && typeof cwd === 'string' && cwd !== '') return cwd
+  }
+  return undefined
+}
+
+/**
+ * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
+ * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17）：blank ∧ cwd 归一命中 ∧
+ * workspace 归属（workspace.sessionIds 含 id）∧ 非归档（archivedSessionIds 不含 id）。
+ * workspaces 快照缺席/漂移 = fail-closed 不复用（宁可走 host sessionCreate 互斥面重用产物，
+ * 不误复用他树会话）。
+ */
+export function blankSessionIdByCwdOf(list: unknown, cwd: string, workspaces?: unknown): string | undefined {
+  const key = worktreeCwdKey(cwd)
+  const snapshot = asRecord(workspaces)
+  const archived = Array.isArray(snapshot?.['archivedSessionIds']) ? (snapshot['archivedSessionIds'] as readonly unknown[]) : undefined
+  const items = Array.isArray(snapshot?.['items']) ? (snapshot['items'] as readonly unknown[]) : undefined
+  if (archived === undefined || items === undefined) return undefined
+  const workspace = items.find((row) => {
+    const path = asRecord(row)?.['path']
+    return typeof path === 'string' && worktreeCwdKey(path) === key
+  })
+  const members = Array.isArray(asRecord(workspace)?.['sessionIds']) ? (asRecord(workspace)?.['sessionIds'] as readonly unknown[]) : undefined
+  if (members === undefined) return undefined
+  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
+    if (id === '') continue
+    if ((row as { blank?: unknown } | null)?.blank !== true) continue
+    const rowCwd = (row as { cwd?: unknown } | null)?.cwd
+    if (typeof rowCwd !== 'string' || worktreeCwdKey(rowCwd) !== key) continue
+    if (!members.includes(id) || archived.includes(id)) continue
+    return id
+  }
+  return undefined
+}
+
+/** 官方 workspaces.list 快照窄读（G4 归属/归档两件数据源；快照缺席 = undefined fail-closed） */
+function workspacesSnapshotOf(list: unknown): unknown {
+  try {
+    return (list as { getSnapshot?: () => unknown } | null | undefined)?.getSnapshot?.()
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * A6 carryDraft 增量搬运落笔值（纯函数单源）：落笔前重读原会话草稿——重读可得即以重读为
+ * 准（官方发送清空草稿 → 重读空串 = 已发送文本不回填，双发根因消除）；重读不可得（缝
+ * 缺席/快照漂移）退回触发时快照。
+ */
+export function carryDraftTextOf(text: string, reread: string | undefined): string {
+  if (typeof reread !== 'string') return text.trim()
+  return reread.trim()
+}
+
 /** dsh 槽位服务窄面（结构同型镜像——bundle 零外部 import） */
 export interface ForgeSlotsService {
   /** 依赖洞位声明：声明在场（或入座）即装 cb；cb 返回即释放器（随 fiber 卸载级联） */
@@ -999,6 +1178,9 @@ function registerConversationViews(
   bridge: PublishedBridge,
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
+  uiWorkspace: ForgeUiWorkspaceService,
+  sessions: ForgeSessionsService,
+  workspaces: ForgeWorkspacesService,
 ): void {
   registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
     ctx.slots.register(
@@ -1022,10 +1204,27 @@ function registerConversationViews(
       {
         name: HERO_WORKSPACE_SLOT,
         priority: SIDEBAR_SHADOW_PRIORITY,
-        // W3 arm 退役（session-binding-guarantee）：hero worktree face（openSession/
-        // blankSessionByCwd/sessionsList/composerDraft 编排缝）随 arm 效应链退役——
-        // 点选 = 纯选中态（挂载面本地闭环 + pushSelection），会话创建 = 官方 create
-        // 调用点 wrap 改道预铸（零 inject，数据面组件自源 RPC）。
+        // fix-2：worktree 挂靠编排缝。1.29 时序裁决：点选 = 纯选中态（挂载面本地闭环，
+        // 零编排）；本 face 只剩 arm 消费点（会话创建唯一时机 = 首条消息）——openSession、
+        // blankSessionByCwd（reuse-or-create）、sessionsList（账本活源）与 composerDraft
+        // （首条消息意图源 + arm 后草稿搬运）。
+        inject: () => ({
+          worktree: {
+            openSession: (sessionId: string): void => {
+              try {
+                uiWorkspace.openSession(sessionId)
+              } catch {
+                // 官方导航面异常（会话卸载瞬态）fail-soft 不外溢
+              }
+            },
+            // G4 官方四件套：reuse 判据补齐 workspace 归属 + 非归档两件（官方
+            // reuseOrCreateBlank 语义对齐；workspaces 快照缺席 = fail-closed 不复用）
+            blankSessionByCwd: (cwd: string): string | undefined =>
+              blankSessionIdByCwdOf(sessions.list, cwd, workspacesSnapshotOf(workspaces.list)),
+            sessionsList: sessions.list,
+            composerDraft: composerDraftFace(ctx, sessions),
+          },
+        }),
       },
       views.ForgeHeroWorkspacePicker,
     ),
@@ -2367,7 +2566,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, uiWorkspace, sessions, workspaces)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）

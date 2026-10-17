@@ -68,7 +68,7 @@ const baseRiskDialog = (page: Page) => page.getByRole('dialog', { name: '基准�
 
 /** 风险框交互：勾选知悉 → 确认继续 */
 async function acknowledgeAndConfirm(page: Page, dialog: ReturnType<typeof heroRiskDialog>): Promise<void> {
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -91,6 +91,8 @@ async function attachedSessions(page: Page, wsDir: string, path: string): Promis
 
 /** composer 键入（首条消息意图——Lexical 配方：contenteditable 收敛门 + insertText + 回显重试） */
 async function typeDraft(page: Page, text: string): Promise<void> {
+  // 风险框已在场（改选后 draft 非空即时重开）= 首条消息意图已被消费——键入面被 mask 拦截，直接返回
+  if (await heroRiskDialog(page).isVisible().catch(() => false)) return
   await page
     .waitForFunction(
       () => {
@@ -103,7 +105,9 @@ async function typeDraft(page: Page, text: string): Promise<void> {
     .catch(() => undefined)
   const composer = page.locator('[data-composer-input]').first()
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    await composer.click()
+    // 风险框可能恰在改选后即时重开（draft 非空）——点击被 mask 拦截不致命，交由后续框断言判读
+    await composer.click({ timeout: 5_000 }).catch(() => undefined)
+    if (await heroRiskDialog(page).isVisible().catch(() => false)) return
     await page.keyboard.insertText(text)
     const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
     if (echoed.includes(text)) return
@@ -147,6 +151,9 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
+    // A7 前置：选中项目工作区（arm 编排数据根 = selectedId 严格命中项目行——1.31 同配方）
+    await page.locator('button[aria-label="选择工作区"]').first().click()
+    await page.locator('.dswf-hero-picker-list').getByText('risk-repo', { exact: false }).first().click()
 
     // ── AC1：hero chip 改选跨分支行（feat-a ≠ main）——1.29 点选纯选中态：点选零确认框；
     // 首条消息意图（草稿键入）才弹风险框；取消保持原选（选中态清退回锚定默认）──
@@ -166,6 +173,7 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await pickMenuRow(page, 'feat-a')
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
+    // 首条消息意图：draft 非空（取消路径草稿保留）下改选即时重开确认框；框缺席则键入边沿触发
     await typeDraft(page, '1-19 risk confirm first message')
     await expect(heroRiskDialog(page)).toBeVisible({ timeout: 30_000 })
     await acknowledgeAndConfirm(page, heroRiskDialog(page))
@@ -202,7 +210,12 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await expect(baseRiskDialog(page)).toBeVisible()
     await acknowledgeAndConfirm(page, baseRiskDialog(page))
     await expect
-      .poll(async () => (await listNames(page, wsDir)).includes('feat/new'), { timeout: 30_000, message: '确认后应创建同名 worktree feat/new' })
+      .poll(async () => {
+        const names = await listNames(page, wsDir)
+        console.log('[1.19-ac3] worktree names =', names.join(','))
+        // worktreeName = 分支末段归一（feat/new → new——list 条目名单面）
+        return names.includes('new')
+      }, { timeout: 30_000, message: '确认后应创建同名 worktree（分支 feat/new → 树名 new）' })
       .toBe(true)
     await snap(page, 'create-confirmed.png')
 
@@ -216,7 +229,9 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     // 落盘证据双面：① session_projcache 快照 cwd 字段；② 官方存储按会话 cwd 分组——
     // session-<id> 目录必落 `…-wt-a--` 组（分组键 = SessionHeader.cwd）
     const headerCwd = findSessionHeaderCwd(userData, sessionId as string)
-    expect(headerCwd, 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(wtDir)
+    // 分隔符归一比对（落盘 cwd 为 Windows 原生反斜杠形态——语义面等值判定）
+    const norm = (p: string | undefined): string => (p ?? '').replaceAll('\\', '/').toLowerCase()
+    expect(norm(headerCwd), 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(norm(wtDir))
     const sessionDir = findSessionDir(userData, sessionId as string)
     expect(sessionDir, '会话存储目录应按 wt-a worktree cwd 分组').toContain('wt-a')
     // cwd 实测：该目录下 pwd 语义面（git rev-parse --show-toplevel）= worktree 根；零 checkout（主树仍在 main）

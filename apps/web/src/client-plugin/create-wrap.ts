@@ -48,7 +48,7 @@ export interface SessionCreateWrapDeps {
   readonly warn?: (message: string) => void
 }
 
-/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 选中记忆键同判） */
+/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——blankSessionIdByCwdOf 同判） */
 function normPath(value: string): string {
   const slashed = value.replaceAll('\\', '/')
   const trimmed = slashed.length > 1 && slashed.endsWith('/') ? slashed.slice(0, -1) : slashed

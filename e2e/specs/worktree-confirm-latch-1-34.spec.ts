@@ -126,7 +126,7 @@ test('1.34 UI：确认闩锁——确认后键入多字零重弹（同一次选�
     await expect(heroRiskDialog(page), '首条消息意图应触发确认框').toBeVisible({ timeout: 30_000 })
     await snap(page, 'first-dialog.png')
     const dialog = heroRiskDialog(page)
-    await dialog.locator('input[type="checkbox"]').check()
+    await dialog.locator('input[type="checkbox"]').first().check()
     await dialog.getByRole('button', { name: '确认继续' }).click()
     await expect(heroRiskDialog(page)).toBeHidden()
 

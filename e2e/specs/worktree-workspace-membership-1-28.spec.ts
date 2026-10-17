@@ -67,7 +67,7 @@ const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分�
 /** 风险框交互：勾选知悉 → 确认继续（1.19 同款） */
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -193,6 +193,9 @@ test('1.28 UI：编排产物会话挂树工作区（sessionIds 名单可见）+ 
     page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+    // A7 前置：选中项目工作区（arm 编排数据根 = selectedId 严格命中项目行——1.31 同配方）
+    await page.locator('button[aria-label="选择工作区"]').first().click()
+    await page.locator('.dswf-hero-picker-list').getByText('orch-repo', { exact: false }).first().click()
 
     // ── 首条消息意图：跨分支确认框 → 确认 → 预铸编排（cwd = wt-a）──
     await page
