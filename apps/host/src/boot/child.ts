@@ -11,6 +11,7 @@
 // 以下 type-only 引入仅为拉入 cordis Context 模块增强（ctx.connection / ctx.webServer 类型）
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import { renderIndexInjections } from '@deepseek-ai/dsh-host-webserver'
 // mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -571,6 +572,23 @@ async function main(): Promise<void> {
             res.end()
             return
           }
+          // mobile-ui connection 探针：官方注入行的 combo URL 是文档相对路径（plugins/??…，
+          // 官方根挂载下解析为 /plugins）——/remote/ 挂载下浏览器解析为 /remote/plugins/…。
+          // 302 弹回官方根组合路由（client-modules Node half 的既有服务面，零新服务逻辑；
+          // 同 origin cookie 全随）。
+          if (requestUrl.startsWith(`${REMOTE_VIEW_MOUNT}/plugins/`)) {
+            res.writeHead(302, { location: requestUrl.slice(REMOTE_VIEW_MOUNT.length), 'cache-control': 'no-store' })
+            res.end()
+            return
+          }
+          // 官方 client http transport 以文档相对 URL 发单呼（`${channel}/${endpoint}`.slice(1)
+          // ——/remote/ 挂载下解析为 /remote/api/…）。307 保方法重定向回官方 /api 通道
+          // （302 会把 POST 降级为 GET——信封体丢失）；同 origin cookie 全随。
+          if (requestUrl.startsWith(`${REMOTE_VIEW_MOUNT}/api/`)) {
+            res.writeHead(307, { location: requestUrl.slice(REMOTE_VIEW_MOUNT.length), 'cache-control': 'no-store' })
+            res.end()
+            return
+          }
           // fix-25 webserver HTTP RPC 桥分诊（POST /remote/__rpc——受限只读 + 审批端点：
           // progress = listTasks/taskStats 装配只读、projects/list = 项目上下文只读、
           // approval = 决策转发——与 forge:remote/* 通道同语义。鉴权 = 会话 cookie 在场
@@ -614,15 +632,23 @@ async function main(): Promise<void> {
             return
           }
           readFile(target)
-            .then((body) => {
+            .then(async (body) => {
               const isIndex = rel === 'index.html'
               const ext = target.slice(target.lastIndexOf('.'))
+              // mobile-ui connection 探针（R9 证伪续作）：index 响应注入官方结构化行
+              // （ModuleLoader facade + client bundle 组合脚本 + __DSH_BOOT__ 图）——与官方
+              // frontend-static 同缝。用 renderIndexInjections（官方导出纯函数）而非
+              // renderIndex：tapIndex 弹射（dswf cookie → location.replace('/remote/')）
+              // 对移动面自身是自跳环（探针 netLog ⇄ nav 实证），弹射终点 = 本页，跳过。
+              const out = isIndex
+                ? renderIndexInjections(body.toString('utf8'), ctx.webServer.collectIndexInjections())
+                : body
               res.writeHead(200, {
                 'content-type': MIME[ext] ?? 'application/octet-stream',
                 // 入口 HTML no-store（④）；hash 命名资产默认缓存（content-type 已按扩展名钉）
                 ...(isIndex ? { 'cache-control': 'no-store' } : {}),
               })
-              res.end(method === 'HEAD' ? undefined : body)
+              res.end(method === 'HEAD' ? undefined : out)
             })
             .catch((error: unknown) => {
               if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
