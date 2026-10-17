@@ -1,6 +1,7 @@
 // worktree-branch-management 1.26 真机 UI e2e：hero 选中态升级编排默认——chip 显示哪，
 // 首条消息就落哪（所见即所得）。
-//   · 默认回填 = 主行（isMain）→ arm 效应跳过（官方原流零变化，attachedSessions = 0）；
+//   · 默认回填 = 主行（isMain）→ 1.27 起主行同样进编排（worktree-mandatory-bind-1-27
+//     收紧；本件原「主行零编排」断言随动更新）；
 //   · 点选 worktree 行（feat-a ≠ main）→ 1.19 风险确认框 → 确认才走预铸编排（cwd = wt-a）；
 //   · 编排默认 arm（记忆选中 ≠ 当前会话 cwd）：官方新会话流落回主树后，回填/记忆态自动
 //     arm 回选中树（复用既有空白挂靠会话——双路不重复建会话）；
@@ -160,11 +161,17 @@ test('1.26 UI：hero 选中态编排默认——首条消息按 chip 选中树�
     page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-    // 默认锚定：主树检出 main → chip = 主行（回填态；主行不进 arm——官方原流）
+    // 默认锚定：主树检出 main → chip = 主行（回填态；1.27 必绑收紧——主行同样进编排，
+    // 原「主行零编排 attachedSessions = 0」断言随 worktree-mandatory-bind-1-27 收紧面更新）
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
-    expect(await attachedSessions(page, wsDir, wsDir), '主行回填态零编排（官方原流零破坏）').toBe(0)
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wsDir), {
+        timeout: 60_000,
+        message: '主行锚定应编排绑定主树（1.27 必绑收紧）',
+      })
+      .toBeGreaterThanOrEqual(1)
 
     // ── 选中 worktree（跨分支）：1.19 风险确认框 → 确认才走预铸编排（cwd = wt-a）。
     // 确认后采纳可能引发整域重载（cwd 未落选中树前 arm 或再弹确认框）——循环确认至收敛。

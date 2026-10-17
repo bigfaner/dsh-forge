@@ -25,6 +25,7 @@ import {
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
+  worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
 } from './hero-picker-model.js'
@@ -132,9 +133,41 @@ export function ForgeHeroWorkspacePicker({
           return false
         }
         const rpc = makeRpc()
+        // 1.27 必绑收紧：主行（路径归一 ≡ 项目根）走主树绑定径——git 项目不存在无绑定
+        // 新会话。官方新会话流的 blank 恒落项目根 cwd 且无绑定，reuse 命中时不再「只
+        // 打开」（那会保留无绑定会话），改为补写挂靠事件绑定之（attach 通道对非活会话
+        // 合法、幂等；已绑定经 seal 读面判读零重复写）；无 blank 命中 → 预铸
+        // sessionCreate 原径（worktreePath = 项目根，host 侧 isMain 绑定同配方）。
+        // 既有无绑定历史会话不回填——本编排只在 hero/新会话选择时触发（生效路径注记）。
+        const isMainPath = selectedProjectRoot !== null && worktreeCwdKey(path) === worktreeCwdKey(selectedProjectRoot)
         // 1.26 双路不重复建会话：该 cwd 已有空白会话（点选/编排默认 arm 先前已建）→
         // 直接打开复用，不再走预铸新建（官方 reuseOrCreateBlank 语义同构）
         const reuseSessionId = worktree.blankSessionByCwd?.(path)
+        if (reuseSessionId !== undefined && isMainPath) {
+          try {
+            const seal = await rpc.worktree.seal({ sessionId: reuseSessionId })
+            if (seal.binding === null) {
+              await rpc.worktree.attach({ sessionId: reuseSessionId, worktreePath: path })
+            }
+          } catch (error) {
+            setWorktreeNotice((prev) => ({
+              text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
+              seq: (prev?.seq ?? 0) + 1,
+            }))
+            return false
+          }
+          try {
+            worktree.openSession(reuseSessionId)
+          } catch (error) {
+            setWorktreeNotice((prev) => ({
+              text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
+              seq: (prev?.seq ?? 0) + 1,
+            }))
+            return false
+          }
+          onClose()
+          return true
+        }
         if (reuseSessionId !== undefined) {
           try {
             worktree.openSession(reuseSessionId)
@@ -171,7 +204,7 @@ export function ForgeHeroWorkspacePicker({
         return true
       })().catch(() => false)
     },
-    [worktree, makeRpc, onClose],
+    [worktree, makeRpc, onClose, selectedProjectRoot],
   )
 
   const onSelect = useCallback(

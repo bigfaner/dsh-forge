@@ -134,3 +134,36 @@ export function blankSessionIdByCwdOf(list: unknown, cwd: string): string | unde
   }
   return undefined
 }
+
+// ───────────── 1.27 必绑收紧：编排默认 arm 闸纯函数（主行同样进编排） ─────────────
+
+/** arm 闸输入（挂载面效应读数的窄投影——判读单源，WorktreeFaces arm 效应消费） */
+export interface ArmGateInput {
+  /** 清单就绪且 isGit（能力位真） */
+  readonly phaseReadyGit: boolean
+  readonly path: string | undefined
+  /** 失败/取消抑制集（1.25/1.26——失败循环零重入） */
+  readonly suppressed: readonly string[]
+  readonly rowPresent: boolean
+  readonly isMain: boolean
+  /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
+  readonly currentCwd: string | undefined
+}
+
+/**
+ * 编排默认 arm 闸（1.27 必绑收紧）：选中行在场即候选。树内行沿用 1.26 cwd 去重——
+ * 当前 cwd 已在选中树 = 点选/先前编排已建（双路不重复建会话）；**主行不适用 cwd 去重**：
+ * 官方新会话流的 blank 恒落项目根 cwd 且无绑定，「cwd 已在根」恰是须补绑定的待编排态，
+ * 而非「已建」证据。既有无绑定历史会话不回填——本闸只在 hero/新会话阶段被消费，
+ * 历史会话打开不进 hero 面（生效路径注记：仅对新建会话生效）。
+ */
+export function shouldArmSelectedRow(input: ArmGateInput): boolean {
+  if (!input.phaseReadyGit) return false
+  if (input.path === undefined) return false
+  if (input.suppressed.includes(input.path)) return false
+  if (!input.rowPresent) return false
+  if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
+    return false
+  }
+  return true
+}

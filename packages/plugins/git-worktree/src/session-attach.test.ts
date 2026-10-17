@@ -219,6 +219,13 @@ describe('封存判定 + 发送拦截面（seal-guard）', () => {
     expect(evaluateSeal(null, [])).toEqual({ sealed: false })
   })
 
+  it('1.27 主树绑定恒不封存（主树恒在场——worktreePath = 项目根在全量在场集内）', () => {
+    // git worktree list 恒含主树本身 → 项目根绑定的封存判定恒假
+    expect(evaluateSeal({ worktreePath: 'C:/repo', branch: 'main' }, ['C:/repo', 'C:/repo/.forge/worktrees/wt-a'])).toEqual({
+      sealed: false,
+    })
+  })
+
   it('发送拦截面：封存会话 assertSendable 拒绝并给出明确错误提示', () => {
     expect(() => assertSendable({ sealed: true, reason: 'worktree-missing' })).toThrow(SessionSealedError)
     expect(() => assertSendable({ sealed: true, reason: 'worktree-missing' })).toThrow(/worktree 已删除/)

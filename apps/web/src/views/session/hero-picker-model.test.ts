@@ -6,6 +6,8 @@ import {
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
+  shouldArmSelectedRow,
+  worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
 } from './hero-picker-model.js'
@@ -118,5 +120,47 @@ describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
     const text = worktreeOrchestrationNotice('open', 'session unloaded')
     expect(text).toContain('打开会话')
     expect(text).toContain('session unloaded')
+  })
+})
+
+// 1.27 必绑收紧——arm 闸纯函数（主行同样进编排）。
+describe('shouldArmSelectedRow（1.27 主行编排默认）', () => {
+  const input = (over: Partial<Parameters<typeof shouldArmSelectedRow>[0]> = {}) => ({
+    phaseReadyGit: true,
+    path: 'C:/repo/.forge/worktrees/wt-a',
+    suppressed: [],
+    rowPresent: true,
+    isMain: false,
+    currentCwd: 'C:/repo/.forge/worktrees/wt-a',
+    ...over,
+  })
+
+  it('树内行当前 cwd 已在选中树 → 不 arm（双路不重复建会话——1.26 现状保留）', () => {
+    expect(shouldArmSelectedRow(input())).toBe(false)
+  })
+
+  it('树内行 cwd 在别处 → arm（官方新会话流落回主树后重消费——1.26 现状保留）', () => {
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere' }))).toBe(true)
+  })
+
+  it('主行 cwd 恒等于项目根（官方 blank 落根、无绑定）→ 仍 arm（1.27：cwd 去重对主行不适用）', () => {
+    expect(
+      shouldArmSelectedRow(input({ path: 'C:/repo', isMain: true, currentCwd: 'C:\\repo\\' })),
+    ).toBe(true)
+  })
+
+  it('主行 cwd 在别处（当前会话在别树）→ arm（预铸 sessionCreate 绑定项目根）', () => {
+    expect(shouldArmSelectedRow(input({ path: 'C:/repo', isMain: true, currentCwd: 'C:/repo/.forge/worktrees/wt-a' }))).toBe(true)
+  })
+
+  it('失败抑制 / 行缺席 / 相位未就绪 / 无选中 → 一律不 arm', () => {
+    expect(shouldArmSelectedRow(input({ suppressed: ['C:/repo/.forge/worktrees/wt-a'] }))).toBe(false)
+    expect(shouldArmSelectedRow(input({ rowPresent: false }))).toBe(false)
+    expect(shouldArmSelectedRow(input({ phaseReadyGit: false }))).toBe(false)
+    expect(shouldArmSelectedRow(input({ path: undefined }))).toBe(false)
+  })
+
+  it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
+    expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
   })
 })

@@ -28,7 +28,7 @@ import type { SlugCandidate } from '@dsh-forge/git-worktree/client'
 import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
-import { activeSessionCwdOf } from './hero-picker-model.js'
+import { activeSessionCwdOf, shouldArmSelectedRow } from './hero-picker-model.js'
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
 import './session.css'
 
@@ -215,14 +215,17 @@ export function ForgeHeroWorktreeMount({
   }, [phase, projectRoot])
 
   // ── 1.26 编排默认（hero 选中态升级：chip 显示哪，首条消息就落哪——所见即所得）──
-  // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：回填/记忆选中指向非主行树时，
+  // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：回填/记忆选中指向某行时，
   // 首条消息按官方原流会落主树 cwd（显示与执行脱节——bug af65c0a9 语义缺口）。arm 效应
-  // 在首条消息发出前把当前会话换成选中树的空白挂靠会话：复用 1.16 预铸配方编排缝
-  // （onSelectConfirmed = sessionCreate + attach + openSession 一体），选中主行/无选中
-  // 不进本效应（官方原流零变化）。去重三闸：armedRef（本挂载期已 arm 同径）、
-  // currentSessionCwd（选中树已开——点选编排已建，双路不重复建会话）、armSuppressed
-  // （失败/取消路径零重试）。跨分支风险 = 1.19 确认框同款（判定源 = 主行 branch vs
-  // 选中树 branch），确认才编排、取消清选中态走官方原流。
+  // 在首条消息发出前把当前会话换成选中行的挂靠会话：复用 1.16 预铸配方编排缝
+  // （onSelectConfirmed = sessionCreate + attach + openSession 一体）。
+  // 1.27 必绑收紧：**主行同样进编排**（选中主行 → worktreePath = 项目根的 isMain 绑定，
+  // git 项目不存在无绑定新会话——官方原流口子堵死）。去重三闸：armedRef（本挂载期已
+  // arm 同径）、currentSessionCwd（树内行已开——点选编排已建，双路不重复建会话；cwd
+  // 去重经 shouldArmSelectedRow 纯函数单源，主行不适用——官方 blank 落根恰是待绑定态）、
+  // armSuppressed（失败/取消路径零重试）。跨分支风险 = 1.19 确认框同款（判定源 = 主行
+  // branch vs 选中树 branch；主行自绑定同分支零风险直通）。既有无绑定历史会话不回填
+  // （本效应只在 hero/新会话阶段消费，历史会话打开不进 hero 面）。
   const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
   // 账本订阅（useSyncExternalStore 直读——闭包绑定 face：dsh 快照源 = 类方法，裸引用
   // 脱离 this 即崩，ForgeSidebarSlot 同口径）。当前主视图会话 cwd 是 arm 去重/重消费的
@@ -288,9 +291,9 @@ export function ForgeHeroWorktreeMount({
     if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
     if (readArmCooldownActive()) return // 编排后冷却窗——cwd 收敛滞后抑噪
     const row = phase.rows.find((candidate) => candidate.path === path)
-    if (row === undefined || !row.present || row.isMain) return // 主行 = 官方原流，零编排
-    // 已在选中树（点选/arm 编排产物）——零编排（双路不重复建会话）
-    if (currentCwd !== undefined && cwdKey(currentCwd) === cwdKey(path)) return
+    if (row === undefined) return
+    // 1.27 必绑收紧：主行同样编排；cwd 去重仅对树内行生效（纯函数 shouldArmSelectedRow 单源）
+    if (!shouldArmSelectedRow({ phaseReadyGit: true, path, suppressed: armSuppressed, rowPresent: row.present, isMain: row.isMain, currentCwd })) return
     const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
     if (isCrossBranchRisk(row.branch, mainBranch)) {
       setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排
