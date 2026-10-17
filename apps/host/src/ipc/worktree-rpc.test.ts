@@ -192,6 +192,44 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(created[0]!.title, '树工作区未继承项目名（hero 项目 chip 跟随树名）').toBe('dsh-forge')
   })
 
+  it('bug 4209c531：编排链预防性 ACL 补权——attachWorkspace 对树路径调 ensureDirAcl（沙箱授权链需有效 WRITE_DAC/WRITE_OWNER；失败 fail-soft 不阻断）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry } = fakeWorkspaceRegistry()
+    const aclPaths: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+      ensureDirAcl: async (path) => {
+        aclPaths.push(path)
+      },
+    })
+    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(aclPaths, '编排链未做 ACL 补权（新树首条命令必撞沙箱拒绝）').toEqual(['C:/repo/.forge/worktrees/wt-a'])
+  })
+
+  it('bug 4209c531：ensureDirAcl 拒绝 → 编排链 fail-soft 照常产出会话（不因 ACL 面阻断预铸采纳）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry } = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      workspaceRegistry: registry,
+      ensureDirAcl: async () => {
+        throw new Error('icacls failed')
+      },
+    })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
+      sessionId: expect.stringMatching(/^session-[0-9a-f-]{36}$/),
+    })
+  })
+
   it('存量树工作区 healing：create 复用不改 title（官方语义）→ setTitle 显式回写项目名', async () => {
     const { controller } = fakeController()
     const { persistence } = fakePersistence({})

@@ -9,7 +9,9 @@
 //   · registerWorktreeChannels（main 侧 ipc 注册——m2-wiring 单行编排位）；
 //   · interceptSessionSends（child 侧发送拦截——assertSendable 接入 host 消息处理链：
 //     sessionController.prompt/updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示）。
+import { execFile } from 'node:child_process'
 import { realpath } from 'node:fs/promises'
+import { promisify } from 'node:util'
 import {
   WORKTREE_CHANNELS,
   type WorktreeAheadBehindRequest,
@@ -144,6 +146,24 @@ const noGitCache = new Map<string, WorktreeListResult>()
 
 const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
 
+/**
+ * 目录 ACL 预防性补权（bug 4209c531——与官方 diagnose-windows-sandbox-acl 修复同语义，
+ * 前置到编排创建时点）。平台分派（钩子三平台均在，动作按需）：
+ *   · win32：git worktree add 产出的树目录只继承父链 ACE（Authenticated Users Modify——
+ *     不含 WRITE_DAC/WRITE_OWNER），沙箱授权链 grantWrite 要求目录链对授权进程有效
+ *     WRITE_DAC+WRITE_OWNER，缺任一 = 新树首条命令必被拒 → icacls 为当前用户补
+ *     FullControl（OI)(CI)（仅该树目录；不删改任何既有 ACE）；
+ *   · linux/mac：显式 no-op——posix 树目录由创建者用户所有（ugo 语义天然满足授权
+ *     前置），无 capability-SID 授权链，无需补权。
+ * 调用方 fail-soft（失败只 warn，不阻断编排）。
+ */
+const defaultEnsureDirAcl = async (path: string): Promise<void> => {
+  if (process.platform !== 'win32') return
+  const user = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`
+  if (user === '\\') return
+  await promisify(execFile)('icacls', [path, '/grant', `${user}:(OI)(CI)F`], { windowsHide: true })
+}
+
 /** 路径比对归一口径（seal-guard.normalizePathForCompare 同判——本地镜像零回环） */
 const norm = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
 
@@ -167,6 +187,8 @@ export function createWorktreeRpcService(deps: {
   readonly listWorktreeRows?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null; detached: boolean; bare: boolean }[]>) | undefined
   /** 默认 agentPreset 解析缝（官方 agentPresets registry——缺席/拒绝 = 头缺席零猜测，bug eae18b5c） */
   readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
+  /** 目录 ACL 预防性补权缝（bug 4209c531——缺省 = win32 icacls 当前用户 FullControl；测试注入桩） */
+  readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
   readonly warn?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
@@ -250,6 +272,11 @@ export function createWorktreeRpcService(deps: {
     const registry = resolveWorkspaceRegistry()
     if (registry === undefined) return
     try {
+      // bug 4209c531：树目录 ACL 预防性补权（先于一切授权面）——git worktree add 产出的
+      // 目录链常缺有效 WRITE_DAC/WRITE_OWNER，沙箱 provision 必拒；为当前用户补 FullControl。
+      await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(worktreePath).catch((cause: unknown) => {
+        warn(`[git-worktree] 目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
+      })
       // 树工作区标题继承项目命名——官方 chip 文案 = workspace.title（槽外不可改制）。
       // title 源 = 活跃项目行 name（hero 项目行同源；工作区 title 是用户可改名的易变字段
       // 不作源）。主行（cwd=项目根）不回写——主工作区 title 是用户命名面。映射缺席回退树名。
