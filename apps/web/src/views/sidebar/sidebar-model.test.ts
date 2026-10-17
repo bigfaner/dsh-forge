@@ -170,6 +170,25 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.currentSessionId).toBe('blank-cur')
   })
 
+  it('统一更新时间排序（主区/树会话不分 worktree 全组倒序；置顶仍领先）', () => {
+    const treePath = 'Z:/w/p1/.forge/worktrees/t'
+    const out = buildSidebarTree({
+      projects: [project('p1', 'w1', { wsPath: 'Z:/w/p1' })],
+      sessions: ledger([
+        ledgerRow('s-main-old', { updatedAt: 1 }),
+        ledgerRow('s-main-new', { updatedAt: 30 }),
+        ledgerRow('s-tree', { updatedAt: 10 }),
+      ]),
+      workspaces: workspaces([
+        { workspaceId: 'w1', sessionIds: ['s-main-old', 's-main-new'] },
+        { workspaceId: 'wt', path: treePath, sessionIds: ['s-tree'] },
+      ]),
+      workspaceProject: new Map([[normalizeFsPath(treePath), 'p1']]),
+    })
+    // 树会话按 updatedAt 插入全组序（此前 = 树区追加在尾部）
+    expect(out.tree[0]!.sessions.map((r) => r.sessionId)).toEqual(['s-main-new', 's-tree', 's-main-old'])
+  })
+
   it('phase pending → loading 骨架相位；无 mainView 在留行 → currentSessionId null', () => {
     const out = buildSidebarTree({
       projects: [project('p1', 'w1')],

@@ -279,16 +279,18 @@ export function buildSidebarTree(input: {
         ...(loop !== undefined ? { loop } : {}),
       })
     }
-    // D45 置顶领先（稳定排序——置顶行间 = 置顶集序，非置顶行间 = workspace 排列序保持）
-    if (pinnedOrder.size > 0) {
-      rows.sort((a, b) => {
-        const pa = pinnedOrder.get(a.sessionId)
-        const pb = pinnedOrder.get(b.sessionId)
-        if (pa === undefined) return pb === undefined ? 0 : 1
+    // 统一更新时间排序（评审裁决：项目组内全部会话——主区/各树不分来源——按 updatedAt
+    // 倒序；置顶行仍领先，置顶行间 = 置顶集序）
+    rows.sort((a, b) => {
+      const pa = pinnedOrder.get(a.sessionId)
+      const pb = pinnedOrder.get(b.sessionId)
+      if (pa !== undefined || pb !== undefined) {
+        if (pa === undefined) return 1
         if (pb === undefined) return -1
         return pa - pb
-      })
-    }
+      }
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
+    })
     tree.push({
       projectId: project.id,
       workspaceId: project.workspaceId,
