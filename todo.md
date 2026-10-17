@@ -173,4 +173,4 @@ md的FRONTMATTER渲染成表格，跟github一样
 - **进展（2026-10-17 裁决改向）：提前至批次②执行——任务 mobile-ui/1.11 已改向「forge 远程面 typert 化（/api/forge/*）」**；subagent 评估裁决后**首批收敛为 5 端点**：progress（链路探针）→ projects/grouped → approval（前置：真机核销官方 admit 隧道行为，不成立则 __rpc 并存保底）→ disconnect（pair-disconnected 事件对偶补 child→main 缝）→ read-state（前置：域基建 defineDomain/KvTable 现存性核销）。生成器 `@deepseek-ai/dsh-typert-generator`（npm 0.0.1-rc.1，已核实可得）；实现锚点 = `dsh-commands` typert 形态。
 - **移出首批（评估裁决）**：workers（session/list 官方面派生即全量）、task-action（官方 commands/execute + session/prompt 承载，零新增写面）、session-links（延后可选增强）。
 - 后续（非阻塞）：桌面 `remote-transport` 的 `forge:remote/*` 消费迁移同一协议；mobile `rpc.ts` 删除收口单 client。
-- 关键核销点：审批写入端点的守卫等价性（隧道域 dswf cookie 兜底 vs /api admit——真机核销，write 面不降级）；生成器 CLI 输入格式；PeerScope 身份字段。
+- 关键核销点：审批写入端点的守卫等价性——**可行性评估（2026-10-17）结构性结论：隧道实际反代整个 webserver（PAIRING_FACES「只暴露配对面」无运行时消费方，文档与实现矛盾待修），但官方信任门 Host/cookie authority 绑定 + fix-27 先例实证隧道域 POST 被拒 → 隧道模式 /api 大概率不可达，预期结论「LAN 可用、隧道降级 __rpc 保底」**；生成器 CLI 输入格式；PeerScope 身份字段；生成器 pin（0.0.1-rc.1 vs 0.1.0-rc.8 与 protocol 0.2.0-rc.2 代差兼容，首日试跑定）。
