@@ -240,6 +240,8 @@ sequenceDiagram
 | 6 | D1 拆分裁决：「能力缺席显式拒绝」与「瞬态异常是否按 D1-c 收紧封存面」两案独立 | W2 |
 | 7 | 两提案联动（mobile-ui × 本案）：`/remote/__rpc` 透传 `sessionCreate` 的 allowlist 落地时序与 `agentPreset` 字段过桥序列化核对（通道形态已定——mobile-ui 提案已规划透传）；移动端 hero 首选预铸 + fail-open 回退的语义钉（契约测试） | W3 |
 
+> **核销闭环（2026-10-17，真机取证）**：#1/#2 探针双过——boot apply 期 wrap 安装点恒早于官方首个 create（+95~+109ms，`probe-boot-timing.md`）；ClientSessions 实例可写 + apply 点属性替换 wrap 对官方入口生效 + create 失败走官方 createFailed toast 链（`probe-real-device-wrap.md`，截图留证）。#3-#7 五项裁决见 `adjudications.md`。
+
 ## 验收口径（真机端到端）
 
 1. 重启应用 → hero 直输（不碰 picker）→ 会话出生即绑定（attach@seq0 先于首条消息）；
