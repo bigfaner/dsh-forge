@@ -80,7 +80,8 @@ flowchart LR
 
 - **单选（radio）**：圆形选项，**点击某一选项即表示选中**（无需二次确认，选中态即时高亮；提交前可改选）。
 - **多选（checkbox group）**：方框对勾，点选/取消任意组合。
-- **other 选项**：带自由输入框；**单选**——输入值即表示选中 other（点选 other 行聚焦输入框亦可）；**多选**——输入值表示用户**额外选中** other（不影响已勾选的其它选项）。
+- **other 选项**：= 官方 **customAnswer 自由文本域**（每题附带，非选项成员；载荷字段 `custom`）；**单选**——输入值即表示选中 other；**多选**——输入值表示用户**额外选中** other（不影响已勾选的其它选项）。
+- **载荷契约（官方页实证，tech-research R9#2）**：`questions[{id, header?, question, detail?, options?[{label, description?, recommended?}], multiSelect?}]`——题型判别 = `multiSelect`；选项另有 recommended 徽标与 previous/skip/continue 按钮族（对齐官方交互词汇）。
 
 ### F3 设置面板与模型切换（屏 7/8）`浮层 + new-page #/models`
 

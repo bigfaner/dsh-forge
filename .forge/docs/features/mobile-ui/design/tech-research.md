@@ -139,13 +139,13 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - thinking 折叠卡结构同源实证：官方页 summary = `activity-leading/title/dot/summary/chevron`——与 mockup `.think` 结构一致；
 - 全屏阅读页（reader）复用同一实现（mermaid 增强器仍走 `@dsh-forge/md-mermaid` 动态 import）。
 
-## R9 待核实清单（余项，均已排批次或低风险）
+## R9 余项核实结论（2026-10-17 全部完成：dsh 源码 + 仓内代码 + 会话数据）
 
-| # | 项 | 时点 |
+| # | 项 | 结论（证据） |
 |---|---|---|
-| 1 | 官方指令执行 RPC 端点名/载荷（catalog/execute 形状） | 批次①录制（任务 1.1 AC 已含） |
-| 2 | `interaction.pending` ask 题型载荷（单选/多选/other 字段判别——对齐 ui-functions F2 三题型语义） | 批次①录制样本核对 |
-| 3 | one-shot worker 的 `subagent/catalog` 事件形状（现实证样本仅 `mode:'continuable'`） | 批次③前抽查日志 |
-| 4 | dsh-storage 三包在 host 组合的挂载在场性 | 批次②首步（AD-7 三步之②） |
-| 5 | 配对域 `session.list` 可见范围（受限视图是否全量会话——workers 派生与抽屉的前提） | 批次②真机/配对环境核对 |
-| 6 | 文档卡 `tool/result.meta` 通道载荷 | 批次③探针（任务 1.19 已含降级路径） |
+| 1 | 指令执行 RPC 面 | ✅ **typert 服务命名空间 = `commands`**，远程方法 = **`list`**（目录）+ **`execute`**（`@Remote` 装饰实证，dsh-commands lib/index.js：`constructor(ctx,"commands")`）。手机端 UI-adapter 仲裁调用此面；wire 方法全名以批次①录制复核 |
+| 2 | ask 题型载荷 | ✅ 官方页 `renderQuestionComposer` 实证：`pendingQuestion = {rpcId, questions:[{id, header?, question, detail?(md 渲染), options?:[{label, description?, recommended?}], multiSelect?}]}`——**题型判别 = `multiSelect`**；**other = 每题附带的 customAnswer 自由文本域**（`questionCustom`，非选项成员）；提交 = `{id, selected:[label…], custom}`（+skipped）；校验 = selected 空且 custom 空才拒绝。另有 recommended 徽标与 previous/skip/continue 按钮族 |
+| 3 | one-shot catalog | ✅ 会话数据实证（30802 行扫描）：`{childId, childCreatedAt, mode:'one-shot', label:'移动端对话UI&UX专家重设计'}`——与 continuable 同形，**label 在 one-shot 亦有值**；continuable 事件 10 条 |
+| 4 | storage 挂载在场性 | ✅ **`dsh-base` bundle cordis.patch.yml 显式挂载三行**：`storage`（hub）/ `storage-json`（**config.root 已指 `dshHomePath('storages')`**）/ `storage-domain`（域 facility）。我们 host profile.dev bundles 含 dsh-base → **存储缝已挂载到位，无需补挂**；host profile.dev pnpm-lock 已含 dsh-storage-domain@0.2.0-rc.2（传递依赖已装） |
+| 5 | 配对域 session.list 可见范围 | ✅ 官方口径 = **全量可见会话**：`ApiSessionList.list` 文档「Read every visible attached and persisted Session」，无 per-connection 过滤参数；官方手机页配对后 `rpc('session.list',{})` 即渲染全量列表——受限视图与桌面同域可见 |
+| 6 | tool/result.meta | ✅ 会话数据实证 **2600 条**：载荷 = 工具私有 JSON（read：`{path,offset,lines,totalLines,lang}`；fs-search：`{shape,files,truncated,total}`）——通道确证可用；deliverable 类工具的具体 meta 形状批次③随文档卡探针核对 |
