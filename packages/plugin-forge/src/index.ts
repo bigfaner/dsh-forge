@@ -327,7 +327,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
-      spawn,
+      // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
+      // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
+      loop: { driver: loopDriver, registry: loopRegistry },
     })
     forgeToolsRef = tools // 回放计划 runTool 的执行面回填（见 spawn 替换缝注记）
     // S7 会话投影键注册（run-tasks-host-command——sessionProjections 注册表可选消费，
@@ -462,6 +464,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.createProposal),
       ctx.tools.register(tools.transitionProposal),
       ctx.tools.register(tools.dispatchTask),
+      ctx.tools.register(tools.stopTaskLoop),
       ctx.tools.register(tools.updateTask),
       ctx.tools.register(tools.taskStats),
       ctx.tools.register(tools.listTasks),

@@ -21,6 +21,7 @@ import type {
   TransitionTaskInput,
 } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
+import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
 import { backoffDelayMs, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
@@ -1044,9 +1045,17 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
       },
       { timeout: 2000, interval: 5 },
     )
-    // 同源他会话再 start → 拒绝（同一任务源不能双派发）
+    // 同源他会话再 start → 拒绝（同一任务源不能双派发——3b 起失败分支带 message/guidance/suspended 全形）
     const same = await built.driver.start({ source: SOURCE, ownerSessionId: 'session-2', parent: {} })
-    expect(same).toEqual({ ok: false, code: 'loop-active', activeSource: SOURCE, activeOwnerSessionId: OWNER })
+    expect(same).toEqual({
+      ok: false,
+      code: 'loop-active',
+      activeSource: SOURCE,
+      activeOwnerSessionId: OWNER,
+      suspended: false,
+      message: expect.any(String),
+      guidance: [],
+    })
     // 异源他会话 start → 并行放行（多会话各跑各源）
     const parallel = await built.driver.start({ source: { kind: 'proposal', slug: 'other' }, ownerSessionId: 'session-2', parent: {} })
     expect(parallel).toEqual({ ok: true, loopId: expect.any(String) })
@@ -1839,5 +1848,140 @@ describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清�
     await untilSuspended(built.driver)
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
     expect(built.driver.resume({ loopId: loopId2 })).toEqual({ ok: false, code: 'no-active-loop' })
+  })
+})
+
+// ─────────────────────────── 3b③ 会话单活门控 + stopTaskLoop 定向停止 ───────────────────────────
+
+describe('start 会话级单活门控（3b——用户裁决 2026-10-17：一会话一循环，含挂起中）', () => {
+  /** 预置登记行（门控读数源——不经真实 runLoop） */
+  function loopRecordOf(owner: string, over: Partial<LoopRecord> = {}): LoopRecord {
+    return {
+      id: 'loop-pre',
+      source: { kind: 'feature', slug: 'feat-x' },
+      ownerSessionId: owner,
+      projectId: PROJECT,
+      takeoverSessions: new Set<string>(),
+      ...over,
+    }
+  }
+
+  /** 预置登记表的驱动器（deps.registry 注入缝——门控读数源，不经真实 runLoop） */
+  function driverWithRegistry(record: LoopRecord): { driver: LoopDriver; registry: ReturnType<typeof createLoopRegistry> } {
+    const registry = createLoopRegistry()
+    registry.register(record)
+    const h = tasksHarness()
+    const calls: NarrationCall[] = []
+    const narrator: Narrator = createNarrator({
+      channel: {
+        notice: async (sessionId, text) => {
+          calls.push({ method: 'notice', sessionId, text })
+        },
+        followup: async (sessionId, text) => {
+          calls.push({ method: 'followup', sessionId, text })
+        },
+      },
+    })
+    const driver = createLoopDriver({
+      projectId: PROJECT,
+      tasks: h.tasks,
+      spawn: parkedSpawn as unknown as SpawnWorker,
+      narrator,
+      registry,
+      delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    })
+    return { driver, registry }
+  }
+
+  it('owner 已有活循环（他源）→ owner-active 拒绝：归属 + suspended=false + 人话/指引随行；登记未增', async () => {
+    const { driver, registry } = driverWithRegistry(loopRecordOf(OWNER))
+    const result = await driver.start({ source: { kind: 'feature', slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('owner-active')
+      expect(result.activeSource).toEqual({ kind: 'feature', slug: 'feat-x' })
+      expect(result.suspended).toBe(false)
+      expect(result.message).toContain('one loop per session')
+      expect(result.guidance.some((g) => g.includes('stopTaskLoop'))).toBe(true)
+    }
+    expect(registry.all()).toHaveLength(1)
+  })
+
+  it('挂起中的活循环同占会话名额：owner-active 且 suspended=true', async () => {
+    const { driver } = driverWithRegistry(
+      loopRecordOf(OWNER, {
+        suspended: {
+          escalation: { kind: 'deadlock', ownerSessionId: OWNER, source: { kind: 'feature', slug: 'feat-x' }, blockedItems: [] },
+          since: 0,
+        },
+      }),
+    )
+    const result = await driver.start({ source: { kind: 'feature', slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(false)
+    expect(result.ok ? undefined : result.suspended).toBe(true)
+  })
+
+  it('他源他会话并行不受限：owner 无活循环时正常启动（既有语义零回归）', async () => {
+    const { driver } = driverWithRegistry(loopRecordOf('someone-else'))
+    const result = await driver.start({ source: { kind: 'feature', slug: 'feat-y' }, ownerSessionId: OWNER, parent: {} })
+    expect(result.ok).toBe(true)
+  })
+})
+
+describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 registry 判活 + 作用域裁决）', () => {
+  it('无活循环 → no-active-loop（ownerSessionId 空形）', async () => {
+    const built = build()
+    expect(await built.driver.stopLoop({ loopId: 'ghost', requesterSessionId: 'x' })).toEqual({
+      ok: false,
+      code: 'no-active-loop',
+      suspended: false,
+      ownerSessionId: '',
+    })
+  })
+
+  it('运行中：owner 可停（统一结束处理同径——真化 interrupted + ⑰ 收口叙述 + 终态注销）；非 owner 被拒', async () => {
+    const built = build({ claim: [claimed()] })
+    built.spawn.setBehavior(parkedSpawn)
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    // 非 owner → forbidden（owner 随行——自解释文案数据源）
+    const denied = await built.driver.stopLoop({ loopId, requesterSessionId: 'other-session' })
+    expect(denied).toEqual({ ok: false, code: 'forbidden', suspended: false, ownerSessionId: OWNER })
+    // owner → 统一结束处理（stop() 同径单源）
+    const stopped = await built.driver.stopLoop({ loopId, requesterSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
+    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('继续执行 /run-dag-tasks feat-x'))).toBe(true)
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
+  })
+
+  it('挂起态任意会话可停：非 owner 触达挂起循环 → 统一结束处理收口', async () => {
+    /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+    const queryBlockedNoProgress = (): QueryTaskResult => ({
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    })
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryBlockedNoProgress()],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    const stopped = await built.driver.stopLoop({ loopId, requesterSessionId: 'takeover-session' })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+    expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
   })
 })

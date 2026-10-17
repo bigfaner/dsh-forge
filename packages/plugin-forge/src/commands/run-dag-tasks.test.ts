@@ -90,12 +90,23 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
           code: 'loop-active' as const,
           activeSource: { kind: 'feature' as const, slug: input.source.slug },
           activeOwnerSessionId: 's-race',
+          suspended: false,
+          message: 'loop-active race',
+          guidance: [],
         }
       }
       // 同源独占（2026-10-12 多会话并行裁决）：同 kind+slug 已在跑才拒；他源他 session 并行放行
       for (const record of loops.values()) {
         if (record.source.kind === input.source.kind && record.source.slug === input.source.slug) {
-          return { ok: false as const, code: 'loop-active' as const, activeSource: record.source, activeOwnerSessionId: record.ownerSessionId }
+          return {
+            ok: false as const,
+            code: 'loop-active' as const,
+            activeSource: record.source,
+            activeOwnerSessionId: record.ownerSessionId,
+            suspended: record.suspended !== undefined,
+            message: 'loop-active race',
+            guidance: [],
+          }
         }
       }
       loops.set(input.ownerSessionId, recordOf(input.ownerSessionId, input.source.slug))
@@ -111,6 +122,7 @@ function driverStub(options: { activeRecord?: LoopRecord; startCode?: 'loop-acti
     activeOf: vi.fn((ownerSessionId: string) => loops.get(ownerSessionId)),
     activeAll: vi.fn(() => [...loops.values()]),
     resume: vi.fn(() => ({ ok: false, code: 'no-active-loop' }) as const),
+    stopLoop: vi.fn(async () => ({ ok: false, code: 'no-active-loop', suspended: false, ownerSessionId: '' }) as const),
     dispose: vi.fn(() => {}),
   }
   return { driver, startInputs, stopInputs, loops, recordOf }

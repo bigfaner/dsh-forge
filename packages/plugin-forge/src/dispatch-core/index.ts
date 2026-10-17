@@ -32,9 +32,14 @@ export {
   hasExclusiveLoopSources,
   LOOP_EXCLUSIVE_GUIDANCE,
   LoopSourceExclusiveError,
+  ownerActiveLoopOf,
+  OwnerActiveLoopError,
+  OWNER_ACTIVE_GUIDANCE,
+  ownerSingleActiveRejection,
   resetExclusiveLoopSources,
   setExclusiveLoopSource,
 } from './exclusivity.js'
+export type { OwnerActiveLoopView, OwnerLoopReader } from './exclusivity.js'
 export { classifyPool, poolOf } from './pool.js'
 export type { PoolSnapshot, PoolVerdict } from './pool.js'
 export type { DispatchCoreFailure, DispatchSpawnedResult, DispatchTaskResult } from './result.js'

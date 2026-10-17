@@ -35,7 +35,7 @@ import type {
   PoolSnapshot,
   SpawnWorker,
 } from '../dispatch-core/index.js'
-import { clearExclusiveLoopSource, setExclusiveLoopSource } from '../dispatch-core/index.js'
+import { clearExclusiveLoopSource, ownerSingleActiveRejection, setExclusiveLoopSource } from '../dispatch-core/index.js'
 import { renderHeadline, renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
@@ -240,15 +240,36 @@ export interface LoopStartInput {
   readonly projectId?: string
 }
 
-/** 启动返回（v1 单活：进程内已有活循环 → loop-active 拒绝——S2 据此问询查看/停止/替换） */
+/** 启动返回（3b 两拒绝码：loop-active = 该容器已有活循环（他源他会话并行不受限）；
+ *  owner-active = 会话级单活门控（用户裁决 2026-10-17）——本会话已有活循环（含挂起中），
+ *  循环间串行；suspended 标记挂起占用形态） */
 export type LoopStartResult =
   | { readonly ok: true; readonly loopId: LoopInstanceId }
-  | { readonly ok: false; readonly code: 'loop-active'; readonly activeSource: LoopSourceRef; readonly activeOwnerSessionId: string }
+  | {
+      readonly ok: false
+      readonly code: 'loop-active' | 'owner-active'
+      readonly activeSource: LoopSourceRef
+      readonly activeOwnerSessionId: string
+      /** owner-active 径专用——命中会话的活循环是否挂起中（挂起也占会话名额） */
+      readonly suspended: boolean
+      /** 自解释人话 + 指引行（工具/指令渲染面直接投影——零二次拼装） */
+      readonly message: string
+      readonly guidance: readonly string[]
+    }
 
 /** 停止返回（本会话无活循环 = no-active-loop——S2 据此提示「本会话没有派发任务」，decisions #20） */
 export type LoopStopResult =
   | { readonly ok: true; readonly stopped: true; readonly hadInFlight: boolean }
   | { readonly ok: false; readonly code: 'no-active-loop' }
+
+/**
+ * 定向停止返回（3b stopTaskLoop——作用域裁决 2026-10-17：运行中仅 owner 可停（decisions #20
+ * 隔离纪律）；挂起态（awaiting-verdict）任意会话可停——支撑其它会话接管。越权/无活循环拒绝，
+ * suspended/ownerSessionId 随行供自解释文案。
+ */
+export type LoopStopLoopResult =
+  | { readonly ok: true; readonly stopped: true; readonly hadInFlight: boolean }
+  | { readonly ok: false; readonly code: 'no-active-loop' | 'forbidden'; readonly suspended: boolean; readonly ownerSessionId: string }
 
 /** 驱动器依赖（装配方注入——registry 缺省自建，多驱动器共享时由装配传入单例） */
 export interface LoopDriverDeps {
@@ -288,6 +309,12 @@ export interface LoopDriverDeps {
 export interface LoopDriver {
   start(input: LoopStartInput): Promise<LoopStartResult>
   stop(input: { readonly ownerSessionId: string }): Promise<LoopStopResult>
+  /**
+   * 定向停止（3b stopTaskLoop 消费面——与 /stop-dag-tasks 双入口同 registry 判活）：按
+   * LoopInstanceId 定位，统一结束处理（在途 worker 取消、孤儿任务真化 interrupted、收口
+   * 叙述、终态注销）与 stop() 同径单源。作用域见 LoopStopLoopResult 注。
+   */
+  stopLoop(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string }): Promise<LoopStopLoopResult>
   /** 本会话活循环（S2「跑动中再触发」的查询面；无 = undefined） */
   activeOf(ownerSessionId: string): LoopRecord | undefined
   /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
@@ -501,16 +528,67 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
   const registry = deps.registry ?? createLoopRegistry()
   const live = new Map<LoopInstanceId, ActiveLoop>()
 
+  /** 统一结束处理（stop/stopLoop 双入口同径单源）：在途取消 + 孤儿真化 + 收口叙述 + 终态注销 */
+  async function terminateRecord(record: LoopRecord): Promise<boolean> {
+    const loop = live.get(record.id)
+    // 先摘牌再 abort——停止竞态收口：runRound 各 await 恢复点见 inFlight 已清即让渡接管权
+    const captured: LoopInFlight | undefined = record.inFlight
+    record.inFlight = undefined
+    loop?.controller.abort('loop stopped by command')
+    if (captured !== undefined) {
+      await interruptedize(loop, captured.taskId) // in-flight 真化 interrupted（S3 transitionTask 面）
+      // 进度事件（1.17——状态迁移点：停止真化 in-flight → interrupted）
+      if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', taskKey: captured.taskKey })
+    }
+    const stats = await statsFailSoft(loop)
+    await deps.narrator.followup(
+      record.ownerSessionId,
+      renderNarrative('stopped-by-command', {
+        sourceSlug: record.source.slug,
+        completed: stats.byStatus.completed,
+        inFlightTaskKey: captured?.taskKey ?? '无',
+        instruction: loopInstructionOf('resume', record.source.slug),
+      }),
+    )
+    registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）
+    clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（归属校验——幂等）
+    live.delete(record.id)
+    return captured !== undefined
+  }
+
   return {
     async start(input: LoopStartInput): Promise<LoopStartResult> {
       // S2 projectId 解析（会话工作区覆盖 > 装配缺省；双缺席 fail-loud——不落不可归属的循环）
       const projectId = input.projectId ?? deps.projectId
       if (projectId === undefined) throw new Error('派发循环启动缺少 projectId（input.projectId 与 deps.projectId 双缺席）')
+      // 会话级单活门控（3b——用户裁决 2026-10-17：一个会话同一时间段只允许一个任务循环，
+      // 循环间串行）：start 前查 byOwner(caller)——已有活循环（含挂起中）即拒绝并自解释指引
+      // （exclusivity.ts 身份缝合单点；指令与工具双入口同源兑现）。
+      const ownerRejection = ownerSingleActiveRejection((id) => registry.byOwner(id), input.ownerSessionId)
+      if (ownerRejection !== undefined) {
+        return {
+          ok: false,
+          code: 'owner-active',
+          activeSource: { kind: ownerRejection.data.sourceKind, slug: ownerRejection.data.slug },
+          activeOwnerSessionId: ownerRejection.data.ownerSessionId,
+          suspended: ownerRejection.data.suspended,
+          message: ownerRejection.message,
+          guidance: ownerRejection.data.guidance,
+        }
+      }
       // ② 同源独占（2026-10-12 多会话并行裁决——取代 v1 全局单活）：同一任务源进程内至多
       // 一个活循环（他源他会话并行不受限）；同源再 start → loop-active 拒绝
       const active = registry.bySource({ kind: input.source.kind, slug: input.source.slug })
       if (active !== undefined) {
-        return { ok: false, code: 'loop-active', activeSource: active.source, activeOwnerSessionId: active.ownerSessionId }
+        return {
+          ok: false,
+          code: 'loop-active',
+          activeSource: active.source,
+          activeOwnerSessionId: active.ownerSessionId,
+          suspended: active.suspended !== undefined,
+          message: `start rejected: task source ${active.source.slug} already has an active dispatch loop (owner session ${active.ownerSessionId})`,
+          guidance: [],
+        }
       }
       // ⑥ LoopInstanceId（decisions #18）：crypto.randomUUID()——登记表键 + guard 粘性载体
       const id = crypto.randomUUID()
@@ -583,31 +661,22 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       if (record === undefined) {
         return { ok: false, code: 'no-active-loop' }
       }
-      const loop = live.get(record.id)
-      // 先摘牌再 abort——停止竞态收口：runRound 各 await 恢复点见 inFlight 已清即让渡接管权
-      const captured: LoopInFlight | undefined = record.inFlight
-      record.inFlight = undefined
-      loop?.controller.abort('loop stopped by command')
-      let hadInFlight = false
-      if (captured !== undefined) {
-        hadInFlight = true
-        await interruptedize(loop, captured.taskId) // in-flight 真化 interrupted（S3 transitionTask 面）
-        // 进度事件（1.17——状态迁移点：停止真化 in-flight → interrupted）
-        if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', taskKey: captured.taskKey })
+      const hadInFlight = await terminateRecord(record)
+      return { ok: true, stopped: true, hadInFlight }
+    },
+
+    async stopLoop(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string }): Promise<LoopStopLoopResult> {
+      // 3b 定向停止（stopTaskLoop——双入口同 registry 判活；统一结束处理与 stop() 同径单源）。
+      // 作用域裁决（2026-10-17）：运行中仅 owner 可停；挂起态任意会话可停（其它会话接管支撑）。
+      const record = registry.get(input.loopId)
+      if (record === undefined) {
+        return { ok: false, code: 'no-active-loop', suspended: false, ownerSessionId: '' }
       }
-      const stats = await statsFailSoft(loop)
-      await deps.narrator.followup(
-        record.ownerSessionId,
-        renderNarrative('stopped-by-command', {
-          sourceSlug: record.source.slug,
-          completed: stats.byStatus.completed,
-          inFlightTaskKey: captured?.taskKey ?? '无',
-          instruction: loopInstructionOf('resume', record.source.slug),
-        }),
-      )
-      registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）
-      clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（归属校验——幂等）
-      live.delete(record.id)
+      const suspended = record.suspended !== undefined
+      if (!suspended && record.ownerSessionId !== input.requesterSessionId) {
+        return { ok: false, code: 'forbidden', suspended, ownerSessionId: record.ownerSessionId }
+      }
+      const hadInFlight = await terminateRecord(record)
       return { ok: true, stopped: true, hadInFlight }
     },
 

@@ -386,6 +386,13 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     projectId: ctx.projectId,
   })
   if (!result.ok) {
+    // 会话级单活门控（3b——用户裁决 2026-10-17）：本会话已有活循环（含挂起中）——循环间串行
+    if (result.code === 'owner-active') {
+      return {
+        kind: 'success',
+        text: `本会话已有任务循环在运行（${result.activeSource.slug}${result.suspended ? '，挂起等待处置' : ''}）——一个会话同一时间段只允许一个任务循环。请先结束/停止（stopTaskLoop 或 /stop-dag-tasks）或处置当前循环后再发起新循环；或换一个会话发起。`,
+      }
+    }
     // loop-active（active() 读数与 start 之间的竞态窗口；含他会话刚启动的循环）——不重复启动
     return { kind: 'success', text: `任务源 ${result.activeSource.slug} 的派发循环已在运行，本次未重复启动` }
   }

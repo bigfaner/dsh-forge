@@ -22,6 +22,7 @@ export type {
   LoopResumeResult,
   LoopStartInput,
   LoopStartResult,
+  LoopStopLoopResult,
   LoopStopResult,
   LoopTriageDecision,
   LoopTriageHook,
