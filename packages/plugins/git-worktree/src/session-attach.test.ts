@@ -156,6 +156,23 @@ describe('读尾部挂靠事件（会话绑定反查）', () => {
     })
   })
 
+  it('v3→v4 迁移兼容：plugin: 前缀形态的挂靠事件读回可识别（迁移把未知事件 type 加 plugin: 前缀）', async () => {
+    const migrated = [
+      {
+        type: 'plugin:forge/worktree-attach',
+        seq: 0,
+        time: Date.now(),
+        data: { worktreePath: 'C:/wt/migrated', branch: 'feat/m' },
+        ignorable: true,
+      },
+    ] as unknown as readonly SessionEvent[]
+    expect(latestAttachEvent(migrated)).toEqual({
+      seq: 0,
+      worktreePath: 'C:/wt/migrated',
+      branch: 'feat/m',
+    })
+  })
+
   it('无挂靠事件的会话返回 null', async () => {
     const id = await seedSession('empty')
     await expect(latestAttachEvent(await readAll(id))).toBeNull()

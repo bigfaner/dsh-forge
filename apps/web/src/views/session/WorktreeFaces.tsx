@@ -160,8 +160,10 @@ export function ForgeHeroWorktreeMount({
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
     () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined),
   )
-  // 失败/取消抑制集（arm 失败/确认取消路径零重试——1.25/1.26 口径；点选零失败面）
+  // 失败抑制集（arm 失败路径零重试——1.25 口径；1.31 A3 与取消抑制拆分）
   const [armSuppressed, setArmSuppressed] = useState<readonly string[]>([])
+  // 取消抑制集（1.31 A3——确认框取消路径专用；显式重选同树即清除，语义 = 用户否决非失败循环）
+  const [cancelSuppressed, setCancelSuppressed] = useState<readonly string[]>([])
   // 编排在途闸（arm 专用——async 编排窗口内 arm 效应零重入；结束后解锁，当前会话再落
   // 回他树时编排默认可重新消费——mount 为 root 作用域影子，跨会话常驻）
   const orchestrationInFlightRef = useRef(false)
@@ -181,11 +183,13 @@ export function ForgeHeroWorktreeMount({
   )
 
   // 点选 = 纯选中态（1.29）：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
-  // 冷却窗照写——若用户先键入后点选（草稿已非空），冷却把点选触发的 arm 压 8s，保住
-  // 「点选不建会话」的短窗语义。
+  // 冷却窗照写——若用户先键入后点选（草稿已非空），1.31 A1 判据下冷却不再挡发送意图的
+  // arm（唯一编排时机保住）；「点选引发」（draft 空）的 arm 仍压 8s 短窗语义。
+  // A3：显式重选 = 用户再次表达意图——清除该行的取消抑制（确认框可重弹）。
   const onSelectConfirmed = useCallback(
     (path: string): void => {
       writeArmCooldown()
+      setCancelSuppressed((prev) => (prev.includes(path) ? prev.filter((row) => row !== path) : prev))
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       pushSelection(path)
       setLocalSelectedPath(path)
@@ -319,18 +323,21 @@ export function ForgeHeroWorktreeMount({
     if (phase.state !== 'ready' || !phase.isGit) return
     const path = localSelectedPath
     if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
-    if (readArmCooldownActive()) return // 编排后/点选后冷却窗——cwd 收敛滞后抑噪
     const row = phase.rows.find((candidate) => candidate.path === path)
     if (row === undefined) return
     // 1.29 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）——主行
     // （1.27 必绑）同样只在该时点进编排
     const draftIntent = draftText.trim() !== ''
-    // 1.27 必绑收紧：主行同样编排；cwd/armed 去重判读（纯函数 shouldArmSelectedRow 单源）
+    // 1.27 必绑收紧：主行同样编排；cwd/armed 去重 + A3 取消抑制 + A4 确认框闸 + A1
+    // 冷却窗 draftIntent 维度判读（纯函数 shouldArmSelectedRow 单源）
     if (
       !shouldArmSelectedRow({
         phaseReadyGit: true,
         path,
         suppressed: armSuppressed,
+        cancelSuppressed,
+        riskConfirmationOpen: defaultRiskPath !== null,
+        cooldownActive: readArmCooldownActive(),
         rowPresent: row.present,
         isMain: row.isMain,
         currentCwd,
@@ -350,7 +357,7 @@ export function ForgeHeroWorktreeMount({
     armDefault(path, draftText, currentSessionId)
     // draftText/currentCwd/currentSessionId 入 deps：首条消息意图出现、官方新会话流落回
     // 他树后（当前会话变化），编排默认（重新）消费
-  }, [phase, localSelectedPath, armSuppressed, draftText, currentCwd, currentSessionId, armDefault])
+  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, draftText, currentCwd, currentSessionId, armDefault])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -555,7 +562,8 @@ export function ForgeHeroWorktreeMount({
           onCancel={() => {
             const path = defaultRiskPath
             setDefaultRiskPath(null)
-            setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
+            // A3：取消写取消抑制（非失败抑制集）——显式重选同树即清除，确认框可重弹
+            setCancelSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
             // 取消编排默认 = 不落假象：回填态与选中记忆同清（chip 退回占位），消息走官方原流
             if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
             pushSelection(undefined)

@@ -9,10 +9,12 @@ import {
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
+  selectedProjectRootStrictOf,
   shouldArmSelectedRow,
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
+  worktreeReuseBindDegradedNotice,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -82,6 +84,18 @@ describe('selectedProjectOf（workspaceId ↔ 项目映射——owner selectedId
 
   it('selectedId 缺席（无 pending 无会话归属）→ undefined', () => {
     expect(selectedProjectOf(heroPickerPlan(PROJECTS, true).rows, undefined)).toBeUndefined()
+  })
+})
+
+describe('selectedProjectRootStrictOf（A7——编排源与渲染兜底分离）', () => {
+  it('selectedId 命中项目 → ws_path（与 selectedProjectRootOf 首段一致）', () => {
+    expect(selectedProjectRootStrictOf(PROJECTS, 'w-2')).toBe('C:\\ws\\p2')
+  })
+
+  it('selectedId 未命中/缺席 → null（即便存在其他活跃项目——渲染兜底禁止泄漏为编排源）', () => {
+    expect(selectedProjectRootStrictOf(PROJECTS, 'w-native-unbound')).toBeNull()
+    expect(selectedProjectRootStrictOf(PROJECTS, undefined)).toBeNull()
+    expect(selectedProjectRootStrictOf(PROJECTS, 'w-3')).toBeNull() // archived 亦不充当编排源
   })
 })
 
@@ -162,7 +176,25 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
     currentSessionId: 's-cur',
     armedSessionId: undefined,
     armedPath: undefined,
+    riskConfirmationOpen: false,
     ...over,
+  })
+
+  // A4——确认框待决 × 编排在途/完成是未定义态：框开着期间效应守卫零重入
+  it('确认框打开（riskConfirmationOpen）→ 不 arm（守卫链补 defaultRiskPath 闸——防双编排竞态）', () => {
+    expect(shouldArmSelectedRow(input({ riskConfirmationOpen: true, currentCwd: 'C:/elsewhere' }))).toBe(false)
+  })
+
+  // A3——取消抑制与失败抑制拆分：取消写入的抑制集独立判读（显式重选清除后即可重走）
+  it('取消抑制（cancelSuppressed 含 path）→ 不 arm；不在其中 → 照常 arm', () => {
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', cancelSuppressed: ['C:/repo/.forge/worktrees/wt-a'] }))).toBe(false)
+    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', cancelSuppressed: ['C:/other'] }))).toBe(true)
+  })
+
+  // A1——冷却窗判据加 draftIntent 维度：只压「点选引发」（draft 空），发送意图不被冷却挡
+  it('冷却窗 + draft 空 → 不 arm（点选引发的短窗语义保留）；冷却窗 + draft 非空 → 照常 arm（唯一编排时机不被冷却杀）', () => {
+    expect(shouldArmSelectedRow(input({ cooldownActive: true, draftIntent: false }))).toBe(false)
+    expect(shouldArmSelectedRow(input({ cooldownActive: true, currentCwd: 'C:/elsewhere' }))).toBe(true)
   })
 
   it('草稿空（无首条消息意图）→ 不 arm——点选/回填零会话副作用（1.29 唯一时机闸门）', () => {
@@ -208,6 +240,16 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
 
   it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
     expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
+  })
+})
+
+// A8——reuse 补绑定失败降级提示文案（不落「将落主树」假象——降级产物自带绑定）。
+describe('worktreeReuseBindDegradedNotice（A8 降级语义）', () => {
+  it('文案含降级语义与原因（补绑定失败 → 降级新建挂靠会话，非放弃编排）', () => {
+    const text = worktreeReuseBindDegradedNotice('seal rpc timeout')
+    expect(text).toContain('补绑定失败')
+    expect(text).toContain('seal rpc timeout')
+    expect(text).toContain('降级')
   })
 })
 

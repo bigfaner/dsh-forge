@@ -92,13 +92,23 @@ export function createWorktreeAttachWriter(handles: SessionWriteHandleFactory): 
 }
 
 /**
+ * 挂靠事件 type 双形态识别（1.31 搭车——审计假设7）：官方 v3→v4 迁移
+ * （dsh-session-format-v3-to-v4 lib/index.js:1304）把未知事件 type 改写为
+ * `plugin:${type}`——迁移后的旧会话读回为 plugin:forge/worktree-attach，
+ * 按字面读即绑定反查失效。双形态等价识别。
+ */
+export function isWorktreeAttachEventType(type: string): boolean {
+  return type === WORKTREE_ATTACH_EVENT_TYPE || type === `plugin:${WORKTREE_ATTACH_EVENT_TYPE}`
+}
+
+/**
  * 读尾部挂靠事件（会话绑定反查）：从全会话事件中取最近一条 forge/worktree-attach。
  * 会话恢复路径对未知 + ignorable 事件安全跳过（不入 surface），但事件随日志保留，重读即得。
  */
 export function latestAttachEvent(events: readonly SessionEvent[]): WorktreeAttachEvent | null {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i]
-    if (event?.type !== WORKTREE_ATTACH_EVENT_TYPE) continue
+    if (event === undefined || typeof event.type !== 'string' || !isWorktreeAttachEventType(event.type)) continue
     const data = event.data as Partial<WorktreeAttachData> | null
     if (typeof data?.worktreePath === 'string' && typeof data?.branch === 'string') {
       return { seq: event.seq, worktreePath: data.worktreePath, branch: data.branch }

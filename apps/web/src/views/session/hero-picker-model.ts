@@ -47,9 +47,26 @@ export function selectedProjectOf(
 }
 
 /**
- * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正）：
+ * worktree 编排数据根（A7——编排源与渲染兜底分离）：仅 selectedId 严格命中项目行时返回
+ * ws_path；未选中/未命中/归档 → null（编排径不消费——禁止渲染兜底泄漏为绑定语义，
+ * 无绑定工作区会话不得被预铸绑到别的项目树）。渲染兜底仍由 selectedProjectRootOf 承担。
+ */
+export function selectedProjectRootStrictOf(
+  projects: readonly ProjectSummary[],
+  selectedId: string | undefined,
+): string | null {
+  const byWorkspace =
+    selectedId !== undefined ? projects.find((project) => project.workspaceId === selectedId) : undefined
+  return byWorkspace !== undefined && byWorkspace.archived !== true && byWorkspace.wsPath !== ''
+    ? byWorkspace.wsPath
+    : null
+}
+
+/**
+ * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正 / 1.31 A7 分离）：
  * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
- * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底；全无 → null（chip 零注入退回现状）。
+ * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——编排数据源走
+ * selectedProjectRootStrictOf，fallback 泄漏成绑定语义即跨项目错绑）；全无 → null。
  * bug 10833861 Root cause: 原推导以 project.id 比对 workspaceId 恒 miss，fallback 又取
  * 全量首行（created_at 最早的归档项目，如非 git 的 learn）→ isGit=false 全零注入。
  */
@@ -57,10 +74,9 @@ export function selectedProjectRootOf(
   projects: readonly ProjectSummary[],
   selectedId: string | undefined,
 ): string | null {
-  const byWorkspace =
-    selectedId !== undefined ? projects.find((project) => project.workspaceId === selectedId) : undefined
-  if (byWorkspace !== undefined && byWorkspace.wsPath !== '') return byWorkspace.wsPath
-  return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath ?? null
+  return selectedProjectRootStrictOf(projects, selectedId)
+  ?? projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath
+  ?? null
 }
 
 // ───────────── 1.25（bug af65c0a9）失败显式化：提示文案纯函数单源（1.29——失败面只在
@@ -79,6 +95,16 @@ export function worktreeFaceUnavailableNotice(): string {
 export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: string): string {
   const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
   return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
+}
+
+/** A8——主行 reuse 补绑定失败降级提示（降级产物 sessionCreate 自带绑定，非「将落主树」假象） */
+export function worktreeReuseBindDegradedNotice(cause: string): string {
+  return `主树空白会话补绑定失败（${cause}），已降级新建挂靠会话`
+}
+
+/** A7——编排数据根缺席提示（selectedId 未命中项目行——渲染兜底不进编排，显式呈现不静默） */
+export function worktreeUnselectedProjectNotice(): string {
+  return '当前会话未选中 forge 项目，worktree 编排默认停用——首条消息将落主树'
 }
 
 // ───────────── 1.26 编排默认：账本快照读面（纯函数——plugin.ts 重导出单源） ─────────────
@@ -137,8 +163,15 @@ export interface ArmGateInput {
   /** 清单就绪且 isGit（能力位真） */
   readonly phaseReadyGit: boolean
   readonly path: string | undefined
-  /** 失败/取消抑制集（1.25/1.26——失败循环零重入） */
+  /** 失败抑制集（1.25——失败循环零重入；1.31 与取消抑制拆分） */
   readonly suppressed: readonly string[]
+  /** 取消抑制集（1.31 A3——确认框取消路径专用；显式重选同树即清除，与失败抑制语义分离） */
+  readonly cancelSuppressed?: readonly string[]
+  /** 跨分支确认框待决（1.31 A4——框开着期间效应守卫零重入，防双编排竞态） */
+  readonly riskConfirmationOpen: boolean
+  /** arm 冷却窗在窗（1.31 A1——判据加 draftIntent 维度：只压「点选引发」即 draft 空的
+   * arm；发送意图引发的 arm 不受冷却约束） */
+  readonly cooldownActive?: boolean
   readonly rowPresent: boolean
   readonly isMain: boolean
   /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
@@ -165,9 +198,12 @@ export interface ArmGateInput {
 export function shouldArmSelectedRow(input: ArmGateInput): boolean {
   if (!input.phaseReadyGit) return false
   if (input.path === undefined) return false
+  if (input.riskConfirmationOpen) return false // A4：确认框待决——零并发第二路编排
   if (input.suppressed.includes(input.path)) return false
+  if (input.cancelSuppressed?.includes(input.path)) return false // A3：取消抑制独立判读
   if (!input.rowPresent) return false
   if (!input.draftIntent) return false
+  if (input.cooldownActive === true && !input.draftIntent) return false // A1：冷却只压点选引发的 arm
   if (input.armedSessionId !== undefined && input.armedPath === input.path && input.currentSessionId === input.armedSessionId) return false
   if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
     return false

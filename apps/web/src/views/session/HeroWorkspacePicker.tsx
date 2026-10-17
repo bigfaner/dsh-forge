@@ -16,7 +16,7 @@
 // ui-slots single 槽 lowest-renders 语义），其 children 声明持续供养
 // conversation.hero.workspace.directoryFlow 子洞——本影子行不重声明 children（ui-slots
 // register 对已声明子槽重声明即 throw，fix-23 runtime 实证），产品添加径亦不经该子洞。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
@@ -25,9 +25,12 @@ import {
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
+  selectedProjectRootStrictOf,
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
+  worktreeReuseBindDegradedNotice,
+  worktreeUnselectedProjectNotice,
   type HeroWorktreeFace,
   type WorktreeOrchestrateFn,
 } from './hero-picker-model.js'
@@ -38,6 +41,84 @@ import type { KitSelectorHook } from './ConversationViews.js'
 const ADD_PROJECT = 'dswf-add-project'
 /** 添加行文案（产品口径——与 hero CTA/左栏「＋」入口同义词面） */
 const ADD_LABEL = '添加项目…'
+
+/** 编排缝依赖面（React 解耦——1.31 抽出 createWorktreeOrchestrator 可单测面） */
+export interface WorktreeOrchestrationDeps {
+  /** hero worktree inject face（编排 + 账本 + openSession 缝；undefined = 编排降级提示） */
+  readonly worktree: HeroWorktreeFace | undefined
+  readonly makeRpc: () => ForgeRpcClient
+  /** 编排数据根（A7——selectedId 严格命中；null = 渲染兜底不进编排，提示 + null） */
+  readonly orchestrateRoot: string | null
+  /** 提示呈现（组件侧接 Toast 态；1.25 不静默口径） */
+  readonly onNotice: (text: string) => void
+}
+
+const noticeText = (error: unknown): string =>
+  error instanceof Error && error.message !== '' ? error.message : String(error)
+
+/**
+ * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7/A8 语义）：
+ *   · A7——orchestrateRoot null（selectedId 无命中项目行）→ 提示 + null：渲染兜底
+ *     （selectedProjectRootOf fallback）仅供 chip 渲染，禁止泄漏为绑定数据源；
+ *   · 1.27 必绑保留：主行（路径归一 ≡ 编排根）reuse 命中补写挂靠事件绑定；
+ *   · A8——补绑定失败（seal 判读/attach 抛错）不返回无绑定会话：降级 sessionCreate
+ *     直建（预铸自带绑定），失败路径仍产可用发送目标；sessionCreate 再败 → Toast + null。
+ */
+export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): WorktreeOrchestrateFn {
+  return (path: string): Promise<string | null> => {
+    return (async (): Promise<string | null> => {
+      const { worktree, makeRpc, orchestrateRoot, onNotice } = deps
+      if (worktree === undefined) {
+        onNotice(worktreeFaceUnavailableNotice()) // 注入面缺席（旧插件面/装配降级）——1.25①
+        return null
+      }
+      if (orchestrateRoot === null) {
+        onNotice(worktreeUnselectedProjectNotice()) // A7：渲染兜底不进编排
+        return null
+      }
+      const rpc = makeRpc()
+      const isMainPath = worktreeCwdKey(path) === worktreeCwdKey(orchestrateRoot)
+      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构）
+      const reuseSessionId = worktree.blankSessionByCwd?.(path)
+      let reuseBound = false
+      if (reuseSessionId !== undefined && isMainPath) {
+        try {
+          const seal = await rpc.worktree.seal({ sessionId: reuseSessionId })
+          if (seal.binding === null) {
+            await rpc.worktree.attach({ sessionId: reuseSessionId, worktreePath: path })
+          }
+          reuseBound = true
+        } catch (error) {
+          // A8：补绑定失败——降级 sessionCreate 直建绑定会话（不返回无绑定 blank）
+          onNotice(worktreeReuseBindDegradedNotice(noticeText(error)))
+        }
+      }
+      if (reuseSessionId !== undefined && (reuseBound || !isMainPath)) {
+        try {
+          worktree.openSession(reuseSessionId)
+        } catch (error) {
+          onNotice(worktreeOrchestrationNotice('open', noticeText(error)))
+          return null
+        }
+        return reuseSessionId
+      }
+      let sessionId: string
+      try {
+        ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
+      } catch (error) {
+        onNotice(worktreeOrchestrationNotice('create', noticeText(error)))
+        return null
+      }
+      try {
+        worktree.openSession(sessionId)
+      } catch (error) {
+        onNotice(worktreeOrchestrationNotice('open', noticeText(error)))
+        return null
+      }
+      return sessionId
+    })().catch(() => null)
+  }
+}
 
 /** owner share 契约（官方 ConversationContent renderSlot('conversation.hero.workspace', …)
  * 面包——ui-conversation client.js:16268-16281 结构同型镜像）+ root 作用域标准观察钩子 */
@@ -113,85 +194,23 @@ export function ForgeHeroWorkspacePicker({
   // 1.25 编排失败/face 缺席提示态（Toast 只在首条消息时点的 arm 失败出现——1.29 点选
   // 纯选中态无失败面）
   const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
-  // 挂靠编排缝（1.29——arm 消费点唯一消费；点选不再触达本缝）：1.16 预铸采纳单 RPC
-  // （host 侧预铸会话 + 挂靠事件 seq 0 + controller.create adopt 原子完成，UI 不二次调
-  // attach 另开写句柄）。返回产物 sessionId（草稿搬运落点）；任一步失败 → 1.25 Toast
-  // （含环节语义）+ null（挂载面选中态同清——不产生「已选中」假象）。
-  // 1.27 必绑收紧保留：主行（路径归一 ≡ 项目根）走主树绑定径——git 项目不存在无绑定
-  // 新会话；reuse 命中补写挂靠事件绑定之（attach 通道对非活会话合法、幂等）；无 blank
-  // 命中 → 预铸 sessionCreate 原径（worktreePath = 项目根，host 侧 isMain 绑定同配方）。
-  const orchestrate: WorktreeOrchestrateFn = useCallback(
-    (path: string): Promise<string | null> => {
-      return (async (): Promise<string | null> => {
-        if (worktree === undefined) {
-          // 注入面缺席（旧插件面/装配降级）——显式提示，不再静默 no-op（1.25①）
-          setWorktreeNotice((prev) => ({ text: worktreeFaceUnavailableNotice(), seq: (prev?.seq ?? 0) + 1 }))
-          return null
-        }
-        const rpc = makeRpc()
-        const isMainPath = selectedProjectRoot !== null && worktreeCwdKey(path) === worktreeCwdKey(selectedProjectRoot)
-        // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank
-        // 语义同构）；主行 reuse 命中补绑定（只打开会保留无绑定会话——1.27 口径）
-        const reuseSessionId = worktree.blankSessionByCwd?.(path)
-        if (reuseSessionId !== undefined && isMainPath) {
-          try {
-            const seal = await rpc.worktree.seal({ sessionId: reuseSessionId })
-            if (seal.binding === null) {
-              await rpc.worktree.attach({ sessionId: reuseSessionId, worktreePath: path })
-            }
-          } catch (error) {
-            setWorktreeNotice((prev) => ({
-              text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
-              seq: (prev?.seq ?? 0) + 1,
-            }))
-            return null
-          }
-          try {
-            worktree.openSession(reuseSessionId)
-          } catch (error) {
-            setWorktreeNotice((prev) => ({
-              text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
-              seq: (prev?.seq ?? 0) + 1,
-            }))
-            return null
-          }
-          return reuseSessionId
-        }
-        if (reuseSessionId !== undefined) {
-          try {
-            worktree.openSession(reuseSessionId)
-          } catch (error) {
-            setWorktreeNotice((prev) => ({
-              text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
-              seq: (prev?.seq ?? 0) + 1,
-            }))
-            return null
-          }
-          return reuseSessionId
-        }
-        let sessionId: string
-        try {
-          ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
-        } catch (error) {
-          setWorktreeNotice((prev) => ({
-            text: worktreeOrchestrationNotice('create', error instanceof Error && error.message !== '' ? error.message : String(error)),
-            seq: (prev?.seq ?? 0) + 1,
-          }))
-          return null
-        }
-        try {
-          worktree.openSession(sessionId)
-        } catch (error) {
-          setWorktreeNotice((prev) => ({
-            text: worktreeOrchestrationNotice('open', error instanceof Error && error.message !== '' ? error.message : String(error)),
-            seq: (prev?.seq ?? 0) + 1,
-          }))
-          return null
-        }
-        return sessionId
-      })().catch(() => null)
-    },
-    [worktree, makeRpc, selectedProjectRoot],
+  // 挂靠编排缝（1.31——React 解耦抽出 createWorktreeOrchestrator 可单测面；1.29 起 arm
+  // 消费点唯一消费，点选不触达）。返回产物 sessionId（草稿搬运落点）；失败 → 1.25 Toast
+  // + null（挂载面选中态同清——不产生「已选中」假象）。
+  // A7（1.31）：编排数据根 = selectedId 严格命中（selectedProjectRootStrictOf）——渲染
+  // 兜底（selectedProjectRootOf fallback）禁止泄漏为绑定语义：无命中 → 提示 + null 不编排。
+  // A8（1.31）：主行 reuse 补绑定失败（seal 判读/attach 抛错）不返回无绑定会话——降级
+  // sessionCreate 直建（预铸自带绑定，失败路径仍产可用发送目标）。
+  const orchestrateRoot = selectedProjectRootStrictOf(projects, selectedId)
+  const orchestrate = useMemo(
+    () =>
+      createWorktreeOrchestrator({
+        worktree,
+        makeRpc,
+        orchestrateRoot,
+        onNotice: (text) => setWorktreeNotice((prev) => ({ text, seq: (prev?.seq ?? 0) + 1 })),
+      }),
+    [worktree, makeRpc, orchestrateRoot],
   )
 
   const onSelect = useCallback(
