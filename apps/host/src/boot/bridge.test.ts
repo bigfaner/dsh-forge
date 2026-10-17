@@ -37,6 +37,7 @@ import {
   pairRedirectOf,
   remoteViewFilePathOf,
   remoteViewIndexTap,
+  renderRemoteDistMissingPage,
   REMOTE_VIEW_BOUNCE_MARKUP,
   PROJECT_SERVICE_METHODS,
   PROJECTS_M2_SERVICE_METHODS,
@@ -1031,5 +1032,20 @@ describe('remoteViewIndexTap（官方 index 弹射注入）', () => {
   it('弹射脚本形态 pin：仅 dswf_forge_remote=1 命中且 replace 到挂载点', () => {
     expect(REMOTE_VIEW_BOUNCE_MARKUP).toContain('dswf_forge_remote=1')
     expect(REMOTE_VIEW_BOUNCE_MARKUP).toContain('location.replace("/remote/")')
+  })
+})
+
+describe('renderRemoteDistMissingPage（mobile-ui 1.7 AD-5：dist 缺席 fail-soft 提示页）', () => {
+  it('HTML 提示页含诊断行（mobile-dist-missing + dist 根逐字呈现）', () => {
+    const page = renderRemoteDistMissingPage('X:/work/apps/mobile/dist')
+    expect(page.startsWith('<!doctype html>')).toBe(true)
+    expect(page).toContain('mobile-dist-missing')
+    expect(page).toContain('X:/work/apps/mobile/dist')
+    expect(page).toContain('<meta charset="utf-8"')
+  })
+  it('诊断行 HTML 转义（dist 根携 <> 不破页面结构）', () => {
+    const page = renderRemoteDistMissingPage('a<b>&c')
+    expect(page).toContain('a&lt;b&gt;&amp;c')
+    expect(page).not.toContain('a<b>&c')
   })
 })

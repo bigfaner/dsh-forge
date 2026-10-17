@@ -33,6 +33,7 @@ import {
   redactTokenQuery,
   remoteViewFilePathOf,
   remoteViewIndexTap,
+  renderRemoteDistMissingPage,
   REMOTE_VIEW_MOUNT,
   sanitizeLogLine,
   sendGuarded,
@@ -68,7 +69,7 @@ import {
 // @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
 import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
-import { MIME, resolveWebDistDir } from '../window/web-document.js'
+import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
@@ -532,10 +533,12 @@ async function main(): Promise<void> {
       // fix-22 真机修复（bug cbb9131e 架构级根因：产品 dist 仅经 dsh-forge://app 自定义协议
       // 在主窗分发——webServer 面 fallback 服务的是官方 web 前端，手机 302 链落地「桌面版」
       // 实为官方工作台，beacon 零到达）。①/remote 前缀路由 = webserver 移动面静态服务产品
-      // dist（dist 根 resolveWebDistDir 同源口径——env 透传经 spawn 继承 + resourcesDir 兜底）；
+      // dist（mobile-ui 1.7 AD-3：dist 根改指 apps/mobile/dist——resolveMobileDistDir 局部
+      // 装配单源，共享 resolveWebDistDir 主窗语义不动；桌面 web-app 产物不再进 /remote/）；
       // ②官方 index tapIndex 弹射（dswf cookie 在场 → /remote/——根交换落 "/" 后的唯一合缝
-      // 跳转点，不改写官方面行为）；③入口 HTML no-store（防手机端缓存旧态）。
-      const webDistRoot = resolveWebDistDir({
+      // 跳转点，不改写官方面行为）；③入口 HTML no-store（防手机端缓存旧态）；
+      // ④dist 缺席 fail-soft 降级提示页（AD-5——bridge.renderRemoteDistMissingPage + diag）。
+      const webDistRoot = resolveMobileDistDir({
         ...process.env,
         ...(options.resourcesDir !== undefined && options.resourcesDir !== ''
           ? { DSH_FORGE_RESOURCES_DIR: options.resourcesDir }
@@ -623,6 +626,14 @@ async function main(): Promise<void> {
             })
             .catch((error: unknown) => {
               if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+                // mobile-ui 1.7 AD-5：index 缺席 = mobile dist 未构建——fail-soft 提示页
+                // （含诊断行，diag 落 harness.log）；非 index 资产缺席保持 404 既有语义。
+                if (rel === 'index.html') {
+                  diag(`[pair-diag] /remote mobile dist 缺席 root=${webDistRoot} → fail-soft 提示页`)
+                  res.writeHead(503, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+                  res.end(method === 'HEAD' ? undefined : renderRemoteDistMissingPage(webDistRoot))
+                  return
+                }
                 res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
                 res.end()
                 return

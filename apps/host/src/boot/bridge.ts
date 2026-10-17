@@ -896,3 +896,28 @@ export const REMOTE_VIEW_BOUNCE_MARKUP =
 export function remoteViewIndexTap(html: string): string {
   return html.replace(/<head(?:\s[^>]*)?>/i, (open) => `${open}${REMOTE_VIEW_BOUNCE_MARKUP}`)
 }
+
+/**
+ * mobile-ui 1.7（AD-5）：mobile dist 缺席时 /remote/ 静态面 fail-soft 降级提示页（含诊断行
+ * ——dist 根逐字呈现，harness.log diag 行同径可回放）。纯函数：装配与诊断面在 child.ts。
+ */
+export function renderRemoteDistMissingPage(distRoot: string): string {
+  const safeRoot = distRoot.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>移动视图未就绪</title>',
+    '</head>',
+    '<body style="font-family:system-ui,sans-serif;background:#111;color:#eee;margin:0;display:grid;place-items:center;min-height:100vh">',
+    '<main style="padding:24px;text-align:center">',
+    '<p>移动视图尚未构建——请在工作区执行 <code>apps/mobile</code> 构建后重试。</p>',
+    `<p style="opacity:.6;font-size:12px">[mobile-dist-missing] root=${safeRoot}</p>`,
+    '</main>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n')
+}
