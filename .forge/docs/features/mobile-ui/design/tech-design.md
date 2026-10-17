@@ -47,7 +47,7 @@ flowchart LR
 | 语言 | TypeScript / 裸 JS | 类型化消费 wire 契约（SessionEvent 判别集）需 .d.ts；仓库全域 TS | **TypeScript**（`verbatimModuleSyntax` 对齐仓库 tsconfig 风格） |
 | UI runtime | vanilla DOM / Preact / lit | 提案裁决无框架 runtime（重评阈值未触发）；桌面组件不可迁移（pointer/hover 密度） | **vanilla DOM**（模板函数 + 事件委托，零运行时依赖） |
 | 路由 | 自写 hash router / naive-router 库 | 页面 ≤9、无嵌套守卫需求；引库违背零依赖 | **自写 hash router**（~60 行：`#/chat/:id` 等 5 路由 + 浮层不走路由） |
-| md 渲染 | marked 级轻量函数 / markdown-it | 移动端包体敏感；需求仅标题/列表/表格/代码块 | **自写轻量 md 函数**（~200 行，白名单标签）+ `@dsh-forge/md-mermaid` DOM 增强器动态 import |
+| md 渲染 | 自写轻量函数 / markdown-it / 照搬官方页实现 | 官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（tech-research R8 实证）——同构分叉下照搬即最大化复用 | **照搬官方手机页 md 实现**（非自写新函数）+ `@dsh-forge/md-mermaid` DOM 增强器动态 import |
 | 状态 | 模块级 store（发布订阅） / Redux 类 | 单页单会话、SSE 单源；发布订阅足矣 | **自写 20 行 store**（`{get,set,subscribe}`），revision 守卫内置 |
 
 ## 架构决策（ADR 风格）

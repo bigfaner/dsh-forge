@@ -114,6 +114,7 @@ declare module '@deepseek-ai/dsh-llm' {
 ## 六、类型复用纪律（复用审计 2026-10-17）
 
 - `core/wire.ts` 判别集：**type-only import** `@deepseek-ai/dsh-session`（SessionEvent 判别）与 `dsh-api-session-controller`（SessionEventWindow/change）类型——契约类型单源，不手写重声明（零运行时依赖不受影响）。
-- md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态（已核实不可复用于 vanilla 页）；自写轻量 md 维持（官方手机页同构），mermaid 增强器复用 `@dsh-forge/md-mermaid`。
+- md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态不可复用；**官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（R8 实证）——照搬之**，mermaid 增强器复用 `@dsh-forge/md-mermaid`。
+- `/`、`@` 触发面：数据全走官方远程面（CommandRuntime=TypertRemoteService；dsh-api-workspace-files remote-client；session.list）——tech-research R7。
 
 `POST /api/rpc`：`session.list/models/selectModel/create/history/prompt/cancel`、`interaction.pending/answer/cancel`、`workspace.list`、`agentPreset.list/select`；SSE `GET /api/session/stream?sessionId=…`（命名事件 `snapshot`/`event`，帧形状见 tech-research R1）；`GET /api/status`（心跳 + tunnelExpiresAt）。端点形状正本 = 官方手机页源码（probes/official-mobile-page.js.txt），批次①回放录制钉死。

@@ -122,3 +122,30 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 | schema | zod：`{last_read_seq: z.number().int().nonnegative()}` | 持久边界校验；global 不用（表形态足够） |
 | 载体挂载 | host 依赖增补三包（0.2.0-rc.2 同轨）→ 挂 storage-json（root = dsh-home storages）+ storage-domain → 核实官方组合是否已挂（官方 dsh-schedule/projection-cache 已在消费） | AD-7 三步 |
 | 域损坏口径 | open 时 zod 校验拒绝（默认行为，权威数据姿态）；游标丢失即 unread seq 重放自愈 | read-state 是可重建派生态 |
+
+## R7 `/` 与 `@` 触发面能力核查（2026-10-17，源码实证）
+
+**结论：两类触发数据移动端全可达（官方远程面齐备）；不可复用的只是官方 React 交互件。**
+
+- **`/` 指令目录**：`dsh-commands` 的 `CommandRuntime` **extends `TypertRemoteService`**——指令注册表本身远程可调（typert = `/api/rpc` 同协议族）；桌面浏览器实现（`dsh-client-ui-commands` 的 `CommandUiRuntime`）即经 catalog RPC 联 host。slash 仲裁在 interactive UI adapter 层（`session.prompt` 无仲裁——`dsh-api-session-controller` 零 command 引用；官方手机页 70KB 无指令面）。手机端落法 = 履行同一 UI-adapter 契约（`/` 前缀解析 → 官方指令执行远程面；未命中回退字面消息）；执行 RPC 端点/载荷批次①录制钉死。
+- **`@` mention**：触发契约公开——`dsh-client-ui-input-trigger`：`TriggerChar = '/'|'@'`、位置 leading/inline、guard 三档（plain/claimed/frozen，claimed 时 `/` 抑制 `@` 仍活）、`detectTrigger` 语法文档化（URL 斜杠词边界等）。候选三类（图标 token 实证 `file|folder|session`）：file/folder 数据 = `dsh-api-workspace-files` 自带 `typert.remote-client`（list/stat + changes 订阅流）；session 数据 = `session.list`。
+- **范围结论**：mention 渲染（消息流 `@xxx` 高亮）已含于投影；`@` 触发弹层不在 PRD/mockup 范围——数据面已证可达，未来加 = 纯 UI 工作零 host 改动。
+
+## R8 官方手机页内嵌 markdown 实现（2026-10-17 新发现，修正 R2/复用审计）
+
+官方手机页 `renderBlock` 直接消费自带的 **`markdown(text)` + `inlineMarkdown(...)`** 函数（vanilla 自绘轻量实现，非外部库；`.markdown`/`.thinking-body.markdown` 样式族配套）——**此前「官方无 vanilla md、须自写」的审计结论有漏**。修正：
+
+- **md 渲染 = 照搬官方手机页 `markdown()`/`inlineMarkdown()` 实现**（同构分叉原则下的最大化复用——与 SSE 引擎照搬同地位），不自写新函数、不引外部库；
+- thinking 折叠卡结构同源实证：官方页 summary = `activity-leading/title/dot/summary/chevron`——与 mockup `.think` 结构一致；
+- 全屏阅读页（reader）复用同一实现（mermaid 增强器仍走 `@dsh-forge/md-mermaid` 动态 import）。
+
+## R9 待核实清单（余项，均已排批次或低风险）
+
+| # | 项 | 时点 |
+|---|---|---|
+| 1 | 官方指令执行 RPC 端点名/载荷（catalog/execute 形状） | 批次①录制（任务 1.1 AC 已含） |
+| 2 | `interaction.pending` ask 题型载荷（单选/多选/other 字段判别——对齐 ui-functions F2 三题型语义） | 批次①录制样本核对 |
+| 3 | one-shot worker 的 `subagent/catalog` 事件形状（现实证样本仅 `mode:'continuable'`） | 批次③前抽查日志 |
+| 4 | dsh-storage 三包在 host 组合的挂载在场性 | 批次②首步（AD-7 三步之②） |
+| 5 | 配对域 `session.list` 可见范围（受限视图是否全量会话——workers 派生与抽屉的前提） | 批次②真机/配对环境核对 |
+| 6 | 文档卡 `tool/result.meta` 通道载荷 | 批次③探针（任务 1.19 已含降级路径） |
