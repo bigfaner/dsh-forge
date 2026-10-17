@@ -172,10 +172,45 @@ apps/host + apps/web                   ← 仅 wiring（通道注册 / service p
 
 - **双宿主兼容目标**（用户裁决 2026-10-17 追补）：插件面向 dsh-forge 与官方 dsh 双宿主——dsh-forge 侧经宿主 wiring 装配；官方 dsh 侧可经官方 plugin-manager 安装通道直接装载。为此：零 dsh-forge 依赖（既有裁决），全部能力只消费官方机械（typert face / dsh-session surface / dsh-client-store / 官方槽位缝），typert face id 以包名命名空间（`@dsh-forge/composer-correction#editResend/submit`）避免宿主碰撞；两宿主下行为一致，dsh-forge 专属 wiring 不进插件本体。
 
-- **承重假设待核销**（落 tech-design 首项）：官方 Chat 用户消息行动作注入缝、transcript 折叠渲染缝是否存在且合法——这是唯一可能反噬呈现方案的点。
+- **承重假设已核销**（结论见下方 tech-design 节）：用户消息行动作缝与 transcript 折叠缝均存在合法缝，呈现方案成立。
 - **不触碰**：官方 QueueDock（排队编辑走官方原生）、fork 链路、会话日志单写者路径（新消息仍经官方追加机械，本提案不直写日志）。
 - **排除项**：跨会话全局历史；非最近消息作废；原地改写日志；批量作废。
 - **非介入面零差异**：不点「修改」、不用方向键时，composer 与 transcript 行为与现状逐位一致（分流装配期，不挂运行时判断税）。
+
+## tech-design：官方 Chat 注入缝核销
+
+取证对象：`@deepseek-ai/dsh-client-ui-{slots,chat,conversation}` 与 `dsh-session` **0.2.0-rc.2** 源码（node_modules 实读）。
+
+```mermaid
+flowchart LR
+    subgraph 缝①用户消息行「修改」
+        A1[conversation.chat.node<br/>keyed 槽 · key=user] -->|同键注册 priority 影子<br/>整行替换（官方明文语义）| A2[UserRowWithEdit<br/>官方 primitives 重现行 + 悬停动作]
+    end
+    subgraph 缝②被作废整轮折叠
+        B1[dsh-session surface<br/>foldSurface().replacements] -->|官方明文：模型可见面故意遮蔽替换区间<br/>append-origin 事件 = 人读 transcript 正源| B2[ConversationEventRegistry.register<br/>match: isReplacementSurfaceEvent]
+        B2 --> B3[ChatNodeDataMap 合并自有 kind<br/>→ conversation.chat.node keyed 渲染折叠行]
+    end
+```
+
+### 缝① 用户消息行悬停动作 —— 有合法缝（整行替换粒度）
+
+- **无加法式动作槽**：`conversation.chat.assistant-actions`（list，owner `{messageId}`）仅覆盖已定稿助手消息；`conversation.chat.turnTail`（list）位于完成 Turn 动作行之前，均非用户消息行。
+- **合法缝**：`conversation.chat.node`（keyed，scope `session`，`dsh-client-ui-chat` contract/slots.d.ts）。用户消息行即其 `user` 键（`ChatNodeDataMap.user`）；`SlotCore.register` 对同键重复注册按 priority 影子替换（「Reusing a key replaces that node renderer」）。
+- **接入**：`ctx.slots.register({ name: 'conversation.chat.node', key: 'user', scope: 'session', priority: 1 }, UserRowWithEdit)`；组件经 hookContext 拿 `turnData`/`disclosure`，owner props 拿 `openFile` 等；行本体用官方 primitives 重现后加悬停动作。**代价**：非加法式插钮，占位者承担整行呈现（官方升级用户行样式需跟随）；这是官方留出的唯一合法路径，不发明平行机制。
+
+### 缝② 被作废整轮折叠行 —— 有合法缝（定义注册 + 自有节点 kind）
+
+- **数据层（官方明文正道）**：`dsh-session/surface` 文档原文——模型可见 surface 故意遮蔽被替换区间，是「the wrong source for a human transcript」；**append-origin 事件才是人读 transcript 的持久素材**。API：`isAppendSurfaceEvent` / `isReplacementSurfaceEvent` / `foldSurface(events).replacements: {seq, start, end, shadowedSeqs}[]`。被作废轮原文取 raw log append-origin 事件、区间取 `replacements`，全只读消费。
+- **视图层**：官方 Chat 投影消费模型可见面 → 被作废行**自动消失**，无需隐藏旧行；折叠摘要行经合法组合注入——`ConversationEventRegistry.register(definition)`（conversation 包公开注册点，`match` 以 `isReplacementSurfaceEvent` 认领 replace 事件）+ `ChatNodeDataMap` declare-module 合并自有 kind（官方注释即「Merge-extensible payload registry」，chat 自有 `user`/`unknown` 键同径）+ `conversation.chat.node` keyed 槽渲染该 kind。
+- **无现成专用折叠槽**：以上组合全部落在官方缝内（定义注册 / 槽位影子 / 类型合并），零平行注入机制。
+
+### 接入方式汇总
+
+| 需求 | 缝 | 接入 |
+|---|---|---|
+| 悬停「修改」 | `conversation.chat.node` key `user`（影子替换） | `ctx.slots.register({name, key:'user', scope:'session', priority:1}, …)` |
+| 折叠摘要行 | 定义注册 + `ChatNodeDataMap` 合并 + keyed 槽 | `match` 认领 replace 事件 → `buildViewNode` 产自有 kind → keyed 渲染 |
+| 原文 / 作废区间 | `foldSurface().replacements` + append-origin 事件 | 只读消费 |
 
 ## 验收
 
