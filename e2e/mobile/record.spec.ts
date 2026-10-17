@@ -202,7 +202,10 @@ test('mobile-ui 1.1 录制首跑：真实 host wire 抓样 → fixtures/mobile/'
 })
 
 function mkdtempOf(prefix: string): string {
-  return mkdtempSync(join(tmpdir(), prefix))
+  // E2E_USER_DATA_ROOT：userData 基目录覆盖。宿主派生会话内 %TEMP% 对 chromium 单实例
+  // 锁文件写入被拒（0x5 实证）——落 workspace 可写路径；真实终端缺省 tmpdir 不受影响。
+  const base = process.env.E2E_USER_DATA_ROOT ?? tmpdir()
+  return mkdtempSync(join(base, prefix))
 }
 
 function sleep(ms: number): Promise<void> {

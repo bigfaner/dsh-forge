@@ -67,7 +67,24 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
   const installed = opts.executablePath !== undefined && opts.executablePath !== electronBinary
   return _electron.launch({
     executablePath: opts.executablePath ?? electronBinary,
-    ...(installed ? {} : { args: [...(opts.args ?? ['.'])], cwd: opts.cwd ?? HOST_DIR }),
+    ...(installed
+      ? {}
+      : {
+          args: [
+            // chromium 启动开关（置于 app 路径前才生效——electron 参数序：switches * 前置）。
+            // --no-sandbox：宿主派生进程树内 chromium sandbox 初始化即崩（0x80000003 实证）
+            //   ——仅 e2e 隔离面放行；真实终端非必需、无害。
+            // --disable-gpu：无头 e2e 无渲染保真诉求。
+            // --no-proxy-server：系统代理会劫持 LAN origin 页面导航（node fetch 绕代理而
+            //   chromium 不绕——jar 可达而 page.goto 挂起实证）；e2e 直连。
+            ...(process.env.E2E_ELECTRON_SWITCHES === '1'
+              ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server']
+              : []),
+            ...(opts.args ?? []),
+            '.',
+          ],
+          cwd: opts.cwd ?? HOST_DIR,
+        }),
     env: {
       ...sanitizedLaunchEnv(),
       DSH_FORGE_PORT: String(opts.port ?? allocatePort()),
