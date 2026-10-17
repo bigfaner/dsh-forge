@@ -10,21 +10,21 @@ ui-baseline: .forge/docs/proposals/mobile-ui/mobile-ui-mockup-final.html
 
 ## 概述
 
-mobile = 纯 view 层独立工程（`apps/mobile`）：TypeScript 源码经 esbuild 打包为单文件 dist，由 host `/remote/` 静态面服务；数据面双通道——官方 API 面（`/api/rpc` + `/api/session/stream`，零改动）直连 + forge 扩展面（`/remote/__rpc` allowlist 扩充 + 薄方法）。手机端只做「接收数据、渲染页面、转发输入与动作意图」。
+mobile = 纯 view 层独立工程（`apps/mobile`）：TypeScript 源码经 esbuild 打包为单文件 dist，由 host `/remote/` 静态面服务；数据面双通道——官方 client-connection 传输面（`POST /api/<service>/<method>` 信封单呼 + `/api/remote.mux` `$events` 流，组合插行启用官方 api 控制器）+ forge 扩展面（`/remote/__rpc` allowlist 扩充 + 薄方法）。手机端只做「接收数据、渲染页面、转发输入与动作意图」。（传输面裁决正本 = tech-research R11。）
 
 ## 架构图
 
 ```mermaid
 flowchart LR
     subgraph host [apps/host（改动收敛于两面）]
-        STATIC["/remote/ 静态面<br/>remoteViewIndexTap 改指 mobile dist"]
+        STATIC["/remote/ 静态面<br/>mobile dist + 官方注入行<br/>plugins 302 / api 307 通道重定向"]
         RPC["/remote/__rpc<br/>allowlist 扩充 + 薄方法"]
-        OFFICIAL["官方 /api/rpc + SSE<br/>零改动"]
+        OFFICIAL["官方 client-connection 传输面<br/>POST /api/<svc>/<mth> + remote.mux<br/>api-session/workspace-controller 组合行"]
         READSTATE["read-state 已读游标<br/>dsh-storage domain 表"]
         RPC --> READSTATE
     end
     subgraph mobile [apps/mobile（新工程）]
-        CORE["core/：rpc 客户端·SSE 引擎·store·router"]
+        CORE["core/：官方 connection 薄包装<br/>wire 投影·store·router"]
         VIEWS["views/：chat·drawer·hero·ask·settings·models·tasks·worker·reader"]
         WIDGETS["widgets/：消息卡家族·composer·悬浮球·文档卡"]
     end
@@ -62,7 +62,7 @@ flowchart LR
 
 - 候选：①全部走 `/remote/__rpc` 转发；②官方面直连 + forge 面扩展。
 - 权衡：①需在 host 重实现 session.proxy 层（转发即新增 host 代码，违背零改动裁决）；②对话链复用官方已实证契约（SSE 合帧/重连/revision 守卫），host 零改动。
-- 决策：**②**。手机页同源 fetch/EventSource 直连官方面；任务域走 forge 扩展面。
+- 决策：**②**。手机页经官方 client-connection 同源直连官方面（单呼 + mux 流）；任务域走 forge 扩展面。
 
 ### AD-3 dist 接入 = 静态面改指，不动官方 webServer
 
@@ -140,7 +140,7 @@ sequenceDiagram
 
 - **能力边界**：只管「契约字段 → DOM」与「用户输入 → 意图信封」；不管校验、循环、缓存策略（分页由 `hasMore` 驱动）、任何持久化（唯一例外 localStorage 最近使用模型——纯视图偏好）。
 - **职责划分**：
-  - `core/`：`rpc.ts`（`__rpc` 信封客户端）、`api.ts`（官方面窄面）、`sse.ts`（EventSource + rAF 合帧 + 退避轮询 + 心跳判活）、`wire.ts`（SessionEvent 判别集窄化 + 投影纯函数——fake 可测主战场）、`store.ts`、`router.ts`。
+  - `core/`：`connection.ts`（官方 client-connection 薄包装——运行时引导 + `installConnection` + `rpc.call` 单呼面）、`api.ts`（官方面窄面，方法名随官方 `<service>/<method>` 端点）、`stream.ts`（remote.mux `$events` generation 源 + rAF 合帧 + 官方三值退避 + 心跳判活）、`wire.ts`（SessionEvent 判别集窄化 + 投影纯函数——fake 可测主战场）、`store.ts`、`router.ts`。
   - `views/`：一屏一文件（chat/drawer/hero/ask/settings/models/tasks/worker/reader），只做装配。
   - `widgets/`：消息卡家族（气泡/thinking/ioCard/终端块/循环卡/chip/acard/文档卡）、composer、悬浮球、确认框。
 - **依赖方向**：`views → widgets → core`，禁止反向；`core` 不 import views/widgets。
@@ -156,10 +156,11 @@ apps/mobile/
 ├─ src/
 │  ├─ main.ts                  # mount(root)：路由注册 + 首屏装配
 │  ├─ core/
-│  │  ├─ rpc.ts                # /remote/__rpc 信封客户端（{channel,payload}→{ok,data}|{ok,error}）
-│  │  ├─ api.ts                # 官方面窄面：session.history/prompt/rpc、interaction.*、workspace.list
-│  │  ├─ sse.ts                # EventSource(命名事件 snapshot/event) + rAF 合帧 + 官方三值退避轮询(250/750/5000ms) + 心跳判活 + 覆盖层状态机
-│  │  ├─ wire.ts               # SessionEvent 判别集窄化 + 投影纯函数（fake 可测主战场）
+│  │  ├─ rpc.ts                # /remote/__rpc 信封客户端（{channel,payload}→{ok,data}|{ok,error}）——forge 侧通道，不变
+│  │  ├─ connection.ts          # 官方 client-connection 薄包装：组合脚本按需加载 → installConnection → rpc.call 单呼面
+│  │  ├─ api.ts                 # 官方面窄面：session/list·create·prompt·history、interaction.*、commands/list（<service>/<method> 端点）
+│  │  ├─ stream.ts              # remote.mux $events generation 源 + rAF 合帧 + 官方三值退避(250/750/5000ms) + 心跳判活 + 覆盖层状态机
+│  │  ├─ wire.ts                # SessionEvent 判别集窄化 + 投影纯函数（fake 可测主战场）
 │  │  ├─ store.ts              # {get,set,subscribe} + revision 守卫
 │  │  └─ router.ts             # hash router（5 路由 + 浮层管理）
 │  ├─ views/                   # 一屏一文件，只做装配
@@ -184,23 +185,23 @@ packages/contracts/src/
 
 ### 关键逻辑 UML
 
-**SSE 连接状态机**（`core/sse.ts`——对话可用性的核心逻辑；含心跳判活与 teardown 纪律）：
+**连接状态机**（`core/stream.ts`——对话可用性的核心逻辑；generation 源 = remote.mux `$events`，恢复策略 = 官方 ConnectionController 三值退避，心跳判活与 teardown 纪律保留）：
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Live : EventSource open
-    Live --> Live : message 事件→rAF 合帧投影·心跳时间戳刷新
-    Live --> Degraded : error / 心跳超时(15s 间隔·30s 无数据判死→close)
+    [*] --> Live : $events generation ready（官方 onConnected）
+    Live --> Live : $events 帧→rAF 合帧投影·心跳时间戳刷新
+    Live --> Degraded : generation 失效 / 心跳超时(15s 间隔·30s 无数据判死→主动断流)
     Degraded --> Degraded : 轮询 250ms(活跃)/750ms(空闲)→5s 封顶退避 + 覆盖层
-    Degraded --> Live : 轮询成功→EventSource 重建
+    Degraded --> Live : 轮询成功→官方 reconnect() 重开 $events
     Degraded --> Offline : 轮询连续失败(≥3)
     Offline --> Degraded : 手动重试/心跳恢复
-    Live --> [*] : 路由离开会话（teardown：close + 清轮询 timer）
+    Live --> [*] : 路由离开会话（teardown：断流 + 清轮询 timer）
     Degraded --> [*] : 路由离开会话（teardown 同上——timer 必须随状态机销毁，禁止串台）
     Offline --> [*] : 路由离开会话（teardown 同上）
 ```
 
-- **双通道写纪律**：Degraded 期间轮询与 EventSource 重连并存时，全部写入经 store 的 **seq 单调门**（每事件按 seq 丢弃 ≤ 已应用 seq 的写入；live-chunk 按 attemptId+index 去重）——20 行 revision 守卫之上再加此单调合并层，禁止双通道裸写。
+- **双通道写纪律**：Degraded 期间轮询与 `$events` 重连并存时，全部写入经 store 的 **seq 单调门**（每事件按 seq 丢弃 ≤ 已应用 seq 的写入；live-chunk 按 attemptId+index 去重）——20 行 revision 守卫之上再加此单调合并层，禁止双通道裸写。
 - **半开连接**：心跳判活即半开对策（readyState OPEN 但 30s 无数据 → 主动 close → Degraded）。
 
 **消息结算状态机**（`core/wire.ts`——**per-attemptId 子状态机**；配对键来自 `window.change` 判别帧 `{kind:'settle-assistant', attemptId, entry}`——持久 `assistant/message.data` 无 attemptId 字段，不得与 live-chunk 直接配对）：
@@ -257,8 +258,8 @@ sequenceDiagram
 sequenceDiagram
     participant V as chat 视图
     participant S as store
-    participant API as /api/rpc
-    V->>API: session.history(id, maxMessages=10)
+    participant API as /api（官方信封）
+    V->>API: POST /api/session/history {args:{id, maxMessages:10}}
     API-->>S: window{entries, hasMore:true, revision}
     V->>V: 渲染窗口·上翻到顶触发
     V->>API: history 更早页（锚 = 首条 seq）
@@ -268,26 +269,26 @@ sequenceDiagram
 
 ## 跨模块交互契约
 
-- **流通道（官方手机页实证，tech-research R1）**：
-`new EventSource('/api/session/stream?sessionId=…')`，两个**命名事件**——`snapshot`（`{records, projections}` 全量应用）与 `event`（增量，`frame.event || frame`，帧内瞬态类型真名 `assistant/chunk`，非 chunk 触发 pending 同步 150ms 防抖）；`onerror` → 降级轮询。RPC = `POST /api/rpc {method,payload}` → `{ok,error?}`，401/fetch 异常 → disconnected 覆盖层。轮询常量照官方三值：活跃 250ms / 空闲 750ms / 封顶 5000ms；`visibilitychange` 前台回连（官方同款）。
+- **流通道（官方 client-connection 传输面，tech-research R11 探针钉死）**：
+单呼 = `connection.rpc.call('/api', '<service>/<method>', payload)` → 官方信封 `{type:"server-response",rpcId,result:{ok,value|error}}`（`_request` 上下文由官方 typert client 运行时注入）；事件流 = `WS /api/remote.mux` 的 `$events` 逻辑流（generation 源——ready 前基线不抢跑，失效即官方三值退避重连：500ms→10s 封顶）；降级轮询保留（活跃 250ms / 空闲 750ms / 封顶 5000ms）；`visibilitychange` 前台回连。401/fetch 异常 → disconnected 覆盖层。
 
-### 流程时序 1：对话全链（官方面，零 host 改动）
+### 流程时序 1：对话全链（官方面，组合行 + 挂载适配）
 
 ```mermaid
 sequenceDiagram
     participant P as 手机页
-    participant API as /api/rpc
-    participant SSE as /api/session/stream
-    P->>API: session.history(sessionId, maxMessages=10)
+    participant API as /api（官方信封）
+    participant MUX as /api/remote.mux
+    P->>API: POST /api/session/history {args:{sessionId, maxMessages:10}}
     API-->>P: SessionEventWindow{entries, hasMore, revision}
-    P->>API: session.prompt(mode:steer)
-    P->>SSE: EventSource 订阅
-    SSE-->>P: assistant/live-chunk{attemptId, chunk}
+    P->>API: POST /api/session/prompt {args:{sessionId, mode:steer}}
+    P->>MUX: $events 逻辑流订阅（generation 源）
+    MUX-->>P: assistant/live-chunk{attemptId, chunk}
     Note over P: rAF 合帧→text/reasoning delta 投影
-    SSE-->>P: assistant/message（终态）
+    MUX-->>P: assistant/message（终态）
     Note over P: settle-assistant：按 attemptId 原子取代 transient 行
-    SSE--xP: 断线
-    Note over P: 轮询 250/750ms→5s 封顶 + 断线覆盖层；恢复后自愈续流
+    MUX--xP: generation 失效
+    Note over P: 官方三值退避重连 + 轮询 250/750ms→5s 封顶 + 断线覆盖层；恢复后自愈续流
 ```
 
 ### 流程时序 2：任务意图转发（forge 面，host 守卫）
@@ -358,7 +359,7 @@ sequenceDiagram
 
 ### T3 e2e（Playwright + Chrome 设备模拟 + 录制回放——PRD 裁决）
 
-- **录制真实响应回放**：e2e 基建带录制器——首跑连真实 host（本地起服，配对绕过测试门），把 `/api/rpc`、`/api/session/stream`（SSE 逐事件）、`/remote/__rpc` 的真实响应录成回放 fixtures（HAR 扩展或自建 JSONL：method/url/事件序列）；后续 e2e 一律 **Playwright `page.route` 回放**（SSE 按 timed 事件序列重放），离线可重复、断言稳定。
+- **录制真实响应回放**：e2e 基建带录制器——首跑连配对 origin（回环 authority，只读面零凭据），把 `/api/<service>/<method>` 官方信封交换（session/interaction/commands 族）、`/api/remote.mux` `$events` 帧、`/remote/__rpc` 的真实响应录成回放 fixtures（自建 JSONL：method/url/信封/事件序列，形状见 connection-probe）；涉及 prompt/ask 的录制腿走 E2E_MOBILE_RECORD 凭据门；后续 e2e 一律 **Playwright `page.route` 回放**（mux 流按 timed 事件序列重放），离线可重复、断言稳定。
 - **mobile 项目**：`e2e/playwright.config.ts` 新增 project，设备描述符（视口 390×844、触摸、移动 UA）。
 - **旅程**：mockup 十屏逐位对照走查 + 对话（流式/断线恢复/分页）/ask 三题型/抽屉未读/hero 确认框/任务意图守卫/worker 双形态/文档阅读，全部跑在回放 fixtures 上。
 - fixtures 落 `e2e/fixtures/mobile/`（进 git——测试资产非过程产物）。

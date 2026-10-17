@@ -45,7 +45,7 @@ created: 2026-10-17
 | `POST /remote/__rpc`（分发器） | `channelTableOf` allowlist 增 4 通道 + worktree 三通道放行；`RemoteHttpRpcDeps` 注入面扩充（transitionTask 切片、sessionLinks 组合、read-state domain、workers 目录、既有 forwardApproval/tasks/projects 不变） | 既有通道（progress/approval/projects）payload/data 零变化 |
 | `@dsh-forge/contracts` `REMOTE_CHANNELS` | 枚举只增不改：`+task-action, +session-links, +read-state, +workers` | apps/web remote-transport 等消费方编译期兼容（只增枚举 = 超集） |
 | 桌面 web-app `/remote/` 入口 | 入口移除（改指 mobile） | 桌面功能不经 `/remote/`（其走本地窗口），零影响 |
-| 会话日志/官方 API | **零改动**（哨兵是读侧约定 + forge/progress 既有事件；SSE/RPC 官方面原样消费） | — |
+| 会话日志/官方 API | **零改动**（哨兵是读侧约定 + forge/progress 既有事件；官方传输面原样消费） | — |
 
 ## 三、错误模型（新增通道统一码表）
 
@@ -117,4 +117,6 @@ declare module '@deepseek-ai/dsh-llm' {
 - md 渲染：`dsh-client-ui-renderer` 为 React/host-loader 生态不可复用；**官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（R8 实证）——照搬之**，mermaid 增强器复用 `@dsh-forge/md-mermaid`。
 - `/`、`@` 触发面：数据全走官方远程面（CommandRuntime=TypertRemoteService；dsh-api-workspace-files remote-client；session.list）——tech-research R7。
 
-`POST /api/rpc`：`session.list/models/selectModel/create/history/prompt/cancel`、`interaction.pending/answer/cancel`、`workspace.list`、`agentPreset.list/select`；SSE `GET /api/session/stream?sessionId=…`（命名事件 `snapshot`/`event`，帧形状见 tech-research R1）；`GET /api/status`（心跳 + tunnelExpiresAt）。端点形状正本 = 官方手机页源码（probes/official-mobile-page.js.txt），批次①回放录制钉死。
+官方 client-connection 传输面（R11 探针钉死；单呼 = `POST /api/<service>/<method>`，信封 `{type:"client-request",rpcId,method,payload:{args}}` → `{type:"server-response",rpcId,result:{ok,value|error}}`，`_request` 上下文由官方 typert client 运行时注入）：`session/list·create·history·prompt·cancel`、`interaction/pending·answer·cancel`、`commands/list·execute`；事件流 = `WS /api/remote.mux` 逻辑流（`$events` generation 源，事件帧形状见 tech-research R11）。服务可用前提 = 组合行启用官方 api 控制器（dsh-base 出厂缺席——dev profile 已插行，打包模板 template.ts 同源跟进）。端点正本 = 官方包 `@deepseek-ai/dsh-api-session-controller` `Remote()` 装饰 + 批次①回放录制。
+
+**会话归组口径（项目 → worktree → sessions 统一展示）**：`session/list` 零过滤参数（host 全量平铺——主 worktree 与各 worktree 会话同账本同列表）。归组不在手机端做路径推导：**host 侧薄方法**（`/remote/__rpc` allowlist 扩充）出「项目 → worktree → sessions」分组视图 = `listProjects × session/list × git-worktree inferSource`（session cwd ∈ wsPath 本体 ∪ worktreeDir 子树 → 归属该项目；桌面 session-chip 同源语义），手机端一次调用取现成分组 + 「未归属」兜底桶。

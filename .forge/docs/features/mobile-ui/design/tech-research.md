@@ -157,3 +157,15 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - **F3 循环卡色条映射**：kind（dispatch 蓝/followup 浅蓝/state 灰/done 绿）↔ `forge/progress.verb` 值集映射，批次③实现时从 `loop/driver.ts` 取 verb 全集对齐（实证仅见 claim）。
 - **F5 派发寻址（用户裁决 2026-10-17·甲）**：dispatch 指令发用户当前浏览会话——零映射需求（同源独占守卫防重复）；不建专用 dispatch 会话映射。
 - **F4 唯一剩余实现级未知**：typert `commands` 服务（list/execute）的 **wire 暴露形态**——能否经 `/api/rpc {method:"commands.list"}` 直调未实证（官方手机页只用 session.* 族 JSON 面）——批次①录制桌面浏览器调指令的真实请求钉死（任务 1.1 AC 已含）。
+
+## R11 探针钉死（2026-10-17 connection 探针全绿——`/api/rpc` 假设证伪后的传输面重钉）
+
+| # | 项 | 结论（证据：connection-probe 绿跑 + 官方源码核销） |
+|---|---|---|
+| 1 | `/api/rpc` 信封通道 | ❌ **不存在**：本 host 配对 origin 对 `/api/rpc` 返回 404 "not found"；全部官方包 dist/lib 零命中。原 R9#5「官方手机页 rpc('session.list')」的真实通道 = **官方 client-connection 传输面**（下条），非 `{method,payload}` 信封 |
+| 2 | 官方传输面（真实形状） | ✅ host webserver 同源挂载：单呼 = `POST /api/<service>/<method>`（信封 `{type:"client-request",rpcId,method,payload}` → `{type:"server-response",rpcId,result:{ok,value\|error}}`）；事件流 = `WS /api/remote.mux` 逻辑流复用（`$events` generation 源）。client 半 = `installConnection`（`@deepseek-ai/dsh-client-connection`），desktop 壳经 custom scheme 转发同组协议 |
+| 3 | 组合缺口（必须补） | ❌→✅ **dsh-base 出厂只挂 `typert-gateway`，`api-session-controller` / `api-workspace-controller` 缺席**（`/api/session/list` 405 实证）——profile patch 插两行启用行 + profile deps 即点亮（探针已入 dev 形态；打包模板 template.ts 同源跟进） |
+| 4 | `/remote/` 挂载适配（已落地 commit `7921232d`） | ✅ 三缝：index 经 `renderIndexInjections` 注入官方行（facade + 组合脚本 + `__DSH_BOOT__`；tapIndex 弹射跳过——弹射终点即本页）；`/remote/plugins/*` 302 → 官方 `/plugins` 组合路由；`/remote/api/*` 307 → 官方 `/api` 通道（client http transport 发文档相对 URL；302 会降级 POST） |
+| 5 | client 半装载（mobile 页） | ✅ 最小路径实证：facade queue 模式下 app 组合 factory 入 `pendingQueue`（boot 只预载不执行）——按需补加载组合 `<script>` 后从队列直取 `@deepseek-ai/dsh-client-connection` factory 物化（bundle 自包含）；`installConnection` 缺省 web transport 同源直连 |
+| 6 | 认证 | ✅ 配对链 302→302→303 铸官方 `dsh-auth-*` cookie（BrowserAuth，绑定 authority）；`_request` 上下文域由官方 typert client 运行时注入——手搓 payload 到不了（`gateway/arguments-invalid` 实证），**session.prompt 等业务单呼必须经官方 client 运行时** |
+| 7 | 架构裁决 | **方案 B（官方协议）成立且比原估便宜**：host 只需挂载适配（#4，已落地）+ 组合行（#3）；1.3 的 `rpc.ts`/`sse.ts` 替换为官方 client 薄包装（wire 投影/store/router/views 不动）；`/api/rpc`+SSE 假设全部作废（批次② messages 视图的数据源随 1.3b 替换面微调） |

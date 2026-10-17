@@ -70,7 +70,7 @@ flowchart LR
 
 ### F1 对话主视图（屏 1/2/3）`new-page #/chat/:sessionId`
 
-官方 API/SSE 对话引擎全链：SSE→rAF 合帧→末条补丁、乐观提示、revision 守卫、触底跟随、EventSource 原生重连 + 心跳判活 + 断线覆盖层。消息投影与视觉三层级、折叠空间纪律、shell 终端块、异步结果卡、循环哨兵卡（kind 定色条：dispatch 蓝/followup 浅蓝/state 灰/done 绿）、历史默认最近 10 条（可配置常量）+ 上翻分页，均按 prd-spec「消息渲染要点」执行。
+官方 client-connection 对话引擎全链：$events→rAF 合帧→末条补丁、乐观提示、revision 守卫、触底跟随、官方 generation 退避重连 + 心跳判活 + 断线覆盖层。消息投影与视觉三层级、折叠空间纪律、shell 终端块、异步结果卡、循环哨兵卡（kind 定色条：dispatch 蓝/followup 浅蓝/state 灰/done 绿）、历史默认最近 10 条（可配置常量）+ 上翻分页，均按 prd-spec「消息渲染要点」执行。
 
 ### F2 ask 分页面板（屏 6）`new-page #/ask`
 
