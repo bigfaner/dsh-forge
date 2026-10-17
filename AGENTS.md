@@ -10,6 +10,10 @@
 - 关键硬约束速记：单写者铁律（禁建后补写会话日志）、header 不可变（落点决策做在创建时点）、正确性必须 host 单点保证（客户端竞速只算体验优化）、非介入面零行为差异且零固定税（分流优先装配期）。
 
 
+## 插件可移植性（用户裁决 2026-10）
+
+- **装配缝归属插件域**：插件包（`packages/plugins/*`，如 git-worktree）的装配缝（编排逻辑、与官方机械的缝合面）属于插件自身——插件面向一切满足 dsh 规范的应用，不只服务 dsh-forge。宿主只做 wiring（通道注册 / service provide / Face 注入）。正本见 `docs/conventions/plugin-portability.md`（目标分层、判据、现状漂移面）。
+
 ## Windows commit 内存纪律（用户裁决 2026-10-16）
 
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
