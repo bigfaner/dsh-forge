@@ -23,6 +23,7 @@ import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   heroPickerPlan,
+  orchestrateRootOf,
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
@@ -152,7 +153,7 @@ export function ForgeHeroWorkspacePicker({
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
   // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）
-  const { projects: projectsState, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
+  const { projects: projectsState, workspaces, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
@@ -183,12 +184,44 @@ export function ForgeHeroWorkspacePicker({
   // 1.25 编排失败/face 缺席提示态（Toast 只在首条消息时点的 arm 失败出现——1.29 点选
   // 纯选中态无失败面）
   const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
+  // ── bug e9330692：worktree 工作区归并（A7 键扩两段）──
+  // worktree 工作区（编排/挂靠自身产物）不进 projects 注册表——落在其中的会话 hero
+  // selectedId 恒 miss。miss 时消费 host resolve 通道身份裁决（客户端零仲裁）：选中
+  // 工作区路径 → {projectId, projectRoot}；裁决归并回属主项目 → 编排可用。真未归属
+  // （原生无绑定工作区）裁决缺席 → null（A7 fail-closed 提示原样）。
+  const resolveTargetPath = useMemo(() => {
+    // strict 命中 = 归并不参与（注册绑定直取）；miss 段取选中工作区路径交 host 裁决
+    if (selectedProjectRootStrictOf(projects, selectedId) !== null || selectedId === undefined) return null
+    return workspaces?.items.find((row) => row.workspaceId === selectedId)?.path ?? null
+  }, [projects, selectedId, workspaces])
+  const [resolvedProject, setResolvedProject] = useState<{ readonly projectId: string; readonly projectRoot: string } | null>(null)
+  useEffect(() => {
+    // 待裁路径变化即重裁（快照缺席/通道失败 fail-soft = null——维持 A7 提示）
+    if (resolveTargetPath === null) {
+      setResolvedProject(null)
+      return
+    }
+    let alive = true
+    makeRpc()
+      .worktree.resolve({ paths: [resolveTargetPath] })
+      .then((result) => {
+        if (!alive) return
+        const entry = result.resolved.find((row) => row.path === resolveTargetPath)
+        setResolvedProject(entry !== undefined ? { projectId: entry.projectId, projectRoot: entry.projectRoot } : null)
+      })
+      .catch(() => {
+        if (alive) setResolvedProject(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [resolveTargetPath, makeRpc])
   // 挂靠编排缝（1.31——React 解耦抽出 createWorktreeOrchestrator 可单测面；1.29 起 arm
   // 消费点唯一消费，点选不触达）。返回产物 sessionId（草稿搬运落点）；失败 → 1.25 Toast
   // + null（挂载面选中态同清——不产生「已选中」假象）。
-  // A7（1.31）：编排数据根 = selectedId 严格命中（selectedProjectRootStrictOf）——渲染
-  // 兜底（selectedProjectRootOf fallback）禁止泄漏为绑定语义：无命中 → 提示 + null 不编排。
-  const orchestrateRoot = selectedProjectRootStrictOf(projects, selectedId)
+  // A7（1.31）+ bug e9330692：编排数据根 = strict 注册绑定 → miss 段 host 身份裁决归并
+  // （orchestrateRootOf 两段键——渲染兜底仍禁止泄漏为绑定语义）。
+  const orchestrateRoot = orchestrateRootOf(projects, selectedId, resolvedProject)
   const orchestrate = useMemo(
     () =>
       createWorktreeOrchestrator({

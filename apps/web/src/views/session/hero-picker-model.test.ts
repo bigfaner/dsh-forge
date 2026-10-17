@@ -7,6 +7,7 @@ import {
   activeSessionRowOf,
   blankSessionIdByCwdOf,
   heroPickerPlan,
+  orchestrateRootOf,
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
@@ -99,6 +100,35 @@ describe('selectedProjectRootStrictOf（A7——编排源与渲染兜底分离�
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-native-unbound')).toBeNull()
     expect(selectedProjectRootStrictOf(PROJECTS, undefined)).toBeNull()
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-3')).toBeNull() // archived 亦不充当编排源
+  })
+})
+
+// bug e9330692——A7 修订：worktree 工作区（编排/挂靠自身产物）不进 projects 注册表
+// （ws_path 唯一约束，一项目只绑主树工作区），落在其中的会话 hero selectedId 恒 miss。
+// 归并正道 = 消费 host resolve 通道身份仲裁（git common-dir 锚 + 主树行必胜——客户端
+// 零仲裁，只做注册表活跃行核销）；裁决缺席/未注册/归档 → 维持 A7 fail-closed。
+describe('orchestrateRootOf（bug e9330692——worktree 工作区归并回属主项目）', () => {
+  const resolved = (projectId: string, projectRoot: string) => ({ projectId, projectRoot })
+
+  it('strict 命中优先：workspaceId 注册绑定在场 → 直接取该行 ws_path（resolve 裁决不参与）', () => {
+    expect(orchestrateRootOf(PROJECTS, 'w-2', resolved('p1', 'C:\\ws\\p1'))).toBe('C:\\ws\\p2')
+  })
+
+  it('strict miss + resolve 裁决命中活跃项目 → 该项目 ws_path（worktree 工作区会话归并——bug 主场景）', () => {
+    expect(orchestrateRootOf(PROJECTS, 'w-worktree-mobileui', resolved('p2', 'C:\\ws\\p2'))).toBe('C:\\ws\\p2')
+  })
+
+  it('strict miss + resolve 裁决缺席/未解析路径 → null（原生无绑定工作区 A7 fail-closed 原样保留）', () => {
+    expect(orchestrateRootOf(PROJECTS, 'w-native-unbound', null)).toBeNull()
+    expect(orchestrateRootOf(PROJECTS, 'w-native-unbound', undefined)).toBeNull()
+  })
+
+  it('strict miss + resolve 裁决指向归档项目 → null（归档行不充当编排源）', () => {
+    expect(orchestrateRootOf(PROJECTS, 'w-worktree-old', resolved('p3', 'C:\\ws\\p3'))).toBeNull()
+  })
+
+  it('strict miss + resolve 裁决 projectId 不在注册表（漂移/未注册）→ null', () => {
+    expect(orchestrateRootOf(PROJECTS, 'w-any', resolved('p-unknown', 'C:\\ws\\x'))).toBeNull()
   })
 })
 

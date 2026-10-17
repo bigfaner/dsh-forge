@@ -63,6 +63,26 @@ export function selectedProjectRootStrictOf(
 }
 
 /**
+ * worktree 编排数据根（bug e9330692 修订——A7 键扩为两段）：
+ *  1. strict 段 = selectedProjectRootStrictOf（workspaceId 注册绑定——原 A7 全量）；
+ *  2. miss 段 = host resolve 通道身份裁决（forge:worktree/resolve：git common-dir 锚 +
+ *     主树行必胜——客户端零仲裁）归并 worktree 工作区会话回属主项目；裁决 projectId 须
+ *     核销为注册表活跃行（归档/未注册 → null）。
+ * A7 fail-closed 语义保留：真未归属（原生无绑定工作区）裁决缺席 → null（提示不编排）。
+ */
+export function orchestrateRootOf(
+  projects: readonly ProjectSummary[],
+  selectedId: string | undefined,
+  resolved: { readonly projectId: string; readonly projectRoot: string } | null | undefined,
+): string | null {
+  const strict = selectedProjectRootStrictOf(projects, selectedId)
+  if (strict !== null) return strict
+  if (resolved === null || resolved === undefined) return null
+  const row = projects.find((project) => project.id === resolved.projectId)
+  return row !== undefined && row.archived !== true && row.wsPath !== '' ? row.wsPath : null
+}
+
+/**
  * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正 / 1.31 A7 分离）：
  * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
  * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——编排数据源走
