@@ -24,6 +24,8 @@ allowBuilds:
   # 4.1 electron-builder 传递依赖（Squirrel.Windows 目标专用）：P1 仅 NSIS 目标，
   # 构建脚本无需执行——显式置 false 消 ignored-builds 门
   electron-winstaller: false
+  # mobile 工程构建工具（1.2）：esbuild 安装脚本仅落平台二进制（@esbuild/win32-x64 可选依赖）
+  esbuild: true
 
 overrides:
   # 4.1 electron-builder：app-builder-lib 26.17 代码需 ElectronDownloadCacheMode（@electron/get

@@ -41,6 +41,8 @@ export default defineConfig({
         },
       },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
+      // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
+      { test: { name: 'mobile', include: ['apps/mobile/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）
       { test: { name: 'e2e-support', include: ['e2e/support/**/*.test.ts', 'e2e/mobile/**/*.test.ts'] } },
