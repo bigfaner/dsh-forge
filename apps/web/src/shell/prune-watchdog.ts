@@ -73,7 +73,9 @@ export function createPruneWatchdog(deps: PruneWatchdogDeps): PruneWatchdogHandl
       deps.onLapse(`slots entries 计数回落（基线 ${baseline} → 现 ${state.slotCount}）`)
     }
   }
-  const timer = setInterval(evaluate, deps.intervalMs ?? 15_000)
+  // W4 行存续看门 = 设计内的壳 bundle 全局长驻轮询（插件 prune 检测——插件 fiber 同殁
+  // 故必须活在壳面），非 watch 模式残留；理由见 session-binding-guarantee §W4。
+  const timer = setInterval(evaluate, deps.intervalMs ?? 15_000) // audit-allow 5.3：W4 设计内长驻看门（非 watch 残留——session-binding-guarantee §W4）
   const hookGlobals = globalThis as { __DSH_FORGE_PRUNE_CHECK__?: () => void }
   hookGlobals.__DSH_FORGE_PRUNE_CHECK__ = evaluate
   return {
