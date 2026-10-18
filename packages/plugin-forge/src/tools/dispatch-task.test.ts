@@ -487,9 +487,21 @@ describe('execute · 挂起态（P3 摘要兜底 + re-entry 幂等续接 + 接�
     const h = harness()
     h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
     h.driver.resume.mockReturnValue({ ok: false, code: 'not-suspended' })
-    const out = (await h.tool.execute(ARGS, h.exec)) as { resumed: boolean }
-    expect(out.resumed).toBe(false)
+    const out = await h.tool.execute(ARGS, h.exec)
+    expect(out).toMatchObject({ resumed: false, resumeRejectedCode: 'not-suspended' })
     expect(h_render(h, out)).toContain('already resumed')
+  })
+
+  it('挂起期循环已被叫停（resume aborted）：resumeRejectedCode=aborted + 渲染与 not-suspended 可分辨（terminated while suspended，非并发竞态）', async () => {
+    const h = harness()
+    h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
+    h.driver.resume.mockReturnValue({ ok: false, code: 'aborted' })
+    const out = await h.tool.execute(ARGS, h.exec)
+    expect(out).toMatchObject({ resumed: false, resumeRejectedCode: 'aborted' })
+    const text = h_render(h, out)
+    expect(text).toContain("code 'aborted'")
+    expect(text).toContain('terminated while suspended')
+    expect(text).not.toContain('already resumed') // 与 not-suspended 文案可分辨
   })
 })
 

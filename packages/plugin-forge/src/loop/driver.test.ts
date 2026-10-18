@@ -1291,7 +1291,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     // in-flight 真化 interrupted（S3 面——人类转移通道）
     expect(built.h.transitions).toEqual([
-      { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止' },
+      { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
     ])
     // ⑰ 停止终局叙述
     const stoppedNotice = built.calls.find((c) => c.method === 'followup')
@@ -1365,7 +1365,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     await untilSettled(driver)
     expect(await stopPromise).toEqual({ ok: true, stopped: true, hadInFlight: true })
     // 真化归 stop 面（stop 读数晚于 in-flight 登记——接管方）；循环径让渡
-    expect(h.transitions).toEqual([{ projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止' }])
+    expect(h.transitions).toEqual([{ projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' }])
     expect(h.claimInputs).toHaveLength(1) // 零续领
   })
 })
@@ -2082,7 +2082,7 @@ describe('落点核验失败强制处置（settle-cwd-pin——任务真化 inte
     expect(suspended.escalation.kind === 'settle-landing-rejected' && suspended.escalation.reason).toContain('[settle-cwd-pin]')
     // 显式处置①：任务从 completed 真化 interrupted（可恢复态——非 completed 挂死）
     expect(built.h.transitions).toEqual([
-      { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]') },
+      { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]'), actor: 'core' },
     ])
     // 不走失败阶梯：零续领（worker-abort 径会立即重入 claim）、循环不终局（登记保留）
     expect(built.h.claimInputs).toHaveLength(1)

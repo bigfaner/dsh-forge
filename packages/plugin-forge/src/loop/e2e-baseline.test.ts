@@ -7,6 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import { hostOwnedPidsSnapshot } from '../spawn/job-tree.js'
 import { attributionTaskInput, baselineForHead, createE2eBaselineFace, parseE2eRedSpecs, runE2eBaseline } from './e2e-baseline.js'
 
 describe('parseE2eRedSpecs（套件输出 → 红灯 spec 清单）', () => {
@@ -190,6 +191,13 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
     expect(head).toMatch(/^[0-9a-f]{40}$/)
     const outside = await face.readHead(join(dir, 'no-such-wt'))
     expect(outside).toBeUndefined()
+  })
+
+  it('readHead git 子进程出生即登记 hostOwned（在世 keeper 不误收编——登记先于任何 await，同步可断言）', () => {
+    const face = createE2eBaselineFace({ cwd: dir })
+    const pending = face.readHead(dir) // new Promise executor 同步跑——execFile 返回即已 noteHostOwnedChild
+    expect(hostOwnedPidsSnapshot().length).toBeGreaterThan(0)
+    return pending.then((head) => expect(head).toMatch(/^[0-9a-f]{40}$/))
   })
 })
 

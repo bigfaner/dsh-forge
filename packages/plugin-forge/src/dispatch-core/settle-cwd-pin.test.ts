@@ -97,7 +97,7 @@ describe('1.14 · 提交落点核验（settleWorkerRun cwd 钉定收口）', () 
     expect(settlement.cause.message).toContain('main')
     // 显式处置：completed → interrupted（合法边——任务可恢复，不 completed 挂死）
     expect(transitions).toEqual([
-      { projectId: 'p-1', taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]') },
+      { projectId: 'p-1', taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]'), actor: 'core' },
     ])
   })
 

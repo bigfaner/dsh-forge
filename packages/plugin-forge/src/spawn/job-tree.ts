@@ -227,18 +227,24 @@ function resolvePowerShell(): string {
 /** Add-Type 编译缓存（进程级单飞——首个守卫装配，余者复用 Dll + 脚本） */
 let assemblyPromise: Promise<KeeperAssembly> | undefined
 
-function ensureKeeperAssembly(): Promise<KeeperAssembly> {
+/** 编译子进程 spawn 缝（测试注入桩——默认真 spawn）；导出（单测观察面——出生路径登记断言） */
+export type CompileSpawner = typeof spawn
+
+export function ensureKeeperAssembly(
+  deps: { readonly spawnCompile?: CompileSpawner; readonly forceCompile?: boolean } = {},
+): Promise<KeeperAssembly> {
+  const spawnCompile = deps.spawnCompile ?? spawn
   assemblyPromise ??= (async (): Promise<KeeperAssembly> => {
     const dir = join(tmpdir(), 'dsh-forge-jobtree')
     mkdirSync(dir, { recursive: true })
     const assemblyPath = join(dir, `jobtree-native-v${JOB_TREE_VERSION}.dll`)
     const scriptPath = join(dir, `jobtree-keeper-v${JOB_TREE_VERSION}.ps1`)
     if (!existsSync(scriptPath)) writeFileSync(scriptPath, '\uFEFF' + KEEPER_PS, 'utf8') // BOM——PS 5.1 无 BOM 按 ANSI 读，中文注释乱码破坏解析
-    if (!existsSync(assemblyPath)) {
+    if (!existsSync(assemblyPath) || deps.forceCompile === true) {
       const csPath = join(dir, `jobtree-native-v${JOB_TREE_VERSION}.cs`)
       writeFileSync(csPath, KEEPER_CS, 'utf8')
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
+        const child = spawnCompile(
           resolvePowerShell(),
           [
             '-NoProfile',
@@ -249,6 +255,9 @@ function ensureKeeperAssembly(): Promise<KeeperAssembly> {
           ],
           { windowsHide: true, stdio: 'ignore' } satisfies SpawnOptions,
         )
+        // 出生即登记：编译子进程恰跑在它即将服务的在世 keeper 旁——不登记会被该 keeper
+        // 当 candidate 收编（修复声称保护却未登记的出生路径缺口）
+        noteHostOwnedChild(child)
         child.once('error', reject)
         child.once('exit', (code) => (code === 0 ? resolve() : reject(new Error(`keeper 原生绑定编译失败（exit ${code}）`))))
       })
@@ -288,6 +297,11 @@ export function noteHostOwnedChild(child: ChildProcess): void {
   }
   child.once('exit', release)
   child.once('error', release)
+}
+
+/** hostOwned 登记只读快照（单测观察面——出生路径登记/退出解除断言用） */
+export function hostOwnedPidsSnapshot(): readonly number[] {
+  return [...hostOwnedPids]
 }
 
 // ─────────────────────────── 守卫实现 ───────────────────────────

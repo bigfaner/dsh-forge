@@ -89,6 +89,9 @@ export type DispatchLoopResult =
       readonly summary: string
       /** 本次调用是否完成 re-entry（幂等续接；并发竞态 = false，零动作） */
       readonly resumed: boolean
+      /** resumed=false 时的拒绝码（驱动器 resume 原码透传——'aborted' = 挂起期循环已被叫停，
+       * 与 'not-suspended' 并发续接竞态在工具面可分辨） */
+      readonly resumeRejectedCode?: 'no-active-loop' | 'not-suspended' | 'aborted'
       /** 非 owner 首触 = 已加入接管集 */
       readonly takenOver: boolean
       readonly pool: ToolPoolSnapshot
@@ -162,6 +165,7 @@ const DISPATCH_LOOP_OUTPUT_SCHEMA = withFailureVariant({
         source: SOURCE_SCHEMA,
         summary: { type: 'string' },
         resumed: { type: 'boolean' },
+        resumeRejectedCode: { type: 'string', enum: ['no-active-loop', 'not-suspended', 'aborted'] },
         takenOver: { type: 'boolean' },
         pool: POOL_SCHEMA,
       },
@@ -195,7 +199,9 @@ function renderDispatchLoopResult(_args: unknown, value: unknown): readonly Text
     v.summary,
     v.resumed
       ? `- re-entry accepted — the loop resumes from where it suspended (completed tasks are not re-run); pool: ${poolLine(v.pool)}`
-      : `- the loop already resumed (concurrent re-entry) — no action taken; pool: ${poolLine(v.pool)}`,
+      : v.resumeRejectedCode === 'aborted'
+        ? `- resume rejected (code 'aborted') — the loop was terminated while suspended and is gone (this is NOT a concurrent re-entry race); start a fresh loop with dispatchTask if needed; pool: ${poolLine(v.pool)}`
+        : `- the loop already resumed (concurrent re-entry) — no action taken; pool: ${poolLine(v.pool)}`,
     ...(v.takenOver ? ['- you have joined the takeover set for this suspended loop — handle the task (addTask/updateTask/user verdict), then re-enter with dispatchTask, or stop it with stopTaskLoop'] : []),
   ]
   return [{ type: 'text', text: lines.join('\n') }]
@@ -285,6 +291,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
                 source,
                 summary: renderP3(payload),
                 resumed: resumed.ok,
+                ...(resumed.ok ? {} : { resumeRejectedCode: resumed.code }),
                 takenOver: !isOwner,
                 pool,
               }

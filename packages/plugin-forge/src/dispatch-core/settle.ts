@@ -140,6 +140,7 @@ async function rejectLanding(
       taskId: ctx.task.taskId,
       toStatus: 'interrupted',
       reason: cause.message,
+      actor: 'core', // 循环自动化纠偏——审计归因不再误记人类通道 'ui'
     })
   } catch (transitionCause) {
     return {

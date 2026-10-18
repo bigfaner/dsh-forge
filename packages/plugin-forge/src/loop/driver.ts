@@ -1529,6 +1529,7 @@ async function interruptedize(loop: ActiveLoop | undefined, taskId: string): Pro
       taskId,
       toStatus: 'interrupted',
       reason: LOOP_STOP_TRANSITION_REASON,
+      actor: 'core', // 循环自动化纠偏——审计归因不再误记人类通道 'ui'
     })
   } catch (cause) {
     console.warn(

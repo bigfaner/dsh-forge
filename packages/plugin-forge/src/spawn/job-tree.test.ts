@@ -12,7 +12,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { Readable } from 'node:stream'
-import { createWorkerTreeGuard, noopWorkerTreeGuard, noteHostOwnedChild } from './job-tree.js'
+import { createWorkerTreeGuard, ensureKeeperAssembly, hostOwnedPidsSnapshot, noopWorkerTreeGuard, noteHostOwnedChild } from './job-tree.js'
 import type { KeeperProcess, WorkerTreeGuardDeps } from './job-tree.js'
 
 /** 测试装配桩（真 PowerShell 编译不触——assembly 注入假路径） */
@@ -219,6 +219,26 @@ describe('createWorkerTreeGuard（keeper 协议契约）', () => {
     await guard.whenReady
     expect(guard.keeperPid).toBeUndefined()
     expect(await guard.reclaim()).toBe(false)
+  })
+})
+
+describe('R2-minor②（hostOwned 出生路径补全）', () => {
+  it('Add-Type 编译子进程出生即登记 hostOwned（在世 keeper 不收编——修复声称保护却未登记的缺口）', async () => {
+    const fake = new EventEmitter() as unknown as ChildProcess
+    Object.defineProperty(fake, 'pid', { value: 777 })
+    const compiling = ensureKeeperAssembly({
+      forceCompile: true, // 真机 Dll 缓存在场也强制走编译分支——出生路径登记断言不依赖缓存缺席
+      spawnCompile: (() => fake) as unknown as typeof import('node:child_process').spawn,
+    })
+    expect(hostOwnedPidsSnapshot()).toContain(777) // spawn 同步返回后登记即在
+    fake.emit('exit')
+    await expect(compiling).rejects.toThrow('编译失败') // 桩退出码非 0——缓存终态消化，零 unhandled rejection
+    expect(hostOwnedPidsSnapshot()).not.toContain(777) // 退出解除（pid 复用零误伤）
+  })
+
+  it('readHead git 子进程出生即登记（e2e-baseline 面——同口径断言，见 e2e-baseline.test.ts）', () => {
+    // 装配面属 e2e-baseline.test.ts 真子进程断言——此处仅 pin 观察缝导出在位
+    expect(typeof hostOwnedPidsSnapshot).toBe('function')
   })
 })
 

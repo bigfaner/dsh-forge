@@ -242,9 +242,12 @@ export function createE2eBaselineFace(deps: E2eBaselineFaceDeps): {
     })
   const readHead = (worktree: string): Promise<string | undefined> =>
     new Promise((resolve) => {
-      execFile('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }, (error, stdout) =>
+      // 出生即登记：readHead git 子进程恰跑在 claim 轮次在世 keeper 旁——宿主自有子进程
+      // 不被任何在世 keeper 误收编（与 killTree taskkill、settle git 核验同口径）
+      const child = execFile('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }, (error, stdout) =>
         resolve(error == null && stdout.trim() !== '' ? stdout.trim() : undefined),
       )
+      noteHostOwnedChild(child)
     })
   return { runSuite, readHead }
 }

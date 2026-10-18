@@ -54,6 +54,38 @@ describe('transitionTask：提前校验 + reason 必带 + record', () => {
     }
   })
 
+  it('actor 透传（机械纠偏）：显式 core → transition 记录 actor=core（循环自动化真化不再误记 ui）；缺省恒 ui', async () => {
+    const h = createTasksHarness()
+    try {
+      // 写前相位增量断言承重——feature 相位与任务分布一致（completed）才可转
+      seedFeature(h.db, { slug: 'feat', status: 'completed' })
+      const id = seedTask(h.db, 'feat', '1.1', { status: 'completed' })
+
+      await transitionTask(
+        { store: h.store, events: h.events },
+        { projectId: h.projectId, taskId: id, toStatus: 'interrupted', reason: '[settle-cwd-pin] 落点核验失败', actor: 'core' },
+      )
+      expect(recordsOf(h.db, id)).toEqual([
+        { verb: 'transition', from_status: 'completed', to_status: 'interrupted', reason: '[settle-cwd-pin] 落点核验失败', actor: 'core' },
+      ])
+    } finally {
+      h.dispose()
+    }
+
+    const h2 = createTasksHarness()
+    try {
+      seedFeature(h2.db, { slug: 'feat', status: 'in-progress' })
+      const id2 = seedTask(h2.db, 'feat', '1.2', { status: 'in_progress' })
+      await transitionTask(
+        { store: h2.store, events: h2.events },
+        { projectId: h2.projectId, taskId: id2, toStatus: 'skipped', reason: '人工决策' },
+      )
+      expect(recordsOf(h2.db, id2)[0]?.actor).toBe('ui')
+    } finally {
+      h2.dispose()
+    }
+  })
+
   it('to === current 拒绝：ERR_INVALID_TRANSITION（human 面 = 七态 − 当前态——allowed 为 transitionTargets 单源证物）', async () => {
     const h = createTasksHarness()
     try {

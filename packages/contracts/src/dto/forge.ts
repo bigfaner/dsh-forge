@@ -571,13 +571,15 @@ export interface ReconcileInterruptedResult {
   reconciled: TaskRef[]
 }
 
-/** transitionTask 入参（人类通道——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */
+/** transitionTask 入参（人工/机械共用转移面——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */
 export interface TransitionTaskInput {
   projectId: string
   taskId: string
   toStatus: TaskStatus
   /** 必带（→completed/skipped 同挂恢复钩子——与 submitTask 钩子同族，C3） */
   reason: string
+  /** 审计 actor（缺省 'ui'——人类通道；循环自动化纠偏显式传 'core'，防机械纠偏误记人类通道） */
+  actor?: TaskActor
 }
 
 /** queryTask 入参（agent 面——TaskRef 两显式参） */
