@@ -27,6 +27,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'createProposal',
   'transitionProposal',
   'dispatchTask',
+  'stopTaskLoop',
   'updateTask',
   'taskStats',
   'listTasks',

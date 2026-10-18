@@ -14,6 +14,24 @@ vi.mock('@deepseek-ai/dsh-subagent-in-process-driver', () => ({
 }))
 
 import { createInProcessDriverSpawn } from './in-process-driver.js'
+import type { WorkerTreeGuard } from './job-tree.js'
+
+/** 守卫桩工厂（reclaim 调用计数——改进 4 终态可达断言） */
+function guardSpy() {
+  const reclaims: number[] = []
+  const guard: WorkerTreeGuard = {
+    keeperPid: 4242,
+    whenReady: Promise.resolve(),
+    exclude: () => {},
+    reclaim: async () => {
+      reclaims.push(Date.now())
+      return true
+    },
+  }
+  return { guard, reclaims, factory: () => guard }
+}
+
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 /** 官方 SubagentRun 桩（真形状子集——id/result/dispose） */
 function runStub(over: Partial<{ id: string; stopReason: string; output: { type: 'text'; text: string }[] }> = {}) {
@@ -164,5 +182,98 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     await expect(
       spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } }),
     ).rejects.toThrow(/agent factory rejected/)
+  })
+})
+
+describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）', () => {
+  const PIN = 'Z:\\project\\dsh\\dsh-forge\\.forge\\worktrees\\feat-x'
+
+  it('parent 会话 cwd = 钉定检出（含路径拼写变体归一）→ spawn 照常，请求不含 cwd 键（上游无覆盖位）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn({
+      prompt: 'P',
+      parent: { session: { id: 'owner-1', header: { cwd: PIN } } },
+      signal: new AbortController().signal,
+      toolFilter: { deny: [] },
+      workspaceCwd: PIN.replaceAll('\\', '/'),
+    })
+    expect(handle.workerSessionId).toBe('worker-session-7')
+    const [request] = startInProcessRun.mock.calls.at(-1) as [Record<string, unknown>]
+    expect('workspaceCwd' in request).toBe(false) // 官方 SubagentStartRequest 无 cwd 覆盖位——不外泄
+  })
+
+  it('parent 会话 cwd ≠ 钉定检出（主检出发起形态）→ spawn 拒绝并自解释（上游零触达）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    await expect(
+      spawn({
+        prompt: 'P',
+        parent: { session: { id: 'owner-1', header: { cwd: 'Z:\\project\\dsh\\dsh-forge' } } },
+        signal: new AbortController().signal,
+        toolFilter: { deny: [] },
+        workspaceCwd: PIN,
+      }),
+    ).rejects.toThrow(/\[spawn-cwd-pin\].*重新发起循环/)
+    expect(startInProcessRun).not.toHaveBeenCalled()
+  })
+
+  it('parent 会话 cwd 不可读 → spawn 拒绝（不依赖 spawn 时点环境 cwd 的判据面）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    await expect(
+      spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] }, workspaceCwd: PIN }),
+    ).rejects.toThrow(/\[spawn-cwd-pin\].*不可读/)
+    expect(startInProcessRun).not.toHaveBeenCalled()
+  })
+
+  it('workspaceCwd 缺席（工具壳径）= 不核销，行为零变化', async () => {
+    const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    expect(handle.workerSessionId).toBe('worker-session-7')
+  })
+})
+
+describe('进程树守卫接线（改进 4——清理路径全部终态可达）', () => {
+  const requestOf = () => ({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+
+  it('result 终态（completed）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn(requestOf())
+    await handle.result
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('result 异常拒绝（异常终止）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockResolvedValueOnce({ ...runStub(), result: Promise.reject(new Error('worker crashed')) })
+    const handle = await spawn(requestOf())
+    await expect(handle.result).rejects.toThrow(/worker crashed/)
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('dispose（终态前置收尾）→ reclaim 可达', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    const run = runStub()
+    startInProcessRun.mockResolvedValueOnce(run)
+    const handle = await spawn(requestOf())
+    await handle.dispose()
+    await flush()
+    expect(reclaims.length).toBeGreaterThanOrEqual(1)
+    expect(run.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('start 失败径 → reclaim 可达 + 拒绝照旧上抛', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    startInProcessRun.mockRejectedValueOnce(new Error('agent factory rejected'))
+    await expect(spawn(requestOf())).rejects.toThrow(/agent factory rejected/)
+    await flush()
+    expect(reclaims.length).toBe(1)
   })
 })

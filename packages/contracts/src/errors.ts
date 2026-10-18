@@ -52,6 +52,8 @@ export const ERROR_CODES = [
   'ERR_COMMIT_HASH_REQUIRED', // → CommitHashRequiredError：resolveBug(fixed) 缺 agent 捕获的 commit_hash（400）
   // ── bug-recurrence-chain（复发链挂链写径） ──
   'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
+  // ── dispatch-loop-hardening 改进 5（调度权收敛——addTask caller 身份分流） ──
+  'ERR_WORKER_ADDTASK_DENIED', // → WorkerAddTaskDeniedError：loopSourced spawn 的 worker 会话调 addTask 拒收（403；任务派生权限归主会话/循环处置层——正确动作 = submitTask result=blocked 如实结算）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

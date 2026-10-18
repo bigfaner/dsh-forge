@@ -36,7 +36,7 @@ function toolNameLiterals(dir: string): Map<string, string> {
 describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写落定——drift #1）', () => {
   const coreLiterals = toolNameLiterals(CORE_TOOLS_DIR)
 
-  it('核心包常量面 = 十三员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径）', () => {
+  it('核心包常量面 = 十四员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + 3b stopTaskLoop 停止入口）', () => {
     expect([...FORGE_TOOL_NAMES]).toEqual([
       'addTask',
       'submitTask',
@@ -44,6 +44,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
       'createProposal',
       'transitionProposal',
       'dispatchTask',
+      'stopTaskLoop',
       'updateTask',
       'taskStats',
       'listTasks',
@@ -67,7 +68,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     }
   })
 
-  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心十三 / spec 三）', () => {
+  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心十四 / spec 三）', () => {
     expect([...coreLiterals.values()].sort()).toEqual([...FORGE_TOOL_NAMES].sort())
     expect([...toolNameLiterals(SPEC_TOOLS_DIR).values()].sort()).toEqual([...FORGE_SPEC_TOOL_NAMES].sort())
   })

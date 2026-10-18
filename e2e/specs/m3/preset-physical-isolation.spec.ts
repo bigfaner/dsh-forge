@@ -89,9 +89,10 @@ test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚
 
     // ── 核心包技能行 fs 阳性对照（枚举通道有效性证明——缺席断言不空洞通过）──
     const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')
-    for (const skill of ['run-tests', 'brainstorm', 'run-tasks', 'submit-task']) {
+    for (const skill of ['run-tests', 'brainstorm', 'submit-task']) {
       expect(coreEntries, `核心包技能行可见（${skill}——阳性对照）`).toContain(skill)
     }
+    expect(coreEntries, '核心包无 run-tasks 条目（dispatch-loop-hardening 3a 退役断言）').not.toContain('run-tasks')
 
     // ── Step3：customSkillDirs 恒物化绝对路径（!!js 表达式形态零在场）──
     expect(overlay.includes('!!js'), '物化输出零 !!js 残留（全形态死刑）').toBe(false)

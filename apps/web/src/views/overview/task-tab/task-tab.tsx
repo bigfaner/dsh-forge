@@ -136,7 +136,7 @@ export interface DispatchRouteSinks {
  * 派发双路由执行（图 13 · AC4）：容器全集 listTasks（无过滤——runningTaskOf 判据输入
  * 纪律）→ 执行中在场 → taskDetail 水化 sessions（link 源 = 派发挂接）→ dispatchRouteOf
  * 分支（jump / new）。RPC 失败 fail-soft 回退 new（claim 原子性兜底——双 dispatcher
- * 不双派发；指令直达 agent 由 run-tasks 技能再判定）。
+ * 不双派发；指令单行经 slash 仲裁路由宿主派发循环）。
  */
 export async function runDispatchRoute(input: DispatchRouteRunInput, sinks: DispatchRouteSinks): Promise<void> {
   const fallbackNew = (): void => {

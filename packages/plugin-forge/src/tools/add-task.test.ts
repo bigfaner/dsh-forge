@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 import type { AddTaskInput, ForgeTasksService } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createAddTaskTool, parseAddTaskArgs, varsEntriesToRecord } from './add-task.js'
+import { forgetWorkerSourceTask, rememberWorkerSourceTask } from '../dispatch-core/assemble.js'
 import type { ForgeToolDeps } from './index.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
@@ -175,6 +176,46 @@ describe('addTask execute（路由 + 容器直传映射）', () => {
     const tool = createAddTaskTool(deps)
     const out = await tool.execute({ source_kind: 'proposal', source_slug: 'p-404', title: 'T', type: 'doc' }, EXEC)
     expect(out).toEqual({ ok: false, code: 'ERR_PROPOSAL_NOT_FOUND', message: '容器不在场：proposal p-404', violations: [] })
+  })
+})
+
+// ─────────────────────────── 改进 5：addTask caller 身份分流 ───────────────────────────
+
+describe('addTask caller 身份分流（dispatch-loop-hardening 改进 5——worker 拒收 / 主会话·triage 放行）', () => {
+  const ARGS = { source_kind: 'feature', source_slug: 'f1', title: 'T', type: 'coding-fix' } as const
+
+  it('loopSourced spawn 的 worker 会话（workerSourceTasks 在册）拒收——ERR_WORKER_ADDTASK_DENIED + 自解释文案，服务零触达', async () => {
+    const { tool, captured } = toolWithCapture()
+    rememberWorkerSourceTask('worker-w1', 't-src')
+    try {
+      const out = await tool.execute(ARGS, { agent: { session: { id: 'worker-w1', header: { cwd: 'C:\\ws\\demo' } } } })
+      expect(out).toMatchObject({ ok: false, code: 'ERR_WORKER_ADDTASK_DENIED' })
+      const message = (out as { message: string }).message
+      expect(message).toContain('main session and the loop triage layer')
+      expect(message).toContain('result=blocked')
+      expect(captured).toHaveLength(0)
+    } finally {
+      forgetWorkerSourceTask('worker-w1')
+    }
+  })
+
+  it('主会话（不在册）放行照旧；worker 结算注销后同 id 亦放行——拒收只锚活 worker 会话', async () => {
+    const { tool, captured } = toolWithCapture()
+    await tool.execute(ARGS, EXEC)
+    expect(captured).toHaveLength(1)
+    rememberWorkerSourceTask('worker-w2', 't-src')
+    forgetWorkerSourceTask('worker-w2') // 结算核终注销后，同会话 id 不再判 worker
+    await tool.execute(ARGS, { agent: { session: { id: 'worker-w2', header: { cwd: 'C:\\ws\\demo' } } } })
+    expect(captured).toHaveLength(2)
+  })
+
+  it('主会话带 block_source（fix 链派生）照常落库——解阻链不受分流影响（triage/主会话派生后继照常建）', async () => {
+    const { tool, captured } = toolWithCapture()
+    await tool.execute(
+      { ...ARGS, source_task_slug: 'f1', source_task_local_id: '2.4', block_source: true },
+      EXEC,
+    )
+    expect(captured[0]).toMatchObject({ sourceTask: { slug: 'f1', localId: '2.4' }, blockSource: true })
   })
 })
 

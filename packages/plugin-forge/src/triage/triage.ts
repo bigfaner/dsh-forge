@@ -53,8 +53,16 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       ])
       const pool: PoolSnapshot = poolOf(stats)
       const records: readonly TaskRecordEntry[] = detail.records ?? []
-      // ② 类型化提示词（任务简报 + reason 全文 + 池快照 + 最近记录）
-      const prompt = composeTriagePrompt({ task: input.task, reason: input.reason, pool, records })
+      // ② 类型化提示词（任务简报 + reason 全文 + 池快照 + 最近记录 + 改进 6 增补件：
+      //    上次失败回灌摘要 / fix 链深余量——输入面在场才注入，缺席 = 退化现状提示词）
+      const prompt = composeTriagePrompt({
+        task: input.task,
+        reason: input.reason,
+        pool,
+        records,
+        ...(input.lastFailure !== undefined ? { lastFailure: input.lastFailure } : {}),
+        ...(input.fixChain !== undefined ? { fixChain: input.fixChain } : {}),
+      })
       // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致；parent/signal =
       //    每循环身份载体——输入面逐调用绑定，装配期烘焙无效）
       const settings = deps.settings !== undefined ? await deps.settings.get() : undefined

@@ -16,7 +16,10 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { SpawnWorker, SpawnWorkerHandle } from '../dispatch-core/index.js'
+import { noopWorkerTreeGuard } from './job-tree.js'
+import type { WorkerTreeGuard } from './job-tree.js'
 
 /** 回放计划 env 键（e2e 启动 env——值 = 计划 JSON 绝对路径；缺席 = 缝不生效） */
 export const REPLAY_PLAN_ENV = 'DSH_FORGE_REPLAY_PLAN'
@@ -126,9 +129,25 @@ function taskKeyOfLabel(label: string | undefined): string | undefined {
  * 缺省 = output 空串——结算以任务终态为准）。workerSessionId = 裸 uuid（对账锚形态与
  * in-process worker 一致）。
  */
-export function createPlanReplaySpawn(plan: ReplayPlan, runTool: PlanToolRunner): SpawnWorker {
+export function createPlanReplaySpawn(
+  plan: ReplayPlan,
+  runTool: PlanToolRunner,
+  deps: { readonly treeGuard?: () => WorkerTreeGuard } = {},
+): SpawnWorker {
+  const treeGuard = deps.treeGuard ?? noopWorkerTreeGuard
   const counts = new Map<string, number>()
   return async (request) => {
+    // cwd 钉定核销（1.14 判例修复）：请求携带钉定检出（loopSourced 径）时与计划工作区
+    // 归一比对——回放 worker 会话 cwd 恒 = 计划工作区根（index.ts 装配直写 header.cwd），
+    // 不一致 = 回放面拒绝（fail-loud，无重定向形态）
+    if (
+      request.workspaceCwd !== undefined &&
+      normalizeFsPath(request.workspaceCwd) !== normalizeFsPath(plan.workspaceDir)
+    ) {
+      throw new Error(
+        `[replay-plan] cwd 钉定冲突：请求钉定检出 = ${request.workspaceCwd}，计划工作区 = ${plan.workspaceDir}（回放面拒绝错位派发——worker 会话 cwd 必须落钉定检出）`,
+      )
+    }
     const taskKey = taskKeyOfLabel(request.label)
     if (taskKey === undefined) {
       throw new Error(`[replay-plan] spawn 请求无 label（taskKey 不可判——回放面拒绝）：${JSON.stringify(request.label)}`)
@@ -154,6 +173,7 @@ export function createPlanReplaySpawn(plan: ReplayPlan, runTool: PlanToolRunner)
       return handle
     }
     let disposed = false
+    const guard = treeGuard() // 进程树守卫（改进 4）——script 的 git 子进程纳入整树回收
     const result = (async (): Promise<{ readonly stopReason: string; readonly output: string }> => {
       let lastCommit = ''
       const texts: string[] = []
@@ -178,11 +198,16 @@ export function createPlanReplaySpawn(plan: ReplayPlan, runTool: PlanToolRunner)
       }
       return { stopReason: 'completed', output: texts.join('\n') }
     })()
+    void result.then(
+      () => void guard.reclaim(), // 终态径整树回收
+      () => void guard.reclaim(), // 异常/中止径同达
+    )
     const handle: SpawnWorkerHandle = {
       workerSessionId,
       result,
       dispose: async () => {
         disposed = true
+        await guard.reclaim() // dispose 径（幂等——守卫内部单飞）
       },
     }
     return handle

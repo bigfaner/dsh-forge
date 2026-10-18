@@ -56,7 +56,7 @@ test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化�
 
     // ── ② 技能目录枚举（fs 面）──
     const coreEntries = readdirSync(CORE_SKILLS).filter((e) => e !== 'README.md')
-    expect(coreEntries.includes('run-tasks'), 'core 含 run-tasks').toBe(true)
+    expect(coreEntries.includes('run-tasks'), 'core 无 run-tasks 条目（dispatch-loop-hardening 3a 退役断言）').toBe(false)
     expect(coreEntries.includes('quick-tasks'), 'core 含 quick-tasks（突击直达链）').toBe(true)
     expect(coreEntries.includes('brainstorm'), 'core 含 brainstorm（远征全链起点）').toBe(true)
     expect(coreEntries.includes('submit-task'), 'core 含 submit-task').toBe(true)

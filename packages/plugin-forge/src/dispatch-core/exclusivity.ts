@@ -63,9 +63,83 @@ export function hasExclusiveLoopSources(): boolean {
 /** 独占拒绝指引（violations 行——wait/接管/观察三向，被拒调用方零猜测） */
 export const LOOP_EXCLUSIVE_GUIDANCE: readonly string[] = [
   'this source is owned by an active dispatch loop — do not become a second dispatcher for it (the loop claims, spawns and settles every task of the source itself)',
-  'to take over, have the user stop the loop first: /stop-dag-tasks in the session that started it (or its adjudication inquiry)',
+  'to take over, stop the loop first: stopTaskLoop tool or /stop-dag-tasks in the session that started it (a suspended loop may be stopped by any session)',
   'observation stays available: read the source state (queryTask / GUI task tab) instead of dispatching into it',
 ]
+
+// ─────────────────────────── 会话级单活门控（3b——用户裁决 2026-10-17） ───────────────────────────
+
+/**
+ * 会话单活门控读数（byOwner 身份缝合——结构面：消费方传 registry.byOwner 同形读数，
+ * 本面零 import loop 域（依赖方向 loop → dispatch-core 单向）。活循环含挂起中
+ * （record.suspended 在场）——挂起也占会话名额（处置是 owner 职责）。
+ */
+export interface OwnerActiveLoopView {
+  readonly slug: string
+  readonly sourceKind: 'feature' | 'proposal'
+  readonly ownerSessionId: string
+  readonly suspended: boolean
+}
+
+/** byOwner 结构读数（LoopRegistry.byOwner 同形子集——泛化消费缝） */
+export type OwnerLoopReader = (
+  ownerSessionId: string,
+) => {
+  readonly source: { readonly kind: 'feature' | 'proposal'; readonly slug: string }
+  readonly ownerSessionId: string
+  readonly suspended?: unknown
+} | undefined
+
+/** 单活读数（命中 = 该会话已有活循环（含挂起中），附归属视图；无 = undefined） */
+export function ownerActiveLoopOf(byOwner: OwnerLoopReader, ownerSessionId: string): OwnerActiveLoopView | undefined {
+  const record = byOwner(ownerSessionId)
+  if (record === undefined) return undefined
+  return {
+    slug: record.source.slug,
+    sourceKind: record.source.kind,
+    ownerSessionId: record.ownerSessionId,
+    suspended: record.suspended !== undefined,
+  }
+}
+
+/** 单活拒绝指引（violations 行——结束/停止/处置/换会话向，被拒调用方零猜测） */
+export const OWNER_ACTIVE_GUIDANCE: readonly string[] = [
+  'a session runs at most one dispatch loop at a time — finish, dispose or stop the current loop first (stopTaskLoop tool, or /stop-dag-tasks in this session)',
+  'if the loop is suspended (awaiting verdict), handle the pending task first, then re-enter with dispatchTask to resume it — or stop it to abandon',
+  'to run loops in parallel, start the next one from a different session',
+]
+
+/** 会话单活拒绝错误（code 承载 = ERR_SPAWN_FAILED——「本次派发未发生」动词承载码同先例） */
+export class OwnerActiveLoopError extends Error {
+  readonly code = 'ERR_SPAWN_FAILED' as const
+  readonly data: {
+    readonly slug: string
+    readonly sourceKind: ContainerRef['kind']
+    readonly ownerSessionId: string
+    readonly suspended: boolean
+    readonly guidance: readonly string[]
+  }
+
+  constructor(view: OwnerActiveLoopView) {
+    super(
+      `dispatch rejected: this session already owns an active dispatch loop for ${view.slug}${view.suspended ? ' (suspended — awaiting verdict)' : ''} — one loop per session at a time`,
+    )
+    this.name = 'OwnerActiveLoopError'
+    this.data = {
+      slug: view.slug,
+      sourceKind: view.sourceKind,
+      ownerSessionId: view.ownerSessionId,
+      suspended: view.suspended,
+      guidance: OWNER_ACTIVE_GUIDANCE,
+    }
+  }
+}
+
+/** 会话单活拒绝（start 前 byOwner 查——活循环（含挂起中）在场即拒，自解释指引随行） */
+export function ownerSingleActiveRejection(byOwner: OwnerLoopReader, ownerSessionId: string): OwnerActiveLoopError | undefined {
+  const view = ownerActiveLoopOf(byOwner, ownerSessionId)
+  return view !== undefined ? new OwnerActiveLoopError(view) : undefined
+}
 
 /** 独占拒绝错误（code 承载 = ERR_SPAWN_FAILED——「本次派发未发生」动词承载码，见模块头；
  *  data.guidance = 指引行，工具壳 violationLinesOf 派生 violations） */

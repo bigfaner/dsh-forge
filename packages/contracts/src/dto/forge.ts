@@ -139,6 +139,20 @@ export interface TaskAcResult {
 }
 
 /**
+ * e2e 取证债声明（dispatch-loop-hardening 改进7——实现态部分结算）：success 结算携带 =
+ * 实现+单测绿但真机 e2e 断言取证欠账，结算核据此自动生成独立 test-run 欠账任务
+ * （依赖实现卡）——实现卡不再因取证欠账无限期 blocked。
+ */
+export interface TaskEvidenceDebt {
+  /** 取证套件名（如 'e2e'） */
+  suite: string
+  /** 欠账断言覆盖的 spec 清单（正斜杠路径） */
+  specs: string[]
+  /** 欠账说明（缺什么取证、为何） */
+  note?: string
+}
+
+/**
  * 提交记录结构化字段（worker-lean-execution S3——task_records.record_fields_json 解码形；
  * keyDecisions/testsPassed/testsFailed/coverage/notes——从 summary 自由文本拆出的结构化面）。
  */
@@ -150,6 +164,8 @@ export interface TaskRecordFields {
   /** 覆盖率小数（0–1；与 gate.coverage 互补——口径同） */
   coverage?: number
   notes?: string
+  /** e2e 取证债（改进7——实现态部分结算声明；读面经 TaskRecordEntry 投影） */
+  evidenceDebt?: TaskEvidenceDebt
 }
 
 /**
@@ -261,6 +277,8 @@ export interface TaskRecordEntry {
   notes?: string
   gate?: TaskGateReport
   commitHash?: string
+  /** e2e 取证债（改进7——record_fields_json 解码形；旧行键缺席） */
+  evidenceDebt?: TaskEvidenceDebt
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -465,6 +483,12 @@ export interface ClaimTaskInput {
    */
   loopSourced?: boolean
   /**
+   * e2e 红灯基线清单（改进7——可选；循环入场前跑基线所得红灯 spec 路径，随 dispatchPrompt
+   * E2E_BASELINE_RED 行递达 worker：基线红灯 ≠ 本任务回归，机械判定比对归因。
+   * 缺席/空 = 机制关闭或基线全绿，简报零此行）。
+   */
+  e2eBaselineRed?: readonly string[]
+  /**
    * 循环独占守卫（S1c——可选；外部 claim 传入，宿主循环自身的 loopSourced claim 不携带）。
    * 目标解析命中即判（单事务内、任何写入前）：放行 = 正常返回；拒绝 = 抛错（事务整体回滚
    * ——零状态残留）。claim 不上 RPC（Interface 7），回调形入参不外泄。
@@ -513,6 +537,8 @@ export interface SubmitTaskInput {
   notes?: string
   gate?: TaskGateReport
   commitHash?: string
+  /** e2e 取证债声明（改进7——success 专用：实现态部分结算，结算核自动生成欠账 test-run 任务） */
+  evidenceDebt?: TaskEvidenceDebt
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */
   sessionId: string
 }

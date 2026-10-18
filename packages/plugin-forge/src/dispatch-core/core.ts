@@ -17,7 +17,8 @@
 // earliest interrupted 的径）。
 //
 // 依赖方向硬约束：工具壳 → 核心面单向；核心面零 import 工具壳（tools/**）——文件边界即
-// 未来 run-tasks skill 退役时的下线边界（工具面整体移除而核心面/循环/核心单测零波及）。
+// 工具壳下线边界（run-tasks skill 已退役——dispatch-loop-hardening 3a；工具面整体移除而
+// 核心面/循环/核心单测零波及）。
 // 核心面对插件内共享基础设施的合法依赖：contracts / events/sink（事件发射面——非工具壳）/
 // faces（结构化最小面类型——非工具壳）。
 import type {
@@ -27,6 +28,7 @@ import type {
   ForgeSettingsService,
   ForgeTasksService,
   Mode,
+  TaskCard,
   TaskProgressPhase,
   TaskRef,
   TaskSnapshot,
@@ -67,6 +69,11 @@ export interface DispatchCoreArgs {
   /** adopt 定向领取（S3——循环恢复径：接管既有 in_progress/interrupted，忽略 session links；
    *  工具壳不携带——dispatchTask schema 零变化，循环驱动器传 listTasks 中断序首项） */
   readonly adopt?: TaskRef
+  /**
+   * e2e 红灯基线清单（改进7——循环入场基线门产出；透传 claimTask → dispatchPrompt
+   * E2E_BASELINE_RED 行递达 worker。缺席 = 机制关闭，行为零变化）。
+   */
+  readonly e2eBaselineRed?: readonly string[]
   /** 后台派发（工具壳 run_in_background 参数直映射——jobs 包装结算后置；循环不携带） */
   readonly runInBackground?: boolean
 }
@@ -213,6 +220,37 @@ function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: 
   }
 }
 
+// ─────────────────────────── 后继任务活性判定（dispatch-loop-hardening 改进 1） ───────────────────────────
+
+/**
+ * 活的后继任务判定（blocked 静默边界——循环 driver blocked 结算径消费）：后继 = sourceTask
+ * 挂接该任务的派生 fix/继任卡；活 = pending/in_progress，或 blocked 且其自有后继递归存在活者。
+ * rejected/skipped/completed = 断链（不展开）。容器内单次 listTasks 现读 + 内存遍历（visited
+ * 防环——fix 链深 ≤6 结构性有界，visited 仅防御性兜底）。返回首个活后继卡（ref 键载体）；
+ * 无活后继 = undefined（调用方退化为现状问询径）。
+ */
+export async function findLiveSuccessor(
+  tasks: ForgeTasksService,
+  projectId: string,
+  source: ContainerRef,
+  task: TaskRef,
+): Promise<TaskCard | undefined> {
+  const cards = await tasks.listTasks({ projectId, source })
+  const successorsOf = (ref: TaskRef): TaskCard[] =>
+    cards.filter((card) => card.sourceTask !== undefined && card.sourceTask.slug === ref.slug && card.sourceTask.localId === ref.localId)
+  const seen = new Set([`${task.slug}/${task.localId}`])
+  const stack = [...successorsOf(task)]
+  while (stack.length > 0) {
+    const card = stack.pop() as TaskCard
+    const key = `${card.slug}/${card.localId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (card.taskStatus === 'pending' || card.taskStatus === 'in_progress') return card
+    if (card.taskStatus === 'blocked') stack.push(...successorsOf({ slug: card.slug, localId: card.localId }))
+  }
+  return undefined
+}
+
 // ─────────────────────────── 阶段一：claim（守卫 + 领取 + 事件） ───────────────────────────
 
 /** claim 阶段产出（claimed——组装/spawn/结算所需全量：任务行 + 简报指纹 + 重入标识 + 全文） */
@@ -273,6 +311,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(args.source !== undefined ? { source: args.source } : {}),
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
+    ...(args.e2eBaselineRed !== undefined ? { e2eBaselineRed: args.e2eBaselineRed } : {}),
     ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })
   const task = claimed.task
@@ -317,7 +356,7 @@ export async function spawnClaimed(
   deps: DispatchCoreDeps,
   exec: DispatchCoreExec,
   claimed: ClaimedDispatch,
-  options: { readonly scope: DispatchChainScope; readonly signal?: AbortSignal },
+  options: { readonly scope: DispatchChainScope; readonly signal?: AbortSignal; readonly workspaceCwd?: string },
 ): Promise<SpawnStageResult> {
   const task = claimed.task
   const taskKey = `${task.slug}/${task.localId}`
@@ -348,6 +387,8 @@ export async function spawnClaimed(
       ...(agentOptions !== undefined ? { agentOptions } : {}),
       persona: claimed.persona, // 人格面（agent 级，claim 合成）——与 prompt 任务面分层承载（S2）
       label: `${taskKey} · ${task.title}`,
+      // cwd 钉定（1.14 判例修复）：loopSourced 径携带发起循环检出——spawn 实现侧机械核销
+      ...(options.workspaceCwd !== undefined ? { workspaceCwd: options.workspaceCwd } : {}),
     })
   } catch (cause) {
     return { ok: false, failure: spawnFailed(task.slug, taskKey, cause) }
@@ -392,6 +433,11 @@ export interface SettleStageInput {
    * 结算成功径恒清零防线 streak——两形态一致）。
    */
   readonly guardOnFailure?: boolean
+  /**
+   * 容器检出路径（1.14 cwd 钉定收口——循环径透传 LoopRecord.worktree）：success 结算核验
+   * 提交落点；缺席（工具壳）= 不核验，行为零变化。
+   */
+  readonly worktreeCwd?: string
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -418,6 +464,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     handle,
     spawnStartedAt,
     ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
+    ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

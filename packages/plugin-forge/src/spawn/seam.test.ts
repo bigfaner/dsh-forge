@@ -140,6 +140,25 @@ describe('回放计划驱动器（taskKey × occurrence 匹配）', () => {
     await expect(spawn(requestOf('other/9.9 · x'))).rejects.toThrow('回放键漂移')
   })
 
+  it('cwd 钉定核销（1.14）：钉定检出 = 计划工作区（拼写变体归一）→ 照常；错位检出 → spawn 拒绝并自解释', async () => {
+    const ws = makeWs()
+    try {
+      const plan: ReplayPlan = {
+        version: 1,
+        workspaceDir: ws,
+        entries: [{ taskKey: 'f/1.1', occurrence: 1, behavior: 'abort', message: 'abort #pin' }],
+      }
+      const spawn = createPlanReplaySpawn(plan, noopRunner)
+      const h = await spawn({ ...requestOf('f/1.1 · x'), workspaceCwd: ws.replaceAll('\\', '/') })
+      await expect(h.result).rejects.toThrow('abort #pin')
+      await expect(
+        spawn({ ...requestOf('f/1.1 · x'), workspaceCwd: join(ws, '..') }),
+      ).rejects.toThrow(/\[replay-plan\] cwd 钉定冲突/)
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
+  })
+
   it('fs-write 路径逃逸工作区 = 拒绝（围栏）', async () => {
     const ws = makeWs()
     try {

@@ -154,12 +154,12 @@ const corePlugin: CorePlugin = Object.assign(
           // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 首跑零 <resume> 段）
           resolveEvidencePointer: (projectId, slug, localId) =>
             readEvidencePointer(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), slug, localId),
-          // worker-lean-execution 追加轮：任务目录锚点节（WORKSPACE/容器目录树/logs 双锚——
+          // worker-lean-execution 追加轮：任务目录锚点节（容器目录树/logs 双锚——检出根唯一
+          // 权威 = worker 会话 cwd（真根因裁决：WORKSPACE 锚点行砍除，见 worker-context.ts 头注）；
           // persona 通道 worker 独享；logsRoot = <任务库>/logs 与续跑指针共享 deriveTaskStoreDir
           // 单源锚，任务日志目录由渲染器派生 logsRoot/<slug>/<localId>；fail-soft）
           resolveWorkerContext: (projectId, source, localId) =>
             renderWorkerContext({
-              wsPath: routing.wsPath(projectId),
               forgeDir: routing.forgeDir(projectId),
               logsRoot: join(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), 'logs'),
               localId,

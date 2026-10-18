@@ -27,6 +27,13 @@ export interface SpawnWorkerRequest {
    * 人格；缺席 = 不携带键回退父会话人格。不进 dispatchPrompt——任务面/人格面分层保持）
    */
   readonly persona?: string
+  /**
+   * worker 会话 cwd 钉定检出（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）：
+   * loopSourced 派发携带发起循环的检出路径（LoopRecord.worktree），spawn 实现侧机械核销
+   * 「worker 会话工作目录 = 发起循环的检出」——不依赖 spawn 时点环境 cwd。缺席（工具壳
+   * 非 loopSourced 径）= 不携带键，行为零变化。
+   */
+  readonly workspaceCwd?: string
 }
 
 /** spawn 句柄（两段：start 发布即回——task-spawned 事件先于 worker 执行；result 阻塞至终态） */

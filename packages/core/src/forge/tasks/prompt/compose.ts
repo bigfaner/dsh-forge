@@ -122,6 +122,12 @@ export interface DispatchPromptInput {
    * 续跑规则段（路径引用变量 `{forge.project_logs_dir}`——值由任务目录锚点节承载）。
    */
   evidencePointer?: string
+  /**
+   * e2e 红灯基线清单（dispatch-loop-hardening 改进7：`E2E_BASELINE_RED:` 行——循环入场前
+   * 跑基线所得红灯 spec，随简报递达 worker；基线红灯 ≠ 本任务回归，机械判定比对归因、
+   * 禁止顺手修复。缺席/空数组省行——digest 与基线关闭形态同值）。
+   */
+  e2eBaselineRed?: readonly string[]
 }
 
 // ─────────────────────────── 续跑规则段（worker-exec-evidence-replay Solution①/③ 收敛形态） ───────────────────────────
@@ -173,6 +179,15 @@ function renderSurface(input: DispatchPromptInput): string | undefined {
   return input.surfaceType === undefined ? input.surfaceKey : `${input.surfaceKey} (${input.surfaceType})`
 }
 
+/**
+ * E2E_BASELINE_RED 行值（改进7）：红灯 spec 清单 + 机械判定规则——「基线红灯 = e2e 套件
+ * 入场前既有失败，非本任务回归；比对归因，禁止顺手修复」。空清单省行。
+ */
+function renderE2eBaselineRed(red: readonly string[] | undefined): string | undefined {
+  if (red === undefined || red.length === 0) return undefined
+  return `${red.join('; ')}（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）`
+}
+
 /** AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源） */
 function singleLine(criterion: string): string {
   return criterion.replace(/\s*\r?\n\s*/g, ' ')
@@ -190,6 +205,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
   const surface = renderSurface(input)
+  const e2eBaselineRed = renderE2eBaselineRed(input.e2eBaselineRed)
   const lines: (string | undefined)[] = [
     input.title !== undefined ? input.title : undefined,
     `TASK_ID: ${input.slug}/${input.localId}`,
@@ -208,6 +224,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
+    e2eBaselineRed !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRed}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
   if (input.evidencePointer !== undefined) context += `\n${RESUME_SECTION}`

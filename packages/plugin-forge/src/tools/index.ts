@@ -27,7 +27,9 @@ import { createQueryTaskTool } from './query-task.js'
 import { createRecordBugTool } from './record-bug.js'
 import { createResolveBugTool } from './resolve-bug.js'
 import { createSubmitTaskTool } from './submit-task.js'
+import { createStopTaskLoopTool } from './stop-task-loop.js'
 import { createTaskStatsTool } from './task-stats.js'
+import type { LoopToolDeps } from './dispatch-task.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createUpdateTaskTool } from './update-task.js'
 
@@ -100,7 +102,7 @@ export interface ForgeToolDeps {
   jobs?: DispatchJobsFace
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——十三员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——十四员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -108,6 +110,7 @@ export interface ForgeTools {
   readonly createProposal: ReturnType<typeof createCreateProposalTool>
   readonly transitionProposal: ReturnType<typeof createTransitionProposalTool>
   readonly dispatchTask: ReturnType<typeof createDispatchTaskTool>
+  readonly stopTaskLoop: ReturnType<typeof createStopTaskLoopTool>
   readonly updateTask: ReturnType<typeof createUpdateTaskTool>
   readonly taskStats: ReturnType<typeof createTaskStatsTool>
   readonly listTasks: ReturnType<typeof createListTasksTool>
@@ -117,9 +120,9 @@ export interface ForgeTools {
   readonly getBug: ReturnType<typeof createGetBugTool>
 }
 
-/** 注册面全集（十三 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
- *  两 bug 读径；面分治：listBugs 仅主 agent，getBug 主 + worker——WORKER_FORGE_TOOLS
- *  五动词，其余八员 worker deny） */
+/** 注册面全集（十四 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+ *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）；面分治：
+ *  listBugs 仅主 agent，getBug 主 + worker——WORKER_FORGE_TOOLS 五动词，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -127,6 +130,7 @@ export const FORGE_TOOL_NAMES = [
   'createProposal',
   'transitionProposal',
   'dispatchTask',
+  'stopTaskLoop',
   'updateTask',
   'taskStats',
   'listTasks',
@@ -138,9 +142,8 @@ export const FORGE_TOOL_NAMES = [
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
 
-/** dispatchTask 装配 deps（spawn 必给——createForgeTools 入参的扩展面） */
-export type DispatchForgeToolDeps = ForgeToolDeps & { spawn: Parameters<typeof createDispatchTaskTool>[0]['spawn'] }
-
+/** dispatchTask/stopTaskLoop 装配 deps（loop 驱动器 + 登记表单例必给——createForgeTools 入参扩展面） */
+export type DispatchForgeToolDeps = ForgeToolDeps & { loop: LoopToolDeps }
 export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
   return {
     addTask: createAddTaskTool(deps),
@@ -149,6 +152,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     createProposal: createCreateProposalTool(deps),
     transitionProposal: createTransitionProposalTool(deps),
     dispatchTask: createDispatchTaskTool(deps),
+    stopTaskLoop: createStopTaskLoopTool(deps),
     updateTask: createUpdateTaskTool(deps),
     taskStats: createTaskStatsTool(deps),
     listTasks: createListTasksTool(deps),
@@ -223,16 +227,20 @@ export {
   workerAgentOptionsOf,
 } from './dispatch-task.js'
 export type {
+  DispatchLoopResult,
   DispatchSpawnedResult,
   DispatchTaskResult,
   DispatchTaskToolArgs,
   DispatchTaskToolDeps,
+  LoopToolDeps,
   PoolSnapshot,
   PoolVerdict,
   SpawnWorker,
   SpawnWorkerHandle,
   SpawnWorkerRequest,
 } from './dispatch-task.js'
+export { parseStopTaskLoopArgs } from './stop-task-loop.js'
+export type { StopTaskLoopResult, StopTaskLoopToolArgs, StopTaskLoopToolDeps } from './stop-task-loop.js'
 export {
   callToolFace,
   errorCodeOf,

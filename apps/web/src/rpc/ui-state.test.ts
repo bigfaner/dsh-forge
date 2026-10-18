@@ -47,6 +47,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_COMMIT_HASH_REQUIRED: 'error-bar',
   // bug-recurrence-chain（复发链挂链写径）——悬空引用错误条
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
+  // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
+  ERR_WORKER_ADDTASK_DENIED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

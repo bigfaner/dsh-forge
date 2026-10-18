@@ -294,4 +294,36 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     expect(text).toContain('（无记录）')
     expect(text).not.toContain('undefined')
   })
+
+  it('改进 6① 重试回灌：lastFailure 在场 = 失败摘要 + 封闭枚举重申节；缺席 = 零节', () => {
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const withFailure = composeTriagePrompt({ ...base, lastFailure: '越权动作——dispatch（RAW-SNIPPET）' })
+    expect(withFailure).toContain('<last-failure>')
+    expect(withFailure).toContain('RAW-SNIPPET')
+    expect(withFailure).toContain('封闭四动作枚举')
+    expect(composeTriagePrompt(base)).not.toContain('<last-failure>')
+  })
+
+  it('改进 6④ 链深余量：fixChain 在场 = 链深/上限/余量节；余量不足追加禁用 add-fix 指引', () => {
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const withChain = composeTriagePrompt({ ...base, fixChain: { depth: 2, limit: 6, remaining: 4 } })
+    expect(withChain).toContain('fix 链深: 2（上限 6，剩余余量 4）')
+    expect(withChain).not.toContain('禁止选择 add-fix')
+    const exhausted = composeTriagePrompt({ ...base, fixChain: { depth: 6, limit: 6, remaining: 0 } })
+    expect(exhausted).toContain('禁止选择 add-fix')
+    expect(exhausted).toContain('split-remainder 或 ask-user')
+    expect(composeTriagePrompt(base)).not.toContain('<fix-chain>')
+  })
+
+  it('改进 6①④ 钩子透传：triage 输入的 lastFailure/fixChain 进提示词（缺席零节）', async () => {
+    const built = build()
+    const done = createTriageHook(built.hookDeps).run(
+      triageInput({ lastFailure: '输出摘要 RAW', fixChain: { depth: 5, limit: 6, remaining: 1 } }),
+    )
+    built.resolve('{"action":"ask-user"}')
+    await done
+    const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
+    expect(prompt).toContain('RAW')
+    expect(prompt).toContain('剩余余量 1')
+  })
 })

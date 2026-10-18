@@ -21,7 +21,8 @@
 // interrupted → in_progress 经矩阵新边）+ loopSourced 循环来源标记（claim 记录持久痕迹）。
 //
 // 就绪选择（§6-35⑧ 用户裁决「沿一条分支执行，遇阻塞换支」）：分支延续优先（最近满足任务
-// 的就绪直接后继——执行上下文局部性）→ priority（P0 > P1 > P2 > 缺省）→ 创建序。
+// 的就绪直接后继——执行上下文局部性）→ fix 优先键（block_source 挂接的 fix-N 前缀——仅
+// 同轮就绪集内比较，不跨轮饿死）→ priority（P0 > P1 > P2 > 缺省）→ 创建序。
 // PHASE_SUMMARY（老 forge PhaseDetect 平移）：领取任务为首个进入新相位者（currentPhase >
 // 该 feature 已完成业务任务的最大相位 且 > 1）时注入上一相位摘要路径（仓规
 // docs/features/<slug>/tasks/records/{N-1}.summary.md，正斜杠）；文件在场性核验属 dsh 执行
@@ -67,6 +68,10 @@ const READY_PREDICATE = `NOT EXISTS (
 /** priority 线性序（P0 > P1 > P2 > 缺省——就绪选择第二键；NULL 排末位） */
 const PRIORITY_RANK = `CASE t.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END`
 
+/** fix 优先键（改进 2——block_source 挂接的 fix-N 前缀任务；仅同轮就绪集内排序，不跨轮饿死：
+ *  每轮 claim 从 pending 池移除一行，fix 只在与普通任务同轮就绪时赢，普通任务下轮照常领出） */
+const FIX_FIRST = `(CASE WHEN t.local_id LIKE 'fix-%' THEN 0 ELSE 1 END)`
+
 /** Z1 出口（无就绪任务——纯读零变更；dispatchPrompt/digest 空串、reclaimed=false） */
 function noReadyExit(): ClaimTaskResult {
   return { task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false }
@@ -102,7 +107,8 @@ function latestInProgressBySession(
 
 /**
  * 就绪选择（§6-35⑧）：①分支延续——范围内最近满足任务（completed/skipped，updated_at 最新）
- * 的就绪 pending 直接后继；②无延续 → 全局就绪 pending 池按 priority → 创建序。
+ * 的就绪 pending 直接后继（多后继时 fix 优先）；②无延续 → 全局就绪 pending 池按
+ * fix 优先 → priority → 创建序。
  * 仅扫 pending 池（Hard Rule）；scope = 容器限定（M3 2.4：source_kind + slug 双列判别——
  * 成链撞键下 kind 可分；slug 列 ≡ 容器 slug 不变量）。scope 缺席 = 全库就绪池
  * （contracts ClaimTaskInput 缺省语义）；命中容器无就绪任务 → Z1 出口。
@@ -123,7 +129,7 @@ function selectReadyTask(db: Database.Database, source: ContainerRef | undefined
       .prepare<unknown[], { id: string }>(
         `SELECT t.id FROM task_edges e JOIN tasks t ON t.id = e.task_id
          WHERE e.prerequisite_id = ? AND t.task_status = 'pending' AND ${READY_PREDICATE}
-         ORDER BY ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
+         ORDER BY ${FIX_FIRST}, ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
       )
       .get(anchor.id)
     if (successor !== undefined) return taskById(db, successor.id)
@@ -133,7 +139,7 @@ function selectReadyTask(db: Database.Database, source: ContainerRef | undefined
   const ready = db
     .prepare<unknown[], { id: string }>(
       `SELECT t.id FROM tasks t WHERE t.task_status = 'pending'${scope} AND ${READY_PREDICATE}
-       ORDER BY ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
+       ORDER BY ${FIX_FIRST}, ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
     )
     .get(...scopeArgs)
   return ready === undefined ? undefined : taskById(db, ready.id)
@@ -266,13 +272,15 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
       ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
       ...(evidencePointer !== undefined ? { evidencePointer } : {}),
+      // 改进7（e2e 取证债）：红灯基线清单随简报递达——调用方（循环入场基线门）领取瞬间传入
+      ...(input.e2eBaselineRed !== undefined ? { e2eBaselineRed: input.e2eBaselineRed } : {}),
     })
     const digest = dispatchDigest(dispatchPrompt)
 
     // ③b worker persona 合成（S2a 组成矩阵——agent 级人格面；与 dispatchPrompt 任务面分层，
     //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
-    //     追加轮：任务目录锚点节（WORKSPACE/容器目录树/logs 锚点——绝对路径唯一承载处，
-    //     persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
+    //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
+    //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
     const persona = composePersona(row.task_type as TaskType, (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1])
     const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
     const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona

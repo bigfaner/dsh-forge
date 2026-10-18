@@ -1,26 +1,20 @@
-// 3.4 单测 —— dispatchTask 复合派发动词全场景表（tech-design Interface 2 + 图 2/3/4）：
-// 四分支（spawned·success/blocked、no-task 池态三分、halted 粘住、spawn 失败）+
-// 组装序（矩阵→toolFilter、forgeSettings→agentOptions 两态、dispatchPrompt 全文透传）+
-// 池快照附载 + 事件发射（task-claimed/spawned/worker-done/no-ready-task/tool-error，
-// dispatchDigest 双记）+ 计数器行为（3 连败粘住/成功清零/冷启动重置）。
-// spawn 面全桩（SpawnWorker 缝——真绑定 spawn/in-process-driver.ts 由 boot 冒烟联证）。
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  ClaimTaskResult,
-  ForgePluginEvent,
-  ForgeTasksService,
-  QueryTaskResult,
-  TaskSnapshot,
-  TaskStats,
-  TaskStatus,
-  TaskType,
-} from '@dsh-forge/contracts'
+// 3b③ 单测 —— dispatchTask 循环入口契约（dispatch-loop-hardening 改进 3b③）：
+// source 对成对必填（无池级盲选）/ 去 job 模式（无 run_in_background 通道）/ 三态自解释
+// （started · running 状态摘要 · suspended 挂起摘要 + re-entry）/ 守卫拒绝（归属 + 入口）/
+// 会话单活 owner-active 拒绝 / 接管集写点 / description↔P1 协议同源 pin。
+// 循环核心全桩（LoopDriver/LoopRegistry 缝——真 registry + 驱动器录制桩）；纯函数面
+// （池三分/收窄矩阵/agentOptions）单测保留（dispatch-core 单源再导出）。
+import { describe, expect, it, vi } from 'vitest'
+import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
-import { adaptDispatchJobs } from '../faces.js'
-import type { DispatchJobHooks, DispatchJobSpec, DispatchJobsFace, DispatchJobsRegistryFace, ToolExecFace } from '../faces.js'
+import type { ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { deriveTriageToolFilter } from '../dispatch-core/assemble.js'
+import { createLoopRegistry } from '../loop/index.js'
+import type { LoopDriver, LoopEscalation, LoopRecord, LoopRegistry } from '../loop/index.js'
+import { payloadOf, renderP1 } from '../loop/injection.js'
 import { FORGE_TOOL_NAMES } from './index.js'
+import type { DispatchTaskToolDeps } from './dispatch-task.js'
 import {
   classifyPool,
   createDispatchTaskTool,
@@ -29,36 +23,15 @@ import {
   poolOf,
   reconcileWorkerReasoning,
   workerAgentOptionsOf,
-  type DispatchTaskResult,
-  type SpawnWorkerHandle,
-  type SpawnWorkerRequest,
 } from './dispatch-task.js'
-import type { DispatchTaskToolDeps } from './dispatch-task.js'
 
 // ─────────────────────────── 夹具 ───────────────────────────
 
-/** 会话唯一后缀（模块级计数器——SPAWN_FAILURES 会话作用域，跨用例零污染） */
+/** 会话唯一后缀（跨用例零污染） */
 let sessionSeq = 0
 function execOf(): ToolExecFace {
   sessionSeq += 1
   return { agent: { session: { id: `dispatch-${sessionSeq}`, header: { cwd: 'C:\\ws\\demo' } } } }
-}
-
-function snapshot(over: Partial<TaskSnapshot> = {}): TaskSnapshot {
-  return {
-    taskId: 't-1',
-    slug: 'feat-x',
-    localId: '2.5',
-    source: { kind: 'feature', slug: 'feat-x' },
-    title: 'Implement the thing',
-    taskType: 'coding-fix',
-    taskStatus: 'in_progress',
-    breaking: false,
-    complexity: 'high',
-    createdAt: '2026-10-07T00:00:00.000Z',
-    updatedAt: '2026-10-07T00:00:00.000Z',
-    ...over,
-  }
 }
 
 function statsOf(over: Partial<Record<TaskStatus, number>> & { unmetPending?: number } = {}): TaskStats {
@@ -90,216 +63,131 @@ function sinkStub(): { sink: ForgeEventSink; events: ForgePluginEvent[] } {
   }
 }
 
-/** 成功 spawn 桩句柄 */
-function okHandle(): SpawnWorkerHandle {
+/** 挂起载荷（升级事件全文——P3 渲染源） */
+function suspensionOf(): NonNullable<LoopRecord['suspended']> {
+  const escalation: LoopEscalation = {
+    kind: 'blocked-ask-user',
+    ownerSessionId: 'owner-x',
+    source: { kind: 'feature', slug: 'feat-x' },
+    task: {
+      taskId: 't-1',
+      slug: 'feat-x',
+      localId: '2.5',
+      source: { kind: 'feature', slug: 'feat-x' },
+      title: 'Implement the thing',
+      taskType: 'coding-fix',
+      taskStatus: 'blocked',
+      breaking: false,
+      complexity: 'high',
+      createdAt: '2026-10-17T00:00:00.000Z',
+      updatedAt: '2026-10-17T00:00:00.000Z',
+    },
+    reason: 'tests hang on flaky selector',
+    history: ['第1次处置——决定请求人工裁决'],
+  }
+  return { escalation, since: 1_700_000_000_000 }
+}
+
+/** 活循环登记行（守卫/摘要/re-entry 用例源） */
+function recordOf(sessionId: string, over: Partial<LoopRecord> = {}): LoopRecord {
   return {
-    workerSessionId: 'worker-1',
-    result: Promise.resolve({ stopReason: 'completed', output: 'done' }),
-    dispose: async () => {},
+    id: 'loop-1',
+    source: { kind: 'feature', slug: 'feat-x' },
+    ownerSessionId: sessionId,
+    projectId: 'p-1',
+    takeoverSessions: new Set<string>(),
+    ...over,
   }
 }
 
 interface Harness {
   tool: ReturnType<typeof createDispatchTaskTool>
   exec: ToolExecFace
+  sessionId: string
   events: ForgePluginEvent[]
-  calls: { claim: number; stats: number; query: number; list: number; submit: number; dispose: number }
-  claimInputs: unknown[]
+  calls: { stats: number }
   statsInputs: unknown[]
-  spawnRequests: SpawnWorkerRequest[]
-  setClaim(result: ClaimTaskResult): void
-  setQuery(result: QueryTaskResult): void
+  registry: LoopRegistry
+  driver: { start: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn>; stopLoop: ReturnType<typeof vi.fn> }
+  addRecord(record: LoopRecord): void
   setStats(stats: TaskStats): void
-  setCards(cards: { slug: string; localId: string; sourceTask?: { slug: string; localId: string } }[]): void
-  setSpawn(impl: (req: SpawnWorkerRequest) => Promise<SpawnWorkerHandle>): void
 }
 
-function harness(
-  options: {
-    settings?: { get(): Promise<unknown> }
-    resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
-    jobs?: DispatchJobsFace
-  } = {},
-): Harness {
+function harness(): Harness {
   const exec = execOf()
+  const sessionId = (exec.agent as { session: { id: string } }).session.id
   const { sink, events } = sinkStub()
-  const calls = { claim: 0, stats: 0, query: 0, list: 0, submit: 0, dispose: 0 }
-  const claimInputs: unknown[] = []
+  const calls = { stats: 0 }
   const statsInputs: unknown[] = []
-  const spawnRequests: SpawnWorkerRequest[] = []
-  let claimResult: ClaimTaskResult = { task: snapshot(), dispatchPrompt: 'PERSONA + <task-context>', persona: 'PERSONA-MATRIX', digest: 'digestabc123', reclaimed: false }
-  let queryResult: QueryTaskResult = {
-    task: snapshot({ taskStatus: 'completed' }),
-    container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-    records: [
-      { verb: 'submit', toStatus: 'completed', summary: 'did the thing', commitHash: 'abc1234', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' },
-    ],
-  }
   let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2 })
-  let cards: { slug: string; localId: string; sourceTask?: { slug: string; localId: string } }[] = []
-  let spawnImpl: (req: SpawnWorkerRequest) => Promise<SpawnWorkerHandle> = async (req) => {
-    spawnRequests.push(req)
-    return okHandle()
-  }
   const tasks = {
-    claimTask: async (input: unknown) => {
-      claimInputs.push(input)
-      calls.claim += 1
-      return claimResult
-    },
     taskStats: async (input: unknown) => {
       statsInputs.push(input)
       calls.stats += 1
       return statsResult
     },
-    queryTask: async () => {
-      calls.query += 1
-      return queryResult
-    },
-    listTasks: async () => {
-      calls.list += 1
-      return cards.map((c) => ({
-        taskId: `card-${c.localId}`,
-        slug: c.slug,
-        localId: c.localId,
-        title: `Task ${c.localId}`,
-        taskType: 'coding-fix' as TaskType,
-        taskStatus: 'pending' as TaskStatus,
-        prerequisites: [],
-        sessionCount: 0,
-        ...(c.sourceTask !== undefined ? { sourceTask: c.sourceTask } : {}),
-      }))
-    },
-    submitTask: async () => {
-      calls.submit += 1
-      throw new Error('dispatchTask must not submit on any path (spawn failure leaves in_progress)')
-    },
   } as unknown as ForgeTasksService
+  const registry = createLoopRegistry()
+  const driver = {
+    start: vi.fn(async (_input: unknown) => ({ ok: true as const, loopId: 'loop-1' })),
+    resume: vi.fn((_input: unknown) => ({ ok: true as const, loopId: 'loop-1' })),
+    stopLoop: vi.fn(async (_input: unknown) => ({ ok: true as const, stopped: true as const, hadInFlight: false })),
+  }
   const deps: DispatchTaskToolDeps = {
     tasks,
     proposals: {} as DispatchTaskToolDeps['proposals'],
     bugs: {} as DispatchTaskToolDeps['bugs'],
     resolveProjectId: (cwd) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     events: sink,
-    ...(options.settings !== undefined ? { settings: options.settings as DispatchTaskToolDeps['settings'] } : {}),
-    ...(options.resolveModelReasoning !== undefined ? { resolveModelReasoning: options.resolveModelReasoning } : {}),
-    ...(options.jobs !== undefined ? { jobs: options.jobs } : {}),
-    spawn: (req) => spawnImpl(req),
+    loop: { driver: driver as unknown as LoopDriver, registry },
   }
   return {
     tool: createDispatchTaskTool(deps),
     exec,
+    sessionId,
     events,
     calls,
-    claimInputs,
     statsInputs,
-    spawnRequests,
-    setClaim: (r) => {
-      claimResult = r
-    },
-    setQuery: (r) => {
-      queryResult = r
-    },
+    registry,
+    driver,
+    addRecord: (record) => registry.register(record),
     setStats: (s) => {
       statsResult = s
     },
-    setCards: (c) => {
-      cards = c
-    },
-    setSpawn: (impl2) => {
-      spawnImpl = impl2
-    },
   }
 }
 
-/** jobs 面桩（后台径用例——spec/hooks/logLines 三面捕获；jobId 递增签发） */
-interface JobsStub {
-  jobs: DispatchJobsFace
-  specs: DispatchJobSpec[]
-  hooks: DispatchJobHooks[]
-  logLines: string[]
+/** 渲染快捷 */
+function h_render(h: Harness, value: unknown): string {
+  return h.tool.output.render({}, value)[0]?.text ?? ''
 }
 
-function jobsStub(): JobsStub {
-  const specs: DispatchJobSpec[] = []
-  const hooks: DispatchJobHooks[] = []
-  const logLines: string[] = []
-  let seq = 0
-  return {
-    specs,
-    hooks,
-    logLines,
-    jobs: {
-      start: (spec) => {
-        seq += 1
-        specs.push(spec)
-        hooks.push(spec.run({ appendLog: (line) => logLines.push(line) }))
-        return { jobId: `forge-dispatch-${seq}` }
-      },
-    },
-  }
-}
+const ARGS = { source_kind: 'feature', source_slug: 'feat-x' } as const
 
-/** 可控终态句柄桩（后台径——result 由测试手动 resolve/reject） */
-interface ControlledHandle extends SpawnWorkerHandle {
-  release(result: { stopReason: string; output: string }): void
-  reject(cause: unknown): void
-}
+// ─────────────────────────── 参数契约（成对必填——无池级盲选） ───────────────────────────
 
-function controlledHandle(workerSessionId = 'worker-bg'): ControlledHandle {
-  let settle!: (r: { stopReason: string; output: string }) => void
-  let fail!: (cause: unknown) => void
-  const result = new Promise<{ stopReason: string; output: string }>((resolve, reject) => {
-    settle = resolve
-    fail = reject
-  })
-  return {
-    workerSessionId,
-    result,
-    dispose: async () => {},
-    release: settle,
-    reject: fail,
-  }
-}
-
-afterEach(() => {
-  vi.resetModules()
-})
-
-// ─────────────────────────── 参数与纯函数 ───────────────────────────
-
-describe('parseDispatchTaskArgs（防御收窄）', () => {
-  it('零参合法；退役参数 context_slug 落未知键零效应；类型收窄', () => {
-    expect(parseDispatchTaskArgs({})).toEqual({})
-    // context_slug 已退役（无任务事件归属由 source 对兼任）——未知键零效应
-    expect(parseDispatchTaskArgs({ context_slug: 'feat-x' })).toEqual({})
+describe('parseDispatchTaskArgs（3b 契约：source 对成对必填，缺失即拒绝）', () => {
+  it('成对解析为 ContainerRef；退役键 run_in_background/context_slug 落未知键零效应', () => {
+    expect(parseDispatchTaskArgs(ARGS)).toEqual({ source: { kind: 'feature', slug: 'feat-x' } })
+    expect(parseDispatchTaskArgs({ source_kind: 'proposal', source_slug: 'pa', run_in_background: true })).toEqual({
+      source: { kind: 'proposal', slug: 'pa' },
+    })
     expect(() => parseDispatchTaskArgs(null)).toThrow(/must be an object/)
   })
 
-  it('source 对（容器限定认领）：成对解析为 ContainerRef', () => {
-    expect(parseDispatchTaskArgs({ source_kind: 'proposal', source_slug: 'pa' })).toEqual({
-      source: { kind: 'proposal', slug: 'pa' },
-    })
-    expect(() => parseDispatchTaskArgs({ source_kind: 'feature', source_slug: 3 })).toThrow(/source_slug must be a string/)
-  })
-
-  it('source 对半对即拒（both or neither）；kind 词表收窄', () => {
-    expect(() => parseDispatchTaskArgs({ source_kind: 'feature' })).toThrow(/source_kind and source_slug must be given together/)
-    expect(() => parseDispatchTaskArgs({ source_slug: 'fa' })).toThrow(/source_kind and source_slug must be given together/)
+  it('缺失/半对即拒（schema required 同面——无池级盲选形态）', () => {
+    expect(() => parseDispatchTaskArgs({})).toThrow(/both required/)
+    expect(() => parseDispatchTaskArgs({ source_kind: 'feature' })).toThrow(/both required/)
+    expect(() => parseDispatchTaskArgs({ source_slug: 'feat-x' })).toThrow(/both required/)
     expect(() => parseDispatchTaskArgs({ source_kind: 'widget', source_slug: 'fa' })).toThrow(
       /source_kind must be one of \[feature, proposal\]/,
     )
   })
-
-  it('run_in_background 解析：布尔透传（含 false 显式值）；缺省零键；非布尔拒', () => {
-    expect(parseDispatchTaskArgs({ run_in_background: true })).toEqual({ run_in_background: true })
-    expect(parseDispatchTaskArgs({ run_in_background: false })).toEqual({ run_in_background: false })
-    expect(parseDispatchTaskArgs({})).not.toHaveProperty('run_in_background')
-    expect(() => parseDispatchTaskArgs({ run_in_background: 'yes' })).toThrow(/run_in_background must be a boolean/)
-  })
 })
 
-describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
+// ─────────────────────────── 纯函数面（dispatch-core 单源——保留既有单测） ───────────────────────────
+
+describe('poolOf + classifyPool（池态三分）', () => {
   it('poolOf：byStatus 四键 + unmetPending 投影', () => {
     expect(poolOf(statsOf({ pending: 3, in_progress: 1, blocked: 2, unmetPending: 4 }))).toEqual({
       pending: 3,
@@ -321,8 +209,8 @@ describe('poolOf + classifyPool（池态三分——图 3 节点 C）', () => {
 
 describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）', () => {
   it('当前名表（5.1 全表——OQ#2 上游 standard 组合枚举）：全局拒绝集 + forge 闭环 + 族收窄逐型', () => {
-    // 全局十 + forge 闭环九（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid）为共同底座；
-    // 族收窄增量 = 名表五上游族按矩阵逐格进 deny（web 仅验证放行 → 四型全 deny）
+    // 全局十 + forge 闭环（FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS + validateMermaid，含 3b
+    // stopTaskLoop）为共同底座；族收窄增量 = 名表五上游族按矩阵逐格进 deny
     const base = [
       'ask_user_question',
       'createProposal',
@@ -336,6 +224,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'present',
       'queryTask',
       'send_message',
+      'stopTaskLoop',
       'subagent_fork',
       'taskStats',
       'transitionProposal',
@@ -378,7 +267,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveWorkerToolFilter('validation-code', nameFamily).deny).not.toContain('web-search')
   })
 
-  it('forge 闭环同步守护：FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS 全覆盖入 deny（worker 与 triage 两面）', () => {
+  it('forge 闭环同步守护：FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS 全覆盖入 deny（worker 与 triage 两面——含 3b stopTaskLoop）', () => {
     const workerDeny = new Set(deriveWorkerToolFilter('doc').deny)
     const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
@@ -451,901 +340,199 @@ describe('workerAgentOptionsOf + reconcileWorkerReasoning（forgeSettings → ag
   })
 })
 
-// ─────────────────────────── 四分支全场景表 ───────────────────────────
+// ─────────────────────────── execute 三态全场景表（3b 契约） ───────────────────────────
 
-describe('execute 四分支（AC1）', () => {
-  it('spawned·success：结算字段齐备 + 池快照附载 + 渲染 ✓ 行', async () => {
+describe('execute · started（无活循环 → driver.start——指令同源同一循环核心）', () => {
+  it('启动回执：start 收 source/ownerSessionId/parent/projectId + 池快照容器口径 + 渲染启动/停止指引', async () => {
     const h = harness()
-    const out = (await h.tool.execute({}, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
-    expect(out).toMatchObject({
-      kind: 'spawned',
-      outcome: 'success',
-      taskRef: { slug: 'feat-x', localId: '2.5' },
-      title: 'Implement the thing',
-      type: 'coding-fix',
-      digest: 'digestabc123',
-      summary: 'did the thing',
-      commitHash: 'abc1234',
-      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; loopId: string; source: unknown }
+    expect(out).toMatchObject({ kind: 'started', loopId: 'loop-1', source: { kind: 'feature', slug: 'feat-x' } })
+    expect(h.driver.start).toHaveBeenCalledWith({
+      source: { kind: 'feature', slug: 'feat-x' },
+      ownerSessionId: h.sessionId,
+      parent: h.exec.agent,
+      projectId: 'p-1',
+      worktree: 'C:\\ws\\demo', // 1.14 cwd 钉定归属——发起会话检出透传
     })
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text).toContain('✓ feat-x/2.5 completed — coding-fix · did the thing · commit abc1234')
+    expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
+    const text = h_render(h, out)
+    expect(text).toContain('dispatch loop started for feat-x')
+    expect(text).toContain('stopTaskLoop')
     expect(text).toContain('- pool: pending 1 · in_progress 0 · blocked 1 · unmet-pending 2')
   })
 
-  it('spawned·blocked：原因行 + followUp（最新 fix 任务）+ 渲染 ⚑ 行', async () => {
+  it('start owner-active（会话单活拒绝）：失败 DTO——人话 + 指引逐行 + tool-error 事件', async () => {
     const h = harness()
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
-    h.setQuery({
-      task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'missing API key', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' }],
+    h.driver.start.mockResolvedValue({
+      ok: false,
+      code: 'owner-active',
+      activeSource: { kind: 'proposal', slug: 'pa' },
+      activeOwnerSessionId: h.sessionId,
+      suspended: true,
+      message: 'M-OWNER-ACTIVE',
+      guidance: ['G-ONE', 'G-TWO'],
     })
-    // listTasks(sort:'created') 服务契约 = 最新在前——桩按服务序给卡（fix-2 最新）
-    h.setCards([
-      { slug: 'feat-x', localId: 'fix-2', sourceTask: { slug: 'feat-x', localId: '2.4' } },
-      { slug: 'feat-x', localId: 'fix-1', sourceTask: { slug: 'feat-x', localId: '2.4' } },
-    ])
-    const out = (await h.tool.execute({}, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
-    expect(out).toMatchObject({ kind: 'spawned', outcome: 'blocked', reason: 'missing API key' })
-    // created 降序 → 首个命中 = 最新 fix-2
-    expect((out as { followUp?: { localId: string } }).followUp).toEqual({ slug: 'feat-x', localId: 'fix-2' })
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text).toContain('⚑ feat-x/2.4 blocked — missing API key')
-    expect(text).toContain('- follow-up fix task: feat-x/fix-2 (dispatchable)')
-  })
-
-  it('no-task：池快照 + no-ready-task 事件（source 对容器归属——载荷 contextSlug = source_slug）+ 渲染 · 行带三分判词', async () => {
-    const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    h.setStats(statsOf({ pending: 3, blocked: 1, unmetPending: 2 }))
-    const out = (await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)) as Exclude<DispatchTaskResult, { ok: false }>
-    expect(out).toEqual({ kind: 'no-task', pool: { pending: 3, inProgress: 0, blocked: 1, unmetPending: 2 } })
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text).toContain('· no ready task (pool: pending 3 · in_progress 0 · blocked 1 · unmet-pending 2)')
-    expect(text).toContain('retry later')
-    expect(h.events.map((e) => e.type)).toEqual(['no-ready-task'])
-    expect(h.events[0]).toMatchObject({ slug: 'feat-x', payload: { contextSlug: 'feat-x' } })
-  })
-
-  it('no-task 无 source 对：归属回落 _pool', async () => {
-    const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    h.setStats(statsOf())
-    await h.tool.execute({}, h.exec)
-    expect(h.events[0]).toMatchObject({ slug: '_pool', payload: {} })
-    const text = h.tool.output.render({}, { kind: 'no-task', pool: { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0 } })[0]?.text ?? ''
-    expect(text).toContain('pool all settled — wrap up')
-  })
-
-  it('no-task 三分渲染：疑似死锁判词', () => {
-    const text =
-      h_render({ kind: 'no-task', pool: { pending: 0, inProgress: 0, blocked: 2, unmetPending: 0 } })
-    expect(text).toContain('suspected deadlock')
-  })
-
-  it('spawn 失败：ERR_SPAWN_FAILED 失败 DTO + 人话 + 指引（带 taskRef 重入/人工转移）+ tool-error 事件', async () => {
-    const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('child creation rejected')
-    })
-    const out = (await h.tool.execute({}, h.exec)) as { ok: boolean; code: string; message: string; violations: string[] }
+    const out = (await h.tool.execute(ARGS, h.exec)) as { ok: boolean; code: string; message: string; violations: string[] }
     expect(out.ok).toBe(false)
     expect(out.code).toBe('ERR_SPAWN_FAILED')
-    expect(out.message).toContain('worker spawn failed for feat-x/2.5')
-    expect(out.message).toContain('child creation rejected')
-    expect(out.violations.some((v) => v.includes('feat-x/2.5') && v.includes('re-enter'))).toBe(true)
-    expect(out.violations.some((v) => v.includes('manually'))).toBe(true)
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text.startsWith('✗ ERR_SPAWN_FAILED — ')).toBe(true)
-    expect(h.events.map((e) => e.type)).toEqual(['task-claimed', 'tool-error'])
-    expect(h.events[1]).toMatchObject({ type: 'tool-error', payload: { verb: 'dispatchTask', code: 'ERR_SPAWN_FAILED' } })
-  })
-
-  it('spawn 失败不走 submit-blocked：任务留 in_progress（零 submitTask 调用）', async () => {
-    const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('boom')
-    })
-    await h.tool.execute({}, h.exec)
-    expect(h.calls.submit).toBe(0)
-  })
-
-  it('worker run 完成但无结算（refusal/漏提交）：同 spawn 失败径（执行受阻语义）', async () => {
-    const h = harness()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return {
-        workerSessionId: 'worker-9',
-        result: Promise.resolve({ stopReason: 'refusal', output: '' }),
-        dispose: async () => {},
-      }
-    })
-    h.setQuery({
-      task: snapshot({ taskStatus: 'in_progress' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-    })
-    const out = (await h.tool.execute({}, h.exec)) as { code: string; message: string }
-    expect(out.code).toBe('ERR_SPAWN_FAILED')
-    expect(out.message).toContain('without a settlement (stopReason: refusal)')
-    expect(h.calls.submit).toBe(0)
-  })
-
-  it('run.result 拒绝（基建故障）：同 spawn 失败径', async () => {
-    const h = harness()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return {
-        workerSessionId: 'worker-8',
-        result: Promise.reject(new Error('infra fault')),
-        dispose: async () => {},
-      }
-    })
-    const out = (await h.tool.execute({}, h.exec)) as { code: string }
-    expect(out.code).toBe('ERR_SPAWN_FAILED')
-  })
-})
-
-// ─────────────────────────── run_in_background 降级守卫（async-dispatch §7 任务 1.2） ───────────────────────────
-
-describe('run_in_background 降级守卫（jobs 面可选——缺席 = 拒绝并提示，events/settings 同型降级）', () => {
-  it('jobs 缺席：后台调用被拒绝并提示——失败 DTO（人话 + 指引）+ tool-error 事件；claim/spawn 零触达（拒绝在领任务前）', async () => {
-    const h = harness()
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as {
-      ok: boolean
-      code: string
-      message: string
-      violations: string[]
-    }
-    expect(out.ok).toBe(false)
-    expect(out.code).toBe('ERR_SPAWN_FAILED')
-    expect(out.message).toContain('run_in_background')
-    expect(out.message).toContain('jobs service')
-    expect(out.violations.some((v) => v.includes('without run_in_background'))).toBe(true)
-    expect(out.violations.some((v) => v.includes('jobs service'))).toBe(true)
-    expect(h.calls.claim).toBe(0)
-    expect(h.spawnRequests).toHaveLength(0)
+    expect(out.message).toBe('M-OWNER-ACTIVE')
+    expect(out.violations).toEqual(['G-ONE', 'G-TWO'])
+    const text = h_render(h, out)
+    expect(text.startsWith('✗ ERR_SPAWN_FAILED — M-OWNER-ACTIVE')).toBe(true)
     expect(h.events.map((e) => e.type)).toEqual(['tool-error'])
-    // 渲染面（TECH-error-004）：✗ code + 人话 + 违规清单逐行
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text.startsWith('✗ ERR_SPAWN_FAILED — ')).toBe(true)
-    expect(text).toContain('without run_in_background')
+    expect(h.events[0]).toMatchObject({ type: 'tool-error', payload: { verb: 'dispatchTask', code: 'ERR_SPAWN_FAILED' } })
   })
 
-  it('拒绝不入 spawn 失败防线计数：三次后台拒绝后前台派发照常（非 halted——装配降级非 spawn 失败）', async () => {
+  it('start loop-active（竞态窗口）：同守卫拒绝径（独占指引随行）', async () => {
     const h = harness()
-    for (let i = 0; i < 3; i += 1) {
-      const rejected = (await h.tool.execute({ run_in_background: true }, h.exec)) as { ok: boolean }
-      expect(rejected.ok).toBe(false)
-    }
-    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-
-  it('jobs 面在场：后台调用过守卫走 dispatched 分支（deps.jobs 注入即启用后台形态——1.2 直通已被 1.3 dispatched 分支接续）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
-    expect(out.kind).toBe('dispatched')
-  })
-})
-
-// ─────────────────────────── 后台形态（async-dispatch §4.1/4.2/4.4——任务 1.3） ───────────────────────────
-
-describe('dispatched 分支（AC1：立即返回四键回执——不 await worker 终态）', () => {
-  it('run_in_background=true：spawn 后立即回执 taskRef/workerSessionId/jobId/pool——pending result 零阻塞、结算读零触达', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
+    h.driver.start.mockResolvedValue({
+      ok: false,
+      code: 'loop-active',
+      activeSource: { kind: 'feature', slug: 'feat-x' },
+      activeOwnerSessionId: 'other',
+      suspended: false,
+      message: 'M-LOOP-ACTIVE',
+      guidance: [],
     })
-    const sessionId = (h.exec.agent as { session: { id: string } }).session.id
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as {
-      kind: string
-      taskRef: { slug: string; localId: string }
-      title: string
-      type: string
-      workerSessionId: string
-      jobId: string
-      pool: { pending: number; inProgress: number; blocked: number; unmetPending: number }
-    }
-    expect(out).toEqual({
-      kind: 'dispatched',
-      taskRef: { slug: 'feat-x', localId: '2.5' },
-      title: 'Implement the thing',
-      type: 'coding-fix',
-      workerSessionId: 'worker-bg',
-      jobId: 'forge-dispatch-1',
-      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
-    })
-    // 立即返回的结构证据：worker 未终态（pending）而结算读零调用
-    expect(h.calls.query).toBe(0)
-    // job spec：kind/label/owner（派发会话 id——F7 owner 销毁自动取消）+ 负向 pin：禁声明 output 拉取源
-    expect(js.specs).toHaveLength(1)
-    expect(js.specs[0]).toMatchObject({
-      kind: 'forge-dispatch',
-      label: 'feat-x/2.5 · Implement the thing',
-      owner: sessionId,
-    })
-    expect(js.specs[0]).not.toHaveProperty('output')
-  })
-
-  it('no-task 分支不建 job（§5——无任务零注册，no-task 回执原样）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
-    expect(out.kind).toBe('no-task')
-    expect(js.specs).toHaveLength(0)
+    const out = (await h.tool.execute(ARGS, h.exec)) as { ok: boolean; code: string; message: string; violations: string[] }
+    expect(out.ok).toBe(false)
+    expect(out.message).toBe('M-LOOP-ACTIVE')
+    expect(out.violations.length).toBeGreaterThan(0)
+    expect(out.violations.some((v) => v.includes('stopTaskLoop'))).toBe(true)
   })
 })
 
-describe('结算后置交付（AC2：JobOutcome.result = 前台 spawned 分支字段面原样投影）', () => {
-  it('success：status=completed + result JSON 与同夹具前台结果深等（kind: spawned 全字段）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    const receipt = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string }
-    expect(receipt.kind).toBe('dispatched')
-    // 同夹具前台对照（新会话——零防线串扰）
-    const fg = harness()
-    const fgOut = (await fg.tool.execute({}, fg.exec)) as object
-    handle.release({ stopReason: 'completed', output: 'done' })
-    const done = await js.hooks[0]!.done
-    expect(done.status).toBe('completed')
-    expect(JSON.parse(done.result ?? 'null')).toEqual({ kind: 'spawned', ...fgOut })
-  })
-
-  it('blocked：reason/followUp 原样投影 + done:blocked 里程碑', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
-    h.setQuery({
-      task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'missing API key', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' }],
-    })
-    h.setCards([{ slug: 'feat-x', localId: 'fix-2', sourceTask: { slug: 'feat-x', localId: '2.4' } }])
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.release({ stopReason: 'completed', output: 'done' })
-    const done = await js.hooks[0]!.done
-    expect(done.status).toBe('completed')
-    expect(JSON.parse(done.result ?? 'null')).toMatchObject({
-      kind: 'spawned',
-      outcome: 'blocked',
-      reason: 'missing API key',
-      followUp: { slug: 'feat-x', localId: 'fix-2' },
-    })
-    const phases = h.events.filter((e) => e.type === 'task-progress').map((e) => (e.payload as { phase: string }).phase)
-    expect(phases).toContain('done:blocked')
-  })
-})
-
-describe('job 内防线（AC3：无结算 failed + kill taxonomy + 3 连败粘住）', () => {
-  it('无结算径：job=failed + 诊断进 detail + tool-error 留档（任务留 in_progress）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    h.setQuery({
-      task: snapshot({ taskStatus: 'in_progress' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-    })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.release({ stopReason: 'refusal', output: '' })
-    const done = await js.hooks[0]!.done
-    expect(done.status).toBe('failed')
-    expect(done.detail).toContain('without a settlement (stopReason: refusal)')
-    expect(h.events.some((e) => e.type === 'tool-error')).toBe(true)
-  })
-
-  it('run.result 拒绝（非 kill 基建故障）：job=failed + 诊断进 detail', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.reject(new Error('infra fault'))
-    const done = await js.hooks[0]!.done
-    expect(done.status).toBe('failed')
-    expect(done.detail).toContain('infra fault')
-  })
-
-  it('kill=killed 不进防线计数：cancel→abort 后 done=killed（零 tool-error）；3 连 kill 后前台照常派发', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    for (let i = 0; i < 3; i += 1) {
-      const handle = controlledHandle(`worker-k${i}`)
-      h.setSpawn(async (req) => {
-        h.spawnRequests.push(req)
-        return handle
-      })
-      await h.tool.execute({ run_in_background: true }, h.exec)
-      js.hooks[js.hooks.length - 1]!.cancel('operator kill') // abort → 驱动器中止 worker
-      handle.reject(new Error('worker aborted by kill')) // 驱动器对 abort 的反应形态
-      const done = await js.hooks[js.hooks.length - 1]!.done
-      expect(done.status).toBe('killed')
-    }
-    expect(h.events.some((e) => e.type === 'tool-error')).toBe(false) // kill 非失败——零留档
-    // 3 连 kill 未入防线：前台派发照常（非 halted）
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return okHandle()
-    })
-    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-
-  it('AggregateError 例外：即使 aborted 也归 failed（F6 taxonomy 细枝——进防线计数）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    js.hooks[0]!.cancel('kill')
-    handle.reject(new AggregateError([new Error('parallel failure')], 'aggregate'))
-    const done = await js.hooks[0]!.done
-    expect(done.status).toBe('failed')
-    expect(done.detail).toContain('aggregate')
-  })
-
-  it('3 连败 halt 粘住：job 内失败按结算序回灌 → 后续派发同步入口 halted（不再 claim）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    let latest!: ControlledHandle
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      latest = controlledHandle() // 每轮新句柄
-      return latest
-    })
-    for (let i = 0; i < 3; i += 1) {
-      void (await h.tool.execute({ run_in_background: true }, h.exec))
-      latest.reject(new Error('bg boom'))
-      const done = await js.hooks[i]!.done
-      expect(done.status).toBe('failed')
-    }
-    const claimsBefore = h.calls.claim
-    const out = (await h.tool.execute({}, h.exec)) as { kind: string; reason: string }
-    expect(out.kind).toBe('halted')
-    expect(out.reason).toContain('3 consecutive')
-    expect(h.calls.claim).toBe(claimsBefore)
-  })
-
-  it('成功结算清零 streak（结算序）：2 败 → 1 成 → 2 败 → 前台照常（未粘住）', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    let latest!: ControlledHandle
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      latest = controlledHandle()
-      return latest
-    })
-    const fail = async (): Promise<void> => {
-      void (await h.tool.execute({ run_in_background: true }, h.exec))
-      latest.reject(new Error('boom'))
-      await js.hooks[js.hooks.length - 1]!.done
-    }
-    const succeed = async (): Promise<void> => {
-      void (await h.tool.execute({ run_in_background: true }, h.exec))
-      latest.release({ stopReason: 'completed', output: 'done' })
-      await js.hooks[js.hooks.length - 1]!.done
-    }
-    await fail()
-    await fail()
-    await succeed() // 清零
-    await fail()
-    await fail()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return okHandle()
-    })
-    const out = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-
-  it('jobs.start 同步段故障：句柄 dispose + ERR_SPAWN_FAILED DTO（job 未注册——无回执可交付）', async () => {
-    let disposed = 0
-    const h = harness({
-      jobs: {
-        start: () => {
-          throw new Error('registry down')
-        },
-      },
-    })
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return { workerSessionId: 'worker-x', result: new Promise(() => {}), dispose: async () => void (disposed += 1) }
-    })
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { ok: boolean; code: string; message: string }
+describe('execute · 守卫拒绝（他人运行中循环——归属 + 正确入口）', () => {
+  it('失败 DTO：message 含循环归属（loop id + owner session）+ 指引含 stopTaskLoop/观察入口；start 零触达', async () => {
+    const h = harness()
+    h.addRecord(recordOf('other-session'))
+    const out = (await h.tool.execute(ARGS, h.exec)) as { ok: boolean; code: string; message: string; violations: string[] }
     expect(out.ok).toBe(false)
     expect(out.code).toBe('ERR_SPAWN_FAILED')
-    expect(out.message).toContain('registry down')
-    expect(disposed).toBe(1) // worker 无 job 观测面——收尾取消剩余工作
+    expect(out.message).toContain('owner session other-session')
+    expect(out.message).toContain('feat-x')
+    expect(out.violations.some((v) => v.includes('stopTaskLoop'))).toBe(true)
+    expect(out.violations.some((v) => v.includes('queryTask'))).toBe(true)
+    const text = h_render(h, out)
+    expect(text.startsWith('✗ ERR_SPAWN_FAILED — dispatch rejected: task source feat-x')).toBe(true)
+    expect(h.driver.start).not.toHaveBeenCalled()
+    expect(h.events.map((e) => e.type)).toEqual(['tool-error'])
   })
 })
 
-describe('后台径进度双写（§4.2①/§4.3——appendLog + task-progress 同源双写，前台零发射）', () => {
-  it('里程碑序 claimed→spawned→running→settled:reading→done:success：log 行逐里程碑 + 事件载荷 taskKey/ts', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.release({ stopReason: 'completed', output: 'done' })
-    await js.hooks[0]!.done
-    const progresses = h.events.filter((e) => e.type === 'task-progress') as unknown as Array<{
-      slug: string
-      payload: { taskKey: string; phase: string; ts: number }
-    }>
-    expect(progresses.map((e) => e.payload.phase)).toEqual(['claimed', 'spawned', 'running', 'settled:reading', 'done:success'])
-    expect(js.logLines).toHaveLength(progresses.length) // 同源双写：每里程碑一行 log
-    for (const e of progresses) {
-      expect(e.slug).toBe('feat-x')
-      expect(e.payload.taskKey).toBe('feat-x/2.5')
-      expect(typeof e.payload.ts).toBe('number')
-    }
-    // 前台零污染：本会话此前无 task-progress 之外的源——全事件序即证
-    expect(h.events[0]!.type).toBe('task-claimed')
-  })
-})
-
-// ─────────────────────────── 后台径 ring 通道值域（负向 pin 生产者面——async-dispatch §6/F4） ───────────────────────────
-
-describe('后台径 ring 通道值域（负向 pin 生产者面——appendLog 单点硬编码经 adaptDispatchJobs 全链）', () => {
-  /** 原始环捕获注册表（上游注册表结构面——append(text, options) 原样记账，不经任何收窄） */
-  function ringCaptureRegistry(): {
-    registry: DispatchJobsRegistryFace
-    ring: { text: string; channel: string | undefined }[]
-    hooks: DispatchJobHooks[]
-  } {
-    const ring: { text: string; channel: string | undefined }[] = []
-    const hooks: DispatchJobHooks[] = []
-    let seq = 0
-    const registry: DispatchJobsRegistryFace = {
-      start(spec) {
-        seq += 1
-        hooks.push(
-          spec.run({
-            append: (text, options) => {
-              ring.push({ text, channel: options?.channel })
-            },
-          }),
-        )
-        return `forge-dispatch-${seq}`
-      },
-    }
-    return { registry, ring, hooks }
-  }
-
-  it('forge-dispatch job 环块 channel 值域 ⊆ {"log"}；模型消费面投影零进度字节（上游滤 log 行为钉死于 tests/contract/pin-16）', async () => {
-    const { registry, ring, hooks } = ringCaptureRegistry()
-    const h = harness({ jobs: adaptDispatchJobs(registry) })
-    const handle = controlledHandle()
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.release({ stopReason: 'completed', output: 'done' })
-    await hooks[0]!.done
-
-    // 值域断言：五里程碑环块 channel 全 = 'log'——channel 值调用面不可达（DispatchJobRunHandle
-    // 唯一成员 appendLog），单点硬编码于 faces.ts adaptDispatchJobs，拼错通道结构性不可能
-    expect(ring).toHaveLength(5)
-    expect(new Set(ring.map((c) => c.channel))).toEqual(new Set(['log']))
-    // 里程碑行齐全（观察者面 = jobs 面板 live 流全程可见，不受 outputLimitBytes 截留）
-    const joined = ring.map((c) => c.text).join('\n')
-    expect(joined).toContain('claimed feat-x/2.5')
-    expect(joined).toContain('spawned worker worker-bg')
-    expect(joined).toContain('worker executing')
-    expect(joined).toContain('reading settlement')
-    expect(joined).toContain('settlement ready')
-    // 模型消费面投影（上游 renderModelDelta 同判别：channel !== 'log' 可见）= 零字节
-    const modelFace = ring.filter((c) => c.channel !== 'log').map((c) => c.text).join('')
-    expect(modelFace).toBe('')
-  })
-
-  it('blocked 结算同域：done:blocked 里程碑环块亦全 log（值域断言与结算解耦）', async () => {
-    const { registry, ring, hooks } = ringCaptureRegistry()
-    const h = harness({ jobs: adaptDispatchJobs(registry) })
-    h.setClaim({ task: snapshot({ localId: '2.4' }), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd42', reclaimed: false })
-    h.setQuery({
-      task: snapshot({ localId: '2.4', taskStatus: 'blocked', blockedReason: 'missing API key' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-      records: [{ verb: 'submit', toStatus: 'blocked', reason: 'missing API key', actor: 'plugin-tool', createdAt: '2026-10-07T01:00:00.000Z' }],
-    })
-    const handle = controlledHandle('worker-bg')
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return handle
-    })
-    await h.tool.execute({ run_in_background: true }, h.exec)
-    handle.release({ stopReason: 'completed', output: 'done' })
-    await hooks[0]!.done
-
-    expect(ring.length).toBeGreaterThanOrEqual(5)
-    expect(new Set(ring.map((c) => c.channel))).toEqual(new Set(['log']))
-    expect(ring.at(-1)?.text).toContain('settlement ready')
-    const modelFace = ring.filter((c) => c.channel !== 'log').map((c) => c.text).join('')
-    expect(modelFace).toBe('')
-  })
-})
-
-describe('dispatched 渲染与 schema（AC5：五态 + oneOf 增支）', () => {
-  const receipt = {
-    kind: 'dispatched',
-    taskRef: { slug: 'feat-x', localId: '2.5' },
-    title: 'Implement the thing',
-    type: 'coding-fix',
-    workerSessionId: 'worker-1',
-    jobId: 'forge-dispatch-7',
-    pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
-  } as const
-
-  it('渲染 ▸ 行 + job_output/job_kill 指引 + 池行', () => {
-    const text = h_render(receipt)
-    expect(text.startsWith('▸ dispatched feat-x/2.5 — job forge-dispatch-7')).toBe(true)
-    expect(text).toContain('job_output forge-dispatch-7')
-    expect(text).toContain('job_kill forge-dispatch-7')
-    expect(text).toContain('- pool: pending 1 · in_progress 0 · blocked 1 · unmet-pending 2')
-  })
-
-  it('output schema oneOf 四支：dispatched 支 required 含四键（jobId/workerSessionId/taskRef/pool）', () => {
+describe('execute · owner 运行中重调（状态摘要——非拒绝）', () => {
+  it('running 摘要：taskKey 随行（in-flight 在场）+ 渲染「status summary, no new loop」；start 零触达', async () => {
     const h = harness()
-    const schema = h.tool.output.schema as { oneOf: [ { oneOf: Array<{ required?: string[] }> }, object ] }
+    h.addRecord(
+      recordOf(h.sessionId, {
+        inFlight: { taskRef: { slug: 'feat-x', localId: '2.5' }, taskKey: 'feat-x/2.5', taskId: 't-1', title: 'Implement the thing' },
+      }),
+    )
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; ownerSessionId: string; taskKey?: string }
+    expect(out).toMatchObject({ kind: 'running', ownerSessionId: h.sessionId, taskKey: 'feat-x/2.5' })
+    const text = h_render(h, out)
+    expect(text).toContain('status summary, no new loop started')
+    expect(text).toContain('- current task: feat-x/2.5')
+    expect(text).toContain('stopTaskLoop')
+    expect(h.driver.start).not.toHaveBeenCalled()
+  })
+
+  it('轮间窗口（in-flight 缺席）：taskKey 键缺席 + 渲染 between rounds', async () => {
+    const h = harness()
+    h.addRecord(recordOf(h.sessionId))
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; taskKey?: string }
+    expect(out.kind).toBe('running')
+    expect(out).not.toHaveProperty('taskKey')
+    expect(h_render(h, out)).toContain('between rounds')
+  })
+})
+
+describe('execute · 挂起态（P3 摘要兜底 + re-entry 幂等续接 + 接管集写点）', () => {
+  it('owner 重调：resume 调用（loopId 锚）+ 响应必带挂起摘要（P3 全文）+ resumed=true + 续接说明', async () => {
+    const h = harness()
+    h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; summary: string; resumed: boolean; takenOver: boolean }
+    expect(out.kind).toBe('suspended')
+    expect(out.resumed).toBe(true)
+    expect(out.takenOver).toBe(false)
+    expect(h.driver.resume).toHaveBeenCalledWith({ loopId: 'loop-1' })
+    // 挂起摘要 = P3 模板同源（payloadOf(record) 渲染——丢失兜底读径）
+    expect(out.summary).toContain('任务循环挂起')
+    expect(out.summary).toContain('tests hang on flaky selector')
+    expect(out.summary).toContain('dispatchTask(feat-x)')
+    const text = h_render(h, out)
+    expect(text).toContain('任务循环挂起')
+    expect(text).toContain('resumes from where it suspended (completed tasks are not re-run)')
+  })
+
+  it('非 owner 首触：接管集写入（唯一工具侧写点）+ takenOver=true + 同摘要；resume 照常续接', async () => {
+    const h = harness()
+    const record = recordOf('owner-x', { suspended: suspensionOf() })
+    h.addRecord(record)
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; takenOver: boolean; resumed: boolean }
+    expect(out.takenOver).toBe(true)
+    expect(out.resumed).toBe(true)
+    expect(record.takeoverSessions.has(h.sessionId)).toBe(true)
+    expect(h_render(h, out)).toContain('joined the takeover set')
+  })
+
+  it('并发竞态（resume not-suspended）：resumed=false + 渲染 already resumed（零动作不误报）', async () => {
+    const h = harness()
+    h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
+    h.driver.resume.mockReturnValue({ ok: false, code: 'not-suspended' })
+    const out = (await h.tool.execute(ARGS, h.exec)) as { resumed: boolean }
+    expect(out.resumed).toBe(false)
+    expect(h_render(h, out)).toContain('already resumed')
+  })
+})
+
+// ─────────────────────────── 协议 pin（description ↔ P1 同源） ───────────────────────────
+
+describe('协议 pin（description 完整承载调用协议 ↔ 注入模板同源锚）', () => {
+  it('description 关键句：成对必填 / 无 job 通道 / 循环语义 / 停止入口 / 单活门控 / 挂起摘要', () => {
+    const d = harness().tool.description
+    expect(d).toContain('source_kind and source_slug are BOTH required')
+    expect(d).toContain('no pool-wide mode')
+    expect(d).toContain('no run_in_background/job_output/job_kill')
+    expect(d).toContain('same loop core as the /run-dag-tasks instruction')
+    expect(d).toContain('stopTaskLoop')
+    expect(d).toContain('at most one loop at a time')
+    expect(d).toContain('suspension summary')
+    expect(d).toContain('idempotent re-entry')
+  })
+
+  it('description ↔ P1 驻留模板同源：停止入口 stopTaskLoop 双面一致（pin 锚——模板漂移即断言失败）', () => {
+    const d = harness().tool.description
+    const p1 = renderP1(payloadOf(recordOf('any')))
+    expect(d).toContain('stopTaskLoop')
+    expect(p1).toContain('stopTaskLoop')
+  })
+
+  it('output schema：三成功分支（started/running/suspended）+ 失败 DTO 变体', () => {
+    const h = harness()
+    const schema = h.tool.output.schema as { oneOf: [{ oneOf: Array<{ properties?: Record<string, unknown>; required?: string[] }> }, object] }
     const branches = schema.oneOf[0]!.oneOf
-    expect(branches).toHaveLength(4)
-    expect(branches[1]!.required).toEqual(['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'])
+    expect(branches).toHaveLength(3)
+    expect(branches[0]!.required).toEqual(['kind', 'loopId', 'source', 'pool'])
+    expect(branches[1]!.required).toEqual(['kind', 'source', 'ownerSessionId', 'pool'])
+    expect(branches[2]!.required).toEqual(['kind', 'loopId', 'source', 'summary', 'resumed', 'takenOver', 'pool'])
+    // parameters 面成对必填（schema 强制——缺失即拒绝的数据面）
+    const params = h.tool.parameters as { required?: string[] }
+    expect(params.required).toEqual(['source_kind', 'source_slug'])
   })
 })
 
-/** 渲染快捷（no-task 分支） */
-function h_render(value: unknown): string {
-  const h = harness()
-  return h.tool.output.render({}, value)[0]?.text ?? ''
-}
+// ─────────────────────────── 事件归属 ───────────────────────────
 
-// ─────────────────────────── halted 机械防线（AC4） ───────────────────────────
-
-describe('halted 防线（连续失败 ×3 粘住/成功清零/冷启动重置）', () => {
-  it('第 3 次连续失败返回 halted；其后粘住（不再 claim）', async () => {
+describe('事件归属（tool-error——attribution 槽）', () => {
+  it('typed 错误（cwd 未绑定）→ tool-error + 失败 DTO（归属容器语境——source 对已解析）', async () => {
     const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('boom')
-    })
-    const r1 = (await h.tool.execute({}, h.exec)) as { code: string }
-    const r2 = (await h.tool.execute({}, h.exec)) as { code: string }
-    expect(r1.code).toBe('ERR_SPAWN_FAILED')
-    expect(r2.code).toBe('ERR_SPAWN_FAILED')
-    const r3 = (await h.tool.execute({}, h.exec)) as { kind: string; reason: string }
-    expect(r3.kind).toBe('halted')
-    expect(r3.reason).toContain('3 consecutive')
-    // 粘住：第 4 次调用入口即拒——claim 零调用
-    const claimsBefore = h.calls.claim
-    const r4 = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(r4.kind).toBe('halted')
-    expect(h.calls.claim).toBe(claimsBefore)
-    expect(h.tool.output.render({}, r3)[0]?.text).toMatch(/^✗ dispatch halted — /)
-  })
-
-  it('成功结算即清零：败×2 → 成功 → 再败仍 ERR_SPAWN_FAILED（未粘住）', async () => {
-    const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('boom')
-    })
-    await h.tool.execute({}, h.exec)
-    await h.tool.execute({}, h.exec)
-    // 成功一轮（spawn 恢复 + 结算 completed）
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return okHandle()
-    })
-    const ok = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(ok.kind).toBe('spawned')
-    h.setSpawn(async () => {
-      throw new Error('boom again')
-    })
-    const after = (await h.tool.execute({}, h.exec)) as { code: string }
-    expect(after.code).toBe('ERR_SPAWN_FAILED')
-  })
-
-  it('冷启动重置：fresh 模块副本同会话可派发（计数器易失）', async () => {
-    const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('boom')
-    })
-    await h.tool.execute({}, h.exec)
-    await h.tool.execute({}, h.exec)
-    const halted = (await h.tool.execute({}, h.exec)) as { kind: string }
-    expect(halted.kind).toBe('halted')
-    // 模块重载 = 冷启动：计数器清空，同会话恢复可派发
-    vi.resetModules()
-    const fresh = await import('./dispatch-task.js')
-    const events: ForgePluginEvent[] = []
-    const tasks = {
-      claimTask: async () => ({ task: snapshot(), dispatchPrompt: 'P', digest: 'd', reclaimed: false }),
-      taskStats: async () => statsOf(),
-      queryTask: async () => ({ task: snapshot({ taskStatus: 'completed' }), container: { kind: 'feature', slug: 'feat-x', title: 'f' } }),
-      listTasks: async () => [],
-    } as unknown as ForgeTasksService
-    const freshTool = fresh.createDispatchTaskTool({
-      tasks,
-      proposals: {} as DispatchTaskToolDeps['proposals'],
-    bugs: {} as DispatchTaskToolDeps['bugs'],
-      resolveProjectId: () => 'p-1',
-      events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
-      spawn: async () => okHandle(),
-    })
-    const out = (await freshTool.execute({}, h.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-
-  it('会话作用域：他址会话不受本会话粘住影响', async () => {
-    const h = harness()
-    h.setSpawn(async () => {
-      throw new Error('boom')
-    })
-    for (let i = 0; i < 3; i += 1) await h.tool.execute({}, h.exec)
-    // 新会话（execOf 新 id）正常派发
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return okHandle()
-    })
-    const other = harness()
-    const out = (await other.tool.execute({}, other.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-})
-
-// ─────────────────────────── 组装序与事件（AC2/AC3/AC5） ───────────────────────────
-
-describe('组装序落面（AC2：矩阵→toolFilter / settings→agentOptions / dispatchPrompt 全文透传）', () => {
-  it('spawn 请求携带：全文 prompt + 矩阵 deny + label = 任务键 · 任务名（子会话标题——用户裁决 2026-10-10）+ parent/signal', async () => {
-    const h = harness()
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests).toHaveLength(1)
-    const req = h.spawnRequests[0]!
-    expect(req.prompt).toBe('PERSONA + <task-context>') // 全文直达 worker——零转述
-    expect(req.label).toBe('feat-x/2.5 · Implement the thing')
-    expect(req.parent).toBe(h.exec.agent)
-    expect(req.signal).toBeInstanceOf(AbortSignal)
-    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'subagent_fork', 'queryTask', 'dispatchTask']))
-  })
-
-  it('forgeSettings 已配置：agentOptions 显式携带（effort 直映射）', async () => {
-    const h = harness({ settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } }) } })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'deepseek', model: 'reasoner', reasoningEffort: 'high' })
-  })
-
-  it("forgeSettings reasoning='default'：agentOptions 无 effort 键（不下发——provider 默认档）", async () => {
-    const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' } }) },
-    })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash' })
-  })
-
-  it('档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 携带 provider/model（组装面）', async () => {
-    const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' } }) },
-      resolveModelReasoning: async () => ['low', 'high', 'max'],
-    })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash' })
-  })
-
-  it('档位兼容收口：目录已知且受支持 → 原样携带（组装面）', async () => {
-    const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'high' } }) },
-      resolveModelReasoning: async () => ['low', 'high', 'max'],
-    })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'high' })
-  })
-
-  it('档位兼容收口：目录不可知（解析器缺席）→ 原样携带（无法验证不判）', async () => {
-    const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'medium' } }) },
-    })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'medium' })
-  })
-
-  it('forgeSettings 未配置（worker 键缺席）：不携带 agentOptions（回退父会话继承）', async () => {
-    const h = harness({ settings: { get: async () => ({}) } })
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toBeUndefined()
-  })
-
-  it('forgeSettings 服务缺席（deps.settings 无键）：不携带 agentOptions', async () => {
-    const h = harness()
-    await h.tool.execute({}, h.exec)
-    expect(h.spawnRequests[0]?.agentOptions).toBeUndefined()
-  })
-})
-
-describe('claim 入参透传（M3 2.4 容器限定接线）', () => {
-  it('source 对在场：claimTask 收 source 引用（容器限定盲选激活）', async () => {
-    const h = harness()
-    await h.tool.execute({ source_kind: 'proposal', source_slug: 'pa' }, h.exec)
-    expect(h.claimInputs).toEqual([
-      { projectId: 'p-1', sessionId: expect.any(String), source: { kind: 'proposal', slug: 'pa' } },
-    ])
-  })
-
-  it('source 对缺席：claimTask 不含 source 键（全库盲选——缺省行为零变化）', async () => {
-    const h = harness()
-    await h.tool.execute({}, h.exec)
-    expect(h.claimInputs[0]).not.toHaveProperty('source')
-  })
-})
-
-/** 通用 tasks 桩（事件用例复用：claim→task / query→completed / stats） */
-function bareTasks(): ForgeTasksService {
-  return {
-    claimTask: async () => ({ task: snapshot(), dispatchPrompt: 'P', digest: 'd', reclaimed: false }),
-    taskStats: async () => statsOf(),
-    queryTask: async () => ({
-      task: snapshot({ taskStatus: 'completed' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'f' },
-    }),
-    listTasks: async () => [],
-  } as unknown as ForgeTasksService
-}
-
-describe('事件发射（AC5：→ 3.3 总线；dispatchDigest 双记）', () => {
-  it('spawned 全链：task-claimed → task-spawned → task-worker-done（信封 sessionId = 派发会话）', async () => {
-    const h = harness()
-    await h.tool.execute({}, h.exec)
-    expect(h.events.map((e) => e.type)).toEqual(['task-claimed', 'task-spawned', 'task-worker-done'])
-    const [claimed, spawned, done] = h.events as unknown as [
-      { payload: { taskKey: string; dispatchDigest: string; taskType: string } },
-      { payload: { workerSessionId: string; toolFilter: string[]; model: string } },
-      { payload: { durationMs: number; outcome: string } },
-    ]
-    expect(claimed.payload).toMatchObject({ taskKey: 'feat-x/2.5', taskType: 'coding-fix', dispatchDigest: 'digestabc123' })
-    // 双记：事件 digest = claimTask 返回 digest（task_records.claim 行同值）
-    expect(claimed.payload.dispatchDigest).toBe('digestabc123')
-    expect(spawned.payload).toMatchObject({ workerSessionId: 'worker-1', model: 'inherit' })
-    expect(spawned.payload.toolFilter).toEqual(expect.arrayContaining(['ask_user_question', 'queryTask']))
-    expect(done.payload).toMatchObject({ outcome: 'success', workerSessionId: 'worker-1' })
-    expect(done.payload.durationMs).toBeGreaterThanOrEqual(0)
-    for (const e of h.events) {
-      expect(e.sessionId).toBe((h.exec.agent ?? { session: { id: '' } }).session.id)
-      expect(e.slug).toBe('feat-x')
-    }
-  })
-
-  it('agentOptions 携带时 task-spawned.model = 显式 model', async () => {
-    const h = harness()
-    const tool = createDispatchTaskTool({
-      tasks: bareTasks(),
-      proposals: {} as DispatchTaskToolDeps['proposals'],
-    bugs: {} as DispatchTaskToolDeps['bugs'],
-      resolveProjectId: () => 'p-1',
-      events: { emit: (e) => h.events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
-      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'low' } }) },
-      spawn: async () => okHandle(),
-    })
-    await tool.execute({}, h.exec)
-    const spawned = h.events.find((e) => e.type === 'task-spawned') as unknown as { payload: { model: string } }
-    expect(spawned.payload.model).toBe('reasoner')
-  })
-
-  it('claim 前 typed 错误（cwd 未绑定）→ tool-error + 失败 DTO', async () => {
-    const h = harness()
-    const out = (await h.tool.execute({}, { agent: { session: { id: 's-x', header: { cwd: 'C:\\ws\\other' } } } })) as {
+    const out = (await h.tool.execute(ARGS, { agent: { session: { id: 's-x', header: { cwd: 'C:\\ws\\other' } } } })) as {
       ok: boolean
       code: string
     }
     expect(out.code).toBe('ERR_WORKSPACE_NOT_REGISTERED')
     expect(h.events.map((e) => e.type)).toEqual(['tool-error'])
-    expect(h.events[0]).toMatchObject({ slug: '_pool', payload: { verb: 'dispatchTask', code: 'ERR_WORKSPACE_NOT_REGISTERED' } })
-  })
-
-  it('deps.events 缺席 = 零事件降级（四分支照常）', async () => {
-    const h = harness()
-    const tool = createDispatchTaskTool({
-      tasks: bareTasks(),
-      proposals: {} as DispatchTaskToolDeps['proposals'],
-    bugs: {} as DispatchTaskToolDeps['bugs'],
-      resolveProjectId: () => 'p-1',
-      spawn: async () => okHandle(),
-    })
-    const out = (await tool.execute({}, h.exec)) as { kind: string }
-    expect(out.kind).toBe('spawned')
-  })
-})
-
-// ─────────────────────────── scoped 池快照 + 重入回执（run-tasks-host-command/1.10） ───────────────────────────
-
-describe('scoped 池快照 + 重入回执（1.10：快照口径分流 + 重入标识渲染 + schema 可选 reEntered）', () => {
-  it('scoped 调用：taskStats 查询携带 source（容器口径快照——no-task 收据全池数字不再出现的数据源）', async () => {
-    const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    await h.tool.execute({ source_kind: 'feature', source_slug: 'feat-x' }, h.exec)
-    expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
-    const text = h.tool.output.render({}, { kind: 'no-task', pool: { pending: 9, inProgress: 1, blocked: 0, unmetPending: 2 } })[0]?.text ?? ''
-    expect(text).toContain('pool: pending 9 · in_progress 1 · blocked 0 · unmet-pending 2') // 容器数字即收据数字
-  })
-
-  it('非 scoped 调用：taskStats 查询不含 source 键（全池口径零变化）', async () => {
-    const h = harness()
-    h.setClaim({ task: null, dispatchPrompt: '', persona: 'PERSONA-MATRIX', digest: '', reclaimed: false })
-    await h.tool.execute({}, h.exec)
-    expect(h.statsInputs).toHaveLength(1)
-    expect(h.statsInputs[0]).not.toHaveProperty('source')
-  })
-
-  it('重入回执：claim reclaimed=true → dispatched 回执 reEntered=true + 渲染 re-entered 标识与等待指引', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    h.setSpawn(async (req) => {
-      h.spawnRequests.push(req)
-      return { workerSessionId: 'worker-bg', result: new Promise(() => {}), dispose: async () => {} } // 永不结算
-    })
-    h.setClaim({ task: snapshot(), dispatchPrompt: 'P', persona: 'PERSONA-MATRIX', digest: 'd2', reclaimed: true })
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as { kind: string; reEntered?: boolean }
-    expect(out.kind).toBe('dispatched')
-    expect(out.reEntered).toBe(true)
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text.startsWith('▸ re-entered dispatched feat-x/2.5 — job forge-dispatch-1')).toBe(true)
-    expect(text).toContain('already in flight')
-    expect(text).toContain('do NOT dispatchTask')
-    expect(text).toContain('wait for')
-    expect(text).toContain('job_output forge-dispatch-1') // 既有指引行保留
-    expect(text).toContain('- pool: pending 1 · in_progress 0 · blocked 1 · unmet-pending 2')
-  })
-
-  it('新领取回执零重入键（toEqual 全形不变）+ 渲染 ▸ 原样', async () => {
-    const js = jobsStub()
-    const h = harness({ jobs: js.jobs })
-    const out = (await h.tool.execute({ run_in_background: true }, h.exec)) as object
-    expect(out).toEqual({
-      kind: 'dispatched',
-      taskRef: { slug: 'feat-x', localId: '2.5' },
-      title: 'Implement the thing',
-      type: 'coding-fix',
-      workerSessionId: 'worker-1',
-      jobId: 'forge-dispatch-1',
-      pool: { pending: 1, inProgress: 0, blocked: 1, unmetPending: 2 },
-    })
-    const text = h.tool.output.render({}, out)[0]?.text ?? ''
-    expect(text.startsWith('▸ dispatched feat-x/2.5 — job forge-dispatch-1')).toBe(true)
-    expect(text).not.toContain('re-entered')
-  })
-
-  it('output schema：dispatched 支 properties 增 reEntered（可选——required 面不变）', () => {
-    const h = harness()
-    const schema = h.tool.output.schema as {
-      oneOf: [ { oneOf: Array<{ properties?: Record<string, unknown>; required?: string[] }> }, object ]
-    }
-    const dispatched = schema.oneOf[0]!.oneOf[1]!
-    expect(dispatched.properties).toHaveProperty('reEntered')
-    expect(dispatched.required).not.toContain('reEntered')
-    expect(dispatched.required).toEqual(['kind', 'taskRef', 'title', 'type', 'workerSessionId', 'jobId', 'pool'])
+    expect(h.events[0]).toMatchObject({ slug: 'feat-x', payload: { verb: 'dispatchTask', code: 'ERR_WORKSPACE_NOT_REGISTERED' } })
   })
 })

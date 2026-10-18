@@ -24,6 +24,7 @@ import {
   seedTask,
   type TasksHarness,
 } from './harness.js'
+import { queryTask } from './query.js'
 import { submitTask } from './submit.js'
 
 let h: TasksHarness | undefined
@@ -624,5 +625,39 @@ describe('S3 结构化提交：AC 交叉校验 + 逐项闭环 + files 分组 + r
     expect(rows(`SELECT ac_json, record_fields_json FROM task_records WHERE verb = 'submit'`)).toEqual([
       { ac_json: null, record_fields_json: null },
     ])
+  })
+})
+
+describe('改进7 e2e 取证债（实现态部分结算声明落账）', () => {
+  it('success + evidenceDebt：结算为 completed（实现态）+ record_fields_json 携带欠账声明 + 读面投影', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    const r = await submit({
+      projectId: P(),
+      taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success',
+      summary: '实现+单测绿；真机 e2e 断言欠账',
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      evidenceDebt: { suite: 'e2e', specs: ['e2e/specs/race-window.spec.ts'], note: '竞速窗断言待真机取证' },
+      sessionId: 's-exec',
+    })
+    expect(r.status).toBe('completed')
+    const rec = rows(`SELECT record_fields_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      record_fields_json: string
+    }
+    expect(JSON.parse(rec.record_fields_json)).toEqual({
+      evidenceDebt: { suite: 'e2e', specs: ['e2e/specs/race-window.spec.ts'], note: '竞速窗断言待真机取证' },
+    })
+    // 读面投影（TaskRecordEntry.evidenceDebt——settle 核欠账任务生成的数据源）
+    const detail = await queryTask(deps(), {
+      projectId: P(),
+      taskRef: { slug: 'f', localId: '1.1' },
+      include: { records: true },
+    })
+    expect(detail.records?.[0]?.evidenceDebt).toEqual({
+      suite: 'e2e',
+      specs: ['e2e/specs/race-window.spec.ts'],
+      note: '竞速窗断言待真机取证',
+    })
   })
 })

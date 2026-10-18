@@ -24,6 +24,8 @@ export interface DispatchSpawnedResult {
   readonly files?: readonly string[]
   /** 已建修复任务（blocked 径 worker 经 addTask blockSource 派生链——可继续派发） */
   readonly followUp?: TaskRef
+  /** e2e 取证债（改进7——success 径 submit 携带 evidenceDebt 时自动生成的欠账 test-run 任务） */
+  readonly evidenceDebt?: { taskRef: TaskRef; suite: string; specs: readonly string[] }
   readonly pool: PoolSnapshot
 }
 

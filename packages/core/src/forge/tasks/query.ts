@@ -240,6 +240,7 @@ export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
     ...(recordFields?.testsFailed !== undefined ? { testsFailed: recordFields.testsFailed } : {}),
     ...(recordFields?.coverage !== undefined ? { coverage: recordFields.coverage } : {}),
     ...(recordFields?.notes !== undefined ? { notes: recordFields.notes } : {}),
+    ...(recordFields?.evidenceDebt !== undefined ? { evidenceDebt: recordFields.evidenceDebt } : {}),
     ...(row.gate_json !== null ? { gate: JSON.parse(row.gate_json) as TaskGateReport } : {}),
     ...(row.commit_hash !== null ? { commitHash: row.commit_hash } : {}),
     ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),

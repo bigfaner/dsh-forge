@@ -60,6 +60,10 @@ export interface SubmitTaskToolArgs {
   readonly gate_test?: boolean
   readonly gate_coverage?: number
   readonly commit_hash?: string
+  /** e2e 取证债（改进7——success 专用：真机 e2e 断言欠账声明 → 实现态部分结算 + 欠账 test-run 任务自动生成） */
+  readonly evidence_debt_suite?: string
+  readonly evidence_debt_specs?: readonly string[]
+  readonly evidence_debt_note?: string
 }
 
 /** gate 平铺四参 → TaskGateReport（all-or-none + coverage 依赖门在场） */
@@ -113,6 +117,9 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
     gate_test?: boolean
     gate_coverage?: number
     commit_hash?: string
+    evidence_debt_suite?: string
+    evidence_debt_specs?: string[]
+    evidence_debt_note?: string
   } = {
     slug: requiredString(a, 'slug', TOOL),
     local_id: requiredString(a, 'local_id', TOOL),
@@ -177,6 +184,20 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   if (gateCoverage !== undefined) out.gate_coverage = gateCoverage
   const commitHash = optionalString(a, 'commit_hash', TOOL)
   if (commitHash !== undefined) out.commit_hash = commitHash
+  // e2e 取证债（改进7——三参成组：suite 必带、specs 必带非空、note 可选）
+  const debtSuite = optionalString(a, 'evidence_debt_suite', TOOL)
+  const debtSpecs = optionalStringArray(a, 'evidence_debt_specs', TOOL)
+  if (debtSuite !== undefined || debtSpecs !== undefined) {
+    if (debtSuite === undefined || debtSpecs === undefined || debtSpecs.length === 0) {
+      throw new Error(`${TOOL}: evidence_debt_suite and a non-empty evidence_debt_specs must be given together`)
+    }
+    out.evidence_debt_suite = debtSuite
+    out.evidence_debt_specs = debtSpecs
+    const debtNote = optionalString(a, 'evidence_debt_note', TOOL)
+    if (debtNote !== undefined) out.evidence_debt_note = debtNote
+  } else if (a['evidence_debt_note'] !== undefined) {
+    throw new Error(`${TOOL}: evidence_debt_note requires evidence_debt_suite and evidence_debt_specs`)
+  }
   gateOf(out) // 组合形状先证（all-or-none / coverage 依赖）
   return out
 }
@@ -223,7 +244,7 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source.',
+      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source. evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence.',
     parameters: {
       type: 'object',
       properties: {
@@ -277,6 +298,16 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         gate_test: { type: 'boolean', description: 'Quality gate: tests passed.' },
         gate_coverage: { type: 'number', description: 'Coverage fraction 0-1 (optional, with the gate booleans).' },
         commit_hash: { type: 'string', description: 'Commit hash containing the change.' },
+        evidence_debt_suite: {
+          type: 'string',
+          description: "e2e evidence-debt suite name (e.g. 'e2e') — declare when implementation + unit tests are green but real-machine e2e assertion evidence is still owed. Settlement records the implementation phase and the loop auto-creates a dependent test-run debt task (the card is no longer blocked on missing e2e evidence).",
+        },
+        evidence_debt_specs: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Spec paths the owed e2e assertions cover (forward slashes) — required with evidence_debt_suite.',
+        },
+        evidence_debt_note: { type: 'string', description: 'What evidence is owed and why (optional, with the debt pair).' },
       },
       required: ['slug', 'local_id', 'result'],
     },
@@ -316,6 +347,15 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.notes !== undefined ? { notes: parsed.notes } : {}),
           ...(gate !== undefined ? { gate } : {}),
           ...(parsed.commit_hash !== undefined ? { commitHash: parsed.commit_hash } : {}),
+          ...(parsed.evidence_debt_suite !== undefined && parsed.evidence_debt_specs !== undefined
+            ? {
+                evidenceDebt: {
+                  suite: parsed.evidence_debt_suite,
+                  specs: [...parsed.evidence_debt_specs],
+                  ...(parsed.evidence_debt_note !== undefined ? { note: parsed.evidence_debt_note } : {}),
+                },
+              }
+            : {}),
         }
         const result = await deps.tasks.submitTask(input)
         // task-submitted 事件（worker 自身会话 id——串联读法「submit = 执行会话」；AC gate 已过）

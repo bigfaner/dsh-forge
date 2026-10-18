@@ -239,6 +239,65 @@ describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 
     expect((await claim({ projectId: P(), sessionId: 's2' })).task?.localId).toBe('a') // P2（P0 已领走）
   })
 
+  it('fix 优先键（block_source 挂接）：fix 与普通任务同轮就绪 → fix 先领（压过 P0 普通）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fxo', status: 'tasks' })
+    seedTask(h!.db, 'fxo', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fxo', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-fxo-1.1' })
+    seedEdge(h!.db, 't-fxo-fix-1', 't-fxo-1.1', 'fix-chain')
+    seedTask(h!.db, 'fxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    h!.db.prepare(`UPDATE tasks SET priority = 'P0' WHERE local_id = '1.2' AND slug = 'fxo'`).run()
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: 'fix-1', taskStatus: 'in_progress' })
+  })
+
+  it('不跨轮饿死：fix 被领走（in_progress）后下一轮普通任务照常领出', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fxo', status: 'tasks' })
+    seedTask(h!.db, 'fxo', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fxo', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-fxo-1.1' })
+    seedEdge(h!.db, 't-fxo-fix-1', 't-fxo-1.1', 'fix-chain')
+    seedTask(h!.db, 'fxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    expect((await claim({ projectId: P(), sessionId: 's' })).task?.localId).toBe('fix-1')
+    // 同会话重入回领 fix-1（C1）→ 换会话盲选：fix 已不在 pending 就绪集 → 1.2
+    expect((await claim({ projectId: P(), sessionId: 's2' })).task?.localId).toBe('1.2')
+  })
+
+  it('disc-N 非 fix：不享受 fix 优先键（与普通任务同 priority → 创建序）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'dxo', status: 'tasks' })
+    seedTask(h!.db, 'dxo', '1.1', { createdAt: '2026-01-01T00:00:02.000Z' })
+    seedTask(h!.db, 'dxo', 'disc-1', { type: 'doc', sourceTaskId: 't-dxo-1.1', createdAt: '2026-01-01T00:00:03.000Z' })
+    seedTask(h!.db, 'dxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('1.2')
+  })
+
+  it('分支延续优先于 fix 优先键：延续后继（普通）胜过全局池 fix（§6-35⑧ 序：延续 → fix → priority → 创建序）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'mix', status: 'tasks' })
+    seedTask(h!.db, 'mix', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:05.000Z' })
+    seedTask(h!.db, 'mix', '1.2', { createdAt: '2026-01-01T00:00:02.000Z' }) // 延续候选：普通
+    seedEdge(h!.db, 't-mix-1.2', 't-mix-1.1')
+    seedTask(h!.db, 'mix', '2.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'mix', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-mix-2.1', createdAt: '2026-01-01T00:00:01.000Z' })
+    seedEdge(h!.db, 't-mix-fix-1', 't-mix-2.1', 'fix-chain')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('1.2')
+  })
+
+  it('延续后继集内 fix 先选：锚点多就绪后继时 fix 后继胜出（创建序兜底时普通创建早仍被 fix 压过）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'anc', status: 'tasks' })
+    seedTask(h!.db, 'anc', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'anc', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' }) // 普通后继（创建早）
+    seedEdge(h!.db, 't-anc-1.2', 't-anc-1.1')
+    seedTask(h!.db, 'anc', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-anc-1.1', createdAt: '2026-01-01T00:00:02.000Z' })
+    seedEdge(h!.db, 't-anc-fix-1', 't-anc-1.1', 'fix-chain')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('fix-1')
+  })
+
   it('创建序 tie-break：同 priority 取 created_at 最早', async () => {
     const claim = svc()
     seedFeature(h!.db, { slug: 'ord', status: 'tasks' })
