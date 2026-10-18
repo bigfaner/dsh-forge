@@ -2,7 +2,9 @@
 // 红灯清单随任务简报（E2E_BASELINE_RED 行）递达 worker：基线红灯 ≠ 本任务回归，可机械判定；
 // 红灯自动生成归因卡（环境 / 陈旧断言 / 真回归 三分流）。定位：循环面基建（loop/）——
 // 套件执行命令由装配方经 runSuite 注入，本模块只做解析与载荷合成（纯逻辑可单测）。
+import { execFile } from 'node:child_process'
 import type { AddTaskInput, ContainerRef, TaskPriority } from '@dsh-forge/contracts'
+import { noteHostOwnedChild } from '../spawn/job-tree.js'
 
 /** 基线跑批产物（ranAt = 跑批起点 ISO；error 在场 = 套件执行失败——fail-soft 空清单，不阻循环） */
 export interface E2eBaselineRedList {
@@ -12,29 +14,57 @@ export interface E2eBaselineRedList {
 }
 
 /**
- * 套件输出 → 红灯 spec 清单（解析 `FAIL <path>` 行——vitest/jest reporter 共同形态；
- * 路径限定 .spec/.test 后缀滤除噪音；去重 + 字母序——同输出恒同清单）。
+ * 套件输出 → 红灯 spec 清单（逐行解析——行首红灯标记 + 行内首个 spec 路径）：
+ * - vitest/jest reporter：`FAIL <path> > suite`；
+ * - playwright list reporter（本仓 e2e 正道）：`✘ 1 [chromium] › <path>:12:5 › title`
+ *   （✕/×/✗ 变体一并收录——各 runner 红灯字形）；
+ * - vitest default reporter stdout 汇总行：`❯ |project| <path> (1 test | 1 failed)`——
+ *   ❯ 行须带 failed 字样才计红（❯ 亦作套件运行指示符，防绿套件误报）。
+ * 路径限定 .spec/.test 后缀滤除噪音；去重 + 字母序——同输出恒同清单。
  */
 export function parseE2eRedSpecs(output: string): string[] {
   const specs = new Set<string>()
-  const re = /^\s*(?:FAIL|✕|×)\s+(\S+\.(?:spec|test)\.[cm]?[jt]s)\b/gm
-  for (const m of output.matchAll(re)) {
-    if (m[1] !== undefined) specs.add(m[1])
+  const redLineRe = /^\s*(?:FAIL\b|[✕×✘✗❯]).*$/gm
+  const specPathRe = /[A-Za-z0-9_.\\/-]+\.(?:spec|test)\.[cm]?[jt]s\b/
+  for (const m of output.matchAll(redLineRe)) {
+    const line = m[0]
+    // ❯ 双义（红灯汇总行 / 运行指示行）：仅 failed 字样在场才计红
+    if (/^\s*❯/.test(line) && !/\bfailed\b/i.test(line)) continue
+    const path = specPathRe.exec(line)?.[0]
+    if (path !== undefined) specs.add(path)
   }
   return [...specs].sort()
 }
 
+/** 基线套件执行超时缺省（10min——全量 e2e 套件上界；挂死 fail-soft 不拖循环入场） */
+export const E2E_BASELINE_SUITE_TIMEOUT_MS = 600_000
+
 /**
  * 基线跑批（e2e 套件入场前调用一次）：执行注入的 runSuite 取全量输出 → 解析红灯清单。
- * 套件执行故障 fail-soft：空清单 + error 留痕——基线不可得时机制静默关闭（简报零行），
- * 循环派发不受阻（取证债可后补，循环不死锁）。
+ * runSuite 以超时包裹（挂死 = reject——fail-soft 空清单 + error 留痕，不拖循环入场；
+ * 进程级 kill 由装配方 execFile timeout 承担）。套件执行故障 fail-soft：空清单 + error
+ * 留痕——基线不可得时机制静默关闭（简报零行），循环派发不受阻（取证债可后补，循环不死锁）。
  */
-export async function runE2eBaseline(runSuite: () => Promise<string>): Promise<E2eBaselineRedList> {
+export async function runE2eBaseline(
+  runSuite: () => Promise<string>,
+  opts: { readonly timeoutMs?: number } = {},
+): Promise<E2eBaselineRedList> {
   const ranAt = new Date().toISOString()
+  const timeoutMs = opts.timeoutMs ?? E2E_BASELINE_SUITE_TIMEOUT_MS
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    return { ranAt, redSpecs: parseE2eRedSpecs(await runSuite()) }
+    const output = await Promise.race([
+      runSuite(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`e2e 基线套件执行超时（${timeoutMs}ms）——fail-soft 关闭`)), timeoutMs)
+        timer.unref?.()
+      }),
+    ])
+    return { ranAt, redSpecs: parseE2eRedSpecs(output) }
   } catch (cause) {
     return { ranAt, redSpecs: [], error: cause instanceof Error ? cause.message : String(cause) }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -91,4 +121,59 @@ export function attributionTaskInput(
     ].join('\n'),
     vars: { BASELINE_SPEC: spec },
   }
+}
+
+// ─────────────────────────── 生产装配面（宿主 wiring——bug ca061ef6 接线收口） ───────────────────────────
+
+/** e2e 基线装配面参数（宿主 index.ts 消费；probe 真机取证可注入轻量真命令） */
+export interface E2eBaselineFaceDeps {
+  /** 套件执行目录（宿主工作区根——e2e 正本所在地） */
+  readonly cwd: string
+  /** 套件命令（缺省 pnpm；Windows shell 解析 pnpm.cmd） */
+  readonly command?: string
+  /** 套件命令参数（缺省 ['test:e2e']——根 package.json playwright 正道） */
+  readonly args?: readonly string[]
+  /** 套件超时 ms（挂死 kill——缺省 E2E_BASELINE_SUITE_TIMEOUT_MS） */
+  readonly timeoutMs?: number
+  /** shell 解析（缺省 win32 = true——pnpm 需 shell 解析 pnpm.cmd；直连 exe 可显式关） */
+  readonly shell?: boolean
+}
+
+/**
+ * 宿主装配面（LoopDriverDeps.e2eBaseline 生产形态）：runSuite = 真实子进程执行 e2e 套件
+ * 全量（execFile timeout 包裹——套件挂死 kill + 非零退出 reporter 输出照常解析；子进程
+ * noteHostOwnedChild 登记——宿主自有子进程不并发循环 keeper 误收编）+ readHead = git
+ * rev-parse HEAD（故障/非 git 目录 = undefined——键不可得，驱动器回落启动时基线）。
+ * 套件故障 fail-soft（空清单 + warn——机制静默关闭，循环不阻，简报零行）。
+ */
+export function createE2eBaselineFace(deps: E2eBaselineFaceDeps): {
+  readonly runSuite: () => Promise<string>
+  readonly readHead: (worktree: string) => Promise<string | undefined>
+} {
+  const command = deps.command ?? 'pnpm'
+  const args = deps.args ?? ['test:e2e']
+  const timeoutMs = deps.timeoutMs ?? E2E_BASELINE_SUITE_TIMEOUT_MS
+  const runSuite = (): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const child = execFile(
+        command,
+        [...args],
+        { cwd: deps.cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: timeoutMs, windowsHide: true, shell: deps.shell ?? process.platform === 'win32' },
+        (error, stdout, stderr) => {
+          // 非零退出（有红灯）≠ 取数失败——reporter 输出在场即解析（vitest 失败详单走
+          // stderr、playwright 全走 stdout——双流拼接喂解析器）；双流全空 = 执行故障 fail-soft
+          const combined = `${stdout}\n${stderr}`
+          if (combined.trim() !== '') resolve(combined)
+          else reject(error ?? new Error('e2e 基线套件零输出'))
+        },
+      )
+      noteHostOwnedChild(child)
+    })
+  const readHead = (worktree: string): Promise<string | undefined> =>
+    new Promise((resolve) => {
+      execFile('git', ['-C', worktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }, (error, stdout) =>
+        resolve(error == null && stdout.trim() !== '' ? stdout.trim() : undefined),
+      )
+    })
+  return { runSuite, readHead }
 }

@@ -91,6 +91,7 @@ async function createE2eDebtTask(
   tasks: ForgeTasksService,
   ctx: { readonly projectId: string; readonly task: TaskSnapshot },
   debt: NonNullable<TaskRecordEntry['evidenceDebt']>,
+  e2eBaselineRed?: readonly string[],
 ): Promise<DispatchSpawnedResult['evidenceDebt']> {
   try {
     const specsLine = debt.specs.join(', ')
@@ -103,7 +104,11 @@ async function createE2eDebtTask(
         `实现卡 ${ctx.task.slug}/${ctx.task.localId} 已按实现态结算（实现+单测绿），本卡承接其真机 e2e 断言取证欠账。`,
         `取证套件：${debt.suite}；欠账 spec：${specsLine}。`,
         ...(debt.note !== undefined ? [`欠账说明：${debt.note}`] : []),
-        '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。',
+        // 文案与简报行真实存在性一致（bug ca061ef6）：简报红灯清单在场才指示比对——
+        // 无红灯/基线门未接线时兜底文案，不指示真机不存在的简报行
+        e2eBaselineRed !== undefined && e2eBaselineRed.length > 0
+          ? '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。'
+          : '执行 e2e 并断言上述 spec；本卡生成时简报无 E2E_BASELINE_RED 行（基线门未接线或入场基线零红灯）——遇失败不默认归因到本实现，按归因流程（环境/陈旧断言/真回归三分流）自行分流上报。',
       ].join('\n'),
       dependsOn: [ctx.task.localId],
       priority: 'P1',
@@ -180,6 +185,8 @@ export async function settleWorkerRun(
      * 核验提交落点（commit 所属分支 = 容器检出分支）；缺席 = 不核验（工具壳行为零变化）。
      */
     readonly worktreeCwd?: string
+    /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
+    readonly e2eBaselineRed?: readonly string[]
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -240,7 +247,7 @@ export async function settleWorkerRun(
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =
     outcome === 'success' && submitRecord?.evidenceDebt !== undefined
-      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt)
+      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt, ctx.e2eBaselineRed)
       : undefined
   const pool: PoolSnapshot = poolOf(
     await deps.tasks.taskStats({

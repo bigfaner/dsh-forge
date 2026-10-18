@@ -447,6 +447,11 @@ export interface SettleStageInput {
    * 提交落点；缺席（工具壳）= 不核验，行为零变化。
    */
   readonly worktreeCwd?: string
+  /**
+   * 本轮 claim 简报红灯清单（改进7——欠账卡文案与简报行真实存在性一致的判据）：
+   * 在场且非空 = 欠账卡指示「比对 E2E_BASELINE_RED 行」；缺席/空 = 兜底文案。
+   */
+  readonly e2eBaselineRed?: readonly string[]
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -478,6 +483,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     spawnStartedAt,
     ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
     ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
+    ...(input.e2eBaselineRed !== undefined ? { e2eBaselineRed: input.e2eBaselineRed } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

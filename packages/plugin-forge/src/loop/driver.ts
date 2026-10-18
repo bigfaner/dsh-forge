@@ -1068,6 +1068,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     guardOnFailure: false,
     // 提交落点核验（1.14——cwd 钉定收口）：容器检出 = 发起循环 worktree
     ...(record.worktree !== undefined ? { worktreeCwd: record.worktree } : {}),
+    // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
+    // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
+    // （不指示真机不存在的简报行）
+    ...(baseline !== undefined && baseline.redSpecs.length > 0 ? { e2eBaselineRed: baseline.redSpecs } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'

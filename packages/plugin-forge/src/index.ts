@@ -29,7 +29,7 @@ import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
-import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
+import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
@@ -255,8 +255,14 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
     // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
     const loopRegistry = createLoopRegistry()
+    // e2e 红灯基线门真装配（改进7 · bug ca061ef6 生产接线收口）：runSuite = 宿主检出根
+    // e2e 套件全量执行（pnpm test:e2e——reporter FAIL/✘ 行解析为红灯清单；execFile timeout
+    // 挂死 kill + fail-soft）+ readHead = git rev-parse HEAD（disc-2 HEAD 键控缓存键）。
+    // 套件执行故障 fail-soft——机制静默关闭（简报零行），循环派发不阻。
+    const e2eBaseline = createE2eBaselineFace({ cwd: process.cwd() })
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
+      e2eBaseline,
       tasks: ctx.forgeTasks,
       spawn,
       narrator,
