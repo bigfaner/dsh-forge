@@ -26,6 +26,8 @@ coverage/
 test-results/
 # e2e harness 派生会话 userData 自愈基目录（e2e/support/launch.ts e2eUserDataRoot）
 .e2e-ud/
+# e2e 派生会话 TMP 自愈基目录（e2e/global-setup.ts applyE2eTmpRedirect，fix-10）
+.e2e-tmp/
 playwright-report/
 
 # lint selftest crash leftovers (scripts/lint-selftest.mjs sweeps on each run)

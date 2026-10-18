@@ -3,6 +3,11 @@
 // 冒烟骨架组已随 2.14 迁入（specs/smoke-skeleton.spec.ts；台账 = e2e/SMOKE-LEDGER.md）。
 // 1.5 起主窗口载自有壳（apps/web dist）——globalSetup 前置构建。
 import { defineConfig, devices } from '@playwright/test'
+// fix-10 fallback（goal ③）：config 模块加载期（早于 worker spawn）显式执行 TMP 重定向，
+// 与 global-setup 模块顶层共用同一实现（幂等，仅首个生效）——两处任一生效即可。
+import { applyE2eTmpRedirect } from './global-setup.js'
+
+applyE2eTmpRedirect()
 
 // fix-9（并发封顶——用户硬约束「一次最多打开 2 个」，持久配置面）：fullyParallel:false
 // 只串行化单文件内用例，spec 文件仍按 workers 并行分派——Playwright 缺省 workers =
