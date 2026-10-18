@@ -46,24 +46,22 @@ export function parseStopTaskLoopArgs(args: unknown): StopTaskLoopToolArgs {
 export type StopTaskLoopResult =
   | { readonly kind: 'stopped'; readonly source: ContainerRef; readonly hadInFlight: boolean }
 
+// 成功支仅 'stopped' 一种——直接作为 withFailureVariant 的成功 schema（不嵌 oneOf：
+// 宿主子集校验要求 oneOf ≥2 元素，单支嵌套 = 注册即拒炸会话 resume，见 plugin.test 宿主镜像）
 const STOP_TASK_LOOP_OUTPUT_SCHEMA = withFailureVariant({
-  oneOf: [
-    {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    kind: { type: 'string', enum: ['stopped'] },
+    source: {
       type: 'object',
       additionalProperties: false,
-      properties: {
-        kind: { type: 'string', enum: ['stopped'] },
-        source: {
-          type: 'object',
-          additionalProperties: false,
-          properties: { kind: { type: 'string', enum: ['feature', 'proposal'] }, slug: { type: 'string' } },
-          required: ['kind', 'slug'],
-        },
-        hadInFlight: { type: 'boolean' },
-      },
-      required: ['kind', 'source', 'hadInFlight'],
+      properties: { kind: { type: 'string', enum: ['feature', 'proposal'] }, slug: { type: 'string' } },
+      required: ['kind', 'slug'],
     },
-  ],
+    hadInFlight: { type: 'boolean' },
+  },
+  required: ['kind', 'source', 'hadInFlight'],
 })
 
 function renderStopTaskLoopResult(_args: unknown, value: unknown): readonly TextContentBlock[] {

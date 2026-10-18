@@ -213,6 +213,35 @@ describe('注册面集合 pin（十四 tool：M3 九员 + recordBug/resolveBug �
     dispose()
   })
 
+  it('bug: 单元素 oneOf 嵌套逃逸宿主子集校验（stopTaskLoop 曾炸会话创建/resume）', () => {
+    // 宿主引擎 schema 子集校验器：oneOf 必须是 ≥2 个 schema 的数组——stopTaskLoop 成功支仅
+    // 'stopped' 一种却包了层 oneOf:[单支]，经 withFailureVariant 再嵌后 schema.oneOf[0].oneOf
+    // 为单元素数组，插件工具面注册即拒（resume RemoteError：unsupported JSON schema:
+    // schema.oneOf[0].oneOf must be an array of at least two schemas）。同锚深走双面钉住。
+    const walk = (node: unknown, path: string, violations: string[]): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child, i) => walk(child, `${path}[${i}]`, violations))
+        return
+      }
+      if (node === null || typeof node !== 'object') return
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'oneOf' && (!Array.isArray(value) || value.length < 2)) {
+          violations.push(`${path}.oneOf`)
+        }
+        walk(value, `${path}.${key}`, violations)
+      }
+    }
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.ctx())
+    for (const tool of rt.registeredTools) {
+      const violations: string[] = []
+      walk(tool.parameters, `${tool.name}.parameters`, violations)
+      walk(tool.output.schema, `${tool.name}.output.schema`, violations)
+      expect(violations, `${tool.name} 宿主 schema 子集违规（oneOf 须 ≥2 元素数组）`).toEqual([])
+    }
+    dispose()
+  })
+
   it('tool 名形 pin（fix-19 同锚）：^[a-zA-Z0-9_-]+$（OpenAI 兼容端点强校验名形）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
