@@ -7,7 +7,9 @@
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
-    "allowJs": true
+    "allowJs": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true
   },
   "include": ["**/*.ts"]
 }
