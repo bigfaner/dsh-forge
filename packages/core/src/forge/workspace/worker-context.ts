@@ -62,7 +62,7 @@ function renderLogsRootBlock(abs: string): string {
 /** 任务日志锚点段：恒出；树仅任务目录在盘时追加（首跑未建 → 介绍行 + 路径行） */
 function renderTaskLogsBlock(abs: string): string {
   const note =
-    '任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件存储在此。'
+    '任务日志目录：{forge.task_logs_dir} = {forge.project_logs_dir}/{slug}/{local_id}；本轮任务的证据子文件夹与 resume.md 进度文件（随附 resume.validity.json 效度戳——跨 HEAD/基线漂移的证据强制重跑）存储在此。'
   const lines: string[] = [`forge.task_logs_dir——${note}`, `  ${abs}${sep}`]
   scanLines(abs, '  ', 1, lines)
   return lines.join('\n')

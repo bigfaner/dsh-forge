@@ -28,7 +28,7 @@ import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
-import { readEvidencePointer } from './forge/tasks/evidence-pointer.js'
+import { currentValidityDomain, readEvidencePointerState, writeEvidenceValidityStamp } from './forge/tasks/evidence-pointer.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
 import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
@@ -150,10 +150,25 @@ const corePlugin: CorePlugin = Object.assign(
           store,
           events,
           resolveWsPath: routing.wsPath, // 十一法全接线（2.6 读面收口）
-          // worker-exec-evidence-replay 1.3：续跑指针探测（claim 领取瞬间证据位读取——
-          // 容器库目录经 tasksHome + routing.wsPath 单源派生；fail-soft = 首跑零 <resume> 段）
-          resolveEvidencePointer: (projectId, slug, localId) =>
-            readEvidencePointer(deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)), slug, localId),
+          // worker-exec-evidence-replay 1.3 + disc 效度戳：续跑指针探测 + 效度机械比对（claim
+          // 领取瞬间证据位读取——容器库目录经 tasksHome + routing.wsPath 单源派生；checkoutRoot
+          // = claim 入参检出根（循环/派发会话 worktree），缺席回落注册根，再缺席 = 机制惰性
+          // 不判；fail-soft = 首跑零 <resume> 段；漂移 = stale 规则段强制重跑）
+          resolveEvidencePointer: (projectId, slug, localId, checkoutRoot) => {
+            const containerDir = deriveTaskStoreDir(tasksHome, routing.wsPath(projectId))
+            const state = readEvidencePointerState(containerDir, slug, localId, currentValidityDomain(checkoutRoot ?? routing.wsPath(projectId)))
+            return state.pointer === undefined ? undefined : { pointer: state.pointer, stale: state.stale }
+          },
+          // disc 效度戳写侧（submit-task 结算面）：resume.md 在盘才写 sidecar（HEAD + 基线签名
+          // 单源取数同上——checkoutRoot = 结算会话检出 = worker 工作区根；fail-soft）
+          stampEvidenceValidity: (input) => {
+            writeEvidenceValidityStamp(
+              deriveTaskStoreDir(tasksHome, routing.wsPath(input.projectId)),
+              input.slug,
+              input.localId,
+              currentValidityDomain(input.checkoutRoot) ?? { head: 'unknown', baseline: 'unknown' },
+            )
+          },
           // worker-lean-execution 追加轮：任务目录锚点节（容器目录树/logs 双锚——检出根唯一
           // 权威 = worker 会话 cwd（真根因裁决：WORKSPACE 锚点行砍除，见 worker-context.ts 头注）；
           // persona 通道 worker 独享；logsRoot = <任务库>/logs 与续跑指针共享 deriveTaskStoreDir

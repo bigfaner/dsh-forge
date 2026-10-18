@@ -928,6 +928,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     ...(loop.e2eBaselineRed !== undefined && loop.e2eBaselineRed.length > 0
       ? { e2eBaselineRed: loop.e2eBaselineRed }
       : {}),
+    // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
+    // 比对此效度域，漂移 = stale 强制重跑）
+    ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),
   })
   // 停止竞态收口（claim 已落而循环被叫停）：本实例未接管的孤儿 in_progress → 真化 interrupted
   if (await bailIfAborted(loop, claim.kind === 'claimed' ? claim : undefined)) return 'terminal'

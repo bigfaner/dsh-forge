@@ -114,6 +114,43 @@ describe('gateOf（平铺 → TaskGateReport）', () => {
 })
 
 describe('submitTask execute（路由 + 映射）', () => {
+  it('disc 效度戳写侧：结算成功 → stampEvidenceValidity 以结算会话 cwd 调用（worker 检出 = 效度域锚）；cwd 缺席零调用', async () => {
+    const stamped: { projectId: string; slug: string; localId: string; checkoutRoot: string }[] = []
+    const throwing = () => {
+      throw new Error('stamp must be fail-soft')
+    }
+    const tasks = {
+      submitTask: async () => ({ taskId: 't-1', status: 'completed', restored: [] }),
+      stampEvidenceValidity: (input: { projectId: string; slug: string; localId: string; checkoutRoot: string }) => {
+        stamped.push(input)
+      },
+    } as unknown as ForgeTasksService
+    const deps: ForgeToolDeps = {
+      tasks,
+      proposals: {} as ForgeToolDeps['proposals'],
+      bugs: {} as ForgeToolDeps['bugs'],
+      resolveProjectId: () => 'p-1',
+    }
+    const tool = createSubmitTaskTool(deps)
+    await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 'ok' }, EXEC)
+    expect(stamped).toEqual([{ projectId: 'p-1', slug: 'f1', localId: '3.2', checkoutRoot: 'C:\\ws\\demo' }])
+    // blocked 结算同样落戳（1.16 判例：blocked 残留证据也带效度戳，fix 落地后重领判漂移）
+    await tool.execute({ slug: 'f1', local_id: '3.2', result: 'blocked', reason: 'x' }, EXEC)
+    expect(stamped).toHaveLength(2)
+    // fail-soft：落戳抛错不阻断结算
+    const failing = createSubmitTaskTool({
+      ...deps,
+      tasks: { submitTask: async () => ({ taskId: 't-1', status: 'completed', restored: [] }), stampEvidenceValidity: throwing } as unknown as ForgeTasksService,
+    })
+    await expect(
+      failing.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 'ok' }, EXEC),
+    ).resolves.toBeDefined()
+    // cwd 缺席（非 agent 会话）→ 零调用
+    stamped.length = 0
+    await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 'ok' }, { agent: { session: { id: 's' } } })
+    expect(stamped).toEqual([])
+  })
+
   it('slug+local_id → taskRef（slug = 容器 slug——feature/proposal 同规）；sessionId 提取；gate 映射', async () => {
     const { tool, captured } = toolWithCapture()
     await tool.execute(

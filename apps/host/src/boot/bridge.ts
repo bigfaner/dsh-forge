@@ -301,8 +301,12 @@ export const TASKS_SERVICE_METHODS = [
   'sessionLinks',
 ] as const satisfies readonly (keyof ForgeTasksService)[]
 
-/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名） */
-export type TasksWhitelistCoverage = AssertNever<Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number]>>
+/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名；
+ *  stampEvidenceValidity 显式排除——disc 效度戳写侧 = worker/tool 面专属，不入 renderer
+ *  RPC 白名单（ipc 通道族不注册该写动词，SC7 断言面）） */
+export type TasksWhitelistCoverage = AssertNever<
+  Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number] | 'stampEvidenceValidity'>
+>
 
 export const FEATURES_SERVICE_METHODS = [
   'registerFeature',

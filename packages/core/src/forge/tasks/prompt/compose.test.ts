@@ -488,6 +488,36 @@ describe('1.3 <resume> 续跑规则段（重入派发简报整段注入——规
     expect(prompt).not.toContain('EVIDENCE')
   })
 
+  it('disc 效度戳：evidenceStale = true → stale 规则段（只叙不判强制重跑），fresh 段不注入', () => {
+    const prompt = composeDispatchPrompt({
+      ...fullInput({ taskType: 'coding-feature' }),
+      evidencePointer: 'logs/m2-pipeline/2.2/resume.md',
+      evidenceStale: true,
+    })
+    expect(prompt).toContain('效度戳与当前效度域（HEAD commit / 基线签名）比对不一致')
+    expect(prompt).toContain('降级为历史记录（只叙不判）')
+    expect(prompt).toContain('不得复用')
+    expect(prompt).toContain('一律重跑重取')
+    expect(prompt).not.toContain('不得重做已完成部分') // fresh 段不注入
+    expect(prompt).not.toContain('本任务已有部分进度')
+  })
+
+  it('disc 效度戳：evidenceStale 缺席/false → fresh 段（效度域内复用语义不变）；stale 段切换 = digest 变化', () => {
+    const fresh = composeDispatchPrompt({
+      ...minimalInput({ taskType: 'coding-feature' }),
+      evidencePointer: 'logs/m2-pipeline/3.1/resume.md',
+    })
+    expect(fresh).toContain('效度域内的进度台账')
+    const stale = dispatchDigest(
+      composeDispatchPrompt({
+        ...minimalInput({ taskType: 'coding-feature' }),
+        evidencePointer: 'logs/m2-pipeline/3.1/resume.md',
+        evidenceStale: true,
+      }),
+    )
+    expect(stale).not.toBe(dispatchDigest(fresh))
+  })
+
   it('evidencePointer 注入 → digest 新值（简报重合成判据同族）', () => {
     const base = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' })))
     const withPointer = dispatchDigest(

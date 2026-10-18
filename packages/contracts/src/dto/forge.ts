@@ -489,6 +489,11 @@ export interface ClaimTaskInput {
    */
   e2eBaselineRed?: readonly string[]
   /**
+   * 效度比对检出根（disc 跟进——证据效度戳机械比对的当前效度域取数锚：worker/循环检出
+   * worktree。缺席 = 当前效度域不可取 → 机制惰性不判（形态兼容））。
+   */
+  checkoutRoot?: string
+  /**
    * 循环独占守卫（S1c——可选；外部 claim 传入，宿主循环自身的 loopSourced claim 不携带）。
    * 目标解析命中即判（单事务内、任何写入前）：放行 = 正常返回；拒绝 = 抛错（事务整体回滚
    * ——零状态残留）。claim 不上 RPC（Interface 7），回调形入参不外泄。
@@ -714,6 +719,12 @@ export interface ForgeTasksService {
   taskDetail(q: TaskDetailQuery): Promise<TaskDetail>
   /** 挂接双源分型卡（links ∪ records.session_id） */
   sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]>
+  /**
+   * 证据效度戳写侧（disc 跟进——结算时点机械落戳：任务证据位 resume.md 在盘才写
+   * resume.validity.json sidecar（HEAD commit + 基线签名——重领时与当前效度域机械比对，
+   * 漂移 = 证据 stale 强制重跑）。fail-soft 零抛；缺省 = 机制关闭（形态兼容）。
+   */
+  stampEvidenceValidity?(input: { projectId: string; slug: string; localId: string; checkoutRoot: string }): void
 }
 
 // ─────────────────────────── Interface 2：feature 域（ctx.forgeFeatures） ───────────────────────────

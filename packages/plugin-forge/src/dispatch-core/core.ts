@@ -74,6 +74,11 @@ export interface DispatchCoreArgs {
    * E2E_BASELINE_RED 行递达 worker。缺席 = 机制关闭，行为零变化）。
    */
   readonly e2eBaselineRed?: readonly string[]
+  /**
+   * 效度比对检出根（disc 效度戳——claim 透传 claimTask.checkoutRoot：worker/循环检出
+   * worktree = 当前效度域取数锚。缺席 = 机制惰性不判，行为零变化）。
+   */
+  readonly checkoutRoot?: string
   /** 后台派发（工具壳 run_in_background 参数直映射——jobs 包装结算后置；循环不携带） */
   readonly runInBackground?: boolean
 }
@@ -312,6 +317,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
     ...(args.e2eBaselineRed !== undefined ? { e2eBaselineRed: args.e2eBaselineRed } : {}),
+    ...(args.checkoutRoot !== undefined ? { checkoutRoot: args.checkoutRoot } : {}),
     ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })
   const task = claimed.task

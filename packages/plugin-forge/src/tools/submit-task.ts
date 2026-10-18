@@ -358,6 +358,21 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
             : {}),
         }
         const result = await deps.tasks.submitTask(input)
+        // disc 效度戳写侧：结算时点机械落戳（任务证据位 resume.md 在盘才写 sidecar——
+        // (HEAD commit, 基线签名) 取自结算会话检出 = worker 工作区根；重领时与当前效度域
+        // 机械比对，漂移 = 证据 stale 强制重跑。core 侧 fail-soft 零抛；缺席 = 机制关闭）
+        if (session.cwd !== undefined) {
+          try {
+            deps.tasks.stampEvidenceValidity?.({
+              projectId,
+              slug: parsed.slug,
+              localId: parsed.local_id,
+              checkoutRoot: session.cwd,
+            })
+          } catch {
+            // fail-soft：落戳故障不阻断结算
+          }
+        }
         // task-submitted 事件（worker 自身会话 id——串联读法「submit = 执行会话」；AC gate 已过）
         deps.events?.emit({
           ts: Date.now(),

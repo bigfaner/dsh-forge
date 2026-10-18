@@ -62,10 +62,20 @@ export interface TasksServiceDeps {
   readonly resolveWsPath: (projectId: string) => string
   /** git 只读执行注入（缺席 = 生产 execFile——git-lookup.ts defaultExecFile；测试桩受控注入） */
   readonly gitExec?: GitExecFile
-  /** 续跑指针探测（worker-exec-evidence-replay 1.3——可选，缺席 = 简报零 <resume> 段） */
-  readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
+  /**
+   * 续跑指针探测 + 效度比对（worker-exec-evidence-replay 1.3 + disc 效度戳——可选，缺席 =
+   * 简报零 <resume> 段）。checkoutRoot = 效度比对检出根（缺席 = 机制惰性不判）。
+   */
+  readonly resolveEvidencePointer?: (
+    projectId: string,
+    slug: string,
+    localId: string,
+    checkoutRoot?: string,
+  ) => { pointer: string; stale: boolean } | undefined
   /** worker 任务目录锚点节渲染（worker-lean-execution 追加轮——可选，缺席/空串 = persona 零追加） */
   readonly resolveWorkerContext?: (projectId: string, source: ContainerRef, localId: string) => string
+  /** 证据效度戳写侧（disc 跟进——结算落戳装配注入：容器目录派生 + 当前效度域取数单源在装配方；缺席 = 机制关闭） */
+  readonly stampEvidenceValidity?: (input: { projectId: string; slug: string; localId: string; checkoutRoot: string }) => void
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */
@@ -116,5 +126,12 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     async sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]> {
       return sessionLinks(deps, q)
     },
+    ...(deps.stampEvidenceValidity !== undefined
+      ? {
+          stampEvidenceValidity(input: { projectId: string; slug: string; localId: string; checkoutRoot: string }): void {
+            deps.stampEvidenceValidity!(input)
+          },
+        }
+      : {}),
   }
 }
