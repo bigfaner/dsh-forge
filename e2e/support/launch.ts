@@ -10,6 +10,8 @@
 // - stablePhase：'wait'（30s 相位稳定门——常态）| 'probe'（复启链路 60s 逐拍留痕探针
 //   ——comp 形态：settle 慢尾诊断）| 'none'（hero-control：相位由调用侧按项目态断言）。
 // - timeouts：安装形态慢盘 120s（缺省 60/90/60）。
+import { mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +27,38 @@ import { WORKBENCH } from './anchors.js'
  *  `spawn cmd.exe ENOENT` 即时失败（fix-40 勘察实证，回迁母本三段口径）。 */
 export const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 export const HOST_DIR = join(ROOT, 'apps', 'host')
+
+/**
+ * harness 派生会话自愈（fix-9——1.34 归因分类 1 升级形态）：
+ *  - 指纹 = DSH_SHELL === '1'（dispatch worker 会话 env 实测在案）。
+ *  - E2E_ELECTRON_SWITCHES 缺省视为 '1'：派生进程树内 chromium sandbox 初始化即崩
+ *    （0x80000003 实证），--no-sandbox 等开关必须自动启用——替代「跑批环境统一注入」
+ *    （派发器 env 注入不可控，自愈一次落地全池受益）。
+ *  - e2eUserDataRoot()：E2E_USER_DATA_ROOT 覆写优先；harness 派生 → <ROOT>/.e2e-ud
+ *    （workspace 可写基目录，%TEMP% chromium 锁写拒实证）；真实终端 → tmpdir() 缺省
+ *    零变化。与 sanitizedLaunchEnv 摘 ELECTRON_RUN_AS_NODE 同语义：e2e 支撑层对派生
+ *    环境自愈，不依赖调用方手工置 env。
+ */
+const harnessDerived = process.env.DSH_SHELL === '1'
+
+/** electron 启动开关门：显式 env 优先；缺省仅 harness 派生会话自愈启用 */
+const e2eElectronSwitches = process.env.E2E_ELECTRON_SWITCHES ?? (harnessDerived ? '1' : undefined)
+
+/** userData 基目录：env 覆写 → harness 派生 workspace 可写路径 → 真实终端 tmpdir() 缺省
+ *  （覆写与自愈路径均 ensure 存在——消除调用侧预建依赖；tmpdir() 平台保证在场） */
+export function e2eUserDataRoot(): string {
+  const override = process.env.E2E_USER_DATA_ROOT
+  if (override !== undefined && override !== '') {
+    mkdirSync(override, { recursive: true })
+    return override
+  }
+  if (harnessDerived) {
+    const root = join(ROOT, '.e2e-ud')
+    mkdirSync(root, { recursive: true })
+    return root
+  }
+  return tmpdir()
+}
 
 /** electron 二进制（apps/host 依赖闭包解析——pnpm 隔离布局根 node_modules 无 electron） */
 export const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
@@ -77,7 +111,7 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
             // --disable-gpu：无头 e2e 无渲染保真诉求。
             // --no-proxy-server：系统代理会劫持 LAN origin 页面导航（node fetch 绕代理而
             //   chromium 不绕——jar 可达而 page.goto 挂起实证）；e2e 直连。
-            ...(process.env.E2E_ELECTRON_SWITCHES === '1'
+            ...(e2eElectronSwitches === '1'
               ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server']
               : []),
             ...(opts.args ?? []),

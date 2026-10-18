@@ -24,6 +24,8 @@ spikes/s1-thin-host/profile/cordis.yml
 # Test / tooling artifacts
 coverage/
 test-results/
+# e2e harness 派生会话 userData 自愈基目录（e2e/support/launch.ts e2eUserDataRoot）
+.e2e-ud/
 playwright-report/
 
 # lint selftest crash leftovers (scripts/lint-selftest.mjs sweeps on each run)

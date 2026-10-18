@@ -10,10 +10,9 @@
 //   ③ installConnection（缺省 web transport，同 origin fetch + cookie）→ session.list 单呼绿
 // 零真实模型调用（只读 RPC）——不需要凭据门。mux/$events 留给探针 v2。
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type ElectronApplication } from '@playwright/test'
-import { closeApp, launchHost, ROOT } from '../support/launch.js'
+import { closeApp, e2eUserDataRoot, launchHost, ROOT } from '../support/launch.js'
 import { writeDogfoodOverlay } from '../support/dogfood.js'
 
 const EVIDENCE_DIR = join(ROOT, '.forge', 'docs', 'probes', 'mobile-connection-probe')
@@ -306,9 +305,8 @@ test('mobile-ui connection 探针：/remote/ 注入行 → client 模块取用 �
 })
 
 function mkdtempOf(prefix: string): string {
-  // E2E_USER_DATA_ROOT：宿主派生会话内 %TEMP% 对 chromium 锁文件写入被拒——落 workspace 可写路径
-  const base = process.env.E2E_USER_DATA_ROOT ?? tmpdir()
-  return mkdtempSync(join(base, prefix))
+  // e2eUserDataRoot：env 覆写 → harness 派生 <ROOT>/.e2e-ud（%TEMP% chromium 锁写拒自愈）→ tmpdir()
+  return mkdtempSync(join(e2eUserDataRoot(), prefix))
 }
 
 async function rmDirBestEffort(dir: string): Promise<void> {

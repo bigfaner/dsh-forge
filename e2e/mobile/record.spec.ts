@@ -11,11 +11,10 @@
 // + ask 三题型）凭据缺席 = 留痕降级（只读面照常产出 fixtures，不伪造）。回放消费面 = replay-smoke。
 // 产物即测试资产进 git（AC）；cookie/凭据零落盘（fixture 只含 wire 体）。
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type ElectronApplication } from '@playwright/test'
-import { closeApp, launchHost } from '../support/launch.js'
+import { closeApp, e2eUserDataRoot, launchHost } from '../support/launch.js'
 import { rmDirBestEffort } from '../support/cleanup.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../support/dogfood.js'
 import { cookieHeaderOf, WireRecorder } from './recorder.js'
@@ -345,9 +344,8 @@ function findCallId(node: unknown): string {
 }
 
 function mkdtempOf(prefix: string): string {
-  // E2E_USER_DATA_ROOT：userData 基目录覆盖（宿主派生会话 %TEMP% chromium 锁写拒实证）
-  const base = process.env.E2E_USER_DATA_ROOT ?? tmpdir()
-  return mkdtempSync(join(base, prefix))
+  // e2eUserDataRoot：env 覆写 → harness 派生 <ROOT>/.e2e-ud（%TEMP% chromium 锁写拒自愈）→ tmpdir()
+  return mkdtempSync(join(e2eUserDataRoot(), prefix))
 }
 
 function sleep(ms: number): Promise<void> {
