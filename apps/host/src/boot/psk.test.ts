@@ -84,7 +84,7 @@ describe('② AEAD 族', () => {
   it('密文篡改（单比特翻转）即拒（GCM tag）', () => {
     const { iv, ct } = sealFrame(key, 'c2s', 'sid-1', 1, 7, Buffer.from('secret body'))
     const tampered = Buffer.from(ct)
-    tampered[0] ^= 1
+    tampered[0] = (tampered[0] ?? 0) ^ 1
     expect(() => openFrame(key, 'c2s', 'sid-1', 1, 7, iv, tampered)).toThrow()
   })
 

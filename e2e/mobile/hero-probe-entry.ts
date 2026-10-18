@@ -6,6 +6,7 @@ import type { OfficialApi } from '../../apps/mobile/src/core/api.ts'
 import type { RemoteRpc, RpcResult } from '../../apps/mobile/src/core/rpc.ts'
 
 let guardResult: RpcResult<unknown> = { ok: false, error: { code: 'invalid-state', reason: 'worktree 不在场' } }
+let lastSessionCreate: unknown
 
 const listPayload = {
   isGit: true,
@@ -19,7 +20,10 @@ const listPayload = {
 const rpc: RemoteRpc = {
   async call<T = unknown>(channel: string, payload: unknown): Promise<RpcResult<T>> {
     if (channel === HERO_WORKTREE_LIST_CHANNEL) return { ok: true, data: listPayload as T }
-    if (channel === HERO_SESSION_CREATE_CHANNEL) return guardResult as RpcResult<T>
+    if (channel === HERO_SESSION_CREATE_CHANNEL) {
+      lastSessionCreate = payload
+      return guardResult as RpcResult<T>
+    }
     void payload
     return { ok: false, error: { code: 'unknown', reason: channel } }
   },
@@ -45,10 +49,14 @@ const api: OfficialApi = {
 
 interface ProbeHooks {
   setGuardResult(next: RpcResult<unknown>): void
+  readonly lastSessionCreate: unknown
 }
 ;(window as unknown as { __probe: ProbeHooks }).__probe = {
   setGuardResult(next: RpcResult<unknown>) {
     guardResult = next
+  },
+  get lastSessionCreate() {
+    return lastSessionCreate
   },
 }
 

@@ -61,8 +61,9 @@ const TASKS: Pick<ForgeTasksService, 'listTasks' | 'taskStats'> = {
   listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
   taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0 }),
 }
-const PROJECTS: Pick<ProjectService, 'listProjects'> = {
+const PROJECTS: Pick<ProjectService, 'listProjects' | 'getProject'> = {
   listProjects: async () => [{ id: 'p-1', name: 'demo' } as ProjectSummary],
+  getProject: async () => null,
 }
 
 function deps(overrides: Partial<Parameters<typeof handleRemoteHttpRpc>[2]> = {}) {

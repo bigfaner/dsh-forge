@@ -36,7 +36,7 @@ function fakeRes(): FakeRes {
     status: 0,
     headers: {},
     body: '',
-    writeHead(code, headers) {
+    writeHead(code, headers?: Record<string, unknown>) {
       res.status = code
       res.headers = headers ?? {}
     },

@@ -71,12 +71,15 @@ const FORBIDDEN_MODULE_NAME_RE = /(watch|backflow|reflux|resync|snapshot[-_]?syn
  * UI/宿主定时器不在此列——新增豁免须附一句定性，禁静默扩池）：
  *   · ForgeRemoteEntry/ForgeRemoteView：手机远程面的 renderer 状态刷新（REMOTE_STATUS_POLL_MS
  *     轮询 boot manifest 快照 + 倒计时秒进）——消费面轮询非投影重建；
- *   · boot/child.ts：宿主子进程日志轮转计时器——进程管理面，与 forge 状态无关。
+ *   · boot/child.ts：宿主子进程日志轮转计时器——进程管理面，与 forge 状态无关；
+ *   · boot/forge-stream.ts：SSE 心跳 setInterval——传输层 keep-alive ping（判活对齐
+ *     mobile sse 引擎 15s 口径），非 forge 状态投影轮询（随连接销毁，无状态重扫）。
  */
 const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
   'apps/web/src/views/remote/ForgeRemoteEntry.tsx',
   'apps/web/src/views/remote/ForgeRemoteView.tsx',
   'apps/host/src/boot/child.ts',
+  'apps/host/src/boot/forge-stream.ts',
 ]
 
 const isExempt = (relFile: string): boolean => WATCH_RULE_EXEMPT_FILES.some((f) => relFile === f)
