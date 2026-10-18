@@ -1895,3 +1895,237 @@ body[data-ds-dark-theme] .drawer .foot {
 .foot.down .conn-dot {
   background: #e5484d;
 }
+
+/* ---- 任务浮层：悬浮球 + 任务卡（tasks）---- */
+.fab {
+  position: fixed;
+  z-index: 60;
+  left: 12px;
+  top: 40vh;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 0.5px solid #dadce0;
+  background: #4176e6;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  touch-action: none;
+  transition: opacity 0.15s ease;
+}
+.fab .ic {
+  width: 20px;
+  height: 20px;
+}
+.fab.dragging {
+  opacity: 0.9;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24);
+}
+.fab.settled {
+  opacity: 0.55;
+}
+.fab.settled.edge-left {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  transform: translateX(-24px);
+}
+.fab.settled.edge-right {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  transform: translateX(24px);
+}
+.dark .fab,
+body[data-ds-dark-theme] .fab {
+  border-color: #303034;
+  background: #7aaaff;
+  color: #151517;
+}
+
+.tasks-sheet {
+  position: fixed;
+  z-index: 70;
+  inset: auto 0 0 0;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  border: 0.5px solid #dadce0;
+  border-bottom: none;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.1);
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.dark .tasks-sheet,
+body[data-ds-dark-theme] .tasks-sheet {
+  background: #1d1d20;
+  border-color: #303034;
+}
+.tasks-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+.tasks-hd .title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.run-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex: none;
+  scrollbar-width: none;
+}
+.run-chip {
+  flex: none;
+  border-radius: 999px;
+  border: 0.5px solid #dadce0;
+  background: #fbfbfc;
+  color: #5f6368;
+  font-size: 11.5px;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+.run-chip.active {
+  border-color: #4176e6;
+  color: #1a56c4;
+  background: #e8f0fe;
+}
+.run-chip.selected {
+  outline: 1.5px solid #4176e6;
+}
+.dark .run-chip,
+body[data-ds-dark-theme] .run-chip {
+  background: #232324;
+  border-color: #303034;
+  color: #9aa0a6;
+}
+.dark .run-chip.active,
+body[data-ds-dark-theme] .run-chip.active {
+  background: #24345e;
+  color: #9db8ff;
+  border-color: #7aaaff;
+}
+.task-list {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0.5px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+.dark .task-card,
+body[data-ds-dark-theme] .task-card {
+  border-color: #303034;
+}
+.task-card.done {
+  opacity: 0.7;
+}
+.task-num {
+  color: #81858c;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.task-act {
+  flex: none;
+  border: 0.5px solid #dadce0;
+  border-radius: 8px;
+  background: #fff;
+  color: #5f6368;
+  font-size: 11.5px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.dark .task-act,
+body[data-ds-dark-theme] .task-act {
+  background: #2c2c2e;
+  color: #cfd3d6;
+}
+.task-act:disabled,
+.dispatch-bar:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.done-group {
+  font-size: 12px;
+}
+.done-group summary {
+  cursor: pointer;
+  color: #81858c;
+  padding: 4px 2px;
+}
+.tasks-hint {
+  color: #81858c;
+  font-size: 12.5px;
+  text-align: center;
+  padding: 16px 0;
+}
+.task-receipts {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 6px;
+}
+.dark .task-receipts,
+body[data-ds-dark-theme] .task-receipts {
+  border-color: #303034;
+}
+.receipt-line {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #5f6368;
+  min-width: 0;
+}
+.dark .receipt-line,
+body[data-ds-dark-theme] .receipt-line {
+  color: #9aa0a6;
+}
+.receipt-line .name {
+  color: #4176e6;
+  flex: none;
+}
+.receipt-line .text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dispatch-bar {
+  flex: none;
+  height: 38px;
+  border-radius: 12px;
+  border: none;
+  background: #4176e6;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dark .dispatch-bar,
+body[data-ds-dark-theme] .dispatch-bar {
+  background: #7aaaff;
+  color: #151517;
+}
