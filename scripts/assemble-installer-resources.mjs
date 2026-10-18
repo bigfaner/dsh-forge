@@ -199,6 +199,7 @@ export function buildAppManifest(rootVersion) {
   return {
     name: 'dsh-forge',
     productName: 'dsh-forge',
+    author: 'dsh-forge', // electron-builder 必填校验面（缺失仅告警，补齐消除）
     version: rootVersion,
     private: true,
     type: 'module',
