@@ -38,6 +38,36 @@ export async function runE2eBaseline(runSuite: () => Promise<string>): Promise<E
   }
 }
 
+/**
+ * HEAD 键控基线缓存记录（disc-2——基线不随循环实例固化）：{commit, reds} 缓存键——
+ * commit = 取基线时点的 worktree HEAD；undefined = HEAD 不可得（无 worktree/readHead 面）。
+ */
+export interface E2eBaselineCache {
+  readonly commit?: string
+  readonly redSpecs: readonly string[]
+  readonly error?: string
+}
+
+/**
+ * 按 HEAD 键控取基线（disc-2 设计裁决：claim 时与循环 worktree 当前 HEAD 比对——
+ * 一致复用缓存（稳定 HEAD 下零额外套件执行，摊销 ≈ 现状）、漂移重算（fix 中途落地后
+ * 简报反映新基线，不再烤死于循环启动时点）。HEAD 不可得（两侧 undefined）= 无漂移可判，
+ * 首算一次后恒复用。重算故障 fail-soft（runE2eBaseline 语义保持：空清单 + error 留痕）。
+ */
+export async function baselineForHead(
+  currentHead: string | undefined,
+  cache: E2eBaselineCache | undefined,
+  runSuite: () => Promise<string>,
+): Promise<E2eBaselineCache> {
+  if (cache !== undefined && cache.commit === currentHead) return cache
+  const baseline = await runE2eBaseline(runSuite)
+  return {
+    commit: currentHead,
+    redSpecs: baseline.redSpecs,
+    ...(baseline.error !== undefined ? { error: baseline.error } : {}),
+  }
+}
+
 /** 归因卡载荷（改进7 三分流）：基线红灯 spec 逐一生成 test-run 归因卡——结论三分流
  *  （环境 / 陈旧断言 / 真回归），真回归经 recordBug 落台账，修复或钉基线后新取证才可信。 */
 export function attributionTaskInput(

@@ -43,7 +43,7 @@ import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
-import { attributionTaskInput, runE2eBaseline } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, type E2eBaselineCache } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -329,10 +329,16 @@ export interface LoopDriverDeps {
   /**
    * e2e 红灯基线门（改进7——可选；缺席 = 机制关闭，简报零 E2E_BASELINE_RED 行）。
    * runSuite = e2e 套件全量执行命令（返回 reporter 输出——`FAIL <spec>` 行被解析为红灯
-   * 清单）。循环启动时跑一次：红灯随本实例全部简报递达 worker，且逐一生成归因卡
-   * （环境/陈旧断言/真回归三分流）；套件执行故障 fail-soft（空清单 + warn），循环不阻。
+   * 清单）。disc-2：基线按 HEAD 键控缓存——readHead 读循环 worktree 当前 HEAD，claim 时
+   * 比对：一致复用缓存、漂移重算（简报不烤死于循环启动时点）；readHead/HEAD 缺席 = 无漂移
+   * 可判，回落启动时一次性基线。启动跑一次 + 逐一生成归因卡（三分流）；套件执行故障
+   * fail-soft（空清单 + warn），循环不阻。
    */
-  readonly e2eBaseline?: { readonly runSuite: () => Promise<string> }
+  readonly e2eBaseline?: {
+    readonly runSuite: () => Promise<string>
+    /** worktree → 当前 HEAD（装配面注入 git rev-parse 缝；缺席/返回 undefined = 键不可得） */
+    readonly readHead?: (worktree: string) => Promise<string | undefined>
+  }
   /** 机械时延注入（测试缝——缺省生产值；quiescence = 3c 宽限窗基长/轮询间隔） */
   readonly delays?: {
     readonly backoffBaseMs?: number
@@ -399,8 +405,8 @@ interface ActiveLoop {
   waitRounds: number
   /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
   readonly dispositions: Map<string, DispositionBook>
-  /** e2e 红灯基线清单（改进7——启动基线门产物；缺席/空 = 基线全绿或机制关闭，简报零行） */
-  e2eBaselineRed?: readonly string[]
+  /** e2e 红灯基线缓存（disc-2 · HEAD 键控 {commit, reds}——缺席/空 = 基线全绿或机制关闭，简报零行） */
+  e2eBaseline?: E2eBaselineCache
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -724,14 +730,11 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       }
       // e2e 红灯基线门（改进7——入场前跑批，fail-soft）：红灯清单挂本循环实例（逐简报
       // 递达 worker——机械判定「基线红灯 ≠ 本任务回归」），并逐一生成归因卡（三分流）。
+      // disc-2：基线按 HEAD 键控缓存（ensureE2eBaseline——claim 时漂移重算，不烤死于此时点）；
       // 套件执行故障 = 空清单 + warn（机制静默关闭，循环派发不受阻）；归因卡落库失败
       // fail-soft（warn——红灯清单仍在简报面承担机械判定）。
-      if (deps.e2eBaseline !== undefined) {
-        const baseline = await runE2eBaseline(deps.e2eBaseline.runSuite)
-        loop.e2eBaselineRed = baseline.redSpecs
-        if (baseline.error !== undefined) {
-          console.warn(`forge loop e2e baseline failed (${input.source.slug}): ${baseline.error}`)
-        }
+      const baseline = await ensureE2eBaseline(loop)
+      if (baseline !== undefined) {
         for (const spec of baseline.redSpecs) {
           try {
             await deps.tasks.addTask(attributionTaskInput(source, spec, { projectId }))
@@ -894,6 +897,37 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
 }
 
 /**
+ * e2e 基线取数（disc-2 · HEAD 键控刷新）：读循环 worktree 当前 HEAD → baselineForHead
+ * （一致复用缓存 / 漂移重算）。readHead 故障（git 不可用）= 漂移不可判，复用现有缓存
+ * fail-soft（不重跑昂贵套件）；重算故障 = 空清单 + warn（机制静默关闭，循环不阻）。
+ */
+async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
+  const cfg = loop.deps.e2eBaseline
+  if (cfg === undefined) return undefined
+  const slug = loop.record.source.slug
+  let head: string | undefined
+  if (cfg.readHead !== undefined && loop.record.worktree !== undefined) {
+    try {
+      head = await cfg.readHead(loop.record.worktree)
+    } catch (cause) {
+      // HEAD 读失败（git 故障）——漂移不可判，复用现有缓存 fail-soft（不重跑昂贵套件）
+      console.warn(
+        `forge loop e2e baseline head read failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+      return loop.e2eBaseline
+    }
+  }
+  // head undefined（readHead/worktree 缺席或不可得）= 键不可得：首算一次后恒复用（现状语义）
+  const before = loop.e2eBaseline
+  const entry = await baselineForHead(head, before, cfg.runSuite)
+  loop.e2eBaseline = entry
+  if (entry !== before && entry.error !== undefined) {
+    console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
+  }
+  return entry
+}
+
+/**
  * 每轮（implementation-blueprint §3 runRound）：① 逐个恢复优先（任务源内最早 interrupted →
  * adopt 定向领取径）→ ② 领取（dispatch-core 阶段一）→ ③ 领取通知（S4 notice）→ ④ spawn
  * （阶段二，句柄直持）→ ⑤ 结算（阶段三）→ ⑥ 结果通知 + 三层阶梯判定 → 续派/终局。
@@ -918,15 +952,17 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 
   // ② 领取（dispatch-core 阶段一）：主会话真实 id + loopSourced=true（claim 记录循环来源
   //    标记——S3 对账判据）+ guardKey = LoopInstanceId（spawn 防线粘性载体）
+  // 改进7 disc-2：基线红灯清单按 HEAD 键控刷新后随 claim 简报递达（commit 落地漂移 → 重算，
+  // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）
+  const baseline = await ensureE2eBaseline(loop)
   const claim = await claimForDispatch(loop.core, exec, {
     identity: { sessionId: owner, loopSourced: true },
     guardKey: record.id,
     projectId: scope.projectId,
     source,
     ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
-    // 改进7：红灯基线清单随本实例全部简报递达（claim 领取瞬间注入 E2E_BASELINE_RED 行）
-    ...(loop.e2eBaselineRed !== undefined && loop.e2eBaselineRed.length > 0
-      ? { e2eBaselineRed: loop.e2eBaselineRed }
+    ...(baseline !== undefined && baseline.redSpecs.length > 0
+      ? { e2eBaselineRed: baseline.redSpecs }
       : {}),
     // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
     // 比对此效度域，漂移 = stale 强制重跑）

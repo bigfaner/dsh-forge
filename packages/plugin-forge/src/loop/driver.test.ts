@@ -255,8 +255,8 @@ function build(options: {
   limits?: { readonly maxRounds?: number }
   /** 3c 宽限窗基长注入（缺省 1ms——立即收敛；窗内叫停用例注入大值保持确定性） */
   quiescenceWindowMs?: number
-  /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出 */
-  e2eBaseline?: { runSuite: () => Promise<string> }
+  /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出；readHead 桩返回 worktree HEAD */
+  e2eBaseline?: { runSuite: () => Promise<string>; readHead?: (worktree: string) => Promise<string | undefined> }
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -467,6 +467,67 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     await untilSettled(built.driver)
     expect(built.h.addTaskInputs).toHaveLength(0)
     expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
+  })
+
+  it('disc-2 判例回归：fix 中途落地（HEAD 漂移）后简报反映新基线——旧红灯行不再烤死于循环启动时点', async () => {
+    // 时序：start（HEAD c1 · 旧红灯）→ claim1（c1 复用）→ worker1 结算（fix 落地 = c2）
+    // → claim2（c2 漂移重算 · 新红灯）→ no-task 收口。套件执行恰 2 次（稳定 HEAD 零重跑）。
+    let head = 'c1'
+    let output = 'FAIL e2e/specs/old.spec.ts > suite'
+    let suiteRuns = 0
+    let headReads = 0
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      e2eBaseline: {
+        runSuite: async () => {
+          suiteRuns += 1
+          return output
+        },
+        readHead: async () => {
+          headReads += 1
+          if (headReads >= 3) {
+            head = 'c2'
+            output = 'FAIL e2e/specs/new.spec.ts > suite'
+          }
+          return head
+        },
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/old.spec.ts'] })
+    // commit 落地后：简报携带新基线，旧红灯行消失（claim2 起）
+    expect(built.h.claimInputs[1]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
+    expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
+    // 成本约束：稳定 HEAD 零额外套件执行（start 一次 + 漂移重算一次）
+    expect(suiteRuns).toBe(2)
+  })
+
+  it('disc-2 fail-soft：readHead 故障（git 不可用）——复用现有缓存，简报基线行保留，循环不阻', async () => {
+    const built = build({
+      ...FULL_FLOW,
+      e2eBaseline: {
+        runSuite: async () => 'FAIL e2e/specs/a.spec.ts > suite',
+        readHead: async () => {
+          throw new Error('git not available')
+        },
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // start 径 readHead 故障 = 基线机制静默关闭（fail-soft 同套件故障形态）
+    expect(built.h.addTaskInputs).toHaveLength(0)
     expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
   })
 })
