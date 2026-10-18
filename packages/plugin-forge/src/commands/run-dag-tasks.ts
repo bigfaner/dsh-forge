@@ -516,7 +516,10 @@ function commitDispatchLine(
     // 「先取方法再裸调」把类方法从接收者上剥离，内件 `this` = undefined 即抛 `undefined.send`；
     // 历史可用纯因旧目标 = ctx.parent 闭包把手不依赖绑定）。调用面恒以接收者为其绑定
     // this——`target.followup(message)`（与 S4 叙述通道 adaptAgentNarrationChannel 同形）。
-    ;(target as { followup: (message: unknown) => void }).followup(forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`))
+    ;(target as { followup: (message: unknown) => void }).followup(
+      // 1.18 AD-4 循环哨兵：指令单行 source.kind='forge-loop'（task=任务源 slug、state='dispatch'）
+      forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`, { task: source.slug, state: 'dispatch' }),
+    )
     return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)

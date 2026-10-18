@@ -559,6 +559,13 @@ export {
   findMechanismWords,
   MECHANISM_WORDS,
 } from './notify/index.js'
+// 1.18 AD-4 循环哨兵——forge-loop source 铸发面（MessageSourceMap 声明合并自有模块）
+export {
+  forgeLoopSource,
+  FORGE_LOOP_SOURCE_KIND,
+  FORGE_LOOP_KIND_DISPATCH,
+} from './forge-loop-source.js'
+export type { ForgeLoopMessageSource, ForgeLoopNarrationMeta } from './forge-loop-source.js'
 export type {
   NarrationChannel,
   NarrationRoute,
