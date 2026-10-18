@@ -4,6 +4,8 @@
 // 1.5：主窗口改载自有壳（自定义 scheme dsh-forge://app/ 服务 apps/web dist，
 // 非资产路由转发已认证 webserver；boot manifest 经 preload IPC 供壳消费）。
 // Electron 实面绑定（对话框/Harness 动作）下沉 ipc/electron-bindings——main 零直用。
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, ipcMain, protocol, session, shell } from 'electron'
 import { bootDshHost } from './boot/index.js'
@@ -22,9 +24,29 @@ import {
   SHELL_SCHEME, wireDevToolsToggle, wireWindowLifecycle, type BrowserWindowLike,
 } from './window/index.js'
 
-app.setName('dsh-forge') // userData = {app-data}/dsh-forge（profile 首启落地根）
+// dev 形态独立标识（2026-10-19 用户裁决）：app 名/AppUserModelID/窗口标题均带 -dev 后缀，
+// 与打包版进程（dsh-forge.exe）在任务栏分组、userData 缺省名上完全区分（进程名区分在
+// dev.mjs 侧——复制 electron.exe 为 dsh-forge-dev.exe 启动）。
+const IS_DEV = process.env.DSH_FORGE_DEV_PROFILE !== undefined && process.env.DSH_FORGE_DEV_PROFILE !== ''
+const APP_IDENTITY = IS_DEV ? 'dsh-forge-dev' : 'dsh-forge'
+app.setName(APP_IDENTITY) // userData = {app-data}/{APP_IDENTITY}（profile 首启落地根）
+app.setAppUserModelId(IS_DEV ? 'app.dshforge.desktop.dev' : 'app.dshforge.desktop') // 任务栏独立标识（appId 继承 + .dev 后缀）
 if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA) // e2e 隔离（fix-26：在场兼作凭据桥关闭门——dshHome 已缺省隔离）
-if (app.isPackaged) process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
+if (app.isPackaged) {
+  // 打包形态便携数据目录（2026-10-19 用户裁决：运行数据不占 C 盘）——userData 指到 exe 旁
+  // data\（可写探测通过才切；Per-machine 受保护目录等不可写场景回退缺省 %APPDATA%）。直接
+  // setPath 不经 DSH_FORGE_USER_DATA 环境变量，fix-26 凭据桥门不触发，真 home 凭据照常共享。
+  try {
+    const portableData = join(dirname(app.getPath('exe')), 'data')
+    mkdirSync(portableData, { recursive: true })
+    writeFileSync(join(portableData, '.write-probe'), '')
+    rmSync(join(portableData, '.write-probe'))
+    app.setPath('userData', portableData)
+  } catch {
+    /* 探测失败 = 安装根不可写——保持缺省 userData（fail-soft，不阻启动） */
+  }
+  process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
+}
 registerShellScheme(protocol) // 特权 scheme 注册一次性，须先于 app ready
 
 const watchdog = setTimeout(() => {
@@ -102,7 +124,7 @@ void (async () => {
       consentPin: (consent) => host.consentPin?.(consent),
     })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
-    mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: 'dsh-forge' })
+    mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: APP_IDENTITY })
     if (!app.isPackaged) wireDevToolsToggle((mainWindow as BrowserWindow).webContents) // 开发态 F12 按需开关（打包形态零面）
     wireWindowLifecycle(app)
     app.on('before-quit', () => {
