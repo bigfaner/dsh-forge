@@ -56,6 +56,11 @@ import {
   type PinPersist,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+// mobile-ui 1.11：PSK v3 host 侧 + forge:proxy 通道族 + 加密 forge-stream（tunnel-psk v3.1）
+import { isPskEnforcedHost, staticSignatureHeaders, writeConstant401 } from './psk.js'
+import { createStreamSealer, loadPskPersist, loadWatermarks, saveWatermarks, type PskGateDeps } from './psk-gate.js'
+import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
+import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
@@ -77,6 +82,16 @@ import { loadPresetPatches } from '../profile/presets.js'
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
   get(name: string): unknown
+}
+
+/** cordis 可选具名服务惰性取法（AGENTS.md 裁决——具名访问 + 运行期存在性检查承担 fail-soft；
+ *  服务未装载/未 provide = undefined 降级，不抛） */
+function lazyCordisService(face: ServiceGetFace, name: string): unknown {
+  try {
+    return face.get(name) ?? undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** 官方 ToolRuntime 的结构化窄面（tools 服务——dsh-tools Service，super(ctx, "tools") 注册名） */
@@ -476,6 +491,22 @@ async function main(): Promise<void> {
   // 会话；签发/校验/限速/TTL 全语义在 pairing.ts 纯逻辑面，此处只装配路由）。
   // fix-30 ③：durable 态持久化到 dsh-home（跨 boot worker 存活——断开/重启不动长效）。
   const pinIssuer = createPinIssuer(Date.now, createFilePinPersist(join(dirname(options.stateDb), 'remote-pin.json')))
+  // mobile-ui 1.11 PSK v3 host 侧装配（tunnel-psk v3.1 §3/§5）：密钥文件（0600——remote-pin
+  // 同型缝）+ 水位账本（持久化——host 重启防重放窗）+ epoch TTL 清理。门未配置（密钥文件
+  // 缺席）= 旧门语义过渡期；PIN 读法逐请求取——PIN 轮换 = 通信密钥重派生即旧密文作废。
+  const pskFile = join(dirname(options.stateDb), 'remote-psk.json')
+  const pskWatermarkFile = join(dirname(options.stateDb), 'remote-psk-watermarks.json')
+  const pskWatermarks = loadWatermarks(pskWatermarkFile)
+  setInterval(() => {
+    pskWatermarks.sweep(Date.now())
+    saveWatermarks(pskWatermarkFile, pskWatermarks)
+  }, 60_000).unref?.()
+  const pskGate: PskGateDeps = {
+    load: () => loadPskPersist(pskFile),
+    pin: () => pinIssuer.current().pin,
+    watermarks: pskWatermarks,
+    now: Date.now,
+  }
   // fix-31 bug df86240d：长效位自持久态回读（Root cause: pinDurable 模块变量默认 false 且
   // ready 恒发临时面——重启后 issuer 虽回读文件恢复长效 grant，manifest 长效位仍恒 false
   // + remotePinExpiresAt = 假 TTL，UI 重启/重开恒未勾选 = 用户视角「长效被取消」）。
@@ -612,16 +643,79 @@ async function main(): Promise<void> {
                 return servicesFace.get('forgeTasks') as RemoteChannelService | undefined
               },
               get projects() {
-                return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
+                return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
               },
               forwardApproval: (input) =>
                 approvalRelay?.deposit(input) ?? Promise.resolve({ forwarded: false, reason: 'unavailable' as const }),
+              // mobile-ui 1.11 forge:proxy/* 代理通道族装配（官方能力 in-process 直调——
+              // 控制器/commands/userQuestions 惰性取法 + 运行期存在性检查承担 fail-soft；
+              // worktrees = worktreeRpc 桥单源；disconnect = pair-disconnected 对偶缝）
+              proxy: {
+                get session() {
+                  return lazyCordisService(servicesFace, 'sessionController') as ProxySessionFace | undefined
+                },
+                get commands() {
+                  return lazyCordisService(servicesFace, 'commands') as ProxyCommandsFace | undefined
+                },
+                get userQuestions() {
+                  return lazyCordisService(servicesFace, 'userQuestions') as ProxyUserQuestionsFace | undefined
+                },
+                get projects() {
+                  return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
+                },
+                get worktrees() {
+                  return worktreeRpcService === undefined
+                    ? undefined
+                    : { list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request) }
+                },
+                disconnect: () => send({ type: 'pair-disconnected' }),
+              },
+              // PSK 准入门（隧道域强制位——门未配置 = 旧门语义过渡期）
+              psk: pskGate,
               // fix-27 bug b9bfb9d3：__rpc 门 = 官方 authorizeIndex 优先 + dswf_forge_remote
               // cookie 自持兜底（配对握手已认证语义；官方会话门仅用于 GET 页面——隧道域下
               // 手机 POST 被官方 Host 绑定会话门拒绝，真断点由 401 诊断行真机定位）
               authorize: (rq, rs) => authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1])),
               diag,
             })
+            return
+          }
+          // mobile-ui 1.11 加密 forge-stream SSE（tunnel-psk v3 §4.1——事件镜像逐帧推送；
+          // 隧道域 + PSK 配置在场 = 逐帧 AEAD + host 签名（sid/epoch 经查询串注册），
+          // LAN/回环 = 明文镜像旧门语义。缺席订阅名 fail-soft 零装配）
+          if (isForgeStreamRequest(method, requestUrl)) {
+            const tunnelDomain = isPskEnforcedHost(typeof req.headers.host === 'string' ? req.headers.host : undefined)
+            const pskOn = loadPskPersist(pskFile) !== undefined
+            let sealer: ((event: unknown) => string) | undefined
+            if (tunnelDomain && pskOn) {
+              let sid = ''
+              let epoch = 0
+              try {
+                const query = new URL(requestUrl, 'http://dsh.invalid').searchParams
+                sid = query.get('sid') ?? ''
+                const epochRaw = Number(query.get('epoch') ?? '')
+                epoch = Number.isInteger(epochRaw) && epochRaw >= 0 ? epochRaw : -1
+              } catch {
+                sid = ''
+              }
+              sealer = sid !== '' && epoch >= 0 ? createStreamSealer(pskGate, sid, epoch) : undefined
+              if (sealer === undefined) {
+                // 隧道域强制位：无有效封帧参数 = 统一 401（零明文降级路径）
+                writeConstant401(res)
+                return
+              }
+            }
+            createForgeStreamHandler({
+              subscribe: (push) =>
+                subscribeOfficialEvents(
+                  (name, handler) =>
+                    (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
+                  push,
+                  diag,
+                ),
+              seal: (event) => (sealer !== undefined ? sealer(event) : JSON.stringify(event)),
+              diag,
+            })(req, res)
             return
           }
           // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth——零自持；
@@ -656,10 +750,15 @@ async function main(): Promise<void> {
               const out = isIndex
                 ? renderIndexInjections(body.toString('utf8'), ctx.webServer.collectIndexInjections())
                 : body
+              // mobile-ui 1.11 静态资源签名头（tunnel-psk v3.1 §4.5——X-Forge-Sig 覆盖
+              // path‖body，mobile 动态资源验签后才执行；PSK 未配置 = 钥未生成 → 头缺席）
+              const pskShape = loadPskPersist(pskFile)
+              const sigHeaders = pskShape !== undefined ? staticSignatureHeaders(pskShape.signing, `/${rel}`, out) : undefined
               res.writeHead(200, {
                 'content-type': MIME[ext] ?? 'application/octet-stream',
                 // 入口 HTML no-store（④）；hash 命名资产默认缓存（content-type 已按扩展名钉）
                 ...(isIndex ? { 'cache-control': 'no-store' } : {}),
+                ...sigHeaders,
               })
               res.end(method === 'HEAD' ? undefined : out)
             })

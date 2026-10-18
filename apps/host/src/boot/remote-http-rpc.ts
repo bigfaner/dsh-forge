@@ -5,18 +5,18 @@
 // 401/403 由官方面写毕）；通道 allowlist 与既有 forge:remote/* 同语义：
 //   · forge:remote/progress = listTasks/taskStats 装配只读（remote-rpc.ts 同口径）；
 //   · forge:remote/approval = 决策转发（forwarder 缺席 = fail-soft unavailable）；
-//   · forge:projects/list   = 受限视图 projectId 上下文只读（首个项目读法单源）。
-// 日志：每请求经 diag（/__rvdiag 同链——diag 桥 → harness.log）落一行（通道 + 结算态）。
+//   · forge:projects/list   = 受限视图 projectId 上下文只读（首个项目读法单源）；
+//   · forge:proxy/*（1.11）  = 官方能力 in-process 代理通道族 + forge 原生 grouped/
+//     approval/disconnect（proxy-channels.ts 本体——mobile 唯一数据通道）。
+// 隧道域（Host 非 loopback/非 IP 字面量）+ PSK 配置在场 ⇒ 信封强制（tunnel-psk v3 §5）：
+// 入口拦截器 = 唯一 401 owner——统一 401 + 恒定体 + 填充，dswf/authorizeIndex 放行也拒；
+// 解密前 channel 字面量不进 diag（定长标记替代——日志注入/枚举分型消解）。
+// 日志：每请求经 diag（/__rvdiag 同链——diag 桥 → harness.log）落一行（结算态 + 脱敏通道）。
 // 纯 handler（fake req/res 可测）——socket/装配归 child.ts。
-import {
-  PROJECTS_CHANNELS,
-  REMOTE_CHANNELS,
-  type ForgeTasksService,
-  type ProjectService,
-  type RemoteApprovalDecisionInput,
-  type RemoteApprovalForwardResult,
-  type RemoteProgressQuery,
-} from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS, PROJECTS_CHANNELS, type ForgeTasksService, type ProjectService, type RemoteApprovalDecisionInput, type RemoteApprovalForwardResult, type RemoteProgressQuery } from '@dsh-forge/contracts'
+import { isPskEnforcedHost, writeConstant401 } from './psk.js'
+import { admitPskRequest, type PskGateDeps } from './psk-gate.js'
+import { proxyChannelTableOf, type ProxyChannelDeps } from './proxy-channels.js'
 
 /** HTTP RPC 端点（/remote/ 挂载点同侧——静态前缀路由内单点分诊） */
 export const REMOTE_HTTP_RPC_PATH = '/remote/__rpc'
@@ -32,6 +32,9 @@ export function isRemoteHttpRpcRequest(method: string, requestUrl: string): bool
   }
   return pathname === REMOTE_HTTP_RPC_PATH
 }
+
+/** diag 通道脱敏定长标记（解密前 channel 字面量不进日志——tunnel-psk v2/H2） */
+export const DIAG_CHANNEL_REDACTED = 'channel=<redacted>'
 
 /** RPC 响应写出窄面（http.ServerResponse 消费切片——fake 可测） */
 export interface RpcResFace {
@@ -51,13 +54,17 @@ export interface RemoteHttpRpcDeps {
   /** forgeTasks 只读切片（缺席 = progress 通道 fail-soft 错误信封） */
   readonly tasks?: Pick<ForgeTasksService, 'listTasks' | 'taskStats'>
   /** forgeProjects 只读切片（缺席 = projects 通道 fail-soft 错误信封） */
-  readonly projects?: Pick<ProjectService, 'listProjects'>
+  readonly projects?: Pick<ProjectService, 'listProjects' | 'getProject'>
   /** 审批转发器（worker 侧中继——缺席 = fail-soft unavailable，remote-rpc.ts 同口径） */
   readonly forwardApproval?: (input: RemoteApprovalDecisionInput) => Promise<RemoteApprovalForwardResult>
   /** 会话门（官方 authorizeIndex——false = 官方 401 面已写毕，本 handler 零写出） */
   readonly authorize: (req: unknown, res: unknown) => boolean
   /** 诊断落链（/__rvdiag 同链——diag 桥 → harness.log） */
   readonly diag: (line: string) => void
+  /** forge:proxy/* 代理通道族依赖缝（缺席 = proxy 族通道 fail-soft 错误信封） */
+  readonly proxy?: ProxyChannelDeps
+  /** PSK 准入门（tunnel-psk v3——配对 PIN 读法由装配注入；门未配置 = 旧门语义过渡期） */
+  readonly psk?: PskGateDeps
 }
 
 /** 通道 allowlist（值 → 装配动作；形参 = 请求 payload） */
@@ -85,6 +92,7 @@ function channelTableOf(deps: RemoteHttpRpcDeps): Record<string, ChannelHandler>
       if (projects === undefined) throw new Error('forgeProjects 服务缺席——项目上下文不可达')
       return projects.listProjects()
     },
+    ...proxyChannelTableOf(deps.proxy ?? {}),
   }
 }
 
@@ -108,6 +116,7 @@ export const REMOTE_VIEW_COOKIE_NAME = 'dswf_forge_remote'
  * 官方 BrowserAuth 会话 cookie 按 Host authority 绑定（isAuthenticated 逐字比对），隧道域
  * 下手机 POST 被拒而 GET 页面通过的三类断点（authority 派生不一致/fetch cookie 缺席/官方
  * POST 分支语义）皆由自持兜底覆盖，真断点由 401 诊断行在真机日志定位。
+ * 隧道域数据面 POST 另受 PSK 信封强制（本文件分发器内——dswf 放行 ≠ 数据可达）。
  */
 export function authorizeRemoteRpc(req: unknown, res: unknown, authorizeIndex: (req: unknown, res: unknown) => boolean): boolean {
   if (authorizeIndex(req, res)) return true
@@ -125,10 +134,11 @@ function readBody(req: { on(event: string, cb: (chunk: unknown) => void): unknow
 
 /**
  * HTTP RPC 分发（/remote/__rpc 单点——child.ts 静态路由内分诊后调用）：
- * 会话门 → body 解析 → allowlist 分发 → 信封写出 → diag 落链。永不 reject。
+ * 会话门 → body 读取 → 隧道域 PSK 信封强制（唯一 401 owner）→ allowlist 分发 → 信封写出
+ * → diag 落链（channel 脱敏）。永不 reject。
  */
 export async function handleRemoteHttpRpc(
-  req: Parameters<typeof readBody>[0] & { url?: string },
+  req: Parameters<typeof readBody>[0] & { url?: string; headers?: Record<string, unknown> },
   res: RpcResFace,
   deps: RemoteHttpRpcDeps,
 ): Promise<void> {
@@ -142,10 +152,39 @@ export async function handleRemoteHttpRpc(
     )
     return
   }
+  const table = channelTableOf(deps)
+  const rawBody = await readBody(req)
+  const hostHeader = typeof (req as { headers?: Record<string, unknown> }).headers?.['host'] === 'string'
+    ? (req as { headers: Record<string, unknown> }).headers['host'] as string
+    : undefined
+  // 隧道域 + PSK 配置在场 ⇒ 信封强制（v2/C1+H4，A3 生效域）：无信封/验签失败/未知通道
+  // 一律统一 401（恒定体 + 填充）——dswf/authorizeIndex 放行也拒；明文零降级路径。
+  if (deps.psk !== undefined && isPskEnforcedHost(hostHeader) && deps.psk.load() !== undefined) {
+    const verdict = admitPskRequest(deps.psk, rawBody, (channel) => table[channel] !== undefined)
+    if (!verdict.ok) {
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=unauthorized`)
+      writeConstant401(res)
+      return
+    }
+    try {
+      const handler = table[verdict.channel]
+      if (handler === undefined) throw new Error('通道不在受限 allowlist')
+      const data = await handler(verdict.payload)
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(verdict.reply(data))
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=ok`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(verdict.replyError(message))
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error`)
+    }
+    return
+  }
   let channel = ''
   let payload: unknown
   try {
-    const body: unknown = JSON.parse(await readBody(req) || '{}')
+    const body: unknown = JSON.parse(rawBody || '{}')
     if (typeof body !== 'object' || body === null) throw new SyntaxError('body 形状非法')
     channel = typeof (body as Record<string, unknown>)?.['channel'] === 'string'
       ? (body as Record<string, unknown>)['channel'] as string
@@ -153,14 +192,14 @@ export async function handleRemoteHttpRpc(
     payload = (body as Record<string, unknown> | null)?.['payload']
   } catch {
     // 畸形 body = 400（信封面外——协议层失败）
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=(unparsable) status=bad-request`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=bad-request`)
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
     res.end()
     return
   }
-  const handler = channelTableOf(deps)[channel]
+  const handler = table[channel]
   if (handler === undefined) {
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel || '(none)'} status=not-found`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=not-found`)
     res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message: '通道不在受限 allowlist' } }))
     return
@@ -169,11 +208,11 @@ export async function handleRemoteHttpRpc(
     const data = await handler(payload)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: true, data }))
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=ok`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=ok`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message } }))
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=error`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error`)
   }
 }

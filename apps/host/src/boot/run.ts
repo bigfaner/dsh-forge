@@ -30,6 +30,7 @@ import {
   asEventMessage,
   asDiagMessage,
   asPairConnectedMessage,
+  asPairDisconnectedMessage,
   asPairMessage,
   asReadyMessage,
   asTunnelMessage,
@@ -299,6 +300,11 @@ export async function bootDshHost(
     // 轮换 pair 消息经 applyPairMessage 保留该位，connected 态卡不因 token 轮换丢态）
     if (asPairConnectedMessage(message) !== undefined) {
       manifest = applyPairConnected(manifest)
+      return
+    }
+    // mobile-ui 1.11：forge:remote/disconnect 通道对偶缝——断开连接推送收回粘性位
+    if (asPairDisconnectedMessage(message) !== undefined) {
+      manifest = applyPairDisconnected(manifest)
       return
     }
     // dsh-mobile-tunnel：隧道状态推送（激活/换线/TTL 旋转/关闭撤除）→ manifest 隧道面原位重建

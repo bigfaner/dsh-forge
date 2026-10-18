@@ -182,6 +182,14 @@ export interface BridgePairConnectedMessage {
 }
 
 /**
+ * mobile-ui 1.11 子 → 主：断开连接推送（forge:remote/disconnect 通道对偶缝——run.ts 消费
+ * applyPairDisconnected 收回 manifest connected 粘性位；url/绑定/配对/隧道面全保留）。
+ */
+export interface BridgePairDisconnectedMessage {
+  readonly type: 'pair-disconnected'
+}
+
+/**
  * dsh-mobile-tunnel 子 → 主：隧道状态推送（child 侧 TunnelManager 事件/pair 轮换驱动——
  * run.ts 消费重建 manifest 隧道面）。激活态携 tunnelUrl（`${tunnelUrl}/pair?token=` 形状，
  * token 随 pair 轮换换新）+ 链路类型 + Pinggy TTL 到期时刻；零载荷 `{type:'tunnel'}` =
@@ -232,6 +240,7 @@ export type ChildToMainMessage =
   | BridgeEventMessage
   | BridgePairMessage
   | BridgePairConnectedMessage
+  | BridgePairDisconnectedMessage
   | BridgeTunnelMessage
   | BridgeDiagMessage
 
@@ -578,6 +587,16 @@ export function asPairConnectedMessage(message: unknown): BridgePairConnectedMes
   if (typeof message !== 'object' || message === null) return undefined
   if ((message as Record<string, unknown>).type !== 'pair-connected') return undefined
   return { type: 'pair-connected' }
+}
+
+/**
+ * mobile-ui 1.11 pair-disconnected 消息守卫（子 → 主断开连接推送分流——run.ts 消费收回
+ * manifest connected 粘性位）。零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asPairDisconnectedMessage(message: unknown): BridgePairDisconnectedMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'pair-disconnected') return undefined
+  return { type: 'pair-disconnected' }
 }
 
 /**

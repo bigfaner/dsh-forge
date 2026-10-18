@@ -242,6 +242,8 @@ describe('handleRemoteHttpRpc 边界', () => {
     )
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('/remote/__rpc')
-    expect(lines[0]).toContain(REMOTE_CHANNELS.progress)
+    // 1.11：解密前 channel 字面量不进 diag（定长标记替代——日志注入/枚举分型消解）
+    expect(lines[0]).toContain('channel=<redacted>')
+    expect(lines[0]).not.toContain(REMOTE_CHANNELS.progress)
   })
 })
