@@ -2356,3 +2356,109 @@ body[data-ds-dark-theme] .md-code-block pre {
   min-height: 70vh;
   background: #fff;
 }
+
+/* worker 会话双形态（1.17）——列表 + 子会话流 */
+.worker-list-face {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.worker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.worker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.dark .worker-row,
+body[data-ds-dark-theme] .worker-row {
+  border-color: #303034;
+  background: #232324;
+}
+.worker-row.running {
+  border-color: #4176e6;
+}
+.wk-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.wk-mode {
+  flex: none;
+  border-radius: 999px;
+  border: 0.5px solid #dadce0;
+  background: #fbfbfc;
+  color: #5f6368;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.dark .wk-mode,
+body[data-ds-dark-theme] .wk-mode {
+  background: #2c2c2e;
+  border-color: #303034;
+  color: #9aa0a6;
+}
+.wk-mode.continuable {
+  border-color: #4176e6;
+  color: #1a56c4;
+  background: #e8f0fe;
+}
+.dark .wk-mode.continuable,
+body[data-ds-dark-theme] .wk-mode.continuable {
+  border-color: #7aaaff;
+  color: #9db8ff;
+  background: #24345e;
+}
+.wk-act {
+  flex: none;
+  font-size: 11px;
+  color: #81858c;
+  font-variant-numeric: tabular-nums;
+}
+.worker-row.running .wk-act {
+  color: #1a56c4;
+}
+.dark .worker-row.running .wk-act,
+body[data-ds-dark-theme] .worker-row.running .wk-act {
+  color: #9db8ff;
+}
+.worker-hint {
+  color: #81858c;
+  font-size: 12.5px;
+  text-align: center;
+  padding: 16px 0;
+}
+.worker-session-face {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.worker-session-face .topbar .wk-mode {
+  margin-left: 8px;
+}
+.worker-readonly-hint {
+  flex: none;
+  text-align: center;
+  color: #81858c;
+  font-size: 11.5px;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  border-top: 0.5px solid #dadce0;
+}
+.dark .worker-readonly-hint,
+body[data-ds-dark-theme] .worker-readonly-hint {
+  border-color: #303034;
+}

@@ -276,6 +276,11 @@ describe('router', () => {
       router.navigate(name)
       expect(router.current()).toEqual({ name, params: {} })
     }
+    // worker 路由（1.17）：#/worker/:sessionId 参数提取
+    source.set('#/worker/w-continuable')
+    expect(router.current()).toEqual({ name: 'worker', params: { sessionId: 'w-continuable' } })
+    router.navigate('worker', { sessionId: 'w-2' })
+    expect(router.current()).toEqual({ name: 'worker', params: { sessionId: 'w-2' } })
   })
 
   it('hash 变化驱动订阅（含未知 hash → null）', () => {

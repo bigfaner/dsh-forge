@@ -3,7 +3,7 @@
  * hash 源注入——单测不依赖 window。
  */
 
-export type RouteName = 'chat' | 'drawer' | 'hero' | 'settings' | 'models'
+export type RouteName = 'chat' | 'drawer' | 'hero' | 'settings' | 'models' | 'worker'
 
 export interface RouteMatch {
   readonly name: RouteName
@@ -22,6 +22,7 @@ const PATTERNS: readonly (readonly [RouteName, string])[] = [
   ['hero', '#/hero'],
   ['settings', '#/settings'],
   ['models', '#/models'],
+  ['worker', '#/worker/:sessionId'],
 ]
 
 function matchHash(hash: string): RouteMatch | null {
