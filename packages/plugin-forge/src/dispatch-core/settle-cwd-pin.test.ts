@@ -1,7 +1,7 @@
 // 1.14 判例修复（bug 台账：worker 会话未钉定 worktree、提交落 main——判例 366bec6a）定向单测：
 // ① settleWorkerRun 提交落点核验——success + commitHash + 容器检出现在场时核验「commit 所属
-//    分支 = 容器检出分支」；不一致/核验故障 = 结算失败（failed cause 自解释——升级经循环
-//    既有失败阶梯）；
+//    分支 = 容器检出分支」；不一致/核验故障 = landing-rejected 显式处置——任务 completed →
+//    interrupted 真化（bug d8029b20：不得走 worker-abort 阶梯静默接受错分支提交）；
 // ② 缺席容器检出（工具壳径）= 零核验，行为零变化；blocked 径不核验；
 // ③ gitCommitLanding 真核验（临时 git 仓）：落点命中/落错分支/detached HEAD 三态。
 import { execFileSync } from 'node:child_process'
@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { ForgeTasksService, QueryTaskResult, TaskSnapshot } from '@dsh-forge/contracts'
+import type { ForgeTasksService, QueryTaskResult, TaskSnapshot, TransitionTaskInput } from '@dsh-forge/contracts'
 import { settleWorkerRun, gitCommitLanding } from './settle.js'
 import type { CommitLandingVerifier } from './settle.js'
 import type { SpawnWorkerHandle } from './spawn.js'
@@ -35,9 +35,13 @@ function handle(): SpawnWorkerHandle {
   return { workerSessionId: 'worker-1', result: Promise.resolve({ stopReason: 'completed', output: '' }), dispose: async () => {} }
 }
 
-function tasksStub(query: QueryTaskResult): ForgeTasksService {
+function tasksStub(query: QueryTaskResult, transitions?: TransitionTaskInput[]): ForgeTasksService {
   return {
     queryTask: async () => query,
+    transitionTask: async (input: TransitionTaskInput) => {
+      transitions?.push(input)
+      return snapshot({ taskStatus: input.toStatus })
+    },
     taskStats: async () => ({
       total: 1,
       byStatus: { pending: 0, in_progress: 0, blocked: 0, completed: 1, skipped: 0, rejected: 0, suspended: 0, interrupted: 0 },
@@ -79,27 +83,35 @@ describe('1.14 · 提交落点核验（settleWorkerRun cwd 钉定收口）', () 
     expect(settlement.case).toBe('settled')
   })
 
-  it('落点不一致（判例 366bec6a 落 main）→ 结算失败，cause 自解释（容器检出分支 + 提交所在分支）', async () => {
+  it('落点不一致（判例 366bec6a 落 main）→ landing-rejected 显式处置：任务真化 interrupted（可恢复态）+ cause 自解释', async () => {
+    const transitions: TransitionTaskInput[] = []
     const settlement = await settleWorkerRun(
-      { tasks: tasksStub(completedQuery('abc1234')), commitLanding: badLanding },
+      { tasks: tasksStub(completedQuery('abc1234'), transitions), commitLanding: badLanding },
       { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
     )
-    expect(settlement.case).toBe('failed')
-    if (settlement.case !== 'failed') return
+    expect(settlement.case).toBe('landing-rejected')
+    if (settlement.case !== 'landing-rejected') return
     expect(settlement.cause).toBeInstanceOf(Error)
-    expect((settlement.cause as Error).message).toContain('[settle-cwd-pin]')
-    expect((settlement.cause as Error).message).toContain('feat-x')
-    expect((settlement.cause as Error).message).toContain('main')
+    expect(settlement.cause.message).toContain('[settle-cwd-pin]')
+    expect(settlement.cause.message).toContain('feat-x')
+    expect(settlement.cause.message).toContain('main')
+    // 显式处置：completed → interrupted（合法边——任务可恢复，不 completed 挂死）
+    expect(transitions).toEqual([
+      { projectId: 'p-1', taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]'), actor: 'core' },
+    ])
   })
 
-  it('核验故障（git 不可用）→ 结算失败（fail-loud——落点判据不成立不静默）', async () => {
+  it('核验故障（git 不可用）→ landing-rejected 显式处置（fail-loud——落点判据不成立不静默）', async () => {
+    const transitions: TransitionTaskInput[] = []
     const settlement = await settleWorkerRun(
-      { tasks: tasksStub(completedQuery('abc1234')), commitLanding: boomLanding },
+      { tasks: tasksStub(completedQuery('abc1234'), transitions), commitLanding: boomLanding },
       { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
     )
-    expect(settlement.case).toBe('failed')
-    if (settlement.case !== 'failed') return
-    expect((settlement.cause as Error).message).toContain('git not found')
+    expect(settlement.case).toBe('landing-rejected')
+    if (settlement.case !== 'landing-rejected') return
+    expect(settlement.cause.message).toContain('git not found')
+    expect(transitions).toHaveLength(1)
+    expect(transitions[0]?.toStatus).toBe('interrupted')
   })
 
   it('容器检出席席（工具壳径）= 零核验行为零变化；blocked 径与无 commitHash 径不核验', async () => {

@@ -40,3 +40,13 @@ export type {
 } from './escalation.js'
 export { createLoopRegistry } from './registry.js'
 export type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
+// 改进7 · e2e 红灯基线门（宿主装配面真接线——bug ca061ef6）
+export {
+  createE2eBaselineFace,
+  E2E_BASELINE_SUITE_TIMEOUT_MS,
+  attributionTaskInput,
+  baselineForHead,
+  parseE2eRedSpecs,
+  runE2eBaseline,
+} from './e2e-baseline.js'
+export type { E2eBaselineFaceDeps, E2eBaselineCache, E2eBaselineRedList } from './e2e-baseline.js'

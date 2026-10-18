@@ -779,18 +779,21 @@ describe('S1c claimTask 循环独占守卫（exclusivityGuard——目标解析�
 // ─────────────────── worker-exec-evidence-replay 1.3：重入证据指针透传（Solution③/SC3） ───────────────────
 
 describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 → 简报注入 <resume> 段', () => {
-  /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制） */
-  function svcWithPointer(pointer: string | undefined, seen: { slug: string; localId: string }[]) {
+  /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制——pointer+stale 效度态） */
+  function svcWithPointer(
+    state: { pointer: string; stale: boolean } | undefined,
+    seen: { slug: string; localId: string; checkoutRoot?: string }[],
+  ) {
     h ??= createTasksHarness()
     return (input: Parameters<typeof claimTask>[1]) =>
       claimTask(
         {
           store: h!.store,
           events: h!.events,
-          resolveEvidencePointer: (projectId, slug, localId) => {
+          resolveEvidencePointer: (projectId, slug, localId, checkoutRoot) => {
             expect(projectId).toBe(h!.projectId)
-            seen.push({ slug, localId })
-            return pointer
+            seen.push({ slug, localId, checkoutRoot })
+            return state
           },
         },
         input,
@@ -798,8 +801,8 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
   }
 
   it('重入派发（幂等重入）：证据位指针在盘 → 简报注入 <resume> 段（变量指称 + 四条规则——中断重入续跑）', async () => {
-    const seen: { slug: string; localId: string }[] = []
-    const claim = svcWithPointer('logs/f/1.1/resume.md', seen)
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/1.1/resume.md', stale: false }, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1', { status: 'in_progress' }) // 中断残留——重入径
     const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
@@ -807,11 +810,24 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
     expect(r.dispatchPrompt).toContain('<resume>')
     expect(r.dispatchPrompt).toContain('{forge.task_logs_dir}/resume.md')
     expect(r.dispatchPrompt).toContain('不得重做已完成部分')
-    expect(seen).toEqual([{ slug: 'f', localId: '1.1' }]) // 领取瞬间取数——探测按目标行进行
+    expect(seen).toEqual([{ slug: 'f', localId: '1.1', checkoutRoot: undefined }]) // 领取瞬间取数——探测按目标行进行
+  })
+
+  it('disc 效度戳：checkoutRoot 随 claim 透传探测（效度比对检出根）；stale = true → 简报注入 stale 规则段（只叙不判强制重跑）', async () => {
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/3.1/resume.md', stale: true }, seen)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '3.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '3.1' }, sessionId: 's', checkoutRoot: 'Z:\\wt\\f' })
+    expect(seen).toEqual([{ slug: 'f', localId: '3.1', checkoutRoot: 'Z:\\wt\\f' }])
+    expect(r.dispatchPrompt).toContain('<resume>')
+    expect(r.dispatchPrompt).toContain('不得复用')
+    expect(r.dispatchPrompt).toContain('只叙不判')
+    expect(r.dispatchPrompt).not.toContain('不得重做已完成部分') // fresh 规则段不注入
   })
 
   it('证据位无指针（undefined）→ 简报零 <resume> 段（首跑形态）；注入面缺席（dep 缺省）同样零段', async () => {
-    const seen: { slug: string; localId: string }[] = []
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
     const claim = svcWithPointer(undefined, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1')
@@ -825,8 +841,8 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
   })
 
   it('指针注入 → claim 记录 digest 覆盖 <resume> 段（同任务有无指针 = 不同简报指纹）', async () => {
-    const seen: { slug: string; localId: string }[] = []
-    const claim = svcWithPointer('logs/f/2.1/resume.md', seen)
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/2.1/resume.md', stale: false }, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '2.1')
     const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' })

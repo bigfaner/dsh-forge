@@ -123,6 +123,13 @@ export interface DispatchPromptInput {
    */
   evidencePointer?: string
   /**
+   * 证据效度态（disc 跟进——evidencePointer 在场时附带：true = 效度戳缺失/漂移，简报注入
+   * `<resume>` stale 规则段——resume.md 降级历史记录（只叙不判）强制重跑；false/缺席 = 效度
+   * 域内复用（正常续跑规则段）。实现卡（coding 族）进度复用语义零变化——漂移只降级证据
+   * 复用，不触及状态机实现态。
+   */
+  evidenceStale?: boolean
+  /**
    * e2e 红灯基线清单（dispatch-loop-hardening 改进7：`E2E_BASELINE_RED:` 行——循环入场前
    * 跑基线所得红灯 spec，随简报递达 worker；基线红灯 ≠ 本任务回归，机械判定比对归因、
    * 禁止顺手修复。缺席/空数组省行——digest 与基线关闭形态同值）。
@@ -142,11 +149,23 @@ export const RESUME_POINTER_FILE = 'resume.md'
  * plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
  */
 export const RESUME_SECTION = `<resume>
-续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md。
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
 1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
 2. 同目录下按编号命名的子文件夹（如 001-login-fail/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
 3. 遇到阻塞性问题时覆盖写入该文件，仅保留最新状态。
 4. 本段缺席 = 首次执行：从零开始，并自第一轮起按上述方式维护该文件。
+</resume>`
+
+/**
+ * `<resume>` stale 规则段（disc 效度戳——效度域漂移形态：resume.md 在盘但其效度戳与当前
+ * 效度域比对不一致（或无戳不可证）——证据降级历史记录（只叙不判），强制重跑。判例 =
+ * 1.16 二次 blocked 短路：陈旧证据复用上抛，本段封死该通道）。
+ */
+export const RESUME_STALE_SECTION = `<resume>
+续跑说明：本任务存在历史进度文件 {forge.task_logs_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
+1. 该文件降级为历史记录（只叙不判）：可读以了解此前做过什么，但其「已完成」声明一律不可信，不得据此跳过任何步骤或虚报进度。
+2. 同目录编号子文件夹中的证据类产物（测试输出、截图、票据）一律重跑重取；代码结论须以当前树现读为准。
+3. 从零建立 todo_write 待办并全量执行；结算前覆盖写入该文件，仅保留最新状态。
 </resume>`
 
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
@@ -227,7 +246,9 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     e2eBaselineRed !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRed}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
-  if (input.evidencePointer !== undefined) context += `\n${RESUME_SECTION}`
+  if (input.evidencePointer !== undefined) {
+    context += `\n${input.evidenceStale === true ? RESUME_STALE_SECTION : RESUME_SECTION}`
+  }
   if (input.goal !== undefined || (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0)) {
     context += '\n<goal>'
     if (input.goal !== undefined) context += `\n${input.goal}`

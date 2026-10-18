@@ -15,7 +15,6 @@ import {
   renderP1,
   renderP2,
   renderP3,
-  renderP4,
   renderP5,
   renderP6,
   renderP7,
@@ -31,6 +30,7 @@ import { LOOP_EXCLUSIVE_GUIDANCE, OWNER_ACTIVE_GUIDANCE } from '../../src/dispat
 
 const PAYLOAD = {
   slug: 'feat-x',
+  sourceKind: 'feature',
   ownerSessionId: 'sess-a1',
   taskKey: 'feat-x/2.3',
   reason: '验收标准要求全部测试通过，但 3 个既有用例与改动冲突',
@@ -170,12 +170,12 @@ describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
 // ─────────────────────────── 结束族机制断言（AC 11） ───────────────────────────
 
 describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指示段）', () => {
-  it('finished-all 分支追加 P8——四重点逐字在文', () => {
+  it('finished-all 分支即 P8——四重点逐字在文、无重复结束块', () => {
     const text = renderEndOfLoop('finished-all', PAYLOAD)
-    expect(text).toContain('【任务循环结束】')
     expect(text).toContain('【代码评审指示】')
+    expect(text).not.toContain('【任务循环结束】')
     for (const focus of P8_FOCUS_LINES) expect(text).toContain(focus)
-    // P8 复用段与单渲染同文（追加段非改写）
+    // P8 单渲染与结束族同文（非改写）
     expect(text).toContain(renderP8(PAYLOAD))
   })
 
@@ -185,10 +185,21 @@ describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指�
       expect(text).not.toContain('【代码评审指示】')
       for (const focus of P8_FOCUS_LINES) expect(text).not.toContain(focus)
     }
-    expect(renderP4(PAYLOAD)).not.toContain('【代码评审指示】')
     expect(renderP5(PAYLOAD)).toContain('已完成 4，blocked 1')
     expect(renderP6(PAYLOAD)).toContain(`${PAYLOAD.slug} 连续派发失败`)
-    expect(renderP7(PAYLOAD)).toContain(`dispatchTask(${PAYLOAD.slug})`)
+    expect(renderP7(PAYLOAD)).toContain(`dispatchTask(source_kind='feature', source_slug='${PAYLOAD.slug}')`)
+    // 双参形态 pin：全部模板 dispatchTask 指引 schema 合法（source_kind+source_slug 成对，无单参残形）
+    for (const text of [
+      renderP3(PAYLOAD),
+      renderP9(PAYLOAD),
+      renderP5(PAYLOAD),
+      renderP6(PAYLOAD),
+      renderP7(PAYLOAD),
+      renderP8(PAYLOAD),
+    ]) {
+      expect(text).toMatch(/dispatchTask\(source_kind='[a-z]+', source_slug='[^']+'\)/)
+      expect(text).not.toMatch(/dispatchTask\((?!source_kind)[^\s')]/)
+    }
   })
 
   it('driver 消费同源：driver.ts 结束径直调 renderEndOfLoop（非二次抄写）', () => {
@@ -211,7 +222,6 @@ describe('pin-dispatch-injection · 占位符完整性', () => {
       renderP2(PAYLOAD),
       renderP3(PAYLOAD),
       renderP9(PAYLOAD),
-      renderP4(PAYLOAD),
       renderP5(PAYLOAD),
       renderP6(PAYLOAD),
       renderP7(PAYLOAD),

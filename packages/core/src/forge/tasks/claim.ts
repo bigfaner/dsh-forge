@@ -244,9 +244,10 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
     const sourceRef = sourceRow === undefined ? undefined : { slug: sourceRow.slug, localId: sourceRow.local_id }
-    // worker-exec-evidence-replay 1.3：续跑指针领取瞬间探测（证据位 resume.md 在盘 →
-    // EVIDENCE 行——重入派发 brief 自动携带，新 worker 首步读指针续跑；缺席 = 首跑零行）
-    const evidencePointer = deps.resolveEvidencePointer?.(input.projectId, row.slug, row.local_id)
+    // worker-exec-evidence-replay 1.3 + disc 效度戳：续跑指针领取瞬间探测（证据位 resume.md
+    // 在盘 → EVIDENCE 行——重入派发 brief 自动携带；效度戳机械比对：一致 = 复用、漂移 =
+    // stale 规则段强制重跑；缺席 = 首跑零行）
+    const evidenceState = deps.resolveEvidencePointer?.(input.projectId, row.slug, row.local_id, input.checkoutRoot)
     const dispatchPrompt = composeDispatchPrompt({
       slug: row.slug,
       localId: row.local_id,
@@ -271,7 +272,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // S2b/SC3：SURFACE 单行双值（`<key> (<type>)`；缺席省行——R6 填写率缓解）
       ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
       ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
-      ...(evidencePointer !== undefined ? { evidencePointer } : {}),
+      ...(evidenceState !== undefined
+        ? { evidencePointer: evidenceState.pointer, evidenceStale: evidenceState.stale }
+        : {}),
       // 改进7（e2e 取证债）：红灯基线清单随简报递达——调用方（循环入场基线门）领取瞬间传入
       ...(input.e2eBaselineRed !== undefined ? { e2eBaselineRed: input.e2eBaselineRed } : {}),
     })

@@ -6,6 +6,7 @@
 // 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
 // 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import { execFile } from 'node:child_process'
+import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
@@ -65,9 +66,11 @@ export type CommitLandingVerifier = (
 export const gitCommitLanding: CommitLandingVerifier = async (worktreeDir, commitHash) => {
   const run = (args: readonly string[]): Promise<string> =>
     new Promise((resolve, reject) => {
-      execFile('git', ['-C', worktreeDir, ...args], { encoding: 'utf8' }, (error, stdout) =>
+      const git = execFile('git', ['-C', worktreeDir, ...args], { encoding: 'utf8' }, (error, stdout) =>
         error == null ? resolve(stdout) : reject(error),
       )
+      // 结算期 git 核验 = 宿主自有子进程（worker 守卫已 reclaim）——显式登记防并发循环 keeper 误收编误杀
+      noteHostOwnedChild(git)
     })
   const branch = (await run(['branch', '--show-current'])).trim()
   if (branch === '') throw new Error(`容器检出不在分支上（detached HEAD）：${worktreeDir}`)
@@ -88,6 +91,7 @@ async function createE2eDebtTask(
   tasks: ForgeTasksService,
   ctx: { readonly projectId: string; readonly task: TaskSnapshot },
   debt: NonNullable<TaskRecordEntry['evidenceDebt']>,
+  e2eBaselineRed?: readonly string[],
 ): Promise<DispatchSpawnedResult['evidenceDebt']> {
   try {
     const specsLine = debt.specs.join(', ')
@@ -100,7 +104,11 @@ async function createE2eDebtTask(
         `实现卡 ${ctx.task.slug}/${ctx.task.localId} 已按实现态结算（实现+单测绿），本卡承接其真机 e2e 断言取证欠账。`,
         `取证套件：${debt.suite}；欠账 spec：${specsLine}。`,
         ...(debt.note !== undefined ? [`欠账说明：${debt.note}`] : []),
-        '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。',
+        // 文案与简报行真实存在性一致（bug ca061ef6）：简报红灯清单在场才指示比对——
+        // 无红灯/基线门未接线时兜底文案，不指示真机不存在的简报行
+        e2eBaselineRed !== undefined && e2eBaselineRed.length > 0
+          ? '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。'
+          : '执行 e2e 并断言上述 spec；本卡生成时简报无 E2E_BASELINE_RED 行（基线门未接线或入场基线零红灯）——遇失败不默认归因到本实现，按归因流程（环境/陈旧断言/真回归三分流）自行分流上报。',
       ].join('\n'),
       dependsOn: [ctx.task.localId],
       priority: 'P1',
@@ -115,10 +123,41 @@ async function createE2eDebtTask(
   }
 }
 
+/**
+ * 落点核验失败显式处置（bug d8029b20）：任务 completed → interrupted 真化（transitionTask
+ * 人工转移合法边——可恢复态，非 completed 挂死）；真化失败 fail-loud 注记进判词（任务留
+ * completed 需人工转移，绝不静默）。返回 landing-rejected——循环径据此挂起升级，不走
+ * worker-abort 失败阶梯。
+ */
+async function rejectLanding(
+  deps: { readonly tasks: ForgeTasksService },
+  ctx: { readonly projectId: string; readonly task: TaskSnapshot },
+  cause: Error,
+): Promise<{ readonly case: 'landing-rejected'; readonly cause: Error }> {
+  try {
+    await deps.tasks.transitionTask({
+      projectId: ctx.projectId,
+      taskId: ctx.task.taskId,
+      toStatus: 'interrupted',
+      reason: cause.message,
+      actor: 'core', // 循环自动化纠偏——审计归因不再误记人类通道 'ui'
+    })
+  } catch (transitionCause) {
+    return {
+      case: 'landing-rejected',
+      cause: new Error(
+        `${cause.message}；interrupted 真化失败（任务留 completed 态需人工转移）：${transitionCause instanceof Error ? transitionCause.message : String(transitionCause)}`,
+      ),
+    }
+  }
+  return { case: 'landing-rejected', cause }
+}
+
 /** worker 终态结算判定（settleWorkerRun 产物——失败支合并 run 拒绝与无结算，kill 由调用方 taxonomy 判定） */
 export type WorkerSettlement =
   | { readonly case: 'settled'; readonly result: Omit<DispatchSpawnedResult, 'kind'>; readonly durationMs: number }
   | { readonly case: 'failed'; readonly cause: unknown }
+  | { readonly case: 'landing-rejected'; readonly cause: Error }
 
 /**
  * worker 终态结算核（async-dispatch §4.2 ②③——前台 execute 第 4~5 步原样搬迁的共用体，
@@ -147,6 +186,8 @@ export async function settleWorkerRun(
      * 核验提交落点（commit 所属分支 = 容器检出分支）；缺席 = 不核验（工具壳行为零变化）。
      */
     readonly worktreeCwd?: string
+    /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
+    readonly e2eBaselineRed?: readonly string[]
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -183,34 +224,31 @@ export async function settleWorkerRun(
   const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
   const submitRecord = lastSubmitRecordOf(settled.records)
   // 提交落点核验（1.14——cwd 钉定收口）：success + commitHash + 容器检出现在场时核验
-  // 「commit 所属分支 = 容器检出分支」；不一致/核验故障 = 结算失败（升级经循环既有失败
-  // 阶梯）——提交落错分支（判例 366bec6a 落 main）不得静默通过。
+  // 「commit 所属分支 = 容器检出分支」；不一致/核验故障 = landing-rejected 显式处置
+  // （bug d8029b20——submitTask 已落 completed 后再走 worker-abort 阶梯 = 任务终态不可再领、
+  // 错分支提交被静默接受。显式处置：任务 completed → interrupted 真化（人工转移合法边，
+  // 可恢复态）+ 专案判词交循环挂起升级——提交落错分支（判例 366bec6a 落 main）不得静默通过。
+  // Root cause: 核验时点晚于终态落定，失败面必须自带状态纠偏，不能依赖触不到该任务的阶梯。）
   if (outcome === 'success' && submitRecord?.commitHash !== undefined && ctx.worktreeCwd !== undefined) {
     const verify = deps.commitLanding ?? gitCommitLanding
     try {
       const verdict = await verify(ctx.worktreeCwd, submitRecord.commitHash)
       if (!verdict.ok) {
-        return {
-          case: 'failed',
-          cause: new Error(
-            `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝并升级`,
-          ),
-        }
+        return await rejectLanding(deps, ctx, new Error(
+          `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝`,
+        ))
       }
     } catch (cause) {
-      return {
-        case: 'failed',
-        cause: new Error(
-          `[settle-cwd-pin] 提交落点核验故障（容器检出 ${ctx.worktreeCwd}，提交 ${submitRecord.commitHash}）：${cause instanceof Error ? cause.message : String(cause)}`,
-        ),
-      }
+      return await rejectLanding(deps, ctx, new Error(
+        `[settle-cwd-pin] 提交落点核验故障（容器检出 ${ctx.worktreeCwd}，提交 ${submitRecord.commitHash}）：${cause instanceof Error ? cause.message : String(cause)}`,
+      ))
     }
   }
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =
     outcome === 'success' && submitRecord?.evidenceDebt !== undefined
-      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt)
+      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt, ctx.e2eBaselineRed)
       : undefined
   const pool: PoolSnapshot = poolOf(
     await deps.tasks.taskStats({

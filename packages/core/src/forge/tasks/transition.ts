@@ -4,7 +4,8 @@
 // state-machine/phase-deriver/query（行形状与身份解析单源）；四域互禁 import 彼此。
 //
 // 人类通道语义（§6-26）：from≠to 任意转移（七态 − 当前态——human 面目标集）+ reason 必带
-// （ERR_REASON_REQUIRED）；UI 专属（actor='ui' 由通道推断——RPC 人类面恒定，输入面不收）；
+// （ERR_REASON_REQUIRED）；人类面缺省 actor='ui'，机械纠偏显式传 'core'（循环自动化
+// landing-rejected 真化/终止真化等——审计归因与实际通道一致）；
 // 不进 plugin tool 面（3.2 审计锚——SC7 代码审计无 transitionTask tool 注册）。
 //
 // 单事务全成全败（Hard Rule）：行解析 → reason 校验 → 提前校验（assertTransitionAllowed
@@ -113,12 +114,13 @@ export async function transitionTask(deps: TasksVerbDeps, input: TransitionTaskI
       })
     }
 
-    // ⑤ 转移 + transition 记录（actor='ui'——通道推断；reason 审计列必带）
+    // ⑤ 转移 + transition 记录（actor 缺省 'ui'——人类面通道推断；机械纠偏显式传 'core'
+    //    ——循环自动化 landing-rejected 真化等不再误记人类通道；reason 审计列必带）
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(input.toStatus, now, row.id)
     db.prepare(
       `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, actor, created_at, updated_at)
-       VALUES (?, 'transition', ?, ?, ?, 'ui', ?, ?)`,
-    ).run(row.id, row.task_status, input.toStatus, input.reason, now, now)
+       VALUES (?, 'transition', ?, ?, ?, ?, ?, ?)`,
+    ).run(row.id, row.task_status, input.toStatus, input.reason, input.actor ?? 'ui', now, now)
 
     // ⑥ 恢复钩子（C3）：→completed/skipped 同挂（满足集双终态；rejected 不满足不触发）
     if ((SATISFYING_TASK_STATUSES as readonly string[]).includes(input.toStatus)) {
