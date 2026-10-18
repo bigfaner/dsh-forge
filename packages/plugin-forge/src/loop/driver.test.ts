@@ -272,8 +272,9 @@ function build(options: {
   e2eBaseline?: {
     runSuite: () => Promise<string>
     readHead?: (worktree: string) => Promise<string | undefined>
-    /** bug 006d8bfe 后续：持久化缓存路径缝（worktree → 缓存文件；缺席 = 无持久化） */
-    cacheFile?: (worktree?: string) => string | undefined
+    /** bug 006d8bfe 后续：持久化缓存路径缝（{slug, worktree} → 缓存文件；缺席 = 无持久化）——
+     *  形状随 LoopDriverDeps.e2eBaseline.cacheFile（e0c4b6e7 输入形，镜像同步） */
+    cacheFile?: (input: { readonly slug: string; readonly worktree?: string }) => string | undefined
   }
   /** 1.18 落点核验器注入（错分支提交场景——settleWorkerRun commitLanding 缝） */
   commitLanding?: CommitLandingVerifier
