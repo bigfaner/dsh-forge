@@ -5,7 +5,7 @@
 import type { OfficialApi } from '../../apps/mobile/src/core/api.ts'
 import type { RemoteRpc, RpcResult } from '../../apps/mobile/src/core/rpc.ts'
 import type { WireEvent } from '../../apps/mobile/src/core/wire.ts'
-import { createWorkerListView, createWorkerSessionView, type WorkerSessionHandle } from '../../apps/mobile/src/views/worker.ts'
+import { createWorkerListView, createWorkerSessionView } from '../../apps/mobile/src/views/worker.ts'
 
 // 父会话日志：subagent/catalog 双 worker（continuable + one-shot）
 const parentEvents: WireEvent[] = [
@@ -132,7 +132,7 @@ const listeners = new Set<(event: WireEvent) => void>()
     )
   },
   pushFrame(event: WireEvent): void {
-    for (const listener of [...listeners]) listener(event)
+    for (const listener of Array.from(listeners)) listener(event)
   },
   exitCurrent(): void {
     current?.root.remove()
