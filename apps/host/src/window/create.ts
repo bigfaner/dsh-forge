@@ -9,8 +9,6 @@ export interface BrowserWindowLike {
     readonly id: number
     /** 主→渲染单向推送（3.1：forge:events/* 广播面——m2-wiring 消费；fake 窗口可缺席） */
     send?(channel: string, ...args: unknown[]): unknown
-    /** renderer console 转发挂载面（诊断通道——fake 窗口可缺席） */
-    on?(event: 'console-message', listener: (event: unknown, level: number, message: string, line: number, sourceId: string) => void): unknown
   }
   loadURL(url: string): Promise<void>
   on(event: string, listener: () => void): void
@@ -70,14 +68,6 @@ export async function createMainWindow(
     },
   })
   if (!hidden) win.on('ready-to-show', () => win.show())
-  // renderer console 回流终端（诊断通道——dev:debug 排查面：被 UI 捕获的错误任何管道都
-  // 不打印，渲染侧 warn/error 经此进 dev:debug 的 inherit 终端；level 2=warning 3=error）
-  win.webContents.on?.('console-message', (_event, level, message, line, sourceId) => {
-    if (level >= 2) {
-      const tag = level >= 3 ? 'renderer-error' : 'renderer-warn'
-      console.error(`[${tag}] ${message} (${sourceId.split(/[\\/]/).pop()}:${line + 1})`)
-    }
-  })
   await win.loadURL(options.url)
   return win
 }
