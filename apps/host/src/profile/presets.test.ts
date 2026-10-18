@@ -72,10 +72,10 @@ describe('底稿前置（环境门）', () => {
 
 describe('cordis.patch.yml 底稿（registry 覆写行）', () => {
   const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.cordis), 'utf8')
-  it('registry 行 default = expedition（Story 1：hero 座位缺省远征）——除头注释外零多余行', () => {
-    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: expedition')
+  it('registry 行 default = blitz（bug 2ba146d8：hero 座位缺省突击）——除头注释外零多余行', () => {
+    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: blitz')
     const rows = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
-    expect(rows).toEqual(['- id: agent-preset-registry', '  config:', '    default: expedition'])
+    expect(rows).toEqual(['- id: agent-preset-registry', '  config:', '    default: blitz'])
   })
 })
 

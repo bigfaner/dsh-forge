@@ -50,6 +50,20 @@ export function selectedProjectOf(
 }
 
 /**
+ * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
+ * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
+ * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
+ * （ForgeHeroWorkspacePicker）经官方 owner onPick 链拾取——与用户点选同行同语义。
+ */
+export function heroDefaultPickId(
+  rows: readonly HeroPickerRow[],
+  selectedId: string | undefined,
+): string | undefined {
+  if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
+  return rows[0]?.id
+}
+
+/**
  * worktree 数据根（严格段）：仅 selectedId 严格命中项目行时返回 ws_path；未选中/未命中/
  * 归档 → null（渲染兜底不消费——禁止兜底泄漏为绑定语义，无绑定工作区会话不得被指到别的
  * 项目树）。

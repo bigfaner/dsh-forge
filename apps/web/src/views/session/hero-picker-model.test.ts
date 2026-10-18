@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   heroPickerPlan,
+  heroDefaultPickId,
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
@@ -112,6 +113,29 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
   it('全归档/空集 → null（chip 零注入退回现状）', () => {
     expect(selectedProjectRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })], undefined)).toBeNull()
     expect(selectedProjectRootOf([], 'w-1')).toBeNull()
+  })
+})
+
+// ───────────── bug 2ba146d8：hero 默认拾取链（项目 chip 缺省选中第一个活跃项目）──
+describe('heroDefaultPickId（bug 2ba146d8 默认拾取——归档会话回 hero 项目 chip 不得空选中）', () => {
+  it('bug: 无选中（归档会话回 hero/冷启）+ 活跃项目在场 → 默认拾取第一个活跃项目行', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, undefined)).toBe('w-1')
+  })
+
+  it('bug: 选中态未命中行集（未绑定工作区/已归档项目——归档行不可锚定既有语义）→ 默认拾取第一个活跃项目行', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-native-unbound')).toBe('w-1')
+    expect(heroDefaultPickId(rows, 'w-3')).toBe('w-1')
+  })
+
+  it('已命中行集 → 不拾取（undefined——用户显式选中态零覆盖）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-2')).toBeUndefined()
+  })
+
+  it('空行集（无活跃项目）→ 不拾取（undefined——零项目直达添加流现状）', () => {
+    expect(heroDefaultPickId([], undefined)).toBeUndefined()
   })
 })
 

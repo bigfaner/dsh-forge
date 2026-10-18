@@ -248,9 +248,9 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     },
   })
 
-  it('双预设上场（AC6 形制）：registry default = 远征覆写 + 预设声明行（中文 name 直出·order 1/2）', () => {
+  it('双预设上场（AC6 形制）：registry default = 突击覆写（bug 2ba146d8）+ 预设声明行（中文 name 直出·order 1/2）', () => {
     const text = renderBootOverlay(withPresets())
-    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: expedition')
+    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: blitz')
     expect(text).toContain("    - id: preset-expedition\n      name: '@deepseek-ai/dsh-agent-preset'")
     expect(text).toContain('        id: expedition\n        name: 远征模式')
     expect(text).toContain('        order: 1')

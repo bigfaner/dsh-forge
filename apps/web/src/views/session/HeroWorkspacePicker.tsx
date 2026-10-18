@@ -19,12 +19,13 @@
 // W3 arm 退役（session-binding-guarantee）：挂靠编排缝（createWorktreeOrchestrator）与
 // 1.25 失败 Toast 文案族退役——会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，
 // create 失败走官方 createFailed toast），本面只剩项目弹层 + hero worktree chip 挂载。
-import { useCallback, useEffect, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
+  heroDefaultPickId,
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
@@ -77,6 +78,20 @@ export function ForgeHeroWorkspacePicker({
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
   const selectedRow = selectedProjectOf(plan.rows, selectedId)
+
+  // bug 2ba146d8 默认拾取（hero 默认选中第一个活跃项目）：选中态缺席/未命中行集（归档
+  // 会话回 hero、冷启、绑定已归档项目）→ 经官方 owner onPick 链拾取首行（与用户点选同行
+  // 同语义——selectWorkspace 零改契约）。行集未定（loading）不拾取；per 候选 id 一次性
+  // 尝试闩（pick 被官方拒时 pending 回滚、selectedId 不变——闩防重试循环，fail-soft 回
+  // 「选择工作区」现状）。
+  const defaultPickId = heroDefaultPickId(plan.rows, selectedId)
+  const attemptedDefaultRef = useRef<ReadonlySet<string>>(new Set())
+  useEffect(() => {
+    if (defaultPickId === undefined) return
+    if (attemptedDefaultRef.current.has(defaultPickId)) return
+    attemptedDefaultRef.current = new Set(attemptedDefaultRef.current).add(defaultPickId)
+    onPick(defaultPickId)
+  }, [defaultPickId, onPick])
 
   // 「添加项目…」打开（官方 openDirectoryFlow 同形：先 onClose 归还 owner 态，再开产品流）
   const openAdd = useCallback(() => {
