@@ -2,6 +2,7 @@
 // 相位机/项目锚/右栏联动计划自 WorkbenchPanel 测试族迁入（语义不变）；centerViewOf =
 // 新面（官方面板态 → 产品视图镜像）。
 import { describe, expect, it } from 'vitest'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import {
   HERO_PANEL_KEY,
   KNOWLEDGE_PANEL_KEY,
@@ -175,6 +176,58 @@ describe('anchoredOverviewContext 概览项目上下文（4.1 AC4：knowledge-an
 
   it('归档行不带 archived 字段（既有调用形状）→ 行为不变（全部按活跃计）', () => {
     expect(anchoredOverviewContext({ mainSessionId: null, workspaces, projects })).toEqual({ projectId: null, workspaceId: null })
+  })
+})
+
+describe('bug 52fc94db：worktree 工作区会话概览锚定接 host 裁决（e9330692 同族——多项目下失锚）', () => {
+  // 双活跃项目（dsh-forge + my-idea 现实形态）——唯一项目兜底失效的触发条件
+  const projects = [
+    { id: 'p-owner', workspaceId: 'ws-main' },
+    { id: 'p-other', workspaceId: 'ws-idea' },
+  ]
+  // worktree 工作区不在 projects 注册表（注册表一项目一行、ws_path = 主树）
+  const workspaces = {
+    items: [
+      { workspaceId: 'ws-wt', path: 'Z:\\proj\\.forge\\worktrees\\wt-a', sessionIds: ['s-wt'] },
+      { workspaceId: 'ws-main', sessionIds: ['s-main'] },
+      { workspaceId: 'ws-idea', sessionIds: ['s-idea'] },
+    ],
+  }
+  const resolved = new Map([[normalizeFsPath('Z:\\proj\\.forge\\worktrees\\wt-a'), 'p-owner']])
+
+  it('会话锚径 miss 段消费 host 裁决映射（forge:worktree/resolve 产物）：worktree 路径归并属主项目——多项目在册不失锚', () => {
+    expect(
+      anchoredOverviewContext({ mainSessionId: 's-wt', workspaces, projects, workspaceProject: resolved }),
+    ).toEqual({ projectId: 'p-owner', workspaceId: 'ws-main', sessionCount: 1 })
+  })
+
+  it('裁决缺席（原生无绑定工作区——host 未解析该路径）→ fail-closed 无锚（不猜首个）', () => {
+    expect(
+      anchoredOverviewContext({ mainSessionId: 's-wt', workspaces, projects, workspaceProject: new Map() }),
+    ).toEqual({ projectId: null, workspaceId: null })
+    expect(anchoredOverviewContext({ mainSessionId: 's-wt', workspaces, projects })).toEqual({
+      projectId: null,
+      workspaceId: null,
+    })
+  })
+
+  it('裁决命中归档项目行 → 视同未命中，落唯一活跃兜底（bug 1e761ada ② 既有兜底语义同径）', () => {
+    const rows = [
+      { id: 'p-owner', workspaceId: 'ws-main', archived: true },
+      { id: 'p-other', workspaceId: 'ws-idea', archived: false },
+    ]
+    expect(
+      anchoredOverviewContext({ mainSessionId: 's-wt', workspaces, projects: rows, workspaceProject: resolved }),
+    ).toEqual({ projectId: 'p-other', workspaceId: 'ws-idea', sessionCount: 1 })
+  })
+
+  it('workspace 行无 path（快照形状漂移）→ miss 段不消费、fail-closed', () => {
+    const noPath = {
+      items: [{ workspaceId: 'ws-wt', sessionIds: ['s-wt'] }],
+    }
+    expect(
+      anchoredOverviewContext({ mainSessionId: 's-wt', workspaces: noPath, projects, workspaceProject: resolved }),
+    ).toEqual({ projectId: null, workspaceId: null })
   })
 })
 

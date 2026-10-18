@@ -14,9 +14,9 @@
 // ——会话行打开即官方回会话面板）。
 // 本组件由产品视图发布面（product-views.ts）挂到 window.__DSH_FORGE_VIEWS__，插件
 // 槽位注册以该发布件为组件本体——壳 bundle 的 React 与渲染器单例同源（平台模块表）。
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { normalizeFsPath } from '@dsh-forge/path-key'
+import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
+import { useWorkspaceProjectMap } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory } from '../../rpc/index.js'
 import { ForgeWorkspacePanel } from './ForgeWorkspacePanel.js'
 import { sidebarActions } from './sidebar-actions.js'
@@ -98,28 +98,10 @@ export function ForgeSidebarSlot({
   // 的全部路径经 forge:worktree/resolve 批量通道交 host 身份归并单点裁决（与 hero 编排/
   // 必绑拦截同一 resolveProject 基础设施），结果映射直喂 buildSidebarTree；客户端零仲裁。
   // 快照/项目变化才重梳；失败 fail-soft（退主工作区分组现状，树会话不入组）。
+  // bug 52fc94db：effect 收敛至 workbench 共享 hook（useWorkspaceProjectMap——概览锚定
+  // 同源消费），行为零变化。
   const wsItems = workspacesSnap.items
-  const [workspaceProject, setWorkspaceProject] = useState<Map<string, string>>(new Map())
-  useEffect(() => {
-    const paths = [...new Set(wsItems.map((row) => row.path).filter((p): p is string => typeof p === 'string' && p !== ''))]
-    if (paths.length === 0) {
-      setWorkspaceProject(new Map())
-      return
-    }
-    let alive = true
-    preloadRpcClientFactory()
-      .worktree.resolve({ paths })
-      .then((result) => {
-        if (!alive) return
-        const next = new Map<string, string>()
-        for (const entry of result.resolved) next.set(normalizeFsPath(entry.path), entry.projectId)
-        setWorkspaceProject(next)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [wsItems, projectsState.phase])
+  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState.phase)
   const actions = sidebarActions({
     openSession,
     startSession,

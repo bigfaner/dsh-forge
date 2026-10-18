@@ -4,8 +4,10 @@
 // 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面），
 // 数据源 useForgeProjects 仍唯一（views/sidebar）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
+import { preloadRpcClientFactory } from '../rpc/index.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 
 /**
@@ -98,4 +100,40 @@ export function useAnchoredProjects(useWorkspaces?: KitSelectorHook): AnchoredPr
   const anchor =
     useWorkspaces === undefined ? null : <WorkspacesAnchor hook={useWorkspaces} onChange={handleWorkspacesSnap} />
   return { projects, workspaces: workspacesSnap, retry, silentRefresh, anchor }
+}
+
+/**
+ * 工作区归属映射（bug 52fc94db 收敛单源——ForgeSidebarSlot 既有 effect 迁入）：workspace
+ * 快照的全部路径经 forge:worktree/resolve 批量通道交 host 身份归并单点裁决（git common-dir
+ * 锚 + 主树行必胜，与 hero 编排/必绑拦截同一 resolveProject 基础设施），产出 归一工作区
+ * 路径 → projectId 映射。消费面：左栏树分组（buildSidebarTree）+ 概览锚定（projectAnchorOf
+ * miss 段——worktree 工作区会话归并属主项目）。快照/项目相位变化才重梳；失败 fail-soft
+ * 空映射（消费方维持各自的无映射现状语义）。空路径集零 RPC 直返空映射。
+ */
+export function useWorkspaceProjectMap(
+  wsItems: readonly { readonly path?: unknown }[],
+  projectsPhase: ProjectsPhase['phase'],
+): ReadonlyMap<string, string> {
+  const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
+  useEffect(() => {
+    const paths = [...new Set(wsItems.map((row) => row.path).filter((p): p is string => typeof p === 'string' && p !== ''))]
+    if (paths.length === 0) {
+      setMap(new Map())
+      return
+    }
+    let alive = true
+    preloadRpcClientFactory()
+      .worktree.resolve({ paths })
+      .then((result) => {
+        if (!alive) return
+        const next = new Map<string, string>()
+        for (const entry of result.resolved) next.set(normalizeFsPath(entry.path), entry.projectId)
+        setMap(next)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [wsItems, projectsPhase])
+  return map
 }
