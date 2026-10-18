@@ -144,6 +144,16 @@ function resolveFromHost(p: string): string {
   return isAbsolute(p) ? p : join(hostRoot(), p)
 }
 
+/** 产品包在场探测（双形态两探针——git-worktree 行注行门消费，2026-10-18 打包启动崩 fix）：
+ *  dev = profileDir/node_modules 链接树（junction 透传 workspace）；packaged = installAnchor
+ *  邻接 node_modules（anchor = {resources}/runtime/package.json → runtime/node_modules——
+ *  打包形态 profile 目录无 node_modules，boot-chain adjacent 拓扑）。任一命中 = 在场；
+ *  判据 = 包 package.json 在场（安装/物化标记，与 loader 行解析基础同源）。 */
+export function productPackagePresent(profileDir: string, installAnchor: string, pkg: `@dsh-forge/${string}`): boolean {
+  const segments = ['node_modules', ...pkg.split('/'), 'package.json']
+  return existsSync(join(profileDir, ...segments)) || existsSync(join(dirname(installAnchor), ...segments))
+}
+
 /** DSH_HOME 三层解析（fix-26 数据隔离缺省——收口 fix-18 全共享副作用：原生 dsh 工作区/
  *  会话混入产品账本即 fix-24 选择器污染根源。优先级自上而下）：
  *  0. shell 继承 DSH_HOME（main.ts `??=` 缺省注入的第三层——本函数不可见；在场即压过

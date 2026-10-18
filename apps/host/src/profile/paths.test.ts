@@ -1,9 +1,9 @@
 // 1.4 双形态解析 pin（dev / packaged；Implementation Notes：自本任务区分，供 4.1 消费）。
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hostRoot, resolveHostPaths } from './paths.js'
+import { hostRoot, productPackagePresent, resolveHostPaths } from './paths.js'
 
 describe('resolveHostPaths 双形态', () => {
   it('packaged 默认：profile = {userData}/profile，dshHome 缺省隔离 {userData}/dsh-home（fix-26）', () => {
@@ -179,5 +179,41 @@ describe('resolveHostPaths 凭据桥生效门（fix-26）', () => {
   it('DSH_FORGE_DSH_HOME 调试口不关桥（门只认 USER_DATA——人用调试语义同缺省）', () => {
     const paths = resolveHostPaths({ DSH_FORGE_DSH_HOME: 'X:/tmp/dsh-home' }, 'C:/ud')
     expect(paths.credentialsPath).toBe(join(homedir(), '.dsh', '.credentials.yaml'))
+  })
+})
+
+// 产品包在场探测（打包形态启动崩 fix——git-worktree 行注行门消费）：在场 = dev profile 树
+// ∪ installAnchor 邻接树两探针。打包形态 profile 目录无 node_modules（boot-chain adjacent
+// 拓扑），旧口径单探 profileDir 恒缺席 → 包已 staging 也不注行/不装配（能力恒 absent，
+// git 项目 sessionCreate/prompt 双入口 W2 fail-closed 拒绝）。
+describe('productPackagePresent 产品包在场探测（dev profile 树 ∪ anchor 邻接树）', () => {
+  it('bug: 打包形态 anchor 邻接树在场可判（profileDir 无 node_modules 亦真）——旧口径单探 profileDir 恒 false', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-pkg-present-'))
+    try {
+      // 安装后布局镜像：{resources}/runtime/package.json + runtime/node_modules/@dsh-forge/*
+      const runtime = join(root, 'resources', 'runtime')
+      const pkgManifest = join(runtime, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json')
+      mkdirSync(dirname(pkgManifest), { recursive: true })
+      writeFileSync(pkgManifest, '{"name":"@dsh-forge/git-worktree"}', 'utf8')
+      const profileDir = join(root, 'profile') // 打包形态首启落地目录——无 node_modules
+      expect(productPackagePresent(profileDir, join(runtime, 'package.json'), '@dsh-forge/git-worktree')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('dev 形态 profile 树 link 在场 → 真（现行为保持——junction 透传 workspace 链接树）', () => {
+    const dev = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
+    expect(productPackagePresent(dev.profileDir, dev.installAnchor, '@dsh-forge/git-worktree')).toBe(true)
+  })
+
+  it('两探针树均缺席 → false（kill-switch/未安装形态——fail-soft 不注行）', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-pkg-absent-'))
+    try {
+      const anchor = join(root, 'runtime', 'package.json') // 树空（包未物化）
+      expect(productPackagePresent(join(root, 'profile'), anchor, '@dsh-forge/git-worktree')).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

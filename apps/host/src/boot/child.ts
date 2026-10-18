@@ -72,6 +72,7 @@ import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
+import { productPackagePresent } from '../profile/paths.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -269,8 +270,12 @@ async function main(): Promise<void> {
   // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
   // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
   const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
-  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）
-  const gitWorktreeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json'))
+  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）。
+  // 2026-10-18 打包启动崩 fix：探测改双形态（dev profile 树 ∪ installAnchor 邻接树——
+  // productPackagePresent）。旧口径单探 profileDir/node_modules，而打包形态 profile 目录无
+  // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
+  // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
+  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,

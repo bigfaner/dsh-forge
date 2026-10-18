@@ -63,8 +63,9 @@ export interface BootOverlayInput {
   /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
    *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
   readonly credentialsPath?: string
-  /** worktree-branch-management 1.7：git-worktree 插件行注行门（profile 树内 @dsh-forge/
-   *  git-worktree 在场判定——dev 形态 link 在场 / 打包形态暂不含该插件）；true = 注 loader
+  /** worktree-branch-management 1.7：git-worktree 插件行注行门（在场判定 = 双形态两探针
+   *  productPackagePresent——dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树
+   *  runtime/node_modules，2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader
    *  行（插件装载面；扩展点注入不经 config——函数值走 ctx 服务缝，见 ipc/worktree-identity.ts） */
   readonly gitWorktreeRow?: boolean
   /** M3 预设装配（3.7）：三底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
