@@ -32,6 +32,7 @@ import type { ForgeEventSink } from '../events/sink.js'
 import { createTriageHook, TriageDecisionInvalidError } from '../triage/index.js'
 import { exclusiveLoopSourceOf, HALTED_REASON, resetExclusiveLoopSources } from '../dispatch-core/index.js'
 import type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from '../dispatch-core/index.js'
+import type { CommitLandingVerifier } from '../dispatch-core/index.js'
 
 // ─────────────────────────── 夹具 ───────────────────────────
 
@@ -257,6 +258,8 @@ function build(options: {
   quiescenceWindowMs?: number
   /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出；readHead 桩返回 worktree HEAD */
   e2eBaseline?: { runSuite: () => Promise<string>; readHead?: (worktree: string) => Promise<string | undefined> }
+  /** 1.18 落点核验器注入（错分支提交场景——settleWorkerRun commitLanding 缝） */
+  commitLanding?: CommitLandingVerifier
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -302,6 +305,7 @@ function build(options: {
     ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
     ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
     ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
+    ...(options.commitLanding !== undefined ? { commitLanding: options.commitLanding } : {}),
     ...(options.e2eBaseline !== undefined ? { e2eBaseline: options.e2eBaseline } : {}),
     escalation: {
       escalate: async (e) => {
@@ -502,6 +506,8 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
           return head
         },
       },
+      // worktree 在场 + completed 提交 → 落点核验触发（1.18）——落点命中桩（本用例零涉核验）
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
@@ -523,6 +529,8 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
           throw new Error('git not available')
         },
       },
+      // worktree 在场 + completed 提交 → 落点核验触发（1.18）——落点命中桩（本用例零涉核验）
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
@@ -1979,6 +1987,33 @@ describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清�
     await untilSuspended(built.driver)
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
     expect(built.driver.resume({ loopId: loopId2 })).toEqual({ ok: false, code: 'no-active-loop' })
+  })
+})
+
+// ─────────────────────────── 1.18 · 落点核验失败强制处置（错分支提交不静默接受，bug d8029b20） ───────────────────────────
+
+describe('落点核验失败强制处置（settle-cwd-pin——任务真化 interrupted + settle-landing-rejected 挂起）', () => {
+  it('错分支提交闭环：核验失败 → 任务 completed→interrupted 真化 + 挂起升级；不走 worker-abort 阶梯、零续领、不 finished-all', async () => {
+    const badLanding: CommitLandingVerifier = async () => ({ ok: false, branch: 'feat-x', commitBranches: ['main'] })
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ interrupted: 1 })],
+      query: [queryOf('completed')],
+      commitLanding: badLanding,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt' })
+    const suspended = await untilSuspended(built.driver)
+    // 显式处置②：挂起升级（settle-landing-rejected——非 worker-abort-over-limit）
+    expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
+    expect(suspended.escalation.kind === 'settle-landing-rejected' && suspended.escalation.reason).toContain('[settle-cwd-pin]')
+    // 显式处置①：任务从 completed 真化 interrupted（可恢复态——非 completed 挂死）
+    expect(built.h.transitions).toEqual([
+      { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: expect.stringContaining('[settle-cwd-pin]') },
+    ])
+    // 不走失败阶梯：零续领（worker-abort 径会立即重入 claim）、循环不终局（登记保留）
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.driver.activeOf(OWNER)).toBeDefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
 

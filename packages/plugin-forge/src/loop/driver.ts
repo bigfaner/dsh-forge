@@ -238,6 +238,15 @@ export type LoopEscalation =
         /** halted 原因全文（HALTED_REASON——问询 detail） */
         readonly reason: string
       }
+    | {
+        /** 1.18 落点核验失败强制处置（bug d8029b20——错分支提交不得静默接受） */
+        readonly kind: 'settle-landing-rejected'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly taskKey: string
+        /** 核验结论/故障全文（结算核判词——问询 detail；含 interrupted 真化结果） */
+        readonly reason: string
+      }
 
 export interface LoopEscalationHook {
   escalate(escalation: LoopEscalation): Promise<void>
@@ -305,6 +314,8 @@ export interface LoopDriverDeps {
   readonly projectId?: string
   readonly tasks: ForgeTasksService
   readonly spawn: SpawnWorker
+  /** 提交落点核验器（可选——透传 dispatch-core 结算核；缺席回落 gitCommitLanding 真核验） */
+  readonly commitLanding?: DispatchCoreDeps['commitLanding']
   /** 叙述面（notify createNarrator 产物——notice/followup/blocked 三出口 + 落盘委派） */
   readonly narrator: Narrator
   /** 事件发射面（可选——透传 dispatch-core 事件闭包，logs/<slug>.jsonl 里程碑不断流） */
@@ -685,6 +696,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         core: {
           tasks: deps.tasks,
           spawn: deps.spawn,
+          ...(deps.commitLanding !== undefined ? { commitLanding: deps.commitLanding } : {}),
           ...(deps.events !== undefined ? { events: deps.events } : {}),
           ...(deps.settings !== undefined ? { settings: deps.settings } : {}),
           ...(deps.resolveModelReasoning !== undefined ? { resolveModelReasoning: deps.resolveModelReasoning } : {}),
@@ -1060,6 +1072,20 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'
 
+  // 落点核验失败径（1.18 bug d8029b20——显式处置收口，不走 worker-abort 失败阶梯）：
+  // 结算核已把任务 completed → interrupted 真化（可恢复态）；此处事件留痕 + 挂起升级
+  // 问询——重入 claim 对 completed 任务结构性不可达（旧径静默 finished-all 的根因）。
+  if ('kind' in settled && settled.kind === 'landing-rejected') {
+    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'settle-landing-rejected', error: settled.reason })
+    emitProgress(loop, { verb: 'settle', status: 'interrupted', taskKey })
+    return suspendForVerdict(loop, {
+      kind: 'settle-landing-rejected',
+      ownerSessionId: owner,
+      source: record.source,
+      taskKey,
+      reason: settled.reason,
+    })
+  }
   if ('ok' in settled) {
     // 失败 DTO（结算核 failed 径——killSignal 在场时 killed 已先行返回）：
     // worker 异常终止属执行受阻非 spawn 机制故障（guardOnFailure=false 零防线计数零 tool-error）——

@@ -115,10 +115,40 @@ async function createE2eDebtTask(
   }
 }
 
+/**
+ * 落点核验失败显式处置（bug d8029b20）：任务 completed → interrupted 真化（transitionTask
+ * 人工转移合法边——可恢复态，非 completed 挂死）；真化失败 fail-loud 注记进判词（任务留
+ * completed 需人工转移，绝不静默）。返回 landing-rejected——循环径据此挂起升级，不走
+ * worker-abort 失败阶梯。
+ */
+async function rejectLanding(
+  deps: { readonly tasks: ForgeTasksService },
+  ctx: { readonly projectId: string; readonly task: TaskSnapshot },
+  cause: Error,
+): Promise<{ readonly case: 'landing-rejected'; readonly cause: Error }> {
+  try {
+    await deps.tasks.transitionTask({
+      projectId: ctx.projectId,
+      taskId: ctx.task.taskId,
+      toStatus: 'interrupted',
+      reason: cause.message,
+    })
+  } catch (transitionCause) {
+    return {
+      case: 'landing-rejected',
+      cause: new Error(
+        `${cause.message}；interrupted 真化失败（任务留 completed 态需人工转移）：${transitionCause instanceof Error ? transitionCause.message : String(transitionCause)}`,
+      ),
+    }
+  }
+  return { case: 'landing-rejected', cause }
+}
+
 /** worker 终态结算判定（settleWorkerRun 产物——失败支合并 run 拒绝与无结算，kill 由调用方 taxonomy 判定） */
 export type WorkerSettlement =
   | { readonly case: 'settled'; readonly result: Omit<DispatchSpawnedResult, 'kind'>; readonly durationMs: number }
   | { readonly case: 'failed'; readonly cause: unknown }
+  | { readonly case: 'landing-rejected'; readonly cause: Error }
 
 /**
  * worker 终态结算核（async-dispatch §4.2 ②③——前台 execute 第 4~5 步原样搬迁的共用体，
@@ -183,27 +213,24 @@ export async function settleWorkerRun(
   const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'
   const submitRecord = lastSubmitRecordOf(settled.records)
   // 提交落点核验（1.14——cwd 钉定收口）：success + commitHash + 容器检出现在场时核验
-  // 「commit 所属分支 = 容器检出分支」；不一致/核验故障 = 结算失败（升级经循环既有失败
-  // 阶梯）——提交落错分支（判例 366bec6a 落 main）不得静默通过。
+  // 「commit 所属分支 = 容器检出分支」；不一致/核验故障 = landing-rejected 显式处置
+  // （bug d8029b20——submitTask 已落 completed 后再走 worker-abort 阶梯 = 任务终态不可再领、
+  // 错分支提交被静默接受。显式处置：任务 completed → interrupted 真化（人工转移合法边，
+  // 可恢复态）+ 专案判词交循环挂起升级——提交落错分支（判例 366bec6a 落 main）不得静默通过。
+  // Root cause: 核验时点晚于终态落定，失败面必须自带状态纠偏，不能依赖触不到该任务的阶梯。）
   if (outcome === 'success' && submitRecord?.commitHash !== undefined && ctx.worktreeCwd !== undefined) {
     const verify = deps.commitLanding ?? gitCommitLanding
     try {
       const verdict = await verify(ctx.worktreeCwd, submitRecord.commitHash)
       if (!verdict.ok) {
-        return {
-          case: 'failed',
-          cause: new Error(
-            `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝并升级`,
-          ),
-        }
+        return await rejectLanding(deps, ctx, new Error(
+          `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝`,
+        ))
       }
     } catch (cause) {
-      return {
-        case: 'failed',
-        cause: new Error(
-          `[settle-cwd-pin] 提交落点核验故障（容器检出 ${ctx.worktreeCwd}，提交 ${submitRecord.commitHash}）：${cause instanceof Error ? cause.message : String(cause)}`,
-        ),
-      }
+      return await rejectLanding(deps, ctx, new Error(
+        `[settle-cwd-pin] 提交落点核验故障（容器检出 ${ctx.worktreeCwd}，提交 ${submitRecord.commitHash}）：${cause instanceof Error ? cause.message : String(cause)}`,
+      ))
     }
   }
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined

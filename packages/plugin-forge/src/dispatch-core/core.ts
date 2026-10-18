@@ -47,6 +47,7 @@ import {
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchCoreFailure, DispatchTaskResult } from './result.js'
 import { disposeQuietly, settleWorkerRun } from './settle.js'
+import type { CommitLandingVerifier } from './settle.js'
 import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
 
 // ─────────────────────────── 核心面入参/依赖（参数化点） ───────────────────────────
@@ -97,6 +98,8 @@ export interface DispatchCoreDeps {
   readonly jobs?: DispatchJobsFace
   /** in-process driver spawn 真绑定（缺席 = 装配 bug：执行 fail-loud 拒） */
   readonly spawn: SpawnWorker
+  /** 提交落点核验器（可选——缺席回落 gitCommitLanding 真核验；循环装配注入，单测桩） */
+  readonly commitLanding?: CommitLandingVerifier
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */
@@ -447,8 +450,12 @@ export interface SettleStageInput {
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
- *  killSignal 在场可达，主链无 killSignal 恒不出现） */
-export type SettleStageResult = DispatchTaskResult | { readonly kind: 'killed' }
+ *  killSignal 在场可达，主链无 killSignal 恒不出现；landing-rejected 仅落点核验失败可达——
+ *  1.18 显式处置判词交循环挂起升级，零防线计数） */
+export type SettleStageResult =
+  | DispatchTaskResult
+  | { readonly kind: 'killed' }
+  | { readonly kind: 'landing-rejected'; readonly reason: string }
 
 /**
  * 阶段三·settle（主链前台第 4~5 步的共享面）：结算核（await handle.result → dispose →
@@ -486,6 +493,10 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
   // 循环停止径（abort 中止——kill taxonomy：不进防线计数不发射 tool-error）
   if (input.killSignal?.aborted === true) {
     return { kind: 'killed' }
+  }
+  // 落点核验失败径（1.18——显式处置判词：任务已在结算核真化 interrupted，循环挂起升级）
+  if (settlement.case === 'landing-rejected') {
+    return { kind: 'landing-rejected', reason: settlement.cause.message }
   }
   const failure = spawnFailed(task.slug, taskKey, settlement.cause, input.guardOnFailure === false ? { guard: false } : undefined)
   return failure
@@ -660,5 +671,6 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
   const settled = await settleClaimed(deps, exec, { scope, claimed: claim, handle, spawnStartedAt })
   if ('ok' in settled) return settled // 失败 DTO（防线计数 + tool-error 留档已在阶段三落面）
   if (settled.kind === 'killed') return { kind: 'halted', reason: HALTED_REASON } // 不可达防御
+  if (settled.kind === 'landing-rejected') return { kind: 'halted', reason: settled.reason } // 不可达防御（工具壳零 worktreeCwd——核验不触发）
   return settled // spawned | halted
 }
