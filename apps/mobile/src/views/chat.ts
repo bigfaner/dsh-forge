@@ -7,7 +7,7 @@
  */
 import type { OfficialApi } from '../core/api.ts'
 import { DisconnectedError } from '../core/api.ts'
-import type { RemoteRpc } from '../core/rpc.ts'
+import { readCursorKey, writeReadCursor, type KeyValueStore } from '../core/read-cursor.ts'
 import { sendComposerInput } from '../core/rpc.ts'
 import { createSseEngine, type SseSink, type SseState } from '../core/sse.ts'
 import {
@@ -119,7 +119,10 @@ export function defaultStreamEngine(sessionId: string, sink: SseSink): StreamEng
 
 export interface ChatDeps {
   readonly api: OfficialApi
-  readonly rpc: RemoteRpc
+  /** 已读游标载体（mobile 页 localStorage——1.12 裁决：host read-state 面不建）。 */
+  readonly store?: KeyValueStore | null
+  /** 游标键配对域（与 drawer readCursorKey 同源对账）。 */
+  readonly pairDomain?: string
   readonly createEngine: (sessionId: string, sink: SseSink) => StreamEngine
   readonly onOpenDrawer?: () => void
   readonly onOpenHero?: () => void
@@ -330,11 +333,17 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     if (view.scrollTop === 0) void loadOlder()
   })
 
-  /** 触底/回底写已读游标（显示层乐观更新；host 单源计算，AD-6）。 */
+  /** 触底/回底写已读游标（显示层乐观归零；drawer 打开/轮询按同键对账，1.12）。 */
   function writeReadState(): void {
     if (state.tailSeq < 0) return
-    void deps.rpc.call('forge:remote/read-state', { sessionId, seq: state.tailSeq })
+    writeReadCursor(readStore, readCursorKey(deps.pairDomain ?? 'default'), sessionId, state.tailSeq)
   }
+  const readStore: KeyValueStore | null =
+    deps.store === undefined
+      ? typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage
+        : null
+      : deps.store
 
   function deriveTitle(entries: readonly WireEvent[]): string {
     for (let index = entries.length - 1; index >= 0; index--) {

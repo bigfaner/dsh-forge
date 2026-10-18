@@ -156,6 +156,8 @@ export function ensureIconSprite(root: HTMLElement): void {
     <symbol id="i-job" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M9 6V4h6v2M4 10h16"/></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="1.8"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="1.8"/></symbol>
     <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3h6l-1 7 3 3H7l3-3z"/><path d="M12 13v7"/></symbol>
   </svg>`
   root.prepend(holder)
 }
