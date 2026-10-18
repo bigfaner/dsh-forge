@@ -430,7 +430,9 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
 // ─────────────────────────── 改进7 · e2e 红灯基线门 ───────────────────────────
 
 describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
-  const FULL_FLOW = {
+  // 工厂形制（bug 006d8bfe 测试随迁教训）：claim 队列被 harness shift **原地 mutate**——
+  // 共享常量数组会让「先跑的测试掏空后跑测试的队列」（首消费者之前不能再排测试）。
+  const FULL_FLOW = () => ({
     claim: [claimed(), NO_TASK],
     stats: [
       statsOf({ pending: 1 }),
@@ -439,11 +441,35 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
       statsOf({ completed: 1 }),
       statsOf({ completed: 1 }),
     ],
-  }
+  })
+
+  it('bug 006d8bfe：基线门后台化——runSuite 挂死不阻塞 start 回执（工具调用面零阻塞）；放行后循环照常领取（红灯入简报 + 归因卡）', async () => {
+    let release!: (output: string) => void
+    const gate = new Promise<string>((resolve) => {
+      release = resolve
+    })
+    const built = build({
+      ...FULL_FLOW(),
+      e2eBaseline: { runSuite: () => gate },
+    })
+    // start 立即返回启动回执（200ms 预算——挂死套件不得拖住工具调用面）
+    const started = built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const raced = await Promise.race([
+      started.then(() => 'started'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('blocked'), 200)),
+    ])
+    expect(raced).toBe('started')
+    expect(built.h.claimInputs).toHaveLength(0) // 基线在途——零领取（简报等基线，红灯语义不破）
+    // 放行套件 → 后台 fiber 续跑：红灯入简报 + 归因卡生成（既有语义零变化）
+    release('FAIL e2e/specs/a.spec.ts > suite')
+    await untilSettled(built.driver)
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+    expect(built.h.addTaskInputs).toHaveLength(1)
+  })
 
   it('基线红灯：启动即生成归因卡（逐红灯 spec 一张 test-run）+ 红灯清单随 claim 简报入参递达', async () => {
     const built = build({
-      ...FULL_FLOW,
+      ...FULL_FLOW(),
       e2eBaseline: {
         runSuite: async () =>
           ['FAIL e2e/specs/b.spec.ts > suite', 'FAIL e2e/specs/a.spec.ts > suite', 'PASS e2e/specs/green.spec.ts'].join('\n'),
@@ -473,14 +499,17 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
   it('基线套件执行故障：fail-soft 空清单（零归因卡、简报零基线行）——循环派发不受阻', async () => {
     const built = build({
-      ...FULL_FLOW,
+      ...FULL_FLOW(),
       e2eBaseline: { runSuite: async () => { throw new Error('e2e harness missing') } },
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
     expect(built.h.addTaskInputs).toHaveLength(0)
-    expect(built.h.claimInputs).toHaveLength(1)
+    // 工厂化队列（bug 006d8bfe 随迁）：claim + no-task 尝试两径如实计数（旧期望 1 系共享数组
+    // 被前序测试掏空后的伪语义）
+    expect(built.h.claimInputs).toHaveLength(2)
     expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
+    expect(built.h.claimInputs[1]).not.toHaveProperty('e2eBaselineRed')
   })
 
   it('disc-2 判例回归：fix 中途落地（HEAD 漂移）后简报反映新基线——旧红灯行不再烤死于循环启动时点', async () => {
@@ -508,7 +537,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
         },
         readHead: async () => {
           headReads += 1
-          if (headReads >= 3) {
+          if (headReads >= 2) {
             head = 'c2'
             output = 'FAIL e2e/specs/new.spec.ts > suite'
           }
@@ -570,7 +599,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
   it('disc-2 fail-soft：readHead 故障（git 不可用）——复用现有缓存，简报基线行保留，循环不阻', async () => {
     const built = build({
-      ...FULL_FLOW,
+      ...FULL_FLOW(),
       e2eBaseline: {
         runSuite: async () => 'FAIL e2e/specs/a.spec.ts > suite',
         readHead: async () => {

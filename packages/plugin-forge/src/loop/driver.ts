@@ -422,6 +422,10 @@ interface ActiveLoop {
   readonly dispositions: Map<string, DispositionBook>
   /** e2e 红灯基线缓存（disc-2 · HEAD 键控 {commit, reds}——缺席/空 = 基线全绿或机制关闭，简报零行） */
   e2eBaseline?: E2eBaselineCache
+  /** 基线在飞去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首 claim 并发同跑套件的 dedup 缝） */
+  e2eBaselineInflight?: Promise<E2eBaselineCache | undefined>
+  /** 基线链（基线跑批 + 归因卡生成——后台化后的有序收口锚：终局径 await 防归因卡晚于终局） */
+  baselineChain?: Promise<void>
   /** e2e 归因卡已发集（spec 键——HEAD 漂移重算径对新增红灯补发，已发不重发；启动时点同源） */
   readonly e2eAttributed: Set<string>
   /** 3c 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即 ⑮ 终局） */
@@ -750,13 +754,15 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         registry.remove(id)
         return { ok: true, loopId: id }
       }
-      // e2e 红灯基线门（改进7——入场前跑批，fail-soft）：红灯清单挂本循环实例（逐简报
-      // 递达 worker——机械判定「基线红灯 ≠ 本任务回归」），并逐一生成归因卡（三分流）。
-      // disc-2：基线按 HEAD 键控缓存（ensureE2eBaseline——claim 时漂移重算，不烤死于此时点）；
-      // 套件执行故障 = 空清单 + warn（机制静默关闭，循环派发不受阻）；归因卡落库失败
-      // fail-soft（warn——红灯清单仍在简报面承担机械判定）。
-      const baseline = await ensureE2eBaseline(loop)
-      if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+      // e2e 红灯基线门（改进7/disc-2/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
+      // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
+      // runRound 首领任务前 await ensureE2eBaseline（in-flight 去重 + 实例缓存同源——挂起/
+      // claim 漂移重算语义不变），简报红灯行语义不破；归因卡随基线结果在 fiber 内生成。
+      loop.baselineChain = ensureE2eBaseline(loop)
+        .then(async (baseline) => {
+          if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+        })
+        .catch(() => {})
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
       return { ok: true, loopId: id }
     },
@@ -904,6 +910,9 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
     )
   } finally {
     if (!suspended) {
+      // 基线链收口（bug 006d8bfe 后台化——归因卡链随基线在 fiber 内异步）：终局前等待，
+      // 归因卡落库不得晚于登记注销（否则终局后宿主重启丢卡；测试面 untilSettled 同序）
+      if (loop.baselineChain !== undefined) await loop.baselineChain
       loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
       clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
       loop.live.delete(record.id)
@@ -936,6 +945,19 @@ async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[])
  * fail-soft（不重跑昂贵套件）；重算故障 = 空清单 + warn（机制静默关闭，循环不阻）。
  */
 async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
+  // in-flight 去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首领并发触达时
+  // 套件只跑一次；settle 后清位，后续调用走 loop.e2eBaseline 缓存 + claim 时漂移重算语义）
+  if (loop.e2eBaselineInflight !== undefined) return loop.e2eBaselineInflight
+  const inflight = ensureE2eBaselineUncached(loop)
+  loop.e2eBaselineInflight = inflight
+  try {
+    return await inflight
+  } finally {
+    if (loop.e2eBaselineInflight === inflight) loop.e2eBaselineInflight = undefined
+  }
+}
+
+async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
   const cfg = loop.deps.e2eBaseline
   if (cfg === undefined) return undefined
   const slug = loop.record.source.slug
