@@ -203,6 +203,37 @@ describe('createWorkerTreeGuard（keeper 协议契约）', () => {
     expect(await guard.reclaim()).toBe(false)
   })
 
+  it('bug: 正常回收（ready→reclaim→keeper 退出）不误报「keeper 未就绪先亡」', async () => {
+    let finishKeeper!: () => void
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => { errors.push(args.map(String).join(' ')) }
+    try {
+      const guard = createWorkerTreeGuard(
+        deps('win32', () => ({
+          pid: 4242,
+          stdout: (() => {
+            const stdout = new EventEmitter()
+            queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+            return stdout
+          })() as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        })),
+      )
+      await guard.whenReady
+      expect(guard.keeperPid).toBe(4242) // ready 已处理
+      const reclaiming = guard.reclaim()
+      finishKeeper() // terminate 后 keeper 退出——正常回收路径
+      expect(await reclaiming).toBe(true)
+      await new Promise((resolve) => setTimeout(resolve, 0)) // exit 处理器微任务先行
+      expect(errors.filter((e) => e.includes('未就绪先亡'))).toEqual([]) // 修复前：误报在场
+    } finally {
+      console.error = origError
+    }
+  })
+
   it('keeper 未就绪先亡 = 禁用态（脚本异常/PowerShell 缺席形态）', async () => {
     let finish!: () => void
     const guard = createWorkerTreeGuard(

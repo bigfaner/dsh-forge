@@ -316,6 +316,8 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
   private readonly queueDir: string
   private keeper: KeeperProcess | undefined
   private keeperDead = false
+  /** keeper 是否已 ready（未就绪先亡判据——不随 reclaim 的 keeperPid 复位清零） */
+  private keeperReady = false
   private queueSeq = 0
   private done = false
   private reclaimPromise: Promise<boolean> | undefined
@@ -375,7 +377,9 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       // keeper 未就绪先亡（PowerShell 缺席/脚本异常）——守卫转禁用态（fail-soft，不再等 ready）
       void raw.exited.then(() => {
         if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') console.error(`[job-tree] keeper exited before reclaim`)
-        if (this.keeperPid === undefined) {
+        // Root cause: reclaim() 为 guard 复位先清 keeperPid——以 keeperPid===undefined 判
+        // 「未就绪先亡」会把正常回收后的 keeper 退出误诊为禁用；就绪与否独立记账。
+        if (!this.keeperReady) {
           this.keeperDead = true
           this.enabled = false
           this.done = true
@@ -406,6 +410,7 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
     const ready = /^ready (\d+)$/.exec(line)
     if (ready !== null) {
       this.keeperPid = Number(ready[1])
+      this.keeperReady = true
       claimedPids.set(this.keeperPid, this.record) // 与 spawn pid 不一致时兜底再登记（幂等）
       for (const record of activeGuards) {
         if (record.guard !== this) record.guard.exclude(this.keeperPid)
