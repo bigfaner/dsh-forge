@@ -322,7 +322,7 @@ describe('e2e dogfood · 终局 settlement + 零残留（AC 8/11）', () => {
     // P8 评审指示段追加（四重点逐字在文——机制断言）
     expect(settle?.text).toContain('【代码评审指示】')
     for (const focus of P8_FOCUS_LINES) expect(settle?.text).toContain(focus)
-    expect(settle?.text).toContain('用 recordBug 登记 bug，用 addTask 派修复任务')
+    expect(settle?.text).toContain('用 recordBug 登记 bug，再用 addTask 添加修复任务')
     // 时间行收尾（叙述骨架纪律——LocalDateTime 本地时区）
     expect(settle?.text).toMatch(/时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)
 

@@ -150,10 +150,10 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).not.toMatch(/<[^<>\n]+>/)
   })
 
-  it('结束族 kind 分支互斥单选：finished-all 追加 P8 评审指示；其余分支不追加', () => {
+  it('结束族 kind 分支互斥单选：finished-all 即 P8 评审指示（无重复结束块）；其余分支不追加', () => {
     const all = renderEndOfLoop('finished-all', payload)
-    expect(all).toContain('【任务循环结束】')
     expect(all).toContain('【代码评审指示】')
+    expect(all).not.toContain('【任务循环结束】')
     for (const kind of ['blocked-residue', 'spawn-failure', 'wait-timeout'] as const) {
       expect(renderEndOfLoop(kind, payload)).not.toContain('【代码评审指示】')
     }

@@ -15,7 +15,6 @@ import {
   renderP1,
   renderP2,
   renderP3,
-  renderP4,
   renderP5,
   renderP6,
   renderP7,
@@ -170,12 +169,12 @@ describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
 // ─────────────────────────── 结束族机制断言（AC 11） ───────────────────────────
 
 describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指示段）', () => {
-  it('finished-all 分支追加 P8——四重点逐字在文', () => {
+  it('finished-all 分支即 P8——四重点逐字在文、无重复结束块', () => {
     const text = renderEndOfLoop('finished-all', PAYLOAD)
-    expect(text).toContain('【任务循环结束】')
     expect(text).toContain('【代码评审指示】')
+    expect(text).not.toContain('【任务循环结束】')
     for (const focus of P8_FOCUS_LINES) expect(text).toContain(focus)
-    // P8 复用段与单渲染同文（追加段非改写）
+    // P8 单渲染与结束族同文（非改写）
     expect(text).toContain(renderP8(PAYLOAD))
   })
 
@@ -185,7 +184,6 @@ describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指�
       expect(text).not.toContain('【代码评审指示】')
       for (const focus of P8_FOCUS_LINES) expect(text).not.toContain(focus)
     }
-    expect(renderP4(PAYLOAD)).not.toContain('【代码评审指示】')
     expect(renderP5(PAYLOAD)).toContain('已完成 4，blocked 1')
     expect(renderP6(PAYLOAD)).toContain(`${PAYLOAD.slug} 连续派发失败`)
     expect(renderP7(PAYLOAD)).toContain(`dispatchTask(${PAYLOAD.slug})`)
@@ -211,7 +209,6 @@ describe('pin-dispatch-injection · 占位符完整性', () => {
       renderP2(PAYLOAD),
       renderP3(PAYLOAD),
       renderP9(PAYLOAD),
-      renderP4(PAYLOAD),
       renderP5(PAYLOAD),
       renderP6(PAYLOAD),
       renderP7(PAYLOAD),

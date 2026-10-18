@@ -148,9 +148,6 @@ const P9_TEMPLATE = `【任务循环已挂起·处理指引】
 **放弃**
 - 用 stopTaskLoop 工具停止该循环（运行中的任务会标记为 interrupted）。`
 
-const P4_TEMPLATE = `【任务循环结束】
-- <slug> 没有可领取的任务。全部任务已完成。`
-
 const P5_TEMPLATE = `【任务循环结束·残留阻塞任务】
 **结果**
 - <slug> 没有可领取的任务。已完成 <n>，blocked <m>。
@@ -222,12 +219,9 @@ export function renderP9(payload: InjectionPayload): string {
   return interpolate(P9_TEMPLATE, { ...placeholderValues(payload), taskKey: shortKey })
 }
 
-// P4–P8 为 renderEndOfLoop 的分支文本（简化评审合并——互斥单选 + 全部完成追加评审段）
-
-/** P4 · 全部完成分支 */
-export function renderP4(payload: InjectionPayload): string {
-  return interpolate(P4_TEMPLATE, placeholderValues(payload))
-}
+// P5–P8 为 renderEndOfLoop 的分支文本（简化评审合并——互斥单选 + 全部完成即评审段）。
+// P4（全部完成）已删并（用户裁决 2026-10-18）：其信息（没有可领取任务/全部完成）由
+// 骨架头行「[forge·结束] … — 全部任务已完成」与 P8 评审对象首行完全承载，重复三现。
 
 /** P5 · 残留阻塞任务分支（counts 驱动） */
 export function renderP5(payload: InjectionPayload): string {
@@ -249,11 +243,11 @@ export function renderP8(payload: InjectionPayload): string {
   return interpolate(P8_TEMPLATE, placeholderValues(payload))
 }
 
-/** 结束族渲染（kind 互斥单选；finished-all 追加 P8 评审指示段） */
+/** 结束族渲染（kind 互斥单选；finished-all 即 P8 评审指示段——无重复结束块） */
 export function renderEndOfLoop(kind: EndOfLoopKind, payload: InjectionPayload): string {
   switch (kind) {
     case 'finished-all':
-      return [renderP4(payload), renderP8(payload)].join('\n\n')
+      return renderP8(payload)
     case 'blocked-residue':
       return renderP5(payload)
     case 'spawn-failure':
