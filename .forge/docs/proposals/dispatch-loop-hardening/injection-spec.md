@@ -221,12 +221,12 @@ finally {
 
 ## 前置核销清单（红队修补：承重假设须到源码核销，工作区硬约束）
 
-实现 3b 前必须核销的四项假设，核销结论回写本节：
+实现 3b 前必须核销的四项假设，核销结论回写本节（2026-10-17 核销，源码 = `apps/host/profile.dev/node_modules/@deepseek-ai/`）：
 
-1. **官方 section 空文本行为**：`@deepseek-ai/dsh-system-prompt` 源码核销——text 返回空串时 section 是否零输出（无名头无痕迹）；若保留名头则退出路径改 `dispose()` 摘除。
-2. **工具调用超时边界**：DSH 工具层对长时间阻塞的 execute 是否有 turn 级超时强杀；有则内联超时预算必须小于它（循环不得被腰斩于工具边界）。
-3. **ownerSessionId 存活判定**：registry（进程内）如何观测会话失活（`ctx.agents.get(id)` 返回 undefined？官方 session 生命周期事件？）——挂起/结束投递降级（认领路径）依赖此判定。
-4. **agentId 与 ownerSessionId 同轴性**：section 回调的 `context.agent.id` 与 driver 的 `ownerSessionId` 是否同一标识空间（不一致则注入槽键需映射）。
+1. **官方 section 空文本行为**：✅ 已核销——`dsh-system-prompt/lib/index.js` `renderPrompt()`（:113-115）：`sections.map(...).filter((text) => text.length > 0).join("\n\n")`——text 返回空串的 section 被整体过滤，无名字头、无痕迹，与「从未注册」逐字节一致；`section()` 注册（:240-243）返回的即 Cordis effect disposer，退出路径零额外摘除代码。**结论：空串即零注入，`dispose()` 仅插件卸载级使用。**
+2. **工具调用超时边界**：✅ 已核销——`dsh-tool-call-timeout-policy/lib/index.js` `apply()`（:115-142）：仅当工具声明 `timeoutMs` 才武装 deadline（:123-124 无 `timeoutMs` 直接 `next()` 透传）；且超时是**协作式**——包装器 `await next()` 不放弃工具 promise，到期只置换结果（:130），**无 turn 级强杀**。dispatchTask 未声明 `timeoutMs`（已核销 `src/tools/dispatch-task.ts`），循环不会被腰斩于工具边界；内联长阻塞无宿主超时约束，停止语义走 `exec.signal`。
+3. **ownerSessionId 存活判定**：✅ 已核销——`dsh-agent`（README :32 / lib/index.js `AgentRegistry`）：`ctx.agents.get(id)` 命中活 agent 返回裸 `Agent`、未活返回 undefined；事件词汇 `agent/created`/`agent/disposed`/`session/disposed` 在场（`lib/types/index.d.ts` :161/:289-290），挂起/结束投递的 owner 失活降级（认领路径）以 `ctx.agents.get(ownerSessionId) === undefined` 判定，事件仅作观察辅助。
+4. **agentId 与 ownerSessionId 同轴性**：✅ 已核销——`dsh-agent/lib/index.js` `assembleContextFor()`（:291-297）将**活 Agent 句柄**整体作为 `context.agent` 传入 `assemble()`；`dsh-agent-loop/lib/index.js`（:1772-1776）：agent 与 session 在**同一 caller-supplied identity 下创建**（"@param id - shared agent/session identity"）——`context.agent.id` ≡ `session.id` ≡ `ctx.sessionId`（本仓 `run-dag-tasks.ts` :384 即以 `ctx.sessionId` 作 ownerSessionId）。**同一标识空间，注入槽键零映射。**
 
 ## 触发点矩阵
 

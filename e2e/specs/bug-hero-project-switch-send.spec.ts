@@ -19,9 +19,12 @@ import { expect, test, type Page } from '@playwright/test'
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/bug-hero-switch-send'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main） */
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；Z: 盘变体对齐用户现场盘符） */
 function makeGitRepo(tag: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `dsh-forge-bugrep-${tag}-`))
+  const base = process.env.BUGREP_Z_DRIVE === '1' && existsSync('Z:/tmp-forge-tmp')
+    ? 'Z:/tmp-forge-tmp'
+    : tmpdir()
+  const dir = mkdtempSync(join(base, `dsh-forge-bugrep-${tag}-`))
   const opts: ExecFileSyncOptions = { cwd: dir, stdio: 'pipe' }
   const git = (args: string[]): void => {
     execFileSync('git', ['-c', 'user.email=bugrep@test', '-c', 'user.name=bugrep', ...args], opts)
@@ -147,7 +150,8 @@ test('bug 复现：hero 切换项目后首条消息发送（throwIfAborted 在�
   seedDshHome(join(userData, 'dsh-home'), credentials as string)
   const overlay = writeDogfoodOverlay()
   const wsA = makeGitRepo('a')
-  const wsB = makeGitRepo('b')
+  // 用户现场 = annotutor 非 git 注册项目 × 真实凭据——非 git B 对齐（BUGREP_PLAIN_B=1）
+  const wsB = process.env.BUGREP_PLAIN_B === '1' ? makePlainDir('b') : makeGitRepo('b')
   const app = await launchHost({ userData, overlay })
   const consoleLog: string[] = []
   try {

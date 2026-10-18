@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>被作废消息样式 mockup — 已作废整轮折叠（对齐官方 Chat 实测形态）</title>
+<style>
+  /* 刻度取自官方 dsh-client-ui-chat 编译 CSS + DESIGN.md 令牌（light 值；暗色经 --dsw-alias-* 切换） */
+  :root {
+    --dswf-label-primary: #0f1115;      /* alias: label-primary（暗色 #f9fafb） */
+    --dswf-label-secondary: #61666b;    /* alias: label-secondary */
+    --dswf-label-tertiary: #81858c;     /* alias: label-tertiary（暗色 #adb2b8） */
+    --dswf-bubble: #f5f6f7;             /* alias: specific-bubble（官方用户气泡底） */
+    --dswf-radius-xl: 20px;             /* --dsw-radius-xl */
+    --dswf-radius-sm: 8px;              /* --dsw-radius-sm */
+    --dswf-interactive-bg-hover: #2631480f; /* alias: interactive-bg-hover */
+    --dswf-content-font-size: 14px;
+    --dswf-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --dswf-content-width: 748px;        /* --dsh-chat-content-width */
+  }
+  body { font-family: var(--dswf-font); background: #ffffff; margin: 0; padding: 24px; }
+  .transcript { max-width: var(--dswf-content-width); margin: 0 auto; display: flex; flex-direction: column; gap: 6px; } /* flow-gap 默认 6px（官方 EvIC1a_column） */
+
+  /* ── 官方用户消息：右对齐气泡（Sixlwa_userRow/userStack/bubble 逐位对照） ── */
+  .user-row { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .user-stack { min-width: 0; max-width: min(calc(var(--dswf-content-width) * .702), 82%); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .bubble { background: var(--dswf-bubble); border-radius: var(--dswf-radius-xl); max-width: 100%;
+            font-size: var(--dswf-content-font-size); line-height: 22px; color: var(--dswf-label-primary);
+            white-space: pre-wrap; word-break: break-word; padding: 10px 16px; }
+
+  /* ── 官方助手消息：左侧纯文本、无底色无边框（label-primary 正文） ── */
+  .assistant { font-size: var(--dswf-content-font-size); line-height: 22px; color: var(--dswf-label-primary); padding: 2px 0; }
+
+  /* ── 折叠摘要行：官方 compactionButton 形态逐位对照（Sixlwa_compactionButton） ── */
+  .voided-summary { width: 100%; height: 24px; border-radius: var(--dswf-radius-sm); min-width: 0;
+                    color: var(--dswf-label-tertiary); font: inherit; font-size: var(--dswf-content-font-size);
+                    text-align: left; background: none; border: none; display: flex; align-items: center;
+                    padding: 0; cursor: pointer; transition: color .1s; }
+  .voided-summary:hover { color: var(--dswf-label-secondary); background: var(--dswf-interactive-bg-hover); }
+  .voided-summary .leading { width: 16px; height: 16px; color: inherit; flex: none; display: inline-grid; place-items: center; margin-right: 6px; }
+  .voided-summary .leading svg { transition: transform .14s var(--ds-ease-in-out, ease); }
+  .voided-summary[aria-expanded="true"] .leading svg { transform: rotate(90deg); }
+  .voided-summary[aria-expanded="true"] { padding-bottom: 8px; } /* 官方 O_Ebla_title 展开态刻度 */
+
+  /* ── 展开态：原文整块降透明度只读（结构 = 官方消息行原样） ── */
+  .voided-body { opacity: .6; display: flex; flex-direction: column; gap: 6px; }
+  .voided-body[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div class="transcript">
+
+  <!-- 对照：正常历史轮（官方形态：用户右气泡 / 助手左文本） -->
+  <div class="user-row"><div class="user-stack"><div class="bubble">先看一下 client-plugin 的现状</div></div></div>
+  <div class="assistant">好的，client-plugin 当前包含 open-session、bug-source、chip-restore 等模块……</div>
+
+  <!-- ① 被作废整轮：折叠态（compaction 行形态：leading 图标位 + tertiary 文本） -->
+  <button class="voided-summary" aria-expanded="false" aria-controls="voided-turn-1"
+          onclick="const b=this,t=document.getElementById('voided-turn-1');const o=t.toggleAttribute('hidden');b.setAttribute('aria-expanded',String(!o))">
+    <span class="leading"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg></span>已作废（1 轮）
+  </button>
+
+  <!-- ② 展开态：原文只读、整层 60% 透明度（行结构 = 官方消息行原样，无额外装饰） -->
+  <div class="voided-body" id="voided-turn-1" hidden>
+    <div class="user-row"><div class="user-stack"><div class="bubble">帮我重构 apps/web/src/client-plugin/plugin.ts</div></div></div>
+    <div class="assistant">好的，我先读取该文件……</div>
+  </div>
+
+  <!-- ③ 对照：修改后的新消息（正常渲染，与上方正常轮无差异） -->
+  <div class="user-row"><div class="user-stack"><div class="bubble">帮我重构 client-plugin 下的 plugin.ts，只保留 composer 相关接线</div></div></div>
+  <div class="assistant">好的，按新要求处理……</div>
+
+</div>
+</body>
+</html>

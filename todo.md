@@ -168,3 +168,8 @@ md的FRONTMATTER渲染成表格，跟github一样
 - 桌面端适配：`packages/plugin-forge/src/faces.ts`（forgeUserMessage）与 `notify/` 通道注入点、`run-dag-tasks.ts` 指令单行 followup 改走 send，并保留 `source.kind:'forge-loop'` 声明合并（mobile-ui tech-design AD-4）。
 - 手机端适配：循环叙述卡判别只消费 `source.kind`（tech-design 投影白名单 B 档），send 语义（next-turn/next-step、wakeup 与否、cancel parked）不影响渲染契约；惰性续轮（send('next-turn', wakeup:false)）为可选增强。
 - 上下文：mobile-ui tech-design.md AD-4 / 投影白名单；官方正本 dsh-agent runtime-types.d.ts（send/steer/followup/inject 全收显式 UserMessage）。
+
+
+## 75. 任务悬浮面板展示已完成任务数量/总数量，缩小成球也展示。
+
+## 76. 任务localId:采用x.y格式，x表示阶段，y表示阶段内的序号
