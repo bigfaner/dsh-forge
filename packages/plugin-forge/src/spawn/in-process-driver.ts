@@ -12,6 +12,7 @@
 // 任意终态（completed/interrupted/killed/异常拒绝）与 dispose 双径触发 reclaim（幂等），
 // worker 的孙进程（pwsh/node/git）在有限时间内整树退出；真机装配由 index.ts 注入
 // defaultWorkerTreeGuard，缺省 no-op（单测面零 pwsh 依赖）。
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { SpawnWorker, SpawnWorkerHandle } from '../dispatch-core/index.js'
 import { noopWorkerTreeGuard } from './job-tree.js'
 import type { WorkerTreeGuard } from './job-tree.js'
@@ -41,6 +42,38 @@ function outputTextOf(output: readonly unknown[]): string {
 }
 
 /**
+ * spawn parent 会话 cwd 读取位（官方 sessionCwd 同型：parent.session.header.cwd，
+ * 顶层 cwd 兼容位）——in-process provider 即从 parent 会话持久态派生 worker 工作目录
+ * （官方源码核销：SubagentStartRequest 无 cwd 覆盖位），故钉定 = 校验本读取位。
+ */
+function parentCwdOf(parent: unknown): string | undefined {
+  if (typeof parent !== 'object' || parent === null) return undefined
+  const session = (parent as { session?: unknown }).session
+  if (typeof session !== 'object' || session === null) return undefined
+  const header = (session as { header?: unknown }).header
+  const headerCwd =
+    typeof header === 'object' && header !== null ? (header as { cwd?: unknown }).cwd : undefined
+  const cwd = typeof headerCwd === 'string' ? headerCwd : (session as { cwd?: unknown }).cwd
+  return typeof cwd === 'string' ? cwd : undefined
+}
+
+/**
+ * cwd 钉定核销（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）：请求携带
+ * 钉定检出（loopSourced 径）时，parent 会话 cwd 必须等于钉定值——不一致（主检出发起等
+ * 异常场景）= spawn 拒绝并自解释（重定向指引：在钉定检出的会话重新发起循环）。
+ * 缺席 = 不核销（工具壳行为零变化）。
+ */
+function assertPinnedWorkspaceCwd(request: { readonly workspaceCwd?: string; readonly parent: unknown }): void {
+  if (request.workspaceCwd === undefined) return
+  const parentCwd = parentCwdOf(request.parent)
+  if (parentCwd === undefined || normalizeFsPath(parentCwd) !== normalizeFsPath(request.workspaceCwd)) {
+    throw new Error(
+      `[spawn-cwd-pin] worker 会话 cwd 钉定失败：发起循环的检出 = ${request.workspaceCwd}，spawn 时点 parent 会话 cwd = ${parentCwd ?? '（不可读）'}。请在钉定检出的会话（worktree 分支检出）中重新发起循环——拒绝在本检出发起（worker 提交将落错分支）`,
+    )
+  }
+}
+
+/**
  * spawn 真绑定工厂（装配注入 dispatchTask deps.spawn）。
  * 契约：start 发布后返回句柄（task-spawned 事件先行）；result 阻塞至 worker 终态
  * （拒绝 = 基建故障→dispatchTask 失败防线）；dispose 幂等收尾由调用方在结算后执行。
@@ -48,6 +81,7 @@ function outputTextOf(output: readonly unknown[]): string {
 export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => WorkerTreeGuard } = {}): SpawnWorker {
   const treeGuard = deps.treeGuard ?? noopWorkerTreeGuard
   return async (request) => {
+    assertPinnedWorkspaceCwd(request) // cwd 钉定核销（1.14——拒绝在守卫前，零资源留下）
     const guard = treeGuard()
     try {
       const { startInProcessRun } = await import('@deepseek-ai/dsh-subagent-in-process-driver')

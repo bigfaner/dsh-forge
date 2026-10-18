@@ -301,8 +301,15 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
             )
           }
 
-          // 无登记 → 启动循环（会话单活/同源独占门控在 driver.start 兑现——双入口同源）
-          const started = await driver.start({ source, ownerSessionId: sessionId, parent: exec.agent, projectId })
+          // 无登记 → 启动循环（会话单活/同源独占门控在 driver.start 兑现——双入口同源）；
+          // worktree = 发起会话检出（1.14 cwd 钉定归属——worker 会话 cwd 钉定源）
+          const started = await driver.start({
+            source,
+            ownerSessionId: sessionId,
+            parent: exec.agent,
+            projectId,
+            ...(session.cwd !== undefined ? { worktree: session.cwd } : {}),
+          })
           if (!started.ok) {
             if (started.code === 'owner-active') {
               return rejectionOf(started.message, started.guidance)

@@ -257,6 +257,12 @@ export interface LoopStartInput {
    * 双缺席 = start 拒绝——不落不可归属的循环。多工作区宿主逐会话路由的判别缝。）
    */
   readonly projectId?: string
+  /**
+   * 发起循环的检出路径（1.14 判例修复——owner 会话 cwd，worktree 分支检出）：登记进
+   * LoopRecord.worktree——worker 会话 cwd 钉定源 + 结算提交落点核验的容器检出锚。
+   * 缺席 = 未携带（spawn/结算零核销）。
+   */
+  readonly worktree?: string
 }
 
 /** 启动返回（3b 两拒绝码：loop-active = 该容器已有活循环（他源他会话并行不受限）；
@@ -659,6 +665,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         source,
         ownerSessionId: input.ownerSessionId,
         projectId,
+        ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
         takeoverSessions: new Set<string>(), // 3b 接管集（登记绑定——remove 随之蒸发）
       }
       const controller = new AbortController()
@@ -967,7 +974,12 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 
   // ③ spawn（dispatch-core 阶段二）：SpawnWorkerHandle 直持不经 jobs（decisions #14）；
   //    信号 = 循环控制器——stop 经 abort 取消 worker 剩余回合
-  const spawned = await spawnClaimed(loop.core, exec, claim, { scope, signal })
+  const spawned = await spawnClaimed(loop.core, exec, claim, {
+    scope,
+    signal,
+    // cwd 钉定（1.14 判例修复）：worker 会话 cwd 机械钉定 = 发起循环的检出
+    ...(record.worktree !== undefined ? { workspaceCwd: record.worktree } : {}),
+  })
   if (!spawned.ok) {
     record.inFlight = undefined // spawn 未成——任务留 in_progress 走幂等重入径（不走 submit-blocked）
     if ('kind' in spawned.failure) return haltLoop(loop) // HaltedOutcome——唯一 kind 承载成员（guard 粘住）
@@ -1003,6 +1015,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     spawnStartedAt: spawned.spawnStartedAt,
     killSignal: signal,
     guardOnFailure: false,
+    // 提交落点核验（1.14——cwd 钉定收口）：容器检出 = 发起循环 worktree
+    ...(record.worktree !== undefined ? { worktreeCwd: record.worktree } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'

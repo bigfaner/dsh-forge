@@ -126,6 +126,8 @@ interface InvokeContext {
   readonly projectId: string
   readonly sessionId: string
   readonly parent: unknown
+  /** 发起会话 cwd（1.14——LoopRecord.worktree 归属：worker cwd 钉定 + 提交落点核验锚） */
+  readonly worktree?: string
   readonly signal?: AbortSignal
 }
 
@@ -140,7 +142,13 @@ export function createRunDagTasksHandler(
     if (projectId === undefined) {
       return { kind: 'error', text: '当前工作区未注册项目，无法派发任务' }
     }
-    const ctx: InvokeContext = { projectId, sessionId: agent.session.id, parent: agent, ...(signal !== undefined ? { signal } : {}) }
+    const ctx: InvokeContext = {
+      projectId,
+      sessionId: agent.session.id,
+      parent: agent,
+      ...(cwd !== undefined ? { worktree: cwd } : {}),
+      ...(signal !== undefined ? { signal } : {}),
+    }
     const slug = rawInput.trim()
     try {
       // 跑动中再触发（本会话活循环 → 查看/停止/替换问询——decisions #20 作用域）。
@@ -384,6 +392,7 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
     ownerSessionId: ctx.sessionId,
     parent: ctx.parent,
     projectId: ctx.projectId,
+    ...(ctx.worktree !== undefined ? { worktree: ctx.worktree } : {}),
   })
   if (!result.ok) {
     // 会话级单活门控（3b——用户裁决 2026-10-17）：本会话已有活循环（含挂起中）——循环间串行

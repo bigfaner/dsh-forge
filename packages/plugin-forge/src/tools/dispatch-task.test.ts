@@ -352,6 +352,7 @@ describe('execute · started（无活循环 → driver.start——指令同源�
       ownerSessionId: h.sessionId,
       parent: h.exec.agent,
       projectId: 'p-1',
+      worktree: 'C:\\ws\\demo', // 1.14 cwd 钉定归属——发起会话检出透传
     })
     expect(h.statsInputs).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
     const text = h_render(h, out)

@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { SpawnWorker, SpawnWorkerHandle } from '../dispatch-core/index.js'
 import { noopWorkerTreeGuard } from './job-tree.js'
 import type { WorkerTreeGuard } from './job-tree.js'
@@ -136,6 +137,17 @@ export function createPlanReplaySpawn(
   const treeGuard = deps.treeGuard ?? noopWorkerTreeGuard
   const counts = new Map<string, number>()
   return async (request) => {
+    // cwd 钉定核销（1.14 判例修复）：请求携带钉定检出（loopSourced 径）时与计划工作区
+    // 归一比对——回放 worker 会话 cwd 恒 = 计划工作区根（index.ts 装配直写 header.cwd），
+    // 不一致 = 回放面拒绝（fail-loud，无重定向形态）
+    if (
+      request.workspaceCwd !== undefined &&
+      normalizeFsPath(request.workspaceCwd) !== normalizeFsPath(plan.workspaceDir)
+    ) {
+      throw new Error(
+        `[replay-plan] cwd 钉定冲突：请求钉定检出 = ${request.workspaceCwd}，计划工作区 = ${plan.workspaceDir}（回放面拒绝错位派发——worker 会话 cwd 必须落钉定检出）`,
+      )
+    }
     const taskKey = taskKeyOfLabel(request.label)
     if (taskKey === undefined) {
       throw new Error(`[replay-plan] spawn 请求无 label（taskKey 不可判——回放面拒绝）：${JSON.stringify(request.label)}`)

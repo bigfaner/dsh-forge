@@ -185,6 +185,54 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
   })
 })
 
+describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）', () => {
+  const PIN = 'Z:\\project\\dsh\\dsh-forge\\.forge\\worktrees\\feat-x'
+
+  it('parent 会话 cwd = 钉定检出（含路径拼写变体归一）→ spawn 照常，请求不含 cwd 键（上游无覆盖位）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn({
+      prompt: 'P',
+      parent: { session: { id: 'owner-1', header: { cwd: PIN } } },
+      signal: new AbortController().signal,
+      toolFilter: { deny: [] },
+      workspaceCwd: PIN.replaceAll('\\', '/'),
+    })
+    expect(handle.workerSessionId).toBe('worker-session-7')
+    const [request] = startInProcessRun.mock.calls.at(-1) as [Record<string, unknown>]
+    expect('workspaceCwd' in request).toBe(false) // 官方 SubagentStartRequest 无 cwd 覆盖位——不外泄
+  })
+
+  it('parent 会话 cwd ≠ 钉定检出（主检出发起形态）→ spawn 拒绝并自解释（上游零触达）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    await expect(
+      spawn({
+        prompt: 'P',
+        parent: { session: { id: 'owner-1', header: { cwd: 'Z:\\project\\dsh\\dsh-forge' } } },
+        signal: new AbortController().signal,
+        toolFilter: { deny: [] },
+        workspaceCwd: PIN,
+      }),
+    ).rejects.toThrow(/\[spawn-cwd-pin\].*重新发起循环/)
+    expect(startInProcessRun).not.toHaveBeenCalled()
+  })
+
+  it('parent 会话 cwd 不可读 → spawn 拒绝（不依赖 spawn 时点环境 cwd 的判据面）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    await expect(
+      spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] }, workspaceCwd: PIN }),
+    ).rejects.toThrow(/\[spawn-cwd-pin\].*不可读/)
+    expect(startInProcessRun).not.toHaveBeenCalled()
+  })
+
+  it('workspaceCwd 缺席（工具壳径）= 不核销，行为零变化', async () => {
+    const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    const handle = await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    expect(handle.workerSessionId).toBe('worker-session-7')
+  })
+})
+
 describe('进程树守卫接线（改进 4——清理路径全部终态可达）', () => {
   const requestOf = () => ({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
 

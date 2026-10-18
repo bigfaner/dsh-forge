@@ -356,7 +356,7 @@ export async function spawnClaimed(
   deps: DispatchCoreDeps,
   exec: DispatchCoreExec,
   claimed: ClaimedDispatch,
-  options: { readonly scope: DispatchChainScope; readonly signal?: AbortSignal },
+  options: { readonly scope: DispatchChainScope; readonly signal?: AbortSignal; readonly workspaceCwd?: string },
 ): Promise<SpawnStageResult> {
   const task = claimed.task
   const taskKey = `${task.slug}/${task.localId}`
@@ -387,6 +387,8 @@ export async function spawnClaimed(
       ...(agentOptions !== undefined ? { agentOptions } : {}),
       persona: claimed.persona, // 人格面（agent 级，claim 合成）——与 prompt 任务面分层承载（S2）
       label: `${taskKey} · ${task.title}`,
+      // cwd 钉定（1.14 判例修复）：loopSourced 径携带发起循环检出——spawn 实现侧机械核销
+      ...(options.workspaceCwd !== undefined ? { workspaceCwd: options.workspaceCwd } : {}),
     })
   } catch (cause) {
     return { ok: false, failure: spawnFailed(task.slug, taskKey, cause) }
@@ -431,6 +433,11 @@ export interface SettleStageInput {
    * 结算成功径恒清零防线 streak——两形态一致）。
    */
   readonly guardOnFailure?: boolean
+  /**
+   * 容器检出路径（1.14 cwd 钉定收口——循环径透传 LoopRecord.worktree）：success 结算核验
+   * 提交落点；缺席（工具壳）= 不核验，行为零变化。
+   */
+  readonly worktreeCwd?: string
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -457,6 +464,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     handle,
     spawnStartedAt,
     ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
+    ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

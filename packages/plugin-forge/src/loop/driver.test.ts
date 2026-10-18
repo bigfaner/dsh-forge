@@ -2179,3 +2179,40 @@ describe('3c 回归：循环生命周期归属会话无关（host registry 独�
     expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
   })
 })
+
+describe('cwd 钉定（1.14 判例修复——worker 会话未钉定 worktree、提交落 main）', () => {
+  const PIN = 'Z:\\project\\dsh\\dsh-forge\\.forge\\worktrees\\feat-x'
+
+  /** 无 commitHash 的 completed 结算读（落点核验无核销对象——收口不触 git） */
+  const queryCompletedNoCommit = (): QueryTaskResult => ({
+    task: snapshot({ taskStatus: 'completed' }),
+    container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+    records: [{ verb: 'submit', toStatus: 'completed', summary: 'did the thing', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+  })
+
+  it('start 携带 worktree：LoopRecord.worktree 登记 + spawn 请求携带 workspaceCwd（钉定 = 发起循环的检出）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      query: [queryCompletedNoCommit()],
+    })
+    const start = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: { tag: 'parent' }, worktree: PIN })
+    expect(start).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(built.spawn.requests[0]).toMatchObject({ workspaceCwd: PIN })
+  })
+
+  it('worktree 缺席：登记/spawn 请求均不携带键（行为零变化）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      query: [queryCompletedNoCommit()],
+    })
+    const start = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    expect(start).toEqual({ ok: true, loopId: expect.any(String) })
+    await untilSettled(built.driver)
+    expect(built.spawn.requests[0]).toMatchObject({ label: 'feat-x/2.5 · Implement the thing' })
+    expect('workspaceCwd' in built.spawn.requests[0]!).toBe(false)
+  })
+})

@@ -239,7 +239,7 @@ describe('无参路径：单查询枚举「尚有非终态任务的任务源」�
     const agent = agentOf(SESSION, CWD, () => {}) as never // 1.20：提交成功 = 启动前提（followup 在场）
     const out = await d.handler({ agent, rawInput: '' })
     expect(stub.startInputs).toEqual([
-      { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+      { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT, worktree: CWD },
     ])
     expect(out).toMatchObject({ kind: 'success' })
     expect((out as { text?: string }).text).toContain('blitz-y')
@@ -322,7 +322,7 @@ describe('带参 <slug> 直通（AC）', () => {
     const out = await d.handler({ agent, rawInput: ' blitz-y ' }) // 原样入参含空白——handler trim
     expect(ask.requests).toHaveLength(0)
     expect(stub.startInputs).toEqual([
-      { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+      { source: { kind: 'proposal', slug: 'blitz-y' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT, worktree: CWD },
     ])
     expect(out.kind).toBe('success')
   })
@@ -354,7 +354,7 @@ describe('带参 <slug> 模糊过滤（子串包含；精确优先，命中即�
     const out = await d.handler({ agent, rawInput: 'm3' })
     expect(ask.requests).toHaveLength(0)
     expect(stub.startInputs).toEqual([
-      { source: { kind: 'feature', slug: 'dsh-forge-m3-ui' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+      { source: { kind: 'feature', slug: 'dsh-forge-m3-ui' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT, worktree: CWD },
     ])
     expect(out.kind).toBe('success')
   })
@@ -369,7 +369,7 @@ describe('带参 <slug> 模糊过滤（子串包含；精确优先，命中即�
     const question = (ask.requests[0] as { questions: { options?: { label: string }[] }[] }).questions[0]
     expect(question?.options?.map((o) => o.label)).toEqual(['dsh-forge-m2-pipeline', 'dsh-forge-m3-ui', 'legacy-eval']) // 候选序 = 未完成量降序 + slug 稳定决胜
     expect(stub.startInputs).toEqual([
-      { source: { kind: 'proposal', slug: 'legacy-eval' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT },
+      { source: { kind: 'proposal', slug: 'legacy-eval' }, ownerSessionId: SESSION, parent: agent, projectId: PROJECT, worktree: CWD },
     ])
     expect(out.kind).toBe('success')
   })

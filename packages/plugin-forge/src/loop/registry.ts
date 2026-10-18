@@ -46,6 +46,12 @@ export interface LoopRecord {
   /** 主会话（发起会话——叙述目的地 + claim/links 身份锚 + stop 作用域键，decisions #20） */
   readonly ownerSessionId: string
   readonly projectId: string
+  /**
+   * 发起循环的检出路径（1.14 判例修复——cwd 钉定归属）：start 时点 owner 会话 cwd
+   * （worktree 分支检出）；worker 会话 cwd 机械钉定源 + 结算提交落点核验的容器检出锚。
+   * 缺席 = 未携带（老路径——spawn/结算零核销）。
+   */
+  readonly worktree?: string
   inFlight?: LoopInFlight
   /** 在场即挂起态（3b——suspendForVerdict 写入、处置回流清除；投影按此分流 P1 vs P3+P9） */
   suspended?: SuspendedPayload
