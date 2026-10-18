@@ -195,6 +195,8 @@ function fakeClientCtx(
   sessionsRefresh: { current: (() => Promise<unknown>) | undefined }
   /** 1.17 uiConversation events.register 录制（forge/progress 节点定义断言） */
   eventDefinitions: unknown[]
+  /** workspaces.list 换装面（bug d353536f 在场门测试——基线中途到达/缺席两态） */
+  workspacesList: { current: unknown }
 } {
   const registers: RegisterCall[] = []
   const injectedKeys: string[] = []
@@ -235,7 +237,17 @@ function fakeClientCtx(
     ...(sessionFaces?.sessionsUsing !== undefined ? { using: sessionFaces.sessionsUsing } : {}),
   }
   const uiWorkspace = { openSession: open, startSession: start, ...sessionFaces?.uiWorkspaceExtra }
-  const workspaces = { list: { tag: 'workspaces-list' } }
+  // workspaces.list 可换装（bug d353536f 在场门测试面——基线中途到达/缺席两态模拟；
+  // setter 保既有测试 `ctx.get('workspaces').list = …` 直赋写法兼容）
+  const workspacesList: { current: unknown } = { current: { tag: 'workspaces-list' } }
+  const workspaces = {
+    get list(): unknown {
+      return workspacesList.current
+    },
+    set list(v: unknown) {
+      workspacesList.current = v
+    },
+  }
   // fix-23：官方右栏收展窄面（ISidebarRight 切片）；4.2 增 openTab 导航面（挂接 pill → dock 开概览）；
   // 1.3 增 openResource 资源面（Bug source openReference → Bug 台账 pane 路由）
   const openResource = vi.fn()
@@ -277,7 +289,7 @@ function fakeClientCtx(
     // m3.1 D25：reflect 面（ ForgeClientCtx 窄面外——插件真身经 cast 读取，同径注入）
     ...(reflect !== undefined ? { reflect } : {}),
   } as ForgeClientCtx
-  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, openResource, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions }
+  return { ctx, registers, injectedKeys, injectDisposers, open, start, rightToggle, openTab, openResource, selectPanel, locale, tabTypes, sessionsById, sessionsRefresh, eventDefinitions, workspacesList }
 }
 
 /** 假 md-mermaid DOM 增强器（1.9——启停调用记账面；stop 幂等语义镜像真身——重复 stop 不重复记账） */
@@ -462,7 +474,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     unpublishViews()
   })
 
-  it('注入面 = dsh 账本/归属快照源 + openSession + startSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession；fix-42 新会话经 uiWorkspace.startSession）', () => {
+  it('注入面 = dsh 账本/归属快照源 + openSession + startSession（面板数据与动作的唯一通道；fix-11 打开经 uiWorkspace.openSession；fix-42 新会话经 uiWorkspace.startSession）', async () => {
     publishFakeViews()
     const { ctx, registers, open, start } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -478,7 +490,26 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     ;(face as { openSession: (id: string) => void }).openSession('s-1')
     expect(open).toHaveBeenCalledWith('s-1')
     ;(face as { startSession: (id: string) => void }).startSession('w-1')
-    expect(start).toHaveBeenCalledWith('w-1')
+    // bug d353536f 同因面：startSession 经在场门（快照面不可核验 = 放行）异步委派
+    await vi.waitFor(() => expect(start).toHaveBeenCalledWith('w-1'))
+    unpublishViews()
+  })
+
+  it('bug d353536f 同因面：startSession 官方基线未就位 → 等待在场后才委派官方（超时仍委派，错误面保真）', async () => {
+    publishFakeViews()
+    const { ctx, registers, start, workspacesList } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)!
+    const face = workspaces.options.inject!() as { startSession: (id: string) => void }
+    // 基线缺席起跑，30ms 后到达
+    workspacesList.current = { getSnapshot: () => ({ items: [] as { workspaceId: string }[] }) }
+    setTimeout(() => {
+      workspacesList.current = { getSnapshot: () => ({ items: [{ workspaceId: 'w-late' }] }) }
+    }, 30)
+    face.startSession('w-late')
+    expect(start).not.toHaveBeenCalled()
+    // 超时兜底也会委派（错误面保真）——断言只要求「最终到达」，余量盖过满载 worker 抖动
+    await vi.waitFor(() => expect(start).toHaveBeenCalledWith('w-late'), { timeout: 5000 })
     unpublishViews()
   })
 

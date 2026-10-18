@@ -390,3 +390,85 @@ describe('insertReferenceAtTail（官方 scoped 事件径——span-CAS 插入 +
     expect(insertReferenceAtTail(f.services, 's-1', REFERENCE)).toBe(true)
   })
 })
+
+// ───────────── bug d353536f 同因面：openWorkspace 官方基线在场门 ─────────────
+describe('waitForWorkspacePresent + 平台 openWorkspace 在场门（官方基线未就位不盲委派）', () => {
+  /** fake 快照店：items 可编程、可中途换装（基线模拟） */
+  function fakeList(initial?: readonly { workspaceId: string }[]) {
+    let items = initial
+    return {
+      set(next: readonly { workspaceId: string }[]) {
+        items = next
+      },
+      store: {
+        getSnapshot: () => ({ items: items ?? [] }),
+      },
+    }
+  }
+
+  it('bug: 目标已入快照 → 立即委派（在场判定零等待惩罚）', async () => {
+    const list = fakeList([{ workspaceId: 'ws-1' }]).store
+    const open = vi.fn(() => Promise.resolve())
+    const platform = openSessionPlatformFrom({
+      uiWorkspace: { openWorkspace: open, openSession: () => {} },
+      agentPresets: { select: async () => ({ ok: true as const, value: 'x' }) },
+      sessions: { binding: () => undefined },
+      conversation: { input: { for: () => undefined as never } },
+      workspaces: { list },
+    })
+    await platform.openWorkspace('ws-1')
+    expect(open).toHaveBeenCalledWith('ws-1', undefined)
+  })
+
+  it('bug: 快照缺席、基线中途到达 → 等到在场后才委派（盲委派 = connectWorkspace 必抛 unknown workspace）', async () => {
+    const list = fakeList([])
+    const callsAt: string[] = []
+    const open = vi.fn(() => {
+      callsAt.push(list.store.getSnapshot().items.length === 0 ? 'early' : 'late')
+      return Promise.resolve()
+    })
+    setTimeout(() => list.set([{ workspaceId: 'ws-late' }]), 40)
+    const platform = openSessionPlatformFrom(
+      {
+        uiWorkspace: { openWorkspace: open, openSession: () => {} },
+        agentPresets: { select: async () => ({ ok: true as const, value: 'x' }) },
+        sessions: { binding: () => undefined },
+        conversation: { input: { for: () => undefined as never } },
+        workspaces: { list: list.store },
+      },
+      { pollMs: 10, timeoutMs: 2000 },
+    )
+    await platform.openWorkspace('ws-late')
+    expect(callsAt).toEqual(['late']) // 官方链只在基线就位后到达——提前委派即 red
+  })
+
+  it('超时仍委派（官方错误面保真——真不在场由官方 createFailed 口径呈现）', async () => {
+    const list = fakeList([])
+    const open = vi.fn(() => Promise.resolve())
+    const platform = openSessionPlatformFrom(
+      {
+        uiWorkspace: { openWorkspace: open, openSession: () => {} },
+        agentPresets: { select: async () => ({ ok: true as const, value: 'x' }) },
+        sessions: { binding: () => undefined },
+        conversation: { input: { for: () => undefined as never } },
+        workspaces: { list: list.store },
+      },
+      { pollMs: 10, timeoutMs: 60 },
+    )
+    await platform.openWorkspace('ws-never')
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  it('快照面缺席（形状漂移/旧环境）→ 不可核验即放行（fail-open 官方原流，零新等待）', async () => {
+    const open = vi.fn(() => Promise.resolve())
+    const platform = openSessionPlatformFrom({
+      uiWorkspace: { openWorkspace: open, openSession: () => {} },
+      agentPresets: { select: async () => ({ ok: true as const, value: 'x' }) },
+      sessions: { binding: () => undefined },
+      conversation: { input: { for: () => undefined as never } },
+      workspaces: { list: { tag: 'no-getSnapshot' } },
+    })
+    await platform.openWorkspace('ws-1')
+    expect(open).toHaveBeenCalledTimes(1)
+  })
+})

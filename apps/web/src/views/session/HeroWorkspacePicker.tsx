@@ -19,7 +19,7 @@
 // W3 arm 退役（session-binding-guarantee）：挂靠编排缝（createWorktreeOrchestrator）与
 // 1.25 失败 Toast 文案族退役——会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，
 // create 失败走官方 createFailed toast），本面只剩项目弹层 + hero worktree chip 挂载。
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
@@ -121,15 +121,30 @@ export function ForgeHeroWorkspacePicker({
   // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
   const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
 
+  // bug d353536f 同因面：官方基线未就位时点选同样盲打官方链（connectWorkspace 查空快照
+  // 必抛 unknown workspace）——目标不在官方快照 = 挂起待基线，就位后由效应补拾取
+  // （与默认拾取同门同源 heroDefaultPickReady；真不在场 = 挂起不消，不盲打官方链）。
+  const [pendingPickId, setPendingPickId] = useState<string | undefined>(undefined)
+  const pendingReadyPick = heroDefaultPickReady(workspacesSnap?.items, pendingPickId)
+  useEffect(() => {
+    if (pendingReadyPick === undefined) return
+    setPendingPickId(undefined)
+    onPick(pendingReadyPick)
+  }, [pendingReadyPick, onPick])
+
   const onSelect = useCallback(
     (id: string) => {
       if (id === ADD_PROJECT) {
         openAdd()
         return
       }
+      if (heroDefaultPickReady(workspacesSnap?.items, id) === undefined) {
+        setPendingPickId(id)
+        return
+      }
       onPick(id)
     },
-    [openAdd, onPick],
+    [openAdd, onPick, workspacesSnap],
   )
 
   const getAnchorRect = useCallback(

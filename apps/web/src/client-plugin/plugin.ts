@@ -50,6 +50,7 @@ import {
   createOpenSessionOrchestrator,
   insertReferenceAtTail,
   openSessionPlatformFrom,
+  waitForWorkspacePresent,
   type ComposerInputFace,
   type OpenSessionBinding,
   type OpenSessionConversation,
@@ -919,8 +920,13 @@ function registerSidebarSlots(
           },
           startSession: (workspaceId: string): void => {
             // 官方新会话流（fix-42：项目行尾「新会话」钮——uiWorkspace.startSession
-            // reuse-or-create blank + 呈现一体，官方 WorkspaceBrowser 行动作同径）
-            services.uiWorkspace.startSession(workspaceId)
+            // reuse-or-create blank + 呈现一体，官方 WorkspaceBrowser 行动作同径）。
+            // bug d353536f 同因面：官方基线未就位时盲委派 = connectWorkspace 查空快照
+            // 抛 unknown workspace——有界等待在场后委派（waitForWorkspacePresent 单源；
+            // 超时仍委派，官方 createFailed 错误面保真）。
+            void waitForWorkspacePresent(services.workspaces.list, workspaceId).then(() => {
+              services.uiWorkspace.startSession(workspaceId)
+            })
           },
           // D45 会话行动作面（…菜单/归档/置顶钮——官方面缺席 = 键缺席 → 面板对应项不呈现）
           ...sessionActionFaceOf(services),
@@ -1894,6 +1900,7 @@ function buildOpenSessionOrchestrator(
   clientCtx: ForgeClientCtx,
   uiWorkspace: ForgeUiWorkspaceService,
   sessions: ForgeSessionsService,
+  workspaces?: ForgeWorkspacesService,
 ): OpenSessionOrchestrator {
   const asObject = (value: unknown): Record<string, unknown> | undefined =>
     typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -1954,6 +1961,8 @@ function buildOpenSessionOrchestrator(
         },
       },
     } satisfies OpenSessionConversation,
+    // bug d353536f 同因面：openWorkspace 先过官方基线在场门（open-session.ts waitForWorkspacePresent）
+    ...(workspaces !== undefined ? { workspaces: { list: workspaces.list } } : {}),
   }
   return createOpenSessionOrchestrator(openSessionPlatformFrom(services))
 }
@@ -2063,6 +2072,8 @@ function registerDockTabs(
   diagnostics: { registered?: string[] },
   /** Bug 引用 source 快照落缓存面（bug 27ab222b——按钮插入径喂全卡；缺席 = 不落） */
   noteBugInserted?: (bug: BugQuickAddInput) => void,
+  /** 官方 workspaces 服务（bug d353536f 同因面——openSession 编排器基线在场门数据源） */
+  workspaces?: ForgeWorkspacesService,
 ): () => void {
   const disposeOverviewType = sidebarRightTabs.register({
     id: OVERVIEW_TAB_KIND,
@@ -2118,13 +2129,13 @@ function registerDockTabs(
           },
           // 4.6 打开新会话编排器（openSessionWithPreset + 跳转姊妹出口——概览三子 tab
           // 行头预填/诊断发送/派发指令/派发跳转四渠道共源；1.4 Bug 快速路径复用同一编排器）
-          openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
+          openSession: buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
           // 1.4 Bug 快速路径（Bug 子 tab 行「添加到会话中」——有活跃会话 scoped 插入/
           // 无活跃会话开新会话预填；openSession 编排器同源复用）
           addBugToSession: buildBugQuickAdder(
             ctx,
             sessions,
-            buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions),
+            buildOpenSessionOrchestrator(ctx, uiWorkspace, sessions, workspaces),
             noteBugInserted,
           ),
         }),
@@ -2355,6 +2366,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           sidebarRightTabs,
           dockDiagnostics,
           bugSource !== undefined ? (bug) => bugSource.cacheBugSnapshot(bug) : undefined,
+          workspaces,
         )
         // 1.9 DOM 增强器挂接：apply 期启动（@dsh-forge/md-mermaid ./web enhancer 经壳
         // bundle 发布面递达——凡 .md-code-block 全 DOM 扫描增强，门控 + parse 确认 +
@@ -2429,7 +2441,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                   openSessionWithLedgerAddress({ sessions, uiWorkspace }, childSessionId, parentSessionId)
                 },
                 // 打开新会话编排器（弹窗诊断「发送给 agent」——openSessionWithPreset 组合子）
-                openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions),
+                openSession: buildOpenSessionOrchestrator(clientCtx, uiWorkspace, sessions, workspaces),
                 // 文档开出动作（弹窗参考 chip → dock 开文档 tab——官方导航控制器资源面；
                 // 无在场面/地址不认领抛错 fail-soft 不外溢）
                 openDocResource: (address: string): void => {
