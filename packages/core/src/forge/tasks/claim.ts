@@ -279,8 +279,8 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
     // ③b worker persona 合成（S2a 组成矩阵——agent 级人格面；与 dispatchPrompt 任务面分层，
     //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
-    //     追加轮：任务目录锚点节（WORKSPACE/容器目录树/logs 锚点——绝对路径唯一承载处，
-    //     persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
+    //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
+    //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
     const persona = composePersona(row.task_type as TaskType, (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1])
     const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
     const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona

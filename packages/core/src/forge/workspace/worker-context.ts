@@ -1,15 +1,19 @@
 // worker 任务目录锚点节（worker-lean-execution 追加轮——worker 系统面「## 任务目录锚点」）。
 // 定位：业务（forge/workspace/ 共享基建——discovery 同族 FS 读侧）。经 TasksVerbDeps 注入
 // claim（核心动词零 IO 纪律），claim 合成 persona 后追加——persona 通道 worker 独享，
-// 主会话零感知。fail-soft：容器目录缺席/读失败 → 省该锚点段（WORKSPACE 与 logs 双锚恒出）。
+// 主会话零感知。fail-soft：容器目录缺席/读失败 → 省该锚点段（logs 双锚恒出）。
+//
+// 真根因裁决（2026-10-18，bug 0f0ed280）：WORKSPACE 锚点行砍除——routing.wsPath 取项目注册根
+// （主检出），多 worktree 场景与派发会话检出脱钩，双权威致落点非确定。检出根唯一权威 =
+// worker 会话 cwd（spawn 继承）；锚点节仅补一行检出根指引（信息零损失，反搅动价值由
+// proposal/feature/logs 锚点全量承载）。
 //
 // 节形态（每锚点三段：介绍行 `名——职责：细节。`（顶格）→ 路径行（2 空格缩进）→ 目录树
 // （与路径同缩进，仅目录在盘时）；锚点间空行分组）：
 //   ## 任务目录锚点
 //   本任务领取的目录锚点（首行职责介绍；缩进行为绝对路径与目录内容）：
+//   工作目录即检出根（会话 cwd）——检索与改动均在此树内。
 //
-//   WORKSPACE——工作区仓库根：…
-//     <wsPath>
 //   proposal_dir——提案文档目录：…（feature 任务且目录在盘）
 //     <forgeDir>{sep}docs{sep}proposals{sep}<slug>{sep} + 树
 //   feature_dir——特性文档目录：…（feature 任务）/ proposal 任务则 proposal_dir 为主锚
@@ -33,7 +37,6 @@ const TREE_ENTRY_CAP = 60
 
 /** 锚点介绍行文本（`名——` 后的职责与细节；forge 项目/应用项目概念不入文案） */
 const DIR_ROLE_NOTES: Readonly<Record<string, string>> = {
-  WORKSPACE: '工作区仓库根：代码、测试与配置所在；检索与改动均在此树内。',
   proposal_dir: '提案文档目录：本任务的提案出处（proposal.md 及配套）。',
   feature_dir: '特性文档目录：prd/（需求与用户故事）、design/（技术设计）、test/（测试规划）。',
   'forge.project_logs_dir': 'forge 运行日志目录：任务日志存放的根目录（位于工作区仓库之外，属 dsh-forge 运行数据——不进 git）。',
@@ -89,19 +92,19 @@ function scanLines(abs: string, prefix: string, depth: number, lines: string[]):
 }
 
 /**
- * worker 任务目录锚点节（fail-soft 纯读）：WORKSPACE 与 logs 双锚恒出；容器锚点
- * （proposal/feature）目录在盘才出；feature 任务附带同名 proposal 段（远征血统）。
+ * worker 任务目录锚点节（fail-soft 纯读）：logs 双锚恒出；容器锚点（proposal/feature）
+ * 目录在盘才出；feature 任务附带同名 proposal 段（远征血统）。检出根不在此节承载
+ * （唯一权威 = worker 会话 cwd，见头注裁决）。
  * logsRoot = <任务库>/logs（项目级根）；任务日志目录 = logsRoot/<slug>/<localId>。
  */
 export function renderWorkerContext(input: {
-  wsPath: string
   forgeDir: string
   logsRoot: string
   localId: string
   source: ContainerRef
 }): string {
-  const { wsPath, forgeDir, logsRoot, localId, source } = input
-  const blocks = [`WORKSPACE——${DIR_ROLE_NOTES.WORKSPACE}\n  ${wsPath}`]
+  const { forgeDir, logsRoot, localId, source } = input
+  const blocks: string[] = []
   const taskLogsDir = join(logsRoot, source.slug, localId)
   if (source.kind === 'feature') {
     const proposal = renderDirBlock('proposal_dir', join(forgeDir, 'docs', 'proposals', source.slug), DIR_ROLE_NOTES.proposal_dir!)
@@ -115,6 +118,7 @@ export function renderWorkerContext(input: {
   return [
     '## 任务目录锚点',
     '本任务领取的目录锚点（首行职责介绍；缩进行为绝对路径与目录内容）：',
+    '工作目录即检出根（会话 cwd）——检索与改动均在此树内。',
     '',
     blocks.join('\n\n'),
   ].join('\n')
