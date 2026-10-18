@@ -134,7 +134,7 @@ export interface DispatchPromptInput {
    * 跑基线所得红灯 spec，随简报递达 worker；基线红灯 ≠ 本任务回归，机械判定比对归因、
    * 禁止顺手修复。缺席/空数组省行——digest 与基线关闭形态同值）。
    */
-  e2eBaselineRed?: readonly string[]
+  e2eBaselineRedCases?: readonly string[]
 }
 
 // ─────────────────────────── 续跑规则段（worker-exec-evidence-replay Solution①/③ 收敛形态） ───────────────────────────
@@ -224,7 +224,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
   const surface = renderSurface(input)
-  const e2eBaselineRed = renderE2eBaselineRed(input.e2eBaselineRed)
+  const e2eBaselineRedCases = renderE2eBaselineRed(input.e2eBaselineRedCases)
   const lines: (string | undefined)[] = [
     input.title !== undefined ? input.title : undefined,
     `TASK_ID: ${input.slug}/${input.localId}`,
@@ -243,7 +243,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
-    e2eBaselineRed !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRed}` : undefined,
+    e2eBaselineRedCases !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRedCases}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
   if (input.evidencePointer !== undefined) {

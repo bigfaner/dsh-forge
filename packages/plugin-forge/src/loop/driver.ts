@@ -43,7 +43,7 @@ import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
-import { attributionTaskInput, baselineForHead, type E2eBaselineCache } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, loadPersistedBaseline, parseE2eRedCases, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -350,6 +350,16 @@ export interface LoopDriverDeps {
     readonly runSuite: (worktree?: string) => Promise<string>
     /** worktree → 当前 HEAD（装配面注入 git rev-parse 缝；缺席/返回 undefined = 键不可得） */
     readonly readHead?: (worktree: string) => Promise<string | undefined>
+    /**
+     * 基线缓存文件路径提供器（bug 006d8bfe 后续——HEAD 键控持久化，跨实例/重启复用，
+     * 同 HEAD 套件零重跑）。用户裁决 2026-10-18：落 `{worktree}/.forge/caches/{slug}/
+     * e2e-baseline/`（随检出走、容器隔离）。缺席 = 无持久化（实例域缓存现状）。
+     * error 形态（基线不可得）不落缓存。
+     */
+    readonly cacheFile?: (input: {
+      readonly slug: string
+      readonly worktree?: string
+    }) => string | undefined
   }
   /** 机械时延注入（测试缝——缺省生产值；quiescence = 3c 宽限窗基长/轮询间隔） */
   readonly delays?: {
@@ -420,8 +430,10 @@ interface ActiveLoop {
   waitRounds: number
   /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
   readonly dispositions: Map<string, DispositionBook>
-  /** e2e 红灯基线缓存（disc-2 · HEAD 键控 {commit, reds}——缺席/空 = 基线全绿或机制关闭，简报零行） */
-  e2eBaseline?: E2eBaselineCache
+  /** 基线在飞去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首 claim 并发同跑套件的 dedup 缝） */
+  e2eBaselineInflight?: Promise<E2eBaselineCache | undefined>
+  /** 基线链（基线跑批 + 归因卡生成——后台化后的有序收口锚：终局径 await 防归因卡晚于终局） */
+  baselineChain?: Promise<void>
   /** e2e 归因卡已发集（spec 键——HEAD 漂移重算径对新增红灯补发，已发不重发；启动时点同源） */
   readonly e2eAttributed: Set<string>
   /** 3c 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即 ⑮ 终局） */
@@ -750,13 +762,15 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         registry.remove(id)
         return { ok: true, loopId: id }
       }
-      // e2e 红灯基线门（改进7——入场前跑批，fail-soft）：红灯清单挂本循环实例（逐简报
-      // 递达 worker——机械判定「基线红灯 ≠ 本任务回归」），并逐一生成归因卡（三分流）。
-      // disc-2：基线按 HEAD 键控缓存（ensureE2eBaseline——claim 时漂移重算，不烤死于此时点）；
-      // 套件执行故障 = 空清单 + warn（机制静默关闭，循环派发不受阻）；归因卡落库失败
-      // fail-soft（warn——红灯清单仍在简报面承担机械判定）。
-      const baseline = await ensureE2eBaseline(loop)
-      if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+      // e2e 红灯基线门（改进7/disc-2/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
+      // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
+      // runRound 首领任务前 await ensureE2eBaseline（in-flight 去重 + 实例缓存同源——挂起/
+      // claim 漂移重算语义不变），简报红灯行语义不破；归因卡随基线结果在 fiber 内生成。
+      loop.baselineChain = ensureE2eBaseline(loop)
+        .then(async (baseline) => {
+          if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
+        })
+        .catch(() => {})
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
       return { ok: true, loopId: id }
     },
@@ -904,6 +918,9 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
     )
   } finally {
     if (!suspended) {
+      // 基线链收口（bug 006d8bfe 后台化——归因卡链随基线在 fiber 内异步）：终局前等待，
+      // 归因卡落库不得晚于登记注销（否则终局后宿主重启丢卡；测试面 untilSettled 同序）
+      if (loop.baselineChain !== undefined) await loop.baselineChain
       loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
       clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
       loop.live.delete(record.id)
@@ -936,6 +953,19 @@ async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[])
  * fail-soft（不重跑昂贵套件）；重算故障 = 空清单 + warn（机制静默关闭，循环不阻）。
  */
 async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
+  // in-flight 去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首领并发触达时
+  // 套件只跑一次；settle 后清位，后续调用走磁盘持久层 + 每轮 HEAD 键控重验语义）
+  if (loop.e2eBaselineInflight !== undefined) return loop.e2eBaselineInflight
+  const inflight = ensureE2eBaselineUncached(loop)
+  loop.e2eBaselineInflight = inflight
+  try {
+    return await inflight
+  } finally {
+    if (loop.e2eBaselineInflight === inflight) loop.e2eBaselineInflight = undefined
+  }
+}
+
+async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
   const cfg = loop.deps.e2eBaseline
   if (cfg === undefined) return undefined
   const slug = loop.record.source.slug
@@ -944,20 +974,34 @@ async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | u
     try {
       head = await cfg.readHead(loop.record.worktree)
     } catch (cause) {
-      // HEAD 读失败（git 故障）——漂移不可判，复用现有缓存 fail-soft（不重跑昂贵套件）
+      // HEAD 读失败（git 故障）——键不可得：基线跳过（简报零红灯行），循环不阻。
       console.warn(
         `forge loop e2e baseline head read failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
       )
-      return loop.e2eBaseline
+      return undefined
     }
   }
-  // head undefined（readHead/worktree 缺席或不可得）= 键不可得：首算一次后恒复用（现状语义）
-  // runSuite 传同一 worktree——基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）
-  const before = loop.e2eBaseline
-  const entry = await baselineForHead(head, before, () => cfg.runSuite(loop.record.worktree))
-  loop.e2eBaseline = entry
-  if (entry !== before && entry.error !== undefined) {
+  // 磁盘即唯一缓存层（用户裁决 2026-10-18：不缓存到内存）：每次取基线 = 现算 HEAD →
+  // 查持久层（head 键匹配才命中）→ miss 才跑套件 → 落盘。runSuite 传同一 worktree——
+  // 基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）。
+  const cachePath = cfg.cacheFile?.({ slug, worktree: loop.record.worktree })
+  if (head !== undefined && cachePath !== undefined) {
+    const persisted = loadPersistedBaseline(cachePath, head)
+    if (persisted !== undefined) return persisted
+  }
+  const entry = await baselineForHead(head, undefined, () => cfg.runSuite(loop.record.worktree))
+  if (entry.error !== undefined) {
     console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
+  }
+  // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下轮重算）；IO 故障 fail-soft
+  if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
+    try {
+      persistBaseline(cachePath, head, entry.redCases)
+    } catch (cause) {
+      console.warn(
+        `forge loop e2e baseline cache persist failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+    }
   }
   return entry
 }
@@ -991,15 +1035,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）；
   // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
-  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
   const claim = await claimForDispatch(loop.core, exec, {
     identity: { sessionId: owner, loopSourced: true },
     guardKey: record.id,
     projectId: scope.projectId,
     source,
     ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
-    ...(baseline !== undefined && baseline.redSpecs.length > 0
-      ? { e2eBaselineRed: baseline.redSpecs }
+    ...(baseline !== undefined && baseline.redCases.length > 0
+      ? { e2eBaselineRedCases: baseline.redCases }
       : {}),
     // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
     // 比对此效度域，漂移 = stale 强制重跑）
@@ -1096,7 +1140,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
-    ...(baseline !== undefined && baseline.redSpecs.length > 0 ? { e2eBaselineRed: baseline.redSpecs } : {}),
+    ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'

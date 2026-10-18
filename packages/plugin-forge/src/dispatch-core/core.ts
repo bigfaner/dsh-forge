@@ -74,7 +74,7 @@ export interface DispatchCoreArgs {
    * e2e 红灯基线清单（改进7——循环入场基线门产出；透传 claimTask → dispatchPrompt
    * E2E_BASELINE_RED 行递达 worker。缺席 = 机制关闭，行为零变化）。
    */
-  readonly e2eBaselineRed?: readonly string[]
+  readonly e2eBaselineRedCases?: readonly string[]
   /**
    * 效度比对检出根（disc 效度戳——claim 透传 claimTask.checkoutRoot：worker/循环检出
    * worktree = 当前效度域取数锚。缺席 = 机制惰性不判，行为零变化）。
@@ -321,7 +321,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(args.source !== undefined ? { source: args.source } : {}),
     ...(args.adopt !== undefined ? { adopt: args.adopt } : {}),
     ...(args.identity.loopSourced ? { loopSourced: true } : {}),
-    ...(args.e2eBaselineRed !== undefined ? { e2eBaselineRed: args.e2eBaselineRed } : {}),
+    ...(args.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: args.e2eBaselineRedCases } : {}),
     ...(args.checkoutRoot !== undefined ? { checkoutRoot: args.checkoutRoot } : {}),
     ...(exclusivityGuard !== undefined ? { exclusivityGuard } : {}),
   })
@@ -453,7 +453,7 @@ export interface SettleStageInput {
    * 本轮 claim 简报红灯清单（改进7——欠账卡文案与简报行真实存在性一致的判据）：
    * 在场且非空 = 欠账卡指示「比对 E2E_BASELINE_RED 行」；缺席/空 = 兜底文案。
    */
-  readonly e2eBaselineRed?: readonly string[]
+  readonly e2eBaselineRedCases?: readonly string[]
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -485,7 +485,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     spawnStartedAt,
     ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
     ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
-    ...(input.e2eBaselineRed !== undefined ? { e2eBaselineRed: input.e2eBaselineRed } : {}),
+    ...(input.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: input.e2eBaselineRedCases } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

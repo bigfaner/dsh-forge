@@ -46,7 +46,7 @@ export {
   E2E_BASELINE_SUITE_TIMEOUT_MS,
   attributionTaskInput,
   baselineForHead,
-  parseE2eRedSpecs,
+  parseE2eRedCases,
   runE2eBaseline,
 } from './e2e-baseline.js'
 export type { E2eBaselineFaceDeps, E2eBaselineCache, E2eBaselineRedList } from './e2e-baseline.js'
