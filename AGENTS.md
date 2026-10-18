@@ -1,5 +1,9 @@
 # Workspace Conventions
 
+## 分支合并纪律（用户裁决 2026-10-18）
+
+- **禁止 agent 直接合并到 main**：任何分支合入 main 必须先经人类审核——agent 列出合并范围（commit 清单 + diffstat + 回归证据），人类明示批准后才可执行 `git merge`；不得以「上一次获批」为由沿用授权。
+
 ## External dependency verification
 
 - **外部依赖装配面结算门 = 真机端到端取证**（用户裁决 2026-10-15）：子进程/网络/外部文件系统/上游闭源机械的装配代码，fake 契约测试全绿不算交付。正本见 `docs/conventions/external-dependency-verification.md`（适用范围/取证方式/边界）。
