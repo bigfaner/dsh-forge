@@ -101,7 +101,7 @@ export function ForgeSidebarSlot({
   // bug 52fc94db：effect 收敛至 workbench 共享 hook（useWorkspaceProjectMap——概览锚定
   // 同源消费），行为零变化。
   const wsItems = workspacesSnap.items
-  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState.phase)
+  const workspaceProject = useWorkspaceProjectMap(wsItems, projectsState)
   const actions = sidebarActions({
     openSession,
     startSession,

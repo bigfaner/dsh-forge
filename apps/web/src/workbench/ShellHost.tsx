@@ -174,7 +174,7 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   //（右栏概览 tab body 消费）。桥缺席 = 不发布（fail-soft）；效应驱动更新归 e2e。
   const [mainSessionId, setMainSessionId] = useState<string | null>(null)
   // 工作区归属映射（bug 52fc94db——worktree 工作区会话概览锚定接 host 裁决；与左栏同源管线）
-  const workspaceProject = useWorkspaceProjectMap(workspaces?.items ?? [], projectsState.phase)
+  const workspaceProject = useWorkspaceProjectMap(workspaces?.items ?? [], projectsState)
   const overviewContext: ForgeOverviewContext = anchoredOverviewContext({
     mainSessionId,
     workspaces,
