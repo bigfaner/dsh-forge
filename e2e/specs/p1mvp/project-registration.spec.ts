@@ -24,7 +24,7 @@ import { deriveTaskStoreDir } from '../../../packages/core/src/forge/workspace/d
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { dirRow, enterDir } from '../../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import { openStateDb, deleteProjectRowByWsPath } from '../../support/sqlite.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import {
@@ -56,14 +56,13 @@ function makeWorkspaceFixture(name: string, withKnowledge = false): string {
 // 官方首启「预览版说明」预免 = 产品 boot overlay 内置等值确认（fix-12）——裸启动即真实路径。
 // 浏览器行定位/进入（dirRow/enterDir）经 e2e/support/navigation 单源（fix-37 ①）。
 
-/** 从 hero CTA 打开添加项目并导航到夹具根（home → AppData → Local → Temp → 夹具根） */
+/** 从 hero CTA 打开添加项目并导航到夹具根（段 = 夹具绝对路径推导——fix-11） */
 async function openFlowAtFixtureRoot(page: Page, fixtureRoot: string): Promise<void> {
   await page.locator(CTA_ADD_PROJECT).click()
   await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-  for (const segment of ['AppData', 'Local', 'Temp']) {
+  for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
 }
 
 /** canonical path 扁平化（form-model.flattenWorkspacePath 同口径）——4.3 派生行 RPC 化后
@@ -97,10 +96,9 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     await expect(confirmBtn).toHaveText('下一步')
 
     // Step 2 success：导航 + 单击选中 → 解禁 → 下一步 → 表单
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'reg-demo').click()
     await expect(confirmBtn).toBeEnabled()
     await confirmBtn.click()
@@ -219,10 +217,9 @@ test('@web-e2e @p1mvp project-registration·Step2 attach-existing-workspace：�
     expect(before.filter((p) => p.wsPath === targetDir), '挂接态前置：应用库零行（registry 保留）').toHaveLength(0)
     await page.locator(NAV_ADD_PROJECT).first().click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     const row = dirRow(page, 'attach-demo')
     // 注：「已注册」标记源 = 应用库 ws_path 全集（browser-model.ts:90）——挂接态（应用库
     // 零行）标记缺席为设计语义；挂接判定在服务面 ① 预检（registry）
@@ -484,10 +481,9 @@ test('@web-e2e @p1mvp project-registration·Step5 second-project-via-tree：项�
     // 项目态下经项目树「＋」打开同一两段式流程（浏览器起始 = 主目录——导航至夹具根）
     await page.locator(NAV_ADD_PROJECT).first().click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'proj-b').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()

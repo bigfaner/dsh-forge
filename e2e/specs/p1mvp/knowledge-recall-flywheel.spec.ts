@@ -31,7 +31,7 @@ import { test, expect, type Page } from '@playwright/test'
 import type { RecallGroup } from '../../../packages/contracts/src/dto/knowledge.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke, invokeHeat, registerProjectRaw, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { dirRow, enterDir } from '../../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import { decodeSessionFile, findFixtureSession, sessionLogById, waitForFixtureSession, type SessionEvent } from '../../support/session-files.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../../support/dogfood.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../support/cleanup.js'
@@ -92,10 +92,9 @@ function makeUnrelatedFixture(): string {
 async function registerViaUi(page: Page, fixtureRoot: string, dirName: string): Promise<void> {
   await page.locator(CTA_ADD_PROJECT).click()
   await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-  for (const segment of ['AppData', 'Local', 'Temp']) {
+  for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()

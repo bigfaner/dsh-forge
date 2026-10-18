@@ -2,8 +2,39 @@
 // 边界口径（探针 7 实测）：「已注册」标记与目录名零空白拼接（行文本 = "comp-a已注册"），
 // 尾界放宽为 空白|行尾|非名字字符（防 'Local' 误中 'LocalLow' 的前缀碰撞保持不变）。
 // 5.2 增 dock 导航面：openOverviewDock（右栏官方 guide 入口卡 → 产品概览 tab body 挂载）。
+// fix-11 增夹具导航段推导面：pickerStartRoot/fixtureDirSegments——去 ['AppData','Local','Temp']
+// %TEMP% 位置假设（fix-10 dispatch TMP 重定向后夹具落 .e2e-tmp，硬编码段恒脱节）。
 import { expect, type Page } from '@playwright/test'
+import { homedir } from 'node:os'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { DOCKKIT_STRIP_TAB, OV_PANEL, RIGHTBAR_COLLAPSED, RIGHTBAR_COL } from './anchors.js'
+
+/**
+ * 回退浏览器起始根（host listDir 缺省 = os.homedir() 的 spec 侧镜像）。
+ * fix-10 TMP 重定向在期（env 标记随进程树继承）→ 起始根 = 重定向根（launch.ts 同步把宿主
+ * USERPROFILE 对齐该根——同盘符可达）；真实终端无标记 → homedir()（行为不变）。
+ */
+export function pickerStartRoot(): string {
+  const redirected = process.env.__E2E_TMP_REDIRECTED__
+  return redirected !== undefined && redirected !== '' ? resolve(redirected) : homedir()
+}
+
+/**
+ * 夹具绝对路径 → picker 导航段序列（自 picker 起始根起算，含夹具目录名自身）。
+ * Windows 盘符跨根处理：path.relative 跨盘符返回绝对结果/逃逸上级——回退浏览器无跨盘符
+ * 导航面（行双击仅限当前列举子目录），此形 fail-fast 报因（替代 30s dblclick 超时谜团）。
+ */
+export function fixtureDirSegments(fixtureAbsPath: string, pickerRoot: string): string[] {
+  const fixture = resolve(fixtureAbsPath)
+  const root = resolve(pickerRoot)
+  const rel = relative(root, fixture)
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(
+      `夹具不在 picker 起始根之下（回退浏览器无法跨盘符导航）：fixture=${fixture} pickerRoot=${root}`,
+    )
+  }
+  return rel.split(/[\\/]+/).filter((segment) => segment !== '')
+}
 
 /** 浏览器行定位（名称精确匹配——防前缀碰撞） */
 export function dirRow(page: Page, name: string): ReturnType<Page['locator']> {

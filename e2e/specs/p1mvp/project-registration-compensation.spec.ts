@@ -39,7 +39,7 @@ import type { ProjectSummary, RegisterResult } from '../../../packages/contracts
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { dismissOnboardingModals, ensureNoBlockingDialog } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { dirRow, enterDir } from '../../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import {
   countReconcileWarnLogs,
   deleteProjectRowByWsPath,
@@ -83,10 +83,9 @@ async function registerViaUi(page: Page, fixtureRoot: string, dirName: string): 
   await ensureNoBlockingDialog(page)
   await page.locator(NAV_ADD_PROJECT).first().click()
   await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-  for (const segment of ['AppData', 'Local', 'Temp']) {
+  for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()

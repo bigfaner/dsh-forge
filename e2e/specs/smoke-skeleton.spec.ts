@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import { deriveTaskStoreDir } from '../../packages/core/src/forge/workspace/derive-dir.js'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
-import { dirRow, enterDir } from '../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import {
   DOCKKIT_CONTENT,
   DOCKKIT_STRIP_TAB,
@@ -294,11 +294,10 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
       'L3·浏览器相位内容右缘 = 卡片右缘（无溢出）',
     ).toBe(browserGeo.dialog!.right)
 
-    // 导航至夹具根（home → AppData → Local → Temp → 夹具；名称精确匹配防误中）
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    // 导航至夹具根（段 = 夹具绝对路径推导——fix-11；名称精确匹配防误中）
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     // L760 ① 单击选中 → 按钮解禁
     await dirRow(page, 'dsh-demo').click()
     await expect(confirmBtn).toBeEnabled()
@@ -465,11 +464,10 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
 
-    // 走查至 legacy-app（home → … → 夹具根 → 选中）
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    // 走查至 legacy-app（夹具绝对路径推导段 → 选中）
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'legacy-app').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -493,10 +491,9 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     // ── L766 ① 已注册目录带标记（注册后实机：重开向导 → 目录行「已注册」标记）──
     await page.locator('[data-dswf-nav="add-project"]').first().click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     const legacyRow = page.locator('.dswf-fb-item', { hasText: 'legacy-app' }).first()
     await expect(legacyRow).toHaveAttribute('data-registered')
     await expect(legacyRow.locator('.dswf-fb-reg', { hasText: '已注册' })).toBeVisible()

@@ -31,6 +31,7 @@ import { dismissOnboardingModals } from '../../support/modals.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { clearKnowledgeIndex, openStateDb, seedUsageEvents } from '../../support/sqlite.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../../support/cleanup.js'
+import { fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import {
   CLEAR_FILTERS,
   KNOWLEDGE_ENTRY,
@@ -422,8 +423,7 @@ test('@web-e2e @p1mvp knowledge-browsing·关键词交互回归（fix-5）：向
     // 向导注册（hero CTA → 文件浏览器 → 表单默认 → 成功收起）
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible({ timeout: 20_000 })
-    for (const segment of ['AppData', 'Local', 'Temp']) await wizardEnterDir(page, segment)
-    await wizardEnterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) await wizardEnterDir(page, segment)
     await wizardDirRow(page, 'kb-demo').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()

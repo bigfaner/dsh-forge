@@ -92,6 +92,12 @@ function sanitizedLaunchEnv(): Record<string, string> {
   const env = { ...process.env } as Record<string, string>
   delete env.ELECTRON_RUN_AS_NODE
   delete env.DSH_HOME
+  // fix-11 根因伴生面：回退浏览器起始根 = 宿主 os.homedir()（fs-rpc listDir 缺省）。
+  // fix-10 dispatch TMP 重定向在期（env 标记随进程树继承）→ 夹具落重定向根，与真 home
+  // 常跨盘符（行双击无法跨盘）——宿主 USERPROFILE 对齐重定向根，起始根 = 夹具所在根；
+  // 真实终端无标记零变化。
+  const redirected = process.env.__E2E_TMP_REDIRECTED__
+  if (redirected !== undefined && redirected !== '') env.USERPROFILE = redirected
   return env
 }
 

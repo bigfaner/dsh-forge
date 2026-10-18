@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
-import { dirRow, enterDir } from '../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import { registerProject, selectWorkspaceViaChip } from '../support/rpc.js'
 import {
   KNOWLEDGE_ENTRY,
@@ -134,10 +134,9 @@ test('3.8·注册项目 → 知识浏览真数据 + 详情抽屉 + 无召回空�
     // ── 注册知识夹具项目（向导两段：浏览器 → 表单默认值 → 确认——沿 smoke 组二/三走查径） ──
     await page.locator('[data-dswf-nav="add-project"]').first().click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'demo-proj').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()
