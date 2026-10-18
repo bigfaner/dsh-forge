@@ -1,3 +1,8 @@
+// 【历史锚点 · 2026-10-17】随「mobile 不 boot 官方 client 运行时」裁决，本探针的
+// boot 引导结论（facade/queue 物化路径）不再适用——mobile 传输面已定 /remote/__rpc
+// 单通道口径。传输面实证部分仍有效：/remote/ 注入行形态、官方配对链 302→302→303、
+// typert 信封缺 _request 即 gateway/arguments-invalid、组合脚本 302/404 路由行为。
+// 证据留档 .forge/docs/probes/mobile-connection-probe/probe-result.json（同标注）。
 // mobile-ui connection 探针（R9 证伪续作——一次性验证脚本，证据落 .forge/docs/probes/）
 // 钉死三件事：
 //   ① /remote/ index 经 renderIndex 后携带官方注入行（__ModuleLoader__ facade + __DSH_BOOT__ 图）
