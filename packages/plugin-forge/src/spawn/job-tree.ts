@@ -270,14 +270,38 @@ const activeGuards = new Set<GuardRecord>()
 /** 已仲裁 pid → 归属守卫（先报者得——嵌套 Job 误归属消解） */
 const claimedPids = new Map<number, GuardRecord>()
 
+/**
+ * 宿主自有 exec 子进程登记（显式 exclude——结算期 git 核验、回收 taskkill 等
+ * 非 worker 树宿主子进程不被任何在世 keeper 收编；exit/error 即解除，pid 复用零误伤）。
+ * Root cause: keeper 只能按「宿主直接子进程」启发式上报，宿主自有 exec 子进程与
+ * in-process worker 孙进程在同一父进程下无父系可辨——归属判据必须由 host 单点补齐。
+ */
+const hostOwnedPids = new Set<number>()
+
+/** 宿主自有 exec 子进程登记（spawn 后即调；进程退出自动解除） */
+export function noteHostOwnedChild(child: ChildProcess): void {
+  if (child.pid === undefined) return
+  const pid = child.pid
+  hostOwnedPids.add(pid)
+  const release = (): void => {
+    hostOwnedPids.delete(pid)
+  }
+  child.once('exit', release)
+  child.once('error', release)
+}
+
 // ─────────────────────────── 守卫实现 ───────────────────────────
 
 class WorkerTreeGuardImpl implements WorkerTreeGuard {
   keeperPid: number | undefined
+  /** keeper 子进程 pid（spawn 返回即知——ready 行处理前的互认竞态窗口仲裁键） */
+  keeperSpawnPid: number | undefined
   readonly whenReady: Promise<void>
+  readonly record: GuardRecord = { guard: this }
   private readonly exclusions = new Set<number>()
   private readonly queueDir: string
   private keeper: KeeperProcess | undefined
+  private keeperDead = false
   private queueSeq = 0
   private done = false
   private reclaimPromise: Promise<boolean> | undefined
@@ -290,6 +314,7 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
     this.hostPid = hostPid
     this.enabled = enabled
     this.queueDir = join(tmpdir(), 'dsh-forge-jobtree', `queue-${randomUUID()}`)
+    activeGuards.add(this.record) // 仲裁登记入构造器——spawn 即在世（工厂零后置窗口）
     this.whenReady = enabled ? this.bootstrap(deps.keeperAssembly ?? ensureKeeperAssembly()) : Promise.resolve()
   }
 
@@ -302,7 +327,8 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       mkdirSync(this.queueDir, { recursive: true })
       this.queueDirReady = true
       return true
-    } catch {
+    } catch (err) {
+      console.error('[job-tree] 指令队列目录创建失败——守卫禁用', err)
       this.enabled = false
       return false
     }
@@ -310,20 +336,36 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
 
   private async bootstrap(assembly: Promise<KeeperAssembly>): Promise<void> {
     try {
-      // 既有 keeper 互斥链：新 keeper 出生即排除已登记 keeper（防 keeper 相互收编/误杀）
+      // 既有 keeper 互认链：新 keeper 出生即排除已登记 keeper（keeperPid 与 spawn pid 双键——
+      // 对方 ready 未处理时 spawn pid 是唯一已知仲裁键）
       const initial = [...this.exclusions]
-      for (const record of activeGuards) if (record.guard.keeperPid !== undefined) initial.push(record.guard.keeperPid)
+      for (const record of activeGuards) {
+        if (record.guard === this) continue
+        if (record.guard.keeperPid !== undefined) initial.push(record.guard.keeperPid)
+        if (record.guard.keeperSpawnPid !== undefined) initial.push(record.guard.keeperSpawnPid)
+      }
       const { assemblyPath, scriptPath } = await assembly
       if (this.done) return
       if (!this.ensureQueueDir()) return
       const raw = this.launcher({ hostPid: this.hostPid, pollMs: KEEPER_POLL_MS, exclusions: initial, assemblyPath, scriptPath, queueDir: this.queueDir })
       this.keeper = raw
+      // spawn 即仲裁登记（互认竞态窗口消解）：keeper pid 已知即先报者定为本守卫，
+      // 他守卫立即获 exclude——旧 keeper 300ms 轮询先上报也只是触发 host 侧 exclude
+      if (raw.pid !== undefined) {
+        this.keeperSpawnPid = raw.pid
+        claimedPids.set(raw.pid, this.record)
+        for (const other of activeGuards) {
+          if (other.guard !== this) other.guard.exclude(raw.pid)
+        }
+      }
       // keeper 未就绪先亡（PowerShell 缺席/脚本异常）——守卫转禁用态（fail-soft，不再等 ready）
       void raw.exited.then(() => {
         if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') console.error(`[job-tree] keeper exited before reclaim`)
         if (this.keeperPid === undefined) {
+          this.keeperDead = true
           this.enabled = false
           this.done = true
+          console.error('[job-tree] keeper 未就绪先亡——守卫禁用')
         }
       })
       const onLine = (line: string): void => this.onKeeperLine(line)
@@ -339,7 +381,8 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
         const err = (raw as unknown as { stderr?: { on(ev: string, cb: (c: unknown) => void): void } }).stderr
         err?.on('data', (c) => console.error(`[job-tree][keeper-err] ${String(c).trim()}`))
       }
-    } catch {
+    } catch (err) {
+      console.error('[job-tree] keeper 装配失败——守卫禁用', err)
       this.enabled = false // fail-soft 禁用态——worker 正常路径不受守卫装配故障牵连
       this.done = true
     }
@@ -349,6 +392,7 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
     const ready = /^ready (\d+)$/.exec(line)
     if (ready !== null) {
       this.keeperPid = Number(ready[1])
+      claimedPids.set(this.keeperPid, this.record) // 与 spawn pid 不一致时兜底再登记（幂等）
       for (const record of activeGuards) {
         if (record.guard !== this) record.guard.exclude(this.keeperPid)
       }
@@ -357,12 +401,19 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
     const candidate = /^candidate (\d+)$/.exec(line)
     if (candidate !== null) {
       const pid = Number(candidate[1])
-      // keeper 本体（他守卫的监督进程）永不收编——防 keeper 互入对方 Job 引发连锁误杀
+      // keeper 本体（他守卫的监督进程）永不收编——双键匹配：keeperPid（ready 后）与
+      // keeperSpawnPid（spawn 即知——互认竞态窗口内的唯一在世仲裁键）
       for (const record of activeGuards) {
-        if (record.guard.keeperPid === pid) {
+        const guard = record.guard
+        if (guard.keeperPid === pid || guard.keeperSpawnPid === pid) {
           this.send(`exclude ${pid}`)
           return
         }
+      }
+      // 宿主自有 exec 子进程（结算 git 核验等）——显式 exclude，永不收编
+      if (hostOwnedPids.has(pid)) {
+        this.send(`exclude ${pid}`)
+        return
       }
       if (claimedPids.has(pid)) return // 已归属他守卫——本守卫零动作（仲裁单点）
       const record: GuardRecord = { guard: this }
@@ -385,8 +436,9 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       writeFileSync(join(this.queueDir, `${name}.part`), line + '\n', 'utf8')
       rmSync(join(this.queueDir, `${name}.cmd`), { force: true })
       renameSync(join(this.queueDir, `${name}.part`), join(this.queueDir, `${name}.cmd`))
-    } catch {
+    } catch (err) {
       // 队列写失败 = 指令不可达（禁用态化）——worker 正常路径不受牵连
+      console.error('[job-tree] 指令队列写失败——指令不可达，守卫禁用', err)
       this.enabled = false
     }
   }
@@ -398,15 +450,17 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
 
   reclaim(): Promise<boolean> {
     if (this.reclaimPromise !== undefined) return this.reclaimPromise
-    const effective = this.enabled && this.keeper !== undefined
+    const keeper = this.keeper
     this.done = true
     this.keeperPid = undefined // guard 复位——回收即失能，后续知会行零动作
-    if (!effective) {
+    if (keeper === undefined || this.keeperDead) {
+      // keeper 从未生效（spawn 失败 / 未就绪先亡）——无回收面
       this.reclaimPromise = Promise.resolve(false)
       return this.reclaimPromise
     }
-    const keeperPid = this.keeper?.pid
-    const exited = this.keeper!.exited
+    // terminate + taskkill 兜底独立于 enabled：队列写失败禁用态也必须回收 keeper（防孤儿）
+    const keeperPid = keeper.pid
+    const exited = keeper.exited
     const queueDir = this.queueDir
     this.send('terminate')
     this.reclaimPromise = (async () => {
@@ -414,7 +468,8 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       if (keeperPid !== undefined) {
         // 宽限未退兜底：taskkill 整树杀 keeper（keeper 自归属 Job——其子进程一并随树清理）
         await new Promise<void>((resolve) => {
-          execFile('taskkill', ['/PID', String(keeperPid), '/T', '/F'], () => resolve())
+          const taskkill = execFile('taskkill', ['/PID', String(keeperPid), '/T', '/F'], () => resolve())
+          noteHostOwnedChild(taskkill) // 宿主自有子进程——在世 keeper 不得收编回收工具本身
         })
       }
       try {

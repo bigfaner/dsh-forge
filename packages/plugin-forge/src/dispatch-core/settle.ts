@@ -6,6 +6,7 @@
 // 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
 // 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import { execFile } from 'node:child_process'
+import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
@@ -65,9 +66,11 @@ export type CommitLandingVerifier = (
 export const gitCommitLanding: CommitLandingVerifier = async (worktreeDir, commitHash) => {
   const run = (args: readonly string[]): Promise<string> =>
     new Promise((resolve, reject) => {
-      execFile('git', ['-C', worktreeDir, ...args], { encoding: 'utf8' }, (error, stdout) =>
+      const git = execFile('git', ['-C', worktreeDir, ...args], { encoding: 'utf8' }, (error, stdout) =>
         error == null ? resolve(stdout) : reject(error),
       )
+      // 结算期 git 核验 = 宿主自有子进程（worker 守卫已 reclaim）——显式登记防并发循环 keeper 误收编误杀
+      noteHostOwnedChild(git)
     })
   const branch = (await run(['branch', '--show-current'])).trim()
   if (branch === '') throw new Error(`容器检出不在分支上（detached HEAD）：${worktreeDir}`)
