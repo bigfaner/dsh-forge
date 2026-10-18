@@ -14,7 +14,7 @@
 
 1. **出生即绑定**：git 项目的会话自创建时点即携带绑定与模式档，分支 chip 与模式标签出生即正常；
 2. **运行时行为正常**：装载一次性自证 + 行存续看门，正确性层失败显式拒绝（fail-closed），体验层失败 fail-soft 由 host 兜底；
-3. **体验层换血**：sessions.create wrap 上位承担创建时点改道预铸（arm 编排退役）；arm 编排交互链保留，承接点选时点跨分支确认（设计 A 终态）。
+3. **体验层换血**：sessions.create wrap 上位承担创建时点改道预铸，arm 编排链整体退役；确认交互链（1.19 确认框 + 1.34 确认闩锁 +「不再提示」）剥离重锚点选时点，与 arm 零依赖（设计 A 终态）。
 
 ## 架构（三层定稿）
 
@@ -51,16 +51,16 @@ flowchart TB
 
 改动范围：`apps/host/src/ipc/worktree-rpc.ts`（judge/sessionCreate 入口分流 + 探针缓存）、`apps/host/src/boot/child.ts`（能力轮询放弃路径盖 `guardState: 'absent'` 状态位，dep 注入）、`packages/contracts`（typed error code）、`apps/web/src/client-plugin/plugin.ts`（拒绝错误呈现）、`apps/host/src/ipc/worktree-rpc.test.ts` + e2e（能力缺席矩阵：git 拒 / 非 git 照常）。
 
-### W3 client wrap sessions.create（体验层主径，arm 编排交互链保留承接点选确认）
+### W3 client wrap sessions.create（体验层主径，arm 编排链退役 + 确认交互链重锚点选时点）
 
-- **wrap 语义**：装配期对 `ctx.sessions` 服务对象做 `create` 属性替换（host interceptRequiredBinding 同配方，dispose 恢复）；资格门 = 全新创建（无 sessionId）∧ cwd/workspace 命中注册 git 项目 ∧ 能力可用；改道 = `forge:worktree/sessionCreate`（目标树 = host 选中记忆，缺席回退请求 cwd 树；G3 互斥与 guard 共享 blank 产物）；响应契约保真 `{sessionId: Y, agentPreset: 预铸头实际档}`。adopt 径（带 sessionId）与 fork 不在 wrap 面。任何 wrap 内异常 fail-open 透传 original。
-- **arm 编排交互链保留，wrap 双机制并存（设计 A 终态，2026-10-18 用户裁决）**：wrap 承担创建时点改道预铸；arm 编排交互链保留，承接点选时点跨分支确认。
+- **wrap 语义**：装配期对 `ctx.sessions` 服务对象做 `create` 属性替换（host interceptRequiredBinding 同配方，dispose 恢复）；资格门 = 全新创建（无 sessionId）∧ cwd/workspace 命中注册 git 项目 ∧ 能力可用；改道 = `forge:worktree/sessionCreate`（wrap 创建恒绑项目根——注册行 ws_path；选中树不在创建时点消费，由 host 首条消息必绑重路由兑现，1-27/1-29 spec 语义；G3 互斥与 guard 共享 blank 产物）；响应契约保真 `{sessionId: Y, agentPreset: 预铸头实际档}`。adopt 径（带 sessionId）与 fork 不在 wrap 面。任何 wrap 内异常 fail-open 透传 original。
+- **arm 编排链整体退役；确认交互链剥离重锚点选时点，与 arm 零依赖（设计 A 终态，2026-10-18 用户裁决）**：wrap 承担创建时点改道预铸；确认交互链（1.19 确认框 + 1.34 确认闩锁 +「不再提示」）从 arm 效应链剥离，独立锚在点选时点承接跨分支确认。
   - 删（与终态一致）：armDefault 效应链、createWorktreeOrchestrator、composerDraftFace/carryDraft、blankSessionByCwd、armSuppressed/cancelSuppressed、1.25 编排失败 Toast 文案族（create 失败改走官方 createFailed toast）；
-  - 留：hero worktree chip + 选中态 + sessionStorage 项目记忆 + pushSelection（wrap 目标树单源）+ 点选确认交互链；
+  - 留：hero worktree chip + 选中态 + sessionStorage 项目记忆 + pushSelection（host 首条消息必绑重路由单源——wrap 创建恒绑项目根，不读选中态）；
   - 确认终态（#4 设计 A）：跨分支确认框 + 1.34 确认闩锁 +「不再提示」锚在点选时点（1.19 语义回归）——点选命中跨分支且未闩锁/未「不再提示」时立现，确认 = 闩锁置位 + 选中态落定，闩锁命中（同目标已确认）点选静默切换零重弹；wrap 在官方 create 调用内部，不得中途插框。
 - **草稿/回执天然落 Y**：官方 replaceMain 自带 retain/open Y，草稿（会话寻址 InputHub）与 pending echo 零搬运跟随；X 永不物化，零残留。
 
-改动范围：`apps/web/src/client-plugin/plugin.ts`（wrap 注册 + inject 不变）、`apps/web/src/client-plugin/create-wrap.ts`（新——桌面入口分流：资格门 + 改道 + fail-open）、移动端 hero 建会话首选预铸 + fail-open 回退（语义契约见「移动端一致逻辑」小节——实现归 mobile-ui 工程，两案联动）、`apps/web/src/views/session/WorktreeFaces.tsx`（arm 效应链删除、确认框重锚点选时点）、`apps/web/src/views/session/HeroWorkspacePicker.tsx`（createWorktreeOrchestrator 删除）、`apps/web/src/views/session/hero-picker-model.ts`（shouldArmSelectedRow/blankSessionIdByCwdOf 删除、闩锁保留）、`plugin.test.ts` + e2e（1-27 升级创建即绑定断言、1-29 arm 退役语义更新、移动端 hero 预铸优先契约钉）。
+改动范围：`apps/web/src/client-plugin/plugin.ts`（wrap 注册 + arm inject 整面移除——零 inject 面）、`apps/web/src/client-plugin/create-wrap.ts`（既有——桌面入口分流：资格门 + 改道 + fail-open）、移动端 hero 建会话首选预铸 + fail-open 回退（语义契约见「移动端一致逻辑」小节——实现归 mobile-ui 工程，两案联动）、`apps/web/src/views/session/WorktreeFaces.tsx`（arm 效应链删除、确认框重锚点选时点）、`apps/web/src/views/session/HeroWorkspacePicker.tsx`（createWorktreeOrchestrator 删除）、`apps/web/src/views/session/hero-picker-model.ts`（shouldArmSelectedRow/blankSessionIdByCwdOf 删除、闩锁保留）、`plugin.test.ts` + e2e（1-27 升级创建即绑定断言、1-29 arm 退役语义更新、移动端 hero 预铸优先契约钉）。
 
 #### W3 关键代码示例：入口分流（官方 create 内部逻辑零触碰）
 
@@ -171,7 +171,7 @@ wrapped(opts?: { workspaceId?, cwd?, sessionId? }) → Promise<会话id>:
 
 1. **original 永不落 try 域**：①②④ 三个 `return original(opts)` 都在改道 try 之外——官方自身抛的错（如 workspace 不存在）原样上抛给官方前端，不会被 catch 吞掉再调一次（防双调）；
 2. **「零缓存」贯穿两层**：客户端 ② 段每次现查项目行，host ③ 段每次现跑 git 子进程——任何一层都不存「这是 git 项目」的结论，仓库在两次创建之间被移除，下一次创建立刻判非 git；
-3. **wrapped 无 UI、无等待**：跨分支确认在点选时点已问过人（重锚后的 1.19），host 选中记忆只落已确认目标——wrapped 本体是纯快速判定 + 一次 RPC（官方 create 调用内部不能卡模态框）。
+3. **wrapped 无 UI、无等待**：跨分支确认在点选时点已问过人（重锚后的 1.19），host 选中记忆只落已确认目标、由首条消息必绑重路由消费（wrap 创建恒绑项目根，不在创建时点读选中态）——wrapped 本体是纯快速判定 + 一次 RPC（官方 create 调用内部不能卡模态框）。
 
 一次调用的四种归宿：
 
@@ -260,7 +260,7 @@ sequenceDiagram
 ## 边界与不做的事
 
 - 不改制官方创建链本体（api-session-controller createOrAdopt 分支）——wrap 只做子集改道 + fail-open 透传；
-- 跨树创建不进 wrap（attachSession 校验 header.cwd ≡ workspace.path，改向即官方归属面碎裂）——跨树仍由选中编排（wrap 消费选中记忆）承担；
+- 跨树创建不进 wrap（attachSession 校验 header.cwd ≡ workspace.path，改向即官方归属面碎裂）——跨树由选中编排承担（选中记忆经首条消息必绑重路由消费，wrap 创建恒绑项目根）；
 - 既有无绑定历史会话不回填（官方铁律，仅对新会话生效）；
 - worker/fork 不经 wrap 与重路由入口（agents.create 直驱 / fork 方法，结构性隔离；guard 侧 header.parentSession 排除已落地）；
 - 守卫判读链既有 `cachedResolve` G8 会话期缓存（每消息 git 子进程固定税纪律，首条消息判读路径）维持现状——与本方案「创建入口判定零缓存」作用域不同（判读 vs 创建），是否统一另案评估；

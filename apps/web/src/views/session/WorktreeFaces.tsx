@@ -118,10 +118,10 @@ export function anchorDefaultWorktreePath(
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
  * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（chip 回填 + 项目粒度记忆写入 +
- * pushSelection——wrap 改道目标树单源），零会话副作用。跨分支风险确认在点选时点
+ * pushSelection——host 首条消息必绑重路由单源），零会话副作用。跨分支风险确认在点选时点
  * （1.19 语义回归——1.31 确认闩锁 + 「不再提示」语义平移，见下）；确认前选中态不变。
- * 会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，消费 host 选中记忆；缺席回退
- * 请求 cwd 树）——本面零编排。
+ * 会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，恒绑项目根；选中树由首条消息
+ * 必绑重路由兑现）——本面零编排。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
@@ -143,8 +143,9 @@ export function ForgeHeroWorktreeMount({
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
     () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined),
   )
-  // 1.30 选中树推送（forge:worktree/select——host 选中记忆 = wrap 改道目标树单源；
-  // fire-and-forget，path 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
+  // 1.30 选中树推送（forge:worktree/select——host 选中记忆 = 首条消息必绑重路由单源；
+  // wrap 创建恒绑项目根，不在创建时点读选中态。fire-and-forget，path 缺席 = 清除
+  // host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
   const pushSelection = useCallback(
     (path: string | undefined): void => {
       if (projectRoot === null) return
@@ -179,7 +180,7 @@ export function ForgeHeroWorktreeMount({
   const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
 
   // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + 项目粒度记忆写入 +
-  // host 选中记忆推送（wrap 改道目标单源）。
+  // host 选中记忆推送（首条消息必绑重路由单源——wrap 创建恒绑项目根，不读选中态）。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
@@ -215,7 +216,8 @@ export function ForgeHeroWorktreeMount({
   // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
   // 「选中记忆 → 锚定链」回填。记忆在此响应式读（非仅 mount 初值——会话面整域重挂时
   // 首挂 projectRoot 为 null，记忆键不可得；就绪后 projectRoot 到位即补读，跨重挂恢复
-  // 用户选中意图）。回填零编排；会话创建在官方 create 调用点（wrap 消费 host 选中记忆）。
+  // 用户选中意图）。回填零编排；会话创建在官方 create 调用点（wrap 恒绑项目根，选中树
+  // 经首条消息必绑重路由兑现）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit) return
     setLocalSelectedPath(
