@@ -17,8 +17,8 @@
 //   - 文档 tab：[data-dswf-doc-key="<projectId>#<docRel>"]（去重键 = 地址）+ 悬空标记
 //     [data-dswf-doc-dangling]（docs/index 悬空分支）+ 正文 [data-dswf-doc-body] +
 //     单行头路径 [data-path-label]（1.6 收敛——官方 PathLabel，原 .dswf-doc-path 退役）+
-//     mermaid [data-dswf-doc-mermaid-svg]（SVG 在场）/
-//     [data-dswf-doc-mermaid-fallback]（回退占位卡）；
+//     mermaid 经 DOM 增强器单径出图 figure [data-dswf-md-mermaid]（SVG 在场——1.8/1.9
+//     产品渲染链退役）；非法源 = 源码原样进官方代码块 .md-code-block 兜底（零占位卡）；
 //   - 多文档并存：官方 dockkit strip 页签 [data-dockkit-strip] [role=tab]（multiple）；
 //     同地址重开 = reveal（不新增 tab）；
 //   - openExternal（Step 4）：主侧先经桥校验路径在册（越界 ERR_DOC_PATH_INVALID——
@@ -27,7 +27,7 @@
 // Outcome → 测试映射：
 //   Step1-3 success 链（列表→开档→mermaid）………………………「冒烟：发现链列表 → 文档 tab 只读渲染 → mermaid 图」
 //   Step2 dangling-doc-readonly-placeholder ……………………「悬空容错：占位面在场 + 不崩溃不写入不删行」
-//   Step3 render-failure-fallback-card …………………………………「非法 mermaid 源：回退占位卡（异常不外溢）」
+//   Step3 render-failure-fallback-card …………………………………「非法 mermaid 源：官方代码块兜底（异常不外溢）」
 //   Step2 same-doc-reopen-dedup ……………………………………………并入冒烟（同地址 reveal + 双 tab 并存）
 //   Step4 success（在编辑器中打开）……………………………………………「Step4 守卫面：入口在场 + 越界路径拒绝（ERR_DOC_PATH_INVALID）」
 //   Step5 success（仓外项目文档同构）………………………………………并入冒烟（仓外夹具承载同构锚——仓内面归 sc4）
@@ -48,10 +48,10 @@ import { forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import {
-  DOC_MERMAID_FALLBACK,
-  DOC_MERMAID_SVG,
+  DOC_CODE_BLOCK,
   DOC_PATH_LABEL,
   DOCKKIT_STRIP_TAB,
+  MD_MERMAID_FIGURE,
   OV_PARENT_ANY,
   docPanelOf,
   ovDocRowOf,
@@ -60,7 +60,7 @@ import {
 
 /** 合法 erDiagram 段（验收锚——SC4 同源内容形态） */
 const ER_BLOCK = ['```mermaid', 'erDiagram', '    PROJECT ||--o{ FEATURE : has', '    FEATURE ||--o{ TASK : contains', '```'].join('\n')
-/** 非法 mermaid 源（渲染失败 → 回退占位卡） */
+/** 非法 mermaid 源（增强器安全降级——源码原样留官方代码块） */
 const BAD_BLOCK = ['```mermaid', 'this is :: not <valid mermaid> at all', '```'].join('\n')
 
 /** 注册负载直注（发现面以 forge_dir 为 docs/ 根扫描——rpc.ts 固定 {ws}/.forge 载荷不适用） */
@@ -160,9 +160,9 @@ test('@web-e2e @m2 文档浏览·冒烟：发现链列表 → 文档 tab 只读�
     expect(pathText.toLowerCase().startsWith(wsDir.slice(0, 2).toLowerCase()), 'canonical 路径栏 = 绝对路径（盘符起）').toBe(true)
     expect(pathText.endsWith(join('docs', 'features', 'db-feat', 'design', 'tech-design.md')), 'canonical 路径栏逐字承载 rel_path 解析').toBe(true)
 
-    // ── Step 3：mermaid 图渲染（erDiagram 验收锚——SVG 在场）──
-    await expect(designPanel.locator(DOC_MERMAID_SVG).locator('svg'), 'erDiagram 渲染为图（SVG 在场——懒加载收敛）').toBeVisible({ timeout: 30_000 })
-    await expect(designPanel.locator(DOC_MERMAID_FALLBACK), '合法源无回退卡').toHaveCount(0)
+    // ── Step 3：mermaid 图渲染（erDiagram 验收锚——DOM 增强器单径出图在场）──
+    await expect(designPanel.locator(MD_MERMAID_FIGURE).locator('svg'), 'erDiagram 渲染为图（增强器 figure 出图在场——1.8/1.9 渲染链退役）').toBeVisible({ timeout: 30_000 })
+    await expect(designPanel.locator(`${DOC_CODE_BLOCK}[data-dswf-md-mermaid-enhanced]`), '合法源原代码块已增强接管（原块隐藏）').toBeHidden()
 
     // ── Step 2b（去重 + 并存）：第二文档另开新 tab；同地址重开 = reveal ──
     await revealFeatureDocRow(page, prdRel)
@@ -231,7 +231,7 @@ test('@web-e2e @m2 文档浏览·悬空容错：占位面在场 + 不崩溃不�
   }
 });
 
-test('@web-e2e @m2 文档浏览·非法 mermaid 源：回退占位卡（异常不外溢）', async () => {
+test('@web-e2e @m2 文档浏览·非法 mermaid 源：官方代码块兜底（异常不外溢）', async () => {
   test.setTimeout(360_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-bad-'))
   const wsDir = join(fixtureRoot, 'ws-bad')
@@ -254,11 +254,13 @@ test('@web-e2e @m2 文档浏览·非法 mermaid 源：回退占位卡（异常�
     const panel = page.locator(docPanelOf(projectId, docRel)).first()
     await expect(panel).toBeVisible({ timeout: 30_000 })
 
-    // 回退占位卡：源码 + 回退注记（纯文本呈现）；文档其余部分照常渲染
-    await expect(panel.locator(DOC_MERMAID_FALLBACK), '非法源 → 回退占位卡在场').toBeVisible({ timeout: 30_000 })
-    await expect(panel.locator(DOC_MERMAID_FALLBACK), '回退注记文案').toContainText('回退')
-    await expect(panel.locator(DOC_MERMAID_FALLBACK), '源码纯文本呈现（not <valid mermaid> 在卡内）').toContainText('valid mermaid')
-    await expect(panel.locator(DOC_MERMAID_SVG), '非法源零 SVG').toHaveCount(0)
+    // 官方代码块兜底（1.8/1.9 渲染链退役——非法源 = 源码原样进官方代码块，零占位卡）
+    const badBlock = panel.locator(DOC_CODE_BLOCK).first()
+    await expect(badBlock, '非法源 → 官方代码块兜底在场').toBeVisible({ timeout: 30_000 })
+    await expect(badBlock, '源码纯文本在场（not <valid mermaid> 逐字）').toContainText('valid mermaid')
+    await expect(badBlock, '「代码」标签（官方 CodeToolbar codeLabel）').toContainText('代码')
+    await expect(badBlock.locator('button[aria-label="复制"]'), '复制钮在场').toBeVisible()
+    await expect(panel.locator(MD_MERMAID_FIGURE), '非法源零增强 figure').toHaveCount(0)
     await expect(panel.locator('[data-dswf-doc-body]'), '异常不外溢——文档其余部分照常渲染').toContainText('DOC-BAD-BODY')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
