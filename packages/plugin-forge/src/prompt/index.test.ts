@@ -115,19 +115,25 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     }
   })
 
-  it('远征流程图：brainstorm→用户裁决→write-prd→ui-design（有 UI 面）→tech-design→breakdown-tasks→派发→交付，各步产物标于箭头', () => {
+  it('远征流程图：brainstorm→用户裁决→write-prd→review-prd（Blocker 清零放行/返工环）→ui-design（有 UI 面）→tech-design→review-tech（同门）→breakdown-tasks→派发→交付，各步产物标于箭头', () => {
     expect(EXPEDITION).toContain('A[brainstorm] -->|"proposal.md"| B{用户裁决}')
     expect(EXPEDITION).toContain('B -->|"accept"| C[write-prd]')
-    expect(EXPEDITION).toContain('C -->|"prd-spec / user-stories / ui-functions"| D["ui-design（有 UI 面）"]')
-    expect(EXPEDITION).toContain('D -->|"ui-design.md + prototype"| E[tech-design]')
-    expect(EXPEDITION).toContain('C -->|"无 UI 面"| E')
-    expect(EXPEDITION).toContain('E -->|"tech-design / ER / schema / handbook"| F[breakdown-tasks]')
+    expect(EXPEDITION).toContain('C -->|"prd-spec / user-stories / ui-functions"| P[review-prd]')
+    expect(EXPEDITION).toContain('P -->|"Blocker 清零·有 UI 面"| D["ui-design（有 UI 面）"]')
+    expect(EXPEDITION).toContain('P -->|"Blocker 返工"| C')
+    expect(EXPEDITION).toContain('P -->|"Blocker 清零·无 UI 面"| E[tech-design]')
+    expect(EXPEDITION).toContain('D -->|"ui-design.md + prototype"| E')
+    expect(EXPEDITION).toContain('E -->|"tech-design / ER / schema / handbook"| R[review-tech]')
+    expect(EXPEDITION).toContain('R -->|"Blocker 清零·放行"| F[breakdown-tasks]')
+    expect(EXPEDITION).toContain('R -->|"Blocker 返工"| E')
     expect(EXPEDITION).toContain('F -->|"任务清单"| G["/run-dag-tasks 派发"]')
     expect(EXPEDITION).toContain('G --> H["eval → 交付"]')
   })
 
-  it('突击流程图：brainstorm→用户裁决→quick-tasks→派发→交付', () => {
-    expect(BLITZ).toContain('A[brainstorm] -->|"proposal.md"| B{用户裁决}')
+  it('突击流程图：brainstorm→review-proposal（Blocker 清零·提请裁决/返工环）→用户裁决→quick-tasks→派发→交付', () => {
+    expect(BLITZ).toContain('A[brainstorm] -->|"proposal.md"| R[review-proposal]')
+    expect(BLITZ).toContain('R -->|"Blocker 返工提案"| A')
+    expect(BLITZ).toContain('R -->|"Blocker 清零·提请裁决"| B{用户裁决}')
     expect(BLITZ).toContain('B -->|"accept"| C[quick-tasks]')
     expect(BLITZ).toContain('C -->|"任务清单"| D["/run-dag-tasks 派发"]')
     expect(BLITZ).toContain('D --> E[交付]')

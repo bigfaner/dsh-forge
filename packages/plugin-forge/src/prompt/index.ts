@@ -85,10 +85,14 @@ ${docs}
 flowchart LR
     A[brainstorm] -->|"proposal.md"| B{用户裁决}
     B -->|"accept"| C[write-prd]
-    C -->|"prd-spec / user-stories / ui-functions"| D["ui-design（有 UI 面）"]
-    D -->|"ui-design.md + prototype"| E[tech-design]
-    C -->|"无 UI 面"| E
-    E -->|"tech-design / ER / schema / handbook"| F[breakdown-tasks]
+    C -->|"prd-spec / user-stories / ui-functions"| P[review-prd]
+    P -->|"Blocker 清零·有 UI 面"| D["ui-design（有 UI 面）"]
+    P -->|"Blocker 返工"| C
+    P -->|"Blocker 清零·无 UI 面"| E[tech-design]
+    D -->|"ui-design.md + prototype"| E
+    E -->|"tech-design / ER / schema / handbook"| R[review-tech]
+    R -->|"Blocker 清零·放行"| F[breakdown-tasks]
+    R -->|"Blocker 返工"| E
     F -->|"任务清单"| G["/run-dag-tasks 派发"]
     G --> H["eval → 交付"]
 \`\`\`
@@ -131,7 +135,9 @@ ${docs}
 
 \`\`\`mermaid
 flowchart LR
-    A[brainstorm] -->|"proposal.md"| B{用户裁决}
+    A[brainstorm] -->|"proposal.md"| R[review-proposal]
+    R -->|"Blocker 返工提案"| A
+    R -->|"Blocker 清零·提请裁决"| B{用户裁决}
     B -->|"accept"| C[quick-tasks]
     C -->|"任务清单"| D["/run-dag-tasks 派发"]
     D --> E[交付]
