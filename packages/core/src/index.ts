@@ -12,6 +12,9 @@
 // inject 依赖声明（仅 workspaceRegistry 可用时加载）；返回句柄 disposer（fiber 卸载时关库，
 // 单句柄生命周期）。core 不依赖 cordis 编译期包：ctx 以结构化最小面（CoreContextFace）消费，
 // 运行期由 profile 装配注入；reflect.provide 即服务注册官方面（dsh Service 基类同径）。
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { openDatabase } from './db/index.js'
 import { createProjectService } from './forge/project-service.js'
@@ -21,6 +24,12 @@ import { createDocsService } from './forge/small-domains/docs.js'
 import { createBugsService } from './forge/small-domains/bugs.js'
 import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
+import {
+  readEvidencePointerState,
+  writeEvidenceValidityStamp,
+  type EvidencePointerIo,
+  type EvidenceValidityStamp,
+} from './forge/tasks/evidence-pointer.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './forge/tasks/phase-deriver.js'
 import { createTasksService } from './forge/tasks/service.js'
 import { validateFeatureTasks } from './forge/tasks/validate.js'
@@ -28,7 +37,6 @@ import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
-import { currentValidityDomain, readEvidencePointerState, writeEvidenceValidityStamp } from './forge/tasks/evidence-pointer.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
 import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
@@ -47,6 +55,41 @@ export {
 // git 身份探针默认实现（1.6——host bindings 刷新面 worktree→projectId 行的
 // `git worktree list` 现算派生数据源；git 缺席/非 git 目录全 null fail-soft）。
 export { createGitIdentityPort } from './forge/workspace/identity-anchor.js'
+
+// —— 证据效度域生产取数（装配面 IO 收口——R1-major① f913fc49：同步 git/fs 出 core/
+// evidence-pointer.ts，落本装配闭包；core 侧只剩比对纯函数 + io 注入编排）——
+
+/**
+ * 当前效度域取数（机械读侧——生产实现，装配面单源）：checkoutRoot 检出的 HEAD commit
+ * （`git rev-parse HEAD`）+ pnpm-lock.yaml 基线签名（sha-256 前 16 hex）。任何一步故障
+ * （非 git 检出/lock 缺席/exec 失败）= undefined——机制惰性（不判，形态兼容）。claim
+ * 领取热路径经 resolveEvidencePointer 注入闭包间接消费，core 内零同步子进程直调。
+ */
+export function currentValidityDomain(checkoutRoot: string | undefined): EvidenceValidityStamp | undefined {
+  if (checkoutRoot === undefined || checkoutRoot === '') return undefined
+  try {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: checkoutRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    const baseline = createHash('sha256')
+      .update(readFileSync(join(checkoutRoot, 'pnpm-lock.yaml')))
+      .digest('hex')
+      .slice(0, 16)
+    if (head === '') return undefined
+    return { head, baseline }
+  } catch {
+    return undefined
+  }
+}
+
+/** 证据位生产 io（node:fs 适配 EvidencePointerIo 注入缝——UTF-8 文本三法） */
+const evidencePointerIo: EvidencePointerIo = {
+  exists: (path) => existsSync(path),
+  readTextFile: (path) => readFileSync(path, 'utf8'),
+  writeTextFile: (path, data) => writeFileSync(path, data, 'utf8'),
+}
 
 /** 插件配置（profile cordis.patch.yml 行 config；dbFile = state.db 绝对路径，{app-data}/dsh-forge/state.db） */
 export interface CorePluginConfig {
@@ -156,13 +199,20 @@ const corePlugin: CorePlugin = Object.assign(
           // 不判；fail-soft = 首跑零 <resume> 段；漂移 = stale 规则段强制重跑）
           resolveEvidencePointer: (projectId, slug, localId, checkoutRoot) => {
             const containerDir = deriveTaskStoreDir(tasksHome, routing.wsPath(projectId))
-            const state = readEvidencePointerState(containerDir, slug, localId, currentValidityDomain(checkoutRoot ?? routing.wsPath(projectId)))
+            const state = readEvidencePointerState(
+              evidencePointerIo,
+              containerDir,
+              slug,
+              localId,
+              currentValidityDomain(checkoutRoot ?? routing.wsPath(projectId)),
+            )
             return state.pointer === undefined ? undefined : { pointer: state.pointer, stale: state.stale }
           },
           // disc 效度戳写侧（submit-task 结算面）：resume.md 在盘才写 sidecar（HEAD + 基线签名
           // 单源取数同上——checkoutRoot = 结算会话检出 = worker 工作区根；fail-soft）
           stampEvidenceValidity: (input) => {
             writeEvidenceValidityStamp(
+              evidencePointerIo,
               deriveTaskStoreDir(tasksHome, routing.wsPath(input.projectId)),
               input.slug,
               input.localId,

@@ -13,15 +13,18 @@
 // worker 不可信任手写戳）。resume.md 本体仍由 worker persona RESUME_POINTER_BLOCK 约定
 // 覆盖写，本模块不触碰其内容。
 //
+// core 零 IO 纪律（dispatch-loop-hardening R1-major① f913fc49）：本模块 = 比对纯函数 + 戳
+// 读写编排，一切同步 IO（git 子进程、效度域取数、证据位文件系统读写）经 EvidencePointerIo
+// 注入缝进入——同 git-lookup.ts gitExec / add.ts TasksVerbDeps 先例形制。生产实现（git
+// rev-parse + pnpm-lock sha-256 + node:fs）落装配面（src/index.ts 装配闭包）；测试注入
+// 内存 io 受控成败。claim 领取热路径因此零同步 git/fs 子进程直调——读侧消费的
+// deps.resolveEvidencePointer 闭合在装配层。
+//
 // claim 领取瞬间探测任务证据位根部的单点指针文件（logs/<slug>/<taskKey>/resume.md——
 // 覆盖写、最新进度即真相）；在盘 → logs/ 相对路径（正斜杠）注入 brief EVIDENCE 行，缺席 →
 // undefined（首跑零行）。路径形状与净化口径同 notify/incident-log（plugin-forge 侧；core
 // 侧镜像同规则——四域/包互禁 import，规则文本以本文件为 core 单源）。fail-soft：任何缺席/
 // 故障 = undefined，绝不抛。
-import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { RESUME_POINTER_FILE } from './prompt/compose.js'
 
 export { RESUME_POINTER_FILE }
@@ -37,6 +40,19 @@ export interface EvidenceValidityStamp {
   baseline: string
 }
 
+/**
+ * 证据位 IO 注入缝（core 零 IO 纪律——R1-major① f913fc49）：指针在盘探测 / 文本读 / 文本
+ * 覆盖写的最小封闭面。生产 = 装配层 node:fs 适配（src/index.ts）；测试 = 内存 map 受控。
+ */
+export interface EvidencePointerIo {
+  /** 路径在盘探测（node:fs existsSync 同语义——缺席/故障 = false 由实现兜） */
+  exists(path: string): boolean
+  /** UTF-8 文本读（node:fs readFileSync(path, 'utf8') 同语义——读故障由实现抛、本模块 fail-soft 捕获） */
+  readTextFile(path: string): string
+  /** UTF-8 文本覆盖写（node:fs writeFileSync(path, data, 'utf8') 同语义——写故障由实现抛、本模块 fail-soft 捕获） */
+  writeTextFile(path: string, data: string): void
+}
+
 /** 续跑指针探测三态（disc 跟进——stale = 证据漂移强制重跑） */
 export interface EvidencePointerState {
   /** 指针相对路径（正斜杠）；证据位不在盘 = undefined（首跑） */
@@ -50,38 +66,20 @@ function sanitizeSegment(raw: string): string {
   return raw.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
-/**
- * 当前效度域取数（机械读侧）：checkoutRoot 检出的 HEAD commit + pnpm-lock.yaml 基线签名。
- * 任何一步故障（非 git 检出/lock 缺席/exec 失败）= undefined——机制惰性（不判，形态兼容）。
- */
-export function currentValidityDomain(checkoutRoot: string | undefined): EvidenceValidityStamp | undefined {
-  if (checkoutRoot === undefined || checkoutRoot === '') return undefined
-  try {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd: checkoutRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
-    const baseline = createHash('sha256').update(readFileSync(join(checkoutRoot, 'pnpm-lock.yaml'))).digest('hex').slice(0, 16)
-    if (head === '') return undefined
-    return { head, baseline }
-  } catch {
-    return undefined
-  }
-}
-
 /** 效度戳机械比对（纯函数）：双域全等 = 有效；任一漂移 = 失效 */
 export function stampMatches(stored: EvidenceValidityStamp, current: EvidenceValidityStamp): boolean {
   return stored.head === current.head && stored.baseline === current.baseline
 }
 
 /**
- * 探测续跑指针 + 效度比对（领取瞬间取数）：容器库目录（deriveTaskStoreDir 单源派生值）+
- * slug + localId → 指针文件在盘则返回 `logs/<slug>/<localId>/resume.md`（正斜杠相对路径）+
- * 效度态，否则 undefined（首跑零行）。容器目录缺席（undefined/空串）/路径故障 = undefined，
- * 绝不抛。效度判定（current 在场才判——机制惰性）：无戳/戳形坏/双域任一漂移 = stale。
+ * 探测续跑指针 + 效度比对（领取瞬间取数，io 注入）：容器库目录（deriveTaskStoreDir 单源派生
+ * 值）+ slug + localId → 指针文件在盘则返回 `logs/<slug>/<localId>/resume.md`（正斜杠相对
+ * 路径）+ 效度态，否则 undefined（首跑零行）。容器目录缺席（undefined/空串）/路径故障 =
+ * undefined，绝不抛。效度判定（current 在场才判——机制惰性；当前效度域取数由装配层闭包
+ * 注入 current）：无戳/戳形坏/双域任一漂移 = stale。
  */
 export function readEvidencePointerState(
+  io: EvidencePointerIo,
   containerDir: string | undefined,
   slug: string,
   localId: string,
@@ -93,14 +91,14 @@ export function readEvidencePointerState(
   if (s === '' || k === '') return { stale: false }
   const rel = `logs/${s}/${k}/${RESUME_POINTER_FILE}`
   try {
-    if (!existsSync(join(containerDir, ...rel.split('/')))) return { stale: false }
+    if (!io.exists(`${containerDir}/${rel}`)) return { stale: false }
   } catch {
     return { stale: false }
   }
   if (current === undefined) return { pointer: rel, stale: false } // 机制惰性——效度域不可读不判
   let stored: EvidenceValidityStamp | undefined
   try {
-    const parsed = JSON.parse(readFileSync(join(containerDir, 'logs', s, k, RESUME_VALIDITY_FILE), 'utf8')) as {
+    const parsed = JSON.parse(io.readTextFile(`${containerDir}/logs/${s}/${k}/${RESUME_VALIDITY_FILE}`)) as {
       head?: unknown
       baseline?: unknown
     }
@@ -115,10 +113,11 @@ export function readEvidencePointerState(
 }
 
 /**
- * 结算写侧落戳（机械——worker 不可信任手写）：任务证据位 resume.md 在盘才写 sidecar 效度戳
- * （覆盖写——最新结算即最新效度域）；resume.md 缺席/写故障 = false（fail-soft，绝不抛）。
+ * 结算写侧落戳（机械——worker 不可信任手写，io 注入）：任务证据位 resume.md 在盘才写 sidecar
+ * 效度戳（覆盖写——最新结算即最新效度域）；resume.md 缺席/写故障 = false（fail-soft，绝不抛）。
  */
 export function writeEvidenceValidityStamp(
+  io: EvidencePointerIo,
   containerDir: string | undefined,
   slug: string,
   localId: string,
@@ -129,9 +128,9 @@ export function writeEvidenceValidityStamp(
   const k = sanitizeSegment(localId)
   if (s === '' || k === '') return false
   try {
-    const dir = join(containerDir, 'logs', s, k)
-    if (!existsSync(join(dir, RESUME_POINTER_FILE))) return false
-    writeFileSync(join(dir, RESUME_VALIDITY_FILE), `${JSON.stringify(stamp, null, 2)}\n`, 'utf8')
+    const dir = `${containerDir}/logs/${s}/${k}`
+    if (!io.exists(`${dir}/${RESUME_POINTER_FILE}`)) return false
+    io.writeTextFile(`${dir}/${RESUME_VALIDITY_FILE}`, `${JSON.stringify(stamp, null, 2)}\n`)
     return true
   } catch {
     return false
@@ -139,14 +138,15 @@ export function writeEvidenceValidityStamp(
 }
 
 /**
- * 探测续跑指针（领取瞬间取数——1.3 原始形态，fresh 语义）：容器库目录 + slug + localId →
- * 指针文件在盘则返回 `logs/<slug>/<localId>/resume.md`（正斜杠相对路径），否则 undefined。
- * 效度比对需求面用 readEvidencePointerState（本函数 = 无 current 不判的薄包装）。
+ * 探测续跑指针（领取瞬间取数——1.3 原始形态，fresh 语义，io 注入）：容器库目录 + slug +
+ * localId → 指针文件在盘则返回 `logs/<slug>/<localId>/resume.md`（正斜杠相对路径），否则
+ * undefined。效度比对需求面用 readEvidencePointerState（本函数 = 无 current 不判的薄包装）。
  */
 export function readEvidencePointer(
+  io: EvidencePointerIo,
   containerDir: string | undefined,
   slug: string,
   localId: string,
 ): string | undefined {
-  return readEvidencePointerState(containerDir, slug, localId).pointer
+  return readEvidencePointerState(io, containerDir, slug, localId).pointer
 }
