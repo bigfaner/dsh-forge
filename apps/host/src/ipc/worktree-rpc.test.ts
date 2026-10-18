@@ -99,7 +99,7 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
     resolveByPath: async (path: string) => {
       const title = titles[path]
       if (title === undefined) return undefined
-      return { title, setTitle: async (next: string) => titled.push({ path, title: next }) }
+      return { title, setTitle: async (next: string) => { titled.push({ path, title: next }) } }
     },
     create: async (path: string, title?: string) => {
       created.push({ path, title })

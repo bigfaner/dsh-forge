@@ -44,7 +44,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every((k) => k === '@types/node')).toBe(true)
   })
 
-  it('根 solution tsconfig references 八工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec）', () => {
+  it('根 solution tsconfig references 十工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；mobile-ui 1.32 增 git-worktree/md-mermaid 插件）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -56,6 +56,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/path-key',
         'packages/plugin-forge',
         'packages/plugin-forge-spec',
+        'packages/plugins/git-worktree',
+        'packages/plugins/md-mermaid',
       ].sort(),
     )
   })
@@ -70,8 +72,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     ['packages/plugin-forge', ['packages/contracts', 'packages/path-key']],
     // M3 3.1：plugin-forge-spec 同型（deps 仅 contracts + path-key——零 core/跨插件边）
     ['packages/plugin-forge-spec', ['packages/contracts', 'packages/path-key']],
-    ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge']],
-    ['apps/web', ['packages/contracts', 'packages/plugins/md-mermaid']],
+    ['apps/host', ['packages/contracts', 'packages/core', 'packages/knowledge', 'packages/plugins/git-worktree']],
+    ['apps/web', ['packages/contracts', 'packages/plugins/git-worktree', 'packages/plugins/md-mermaid']],
   ] as const)('%s references 拓扑 = %j（composite 联通）', (dir, expected) => {
     const ts = readJson(join(dir, 'tsconfig.json')) as {
       compilerOptions?: { composite?: boolean }
