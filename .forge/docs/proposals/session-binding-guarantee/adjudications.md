@@ -1,5 +1,9 @@
 # 前置核销裁决记录（#3-#7，2026-10-17）
 
+## W2×W3 冲突收口（用户裁决 2026-10-18）
+
+**wrap 识别 typed code 单独放行拒绝**：create-wrap ④ catch 对 `ERR_WORKTREE_CAPABILITY_ABSENT`（W2 fail-closed 确定性拒绝）不再 fail-open——原样上抛呈现（官方 createFailed toast / RpcClientError Toast 链，依 #5 文案语义映射）；其余瞬态异常（RPC 不通、判非 git）维持 fail-open。W2 fail-closed 与 W3 fail-open 各归其位。#5「改道链任何失败 = fail-open」口径自本裁决起收敛为「瞬态失败 = fail-open；typed 拒绝码 = 单独放行」。typed 信封错误经 unwrapRpcEnvelope 以 RpcClientError 形态（code/message/data）保真透传，保证拒绝码可达 wrap ④ 判定点。
+
 | # | 项 | 裁决 |
 |---|---|---|
 | 3 | adopt / fork 改道边界 | **adopt 径直通，fork 不在 wrap 面。** 带 `sessionId` 的 `create`（官方 reuseBlank 采纳）= 官方复用既有会话，改道无意义——① 直通 original（真机实证其真实形态：reuseOrCreateBlank 采纳径 opts 携 `{workspaceId, sessionId}`）。fork 经 `sessions.fork` / `agents.create`，结构性不经过 `create` 方法；worker/fork 重路由排除已在 guard 侧落地（`header.parentSession` 排除）。wrap 改道仅限无 `sessionId` 的全新创建且资格门命中。 |

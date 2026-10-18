@@ -9,7 +9,9 @@
 //   ① 内部零触碰——wrap 只有整调用改道与原样透传两种动作，不读/不改官方 createOrAdopt 分支；
 //   ② 判定逐次独立——每次创建现查项目行，零缓存（git 项目可变非 git、行可增删）；
 //   ③ fail-open 透传——original 永不落改道 try 域：官方自身错误原样上抛（不吞不重调），
-//      改道链任何异常（项目行现查失败 / host 判非 git / RPC 失败）= 官方原流（guard 兜底）。
+//      改道链任何瞬态异常（项目行现查失败 / host 判非 git / RPC 失败）= 官方原流（guard 兜底）；
+//      唯一例外 = W2 typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT（fail-closed 确定性拒绝——
+//      单独放行上抛呈现，不降级回主树，用户裁决 2026-10-18）。
 //
 // bundle 自含纪律（client-plugin 经典 script 形状）：本文件零运行时 import——官方/contracts
 // 面以结构同型镜像窄接口承载（open-session.ts / plugin.ts 先例）。
@@ -92,6 +94,18 @@ export async function treeOf(
   return null
 }
 
+/** W2 typed 拒绝码字面量（contracts ERROR_CODES 同源镜像——bundle 自含零 import） */
+export const ERR_WORKTREE_CAPABILITY_ABSENT = 'ERR_WORKTREE_CAPABILITY_ABSENT'
+
+/** typed 拒绝判定（结构镜像——RpcClientError.code；不依赖 instanceof，跨 bundle 形状容错） */
+function isCapabilityAbsentTyped(cause: unknown): boolean {
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    (cause as { code?: unknown }).code === ERR_WORKTREE_CAPABILITY_ABSENT
+  )
+}
+
 /**
  * 装配期安装（插件 apply() 内 sessions 到手后恰一次）：留底官方原方法 → 影子替换 →
  * 返回 dispose（恢复原方法，host interceptRequiredBinding 同配方；幂等）。
@@ -125,7 +139,11 @@ export function installSessionCreateWrap(
       }
       return sessionId
     } catch (cause) {
-      // ④ fail-open：改道链任何异常（host 判非 git / RPC 失败 / 产物漂移）= 官方原流
+      // ④a W2 fail-closed 单独放行（用户裁决 2026-10-18）：typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT
+      //    = host 确定性拒绝（能力缺席），不是瞬态降级——原样上抛呈现（官方 createFailed toast /
+      //    RpcClientError Toast 链，依 1.1 核销 #5 文案语义映射），不 fail-open 回主树
+      if (isCapabilityAbsentTyped(cause)) throw cause
+      // ④b fail-open：改道链其余瞬态异常（host 判非 git / RPC 失败 / 产物漂移）= 官方原流
       //    （降级态 = 现状世界，host guard 首条消息兜底）
       warn(`[dswf-client] sessions.create 改道预铸失败（fail-open 官方原流）：${String(cause)}`)
       return bound(opts)

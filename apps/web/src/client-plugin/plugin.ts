@@ -1471,7 +1471,18 @@ export async function unwrapRpcEnvelope<T>(call: Promise<unknown>): Promise<T> {
     throw new Error('dsh-forge web-client: RPC 信封形状非法（期望 contracts RpcResult 信封）')
   }
   const result = raw as { ok: boolean; data?: T }
-  if (!result.ok) throw new Error('dsh-forge web-client: RPC 信封 !ok')
+  if (!result.ok) {
+    // typed !ok 信封保真（rpc/client.ts RpcClientError 反序列化结构同型镜像——bundle 自含零
+    // import）：code/message/data 原样透传，typed 拒绝码（如 W2 ERR_WORKTREE_CAPABILITY_ABSENT）
+    // 才能到达消费方判定点（create-wrap ④）；形状漂移/缺 error = 泛型降格照旧（fail-soft 不变）。
+    const err = (raw as { error?: { code?: unknown; message?: unknown; data?: unknown } }).error
+    const message = typeof err?.message === 'string' && err.message !== '' ? err.message : 'RPC 信封 !ok'
+    const typed = new Error(message)
+    typed.name = 'RpcClientError'
+    ;(typed as Error & { code?: unknown; data?: unknown }).code = err?.code
+    ;(typed as Error & { code?: unknown; data?: unknown }).data = err?.data
+    throw typed
+  }
   return result.data as T
 }
 

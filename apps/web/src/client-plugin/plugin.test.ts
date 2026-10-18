@@ -57,6 +57,7 @@ import {
   forgeClientPlugin,
   installSessionCreateWrap,
   treeOf,
+  unwrapRpcEnvelope,
   SESSION_CREATE_CHANNEL,
   moduleLoaderFacade,
   publishedViews,
@@ -2196,6 +2197,54 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     await f.sessions.create({ workspaceId: WS })
     expect(f.sessionCreate).toHaveBeenCalledTimes(1)
     expect(f.projectRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('④ typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT：单独放行拒绝呈现——不 fail-open、不回 official、零 warn（W2 fail-closed）', async () => {
+    const typed = Object.assign(new Error('git 绑定能力缺席（W2 fail-closed 显式拒绝）'), {
+      name: 'RpcClientError',
+      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
+    })
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      sessionCreate: () => Promise.reject(typed),
+    })
+    await expect(f.sessions.create({ workspaceId: WS })).rejects.toBe(typed)
+    expect(f.original).not.toHaveBeenCalled() // 确定性拒绝不透传 original（不落主树）
+    expect(f.deps.warn).not.toHaveBeenCalled()
+  })
+
+  it('④ 瞬态异常维持 fail-open：typed 判定只放行能力缺席码——其余 code / 普通异常照常透传官方原流', async () => {
+    for (const cause of [
+      Object.assign(new Error('其他 typed 拒绝'), { name: 'RpcClientError', code: 'ERR_TASK_NOT_FOUND' }),
+      new Error('host 判非 git'),
+      '非 Error 异常值',
+    ] as const) {
+      const f = fixture({
+        rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+        sessionCreate: () => Promise.reject(cause),
+      })
+      const out = await f.sessions.create({ workspaceId: WS })
+      expect(out).toBe('X-official')
+      expect(f.original).toHaveBeenCalledTimes(1)
+      expect(f.deps.warn).toHaveBeenCalled()
+    }
+  })
+
+  it('unwrapRpcEnvelope typed !ok 信封：RpcClientError 形态保真（code/message/data 透传——typed 拒绝码可达 wrap ④ 判定点）', async () => {
+    const fail = Promise.resolve({
+      ok: false,
+      error: { code: 'ERR_WORKTREE_CAPABILITY_ABSENT', message: 'git 绑定能力缺席', data: { k: 1 } },
+    })
+    const caught = await unwrapRpcEnvelope(fail).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(caught).toBeInstanceOf(Error)
+    const typed = caught as Error & { code?: unknown; data?: unknown }
+    expect(typed.name).toBe('RpcClientError')
+    expect(typed.code).toBe('ERR_WORKTREE_CAPABILITY_ABSENT')
+    expect(typed.message).toBe('git 绑定能力缺席')
+    expect(typed.data).toEqual({ k: 1 })
   })
 
   it('④ fail-open（RPC 拒/产物缺 sessionId/项目行现查异常）：全部回退官方原流 + warn 一行', async () => {
