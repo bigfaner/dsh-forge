@@ -14,7 +14,7 @@
 
 1. **出生即绑定**：git 项目的会话自创建时点即携带绑定与模式档，分支 chip 与模式标签出生即正常；
 2. **运行时行为正常**：装载一次性自证 + 行存续看门，正确性层失败显式拒绝（fail-closed），体验层失败 fail-soft 由 host 兜底；
-3. **体验层换血**：client arm 退役，由 sessions.create wrap 上位——创建时点预铸，消除换绑与竞态窗口。
+3. **体验层换血**：sessions.create wrap 上位承担创建时点改道预铸（arm 编排退役）；arm 编排交互链保留，承接点选时点跨分支确认（设计 A 终态）。
 
 ## 架构（三层定稿）
 
@@ -44,15 +44,20 @@ flowchart TB
 - **拒绝面两入口**：① 创建入口 sessionCreate——contracts 新增 typed error code（rpcEnvelope 只认 ERROR_CODES），前端走现成 RpcClientError → Toast 链；② 发送入口 prompt 拦截——SessionSealedError 先例（Error + 可读中文 message + 稳定 name），经官方 Remote 错误面进 composer。
 - **裁决拆分**：「能力缺席显式拒绝」与「瞬态异常是否按 D1-c 收紧封存面」为两个独立决策，不捆绑；瞬态 fail-open 分支全部保留现状。
 
+交付披露（W2 评审 warning，2026-10-18）：
+
+- **0-60s 瞬态窗口 fail-open**：能力缺席但 60s 放弃位未盖时（`child.ts:488-497` 盖位时点），`absentGitProbe` 在盖位检查处直接放行（`worktree-rpc.ts:264-270` 判定序：先能力位 → 后 `guardState === 'absent'`）——窗口内 git 项目的创建与首条 prompt 落主树、无拒绝。取舍：粘性能力位未到期判「真非 git」有误伤风险，D1 拆分裁决保留现状；逃逸会话由能力到位后的 judge 重路由兜底。
+- **能力缺席期固定探针税**：`guardState` 盖位后，judge（每次 prompt，`worktree-rpc.ts:644`）与 sessionCreate 入口（`:579`）各现跑一次 `commonDirAnchor` git 探针（零缓存）——fail-closed 显式拒绝的必然代价，非介入面「零固定税」纪律在此面被打破（能力在场路径仍零改动）。
+
 改动范围：`apps/host/src/ipc/worktree-rpc.ts`（judge/sessionCreate 入口分流 + 探针缓存）、`apps/host/src/boot/child.ts`（能力轮询放弃路径盖 `guardState: 'absent'` 状态位，dep 注入）、`packages/contracts`（typed error code）、`apps/web/src/client-plugin/plugin.ts`（拒绝错误呈现）、`apps/host/src/ipc/worktree-rpc.test.ts` + e2e（能力缺席矩阵：git 拒 / 非 git 照常）。
 
-### W3 client wrap sessions.create（体验层主径，arm 退役）
+### W3 client wrap sessions.create（体验层主径，arm 编排交互链保留承接点选确认）
 
 - **wrap 语义**：装配期对 `ctx.sessions` 服务对象做 `create` 属性替换（host interceptRequiredBinding 同配方，dispose 恢复）；资格门 = 全新创建（无 sessionId）∧ cwd/workspace 命中注册 git 项目 ∧ 能力可用；改道 = `forge:worktree/sessionCreate`（目标树 = host 选中记忆，缺席回退请求 cwd 树；G3 互斥与 guard 共享 blank 产物）；响应契约保真 `{sessionId: Y, agentPreset: 预铸头实际档}`。adopt 径（带 sessionId）与 fork 不在 wrap 面。任何 wrap 内异常 fail-open 透传 original。
-- **arm 退役清单**：
-  - 删：armDefault 效应链、createWorktreeOrchestrator、composerDraftFace/carryDraft、blankSessionByCwd、armSuppressed/cancelSuppressed、1.25 编排失败 Toast 文案族（create 失败改走官方 createFailed toast）；
-  - 留：hero worktree chip + 选中态 + sessionStorage 项目记忆 + pushSelection（wrap 目标树单源）；
-  - 重锚：跨分支确认框 + 1.34 确认闩锁 + 「不再提示」→ 点选时点确认（1.19 语义回归）——wrap 在官方 create 调用内部，无法区分交互性调用，不得中途插框。
+- **arm 编排交互链保留，wrap 双机制并存（设计 A 终态，2026-10-18 用户裁决）**：wrap 承担创建时点改道预铸；arm 编排交互链保留，承接点选时点跨分支确认。
+  - 删（与终态一致）：armDefault 效应链、createWorktreeOrchestrator、composerDraftFace/carryDraft、blankSessionByCwd、armSuppressed/cancelSuppressed、1.25 编排失败 Toast 文案族（create 失败改走官方 createFailed toast）；
+  - 留：hero worktree chip + 选中态 + sessionStorage 项目记忆 + pushSelection（wrap 目标树单源）+ 点选确认交互链；
+  - 确认终态（#4 设计 A）：跨分支确认框 + 1.34 确认闩锁 +「不再提示」锚在点选时点（1.19 语义回归）——点选命中跨分支且未闩锁/未「不再提示」时立现，确认 = 闩锁置位 + 选中态落定，闩锁命中（同目标已确认）点选静默切换零重弹；wrap 在官方 create 调用内部，不得中途插框。
 - **草稿/回执天然落 Y**：官方 replaceMain 自带 retain/open Y，草稿（会话寻址 InputHub）与 pending echo 零搬运跟随；X 永不物化，零残留。
 
 改动范围：`apps/web/src/client-plugin/plugin.ts`（wrap 注册 + inject 不变）、`apps/web/src/client-plugin/create-wrap.ts`（新——桌面入口分流：资格门 + 改道 + fail-open）、移动端 hero 建会话首选预铸 + fail-open 回退（语义契约见「移动端一致逻辑」小节——实现归 mobile-ui 工程，两案联动）、`apps/web/src/views/session/WorktreeFaces.tsx`（arm 效应链删除、确认框重锚点选时点）、`apps/web/src/views/session/HeroWorkspacePicker.tsx`（createWorktreeOrchestrator 删除）、`apps/web/src/views/session/hero-picker-model.ts`（shouldArmSelectedRow/blankSessionIdByCwdOf 删除、闩锁保留）、`plugin.test.ts` + e2e（1-27 升级创建即绑定断言、1-29 arm 退役语义更新、移动端 hero 预铸优先契约钉）。
