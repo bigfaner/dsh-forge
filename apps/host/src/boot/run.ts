@@ -268,8 +268,13 @@ export async function bootDshHost(
   spawnOptions: BootSpawnOverrides = {},
 ): Promise<DshHostHandle> {
   const childEntry = spawnOptions.childEntry ?? resolveChildEntry(import.meta.url, options.resourcesDir)
+  // Root cause（fix-6）：harness 派生会话注入 ELECTRON_RUN_AS_NODE 毒化变量——spawn env
+  // 先摘除继承值再按本 spawn 约定重建 '1'（e2e/support/launch.ts sanitizedLaunchEnv:57-62
+  // 同语义消毒），消除对「调用方手工净化环境」的隐式依赖。
+  const inheritedEnv = { ...process.env }
+  delete inheritedEnv.ELECTRON_RUN_AS_NODE
   const child = spawn(spawnOptions.execPath ?? process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
+    env: { ...inheritedEnv, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
     stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
   })
   const channel = createBridgeChannel(child) // 消息监听先于 ready 挂上（事件零丢失窗）
