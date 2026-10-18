@@ -41,7 +41,14 @@ export interface TextPart {
 
 export type Projection =
   | { readonly kind: 'user-bubble'; readonly seq: number; readonly text: string; readonly rpcId?: string }
-  | { readonly kind: 'loop-narrative'; readonly seq: number; readonly text: string }
+  | {
+      /** forge-loop 叙述卡（1.19）：runId/state 取自类型化 source（forge-loop-source.ts 正本）。 */
+      readonly kind: 'loop-narrative'
+      readonly seq: number
+      readonly text: string
+      readonly runId: string
+      readonly state: string
+    }
   | { readonly kind: 'model-selection-chip'; readonly seq: number; readonly provider: string; readonly model: string }
   | {
       readonly kind: 'assistant-message'
@@ -73,7 +80,7 @@ export type Projection =
   | {
       readonly kind: 'deliverables-card'
       readonly seq: number
-      readonly files: readonly { readonly description?: string; readonly path: string }[]
+      readonly files: readonly { readonly description?: string; readonly path: string; readonly size?: number }[]
     }
   | { readonly kind: 'plan-mode-chip'; readonly seq: number; readonly active: boolean }
   | {
@@ -111,7 +118,7 @@ function textOf(parts: readonly TextPart[] | undefined): string {
 
 interface UserMessageData {
   readonly content?: readonly TextPart[]
-  readonly source?: { readonly kind?: string; readonly rpcId?: string }
+  readonly source?: { readonly kind?: string; readonly rpcId?: string; readonly runId?: string; readonly state?: string }
 }
 
 function projectUserMessage(event: WireEvent): Projection {
@@ -121,7 +128,13 @@ function projectUserMessage(event: WireEvent): Projection {
     case 'user':
       return { kind: 'user-bubble', seq: event.seq, text, rpcId: data.source.rpcId }
     case 'forge-loop':
-      return { kind: 'loop-narrative', seq: event.seq, text }
+      return {
+        kind: 'loop-narrative',
+        seq: event.seq,
+        text,
+        runId: data.source?.runId ?? '',
+        state: data.source?.state ?? '',
+      }
     case 'model-selection': {
       const model = text
       const [provider = '', name = ''] = model.split('/')
@@ -200,8 +213,18 @@ export function projectEvent(event: WireEvent): Projection | null {
       return { kind: 'compaction-summary-line', seq: event.seq, text: textOf(data.summary) }
     }
     case 'deliverables/presented': {
-      const data = event.data as { files?: readonly { description?: string; path: string }[] }
-      return { kind: 'deliverables-card', seq: event.seq, files: data.files ?? [] }
+      const data = event.data as {
+        files?: readonly { description?: string; path: string; size?: number }[]
+      }
+      return {
+        kind: 'deliverables-card',
+        seq: event.seq,
+        files: (data.files ?? []).map((file) => ({
+          ...(file.description === undefined ? {} : { description: file.description }),
+          path: file.path,
+          ...(typeof file.size === 'number' ? { size: file.size } : {}),
+        })),
+      }
     }
     case 'plan/mode':
       return { kind: 'plan-mode-chip', seq: event.seq, active: (event.data as { active: boolean }).active }

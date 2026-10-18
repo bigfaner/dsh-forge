@@ -3,7 +3,10 @@ import type { Projection } from '../core/wire.ts'
 import {
   COLLAPSE_LINE_THRESHOLD,
   collapseMaxHeight,
+  degradedNarrativeSeqs,
+  docFileName,
   estimateLineCount,
+  formatSize,
   isShellTool,
   loopKindOf,
   loopBadge,
@@ -80,10 +83,55 @@ describe('loop 卡 kind 色条（dispatch 蓝/followup 浅蓝/state 灰/done 绿
     expect(loopKindOf('dispatch', 'completed')).toBe('done')
   })
 
+  it('R10-F3 verb 全集（loop/driver.ts emitProgress 值集）：claim/claim-resume/settle/stop', () => {
+    expect(loopKindOf('claim', 'running')).toBe('dispatch')
+    expect(loopKindOf('claim-resume', 'running')).toBe('followup')
+    expect(loopKindOf('settle', 'blocked')).toBe('state')
+    expect(loopKindOf('stop', 'interrupted')).toBe('state')
+    expect(loopKindOf('settle', 'completed')).toBe('done')
+    expect(loopKindOf('claim', 'completed')).toBe('done')
+  })
+
   it('状态徽标同任务面板色板', () => {
     expect(loopBadge('running')).toEqual({ text: '运行中', tone: 'run' })
     expect(loopBadge('blocked')).toEqual({ text: '阻塞', tone: 'blocked' })
     expect(loopBadge('done')).toEqual({ text: '已完成', tone: 'done' })
     expect(loopBadge('paused')).toEqual({ text: '已暂停', tone: 'paused' })
+  })
+})
+
+describe('循环叙述 runId 聚合（1.19——纯函数面）', () => {
+  const narrative = (seq: number, runId: string): Projection => ({
+    kind: 'loop-narrative',
+    seq,
+    text: `循环叙述 ${seq}`,
+    runId,
+    state: 'followup',
+  })
+
+  it('同 runId 仅最新（seq 最大）保持卡，其余退化', () => {
+    const degraded = degradedNarrativeSeqs([narrative(1, 'r1'), narrative(2, 'r1'), narrative(3, 'r2')])
+    expect(degraded.has(1)).toBe(true)
+    expect(degraded.has(2)).toBe(false)
+    expect(degraded.has(3)).toBe(false)
+  })
+
+  it('不同 runId 互不影响；无叙述投影 = 空集', () => {
+    expect(degradedNarrativeSeqs([narrative(1, 'a'), narrative(2, 'b')]).size).toBe(0)
+    expect(degradedNarrativeSeqs([{ kind: 'user-bubble', seq: 1, text: 'hi' }]).size).toBe(0)
+  })
+})
+
+describe('文档卡五类识别与 size 刻度（屏⑨——纯函数面，DOM 对齐证据走 Playwright）', () => {
+  it('文件名 = 路径末段（反斜杠归一）', () => {
+    expect(docFileName('Z:\\ws\\docs\\a.md')).toBe('a.md')
+    expect(docFileName('docs/b.csv')).toBe('b.csv')
+  })
+
+  it('size 人类可读（B / KB 一位小数 / MB——mockup 屏⑨ 刻度）', () => {
+    expect(formatSize(512)).toBe('512 B')
+    expect(formatSize(6349)).toBe('6.2 KB')
+    expect(formatSize(18432)).toBe('18 KB')
+    expect(formatSize(2 * 1024 * 1024 + 512 * 1024)).toBe('2.5 MB')
   })
 })

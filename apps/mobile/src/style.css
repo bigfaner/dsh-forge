@@ -2129,3 +2129,230 @@ body[data-ds-dark-theme] .dispatch-bar {
   background: #7aaaff;
   color: #151517;
 }
+
+/* ---- 全屏阅读页（屏⑩⑪——mockup .reader 逐位刻度） ---- */
+.reader {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+}
+.dark .reader,
+body[data-ds-dark-theme] .reader {
+  background: #151517;
+}
+.reader .rt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid #e5e7eb;
+  flex: none;
+}
+.dark .reader .rt,
+body[data-ds-dark-theme] .reader .rt {
+  border-color: #303034;
+}
+.reader .rt .t {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f1115;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+.dark .reader .rt .t,
+body[data-ds-dark-theme] .reader .rt .t {
+  color: #f5f5f6;
+}
+.rt-bk {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #0f1115;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.rt-bk:hover {
+  background: #f1f3f4;
+}
+.dark .rt-bk,
+body[data-ds-dark-theme] .rt-bk {
+  color: #f5f5f6;
+}
+.rt-bk svg.ic {
+  width: 20px;
+  height: 20px;
+}
+.rtog {
+  display: flex;
+  border: 0.5px solid #dadce0;
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 550;
+  flex: none;
+}
+.dark .rtog,
+body[data-ds-dark-theme] .rtog {
+  border-color: #444746;
+}
+.rtog span {
+  padding: 4px 11px;
+  color: #5f6368;
+  cursor: pointer;
+}
+.rtog span.on {
+  background: #4176e6;
+  color: #fff;
+}
+.reader .body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #0f1115;
+  scrollbar-width: thin;
+}
+.dark .reader .body,
+body[data-ds-dark-theme] .reader .body {
+  color: #f5f5f6;
+}
+/* 表格居中（md/csv 渲染态） */
+.reader .body table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto 12px;
+}
+.reader .body th,
+.reader .body td {
+  border: 0.5px solid #dadce0;
+  padding: 6px 9px;
+  text-align: left;
+}
+.dark .reader .body th,
+.dark .reader .body td,
+body[data-ds-dark-theme] .reader .body th,
+body[data-ds-dark-theme] .reader .body td {
+  border-color: #303034;
+}
+.reader .body pre.plain {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.6 ui-monospace, Menlo, monospace;
+  color: #5f6368;
+  margin: 0;
+}
+.dark .reader .body pre.plain,
+body[data-ds-dark-theme] .reader .body pre.plain {
+  color: #9aa0a6;
+}
+/* rich md 块级刻度（官方 markdown() 语义 × 原型令牌） */
+.reader .body h1,
+.reader .body h2,
+.reader .body h3,
+.reader .body h4 {
+  margin: 14px 0 6px;
+  line-height: 1.35;
+}
+.reader .body h1 {
+  font-size: 18px;
+}
+.reader .body h2 {
+  font-size: 16px;
+}
+.reader .body h3,
+.reader .body h4 {
+  font-size: 14px;
+}
+.reader .body p {
+  margin: 0 0 10px;
+}
+.reader .body ul,
+.reader .body ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+.reader .body blockquote {
+  margin: 0 0 10px;
+  padding: 2px 12px;
+  border-left: 3px solid #dadce0;
+  color: #5f6368;
+}
+.dark .reader .body blockquote,
+body[data-ds-dark-theme] .reader .body blockquote {
+  border-color: #303034;
+  color: #9aa0a6;
+}
+.reader .body hr {
+  border: 0;
+  border-top: 0.5px solid #dadce0;
+  margin: 12px 0;
+}
+.dark .reader .body hr,
+body[data-ds-dark-theme] .reader .body hr {
+  border-color: #303034;
+}
+.reader .body .md code {
+  font: 12px ui-monospace, Menlo, monospace;
+  background: #f1f3f4;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.dark .reader .body .md code,
+body[data-ds-dark-theme] .reader .body .md code {
+  background: #2c2c2e;
+}
+.reader .body .md a {
+  color: #4176e6;
+}
+.md-code-block {
+  margin: 0 0 12px;
+  border: 0.5px solid #dadce0;
+  border-radius: 10px;
+  background: #f8f9fa;
+  overflow-x: auto;
+}
+.dark .md-code-block,
+body[data-ds-dark-theme] .md-code-block {
+  background: #1a1a1d;
+  border-color: #303034;
+}
+.md-code-block pre {
+  margin: 0;
+  padding: 10px 12px;
+  font: 12px/1.6 ui-monospace, Menlo, monospace;
+  color: #3c4043;
+}
+.dark .md-code-block pre,
+body[data-ds-dark-theme] .md-code-block pre {
+  color: #c9d1d9;
+}
+.reader .body figure[data-dswf-md-mermaid] {
+  margin: 0 0 12px;
+  overflow-x: auto;
+}
+.reader .body .dswf-doc-mermaid-canvas svg {
+  max-width: 100%;
+  height: auto;
+}
+.reader .body iframe.html-frame {
+  border: 0;
+  width: 100%;
+  min-height: 70vh;
+  background: #fff;
+}

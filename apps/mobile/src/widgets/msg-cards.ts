@@ -91,11 +91,26 @@ export function collapseMaxHeight(lineHeightPx: number, minPx = PREVIEW_MIN_PX):
 
 export type LoopKind = 'dispatch' | 'followup' | 'state' | 'done'
 
+/**
+ * verb → kind 色条映射（R10-F3：值集单源 = plugin-forge loop/driver.ts emitProgress
+ * verb 全集 claim / claim-resume / settle / stop；旧叙述别名 dispatch/followup 兼容保留）。
+ * done 状态优先；settle(blocked)/stop(interrupted)/未知 → state 灰。
+ */
 export function loopKindOf(verb: string, status: string): LoopKind {
   if (status === 'done' || status === 'completed' || status === '已完成') return 'done'
-  if (verb === 'followup' || verb === '续跑' || verb === 'inject') return 'followup'
-  if (verb === 'dispatch' || verb === '派发') return 'dispatch'
-  return 'state'
+  switch (verb) {
+    case 'claim':
+    case 'dispatch':
+    case '派发':
+      return 'dispatch'
+    case 'claim-resume':
+    case 'followup':
+    case '续跑':
+    case 'inject':
+      return 'followup'
+    default:
+      return 'state'
+  }
 }
 
 /** 状态徽标文案/档位（同任务面板色板：run/paused/blocked/done）。 */
@@ -339,6 +354,57 @@ function statusBadge(status: string): HTMLElement {
   return el('span', `st ${badge.tone}`, badge.text)
 }
 
+// ---------------------------------------------------------------------------
+// 循环叙述卡（forge-loop，1.19）+ 同 runId 退化 chip
+// ---------------------------------------------------------------------------
+
+export type NarrativeProjection = Extract<Projection, { kind: 'loop-narrative' }>
+
+const NARRATIVE_STATE_LABELS: Readonly<Record<string, string>> = {
+  dispatch: '派发',
+  followup: '续跑',
+}
+
+/**
+ * 同 runId 聚合：每组 runId 仅最新（seq 最大）保持完整叙述卡，其余退化为单行 chip。
+ * 纯函数返回退化 seq 集——渲染按原位替换，时间线不重排。
+ */
+export function degradedNarrativeSeqs(projections: readonly Projection[]): ReadonlySet<number> {
+  const latestByRun = new Map<string, number>()
+  for (const projection of projections) {
+    if (projection.kind !== 'loop-narrative') continue
+    latestByRun.set(projection.runId, Math.max(latestByRun.get(projection.runId) ?? -1, projection.seq))
+  }
+  const degraded = new Set<number>()
+  for (const projection of projections) {
+    if (projection.kind === 'loop-narrative' && projection.seq !== latestByRun.get(projection.runId)) {
+      degraded.add(projection.seq)
+    }
+  }
+  return degraded
+}
+
+/** 循环叙述卡（source.kind forge-loop —— 非蓝气泡，循环族色条 + 状态词徽标）。 */
+export function renderNarrativeCard(projection: NarrativeProjection): HTMLElement {
+  const kind = loopKindOf(projection.state, '')
+  const card = el('div', `loop ${kind} narrative`)
+  const hd = el('div', 'hd')
+  hd.appendChild(svgIcon('i-loop'))
+  hd.appendChild(el('span', undefined, '任务循环'))
+  hd.appendChild(el('span', 'st run', NARRATIVE_STATE_LABELS[projection.state] ?? projection.state ?? '注入'))
+  card.append(hd, el('div', 'bd', projection.text))
+  return card
+}
+
+/** 同 runId 非最新退化：单行 chip 原位替换（时间线不重排）。 */
+export function renderNarrativeChip(projection: NarrativeProjection): HTMLElement {
+  const chip = el('div', 'loop-chip')
+  chip.appendChild(svgIcon('i-loop'))
+  chip.appendChild(el('span', undefined, textPreview(projection.text)))
+  chip.appendChild(el('span', 'n', '循环'))
+  return chip
+}
+
 /** forge 循环卡（kind 定色条）+ 循环 chip + 系统 chip/行。 */
 export function renderLoopCard(projection: Extract<Projection, { kind: 'loop-progress' }>): HTMLElement {
   const kind = loopKindOf(projection.verb, projection.status)
@@ -382,21 +448,49 @@ function docBadgeOf(path: string): { readonly badge: string; readonly tone: stri
   }
 }
 
-/** 文档卡（deliverables/presented 双行确定处置：卡 + 链接行 → 阅读页意图）。 */
+/** 文档卡文件名（正/反斜杠路径末段——mockup 屏⑨ 徽标卡口径）。 */
+export function docFileName(path: string): string {
+  const normalized = path.replaceAll('\\', '/')
+  const name = normalized.split('/').pop() ?? ''
+  return name === '' ? path : name
+}
+
+/** size 人类可读（mockup 屏⑨ 刻度：B / KB 一位小数 / MB）。 */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) {
+    const kb = bytes / 1024
+    return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * 文档卡（deliverables/presented 五类识别 md/txt/csv/html/链接；文件名 + size 右对齐 › 前）。
+ * size 缺席 = 卡上留空，resolveSize 异步回填（forge:proxy/file manifest——fail-soft 留空）。
+ */
 export function renderDocCard(
-  file: { readonly description?: string; readonly path: string },
+  file: { readonly description?: string; readonly path: string; readonly size?: number },
   onOpen?: (path: string) => void,
+  resolveSize?: (path: string) => Promise<number | undefined>,
 ): HTMLElement {
   const { badge, tone } = docBadgeOf(file.path)
   const card = el('div', 'fcard')
+  card.title = file.description ?? file.path
   card.appendChild(el('span', `fic ${tone}`, badge))
   const copy = el('span', 'fc-copy')
-  copy.appendChild(el('span', 'fc-name', file.description ?? file.path))
+  copy.appendChild(el('span', 'fc-name', docFileName(file.path)))
   card.appendChild(copy)
-  card.appendChild(el('span', 'fc-size'))
+  const sizeCell = el('span', 'fc-size', file.size === undefined ? '' : formatSize(file.size))
+  card.appendChild(sizeCell)
   const chev = el('span', 'chev-r')
   chev.appendChild(svgIcon('i-chev-r'))
   card.appendChild(chev)
+  if (resolveSize !== undefined && file.size === undefined) {
+    void resolveSize(file.path).then((size) => {
+      if (typeof size === 'number') sizeCell.textContent = formatSize(size)
+    }).catch(() => {})
+  }
   if (onOpen !== undefined) card.addEventListener('click', () => onOpen(file.path))
   return card
 }
@@ -423,6 +517,10 @@ export function renderApprovalCard(projection: Extract<Projection, { kind: 'appr
 export interface RenderCardOptions {
   readonly streamingSeq?: number
   readonly onOpenDoc?: (path: string) => void
+  /** 文档卡 size 异步回填（forge:proxy/file manifest——装配层注入）。 */
+  readonly resolveDocSize?: (path: string) => Promise<number | undefined>
+  /** loop-narrative 同 runId 非最新 → 退化单行 chip（时间线不重排）。 */
+  readonly degradedNarrative?: boolean
 }
 
 export function renderCard(projection: Projection, opts: RenderCardOptions = {}): HTMLElement {
@@ -441,15 +539,8 @@ export function renderCard(projection: Projection, opts: RenderCardOptions = {})
     case 'tool-result':
       // 未配对的散卡不渲染——由 pairToolActivity 配对后经 renderToolCard 输出
       return el('div', 'sys-line', '')
-    case 'loop-narrative': {
-      const card = el('div', 'loop followup')
-      const hd = el('div', 'hd')
-      hd.appendChild(svgIcon('i-loop'))
-      hd.appendChild(el('span', undefined, '续跑'))
-      hd.appendChild(el('span', 'st run', '注入'))
-      card.append(hd, el('div', 'bd', projection.text))
-      return card
-    }
+    case 'loop-narrative':
+      return opts.degradedNarrative === true ? renderNarrativeChip(projection) : renderNarrativeCard(projection)
     case 'model-selection-chip': {
       const chip = el('div', 'loop-chip')
       chip.appendChild(svgIcon('i-mode'))
@@ -476,7 +567,7 @@ export function renderCard(projection: Projection, opts: RenderCardOptions = {})
     }
     case 'deliverables-card': {
       const wrap = el('div', 'doc-stack')
-      for (const file of projection.files) wrap.appendChild(renderDocCard(file, opts.onOpenDoc))
+      for (const file of projection.files) wrap.appendChild(renderDocCard(file, opts.onOpenDoc, opts.resolveDocSize))
       return wrap
     }
     case 'neutral-line':

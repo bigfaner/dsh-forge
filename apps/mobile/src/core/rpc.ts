@@ -51,6 +51,56 @@ export function createRemoteRpc(deps: RemoteRpcDeps): RemoteRpc {
 }
 
 // ---------------------------------------------------------------------------
+// forge:proxy/file 文件读面（1.19 阅读页数据通道——host proxy-channels.ts readFileChunk 正本）
+// ---------------------------------------------------------------------------
+
+export const PROXY_FILE_CHANNEL = 'forge:proxy/file'
+
+export interface ProxyFileText {
+  readonly text: string
+  readonly size: number
+}
+
+function bytesOfBase64(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index) & 0xff
+  return bytes
+}
+
+/**
+ * 全文件文本读：manifest（offset 0 + manifest:true）取 size → 逐块 base64 直到 eof。
+ * maxBytes 守卫防误读大文件；RPC error 信封原样抛错。
+ */
+export async function loadProxyFileText(
+  rpc: RemoteRpc,
+  path: string,
+  opts?: { readonly maxBytes?: number },
+): Promise<ProxyFileText> {
+  const maxBytes = opts?.maxBytes ?? 2_000_000
+  const manifest = await rpc.call<{ manifest?: boolean; size?: number }>(PROXY_FILE_CHANNEL, {
+    path,
+    offset: 0,
+    manifest: true,
+  })
+  if (!manifest.ok) throw new Error(manifest.error.reason)
+  const size = typeof manifest.data.size === 'number' ? manifest.data.size : 0
+  if (size > maxBytes) throw new Error(`文件超出阅读上限（${size} > ${maxBytes} bytes）`)
+  const decoder = new TextDecoder()
+  let text = ''
+  let offset = 0
+  for (;;) {
+    const chunk = await rpc.call<{ eof?: boolean; data?: string }>(PROXY_FILE_CHANNEL, { path, offset })
+    if (!chunk.ok) throw new Error(chunk.error.reason)
+    if (typeof chunk.data.data !== 'string') throw new Error('forge:proxy/file 块载荷缺失')
+    text += decoder.decode(bytesOfBase64(chunk.data.data), { stream: chunk.data.eof !== true })
+    offset += bytesOfBase64(chunk.data.data).length
+    if (chunk.data.eof === true || offset >= size) break
+  }
+  return { text, size }
+}
+
+// ---------------------------------------------------------------------------
 // `/` 前缀指令仲裁
 // ---------------------------------------------------------------------------
 

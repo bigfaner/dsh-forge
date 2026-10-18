@@ -22,6 +22,7 @@ import {
   type ComposerHandle,
 } from '../widgets/composer.ts'
 import {
+  degradedNarrativeSeqs,
   el,
   ensureIconSprite,
   isReasoningOnly,
@@ -128,6 +129,8 @@ export interface ChatDeps {
   readonly onOpenHero?: () => void
   readonly onOpenSettings?: () => void
   readonly onOpenDoc?: (path: string) => void
+  /** 文档卡 size 回填（forge:proxy/file manifest——装配层注入）。 */
+  readonly resolveDocSize?: (path: string) => Promise<number | undefined>
   readonly onWorktreeTap?: () => void
   readonly mode?: string
   readonly worktree?: string
@@ -210,6 +213,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     const activities = pairToolActivity(projections)
     const activityByCallId = new Map(activities.map((activity) => [activity.call.callId, activity]))
     const seenCalls = new Set<string>()
+    const degradedNarratives = degradedNarrativeSeqs(projections)
     view.textContent = ''
     for (const projection of projections) {
       if (projection.kind === 'tool-result') continue
@@ -224,7 +228,15 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
         view.appendChild(renderThinkCard(projection.reasoning))
         continue
       }
-      view.appendChild(renderCard(projection, { onOpenDoc: deps.onOpenDoc }))
+      view.appendChild(
+        renderCard(projection, {
+          onOpenDoc: deps.onOpenDoc,
+          resolveDocSize: deps.resolveDocSize,
+          ...(projection.kind === 'loop-narrative' && degradedNarratives.has(projection.seq)
+            ? { degradedNarrative: true }
+            : {}),
+        }),
+      )
     }
     // 流式瞬态行（settler 子状态机）
     let streaming = false

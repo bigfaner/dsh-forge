@@ -100,12 +100,36 @@ describe('wire 投影：37 类持久事件样本', () => {
 
   it('user/message source.kind 分派：user → 蓝气泡 / forge-loop → 叙述卡 / model-selection → chip / 未知 → 中性系统行', () => {
     const data = USER_MESSAGE_SAMPLE.data as { content: unknown; source: { kind: string } }
-    const forgeLoop = ev('user/message', 30, { ...data, source: { kind: 'forge-loop' } })
-    expect(projectEvent(forgeLoop)).toMatchObject({ kind: 'loop-narrative' })
+    const forgeLoop = ev('user/message', 30, {
+      ...data,
+      source: { kind: 'forge-loop', runId: 'run-1', state: 'followup' },
+    })
+    expect(projectEvent(forgeLoop)).toMatchObject({
+      kind: 'loop-narrative',
+      runId: 'run-1',
+      state: 'followup',
+    })
     const modelSelection = ev('user/message', 31, { ...data, source: { kind: 'model-selection' } })
     expect(projectEvent(modelSelection)).toMatchObject({ kind: 'model-selection-chip' })
     const unknownKind = ev('user/message', 32, { ...data, source: { kind: 'mystery' } })
     expect(projectEvent(unknownKind)).toMatchObject({ kind: 'neutral-line' })
+  })
+
+  it('forge-loop source 字段缺席 = runId/state 空串兜底（face 不强求调用方知情）', () => {
+    const data = USER_MESSAGE_SAMPLE.data as { content: unknown; source: { kind: string } }
+    const bare = ev('user/message', 33, { ...data, source: { kind: 'forge-loop' } })
+    expect(projectEvent(bare)).toMatchObject({ kind: 'loop-narrative', runId: '', state: '' })
+  })
+
+  it('deliverables/presented size 元数据透传（缺席 = 无 size 键）', () => {
+    const withSize = ev('deliverables/presented', 60, {
+      files: [{ path: 'a.md', size: 6349 }, { path: 'b.txt' }],
+    })
+    const card = projectEvent(withSize)
+    expect(card).toMatchObject({
+      kind: 'deliverables-card',
+      files: [{ path: 'a.md', size: 6349 }, { path: 'b.txt' }],
+    })
   })
 
   it('assistant/message interrupted 前缀保留中断标记', () => {
