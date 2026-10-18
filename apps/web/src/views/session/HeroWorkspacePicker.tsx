@@ -26,6 +26,7 @@ import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   heroDefaultPickId,
+  heroDefaultPickReady,
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
@@ -72,8 +73,10 @@ export function ForgeHeroWorkspacePicker({
   makeRpc = preloadRpcClientFactory,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
-  // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）
-  const { projects: projectsState, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
+  // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）。workspaces 快照同时是默认
+  // 拾取的官方基线在场门数据源（bug d353536f）。
+  const { projects: projectsState, workspaces: workspacesSnap, silentRefresh, anchor: workspacesAnchor } =
+    useAnchoredProjects(useWorkspaces)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
@@ -83,15 +86,18 @@ export function ForgeHeroWorkspacePicker({
   // 会话回 hero、冷启、绑定已归档项目）→ 经官方 owner onPick 链拾取首行（与用户点选同行
   // 同语义——selectWorkspace 零改契约）。行集未定（loading）不拾取；per 候选 id 一次性
   // 尝试闩（pick 被官方拒时 pending 回滚、selectedId 不变——闩防重试循环，fail-soft 回
-  // 「选择工作区」现状）。
+  // 「选择工作区」现状）。bug d353536f 在场门：官方 workspaces 快照含目标 id 才放行——
+  // 基线未就位盲拾取 = 官方 connectWorkspace 查空快照抛 unknown workspace；快照就位经
+  // 锚重渲染补拾取（heroDefaultPickReady 纯函数单源）。
   const defaultPickId = heroDefaultPickId(plan.rows, selectedId)
+  const defaultPick = heroDefaultPickReady(workspacesSnap?.items, defaultPickId)
   const attemptedDefaultRef = useRef<ReadonlySet<string>>(new Set())
   useEffect(() => {
-    if (defaultPickId === undefined) return
-    if (attemptedDefaultRef.current.has(defaultPickId)) return
-    attemptedDefaultRef.current = new Set(attemptedDefaultRef.current).add(defaultPickId)
-    onPick(defaultPickId)
-  }, [defaultPickId, onPick])
+    if (defaultPick === undefined) return
+    if (attemptedDefaultRef.current.has(defaultPick)) return
+    attemptedDefaultRef.current = new Set(attemptedDefaultRef.current).add(defaultPick)
+    onPick(defaultPick)
+  }, [defaultPick, onPick])
 
   // 「添加项目…」打开（官方 openDirectoryFlow 同形：先 onClose 归还 owner 态，再开产品流）
   const openAdd = useCallback(() => {

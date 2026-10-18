@@ -6,6 +6,7 @@ import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   heroPickerPlan,
   heroDefaultPickId,
+  heroDefaultPickReady,
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
@@ -136,6 +137,30 @@ describe('heroDefaultPickId（bug 2ba146d8 默认拾取——归档会话回 her
 
   it('空行集（无活跃项目）→ 不拾取（undefined——零项目直达添加流现状）', () => {
     expect(heroDefaultPickId([], undefined)).toBeUndefined()
+  })
+})
+
+// ───────────── bug d353536f：默认拾取官方基线在场门（刷新后基线未就位盲拾取 → 官方
+// connectWorkspace 查空快照抛 unknown workspace toast）─────────────
+describe('heroDefaultPickReady（bug d353536f 在场门——官方 workspaces 快照含目标才放行拾取）', () => {
+  const ITEMS = [{ workspaceId: 'w-1' }, { workspaceId: 'w-2' }]
+
+  it('bug: 目标已入官方快照 → 放行拾取 id（基线就位后拾取零等待惩罚）', () => {
+    expect(heroDefaultPickReady(ITEMS, 'w-1')).toBe('w-1')
+  })
+
+  it('bug: 目标未入官方快照（基线未达/流未开）→ undefined 不盲拾取（盲拾取 = connectWorkspace 必抛 unknown workspace）', () => {
+    expect(heroDefaultPickReady([{ workspaceId: 'w-other' }], 'w-1')).toBeUndefined()
+    expect(heroDefaultPickReady([], 'w-1')).toBeUndefined()
+  })
+
+  it('官方快照缺席（非壳载体/形状漂移 null）→ undefined（拾取前置事实不可证 = 不拾取）', () => {
+    expect(heroDefaultPickReady(null, 'w-1')).toBeUndefined()
+    expect(heroDefaultPickReady(undefined, 'w-1')).toBeUndefined()
+  })
+
+  it('无默认拾取目标 → undefined（heroDefaultPickId 已判空的直通面）', () => {
+    expect(heroDefaultPickReady(ITEMS, undefined)).toBeUndefined()
   })
 })
 

@@ -64,6 +64,25 @@ export function heroDefaultPickId(
 }
 
 /**
+ * 默认拾取官方基线在场门（bug d353536f——纯函数单源）：官方 workspaces.list 快照含目标
+ * workspaceId 才放行拾取。刷新后基线流未就位时盲拾取，官方 connectWorkspace 查客户端
+ * 空快照必抛「unknown workspace」（新建会话失败 toast）且拾取闩已记账不再重试——前置
+ * 事实（官方认识该工作区）不可证 = 不拾取，快照就位后由效应重渲染补拾取；真不在场
+ * （未注册/已删工作区）= 永不盲拾取，fail-soft 回「选择工作区」现状（拾取闩口径不变）。
+ */
+export function heroDefaultPickReady(
+  items: readonly { readonly workspaceId?: unknown }[] | null | undefined,
+  defaultPickId: string | undefined,
+): string | undefined {
+  if (defaultPickId === undefined) return undefined
+  if (items === null || items === undefined) return undefined
+  const present = items.some(
+    (row) => typeof row?.workspaceId === 'string' && row.workspaceId === defaultPickId,
+  )
+  return present ? defaultPickId : undefined
+}
+
+/**
  * worktree 数据根（严格段）：仅 selectedId 严格命中项目行时返回 ws_path；未选中/未命中/
  * 归档 → null（渲染兜底不消费——禁止兜底泄漏为绑定语义，无绑定工作区会话不得被指到别的
  * 项目树）。
