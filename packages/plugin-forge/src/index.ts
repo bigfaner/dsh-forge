@@ -18,8 +18,7 @@
 // 交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
-import { createHash } from 'node:crypto'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type { ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
@@ -263,23 +262,15 @@ const forgePlugin: ForgePlugin = Object.assign(
     // readHead = git rev-parse HEAD（disc-2 HEAD 键控缓存键；runSuite 与 readHead 同源
     // worktree 锚定，cwd 仅作 worktree 缺席回落）。套件执行故障 fail-soft——机制静默关闭
     // （简报零行），循环派发不阻。
-    // bug 006d8bfe 后续：基线缓存持久化（cacheFile 路径提供器）——落**项目专属库目录**
-    // （forge-workspaces\<项目>@<哈希>\e2e-baseline-cache\<worktree 哈希>.json，与 logs/
-    // 同级的独立子目录；目录经 projectDirs 既有解析链单源——与任务库/事件日志同一落位
-    // 基础设施），同 HEAD 跨实例/跨重启套件零重跑。路径策略语言/生态无关（哈希寻址，
-    // 不绑任何构建生态目录——TypeScript/Java/Golang 项目通用）。
+    // bug 006d8bfe 后续：基线缓存持久化（cacheFile 路径提供器）——用户裁决 2026-10-18：
+    // 落各 worktree 自身 `{worktree}/.forge/caches/{slug}/e2e-baseline/cache.json`
+    // （随检出走、容器隔离、跨重启复用；同 HEAD 套件零重跑）。
     const e2eBaseline = {
       ...createE2eBaselineFace({ cwd: process.cwd() }),
-      cacheFile: (input: { readonly projectId: string; readonly worktree?: string }): string | undefined => {
-        const storeDir = projectDirs.resolve(input.projectId)
-        if (storeDir === undefined) return undefined
-        const key = input.worktree ?? input.projectId
-        return join(
-          storeDir,
-          'e2e-baseline-cache',
-          `${createHash('sha1').update(key.toLowerCase()).digest('hex').slice(0, 16)}.json`,
-        )
-      },
+      cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
+        input.worktree === undefined
+          ? undefined
+          : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
     }
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,

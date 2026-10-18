@@ -568,9 +568,10 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
   it('bug 006d8bfe 后续：基线缓存持久化跨实例——同 HEAD 重启后套件零重跑（error 形态不落缓存）', async () => {
     // 真机判例：宿主重启丢 ActiveLoop 实例缓存 → 同 HEAD 全量套件重跑（启动税 24 分钟）。
-    // 修法：HEAD 键控缓存持久化到项目库目录独立子目录（cacheFile 注入缝，projectId 寻址）。
+    // 修法（用户裁决 2026-10-18）：缓存落各 worktree 自身 .forge/caches/{slug}/e2e-baseline/
+    // （cacheFile 注入缝——随检出走、容器隔离、跨重启复用）。
     const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
-    const cacheFile = join(cacheDir, 'e2e-baseline-cache', 'forge-e2e-baseline.json')
+    const cacheFile = join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json')
     try {
       let suiteRuns = 0
       const makeBuild = () =>
@@ -607,7 +608,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
   it('bug 006d8bfe 后续：error 形态（基线不可得）不落缓存——下实例重跑而非沿用「不可得」', async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
-    const cacheFile = join(cacheDir, 'e2e-baseline-cache', 'forge-e2e-baseline.json')
+    const cacheFile = join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json')
     try {
       let throwing = true
       const makeBuild = () =>

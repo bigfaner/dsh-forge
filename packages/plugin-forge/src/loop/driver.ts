@@ -352,11 +352,12 @@ export interface LoopDriverDeps {
     readonly readHead?: (worktree: string) => Promise<string | undefined>
     /**
      * 基线缓存文件路径提供器（bug 006d8bfe 后续——HEAD 键控持久化，跨实例/重启复用，
-     * 同 HEAD 套件零重跑；路径策略归装配裁决——项目库目录内独立子目录，语言/生态无关）。
-     * 缺席 = 无持久化（实例域缓存现状）。error 形态（基线不可得）不落缓存。
+     * 同 HEAD 套件零重跑）。用户裁决 2026-10-18：落 `{worktree}/.forge/caches/{slug}/
+     * e2e-baseline/`（随检出走、容器隔离）。缺席 = 无持久化（实例域缓存现状）。
+     * error 形态（基线不可得）不落缓存。
      */
     readonly cacheFile?: (input: {
-      readonly projectId: string
+      readonly slug: string
       readonly worktree?: string
     }) => string | undefined
   }
@@ -987,7 +988,7 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   const before = loop.e2eBaseline
   // 持久化缓存优先（bug 006d8bfe 后续——实例域缓存随重启即丢，同 HEAD 跨重启/跨实例复用：
   // 同 HEAD 套件零重跑；error 形态不落盘故天然不复用「不可得」）。读失败/未命中 = 回落跑批。
-  const cachePath = cfg.cacheFile?.({ projectId: loop.scope.projectId, worktree: loop.record.worktree })
+  const cachePath = cfg.cacheFile?.({ slug, worktree: loop.record.worktree })
   if (head !== undefined && cachePath !== undefined && before === undefined) {
     const persisted = loadPersistedBaseline(cachePath, head)
     if (persisted !== undefined) {
