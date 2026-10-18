@@ -13,6 +13,9 @@ import { optionalString, requireArgsObject, requiredEnum, requiredString } from 
 import { callToolFace, formatFailure, isForgeToolFailure, withFailureVariant, type ForgeToolFailure } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
 
+// Root cause: rel_path 契约 = 相对 forge_dir；描述示例曾给 docs 根相对形态
+// （'features/<slug>/...'），agent 照抄注册 → 标准布局 <ws>/.forge 下缺 docs/ 段全量悬空。
+// 示例必须与 write-prd/ui-design 技能约定（docs/features/<slug>/...）同锚。
 const TOOL = 'upsertFeatureDoc'
 
 /** agent 面参数 */
@@ -75,7 +78,7 @@ export function createUpsertFeatureDocTool(deps: ForgeSpecToolDeps): ForgeToolDe
       properties: {
         feature_slug: { type: 'string', description: 'Feature slug (the feature container natural key).' },
         doc_kind: { type: 'string', description: `Document kind, one of: ${DOC_KINDS.join(', ')}.` },
-        rel_path: { type: 'string', description: "Document path relative to the workspace forge dir, forward slashes (e.g. 'features/<slug>/prd/prd-spec.md'). May dangle; the file may be written after registration." },
+        rel_path: { type: 'string', description: "Document path relative to the workspace forge dir, forward slashes (e.g. 'docs/features/<slug>/prd/prd-spec.md' — include the docs/ segment; the standard forge dir is <workspace>/.forge with documents under .forge/docs). May dangle; the file may be written after registration." },
         summary: { type: 'string', description: 'One-line summary of the document.' },
       },
       required: ['feature_slug', 'doc_kind', 'rel_path'],
