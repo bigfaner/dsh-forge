@@ -1587,5 +1587,94 @@
     "value": "blitz-created tasks: plain integer local_id (regular numeric allocation), no stage-gate, eval gate exempt — semantics derive from the task mode snapshot, not from the executing session preset [packages/core/src/forge/tasks/add.ts:127-133; PRD Story 2/SC3]",
     "confidence": "inferred",
     "updated_at": "2026-10-08T05:51:25Z"
+  },
+  {
+    "fact_id": "MU_RPC_ENVELOPE",
+    "source": "static",
+    "subject": "Mobile RPC envelope + channel allowlist",
+    "kind": "signature",
+    "value": "POST /remote/__rpc body {channel,payload} -> {ok:true,data} | {ok:false,error:{code,reason}}; channel = allowlist 精确匹配，未列通道 fail-soft 错误信封; 鉴权 authorizeIndex 放行优先 + dswf_forge_remote cookie 兜底",
+    "confidence": "inferred",
+    "citations": [
+      "apps/host/src/boot/remote-http-rpc.ts:22,136",
+      "features/mobile-ui/design/api-handbook.md#header"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_OFFICIAL_API_FACE",
+    "source": "static",
+    "subject": "Official mobile API consumption set",
+    "kind": "signature",
+    "value": "POST /api/rpc {method,payload} -> {ok,error?}; methods = session.list/models/selectModel/create/history/prompt/cancel, interaction.pending/answer/cancel, workspace.list, agentPreset.list/select; SSE GET /api/session/stream?sessionId=... named events snapshot|event; 401/fetch 异常 -> disconnected 覆盖层",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/design/tech-research.md#R1.2",
+      "features/mobile-ui/design/api-handbook.md#五"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_STREAM_FRAMES",
+    "source": "static",
+    "subject": "SSE frame semantics (snapshot/event/settle)",
+    "kind": "output_format",
+    "value": "snapshot frame {records,projections} 全量应用 streamRevision+=1; event 增量帧 type 小写化后与 assistant/chunk 比较（流上真名，非 client-store live-chunk）; settle = assistant/message 终态帧覆盖; onerror -> streamConnected=false + schedulePoll 降级轮询",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/design/tech-research.md#R1.1,R1.4",
+      "features/mobile-ui/design/wire-samples.md#assistant/message"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_POLL_CONSTANTS",
+    "source": "static",
+    "subject": "Official poll/lifecycle constants",
+    "kind": "precondition",
+    "value": "HISTORY_POLL_ACTIVE_MS=250, HISTORY_POLL_IDLE_MS=750, HISTORY_POLL_IDLE_CAP_MS=5000, PENDING_SYNC_DEBOUNCE_MS=150; visibilitychange 隐藏停轮询/回前台 loadHistory(false)+checkConnection",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/design/tech-research.md#R1.3"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_READ_STATE_CHANNEL",
+    "source": "static",
+    "subject": "forge:remote/read-state 单端点双语义",
+    "kind": "signature",
+    "value": "read payload {sessionId} -> {seq,unread,stale?} (stale:true 仅域重建窗口); 写 payload {sessionId,seq} -> {seq,unread} 或单调守卫拒绝回退返回现值不报错; seq>tailSeq clamp; 失败码 not-found; 计算单源在 host unread=tailSeq-lastReadSeq",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/design/api-handbook.md#1.1"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_LOOP_SENTINEL_SOURCE",
+    "source": "static",
+    "subject": "Loop sentinel message source kind",
+    "kind": "signature",
+    "value": "MessageSourceMap forge-loop: {kind:forge-loop, loopKind, runId, task, state}; 注入点 forgeUserMessage/notify/run-dag-tasks 指令单行 source.kind 一律 forge-loop; subagent/catalog 持久事件 {childId,mode,label} 投影 worker 目录",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/design/api-handbook.md#4.3",
+      "features/mobile-ui/design/wire-samples.md#subagent/catalog"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
+  },
+  {
+    "fact_id": "MU_HISTORY_WINDOW",
+    "source": "static",
+    "subject": "Chat history window + pagination anchor",
+    "kind": "signature",
+    "value": "会话默认仅加载最近 10 条消息（历史窗口常量）; 上翻按锚分页 hasMore 锚耗尽停发; 历史不足窗口时一次全量无上翻入口",
+    "confidence": "inferred",
+    "citations": [
+      "features/mobile-ui/testing/chat-stream-recovery-history/journey.md",
+      "features/mobile-ui/design/tech-design.md"
+    ],
+    "updated_at": "2026-10-18T14:31:02+08:00"
   }
 ]
