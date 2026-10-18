@@ -9,6 +9,7 @@ export interface ComposerOptions {
   readonly onSend: (text: string) => void
   readonly onSettings: () => void
   readonly onWorktreeTap?: () => void
+  readonly onModeTap?: () => void
   readonly modeReadOnly?: boolean
 }
 
@@ -48,6 +49,8 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
   worktreeChip.insertAdjacentHTML('beforeend', '<svg class="ic" style="width:11px;height:11px"><use href="#i-chev"/></svg>')
   if (options.onWorktreeTap !== undefined)
     worktreeChip.addEventListener('click', () => options.onWorktreeTap?.())
+  if (options.onModeTap !== undefined)
+    modeChip.addEventListener('click', () => options.onModeTap?.())
 
   const settingsButton = document.createElement('button')
   settingsButton.className = 'setbtn'

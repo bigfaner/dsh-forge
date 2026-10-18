@@ -1446,6 +1446,182 @@ body[data-ds-dark-theme] .mrow .chk {
   color: #e5484d;
 }
 
+/* ---- hero 新会话（屏⑤；刻度逐位取自 mockup .hero / .bw-pop 族） ---- */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: 60px;
+  position: relative;
+}
+.hero .proj {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #5f6368;
+  background: #f1f3f4;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.dark .hero .proj,
+body[data-ds-dark-theme] .hero .proj {
+  background: #2c2c2e;
+  color: #9aa0a6;
+}
+.hero .logo {
+  width: 64px;
+  height: 64px;
+}
+.hero .slogan {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #0f1115;
+}
+.dark .hero .slogan,
+body[data-ds-dark-theme] .hero .slogan {
+  color: #f5f5f6;
+}
+.hero .hi {
+  font-size: 20px;
+  font-weight: 600;
+  color: #0f1115;
+}
+.dark .hero .hi,
+body[data-ds-dark-theme] .hero .hi {
+  color: #f5f5f6;
+}
+.hero-hint {
+  margin: 0 14px 6px;
+  font-size: 12px;
+  color: #e5484d;
+  text-align: center;
+}
+.bw-pop {
+  border: 1px solid #dadce0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.dark .bw-pop,
+body[data-ds-dark-theme] .bw-pop {
+  background: #232324;
+  border-color: #444746;
+}
+.bw-pop .mi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  font-size: 13px;
+  color: #0f1115;
+  cursor: pointer;
+}
+.dark .bw-pop .mi,
+body[data-ds-dark-theme] .bw-pop .mi {
+  color: #f5f5f6;
+}
+.bw-pop .mi.picked {
+  background: #f1f3f4;
+}
+.dark .bw-pop .mi.picked,
+body[data-ds-dark-theme] .bw-pop .mi.picked {
+  background: #2c2c2e;
+}
+.bw-pop .mi .k {
+  margin-left: auto;
+  font-size: 11px;
+  color: #81858c;
+}
+.bw-pop .mi.add {
+  border-top: 1px solid #e5e7eb;
+  color: #4176e6;
+  font-weight: 550;
+}
+.dark .bw-pop .mi.add,
+body[data-ds-dark-theme] .bw-pop .mi.add {
+  border-top-color: #303034;
+}
+/* ---- 确认框（host 守卫拒绝回执承载——选回/仍要切换；面板语言同 bw-pop 刻度） ---- */
+.confirm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 60;
+}
+.confirm-card {
+  width: 100%;
+  max-width: 320px;
+  border: 1px solid #dadce0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 16px 15px;
+}
+.dark .confirm-card,
+body[data-ds-dark-theme] .confirm-card {
+  background: #232324;
+  border-color: #444746;
+}
+.confirm-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #0f1115;
+  margin-bottom: 8px;
+}
+.dark .confirm-title,
+body[data-ds-dark-theme] .confirm-title {
+  color: #f5f5f6;
+}
+.confirm-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5f6368;
+  margin-bottom: 14px;
+}
+.dark .confirm-body,
+body[data-ds-dark-theme] .confirm-body {
+  color: #9aa0a6;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.confirm-btn {
+  border: 1px solid #dadce0;
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #0f1115;
+  cursor: pointer;
+}
+.dark .confirm-btn,
+body[data-ds-dark-theme] .confirm-btn {
+  background: #232324;
+  border-color: #444746;
+  color: #f5f5f6;
+}
+.confirm-btn.primary {
+  border-color: #4176e6;
+  background: #4176e6;
+  color: #fff;
+}
+
 /* ---- 抽屉会话列表（屏④；刻度逐位取自 mockup .drawer 族） ---- */
 .drawer-mask {
   position: absolute;

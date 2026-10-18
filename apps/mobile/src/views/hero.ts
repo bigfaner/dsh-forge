@@ -1,0 +1,435 @@
+/**
+ * hero 新会话视图（mockup 屏⑤，路由 `#/hero`）——
+ * 数据源 = `forge:worktree/list`（透传通道，项目根注入）+ `session.create`（官方面）+
+ * `forge:worktree/session-create`（预铸采纳单门透传——host 建会话守卫）。
+ *
+ * 交互口径（US-6）：默认模式=突击、分支=当前所在（不强切）；乐观切换——点选即改
+ * 选中态（零网络、零预检调用）；host 建会话守卫拒绝（session-create 错误回执）→
+ * 确认框（选回/仍要切换，widgets/confirm 回执驱动，UI 无预检说明文本）。
+ * 建会话双径：默认分支（=当前所在）走官方 `session.create`；非默认 worktree 走
+ * `forge:worktree/session-create` 透传。`forge:remote/session-links` 预检不实现
+ * （api-handbook 1.2 延后可选）。
+ *
+ * 结构：createHeroController 纯状态机（单测主战场——load() 为唯一显式 I/O 挂点）+
+ * createHeroView 薄装配（仓内零 jsdom 惯例：DOM 胶水不进单测，对齐证据走 Playwright 走查）。
+ */
+import type { OfficialApi } from '../core/api.ts'
+import type { RemoteRpc } from '../core/rpc.ts'
+import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
+import { createComposer, type ComposerHandle } from '../widgets/composer.ts'
+import { showConfirm } from '../widgets/confirm.ts'
+
+// ---------------------------------------------------------------------------
+// 常量（口径）
+// ---------------------------------------------------------------------------
+
+/** worktree 清单通道（contracts WORKTREE_CHANNELS.list 透传）。 */
+export const HERO_WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+/** 建会话守卫通道（contracts WORKTREE_CHANNELS.sessionCreate 透传——预铸采纳单门）。 */
+export const HERO_SESSION_CREATE_CHANNEL = 'forge:worktree/session-create'
+/** 默认模式（US-6：默认突击）。 */
+export const HERO_DEFAULT_MODE = '突击'
+/** hero 模式目录（composer 模式弹层行序）。 */
+export const HERO_MODES: readonly string[] = ['突击', '远征']
+
+// ---------------------------------------------------------------------------
+// 纯函数：清单收敛 + 行派生
+// ---------------------------------------------------------------------------
+
+/** bw-pop 分支行模型（WorktreeEntryDto 窄化——缺字段 fail-soft 剔行）。 */
+export interface HeroWorktreeRow {
+  /** worktree 绝对路径（session-create worktreePath；主行 = 项目根） */
+  readonly path: string
+  /** 检出分支短名（detached/bare = null → 展示名退 worktreeName） */
+  readonly branch: string | null
+  readonly worktreeName: string
+  readonly isMain: boolean
+}
+
+export interface HeroWorktreeListModel {
+  readonly isGit: boolean
+  readonly rows: readonly HeroWorktreeRow[]
+}
+
+function coerceRow(entry: unknown): HeroWorktreeRow | null {
+  if (typeof entry !== 'object' || entry === null) return null
+  const record = entry as { path?: unknown; branch?: unknown; worktreeName?: unknown; isMain?: unknown }
+  const path = typeof record.path === 'string' && record.path !== '' ? record.path : ''
+  if (path === '') return null
+  return {
+    path,
+    branch: typeof record.branch === 'string' && record.branch !== '' ? record.branch : null,
+    worktreeName:
+      typeof record.worktreeName === 'string' && record.worktreeName !== ''
+        ? record.worktreeName
+        : path.replaceAll('\\', '/').split('/').pop() ?? path,
+    isMain: record.isMain === true,
+  }
+}
+
+/** forge:worktree/list 响应收敛（缺字段 fail-soft：isGit 缺席 = false，entries 非数组 = 空集）。 */
+export function coerceWorktreeList(raw: unknown): HeroWorktreeListModel {
+  if (typeof raw !== 'object' || raw === null) return { isGit: false, rows: [] }
+  const frame = raw as { isGit?: unknown; entries?: unknown }
+  const entries = Array.isArray(frame.entries) ? frame.entries : []
+  return { isGit: frame.isGit === true, rows: entries.map(coerceRow).filter((row): row is HeroWorktreeRow => row !== null) }
+}
+
+/** 路径归一键（反斜杠→正斜杠 + 去尾斜杠 + 小写——跨源比对单源）。 */
+function pathKey(path: string): string {
+  return path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+}
+
+/**
+ * 默认选中行（US-6：分支=当前所在，不强切）：当前分支命中行优先（大小写不敏感、
+ * 斜杠归一）；未命中回退主行；再回退首行；空集 = null（composer 只显当前分支名）。
+ */
+export function pickDefaultRow(
+  rows: readonly HeroWorktreeRow[],
+  currentBranch: string | undefined,
+): HeroWorktreeRow | null {
+  if (currentBranch !== undefined && currentBranch !== '') {
+    const needle = pathKey(currentBranch)
+    const hit = rows.find((row) => row.branch !== null && row.branch.toLowerCase() === needle)
+    if (hit !== undefined) return hit
+  }
+  return rows.find((row) => row.isMain) ?? rows[0] ?? null
+}
+
+/** 行展示名（branch 缺席退 worktreeName）。 */
+export function rowDisplayName(row: HeroWorktreeRow): string {
+  return row.branch ?? row.worktreeName
+}
+
+/** 行右缘说明文案（.k）：主行默认 = 「当前所在分支 · 主 worktree（默认）」；他行默认行 = 「当前所在分支」；复用行 = 「复用已有 worktree」。 */
+export function rowHintText(row: HeroWorktreeRow, defaultRow: HeroWorktreeRow | null): string {
+  if (defaultRow !== null && pathKey(row.path) === pathKey(defaultRow.path)) {
+    return row.isMain ? '当前所在分支 · 主 worktree（默认）' : '当前所在分支'
+  }
+  return '复用已有 worktree'
+}
+
+/** composer worktree chip 文案（mockup：`main · 当前所在分支`；复用行 = 分支名）。 */
+export function composerWorktreeLabel(row: HeroWorktreeRow | null, defaultRow: HeroWorktreeRow | null): string {
+  if (row === null) return ''
+  return defaultRow !== null && pathKey(row.path) === pathKey(defaultRow.path)
+    ? `${rowDisplayName(row)} · 当前所在分支`
+    : rowDisplayName(row)
+}
+
+/** 是否走预铸采纳径（非默认 worktree 才触达 host 建会话守卫）。 */
+export function needsWorktreeBinding(row: HeroWorktreeRow | null, currentWorktreePath: string | undefined): boolean {
+  if (row === null) return false
+  if (row.isMain) return false
+  if (currentWorktreePath === undefined || currentWorktreePath === '') return true
+  return pathKey(row.path) !== pathKey(currentWorktreePath)
+}
+
+/** hero 模式 → session.prompt mode（突击 = steer 抢占、远征 = queue 排队）。 */
+export function promptModeOf(mode: string): 'steer' | 'queue' {
+  return mode === '远征' ? 'queue' : 'steer'
+}
+
+// ---------------------------------------------------------------------------
+// 控制器（纯状态机——单测主战场，零 DOM；load() 为唯一显式 I/O 挂点）
+// ---------------------------------------------------------------------------
+
+export type HeroPop = 'branch' | 'mode' | null
+
+/** hero 可渲染状态快照（视图按快照重绘弹层/chip + 守卫确认框挂点）。 */
+export interface HeroState {
+  readonly pop: HeroPop
+  readonly rows: readonly HeroWorktreeRow[]
+  readonly defaultRow: HeroWorktreeRow | null
+  /** 乐观选中行路径（null = 无清单/composer 只显当前分支名）。 */
+  readonly selectedPath: string | null
+  readonly mode: string
+  readonly modes: readonly string[]
+  /** 守卫拒绝回执（非 null = 视图须弹确认框——选回/仍要切换）。 */
+  readonly pendingGuard: { readonly reason: string } | null
+  readonly busy: boolean
+}
+
+export interface HeroDeps {
+  readonly rpc: RemoteRpc
+  readonly api: Pick<OfficialApi, 'createSession' | 'prompt'>
+  /** 项目根（forge:worktree/list payload；缺席 = 不拉清单，composer 只显当前分支）。 */
+  readonly projectRoot?: string
+  /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
+  readonly currentBranch?: string
+  readonly currentWorktreePath?: string
+  readonly workspaceId?: string
+  readonly onOpenSession: (sessionId: string) => void
+  readonly modes?: readonly string[]
+  /** 状态变更通知（视图重绘挂点；缺席 = 纯控制器单测）。 */
+  readonly onChange?: () => void
+}
+
+export interface HeroController {
+  state(): HeroState
+  /** 清单装载（forge:worktree/list → 默认行 = 当前所在）。 */
+  load(): Promise<void>
+  /** 乐观切换：点选即改选中态（零网络、零预检）。 */
+  pickBranch(path: string): void
+  pickMode(mode: string): void
+  openPop(kind: Exclude<HeroPop, null>): void
+  closePop(): void
+  /** 顶栏新会话钮：回默认模式/默认分支。 */
+  reset(): void
+  /** composer 发送：建会话双径 + 首条消息透传。 */
+  send(text: string): Promise<void>
+  /** 守卫回执确认框点按（选回 = cancel / 仍要切换 = confirm）。 */
+  resolveGuard(choice: 'confirm' | 'cancel'): void
+}
+
+export function createHeroController(deps: HeroDeps): HeroController {
+  const modes = deps.modes ?? HERO_MODES
+  let rows: readonly HeroWorktreeRow[] = []
+  let defaultRow: HeroWorktreeRow | null = null
+  let selectedPath: string | null = null
+  let mode = HERO_DEFAULT_MODE
+  let pop: HeroPop = null
+  let pendingGuard: { readonly reason: string } | null = null
+  let busy = false
+
+  const emit = (): void => deps.onChange?.()
+  const selectedRow = (): HeroWorktreeRow | null => rows.find((row) => row.path === selectedPath) ?? null
+
+  function createPlainSession(): Promise<string> {
+    return deps.api.createSession(deps.workspaceId ?? '').then((created) => created.sessionId)
+  }
+
+  async function enter(sessionId: string, text: string): Promise<void> {
+    if (text.trim() !== '') {
+      try {
+        await deps.api.prompt(sessionId, text, promptModeOf(mode))
+      } catch {
+        /* 首条消息投递失败不阻断进入会话（会话已建） */
+      }
+    }
+    busy = false
+    deps.onOpenSession(sessionId)
+    emit()
+  }
+
+  return {
+    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy }),
+
+    async load() {
+      if (deps.projectRoot === undefined || deps.projectRoot === '') return
+      const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: deps.projectRoot })
+      if (!result.ok) return
+      rows = coerceWorktreeList(result.data).rows
+      defaultRow = pickDefaultRow(rows, deps.currentBranch)
+      selectedPath = defaultRow?.path ?? null
+      emit()
+    },
+
+    pickBranch(path) {
+      if (!rows.some((row) => row.path === path)) return
+      selectedPath = path
+      pop = null
+      emit()
+    },
+
+    pickMode(next) {
+      if (!modes.includes(next)) return
+      mode = next
+      pop = null
+      emit()
+    },
+
+    openPop(kind) {
+      pop = kind
+      emit()
+    },
+
+    closePop() {
+      pop = null
+      emit()
+    },
+
+    reset() {
+      mode = HERO_DEFAULT_MODE
+      selectedPath = defaultRow?.path ?? null
+      pop = null
+      emit()
+    },
+
+    async send(text) {
+      if (busy || pendingGuard !== null) return
+      busy = true
+      emit()
+      try {
+        const selected = selectedRow()
+        if (needsWorktreeBinding(selected, deps.currentWorktreePath)) {
+          // 透传径：预铸采纳单门 = host 建会话守卫（回执驱动，无预检调用）
+          const result = await deps.rpc.call<{ sessionId: string; branch: string }>(HERO_SESSION_CREATE_CHANNEL, {
+            worktreePath: selected?.path,
+          })
+          if (result.ok) {
+            await enter(result.data.sessionId, text)
+            return
+          }
+          // 守卫拒绝回执 → 确认框待决（busy 保持——确认期间发送面冻结）
+          pendingGuard = { reason: result.error.reason }
+          emit()
+          return
+        }
+        // 官方面径：默认分支/当前所在（不触守卫）
+        await enter(await createPlainSession(), text)
+      } catch {
+        busy = false
+        emit()
+      }
+    },
+
+    resolveGuard(choice) {
+      if (pendingGuard === null || !busy) return
+      pendingGuard = null
+      if (choice === 'cancel') {
+        // 选回：乐观选中态回退当前所在（默认行）
+        selectedPath = defaultRow?.path ?? null
+        busy = false
+        emit()
+        return
+      }
+      // 仍要切换：保留选中态，会话经官方面落主树（首条消息落主树语义）
+      void createPlainSession()
+        .then((sessionId) => {
+          busy = false
+          deps.onOpenSession(sessionId)
+          emit()
+        })
+        .catch(() => {
+          busy = false
+          emit()
+        })
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 视图装配（薄胶水——DOM 不进单测，对齐证据走 Playwright 走查）
+// ---------------------------------------------------------------------------
+
+export interface HeroViewDeps extends HeroDeps {
+  readonly projectName?: string
+  readonly onOpenDrawer?: () => void
+  readonly onOpenSettings?: () => void
+}
+
+export function createHeroView(deps: HeroViewDeps): HTMLElement {
+  // 渲染函数声明提升——控制器装配即携带重绘挂点（单控制器，无双实例）
+  const controller = createHeroController({
+    ...deps,
+    onChange: () => {
+      renderPop()
+      renderChips()
+      renderGuard()
+    },
+  })
+  const root = el('div', 'phone-root')
+  ensureIconSprite(root)
+
+  // ---- 顶栏（屏⑤：☰ / 新会话 / 新会话重置）----
+  const topbar = el('div', 'topbar')
+  const menuButton = el('button', 'iconbtn')
+  menuButton.innerHTML = '<svg class="ic"><use href="#i-menu"/></svg>'
+  menuButton.addEventListener('click', () => deps.onOpenDrawer?.())
+  const resetButton = el('button', 'iconbtn')
+  resetButton.title = '新会话'
+  resetButton.innerHTML = '<svg class="ic"><use href="#i-new"/></svg>'
+  resetButton.addEventListener('click', () => controller.reset())
+  topbar.append(menuButton, el('div', 'title', '新会话'), resetButton)
+
+  // ---- hero 主区（proj 徽标 / logo / slogan / 问候）----
+  const hero = el('div', 'hero')
+  if (deps.projectName !== undefined && deps.projectName !== '') {
+    const proj = el('div', 'proj')
+    proj.innerHTML = '<svg class="ic" style="width:13px;height:13px"><use href="#i-folder"/></svg>'
+    proj.appendChild(document.createTextNode(deps.projectName))
+    hero.appendChild(proj)
+  }
+  hero.insertAdjacentHTML(
+    'beforeend',
+    '<svg class="logo" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#4176e6"/><path d="M18 38c6 4 14 5 22 2 6-2 9-6 8-10-1-3-5-5-9-4-5 1-7 5-5 8-4-1-9-3-13-7-2 4-3 8-3 11z" fill="#fff"/></svg>',
+  )
+  hero.appendChild(el('div', 'slogan', '知识就是力量'))
+  hero.appendChild(el('div', 'hi', '你好，有什么我能帮你的吗？'))
+
+  // ---- 输入区：bw-pop（分支/模式弹层）挂 composer.inputbar 头部 + composer ----
+  const bwPop = el('div', 'bw-pop')
+  bwPop.hidden = true
+
+  const composer: ComposerHandle = createComposer({
+    mode: HERO_DEFAULT_MODE,
+    worktree: '',
+    onSend: (text) => void controller.send(text),
+    onSettings: () => deps.onOpenSettings?.(),
+    onWorktreeTap: () => controller.openPop('branch'),
+    onModeTap: () => controller.openPop('mode'),
+  })
+  composer.root.prepend(bwPop)
+
+  root.append(topbar, hero, composer.root)
+
+  // ---- 渲染（按状态快照重绘弹层/chip + 守卫确认框挂点）----
+  function renderPop(): void {
+    const state = controller.state()
+    bwPop.hidden = state.pop === null
+    bwPop.textContent = ''
+    if (state.pop === 'branch') {
+      for (const row of state.rows) {
+        const item = el('div', `mi${row.path === state.selectedPath ? ' picked' : ''}`)
+        item.innerHTML = '<svg class="ic" style="width:14px;height:14px"><use href="#i-branch"/></svg>'
+        item.appendChild(document.createTextNode(rowDisplayName(row)))
+        item.appendChild(el('span', 'k', rowHintText(row, state.defaultRow)))
+        item.addEventListener('click', () => controller.pickBranch(row.path))
+        bwPop.appendChild(item)
+      }
+      const addRow = el('div', 'mi add')
+      addRow.appendChild(document.createTextNode('＋ 新建分支 / worktree…'))
+      bwPop.appendChild(addRow)
+    } else if (state.pop === 'mode') {
+      for (const item of state.modes) {
+        const row = el('div', `mi${item === state.mode ? ' picked' : ''}`)
+        row.innerHTML = '<svg class="ic" style="width:14px;height:14px"><use href="#i-mode"/></svg>'
+        row.appendChild(document.createTextNode(item))
+        row.addEventListener('click', () => controller.pickMode(item))
+        bwPop.appendChild(row)
+      }
+    }
+  }
+
+  function renderChips(): void {
+    const state = controller.state()
+    const selected = state.rows.find((row) => row.path === state.selectedPath) ?? null
+    composer.setWorktree(composerWorktreeLabel(selected, state.defaultRow))
+    composer.setMode(state.mode)
+    composer.setSending(state.busy)
+  }
+
+  // ---- 守卫回执确认框（选回/仍要切换；回执驱动，UI 无预检说明文本）----
+  let guardShown = false
+  function renderGuard(): void {
+    const state = controller.state()
+    if (state.pendingGuard !== null && !guardShown) {
+      guardShown = true
+      void showConfirm(root, {
+        title: '无法切换到所选分支',
+        body: `host 建会话守卫拒绝：${state.pendingGuard.reason}。选回则留在当前分支，仍要切换则会话落主树。`,
+        cancelLabel: '选回',
+        confirmLabel: '仍要切换',
+      }).then((choice) => {
+        guardShown = false
+        controller.resolveGuard(choice)
+      })
+    }
+  }
+
+  // ---- 数据：worktree 清单装载（默认分支 = 当前所在，不强切）----
+  void controller.load()
+
+  return root
+}
