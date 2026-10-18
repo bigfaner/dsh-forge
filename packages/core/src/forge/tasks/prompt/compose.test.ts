@@ -177,7 +177,7 @@ describe('改进7 E2E_BASELINE_RED 行（e2e 取证债红灯基线门）', () =>
   it('清单在场 → E2E_BASELINE_RED 行（清单 + 机械判定规则——基线红灯非本任务回归）', () => {
     const prompt = composeDispatchPrompt({
       ...minimalInput({ taskType: 'coding-feature' }),
-      e2eBaselineRed: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
+      e2eBaselineRedCases: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
     })
     expect(prompt).toContain(
       'E2E_BASELINE_RED: e2e/specs/a.spec.ts; e2e/specs/b.spec.ts（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）',
@@ -186,14 +186,14 @@ describe('改进7 E2E_BASELINE_RED 行（e2e 取证债红灯基线门）', () =>
 
   it('缺席/空数组省行——digest 与机制关闭形态同值', () => {
     const off = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' })))
-    const absent = dispatchDigest(composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-feature' }), e2eBaselineRed: [] }))
+    const absent = dispatchDigest(composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-feature' }), e2eBaselineRedCases: [] }))
     expect(absent).toBe(off)
   })
 
   it('清单在场 → digest 新值（简报重合成判据）', () => {
     const off = dispatchDigest(composeDispatchPrompt(minimalInput({ taskType: 'coding-feature' })))
     const on = dispatchDigest(
-      composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-feature' }), e2eBaselineRed: ['e2e/specs/a.spec.ts'] }),
+      composeDispatchPrompt({ ...minimalInput({ taskType: 'coding-feature' }), e2eBaselineRedCases: ['e2e/specs/a.spec.ts'] }),
     )
     expect(on).not.toBe(off)
   })

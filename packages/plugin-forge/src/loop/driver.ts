@@ -43,7 +43,7 @@ import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
-import { attributionTaskInput, baselineForHead, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, loadPersistedBaseline, parseE2eRedCases, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -768,7 +768,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       // claim 漂移重算语义不变），简报红灯行语义不破；归因卡随基线结果在 fiber 内生成。
       loop.baselineChain = ensureE2eBaseline(loop)
         .then(async (baseline) => {
-          if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+          if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
         })
         .catch(() => {})
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
@@ -996,7 +996,7 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下轮重算）；IO 故障 fail-soft
   if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
     try {
-      persistBaseline(cachePath, head, entry.redSpecs)
+      persistBaseline(cachePath, head, entry.redCases)
     } catch (cause) {
       console.warn(
         `forge loop e2e baseline cache persist failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -1035,15 +1035,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）；
   // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
-  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
+  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
   const claim = await claimForDispatch(loop.core, exec, {
     identity: { sessionId: owner, loopSourced: true },
     guardKey: record.id,
     projectId: scope.projectId,
     source,
     ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
-    ...(baseline !== undefined && baseline.redSpecs.length > 0
-      ? { e2eBaselineRed: baseline.redSpecs }
+    ...(baseline !== undefined && baseline.redCases.length > 0
+      ? { e2eBaselineRedCases: baseline.redCases }
       : {}),
     // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
     // 比对此效度域，漂移 = stale 强制重跑）
@@ -1140,7 +1140,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
-    ...(baseline !== undefined && baseline.redSpecs.length > 0 ? { e2eBaselineRed: baseline.redSpecs } : {}),
+    ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'

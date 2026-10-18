@@ -487,7 +487,7 @@ export interface ClaimTaskInput {
    * E2E_BASELINE_RED 行递达 worker：基线红灯 ≠ 本任务回归，机械判定比对归因。
    * 缺席/空 = 机制关闭或基线全绿，简报零此行）。
    */
-  e2eBaselineRed?: readonly string[]
+  e2eBaselineRedCases?: readonly string[]
   /**
    * 效度比对检出根（disc 跟进——证据效度戳机械比对的当前效度域取数锚：worker/循环检出
    * worktree。缺席 = 当前效度域不可取 → 机制惰性不判（形态兼容））。

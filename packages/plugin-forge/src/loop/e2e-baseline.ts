@@ -11,31 +11,51 @@ import { noteHostOwnedChild } from '../spawn/job-tree.js'
 /** 基线跑批产物（ranAt = 跑批起点 ISO；error 在场 = 套件执行失败——fail-soft 空清单，不阻循环） */
 export interface E2eBaselineRedList {
   readonly ranAt: string
-  readonly redSpecs: readonly string[]
+  readonly redCases: readonly string[]
   readonly error?: string
 }
 
 /**
- * 套件输出 → 红灯 spec 清单（逐行解析——行首红灯标记 + 行内首个 spec 路径）：
- * - vitest/jest reporter：`FAIL <path> > suite`；
+ * 套件输出 → 红灯用例清单（逐行解析，**用例级**——`路径 > suite > case` / playwright
+ * `路径:行:列 › title`；无用例链的行回落裸路径）：
+ * - vitest/jest reporter：`FAIL <path> > suite > case`（FAIL 行携完整用例链）；
  * - playwright list reporter（本仓 e2e 正道）：`✘ 1 [chromium] › <path>:12:5 › title`
  *   （✕/×/✗ 变体一并收录——各 runner 红灯字形）；
  * - vitest default reporter stdout 汇总行：`❯ |project| <path> (1 test | 1 failed)`——
- *   ❯ 行须带 failed 字样才计红（❯ 亦作套件运行指示符，防绿套件误报）。
+ *   ❯ 行须带 failed 字样才计红（❯ 亦作套件运行指示符，防绿套件误报），文件级（无链可取）。
+ * 归一：尾部时长/重试标注剥离（`(302ms)` / `(retry #N)`——同用例 retry 去重）、空白折叠、
  * 路径限定 .spec/.test 后缀滤除噪音；去重 + 字母序——同输出恒同清单。
  */
-export function parseE2eRedSpecs(output: string): string[] {
-  const specs = new Set<string>()
+export function parseE2eRedCases(output: string): string[] {
+  const cases = new Set<string>()
   const redLineRe = /^\s*(?:FAIL\b|[✕×✘✗❯]).*$/gm
   const specPathRe = /[A-Za-z0-9_.\\/-]+\.(?:spec|test)\.[cm]?[jt]s\b/
   for (const m of output.matchAll(redLineRe)) {
     const line = m[0]
-    // ❯ 双义（红灯汇总行 / 运行指示行）：仅 failed 字样在场才计红
-    if (/^\s*❯/.test(line) && !/\bfailed\b/i.test(line)) continue
-    const path = specPathRe.exec(line)?.[0]
-    if (path !== undefined) specs.add(path)
+    const isSummary = /^\s*❯/.test(line)
+    // ❯ 双义（红灯汇总行 / 运行指示行）：仅 failed 字样在场才计红（文件级——无链可取）
+    if (isSummary && !/\bfailed\b/i.test(line)) continue
+    const pm = specPathRe.exec(line)
+    if (pm === null) continue
+    const path = pm[0]
+    if (isSummary) {
+      cases.add(path)
+      continue
+    }
+    // 用例级：路径起至行尾；尾部时长/重试标注剥离（同用例 retry 去重），空白折叠
+    const chain = line
+      .slice(pm.index + path.length)
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\s*\((?:[\d.]+m?s|retry #\d+)\)$/i, '')
+    if (chain.length === 0) {
+      cases.add(path)
+      continue
+    }
+    // `:行:列` 起头 = playwright 路径的行列后缀（零间隙拼接）；` › `/` > ` 起头 = 用例链（空格连接）
+    cases.add(chain.startsWith(':') ? `${path}${chain}` : `${path} ${chain}`)
   }
-  return [...specs].sort()
+  return [...cases].sort()
 }
 
 /** 基线套件执行超时缺省（10min——全量 e2e 套件上界；挂死 fail-soft 不拖循环入场） */
@@ -62,9 +82,9 @@ export async function runE2eBaseline(
         timer.unref?.()
       }),
     ])
-    return { ranAt, redSpecs: parseE2eRedSpecs(output) }
+    return { ranAt, redCases: parseE2eRedCases(output) }
   } catch (cause) {
-    return { ranAt, redSpecs: [], error: cause instanceof Error ? cause.message : String(cause) }
+    return { ranAt, redCases: [], error: cause instanceof Error ? cause.message : String(cause) }
   } finally {
     clearTimeout(timer)
   }
@@ -76,7 +96,7 @@ export async function runE2eBaseline(
  */
 export interface E2eBaselineCache {
   readonly commit?: string
-  readonly redSpecs: readonly string[]
+  readonly redCases: readonly string[]
   readonly error?: string
 }
 
@@ -95,7 +115,7 @@ export async function baselineForHead(
   const baseline = await runE2eBaseline(runSuite)
   return {
     commit: currentHead,
-    redSpecs: baseline.redSpecs,
+    redCases: baseline.redCases,
     ...(baseline.error !== undefined ? { error: baseline.error } : {}),
   }
 }
@@ -103,7 +123,7 @@ export async function baselineForHead(
 // ─────────────────────────── 基线持久化缓存（bug 006d8bfe 后续） ───────────────────────────
 //
 // 实例域缓存（挂 ActiveLoop）随宿主重启即丢——同 HEAD 重启循环也全量重跑套件（真机判例：
-// 启动税 24 分钟）。本节 = HEAD 键控缓存的项目级持久化：落盘 {head, redSpecs}，同 HEAD 直接
+// 启动税 24 分钟）。本节 = HEAD 键控缓存的项目级持久化：落盘 {head, redCases}，同 HEAD 直接
 // 复用（跨实例/跨重启），HEAD 变化即失效重跑。落点由装配方裁决（cacheFile 路径提供器——
 // 语言/生态无关：TypeScript/Java/Golang 项目通用，本模块只认文件不认生态）。
 
@@ -114,19 +134,19 @@ export async function baselineForHead(
  */
 export function loadPersistedBaseline(path: string, head: string): E2eBaselineCache | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { head?: unknown; redSpecs?: unknown }
-    if (parsed.head !== head || !Array.isArray(parsed.redSpecs)) return undefined
-    const redSpecs = parsed.redSpecs.filter((s): s is string => typeof s === 'string')
-    return { commit: head, redSpecs }
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { head?: unknown; redCases?: unknown }
+    if (parsed.head !== head || !Array.isArray(parsed.redCases)) return undefined
+    const redCases = parsed.redCases.filter((s): s is string => typeof s === 'string')
+    return { commit: head, redCases }
   } catch {
     return undefined
   }
 }
 
 /** 写持久化基线缓存（成功解析结果才落盘——error 形态由调用方跳过；目录递归建；IO 故障上抛由调用方 fail-soft） */
-export function persistBaseline(path: string, head: string, redSpecs: readonly string[]): void {
+export function persistBaseline(path: string, head: string, redCases: readonly string[]): void {
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, JSON.stringify({ head, redSpecs }))
+  writeFileSync(path, JSON.stringify({ head, redCases }))
 }
 
 /** 归因卡载荷（改进7 三分流）：基线红灯 spec 逐一生成 test-run 归因卡——结论三分流
@@ -247,7 +267,7 @@ export function createE2eBaselineFace(deps: E2eBaselineFaceDeps): {
         clearTimeout(timer)
         // 崩溃形态收口（bug 637fcb9e）：执行故障 ∧ 解析零红灯行 → reject（error 留痕、
         // 基线不可得）；有红灯行 = 非零退出但 reporter 输出在场，照常解析（非取数失败）
-        const redCount = parseE2eRedSpecs(combined).length
+        const redCount = parseE2eRedCases(combined).length
         if (err !== null && redCount === 0) {
           reject(err)
           return

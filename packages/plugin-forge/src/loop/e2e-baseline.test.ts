@@ -1,5 +1,5 @@
 // 改进7（dispatch-loop-hardening · e2e 取证债）· 红灯基线门单测：
-// parseE2eRedSpecs（FAIL/✘ 行解析/去重/排序/噪音滤除）、runE2eBaseline（成功 + 执行故障
+// parseE2eRedCases（FAIL/✘ 行解析/去重/排序/噪音滤除）、runE2eBaseline（成功 + 执行故障
 // fail-soft + 超时 fail-soft）、baselineForHead（HEAD 键控缓存）、attributionTaskInput
 // （三分流归因卡载荷形状）、createE2eBaselineFace（真子进程装配面）。
 import { execFileSync } from 'node:child_process'
@@ -8,25 +8,29 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { hostOwnedPidsSnapshot } from '../spawn/job-tree.js'
-import { attributionTaskInput, baselineForHead, createE2eBaselineFace, parseE2eRedSpecs, runE2eBaseline } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, createE2eBaselineFace, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
 
-describe('parseE2eRedSpecs（套件输出 → 红灯 spec 清单）', () => {
-  it('FAIL 行提取 + 去重 + 字母序', () => {
+describe('parseE2eRedCases（套件输出 → 红灯用例清单）', () => {
+  it('FAIL 行用例级提取（路径 + 用例链）+ 去重 + 字母序', () => {
     const output = [
       'FAIL  e2e/specs/b.spec.ts > suite > case',
       'PASS  e2e/specs/green.spec.ts > suite > case',
       'FAIL e2e/specs/a.spec.ts > suite > case',
       'FAIL  e2e/specs/b.spec.ts > suite > case-2',
     ].join('\n')
-    expect(parseE2eRedSpecs(output)).toEqual(['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'])
+    expect(parseE2eRedCases(output)).toEqual([
+      'e2e/specs/a.spec.ts > suite > case',
+      'e2e/specs/b.spec.ts > suite > case',
+      'e2e/specs/b.spec.ts > suite > case-2',
+    ])
   })
 
   it('非 spec 路径滤除 + 空输出零清单', () => {
-    expect(parseE2eRedSpecs('FAIL packages/core/src/x.ts\n✗ something else')).toEqual([])
-    expect(parseE2eRedSpecs('')).toEqual([])
+    expect(parseE2eRedCases('FAIL packages/core/src/x.ts\n✗ something else')).toEqual([])
+    expect(parseE2eRedCases('')).toEqual([])
   })
 
-  it('playwright list reporter ✘ 行（[project] › path:12:5 › title）提取 + 去重 + 字母序', () => {
+  it('playwright list reporter ✘ 行用例级（[project] › path:12:5 › title）+ 尾部时长/重试标注归一去重', () => {
     const output = [
       'Running 128 tests using 4 workers',
       '',
@@ -39,10 +43,13 @@ describe('parseE2eRedSpecs（套件输出 → 红灯 spec 清单）', () => {
       '  1 skipped',
       '  125 passed',
     ].join('\n')
-    expect(parseE2eRedSpecs(output)).toEqual(['e2e/specs/m2/dogfood.spec.ts', 'e2e\\specs\\m3\\blitz.spec.ts'])
+    expect(parseE2eRedCases(output)).toEqual([
+      'e2e/specs/m2/dogfood.spec.ts:12:5 › chain › seed',
+      'e2e\\specs\\m3\\blitz.spec.ts:8:3 › direct',
+    ])
   })
 
-  it('vitest default reporter：❯ 汇总行（带 failed）计红；❯ 运行指示行不计', () => {
+  it('vitest default reporter：❯ 汇总行（带 failed）计红（文件级——无链可取）；❯ 运行指示行不计', () => {
     const output = [
       ' RUN  v5.0.3 Z:/repo',
       '',
@@ -52,14 +59,14 @@ describe('parseE2eRedSpecs（套件输出 → 红灯 spec 清单）', () => {
       '',
       ' Test Files  1 failed (1)',
     ].join('\n')
-    expect(parseE2eRedSpecs(output)).toEqual(['packages/plugin-forge/src/__probe__/red.test.ts'])
+    expect(parseE2eRedCases(output)).toEqual(['packages/plugin-forge/src/__probe__/red.test.ts'])
   })
 })
 
 describe('runE2eBaseline（基线跑批）', () => {
   it('成功：ranAt + 红灯清单', async () => {
     const r = await runE2eBaseline(async () => 'FAIL e2e/specs/x.spec.ts > s')
-    expect(r.redSpecs).toEqual(['e2e/specs/x.spec.ts'])
+    expect(r.redCases).toEqual(['e2e/specs/x.spec.ts > s'])
     expect(r.error).toBeUndefined()
     expect(Number.isNaN(Date.parse(r.ranAt))).toBe(false)
   })
@@ -68,7 +75,7 @@ describe('runE2eBaseline（基线跑批）', () => {
     const r = await runE2eBaseline(async () => {
       throw new Error('harness missing')
     })
-    expect(r.redSpecs).toEqual([])
+    expect(r.redCases).toEqual([])
     expect(r.error).toBe('harness missing')
   })
 
@@ -77,7 +84,7 @@ describe('runE2eBaseline（基线跑批）', () => {
       () => new Promise<string>(() => {}),
       { timeoutMs: 20 },
     )
-    expect(r.redSpecs).toEqual([])
+    expect(r.redCases).toEqual([])
     expect(r.error).toContain('超时')
   })
 })
@@ -95,7 +102,7 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
     })
     const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
     expect(r.error).toBeUndefined()
-    expect(r.redSpecs).toEqual(['e2e/specs/probe.spec.ts'])
+    expect(r.redCases).toEqual(['e2e/specs/probe.spec.ts:10:5 › t'])
   })
 
   it('runSuite：命令缺席/零输出 → fail-soft error 留痕', async () => {
@@ -107,7 +114,7 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
       timeoutMs: 30_000,
     })
     const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
-    expect(r.redSpecs).toEqual([])
+    expect(r.redCases).toEqual([])
     expect(r.error).toBeDefined()
   })
 
@@ -123,7 +130,7 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
       timeoutMs: 30_000,
     })
     const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
-    expect(r.redSpecs).toEqual([])
+    expect(r.redCases).toEqual([])
     expect(r.error).toBeDefined() // 修复前：error 缺席 = 崩溃被记「基线全绿」（漏报）
   })
 
@@ -203,7 +210,7 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
 
 describe('baselineForHead（disc-2 · HEAD 键控基线缓存）', () => {
   it('HEAD 一致：复用缓存（零套件执行——成本约束）', async () => {
-    const cache = { commit: 'c1', redSpecs: ['e2e/specs/a.spec.ts'] }
+    const cache = { commit: 'c1', redCases: ['e2e/specs/a.spec.ts'] }
     let runs = 0
     const r = await baselineForHead('c1', cache, async () => {
       runs += 1
@@ -214,16 +221,16 @@ describe('baselineForHead（disc-2 · HEAD 键控基线缓存）', () => {
   })
 
   it('commit 落地漂移：重算并更新缓存键（简报不再烤死于循环启动时点）', async () => {
-    const cache = { commit: 'c1', redSpecs: ['e2e/specs/old.spec.ts'] }
-    const r = await baselineForHead('c2', cache, async () => 'FAIL e2e/specs/new.spec.ts > suite')
-    expect(r).toEqual({ commit: 'c2', redSpecs: ['e2e/specs/new.spec.ts'] })
+    const cache = { commit: 'c1', redCases: ['e2e/specs/old.spec.ts'] }
+    const r = await baselineForHead('c2', cache, async () => 'FAIL e2e/specs/new.spec.ts')
+    expect(r).toEqual({ commit: 'c2', redCases: ['e2e/specs/new.spec.ts'] })
   })
 
   it('重算故障 fail-soft：空清单 + error 留痕，键仍记当前 HEAD（不阻循环）', async () => {
     const r = await baselineForHead('c2', undefined, async () => {
       throw new Error('boom')
     })
-    expect(r).toEqual({ commit: 'c2', redSpecs: [], error: 'boom' })
+    expect(r).toEqual({ commit: 'c2', redCases: [], error: 'boom' })
   })
 
   it('HEAD 不可得（两侧 undefined）：首算一次后恒复用（无 worktree = 无漂移可判）', async () => {

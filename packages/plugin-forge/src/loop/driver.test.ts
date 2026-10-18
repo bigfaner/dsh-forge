@@ -471,7 +471,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // 放行套件 → 后台 fiber 续跑：红灯入简报 + 归因卡生成（既有语义零变化）
     release('FAIL e2e/specs/a.spec.ts > suite')
     await untilSettled(built.driver)
-    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
     expect(built.h.addTaskInputs).toHaveLength(1)
   })
 
@@ -480,12 +480,12 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
       ...FULL_FLOW(),
       e2eBaseline: {
         runSuite: async () =>
-          ['FAIL e2e/specs/b.spec.ts > suite', 'FAIL e2e/specs/a.spec.ts > suite', 'PASS e2e/specs/green.spec.ts'].join('\n'),
+          ['FAIL e2e/specs/b.spec.ts', 'FAIL e2e/specs/a.spec.ts', 'PASS e2e/specs/green.spec.ts'].join('\n'),
       },
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    // 归因卡：逐红灯 spec 一张（parseE2eRedSpecs 字母序——a 先 b 后），type=test-run + 三分流指示
+    // 归因卡：逐红灯用例一张（parseE2eRedCases 字母序——a 先 b 后），type=test-run + 三分流指示
     expect(built.h.addTaskInputs).toHaveLength(2)
     expect(built.h.addTaskInputs[0]).toMatchObject({
       projectId: PROJECT,
@@ -501,7 +501,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // 红灯清单随本实例全部 claim 简报入参递达（机械判定载体——首轮 claim + 次轮 no-task 领取尝试同带）
     expect(built.h.claimInputs).toHaveLength(2)
     expect(built.h.claimInputs[0]).toMatchObject({
-      e2eBaselineRed: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
+      e2eBaselineRedCases: ['e2e/specs/a.spec.ts', 'e2e/specs/b.spec.ts'],
     })
   })
 
@@ -516,8 +516,8 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // 工厂化队列（bug 006d8bfe 随迁）：claim + no-task 尝试两径如实计数（旧期望 1 系共享数组
     // 被前序测试掏空后的伪语义）
     expect(built.h.claimInputs).toHaveLength(2)
-    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
-    expect(built.h.claimInputs[1]).not.toHaveProperty('e2eBaselineRed')
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRedCases')
+    expect(built.h.claimInputs[1]).not.toHaveProperty('e2eBaselineRedCases')
   })
 
   it('disc-2 判例回归：fix 中途落地（HEAD 漂移）后简报反映新基线——旧红灯行不再烤死于循环启动时点', async () => {
@@ -526,7 +526,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // 套件执行恰 2 次（磁盘为唯一缓存层——稳定 HEAD 零重跑）。
     const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
     let head = 'c1'
-    let output = 'FAIL e2e/specs/old.spec.ts > suite'
+    let output = 'FAIL e2e/specs/old.spec.ts'
     let suiteRuns = 0
     let headReads = 0
     const built = build({
@@ -549,7 +549,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
           headReads += 1
           if (headReads >= 2) {
             head = 'c2'
-            output = 'FAIL e2e/specs/new.spec.ts > suite'
+            output = 'FAIL e2e/specs/new.spec.ts'
           }
           return head
         },
@@ -561,10 +561,10 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
     expect(built.h.claimInputs).toHaveLength(3)
-    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/old.spec.ts'] })
+    expect(built.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/old.spec.ts'] })
     // commit 落地后：简报携带新基线，旧红灯行消失（claim2 起）
-    expect(built.h.claimInputs[1]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
-    expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
+    expect(built.h.claimInputs[1]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/new.spec.ts'] })
+    expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/new.spec.ts'] })
     // 成本约束：磁盘唯一缓存层——稳定 HEAD 零额外套件执行（漂移重算一次后命中复用）
     expect(suiteRuns).toBe(2)
     rmSync(cacheDir, { recursive: true, force: true })
@@ -603,7 +603,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
       await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
       await untilSettled(b.driver)
       expect(suiteRuns).toBe(1)
-      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
       expect(b.h.addTaskInputs).toHaveLength(1) // 归因卡照常（缓存命中径同样补发）
     } finally {
       rmSync(cacheDir, { recursive: true, force: true })
@@ -636,7 +636,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
       const b = makeBuild()
       await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
       await untilSettled(b.driver)
-      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts > suite'] })
     } finally {
       rmSync(cacheDir, { recursive: true, force: true })
     }
@@ -646,7 +646,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // 同 disc-2 漂移场景：start（c1 · 旧红灯 → 归因卡 old）→ fix 落地（c2）→ claim2 重算
     // （新红灯 → 归因卡 new 补发）→ claim3（同基线零重复卡）→ no-task 收口。
     let head = 'c1'
-    let output = 'FAIL e2e/specs/old.spec.ts > suite'
+    let output = 'FAIL e2e/specs/old.spec.ts'
     let headReads = 0
     const built = build({
       claim: [claimed(), claimed(), NO_TASK],
@@ -665,7 +665,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
           headReads += 1
           if (headReads >= 3) {
             head = 'c2'
-            output = 'FAIL e2e/specs/new.spec.ts > suite'
+            output = 'FAIL e2e/specs/new.spec.ts'
           }
           return head
         },
@@ -697,7 +697,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     await untilSettled(built.driver)
     // start 径 readHead 故障 = 基线机制静默关闭（fail-soft 同套件故障形态）
     expect(built.h.addTaskInputs).toHaveLength(0)
-    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRed')
+    expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRedCases')
   })
 })
 

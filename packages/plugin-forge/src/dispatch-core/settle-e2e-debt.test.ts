@@ -3,7 +3,7 @@
 //    部分结算）→ 自动生成同容器 test-run 欠账任务（dependsOn 实现卡 localId）；
 // ② fail-soft——addTask 落库故障不回滚已定结算（result 零 evidenceDebt）；
 // ③ blocked / 无欠账 → 零 addTask；
-// ④ claimForDispatch e2eBaselineRed 透传 claimTask（简报红灯清单载体）。
+// ④ claimForDispatch e2eBaselineRedCases 透传 claimTask（简报红灯清单载体）。
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
@@ -161,7 +161,7 @@ describe('改进7 · e2e 取证债（settleWorkerRun 欠账任务生成）', () 
 
   it('欠账卡文案与简报行存在性一致（bug ca061ef6）：简报红灯在场 → 指示比对行；缺席 → 兜底文案', async () => {
     const withRed = harness(completedQuery(true))
-    await settleWorkerRun({ tasks: withRed.tasks }, { ...ctxOf(), e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+    await settleWorkerRun({ tasks: withRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: ['e2e/specs/a.spec.ts'] })
     expect(withRed.addTaskInputs[0]!.taskDesc).toContain('先比对任务简报 E2E_BASELINE_RED 行')
 
     const withoutRed = harness(completedQuery(true))
@@ -170,13 +170,13 @@ describe('改进7 · e2e 取证债（settleWorkerRun 欠账任务生成）', () 
     expect(withoutRed.addTaskInputs[0]!.taskDesc).not.toContain('先比对任务简报')
 
     const emptyRed = harness(completedQuery(true))
-    await settleWorkerRun({ tasks: emptyRed.tasks }, { ...ctxOf(), e2eBaselineRed: [] })
+    await settleWorkerRun({ tasks: emptyRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: [] })
     expect(emptyRed.addTaskInputs[0]!.taskDesc).toContain('简报无 E2E_BASELINE_RED 行')
   })
 })
 
 describe('改进7 · e2e 红灯基线清单透传（claimForDispatch → claimTask）', () => {
-  it('args.e2eBaselineRed 随 claimTask 入参递达（简报 E2E_BASELINE_RED 行载体）', async () => {
+  it('args.e2eBaselineRedCases 随 claimTask 入参递达（简报 E2E_BASELINE_RED 行载体）', async () => {
     const claimInputs: unknown[] = []
     const claim: ClaimTaskResult = {
       task: snapshot(),
@@ -200,10 +200,10 @@ describe('改进7 · e2e 红灯基线清单透传（claimForDispatch → claimTa
       guardKey: 'loop-1',
       projectId: 'p-1',
       source: { kind: 'feature', slug: 'feat-x' },
-      e2eBaselineRed: ['e2e/specs/a.spec.ts'],
+      e2eBaselineRedCases: ['e2e/specs/a.spec.ts'],
     }
     const result = await claimForDispatch(deps, exec, args)
     expect(result.kind).toBe('claimed')
-    expect(claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+    expect(claimInputs[0]).toMatchObject({ e2eBaselineRedCases: ['e2e/specs/a.spec.ts'] })
   })
 })
