@@ -232,7 +232,9 @@ function chainClosuresOf(deps: DispatchCoreDeps, exec: DispatchCoreExec, scope: 
 
 /**
  * 活的后继任务判定（blocked 静默边界——循环 driver blocked 结算径消费）：后继 = sourceTask
- * 挂接该任务的派生 fix/继任卡；活 = pending/in_progress，或 blocked 且其自有后继递归存在活者。
+ * 挂接该任务的派生 fix/继任卡；活 = pending/in_progress/interrupted（interrupted 在场 = 上轮
+ * stop 真化的 fix 待 adopt 恢复——计入活后继，源任务不误入无进展硬停/triage 重复建 fix），
+ * 或 blocked 且其自有后继递归存在活者。
  * rejected/skipped/completed = 断链（不展开）。容器内单次 listTasks 现读 + 内存遍历（visited
  * 防环——fix 链深 ≤6 结构性有界，visited 仅防御性兜底）。返回首个活后继卡（ref 键载体）；
  * 无活后继 = undefined（调用方退化为现状问询径）。
@@ -253,7 +255,7 @@ export async function findLiveSuccessor(
     const key = `${card.slug}/${card.localId}`
     if (seen.has(key)) continue
     seen.add(key)
-    if (card.taskStatus === 'pending' || card.taskStatus === 'in_progress') return card
+    if (card.taskStatus === 'pending' || card.taskStatus === 'in_progress' || card.taskStatus === 'interrupted') return card
     if (card.taskStatus === 'blocked') stack.push(...successorsOf({ slug: card.slug, localId: card.localId }))
   }
   return undefined

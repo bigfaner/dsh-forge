@@ -68,15 +68,18 @@ export function parseDispatchTaskArgs(args: unknown): DispatchTaskToolArgs {
 
 // ─────────────────────────── 结果与渲染（三态自解释——started/running/suspended + 失败 DTO） ───────────────────────────
 
+/** 工具侧池快照（PoolSnapshot 扩展——readFailed 在场 = taskStats 读数失败，零值为兜底非实况） */
+type ToolPoolSnapshot = PoolSnapshot & { readonly readFailed?: boolean }
+
 /** 工具结果三态（3b 契约——started/running/suspended；守卫与单活拒绝走失败 DTO） */
 export type DispatchLoopResult =
-  | { readonly kind: 'started'; readonly loopId: string; readonly source: ContainerRef; readonly pool: PoolSnapshot }
+  | { readonly kind: 'started'; readonly loopId: string; readonly source: ContainerRef; readonly pool: ToolPoolSnapshot }
   | {
       readonly kind: 'running'
       readonly source: ContainerRef
       readonly ownerSessionId: string
       readonly taskKey?: string
-      readonly pool: PoolSnapshot
+      readonly pool: ToolPoolSnapshot
     }
   | {
       readonly kind: 'suspended'
@@ -88,12 +91,13 @@ export type DispatchLoopResult =
       readonly resumed: boolean
       /** 非 owner 首触 = 已加入接管集 */
       readonly takenOver: boolean
-      readonly pool: PoolSnapshot
+      readonly pool: ToolPoolSnapshot
     }
 
-/** 池行（无状态快照——dispatcher 继续/收工/fix 链观察判据） */
-function poolLine(pool: PoolSnapshot): string {
-  return `pending ${pool.pending} · in_progress ${pool.inProgress} · blocked ${pool.blocked} · unmet-pending ${pool.unmetPending}`
+/** 池行（无状态快照——dispatcher 继续/收工/fix 链观察判据；读数失败零值标注防误判容器已清空） */
+function poolLine(pool: ToolPoolSnapshot): string {
+  const base = `pending ${pool.pending} · in_progress ${pool.inProgress} · blocked ${pool.blocked} · unmet-pending ${pool.unmetPending}`
+  return pool.readFailed === true ? `${base} · ⚠ pool read FAILED (zero fallback — not actual counts)` : base
 }
 
 // 三分判词（POOL_VERDICT_TEXT）随池级盲选退役——no-task 收口叙述归循环 driver
@@ -108,6 +112,7 @@ const POOL_SCHEMA = {
     inProgress: { type: 'integer' },
     blocked: { type: 'integer' },
     unmetPending: { type: 'integer' },
+    readFailed: { type: 'boolean', description: 'true = pool stats read failed; the zero values are a fallback, not actual counts' },
   },
   required: ['pending', 'inProgress', 'blocked', 'unmetPending'],
 } as const
@@ -211,12 +216,12 @@ export type DispatchTaskToolDeps = ForgeToolDeps & {
   readonly loop: LoopToolDeps
 }
 
-/** 池快照现读（fail-soft——读面故障零值兜底，快照非循环正确性依赖） */
-async function poolSnapshotOf(tasks: ForgeTasksService, projectId: string, source: ContainerRef): Promise<PoolSnapshot> {
+/** 池快照现读（fail-soft——读面故障零值兜底 + readFailed 标注：非全零误导模型判容器已清空） */
+async function poolSnapshotOf(tasks: ForgeTasksService, projectId: string, source: ContainerRef): Promise<ToolPoolSnapshot> {
   try {
     return poolOf(await tasks.taskStats({ projectId, source }))
   } catch {
-    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0 }
+    return { pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true }
   }
 }
 

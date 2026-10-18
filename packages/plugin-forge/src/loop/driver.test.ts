@@ -118,6 +118,15 @@ function queryOf(status: TaskStatus, over: Partial<TaskSnapshot> = {}): QueryTas
   }
 }
 
+/** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
+function queryOfBlockedNoProgress(): QueryTaskResult {
+  return {
+    task: snapshot({ taskStatus: 'blocked' }),
+    container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+    records: [{ verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' }],
+  }
+}
+
 /** 结算尾延迟句柄（live 并发跟踪——maxLive 断言串行 ≤1 的机械证据） */
 function trackedSpawn(): { spawn: SpawnWorker; requests: SpawnWorkerRequest[]; maxLive: () => number; setBehavior: (b: (n: number) => Promise<SpawnWorkerHandle>) => void } {
   const requests: SpawnWorkerRequest[] = []
@@ -520,6 +529,45 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     expect(suiteRuns).toBe(2)
   })
 
+  it('R2-minor⑥：HEAD 漂移重算的新增红灯补生成归因卡（与启动时点行为一致；已发不重发）', async () => {
+    // 同 disc-2 漂移场景：start（c1 · 旧红灯 → 归因卡 old）→ fix 落地（c2）→ claim2 重算
+    // （新红灯 → 归因卡 new 补发）→ claim3（同基线零重复卡）→ no-task 收口。
+    let head = 'c1'
+    let output = 'FAIL e2e/specs/old.spec.ts > suite'
+    let headReads = 0
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      e2eBaseline: {
+        runSuite: async () => output,
+        readHead: async () => {
+          headReads += 1
+          if (headReads >= 3) {
+            head = 'c2'
+            output = 'FAIL e2e/specs/new.spec.ts > suite'
+          }
+          return head
+        },
+      },
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs.map((t) => t.title)).toEqual([
+      'e2e 基线红灯归因：e2e/specs/old.spec.ts', // 启动时点
+      'e2e 基线红灯归因：e2e/specs/new.spec.ts', // 漂移重算新增——补发
+    ])
+    expect(built.h.addTaskInputs[1]).toMatchObject({ type: 'test-run', vars: { BASELINE_SPEC: 'e2e/specs/new.spec.ts' } })
+  })
+
   it('disc-2 fail-soft：readHead 故障（git 不可用）——复用现有缓存，简报基线行保留，循环不阻', async () => {
     const built = build({
       ...FULL_FLOW,
@@ -733,6 +781,26 @@ describe('blocked 结算分支（图 C）', () => {
     expect(suspended.escalation.kind).toBe('blocked-ask-user')
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
     await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('静默边界（R2-minor④）：interrupted 后继计入活后继——上轮 stop 真化的 fix 不触发问询硬停', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+      query: [queryOf('blocked')],
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 活后继在场（interrupted 待 adopt 恢复）→ 静默 notify（⑦ blocked-with-fix），零问询硬停
+    expect(built.calls.some((c) => c.text.includes('已自动创建修复任务 fix-1'))).toBe(true)
+    expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(false)
   })
 
   it('静默边界（改进 1）：后继任务被 rejected → 问询恢复上浮', async () => {
@@ -1924,17 +1992,6 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
 // ─────────────────────────── 3b · 升级点挂起与 re-entry 回落（dispatch-loop-hardening 1.8） ───────────────────────────
 
 describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清挂起回落续跑）', () => {
-  /** 无进展 blocked 的结算记录（零 commit hash 零 files——硬停门直达挂起） */
-  function queryOfBlockedNoProgress(): QueryTaskResult {
-    return {
-      task: snapshot({ taskStatus: 'blocked' }),
-      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
-      records: [
-        { verb: 'submit', toStatus: 'blocked', reason: 'needs human verdict', actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
-      ],
-    }
-  }
-
   it('升级点挂起：suspended 在场（升级事件全文 + since）、登记/独占保留、runLoop 停驻零续领；resume 清 suspended 从留存点续跑到 settled 收口', async () => {
     const built = build({
       claim: [claimed('2.5'), claimed('2.6'), NO_TASK],
@@ -1987,6 +2044,23 @@ describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清�
     await untilSuspended(built.driver)
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
     expect(built.driver.resume({ loopId: loopId2 })).toEqual({ ok: false, code: 'no-active-loop' })
+  })
+
+  it('resume 前置判 aborted（R2-minor⑤）：terminateRecord 异步窗口内 resume 拒绝（非误导性 ok:true）', async () => {
+    const built = build({
+      claim: [claimed('2.5')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1, blocked: 1 })],
+      query: [queryOfBlockedNoProgress()],
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver)
+    // 不 await stop——terminateRecord 异步窗口：控制器已同步 abort、登记表尚未注销
+    const stopping = built.driver.stop({ ownerSessionId: OWNER })
+    expect(built.driver.resume({ loopId })).toEqual({ ok: false, code: 'aborted' })
+    expect(await stopping).toEqual({ ok: true, stopped: true, hadInFlight: false })
+    // 窗口闭合（登记注销）→ 常规 no-active-loop
+    expect(built.driver.resume({ loopId })).toEqual({ ok: false, code: 'no-active-loop' })
   })
 })
 
@@ -2245,6 +2319,29 @@ describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮�
     const end = built.calls.at(-1)
     expect(end?.text).toContain('[forge·结束]')
     expect(end?.text).toContain('达到最大轮次上限')
+  })
+
+  it('最大轮次计数为生命周期总量（ActiveLoop——resume 续用不清零）：挂起耗尽末轮，resume 即 ⑮ 收口零续领', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1, blocked: 1 }), // 领取通知读
+        statsOf({ in_progress: 1, blocked: 1 }), // 结算读
+        statsOf({ blocked: 1 }), // resume 径 ⑮ 收口读
+      ],
+      query: [queryOfBlockedNoProgress()],
+      limits: { maxRounds: 1 },
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver) // 第 1 轮（rounds=1）blocked 无进展 → 挂起
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    // rounds 保留（resume 不清零）→ 达上限 ⑮ 结束叙述收口，零续领
+    expect(built.h.claimInputs).toHaveLength(1)
+    expect(built.calls.at(-1)?.text).toContain('达到最大轮次上限')
   })
 })
 

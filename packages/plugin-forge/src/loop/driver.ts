@@ -375,10 +375,13 @@ export interface LoopDriver {
   activeOf(ownerSessionId: string): LoopRecord | undefined
   /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
   activeAll(): readonly LoopRecord[]
-  /**
-   * 处置回流（3b re-entry）：清 `record.suspended` 回落 active 并从留存点续跑（ActiveLoop
-   * 运行时状态——处置簿/计数——挂起期保留）。无活登记 = no-active-loop；未挂起 = not-suspended。
-   */
+   /**
+    * 处置回流（3b re-entry）：清 `record.suspended` 回落 active 并从留存点续跑（ActiveLoop
+    * 运行时状态——处置簿/计数——挂起期保留）。
+    *
+    * 返回（re-entry）：无活登记 = no-active-loop；未挂起 = not-suspended；
+    * 已叫停（terminateRecord 异步窗口内 re-entry——控制器已 abort）= aborted（拒绝，不误报 ok:true）。
+    */
   resume(input: { readonly loopId: LoopInstanceId }): LoopResumeResult
 
   /**
@@ -418,6 +421,10 @@ interface ActiveLoop {
   readonly dispositions: Map<string, DispositionBook>
   /** e2e 红灯基线缓存（disc-2 · HEAD 键控 {commit, reds}——缺席/空 = 基线全绿或机制关闭，简报零行） */
   e2eBaseline?: E2eBaselineCache
+  /** e2e 归因卡已发集（spec 键——HEAD 漂移重算径对新增红灯补发，已发不重发；启动时点同源） */
+  readonly e2eAttributed: Set<string>
+  /** 3c 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即 ⑮ 终局） */
+  rounds: number
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -550,7 +557,7 @@ function suspendForVerdict(loop: ActiveLoop, escalation: LoopEscalation): RoundO
 /** 处置回流返回（re-entry——无活登记 / 非挂起态拒绝） */
 export type LoopResumeResult =
   | { readonly ok: true; readonly loopId: LoopInstanceId }
-  | { readonly ok: false; readonly code: 'no-active-loop' | 'not-suspended' }
+  | { readonly ok: false; readonly code: 'no-active-loop' | 'not-suspended' | 'aborted' }
 
 /** 呈现任务行（「localId 任务名」——notification-samples ④「2.8 诊断弹窗装配（Apps web）」口径） */
 function taskLabelOf(task: TaskSnapshot): string {
@@ -715,6 +722,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           quiescencePollMs: deps.delays?.quiescencePollMs ?? LOOP_QUIESCENCE_POLL_MS,
         },
         maxRounds: deps.limits?.maxRounds ?? LOOP_MAX_ROUNDS,
+        rounds: 0, // 3c 轮数总量计数（生命周期总量——resume 续用不清零）
+        e2eAttributed: new Set<string>(),
         spawnFailures: 0,
         workerAborts: 0,
         waitRounds: 0,
@@ -746,17 +755,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       // 套件执行故障 = 空清单 + warn（机制静默关闭，循环派发不受阻）；归因卡落库失败
       // fail-soft（warn——红灯清单仍在简报面承担机械判定）。
       const baseline = await ensureE2eBaseline(loop)
-      if (baseline !== undefined) {
-        for (const spec of baseline.redSpecs) {
-          try {
-            await deps.tasks.addTask(attributionTaskInput(source, spec, { projectId }))
-          } catch (cause) {
-            console.warn(
-              `forge loop e2e baseline attribution card failed (${spec}): ${cause instanceof Error ? cause.message : String(cause)}`,
-            )
-          }
-        }
-      }
+      if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
       void runLoop(loop) // 循环自身 async 挂起（零线程占用——await handle.result 即事件循环挂起）
       return { ok: true, loopId: id }
     },
@@ -798,6 +797,9 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       const loop = live.get(input.loopId)
       if (loop === undefined) return { ok: false, code: 'no-active-loop' }
       if (loop.record.suspended === undefined) return { ok: false, code: 'not-suspended' }
+      // terminateRecord 异步窗口拒绝（竞态收口）：控制器已 abort = 循环在途终态注销——
+      // 此时清挂起续跑会与终局清理双写竞态且响应误导（ok:true 实际未续跑）
+      if (loop.controller.signal.aborted) return { ok: false, code: 'aborted' }
       loop.record.suspended = undefined // 写点②：处置回流——清挂起回落 active
       void runLoop(loop) // 从留存点续跑（ActiveLoop 运行时状态挂起期保留）
       return { ok: true, loopId: loop.record.id }
@@ -868,11 +870,11 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
 async function runLoop(loop: ActiveLoop): Promise<void> {
   const { record } = loop
   let suspended = false
-  let rounds = 0 // 3c 轮数总量计数（生命周期总量——非连击，无复位）
   try {
     while (!loop.controller.signal.aborted) {
-      // 3c 最大轮次封顶（终止条件全集之一）：达上限按 ⑮ 结束叙述收口（建议重派），不再续领
-      if (rounds >= loop.maxRounds) {
+      // 3c 最大轮次封顶（终止条件全集之一）：达上限按 ⑮ 结束叙述收口（建议重派），不再续领。
+      // 计数在 ActiveLoop（生命周期总量——resume 续用不清零，反复挂起/回流不绕过封顶）
+      if (loop.rounds >= loop.maxRounds) {
         const stats = await statsFailSoft(loop)
         await loop.deps.narrator.settle(
           record.ownerSessionId,
@@ -887,7 +889,7 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
         )
         break
       }
-      rounds += 1
+      loop.rounds += 1
       const outcome = await runRound(loop)
       if (outcome === 'suspend') {
         suspended = true // 挂起待裁决——登记在场、投影挂起、等 re-entry
@@ -904,6 +906,25 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
       loop.registry.remove(record.id) // 终态即登记表删除（settled/halted/stopped/异常同径）
       clearExclusiveLoopSource(record.source, record.id) // S1c 独占注销（终态同径——幂等）
       loop.live.delete(record.id)
+    }
+  }
+}
+
+/**
+ * e2e 归因卡补发（改进7 · R2-minor⑥）：红灯 spec 逐一生成归因卡——启动时点与 HEAD 漂移
+ * 重算径同源消费；e2eAttributed 已发不重发（漂移后仍在场的旧红灯零重复卡）。落库失败
+ * fail-soft（warn——红灯清单仍在简报面承担机械判定）。
+ */
+async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[]): Promise<void> {
+  for (const spec of specs) {
+    if (loop.e2eAttributed.has(spec)) continue
+    loop.e2eAttributed.add(spec)
+    try {
+      await loop.deps.tasks.addTask(attributionTaskInput(loop.source, spec, { projectId: loop.scope.projectId }))
+    } catch (cause) {
+      console.warn(
+        `forge loop e2e baseline attribution card failed (${spec}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
     }
   }
 }
@@ -965,8 +986,10 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // ② 领取（dispatch-core 阶段一）：主会话真实 id + loopSourced=true（claim 记录循环来源
   //    标记——S3 对账判据）+ guardKey = LoopInstanceId（spawn 防线粘性载体）
   // 改进7 disc-2：基线红灯清单按 HEAD 键控刷新后随 claim 简报递达（commit 落地漂移 → 重算，
-  // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）
+  // 简报不再烤死于循环启动时点；稳定 HEAD = 缓存复用，零额外套件执行）；
+  // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
+  if (baseline !== undefined) await issueAttributionCards(loop, baseline.redSpecs)
   const claim = await claimForDispatch(loop.core, exec, {
     identity: { sessionId: owner, loopSourced: true },
     guardKey: record.id,

@@ -111,6 +111,8 @@ interface Harness {
   driver: { start: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn>; stopLoop: ReturnType<typeof vi.fn> }
   addRecord(record: LoopRecord): void
   setStats(stats: TaskStats): void
+  /** 池读故障注入（taskStats 拒绝——readFailed 标注用例源） */
+  failStats(message: string): void
 }
 
 function harness(): Harness {
@@ -120,10 +122,12 @@ function harness(): Harness {
   const calls = { stats: 0 }
   const statsInputs: unknown[] = []
   let statsResult: TaskStats = statsOf({ pending: 1, blocked: 1, unmetPending: 2 })
+  let statsError: Error | undefined
   const tasks = {
     taskStats: async (input: unknown) => {
       statsInputs.push(input)
       calls.stats += 1
+      if (statsError !== undefined) throw statsError
       return statsResult
     },
   } as unknown as ForgeTasksService
@@ -153,6 +157,9 @@ function harness(): Harness {
     addRecord: (record) => registry.register(record),
     setStats: (s) => {
       statsResult = s
+    },
+    failStats: (message) => {
+      statsError = new Error(message)
     },
   }
 }
@@ -483,6 +490,19 @@ describe('execute · 挂起态（P3 摘要兜底 + re-entry 幂等续接 + 接�
     const out = (await h.tool.execute(ARGS, h.exec)) as { resumed: boolean }
     expect(out.resumed).toBe(false)
     expect(h_render(h, out)).toContain('already resumed')
+  })
+})
+
+describe('execute · 池快照读数失败标注（R2-minor⑤——零值为兜底非实况）', () => {
+  it('taskStats 故障：零值兜底 + readFailed=true + 渲染警示行（非全零误导模型判容器已清空）', async () => {
+    const h = harness()
+    h.failStats('task_stats read failed')
+    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; pool: { pending: number; readFailed?: boolean } }
+    expect(out.kind).toBe('started')
+    expect(out.pool).toEqual({ pending: 0, inProgress: 0, blocked: 0, unmetPending: 0, readFailed: true })
+    const text = h_render(h, out)
+    expect(text).toContain('pool read FAILED')
+    expect(text).toContain('not actual counts')
   })
 })
 
