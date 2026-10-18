@@ -3,6 +3,8 @@
 // 红灯自动生成归因卡（环境 / 陈旧断言 / 真回归 三分流）。定位：循环面基建（loop/）——
 // 套件执行命令由装配方经 runSuite 注入，本模块只做解析与载荷合成（纯逻辑可单测）。
 import { execFile, spawn } from 'node:child_process'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type { AddTaskInput, ContainerRef, TaskPriority } from '@dsh-forge/contracts'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 
@@ -96,6 +98,35 @@ export async function baselineForHead(
     redSpecs: baseline.redSpecs,
     ...(baseline.error !== undefined ? { error: baseline.error } : {}),
   }
+}
+
+// ─────────────────────────── 基线持久化缓存（bug 006d8bfe 后续） ───────────────────────────
+//
+// 实例域缓存（挂 ActiveLoop）随宿主重启即丢——同 HEAD 重启循环也全量重跑套件（真机判例：
+// 启动税 24 分钟）。本节 = HEAD 键控缓存的项目级持久化：落盘 {head, redSpecs}，同 HEAD 直接
+// 复用（跨实例/跨重启），HEAD 变化即失效重跑。落点由装配方裁决（cacheFile 路径提供器——
+// 语言/生态无关：TypeScript/Java/Golang 项目通用，本模块只认文件不认生态）。
+
+/**
+ * 读持久化基线缓存（head 键匹配才命中；文件缺席/损坏/键不匹配/字段形状漂移 = undefined
+ * ——fail-soft 缺席语义，调用方回落全量跑批）。error 形态永不落盘（637fcb9e：不可得 ≠ 全绿），
+ * 故命中结果恒无 error 字段。
+ */
+export function loadPersistedBaseline(path: string, head: string): E2eBaselineCache | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { head?: unknown; redSpecs?: unknown }
+    if (parsed.head !== head || !Array.isArray(parsed.redSpecs)) return undefined
+    const redSpecs = parsed.redSpecs.filter((s): s is string => typeof s === 'string')
+    return { commit: head, redSpecs }
+  } catch {
+    return undefined
+  }
+}
+
+/** 写持久化基线缓存（成功解析结果才落盘——error 形态由调用方跳过；目录递归建；IO 故障上抛由调用方 fail-soft） */
+export function persistBaseline(path: string, head: string, redSpecs: readonly string[]): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, JSON.stringify({ head, redSpecs }))
 }
 
 /** 归因卡载荷（改进7 三分流）：基线红灯 spec 逐一生成 test-run 归因卡——结论三分流

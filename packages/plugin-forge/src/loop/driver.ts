@@ -43,7 +43,7 @@ import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
-import { attributionTaskInput, baselineForHead, type E2eBaselineCache } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
 
 // ─────────────────────────── 机械常量（第一层守卫/耐心参数） ───────────────────────────
 
@@ -350,6 +350,15 @@ export interface LoopDriverDeps {
     readonly runSuite: (worktree?: string) => Promise<string>
     /** worktree → 当前 HEAD（装配面注入 git rev-parse 缝；缺席/返回 undefined = 键不可得） */
     readonly readHead?: (worktree: string) => Promise<string | undefined>
+    /**
+     * 基线缓存文件路径提供器（bug 006d8bfe 后续——HEAD 键控持久化，跨实例/重启复用，
+     * 同 HEAD 套件零重跑；路径策略归装配裁决——项目库目录内独立子目录，语言/生态无关）。
+     * 缺席 = 无持久化（实例域缓存现状）。error 形态（基线不可得）不落缓存。
+     */
+    readonly cacheFile?: (input: {
+      readonly projectId: string
+      readonly worktree?: string
+    }) => string | undefined
   }
   /** 机械时延注入（测试缝——缺省生产值；quiescence = 3c 宽限窗基长/轮询间隔） */
   readonly delays?: {
@@ -976,10 +985,34 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   // head undefined（readHead/worktree 缺席或不可得）= 键不可得：首算一次后恒复用（现状语义）
   // runSuite 传同一 worktree——基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）
   const before = loop.e2eBaseline
+  // 持久化缓存优先（bug 006d8bfe 后续——实例域缓存随重启即丢，同 HEAD 跨重启/跨实例复用：
+  // 同 HEAD 套件零重跑；error 形态不落盘故天然不复用「不可得」）。读失败/未命中 = 回落跑批。
+  const cachePath = cfg.cacheFile?.({ projectId: loop.scope.projectId, worktree: loop.record.worktree })
+  if (head !== undefined && cachePath !== undefined && before === undefined) {
+    const persisted = loadPersistedBaseline(cachePath, head)
+    if (persisted !== undefined) {
+      loop.e2eBaseline = persisted
+      return persisted
+    }
+  }
   const entry = await baselineForHead(head, before, () => cfg.runSuite(loop.record.worktree))
   loop.e2eBaseline = entry
+  // eslint-disable-next-line no-console
+  console.log('DBG-UNCACHED head=', head, 'cachePath=', cachePath, 'error=', entry.error)
   if (entry !== before && entry.error !== undefined) {
     console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
+  }
+  // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下实例重跑）；IO 故障 fail-soft
+  if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('DBG-PERSIST', cachePath, JSON.stringify(entry.redSpecs))
+      persistBaseline(cachePath, head, entry.redSpecs)
+    } catch (cause) {
+      console.warn(
+        `forge loop e2e baseline cache persist failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      )
+    }
   }
   return entry
 }

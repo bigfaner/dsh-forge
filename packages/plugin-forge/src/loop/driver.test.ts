@@ -5,6 +5,9 @@
 // 退避 ×3 halted 粘性、worker 异常终止 bounded 重入超限升级、停止（in-flight 真化
 // interrupted + ⑰ 收口）、v1 单活守卫。spawn/tasks/narrator 通道全桩（真 narrator 渲染 +
 // 录制通道；incident 仓缺目录 = 零 I/O）。
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
@@ -266,7 +269,12 @@ function build(options: {
   /** 3c 宽限窗基长注入（缺省 1ms——立即收敛；窗内叫停用例注入大值保持确定性） */
   quiescenceWindowMs?: number
   /** 改进7（e2e 取证债）：红灯基线门注入——runSuite 桩返回 reporter 输出；readHead 桩返回 worktree HEAD */
-  e2eBaseline?: { runSuite: () => Promise<string>; readHead?: (worktree: string) => Promise<string | undefined> }
+  e2eBaseline?: {
+    runSuite: () => Promise<string>
+    readHead?: (worktree: string) => Promise<string | undefined>
+    /** bug 006d8bfe 后续：持久化缓存路径缝（worktree → 缓存文件；缺席 = 无持久化） */
+    cacheFile?: (worktree?: string) => string | undefined
+  }
   /** 1.18 落点核验器注入（错分支提交场景——settleWorkerRun commitLanding 缝） */
   commitLanding?: CommitLandingVerifier
 } = {}): Built {
@@ -556,6 +564,77 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
     // 成本约束：稳定 HEAD 零额外套件执行（start 一次 + 漂移重算一次）
     expect(suiteRuns).toBe(2)
+  })
+
+  it('bug 006d8bfe 后续：基线缓存持久化跨实例——同 HEAD 重启后套件零重跑（error 形态不落缓存）', async () => {
+    // 真机判例：宿主重启丢 ActiveLoop 实例缓存 → 同 HEAD 全量套件重跑（启动税 24 分钟）。
+    // 修法：HEAD 键控缓存持久化到项目库目录独立子目录（cacheFile 注入缝，projectId 寻址）。
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
+    const cacheFile = join(cacheDir, 'e2e-baseline-cache', 'forge-e2e-baseline.json')
+    try {
+      let suiteRuns = 0
+      const makeBuild = () =>
+        build({
+          ...FULL_FLOW(),
+          // worktree 在场 → 落点核验触发（1.18）——命中桩（本组用例零涉核验面）
+          commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+          e2eBaseline: {
+            runSuite: async () => {
+              suiteRuns += 1
+              return 'FAIL e2e/specs/a.spec.ts > suite'
+            },
+            readHead: async () => 'c1',
+            cacheFile: () => cacheFile,
+          },
+        })
+      // 实例 A：首算（套件跑 1 次）+ 缓存落盘（worktree 在场——HEAD 键与持久化键同源）
+      const a = makeBuild()
+      await a.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(a.driver)
+      expect(suiteRuns).toBe(1)
+      expect(existsSync(cacheFile)).toBe(true)
+      // 实例 B（模拟重启后新循环）：同 HEAD → 缓存命中，套件零重跑；红灯照常入简报
+      const b = makeBuild()
+      await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(b.driver)
+      expect(suiteRuns).toBe(1)
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+      expect(b.h.addTaskInputs).toHaveLength(1) // 归因卡照常（缓存命中径同样补发）
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
+  })
+
+  it('bug 006d8bfe 后续：error 形态（基线不可得）不落缓存——下实例重跑而非沿用「不可得」', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
+    const cacheFile = join(cacheDir, 'e2e-baseline-cache', 'forge-e2e-baseline.json')
+    try {
+      let throwing = true
+      const makeBuild = () =>
+        build({
+          ...FULL_FLOW(),
+          commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+          e2eBaseline: {
+            runSuite: async () => {
+              if (throwing) throw new Error('baseline unavailable')
+              return 'FAIL e2e/specs/a.spec.ts > suite'
+            },
+            readHead: async () => 'c1',
+            cacheFile: () => cacheFile,
+          },
+        })
+      const a = makeBuild()
+      await a.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+      await untilSettled(a.driver)
+      expect(existsSync(cacheFile)).toBe(false) // 不可得 ≠ 全绿——不落缓存（637fcb9e 语义保持）
+      throwing = false
+      const b = makeBuild()
+      await b.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+      await untilSettled(b.driver)
+      expect(b.h.claimInputs[0]).toMatchObject({ e2eBaselineRed: ['e2e/specs/a.spec.ts'] })
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true })
+    }
   })
 
   it('R2-minor⑥：HEAD 漂移重算的新增红灯补生成归因卡（与启动时点行为一致；已发不重发）', async () => {
