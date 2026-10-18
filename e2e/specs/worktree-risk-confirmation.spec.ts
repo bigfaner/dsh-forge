@@ -1,5 +1,7 @@
 // worktree-branch-management 1.19 真机 UI e2e：切换分支风险确认框 + 零 checkout/cwd 三重纪律。
-//   · hero chip 改选跨分支行 → 官方 RiskConfirmation 弹出；取消保持原选；勾选知悉 + 确认才切换；
+// 设计 A 重锚（用户裁决 2026-10-18）：确认框在点选时点弹出——
+//   · hero chip 点选跨分支行 → 官方 RiskConfirmation 立现；取消保持原选（mask 退场干净）；
+//     确认才切换选中态（chip 回填目标行）；
 //   · 同分支重选（目标 = 主树当前检出分支）不弹框直接切换；
 //   · 新建表单基准分支 ≠ 主树检出分支 → 创建前同款确认框；取消不进 git，确认才创建；
 //   · 挂靠会话 cwd 强制：sessionCreate 真机预铸 → 落盘 SessionHeader.cwd = worktree 根，
@@ -15,7 +17,7 @@ import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.19/001-risk-confirm'
+  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/002-risk-confirm'
 
 /** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
 function makeGitRepo(): { dir: string; wtDir: string } {
@@ -68,7 +70,7 @@ const baseRiskDialog = (page: Page) => page.getByRole('dialog', { name: '基准�
 
 /** 风险框交互：勾选知悉 → 确认继续 */
 async function acknowledgeAndConfirm(page: Page, dialog: ReturnType<typeof heroRiskDialog>): Promise<void> {
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -80,17 +82,8 @@ async function pickMenuRow(page: Page, text: string): Promise<void> {
   await heroMenu(page).getByText(text, { exact: false }).first().click()
 }
 
-/** 挂靠会话计数（checks RPC——编排判定共用源） */
-async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
-  const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
-    data?: { attachedSessions?: number }
-    attachedSessions?: number
-  } | null
-  return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
-}
-
-/** composer 键入（首条消息意图——Lexical 配方：contenteditable 收敛门 + insertText + 回显重试） */
-async function typeDraft(page: Page, text: string): Promise<void> {
+/** mask 退场干净（设计 A 缺陷②）：确认框关闭后 composer 可点（零遮挡残留） */
+async function expectComposerReachable(page: Page, label: string): Promise<void> {
   await page
     .waitForFunction(
       () => {
@@ -101,14 +94,13 @@ async function typeDraft(page: Page, text: string): Promise<void> {
       { timeout: 60_000 },
     )
     .catch(() => undefined)
-  const composer = page.locator('[data-composer-input]').first()
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    await composer.click()
-    await page.keyboard.insertText(text)
-    const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
-    if (echoed.includes(text)) return
-    await page.waitForTimeout(5_000)
-  }
+  await page
+    .locator('[data-composer-input]')
+    .first()
+    .click({ timeout: 8_000 })
+    .catch(() => {
+      throw new Error(`${label}：composer 点击被遮挡（mask 残留）`)
+    })
 }
 
 /** 走查截图（非关键路径——动画收尾期 page.screenshot 可能超时，失败不阻塞断言链） */
@@ -130,7 +122,7 @@ async function listNames(page: Page, wsDir: string): Promise<string[]> {
   return entries.map((entry) => entry.worktreeName ?? '')
 }
 
-test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠会话 cwd 强制', async () => {
+test('1.19 UI：点选时点跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠会话 cwd 强制', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-19-risk-'))
   const { dir: wsDir, wtDir } = makeGitRepo()
@@ -147,34 +139,29 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
+    // 前置：选中项目工作区（hero chip 挂载前置）
+    await page.locator('button[aria-label="选择工作区"]').first().click()
+    await page.locator('.dswf-hero-picker-list').getByText('risk-repo', { exact: false }).first().click()
 
-    // ── AC1：hero chip 改选跨分支行（feat-a ≠ main）——1.29 点选纯选中态：点选零确认框；
-    // 首条消息意图（草稿键入）才弹风险框；取消保持原选（选中态清退回锚定默认）──
+    // ── AC1：点选跨分支行（feat-a ≠ main）——点选时点确认框立现（设计 A）；
+    // 取消 = 本次改选未发生（chip 保持原行）+ mask 退场干净 ──
     await pickMenuRow(page, 'feat-a')
-    await expect(heroRiskDialog(page), '点选不应弹确认框（1.29 时机随编排后移）').not.toBeVisible({ timeout: 8_000 })
-    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
-      .toContain('feat-a')
-    await typeDraft(page, '1-19 risk first message')
-    await expect(heroRiskDialog(page), '首条消息意图应弹官方 RiskConfirmation（时机后移）').toBeVisible({ timeout: 30_000 })
+    await expect(heroRiskDialog(page), '点选跨分支行应立现确认框（点选时点）').toBeVisible({ timeout: 8_000 })
     await snap(page, 'hero-risk-dialog.png')
     await heroRiskDialog(page).getByRole('button', { name: '取消', exact: true }).click()
     await expect(heroRiskDialog(page)).toBeHidden()
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .not.toContain('feat-a')
+    await expectComposerReachable(page, '取消后')
 
-    // ── AC1 确认路径：重新选中 → 首条消息意图 → 勾选知悉 → 确认才走挂靠编排 ──
+    // ── AC1 确认路径：重新点选 → 确认框重弹 → 勾选知悉 → 确认后才切换选中态 ──
     await pickMenuRow(page, 'feat-a')
-    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
-      .toContain('feat-a')
-    await typeDraft(page, '1-19 risk confirm first message')
-    await expect(heroRiskDialog(page)).toBeVisible({ timeout: 30_000 })
+    await expect(heroRiskDialog(page), '重选应重弹确认框').toBeVisible({ timeout: 8_000 })
     await acknowledgeAndConfirm(page, heroRiskDialog(page))
     await expect(heroRiskDialog(page)).toBeHidden()
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后应产生 wt-a 挂靠会话（首条消息时点编排）' })
-      .toBe(1)
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
+    await expectComposerReachable(page, '确认后')
 
     // ── AC2：同分支重选（目标 = 主树当前检出分支 main）不弹框直接切换 ──
     await pickMenuRow(page, 'main')
@@ -202,7 +189,12 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await expect(baseRiskDialog(page)).toBeVisible()
     await acknowledgeAndConfirm(page, baseRiskDialog(page))
     await expect
-      .poll(async () => (await listNames(page, wsDir)).includes('feat/new'), { timeout: 30_000, message: '确认后应创建同名 worktree feat/new' })
+      .poll(async () => {
+        const names = await listNames(page, wsDir)
+        console.log('[1.19-ac3] worktree names =', names.join(','))
+        // worktreeName = 分支末段归一（feat/new → new——list 条目名单面）
+        return names.includes('new')
+      }, { timeout: 30_000, message: '确认后应创建同名 worktree（分支 feat/new → 树名 new）' })
       .toBe(true)
     await snap(page, 'create-confirmed.png')
 
@@ -216,7 +208,9 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     // 落盘证据双面：① session_projcache 快照 cwd 字段；② 官方存储按会话 cwd 分组——
     // session-<id> 目录必落 `…-wt-a--` 组（分组键 = SessionHeader.cwd）
     const headerCwd = findSessionHeaderCwd(userData, sessionId as string)
-    expect(headerCwd, 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(wtDir)
+    // 分隔符归一比对（落盘 cwd 为 Windows 原生反斜杠形态——语义面等值判定）
+    const norm = (p: string | undefined): string => (p ?? '').replaceAll('\\', '/').toLowerCase()
+    expect(norm(headerCwd), 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(norm(wtDir))
     const sessionDir = findSessionDir(userData, sessionId as string)
     expect(sessionDir, '会话存储目录应按 wt-a worktree cwd 分组').toContain('wt-a')
     // cwd 实测：该目录下 pwd 语义面（git rev-parse --show-toplevel）= worktree 根；零 checkout（主树仍在 main）

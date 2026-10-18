@@ -13,14 +13,18 @@ import {
   WORKTREE_CHANNELS,
   type WorktreeListRequest,
   type WorktreeSealRequest,
+  type WorktreeSessionCreateRequest,
 } from '@dsh-forge/contracts'
 import { SessionCwdMismatchError, SessionSealedError } from '@dsh-forge/git-worktree'
 import type { ForgeIpc } from './forge-channels.js'
+import { rpcEnvelope } from './rpc-envelope.js'
 import {
   createWorktreeRpcService,
   interceptRequiredBinding,
   interceptSessionSends,
   registerWorktreeChannels,
+  verifySendGuardInstalled,
+  WorktreeCapabilityAbsentError,
   type SessionControllerFace,
   type SessionPersistenceFace,
 } from './worktree-rpc.js'
@@ -816,5 +820,153 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     outer()
     await expect(controller.prompt({ sessionId: 's1' })).rejects.toThrow(SessionSealedError)
     expect(prompts).toHaveLength(0)
+  })
+})
+
+describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
+  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+
+  /** 缺席装配桩：gitWorktree 能力缺席 + guardState/探针表驱动 + 预铸采纳两缝在场 */
+  function absentRig(input: {
+    guardState?: 'absent'
+    probe?: (dir: string) => Promise<string | null>
+    headers?: Record<string, { cwd: string }>
+  }) {
+    const probes: string[] = []
+    const probeGitAnchor = async (dir: string): Promise<string | null> => {
+      probes.push(dir)
+      return input.probe ? input.probe(dir) : null
+    }
+    const { persistence } = fakePersistence({}, input.headers ?? {})
+    const { controller, calls, prompts } = fakeController()
+    const service = createWorktreeRpcService({
+      // gitWorktree 能力缺席（不传）+ 60s 放弃位表驱动 + 探针注入桩
+      guardState: input.guardState === 'absent' ? (() => 'absent' as const) : undefined,
+      probeGitAnchor,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+    })
+    return { service, controller, calls, prompts, probesOf: () => probes }
+  }
+
+  it('git 拒：能力缺席 + guardState absent + 探针有锚 → sessionCreate typed error 显式拒绝（controller.create 零调用）', async () => {
+    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo' })
+    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toMatchObject({
+      name: 'WorktreeCapabilityAbsentError',
+      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
+    })
+    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow(/git 绑定能力缺席/)
+    expect(rig.calls).toHaveLength(0)
+  })
+
+  it('typed error 经 rpcEnvelope 序列化为 RpcErr 信封（code ∈ ERROR_CODES——前端 RpcClientError 链可达）', async () => {
+    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo' })
+    const handler = rpcEnvelope((q: WorktreeSessionCreateRequest) => rig.service.sessionCreate(q))
+    const result = await handler(undefined, { worktreePath: WT_A })
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'ERR_WORKTREE_CAPABILITY_ABSENT', message: expect.stringContaining('git 绑定能力缺席') },
+    })
+  })
+
+  it('非 git 照常：探针 null → 官方原流（预铸采纳照常，行为零差异）', async () => {
+    const rig = absentRig({ guardState: 'absent', probe: async () => null })
+    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
+    expect(result).toMatchObject({ sessionId: expect.any(String), branch: 'feat/a' })
+    expect(rig.calls).toHaveLength(1)
+  })
+
+  it('探针逐次现跑、零缓存：git 仓库移除后下一次创建立刻判非 git（探针两次现跑）', async () => {
+    let repoPresent = true
+    const rig = absentRig({ guardState: 'absent', probe: async () => (repoPresent ? 'C:/repo' : null) })
+    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow(WorktreeCapabilityAbsentError)
+    repoPresent = false // 模拟 git 仓库被移除
+    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
+    expect(result).toMatchObject({ sessionId: expect.any(String) })
+    expect(rig.probesOf()).toHaveLength(2) // 逐次现跑——判定结果未作会话期记忆
+  })
+
+  it('瞬态窗口 fail-open 现状：guardState 未盖位（能力轮询未放弃）→ 探针不跑、sessionCreate 照常（D1 拆分）', async () => {
+    const rig = absentRig({ probe: async () => 'C:/repo' })
+    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
+    expect(result).toMatchObject({ sessionId: expect.any(String) })
+    expect(rig.probesOf()).toHaveLength(0)
+  })
+
+  it('能力在场零改动：gitWorktree 在场时探针不跑（粘性能力位优先，非介入面零固定税）', async () => {
+    const probes: string[] = []
+    const { persistence } = fakePersistence({})
+    const { controller, calls } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      guardState: () => 'absent',
+      probeGitAnchor: async (dir) => {
+        probes.push(dir)
+        return 'C:/repo'
+      },
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+    })
+    const result = await service.sessionCreate({ worktreePath: WT_A })
+    expect(result).toMatchObject({ sessionId: expect.any(String) })
+    expect(calls).toHaveLength(1)
+    expect(probes).toHaveLength(0)
+  })
+
+  it('prompt 拦截拒：能力缺席 + 探针有锚 → judge 抛稳定 name 错误（显式拒绝不 fail-open）', async () => {
+    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo', headers: { blank: { cwd: 'C:/repo' } } })
+    const guard = rig.service.requiredBindingGuard()
+    expect(guard).toBeDefined()
+    await expect(guard!.judge('blank')).rejects.toMatchObject({
+      name: 'WorktreeCapabilityAbsentError',
+      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
+    })
+    await expect(guard!.judge('blank')).rejects.toThrow(/git 绑定能力缺席/)
+  })
+
+  it('prompt 拦截非 git 照常：探针 null → judge pass 原流放行', async () => {
+    const rig = absentRig({ guardState: 'absent', probe: async () => null, headers: { blank: { cwd: 'C:/repo' } } })
+    const { controller, prompts } = rig
+    const dispose = interceptRequiredBinding(controller, rig.service.requiredBindingGuard()!)
+    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).resolves.toEqual({ accepted: true })
+    dispose()
+    expect(prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
+  })
+})
+
+// ── W4 装载自证（session-binding-guarantee §W4）——wrap 换芯读回判读核 ──────────────────
+describe('verifySendGuardInstalled（成功路径自证：prompt 已换 + guard 非空，失败 fail-loud）', () => {
+  const fakeController = (prompt: unknown): SessionControllerFace =>
+    ({ prompt }) as unknown as SessionControllerFace
+
+  it('换芯（prompt ≠ 装配前留底）+ guard 在场 → 通过不抛', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    const wrapped = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: true }),
+    ).not.toThrow()
+  })
+
+  it('prompt 未换芯（= 装配前留底）→ 抛 fail-loud（不静默残缺）', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(original), { promptBefore: original, guardPresent: true }),
+    ).toThrow(/未换芯/)
+  })
+
+  it('必绑 guard 缺席（sessionPersistence 缺席）→ 抛 fail-loud', () => {
+    const original = (): Promise<unknown> => Promise.resolve()
+    const wrapped = (): Promise<unknown> => Promise.resolve()
+    expect(() =>
+      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: false }),
+    ).toThrow(/guard 缺席/)
+  })
+
+  it('装配前留底非函数（prompt 面漂移）→ 抛 fail-loud', () => {
+    expect(() =>
+      verifySendGuardInstalled(fakeController(undefined), { promptBefore: undefined, guardPresent: true }),
+    ).toThrow(/留底缺席/)
   })
 })

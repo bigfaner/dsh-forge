@@ -49,6 +49,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
   // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
+  // session-binding-guarantee W2——能力缺席拒绝错误条
+  ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

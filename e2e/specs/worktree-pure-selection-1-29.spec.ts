@@ -1,15 +1,18 @@
-// worktree-branch-management 1.29 真机 UI e2e：点选 worktree 去编排化——只改选中态，
-// 会话创建唯一时机 = 首条消息。
+// worktree-branch-management 1.29 真机 UI e2e（W3 arm 退役语义更新——纯选中态）：点选
+// worktree 行只改选中态（点选时点跨分支确认，1.19 语义回归），会话创建唯一时机 = 官方
+// create 调用点（wrap 改道预铸，目标 = 注册项目根）。
 //   · 挂载/默认锚定回填：零会话副作用（attachedSessions = 0）；
-//   · 点选 worktree 行（feat-a ≠ main）：纯选中态——chip 回填 + 零确认框 + 零新会话
-//     （sessions 目录零新 jsonl——1.14「点选即建会话」即时编排语义废除）；
-//   · 首条消息意图（composer 草稿非空）→ 1.19 跨分支确认框（时机随编排后移）→ 确认才
-//     预铸编排（cwd = wt-a）→ 草稿搬运到产物会话（确认前消息不发出）；
-//   · 发送 → 首条消息落选中树（会话日志落 wt-a cwd 分组目录）。
+//   · 点选 worktree 行（feat-a ≠ main）：点选时点确认框立现 → 确认 → 纯选中态——chip
+//     回填 + host 选中记忆推送 + 零会话副作用（attachedSessions 恒零）；
+//   · 「新会话」钮 → 官方 create → wrap 预铸绑定项目根（创建即绑定；选中树消费面 =
+//     host 必绑重路由，对无绑定 blank 生效）；
+//   · 发送 → 首条消息落预铸绑定会话（seal 绑定回读 = 落账证据；模型运行失败可接受
+//     ——隔离 profile 无模型凭据，user 消息落账不受影响）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；新会话钮 =
-// [data-dswf-project-action="new-session"]；composer = [data-composer-input]。
+// [data-dswf-project-action="new-session"]；会话行 = [data-dswf-session]；
+// composer = [data-composer-input]。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeApp, launchElectron } from '../support/launch.js'
@@ -17,7 +20,7 @@ import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.29/001-pure-selection'
+  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/006-pure-selection'
 
 /** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
 function makeGitRepo(): { dir: string; wtDir: string } {
@@ -66,11 +69,12 @@ async function registerProject(page: Page, wsDir: string): Promise<void> {
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
 const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分支风险确认' })
+const newSessionButton = (page: Page) => page.locator('[data-dswf-project-action="new-session"]').first()
 
-/** 风险框交互：勾选知悉 → 确认继续（1.19 同款） */
+/** 风险框交互：勾选风险知悉 → 确认继续（1.19 同款；「不再提示」勾选行不勾——保持可重问） */
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -86,33 +90,15 @@ async function attachedSessions(page: Page, wsDir: string, path: string): Promis
   return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
 }
 
-/** sessions 目录 jsonl 总数（点选零会话副作用的落盘面证据） */
-function countSessionJsonl(userData: string): number {
-  let count = 0
-  const visit = (dir: string, depth: number): void => {
-    if (depth > 8) return
-    let rows: string[] = []
-    try {
-      rows = readdirSync(dir)
-    } catch {
-      return
-    }
-    for (const row of rows) {
-      const full = join(dir, row)
-      let stat
-      try {
-        stat = statSync(full)
-      } catch {
-        continue
-      }
-      if (stat.isDirectory()) visit(full, depth + 1)
-      else if (row.endsWith('.jsonl')) count += 1
-    }
-  }
-  for (const root of [join(userData, 'dsh-home'), userData]) {
-    if (existsSync(root)) visit(root, 0)
-  }
-  return count
+/** seal 绑定回读（header.cwd ≡ worktreePath 由宿主 cwd 守护保证——读到即 cwd 证据） */
+async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePath?: string; branch?: string; sealed?: boolean } | undefined> {
+  const raw = (await forgeRpc(page, 'forge:worktree/seal', { sessionId })) as {
+    data?: { sealed?: boolean; binding?: { worktreePath?: string; branch?: string } | null }
+    sealed?: boolean
+    binding?: { worktreePath?: string; branch?: string } | null
+  } | null
+  const seal = raw?.data ?? raw
+  return seal?.binding === null || seal?.binding === undefined ? undefined : { ...seal.binding, sealed: seal?.sealed }
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -124,51 +110,7 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-/**
- * 首条消息落盘取证：在 userData 下找含 marker 文本的会话日志文件，返回其所在存储目录
- * （官方按会话 cwd 分组——目录名含 worktree 名即 cwd 语义面证据）。
- */
-function findSessionDirByMarker(userData: string, marker: string): string | undefined {
-  const visit = (dir: string, depth: number): string | undefined => {
-    if (depth > 8) return undefined
-    let rows: string[] = []
-    try {
-      rows = readdirSync(dir)
-    } catch {
-      return undefined
-    }
-    for (const row of rows) {
-      const full = join(dir, row)
-      let stat
-      try {
-        stat = statSync(full)
-      } catch {
-        continue
-      }
-      if (stat.isDirectory()) {
-        const hit = visit(full, depth + 1)
-        if (hit !== undefined) return hit
-        continue
-      }
-      if (!row.endsWith('.jsonl')) continue
-      try {
-        if (readFileSync(full, 'utf8').includes(marker)) return dir
-      } catch {
-        continue
-      }
-    }
-    return undefined
-  }
-  for (const root of [join(userData, 'dsh-home'), userData]) {
-    if (existsSync(root)) {
-      const hit = visit(root, 0)
-      if (hit !== undefined) return hit
-    }
-  }
-  return undefined
-}
-
-test('1.29 UI：点选纯选中态零会话副作用——首条消息按选中树落 cwd（唯一时机）', async () => {
+test('1.29 UI：点选纯选中态（点选时点确认）——会话在官方 create 调用点预铸绑定', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-29-pure-'))
   const { dir: wsDir, wtDir } = makeGitRepo()
@@ -184,34 +126,65 @@ test('1.29 UI：点选纯选中态零会话副作用——首条消息按选中�
     page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-    // 默认锚定：主树检出 main → chip = 主行（回填态）；1.29 零会话副作用——挂载/回填不建会话
+    // 默认锚定：主树检出 main → chip = 主行（回填态）；零会话副作用——挂载/回填不建会话
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
     await expect
       .poll(async () => attachedSessions(page, wsDir, wsDir), {
         timeout: 30_000,
-        message: '挂载/默认锚定回填不应产生主树挂靠会话（1.29 会话创建唯一时机 = 首条消息）',
+        message: '挂载/默认锚定回填不应产生主树挂靠会话',
       })
       .toBe(0)
-    const baselineJsonl = countSessionJsonl(userData)
 
-    // ── 点选 worktree（跨分支 feat-a）：纯选中态——零确认框、chip 回填、零新会话 ──
+    // ── 点选 worktree（跨分支 feat-a）：点选时点确认框立现（1.19 语义回归）→ 确认 →
+    // 纯选中态（chip 回填 + host 选中记忆推送 + 零会话副作用）──
     await chip(page).first().click()
     await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
-    await expect(heroRiskDialog(page), '点选不应弹跨分支确认框（1.19 时机随编排后移至首条消息）')
-      .not.toBeVisible({ timeout: 8_000 })
+    await expect(heroRiskDialog(page), '点选时点跨分支确认框应立现（1.19 语义回归）').toBeVisible({ timeout: 8_000 })
+    await snap(page, 'select-time-risk-dialog.png')
+    await acknowledgeAndConfirm(page)
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
     await page.waitForTimeout(2_000)
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选不应产生 wt-a 挂靠会话' })
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选确认不应产生 wt-a 挂靠会话（纯选中态）' })
       .toBe(0)
-    expect(countSessionJsonl(userData), '点选后 sessions 目录零新 jsonl（纯选中态）').toBe(baselineJsonl)
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wsDir), { timeout: 30_000, message: '点选确认不应产生主树挂靠会话（纯选中态）' })
+      .toBe(0)
     await snap(page, 'pure-selection-no-session.png')
 
-    // ── 首条消息意图（键入）：1.19 确认框在首条消息时点出现 → 确认 → 预铸编排 ──
-    // 前置：composer 键入配方（1.26 同径：contenteditable 收敛门 + insertText + 回显重试）
+    // ── 「新会话」钮 → 官方 create → wrap 预铸（创建即绑定；创建目标 = 注册项目根——
+    // 选中树消费面 = host 必绑重路由，对无绑定 blank 生效；点选零会话副作用不受影响）──
+    await page
+      .locator('.dswf-sidebar-project-row', { hasText: 'orch-repo' })
+      .first()
+      .hover()
+    await newSessionButton(page).click()
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wsDir), { timeout: 60_000, message: '创建即绑定：新会话应预铸绑定项目根' })
+      .toBe(1)
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '选中态不改变 wrap 创建目标（wt-a 恒零）' })
+      .toBe(0)
+    await snap(page, 'create-bound-root.png')
+
+    // ── 发送：startSession 落 hero 空态（composer inert——官方无 hero 提交建会话触点），
+    // 先经左栏会话行打开预铸会话，再在会话 composer 键入并发送（发送钮手势）──
+    const MARKER = '1-29-pure-selection-first-message'
+    await page.locator('[data-dswf-session]').first().click()
+    // 会话行激活判读（data-selected 翻转 = 官方 openSession 落位）
+    await expect
+      .poll(async () => {
+        const rows = page.locator('[data-dswf-session]')
+        const n = await rows.count()
+        for (let i = 0; i < n; i += 1) {
+          if ((await rows.nth(i).getAttribute('data-selected')) !== null) return true
+        }
+        return false
+      }, { timeout: 30_000, message: '会话行点击后应激活（data-selected）' })
+      .toBe(true)
     await page
       .waitForFunction(
         () => {
@@ -222,7 +195,6 @@ test('1.29 UI：点选纯选中态零会话副作用——首条消息按选中�
         { timeout: 60_000 },
       )
       .catch(() => undefined)
-    const MARKER = '1-29-pure-selection-first-message'
     const composer = page.locator('[data-composer-input]').first()
     for (let attempt = 0; attempt < 8; attempt += 1) {
       await composer.click()
@@ -231,53 +203,37 @@ test('1.29 UI：点选纯选中态零会话副作用——首条消息按选中�
       if (echoed.includes(MARKER)) break
       await page.waitForTimeout(5_000)
     }
-    // 确认框出现本身 = 首条消息时点消费的证据；确认前消息不发出（草稿留在 composer）
-    await expect(heroRiskDialog(page), '首条消息意图应触发跨分支确认框（时机后移）').toBeVisible({ timeout: 30_000 })
-    await snap(page, 'first-message-intent-risk-dialog.png')
-    await acknowledgeAndConfirm(page)
-    // arm 收敛：选中树挂靠会话唯一（预铸编排产物——非复用即新建一次，之后零重复）
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后应产生 wt-a 挂靠会话（首条消息时点编排）' })
-      .toBe(1)
-    // 草稿搬运：已键入首条消息出现在 arm 后的产物会话 composer（确认前不发出、不丢失）
-    await expect
-      .poll(async () => (await composer.evaluate((el) => (el as HTMLElement).textContent ?? '').catch(() => '')) ?? '', {
-        timeout: 30_000,
-        message: '草稿应搬运到 arm 产物会话（首条消息不丢）',
-      })
-      .toContain(MARKER)
-    await snap(page, 'armed-draft-carried.png')
-
-    // ── 发送：首条消息落选中树（会话存储按 wt-a cwd 分组）──
-    const inertPlaceholder = page.getByText('选择工作区开始', { exact: false })
-    if ((await inertPlaceholder.count()) > 0) {
-      await page.getByRole('button', { name: '选择工作区' }).first().click()
-      await page.locator('.dswf-hero-picker-list').getByText('orch-repo', { exact: false }).first().click()
-    }
-    // 发送重试环（焦点收敛 + 发送钮/键盘双手势——Lexical 绑定收敛竞态吃首次手势，
-    // 1.26 同症状判例）：以会话日志落盘为唯一发送成功证据
+    await snap(page, 'before-send.png')
+    // 发送（发送钮手势——运行失败可接受：隔离 profile 无模型凭据，user 消息落账不受影响）
     const sendButton = page.getByRole('button', { name: '发送消息' })
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      await composer.click()
-      if (await sendButton.isEnabled().catch(() => false)) {
-        await sendButton.click().catch(() => {})
-      } else {
-        await page.keyboard.press('Enter')
-      }
-      const deadline = Date.now() + 20_000
-      let landed = false
-      while (Date.now() < deadline) {
-        if (findSessionDirByMarker(userData, MARKER) !== undefined) {
-          landed = true
-          break
+    await composer.click()
+    if (await sendButton.isEnabled().catch(() => false)) await sendButton.click().catch(() => {})
+    else await page.keyboard.press('Enter')
+    // 发送落账判读：左栏会话行标题 = 首条消息文本（官方会话题名取首条 user 消息）
+    await expect
+      .poll(async () => {
+        const rows = page.locator('[data-dswf-session]')
+        const n = await rows.count()
+        for (let i = 0; i < n; i += 1) {
+          if (((await rows.nth(i).textContent()) ?? '').includes(MARKER)) return true
         }
-        await page.waitForTimeout(1_000)
-      }
-      if (landed) break
-    }
-    const sessionDir = findSessionDirByMarker(userData, MARKER)
-    expect(sessionDir, '首条消息应落会话日志（落盘 = 发送成功证据）').toBeDefined()
-    expect(sessionDir, '会话存储目录应按选中 worktree cwd 分组（cwd = wt-a 根）').toContain('wt-a')
+        return false
+      }, { timeout: 60_000, message: '首条消息应落账（会话行标题 = 消息文本）' })
+      .toBe(true)
+    // seal 绑定回读：预铸会话出生即绑项目根（创建即绑定证据——header.cwd ≡ worktreePath
+    // 由宿主 cwd 守护保证；模型运行失败不影响绑定与落账）
+    const sessionId = (await page.locator('[data-dswf-session]').first().getAttribute('data-dswf-session')) ?? ''
+    let binding: { worktreePath?: string; branch?: string; sealed?: boolean } | undefined
+    await expect
+      .poll(async () => (binding = await sealBinding(page, sessionId).catch(() => undefined)), {
+        timeout: 60_000,
+        message: 'seal 未读到预铸会话绑定',
+      })
+      .toBeDefined()
+    console.log('[1.29] seal binding =', JSON.stringify(binding))
+    expect(binding?.worktreePath?.toLowerCase().replaceAll('\\', '/')).toBe(wsDir.toLowerCase().replaceAll('\\', '/'))
+    expect(binding?.branch).toBe('main')
+    expect(binding?.sealed, '主树绑定恒不封存').toBe(false)
     await snap(page, 'first-message-in-worktree.png')
   } finally {
     // eslint-disable-next-line no-console -- 判读留痕：runner stdout（Tee 日志）+ 证据目录双落

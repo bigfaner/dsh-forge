@@ -66,6 +66,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── dispatch-loop-hardening 改进 5（addTask caller 身份分流）──
   // worker 会话 addTask 拒收 → 错误条（自解释文案带正确动作——submitTask result=blocked 如实结算）
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
+  // ── session-binding-guarantee W2（host 能力缺席显式拒绝）──
+  // git 绑定能力缺席拒绝 → 错误条（创建/发送语境原地反馈——检查插件装配后重启）
+  ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
 }
 
 /**

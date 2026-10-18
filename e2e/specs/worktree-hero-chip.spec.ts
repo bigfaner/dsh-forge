@@ -100,8 +100,17 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
     await expect(menu.locator('text=/dsh-forge-fix4-ui-repo/').first()).toBeVisible()
     // AC（bug 907225f2）：选择确认后 chip 回填所选行（分支 · worktree 名）——不再恒占位。
     // 编排成功 → 会话面接管；经官方「新会话」入口重入 hero，选中记忆仍回填（确认即回填口径）
+    // 点选前挂靠基线（本 spec 前置已 sessionCreate 预铸一记——基线 ≥1 在场）
+    const baselineAttached = await (async () => {
+      const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path: wsDir })) as {
+        attachedSessions?: number
+        data?: { attachedSessions?: number }
+      } | null
+      return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+    })()
     await menu.locator('[role="menuitem"]').filter({ hasText: 'dsh-forge-fix4-ui-repo' }).first().click()
-    await page.getByRole('button', { name: /新会话|新建会话/ }).first().click({ timeout: 30_000 })
+    // AC（bug 907225f2 + 设计 A）：同分支点选零弹框直切，选择确认后 chip 回填所选行
+    //（分支 · worktree 名）——不再恒占位。
     const backfilled = page.locator('[data-dswt-hero-trigger]')
     await expect
       .poll(async () => {
@@ -113,8 +122,9 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
       })
       .toMatch(/·/)
     expect(await backfilled.first().textContent()).not.toContain('选择 worktree…')
-    // AC（1.29 点选纯选中态）：选择确认零会话副作用——checks attachedSessions 恒 0
-    //（1.14「点选即建会话」即时编排语义废除；挂靠会话只在首条消息时点产生）
+    // AC（设计 A 点选纯选中态）：点选零会话副作用——点选零「新增」挂靠会话
+    //（会话创建唯一时机 = 官方 create 调用点 wrap 预铸；计数取点选前基线对照——前置
+    // 预铸基线已在场，绝对 0 不可达）
     await expect
       .poll(async () => {
         const raw = (await forgeRpc(page, 'forge:worktree/checks', {
@@ -122,8 +132,21 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
           path: wsDir,
         })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
         return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
-      }, { timeout: 30_000, message: '点选后不应产生挂靠会话（纯选中态）' })
-      .toBe(0)
+      }, { timeout: 30_000, message: '点选后不应新增挂靠会话（纯选中态）' })
+      .toBe(baselineAttached)
+    // AC（设计 A + G4 reuse）：经官方「新会话」入口重入 hero——前置预铸 blank 在场 =
+    // 官方 reuse-or-create 采纳既有 blank（adopt 径 wrap 直通，零重复建）；选中记忆仍回填
+    await page.getByRole('button', { name: /新会话|新建会话/ }).first().click({ timeout: 30_000 })
+    await expect
+      .poll(async () => {
+        const raw = (await forgeRpc(page, 'forge:worktree/checks', {
+          projectRoot: wsDir,
+          path: wsDir,
+        })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
+        return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+      }, { timeout: 30_000, message: '新会话应采纳既有预铸 blank（零重复建——计数不变）' })
+      .toBe(baselineAttached)
+    expect(await backfilled.first().textContent(), '重入 hero 后选中记忆仍回填所选行').toMatch(/·/)
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })

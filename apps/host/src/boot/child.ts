@@ -61,6 +61,7 @@ import {
   createWorktreeRpcService,
   interceptRequiredBinding,
   interceptSessionSends,
+  verifySendGuardInstalled,
   type SessionControllerFace,
   type SessionPersistenceFace,
   type WorktreeRpcService,
@@ -335,6 +336,9 @@ async function main(): Promise<void> {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
     }
     try {
+      // W2 缺席拒绝面判定源：60s 能力轮询放弃路径盖 'absent'（注入 createWorktreeRpcService
+      // ——sessionCreate/prompt 两入口据此判定是否跑 core git 探针显式拒绝）。
+      let worktreeGuardState: 'absent' | undefined
       // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
       // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
       // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
@@ -373,6 +377,7 @@ async function main(): Promise<void> {
       }
       const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
         gitWorktree: getGitWorktree as never,
+        guardState: () => worktreeGuardState,
         sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
@@ -447,6 +452,8 @@ async function main(): Promise<void> {
           return
         }
         const disposers: Array<() => void> = []
+        // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
+        const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
         disposers.push(
           interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), (line) => diag(line)),
         )
@@ -466,6 +473,10 @@ async function main(): Promise<void> {
             }
           }
         }
+        // W4 装载自证（session-binding-guarantee §W4）：wrap 换芯读回——controller.prompt 已换
+        // （≠ 装配前留底）+ 必绑 guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛
+        // （不静默降级为无拦截宿主）。
+        verifySendGuardInstalled(sessionController, { promptBefore, guardPresent: guard !== undefined })
       }
       const wrapGate = setInterval(() => {
         if (getGitWorktree() !== undefined) {
@@ -477,7 +488,12 @@ async function main(): Promise<void> {
       setTimeout(() => {
         clearInterval(wrapGate)
         if (!sendGuardInstalled) {
-          diag('[git-worktree] gitWorktree 能力未解析——发送拦截零 wrap（git 缺席宿主零开销）')
+          // W2 能力缺席 fail-closed 收口：盖缺席状态位 + 接线拒绝面（judge/sessionCreate
+          // 入口对 git 项目显式拒绝；非 git 探针 null 走官方原流零差异）。能力在场路径
+          // （wrapGate 命中先行安装）零改动。
+          worktreeGuardState = 'absent'
+          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——guardState 盖 absent，缺席拒绝面接线')
+          installSendGuard()
         }
       }, 60_000).unref?.()
     } catch (cause) {

@@ -9,7 +9,11 @@
 //     挂 conversation.input.overlay 槽——composer 区官方缝。「不可发送」硬保证在 host
 //     发送拦截面，UI 均提示性视觉）。
 // 数据面 = forge:worktree/* 九通道（contracts WORKTREE_CHANNELS 唯一源，rpc client 薄面）。
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+// W3 arm 退役（session-binding-guarantee）：armDefault 效应链（首条消息时点编排 + 草稿搬运
+// + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
+// 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
+// （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   CreateWorktreeDialog,
   DeleteWorktreeDialog,
@@ -29,13 +33,9 @@ import { collectSlugCandidates } from '@dsh-forge/git-worktree/client'
 import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
-  activeSessionRowOf,
   riskDialogNeeded,
   riskLatchConfirm,
-  riskLatchFailureClear,
   riskLatchReselect,
-  shouldArmSelectedRow,
-  type HeroWorktreeFace,
   type RiskConfirmLatch,
 } from './hero-picker-model.js'
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
@@ -70,16 +70,15 @@ interface WorktreeListPhase {
 
 const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
 
-/** worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对；与 plugin.ts
- * worktreeCwdKey 同式，组件层本地单源避免装配层反向依赖） */
+/** worktree 路径归一键（1.21/1.24 口径——项目根选中记忆键归一；与 wrap/create-wrap 归一同式） */
 const cwdKey = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
 
 /**
  * 项目粒度选中记忆（1.26 起落 sessionStorage——bug 907225f2 确认即回填的载体升级）：
- * worktree 挂靠会话采纳会引发会话面整域重载（1.26 e2e 实证——挂靠 openSession 后 hero
- * 挂载树整域重挂、模块级记忆丢失），模块级 Map 载体使「记忆选中→编排默认」跨重载失效；
- * sessionStorage 同 tab 同源存活、重载不丢，读写全程 try/catch（隐私模式/SSR fail-soft
- * 退回无记忆现状）。写入口唯一（select 记忆/删除两式），键 = 归一 projectRoot。
+ * 会话面整域重载（挂载树重挂、模块级记忆丢失）不丢「记忆选中→回填」；wrap 消费 host
+ * 选中记忆（pushSelection），本记忆承担跨重挂的选中意图恢复。sessionStorage 同 tab 同源
+ * 存活、重载不丢，读写全程 try/catch（隐私模式/SSR fail-soft 退回无记忆现状）。写入口
+ * 唯一（select 记忆/删除两式），键 = 归一 projectRoot。
  */
 const memoryKey = (projectRoot: string): string => `dswt.lastWorktree.${cwdKey(projectRoot)}`
 
@@ -118,20 +117,18 @@ export function anchorDefaultWorktreePath(
  * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
- * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（1.29 裁决——chip 回填 + 项目粒度
- * 记忆写入，零编排零确认框零会话副作用；1.14「点选即建会话」即时编排语义废除）。
- * 编排唯一消费点 = arm 效应（首条消息时点——composer 草稿非空驱动），见下。
+ * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（chip 回填 + 项目粒度记忆写入 +
+ * pushSelection——host 首条消息必绑重路由单源），零会话副作用。跨分支风险确认在点选时点
+ * （1.19 语义回归——1.31 确认闩锁 + 「不再提示」语义平移，见下）；确认前选中态不变。
+ * 会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，恒绑项目根；选中树由首条消息
+ * 必绑重路由兑现）——本面零编排。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
-  worktree,
   makeRpc = preloadRpcClientFactory,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
-  /** hero worktree inject face（编排缝 + 账本源 + composer 草稿缝——HeroWorktreeFace
-   * 单源；缺席 = arm 不消费，选中态照常闭环） */
-  readonly worktree?: HeroWorktreeFace | undefined
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -142,22 +139,13 @@ export function ForgeHeroWorktreeMount({
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
-  // 选中态本地闭环（初值 = 选中记忆——1.29 点选纯选中态，无 owner 显式回填面）
+  // 选中态本地闭环（初值 = 选中记忆——点选纯选中态，无 owner 显式回填面）
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
     () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined),
   )
-  // 失败抑制集（arm 失败路径零重试——1.25 口径；1.31 A3 与取消抑制拆分）
-  const [armSuppressed, setArmSuppressed] = useState<readonly string[]>([])
-  // 取消抑制集（1.31 A3——确认框取消路径专用；显式重选同树即清除，语义 = 用户否决非失败循环）
-  const [cancelSuppressed, setCancelSuppressed] = useState<readonly string[]>([])
-  // 编排在途闸（arm 专用——async 编排窗口内 arm 效应零重入；结束后解锁，当前会话再落
-  // 回他树时编排默认可重新消费——mount 为 root 作用域影子，跨会话常驻）
-  const orchestrationInFlightRef = useRef(false)
-  // 最近一次 arm 成功产物（armed 去重——产物即当前会话且选中路径未变时零重入，键入续字
-  // 不抖；改选他行即重新消费）
-  const armedRef = useRef<{ readonly path: string; readonly sessionId: string } | undefined>(undefined)
-  // 1.30 选中树推送（forge:worktree/select——host 必绑拦截重路由目标单源；fire-and-forget，
-  // path 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft 不扰选中态。
+  // 1.30 选中树推送（forge:worktree/select——host 选中记忆 = 首条消息必绑重路由单源；
+  // wrap 创建恒绑项目根，不在创建时点读选中态。fire-and-forget，path 缺席 = 清除
+  // host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
   const pushSelection = useCallback(
     (path: string | undefined): void => {
       if (projectRoot === null) return
@@ -168,47 +156,6 @@ export function ForgeHeroWorktreeMount({
     [projectRoot, makeRpc],
   )
 
-  // 点选 = 纯选中态：chip 回填 + 项目粒度记忆写入；零编排零确认框零会话副作用。
-  // 显式重选 = 用户再次表达意图——清除该行的取消抑制（确认框可重弹）。
-  const onSelectConfirmed = useCallback(
-    (path: string): void => {
-      // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 续字零重弹）
-      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
-      setCancelSuppressed((prev) => (prev.includes(path) ? prev.filter((row) => row !== path) : prev))
-      if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
-      pushSelection(path)
-      setLocalSelectedPath(path)
-    },
-    [projectRoot, pushSelection],
-  )
-
-  // 1.17 默认回填（展示层回填；1.26 起回填态升级为编排默认——arm 效应见下）：清单就绪
-  // 且无用户记忆/显式回填时按「选中记忆 → 锚定链」回填。记忆在此响应式读（非仅 mount
-  // 初值——挂靠采纳引发会话面整域重挂时首挂 projectRoot 为 null，记忆键不可得；就绪后
-  // projectRoot 到位即补读，跨重挂恢复用户选中意图）。回填零编排；arm 编排由独立效应消费。
-  useEffect(() => {
-    if (phase.state !== 'ready' || !phase.isGit) return
-    setLocalSelectedPath(
-      (prev) =>
-        prev ??
-        (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined) ??
-        anchorDefaultWorktreePath(phase.rows),
-    )
-  }, [phase, projectRoot])
-
-  // ── 1.29 编排默认（会话创建唯一时机 = 首条消息——所见即所得的唯一执行面）──
-  // hero 阶段当前会话是 blank 会话（cwd 建会话时定死）：选中态指向某行时，首条消息按
-  // 官方原流会落主树 cwd（显示与执行脱节）。arm 效应由 composer 首条消息意图驱动
-  // （draft 空 → 非空）：走预铸采纳编排缝（sessionCreate + openSession），成功后把
-  // 已键入草稿搬运到产物会话（carryDraft——确认前消息不发出，草稿始终留在 composer）。
-  // 主行同样进编排（worktreePath = 项目根，git 项目不存在无绑定新会话）。去重闸：
-  // cwd 去重（树内行已开）、armed 去重（本轮编排产物即当前会话——键入续字零重入；
-  // 官方新会话流另起新 id 自然失效）、armSuppressed（失败/取消路径零重试）、在途闸。
-  // draft 意图与全部判读经 shouldArmSelectedRow 纯函数单源。跨分支风险 = 确认框
-  // （判定源 = 主行 branch vs 选中树 branch；同分支零风险直通）——时机随编排后移至
-  // 首条消息时点，点选不再弹框。既有无绑定历史会话不回填（本效应只在 hero/新会话
-  // 阶段消费，历史会话打开不进 hero 面）。
-  const [defaultRiskPath, setDefaultRiskPath] = useState<string | null>(null)
   // 跨分支确认「不再提示」（forge settings worktree.crossBranchRiskDismissed 持久化——
   // 用户级一票：装载读 + 勾选确认写；装载缺席/通道失败 = false 不抑制，fail-soft）
   const [riskDismissed, setRiskDismissed] = useState(false)
@@ -225,143 +172,61 @@ export function ForgeHeroWorktreeMount({
       alive = false
     }
   }, [makeRpc])
-  // 1.34 确认闩锁（bug ccfcc103——每键重弹修复）：确认后置位，arm 效应每键重评估时弹框
-  // 判定消费闩锁（已确认 = 零重弹，编排照常 carryDraft 完成）；生命周期 = 换目标重选清
-  // （riskLatchReselect）+ 编排失败清退（riskLatchFailureClear）。取消路径不混用（A3
-  // cancelSuppressed——取消时闩锁必为 null，显式重选由取消抑制清除后重问）。
+  // 1.34 确认闩锁（bug ccfcc103）：确认后置位——同行重选零重弹；换目标重选清退
+  // （riskLatchReselect，重新判定）。取消 = 本次改选未发生（选中态保持原样），不写抑制集
+  // （抑制语义随 arm 效应链退役——再点选即重新判定）。
   const [riskConfirmedLatch, setRiskConfirmedLatch] = useState<RiskConfirmLatch>(null)
-  // 账本订阅（useSyncExternalStore 直读——闭包绑定 face：dsh 快照源 = 类方法，裸引用
-  // 脱离 this 即崩，ForgeSidebarSlot 同口径）。当前主视图会话（id + cwd）是 arm 去重/
-  // 重消费与草稿源寻址的活源：官方新会话流落回他树 → 变化 → 效应重跑 → 编排默认重新消费。
-  const subscribeLedger = useCallback(
-    (onChange: () => void): (() => void) => {
-      const store = worktree?.sessionsList as { subscribe?: (cb: () => void) => () => void } | undefined
-      try {
-        return store?.subscribe?.(onChange) ?? (() => {})
-      } catch {
-        return () => {}
-      }
-    },
-    [worktree],
-  )
-  const readLedger = useCallback((): unknown => {
-    const store = worktree?.sessionsList as { getSnapshot?: () => unknown } | undefined
-    try {
-      return store?.getSnapshot?.()
-    } catch {
-      return undefined
-    }
-  }, [worktree])
-  const ledgerSnapshot = useSyncExternalStore(subscribeLedger, readLedger, readLedger)
-  const activeRow = useMemo(
-    () => (ledgerSnapshot !== undefined ? activeSessionRowOf({ getSnapshot: () => ledgerSnapshot }) : undefined),
-    [ledgerSnapshot],
-  )
-  const currentCwd = activeRow?.cwd
-  const currentSessionId = activeRow?.id
-  // composer 草稿源（首条消息意图——官方 InputState 快照 store，经 sourceOf 会话寻址；
-  // 缺席/形状漂移 = fail-soft 空串，arm 不消费）
-  const draftStore = useMemo(
-    () => (currentSessionId !== undefined ? worktree?.composerDraft?.sourceOf?.(currentSessionId) ?? undefined : undefined),
-    [currentSessionId, worktree],
-  )
-  const subscribeDraft = useCallback(
-    (onChange: () => void): (() => void) => {
-      try {
-        return draftStore?.subscribe?.(onChange) ?? (() => {})
-      } catch {
-        return () => {}
-      }
-    },
-    [draftStore],
-  )
-  const readDraft = useCallback((): string => {
-    try {
-      const draft = (draftStore?.getSnapshot?.() as { draft?: unknown } | null | undefined)?.draft
-      return typeof draft === 'string' ? draft : ''
-    } catch {
-      return ''
-    }
-  }, [draftStore])
-  const draftText = useSyncExternalStore(subscribeDraft, readDraft, readDraft)
-  const armDefault = useCallback(
-    (path: string, draftAtTrigger: string, previousSessionId: string | undefined): void => {
-      // 编排默认径（1.29——唯一编排消费点，自带一次延迟重试）：arm 常与官方导航并发
-      // （官方新会话流落主树的窗口内）——openSession 撞导航瞬态抛错属可重试失败，一次
-      // 重试后仍失败才落 1.25 口径（Toast 已由编排缝呈现 + 选中态清退不落假象）。
-      orchestrationInFlightRef.current = true
+  // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
+  const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
+
+  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + 项目粒度记忆写入 +
+  // host 选中记忆推送（首条消息必绑重路由单源——wrap 创建恒绑项目根，不读选中态）。
+  const applySelection = useCallback(
+    (path: string): void => {
+      // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
+      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
       if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       pushSelection(path)
       setLocalSelectedPath(path)
-      const attempt = (left: number): void => {
-        void Promise.resolve(worktree?.orchestrate?.(path) ?? null)
-          .then((sessionId) => {
-            if ((sessionId === null || sessionId === undefined) && left > 0) {
-              setTimeout(() => attempt(left - 1), 1_500)
-              return
-            }
-            if (sessionId === null || sessionId === undefined) {
-              if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
-              pushSelection(undefined) // host 选中记忆同清（重路由目标不落假象）
-              setLocalSelectedPath(undefined)
-              setArmSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
-              // 1.34 确认闩锁清退：编排失败 → Toast（1.25）已呈现，允许重试重问
-              setRiskConfirmedLatch((prev) => riskLatchFailureClear(prev, path))
-              return
-            }
-            // 成功：armed 去重登记 + 已键入首条消息搬运到产物会话（best-effort——失败
-            // = 草稿留在原会话不丢）
-            armedRef.current = { path, sessionId }
-            const draft = draftAtTrigger.trim()
-            if (draft !== '') void worktree?.composerDraft?.carryDraft?.(sessionId, draft, previousSessionId)
-          })
-          .catch(() => {})
-          .finally(() => {
-            orchestrationInFlightRef.current = false
-          })
-      }
-      attempt(1)
     },
-    [projectRoot, worktree, pushSelection],
+    [projectRoot, pushSelection],
   )
+
+  // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
+  // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
+  const onSelectConfirmed = useCallback(
+    (path: string): void => {
+      const row = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path) : undefined
+      const mainBranch = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.isMain)?.branch ?? null : null
+      if (
+        row !== undefined &&
+        isCrossBranchRisk(row.branch, mainBranch) &&
+        !riskDismissed &&
+        riskDialogNeeded(path, riskConfirmedLatch)
+      ) {
+        setRiskDismissChecked(false)
+        setPendingRiskPath(path) // 确认框待决——确认/取消前选中态不变
+        return
+      }
+      applySelection(path)
+    },
+    [phase, riskDismissed, riskConfirmedLatch, applySelection],
+  )
+
+  // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
+  // 「选中记忆 → 锚定链」回填。记忆在此响应式读（非仅 mount 初值——会话面整域重挂时
+  // 首挂 projectRoot 为 null，记忆键不可得；就绪后 projectRoot 到位即补读，跨重挂恢复
+  // 用户选中意图）。回填零编排；会话创建在官方 create 调用点（wrap 恒绑项目根，选中树
+  // 经首条消息必绑重路由兑现）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit) return
-    const path = localSelectedPath
-    if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
-    const row = phase.rows.find((candidate) => candidate.path === path)
-    if (row === undefined) return
-    // 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）；主行同样只在该
-    // 时点进编排。cwd/armed 去重 + 取消抑制 + 确认框闸（shouldArmSelectedRow 单源）
-    const draftIntent = draftText.trim() !== ''
-    if (
-      !shouldArmSelectedRow({
-        phaseReadyGit: true,
-        path,
-        suppressed: armSuppressed,
-        cancelSuppressed,
-        riskConfirmationOpen: defaultRiskPath !== null,
-        rowPresent: row.present,
-        isMain: row.isMain,
-        currentCwd,
-        draftIntent,
-        currentSessionId,
-        armedSessionId: armedRef.current?.sessionId,
-        armedPath: armedRef.current?.path,
-      })
-    ) {
-      return
-    }
-    const mainBranch = phase.rows.find((candidate) => candidate.isMain)?.branch ?? null
-    // 1.34 确认闩锁消费：已确认（闩锁命中）或用户勾选「不再提示」（settings 持久化）
-    // → 跨分支也直通编排（续字/再发零重弹）
-    if (isCrossBranchRisk(row.branch, mainBranch) && !riskDismissed && riskDialogNeeded(path, riskConfirmedLatch)) {
-      setDefaultRiskPath((prev) => prev ?? path) // 确认框待决——确认/取消前零编排（消息未发出）
-      return
-    }
-    armDefault(path, draftText, currentSessionId)
-    // draftText/currentCwd/currentSessionId 入 deps：首条消息意图出现、官方新会话流落回
-    // 他树后（当前会话变化），编排默认（重新）消费
-  }, [phase, localSelectedPath, armSuppressed, cancelSuppressed, defaultRiskPath, riskConfirmedLatch, riskDismissed, draftText, currentCwd, currentSessionId, armDefault])
+    setLocalSelectedPath(
+      (prev) =>
+        prev ??
+        (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined) ??
+        anchorDefaultWorktreePath(phase.rows),
+    )
+  }, [phase, projectRoot])
 
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
@@ -459,9 +324,8 @@ export function ForgeHeroWorktreeMount({
         .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
         .then((result) => {
           setCreateOpen(false)
-          // 创建成功 hero 选中态自动切到新 worktree（项目粒度选中记忆写入 + 本地回填；
-          // 挂靠编排留给首条消息时点的 arm 消费）；主树 HEAD 不动（worktree add 新树内
-          // 检出新分支，零 checkout）。
+          // 创建成功 hero 选中态自动切到新 worktree（项目粒度选中记忆写入 + 本地回填 +
+          // host 选中记忆推送）；主树 HEAD 不动（worktree add 新树内检出新分支，零 checkout）。
           // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
           // 行匹配 path === selectedPath 用精确等值；本地拼串反斜杠 ≠ 清单正斜杠实证）
           const createdPath = result.entry?.path ?? path
@@ -561,32 +425,25 @@ export function ForgeHeroWorktreeMount({
         onClose={() => setDeleteTarget(null)}
         onConfirm={onConfirmDelete}
       />
-      {/* 1.29 首条消息时点跨分支风险确认框（1.19 官方 RiskConfirmation 同款——选中态
-          指向非主行树且跨分支、且首条消息意图出现时确认才编排；点选不再弹框。确认前
-          消息不发出：草稿留在 composer，arm 未完成无发送面。取消 = 选中态退回占位走
-          官方原流） */}
-      {defaultRiskPath !== null && (
+      {/* 1.19 点选时点跨分支风险确认框（官方 RiskConfirmation 同款）：点选命中跨分支
+          且未闩锁/未「不再提示」时立现；确认前选中态不变（取消 = 本次改选未发生，
+          选中态保持原样）。确认 = 闩锁置位 + 选中态落定（记忆写入 + host 推送）——
+          会话创建不在此处（官方 create 调用点 wrap 改道预铸）。 */}
+      {pendingRiskPath !== null && (
         <WorktreeRiskConfirmation
           open
-          targetBranch={phase.rows.find((candidate) => candidate.path === defaultRiskPath)?.branch ?? null}
+          targetBranch={phase.rows.find((candidate) => candidate.path === pendingRiskPath)?.branch ?? null}
           currentBranch={phase.rows.find((candidate) => candidate.isMain)?.branch ?? null}
           dismissChecked={riskDismissChecked}
           onDismissChange={setRiskDismissChecked}
           onCancel={() => {
-            const path = defaultRiskPath
-            setDefaultRiskPath(null)
+            setPendingRiskPath(null)
             setRiskDismissChecked(false)
-            // A3：取消写取消抑制（非失败抑制集）——显式重选同树即清除，确认框可重弹
-            setCancelSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
-            // 取消编排默认 = 不落假象：回填态与选中记忆同清（chip 退回占位），消息走官方原流
-            if (projectRoot !== null) writeSelectedMemory(projectRoot, undefined)
-            pushSelection(undefined)
-            setLocalSelectedPath(undefined)
           }}
           onConfirm={() => {
-            const path = defaultRiskPath
-            setDefaultRiskPath(null)
-            // 勾选「不再提示」→ forge settings 持久化（fire-and-forget，失败不阻断编排——
+            const path = pendingRiskPath
+            setPendingRiskPath(null)
+            // 勾选「不再提示」→ forge settings 持久化（fire-and-forget，失败不阻断——
             // 本轮已直通；下轮装载失败 = false 重问，fail-soft）
             if (riskDismissChecked) {
               setRiskDismissed(true)
@@ -595,9 +452,11 @@ export function ForgeHeroWorktreeMount({
                 .catch(() => {})
             }
             setRiskDismissChecked(false)
-            // 1.34 确认闩锁置位：同一次选中意图只弹一次——续字/再发零重弹，编排照常完成
-            if (path !== null) setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
-            if (path !== null) armDefault(path, draftText, currentSessionId)
+            // 1.34 确认闩锁置位：同一次选中意图只弹一次——同行重选零重弹
+            if (path !== null) {
+              setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
+              applySelection(path)
+            }
           }}
         />
       )}

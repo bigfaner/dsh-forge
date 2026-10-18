@@ -6,7 +6,7 @@
 // 洞名/影子优先级/注入面 = G1 契约面清单第 3 项（S2 残留 #1——2.7 清点入池）的常量 pin；
 // 面板 key 字面量同源 pin = workbench/panel-model.ts（plugin 侧常量 ↔ 壳侧常量，不经
 // import 共享——bundle 自含纪律，main.ts id 同源同形制）。
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BUG_ADDRESS_PREFIX,
   BUG_TAB_KIND,
@@ -45,8 +45,6 @@ import {
   bugAddressOf,
   bugIdOfAddress,
   activeSessionIdOf,
-  activeSessionCwdOf,
-  blankSessionIdByCwdOf,
   buildBugQuickAdder,
   resolveWorkerChildSession,
   sessionParentIdOf,
@@ -55,6 +53,10 @@ import {
   workerChildSessionOf,
   workerOpenTarget,
   forgeClientPlugin,
+  installSessionCreateWrap,
+  treeOf,
+  unwrapRpcEnvelope,
+  SESSION_CREATE_CHANNEL,
   moduleLoaderFacade,
   publishedViews,
   registerForgeClient,
@@ -63,6 +65,7 @@ import {
   type ForgeSidebarRightTabsService,
   type ForgeSlotsService,
 } from './plugin.js'
+import type { SessionCreateWrapDeps } from './create-wrap.js'
 import { FORGE_PROGRESS_NODE_KIND, FORGE_PROGRESS_NODE_SLOT, forgeProgressDefinition } from './progress-node.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
 import {
@@ -638,22 +641,10 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.component).toBe(views.ForgeHeroWorkspacePicker)
     // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
     expect(hero.options.children).toBeUndefined()
-    expect(typeof hero.options.inject).toBe('function') // fix-2：inject = worktree 挂靠编排缝（openSession 官方导航闭包）
-    const heroFace = hero.options.inject!() as {
-      worktree?: {
-        openSession: (id: string) => void
-        blankSessionByCwd?: (cwd: string) => string | undefined
-        sessionsList?: unknown
-        composerDraft?: { sourceOf?: unknown; carryDraft?: unknown }
-      }
-    }
-    expect(typeof heroFace.worktree?.openSession).toBe('function')
-    // 编排默认账本面（reuse-or-create 去重 + 账本快照源——mount 订阅驱动 arm 去重）
-    expect(typeof heroFace.worktree?.blankSessionByCwd).toBe('function')
-    expect(heroFace.worktree?.sessionsList).toBeDefined()
-    // 1.29 首条消息意图缝（composer 草稿源 + arm 后草稿搬运——会话创建唯一时机的闸门）
-    expect(typeof heroFace.worktree?.composerDraft?.sourceOf).toBe('function')
-    expect(typeof heroFace.worktree?.composerDraft?.carryDraft).toBe('function')
+    // W3 arm 退役：hero worktree face（openSession/blankSessionByCwd/sessionsList/
+    // composerDraft 编排缝）随 arm 效应链退役——零 inject（点选纯选中态组件自源 RPC，
+    // 会话创建走官方 create 调用点 wrap 改道预铸）
+    expect(hero.options.inject).toBeUndefined()
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
@@ -1938,62 +1929,6 @@ describe('activeSessionIdOf（官方快照形状——retainedBy.mainView 锚，
   })
 })
 
-describe('1.26 编排默认账本读面（activeSessionCwdOf / blankSessionIdByCwdOf）', () => {
-  /** 官方 SessionListState 真形窄搭（activeSessionIdOf describe 同款） */
-  function ledger(rows: Record<string, unknown>): unknown {
-    return { getSnapshot: () => ({ ids: Object.keys(rows), byId: rows, phase: 'ready', projectionsBySession: {} }) }
-  }
-
-  it('activeSessionCwdOf：mainView 在留行的 cwd 命中；漂移/缺席 = undefined', () => {
-    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 1 }, cwd: 'C:/repo' } }))).toBe('C:/repo')
-    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 0 }, cwd: 'C:/repo' } }))).toBeUndefined()
-    expect(activeSessionCwdOf(ledger({ s: { id: 's', retainedBy: { mainView: 1 }, cwd: '' } }))).toBeUndefined()
-    expect(activeSessionCwdOf(undefined)).toBeUndefined()
-  })
-
-  it('blankSessionIdByCwdOf：blank + cwd 归一命中（反斜杠/尾斜杠/大小写跨源）；非 blank 不命中', () => {
-    const rows = {
-      a: { id: 'a', blank: true, cwd: 'C:\\Repo\\wt-a\\' },
-      b: { id: 'b', blank: false, cwd: 'C:/repo/wt-a' },
-    }
-    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a', 'b'] }], archivedSessionIds: [] }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'c:/repo/wt-a', ws)).toBe('a')
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a/', ws)).toBe('a')
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo', ws)).toBeUndefined()
-    expect(blankSessionIdByCwdOf(undefined, 'C:/repo', ws)).toBeUndefined()
-  })
-
-  it('G4 官方四件套：reuse 判据补齐 workspace 归属 + 非归档（reuseOrCreateBlank 语义对齐）', () => {
-    const rows = {
-      a: { id: 'a', blank: true, cwd: 'C:/repo/wt-a' },
-      c: { id: 'c', blank: true, cwd: 'C:/repo/wt-a' },
-    }
-    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: [] }
-    // 归属件：cwd 命中但 session 不在该 workspace → 不复用
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', ws)).toBe('a')
-    const foreignMember = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['x'] }], archivedSessionIds: [] }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', foreignMember)).toBeUndefined()
-    // 归档件：archivedSessionIds 含 id → 不复用
-    const archived = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: ['a'] }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', archived)).toBeUndefined()
-    // workspace 快照缺席/漂移 = fail-closed 不复用（宁可走 host 互斥面，不误复用他树会话）
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a')).toBeUndefined()
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', {})).toBeUndefined()
-    const noWorkspaceRow = { items: [], archivedSessionIds: [] }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', noWorkspaceRow)).toBeUndefined()
-  })
-
-  it('A6 carryDraft 增量搬运（carryDraftTextOf——落笔前重读，已发送文本不回填）', async () => {
-    const { carryDraftTextOf } = await import('./plugin.js')
-    // 官方发送清空草稿 → 重读空串 = 不搬运（双发根因消除）
-    expect(carryDraftTextOf('hello', '')).toBe('')
-    // 重读可得（用户续字）→ 以重读为准（增量）
-    expect(carryDraftTextOf('hello', 'hello world')).toBe('hello world')
-    // 重读不可得（缝缺席/漂移）→ 退触发时快照
-    expect(carryDraftTextOf('hello', undefined)).toBe('hello')
-  })
-})
-
 describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活跃会话开新会话预填）', () => {
   const BUG = { bugId: 'b-42', summary: '修复双开对话框' }
   const CLIP = '@[修复双开对话框](bug:b-42)'
@@ -2076,5 +2011,431 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
     await f.addBugToSession(BUG, null)
     expect(f.openSessionWithPreset).not.toHaveBeenCalled()
     expect(f.bail).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================================
+// W3 sessions.create wrap（体验层主径——资格门矩阵 + fail-open 出口 + dispose 恢复）。
+// 三铁律钉：内部零触碰（只有整调用改道/透传）、判定逐次独立（项目行逐次现查零缓存）、
+// fail-open 透传（original 永不落改道 try 域——官方自身错误原样上抛不吞不重调）。
+// ============================================================================
+describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail-open）', () => {
+  const WS = 'ws-git'
+  const WS_PATH = 'C:/repo'
+
+  /** 项目行 fixture（ProjectSummary 消费切片：id/workspaceId/wsPath/archived） */
+  function rowsFixture(rows: Array<{ workspaceId?: string; wsPath?: string; archived?: boolean }>): unknown[] {
+    return rows.map((row, i) => ({
+      id: `p-${i}`,
+      workspaceId: row.workspaceId ?? 'ws-other',
+      name: `n-${i}`,
+      wsPath: row.wsPath ?? 'C:/elsewhere',
+      archived: row.archived ?? false,
+    }))
+  }
+
+  /** wrap 装配 harness：官方 create spy + 项目行现查 spy + sessionCreate RPC spy */
+  function fixture(options?: {
+    rows?: unknown[] | (() => unknown[] | Promise<unknown[]>) | Error
+    sessionCreate?: (tree: string) => Promise<string>
+    create?: (opts?: { sessionId?: string; workspaceId?: string; cwd?: string }) => Promise<string>
+  }) {
+    const original = options?.create ?? vi.fn(() => Promise.resolve('X-official'))
+    const sessions = { create: original } as { create: unknown }
+    const projectRows = vi.fn(() => {
+      if (options?.rows instanceof Error) return Promise.reject(options.rows)
+      const value = typeof options?.rows === 'function' ? options.rows() : (options?.rows ?? [])
+      return Promise.resolve(value)
+    })
+    const sessionCreate = options?.sessionCreate ?? vi.fn(() => Promise.resolve('Y-precast'))
+    const deps: SessionCreateWrapDeps = {
+      sessionCreate: sessionCreate as (tree: string) => Promise<string>,
+      projectRows: projectRows as unknown as SessionCreateWrapDeps['projectRows'],
+      warn: vi.fn(),
+    }
+    const dispose = installSessionCreateWrap(
+      sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
+      deps,
+    )
+    return {
+      sessions: sessions as { create: (opts?: Record<string, string>) => Promise<string> },
+      original: original as ReturnType<typeof vi.fn>,
+      projectRows,
+      sessionCreate,
+      deps,
+      dispose,
+    }
+  }
+
+  it('① adopt 径直通：带 sessionId = 官方复用采纳，零判定零改道（original 透传、零 RPC）', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    const out = await f.sessions.create({ sessionId: 's-adopt', workspaceId: WS })
+    expect(out).toBe('X-official')
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.projectRows).not.toHaveBeenCalled()
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门命中（workspaceId → 注册项目 ws_path）：改道预铸返回 Y，官方 create 零调用', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('Y-precast')
+    expect(f.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    expect(f.original).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门命中（cwd 命中注册行 ws_path）：改道预铸（跨源反斜杠/大小写归一命中）', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: 'C:\\Repo\\' }]) })
+    const out = await f.sessions.create({ cwd: 'c:/repo' })
+    expect(out).toBe('Y-precast')
+    expect(f.sessionCreate).toHaveBeenCalledWith('c:/repo')
+    expect(f.original).not.toHaveBeenCalled()
+  })
+
+  it('② 资格门不命中矩阵：未注册 workspaceId / 归档行 / cwd 未注册 / 双缺（零参）→ 官方原流零介入', async () => {
+    const rows = rowsFixture([
+      { workspaceId: WS, wsPath: WS_PATH },
+      { workspaceId: 'ws-arch', wsPath: 'C:/arch', archived: true },
+    ])
+    for (const opts of [
+      { workspaceId: 'ws-unknown' },
+      { workspaceId: 'ws-arch' },
+      { cwd: 'C:/not-registered' },
+      {},
+      undefined,
+    ]) {
+      const f = fixture({ rows })
+      const out = await f.sessions.create(opts as Record<string, string> | undefined)
+      expect(out).toBe('X-official')
+      expect(f.sessionCreate).not.toHaveBeenCalled()
+      expect(f.original).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('② 判定逐次独立（零缓存）：两次创建各现查项目行恰一次（首次未注册原流、次次注册改道）', async () => {
+    let call = 0
+    const f = fixture({
+      rows: () => {
+        call += 1
+        return call === 1 ? [] : rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }])
+      },
+    })
+    await f.sessions.create({ workspaceId: WS })
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+    await f.sessions.create({ workspaceId: WS })
+    expect(f.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(f.projectRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('④ typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT：单独放行拒绝呈现——不 fail-open、不回 official、零 warn（W2 fail-closed）', async () => {
+    const typed = Object.assign(new Error('git 绑定能力缺席（W2 fail-closed 显式拒绝）'), {
+      name: 'RpcClientError',
+      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
+    })
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      sessionCreate: () => Promise.reject(typed),
+    })
+    await expect(f.sessions.create({ workspaceId: WS })).rejects.toBe(typed)
+    expect(f.original).not.toHaveBeenCalled() // 确定性拒绝不透传 original（不落主树）
+    expect(f.deps.warn).not.toHaveBeenCalled()
+  })
+
+  it('④ 瞬态异常维持 fail-open：typed 判定只放行能力缺席码——其余 code / 普通异常照常透传官方原流', async () => {
+    for (const cause of [
+      Object.assign(new Error('其他 typed 拒绝'), { name: 'RpcClientError', code: 'ERR_TASK_NOT_FOUND' }),
+      new Error('host 判非 git'),
+      '非 Error 异常值',
+    ] as const) {
+      const f = fixture({
+        rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+        sessionCreate: () => Promise.reject(cause),
+      })
+      const out = await f.sessions.create({ workspaceId: WS })
+      expect(out).toBe('X-official')
+      expect(f.original).toHaveBeenCalledTimes(1)
+      expect(f.deps.warn).toHaveBeenCalled()
+    }
+  })
+
+  it('unwrapRpcEnvelope typed !ok 信封：RpcClientError 形态保真（code/message/data 透传——typed 拒绝码可达 wrap ④ 判定点）', async () => {
+    const fail = Promise.resolve({
+      ok: false,
+      error: { code: 'ERR_WORKTREE_CAPABILITY_ABSENT', message: 'git 绑定能力缺席', data: { k: 1 } },
+    })
+    const caught = await unwrapRpcEnvelope(fail).then(
+      () => null,
+      (e: unknown) => e,
+    )
+    expect(caught).toBeInstanceOf(Error)
+    const typed = caught as Error & { code?: unknown; data?: unknown }
+    expect(typed.name).toBe('RpcClientError')
+    expect(typed.code).toBe('ERR_WORKTREE_CAPABILITY_ABSENT')
+    expect(typed.message).toBe('git 绑定能力缺席')
+    expect(typed.data).toEqual({ k: 1 })
+  })
+
+  it('④ fail-open（RPC 拒/产物缺 sessionId/项目行现查异常）：全部回退官方原流 + warn 一行', async () => {
+    for (const overrides of [
+      { sessionCreate: () => Promise.reject(new Error('host 判非 git')) },
+      { sessionCreate: () => Promise.resolve(undefined as unknown as string) },
+    ] as const) {
+      const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]), ...overrides })
+      const out = await f.sessions.create({ workspaceId: WS })
+      expect(out).toBe('X-official')
+      expect(f.original).toHaveBeenCalledTimes(1)
+      expect(f.deps.warn).toHaveBeenCalled()
+    }
+    // 项目行现查异常（列表 RPC 失败）→ fail-open 透传（② 出口）
+    const f = fixture({ rows: new Error('list 拉取失败') })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('X-official')
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('三铁律①②：original 永不落改道 try 域——官方自身抛错原样上抛（不吞、不双调）', async () => {
+    const boom = new Error('官方 create 自身错误')
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      create: vi.fn(() => Promise.reject(boom)),
+      sessionCreate: vi.fn(() => Promise.reject(new Error('host 判非 git'))),
+    })
+    await expect(f.sessions.create({ sessionId: 's-adopt' })).rejects.toBe(boom)
+    await expect(f.sessions.create({ workspaceId: 'ws-unknown' })).rejects.toBe(boom)
+    await expect(f.sessions.create({ workspaceId: WS })).rejects.toBe(boom) // 改道径异常回退 → original 错误上抛
+    expect(f.original).toHaveBeenCalledTimes(3) // 每次恰一调（无 catch 吞后重调）
+  })
+
+  it('dispose 恢复原方法（host interceptRequiredBinding 同配方）且幂等；缺席 create 面 = no-op 安装', async () => {
+    const f = fixture()
+    f.dispose()
+    f.dispose()
+    expect(f.sessions.create).toBe(f.original)
+    // 缺席 create 面（上游面漂移）= 零安装零抛
+    const bare = {} as Parameters<typeof installSessionCreateWrap>[0]
+    expect(() => installSessionCreateWrap(bare, f.deps)).not.toThrow()
+  })
+
+  it('SESSION_CREATE_CHANNEL 通道字面量同源（contracts WORKTREE_CHANNELS.sessionCreate 镜像）', () => {
+    expect(SESSION_CREATE_CHANNEL).toBe('forge:worktree/session-create')
+  })
+
+  it('treeOf 纯函数矩阵（行正规化：非对象/缺键剔除；archived 排除）', async () => {
+    const rows = [
+      null,
+      42,
+      { workspaceId: WS }, // 缺 wsPath
+      { wsPath: WS_PATH }, // 缺 workspaceId
+      { workspaceId: WS, wsPath: WS_PATH, archived: true },
+      { workspaceId: WS, wsPath: WS_PATH },
+    ]
+    expect(await treeOf({ workspaceId: WS }, rows)).toBe(WS_PATH)
+    expect(await treeOf({ workspaceId: WS }, [])).toBeNull()
+    expect(await treeOf(undefined, rows)).toBeNull()
+    expect(await treeOf({ sessionId: 's' }, rows)).toBeNull()
+  })
+
+  // 移动端语义契约钉（mobile-ui 一致逻辑——提案 §移动端一致逻辑：判定单源在 host，
+  // 两端共享的只有语义契约与 API 协议，非代码共享）。钉双语义：
+  //   ① 预铸优先：命中资格即首选 forge:worktree/session-create 预铸（worktreePath 显式树）；
+  //   ② fail-open 回退：预铸链任何失败 → 回退官方原流（桌面 = original，移动端 = 官方
+  //      /api/rpc session.create——同④出口语义）；无绑定产物由 host guard 首条消息兜底。
+  // 本用例即共享契约的断言单源：mobile-ui 侧契约测试须钉同两条（通道字面量
+  // forge:worktree/session-create + 失败回退），实现归 mobile-ui 工程。
+  it('移动端 hero 预铸优先 + fail-open 回退——语义契约钉（与桌面 wrap ④ 出口同语义）', async () => {
+    // ① 预铸优先：资格命中 = sessionCreate 恰一调先行，官方原流零调用
+    const prefer = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    expect(await prefer.sessions.create({ workspaceId: WS })).toBe('Y-precast')
+    expect(prefer.sessionCreate).toHaveBeenCalledTimes(1)
+    expect(prefer.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    expect(prefer.original).not.toHaveBeenCalled()
+    // ② fail-open 回退：预铸失败 = 官方原流（回退语义与④出口同源）
+    const rejectSessionCreate = vi.fn((_tree: string) => Promise.reject(new Error('预铸失败')))
+    const fallback = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      sessionCreate: rejectSessionCreate,
+    })
+    expect(await fallback.sessions.create({ workspaceId: WS })).toBe('X-official')
+    expect(fallback.original).toHaveBeenCalledTimes(1)
+    // 协议钉：改道载荷 = {worktreePath: 显式树}（移动端透传同协议）；通道字面量上方已钉
+    expect(rejectSessionCreate.mock.calls[0]![0]!).toBe(WS_PATH)
+  })
+})
+
+// ── W4 装载自证 + 行存续看门（session-binding-guarantee §W4）──────────────────────────
+describe('W4 激活自证（RPC 轻探 + wrap 换芯证据）+ 看门探测面', () => {
+  const g = () =>
+    globalThis as {
+      dshForge?: unknown
+      __DSH_FORGE_CLIENT__?: unknown
+      __DSH_FORGE_HEALTH__?: { slotCount: () => number; check: () => void }
+      __DSH_FORGE_PRUNE_CHECK__?: unknown
+    }
+  const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+
+  afterEach(() => {
+    delete g().dshForge
+    delete g().__DSH_FORGE_HEALTH__
+    delete g().__DSH_FORGE_PRUNE_CHECK__
+  })
+
+  function fakeInvoke(): ReturnType<typeof vi.fn> {
+    const invoke = vi.fn((channel: string) => {
+      if (channel === WORKTREE_LIST_CHANNEL) {
+        return Promise.resolve({ ok: true, data: { isGit: false, entries: [] } })
+      }
+      return Promise.resolve({ ok: true, data: [] }) // forge:projects/list 等读面
+    })
+    g().dshForge = { invoke }
+    return invoke
+  }
+
+  function augmentCtx(ctx: ForgeClientCtx): {
+    listeners: Array<(name: string, value: unknown) => void>
+    slotsEntries: Map<string, readonly unknown[]>
+  } {
+    const listeners: Array<(name: string, value: unknown) => void> = []
+    const slotsEntries = new Map<string, readonly unknown[]>([
+      [SHELL_OVERLAY_SLOT, ['entry-1']],
+      [MAIN_SLOT, ['entry-2', 'entry-3']],
+    ])
+    ;(ctx as unknown as { on: unknown }).on = (name: string, cb: (n: string, v: unknown) => void) => {
+      listeners.push(cb)
+      return () => {}
+    }
+    ;(ctx.slots as { entries?: (key: string) => readonly unknown[] }).entries = (key: string) =>
+      slotsEntries.get(key) ?? []
+    return { listeners, slotsEntries }
+  }
+
+  it('零传输（非 Electron 载体）：自证缺席面呈现（不 fail）+ 看门探测面发布 + overlay dispose 对称清收', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx, injectDisposers } = fakeClientCtx()
+    const { listeners } = augmentCtx(ctx)
+    forgeClientPlugin().apply(ctx)
+    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { wrap?: string; rpcProbe?: string } }
+    expect(marker?.selfCheck?.wrap).toBe('absent（非 Electron 载体零安装）')
+    expect(marker?.selfCheck?.rpcProbe).toBe('absent（非 Electron 载体）')
+    // 看门探测面：entries 求和（shell.overlay 1 + main 2 = 3）+ 事件转发钩接线
+    const health = g().__DSH_FORGE_HEALTH__
+    expect(health?.slotCount()).toBe(3)
+    expect(listeners).toHaveLength(1)
+    // overlay dispose = 卸载级联回收面：探测面对称清收
+    injectDisposers.get(SHELL_OVERLAY_SLOT)?.()
+    expect(g().__DSH_FORGE_HEALTH__).toBeUndefined()
+    // 恢复外层标记
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
+  })
+
+  it('传输在场：wrap 换芯证据 verified（sessions.create 已换）+ RPC 轻探 ok', async () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const invoke = fakeInvoke()
+    const { ctx } = fakeClientCtx()
+    augmentCtx(ctx)
+    const sessions = ctx.get('sessions') as { create?: unknown }
+    const original = (): Promise<string> => Promise.resolve('X-official')
+    sessions.create = original
+    forgeClientPlugin().apply(ctx)
+    const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { wrap?: string; rpcProbe?: string } }
+    expect(marker?.selfCheck?.wrap).toBe('verified')
+    expect(sessions.create).not.toBe(original) // 换芯读回（host verifySendGuardInstalled 同判）
+    expect(invoke).toHaveBeenCalledWith(WORKTREE_LIST_CHANNEL, { projectRoot: '' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(marker?.selfCheck?.rpcProbe).toBe('ok')
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
+  })
+
+  it('wrap 未换芯 = fail-loud：console.error + selfCheck 失败因 + apply catch 全族 error UI 态（回滚）', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    fakeInvoke()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { ctx } = fakeClientCtx()
+      augmentCtx(ctx)
+      // sessions.create 装配前在场但写不进（getter 替身——属性替换被吞）→ 读回 = 原引用
+      // = 未换芯（installSessionCreateWrap 写面失效的替身建模）
+      const sessions = ctx.get('sessions') as Record<string, unknown>
+      const original = (): Promise<string> => Promise.resolve('X-official')
+      Object.defineProperty(sessions, 'create', { get: () => original, set: () => {}, configurable: true })
+      forgeClientPlugin().apply(ctx)
+      const marker = g().__DSH_FORGE_CLIENT__ as {
+        selfCheck?: { wrap?: string }
+        sidebar?: { error?: string }
+      }
+      expect(marker?.selfCheck?.wrap).toContain('未换芯')
+      expect(marker?.sidebar?.error).toContain('未换芯') // apply catch 全族 error = UI 态
+      expect(err.mock.calls.some((call) => String(call[0]).includes('未换芯'))).toBe(true)
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
+  })
+
+  it('RPC 轻探不通 = fail-loud 呈现：selfCheck.rpcProbe 失败因 + console.error（不阻断激活主链）', async () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const invoke = vi.fn((channel: string) =>
+        channel === WORKTREE_LIST_CHANNEL
+          ? Promise.reject(new Error('IPC 链断裂'))
+          : Promise.resolve({ ok: true, data: [] }),
+      )
+      g().dshForge = { invoke }
+      const { ctx } = fakeClientCtx()
+      augmentCtx(ctx)
+      const sessions = ctx.get('sessions') as { create?: unknown }
+      sessions.create = (): Promise<string> => Promise.resolve('X')
+      forgeClientPlugin().apply(ctx)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const marker = g().__DSH_FORGE_CLIENT__ as { selfCheck?: { rpcProbe?: string; wrap?: string } }
+      expect(marker?.selfCheck?.wrap).toBe('verified') // 主链不受累
+      expect(marker?.selfCheck?.rpcProbe).toContain('轻探不通')
+      expect(err.mock.calls.some((call) => String(call[0]).includes('轻探不通'))).toBe(true)
+    } finally {
+      err.mockRestore()
+      if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+      else g().__DSH_FORGE_CLIENT__ = markerBefore
+      unpublishViews()
+    }
+  })
+
+  it('internal/service 事件（sessions 注销 = prune 官方信号）转发看门核查钩；他服务/在场值不转发', () => {
+    const markerBefore = g().__DSH_FORGE_CLIENT__
+    delete g().__DSH_FORGE_CLIENT__
+    publishFakeViews()
+    const { ctx } = fakeClientCtx()
+    const { listeners } = augmentCtx(ctx)
+    forgeClientPlugin().apply(ctx)
+    const hook = vi.fn()
+    g().__DSH_FORGE_PRUNE_CHECK__ = hook
+    const health = g().__DSH_FORGE_HEALTH__!
+    const emit = listeners[0]!
+    emit('other', undefined)
+    emit('sessions', { alive: true })
+    expect(hook).not.toHaveBeenCalled()
+    emit('sessions', undefined) // 官方注销信号（reflect.notify value undefined）
+    expect(hook).toHaveBeenCalledTimes(1)
+    health.check() // 事件转发入口 = 探测面 check
+    expect(hook).toHaveBeenCalledTimes(2)
+    if (markerBefore === undefined) delete g().__DSH_FORGE_CLIENT__
+    else g().__DSH_FORGE_CLIENT__ = markerBefore
+    unpublishViews()
   })
 })
