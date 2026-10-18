@@ -16,25 +16,19 @@
 // ui-slots single 槽 lowest-renders 语义），其 children 声明持续供养
 // conversation.hero.workspace.directoryFlow 子洞——本影子行不重声明 children（ui-slots
 // register 对已声明子槽重声明即 throw，fix-23 runtime 实证），产品添加径亦不经该子洞。
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+// W3 arm 退役（session-binding-guarantee）：挂靠编排缝（createWorktreeOrchestrator）与
+// 1.25 失败 Toast 文案族退役——会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸，
+// create 失败走官方 createFailed toast），本面只剩项目弹层 + hero worktree chip 挂载。
+import { useCallback, useEffect, type ReactNode } from 'react'
+import { IconFolderCloseRegular, IconPlusOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import { openAddProjectFlow } from '../../flows/add-project/flow-open.js'
 import { useAnchoredProjects } from '../../workbench/anchored-projects.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   heroPickerPlan,
-  orchestrateRootOf,
   selectedProjectOf,
   selectedProjectRootOf,
-  selectedProjectRootStrictOf,
-  worktreeCapabilityAbsentNotice,
-  worktreeFaceUnavailableNotice,
-  worktreeOrchestrationNotice,
-  worktreeUnselectedProjectNotice,
-  type HeroWorktreeFace,
-  type WorktreeOrchestrateFn,
 } from './hero-picker-model.js'
-import { RpcClientError } from '../../rpc/errors.js'
 import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
@@ -42,82 +36,6 @@ import type { KitSelectorHook } from './ConversationViews.js'
 const ADD_PROJECT = 'dswf-add-project'
 /** 添加行文案（产品口径——与 hero CTA/左栏「＋」入口同义词面） */
 const ADD_LABEL = '添加项目…'
-
-/** 编排缝依赖面（React 解耦——1.31 抽出 createWorktreeOrchestrator 可单测面） */
-export interface WorktreeOrchestrationDeps {
-  /** hero worktree inject face（编排 + 账本 + openSession 缝；undefined = 编排降级提示） */
-  readonly worktree: HeroWorktreeFace | undefined
-  readonly makeRpc: () => ForgeRpcClient
-  /** 编排数据根（A7——selectedId 严格命中；null = 渲染兜底不进编排，提示 + null） */
-  readonly orchestrateRoot: string | null
-  /** 提示呈现（组件侧接 Toast 态；1.25 不静默口径） */
-  readonly onNotice: (text: string) => void
-}
-
-const noticeText = (error: unknown): string =>
-  error instanceof Error && error.message !== '' ? error.message : String(error)
-
-/** create 失败提示归一：W2 typed 拒绝码（ERR_WORKTREE_CAPABILITY_ABSENT）走专用文案
- *  （host fail-closed——消息不会落主树，不得套用「将落主树」误导）；其余照常环节语义 */
-const createNoticeOf = (error: unknown): string =>
-  error instanceof RpcClientError && error.code === 'ERR_WORKTREE_CAPABILITY_ABSENT'
-    ? worktreeCapabilityAbsentNotice()
-    : worktreeOrchestrationNotice('create', noticeText(error))
-
-/**
- * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7 语义；bug e678ca5f 主行 reuse 零补绑定）：
- *   · A7——orchestrateRoot null（selectedId 无命中项目行）→ 提示 + null：渲染兜底
- *     （selectedProjectRootOf fallback）仅供 chip 渲染，禁止泄漏为绑定数据源；
- *   · 主行/树行 blank reuse 均直接打开：活跃会话写句柄被官方 agent loop 持有（单写者
- *     铁律），客户端补写挂靠事件结构性必败——绑定正确性由 host 侧必绑拦截单点保证
- *     （judge 'route' → 预铸采纳重路由，挂靠事件随预铸落盘）。
- */
-export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): WorktreeOrchestrateFn {
-  return (path: string): Promise<string | null> => {
-    return (async (): Promise<string | null> => {
-      const { worktree, makeRpc, orchestrateRoot, onNotice } = deps
-      if (worktree === undefined) {
-        onNotice(worktreeFaceUnavailableNotice()) // 注入面缺席（旧插件面/装配降级）——1.25①
-        return null
-      }
-      if (orchestrateRoot === null) {
-        onNotice(worktreeUnselectedProjectNotice()) // A7：渲染兜底不进编排
-        return null
-      }
-      const rpc = makeRpc()
-      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构；
-      // bug e678ca5f：零补绑定——首条消息时点由 host 必绑拦截保证绑定）
-      const reuseSessionId = worktree.blankSessionByCwd?.(path)
-      if (reuseSessionId !== undefined) {
-        try {
-          worktree.openSession(reuseSessionId)
-        } catch (error) {
-          onNotice(worktreeOrchestrationNotice('open', noticeText(error)))
-          return null
-        }
-        return reuseSessionId
-      }
-      let sessionId: string
-      try {
-        ({ sessionId } = await rpc.worktree.sessionCreate({ worktreePath: path }))
-      } catch (error) {
-        onNotice(createNoticeOf(error))
-        return null
-      }
-      try {
-        worktree.openSession(sessionId)
-      } catch (error) {
-        onNotice(worktreeOrchestrationNotice('open', noticeText(error)))
-        return null
-      }
-      return sessionId
-    })().catch((error: unknown) => {
-      // 安全网兜底（内部各失败径已自呈提示）——意外异常不静默：同一 Toast 面呈现
-      deps.onNotice(createNoticeOf(error))
-      return null
-    })
-  }
-}
 
 /** owner share 契约（官方 ConversationContent renderSlot('conversation.hero.workspace', …)
  * 面包——ui-conversation client.js:16268-16281 结构同型镜像）+ root 作用域标准观察钩子 */
@@ -134,13 +52,6 @@ export interface ForgeHeroWorkspacePickerProps {
   readonly onClose: () => void
   /** workspace 归属观察钩子（root 作用域标准 prop——项目重拉锚，外部注册后快照身份变化） */
   readonly useWorkspaces?: KitSelectorHook
-  /**
-   * worktree 挂靠缝（fix-2 槽位 inject face——client 插件注册时递达）。1.29 时序裁决：
-   * 点选 worktree 行 = 纯选中态（chip 回填 + 项目粒度记忆，挂载面本地闭环）——本 face
-   * 只剩 arm 消费点（首条消息时点）消费的编排与账本面。缺席 = 编排降级（arm 时 1.25
-   * Toast 明示；旧插件面/降级装配场景）。face 细节见 HeroWorktreeFace（model 单源）。
-   */
-  readonly worktree?: HeroWorktreeFace | undefined
   /** RPC 构造器（测试替身注入；缺省 preload 真身） */
   readonly makeRpc?: () => ForgeRpcClient
 }
@@ -157,12 +68,11 @@ export function ForgeHeroWorkspacePicker({
   onPick,
   onClose,
   useWorkspaces,
-  worktree,
   makeRpc = preloadRpcClientFactory,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
   // 同锚口径；useAnchoredProjects 共享 hook，fix-36 收敛）
-  const { projects: projectsState, workspaces, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
+  const { projects: projectsState, silentRefresh, anchor: workspacesAnchor } = useAnchoredProjects(useWorkspaces)
 
   const projects = projectsState.phase === 'ready' ? projectsState.projects : []
   const plan = heroPickerPlan(projects, projectsState.phase !== 'loading')
@@ -189,58 +99,6 @@ export function ForgeHeroWorkspacePicker({
   // worktree 第二 chip 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——bug 10833861
   // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
   const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
-
-  // 1.25 编排失败/face 缺席提示态（Toast 只在首条消息时点的 arm 失败出现——1.29 点选
-  // 纯选中态无失败面）
-  const [worktreeNotice, setWorktreeNotice] = useState<{ readonly text: string; readonly seq: number } | undefined>(undefined)
-  // ── bug e9330692：worktree 工作区归并（A7 键扩两段）──
-  // worktree 工作区（编排/挂靠自身产物）不进 projects 注册表——落在其中的会话 hero
-  // selectedId 恒 miss。miss 时消费 host resolve 通道身份裁决（客户端零仲裁）：选中
-  // 工作区路径 → {projectId, projectRoot}；裁决归并回属主项目 → 编排可用。真未归属
-  // （原生无绑定工作区）裁决缺席 → null（A7 fail-closed 提示原样）。
-  const resolveTargetPath = useMemo(() => {
-    // strict 命中 = 归并不参与（注册绑定直取）；miss 段取选中工作区路径交 host 裁决
-    if (selectedProjectRootStrictOf(projects, selectedId) !== null || selectedId === undefined) return null
-    return workspaces?.items.find((row) => row.workspaceId === selectedId)?.path ?? null
-  }, [projects, selectedId, workspaces])
-  const [resolvedProject, setResolvedProject] = useState<{ readonly projectId: string; readonly projectRoot: string } | null>(null)
-  useEffect(() => {
-    // 待裁路径变化即重裁（快照缺席/通道失败 fail-soft = null——维持 A7 提示）
-    if (resolveTargetPath === null) {
-      setResolvedProject(null)
-      return
-    }
-    let alive = true
-    makeRpc()
-      .worktree.resolve({ paths: [resolveTargetPath] })
-      .then((result) => {
-        if (!alive) return
-        const entry = result.resolved.find((row) => row.path === resolveTargetPath)
-        setResolvedProject(entry !== undefined ? { projectId: entry.projectId, projectRoot: entry.projectRoot } : null)
-      })
-      .catch(() => {
-        if (alive) setResolvedProject(null)
-      })
-    return () => {
-      alive = false
-    }
-  }, [resolveTargetPath, makeRpc])
-  // 挂靠编排缝（1.31——React 解耦抽出 createWorktreeOrchestrator 可单测面；1.29 起 arm
-  // 消费点唯一消费，点选不触达）。返回产物 sessionId（草稿搬运落点）；失败 → 1.25 Toast
-  // + null（挂载面选中态同清——不产生「已选中」假象）。
-  // A7（1.31）+ bug e9330692：编排数据根 = strict 注册绑定 → miss 段 host 身份裁决归并
-  // （orchestrateRootOf 两段键——渲染兜底仍禁止泄漏为绑定语义）。
-  const orchestrateRoot = orchestrateRootOf(projects, selectedId, resolvedProject)
-  const orchestrate = useMemo(
-    () =>
-      createWorktreeOrchestrator({
-        worktree,
-        makeRpc,
-        orchestrateRoot,
-        onNotice: (text) => setWorktreeNotice((prev) => ({ text, seq: (prev?.seq ?? 0) + 1 })),
-      }),
-    [worktree, makeRpc, orchestrateRoot],
-  )
 
   const onSelect = useCallback(
     (id: string) => {
@@ -287,23 +145,10 @@ export function ForgeHeroWorkspacePicker({
         listClassName="dswf-hero-picker-list"
       />
       {workspacesAnchor}
-      {/* 1.25 编排失败/face 缺席提示（官方 Toast——body portal 顶部横幅，失败档长驻 5s） */}
-      {worktreeNotice !== undefined && (
-        <Toast
-          key={worktreeNotice.seq}
-          text={worktreeNotice.text}
-          holdMs={5000}
-          onDone={() => setWorktreeNotice(undefined)}
-        />
-      )}
       {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
-          两 chip」构图；非 git / 未选中项目零注入整体退回现状）。1.29：点选纯选中态在
-          挂载面本地闭环；编排缝只递达 arm 消费点。 */}
-      <ForgeHeroWorktreeMount
-        projectRoot={selectedProjectRoot}
-        worktree={worktree !== undefined ? { ...worktree, orchestrate } : undefined}
-        makeRpc={makeRpc}
-      />
+          两 chip」构图；非 git / 未选中项目零注入整体退回现状）。点选 = 纯选中态 +
+          点选时点跨分支确认（1.19），会话创建 = 官方 create 调用点 wrap 改道预铸。 */}
+      <ForgeHeroWorktreeMount projectRoot={selectedProjectRoot} makeRpc={makeRpc} />
     </>
   )
 }
