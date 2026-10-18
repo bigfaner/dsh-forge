@@ -53,6 +53,13 @@ export interface ForgePluginConfig {
   bindingsFile?: string
   /** 管线模式（preset yml plugin-forge 行 config 的 mode 键——expedition/blitz，缺省回退远征） */
   mode?: string
+  /**
+   * e2e 红灯基线门开关（用户裁决 2026-10-18 缺省 **false 禁用**——全量套件 >10min 超预算，
+   * 每次循环启动白烧超时窗）。true = 循环启动时后台跑全量 e2e 套件建基线（红灯清单随
+   * 简报递达 worker + 逐用例归因卡 + HEAD 键控持久缓存）。重启用前置 = 基线口径收敛到
+   * 可承受时长（分片/受影响 spec/增量基线）。
+   */
+  e2eBaselineGate?: boolean
 }
 
 /** 启动对账降级告警（fail-soft 单行——console.warn；降级 = 遗留 in_progress 原样，下次重启重试） */
@@ -256,25 +263,26 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
     // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
     const loopRegistry = createLoopRegistry()
-    // e2e 红灯基线门真装配（改进7 · bug ca061ef6 生产接线收口）：runSuite = 循环 worktree
-    // e2e 套件全量执行（pnpm test:e2e——reporter FAIL/✘ 行解析为红灯清单；spawn 直启 +
-    // timeout 整树回收 + 崩溃形态 error 上抛——基线不可得与全绿不同形，bug 637fcb9e）+
-    // readHead = git rev-parse HEAD（disc-2 HEAD 键控缓存键；runSuite 与 readHead 同源
-    // worktree 锚定，cwd 仅作 worktree 缺席回落）。套件执行故障 fail-soft——机制静默关闭
-    // （简报零行），循环派发不阻。
-    // bug 006d8bfe 后续：基线缓存持久化（cacheFile 路径提供器）——用户裁决 2026-10-18：
-    // 落各 worktree 自身 `{worktree}/.forge/caches/{slug}/e2e-baseline/cache.json`
-    // （随检出走、容器隔离、跨重启复用；同 HEAD 套件零重跑）。
-    const e2eBaseline = {
-      ...createE2eBaselineFace({ cwd: process.cwd() }),
-      cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
-        input.worktree === undefined
-          ? undefined
-          : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
-    }
+    // e2e 红灯基线门（改进7）：**config.e2eBaselineGate 配置项控制，缺省 false 禁用**
+    // （用户裁决 2026-10-18「全量太重，先禁用」——真机全量套件 >10min，600s 超时必命中：
+    // 每次循环启动白烧 10 分钟后 fail-soft 关闭）。true = 接线基线面：循环启动后台跑全量
+    // e2e 套件建基线（红灯清单随简报递达 worker + 逐用例归因卡 + HEAD 键控持久缓存
+    // `{worktree}/.forge/caches/{slug}/e2e-baseline/`——跨实例/重启同 HEAD 零重跑）。
+    // 机制本体（driver/e2e-baseline/持久化/归因卡）完整保留并有测试覆盖；重启用前置 =
+    // 基线口径收敛到可承受时长（分片/受影响 spec/增量基线）。
+    const e2eBaseline =
+      config.e2eBaselineGate === true
+        ? {
+            ...createE2eBaselineFace({ cwd: process.cwd() }),
+            cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
+              input.worktree === undefined
+                ? undefined
+                : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
+          }
+        : undefined
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
-      e2eBaseline,
+      ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,
       narrator,
