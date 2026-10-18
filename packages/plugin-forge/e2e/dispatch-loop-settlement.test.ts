@@ -203,7 +203,9 @@ function build(options: { claim?: ClaimTaskResult[]; stats?: TaskStats[]; query?
     narrator,
     events: sink,
     registry,
-    delays: { backoffBaseMs: 1, patiencePauseMs: 1 },
+    // Root cause: 3c 终局 wait-for-quiescence 生产缺省 30s/5s——测试装配必须同缝注入小值，
+    // 否则终局落在生产窗内不 registry.remove，untilSettled 超时。
+    delays: { backoffBaseMs: 1, patiencePauseMs: 1, quiescenceWindowMs: 1, quiescencePollMs: 1 },
   }
   return { driver: createLoopDriver(deps), registry, calls }
 }
