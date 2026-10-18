@@ -430,8 +430,6 @@ interface ActiveLoop {
   waitRounds: number
   /** 同任务处置簿（S1c 第二层——taskKey → { 处置次数, 处置历史 }；封顶强制升级，结算成功清账） */
   readonly dispositions: Map<string, DispositionBook>
-  /** e2e 红灯基线缓存（disc-2 · HEAD 键控 {commit, reds}——缺席/空 = 基线全绿或机制关闭，简报零行） */
-  e2eBaseline?: E2eBaselineCache
   /** 基线在飞去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首 claim 并发同跑套件的 dedup 缝） */
   e2eBaselineInflight?: Promise<E2eBaselineCache | undefined>
   /** 基线链（基线跑批 + 归因卡生成——后台化后的有序收口锚：终局径 await 防归因卡晚于终局） */
@@ -956,7 +954,7 @@ async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[])
  */
 async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | undefined> {
   // in-flight 去重（bug 006d8bfe 后台化——start fire-and-forget 与 runRound 首领并发触达时
-  // 套件只跑一次；settle 后清位，后续调用走 loop.e2eBaseline 缓存 + claim 时漂移重算语义）
+  // 套件只跑一次；settle 后清位，后续调用走磁盘持久层 + 每轮 HEAD 键控重验语义）
   if (loop.e2eBaselineInflight !== undefined) return loop.e2eBaselineInflight
   const inflight = ensureE2eBaselineUncached(loop)
   loop.e2eBaselineInflight = inflight
@@ -976,38 +974,28 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
     try {
       head = await cfg.readHead(loop.record.worktree)
     } catch (cause) {
-      // HEAD 读失败（git 故障）——漂移不可判，复用现有缓存 fail-soft（不重跑昂贵套件）
+      // HEAD 读失败（git 故障）——键不可得：基线跳过（简报零红灯行），循环不阻。
       console.warn(
         `forge loop e2e baseline head read failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
       )
-      return loop.e2eBaseline
+      return undefined
     }
   }
-  // head undefined（readHead/worktree 缺席或不可得）= 键不可得：首算一次后恒复用（现状语义）
-  // runSuite 传同一 worktree——基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）
-  const before = loop.e2eBaseline
-  // 持久化缓存优先（bug 006d8bfe 后续——实例域缓存随重启即丢，同 HEAD 跨重启/跨实例复用：
-  // 同 HEAD 套件零重跑；error 形态不落盘故天然不复用「不可得」）。读失败/未命中 = 回落跑批。
+  // 磁盘即唯一缓存层（用户裁决 2026-10-18：不缓存到内存）：每次取基线 = 现算 HEAD →
+  // 查持久层（head 键匹配才命中）→ miss 才跑套件 → 落盘。runSuite 传同一 worktree——
+  // 基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）。
   const cachePath = cfg.cacheFile?.({ slug, worktree: loop.record.worktree })
-  if (head !== undefined && cachePath !== undefined && before === undefined) {
+  if (head !== undefined && cachePath !== undefined) {
     const persisted = loadPersistedBaseline(cachePath, head)
-    if (persisted !== undefined) {
-      loop.e2eBaseline = persisted
-      return persisted
-    }
+    if (persisted !== undefined) return persisted
   }
-  const entry = await baselineForHead(head, before, () => cfg.runSuite(loop.record.worktree))
-  loop.e2eBaseline = entry
-  // eslint-disable-next-line no-console
-  console.log('DBG-UNCACHED head=', head, 'cachePath=', cachePath, 'error=', entry.error)
-  if (entry !== before && entry.error !== undefined) {
+  const entry = await baselineForHead(head, undefined, () => cfg.runSuite(loop.record.worktree))
+  if (entry.error !== undefined) {
     console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
   }
-  // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下实例重跑）；IO 故障 fail-soft
+  // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下轮重算）；IO 故障 fail-soft
   if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
     try {
-      // eslint-disable-next-line no-console
-      console.log('DBG-PERSIST', cachePath, JSON.stringify(entry.redSpecs))
       persistBaseline(cachePath, head, entry.redSpecs)
     } catch (cause) {
       console.warn(

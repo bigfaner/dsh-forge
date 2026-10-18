@@ -522,7 +522,9 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
   it('disc-2 判例回归：fix 中途落地（HEAD 漂移）后简报反映新基线——旧红灯行不再烤死于循环启动时点', async () => {
     // 时序：start（HEAD c1 · 旧红灯）→ claim1（c1 复用）→ worker1 结算（fix 落地 = c2）
-    // → claim2（c2 漂移重算 · 新红灯）→ no-task 收口。套件执行恰 2 次（稳定 HEAD 零重跑）。
+    // → claim2（c2 漂移重算 · 新红灯）→ claim3（c2 磁盘命中复用）→ no-task 收口。
+    // 套件执行恰 2 次（磁盘为唯一缓存层——稳定 HEAD 零重跑）。
+    const cacheDir = mkdtempSync(join(tmpdir(), 'forge-baseline-cache-'))
     let head = 'c1'
     let output = 'FAIL e2e/specs/old.spec.ts > suite'
     let suiteRuns = 0
@@ -551,6 +553,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
           }
           return head
         },
+        cacheFile: () => join(cacheDir, '.forge', 'caches', 'feat-x', 'e2e-baseline', 'cache.json'),
       },
       // worktree 在场 + completed 提交 → 落点核验触发（1.18）——落点命中桩（本用例零涉核验）
       commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
@@ -562,8 +565,9 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // commit 落地后：简报携带新基线，旧红灯行消失（claim2 起）
     expect(built.h.claimInputs[1]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
     expect(built.h.claimInputs[2]).toMatchObject({ e2eBaselineRed: ['e2e/specs/new.spec.ts'] })
-    // 成本约束：稳定 HEAD 零额外套件执行（start 一次 + 漂移重算一次）
+    // 成本约束：磁盘唯一缓存层——稳定 HEAD 零额外套件执行（漂移重算一次后命中复用）
     expect(suiteRuns).toBe(2)
+    rmSync(cacheDir, { recursive: true, force: true })
   })
 
   it('bug 006d8bfe 后续：基线缓存持久化跨实例——同 HEAD 重启后套件零重跑（error 形态不落缓存）', async () => {
