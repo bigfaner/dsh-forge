@@ -1397,6 +1397,7 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
     const stats = await statsFailSoft(loop)
     const settledPayload: InjectionPayload = {
       slug: loop.record.source.slug,
+      sourceKind: loop.record.source.kind,
       ownerSessionId: loop.record.ownerSessionId,
       taskKey: '',
       reason: '',

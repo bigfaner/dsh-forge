@@ -459,7 +459,7 @@ describe('execute · 挂起态（P3 摘要兜底 + re-entry 幂等续接 + 接�
     // 挂起摘要 = P3 模板同源（payloadOf(record) 渲染——丢失兜底读径）
     expect(out.summary).toContain('任务循环挂起')
     expect(out.summary).toContain('tests hang on flaky selector')
-    expect(out.summary).toContain('dispatchTask(feat-x)')
+    expect(out.summary).toContain(`dispatchTask(source_kind='feature', source_slug='feat-x')`)
     const text = h_render(h, out)
     expect(text).toContain('任务循环挂起')
     expect(text).toContain('resumes from where it suspended (completed tasks are not re-run)')

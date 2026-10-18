@@ -30,6 +30,7 @@ import { LOOP_EXCLUSIVE_GUIDANCE, OWNER_ACTIVE_GUIDANCE } from '../../src/dispat
 
 const PAYLOAD = {
   slug: 'feat-x',
+  sourceKind: 'feature',
   ownerSessionId: 'sess-a1',
   taskKey: 'feat-x/2.3',
   reason: '验收标准要求全部测试通过，但 3 个既有用例与改动冲突',
@@ -186,7 +187,19 @@ describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指�
     }
     expect(renderP5(PAYLOAD)).toContain('已完成 4，blocked 1')
     expect(renderP6(PAYLOAD)).toContain(`${PAYLOAD.slug} 连续派发失败`)
-    expect(renderP7(PAYLOAD)).toContain(`dispatchTask(${PAYLOAD.slug})`)
+    expect(renderP7(PAYLOAD)).toContain(`dispatchTask(source_kind='feature', source_slug='${PAYLOAD.slug}')`)
+    // 双参形态 pin：全部模板 dispatchTask 指引 schema 合法（source_kind+source_slug 成对，无单参残形）
+    for (const text of [
+      renderP3(PAYLOAD),
+      renderP9(PAYLOAD),
+      renderP5(PAYLOAD),
+      renderP6(PAYLOAD),
+      renderP7(PAYLOAD),
+      renderP8(PAYLOAD),
+    ]) {
+      expect(text).toMatch(/dispatchTask\(source_kind='[a-z]+', source_slug='[^']+'\)/)
+      expect(text).not.toMatch(/dispatchTask\((?!source_kind)[^\s')]/)
+    }
   })
 
   it('driver 消费同源：driver.ts 结束径直调 renderEndOfLoop（非二次抄写）', () => {
