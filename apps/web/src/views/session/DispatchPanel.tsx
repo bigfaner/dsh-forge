@@ -643,6 +643,8 @@ function useDispatchAnchor(active: boolean): DispatchPanelGeometry | null {
     if (!active) return
     let disposed = false
     let observer: ResizeObserver | null = null
+    let observed: Element | null = null
+    let mo: MutationObserver | null = null
     let raf = 0
     let attempts = 0
     const dom = (): DispatchAnchorDom => ({
@@ -657,21 +659,31 @@ function useDispatchAnchor(active: boolean): DispatchPanelGeometry | null {
         const next = dispatchPanelAnchor(rects)
         return prev !== null && prev.left === next.left && prev.top === next.top ? prev : next
       })
-      if (observer === null) {
-        const conv = document.querySelector(DP_CONV_SELECTOR)
-        if (conv !== null) {
-          observer = new ResizeObserver(() => {
-            recompute()
-          })
+      // Root cause: dock 展开 → 对话列槽位重排可能重建 [data-conversation-scroll] 节点——
+      // observer 若钉在首次 recompute 捕获的旧节点上，新节点宽度变化零回调 → 面板不左移。
+      // 修法：每次 recompute 重新按选择器取当前锚节点，节点更替即换观察面（最小改动：
+      // 择「重新 observe」而非 MutationObserver 挂容器/改观察容器）。
+      const conv = document.querySelector(DP_CONV_SELECTOR)
+      if (conv !== null) {
+        if (observer === null) observer = new ResizeObserver(() => recompute())
+        if (observed !== conv) {
+          observer.disconnect()
           observer.observe(conv)
+          observed = conv
         }
       }
     }
+    // 槽位重排触发源：dock 展开 → 对话列整体重建（旧锚节点拆下 = ResizeObserver 零回调、
+    // 窗口不 resize）→ 需 DOM 变更面通知换锚重算（Root cause 补充：断锚失联 = 无触发时机）。
+    mo = new MutationObserver(() => {
+      recompute()
+    })
+    mo.observe(document.documentElement, { childList: true, subtree: true })
     const retry = (): void => {
       if (disposed) return
       recompute()
       // 挂载竞态兜底：容器未到场（与 main 槽树同帧交替挂载）→ rAF 有限重试（到场即停）
-      if (observer === null && attempts < 120) {
+      if (observed === null && attempts < 120) {
         attempts += 1
         raf = window.requestAnimationFrame(retry)
       }
@@ -682,6 +694,7 @@ function useDispatchAnchor(active: boolean): DispatchPanelGeometry | null {
       disposed = true
       window.cancelAnimationFrame(raf)
       window.removeEventListener('resize', recompute)
+      mo?.disconnect()
       observer?.disconnect()
     }
   }, [active])
