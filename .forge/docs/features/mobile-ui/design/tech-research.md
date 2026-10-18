@@ -7,6 +7,8 @@ probe-source: .forge/docs/probes/official-mobile-page.js.txt
 
 ## R1 官方手机页实现实证（AD-2 条件项钉死）
 
+> **已证伪，见 R11**（探针实证 `/api/rpc` + `/api/session/stream` SSE 通道不存在）；R12 进一步裁决 **mobile 不消费 `/api` 官方面**（端点仅形状参照，消费经 `forge:proxy/*` in-process 直调）。本节保留为官方手机页**机械实证**（轮询常量/rAF 合帧/末条补丁/心跳/键盘视口），通道与端点口径以 R11/R12 为准。
+
 来源：本机官方安装物 `D:\software\DSH Desktop\resources\app.asar` 内 `renderMobilePage`（70KB 单文件页，提取件见 probe-source）。**这是批次①「SSE 抓样」的前置答案——端点形状已钉死，批次①首任务降为回放录制**。
 
 ### R1.1 流通道（SSE）
@@ -113,7 +115,7 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - per-record 键即路径段：必须 `[a-zA-Z0-9_-]+`，不安全键写时拒绝。
 - 无查询、无通知（通知在域层）、无跨进程仲裁。
 
-### R6.4 对 read-state 的实现精化
+### R6.4 对 read-state 的实现精化（**方案已撤销——2026-10-17 裁决 read-state host 面不建，未读游标 = 手机端 localStorage（tech-design AD-6）；本节仅留档**）
 
 | 决策点 | 结论 | 依据 |
 |---|---|---|
@@ -166,8 +168,8 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 | 2 | 官方传输面（真实形状） | ✅ host webserver 同源挂载：单呼 = `POST /api/<service>/<method>`（信封 `{type:"client-request",rpcId,method,payload}` → `{type:"server-response",rpcId,result:{ok,value\|error}}`）；事件流 = `WS /api/remote.mux` 逻辑流复用（`$events` generation 源）。client 半 = `installConnection`（`@deepseek-ai/dsh-client-connection`），desktop 壳经 custom scheme 转发同组协议 |
 | 3 | 组合缺口（必须补） | ❌→✅ **dsh-base 出厂只挂 `typert-gateway`，`api-session-controller` / `api-workspace-controller` 缺席**（`/api/session/list` 405 实证）——profile patch 插两行启用行 + profile deps 即点亮（探针已入 dev 形态；打包模板 template.ts 同源跟进） |
 | 4 | `/remote/` 挂载适配（已落地 commit `7921232d`） | ✅ 三缝：index 经 `renderIndexInjections` 注入官方行（facade + 组合脚本 + `__DSH_BOOT__`；tapIndex 弹射跳过——弹射终点即本页）；`/remote/plugins/*` 302 → 官方 `/plugins` 组合路由；`/remote/api/*` 307 → 官方 `/api` 通道（client http transport 发文档相对 URL；302 会降级 POST） |
-| 5 | client 半装载（mobile 页） | ✅ 最小路径实证：facade queue 模式下 app 组合 factory 入 `pendingQueue`（boot 只预载不执行）——按需补加载组合 `<script>` 后从队列直取 `@deepseek-ai/dsh-client-connection` factory 物化（bundle 自包含）；`installConnection` 缺省 web transport 同源直连 |
-| 6 | 认证 | ✅ 配对链 302→302→303 铸官方 `dsh-auth-*` cookie（BrowserAuth，绑定 authority）；`_request` 上下文域由官方 typert client 运行时注入——手搓 payload 到不了（`gateway/arguments-invalid` 实证），**session.prompt 等业务单呼必须经官方 client 运行时** |
+| 5 | client 半装载（mobile 页） | ✅ 最小路径实证：facade queue 模式下 app 组合 factory 入 `pendingQueue`（boot 只预载不执行）——按需补加载组合 `<script>` 后从队列直取 `@deepseek-ai/dsh-client-connection` factory 物化（bundle 自包含）；`installConnection` 缺省 web transport 同源直连 **（R12 作废——mobile 不 boot 官方 client，client 半不引入，见 R12#5）** |
+| 6 | 认证 | ✅ 配对链 302→302→303 铸官方 `dsh-auth-*` cookie（BrowserAuth，绑定 authority）；`_request` 上下文域由官方 typert client 运行时注入——手搓 payload 到不了（`gateway/arguments-invalid` 实证），**session.prompt 等业务单呼必须经官方 client 运行时** **（R12 作废——`_request` 随 forge:proxy in-process 直调消失，认证面见 tunnel-psk PSK v3，见 R12#5）** |
 | 7 | 架构裁决 | ~~方案 B（官方协议）~~ **R12 已改向**（见下） |
 
 ## R12 最终裁决（2026-10-17：`/api` 官方 RPC 面整体放弃——安全裁决）

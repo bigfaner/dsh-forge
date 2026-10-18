@@ -1,6 +1,6 @@
 ---
 created: 2026-10-17
-db-schema: "yes"
+db-schema: "no"
 source-proposal: mobile-ui
 ui-baseline: .forge/docs/proposals/mobile-ui/mobile-ui-mockup-final.html
 render-baseline: .forge/docs/proposals/mobile-remote-approval/walkthrough/mobile-message-rendering-gallery-v2.html
@@ -19,7 +19,7 @@ render-baseline: .forge/docs/proposals/mobile-remote-approval/walkthrough/mobile
 | # | 目标 | 量化口径 |
 |---|---|---|
 | G1 | 手机端成为独立 view 层工程，与桌面 web-app 零模块引用 | 互不 import、互不构建；扫码秒开（单文件产物） |
-| G2 | 对话体验对齐官方手机页机械 | 官方 $events 流式、断线降级轮询（750ms→5s）、恢复自愈 |
+| G2 | 对话体验对齐官方手机页机械 | forge-stream 流式、断线降级轮询（750ms→5s）、恢复自愈 |
 | G3 | forge 任务域手机可见可控（只读展示 + 意图转发） | 暂停/派发等动作全部经 host 守卫落地 |
 | G4 | 各屏与 UI 定稿逐位一致 | 真机逐位对照 `mobile-ui-mockup-final.html` |
 | G5 | 分批交付，每批独立 e2e 验收 | 3 批，每批质量门全绿 + walkthrough 取证归档；**UI/交互验收 = Chrome 设备模拟移动端**（开发在 PC 上进行） |
@@ -29,13 +29,13 @@ render-baseline: .forge/docs/proposals/mobile-remote-approval/walkthrough/mobile
 ### In Scope
 
 - mobile 独立工程（apps/mobile：源码、esbuild 构建、单文件产物接入 `/remote/` 静态面）。
-- 官方 client-connection 对话通道全链（对话流、ask 分页卡、设置面板与模型切换）。
-- forge 扩展面接入与 host 侧薄方法：`/remote/__rpc` allowlist 扩充、分支切换校验、per-session read-state 已读游标存储（seq 游标，host 共享能力）、worker 类型派生（视探针）。
+- 对话通道全链经 forge 单通道（`forge:proxy/*` 代理 + `forge-stream` 事件镜像：对话流、ask 分页卡、设置面板与模型切换）。
+- forge 扩展面接入与 host 侧薄方法：`/remote/__rpc` allowlist 扩充、分支切换校验、未读游标 = 手机端 localStorage（2026-10-17 裁决：read-state host 面不建）、worker 类型派生（视探针）。
 - 抽屉、hero 新会话、未读徽标、任务进度悬浮球、worker 会话、循环卡、文档卡片/全屏阅读。
 
 ### Out of Scope
 
-- 官方 webServer API 面（client-connection 传输）、配对/PIN/隧道机械——零改动（组合行启用官方 api 控制器除外）。
+- 官方 webServer API 面（`/api`——mobile 不消费，R12）、配对/PIN/隧道机械——零改动。
 - 桌面 web-app 与桌面任务循环——零改动。
 - 会话格式——循环哨兵是读侧约定，不改写会话数据。
 - 手机端业务逻辑/校验/循环状态维护——硬边界禁止（见下）。
@@ -73,13 +73,13 @@ graph LR
 ```mermaid
 flowchart TD
     A[手机配对进入 /remote/] --> B[加载 mobile 单文件产物]
-    B --> C[官方 client-connection 对话通道]
+    B --> C[forge:proxy 对话通道 + forge-stream]
     C --> D{会话内动作}
-    D -->|消息 / ask 回答| E[官方 API 直达<br/>session.prompt / interaction.answer]
+    D -->|消息 / ask 回答| E[forge:proxy 通道<br/>session-prompt / user-questions-answer]
     D -->|任务暂停/派发 / 分支切换| F[forge 扩展通道 /remote/__rpc<br/>host 守卫校验]
     F -->|校验失败| G[手机端呈现确认框/提示<br/>UI 无预检判断]
     F -->|校验通过| H[host 落地执行]
-    E --> I[$events 流式渲染 + 断线降级轮询]
+    E --> I[forge-stream 流式渲染 + 断线降级轮询]
     H --> I
     I --> J[消息投影：气泡/活动卡/循环卡/文档卡]
 ```
@@ -88,20 +88,20 @@ flowchart TD
 
 ### 依赖前提：API 面来源与集成现状
 
-「官方 API 直达」= 手机页作为配对隧道**同源客户端**，直接调用官方 webServer 自带端点，对话全链不新造任何服务器代码。
+「官方 API 直达」已由 R12 裁决取代：**mobile 不消费 `/api` 官方面**（含 LAN）——对话数据经 `forge:proxy/*` 代理通道（host in-process 直调官方能力），事件流经 `forge-stream` 镜像。
 
 | 面 | 来源 | 现状 |
 |---|---|---|
-| 官方 API 面（client-connection 传输面：`POST /api/<service>/<method>` 信封 + `/api/remote.mux` `$events` 流） | 官方 webServer 既有路由；api-session/workspace 控制器组合行启用（dsh-base 出厂缺席——R11 探针实证后插行） | ✅ 探针全绿（connection-probe）；`/remote/` 挂载三缝适配已落地（plugins 302 / api 307 / 官方注入行） |
+| 对话数据（`forge:proxy/*` 代理通道族） | host `/remote/__rpc` 桥扩充（官方 session/commands 能力 in-process 直调，contracts DTO zod 校验） | 本工程新增 allowlist 表项 + 代理 handler（R12 终版口径） |
+| 事件流（`GET /remote/forge-stream`） | forge 侧订阅 host 事件镜像，加密 SSE 逐帧推送 | 本工程消费端（mobile stream.ts） |
 | 配对/PIN 门 → `/remote/` 静态面 | host 既有注册（弹射 tap + 静态路由） | ✅ 已有，已改指 mobile 单文件产物 |
-| forge 扩展面（`POST /remote/__rpc`） | host 既有桥（单点 HTTP RPC 分发 + allowlist 门，官方 authorizeIndex 放行优先） | ✅ 桥已在用（桌面 remote-transport 消费中）；本工程扩 allowlist + 新增薄方法 |
+| forge 原生通道（`POST /remote/__rpc`） | host 既有桥（allowlist 门） | ✅ 桥已在用（桌面 remote-transport 消费中）；本工程扩 allowlist |
 
 ```text
 手机浏览器（配对隧道同源）
-├─ POST /api/<service>/<method>（官方信封单呼）               ← 官方面，组合行启用
-├─ WS /api/remote.mux（$events 逻辑流）                       ← 官方面，组合行启用
-├─ GET /remote/  → mobile 单文件产物 + 官方注入行             ← 已落地（挂载三缝）
-└─ POST /remote/__rpc {channel: forge:remote/progress|...}  ← 桥已有，扩 allowlist
+├─ POST /remote/__rpc {channel: forge:proxy/*|forge:remote/*}   ← 单通道（R12）
+├─ GET /remote/forge-stream（加密 SSE 事件镜像）                 ← 会话事件流
+└─ GET /remote/  → mobile 单文件产物 + 官方注入行                ← 已落地（挂载三缝）
 ```
 
 硬边界（手机端零业务逻辑）成立的前提即此分工：校验与执行在 host/桌面侧，手机页只剩「调用 + 渲染」。
@@ -139,8 +139,8 @@ StreamChunk 判别集：`block-start｜text-delta｜reasoning-delta｜tool-call-
 
 | 类别 | 约束 | 性质 |
 |---|---|---|
-| 性能 | 扫码即用秒开：单文件轻量页，无框架 runtime；$events→rAF 合帧渲染 | 保健 |
-| 可用性 | EventSource 原生重连 + 心跳判活 + 断线覆盖层；仅消息区竖直滚动 | 保健 |
+| 性能 | 扫码即用秒开：单文件轻量页，无框架 runtime；forge-stream→rAF 合帧渲染 | 保健 |
+| 可用性 | forge-stream SSE 重连 + 心跳判活 + 断线覆盖层；仅消息区竖直滚动 | 保健 |
 | 兼容 | 手机浏览器（配对隧道环境）；100+ 模型多提供商列表可检索 | 保健 |
 | 安全 | 动作意图一律 host 守卫；preset 锁定语义 host 侧执行，UI 不展示 | 保健 |
 | 一致性 | 设计令牌对齐 DESIGN.md；图标全 SVG，无 emoji；选中态配方全站统一 | 保健 |
