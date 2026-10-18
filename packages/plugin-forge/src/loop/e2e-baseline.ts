@@ -2,7 +2,7 @@
 // 红灯清单随任务简报（E2E_BASELINE_RED 行）递达 worker：基线红灯 ≠ 本任务回归，可机械判定；
 // 红灯自动生成归因卡（环境 / 陈旧断言 / 真回归 三分流）。定位：循环面基建（loop/）——
 // 套件执行命令由装配方经 runSuite 注入，本模块只做解析与载荷合成（纯逻辑可单测）。
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import type { AddTaskInput, ContainerRef, TaskPriority } from '@dsh-forge/contracts'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 
@@ -42,7 +42,7 @@ export const E2E_BASELINE_SUITE_TIMEOUT_MS = 600_000
 /**
  * 基线跑批（e2e 套件入场前调用一次）：执行注入的 runSuite 取全量输出 → 解析红灯清单。
  * runSuite 以超时包裹（挂死 = reject——fail-soft 空清单 + error 留痕，不拖循环入场；
- * 进程级 kill 由装配方 execFile timeout 承担）。套件执行故障 fail-soft：空清单 + error
+ * 进程级整树回收由装配方 timeout killTree 承担）。套件执行故障 fail-soft：空清单 + error
  * 留痕——基线不可得时机制静默关闭（简报零行），循环派发不受阻（取证债可后补，循环不死锁）。
  */
 export async function runE2eBaseline(
@@ -127,7 +127,7 @@ export function attributionTaskInput(
 
 /** e2e 基线装配面参数（宿主 index.ts 消费；probe 真机取证可注入轻量真命令） */
 export interface E2eBaselineFaceDeps {
-  /** 套件执行目录（宿主工作区根——e2e 正本所在地） */
+  /** 套件执行目录回落（runSuite 未传 worktree 时使用——驱动器恒传循环 worktree 同源锚定） */
   readonly cwd: string
   /** 套件命令（缺省 pnpm；Windows shell 解析 pnpm.cmd） */
   readonly command?: string
@@ -139,34 +139,105 @@ export interface E2eBaselineFaceDeps {
   readonly shell?: boolean
 }
 
+/** 套件输出体量上限（256MB——reporter 疯狂输出防内存打爆；超限截断，解析以在场内容为准） */
+const E2E_BASELINE_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+
+/**
+ * timeout 整树回收：shell:true 下子进程 pid = shell 层，kill 只及 shell——pnpm/node 孙进程
+ * 成孤儿（与 windows commit 纪律相悖）。win32 = taskkill /T /F 整树；posix = spawn 直启
+ * detached（独立进程组），负 pid 组杀。回收工具自身经 noteHostOwnedChild 登记（不被 keeper 收编）。
+ */
+function killTree(pid: number | undefined): void {
+  if (pid === undefined) return
+  if (process.platform === 'win32') {
+    const taskkill = execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => {})
+    taskkill.once('error', () => {}) // taskkill 缺席/进程已退——回收尽力而为 fail-soft
+    noteHostOwnedChild(taskkill)
+  } else {
+    try {
+      process.kill(-pid, 'SIGKILL')
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // 进程已退——零动作
+      }
+    }
+  }
+}
+
 /**
  * 宿主装配面（LoopDriverDeps.e2eBaseline 生产形态）：runSuite = 真实子进程执行 e2e 套件
- * 全量（execFile timeout 包裹——套件挂死 kill + 非零退出 reporter 输出照常解析；子进程
- * noteHostOwnedChild 登记——宿主自有子进程不并发循环 keeper 误收编）+ readHead = git
- * rev-parse HEAD（故障/非 git 目录 = undefined——键不可得，驱动器回落启动时基线）。
- * 套件故障 fail-soft（空清单 + warn——机制静默关闭，循环不阻，简报零行）。
+ * 全量（spawn 直启 + 自管 timeout——timeout 整树回收孙进程 + 非零退出 reporter 输出照常
+ * 解析；子进程 noteHostOwnedChild 登记——宿主自有子进程不并发循环 keeper 误收编）+
+ * readHead = git rev-parse HEAD（故障/非 git 目录 = undefined——键不可得，驱动器回落启动时基线）。
+ * runSuite 的 worktree 入参与 readHead 同源锚定（disc-2 多 worktree 并行循环基线取数点
+ * 与缓存键不错位；缺席回落 deps.cwd）。套件崩溃形态（执行故障 ∧ 解析零红灯行）以 error
+ * 上抛——基线记「不可得」，与「基线全绿」不同形（bug 637fcb9e：resolve 空清单 = 漏报，
+ * worker 真 e2e 失败被误归因到实现任务）。
  */
 export function createE2eBaselineFace(deps: E2eBaselineFaceDeps): {
-  readonly runSuite: () => Promise<string>
+  readonly runSuite: (worktree?: string) => Promise<string>
   readonly readHead: (worktree: string) => Promise<string | undefined>
 } {
   const command = deps.command ?? 'pnpm'
   const args = deps.args ?? ['test:e2e']
   const timeoutMs = deps.timeoutMs ?? E2E_BASELINE_SUITE_TIMEOUT_MS
-  const runSuite = (): Promise<string> =>
+  const runSuite = (worktree?: string): Promise<string> =>
     new Promise((resolve, reject) => {
-      const child = execFile(
-        command,
-        [...args],
-        { cwd: deps.cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, timeout: timeoutMs, windowsHide: true, shell: deps.shell ?? process.platform === 'win32' },
-        (error, stdout, stderr) => {
-          // 非零退出（有红灯）≠ 取数失败——reporter 输出在场即解析（vitest 失败详单走
-          // stderr、playwright 全走 stdout——双流拼接喂解析器）；双流全空 = 执行故障 fail-soft
-          const combined = `${stdout}\n${stderr}`
-          if (combined.trim() !== '') resolve(combined)
-          else reject(error ?? new Error('e2e 基线套件零输出'))
-        },
-      )
+      const cwd = worktree ?? deps.cwd
+      const shell = deps.shell ?? process.platform === 'win32'
+      const child = spawn(command, [...args], {
+        cwd,
+        windowsHide: true,
+        shell,
+        // posix 直启（shell 缺省 false）独立进程组——timeout 负 pid 组杀可达整树
+        detached: !shell && process.platform !== 'win32',
+      })
+      const chunks: Buffer[] = []
+      let bytes = 0
+      let timedOut = false
+      let settled = false
+      const onChunk = (chunk: Buffer): void => {
+        if (bytes >= E2E_BASELINE_MAX_OUTPUT_BYTES) return
+        bytes += chunk.length
+        chunks.push(chunk)
+      }
+      child.stdout?.on('data', onChunk)
+      child.stderr?.on('data', onChunk)
+      const timer = setTimeout(() => {
+        timedOut = true
+        killTree(child.pid)
+      }, timeoutMs)
+      timer.unref?.()
+      const finish = (err: Error | null, combined: string): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        // 崩溃形态收口（bug 637fcb9e）：执行故障 ∧ 解析零红灯行 → reject（error 留痕、
+        // 基线不可得）；有红灯行 = 非零退出但 reporter 输出在场，照常解析（非取数失败）
+        const redCount = parseE2eRedSpecs(combined).length
+        if (err !== null && redCount === 0) {
+          reject(err)
+          return
+        }
+        if (combined.trim() === '') {
+          reject(err ?? new Error('e2e 基线套件零输出'))
+          return
+        }
+        resolve(combined)
+      }
+      child.once('error', (err) => finish(err, ''))
+      child.once('close', (code) => {
+        finish(
+          timedOut
+            ? new Error(`e2e 基线套件执行超时（${timeoutMs}ms）——整树回收后 fail-soft 关闭`)
+            : code !== 0
+              ? new Error(`e2e 基线套件执行失败（exit ${code}）`)
+              : null,
+          `${Buffer.concat(chunks).toString('utf8')}`,
+        )
+      })
       noteHostOwnedChild(child)
     })
   const readHead = (worktree: string): Promise<string | undefined> =>

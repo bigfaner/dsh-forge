@@ -3,7 +3,7 @@
 // fail-soft + 超时 fail-soft）、baselineForHead（HEAD 键控缓存）、attributionTaskInput
 // （三分流归因卡载荷形状）、createE2eBaselineFace（真子进程装配面）。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -108,6 +108,76 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
     const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
     expect(r.redSpecs).toEqual([])
     expect(r.error).toBeDefined()
+  })
+
+  it('bug 637fcb9e：套件崩溃形态（stderr 堆栈零红灯行）→ 基线「不可得」（error 在场），与全绿不同形', async () => {
+    const face = createE2eBaselineFace({
+      cwd: dir,
+      command: process.execPath,
+      args: [
+        '-e',
+        'console.error("Error: harness config boom"); console.error("    at Object.<anonymous> (config.ts:3:9)"); process.exitCode = 1',
+      ],
+      shell: false,
+      timeoutMs: 30_000,
+    })
+    const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
+    expect(r.redSpecs).toEqual([])
+    expect(r.error).toBeDefined() // 修复前：error 缺席 = 崩溃被记「基线全绿」（漏报）
+  })
+
+  it('face cwd 锚定：runSuite 按传入 worktree 定 cwd（与 readHead 缓存键同源——多 worktree 不错位）', async () => {
+    const d1 = mkdtempSync(join(tmpdir(), 'forge-baseline-wt1-'))
+    const d2 = mkdtempSync(join(tmpdir(), 'forge-baseline-wt2-'))
+    writeFileSync(join(d1, 'marker.txt'), 'x')
+    try {
+      const face = createE2eBaselineFace({
+        cwd: d2,
+        command: process.execPath,
+        args: ['-e', "process.stdout.write(String(require('fs').existsSync('marker.txt')))"],
+        shell: false,
+        timeoutMs: 30_000,
+      })
+      expect(await face.runSuite(d1)).toBe('true') // 修复前：恒落 deps.cwd（d2）= 'false'
+      expect(await face.runSuite(d2)).toBe('false')
+    } finally {
+      rmSync(d1, { recursive: true, force: true })
+      rmSync(d2, { recursive: true, force: true })
+    }
+  })
+
+  it('timeout 整树回收：孙进程不残留（shell 层 kill 孤儿收口——真机形态）', async () => {
+    const innerPidFile = join(dir, 'inner.pid')
+    const bootstrap = `require('node:fs').writeFileSync(${JSON.stringify(innerPidFile)},String(process.pid));setInterval(()=>{},1000)`
+    const script = `require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(bootstrap)}],{stdio:'ignore'});setInterval(()=>{},1000)`
+    const face = createE2eBaselineFace({
+      cwd: dir,
+      command: process.execPath,
+      args: ['-e', script],
+      shell: false,
+      timeoutMs: 1_500,
+    })
+    const r = await runE2eBaseline(face.runSuite, { timeoutMs: 30_000 })
+    expect(r.error).toContain('超时')
+    // 等孙进程 pid 落盘（spawn 竞态宽限），随后断言其被整树回收
+    for (let i = 0; i < 50 && !existsSync(innerPidFile); i++) await new Promise((r2) => setTimeout(r2, 100))
+    expect(existsSync(innerPidFile)).toBe(true)
+    const innerPid = Number(readFileSync(innerPidFile, 'utf8').trim())
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    // 回收宽限上界 10s——超时仍未回收即孤儿在场（修复前形态）
+    let reaped = false
+    for (let i = 0; i < 100 && !reaped; i++) {
+      reaped = !alive(innerPid)
+      if (!reaped) await new Promise((r2) => setTimeout(r2, 100))
+    }
+    expect(reaped).toBe(true)
   })
 
   it('readHead：真 git 仓库 → HEAD；非 git 目录 → undefined（键不可得）', async () => {

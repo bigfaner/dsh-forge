@@ -340,13 +340,14 @@ export interface LoopDriverDeps {
   /**
    * e2e 红灯基线门（改进7——可选；缺席 = 机制关闭，简报零 E2E_BASELINE_RED 行）。
    * runSuite = e2e 套件全量执行命令（返回 reporter 输出——`FAIL <spec>` 行被解析为红灯
-   * 清单）。disc-2：基线按 HEAD 键控缓存——readHead 读循环 worktree 当前 HEAD，claim 时
+   * 清单；worktree 入参与 readHead 同源锚定——多 worktree 并行循环基线取数点与缓存键
+   * 不错位）。disc-2：基线按 HEAD 键控缓存——readHead 读循环 worktree 当前 HEAD，claim 时
    * 比对：一致复用缓存、漂移重算（简报不烤死于循环启动时点）；readHead/HEAD 缺席 = 无漂移
    * 可判，回落启动时一次性基线。启动跑一次 + 逐一生成归因卡（三分流）；套件执行故障
    * fail-soft（空清单 + warn），循环不阻。
    */
   readonly e2eBaseline?: {
-    readonly runSuite: () => Promise<string>
+    readonly runSuite: (worktree?: string) => Promise<string>
     /** worktree → 当前 HEAD（装配面注入 git rev-parse 缝；缺席/返回 undefined = 键不可得） */
     readonly readHead?: (worktree: string) => Promise<string | undefined>
   }
@@ -951,8 +952,9 @@ async function ensureE2eBaseline(loop: ActiveLoop): Promise<E2eBaselineCache | u
     }
   }
   // head undefined（readHead/worktree 缺席或不可得）= 键不可得：首算一次后恒复用（现状语义）
+  // runSuite 传同一 worktree——基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）
   const before = loop.e2eBaseline
-  const entry = await baselineForHead(head, before, cfg.runSuite)
+  const entry = await baselineForHead(head, before, () => cfg.runSuite(loop.record.worktree))
   loop.e2eBaseline = entry
   if (entry !== before && entry.error !== undefined) {
     console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
