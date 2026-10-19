@@ -223,6 +223,11 @@ test('dist:win 打包形态观测面：四路注错落 app-*.jsonl + 生产零�
   execFileSync('git', ['add', '.'], { cwd: wsDir, stdio: 'pipe' })
   execFileSync('git', ['-c', 'user.email=pk@test', '-c', 'user.name=pk', 'commit', '-m', 'init'], { cwd: wsDir, stdio: 'pipe' })
 
+  // 生境隔离（bug fd565018 根因修复）：打包便携 userData = {exe}/data 跨运行持久——
+  // 残留的项目/会话行让复启恢复已释放的 session reference（renderer「Session reference
+  // is released」），fail-open 官方原流与发送链在 renderer 侧即死，链 B 派生径结构性
+  // 零触发。首轮启动前清空便携 data（Step 1b 复启不清——追加面断言依赖同目录延续）。
+  rmSync(join(UNPACKED_DIR, 'data'), { recursive: true, force: true })
   const launched = await launchHost({
     userData, // 打包形态 userData 路径被便携 data 覆盖——此值仅承担 DSH_FORGE_USER_DATA 凭据桥关闭门
     executablePath: EXE,
@@ -277,8 +282,11 @@ test('dist:win 打包形态观测面：四路注错落 app-*.jsonl + 生产零�
     //    （judge 'route' → reroute 派生 sessionCreate 抛错 → 拦截层 fail-open emit，
     //    ALS 上下文内——行带链 B trace_id；process=child，bridge 显式携带生效） ──
     await registerProject(page, wsDir, 'pk-telem-ws')
-    await selectWorkspaceViaChip(page, 'pk-telem-ws')
+    // 派生失败注入：checkout --detach 必须在芯片点选**之前**（bug 7b9463df 同根修订——
+    // W3 sessions.create wrap 在点选时点预铸采纳会话；detach 晚于点选则预铸已绑定分支
+    // cwd，后续发送走 SessionCwdMismatch typed 拒绝径，fail-open 行结构性缺席）
     execFileSync('git', ['checkout', '--detach'], { cwd: wsDir, stdio: 'pipe' })
+    await selectWorkspaceViaChip(page, 'pk-telem-ws')
     await typeDraft(page, MARK_PROMPT)
     const tInject = Date.now() - 1_000
     await clickSend(page)
@@ -292,7 +300,9 @@ test('dist:win 打包形态观测面：四路注错落 app-*.jsonl + 生产零�
     execFileSync('git', ['checkout', 'main'], { cwd: wsDir, stdio: 'pipe' })
     await typeDraft(page, `${MARK_PROMPT}-ok`)
     const tSend = Date.now() - 1_000
-    await sendUntilLanded(page, userData, 'pk-telem-ws', tSend)
+    // 打包便携 userData 覆盖（bug fd565018 同根）：dsh-home 实际在 {exe}/data 下——
+    // 以运行中 main 实读 userData（logsDir 父目录）定位，零猜测
+    await sendUntilLanded(page, join(logsDir, '..'), 'pk-telem-ws', tSend)
     await pollDiagLines(logsDir, (lines) => lines.some((l) => l.process === 'child'), 120_000)
 
     // 关停（before-quit flush：崩溃豁免前置——证据确定落盘后重启）
