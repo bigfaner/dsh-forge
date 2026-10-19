@@ -71,6 +71,20 @@ describe('loadBootChain（fail-loud 防双实例裂缝）', () => {
     await expect(loadBootChain(dir)).rejects.toThrow(/split risk.*@deepseek-ai\/dsh-app-boot missing/)
   })
 
+  it('bug: 守卫报错只给 dev 恢复指引——打包部署机无从下手（2026-10-19 事故：现场只得 "reinstall apps/host/profile.dev"，部署机无此路径）', async () => {
+    const dir = makeScratchProfile()
+    writeTreeMarker(dir, '@deepseek-ai/dsh-app-boot')
+    const message = await loadBootChain(dir).then(
+      () => 'unexpectedly resolved',
+      (error: Error) => error.message,
+    )
+    expect(message).toMatch(/split risk.*@deepseek-ai\/dsh missing/)
+    // 恢复指引按形态分流：dev 重装 profile.dev；打包形态补装缺件进 profile 树或删树
+    // 回退内置 runtime——两形态都要有可执行动作
+    expect(message).toContain('packaged')
+    expect(message).toContain('node_modules')
+  })
+
   it('树内标记在场但解析逃逸出树（junction 指向树外真身）：BootChainSplitError', async () => {
     const dir = makeScratchProfile()
     // 可解析的树内 dsh-app-boot（main 面）

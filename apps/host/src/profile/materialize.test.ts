@@ -37,10 +37,25 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
       dsh: { profile: { bundles: string[] } }
     }
     expect(pkg.dependencies).toEqual({
+      '@deepseek-ai/cordis-plugin-group': '~1.0.4',
+      '@deepseek-ai/dsh': DSH_STACK_VERSION,
       '@deepseek-ai/dsh-base': DSH_STACK_VERSION,
       '@deepseek-ai/dsh-web-app': DSH_STACK_VERSION,
     })
     expect(pkg.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
+  })
+
+  it('bug: 模板缺 boot 链树依赖行——打包形态用户装插件物化树后恒无法启动（fix-20 只同步了 profile.dev，模板漏同步；2026-10-19 D:\\software\\dsh-forge 部署机事故）', () => {
+    const pkg = JSON.parse(PROFILE_TEMPLATE_FILES['package.json']!) as {
+      dependencies: Record<string, string>
+    }
+    // @deepseek-ai/dsh = boot 链两件之二：不在 dsh-base/dsh-web-app 依赖闭包，树物化时
+    // 永不进树 → fix-20 半树守卫 fail-closed 拒启（dev 形态 profile.dev 先例行）
+    expect(pkg.dependencies['@deepseek-ai/dsh']).toBe(DSH_STACK_VERSION)
+    // cordis-plugin-group = dsh-app-boot 六 peer 中唯一不被任何正常依赖携带者
+    // （autoInstallPeers: false 下其余五件经闭包 hoist 进树，唯它缺席）→ 齐树后
+    // dsh-app-boot 树内 import 必崩（版本范围对齐 dsh-app-boot peerDependencies 声明）
+    expect(pkg.dependencies['@deepseek-ai/cordis-plugin-group']).toBe('~1.0.4')
   })
 
   it('cordis.patch.yml 模板：官方行 + client-hmr 置停 + 产品 insert 行 = PRODUCT_PLUGINS 配置派生（单一配置源：userLayerRow 门——翻转布尔即行增减，不改模板代码；现值 core 开 / knowledge 关——知识库功能不完整暂不开放）', () => {
