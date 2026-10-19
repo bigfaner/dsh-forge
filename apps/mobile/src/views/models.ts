@@ -6,12 +6,13 @@
  *
  * 纯逻辑面（单测主战场）：catalog 收敛 / 检索过滤 / 分组计数 / 最近使用栈 / 防抖器。
  */
-import type { OfficialApi } from '../core/api.ts'
-import { DisconnectedError } from '../core/api.ts'
+import type { RemoteRpc } from '../core/rpc.ts'
+import { DisconnectedError } from '../core/rpc.ts'
+import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, proxyCall } from '../core/rpc.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 
 // ---------------------------------------------------------------------------
-// 纯函数：catalog 收敛（缺字段 fail-soft）
+// 纯函数：catalog 收敛（官方 session-model-catalog groups 形状，缺字段 fail-soft）
 // ---------------------------------------------------------------------------
 
 export interface ModelInfo {
@@ -34,79 +35,46 @@ export interface ModelCatalog {
   readonly current?: ModelSelection
 }
 
+/** efforts 项收敛（官方 ModelReasoningEffort {id,name,…}——非法项剔除，取值 = id）。 */
 function coerceEfforts(raw: unknown): readonly string[] {
-  const efforts =
-    (typeof raw === 'object' && raw !== null ? (raw as { efforts?: unknown; reasoning?: { efforts?: unknown } }) : {})
-  const list = efforts.efforts ?? efforts.reasoning?.efforts
-  return Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []
+  const efforts = (typeof raw === 'object' && raw !== null ? (raw as { reasoning?: { efforts?: unknown } }) : {})
+  const list = efforts.reasoning?.efforts
+  return Array.isArray(list)
+    ? list.filter((item): item is { id: string } => typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string')
+        .map((item) => item.id)
+    : []
 }
 
-function coerceModelItem(raw: unknown): ModelInfo | null {
-  if (typeof raw !== 'object' || raw === null) return null
-  const item = raw as {
-    provider?: unknown
-    id?: unknown
-    model?: unknown
-    name?: unknown
-    label?: unknown
-    displayName?: unknown
-    current?: unknown
-    reasoningEffort?: unknown
-  }
-  const provider = typeof item.provider === 'string' && item.provider !== '' ? item.provider : '其他'
-  const id = typeof item.id === 'string' ? item.id : typeof item.model === 'string' ? item.model : ''
-  if (id === '') return null
-  const name =
-    typeof item.displayName === 'string' && item.displayName !== ''
-      ? item.displayName
-      : typeof item.name === 'string' && item.name !== ''
-        ? item.name
-        : typeof item.label === 'string' && item.label !== ''
-          ? item.label
-          : id
-  return { provider, id, name, efforts: coerceEfforts(raw) }
-}
-
-/** 官方 session.models 窗口形状收敛：顶层 {models:[…]}（current 可为成员 current:true 或顶层 current 对象）。 */
+/** 官方 ModelCatalog 收敛：groups 平铺为模型行；current = 部署 default（{provider,model}），
+ * name 取目录成员名回退 id——会话当前档以回执/投影为准（preset 锁定语义 host 侧）。 */
 export function coerceModelCatalog(raw: unknown): ModelCatalog {
   if (typeof raw !== 'object' || raw === null) return { models: [] }
-  const frame = raw as { models?: unknown; current?: unknown }
-  const list = Array.isArray(frame.models) ? frame.models : []
-  const models = list
-    .map(coerceModelItem)
-    .filter((item): item is ModelInfo => item !== null)
-  let current: ModelSelection | undefined
-  if (typeof frame.current === 'object' && frame.current !== null) {
-    const picked = coerceModelItem(frame.current)
-    if (picked !== null) {
-      current = {
-        provider: picked.provider,
-        id: picked.id,
-        name: picked.name,
-        reasoningEffort:
-          typeof (frame.current as { reasoningEffort?: unknown }).reasoningEffort === 'string'
-            ? (frame.current as { reasoningEffort: string }).reasoningEffort
-            : undefined,
-      }
+  const frame = raw as { default?: unknown; groups?: unknown }
+  const groups = Array.isArray(frame.groups) ? frame.groups : []
+  const models: ModelInfo[] = []
+  for (const group of groups) {
+    if (typeof group !== 'object' || group === null) continue
+    const g = group as { id?: unknown; name?: unknown; models?: unknown }
+    const provider = typeof g.id === 'string' && g.id !== '' ? g.id : typeof g.name === 'string' && g.name !== '' ? g.name : '其他'
+    if (!Array.isArray(g.models)) continue
+    for (const item of g.models) {
+      if (typeof item !== 'object' || item === null) continue
+      const m = item as { id?: unknown; name?: unknown }
+      if (typeof m.id !== 'string' || m.id === '') continue
+      const name = typeof m.name === 'string' && m.name !== '' ? m.name : m.id
+      models.push({ provider, id: m.id, name, efforts: coerceEfforts(item) })
     }
   }
-  if (current === undefined) {
-    const flagged = list.find(
-      (item) => typeof item === 'object' && item !== null && (item as { current?: unknown }).current === true,
-    )
-    const picked = coerceModelItem(flagged)
-    if (picked !== null)
-      current = {
-        provider: picked.provider,
-        id: picked.id,
-        name: picked.name,
-        reasoningEffort:
-          typeof (flagged as { reasoningEffort?: unknown }).reasoningEffort === 'string'
-            ? (flagged as { reasoningEffort: string }).reasoningEffort
-            : undefined,
-      }
+  const fallback = (id: string): string => models.find((model) => model.id === id)?.name ?? id
+  if (
+    typeof frame.default === 'object' && frame.default !== null &&
+    typeof (frame.default as { provider?: unknown }).provider === 'string' &&
+    typeof (frame.default as { model?: unknown }).model === 'string'
+  ) {
+    const d = frame.default as { provider: string; model: string }
+    return { models, current: { provider: d.provider, id: d.model, name: fallback(d.model) } }
   }
-  return { models, ...(current === undefined ? {} : { current }) }
+  return { models }
 }
 
 /** 当前选中判据：provider+id 全等（对勾与选中态同判据）。 */
@@ -241,7 +209,7 @@ export function createDebounce(
 // ---------------------------------------------------------------------------
 
 export interface ModelsDeps {
-  readonly api: OfficialApi
+  readonly rpc: RemoteRpc
   readonly sessionId: string
   /** 最近使用存储键（按配对域隔离，见 recentStorageKey）。 */
   readonly recentKey: string
@@ -350,7 +318,12 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
 
   async function pick(model: ModelInfo): Promise<void> {
     try {
-      await deps.api.selectModel(deps.sessionId, model.provider, model.id)
+      // 选档即转发（SessionSelectModelRequest {sessionId, provider, model}——preset 锁定语义 host 侧）
+      await proxyCall(deps.rpc, PROXY_SESSION_SELECT_MODEL_CHANNEL, {
+        sessionId: deps.sessionId,
+        provider: model.provider,
+        model: model.id,
+      })
     } catch (error) {
       if (error instanceof DisconnectedError) {
         list.appendChild(el('div', 'msearch-hint err', '连接已断开'))
@@ -373,7 +346,7 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
 
   async function load(): Promise<void> {
     try {
-      catalog = coerceModelCatalog(await deps.api.models(deps.sessionId))
+      catalog = coerceModelCatalog(await proxyCall(deps.rpc, PROXY_SESSION_MODEL_CATALOG_CHANNEL, {}))
     } catch (error) {
       list.appendChild(
         el('div', 'msearch-hint err', error instanceof DisconnectedError ? '连接已断开' : '模型列表加载失败'),

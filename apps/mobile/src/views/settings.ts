@@ -1,12 +1,15 @@
 /**
  * settings 最小化设置面板（浮层，mockup 屏⑦）——composer 滑杆钮打开：
  * 无标题/无说明文本；模型行（点开 #/models 唯一子视图）+ 推理等级分段控件内联
- * （选档即生效：session.selectModel 即时下发；无子视图）。
+ * （选档即生效：forge:proxy/session-select-model 即时下发；无子视图）。
  * 推理档位随当前模型 reasoning.efforts 联动——不支持则整段隐藏。
+ * （R12 口径：模型面 = forge:proxy/session-model-catalog 读 + session-select-model 写，
+ * preset 锁定语义 host 侧。）
  *
  * 纯逻辑面（单测主战场）：effort 档位映射 / 当前档收敛 / 乐观回滚状态机。
  */
-import type { OfficialApi } from '../core/api.ts'
+import type { RemoteRpc } from '../core/rpc.ts'
+import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, proxyCall } from '../core/rpc.ts'
 import type { ModelCatalog, ModelSelection } from './models.ts'
 import { coerceModelCatalog, isSameModel } from './models.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
@@ -71,7 +74,7 @@ export function settleEffort(draft: EffortDraft, value: string): EffortDraft {
 // ---------------------------------------------------------------------------
 
 export interface SettingsDeps {
-  readonly api: OfficialApi
+  readonly rpc: RemoteRpc
   readonly sessionId: string
   /** 模型行点击 → 打开 #/models 唯一子视图（路由侧装配）。 */
   readonly onOpenModels?: () => void
@@ -144,7 +147,13 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
     draft = commitEffort(draft, value) // 选档即生效：乐观 picked
     render()
     try {
-      await deps.api.selectModel(deps.sessionId, current.provider, current.id, value)
+      // 选档即生效（SessionSelectModelRequest + reasoningEffort——preset 锁定语义 host 侧）
+      await proxyCall(deps.rpc, PROXY_SESSION_SELECT_MODEL_CHANNEL, {
+        sessionId: deps.sessionId,
+        provider: current.provider,
+        model: current.id,
+        reasoningEffort: value,
+      })
       draft = settleEffort(draft, value)
     } catch {
       draft = rollbackEffort(draft, previousEffort) // 失败回滚显示
@@ -154,7 +163,7 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
 
   async function refresh(): Promise<void> {
     try {
-      catalog = coerceModelCatalog(await deps.api.models(deps.sessionId))
+      catalog = coerceModelCatalog(await proxyCall(deps.rpc, PROXY_SESSION_MODEL_CATALOG_CHANNEL, {}))
     } catch {
       /* 拉取失败保留旧数据，面板保持可用 */
     }

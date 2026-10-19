@@ -51,6 +51,29 @@ export function createRemoteRpc(deps: RemoteRpcDeps): RemoteRpc {
 }
 
 // ---------------------------------------------------------------------------
+// forge:proxy 视图数据通道（R12 口径——ask/models/settings 三视图唯一数据面；
+// host 侧正本 = proxy-channels.ts PROXY_CHANNELS）
+// ---------------------------------------------------------------------------
+
+/** pending 发现（sessionController.projections → UserQuestionProjectionView{active,settled}） */
+export const PROXY_SESSION_PROJECTIONS_CHANNEL = 'forge:proxy/session-projections'
+/** ask 提交（ctx.userQuestions.answer） */
+export const PROXY_USER_QUESTIONS_ANSWER_CHANNEL = 'forge:proxy/user-questions-answer'
+/** 模型目录（sessionController.modelCatalog → 官方 ModelCatalog groups 形状） */
+export const PROXY_SESSION_MODEL_CATALOG_CHANNEL = 'forge:proxy/session-model-catalog'
+/** 模型选档（sessionController.selectModel；preset 锁定语义 host 侧） */
+export const PROXY_SESSION_SELECT_MODEL_CHANNEL = 'forge:proxy/session-select-model'
+
+/** 视图层通道调用：error 信封 → throw（disconnected 归一为 DisconnectedError，保持视图断线文案路径）。 */
+export async function proxyCall<T>(rpc: RemoteRpc, channel: string, payload: unknown): Promise<T> {
+  const result = await rpc.call<T>(channel, payload)
+  if (!result.ok) {
+    throw result.error.code === 'disconnected' ? new DisconnectedError() : new Error(result.error.reason)
+  }
+  return result.data
+}
+
+// ---------------------------------------------------------------------------
 // forge:proxy/file 文件读面（1.19 阅读页数据通道——host proxy-channels.ts readFileChunk 正本）
 // ---------------------------------------------------------------------------
 

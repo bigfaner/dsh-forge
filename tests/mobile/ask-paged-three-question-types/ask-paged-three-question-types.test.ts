@@ -21,7 +21,7 @@ import { expectMobileFile, loadFixtures, mobileSrc, sessionSummarySample } from 
 const FIX = loadFixtures()
 const SINGLE: AskQuestion = { id: 'q1', question: '部署目标？', options: [{ label: '边缘', recommended: true }, { label: '云端' }] }
 const MULTI: AskQuestion = { id: 'q2', question: '导出格式？', multiSelect: true, options: [{ label: 'md' }, { label: 'csv' }, { label: 'html' }] }
-const PENDING = { rpcId: 'rec-ask-1', questions: [SINGLE, MULTI] }
+const PENDING = { values: { userQuestions: { active: [{ callId: 'rec-ask-1', state: 'open', questions: [SINGLE, MULTI] }], settled: [] } } }
 
 describe('step-1 enter-ask（pending 交互进入 ask 面板）', () => {
   it('success（进入分页面板）', () => {
@@ -37,6 +37,9 @@ describe('step-1 enter-ask（pending 交互进入 ask 面板）', () => {
     expect(Object.keys(values)).toContain('userQuestions')
     // 通道录制在场（404 缺口显性化——录制期通道未放行）
     expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === 'forge:proxy/user-questions-answer')).toBe(true)
+    // R12 口径源面钉死：发现 = session-projections 投影；到达 = forge-stream user-questions/request 腿
+    expect(mobileSrc('views/ask.ts')).toMatch(/forge:proxy\/session-projections/)
+    expect(mobileSrc('views/ask.ts')).toMatch(/user-questions\/request|subscribeStream/)
   })
 
   it('session-switch-race（面板打开期间切会话）', () => {
@@ -46,7 +49,7 @@ describe('step-1 enter-ask（pending 交互进入 ask 面板）', () => {
     expect(draft.selected).toEqual(['云端']) // 缓冲在面板内
     // coercePending 为纯函数：pending 载荷零可变状态——切会话重进 pending 仍在（未提交不消失）
     expect(coercePending(PENDING)).toEqual(coercePending(PENDING))
-    expect(mobileSrc('views/ask.ts')).toMatch(/interaction\.answer/) // 唯一提交出口 = answer 通道
+    expect(mobileSrc('views/ask.ts')).toMatch(/user-questions-answer/) // 唯一提交出口 = user-questions-answer 通道
   })
 })
 
@@ -138,7 +141,7 @@ describe('step-5 prev-review（回看上一题答案保留）', () => {
     expect(answers.get(SINGLE.id)?.selected).toEqual(['边缘'])
     expect(answers.get(MULTI.id)?.selected).toEqual(['csv'])
     expect(answers.get(MULTI.id)?.custom).toBe('yaml')
-    expect(PENDING.questions).toHaveLength(2) // 序号/总数一致
+    expect(coercePending(PENDING)!.questions).toHaveLength(2) // 序号/总数一致
   })
 
   it('navigation-no-submit（翻页不提交中间态）', () => {
@@ -189,7 +192,7 @@ describe('smoke: happy path 依序走全链（ask-paged-three-question-types）'
     // ⑤ 回翻缓冲不变（Map 语义）
     expect(a1.selected).toEqual(['边缘'])
     expect(a2).toEqual({ id: 'q2', selected: ['md'], custom: 'yaml' })
-    // ⑥ 末题提交载荷契约（official interaction.answer 形状）
+    // ⑥ 末题提交载荷契约（user-questions-answer answers 项形状 {id, selected, custom}）
     expect([a1, a2].map((a) => Object.keys(a).sort())).toEqual([['custom', 'id', 'selected'], ['custom', 'id', 'selected']])
   })
 })

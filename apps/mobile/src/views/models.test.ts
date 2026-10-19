@@ -21,33 +21,47 @@ const model = (id: string, provider = 'DeepSeek', efforts: string[] = []): Model
   efforts,
 })
 
-describe('catalog 收敛（缺字段 fail-soft）', () => {
-  it('标准形状：models 数组 + 顶层 current', () => {
+describe('catalog 收敛（官方 session-model-catalog groups 形状，缺字段 fail-soft）', () => {
+  it('官方 ModelCatalog：groups 平铺 + default 收敛 current（current.name 取目录成员名）', () => {
     const catalog = coerceModelCatalog({
-      models: [
-        { provider: 'DeepSeek', id: 'deepseek-r1', name: 'DeepSeek-R1', reasoning: { efforts: ['low', 'medium'] } },
-        { provider: 'Anthropic', id: 'claude', displayName: 'Claude Sonnet 4.6' },
+      default: { provider: 'DeepSeek', model: 'deepseek-r1' },
+      routableProviders: ['DeepSeek', 'Anthropic'],
+      groups: [
+        {
+          id: 'DeepSeek',
+          name: 'DeepSeek',
+          models: [
+            { id: 'deepseek-r1', name: 'DeepSeek-R1', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'medium', name: 'Medium' }] } },
+          ],
+        },
+        { id: 'Anthropic', name: 'Anthropic', models: [{ id: 'claude', name: 'Claude Sonnet 4.6' }] },
       ],
-      current: { provider: 'DeepSeek', id: 'deepseek-r1', name: 'DeepSeek-R1', reasoningEffort: 'medium' },
     })
     expect(catalog.models).toHaveLength(2)
+    expect(catalog.models[0]?.provider).toBe('DeepSeek')
     expect(catalog.models[0]?.efforts).toEqual(['low', 'medium'])
     expect(catalog.current?.id).toBe('deepseek-r1')
-    expect(catalog.current?.reasoningEffort).toBe('medium')
+    expect(catalog.current?.provider).toBe('DeepSeek')
+    expect(catalog.current?.name).toBe('DeepSeek-R1')
+    expect(catalog.current?.reasoningEffort).toBeUndefined()
   })
 
-  it('成员 current:true 兜底 + 缺 provider 归「其他」+ 非法项剔除', () => {
+  it('efforts 非法项剔除 + 缺 reasoning = 空 efforts；default 缺席/畸形 = 无 current', () => {
     const catalog = coerceModelCatalog({
-      models: [{ id: 'a' }, { id: 'b', current: true }, 42, { provider: 'X' }],
+      groups: [
+        { id: 'X', name: 'X', models: [{ id: 'a', name: 'A', reasoning: { efforts: [{ id: 'low' }, 42] } }, { id: 'b', name: 'B' }, 7] },
+      ],
     })
     expect(catalog.models).toHaveLength(2)
-    expect(catalog.models[0]?.provider).toBe('其他')
-    expect(catalog.current?.id).toBe('b')
+    expect(catalog.models[0]?.efforts).toEqual(['low'])
+    expect(catalog.models[1]?.efforts).toEqual([])
+    expect(catalog.current).toBeUndefined()
   })
 
   it('空/畸形 payload 安全', () => {
     expect(coerceModelCatalog(null)).toEqual({ models: [] })
     expect(coerceModelCatalog({}).models).toHaveLength(0)
+    expect(coerceModelCatalog({ groups: 'nope' }).models).toHaveLength(0)
   })
 })
 

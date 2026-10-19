@@ -24,27 +24,51 @@ const multiQuestion = {
   options: [{ label: '甲' }, { label: '乙' }, { label: '丙' }],
 }
 
-describe('pending 载荷收敛（R9#2 官方契约）', () => {
-  it('questions 形状直传 + 题型判别 = multiSelect', () => {
-    const pending = coercePending({
-      rpcId: 'rpc-1',
-      questions: [singleQuestion, multiQuestion],
-    })
+// session-projections 响应：UserQuestionProjectionView{active,settled}（官方投影值形）
+const projectionView = {
+  active: [{ callId: 'call-1', state: 'open', questions: [singleQuestion, multiQuestion] }],
+  settled: [],
+}
+
+describe('pending 载荷收敛（R12 口径：session-projections userQuestions 投影）', () => {
+  it('projections 帧 {values:{userQuestions:{active,settled}}} 收敛首个 open 题', () => {
+    const pending = coercePending({ values: { userQuestions: projectionView } })
     expect(pending).not.toBeNull()
-    expect(pending?.rpcId).toBe('rpc-1')
+    expect(pending?.rpcId).toBe('call-1')
     expect(pending?.questions).toHaveLength(2)
     expect(pending?.questions[0]?.multiSelect).toBe(false)
     expect(pending?.questions[1]?.multiSelect).toBe(true)
   })
 
-  it('缺字段 fail-soft：questions 缺失/null = null', () => {
+  it('裸视图 {userQuestions:view} 与 view 本体两种层级均收敛', () => {
+    expect(coercePending({ userQuestions: projectionView })?.rpcId).toBe('call-1')
+    expect(coercePending(projectionView)?.rpcId).toBe('call-1')
+  })
+
+  it('state=continued 的在途题跳过（只取 open）', () => {
+    const view = {
+      active: [
+        { callId: 'old', state: 'continued', questions: [singleQuestion] },
+        { callId: 'live', state: 'open', questions: [multiQuestion] },
+      ],
+      settled: [],
+    }
+    expect(coercePending(view)?.rpcId).toBe('live')
+    expect(coercePending({ ...view, active: [view.active[0]!] })).toBeNull()
+  })
+
+  it('缺字段 fail-soft：无 active 题/畸形载荷 = null', () => {
     expect(coercePending(null)).toBeNull()
-    expect(coercePending({ rpcId: 'x' })).toBeNull()
-    expect(coercePending({ rpcId: 'x', questions: 'nope' })).toBeNull()
+    expect(coercePending({})).toBeNull()
+    expect(coercePending({ values: {} })).toBeNull()
+    expect(coercePending({ userQuestions: { active: [], settled: [] } })).toBeNull()
+    expect(coercePending({ userQuestions: { active: [{ callId: 'x', questions: 'nope' }], settled: [] } })).toBeNull()
   })
 
   it('选项 recommended / description 保留，缺省安全', () => {
-    const pending = coercePending({ rpcId: 'r', questions: [singleQuestion] })
+    const pending = coercePending({
+      userQuestions: { active: [{ callId: 'r', state: 'open', questions: [singleQuestion] }], settled: [] },
+    })
     expect(pending?.questions[0]?.options?.[0]).toEqual({
       label: '甲',
       description: '甲说明',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createOfficialApi, DisconnectedError, type ApiDeps } from './api.ts'
-import { arbitrate, createRemoteRpc, parseSlashLine, sendComposerInput, type RemoteRpcDeps } from './rpc.ts'
+import { arbitrate, createRemoteRpc, parseSlashLine, proxyCall, sendComposerInput, type RemoteRpcDeps } from './rpc.ts'
+import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_PROJECTIONS_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, PROXY_USER_QUESTIONS_ANSWER_CHANNEL, type RemoteRpc, type RpcResult } from './rpc.ts'
 import { createStore } from './store.ts'
 import { createRouter } from './router.ts'
 
@@ -39,6 +40,49 @@ describe('__rpc 信封客户端', () => {
     expect(await createRemoteRpc(denied.deps).call('x', {})).toEqual({ ok: false, error: { code: 'disconnected', reason: 'unauthorized' } })
     const offline: RemoteRpcDeps = { post: async () => { throw new Error('net down') } }
     expect(await createRemoteRpc(offline).call('x', {})).toEqual({ ok: false, error: { code: 'disconnected', reason: 'network' } })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// forge:proxy 视图数据通道（R12 口径——ask/models/settings 三视图唯一数据面）
+// ---------------------------------------------------------------------------
+
+describe('proxyCall 信封解包', () => {
+  const channels = [
+    PROXY_SESSION_PROJECTIONS_CHANNEL,
+    PROXY_USER_QUESTIONS_ANSWER_CHANNEL,
+    PROXY_SESSION_MODEL_CATALOG_CHANNEL,
+    PROXY_SESSION_SELECT_MODEL_CHANNEL,
+  ]
+  it('通道名族钉死（host proxy-channels.ts PROXY_CHANNELS 同源）', () => {
+    expect(channels).toEqual([
+      'forge:proxy/session-projections',
+      'forge:proxy/user-questions-answer',
+      'forge:proxy/session-model-catalog',
+      'forge:proxy/session-select-model',
+    ])
+  })
+
+  it('ok → data 透传；error 信封 → throw reason', async () => {
+    const rpc: RemoteRpc = {
+      call: async <T,>(channel: string, payload: unknown): Promise<RpcResult<T>> => {
+        if (channel === PROXY_SESSION_PROJECTIONS_CHANNEL) {
+          expect(payload).toEqual({ sessionId: 's-1' })
+          return { ok: true, data: { values: { userQuestions: { active: [], settled: [] } } } as T }
+        }
+        return { ok: false, error: { code: 'invalid-args', reason: 'payload 非法' } }
+      },
+    }
+    await expect(proxyCall(rpc, PROXY_SESSION_PROJECTIONS_CHANNEL, { sessionId: 's-1' })).resolves.toEqual({
+      values: { userQuestions: { active: [], settled: [] } },
+    })
+    await expect(proxyCall(rpc, PROXY_USER_QUESTIONS_ANSWER_CHANNEL, {})).rejects.toThrow('payload 非法')
+  })
+
+  it('disconnected 信封 → DisconnectedError（视图断线文案路径保持）', async () => {
+    const rpc: RemoteRpc = { call: async () => ({ ok: false, error: { code: 'disconnected', reason: 'network' } }) }
+    await expect(proxyCall(rpc, PROXY_SESSION_MODEL_CATALOG_CHANNEL, {})).rejects.toBeInstanceOf(DisconnectedError)
+    await expect(proxyCall(rpc, PROXY_SESSION_SELECT_MODEL_CHANNEL, {})).rejects.toBeInstanceOf(DisconnectedError)
   })
 })
 

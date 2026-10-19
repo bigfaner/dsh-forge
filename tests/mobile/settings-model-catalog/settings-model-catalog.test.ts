@@ -33,11 +33,25 @@ import { firstProxy, loadFixtures, mobileSrc, sessionSummarySample } from '../su
 const FIX = loadFixtures()
 
 const CATALOG = {
-  models: [
-    { provider: 'zai-coding-cn', id: 'glm-5.3', displayName: 'GLM 5.3', current: true, reasoning: { efforts: ['min', 'default', 'max'] } },
-    { provider: 'zai-coding-cn', id: 'glm-4.6v', displayName: 'GLM 4.6V' },
-    { provider: 'deepseek', id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', efforts: ['default'] },
-    { provider: 'deepseek', id: 'deepseek-r2', displayName: 'DeepSeek R2', reasoningEffort: 'max' },
+  default: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+  routableProviders: ['zai-coding-cn', 'deepseek'],
+  groups: [
+    {
+      id: 'zai-coding-cn',
+      name: 'zai-coding-cn',
+      models: [
+        { id: 'glm-5.3', name: 'GLM 5.3', reasoning: { efforts: [{ id: 'min' }, { id: 'default' }, { id: 'max' }] } },
+        { id: 'glm-4.6v', name: 'GLM 4.6V' },
+      ],
+    },
+    {
+      id: 'deepseek',
+      name: 'deepseek',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', reasoning: { efforts: [{ id: 'default' }] } },
+        { id: 'deepseek-r2', name: 'DeepSeek R2', reasoning: { efforts: [{ id: 'max' }] } },
+      ],
+    },
   ],
 }
 
@@ -63,6 +77,11 @@ describe('step-1 open-settings（打开最小化设置面板）', () => {
     const src = mobileSrc('views/settings.ts')
     expect(src).toContain('无标题/无说明文本') // 最小化面板纪律源面钉死
     expect(src).toMatch(/选档即生效/)
+    // R12 口径源面钉死：模型面 = session-model-catalog 读 + session-select-model 写（settings/models 两屏）
+    expect(mobileSrc('views/models.ts')).toMatch(/PROXY_SESSION_MODEL_CATALOG_CHANNEL/)
+    expect(mobileSrc('views/models.ts')).toMatch(/PROXY_SESSION_SELECT_MODEL_CHANNEL/)
+    expect(mobileSrc('views/settings.ts')).toMatch(/PROXY_SESSION_MODEL_CATALOG_CHANNEL/)
+    expect(mobileSrc('views/settings.ts')).toMatch(/PROXY_SESSION_SELECT_MODEL_CHANNEL/)
     // 目录通道录制在场（404 缺口显性化）
     expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === 'forge:proxy/session-model-catalog')).toBe(true)
   })

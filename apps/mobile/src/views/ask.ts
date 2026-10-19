@@ -1,6 +1,8 @@
 /**
  * ask 分页面板（根 `#/ask`）——pending 交互一屏一题分页：
- * `interaction.pending` 发现 + `interaction.answer` 提交 + `interaction.cancel` 取消。
+ * `forge:proxy/session-projections` 投影发现（userQuestions{active,settled}）+
+ * forge-stream `user-questions/request` 到达腿 + `forge:proxy/user-questions-answer` 提交
+ * （R12 口径——本组合无 interaction 服务，旧 interaction.* 通道证伪）。
  *
  * 三题型语义（判别字段 = multiSelect；载荷契约正本 = tech-research R9#2 官方页
  * renderQuestionComposer 实证）：单选点击即选中可改选；多选 checkbox 任意组合；
@@ -10,8 +12,9 @@
  *
  * 纯逻辑面（单测主战场）：pending 载荷收敛 / 选项语义状态机 / 提交载荷构造。
  */
-import type { OfficialApi } from '../core/api.ts'
-import { DisconnectedError } from '../core/api.ts'
+import type { RemoteRpc } from '../core/rpc.ts'
+import { DisconnectedError } from '../core/rpc.ts'
+import { PROXY_SESSION_PROJECTIONS_CHANNEL, PROXY_USER_QUESTIONS_ANSWER_CHANNEL, proxyCall } from '../core/rpc.ts'
 import { el, renderMarkdown } from '../widgets/msg-cards.ts'
 
 // ---------------------------------------------------------------------------
@@ -38,17 +41,48 @@ export interface PendingInteraction {
   readonly questions: readonly AskQuestion[]
 }
 
-/** 官方 interaction.pending 窗口形状收敛（缺字段 fail-soft）。 */
-export function coercePending(raw: unknown): PendingInteraction | null {
+/** userQuestions 投影视图（UserQuestionProjectionView 官方形状，缺字段 fail-soft）。 */
+export interface UserQuestionsView {
+  readonly active: readonly { callId?: unknown; state?: unknown; questions?: unknown }[]
+  readonly settled: readonly unknown[]
+}
+
+/** 投影视图提取：projections 帧 {values:{userQuestions}} / {userQuestions} / 裸视图三层级兼容。 */
+function userQuestionsViewOf(raw: unknown): UserQuestionsView | null {
   if (typeof raw !== 'object' || raw === null) return null
-  const frame = raw as { rpcId?: unknown; questions?: unknown }
-  if (typeof frame.rpcId !== 'string' || !Array.isArray(frame.questions)) return null
-  const questions = frame.questions.map((question) => {
-    const q = (typeof question === 'object' && question !== null ? question : {}) as AskQuestion
-    // 题型判别字段归一：multiSelect 缺省 = 单选（false）
-    return { ...q, multiSelect: q.multiSelect === true }
-  })
-  return { rpcId: frame.rpcId, questions }
+  const frame = raw as { values?: unknown; userQuestions?: unknown }
+  for (const candidate of [frame.values, frame.userQuestions, raw]) {
+    if (typeof candidate !== 'object' || candidate === null) continue
+    const view = candidate as { userQuestions?: unknown; active?: unknown; settled?: unknown }
+    const inner = typeof view.userQuestions === 'object' && view.userQuestions !== null
+      ? (view.userQuestions as { active?: unknown; settled?: unknown })
+      : view
+    if (Array.isArray(inner.active)) {
+      return { active: inner.active as UserQuestionsView['active'], settled: Array.isArray(inner.settled) ? (inner.settled as unknown[]) : [] }
+    }
+  }
+  return null
+}
+
+/**
+ * session-projections 响应收敛：取首个 state='open' 在途题（state 缺省 fail-soft 视为 open），
+ * rpcId = 官方 callId；settled 投影不进面板。
+ */
+export function coercePending(raw: unknown): PendingInteraction | null {
+  const view = userQuestionsViewOf(raw)
+  if (view === null) return null
+  for (const entry of view.active) {
+    if (typeof entry !== 'object' || entry === null) continue
+    if (typeof entry.callId !== 'string' || !Array.isArray(entry.questions)) continue
+    if (entry.state !== undefined && entry.state !== 'open') continue
+    const questions = (entry.questions as unknown[]).map((question) => {
+      const q = (typeof question === 'object' && question !== null ? question : {}) as AskQuestion
+      // 题型判别字段归一：multiSelect 缺省 = 单选（false）
+      return { ...q, multiSelect: q.multiSelect === true }
+    })
+    return { rpcId: entry.callId, questions }
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -110,10 +144,12 @@ export function buildSkipped(question: AskQuestion): AnswerEntry {
 // ---------------------------------------------------------------------------
 
 export interface AskDeps {
-  readonly api: OfficialApi
+  readonly rpc: RemoteRpc
   readonly sessionId: string
   /** 全部题目提交成功后的回调（路由侧收口，如 navigate 回 chat）。 */
   readonly onDone?: () => void
+  /** forge-stream `user-questions/request` 到达腿（帧到达 → 重拉投影；缺席 = 打开时静态投影）。 */
+  readonly subscribeStream?: (onFrame: () => void) => () => void
 }
 
 export function createAskView(deps: AskDeps): HTMLElement {
@@ -125,7 +161,7 @@ export function createAskView(deps: AskDeps): HTMLElement {
   const title = el('div', 'title', '待回答')
   const skipAll = el('button', 'iconbtn')
   skipAll.innerHTML = '<svg class="ic"><use href="#i-down"/></svg>'
-  skipAll.title = '取消本次交互（interaction.cancel）'
+  skipAll.title = '关闭面板（本地收起——R12 通道族无交互取消面）'
   topbar.append(back, title, skipAll)
 
   const view = el('div', 'view ask-view')
@@ -137,24 +173,19 @@ export function createAskView(deps: AskDeps): HTMLElement {
   const skipped = new Set<string>()
   let sending = false
 
-  back.addEventListener('click', () => void cancel())
-  skipAll.addEventListener('click', () => void cancel())
-
-  async function cancel(): Promise<void> {
-    if (pending === null || sending) return
-    sending = true
-    try {
-      await deps.api.cancelInteraction(pending.rpcId, deps.sessionId)
-    } catch {
-      /* 取消失败留在本页（数据不变） */
-    } finally {
-      sending = false
-    }
+  // R12 通道族无 interaction.cancel 对偶缝：返回/收起 = 本地面板收起（宿主 pending 不动）
+  const dismiss = (): void => {
+    pending = null
+    drafts.clear()
+    skipped.clear()
+    render()
   }
+  back.addEventListener('click', dismiss)
+  skipAll.addEventListener('click', dismiss)
 
   async function load(): Promise<void> {
     try {
-      const raw = await deps.api.pendingInteractions(deps.sessionId)
+      const raw = await proxyCall(deps.rpc, PROXY_SESSION_PROJECTIONS_CHANNEL, { sessionId: deps.sessionId })
       pending = coercePending(raw)
       page = 0
       drafts.clear()
@@ -196,12 +227,21 @@ export function createAskView(deps: AskDeps): HTMLElement {
     return entries
   }
 
+  /** 官方 AskUserQuestionAnswerItem 形状收敛 {id, selected, custom}（skipped 为面板本地语义不进载荷）。 */
+  function answerPayload(entries: readonly AnswerEntry[]): readonly { id: string; selected: readonly string[]; custom: string }[] {
+    return entries.map((entry) => ({ id: entry.id, selected: [...entry.selected], custom: entry.custom }))
+  }
+
   async function finish(entries: readonly AnswerEntry[]): Promise<void> {
     if (pending === null) return
     sending = true
     render()
     try {
-      await deps.api.answerInteraction(pending.rpcId, deps.sessionId, entries)
+      await proxyCall(deps.rpc, PROXY_USER_QUESTIONS_ANSWER_CHANNEL, {
+        sessionId: deps.sessionId,
+        callId: pending.rpcId,
+        answer: { answers: answerPayload(entries) },
+      })
       pending = null
       deps.onDone?.()
     } catch (error) {
@@ -312,11 +352,14 @@ export function createAskView(deps: AskDeps): HTMLElement {
     return card
   }
 
-  /** 末题 continue → interaction.answer 提交全部条目。 */
+  /** 末题 continue → user-questions-answer 提交全部条目。 */
   function advance(index: number, total: number, entries: readonly AnswerEntry[]): void {
     if (index === total - 1 && pending !== null && entries.length > 0) void finish(entries)
   }
 
   void load()
+  deps.subscribeStream?.(() => {
+    if (!sending) void load()
+  })
   return root
 }
