@@ -80,17 +80,19 @@ function fakePersistence(
 function fakeController() {
   const calls: Array<{ sessionId?: string; cwd?: string }> = []
   const prompts: Array<unknown> = []
+  const promptSignals: Array<unknown> = []
   const controller: SessionControllerFace = {
     create: async (request) => {
       calls.push({ sessionId: request.sessionId, cwd: request.cwd })
       return { sessionId: request.sessionId ?? 's-created' }
     },
-    prompt: async (request) => {
+    prompt: async (request, signal) => {
       prompts.push(request)
+      promptSignals.push(signal)
       return { accepted: true }
     },
   }
-  return { controller, calls, prompts }
+  return { controller, calls, prompts, promptSignals }
 }
 
 /** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
@@ -535,7 +537,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       }),
     }
     const { persistence, created } = fakePersistence(input.events, input.headers, opens)
-    const { controller, calls, prompts } = fakeController()
+    const { controller, calls, prompts, promptSignals } = fakeController()
     const service = createWorktreeRpcService({
       gitWorktree: countingExt,
       sessionController: controller,
@@ -545,7 +547,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
         { path: WT_A, branch: 'feat/a' },
       ],
     })
-    return { service, controller, prompts, calls, opens, created, resolveCallsOf: () => resolveCalls }
+    return { service, controller, prompts, promptSignals, calls, opens, created, resolveCallsOf: () => resolveCalls }
   }
 
   it('A2 竞速败窗：git 项目无绑定 blank 会话 prompt → 原发送拒绝 + 编排产物重路由（原消息内容保真）', async () => {
@@ -560,6 +562,19 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank'), text: 'hello' })
     // 产物 = 预铸采纳的挂靠会话（cwd = 重路由目标树）
     expect(rig.calls).toHaveLength(1)
+  })
+
+  it('bug dcdc1b4d 回归：重路由透传调用方 signal（官方 prompt 契约 (request, signal) 首行 throwIfAborted）', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    const sentinel = new AbortController().signal
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' }, sentinel)
+    dispose()
+    expect(rig.prompts).toHaveLength(1)
+    expect(
+      rig.promptSignals[0],
+      '重路由内层 prompt 必须收到调用方 signal——漏传 = 官方 prompt 首行 signal.throwIfAborted() 崩溃（gateway/internal toast + 无回复）',
+    ).toBe(sentinel)
   })
 
   it('G2 同树也不放行：无选中（selection 缺席）无绑定 blank → 重路由目标 = 会话 cwd 树（主行绑定）', async () => {

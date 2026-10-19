@@ -135,8 +135,8 @@ export interface WorktreeRpcService {
 export interface RequiredBindingGuardFace {
   /** 'pass' = 放行；'route' = 无绑定 blank（必绑拦截命中）→ reroute */
   judge(sessionId: string): Promise<'pass' | 'route'>
-  /** 编排（等待既有在途产物）+ 以原消息内容 prompt 产物会话；失败显式报错 */
-  reroute(sessionId: string, request: unknown): Promise<unknown>
+  /** 编排（等待既有在途产物）+ 以原消息内容 prompt 产物会话；args 尾巴（官方 signal 等）原样透传；失败显式报错 */
+  reroute(sessionId: string, request: unknown, ...args: unknown[]): Promise<unknown>
 }
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
@@ -657,7 +657,11 @@ export function createWorktreeRpcService(deps: {
         // 编排（与 client arm 共享 sessionCreate 互斥面——在途即等待）+ 重路由：
         // 目标 = hero 选中树（select 推送记忆）缺席回退会话 cwd 树；原消息内容保真换绑；
         // 模式随档（bug 82cab5fe——源会话 preset 折叠值显式入请求，registry 默认不覆盖源档）。
-        reroute: async (sessionId, request) => {
+        // bug dcdc1b4d：官方 prompt 契约 = (request, signal)（gateway 面 prompt 首行
+        // signal.throwIfAborted()）——重路由漏传 signal 使内层 prompt 拿到 undefined →
+        // TypeError 被网关 dispatch 折叠为 gateway/internal 回包（toast + 无回复）。
+        // args 尾巴原样透传（signal 等调用方上下文保真）。
+        reroute: async (sessionId, request, ...args) => {
           const header = await headerOf(sessionId)
           const cwd = header.cwd
           const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
@@ -671,7 +675,7 @@ export function createWorktreeRpcService(deps: {
             worktreePath: target,
             ...(preset === undefined ? {} : { agentPreset: preset }),
           })
-          return controller.prompt({ ...(request as Record<string, unknown>), sessionId: product.sessionId })
+          return (controller.prompt as (r: unknown, ...rest: unknown[]) => unknown)({ ...(request as Record<string, unknown>), sessionId: product.sessionId }, ...args)
         },
       }
     },
@@ -802,8 +806,9 @@ export function interceptRequiredBinding(
     if (sessionId !== undefined) {
       try {
         if ((await guard.judge(sessionId)) === 'route') {
-          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话
-          return guard.reroute(sessionId, request)
+          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话；
+          // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
+          return guard.reroute(sessionId, request, ...args.slice(1))
         }
       } catch (cause) {
         const name = (cause as Error)?.name
