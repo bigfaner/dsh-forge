@@ -16,14 +16,15 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { test, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test'
 import { closeApp, launchHost } from '../support/launch.js'
 import { dismissOnboardingModals } from '../support/modals.js'
 import { rmDirBestEffort } from '../support/cleanup.js'
 
 const REMOTE_ENTRY = '.dswf-remote-entry'
 const REMOTE_PANEL = '.dswf-remote-panel'
-const REMOTE_SWITCH = '.dswf-remote-switch'
+/** 官方 Switch 件（ForgeRemoteEntry.tsx:838-848，props.label 作 accessible name——无 dswf-remote-switch class） */
+const remoteSwitchIn = (panel: Locator) => panel.getByRole('switch', { name: '远程访问开关' })
 
 /** 工作区夹具目录（{root}/<name>——注册链承接 canonical 化） */
 function makeWorkspaceFixture(name: string): string {
@@ -104,7 +105,7 @@ async function toggleRemote(page: Page, want: boolean, label: string): Promise<v
   await page.locator(REMOTE_ENTRY).click()
   const panel = page.locator(REMOTE_PANEL)
   await expect(panel, `${label}：远程面板开`).toBeVisible({ timeout: 10_000 })
-  await panel.locator(REMOTE_SWITCH).click()
+  await remoteSwitchIn(panel).click()
   await expect.poll(() => remoteConfigEnabledOf(page), `${label}：产品配置读数 = ${want}`)
     .toBe(want, { timeout: 15_000 })
   await expect(page.locator(REMOTE_ENTRY), `${label}：图标转待重启提示态（pending——重启生效形态）`)
