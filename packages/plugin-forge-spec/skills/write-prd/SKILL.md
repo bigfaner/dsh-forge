@@ -37,7 +37,7 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "prd-spec", rel_path: "docs
 
 | 意图 | PRD 格式 | 用户故事 | UI 功能 |
 |---|---|---|---|
-| `new-feature` | 完整版 | 是 | 是（仅 UI 表面） |
+| `new-feature` | 完整版 | 是 | 是（仅 UI 交互） |
 | `enhancement` | 背景 + 目标 + 验收管线 | 否 | 有信号才写 |
 | `refactor` / `cleanup` / `fix` | 仅规格（下方三个必填字段） | 否 | 否 |
 | `doc` | 极简（标题 + 目标 + 范围） | 否 | 否 |
@@ -90,6 +90,6 @@ upsertFeatureDoc { feature_slug: "<slug>", doc_kind: "prd-spec", rel_path: "docs
 6. **撰写文档**——按上方意图表执行。
    - PRD 规格：frontmatter 必带 `db-schema: "yes" | "no"`（特性是否引入/变更持久化数据模型——tech-design DB 分支的判定输入）。
    - 用户故事：仅 new-feature（或"用户可见行为"覆盖信号；当所有 In Scope 条目都指向不可编译工件时不写）。背景中每个角色 ≥1 条故事；动作具体；每条故事带可客观核验的 Given/When/Then 验收标准。
-   - UI 功能：仅当特性有 UI 表面。含每项功能的落位（`new-page` vs `existing-page:<route>`）与导航架构一节，并遵守上方"prd-ui-functions 写作要求"（ASCII 线框限关键页 + mermaid 交互图）。
+   - UI 功能：仅当特性有 UI 交互。含每项功能的落位（`new-page` vs `existing-page:<route>`）与导航架构一节，并遵守上方"prd-ui-functions 写作要求"（ASCII 线框限关键页 + mermaid 交互图）。
 7. **注册每份产出文档**——经 `upsertFeatureDoc`（见上表）；返工重注册语义见状态层纪律节所引 forge:spec 系统提示段。
 8. **自检**——背景各维度覆盖；目标尽量量化；范围边界显式；验收标准可核验；覆盖信号已注记；无范围外内容渗入。

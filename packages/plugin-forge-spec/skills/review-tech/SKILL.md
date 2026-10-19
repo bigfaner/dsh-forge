@@ -1,6 +1,6 @@
 ---
 name: review-tech
-description: 评审技术方案 tech-design.md（含模块子文档、ER 图、schema、表面手册）——核验方案优雅性与可行性，产出分级评审报告。使用时机：tech-design 生成后、breakdown-tasks 拆任务前。
+description: 评审技术方案 tech-design.md（含模块子文档、ER 图、schema、设计手册）——核验方案优雅性与可行性，产出分级评审报告。使用时机：tech-design 生成后、breakdown-tasks 拆任务前。
 ---
 
 # 技术方案评审（review-tech）

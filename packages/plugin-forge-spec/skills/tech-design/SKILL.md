@@ -21,9 +21,9 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 | 技术设计 | `upsertFeatureDoc` `doc_kind: tech-design` |
 | ER 图 | `upsertFeatureDoc` `doc_kind: er-diagram` |
 | SQL schema | `upsertFeatureDoc` `doc_kind: sql-schema` |
-| 页面地图（web 表面） | `upsertFeatureDoc` `doc_kind: page-map` |
+| 页面地图（有 UI 时） | `upsertFeatureDoc` `doc_kind: page-map` |
 
-`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方表面手册）**没有注册 kind**——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
+`api-handbook.md` / `cli-handbook.md` / `screen-map.md`（下方设计手册）**没有注册 kind**——它们是 gen-contracts/gen-test-scripts 消费的盘面工件，不得虚构注册。
 
 ## 意图适配
 
@@ -39,7 +39,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 设计文档**必列**两段，任何意图不豁免：
 
 - **改动范围**：受影响的包/模块/文件（包粒度），具体路径。
-- **影响范围**：下游消费方（接口调用者、依赖本包的模块、契约/测试面）与运行时影响（表面、构建、schema），未触及的写"无"并说明判据。
+- **影响范围**：下游消费方（接口调用者、依赖本包的模块、契约/测试面）与运行时影响（接口形态、构建、schema），未触及的写"无"并说明判据。
 
 ## 决策分级与确认纪律
 
@@ -53,7 +53,7 @@ description: 从 PRD（与 UI 设计）出发产出技术设计——技术栈�
 ## 图示与文档拆分
 
 - **图优先**：架构、核心逻辑、关键业务流程一律优先用 mermaid UML 图描述（架构 = flowchart/component、核心逻辑 = stateDiagram、业务流程 = sequenceDiagram/flowchart）；文字只做图说不清的约束、判据与理由，不复述图内信息。
-- **按模块拆分**：功能复杂（多表面/多子系统）时按功能模块拆分设计文档（`design/<module>-design.md`），`tech-design.md` 保留全局总览（架构图 + 决策索引 + PRD Coverage Map）并以相对链接引用子文档；子文档无 `doc_kind`，不得虚构注册。
+- **按模块拆分**：功能复杂（多模块/多子系统）时按功能模块拆分设计文档（`design/<module>-design.md`），`tech-design.md` 保留全局总览（架构图 + 决策索引 + PRD Coverage Map）并以相对链接引用子文档；子文档无 `doc_kind`，不得虚构注册。
 
 ## 技术栈选型步骤
 
@@ -90,7 +90,7 @@ brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此
 4. **逐节起草并确认**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。确认粒度：选型级决策逐点确认（`ask_user_question`），叙述性内容整稿确认；DB 分支同下。逐节自检并产出命名节**PRD Coverage Map**（breakdown-tasks 的核对输入）：每条 PRD AC 映射到设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
    - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
      + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。`er-diagram.md` 图外必附两说明：**实体说明**（每实体一行职责）与**关系说明**（基数 1:1/1:N/N:M、外键方向）。**索引纪律**：非必要不加（判据 = 明确的查询/守卫路径需要）；优先联合索引覆盖多条查询路径，避免单列索引堆叠。
-5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；手册按表面：`api-handbook.md`（api）、`cli-handbook.md`（cli/tui）、`page-map.md`（web）、`screen-map.md`（mobile）。表面探测：读仓库自身的表面配置（`docs/conventions/testing/` 的测试约定、既有任务 surface 字段、UI 函数平台）——不许猜；表面判定属选型级决策，过确认纪律。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
+5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；设计手册按交互形态产出：`api-handbook.md`（API 交互）、`cli-handbook.md`（命令行交互）、`page-map.md`（Web UI）、`screen-map.md`（移动 UI）——形态从 PRD UI 功能的平台/交互方式推断，不许猜；判定属选型级决策，过确认纪律。monorepo 下按模块归属分别产出（模块归属判据与测试链统一：目标模块 = workspace 包/应用目录，从 PRD UI 功能落位推断；含糊 → 问用户或推导并记录）。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
 6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的长期归档动作，认为有必要时向用户提议，不擅自执行。
 
 ## 方法论速查
