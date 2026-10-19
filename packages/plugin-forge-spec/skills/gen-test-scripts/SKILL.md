@@ -27,7 +27,7 @@ description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测
 
 ## 工作流
 
-1. **装载约定（表面优先）**——逐探测表面读 `docs/conventions/testing/{surface}/core.md`；不装载旧式扁平框架优先文件（标记待再生）。从 `core.md` 读断言偏好表解析目标框架；否则从既有测试文件探测；仍含糊 → 问（交互式）或按测试表面判定纪律推导并记录选择（正本：`docs/conventions/testing-surfaces.md`）。绝不静默取缺省。
+1. **装载约定（表面优先）**——逐探测表面读 `docs/conventions/testing/{surface}/core.md`；不装载旧式扁平框架优先文件（标记待再生）。从 `core.md` 读断言偏好表解析目标框架；否则从既有测试文件探测；仍含糊 → 问（交互式）或按仓库自身事实推导并记录选择（任务语境）：journey frontmatter 的表面声明 → testing 约定目录 → `tests/` 布局。绝不静默取缺省。
 2. **代码侦察**——刷新事实表（`.forge/fact-table.json`）：框架模式（runner、imports、build tags）与领域地面真值（入口、处理器、配置）。逐条语义描述符对照事实解析并引用来源。
 3. **逐 Journey 路由决策**——有 Contract → Contract 路径。无 Contract → 报错：先跑 `gen-contracts`（与前置表一致）。
 4. **锚点交叉校验**（Contract 路径）——把 Contract frontmatter 锚点与事实表对照；手册是权威：手册与锚点一致而代码不同 → 代码 bug 报告；手册与锚点不同 → 提议锚点修复（展示 diff）——交互式语境获明确批准才写入；派发语境 diff 呈报于任务输出，写入留给人工或 fix 链。无手册 → 降级模式，用事实表推断并附提示。绝不自动裁决低置信或无法核验的匹配——呈报。输出表面覆盖报告。
