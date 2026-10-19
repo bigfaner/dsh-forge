@@ -49,8 +49,6 @@ export function detailFixture(overrides: DetailFixtureOverrides = {}): TaskDetai
     vars: undefined,
     coverage: 0.8,
     complexity: 'high',
-    surfaceKey: undefined,
-    surfaceType: undefined,
     blockedReason: undefined,
     breaking: false,
     createdAt: '2026-10-01T09:14:00.000Z',

@@ -206,8 +206,6 @@ export interface TaskSnapshot {
   /** 覆盖率阈值小数；缺省 = 全局默认（三级优先） */
   coverage?: number
   complexity: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
   /** ISO-8601 */
   createdAt: string
   /** ISO-8601 */
@@ -338,8 +336,6 @@ export interface TaskDetail extends TaskCard {
   /** 验收与覆盖率负载（覆盖率进度条；NULL = 全局默认） */
   coverage?: number
   complexity: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
   blockedReason?: string
   breaking: boolean
   /** ISO-8601 */
@@ -409,8 +405,6 @@ export interface AddTaskInput {
   breaking?: boolean
   coverage?: number
   complexity?: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
 }
 
 /** addTask 返回体 */
@@ -442,8 +436,6 @@ export interface UpdateTaskInput {
   acceptanceCriteria?: string[]
   /** --var 注入变量（vars_json 整体覆写） */
   vars?: Record<string, string>
-  surfaceKey?: string
-  surfaceType?: string
   /** 依赖改写（manual 边整体置换：删旧 manual 边 → 增量环校验 → 插新 manual 边） */
   dependsOn?: string[]
 }

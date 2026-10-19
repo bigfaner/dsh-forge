@@ -48,16 +48,15 @@ export function recordVerbLabel(verb: TaskRecordVerb, taskType: string): string 
   }
 }
 
-/** 现状条条目（六型条件投影——渲染序 = 投影序） */
+/** 现状条条目（五型条件投影——渲染序 = 投影序） */
 export type NowBarItem =
   | { readonly kind: 'blocked'; readonly reason: string }
   | { readonly kind: 'prereqs'; readonly items: readonly { readonly key: string; readonly slug: string; readonly statusZh: string }[] }
   | { readonly kind: 'sessions'; readonly items: readonly SessionTaskLinkCard[] }
-  | { readonly kind: 'surface'; readonly key: string; readonly surfaceType: string }
   | { readonly kind: 'gate'; readonly passed: number; readonly total: number }
   | { readonly kind: 'score'; readonly score: string; readonly severity: string }
 
-/** 现状条条目投影（六型条件：blocked / 前置[键+状态] / 挂接 pill 分型 / Surface[test 族] /
+/** 现状条条目投影（五型条件：blocked / 前置[键+状态] / 挂接 pill 分型 /
  *  质量门 M/N[gate 族] / 得分+严重度[eval 族——vars.score 自由文本承载]） */
 export function nowBarItems(detail: TaskDetail): readonly NowBarItem[] {
   const items: NowBarItem[] = []
@@ -78,9 +77,6 @@ export function nowBarItems(detail: TaskDetail): readonly NowBarItem[] {
     items.push({ kind: 'sessions', items: detail.sessions })
   }
   const family = templateFamilyOf(detail.taskType)
-  if (family === 'test' && detail.surfaceKey !== undefined) {
-    items.push({ kind: 'surface', key: detail.surfaceKey, surfaceType: detail.surfaceType ?? '?' })
-  }
   if (family === 'gate') {
     const gate = latestSubmitGateOf(detail.records)
     if (gate !== undefined) {
@@ -173,12 +169,6 @@ export function TimelineNow({
                 {item.items.map((session) => (
                   <SessionPill key={session.sessionId} session={session} onOpenSession={onOpenSession} sessionTitleOf={sessionTitleOf} />
                 ))}
-              </span>
-            )
-          case 'surface':
-            return (
-              <span className="dswf-td-now-item" key={index}>
-                Surface {item.key}（{item.surfaceType}）
               </span>
             )
           case 'gate':

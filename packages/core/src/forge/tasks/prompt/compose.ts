@@ -1,7 +1,7 @@
 // dispatchPrompt 合成（任务 2.2 起源；S2b 收窄重定义——worker-lean-execution 提案）。
 // 分层承载（S2/S2a/S2b）：agent 级内容（人格、门禁、Coding Strategy、工作流、Record
 // Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
-// system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 + SURFACE 行 +
+// system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 +
 // ACCEPTANCE_CRITERIA），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
 // 结算出口句删除（用户裁决 2026-10-13）：结算纪律归 worker persona（每变体工作流收尾句）与
 // submit-task 技能正本——简报零重复；TASK_ID 键行恒在场即参数本体。
@@ -112,10 +112,6 @@ export interface DispatchPromptInput {
   breaking?: boolean
   /** fix 链源（标记行 fix-of 呈现；非 fix 任务缺省） */
   sourceTask?: TaskRef
-  /** 目标 surface 键（S2b/SC3：`SURFACE: <key> (<type>)` 单行双值；缺席省行——R6 填写率缓解） */
-  surfaceKey?: string
-  /** surface 类型（web/api/cli/tui/mobile；仅 surfaceKey 在场时随行呈现） */
-  surfaceType?: string
   /**
    * 续跑指针（worker-exec-evidence-replay 1.3：`logs/<slug>/<localId>/resume.md` 相对路径，
    * 调用方领取瞬间探测证据位注入；缺席 = 首跑零段。在场即重入语境：简报注入 `<resume>`
@@ -192,12 +188,6 @@ function renderVars(vars: Readonly<Record<string, string>> | undefined): string 
   return keys.map((k) => `${k}=${vars[k]}`).join('; ')
 }
 
-/** SURFACE 行值（SC3 单行双值）：`web (web)`；type 缺席单值 `web`；key 缺席 → 省行 */
-function renderSurface(input: DispatchPromptInput): string | undefined {
-  if (input.surfaceKey === undefined) return undefined
-  return input.surfaceType === undefined ? input.surfaceKey : `${input.surfaceKey} (${input.surfaceType})`
-}
-
 /**
  * E2E_BASELINE_RED 行值（改进7）：红灯 spec 清单 + 机械判定规则——「基线红灯 = e2e 套件
  * 入场前既有失败，非本任务回归；比对归因，禁止顺手修复」。空清单省行。
@@ -213,8 +203,8 @@ function singleLine(criterion: string): string {
 }
 
 /** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
- *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
- *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
+ *  BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
+ *  VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
  *  `<resume>` = 重入命中的续跑规则段（evidencePointer 在场才注入——键值行之后）；
  *  GOAL = `<goal>` 包围的任务体段落（目标 + ACCEPTANCE_CRITERIA 同段——worker 面无
  *  queryTask 时的定义唯一到达面）。TITLE 缺席时首行为 TASK_ID；简报以 `</goal>`（在场）或
@@ -223,7 +213,6 @@ export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
-  const surface = renderSurface(input)
   const e2eBaselineRedCases = renderE2eBaselineRed(input.e2eBaselineRedCases)
   const lines: (string | undefined)[] = [
     input.title !== undefined ? input.title : undefined,
@@ -232,7 +221,6 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,
-    surface !== undefined ? `SURFACE: ${surface}` : undefined,
     input.blockers !== undefined && input.blockers.length > 0
       ? `BLOCKERS: ${renderBlockers(input.blockers)}`
       : undefined,
@@ -264,7 +252,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
 
 /**
  * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形 + 无包裹再收窄）：任务级简报正文直出——
- * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + SURFACE 行 + `<goal>` 包围目标 +
+ * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + `<goal>` 包围目标 +
  * ACCEPTANCE_CRITERIA）。无人格段/约束块/类型策略工作流段/结算出口句（agent 级内容
  * 由 persona 承载——prompt/persona.ts 单源，经 spawn 链 persona 通道落子会话 system 面；
  * 结算路径由 persona 工作流收尾句 + submit-task 技能正本承载）。

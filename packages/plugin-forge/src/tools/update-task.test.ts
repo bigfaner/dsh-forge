@@ -125,7 +125,7 @@ describe('updateTask 返回面渲染（formatOk：更新后快照，更新字段
     expect(text).toContain('- updatedAt: 2026-01-02T00:00:00.000Z')
   })
 
-  it('可选字段按在场投影：desc/AC 计数/vars 计数/surface', () => {
+  it('可选字段按在场投影：desc/AC 计数/vars 计数', () => {
     const text =
       tool.output.render(
         {},
@@ -134,14 +134,11 @@ describe('updateTask 返回面渲染（formatOk：更新后快照，更新字段
           taskDesc: '载荷',
           acceptanceCriteria: ['AC-1', 'AC-2'],
           vars: { K: 'V' },
-          surfaceKey: 'web',
-          surfaceType: 'web',
         },
       )[0]?.text ?? ''
     expect(text).toContain('- desc: 载荷')
     expect(text).toContain('- acceptanceCriteria: 2 items')
     expect(text).toContain('- vars: 1 entries')
-    expect(text).toContain('- surface: web (web)')
   })
 })
 
@@ -152,7 +149,7 @@ describe('UPDATE_TASK_OUTPUT_SCHEMA 结构 pin（TaskSnapshot 镜像 + 失败支
     for (const key of [
       'taskId', 'slug', 'localId', 'source', 'title', 'taskType', 'taskStatus', 'taskDesc', 'priority',
       'estimatedTime', 'vars', 'sourceTaskId', 'blockedReason', 'mode', 'acceptanceCriteria', 'breaking',
-      'coverage', 'complexity', 'surfaceKey', 'surfaceType', 'createdAt', 'updatedAt',
+      'coverage', 'complexity', 'createdAt', 'updatedAt',
     ]) {
       expect(Object.keys(successProps), `${key} 必须在 schema properties 中`).toContain(key)
     }

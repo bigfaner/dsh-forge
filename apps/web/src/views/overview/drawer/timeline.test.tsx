@@ -59,14 +59,12 @@ describe('现状条（AC5 六型条件）', () => {
     expect(items.map((i) => i.kind)).toEqual(['blocked', 'prereqs', 'sessions', 'gate'])
   })
 
-  it('Surface 条件仅 test 族；得分+严重度条件仅 eval 族（vars.score 承载）', () => {
+  it('得分+严重度条件仅 eval 族（vars.score 承载）；test 族现状条无 surface 投影', () => {
     const testDetail = detailFixture({
       taskType: 'test-run',
-      surfaceKey: 'web',
-      surfaceType: 'web',
       prerequisites: [],
     })
-    expect(nowBarItems(testDetail).map((i) => i.kind)).toEqual(['surface'])
+    expect(nowBarItems(testDetail).map((i) => i.kind)).toEqual([])
     const evalDetail = detailFixture({
       taskType: 'eval-contract',
       vars: { score: '45', severity: 'high' },

@@ -121,18 +121,19 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(existsSync(resolve(ROOT, BLUEPRINT))).toBe(true)
   })
 
-  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段）', () => {
+  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段 + v4 surface 退役段）', () => {
     const expected = [
       ...blueprintStatements(),
       ...BUGS_DDL.map(norm),
       ...BUGS_V2_SQL.map(norm),
       ...BUGS_V3_SQL.map(norm),
+      ...WORKSPACE_MIGRATIONS[3]!.statements.map(stmtText),
     ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
   })
 
-  it('十二表 + 九索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs + migration_digests 外的 v2 收敛 bugs 表；fix-bug bugs 表 + v2 IF NOT EXISTS 形态）', () => {
+  it('十三表 + 九索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs + migration_digests 外的 v2 收敛 bugs 表 + v4 归档表；fix-bug bugs 表 + v2 IF NOT EXISTS 形态）', () => {
     const tables = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TABLE/i.test(stmtText(s))),
     )
@@ -142,7 +143,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     const triggers = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TRIGGER/i.test(stmtText(s))),
     )
-    expect(tables).toHaveLength(12)
+    expect(tables).toHaveLength(13)
     expect(indexes).toHaveLength(9)
     expect(triggers).toHaveLength(4)
   })
@@ -194,7 +195,24 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(3)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(4)
+  })
+
+  it('v4：surface 退役——归档表 + 存量归档 + 守卫式 DROP COLUMN×2（dropGuard：列不在场跳过）', () => {
+    const v4 = WORKSPACE_MIGRATIONS.find((m) => m.version === 4)
+    const stmts = v4!.statements
+    expect(stmts).toHaveLength(4)
+    expect(stmtText(stmts[0]!)).toContain('CREATE TABLE IF NOT EXISTS tasks_surface_archive')
+    expect(stmtText(stmts[1]!)).toContain('INSERT INTO tasks_surface_archive')
+    expect(stmtText(stmts[1]!)).toContain('WHERE surface_key IS NOT NULL OR surface_type IS NOT NULL')
+    expect(stmts[2]).toEqual({
+      sql: `ALTER TABLE tasks DROP COLUMN surface_key`,
+      dropGuard: { table: 'tasks', column: 'surface_key' },
+    })
+    expect(stmts[3]).toEqual({
+      sql: `ALTER TABLE tasks DROP COLUMN surface_type`,
+      dropGuard: { table: 'tasks', column: 'surface_type' },
+    })
   })
 
   it('v3：守卫式 ALTER bugs ADD COLUMN recurrence_of（可空前驱指针——既有扁平台账行无损）', () => {

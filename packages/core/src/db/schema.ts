@@ -3,12 +3,14 @@
 // 本文件为机制层零域语义代码：表名/列名是蓝本蓝图本身，不含任何表消费逻辑。
 
 /**
- * 守卫语句：SQLite 无 ADD COLUMN IF NOT EXISTS——columnGuard 命中（table.column 已在场）时
- * 跳过该语句不执行，未命中才执行（收敛式迁移：同一语句可安全落在多谱系库上）。
+ * 守卫语句：SQLite 无 ADD/DROP COLUMN IF [NOT] EXISTS——columnGuard 命中（table.column 已在场）时
+ * 跳过该语句不执行；dropGuard 命中（table.column 不在场）时跳过（仅列在场才执行——DROP 类
+ * 收敛语句用）。两种守卫使同一语句可安全落在多谱系库上（收敛式迁移）。
  */
 export interface GuardedStatement {
   readonly sql: string
   readonly columnGuard?: { readonly table: string; readonly column: string }
+  readonly dropGuard?: { readonly table: string; readonly column: string }
 }
 
 /** 单条迁移语句：裸 SQL 或带列守卫的收敛语句。 */

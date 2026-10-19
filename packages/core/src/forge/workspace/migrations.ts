@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 3
+export const FORGE_DB_SCHEMA_VERSION = 4
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -244,6 +244,35 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
       {
         sql: `ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`,
         columnGuard: { table: 'bugs', column: 'recurrence_of' },
+      },
+    ],
+  },
+  {
+    // v4（surface 退役）：任务实体摘除 surface_key/surface_type（上游技能/工具/UI 同批退役）。
+    // 无损三步（单事务原子 + 迁移前 VACUUM INTO 备份兜底）：
+    // ①归档表 tasks_surface_archive（IF NOT EXISTS 幂等）；
+    // ②存量非空行归档（archived_at 以 SQL 时钟落 ISO-8601）；
+    // ③④守卫式 DROP COLUMN（dropGuard：列不在场跳过——列无索引/无约束，SQLite 3.35+ 直 DROP）。
+    // v1 建表语句不可改（已发布迁移禁改），故全新库路径 = v1 建表（含两列）→ v4 归档（零行）→ DROP，
+    // 与存量库终态一致。
+    version: 4,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS tasks_surface_archive (
+    task_id      TEXT NOT NULL,
+    surface_key  TEXT,
+    surface_type TEXT,
+    archived_at  TEXT NOT NULL
+)`,
+      `INSERT INTO tasks_surface_archive (task_id, surface_key, surface_type, archived_at)
+     SELECT id, surface_key, surface_type, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     FROM tasks WHERE surface_key IS NOT NULL OR surface_type IS NOT NULL`,
+      {
+        sql: `ALTER TABLE tasks DROP COLUMN surface_key`,
+        dropGuard: { table: 'tasks', column: 'surface_key' },
+      },
+      {
+        sql: `ALTER TABLE tasks DROP COLUMN surface_type`,
+        dropGuard: { table: 'tasks', column: 'surface_type' },
       },
     ],
   },

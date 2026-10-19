@@ -84,7 +84,10 @@ function applyMigration(db: Database.Database, migration: Migration): void {
   db.transaction(() => {
     db.pragma('defer_foreign_keys = ON')
     for (const stmt of migration.statements) {
-      if (typeof stmt !== 'string' && stmt.columnGuard && columnExists(db, stmt.columnGuard)) continue
+      if (typeof stmt !== 'string') {
+        if (stmt.columnGuard && columnExists(db, stmt.columnGuard)) continue
+        if (stmt.dropGuard && !columnExists(db, stmt.dropGuard)) continue
+      }
       db.prepare(typeof stmt === 'string' ? stmt : stmt.sql).run()
     }
     db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, ?)`).run(

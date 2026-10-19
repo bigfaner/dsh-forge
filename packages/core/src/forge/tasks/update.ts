@@ -6,7 +6,7 @@
 // 返回更新后快照（同 transitionTask 返回口径）。
 //
 // 宽字段面 partial 语义：title/type/priority/estimated_time/complexity/task_desc/
-// acceptance_criteria/vars/surface_key/surface_type/depends_on 给定即改、未给不动。
+// acceptance_criteria/vars/depends_on 给定即改、未给不动。
 //
 // 状态门（统一判据：无 worker 持有 ∧ 未落结算审计）：pending/blocked/suspended 可改；
 // in_progress/interrupted（简报已被 worker 消费——改写致重入不一致）与 completed/skipped/
@@ -155,14 +155,6 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
     if (input.vars !== undefined) {
       sets.push('vars_json = ?')
       args.push(JSON.stringify(input.vars))
-    }
-    if (input.surfaceKey !== undefined) {
-      sets.push('surface_key = ?')
-      args.push(input.surfaceKey)
-    }
-    if (input.surfaceType !== undefined) {
-      sets.push('surface_type = ?')
-      args.push(input.surfaceType)
     }
     sets.push('updated_at = ?')
     args.push(now, row.id)

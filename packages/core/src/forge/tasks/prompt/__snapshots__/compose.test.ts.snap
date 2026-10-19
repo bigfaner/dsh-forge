@@ -25,7 +25,6 @@ TASK_ID: m2-pipeline/2.2
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: coding-feature
 CATEGORY: coding
-SURFACE: web (web)
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 COVERAGE: percentage 80%
@@ -79,7 +78,6 @@ TASK_ID: m2-pipeline/2.2
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: doc-review
 CATEGORY: doc
-SURFACE: web (web)
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
@@ -117,7 +115,6 @@ TASK_ID: m2-pipeline/2.2
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: gate
 CATEGORY: gate
-SURFACE: web (web)
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1
@@ -161,7 +158,6 @@ TASK_ID: m2-pipeline/2.2
 FILE: docs/features/m2-pipeline/tasks/2.2-dispatch-prompt-templates.md
 TYPE: validation-code
 CATEGORY: validation
-SURFACE: web (web)
 BLOCKERS: 2.1 completed; 1.gate skipped
 PHASE_SUMMARY: docs/features/m2-pipeline/tasks/records/1-summary.md
 PRIORITY: P1

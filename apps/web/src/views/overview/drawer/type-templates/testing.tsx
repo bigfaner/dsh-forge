@@ -1,5 +1,4 @@
 // test 族模板（定位：业务——AC3：命令 / 采集指标 / 基线；族成员 = test-run / test-gen-*）。
-// Surface（surfaceKey/surfaceType 行字段）呈现在块二现状条（timeline.tsx——六型条件之一）。
 import type { ReactNode } from 'react'
 import { varsList, varsText } from '../detail-model.js'
 import { CodeSpan, KvRow, PlainList, SubTitle } from './parts.js'

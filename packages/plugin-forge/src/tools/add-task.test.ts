@@ -49,8 +49,6 @@ describe('parseAddTaskArgs（防御收窄——容器双参直传）', () => {
       breaking: true,
       coverage: 0.8,
       complexity: 'high',
-      surface_key: 'web',
-      surface_type: 'web',
     }
     expect(parseAddTaskArgs(full)).toEqual(full)
   })

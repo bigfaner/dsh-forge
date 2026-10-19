@@ -79,8 +79,6 @@ export interface AddTaskToolArgs {
   /** 覆盖率阈值小数（0–1） */
   readonly coverage?: number
   readonly complexity?: TaskComplexity
-  readonly surface_key?: string
-  readonly surface_type?: string
 }
 
 /** KEY=VALUE 条目数组 → Record（重复键/畸形条目拒——防御收窄） */
@@ -121,15 +119,13 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
     breaking?: boolean
     coverage?: number
     complexity?: TaskComplexity
-    surface_key?: string
-    surface_type?: string
   } = {
     source_kind: requiredEnum(a, 'source_kind', CONTAINER_KINDS, TOOL),
     source_slug: requiredString(a, 'source_slug', TOOL),
     title: requiredString(a, 'title', TOOL),
     type: requiredEnum(a, 'type', TASK_TYPES, TOOL),
   }
-  const set = <K extends 'task_desc' | 'estimated_time' | 'surface_key' | 'surface_type'>(
+  const set = <K extends 'task_desc' | 'estimated_time'>(
     key: K,
     value: string | undefined,
   ): void => {
@@ -137,8 +133,6 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
   }
   set('task_desc', optionalString(a, 'task_desc', TOOL))
   set('estimated_time', optionalString(a, 'estimated_time', TOOL))
-  set('surface_key', optionalString(a, 'surface_key', TOOL))
-  set('surface_type', optionalString(a, 'surface_type', TOOL))
   const priority = optionalEnum(a, 'priority', PRIORITIES, TOOL)
   if (priority !== undefined) out.priority = priority
   const complexity = optionalEnum(a, 'complexity', COMPLEXITIES, TOOL)
@@ -256,8 +250,6 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         breaking: { type: 'boolean', description: 'Breaking-change flag (default false).' },
         coverage: { type: 'number', description: 'Coverage threshold as a 0-1 fraction (omit for global default).' },
         complexity: { type: 'string', description: 'One of: low, medium, high.' },
-        surface_key: { type: 'string', description: 'Surface key the task targets.' },
-        surface_type: { type: 'string', description: 'Surface type the task targets (web/api/cli/tui/mobile).' },
       },
       required: ['source_kind', 'source_slug', 'title', 'type'],
     },
@@ -286,8 +278,6 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.breaking !== undefined ? { breaking: parsed.breaking } : {}),
           ...(parsed.coverage !== undefined ? { coverage: parsed.coverage } : {}),
           ...(parsed.complexity !== undefined ? { complexity: parsed.complexity } : {}),
-          ...(parsed.surface_key !== undefined ? { surfaceKey: parsed.surface_key } : {}),
-          ...(parsed.surface_type !== undefined ? { surfaceType: parsed.surface_type } : {}),
         }
         return deps.tasks.addTask(input)
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))

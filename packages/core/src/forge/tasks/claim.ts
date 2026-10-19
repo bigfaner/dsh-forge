@@ -239,7 +239,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     // ③ dispatchPrompt 合成（领取瞬间取数——BLOCKERS 快照 + PHASE_SUMMARY 相位机注入 +
     //    fix 源标记谱系水化 + 任务规格内嵌（5.3：TITLE/GOAL/ACCEPTANCE_CRITERIA——S2b
     //    DESCRIPTION 键更名 GOAL；worker 收窄面禁 queryTask 且 M3 task_file 列砍除，
-    //    本合成 = 任务定义唯一到达面）+ SURFACE 行（S2b/SC3）+
+    //    本合成 = 任务定义唯一到达面）+
     //    VARS 行（vars_json 解码——SKIP_EVAL_GATE/fix 链上下文的唯一送达面）；
     //    M2 task_file 列砍除——taskFile 缺席省行）
     const sourceRow = row.source_task_id === null ? undefined : taskById(db, row.source_task_id)
@@ -269,9 +269,6 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       // main_session 砍除（M3 裁决⑦）：标记行不再有 main-session 分支（1.2 schema 直改伴随）
       breaking: row.breaking === 1,
       sourceTask: sourceRef,
-      // S2b/SC3：SURFACE 单行双值（`<key> (<type>)`；缺席省行——R6 填写率缓解）
-      ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
-      ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
       ...(evidenceState !== undefined
         ? { evidencePointer: evidenceState.pointer, evidenceStale: evidenceState.stale }
         : {}),

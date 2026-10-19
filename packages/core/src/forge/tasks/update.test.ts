@@ -48,8 +48,6 @@ describe('AC1 pending/blocked/suspended 全字段 partial 改写落库并返回�
       taskDesc: '新描述',
       acceptanceCriteria: ['全绿', 'lint 干净'],
       vars: { K: 'V' },
-      surfaceKey: 'web',
-      surfaceType: 'web',
     })
     expect(snap).toMatchObject({
       taskId: id,
@@ -64,12 +62,10 @@ describe('AC1 pending/blocked/suspended 全字段 partial 改写落库并返回�
       taskDesc: '新描述',
       acceptanceCriteria: ['全绿', 'lint 干净'],
       vars: { K: 'V' },
-      surfaceKey: 'web',
-      surfaceType: 'web',
     })
     const row = h!.db.prepare<unknown[], Record<string, unknown>>(
-      `SELECT title, task_type, priority, estimated_time, complexity, task_desc, ac_json, vars_json,
-         surface_key, surface_type FROM tasks WHERE id = ?`,
+      `SELECT title, task_type, priority, estimated_time, complexity, task_desc, ac_json, vars_json
+         FROM tasks WHERE id = ?`,
     ).get(id) as Record<string, unknown>
     expect(row).toMatchObject({
       title: '改题',
@@ -80,8 +76,6 @@ describe('AC1 pending/blocked/suspended 全字段 partial 改写落库并返回�
       task_desc: '新描述',
       ac_json: '["全绿","lint 干净"]',
       vars_json: '{"K":"V"}',
-      surface_key: 'web',
-      surface_type: 'web',
     })
     expect(h!.events.emitted).toEqual([{ projectId: P() }])
   })

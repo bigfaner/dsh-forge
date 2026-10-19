@@ -52,8 +52,6 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       vars: { K: 'V' },
       coverage: 0.8,
       complexity: 'high',
-      surfaceKey: 'web',
-      surfaceType: 'web',
       breaking: true,
     })
     expect(r).toMatchObject({ slug: 'f1', localId: '1.1', reused: false })
@@ -61,8 +59,8 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
     const row = h!.db
       .prepare<unknown[], Record<string, unknown>>(
         `SELECT slug, local_id, title, task_type, task_status, task_desc, ac_json, priority, estimated_time,
-           vars_json, source_task_id, breaking, coverage, complexity, surface_key,
-           surface_type, source_kind, source_id, mode FROM tasks WHERE id = ?`,
+           vars_json, source_task_id, breaking, coverage, complexity,
+           source_kind, source_id, mode FROM tasks WHERE id = ?`,
       )
       .get(r.taskId) as Record<string, unknown>
     expect(row).toMatchObject({
@@ -80,8 +78,6 @@ describe('AC1 addTask 单事务：tasks 行 + localId 混合分配 + slug 归属
       breaking: 1,
       coverage: 0.8,
       complexity: 'high',
-      surface_key: 'web',
-      surface_type: 'web',
     })
     // M3（1.2）：source 双列（feature 容器特例）+ mode 创建时快照（恒远征·裁决⑥）；
     // main_session 砍除（裁决⑦）——列不存在

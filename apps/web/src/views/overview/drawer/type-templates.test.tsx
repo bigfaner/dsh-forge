@@ -242,8 +242,6 @@ describe('fix / doc / gate / test 族区块（AC3 模板表逐族）', () => {
       TypeTemplateBody({
         detail: detailFixture({
           taskType: 'test-run',
-          surfaceKey: 'web',
-          surfaceType: 'web',
           vars: { command: 'pnpm bench', metrics: '["p95 耗时", "内存峰值"]', baseline: 'v0.2.0 @ 90 天' },
         }),
         onOpenDoc: OPEN_DOC,

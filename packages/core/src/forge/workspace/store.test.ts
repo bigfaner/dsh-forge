@@ -51,8 +51,8 @@ function seedTask(db: Database.Database, taskId = 't1'): void {
   ).run(taskId, 'demo-feature-f1', '1.1', '任务一', 'coding.feature', NOW, NOW)
 }
 
-describe('AC1 全 DDL 在临时库执行零错（十二表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
-  it('首开空目录：十二表全部在场（八域表 + bugs + schema_meta + app_key_logs + migration_digests）', () => {
+describe('AC1 全 DDL 在临时库执行零错（十三表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
+  it('首开空目录：十三表全部在场（八域表 + bugs + schema_meta + app_key_logs + migration_digests + tasks_surface_archive）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const tables = db
@@ -74,6 +74,7 @@ describe('AC1 全 DDL 在临时库执行零错（十二表 + 八索引 + 四触�
       'task_records',
       'task_session_links',
       'tasks',
+      'tasks_surface_archive',
     ])
     store.dispose()
   })

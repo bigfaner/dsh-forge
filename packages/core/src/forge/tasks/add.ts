@@ -408,8 +408,8 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       db.prepare(
         `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
            estimated_time, vars_json, source_task_id, blocked_reason, breaking,
-           coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           coverage, complexity, source_kind, source_id, mode, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         taskId,
         container.slug,
@@ -425,8 +425,6 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         input.breaking === true ? 1 : 0,
         input.coverage ?? null,
         input.complexity ?? 'medium',
-        input.surfaceKey ?? null,
-        input.surfaceType ?? null,
         container.kind,
         container.sourceId,
         container.mode, // 创建时容器 mode 快照（feature 容器恒 'expedition'——裁决⑥；人工变更不回溯·律三）

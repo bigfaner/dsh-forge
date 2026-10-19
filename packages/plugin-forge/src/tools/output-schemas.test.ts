@@ -89,8 +89,6 @@ const TASK_SNAPSHOT: TaskSnapshot = {
   breaking: false,
   coverage: 0.8,
   complexity: 'low',
-  surfaceKey: 'docs',
-  surfaceType: 'web',
   createdAt: '2026-10-14T00:00:00.000Z',
   updatedAt: '2026-10-14T01:00:00.000Z',
 }

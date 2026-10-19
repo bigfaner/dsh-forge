@@ -1,5 +1,5 @@
 // S2b 快照/契约测试（worker-lean-execution）：dispatchPrompt 收窄为纯任务级单块简报
-// （TITLE 裸值首行 + `<goal>` 包围目标 + SURFACE 行 + ACCEPTANCE_CRITERIA 单行化；
+// （TITLE 裸值首行 + `<goal>` 包围目标 + ACCEPTANCE_CRITERIA 单行化；
 // 无 <task-context> 外包裹）。反锚（SC9）：无人格段/无约束块/无工作流段/无结算出口句
 // （agent 级内容迁 persona——persona.ts 单源，system 面承载；结算路径由 persona 工作流
 // 收尾句 + submit-task 技能正本承载——用户裁决 2026-10-13 删简报尾行）。快照 ×20 = 任务级
@@ -38,8 +38,6 @@ function fullInput(o: { taskType: TaskType }): DispatchPromptInput {
     ],
     breaking: true,
     sourceTask: { slug: 'm2-pipeline', localId: '2.4' },
-    surfaceKey: 'web',
-    surfaceType: 'web',
   }
 }
 
@@ -217,13 +215,12 @@ describe('AC2 简报键值行（键级零标签）', () => {
     expect(noTitle.split('\n')[0]).toBe('TASK_ID: m2-pipeline/3.1')
   })
 
-  it('键值行序 = TASK_ID < FILE < TYPE < CATEGORY < SURFACE < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS（SURFACE = S2b 增键，紧随 CATEGORY——SC3）', () => {
+  it('键值行序 = TASK_ID < FILE < TYPE < CATEGORY < BLOCKERS < PHASE_SUMMARY < COVERAGE < PRIORITY < MARKERS < VARS', () => {
     const keys = [
       'TASK_ID:',
       'FILE:',
       'TYPE:',
       'CATEGORY:',
-      'SURFACE:',
       'BLOCKERS:',
       'PHASE_SUMMARY:',
       'COVERAGE:',
@@ -234,15 +231,6 @@ describe('AC2 简报键值行（键级零标签）', () => {
     const positions = keys.map((k) => ctx.indexOf(k))
     for (const p of positions) expect(p).toBeGreaterThanOrEqual(0)
     for (let i = 1; i < positions.length; i++) expect(positions[i]).toBeGreaterThan(positions[i - 1]!)
-  })
-
-  it('SURFACE 行 = SC3 单行双值 `web (web)`；type 缺席单值；key 缺席省行', () => {
-    expect(ctx).toContain('SURFACE: web (web)')
-    const keyOnly = composeDispatchPrompt({ ...minimalInput({ taskType: 'doc' }), surfaceKey: 'api' })
-    expect(keyOnly).toContain('SURFACE: api')
-    expect(keyOnly).not.toContain('SURFACE: api (')
-    const none = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    expect(none).not.toContain('SURFACE:')
   })
 
   it('BLOCKERS 快照行 = 前置自然键+状态（领取瞬间注入的列表值）', () => {
@@ -268,7 +256,7 @@ describe('AC2 简报键值行（键级零标签）', () => {
 
   it('条件键缺席即省行（最小夹具仅恒在场键；结算出口句不在简报——persona/技能承载）', () => {
     const minimal = composeDispatchPrompt(minimalInput({ taskType: 'doc' }))
-    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', '<goal>', 'ACCEPTANCE_CRITERIA:', 'SURFACE:']) {
+    for (const key of ['FILE:', 'BLOCKERS:', 'PHASE_SUMMARY:', 'COVERAGE:', 'PRIORITY:', 'MARKERS:', 'TITLE:', 'VARS:', '<goal>', 'ACCEPTANCE_CRITERIA:']) {
       expect(minimal).not.toContain(key)
     }
     expect(minimal).not.toContain('Settlement exit')
