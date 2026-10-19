@@ -1,5 +1,7 @@
 // worktree-branch-management 1.34 真机 UI e2e（bug ccfcc103——跨分支确认框每键重弹）：
 //   · 选中跨分支行 → 键入首段文字 → 确认框弹一次 → 勾选知悉 + 确认 → 预铸编排（cwd = wt-a）；
+//   · 知悉勾选以可访问名锚定（1.35 起框内并存「不再提示」持久化第二勾选，无差别
+//     input[type=checkbox] 定位会 strict mode 歧义）；
 //   · 确认后闩锁：继续键入多字 → 零重弹（框保持隐藏）；编排产物会话草稿照常 carryDraft；
 //   · 取消路径不混用：取消抑制语义（1.31 A3）保持——本意图静默。
 // data 锚同 1.29：chip = [data-dswt-hero-trigger]；composer = [data-composer-input]；
@@ -126,7 +128,7 @@ test('1.34 UI：确认闩锁——确认后键入多字零重弹（同一次选�
     await expect(heroRiskDialog(page), '首条消息意图应触发确认框').toBeVisible({ timeout: 30_000 })
     await snap(page, 'first-dialog.png')
     const dialog = heroRiskDialog(page)
-    await dialog.locator('input[type="checkbox"]').check()
+    await dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' }).check()
     await dialog.getByRole('button', { name: '确认继续' }).click()
     await expect(heroRiskDialog(page)).toBeHidden()
 
