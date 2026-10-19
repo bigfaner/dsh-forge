@@ -65,7 +65,10 @@ export async function registerProject(page: Page, dir: string, name: string): Pr
 export async function selectWorkspaceViaChip(page: Page, workspaceName: string): Promise<void> {
   const composer = page.locator(COMPOSER_INPUT).last()
   await expect(composer, '官方会话面 composer 在场').toBeVisible({ timeout: 60_000 })
-  const chip = page.locator('button', { hasText: /^默认工作区$|^选择工作区$/ }).first()
+  // Root cause: 项目绑定后芯片 innerText 是项目名、「选择工作区/默认工作区」在 aria-label
+  // 可访问名（error-context.md:51 证 button "选择工作区": telem-obs-ws）——hasText 不匹配
+  // aria-label，须走 getByRole name（可访问名，非 ^…$ 精确锚，带后缀仍命中）。
+  const chip = page.getByRole('button', { name: /默认工作区|选择工作区/ }).first()
   await expect(chip).toBeVisible({ timeout: 30_000 })
   await chip.click()
   const menu = page.locator('[role="menu"]').first()
