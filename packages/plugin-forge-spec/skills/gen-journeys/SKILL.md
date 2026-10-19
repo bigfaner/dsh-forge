@@ -29,7 +29,7 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
 ## 核心概念
 
 - **Journey**：kebab-case 名称（`task-lifecycle`，模块内唯一）、Risk、有序 Steps（用户动作 +预期结果）、Invariants（跨步约束）。
-- **模块归属**（monorepo）：每条 Journey 落到唯一目标模块（workspace 包/应用目录，如 `apps/web`、`packages/core`）——从用户故事与 PRD UI 函数的落位推断；跨模块工作流按主落位模块归属并在正文标注跨界步骤。单仓无此概念。含糊 → 问用户（交互式）或从简报推导并记录选择。
+- **模块归属**（monorepo，全链统一判据）：每条 Journey 落到唯一目标模块（workspace 包/应用目录，如 `apps/web`、`packages/core`），权威载体 = journey frontmatter `module` 字段；单仓省略该字段。归属从用户故事与 PRD UI 函数的落位推断；跨模块工作流按主落位模块归属并在正文标注跨界步骤。含糊 → 问用户（交互式）或从简报推导并记录选择。
 - **Risk**：`High`（状态变更/数据丢失/不可逆——边界用例数必须 ≥ happy path 步数）、`Medium`（多步、无不可逆副作用——按分支前置条件配边界用例）、`Low`（只读——仅 happy path + 关键错误）。从 PRD 推断：增/删/改 → High；查/列/搜 → Low。
 - **Golden Path**（必备）：每特性 ≥1 条 Journey 覆盖主故事的核心域动作序列，≥3 步，用领域术语（不用 API 术语）。复杂特性（≥2 类实体且存在父子关系）要求 ≥5 步跨实体步骤。
 

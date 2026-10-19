@@ -20,8 +20,9 @@ description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测
 
 ## 输出目录
 
+- **模块归属**（monorepo，全链统一判据）：每条 Journey 落到唯一目标模块（workspace 包/应用目录，如 `apps/web`、`packages/core`），权威载体 = journey frontmatter `module` 字段；单仓省略该字段。本技能只消费该字段，不改判归属；缺失/含糊 → 问（交互式）或从简报 + 事实表推导并记录选择。
 - **单仓**：`tests/<journey>/`
-- **monorepo**：`<module>/tests/<journey>/`——`<module>` 取 Journey frontmatter 的 `module`（workspace 包/应用目录）；遵循该模块既有测试树与框架配置（testDir 等），模块无独立测试根时在其下新建 `tests/`。
+- **monorepo**：`<module>/tests/<journey>/`（`<module>` = journey frontmatter `module`）；遵循该模块既有测试树与框架配置（testDir 等），模块无独立测试根时在其下新建 `tests/`。
 
 无暂存区——测试直接落最终位置；生命周期基于标签。
 
