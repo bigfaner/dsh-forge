@@ -371,13 +371,14 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     })
     expect(forgeAboveKn, 'L779 forge 目录字段在知识库目录之上').toBe(true)
     // L783 ② 目录字段均带「浏览…」（文件浏览器改选）
-    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(2)
+    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(3)
     // L784 ② 文档位置 = forge 目录输入（仓内/仓外 radio 已并入——chip 呈现）
     await expect(page.locator('.dswf-rf input[type="radio"]')).toHaveCount(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
     // L785 ② 默认召回域字段已移除（载体适配，台账 #170：以字段全集盘点承载「无此字段」；
-    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn）
-    await expect(page.locator('.dswf-rf input')).toHaveCount(4)
+    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn；fix-26 随 1.6 AC3
+    // worktree 目录行 4→5——ws/name/forge/kn/worktree）
+    await expect(page.locator('.dswf-rf input')).toHaveCount(5)
     // L786 ② 底部按钮 =「确认」
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
@@ -390,8 +391,8 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
       .click()
     await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="knowledgeDir"]')).toBeVisible()
     await expect(page.getByText('选择知识库目录').first()).toBeVisible()
-    // 浏览起点 = 当前知识库目录（demo/.knowledge，无子目录）→ 上一级到 dsh-demo → 选 .knowledge
-    await page.locator('.dswf-fb-up').click()
+    // 浏览起点 = 知识库目录值的父目录（dsh-demo——startDir 父目录口径，form-model
+    // browseStartDirOf）→ 直接选 .knowledge（旧「上一级」导航随口径随迁移除）
     await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('dsh-demo', { timeout: 15_000 })
     await dirRow(page, '.knowledge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
@@ -422,7 +423,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
     await expect(page.locator(dsrOf('ready')), 'L810 任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
-    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), 'L810 任务清单随工作区重新派生').toBe(rederivedExpected)
+    await expect(page.locator(DSR_DIR), 'L810 任务清单随工作区重新派生（RPC 重派生在途——轮询至收敛）').toHaveText(rederivedExpected, { timeout: 30_000 })
     // L811 ④ 浏览选定的知识库目录保留（不随工作区重构）
     await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
 
