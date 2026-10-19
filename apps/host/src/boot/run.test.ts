@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
+import { spawn } from 'node:child_process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
@@ -296,6 +297,42 @@ describe('fix-17 ③ PIN 读数 manifest 面（轮换换新 / 重建保留）', 
     const withTunnel = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
     expect(withTunnel.remotePin).toBe('111111')
     expect(withTunnel.tunnelProvider).toBe('pinggy')
+  })
+})
+
+// ── 2026-10-19 安装版主进程崩溃（ERR_IPC_CHANNEL_CLOSED 未捕获异常）──
+// 根因：closed IPC 通道上无 callback 的 child.send() 除返回 false 外，还会异步 emit
+// 'error'（ERR_IPC_CHANNEL_CLOSED）到 child 实例（node:internal/child_process 经
+// processTicksAndRejections）——ready 后 waitForReady 的 error 监听已撤，EventEmitter
+// 'error' 无监听 = 主进程未捕获异常（原生对话框整 app 退出；try/catch 与 false 返回值
+// 均不可达该异步路径）。修复契约：桥通道出站 send 恒携带回调——错误进回调留痕，不外溢实例事件。
+describe('createBridgeChannel · closed 通道 send 的异步 error 外溢（2026-10-19 主进程崩溃根因）', () => {
+  it('bug: 桥通道出站 send 恒携带回调（回调在场 = closed 通道错误进回调，不 emit 实例 error）', async () => {
+    const sendArgs: unknown[][] = []
+    const child = new EventEmitter() as unknown as EventEmitter & {
+      send(message: unknown, callback?: (error: Error | null) => void): boolean
+    }
+    child.send = (message: unknown, callback?: (error: Error | null) => void): boolean => {
+      sendArgs.push([message, callback])
+      return false
+    }
+    const channel = createBridgeChannel(child as unknown as BridgeChildFace)
+    await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败/)
+    expect(sendArgs).toHaveLength(1)
+    expect(typeof sendArgs[0]?.[1]).toBe('function')
+  })
+
+  it('bug: child 退出后 RPC 调用不得在 child 实例上异步 emit error（无监听的 error 事件 = 主进程未捕获异常）', async () => {
+    const child = spawn(process.execPath, ['-e', ''], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] })
+    await new Promise<void>((resolve) => {
+      child.once('close', () => resolve())
+    })
+    const errors: unknown[] = []
+    child.on('error', (error) => errors.push(error))
+    const channel = createBridgeChannel(child as unknown as BridgeChildFace)
+    await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败|boot child 已退出/)
+    await new Promise((resolve) => setTimeout(resolve, 50)) // processTicksAndRejections 排空（异步 emit 到达窗）
+    expect(errors).toEqual([])
   })
 })
 

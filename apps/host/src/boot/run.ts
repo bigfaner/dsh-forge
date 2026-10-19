@@ -166,7 +166,7 @@ const SHUTDOWN_GRACE_MS = 6_000
 export interface BridgeChildFace {
   on(event: 'message', listener: (message: unknown) => void): unknown
   once(event: 'close', listener: () => void): unknown
-  send(message: unknown): boolean | null
+  send(message: unknown, callback?: (error: Error | null) => void): boolean | null
 }
 
 /** 桥通道：RPC pending 结算 + 事件扇出（bootDshHost 装配素材；独立工厂以便替身测试） */
@@ -449,7 +449,16 @@ async function shutdownChild(child: ChildProcess): Promise<void> {
 /** 消息发送（通道已关/缺席不抛——false 由调用方结算；ChildProcess.send 的 null 同失败面） */
 function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildMessage): boolean {
   try {
-    return child.send(message) === true
+    // Root cause: closed IPC 通道上无 callback 的 send() 除返回 false 外还会异步 emit 'error'
+    // （ERR_IPC_CHANNEL_CLOSED）到 child 实例——ready 后 waitForReady 的 error 监听已撤，
+    // 无监听 = 主进程未捕获异常（2026-10-19 安装版 /run-dag-tasks 崩溃；try/catch 与 false
+    // 返回值均不可达该异步路径）。回调恒在场 = 错误进回调留痕，不外溢实例事件；异步写失败
+    // 的 pending 结算仍归 close 全量拒绝兜底。
+    return (
+      child.send(message, (error) => {
+        if (error !== undefined && error !== null) console.warn(`boot child IPC 发送失败（fail-soft）: ${String(error)}`)
+      }) === true
+    )
   } catch {
     return false
   }
