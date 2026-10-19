@@ -255,6 +255,30 @@ describe('asReadyMessage（ready 守卫）', () => {
     expect(asReadyMessage(null)).toBeUndefined()
   })
 
+  it('bug 2ffb0a82：knowledgePlugin 位可选透传（宿主 knowledge 插件装载位——=== true 才携带；缺席/他值 = 降级不阻 ready）', () => {
+    const base = {
+      type: 'ready',
+      url: 'http://127.0.0.1:1/#t',
+      injections: [],
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+        forgeSettings: true,
+        forgeBugs: true,
+        forgeWorktree: true,
+        approval: true,
+      },
+    } as const
+    expect(asReadyMessage({ ...base, knowledgePlugin: true })?.knowledgePlugin).toBe(true)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base }) ?? {})).toBe(false)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base, knowledgePlugin: false }) ?? {})).toBe(false)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base, knowledgePlugin: 'yes' }) ?? {})).toBe(false)
+  })
+
   it('tools 清单可选透传（3.4 冒烟观测面）：在场 = string[]；缺席/畸形 = 降级不阻 ready', () => {
     const base = {
       type: 'ready',

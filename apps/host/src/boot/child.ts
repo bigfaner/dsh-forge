@@ -276,12 +276,15 @@ async function main(): Promise<void> {
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
   const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  // bug 2ffb0a82：knowledge 插件装载位（与 overlay 注行门同源单值——child 侧唯一探测点，
+  // ready 消息上送 renderer 知识面门控；dev 树在场 true / 打包形态暂不含 false）
+  const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
-    knowledgeRow: existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json')), // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
+    knowledgeRow, // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
     gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
@@ -920,6 +923,8 @@ async function main(): Promise<void> {
       approval: services.approval !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
+    // bug 2ffb0a82：knowledge 插件装载位（renderer 知识 UI 面门控单源——见上方 knowledgeRow 注记）
+    knowledgePlugin: knowledgeRow,
   })
   shutdownTree = async () => {
     try {

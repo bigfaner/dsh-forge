@@ -1,7 +1,8 @@
 // shell/boot 单测 —— boot manifest 消费的纯面（G1 第 1/2 项缝的 renderer 侧 pin）：
-// 形状校验、carrier 推导、掌舵入图（追加语义 + 负样例）。DOM/IPC 面由 e2e（web-shell.spec）覆盖。
+// 形状校验、carrier 推导、掌舵入图（追加语义 + 负样例）、宿主插件位发布（bug 2ffb0a82）。
+// DOM/IPC 面由 e2e（web-shell.spec）覆盖。
 import { afterEach, describe, expect, it } from 'vitest'
-import { steerBootGraph, type ProductClientEntry } from './boot.js'
+import { bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
 import { transportCarrierFor } from './carrier.js'
 import { assertBootManifestShape, type BootManifestPayload, preloadBridge } from './bridge.js'
 
@@ -63,5 +64,28 @@ describe('preload 桥 fail-loud', () => {
   })
   it('window.dshForge 缺席即抛（host preload 未接入）', () => {
     expect(() => preloadBridge()).toThrow(/getBootManifest/)
+  })
+})
+
+describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlugin → __DSH_FORGE_HOST_PLUGINS__ 页内缝）', () => {
+  afterEach(() => {
+    delete (globalThis as { dshForge?: unknown }).dshForge
+    delete (globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__
+    delete (globalThis as { __DSH_BOOT_READY__?: unknown }).__DSH_BOOT_READY__
+    delete (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__
+    delete (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__
+  })
+  it('knowledgePlugin:true → { knowledge: true }；位缺席/旧宿主 → { knowledge: false }（fail-closed——知识面隐藏单源）', async () => {
+    const boot = (manifestOver: Partial<BootManifestPayload>) => {
+      ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+      ;(globalThis as { dshForge?: unknown }).dshForge = {
+        getBootManifest: () => Promise.resolve(manifest(manifestOver)),
+      }
+      return bootShell(product())
+    }
+    await boot({ knowledgePlugin: true })
+    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__).toEqual({ knowledge: true })
+    await boot({})
+    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__).toEqual({ knowledge: false })
   })
 })

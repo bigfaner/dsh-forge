@@ -373,12 +373,19 @@ function publishFakeViews() {
     createMermaidEnhancer: () => lastFakeEnhancer!,
   }
   ;(globalThis as { __DSH_FORGE_VIEWS__?: unknown }).__DSH_FORGE_VIEWS__ = views
+  publishHostPlugins(true) // bug 2ffb0a82：宿主插件位页内缝（壳 boot 发布——dev 形态 knowledge 在场）
   return views
+}
+
+/** 宿主插件装载位发布（结构同型镜像 shell/boot.ts bootShell 发布面） */
+function publishHostPlugins(knowledge: boolean): void {
+  ;(globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__ = { knowledge }
 }
 
 function unpublishViews(): void {
   delete (globalThis as { __DSH_FORGE_VIEWS__?: unknown }).__DSH_FORGE_VIEWS__
   delete (globalThis as { __DSH_FORGE_WORKBENCH__?: unknown }).__DSH_FORGE_WORKBENCH__
+  delete (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__
 }
 
 describe('forgeClientPlugin 形状（cordis 插件面）', () => {
@@ -631,6 +638,36 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect((row!.options.label as () => string)()).toBe('知识库')
     expect(row!.options.order).toBe(20)
     expect(row!.component).toBe(views.ForgeKnowledgeGlyph)
+    unpublishViews()
+  })
+
+  it('bug 2ffb0a82 知识门：宿主插件位 knowledge:false → 整组知识面零登记（panellist 行 / main 知识面板 / 召回页签缺席；hero 面板与其余登记不受累）', () => {
+    publishFakeViews()
+    publishHostPlugins(false)
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    // 左栏「知识库」菜单行缺席（官方 PanelRow 行语言——不注册即不呈现）
+    expect(registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)).toBeUndefined()
+    // main 知识面板缺席；hero 面板保持（同族非知识面不受门控）
+    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === KNOWLEDGE_PANEL_KEY)).toBeUndefined()
+    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === HERO_PANEL_KEY)).toBeDefined()
+    // 会话「知识召回」页签缺席（conversation.view roster 零产品登记）
+    expect(registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)).toHaveLength(0)
+    // 诊断面：center 仅 hero 一登记；views 族不含召回登记
+    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { center?: { registered?: string[] }; views?: { registered?: string[] } } }).__DSH_FORGE_CLIENT__
+    expect(marker?.center?.registered).toEqual([MAIN_SLOT])
+    expect(marker?.views?.registered).not.toContain(CONVERSATION_VIEW_SLOT)
+    unpublishViews()
+  })
+
+  it('bug 2ffb0a82 知识门 fail-closed：宿主插件位页内缝缺席（旧壳/发布断裂）→ 知识面零登记（不虚报在场）', () => {
+    publishFakeViews()
+    delete (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    expect(registers.find((r) => r.key === SIDEBAR_PANELLIST_SLOT)).toBeUndefined()
+    expect(registers.find((r) => r.key === MAIN_SLOT && r.options.key === KNOWLEDGE_PANEL_KEY)).toBeUndefined()
+    expect(registers.filter((r) => r.key === CONVERSATION_VIEW_SLOT)).toHaveLength(0)
     unpublishViews()
   })
 

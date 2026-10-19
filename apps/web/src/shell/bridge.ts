@@ -9,6 +9,9 @@ export interface BootManifestPayload {
   readonly url: string
   /** 官方 ui-* client bundle 注入行 + 组合图（collectIndexInjections 原样） */
   readonly injections: readonly unknown[]
+  /** bug 2ffb0a82：宿主 knowledge 插件装载位（形状权威 host manifest.knowledgePlugin；
+   *  可选：旧宿主/打包形态缺席 = false 口径） */
+  readonly knowledgePlugin?: boolean
 }
 
 /** apps/host ESM preload 暴露面（window.dshForge） */

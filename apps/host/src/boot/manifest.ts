@@ -38,6 +38,10 @@ export interface BootManifest {
   /** fix-19 ⑦：隧道意外死亡位（官方 :1188 unexpectedlyClosed——UI 一次性守卫自动重开单源；
    *  健康面推送即清除） */
   tunnelUnexpectedlyClosed?: boolean
+  /** bug 2ffb0a82：宿主 knowledge 插件装载位（child 按 profile 树包在场探测——与 boot
+   *  overlay 注行门同源单值）。renderer 侧知识 UI 面（左栏入口行/main 面板/召回页签）
+   *  门控单源：true = 三面照常登记；缺席/false = 整组隐藏（打包形态插件缺席）。 */
+  knowledgePlugin?: boolean
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -114,6 +118,7 @@ export function buildBootManifest(
   remotePin?: string,
   remotePinExpiresAt?: number,
   remotePinDurable?: boolean,
+  knowledgePlugin?: boolean,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -148,5 +153,7 @@ export function buildBootManifest(
       : {}),
     // fix-26：长效位透传（严格 === true 才携带）
     ...(remotePinDurable === true ? { remotePinDurable: true } : {}),
+    // bug 2ffb0a82：knowledge 插件装载位透传（严格 === true 才携带——缺席/false = renderer 知识面隐藏）
+    ...(knowledgePlugin === true ? { knowledgePlugin: true } : {}),
   })
 }

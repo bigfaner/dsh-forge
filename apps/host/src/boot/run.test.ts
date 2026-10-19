@@ -300,6 +300,20 @@ describe('fix-17 ③ PIN 读数 manifest 面（轮换换新 / 重建保留）', 
   })
 })
 
+describe('bug 2ffb0a82 knowledgePlugin 位 manifest 面（pair/tunnel/connected 重建保留——renderer 知识面门控单源）', () => {
+  const base = () =>
+    buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, undefined, undefined, undefined, true)
+
+  it('pair 轮换 / connected / 断开 / 隧道重建 → knowledgePlugin 保留（boot 期事实不随运行期消息漂移）', () => {
+    const rotated = applyPairMessage(base(), { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(rotated.knowledgePlugin).toBe(true)
+    expect(applyPairConnected(base()).knowledgePlugin).toBe(true)
+    expect(applyPairDisconnected(base()).knowledgePlugin).toBe(true)
+    const withTunnel = applyTunnelMessage(base(), { type: 'tunnel', tunnelUrl: 'https://x/pair?token=t', tunnelProvider: 'pinggy' })
+    expect(withTunnel.knowledgePlugin).toBe(true)
+  })
+})
+
 // ── 2026-10-19 安装版主进程崩溃（ERR_IPC_CHANNEL_CLOSED 未捕获异常）──
 // 根因：closed IPC 通道上无 callback 的 child.send() 除返回 false 外，还会异步 emit
 // 'error'（ERR_IPC_CHANNEL_CLOSED）到 child 实例（node:internal/child_process 经

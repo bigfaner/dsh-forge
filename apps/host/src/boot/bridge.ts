@@ -149,6 +149,9 @@ export interface BridgeReadyMessage {
   readonly remotePinExpiresAt?: number
   /** fix-26：长效密码位（true = PIN 长期生效不轮换；可选：临时态/旧 child = 缺席） */
   readonly remotePinDurable?: boolean
+  /** bug 2ffb0a82：宿主 knowledge 插件装载位（child 按 profile 树包在场探测——与 boot
+   *  overlay 注行门同源单值；可选：旧 child 缺席 = false 口径降级，不阻 ready 守卫） */
+  readonly knowledgePlugin?: boolean
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -529,6 +532,8 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
     // fix-26：长效位透传（严格 === true 才携带）
     ...(m.remotePinDurable === true ? { remotePinDurable: true as const } : {}),
+    // bug 2ffb0a82：knowledge 插件装载位透传（严格 === true 才携带——畸形视为缺席降级）
+    ...(m.knowledgePlugin === true ? { knowledgePlugin: true as const } : {}),
   }
 }
 

@@ -27,4 +27,7 @@ declare global {
   var __DSH_TRANSPORT__: { ownsHost: boolean; streamBaseUrl: string } | undefined
   /** 模块系统注册面（宿主注入行建立；client bundle 与壳内核共同消费） */
   var __ModuleLoader__: ModuleLoaderFacade | undefined
+  /** bug 2ffb0a82：宿主插件装载位（shell/boot.ts bootShell 于就绪门放行前发布——
+   *  单源 = boot manifest.knowledgePlugin；client 插件 apply 期同步读，缺席 = 知识面隐藏） */
+  var __DSH_FORGE_HOST_PLUGINS__: { knowledge: boolean } | undefined
 }

@@ -59,7 +59,7 @@ staging = BFS闭包( userLayerRow 插件
 
 - **新增产品包零配置**：被行/预设/依赖引用即自动随包；contracts/path-key 类闭包成员自动入场（e791a46「忘列 path-key」病理结构性消除）。
 - 带技能面的插件在 `STAGING_EXTRAS` 补 skills 物化与关键文件口径（plugin-forge / plugin-forge-spec）。
-- 现值裁决：`knowledge` = `{ userLayerRow: false, staged: false }`——知识库功能不完整，打包形态暂不开放（dev 形态 profile.dev 仍含，开发时全量可用）。
+- 现值裁决：`knowledge` = `{ userLayerRow: false, staged: false }`——知识库功能不完整，打包形态暂不开放（dev 形态 profile.dev 仍含，开发时全量可用）。UI 面对齐：knowledge 不随包 = 宿主插件位 false = 知识 UI 三登记（左栏入口行/main 面板/召回页签）整组隐藏（bug 2ffb0a82 门控，见 [web-ui-composition.md](web-ui-composition.md) §2）。
 - 不受配置约束的两面：boot overlay 的插件行 config 注入按 profile 树**运行期探测**（[apps/host/src/boot/overlay.ts](../../apps/host/src/boot/overlay.ts) knowledgeRow 门——配置翻转后双形态自动自洽）；dev 形态手维文件不受限。
 
 守护测试：`tests/structure/installer-pipeline.test.ts`（推导集合 pin + 闭包自洽——kill-switch 误伤即红）、`apps/host/src/profile/materialize.test.ts`（模板行 ↔ 配置同步 pin）。

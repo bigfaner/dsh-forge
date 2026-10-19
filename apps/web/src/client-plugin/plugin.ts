@@ -953,6 +953,8 @@ function registerSidebarSlots(
  * center 族登记（fix-36 自 apply 拆出）：官方 main 面板族（fix-25 降位载体）——hero（零
  * 项目引导——ShellHost 驱动选中/让位）+ knowledge（UF-5 知识视图——桥注入抽屉缝）+
  * sidebar.panellist 官方面板行（id = main key 同源；fix-33 ⑧ label 经 locale NS thunk）。
+ * bug 2ffb0a82：knowledge 两登记受宿主插件位门控（knowledgeEnabled = false → 整组知识面
+ * 零登记——打包形态 knowledge 插件缺席时左栏入口/知识面板不呈现；hero 不受门控）。
  */
 function registerCenterPanels(
   ctx: ForgeClientCtx,
@@ -960,6 +962,7 @@ function registerCenterPanels(
   bridge: PublishedBridge,
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
+  knowledgeEnabled: boolean,
 ): void {
   registerSlotEntry(ctx, MAIN_SLOT, diagnostics, () =>
     ctx.slots.register(
@@ -967,6 +970,7 @@ function registerCenterPanels(
       views.ForgeHeroPanel,
     ),
   )
+  if (!knowledgeEnabled) return
   registerSlotEntry(ctx, MAIN_SLOT, diagnostics, () =>
     ctx.slots.register(
       { name: MAIN_SLOT, key: KNOWLEDGE_PANEL_KEY, inject: () => ({ bridge }) },
@@ -998,6 +1002,8 @@ function registerCenterPanels(
  * 实机报障收口：官方通用行参数摘要取「首个字符串值」= source_kind 种类词，业务视图
  * 接管后摘要段 = source_slug 容器标识 + 结算后任务键后缀；locale 行声明本插件 NS——
  * 行内 t 座即 FORGE_LOCALE_NS）。
+ * bug 2ffb0a82：召回页签登记受宿主插件位门控（knowledgeEnabled = false → 会话
+ * 「知识召回」页签零登记——与左栏入口/知识面板同组隐藏；hero 影子/工具行不受门控）。
  */
 function registerConversationViews(
   ctx: ForgeClientCtx,
@@ -1005,24 +1011,27 @@ function registerConversationViews(
   bridge: PublishedBridge,
   t: (key: string) => string,
   diagnostics: { registered?: string[] },
+  knowledgeEnabled: boolean,
 ): void {
-  registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      {
-        name: CONVERSATION_VIEW_SLOT,
-        id: RECALL_VIEW_ID,
-        order: 20,
-        locale: FORGE_LOCALE_NS,
-        label: (): string => t('view.recall'),
-        inject: () => ({
-          openKnowledgeEntry: (entryId: number): void => {
-            bridge.openKnowledgeEntry(entryId)
-          },
-        }),
-      },
-      views.ForgeRecallView,
-    ),
-  )
+  if (knowledgeEnabled) {
+    registerSlotEntry(ctx, CONVERSATION_VIEW_SLOT, diagnostics, () =>
+      ctx.slots.register(
+        {
+          name: CONVERSATION_VIEW_SLOT,
+          id: RECALL_VIEW_ID,
+          order: 20,
+          locale: FORGE_LOCALE_NS,
+          label: (): string => t('view.recall'),
+          inject: () => ({
+            openKnowledgeEntry: (entryId: number): void => {
+              bridge.openKnowledgeEntry(entryId)
+            },
+          }),
+        },
+        views.ForgeRecallView,
+      ),
+    )
+  }
   registerSlotEntry(ctx, HERO_WORKSPACE_SLOT, diagnostics, () =>
     ctx.slots.register(
       {
@@ -2387,10 +2396,21 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // 三族登记（fix-36 按 sidebar/center/views 拆注册子函数——apply 仅编排）+ 设置分区
         // （4.7 settings 族）+ 常驻壳宿主。m3.1 D5：会话头挂接 pill 登记退役
         // （conversation.session.header.actions 零产品登记——官方动作带不受扰）。
+        // bug 2ffb0a82：宿主插件位门（__DSH_FORGE_HOST_PLUGINS__——壳 bootShell 于就绪门
+        // 放行前发布，apply 期同步可读；单源 = boot manifest.knowledgePlugin = child 按
+        // profile 树包在场探测）。knowledge 缺席/false = 整组知识面（左栏入口行/main
+        // 面板/召回页签）零登记——打包形态 knowledge 插件不随包；页内缝缺席 = fail-closed
+        // 隐藏（不虚报在场）。
+        const hostPlugins = (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } })
+          .__DSH_FORGE_HOST_PLUGINS__
+        const knowledgeEnabled = hostPlugins?.knowledge === true
+        if (!knowledgeEnabled) {
+          console.info(`[dswf-client] knowledge 面隐藏（宿主插件位：${hostPlugins === undefined ? '页内缝缺席' : 'knowledge=false'}——bug 2ffb0a82 门）`)
+        }
         registerSidebarSlots(clientCtx, views, { sessions, workspaces, uiWorkspace }, sidebarDiagnostics)
         registerRemoteEntry(clientCtx, views, t, sidebarDiagnostics)
-        registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics)
-        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics)
+        registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics, knowledgeEnabled)
+        registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, knowledgeEnabled)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
         registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
