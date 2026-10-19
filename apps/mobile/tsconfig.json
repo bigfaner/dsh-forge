@@ -15,5 +15,8 @@
   "include": [
     "src",
     "esbuild.mjs"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
   ]
 }

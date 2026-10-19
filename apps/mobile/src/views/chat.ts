@@ -134,6 +134,8 @@ export interface ChatDeps {
   readonly onWorktreeTap?: () => void
   readonly mode?: string
   readonly worktree?: string
+  /** 隧道模式位（1.31——覆盖层文案区分「隧道模式（降级）」/ LAN 断线文案）。 */
+  readonly tunnel?: boolean
 }
 
 type OverlayMode = 'hidden' | 'degraded' | 'offline' | 'pairing'
@@ -272,7 +274,8 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     overlay.hidden = state.overlay === 'hidden'
     overlay.className = `conn-overlay ${state.overlay}`
     overlay.textContent = ''
-    if (state.overlay === 'degraded') overlay.appendChild(el('span', undefined, '连接不稳定，正在重连…'))
+    if (state.overlay === 'degraded')
+      overlay.appendChild(el('span', undefined, deps.tunnel === true ? '隧道模式（降级），正在重连…' : '连接不稳定，正在重连…'))
     if (state.overlay === 'offline') {
       overlay.appendChild(el('span', undefined, '连接已断开'))
       const retry = el('button', 'retry-btn', '重试')

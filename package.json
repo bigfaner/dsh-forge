@@ -24,16 +24,17 @@
     "dist:stage": "node scripts/assemble-installer-resources.mjs",
     "dist:check": "node scripts/assemble-installer-resources.mjs --check",
     "dist:win": "pnpm build && pnpm dist:stage && node scripts/dist-win.mjs",
-    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p packages/plugin-forge/tsconfig.test.json && tsc -p packages/plugin-forge-spec/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p apps/mobile/tsconfig.json && tsc -p tests/tsconfig.json"
+    "lint:test-types": "tsc -p packages/contracts/tsconfig.test.json && tsc -p packages/path-key/tsconfig.test.json && tsc -p packages/core/tsconfig.test.json && tsc -p packages/knowledge/tsconfig.test.json && tsc -p packages/plugin-forge/tsconfig.test.json && tsc -p packages/plugin-forge-spec/tsconfig.test.json && tsc -p apps/host/tsconfig.test.json && tsc -p apps/web/tsconfig.test.json && tsc -p apps/mobile/tsconfig.json && tsc -p apps/mobile/tsconfig.test.json && tsc -p tests/tsconfig.json"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "22.10.2",
     "@vitest/coverage-v8": "5.0.3",
+    "better-sqlite3": "13.0.3",
     "electron-builder": "26.17.0",
     "oxlint": "1.86.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.3",
-    "better-sqlite3": "13.0.3",
-    "@types/better-sqlite3": "9.6.0"
+    "vitest": "5.0.3"
   }
 }
