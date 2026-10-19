@@ -321,7 +321,7 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 
       // 进程已退出/通道已闭——关停幂等跳过
     }
     // 取证保留：失败轮 userData 留盘（task_logs 取证目录——成功/失败证据均归档，不静默清理）
-    const keepDir = 'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/app-observability/fix-3/001-observability-e2e'
+    const keepDir = 'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/app-observability/fix-2/001-observability-e2e'
     try {
       execSync(`robocopy "${userData}" "${keepDir}/userdata-last" /E /NFL /NDL /NJH /NJS`, { stdio: 'ignore' })
     } catch {
