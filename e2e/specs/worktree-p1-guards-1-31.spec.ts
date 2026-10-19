@@ -168,9 +168,17 @@ test('1.31 UI：A1 冷却窗维度拆分 + A3 取消抑制显式重选清除 + A
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .not.toContain('feat-a')
     await pickMenuRow(page, 'feat-a')
+    // 1.98 取消消费意图（bug f54f54ee）：显式重选清除取消抑制照旧，但被取消否决的那份
+    // 草稿不再自触发弹框（模态残留会永久遮挡 composer）——composer 可键入，草稿变化
+    // （新意图）出现即重弹，A3「重弹可能」语义保留。
     await expect(
       heroRiskDialog(page),
-      'A3：显式重选同树清除取消抑制——确认框必须重弹（修复前被 armSuppressed 永久挡）',
+      'A3 配套：重选后零自动重弹（取消消费意图——f54f54ee，重弹改由新意图触发）',
+    ).toBeHidden({ timeout: 6_000 })
+    await typeDraft(page, ' 1-31')
+    await expect(
+      heroRiskDialog(page),
+      'A3：显式重选同树清除取消抑制——确认框在新意图出现时重弹',
     ).toBeVisible({ timeout: 6_000 })
     await snap(page, 'a3-dialog-reopens-after-reselect.png')
 

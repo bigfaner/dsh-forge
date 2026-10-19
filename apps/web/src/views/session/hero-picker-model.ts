@@ -249,6 +249,16 @@ export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean
 }
 
 /**
+ * 首条消息意图判读（bug f54f54ee 取消消费意图）：取消 = 用户否决了当时草稿的编排请求，
+ * 该份草稿不再作为意图源——否则重选同树时残留草稿即刻重弹风险框，模态遮挡 composer
+ * 永远等不到「键入才弹框」的新意图。草稿变化（trim 归一后不等）即新意图，可重弹。
+ */
+export function draftIntentFresh(draft: string, vetoedDraft: string | undefined): boolean {
+  const trimmed = draft.trim()
+  return trimmed !== '' && trimmed !== vetoedDraft
+}
+
+/**
  * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
  * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17：blank ∧ summary.cwd ===
  * workspace.path ∧ workspace.sessionIds.includes(id) ∧ !archived.includes(id)）——

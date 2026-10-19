@@ -30,6 +30,7 @@ import { EditableCombobox } from '../../components/index.js'
 import { preloadRpcClientFactory, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   activeSessionRowOf,
+  draftIntentFresh,
   riskDialogNeeded,
   riskLatchConfirm,
   riskLatchFailureClear,
@@ -156,6 +157,11 @@ export function ForgeHeroWorktreeMount({
   // 最近一次 arm 成功产物（armed 去重——产物即当前会话且选中路径未变时零重入，键入续字
   // 不抖；改选他行即重新消费）
   const armedRef = useRef<{ readonly path: string; readonly sessionId: string } | undefined>(undefined)
+  // 取消消费意图（bug f54f54ee——Root cause: 取消后残留草稿仍作 draftIntent，重选同树即刻
+  // 重弹风险框，模态遮挡 composer 永远等不到「键入才弹框」）：取消时记下被否决的那份草稿，
+  // 同文草稿不再自触发；草稿变化（续写/改写）即新意图。官方原流不受影响——用户发送即官方
+  // 清草稿，draftText 归空零意图。
+  const vetoedIntentRef = useRef<string | undefined>(undefined)
   // 1.30 选中树推送（forge:worktree/select——host 必绑拦截重路由目标单源；fire-and-forget，
   // path 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft 不扰选中态。
   const pushSelection = useCallback(
@@ -330,9 +336,10 @@ export function ForgeHeroWorktreeMount({
     if (path === undefined || orchestrationInFlightRef.current || armSuppressed.includes(path)) return
     const row = phase.rows.find((candidate) => candidate.path === path)
     if (row === undefined) return
-    // 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）；主行同样只在该
-    // 时点进编排。cwd/armed 去重 + 取消抑制 + 确认框闸（shouldArmSelectedRow 单源）
-    const draftIntent = draftText.trim() !== ''
+    // 首条消息意图闸：draft 空 = 无会话创建时机（点选/回填零副作用）；被取消否决的那份
+    // 草稿不再作意图源（f54f54ee 取消消费）；主行同样只在该时点进编排。cwd/armed 去重 +
+    // 取消抑制 + 确认框闸（shouldArmSelectedRow 单源）
+    const draftIntent = draftIntentFresh(draftText, vetoedIntentRef.current)
     if (
       !shouldArmSelectedRow({
         phaseReadyGit: true,
@@ -576,6 +583,8 @@ export function ForgeHeroWorktreeMount({
             const path = defaultRiskPath
             setDefaultRiskPath(null)
             setRiskDismissChecked(false)
+            // f54f54ee 取消消费意图：被否决的那份草稿不再自触发弹框（重选不重弹，键入新意图才弹）
+            vetoedIntentRef.current = draftText.trim()
             // A3：取消写取消抑制（非失败抑制集）——显式重选同树即清除，确认框可重弹
             setCancelSuppressed((prev) => (prev.includes(path) ? prev : [...prev, path]))
             // 取消编排默认 = 不落假象：回填态与选中记忆同清（chip 退回占位），消息走官方原流

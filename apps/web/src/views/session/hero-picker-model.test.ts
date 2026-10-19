@@ -6,6 +6,7 @@ import {
   activeSessionIdOf,
   activeSessionRowOf,
   blankSessionIdByCwdOf,
+  draftIntentFresh,
   heroPickerPlan,
   selectedProjectOf,
   selectedProjectRootOf,
@@ -308,6 +309,27 @@ describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/确认续跑�
         armedPath: WT_A,
       }),
     ).toBe(false)
+  })
+})
+
+describe('draftIntentFresh（bug f54f54ee 取消消费意图——被否决的草稿不再自触发弹框）', () => {
+  it('草稿非空且非被否决份 → 意图在场（首条消息时机）', () => {
+    expect(draftIntentFresh('new message', undefined)).toBe(true)
+    expect(draftIntentFresh('new message', 'old vetoed')).toBe(true)
+  })
+
+  it('草稿为空 → 零意图（点选/回填零副作用口径不变）', () => {
+    expect(draftIntentFresh('', undefined)).toBe(false)
+    expect(draftIntentFresh('   ', undefined)).toBe(false)
+  })
+
+  it('取消消费：与被否决份相同（trim 归一）→ 非新鲜意图——重选不得据此重弹框', () => {
+    expect(draftIntentFresh('1-19 risk first message', '1-19 risk first message')).toBe(false)
+    expect(draftIntentFresh('  1-19 risk first message ', '1-19 risk first message')).toBe(false)
+  })
+
+  it('草稿变化即新意图：被否决基础上续写/改写 → 重新成为首条消息时机', () => {
+    expect(draftIntentFresh('1-19 risk first message plus', '1-19 risk first message')).toBe(true)
   })
 })
 

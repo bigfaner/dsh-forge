@@ -68,7 +68,7 @@ const baseRiskDialog = (page: Page) => page.getByRole('dialog', { name: '基准�
 
 /** 风险框交互：勾选知悉 → 确认继续 */
 async function acknowledgeAndConfirm(page: Page, dialog: ReturnType<typeof heroRiskDialog>): Promise<void> {
-  const box = dialog.locator('input[type="checkbox"]')
+  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -201,8 +201,10 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     await dialog.locator('[data-dswt-create-submit]').click()
     await expect(baseRiskDialog(page)).toBeVisible()
     await acknowledgeAndConfirm(page, baseRiskDialog(page))
+    // worktreeName = 路径尾段 basename（list 命名口径——branch feat/new 落
+    // .forge/worktrees/feat/new，尾段 = 'new'；零 checkout 纪律由 AC5 主树 HEAD pin）
     await expect
-      .poll(async () => (await listNames(page, wsDir)).includes('feat/new'), { timeout: 30_000, message: '确认后应创建同名 worktree feat/new' })
+      .poll(async () => (await listNames(page, wsDir)).includes('new'), { timeout: 30_000, message: '确认后应创建同名 worktree（尾段 new）' })
       .toBe(true)
     await snap(page, 'create-confirmed.png')
 
@@ -215,7 +217,7 @@ test('1.19 UI：跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠
     expect(typeof sessionId).toBe('string')
     // 落盘证据双面：① session_projcache 快照 cwd 字段；② 官方存储按会话 cwd 分组——
     // session-<id> 目录必落 `…-wt-a--` 组（分组键 = SessionHeader.cwd）
-    const headerCwd = findSessionHeaderCwd(userData, sessionId as string)
+    const headerCwd = findSessionHeaderCwd(userData, sessionId as string)?.replaceAll('\\', '/').trim()
     expect(headerCwd, 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(wtDir)
     const sessionDir = findSessionDir(userData, sessionId as string)
     expect(sessionDir, '会话存储目录应按 wt-a worktree cwd 分组').toContain('wt-a')
