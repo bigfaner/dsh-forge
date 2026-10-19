@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hostRoot, productPackagePresent, resolveHostPaths } from './paths.js'
+import { hostRoot, isPackagedForm, productPackagePresent, resolveHostPaths } from './paths.js'
 
 describe('resolveHostPaths 双形态', () => {
   it('packaged 默认：profile = {userData}/profile，dshHome 缺省隔离 {userData}/dsh-home（fix-26）', () => {
@@ -215,5 +215,29 @@ describe('productPackagePresent 产品包在场探测（dev profile 树 ∪ anch
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+// 形态判定门（2026-10-19 dev:debug 启动崩 fix）：dev.mjs 复制 electron.exe → dsh-forge-dev.exe
+// 启动（进程名区分用户裁决）后，Electron 的 app.isPackaged 按 exe 名判定（非 electron* 即
+// true）→ dev 下恒 true（dsh-forge-dev.exe 实测 isPackaged=true，electron.exe 同 app=false）。
+// main 侧打包分支（便携数据目录 + DSH_FORGE_RESOURCES_DIR 注入）单看 isPackaged 即误入：
+// resources 根指进 electron dist → resolveChildEntry 探 runtime/host-dist 缺席 throw（半成型
+// 资源）。isPackagedForm = isPackaged ∧ 非 dev 形态——与 resolveHostPaths form 同源
+// （DSH_FORGE_DEV_PROFILE 真值）。
+describe('isPackagedForm 形态判定门（app.isPackaged 不可单腿）', () => {
+  it('bug: dev 改名副本 exe（isPackaged=true ∧ DEV_PROFILE 真值）误判打包形态——dev:debug 启动崩根因', () => {
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: 'dev' }, true)).toBe(false)
+  })
+
+  it('真打包形态：isPackaged=true ∧ DEV_PROFILE 缺席/空串/0（安装版/安装形态 e2e）', () => {
+    expect(isPackagedForm({}, true)).toBe(true)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: '' }, true)).toBe(true)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: '0' }, true)).toBe(true)
+  })
+
+  it('非打包：isPackaged=false（形态无关——dev 直跑 electron.exe / e2e dev 走查）', () => {
+    expect(isPackagedForm({}, false)).toBe(false)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: 'dev' }, false)).toBe(false)
   })
 })

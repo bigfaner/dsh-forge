@@ -17,7 +17,7 @@ import {
   registerProjectsChannels, removeHarnessChannels, removeTunnelChannel, runStartupReconcile,
   registerTunnelChannel, withKnowledgeBindingsRefresh,
 } from './ipc/index.js'
-import { ensureProfileMaterialized, ensureSafeModeProfile, resolveHostPaths } from './profile/index.js'
+import { ensureProfileMaterialized, ensureSafeModeProfile, isDevForm, isPackagedForm, resolveHostPaths } from './profile/index.js'
 import {
   acquireSingleInstance, authenticateWebHost, createMainWindow, createShellProtocolHandler,
   installShellStreamRewrite, registerShellScheme, resolveWebDistDir, SHELL_ENTRY_URL,
@@ -27,12 +27,14 @@ import {
 // dev 形态独立标识（2026-10-19 用户裁决）：app 名/AppUserModelID/窗口标题均带 -dev 后缀，
 // 与打包版进程（dsh-forge.exe）在任务栏分组、userData 缺省名上完全区分（进程名区分在
 // dev.mjs 侧——复制 electron.exe 为 dsh-forge-dev.exe 启动）。
-const IS_DEV = process.env.DSH_FORGE_DEV_PROFILE !== undefined && process.env.DSH_FORGE_DEV_PROFILE !== ''
+const IS_DEV = isDevForm(process.env)
 const APP_IDENTITY = IS_DEV ? 'dsh-forge-dev' : 'dsh-forge'
 app.setName(APP_IDENTITY) // userData = {app-data}/{APP_IDENTITY}（profile 首启落地根）
 app.setAppUserModelId(IS_DEV ? 'app.dshforge.desktop.dev' : 'app.dshforge.desktop') // 任务栏独立标识（appId 继承 + .dev 后缀）
 if (process.env.DSH_FORGE_USER_DATA) app.setPath('userData', process.env.DSH_FORGE_USER_DATA) // e2e 隔离（fix-26：在场兼作凭据桥关闭门——dshHome 已缺省隔离）
-if (app.isPackaged) {
+// 形态门 = isPackagedForm 而非裸 app.isPackaged（Root cause: dev 改名副本 exe 下 isPackaged
+// 恒 true，裸判令 dev 误入打包分支——详见 isPackagedForm 注释）
+if (isPackagedForm(process.env, app.isPackaged)) {
   // 打包形态便携数据目录（2026-10-19 用户裁决：运行数据不占 C 盘）——userData 指到 exe 旁
   // data\（可写探测通过才切；Per-machine 受保护目录等不可写场景回退缺省 %APPDATA%）。直接
   // setPath 不经 DSH_FORGE_USER_DATA 环境变量，fix-26 凭据桥门不触发，真 home 凭据照常共享。
@@ -125,7 +127,7 @@ void (async () => {
     })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: APP_IDENTITY })
-    if (!app.isPackaged) wireDevToolsToggle((mainWindow as BrowserWindow).webContents) // 开发态 F12 按需开关（打包形态零面）
+    if (!isPackagedForm(process.env, app.isPackaged)) wireDevToolsToggle((mainWindow as BrowserWindow).webContents) // 开发态 F12 按需开关（真实打包形态零面——isPackagedForm 门同上：dev 改名副本 exe 下 isPackaged 恒 true）
     wireWindowLifecycle(app)
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
