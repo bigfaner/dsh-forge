@@ -28,7 +28,7 @@ description: 面向 `test-run` 任务的表面级测试编排——识别 surfac
 
 ## 判断点（按顺序）
 
-1. **识别 surface**——任务简报 `SURFACE` 行（`key (type)` 形态）是唯一权威来源。简报无 `SURFACE` 行即**阻断性**错误，不可重试：连同恢复线索（任务上下文、工作区测试目录与脚本）一并上报并停止——不要自行猜测或另选 surface 来源。
+1. **识别 surface**——任务简报 `SURFACE` 行（`key (type)` 形态）在场就取用；否则按仓库事实探测（与 gen-journeys 同源，绝不猜）：既有 journey 文档的 frontmatter `surface_types`/`surface_keys`、`docs/conventions/testing/` 的逐表面约定目录、`tests/` 布局（`tests/<surfaceKey>/<journey>/` = 多表面，`tests/<journey>/` = 单表面）。全部来源零命中，或证据互相矛盾且不可裁决 → **阻断性**错误，不可重试：连同恢复线索（任务上下文、探测证据）一并上报并停止——不要自行编派 surface。
 2. **发现旅程**——`tests/<journey>/`（单 surface）或 `tests/<surfaceKey>/<journey>/`（多 surface）；工具链不设 tests/ 目录时以工作区实际测试树为准（如 Playwright `testDir` 下的 journey spec）。未发现任何旅程 → 上报旅程测试需要生成脚本并停止（阻断）。以任务身份被调用且未限定旅程范围 → 运行全部已发现的旅程。
 3. **检查环境**——测试命令及其依赖存在且可运行。不就绪 → 以**可重试**中止（环境可被修复后重新调用本技能）；只上报诊断信息与修复建议——不自动修。
 4. **执行序列**——完整生命周期 surface（web/api/mobile）：dev 一次 → probe（有界重试，约 3 次）→ 逐旅程以 **run-once** 测试命令执行（命令按工作区实际工具链取用，如 `npx playwright test <journey>` / `npx vitest run <journey>`；一律 run-once，禁 `--watch` 形态）→ teardown 一次。简化 surface（cli/tui）：逐旅程循环 → teardown。每个旅程完成即记录其结果。teardown 是**强制的——即使前面步骤失败也必须执行**。
