@@ -1,11 +1,11 @@
 ---
 name: run-tests
-description: 面向 `test-run` 任务的表面级测试编排——识别 surface，按序执行其 just 配方（dev、probe、逐旅程 test、teardown），并如实上报实测结果；绝不伪造结果，失败一律以 blocked 结算。
+description: 面向 `test-run` 任务的表面级测试编排——识别 surface，按序执行工作区测试编排（dev、probe、逐旅程 test、teardown），并如实上报实测结果；绝不伪造结果，失败一律以 blocked 结算。
 ---
 
 # 运行测试（Run Tests）
 
-**核心原则**：这是一个编排器——识别 surface、按序执行其 just 配方、如实上报实测结果。surface 解析、服务生命周期、结果解析与上报都在这里完成——仅此而已。修复、重写测试、下判定属于别处（发起任务与 fix 链）。
+**核心原则**：这是一个编排器——识别 surface、按序执行工作区测试编排、如实上报实测结果。surface 解析、服务生命周期、结果解析与上报都在这里完成——仅此而已。修复、重写测试、下判定属于别处（发起任务与 fix 链）。
 
 **按需加载**：这份文档只在执行 `test-run` 任务时适用——手上没有 test-run 任务却在读它，就把它放回去。
 
@@ -28,10 +28,10 @@ description: 面向 `test-run` 任务的表面级测试编排——识别 surfac
 
 ## 判断点（按顺序）
 
-1. **识别 surface**——任务简报 `SURFACE` 行（`key (type)` 形态）就取用；否则读 justfile 的 surface 分组。标量 surface 使用裸配方（`dev`、`probe`、`test`、`teardown`）；具名 surface 给每个配方加 `<surface-key>-` 前缀。两个来源都无法识别是**阻断性**错误，不可重试：连同恢复线索（任务上下文、justfile、surface 配置）一并上报并停止。
-2. **发现旅程**——`tests/<journey>/`（单 surface）或 `tests/<surfaceKey>/<journey>/`（多 surface）。未发现任何旅程 → 上报旅程测试需要生成脚本并停止（阻断）。以任务身份被调用且未限定旅程范围 → 运行全部已发现的旅程。
-3. **检查环境**——配方及其依赖存在且可运行。不就绪 → 以**可重试**中止（环境可被修复后重新调用本技能）；只上报诊断信息与修复建议——不自动修。
-4. **执行序列**——完整生命周期 surface（web/api/mobile）：`dev` 一次 → `probe`（有界重试，约 3 次）→ 逐旅程 `just <prefix>test <journey>` → `teardown` 一次。简化 surface（cli/tui）：逐旅程循环 → `teardown`。每个旅程完成即记录其结果。teardown 是**强制的——即使前面步骤失败也必须执行**。
+1. **识别 surface**——任务简报 `SURFACE` 行（`key (type)` 形态）是唯一权威来源。简报无 `SURFACE` 行即**阻断性**错误，不可重试：连同恢复线索（任务上下文、工作区测试目录与脚本）一并上报并停止——不要自行猜测或另选 surface 来源。
+2. **发现旅程**——`tests/<journey>/`（单 surface）或 `tests/<surfaceKey>/<journey>/`（多 surface）；工具链不设 tests/ 目录时以工作区实际测试树为准（如 Playwright `testDir` 下的 journey spec）。未发现任何旅程 → 上报旅程测试需要生成脚本并停止（阻断）。以任务身份被调用且未限定旅程范围 → 运行全部已发现的旅程。
+3. **检查环境**——测试命令及其依赖存在且可运行。不就绪 → 以**可重试**中止（环境可被修复后重新调用本技能）；只上报诊断信息与修复建议——不自动修。
+4. **执行序列**——完整生命周期 surface（web/api/mobile）：dev 一次 → probe（有界重试，约 3 次）→ 逐旅程以 **run-once** 测试命令执行（命令按工作区实际工具链取用，如 `npx playwright test <journey>` / `npx vitest run <journey>`；一律 run-once，禁 `--watch` 形态）→ teardown 一次。简化 surface（cli/tui）：逐旅程循环 → teardown。每个旅程完成即记录其结果。teardown 是**强制的——即使前面步骤失败也必须执行**。
 5. **上报**——每个旅程的合计（passed/failed/skipped）、每条失败附错误摘录作为证据、以及实际执行的序列。结果输出缺失或为空 → 如实说明并附运行器控制台输出；不得编造报告。
 
 ## 结算（以任务身份运行时）
