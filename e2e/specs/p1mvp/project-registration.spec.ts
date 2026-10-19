@@ -123,7 +123,7 @@ test('@web-e2e @p1mvp project-registration·冒烟：hero → 两段式注册 �
     expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单与记录只读派生（core 单源同值）').toBe(derivedExpected)
     expect(await page.locator('.dswf-rf input[type="radio"]').count(), '仓内/仓外无 radio 字段').toBe(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
-    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 4（ws/name/forge/kn——派生行 4.3 零输入位化）').toHaveCount(4)
+    await expect(page.locator('.dswf-rf input'), '表单字段全集 = 5（ws/name/forge/kn/wt——1.6 AC3 worktree 输入随迁）').toHaveCount(5)
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
     // Step 4 success：确认 → 不可交互中断执行态 → 四步链
@@ -336,7 +336,7 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
       .getByRole('button', { name: '浏览…' })
       .click()
     await expect(page.locator(rfBrowsing('knowledgeDir'))).toBeVisible()
-    await page.locator('.dswf-fb-up').click()
+    // Root cause: browseStartDirOf 语义 = 输入框值的父目录（39f03ab9），起点即 rederive-a，无需上一级
     await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('rederive-a', { timeout: 15_000 })
     await dirRow(page, '.forge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
@@ -359,7 +359,8 @@ test('@web-e2e @p1mvp project-registration·Step3 reselect-rederive-fields：换
     // fix-7 载体适配（同 Step3）：重新派生 = 派生行随换选目录更新（core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(dirB))
     await expect(page.locator(dsrOf('ready')), '任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
-    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), '任务清单重新派生（core 单源同值）').toBe(rederivedExpected)
+    // toHaveText 自带轮询：换选触发 loading→ready 重渲染，非重试式 toBe 会读到旧 ready 值
+    await expect(page.locator(DSR_DIR), '任务清单重新派生（core 单源同值）').toHaveText(rederivedExpected, { timeout: 30_000 })
     await expect(page.locator(rfField('kn')), '浏览选定过的知识库目录保留原值').toHaveValue(`${join(dirA, '.forge')}`)
   } finally {
     await closeApp(app)
