@@ -186,7 +186,7 @@ export interface BridgeChannel {
  * child close → pending 全量拒绝（forge:* 面信封化降级））。监听先于 ready 等待挂上
  * ——事件与早到 rpc-result 零丢失窗。
  */
-export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
+export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => string | undefined): BridgeChannel {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
@@ -232,8 +232,10 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
     call: (service, method, args) =>
       new Promise((resolve, reject) => {
         const id = nextId++
+        // trace_id 显式携带（ALS 过 IPC 序列化断点——main 侧读数随请求面入 child）
+        const traceId = traceIdOf?.()
         pending.set(id, { resolve, reject })
-        if (!sendToChild(child, { type: 'rpc', id, service, method, args })) {
+        if (!sendToChild(child, { type: 'rpc', id, service, method, args, ...(traceId !== undefined && traceId !== '' ? { traceId } : {}) })) {
           pending.delete(id)
           reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
         }
@@ -253,6 +255,57 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
   }
 }
 
+/**
+ * child stdio 管道消费（app-observability 1.2）：逐行读 stdout/stderr 管道 → sink 转译
+ * （main 侧 emit 诊断事件）+ 回显 process 直写（dev 终端可见性补偿——评审 Note-2）。
+ * 背压保护（红线②）：消费侧只做同步转译 + 无等待 write，child console 调用永不被
+ * main 拖住；行残段跨 chunk 缓存拼接。
+ */
+export function wireChildPipes(
+  child: Pick<ChildProcess, 'stdout' | 'stderr'>,
+  sink?: (stream: 'stdout' | 'stderr', line: string) => void,
+): void {
+  const wire = (stream: NodeJS.ReadableStream | null, name: 'stdout' | 'stderr'): void => {
+    if (stream === null) return
+    let buffer = ''
+    stream.on('data', (chunk: Buffer | string) => {
+      buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+      let idx = buffer.indexOf('\n')
+      while (idx >= 0) {
+        const line = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 1)
+        deliverLine(name, line, sink)
+        idx = buffer.indexOf('\n')
+      }
+    })
+    stream.on('end', () => {
+      if (buffer !== '') deliverLine(name, buffer, sink)
+      buffer = ''
+    })
+  }
+  wire(child.stdout, 'stdout')
+  wire(child.stderr, 'stderr')
+}
+
+/** 单行投递：sink 转译 + process 回显（双写——评审 Note-2；回显失败静默） */
+function deliverLine(
+  name: 'stdout' | 'stderr',
+  line: string,
+  sink?: (stream: 'stdout' | 'stderr', line: string) => void,
+): void {
+  try {
+    sink?.(name, line)
+  } catch {
+    // sink 异常不反压管道消费（诊断面零阻塞——红线②同构）
+  }
+  try {
+    const out = name === 'stdout' ? process.stdout : process.stderr
+    out.write(`${line}\n`)
+  } catch {
+    // 回显失败静默
+  }
+}
+
 /** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals）。
  *  spawnOverrides 为 spawn 驱动面覆盖（不序列化入子进程 argv）：execPath = 派生可执行
  *  （缺省 process.execPath——Electron main 下即 electron.exe；3.4 冒烟经 node/vitest 驱动
@@ -261,6 +314,11 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
 export interface BootSpawnOverrides {
   readonly execPath?: string
   readonly childEntry?: string
+  /** child stdio 管道行消费缝（app-observability 1.2——main 读 pipe 转译为诊断事件 +
+   *  dev 终端回显；缺省 = 仅回显 process.stdout/stderr 直写，dev:debug 终端可见性不丢） */
+  readonly stdioSink?: (stream: 'stdout' | 'stderr', line: string) => void
+  /** main 侧诊断 ALS（trace_id 读数源——bridge rpc 调用显式携带到 child；不序列化入 argv） */
+  readonly diagAls?: import('../telemetry/diag-context.js').DiagContextStore
 }
 
 export async function bootDshHost(
@@ -270,9 +328,16 @@ export async function bootDshHost(
   const childEntry = spawnOptions.childEntry ?? resolveChildEntry(import.meta.url, options.resourcesDir)
   const child = spawn(spawnOptions.execPath ?? process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
+    // app-observability 1.2：inherit → pipe（评审 Blocker-2 修订——inherit 直通父 stdio
+    // 不可拦截，打包版无终端即全丢）。stdout/stderr 双管道 → main 逐行转译（stdioSink
+    // 缺省回显 process 直写，dev:debug 终端可见性不丢）。
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
-  const channel = createBridgeChannel(child) // 消息监听先于 ready 挂上（事件零丢失窗）
+  wireChildPipes(child, spawnOptions.stdioSink) // 回显 = appender 转写 + process.stdout 双写（Note-2）
+  const channel = createBridgeChannel(
+    child,
+    () => spawnOptions.diagAls?.getStore()?.traceId, // bridge 显式携带 trace_id（ALS 断点补偿）
+  ) // 消息监听先于 ready 挂上（事件零丢失窗）
   const ready = await waitForReady(child)
   const call = channel.call
   // fix-6 配对令牌轮换：child 每 TTL 推 pair 消息 → manifest 原位换新（getBootManifest

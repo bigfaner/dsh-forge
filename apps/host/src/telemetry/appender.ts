@@ -27,6 +27,8 @@ export interface DiagLine {
   projectId?: string
   sessionId?: string
   cwd?: string
+  /** 折叠计数（12③——被折叠掉的重复行数；未折叠缺席省略） */
+  repeat?: number
 }
 
 /** 运行计数（性能红线语义的观测面——内存态，零磁盘税） */
@@ -165,7 +167,7 @@ export class DiagAppender {
     const line: DiagLine = {
       timestamp: this.#now().toISOString(),
       level: payload.level,
-      trace_id: store?.traceId ?? '-',
+      trace_id: payload.traceId ?? store?.traceId ?? '-',
       process: payload.process,
       message: payload.message,
       event: payload.event,
@@ -178,6 +180,7 @@ export class DiagAppender {
     if (sessionId !== undefined) line.sessionId = sessionId
     const cwd = payload.cwd ?? store?.cwd
     if (cwd !== undefined) line.cwd = cwd
+    if (payload.repeat !== undefined) line.repeat = payload.repeat
     return line
   }
 

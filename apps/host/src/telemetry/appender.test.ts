@@ -26,6 +26,36 @@ function dayDate(day: string, time = '00:00:00.000'): Date {
 
 const BASE = { level: 'warn', process: 'child', event: 'e', message: 'm' } as const
 
+describe('trace_id / repeat 字段透传（app-observability 1.2）', () => {
+  it('payload.traceId 显式携带（child relay 跨进程链）优先于 ALS', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (file, data) => { void file; captured.push(data) } }),
+    })
+    appender.handleEvent({ ...BASE, traceId: 'tr-relay' })
+    await appender.idle()
+    expect(JSON.parse(captured[0]).trace_id).toBe('tr-relay')
+  })
+
+  it('repeat 字段透传入行；缺席省略', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.handleEvent({ ...BASE, repeat: 4 })
+    appender.handleEvent({ ...BASE })
+    await appender.idle()
+    expect(JSON.parse(captured[0]).repeat).toBe(4)
+    expect(JSON.parse(captured[1])).not.toHaveProperty('repeat')
+  })
+})
+
 /** 零维护替身驱动（维护面用真实 fs，写面按用例注入） */
 function driverWith(overrides: Partial<AppenderDriver>): AppenderDriver {
   return {

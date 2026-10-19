@@ -31,18 +31,18 @@ describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
     expect(lines.length).toBeLessThanOrEqual(130)
   })
 
-  it('import 仅限：electron、node:url、四子模块 barrel（编排面无其他依赖）', () => {
+  it('import 仅限：electron、node:url、五子模块 barrel（编排面无其他依赖——1.2 增 telemetry 诊断域装配 barrel）', () => {
     const imports = importSpecifiersOf(source)
     for (const specifier of imports) {
       expect(
         specifier === 'electron' ||
           specifier === 'node:url' ||
-          /^\.\/(?:boot|ipc|profile|window)\/index\.js$/.test(specifier),
+          /^\.\/(?:boot|ipc|profile|window|telemetry)\/index\.js$/.test(specifier),
         `main.ts 越界 import：${specifier}`,
       ).toBe(true)
     }
-    // 四子模块 barrel 全部被编排（缺一即未装配）
-    for (const barrel of ['./boot/index.js', './ipc/index.js', './profile/index.js', './window/index.js']) {
+    // 子模块 barrel 全部被编排（缺一即未装配）
+    for (const barrel of ['./boot/index.js', './ipc/index.js', './profile/index.js', './window/index.js', './telemetry/index.js']) {
       expect(imports, `main.ts 未编排 ${barrel}`).toContain(barrel)
     }
   })

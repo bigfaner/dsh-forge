@@ -24,3 +24,6 @@ export {
 } from './appender.js'
 export { LineFolder, foldKeyOf, type FoldedLine, type LineFolderOptions } from './line-folder.js'
 export { installMainFallbackHooks, type FallbackProcessLike } from './fallback.js'
+export { relayDiagOverBridge, parseDiagRelayLine } from './child-relay.js'
+export { attachGatewayFoldDiag, isFoldedInternalError, type GatewayFoldFace, type GatewayFoldEmit } from './gateway-fold.js'
+export { attachHostTelemetry, type HostTelemetry } from './host-wiring.js'

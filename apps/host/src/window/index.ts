@@ -3,3 +3,4 @@
 export * from './create.js'
 export * from './lifecycle.js'
 export * from './web-document.js'
+export { forwardRendererConsole, type ConsoleMessageFace } from './console-forward.js' // app-observability 1.2

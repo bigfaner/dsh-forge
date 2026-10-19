@@ -7,9 +7,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
+import { PassThrough } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
-import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, type BridgeChildFace } from './run.js'
+import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, wireChildPipes, type BridgeChildFace } from './run.js'
+import { dispatchRpc } from './bridge.js'
+import { createDiagContextStore, runWithDiagContext } from '../telemetry/diag-context.js'
 import { buildBootManifest } from './manifest.js'
 
 const MODULE_URL = 'file:///Z:/worktrees/redesign/apps/host/dist/boot/run.js'
@@ -380,5 +383,110 @@ describe('createBridgeChannel · RPC 结算面（既有语义回归——提取�
     const pending = channel.call('forgeTasks', 'taskStats', [])
     child.emit('close')
     await expect(pending).rejects.toThrow(/boot child 已退出/)
+  })
+
+  it('traceIdOf 在场 → rpc 请求显式携带 trace_id（bridge 显式传递——ALS 序列化断点补偿）；缺省零差异', () => {
+    const { child, sent } = fakeChild()
+    const channel = createBridgeChannel(child, () => 'tr-main')
+    channel.call('forgeTasks', 'listTasks', [{ projectId: 'p' }])
+    expect(sent[0]).toMatchObject({ type: 'rpc', id: 1, traceId: 'tr-main' })
+    const plain = createBridgeChannel(child)
+    plain.call('forgeTasks', 'listTasks', [])
+    expect(sent[1]).not.toHaveProperty('traceId')
+  })
+})
+
+describe('wireChildPipes（app-observability 1.2——inherit→pipe 回显转写）', () => {
+  function fakePipes() {
+    return { stdout: new PassThrough(), stderr: new PassThrough() }
+  }
+
+  it('stdout/stderr 逐行转译 sink + process 回显双写（Note-2）', async () => {
+    const pipes = fakePipes()
+    const received: Array<{ stream: string; line: string }> = []
+    const echoed: string[] = []
+    const originalWrite = process.stdout.write.bind(process.stdout)
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      echoed.push(String(chunk))
+      return true
+    }) as typeof process.stdout.write
+    try {
+      wireChildPipes(pipes as never, (stream, line) => received.push({ stream, line }))
+      pipes.stdout.write('out-1\nout-2\n')
+      pipes.stderr.write('err-1\n')
+      await new Promise((r) => setTimeout(r, 10))
+    } finally {
+      process.stdout.write = originalWrite
+    }
+    expect(received).toEqual([
+      { stream: 'stdout', line: 'out-1' },
+      { stream: 'stdout', line: 'out-2' },
+      { stream: 'stderr', line: 'err-1' },
+    ])
+    expect(echoed.join('')).toContain('out-1\n')
+    expect(echoed.join('')).toContain('out-2\n') // 回显双写（stdout 半边；stderr 回显同构走 process.stderr）
+  })
+
+  it('跨 chunk 残段拼接 + sink 异常不破管道消费', async () => {
+    const pipes = fakePipes()
+    const received: string[] = []
+    wireChildPipes(pipes as never, (_stream, line) => {
+      if (line === 'boom') throw new Error('sink fail')
+      received.push(line)
+    })
+    pipes.stdout.write('frag')
+    pipes.stdout.write('ment\nboom\nend')
+    pipes.stdout.end()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(received).toEqual(['fragment', 'end'])
+  })
+
+  it('stdio 配置 pin：inherit → pipe（评审 Blocker-2 修订语义——源码面断言）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./run.ts', import.meta.url), 'utf8')
+    expect(source).toContain("stdio: ['ignore', 'pipe', 'pipe', 'ipc']")
+    expect(source).not.toContain("'ignore', 'inherit', 'inherit', 'ipc'")
+  })
+})
+
+describe('dispatchRpc trace_id 显式携带复原（ALS 包裹——1.2 bridge 显式传递 child 半边）', () => {
+  it('request.traceId + als → handler 执行于诊断 ALS 上下文（trace_id 可读）', async () => {
+    const als = createDiagContextStore()
+    let seen: string | undefined
+    const result = await dispatchRpc(
+      { forgeTasks: { listTasks: () => { seen = als.getStore()?.traceId; return [] } } },
+      { type: 'rpc', id: 1, service: 'forgeTasks', method: 'listTasks', args: [], traceId: 'tr-bridge' },
+      als,
+    )
+    expect(result).toMatchObject({ ok: true })
+    expect(seen).toBe('tr-bridge')
+    expect(als.getStore()?.traceId).toBeUndefined()
+  })
+
+  it('als 或 traceId 缺席 → 原样零差异', async () => {
+    const als = createDiagContextStore()
+    const result = await dispatchRpc(
+      { forgeTasks: { listTasks: () => (als.getStore() === undefined ? 'bare' : 'wrapped') } },
+      { type: 'rpc', id: 1, service: 'forgeTasks', method: 'listTasks', args: [] },
+      als,
+    )
+    expect(result).toMatchObject({ ok: true, data: 'bare' })
+  })
+
+  it('ALS 包裹下 child 侧 emit → relay 行携同 trace_id（main↔child 全链单测）', async () => {
+    const { Context } = await import('@deepseek-ai/cordis')
+    const { emitDiag } = await import('../telemetry/diag-events.js')
+    const { relayDiagOverBridge, parseDiagRelayLine } = await import('../telemetry/child-relay.js')
+    const als = createDiagContextStore()
+    const ctx = new Context()
+    const lines: string[] = []
+    relayDiagOverBridge(ctx, (line) => lines.push(line), als)
+    await dispatchRpc(
+      { forgeTasks: { listTasks: () => { emitDiag(ctx, { level: 'warn', process: 'child', event: 'fail-open', message: 'm' }); return [] } } },
+      { type: 'rpc', id: 2, service: 'forgeTasks', method: 'listTasks', args: [], traceId: 'tr-e2e' },
+      als,
+    )
+    expect(parseDiagRelayLine(lines[0])).toMatchObject({ traceId: 'tr-e2e' })
+    expect(runWithDiagContext(als, { traceId: 'x' }, () => als.getStore()?.traceId)).toBe('x')
   })
 })

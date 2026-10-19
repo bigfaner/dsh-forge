@@ -787,15 +787,28 @@ export function interceptSessionSends(
 }
 
 /**
+ * 诊断 trace 缝（app-observability 1.2 链 B）：宿主 prompt dispatch 入口生成 trace_id +
+ * ALS 包裹——judge/reroute/原发送等同链派生调用与日志行自动携带。child 侧装配方注入。
+ */
+export interface PromptTraceSpan {
+  /** 新 trace_id（每次 prompt 派生链一枚） */
+  next(): string
+  /** 在 trace 上下文内执行整条 prompt 链 */
+  run<T>(traceId: string, sessionId: string | undefined, fn: () => Promise<T>): Promise<T>
+}
+
+/**
  * 1.30 第二层 prompt 拦截（必绑 + 重路由）——叠加现役 interceptSessionSends 之上（官方
  * commands.prompt 调用时属性查找：本层先于封存层执行，judge 'route' 时以 guard.reroute
  * 的 promise 替代原发送；dispose 恢复封存层包装 = 逆序撤销安全）。
  * 判读链异常 fail-open 放行；SessionCwdMismatchError（A5）与重路由失败显式拒绝。
+ * trace 缝注入（1.2 链 B）：prompt 入口生成 trace_id 并以 ALS 包裹整链（缺席 = 原样零差异）。
  */
 export function interceptRequiredBinding(
   controller: SessionControllerFace,
   guard: RequiredBindingGuardFace,
   warn: (message: string) => void = console.warn,
+  trace?: PromptTraceSpan,
 ): () => void {
   const original = (controller as unknown as Record<string, unknown>)['prompt']
   if (typeof original !== 'function') return () => {}
@@ -803,20 +816,24 @@ export function interceptRequiredBinding(
   const wrapped = async (...args: unknown[]): Promise<unknown> => {
     const request = args[0] as { sessionId?: unknown } | undefined
     const sessionId = typeof request?.sessionId === 'string' ? request.sessionId : undefined
-    if (sessionId !== undefined) {
-      try {
-        if ((await guard.judge(sessionId)) === 'route') {
-          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话；
-          // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
-          return guard.reroute(sessionId, request, ...args.slice(1))
+    const inner = async (): Promise<unknown> => {
+      if (sessionId !== undefined) {
+        try {
+          if ((await guard.judge(sessionId)) === 'route') {
+            // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话；
+            // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
+            return guard.reroute(sessionId, request, ...args.slice(1))
+          }
+        } catch (cause) {
+          const name = (cause as Error)?.name
+          if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
+          warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
         }
-      } catch (cause) {
-        const name = (cause as Error)?.name
-        if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
-        warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
       }
+      return bound(...args)
     }
-    return bound(...args)
+    if (trace !== undefined) return trace.run(trace.next(), sessionId, inner)
+    return inner()
   }
   ;(controller as unknown as Record<string, unknown>)['prompt'] = wrapped
   return () => {

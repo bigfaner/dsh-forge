@@ -33,6 +33,8 @@ import {
 } from '@dsh-forge/contracts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { TunnelProvider } from '../tunnel/index.js'
+import type { DiagContextStore } from '../telemetry/diag-context.js'
+import { runWithDiagContext } from '../telemetry/diag-context.js'
 import type { BootDshOptions } from './run.js'
 
 /**
@@ -70,13 +72,15 @@ export const BRIDGE_SERVICE_NAMES = [
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
 export type ServiceNamesCoverage = AssertNever<Exclude<BridgeServiceName, (typeof BRIDGE_SERVICE_NAMES)[number]>>
 
-/** 主 → 子：RPC 调用（id 供 rpc-result 关联回） */
+/** 主 → 子：RPC 调用（id 供 rpc-result 关联回；traceId = main 侧诊断 ALS 读数显式
+ *  携带——ALS 过 IPC 序列化断点，bridge 显式传递，child 侧 dispatchRpc 复原上下文） */
 export interface BridgeRpcRequest {
   readonly type: 'rpc'
   readonly id: number
   readonly service: BridgeServiceName
   readonly method: string
   readonly args: readonly unknown[]
+  readonly traceId?: string
 }
 
 /** 主 → 子：优雅关停（子侧 ProcessShutdown.shutdown(0)——内部 5s 升级强退） */
@@ -692,10 +696,13 @@ export function asEventMessage(message: unknown): BridgeEventMessage | undefined
 /**
  * 子侧 RPC 派发（纯函数——child.ts 以 process 消息驱动）。服务/方法不在场或执行
  * 异常均归一为 ok=false 结果消息（永不 reject——IPC 结果面单通道，调用侧按 error 结算）。
+ * als + request.traceId 在场 → 方法执行包进诊断 ALS（main↔child trace_id 显式携带复原；
+ * ALS 缺席 = 原样直调零差异）。
  */
 export async function dispatchRpc(
   services: Partial<Record<BridgeServiceName, object>>,
   request: BridgeRpcRequest,
+  als?: DiagContextStore,
 ): Promise<BridgeRpcResultMessage> {
   const target = services[request.service] as Record<string, unknown> | undefined
   const method = target?.[request.method]
@@ -707,14 +714,20 @@ export async function dispatchRpc(
       error: `bridge: ${request.service}.${request.method} 不在场（core/knowledge 插件行未装载？）`,
     }
   }
-  try {
-    const data = await (method as (...args: readonly unknown[]) => Promise<unknown> | unknown)(
-      ...request.args,
-    )
-    return { type: 'rpc-result', id: request.id, ok: true, data: encodeWire(data) }
-  } catch (cause) {
-    return { type: 'rpc-result', id: request.id, ok: false, error: serializeBridgeError(cause) }
+  const invoke = async (): Promise<BridgeRpcResultMessage> => {
+    try {
+      const data = await (method as (...args: readonly unknown[]) => Promise<unknown> | unknown)(
+        ...request.args,
+      )
+      return { type: 'rpc-result', id: request.id, ok: true, data: encodeWire(data) }
+    } catch (cause) {
+      return { type: 'rpc-result', id: request.id, ok: false, error: serializeBridgeError(cause) }
+    }
   }
+  if (als !== undefined && typeof request.traceId === 'string' && request.traceId !== '') {
+    return runWithDiagContext(als, { traceId: request.traceId }, invoke)
+  }
+  return invoke()
 }
 
 /**

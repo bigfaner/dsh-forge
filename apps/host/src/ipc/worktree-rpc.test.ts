@@ -28,6 +28,7 @@ import {
   type SessionControllerFace,
   type SessionPersistenceFace,
 } from './worktree-rpc.js'
+import { createDiagContextStore, runWithDiagContext } from '../telemetry/diag-context.js'
 
 /** 插件域扩展点桩（resolveProject 恒命中 C:/repo 主项目；worktreeDir 默认式样） */
 const fakeExt = {
@@ -983,5 +984,66 @@ describe('verifySendGuardInstalled（成功路径自证：prompt 已换 + guard 
     expect(() =>
       verifySendGuardInstalled(fakeController(undefined), { promptBefore: undefined, guardPresent: true }),
     ).toThrow(/留底缺席/)
+  })
+})
+
+describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——prompt 入口生成 + ALS 包裹）', () => {
+  const als = createDiagContextStore()
+
+  function rig(judgeResult: 'route' | 'pass' = 'pass') {
+    const seenTraceIds: Array<string | undefined> = []
+    const controller = {
+      prompt: async (request: { sessionId: string; text: string }) => {
+        seenTraceIds.push(als.getStore()?.traceId)
+        return { accepted: true, request }
+      },
+    } as unknown as SessionControllerFace
+    const guard = {
+      judge: async () => judgeResult,
+      reroute: async (sessionId: string) => {
+        seenTraceIds.push(als.getStore()?.traceId)
+        return { rerouted: sessionId }
+      },
+    } as unknown as Parameters<typeof interceptRequiredBinding>[1]
+    return { controller, guard, seenTraceIds }
+  }
+
+  it('prompt 入口生成 trace_id，judge/原发送同链 ALS 可读（一次 prompt 全链同 trace_id）', async () => {
+    const rig1 = rig()
+    const issued: string[] = []
+    const dispose = interceptRequiredBinding(rig1.controller, rig1.guard, console.warn, {
+      next: () => {
+        const id = `tr-${issued.length}`
+        issued.push(id)
+        return id
+      },
+      run: <T,>(traceId: string, _sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
+        runWithDiagContext(als, { traceId }, fn),
+    })
+    await rig1.controller.prompt({ sessionId: 's1', text: 'hello' })
+    dispose()
+    expect(issued).toEqual(['tr-0'])
+    expect(rig1.seenTraceIds).toEqual(['tr-0'])
+    expect(als.getStore()?.traceId).toBeUndefined() // 链外零残留
+  })
+
+  it('重路由派生调用同 trace_id（judge=route 分支）', async () => {
+    const rig2 = rig('route')
+    const dispose = interceptRequiredBinding(rig2.controller, rig2.guard, console.warn, {
+      next: () => 'tr-route',
+      run: <T,>(traceId: string, _s: string | undefined, fn: () => Promise<T>): Promise<T> =>
+        runWithDiagContext(als, { traceId }, fn),
+    })
+    await rig2.controller.prompt({ sessionId: 's2', text: 'hi' })
+    dispose()
+    expect(rig2.seenTraceIds).toEqual(['tr-route']) // route 分支：仅重路由派生调用（原发送被拒）
+  })
+
+  it('trace 缝缺席 → 原样零差异（ALS 零注入）', async () => {
+    const rig3 = rig()
+    const dispose = interceptRequiredBinding(rig3.controller, rig3.guard)
+    await rig3.controller.prompt({ sessionId: 's3', text: 'x' })
+    dispose()
+    expect(rig3.seenTraceIds).toEqual([undefined])
   })
 })

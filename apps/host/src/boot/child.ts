@@ -73,6 +73,14 @@ import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
 import { loadPresetPatches } from '../profile/presets.js'
 import { productPackagePresent } from '../profile/paths.js'
+import {
+  createDiagContextStore,
+  emitDiag,
+  relayDiagOverBridge,
+  runWithDiagContext,
+} from '../telemetry/index.js'
+import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
+import type { PromptTraceSpan } from '../ipc/worktree-rpc.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -115,6 +123,14 @@ const diag = (line: string): void => {
 
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），
 // boot 完成后置换为真处理器；listen 常驻不拆（消息零丢失窗）。
+/** trace_id 生成（child 侧——链 B prompt 入口；crypto.randomUUID 同 preload 口径） */
+const newTraceIdChild = (): string => {
+  try {
+    return globalThis.crypto.randomUUID()
+  } catch {
+    return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
+}
 let handleMessage: (message: MainToChildMessage) => void = () => {}
 process.on('message', (message: unknown) => {
   handleMessage(message as MainToChildMessage)
@@ -308,6 +324,65 @@ async function main(): Promise<void> {
     args: ['--no-open', '--port', String(options.port)],
   })
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
+  // app-observability 1.2：诊断事件域 child 半边接线——
+  //   ① relay：ctx 'diag/log' 事件 → 结构化 JSON 行经桥 diag 消息回 main（main 转译入
+  //      appender 单源；ALS trace_id 在订阅回调内同步读入行负载）。
+  //   ② ALS 单实例：prompt 拦截 trace 包裹 + bridge rpc 复原共用（链 B 进程内贯穿）。
+  //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
+  const diagAls = createDiagContextStore()
+  relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
+  const failOpenDiag = (line: string): void => {
+    diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'fail-open', message: line })
+    } catch {
+      // 诊断面异常不反压拦截层（红线①同构）
+    }
+  }
+  // 网关折叠点落栈（方案 3——官方缝 wrap，官方包零改制）：typertGateway 服务惰性解析
+  // （cordis Service 激活晚于本装配段可达——250ms 轮询，60s 放弃；形状不符 = 零挂接 fail-soft）。
+  {
+    let foldAttached = false
+    const attachFold = (): void => {
+      if (foldAttached) return
+      let gateway: GatewayFoldFace | undefined
+      try {
+        gateway = (ctx as unknown as { get(name: string): unknown }).get('typertGateway') as GatewayFoldFace | undefined
+      } catch {
+        gateway = undefined
+      }
+      if (
+        gateway === undefined ||
+        typeof (gateway as Record<string, unknown>)['prepareInvocation'] !== 'function' ||
+        typeof (gateway as Record<string, unknown>)['invokePrepared'] !== 'function'
+      ) {
+        return
+      }
+      foldAttached = true
+      attachGatewayFoldDiag(gateway, (error, phase) => {
+        try {
+          const err = error as Error | undefined
+          emitDiag(ctx, {
+            level: 'error',
+            process: 'child',
+            event: 'gateway-fold',
+            message: `[gateway/${phase}] ${String(err?.message ?? error)}`,
+            stack: err?.stack,
+          })
+        } catch {
+          // 诊断面异常不反压网关（红线①同构）
+        }
+      })
+      diag('[diag] 网关折叠点挂接完成（typertGateway wrap——gateway/internal 类错误原始栈落日志）')
+    }
+    const foldGate = setInterval(attachFold, 250)
+    foldGate.unref?.()
+    setTimeout(() => {
+      clearInterval(foldGate)
+      attachFold()
+    }, 60_000).unref?.()
+    attachFold()
+  }
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
   // fix-2：worktree RPC 域服务（gitWorktree 行在场时装配段构造——见下方装配块）
@@ -463,12 +538,18 @@ async function main(): Promise<void> {
         // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
         const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
         disposers.push(
-          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), (line) => diag(line)),
+          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), failOpenDiag),
         )
         // 1.30 第二层必绑拦截（A2/G2 拒绝 + 编排重路由；A5 cwd 漂移拒绝）——叠加封存层之上
         const guard = worktreeRpc.requiredBindingGuard()
         if (guard !== undefined) {
-          disposers.push(interceptRequiredBinding(sessionController, guard, (line) => diag(line)))
+          // app-observability 1.2 链 B：prompt dispatch 入口生成 trace_id + ALS 包裹整链
+          const traceSpan: PromptTraceSpan = {
+            next: () => newTraceIdChild(),
+            run: <T,>(traceId: string, sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
+              runWithDiagContext(diagAls, { traceId, sessionId }, fn),
+          }
+          disposers.push(interceptRequiredBinding(sessionController, guard, failOpenDiag, traceSpan))
         } else {
           diag('[git-worktree] 必绑拦截 guard 缺席（sessionPersistence 缺席）——仅封存层接线')
         }
@@ -966,7 +1047,7 @@ async function main(): Promise<void> {
       return
     }
     if (message?.type === 'rpc') {
-      void dispatchRpc(services, message).then(send)
+      void dispatchRpc(services, message, diagAls).then(send) // ALS 复原 main↔bridge 显式携带的 trace_id
     }
   }
 }

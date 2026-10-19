@@ -33,6 +33,15 @@ export interface PreloadEventFace {
   removeListener(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown
 }
 
+/** trace_id 生成（链 A 单点——preload invoke 面每次调用一枚；crypto.randomUUID 可注入面） */
+export function newTraceId(random: () => string = () => globalThis.crypto.randomUUID()): string {
+  try {
+    return random()
+  } catch {
+    return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
+}
+
 /**
  * forge:events/* 订阅（allowlist 守卫——FORGE_EVENT_CHANNELS 值域唯一源，未列通道
  * fail-loud 拒绝，与 invoke 面同形纪律）；载荷形状守卫（{ projectId } 只读——Hard Rule；
@@ -94,14 +103,16 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
      */
     pinConsent: (consent: boolean): Promise<void> =>
       invokeFace.invoke(PIN_CONSENT_CHANNEL, consent) as Promise<void>,
-    /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝） */
+    /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝）。
+     *  trace_id 单点生成（1.2 链 A——renderer 侧唯一生成点，三镜像消费面零改动）：
+     *  以第三参随 invoke 入 main，rpcEnvelope 信封单点读入诊断 ALS。 */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {
         throw new Error(
           `[preload] forge RPC 通道不在 allowlist，拒绝调用：${channel}（唯一源 = @dsh-forge/contracts channels；新通道须三处一体：contracts → web/rpc → core 域）`,
         )
       }
-      return invokeFace.invoke(channel, payload)
+      return invokeFace.invoke(channel, payload, newTraceId())
     },
     /**
      * forge:events/tasks-changed 订阅（3.1——Interface 7 推送面 preload 半边；
