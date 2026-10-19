@@ -11,6 +11,10 @@ describe('normalizeConsoleMessage（Electron 双形态归一）', () => {
     expect(normalizeConsoleMessage([{ level: 'info', message: 'm' }])).toBeUndefined()
     expect(normalizeConsoleMessage([{ level: 'log', message: 'm' }])).toBeUndefined()
   })
+  it('bug 84b5216a：Electron 真机新形 level 枚举 warning（非 warn）→ 归一 warn；debug 拒绝', () => {
+    expect(normalizeConsoleMessage([{ level: 'warning', message: 'w' }])).toEqual({ level: 'warn', message: 'w' })
+    expect(normalizeConsoleMessage([{ level: 'debug', message: 'd' }])).toBeUndefined()
+  })
   it('旧形位置参数：2=warn 3=error；1=info 拒绝', () => {
     expect(normalizeConsoleMessage([{ seed: true }, 2, 'w'])).toEqual({ level: 'warn', message: 'w' })
     expect(normalizeConsoleMessage([{ seed: true }, 3, 'e'])).toEqual({ level: 'error', message: 'e' })
@@ -57,6 +61,17 @@ describe('forwardRendererConsole（折叠计数 + 诊断域 emit）', () => {
     h.forward.flush()
     expect(h.emitted).toHaveLength(1)
     expect(h.emitted[0].repeat).toBe(4)
+  })
+
+  it('bug 84b5216a：真机 warning closer 行收口先行 error 折叠组（无须显式 flush）', () => {
+    const h = harness()
+    h.listeners[0]?.({ level: 'error', message: 'err-mark' })
+    h.listeners[0]?.({ level: 'warning', message: 'closer-mark' })
+    expect(h.emitted).toHaveLength(1)
+    expect(h.emitted[0]).toMatchObject({ level: 'error', message: 'err-mark' })
+    h.forward.flush()
+    expect(h.emitted).toHaveLength(2)
+    expect(h.emitted[1]).toMatchObject({ level: 'warn', message: 'closer-mark' })
   })
 
   it('异文切换 / 越窗 → 分组收口', () => {

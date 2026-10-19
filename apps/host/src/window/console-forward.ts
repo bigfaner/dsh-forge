@@ -17,7 +17,10 @@ export function normalizeConsoleMessage(args: readonly unknown[]): { level: 'war
   if (typeof first === 'object' && first !== null && typeof first['level'] === 'string') {
     const level = first['level']
     const message = first['message']
-    if ((level === 'warn' || level === 'error') && typeof message === 'string') return { level, message }
+    // Electron 真机新形 level 枚举 = info|warning|error|debug（bug 84b5216a：'warning' 是
+    // warn 的真机拼写——仅认 'warn' 令真机 warn 行全数丢弃、折叠组无异文收口行）
+    const warnLevel = level === 'warn' || level === 'warning'
+    if ((warnLevel || level === 'error') && typeof message === 'string') return { level: warnLevel ? 'warn' : 'error', message }
     return undefined
   }
   // 旧形：(event, level:number(1=info 2=warn 3=error), message:string, ...)

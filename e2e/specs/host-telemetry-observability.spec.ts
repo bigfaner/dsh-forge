@@ -213,15 +213,19 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 
     // ── 路②d + ③：prompt 旅程（注册 → 芯片选工作区 → 键入；零凭据形态模型失败可接受
     //    ——user 消息落账不受影响，1-29 同口径） ──
     await registerProject(page, wsDir, 'telem-obs-ws')
+    // ── ③ 派生失败注入：夹具仓库 checkout --detach——必须在芯片点选**之前**（bug 7b9463df
+    //    根因修订：W3 sessions.create wrap 在点选时点预铸采纳会话——detach 晚于点选时预铸
+    //    已带 attach 绑定，judge 读到 binding ≠ null 短路 'pass'，重路由径结构性零触发）。
+    //    detach 前置 → 预铸 sessionCreate 派生失败（分支解析 '' → requireNonEmpty 拒绝）→
+    //    client wrap ④ fail-open 回官方原流（无绑定 blank 会话）→ 发送 → 必绑 judge 'route'
+    //    （git 项目 × blank × 无绑定）→ reroute 派生 sessionCreate 同因抛错 → 拦截层 catch 补
+    //    fail-open 取证 emit（ALS 上下文内——行带链 B trace_id）。发送被拒（composer 错误面）
+    //    属预期——注入旅程不要求落盘，fail-open 行即取证。 ──
+    execFileSync('git', ['checkout', '--detach'], { cwd: wsDir, stdio: 'pipe' })
     await selectWorkspaceViaChip(page, 'telem-obs-ws')
 
-    // ── ③ 派生失败注入：夹具仓库 checkout --detach → 重路由派生 sessionCreate 必然抛错
-    //    （listWorktrees 主树行 detached → branch null → 预铸 requireNonEmpty 拒绝——不依赖
-    //    选中态，首两轮回跑实证选中树注入会被 UI hero 推送覆盖）→ 发送 → 必绑 judge 'route'
-    //   （git 项目 × blank 会话 × 无绑定）→ reroute 派生失败 → 拦截层显式拒绝前 emit
-    //    fail-open（ALS 上下文内——行带链 B trace_id）。发送被拒（composer 错误面）属预期
-    //    ——注入旅程不要求落盘，fail-open 行即取证。 ──
-    execFileSync('git', ['checkout', '--detach'], { cwd: wsDir, stdio: 'pipe' })
+    //    fail-open（ALS 上下文内——行带链 B trace_id）——detach 前置见上方 ③ 注入块；发送 →
+    //    必绑 judge 'route' → reroute 派生失败 → fail-open 行即取证。 ──
     await typeDraft(page, MARK_PROMPT)
     const tInject = Date.now() - 1_000 // 注入发送窗口起点
     await clickSend(page)
