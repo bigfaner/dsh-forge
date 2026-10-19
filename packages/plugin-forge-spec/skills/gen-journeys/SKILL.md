@@ -34,7 +34,7 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
 
 ## 表面处理
 
-本环境没有表面注册表 CLI。从仓库自身探测表面：`docs/conventions/testing/` 结构（逐表面约定目录）、既有 journey 的 `surface_types`、feature 任务的表面字段。支持类型：`web`、`api`、`cli`、`tui`、`mobile`。绝不猜——含糊且交互式 → 问用户；派发任务语境 → 从任务简报推导并记录选择。每条 Journey 声明 `surface_types` + `surface_keys`；全部 Journey 的并集必须覆盖每个已配置的表面类型与键。
+本环境没有表面注册表 CLI。按测试表面判定纪律从仓库自身事实探测（正本：`docs/conventions/testing-surfaces.md`——判定来源按序探测、绝不猜）。支持类型：`web`、`api`、`cli`、`tui`、`mobile`。含糊且交互式 → 问用户；派发任务语境 → 从任务简报推导并记录选择。每条 Journey 声明 `surface_types` + `surface_keys`；全部 Journey 的并集必须覆盖每个已配置的表面类型与键。
 
 ## 工作流
 

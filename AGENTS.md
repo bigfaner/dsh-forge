@@ -49,6 +49,7 @@
 | test | `npx vitest run <受影响的测试文件或目录>` | **针对性执行受影响功能的单元测试，不跑全局**；契约测试用 `pnpm test:contract`；e2e 用 `pnpm test:e2e` |
 
 - **test 纪律**：`pnpm test`（全局 `vitest run`）只作参考口径；agent 执行质量门时按本次改动定位受影响的测试文件/项目，针对性运行；全局跑仅在跨包重构或收口验收时使用。
+- **测试表面判定**：test-gen / test-run 全链判定与消费表面（web/api/cli/tui/mobile）一律从仓库自身事实按序探测（journey frontmatter → testing 约定目录 → tests/ 布局），绝不猜；零命中或证据矛盾即阻断上报。正本见 `docs/conventions/testing-surfaces.md`。
 
 ## 5. Git 与提交
 
