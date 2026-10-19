@@ -98,6 +98,12 @@ export function hostRoot(): string {
   return dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 }
 
+/** dev 生境判定（app-observability fix-1 causeStack 生境注入同源判据）——isDevForm 薄委托
+ *  （单源，判据同式：DSH_FORGE_DEV_PROFILE 真值 = dev）。 */
+export function isDevProfile(env: Pick<PathEnv, 'DSH_FORGE_DEV_PROFILE'>): boolean {
+  return isDevForm(env)
+}
+
 export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
   const dev = isDevForm(env)
   const profileDir =

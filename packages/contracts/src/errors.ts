@@ -62,11 +62,14 @@ export type ErrorCode = (typeof ERROR_CODES)[number]
 
 /** RPC 边界错误序列化形状（Propagation Strategy：`{ code, message, data }`）。
  *  data = 结构化附载（workspaceId / projectId / 失败原因 / 处置结果等）；UI 按 code 映射状态。
- *  M2 三码持结构化 data 载荷（下方接口）；其余码 data 缺省或自由附载。 */
+ *  M2 三码持结构化 data 载荷（下方接口）；其余码 data 缺省或自由附载。
+ *  causeStack = dev 生境（DSH_FORGE_DEV_PROFILE）专用：错误回包附原始栈（DevTools Network
+ *  面板点开即得；app-observability 方案 6）——生产生境恒缺席（零税）。 */
 export interface RpcErrorPayload {
   code: ErrorCode
   message: string
   data?: unknown
+  causeStack?: string
 }
 
 /** ERR_DEPENDENCIES_UNMET data 载荷：claim 守卫前置未满足清单（自然键 + 当前状态） */

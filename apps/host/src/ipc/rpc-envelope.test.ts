@@ -177,6 +177,45 @@ describe('rpcEnvelope 诊断埋点（app-observability 1.2 单点 emit）', () =
   })
 })
 
+describe('rpcEnvelope causeStack 生境注入（app-observability fix-1 方案 6）', () => {
+  afterEach(() => configureRpcEnvelopeDiag(undefined))
+
+  it('dev 生境（causeStack: true）→ typed 错误回包附原始栈（栈帧可判型）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {}, causeStack: true })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect(result.error.causeStack).toEqual(expect.stringContaining('WorkspaceCreateError'))
+  })
+
+  it('生产生境（缺省 false）→ 回包无 causeStack（零税）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {} })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect('causeStack' in result.error).toBe(false)
+    expect(JSON.parse(JSON.stringify(result.error)).causeStack).toBeUndefined()
+  })
+
+  it('configure(undefined) 重置 → 生境门随之关闭（零税复位）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {}, causeStack: true })
+    configureRpcEnvelopeDiag(undefined)
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect('causeStack' in result.error).toBe(false)
+  })
+})
+
 describe('桥重建 Error 判型（fix-28：child 形态 typed error 过桥 → 信封带内保真）', () => {
   it('rebuildBridgeError(结构化) → serializeRpcError 判型通过 → RpcErr 信封（code/message/data 保真）', async () => {
     const wire = {

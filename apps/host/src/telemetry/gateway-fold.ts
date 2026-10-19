@@ -29,14 +29,41 @@ export interface GatewayFoldEmit {
   (error: unknown, phase: 'unary' | 'stream'): void
 }
 
+/** 挂接选项（fix-1）：causeStack = dev 生境（DSH_FORGE_DEV_PROFILE）回包附原始栈——
+ *  折叠面 Error 改以结构同型 Remote 承载 details.causeStack 重抛/透传，官方 rpcFailure
+ *  经 remoteErrorOf 保真编码（gateway/internal 码与 message 逐字不变）；生产缺省 = 官方
+ *  行为逐字不变（零税）。 */
+export interface GatewayFoldOptions {
+  causeStack?: boolean
+}
+
+/**
+ * dev causeStack 改写（方案 6）：折叠面 Error → 结构同型 Remote（isDSHRemoteError 标记 +
+ * gateway/internal 码 + details.causeStack）——官方 rpcFailure details 原样透传到回包；
+ * 非 Error 原样返回（无栈可附）。生产不调用本函数（官方折叠行为零差异）。
+ */
+export function withCauseStack(error: unknown): unknown {
+  if (!(error instanceof Error)) return error
+  return {
+    isDSHRemoteError: true,
+    code: 'gateway/internal',
+    message: error.message,
+    details: { causeStack: error.stack },
+  }
+}
+
 /**
  * 挂接网关折叠点（实例方法 wrap + wireStream.failure 属性替换；返回撤销面——恢复原
- * 引用）。emit 只对非 RemoteError（gateway/internal 折叠面）触发。
+ * 引用）。emit 只对非 RemoteError（gateway/internal 折叠面）触发。options.causeStack
+ * （dev 生境）= 折叠面 Error 改写为 details.causeStack 承载后重抛/透传。
  */
 export function attachGatewayFoldDiag(
   gateway: GatewayFoldFace,
   emit: GatewayFoldEmit,
+  options: GatewayFoldOptions = {},
 ): () => void {
+  const causeStack = options.causeStack === true
+  const relay = (error: unknown): unknown => (causeStack && isFoldedInternalError(error) ? withCauseStack(error) : error)
   const undo: Array<() => void> = []
   const wrapMethod = (name: 'prepareInvocation' | 'invokePrepared', phase: 'unary'): void => {
     const original = gateway[name]
@@ -47,7 +74,7 @@ export function attachGatewayFoldDiag(
         return await bound(...args)
       } catch (error) {
         if (isFoldedInternalError(error)) emit(error, phase)
-        throw error
+        throw relay(error)
       }
     }
     ;(gateway as Record<string, unknown>)[name] = wrapped
@@ -62,7 +89,7 @@ export function attachGatewayFoldDiag(
     const originalFailure = failure as (error: unknown) => unknown
     gateway.wireStream.failure = (error: unknown): unknown => {
       if (isFoldedInternalError(error)) emit(error, 'stream')
-      return originalFailure(error)
+      return originalFailure(relay(error))
     }
     undo.push(() => {
       gateway.wireStream!.failure = originalFailure

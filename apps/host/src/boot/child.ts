@@ -71,6 +71,7 @@ import {
 import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveWebDistDir } from '../window/web-document.js'
+import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
 import { productPackagePresent } from '../profile/paths.js'
 import {
@@ -359,7 +360,9 @@ async function main(): Promise<void> {
         return
       }
       foldAttached = true
-      attachGatewayFoldDiag(gateway, (error, phase) => {
+      attachGatewayFoldDiag(
+        gateway,
+        (error, phase) => {
         try {
           const err = error as Error | undefined
           emitDiag(ctx, {
@@ -372,7 +375,7 @@ async function main(): Promise<void> {
         } catch {
           // 诊断面异常不反压网关（红线①同构）
         }
-      })
+      }, { causeStack: isDevProfile(process.env) }) // dev 生境错误回包 details 附原始栈（fix-1 方案 6）
       diag('[diag] 网关折叠点挂接完成（typertGateway wrap——gateway/internal 类错误原始栈落日志）')
     }
     const foldGate = setInterval(attachFold, 250)

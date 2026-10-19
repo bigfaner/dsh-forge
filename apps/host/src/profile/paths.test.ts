@@ -3,7 +3,17 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hostRoot, isPackagedForm, productPackagePresent, resolveHostPaths } from './paths.js'
+import { hostRoot, isDevProfile, isPackagedForm, productPackagePresent, resolveHostPaths } from './paths.js'
+
+describe('isDevProfile（fix-1 causeStack 生境门同源判据）', () => {
+  it("真值/'0' 语义与 resolveHostPaths form 判定同式", () => {
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: 'dev' })).toBe(true)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '1' })).toBe(true)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: undefined })).toBe(false)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '' })).toBe(false)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '0' })).toBe(false)
+  })
+})
 
 describe('resolveHostPaths 双形态', () => {
   it('packaged 默认：profile = {userData}/profile，dshHome 缺省隔离 {userData}/dsh-home（fix-26）', () => {

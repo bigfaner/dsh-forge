@@ -18,14 +18,18 @@ export type RpcDomainHandler<Req, Res> = (payload: Req) => Promise<Res> | Res
 /** 诊断埋点出口（main 装配单点注入——emitDiag(ctx, payload)；缺省零埋点不抛） */
 export type RpcEnvelopeDiagSink = (payload: DiagEventPayload) => void
 
-/** 信封诊断装配缝（ALS 读 trace_id + emit 出口——main.ts 装配一次；测试可重置） */
+/** 信封诊断装配缝（ALS 读 trace_id + emit 出口 + causeStack 生境门——main.ts 装配一次；
+ *  测试可重置）。causeStack = dev 生境（DSH_FORGE_DEV_PROFILE）回包附原始栈（app-observability
+ *  方案 6）——生产 false 恒缺席（零税）。 */
 let diagAls: DiagContextStore | undefined
 let diagSink: RpcEnvelopeDiagSink | undefined
+let causeStackEnabled = false
 
 /** 装配信封诊断缝（main.ts 单点调用；undefined 出口 = 卸载面，测试重置用） */
-export function configureRpcEnvelopeDiag(config: { als?: DiagContextStore; sink?: RpcEnvelopeDiagSink } | undefined): void {
+export function configureRpcEnvelopeDiag(config: { als?: DiagContextStore; sink?: RpcEnvelopeDiagSink; causeStack?: boolean } | undefined): void {
   diagAls = config?.als
   diagSink = config?.sink
+  causeStackEnabled = config?.causeStack === true
 }
 
 /** 埋点构造（信封内单点——两路错误同构；emit 异常吞掉，埋点永不破信封语义） */
@@ -76,6 +80,10 @@ export function rpcEnvelope<Req, Res>(
         emitHandlerError(error)
         const payload = serializeRpcError(error)
         if (payload === undefined) throw error
+        // dev causeStack（方案 6）：信封 emit 就近附栈——契约字段贯通，生产生境零税
+        if (causeStackEnabled && error instanceof Error && error.stack !== undefined) {
+          payload.causeStack = error.stack
+        }
         return { ok: false, error: payload }
       }
     }

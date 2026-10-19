@@ -31,8 +31,9 @@ export interface HostTelemetry {
   readonly translateRelayLine: (line: string) => DiagEventPayload | undefined
 }
 
-/** 装配（userData = {app-data}/dsh-forge——logs 目录 = {userData}/logs） */
-export function attachHostTelemetry(userData: string): HostTelemetry {
+/** 装配（userData = {app-data}/dsh-forge——logs 目录 = {userData}/logs；options.causeStack =
+ *  dev 生境（paths.form === 'dev'）错误回包附原始栈门——fix-1 方案 6，生产缺省零税） */
+export function attachHostTelemetry(userData: string, options: { causeStack?: boolean } = {}): HostTelemetry {
   const logsDir = join(userData, 'logs')
   try {
     mkdirSync(logsDir, { recursive: true })
@@ -50,7 +51,7 @@ export function attachHostTelemetry(userData: string): HostTelemetry {
       // 诊断面异常不反压业务（红线①同构）
     }
   }
-  configureRpcEnvelopeDiag({ als: diagAls, sink: emit }) // ipc-handler 单点埋点 + 链 A ALS
+  configureRpcEnvelopeDiag({ als: diagAls, sink: emit, causeStack: options.causeStack === true }) // ipc-handler 单点埋点 + 链 A ALS + dev causeStack
   return {
     diagAls,
     appender,

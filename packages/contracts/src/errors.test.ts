@@ -7,6 +7,7 @@ import {
   type CycleDetectedData,
   type DependenciesUnmetData,
   ERROR_CODES,
+  type RpcErrorPayload,
   type SuspectedMoveData,
   type TestEvidenceRequiredData,
   type UnmetDependency,
@@ -140,5 +141,23 @@ describe('AC3 三码 data 载荷形状（Implementation Notes：未满足清单 
     expectTypeOf<SuspectedMoveData>().toHaveProperty('guidance')
     expectTypeOf<SuspectedMoveData>().toHaveProperty('existingDir')
     expectTypeOf<SuspectedMoveData>().toHaveProperty('derivedDir')
+  })
+})
+
+describe('RpcErrorPayload.causeStack（app-observability fix-1 dev 生境字段）', () => {
+  it('causeStack 可选 string 字段：dev 生境附载（序列化形状保真）', () => {
+    const payload: RpcErrorPayload = {
+      code: 'ERR_PROJECT_WRITE',
+      message: '应用库 projects 行写入失败',
+      causeStack: 'Error: boom\n    at Object.<anonymous> (app.ts:1:1)',
+    }
+    expect(payload.causeStack).toContain('app.ts:1:1')
+    expectTypeOf<RpcErrorPayload['causeStack']>().toEqualTypeOf<string | undefined>()
+  })
+
+  it('causeStack 缺席 = 生产零税形态（JSON 序列化恒省略）', () => {
+    const payload: RpcErrorPayload = { code: 'ERR_COMPENSATION', message: 'm', data: { a: 1 } }
+    expect('causeStack' in payload).toBe(false)
+    expect(JSON.parse(JSON.stringify(payload))).toEqual({ code: 'ERR_COMPENSATION', message: 'm', data: { a: 1 } })
   })
 })
