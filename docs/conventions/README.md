@@ -18,3 +18,4 @@ domains: [index, convention]
 | [rpc-and-contracts.md](./rpc-and-contracts.md) | RPC 通道与契约约定 |
 | [styling.md](./styling.md) | 样式约定 |
 | [task-domain.md](./task-domain.md) | 任务域约定 |
+| [testing/](./testing/core.md) | 测试策略与约束（应用向 forge 测试链声明的正本） |

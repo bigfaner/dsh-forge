@@ -49,6 +49,7 @@
 | test | `npx vitest run <受影响的测试文件或目录>` | **针对性执行受影响功能的单元测试，不跑全局**；契约测试用 `pnpm test:contract`；e2e 用 `pnpm test:e2e` |
 
 - **test 纪律**：`pnpm test`（全局 `vitest run`）只作参考口径；agent 执行质量门时按本次改动定位受影响的测试文件/项目，针对性运行；全局跑仅在跨包重构或收口验收时使用。
+- **测试策略正本**：测试分层、执行树布局、旅程/脚本目录约定与环境约束见 `docs/conventions/testing/core.md`——应用向 forge 测试链（gen-journeys → gen-contracts → gen-test-scripts → run-tests）声明的策略与约束；技能在仓内探测该目录，在场即装载遵循。
 
 ## 5. Git 与提交
 
