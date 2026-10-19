@@ -18,4 +18,3 @@ domains: [index, convention]
 | [rpc-and-contracts.md](./rpc-and-contracts.md) | RPC 通道与契约约定 |
 | [styling.md](./styling.md) | 样式约定 |
 | [task-domain.md](./task-domain.md) | 任务域约定 |
-| [testing-surfaces.md](./testing-surfaces.md) | 测试表面判定纪律 |
