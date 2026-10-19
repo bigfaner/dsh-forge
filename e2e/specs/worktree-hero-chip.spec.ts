@@ -73,13 +73,16 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
     if (typeof preseedId !== 'string') {
       throw new Error(`sessionCreate 直调未返回 sessionId：${JSON.stringify(preseed)?.slice(0, 400)}`)
     }
+    // AC（1.16）：预铸挂靠落盘基线（attachedSessionsOf 统计持久绑定——预铸永久在账不可归零）
+    let attachedBaseline = -1
     await expect
       .poll(async () => {
         const raw = (await forgeRpc(page, 'forge:worktree/checks', {
           projectRoot: wsDir,
           path: wsDir,
         })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
-        return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+        attachedBaseline = raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
+        return attachedBaseline
       }, { timeout: 30_000, message: 'checks 未读到预铸挂靠会话（预铸挂靠事件未落盘）' })
       .toBeGreaterThanOrEqual(1)
     // AC（1.16）：seal 判定读到预铸挂靠事件（绑定回读）
@@ -113,8 +116,8 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
       })
       .toMatch(/·/)
     expect(await backfilled.first().textContent()).not.toContain('选择 worktree…')
-    // AC（1.29 点选纯选中态）：选择确认零会话副作用——checks attachedSessions 恒 0
-    //（1.14「点选即建会话」即时编排语义废除；挂靠会话只在首条消息时点产生）
+    // AC（1.29/1.92 点选纯选中态）：选择确认零会话副作用——attachedSessions 相对预铸基线零增量
+    //（点选=纯选中态，非绝对零：预铸挂靠绑定持久在账，语义=零新增挂靠）
     await expect
       .poll(async () => {
         const raw = (await forgeRpc(page, 'forge:worktree/checks', {
@@ -122,8 +125,8 @@ test('fix-4 UI：注册 git 仓后 hero 第二 chip 真机可见，弹层列主�
           path: wsDir,
         })) as { attachedSessions?: number; data?: { attachedSessions?: number } } | null
         return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
-      }, { timeout: 30_000, message: '点选后不应产生挂靠会话（纯选中态）' })
-      .toBe(0)
+      }, { timeout: 30_000, message: '点选后不应新增挂靠会话（纯选中态——相对预铸基线零增量）' })
+      .toBe(attachedBaseline)
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
