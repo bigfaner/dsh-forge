@@ -156,8 +156,8 @@ describe('createE2eBaselineFace（宿主装配面——真子进程）', () => {
 
   it('timeout 整树回收：孙进程不残留（shell 层 kill 孤儿收口——真机形态）', async () => {
     const innerPidFile = join(dir, 'inner.pid')
-    const bootstrap = `require('node:fs').writeFileSync(${JSON.stringify(innerPidFile)},String(process.pid));setInterval(()=>{},1000)`
-    const script = `require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(bootstrap)}],{stdio:'ignore'});setInterval(()=>{},1000)`
+    const bootstrap = `require('node:fs').writeFileSync(${JSON.stringify(innerPidFile)},String(process.pid));setInterval(()=>{},1000)` // audit-allow：测试夹具子进程保活心跳（timeout 整树回收用例的被回收对象），非 forge 状态投影轮询——dispatch-loop-hardening 面既有基线红灯豁免（app-observability fix-6）
+    const script = `require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(bootstrap)}],{stdio:'ignore'});setInterval(()=>{},1000)` // audit-allow：同上——夹具外层保活，等 kill 验证整树回收
     const face = createE2eBaselineFace({
       cwd: dir,
       command: process.execPath,
