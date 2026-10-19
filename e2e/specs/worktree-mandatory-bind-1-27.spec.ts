@@ -76,7 +76,9 @@ async function acknowledgeUntilSettled(page: Page): Promise<void> {
       .catch(() => false)
     if (!appeared) return
     const dialog = heroRiskDialog(page)
-    const box = dialog.locator('input[type="checkbox"]')
+    // 1.35 双勾选歧义消解（4c797b2c 同款）：知悉勾选按可访问名锚定（input[type=checkbox]
+    // 无差别定位会撞「不再提示」第二勾选 strict mode 歧义）
+    const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
     await expect(box).toBeVisible()
     await box.check()
     await dialog.getByRole('button', { name: '确认继续' }).click()

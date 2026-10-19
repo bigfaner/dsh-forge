@@ -10,6 +10,7 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
+  unambiguousOrchestrationRootOf,
   riskDialogNeeded,
   riskLatchConfirm,
   riskLatchFailureClear,
@@ -18,6 +19,7 @@ import {
   worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
+  worktreeReuseBindDegradedNotice,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -99,6 +101,23 @@ describe('selectedProjectRootStrictOf（A7——编排源与渲染兜底分离�
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-native-unbound')).toBeNull()
     expect(selectedProjectRootStrictOf(PROJECTS, undefined)).toBeNull()
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-3')).toBeNull() // archived 亦不充当编排源
+  })
+})
+
+describe('unambiguousOrchestrationRootOf（A7 细化——selectedId 未命中时的唯一活跃项目兜底）', () => {
+  it('活跃项目恰一个 → 该项目 ws_path（单项目零歧义——chip 渲染根即唯一绑定候选，bug 84edc6ff）', () => {
+    expect(unambiguousOrchestrationRootOf([project({ id: 'p9', workspaceId: 'w-9', name: 'solo' })])).toBe('C:\\ws\\p9')
+  })
+
+  it('多个活跃项目 → null（歧义兜底禁止泄漏为编排源——A7 跨项目错绑防线保留）', () => {
+    expect(unambiguousOrchestrationRootOf(PROJECTS)).toBeNull()
+  })
+
+  it('零活跃项目 / 唯一活跃项无 ws_path → null', () => {
+    expect(unambiguousOrchestrationRootOf([])).toBeNull()
+    expect(unambiguousOrchestrationRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })])).toBeNull()
+    const noPath = { ...project({ id: 'p8', workspaceId: 'w-8', name: 'nop' }), wsPath: '' }
+    expect(unambiguousOrchestrationRootOf([noPath])).toBeNull()
   })
 })
 
@@ -237,6 +256,16 @@ describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
 
   it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
     expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
+  })
+})
+
+// A8——reuse 补绑定失败降级提示文案（不落「将落主树」假象——降级产物自带绑定）。
+describe('worktreeReuseBindDegradedNotice（A8 降级语义）', () => {
+  it('文案含降级语义与原因（补绑定失败 → 降级新建挂靠会话，非放弃编排）', () => {
+    const text = worktreeReuseBindDegradedNotice('seal rpc timeout')
+    expect(text).toContain('补绑定失败')
+    expect(text).toContain('seal rpc timeout')
+    expect(text).toContain('降级')
   })
 })
 

@@ -64,7 +64,8 @@ const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分�
 
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  const box = dialog.locator('input[type="checkbox"]')
+  // 1.35 双勾选歧义消解（4c797b2c 同款）：知悉勾选按可访问名锚定
+  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()

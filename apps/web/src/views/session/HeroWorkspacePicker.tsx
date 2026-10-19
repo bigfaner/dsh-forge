@@ -26,8 +26,11 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
+  unambiguousOrchestrationRootOf,
+  worktreeCwdKey,
   worktreeFaceUnavailableNotice,
   worktreeOrchestrationNotice,
+  worktreeReuseBindDegradedNotice,
   worktreeUnselectedProjectNotice,
   type HeroWorktreeFace,
   type WorktreeOrchestrateFn,
@@ -55,12 +58,12 @@ const noticeText = (error: unknown): string =>
   error instanceof Error && error.message !== '' ? error.message : String(error)
 
 /**
- * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7 语义；bug e678ca5f 主行 reuse 零补绑定）：
+ * 挂靠编排缝（1.16 预铸采纳单 RPC 一体面；1.31 A7/A8 语义；bug 84edc6ff 主行 reuse 绑定判读）：
  *   · A7——orchestrateRoot null（selectedId 无命中项目行）→ 提示 + null：渲染兜底
  *     （selectedProjectRootOf fallback）仅供 chip 渲染，禁止泄漏为绑定数据源；
- *   · 主行/树行 blank reuse 均直接打开：活跃会话写句柄被官方 agent loop 持有（单写者
- *     铁律），客户端补写挂靠事件结构性必败——绑定正确性由 host 侧必绑拦截单点保证
- *     （judge 'route' → 预铸采纳重路由，挂靠事件随预铸落盘）。
+ *   · 1.27 必绑保留：主行 reuse 命中先 seal 判读——未绑定/判读失败 → 降级 sessionCreate
+ *     直建（预铸 seq0 自带绑定，单写者安全；客户端补写挂靠事件结构性必败故不重试 attach）；
+ *   · 树行 blank reuse 直接打开：树行绑定由首条消息时点 host 必绑拦截单点保证。
  */
 export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): WorktreeOrchestrateFn {
   return (path: string): Promise<string | null> => {
@@ -75,10 +78,24 @@ export function createWorktreeOrchestrator(deps: WorktreeOrchestrationDeps): Wor
         return null
       }
       const rpc = makeRpc()
-      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构；
-      // bug e678ca5f：零补绑定——首条消息时点由 host 必绑拦截保证绑定）
+      const isMainPath = worktreeCwdKey(path) === worktreeCwdKey(orchestrateRoot)
+      // arm 重复消费不重复建会话：该 cwd 已有空白会话 → 复用（官方 reuseOrCreateBlank 同构）。
+      // bug 84edc6ff：主行 reuse 必须先 seal 判读绑定——8ea534cf 删客户端补绑定是对的
+      // （活跃会话写句柄被官方持有，attach 结构性必败），但把无绑定 blank 直接作为 arm
+      // 产物打开，丢了 1.27 必绑契约（host 拦截只在发送时点兜底）。主行未绑定 → fail-closed
+      // 降级 sessionCreate 直建（预铸 seq0 自带绑定，单写者安全）；已绑定 → 复用零新建。
       const reuseSessionId = worktree.blankSessionByCwd?.(path)
-      if (reuseSessionId !== undefined) {
+      let reuseUsable = false
+      if (reuseSessionId !== undefined && isMainPath) {
+        try {
+          const seal = await rpc.worktree.seal({ sessionId: reuseSessionId })
+          reuseUsable = seal.binding !== null
+        } catch (error) {
+          // seal 判读失败按未绑定处理（fail-closed）——降级 sessionCreate，不落假象
+          onNotice(worktreeReuseBindDegradedNotice(noticeText(error)))
+        }
+      }
+      if (reuseSessionId !== undefined && (reuseUsable || !isMainPath)) {
         try {
           worktree.openSession(reuseSessionId)
         } catch (error) {
@@ -188,7 +205,9 @@ export function ForgeHeroWorkspacePicker({
   // + null（挂载面选中态同清——不产生「已选中」假象）。
   // A7（1.31）：编排数据根 = selectedId 严格命中（selectedProjectRootStrictOf）——渲染
   // 兜底（selectedProjectRootOf fallback）禁止泄漏为绑定语义：无命中 → 提示 + null 不编排。
-  const orchestrateRoot = selectedProjectRootStrictOf(projects, selectedId)
+  // bug 84edc6ff 细化：严格未命中但活跃项目恰一个（零歧义——chip 渲染根即唯一绑定候选）
+  // 时仍充当编排源（hero 默认回填→首条消息编排链恢复）；多项目歧义保持 A7 拒绝。
+  const orchestrateRoot = selectedProjectRootStrictOf(projects, selectedId) ?? unambiguousOrchestrationRootOf(projects)
   const orchestrate = useMemo(
     () =>
       createWorktreeOrchestrator({

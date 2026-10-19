@@ -79,6 +79,17 @@ export function selectedProjectRootOf(
   ?? null
 }
 
+/**
+ * 唯一活跃项目兜底（A7 语义细化——bug 84edc6ff）：selectedId 未命中时，活跃（非归档、
+ * ws_path 在场）项目**恰一个** → 该项目 ws_path 可充当编排源——单项目零歧义，hero chip
+ * 渲染根即唯一绑定候选，不存在 A7 防的跨项目错绑；多个/零个 → null（歧义兜底不进编排，
+ * A7 防线保留）。
+ */
+export function unambiguousOrchestrationRootOf(projects: readonly ProjectSummary[]): string | null {
+  const active = projects.filter((project) => project.archived !== true && project.wsPath !== undefined && project.wsPath !== '')
+  return active.length === 1 ? active[0]!.wsPath ?? null : null
+}
+
 // ───────────── 1.25（bug af65c0a9）失败显式化：提示文案纯函数单源（1.29——失败面只在
 // 首条消息时点发生：点选纯选中态无编排可失败，编排失败呈现走 arm 消费点的 Toast） ─────────────
 
@@ -95,6 +106,11 @@ export function worktreeFaceUnavailableNotice(): string {
 export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: string): string {
   const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
   return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
+}
+
+/** A8——主行 reuse 补绑定失败降级提示（降级产物 sessionCreate 自带绑定，非「将落主树」假象） */
+export function worktreeReuseBindDegradedNotice(cause: string): string {
+  return `主树空白会话补绑定失败（${cause}），已降级新建挂靠会话`
 }
 
 /** A7——编排数据根缺席提示（selectedId 未命中项目行——渲染兜底不进编排，显式呈现不静默） */

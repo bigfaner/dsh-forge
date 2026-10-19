@@ -37,7 +37,7 @@ describe('ForgeHeroWorkspacePicker（conversation.hero.workspace 影子占用者
   })
 })
 
-// ── 编排缝抽出单测（A7 渲染兜底分离 + bug e678ca5f 主行 reuse 零补绑定）──
+// ── 编排缝抽出单测（A7 渲染兜底分离 + 1.27 必绑：主行 reuse 未绑定不作为发送目标）──
 describe('createWorktreeOrchestrator（挂靠编排缝——React 解耦的可单测面）', () => {
   const ROOT = 'C:/repo'
   const face = (over: Partial<HeroWorktreeFace> = {}): HeroWorktreeFace => ({
@@ -69,23 +69,43 @@ describe('createWorktreeOrchestrator（挂靠编排缝——React 解耦的可�
     }
   }
 
-  it('bug e678ca5f——主行 blank reuse 零补绑定（活跃会话写句柄被官方持有，attach 结构性必败；绑定由 host 必绑拦截单点保证）→ 直接打开原 blank', async () => {
+  it('主行 blank reuse 未绑定（binding null）→ 不复用：sessionCreate 直建绑定会话（1.27 必绑——无绑定 blank 不作发送目标）', async () => {
     const { deps: d, worktreeRpc, onNotice } = deps()
     const sessionId = await createWorktreeOrchestrator(d)(ROOT)
-    expect(sessionId).toBe('s-blank')
-    expect(worktreeRpc.seal).not.toHaveBeenCalled()
-    expect(worktreeRpc.sessionCreate).not.toHaveBeenCalled()
-    expect(d.worktree.openSession).toHaveBeenCalledWith('s-blank')
+    expect(worktreeRpc.seal).toHaveBeenCalledWith({ sessionId: 's-blank' })
+    expect(worktreeRpc.sessionCreate).toHaveBeenCalledWith({ worktreePath: ROOT })
+    expect(d.worktree.openSession).toHaveBeenCalledWith('s-new')
+    expect(sessionId).toBe('s-new')
     expect(onNotice).not.toHaveBeenCalled()
   })
 
-  it('树行 blank reuse 同径零编排（预铸自带绑定）→ 打开原 blank', async () => {
+  it('主行 blank reuse 已绑定（binding 在场）→ 打开原 blank 零新建（复用去重保留）', async () => {
+    const { deps: d, worktreeRpc } = deps({
+      rpc: { seal: vi.fn().mockResolvedValue({ isGit: true, sealed: false, binding: { worktreePath: ROOT, branch: 'main' } }) },
+    })
+    const sessionId = await createWorktreeOrchestrator(d)(ROOT)
+    expect(worktreeRpc.sessionCreate).not.toHaveBeenCalled()
+    expect(d.worktree.openSession).toHaveBeenCalledWith('s-blank')
+    expect(sessionId).toBe('s-blank')
+  })
+
+  it('主行 seal 判读失败 → fail-closed 按未绑定降级 sessionCreate + 降级提示（A8——不返回无绑定 blank）', async () => {
+    const { deps: d, worktreeRpc, onNotice } = deps({ rpc: { seal: vi.fn().mockRejectedValue(new Error('seal boom')) } })
+    const sessionId = await createWorktreeOrchestrator(d)(ROOT)
+    expect(sessionId).toBe('s-new')
+    expect(worktreeRpc.sessionCreate).toHaveBeenCalledWith({ worktreePath: ROOT })
+    expect(d.worktree.openSession).toHaveBeenCalledWith('s-new')
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('降级'))
+  })
+
+  it('树行 blank reuse 直接打开（零 seal——树行绑定由首条消息时点 host 必绑拦截保证）', async () => {
     const treePath = 'C:/repo/.worktrees/feat'
     const { deps: d, worktreeRpc } = deps()
     const sessionId = await createWorktreeOrchestrator(d)(treePath)
-    expect(sessionId).toBe('s-blank')
+    expect(worktreeRpc.seal).not.toHaveBeenCalled()
     expect(worktreeRpc.sessionCreate).not.toHaveBeenCalled()
     expect(d.worktree.openSession).toHaveBeenCalledWith('s-blank')
+    expect(sessionId).toBe('s-blank')
   })
 
   it('A7——orchestrateRoot null（selectedId 无命中，渲染兜底不进编排）→ null + 提示呈现，零 RPC 零编排', async () => {
