@@ -2,8 +2,10 @@
 // 失败/缺席双静默路消灭）：
 //   · 编排成功：挂靠事件在场（checks attachedSessions ≥ 1）+ 会话头 worktree chip 呈现
 //     （data-dswt-session-chip——worktree 来源会话必有绑定的修复验证探针）；
-//   · 故障注入（session-create 通道恒拒，宿主 ipcMain 公共 API 换装）→ 官方 Toast 显式
-//     呈现「创建挂靠会话」环节失败；会话不切换；选中态不产生「已选中」假象（chip 不切行）。
+//   · 故障注入（session-create 通道恒拒，宿主 ipcMain 公共 API 换装）→ 场景 A 同 armed
+//     行重选：armed 去重短路（1.29 去重语义存活）——零 Toast 零重编排（语义演进链：
+//     1.25「失败 Toast 必现」→ 1.29 armed 去重 → fix-29（9a851d6e）主行 reuse
+//     fail-closed 降级 sessionCreate，编排产物即当前会话，同树重选不再重触发）。
 // 场景顺序 = 成功先行（注入经 removeHandler+重挂恒抛，不可逆——原 handler 取不回）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；会话头 chip =
 // [data-dswt-session-chip]；Toast = 官方横幅（按文案定位）。
@@ -129,7 +131,7 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toast 显式呈现（不静默）+ 选中态不切行', async () => {
+test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后同 armed 行重选零重编排零 Toast（armed 去重语义）', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-25-orch-'))
   const wsDir = makeGitRepo()
@@ -199,26 +201,24 @@ test('1.25 UI：编排成功（挂靠 + 会话头 chip）→ 故障注入后 Toa
     }
     await snap(page, 'orchestration-success-session-chip.png')
 
-    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 再选 worktree 行（纯选中态）→
-    // 首条消息意图触发编排 → 失败 Toast 显式呈现（1.29 失败面只在首条消息时点）──
+    // ── 场景 A：故障注入（session-create RPC 拒绝）→ 重选主树行（同 armed 行）→
+    // 首条消息意图 → armed 去重短路（1.29 去重语义存活；fix-29 后场景 B 编排产物即
+    // 当前会话——armedSessionId/armedPath/currentSessionId 三元命中，零重编排零 Toast）──
     await injectSessionCreateFaultFinal(page, app.app)
     const chipBefore = await chip(page).first().textContent()
     await chip(page).first().click()
     await heroMenu(page).getByText('orch-repo', { exact: false }).first().click()
-    await expect(page.getByText(/worktree 挂靠失败/), '点选零编排零 Toast（纯选中态）').toHaveCount(0)
     await typeDraft(page, '1-25 scene-a first message')
-    const failToast = page.getByText(/worktree 挂靠失败（创建挂靠会话）/)
-    await expect(failToast.first(), '编排失败官方 Toast 显式呈现（含环节语义，首条消息时点）').toBeVisible({ timeout: 30_000 })
-    console.log('[1.25-scene-a] toast =', await failToast.first().textContent())
-    await snap(page, 'orchestration-failure-toast.png')
-    // 会话不切换：wt-a 零新增挂靠（仍只有前置挂靠面）
+    // armed 去重 = 正确语义：任何环节失败 Toast 均不得出现（零编排 → 故障注入通道零触达）
+    await expect(page.getByText(/worktree 挂靠失败/), 'armed 去重短路——零编排零 Toast').toHaveCount(0)
+    // 零重编排：主树挂靠计数不变（注入通道零触达——无新建亦无失败）
     await expect
       .poll(async () => attachedSessions(page, wsDir, wsDir), {
         timeout: 15_000,
-        message: '主树挂靠计数不变（失败 = 不切换）',
+        message: '主树挂靠计数不变（armed 去重 = 零重编排）',
       })
       .toBe(1)
-    // 选中态不产生「已选中」假象：chip 文本不变（失败回填不落——1.25 口径）
+    // 选中态不受故障注入影响：chip 文本不变
     expect(await chip(page).first().textContent()).toBe(chipBefore)
   } finally {
     await closeApp(app.app)
