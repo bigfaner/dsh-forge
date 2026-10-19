@@ -70,7 +70,8 @@ const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分�
 /** 风险框交互：勾选知悉 → 确认继续（1.19 同款） */
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  const box = dialog.locator('input[type="checkbox"]')
+  // Root cause: 1.35 起风险框含双勾选（知悉 + 「不再提示」），泛型 input[type=checkbox] 定位 strict 歧义——按可访问名唯一定位
+  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
