@@ -10,6 +10,7 @@
 // - stablePhase：'wait'（30s 相位稳定门——常态）| 'probe'（复启链路 60s 逐拍留痕探针
 //   ——comp 形态：settle 慢尾诊断）| 'none'（hero-control：相位由调用侧按项目态断言）。
 // - timeouts：安装形态慢盘 120s（缺省 60/90/60）。
+import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
@@ -312,20 +313,77 @@ export async function launchHost(opts: LaunchHostOptions): Promise<Launched> {
 }
 
 /**
+ * closeApp 有界看门狗（fix-20 防御性加固——fix-19 裁决②，非缺陷修复）：
+ * 判例留档——1.72 基线单次 closeApp 挂死（480s 测试超时 + 60s teardown = 540s 代价），
+ * 四次定向复现全绿且退出链全链有界核销在案（bug 3fe6d3f5 裁决「环境级疑似而非代码缺陷」，
+ * 与 AGENTS.md「Windows commit 耗尽」症状族一致——随机进程冻结，与代码路径无关）。
+ * 本看门狗是防御面：优雅 close 30s 未决 → taskkill /T /F 强制进程树回收，把单次偶发
+ * 挂死代价封顶到 ~30s；正常路径优雅 close 秒级完成，永不触及 kill 分支。
+ */
+const CLOSE_WATCHDOG_MS = 30_000
+
+/** 进程树强杀：Windows taskkill /T /F（含子进程树）；其余平台 SIGKILL 直杀主进程；
+ *  pid 缺席（进程已退出竞态）退回 playwright 进程句柄 kill 兜底 */
+function killProcessTree(pid: number | undefined, fallback: () => void): void {
+  if (pid !== undefined) {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // 进程已退出——竞态无害
+      }
+    }
+  } else {
+    fallback()
+  }
+}
+
+/**
  * 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
  * fix-34 止血形态，fix-37 收编单源——全员强制消费，禁止裸 app.close()）。
+ * 优雅退出链（app.close → exit 等待）整体置于 30s 看门狗之下（头注判例）。
  */
 export async function closeApp(app: ElectronApplication): Promise<void> {
   const proc = app.process()
-  await app.close().catch(() => undefined)
-  if (proc.exitCode === null) {
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, 10_000)
-      proc.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
+  let watchdog: NodeJS.Timeout | undefined
+  let watchdogFired = false
+  const deadline = new Promise<void>((resolve) => {
+    watchdog = setTimeout(() => {
+      watchdogFired = true
+      killProcessTree(proc.pid, () => {
+        proc.kill('SIGKILL')
       })
-    })
+      resolve()
+    }, CLOSE_WATCHDOG_MS)
+  })
+  proc.once('exit', () => {
+    if (watchdog !== undefined) clearTimeout(watchdog)
+  })
+  try {
+    await app.close().catch(() => undefined)
+    if (proc.exitCode === null) {
+      await Promise.race([
+        new Promise<void>((resolve) => proc.once('exit', resolve)),
+        deadline,
+      ])
+    }
+  } finally {
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    // 看门狗已强杀（或 exit 尚未落地）时仍等待进程真正退出——有界 10s 兜底
+    if (proc.exitCode === null) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 10_000)
+        proc.once('exit', () => {
+          clearTimeout(timer)
+          resolve()
+        })
+      })
+    }
+    if (watchdogFired) {
+      console.warn(`[closeApp] 优雅退出超 ${CLOSE_WATCHDOG_MS / 1000}s，看门狗强制进程树回收 (pid=${String(proc.pid)})`)
+    }
   }
   await new Promise((resolve) => setTimeout(resolve, 2_000))
 }
