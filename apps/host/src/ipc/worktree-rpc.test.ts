@@ -1046,4 +1046,65 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
     dispose()
     expect(rig3.seenTraceIds).toEqual([undefined])
   })
+
+  // ── app-observability fix-3：派生失败处 emit 诊断事件（ALS 上下文内——行带链 B trace_id）──
+  it('fix-3 重路由派生失败（sessionCreate 抛错）：显式拒绝语义不变 + warn 通道 emit 于 ALS 上下文内（行带同 trace_id）', async () => {
+    const seen: Array<string | undefined> = []
+    const controller = {
+      prompt: async (): Promise<unknown> => ({ accepted: true }),
+    } as unknown as SessionControllerFace
+    const guard = {
+      judge: async (): Promise<'route'> => 'route',
+      reroute: async () => {
+        throw new TypeError('forge/worktree-attach: branch 必须为非空字符串')
+      },
+    } as unknown as Parameters<typeof interceptRequiredBinding>[1]
+    const warns: string[] = []
+    const dispose = interceptRequiredBinding(controller, guard, (message) => {
+      seen.push(als.getStore()?.traceId)
+      warns.push(message)
+    }, {
+      next: () => 'tr-inject',
+      run: <T,>(traceId: string, _s: string | undefined, fn: () => Promise<T>): Promise<T> =>
+        runWithDiagContext(als, { traceId }, fn),
+    })
+    await expect(controller.prompt({ sessionId: 's-inject', text: 'hi' })).rejects.toThrow(/branch 必须为非空字符串/)
+    dispose()
+    expect(warns, '派生失败处诊断 emit 缺席（bug ba763219——重路由失败零日志）').toHaveLength(1)
+    expect(seen, 'emit 发生在 ALS 上下文外——trace_id 断链').toEqual(['tr-inject'])
+  })
+
+  it('fix-3 judge 判读链异常 fail-open 放行：failOpenDiag emit 于 ALS 上下文内（行带同 trace_id）；放行语义不变', async () => {
+    const alsJudge = createDiagContextStore()
+    let openCalls = 0
+    const persistence = {
+      // 第 1 次 open = headerOf（cwd 读）；第 2 次 = readLatestAttach（判读链异常注入点）
+      open: (async () => {
+        openCalls += 1
+        if (openCalls >= 2) throw new Error('attach read crashed')
+        return {
+          header: { cwd: 'C:/repo' },
+          read: async () => ({ events: [] }),
+          close: async () => {},
+        }
+      }) as unknown as SessionPersistenceFace['open'],
+    } as unknown as SessionPersistenceFace
+    const emits: Array<{ message: string; traceId: string | undefined }> = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: fakeController().controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      failOpenDiag: (message) => {
+        emits.push({ message, traceId: alsJudge.getStore()?.traceId })
+      },
+    })
+    const guard = service.requiredBindingGuard()
+    expect(guard).toBeDefined()
+    const verdict = await runWithDiagContext(alsJudge, { traceId: 'tr-open' }, () => guard!.judge('s-fix3'))
+    expect(verdict, '判读链异常 fail-open 放行语义不变').toBe('pass')
+    expect(emits, 'fail-open 判读链异常零诊断 emit（bug ba763219）').toHaveLength(1)
+    expect(emits[0]?.traceId, 'emit 发生在 ALS 上下文外——trace_id 断链').toBe('tr-open')
+    expect(emits[0]?.message).toContain('fail-open')
+  })
 })

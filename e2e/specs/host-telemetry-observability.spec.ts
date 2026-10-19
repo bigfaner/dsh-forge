@@ -1,28 +1,31 @@
-// app-observability fix-2 观测面 e2e（1.4 取证债前置——断言锚 apps/host/src/telemetry/host-wiring.ts，
+// app-observability fix-3 观测面 e2e（1.4 取证债重跑——断言锚 apps/host/src/telemetry/host-wiring.ts，
 // 日志落点 {userData}/logs/app-YYYYMMDD.jsonl）。真实多进程取证，零 fake：宿主真机 boot（dev
-// profile）→ 四路错误源真实注入 → 统一日志汇断言。
-//   ① dev:debug 终端回显可见性：child 诊断行（stdio pipe 消费侧 process 直写回显——run.ts
-//     wireChildPipes Note-2 双写）在宿主终端输出（main process stdout/stderr 捕获）出现；
+// profile）→ 错误源真实注入 → 统一日志汇断言。
+//   ① dev:debug 终端回显：**撤自动化断言**（fix-3 形态裁决——Windows Electron GUI main stdout
+//     在 pipe/文件重定向承载下结构性丢失，fix-2 三载体实证 out=0B；e2e 无 pty 不可测）。child
+//     stderr→JSONL 自动断言保留（本文件 ②d——child-stdio 行经 stderr pipe → main 转译落盘）；
+//     dev:debug 真实附接控制台人工走查一次留档（.forge/docs/proposals/app-observability/walkthrough/，
+//     不进 git）。
 //   ② 四路错误源注入 → app-*.jsonl 各含错误行（含栈面按源本性断言）：
 //        main 兜底钩（真 uncaughtException——setTimeout throw，appendCrashLine 同步写）
 //        host IPC handler（preload allowlist 通道畸形负载 → handler 抛错 → rpc-envelope 单点埋点）
 //        renderer console（console.error/warn 官方 console-message 事件 → 转发，同文折叠窗
 //          需异文行收口）
 //        child（零凭据 prompt 发送 → child 侧模型错误 → stderr/console + gateway-fold relay）
-//   ③ 一次 prompt 发送全链同 trace_id：发送窗口内全部 trace_id ≠ '-' 的日志行共享单值
-//     （链 B——child.ts prompt dispatch 入口 newTraceIdChild + ALS 包裹整链；链 A preload
-//     invoke 的 trace 行全部落在发送窗口之外，不入窗口判定）。
+//   ③ 链 B 全链 trace_id：**派生失败注入形态**（fix-3 形态修正——零凭据 happy path 无诊断事件
+//     系设计使然，非缺陷）：夹具仓库 checkout --detach → 重路由派生 sessionCreate 抛错
+//     （主树行 detached → 分支解析 null → 预铸 requireNonEmpty 拒绝）→ 拦截层显式拒绝前
+//     emit fail-open 诊断事件（ALS 上下文内——行带链 B trace_id）→ 断言注入窗口内 fail-open
+//     行共享同 trace_id；随后恢复分支重发（happy path）走完发送落盘 + ②d child 证据。
 // 载体纪律：launchHost/closeApp 单源（e2e/support）；隔离 userData（e2e 单实例纪律）；零凭据
 // 发送（Hard Rule 零真实模型——user 消息落账不受模型失败影响，1-29 同口径）。
-import { execFileSync, execSync, spawn } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { closeApp, launchHost } from '../support/launch.js'
 import { registerProject, selectWorkspaceViaChip } from '../support/rpc.js'
-import { allocatePort } from '../support/ports.js'
-import { electronBinary, HOST_DIR } from '../support/launch.js'
 
 // ── 注入标记（唯一化——与宿主自发日志行零碰撞） ──
 const MARK_FALLBACK = 'e2e-telem-fallback-uncaught'
@@ -134,15 +137,20 @@ function findSessionDir(userData: string, dirFragment: string, since: number): s
   return hit
 }
 
+/** 发送手势单击（发送钮/键盘双手势——不等待落盘；落盘等待由调用方按旅程语义自行编排） */
+async function clickSend(page: Page): Promise<void> {
+  const composer = page.locator('[data-composer-input]').first()
+  await composer.click()
+  const sendButton = page.getByRole('button', { name: '发送消息' })
+  const enabled = await sendButton.isEnabled().catch(() => false)
+  if (enabled) await sendButton.click().catch(() => {})
+  else await page.keyboard.press('Enter')
+}
+
 /** 发送重试环（发送钮/键盘双手势 + 会话日志落盘为唯一发送成功证据——1-29 同款） */
 async function sendUntilLanded(page: Page, userData: string, dirFragment: string, since: number): Promise<string> {
-  const composer = page.locator('[data-composer-input]').first()
-  const sendButton = page.getByRole('button', { name: '发送消息' })
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    await composer.click()
-    const enabled = await sendButton.isEnabled().catch(() => false)
-    if (enabled) await sendButton.click().catch(() => {})
-    else await page.keyboard.press('Enter')
+    await clickSend(page)
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
       const hit = findSessionDir(userData, dirFragment, since)
@@ -153,7 +161,7 @@ async function sendUntilLanded(page: Page, userData: string, dirFragment: string
   throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席`)
 }
 
-test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trace_id', async () => {
+test('观测面 e2e：四路注错落 app-*.jsonl + 派生失败注入全链同 trace_id', async () => {
   test.setTimeout(420_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-telem-'))
   // 真 git 仓库夹具（链 B prompt 拦截器仅对 git 项目激活——非 git 探针 null 走官方原流
@@ -202,11 +210,31 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
       }
     })
 
-    // ── 路②d + ③：一次 prompt 发送（注册 → 芯片选工作区 → 键入 → 发送落盘；零凭据形态
-    //    模型失败可接受——user 消息落账不受影响，1-29 同口径） ──
+    // ── 路②d + ③：prompt 旅程（注册 → 芯片选工作区 → 键入；零凭据形态模型失败可接受
+    //    ——user 消息落账不受影响，1-29 同口径） ──
     await registerProject(page, wsDir, 'telem-obs-ws')
     await selectWorkspaceViaChip(page, 'telem-obs-ws')
+
+    // ── ③ 派生失败注入：夹具仓库 checkout --detach → 重路由派生 sessionCreate 必然抛错
+    //    （listWorktrees 主树行 detached → branch null → 预铸 requireNonEmpty 拒绝——不依赖
+    //    选中态，首两轮回跑实证选中树注入会被 UI hero 推送覆盖）→ 发送 → 必绑 judge 'route'
+    //   （git 项目 × blank 会话 × 无绑定）→ reroute 派生失败 → 拦截层显式拒绝前 emit
+    //    fail-open（ALS 上下文内——行带链 B trace_id）。发送被拒（composer 错误面）属预期
+    //    ——注入旅程不要求落盘，fail-open 行即取证。 ──
+    execFileSync('git', ['checkout', '--detach'], { cwd: wsDir, stdio: 'pipe' })
     await typeDraft(page, MARK_PROMPT)
+    const tInject = Date.now() - 1_000 // 注入发送窗口起点
+    await clickSend(page)
+    await pollDiagLines(
+      userData,
+      (lines) => lines.some((l) => l.event === 'fail-open' && l.trace_id !== '-' && Date.parse(l.timestamp) >= tInject),
+      90_000,
+    )
+
+    // ── 恢复分支（happy path 重发：重路由产物会话落盘 + ②d child 证据） ──
+    const tHealthyStart = Date.now() // 注入窗口终点（其后行归 happy path 窗口）
+    execFileSync('git', ['checkout', 'main'], { cwd: wsDir, stdio: 'pipe' })
+    await typeDraft(page, `${MARK_PROMPT}-ok`)
     const tSend = Date.now() - 1_000 // 发送窗口起点
     // 落盘证据 fragment = 工作区临时目录名段（会话 cwd 分组目录——与注册名无关）
     await sendUntilLanded(page, userData, 'telem-ws', tSend)
@@ -230,9 +258,8 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
       expect(line.event, '固定字段 event 恒在').toBeDefined()
     }
 
-    // ① dev:debug 终端回显 → 独立 CLI 载体用例（test 2——Playwright _electron 载体对
-    //    main process stdout/stderr 写面不可观测，实测注记；dev:debug 真终端语义 =
-    //    直启 electron 的进程 stdio 管道，CLI 载体逐位同构）
+    // ① dev:debug 终端回显 → 已撤自动化断言（fix-3 形态裁决——文件头注记）；child stderr→
+    //    JSONL 自动断言保留于 ②d；真实附接控制台人工走查留档 walkthrough/（不进 git）
 
     // ②a main 兜底钩：真 uncaughtException → 同步崩溃行含完整栈
     const fallbackLine = lines.find(
@@ -254,7 +281,8 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
     expect(rendererLine, '②c renderer console：console.error 标记行落盘（console-message 转发链通）').toBeDefined()
     expect(rendererLine?.level, '②c renderer 标记行 error 级（warn/error 过滤口径）').toBe('error')
 
-    // ②d child：child 源错误行（含栈面——relay 结构化行 stack 或 child-stdio error 级）
+    // ②d child（child stderr→JSONL 自动断言——① 撤 echo 断言后的保留承载面）：child 源
+    //    错误行（含栈面——relay 结构化行 stack 或 child-stdio error 级）
     const childLines = lines.filter((l) => l.process === 'child')
     expect(childLines.length, 'child 进程诊断行在场（stderr pipe / relay 双源任一）').toBeGreaterThan(0)
     const childStacked = childLines.some((l) => typeof l.stack === 'string' && l.stack.length > 0)
@@ -264,17 +292,28 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
       '②d child 源：含栈结构化行（relay/gateway-fold）或 child-stdio error 行在场',
     ).toBe(true)
 
-    // ③ 一次 prompt 全链同 trace_id：发送窗口内全部带 trace 行共享单值（链 B ALS 整链
-    //    包裹；链 A invoke 行在窗口外，不入判定）
-    const windowTraced = lines.filter((l) => l.trace_id !== '-' && Date.parse(l.timestamp) >= tSend)
-    expect(windowTraced.length, '③ 发送窗口内带 trace_id 日志行在场（全链落日志才可串联）').toBeGreaterThan(0)
-    const distinctTraces = [...new Set(windowTraced.map((l) => l.trace_id))]
-    expect(distinctTraces, `③ 全链同 trace_id（窗口 ${String(windowTraced.length)} 行）`).toHaveLength(1)
-    // 结构面：窗口内 renderer 行不得携带链 B trace（console 转发恒 -——跨链不串味）
-    const strayInWindow = lines.filter(
-      (l) => l.trace_id !== '-' && l.process === 'renderer' && Date.parse(l.timestamp) >= tSend,
+    // ③ 派生失败注入全链同 trace_id：注入窗口内带 trace_id 行在场且共享单值（链 B ALS
+    //    整链包裹——拦截层派生失败 emit 落在 judge/reroute 链内）
+    const injectTraced = lines.filter(
+      (l) => l.trace_id !== '-' && Date.parse(l.timestamp) >= tInject && Date.parse(l.timestamp) < tHealthyStart,
     )
-    expect(strayInWindow, '③ renderer 行不携带链 B trace（console 转发恒 -——跨链不串味）').toHaveLength(0)
+    expect(injectTraced.length, '③ 注入窗口带 trace_id 日志行在场（派生失败取证 emit——bug ba763219 修复面）').toBeGreaterThan(0)
+    expect(
+      injectTraced.some((l) => l.event === 'fail-open' && l.process === 'child'),
+      '③ 注入窗口 fail-open 行（process=child——拦截层派生失败 emit）在场',
+    ).toBe(true)
+    expect(
+      [...new Set(injectTraced.map((l) => l.trace_id))],
+      `③ 注入窗口全链同 trace_id（${String(injectTraced.length)} 行）`,
+    ).toHaveLength(1)
+    // happy path 重发（设计使然零诊断事件）：发送窗口内带 trace 行（如有）共享单值；
+    // renderer 行恒不携带链 B trace（console 转发跨链不串味）
+    const happyTraced = lines.filter((l) => l.trace_id !== '-' && Date.parse(l.timestamp) >= tSend)
+    expect([...new Set(happyTraced.map((l) => l.trace_id))], '③ happy path 窗口 trace 单值（零诊断行为设计使然）').toHaveLength(happyTraced.length > 0 ? 1 : 0)
+    const strayAfterInject = lines.filter(
+      (l) => l.trace_id !== '-' && l.process === 'renderer' && Date.parse(l.timestamp) >= tInject,
+    )
+    expect(strayAfterInject, '③ renderer 行不携带链 B trace（console 转发恒 -——跨链不串味）').toHaveLength(0)
   } finally {
     try {
       if (!app.process().killed) await closeApp(app)
@@ -282,7 +321,7 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
       // 进程已退出/通道已闭——关停幂等跳过
     }
     // 取证保留：失败轮 userData 留盘（task_logs 取证目录——成功/失败证据均归档，不静默清理）
-    const keepDir = 'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/app-observability/fix-2/001-observability-e2e'
+    const keepDir = 'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/app-observability/fix-3/001-observability-e2e'
     try {
       execSync(`robocopy "${userData}" "${keepDir}/userdata-last" /E /NFL /NDL /NJH /NJS`, { stdio: 'ignore' })
     } catch {
@@ -290,55 +329,5 @@ test('观测面 e2e：四路注错落 app-*.jsonl + 一次 prompt 全链同 trac
     }
     rmSync(userData, { recursive: true, force: true })
     rmSync(wsDir, { recursive: true, force: true })
-  }
-})
-
-// ① 独立载体：dev:debug 终端回显可见性。dev:debug 真终端 = 直启 electron 的进程 stdio
-// 承载——child stdio pipe 行经 main wireChildPipes 消费侧 process 直写回显（run.ts Note-2
-// 双写），在宿主终端输出出现。Windows 实测注记：electron GUI main 的 stdout 在 pipe 承载
-// 下丢失（Playwright _electron 与 node spawn pipe 双实证 0B）——本用例以 cmd 文件重定向
-// 承载（terminal 重定向同语义承载面），捕获面 = 重定向文件。
-test('观测面 e2e·dev:debug 终端回显：child 诊断行在宿主终端输出出现（重定向承载）', async () => {
-  test.setTimeout(180_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-telem-cli-'))
-  const outLog = join(userData, 'term-out.log')
-  const errLog = join(userData, 'term-err.log')
-  const cmdLine = `"${electronBinary}" . > "${outLog}" 2> "${errLog}"`
-  const child = spawn('cmd.exe', ['/d', '/s', '/c', cmdLine], {
-    cwd: HOST_DIR,
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '',
-      DSH_FORGE_DEV_PROFILE: 'dev',
-      DSH_FORGE_USER_DATA: userData,
-      DSH_FORGE_WINDOW_HIDDEN: '1',
-      DSH_FORGE_PORT: String(allocatePort()),
-    },
-    stdio: 'ignore',
-  })
-  try {
-    // child 诊断行回显等待：child 侧 console 输出（官方 server banner「dsh web: …」经
-    // child console.log → stdout pipe → main 转译 + 回显直写）出现在宿主终端承载面
-    const deadline = Date.now() + 120_000
-    let termText = ''
-    for (;;) {
-      termText = `${readFileSync(outLog, 'utf8')}${readFileSync(errLog, 'utf8')}`
-      if (/dsh web: http:\/\//.test(termText)) break
-      if (Date.now() > deadline) {
-        throw new Error(`child 诊断行回显未在终端承载面出现（120s）：out+err=${String(termText.length)}B sample=${JSON.stringify(termText.slice(0, 240))}`)
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1_000))
-    }
-    expect(termText, '① dev:debug 终端回显：child 诊断行（dsh web banner）在宿主终端输出出现').toMatch(/dsh web: http:\/\//)
-  } finally {
-    if (child.exitCode === null && !child.killed) {
-      // Windows 树杀（electron main + dsh child 双进程——防孤儿持端口）
-      try {
-        execSync(`taskkill /pid ${String(child.pid)} /T /F`, { stdio: 'ignore' })
-      } catch {
-        child.kill()
-      }
-    }
-    rmSync(userData, { recursive: true, force: true })
   }
 })

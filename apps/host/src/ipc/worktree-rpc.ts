@@ -220,6 +220,9 @@ export function createWorktreeRpcService(deps: {
    *  逐次现跑、零缓存——git 仓库可被移除，判定结果不作会话期记忆；测试注入桩） */
   readonly probeGitAnchor?: ((dir: string) => Promise<string | null>) | undefined
   readonly warn?: (message: string) => void
+  /** 派生失败诊断 emit 缝（app-observability fix-3）：judge 判读链 fail-open 放行处 emit
+   *  诊断事件（装配方注入 failOpenDiag——ALS 上下文内被调，行带链 B trace_id）；缺席 = 零 emit。 */
+  readonly failOpenDiag?: (message: string) => void
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
   // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）
@@ -649,6 +652,9 @@ export function createWorktreeRpcService(deps: {
             binding = await readLatestAttach(sessionId, readFactory)
           } catch (cause) {
             if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause // A5 拒绝
+            // Root cause: 判读链异常此前静默 'pass'——链 B 派生失败旅程零日志行（fix-2 实证）。
+            // fail-open 放行语义不变，仅补诊断 emit（ALS 上下文内——行带同 trace_id）。
+            deps.failOpenDiag?.(`[git-worktree] 必绑判读链异常 fail-open 放行（attach 读失败）：${String(cause)}`)
             return 'pass' // 判读链异常 fail-open（正确性不依赖此径）
           }
           if (binding !== null) return 'pass'
@@ -818,16 +824,28 @@ export function interceptRequiredBinding(
     const sessionId = typeof request?.sessionId === 'string' ? request.sessionId : undefined
     const inner = async (): Promise<unknown> => {
       if (sessionId !== undefined) {
+        // 判读（fail-open 域）：judge 链异常放行（正确性不依赖此径）；A5/W2 typed 拒绝原样上抛
+        let verdict: 'route' | 'pass'
         try {
-          if ((await guard.judge(sessionId)) === 'route') {
-            // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话；
-            // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
-            return guard.reroute(sessionId, request, ...args.slice(1))
-          }
+          verdict = await guard.judge(sessionId)
         } catch (cause) {
           const name = (cause as Error)?.name
           if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
           warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
+          verdict = 'pass'
+        }
+        if (verdict === 'route') {
+          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话。
+          // 重路由失败 = 显式拒绝（不 fail-open）——独立 try 使 rejection 不落入判读
+          // fail-open 径；catch 仅补派生失败取证 emit（ALS 上下文内——行带同 trace_id，
+          // fix-2 实证 rejection 裸 return 时结构性零日志）后原样上抛。
+          try {
+            // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
+            return await guard.reroute(sessionId, request, ...args.slice(1))
+          } catch (cause) {
+            warn(`[git-worktree] 必绑重路由派生失败（显式拒绝，取证 emit）：${String(cause)}`)
+            throw cause
+          }
         }
       }
       return bound(...args)

@@ -523,6 +523,9 @@ async function main(): Promise<void> {
           return (await resolve.call(presets, undefined)).id
         },
         warn: (line) => diag(line),
+        // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
+        // failOpenDiag = diag 双轨 + emitDiag（ALS 上下文内被调 → 行带链 B trace_id）。
+        failOpenDiag,
       })
       worktreeRpcService = worktreeRpc
 
