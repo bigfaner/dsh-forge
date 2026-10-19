@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdDecompressSync } from 'node:zlib'
 import { closeApp, launchElectron } from '../support/launch.js'
 import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
@@ -87,7 +88,38 @@ async function attachedSessions(page: Page, wsDir: string, path: string): Promis
   return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
 }
 
-/** sessions 目录 jsonl 总数（点选零会话副作用的落盘面证据） */
+/** sessions 目录会话日志总数（点选零会话副作用的落盘面证据）。
+ *  Root cause: 官方存储格式已迁 `session.v4.jsonl.zstd`（zstd 压缩整文件）——探针
+ *  曾只认裸 `.jsonl` 明文，应用落盘正常也恒判零/未命中（bug c81b28f5 误诊发送链回归）。
+ *  会话日志 = `.jsonl`（历史/未压缩形态）∪ `.jsonl.zstd`（v4 压缩形态）。 */
+function isSessionLog(row: string): boolean {
+  return row.endsWith('.jsonl') || row.endsWith('.jsonl.zstd')
+}
+
+/** 会话日志 → utf8 文本（`.jsonl.zstd` = zstdDecompressSync；官方按 flush 追加多帧——
+ *  按 magic 逐帧解码后拼接；读失败 = 空串 fail-soft） */
+function sessionLogText(full: string): string {
+  try {
+    if (full.endsWith('.zstd')) {
+      const buf = readFileSync(full)
+      const magic = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+      const frames: number[] = []
+      for (let i = 0; i <= buf.length - 4; i += 1) {
+        if (buf[i] === magic[0] && buf[i + 1] === magic[1] && buf[i + 2] === magic[2] && buf[i + 3] === magic[3]) frames.push(i)
+      }
+      let text = ''
+      for (let k = 0; k < frames.length; k += 1) {
+        const end = k + 1 < frames.length ? frames[k + 1] : buf.length
+        text += zstdDecompressSync(buf.subarray(frames[k], end)).toString('utf8')
+      }
+      return text
+    }
+    return readFileSync(full, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 function countSessionJsonl(userData: string): number {
   let count = 0
   const visit = (dir: string, depth: number): void => {
@@ -107,7 +139,7 @@ function countSessionJsonl(userData: string): number {
         continue
       }
       if (stat.isDirectory()) visit(full, depth + 1)
-      else if (row.endsWith('.jsonl')) count += 1
+      else if (isSessionLog(row)) count += 1
     }
   }
   for (const root of [join(userData, 'dsh-home'), userData]) {
@@ -151,9 +183,9 @@ function findSessionDirByMarker(userData: string, marker: string): string | unde
         if (hit !== undefined) return hit
         continue
       }
-      if (!row.endsWith('.jsonl')) continue
+      if (!isSessionLog(row)) continue
       try {
-        if (readFileSync(full, 'utf8').includes(marker)) return dir
+        if (sessionLogText(full).includes(marker)) return dir
       } catch {
         continue
       }
