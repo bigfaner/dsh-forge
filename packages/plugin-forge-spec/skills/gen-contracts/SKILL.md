@@ -24,7 +24,7 @@ Contract 文件是 `testing/<journey>/contracts/` 下的磁盘工件——注册
 
 1. **读 Journeys**——`testing/` 下每个 Journey 目录；绝不按风险或体量跳过。解析名称、风险级、happy path 步骤、边界用例、不变式。
 2. **代码侦察（事实表）**——读源码提取地面真值（签名、输出格式、错误码、副作用、前置条件）并附来源引用。把事实表写入/合并 `.forge/fact-table.json`（`source: "static"`、`confidence: "inferred"`；按 `fact_id` 合并，绝不删除运行期条目）。
-3. **装载手册 + 锚点**——按 Journey 的模块归属（monorepo）与交互形态装载对应设计手册（手册产出约定以 tech-design 技能为正本）。手册缺失 → 跳过锚点填充并留提示，绝不中止。手册过期（生成早于当前 tech-design）→ 警告并继续。锚点**只**来自手册——绝不从代码逆向；匹配不上的 Step 锚点留空而不臆造。任一锚点被填充时写 `last_anchor_sync`（ISO-8601）。
+3. **装载手册 + 锚点**——按 Journey 的模块归属（monorepo，全链统一判据：journey frontmatter `module` = 模块**唯一标识**如 `web`，非路径；单仓省略）与交互形态装载对应设计手册（手册产出约定以 tech-design 技能为正本）。手册缺失 → 跳过锚点填充并留提示，绝不中止。手册过期（生成早于当前 tech-design）→ 警告并继续。锚点**只**来自手册——绝不从代码逆向；匹配不上的 Step 锚点留空而不臆造。任一锚点被填充时写 `last_anchor_sync`（ISO-8601）。
 4. **生成 Contract**——每步一份文件：`step-<N>-<action-slug>.md`。一个 Step 的全部 Outcome 共享其文件；happy path 步骤成为 `success` Outcome，边界用例成为带分叉 Preconditions 的附加 Outcome。
    - **每 Outcome 六维度**：Preconditions、Input、Output、State（必备）；Side-effect、Invariants（可选，缺省 `none` / 无）。
    - **fixture_spec 强制**在 Preconditions 内：声明式的既有数据状态（实体、关系、最低数量）。缺它即无效 Contract。

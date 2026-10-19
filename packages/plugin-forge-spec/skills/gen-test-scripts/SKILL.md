@@ -20,15 +20,36 @@ description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测
 
 ## 输出目录
 
-- **模块归属**（monorepo，全链统一判据）：每条 Journey 落到唯一目标模块（workspace 包/应用目录，如 `apps/web`、`packages/core`），权威载体 = journey frontmatter `module` 字段；单仓省略该字段。本技能只消费该字段，不改判归属；缺失/含糊 → 问（交互式）或从简报 + 事实表推导并记录选择。
-- **单仓**：`tests/<journey>/`
-- **monorepo**：`<module>/tests/<journey>/`（`<module>` = journey frontmatter `module`）；遵循该模块既有测试树与框架配置（testDir 等），模块无独立测试根时在其下新建 `tests/`。
+- **单元测试留在模块源码树内**（各包既有 `*.test.ts(x)` 位置不变）——本技能产出的是旅程测试（e2e/functional），统一落**项目根 `tests/`**：
+  - **单仓**：`tests/<journey>/`
+  - **monorepo**：`tests/<moduleName>/<journey>/`（`<moduleName>` = journey frontmatter `module`——模块**唯一标识**如 `web`，**不是路径**）
+- 模块归属（monorepo，全链统一判据）权威载体 = journey frontmatter `module` 字段；本技能只消费，不改判归属；缺失/含糊 → 问（交互式）或从简报 + 事实表推导并记录选择。
+
+目录树示例：
+
+```text
+# 单仓
+tests/
+└── <journey>/
+    ├── step-1-<action>.spec.ts    # 每 Contract 步一份测试文件
+    ├── step-2-<action>.spec.ts
+    └── smoke.spec.ts              # Journey 冒烟（恰一条，happy path 全程）
+
+# monorepo（moduleName = 模块唯一标识，非路径）
+tests/
+├── web/
+│   └── <journey>/
+│       └── …                      # 同单仓形
+└── core/
+    └── <journey>/
+        └── …
+```
 
 无暂存区——测试直接落最终位置；生命周期基于标签。
 
 ## 工作流
 
-1. **装载测试约定**——读工作区 `docs/conventions/testing/` 下的测试约定（如 `core.md`）；monorepo 下逐目标模块探测其测试树与框架配置，以模块自身约定优先。不装载旧式扁平框架优先文件（标记待再生）。从约定读断言偏好表解析目标框架；否则从既有测试文件探测；仍含糊 → 问（交互式）或从简报 + 事实表推导并记录选择（任务语境）。绝不静默取缺省。
+1. **装载测试约定**——读工作区 `docs/conventions/testing/` 下的测试约定（如 `core.md`）；monorepo 下旅程测试统一落项目根 `tests/`（见输出目录），目标框架按目标模块的既有测试与框架配置探测。不装载旧式扁平框架优先文件（标记待再生）。从约定读断言偏好表解析目标框架；否则从既有测试文件探测；仍含糊 → 问（交互式）或从简报 + 事实表推导并记录选择（任务语境）。绝不静默取缺省。
 2. **代码侦察**——刷新事实表（`.forge/fact-table.json`）：框架模式（runner、imports、build tags）与领域地面真值（入口、处理器、配置）。逐条语义描述符对照事实解析并引用来源。
 3. **逐 Journey 路由决策**——有 Contract → Contract 路径。无 Contract → 报错：先跑 `gen-contracts`（与前置表一致）。
 4. **锚点交叉校验**（Contract 路径）——把 Contract frontmatter 锚点与事实表对照；手册是权威：手册与锚点一致而代码不同 → 代码 bug 报告；手册与锚点不同 → 提议锚点修复（展示 diff）——交互式语境获明确批准才写入；派发语境 diff 呈报于任务输出，写入留给人工或 fix 链。无手册 → 降级模式，用事实表推断并附提示。绝不自动裁决低置信或无法核验的匹配——呈报。输出锚点覆盖报告。

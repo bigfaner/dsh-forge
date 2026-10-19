@@ -90,7 +90,7 @@ brainstorm 已识别交互面（谁与谁、哪些流程、边界在哪）；此
 4. **逐节起草并确认**——概述 / 架构图 / 技术栈选型 / 架构决策 / 模块设计 / 交互契约 / 接口 / 数据模型 / 错误处理 / 测试，按意图取用。确认粒度：选型级决策逐点确认（`ask_user_question`），叙述性内容整稿确认；DB 分支同下。逐节自检并产出命名节**PRD Coverage Map**（breakdown-tasks 的核对输入）：每条 PRD AC 映射到设计元素；跨层数据流已测绘；集成点已规格化；每节可直接拆任务。
    - **DB 分支**（`db-schema: "yes"`，new-feature）：随数据模型段生成 `er-diagram.md`
      + `schema.sql`，作为独立评审单元呈现——未明示批准不得推进。`er-diagram.md` 图外必附两说明：**实体说明**（每实体一行职责）与**关系说明**（基数 1:1/1:N/N:M、外键方向）。**索引纪律**：非必要不加（判据 = 明确的查询/守卫路径需要）；优先联合索引覆盖多条查询路径，避免单列索引堆叠。
-5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；设计手册按交互形态产出：`api-handbook.md`（API 交互）、`cli-handbook.md`（命令行交互）、`page-map.md`（Web UI）、`screen-map.md`（移动 UI）——形态从 PRD UI 功能的平台/交互方式推断，不许猜；判定属选型级决策，过确认纪律。monorepo 下按模块归属分别产出（模块归属判据与测试链统一：目标模块 = workspace 包/应用目录，从 PRD UI 功能落位推断；含糊 → 问用户或推导并记录）。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
+5. **落盘并注册**——`design/tech-design.md` 必出；DB 分支出 ER + schema；设计手册按交互形态产出：`api-handbook.md`（API 交互）、`cli-handbook.md`（命令行交互）、`page-map.md`（Web UI）、`screen-map.md`（移动 UI）——形态从 PRD UI 功能的平台/交互方式推断，不许猜；判定属选型级决策，过确认纪律。monorepo 下按模块归属分别产出（模块归属判据与测试链统一：`module` = 模块**唯一标识**如 `web`，非路径；从 PRD UI 功能落位推断；含糊 → 问用户或推导并记录）。手册带 `created` frontmatter 时间戳供下游新鲜度检查。
 6. **决策留存**——重大决策写在设计文档内；归档到 `docs/decisions/` 是本技能之外的长期归档动作，认为有必要时向用户提议，不擅自执行。
 
 ## 方法论速查
