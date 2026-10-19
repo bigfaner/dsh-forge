@@ -18,7 +18,7 @@
 //   生产零税：IPC 错误回包 details 无 causeStack（打包形态 causeStack 选项恒 false）。
 //   崩溃豁免：关停后重启 exe → 日志文件继续追加（打包版无终端，JSONL 是唯一证据面）。
 import { execFileSync, execSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,9 +30,10 @@ const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 const UNPACKED_DIR = join(ROOT, 'release', 'installer', 'win-unpacked')
 const EXE = join(UNPACKED_DIR, 'dsh-forge.exe')
 const ASSEMBLE_SCRIPT = join(ROOT, 'scripts', 'assemble-installer-resources.mjs')
-// 证据归档（slug 目录，不进 git——AGENTS §5.2 过程产物纪律）
+// 证据归档目录（slug 面，不进 git——AGENTS §5.2 过程产物纪律）：env 优先（派发侧注入
+// forge 任务 logs 面），缺省落 release/evidence/（git 外产物树，零用户机器路径硬编码）
 const KEEP_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/app-observability/fix-11/001-dist-win-packaged-observability'
+  process.env.DSH_FORGE_OBS_KEEP_DIR ?? join(ROOT, 'release', 'evidence', 'dist-win-packaged-observability')
 
 // ── 注入标记（唯一化——与宿主自发日志行零碰撞；dev spec 同名族加 pk 前缀） ──
 const MARK_FALLBACK = 'pk-telem-fallback-uncaught'
@@ -223,11 +224,24 @@ test('dist:win 打包形态观测面：四路注错落 app-*.jsonl + 生产零�
   execFileSync('git', ['add', '.'], { cwd: wsDir, stdio: 'pipe' })
   execFileSync('git', ['-c', 'user.email=pk@test', '-c', 'user.name=pk', 'commit', '-m', 'init'], { cwd: wsDir, stdio: 'pipe' })
 
-  // 生境隔离（bug fd565018 根因修复）：打包便携 userData = {exe}/data 跨运行持久——
-  // 残留的项目/会话行让复启恢复已释放的 session reference（renderer「Session reference
-  // is released」），fail-open 官方原流与发送链在 renderer 侧即死，链 B 派生径结构性
-  // 零触发。首轮启动前清空便携 data（Step 1b 复启不清——追加面断言依赖同目录延续）。
-  rmSync(join(UNPACKED_DIR, 'data'), { recursive: true, force: true })
+  // 生境隔离属主门（Root cause: 打包便携 userData = {exe}/data 跨运行持久且可能承载
+  // 用户数据，bug fd565018 修复径在此径直 rmSync 无属主判定——任何在场目录都被静默删除）：
+  // 仅当 spec 属主 sentinel（本 spec 首建后写入）在场才清空；缺席 = 非 spec 属主
+  // （用户数据或外来运行残留），跳过隔离并告警——测试可能因残留失败，但绝不静默删用户数据。
+  const portableData = join(UNPACKED_DIR, 'data')
+  const ownSentinel = join(portableData, '.dsh-forge-spec-owned')
+  if (existsSync(ownSentinel)) {
+    rmSync(portableData, { recursive: true, force: true })
+  }
+  if (!existsSync(portableData)) {
+    // sentinel 在清理后、首启前写入（fresh 建立即声明属主；已存在的非属主目录不认领）
+    mkdirSync(portableData, { recursive: true })
+    writeFileSync(ownSentinel, `owner: dist-win-packaged-observability.spec\ncreated: ${new Date().toISOString()}\n`, 'utf8')
+  } else if (!existsSync(ownSentinel)) {
+    console.warn(
+      `[dist-win-packaged-observability] 检测到非 spec 属主的便携 data（${portableData}），为保护用户数据本轮跳过生境隔离——测试可能因残留状态失败`,
+    )
+  }
   const launched = await launchHost({
     userData, // 打包形态 userData 路径被便携 data 覆盖——此值仅承担 DSH_FORGE_USER_DATA 凭据桥关闭门
     executablePath: EXE,
@@ -388,13 +402,22 @@ test('dist:win 打包形态观测面：四路注错落 app-*.jsonl + 生产零�
     } catch {
       // 进程已退出/通道已闭——关停幂等跳过
     }
-    // 证据归档 slug 目录（成功/失败均留痕，不静默清理）
-    try {
-      execSync(`robocopy "${(assembly.logsDir ?? 'missing').replaceAll('/', '\\')}" "${KEEP_DIR}/logs-last" /E /NFL /NDL /NJH /NJS`, { stdio: 'ignore' })
-      execSync(`robocopy "${wsDir.replaceAll('/', '\\')}" "${KEEP_DIR}/fixture-ws-last" /E /NFL /NDL /NJH /NJS`, { stdio: 'ignore' })
-    } catch {
-      // robocopy 非 0 码 = 有复制行——证据已在盘
+    // 证据归档 slug 目录（成功/失败均留痕，不静默清理）。robocopy：<8 = 含复制行为即
+    // 成功；≥8 = 真失败——归档属附带面（取证已闭合），不 fail 测试本体，但必须
+    // console.error 可见告警，不再静默吞掉（bug 7f24b732 C3）
+    const archiveInto = (src: string, destName: string): void => {
+      const dest = join(KEEP_DIR, destName)
+      const copy = spawnSync(
+        'robocopy',
+        [src.replaceAll('/', '\\'), dest.replaceAll('/', '\\'), '/E', '/NFL', '/NDL', '/NJH', '/NJS'],
+        { encoding: 'utf8' },
+      )
+      if ((copy.status ?? 8) >= 8) {
+        console.error(`[dist-win-packaged-observability] 证据归档失败（robocopy exit ${String(copy.status)}）：${src} → ${dest}`)
+      }
     }
+    archiveInto(assembly.logsDir ?? 'missing', 'logs-last')
+    archiveInto(wsDir, 'fixture-ws-last')
     rmSync(userData, { recursive: true, force: true })
     rmSync(wsDir, { recursive: true, force: true })
   }
