@@ -77,9 +77,9 @@ test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚
     const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
     const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
-    expect(blitzDirs.length, `突击组合仅一目录（dirs=${JSON.stringify(blitzDirs)}）`).toBe(1)
+    expect(blitzDirs.length, `突击组合双目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
     expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（七规格技能零在场——物理调不到，非被叮嘱不要）').toBe(true)
-    expect(blitzDirs.filter(isCoreDir).length, '核心包技能目录在场（阳性对照——枚举通道有效性）').toBe(1)
+    expect(blitzDirs.filter(isCoreDir).length, '核心包技能目录在场（core+skills-blitz 双条——阳性对照枚举通道有效性）').toBe(2)
 
     // ── Step1b：远征对照——双目录全量挂载 ──
     const expDirs = presetSkillDirs(overlay, 'expedition')

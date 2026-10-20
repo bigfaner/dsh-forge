@@ -166,27 +166,31 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     expect(empty?.skillsDir).toBeUndefined()
   })
 
-  it('M3 装配缝可选透传（3.7 specSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {
+  it('M3 装配缝可选透传（3.7 specSkillsDir/blitzSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {
     const m3 = parseChildOptions([
       'electron.exe',
       'child.js',
       JSON.stringify({
         ...JSON.parse(valid),
         specSkillsDir: 'C:/pkg/spec-skills',
+        blitzSkillsDir: 'C:/pkg/blitz-skills',
         settingsFile: 'C:/ud/forge-settings.json',
       }),
     ])
     expect(m3?.specSkillsDir).toBe('C:/pkg/spec-skills')
+    expect(m3?.blitzSkillsDir).toBe('C:/pkg/blitz-skills')
     expect(m3?.settingsFile).toBe('C:/ud/forge-settings.json')
     const legacy = parseChildOptions(['electron.exe', 'child.js', valid]) // 旧载荷（M3 前主进程）零破坏
     expect(legacy?.specSkillsDir).toBeUndefined()
+    expect(legacy?.blitzSkillsDir).toBeUndefined()
     expect(legacy?.settingsFile).toBeUndefined()
     const empty = parseChildOptions([
       'electron.exe',
       'child.js',
-      JSON.stringify({ ...JSON.parse(valid), specSkillsDir: '', settingsFile: '' }),
+      JSON.stringify({ ...JSON.parse(valid), specSkillsDir: '', blitzSkillsDir: '', settingsFile: '' }),
     ])
     expect(empty?.specSkillsDir).toBeUndefined()
+    expect(empty?.blitzSkillsDir).toBeUndefined()
     expect(empty?.settingsFile).toBeUndefined()
   })
 })

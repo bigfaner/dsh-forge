@@ -472,6 +472,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
   // M3 3.7：spec skills 物化锚（预设 customSkillDirs[spec]——远征组合携带；缺席 = spec 技能面降级）
   const specSkillsDir = typeof o.specSkillsDir === 'string' && o.specSkillsDir !== '' ? o.specSkillsDir : undefined
+  // blitz skills 物化锚（预设 customSkillDirs[blitz]——突击组合携带；缺席 = blitz 技能面降级）
+  const blitzSkillsDir = typeof o.blitzSkillsDir === 'string' && o.blitzSkillsDir !== '' ? o.blitzSkillsDir : undefined
   // M3 3.8：设置域存储路径（boot overlay 注 core 行 config.settingsFile——缺席 = forgeSettings 服务降级）
   const settingsFile = typeof o.settingsFile === 'string' && o.settingsFile !== '' ? o.settingsFile : undefined
   return {
@@ -484,6 +486,7 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     tasksHome,
     skillsDir,
     specSkillsDir,
+    blitzSkillsDir,
     settingsFile,
   }
 }

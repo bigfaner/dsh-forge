@@ -170,6 +170,9 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
       'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
+      // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
+      // 挂载源；缺席即突击组合技能面静默缺失）
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills-blitz/grilling/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',

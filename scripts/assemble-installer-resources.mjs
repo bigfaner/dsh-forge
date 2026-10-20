@@ -62,9 +62,10 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS）。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
-/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
+/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件；
+ *  skills-blitz = plugin-forge 包内突击专属技能旁目录——blitz 预设 customSkillDirs 挂载源） */
 const STAGING_EXTRAS = {
-  'plugin-forge': { files: ['skills'], keyFiles: ['skills/submit-task/SKILL.md'] },
+  'plugin-forge': { files: ['skills', 'skills-blitz'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']

@@ -73,6 +73,9 @@ export interface BootDshOptions {
   /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
    *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
   specSkillsDir?: string
+  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
+   *  突击组合携带；缺席 = blitz 技能面降级 fail-soft 不注入） */
+  blitzSkillsDir?: string
   /** 设置域存储文件绝对路径（M3 3.8：boot overlay 注 core 行 config.settingsFile——
    *  {userData}/forge-settings.json；缺席 = forgeSettings 服务降级缺席（六服务形制）） */
   settingsFile?: string

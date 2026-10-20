@@ -312,6 +312,7 @@ async function main(): Promise<void> {
             ...presetPatches,
             coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
             specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
+            blitzSkillsDir: options.blitzSkillsDir, // customSkillDirs[blitz]（缺席 = blitz 技能面降级）
             bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
           },
         }

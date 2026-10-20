@@ -153,8 +153,13 @@ for (const preset of ['expedition', 'blitz'] as const) {
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
       const skill = rows.get('skill-filesystem')!
       expect(skill).toContain('                - "{{plugin-forge-skills}}"')
-      if (isExpedition) expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
-      else expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
+      if (isExpedition) {
+        expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
+        expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')
+      } else {
+        expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
+        expect(skill).toContain('                - "{{plugin-forge-blitz-skills}}"')
+      }
     })
 
     it(`产品增量行：plugin-forge 恒携${isExpedition ? ' + plugin-forge-spec（远征 spec 全量）' : '，物理无 plugin-forge-spec（Story 6：L1 物理隔离）'}`, () => {

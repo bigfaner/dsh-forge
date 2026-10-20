@@ -78,6 +78,10 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
     expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
     expect(existsSync(join(paths.skillsDir!, 'submit-task', 'SKILL.md'))).toBe(true)
+    // blitz 专属面（同包 skills-blitz 子目录——junction 随包透传）
+    expect(paths.blitzSkillsDir).toBeDefined()
+    expect(paths.blitzSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills-blitz$/)
+    expect(existsSync(join(paths.blitzSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
   })
 
   it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {
@@ -92,13 +96,18 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
       const anchor = join(root, 'anchor', 'package.json')
       const specSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge-spec', 'skills')
       const coreSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills')
-      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec 树缺席
+      const blitzSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills-blitz')
+      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec/blitz 树缺席
       const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(absent.skillsDir).toBe(coreSkills)
       expect(absent.specSkillsDir).toBeUndefined() // spec 技能面降级（fail-soft 不抛断启动）
+      expect(absent.blitzSkillsDir).toBeUndefined() // blitz 技能面降级（同法 fail-soft）
       mkdirSync(specSkills, { recursive: true }) // spec 树落地（3.2 后形态）→ 解析同法
       const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(present.specSkillsDir).toBe(specSkills)
+      mkdirSync(blitzSkills, { recursive: true }) // blitz 子目录落地 → 同包旁路解析
+      const blitzPresent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(blitzPresent.blitzSkillsDir).toBe(blitzSkills)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

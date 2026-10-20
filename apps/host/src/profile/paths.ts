@@ -62,6 +62,10 @@ export interface HostPaths {
    *  携带；dev = workspace 链接、packaged = runtime/node_modules 邻接。解析失败 = undefined
    *  不注入（spec 技能面降级 fail-soft；突击/blitz 本就物理不含） */
   specSkillsDir?: string
+  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
+   *  突击携带；同包 skills 旁子目录，dev junction 随包透传。解析失败 = undefined 不注入
+   *  （blitz 技能面降级 fail-soft；远征本就物理不含） */
+  blitzSkillsDir?: string
   /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
   resourcesDir?: string
 }
@@ -135,6 +139,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     settingsFile: join(userData, 'forge-settings.json'),
     skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
+    blitzSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge', 'skills-blitz'),
     resourcesDir,
   }
 }
@@ -149,14 +154,15 @@ function resolveTasksHome(env: PathEnv, userData: string): string {
 }
 
 /** 产品包 skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：自
- *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/skills；3.4 plugin-forge 起，
- *  M3 3.7 增 plugin-forge-spec 同法）。dev = apps/host 树 workspace 链接（junction 透传到
- *  packages/<pkg>/skills）；packaged = runtime/node_modules 邻接（anchor =
- *  {resources}/runtime/package.json，首探即中）。不走 require.resolve：产品包 ESM-only
- *  （exports 无 require 条件，CJS 解析恒拒）。解析失败返回 undefined（fail-soft：技能面
- *  缺席降级，不抛断启动——tools 半身照常，装配缺口由冒烟/结构 pin 显形）。 */
-function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${string}`): string | undefined {
-  const rel = `node_modules/${pkg}/skills`
+ *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/<sub>；3.4 plugin-forge 起，
+ *  M3 3.7 增 plugin-forge-spec 同法；skills-blitz = 同包 skills 旁子目录（sub 可选，缺省
+ *  skills）。dev = apps/host 树 workspace 链接（junction 透传到 packages/<pkg> 子目录）；
+ *  packaged = runtime/node_modules 邻接（anchor = {resources}/runtime/package.json，首探
+ *  即中）。不走 require.resolve：产品包 ESM-only（exports 无 require 条件，CJS 解析恒拒）。
+ *  解析失败返回 undefined（fail-soft：技能面缺席降级，不抛断启动——tools 半身照常，装配
+ *  缺口由冒烟/结构 pin 显形）。 */
+function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${string}`, sub = 'skills'): string | undefined {
+  const rel = `node_modules/${pkg}/${sub}`
   for (let dir = dirname(installAnchor); ; dir = dirname(dir)) {
     const candidate = join(dir, ...rel.split('/'))
     if (existsSync(candidate)) return candidate
