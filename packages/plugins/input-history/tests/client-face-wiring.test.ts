@@ -1,9 +1,14 @@
 // client face 组合 apply 接线单测（AC：组合 apply 正确接线、不依赖宿主 wiring 注入）：
 // sessions 注入缝 + binding.eventSource 历史源 + DOM 键源 + mention 守卫 + 活跃会话跟随
 // 全在包内 apply 装配（fake ctx/fake document 驱动）。
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { inputHistoryClient, wireInputHistoryClient } from '../src/client/index.js'
 import type { ForgeComposerDomKeyEvent, ForgeComposerEventTarget } from '../src/client/composer-keys.js'
+
+// globalThis.document 手工注入的还原缝：断言失败不向后续用例泄漏污染。
+afterEach(() => {
+  ;(globalThis as { document?: unknown }).document = undefined
+})
 
 // --- fake 官方面 ---------------------------------------------------------------
 
@@ -151,7 +156,6 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     world.doc.dispatch('ArrowDown', editableTarget())
     expect(world.drafts.get('s1')).toBe('')
     face.dispose()
-    setDoc(undefined)
   })
 
   it('mention 菜单开时不抢键：方向键不进历史', () => {
@@ -161,7 +165,6 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.get('menu-open') ?? '').toBe('')
     face.dispose()
-    setDoc(undefined)
   })
 
   it('会话切换即切源：list 快照换活跃会话后翻出新会话消息', () => {
@@ -177,7 +180,6 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.get('s2')).toBe('会话二消息')
     face.dispose()
-    setDoc(undefined)
   })
 
   it('dispose 后键源退订：方向键不再触发置稿', () => {
@@ -187,7 +189,6 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     face.dispose()
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.size).toBe(0)
-    setDoc(undefined)
   })
 
   it('apply 生产路径 dispose 挂 ctx.effect：fiber unload 时 keydown/list/feed 全量退订', () => {
@@ -204,7 +205,6 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     expect(world.drafts.get('s1')).toBe('消息') // keydown 已退订，不再触发
     expect(world.listListeners).toHaveLength(0) // list.subscribe 已退订
     expect(feedDisposes.reduce((n, t) => n + t.count, 0)).toBeGreaterThan(0) // feed 订阅已释放
-    setDoc(undefined)
   })
 
   it('apply late-wiring 路径同样挂 ctx.effect：inject 晚到接线后 unload 全量退订', () => {
@@ -231,6 +231,5 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     expect(world.drafts.get('s1')).toBe('消息') // 卸载后不再触发
     expect(world.listListeners).toHaveLength(0)
     expect(feedDisposes.reduce((n, t) => n + t.count, 0)).toBeGreaterThan(0)
-    setDoc(undefined)
   })
 })

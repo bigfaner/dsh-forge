@@ -34,9 +34,16 @@ export function historyFeedOf(binding: unknown): HistoryEventFeed | undefined {
           return wrapped?.type === 'event' && wrapped.event !== undefined ? [wrapped.event as HistorySessionEvent] : []
         })
       },
-      subscribe: (listener: () => void) =>
-        ((source.subscribe as (cb: () => void) => () => void)(listener) as (() => void) | undefined) ??
-        (() => undefined),
+      subscribe: (listener: () => void) => {
+        // 退订器形状与 getSnapshot 同口径严格校验：非函数真值/缺席/上游抛错 = 按缺席
+        // fail-soft 降级为 no-op 退订（下游 dispose 语义恒安全）。
+        try {
+          const dispose = (source.subscribe as (cb: () => void) => unknown)(listener)
+          return typeof dispose === 'function' ? (dispose as () => void) : (() => undefined)
+        } catch {
+          return () => undefined
+        }
+      },
     }
   } catch {
     return undefined

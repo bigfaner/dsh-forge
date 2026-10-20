@@ -71,9 +71,11 @@ describe("client bundle 装载契约（官方 clientBundle 配方四断言）", 
         req: (s: string) => unknown,
       ) => Record<string, unknown>
     )(seedRequire);
-    // react 外置：内联第二份 react 会使 shell 渲染树里的组件 hooks 读到
-    // 另一副本的 dispatcher（Invalid hook call）——官方基线 PLATFORM_MODULES 同款。
-    expect(requested, "react 未走种子 require（被内联）").toContain("react");
+    // 外置守卫：factory 物化期任何 require 都必须落在种子表内（seedRequire 对表外
+    // 规格抛错）——react 实现被内联成第二副本会使 shell 渲染树组件 hooks 读到
+    // 另一副本的 dispatcher（Invalid hook call）。当前 client face 为纯逻辑接线、
+    // 运行期零平台 require（见 scripts/bundle-client.mjs 种子表注释）。
+    expect(Array.isArray(requested)).toBe(true);
     const face = exports.inputHistoryClient as { apply?: unknown };
     expect(face).toBeTypeOf("object");
     expect(face?.apply, "client face 缺组合 apply（DI 库件 → 真机 invalid plugin）").toBeTypeOf(
@@ -93,12 +95,8 @@ describe("client bundle 装载契约（官方 clientBundle 配方四断言）", 
     ).toBe(false);
   });
 
-  it('react 实现不内联（require("react") 在场且无 react 副本标记）', () => {
+  it('react 实现不内联（无 react 副本标记）', () => {
     const code = readFileSync(bundlePath, "utf8");
-    expect(
-      code.includes('require("react")'),
-      '缺 require("react")——react 被内联成第二副本',
-    ).toBe(true);
     expect(
       code.includes('"react.element"'),
       "内联了 react 实现副本（Symbol.for('react.element') 标记在场）",

@@ -1,7 +1,13 @@
 // 会话事件历史源单测（tech-design ②：binding.eventSource 解包适配内联本包）：
 // 官方 SessionEventSource（ObservableSnapshot<SessionEventWindow>）→ 插件裸事件 feed。
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { historyFeedOf } from '../src/client/event-source.js'
+
+// 模块级可变 cbs 的还原缝：断言失败不向后续用例泄漏污染。
+let cbs: (() => void)[] = []
+beforeEach(() => {
+  cbs = []
+})
 
 /** 官方窗口条目包装形（{type:'event',event}|{type:'transient',…}） */
 function wrappedEvent(type: string, seq: number): unknown {
@@ -21,8 +27,6 @@ function fakeEventSource(entries: unknown[]) {
   }
 }
 
-let cbs: (() => void)[] = []
-
 describe('historyFeedOf（binding.eventSource 解包适配）', () => {
   it('解包 {type:event,event} 条目为裸事件流；transient 条目丢弃', () => {
     const feed = historyFeedOf({ eventSource: fakeEventSource([wrappedEvent('user/message', 1), { type: 'transient' }, wrappedEvent('turn/start', 2)]) })
@@ -34,7 +38,6 @@ describe('historyFeedOf（binding.eventSource 解包适配）', () => {
   })
 
   it('subscribe 透传上游发布；退订器撤上游监听', () => {
-    cbs = []
     const feed = historyFeedOf({ eventSource: fakeEventSource([]) })!
     const listener = vi.fn()
     const dispose = feed.subscribe(listener)
@@ -51,6 +54,13 @@ describe('historyFeedOf（binding.eventSource 解包适配）', () => {
     expect(historyFeedOf({ eventSource: {} })).toBeUndefined()
     expect(historyFeedOf({ eventSource: { getSnapshot: 'x', subscribe: () => undefined } })).toBeUndefined()
     expect(historyFeedOf({ eventSource: { getSnapshot: () => ({}), subscribe: 'x' } })).toBeUndefined()
+  })
+
+  it('subscribe 返回非函数真值 = 降级 no-op 退订（不外溢）', () => {
+    const feed = historyFeedOf({
+      eventSource: { getSnapshot: () => ({ entries: [] }), subscribe: () => 42 },
+    })
+    expect(() => feed!.subscribe(() => {})()).not.toThrow()
   })
 
   it('snapshot 异常 = 空数组（不外溢）', () => {

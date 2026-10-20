@@ -8,8 +8,10 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { assertClientBundleClassicScript } from './src/build/client-bundle-shape.js'
+import { assertInputHistorySteeringLine } from './src/build/input-history-manifest.js'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
 const STANDALONE_ERROR = 'apps/web 不是独立应用：bare vite serve 无 __DSH_BOOT__ 注入。'
@@ -69,10 +71,37 @@ function emitInputHistoryBundle(): Plugin {
   }
 }
 
+/**
+ * input-history 装载双真相源断言（构建期 fail-loud）：main.ts 掌舵行的
+ * id/inject 字面量与 @dsh-forge/input-history package.json dsh.client 清单
+ * 是同一契约的两处表达——漂移即构建失败，不靠人工同步。
+ */
+function assertInputHistoryManifest(): Plugin {
+  return {
+    name: 'dsh-forge-assert-input-history-manifest',
+    generateBundle() {
+      const req = createRequire(import.meta.url)
+      const clientEntry = req.resolve('@dsh-forge/input-history/client')
+      const pkgPath = resolve(dirname(clientEntry), '../package.json')
+      let manifest: { name: string; inject: readonly string[] }
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+          name?: string
+          dsh?: { client?: { inject?: string[] } }
+        }
+        manifest = { name: pkg.name ?? '', inject: pkg.dsh?.client?.inject ?? [] }
+      } catch (error) {
+        throw new Error(`vite: 读 @dsh-forge/input-history package.json 失败（${pkgPath}）: ${String(error)}`)
+      }
+      assertInputHistorySteeringLine(readFileSync(src('./src/main.ts'), 'utf8'), manifest)
+    },
+  }
+}
+
 export default defineConfig({
   // 相对资产 URL：宿主自定义 scheme 于任意挂载深度服务本 dist，文档相对路由（plugins/…）同源解析
   base: './',
-  plugins: [rejectStandaloneServe(), pinClientBundleShape(), emitInputHistoryBundle()],
+  plugins: [rejectStandaloneServe(), pinClientBundleShape(), assertInputHistoryManifest(), emitInputHistoryBundle()],
   define: {
     __DSH_FORGE_BUILD_REV__: JSON.stringify(BUILD_REV),
     // 已发布 cordis-plugin-loader 的 Node 探测替身（母本同款 define 集）

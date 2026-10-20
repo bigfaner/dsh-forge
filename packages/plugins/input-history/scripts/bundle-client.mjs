@@ -14,21 +14,14 @@ import { fileURLToPath } from "node:url";
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/input-history";
 
-// 平台基线种子表（官方 PLATFORM_MODULES 冻结种子表，与 annotutor 判例同款，
-// 需与官方 packages/client/web/src/platform.ts 保持同步）：react 等经 factory
-// 的 require 对壳层冻结种子表解析——内联第二份 react 会使 shell 渲染树里的组件
-// hooks 读到另一副本的 dispatcher。表外依赖全部内联。
-const PLATFORM_MODULES = [
-  "react",
-  "react/jsx-runtime",
-  "react-dom",
-  "react-dom/client",
-  "@deepseek-ai/cordis",
-  "@deepseek-ai/dsh-client-store",
-  "@deepseek-ai/dsh-client-ui-slots",
-  "@deepseek-ai/dsh-client-ui-primitives",
-  "@deepseek-ai/dsh-client-ui-dockkit",
-];
+// 平台基线外置表（对齐官方 packages/client/web/src/platform.ts 冻结种子表口径）：
+// 收敛为本 client face 运行期经 factory require 实际可达的依赖。当前仅 react——
+// 历史状态机/DOM 键源/事件源均为纯逻辑，react-dom 与 ui-* 只在宿主壳层消费、
+// type-only import 构建期已擦除（esbuild 不会为类型引用发 require）。保留 react
+// 外置而非从表移除：未来组件化消费一旦出现，require 必须落到壳层冻结种子表单例
+// ——内联第二份 react 会使 shell 渲染树组件 hooks 读到另一副本的 dispatcher
+// （Invalid hook call）。表外依赖全部内联。
+const PLATFORM_MODULES = ["react"];
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/client/index.js")],

@@ -13,7 +13,6 @@
 //   ② DOM 键位源 + mention 菜单态守卫（composer-keys.ts 判例移植——菜单开不抢键）；
 //   ③ 会话事件历史源（event-source.ts binding.eventSource 解包 + 活跃会话跟随切源）。
 // 全缝 fail-soft：sessions/binding/eventSource/document 任一缺席只降本面，不炸组合。
-import { createElement, type ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
@@ -158,12 +157,8 @@ function wireSessions(ctx: Context, sessions: ISessions): InputHistoryClientFace
         return false
       }
       if (feed === undefined) return false
-      try {
-        history.attach(sessionId, feed)
-        return true
-      } catch {
-        return false
-      }
+      history.attach(sessionId, feed)
+      return true
     }
     // 真实按键接线 + 草稿缝（有 document 才接——Node/无 DOM 环境 = 跳过，单测可注入）
     if (doc !== undefined) {
@@ -223,14 +218,6 @@ function wireSessions(ctx: Context, sessions: ISessions): InputHistoryClientFace
       },
     }
 }
-
-/**
- * react 消费点占位（装载契约：react 等平台基线经 factory 的 require 走壳层
- * 冻结种子表、永不内联——守卫测试钉死 require("react") 在场）。
- */
-export const inputHistoryPlaceholder: ReactElement = createElement('div', {
-  'data-input-history': 'skeleton',
-})
 
 /**
  * 装载器正门（client-modules 装载契约）：materialize 后的 module.exports 须本身为
