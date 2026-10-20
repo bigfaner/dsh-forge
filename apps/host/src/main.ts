@@ -35,14 +35,18 @@ if (isPackagedForm(process.env, app.isPackaged)) {
   // 打包形态便携数据目录（2026-10-19 用户裁决：运行数据不占 C 盘）——userData 指到 exe 旁
   // data\（可写探测通过才切；Per-machine 受保护目录等不可写场景回退缺省 %APPDATA%）。直接
   // setPath 不经 DSH_FORGE_USER_DATA 环境变量，fix-26 凭据桥门不触发，真 home 凭据照常共享。
-  try {
-    const portableData = join(dirname(app.getPath('exe')), 'data')
-    mkdirSync(portableData, { recursive: true })
-    writeFileSync(join(portableData, '.write-probe'), '')
-    rmSync(join(portableData, '.write-probe'))
-    app.setPath('userData', portableData)
-  } catch {
-    /* 探测失败 = 安装根不可写——保持缺省 userData（fail-soft，不阻启动） */
+  // 平台门（bug 9b7a6216）：仅 win32 劫持——mac exe 在 .app bundle 内，升级整包替换会清空
+  // bundle 内 data；其余平台走缺省 userData（升级安全）。
+  if (process.platform === 'win32') {
+    try {
+      const portableData = join(dirname(app.getPath('exe')), 'data')
+      mkdirSync(portableData, { recursive: true })
+      writeFileSync(join(portableData, '.write-probe'), '')
+      rmSync(join(portableData, '.write-probe'))
+      app.setPath('userData', portableData)
+    } catch {
+      /* 探测失败 = 安装根不可写——保持缺省 userData（fail-soft，不阻启动） */
+    }
   }
   process.env.DSH_FORGE_RESOURCES_DIR ??= process.resourcesPath // 4.1：打包形态资源根（installAnchor/壳 dist 解析源）
 }

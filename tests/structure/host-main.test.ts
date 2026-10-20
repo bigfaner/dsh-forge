@@ -54,6 +54,11 @@ describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
     expect(source).not.toMatch(/^await app\.whenReady/m)
   })
 
+  it('bug 9b7a6216：便携数据目录劫持必须 process.platform === win32 门——mac exe 在 .app bundle 内，升级整包替换清空 bundle 内 data', () => {
+    // 劫持块（setPath('userData', portableData)）之前须有 win32 平台门（mac/linux 走缺省 userData，升级安全）
+    expect(source.slice(0, source.indexOf("app.setPath('userData', portableData)"))).toMatch(/process\.platform === 'win32'/)
+  })
+
   it('四子模块源文件就位（含 preload 与 dev profile 模板）', () => {
     for (const p of [
       'apps/host/src/profile/index.ts',
