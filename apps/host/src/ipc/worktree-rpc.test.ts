@@ -5,7 +5,7 @@
 //   · interceptSessionSends——assertSendable 接入 host 消息处理链（封存拒绝 + 明确错误；
 //     未绑定/未封存放行；判读异常 fail-open）。
 // ops 真机 git 面归独立模式走查（1.8 e2e 记录）——本文件全 fake 注入，零 git 依赖。
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -20,6 +20,7 @@ import type { ForgeIpc } from './forge-channels.js'
 import { rpcEnvelope } from './rpc-envelope.js'
 import {
   createWorktreeRpcService,
+  defaultEnsureDirAcl,
   interceptRequiredBinding,
   interceptSessionSends,
   registerWorktreeChannels,
@@ -1106,5 +1107,112 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
     expect(emits, 'fail-open 判读链异常零诊断 emit（bug ba763219）').toHaveLength(1)
     expect(emits[0]?.traceId, 'emit 发生在 ALS 上下文外——trace_id 断链').toBe('tr-open')
     expect(emits[0]?.message).toContain('fail-open')
+  })
+})
+
+describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 / B 幂等短路 / C 主行跳过 / D 超时上界）', () => {
+  /** B/D 面注入 runner——记录调用面（args + opts），读查询回 canned DACL */
+  const mkRunner = (dacl: string) => {
+    const calls: Array<{ file: string; args: string[]; opts?: { timeout?: number } }> = []
+    const run = async (file: string, args: string[], opts?: { timeout?: number }): Promise<string> => {
+      calls.push({ file, args, opts })
+      if (!args.includes('/grant')) return dacl
+      return 'Successfully processed 1 files'
+    }
+    return { run, calls }
+  }
+  const WITHOUT_ACE = 'Z:\\repo BUILTIN\\Administrators:(I)(F)\nNT AUTHORITY\\Authenticated Users:(I)(M)\n'
+  const WITH_ACE = 'Z:\\repo PANDA\\panda:(OI)(CI)(F)\nBUILTIN\\Administrators:(I)(F)\n'
+  const withEnv = async (fn: () => Promise<void>): Promise<void> => {
+    const backup = { d: process.env.USERDOMAIN, u: process.env.USERNAME }
+    process.env.USERDOMAIN = 'PANDA'
+    process.env.USERNAME = 'panda'
+    try {
+      await fn()
+    } finally {
+      for (const [k, v] of Object.entries(backup)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
+  }
+
+  it.skipIf(process.platform !== 'win32')('B：ACE 已在场（含继承式 (I)(OI)(CI)(F)）→ 只读短路、零 grant 调用', async () => {
+    const { run, calls } = mkRunner(`${WITH_ACE}PANDA\\panda:(I)(OI)(CI)(F)\n`)
+    await withEnv(() => defaultEnsureDirAcl('Z:\\repo', run))
+    expect(calls.filter((c) => c.args.includes('/grant')), '无短路——每次编排都触发分钟级全子树传播（bug 在场）').toEqual([])
+  })
+
+  it.skipIf(process.platform !== 'win32')('B+D：ACE 缺席 → grant 执行且带超时上界', async () => {
+    const { run, calls } = mkRunner(WITHOUT_ACE)
+    await withEnv(() => defaultEnsureDirAcl('Z:\\repo', run))
+    const grants = calls.filter((c) => c.args.includes('/grant'))
+    expect(grants.length).toBe(1)
+    expect(grants[0]!.opts?.timeout, '无超时——传播分钟级阻塞无上界（bug 在场）').toBeGreaterThan(0)
+  })
+
+  it.skipIf(process.platform !== 'win32')('B：DENY 行不算已补权（拒绝优先语义）', async () => {
+    const { run, calls } = mkRunner(`Z:\\repo PANDA\\panda:(DENY)(F)\n${WITHOUT_ACE}`)
+    await withEnv(() => defaultEnsureDirAcl('Z:\\repo', run))
+    expect(calls.some((c) => c.args.includes('/grant'))).toBe(true)
+  })
+
+  it.skipIf(process.platform !== 'win32')('真机冒烟：临时目录两次补权均亚秒级（只读短路生效，无全子树传播阻塞）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dswf-acl-'))
+    try {
+      const start = Date.now()
+      await defaultEnsureDirAcl(dir)
+      await defaultEnsureDirAcl(dir)
+      expect(Date.now() - start).toBeLessThan(2000)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('C：主行（worktreePath ≡ projectRoot）不做预防性 ACL 补权——非 worktree add 产物零全子树传播', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry } = fakeWorkspaceRegistry()
+    const aclPaths: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: registry,
+      ensureDirAcl: async (path) => {
+        aclPaths.push(path)
+      },
+    })
+    await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(aclPaths, '主行补权在场——项目根每次编排都跑分钟级全子树传播（bug 在场）').toEqual([])
+  })
+
+  it("A′：create 预铸空目录并先于 worktree add 授权（授权时目录必空——毫秒级，检出文件出生即继承）", async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'dswf-preseed-'))
+    const wtPath = join(ws, 'wt-a').replaceAll('\\', '/')
+    const order: string[] = []
+    const aclPaths: string[] = []
+    let dirStateAtAcl: string[] | undefined
+    try {
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        ensureDirAcl: async (path) => {
+          order.push('acl')
+          aclPaths.push(path)
+          dirStateAtAcl = existsSync(path) ? readdirSync(path) : ['<absent>']
+        },
+        createWorktreeOp: async () => {
+          order.push('add')
+          return { path: wtPath, head: 'ab' + '0'.repeat(38), branch: 'feat/a', detached: false, bare: false }
+        },
+      })
+      await service.create({ projectRoot: 'C:/repo', branch: 'feat/a', path: wtPath, base: 'main' })
+      expect(order, '授权未先于 worktree add（bug 在场）').toEqual(['acl', 'add'])
+      expect(aclPaths).toEqual([wtPath])
+      expect(dirStateAtAcl, '授权时目录非空/缺席——预铸时序未成立').toEqual([])
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
   })
 })

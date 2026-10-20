@@ -10,6 +10,7 @@
 //   · interceptSessionSends（child 侧发送拦截——assertSendable 接入 host 消息处理链：
 //     sessionController.prompt/updateQueue 前置封存校验，封存会话 host 拒绝 + 明确错误提示）。
 import { execFile } from 'node:child_process'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import {
@@ -173,12 +174,36 @@ const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').spli
  *     前置），无 capability-SID 授权链，无需补权。
  * 调用方 fail-soft（失败只 warn，不阻断编排）。
  */
-const defaultEnsureDirAcl = async (path: string): Promise<void> => {
+/** grant 超时上界（ms）——残余传播场景最坏 10s fail-soft（diagnose 技能兜底不变） */
+const ACL_GRANT_TIMEOUT_MS = 10_000
+
+/** ACL 子进程执行器（测试注入缝；缺省 = execFile promisified） */
+export type AclRunner = (file: string, args: string[], opts?: { timeout?: number }) => Promise<string>
+const defaultAclRunner: AclRunner = async (file, args, opts) =>
+  (await promisify(execFile)(file, args, { windowsHide: true, ...opts })).stdout
+
+const defaultEnsureDirAcl = async (path: string, run: AclRunner = defaultAclRunner): Promise<void> => {
   if (process.platform !== 'win32') return
   const user = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`
   if (user === '\\') return
-  await promisify(execFile)('icacls', [path, '/grant', `${user}:(OI)(CI)F`], { windowsHide: true })
+  // Root cause: 带继承标志的 ACE 写入触发 Windows 对整棵子树的继承传播（大仓库分钟级、
+  // 独占 1 核——bug f9a23367），且旧实现每次编排无条件 grant（已补权目录重复付账）。
+  // 幂等短路：先只读查 DACL（单目录 SD 读，毫秒级），当前用户已有 (OI)(CI)(F) 有效
+  // ACE（含继承式 (I) 标记——继承物化在场同样有效）即跳过 grant；DENY 行拒绝优先不算。
+  try {
+    const current = await run('icacls', [path])
+    const prefix = `${user}:`.toUpperCase()
+    const granted = current.split('\n').some((line) => {
+      const l = line.trim().toUpperCase()
+      return !l.includes('(DENY)') && l.startsWith(prefix) && l.includes('(OI)(CI)') && l.includes('(F)')
+    })
+    if (granted) return
+  } catch {
+    // 只读失败走 grant 兜底（超时上界保护）——现行 fail-soft 语义不变
+  }
+  await run('icacls', [path, '/grant', `${user}:(OI)(CI)F`], { timeout: ACL_GRANT_TIMEOUT_MS })
 }
+export { defaultEnsureDirAcl }
 
 /** 路径比对归一口径（seal-guard.normalizePathForCompare 同判——本地镜像零回环） */
 const norm = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
@@ -205,6 +230,8 @@ export function createWorktreeRpcService(deps: {
   readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
   /** 目录 ACL 预防性补权缝（bug 4209c531——缺省 = win32 icacls 当前用户 FullControl；测试注入桩） */
   readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
+  /** worktree 一体创建缝（bug f9a23367 A′ 预铸时序——缺省 = 插件域 createWorktree 真机 git；测试注入桩） */
+  readonly createWorktreeOp?: typeof createWorktree | undefined
   /** worktree 集合变化锚（绑定表失效通知——create/remove 建删树 + sessionCreate 树首次
    * 挂会话时点触发；装配方接 refreshKnowledgeBindings 全量现算重写 knowledge-bindings。
    * fail-soft：锚缺席/抛错只记 warn，不影响建删树/编排结果） */
@@ -377,17 +404,20 @@ export function createWorktreeRpcService(deps: {
     const registry = resolveWorkspaceRegistry()
     if (registry === undefined) return
     try {
-      // bug 4209c531：树目录 ACL 预防性补权（先于一切授权面）——git worktree add 产出的
-      // 目录链常缺有效 WRITE_DAC/WRITE_OWNER，沙箱 provision 必拒；为当前用户补 FullControl。
-      await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(worktreePath).catch((cause: unknown) => {
-        warn(`[git-worktree] 目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
-      })
       // 树工作区标题继承项目命名——官方 chip 文案 = workspace.title（槽外不可改制）。
       // title 源 = 活跃项目行 name（hero 项目行同源；工作区 title 是用户可改名的易变字段
       // 不作源）。主行（cwd=项目根）不回写——主工作区 title 是用户命名面。映射缺席回退树名。
       const resolution = await cachedResolve(worktreePath).catch(() => null)
       const projectRoot = resolution?.projectRoot
       const isMainRow = projectRoot !== undefined && norm(worktreePath) === norm(projectRoot)
+      // bug f9a23367（C）：预防性补权只针对 git worktree add 产物（4209c531 语义——新树
+      // 目录缺 WRITE_DAC 继承链）；主行 = 用户自有目录链，跳过——否则项目根每次编排都
+      // 触发分钟级全子树传播。resolution 缺席（非 git/降级面）保守补权（原行为不变）。
+      if (!isMainRow) {
+        await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(worktreePath).catch((cause: unknown) => {
+          warn(`[git-worktree] 目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
+        })
+      }
       const mainTitle = isMainRow
         ? undefined
         : (resolution?.projectName ??
@@ -526,7 +556,20 @@ export function createWorktreeRpcService(deps: {
     },
 
     async create(request) {
-      const entry = await createWorktree(request.projectRoot, {
+      // A′（bug f9a23367）：树目录预铸——先建空目录并在此刻补可继承 ACE（空目录上 grant
+      // 毫秒级），git worktree add 检出的每个文件出生即继承，消除「检出后对满树 grant」
+      // 的分钟级全子树回溯传播。非空/已存在路径不授权（createWorktree 按 path-exists 拒）。
+      try {
+        if (!existsSync(request.path)) mkdirSync(request.path, { recursive: true })
+        if (readdirSync(request.path).length === 0) {
+          await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(request.path).catch((cause: unknown) => {
+            warn(`[git-worktree] 预铸目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
+          })
+        }
+      } catch (cause) {
+        warn(`[git-worktree] 预铸目录创建失败（fail-soft——git 自建目录路径不受影响）：${String(cause)}`)
+      }
+      const entry = await (deps.createWorktreeOp ?? createWorktree)(request.projectRoot, {
         branch: request.branch,
         path: request.path,
         base: request.base,

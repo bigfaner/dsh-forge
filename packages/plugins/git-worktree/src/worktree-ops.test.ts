@@ -169,6 +169,16 @@ describe('createWorktree（前置 fetch + worktree add -b 一体创建）', () =
     })
   })
 
+  it('bug f9a23367A：目标为已存在的空目录 → 放行创建（host 预铸授权缝——空目录先获可继承 ACE，检出文件出生即继承）', async () => {
+    const repo = makeLocalRepo('create-emptydir')
+    const wtPath = join(root, 'create-emptydir-wt')
+    mkdirSync(wtPath) // 空目录（host 侧预铸 + ACL 授权后移交 git）
+    const entry = await createWorktree(repo, { branch: 'feat/empty', path: wtPath, base: 'main' })
+    expect(entry.branch).toBe('feat/empty')
+    const listed = await listWorktrees(repo)
+    expect(listed.some((candidate) => norm(candidate.path) === norm(wtPath) && candidate.branch === 'feat/empty')).toBe(true)
+  })
+
   it('分支名非法 → CreateWorktreeError(invalid-branch) 明确报错', async () => {
     const repo = makeLocalRepo('create-badbranch')
     const wtPath = join(root, 'create-badbranch-wt')
