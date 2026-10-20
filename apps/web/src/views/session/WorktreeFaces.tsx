@@ -21,6 +21,7 @@ import {
   SealNotice,
   SealedComposerPlaceholder,
   SessionWorktreeChip,
+  StaleSelectionNotice,
   WorktreeRiskConfirmation,
   isCrossBranchRisk,
   joinWorktreePath,
@@ -36,6 +37,7 @@ import {
   riskDialogNeeded,
   riskLatchConfirm,
   riskLatchReselect,
+  staleSelectionResetOf,
   type RiskConfirmLatch,
 } from './hero-picker-model.js'
 // 弹窗卡面/下拉浮层宽度规则（.dswt-create-modal / .dswt-*-menu——session.css 1.12 段）
@@ -228,6 +230,24 @@ export function ForgeHeroWorktreeMount({
     )
   }, [phase, projectRoot])
 
+  // 陈旧选中自愈（bug 4a30b193 UI 面）：清单就绪后发现选中行盘上缺席（present=false 或
+  // 行已消失——外部强制删除）→ 三层选中态同清（本地 / 项目粒度记忆 / host 推送）+ chip
+  // 跳回主行 + 一次性 notice 告知。host 侧重路由活性探测为正确性兜底（双保险不同层）。
+  const [staleNoticeName, setStaleNoticeName] = useState<string | null>(null)
+  useEffect(() => {
+    if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    const reset = staleSelectionResetOf(phase.rows, localSelectedPath)
+    if (!reset.stale) return
+    setStaleNoticeName(reset.worktreeName ?? null)
+    if (reset.mainPath !== undefined) {
+      applySelection(reset.mainPath) // 跳回主行：记忆写入 + host 推送 + chip 回填（唯一写入口）
+    } else {
+      writeSelectedMemory(projectRoot, undefined)
+      pushSelection(undefined)
+      setLocalSelectedPath(undefined)
+    }
+  }, [phase, localSelectedPath, projectRoot, applySelection, pushSelection])
+
   const refresh = useCallback((): void => {
     if (projectRoot === null) return
     makeRpc()
@@ -373,6 +393,9 @@ export function ForgeHeroWorktreeMount({
   if (projectRoot === null) return null // 无选中项目：hero 区零注入（退回现状）
   return (
     <>
+      {staleNoticeName !== null && (
+        <StaleSelectionNotice worktreeName={staleNoticeName} onClose={() => setStaleNoticeName(null)} />
+      )}
       <HeroWorktreePicker
         isGit={phase.isGit}
         rows={phase.rows}

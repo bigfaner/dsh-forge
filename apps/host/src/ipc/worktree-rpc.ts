@@ -292,6 +292,8 @@ export function createWorktreeRpcService(deps: {
   const listPresent =
     deps.listPresent ??
     ((root: string) => listWorktrees(root).then((entries) => entries.map((entry) => entry.path)))
+  // 重路由目标 / list present 共源活性探测（bug 4a30b193 缝——缺省 = existsSync 盘上事实）
+  const presentOf = deps.pathPresent ?? defaultPathPresent
   const resolveGitWorktree = (): GitWorktreeServiceFace | undefined =>
     typeof deps.gitWorktree === 'function' ? deps.gitWorktree() : deps.gitWorktree
   const ext = (): GitWorktreeExtensionPoints =>
@@ -565,7 +567,9 @@ export function createWorktreeRpcService(deps: {
         (deps.listWorktreeRows ?? listWorktrees)(resolution.projectRoot),
         Promise.resolve(ext().getWorktreeDir(resolution.projectRoot)),
       ])
-      const dtos = entries.map((entry) => entryToDto(entry, resolution.projectRoot))
+      // present 兑现盘上事实（bug 4a30b193 UI 面）：git 清单在 prune 前保留已删树陈旧行
+      // ——UI 陈旧选中自愈判定源 = existsSync 盘上实存（与重路由活性同源 presentOf）
+      const dtos = entries.map((entry) => ({ ...entryToDto(entry, resolution.projectRoot), present: presentOf(entry.path) }))
       healWorkspaceTitles(resolution, dtos)
       return {
         isGit: true,

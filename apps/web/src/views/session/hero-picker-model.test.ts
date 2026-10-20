@@ -13,6 +13,7 @@ import {
   riskDialogNeeded,
   riskLatchConfirm,
   riskLatchReselect,
+  staleSelectionResetOf,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -184,5 +185,35 @@ describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/弹框判定�
     expect(riskDialogNeeded(WT_A, null)).toBe(true) // 未确认 → 弹框
     expect(riskDialogNeeded(WT_A, WT_A)).toBe(false) // 已确认闩锁 → 零重弹
     expect(riskDialogNeeded(WT_A, 'C:/other')).toBe(true) // 闩锁他行 → 仍弹框
+  })
+})
+
+// ───────────── bug 4a30b193 陈旧选中自愈判定（纯函数单源）─────────────
+describe('staleSelectionResetOf（bug 4a30b193 陈旧选中自愈判定）', () => {
+  const rows = [
+    { path: 'C:/repo', worktreeName: 'repo', isMain: true, present: true },
+    { path: 'C:/repo/.forge/worktrees/wt-a', worktreeName: 'wt-a', isMain: false, present: true },
+  ]
+
+  it('选中行盘上缺席（present=false，git 陈旧清单行）→ stale + 树名引述 + 主行回落', () => {
+    const goneRows = [rows[0]!, { ...rows[1]!, present: false }] // wt-a 行在（git 未 prune）但盘上已删
+    const plan = staleSelectionResetOf(goneRows, goneRows[1]!.path)
+    expect(plan).toEqual({ stale: true, worktreeName: 'wt-a', mainPath: 'C:/repo' })
+  })
+
+  it('选中行整段消失（清单无行——prune 后）→ stale + 树名取路径尾段', () => {
+    const plan = staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/gone')
+    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: 'C:/repo' })
+  })
+
+  it('健康选中 / 无选中 → 不自愈（用户显式选中零覆盖）', () => {
+    expect(staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/wt-a')).toEqual({ stale: false })
+    expect(staleSelectionResetOf(rows, undefined)).toEqual({ stale: false })
+  })
+
+  it('清单无主行（退化清单）→ stale 但 mainPath 缺席（装配层仅清选中态）', () => {
+    const noMain = [{ path: 'C:/x', worktreeName: 'x', isMain: false, present: true }]
+    const plan = staleSelectionResetOf(noMain, 'C:/gone')
+    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: undefined })
   })
 })

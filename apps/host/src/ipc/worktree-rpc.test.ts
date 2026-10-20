@@ -493,6 +493,22 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       { path: 'C:/repo/.forge/worktrees/wt-b', projectId: 'p1', projectRoot: 'C:/repo', projectName: 'dsh-forge' },
     ])
   })
+
+  it('bug 4a30b193：list present 兑现盘上事实——已删树陈旧行（git prune 前）present=false', async () => {
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [
+        { path: 'C:/repo', branch: 'main', detached: false, bare: false },
+        { path: 'C:/repo/.forge/worktrees/gone', branch: 'feat/gone', detached: false, bare: false },
+      ],
+      pathPresent: (p) => p === 'C:/repo', // gone 目录已被外部强制删除
+    })
+    const result = await service.list({ projectRoot: 'C:/repo' })
+    expect(result.entries.map((entry) => [entry.worktreeName, entry.present])).toEqual([
+      ['repo', true],
+      ['gone', false], // 恒 true = UI 陈旧选中无法识别（bug 在场）
+    ])
+  })
 })
 
 describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {

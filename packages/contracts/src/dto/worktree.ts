@@ -17,7 +17,7 @@ export interface WorktreeEntryDto {
   readonly worktreeName: string
   /** 主 worktree 行（只展示、无删除入口） */
   readonly isMain: boolean
-  /** 盘上在场性（git worktree list 派生——恒 true；保留字段对齐 UI 行模型） */
+  /** 盘上在场性（existsSync 实存判定——git 清单 prune 前保留已删树陈旧行，不可作判据） */
   readonly present: boolean
   readonly detached: boolean
   readonly bare: boolean

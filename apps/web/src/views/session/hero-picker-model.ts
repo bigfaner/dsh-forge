@@ -137,3 +137,41 @@ export function riskLatchReselect(prev: RiskConfirmLatch, path: string): RiskCon
 export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean {
   return latch !== path
 }
+
+// ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
+
+/** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */
+export interface StaleSelectionRow {
+  readonly path: string
+  readonly worktreeName: string
+  readonly isMain: boolean
+  readonly present: boolean
+}
+
+/** 自愈计划（选中行盘上缺席时装配层消费：选中态切回主行 + notice 引述树名） */
+export interface StaleSelectionReset {
+  /** true = 选中行已失效，需切回主行并呈现 notice */
+  readonly stale: boolean
+  /** 失效树名（notice 引述；stale=false 缺席） */
+  readonly worktreeName?: string
+  /** 回落主行路径（主行缺席 = undefined——无主行可落，仅清选中态） */
+  readonly mainPath?: string
+}
+
+/**
+ * 陈旧选中自愈判定（纯函数单源）：选中行在清单中缺席，或行在场但盘上实存为假
+ * （git 清单 prune 前保留已删树陈旧行——present 以 existsSync 盘上事实为准）→ stale。
+ * 选中态缺席/命中健康行 = 不自愈（用户显式选中零覆盖）。
+ */
+export function staleSelectionResetOf(
+  rows: readonly StaleSelectionRow[],
+  selectedPath: string | undefined,
+): StaleSelectionReset {
+  if (selectedPath === undefined) return { stale: false }
+  const row = rows.find((candidate) => candidate.path === selectedPath)
+  if (row !== undefined && row.present) return { stale: false }
+  const main = rows.find((candidate) => candidate.isMain)
+  // 行整段消失（清单无行）→ 树名取路径尾段（与 host worktreeNameOf 同判）
+  const name = row?.worktreeName ?? selectedPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? selectedPath
+  return { stale: true, worktreeName: name, mainPath: main?.path }
+}

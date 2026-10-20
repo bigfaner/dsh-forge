@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SessionWorktreeChip, SessionWorktreeInfoCard } from './session-worktree-chip.js'
-import { SealNotice, SealedComposerPlaceholder } from './seal-notice.js'
+import { SealNotice, SealedComposerPlaceholder, StaleSelectionNotice } from './seal-notice.js'
 
 const chip = (over: Partial<Parameters<typeof SessionWorktreeChip>[0]> = {}): string =>
   renderToStaticMarkup(<SessionWorktreeChip isGit branch="feat/api" worktreeName="wt-api" {...over} />)
@@ -109,5 +109,15 @@ describe('封存三通道（worktree 被删提示）', () => {
     const markup = renderToStaticMarkup(<SealedComposerPlaceholder />)
     expect(markup).toContain('data-dswt-seal-placeholder')
     expect(markup).toContain('worktree 已删除，会话已封存——可查看历史')
+  })
+})
+
+describe('hero 选中树失效 notice（bug 4a30b193——StaleSelectionNotice）', () => {
+  it('警告形态 + 引述树名 + 已切回主树文案 + 一次性关闭锚', () => {
+    const markup = renderToStaticMarkup(<StaleSelectionNotice worktreeName="wt-gone" onClose={() => {}} />)
+    expect(markup).toContain('data-dswt-stale-selection-notice')
+    expect(markup).toContain('已不存在（可能已被删除），已切回主树')
+    expect(markup).toContain('wt-gone')
+    expect(markup).toContain('data-dswt-stale-selection-notice-close')
   })
 })
