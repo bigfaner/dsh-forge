@@ -1,7 +1,7 @@
 // shell/boot 单测 —— boot manifest 消费的纯面（G1 第 1/2 项缝的 renderer 侧 pin）：
 // 形状校验、carrier 推导、掌舵入图（追加语义 + 负样例）、宿主插件位发布（bug 2ffb0a82）。
 // DOM/IPC 面由 e2e（web-shell.spec）覆盖。
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bootShell, steerBootGraph, type ProductClientEntry } from './boot.js'
 import { transportCarrierFor } from './carrier.js'
 import { assertBootManifestShape, type BootManifestPayload, preloadBridge } from './bridge.js'
@@ -96,6 +96,30 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
       inject: ['@deepseek-ai/dsh-api-session-controller'],
       immediately: true,
     })
+  })
+  it('产品行已在图（官方 plugin-manager 装载在场）→ 壳掌舵让位幂等跳过，官方行原样保留', async () => {
+    // 官方行来源 = 官方花名册经 global 注入行写 __DSH_BOOT__（applyIndexInjections 落值）
+    const officialRow = { id: '@dsh-forge/input-history', url: 'input-history-client.js?rev=official', rev: 'official', immediately: true }
+    ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+    ;(globalThis as { dshForge?: unknown }).dshForge = {
+      getBootManifest: () =>
+        Promise.resolve(manifest({
+          injections: [{ kind: 'global', name: '__DSH_BOOT__', value: { entries: [officialRow], batches: [] } }],
+        })),
+    }
+    const warn: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((line) => void warn.push(String(line)))
+    try {
+      await bootShell([product(), inputHistory()])
+    } finally {
+      spy.mockRestore()
+    }
+    const g = (globalThis as { __DSH_BOOT__?: { entries: { id: string }[]; batches: unknown[] } }).__DSH_BOOT__
+    // 本体行照常掌舵；input-history 官方行原样保留（不追加壳行、不改写官方 url/rev）
+    expect(g?.entries.map((r) => r.id)).toEqual(['@dsh-forge/input-history', '@dsh-forge/web-client'])
+    expect(g?.entries[0]).toBe(officialRow)
+    expect(g?.batches).toHaveLength(1) // 仅本体 application 批——壳未为 input-history 追加批
+    expect(warn.some((line) => line.includes('@dsh-forge/input-history'))).toBe(true)
   })
   it('knowledgePlugin:true → { knowledge: true }；位缺席/旧宿主 → { knowledge: false }（fail-closed——知识面隐藏单源）', async () => {
     const boot = (manifestOver: Partial<BootManifestPayload>) => {
