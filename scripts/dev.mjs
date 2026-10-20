@@ -72,6 +72,20 @@ if (ensureHostDist.status !== 0) {
 	);
 }
 
+// input-history client bundle 打包步（Root cause: 根 tsc -b 只产 tsc 输出 dist/client/，
+// exports["./client"] 指向的 dist/client.js 由包内 bundle-client.mjs esbuild 产出——
+// 管线不跑它则 vite watch 初始构建 req.resolve 失败。run-once 增量，幂等便宜）。
+const ensurePluginClientBundle = spawnSync(
+	'pnpm',
+	['-C', 'packages/plugins/input-history', 'build'],
+	{ stdio: 'inherit', shell: true, cwd: ROOT }
+);
+if (ensurePluginClientBundle.status !== 0) {
+	console.error(
+		'[dev] input-history client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席'
+	);
+}
+
 start('vite', 'pnpm -C apps/web watch');
 start('tsc', 'pnpm exec tsc -b --watch');
 
