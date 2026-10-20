@@ -247,6 +247,15 @@ export type LoopEscalation =
         /** 核验结论/故障全文（结算核判词——问询 detail；含 interrupted 真化结果） */
         readonly reason: string
       }
+    | {
+        /** 流控挂起（bug 63112ab2——限流零重试，返回主会话择时重派） */
+        readonly kind: 'rate-limit'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly taskKey: string
+        /** 流控原因全文（worker 输出/spawn 拒绝判词——问询 detail） */
+        readonly reason: string
+      }
 
 export interface LoopEscalationHook {
   escalate(escalation: LoopEscalation): Promise<void>
@@ -490,6 +499,15 @@ export function triageFailureSummary(cause: unknown): string {
 /** 模型输出无效判别（改进 6② 分流键——结构性识别 TriageDecisionInvalidError，不 import triage 面） */
 export function isTriageInvalidOutput(cause: unknown): boolean {
   return (cause as { name?: unknown } | null)?.name === 'TriageDecisionInvalidError'
+}
+
+/**
+ * 流控类失败判别（bug 63112ab2 分流键）：限流窗口内立即重试必再撞限流——三次拉起全败
+ * 只加剧限流。识别后零重试，循环挂起返回主会话（附流控原因），择时重派由主会话决定。
+ */
+const RATE_LIMIT_PATTERN = /\b429\b|rate[ -]?limit|throttl|too many requests|流控|限流/i
+export function isRateLimitFailure(text: string): boolean {
+  return RATE_LIMIT_PATTERN.test(text)
 }
 
 /** 宿主执行前置校验拒绝（改进 6④⑤——结构同 TriageDecisionInvalidError：立即重试 + 回灌摘要） */
@@ -1104,6 +1122,12 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     record.inFlight = undefined // spawn 未成——任务留 in_progress 走幂等重入径（不走 submit-blocked）
     if ('kind' in spawned.failure) return haltLoop(loop) // HaltedOutcome——唯一 kind 承载成员（guard 粘住）
     const failure = spawned.failure // ERR_SPAWN_FAILED DTO（防线计数已按 guardKey 落面）
+    // 流控分流（bug 63112ab2）：限流窗口内退避重试必再撞限流——零重试直接挂起返回主会话
+    // （附流控原因），择时重派由主会话决定；非流控照旧走退避阶梯。
+    if (isRateLimitFailure(failure.message)) {
+      loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'spawn-rate-limited', error: failure.message })
+      return suspendForVerdict(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: failure.message })
+    }
     // 第一层机械守卫：退避后幂等重入（不立即重试——间隔递增 base×N；×3 halted 由 guard 兑现，decisions #11）
     loop.spawnFailures += 1
     const attempt = loop.spawnFailures
@@ -1163,6 +1187,11 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 失败 DTO（结算核 failed 径——killSignal 在场时 killed 已先行返回）：
     // worker 异常终止属执行受阻非 spawn 机制故障（guardOnFailure=false 零防线计数零 tool-error）——
     // ⑫ bounded 立即重入（claim 面按 links 幂等重入同任务，不退避）→ 超限第三层（decisions #16）
+    // 流控分流（bug 63112ab2）：限流终态（输出原文随判词在场）零重入——挂起返回主会话择时重派
+    if (isRateLimitFailure(settled.message)) {
+      loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-rate-limited', error: settled.message })
+      return suspendForVerdict(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: settled.message })
+    }
     loop.workerAborts += 1
     const attempt = loop.workerAborts
     loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })

@@ -217,8 +217,13 @@ export async function settleWorkerRun(
   const status = settled.task.taskStatus
   if (status !== 'completed' && status !== 'blocked') {
     // worker 未产出（完成但无结算——refusal/max-tokens/漏提交同径）：执行受阻语义，
-    // 任务留 in_progress 走幂等重入径（不走 submit-blocked）
-    return { case: 'failed', cause: new Error(`worker run ended without a settlement (stopReason: ${run.stopReason})`) }
+    // 任务留 in_progress 走幂等重入径（不走 submit-blocked）；
+    // 输出原文随判词携带（bug 63112ab2——循环侧流控分类的载体；截断防长文进防线面）
+    const detail = run.output.trim().slice(0, 500)
+    return {
+      case: 'failed',
+      cause: new Error(`worker run ended without a settlement (stopReason: ${run.stopReason})${detail !== '' ? `: ${detail}` : ''}`),
+    }
   }
 
   const outcome: 'success' | 'blocked' = status === 'completed' ? 'success' : 'blocked'

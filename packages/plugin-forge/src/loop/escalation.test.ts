@@ -136,6 +136,16 @@ describe('问询材料（renderEscalationAsk——纯函数，reason 原文 + �
       attempts: 4,
     })
     expect(abort.question).toContain('4 次')
+
+    const rateLimit = renderEscalationAsk({
+      kind: 'rate-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/2.5',
+      reason: 'provider error: 429 rate limit exceeded',
+    })
+    expect(rateLimit.question).toContain('流控')
+    expect(rateLimit.detail).toContain('429 rate limit exceeded')
   })
 })
 

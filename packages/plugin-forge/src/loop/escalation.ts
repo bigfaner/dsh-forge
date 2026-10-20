@@ -237,6 +237,19 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
         ].join('\n'),
         options: ESCALATION_OPTIONS,
       }
+    case 'rate-limit':
+      return {
+        header: '派发循环裁决',
+        question: `任务 ${escalation.taskKey} 因 LLM 供应商流控无法执行（限流窗口内重试必再撞限流），循环已挂起——流控解除后需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          `任务: ${escalation.taskKey}`,
+          '',
+          '流控原因（全文）：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
     case 'deadlock':
       return {
         header: '派发循环裁决',

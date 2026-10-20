@@ -27,7 +27,7 @@ import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
-import { backoffDelayMs, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
+import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import type { ForgeProgressEventData } from '../progress/index.js'
@@ -1310,6 +1310,85 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     // 执行受阻 ≠ spawn 机制故障：零 guard 计数、零 tool-error 留档（循环自有 bounded 阶梯）
     expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
     await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── 流控失败分流（bug 63112ab2） ───────────────────────────
+
+describe('流控失败分流（限流零重试——挂起返回主会话择时重派）', () => {
+  it('worker 无结算终态（stopReason: error + 限流输出）：零重试直接挂起 rate-limit，reason 携带限流原文', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      query: [queryOf('in_progress')],
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.resolve({ stopReason: 'error', output: 'provider error: 429 Too Many Requests, rate limit exceeded' }),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 限流窗口内重试必再撞限流——单次 spawn 不重试
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(suspended.escalation).toEqual({
+      kind: 'rate-limit',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/2.5',
+      reason: expect.stringContaining('rate limit exceeded'),
+    })
+    // 不走 ⑪/⑫ 自动重试叙述
+    expect(built.calls.some((c) => c.text.includes('[forge·自动重试]'))).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('spawn 拒绝（限流文案）：零重试零退避，直接挂起 rate-limit', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('provider rejected session start: 429 rate limit exceeded')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(built.spawn.requests).toHaveLength(1)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expect(suspended.escalation.kind === 'rate-limit' && suspended.escalation.reason).toContain('429')
+    expect(built.calls.some((c) => c.text.includes('启动子代理失败'))).toBe(false)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('非流控 spawn 失败不误判：照旧走退避重试阶梯至 halted（回归锚）', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('subagent factory rejected')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 三次尝试 + ⑪ ×2 —— 原阶梯行为不变（bug 63112ab2 只分流限流径）
+    expect(built.spawn.requests).toHaveLength(3)
+    expect(built.calls.filter((c) => c.text.includes('启动子代理失败'))).toHaveLength(2)
+  })
+})
+
+describe('流控分类器 isRateLimitFailure', () => {
+  it('命中限流族文案（429 / rate limit / throttled / Too Many Requests / 流控 / 限流）', () => {
+    expect(isRateLimitFailure('provider error: 429 Too Many Requests')).toBe(true)
+    expect(isRateLimitFailure('Rate limit exceeded, retry after 60s')).toBe(true)
+    expect(isRateLimitFailure('request throttled by upstream')).toBe(true)
+    expect(isRateLimitFailure('供应商流控触发，请稍后重试')).toBe(true)
+    expect(isRateLimitFailure('触发限流窗口')).toBe(true)
+  })
+
+  it('不命中一般失败文案', () => {
+    expect(isRateLimitFailure('subagent factory rejected')).toBe(false)
+    expect(isRateLimitFailure('worker run ended without a settlement (stopReason: error)')).toBe(false)
+    expect(isRateLimitFailure('')).toBe(false)
   })
 })
 
