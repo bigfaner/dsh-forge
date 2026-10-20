@@ -280,7 +280,7 @@ function SessionRow({
   onActivate,
   actions,
 }: {
-  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'status' | 'updatedAt' | 'pinned' | 'archived' | 'loop'>
+  row: Pick<SidebarSessionRow, 'sessionId' | 'title' | 'savedTitle' | 'status' | 'updatedAt' | 'pinned' | 'archived' | 'loop'>
   selected: boolean
   now: number
   onActivate?: (sessionId: string) => void
@@ -389,7 +389,7 @@ function SessionRow({
               onSelect={(id) => {
                 setMenuOpen(false)
                 if (id === 'pin') actions?.onPinToggle?.(row.sessionId, !row.pinned)
-                else if (id === 'rename') actions?.onRequestRename?.(row.sessionId, row.title)
+                else if (id === 'rename') actions?.onRequestRename?.(row.sessionId, row.savedTitle)
                 else if (id === 'fork') actions?.onFork?.(row.sessionId)
                 else if (id === 'archive') {
                   if (row.archived) actions?.onUnarchive?.(row.sessionId)
