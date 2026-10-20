@@ -374,4 +374,58 @@ describe('R2-major②③（bug 458fa355）：互认竞态 / 宿主子进程收�
     expect(await reclaiming).toBe(true)
     rmSync(queueDir!, { recursive: true, force: true })
   })
+
+  it('bug 0fc07374：队列目录运行中被外部删除 → 首次写失败禁用后不再重复尝试（错误单条、零连喷）', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let queueDir: string | undefined
+    let pipe: EventEmitter
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        pipe = new EventEmitter()
+        queueMicrotask(() => pipe!.emit('data', 'ready 4242\n'))
+        return { pid: 4242, stdout: pipe as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    try {
+      await guard.whenReady
+      rmSync(queueDir!, { recursive: true, force: true }) // Temp 清理器形态：目录消失
+      for (let i = 0; i < 5; i++) pipe!.emit('data', `candidate ${700 + i}\n`) // keeper 行持续到达
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const spam = errSpy.mock.calls.filter((c) => String(c[0]).includes('指令队列写失败'))
+      expect(spam.length).toBe(1) // 修复前：每条 keeper 行各喷一次（现场 10 连喷）
+    } finally {
+      errSpy.mockRestore()
+      rmSync(queueDir!, { recursive: true, force: true })
+    }
+  })
+
+  it('bug 0fc07374：目录被删禁用后 reclaim 自愈——ensureQueueDir 重建目录、terminate 仍可达', async () => {
+    let queueDir: string | undefined
+    let finishKeeper!: () => void
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return {
+          pid: 4242,
+          stdout: stdout as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    rmSync(queueDir!, { recursive: true, force: true }) // 目录被外部清理
+    guard.exclude(5) // 首次写失败 → 禁用 + queueDirReady 应失效
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const reclaiming = guard.reclaim() // 不人工恢复目录——send('terminate') 须自重建目录投递
+    const queued = queueContent(queueDir!)
+    expect(queued).toContain('terminate')
+    finishKeeper()
+    expect(await reclaiming).toBe(true)
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
 })

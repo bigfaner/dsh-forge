@@ -448,6 +448,9 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
 
   /** 指令投递（文件队列——写临时名后原子改名，keeper 只认 *.cmd 零部分读） */
   private send(line: string): void {
+    // Root cause: 禁用态只置 enabled 却无人消费——keeper 行照旧进 send()，同因写失败连喷；
+    // terminate 例外（reclaim 兜底独立于 enabled——孤儿防护不可被禁用态拦截）。
+    if (!this.enabled && line !== 'terminate') return
     if (this.done && line !== 'terminate') return
     if (!this.ensureQueueDir()) return
     const name = `${Date.now()}-${this.queueSeq++}`
@@ -456,8 +459,11 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       rmSync(join(this.queueDir, `${name}.cmd`), { force: true })
       renameSync(join(this.queueDir, `${name}.part`), join(this.queueDir, `${name}.cmd`))
     } catch (err) {
-      // 队列写失败 = 指令不可达（禁用态化）——worker 正常路径不受牵连
+      // 队列写失败 = 指令不可达（禁用态化）——worker 正常路径不受牵连。
+      // queueDirReady 同步失效：目录可能被外部清理（Temp 清理器），后续 terminate 兜底径
+      // 经 ensureQueueDir 重建目录自愈；非 terminate 指令已被入口 enabled 门拦截。
       console.error('[job-tree] 指令队列写失败——指令不可达，守卫禁用', err)
+      this.queueDirReady = false
       this.enabled = false
     }
   }
