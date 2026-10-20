@@ -140,12 +140,18 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     const anchor = buildRuntimeAnchorManifest(install, { '@dsh-forge/core': '0.1.0' }, '0.2.0') as {
       name: string
       version: string
+      type?: string
       dependencies: Record<string, string>
     }
     expect(anchor.name).toBe('dsh-forge-runtime')
     expect(anchor.version).toBe('0.2.0')
     expect(Object.keys(anchor.dependencies)).toEqual(['@dsh-forge/core', 'a-pkg', 'b-pkg'])
     expect(anchor.dependencies['@dsh-forge/core']).toBe('0.1.0')
+  })
+
+  it('bug f27619a2：anchor 清单必须携带 type:module——host-dist 全 ESM，缺席即每启 MODULE_TYPELESS 重解析警告（error 级日志噪音）', () => {
+    const anchor = buildRuntimeAnchorManifest({ dependencies: {} }, {}, '0.2.0') as { type?: string }
+    expect(anchor.type, 'runtime/package.json 缺 type:module（bug 在场）').toBe('module')
   })
 
   it('app 清单 deps-free：main = main.js 装载器 + ESM（electron-builder 无依赖可收）', () => {

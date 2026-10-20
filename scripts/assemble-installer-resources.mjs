@@ -188,6 +188,9 @@ export function buildRuntimeAnchorManifest(installManifest, productVersions, roo
   return {
     name: 'dsh-forge-runtime',
     private: true,
+    // Root cause (bug f27619a2)：同容器 host-dist/ 全为 ESM（tsc 产物），缺席 type 字段
+    // 使 Node 先按 CJS 解析失败再重解析——每启 MODULE_TYPELESS 警告（error 级）+ 双解析开销。
+    type: 'module',
     version: rootVersion,
     description:
       'dsh-forge packaged runtime anchor (synthetic dsh installation manifest; drives dsh-app-boot resolution BFS — see scripts/assemble-installer-resources.mjs).',
