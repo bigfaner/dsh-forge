@@ -171,6 +171,9 @@ importers:
       '@dsh-forge/git-worktree':
         specifier: workspace:*
         version: link:../../packages/plugins/git-worktree
+      '@dsh-forge/input-history':
+        specifier: workspace:*
+        version: link:../../packages/plugins/input-history
       '@dsh-forge/md-mermaid':
         specifier: workspace:*
         version: link:../../packages/plugins/md-mermaid

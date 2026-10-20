@@ -2,7 +2,7 @@
 // sessions 注入缝 + binding.eventSource 历史源 + DOM 键源 + mention 守卫 + 活跃会话跟随
 // 全在包内 apply 装配（fake ctx/fake document 驱动）。
 import { describe, expect, it } from 'vitest'
-import { inputHistoryClient } from '../src/client/index.js'
+import { wireInputHistoryClient } from '../src/client/index.js'
 import type { ForgeComposerDomKeyEvent, ForgeComposerEventTarget } from '../src/client/composer-keys.js'
 
 // --- fake 官方面 ---------------------------------------------------------------
@@ -110,10 +110,10 @@ function worldWithSession(world: World, id: string, texts: { seq: number; text: 
   world.listSnapshot.byId[id] = { id, retainedBy: { mainView: 1 } }
 }
 
-describe('inputHistoryClient.apply（组合 apply 接线）', () => {
+describe('wireInputHistoryClient（组合接线面）', () => {
   it('sessions 缺席 = 空态降级（sessionsAvailable=false，不炸组合）', () => {
     setDoc(undefined)
-    const face = inputHistoryClient.apply({} as never)
+    const face = wireInputHistoryClient({} as never)
     expect(face.sessionsAvailable).toBe(false)
     expect(() => face.dispose()).not.toThrow()
   })
@@ -121,7 +121,7 @@ describe('inputHistoryClient.apply（组合 apply 接线）', () => {
   it('全缝在场：活跃会话自动 attach，ArrowUp 翻出已发送消息并置稿（DOM 键源 → 历史）', () => {
     const world = fakeWorld()
     worldWithSession(world, 's1', [{ seq: 1, text: '会话一消息' }])
-    const face = inputHistoryClient.apply(world.ctx as never)
+    const face = wireInputHistoryClient(world.ctx as never)
     expect(face.sessionsAvailable).toBe(true)
     expect(face.history?.attachedSession()).toBe('s1')
     world.doc.dispatch('ArrowUp', editableTarget())
@@ -136,7 +136,7 @@ describe('inputHistoryClient.apply（组合 apply 接线）', () => {
   it('mention 菜单开时不抢键：方向键不进历史', () => {
     const world = fakeWorld()
     worldWithSession(world, 'menu-open', [{ seq: 1, text: '消息' }])
-    const face = inputHistoryClient.apply(world.ctx as never)
+    const face = wireInputHistoryClient(world.ctx as never)
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.get('menu-open') ?? '').toBe('')
     face.dispose()
@@ -147,7 +147,7 @@ describe('inputHistoryClient.apply（组合 apply 接线）', () => {
     const world = fakeWorld()
     worldWithSession(world, 's1', [{ seq: 1, text: '会话一消息' }])
     worldWithSession(world, 's2', [{ seq: 10, text: '会话二消息' }])
-    const face = inputHistoryClient.apply(world.ctx as never)
+    const face = wireInputHistoryClient(world.ctx as never)
     expect(face.history?.attachedSession()).toBe('s1')
     // 模拟宿主切换活跃会话：s1 退留、s2 在留
     world.listSnapshot.byId['s1'] = { id: 's1', retainedBy: { mainView: 0 } }
@@ -162,7 +162,7 @@ describe('inputHistoryClient.apply（组合 apply 接线）', () => {
   it('dispose 后键源退订：方向键不再触发置稿', () => {
     const world = fakeWorld()
     worldWithSession(world, 's1', [{ seq: 1, text: '消息' }])
-    const face = inputHistoryClient.apply(world.ctx as never)
+    const face = wireInputHistoryClient(world.ctx as never)
     face.dispose()
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.size).toBe(0)

@@ -31,6 +31,18 @@ const productClient: ProductClientEntry = {
   rev: __DSH_FORGE_BUILD_REV__,
 }
 
+// 独立插件包缺省装载行（composer-input-history-plugin/1.4）：bundle = vite 构建期原样
+// 发射的 @dsh-forge/input-history dist/client.js（官方自注册 CJS，vite.config 发射插件）；
+// id 字面量与本包 bundle-client.mjs PLUGIN_ID 同源（自注册头）——不 import（资产零代码耦合）。
+// rev 同用构建戳（与掌舵 url 查询一致——模块系统 atRevision 契约）；inject = 装配期注入边
+// （与本包 dsh.client 清单同源：装载序落在 session-controller 之后——ctx.sessions 运行期可达）。
+const inputHistoryClient: ProductClientEntry = {
+  id: '@dsh-forge/input-history',
+  url: `input-history-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
+  rev: __DSH_FORGE_BUILD_REV__,
+  inject: ['@deepseek-ai/dsh-api-session-controller'],
+}
+
 const el = document.getElementById('root')
 if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 
@@ -52,7 +64,7 @@ if (decision.branch === 'restricted') {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {
   const entry = new AppWebEntry(el)
-  void bootShell(productClient)
+  void bootShell([productClient, inputHistoryClient])
   // W4 行存续看门（session-binding-guarantee §W4）：活在壳 bundle 全局面——插件 fiber 内
   // 看门随插件同殁，检不出 prune。周期查 __DSH_FORGE_CLIENT__ 激活标记 + forge 洞位
   // ctx.slots.entries 计数（经插件发布的 __DSH_FORGE_HEALTH__ 探针）；插件侧 cordis

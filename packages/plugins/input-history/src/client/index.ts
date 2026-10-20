@@ -76,11 +76,59 @@ function inputFaceOf(ctx: unknown, sessions: ISessions, sessionId: string): Comp
  * （AGENTS.md §1.5），运行期存在性检查承担 fail-soft。
  */
 export const inputHistoryClient = {
-  apply(ctx: Context): InputHistoryClientFace {
-    const sessions = (ctx as { sessions?: ISessions }).sessions
+  // 返回值铁律：cordis 组合把 apply 返回值当 effect 消费（真机判例——返回任意
+  // 非空对象 = TypeError「Invalid effect」→ entry failed → 壳整页 boot 失败），
+  // apply 必须返回 undefined；接线面经 wireInputHistoryClient 显式取用。
+  apply(ctx: Context): void {
+    // 组合缝 fail-loud log + fail-soft 降级：接线面任一未捕获异常只降本面（console
+    // 留痕供真机判读），不外溢炸 cordis 组合。
+    try {
+      const sessions = readSessionsOf(ctx)
+      if (sessions != null) {
+        wireSessions(ctx, sessions)
+        return
+      }
+      // 装配序兜底（官方 inject face——AGENTS.md §1.1 合法缝）：boot-graph inject 边
+      // 只保证 bundle 装载序，服务 provide 仍可能晚于本插件 apply（真机判例）——
+      // 运行期注入 sessions，provide 时接线；已提供则同步触发。
+      const inject = (ctx as {
+        inject?: (names: readonly string[], cb: (scope: unknown) => void) => unknown
+      }).inject
+      if (typeof inject !== 'function') return
+      inject.call(ctx, ['sessions'], (scope: unknown) => {
+        const late = readSessionsOf(scope)
+        if (late == null) return
+        try {
+          wireSessions(ctx, late)
+        } catch (error) {
+          console.error('[dsh-forge/input-history] late wiring failed——降级空态', error)
+        }
+      })
+    } catch (error) {
+      console.error('[dsh-forge/input-history] client apply failed——降级空态', error)
+    }
+  },
+}
+
+/** sessions 具名服务读取（fail-soft：cordis 缺席服务属性访问可抛）。 */
+function readSessionsOf(source: unknown): ISessions | undefined {
+  try {
+    return (source as { sessions?: ISessions }).sessions ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 接线本体（测试与诊断显式取面；apply 的 try 体——异常归类由外层缝承担）。 */
+export function wireInputHistoryClient(ctx: Context): InputHistoryClientFace {
+    const sessions = readSessionsOf(ctx)
     if (sessions == null) {
       return { sessionsAvailable: false, history: undefined, dispose: () => undefined }
     }
+    return wireSessions(ctx, sessions)
+}
+
+function wireSessions(ctx: Context, sessions: ISessions): InputHistoryClientFace {
     const disposes: (() => void)[] = []
     const history = createInputHistory()
     const doc = (globalThis as { document?: ForgeComposerMenuDocument & ForgeComposerEventTarget }).document
@@ -158,7 +206,6 @@ export const inputHistoryClient = {
         for (const dispose of disposes.splice(0)) dispose()
       },
     }
-  },
 }
 
 /**
@@ -168,3 +215,11 @@ export const inputHistoryClient = {
 export const inputHistoryPlaceholder: ReactElement = createElement('div', {
   'data-input-history': 'skeleton',
 })
+
+/**
+ * 装载器正门（client-modules 装载契约）：materialize 后的 module.exports 须本身为
+ * cordis 插件面——function 或含 apply 方法的对象（official 判例 session-controller
+ * exports.apply 同型）；exports.inputHistoryClient 嵌套不被识别（真机「invalid
+ * plugin, expect function or object with an apply method, received object」判例）。
+ */
+export const apply = inputHistoryClient.apply.bind(inputHistoryClient)

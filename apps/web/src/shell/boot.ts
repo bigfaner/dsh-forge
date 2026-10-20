@@ -16,6 +16,8 @@ export interface ProductClientEntry {
   readonly url: string
   /** 内容修订（缓存戳/HMR 锚） */
   readonly rev: string
+  /** 装配期注入边（官方 dsh.client.inject 同义——Loader 装载序，插件运行期服务可达性） */
+  readonly inject?: readonly string[]
 }
 
 /** __DSH_BOOT__ 组合图的窄类型（宿主 global 行写入；壳只追加不重排——行序 = 模块图序） */
@@ -78,16 +80,24 @@ export function steerBootGraph(wire: unknown, product: ProductClientEntry): Boot
   if (graph.entries.some((row) => row.id === product.id) || graph.batches.some((b) => b.url === product.url)) {
     throw new Error(`dsh-forge web: 产品 client 插件行已入图（重复掌舵）：${product.id}`)
   }
-  graph.entries.push({ id: product.id, url: product.url, rev: product.rev, inject: [], immediately: true })
+  graph.entries.push({
+    id: product.id,
+    url: product.url,
+    rev: product.rev,
+    inject: [...(product.inject ?? [])],
+    immediately: true,
+  })
   graph.batches.push({ phase: 'application', url: product.url, rev: product.rev, entries: [product.id] })
   return graph
 }
 
 /**
  * 壳 boot 消费主流程（main 入口调用；与 AppWebEntry.run 并行——run 在就绪门上等待）。
+ * 产品 client 插件行逐条掌舵入图（缺省装本体 forge-client + 独立插件包 bundle，
+ * 如 @dsh-forge/input-history——对齐现状默认态，无开关门控）。
  * 任一步失败即 reject 就绪门：AppWebEntry.run 的门 await 抛出 → 壳内核 boot 页渲染失败因。
  */
-export async function bootShell(product: ProductClientEntry): Promise<void> {
+export async function bootShell(products: readonly ProductClientEntry[]): Promise<void> {
   const gate = bootReadinessGate()
   try {
     const manifest = assertBootManifestShape(await preloadBridge().getBootManifest())
@@ -99,7 +109,7 @@ export async function bootShell(product: ProductClientEntry): Promise<void> {
     installTransportCarrier(transportCarrierFor(manifest.url))
     // 注入行形状归 dsh（IndexInjection）；host 只运输，壳按表执行（applyIndexInjections 校验行 kind）
     await applyIndexInjections(manifest.injections as Parameters<typeof applyIndexInjections>[0], loadScriptElement)
-    steerBootGraph((globalThis as BootGlobals).__DSH_BOOT__, product)
+    for (const product of products) steerBootGraph((globalThis as BootGlobals).__DSH_BOOT__, product)
     gate.resolve()
   } catch (error) {
     gate.reject(error)
