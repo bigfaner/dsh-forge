@@ -421,6 +421,35 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     await expect(legacy.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
   })
 
+  it('bug b6b88f49：分支解析落空（detached HEAD）→ 边界显式拒绝（可读错误含 worktree 路径），不预铸半截会话', async () => {
+    const { persistence, created } = fakePersistence({})
+    const { controller } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: null }], // detached 检出
+    })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
+      /分支解析失败.*wt-a/s,
+    )
+    expect(created).toHaveLength(0) // 未落半截预铸会话
+  })
+
+  it('bug b6b88f49：worktree list 清单失配（查无该树条目）→ 同径边界显式拒绝，不抛预铸深处 TypeError', async () => {
+    const { persistence } = fakePersistence({})
+    const { controller } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-other', branch: 'feat/x' }],
+    })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
+      /分支解析失败.*wt-a/s,
+    )
+  })
+
   it('checks：attachedSessions 反查（snapshot list 形态 header.id + 挂靠事件归并）', async () => {
     const { persistence } = fakePersistence({
       's-pre': [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' } }],

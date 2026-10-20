@@ -745,6 +745,12 @@ export function createWorktreeRpcService(deps: {
     // 预铸头与后续比对不再漂移。可达则归一、失败 fail-soft 回退原拼写（canonicalizeDir 同判）。
     const cwd = await realpath(request.worktreePath).catch(() => request.worktreePath)
     const branch = await resolveBranch(cwd)
+    // Root cause: 分支解析落空（detached HEAD 检出 / 清单路径失配或失败）此前未在边界拦截，
+    // 空串直达预铸深处由 requireNonEmpty 抛无业务语义的 TypeError（bug b6b88f49）。
+    // 挂靠事件契约 = 分支非空（一 worktree 一分支），落空即显式拒绝、不落半截预铸会话。
+    if (branch === '') {
+      throw new Error(`worktree 分支解析失败（detached HEAD 检出或清单失配），无法预铸挂靠会话：${cwd}`)
+    }
     // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
     // 唯一写句柄——建会话后另开写句柄补写挂靠事件在活会话上结构性不可行）。改为：先
     // persistence.create 预铸（自铸 id + cwd 头）→ 初始句柄写挂靠事件（seq 0, ignorable）
