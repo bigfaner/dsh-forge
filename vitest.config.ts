@@ -44,6 +44,8 @@ export default defineConfig({
           },
         },
       },
+      // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）
+      { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）

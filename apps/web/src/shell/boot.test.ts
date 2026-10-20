@@ -13,6 +13,12 @@ const manifest = (over: Partial<BootManifestPayload> = {}): BootManifestPayload 
 })
 
 const product = (): ProductClientEntry => ({ id: '@dsh-forge/web-client', url: 'forge-client.js?rev=b1', rev: 'b1' })
+const inputHistory = (): ProductClientEntry => ({
+  id: '@dsh-forge/input-history',
+  url: 'input-history-client.js?rev=b1',
+  rev: 'b1',
+  inject: ['@deepseek-ai/dsh-api-session-controller'],
+})
 
 const graph = () => ({
   entries: [{ id: '@deepseek-ai/dsh-client-ui-theme', url: 'plugins/x?rev=r1', rev: 'r1', immediately: true }],
@@ -75,13 +81,29 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
     delete (globalThis as { __DSH_TRANSPORT__?: unknown }).__DSH_TRANSPORT__
     delete (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: unknown }).__DSH_FORGE_HOST_PLUGINS__
   })
+  it('多产品行逐条掌舵入图（本体 + input-history 插件行，行序 = 传入序）', async () => {
+    ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+    ;(globalThis as { dshForge?: unknown }).dshForge = {
+      getBootManifest: () => Promise.resolve(manifest()),
+    }
+    await bootShell([product(), inputHistory()])
+    const g = (globalThis as { __DSH_BOOT__?: { entries: { id: string }[] } }).__DSH_BOOT__
+    expect(g?.entries.map((r) => r.id)).toEqual(['@dsh-forge/web-client', '@dsh-forge/input-history'])
+    expect(g?.entries[1]).toEqual({
+      id: '@dsh-forge/input-history',
+      url: 'input-history-client.js?rev=b1',
+      rev: 'b1',
+      inject: ['@deepseek-ai/dsh-api-session-controller'],
+      immediately: true,
+    })
+  })
   it('knowledgePlugin:true → { knowledge: true }；位缺席/旧宿主 → { knowledge: false }（fail-closed——知识面隐藏单源）', async () => {
     const boot = (manifestOver: Partial<BootManifestPayload>) => {
       ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
       ;(globalThis as { dshForge?: unknown }).dshForge = {
         getBootManifest: () => Promise.resolve(manifest(manifestOver)),
       }
-      return bootShell(product())
+      return bootShell([product()])
     }
     await boot({ knowledgePlugin: true })
     expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__).toEqual({ knowledge: true })
