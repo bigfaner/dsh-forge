@@ -85,7 +85,7 @@ export const inputHistoryClient = {
     try {
       const sessions = readSessionsOf(ctx)
       if (sessions != null) {
-        wireSessions(ctx, sessions)
+        mountDisposeOnContext(ctx, () => wireSessions(ctx, sessions).dispose)
         return
       }
       // 装配序兜底（官方 inject face——AGENTS.md §1.1 合法缝）：boot-graph inject 边
@@ -99,7 +99,7 @@ export const inputHistoryClient = {
         const late = readSessionsOf(scope)
         if (late == null) return
         try {
-          wireSessions(ctx, late)
+          mountDisposeOnContext(ctx, () => wireSessions(ctx, late).dispose)
         } catch (error) {
           console.error('[dsh-forge/input-history] late wiring failed——降级空态', error)
         }
@@ -117,6 +117,22 @@ function readSessionsOf(source: unknown): ISessions | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * dispose 挂官方 cordis 生命周期缝（ctx.effect——Context extends Pick<Fiber,'effect'>，
+ * 产物 disposer 在 fiber unload 时自动执行，官方核销 @deepseek-ai/cordis fiber.d.ts）。
+ * effect 缝缺席（非 cordis ctx，测试/直驱）= 只接线不挂卸载，语义同旧行为。
+ */
+function mountDisposeOnContext(ctx: Context, mount: () => () => void): void {
+  const effect = (ctx as { effect?: (execute: () => unknown) => unknown }).effect
+  if (typeof effect !== 'function') {
+    mount()
+    return
+  }
+  // Root cause: 旧实现 wireSessions 后丢弃 dispose——插件卸载/重组时 keydown 监听、
+  // list.subscribe、feed 订阅全量泄漏；现挂 fiber effect 缝随卸载自动退订。
+  effect.call(ctx, mount)
 }
 
 /** 接线本体（测试与诊断显式取面；apply 的 try 体——异常归类由外层缝承担）。 */

@@ -2,7 +2,7 @@
 // sessions 注入缝 + binding.eventSource 历史源 + DOM 键源 + mention 守卫 + 活跃会话跟随
 // 全在包内 apply 装配（fake ctx/fake document 驱动）。
 import { describe, expect, it } from 'vitest'
-import { wireInputHistoryClient } from '../src/client/index.js'
+import { inputHistoryClient, wireInputHistoryClient } from '../src/client/index.js'
 import type { ForgeComposerDomKeyEvent, ForgeComposerEventTarget } from '../src/client/composer-keys.js'
 
 // --- fake 官方面 ---------------------------------------------------------------
@@ -37,13 +37,19 @@ function fakeDoc(): FakeDoc {
   })
 }
 
-/** 官方窗口源假件（binding.eventSource——快照 + 订阅） */
-function fakeEventSource(userTexts: { seq: number; text: string }[]) {
+/** 官方窗口源假件（binding.eventSource——快照 + 订阅；subscribe 可追踪退订） */
+function fakeEventSource(userTexts: { seq: number; text: string }[], disposes?: { count: number }[]) {
   return {
     getSnapshot: () => ({
       entries: userTexts.map((m) => ({ type: 'event', event: { type: 'user/message', seq: m.seq, data: { source: { kind: 'user' }, content: [{ type: 'text', text: m.text }] } } })),
     }),
-    subscribe: (_cb: () => void) => () => undefined,
+    subscribe: (_cb: () => void) => {
+      const tracked = { count: 0 }
+      disposes?.push(tracked)
+      return () => {
+        tracked.count++
+      }
+    },
   }
 }
 
@@ -105,9 +111,24 @@ function setDoc(doc: unknown): void {
   ;(globalThis as { document?: unknown }).document = doc
 }
 
-function worldWithSession(world: World, id: string, texts: { seq: number; text: string }[]): void {
-  world.bindings.set(id, { sessionId: id, ctx: { sessionId: id }, eventSource: fakeEventSource(texts) })
+function worldWithSession(world: World, id: string, texts: { seq: number; text: string }[], disposes?: { count: number }[]): void {
+  world.bindings.set(id, { sessionId: id, ctx: { sessionId: id }, eventSource: fakeEventSource(texts, disposes) })
   world.listSnapshot.byId[id] = { id, retainedBy: { mainView: 1 } }
+}
+
+/** 官方生命周期缝假件（cordis ctx.effect——记录 effect 产物，unload() 模拟 fiber 卸载） */
+function mountEffectRecorder(world: World): { unload(): void } {
+  const disposers: (() => void)[] = []
+  ;(world.ctx as { effect?: (execute: () => () => void) => unknown }).effect = (execute) => {
+    const disposer = execute()
+    disposers.push(disposer)
+    return disposer
+  }
+  return {
+    unload(): void {
+      for (const d of disposers.splice(0)) d()
+    },
+  }
 }
 
 describe('wireInputHistoryClient（组合接线面）', () => {
@@ -166,6 +187,50 @@ describe('wireInputHistoryClient（组合接线面）', () => {
     face.dispose()
     world.doc.dispatch('ArrowUp', editableTarget())
     expect(world.drafts.size).toBe(0)
+    setDoc(undefined)
+  })
+
+  it('apply 生产路径 dispose 挂 ctx.effect：fiber unload 时 keydown/list/feed 全量退订', () => {
+    const world = fakeWorld()
+    const feedDisposes: { count: number }[] = []
+    worldWithSession(world, 's1', [{ seq: 1, text: '消息' }], feedDisposes)
+    const fiber = mountEffectRecorder(world)
+    inputHistoryClient.apply(world.ctx as never)
+    expect(world.drafts.size).toBe(0)
+    world.doc.dispatch('ArrowUp', editableTarget())
+    expect(world.drafts.get('s1')).toBe('消息') // 卸载前接线有效
+    fiber.unload() // 模拟 fiber 卸载
+    world.doc.dispatch('ArrowUp', editableTarget())
+    expect(world.drafts.get('s1')).toBe('消息') // keydown 已退订，不再触发
+    expect(world.listListeners).toHaveLength(0) // list.subscribe 已退订
+    expect(feedDisposes.reduce((n, t) => n + t.count, 0)).toBeGreaterThan(0) // feed 订阅已释放
+    setDoc(undefined)
+  })
+
+  it('apply late-wiring 路径同样挂 ctx.effect：inject 晚到接线后 unload 全量退订', () => {
+    const world = fakeWorld()
+    const feedDisposes: { count: number }[] = []
+    // 先不提供 sessions——走 inject 兜底路径
+    const sessions = (world.ctx as { sessions: unknown }).sessions
+    delete (world.ctx as { sessions?: unknown }).sessions
+    const fiber = mountEffectRecorder(world)
+    const injectListeners: ((scope: unknown) => void)[] = []
+    ;(world.ctx as { inject?: unknown }).inject = (_names: readonly string[], cb: (scope: unknown) => void) => {
+      injectListeners.push(cb)
+    }
+    inputHistoryClient.apply(world.ctx as never)
+    expect(injectListeners).toHaveLength(1)
+    // sessions 晚到：注入回调触发接线
+    ;(world.ctx as { sessions?: unknown }).sessions = sessions
+    worldWithSession(world, 's1', [{ seq: 1, text: '消息' }], feedDisposes)
+    for (const cb of injectListeners) cb(world.ctx)
+    world.doc.dispatch('ArrowUp', editableTarget())
+    expect(world.drafts.get('s1')).toBe('消息') // 晚到接线有效
+    fiber.unload()
+    world.doc.dispatch('ArrowUp', editableTarget())
+    expect(world.drafts.get('s1')).toBe('消息') // 卸载后不再触发
+    expect(world.listListeners).toHaveLength(0)
+    expect(feedDisposes.reduce((n, t) => n + t.count, 0)).toBeGreaterThan(0)
     setDoc(undefined)
   })
 })

@@ -107,6 +107,31 @@ describe('createHistorySource', () => {
     feed.emit(userMessage(3, '第三条'))
     expect(listener).toHaveBeenCalledTimes(1)
   })
+
+  it('listener 归零后再 subscribe 恢复 feed 失效通知（不死源）', () => {
+    const feed = new FakeFeed([userMessage(1, '第一条')])
+    const source = createHistorySource('s1', feed)
+    const d1 = source.subscribe(vi.fn())
+    d1() // 归零 → 释放 feed 订阅
+    const listener = vi.fn()
+    const d2 = source.subscribe(listener)
+    feed.emit(userMessage(2, '第二条'))
+    expect(listener).toHaveBeenCalledTimes(1) // 修复前：feedDisposed 不可逆 → 永不再通知
+    d2()
+    feed.emit(userMessage(3, '第三条'))
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('归零释放后再 subscribe 而后 dispose：feed 至多退订一次（幂等不叠订）', () => {
+    const feed = new TrackedFeed([userMessage(1, '一')])
+    const source = createHistorySource('s1', feed)
+    const d1 = source.subscribe(vi.fn())
+    d1() // 归零 → 释放
+    const d2 = source.subscribe(vi.fn()) // 重订阅 → 恢复
+    d2()
+    source.dispose()
+    expect(feed.disposeCount).toBe(2) // 归零一次 + dispose 一次，无叠订
+  })
 })
 
 describe('browseUp / browseDown（readline 键位判定）', () => {

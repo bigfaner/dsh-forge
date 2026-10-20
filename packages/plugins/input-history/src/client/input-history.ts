@@ -78,27 +78,37 @@ export interface InputHistorySource {
 /** 单会话历史源：条目惰性取 feed 快照重算（feed = 事实源），订阅负责失效通知 */
 export function createHistorySource(sessionId: string, feed: HistoryEventFeed): InputHistorySource {
   const listeners = new Set<() => void>()
-  const disposeFeed = feed.subscribe(() => {
-    for (const listener of listeners) listener()
-  })
   let feedDisposed = false
-  // 单点释放（幂等旗标）：listener 全退路径与 dispose() 共用，任意时序组合 feed 至多退订一次
+  let feedActive = true
+  let disposeFeed = feed.subscribe(notify)
+  function notify(): void {
+    for (const listener of listeners) listener()
+  }
+  // 惰性订阅：listener 归零即释放 feed 订阅；dispose() 前再 subscribe 可重订恢复通知
+  // （Root cause: 旧实现归零即置 feedDisposed=true 不可逆——重订阅得到死源）
   const releaseFeed = (): void => {
-    if (feedDisposed) return
-    feedDisposed = true
+    if (!feedActive) return
+    feedActive = false
     disposeFeed()
+  }
+  const resubscribe = (): void => {
+    if (feedActive || feedDisposed) return
+    disposeFeed = feed.subscribe(notify)
+    feedActive = true
   }
   return {
     sessionId,
     entries: () => historyEntriesOf(feed.snapshot()),
     subscribe(listener: () => void): () => void {
       listeners.add(listener)
+      resubscribe()
       return () => {
         listeners.delete(listener)
         if (listeners.size === 0) releaseFeed()
       }
     },
     dispose(): void {
+      feedDisposed = true
       releaseFeed()
     },
   }
