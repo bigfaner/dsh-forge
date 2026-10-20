@@ -69,6 +69,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── session-binding-guarantee W2（host 能力缺席显式拒绝）──
   // git 绑定能力缺席拒绝 → 错误条（创建/发送语境原地反馈——检查插件装配后重启）
   ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
+  // ── bug 4a30b193（必绑重路由目标树活性守护）──
+  // 重路由目标树不在场拒绝 → 错误条（发送语境原地反馈——文案带重建/重选指引）
+  ERR_WORKTREE_TARGET_ABSENT: 'error-bar',
 }
 
 /**

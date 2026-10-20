@@ -72,6 +72,20 @@ export class WorktreeCapabilityAbsentError extends Error {
   }
 }
 
+/**
+ * 重路由目标树不在场显式拒绝（bug 4a30b193——prompt 径 typed 收口，SessionSealedError /
+ * WorktreeCapabilityAbsentError 先例同径：Error + 可读中文 message + 稳定 name + code ∈
+ * contracts ERROR_CODES）。code ∈ ERROR_CODES → rpc-envelope / 前端按码映射错误条，
+ * 不落 gateway/internal 泛化折叠。
+ */
+export class WorktreeTargetAbsentError extends Error {
+  readonly code = 'ERR_WORKTREE_TARGET_ABSENT'
+  constructor(readonly targetPath: string) {
+    super(`绑定的 worktree 目录已不存在（可能已被删除）：${targetPath}——消息未发送。请重建该 worktree，或在顶部项目栏重新选择目标后重试`)
+    this.name = 'WorktreeTargetAbsentError'
+  }
+}
+
 /** 插件域扩展点消费窄面（ctx `gitWorktree` 能力服务形状——缺省退独立模式默认实现） */
 export interface GitWorktreeServiceFace {
   getExtensionPoints(): GitWorktreeExtensionPoints
@@ -208,6 +222,9 @@ export { defaultEnsureDirAcl }
 /** 路径比对归一口径（seal-guard.normalizePathForCompare 同判——本地镜像零回环） */
 const norm = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
 
+/** 重路由目标活性探测（bug 4a30b193 缝——缺省 = existsSync 盘上事实；测试注入桩） */
+const defaultPathPresent = (path: string): boolean => existsSync(path)
+
 /**
  * child 侧服务本体装配（透传插件域 ops + 官方 sessionController/sessionPersistence 两缝）。
  * extensionPoints 缺席（gitWorktree 服务未 provide / git 未装）→ fail-soft 独立模式面：
@@ -250,6 +267,8 @@ export function createWorktreeRpcService(deps: {
   /** 派生失败诊断 emit 缝（app-observability fix-3）：judge 判读链 fail-open 放行处 emit
    *  诊断事件（装配方注入 failOpenDiag——ALS 上下文内被调，行带链 B trace_id）；缺席 = 零 emit。 */
   readonly failOpenDiag?: (message: string) => void
+  /** 重路由目标活性探测缝（bug 4a30b193——缺省 = existsSync 盘上事实；测试注入桩） */
+  readonly pathPresent?: ((path: string) => boolean) | undefined
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
   // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）
@@ -714,9 +733,19 @@ export function createWorktreeRpcService(deps: {
           const header = await headerOf(sessionId)
           const cwd = header.cwd
           const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
+          // bug 4a30b193：Root cause——hero 选中树记忆（lastSelection）从不失效，树目录被
+          // 强制删除后重路由仍以其为目标编排（realpath ENOENT 链 / adopt 到不存在 cwd /
+          // AbortError 显式拒绝——实机发送长时间无响应）。消费时点验活性：陈旧选中树摘除
+          // 并回落会话 cwd；cwd 亦不在场 = 显式报错，绝不对已删路径静默编排。
+          const presentOf = deps.pathPresent ?? defaultPathPresent
           const selected = resolution !== null ? lastSelection.get(norm(resolution.projectRoot)) : undefined
-          const target = selected ?? (cwd !== undefined && cwd !== '' ? cwd : undefined)
+          let target = selected !== undefined && presentOf(selected) ? selected : undefined
+          if (target === undefined && selected !== undefined && resolution !== null) {
+            lastSelection.delete(norm(resolution.projectRoot)) // 陈旧记忆摘除——后续发送不再走失效径
+          }
+          if (target === undefined && cwd !== undefined && cwd !== '') target = cwd
           if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
+          if (!presentOf(target)) throw new WorktreeTargetAbsentError(target)
           // 走 sessionCreate 公开面（G3 双建互斥：在途共享、产物 blank 复用）——直调
           // doSessionCreate 会绕过互斥，与 client arm 并发时同 cwd 双建。
           const preset = await sourcePresetOf(sessionId)

@@ -82,8 +82,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 36 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码 + worker addTask 拒收码 + W2 能力缺席拒绝码收尾', () => {
-    expect([...ERROR_CODES]).toHaveLength(36)
+  it('ERROR_CODES = 37 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码 + worker addTask 拒收码 + W2 能力缺席拒绝码 + 重路由目标缺席拒绝码收尾', () => {
+    expect([...ERROR_CODES]).toHaveLength(37)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -94,8 +94,12 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_COMMIT_HASH_REQUIRED',
     ])
     expect([...ERROR_CODES].slice(33, 34)).toEqual(['ERR_BUG_RECURRENCE_DANGLING'])
-    expect([...ERROR_CODES].slice(34)).toEqual(['ERR_WORKER_ADDTASK_DENIED', 'ERR_WORKTREE_CAPABILITY_ABSENT'])
-    expect(new Set(ERROR_CODES).size).toBe(36)
+    expect([...ERROR_CODES].slice(34)).toEqual([
+      'ERR_WORKER_ADDTASK_DENIED',
+      'ERR_WORKTREE_CAPABILITY_ABSENT',
+      'ERR_WORKTREE_TARGET_ABSENT',
+    ])
+    expect(new Set(ERROR_CODES).size).toBe(37)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {

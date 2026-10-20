@@ -56,6 +56,8 @@ export const ERROR_CODES = [
   'ERR_WORKER_ADDTASK_DENIED', // → WorkerAddTaskDeniedError：loopSourced spawn 的 worker 会话调 addTask 拒收（403；任务派生权限归主会话/循环处置层——正确动作 = submitTask result=blocked 如实结算）
   // ── session-binding-guarantee W2（host 能力缺席显式拒绝——fail-closed 收口） ──
   'ERR_WORKTREE_CAPABILITY_ABSENT', // → WorktreeCapabilityAbsentError：gitWorktree 能力缺席（60s 放弃）+ git 探针有锚——sessionCreate 入口显式拒绝（prompt 入口同因走 SessionSealedError 先例稳定 name 面）
+  // ── bug 4a30b193（必绑重路由目标树活性守护——陈旧选中树/cwd 已删显式拒绝） ──
+  'ERR_WORKTREE_TARGET_ABSENT', // → WorktreeTargetAbsentError：重路由目标树目录不在场（已被外部强制删除）——prompt 径显式拒绝不静默编排（data 带目标路径）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

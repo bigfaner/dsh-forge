@@ -573,6 +573,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       gitWorktree: countingExt,
       sessionController: controller,
       sessionPersistence: persistence,
+      pathPresent: () => true, // fake 路径无盘上实体——活性探测恒真（bug 4a30b193 缝专测单独表驱动）
       listWorktreeEntries: async () => [
         { path: 'C:/repo', branch: 'main' },
         { path: WT_A, branch: 'feat/a' },
@@ -625,6 +626,53 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(rig.calls[0]?.cwd).toBe(WT_A)
   })
 
+  it('bug 4a30b193：hero 选中树目录已被强制删除（陈旧 lastSelection）→ 回落会话 cwd 编排，绝不在已删路径上预铸', async () => {
+    const GHOST = 'C:/repo/.forge/worktrees/gone'
+    const { persistence, created } = fakePersistence({ blank: [] }, { blank: { cwd: 'C:/repo' } })
+    const { controller, calls, prompts } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [
+        { path: 'C:/repo', branch: 'main' },
+        { path: GHOST, branch: 'feat/gone' }, // git 未 prune 的陈旧清单行——分支解析仍可「成功」
+      ],
+      pathPresent: (p) => p === 'C:/repo', // 选中树目录已被强制删除，仅主根在场
+    })
+    await service.select({ projectRoot: 'C:/repo', path: GHOST })
+    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
+    await expect(controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
+    dispose()
+    expect(calls, '编排在已删路径上预铸采纳（bug 在场）').toHaveLength(1)
+    expect(calls[0]!.cwd, '产物 cwd 应回落会话 cwd（主根）').toBe('C:/repo')
+    expect(created[0]!.header.cwd).toBe('C:/repo')
+    expect(prompts[0]).toMatchObject({ sessionId: created[0]!.header.id, text: 'hello' })
+  })
+
+  it('bug 4a30b193：会话 cwd 树目录亦不在场 → 显式报错（可读错误含路径），不静默编排半截会话', async () => {
+    const GHOST = 'C:/repo/.forge/worktrees/gone'
+    const { persistence, created } = fakePersistence({ blank: [] }, { blank: { cwd: GHOST } })
+    const { controller, calls } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: GHOST, branch: 'feat/gone' }],
+      pathPresent: () => false,
+    })
+    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
+    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toMatchObject({
+      name: 'WorktreeTargetAbsentError',
+      code: 'ERR_WORKTREE_TARGET_ABSENT',
+      targetPath: GHOST,
+      message: expect.stringContaining('已不存在'),
+    })
+    dispose()
+    expect(calls, 'controller.create 被调用（半截预铸在场）').toHaveLength(0)
+    expect(created).toHaveLength(0)
+  })
+
   it('有绑定会话放行（原 prompt 直通，零重路由）；非 blank 无绑定既有会话零打扰放行', async () => {
     const bound = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
     const disposeBound = interceptRequiredBinding(bound.controller, bound.service.requiredBindingGuard()!)
@@ -671,6 +719,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       gitWorktree: fakeExt,
       sessionController: controller,
       sessionPersistence: persistence,
+      pathPresent: () => true, // fake 路径无盘上实体——本测专查编排失败径，活性恒真
       listWorktreeEntries: async () => {
         throw new Error('git crashed')
       },
