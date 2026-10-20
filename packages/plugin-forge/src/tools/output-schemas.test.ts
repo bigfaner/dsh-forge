@@ -209,6 +209,10 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
     expectValid('recordBug', schemaOf(createRecordBugTool(DEPS)), BUG_CARD_OPEN)
   })
 
+  it('recordBug：BugCard 登记面全形（挂链——含 recurrenceOf，bug 37693dfc）', () => {
+    expectValid('recordBug 挂链', schemaOf(createRecordBugTool(DEPS)), { ...BUG_CARD_OPEN, recurrenceOf: 'b-root' })
+  })
+
   it('resolveBug：BugCard 回填面全形（fixed 证据）', () => {
     expectValid('resolveBug', schemaOf(createResolveBugTool(DEPS)), BUG_CARD_FIXED)
   })
