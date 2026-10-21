@@ -6,15 +6,19 @@
 //
 // inject 声明硬门：本 face 引用的 ctx 服务 = sessions（dsh.client.inject 清单已声明
 // `@deepseek-ai/dsh-api-session-controller`，与包清单一致——mini-composer 数据面消费）；
-// conversation 走 ctx.reflect.get 只读反射（官方面：绕过 inject 义务的只读反射，
-// 缺席 = undefined——quote-reference 判例同构）；bail 为 ctx 自带事件缝，不入清单。
+// conversation / inputTriggers / sidebarRight 走只读反射/结构读取（官方面：
+// inputTriggers = InputTriggerService（client/service.d.ts——sessionOf(actx) 取每会话
+// controller）、sidebarRight = ISidebarRight（toggleFullscreen = 官方 chrome 同径退全屏），
+// 缺席 = undefined 空态降级）；bail 为 ctx 自带事件缝，不入清单。
 //
-// 接线本体：createFullscreenTracker（fullscreen.ts 纯逻辑）——正门 tabInfo hook
-// 快照 getter（React 渲染侧订阅缝由 mini-composer 在替身组件树内回填；本面先接
-// DOM 兜底源，watch = MutationObserver 属性变化监听）+ mini-composer 替身挂载
-//（MiniComposerCard + createSuperComposerDataFace 真实服务切片，createRoot 替身
-// 容器——data-dscf-* 锚在卡片本体 data-testid）。全缝 fail-soft：document 缺席
-//（Node）= 不装配，不炸 cordis 组合。
+// 装配序兜底（quote-reference 判例同构——bug ba885f7d ②）：真机 sessions provide 晚于
+// apply，主径走 inject(['sessions']) 兜底回调，以注入后 scope 装配替身（scope 优先、
+// ctx 兜底取服务切片）。
+//
+// 接线本体：createFullscreenTracker（fullscreen.ts 纯逻辑）DOM 兜底源（watch =
+// MutationObserver）门控替身挂载可见——非全屏呈现态 render(null) 不常驻（AC5）；
+// ⧉ = sidebarRight.toggleFullscreen(commandTarget(pane)) 官方同径真实退全屏。
+// 全缝 fail-soft：document 缺席（Node）= 不装配，不炸 cordis 组合。
 import type { Context } from '@deepseek-ai/cordis'
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -54,15 +58,26 @@ function readSessionsOf(source: unknown): unknown {
   }
 }
 
+/** cordis ctx 只读反射/属性读取（具名服务窄面——缺席/漂移 = undefined）。 */
+function readServiceOf(source: unknown, name: string): unknown {
+  try {
+    const direct = (source as { [key: string]: unknown } | null)?.[name]
+    if (direct != null) return direct
+  } catch {
+    // fail-soft
+  }
+  try {
+    const reflect = (source as { reflect?: { get?: (name: string) => unknown } }).reflect
+    if (typeof reflect?.get === 'function') return reflect.get(name)
+  } catch {
+    // fail-soft
+  }
+  return undefined
+}
+
 /** conversation 只读反射读取（ctx.reflect.get——缺席 = undefined）。 */
 function readConversationOf(ctx: Context): unknown {
-  try {
-    const reflect = (ctx as { reflect?: { get?: (name: string) => unknown } }).reflect
-    if (typeof reflect?.get === 'function') return reflect.get('conversation')
-    return (ctx as { conversation?: unknown }).conversation ?? undefined
-  } catch {
-    return undefined
-  }
+  return readServiceOf(ctx, 'conversation')
 }
 
 /** ctx.bail 窄面读取（缺席 = undefined）。 */
@@ -72,19 +87,61 @@ function readBailOf(ctx: Context): ((actx: unknown, name: string, payload: unkno
   return bail.bind(ctx)
 }
 
+/** 官方 InputTriggerService 窄面（sessionOf 在场判读——漂移 = undefined）。 */
+function readInputTriggersOf(source: unknown): { sessionOf: (actx: unknown) => unknown } | undefined {
+  const service = readServiceOf(source, 'inputTriggers') as { sessionOf?: unknown } | undefined
+  if (service === undefined || typeof service.sessionOf !== 'function') return undefined
+  const sessionOf = service.sessionOf as (actx: unknown) => unknown
+  return { sessionOf: (actx) => sessionOf(actx) }
+}
+
+/**
+ * 官方退全屏窄面（ISidebarRight.toggleFullscreen——chrome 按钮同径）：以 dockkit pane
+ * 元素捕获 command target 后 toggle。服务/target 任一缺席 = no-op（fail-soft）。
+ */
+function exitFullscreenOf(source: unknown, doc: Document, fallback?: unknown): () => void {
+  return () => {
+    try {
+      const sidebarRight = (readServiceOf(source, 'sidebarRight') ?? readServiceOf(fallback, 'sidebarRight')) as
+        | { commandTarget?: (el: Element | null) => unknown; toggleFullscreen?: (t: unknown) => void }
+        | undefined
+      if (typeof sidebarRight?.commandTarget !== 'function' || typeof sidebarRight.toggleFullscreen !== 'function') return
+      const target = sidebarRight.commandTarget(doc.querySelector('[data-dockkit-pane]'))
+      if (target != null) sidebarRight.toggleFullscreen(target)
+    } catch {
+      // fail-soft：官方面漂移只降本动作，不外溢
+    }
+  }
+}
+
+/** mini-composer 替身挂载选项（服务切片源 + 全屏门控 + 退全屏动作可注入）。 */
+export interface MountMiniComposerOptions {
+  /** 服务切片源（inject 兜底回调传入注入后 scope——scope 优先、ctx 兜底） */
+  readonly source?: unknown
+  /** 全屏感知 tracker（在场 = 替身按全屏呈现门控挂载可见） */
+  readonly tracker?: FullscreenTracker
+  /**「⧉」退全屏动作（缺省 = no-op） */
+  readonly exitFullscreen?: () => void
+}
+
 /**
  * mini-composer 替身挂载（document 在场前提）：createRoot 替身容器渲染
- * MiniComposerCard——数据面 = createSuperComposerDataFace（真实 ctx 服务切片：
- * sessions + conversation.input.for + bail，同 quote-reference 模式；inputTriggers
- * 未声明 = mention 空态）。face.subscribe 扇出重渲染（流式增量上屏）。
+ * MiniComposerCard——数据面 = createSuperComposerDataFace（真实服务切片：
+ * sessions + conversation.input.for + bail + inputTriggers，同 quote-reference 模式）。
+ * tracker 在场 = 替身仅在全屏呈现源激活时渲染（非全屏 render(null) 不常驻——AC5）。
+ * face.subscribe（input state + eventSource + mention menu store）扇出重渲染。
  * 返回全量撤销（摘订阅 + root.unmount + 容器摘除 + face.dispose）。
  */
-export function mountMiniComposer(doc: Document, ctx: Context): () => void {
+export function mountMiniComposer(doc: Document, ctx: Context, options: MountMiniComposerOptions = {}): () => void {
+  const origin = (options.source ?? ctx) as Context
   const container = doc.createElement('div')
   doc.body.appendChild(container)
+  // 服务逐项 scope 优先、ctx 兜底（真机判例：inject 注入 scope 只承载被注入服务
+  // sessions——conversation/inputTriggers 等仍在主 ctx 上且 provide 晚于 apply，
+  // 一律每操作时点惰性解析，挂载期捕获 = 恒 undefined）
   // conversation.input.for 切片（quote-reference composerFaceOf 判例同构——形状漂移 = undefined）
-  const conversation = readConversationOf(ctx)
   const composerFaceOf = (actx: unknown): SessionInputFaceMirror | undefined => {
+    const conversation = readServiceOf(ctx, 'conversation') ?? readConversationOf(origin)
     if (typeof conversation !== 'object' || conversation === null) return undefined
     try {
       return (conversation as { input?: { for?: (a: unknown) => SessionInputFaceMirror | undefined } }).input?.for?.(actx) ?? undefined
@@ -93,20 +150,37 @@ export function mountMiniComposer(doc: Document, ctx: Context): () => void {
     }
   }
   const face = createSuperComposerDataFace({
-    sessions: readSessionsOf(ctx) as never,
+    sessions: readSessionsOf(origin) as never ?? readSessionsOf(ctx) as never,
     conversation: { input: { for: composerFaceOf } },
-    bail: readBailOf(ctx),
+    bail: readBailOf(ctx) ?? readBailOf(origin),
+    inputTriggers: (readInputTriggersOf(ctx) ?? readInputTriggersOf(origin)) as never,
   })
   const root = createRoot(container)
   const render = (): void => {
-    root.render(createElement(MiniComposerCard, miniComposerPropsOf(face)))
+    // 全屏门控：非全屏呈现态不渲染替身（fullscreenMarkers=0 时不常驻——AC5）
+    if (options.tracker !== undefined && !options.tracker.isFullscreen()) {
+      root.render(null)
+      return
+    }
+    root.render(
+      createElement(MiniComposerCard, miniComposerPropsOf(face, { onExitFullscreen: options.exitFullscreen ?? (() => undefined) })),
+    )
   }
   const off = face.subscribe(render)
+  const offFullscreen = options.tracker?.subscribe(render)
+  // 晚序服务补挂重试（conversation/inputTriggers provide 晚于挂载——有界轮询直至全源挂上）
+  let syncTries = 0
+  const syncTimer = setInterval(() => {
+    syncTries += 1
+    if (torn || syncTries > 30 || face.syncSubscriptions(render)) clearInterval(syncTimer)
+  }, 2_000)
   render()
   let torn = false
   return () => {
     if (torn) return
     torn = true
+    clearInterval(syncTimer)
+    offFullscreen?.()
     off()
     root.unmount()
     container.remove()
@@ -145,10 +219,39 @@ export const superComposerClient = {
       const doc = (globalThis as { document?: Document }).document
       if (doc === undefined) return
       const tracker = mountFullscreenTracker(doc)
-      // mini-composer 替身挂载（fail-soft：替身面异常只降本面，tracker 仍收口）
+      // Root cause: 真机 web 壳 sessions provide 晚于本 apply——主径恒走兜底分支，
+      // 兜底回调必须以注入后 scope 完成接线（空回调/ctx 重读 = 替身数据面恒空态）。
       let disposeCard = (): void => {}
+      let wired = false
+      const wire = (source?: unknown): void => {
+        if (wired) return // 幂等防重挂：已接线不再二次 mount/dispose
+        wired = true
+        disposeCard = mountMiniComposer(doc, ctx, {
+          source,
+          tracker,
+          exitFullscreen: exitFullscreenOf(ctx, doc, source),
+        })
+      }
       try {
-        disposeCard = mountMiniComposer(doc, ctx)
+        if (readSessionsOf(ctx) != null) {
+          wire()
+        } else {
+          // 装配序兜底（官方 inject face——AGENTS.md §1.1 合法缝）：服务 provide 晚于本
+          // apply 时运行期注入，provide 时以注入后 scope 接线；已提供则前分支已走。
+          const inject = (ctx as {
+            inject?: (names: readonly string[], cb: (scope: unknown) => void) => unknown
+          }).inject
+          if (typeof inject === 'function') {
+            inject.call(ctx, ['sessions'], (scope: unknown) => {
+              if (readSessionsOf(scope) == null) return
+              try {
+                wire(scope)
+              } catch (error) {
+                console.error('[dsh-forge/super-composer] late wiring failed——降级空态', error)
+              }
+            })
+          }
+        }
       } catch (error) {
         console.error('[dsh-forge/super-composer] mini-composer mount failed——降级空态', error)
       }

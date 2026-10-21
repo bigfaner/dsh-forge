@@ -234,6 +234,9 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           position: "fixed",
           right: "var(--dsw-space-6, 24px)",
           bottom: "var(--dsw-space-6, 24px)",
+          // 层叠修正（bug ba885f7d ③）：fixed 球须浮出 dock pane 层叠上下文
+          //（dswf-doc-body 遮挡 = pointer 不可达）——高于文档 pane 族的显式层级。
+          zIndex: 30,
           width: 44,
           height: 44,
           borderRadius: "var(--dsw-radius-panel, 28px)",
@@ -268,6 +271,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         left: "50%",
         bottom: "var(--dsw-space-6, 24px)",
         transform: "translateX(-50%)",
+        zIndex: 30,
         width: "min(860px, 94vw)",
         borderRadius: "var(--dsw-radius-lg, 16px)",
         border: "0.5px solid var(--dsw-alias-border-l2)",

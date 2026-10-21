@@ -1,26 +1,106 @@
 // @vitest-environment happy-dom
 // mini-composer 挂载接线测试（真实 DOM 链路——apply 正门 createRoot 替身容器）。
-import { describe, expect, it } from "vitest";
+// bug ba885f7d：④ 全屏门控（非全屏不常驻）/ ② 装配序兜底（inject scope 接线）/
+// ⑤ inputTriggers 接线 / ④ ⧉ exitFullscreen 官方径。
+import { afterEach, describe, expect, it } from "vitest";
 import type { Context } from "@deepseek-ai/cordis";
 import { superComposerClient } from "../src/client/index.js";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-function stubCtx(): Context {
+/** 全屏呈现源标记（tracker DOM 兜底读数——在场 = 替身可见；兼 dockkit pane 供 ⧉ target 捕获）。 */
+function setFullscreenMarker(on: boolean): void {
+  document.querySelectorAll("[data-sidebar-right-panel]").forEach((el) => el.remove());
+  if (on) {
+    const pane = document.createElement("div");
+    pane.setAttribute("data-dockkit-pane", "");
+    document.body.appendChild(pane);
+    // 先插入后打标：attribute mutation 发生在插入后，MutationObserver 才会扇出
+    pane.setAttribute("data-sidebar-right-panel", "fullscreen");
+  }
+}
+
+const menuStore = {
+  open: false,
+  groups: [],
+  highlight: null,
+  listeners: new Set<() => void>(),
+  getSnapshot(): { open: boolean; groups: never[]; highlight: null } {
+    return { open: menuStore.open, groups: [], highlight: null };
+  },
+  subscribe(listener: () => void): () => void {
+    menuStore.listeners.add(listener);
+    return () => menuStore.listeners.delete(listener);
+  },
+};
+
+const triggersStub = {
+  sessionOf: () => ({
+    menu: menuStore,
+    track: () => undefined,
+    arbitrate: () => "pass" as const,
+    pick: () => undefined,
+    dismiss: () => undefined,
+  }),
+};
+
+const sidebarRightCalls: string[] = [];
+const sidebarRightStub = {
+  commandTarget: (el: Element | null) => (el === null ? null : { pane: "p1" }),
+  toggleFullscreen: () => sidebarRightCalls.push("toggle"),
+};
+
+function stubCtx(options: { sessions?: unknown; inject?: boolean } = {}): Context {
   const effects: Array<() => unknown> = [];
-  const ctx = {
+  const ctx: Record<string, unknown> = {
     effect: (execute: () => unknown) => {
       effects.push(execute);
       return undefined;
     },
-  } as unknown as Context;
-  (ctx as unknown as { __effects: Array<() => unknown> }).__effects = effects;
-  return ctx;
+  };
+  // inject:true = 模拟真机 provide 晚于 apply——ctx 不直挂 sessions（快路径不触发）
+  if (options.sessions !== undefined && options.inject !== true) ctx.sessions = options.sessions;
+  if (options.inject === true) {
+    ctx.inject = (names: readonly string[], cb: (scope: unknown) => void) => {
+      // provide 晚于 apply：注入 scope 承载服务切片
+      cb({ sessions: options.sessions, inputTriggers: triggersStub, sidebarRight: sidebarRightStub });
+      return undefined;
+    };
+  }
+  (ctx as { __effects: Array<() => unknown> }).__effects = effects;
+  return ctx as unknown as Context;
 }
 
+const sessionsStub = {
+  list: { getSnapshot: () => ({ byId: {} }) },
+  binding: () => undefined,
+};
+
+/** 带在留会话的 sessions 替身（durable user message → 卡 active → 标题栏/⧉ 在场）。 */
+const sessionsWithMessage = {
+  list: { getSnapshot: () => ({ byId: { s1: { id: "s1", retainedBy: { mainView: 1 } } } }) },
+  binding: () => ({
+    sessionId: "s1",
+    ctx: {},
+    eventSource: {
+      getSnapshot: () => ({
+        entries: [{ type: "event", event: { type: "user/message", data: { id: "m1", content: [{ type: "text", text: "hello" }] } } }],
+      }),
+      subscribe: () => () => undefined,
+    },
+  }),
+};
+
+/** 用例间隔离：摘除上一用例残留替身容器（mount 容器无锚——按 dscf-root 父链清理）。 */
+afterEach(() => {
+  document.querySelectorAll('[data-testid="dscf-root"]').forEach((el) => el.parentElement?.remove());
+  setFullscreenMarker(false);
+});
+
 describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace 真实接线）", () => {
-  it("apply 后 DOM 在场 dscf-root/dscf-input 锚（真机 dscfRoot/dscfInput 非零的前提）", async () => {
-    const ctx = stubCtx();
+  it("apply（sessions 在场 + 全屏标记）后 DOM 在场 dscf-root/dscf-input 锚", async () => {
+    setFullscreenMarker(true);
+    const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
     await tick();
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
@@ -30,7 +110,8 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
   });
 
   it("disposer 收口：root.unmount 摘除替身 DOM（幂等不抛）", async () => {
-    const ctx = stubCtx();
+    setFullscreenMarker(true);
+    const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
     await tick();
     const effects = (ctx as unknown as { __effects: Array<() => unknown> }).__effects;
@@ -42,5 +123,40 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     await tick();
     expect(document.querySelectorAll('[data-testid="dscf-root"]').length).toBe(before - 1);
     expect(() => dispose()).not.toThrow();
+  });
+
+  it("bug ba885f7d ④: 全屏门控——fullscreenMarkers=0 时替身不常驻（dscf-root 不在场）", async () => {
+    setFullscreenMarker(false);
+    const ctx = stubCtx({ sessions: sessionsStub });
+    superComposerClient.apply(ctx);
+    await tick();
+    const before = document.querySelectorAll('[data-testid="dscf-root"]').length;
+    expect(before, "前置测试残留替身须为零").toBe(0);
+    // 全屏激活（DOM 标记出现）→ tracker 扇出重渲染 → 替身浮现
+    setFullscreenMarker(true);
+    await tick();
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
+  });
+
+  it("bug ba885f7d ②: 装配序兜底——sessions 缺席 + inject 缝 = 注入 scope 接线后替身在常", async () => {
+    setFullscreenMarker(true);
+    const ctx = stubCtx({ inject: true, sessions: sessionsStub });
+    superComposerClient.apply(ctx);
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
+  });
+
+  it("bug ba885f7d ④: ⧉ onExitFullscreen 走官方 sidebarRight.toggleFullscreen 同径", async () => {
+    setFullscreenMarker(true);
+    sidebarRightCalls.length = 0;
+    const ctx = stubCtx({ inject: true, sessions: sessionsWithMessage });
+    superComposerClient.apply(ctx);
+    await tick();
+    const btn = document.querySelector('[data-testid="dscf-fullscreen"]');
+    expect(btn).not.toBeNull();
+    (btn as HTMLElement).click();
+    await tick();
+    expect(sidebarRightCalls).toEqual(["toggle"]);
   });
 });

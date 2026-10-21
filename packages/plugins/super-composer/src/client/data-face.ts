@@ -251,6 +251,8 @@ export interface SuperComposerDataFace {
   trackMention(draft: string, caret: number): void
   /** 变更订阅（input state store + eventSource 扇出；返回退订） */
   subscribe(listener: () => void): () => void
+  /** 订阅补挂重试（晚序服务就绪后调用——全源挂上 = true） */
+  syncSubscriptions(listener: () => void): boolean
   /** 全量摘订阅 */
   dispose(): void
 }
@@ -285,25 +287,75 @@ function bindingOf(services: DataFaceServices): BindingMirror | undefined {
 export function createSuperComposerDataFace(services: DataFaceServices): SuperComposerDataFace {
   const inputOffs = new Set<() => void>()
   let disposed = false
+  // 每会话源订阅分源判据（Root cause: 会话与 conversation 服务均可能晚于挂载 provide
+  // ——单标志会把「首次补挂失败」误判为已挂，受控值投影/mention 菜单永不重渲染。
+  // state/menu 依赖 conversation —— 由 syncSubscriptions 重试补挂直至各源挂上）
+  let stateSubAttached = false
+  let menuSubAttached = false
+  let eventSourceSubAttached = false
 
-  const onSources = (listener: () => void): void => {
+  const attachSessionSubs = (listener: () => void): boolean => {
     const binding = bindingOf(services)
-    if (binding === undefined) return
-    const state = faceOf(services)?.state
-    if (state?.subscribe !== undefined) {
-      try {
-        const off = state.subscribe(listener)
-        if (typeof off === 'function') inputOffs.add(off)
-      } catch {
-        // fail-soft
+    if (binding === undefined) return false
+    let attachedAnything = false
+    if (!stateSubAttached) {
+      const state = faceOf(services)?.state
+      if (state?.subscribe !== undefined) {
+        try {
+          const off = state.subscribe(listener)
+          if (typeof off === 'function') inputOffs.add(off)
+          stateSubAttached = true
+          attachedAnything = true
+        } catch {
+          // fail-soft（下一轮重试）
+        }
       }
     }
+    if (!menuSubAttached) {
+      const triggers = services.inputTriggers
+      if (triggers !== undefined) {
+        try {
+          const menu = triggers.sessionOf(binding.ctx)?.menu
+          if (typeof menu?.subscribe === 'function') {
+            const off = menu.subscribe(listener)
+            if (typeof off === 'function') inputOffs.add(off)
+            menuSubAttached = true
+            attachedAnything = true
+          }
+        } catch {
+          // fail-soft（下一轮重试）
+        }
+      }
+    }
+    if (!eventSourceSubAttached) {
+      try {
+        const off = binding.eventSource.subscribe(listener)
+        if (typeof off === 'function') inputOffs.add(off)
+        eventSourceSubAttached = true
+        attachedAnything = true
+      } catch {
+        // fail-soft（下一轮重试）
+      }
+    }
+    return attachedAnything
+  }
+
+  const onSources = (listener: () => void): void => {
+    // sessions.list 订阅恒挂（会话后到——挂载时 binding 缺席也要在会话在留后扇出
+    // 重渲染并补挂每会话源订阅）
     try {
-      const off = binding.eventSource.subscribe(listener)
-      if (typeof off === 'function') inputOffs.add(off)
+      const list = (services.sessions as { list?: { subscribe?: (l: () => void) => () => void } } | undefined)?.list
+      if (typeof list?.subscribe === 'function') {
+        const off = list.subscribe(() => {
+          attachSessionSubs(listener)
+          listener()
+        })
+        if (typeof off === 'function') inputOffs.add(off)
+      }
     } catch {
       // fail-soft
     }
+    attachSessionSubs(listener)
   }
 
   return {
@@ -399,6 +451,10 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
         }
         inputOffs.clear()
       }
+    },
+    syncSubscriptions(listener) {
+      if (disposed) return true
+      return attachSessionSubs(listener)
     },
     dispose() {
       disposed = true
