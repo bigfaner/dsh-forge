@@ -92,6 +92,9 @@ export const BUG_CARD_SUCCESS_SCHEMA = {
     reportSessionId: { type: 'string', description: 'Registering (executing) session.' },
     fixSessionId: { type: 'string', description: 'Fixing session (written on fixed backfill).' },
     reporter: { type: 'string', description: 'Server-resolved git identity (user.name, fallback user.email).' },
+    // Root cause: bug-recurrence-chain 给 BugCard 新增 recurrenceOf 后未回写本白名单（additionalProperties:false），
+    // 挂链登记的返回卡被 oneOf 输出校验整体拒绝。
+    recurrenceOf: { type: 'string', description: 'Recurrence-chain predecessor bug_id (absent on chain roots).' },
     fixer: { type: 'string', description: 'Server-resolved fixer git identity (fixed backfill).' },
     createdAt: { type: 'string', description: 'Registration time (ISO-8601).' },
     updatedAt: { type: 'string', description: 'Backfill time (ISO-8601; equals createdAt until backfilled).' },

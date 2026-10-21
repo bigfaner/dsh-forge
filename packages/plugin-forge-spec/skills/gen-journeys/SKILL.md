@@ -28,13 +28,10 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
 
 ## 核心概念
 
-- **Journey**：kebab-case 名称（`task-lifecycle`）、Risk、有序 Steps（用户动作 +预期结果）、Invariants（跨步约束）。
+- **Journey**：kebab-case 名称（`task-lifecycle`，模块内唯一）、Risk、有序 Steps（用户动作 +预期结果）、Invariants（跨步约束）。
+- **模块归属**（monorepo，全链统一判据）：每条 Journey 落到唯一目标模块——`module` 字段 = 模块**唯一标识**（如 `web`、`core`，**不是路径** `apps/web`）；单仓省略该字段。归属从用户故事与 PRD UI 函数的落位推断；跨模块工作流按主落位模块归属并在正文标注跨界步骤。含糊 → 问用户（交互式）或从简报推导并记录选择。
 - **Risk**：`High`（状态变更/数据丢失/不可逆——边界用例数必须 ≥ happy path 步数）、`Medium`（多步、无不可逆副作用——按分支前置条件配边界用例）、`Low`（只读——仅 happy path + 关键错误）。从 PRD 推断：增/删/改 → High；查/列/搜 → Low。
 - **Golden Path**（必备）：每特性 ≥1 条 Journey 覆盖主故事的核心域动作序列，≥3 步，用领域术语（不用 API 术语）。复杂特性（≥2 类实体且存在父子关系）要求 ≥5 步跨实体步骤。
-
-## 表面处理
-
-本环境没有表面注册表 CLI。从仓库自身探测表面：`docs/conventions/testing/` 结构（逐表面约定目录）、既有 journey 的 `surface_types`、feature 任务的表面字段。支持类型：`web`、`api`、`cli`、`tui`、`mobile`。绝不猜——含糊且交互式 → 问用户；派发任务语境 → 从任务简报推导并记录选择。每条 Journey 声明 `surface_types` + `surface_keys`；全部 Journey 的并集必须覆盖每个已配置的表面类型与键。
 
 ## 工作流
 
@@ -48,13 +45,20 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
    feature: "<slug>"
    journey: "<name>"
    risk_level: "High|Medium|Low"
-   surface_types: ["web"]
-   surface_keys: ["<key>"]
+   module: "<moduleName>"  # monorepo 必填（模块唯一标识，如 web——非路径）；单仓省略本行
    sources: ["<input doc paths>"]
    generated: "YYYY-MM-DD"
    ---
    ```
 
    正文：搭建前置条件 → 编号 happy path 步骤（每步：用户动作 + 预期结果）→ 边界用例（被引步骤 + 分叉前置条件 + 动作 + 结果）→ Journey Invariants。一条 Journey = 一份内聚文档；内容大时内部分批写，绝不拆文件。
-5. **逐 Journey 校验**：名称在位；风险级有效；表面字段非空且与探测面匹配；≥1 条 happy path 步骤；≥1 条边界用例；High 风险密度达标；≥1 条不变式；每步有动作 + 预期结果；PRD 可回溯；表面覆盖完整。失败先修复再收尾。
+
+   产出目录树（feature 目录下）：
+
+   ```text
+   testing/
+   └── <journey>/          # kebab-case，模块内唯一
+       └── journey.md      # 叙事正本（本技能唯一产出；contracts/ 由 gen-contracts 产出）
+   ```
+5. **逐 Journey 校验**：名称在位；风险级有效；monorepo 下 `module` 非空；≥1 条 happy path 步骤；≥1 条边界用例；High 风险密度达标；≥1 条不变式；每步有动作 + 预期结果；PRD 可回溯。失败先修复再收尾。
 6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。质量门：`eval` 技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`（那是它的 gate，不是本技能的）。

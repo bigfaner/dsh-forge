@@ -174,3 +174,9 @@ md的FRONTMATTER渲染成表格，跟github一样
 - 重启条件：桌面端决定统一迁 `/api` 官方协议（届时必须 boot typert client，forge 面搭车）；或 mobile 需要零成本获得官方 client 生态兼容。
 - 接入链（评估已核销）：`@deepseek-ai/dsh-typert-generator`（首日核销 0.1.0-rc.8 代差兼容）+ `dsh-typert-protocol`（在位）；实现锚点 = `dsh-commands` typert 形态；`_request` 由代理侧注入（逐端点核对描述符）。
 - 关键核销点：生成器 CLI 输入格式；PeerScope 身份字段；mobile 信封换 `client-request` 形状的迁移成本。
+
+## 75. 任务悬浮面板展示已完成任务数量/总数量，缩小成球也展示。
+
+## 76. 任务localId:采用x.y格式，x表示阶段，y表示阶段内的序号
+
+## 77. 任务循环结束后，要复盘 repro，参考matt

@@ -7,6 +7,7 @@ import {
   type CycleDetectedData,
   type DependenciesUnmetData,
   ERROR_CODES,
+  type RpcErrorPayload,
   type SuspectedMoveData,
   type TestEvidenceRequiredData,
   type UnmetDependency,
@@ -81,8 +82,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 34 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码', () => {
-    expect([...ERROR_CODES]).toHaveLength(34)
+  it('ERROR_CODES = 37 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码 + worker addTask 拒收码 + W2 能力缺席拒绝码 + 重路由目标缺席拒绝码收尾', () => {
+    expect([...ERROR_CODES]).toHaveLength(37)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -92,8 +93,13 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_BUG_ALREADY_RESOLVED',
       'ERR_COMMIT_HASH_REQUIRED',
     ])
-    expect([...ERROR_CODES].slice(33)).toEqual(['ERR_BUG_RECURRENCE_DANGLING'])
-    expect(new Set(ERROR_CODES).size).toBe(34)
+    expect([...ERROR_CODES].slice(33, 34)).toEqual(['ERR_BUG_RECURRENCE_DANGLING'])
+    expect([...ERROR_CODES].slice(34)).toEqual([
+      'ERR_WORKER_ADDTASK_DENIED',
+      'ERR_WORKTREE_CAPABILITY_ABSENT',
+      'ERR_WORKTREE_TARGET_ABSENT',
+    ])
+    expect(new Set(ERROR_CODES).size).toBe(37)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {
@@ -139,5 +145,23 @@ describe('AC3 三码 data 载荷形状（Implementation Notes：未满足清单 
     expectTypeOf<SuspectedMoveData>().toHaveProperty('guidance')
     expectTypeOf<SuspectedMoveData>().toHaveProperty('existingDir')
     expectTypeOf<SuspectedMoveData>().toHaveProperty('derivedDir')
+  })
+})
+
+describe('RpcErrorPayload.causeStack（app-observability fix-1 dev 生境字段）', () => {
+  it('causeStack 可选 string 字段：dev 生境附载（序列化形状保真）', () => {
+    const payload: RpcErrorPayload = {
+      code: 'ERR_PROJECT_WRITE',
+      message: '应用库 projects 行写入失败',
+      causeStack: 'Error: boom\n    at Object.<anonymous> (app.ts:1:1)',
+    }
+    expect(payload.causeStack).toContain('app.ts:1:1')
+    expectTypeOf<RpcErrorPayload['causeStack']>().toEqualTypeOf<string | undefined>()
+  })
+
+  it('causeStack 缺席 = 生产零税形态（JSON 序列化恒省略）', () => {
+    const payload: RpcErrorPayload = { code: 'ERR_COMPENSATION', message: 'm', data: { a: 1 } }
+    expect('causeStack' in payload).toBe(false)
+    expect(JSON.parse(JSON.stringify(payload))).toEqual({ code: 'ERR_COMPENSATION', message: 'm', data: { a: 1 } })
   })
 })

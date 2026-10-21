@@ -57,8 +57,8 @@ export interface ForgeWorkspaceStore {
 /** 库文件名（部署：{tasksHome}/{flatten}@{hash8}/forge.db——schema.sql 头注） */
 const FORGE_DB_FILENAME = 'forge.db'
 
-/** 结构健全性检查·表在场清单（十二表 = 八域表 + bugs + schema_meta + app_key_logs 域基建表 +
- *  migration_digests 机制表；字母序） */
+/** 结构健全性检查·表在场清单（十三表 = 八域表 + bugs + schema_meta + app_key_logs 域基建表 +
+ *  migration_digests 机制表 + tasks_surface_archive 归档表（v4）；字母序） */
 const EXPECTED_TABLES: readonly string[] = [
   'app_key_logs',
   'bugs',
@@ -72,6 +72,7 @@ const EXPECTED_TABLES: readonly string[] = [
   'task_records',
   'task_session_links',
   'tasks',
+  'tasks_surface_archive',
 ]
 
 /**
@@ -116,7 +117,7 @@ function assertStructureSound(db: Database.Database): void {
     .map((r) => r.name)
   if (tables.length !== EXPECTED_TABLES.length || tables.some((t, i) => t !== EXPECTED_TABLES[i])) {
     throw new Error(
-      `工作区库结构健全性检查失败：表在场不符（期望十二表 [${EXPECTED_TABLES.join(', ')}]，实际 [${tables.join(', ')}]）`,
+      `工作区库结构健全性检查失败：表在场不符（期望十三表 [${EXPECTED_TABLES.join(', ')}]，实际 [${tables.join(', ')}]）`,
     )
   }
   // 关键列断言（v1 直改跨轮次——存量开发库废弃重扫，缺列 fail-loud 带处置指引）

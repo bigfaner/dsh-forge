@@ -2,7 +2,7 @@
 // 消费 1.1 core updateTask 动词）。任务定位同 submitTask/queryTask 口径：slug + local_id
 // 两显式参（必填）；宽字段全部可选（partial 语义——给定的字段改写、未给字段不动）：
 // title/type/priority/estimated_time/complexity/task_desc/acceptance_criteria（ac_json 整体
-// 覆写）/vars（KEY=VALUE 条目数组 → vars_json 整体覆写）/surface_key/surface_type/
+// 覆写）/vars（KEY=VALUE 条目数组 → vars_json 整体覆写）/
 // depends_on（manual 边整体置换——core 侧增量环校验 + 派生边护栏）。projectId 由 exec ctx
 // cwd 解析（session.ts）。返回 = 更新后任务快照（UpdateTaskResult = TaskSnapshot）。
 // tool 面零业务逻辑（Hard Rule）：参数映射 + 路由到 core 动词（单一写入门）。
@@ -51,8 +51,6 @@ export interface UpdateTaskToolArgs {
   readonly acceptance_criteria?: readonly string[]
   /** KEY=VALUE 条目数组（→ vars_json 整体覆写；重复键/畸形条目拒） */
   readonly vars?: readonly string[]
-  readonly surface_key?: string
-  readonly surface_type?: string
   /** 依赖改写（manual 边整体置换：删旧 → 增量环校验 → 插新；派生边拒） */
   readonly depends_on?: readonly string[]
 }
@@ -71,14 +69,12 @@ export function parseUpdateTaskArgs(args: unknown): UpdateTaskToolArgs {
     task_desc?: string
     acceptance_criteria?: string[]
     vars?: string[]
-    surface_key?: string
-    surface_type?: string
     depends_on?: string[]
   } = {
     slug: requiredString(a, 'slug', TOOL),
     local_id: requiredString(a, 'local_id', TOOL),
   }
-  for (const key of ['title', 'task_desc', 'estimated_time', 'surface_key', 'surface_type'] as const) {
+  for (const key of ['title', 'task_desc', 'estimated_time'] as const) {
     const v = optionalString(a, key, TOOL)
     if (v !== undefined) out[key] = v
   }
@@ -119,8 +115,6 @@ export const UPDATE_TASK_OUTPUT_SCHEMA = withFailureVariant({
     breaking: { type: 'boolean' },
     coverage: { type: 'number' },
     complexity: { type: 'string' },
-    surfaceKey: { type: 'string' },
-    surfaceType: { type: 'string' },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string', description: 'Last write timestamp (bumped by this update).' },
   },
@@ -139,9 +133,6 @@ function renderUpdateResult(_args: unknown, value: unknown): readonly { type: 't
   if (v.taskDesc !== undefined) entries.push(`- desc: ${v.taskDesc}`)
   if (v.acceptanceCriteria !== undefined) entries.push(`- acceptanceCriteria: ${v.acceptanceCriteria.length} items`)
   if (v.vars !== undefined) entries.push(`- vars: ${Object.keys(v.vars).length} entries`)
-  if (v.surfaceKey !== undefined || v.surfaceType !== undefined) {
-    entries.push(`- surface: ${v.surfaceKey ?? '-'} (${v.surfaceType ?? '-'})`)
-  }
   entries.push(`- updatedAt: ${v.updatedAt}`)
   return formatOk(`Task ${v.slug}/${v.localId} updated — [${v.taskStatus}] ${v.title}`, entries)
 }
@@ -151,7 +142,7 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Update an existing task (located by its container slug + local_id): wide-field partial semantics — given fields are rewritten, absent fields stay untouched. Rewritable: title, type, priority, estimated_time, complexity, task_desc, acceptance_criteria (ac_json overwritten as a whole), vars (KEY=VALUE entries, vars_json overwritten as a whole), surface_key/surface_type, depends_on (manual edges replaced as a whole; cycle-checked incrementally; fix-chain/autoconfig derived edges are rejected). Blocked by status gates (locked statuses reject) — read the updated task snapshot back.',
+      'Update an existing task (located by its container slug + local_id): wide-field partial semantics — given fields are rewritten, absent fields stay untouched. Rewritable: title, type, priority, estimated_time, complexity, task_desc, acceptance_criteria (ac_json overwritten as a whole), vars (KEY=VALUE entries, vars_json overwritten as a whole), depends_on (manual edges replaced as a whole; cycle-checked incrementally; fix-chain/autoconfig derived edges are rejected). Blocked by status gates (locked statuses reject) — read the updated task snapshot back.',
     parameters: {
       type: 'object',
       properties: {
@@ -173,8 +164,6 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           items: { type: 'string' },
           description: 'Replacement injection variables as KEY=VALUE entries (overwrites vars_json as a whole; duplicate keys rejected).',
         },
-        surface_key: { type: 'string', description: 'Surface key the task targets.' },
-        surface_type: { type: 'string', description: 'Surface type the task targets (web/api/cli/tui/mobile).' },
         depends_on: {
           type: 'array',
           items: { type: 'string' },
@@ -200,8 +189,6 @@ export function createUpdateTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.task_desc !== undefined ? { taskDesc: parsed.task_desc } : {}),
           ...(parsed.acceptance_criteria !== undefined ? { acceptanceCriteria: [...parsed.acceptance_criteria] } : {}),
           ...(parsed.vars !== undefined ? { vars: varsEntriesToRecord(parsed.vars) } : {}),
-          ...(parsed.surface_key !== undefined ? { surfaceKey: parsed.surface_key } : {}),
-          ...(parsed.surface_type !== undefined ? { surfaceType: parsed.surface_type } : {}),
           ...(parsed.depends_on !== undefined ? { dependsOn: [...parsed.depends_on] } : {}),
         }
         return deps.tasks.updateTask(input)

@@ -20,7 +20,13 @@ export interface SnapshotSource<T> {
 /** dsh 会话账本行窄形状（上游 SessionSummary 消费切片） */
 export interface LedgerSessionRow {
   readonly id: string
-  /** 人面标签：持久标题，缺省回退项目名/会话 id（上游 displayTitle 契约） */
+  /**
+   * 持久标题（上游 SessionSummary 行缺席 = 未命名）。行标题只消费它（trim 后空/缺席
+   * = 「未命名」；blank = 「新会话」——官方 ui-workspace sessionTitle 口径），不消费
+   * displayTitle 的目录名/id 兜底（bug 3d26a1be）。
+   */
+  readonly title?: string
+  /** 上游 display 投影（持久标题 → 目录名 → id 三级兜底）——目录名兜底不进侧栏行标签 */
   readonly displayTitle: string
   readonly updatedAt: number
   readonly running?: boolean
@@ -83,7 +89,10 @@ export type SidebarSessionStatus = 'attention' | 'done' | 'running' | 'idle'
  * 集合成员位（置顶行领先 + 静止位图钉标记；归档行随归档过滤三态进退）。 */
 export interface SidebarSessionRow {
   readonly sessionId: string
+  /** 行显示标签：blank → 「新会话」/ 持久标题（trim）/ 缺席 → 「未命名」——官方行口径（bug 3d26a1be） */
   readonly title: string
+  /** 已保存持久标题（trim 后；无 = ''）——改名草稿种子官方同判（无标题留空） */
+  readonly savedTitle: string
   readonly status: SidebarSessionStatus
   readonly updatedAt: number
   /** 置顶成员位（D45——置顶行项目块内领先 + 24h 折叠让位） */
@@ -188,6 +197,25 @@ function sessionVisible(row: LedgerSessionRow, currentSessionId: string | null):
   return true
 }
 
+/**
+ * 行显示标签（bug 3d26a1be——官方 ui-workspace 行 displayTitle 派生同口径）：blank → 「新会话」；
+ * 持久标题（trim 后非空）→ 标题；否则「新会话」。不消费上游 displayTitle 的目录名/id
+ * 兜底——该投影语义与行标签无关（未命名会话曾因此显示项目目录名，与项目组名重名）。
+ * 用户裁决（bug 9eb9d6cb 后续）：空 title 回退词统一「新会话」——title 漂移链收敛为
+ * 新会话 → 有意义的名称（「未命名」中间态退役；自动命名到达即替换，savedTitle 恒 ''
+ * 不挡自动命名）。
+ */
+export function sessionRowTitle(row: LedgerSessionRow): string {
+  if (row.blank === true) return '新会话'
+  const saved = typeof row.title === 'string' ? row.title.trim() : ''
+  return saved !== '' ? saved : '新会话'
+}
+
+/** 已保存标题（trim；无 = ''）——改名草稿种子（官方：无标题留空，不用显示标签兜底） */
+export function sessionSavedTitleOf(row: LedgerSessionRow): string {
+  return typeof row.title === 'string' ? row.title.trim() : ''
+}
+
 /** buildSidebarTree 输出（tree + 账本相位切片——loading = phase 'pending'） */
 export interface SidebarTree {
   readonly tree: readonly SidebarProjectNode[]
@@ -271,7 +299,8 @@ export function buildSidebarTree(input: {
       const loop = sessionLoopBadge(row) // S7——活循环徽标随行（undefined = 零徽标）
       rows.push({
         sessionId: row.id,
-        title: row.displayTitle,
+        title: sessionRowTitle(row),
+        savedTitle: sessionSavedTitleOf(row),
         status: sessionStatus(row),
         updatedAt: row.updatedAt,
         pinned: pinnedOrder.has(sessionId),
@@ -484,6 +513,8 @@ export interface SidebarFlatRow {
   readonly projectName: string
   readonly sessionId: string
   readonly title: string
+  /** 已保存持久标题（改名草稿种子——随树行同源派生，bug 3d26a1be） */
+  readonly savedTitle: string
   readonly status: SidebarSessionStatus
   readonly updatedAt: number
   /** 置顶成员位（D45——平铺行行尾动作组消费） */
@@ -509,6 +540,7 @@ export function sidebarFlatRowsOf(tree: readonly SidebarProjectNode[]): readonly
         projectId: node.projectId,
         projectName: node.name,
         title: session.title,
+        savedTitle: session.savedTitle,
         sessionId: session.sessionId,
         status: session.status,
         updatedAt: session.updatedAt,

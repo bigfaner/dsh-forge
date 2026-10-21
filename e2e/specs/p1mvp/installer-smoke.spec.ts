@@ -191,7 +191,9 @@ test('@web-e2e @p1mvp installer-smoke·冒烟前半：安装→启动零错→�
     // ── Step 3 success：主界面可达——三区工作台骨架（零项目 hero 确定相位） ──
     await expect(page.locator(NAV_SHELL).first(), '左栏导航 rail 入口在位').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(SIDEBAR_ANY).first(), '产品工作区面板').toBeVisible()
-    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口').toBeVisible()
+    // bug 2ffb0a82：knowledge 插件不随包（staged:false）→ 宿主插件位 false → 左栏
+    // 「知识库」入口行零登记（打包形态知识面整组隐藏）
+    await expect(page.locator(KNOWLEDGE_ENTRY).first(), '知识库入口（打包形态插件缺席 = 隐藏）').toHaveCount(0)
     await expect(page.locator(PROJECT_ROW_ANY), '零项目态：项目树空').toHaveCount(0)
     // fix-7 定性收口（smoke-skeleton L44 同源矛盾）：view 镜像 = 官方面板态投影（hero 相位
     // 产品 'dswf-hero' 面板替换呈现 → 镜像恒 'hero'）；本组自带零项目 hero 确定相位（组题

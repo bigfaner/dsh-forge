@@ -11,26 +11,26 @@ import { deriveWorkerToolFilter, workerAgentOptionsOf } from '../../../packages/
 
 /** 全局 deny 十员（WORKER_GLOBAL_DENY_TOOLS 实面实名——drift #10/fix-1 + worker-lean-execution S5） */
 const GLOBAL_DENY = ['ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
-/** forge 闭环禁入九动词（FORGE_DENY_IN_WORKER：updateTask/taskStats/listTasks/listBugs 仅主 agent 面 + validateMermaid 插件面——getBug 自 bug-recurrence-chain 1.3 起 worker 放行） */
-const FORGE_DENY = ['queryTask', 'createProposal', 'transitionProposal', 'dispatchTask', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'validateMermaid']
+/** forge 闭环禁入十动词（FORGE_DENY_IN_WORKER：updateTask/taskStats/listTasks/listBugs 仅主 agent 面 + validateMermaid 插件面 + stopTaskLoop 循环停止面主 agent 专属——getBug 自 bug-recurrence-chain 1.3 起 worker 放行） */
+const FORGE_DENY = ['queryTask', 'createProposal', 'transitionProposal', 'dispatchTask', 'stopTaskLoop', 'updateTask', 'taskStats', 'listTasks', 'listBugs', 'validateMermaid']
 
 describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——族收窄 deny 集）', () => {
-  it('coding：基座 19 + web 二名（21 deny——web 族收窄）', () => {
+  it('coding：基座 20 + web 二名（22 deny——web 族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('coding-feature')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'web_fetch', 'web_search'].sort())
   })
 
-  it('doc：+job 三名 + read_image + web 二名（25 deny）', () => {
+  it('doc：+job 三名 + read_image + web 二名（26 deny）', () => {
     const { deny } = deriveWorkerToolFilter('doc')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'job_list', 'job_output', 'job_kill', 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('gate：+read_image + web 二名（22 deny）', () => {
+  it('gate：+read_image + web 二名（23 deny）', () => {
     const { deny } = deriveWorkerToolFilter('gate')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY, 'read_image', 'web_fetch', 'web_search'].sort())
   })
 
-  it('validation：恰基座 19（零族收窄）', () => {
+  it('validation：恰基座 20（零族收窄）', () => {
     const { deny } = deriveWorkerToolFilter('validation-code')
     expect([...deny].sort()).toEqual([...GLOBAL_DENY, ...FORGE_DENY].sort())
     const evalDeny = deriveWorkerToolFilter('eval-contract').deny

@@ -49,20 +49,21 @@ function node(overrides: Partial<SidebarProjectNode> = {}): SidebarProjectNode {
     wsPath: 'Z:/w/p1',
     archived: false,
     sessions: [
-      { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: false },
-      { sessionId: 's2', title: '索引重建', status: 'running', updatedAt: NOW - 3 * 3_600_000, pinned: false, archived: false },
-      { sessionId: 's4', title: '静默会话', status: 'idle', updatedAt: NOW - 30_000, pinned: false, archived: false },
+      { sessionId: 's1', title: '登录修复', savedTitle: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: false },
+      { sessionId: 's2', title: '索引重建', savedTitle: '索引重建', status: 'running', updatedAt: NOW - 3 * 3_600_000, pinned: false, archived: false },
+      { sessionId: 's4', title: '静默会话', savedTitle: '静默会话', status: 'idle', updatedAt: NOW - 30_000, pinned: false, archived: false },
       // 2026-10-12 至少 10 行下限：补足窗口内行（s1/s2/s4 + s5..s11 = 10 行窗口内）；
       // s3（2 天前）位于窗口内行之后 → 保持「更早（1）」折叠口径不变（前缀补足语义）
       ...Array.from({ length: 7 }, (_, i) => ({
         sessionId: `s${i + 5}`,
         title: `填充会话${i + 5}`,
+        savedTitle: `填充会话${i + 5}`,
         status: 'idle' as const,
         updatedAt: NOW - 4 * 3_600_000 - i * 60_000,
         pinned: false,
         archived: false,
       })),
-      { sessionId: 's3', title: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000, pinned: false, archived: false },
+      { sessionId: 's3', title: '文档补全', savedTitle: '文档补全', status: 'done', updatedAt: NOW - 2 * 86_400_000, pinned: false, archived: false },
     ],
     ...overrides,
   }
@@ -469,7 +470,7 @@ describe('SidebarProjectsZone 视图应用（fix-42：groupBy 平铺 + archivedF
       name: '文档站',
       archived: true,
       sessions: [
-        { sessionId: 's9', title: '归档行', status: 'idle', updatedAt: NOW - 60_000, pinned: false, archived: false },
+        { sessionId: 's9', title: '归档行', savedTitle: '归档行', status: 'idle', updatedAt: NOW - 60_000, pinned: false, archived: false },
       ],
     }),
   ]
@@ -590,7 +591,7 @@ describe('D42/D45 会话行 hover 动作组（官方 fading 模式 + 三钮 ⋯/
   it('置顶行：置顶钮转取消置顶形 + 行尾静止图钉标记（官方 rest-state pin marker 同位）', () => {
     const markup = panel({
       ...actions,
-      tree: [node({ sessions: [{ sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: true, archived: false }] })],
+      tree: [node({ sessions: [{ sessionId: 's1', title: '登录修复', savedTitle: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: true, archived: false }] })],
     })
     expect(markup).toContain('aria-label="取消置顶 登录修复"')
     expect(markup).toContain('data-dswf-session-pinmark')
@@ -607,7 +608,7 @@ describe('D42/D45 会话行 hover 动作组（官方 fading 模式 + 三钮 ⋯/
       <SidebarProjectsZone
         tree={[node({
           sessions: [
-            { sessionId: 's1', title: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: true },
+            { sessionId: 's1', title: '登录修复', savedTitle: '登录修复', status: 'attention', updatedAt: NOW - 5 * 60_000, pinned: false, archived: true },
           ],
         })]}
         loading={false}
@@ -752,6 +753,7 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
             {
               sessionId: 's-dispatch',
               title: '派发会话',
+              savedTitle: '派发会话',
               status: 'running',
               updatedAt: NOW - 30_000,
               pinned: false,
@@ -786,6 +788,7 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
             {
               sessionId: 's-start',
               title: '启动会话',
+              savedTitle: '启动会话',
               status: 'running',
               updatedAt: NOW - 30_000,
               pinned: false,
@@ -795,6 +798,7 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
             {
               sessionId: 's-stop',
               title: '收尾会话',
+              savedTitle: '收尾会话',
               status: 'running',
               updatedAt: NOW - 30_000,
               pinned: false,

@@ -63,11 +63,13 @@ import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
+import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
   createWorktreeRpcService,
   interceptRequiredBinding,
   interceptSessionSends,
+  verifySendGuardInstalled,
   type SessionControllerFace,
   type SessionPersistenceFace,
   type WorktreeRpcService,
@@ -77,7 +79,17 @@ import {
 import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
+import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
+import { productPackagePresent } from '../profile/paths.js'
+import {
+  createDiagContextStore,
+  emitDiag,
+  relayDiagOverBridge,
+  runWithDiagContext,
+} from '../telemetry/index.js'
+import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
+import type { PromptTraceSpan } from '../ipc/worktree-rpc.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -130,6 +142,14 @@ const diag = (line: string): void => {
 
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），
 // boot 完成后置换为真处理器；listen 常驻不拆（消息零丢失窗）。
+/** trace_id 生成（child 侧——链 B prompt 入口；crypto.randomUUID 同 preload 口径） */
+const newTraceIdChild = (): string => {
+  try {
+    return globalThis.crypto.randomUUID()
+  } catch {
+    return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
+}
 let handleMessage: (message: MainToChildMessage) => void = () => {}
 process.on('message', (message: unknown) => {
   handleMessage(message as MainToChildMessage)
@@ -285,14 +305,21 @@ async function main(): Promise<void> {
   // 直读文件（core forgeSettings 服务尚未装配——本进程 runProfile 之前唯一读缝）；文件
   // 缺席/畸形 = 未开启（fail-soft 默认回环形制）。
   const remoteExpose = remoteApprovalEnabledOf(options.settingsFile)
-  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）
-  const gitWorktreeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json'))
+  // 1.7 git-worktree 插件行注行门（overlay 与装配段共用单源——插件在 profile 树才装载+注入）。
+  // 2026-10-18 打包启动崩 fix：探测改双形态（dev profile 树 ∪ installAnchor 邻接树——
+  // productPackagePresent）。旧口径单探 profileDir/node_modules，而打包形态 profile 目录无
+  // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
+  // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
+  const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  // bug 2ffb0a82：knowledge 插件装载位（与 overlay 注行门同源单值——child 侧唯一探测点，
+  // ready 消息上送 renderer 知识面门控；dev 树在场 true / 打包形态暂不含 false）
+  const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
   const overlayPath = writeBootOverlay(join(dirname(options.stateDb), 'boot-overlay.yml'), {
     stateDb: options.stateDb,
     bindingsFile: options.bindingsFile,
     tasksHome: options.tasksHome, // 3.4 M2 派生根（缺席 = core 四域降级——P1 面零变化）
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
-    knowledgeRow: existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json')), // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
+    knowledgeRow, // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
     gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
@@ -303,6 +330,7 @@ async function main(): Promise<void> {
             ...presetPatches,
             coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
             specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
+            blitzSkillsDir: options.blitzSkillsDir, // customSkillDirs[blitz]（缺席 = blitz 技能面降级）
             bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
           },
         }
@@ -316,6 +344,67 @@ async function main(): Promise<void> {
     args: ['--no-open', '--port', String(options.port)],
   })
   const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${ctx.webServer.port}`)
+  // app-observability 1.2：诊断事件域 child 半边接线——
+  //   ① relay：ctx 'diag/log' 事件 → 结构化 JSON 行经桥 diag 消息回 main（main 转译入
+  //      appender 单源；ALS trace_id 在订阅回调内同步读入行负载）。
+  //   ② ALS 单实例：prompt 拦截 trace 包裹 + bridge rpc 复原共用（链 B 进程内贯穿）。
+  //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
+  const diagAls = createDiagContextStore()
+  relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
+  const failOpenDiag = (line: string): void => {
+    diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'fail-open', message: line })
+    } catch {
+      // 诊断面异常不反压拦截层（红线①同构）
+    }
+  }
+  // 网关折叠点落栈（方案 3——官方缝 wrap，官方包零改制）：typertGateway 服务惰性解析
+  // （cordis Service 激活晚于本装配段可达——250ms 轮询，60s 放弃；形状不符 = 零挂接 fail-soft）。
+  {
+    let foldAttached = false
+    const attachFold = (): void => {
+      if (foldAttached) return
+      let gateway: GatewayFoldFace | undefined
+      try {
+        gateway = (ctx as unknown as { get(name: string): unknown }).get('typertGateway') as GatewayFoldFace | undefined
+      } catch {
+        gateway = undefined
+      }
+      if (
+        gateway === undefined ||
+        typeof (gateway as Record<string, unknown>)['prepareInvocation'] !== 'function' ||
+        typeof (gateway as Record<string, unknown>)['invokePrepared'] !== 'function'
+      ) {
+        return
+      }
+      foldAttached = true
+      attachGatewayFoldDiag(
+        gateway,
+        (error, phase) => {
+        try {
+          const err = error as Error | undefined
+          emitDiag(ctx, {
+            level: 'error',
+            process: 'child',
+            event: 'gateway-fold',
+            message: `[gateway/${phase}] ${String(err?.message ?? error)}`,
+            stack: err?.stack,
+          })
+        } catch {
+          // 诊断面异常不反压网关（红线①同构）
+        }
+      }, { causeStack: isDevProfile(process.env) }) // dev 生境错误回包 details 附原始栈（fix-1 方案 6）
+      diag('[diag] 网关折叠点挂接完成（typertGateway wrap——gateway/internal 类错误原始栈落日志）')
+    }
+    const foldGate = setInterval(attachFold, 250)
+    foldGate.unref?.()
+    setTimeout(() => {
+      clearInterval(foldGate)
+      attachFold()
+    }, 60_000).unref?.()
+    attachFold()
+  }
   // 1.32 /api 非回环拦截（connection/request waterfall 硬化）：remoteExpose（fix-3 行覆写
   // 0.0.0.0）使 /api 面 LAN 可达——官方围栏自动信任 IP 字面量 Host + 会话 cookie 明文可嗅。
   // 官方多听者插槽 `connection/request`（dsh-client-connection README「Browser authentication
@@ -364,6 +453,9 @@ async function main(): Promise<void> {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
     }
     try {
+      // W2 缺席拒绝面判定源：60s 能力轮询放弃路径盖 'absent'（注入 createWorktreeRpcService
+      // ——sessionCreate/prompt 两入口据此判定是否跑 core git 探针显式拒绝）。
+      let worktreeGuardState: 'absent' | undefined
       // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
       // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
       // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
@@ -402,9 +494,71 @@ async function main(): Promise<void> {
       }
       const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
         gitWorktree: getGitWorktree as never,
+        guardState: () => worktreeGuardState,
         sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
+        // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
+        // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
+        // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
+        // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
+        // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
+        // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
+        onWorktreeSetChanged: async (worktreePath?: string) => {
+          let projects: Pick<ProjectService, 'listProjects'> | undefined
+          try {
+            projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
+          } catch {
+            projects = undefined
+          }
+          if (projects === undefined) return
+          if (worktreePath !== undefined) {
+            try {
+              const { readFileSync } = await import('node:fs')
+              const raw = readFileSync(options.bindingsFile, 'utf8')
+              const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
+              const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+              const present = (parsed.projects ?? []).some(
+                (row) =>
+                  typeof row.wsPath === 'string' &&
+                  row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
+              )
+              if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
+            } catch {
+              // 读失败（首建/损坏）→ 落全量刷新现状
+            }
+          }
+          await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
+        },
+        // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
+        // adopt = resume 既有日志 → 官方恢复链补 end-seed → permission 钉档走「已种子化」
+        // 分支按组合缺省落档，绕过 defaultPreset（设置>通用>权限）。官方正缝修正：live
+        // session 上经 permissionPresets.set（UI 选择器同径公共 API）补钉解析后的用户缺省
+        // 档；服务/会话缺席、已同档或 custom = no-op fail-soft。
+        onSessionAdopted: async (sessionId: string) => {
+          let presets: unknown
+          let sessions: unknown
+          try {
+            presets = servicesFace.get('permissionPresets')
+            sessions = servicesFace.get('sessions')
+          } catch {
+            return
+          }
+          const face = presets as
+            | {
+                readonly defaultPreset: string
+                current(session: unknown): string
+                set(session: unknown, name: string): void
+              }
+            | undefined
+          const store = sessions as { get(id: string): unknown } | undefined
+          if (face === undefined || store === undefined) return
+          const session = store.get(sessionId)
+          if (session === undefined) return
+          const target = face.defaultPreset
+          if (target === 'custom' || face.current(session) === target) return
+          face.set(session, target)
+        },
         // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
         // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
         resolveDefaultPreset: async () => {
@@ -419,6 +573,9 @@ async function main(): Promise<void> {
           return (await resolve.call(presets, undefined)).id
         },
         warn: (line) => diag(line),
+        // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
+        // failOpenDiag = diag 双轨 + emitDiag（ALS 上下文内被调 → 行带链 B trace_id）。
+        failOpenDiag,
       })
       worktreeRpcService = worktreeRpc
 
@@ -434,13 +591,21 @@ async function main(): Promise<void> {
           return
         }
         const disposers: Array<() => void> = []
+        // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
+        const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
         disposers.push(
-          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), (line) => diag(line)),
+          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), failOpenDiag),
         )
         // 1.30 第二层必绑拦截（A2/G2 拒绝 + 编排重路由；A5 cwd 漂移拒绝）——叠加封存层之上
         const guard = worktreeRpc.requiredBindingGuard()
         if (guard !== undefined) {
-          disposers.push(interceptRequiredBinding(sessionController, guard, (line) => diag(line)))
+          // app-observability 1.2 链 B：prompt dispatch 入口生成 trace_id + ALS 包裹整链
+          const traceSpan: PromptTraceSpan = {
+            next: () => newTraceIdChild(),
+            run: <T,>(traceId: string, sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
+              runWithDiagContext(diagAls, { traceId, sessionId }, fn),
+          }
+          disposers.push(interceptRequiredBinding(sessionController, guard, failOpenDiag, traceSpan))
         } else {
           diag('[git-worktree] 必绑拦截 guard 缺席（sessionPersistence 缺席）——仅封存层接线')
         }
@@ -453,6 +618,10 @@ async function main(): Promise<void> {
             }
           }
         }
+        // W4 装载自证（session-binding-guarantee §W4）：wrap 换芯读回——controller.prompt 已换
+        // （≠ 装配前留底）+ 必绑 guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛
+        // （不静默降级为无拦截宿主）。
+        verifySendGuardInstalled(sessionController, { promptBefore, guardPresent: guard !== undefined })
       }
       const wrapGate = setInterval(() => {
         if (getGitWorktree() !== undefined) {
@@ -464,7 +633,12 @@ async function main(): Promise<void> {
       setTimeout(() => {
         clearInterval(wrapGate)
         if (!sendGuardInstalled) {
-          diag('[git-worktree] gitWorktree 能力未解析——发送拦截零 wrap（git 缺席宿主零开销）')
+          // W2 能力缺席 fail-closed 收口：盖缺席状态位 + 接线拒绝面（judge/sessionCreate
+          // 入口对 git 项目显式拒绝；非 git 探针 null 走官方原流零差异）。能力在场路径
+          // （wrapGate 命中先行安装）零改动。
+          worktreeGuardState = 'absent'
+          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——guardState 盖 absent，缺席拒绝面接线')
+          installSendGuard()
         }
       }, 60_000).unref?.()
     } catch (cause) {
@@ -1005,6 +1179,8 @@ async function main(): Promise<void> {
       approval: services.approval !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
+    // bug 2ffb0a82：knowledge 插件装载位（renderer 知识 UI 面门控单源——见上方 knowledgeRow 注记）
+    knowledgePlugin: knowledgeRow,
   })
   shutdownTree = async () => {
     try {
@@ -1046,7 +1222,7 @@ async function main(): Promise<void> {
       return
     }
     if (message?.type === 'rpc') {
-      void dispatchRpc(services, message).then(send)
+      void dispatchRpc(services, message, diagAls).then(send) // ALS 复原 main↔bridge 显式携带的 trace_id
     }
   }
 }

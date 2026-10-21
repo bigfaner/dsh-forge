@@ -5,7 +5,7 @@
 //（source_task_slug + source_task_local_id 成对显式）；嵌套负载平铺：vars = ['KEY=VALUE'] 条目
 // 数组（老 forge `--var KEY=VALUE` 形制平移）；acceptance_criteria = AC 清单（→ ac_json，
 // submitTask 证据门判据）。projectId 由 exec ctx cwd 解析（session.ts——cwd 缺席/未命中
-// = ERR_WORKSPACE_NOT_REGISTERED）；返回 = contracts AddTaskResult 透传。
+// = ERR_WORKSPACE_NOT_REGISTERED）。
 // tool 面零业务逻辑（Hard Rule）：参数映射 + 路由到 core 动词（单一写入门）。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + 键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话 + 违规清单逐行——format.ts 单源）。
@@ -41,6 +41,7 @@ import {
   type ForgeToolFailure,
 } from './format.js'
 import { requireProjectId, sessionContextOf } from './session.js'
+import { workerSourceTaskOf } from '../dispatch-core/assemble.js'
 import { emitToolError, slugOfToolArgs } from '../events/sink.js'
 
 const TOOL = 'addTask'
@@ -78,8 +79,6 @@ export interface AddTaskToolArgs {
   /** 覆盖率阈值小数（0–1） */
   readonly coverage?: number
   readonly complexity?: TaskComplexity
-  readonly surface_key?: string
-  readonly surface_type?: string
 }
 
 /** KEY=VALUE 条目数组 → Record（重复键/畸形条目拒——防御收窄） */
@@ -120,15 +119,13 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
     breaking?: boolean
     coverage?: number
     complexity?: TaskComplexity
-    surface_key?: string
-    surface_type?: string
   } = {
     source_kind: requiredEnum(a, 'source_kind', CONTAINER_KINDS, TOOL),
     source_slug: requiredString(a, 'source_slug', TOOL),
     title: requiredString(a, 'title', TOOL),
     type: requiredEnum(a, 'type', TASK_TYPES, TOOL),
   }
-  const set = <K extends 'task_desc' | 'estimated_time' | 'surface_key' | 'surface_type'>(
+  const set = <K extends 'task_desc' | 'estimated_time'>(
     key: K,
     value: string | undefined,
   ): void => {
@@ -136,8 +133,6 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
   }
   set('task_desc', optionalString(a, 'task_desc', TOOL))
   set('estimated_time', optionalString(a, 'estimated_time', TOOL))
-  set('surface_key', optionalString(a, 'surface_key', TOOL))
-  set('surface_type', optionalString(a, 'surface_type', TOOL))
   const priority = optionalEnum(a, 'priority', PRIORITIES, TOOL)
   if (priority !== undefined) out.priority = priority
   const complexity = optionalEnum(a, 'complexity', COMPLEXITIES, TOOL)
@@ -184,6 +179,23 @@ function renderAddTaskResult(_args: unknown, value: unknown): readonly { type: '
     v.reused ? `Task ${v.slug}/${v.localId} already exists (fix dedup) — reused, no new row` : `Task ${v.slug}/${v.localId} added`,
     [`- taskId: ${v.taskId}`],
   )
+}
+
+/**
+ * caller 身份分流（改进 5）：loopSourced spawn 的 worker 会话拒收——身份锚 =
+ * workerSourceTasks 登记表（spawnClaimed 成功即登记、结算即注销；主会话与 triage
+ * 代理不在表 = 放行）。响应自解释：权限归属 + 正确动作（submitTask result=blocked
+ * 如实结算——fix/后继任务由处置方派生）。
+ */
+function workerAddTaskDenied(): ForgeToolFailure {
+  return {
+    ok: false,
+    code: 'ERR_WORKER_ADDTASK_DENIED',
+    message:
+      'addTask is not available to dispatch-loop worker sessions — task spawning belongs to the main session and the loop triage layer.\n' +
+      'Correct action: settle honestly via submitTask with result=blocked (reason + evidence); the fix/successor task is derived by the disposal layer.',
+    violations: [],
+  }
 }
 
 /** tool 定义工厂（deps 注入服务与解析器——纯函数体，无插件级状态） */
@@ -238,14 +250,13 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         breaking: { type: 'boolean', description: 'Breaking-change flag (default false).' },
         coverage: { type: 'number', description: 'Coverage threshold as a 0-1 fraction (omit for global default).' },
         complexity: { type: 'string', description: 'One of: low, medium, high.' },
-        surface_key: { type: 'string', description: 'Surface key the task targets.' },
-        surface_type: { type: 'string', description: 'Surface type the task targets (web/api/cli/tui/mobile).' },
       },
       required: ['source_kind', 'source_slug', 'title', 'type'],
     },
     output: { schema: ADD_TASK_OUTPUT_SCHEMA, render: renderAddTaskResult },
     async execute(args: unknown, exec: ToolExecFace): Promise<AddTaskResult | ForgeToolFailure> {
       const session = sessionContextOf(exec)
+      if (workerSourceTaskOf(session.sessionId) !== undefined) return workerAddTaskDenied()
       return callToolFace(async () => {
         const parsed = parseAddTaskArgs(args)
         const projectId = requireProjectId(deps.resolveProjectId, session)
@@ -267,8 +278,6 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.breaking !== undefined ? { breaking: parsed.breaking } : {}),
           ...(parsed.coverage !== undefined ? { coverage: parsed.coverage } : {}),
           ...(parsed.complexity !== undefined ? { complexity: parsed.complexity } : {}),
-          ...(parsed.surface_key !== undefined ? { surfaceKey: parsed.surface_key } : {}),
-          ...(parsed.surface_type !== undefined ? { surfaceType: parsed.surface_type } : {}),
         }
         return deps.tasks.addTask(input)
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))

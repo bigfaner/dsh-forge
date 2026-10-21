@@ -242,6 +242,7 @@ export interface ForgeWorktreeRpc {
   sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
 }
 
@@ -336,6 +337,7 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
       seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
       select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
+      selected: (q) => invokeRpc<{ readonly path?: string }>(transport, WORKTREE_CHANNELS.selected, q),
       resolve: (q) => invokeRpc<WorktreeResolveResult>(transport, WORKTREE_CHANNELS.resolve, q),
     },
   }

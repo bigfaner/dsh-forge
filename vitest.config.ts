@@ -24,6 +24,10 @@ export default defineConfig({
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
       { test: { name: 'knowledge', include: ['packages/knowledge/src/**/*.test.ts'] } },
       { test: { name: 'plugin-forge', include: ['packages/plugin-forge/src/**/*.test.ts'] } },
+      // 3b④ 契约 pin 扩池：pin-dispatch-injection（dispatchTask description ↔ 注入模板同源断言）
+      { test: { name: 'plugin-forge-contract', include: ['packages/plugin-forge/tests/contract/**/*.test.ts'] } },
+      // 3b④ e2e dogfood 回放取证（真驱动器/真注入投影/真工具壳 + 桩 tasks/spawn/agents——零模型零 Electron）
+      { test: { name: 'plugin-forge-e2e', include: ['packages/plugin-forge/e2e/**/*.test.ts'] } },
       // M3 3.1：第八工件 plugin-forge-spec（spec 三 tool + forge:spec 段）
       { test: { name: 'plugin-forge-spec', include: ['packages/plugin-forge-spec/src/**/*.test.ts'] } },
       // md-mermaid 插件包（校验面单测 + 真引擎 headless parse 集成）
@@ -42,6 +46,8 @@ export default defineConfig({
           },
         },
       },
+      // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）
+      { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
       { test: { name: 'mobile', include: ['apps/mobile/src/**/*.test.ts'] } },

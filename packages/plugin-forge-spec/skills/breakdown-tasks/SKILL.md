@@ -35,8 +35,7 @@ description: 把定稿的技术设计拆解为可执行任务图（经 addTask�
 addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "...",
           priority: "P0|P1|P2", estimated_time: "...", task_desc: "...",
           acceptance_criteria: ["...", "..."], depends_on: ["<prior local_id>"],
-          vars: ["KEY=VALUE"], complexity: "low|medium|high",
-          surface_key: "...", surface_type: "...", breaking: true|false }
+          vars: ["KEY=VALUE"], complexity: "low|medium|high", breaking: true|false }
 ```
 
 - `title` = 动词先行的业务措辞；`task_desc` = 工作描述。

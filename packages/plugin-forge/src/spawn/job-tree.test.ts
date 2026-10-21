@@ -1,0 +1,490 @@
+// 1.3 单测 —— worker 进程树 Job Object 整树回收（spawn/job-tree.ts）：
+// keeper 进程协议（ready/candidate/assigned/assign-failed ←；claim/exclude/terminate →
+// 经指令文件队列）经注入桩 launcher 全测（真 keeper = PowerShell P/Invoke，真机端到端
+// 取证另行归档）。锁面：①win32 门（非 win32 = 禁用态 no-op，launcher 不触）；②spawn
+// 失败 fail-soft（禁用态不抛、reclaim 返回 false）；③指令文件队列投递（claim/exclude/
+// terminate 落 *.cmd）；④candidate 仲裁单点互斥（先报者 claim、余者 exclude——嵌套 Job
+// 误归属的消解）；⑤reclaim 幂等（terminate 单发）；⑥pid 复位（reclaim 后 keeperPid
+// 复位——guard 复位回归断言）。
+import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import type { ChildProcess } from 'node:child_process'
+import type { Readable } from 'node:stream'
+import { createWorkerTreeGuard, ensureKeeperAssembly, hostOwnedPidsSnapshot, noopWorkerTreeGuard, noteHostOwnedChild } from './job-tree.js'
+import type { KeeperProcess, WorkerTreeGuardDeps } from './job-tree.js'
+
+/** 测试装配桩（真 PowerShell 编译不触——assembly 注入假路径） */
+const ASSEMBLY_STUB = Promise.resolve({ assemblyPath: 'C:\\stub\\jobtree.dll', scriptPath: 'C:\\stub\\keeper.ps1' })
+
+/** 指令队列当前内容（按文件名序拼接——投递顺序断言面） */
+function queueContent(queueDir: string): string {
+  try {
+    return readdirSync(queueDir)
+      .sort()
+      .map((f) => readFileSync(join(queueDir, f), 'utf8'))
+      .join('')
+  } catch {
+    return ''
+  }
+}
+
+function deps(p: string, launch: NonNullable<WorkerTreeGuardDeps['keeperLauncher']>): WorkerTreeGuardDeps {
+  return { platform: p, keeperLauncher: launch, keeperAssembly: ASSEMBLY_STUB }
+}
+
+describe('createWorkerTreeGuard（keeper 协议契约）', () => {
+  it('非 win32 = 禁用态：launcher 不触、keeperPid undefined、reclaim no-op false', async () => {
+    let calls = 0
+    const guard = createWorkerTreeGuard({
+      platform: 'linux',
+      keeperLauncher: () => {
+        calls++
+        throw new Error('must not launch')
+      },
+    })
+    await guard.whenReady
+    expect(calls).toBe(0)
+    expect(guard.keeperPid).toBeUndefined()
+    expect(await guard.reclaim()).toBe(false)
+  })
+
+  it('noopWorkerTreeGuard：全 no-op（单测/驱动器缺省注入位）', async () => {
+    const guard = noopWorkerTreeGuard()
+    guard.exclude(1)
+    await guard.whenReady
+    expect(guard.keeperPid).toBeUndefined()
+    expect(await guard.reclaim()).toBe(false)
+  })
+
+  it('就绪握手：ready 行 → keeperPid 置位 + whenReady 兑现；launcher 收齐装配参数', async () => {
+    let captured: Parameters<NonNullable<WorkerTreeGuardDeps['keeperLauncher']>>[0] | undefined
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        captured = args
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', `ready 4242\n`))
+        return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    expect(guard.keeperPid).toBeUndefined()
+    await guard.whenReady
+    expect(guard.keeperPid).toBe(4242)
+    expect(captured).toBeDefined()
+    expect(captured!.hostPid).toBeTypeOf('number')
+    expect(captured!.pollMs).toBeGreaterThan(0)
+    expect(captured!.assemblyPath).toContain('jobtree.dll')
+    expect(captured!.scriptPath).toContain('keeper.ps1')
+    expect(captured!.queueDir).toContain('queue-')
+  })
+
+  it('指令队列：exclude 在就绪后投递（claim/exclude 落 *.cmd 文件）', async () => {
+    let queueDir: string | undefined
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', `ready 4242\n`))
+        return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    guard.exclude(11)
+    guard.exclude(22)
+    await guard.whenReady
+    const content = queueContent(queueDir!)
+    expect(content).toContain('exclude 11')
+    expect(content).toContain('exclude 22')
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
+
+  it('candidate 仲裁：先报者 claim、余者 exclude（双 guard 互斥单点归属）', async () => {
+    const dirs: string[] = []
+    const stdoutPipes: EventEmitter[] = []
+    const launcher: WorkerTreeGuardDeps['keeperLauncher'] = (args) => {
+      dirs.push(args.queueDir)
+      const stdout = new EventEmitter()
+      stdoutPipes.push(stdout)
+      queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+      return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+    }
+    const guard1 = createWorkerTreeGuard(deps('win32', launcher))
+    const guard2 = createWorkerTreeGuard(deps('win32', launcher))
+    await Promise.all([guard1.whenReady, guard2.whenReady])
+    stdoutPipes[0]!.emit('data', 'candidate 777\n')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(queueContent(dirs[0]!)).toContain('claim 777')
+    expect(queueContent(dirs[1]!)).toContain('exclude 777')
+    // 后报者（已 exclude）不再 claim——嵌套 Job 误归属消解
+    stdoutPipes[1]!.emit('data', 'candidate 777\n')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(queueContent(dirs[1]!)).not.toContain('claim 777')
+    for (const d of dirs) rmSync(d, { recursive: true, force: true })
+  })
+
+  it('仲裁第二例：guard2 先报 → claim 落 guard2、exclude 落 guard1（非 guard1 固定优先）', async () => {
+    const dirs: string[] = []
+    const stdoutPipes: EventEmitter[] = []
+    const launcher: WorkerTreeGuardDeps['keeperLauncher'] = (args) => {
+      dirs.push(args.queueDir)
+      const stdout = new EventEmitter()
+      stdoutPipes.push(stdout)
+      queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+      return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+    }
+    const guard1 = createWorkerTreeGuard(deps('win32', launcher))
+    const guard2 = createWorkerTreeGuard(deps('win32', launcher))
+    await Promise.all([guard1.whenReady, guard2.whenReady])
+    stdoutPipes[1]!.emit('data', 'candidate 888\n')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(queueContent(dirs[1]!)).toContain('claim 888')
+    expect(queueContent(dirs[0]!)).toContain('exclude 888')
+    for (const d of dirs) rmSync(d, { recursive: true, force: true })
+  })
+
+  it('assigned/assign-failed 行不产生指令投递（单知会语义）', async () => {
+    let queueDir: string | undefined
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const before = queueContent(queueDir!)
+    const stdout = (guard as unknown as { keeper?: { stdout: EventEmitter } }).keeper!.stdout
+    stdout.emit('data', 'assigned 900\n')
+    stdout.emit('data', 'assign-failed 901\n')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(queueContent(queueDir!)).toBe(before)
+  })
+
+  it('reclaim：terminate 单发 + 幂等 + keeperPid 复位 + 队列回收（guard 复位回归断言）', async () => {
+    let queueDir: string | undefined
+    let finishKeeper!: () => void
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return {
+          pid: 4242,
+          stdout: stdout as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    const first = guard.reclaim()
+    const queued = queueContent(queueDir!)
+    expect(queued).toContain('terminate')
+    finishKeeper()
+    expect(await first).toBe(true)
+    expect(guard.keeperPid).toBeUndefined()
+    expect(await guard.reclaim()).toBe(true) // 幂等：二次 no-op
+    expect(queued.split('terminate').length - 1).toBe(1)
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
+
+  it('spawn 失败 = fail-soft 禁用态：不抛、reclaim false、后续 exclude no-op', async () => {
+    const guard = createWorkerTreeGuard(
+      deps('win32', () => {
+        throw new Error('PowerShell missing')
+      }),
+    )
+    await guard.whenReady
+    guard.exclude(5)
+    expect(guard.keeperPid).toBeUndefined()
+    expect(await guard.reclaim()).toBe(false)
+  })
+
+  it('bug: 正常回收（ready→reclaim→keeper 退出）不误报「keeper 未就绪先亡」', async () => {
+    let finishKeeper!: () => void
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => { errors.push(args.map(String).join(' ')) }
+    try {
+      const guard = createWorkerTreeGuard(
+        deps('win32', () => ({
+          pid: 4242,
+          stdout: (() => {
+            const stdout = new EventEmitter()
+            queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+            return stdout
+          })() as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        })),
+      )
+      await guard.whenReady
+      expect(guard.keeperPid).toBe(4242) // ready 已处理
+      const reclaiming = guard.reclaim()
+      finishKeeper() // terminate 后 keeper 退出——正常回收路径
+      expect(await reclaiming).toBe(true)
+      await new Promise((resolve) => setTimeout(resolve, 0)) // exit 处理器微任务先行
+      expect(errors.filter((e) => e.includes('未就绪先亡'))).toEqual([]) // 修复前：误报在场
+    } finally {
+      console.error = origError
+    }
+  })
+
+  it('keeper 未就绪先亡 = 禁用态（脚本异常/PowerShell 缺席形态）', async () => {
+    let finish!: () => void
+    const guard = createWorkerTreeGuard(
+      deps('win32', () => ({
+        pid: 4242,
+        stdout: new EventEmitter() as unknown as Readable,
+        exited: new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+      })),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0)) // bootstrap 微任务先行——keeper 桩已 spawn
+    finish()
+    await guard.whenReady
+    expect(guard.keeperPid).toBeUndefined()
+    expect(await guard.reclaim()).toBe(false)
+  })
+})
+
+describe('R2-minor②（hostOwned 出生路径补全）', () => {
+  it('Add-Type 编译子进程出生即登记 hostOwned（在世 keeper 不收编——修复声称保护却未登记的缺口）', async () => {
+    const fake = new EventEmitter() as unknown as ChildProcess
+    Object.defineProperty(fake, 'pid', { value: 777 })
+    const compiling = ensureKeeperAssembly({
+      forceCompile: true, // 真机 Dll 缓存在场也强制走编译分支——出生路径登记断言不依赖缓存缺席
+      spawnCompile: (() => fake) as unknown as typeof import('node:child_process').spawn,
+    })
+    expect(hostOwnedPidsSnapshot()).toContain(777) // spawn 同步返回后登记即在
+    fake.emit('exit')
+    await expect(compiling).rejects.toThrow('编译失败') // 桩退出码非 0——缓存终态消化，零 unhandled rejection
+    expect(hostOwnedPidsSnapshot()).not.toContain(777) // 退出解除（pid 复用零误伤）
+  })
+
+  it('readHead git 子进程出生即登记（e2e-baseline 面——同口径断言，见 e2e-baseline.test.ts）', () => {
+    // 装配面属 e2e-baseline.test.ts 真子进程断言——此处仅 pin 观察缝导出在位
+    expect(typeof hostOwnedPidsSnapshot).toBe('function')
+  })
+})
+
+describe('R2-major②③（bug 458fa355）：互认竞态 / 宿主子进程收编 / 失能可观测 / 兜底独立 enabled', () => {
+  const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('互认竞态：新 keeper spawn 后 ready 前，旧 keeper 报其 pid 为 candidate 不收编、旧 reclaim 不波及新 keeper', async () => {
+    const dirs: string[] = []
+    const pipes: EventEmitter[] = []
+    const launcher: WorkerTreeGuardDeps['keeperLauncher'] = (args) => {
+      dirs.push(args.queueDir)
+      const stdout = new EventEmitter()
+      pipes.push(stdout)
+      if (pipes.length === 1) queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+      // 第二个 keeper：pid 已定（5151）但 ready 行不发——宿主处理 ready 前的互认竞态窗口
+      return { pid: pipes.length === 1 ? 4242 : 5151, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+    }
+    const guard1 = createWorkerTreeGuard(deps('win32', launcher))
+    createWorkerTreeGuard(deps('win32', launcher)) // guard2：keeper pid=5151（ready 不发）
+    await guard1.whenReady
+    pipes[0]!.emit('data', 'candidate 5151\n')
+    await tick()
+    expect(queueContent(dirs[0]!)).not.toContain('claim 5151')
+    expect(queueContent(dirs[0]!)).toContain('exclude 5151')
+    void guard1.reclaim()
+    await tick()
+    expect(queueContent(dirs[1]!)).not.toContain('terminate') // 旧守卫回收零波及新 keeper
+  })
+
+  it('宿主自有 exec 子进程：登记后 candidate 零收编（exclude 落队）；exit 后登记解除恢复可收编', async () => {
+    const fake = new EventEmitter() as unknown as ChildProcess
+    Object.defineProperty(fake, 'pid', { value: 999 })
+    noteHostOwnedChild(fake)
+    let queueDir: string | undefined
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    const stdout = (guard as unknown as { keeper?: { stdout: EventEmitter } }).keeper!.stdout
+    stdout.emit('data', 'candidate 999\n')
+    await tick()
+    expect(queueContent(queueDir!)).not.toContain('claim 999')
+    expect(queueContent(queueDir!)).toContain('exclude 999')
+    fake.emit('exit') // 进程退出——登记解除（pid 复用零误伤）
+    stdout.emit('data', 'candidate 999\n')
+    await tick()
+    expect(queueContent(queueDir!)).toContain('claim 999')
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
+
+  it('失能可观测：launcher 装配失败 → console.error 无条件告警（非 DEBUG 门控）', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const guard = createWorkerTreeGuard(
+        deps('win32', () => {
+          throw new Error('PowerShell missing')
+        }),
+      )
+      await guard.whenReady
+      expect(guard.keeperPid).toBeUndefined()
+      expect(errSpy.mock.calls.some((c) => String(c[0]).includes('[job-tree]'))).toBe(true)
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  it('reclaim 兜底独立于 enabled：队列写失败禁用后 reclaim 仍投递 terminate 并返回 true', async () => {
+    let queueDir: string | undefined
+    let finishKeeper!: () => void
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return {
+          pid: 4242,
+          stdout: stdout as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    // 破坏队列：目录改放同名文件 → send 写失败 → enabled=false（失能路径）
+    rmSync(queueDir!, { recursive: true, force: true })
+    writeFileSync(queueDir!, 'x', 'utf8')
+    guard.exclude(5)
+    await tick()
+    // 恢复目录使 terminate 可达——reclaim 不得被 enabled 判定拦截
+    rmSync(queueDir!, { force: true })
+    mkdirSync(queueDir!, { recursive: true })
+    const reclaiming = guard.reclaim()
+    const queued = queueContent(queueDir!) // reclaim 完成段会清队列目录——投递面在返回前断言
+    expect(queued).toContain('terminate')
+    finishKeeper()
+    expect(await reclaiming).toBe(true)
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
+
+  it('bug 0fc07374：队列目录运行中被外部删除 → 首次写失败禁用后不再重复尝试（错误单条、零连喷）', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let queueDir: string | undefined
+    let pipe: EventEmitter
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        pipe = new EventEmitter()
+        queueMicrotask(() => pipe!.emit('data', 'ready 4242\n'))
+        return { pid: 4242, stdout: pipe as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+      }),
+    )
+    try {
+      await guard.whenReady
+      rmSync(queueDir!, { recursive: true, force: true }) // Temp 清理器形态：目录消失
+      for (let i = 0; i < 5; i++) pipe!.emit('data', `candidate ${700 + i}\n`) // keeper 行持续到达
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const spam = errSpy.mock.calls.filter((c) => String(c[0]).includes('指令队列写失败'))
+      expect(spam.length).toBe(1) // 修复前：每条 keeper 行各喷一次（现场 10 连喷）
+    } finally {
+      errSpy.mockRestore()
+      rmSync(queueDir!, { recursive: true, force: true })
+    }
+  })
+
+  it('bug 0fc07374：目录被删禁用后 reclaim 自愈——ensureQueueDir 重建目录、terminate 仍可达', async () => {
+    let queueDir: string | undefined
+    let finishKeeper!: () => void
+    const guard = createWorkerTreeGuard(
+      deps('win32', (args) => {
+        queueDir = args.queueDir
+        const stdout = new EventEmitter()
+        queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+        return {
+          pid: 4242,
+          stdout: stdout as unknown as Readable,
+          exited: new Promise<void>((resolve) => {
+            finishKeeper = resolve
+          }),
+        } satisfies KeeperProcess
+      }),
+    )
+    await guard.whenReady
+    rmSync(queueDir!, { recursive: true, force: true }) // 目录被外部清理
+    guard.exclude(5) // 首次写失败 → 禁用 + queueDirReady 应失效
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const reclaiming = guard.reclaim() // 不人工恢复目录——send('terminate') 须自重建目录投递
+    const queued = queueContent(queueDir!)
+    expect(queued).toContain('terminate')
+    finishKeeper()
+    expect(await reclaiming).toBe(true)
+    rmSync(queueDir!, { recursive: true, force: true })
+  })
+})
+
+// ───────────── 队列目录锚（Temp 清理器竞态收口——queueBaseDir 注入缝 + 遗留清扫）─────────────
+
+describe('队列目录锚（queueBaseDir）', () => {
+  const win32Launcher = (queueDirs: string[]): NonNullable<WorkerTreeGuardDeps['keeperLauncher']> => (args) => {
+    queueDirs.push(args.queueDir)
+    const stdout = new EventEmitter()
+    queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+    return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+  }
+
+  it('queueBaseDir 注入：queueDir 落注入基址下的 queue-* 子目录（宿主 data 锚承接面）', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-test-'))
+    const dirs: string[] = []
+    const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard.whenReady
+    expect(dirs[0]).toBeDefined()
+    expect(dirs[0]!.startsWith(base)).toBe(true) // queueDir 落注入基址下
+    expect(dirs[0]!.slice(base.length + 1)).toMatch(/^queue-/) // 子目录名 queue-* 形态
+    rmSync(dirs[0]!, { recursive: true, force: true })
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('env DSH_FORGE_JOBTREE_DIR 兜底：deps 缺席注入时取 env 基址', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-env-'))
+    const dirs: string[] = []
+    vi.stubEnv('DSH_FORGE_JOBTREE_DIR', base)
+    try {
+      const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: undefined })
+      await guard.whenReady
+      expect(dirs[0]!.startsWith(base)).toBe(true)
+      rmSync(dirs[0]!, { recursive: true, force: true })
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('遗留清扫：基址下 mtime 超 24h 的 queue-* 目录删除，新鲜目录保留（断电遗留面）', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-sweep-'))
+    const stale = join(base, 'queue-stale')
+    const fresh = join(base, 'queue-fresh')
+    const foreign = join(base, 'unrelated') // 非 queue-* 前缀不碰
+    for (const dir of [stale, fresh, foreign]) mkdirSync(dir, { recursive: true })
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    utimesSync(stale, old, old)
+    const dirs: string[] = []
+    const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard.whenReady
+    const guard2 = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard2.whenReady
+    expect(readdirSync(base).filter((name) => name === 'queue-stale')).toEqual([]) // 陈旧遗留清除
+    expect(readdirSync(base)).toContain('queue-fresh') // 新鲜目录保留
+    expect(readdirSync(base)).toContain('unrelated') // 非 queue-* 不碰
+    rmSync(base, { recursive: true, force: true })
+  })
+})

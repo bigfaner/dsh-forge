@@ -37,7 +37,9 @@
 
 行语言（dsh 行语言 = 官方 ui-workspace Rows 刻度）：状态点官方 StateDot 四态
 （pendingInteraction→warning / completed→done / running→ongoing / 其余 idle）、
-标题 `displayTitle`、相对时间官方 `relativeTime` 桶化 + zh 文案；顶层行口径：无父行、
+标题派生官方行口径（blank→「新会话」/ 持久标题 trim / 缺席→「未命名」——不消费
+`displayTitle` 的目录名/id 兜底，bug 3d26a1be；改名草稿种子 = 已保存标题，无标题留空）、
+相对时间官方 `relativeTime` 桶化 + zh 文案；顶层行口径：无父行、
 空白会话仅显示被选中者；未注册为项目的 workspace 会话不入树（产品面 = 注册项目口径）。
 
 ## 导航动作（AC5 + fix-42 行尾动作）

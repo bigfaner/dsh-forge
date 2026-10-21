@@ -52,17 +52,26 @@ export const ERROR_CODES = [
   'ERR_COMMIT_HASH_REQUIRED', // → CommitHashRequiredError：resolveBug(fixed) 缺 agent 捕获的 commit_hash（400）
   // ── bug-recurrence-chain（复发链挂链写径） ──
   'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
+  // ── dispatch-loop-hardening 改进 5（调度权收敛——addTask caller 身份分流） ──
+  'ERR_WORKER_ADDTASK_DENIED', // → WorkerAddTaskDeniedError：loopSourced spawn 的 worker 会话调 addTask 拒收（403；任务派生权限归主会话/循环处置层——正确动作 = submitTask result=blocked 如实结算）
+  // ── session-binding-guarantee W2（host 能力缺席显式拒绝——fail-closed 收口） ──
+  'ERR_WORKTREE_CAPABILITY_ABSENT', // → WorktreeCapabilityAbsentError：gitWorktree 能力缺席（60s 放弃）+ git 探针有锚——sessionCreate 入口显式拒绝（prompt 入口同因走 SessionSealedError 先例稳定 name 面）
+  // ── bug 4a30b193（必绑重路由目标树活性守护——陈旧选中树/cwd 已删显式拒绝） ──
+  'ERR_WORKTREE_TARGET_ABSENT', // → WorktreeTargetAbsentError：重路由目标树目录不在场（已被外部强制删除）——prompt 径显式拒绝不静默编排（data 带目标路径）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
 
 /** RPC 边界错误序列化形状（Propagation Strategy：`{ code, message, data }`）。
  *  data = 结构化附载（workspaceId / projectId / 失败原因 / 处置结果等）；UI 按 code 映射状态。
- *  M2 三码持结构化 data 载荷（下方接口）；其余码 data 缺省或自由附载。 */
+ *  M2 三码持结构化 data 载荷（下方接口）；其余码 data 缺省或自由附载。
+ *  causeStack = dev 生境（DSH_FORGE_DEV_PROFILE）专用：错误回包附原始栈（DevTools Network
+ *  面板点开即得；app-observability 方案 6）——生产生境恒缺席（零税）。 */
 export interface RpcErrorPayload {
   code: ErrorCode
   message: string
   data?: unknown
+  causeStack?: string
 }
 
 /** ERR_DEPENDENCIES_UNMET data 载荷：claim 守卫前置未满足清单（自然键 + 当前状态） */

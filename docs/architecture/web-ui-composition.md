@@ -82,6 +82,7 @@ dsh-forge 不是「仿 dsh 的自研界面」，而是**官方壳的另一个占
 
 - **依赖服务**：`inject = ['slots','sessions','uiWorkspace','workspaces','sidebarRight','layout']`（cordis 注入等待；fix-23 增 sidebarRight、fix-25 增 layout）。
 - **影子纪律**：single 槽 lowest renders（priority 升序最低者渲染；官方占用者缺省 0 → 产品 -100 替换占用）。#8 例外注记：不声明 children——官方登记行恒在场供养 `conversation.hero.workspace.directoryFlow` 子洞（原生目录选取链 fix-14/16 不断）。
+- **知识面门控**（bug 2ffb0a82）：#5/#6/#7 三登记受宿主插件位门控——`__DSH_FORGE_HOST_PLUGINS__.knowledge`（shell bootShell 于就绪门放行前发布，单源 = boot manifest `knowledgePlugin` = child 按 profile 树 `@dsh-forge/knowledge` 包在场探测）；false/页内缝缺席 = 三登记整组跳过（打包形态插件缺席 → 左栏入口/知识面板/召回页签均不呈现），hero 与其余登记不受门控。
 - **激活自证**：`__DSH_FORGE_CLIENT__`（先于注册立标；sidebar/center/views/shell 四族 registered/error 诊断）。
 - **工作台桥**：apply 期经发布面工厂创建并发布 `__DSH_FORGE_WORKBENCH__`（showKnowledge = `selectPanel('dswf-knowledge')`、showSession = `selectPanel(null)` + 知识抽屉目标 store）；随 shell.overlay 登记同期撤销，缺席期导航 fail-soft no-op。
 - **`main.conversation` 影子登记缺席**（fix-25 退役——官方 ConversationRoot 直渲，见 §3/§11）。

@@ -4,7 +4,7 @@
 //   2. profile.install 安装树清单 = 官方栈并集（RUNTIME_PACKAGES ∪ 模板 bundles ∪ core 原生依赖）
 //      ——与 runtime-packages.ts 同源的漂移守卫（apps/host/package.json 已另有 pin）
 //   3. 物化脚本纯函数（合成 anchor 清单 / deps-free app 清单 / 关键文件口径）
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -140,12 +140,18 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
     const anchor = buildRuntimeAnchorManifest(install, { '@dsh-forge/core': '0.1.0' }, '0.2.0') as {
       name: string
       version: string
+      type?: string
       dependencies: Record<string, string>
     }
     expect(anchor.name).toBe('dsh-forge-runtime')
     expect(anchor.version).toBe('0.2.0')
     expect(Object.keys(anchor.dependencies)).toEqual(['@dsh-forge/core', 'a-pkg', 'b-pkg'])
     expect(anchor.dependencies['@dsh-forge/core']).toBe('0.1.0')
+  })
+
+  it('bug f27619a2：anchor 清单必须携带 type:module——host-dist 全 ESM，缺席即每启 MODULE_TYPELESS 重解析警告（error 级日志噪音）', () => {
+    const anchor = buildRuntimeAnchorManifest({ dependencies: {} }, {}, '0.2.0') as { type?: string }
+    expect(anchor.type, 'runtime/package.json 缺 type:module（bug 在场）').toBe('module')
   })
 
   it('app 清单 deps-free：main = main.js 装载器 + ESM（electron-builder 无依赖可收）', () => {
@@ -169,7 +175,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // knowledge 暂不含（产品裁决：知识库功能不完整，打包形态不开放——dev 形态仍含；
       // 重开放 = 翻转 contracts PRODUCT_PLUGINS staged 布尔，本口径随之派生）
       'runtime/node_modules/@dsh-forge/plugin-forge/dist/index.js',
-      'runtime/node_modules/@dsh-forge/plugin-forge/skills/run-tasks/SKILL.md',
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills/submit-task/SKILL.md',
+      // blitz 专属技能面（plugin-forge 包内 skills-blitz 旁目录——blitz 预设 customSkillDirs
+      // 挂载源；缺席即突击组合技能面静默缺失）
+      'runtime/node_modules/@dsh-forge/plugin-forge/skills-blitz/grilling/SKILL.md',
       // M3 3.8 packaging 三处同步（TECH-packaging-001）：plugin-forge-spec 新包——漏列 =
       // 打包形态 boot ESM 解析断裂（远征预设行装载失败，TECH-packaging-001 症状面）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/package.json',
@@ -177,6 +186,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // M3 3.2 规格技能迁移落地：spec skills 入物化清单与关键文件口径（3.8 曾注记
       // 「随 3.2 落地后补列」——缺席即远征组合技能面静默缺失）
       'runtime/node_modules/@dsh-forge/plugin-forge-spec/skills/write-prd/SKILL.md',
+      // 2026-10-18 安装版启动崩 fix：host dist ipc/worktree-rpc 静态 import——缺席即
+      // 打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化）
+      'runtime/node_modules/@dsh-forge/git-worktree/package.json',
+      'runtime/node_modules/@dsh-forge/git-worktree/dist/index.js',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -211,9 +224,33 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid——远征/突击组合行）
     expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
+    // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
     )
+  })
+
+  it('bug: host dist 静态 @dsh-forge/* import 面 ⊆ staging 闭包（打包形态主进程 ESM 上溯 runtime/node_modules——漏包即 ERR_MODULE_NOT_FOUND 启动崩，2026-10-18 安装版实证 git-worktree）', () => {
+    // Root cause 病理：host 主进程新增静态 import（worktree-rpc → @dsh-forge/git-worktree）
+    // 而包未入 staging 种子（userLayerRow/预设/依赖闭包三径均不可达——零依赖叶子）。
+    // 推导制只看「行/预设/闭包引用」，host dist import 面不在其宇宙——本断言补上该缝。
+    const distDir = join(ROOT, 'apps', 'host', 'dist')
+    expect(existsSync(join(distDir, 'main.js')), `apps/host/dist 缺席（先 pnpm build——结构测试前置）：${distDir}`).toBe(true)
+    const imported = new Set<string>()
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) walk(path)
+        else if (entry.name.endsWith('.js')) {
+          for (const hit of readFileSync(path, 'utf8').matchAll(/from '(@dsh-forge\/[a-z0-9-]+)'/g)) imported.add(hit[1]!)
+        }
+      }
+    }
+    walk(distDir)
+    expect(imported.size, 'host dist 应有 @dsh-forge/* 静态 import（扫描面失效即假绿）').toBeGreaterThan(0)
+    const stagedFullNames = new Set([...stagedPackages].map((name) => `@dsh-forge/${name}`))
+    const missing = [...imported].filter((name) => !stagedFullNames.has(name)).sort()
+    expect(missing, `host dist 静态 import 未入 staging 闭包（安装版启动即崩——staged:true 覆写或闭包补径）：${missing.join('; ')}`).toEqual([])
   })
 
   it('闭包自洽：已 staging 产品包的 @dsh-forge/* 运行时依赖均在场（kill-switch 误伤即红——boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {

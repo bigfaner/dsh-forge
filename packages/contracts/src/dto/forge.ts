@@ -139,6 +139,20 @@ export interface TaskAcResult {
 }
 
 /**
+ * e2e 取证债声明（dispatch-loop-hardening 改进7——实现态部分结算）：success 结算携带 =
+ * 实现+单测绿但真机 e2e 断言取证欠账，结算核据此自动生成独立 test-run 欠账任务
+ * （依赖实现卡）——实现卡不再因取证欠账无限期 blocked。
+ */
+export interface TaskEvidenceDebt {
+  /** 取证套件名（如 'e2e'） */
+  suite: string
+  /** 欠账断言覆盖的 spec 清单（正斜杠路径） */
+  specs: string[]
+  /** 欠账说明（缺什么取证、为何） */
+  note?: string
+}
+
+/**
  * 提交记录结构化字段（worker-lean-execution S3——task_records.record_fields_json 解码形；
  * keyDecisions/testsPassed/testsFailed/coverage/notes——从 summary 自由文本拆出的结构化面）。
  */
@@ -150,6 +164,8 @@ export interface TaskRecordFields {
   /** 覆盖率小数（0–1；与 gate.coverage 互补——口径同） */
   coverage?: number
   notes?: string
+  /** e2e 取证债（改进7——实现态部分结算声明；读面经 TaskRecordEntry 投影） */
+  evidenceDebt?: TaskEvidenceDebt
 }
 
 /**
@@ -190,8 +206,6 @@ export interface TaskSnapshot {
   /** 覆盖率阈值小数；缺省 = 全局默认（三级优先） */
   coverage?: number
   complexity: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
   /** ISO-8601 */
   createdAt: string
   /** ISO-8601 */
@@ -261,6 +275,8 @@ export interface TaskRecordEntry {
   notes?: string
   gate?: TaskGateReport
   commitHash?: string
+  /** e2e 取证债（改进7——record_fields_json 解码形；旧行键缺席） */
+  evidenceDebt?: TaskEvidenceDebt
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -320,8 +336,6 @@ export interface TaskDetail extends TaskCard {
   /** 验收与覆盖率负载（覆盖率进度条；NULL = 全局默认） */
   coverage?: number
   complexity: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
   blockedReason?: string
   breaking: boolean
   /** ISO-8601 */
@@ -391,8 +405,6 @@ export interface AddTaskInput {
   breaking?: boolean
   coverage?: number
   complexity?: TaskComplexity
-  surfaceKey?: string
-  surfaceType?: string
 }
 
 /** addTask 返回体 */
@@ -424,8 +436,6 @@ export interface UpdateTaskInput {
   acceptanceCriteria?: string[]
   /** --var 注入变量（vars_json 整体覆写） */
   vars?: Record<string, string>
-  surfaceKey?: string
-  surfaceType?: string
   /** 依赖改写（manual 边整体置换：删旧 manual 边 → 增量环校验 → 插新 manual 边） */
   dependsOn?: string[]
 }
@@ -464,6 +474,17 @@ export interface ClaimTaskInput {
    * reconcileInterrupted 判据；工具壳缺省 = 无标记——skill 路线幂等重入不受对账波及）。
    */
   loopSourced?: boolean
+  /**
+   * e2e 红灯基线清单（改进7——可选；循环入场前跑基线所得红灯 spec 路径，随 dispatchPrompt
+   * E2E_BASELINE_RED 行递达 worker：基线红灯 ≠ 本任务回归，机械判定比对归因。
+   * 缺席/空 = 机制关闭或基线全绿，简报零此行）。
+   */
+  e2eBaselineRedCases?: readonly string[]
+  /**
+   * 效度比对检出根（disc 跟进——证据效度戳机械比对的当前效度域取数锚：worker/循环检出
+   * worktree。缺席 = 当前效度域不可取 → 机制惰性不判（形态兼容））。
+   */
+  checkoutRoot?: string
   /**
    * 循环独占守卫（S1c——可选；外部 claim 传入，宿主循环自身的 loopSourced claim 不携带）。
    * 目标解析命中即判（单事务内、任何写入前）：放行 = 正常返回；拒绝 = 抛错（事务整体回滚
@@ -513,6 +534,8 @@ export interface SubmitTaskInput {
   notes?: string
   gate?: TaskGateReport
   commitHash?: string
+  /** e2e 取证债声明（改进7——success 专用：实现态部分结算，结算核自动生成欠账 test-run 任务） */
+  evidenceDebt?: TaskEvidenceDebt
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */
   sessionId: string
 }
@@ -540,13 +563,15 @@ export interface ReconcileInterruptedResult {
   reconciled: TaskRef[]
 }
 
-/** transitionTask 入参（人类通道——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */
+/** transitionTask 入参（人工/机械共用转移面——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */
 export interface TransitionTaskInput {
   projectId: string
   taskId: string
   toStatus: TaskStatus
   /** 必带（→completed/skipped 同挂恢复钩子——与 submitTask 钩子同族，C3） */
   reason: string
+  /** 审计 actor（缺省 'ui'——人类通道；循环自动化纠偏显式传 'core'，防机械纠偏误记人类通道） */
+  actor?: TaskActor
 }
 
 /** queryTask 入参（agent 面——TaskRef 两显式参） */
@@ -688,6 +713,12 @@ export interface ForgeTasksService {
   taskDetail(q: TaskDetailQuery): Promise<TaskDetail>
   /** 挂接双源分型卡（links ∪ records.session_id） */
   sessionLinks(q: SessionLinksQuery): Promise<SessionTaskLinkCard[]>
+  /**
+   * 证据效度戳写侧（disc 跟进——结算时点机械落戳：任务证据位 resume.md 在盘才写
+   * resume.validity.json sidecar（HEAD commit + 基线签名——重领时与当前效度域机械比对，
+   * 漂移 = 证据 stale 强制重跑）。fail-soft 零抛；缺省 = 机制关闭（形态兼容）。
+   */
+  stampEvidenceValidity?(input: { projectId: string; slug: string; localId: string; checkoutRoot: string }): void
 }
 
 // ─────────────────────────── Interface 2：feature 域（ctx.forgeFeatures） ───────────────────────────

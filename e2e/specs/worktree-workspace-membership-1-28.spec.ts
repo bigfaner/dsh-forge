@@ -1,9 +1,10 @@
 // worktree-branch-management 1.28 真机 e2e（bug 925c96d5）：每树一工作区 + attachSession——
-// 编排产物会话获得官方工作区归属（composer 门控/模式/侧栏可见性的官方单源）。
-//   · 首条消息 → 跨分支确认 → 预铸编排（cwd = wt-a）→ 挂靠会话唯一（1.29 同径）；
-//   · 官方 workspace 快照（renderer domain/changed 推送投影）出现「树路径工作区节点」，
-//     其 sessionIds 名单含编排产物会话（修复前 = 全工作区 NONE 归属——probe-ws5 判例）；
-//   · composer 可发 + 首条消息落 wt-a cwd 分组目录（1.26/1.29 终段断言解阻）。
+// 预铸会话获得官方工作区归属（composer 门控/模式/侧栏可见性的官方单源）。
+// 设计 A 重锚（用户裁决 2026-10-18）：
+//   · 点选跨分支行 → 点选时点确认框 → 确认后选中态切行（1.28 选中语义）；
+//   · sessionCreate 真机预铸（cwd = wt-a）→ 官方 workspace 快照（renderer domain/changed
+//     推送投影）出现「树路径工作区节点」，其 sessionIds 名单含预铸会话；
+//   · 侧栏会话行打开预铸会话 → composer 可发 + 首条消息落 wt-a cwd 分组目录。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；composer = [data-composer-input]。
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -14,7 +15,7 @@ import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.28/001-workspace-membership'
+  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/004-workspace-membership'
 
 /** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
 function makeGitRepo(): { dir: string; wtDir: string } {
@@ -67,21 +68,11 @@ const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分�
 /** 风险框交互：勾选知悉 → 确认继续（1.19 同款） */
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  // Root cause: 1.35 起风险框含双勾选（知悉 + 「不再提示」），泛型 input[type=checkbox] 定位 strict 歧义——按可访问名唯一定位（fix-27/fix-31 同款随迁）
-  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
   await expect(heroRiskDialog(page)).toBeHidden()
-}
-
-/** 挂靠会话计数（checks RPC——编排/封存判定共用源） */
-async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
-  const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
-    data?: { attachedSessions?: number }
-    attachedSessions?: number
-  } | null
-  return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
 }
 
 /**
@@ -178,7 +169,7 @@ function findWorktreeSessionDir(userData: string): string | undefined {
   return hit
 }
 
-test('1.28 UI：编排产物会话挂树工作区（sessionIds 名单可见）+ composer 可发 + 首条消息落树内', async () => {
+test('1.28 UI：点选确认切行 + 预铸会话挂树工作区（sessionIds 名单可见）+ composer 可发落树内', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-28-wsmembership-'))
   const { dir: wsDir, wtDir } = makeGitRepo()
@@ -194,8 +185,54 @@ test('1.28 UI：编排产物会话挂树工作区（sessionIds 名单可见）+ 
     page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+    // 前置：选中项目工作区（hero chip 挂载前置）
+    await page.locator('button[aria-label="选择工作区"]').first().click()
+    await page.locator('.dswf-hero-picker-list').getByText('orch-repo', { exact: false }).first().click()
 
-    // ── 首条消息意图：跨分支确认框 → 确认 → 预铸编排（cwd = wt-a）──
+    // ── 选中语义（设计 A）：点选 feat-a → 点选时点确认框 → 确认后选中态切行 ──
+    await chip(page).first().click()
+    await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
+    await expect(heroRiskDialog(page), '点选跨分支行应立现确认框（点选时点）').toBeVisible({ timeout: 8_000 })
+    await snap(page, 'pick-time-risk-dialog.png')
+    await acknowledgeAndConfirm(page)
+    await expect
+      .poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000, message: '确认后选中态应切目标行（1.28 语义）' })
+      .toContain('feat-a')
+
+    // ── 真机预铸：sessionCreate（cwd = wt-a）→ 挂靠会话唯一 ──
+    const raw = (await forgeRpc(page, 'forge:worktree/session-create', { worktreePath: wtDir })) as {
+      data?: { sessionId?: string }
+      sessionId?: string
+    } | null
+    const sessionId = raw?.data?.sessionId ?? raw?.sessionId
+    expect(typeof sessionId, `sessionCreate 直调未返回 sessionId：${JSON.stringify(raw)?.slice(0, 300)}`).toBe('string')
+
+    // ── AC 主断言：官方 workspace 投影出现 wt-a 树工作区节点，sessionIds 名单含预铸会话 ──
+    await expect
+      .poll(async () => {
+        const snapshot = await workspaceSnapshot(page, wtDir)
+        return snapshot.target?.sessionIds.includes(sessionId as string) ?? false
+      }, { timeout: 60_000, message: 'wt-a 树工作区节点 sessionIds 名单应含预铸会话（bug 925c96d5 修复面）' })
+      .toBe(true)
+    const membership = await workspaceSnapshot(page, wtDir)
+    await snap(page, 'membership-visible.png')
+
+    // ── composer 可发：侧栏打开预铸会话 → 首条消息落 wt-a cwd 分组目录 ──
+    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click().catch(async () => {
+      // 行锚漂移兜底：按文本兜底点首行含会话的行
+      await page.locator('[data-dswf-session]').first().click()
+    })
+    // 会话行激活判读（data-selected 翻转 = 官方 openSession 落位）
+    await expect
+      .poll(async () => {
+        const rows = page.locator('[data-dswf-session]')
+        const n = await rows.count()
+        for (let i = 0; i < n; i += 1) {
+          if ((await rows.nth(i).getAttribute('data-selected')) !== null) return true
+        }
+        return false
+      }, { timeout: 30_000, message: '会话行点击后应激活（data-selected）' })
+      .toBe(true)
     await page
       .waitForFunction(
         () => {
@@ -206,13 +243,6 @@ test('1.28 UI：编排产物会话挂树工作区（sessionIds 名单可见）+ 
         { timeout: 60_000 },
       )
       .catch(() => undefined)
-    // 选中 feat-a 树（纯选中态），再键入首条消息（draft 空→非空边沿触发 1.19 确认框）
-    await chip(page).first().click()
-    await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
-    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
-      .toContain('feat-a')
-    // 点选冷却窗（8s）过期后再键入——draft 非空边沿落在窗内会被抑噪闸吞掉且不重放
-    await page.waitForTimeout(9_000)
     const MARKER = '1-28-workspace-membership-first-message'
     const composer = page.locator('[data-composer-input]').first()
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -221,36 +251,6 @@ test('1.28 UI：编排产物会话挂树工作区（sessionIds 名单可见）+ 
       const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
       if (echoed.includes(MARKER)) break
       await page.waitForTimeout(5_000)
-    }
-    await expect(heroRiskDialog(page), '首条消息意图应触发跨分支确认框（1.19 时机后移）').toBeVisible({ timeout: 30_000 })
-    await snap(page, 'first-message-intent-risk-dialog.png')
-    await acknowledgeAndConfirm(page)
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后应产生 wt-a 挂靠会话' })
-      .toBe(1)
-
-    // ── AC 主断言：官方 workspace 投影出现 wt-a 树工作区节点，sessionIds 名单非空 ──
-    await expect
-      .poll(async () => {
-        const snapshot = await workspaceSnapshot(page, wtDir)
-        return snapshot.target?.sessionIds.length ?? 0
-      }, { timeout: 60_000, message: 'wt-a 树工作区节点 sessionIds 名单应为空 → 非空（bug 925c96d5 修复面）' })
-      .toBeGreaterThan(0)
-    const membership = await workspaceSnapshot(page, wtDir)
-    // 草稿搬运（1.29 同款）：arm 后产物会话 composer 应含首条消息文本
-    await expect
-      .poll(async () => (await composer.evaluate((el) => (el as HTMLElement).textContent ?? '').catch(() => '')) ?? '', {
-        timeout: 30_000,
-        message: '草稿应搬运到 arm 产物会话',
-      })
-      .toContain(MARKER)
-    await snap(page, 'armed-draft-carried.png')
-
-    // ── composer 可发：首条消息落 wt-a cwd 分组目录（1.26/1.29 终段断言解阻）──
-    const inertPlaceholder = page.getByText('选择工作区开始', { exact: false })
-    if ((await inertPlaceholder.count()) > 0) {
-      await page.getByRole('button', { name: '选择工作区' }).first().click()
-      await page.locator('.dswf-hero-picker-list').getByText('orch-repo', { exact: false }).first().click()
     }
     const sendButton = page.getByRole('button', { name: '发送消息' })
     for (let attempt = 0; attempt < 4; attempt += 1) {

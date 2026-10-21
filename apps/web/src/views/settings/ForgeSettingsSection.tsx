@@ -79,7 +79,7 @@ export const UNCONFIGURED_NOTICE = '⚠ 未配置——worker 派发将回退父
 
 /** 保存成功注记（AC4：下次派发生效——改完即生效无重启，图 11 虚线「下次派发即生效」） */
 export const SAVED_EFFECT_NOTE =
-  '已保存 ✓——下次 run-tasks 派发经 agentOptions 携带生效（无需重启，优先于父会话继承）'
+  '已保存 ✓——下次派发经 agentOptions 携带生效（无需重启，优先于父会话继承）'
 
 /** 供应商 → 模型候选（联动纯函数：空/未知供应商 = 空候选面；m3.1 D25 目录参数化——缺省静态回退面） */
 export function workerModelCandidates(

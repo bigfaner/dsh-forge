@@ -284,6 +284,8 @@ export interface OpenSessionServices {
   readonly agentPresets: OpenSessionAgentPresets
   readonly sessions: OpenSessionSessions
   readonly conversation: OpenSessionConversation
+  /** 官方 workspaces.list 快照店（bug d353536f 在场门数据源；缺席 = 不可核验即放行） */
+  readonly workspaces?: { readonly list: unknown }
 }
 
 /** 等待参数（缺省 50ms 轮询 / 2s 上限——测试可注入快参） */
@@ -299,9 +301,53 @@ function wait(ms: number): Promise<void> {
 }
 
 /**
+ * 官方 workspaces.list 快照 items 窄读（bug d353536f）：store 面 `getSnapshot() → items`
+ * 结构同型镜像；面缺席/形状漂移/读取异常 = undefined（不可核验）。
+ */
+function workspaceSnapshotItemsOf(
+  list: unknown,
+): readonly { readonly workspaceId?: unknown }[] | undefined {
+  const store = list as { getSnapshot?: () => unknown } | null | undefined
+  if (store === null || store === undefined || typeof store.getSnapshot !== 'function') return undefined
+  try {
+    const snap = store.getSnapshot() as { items?: unknown } | null | undefined
+    if (snap === null || snap === undefined || !Array.isArray(snap.items)) return undefined
+    return snap.items as readonly { readonly workspaceId?: unknown }[]
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 有界等待目标工作区进入官方基线（bug d353536f 同因面单源）：官方 connectWorkspace 只查
+ * 客户端本地快照，基线流未就位时盲委派必抛 unknown workspace。快照面缺席（形状漂移/旧
+ * 环境）= 不可核验即放行（fail-open 官方原流，零新等待）；上限到点仍缺席 = 放行委派
+ * （真不在场由官方 createFailed 口径呈现，错误面保真）。返回值 = 是否核验到在场。
+ */
+export async function waitForWorkspacePresent(
+  list: unknown,
+  workspaceId: string,
+  options?: OpenSessionWaitOptions,
+): Promise<boolean> {
+  const pollMs = options?.pollMs ?? 50
+  const timeoutMs = options?.timeoutMs ?? 2000
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const items = workspaceSnapshotItemsOf(list)
+    if (items === undefined) return true
+    if (items.some((row) => typeof row?.workspaceId === 'string' && row.workspaceId === workspaceId)) {
+      return true
+    }
+    if (Date.now() >= deadline) return false
+    await wait(pollMs)
+  }
+}
+
+/**
  * 真实服务 → 平台窄面适配层。setDraft/submitDraft/focusComposer 经 `conversation.input.for
  * (binding.ctx)` 会话寻址（SessionInputResolver）；openSession 同步 retain(mainView) 在
  * replaceMain 内完成，但会话作用域物化为异步 fiber——binding 缺席时轮询等待（上限内重试）。
+ * openWorkspace 先过官方基线在场门（waitForWorkspacePresent——bug d353536f 同因面收口）。
  */
 export function openSessionPlatformFrom(
   services: OpenSessionServices,
@@ -328,7 +374,11 @@ export function openSessionPlatformFrom(
     }
   }
   return {
-    openWorkspace: (workspaceId, beforeOpen) => services.uiWorkspace.openWorkspace(workspaceId, beforeOpen),
+    openWorkspace: async (workspaceId, beforeOpen) => {
+      const list = services.workspaces?.list
+      if (list !== undefined) await waitForWorkspacePresent(list, workspaceId, { pollMs, timeoutMs })
+      return services.uiWorkspace.openWorkspace(workspaceId, beforeOpen)
+    },
     openSession: (sessionId) => {
       services.uiWorkspace.openSession(sessionId)
     },

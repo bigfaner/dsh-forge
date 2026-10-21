@@ -1,26 +1,19 @@
 // hero-picker-model 单测（fix-24 ① AC5）——项目映射纯函数三口径：
 // workspaceId↔project 映射 / archived 排除 / 空集（添加唯一入口 + 直达判据）。
+// W3 arm 退役后本文件只剩映射面 + 1.34 确认闩锁（点选时点确认语义）。
 import { describe, expect, it } from 'vitest'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
-  activeSessionIdOf,
-  activeSessionRowOf,
-  blankSessionIdByCwdOf,
-  draftIntentFresh,
   heroPickerPlan,
+  heroDefaultPickId,
+  heroDefaultPickReady,
   selectedProjectOf,
   selectedProjectRootOf,
   selectedProjectRootStrictOf,
-  unambiguousOrchestrationRootOf,
   riskDialogNeeded,
   riskLatchConfirm,
-  riskLatchFailureClear,
   riskLatchReselect,
-  shouldArmSelectedRow,
-  worktreeCwdKey,
-  worktreeFaceUnavailableNotice,
-  worktreeOrchestrationNotice,
-  worktreeReuseBindDegradedNotice,
+  staleSelectionResetOf,
 } from './hero-picker-model.js'
 
 const project = (o: { id: string; workspaceId: string; name: string; archived?: boolean }): ProjectSummary => ({
@@ -38,11 +31,11 @@ const PROJECTS = [
 ]
 
 describe('heroPickerPlan（行集 + 入口形态）', () => {
-  it('行集 = 项目（id=workspaceId、name=label）；archived 排除（过滤口径与左栏一致）', () => {
+  it('行集 = 项目（id=workspaceId、name=label、wsPath=树 ws 判据源——bug 9eb9d6cb）；archived 排除（过滤口径与左栏一致）', () => {
     const plan = heroPickerPlan(PROJECTS, true)
     expect(plan.rows).toEqual([
-      { id: 'w-1', name: 'alpha' },
-      { id: 'w-2', name: 'beta' },
+      { id: 'w-1', name: 'alpha', wsPath: 'C:\\ws\\p1' },
+      { id: 'w-2', name: 'beta', wsPath: 'C:\\ws\\p2' },
     ])
   })
 
@@ -75,7 +68,7 @@ describe('heroPickerPlan（行集 + 入口形态）', () => {
 describe('selectedProjectOf（workspaceId ↔ 项目映射——owner selectedId 契约）', () => {
   it('selectedId 命中项目行 → 返回该行（onPick/selectedId 以 workspaceId 为键零翻译）', () => {
     const rows = heroPickerPlan(PROJECTS, true).rows
-    expect(selectedProjectOf(rows, 'w-2')).toEqual({ id: 'w-2', name: 'beta' })
+    expect(selectedProjectOf(rows, 'w-2')).toEqual({ id: 'w-2', name: 'beta', wsPath: 'C:\\ws\\p2' })
   })
 
   it('selectedId 指向未绑定工作区（账本原生行）→ 无命中（零高亮——未绑定工作区不在弹层）', () => {
@@ -93,32 +86,15 @@ describe('selectedProjectOf（workspaceId ↔ 项目映射——owner selectedId
   })
 })
 
-describe('selectedProjectRootStrictOf（A7——编排源与渲染兜底分离）', () => {
+describe('selectedProjectRootStrictOf（严格段——兜底禁止泄漏为数据源）', () => {
   it('selectedId 命中项目 → ws_path（与 selectedProjectRootOf 首段一致）', () => {
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-2')).toBe('C:\\ws\\p2')
   })
 
-  it('selectedId 未命中/缺席 → null（即便存在其他活跃项目——渲染兜底禁止泄漏为编排源）', () => {
+  it('selectedId 未命中/缺席 → null（即便存在其他活跃项目——渲染兜底不消费严格段）', () => {
     expect(selectedProjectRootStrictOf(PROJECTS, 'w-native-unbound')).toBeNull()
     expect(selectedProjectRootStrictOf(PROJECTS, undefined)).toBeNull()
-    expect(selectedProjectRootStrictOf(PROJECTS, 'w-3')).toBeNull() // archived 亦不充当编排源
-  })
-})
-
-describe('unambiguousOrchestrationRootOf（A7 细化——selectedId 未命中时的唯一活跃项目兜底）', () => {
-  it('活跃项目恰一个 → 该项目 ws_path（单项目零歧义——chip 渲染根即唯一绑定候选，bug 84edc6ff）', () => {
-    expect(unambiguousOrchestrationRootOf([project({ id: 'p9', workspaceId: 'w-9', name: 'solo' })])).toBe('C:\\ws\\p9')
-  })
-
-  it('多个活跃项目 → null（歧义兜底禁止泄漏为编排源——A7 跨项目错绑防线保留）', () => {
-    expect(unambiguousOrchestrationRootOf(PROJECTS)).toBeNull()
-  })
-
-  it('零活跃项目 / 唯一活跃项无 ws_path → null', () => {
-    expect(unambiguousOrchestrationRootOf([])).toBeNull()
-    expect(unambiguousOrchestrationRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })])).toBeNull()
-    const noPath = { ...project({ id: 'p8', workspaceId: 'w-8', name: 'nop' }), wsPath: '' }
-    expect(unambiguousOrchestrationRootOf([noPath])).toBeNull()
+    expect(selectedProjectRootStrictOf(PROJECTS, 'w-3')).toBeNull() // archived 亦不充当数据根
   })
 })
 
@@ -142,137 +118,73 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
   })
 })
 
-// 1.29——主视图在留会话行解析（id + cwd 双字段：草稿源寻址 + arm 去重判读）。
-describe('activeSessionRowOf / activeSessionIdOf（账本活源读面）', () => {
-  const ledger = (rows: Record<string, unknown>): { getSnapshot: () => { byId: Record<string, unknown> } } => ({
-    getSnapshot: () => ({ byId: rows }),
+// ───────────── bug 2ba146d8：hero 默认拾取链（项目 chip 缺省选中第一个活跃项目）──
+describe('heroDefaultPickId（bug 2ba146d8 默认拾取——归档会话回 hero 项目 chip 不得空选中）', () => {
+  it('bug: 无选中（归档会话回 hero/冷启）+ 活跃项目在场 → 默认拾取第一个活跃项目行', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, undefined)).toBe('w-1')
   })
 
-  it('mainView > 0 的行 → id + cwd 双读（首行命中即返回）', () => {
-    const list = ledger({
-      's-a': { retainedBy: { mainView: 0 } },
-      's-b': { retainedBy: { mainView: 1 }, cwd: 'C:\\repo\\wt-a' },
-    })
-    expect(activeSessionRowOf(list)).toEqual({ id: 's-b', cwd: 'C:\\repo\\wt-a' })
-    expect(activeSessionIdOf(list)).toBe('s-b')
+  it('bug: 选中态未命中行集（未绑定工作区/已归档项目——归档行不可锚定既有语义）→ 默认拾取第一个活跃项目行', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-native-unbound')).toBe('w-1')
+    expect(heroDefaultPickId(rows, 'w-3')).toBe('w-1')
   })
 
-  it('无在留行 / cwd 空 → cwd undefined、id 照读；空账本 = undefined', () => {
-    const noCwd = ledger({ 's-a': { retainedBy: { mainView: 2 } } })
-    expect(activeSessionRowOf(noCwd)).toEqual({ id: 's-a', cwd: undefined })
-    expect(activeSessionRowOf(ledger({}))).toBeUndefined()
-    expect(activeSessionIdOf(undefined)).toBeUndefined()
-  })
-})
-
-// 1.25（bug af65c0a9）双静默路显式化——文案纯函数单源。
-describe('worktree 编排失败/缺席提示文案（1.25 不静默）', () => {
-  it('注入面缺席 → 明示「编排面不可用」（旧插件面/装配降级，不静默 no-op）', () => {
-    const text = worktreeFaceUnavailableNotice()
-    expect(text).toContain('编排面不可用')
-    expect(text).toContain('插件版本陈旧')
+  it('已命中行集 → 不拾取（undefined——用户显式选中态零覆盖）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-2')).toBeUndefined()
   })
 
-  it('编排失败文案带环节语义：sessionCreate 失败 → 「创建挂靠会话」+ 原因', () => {
-    const text = worktreeOrchestrationNotice('create', 'repo not found')
-    expect(text).toContain('创建挂靠会话')
-    expect(text).toContain('repo not found')
+  it('空行集（无活跃项目）→ 不拾取（undefined——零项目直达添加流现状）', () => {
+    expect(heroDefaultPickId([], undefined)).toBeUndefined()
   })
 
-  it('编排失败文案带环节语义：openSession 失败 → 「打开会话」+ 原因', () => {
-    const text = worktreeOrchestrationNotice('open', 'session unloaded')
-    expect(text).toContain('打开会话')
-    expect(text).toContain('session unloaded')
+  // ── bug 9eb9d6cb：树 workspace 选中态 = 合法选中（A2 后会话可绑树 ws，永不命中项目行）──
+  const WSR = (workspaceId: string, path: string) => ({ workspaceId, path })
+  it('bug: selectedId 命中官方 workspace 行且 path 在活跃项目根下（树 ws）→ 不拾取（合法选中零覆盖）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows // 活跃根 = C:/ws/p1、C:/ws/p2
+    const wsRows = [WSR('w-tree', 'C:/ws/p1/.forge/worktrees/super-composer')]
+    expect(heroDefaultPickId(rows, 'w-tree', wsRows)).toBeUndefined()
+  })
+
+  it('bug: 树 ws 判据只认活跃项目根下路径——外部 workspace（他 repo 根）维持现状拾取', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-external', [WSR('w-external', 'D:/other-repo')])).toBe('w-1')
+  })
+
+  it('bug: 判据数据缺席（官方快照未到）→ 现状行为（d353536f 在场门兜住不盲拾取）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-tree')).toBe('w-1')
   })
 })
 
-// 1.29——arm 闸纯函数（会话创建唯一时机 = 首条消息；主行 1.27 必绑同在该时点）。
-describe('shouldArmSelectedRow（1.29 首条消息时点 arm 闸）', () => {
-  const input = (over: Partial<Parameters<typeof shouldArmSelectedRow>[0]> = {}) => ({
-    phaseReadyGit: true,
-    path: 'C:/repo/.forge/worktrees/wt-a',
-    suppressed: [],
-    rowPresent: true,
-    isMain: false,
-    currentCwd: 'C:/repo/.forge/worktrees/wt-a',
-    draftIntent: true,
-    currentSessionId: 's-cur',
-    armedSessionId: undefined,
-    armedPath: undefined,
-    riskConfirmationOpen: false,
-    ...over,
+// ───────────── bug d353536f：默认拾取官方基线在场门（刷新后基线未就位盲拾取 → 官方
+// connectWorkspace 查空快照抛 unknown workspace toast）─────────────
+describe('heroDefaultPickReady（bug d353536f 在场门——官方 workspaces 快照含目标才放行拾取）', () => {
+  const ITEMS = [{ workspaceId: 'w-1' }, { workspaceId: 'w-2' }]
+
+  it('bug: 目标已入官方快照 → 放行拾取 id（基线就位后拾取零等待惩罚）', () => {
+    expect(heroDefaultPickReady(ITEMS, 'w-1')).toBe('w-1')
   })
 
-  // A4——确认框待决 × 编排在途/完成是未定义态：框开着期间效应守卫零重入
-  it('确认框打开（riskConfirmationOpen）→ 不 arm（守卫链补 defaultRiskPath 闸——防双编排竞态）', () => {
-    expect(shouldArmSelectedRow(input({ riskConfirmationOpen: true, currentCwd: 'C:/elsewhere' }))).toBe(false)
+  it('bug: 目标未入官方快照（基线未达/流未开）→ undefined 不盲拾取（盲拾取 = connectWorkspace 必抛 unknown workspace）', () => {
+    expect(heroDefaultPickReady([{ workspaceId: 'w-other' }], 'w-1')).toBeUndefined()
+    expect(heroDefaultPickReady([], 'w-1')).toBeUndefined()
   })
 
-  // A3——取消抑制与失败抑制拆分：取消写入的抑制集独立判读（显式重选清除后即可重走）
-  it('取消抑制（cancelSuppressed 含 path）→ 不 arm；不在其中 → 照常 arm', () => {
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', cancelSuppressed: ['C:/repo/.forge/worktrees/wt-a'] }))).toBe(false)
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', cancelSuppressed: ['C:/other'] }))).toBe(true)
+  it('官方快照缺席（非壳载体/形状漂移 null）→ undefined（拾取前置事实不可证 = 不拾取）', () => {
+    expect(heroDefaultPickReady(null, 'w-1')).toBeUndefined()
+    expect(heroDefaultPickReady(undefined, 'w-1')).toBeUndefined()
   })
 
-  it('草稿空（无首条消息意图）→ 不 arm——点选/回填零会话副作用（1.29 唯一时机闸门）', () => {
-    expect(shouldArmSelectedRow(input({ draftIntent: false }))).toBe(false)
-  })
-
-  it('树内行当前 cwd 已在选中树 → 不 arm（已在该会话，零重复建）', () => {
-    expect(shouldArmSelectedRow(input())).toBe(false)
-  })
-
-  it('树内行 cwd 在别处 → arm（官方新会话流落回主树后重消费）', () => {
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere' }))).toBe(true)
-  })
-
-  it('armed 去重：arm 产物即当前会话且选中路径未变 → 不 arm（键入续字零重入）', () => {
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-cur', armedPath: 'C:/repo/.forge/worktrees/wt-a' }))).toBe(false)
-  })
-
-  it('armed 去重失效：改选他行（armedPath ≠ path）→ 重新 arm', () => {
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-cur', armedPath: 'C:/repo' }))).toBe(true)
-  })
-
-  it('armed 去重失效：官方新会话流另起新 id → 重新 arm', () => {
-    expect(shouldArmSelectedRow(input({ currentCwd: 'C:/elsewhere', armedSessionId: 's-old', armedPath: 'C:/repo/.forge/worktrees/wt-a', currentSessionId: 's-new' }))).toBe(true)
-  })
-
-  it('主行 cwd 恒等于项目根（官方 blank 落根、无绑定）→ 仍 arm（1.27：cwd 去重对主行不适用）', () => {
-    expect(
-      shouldArmSelectedRow(input({ path: 'C:/repo', isMain: true, currentCwd: 'C:\\repo\\' })),
-    ).toBe(true)
-  })
-
-  it('主行 cwd 在别处（当前会话在别树）→ arm（预铸 sessionCreate 绑定项目根）', () => {
-    expect(shouldArmSelectedRow(input({ path: 'C:/repo', isMain: true, currentCwd: 'C:/repo/.forge/worktrees/wt-a' }))).toBe(true)
-  })
-
-  it('失败抑制 / 行缺席 / 相位未就绪 / 无选中 → 一律不 arm', () => {
-    expect(shouldArmSelectedRow(input({ suppressed: ['C:/repo/.forge/worktrees/wt-a'] }))).toBe(false)
-    expect(shouldArmSelectedRow(input({ rowPresent: false }))).toBe(false)
-    expect(shouldArmSelectedRow(input({ phaseReadyGit: false }))).toBe(false)
-    expect(shouldArmSelectedRow(input({ path: undefined }))).toBe(false)
-  })
-
-  it('cwd 归一经 worktreeCwdKey 单源（分隔符/大小写/尾斜杠）', () => {
-    expect(worktreeCwdKey('C:\\Repo\\')).toBe(worktreeCwdKey('c:/repo'))
+  it('无默认拾取目标 → undefined（heroDefaultPickId 已判空的直通面）', () => {
+    expect(heroDefaultPickReady(ITEMS, undefined)).toBeUndefined()
   })
 })
 
-// A8——reuse 补绑定失败降级提示文案（不落「将落主树」假象——降级产物自带绑定）。
-describe('worktreeReuseBindDegradedNotice（A8 降级语义）', () => {
-  it('文案含降级语义与原因（补绑定失败 → 降级新建挂靠会话，非放弃编排）', () => {
-    const text = worktreeReuseBindDegradedNotice('seal rpc timeout')
-    expect(text).toContain('补绑定失败')
-    expect(text).toContain('seal rpc timeout')
-    expect(text).toContain('降级')
-  })
-})
-
-// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103——每键重弹修复）三组：
-// ① 置位 ② 清退 ③ 确认续跑（含 armed 去重协同口径 pin） ─────────────
-describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/确认续跑）', () => {
+// ───────────── 1.34 跨分支确认闩锁（bug ccfcc103）——消费时点 = 点选（1.19 语义回归）──
+describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/弹框判定）', () => {
   const WT_A = 'C:/repo/.forge/worktrees/wt-a'
 
   it('置位：确认即置位（null→path），重复确认幂等（零重弹锚点）', () => {
@@ -281,67 +193,45 @@ describe('riskLatch（bug ccfcc103 确认闩锁——置位/清退/确认续跑�
     expect(riskLatchConfirm('C:/other', WT_A)).toBe(WT_A) // 换确认目标覆盖
   })
 
-  it('清退：换目标重选即清（重新判定）；同行重选保留（续字零重弹）；编排失败清退允许重试', () => {
-    expect(riskLatchReselect(WT_A, WT_A)).toBe(WT_A) // 同行重选不清——确认后点 chip 不重弹
+  it('清退：换目标重选即清（重新判定）；同行重选保留（确认后点 chip 不重弹）', () => {
+    expect(riskLatchReselect(WT_A, WT_A)).toBe(WT_A) // 同行重选不清
     expect(riskLatchReselect(WT_A, 'C:/other')).toBeNull() // 换目标 → 清，重新判定
     expect(riskLatchReselect(null, WT_A)).toBeNull()
-    expect(riskLatchFailureClear(WT_A, WT_A)).toBeNull() // 编排失败 → 闩锁清退（Toast 后可重试重问）
-    expect(riskLatchFailureClear(WT_A, 'C:/other')).toBe(WT_A) // 他行失败不误清
   })
 
-  it('确认续跑：闩锁在位 → 弹框判定为不需要（续字/再发零重弹）；未闩 → 需弹框；闩锁只旁路弹框分支，armed 去重照常生效（协同 pin）', () => {
+  it('弹框判定：未闩 → 需弹框；已闩 → 零重弹；闩锁他行 → 仍弹框（闩锁只旁路弹框分支）', () => {
     expect(riskDialogNeeded(WT_A, null)).toBe(true) // 未确认 → 弹框
     expect(riskDialogNeeded(WT_A, WT_A)).toBe(false) // 已确认闩锁 → 零重弹
     expect(riskDialogNeeded(WT_A, 'C:/other')).toBe(true) // 闩锁他行 → 仍弹框
-    // 协同口径：闩锁不是 arm 旁路——确认后续字若 armed 去重命中，闸照旧否决（不重复编排）
-    expect(
-      shouldArmSelectedRow({
-        phaseReadyGit: true,
-        path: WT_A,
-        suppressed: [],
-        riskConfirmationOpen: false,
-        rowPresent: true,
-        isMain: false,
-        currentCwd: 'C:/elsewhere',
-        draftIntent: true,
-        currentSessionId: 's-armed',
-        armedSessionId: 's-armed',
-        armedPath: WT_A,
-      }),
-    ).toBe(false)
   })
 })
 
-describe('draftIntentFresh（bug f54f54ee 取消消费意图——被否决的草稿不再自触发弹框）', () => {
-  it('草稿非空且非被否决份 → 意图在场（首条消息时机）', () => {
-    expect(draftIntentFresh('new message', undefined)).toBe(true)
-    expect(draftIntentFresh('new message', 'old vetoed')).toBe(true)
+// ───────────── bug 4a30b193 陈旧选中自愈判定（纯函数单源）─────────────
+describe('staleSelectionResetOf（bug 4a30b193 陈旧选中自愈判定）', () => {
+  const rows = [
+    { path: 'C:/repo', worktreeName: 'repo', isMain: true, present: true },
+    { path: 'C:/repo/.forge/worktrees/wt-a', worktreeName: 'wt-a', isMain: false, present: true },
+  ]
+
+  it('选中行盘上缺席（present=false，git 陈旧清单行）→ stale + 树名引述 + 主行回落', () => {
+    const goneRows = [rows[0]!, { ...rows[1]!, present: false }] // wt-a 行在（git 未 prune）但盘上已删
+    const plan = staleSelectionResetOf(goneRows, goneRows[1]!.path)
+    expect(plan).toEqual({ stale: true, worktreeName: 'wt-a', mainPath: 'C:/repo' })
   })
 
-  it('草稿为空 → 零意图（点选/回填零副作用口径不变）', () => {
-    expect(draftIntentFresh('', undefined)).toBe(false)
-    expect(draftIntentFresh('   ', undefined)).toBe(false)
+  it('选中行整段消失（清单无行——prune 后）→ stale + 树名取路径尾段', () => {
+    const plan = staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/gone')
+    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: 'C:/repo' })
   })
 
-  it('取消消费：与被否决份相同（trim 归一）→ 非新鲜意图——重选不得据此重弹框', () => {
-    expect(draftIntentFresh('1-19 risk first message', '1-19 risk first message')).toBe(false)
-    expect(draftIntentFresh('  1-19 risk first message ', '1-19 risk first message')).toBe(false)
+  it('健康选中 / 无选中 → 不自愈（用户显式选中零覆盖）', () => {
+    expect(staleSelectionResetOf(rows, 'C:/repo/.forge/worktrees/wt-a')).toEqual({ stale: false })
+    expect(staleSelectionResetOf(rows, undefined)).toEqual({ stale: false })
   })
 
-  it('草稿变化即新意图：被否决基础上续写/改写 → 重新成为首条消息时机', () => {
-    expect(draftIntentFresh('1-19 risk first message plus', '1-19 risk first message')).toBe(true)
-  })
-})
-
-describe('blankSessionIdByCwdOf（G4 官方四件套——与 plugin.ts 镜像同语义 pin）', () => {
-  const ledger = (rows: Record<string, unknown>): unknown => ({ getSnapshot: () => ({ ids: Object.keys(rows), byId: rows }) })
-
-  it('blank + cwd 归一命中 + workspace 归属 + 非归档；漂移件各自否决', () => {
-    const rows = { a: { id: 'a', blank: true, cwd: 'C:/repo/wt-a' } }
-    const ws = { items: [{ path: 'C:/repo/wt-a', sessionIds: ['a'] }], archivedSessionIds: [] }
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/Repo/WT-A/', ws)).toBe('a')
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', { ...ws, archivedSessionIds: ['a'] })).toBeUndefined()
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a', { ...ws, items: [{ path: 'C:/repo/wt-a', sessionIds: ['x'] }] })).toBeUndefined()
-    expect(blankSessionIdByCwdOf(ledger(rows), 'C:/repo/wt-a')).toBeUndefined() // 快照缺席 fail-closed
+  it('清单无主行（退化清单）→ stale 但 mainPath 缺席（装配层仅清选中态）', () => {
+    const noMain = [{ path: 'C:/x', worktreeName: 'x', isMain: false, present: true }]
+    const plan = staleSelectionResetOf(noMain, 'C:/gone')
+    expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: undefined })
   })
 })

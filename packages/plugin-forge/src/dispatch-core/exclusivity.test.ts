@@ -14,6 +14,10 @@ import {
   hasExclusiveLoopSources,
   LOOP_EXCLUSIVE_GUIDANCE,
   LoopSourceExclusiveError,
+  ownerActiveLoopOf,
+  OwnerActiveLoopError,
+  OWNER_ACTIVE_GUIDANCE,
+  ownerSingleActiveRejection,
   resetExclusiveLoopSources,
   setExclusiveLoopSource,
 } from './exclusivity.js'
@@ -218,5 +222,39 @@ describe('盲选径：exclusivityGuard 随 claimTask 进核，目标命中独占
     h.setClaimAppliesGuard(true) // 真核对目标行判——other 不命中 → 放行
     const claim = await claimForDispatch(h.deps, execOf(), argsOf())
     expect(claim.kind).toBe('claimed')
+  })
+})
+
+// ─────────────────────────── 会话级单活门控（3b——byOwner 身份缝合） ───────────────────────────
+
+describe('会话单活门控（ownerActiveLoopOf / ownerSingleActiveRejection——结构读数，零 loop 域依赖）', () => {
+  const byOwnerOf = (
+    record:
+      | {
+          readonly source: { readonly kind: 'feature' | 'proposal'; readonly slug: string }
+          readonly ownerSessionId: string
+          readonly suspended?: unknown
+        }
+      | undefined,
+  ) => () => record
+
+  it('活循环在场（含挂起中）→ OwnerActiveLoopError：归属 + suspended 形态 + 指引随行', () => {
+    const rejection = ownerSingleActiveRejection(
+      byOwnerOf({ source: { kind: 'proposal', slug: 'pa' }, ownerSessionId: 's-1', suspended: { since: 1 } }),
+      's-1',
+    )
+    expect(rejection).toBeInstanceOf(OwnerActiveLoopError)
+    expect(rejection?.message).toContain('already owns an active dispatch loop for pa')
+    expect(rejection?.message).toContain('suspended')
+    expect(rejection?.code).toBe('ERR_SPAWN_FAILED')
+    expect(rejection?.data.suspended).toBe(true)
+    expect(OWNER_ACTIVE_GUIDANCE.some((g) => g.includes('stopTaskLoop'))).toBe(true)
+    expect(OWNER_ACTIVE_GUIDANCE.some((g) => g.includes('at most one dispatch loop'))).toBe(true)
+  })
+
+  it('无挂起标记的活循环：suspended=false（运行中占用形态）；无活循环 = undefined', () => {
+    const running = ownerActiveLoopOf(byOwnerOf({ source: { kind: 'feature', slug: 'feat-x' }, ownerSessionId: 's-1' }), 's-1')
+    expect(running).toEqual({ slug: 'feat-x', sourceKind: 'feature', ownerSessionId: 's-1', suspended: false })
+    expect(ownerSingleActiveRejection(byOwnerOf(undefined), 's-1')).toBeUndefined()
   })
 })

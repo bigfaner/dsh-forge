@@ -3,7 +3,7 @@
 ```yaml
 created: 2026-02-14
 author: panda
-status: Draft
+status: Accepted
 intent: new-feature
 mode: blitz
 ```
@@ -20,7 +20,7 @@ mode: blitz
 ```mermaid
 flowchart LR
     subgraph 编辑重发
-        A[最近一条用户消息悬停<br/>「编辑重发」钮] --> B[原文预填 composer]
+        A[最近一条用户消息悬停<br/>「修改」钮] --> B[原文预填 composer]
         B --> C[用户修改后发送]
         C --> D[host 提交通道携带<br/>surfaceOp replace startSeq..endSeq]
         D --> E[新 user/message 遮蔽整段尾轮<br/>模型视野中该轮未发生]
@@ -34,7 +34,12 @@ flowchart LR
     end
 ```
 
-**编辑重发**：会话空闲（尾轮已结束）时，最近一条用户消息悬停出现「编辑重发」动作；点击后原文进 composer 预填；发送时新 `user/message` 携带 `surfaceOp: replace (startSeq..endSeq)`，作废范围 = 该消息所在整段尾轮（含其触发的助手回复）——模型从下一轮起如同该轮未发生；append-only 日志保留原文。UI 上被作废的整轮消息折叠呈现（可展开查看）。
+**编辑重发**：最近一条用户消息悬停出现「修改」动作（空闲或流式响应中均可；消息仍在队列未被消费时走官方 QueueDock Edit/Remove）；点击后原文进 composer 预填；发送时：
+
+- **尾轮已闭合（空闲）**：新 `user/message` 携带 `surfaceOp: replace (startSeq..endSeq)`，作废范围 = 该消息所在整段尾轮（含其触发的助手回复）——模型从下一轮起如同该轮未发生。
+- **尾轮流式响应中**（用户裁决追补）：host 先经官方 `session/cancel` 停止该轮，待其落 `turn/end` 闭合后，同径追加携带 replace 的新消息作废整轮——「停掉 + 替代」一次发送原子完成；取消与追加之间由 host 单点编排，客户端不竞速。
+
+append-only 日志保留原文；UI 上被作废的整轮消息折叠呈现（可展开查看）。
 
 **方向键历史**：当前会话内已发送用户消息文本按发送序构成历史；readline 习惯——仅当草稿为空或光标在首行行首时 ArrowUp 翻上一条，ArrowDown 回翻，翻历史前的未提交草稿暂存并在翻回时恢复。会话切换即切换历史源。
 
@@ -42,26 +47,63 @@ flowchart LR
 - 作废（void）= surface replace 遮蔽：事件保留于日志与模型视野之外，非删除。
 - 尾轮（trailing turn）= 最后一条用户消息所归属的完整轮次（该消息 + 其触发的全部助手回复与工具事件区间）。
 
+### 编辑重发时序（锚点生命周期）
+
+```mermaid
+sequenceDiagram
+    participant U as 用户
+    participant CP as client-plugin
+    participant PS as pendingEdit 侧车 store<br/>（官方 dsh-client-store·逐会话 persist）
+    participant DS as 官方 draftStore
+    participant H as 自建 host
+
+    U->>CP: 悬停点击「修改」
+    CP->>PS: set anchorSeq（持久化，localStorage 同官方草稿域）
+    CP->>DS: setDraft(原文)
+    U->>DS: 编辑草稿（锚不动）
+    U->>CP: 发送
+    CP->>H: 提交 {文本, anchorSeq}（仅 plain 提交携带）
+    H->>H: 复核：锚=最后一条用户消息·其轮空闲或流式中
+    alt 校验通过·尾轮流式中
+        H->>H: 官方 session/cancel 停止该轮
+        H->>H: 待 turn/end 闭合 → 追加新 user/message（surfaceOp replace 整段尾轮）
+        H-->>CP: 成功（停止+替换一次发送完成）
+        CP->>PS: clear（与草稿清空同拍）
+    else 校验通过·尾轮已闭合
+        H->>H: 追加新 user/message（surfaceOp replace 整段尾轮）
+        H-->>CP: 成功
+        CP->>PS: clear（与草稿清空同拍）
+    else 校验拒绝（轮次已前进等）
+        H-->>CP: 拒绝 + 原因
+        CP->>PS: clear（锚失效）
+        CP->>DS: 草稿保留为普通文本 + 错误提示
+    end
+```
+
+持久化裁决（用户裁决）：anchorSeq 不驻内存——与官方草稿同款机械（`dsh-client-store` `defineStore({ persist, scopeKey: sessionId })`）持久化到 localStorage，与官方草稿同域同粒度、同拍清除；进程重启后草稿与锚一起恢复，host 复核仍是唯一闸门（复核不过 = 宁可不作废，不可错作废）。
+
 ### 跨模块交互面
 
 | 交互面 | 参与方 | 边界 |
 |---|---|---|
 | composer 草稿读写 + 键位 | client-plugin ↔ 官方 conversation 服务 | 官方 keymap 已保留 Enter 族之外按键；ArrowUp/Down 经应用快捷键缝接入 |
-| 作废提交通道 | web client ↔ 自建 host | 官方 `session/prompt` RPC 不透传 surfaceOp；host 层补一条窄面（在作废区间起点处携带 replace 标记的提交） |
+| 作废提交通道 | web client ↔ 自建 host | 官方 `session/prompt` RPC 不透传 surfaceOp；host 层补一条窄面（在作废区间起点处携带 replace 标记的提交），通道形态采用官方 `dsh-typert`（FaceModel → host/remote-client 双面生成，与官方 RPC 同构） |
+| 锚点持久化 | client-plugin ↔ 官方 dsh-client-store | 侧车 store（persist + scopeKey=sessionId）与官方草稿同域同拍，重启同恢复 |
 | transcript 折叠呈现 | client-plugin ↔ 官方 Chat 渲染 | 作废轮折叠为摘要行，展开保留原文 |
+| 流式停止 | host ↔ 官方 session/cancel | 被修改消息流式中：host 先 cancel 停轮、待 turn/end 后再 replace——取消与追加在 host 单点编排，客户端不竞速 |
 | 排队消息编辑 | 官方 QueueDock | 已有 Edit/Remove/Steer，本提案不触碰 |
 
 ## UI Mockup
 
 涉及 UI 改造共三处：①用户消息行悬停动作；②transcript 被作废整轮的折叠态；③方向键翻历史的草稿态（无新增可见元素，仅草稿内容变化）。
 
-### ① 最近一条用户消息悬停「编辑重发」（仅空闲会话）
+### ① 最近一条用户消息悬停「修改」（空闲或流式中）
 
 ```text
 ┌─ transcript ──────────────────────────────────────────┐
 │  (历史轮次…)                                           │
 │                                                        │
-│  ┌ 用户 · 你 ──────────────────── [✏️ 编辑重发] ──┐    │
+│  ┌ 用户 · 你 ──────────────────────── [✏️ 修改] ──┐    │
 │  │ 帮我重构 apps/web/src/client-plugin/plugin.ts  │    │
 │  └────────────────────────────────────────────────┘    │
 │  ┌ 助手 ┐                                               │
@@ -70,7 +112,7 @@ flowchart LR
 ├─ composer ────────────────────────────────────────────┤
 │  [输入框…（空）                          ] [发送] │
 └────────────────────────────────────────────────────────┘
-   悬停出现动作钮；非最近消息/运行中会话不出现
+   悬停出现动作钮；非最近消息不出现；流式响应中同样可用；消息仍在队列时走官方 QueueDock
 ```
 
 ### ② 发送替换后：被作废整轮折叠（可展开）
@@ -79,7 +121,7 @@ flowchart LR
 ┌─ transcript ──────────────────────────────────────────┐
 │  (历史轮次…)                                           │
 │                                                        │
-│  ▸ [已作废 · 本轮已由编辑重发替换] ──────────── 1 轮   │  ← 点击展开原文
+│  ▸ 已作废（1 轮）                                      │  ← 点击展开原文
 │                                                        │
 │  ┌ 用户 · 你 ─────────────────────────────────┐       │
 │  │ 帮我重构 client-plugin 下的 plugin.ts，只保留 │       │
@@ -91,6 +133,8 @@ flowchart LR
 └────────────────────────────────────────────────────────┘
    展开态：原用户消息 + 原助手回复按原文只读呈现
 ```
+
+可交互 HTML mockup（折叠/展开切换、hover、令牌全对齐 DESIGN.md）：[mockup/voided-style.html](mockup/voided-style.html)（浏览器打开；样式要点——折叠行 Caption 级 tertiary 纯文字 + hover 淡底，展开块整层 60% 透明度、行结构复用官方 Chat 形态、零删除线）。
 
 ### ③ 方向键历史（readline 习惯，无新增控件）
 
@@ -104,20 +148,80 @@ flowchart LR
 
 ## 改动影响范围
 
-- client-plugin 层（`apps/web/src/client-plugin/`）：编辑重发入口 + 作废提交编排 + 方向键历史（会话内历史源、键位接入、草稿暂存）。
-- 自建 host 层：作废提交通道窄面（surfaceOp replace 语义组装）。
-- Chat transcript 呈现：作废整轮折叠。
-- 不改动官方包本体；不触碰 QueueDock；不做跨会话全局历史；不做非最近消息作废与原地改写日志。
+独立插件承载（用户裁决 2026-10-17）：本功能自成一体，不进 apps/web client-plugin 内嵌面——新建 `packages/plugins/composer-correction`（`@dsh-forge/composer-correction`，cordis 插件，零 dsh-forge 依赖，面向一切 dsh 规范应用），宿主只做 wiring。
+
+```text
+packages/plugins/composer-correction/  ← 独立插件（host 面 + client 面，全部业务）
+apps/host + apps/web                   ← 仅 wiring（通道注册 / service provide / 客户端装配）
+官方包（@deepseek-ai/*）               ← 零改动，只消费其机械与缝
+```
+
+### 改动点清单（file 粒度）
+
+| 层 | 位置 | 改动 | 性质 |
+|---|---|---|---|
+| 插件 host 面 | `packages/plugins/composer-correction/src/index.ts`（新） | cordis 插件入口：**typert face `editResend/submit`**（FaceModel 声明，typert.host 生成 host 面 / typert.remote-client 生成 client 面，id `@dsh-forge/composer-correction#editResend/submit`——face 名词/method camelCase 动词对齐官方 `#session/fork` 形态，包名命名空间保双宿主不碰撞，schema 校验由 typert 机械承担）；复核（锚=最后一条用户消息·其轮空闲或流式中·区间完整），流式中先经官方 `session/cancel` 停止并待 `turn/end` 闭合，组装 surfaceOp replace 交官方 session 机械追加。注：本仓 apps/host 现有通道均 ForgeIpc+rpcEnvelope，此为首例 typert 通道（用户裁决 2026-02-14） | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/edit-resend.ts`（新） | 锚点编排：悬停动作接线、pendingEdit 侧车 store（官方 dsh-client-store persist 机械）、提交携带 anchorSeq、失败恢复 | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/input-history.ts`（新） | 会话内历史源（订阅 user/message 事件）、readline 键位判定（空草稿/首行行首）、草稿暂存恢复 | 新增 |
+| 插件 client 面 | `packages/plugins/composer-correction/src/client/voided-transcript.ts`（新） | ①用户消息行「修改」动作注入；②被作废整轮折叠行——两处注入点须先核销官方 Chat 留出的合法缝（槽位影子/inject face），无合法缝则回到 tech-design 重议呈现方案 | 新增 |
+| 宿主 wiring | `apps/host/src/ipc/bindings.ts` / `forge-channels.ts`（改） | 插件 host 面装配（通道注册单行编排位，同 worktree 插件 wiring 模式） | 修改 |
+| 宿主 wiring | `apps/web/src/client-plugin/plugin.ts`（改） | 插件 client 面装载接线（不内嵌业务逻辑） | 修改 |
+| 官方机械消费 | 不落盘改动 | `dsh-client-store`（persist 侧车）、`dsh-session` surface（replace 语义）、官方 keymap/快捷键缝——import 消费，零 vendor 零改制 | 只读 |
+
+### 影响点与边界
+
+- **双宿主兼容目标**（用户裁决 2026-10-17 追补）：插件面向 dsh-forge 与官方 dsh 双宿主——dsh-forge 侧经宿主 wiring 装配；官方 dsh 侧可经官方 plugin-manager 安装通道直接装载。为此：零 dsh-forge 依赖（既有裁决），全部能力只消费官方机械（typert face / dsh-session surface / dsh-client-store / 官方槽位缝），typert face id 以包名命名空间（`@dsh-forge/composer-correction#editResend/submit`）避免宿主碰撞；两宿主下行为一致，dsh-forge 专属 wiring 不进插件本体。
+
+- **承重假设已核销**（结论见下方 tech-design 节）：用户消息行动作缝与 transcript 折叠缝均存在合法缝，呈现方案成立。
+- **不触碰**：官方 QueueDock（排队编辑走官方原生）、fork 链路、会话日志单写者路径（新消息仍经官方追加机械，本提案不直写日志）。
+- **排除项**：跨会话全局历史；非最近消息作废；原地改写日志；批量作废。
+- **非介入面零差异**：不点「修改」、不用方向键时，composer 与 transcript 行为与现状逐位一致（分流装配期，不挂运行时判断税）。
+
+## tech-design：官方 Chat 注入缝核销
+
+取证对象：`@deepseek-ai/dsh-client-ui-{slots,chat,conversation}` 与 `dsh-session` **0.2.0-rc.2** 源码（node_modules 实读）。
+
+```mermaid
+flowchart LR
+    subgraph 缝①用户消息行「修改」
+        A1[conversation.chat.node<br/>keyed 槽 · key=user] -->|同键注册 priority 影子<br/>整行替换（官方明文语义）| A2[UserRowWithEdit<br/>官方 primitives 重现行 + 悬停动作]
+    end
+    subgraph 缝②被作废整轮折叠
+        B1[dsh-session surface<br/>foldSurface().replacements] -->|官方明文：模型可见面故意遮蔽替换区间<br/>append-origin 事件 = 人读 transcript 正源| B2[ConversationEventRegistry.register<br/>match: isReplacementSurfaceEvent]
+        B2 --> B3[ChatNodeDataMap 合并自有 kind<br/>→ conversation.chat.node keyed 渲染折叠行]
+    end
+```
+
+### 缝① 用户消息行悬停动作 —— 有合法缝（整行替换粒度）
+
+- **无加法式动作槽**：`conversation.chat.assistant-actions`（list，owner `{messageId}`）仅覆盖已定稿助手消息；`conversation.chat.turnTail`（list）位于完成 Turn 动作行之前，均非用户消息行。
+- **合法缝**：`conversation.chat.node`（keyed，scope `session`，`dsh-client-ui-chat` contract/slots.d.ts）。用户消息行即其 `user` 键（`ChatNodeDataMap.user`）；`SlotCore.register` 对同键重复注册按 priority 影子替换（「Reusing a key replaces that node renderer」）。
+- **接入**：`ctx.slots.register({ name: 'conversation.chat.node', key: 'user', scope: 'session', priority: 1 }, UserRowWithEdit)`；组件经 hookContext 拿 `turnData`/`disclosure`，owner props 拿 `openFile` 等；行本体用官方 primitives 重现后加悬停动作。**代价**：非加法式插钮，占位者承担整行呈现（官方升级用户行样式需跟随）；这是官方留出的唯一合法路径，不发明平行机制。
+
+### 缝② 被作废整轮折叠行 —— 有合法缝（定义注册 + 自有节点 kind）
+
+- **数据层（官方明文正道）**：`dsh-session/surface` 文档原文——模型可见 surface 故意遮蔽被替换区间，是「the wrong source for a human transcript」；**append-origin 事件才是人读 transcript 的持久素材**。API：`isAppendSurfaceEvent` / `isReplacementSurfaceEvent` / `foldSurface(events).replacements: {seq, start, end, shadowedSeqs}[]`。被作废轮原文取 raw log append-origin 事件、区间取 `replacements`，全只读消费。
+- **视图层**：官方 Chat 投影消费模型可见面 → 被作废行**自动消失**，无需隐藏旧行；折叠摘要行经合法组合注入——`ConversationEventRegistry.register(definition)`（conversation 包公开注册点，`match` 以 `isReplacementSurfaceEvent` 认领 replace 事件）+ `ChatNodeDataMap` declare-module 合并自有 kind（官方注释即「Merge-extensible payload registry」，chat 自有 `user`/`unknown` 键同径）+ `conversation.chat.node` keyed 槽渲染该 kind。
+- **无现成专用折叠槽**：以上组合全部落在官方缝内（定义注册 / 槽位影子 / 类型合并），零平行注入机制。
+
+### 接入方式汇总
+
+| 需求 | 缝 | 接入 |
+|---|---|---|
+| 悬停「修改」 | `conversation.chat.node` key `user`（影子替换） | `ctx.slots.register({name, key:'user', scope:'session', priority:1}, …)` |
+| 折叠摘要行 | 定义注册 + `ChatNodeDataMap` 合并 + keyed 槽 | `match` 认领 replace 事件 → `buildViewNode` 产自有 kind → keyed 渲染 |
+| 原文 / 作废区间 | `foldSurface().replacements` + append-origin 事件 | 只读消费 |
 
 ## 验收
 
-1. 空闲会话中，最近一条用户消息悬停出现「编辑重发」钮；点击后 composer 预填原文。
+1. 最近一条用户消息悬停出现「修改」钮（空闲与流式响应中均可）；点击后 composer 预填原文。
 2. 修改后发送：新消息进入对话；被作废的整段尾轮（原消息 + 其回复）在 transcript 中折叠，可展开查看原文；模型后续请求不含被作废区间（surface 投影核实）。
-3. 排队中的消息仍走官方 QueueDock Edit/Remove，两路互不干扰。
-4. 空草稿或光标在首行行首时 ArrowUp 依次翻出本会话此前已发送的用户消息；ArrowDown 回翻；翻回起点恢复翻阅前的未提交草稿；多行草稿编辑中 ArrowUp/Down 保持原生光标移动。
-5. 会话切换后，历史源随会话切换（翻出的是新会话的消息）。
+3. 被修改消息正处于流式响应时，发送替代消息的同时停止该轮——停止与替换一次发送原子完成（host 单点编排），流式输出中止、整轮折叠、新消息进入对话。
+4. 排队中的消息仍走官方 QueueDock Edit/Remove，两路互不干扰。
+5. 空草稿或光标在首行行首时 ArrowUp 依次翻出本会话此前已发送的用户消息；ArrowDown 回翻；翻回起点恢复翻阅前的未提交草稿；多行草稿编辑中 ArrowUp/Down 保持原生光标移动。
+6. 会话切换后，历史源随会话切换（翻出的是新会话的消息）。
 
 ## 一致性检查
 
-- 验收 1–2 ↔ 纳入项「编辑重发」；验收 3 ↔ 排除项「排队编辑走官方」；验收 4–5 ↔ 纳入项「方向键历史」。每个纳入项均有对应验收覆盖，无互相矛盾。
-- 用户裁决记录：7 条访谈裁决 + 复述审核通过；方案 A 采纳；UI 呈现更正为「整轮折叠」。
+- 验收 1–3 ↔ 纳入项「编辑重发」（含流式停止分支）；验收 4 ↔ 排除项「排队编辑走官方」；验收 5–6 ↔ 纳入项「方向键历史」。每个纳入项均有对应验收覆盖，无互相矛盾。
+- 用户裁决记录：7 条访谈裁决 + 复述审核通过；方案 A 采纳；UI 呈现更正为「整轮折叠」；追补裁决——流式响应中的被修改消息在发送替代消息时同步停止（host 经官方 session/cancel 单点编排）。

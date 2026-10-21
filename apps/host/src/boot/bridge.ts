@@ -33,6 +33,8 @@ import {
 } from '@dsh-forge/contracts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { TunnelProvider } from '../tunnel/index.js'
+import type { DiagContextStore } from '../telemetry/diag-context.js'
+import { runWithDiagContext } from '../telemetry/diag-context.js'
 import type { BootDshOptions } from './run.js'
 
 /**
@@ -70,13 +72,15 @@ export const BRIDGE_SERVICE_NAMES = [
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
 export type ServiceNamesCoverage = AssertNever<Exclude<BridgeServiceName, (typeof BRIDGE_SERVICE_NAMES)[number]>>
 
-/** 主 → 子：RPC 调用（id 供 rpc-result 关联回） */
+/** 主 → 子：RPC 调用（id 供 rpc-result 关联回；traceId = main 侧诊断 ALS 读数显式
+ *  携带——ALS 过 IPC 序列化断点，bridge 显式传递，child 侧 dispatchRpc 复原上下文） */
 export interface BridgeRpcRequest {
   readonly type: 'rpc'
   readonly id: number
   readonly service: BridgeServiceName
   readonly method: string
   readonly args: readonly unknown[]
+  readonly traceId?: string
 }
 
 /** 主 → 子：优雅关停（子侧 ProcessShutdown.shutdown(0)——内部 5s 升级强退） */
@@ -149,6 +153,9 @@ export interface BridgeReadyMessage {
   readonly remotePinExpiresAt?: number
   /** fix-26：长效密码位（true = PIN 长期生效不轮换；可选：临时态/旧 child = 缺席） */
   readonly remotePinDurable?: boolean
+  /** bug 2ffb0a82：宿主 knowledge 插件装载位（child 按 profile 树包在场探测——与 boot
+   *  overlay 注行门同源单值；可选：旧 child 缺席 = false 口径降级，不阻 ready 守卫） */
+  readonly knowledgePlugin?: boolean
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -310,8 +317,12 @@ export const TASKS_SERVICE_METHODS = [
   'sessionLinks',
 ] as const satisfies readonly (keyof ForgeTasksService)[]
 
-/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名） */
-export type TasksWhitelistCoverage = AssertNever<Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number]>>
+/** 白名单覆盖完备性（= never：缺席的 ForgeTasksService 方法在此编译期点名；
+ *  stampEvidenceValidity 显式排除——disc 效度戳写侧 = worker/tool 面专属，不入 renderer
+ *  RPC 白名单（ipc 通道族不注册该写动词，SC7 断言面）） */
+export type TasksWhitelistCoverage = AssertNever<
+  Exclude<keyof ForgeTasksService, (typeof TASKS_SERVICE_METHODS)[number] | 'stampEvidenceValidity'>
+>
 
 export const FEATURES_SERVICE_METHODS = [
   'registerFeature',
@@ -470,6 +481,8 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
   const skillsDir = typeof o.skillsDir === 'string' && o.skillsDir !== '' ? o.skillsDir : undefined
   // M3 3.7：spec skills 物化锚（预设 customSkillDirs[spec]——远征组合携带；缺席 = spec 技能面降级）
   const specSkillsDir = typeof o.specSkillsDir === 'string' && o.specSkillsDir !== '' ? o.specSkillsDir : undefined
+  // blitz skills 物化锚（预设 customSkillDirs[blitz]——突击组合携带；缺席 = blitz 技能面降级）
+  const blitzSkillsDir = typeof o.blitzSkillsDir === 'string' && o.blitzSkillsDir !== '' ? o.blitzSkillsDir : undefined
   // M3 3.8：设置域存储路径（boot overlay 注 core 行 config.settingsFile——缺席 = forgeSettings 服务降级）
   const settingsFile = typeof o.settingsFile === 'string' && o.settingsFile !== '' ? o.settingsFile : undefined
   return {
@@ -482,6 +495,7 @@ export function parseChildOptions(argv: readonly string[]): BootDshOptions | und
     tasksHome,
     skillsDir,
     specSkillsDir,
+    blitzSkillsDir,
     settingsFile,
   }
 }
@@ -534,6 +548,8 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(remotePinExpiresAt !== undefined ? { remotePinExpiresAt } : {}),
     // fix-26：长效位透传（严格 === true 才携带）
     ...(m.remotePinDurable === true ? { remotePinDurable: true as const } : {}),
+    // bug 2ffb0a82：knowledge 插件装载位透传（严格 === true 才携带——畸形视为缺席降级）
+    ...(m.knowledgePlugin === true ? { knowledgePlugin: true as const } : {}),
   }
 }
 
@@ -702,10 +718,13 @@ export function asEventMessage(message: unknown): BridgeEventMessage | undefined
 /**
  * 子侧 RPC 派发（纯函数——child.ts 以 process 消息驱动）。服务/方法不在场或执行
  * 异常均归一为 ok=false 结果消息（永不 reject——IPC 结果面单通道，调用侧按 error 结算）。
+ * als + request.traceId 在场 → 方法执行包进诊断 ALS（main↔child trace_id 显式携带复原；
+ * ALS 缺席 = 原样直调零差异）。
  */
 export async function dispatchRpc(
   services: Partial<Record<BridgeServiceName, object>>,
   request: BridgeRpcRequest,
+  als?: DiagContextStore,
 ): Promise<BridgeRpcResultMessage> {
   const target = services[request.service] as Record<string, unknown> | undefined
   const method = target?.[request.method]
@@ -717,14 +736,20 @@ export async function dispatchRpc(
       error: `bridge: ${request.service}.${request.method} 不在场（core/knowledge 插件行未装载？）`,
     }
   }
-  try {
-    const data = await (method as (...args: readonly unknown[]) => Promise<unknown> | unknown)(
-      ...request.args,
-    )
-    return { type: 'rpc-result', id: request.id, ok: true, data: encodeWire(data) }
-  } catch (cause) {
-    return { type: 'rpc-result', id: request.id, ok: false, error: serializeBridgeError(cause) }
+  const invoke = async (): Promise<BridgeRpcResultMessage> => {
+    try {
+      const data = await (method as (...args: readonly unknown[]) => Promise<unknown> | unknown)(
+        ...request.args,
+      )
+      return { type: 'rpc-result', id: request.id, ok: true, data: encodeWire(data) }
+    } catch (cause) {
+      return { type: 'rpc-result', id: request.id, ok: false, error: serializeBridgeError(cause) }
+    }
   }
+  if (als !== undefined && typeof request.traceId === 'string' && request.traceId !== '') {
+    return runWithDiagContext(als, { traceId: request.traceId }, invoke)
+  }
+  return invoke()
 }
 
 /**

@@ -68,3 +68,8 @@ domains: [rpc, contracts, channel, sqlite, service-injection, event, settings]
 **Requirement**: 插件工具面 schema（parameters 与 output.schema 全节点深走）additionalProperties 只许布尔形或缺席——宿主引擎子集校验器拒对象形（`{ type: ... }`），违例 = 插件注册即拒、新建会话（agent-preset/invalid）与 resume（gateway/internal）全炸；Record 形字段改闭集显式 properties（单源常量派生，如 TASK_STATUSES）+ `additionalProperties: false`。plugin.test.ts 宿主子集 walker 测试钉住（4a699518）。
 **Scope**: [CROSS]
 **Source**: /learn entry 2026-10-14
+
+### TECH-rpc-011: tool 面 schema oneOf ≥2 元素——单成功支禁嵌 oneOf
+**Requirement**: 插件工具面 schema（parameters 与 output.schema 全节点深走，含嵌套）任何 oneOf 必须是 ≥2 个 schema 的数组——宿主引擎子集校验器拒单元素 oneOf（报 `schema.oneOf[N].oneOf must be an array of at least two schemas`），违例同样 = 插件注册即拒、会话全炸；单一成功 DTO 的工具（如 stopTaskLoop 仅 'stopped' 支）成功 schema 直传 `withFailureVariant`（与 updateTask 等同形），勿沿用 dispatchTask 多分支的 `oneOf:[…]` 内嵌形制——内嵌仅在成功支本身 ≥2 变体时合法。plugin.test.ts 宿主子集 walker 已含 oneOf 基数规则（19f36dda）。
+**Scope**: [CROSS]
+**Source**: /learn entry 2026-10-18

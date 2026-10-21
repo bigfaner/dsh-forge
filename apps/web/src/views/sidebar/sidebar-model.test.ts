@@ -36,7 +36,9 @@ function project(id: string, workspaceId: string, overrides: Partial<ProjectSumm
 }
 
 function ledgerRow(id: string, overrides: Partial<LedgerSessionRow> = {}): LedgerSessionRow {
-  return { id, displayTitle: `会话${id}`, updatedAt: Date.now() - 5 * MIN, ...overrides }
+  // 默认带持久标题（= displayTitle 同值）——与官方「有标题会话」常态同型；
+  // 未命名/blank 场景由用例显式覆盖（bug 3d26a1be describe）。
+  return { id, title: `会话${id}`, displayTitle: `会话${id}`, updatedAt: Date.now() - 5 * MIN, ...overrides }
 }
 
 function ledger(rows: readonly LedgerSessionRow[], overrides: Partial<LedgerSessionsSnapshot> = {}): LedgerSessionsSnapshot {
@@ -170,6 +172,48 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.currentSessionId).toBe('blank-cur')
   })
 
+  // bug 3d26a1be：官方行口径——标题消费持久 title，不消费 displayTitle 的目录名/id 兜底
+  // （官方 sessionTitle：blank → ''、title?.trim() ?? ''）。
+  // bug 9eb9d6cb 后续用户裁决：空 title 回退词统一「新会话」——title 漂移链收敛为
+  // 新会话 → 有意义的名称（「未命名」中间态退役）。
+  describe('会话行标题派生（bug 3d26a1be——不消费 displayTitle 目录名兜底）', () => {
+    it('bug：无持久标题会话显示「新会话」而非 displayTitle 目录名；savedTitle 空串供改名种子', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([ledgerRow('s1', { title: undefined, displayTitle: 'dsh-forge' })]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('新会话')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
+    })
+
+    it('当前选中的空白会话显示「新会话」（官方 blank 行口径）', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([
+          ledgerRow('blank-cur', { blank: true, title: undefined, displayTitle: 'dsh-forge', retainedBy: { mainView: 1 } }),
+        ]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['blank-cur'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('新会话')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
+    })
+
+    it('有持久标题：显示 trim 后标题，savedTitle 同步；空白串标题回退「新会话」（官方 trim 口径）', () => {
+      const out = buildSidebarTree({
+        projects: [project('p1', 'w1')],
+        sessions: ledger([
+          ledgerRow('s-titled', { title: '  登录修复  ', displayTitle: '登录修复' }),
+          ledgerRow('s-space', { title: '   ', displayTitle: 'dsh-forge' }),
+        ]),
+        workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s-titled', 's-space'] }]),
+      })
+      expect(out.tree[0]!.sessions[0]!.title).toBe('登录修复')
+      expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('登录修复')
+      expect(out.tree[0]!.sessions[1]!.title).toBe('新会话')
+    })
+  })
+
   it('统一更新时间排序（主区/树会话不分 worktree 全组倒序；置顶仍领先）', () => {
     const treePath = 'Z:/w/p1/.forge/worktrees/t'
     const out = buildSidebarTree({
@@ -233,7 +277,7 @@ describe('buildSidebarTree（项目树派生）', () => {
 
 describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原型 renderProjects 同型）', () => {
   function row(sessionId: string, title: string): SidebarProjectNode['sessions'][number] {
-    return { sessionId, title, status: 'idle', updatedAt: 1, pinned: false, archived: false }
+    return { sessionId, title, savedTitle: title, status: 'idle', updatedAt: 1, pinned: false, archived: false }
   }
 
   const tree: SidebarProjectNode[] = [
@@ -295,8 +339,8 @@ describe('sidebarFilterOf（fix-6：UF-1 Validation 前缀/子串过滤——原
     const built = buildSidebarTree({
       projects: [project('p1', 'w1', { name: '支付网关' })],
       sessions: ledger([
-        ledgerRow('s1', { displayTitle: '登录修复', retainedBy: { mainView: 1 } }),
-        ledgerRow('s2', { displayTitle: '索引重建' }),
+        ledgerRow('s1', { title: '登录修复', displayTitle: '登录修复', retainedBy: { mainView: 1 } }),
+        ledgerRow('s2', { title: '索引重建', displayTitle: '索引重建' }),
       ]),
       workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1', 's2'] }]),
     })
@@ -359,7 +403,7 @@ describe('SIDEBAR_VIEW_DEFAULT（D41-①：归档项目默认隐藏）', () => {
 describe('sidebarSessionVisibility（D41-② 24h 窗口 + 2026-10-12 至少 10 行下限——recent 默认可见 / older 折叠）', () => {
   const NOW = 1_700_000_000_000
   function row(sessionId: string, updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
-    return { sessionId, title: `会话${sessionId}`, status: 'idle', updatedAt, pinned: false, archived: false, ...overrides }
+    return { sessionId, title: `会话${sessionId}`, savedTitle: `会话${sessionId}`, status: 'idle', updatedAt, pinned: false, archived: false, ...overrides }
   }
 
   it('窗口内优先（≥10 窗口内非置顶行时封顶取最近的 10 个——窗口规则让位封顶）', () => {
@@ -420,7 +464,7 @@ describe('sidebarSessionVisibility（D41-② 24h 窗口 + 2026-10-12 至少 10 �
 
 describe('sidebarArchivedFilterOf（归档过滤投影——D45 扩面：项目域 + 会话域双口径）', () => {
   function srow(sessionId: string, archived = false): SidebarSessionRow {
-    return { sessionId, title: `行${sessionId}`, status: 'idle', updatedAt: 1, pinned: false, archived }
+    return { sessionId, title: `行${sessionId}`, savedTitle: `行${sessionId}`, status: 'idle', updatedAt: 1, pinned: false, archived }
   }
   const tree: readonly SidebarProjectNode[] = [
     { projectId: 'p1', workspaceId: 'w1', name: '活跃', wsPath: 'Z:/w/p1', archived: false, sessions: [] },
@@ -487,7 +531,7 @@ describe('sidebarArchivedFilterOf（归档过滤投影——D45 扩面：项目�
 
 describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42）', () => {
   function frow(sessionId: string, title: string, status: SidebarSessionRow['status'], updatedAt: number, overrides: Partial<SidebarSessionRow> = {}): SidebarSessionRow {
-    return { sessionId, title, status, updatedAt, pinned: false, archived: false, ...overrides }
+    return { sessionId, title, savedTitle: title, status, updatedAt, pinned: false, archived: false, ...overrides }
   }
   const tree: readonly SidebarProjectNode[] = [
     {
@@ -521,6 +565,7 @@ describe('sidebarFlatRowsOf / sidebarFlatFilterOf（平铺视图投影，fix-42�
       projectName: '支付网关',
       sessionId: 's2',
       title: '索引重建',
+      savedTitle: '索引重建',
       status: 'running',
       updatedAt: 300,
       pinned: false,
@@ -662,10 +707,11 @@ describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——�
       wsPath: 'Z:/w/p1',
       archived: false,
       sessions: [
-        { sessionId: 's1', title: '普通', status: 'idle', updatedAt: 100, pinned: false, archived: false },
+        { sessionId: 's1', title: '普通', savedTitle: '普通', status: 'idle', updatedAt: 100, pinned: false, archived: false },
         {
           sessionId: 's2',
           title: '派发会话',
+          savedTitle: '派发会话',
           status: 'running',
           updatedAt: 300,
           pinned: false,

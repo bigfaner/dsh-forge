@@ -63,8 +63,9 @@ export interface BootOverlayInput {
   /** 真 home 凭据文档桥（fix-26：在场即给 credentials 行注 config.path——官方
    *  resolveSpec 显式 path 优先于 home 拼接；缺席 = e2e/测试隔离态不桥） */
   readonly credentialsPath?: string
-  /** worktree-branch-management 1.7：git-worktree 插件行注行门（profile 树内 @dsh-forge/
-   *  git-worktree 在场判定——dev 形态 link 在场 / 打包形态暂不含该插件）；true = 注 loader
+  /** worktree-branch-management 1.7：git-worktree 插件行注行门（在场判定 = 双形态两探针
+   *  productPackagePresent——dev 形态 profile 树 link 在场 / 打包形态 anchor 邻接树
+   *  runtime/node_modules，2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader
    *  行（插件装载面；扩展点注入不经 config——函数值走 ctx 服务缝，见 ipc/worktree-identity.ts） */
   readonly gitWorktreeRow?: boolean
   /** M3 预设装配（3.7）：三底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
@@ -85,6 +86,9 @@ export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge-spec skills 当形态绝对路径（customSkillDirs[spec]；缺席 = 剔除
    *  ——spec 技能面降级 fail-soft，突击/blitz 本就物理不含） */
   readonly specSkillsDir?: string
+  /** plugin-forge skills-blitz 突击专属技能当形态绝对路径（customSkillDirs[blitz]；缺席 =
+   *  剔除——blitz 技能面降级 fail-soft，远征本就物理不含） */
+  readonly blitzSkillsDir?: string
   /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚——
    *  与 knowledge 全局行同值单源；必填：BootOverlayInput.bindingsFile 本就必填，无缺席分支） */
   readonly bindingsFile: string
@@ -94,6 +98,7 @@ export interface PresetOverlayInput extends PresetPatches {
 const PRESET_SKILL_DIR_TOKENS = {
   core: '{{plugin-forge-skills}}',
   spec: '{{plugin-forge-spec-skills}}',
+  blitz: '{{plugin-forge-blitz-skills}}',
 } as const
 
 /**
@@ -121,12 +126,17 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     const trimmed = line.trim()
     const coreToken = `- "${PRESET_SKILL_DIR_TOKENS.core}"`
     const specToken = `- "${PRESET_SKILL_DIR_TOKENS.spec}"`
+    const blitzToken = `- "${PRESET_SKILL_DIR_TOKENS.blitz}"`
     if (trimmed === coreToken) {
       if (input.coreSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.coreSkillsDir)}`)
       continue
     }
     if (trimmed === specToken) {
       if (input.specSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.specSkillsDir)}`)
+      continue
+    }
+    if (trimmed === blitzToken) {
+      if (input.blitzSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.blitzSkillsDir)}`)
       continue
     }
     if (trimmed === PRESET_BINDINGS_LINE_TOKEN) {

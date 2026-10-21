@@ -108,6 +108,33 @@ describe('AC1/AC5 注册面：三 tool（名 = 动词透传）+ transitionFeatur
     dispose()
   })
 
+  it('宿主 schema 子集 pin（TECH-rpc-011 同锚）：oneOf 须 ≥2 元素数组（单成功支嵌套 = 注册即拒炸会话 resume）', () => {
+    // 宿主引擎 schema 子集校验器要求 oneOf 为 ≥2 元素数组——单成功支经 withFailureVariant
+    // 包装后再嵌即 schema.oneOf[0].oneOf 单元素（stopTaskLoop 判例，plugin-forge 同锚镜像）。
+    const walk = (node: unknown, path: string, violations: string[]): void => {
+      if (Array.isArray(node)) {
+        node.forEach((child, i) => walk(child, `${path}[${i}]`, violations))
+        return
+      }
+      if (node === null || typeof node !== 'object') return
+      for (const [key, value] of Object.entries(node)) {
+        if (key === 'oneOf' && (!Array.isArray(value) || value.length < 2)) {
+          violations.push(`${path}.oneOf`)
+        }
+        walk(value, `${path}.${key}`, violations)
+      }
+    }
+    const rt = new TempRuntime()
+    const dispose = forgeSpecPlugin(rt.ctx())
+    for (const tool of rt.registeredTools) {
+      const violations: string[] = []
+      walk(tool.parameters, `${tool.name}.parameters`, violations)
+      walk(tool.output.schema, `${tool.name}.output.schema`, violations)
+      expect(violations, `${tool.name} 宿主 schema 子集违规（oneOf 须 ≥2 元素数组）`).toEqual([])
+    }
+    dispose()
+  })
+
   it('config 装配缝消费：config.projects 进入解析链（绑定命中 → 解析 projectId 注入服务调用）', async () => {
     const rt = new TempRuntime()
     let routed: string | undefined

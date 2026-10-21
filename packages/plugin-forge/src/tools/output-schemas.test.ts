@@ -89,8 +89,6 @@ const TASK_SNAPSHOT: TaskSnapshot = {
   breaking: false,
   coverage: 0.8,
   complexity: 'low',
-  surfaceKey: 'docs',
-  surfaceType: 'web',
   createdAt: '2026-10-14T00:00:00.000Z',
   updatedAt: '2026-10-14T01:00:00.000Z',
 }
@@ -211,6 +209,10 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
     expectValid('recordBug', schemaOf(createRecordBugTool(DEPS)), BUG_CARD_OPEN)
   })
 
+  it('recordBug：BugCard 登记面全形（挂链——含 recurrenceOf，bug 37693dfc）', () => {
+    expectValid('recordBug 挂链', schemaOf(createRecordBugTool(DEPS)), { ...BUG_CARD_OPEN, recurrenceOf: 'b-root' })
+  })
+
   it('resolveBug：BugCard 回填面全形（fixed 证据）', () => {
     expectValid('resolveBug', schemaOf(createResolveBugTool(DEPS)), BUG_CARD_FIXED)
   })
@@ -258,31 +260,29 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
     })
   })
 
-  it('dispatchTask：dispatched / spawned / no-task 三回执分支', () => {
+  it('dispatchTask：started / running / suspended 三回执分支（3b 循环入口契约）', () => {
     const schema = schemaOf(createDispatchTaskTool(DISPATCH_DEPS))
-    expectValid('dispatchTask:dispatched', schema, {
-      kind: 'dispatched',
-      taskRef: { slug: 'md-mermaid-plugin', localId: 'fix-1' },
-      title: 'Fix',
-      type: 'coding-fix',
-      workerSessionId: 'session-w',
-      jobId: 'forge-dispatch-1',
-      pool: POOL,
-      reEntered: false,
-    })
-    expectValid('dispatchTask:spawned', schema, {
-      kind: 'spawned',
-      outcome: 'success',
-      taskRef: { slug: 'md-mermaid-plugin', localId: '1.12' },
-      title: 'gate',
-      type: 'test-run',
-      mode: 'blitz',
-      digest: 'abc123',
-      summary: 'ok',
-      commitHash: '3b0f41f9224a41c798fa977522cbc25f98519254',
-      files: ['e2e/specs/blitz/md-mermaid-plugin.spec.ts'],
+    expectValid('dispatchTask:started', schema, {
+      kind: 'started',
+      loopId: 'loop-1',
+      source: { kind: 'feature', slug: 'md-mermaid-plugin' },
       pool: POOL,
     })
-    expectValid('dispatchTask:no-task', schema, { kind: 'no-task', pool: POOL })
+    expectValid('dispatchTask:running', schema, {
+      kind: 'running',
+      source: { kind: 'feature', slug: 'md-mermaid-plugin' },
+      ownerSessionId: 'session-a',
+      taskKey: 'md-mermaid-plugin/1.12',
+      pool: POOL,
+    })
+    expectValid('dispatchTask:suspended', schema, {
+      kind: 'suspended',
+      loopId: 'loop-1',
+      source: { kind: 'feature', slug: 'md-mermaid-plugin' },
+      summary: '【任务循环挂起】',
+      resumed: true,
+      takenOver: false,
+      pool: POOL,
+    })
   })
 })

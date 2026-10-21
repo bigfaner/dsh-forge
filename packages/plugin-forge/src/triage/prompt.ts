@@ -5,13 +5,24 @@
 import type { PoolSnapshot } from '../dispatch-core/index.js'
 import type { TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
 
-/** 组装入参（四件套——driver LoopTriageInput + 宿主现读的池/记录） */
+/** fix 链深余量（改进 6④——driver 沿 sourceTask 链现算；缺席 = 链数据不可得，退化现状） */
+export interface TriageFixChain {
+  readonly depth: number
+  readonly limit: number
+  readonly remaining: number
+}
+
+/** 组装入参（四件套——driver LoopTriageInput + 宿主现读的池/记录；改进 6 增补两可选件） */
 export interface TriagePromptInput {
   readonly task: TaskSnapshot
   /** blocked 原因全文（只进本提示词与裁决问询——叙述面摘要，decisions #24） */
   readonly reason: string
   readonly pool: PoolSnapshot
   readonly records: readonly TaskRecordEntry[]
+  /** 改进 6① 重试回灌——上次处置失败的输出/错误摘要（首次处置缺席） */
+  readonly lastFailure?: string
+  /** 改进 6④ fix 链深余量（缺席 = 不可得） */
+  readonly fixChain?: TriageFixChain
 }
 
 /** 记录行投影（时间线一行一条——verb → to/reason/summary 摘要，防长摘要刷屏） */
@@ -24,7 +35,7 @@ function recordLine(entry: TaskRecordEntry): string {
 
 /** 处置代理提示词全文（worker 首条用户消息同位——一次性决策代理的唯一输入面） */
 export function composeTriagePrompt(input: TriagePromptInput): string {
-  const { task, reason, pool, records } = input
+  const { task, reason, pool, records, lastFailure, fixChain } = input
   const ac = task.acceptanceCriteria ?? []
   const lines: string[] = [
     '你是派发循环的异常处置分析员。一个任务在执行后被阻塞，且没有携带修复任务（修复路径缺位）。',
@@ -48,6 +59,30 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
     '<recent-records>',
     ...(records.length > 0 ? records.slice(-20).map(recordLine) : ['-（无记录）']),
     '</recent-records>',
+    '',
+    // 改进 6④：fix 链深/余量入参——余量不足时 add-fix 结构性被拒（宿主侧守卫同口径）
+    ...(fixChain !== undefined
+      ? [
+          '<fix-chain>',
+          `fix 链深: ${fixChain.depth}（上限 ${fixChain.limit}，剩余余量 ${fixChain.remaining}）`,
+          ...(fixChain.remaining < 1
+            ? ['余量不足——禁止选择 add-fix（修复链已到顶，创建修复任务必被拒绝）；请改选 split-remainder 或 ask-user。']
+            : []),
+          '</fix-chain>',
+          '',
+        ]
+      : []),
+    // 改进 6①：重试回灌——上次失败摘要 + 封闭枚举重申（消除无信息重试）
+    ...(lastFailure !== undefined
+      ? [
+          '<last-failure>',
+          '上一次处置分析失败，宿主拒绝原因/输出摘要如下——请针对性修正，不要重复同类错误：',
+          lastFailure,
+          '决策契约重申：只允许封闭四动作枚举 add-fix / wait-external / ask-user / split-remainder，输出唯一一行 JSON。',
+          '</last-failure>',
+          '',
+        ]
+      : []),
     '',
     '决策规则（四选一，封闭枚举，无第五种）：',
     '1. "add-fix" —— 阻塞可由一个修复任务解决（依赖安装、脚本修正、配置修补、测试修复等）。提供：',

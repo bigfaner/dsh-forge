@@ -38,10 +38,22 @@ export interface BootChain {
 export class BootChainSplitError extends Error {
   constructor(profileDir: string, specifier: string, resolvedUrl: string) {
     super(
-      `boot chain split risk: profile tree at ${profileDir} serves plugins, but ${specifier} resolved outside it (${resolvedUrl}) — boot registration copy would diverge from the plugin consumer copy (fix-20); reinstall apps/host/profile.dev`,
+      `boot chain split risk: profile tree at ${profileDir} serves plugins, but ${specifier} resolved outside it (${resolvedUrl}) — boot registration copy would diverge from the plugin consumer copy (fix-20); ${recoveryHint(profileDir)}`,
     )
     this.name = 'BootChainSplitError'
   }
+}
+
+/**
+ * 守卫报错恢复指引（两形态分流）。Root cause: 原话术只有 "reinstall
+ * apps/host/profile.dev"（dev 专属路径）——2026-10-19 D:\software\dsh-forge 部署机
+ * 事故：打包形态踩半树守卫时该指引无从下手，现场只能靠翻源码排障。
+ */
+function recoveryHint(profileDir: string): string {
+  return [
+    'recovery (dev): reinstall apps/host/profile.dev',
+    `recovery (packaged): add missing packages to ${join(profileDir, 'package.json')} and reinstall, or remove ${join(profileDir, 'node_modules')} to fall back to the bundled runtime`,
+  ].join('; ')
 }
 
 /**
@@ -74,7 +86,7 @@ export async function loadBootChain(profileDir: string): Promise<BootChain> {
   if (present.length !== TREE_CHAIN_PACKAGES.length) {
     const missing = TREE_CHAIN_PACKAGES.filter((name) => !present.includes(name))
     throw new Error(
-      `boot chain split risk: profile tree at ${profileDir} is incomplete (${missing.join(', ')} missing) — tree would serve plugins while the boot chain falls back to another copy (fix-20); reinstall apps/host/profile.dev`,
+      `boot chain split risk: profile tree at ${profileDir} is incomplete (${missing.join(', ')} missing) — tree would serve plugins while the boot chain falls back to another copy (fix-20); ${recoveryHint(profileDir)}`,
     )
   }
   // 与插件同锚点：根配置文件位置（cordis.yml = runProfile 每启重写的根配置）——

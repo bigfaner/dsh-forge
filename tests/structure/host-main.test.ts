@@ -27,22 +27,24 @@ function importSpecifiersOf(src: string): string[] {
 }
 
 describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
-  it('总行数 ≤ 130（薄宿主编排纪律上限——1.9 现状 124 行对齐：装配缝自然增长仍仅编排）', () => {
-    expect(lines.length).toBeLessThanOrEqual(130)
+  it('总行数 ≤ 160（薄宿主编排纪律上限——1.2 telemetry 装配行并入后现状 158 行对齐：装配缝自然增长仍仅编排）', () => {
+    expect(lines.length).toBeLessThanOrEqual(160)
   })
 
-  it('import 仅限：electron、node:url、四子模块 barrel（编排面无其他依赖）', () => {
+  it('import 仅限：electron、node:url、node:fs、node:path、五子模块 barrel（编排面无其他依赖——1.2 增 telemetry 诊断域装配 barrel + 便携数据目录写探测/路径解析 node 基座）', () => {
     const imports = importSpecifiersOf(source)
     for (const specifier of imports) {
       expect(
         specifier === 'electron' ||
           specifier === 'node:url' ||
-          /^\.\/(?:boot|ipc|profile|window)\/index\.js$/.test(specifier),
+          specifier === 'node:fs' ||
+          specifier === 'node:path' ||
+          /^\.\/(?:boot|ipc|profile|window|telemetry)\/index\.js$/.test(specifier),
         `main.ts 越界 import：${specifier}`,
       ).toBe(true)
     }
-    // 四子模块 barrel 全部被编排（缺一即未装配）
-    for (const barrel of ['./boot/index.js', './ipc/index.js', './profile/index.js', './window/index.js']) {
+    // 子模块 barrel 全部被编排（缺一即未装配）
+    for (const barrel of ['./boot/index.js', './ipc/index.js', './profile/index.js', './window/index.js', './telemetry/index.js']) {
       expect(imports, `main.ts 未编排 ${barrel}`).toContain(barrel)
     }
   })
@@ -50,6 +52,11 @@ describe('AC1 main 装配纪律（~100 行 + 仅编排）', () => {
   it('ESM main 禁顶层 await whenReady（S1 实测死锁坑——boot 须入 void async）', () => {
     expect(source).toMatch(/void \(async \(\) => \{/)
     expect(source).not.toMatch(/^await app\.whenReady/m)
+  })
+
+  it('bug 9b7a6216：便携数据目录劫持必须 process.platform === win32 门——mac exe 在 .app bundle 内，升级整包替换清空 bundle 内 data', () => {
+    // 劫持块（setPath('userData', portableData)）之前须有 win32 平台门（mac/linux 走缺省 userData，升级安全）
+    expect(source.slice(0, source.indexOf("app.setPath('userData', portableData)"))).toMatch(/process\.platform === 'win32'/)
   })
 
   it('四子模块源文件就位（含 preload 与 dev profile 模板）', () => {

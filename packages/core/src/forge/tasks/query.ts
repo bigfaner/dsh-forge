@@ -54,8 +54,6 @@ export interface TaskStorageRow {
   breaking: number
   coverage: number | null
   complexity: string
-  surface_key: string | null
-  surface_type: string | null
   source_kind: 'feature' | 'proposal'
   source_id: string
   mode: string | null
@@ -83,7 +81,7 @@ interface TaskRecordStorageRow {
 
 export const TASK_COLUMNS = `id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority, estimated_time,
   vars_json, source_task_id, blocked_reason, breaking, coverage, complexity,
-  surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at`
+  source_kind, source_id, mode, created_at, updated_at`
 
 /**
  * tasks 行 → TaskSnapshot（INTEGER 0/1 → boolean；*_json → 解码形；NULL → 键缺席）。
@@ -112,8 +110,6 @@ export function toTaskSnapshot(row: TaskStorageRow): TaskSnapshot {
     breaking: row.breaking === 1,
     ...(row.coverage !== null ? { coverage: row.coverage } : {}),
     complexity: row.complexity as TaskSnapshot['complexity'],
-    ...(row.surface_key !== null ? { surfaceKey: row.surface_key } : {}),
-    ...(row.surface_type !== null ? { surfaceType: row.surface_type } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -240,6 +236,7 @@ export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
     ...(recordFields?.testsFailed !== undefined ? { testsFailed: recordFields.testsFailed } : {}),
     ...(recordFields?.coverage !== undefined ? { coverage: recordFields.coverage } : {}),
     ...(recordFields?.notes !== undefined ? { notes: recordFields.notes } : {}),
+    ...(recordFields?.evidenceDebt !== undefined ? { evidenceDebt: recordFields.evidenceDebt } : {}),
     ...(row.gate_json !== null ? { gate: JSON.parse(row.gate_json) as TaskGateReport } : {}),
     ...(row.commit_hash !== null ? { commitHash: row.commit_hash } : {}),
     ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),

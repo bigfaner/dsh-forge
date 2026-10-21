@@ -4,11 +4,13 @@
 |----------|-------|
 | architecture | 6 |
 | interface | 4 |
+| error-handling | 1 |
 
 ## Recent Decisions
 
 | Date | Feature | Decision | Category |
 |------------|-----------------|----------|------------|
+| 2026-10-19 | host-boot-ipc-crash | sendToChild 恒带 send 回调（closed 通道错误进回调留痕，不加实例级 error 监听） | error-handling |
 | 2026-10-08 | dsh-forge-m3-bootstrap-presets | dispatchTask 复合派发动词（claim+spawn 合并·简报零进模型上下文·池快照·halted 机械防线） | interface |
 | 2026-10-08 | dsh-forge-m3-bootstrap-presets | tool 返回面双友好格式化文本（formatOk/formatErr·RPC typed 信封照旧） | interface |
 | 2026-10-08 | dsh-forge-m3-bootstrap-presets | tasks 源头双列 source_kind+source_id（多态·服务不变量）+ main_session 砍除 + schema v1 直改 | architecture |

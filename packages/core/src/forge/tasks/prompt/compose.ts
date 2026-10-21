@@ -1,7 +1,7 @@
 // dispatchPrompt 合成（任务 2.2 起源；S2b 收窄重定义——worker-lean-execution 提案）。
 // 分层承载（S2/S2a/S2b）：agent 级内容（人格、门禁、Coding Strategy、工作流、Record
 // Fields）全部迁 persona（本目录 persona.ts 单源，经 spawn 链 persona 通道落子会话
-// system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 + SURFACE 行 +
+// system 面）；dispatchPrompt 收窄为纯任务级——单块简报（TITLE 裸值首行 + GOAL 键 +
 // ACCEPTANCE_CRITERIA），digest 语义不变（对全文取指纹，对账锚不受迁移影响）。
 // 结算出口句删除（用户裁决 2026-10-13）：结算纪律归 worker persona（每变体工作流收尾句）与
 // submit-task 技能正本——简报零重复；TASK_ID 键行恒在场即参数本体。
@@ -112,16 +112,25 @@ export interface DispatchPromptInput {
   breaking?: boolean
   /** fix 链源（标记行 fix-of 呈现；非 fix 任务缺省） */
   sourceTask?: TaskRef
-  /** 目标 surface 键（S2b/SC3：`SURFACE: <key> (<type>)` 单行双值；缺席省行——R6 填写率缓解） */
-  surfaceKey?: string
-  /** surface 类型（web/api/cli/tui/mobile；仅 surfaceKey 在场时随行呈现） */
-  surfaceType?: string
   /**
    * 续跑指针（worker-exec-evidence-replay 1.3：`logs/<slug>/<localId>/resume.md` 相对路径，
    * 调用方领取瞬间探测证据位注入；缺席 = 首跑零段。在场即重入语境：简报注入 `<resume>`
    * 续跑规则段（路径引用变量 `{forge.project_logs_dir}`——值由任务目录锚点节承载）。
    */
   evidencePointer?: string
+  /**
+   * 证据效度态（disc 跟进——evidencePointer 在场时附带：true = 效度戳缺失/漂移，简报注入
+   * `<resume>` stale 规则段——resume.md 降级历史记录（只叙不判）强制重跑；false/缺席 = 效度
+   * 域内复用（正常续跑规则段）。实现卡（coding 族）进度复用语义零变化——漂移只降级证据
+   * 复用，不触及状态机实现态。
+   */
+  evidenceStale?: boolean
+  /**
+   * e2e 红灯基线清单（dispatch-loop-hardening 改进7：`E2E_BASELINE_RED:` 行——循环入场前
+   * 跑基线所得红灯 spec，随简报递达 worker；基线红灯 ≠ 本任务回归，机械判定比对归因、
+   * 禁止顺手修复。缺席/空数组省行——digest 与基线关闭形态同值）。
+   */
+  e2eBaselineRedCases?: readonly string[]
 }
 
 // ─────────────────────────── 续跑规则段（worker-exec-evidence-replay Solution①/③ 收敛形态） ───────────────────────────
@@ -136,11 +145,23 @@ export const RESUME_POINTER_FILE = 'resume.md'
  * plugin-forge notify/incident-log（NNN 前缀 max+1 自增，永不覆盖）。
  */
 export const RESUME_SECTION = `<resume>
-续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md。
+续跑说明：本段在场 = 本任务已有部分进度，进度文件为 {forge.task_logs_dir}/resume.md（效度域内的进度台账——其效度戳已与本轮效度域比对一致，可复用）。
 1. 首步读取该文件：内容为「已完成 / 进行中 / 待办」三项；将未完成项转入 todo_write 后继续执行，不得重做已完成部分。
 2. 同目录下按编号命名的子文件夹（如 001-login-fail/）为此前各轮产物：先核对内容，再决定沿用或重跑；未核对不得覆盖。
 3. 遇到阻塞性问题时覆盖写入该文件，仅保留最新状态。
 4. 本段缺席 = 首次执行：从零开始，并自第一轮起按上述方式维护该文件。
+</resume>`
+
+/**
+ * `<resume>` stale 规则段（disc 效度戳——效度域漂移形态：resume.md 在盘但其效度戳与当前
+ * 效度域比对不一致（或无戳不可证）——证据降级历史记录（只叙不判），强制重跑。判例 =
+ * 1.16 二次 blocked 短路：陈旧证据复用上抛，本段封死该通道）。
+ */
+export const RESUME_STALE_SECTION = `<resume>
+续跑说明：本任务存在历史进度文件 {forge.task_logs_dir}/resume.md，但其效度戳与当前效度域（HEAD commit / 基线签名）比对不一致——证据已跨效度域，不得复用。
+1. 该文件降级为历史记录（只叙不判）：可读以了解此前做过什么，但其「已完成」声明一律不可信，不得据此跳过任何步骤或虚报进度。
+2. 同目录编号子文件夹中的证据类产物（测试输出、截图、票据）一律重跑重取；代码结论须以当前树现读为准。
+3. 从零建立 todo_write 待办并全量执行；结算前覆盖写入该文件，仅保留最新状态。
 </resume>`
 
 // ─────────────────────────── 动态块渲染（键值行；键级零标签） ───────────────────────────
@@ -167,10 +188,13 @@ function renderVars(vars: Readonly<Record<string, string>> | undefined): string 
   return keys.map((k) => `${k}=${vars[k]}`).join('; ')
 }
 
-/** SURFACE 行值（SC3 单行双值）：`web (web)`；type 缺席单值 `web`；key 缺席 → 省行 */
-function renderSurface(input: DispatchPromptInput): string | undefined {
-  if (input.surfaceKey === undefined) return undefined
-  return input.surfaceType === undefined ? input.surfaceKey : `${input.surfaceKey} (${input.surfaceType})`
+/**
+ * E2E_BASELINE_RED 行值（改进7）：红灯 spec 清单 + 机械判定规则——「基线红灯 = e2e 套件
+ * 入场前既有失败，非本任务回归；比对归因，禁止顺手修复」。空清单省行。
+ */
+function renderE2eBaselineRed(red: readonly string[] | undefined): string | undefined {
+  if (red === undefined || red.length === 0) return undefined
+  return `${red.join('; ')}（基线红灯 = e2e 套件入场前既有失败，非本任务回归——比对归因，禁止顺手修复）`
 }
 
 /** AC 条目单行化（S2b：换行折叠空格——机械提取无歧义，criterion 交叉校验同源） */
@@ -179,8 +203,8 @@ function singleLine(criterion: string): string {
 }
 
 /** 简报正文（行序 = S2b 序 + 提案再收窄：TITLE 裸值首行（无键前缀）/TASK_ID/SOURCE/FILE/TYPE/CATEGORY/
- *  SURFACE/BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
- *  SURFACE = S2b 增键紧随 CATEGORY；VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
+ *  BLOCKERS/PHASE_SUMMARY/COVERAGE/PRIORITY/标记/VARS——SOURCE = M3 2.4 增键紧随 TASK_ID；
+ *  VARS = vars 注入面（SKIP_EVAL_GATE/fix 链上下文——尾行承载体）；
  *  `<resume>` = 重入命中的续跑规则段（evidencePointer 在场才注入——键值行之后）；
  *  GOAL = `<goal>` 包围的任务体段落（目标 + ACCEPTANCE_CRITERIA 同段——worker 面无
  *  queryTask 时的定义唯一到达面）。TITLE 缺席时首行为 TASK_ID；简报以 `</goal>`（在场）或
@@ -189,7 +213,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
   const coverage = resolveCoverage(input.taskType, input.coverage)
   const markers = renderMarkers(input)
   const vars = renderVars(input.vars)
-  const surface = renderSurface(input)
+  const e2eBaselineRedCases = renderE2eBaselineRed(input.e2eBaselineRedCases)
   const lines: (string | undefined)[] = [
     input.title !== undefined ? input.title : undefined,
     `TASK_ID: ${input.slug}/${input.localId}`,
@@ -197,7 +221,6 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.taskFile !== undefined ? `FILE: ${input.taskFile}` : undefined,
     `TYPE: ${input.taskType}`,
     `CATEGORY: ${TASK_CATEGORY_FOR_TYPE[input.taskType]}`,
-    surface !== undefined ? `SURFACE: ${surface}` : undefined,
     input.blockers !== undefined && input.blockers.length > 0
       ? `BLOCKERS: ${renderBlockers(input.blockers)}`
       : undefined,
@@ -208,9 +231,12 @@ export function renderTaskContext(input: DispatchPromptInput): string {
     input.priority !== undefined ? `PRIORITY: ${input.priority}` : undefined,
     markers !== undefined ? `MARKERS: ${markers}` : undefined,
     vars !== undefined ? `VARS: ${vars}` : undefined,
+    e2eBaselineRedCases !== undefined ? `E2E_BASELINE_RED: ${e2eBaselineRedCases}` : undefined,
   ]
   let context = lines.filter((line): line is string => line !== undefined).join('\n')
-  if (input.evidencePointer !== undefined) context += `\n${RESUME_SECTION}`
+  if (input.evidencePointer !== undefined) {
+    context += `\n${input.evidenceStale === true ? RESUME_STALE_SECTION : RESUME_SECTION}`
+  }
   if (input.goal !== undefined || (input.acceptanceCriteria !== undefined && input.acceptanceCriteria.length > 0)) {
     context += '\n<goal>'
     if (input.goal !== undefined) context += `\n${input.goal}`
@@ -226,7 +252,7 @@ export function renderTaskContext(input: DispatchPromptInput): string {
 
 /**
  * dispatchPrompt 合成（纯函数零 IO；S2b 收窄形 + 无包裹再收窄）：任务级简报正文直出——
- * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + SURFACE 行 + `<goal>` 包围目标 +
+ * 无 `<task-context>` 外包裹（TITLE 裸值首行 + GOAL 键 + `<goal>` 包围目标 +
  * ACCEPTANCE_CRITERIA）。无人格段/约束块/类型策略工作流段/结算出口句（agent 级内容
  * 由 persona 承载——prompt/persona.ts 单源，经 spawn 链 persona 通道落子会话 system 面；
  * 结算路径由 persona 工作流收尾句 + submit-task 技能正本承载）。

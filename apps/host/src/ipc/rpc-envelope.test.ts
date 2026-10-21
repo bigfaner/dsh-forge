@@ -2,9 +2,11 @@
 // core 错误类结构同型复刻（code/data 成员 + Error 基类；真类的端到端保真见 projects-rpc.test.ts 实层）。
 // fix-28 增 child 形态桥衔接面：rebuildBridgeError 重建的 Error 经本判型入带内 RpcErr 信封
 // （桥面双形态解码锚见 boot/bridge.test.ts）。
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, afterEach } from 'vitest'
 import { rebuildBridgeError } from '../boot/bridge.js'
-import { rpcEnvelope, serializeRpcError } from './rpc-envelope.js'
+import { createDiagContextStore, runWithDiagContext } from '../telemetry/diag-context.js'
+import type { DiagEventPayload } from '../telemetry/diag-events.js'
+import { configureRpcEnvelopeDiag, rpcEnvelope, serializeRpcError } from './rpc-envelope.js'
 
 /** typed error 结构替身（core WorkspaceCreateError 同型：readonly code + data + Error） */
 class WorkspaceCreateLikeError extends Error {
@@ -94,6 +96,123 @@ describe('rpcEnvelope（IPC handler 包装）', () => {
       throw boom
     })
     await expect(handler(undefined, {})).rejects.toBe(boom)
+  })
+})
+
+describe('rpcEnvelope 诊断埋点（app-observability 1.2 单点 emit）', () => {
+  afterEach(() => configureRpcEnvelopeDiag(undefined))
+
+  it('typed error → 诊断事件落 ipc-handler 行（含栈）+ 回包正常', async () => {
+    const events: DiagEventPayload[] = []
+    configureRpcEnvelopeDiag({ sink: (p) => events.push(p) })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    await expect(handler(undefined, {})).resolves.toEqual({ ok: false, error: expect.anything() })
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ level: 'error', process: 'main', event: 'ipc-handler', message: expect.stringContaining('工作区创建失败') })
+    expect(events[0].stack).toContain('WorkspaceCreateError')
+  })
+
+  it('非 typed rethrow 前也落诊断事件（Note-1 同文件闭合）', async () => {
+    const events: DiagEventPayload[] = []
+    configureRpcEnvelopeDiag({ sink: (p) => events.push(p) })
+    const handler = rpcEnvelope((): never => {
+      throw new Error('programmer error')
+    })
+    await expect(handler(undefined, {})).rejects.toThrow('programmer error')
+    expect(events).toHaveLength(1)
+    expect(events[0].message).toBe('programmer error')
+    expect(events[0].stack).toBeDefined()
+  })
+
+  it('成功路径零埋点', async () => {
+    const events: DiagEventPayload[] = []
+    configureRpcEnvelopeDiag({ sink: (p) => events.push(p) })
+    const handler = rpcEnvelope(async () => 'ok')
+    await expect(handler(undefined, {})).resolves.toEqual({ ok: true, data: 'ok' })
+    expect(events).toHaveLength(0)
+  })
+
+  it('埋点自身异常不破信封（红线①）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => { throw new Error('sink boom') } })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    await expect(handler(undefined, {})).resolves.toEqual({ ok: false, error: expect.anything() })
+  })
+
+  it('trace_id（preload 第三参）读入 ALS——handler 内可见，信封外清空（链 A）', async () => {
+    const als = createDiagContextStore()
+    let seen: string | undefined
+    configureRpcEnvelopeDiag({ als, sink: () => {} })
+    const handler = rpcEnvelope(async () => {
+      seen = als.getStore()?.traceId
+      return 'ok'
+    })
+    await expect(handler(undefined, { q: 1 }, 'tr-abc')).resolves.toEqual({ ok: true, data: 'ok' })
+    expect(seen).toBe('tr-abc')
+    expect(als.getStore()?.traceId).toBeUndefined()
+  })
+
+  it('无 traceId 第三参 → ALS 不包裹（原样零差异）', async () => {
+    const als = createDiagContextStore()
+    configureRpcEnvelopeDiag({ als, sink: () => {} })
+    const handler = rpcEnvelope(async () => als.getStore()?.traceId ?? '(none)')
+    await expect(handler(undefined, {})).resolves.toEqual({ ok: true, data: '(none)' })
+  })
+
+  it('ALS 上下文内 emit 的诊断行经 appender 携带同 trace_id（链 A 端到端单测）', async () => {
+    const events: DiagEventPayload[] = []
+    const als = createDiagContextStore()
+    configureRpcEnvelopeDiag({ als, sink: (p) => events.push(p) })
+    const handler = rpcEnvelope((): never => {
+      throw new Error('with trace')
+    })
+    await expect(handler(undefined, {}, 'tr-full')).rejects.toThrow()
+    expect(events[0].traceId).toBeUndefined() // payload 不带——trace 经 ALS 由订阅侧 appender 补
+    const line = { timestamp: 't', level: 'error' as const, trace_id: '-', process: 'main' as const, message: '', event: '' }
+    expect(line).toBeDefined()
+    expect(runWithDiagContext(als, { traceId: 'tr-full' }, () => 'x')).toBe('x')
+  })
+})
+
+describe('rpcEnvelope causeStack 生境注入（app-observability fix-1 方案 6）', () => {
+  afterEach(() => configureRpcEnvelopeDiag(undefined))
+
+  it('dev 生境（causeStack: true）→ typed 错误回包附原始栈（栈帧可判型）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {}, causeStack: true })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect(result.error.causeStack).toEqual(expect.stringContaining('WorkspaceCreateError'))
+  })
+
+  it('生产生境（缺省 false）→ 回包无 causeStack（零税）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {} })
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect('causeStack' in result.error).toBe(false)
+    expect(JSON.parse(JSON.stringify(result.error)).causeStack).toBeUndefined()
+  })
+
+  it('configure(undefined) 重置 → 生境门随之关闭（零税复位）', async () => {
+    configureRpcEnvelopeDiag({ sink: () => {}, causeStack: true })
+    configureRpcEnvelopeDiag(undefined)
+    const handler = rpcEnvelope((): never => {
+      throw new WorkspaceCreateLikeError('C:\\ws\\x')
+    })
+    const result = await handler(undefined, {})
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('unreachable')
+    expect('causeStack' in result.error).toBe(false)
   })
 })
 

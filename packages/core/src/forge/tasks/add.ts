@@ -48,10 +48,17 @@ export interface TasksVerbDeps {
   /** 写后事件发射器（事务提交后 emitTasksChanged） */
   readonly events: ForgeTaskEvents
   /**
-   * 续跑指针探测（worker-exec-evidence-replay 1.3——claim 领取瞬间取数触发简报 `<resume>`
-   * 段；核心零 IO 纪律下由装配方注入 FS 读侧，缺席/undefined = 首跑零段，形态兼容）。
+   * 续跑指针探测 + 效度比对（worker-exec-evidence-replay 1.3 + disc 效度戳——claim 领取
+   * 瞬间取数触发简报 `<resume>` 段；核心零 IO 纪律下由装配方注入 FS 读侧。返回带 stale 态：
+   * true = 效度戳缺失/漂移——简报注入 stale 规则段强制重跑；缺席/undefined = 首跑零段，
+   * 形态兼容）。checkoutRoot = 效度比对检出根（缺席 = 机制惰性不判）。
    */
-  readonly resolveEvidencePointer?: (projectId: string, slug: string, localId: string) => string | undefined
+  readonly resolveEvidencePointer?: (
+    projectId: string,
+    slug: string,
+    localId: string,
+    checkoutRoot?: string,
+  ) => { pointer: string; stale: boolean } | undefined
   /**
    * worker 任务目录锚点节（worker-lean-execution 追加轮——WORKSPACE/容器目录树/logs 锚点，
    * claim 领取瞬间渲染追加 persona 尾部；缺席/空串 = 零追加，形态兼容）。
@@ -401,8 +408,8 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       db.prepare(
         `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
            estimated_time, vars_json, source_task_id, blocked_reason, breaking,
-           coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           coverage, complexity, source_kind, source_id, mode, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         taskId,
         container.slug,
@@ -418,8 +425,6 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         input.breaking === true ? 1 : 0,
         input.coverage ?? null,
         input.complexity ?? 'medium',
-        input.surfaceKey ?? null,
-        input.surfaceType ?? null,
         container.kind,
         container.sourceId,
         container.mode, // 创建时容器 mode 快照（feature 容器恒 'expedition'——裁决⑥；人工变更不回溯·律三）

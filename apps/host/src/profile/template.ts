@@ -45,6 +45,15 @@ export const PROFILE_TEMPLATE_FILES: Readonly<Record<string, string>> = {
       description:
         'dsh-forge product profile (official web bundles + product plugin rows; materialized by host first launch).',
       dependencies: {
+        // Root cause: fix-20 统一 boot 链实例时只给 profile.dev 补了 @deepseek-ai/dsh，
+        // 本模板漏同步——打包形态 profile 树一旦物化（用户装第三方插件触发 pnpm
+        // install），dsh 缺席 = 半树 → boot-chain fix-20 守卫 fail-closed 拒启
+        //（2026-10-19 D:\software\dsh-forge 部署机事故）。
+        '@deepseek-ai/dsh': DSH_STACK_VERSION,
+        // dsh-app-boot 六 peer 中唯一不被任何正常依赖携带者（autoInstallPeers: false
+        // 下其余五件经 dsh-base 闭包 hoist 进树，唯它缺席）——齐树后树内 import 必崩；
+        // 版本范围对齐 dsh-app-boot@DSH_STACK_VERSION 的 peerDependencies 声明（~1.0.4）。
+        '@deepseek-ai/cordis-plugin-group': '~1.0.4',
         '@deepseek-ai/dsh-base': DSH_STACK_VERSION,
         '@deepseek-ai/dsh-web-app': DSH_STACK_VERSION,
       },

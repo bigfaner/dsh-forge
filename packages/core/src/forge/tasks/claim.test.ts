@@ -177,11 +177,6 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
     expect(dispatchPrompt).toContain(
       '<goal>\n达成：工作区根 notes.md 在场，内容恰好一行：ok\nACCEPTANCE_CRITERIA:\n- notes.md 在场且内容逐字\n- 四门全绿\n</goal>',
     )
-    // S2b/SC3：SURFACE 单行双值（行值取任务行 surface_key/surface_type；缺席省行）
-    h!.db.prepare(`UPDATE tasks SET surface_key = 'web', surface_type = 'web' WHERE id = 't-f-4.1'`).run()
-    const withSurface = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '4.1' }, sessionId: 's' })
-    expect(withSurface.dispatchPrompt).toContain('SURFACE: web (web)')
-    expect(withSurface.dispatchPrompt.indexOf('SURFACE:')).toBeGreaterThan(withSurface.dispatchPrompt.indexOf('CATEGORY:'))
     // 任务体在键值行之后——<goal> 段落于 VARS/键值区之后
     expect(dispatchPrompt.indexOf('<goal>')).toBeGreaterThan(dispatchPrompt.indexOf('TASK_ID:'))
     // 无 desc/AC 任务 → 段落省略（M2 形态兼容）
@@ -237,6 +232,65 @@ describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 
     ).run()
     expect((await claim({ projectId: P(), sessionId: 's' })).task?.localId).toBe('b') // P0
     expect((await claim({ projectId: P(), sessionId: 's2' })).task?.localId).toBe('a') // P2（P0 已领走）
+  })
+
+  it('fix 优先键（block_source 挂接）：fix 与普通任务同轮就绪 → fix 先领（压过 P0 普通）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fxo', status: 'tasks' })
+    seedTask(h!.db, 'fxo', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fxo', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-fxo-1.1' })
+    seedEdge(h!.db, 't-fxo-fix-1', 't-fxo-1.1', 'fix-chain')
+    seedTask(h!.db, 'fxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    h!.db.prepare(`UPDATE tasks SET priority = 'P0' WHERE local_id = '1.2' AND slug = 'fxo'`).run()
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: 'fix-1', taskStatus: 'in_progress' })
+  })
+
+  it('不跨轮饿死：fix 被领走（in_progress）后下一轮普通任务照常领出', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'fxo', status: 'tasks' })
+    seedTask(h!.db, 'fxo', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fxo', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-fxo-1.1' })
+    seedEdge(h!.db, 't-fxo-fix-1', 't-fxo-1.1', 'fix-chain')
+    seedTask(h!.db, 'fxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    expect((await claim({ projectId: P(), sessionId: 's' })).task?.localId).toBe('fix-1')
+    // 同会话重入回领 fix-1（C1）→ 换会话盲选：fix 已不在 pending 就绪集 → 1.2
+    expect((await claim({ projectId: P(), sessionId: 's2' })).task?.localId).toBe('1.2')
+  })
+
+  it('disc-N 非 fix：不享受 fix 优先键（与普通任务同 priority → 创建序）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'dxo', status: 'tasks' })
+    seedTask(h!.db, 'dxo', '1.1', { createdAt: '2026-01-01T00:00:02.000Z' })
+    seedTask(h!.db, 'dxo', 'disc-1', { type: 'doc', sourceTaskId: 't-dxo-1.1', createdAt: '2026-01-01T00:00:03.000Z' })
+    seedTask(h!.db, 'dxo', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' })
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('1.2')
+  })
+
+  it('分支延续优先于 fix 优先键：延续后继（普通）胜过全局池 fix（§6-35⑧ 序：延续 → fix → priority → 创建序）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'mix', status: 'tasks' })
+    seedTask(h!.db, 'mix', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:05.000Z' })
+    seedTask(h!.db, 'mix', '1.2', { createdAt: '2026-01-01T00:00:02.000Z' }) // 延续候选：普通
+    seedEdge(h!.db, 't-mix-1.2', 't-mix-1.1')
+    seedTask(h!.db, 'mix', '2.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'mix', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-mix-2.1', createdAt: '2026-01-01T00:00:01.000Z' })
+    seedEdge(h!.db, 't-mix-fix-1', 't-mix-2.1', 'fix-chain')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('1.2')
+  })
+
+  it('延续后继集内 fix 先选：锚点多就绪后继时 fix 后继胜出（创建序兜底时普通创建早仍被 fix 压过）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'anc', status: 'tasks' })
+    seedTask(h!.db, 'anc', '1.1', { status: 'completed', createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'anc', '1.2', { createdAt: '2026-01-01T00:00:01.000Z' }) // 普通后继（创建早）
+    seedEdge(h!.db, 't-anc-1.2', 't-anc-1.1')
+    seedTask(h!.db, 'anc', 'fix-1', { type: 'coding-fix', sourceTaskId: 't-anc-1.1', createdAt: '2026-01-01T00:00:02.000Z' })
+    seedEdge(h!.db, 't-anc-fix-1', 't-anc-1.1', 'fix-chain')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task?.localId).toBe('fix-1')
   })
 
   it('创建序 tie-break：同 priority 取 created_at 最早', async () => {
@@ -720,18 +774,21 @@ describe('S1c claimTask 循环独占守卫（exclusivityGuard——目标解析�
 // ─────────────────── worker-exec-evidence-replay 1.3：重入证据指针透传（Solution③/SC3） ───────────────────
 
 describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 → 简报注入 <resume> 段', () => {
-  /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制） */
-  function svcWithPointer(pointer: string | undefined, seen: { slug: string; localId: string }[]) {
+  /** 带 resolveEvidencePointer 注入的 claim（探测结果由夹具控制——pointer+stale 效度态） */
+  function svcWithPointer(
+    state: { pointer: string; stale: boolean } | undefined,
+    seen: { slug: string; localId: string; checkoutRoot?: string }[],
+  ) {
     h ??= createTasksHarness()
     return (input: Parameters<typeof claimTask>[1]) =>
       claimTask(
         {
           store: h!.store,
           events: h!.events,
-          resolveEvidencePointer: (projectId, slug, localId) => {
+          resolveEvidencePointer: (projectId, slug, localId, checkoutRoot) => {
             expect(projectId).toBe(h!.projectId)
-            seen.push({ slug, localId })
-            return pointer
+            seen.push({ slug, localId, checkoutRoot })
+            return state
           },
         },
         input,
@@ -739,8 +796,8 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
   }
 
   it('重入派发（幂等重入）：证据位指针在盘 → 简报注入 <resume> 段（变量指称 + 四条规则——中断重入续跑）', async () => {
-    const seen: { slug: string; localId: string }[] = []
-    const claim = svcWithPointer('logs/f/1.1/resume.md', seen)
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/1.1/resume.md', stale: false }, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1', { status: 'in_progress' }) // 中断残留——重入径
     const r = await claim({ projectId: P(), sessionId: 's-new', adopt: { slug: 'f', localId: '1.1' } })
@@ -748,11 +805,24 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
     expect(r.dispatchPrompt).toContain('<resume>')
     expect(r.dispatchPrompt).toContain('{forge.task_logs_dir}/resume.md')
     expect(r.dispatchPrompt).toContain('不得重做已完成部分')
-    expect(seen).toEqual([{ slug: 'f', localId: '1.1' }]) // 领取瞬间取数——探测按目标行进行
+    expect(seen).toEqual([{ slug: 'f', localId: '1.1', checkoutRoot: undefined }]) // 领取瞬间取数——探测按目标行进行
+  })
+
+  it('disc 效度戳：checkoutRoot 随 claim 透传探测（效度比对检出根）；stale = true → 简报注入 stale 规则段（只叙不判强制重跑）', async () => {
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/3.1/resume.md', stale: true }, seen)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '3.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '3.1' }, sessionId: 's', checkoutRoot: 'Z:\\wt\\f' })
+    expect(seen).toEqual([{ slug: 'f', localId: '3.1', checkoutRoot: 'Z:\\wt\\f' }])
+    expect(r.dispatchPrompt).toContain('<resume>')
+    expect(r.dispatchPrompt).toContain('不得复用')
+    expect(r.dispatchPrompt).toContain('只叙不判')
+    expect(r.dispatchPrompt).not.toContain('不得重做已完成部分') // fresh 规则段不注入
   })
 
   it('证据位无指针（undefined）→ 简报零 <resume> 段（首跑形态）；注入面缺席（dep 缺省）同样零段', async () => {
-    const seen: { slug: string; localId: string }[] = []
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
     const claim = svcWithPointer(undefined, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '1.1')
@@ -766,8 +836,8 @@ describe('1.3 重入续跑规则段透传：claim 领取瞬间探测证据位 �
   })
 
   it('指针注入 → claim 记录 digest 覆盖 <resume> 段（同任务有无指针 = 不同简报指纹）', async () => {
-    const seen: { slug: string; localId: string }[] = []
-    const claim = svcWithPointer('logs/f/2.1/resume.md', seen)
+    const seen: { slug: string; localId: string; checkoutRoot?: string }[] = []
+    const claim = svcWithPointer({ pointer: 'logs/f/2.1/resume.md', stale: false }, seen)
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })
     seedTask(h!.db, 'f', '2.1')
     const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' })

@@ -16,6 +16,8 @@ export interface ProductClientEntry {
   readonly url: string
   /** 内容修订（缓存戳/HMR 锚） */
   readonly rev: string
+  /** 装配期注入边（官方 dsh.client.inject 同义——Loader 装载序，插件运行期服务可达性） */
+  readonly inject?: readonly string[]
 }
 
 /** __DSH_BOOT__ 组合图的窄类型（宿主 global 行写入；壳只追加不重排——行序 = 模块图序） */
@@ -78,23 +80,50 @@ export function steerBootGraph(wire: unknown, product: ProductClientEntry): Boot
   if (graph.entries.some((row) => row.id === product.id) || graph.batches.some((b) => b.url === product.url)) {
     throw new Error(`dsh-forge web: 产品 client 插件行已入图（重复掌舵）：${product.id}`)
   }
-  graph.entries.push({ id: product.id, url: product.url, rev: product.rev, inject: [], immediately: true })
+  graph.entries.push({
+    id: product.id,
+    url: product.url,
+    rev: product.rev,
+    inject: [...(product.inject ?? [])],
+    immediately: true,
+  })
   graph.batches.push({ phase: 'application', url: product.url, rev: product.rev, entries: [product.id] })
   return graph
 }
 
 /**
  * 壳 boot 消费主流程（main 入口调用；与 AppWebEntry.run 并行——run 在就绪门上等待）。
+ * 产品 client 插件行逐条掌舵入图（缺省装本体 forge-client + 独立插件包 bundle，
+ * 如 @dsh-forge/input-history——对齐现状默认态，无开关门控）。
  * 任一步失败即 reject 就绪门：AppWebEntry.run 的门 await 抛出 → 壳内核 boot 页渲染失败因。
+ * 幂等缝：产品行已在图中（如用户此前经官方 plugin-manager UI 装过同 id 插件——官方
+ * dsh.client 花名册先写 __DSH_BOOT__）则跳过本壳掌舵行（console.warn 记因）——官方行
+ * 已承担装载，重复追加 = 重复掌舵守卫即崩；旧版升级用户（UI 装过 → 壳缺省装载落地）
+ * 由此免启动崩，语义 = 同 id 单装载（官方行优先，壳让位）。
  */
-export async function bootShell(product: ProductClientEntry): Promise<void> {
+export async function bootShell(products: readonly ProductClientEntry[]): Promise<void> {
   const gate = bootReadinessGate()
   try {
     const manifest = assertBootManifestShape(await preloadBridge().getBootManifest())
+    // bug 2ffb0a82：宿主插件装载位发布（页内缝——与 __DSH_FORGE_VIEWS__ 同族装配↔插件
+    // 两单元缝；先于就绪门放行 = client 插件 apply 期同步可读；缺席/false = 知识面隐藏）
+    ;(globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__ = {
+      knowledge: manifest.knowledgePlugin === true,
+    }
     installTransportCarrier(transportCarrierFor(manifest.url))
     // 注入行形状归 dsh（IndexInjection）；host 只运输，壳按表执行（applyIndexInjections 校验行 kind）
     await applyIndexInjections(manifest.injections as Parameters<typeof applyIndexInjections>[0], loadScriptElement)
-    steerBootGraph((globalThis as BootGlobals).__DSH_BOOT__, product)
+    const wire = (globalThis as BootGlobals).__DSH_BOOT__
+    for (const product of products) {
+      const steered = typeof wire === 'object' && wire !== null
+        && Array.isArray((wire as BootGraphWire).entries)
+        && (wire as BootGraphWire).entries.some((row) => row.id === product.id)
+      if (steered) {
+        console.warn(`[dsh-forge web] 产品 client 插件行已在图中（官方装载在场，壳掌舵让位）：${product.id}`)
+        continue
+      }
+      steerBootGraph(wire, product)
+    }
     gate.resolve()
   } catch (error) {
     gate.reject(error)

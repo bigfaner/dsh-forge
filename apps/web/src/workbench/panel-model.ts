@@ -6,6 +6,7 @@
 //   - 产品页签（轨迹/知识召回）= 官方 conversation.view roster（ui-trajectory 同型先例）；
 //   - UF-2 hero（零项目首用引导）= 产品全局 main 面板（boot 期零项目时由 ShellHost 驱动选中）。
 // 本模块 = 上述装配的纯推导面（相位/项目锚/右栏联动计划/面板→视图镜像——单测直测）。
+import { normalizeFsPath } from '@dsh-forge/path-key'
 
 /** 产品知识面板的官方 main 面板 key（= sidebar.panellist 行 id；plugin.ts 字面量同源 pin） */
 export const KNOWLEDGE_PANEL_KEY = 'dswf-knowledge'
@@ -61,8 +62,14 @@ export function nextLastReadyCount(prev: number | null, projects: {
  */
 export function projectAnchorOf(input: {
   readonly sessionId: string | null
-  readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
+  readonly workspaces: {
+    readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[]; readonly path?: string }[]
+  } | null
   readonly projects: readonly { readonly id: string; readonly workspaceId: string; readonly archived?: boolean }[]
+  /** 工作区路径（归一键）→ 归属项目 id——host 身份裁决映射（forge:worktree/resolve 批量
+   *  通道产物，bug 52fc94db：worktree 工作区会话概览锚定接 host 裁决——e9330692 同族，
+   *  概览锚定径补同款两段键）。缺席 = 既有行为零变化。 */
+  readonly workspaceProject?: ReadonlyMap<string, string>
 }): string | null {
   const active = input.projects.filter((p) => p.archived !== true)
   if (input.sessionId !== null && input.workspaces !== null) {
@@ -70,6 +77,15 @@ export function projectAnchorOf(input: {
     if (home !== undefined) {
       const byWorkspace = active.find((p) => p.workspaceId === home.workspaceId)
       if (byWorkspace !== undefined) return byWorkspace.id
+      // miss 段（orchestrateRootOf 同形制——e9330692 修订）：worktree 工作区不在注册表，
+      // 经 host 身份裁决映射归并回属主项目；裁决行须核销活跃（归档/未解析 → 落兜底，不锚定）。
+      if (home.path !== undefined && input.workspaceProject !== undefined) {
+        const resolvedId = input.workspaceProject.get(normalizeFsPath(home.path))
+        if (resolvedId !== undefined) {
+          const resolvedRow = active.find((p) => p.id === resolvedId)
+          if (resolvedRow !== undefined) return resolvedRow.id
+        }
+      }
     }
   }
   if (active.length === 1) return active[0]!.id
@@ -84,10 +100,19 @@ export function projectAnchorOf(input: {
  */
 export function anchoredOverviewContext(input: {
   readonly mainSessionId: string | null
-  readonly workspaces: { readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[] }[] } | null
+  readonly workspaces: {
+    readonly items: readonly { readonly workspaceId: string; readonly sessionIds: readonly string[]; readonly path?: string }[]
+  } | null
   readonly projects: readonly { readonly id: string; readonly workspaceId: string; readonly archived?: boolean }[]
+  /** host 身份裁决映射（forge:worktree/resolve 产物——bug 52fc94db，projectAnchorOf 同参透传） */
+  readonly workspaceProject?: ReadonlyMap<string, string>
 }): { readonly projectId: string | null; readonly workspaceId: string | null; readonly sessionCount?: number } {
-  const projectId = projectAnchorOf({ sessionId: input.mainSessionId, workspaces: input.workspaces, projects: input.projects })
+  const projectId = projectAnchorOf({
+    sessionId: input.mainSessionId,
+    workspaces: input.workspaces,
+    projects: input.projects,
+    workspaceProject: input.workspaceProject,
+  })
   if (projectId === null) return { projectId: null, workspaceId: null }
   const project = input.projects.find((row) => row.id === projectId)
   if (project === undefined || input.workspaces === null) return { projectId, workspaceId: project?.workspaceId ?? null }

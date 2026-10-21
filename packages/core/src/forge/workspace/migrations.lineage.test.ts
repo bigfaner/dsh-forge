@@ -60,8 +60,8 @@ function buildLineageFixture(file: string, statements: readonly string[]): void 
       .run(NOW, NOW)
     raw
       .prepare(
-        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, source_kind, source_id, mode, created_at, updated_at)
-         VALUES ('t1', 'demo', '1.1', '任务一', 'coding-feature', 'in_progress', 'proposal', 'p1', 'blitz', ?, ?)`,
+        `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
+         VALUES ('t1', 'demo', '1.1', '任务一', 'coding-feature', 'in_progress', 'web', 'web', 'proposal', 'p1', 'blitz', ?, ?)`,
       )
       .run(NOW, NOW)
     raw
@@ -102,15 +102,27 @@ function assertConverged(
     )
     .all()
     .map((r) => r.name)
-  expect(tables).toHaveLength(12)
+  expect(tables).toHaveLength(13)
   expect(tables).toContain('bugs')
   expect(tables).toContain('migration_digests')
+  expect(tables).toContain('tasks_surface_archive')
   const bugCols = (db.pragma(`table_info('bugs')`) as Array<{ name: string }>).map((c) => c.name)
   expect(bugCols).toHaveLength(22)
   expect(bugCols[bugCols.length - 2]).toBe('fix_approach')
   expect(bugCols[bugCols.length - 1]).toBe('recurrence_of')
-  // 业务行全保留（全新库无既有业务行——行数断言按谱系预期）
+  // v4（surface 退役）：tasks 两列已摘除；存量值无损归档（businessRow 谱系 t1 携带 web/web）
+  const taskCols = (db.pragma(`table_info('tasks')`) as Array<{ name: string }>).map((c) => c.name)
+  expect(taskCols).not.toContain('surface_key')
+  expect(taskCols).not.toContain('surface_type')
   const biz = opts.businessRows === false ? 0 : 1
+  expect(
+    db
+      .prepare<unknown[], { task_id: string; surface_key: string | null; surface_type: string | null }>(
+        `SELECT task_id, surface_key, surface_type FROM tasks_surface_archive`,
+      )
+      .all(),
+  ).toEqual(biz === 1 ? [{ task_id: 't1', surface_key: 'web', surface_type: 'web' }] : [])
+  // 业务行全保留（全新库无既有业务行——行数断言按谱系预期）
   expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM features`).get()?.n).toBe(biz)
   expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM proposals`).get()?.n).toBe(biz)
   expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks`).get()?.n).toBe(biz)

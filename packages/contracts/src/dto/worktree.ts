@@ -17,7 +17,7 @@ export interface WorktreeEntryDto {
   readonly worktreeName: string
   /** 主 worktree 行（只展示、无删除入口） */
   readonly isMain: boolean
-  /** 盘上在场性（git worktree list 派生——恒 true；保留字段对齐 UI 行模型） */
+  /** 盘上在场性（existsSync 实存判定——git 清单 prune 前保留已删树陈旧行，不可作判据） */
   readonly present: boolean
   readonly detached: boolean
   readonly bare: boolean
@@ -100,6 +100,11 @@ export interface WorktreeChecksResult {
 export interface WorktreeSessionCreateRequest {
   /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */
   readonly worktreePath: string
+  /**
+   * 预铸头 agentPreset 显式档（bug 82cab5fe 重路由模式随档——源会话 preset 折叠值优先于
+   * registry 默认；缺席 = resolveDefaultPreset registry 单源，bug eae18b5c 同径）。
+   */
+  readonly agentPreset?: string
 }
 export interface WorktreeSessionCreateResult {
   readonly sessionId: string
@@ -135,6 +140,19 @@ export interface WorktreeSelectRequest {
 }
 export interface WorktreeSelectResult {
   readonly ok: true
+}
+
+/**
+ * forge:worktree/selected（host 唯一事实源读面——bug 9eb9d6cb 后续收敛）：读该项目
+ * host 侧选中记忆（select 推送的读镜像）。hero chip 回填唯一事实源——web sessionStorage
+ * 记忆已退役（漂移源拆除）；host 重启后记忆为空 = 无记忆（web 走锚定链回填）。
+ */
+export interface WorktreeSelectedRequest {
+  readonly projectRoot: string
+}
+export interface WorktreeSelectedResult {
+  /** 选中树路径；undefined = 无记忆（重启后/未点选过） */
+  readonly path?: string
 }
 
 /**

@@ -18,6 +18,7 @@
 // 交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
+import { join } from 'node:path'
 import type { ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
@@ -29,13 +30,16 @@ import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
-import { createLoopDriver, createUserQuestionsEscalation } from './loop/index.js'
+import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import type { EscalationAskFace } from './loop/index.js'
+import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
+import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
+import { defaultWorkerTreeGuard } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
@@ -49,6 +53,13 @@ export interface ForgePluginConfig {
   bindingsFile?: string
   /** 管线模式（preset yml plugin-forge 行 config 的 mode 键——expedition/blitz，缺省回退远征） */
   mode?: string
+  /**
+   * e2e 红灯基线门开关（用户裁决 2026-10-18 缺省 **false 禁用**——全量套件 >10min 超预算，
+   * 每次循环启动白烧超时窗）。true = 循环启动时后台跑全量 e2e 套件建基线（红灯清单随
+   * 简报递达 worker + 逐用例归因卡 + HEAD 键控持久缓存）。重启用前置 = 基线口径收敛到
+   * 可承受时长（分片/受影响 spec/增量基线）。
+   */
+  e2eBaselineGate?: boolean
 }
 
 /** 启动对账降级告警（fail-soft 单行——console.warn；降级 = 遗留 in_progress 原样，下次重启重试） */
@@ -191,6 +202,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     // worker 同产品写路径——SC7 会话链断言结构保留）， fabricated 会话上下文：
     // sessionId = 回放 worker 裸 uuid、cwd = 计划工作区根（绑定表路由 projectId）。
     let forgeToolsRef: ReturnType<typeof createForgeTools> | undefined
+    // 进程树守卫真装配（dispatch-loop-hardening 改进 4）：worker 任意终态 Job Object
+    // 整树回收——真机绑定 defaultWorkerTreeGuard（fail-soft：非 win32/装配失败 = no-op）
+    const treeGuard = (): ReturnType<typeof defaultWorkerTreeGuard> => defaultWorkerTreeGuard()
     const replayPlan = loadReplayPlanFromEnv()
     const planSpawn: SpawnWorker | undefined =
       replayPlan !== undefined
@@ -204,9 +218,9 @@ const forgePlugin: ForgePlugin = Object.assign(
             return def.execute(args, {
               agent: { session: { id: sessionId, header: { cwd: replayPlan.workspaceDir } } },
             })
-          })
+          }, { treeGuard })
         : undefined
-    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn() // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn({ treeGuard }) // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
     // 容器目录解析缝（projectId→workspaceDir 反向解析——incident-log 落盘面，1.11 收口）：
     // 装配期逐绑定项目预热 + 未命中懒解析记忆化（faces.createProjectContainerDirs——解析链
     // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
@@ -224,7 +238,51 @@ const forgePlugin: ForgePlugin = Object.assign(
     // ——启动包装在循环启动时点以 projectId 反解容器库目录直记 sink，logs/<slug>.jsonl
     // 里程碑（task-claimed/tool-error 族）不再整流丢弃。解析未命中 = 不记忆（sink fail-soft
     // 丢行原语义不变）。stop/activeOf 直通原驱动器——落位记忆只属启动径。
+    // 改进 6⑤ 已知容器集读面（wait-external.externalSlug 存在性校验数据源）：feature +
+    // proposal 双轨 slug 并集，逐调用现读（fail-soft：任一读面故障 = 空并集——校验按缺席
+    // 处理见 driver）；forgeFeatures 服务经 reflect 防御读取（同 forgeSettings 配方——
+    // core 装配同块恒提供，缺席形态仅剩降级容错）
+    let knownContainers: ((projectId: string) => Promise<readonly string[]>) | undefined
+    try {
+      const features = ctx.reflect?.get('forgeFeatures') as
+        | { listFeatures?(q: { projectId: string }): Promise<readonly { slug: string }[]> }
+        | undefined
+      if (typeof features?.listFeatures === 'function') {
+        knownContainers = async (projectId) => {
+          const [featureRows, proposalRows] = await Promise.all([
+            features.listFeatures!({ projectId }).catch(() => []),
+            ctx.forgeProposals.listProposals({ projectId }).catch(() => []),
+          ])
+          return [...featureRows.map((r) => r.slug), ...proposalRows.map((r) => r.slug)]
+        }
+      }
+    } catch {
+      knownContainers = undefined
+    }
+    // 3b 注入面 registry 单例（装配方持有——驱动器 deps 注入共享同一登记表；section 回调
+    // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
+    // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
+    const loopRegistry = createLoopRegistry()
+    // e2e 红灯基线门（改进7）：**config.e2eBaselineGate 配置项控制，缺省 false 禁用**
+    // （用户裁决 2026-10-18「全量太重，先禁用」——真机全量套件 >10min，600s 超时必命中：
+    // 每次循环启动白烧 10 分钟后 fail-soft 关闭）。true = 接线基线面：循环启动后台跑全量
+    // e2e 套件建基线（红灯清单随简报递达 worker + 逐用例归因卡 + HEAD 键控持久缓存
+    // `{worktree}/.forge/caches/{slug}/e2e-baseline/`——跨实例/重启同 HEAD 零重跑）。
+    // 机制本体（driver/e2e-baseline/持久化/归因卡）完整保留并有测试覆盖；重启用前置 =
+    // 基线口径收敛到可承受时长（分片/受影响 spec/增量基线）。
+    const e2eBaseline =
+      config.e2eBaselineGate === true
+        ? {
+            ...createE2eBaselineFace({ cwd: process.cwd() }),
+            cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
+              input.worktree === undefined
+                ? undefined
+                : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
+          }
+        : undefined
     const loopDriverBase = createLoopDriver({
+      registry: loopRegistry,
+      ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,
       narrator,
@@ -232,6 +290,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      ...(knownContainers !== undefined ? { knownContainers } : {}),
       triage: createTriageHook({
         tasks: ctx.forgeTasks,
         spawn,
@@ -294,7 +353,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
-      spawn,
+      // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
+      // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
+      loop: { driver: loopDriver, registry: loopRegistry },
     })
     forgeToolsRef = tools // 回放计划 runTool 的执行面回填（见 spawn 替换缝注记）
     // S7 会话投影键注册（run-tasks-host-command——sessionProjections 注册表可选消费，
@@ -414,6 +475,14 @@ const forgePlugin: ForgePlugin = Object.assign(
           mode: pipelineMode,
         }),
     })
+    // 3b 协作面驻留段（P1 驻留 / 挂起 P3+P9——injection-spec 载体分配：P1/P9 永走系统提示词）。
+    // 段 text 每回合现调：agent.id 缺席 = 空串；registry 投影无命中 = 空串（零固定税——
+    // 协作外会话提示词与无此插件时逐字节一致）；占位符残留段 fail-soft 跳段（injection.ts 落盘告警）。
+    const disposeDispatchLoop = ctx.systemPrompt.section({
+      name: FORGE_DISPATCH_LOOP_SECTION_NAME,
+      order: FORGE_DOC_STYLE_SECTION_ORDER + FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, // 512（doc-style 511 之后——forge 段族次序稳定）
+      text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry)),
+    })
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),
@@ -421,6 +490,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.createProposal),
       ctx.tools.register(tools.transitionProposal),
       ctx.tools.register(tools.dispatchTask),
+      ctx.tools.register(tools.stopTaskLoop),
       ctx.tools.register(tools.updateTask),
       ctx.tools.register(tools.taskStats),
       ctx.tools.register(tools.listTasks),
@@ -434,6 +504,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       // pipeline 段函数形态单次注册（按装配求值，无重注册升级面）；doc-style
       // 独立段双模式共用（disposeDocStyle 恰一份）。
       () => disposePipeline(),
+      () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）

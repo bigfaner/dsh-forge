@@ -29,9 +29,9 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
       .prepare(
         `INSERT INTO tasks (id, slug, local_id, title, task_type, task_status, task_desc, ac_json, priority,
            estimated_time, vars_json, source_task_id, blocked_reason, breaking,
-           coverage, complexity, surface_key, surface_type, source_kind, source_id, mode, created_at, updated_at)
+           coverage, complexity, source_kind, source_id, mode, created_at, updated_at)
          VALUES ('tid-1', 'f1', '2.1', '标题', 'coding-feature', 'blocked', '描述', '["通过全部测试"]', 'P1', '4h',
-           '{"A":"1"}', 't-f1-1.0', 'lint 失败', 0, 0.9, 'low', 'web', 'web', 'feature', 'f-f1', 'expedition',
+           '{"A":"1"}', 't-f1-1.0', 'lint 失败', 0, 0.9, 'low', 'feature', 'f-f1', 'expedition',
            '2026-10-06T08:00:00.000Z', '2026-10-06T09:00:00.000Z')`,
       )
       .run()
@@ -55,8 +55,6 @@ describe('AC5 queryTask：身份解析 + TaskSnapshot 全量映射', () => {
       breaking: false,
       coverage: 0.9,
       complexity: 'low',
-      surfaceKey: 'web',
-      surfaceType: 'web',
       createdAt: '2026-10-06T08:00:00.000Z',
       updatedAt: '2026-10-06T09:00:00.000Z',
     })
@@ -326,7 +324,7 @@ describe('AC-lossless：可选字段缺席形态（agent tool 输出无损 JSON�
   it('NULL 可选列任务行 → 快照零显式 undefined（claimTask/queryTask 返回体）', async () => {
     const q = svc()
     seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
-    seedTask(h!.db, 'f1', '1.1') // task_desc/priority/estimated_time/vars/coverage/surface_* 全 NULL
+    seedTask(h!.db, 'f1', '1.1') // task_desc/priority/estimated_time/vars/coverage 全 NULL
     const r = await q({ projectId: P(), taskRef: { slug: 'f1', localId: '1.1' } })
     assertLossless(r.task, 'task snapshot')
   })

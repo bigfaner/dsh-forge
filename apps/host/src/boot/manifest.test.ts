@@ -118,6 +118,18 @@ describe('buildBootManifest', () => {
     expect('remotePinDurable' in off).toBe(false)
   })
 
+  it('bug 2ffb0a82：knowledgePlugin = true 透传（宿主 knowledge 插件装载位——renderer 知识面门控单源）；缺席/false = 字段不出现', () => {
+    expect(
+      buildBootManifest('http://127.0.0.1:1/', [], undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, true)
+        .knowledgePlugin,
+    ).toBe(true)
+    expect('knowledgePlugin' in buildBootManifest('http://127.0.0.1:1/', [])).toBe(false)
+    expect(
+      'knowledgePlugin' in
+        buildBootManifest('http://127.0.0.1:1/', [], undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, false),
+    ).toBe(false)
+  })
+
   it('dsh-mobile-tunnel：tunnelPairUrlOf 产隧道 /pair 形状——`${tunnelUrl}/pair?token=<token>`（与 LAN 同协议，URL 形状单源）', () => {
     expect(tunnelPairUrlOf('https://x.trycloudflare.com', 'abc_-X')).toBe(
       'https://x.trycloudflare.com/pair?token=abc_-X',

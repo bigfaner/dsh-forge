@@ -26,7 +26,7 @@ import type { TaskStatus } from '@dsh-forge/contracts'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
 import { useProjectDocsRoot } from '../views/overview/overview-data.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
-import { MainSessionAnchor, useAnchoredProjects } from './anchored-projects.js'
+import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
   anchoredOverviewContext,
@@ -173,10 +173,13 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
   // anchoredOverviewContext 纯推导（会话锚定优先/唯一项目兜底 + 会话计数）→ 桥写回
   //（右栏概览 tab body 消费）。桥缺席 = 不发布（fail-soft）；效应驱动更新归 e2e。
   const [mainSessionId, setMainSessionId] = useState<string | null>(null)
+  // 工作区归属映射（bug 52fc94db——worktree 工作区会话概览锚定接 host 裁决；与左栏同源管线）
+  const workspaceProject = useWorkspaceProjectMap(workspaces?.items ?? [], projectsState)
   const overviewContext: ForgeOverviewContext = anchoredOverviewContext({
     mainSessionId,
     workspaces,
     projects: projectsState.phase === 'ready' ? projectsState.projects : [],
+    workspaceProject,
   })
   const overviewBridge = props.bridge
   useEffect(() => {

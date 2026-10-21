@@ -2,7 +2,7 @@
 // 读：list --porcelain / rev-list --left-right --count / status --porcelain / for-each-ref / branch -r。
 // 写（封闭写集）：create = git fetch（前置刷新）→ worktree add -b 一体创建；delete = 确认回调通过后 worktree remove。
 // 删除拦截数据（未提交变更/挂靠会话）由本域 status/list 提供、调用方持拦截语义。
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { GitCommandError, runGit, type GitRunner } from './git-anchor.js'
 
 /** worktree 清单条目（porcelain 解析面） */
@@ -95,7 +95,9 @@ export interface CreateWorktreeOptions {
  */
 export async function createWorktree(cwd: string, options: CreateWorktreeOptions, runner?: GitRunner): Promise<WorktreeEntry> {
   const { branch, path, base } = options
-  if (existsSync(path)) {
+  // Root cause (bug f9a23367)：仅非空目录视为冲突拒绝；已存在的空目录放行——host 侧
+  // 预铸授权缝（空目录先获可继承 ACE 再交检出，文件出生即继承，免检出后全子树回溯传播）。
+  if (existsSync(path) && readdirSync(path).length > 0) {
     throw new CreateWorktreeError('path-exists', `worktree path already exists: ${path}`)
   }
   // 分支名合法性预检（git 官方判据，含 Windows 保留名/魔法名）

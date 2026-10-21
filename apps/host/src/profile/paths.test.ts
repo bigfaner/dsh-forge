@@ -1,9 +1,19 @@
 // 1.4 双形态解析 pin（dev / packaged；Implementation Notes：自本任务区分，供 4.1 消费）。
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { hostRoot, resolveHostPaths } from './paths.js'
+import { hostRoot, isDevProfile, isPackagedForm, productPackagePresent, resolveHostPaths } from './paths.js'
+
+describe('isDevProfile（fix-1 causeStack 生境门同源判据）', () => {
+  it("真值/'0' 语义与 resolveHostPaths form 判定同式", () => {
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: 'dev' })).toBe(true)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '1' })).toBe(true)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: undefined })).toBe(false)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '' })).toBe(false)
+    expect(isDevProfile({ DSH_FORGE_DEV_PROFILE: '0' })).toBe(false)
+  })
+})
 
 describe('resolveHostPaths 双形态', () => {
   it('packaged 默认：profile = {userData}/profile，dshHome 缺省隔离 {userData}/dsh-home（fix-26）', () => {
@@ -67,7 +77,11 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     expect(paths.skillsDir).toBeDefined()
     expect(paths.skillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills$/)
     expect(existsSync(paths.skillsDir!)).toBe(true) // junction 透传（workspace 链接树）
-    expect(existsSync(join(paths.skillsDir!, 'run-tasks', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(paths.skillsDir!, 'submit-task', 'SKILL.md'))).toBe(true)
+    // blitz 专属面（同包 skills-blitz 子目录——junction 随包透传）
+    expect(paths.blitzSkillsDir).toBeDefined()
+    expect(paths.blitzSkillsDir!.replaceAll('\\', '/')).toMatch(/@dsh-forge[/\\]plugin-forge[/\\]skills-blitz$/)
+    expect(existsSync(join(paths.blitzSkillsDir!, 'grilling', 'SKILL.md'))).toBe(true)
   })
 
   it('plugin-forge skills 挂载目录：树内缺席 → undefined（fail-soft 技能面降级，不抛）', () => {
@@ -82,13 +96,18 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
       const anchor = join(root, 'anchor', 'package.json')
       const specSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge-spec', 'skills')
       const coreSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills')
-      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec 树缺席
+      const blitzSkills = join(root, 'node_modules', '@dsh-forge', 'plugin-forge', 'skills-blitz')
+      mkdirSync(coreSkills, { recursive: true }) // core 树在场；spec/blitz 树缺席
       const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(absent.skillsDir).toBe(coreSkills)
       expect(absent.specSkillsDir).toBeUndefined() // spec 技能面降级（fail-soft 不抛断启动）
+      expect(absent.blitzSkillsDir).toBeUndefined() // blitz 技能面降级（同法 fail-soft）
       mkdirSync(specSkills, { recursive: true }) // spec 树落地（3.2 后形态）→ 解析同法
       const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
       expect(present.specSkillsDir).toBe(specSkills)
+      mkdirSync(blitzSkills, { recursive: true }) // blitz 子目录落地 → 同包旁路解析
+      const blitzPresent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(blitzPresent.blitzSkillsDir).toBe(blitzSkills)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -179,5 +198,65 @@ describe('resolveHostPaths 凭据桥生效门（fix-26）', () => {
   it('DSH_FORGE_DSH_HOME 调试口不关桥（门只认 USER_DATA——人用调试语义同缺省）', () => {
     const paths = resolveHostPaths({ DSH_FORGE_DSH_HOME: 'X:/tmp/dsh-home' }, 'C:/ud')
     expect(paths.credentialsPath).toBe(join(homedir(), '.dsh', '.credentials.yaml'))
+  })
+})
+
+// 产品包在场探测（打包形态启动崩 fix——git-worktree 行注行门消费）：在场 = dev profile 树
+// ∪ installAnchor 邻接树两探针。打包形态 profile 目录无 node_modules（boot-chain adjacent
+// 拓扑），旧口径单探 profileDir 恒缺席 → 包已 staging 也不注行/不装配（能力恒 absent，
+// git 项目 sessionCreate/prompt 双入口 W2 fail-closed 拒绝）。
+describe('productPackagePresent 产品包在场探测（dev profile 树 ∪ anchor 邻接树）', () => {
+  it('bug: 打包形态 anchor 邻接树在场可判（profileDir 无 node_modules 亦真）——旧口径单探 profileDir 恒 false', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-pkg-present-'))
+    try {
+      // 安装后布局镜像：{resources}/runtime/package.json + runtime/node_modules/@dsh-forge/*
+      const runtime = join(root, 'resources', 'runtime')
+      const pkgManifest = join(runtime, 'node_modules', '@dsh-forge', 'git-worktree', 'package.json')
+      mkdirSync(dirname(pkgManifest), { recursive: true })
+      writeFileSync(pkgManifest, '{"name":"@dsh-forge/git-worktree"}', 'utf8')
+      const profileDir = join(root, 'profile') // 打包形态首启落地目录——无 node_modules
+      expect(productPackagePresent(profileDir, join(runtime, 'package.json'), '@dsh-forge/git-worktree')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('dev 形态 profile 树 link 在场 → 真（现行为保持——junction 透传 workspace 链接树）', () => {
+    const dev = resolveHostPaths({ DSH_FORGE_DEV_PROFILE: 'dev' }, 'C:/ud')
+    expect(productPackagePresent(dev.profileDir, dev.installAnchor, '@dsh-forge/git-worktree')).toBe(true)
+  })
+
+  it('两探针树均缺席 → false（kill-switch/未安装形态——fail-soft 不注行）', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-pkg-absent-'))
+    try {
+      const anchor = join(root, 'runtime', 'package.json') // 树空（包未物化）
+      expect(productPackagePresent(join(root, 'profile'), anchor, '@dsh-forge/git-worktree')).toBe(false)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+// 形态判定门（2026-10-19 dev:debug 启动崩 fix）：dev.mjs 复制 electron.exe → dsh-forge-dev.exe
+// 启动（进程名区分用户裁决）后，Electron 的 app.isPackaged 按 exe 名判定（非 electron* 即
+// true）→ dev 下恒 true（dsh-forge-dev.exe 实测 isPackaged=true，electron.exe 同 app=false）。
+// main 侧打包分支（便携数据目录 + DSH_FORGE_RESOURCES_DIR 注入）单看 isPackaged 即误入：
+// resources 根指进 electron dist → resolveChildEntry 探 runtime/host-dist 缺席 throw（半成型
+// 资源）。isPackagedForm = isPackaged ∧ 非 dev 形态——与 resolveHostPaths form 同源
+// （DSH_FORGE_DEV_PROFILE 真值）。
+describe('isPackagedForm 形态判定门（app.isPackaged 不可单腿）', () => {
+  it('bug: dev 改名副本 exe（isPackaged=true ∧ DEV_PROFILE 真值）误判打包形态——dev:debug 启动崩根因', () => {
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: 'dev' }, true)).toBe(false)
+  })
+
+  it('真打包形态：isPackaged=true ∧ DEV_PROFILE 缺席/空串/0（安装版/安装形态 e2e）', () => {
+    expect(isPackagedForm({}, true)).toBe(true)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: '' }, true)).toBe(true)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: '0' }, true)).toBe(true)
+  })
+
+  it('非打包：isPackaged=false（形态无关——dev 直跑 electron.exe / e2e dev 走查）', () => {
+    expect(isPackagedForm({}, false)).toBe(false)
+    expect(isPackagedForm({ DSH_FORGE_DEV_PROFILE: 'dev' }, false)).toBe(false)
   })
 })

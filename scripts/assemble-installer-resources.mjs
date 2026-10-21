@@ -62,9 +62,10 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
  * profile.dev 仍含；重开放 = 改 contracts PRODUCT_PLUGINS）。
  * 守护测试：tests/structure/installer-pipeline.test.ts staging 闭包段。
  */
-/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件） */
+/** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件；
+ *  skills-blitz = plugin-forge 包内突击专属技能旁目录——blitz 预设 customSkillDirs 挂载源） */
 const STAGING_EXTRAS = {
-  'plugin-forge': { files: ['skills'], keyFiles: ['skills/run-tasks/SKILL.md'] },
+  'plugin-forge': { files: ['skills', 'skills-blitz'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
@@ -187,6 +188,9 @@ export function buildRuntimeAnchorManifest(installManifest, productVersions, roo
   return {
     name: 'dsh-forge-runtime',
     private: true,
+    // Root cause (bug f27619a2)：同容器 host-dist/ 全为 ESM（tsc 产物），缺席 type 字段
+    // 使 Node 先按 CJS 解析失败再重解析——每启 MODULE_TYPELESS 警告（error 级）+ 双解析开销。
+    type: 'module',
     version: rootVersion,
     description:
       'dsh-forge packaged runtime anchor (synthetic dsh installation manifest; drives dsh-app-boot resolution BFS — see scripts/assemble-installer-resources.mjs).',
@@ -199,6 +203,7 @@ export function buildAppManifest(rootVersion) {
   return {
     name: 'dsh-forge',
     productName: 'dsh-forge',
+    author: 'dsh-forge', // electron-builder 必填校验面（缺失仅告警，补齐消除）
     version: rootVersion,
     private: true,
     type: 'module',

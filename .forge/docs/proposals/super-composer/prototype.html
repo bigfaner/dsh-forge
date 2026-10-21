@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>super-composer 交互原型</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg-soft: #f5f6f8; --border: #e4e6eb; --text: #1b1f27;
+    --text-2: #6b7280; --accent: #4b6bfb; --chip-bg: #eef1fe; --chip-border: #c9d4fc;
+    --bubble-user: #4b6bfb; --bubble-user-text: #fff; --bubble-ai: #f2f3f5;
+    --tip-bg: #111827; --tip-text: #ffffff;
+    --radius: 12px; --shadow: 0 8px 32px rgba(0,0,0,.14), 0 2px 8px rgba(0,0,0,.08);
+  }
+  /* 暗色主题：跟随应用/系统主题（prefers-color-scheme），不设独立开关 */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1f27; --bg-soft: #11151c; --border: #2c3340; --text: #e6e9ef;
+      --text-2: #9aa1ac; --chip-bg: #233064; --chip-border: #3b4a8f;
+      --bubble-ai: #262c36; --tip-bg: #f5f6f8; --tip-text: #1b1f27;
+      --shadow: 0 8px 32px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: var(--text); background: var(--bg-soft); height: 100vh; overflow: hidden; }
+
+  /* ── 模式切换 ── */
+  .mode-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 50; display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: #111827; color: #e5e7eb; font-size: 13px; }
+  .mode-bar button { border: 1px solid #374151; background: #1f2937; color: #e5e7eb; border-radius: 8px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+  .mode-bar button.on { background: var(--accent); border-color: var(--accent); }
+  .mode-hint { margin-left: auto; color: #9ca3af; }
+
+  /* ── 主区域（左侧栏 240px 恒在：全屏 = 文档占中间+右侧，左侧栏不变） ── */
+  .app-side { position: fixed; top: 44px; bottom: 0; left: 0; width: 240px; background: var(--bg-soft); border-right: 1px solid var(--border); padding: 16px; color: var(--text-2); font-size: 13px; }
+  .stage { position: absolute; inset: 44px 0 0 240px; display: flex; }
+  .main { flex: 1; display: flex; flex-direction: row; min-width: 0; }
+  .doc-pane { width: 42%; flex: none; overflow: auto; padding: 48px 40px; background: var(--bg); border-left: 1px solid var(--border); }
+  .doc-pane h1 { font-size: 22px; margin-bottom: 16px; }
+  .doc-pane p { margin: 0 0 14px; color: #374151; max-width: 720px; }
+  .doc-pane.fullscreen { position: fixed; inset: 44px 0 0 240px; width: auto; z-index: 20; }
+  .doc-pane.fullscreen p { max-width: none; }
+
+  /* ChatView 模拟（非全屏时右侧） */
+  .chatview { flex: 1; min-width: 0; background: var(--bg); display: flex; flex-direction: column; }
+  .chatview .cv-head { padding: 10px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px; color: var(--text-2); }
+  .chatview .cv-msgs { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .chatview .cv-input { margin: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; color: var(--text-2); background: var(--bg-soft); }
+  .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--bubble-user); color: var(--bubble-user-text); border-bottom-right-radius: 4px; }
+  .msg.ai { align-self: flex-start; background: var(--bubble-ai); border-bottom-left-radius: 4px; }
+  .msg .qchip { display: inline-block; margin: 0 2px; padding: 0 6px; background: rgba(255,255,255,.25); border-radius: 6px; font-size: 12px; }
+  .msg.ai .qchip { background: var(--chip-bg); color: var(--accent); border: 1px solid var(--chip-border); }
+
+  /* ── 选区浮出菜单 ── */
+  .sel-menu { position: fixed; z-index: 60; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 4px; min-width: 148px; }
+  .sel-menu button { display: flex; gap: 8px; width: 100%; border: 0; background: none; padding: 7px 12px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text); text-align: left; }
+  .sel-menu button:hover { background: var(--bg-soft); }
+
+  /* ── chip（草稿引用投影，两处 composer 同源） ── */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chips:empty { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 2px 8px; background: var(--chip-bg); border: 1px solid var(--chip-border); color: var(--accent); border-radius: 7px; font-size: 12px; }
+  .chip .x { cursor: pointer; opacity: .6; } .chip .x:hover { opacity: 1; }
+
+  /* ── 主 composer（官方形态 1:1：输入区 + 底部控件行） ── */
+  .composer { padding: 12px 16px; background: var(--bg); }
+  .composer .cv-card { position: relative; background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 10px 14px; }
+  .composer textarea { width: 100%; resize: none; border: 0; outline: none; font: inherit; color: var(--text); padding: 2px 2px 8px; background: transparent; }
+  .composer textarea::placeholder { color: #9aa1ac; }
+  .composer .row { display: flex; gap: 10px; align-items: center; }
+  .composer .ghost { border: 0; background: none; color: var(--text-2); font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+  .composer .ghost:hover { background: var(--bg-soft); }
+  .composer .model { margin-left: auto; color: var(--text); font-size: 13px; cursor: pointer; }
+  .composer .model .sub { color: var(--text-2); font-size: 12px; }
+  .composer .send-round { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #aebcf9; color: #fff; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  .composer .send-round.ready { background: var(--accent); }
+
+  /* ── 全屏底部一体卡替身（标题栏 + 消息流 + 横线 + composer） ── */
+  .surrogate { position: fixed; left: 240px; right: 0; bottom: 0; z-index: 30; display: none; flex-direction: column; align-items: center; overflow: visible; pointer-events: none; }
+  .surrogate > * { pointer-events: auto; }
+  .surrogate.show { display: flex; }
+  /* 消息流列表（一体卡内区段，横线上方） */
+  .surrogate .mini-chat { display: none; overflow: auto; padding: 2px 2px 10px; flex-direction: column; gap: 10px; max-height: 52vh; }
+  /* chat view 标题栏：左「—」收成悬浮球 + 会话 title + 右「⧉」恢复常规视图（无 ✕） */
+  .chat-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 6px; }
+  /* 应用风格的方向光标：主题色 chevron SVG（可展开=向上，可折叠=向下） */
+  .chat-head.can-expand {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><path d='M5 14 L11 7 L17 14' fill='none' stroke='%234b6bfb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>") 11 11, n-resize;
+  }
+  .chat-head.can-collapse {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><path d='M5 8 L11 15 L17 8' fill='none' stroke='%234b6bfb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>") 11 11, s-resize;
+  }
+  .min-btn { border: 0; background: none; color: var(--text-2); font-size: 15px; cursor: pointer; padding: 2px 8px; border-radius: 8px; line-height: 1; }
+  .min-btn:hover { background: var(--bg-soft); color: var(--text); }
+  .chat-title { font-weight: 600; font-size: 13px; color: var(--text); }
+  /* composer 双形态：简易态无控件行；chat view 展开后 = 完整 composer（控件行回归） */
+  .surrogate .full-controls { display: none; align-items: center; gap: 10px; margin-top: 6px; }
+  .surrogate .ghost { border: 0; background: none; color: var(--text-2); font-size: 13px; cursor: pointer; padding: 4px 6px; border-radius: 8px; }
+  .surrogate .ghost:hover { background: var(--bg-soft); }
+  .surrogate .model { margin-left: auto; color: var(--text); font-size: 13px; cursor: pointer; }
+  .surrogate .model .sub { color: var(--text-2); font-size: 12px; }
+  .surrogate .send-round { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #aebcf9; color: #fff; cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  .surrogate .send-round.ready { background: var(--accent); }
+  /* 一体卡：标题栏 + 消息流 + 横线 + composer 合成一张卡 */
+  .surrogate .sc-card { position: relative; width: min(860px, 94vw); background: var(--bg); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 40px rgba(17,24,39,.18), 0 4px 12px rgba(17,24,39,.10); margin: 0 0 14px; padding: 10px 14px; transition: opacity .4s; }
+  .surrogate .sc-card.pre-dock { opacity: .68; }
+  .surrogate .sc-divider { height: 1px; background: var(--border); margin: 8px -14px; }
+  .surrogate .sc-input { width: 100%; border: 0; outline: none; resize: none; font: inherit; color: var(--text); padding: 4px 2px 8px; min-height: 24px; max-height: 120px; background: transparent; }
+  .surrogate .sc-input::placeholder { color: #9aa1ac; }
+  /* 悬浮球：「—」/Esc 逐层退/30s 四条件空闲后的收起形态 */
+  .chat-ball { position: fixed; right: 28px; bottom: 28px; z-index: 31; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 19px; cursor: pointer; box-shadow: var(--shadow); display: none; align-items: center; justify-content: center; }
+  .chat-ball.show { display: flex; }
+  .chat-ball:hover { filter: brightness(1.06); }
+  /* mention 触发菜单（/ 与 @ 同壳，官方 MenuView 同语义：↑↓ 循环、Enter 落定、Esc 关） */
+  .sc-menu { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 4px); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 4px; max-height: 220px; overflow: auto; }
+  .sc-menu .sc-menu-head { padding: 4px 10px; font-size: 11px; color: var(--text-2); }
+  .sc-menu .sc-menu-row { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  .sc-menu .sc-menu-row.active { background: var(--bg-soft); }
+  .sc-menu .sc-menu-row .n { font-weight: 600; font-size: 13px; }
+  .sc-menu .sc-menu-row .d { color: var(--text-2); font-size: 12px; margin-left: auto; }
+  .surrogate .sc-top { display: flex; align-items: center; gap: 6px; padding: 6px 12px 0; }
+  .surrogate .sc-top .chips { flex: 1; margin-bottom: 0; overflow-x: auto; flex-wrap: nowrap; }
+  .surrogate .toggle { border: 0; background: none; cursor: pointer; color: var(--text-2); font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+  .surrogate .toggle:hover { background: var(--bg-soft); }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--text-2); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  /* 应用风格 tooltip（替代原生 title；颜色随主题） */
+  .ux-tip { position: fixed; z-index: 80; background: var(--tip-bg); color: var(--tip-text); font-size: 12px; padding: 4px 10px; border-radius: 8px; pointer-events: none; opacity: 0; transition: opacity .12s; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+  .ux-tip.show { opacity: .95; }
+  .toast { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 70; background: var(--tip-bg); color: var(--tip-text); padding: 8px 16px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+
+<div class="mode-bar">
+  模式：
+  <button id="mNormal" class="on">常规（ChatView + 主 composer）</button>
+  <button id="mFull">文档全屏（中间+右侧；左侧栏不变）</button>
+  <span class="mode-hint">划选文本 → 「添加到对话」；加 chip/输入即显标题栏；发送后长出消息流；「—」收球、Esc 逐层退；流式期间钉死不收</span>
+</div>
+
+<div class="app-side">左侧栏（会话/导航——全屏时保持不变）</div>
+
+<div class="stage">
+  <div class="main">
+    <div class="chatview" id="chatview">
+      <div class="cv-head">主 ChatView · 会话 s-1（同一草稿机）</div>
+      <div class="cv-msgs" id="cvMsgs">
+        <div class="msg ai">你好，我是 tutor。可以划选文档或对话消息加进对话来提问。</div>
+      </div>
+      <div class="composer">
+        <div class="cv-card">
+          <div class="chips" id="cvChips"></div>
+          <textarea id="cvInput" rows="1" placeholder="发消息或创建任务，/ 调用指令，@ 文件或对话"></textarea>
+          <div class="row">
+            <button class="ghost" title="附加">＋</button>
+            <button class="ghost">⛨ 完全权限 ▾</button>
+            <span class="model">GLM-5.3-Flash <span class="sub">Default ▾</span></span>
+            <button class="send-round" id="cvSend" title="发送">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-pane" id="doc">
+      <h1>dockkit 文档示例：锚定与重定位</h1>
+      <p>文本引用锚定的核心是把一段选区映射为稳定描述符：精确前缀 + 引用文本 + 精确后缀三段拼合，在文档树变化后仍可通过模糊匹配重定位到原文位置。试试用鼠标划选这段话的任意部分。</p>
+      <p>高亮包裹采用语义化 span 标记而非样式直写，卸载时统一解包，避免样式残留与树结构污染。重定位失败的降级路径是 anchorLost：面板仍展开，只是不挂高亮——阅读不被打断。</p>
+      <p>会话绑定按文档域长期复用：同一文档的提问共享一个 tutor 会话，讲解质量来自上下文连续性；切换文档即切换绑定域。发送后的回复会流式返回，全屏替身里也能实时看到。</p>
+      <p>划选任意段落文字，然后点击浮出菜单中的「添加到对话」，选段会以引用 chip 的形态落入 composer 草稿；发送时 chip 序列化为引用文本随消息上行。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 全屏替身：一体卡（标题栏 + 消息流 + 横线 + composer） -->
+<div class="surrogate" id="surrogate">
+  <div class="sc-card">
+    <div class="chat-head" id="scHead" style="display: none">
+      <button class="min-btn" id="scCollapse" title="收起为悬浮球">—</button>
+      <span class="chat-title">主 ChatView · 会话 s-1</span>
+      <button class="min-btn" id="scRestore" title="恢复常规视图" style="margin-left: auto">⧉</button>
+    </div>
+    <div class="mini-chat" id="scMsgs"></div>
+    <div class="sc-divider" id="scDivider" style="display: none"></div>
+    <div class="sc-top">
+      <div class="chips" id="scChips"></div>
+    </div>
+    <textarea class="sc-input" id="scInput" rows="1" placeholder="发消息或创建任务，/ 调用指令，@ 文件或对话（Enter 发送）"></textarea>
+    <div class="full-controls">
+      <button class="ghost" title="附加">＋</button>
+      <button class="ghost">⛨ 完全权限 ▾</button>
+      <span class="model">GLM-5.3-Flash <span class="sub">Default ▾</span></span>
+      <button class="send-round" id="scSendRound" title="发送">↑</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<button class="chat-ball" id="chatBall" title="展开对话">💬</button>
+
+<script>
+(function () {
+  var state = { chips: [], fullscreen: false, seq: 0 };
+  var doc = document.getElementById('doc');
+  var surrogate = document.getElementById('surrogate');
+  var chatBall = document.getElementById('chatBall');
+  var cvMsgs = document.getElementById('cvMsgs'), scMsgs = document.getElementById('scMsgs');
+  var cvChips = document.getElementById('cvChips'), scChips = document.getElementById('scChips');
+  var cvInput = document.getElementById('cvInput'), scInput = document.getElementById('scInput');
+  var menu = null, toastTimer = null;
+
+  function toast(t) {
+    var el = document.getElementById('toast');
+    el.textContent = t; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+  function excerpt(s, n) { s = s.replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) + '…' : s; }
+
+  /* ── chip 状态（同一草稿机：两处 chips 视图同源渲染） ── */
+  function renderChips() {
+    [cvChips, scChips].forEach(function (box) {
+      box.innerHTML = '';
+      state.chips.forEach(function (c, i) {
+        var el = document.createElement('span');
+        el.className = 'chip';
+        el.appendChild(document.createTextNode('▢ ' + c.label));
+        var x = document.createElement('span'); x.className = 'x'; x.textContent = '×';
+        x.onclick = function () { state.chips.splice(i, 1); renderChips(); };
+        el.appendChild(x); box.appendChild(el);
+      });
+    });
+  }
+  function addChip(quote) {
+    state.chips.push({ label: excerpt(quote, 18), quote: quote });
+    renderChips();
+    toast('已添加到对话（草稿尾 span-CAS 插入 quote chip）');
+    if (state.fullscreen) {
+      if (!surrogate.classList.contains('show')) showCard();
+      // 加 chip 即显标题栏（仅标题栏，消息流发送后才长出）
+      syncCard();
+    }
+  }
+
+  /* ── 选区浮出菜单 ── */
+  document.addEventListener('mouseup', function () {
+    setTimeout(function () {
+      var sel = window.getSelection();
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+      var range = sel.getRangeAt(0);
+      var text = sel.toString();
+      if (!text.trim()) return;
+      var anchor = range.startContainer;
+      var el = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+      if (!el) return;
+      // 可引用域 = dockkit 文档内容 + 对话消息（均为主 Document 声明式 scope）
+      if (!doc.contains(el) && !cvMsgs.contains(el) && !scMsgs.contains(el)) return;
+      // 排除编辑域与输入/控件/标题区（替身消息正文与文档、主对话消息一样可引用）
+      if (el.closest('input, textarea, [contenteditable], .composer, .sc-top, .full-controls, .chat-head')) return;
+      var rect = range.getBoundingClientRect();
+      closeMenu();
+      menu = document.createElement('div');
+      menu.className = 'sel-menu';
+      var btn = document.createElement('button');
+      btn.innerHTML = '💬 添加到对话';
+      btn.addEventListener('mousedown', function (e) { e.preventDefault(); }); // 防止按钮抢焦点
+      btn.onclick = function () {
+        addChip(text); sel.removeAllRanges(); closeMenu();
+        // 引用后自动聚焦 composer 输入区（延时一帧确保焦点不被弹层回收）
+        setTimeout(function () { (state.fullscreen ? scInput : cvInput).focus(); }, 0);
+      };
+      menu.appendChild(btn);
+      document.body.appendChild(menu);
+      var mw = 160, mh = 40, x = rect.left + rect.width / 2 - mw / 2;
+      var y = rect.bottom + 8 + mh > innerHeight ? rect.top - 8 - mh : rect.bottom + 8;
+      menu.style.left = Math.max(8, Math.min(x, innerWidth - mw - 8)) + 'px';
+      menu.style.top = y + 'px';
+    }, 0);
+  });
+  document.addEventListener('mousedown', function (e) { if (menu && !menu.contains(e.target)) closeMenu(); });
+  function closeMenu() { if (menu) { menu.remove(); menu = null; } }
+
+  /* ── 模式切换 ── */
+  var mN = document.getElementById('mNormal'), mF = document.getElementById('mFull');
+  mN.onclick = function () { setMode(false); };
+  mF.onclick = function () { setMode(true); };
+  function setMode(full) {
+    state.fullscreen = full;
+    doc.classList.toggle('fullscreen', full);
+    document.getElementById('chatview').style.display = full ? 'none' : 'flex';
+    surrogate.classList.toggle('show', full);
+    chatBall.classList.remove('show');
+    mN.classList.toggle('on', !full); mF.classList.toggle('on', full);
+    if (full) { armDock(); toast('文档全屏：底部简易替身 = 同一 composer（同草稿机）'); }
+  }
+
+  /* ── 替身开合（UX 重设计）：
+       单击聚焦；标题栏热区点击展开/收起消息流；「—」收球、Esc 逐层退；
+       流式钉死；唯一自动塌缩 = 无流式·无草稿·无焦点·无 hover 全满足 30s 收球（前 3s 预告可拦截） ── */
+  var scCard = document.querySelector('.surrogate .sc-card');
+  var scHead = document.getElementById('scHead');
+  var scDivider = document.getElementById('scDivider');
+  var fullControls = document.querySelector('.surrogate .full-controls');
+  var streaming = false, unread = false, hoverCount = 0, listShown = false;
+  var dockTimer = null, warnTimer = null, warned = false;
+
+  function dirty() { return state.chips.length > 0 || scInput.value.trim().length > 0; }
+  function hasMessages() { return !!scMsgs.querySelector('.msg'); }
+  function focusedIn() { var a = document.activeElement; return !!(a && (a === scInput || surrogate.contains(a))); }
+  // 一体卡同步：有 chip/输入/消息 → 显标题栏 + 横线；消息流仅发送后且未收起时显示
+  function syncCard() {
+    var active = dirty() || hasMessages();
+    scHead.style.display = active ? 'flex' : 'none';
+    scDivider.style.display = active ? 'block' : 'none';
+    scMsgs.style.display = (active && listShown && hasMessages()) ? 'flex' : 'none';
+    fullControls.style.display = (active && listShown) ? 'flex' : 'none';
+    scHead.classList.toggle('can-expand', hasMessages() && !listShown);
+    scHead.classList.toggle('can-collapse', hasMessages() && listShown);
+  }
+  function showWarn() { if (warned) return; warned = true; scCard.classList.add('pre-dock'); toast('即将收起 · 移入即保留'); }
+  function hideWarn() { warned = false; scCard.classList.remove('pre-dock'); }
+  function armDock() {
+    clearDock();
+    if (!state.fullscreen || !surrogate.classList.contains('show')) return;
+    if (streaming || dirty() || focusedIn() || hoverCount > 0) return;
+    warnTimer = setTimeout(showWarn, 27000);
+    dockTimer = setTimeout(dockToBall, 30000);
+  }
+  function clearDock() { clearTimeout(dockTimer); clearTimeout(warnTimer); hideWarn(); }
+  function dockToBall() { clearDock(); surrogate.classList.remove('show'); chatBall.classList.add('show'); }
+  function showCard() { chatBall.classList.remove('show'); surrogate.classList.add('show'); armDock(); }
+
+  scCard.addEventListener('mouseenter', function () { hoverCount++; clearDock(); });
+  scCard.addEventListener('mouseleave', function () { hoverCount = Math.max(0, hoverCount - 1); armDock(); });
+  // 单击卡身聚焦输入框（消息流仅发送后出现；划选进行中不抢焦点）
+  scCard.addEventListener('click', function (e) {
+    if (e.target.closest('.chip')) return;
+    var s = window.getSelection();
+    if (s && !s.isCollapsed) return;
+    scInput.focus();
+  });
+  // 标题栏非按钮区域：光标 = 应用风格方向箭头（未展开向上展开；已展开向下收起），点击执行对应动作
+  var scHeadBtn = function (t) { return !!(t.closest && t.closest('.min-btn')); };
+  // 应用风格 tooltip（替代原生 title）
+  var uxTip = document.createElement('div');
+  uxTip.className = 'ux-tip';
+  document.body.appendChild(uxTip);
+  scHead.addEventListener('mousemove', function (e) {
+    var onBtn = scHeadBtn(e.target);
+    var tip = !onBtn && scHead.classList.contains('can-expand') ? '展开对话'
+            : !onBtn && scHead.classList.contains('can-collapse') ? '收起对话' : '';
+    if (!tip) { uxTip.classList.remove('show'); return; }
+    uxTip.textContent = tip;
+    uxTip.style.left = Math.min(e.clientX + 14, innerWidth - uxTip.offsetWidth - 8) + 'px';
+    uxTip.style.top = (e.clientY + 16) + 'px';
+    uxTip.classList.add('show');
+  });
+  scHead.addEventListener('mouseleave', function () { uxTip.classList.remove('show'); });
+  scHead.addEventListener('click', function (e) {
+    if (scHeadBtn(e.target) || !hasMessages()) return;
+    uxTip.classList.remove('show');
+    listShown = !listShown;
+    syncCard();
+    armDock();
+  });
+  // —：直接收起成右下角悬浮球
+  document.getElementById('scCollapse').addEventListener('click', function () { dockToBall(); });
+  // 标题栏右端 ⧉：退出全屏，恢复常规模式视图
+  document.getElementById('scRestore').addEventListener('click', function () { setMode(false); });
+  // Esc：消息流在场先收消息流（只留标题栏+输入区），再按收球
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !state.fullscreen) return;
+    if (listShown && hasMessages()) { listShown = false; syncCard(); armDock(); }
+    else if (surrogate.classList.contains('show')) dockToBall();
+  });
+  // 焦点信号：聚焦保活，失焦重估
+  scInput.addEventListener('focus', clearDock);
+  scInput.addEventListener('blur', armDock);
+  // 球：有未读流式回复直接回完整对话，否则回当前态
+  chatBall.onclick = function () {
+    showCard();
+    if (unread) { unread = false; listShown = true; }
+    syncCard();
+    scInput.focus();
+  };
+  // 完整 composer 控件行的 ↑ 发送
+  document.getElementById('scSendRound').onclick = function () {
+    var t = scInput.value.trim();
+    if (t || state.chips.length) { send(t); scInput.value = ''; }
+  };
+
+  /* ── 发送 + 假流式回复（同一会话数据渠道，两面同投） ── */
+  function send(text) {
+    if (!text && state.chips.length === 0) return;
+    var userEl = null;
+    var html = '';
+    state.chips.forEach(function (c) {
+      // 消息内 quote 引用 = 明文 mention 投影（消息体无插件渲染缝——与 bug mention 形态一致）
+      html += '@[' + c.label + '](quote:' + (c.quote ? 'uuid' : 'uuid') + ') ';
+    });
+    if (text) html += text;
+    state.chips = []; renderChips();
+    // 发送即长出消息流（完整 chat view）
+    if (state.fullscreen) { listShown = true; syncCard(); }
+    function put(box, extra) {
+      var d = document.createElement('div');
+      d.className = 'msg user'; d.innerHTML = html + (extra || '');
+      box.appendChild(d); box.scrollTop = box.scrollHeight;
+      return d;
+    }
+    userEl = put(cvMsgs); if (state.fullscreen) put(scMsgs);
+    // 首条消息入列后再同步：简易模式首次发送也展开消息流
+    if (state.fullscreen) syncCard();
+    var ai = document.createElement('div'); ai.className = 'msg ai';
+    var answer = '这段选段的关键在锚定的稳定性：描述符三段拼合让重定位不依赖节点路径，树变化后仍能落回原文。发送链上 chip 序列化为引用文本，模型侧拿到的是可追溯的原文语境，而不是转述。';
+    var i = 0;
+    var targets = state.fullscreen ? [cvMsgs, scMsgs] : [cvMsgs];
+    var els = targets.map(function (b) { var d = document.createElement('div'); d.className = 'msg ai'; b.appendChild(d); return d; });
+    var timer = setInterval(function () {
+      i += 2;
+      streaming = true; clearDock();
+      els.forEach(function (d) { d.innerHTML = answer.slice(0, i) + (i < answer.length ? '<span class="caret"></span>' : ''); });
+      targets.forEach(function (b) { b.scrollTop = b.scrollHeight; });
+      if (i >= answer.length) { clearInterval(timer); streaming = false; unread = true; armDock(); }
+    }, 40);
+  }
+  function syncMiniChat() { scMsgs.scrollTop = scMsgs.scrollHeight; }
+
+  document.getElementById('cvSend').onclick = function () { var t = cvInput.value.trim(); if (t || state.chips.length) { send(t); cvInput.value = ''; } };
+  function updateCvSend() {
+    document.getElementById('cvSend').classList.toggle('ready', cvInput.value.trim().length > 0 || state.chips.length > 0);
+  }
+  cvInput.addEventListener('input', updateCvSend);
+  cvInput.addEventListener('keydown', function (e) {
+    // 主 composer 同键盘语义：Enter 发送、Shift+Enter 换行
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      var t = cvInput.value.trim();
+      if (t || state.chips.length) { send(t); cvInput.value = ''; }
+    }
+  });
+
+  /* ── 简易 composer：无发送钮，Enter 发送 + mention 菜单（/ 与 @ 同壳） ── */
+  var MENTION = {
+    '@': [
+      { n: '文档', d: '引用当前文档' },
+      { n: '会话', d: '引用其它会话' },
+      { n: '文件', d: '引用工作区文件' }
+    ],
+    '/': [
+      { n: 'summarize', d: '总结当前文档' },
+      { n: 'quiz', d: '根据选段出题' },
+      { n: 'translate', d: '翻译选段' }
+    ]
+  };
+  var scMenu = null, scRows = [], scActive = 0, scTrigger = '';
+  function closeScMenu() { if (scMenu) { scMenu.remove(); scMenu = null; } }
+  function openScMenu(trigger) {
+    closeScMenu();
+    scTrigger = trigger;
+    scRows = MENTION[trigger];
+    scActive = 0;
+    scMenu = document.createElement('div');
+    scMenu.className = 'sc-menu';
+    var head = document.createElement('div');
+    head.className = 'sc-menu-head';
+    head.textContent = trigger === '@' ? '引用' : '指令';
+    scMenu.appendChild(head);
+    scRows.forEach(function (r, i) {
+      var row = document.createElement('div');
+      row.className = 'sc-menu-row' + (i === scActive ? ' active' : '');
+      row.innerHTML = '<span class="n">' + r.n + '</span><span class="d">' + r.d + '</span>';
+      row.onclick = function () { pickSc(i); };
+      scMenu.appendChild(row);
+    });
+    scCard.appendChild(scMenu);
+  }
+  function refreshScMenu() {
+    if (!scMenu) return;
+    [...scMenu.querySelectorAll('.sc-menu-row')].forEach(function (el, i) {
+      el.classList.toggle('active', i === scActive);
+    });
+  }
+  function pickSc(i) {
+    var r = scRows[i];
+    scInput.value = scInput.value.replace(new RegExp('(^|\\s)' + scTrigger + '[^\\s]*$'), '$1') + r.n + ' ';
+    closeScMenu();
+    scInput.focus();
+  }
+  scInput.addEventListener('input', function () {
+    clearDock(); syncCard();
+    var m = /(^|\s)([@/])([^\s]*)$/.exec(scInput.value.slice(0, scInput.selectionStart));
+    if (m) openScMenu(m[2]); else closeScMenu();
+  });
+  scInput.addEventListener('focus', clearDock);
+  scInput.addEventListener('keydown', function (e) {
+    if (scMenu) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); scActive = (scActive + 1) % scRows.length; refreshScMenu(); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); scActive = (scActive - 1 + scRows.length) % scRows.length; refreshScMenu(); return; }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); pickSc(scActive); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeScMenu(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      var t = scInput.value.trim();
+      if (t || state.chips.length) { send(t); scInput.value = ''; }
+    }
+  });
+})();
+</script>
+</body>
+</html>

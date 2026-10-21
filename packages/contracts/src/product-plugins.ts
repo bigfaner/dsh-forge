@@ -40,5 +40,10 @@ export interface ProductPluginSwitch {
  */
 export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   core: { userLayerRow: true },
+  // 打包形态发货覆写（2026-10-18 安装版启动崩 fix）：host dist ipc/worktree-rpc 静态
+  // import 本包——缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。三径种子
+  // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true
+  // 显式入 staging。行装载不走用户层：boot overlay presence 门注行（dev 同径单源）。
+  'git-worktree': { userLayerRow: false, staged: true },
   knowledge: { userLayerRow: false, staged: false },
 }

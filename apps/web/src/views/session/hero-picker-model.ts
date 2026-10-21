@@ -6,12 +6,16 @@
 //   - 选中映射：owner selectedId（workspaceId）↔ 行 id（= project.workspaceId）恒等对照，
 //     未绑定/已归档工作区无命中行（零高亮）；
 //   - 空集 + 账面已定 → 「添加」为唯一入口（官方 addIsTheOnlyEntry 语义对齐，:1935-1943）。
+// W3 arm 退役（session-binding-guarantee）：会话创建唯一时机 = 官方 create 调用点（wrap
+// 改道预铸），点选 = 纯选中态 + 点选时点跨分支确认（1.19 语义回归）——编排闸/账本读面/
+// 草稿缝/1.25 失败文案族随 arm 效应链一并退役，本文件只剩映射面 + 确认闩锁。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 
-/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链） */
+/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
 export interface HeroPickerRow {
   readonly id: string
   readonly name: string
+  readonly wsPath: string
 }
 
 /** 弹层面（行集 + 入口形态派生——组件消费的唯一计划对象） */
@@ -32,7 +36,7 @@ export function heroPickerPlan(
   const rows: HeroPickerRow[] = []
   for (const project of projects) {
     if (project.archived) continue // 过滤口径：archived 排除（与左栏一致）
-    rows.push({ id: project.workspaceId, name: project.name })
+    rows.push({ id: project.workspaceId, name: project.name, wsPath: project.wsPath })
   }
   return { rows, pinAdd: rows.length > 0, addIsTheOnlyEntry: settled && rows.length === 0 }
 }
@@ -46,10 +50,71 @@ export function selectedProjectOf(
   return rows.find((row) => row.id === selectedId)
 }
 
+/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 选中记忆键同判） */
+function normRootPath(value: string): string {
+  const slashed = value.replaceAll('\\', '/')
+  const trimmed = slashed.length > 1 && slashed.endsWith('/') ? slashed.slice(0, -1) : slashed
+  return trimmed.toLowerCase()
+}
+
 /**
- * worktree 编排数据根（A7——编排源与渲染兜底分离）：仅 selectedId 严格命中项目行时返回
- * ws_path；未选中/未命中/归档 → null（编排径不消费——禁止渲染兜底泄漏为绑定语义，
- * 无绑定工作区会话不得被预铸绑到别的项目树）。渲染兜底仍由 selectedProjectRootOf 承担。
+ * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
+ * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
+ * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
+ * （ForgeHeroWorkspacePicker）经官方 owner onPick 链拾取——与用户点选同行同语义。
+ * bug 9eb9d6cb：A2 后 selectedId 可合法指向树 workspace（官方 selectWorkspace 切树后
+ * sessionWorkspace = 树 ws id，永不命中项目行）——官方快照中该 id 的 path 落在活跃项目
+ * 根之下 = 合法选中，零拾取；数据缺席（快照未到）= 现状行为（d353536f 在场门兜住不盲拾）。
+ */
+export function heroDefaultPickId(
+  rows: readonly HeroPickerRow[],
+  selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
+): string | undefined {
+  if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRows.find(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
+        typeof (row as { path?: unknown }).path === 'string',
+    ) as { path: string } | undefined
+    if (path !== undefined) {
+      const normalized = normRootPath(path.path)
+      const underActiveProject = rows.some((row) => {
+        const root = normRootPath(row.wsPath)
+        return normalized === root || normalized.startsWith(`${root}/`)
+      })
+      if (underActiveProject) return undefined // 树 ws 合法选中——零拾取（bug 9eb9d6cb）
+    }
+  }
+  return rows[0]?.id
+}
+
+/**
+ * 默认拾取官方基线在场门（bug d353536f——纯函数单源）：官方 workspaces.list 快照含目标
+ * workspaceId 才放行拾取。刷新后基线流未就位时盲拾取，官方 connectWorkspace 查客户端
+ * 空快照必抛「unknown workspace」（新建会话失败 toast）且拾取闩已记账不再重试——前置
+ * 事实（官方认识该工作区）不可证 = 不拾取，快照就位后由效应重渲染补拾取；真不在场
+ * （未注册/已删工作区）= 永不盲拾取，fail-soft 回「选择工作区」现状（拾取闩口径不变）。
+ */
+export function heroDefaultPickReady(
+  items: readonly { readonly workspaceId?: unknown }[] | null | undefined,
+  defaultPickId: string | undefined,
+): string | undefined {
+  if (defaultPickId === undefined) return undefined
+  if (items === null || items === undefined) return undefined
+  const present = items.some(
+    (row) => typeof row?.workspaceId === 'string' && row.workspaceId === defaultPickId,
+  )
+  return present ? defaultPickId : undefined
+}
+
+/**
+ * worktree 数据根（严格段）：仅 selectedId 严格命中项目行时返回 ws_path；未选中/未命中/
+ * 归档 → null（渲染兜底不消费——禁止兜底泄漏为绑定语义，无绑定工作区会话不得被指到别的
+ * 项目树）。
  */
 export function selectedProjectRootStrictOf(
   projects: readonly ProjectSummary[],
@@ -65,8 +130,8 @@ export function selectedProjectRootStrictOf(
 /**
  * worktree 第二 chip 数据根（纯函数，fix-2 建立 / bug 10833861 修正 / 1.31 A7 分离）：
  * selectedId 官方语义 = workspaceId（owner 契约）——经 workspaceId 回查项目行取 ws_path；
- * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——编排数据源走
- * selectedProjectRootStrictOf，fallback 泄漏成绑定语义即跨项目错绑）；全无 → null。
+ * 未选中/未命中 → 活跃（非归档）首个有 ws_path 的行兜底（**仅渲染消费**——fallback 泄漏
+ * 成绑定语义即跨项目错绑）；全无 → null。
  * bug 10833861 Root cause: 原推导以 project.id 比对 workspaceId 恒 miss，fallback 又取
  * 全量首行（created_at 最早的归档项目，如非 git 的 learn）→ isGit=false 全零注入。
  */
@@ -79,151 +144,10 @@ export function selectedProjectRootOf(
   ?? null
 }
 
-/**
- * 唯一活跃项目兜底（A7 语义细化——bug 84edc6ff）：selectedId 未命中时，活跃（非归档、
- * ws_path 在场）项目**恰一个** → 该项目 ws_path 可充当编排源——单项目零歧义，hero chip
- * 渲染根即唯一绑定候选，不存在 A7 防的跨项目错绑；多个/零个 → null（歧义兜底不进编排，
- * A7 防线保留）。
- */
-export function unambiguousOrchestrationRootOf(projects: readonly ProjectSummary[]): string | null {
-  const active = projects.filter((project) => project.archived !== true && project.wsPath !== undefined && project.wsPath !== '')
-  return active.length === 1 ? active[0]!.wsPath ?? null : null
-}
-
-// ───────────── 1.25（bug af65c0a9）失败显式化：提示文案纯函数单源（1.29——失败面只在
-// 首条消息时点发生：点选纯选中态无编排可失败，编排失败呈现走 arm 消费点的 Toast） ─────────────
-
-/** worktree 注入面缺席提示（旧插件面/装配降级——不静默 no-op，官方 Toast 呈现） */
-export function worktreeFaceUnavailableNotice(): string {
-  return 'worktree 编排面不可用（插件版本陈旧？），首条消息将落主树'
-}
-
-/**
- * worktree 挂靠编排失败提示（含环节语义——sessionCreate / openSession 两步；
- * bug af65c0a9 Root cause: 编排失败静默吞错，以为已在选中 worktree，实际仍在主树会话）。
- * 1.29 时点注记：本提示只在首条消息时点（arm 消费点）出现。
- */
-export function worktreeOrchestrationNotice(stage: 'create' | 'open', cause: string): string {
-  const stageText = stage === 'create' ? '创建挂靠会话' : '打开会话'
-  return `worktree 挂靠失败（${stageText}）：${cause}，首条消息将落主树`
-}
-
-/** A8——主行 reuse 补绑定失败降级提示（降级产物 sessionCreate 自带绑定，非「将落主树」假象） */
-export function worktreeReuseBindDegradedNotice(cause: string): string {
-  return `主树空白会话补绑定失败（${cause}），已降级新建挂靠会话`
-}
-
-/** A7——编排数据根缺席提示（selectedId 未命中项目行——渲染兜底不进编排，显式呈现不静默） */
-export function worktreeUnselectedProjectNotice(): string {
-  return '当前会话未选中 forge 项目，worktree 编排默认停用——首条消息将落主树'
-}
-
-// ───────────── 1.26 编排默认：账本快照读面（纯函数——plugin.ts 重导出单源） ─────────────
-//
-// 1.29 时序裁决（点选去编排化）：会话创建唯一时机 = 首条消息——点选 worktree 行只更新
-// 选中态（chip 回填 + 项目粒度记忆），零编排零确认框；1.26 编排默认（arm）消费点唯一化，
-// 由 composer 首条消息意图（draft 非空）驱动。1.25 失败 Toast 与 1.19 跨分支确认框随
-// 编排同移至该时点（确认前消息不发出——草稿留在 composer，arm 未完成无发送面）。
-
-/**
- * worktree 路径归一键（1.21/1.24 口径——账本 cwd 与清单行 path 跨源比对单源）：
- * 反斜杠→正斜杠 + 去尾斜杠 + 小写。
- */
-export function worktreeCwdKey(path: string): string {
-  return path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-}
-
-/** 账本快照窄读单步（getSnapshot 调用 + byId 取行——快照缺席/形状漂移 = undefined fail-soft） */
-function ledgerRowsOf(list: unknown): Record<string, unknown> | undefined {
-  if (typeof list !== 'object' || list === null) return undefined
-  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
-  if (typeof getSnapshot !== 'function') return undefined
-  let snapshot: unknown
-  try {
-    snapshot = getSnapshot.call(list)
-  } catch {
-    return undefined
-  }
-  const byId = (snapshot as { byId?: unknown } | null)?.byId
-  return typeof byId === 'object' && byId !== null ? (byId as Record<string, unknown>) : undefined
-}
-
-/**
- * 主视图在留会话行解析（1.29——`retainedBy.mainView > 0` 官方 publishMain 同判据，读 id +
- * cwd 双字段：id 驱动 composer 草稿源寻址与 arm 后去重，cwd 驱动 arm 去重）。无在留行 =
- * undefined。
- */
-export function activeSessionRowOf(list: unknown): { readonly id: string; readonly cwd?: string } | undefined {
-  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
-    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
-    if (typeof mainView === 'number' && mainView > 0 && id !== '') {
-      const cwd = (row as { cwd?: unknown } | null)?.cwd
-      return { id, cwd: typeof cwd === 'string' && cwd !== '' ? cwd : undefined }
-    }
-  }
-  return undefined
-}
-
-/** 主视图在留会话 id（activeSessionRowOf 投影） */
-export function activeSessionIdOf(list: unknown): string | undefined {
-  return activeSessionRowOf(list)?.id
-}
-
-/** arm 闸输入（挂载面效应读数的窄投影——判读单源，WorktreeFaces arm 效应消费） */
-export interface ArmGateInput {
-  /** 清单就绪且 isGit（能力位真） */
-  readonly phaseReadyGit: boolean
-  readonly path: string | undefined
-  /** 失败抑制集（1.25——失败循环零重入；1.31 与取消抑制拆分） */
-  readonly suppressed: readonly string[]
-  /** 取消抑制集（1.31 A3——确认框取消路径专用；显式重选同树即清除，与失败抑制语义分离） */
-  readonly cancelSuppressed?: readonly string[]
-  /** 跨分支确认框待决（1.31 A4——框开着期间效应守卫零重入，防双编排竞态） */
-  readonly riskConfirmationOpen: boolean
-  readonly rowPresent: boolean
-  readonly isMain: boolean
-  /** 当前主视图会话 cwd（账本活源；undefined = 无在留会话） */
-  readonly currentCwd: string | undefined
-  /** 首条消息意图（1.29——composer 草稿非空；会话创建唯一时机的闸门） */
-  readonly draftIntent: boolean
-  /** 当前主视图会话 id（armed 去重——arm 已把当前会话换成本编排产物时零重入） */
-  readonly currentSessionId: string | undefined
-  /** 最近一次 arm 成功产物会话 id（undefined = 本挂载期尚未 arm） */
-  readonly armedSessionId: string | undefined
-  /** 最近一次 arm 成功的选中路径（armed 去重按路径生效——改选他行即重新消费） */
-  readonly armedPath: string | undefined
-}
-
-/**
- * 编排默认 arm 闸（1.29 首条消息时点）：选中行在场 + 首条消息意图（draft 非空）即候选。
- * 树内行沿用 1.26 cwd 去重——当前 cwd 已在选中树 = 已在选中会话（双路不重复建会话）；
- * **主行不适用 cwd 去重**：官方新会话流的 blank 恒落项目根 cwd 且无绑定，「cwd 已在根」
- * 恰是须补绑定的待编排态，而非「已建」证据。armed 去重（1.29）：arm 产物即当前会话 =
- * 本轮编排已消费（键入续字零重入）；官方新会话流另起新 id → 去重自然失效，编排默认
- * 重新消费。既有无绑定历史会话不回填——本闸只在 hero/新会话阶段被消费，历史会话打开
- * 不进 hero 面（生效路径注记：仅对新建会话生效）。
- */
-export function shouldArmSelectedRow(input: ArmGateInput): boolean {
-  if (!input.phaseReadyGit) return false
-  if (input.path === undefined) return false
-  if (input.riskConfirmationOpen) return false // A4：确认框待决——零并发第二路编排
-  if (input.suppressed.includes(input.path)) return false
-  if (input.cancelSuppressed?.includes(input.path)) return false // A3：取消抑制独立判读
-  if (!input.rowPresent) return false
-  if (!input.draftIntent) return false
-  if (input.armedSessionId !== undefined && input.armedPath === input.path && input.currentSessionId === input.armedSessionId) return false
-  if (!input.isMain && input.currentCwd !== undefined && worktreeCwdKey(input.currentCwd) === worktreeCwdKey(input.path)) {
-    return false
-  }
-  return true
-}
-
 // ───────────── 1.34 跨分支确认闩锁（bug ccfcc103）─────────────
-// Root cause: 1.29 确认框由 arm 效应驱动（deps 含 draftText），每键重评估时跨分支判定
-// 恒真而「已确认」无持久化痕迹（确认动作是一次性回调），故每键重弹。闩锁 = per 选中行
-// 单值态：确认置位（续字/再发零重弹）、换目标重选清退（重新判定）、编排失败清退（Toast
-// 后可重试重问）。取消路径不混用（1.31 A3 cancelSuppressed 独立语义——取消时闩锁必为
-// null，显式重选由取消抑制清除后重问）。
+// 确认框消费时点 = 点选（1.19 语义回归——W3 arm 退役后确认不再随首条消息编排后移）。
+// 闩锁 = per 选中行单值态：确认置位（同行重选零重弹）、换目标重选清退（重新判定）。
+// 「不再提示」为 settings 持久化的用户级一票，独立于闩锁。
 
 /** 确认闩锁态（选中行唯一 → 单值即 per 选中行）：path = 已确认 | null = 无闩锁 */
 export type RiskConfirmLatch = string | null
@@ -233,101 +157,50 @@ export function riskLatchConfirm(prev: RiskConfirmLatch, path: string): RiskConf
   return path
 }
 
-/** 换目标重选清退（点选回调消费——同行重选保留闩锁：确认后点 chip 续字不重弹） */
+/** 换目标重选清退（点选回调消费——同行重选保留闩锁：确认后点 chip 不重弹） */
 export function riskLatchReselect(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
   return prev !== null && prev !== path ? null : prev
 }
 
-/** 编排失败清退（arm 失败分支消费——Toast 已呈现，闩锁清退允许重试重问；他行失败不误清） */
-export function riskLatchFailureClear(prev: RiskConfirmLatch, path: string): RiskConfirmLatch {
-  return prev === path ? null : prev
-}
-
-/** 弹框判定消费闩锁（闩锁只旁路弹框分支——armed 去重/在途闸照常，非 arm 旁路）：true = 需弹框 */
+/** 弹框判定消费闩锁（闩锁只旁路弹框分支——选中态回填照常）：true = 需弹框 */
 export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean {
   return latch !== path
 }
 
-/**
- * 首条消息意图判读（bug f54f54ee 取消消费意图）：取消 = 用户否决了当时草稿的编排请求，
- * 该份草稿不再作为意图源——否则重选同树时残留草稿即刻重弹风险框，模态遮挡 composer
- * 永远等不到「键入才弹框」的新意图。草稿变化（trim 归一后不等）即新意图，可重弹。
- */
-export function draftIntentFresh(draft: string, vetoedDraft: string | undefined): boolean {
-  const trimmed = draft.trim()
-  return trimmed !== '' && trimmed !== vetoedDraft
+// ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
+
+/** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */
+export interface StaleSelectionRow {
+  readonly path: string
+  readonly worktreeName: string
+  readonly isMain: boolean
+  readonly present: boolean
+}
+
+/** 自愈计划（选中行盘上缺席时装配层消费：选中态切回主行 + notice 引述树名） */
+export interface StaleSelectionReset {
+  /** true = 选中行已失效，需切回主行并呈现 notice */
+  readonly stale: boolean
+  /** 失效树名（notice 引述；stale=false 缺席） */
+  readonly worktreeName?: string
+  /** 回落主行路径（主行缺席 = undefined——无主行可落，仅清选中态） */
+  readonly mainPath?: string
 }
 
 /**
- * 按 cwd 反查空白会话 id（arm reuse-or-create 判定——编排默认重复消费不重复建会话）。
- * G4 官方四件套（reuseOrCreateBlank 源码核销 2026-10-17：blank ∧ summary.cwd ===
- * workspace.path ∧ workspace.sessionIds.includes(id) ∧ !archived.includes(id)）——
- * 归属/归档两件数据源 = workspaces.list 快照（缺席/漂移 = fail-closed 不复用）。
- * plugin.ts 同式镜像（bundle 自含禁跨 chunk import——两侧行为由各自单测 pin）。
+ * 陈旧选中自愈判定（纯函数单源）：选中行在清单中缺席，或行在场但盘上实存为假
+ * （git 清单 prune 前保留已删树陈旧行——present 以 existsSync 盘上事实为准）→ stale。
+ * 选中态缺席/命中健康行 = 不自愈（用户显式选中零覆盖）。
  */
-export function blankSessionIdByCwdOf(list: unknown, cwd: string, workspaces?: unknown): string | undefined {
-  const key = worktreeCwdKey(cwd)
-  const snapshot = (typeof workspaces === 'object' && workspaces !== null ? workspaces : undefined) as
-    | { archivedSessionIds?: unknown; items?: unknown }
-    | undefined
-  const archived = Array.isArray(snapshot?.archivedSessionIds) ? snapshot.archivedSessionIds : undefined
-  const items = Array.isArray(snapshot?.items) ? snapshot.items : undefined
-  if (archived === undefined || items === undefined) return undefined
-  const workspace = items.find((row) => {
-    const path = (typeof row === 'object' && row !== null ? (row as { path?: unknown }).path : undefined)
-    return typeof path === 'string' && worktreeCwdKey(path) === key
-  })
-  const members =
-    Array.isArray((typeof workspace === 'object' && workspace !== null ? (workspace as { sessionIds?: unknown }).sessionIds : undefined))
-      ? (workspace as { sessionIds: readonly unknown[] }).sessionIds
-      : undefined
-  if (members === undefined) return undefined
-  for (const [id, row] of Object.entries(ledgerRowsOf(list) ?? {})) {
-    if (id === '') continue
-    if ((row as { blank?: unknown } | null)?.blank !== true) continue
-    const rowCwd = (row as { cwd?: unknown } | null)?.cwd
-    if (typeof rowCwd !== 'string' || worktreeCwdKey(rowCwd) !== key) continue
-    if (!members.includes(id) || archived.includes(id)) continue
-    return id
-  }
-  return undefined
+export function staleSelectionResetOf(
+  rows: readonly StaleSelectionRow[],
+  selectedPath: string | undefined,
+): StaleSelectionReset {
+  if (selectedPath === undefined) return { stale: false }
+  const row = rows.find((candidate) => candidate.path === selectedPath)
+  if (row !== undefined && row.present) return { stale: false }
+  const main = rows.find((candidate) => candidate.isMain)
+  // 行整段消失（清单无行）→ 树名取路径尾段（与 host worktreeNameOf 同判）
+  const name = row?.worktreeName ?? selectedPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? selectedPath
+  return { stale: true, worktreeName: name, mainPath: main?.path }
 }
-
-// ───────────── 1.29 composer 草稿缝（首条消息意图源 + arm 后草稿搬运——plugin.ts 注入） ─────────────
-
-/** 官方 InputState 快照窄读切片（draft 消费——形状漂移 = fail-soft 空串） */
-export type DraftSourceFace = {
-  readonly getSnapshot?: () => unknown
-  readonly subscribe?: (onChange: () => void) => () => void
-}
-
-/** composer 草稿缝（plugin.ts inject 递达；缺席 = fail-soft 无意图源——arm 不消费） */
-export interface WorktreeComposerDraftFace {
-  /** 会话 id → InputState 快照源（binding 未就绪/缝缺席 = undefined） */
-  readonly sourceOf?: (sessionId: string) => DraftSourceFace | undefined
-  /** 草稿搬运（arm 换会话后把已键入首条消息 setDraft 到产物会话；previousSessionId
-   * 在场时顺带清原会话草稿防幻影——均 best-effort，失败 = 草稿留在原会话不丢） */
-  readonly carryDraft?: (sessionId: string, text: string, previousSessionId?: string) => Promise<boolean>
-}
-
-/** hero worktree inject face（1.29 形态——编排缝仅剩 arm 消费点；点选零编排） */
-export interface HeroWorktreeFace {
-  /** 官方 openSession（arm 换会话呈现） */
-  readonly openSession: (sessionId: string) => void
-  /** 空白会话按 cwd 反查（reuse-or-create——arm 重复消费不重复建会话） */
-  readonly blankSessionByCwd?: (cwd: string) => string | undefined
-  /** 账本快照源（arm 去重/重消费活源） */
-  readonly sessionsList?: unknown
-  /** composer 草稿缝（首条消息意图源 + 草稿搬运；缺席 = arm 不消费） */
-  readonly composerDraft?: WorktreeComposerDraftFace
-  /** 挂靠编排缝（arm 唯一消费点——sessionCreate/attach/openSession 一体；失败已由
-   * 编排面 1.25 Toast 呈现，返回 null） */
-  readonly orchestrate?: WorktreeOrchestrateFn
-}
-
-/**
- * 编排缝消费结果（arm 唯一消费点——点选不再触达）：sessionId = 编排产物（已 openSession，
- * 草稿搬运落点）；null = 失败（错误已由编排面 1.25 Toast 呈现，选中态同清）。
- */
-export type WorktreeOrchestrateOutcome = string | null
-export type WorktreeOrchestrateFn = (path: string) => Promise<WorktreeOrchestrateOutcome>

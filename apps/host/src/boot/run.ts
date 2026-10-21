@@ -74,6 +74,9 @@ export interface BootDshOptions {
   /** plugin-forge-spec skills 物理挂载目录（M3 3.7：预设装配 customSkillDirs[spec]——仅远征
    *  组合携带；缺席 = spec 技能面降级 fail-soft 不注入） */
   specSkillsDir?: string
+  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
+   *  突击组合携带；缺席 = blitz 技能面降级 fail-soft 不注入） */
+  blitzSkillsDir?: string
   /** 设置域存储文件绝对路径（M3 3.8：boot overlay 注 core 行 config.settingsFile——
    *  {userData}/forge-settings.json；缺席 = forgeSettings 服务降级缺席（六服务形制）） */
   settingsFile?: string
@@ -167,7 +170,7 @@ const SHUTDOWN_GRACE_MS = 6_000
 export interface BridgeChildFace {
   on(event: 'message', listener: (message: unknown) => void): unknown
   once(event: 'close', listener: () => void): unknown
-  send(message: unknown): boolean | null
+  send(message: unknown, callback?: (error: Error | null) => void): boolean | null
 }
 
 /** 桥通道：RPC pending 结算 + 事件扇出（bootDshHost 装配素材；独立工厂以便替身测试） */
@@ -187,11 +190,20 @@ export interface BridgeChannel {
  * child close → pending 全量拒绝（forge:* 面信封化降级））。监听先于 ready 等待挂上
  * ——事件与早到 rpc-result 零丢失窗。
  */
-export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
+export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => string | undefined): BridgeChannel {
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
   const diagListeners = new Set<(line: string) => void>()
+  // bug ae1f737a 死闩（熔断）：通道死亡（close / send 失败）后后续 call 立即以首因拒绝——
+  // 零 send 尝试、观测行同因只落一次。现场（2026-10-21 06:26Z）：child 运行期死亡零 exit
+  // 记录（死因失明）+ host 带死通道 23 分钟逐发逐报同因错误。
+  let deadError: Error | undefined
+  const markDead = (error: Error, alarm?: string): void => {
+    if (deadError !== undefined) return
+    deadError = error
+    if (alarm !== undefined && !gracefulShutdownChildren.has(child as unknown as object)) console.error(alarm)
+  }
   child.on('message', (message) => {
     // fix-23 diag 分支：诊断日志行 → onDiag 订阅方扇出（main.ts → harness.log；畸形信封静默忽略）
     const diag = asDiagMessage(message)
@@ -225,18 +237,38 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
     if (m.ok) waiter.resolve(m.data)
     else waiter.reject(rebuildBridgeError(m.error ?? `bridge rpc #${String(m.id)} 失败（无错误信息）`))
   })
-  child.once('close', () => {
+  child.once('close', (code?: number | null, signal?: string | null) => {
+    // 观测行（bug ae1f737a）：运行期退出 code/signal 落诊断链一次——死因可考（此前
+    // ready 后零 exit 挂接，崩溃/被杀/OOM 全部无声）；优雅关停（shutdownChild）不告警。
+    markDead(
+      new Error('boot child 已退出——RPC 面不可用'),
+      `[boot] boot child exited code=${String(code ?? 'null')}${signal ? ` signal=${String(signal)}` : ''} — bridge rpc 面熔断（后续调用快速拒绝）`,
+    )
     for (const waiter of pending.values()) waiter.reject(new Error('boot child 已退出——RPC 面不可用'))
     pending.clear()
   })
   return {
     call: (service, method, args) =>
       new Promise((resolve, reject) => {
+        // 死闩熔断：通道已死 → 立即以首因拒绝（零 send、零逐发报错）
+        if (deadError !== undefined) {
+          reject(deadError)
+          return
+        }
         const id = nextId++
+        // trace_id 显式携带（ALS 过 IPC 序列化断点——main 侧读数随请求面入 child）
+        const traceId = traceIdOf?.()
         pending.set(id, { resolve, reject })
-        if (!sendToChild(child, { type: 'rpc', id, service, method, args })) {
+        if (!sendToChild(child, { type: 'rpc', id, service, method, args, ...(traceId !== undefined && traceId !== '' ? { traceId } : {}) })) {
           pending.delete(id)
-          reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
+          const failure = new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`)
+          // 首因胜出观测：send 失败径（close 事件未达/不达的窗口）同样留一次退出行——
+          // 随后 close 事件到来时 markDead 已置位，零重复（同因去重）。
+          markDead(
+            failure,
+            '[boot] boot child exited (send failed: IPC channel closed) — bridge rpc 面熔断（后续调用快速拒绝）',
+          )
+          reject(failure)
         }
       }),
     onEvent: (listener) => {
@@ -254,6 +286,57 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
   }
 }
 
+/**
+ * child stdio 管道消费（app-observability 1.2）：逐行读 stdout/stderr 管道 → sink 转译
+ * （main 侧 emit 诊断事件）+ 回显 process 直写（dev 终端可见性补偿——评审 Note-2）。
+ * 背压保护（红线②）：消费侧只做同步转译 + 无等待 write，child console 调用永不被
+ * main 拖住；行残段跨 chunk 缓存拼接。
+ */
+export function wireChildPipes(
+  child: Pick<ChildProcess, 'stdout' | 'stderr'>,
+  sink?: (stream: 'stdout' | 'stderr', line: string) => void,
+): void {
+  const wire = (stream: NodeJS.ReadableStream | null, name: 'stdout' | 'stderr'): void => {
+    if (stream === null) return
+    let buffer = ''
+    stream.on('data', (chunk: Buffer | string) => {
+      buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+      let idx = buffer.indexOf('\n')
+      while (idx >= 0) {
+        const line = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 1)
+        deliverLine(name, line, sink)
+        idx = buffer.indexOf('\n')
+      }
+    })
+    stream.on('end', () => {
+      if (buffer !== '') deliverLine(name, buffer, sink)
+      buffer = ''
+    })
+  }
+  wire(child.stdout, 'stdout')
+  wire(child.stderr, 'stderr')
+}
+
+/** 单行投递：sink 转译 + process 回显（双写——评审 Note-2；回显失败静默） */
+function deliverLine(
+  name: 'stdout' | 'stderr',
+  line: string,
+  sink?: (stream: 'stdout' | 'stderr', line: string) => void,
+): void {
+  try {
+    sink?.(name, line)
+  } catch {
+    // sink 异常不反压管道消费（诊断面零阻塞——红线②同构）
+  }
+  try {
+    const out = name === 'stdout' ? process.stdout : process.stderr
+    out.write(`${line}\n`)
+  } catch {
+    // 回显失败静默
+  }
+}
+
 /** spawn child 形态 boot（官方 Desktop 同款：ELECTRON_RUN_AS_NODE=1 --expose-internals）。
  *  spawnOverrides 为 spawn 驱动面覆盖（不序列化入子进程 argv）：execPath = 派生可执行
  *  （缺省 process.execPath——Electron main 下即 electron.exe；3.4 冒烟经 node/vitest 驱动
@@ -262,6 +345,11 @@ export function createBridgeChannel(child: BridgeChildFace): BridgeChannel {
 export interface BootSpawnOverrides {
   readonly execPath?: string
   readonly childEntry?: string
+  /** child stdio 管道行消费缝（app-observability 1.2——main 读 pipe 转译为诊断事件 +
+   *  dev 终端回显；缺省 = 仅回显 process.stdout/stderr 直写，dev:debug 终端可见性不丢） */
+  readonly stdioSink?: (stream: 'stdout' | 'stderr', line: string) => void
+  /** main 侧诊断 ALS（trace_id 读数源——bridge rpc 调用显式携带到 child；不序列化入 argv） */
+  readonly diagAls?: import('../telemetry/diag-context.js').DiagContextStore
 }
 
 export async function bootDshHost(
@@ -276,9 +364,16 @@ export async function bootDshHost(
   delete inheritedEnv.ELECTRON_RUN_AS_NODE
   const child = spawn(spawnOptions.execPath ?? process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
     env: { ...inheritedEnv, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
-    stdio: ['ignore', 'inherit', 'inherit', 'ipc'], // S1 run3 母本同款（子进程日志回流主控台）
+    // app-observability 1.2：inherit → pipe（评审 Blocker-2 修订——inherit 直通父 stdio
+    // 不可拦截，打包版无终端即全丢）。stdout/stderr 双管道 → main 逐行转译（stdioSink
+    // 缺省回显 process 直写，dev:debug 终端可见性不丢）。
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
-  const channel = createBridgeChannel(child) // 消息监听先于 ready 挂上（事件零丢失窗）
+  wireChildPipes(child, spawnOptions.stdioSink) // 回显 = appender 转写 + process.stdout 双写（Note-2）
+  const channel = createBridgeChannel(
+    child,
+    () => spawnOptions.diagAls?.getStore()?.traceId, // bridge 显式携带 trace_id（ALS 断点补偿）
+  ) // 消息监听先于 ready 挂上（事件零丢失窗）
   const ready = await waitForReady(child)
   const call = channel.call
   // fix-6 配对令牌轮换：child 每 TTL 推 pair 消息 → manifest 原位换新（getBootManifest
@@ -294,6 +389,7 @@ export async function bootDshHost(
     ready.remotePin, // fix-17 ③：PIN 读数入 manifest（互联网 tab PIN 卡单源）
     ready.remotePinExpiresAt,
     ready.remotePinDurable === true, // fix-26：长效位入 manifest（UI hint 双态单源）
+    ready.knowledgePlugin === true, // bug 2ffb0a82：knowledge 插件装载位入 manifest（renderer 知识面门控单源）
   )
   child.on('message', (message: unknown) => {
     // fix-7：/pair 握手成功推送 → manifest 抬 remoteDeviceConnected（粘性 until 重启——
@@ -438,9 +534,13 @@ function waitForReady(child: ChildProcess): Promise<BridgeReadyMessage> {
   })
 }
 
+/** 优雅关停中的 child（桥通道观测行不告警——正常关停非事故；bug ae1f737a 配套） */
+const gracefulShutdownChildren = new WeakSet<object>()
+
 /** 优雅关停（bounded）：shutdown 消息 → 等退出；超时 kill 兜底（子侧 ProcessShutdown 5s 升级先行） */
 async function shutdownChild(child: ChildProcess): Promise<void> {
   if (child.killed) return
+  gracefulShutdownChildren.add(child)
   sendToChild(child, { type: 'shutdown' })
   await new Promise<void>((resolve) => {
     const done = (): void => {
@@ -460,7 +560,16 @@ async function shutdownChild(child: ChildProcess): Promise<void> {
 /** 消息发送（通道已关/缺席不抛——false 由调用方结算；ChildProcess.send 的 null 同失败面） */
 function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildMessage): boolean {
   try {
-    return child.send(message) === true
+    // Root cause: closed IPC 通道上无 callback 的 send() 除返回 false 外还会异步 emit 'error'
+    // （ERR_IPC_CHANNEL_CLOSED）到 child 实例——ready 后 waitForReady 的 error 监听已撤，
+    // 无监听 = 主进程未捕获异常（2026-10-19 安装版 /run-dag-tasks 崩溃；try/catch 与 false
+    // 返回值均不可达该异步路径）。回调恒在场 = 错误进回调留痕，不外溢实例事件；异步写失败
+    // 的 pending 结算仍归 close 全量拒绝兜底。
+    return (
+      child.send(message, (error) => {
+        if (error !== undefined && error !== null) console.warn(`boot child IPC 发送失败（fail-soft）: ${String(error)}`)
+      }) === true
+    )
   } catch {
     return false
   }
@@ -484,6 +593,7 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
     pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
     pair.remotePinDurable ?? manifest.remotePinDurable === true, // fix-26：长效位随轮换换新/保留
+    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留（boot 期事实不随轮换漂移）
   )
 }
 
@@ -503,6 +613,7 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     manifest.remotePin, // fix-17 ③：PIN 读数保留
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
+    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
   )
 }
 
@@ -522,6 +633,7 @@ export function applyPairDisconnected(manifest: BootManifest): BootManifest {
     manifest.remotePin, // fix-17 ③：PIN 读数保留
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
+    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
   )
 }
 
@@ -552,5 +664,6 @@ export function applyTunnelMessage(manifest: BootManifest, message: unknown): Bo
     manifest.remotePin, // fix-17 ③：隧道重建保留 PIN 读数
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
+    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
   )
 }

@@ -26,7 +26,13 @@ export {
   type WorktreeRiskConfirmationBodyProps,
   type WorktreeRiskConfirmationProps,
 } from './risk-confirmation.js'
-export { SealNotice, SealedComposerPlaceholder, type SealNoticeProps } from './seal-notice.js'
+export {
+  SealNotice,
+  SealedComposerPlaceholder,
+  StaleSelectionNotice,
+  type SealNoticeProps,
+  type StaleSelectionNoticeProps,
+} from './seal-notice.js'
 export { HeroWorktreePicker, heroWorktreeRows, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
 export {
   aheadBehindSegments,

@@ -21,10 +21,11 @@
 | 1.18 质量门证据（tsc×3 exit 0 / vitest 729/729 / oxlint 0 / lint-imports 0） | `logs/mobile-ui/1.18/001-forge-loop/gates.md` |
 | 1.19 走查记录（屏⑨⑩⑪逐位对照 + e2e loop-reader.spec.ts 1 通过） | `proposals/mobile-ui/walkthrough/1-19-loop-reader/walkthrough-record.md` + impl-screen-9/10/11 图 |
 
-归档偏差（如实记录）：
+归档补齐（2026-10-20 批次③验收门复跑）：
 
-- `walkthrough/1-17-worker/` 目录现存为空——1.17 resume 声明的 impl-worker-list/continuable/oneshot.png 三图未在盘上找到，待补录或确认归档路径。
-- 1.16 走查记录待办「真机走查截图待装配后补录」仍未收口（main.ts 集成装配属后续集成批次）。
+- `walkthrough/1-17-worker/` 已补齐：walkthrough-record.md（原误存为平铺同名文件，已归位目录结构）+ impl-worker-list/continuable/oneshot.png 三图（worker.spec.ts 复跑重生成）。
+- `walkthrough/1-19-loop-reader/` 屏⑨⑩⑪四图已补齐（loop-reader.spec.ts 复跑重生成；此前仅存走查记录）。
+- 1.16 fab/任务浮层整机截图仍待 main.ts 集成装配后补录（screen-map #7 为 mockup 无屏号附加面，不占十屏口径）。
 
 ## 3. 循环注入改造说明（批次③专项）
 
@@ -42,4 +43,4 @@
 ## 5. 遗留与移交
 
 - main.ts 集成装配（fab 挂载、任务浮层开合、forge-stream 帧订阅、onOpenDoc 阅读页入栈、resolveDocSize 真实 rpc）属集成批次——组件均已 e2e/单测验证，整机走查待装配后统一收口。
-- 1.17 三张截图归档缺失，待补录（不影响门禁结论，门禁证据在 resume.md）。
+- 1.17 三张截图已补录归档（2026-10-20 门禁轮复跑重生成）。

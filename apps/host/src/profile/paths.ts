@@ -9,8 +9,10 @@
 //                          凭据桥关闭门（fix-26：e2e/测试不读真 home 凭据；dshHome 自 fix-26
 //                          起缺省即隔离，此门不再参与 home 解析）
 //   DSH_FORGE_DSH_HOME     显式 DSH_HOME 覆盖（fix-18 新增测试/调试口；优先级最高）
-//   DSH_FORGE_RESOURCES_DIR 安装包 resources 根（4.1 打包形态；main 侧 app.isPackaged 时
-//                           自 process.resourcesPath 注入，e2e 以 staging/已安装目录模拟）——
+//   DSH_FORGE_RESOURCES_DIR 安装包 resources 根（4.1 打包形态；main 侧 isPackagedForm
+//                           （app.isPackaged ∧ 非 dev——2026-10-19 dev 改名副本 exe 起
+//                           isPackaged 单腿不可用）时自 process.resourcesPath 注入，e2e 以
+//                           staging/已安装目录模拟）——
 //                           置位后 installAnchor 取 {resources}/runtime/package.json（合成
 //                           anchor 清单，assemble-installer-resources.mjs 物化），壳 dist 取
 //                           {resources}/web-dist（resolveWebDistDir 同源消费），boot child
@@ -60,6 +62,10 @@ export interface HostPaths {
    *  携带；dev = workspace 链接、packaged = runtime/node_modules 邻接。解析失败 = undefined
    *  不注入（spec 技能面降级 fail-soft；突击/blitz 本就物理不含） */
   specSkillsDir?: string
+  /** plugin-forge skills-blitz 突击专属技能挂载目录（预设装配 customSkillDirs[blitz]——仅
+   *  突击携带；同包 skills 旁子目录，dev junction 随包透传。解析失败 = undefined 不注入
+   *  （blitz 技能面降级 fail-soft；远征本就物理不含） */
+  blitzSkillsDir?: string
   /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
   resourcesDir?: string
 }
@@ -74,13 +80,36 @@ export interface PathEnv {
   DSH_FORGE_TASKS_HOME?: string
 }
 
+/** dev 形态环境判定（单一来源：DSH_FORGE_DEV_PROFILE 真值——resolveHostPaths form 与
+ *  main.ts IS_DEV 同源消费；空串/0 = 未置位惯例）。2026-10-19 dev.mjs 复制 electron.exe →
+ *  dsh-forge-dev.exe 启动（进程名区分裁决）后 app.isPackaged 在 dev 下恒 true（Electron
+ *  按 exe 名非 electron* 判 packaged），形态判据不得再单看 isPackaged。 */
+export function isDevForm(env: PathEnv): boolean {
+  return env.DSH_FORGE_DEV_PROFILE !== undefined && env.DSH_FORGE_DEV_PROFILE !== '' && env.DSH_FORGE_DEV_PROFILE !== '0'
+}
+
+/** 真实打包形态判定（main 侧 app.isPackaged 门替换）：isPackaged ∧ 非 dev 形态。dev 改名
+ *  副本 exe 下单看 isPackaged 会令 dev 误入打包分支——便携数据目录劫持 userData 进
+ *  electron dist\data + DSH_FORGE_RESOURCES_DIR 指进 electron dist\resources →
+ *  resolveChildEntry 探 runtime/host-dist 缺席 throw（半成型资源——2026-10-19 dev:debug
+ *  启动崩）。 */
+export function isPackagedForm(env: PathEnv, appIsPackaged: boolean): boolean {
+  return appIsPackaged && !isDevForm(env)
+}
+
 /** apps/host 包根（本模块位于 {src|dist}/profile/ 下，上溯三级；dev 形态默认 profile 目录锚） */
 export function hostRoot(): string {
   return dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 }
 
+/** dev 生境判定（app-observability fix-1 causeStack 生境注入同源判据）——isDevForm 薄委托
+ *  （单源，判据同式：DSH_FORGE_DEV_PROFILE 真值 = dev）。 */
+export function isDevProfile(env: Pick<PathEnv, 'DSH_FORGE_DEV_PROFILE'>): boolean {
+  return isDevForm(env)
+}
+
 export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
-  const dev = env.DSH_FORGE_DEV_PROFILE !== undefined && env.DSH_FORGE_DEV_PROFILE !== '' && env.DSH_FORGE_DEV_PROFILE !== '0'
+  const dev = isDevForm(env)
   const profileDir =
     env.DSH_FORGE_PROFILE_DIR !== undefined && env.DSH_FORGE_PROFILE_DIR !== ''
       ? resolveFromHost(env.DSH_FORGE_PROFILE_DIR)
@@ -110,6 +139,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     settingsFile: join(userData, 'forge-settings.json'),
     skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
+    blitzSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge', 'skills-blitz'),
     resourcesDir,
   }
 }
@@ -124,14 +154,15 @@ function resolveTasksHome(env: PathEnv, userData: string): string {
 }
 
 /** 产品包 skills 目录解析（installAnchor 树锚定——与 loader 插件行解析同源逻辑：自
- *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/skills；3.4 plugin-forge 起，
- *  M3 3.7 增 plugin-forge-spec 同法）。dev = apps/host 树 workspace 链接（junction 透传到
- *  packages/<pkg>/skills）；packaged = runtime/node_modules 邻接（anchor =
- *  {resources}/runtime/package.json，首探即中）。不走 require.resolve：产品包 ESM-only
- *  （exports 无 require 条件，CJS 解析恒拒）。解析失败返回 undefined（fail-soft：技能面
- *  缺席降级，不抛断启动——tools 半身照常，装配缺口由冒烟/结构 pin 显形）。 */
-function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${string}`): string | undefined {
-  const rel = `node_modules/${pkg}/skills`
+ *  anchor 所在目录逐级上溯探 node_modules/@dsh-forge/<pkg>/<sub>；3.4 plugin-forge 起，
+ *  M3 3.7 增 plugin-forge-spec 同法；skills-blitz = 同包 skills 旁子目录（sub 可选，缺省
+ *  skills）。dev = apps/host 树 workspace 链接（junction 透传到 packages/<pkg> 子目录）；
+ *  packaged = runtime/node_modules 邻接（anchor = {resources}/runtime/package.json，首探
+ *  即中）。不走 require.resolve：产品包 ESM-only（exports 无 require 条件，CJS 解析恒拒）。
+ *  解析失败返回 undefined（fail-soft：技能面缺席降级，不抛断启动——tools 半身照常，装配
+ *  缺口由冒烟/结构 pin 显形）。 */
+function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${string}`, sub = 'skills'): string | undefined {
+  const rel = `node_modules/${pkg}/${sub}`
   for (let dir = dirname(installAnchor); ; dir = dirname(dir)) {
     const candidate = join(dir, ...rel.split('/'))
     if (existsSync(candidate)) return candidate
@@ -142,6 +173,16 @@ function resolvePackageSkillsDir(installAnchor: string, pkg: `@dsh-forge/${strin
 
 function resolveFromHost(p: string): string {
   return isAbsolute(p) ? p : join(hostRoot(), p)
+}
+
+/** 产品包在场探测（双形态两探针——git-worktree 行注行门消费，2026-10-18 打包启动崩 fix）：
+ *  dev = profileDir/node_modules 链接树（junction 透传 workspace）；packaged = installAnchor
+ *  邻接 node_modules（anchor = {resources}/runtime/package.json → runtime/node_modules——
+ *  打包形态 profile 目录无 node_modules，boot-chain adjacent 拓扑）。任一命中 = 在场；
+ *  判据 = 包 package.json 在场（安装/物化标记，与 loader 行解析基础同源）。 */
+export function productPackagePresent(profileDir: string, installAnchor: string, pkg: `@dsh-forge/${string}`): boolean {
+  const segments = ['node_modules', ...pkg.split('/'), 'package.json']
+  return existsSync(join(profileDir, ...segments)) || existsSync(join(dirname(installAnchor), ...segments))
 }
 
 /** DSH_HOME 三层解析（fix-26 数据隔离缺省——收口 fix-18 全共享副作用：原生 dsh 工作区/

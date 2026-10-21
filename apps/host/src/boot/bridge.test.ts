@@ -167,27 +167,31 @@ describe('parseChildOptions（argv[2] BootDshOptions JSON）', () => {
     expect(empty?.skillsDir).toBeUndefined()
   })
 
-  it('M3 装配缝可选透传（3.7 specSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {
+  it('M3 装配缝可选透传（3.7 specSkillsDir/blitzSkillsDir / 3.8 settingsFile；空串/缺席 = 不注入降级）', () => {
     const m3 = parseChildOptions([
       'electron.exe',
       'child.js',
       JSON.stringify({
         ...JSON.parse(valid),
         specSkillsDir: 'C:/pkg/spec-skills',
+        blitzSkillsDir: 'C:/pkg/blitz-skills',
         settingsFile: 'C:/ud/forge-settings.json',
       }),
     ])
     expect(m3?.specSkillsDir).toBe('C:/pkg/spec-skills')
+    expect(m3?.blitzSkillsDir).toBe('C:/pkg/blitz-skills')
     expect(m3?.settingsFile).toBe('C:/ud/forge-settings.json')
     const legacy = parseChildOptions(['electron.exe', 'child.js', valid]) // 旧载荷（M3 前主进程）零破坏
     expect(legacy?.specSkillsDir).toBeUndefined()
+    expect(legacy?.blitzSkillsDir).toBeUndefined()
     expect(legacy?.settingsFile).toBeUndefined()
     const empty = parseChildOptions([
       'electron.exe',
       'child.js',
-      JSON.stringify({ ...JSON.parse(valid), specSkillsDir: '', settingsFile: '' }),
+      JSON.stringify({ ...JSON.parse(valid), specSkillsDir: '', blitzSkillsDir: '', settingsFile: '' }),
     ])
     expect(empty?.specSkillsDir).toBeUndefined()
+    expect(empty?.blitzSkillsDir).toBeUndefined()
     expect(empty?.settingsFile).toBeUndefined()
   })
 })
@@ -254,6 +258,30 @@ describe('asReadyMessage（ready 守卫）', () => {
     expect(asReadyMessage({ type: 'event', channel: FORGE_EVENT_CHANNELS.tasksChanged, payload: { projectId: 'p' } })).toBeUndefined()
     expect(asReadyMessage({ type: 'ready', injections: [], services: { forgeProjects: true } })).toBeUndefined()
     expect(asReadyMessage(null)).toBeUndefined()
+  })
+
+  it('bug 2ffb0a82：knowledgePlugin 位可选透传（宿主 knowledge 插件装载位——=== true 才携带；缺席/他值 = 降级不阻 ready）', () => {
+    const base = {
+      type: 'ready',
+      url: 'http://127.0.0.1:1/#t',
+      injections: [],
+      services: {
+        forgeProjects: true,
+        forgeKnowledge: true,
+        forgeTasks: true,
+        forgeFeatures: true,
+        forgeProposals: true,
+        forgeDocs: true,
+        forgeSettings: true,
+        forgeBugs: true,
+        forgeWorktree: true,
+        approval: true,
+      },
+    } as const
+    expect(asReadyMessage({ ...base, knowledgePlugin: true })?.knowledgePlugin).toBe(true)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base }) ?? {})).toBe(false)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base, knowledgePlugin: false }) ?? {})).toBe(false)
+    expect('knowledgePlugin' in (asReadyMessage({ ...base, knowledgePlugin: 'yes' }) ?? {})).toBe(false)
   })
 
   it('tools 清单可选透传（3.4 冒烟观测面）：在场 = string[]；缺席/畸形 = 降级不阻 ready', () => {

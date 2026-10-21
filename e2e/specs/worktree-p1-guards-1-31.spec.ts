@@ -1,9 +1,8 @@
-// worktree-branch-management 1.31 真机 UI e2e：P1 批守卫三场景（A1/A3/A4——同一发射取证）。
-//   · A1：draft 非空（发送意图在场）→ 点选跨分支行 → 风险确认框立现（不被 8s 冷却窗挡——
-//     冷却只压「点选引发」即 draft 空的 arm；发送意图是唯一编排时机）；
-//   · A3：确认框取消 → 显式重选同一行 → 确认框重弹（取消抑制被显式重选清除——非永久否决）；
-//   · A4：确认框开着期间点选他行（主行，其余闸全过）→ 零并发第二路编排——确认 feat-a 后
-//     仅 wt-a 一个挂靠会话、项目根零新增（守卫链 defaultRiskPath 闸生效）。
+// worktree-branch-management 1.31 真机 UI e2e（设计 A 重锚——点选时点确认守卫三场景）：
+//   · A1：点选跨分支行 → 确认框立现（点选时点——零 draft/冷却窗依赖）；
+//   · A2：取消 → mask 退场干净（composer 可点可键入，零遮挡残留——上轮失败症状回归钉）；
+//   · A3：显式重选 → 确认框重弹（取消非永久否决）；确认后选中态切行 + 零会话副作用
+//     （点选零编排——确认/待决全程 attachedSessions 恒零，结构性无并发第二路）。
 // data 锚与夹具配方 = worktree-risk-confirmation.spec.ts（1.19）同款。
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,7 +13,7 @@ import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.31/001-p1-guards'
+  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/003-p1-guards'
 
 /** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
 function makeGitRepo(): { dir: string; wtDir: string } {
@@ -61,11 +60,11 @@ async function registerProject(page: Page, wsDir: string): Promise<void> {
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
 const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分支风险确认' })
+const composer = (page: Page) => page.locator('[data-composer-input]').last()
 
 async function acknowledgeAndConfirm(page: Page): Promise<void> {
   const dialog = heroRiskDialog(page)
-  // 1.35 双勾选歧义消解（4c797b2c 同款）：知悉勾选按可访问名锚定
-  const box = dialog.getByRole('checkbox', { name: '我已了解跨分支上下文风险' })
+  const box = dialog.locator('input[type="checkbox"]').first()
   await expect(box).toBeVisible()
   await box.check()
   await dialog.getByRole('button', { name: '确认继续' }).click()
@@ -76,26 +75,8 @@ async function pickMenuRow(page: Page, text: string): Promise<void> {
   await heroMenu(page).getByText(text, { exact: false }).first().click()
 }
 
-async function typeDraft(page: Page, text: string): Promise<void> {
-  await page
-    .waitForFunction(
-      () => {
-        const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
-        return els.length > 0 && [...els].every((el) => el.isContentEditable)
-      },
-      undefined,
-      { timeout: 60_000 },
-    )
-    .catch(() => undefined)
-  const composer = page.locator('[data-composer-input]').last()
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    await composer.click()
-    await page.keyboard.insertText(text)
-    const echoed = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '')
-    if (echoed.includes(text)) return
-    await page.waitForTimeout(5_000)
-  }
-  throw new Error(`composer 键入失败（8 次重试后回显仍不含目标文本）：${text}`)
+async function chipText(page: Page): Promise<string> {
+  return (await chip(page).first().textContent()) ?? ''
 }
 
 async function snap(page: Page, name: string): Promise<void> {
@@ -106,7 +87,7 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-/** 挂靠会话计数（checks RPC——编排判定共用源） */
+/** 挂靠会话计数（checks RPC——纯选中态零副作用判定源） */
 async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
   const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
     data?: { attachedSessions?: number }
@@ -115,7 +96,31 @@ async function attachedSessions(page: Page, wsDir: string, path: string): Promis
   return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
 }
 
-test('1.31 UI：A1 冷却窗维度拆分 + A3 取消抑制显式重选清除 + A4 确认框零并发编排', async () => {
+/** mask 退场干净（A2 本体）：确认框关闭后 composer 可点 + 键入回显（零遮挡残留） */
+async function typeIntoComposer(page: Page, text: string): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
+        return els.length > 0 && [...els].every((el) => el.isContentEditable)
+      },
+      undefined,
+      { timeout: 60_000 },
+    )
+    .catch(() => undefined)
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await composer(page).click({ timeout: 8_000 }).catch(() => {
+      throw new Error('composer 点击被遮挡（mask 残留）')
+    })
+    await page.keyboard.insertText(text)
+    const echoed = await composer(page).evaluate((el) => (el as HTMLElement).textContent ?? '')
+    if (echoed.includes(text)) return
+    await page.waitForTimeout(3_000)
+  }
+  throw new Error(`composer 键入失败（回显不含目标文本）：${text}`)
+}
+
+test('1.31 UI：A1 点选时点确认立现 + A2 mask 退场干净 + A3 确认切行零会话副作用', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-31-guards-'))
   const { dir: wsDir, wtDir } = makeGitRepo()
@@ -127,75 +132,51 @@ test('1.31 UI：A1 冷却窗维度拆分 + A3 取消抑制显式重选清除 + A
     await page.waitForLoadState('domcontentloaded')
     await dismissOnboardingModals(page)
     await registerProject(page, wsDir)
-    // A7 前置：选中项目工作区（selectedId 命中项目行——编排数据根严格命中；未选中项目
-    // 时编排默认停用正是 A7 语义，此处显式走正确用法）
+    // 前置：选中项目工作区（hero chip 挂载前置）
     await page.locator('button[aria-label="选择工作区"]').first().click()
     await page.locator('.dswf-hero-picker-list').getByText('guards-repo', { exact: false }).first().click()
     await expect(page.locator('[data-composer-input]').last()).toBeVisible({ timeout: 30_000 })
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-    await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
-      timeout: 30_000,
-    }).toContain('main')
-
-    // ── A1：draft 非空（发送意图在场）→ 点选跨分支行 → 确认框在冷却窗（8s）内立现。
-    // 修复前：readArmCooldownActive 先行 return——8s 内零确认框零编排（WYSIWYG 主承诺违约）。
-    await typeDraft(page, '1-31 A1 send-intent message')
-    // 工作区切换后 composer InputState store 绑定可能滞后于 DOM 回显——补键入直至
-    // 首条消息意图（draft 非空）被 arm 闸读到（确认框立现 = A1 断言本体）。
-    let dialogShown = false
-    for (let attempt = 0; attempt < 5 && !dialogShown; attempt += 1) {
-      dialogShown = await heroRiskDialog(page)
-        .waitFor({ state: 'visible', timeout: 4_000 })
-        .then(() => true)
-        .catch(() => false)
-      if (!dialogShown) {
-        await pickMenuRow(page, 'feat-a')
-        await typeDraft(page, ' 1-31')
-      }
+    await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('main')
+    // 项目根挂靠基线（工作区拾取触发的官方 create 预铸为异步落点——轮询至计数稳定后
+    // 定格；A3 断言 = 点选/确认全程零「新增」第二路，而非绝对零）
+    let rootBaseline = -1
+    for (let round = 0; round < 5; round += 1) {
+      await page.waitForTimeout(3_000)
+      const current = await attachedSessions(page, wsDir, wsDir)
+      if (current === rootBaseline) break
+      rootBaseline = current
     }
-    await expect(
-      heroRiskDialog(page),
-      'A1：发送意图引发的 arm 不被冷却窗挡——确认框应在 8s 冷却窗内立现',
-    ).toBeVisible({ timeout: 6_000 })
-    await snap(page, 'a1-dialog-within-cooldown.png')
-    // A4 基线：主行被锚定默认选中，draft 键入即已编排主行（root 计数为既有值）——
-    // A4 断言口径 = feat-a 确认框待决/确认全程 root 计数零新增
-    const rootBaseline = await attachedSessions(page, wsDir, wsDir)
 
-    // ── A3：取消 → 显式重选同一行 → 确认框重弹（取消抑制被显式重选清除）。
+    // ── A1：点选跨分支行 → 确认框立现（点选时点——零 draft 依赖，设计 A 主断言）──
+    await pickMenuRow(page, 'feat-a')
+    await expect(heroRiskDialog(page), 'A1：点选时点确认框应立现（零 draft/冷却窗依赖）').toBeVisible({ timeout: 8_000 })
+    await snap(page, 'a1-pick-time-dialog.png')
+
+    // ── A2：取消 → mask 退场干净——composer 可点可键入（零遮挡残留）──
     await heroRiskDialog(page).getByRole('button', { name: '取消', exact: true }).click()
     await expect(heroRiskDialog(page)).toBeHidden()
-    await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
-      .not.toContain('feat-a')
-    await pickMenuRow(page, 'feat-a')
-    // 1.98 取消消费意图（bug f54f54ee）：显式重选清除取消抑制照旧，但被取消否决的那份
-    // 草稿不再自触发弹框（模态残留会永久遮挡 composer）——composer 可键入，草稿变化
-    // （新意图）出现即重弹，A3「重弹可能」语义保留。
-    await expect(
-      heroRiskDialog(page),
-      'A3 配套：重选后零自动重弹（取消消费意图——f54f54ee，重弹改由新意图触发）',
-    ).toBeHidden({ timeout: 6_000 })
-    await typeDraft(page, ' 1-31')
-    await expect(
-      heroRiskDialog(page),
-      'A3：显式重选同树清除取消抑制——确认框在新意图出现时重弹',
-    ).toBeVisible({ timeout: 6_000 })
-    await snap(page, 'a3-dialog-reopens-after-reselect.png')
+    await expect.poll(async () => chipText(page), { timeout: 30_000 }).not.toContain('feat-a')
+    await typeIntoComposer(page, '1-31 A2 mask-clean typing')
+    await snap(page, 'a2-mask-clean-composer.png')
 
-    // ── A4：确认框待决期间零并发第二路编排。模态 mask 下 UI 输入不可达（点选/键入均被
-    // 官方 Modal 拦截——并发重入只能来自效应层，归 shouldArmSelectedRow 单测钉）；此处
-    // 取终态面：确认 feat-a 后恰一个挂靠会话，项目根（主行，draft 非空下其余闸全过）
-    // 零杂散编排。
+    // ── A3：显式重选 → 确认框重弹（取消非永久否决）→ 确认 → 选中态切行 + 零会话副作用 ──
+    await pickMenuRow(page, 'feat-a')
+    await expect(heroRiskDialog(page), 'A3：显式重选应重弹确认框').toBeVisible({ timeout: 8_000 })
+    await snap(page, 'a3-dialog-reopens-after-reselect.png')
     await acknowledgeAndConfirm(page)
     await expect(heroRiskDialog(page)).toBeHidden()
+    await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('feat-a')
+    // 点选零编排（结构性无并发第二路）：确认全程 wt-a 与项目根 attachedSessions 恒零
+    //（会话创建唯一时机 = 官方 create 调用点 wrap 预铸；点选 = 纯选中态）
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 60_000, message: '确认后 wt-a 应恰一个挂靠会话' })
-      .toBe(1)
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: 'A3：点选确认不应产生 wt-a 挂靠会话（纯选中态）' })
+      .toBe(0)
     expect(
       await attachedSessions(page, wsDir, wsDir),
-      'A4：项目根（主行）零并发编排——确认框待决/确认全程零新增第二路会话',
+      'A3：项目根零并发第二路——点选/确认全程零新增（基线对照）',
     ).toBe(rootBaseline)
-    await snap(page, 'a4-final-single-session.png')
+    await snap(page, 'a3-confirmed-switched-zero-sessions.png')
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })

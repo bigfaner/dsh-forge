@@ -4,8 +4,10 @@
 // 铁律口径：「视图同级互禁」只禁同级业务互引——本模块 = 公共下层（装配域共享面），
 // 数据源 useForgeProjects 仍唯一（views/sidebar）。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { LedgerWorkspacesSnapshot } from '../views/sidebar/sidebar-model.js'
 import { useForgeProjects, type ProjectsPhase } from '../views/sidebar/use-forge-projects.js'
+import { preloadRpcClientFactory, type RpcClientFactory } from '../rpc/index.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
 
 /**
@@ -98,4 +100,51 @@ export function useAnchoredProjects(useWorkspaces?: KitSelectorHook): AnchoredPr
   const anchor =
     useWorkspaces === undefined ? null : <WorkspacesAnchor hook={useWorkspaces} onChange={handleWorkspacesSnap} />
   return { projects, workspaces: workspacesSnap, retry, silentRefresh, anchor }
+}
+
+/**
+ * 工作区归属解析（纯异步转换——bug 52fc94db 后续管线可测化）：路径集 → forge:worktree/resolve
+ * 批量通道 → 归一工作区路径 → projectId 映射。未解析路径（非 git/未注册）不出现在结果
+ * （host 侧归档行跳过同语义）；空路径集零 RPC 短路；通道故障原样上抛（hook 径 catch 降级）。
+ */
+export async function resolveWorkspaceProjectMap(
+  paths: readonly string[],
+  makeClient: RpcClientFactory,
+): Promise<ReadonlyMap<string, string>> {
+  if (paths.length === 0) return new Map()
+  const result = await makeClient().worktree.resolve({ paths })
+  const next = new Map<string, string>()
+  for (const entry of result.resolved) next.set(normalizeFsPath(entry.path), entry.projectId)
+  return next
+}
+
+/**
+ * 工作区归属映射（bug 52fc94db 收敛单源——ForgeSidebarSlot 既有 effect 迁入）：workspace
+ * 快照的全部路径经 forge:worktree/resolve 批量通道交 host 身份归并单点裁决（git common-dir
+ * 锚 + 主树行必胜，与 hero 编排/必绑拦截同一 resolveProject 基础设施），产出 归一工作区
+ * 路径 → projectId 映射。消费面：左栏树分组（buildSidebarTree）+ 概览锚定（projectAnchorOf
+ * miss 段——worktree 工作区会话归并属主项目）。**重梳级联 = deps 含项目数据对象身份**
+ * （useForgeProjects 每次刷新/静默刷新产新对象——注册/归档后一次项目刷新即重梳；只比相位
+ * 字符串会使「已开 workspace 后补注册」永不重梳）。失败 fail-soft 空映射（消费方维持各自
+ * 的无映射现状语义）；空路径集零 RPC 短路。效应断言归 e2e（仓规——anchored-projects 同注）。
+ */
+export function useWorkspaceProjectMap(
+  wsItems: readonly { readonly path?: unknown }[],
+  projectsState: ProjectsPhase,
+  makeClient: RpcClientFactory = preloadRpcClientFactory,
+): ReadonlyMap<string, string> {
+  const [map, setMap] = useState<ReadonlyMap<string, string>>(() => new Map())
+  useEffect(() => {
+    const paths = [...new Set(wsItems.map((row) => row.path).filter((p): p is string => typeof p === 'string' && p !== ''))]
+    let alive = true
+    resolveWorkspaceProjectMap(paths, makeClient)
+      .then((next) => {
+        if (alive) setMap(next)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [wsItems, projectsState, makeClient])
+  return map
 }

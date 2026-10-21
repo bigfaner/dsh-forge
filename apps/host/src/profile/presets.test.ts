@@ -72,10 +72,10 @@ describe('底稿前置（环境门）', () => {
 
 describe('cordis.patch.yml 底稿（registry 覆写行）', () => {
   const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.cordis), 'utf8')
-  it('registry 行 default = expedition（Story 1：hero 座位缺省远征）——除头注释外零多余行', () => {
-    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: expedition')
+  it('registry 行 default = blitz（bug 2ba146d8：hero 座位缺省突击）——除头注释外零多余行', () => {
+    expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: blitz')
     const rows = text.split('\n').filter((line) => line !== '' && !line.startsWith('#'))
-    expect(rows).toEqual(['- id: agent-preset-registry', '  config:', '    default: expedition'])
+    expect(rows).toEqual(['- id: agent-preset-registry', '  config:', '    default: blitz'])
   })
 })
 
@@ -131,7 +131,7 @@ for (const preset of ['expedition', 'blitz'] as const) {
       expect(persona).toContain('clean code')
       expect(persona).toContain('行为纪律：')
       expect(persona).toContain('反模式禁令：')
-      // 分工纪律单一归属技能层：persona 仅一句引用，不重复 run-tasks 铁律 3 表述
+      // 分工纪律单一归属技能层：persona 仅一句引用，不重复各技能自身铁律表述
       expect(persona).toContain('分工纪律按各技能自身铁律执行')
       const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
       expect(bodyLines).toHaveLength(6) // 身份定位/作风/思维习惯/行为纪律/反模式禁令/分工引用——prefix 总行数 7 ≤ 12
@@ -153,8 +153,13 @@ for (const preset of ['expedition', 'blitz'] as const) {
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
       const skill = rows.get('skill-filesystem')!
       expect(skill).toContain('                - "{{plugin-forge-skills}}"')
-      if (isExpedition) expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
-      else expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
+      if (isExpedition) {
+        expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
+        expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')
+      } else {
+        expect(skill).not.toContain('{{plugin-forge-spec-skills}}')
+        expect(skill).toContain('                - "{{plugin-forge-blitz-skills}}"')
+      }
     })
 
     it(`产品增量行：plugin-forge 恒携${isExpedition ? ' + plugin-forge-spec（远征 spec 全量）' : '，物理无 plugin-forge-spec（Story 6：L1 物理隔离）'}`, () => {

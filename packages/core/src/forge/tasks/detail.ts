@@ -169,8 +169,6 @@ export async function taskDetail(deps: TasksDetailDeps, q: TaskDetailQuery): Pro
     vars: snapshot.vars,
     coverage: snapshot.coverage,
     complexity: snapshot.complexity,
-    surfaceKey: snapshot.surfaceKey,
-    surfaceType: snapshot.surfaceType,
     blockedReason: snapshot.blockedReason,
     breaking: snapshot.breaking,
     createdAt: snapshot.createdAt,

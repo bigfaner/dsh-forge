@@ -20,6 +20,7 @@ import { dirname } from 'node:path'
 import { createGitIdentityPort } from '@dsh-forge/core'
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectService, ProjectSummary } from '@dsh-forge/contracts'
+import { invalidateResolveCaches } from './worktree-rpc.js'
 
 /** 绑定表文件形状（版本化——消费方 = knowledge 插件 tools/session.ts 惰性读取） */
 export interface KnowledgeBindingsFile {
@@ -126,6 +127,9 @@ export function withKnowledgeBindingsRefresh(
     async registerProject(input: Parameters<ProjectService['registerProject']>[0]) {
       const result = await service.registerProject(input)
       await writeKnowledgeBindings(target, await service.listProjects().catch(() => []), log, listWorktrees)
+      // bug 9eb9d6cb 后续收口：新注册路径的两级解析缓存失效（注册前该路径被探测为
+      // 非 git/未注册时，清单停在 isGit:false、解析停在陈旧 null 直到重启）。
+      invalidateResolveCaches(input.workspaceDir)
       return result
     },
   }

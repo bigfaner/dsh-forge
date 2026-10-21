@@ -64,6 +64,9 @@ export function createElectronBuilderConfig(rootVersion = ROOT_VERSION) {
       // 安装器/卸载器图标（fix-45）——与 win.icon 同源 build/icon.ico
       installerIcon: 'build/icon.ico',
       uninstallerIcon: 'build/icon.ico',
+      // 卸载保留便携数据目录（customRemoveFiles 宏缝——跳过 $INSTDIR\data\，见 installer.nsh）
+      // electron-builder API schema：include 是单文件路径字符串，不收数组
+      include: 'build/installer.nsh',
     },
     publish: null, // P1 无更新通道（插件升级 = 随应用发版更新资源目录）
   }

@@ -224,6 +224,32 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
         detail: ['任务源: ' + escalation.source.slug, '', '失败原因（全文）：', escalation.reason].join('\n'),
         options: ESCALATION_OPTIONS,
       }
+    case 'settle-landing-rejected':
+      return {
+        header: '派发循环裁决',
+        question: `任务 ${escalation.taskKey} 的提交落点核验失败（提交落错分支或核验故障），任务已转移为可恢复态，需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          `任务: ${escalation.taskKey}`,
+          '',
+          '核验结论（全文）：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
+    case 'rate-limit':
+      return {
+        header: '派发循环裁决',
+        question: `任务 ${escalation.taskKey} 因 LLM 供应商流控无法执行（限流窗口内重试必再撞限流），循环已挂起——流控解除后需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          `任务: ${escalation.taskKey}`,
+          '',
+          '流控原因（全文）：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
     case 'deadlock':
       return {
         header: '派发循环裁决',

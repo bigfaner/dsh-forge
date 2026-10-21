@@ -81,6 +81,13 @@ describe('upsertFeatureDoc', () => {
     expect(out).toMatchObject({ ok: false, code: 'ERR_WORKSPACE_NOT_REGISTERED', violations: [] })
   })
 
+  it('bug: rel_path 描述示例缺 docs/ 前缀——误导 agent 注册悬空 rel_path（须与 write-prd 技能约定 docs/features/<slug>/... 对齐）', () => {
+    const tool = createUpsertFeatureDocTool(depsWithCapture().deps)
+    const desc = tool.parameters.properties.rel_path?.description ?? ''
+    expect(desc).toContain("docs/features/<slug>/prd/prd-spec.md")
+    expect(desc).not.toMatch(/'\s*features\//)
+  })
+
   it('render：formatOk 双友好快照——首行 ✓ + relPath/summary/updatedAt 行', async () => {
     const { deps } = depsWithCapture()
     const tool = createUpsertFeatureDocTool(deps)
