@@ -32,11 +32,14 @@ export interface ResolvedQuoteScope {
   readonly fullscreenSurface: string
 }
 
-/** 默认监听域：dockkit 文档容器 + 浮窗 + 主 ChatView 消息区。 */
+/** 默认监听域：dockkit 文档容器 + 浮窗 + 主 ChatView 消息流列容器。
+ * [data-chat-flow] 出处：官方 @deepseek-ai/dsh-client-ui-chat@0.2.0-rc.2
+ * lib/client.js ChatView（column div，"data-chat-flow": ""，scroll.listRef 内层）——
+ * 官方 DOM/官方包均无 [data-chat-messages]（1.10 走查实测，已退役）。 */
 export const DEFAULT_SELECTION_ROOTS: readonly string[] = [
   '[data-dockkit-pane]',
   '[data-dockkit-float]',
-  '[data-chat-messages]',
+  '[data-chat-flow]',
 ]
 
 /** 默认全屏呈现源：rightbar fullscreen（proposal 复用核销表）。 */

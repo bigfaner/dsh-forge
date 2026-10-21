@@ -19,7 +19,7 @@ const PARA_TEXT = '文本引用锚定的核心是把一段选区映射为稳定�
 /** 组装可划选 DOM：scope 域内段落 + 编辑域 + 域外文本。 */
 function seedDom(): void {
   document.body.innerHTML = `
-    <div data-chat-messages>
+    <div data-chat-flow>
       <p id="para">${PARA_TEXT}</p>
       <div id="box" contenteditable="true">编辑域文本</div>
     </div>
@@ -124,7 +124,7 @@ describe('extractSelection（DOM → SelectionProbe 提取）', () => {
     expect(probe.collapsed).toBe(false)
     expect(probe.editableTarget).toBe(false)
     expect(probe.overlayRole).toBeNull()
-    expect(probe.scopeRoot).toBe('[data-chat-messages]')
+    expect(probe.scopeRoot).toBe('[data-chat-flow]')
     expect(probe.text).toBe(PARA_TEXT)
   })
 

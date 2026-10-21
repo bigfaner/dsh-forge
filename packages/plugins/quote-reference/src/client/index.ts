@@ -159,19 +159,36 @@ export const quoteReferenceClient = {
     // 组合缝 fail-loud log + fail-soft 降级：接线面任一未捕获异常只降本面（console
     // 留痕供真机判读），不外溢炸 cordis 组合。
     try {
+      // Root cause: 真机 web 壳 sessions provide 晚于本 apply——主径恒走兜底分支，
+      // 兜底回调必须自身完成接线（空回调 = 菜单永不装配）。
+      let menu: SelectionMenuHandle | undefined
+      let disposeWired = false
+      const wire = (): void => {
+        if (disposeWired) return // 幂等防重挂：已接线不再二次 mount/dispose
+        disposeWired = true
+        menu = mountQuoteSelectionMenu(ctx)
+        mountDisposeOnContext(ctx, () => () => menu?.dispose())
+      }
       const sessions = readSessionsOf(ctx)
       if (sessions != null) {
-        const menu = mountQuoteSelectionMenu(ctx)
-        mountDisposeOnContext(ctx, () => () => menu?.dispose())
+        wire()
         return
       }
       // 装配序兜底（官方 inject face——AGENTS.md §1.1 合法缝）：服务 provide 晚于本
-      // apply 时运行期注入，provide 时接线；已提供则前分支已走。
+      // apply 时运行期注入，provide 时以注入后 scope 接线；已提供则前分支已走。
       const inject = (ctx as {
         inject?: (names: readonly string[], cb: (scope: unknown) => void) => unknown
       }).inject
       if (typeof inject !== 'function') return
-      inject.call(ctx, ['sessions'], () => undefined)
+      inject.call(ctx, ['sessions'], (scope: unknown) => {
+        const late = readSessionsOf(scope)
+        if (late == null) return
+        try {
+          wire()
+        } catch (error) {
+          console.error('[dsh-forge/quote-reference] late wiring failed——降级空态', error)
+        }
+      })
     } catch (error) {
       console.error('[dsh-forge/quote-reference] client apply failed——降级空态', error)
     }

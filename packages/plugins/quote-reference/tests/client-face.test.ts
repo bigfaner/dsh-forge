@@ -76,4 +76,42 @@ describe("client face apply 骨架", () => {
     quoteReferenceClient.apply(ctx as never);
     expect(injected).toEqual([["sessions"]]);
   });
+
+  it("bug: 兜底回调执行时以注入后 scope 接线（effect 缝注册——回调空体 = 菜单永不装配）", () => {
+    const effects: Array<() => unknown> = [];
+    let callback: ((scope: unknown) => void) | undefined;
+    const ctx: FakeCtx = {
+      inject: (_names, cb) => {
+        callback = cb;
+        return undefined;
+      },
+      effect: (execute) => {
+        effects.push(execute);
+        return undefined;
+      },
+    };
+    quoteReferenceClient.apply(ctx as never);
+    // provide 晚于 apply：宿主 provide 时以注入后 scope 触发回调
+    callback?.({ sessions: { list: [] } });
+    expect(effects.length, "兜底回调必须完成接线（dispose 挂 ctx.effect）").toBe(1);
+  });
+
+  it("bug: 兜底回调幂等防重挂（二次触发不再重复接线）", () => {
+    const effects: Array<() => unknown> = [];
+    let callback: ((scope: unknown) => void) | undefined;
+    const ctx: FakeCtx = {
+      inject: (_names, cb) => {
+        callback = cb;
+        return undefined;
+      },
+      effect: (execute) => {
+        effects.push(execute);
+        return undefined;
+      },
+    };
+    quoteReferenceClient.apply(ctx as never);
+    callback?.({ sessions: { list: [] } });
+    callback?.({ sessions: { list: [] } });
+    expect(effects.length).toBe(1);
+  });
 });

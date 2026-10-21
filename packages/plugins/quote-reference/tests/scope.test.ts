@@ -48,6 +48,11 @@ describe("resolveSelectionScope（组合配置解析）", () => {
     expect(scope.listening).toBe(true);
   });
 
+  it("bug: 默认清单对齐官方真实 DOM（[data-chat-flow] 官方核销锚在场；[data-chat-messages] 退役）", () => {
+    expect(DEFAULT_SELECTION_ROOTS).toContain("[data-chat-flow]");
+    expect(DEFAULT_SELECTION_ROOTS).not.toContain("[data-chat-messages]");
+  });
+
   it("fullscreen.surface 未声明 = rightbar fullscreen 默认", () => {
     expect(DEFAULT_FULLSCREEN_SURFACE).toBe("rightbar-fullscreen");
     expect(resolveSelectionScope({}).fullscreenSurface).toBe("rightbar-fullscreen");
@@ -99,7 +104,7 @@ describe("isQuotableSelection（选区过滤纯模型）", () => {
   it("替身/浮层消息正文（无浮层角色标记）不在排除集——可引用域仍由声明清单裁定", () => {
     expect(
       isQuotableSelection(
-        quotable({ scopeRoot: "[data-chat-messages]", overlayRole: null }),
+        quotable({ scopeRoot: "[data-chat-flow]", overlayRole: null }),
       ),
     ).toBe(true);
   });
