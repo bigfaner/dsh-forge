@@ -268,6 +268,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
         { path: 'C:/repo', branch: 'main', detached: false, bare: false },
         { path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a', detached: false, bare: false },
       ],
+      pathPresent: () => true, // 本测专查 healing 触发面——活性恒真（缺席跳过归 bug 63180253 专测）
       workspaceRegistry: registry,
     })
     const result = await service.list({ projectRoot: 'C:/repo' })
@@ -276,6 +277,30 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(titled, '旧工作区未随 list 自愈（存量边界）').toEqual([
       { path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' },
     ])
+  })
+
+  it('bug 63180253：heal 跳过盘上缺席陈旧行（present=false）——零 resolveByPath 空转（ENOENT 噪音根治）', async () => {
+    const resolvedPaths: string[] = []
+    const registry = {
+      resolveByPath: async (path: string) => {
+        resolvedPaths.push(path)
+        return undefined
+      },
+      create: async (_path: string, _title?: string) => ({ attachSession: async () => {} }),
+    }
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [
+        { path: 'C:/repo', branch: 'main', detached: false, bare: false },
+        { path: 'C:/repo/.forge/worktrees/gone', branch: 'feat/gone', detached: false, bare: false },
+      ],
+      pathPresent: (p) => p === 'C:/repo', // gone 树已被外部删除（git prune 前陈旧行）
+      workspaceRegistry: registry,
+    })
+    await service.list({ projectRoot: 'C:/repo' })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    // 主行 isMain 跳过 + 缺席行 present=false 跳过 → resolveByPath 零触达（现场 26 次/天 ENOENT warn 根治）
+    expect(resolvedPaths).toEqual([])
   })
 
   it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {

@@ -472,7 +472,9 @@ export function createWorktreeRpcService(deps: {
     const projectName = resolution.projectName
     if (registry === undefined || projectName === undefined || projectName === '') return
     for (const entry of dtos) {
-      if (entry.isMain) continue
+      // bug 63180253：盘上缺席陈旧行（git prune 前残留）跳过——resolveByPath realpath
+      // ENOENT warn 空转（现场 26 次/天）。树重建后 list 自然重新对齐，自愈语义零损失。
+      if (entry.isMain || !entry.present) continue
       void (async (): Promise<void> => {
         try {
           const workspace = await registry.resolveByPath?.(entry.path)
