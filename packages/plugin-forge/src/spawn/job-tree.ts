@@ -12,7 +12,7 @@
 // 交付门边界：本文件的机制断言经注入桩 launcher 单测锁定；真机端到端取证（嵌套 Job
 // 语义真机验证 / --watch 整树退出 / commit charge 无孤儿）归档任务日志（AGENTS.md 2026-10-15）。
 import { spawn, execFile, execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -325,11 +325,14 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
   private readonly hostPid: number
   private enabled: boolean
 
-  constructor(deps: { readonly keeperAssembly?: Promise<KeeperAssembly> }, launcher: KeeperLauncher, hostPid: number, enabled: boolean) {
+  constructor(deps: { readonly keeperAssembly?: Promise<KeeperAssembly> }, launcher: KeeperLauncher, hostPid: number, enabled: boolean, queueBaseDir: string) {
     this.launcher = launcher
     this.hostPid = hostPid
     this.enabled = enabled
-    this.queueDir = join(tmpdir(), 'dsh-forge-jobtree', `queue-${randomUUID()}`)
+    // Root cause: 队列目录原落 Temp（Temp 清理器在 keeper 存活期掏目录 → 在途 terminate
+    // 指令丢失 = 整树回收失效，孤儿进程吃 commit）。基址改注入缝：宿主传应用数据锚
+    // （会话级瞬态运行时域），缺省 env 覆写，最终缺省保留 Temp（插件便携缺省）。
+    this.queueDir = join(queueBaseDir, `queue-${randomUUID()}`)
     activeGuards.add(this.record) // 仲裁登记入构造器——spawn 即在世（工厂零后置窗口）
     this.whenReady = enabled ? this.bootstrap(deps.keeperAssembly ?? ensureKeeperAssembly()) : Promise.resolve()
   }
@@ -555,7 +558,9 @@ export function createWorkerTreeGuard(deps: WorkerTreeGuardDeps = {}): WorkerTre
   const launcher = deps.keeperLauncher ?? pwshKeeperLauncher
   const envOff = process.env.DSH_FORGE_TREE_GUARD === GUARD_ENV_OFF
   if (platform !== 'win32' || envOff) return noopWorkerTreeGuard()
-  const guard = new WorkerTreeGuardImpl({ keeperAssembly: deps.keeperAssembly }, launcher, hostPid, true)
+  const queueBaseDir = resolveQueueBaseDir(deps)
+  sweepStaleQueueDirs(queueBaseDir) // 断电遗留清扫（迁出 Temp 后 OS 兜底消失——自补清理语义）
+  const guard = new WorkerTreeGuardImpl({ keeperAssembly: deps.keeperAssembly }, launcher, hostPid, true, queueBaseDir)
   const record: GuardRecord = { guard }
   activeGuards.add(record)
   const originalReclaim = guard.reclaim.bind(guard)
@@ -576,6 +581,47 @@ export interface WorkerTreeGuardDeps {
   readonly keeperLauncher?: KeeperLauncher
   /** keeper 装配（测试注入桩——缺省真编译缓存） */
   readonly keeperAssembly?: Promise<KeeperAssembly>
+  /**
+   * 指令队列基址注入缝（宿主 data 锚——`{userData}/runtime/jobtree`）：Temp 清理器
+   * 会在 keeper 存活期掏 Temp 目录，在途 terminate 指令丢失 = 整树回收失效。解析序：
+   * 本注入 > env DSH_FORGE_JOBTREE_DIR > Temp 缺省（插件便携缺省——无宿主注入时行为不变）。
+   */
+  readonly queueBaseDir?: string
+}
+
+/** 队列基址解析（deps 注入 > env 覆写 > Temp 缺省——三级单源） */
+function resolveQueueBaseDir(deps: WorkerTreeGuardDeps): string {
+  const injected = deps.queueBaseDir
+  if (injected !== undefined && injected !== '') return injected
+  const env = process.env.DSH_FORGE_JOBTREE_DIR
+  if (env !== undefined && env !== '') return env
+  return join(tmpdir(), 'dsh-forge-jobtree')
+}
+
+/** 遗留清扫阈值（host 被断电杀掉时 queue-* 遗留——活 keeper 目录当天必有写动作 touch mtime） */
+const STALE_SWEEP_MS = 24 * 60 * 60 * 1000
+
+/** 已清扫基址（进程级一次——同基址多 guard 不重复扫） */
+const sweptBases = new Set<string>()
+
+/** 遗留 queue-* 目录清扫（启动期一次 per 基址；24h mtime 判陈旧；fail-soft 零抛） */
+function sweepStaleQueueDirs(base: string): void {
+  if (sweptBases.has(base)) return
+  sweptBases.add(base)
+  try {
+    const cutoff = Date.now() - STALE_SWEEP_MS
+    for (const entry of readdirSync(base)) {
+      if (!entry.startsWith('queue-')) continue // 非队列命名空间不碰（数据集中目录内的他者）
+      const dir = join(base, entry)
+      try {
+        if (statSync(dir).mtimeMs < cutoff) rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // 单目录判定/删除失败不影响其余与守卫装配
+      }
+    }
+  } catch {
+    // 基址缺席（首次使用未建）= 无遗留可扫，静默
+  }
 }
 
 /** 生产装配缺省守卫工厂（环境开关 + fail-soft） */

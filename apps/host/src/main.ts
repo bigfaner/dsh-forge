@@ -65,6 +65,9 @@ void (async () => {
     const tele = attachHostTelemetry(app.getPath('userData'), { causeStack: paths.form === 'dev' })
     if (process.env.DSH_HOME) console.warn(`[host] shell 继承 DSH_HOME=${process.env.DSH_HOME} 压过 fix-26 缺省隔离（paths.ts 第三层）——确认有意（调试/特殊布局）`)
     process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-26：缺省隔离 {userData}/dsh-home 数据两界，凭据经 overlay 桥真 home）
+    // job-tree 指令队列基址注入（数据集中裁决——worker 守卫队列目录落 {userData}/runtime/jobtree，
+    // 消除 Temp 清理器掏目录竞态；child 经 env 继承链拿到，插件侧 deps/env/Temp 三级解析兜底）
+    process.env.DSH_FORGE_JOBTREE_DIR ??= join(app.getPath('userData'), 'runtime', 'jobtree')
     // fix-12 B：安全模式（HARNESS_SAFE_MODE_ENV 跨进程存活——relaunch 环境承载 profile
     // 切换；安全模式 = 官方基座三件套隔离区，跳过用户层与第三方 bundle）。
     let profileDir = paths.profileDir

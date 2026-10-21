@@ -8,8 +8,10 @@
 // 复位——guard 复位回归断言）。
 import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type { ChildProcess } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { createWorkerTreeGuard, ensureKeeperAssembly, hostOwnedPidsSnapshot, noopWorkerTreeGuard, noteHostOwnedChild } from './job-tree.js'
@@ -427,5 +429,62 @@ describe('R2-major②③（bug 458fa355）：互认竞态 / 宿主子进程收�
     finishKeeper()
     expect(await reclaiming).toBe(true)
     rmSync(queueDir!, { recursive: true, force: true })
+  })
+})
+
+// ───────────── 队列目录锚（Temp 清理器竞态收口——queueBaseDir 注入缝 + 遗留清扫）─────────────
+
+describe('队列目录锚（queueBaseDir）', () => {
+  const win32Launcher = (queueDirs: string[]): NonNullable<WorkerTreeGuardDeps['keeperLauncher']> => (args) => {
+    queueDirs.push(args.queueDir)
+    const stdout = new EventEmitter()
+    queueMicrotask(() => stdout.emit('data', 'ready 4242\n'))
+    return { pid: 4242, stdout: stdout as unknown as Readable, exited: new Promise<void>(() => {}) } satisfies KeeperProcess
+  }
+
+  it('queueBaseDir 注入：queueDir 落注入基址下的 queue-* 子目录（宿主 data 锚承接面）', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-test-'))
+    const dirs: string[] = []
+    const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard.whenReady
+    expect(dirs[0]).toBeDefined()
+    expect(dirs[0]!.startsWith(base)).toBe(true) // queueDir 落注入基址下
+    expect(dirs[0]!.slice(base.length + 1)).toMatch(/^queue-/) // 子目录名 queue-* 形态
+    rmSync(dirs[0]!, { recursive: true, force: true })
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('env DSH_FORGE_JOBTREE_DIR 兜底：deps 缺席注入时取 env 基址', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-env-'))
+    const dirs: string[] = []
+    vi.stubEnv('DSH_FORGE_JOBTREE_DIR', base)
+    try {
+      const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: undefined })
+      await guard.whenReady
+      expect(dirs[0]!.startsWith(base)).toBe(true)
+      rmSync(dirs[0]!, { recursive: true, force: true })
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  it('遗留清扫：基址下 mtime 超 24h 的 queue-* 目录删除，新鲜目录保留（断电遗留面）', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-sweep-'))
+    const stale = join(base, 'queue-stale')
+    const fresh = join(base, 'queue-fresh')
+    const foreign = join(base, 'unrelated') // 非 queue-* 前缀不碰
+    for (const dir of [stale, fresh, foreign]) mkdirSync(dir, { recursive: true })
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    utimesSync(stale, old, old)
+    const dirs: string[] = []
+    const guard = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard.whenReady
+    const guard2 = createWorkerTreeGuard({ ...deps('win32', win32Launcher(dirs)), queueBaseDir: base })
+    await guard2.whenReady
+    expect(readdirSync(base).filter((name) => name === 'queue-stale')).toEqual([]) // 陈旧遗留清除
+    expect(readdirSync(base)).toContain('queue-fresh') // 新鲜目录保留
+    expect(readdirSync(base)).toContain('unrelated') // 非 queue-* 不碰
+    rmSync(base, { recursive: true, force: true })
   })
 })
