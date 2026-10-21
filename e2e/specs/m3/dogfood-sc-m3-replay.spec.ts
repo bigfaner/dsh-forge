@@ -4,9 +4,12 @@
 // 经 plugin-forge spawn 替换缝（index.ts 装配三级解析：override > 计划 > in-process）整替
 // worker spawn：零真实模型调用，派发循环/dispatchTask 四分支应用链真实照跑——
 //   ① halted：计划 abort 条目（spawn 成功 + worker 无结算死亡）→ 异常终止阶梯 ×4 →
-//      worker-abort-over-limit 问询 → 跳过收口 → 人工转移 → 会话 B 二轮（occurrence 5）；
-//   ② spawned·success（1.1 复位后 + 1.2）；③ spawned·blocked（1.3 一轮 blocked + addTask
-//      fix 链 → fix-1 成功 → auto-restore → 二轮成功）；④ no-task（1.4 收官占位——harness
+//      worker-abort-over-limit 挂起投影（3b① 起裁决走 owner 对话面——问询卡退役）→
+//      /stop-dag-tasks 人工停止收口 → 人工转移 → 会话 B 二轮（occurrence 5）；
+//   ② spawned·success（1.1 复位后 + 1.2）；③ spawned·blocked（1.3 一轮 blocked →
+//      blocked-ask-user 无进展硬停挂起 → harness 代理处置层建 fix-1（d5c272c6 起 worker
+//      拒收 addTask——链派生权归主会话/循环处置层）→ 停止收口 → 会话 C：fix-1 成功 →
+//      auto-restore → 1.3 二轮成功）；④ no-task（1.4 收官占位——harness
 //      预领/结算，池快照判词收工）。
 // 「模型」变量的回放代位（B 层边界——工具调用经 forge tool 真执行，工件/提交由计划动作
 // fs-write/git-commit 确定性代位，'$commit' 哨兵把本轮提交哈希代进 submit 载荷）：
@@ -30,7 +33,7 @@ import { createBridgeDriver } from '../../support/replay/executor.js'
 import { readDogfoodAudit, seedDogfoodTaskRow, type DogfoodAuditRecord } from '../../support/replay/dogfood-record.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel } from '../../support/m3.js'
-import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
 
 /** M3.5 真实提案（仓内 Draft——夹具内逐字拷贝；与录制轮同源） */
@@ -41,6 +44,31 @@ const FEATURE = PROP
 const WS_NAME = 'm35-ws'
 /** worker 无结算死亡的归因锚（事件夹 error.log 断言同源——产品结算核失败消息面） */
 const ABORT_MESSAGE = 'worker run ended without a settlement (replay halt ladder)'
+
+/**
+ * 概览 dock 挂载重试（002 复跑实证——阻塞问询 owner 模型轮 + 渲染层连接重试窗内 projects
+ * 读失败，概览 body 退化为「未锚定项目」占位、OV_PANEL 不挂载）。每轮 = 整段 openOverviewDock
+ * （reveal/幂等门自带）；失败后关掉概览 tab 再重开——keyed body 重挂载触发项目锚重解析。
+ * 瞬态窗对策，非放宽断言：轮内 30s 挂载门原样保留。
+ */
+async function openOverviewDockWithRetry(page: import('@playwright/test').Page, rounds: number): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < rounds; i++) {
+    try {
+      await openOverviewDock(page)
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+    }
+  }
+  throw lastCause
+}
 
 /** 夹具工作区：git 仓 + 无害四门 justfile（与录制轮同形） */
 function makeWalkthroughWorkspace(): string {
@@ -159,7 +187,8 @@ function makeReplayPlan(ws: string): ReplayPlan {
           },
         ],
       },
-      // ③ 1.3 一轮受阻 + fix 链建链（blocked submit → addTask 单事务建链面）
+      // ③ 1.3 一轮 blocked（纯结算——fix 链派生不在 worker 面：d5c272c6 起 worker 会话
+      //    addTask 拒收，链由处置层 harness 代理建，见走查中段 1.3 阻塞处置轮）
       {
         taskKey: `${FEATURE}/1.3`, occurrence: 1, behavior: 'script',
         actions: [
@@ -168,15 +197,6 @@ function makeReplayPlan(ws: string): ReplayPlan {
             args: {
               slug: FEATURE, local_id: '1.3', result: 'blocked',
               reason: 'freshness-checklist.md absent — fix: create docs/knowledge/freshness-checklist.md containing the single line: marker',
-            },
-          },
-          {
-            kind: 'tool', name: 'addTask',
-            args: {
-              source_kind: 'feature', source_slug: FEATURE,
-              title: 'Fix: create freshness-checklist.md', type: 'doc',
-              source_task_slug: FEATURE, source_task_local_id: '1.3', block_source: true,
-              task_desc: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
             },
           },
         ],
@@ -482,12 +502,39 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       console.log(`[m35-replay] halted 收敛 +${Math.round((Date.now() - startedAt) / 1000)}s（claims11=${s.claims11}）`)
     }
 
-    // ── 裁决问询卡收口（worker-abort-over-limit 第三层）→「跳过」──
-    // 定位收窄 = 启用态按钮（概览任务子 tab 的「跳过」状态 chip 同名 disabled——排除歧义）
-    const skipAsk = page.locator('button:not([disabled])', { hasText: '跳过' }).first()
-    await expect(skipAsk, 'worker-abort 超限裁决问询卡挂出（阶梯 ×4 终局）').toBeVisible({ timeout: 90_000 })
-    await skipAsk.click()
-    await expect(skipAsk, '问询卡收口（循环终态——独占随登记表删除释放）').toBeHidden({ timeout: 30_000 })
+    // ── 挂起投影 + 人工停止收口（worker-abort-over-limit 第三层）──
+    // 595eaab7（3b① 挂起改造）起裁决改经 owner 对话面（P3 挂起投影），不再挂 userQuestions
+    // 问询卡——旧「跳过」按钮锚退役（两轮 run-m3 DOM 快照零问询卡实证：b73ce82/529252f5
+    // 同点 not found）。挂起机械信号 = 阶梯冻结：1.1 claim 计钉在 4（零第 5 次重入）+
+    // 全库零 submit + 1.1 保持 in_progress；处置走挂起回执指引的「停止」径——/stop-dag-tasks
+    // （UI command plane 直执行，零模型依赖）终止循环 → 登记表删除 → 独占释放（与旧跳过
+    // 收口同终态语义——会话 B 才能新开循环）。
+    const freezeDeadline = Date.now() + 30_000
+    for (;;) {
+      const s = dbStats()
+      if (s.claims11 >= 4) break
+      if (Date.now() > freezeDeadline) {
+        throw new Error(`挂起冻结超时：claims11=${s.claims11} statuses=${JSON.stringify([...s.statuses.entries()])}`)
+      }
+      await sleep(2_000)
+    }
+    await sleep(3_000) // 静置——第 5 次重入若发生即非挂起（冻结判据反证窗）
+    {
+      const s = dbStats()
+      expect(s.claims11, '挂起冻结：1.1 claim 计 = 4（阶梯 ×4 终局——零第 5 次重入）').toBe(4)
+      expect(s.submits, '挂起阶段全库零 submit').toBe(0)
+      expect(s.statuses.get('1.1'), '挂起保持：1.1 留 in_progress').toBe('in_progress')
+      console.log(`[m35-replay] 挂起投影 +${Math.round((Date.now() - startedAt) / 1000)}s（claims11=${s.claims11}）`)
+    }
+    const stopComposer = page.locator(COMPOSER_INPUT).last()
+    await expect(stopComposer, 'owner 会话 composer 在场（挂起处置入口）').toBeVisible({ timeout: 30_000 })
+    await stopComposer.click()
+    await stopComposer.fill('/stop-dag-tasks')
+    await page.keyboard.press('Enter')
+    await expect(
+      page.locator(CONVERSATION_CONTENT).first(),
+      '循环停止回执（登记表删除——独占释放，会话 B 可新开）',
+    ).toContainText('已停止任务源', { timeout: 30_000 })
 
     // ── halted 阶日志面：worker 异常终止阶梯证据 ──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)
@@ -549,6 +596,58 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     await expect(
       page.locator('[data-conversation-content]').first(),
       '会话 B 派发指令自动发送（不重发到 A——新会话转录只含本轮指令）',
+    ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
+    await awaitPresetHeaderLabel(page, '远征模式')
+    await awaitNoLateModals(page)
+
+    // ── 1.3 阻塞处置轮（3b② 无进展硬停挂起 + d5c272c6 派生权收归处置层——harness 代理）──
+    // B 轮领序：1.1（P0）成功 → 1.3 blocked 结算（零 commit/files）→ blocked-ask-user 挂起。
+    // 处置 = harness 代理处置层单事务建 fix 链（blockSource：fix-1 行 + fix-chain 边 + 源
+    // auto-block）→ 挂起收口走「停止」径（owner 会话 /stop-dag-tasks——同 ① 径）→ 会话 C
+    // 新开循环领 fix-1（fix 优先键）→ auto-restore → 1.3 二轮成功。
+    const blockedDeadline = Date.now() + 120_000
+    for (;;) {
+      const s = dbStats()
+      if (s.statuses.get('1.1') === 'completed' && s.statuses.get('1.3') === 'blocked') break
+      if (proc.exitCode !== null) throw new Error(`宿主进程提前退出：code=${String(proc.exitCode)}`)
+      if (Date.now() > blockedDeadline) {
+        throw new Error(`1.3 一轮受阻收敛超时：statuses=${JSON.stringify([...s.statuses.entries()])}`)
+      }
+      await sleep(2_000)
+    }
+    console.log(`[m35-replay] 1.3 一轮受阻 +${Math.round((Date.now() - startedAt) / 1000)}s（1.1 completed / 1.3 blocked）`)
+    await driver.call('forgeTasks', 'addTask', {
+      projectId,
+      source: { kind: 'feature', slug: FEATURE },
+      title: 'Fix: create freshness-checklist.md',
+      type: 'doc',
+      sourceTask: { slug: FEATURE, localId: '1.3' },
+      blockSource: true,
+      taskDesc: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
+    })
+    const stopComposerB = page.locator(COMPOSER_INPUT).last()
+    await expect(stopComposerB, '会话 B composer 在场（挂起处置入口）').toBeVisible({ timeout: 30_000 })
+    await stopComposerB.click()
+    await stopComposerB.fill('/stop-dag-tasks')
+    await page.keyboard.press('Enter')
+    await expect(
+      page.locator(CONVERSATION_CONTENT).first(),
+      'B 轮循环停止回执（登记表删除——独占释放，会话 C 可新开）',
+    ).toContainText('已停止任务源', { timeout: 30_000 })
+
+    // ── 派发会话 C（fix 链执行轮——fix-1 → auto-restore → 1.3 二轮）──
+    // dock 挂载重试（002 复跑实证：B 轮 blocked 问询的 owner 模型轮 + 渲染层连接重试窗内
+    // projects 读失败 → 概览 body 退化为「未锚定项目」占位——OV_PANEL 不挂载。重开概览
+    // tab 触发 keyed body 重挂载 + 项目锚重解析，吃掉瞬态窗——非放宽断言，30s/轮 ×3 轮）。
+    await openOverviewDockWithRetry(page, 3)
+    await page.locator(ovSubtabOf('tasks')).click()
+    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    const dispatchOn3 = page.locator('[data-dswf-tt-dispatch="on"]').first()
+    await expect(dispatchOn3, '派发按钮亮起（fix-1 pending 在场）').toBeVisible({ timeout: 30_000 })
+    await dispatchOn3.click()
+    await expect(
+      page.locator(CONVERSATION_CONTENT).first(),
+      '会话 C 派发指令自动发送',
     ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '远征模式')
     await awaitNoLateModals(page)
@@ -675,7 +774,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     expect(fixRow, 'fix 任务行在场（fix-N 前缀）').toBeDefined()
     expect(fixRow?.localId).toMatch(/^fix-\d+$/)
     const fixAdd = recsOf(fixRow!.localId).find((r) => r.verb === 'add')
-    expect(fixAdd, 'fix add 记录在场（worker tool 面——逃生通道）').toBeDefined()
+    expect(fixAdd, 'fix add 记录在场（处置层派生——harness 代理主会话面，d5c272c6 后 worker 面拒收）').toBeDefined()
     const autoBlock = c.find((r) => r.verb === 'auto-block')
     expect(autoBlock, '源 auto-block 记录在场（core 面）').toBeDefined()
     expect(autoBlock!.id, '单事务建链：auto-block 与 fix add 相邻（同事务落账）').toBe(fixAdd!.id + 1)
