@@ -18,13 +18,14 @@ import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
-import { findFixtureSession } from '../../support/session-files.js'
+import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, sessionRowOf } from '../../support/anchors.js'
 import { awaitPresetHeaderLabel, awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 
 const WS_NAME = 'ws-sc1'
+const MARKER = 'SC1 blank 锁断言夹具消息'
 
 test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1·2/blank 锁/恢复投影重建', async () => {
   test.setTimeout(480_000)
@@ -66,7 +67,7 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
     // ── ③ blank 锁生效：首轮消息后座位卸载（UI 投影面——hero 面随非 blank 退场）──
     const composer = page.locator(COMPOSER_INPUT).last()
     await composer.click()
-    await page.keyboard.insertText('SC1 blank 锁断言夹具消息（零凭据形态）')
+    await page.keyboard.insertText(`${MARKER}（零凭据形态）`)
     await page.keyboard.press('Enter')
     await ensureNoBlockingDialog(page)
     const seatButton = seatRoot(page).locator('button').first()
@@ -85,11 +86,20 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
     const session = findFixtureSession(dshHome, WS_NAME)
     expect(session, '会话目录在盘（复启投影重建断言锚）').toBeDefined()
     const sessionId = (session as { sessionId: string }).sessionId
+    // 持久化门（bug e3beff4a 根因——closeApp 不等会话日志写者：夹具消息未 flush 即关停，
+    // 复启后按残缺日志重建 = 转录空 + 恢复面 CDP session closed；探针实测关停即刻
+    // 4 events/360B vs 静置后 19 events/24KB）。恢复段前置：夹具 user/message 事件在盘。
+    await waitForSessionEvents(
+      dshHome,
+      sessionId,
+      (events) => events.some((e) => e.type === 'user/message' && JSON.stringify(e.data ?? {}).includes(MARKER)),
+      60_000,
+    )
 
     // ── ④ 恢复会话按 agentPreset 投影重建：复启 → 会话行 → 头部投影标签同款 ──
     await closeApp(launched.app)
     launched = undefined
-    const relaunched = await launchHost({ userData })
+    const relaunched = await launchHost({ userData, collectConsole: true })
     launched = relaunched
     const page2 = relaunched.page
     const row = page2.locator(sessionRowOf(sessionId)).first()
@@ -97,7 +107,7 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
     await row.click()
     await expect(page2.locator(CONVERSATION_CONTENT).first(), '会话转录恢复').toBeVisible({ timeout: 30_000 })
     await awaitPresetHeaderLabel(page2, '突击模式')
-    expect(page2.locator(CONVERSATION_CONTENT).first(), '会话内容按账本重建').toContainText('SC1 blank 锁断言夹具消息')
+    await expect(page2.locator(CONVERSATION_CONTENT).first(), '会话内容按账本重建').toContainText(MARKER)
 
     // 零凭据模型失败面不计入产品断言（留痕诊断）
     if (launched.pageErrors.length > 0) console.log(`[sc1-diagnostic] pageerror：${launched.pageErrors.slice(-3).join(' | ')}`)
