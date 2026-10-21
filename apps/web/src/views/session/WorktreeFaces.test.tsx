@@ -9,6 +9,7 @@ import {
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
   anchorDefaultWorktreePath,
+  createFollowup,
 } from './WorktreeFaces.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
@@ -44,6 +45,23 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
   // 注：选中态回填（selectedPath → chip 一体两属性）的相位数据面 SSR 不可达（list 为效应
   // 回调——本文件头注口径）；透传锚归 packages git-worktree hero-worktree-picker.test
   // （selectedPath 在册即回填 feat/api · wt-api），选中闭环交互归 e2e worktree-hero-chip。
+})
+
+// ───────────── bug 6593d708 创建跟进次序（纯编排——createFollowup）─────────────
+
+describe('创建跟进次序（bug 6593d708——清单刷新先于选中态落定）', () => {
+  it('创建成功后先刷新清单、后落选中态（防陈旧自愈以创建前旧行集误判新树盘上失配）', async () => {
+    const order: string[] = []
+    await createFollowup('C:/repo/.forge/worktrees/super-composer', {
+      refresh: async () => {
+        order.push('refresh')
+      },
+      onSelectConfirmed: () => {
+        order.push('select')
+      },
+    })
+    expect(order).toEqual(['refresh', 'select'])
+  })
 })
 
 describe('1.17 hero 默认回填锚定链（纯函数——anchorDefaultWorktreePath）', () => {

@@ -116,6 +116,22 @@ export function anchorDefaultWorktreePath(
 }
 
 /**
+ * 创建成功跟进次序（bug 6593d708 纯编排单源）：清单刷新先于选中态落定。
+ * 选中态落定触发陈旧选中自愈效应——若行集尚未含新树（创建前旧快照），新树被误判
+ * 「盘上失配」：失效 toast + 三层选中态清回主树（含 host 选中记忆，首条消息必绑
+ * 重路由随之回落项目根）。次序契约 = refresh 完成后 onSelectConfirmed。
+ */
+export interface CreateFollowupDeps {
+  readonly refresh: () => Promise<void>
+  readonly onSelectConfirmed: (path: string) => void
+}
+
+export async function createFollowup(createdPath: string, deps: CreateFollowupDeps): Promise<void> {
+  await deps.refresh()
+  deps.onSelectConfirmed(createdPath)
+}
+
+/**
  * hero 第二 chip 挂载（新建/删除弹窗由本面持有——通用层组件零弹窗自持，装配层挂）。
  * projectRoot 缺席（无选中项目）= 零注入退回现状；非 git = HeroWorktreePicker 内部
  * 返回 null（能力位条件渲染——UI 只消费 isGit）。
@@ -248,9 +264,9 @@ export function ForgeHeroWorktreeMount({
     }
   }, [phase, localSelectedPath, projectRoot, applySelection, pushSelection])
 
-  const refresh = useCallback((): void => {
-    if (projectRoot === null) return
-    makeRpc()
+  const refresh = useCallback((): Promise<void> => {
+    if (projectRoot === null) return Promise.resolve()
+    return makeRpc()
       .worktree.list({ projectRoot })
       .then((result) => {
         setPhase({
@@ -267,7 +283,7 @@ export function ForgeHeroWorktreeMount({
 
   // 挂载期一次 + 弹窗关闭后刷新（新建/删除后清单即新——提案「创建后立即出现在选择列表」）
   useEffect(() => {
-    refresh()
+    void refresh()
   }, [refresh, createOpen, deleteTarget])
   useEffect(() => {
     if (!createOpen || projectRoot === null) return
@@ -342,15 +358,18 @@ export function ForgeHeroWorktreeMount({
       const settle = (): void => setCreating(false)
       makeRpc()
         .worktree.create({ projectRoot, branch: request.branch, base: request.baseBranch, path })
-        .then((result) => {
+        .then(async (result) => {
           setCreateOpen(false)
           // 创建成功 hero 选中态自动切到新 worktree（项目粒度选中记忆写入 + 本地回填 +
           // host 选中记忆推送）；主树 HEAD 不动（worktree add 新树内检出新分支，零 checkout）。
           // 选中路径取 create 返回条目的清单正则（entry.path——与 list 行路径同源同格式，
           // 行匹配 path === selectedPath 用精确等值；本地拼串反斜杠 ≠ 清单正斜杠实证）
           const createdPath = result.entry?.path ?? path
-          onSelectConfirmed(createdPath)
-          refresh()
+          // bug 6593d708 Root cause: 选中态先落、清单后刷——陈旧选中自愈效应以创建前旧行集
+          // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
+          // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
+          // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
+          await createFollowup(createdPath, { refresh, onSelectConfirmed })
         })
         .catch((error: unknown) => {
           // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
