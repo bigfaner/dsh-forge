@@ -55,6 +55,8 @@ export interface HeroRebindFace {
   isBlank(sessionId: string): boolean
   openSession(sessionId: string): void
   archiveSession(sessionId: string): Promise<void>
+  /** 账本变更订阅（官方 sessions.list store subscribe——归档前置确认的事件推送源；缺席 = 确认面降级） */
+  subscribeSessionLedger(listener: () => void): () => void
 }
 
 /** 点选即换绑编排依赖（纯函数注入面——face×seal 判读合成在调用方，本面只管次序） */
@@ -71,21 +73,27 @@ export interface RebindOrchestrationDeps {
   readonly switchToProduct: (path: string, productSessionId: string) => void
   /** 官方归档（后清场——弃置 blank 入 durable 归档集，可恢复、回收径复用） */
   readonly archiveSession: (sessionId: string) => Promise<void>
+  /**
+   * 切换落定确认（方案 A3 事件驱动）：resolve(true) = 官方 mainView 已在留产物会话
+   * （账本事件推送通知，零轮询）；resolve(false) = 确认面上界超时/缺席（本轮跳过归档）
+   */
+  readonly awaitSwitchSettled: (productSessionId: string) => Promise<boolean>
 }
 
 /**
  * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
  * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → switchToProduct
- * 切换 → 旧 blank 归档。次序契约 = 先切后归档；无可换绑 blank = 零编排（纯选中态）；
- * 失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
- * 已知边界（revert b5d00e81 轮询确认——用户裁决不依赖轮询）：切换链未落定时归档仍居
- * main 的旧 blank，官方投影对账可能短暂弹回 hero；残留交由下次旅程 recycle/reroute 清理。
+ * 切换 → **事件驱动等官方切换落定**（账本订阅推送 mainView 在留通知，零轮询）→ 旧 blank
+ * 归档。归档前置确认（bug ff324cad 症状：归档仍居 main 的会话，官方投影对账释放 main →
+ * 弹回 hero）：awaitSwitchSettled false = 本轮跳过归档（残留交由下次旅程 recycle/reroute
+ * 清理）。无可换绑 blank = 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状）。
  */
 export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
   const staleBlankId = await deps.rebindableBlankId()
   if (staleBlankId === undefined) return
   const product = await deps.sessionCreate(path)
   deps.switchToProduct(path, product.sessionId)
+  if (!(await deps.awaitSwitchSettled(product.sessionId))) return // 未落定跳过归档
   await deps.archiveSession(staleBlankId)
 }
 
@@ -120,6 +128,9 @@ const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: []
 
 /** worktree 路径归一键（1.21/1.24 口径——项目根选中记忆键归一；与 wrap/create-wrap 归一同式） */
 const cwdKey = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+
+/** 换绑归档前置确认上界（官方投影/导航延迟 1~3s 实测刻度 ×2 余量——超时跳过本轮归档） */
+const SWITCH_CONFIRM_TIMEOUT_MS = 6000
 
 /**
  * 项目粒度选中记忆（1.26 起落 sessionStorage——bug 907225f2 确认即回填的载体升级）：
@@ -290,6 +301,27 @@ export function ForgeHeroWorktreeMount({
           return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
         },
         sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
+        // 方案 A3 归档前置确认（事件驱动）：订阅官方账本变更，mainView 在留产物即落定；
+        // 超时/订阅缝缺席 = false 本轮跳过归档（零轮询——等待由 store 写侧推送驱动）
+        awaitSwitchSettled: (productSessionId) =>
+          new Promise<boolean>((resolve) => {
+            if (rebindFace.activeSessionId() === productSessionId) {
+              resolve(true) // 已落定零订阅
+              return
+            }
+            let settled = false
+            const finish = (value: boolean): void => {
+              if (settled) return
+              settled = true
+              unsubscribe()
+              clearTimeout(timer)
+              resolve(value)
+            }
+            const unsubscribe = rebindFace.subscribeSessionLedger(() => {
+              if (rebindFace.activeSessionId() === productSessionId) finish(true)
+            })
+            const timer = setTimeout(() => finish(false), SWITCH_CONFIRM_TIMEOUT_MS)
+          }),
         // 方案 A2：优先官方 onPick(树 workspaceId)——selectWorkspace 全链含草稿/附件搬运，
         // openWorkspace 复用刚预铸的树 blank（官方 reuseOrCreateBlank 判据天然命中）；
         // 树 workspaceId 不可得（未建/快照未刷新/形状漂移）→ fallback openSession 现状径
@@ -320,7 +352,6 @@ export function ForgeHeroWorktreeMount({
     },
     [rebindFace, projectRoot, phase, makeRpc, pickWorkspace, workspaceRows],
   )
-
   const onSelectConfirmed = useCallback(
     (path: string): void => {
       const row = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path) : undefined

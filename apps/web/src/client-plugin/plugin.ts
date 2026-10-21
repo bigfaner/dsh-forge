@@ -1041,6 +1041,12 @@ export function heroRebindFaceOf(ctx: ForgeClientCtx): HeroRebindFace {
     archiveSession: async (sessionId) => {
       await uiWorkspace()?.archiveSession?.(sessionId, { stopActivity: true })
     },
+    subscribeSessionLedger: (listener) => {
+      const subscribe = (ctx.get('sessions') as { list?: { subscribe?: (l: () => void) => () => void } } | undefined)?.list
+        ?.subscribe
+      if (typeof subscribe !== 'function') return () => {} // 订阅缝缺席 = 确认面降级（超时路径兜底）
+      return subscribe.call(ctx.get('sessions')?.list, listener)
+    },
   }
 }
 
