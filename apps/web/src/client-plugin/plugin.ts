@@ -1021,7 +1021,7 @@ export function heroRebindFaceOf(ctx: ForgeClientCtx): HeroRebindFace {
     const getSnapshot = (sessions?.list as { getSnapshot?: () => unknown } | undefined)?.getSnapshot
     if (typeof getSnapshot !== 'function') return undefined
     try {
-      return (getSnapshot.call(sessions?.list) as { byId?: unknown } | null) ?? undefined
+      return (getSnapshot.call(sessions?.list) as { byId?: Record<string, unknown> } | null) ?? undefined
     } catch {
       return undefined
     }
