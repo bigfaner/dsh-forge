@@ -27,6 +27,7 @@ import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
+import { attachQuoteMentionPrestep, createQuoteSnapshotStore } from './agent/quote-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
@@ -344,6 +345,18 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       disposePrestep = undefined
     }
+    // quote mention 发送期展开 pre-step（super-composer §2.3——bug-mention-prestep 同位）：
+    // 内存快照存储（插件侧 cache 入口后续装配接线；当前空表 = 快照缺失跳过 fail-soft）
+    // + 'agent/pre-step' waterfall global 挂接：扫描 @[…](quote:<uuid36>)，快照在场 →
+    // 尾部追加 <quote id source>全文</quote> 块；幂等 + 永不抛错。ctx.on 缺席/注册
+    // 抛错 = 不挂接 fail-soft。
+    const quoteSnapshotStore = createQuoteSnapshotStore()
+    let disposeQuotePrestep: (() => void) | undefined
+    try {
+      disposeQuotePrestep = attachQuoteMentionPrestep(ctx, { resolveQuote: quoteSnapshotStore.get })
+    } catch {
+      disposeQuotePrestep = undefined
+    }
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
@@ -509,6 +522,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
       ...(disposePrestep !== undefined ? [disposePrestep] : []), // bug mention pre-step（ctx.on 面在场时）
+      ...(disposeQuotePrestep !== undefined ? [disposeQuotePrestep] : []), // quote mention pre-step（ctx.on 面在场时）
       () => loopDriverBase.dispose(), // fiber 卸载收口：活循环同步终态（不收口则 DB 关闭后循环异常终止——fix-bug ea86ea00）
     ]
     return () => {
@@ -554,6 +568,26 @@ export type {
   PrestepPayloadFace,
   PrestepUserMessageFace,
 } from './agent/bug-mention-prestep.js'
+// quote mention 发送期展开 pre-step（super-composer 提案 §2.3——'agent/pre-step' waterfall
+// 扫描/投影/快照取数纯函数 + 挂接 + 内存快照存储）。
+export {
+  attachQuoteMentionPrestep,
+  createQuoteSnapshotStore,
+  expandQuoteMentions,
+  hasQuoteBlock,
+  scanQuoteMentions,
+  serializeQuoteBlock,
+} from './agent/quote-mention-prestep.js'
+export type {
+  PreStepDecisionFace as QuotePreStepDecisionFace,
+  PreStepRegisterFace as QuotePreStepRegisterFace,
+  PrestepPayloadFace as QuotePrestepPayloadFace,
+  PrestepUserMessageFace as QuotePrestepUserMessageFace,
+  QuoteMentionPrestepDeps,
+  QuoteSnapshotFace,
+  QuoteSnapshotLookupFace,
+  QuoteSnapshotStore,
+} from './agent/quote-mention-prestep.js'
 export {
   attachForgeLogListener,
   createForgeLogListener,
