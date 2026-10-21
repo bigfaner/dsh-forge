@@ -11,10 +11,11 @@
 // 草稿缝/1.25 失败文案族随 arm 效应链一并退役，本文件只剩映射面 + 确认闩锁。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 
-/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链） */
+/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
 export interface HeroPickerRow {
   readonly id: string
   readonly name: string
+  readonly wsPath: string
 }
 
 /** 弹层面（行集 + 入口形态派生——组件消费的唯一计划对象） */
@@ -35,7 +36,7 @@ export function heroPickerPlan(
   const rows: HeroPickerRow[] = []
   for (const project of projects) {
     if (project.archived) continue // 过滤口径：archived 排除（与左栏一致）
-    rows.push({ id: project.workspaceId, name: project.name })
+    rows.push({ id: project.workspaceId, name: project.name, wsPath: project.wsPath })
   }
   return { rows, pinAdd: rows.length > 0, addIsTheOnlyEntry: settled && rows.length === 0 }
 }
@@ -49,17 +50,45 @@ export function selectedProjectOf(
   return rows.find((row) => row.id === selectedId)
 }
 
+/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 选中记忆键同判） */
+function normRootPath(value: string): string {
+  const slashed = value.replaceAll('\\', '/')
+  const trimmed = slashed.length > 1 && slashed.endsWith('/') ? slashed.slice(0, -1) : slashed
+  return trimmed.toLowerCase()
+}
+
 /**
  * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
  * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
  * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
  * （ForgeHeroWorkspacePicker）经官方 owner onPick 链拾取——与用户点选同行同语义。
+ * bug 9eb9d6cb：A2 后 selectedId 可合法指向树 workspace（官方 selectWorkspace 切树后
+ * sessionWorkspace = 树 ws id，永不命中项目行）——官方快照中该 id 的 path 落在活跃项目
+ * 根之下 = 合法选中，零拾取；数据缺席（快照未到）= 现状行为（d353536f 在场门兜住不盲拾）。
  */
 export function heroDefaultPickId(
   rows: readonly HeroPickerRow[],
   selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
 ): string | undefined {
   if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRows.find(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
+        typeof (row as { path?: unknown }).path === 'string',
+    ) as { path: string } | undefined
+    if (path !== undefined) {
+      const normalized = normRootPath(path.path)
+      const underActiveProject = rows.some((row) => {
+        const root = normRootPath(row.wsPath)
+        return normalized === root || normalized.startsWith(`${root}/`)
+      })
+      if (underActiveProject) return undefined // 树 ws 合法选中——零拾取（bug 9eb9d6cb）
+    }
+  }
   return rows[0]?.id
 }
 

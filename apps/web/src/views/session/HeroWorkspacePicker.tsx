@@ -92,7 +92,9 @@ export function ForgeHeroWorkspacePicker({
   // 「选择工作区」现状）。bug d353536f 在场门：官方 workspaces 快照含目标 id 才放行——
   // 基线未就位盲拾取 = 官方 connectWorkspace 查空快照抛 unknown workspace；快照就位经
   // 锚重渲染补拾取（heroDefaultPickReady 纯函数单源）。
-  const defaultPickId = heroDefaultPickId(plan.rows, selectedId)
+  // bug 9eb9d6cb：默认拾取判据带官方 workspace 行——selectedId 指向树 workspace（A2 合法
+  // 选中，永不命中项目行）时零拾取，防 1~3s 锚刷新后 onPick(主项目) 弹回 hero。
+  const defaultPickId = heroDefaultPickId(plan.rows, selectedId, workspacesSnap?.items)
   const defaultPick = heroDefaultPickReady(workspacesSnap?.items, defaultPickId)
   const attemptedDefaultRef = useRef<ReadonlySet<string>>(new Set())
   useEffect(() => {

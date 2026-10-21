@@ -31,11 +31,11 @@ const PROJECTS = [
 ]
 
 describe('heroPickerPlan（行集 + 入口形态）', () => {
-  it('行集 = 项目（id=workspaceId、name=label）；archived 排除（过滤口径与左栏一致）', () => {
+  it('行集 = 项目（id=workspaceId、name=label、wsPath=树 ws 判据源——bug 9eb9d6cb）；archived 排除（过滤口径与左栏一致）', () => {
     const plan = heroPickerPlan(PROJECTS, true)
     expect(plan.rows).toEqual([
-      { id: 'w-1', name: 'alpha' },
-      { id: 'w-2', name: 'beta' },
+      { id: 'w-1', name: 'alpha', wsPath: 'C:\\ws\\p1' },
+      { id: 'w-2', name: 'beta', wsPath: 'C:\\ws\\p2' },
     ])
   })
 
@@ -68,7 +68,7 @@ describe('heroPickerPlan（行集 + 入口形态）', () => {
 describe('selectedProjectOf（workspaceId ↔ 项目映射——owner selectedId 契约）', () => {
   it('selectedId 命中项目行 → 返回该行（onPick/selectedId 以 workspaceId 为键零翻译）', () => {
     const rows = heroPickerPlan(PROJECTS, true).rows
-    expect(selectedProjectOf(rows, 'w-2')).toEqual({ id: 'w-2', name: 'beta' })
+    expect(selectedProjectOf(rows, 'w-2')).toEqual({ id: 'w-2', name: 'beta', wsPath: 'C:\\ws\\p2' })
   })
 
   it('selectedId 指向未绑定工作区（账本原生行）→ 无命中（零高亮——未绑定工作区不在弹层）', () => {
@@ -138,6 +138,24 @@ describe('heroDefaultPickId（bug 2ba146d8 默认拾取——归档会话回 her
 
   it('空行集（无活跃项目）→ 不拾取（undefined——零项目直达添加流现状）', () => {
     expect(heroDefaultPickId([], undefined)).toBeUndefined()
+  })
+
+  // ── bug 9eb9d6cb：树 workspace 选中态 = 合法选中（A2 后会话可绑树 ws，永不命中项目行）──
+  const WSR = (workspaceId: string, path: string) => ({ workspaceId, path })
+  it('bug: selectedId 命中官方 workspace 行且 path 在活跃项目根下（树 ws）→ 不拾取（合法选中零覆盖）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows // 活跃根 = C:/ws/p1、C:/ws/p2
+    const wsRows = [WSR('w-tree', 'C:/ws/p1/.forge/worktrees/super-composer')]
+    expect(heroDefaultPickId(rows, 'w-tree', wsRows)).toBeUndefined()
+  })
+
+  it('bug: 树 ws 判据只认活跃项目根下路径——外部 workspace（他 repo 根）维持现状拾取', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-external', [WSR('w-external', 'D:/other-repo')])).toBe('w-1')
+  })
+
+  it('bug: 判据数据缺席（官方快照未到）→ 现状行为（d353536f 在场门兜住不盲拾取）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-tree')).toBe('w-1')
   })
 })
 
