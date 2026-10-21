@@ -652,7 +652,24 @@ export function createWorktreeRpcService(deps: {
       // W2 能力缺席显式拒绝（fail-closed）：git 项目 × 能力缺席 → typed error（rpcEnvelope
       // 序列化 → 前端 RpcClientError → Toast）；非 git / 瞬态窗口 → 官方原流零差异。
       if (await absentGitProbe(request.worktreePath)) throw new WorktreeCapabilityAbsentError(request.worktreePath)
-      const key = norm(request.worktreePath)
+      // bug ff324cad 根治级「创建即绑选中树」：hero 选中树记忆消费前移到创建时点——wrap
+      // 恒传项目根，此处选中记忆在场且活性可证即直接预铸选中树会话（零主树占位双建，
+      // 首条消息零重路由）；陈旧记忆摘除回落请求路径（bug 4a30b193 同判）；选中树 ≡
+      // 请求路径（主行锚定/无选中）= 原语义零差异。重路由径目标本就取自本记忆， Consult
+      // 幂等同值。
+      let targetPath = request.worktreePath
+      const resolution = await cachedResolve(request.worktreePath).catch(() => null)
+      if (resolution !== null) {
+        const selected = lastSelection.get(norm(resolution.projectRoot))
+        if (selected !== undefined) {
+          if (presentOf(selected)) {
+            if (norm(selected) !== norm(request.worktreePath)) targetPath = selected
+          } else {
+            lastSelection.delete(norm(resolution.projectRoot)) // 陈旧记忆摘除——后续创建不再走失效径
+          }
+        }
+      }
+      const key = norm(targetPath)
       // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用
       for (;;) {
         const existing = sessionProducts.get(key)
@@ -663,7 +680,7 @@ export function createWorktreeRpcService(deps: {
       }
       // 绑定表失效锚进 pending 链（首次挂会话时点恰一次——外部裸建树首次使用即入表；
       // G3 并发等待者共享同链不重复触发；fail-soft 恒不改写产物）
-      const pending = doSessionCreate(request).then(async (result) => {
+      const pending = doSessionCreate({ ...request, worktreePath: targetPath }).then(async (result) => {
         await notifyWorktreeSetChanged()
         return result
       })

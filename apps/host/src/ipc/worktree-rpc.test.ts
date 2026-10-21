@@ -893,6 +893,69 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(created).toHaveLength(1)
   })
 
+  // ── bug ff324cad 根治级：创建即绑选中树（hero 选中记忆消费前移到 sessionCreate——
+  //    wrap 请求项目根时直接预铸选中树会话，零主树占位双建）──
+  it('创建即绑选中树：select 推送在场 → sessionCreate(项目根) 直接预铸选中树会话（预铸头 cwd / adopt cwd / 工作区归属三面全落选中树，零主树占位）', async () => {
+    const { controller, calls } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const { registry, created: wsCreated } = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [
+        { path: 'C:/repo', branch: 'main' },
+        { path: WT_A, branch: 'feat/a' },
+      ],
+      workspaceRegistry: registry,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    await service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(created, '预铸头 cwd 未落选中树——创建即绑选中树未兑现（bug 在场）').toEqual([
+      { header: expect.objectContaining({ cwd: WT_A, id: result.sessionId }) },
+    ])
+    expect(calls, 'controller.create adopt 未落选中树').toEqual([
+      { sessionId: result.sessionId, cwd: WT_A },
+    ])
+    expect(wsCreated.map((row) => row.path), '工作区归属未落选中树（主树占位会话出现）').toEqual([WT_A])
+  })
+
+  it('创建即绑选中树：选中记忆为陈旧树（盘上缺席）→ 记忆摘除回落项目根（不对已删路径预铸）', async () => {
+    const { controller, calls } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const ghost = 'C:/repo/.forge/worktrees/ghost'
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      pathPresent: (path) => path !== ghost,
+      ensureDirAcl: async () => {},
+    })
+    await service.select({ projectRoot: 'C:/repo', path: ghost })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(created[0]?.header.cwd, '陈旧选中树被用作预铸目标（bug 4a30b193 同族回归）').toBe('C:/repo')
+    expect(calls).toEqual([{ sessionId: result.sessionId, cwd: 'C:/repo' }])
+  })
+
+  it('创建即绑选中树：选中树 ≡ 项目根（主行锚定）→ 原语义预铸项目根（零行为差异）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    await service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
+    await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(created[0]?.header.cwd).toBe('C:/repo')
+  })
+
   // ── 绑定表失效锚（onWorktreeSetChanged——外部裸建树首次使用即入表的 sessionCreate 锚）──
   it('锚恰一次：全新 sessionCreate 成功后触发 onWorktreeSetChanged 恰一次（进 pending 链——G3 并发等待者不重复触发）；blank 复用不重触发', async () => {
     const { controller } = fakeController()
