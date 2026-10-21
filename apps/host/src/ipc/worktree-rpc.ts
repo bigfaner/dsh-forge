@@ -481,6 +481,11 @@ export function createWorktreeRpcService(deps: {
    *  （registry.create realpath 归一比对——契约条件 header.cwd realpath ≡ workspace.path
    *  对 cwd=树路径的会话天然成立）→ attachSession。主行（cwd=项目根）同径挂主工作区。
    *  fail-soft：registry 缺席/失败只 warn——不阻断预铸采纳主链（会话本体已可用）。 */
+  // ACL 已补权目录会话期记忆（性能收口：icacls 幂等短路查询本身 30~60ms/次——每次
+  // 预铸都查一遍；目录 ACL 不回退（git worktree add 产物继承链恒在），会话期记忆安全。
+  // ensureDirAcl 失败不入集——下次编排重试。
+  const aclGrantedDirs = new Set<string>()
+
   const attachWorkspace = async (worktreePath: string, sessionId: string): Promise<void> => {
     const registry = resolveWorkspaceRegistry()
     if (registry === undefined) return
@@ -494,10 +499,15 @@ export function createWorktreeRpcService(deps: {
       // bug f9a23367（C）：预防性补权只针对 git worktree add 产物（4209c531 语义——新树
       // 目录缺 WRITE_DAC 继承链）；主行 = 用户自有目录链，跳过——否则项目根每次编排都
       // 触发分钟级全子树传播。resolution 缺席（非 git/降级面）保守补权（原行为不变）。
-      if (!isMainRow) {
-        await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(worktreePath).catch((cause: unknown) => {
-          warn(`[git-worktree] 目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
-        })
+      if (!isMainRow && !aclGrantedDirs.has(norm(worktreePath))) {
+        await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(worktreePath).then(
+          () => {
+            aclGrantedDirs.add(norm(worktreePath)) // 补权成功入集——后续编排零 icacls 查询
+          },
+          (cause: unknown) => {
+            warn(`[git-worktree] 目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
+          },
+        )
       }
       const mainTitle = isMainRow
         ? undefined
@@ -614,7 +624,9 @@ export function createWorktreeRpcService(deps: {
    */
   const resolveBranch = async (worktreePath: string, branch?: string): Promise<string> => {
     if (branch !== undefined && branch !== '') return branch
-    const resolution = await ext().resolveProject(worktreePath).catch(() => null)
+    // 性能收口：走 G7② 缓存（consult/换绑/上一次预铸已解析过同路径 → 零 git 探测重跑；
+    // 此前每点击直呼 ext().resolveProject = 每次 60~120ms git 子进程固定税）
+    const resolution = await cachedResolve(worktreePath).catch(() => null)
     const root = resolution?.projectRoot ?? worktreePath
     const entries = await (deps.listWorktreeEntries ?? listWorktrees)(root).catch(() => [])
     const listed = entries.find((row) => norm(row.path) === norm(worktreePath))?.branch
