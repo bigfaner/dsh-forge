@@ -642,6 +642,49 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(rig.calls[0]?.cwd).toBe(WT_A)
   })
 
+  it('bug ac0246f5：W3 预铸 blank（绑定 ≡ 项目根）首条消息仍重路由选中树——根绑定占位 ≠ 绑定决定', async () => {
+    const rig = guardRig({
+      events: {
+        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+      },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.calls[0]?.cwd, '产物应预铸在选中树上（W3 改道产物 blank 仍可重路由）').toBe(WT_A)
+    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank'), text: 'hi' })
+  })
+
+  it('bug ac0246f5 伴例：绑定项目根但已非 blank（真实使用过）→ pass 零打扰', async () => {
+    const rig = guardRig({
+      events: {
+        s1: [
+          { type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } },
+          { type: 'turn/start', seq: 1, data: { turn: 1 } },
+        ],
+      },
+      headers: { s1: { cwd: 'C:/repo' } },
+    })
+    const verdict = await rig.service.requiredBindingGuard()!.judge('s1')
+    expect(verdict).toBe('pass')
+  })
+
+  it('bug ac0246f5 伴例：根绑定 blank × 目标 ≡ 自身树 → reuse-self 恰一次投递不重入', async () => {
+    const rig = guardRig({
+      events: {
+        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+      },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.prompts).toHaveLength(1)
+    expect(rig.prompts[0]).toMatchObject({ sessionId: 'blank', text: 'hi' })
+  })
+
   it('bug 4a30b193：hero 选中树目录已被强制删除（陈旧 lastSelection）→ 回落会话 cwd 编排，绝不在已删路径上预铸', async () => {
     const GHOST = 'C:/repo/.forge/worktrees/gone'
     const { persistence, created } = fakePersistence({ blank: [] }, { blank: { cwd: 'C:/repo' } })

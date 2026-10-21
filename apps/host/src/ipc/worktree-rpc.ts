@@ -412,6 +412,10 @@ export function createWorktreeRpcService(deps: {
   // hero 选中树记忆（select 通道推送——重路由目标单源；键 = 归一 projectRoot）
   const lastSelection = new Map<string, string>()
 
+  // 重路由在途重入保护：reroute 对「目标 ≡ 会话自身树」径 reuse 自身 blank 后原样
+  // prompt——judge 若再判 route 将无限重入。在途标记使重入判读恒 pass。
+  const routing = new Set<string>()
+
   // G3 双建互斥（host 重路由 × client arm 共享互斥面）：sessionCreate 按 cwd 归一键记忆
   // 产物 Promise——并发调用共享同一在途编排（等待编排完成），已产物 blank 会话直接复用
   // （每 cwd 至多一个 blank 产物）；产物已非 blank（真实使用过）→ 除名允许新建。
@@ -698,12 +702,12 @@ export function createWorktreeRpcService(deps: {
 
     requiredBindingGuard() {
       if (deps.sessionController === undefined || deps.sessionPersistence === undefined) return undefined
-      const controller = deps.sessionController
       return {
         // 判据（设计 §7 + bug 82cab5fe 修订）：git 项目 ∧ 目标会话 blank ∧ 无绑定 ∧ 顶层
         // 会话（header.parentSession 缺席——worker/fork 子会话归官方子代理机械所有，恒放行）；
         // cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）；非 blank 既有会话零打扰。
         judge: async (sessionId) => {
+          if (routing.has(sessionId)) return 'pass' // 重路由在途重入保护（reuse-self 径）
           const header = await headerOf(sessionId)
           if (header.parentSession !== undefined) return 'pass' // 子会话零重路由（非 hero 人口）
           const cwd = header.cwd
@@ -723,7 +727,14 @@ export function createWorktreeRpcService(deps: {
             deps.failOpenDiag?.(`[git-worktree] 必绑判读链异常 fail-open 放行（attach 读失败）：${String(cause)}`)
             return 'pass' // 判读链异常 fail-open（正确性不依赖此径）
           }
-          if (binding !== null) return 'pass'
+          if (binding !== null) {
+            // W3 预铸占位（bug ac0246f5）：create-wrap 改道产物 blank 恒绑项目根——那是
+            // 「待重路由占位」不是绑定决定，选中树由首条消息重路由兑现；非 blank（已真实
+            // 使用）或绑定他树 = 绑定决定，零打扰。
+            const rootPlaceholder = norm(binding.worktreePath) === norm(resolution.projectRoot)
+            if (!rootPlaceholder || !(await blankOf(sessionId))) return 'pass'
+            return 'route'
+          }
           return (await blankOf(sessionId)) ? 'route' : 'pass'
         },
         // 编排（与 client arm 共享 sessionCreate 互斥面——在途即等待）+ 重路由：
@@ -734,7 +745,23 @@ export function createWorktreeRpcService(deps: {
         // TypeError 被网关 dispatch 折叠为 gateway/internal 回包（toast + 无回复）。
         // args 尾巴原样透传（signal 等调用方上下文保真）。
         reroute: async (sessionId, request, ...args) => {
-          const header = await headerOf(sessionId)
+          routing.add(sessionId) // 重入保护：reuse-self 径的原样 prompt 判读恒 pass
+          try {
+            return await rerouteInner(sessionId, request, ...args)
+          } finally {
+            routing.delete(sessionId)
+          }
+        },
+      }
+    },
+
+    seal: sealStateOf,
+  }
+
+  /** 重路由编排本体（guard.reroute 的 inner——routing 重入标记由外层承担） */
+  async function rerouteInner(sessionId: string, request: unknown, ...args: unknown[]): Promise<unknown> {
+    {
+      const header = await headerOf(sessionId)
           const cwd = header.cwd
           const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
           // bug 4a30b193：Root cause——hero 选中树记忆（lastSelection）从不失效，树目录被
@@ -750,6 +777,17 @@ export function createWorktreeRpcService(deps: {
           if (target === undefined && cwd !== undefined && cwd !== '') target = cwd
           if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
           if (!presentOf(target)) throw new WorktreeTargetAbsentError(target)
+          // 已绑定目标树（根绑定占位 × 目标 ≡ 自身树）→ 免再编排，原样投递（routing 标记
+          // 使重入判读 pass）；无绑定 blank 同目标仍走产物径（G2——绑定语义由预铸兑现）。
+          const existingBinding = await readLatestAttach(sessionId, readFactory).catch(() => null)
+          if (existingBinding !== null && norm(existingBinding.worktreePath) === norm(target)) {
+            const selfController = deps.sessionController
+            if (selfController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法投递 prompt')
+            return (selfController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+              { ...(request as Record<string, unknown>), sessionId },
+              ...args,
+            )
+          }
           // 走 sessionCreate 公开面（G3 双建互斥：在途共享、产物 blank 复用）——直调
           // doSessionCreate 会绕过互斥，与 client arm 并发时同 cwd 双建。
           const preset = await sourcePresetOf(sessionId)
@@ -757,12 +795,10 @@ export function createWorktreeRpcService(deps: {
             worktreePath: target,
             ...(preset === undefined ? {} : { agentPreset: preset }),
           })
-          return (controller.prompt as (r: unknown, ...rest: unknown[]) => unknown)({ ...(request as Record<string, unknown>), sessionId: product.sessionId }, ...args)
-        },
-      }
-    },
-
-    seal: sealStateOf,
+          const productController = deps.sessionController
+          if (productController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法重路由 prompt')
+          return (productController.prompt as (r: unknown, ...rest: unknown[]) => unknown)({ ...(request as Record<string, unknown>), sessionId: product.sessionId }, ...args)
+    }
   }
 
   /** 预铸采纳单会话创建（1.16 配方本体——G3 互斥面与 guard 共用的原始创建径） */
