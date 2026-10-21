@@ -260,10 +260,12 @@ export function createWorktreeRpcService(deps: {
   readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
   /** worktree 一体创建缝（bug f9a23367 A′ 预铸时序——缺省 = 插件域 createWorktree 真机 git；测试注入桩） */
   readonly createWorktreeOp?: typeof createWorktree | undefined
-  /** worktree 集合变化锚（绑定表失效通知——create/remove 建删树 + sessionCreate 树首次
-   * 挂会话时点触发；装配方接 refreshKnowledgeBindings 全量现算重写 knowledge-bindings。
-   * fail-soft：锚缺席/抛错只记 warn，不影响建删树/编排结果） */
-  readonly onWorktreeSetChanged?: (() => Promise<void> | void) | undefined
+  /**
+   * 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）。
+   * worktreePath 缺席调用（建/删树）= 集合真变，必刷新；带路径调用（预铸挂会话）=
+   * 装配方按「绑定行已在册」跳过判定（性能收口：每点击省 N×git worktree list + 文件重写）。
+   */
+  readonly onWorktreeSetChanged?: ((worktreePath?: string) => Promise<void> | void) | undefined
   /** 会话采纳锚（bug e5059ee1——controller.create adopt 成功后触发恰一次；装配方经官方
    * permissionPresets.set 补钉 defaultPreset（resume 钉档走「已种子化」分支落组合缺省，
    * 绕过用户缺省档）。fail-soft：缺席/抛错只记 warn不改写产物） */
@@ -282,11 +284,12 @@ export function createWorktreeRpcService(deps: {
   readonly pathPresent?: ((path: string) => boolean) | undefined
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
-  // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）
-  const notifyWorktreeSetChanged = async (): Promise<void> => {
+  // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）。
+  // worktreePath 缺席（建/删树）= 集合真变必刷新；带路径（预铸挂会话）由装配方判定跳过。
+  const notifyWorktreeSetChanged = async (worktreePath?: string): Promise<void> => {
     if (deps.onWorktreeSetChanged === undefined) return
     try {
-      await deps.onWorktreeSetChanged()
+      await deps.onWorktreeSetChanged(worktreePath)
     } catch (cause) {
       warn(`[git-worktree] 绑定表刷新锚失败（fail-soft——表停旧快照，下次 boot/注册自愈）：${String(cause)}`)
     }
@@ -614,13 +617,13 @@ export function createWorktreeRpcService(deps: {
         path: request.path,
         base: request.base,
       })
-      await notifyWorktreeSetChanged() // 绑定表失效锚：新树路径即需路由行
+      await notifyWorktreeSetChanged(request.path) // 绑定表失效锚：新树路径即需路由行
       return { entry: entryToDto(entry, request.projectRoot) }
     },
 
     async remove(request) {
       const result = await deleteWorktree(request.projectRoot, request.path, async () => true)
-      await notifyWorktreeSetChanged() // 绑定表失效锚：被删路径旧行随全量重写即时消失
+      await notifyWorktreeSetChanged(request.path) // 绑定表失效锚：被删路径旧行随全量重写即时消失
       return { removed: result.removed }
     },
 
@@ -755,7 +758,9 @@ export function createWorktreeRpcService(deps: {
           }
         }
         const result = await doSessionCreate({ ...request, worktreePath: targetPath })
-        await notifyWorktreeSetChanged()
+        // 绑定表锚后台化（性能收口）：刷新（N×git worktree list + 文件重写，~百 ms）不阻塞
+        // 会话交付——会话本体已可用，绑定表晚几拍落盘无正确性影响（fail-soft 自愈语义不变）
+        void notifyWorktreeSetChanged(targetPath)
         return result
       })()
       sessionProducts.set(key, pending)

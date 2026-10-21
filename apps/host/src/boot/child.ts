@@ -471,7 +471,10 @@ async function main(): Promise<void> {
         // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
-        onWorktreeSetChanged: async () => {
+        // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
+        // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
+        // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
+        onWorktreeSetChanged: async (worktreePath?: string) => {
           let projects: Pick<ProjectService, 'listProjects'> | undefined
           try {
             projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
@@ -479,6 +482,22 @@ async function main(): Promise<void> {
             projects = undefined
           }
           if (projects === undefined) return
+          if (worktreePath !== undefined) {
+            try {
+              const { readFileSync } = await import('node:fs')
+              const raw = readFileSync(options.bindingsFile, 'utf8')
+              const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
+              const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+              const present = (parsed.projects ?? []).some(
+                (row) =>
+                  typeof row.wsPath === 'string' &&
+                  row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
+              )
+              if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
+            } catch {
+              // 读失败（首建/损坏）→ 落全量刷新现状
+            }
+          }
           await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
         },
         // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
