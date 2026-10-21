@@ -10,6 +10,7 @@
     { "path": "packages/plugins/git-worktree" },
     { "path": "packages/plugins/md-mermaid" },
     { "path": "packages/plugins/input-history" },
+    { "path": "packages/plugins/quote-reference" },
     { "path": "apps/host" },
     { "path": "apps/web" }
   ]
