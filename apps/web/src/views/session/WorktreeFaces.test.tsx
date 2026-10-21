@@ -80,7 +80,6 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
       switchToProduct: (path, productSessionId) => {
         order.push(`open:${productSessionId}(${path})`)
       },
-      activeSessionId: () => 's-tree', // 切换即时落定
       archiveSession: async (sessionId) => {
         order.push(`archive:${sessionId}`)
       },
@@ -114,30 +113,8 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
     await expect(rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)).rejects.toThrow('precast boom')
     expect(order).toEqual([])
   })
-
-  it('切换未落定 → 归档前等待确认；落定后归档（官方对账延迟 1~3s 实测刻度内完成）', async () => {
-    let active: string | undefined = undefined // 切换后延迟落定
-    const { full, order } = deps({ activeSessionId: () => active })
-    const done = rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    expect(order, '落定前绝不归档——归档仍居 main 的会话会把官方对账弹回 hero').not.toContain('archive:s-placeholder')
-    active = 's-tree'
-    await done
-    expect(order).toEqual([
-      'create:C:/repo/.forge/worktrees/wt-a',
-      'open:s-tree(C:/repo/.forge/worktrees/wt-a)',
-      'archive:s-placeholder',
-    ])
-  })
-
-  it('切换确认超时 → 跳过归档（残留交由下次旅程 recycle/reroute 清理，绝不归档仍居 main 的会话）', async () => {
-    const { full, order } = deps({
-      activeSessionId: () => 's-placeholder', // 永不落定
-      confirmTimeoutMs: 60,
-    })
-    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
-    expect(order).not.toContain('archive:s-placeholder')
-  })
+  // revert b5d00e81 轮询确认（用户裁决不依赖轮询）：归档即时执行，切换未落定时的
+  // hero 弹回为已知边界（残留交由下次旅程 recycle/reroute 清理）——事件驱动方案另立。
 })
 
 describe('1.17 hero 默认回填锚定链（纯函数——anchorDefaultWorktreePath）', () => {

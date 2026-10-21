@@ -69,36 +69,23 @@ export interface RebindOrchestrationDeps {
    * openSession 现状径，草稿不搬）
    */
   readonly switchToProduct: (path: string, productSessionId: string) => void
-  /** 活跃会话 id 现读（官方 mainView 在留判读——归档前置确认源） */
-  readonly activeSessionId: () => string | undefined
   /** 官方归档（后清场——弃置 blank 入 durable 归档集，可恢复、回收径复用） */
   readonly archiveSession: (sessionId: string) => Promise<void>
-  /** 切换落定确认上界（缺省 6s——官方投影/导航 1~3s 实测 ×2；测试注入短上界） */
-  readonly confirmTimeoutMs?: number
 }
-
-/** 切换落定确认上界（官方投影/导航延迟 1~3s 实测刻度 ×2 余量） */
-const SWITCH_CONFIRM_TIMEOUT_MS = 6000
-const SWITCH_CONFIRM_POLL_MS = 250
 
 /**
  * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
  * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → switchToProduct
- * 切换 → **等官方切换落定** → 旧 blank 归档。归档前置确认（bug ff324cad 症状：归档仍居
- * main 的会话，官方投影对账释放 main → 弹回 hero）：activeSessionId ≠ 产物 id 期间绝不
- * 归档，超时 = 本轮跳过归档（残留交由下次旅程 recycle/reroute 清理）。无可换绑 blank =
- * 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状）。
+ * 切换 → 旧 blank 归档。次序契约 = 先切后归档；无可换绑 blank = 零编排（纯选中态）；
+ * 失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
+ * 已知边界（revert b5d00e81 轮询确认——用户裁决不依赖轮询）：切换链未落定时归档仍居
+ * main 的旧 blank，官方投影对账可能短暂弹回 hero；残留交由下次旅程 recycle/reroute 清理。
  */
 export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
   const staleBlankId = await deps.rebindableBlankId()
   if (staleBlankId === undefined) return
   const product = await deps.sessionCreate(path)
   deps.switchToProduct(path, product.sessionId)
-  const deadline = Date.now() + (deps.confirmTimeoutMs ?? SWITCH_CONFIRM_TIMEOUT_MS)
-  while (deps.activeSessionId() !== product.sessionId) {
-    if (Date.now() > deadline) return // 超时跳过归档——绝不归档仍居 main 的会话
-    await new Promise((resolve) => setTimeout(resolve, SWITCH_CONFIRM_POLL_MS))
-  }
   await deps.archiveSession(staleBlankId)
 }
 
@@ -303,7 +290,6 @@ export function ForgeHeroWorktreeMount({
           return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
         },
         sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
-        activeSessionId: () => rebindFace.activeSessionId(),
         // 方案 A2：优先官方 onPick(树 workspaceId)——selectWorkspace 全链含草稿/附件搬运，
         // openWorkspace 复用刚预铸的树 blank（官方 reuseOrCreateBlank 判据天然命中）；
         // 树 workspaceId 不可得（未建/快照未刷新/形状漂移）→ fallback openSession 现状径
