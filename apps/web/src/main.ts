@@ -53,11 +53,14 @@ const quoteReferenceClient: ProductClientEntry = {
   inject: ['@deepseek-ai/dsh-api-session-controller'],
 }
 
-// super-composer 插件缺省装载行（super-composer/1.9，同上判例同构；包清单 inject 为空集）。
+// super-composer 插件缺省装载行（super-composer/1.9，input-history 判例同构）：
+// id/inject 与本包 package.json dsh.client 清单同源（vite.config 双真相源断言核销；
+// ctx.conversation.input 走 session-controller 注入边——装载序同上落在其后）。
 const superComposerClient: ProductClientEntry = {
   id: '@dsh-forge/super-composer',
   url: `super-composer-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
   rev: __DSH_FORGE_BUILD_REV__,
+  inject: ['@deepseek-ai/dsh-api-session-controller'],
 }
 
 const el = document.getElementById('root')
