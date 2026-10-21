@@ -133,32 +133,6 @@ const cwdKey = (path: string): string => path.replaceAll('\\', '/').replace(/\/+
 const SWITCH_CONFIRM_TIMEOUT_MS = 6000
 
 /**
- * 项目粒度选中记忆（1.26 起落 sessionStorage——bug 907225f2 确认即回填的载体升级）：
- * 会话面整域重载（挂载树重挂、模块级记忆丢失）不丢「记忆选中→回填」；wrap 消费 host
- * 选中记忆（pushSelection），本记忆承担跨重挂的选中意图恢复。sessionStorage 同 tab 同源
- * 存活、重载不丢，读写全程 try/catch（隐私模式/SSR fail-soft 退回无记忆现状）。写入口
- * 唯一（select 记忆/删除两式），键 = 归一 projectRoot。
- */
-const memoryKey = (projectRoot: string): string => `dswt.lastWorktree.${cwdKey(projectRoot)}`
-
-function readSelectedMemory(projectRoot: string): string | undefined {
-  try {
-    return window.sessionStorage.getItem(memoryKey(projectRoot)) ?? undefined
-  } catch {
-    return undefined
-  }
-}
-
-function writeSelectedMemory(projectRoot: string, path: string | undefined): void {
-  try {
-    if (path === undefined) window.sessionStorage.removeItem(memoryKey(projectRoot))
-    else window.sessionStorage.setItem(memoryKey(projectRoot), path)
-  } catch {
-    // 存储不可用（隐私模式）fail-soft：记忆丢失 = 退回锚定回填现状
-  }
-}
-
-/**
  * hero 默认回填锚定链（纯函数单源）：主行（isMain）当前检出分支
  * → rows 中检出同分支的行（分支只检出于一个树，分支→worktree 映射唯一；不硬编码
  * main/主行——主行检出 feature 分支时默认即指向该分支所在树，含主行自身检出场景）。
@@ -224,10 +198,9 @@ export function ForgeHeroWorktreeMount({
   const [slugCandidates, setSlugCandidates] = useState<readonly SlugCandidate[]>([])
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
-  // 选中态本地闭环（初值 = 选中记忆——点选纯选中态，无 owner 显式回填面）
-  const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(
-    () => (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined),
-  )
+  // 选中态本地投影（bug 9eb9d6cb 后续收敛：host lastSelection 唯一事实源——本地态只是
+  // host 态的 UI 镜像，挂载回填经 forge:worktree/selected 读 host，sessionStorage 记忆退役）
+  const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(undefined)
   // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：sessionCreate 创建时点
   // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
   // 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
@@ -266,13 +239,12 @@ export function ForgeHeroWorktreeMount({
   // 换绑在途闸（快速连点零并发编排——两次 sessionCreate 双 blank 竞态防线）
   const rebindInFlight = useRef(false)
 
-  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + 项目粒度记忆写入 +
-  // host 选中记忆推送（host sessionCreate 创建时点消费 + 必绑重路由兜底单源）。
+  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送
+  // （host 唯一事实源——sessionCreate 创建时点消费 + 必绑重路由兜底；本地态只是投影）。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
       setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
-      if (projectRoot !== null) writeSelectedMemory(projectRoot, path)
       pushSelection(path)
       setLocalSelectedPath(path)
     },
@@ -373,22 +345,28 @@ export function ForgeHeroWorktreeMount({
   )
 
   // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
-  // 「选中记忆 → 锚定链」回填。记忆在此响应式读（非仅 mount 初值——会话面整域重挂时
-  // 首挂 projectRoot 为 null，记忆键不可得；就绪后 projectRoot 到位即补读，跨重挂恢复
-  // 用户选中意图）。回填零编排；会话创建在官方 create 调用点（host sessionCreate 消费
-  // 选中记忆——创建时点即绑选中树，缺席重路由兜底）。
+  // 「host 选中记忆（forge:worktree/selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式
+  // 读（会话面整域重挂后 projectRoot 到位即补读，跨重挂恢复用户选中意图——host 唯一
+  // 事实源，sessionStorage 记忆已退役）。回填零编排；会话创建在官方 create 调用点
+  // （host sessionCreate 消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
   useEffect(() => {
-    if (phase.state !== 'ready' || !phase.isGit) return
-    setLocalSelectedPath(
-      (prev) =>
-        prev ??
-        (projectRoot !== null ? readSelectedMemory(projectRoot) : undefined) ??
-        anchorDefaultWorktreePath(phase.rows),
-    )
-  }, [phase, projectRoot])
+    if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    let alive = true
+    makeRpc()
+      .worktree.selected({ projectRoot })
+      .then((result) => {
+        if (alive) setLocalSelectedPath((prev) => prev ?? result.path ?? anchorDefaultWorktreePath(phase.rows))
+      })
+      .catch(() => {
+        if (alive) setLocalSelectedPath((prev) => prev ?? anchorDefaultWorktreePath(phase.rows))
+      })
+    return () => {
+      alive = false
+    }
+  }, [phase, projectRoot, makeRpc])
 
   // 陈旧选中自愈（bug 4a30b193 UI 面）：清单就绪后发现选中行盘上缺席（present=false 或
-  // 行已消失——外部强制删除）→ 三层选中态同清（本地 / 项目粒度记忆 / host 推送）+ chip
+  // 行已消失——外部强制删除）→ 两层选中态同清（本地投影 / host 推送清除）+ chip
   // 跳回主行 + 一次性 notice 告知。host 侧重路由活性探测为正确性兜底（双保险不同层）。
   const [staleNoticeName, setStaleNoticeName] = useState<string | null>(null)
   useEffect(() => {
@@ -397,9 +375,8 @@ export function ForgeHeroWorktreeMount({
     if (!reset.stale) return
     setStaleNoticeName(reset.worktreeName ?? null)
     if (reset.mainPath !== undefined) {
-      applySelection(reset.mainPath) // 跳回主行：记忆写入 + host 推送 + chip 回填（唯一写入口）
+      applySelection(reset.mainPath) // 跳回主行：host 推送 + chip 回填（唯一写入口）
     } else {
-      writeSelectedMemory(projectRoot, undefined)
       pushSelection(undefined)
       setLocalSelectedPath(undefined)
     }

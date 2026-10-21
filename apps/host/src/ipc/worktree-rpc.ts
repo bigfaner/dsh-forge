@@ -127,6 +127,7 @@ export const WORKTREE_RPC_METHODS = [
   'sessionCreate',
   'seal',
   'select',
+  'selected',
   'resolve',
 ] as const
 
@@ -141,6 +142,7 @@ export interface WorktreeRpcService {
   sessionCreate(request: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(request: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
+  selected(request: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   resolve(request: WorktreeResolveRequest): Promise<WorktreeResolveResult>
   /** host 必绑拦截 guard 面（1.30——非 RPC：sessionController/sessionPersistence 在场才有） */
   requiredBindingGuard(): RequiredBindingGuardFace | undefined
@@ -772,6 +774,12 @@ export function createWorktreeRpcService(deps: {
       return { ok: true }
     },
 
+    // 选中态读镜像（host 唯一事实源——web sessionStorage 记忆退役后的 chip 回填正门）。
+    // 无活性检查：读取是显示层消费（陈旧选中由 web 陈旧自愈 + consult 摘除各自兜底）。
+    async selected(request) {
+      return { path: lastSelection.get(norm(request.projectRoot)) }
+    },
+
     // 批量归属解析（身份归并单点——hero 编排/必绑拦截同一 resolveProject 基础设施；
     // web 归属消费面加载时一次梳理，客户端零仲裁副本）。逐路径独立解析，未解析
     // （非 git/未注册/失败）不进结果；路径经 cachedResolve 会话期缓存。
@@ -967,6 +975,7 @@ export function registerWorktreeChannels(ipc: ForgeIpc, service: WorktreeRpcServ
   ipc.register(WORKTREE_CHANNELS.sessionCreate, rpcEnvelope((q: WorktreeSessionCreateRequest) => service.sessionCreate(q)))
   ipc.register(WORKTREE_CHANNELS.seal, rpcEnvelope((q: WorktreeSealRequest) => service.seal(q)))
   ipc.register(WORKTREE_CHANNELS.select, rpcEnvelope((q: WorktreeSelectRequest) => service.select(q)))
+  ipc.register(WORKTREE_CHANNELS.selected, rpcEnvelope((q: { projectRoot: string }) => service.selected(q)))
   ipc.register(WORKTREE_CHANNELS.resolve, rpcEnvelope((q: WorktreeResolveRequest) => service.resolve(q)))
 }
 

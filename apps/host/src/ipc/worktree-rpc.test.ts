@@ -558,7 +558,7 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
     expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(10) // 九通道 + resolve（批量归属解析——身份归并单点）
+    expect(registered).toHaveLength(11) // 十通道 + selected（选中态读镜像——host 唯一事实源）
   })
 })
 
