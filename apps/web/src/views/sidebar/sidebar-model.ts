@@ -199,13 +199,16 @@ function sessionVisible(row: LedgerSessionRow, currentSessionId: string | null):
 
 /**
  * 行显示标签（bug 3d26a1be——官方 ui-workspace 行 displayTitle 派生同口径）：blank → 「新会话」；
- * 持久标题（trim 后非空）→ 标题；否则「未命名」。不消费上游 displayTitle 的目录名/id
+ * 持久标题（trim 后非空）→ 标题；否则「新会话」。不消费上游 displayTitle 的目录名/id
  * 兜底——该投影语义与行标签无关（未命名会话曾因此显示项目目录名，与项目组名重名）。
+ * 用户裁决（bug 9eb9d6cb 后续）：空 title 回退词统一「新会话」——title 漂移链收敛为
+ * 新会话 → 有意义的名称（「未命名」中间态退役；自动命名到达即替换，savedTitle 恒 ''
+ * 不挡自动命名）。
  */
 export function sessionRowTitle(row: LedgerSessionRow): string {
   if (row.blank === true) return '新会话'
   const saved = typeof row.title === 'string' ? row.title.trim() : ''
-  return saved !== '' ? saved : '未命名'
+  return saved !== '' ? saved : '新会话'
 }
 
 /** 已保存标题（trim；无 = ''）——改名草稿种子（官方：无标题留空，不用显示标签兜底） */
