@@ -63,15 +63,19 @@ export interface RebindOrchestrationDeps {
   readonly rebindableBlankId: () => Promise<string | undefined>
   /** 预铸新选树会话（forge:worktree/session-create——显式树请求不被选中记忆劫持） */
   readonly sessionCreate: (path: string) => Promise<{ readonly sessionId: string }>
-  /** 官方 openSession（先切——hero 不落在归档会话上） */
-  readonly openSession: (sessionId: string) => void
+  /**
+   * 切换到产物会话（方案 A2——优先官方 onPick(树 workspaceId)：官方 selectWorkspace 全链
+   * 含草稿/附件搬运 + openWorkspace 复用刚预铸的树 blank；树 workspaceId 不可得 = fallback
+   * openSession 现状径，草稿不搬）
+   */
+  readonly switchToProduct: (path: string, productSessionId: string) => void
   /** 官方归档（后清场——弃置 blank 入 durable 归档集，可恢复、回收径复用） */
   readonly archiveSession: (sessionId: string) => Promise<void>
 }
 
 /**
  * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
- * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → openSession
+ * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → switchToProduct
  * 切换 → 旧 blank 归档。次序契约 = 先切后归档；无可换绑 blank = 零编排（纯选中态）；
  * 失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
  */
@@ -79,7 +83,7 @@ export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps
   const staleBlankId = await deps.rebindableBlankId()
   if (staleBlankId === undefined) return
   const product = await deps.sessionCreate(path)
-  deps.openSession(product.sessionId)
+  deps.switchToProduct(path, product.sessionId)
   await deps.archiveSession(staleBlankId)
 }
 
@@ -185,12 +189,18 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
 export function ForgeHeroWorktreeMount({
   projectRoot,
   rebindFace,
+  pickWorkspace,
+  workspaceRows,
   makeRpc = preloadRpcClientFactory,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
   /** 点选即换绑编排缝（方案 A——plugin.ts hero slot inject 递达；缺席 = 零编排） */
   readonly rebindFace?: HeroRebindFace
+  /** 官方 onPick(workspaceId) 递达（方案 A2——树 workspace 切换走官方 selectWorkspace 全链含草稿搬运；缺席 = fallback openSession） */
+  readonly pickWorkspace?: (workspaceId: string) => void
+  /** 官方 workspace 行（{workspaceId, path}——树 workspaceId 解析源；缺席 = fallback） */
+  readonly workspaceRows?: readonly { readonly workspaceId?: unknown; readonly path?: unknown }[]
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -278,8 +288,22 @@ export function ForgeHeroWorktreeMount({
           return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
         },
         sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
-        openSession: (sessionId) => {
-          rebindFace.openSession(sessionId)
+        // 方案 A2：优先官方 onPick(树 workspaceId)——selectWorkspace 全链含草稿/附件搬运，
+        // openWorkspace 复用刚预铸的树 blank（官方 reuseOrCreateBlank 判据天然命中）；
+        // 树 workspaceId 不可得（未建/快照未刷新/形状漂移）→ fallback openSession 现状径
+        switchToProduct: (target, productSessionId) => {
+          const wsId = workspaceRows?.find(
+            (row) =>
+              typeof row.workspaceId === 'string' &&
+              row.workspaceId !== '' &&
+              typeof row.path === 'string' &&
+              cwdKey(row.path) === cwdKey(target),
+          )?.workspaceId
+          if (pickWorkspace !== undefined && typeof wsId === 'string') {
+            pickWorkspace(wsId)
+            return
+          }
+          rebindFace.openSession(productSessionId)
         },
         archiveSession: async (sessionId) => {
           await rebindFace.archiveSession(sessionId)
@@ -292,7 +316,7 @@ export function ForgeHeroWorktreeMount({
           rebindInFlight.current = false
         })
     },
-    [rebindFace, projectRoot, phase, makeRpc],
+    [rebindFace, projectRoot, phase, makeRpc, pickWorkspace, workspaceRows],
   )
 
   const onSelectConfirmed = useCallback(

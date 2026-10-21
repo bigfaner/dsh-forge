@@ -187,7 +187,17 @@ export function ForgeHeroWorkspacePicker({
       {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
           两 chip」构图；非 git / 未选中项目零注入整体退回现状）。点选 = 纯选中态 +
           点选时点跨分支确认（1.19），会话创建 = 官方 create 调用点 wrap 改道预铸。 */}
-      <ForgeHeroWorktreeMount projectRoot={selectedProjectRoot} rebindFace={rebindFace} makeRpc={makeRpc} />
+      <ForgeHeroWorktreeMount
+        projectRoot={selectedProjectRoot}
+        rebindFace={rebindFace}
+        pickWorkspace={onSelect}
+        workspaceRows={
+          Array.isArray(workspacesSnap?.items)
+            ? (workspacesSnap.items as readonly { readonly workspaceId?: unknown; readonly path?: unknown }[])
+            : undefined
+        }
+        makeRpc={makeRpc}
+      />
     </>
   )
 }

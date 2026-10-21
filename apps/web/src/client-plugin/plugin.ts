@@ -1290,6 +1290,8 @@ export const BUGS_LIST_CHANNEL = 'forge:bugs/list'
 export const PROJECTS_LIST_CHANNEL = 'forge:projects/list'
 /** forge:worktree/list 通道字面量（contracts WORKTREE_CHANNELS.list 同源镜像——W4 激活自证轻探） */
 export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+/** forge:worktree/resolve 通道字面量（contracts WORKTREE_CHANNELS.resolve 同源镜像——wrap 树归属门） */
+export const WORKTREE_RESOLVE_CHANNEL = 'forge:worktree/resolve'
 
 /**
  * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
@@ -2284,6 +2286,23 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                   projectRows: async () => {
                     const data = await unwrapRpcEnvelope<unknown>(forgeInvoke(PROJECTS_LIST_CHANNEL))
                     return Array.isArray(data) ? data : []
+                  },
+                  // bug ff324cad A2：树 workspace 切换径判定面——官方 workspaces 快照窄镜像
+                  // （items {workspaceId, path}）+ 树归属门（forge:worktree/resolve 现查）。
+                  // 缺席/形状漂移 = 判定面降级（零改道，现状 fail-soft）。
+                  workspaceRows: async () => {
+                    const getSnapshot = (workspaces.list as { getSnapshot?: () => unknown } | undefined)?.getSnapshot
+                    if (typeof getSnapshot !== 'function') return []
+                    const snapshot = getSnapshot.call(workspaces.list) as { items?: unknown } | null
+                    const items = Array.isArray(snapshot?.items) ? snapshot.items : []
+                    return items
+                  },
+                  resolveRoot: async (path) => {
+                    const data = await unwrapRpcEnvelope<{ resolved?: Array<{ path?: unknown; projectRoot?: unknown }> }>(
+                      forgeInvoke(WORKTREE_RESOLVE_CHANNEL, { paths: [path] }),
+                    )
+                    const hit = data.resolved?.find((entry) => entry.path === path)
+                    return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
                   },
                 },
               )

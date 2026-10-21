@@ -46,6 +46,12 @@ export interface SessionCreateWrapDeps {
   readonly sessionCreate: (worktreePath: string) => Promise<string>
   /** 注册项目行现查（每次创建现拉零缓存——列表 RPC 逐次 fresh） */
   readonly projectRows: () => Promise<ProjectRowsSnapshot>
+  /** 官方 workspace 行现查（bug ff324cad A2——workspaces.list 快照窄面镜像 {workspaceId, path}；
+   *  缺席 = 树 workspaceId/cwd 判定面缺席（零改道，现状） */
+  readonly workspaceRows?: () => Promise<readonly unknown[]>
+  /** 树归属门（forge:worktree/resolve 窄面——path → 注册项目根；null = 未注册）。
+   *  缺席 = workspaceRows 判定面同缺席 */
+  readonly resolveRoot?: (path: string) => Promise<string | null>
   /** fail-open 诊断行（缺省 console.warn——e2e/诊断消费） */
   readonly warn?: (message: string) => void
 }
@@ -69,27 +75,73 @@ function normalizeRow(row: unknown): { workspaceId: string; wsPath: string } | n
   return { workspaceId, wsPath }
 }
 
+/** 官方 workspace 行正规化（非对象/缺键/空串剔除——workspaces.list.items 窄镜像） */
+function normalizeWorkspaceRow(row: unknown): { workspaceId: string; path: string } | null {
+  if (row === null || typeof row !== 'object') return null
+  const record = row as Record<string, unknown>
+  const workspaceId = record['workspaceId']
+  const path = record['path']
+  if (typeof workspaceId !== 'string' || workspaceId === '') return null
+  if (typeof path !== 'string' || path === '') return null
+  return { workspaceId, path }
+}
+
 /**
- * 目标树逐次判定（零缓存核心段，纯函数）：workspaceId → 注册项目 ws_path；只有 cwd →
- * cwd 命中注册行 ws_path（未注册 = null = 官方原流，非 forge/非 git 项目零行为差异）。
- * git 与否不在客户端预判——host doSessionCreate 逐次现跑实质判定。任何不命中 = null。
+ * 树归属门（bug ff324cad A2）：workspace 行 path 解析注册项目根——命中且 path ≠ 根
+ * = forge 管理的树（改道预铸带绑定）；主行/未注册 = null（官方原流/现状，零扩张）。
+ */
+async function gatedTreePath(
+  path: string,
+  resolveRoot: (path: string) => Promise<string | null>,
+): Promise<string | null> {
+  let projectRoot: string | null
+  try {
+    projectRoot = await resolveRoot(path)
+  } catch {
+    return null
+  }
+  if (projectRoot === null || projectRoot === '') return null
+  if (normPath(path) === normPath(projectRoot)) return null
+  return path
+}
+
+/**
+ * 目标树逐次判定（零缓存核心段，纯函数）：workspaceId/cwd → 注册项目 ws_path（现状）；
+ * 项目行不命中 → 官方 workspace 行命中（bug ff324cad A2——树 workspace 切换径）经树归属
+ * 门（resolve 现查：命中注册项目且 ≠ 项目根）改道预铸，官方切树工作区诞生/复用的会话
+ * 即带绑定台账（零重路由二建）。未注册 workspace = null = 官方原流，零行为差异。
+ * git 与否不在客户端预判——host doSessionCreate 逐次现跑实质判定。
  */
 export async function treeOf(
   opts: SessionCreateCallOpts | undefined,
   rows: ProjectRowsSnapshot,
+  workspaces?: readonly unknown[],
+  resolveRoot?: (path: string) => Promise<string | null>,
 ): Promise<string | null> {
   if (opts === undefined) return null
   if (opts.sessionId !== undefined && opts.sessionId !== '') return null
   const normalized = rows.map(normalizeRow)
+  const workspaceRows = (workspaces ?? []).map(normalizeWorkspaceRow)
+  const gated = resolveRoot !== undefined ? (path: string): Promise<string | null> => gatedTreePath(path, resolveRoot) : undefined
   const workspaceId = typeof opts.workspaceId === 'string' && opts.workspaceId !== '' ? opts.workspaceId : undefined
   if (workspaceId !== undefined) {
-    return normalized.find((row) => row !== null && row.workspaceId === workspaceId)?.wsPath ?? null
+    const project = normalized.find((row) => row !== null && row.workspaceId === workspaceId)?.wsPath
+    if (project !== undefined) return project
+    if (gated !== undefined) {
+      const row = workspaceRows.find((row) => row !== null && row.workspaceId === workspaceId)
+      if (row !== null && row !== undefined) return gated(row.path)
+    }
+    return null
   }
   const cwd = typeof opts.cwd === 'string' && opts.cwd !== '' ? opts.cwd : undefined
   if (cwd !== undefined) {
     const key = normPath(cwd)
-    const match = normalized.find((row) => row !== null && normPath(row.wsPath) === key)
-    return match !== null && match !== undefined ? cwd : null
+    if (normalized.some((row) => row !== null && normPath(row.wsPath) === key)) return cwd
+    if (gated !== undefined) {
+      const row = workspaceRows.find((row) => row !== null && normPath(row.path) === key)
+      if (row !== null && row !== undefined) return gated(cwd)
+    }
+    return null
   }
   return null
 }
@@ -122,10 +174,16 @@ export function installSessionCreateWrap(
   const wrapped = async (opts?: SessionCreateCallOpts): Promise<string> => {
     // ① adopt 径直通：带 sessionId = 官方复用采纳既有会话，改道无意义（try 域之外）
     if (opts?.sessionId !== undefined && opts.sessionId !== '') return bound(opts)
-    // ② 目标树逐次独立判定（零缓存）：现查项目行；异常/不命中 = null = 官方原流
+    // ② 目标树逐次独立判定（零缓存）：现查项目行 + 官方 workspace 行（树归属门）；
+    //    异常/不命中 = null = 官方原流
     let tree: string | null = null
     try {
-      tree = await treeOf(opts, await deps.projectRows())
+      tree = await treeOf(
+        opts,
+        await deps.projectRows(),
+        deps.workspaceRows === undefined ? undefined : await deps.workspaceRows().catch(() => []),
+        deps.resolveRoot,
+      )
     } catch {
       tree = null
     }

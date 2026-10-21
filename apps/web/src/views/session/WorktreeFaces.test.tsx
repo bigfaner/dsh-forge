@@ -77,8 +77,8 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
         order.push(`create:${path}`)
         return { sessionId: 's-tree' }
       },
-      openSession: (sessionId) => {
-        order.push(`open:${sessionId}`)
+      switchToProduct: (path, productSessionId) => {
+        order.push(`open:${productSessionId}(${path})`)
       },
       archiveSession: async (sessionId) => {
         order.push(`archive:${sessionId}`)
@@ -93,7 +93,7 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
     await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
     expect(order).toEqual([
       'create:C:/repo/.forge/worktrees/wt-a',
-      'open:s-tree',
+      'open:s-tree(C:/repo/.forge/worktrees/wt-a)',
       'archive:s-placeholder',
     ])
   })

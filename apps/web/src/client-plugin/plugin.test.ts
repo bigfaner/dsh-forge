@@ -2310,6 +2310,37 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(await treeOf({ sessionId: 's' }, rows)).toBeNull()
   })
 
+  // ── bug ff324cad A2：树 workspace 切换径（workspaceRows + 树归属门）──
+  const TREE_WS = 'ws-tree'
+  const TREE_PATH = 'C:/repo/.forge/worktrees/wt-a'
+  const ROOT_PATH = 'C:/repo'
+  const wsRows = [
+    { junk: true },
+    { workspaceId: TREE_WS }, // 缺 path
+    { workspaceId: TREE_WS, path: TREE_PATH },
+  ]
+
+  it('treeOf 树归属门：workspaceId 命中树 workspace × resolve 命中注册项目 ≠ 根 → 改道树路径', async () => {
+    const tree = await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => ROOT_PATH)
+    expect(tree, '树 workspace 未改道（官方切树会话零绑定——重路由二建）').toBe(TREE_PATH)
+  })
+
+  it('treeOf 树归属门：resolve 未命中注册项目（外部 workspace）→ null 官方原流（行为面零扩张）', async () => {
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => null)).toBeNull()
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => TREE_PATH)).toBeNull() // 自身即根（他项目主行形态）
+  })
+
+  it('treeOf 树归属门：项目行优先（主行 workspaceId 恒项目根，树门不触）；resolve 抛错 = null fail-soft', async () => {
+    expect(await treeOf({ workspaceId: WS }, [{ workspaceId: WS, wsPath: WS_PATH }], wsRows, async () => ROOT_PATH)).toBe(WS_PATH)
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => { throw new Error('boom') })).toBeNull()
+  })
+
+  it('treeOf 树归属门：cwd 形态同判（workspace 行 path 命中 → 归属门 → cwd）；判定面缺席（deps 未注入）→ null 现状', async () => {
+    expect(await treeOf({ cwd: TREE_PATH }, [], wsRows, async () => ROOT_PATH)).toBe(TREE_PATH)
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows)).toBeNull() // resolveRoot 缺席
+    expect(await treeOf({ cwd: TREE_PATH }, [], wsRows)).toBeNull()
+  })
+
   // 移动端语义契约钉（mobile-ui 一致逻辑——提案 §移动端一致逻辑：判定单源在 host，
   // 两端共享的只有语义契约与 API 协议，非代码共享）。钉双语义：
   //   ① 预铸优先：命中资格即首选 forge:worktree/session-create 预铸（worktreePath 显式树）；
