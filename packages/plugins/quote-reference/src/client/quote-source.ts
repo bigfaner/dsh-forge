@@ -215,7 +215,7 @@ export function createQuoteReferenceSource(deps?: { readonly name?: string }): Q
       },
       async serialize(ref, _signal) {
         try {
-          const id = quoteIdOfRef(ref)
+            const id = quoteIdOfRef(ref)
           if (id === undefined) return ''
           // 快照优先（全文真值在即出 mention + <quote> 块）
           const snapshotted = snapshots.get(id)

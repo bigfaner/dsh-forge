@@ -25,7 +25,7 @@ import {
   type ScopedEventBail,
   type SelectionMenuHandle,
 } from './selection-menu.js'
-import { createQuoteReferenceSource } from './quote-source.js'
+import { createQuoteReferenceSource, type QuoteReferenceSource } from './quote-source.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
 export interface QuoteReferenceClientFace {
@@ -53,6 +53,23 @@ function readConversationOf(ctx: Context): unknown {
   } catch {
     return undefined
   }
+}
+
+/** cordis ctx 只读反射/属性读取（具名服务窄面——缺席/漂移 = undefined）。 */
+function readServiceOf(source: unknown, name: string): unknown {
+  try {
+    const direct = (source as { [key: string]: unknown } | null)?.[name]
+    if (direct != null) return direct
+  } catch {
+    // fail-soft
+  }
+  try {
+    const reflect = (source as { reflect?: { get?: (n: string) => unknown } }).reflect
+    if (typeof reflect?.get === 'function') return reflect.get(name)
+  } catch {
+    // fail-soft
+  }
+  return undefined
 }
 
 /** ctx.bail 窄面读取（缺席 = undefined）。 */
@@ -91,21 +108,28 @@ export function activeSessionIdOf(list: unknown): string | undefined {
 function composerFaceOf(conversation: unknown, actx: unknown): QuoteComposerFace | undefined {
   if (typeof conversation !== 'object' || conversation === null) return undefined
   try {
-    return (conversation as { input?: { for?: (a: unknown) => QuoteComposerFace | undefined } }).input?.for?.(actx)
+    return (conversation as { input?: { for?: (a: unknown) => QuoteComposerFace | undefined } }).input?.for?.(actx) ?? undefined
   } catch {
     return undefined
   }
 }
 
-/** 引用插入服务组装（真实 ctx 服务切片 → QuoteInsertServices 窄面）。 */
-function quoteInsertServicesFrom(ctx: Context): QuoteInsertServices | undefined {
-  const sessions = readSessionsOf(ctx)
-  const bail = readBailOf(ctx)
+/** 引用插入服务组装（真实 ctx 服务切片 → QuoteInsertServices 窄面；服务逐项
+ * scope 优先、ctx 兜底——inject 注入 scope 只承载被注入服务（真机判例：
+ * conversation/reflect 不在注入 scope 上），其余服务仍以主 ctx 读取）。 */
+function quoteInsertServicesFrom(ctx: Context, source?: unknown): QuoteInsertServices | undefined {
+  const origin = (source ?? ctx) as Context
+  const sessions = readSessionsOf(origin) ?? readSessionsOf(ctx)
+  const bail = readBailOf(ctx) ?? readBailOf(origin)
   if (sessions === undefined || bail === undefined) return undefined
-  const conversation = readConversationOf(ctx)
   return {
     sessions: { binding: (id) => sessions.binding(id as Parameters<typeof sessions.binding>[0]) },
-    conversation: { input: { for: (actx) => composerFaceOf(conversation, actx) } },
+    // conversation 惰性解析（每操作时点读——provide 晚于 apply，挂载期捕获 = 恒 undefined）
+    conversation: {
+      input: {
+        for: (actx) => composerFaceOf(readConversationOf(ctx) ?? readConversationOf(origin), actx),
+      },
+    },
     bail,
   }
 }
@@ -134,18 +158,22 @@ installQuoteReferenceStyles((globalThis as { document?: StyleDocument }).documen
  * mouseup → scope 过滤 → primitives Menu 弹层 → insertReferenceAtTail 同径落 chip
  * → 自动聚焦对应面。全屏替身聚焦缝（focusFullscreenInput）由 super-composer 组合
  * 注入——本包不感知全屏（两包正交边界）。任一前提缺席 = 不装配（undefined）。
+ * @param source 服务切片源（inject 兜底回调传入注入后 scope——scope 优先、ctx 兜底；
+ *   直驱/快路径缺省 = ctx。Root cause: inject 回调时点服务落在注入 scope 上，
+ *   重读 ctx.sessions = undefined → 菜单永不挂载）
  */
-export function mountQuoteSelectionMenu(ctx: Context): SelectionMenuHandle | undefined {
+export function mountQuoteSelectionMenu(ctx: Context, source?: unknown, quoteSource?: QuoteReferenceSource): SelectionMenuHandle | undefined {
   if (typeof document === 'undefined') return undefined
-  const sessions = readSessionsOf(ctx)
-  const services = quoteInsertServicesFrom(ctx)
+  const origin = (source ?? ctx) as Context
+  const sessions = readSessionsOf(origin) ?? readSessionsOf(ctx)
+  const services = quoteInsertServicesFrom(ctx, source)
   if (sessions === undefined || services === undefined) return undefined
   return mountSelectionMenu({
     doc: document,
     roots: resolveSelectionScope().selectionRoots,
     resolveSessionId: () => activeSessionIdOf(sessions.list),
     services,
-    source: createQuoteReferenceSource(),
+    source: quoteSource ?? createQuoteReferenceSource(),
   })
 }
 
@@ -163,11 +191,58 @@ export const quoteReferenceClient = {
       // 兜底回调必须自身完成接线（空回调 = 菜单永不装配）。
       let menu: SelectionMenuHandle | undefined
       let disposeWired = false
-      const wire = (): void => {
+      let disposedFlag = false
+      // scope 优先（inject 兜底回调传入注入后 scope——服务切片从 scope 读，ctx 只作缺省）
+      const quoteSource = createQuoteReferenceSource()
+      let disposeSource = (): void => {}
+      // quote chip source 挂官方 inputTriggers 名册（proposal 复用核销表正门——
+      // serialize codec 的 owner 缺席 = 发送期 serializeReference 拒绝 → 发送被阻断）。
+      // 注册依赖服务 provide 晚序——短周期重试直至生效（registered 幂等判据），上限 30 次。
+      let registered = false
+      let tries = 0
+      const registerTriggerSource = (): boolean => {
+        if (registered) return true
+        const service = readServiceOf(ctx, 'inputTriggers') as
+          | { registerSource?: (src: unknown) => unknown }
+          | undefined
+        const register = service?.registerSource
+        if (typeof register !== 'function') return false
+        try {
+          const dispose = register.call(service, quoteSource)
+          if (typeof dispose === 'function') disposeSource = dispose as () => void
+          registered = true
+          return true
+        } catch (error) {
+          // duplicate trigger/name = 重复注册（前次已生效）——视同成功
+          if (/duplicate/i.test(String(error))) {
+            registered = true
+            return true
+          }
+          console.error('[dsh-forge/quote-reference] trigger source register failed——降级空态', error)
+          return false
+        }
+      }
+      const registrationTimer = setInterval(() => {
+        tries += 1
+        if (registered || disposedFlag || tries > 30) {
+          clearInterval(registrationTimer)
+          return
+        }
+        if (registerTriggerSource()) {
+          clearInterval(registrationTimer)
+        }
+      }, 2_000)
+      const wire = (source?: unknown): void => {
         if (disposeWired) return // 幂等防重挂：已接线不再二次 mount/dispose
         disposeWired = true
-        menu = mountQuoteSelectionMenu(ctx)
-        mountDisposeOnContext(ctx, () => () => menu?.dispose())
+        registerTriggerSource()
+        menu = mountQuoteSelectionMenu(ctx, source, quoteSource)
+        mountDisposeOnContext(ctx, () => () => {
+          disposedFlag = true
+          clearInterval(registrationTimer)
+          menu?.dispose()
+          disposeSource()
+        })
       }
       const sessions = readSessionsOf(ctx)
       if (sessions != null) {
@@ -184,7 +259,7 @@ export const quoteReferenceClient = {
         const late = readSessionsOf(scope)
         if (late == null) return
         try {
-          wire()
+          wire(scope)
         } catch (error) {
           console.error('[dsh-forge/quote-reference] late wiring failed——降级空态', error)
         }

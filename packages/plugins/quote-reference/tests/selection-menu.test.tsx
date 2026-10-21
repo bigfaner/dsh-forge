@@ -201,6 +201,31 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
     handle.dispose()
   })
 
+  it('bug（fix-7 ①）: 菜单自身 mouseup 不参与选区裁定——真实点击序列（mousedown 折叠选区 + menu 上 mouseup）不抢先收层，click 仍落 chip', () => {
+    const face = makeFaceSpy()
+    const { services, bails } = makeServices(face)
+    const handle = mount({ services })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    expect(menuItems()).toHaveLength(1)
+    // 真实点击序列：mousedown 落在 menu 上折叠选区 → menu 容器内 mouseup 冒泡到 document
+    const selection = document.getSelection()
+    if (selection === null) throw new Error('missing selection')
+    selection.removeAllRanges() // 模拟 mousedown 折叠选区
+    const item = menuItems()[0]!
+    // 官方 Menu portal 到 body（容器外）——以官方 role="menu" 锚定位弹层自身
+    const menuEl = item.closest('[role="menu"]')
+    if (menuEl === null) throw new Error('missing menu element')
+    menuEl.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    // 菜单须仍在场（未被收层）——随后 click 才能落到 onSelect
+    expect(menuItems()).toHaveLength(1)
+    item.click()
+    expect(bails).toHaveLength(1)
+    expect(face.focusCalls).toBe(1)
+    expect(menuItems()).toHaveLength(0)
+    handle.dispose()
+  })
+
   it('全屏面：focusFullscreenInput 提供时聚焦替身（对应面聚焦，不落主 face 焦点间谍）', () => {
     const face = makeFaceSpy()
     const { services } = makeServices(face)

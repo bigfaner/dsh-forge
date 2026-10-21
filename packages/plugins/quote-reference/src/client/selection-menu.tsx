@@ -371,8 +371,13 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
 
   const addToChat = (): void => onSelectionTarget(pendingText)
 
-  function onMouseUp(): void {
+  function onMouseUp(event: MouseEvent): void {
     if (disposed) return
+    // Root cause: 弹层自身的 mouseup 也冒泡到 document——真实点击序列里 mousedown
+    // 先折叠选区，此径会把刚打开的菜单抢先收层（click 永不落到 onSelect → chip 永不
+    // 落稿）。官方 Menu portal 到 body（容器外），以官方 role="menu" 锚排除弹层自身。
+    const target = event.target
+    if (target instanceof Element && target.closest('[role="menu"]') !== null) return
     const extraction = extractSelection(doc, roots)
     if (!isQuotableSelection(extraction, roots)) {
       close()
