@@ -186,6 +186,22 @@ const noGit: WorktreeListResult = { isGit: false, entries: [] }
  *  只缓存负结果：isGit:true 面保持实时（worktree 清单必须新鲜）。 */
 const noGitCache = new Map<string, WorktreeListResult>()
 
+/**
+ * 解析缓存失效缝（bug 9eb9d6cb 后续收口）：归属事实变更事件（registerProject/建删树）
+ * 触发——两级解析缓存（noGitCache 负结果 + 各服务实例 projectCache 解析记忆）清除，
+ * 下次消费现跑。此前注册路径不清缓存：新注册路径的清单停在 isGit:false、解析停在陈旧
+ * null 直到重启。projectRoot 缺席 = 全清（保守——重填成本低，一次性 git 探测）。
+ * 实例级 projectCache 经注册器缝到达（各 createWorktreeRpcService 实例登记自己的清除
+ * 闭包——闭包内 Map 模块级不可达；实例随宿主进程生灭，注册器不摘除=零泄漏面）。
+ */
+const resolveCacheInvalidators = new Set<(projectRoot?: string) => void>()
+
+export function invalidateResolveCaches(projectRoot?: string): void {
+  if (projectRoot === undefined) noGitCache.clear()
+  else noGitCache.delete(norm(projectRoot))
+  for (const invalidate of resolveCacheInvalidators) invalidate(projectRoot)
+}
+
 const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
 
 /**
@@ -340,6 +356,9 @@ export function createWorktreeRpcService(deps: {
   // ── G7② 项目能力缓存（resolveProject 结果按 projectRoot 会话期记忆化）──
   // 只在 gitWorktree 能力服务在场时缓存（默认独立模式扩展点恒 null——缓存会把「能力未到」
   // 冻结成永久非 git）。判非 git 直接短路 = 零会话日志读、零 git 子进程。
+  // null 结果缓存（G7② 性能钉：非 git 会话每消息零固定税）；陈旧由失效缝清
+  // （invalidateResolveCaches——registerProject 等归属事实变更事件触发），不做读时驱逐
+  //（evict-on-null 与 G7② 性能钉互斥——非 git 会话每消息重探测即固定税，b5d00e81 时代实证）。
   const projectCache = new Map<string, Promise<{ projectRoot: string; projectName?: string } | null>>()
   const cachedResolve = (path: string): Promise<{ projectRoot: string; projectName?: string } | null> => {
     const key = norm(path)
@@ -349,6 +368,14 @@ export function createWorktreeRpcService(deps: {
     if (resolveGitWorktree() !== undefined) projectCache.set(key, pending)
     return pending
   }
+  // 失效缝注册（invalidateResolveCaches 模块级出口——本实例 projectCache 闭包内不可达）
+  resolveCacheInvalidators.add((projectRoot) => {
+    if (projectRoot === undefined) {
+      projectCache.clear()
+      return
+    }
+    projectCache.delete(norm(projectRoot))
+  })
 
   // 会话 header 消费切片记忆（cwd + parentSession 单读双取——零事件读；逐会话一次，其后零开销）
   const headerMemo = new Map<string, { cwd?: string; parentSession?: string }>()
