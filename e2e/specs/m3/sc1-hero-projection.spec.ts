@@ -34,14 +34,14 @@ test('@web-e2e @m3 SC1·hero 投影四断言：座位在场/中文直出 order 1
   const dshHome = join(userData, 'dsh-home')
   let launched: Launched | undefined
   try {
-    // ── ① 座位在场 + 默认远征（ui-settings 首启预置——零 UI 开关动作）──
+    // ── ① 座位在场 + 默认突击（registry 缺省——bug 2ba146d8 缺省=blitz；零 UI 开关动作）──
     launched = await launchHost({ userData, expectPhase: 'hero' })
     const page = launched.page
     await registerProject(page, wsDir, WS_NAME)
     await selectWorkspaceViaChip(page, WS_NAME)
     expect(await seatPresent(page), '预设座位自现（hero 面）').toBe(true)
     const label = await awaitSeatLabel(page)
-    expect(label.includes('远征') || label.includes('expedition'), `默认预设 = 远征（label=${label}）`).toBe(true)
+    expect(label.includes('突击') || label.includes('blitz'), `默认预设 = 突击（label=${label}）`).toBe(true)
 
     // ── ② 中文直出 order 1·2：菜单项序（远征模式 → 突击模式；相对序断言——上游 standard
     //    行非产品面不进断言集）──

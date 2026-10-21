@@ -345,7 +345,7 @@ test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二
       db.close()
     }
 
-    // ── Step5：升降级联动——下一个「打开新会话」自动对齐远征 ──
+    // ── Step5：升降级联动——下一个「打开新会话」对齐 registry 缺省突击（该会话无显式 mode 溯源——bug 2ba146d8 缺省=blitz）──
     const openEntry = page.locator('[data-dswf-ov-opensession="jprm-inflight"]').first()
     await expect(openEntry, '行头「打开新会话」在场').toBeVisible({ timeout: 15_000 })
     await openEntry.click()
@@ -353,10 +353,10 @@ test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二
     let seat = ''
     while (Date.now() < deadline) {
       seat = (await page.locator('[data-slot="conversation.hero.agentPreset"]').first().textContent().catch(() => '')) ?? ''
-      if (seat.includes('远征') || seat.includes('expedition')) break
+      if (seat.includes('突击') || seat.includes('blitz')) break
       await page.waitForTimeout(1_000)
     }
-    expect(seat.includes('远征') || seat.includes('expedition'), `新会话自动对齐远征（label=${seat}——律一）`).toBe(true)
+    expect(seat.includes('突击') || seat.includes('blitz'), `新会话对齐 registry 缺省突击（无显式 mode 溯源——bug 2ba146d8 缺省=blitz；label=${seat}）`).toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

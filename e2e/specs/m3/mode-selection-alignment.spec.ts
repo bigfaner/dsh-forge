@@ -5,7 +5,7 @@
 //
 // 载体纪律（Hard Rule）：零真实模型——会话夹具 = hero 座位点选（blank 期 select 写入，
 // 无需消息）；提案经回放主径建行。本件与 SC1（hero 投影四断言 + 自动对齐）旅程分工：
-// SC1 承载 ①座位在场/默认远征 ②菜单序 ③blank 锁双信号 ④恢复投影重建 ⑤自动对齐主径；
+// SC1 承载 ①座位在场/默认突击（bug 2ba146d8 缺省=blitz）②菜单序 ③blank 锁双信号 ④恢复投影重建 ⑤自动对齐主径；
 // 本件承载合约其余 Outcome（幂等点选 / 无溯源不切换 / 错配守卫可读面）并交叉引用。
 //
 // Fact Table 摘录（源码核实）：
@@ -25,7 +25,7 @@
 //   Step2b idempotent-default-select（点选当前已选 = 投影稳定零漂移）……………………「T1」
 //   Step4 success（提案绑定入口自动对齐——座位标签突击）…………………………………………「T2」
 //   Step4b no-mode-source-keeps-default（无溯源不切换——select 不调用沿 registry 当前
-//     选择（净默认远征世界归 T1 Step1）+ chip 缺省占位）…………………………………………………「T2」
+//     选择（净缺省突击世界归 T1 Step1——bug 2ba146d8 缺省=blitz）+ chip 缺省占位）………………「T2」
 //   Step5 success / 5b honest-accounting-mismatch（错配守卫可读面 + 零阻断 +
 //     下游读溯源字段不读会话预设）…………………………………………………………………………………「T3」
 //   Step1b hero-switch-off / Step1c settings-toggle-roundtrip………………………………诚实映射
@@ -62,7 +62,7 @@ import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '
 
 const WS_NAME = 'ws-jmsa'
 
-test('@web-e2e @m3 模式选择·T1：座位在场默认远征 + 菜单双入口中文直出 + blank 点选突击 + 幂等点选零漂移', async () => {
+test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口中文直出 + blank 点选远征 + 幂等点选零漂移', async () => {
   test.setTimeout(420_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa-'))
   const wsDir = join(fixtureRoot, WS_NAME)
@@ -73,10 +73,10 @@ test('@web-e2e @m3 模式选择·T1：座位在场默认远征 + 菜单双入口
     await registerProject(page, wsDir, WS_NAME)
     await selectWorkspaceViaChip(page, WS_NAME)
 
-    // ── Step1：预设座位在场 + 折叠标签 = 远征（registry 默认）──
+    // ── Step1：预设座位在场 + 折叠标签 = 突击（registry 缺省——bug 2ba146d8 缺省=blitz）──
     expect(await seatPresent(page), '预设座位在场（hero 面——ui-settings 首启预置开启）').toBe(true)
     const label = await awaitSeatLabel(page)
-    expect(label.includes('远征') || label.includes('expedition'), `默认预设 = 远征（label=${label}）`).toBe(true)
+    expect(label.includes('突击') || label.includes('blitz'), `默认预设 = 突击（label=${label}）`).toBe(true)
 
     // ── 菜单双入口：中文显示名直出 + 远征在前（order 1/2——相对序）──
     await seatRoot(page).locator('button').first().click()
@@ -91,19 +91,19 @@ test('@web-e2e @m3 模式选择·T1：座位在场默认远征 + 菜单双入口
     await page.keyboard.press('Escape')
     await expect(menu).toBeHidden({ timeout: 10_000 })
 
-    // ── Step2b：幂等点选——点选当前已选「远征模式」→ 组合不漂移 ──
-    await selectPreset(page, '远征模式')
-    const idempotent = await awaitSeatLabel(page)
-    expect(idempotent.includes('远征') || idempotent.includes('expedition'), `幂等点选后标签保持远征（label=${idempotent}）`).toBe(true)
-
-    // ── Step2：blank 期点选「突击模式」→ 组合即时切换 ──
+    // ── Step2b：幂等点选——点选当前已选「突击模式」（registry 缺省——bug 2ba146d8 缺省=blitz）→ 组合不漂移 ──
     await selectPreset(page, '突击模式')
-    const switched = await awaitSeatLabel(page)
-    expect(switched.includes('突击') || switched.includes('blitz'), `切换后标签 = 突击（label=${switched}）`).toBe(true)
-    // 再点远征可回切（blank 期未锁——可逆窗口佐证）
+    const idempotent = await awaitSeatLabel(page)
+    expect(idempotent.includes('突击') || idempotent.includes('blitz'), `幂等点选后标签保持突击（label=${idempotent}）`).toBe(true)
+
+    // ── Step2：blank 期点选「远征模式」→ 组合即时切换 ──
     await selectPreset(page, '远征模式')
+    const switched = await awaitSeatLabel(page)
+    expect(switched.includes('远征') || switched.includes('expedition'), `切换后标签 = 远征（label=${switched}）`).toBe(true)
+    // 再点突击可回切（blank 期未锁——可逆窗口佐证）
+    await selectPreset(page, '突击模式')
     const back = await awaitSeatLabel(page)
-    expect(back.includes('远征') || back.includes('expedition'), 'blank 期可再切（未锁窗口）').toBe(true)
+    expect(back.includes('突击') || back.includes('blitz'), 'blank 期可再切（未锁窗口）').toBe(true)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {

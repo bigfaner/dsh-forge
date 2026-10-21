@@ -225,10 +225,10 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     let seat2 = ''
     while (Date.now() < deadline2) {
       seat2 = (await page.locator('[data-slot="conversation.hero.agentPreset"]').first().textContent().catch(() => '')) ?? ''
-      if (seat2.includes('远征') || seat2.includes('expedition')) break
+      if (seat2.includes('突击') || seat2.includes('blitz')) break
       await page.waitForTimeout(1_000)
     }
-    expect(seat2.includes('远征') || seat2.includes('expedition'), `无溯源不切换（保持默认远征——label=${seat2}）`).toBe(true)
+    expect(seat2.includes('突击') || seat2.includes('blitz'), `无溯源不切换（保持 registry 缺省突击——bug 2ba146d8 缺省=blitz；label=${seat2}）`).toBe(true)
 
     // ── Step2b：空意图直接发送（自由文本输入——无字段校验拦截，消息照常发出）──
     const composer = page.locator(COMPOSER_INPUT).last()
