@@ -297,7 +297,6 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
   const attachSessionSubs = (listener: () => void): boolean => {
     const binding = bindingOf(services)
     if (binding === undefined) return false
-    let attachedAnything = false
     if (!stateSubAttached) {
       const state = faceOf(services)?.state
       if (state?.subscribe !== undefined) {
@@ -305,7 +304,6 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
           const off = state.subscribe(listener)
           if (typeof off === 'function') inputOffs.add(off)
           stateSubAttached = true
-          attachedAnything = true
         } catch {
           // fail-soft（下一轮重试）
         }
@@ -315,15 +313,15 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       const triggers = services.inputTriggers
       if (triggers !== undefined) {
         try {
-          const menu = triggers.sessionOf(binding.ctx)?.menu
+          const sessionOf = triggers.sessionOf
+          const menu = typeof sessionOf === 'function' ? sessionOf(binding.ctx)?.menu : undefined
           if (typeof menu?.subscribe === 'function') {
             const off = menu.subscribe(listener)
             if (typeof off === 'function') inputOffs.add(off)
             menuSubAttached = true
-            attachedAnything = true
           }
         } catch {
-          // fail-soft（下一轮重试）
+          // fail-soft（下一轮重试——sessionOf 可因会话在留态抛，服务就绪后重试可达）
         }
       }
     }
@@ -332,12 +330,11 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
         const off = binding.eventSource.subscribe(listener)
         if (typeof off === 'function') inputOffs.add(off)
         eventSourceSubAttached = true
-        attachedAnything = true
       } catch {
         // fail-soft（下一轮重试）
       }
     }
-    return attachedAnything
+    return stateSubAttached && menuSubAttached && eventSourceSubAttached
   }
 
   const onSources = (listener: () => void): void => {
@@ -422,7 +419,9 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       const triggers = services.inputTriggers
       if (binding === undefined || triggers === undefined) return undefined
       try {
-        return triggers.sessionOf(binding.ctx)
+        const sessionOf = triggers.sessionOf
+        if (typeof sessionOf !== 'function') return undefined
+        return sessionOf(binding.ctx)
       } catch {
         return undefined
       }

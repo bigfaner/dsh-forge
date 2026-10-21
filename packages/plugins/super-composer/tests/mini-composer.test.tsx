@@ -340,6 +340,50 @@ describe("发送链与输入", () => {
   });
 });
 
+describe("bug f863404a: 输入以本地态为源（官方投影回摆不清空 textarea）", () => {
+  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+
+  function typeInto(h: Harness, text: string): void {
+    const input = q(h, "dscf-input") as HTMLTextAreaElement;
+    nativeSetter.call(input, text);
+    act(() => {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("输入后 props.draft 回摆空串：textarea 保持所键文本（受控回读链不回滚）", () => {
+    harness = mount();
+    typeInto(harness, "回读样本");
+    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("回读样本");
+    // 官方 store 周期性回摆（真机 run3/run4 取证）：投影重渲染以旧值回灌
+    harness.rerender({ draft: "" });
+    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("回读样本");
+  });
+
+  it("外部非空草稿变更（chip 插入径）采纳投影：textarea 跟随增长", () => {
+    harness = mount();
+    typeInto(harness, "abc");
+    harness.rerender({ draft: "abc@\"docs/x.md\"" });
+    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("abc@\"docs/x.md\"");
+  });
+
+  it("本机输入回声（props.draft 回灌同值）不抖动", () => {
+    harness = mount();
+    typeInto(harness, "abc");
+    harness.rerender({ draft: "abc" });
+    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("abc");
+  });
+
+  it("发送后本地清稿：textarea 清空且 onSend 携带所键文本", () => {
+    const onSend = vi.fn();
+    harness = mount({ onSend });
+    typeInto(harness, "替身发送样本");
+    fireKey(q(harness, "dscf-input") as HTMLTextAreaElement, "Enter");
+    expect(onSend).toHaveBeenCalledWith("替身发送样本");
+    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("");
+  });
+});
+
 describe("标题栏热区光标 + 浮层 tooltip（应用风格，非原生 title）", () => {
   it("可展开/可折叠类名切换 + 热区不落原生 title 属性", () => {
     harness = mount({ messages: [msg("m1", "user", "hi")] });

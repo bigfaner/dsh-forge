@@ -2,7 +2,7 @@
 // mini-composer 挂载接线测试（真实 DOM 链路——apply 正门 createRoot 替身容器）。
 // bug ba885f7d：④ 全屏门控（非全屏不常驻）/ ② 装配序兜底（inject scope 接线）/
 // ⑤ inputTriggers 接线 / ④ ⧉ exitFullscreen 官方径。
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Context } from "@deepseek-ai/cordis";
 import { superComposerClient } from "../src/client/index.js";
 
@@ -45,9 +45,40 @@ const triggersStub = {
 };
 
 const sidebarRightCalls: string[] = [];
+const capturedTargets: unknown[] = [];
 const sidebarRightStub = {
-  commandTarget: (el: Element | null) => (el === null ? null : { pane: "p1" }),
+  commandTarget: (el: Element | null) => {
+    capturedTargets.push(el);
+    return el === null ? null : { pane: "p1" };
+  },
   toggleFullscreen: () => sidebarRightCalls.push("toggle"),
+};
+
+/** 在留会话 + 官方 conversation.input 面（state store 可订阅——draft 投影供给链）。 */
+const stateListeners = new Set<() => void>();
+const inputState = {
+  draft: "",
+  draftRev: 0,
+  phase: "plain" as const,
+  occurrences: [],
+  getSnapshot() {
+    return inputState;
+  },
+  subscribe(listener: () => void): () => void {
+    stateListeners.add(listener);
+    return () => stateListeners.delete(listener);
+  },
+};
+const sessionsLiveWithInput = {
+  list: { getSnapshot: () => ({ byId: { s1: { id: "s1", retainedBy: { mainView: 1 } } } }) },
+  binding: () => ({
+    sessionId: "s1",
+    ctx: {},
+    eventSource: {
+      getSnapshot: () => ({ entries: [] }),
+      subscribe: () => () => undefined,
+    },
+  }),
 };
 
 function stubCtx(options: { sessions?: unknown; inject?: boolean } = {}): Context {
@@ -147,9 +178,19 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
-  it("bug ba885f7d ④: ⧉ onExitFullscreen 走官方 sidebarRight.toggleFullscreen 同径", async () => {
-    setFullscreenMarker(true);
+  it("bug d976ed15: ⧉ 退全屏捕获真实全屏 pane（fullscreen panel 内 dockkit pane）", async () => {
     sidebarRightCalls.length = 0;
+    capturedTargets.length = 0;
+    // 真实全屏形态：fullscreen panel 内含带 id 的 dockkit pane（官方 sidebarTargetFromElement 读 dataset 捕获）
+    const panel = document.createElement("div");
+    panel.setAttribute("data-sidebar-right-panel", "fullscreen");
+    const session = document.createElement("div");
+    session.setAttribute("data-sidebar-right-session", "s1");
+    const pane = document.createElement("div");
+    pane.setAttribute("data-dockkit-pane", "pane-1");
+    session.appendChild(pane);
+    panel.appendChild(session);
+    document.body.appendChild(panel);
     const ctx = stubCtx({ inject: true, sessions: sessionsWithMessage });
     superComposerClient.apply(ctx);
     await tick();
@@ -158,5 +199,44 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     (btn as HTMLElement).click();
     await tick();
     expect(sidebarRightCalls).toEqual(["toggle"]);
+    // 官方公开命令径：commandTarget() 无参捕获（activeElement 回落 active dock pane）
+    expect(capturedTargets[0]).toBeUndefined();
+  });
+
+  it("bug d976ed15: 无真实全屏 pane（注入式假标记）时 ⧉ no-op（禁把常规视图翻进全屏）", async () => {
+    setFullscreenMarker(true);
+    sidebarRightCalls.length = 0;
+    capturedTargets.length = 0;
+    const ctx = stubCtx({ inject: true, sessions: sessionsWithMessage });
+    superComposerClient.apply(ctx);
+    await tick();
+    const btn = document.querySelector('[data-testid="dscf-fullscreen"]');
+    expect(btn).not.toBeNull();
+    (btn as HTMLElement).click();
+    await tick();
+    expect(sidebarRightCalls).toEqual([]);
+    expect(capturedTargets).toEqual([]);
+  });
+
+  it("bug 80421b57: inputTriggers 晚序 provide 后 menu store 补挂——'@' 菜单投影进替身渲染", async () => {
+    setFullscreenMarker(true);
+    // 首轮订阅时 inputTriggers 缺席（真机 provide 晚序——run3/run4 取证持续 absent）
+    const ctx = stubCtx({ sessions: sessionsLiveWithInput });
+    superComposerClient.apply(ctx);
+    await tick();
+    await new Promise((resolve) => setTimeout(resolve, 2_300)); // 首轮 sync tick：state+evs 挂上、triggers 缺席
+    // 晚序 provide（官方 inputTriggers 服务就绪）
+    (ctx as Record<string, unknown>).inputTriggers = triggersStub;
+    await new Promise((resolve) => setTimeout(resolve, 2_300)); // 次轮 sync tick：menu store 补挂
+    // 官方 controller 菜单开（'@' trigger 命中 roster）→ store notify → 替身重渲染
+    menuStore.open = true;
+    const sessionOfSpy = vi.fn(triggersStub.sessionOf);
+    (ctx as Record<string, unknown>).inputTriggers = { sessionOf: sessionOfSpy };
+    for (const listener of menuStore.listeners) listener();
+    await new Promise((resolve) => setTimeout(resolve, 120)); // React 并发调度 flush（Scheduler macrotask）
+    await tick();
+    console.log("DBG open", menuStore.getSnapshot().open, "sessionOfCalls", sessionOfSpy.mock.calls.length,
+      "rootHtml", document.querySelector('[data-testid="dscf-root"]')?.innerHTML.length);
+    expect(document.querySelector('[data-testid="dscf-mention"]')).not.toBeNull();
   });
 });

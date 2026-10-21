@@ -24,7 +24,7 @@ import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createFullscreenTracker, type FullscreenTracker } from './fullscreen.js'
 import { MiniComposerCard } from './mini-composer.js'
-import { createSuperComposerDataFace, miniComposerPropsOf, type SessionInputFaceMirror } from './data-face.js'
+import { createSuperComposerDataFace, mentionMenuOf, miniComposerPropsOf, type SessionInputFaceMirror } from './data-face.js'
 import { installSuperComposerStyles, type StyleDocument } from './styles.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
@@ -87,26 +87,35 @@ function readBailOf(ctx: Context): ((actx: unknown, name: string, payload: unkno
   return bail.bind(ctx)
 }
 
-/** 官方 InputTriggerService 窄面（sessionOf 在场判读——漂移 = undefined）。 */
+/** 官方 InputTriggerService 窄面（sessionOf 在场判读——漂移 = undefined；方法须
+ * 绑定 service 调用——裸提取丢 this，官方 sessionOf 内部读 this.ctx 即炸）。 */
 function readInputTriggersOf(source: unknown): { sessionOf: (actx: unknown) => unknown } | undefined {
   const service = readServiceOf(source, 'inputTriggers') as { sessionOf?: unknown } | undefined
   if (service === undefined || typeof service.sessionOf !== 'function') return undefined
-  const sessionOf = service.sessionOf as (actx: unknown) => unknown
-  return { sessionOf: (actx) => sessionOf(actx) }
+  const sessionOf = service.sessionOf as (this: unknown, actx: unknown) => unknown
+  return { sessionOf: (actx) => sessionOf.call(service, actx) }
 }
 
 /**
- * 官方退全屏窄面（ISidebarRight.toggleFullscreen——chrome 按钮同径）：以 dockkit pane
- * 元素捕获 command target 后 toggle。服务/target 任一缺席 = no-op（fail-soft）。
+ * 官方退全屏窄面（ISidebarRight.toggleFullscreen——chrome 按钮同径）：仅当真实右栏
+ * 处于全屏（fullscreen panel 内的真实 dockkit pane 在场）时捕获该 pane 后 toggle；
+ * 无真实全屏 pane = no-op（bug d976ed15：文档首个 [data-dockkit-pane] 可为注入式
+ * 假标记/常规 pane——把常规视图翻进全屏即语义反转）。服务缺席 = no-op（fail-soft）。
  */
 function exitFullscreenOf(source: unknown, doc: Document, fallback?: unknown): () => void {
   return () => {
     try {
       const sidebarRight = (readServiceOf(source, 'sidebarRight') ?? readServiceOf(fallback, 'sidebarRight')) as
-        | { commandTarget?: (el: Element | null) => unknown; toggleFullscreen?: (t: unknown) => void }
+        | { commandTarget?: (el?: Element | null) => unknown; toggleFullscreen?: (t: unknown) => void }
         | undefined
       if (typeof sidebarRight?.commandTarget !== 'function' || typeof sidebarRight.toggleFullscreen !== 'function') return
-      const target = sidebarRight.commandTarget(doc.querySelector('[data-dockkit-pane]'))
+      const pane = doc.querySelector('[data-sidebar-right-panel="fullscreen"] [data-dockkit-pane]')
+      if (pane === null) return
+      // 官方公开命令径（sidebar-right client.js:9122 同型）：commandTarget() 无参捕获
+      //（activeElement 在会话外 = 回落 active dock pane，布局自洽目标）。DOM pane 元素
+      // 仅作方向门（真实全屏 pane 在场才动作）；捕获走官方径，避免 DOM 派生目标与
+      // isTargetCurrent 的 occurrence/revision 校验错位。
+      const target = sidebarRight.commandTarget()
       if (target != null) sidebarRight.toggleFullscreen(target)
     } catch {
       // fail-soft：官方面漂移只降本动作，不外溢
@@ -153,7 +162,13 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     sessions: readSessionsOf(origin) as never ?? readSessionsOf(ctx) as never,
     conversation: { input: { for: composerFaceOf } },
     bail: readBailOf(ctx) ?? readBailOf(origin),
-    inputTriggers: (readInputTriggersOf(ctx) ?? readInputTriggersOf(origin)) as never,
+    // inputTriggers 惰性切片（bug 80421b57：服务 provide 晚序可达分钟级——挂载期一次性
+    // 捕获会把 undefined 永久焊死在数据面上；getter 每次调用时点重读）
+    inputTriggers: {
+      get sessionOf(): ((actx: unknown) => never) | undefined {
+        return (readInputTriggersOf(ctx) ?? readInputTriggersOf(origin))?.sessionOf as never
+      },
+    } as never,
   })
   const root = createRoot(container)
   const render = (): void => {
@@ -163,16 +178,25 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
       return
     }
     root.render(
-      createElement(MiniComposerCard, miniComposerPropsOf(face, { onExitFullscreen: options.exitFullscreen ?? (() => undefined) })),
+      createElement(
+        MiniComposerCard,
+        // mention 同壳面随渲染组装（bug 80421b57：menu store 订阅扇出已到 render，
+        // 但 props.mention 此前从未组装——菜单模型永远进不了替身渲染）
+        miniComposerPropsOf(face, {
+          onExitFullscreen: options.exitFullscreen ?? (() => undefined),
+          mention: mentionMenuOf(face),
+        }),
+      ),
     )
   }
   const off = face.subscribe(render)
   const offFullscreen = options.tracker?.subscribe(render)
-  // 晚序服务补挂重试（conversation/inputTriggers provide 晚于挂载——有界轮询直至全源挂上）
+  // 晚序服务补挂重试（conversation/inputTriggers provide 晚于挂载——有界轮询直至全源
+  // 挂上；真机判例 inputTriggers provide 晚序可达分钟级，上界 150 次 = 5 分钟）
   let syncTries = 0
   const syncTimer = setInterval(() => {
     syncTries += 1
-    if (torn || syncTries > 30 || face.syncSubscriptions(render)) clearInterval(syncTimer)
+    if (torn || syncTries > 150 || face.syncSubscriptions(render)) clearInterval(syncTimer)
   }, 2_000)
   render()
   let torn = false

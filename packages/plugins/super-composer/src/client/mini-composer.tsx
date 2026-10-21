@@ -139,8 +139,21 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const [hovered, setHovered] = useState(false)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null)
   const [unread, setUnread] = useState(false)
+  // 输入以本地态为源（bug f863404a）：官方共享 store 对替身 setDraft 的回灌投影存在
+  // 周期性回摆（真机 fix-8 001-diag run3/run4 取证：post-setDraft 快照即时正确，~2s
+  // 周期投影回读回摆空串）——受控源落在共享投影上会被 React 回滚清空 DOM。本地态承
+  // DOM 真值，数据面经 onDraftChange 同步（即时发布已证），投影仅在外部值非本机回声
+  // 且非空时采纳（chip 插入 / 他端写入）；空串不采纳（发送清稿由本组件显式收口）。
+  const [draftLocal, setDraftLocal] = useState(props.draft)
+  const pushedRef = useRef<string | null>(null)
   const seenCountRef = useRef(0)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const external = props.draft
+    if (external === draftLocal || external === pushedRef.current || external === "") return
+    setDraftLocal(external)
+  }, [props.draft, draftLocal])
 
   const phase = derivePhase(props, view)
   const expandable = isExpandable(props)
@@ -181,12 +194,15 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   }, [view.preview, idle, previewMs, setViewSafe])
 
   const handleSend = useCallback((): void => {
-    const text = props.draft.trim()
+    const text = draftLocal.trim()
     if (text === "" || props.streaming) return
     props.onSend(text)
-    // 发送自动进入 S2（消息流展开 + 完整控件行）
+    // 发送自动进入 S2（消息流展开 + 完整控件行）；本地清稿（官方 submit 同步清空
+    // 共享草稿，本地态为源须显式收口）
+    setDraftLocal("")
+    pushedRef.current = ""
     setViewSafe({ expanded: true, preview: false })
-  }, [props, setViewSafe])
+  }, [props, draftLocal, setViewSafe])
 
   // Esc 逐层退：S2 → S1（只留标题栏 + 输入区）→ C；球态不再动作。
   // mention 菜单开 = 菜单 Esc 优先（官方 arbitrate 消费）——状态机不动作。
@@ -234,9 +250,11 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           position: "fixed",
           right: "var(--dsw-space-6, 24px)",
           bottom: "var(--dsw-space-6, 24px)",
-          // 层叠修正（bug ba885f7d ③）：fixed 球须浮出 dock pane 层叠上下文
-          //（dswf-doc-body 遮挡 = pointer 不可达）——高于文档 pane 族的显式层级。
-          zIndex: 30,
+          // 层叠修正（bug ba885f7d ③ + fix-8）：fixed 球/卡须浮出 dock pane 层叠上下文
+          //——常规 doc pane 族之上，且全屏呈现态 dock layer 升至 40（官方 sidebar-right
+          // panel [data-sidebar-right-panel=fullscreen] --dsh-dockkit-dock-layer:40），
+          // 取 50 盖过全屏内容（float 层 60 仍在其上，官方弹层不被压）。
+          zIndex: 50,
           width: 44,
           height: 44,
           borderRadius: "var(--dsw-radius-panel, 28px)",
@@ -271,7 +289,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         left: "50%",
         bottom: "var(--dsw-space-6, 24px)",
         transform: "translateX(-50%)",
-        zIndex: 30,
+        zIndex: 50,
         width: "min(860px, 94vw)",
         borderRadius: "var(--dsw-radius-lg, 16px)",
         border: "0.5px solid var(--dsw-alias-border-l2)",
@@ -472,10 +490,13 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       <div style={{ padding: "8px 16px 12px" }}>
         <textarea
           data-testid="dscf-input"
-          value={props.draft}
-          onChange={(event): void =>
-            props.onDraftChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
-          }
+          value={draftLocal}
+          onChange={(event): void => {
+            const text = event.target.value
+            setDraftLocal(text)
+            pushedRef.current = text
+            props.onDraftChange(text, event.target.selectionStart ?? event.target.value.length)
+          }}
           onFocus={(): void => setFocused(true)}
           onBlur={(): void => setFocused(false)}
           onKeyDown={(event): void => {
