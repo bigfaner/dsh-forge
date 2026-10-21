@@ -60,6 +60,13 @@ export default defineConfig({
           },
         },
       },
+      // super-composer 插件包（纯 client 包——client bundle 装载契约守卫 + 全屏感知纯逻辑单测）
+      {
+        test: {
+          name: 'super-composer',
+          include: ['packages/plugins/super-composer/tests/**/*.test.{ts,tsx}'],
+        },
+      },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）

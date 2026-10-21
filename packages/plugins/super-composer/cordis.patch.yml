@@ -1,0 +1,7 @@
+# @dsh-forge/super-composer 组合层：单行插入本包——node 半应 main 空载（纯 client 包，
+# 「无 host 行为（空载合法）」，input-history 判例同构）；浏览器半应
+# dsh.client.platform=web 由 modules 行扫描进花名册（./client = 自注册 CJS bundle，
+# __ModuleLoader__ classic script 装载）。
+- insert:
+    - id: super-composer
+      name: '@dsh-forge/super-composer'
