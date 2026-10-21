@@ -65,6 +65,19 @@ async function appendAttachEvent(
 }
 
 /**
+ * 回收复用刷新（bug ff324cad：归档占位 unarchive 复用时侧栏时间戳停在旧事件）：
+ * 预 adopt 写入窗（会话未活、写句柄合法——1.16 预铸配方同域）追加一条同绑定挂靠事件
+ * （幂等绑定语义——latestAttach 取尾，零状态变化）刷新会话末事件时间戳。调用方持句柄
+ * 生命周期（append + flush；close 由调用方负责）——与 appendAttachEvent 同信封。
+ */
+export async function refreshRecycledAttach(
+  handle: Pick<SessionHandle, 'read' | 'append' | 'flush'>,
+  binding: WorktreeAttachData,
+): Promise<WorktreeAttachEvent> {
+  return appendAttachEvent(handle, binding)
+}
+
+/**
  * 挂靠事件 type 双形态识别：官方 v3→v4 迁移（dsh-session-format-v3-to-v4
  * lib/index.js:1304）把未知事件 type 改写为 `plugin:${type}`——迁移后的旧会话读回为
  * plugin:forge/worktree-attach，按字面读即绑定反查失效。双形态等价识别。

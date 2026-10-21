@@ -41,8 +41,10 @@ import {
 import {
   createWorktree,
   preseedWorktreeSession,
+  refreshRecycledAttach,
   readLatestAttach,
   type SessionPersistenceCreateFace,
+  type WorktreeAttachData,
   defaultBranch as defaultBranchOp,
   deleteWorktree,
   aheadBehind as aheadBehindOp,
@@ -684,6 +686,26 @@ export function createWorktreeRpcService(deps: {
       const key = norm(targetPath)
       const registry = resolveWorkspaceRegistry()
       const archivedOf = (): readonly string[] => registry?.archivedSessionIds ?? []
+      // 回收复用时间戳刷新（bug ff324cad：归档占位 unarchive 复用，侧栏时间戳停在旧事件
+      // 显示「N 天前」）：预 adopt 写入窗（会话未活——归档态无官方写者，1.16 预铸配方同域）
+      // 追加一条同绑定 ignorable 挂靠事件，末事件时间戳即「刚刚」。fail-soft：刷新失败只
+      // warn 不阻断交付（时间戳陈旧非正确性问题）。
+      const refreshRecycled = async (sessionId: string, binding: WorktreeAttachData): Promise<void> => {
+        if (deps.sessionPersistence === undefined) return
+        try {
+          const handle = (await deps.sessionPersistence.open(sessionId, 'write')) as
+            | { append?: (batch: readonly unknown[]) => Promise<void>; flush?: () => Promise<void>; close?: () => Promise<void> }
+            | undefined
+          if (handle === undefined) return
+          try {
+            await refreshRecycledAttach(handle as never, binding)
+          } finally {
+            await handle.close?.()
+          }
+        } catch (cause) {
+          warn(`[git-worktree] 回收占位时间戳刷新失败（fail-soft——侧栏时间戳陈旧）：${String(cause)}`)
+        }
+      }
       // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用；弃置归档产物（重路由
       // 清场，见 rerouteInner）unarchive 回活复用——占位全局至多一个（bug ff324cad 累积面收口）
       for (;;) {
@@ -712,6 +734,7 @@ export function createWorktreeRpcService(deps: {
               sessionProducts.delete(key)
               break
             }
+            await refreshRecycled(reused.sessionId, binding)
           }
           return reused
         }
@@ -750,6 +773,8 @@ export function createWorktreeRpcService(deps: {
                   recycledId = undefined
                 }
                 if (recycledId !== undefined && !archivedOf().includes(recycledId)) {
+                  const scanBinding = await readLatestAttach(recycledId, readFactory).catch(() => null)
+                  if (scanBinding !== null) await refreshRecycled(recycledId, scanBinding)
                   return { sessionId: recycledId, branch: await resolveBranch(targetPath) }
                 }
               }

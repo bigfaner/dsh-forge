@@ -1035,11 +1035,11 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
   })
 
   // ── bug ff324cad 占位回收：弃置归档的 blank 占位循环复用——全局至多一个根占位（累积面收口）──
-  it('占位回收：归档产物再创建 → unarchive 回活复用同一会话（零新建预铸）', async () => {
+  it('占位回收：归档产物再创建 → unarchive 回活复用同一会话（零新建预铸 + 交付前时间戳刷新事件）', async () => {
     const { controller } = fakeController()
     const events: Record<string, readonly unknown[]> = {}
     const headers: Record<string, { cwd: string }> = {}
-    const { persistence, created } = fakePersistence(events, headers)
+    const { persistence, created, appended } = fakePersistence(events, headers)
     const ws = fakeWorkspaceRegistry()
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
@@ -1059,9 +1059,15 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(second.sessionId, '归档占位未回收——每次新会话新增一个 blank（累积面在场）').toBe(first.sessionId)
     expect(ws.unarchived).toEqual([first.sessionId])
     expect(created, '回收必须零新建预铸').toHaveLength(1)
-    // 回收后的 live blank 再创建 → 原路复用（G3 原语义）
+    // bug ff324cad：交付前追加同绑定 ignorable 刷新事件（侧栏时间戳「刚刚」而非「N 天前」）
+    const refresh = appended.filter((row) => row.id === first.sessionId).flatMap((row) => row.events)
+    expect(refresh.length, '回收占位未刷新时间戳（侧栏显示「N 天前」）').toBeGreaterThan(0)
+    expect(refresh[0]).toMatchObject({ ignorable: true, data: { worktreePath: 'C:/repo', branch: 'main' } })
+    // 回收后的 live blank 再创建 → 原路复用（G3 原语义，零重复刷新）
+    const refreshCountBefore = appended.filter((row) => row.id === first.sessionId).length
     const third = await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(third.sessionId).toBe(first.sessionId)
+    expect(appended.filter((row) => row.id === first.sessionId).length).toBe(refreshCountBefore)
     expect(created).toHaveLength(1)
   })
 
