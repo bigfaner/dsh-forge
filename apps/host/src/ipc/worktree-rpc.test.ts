@@ -98,12 +98,21 @@ function fakeController() {
 }
 
 /** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
- *  titles = resolveByPath 项目 title 映射——继承命名面） */
+ *  titles = resolveByPath 项目 title 映射——继承命名面；archive 可选档 = 归档集 +
+ *  unarchive 捕获——bug ff324cad 占位回收面） */
 function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, string> = {}) {
   const created: Array<{ path: string; title?: string }> = []
   const attached: Array<{ path: string; sessionId: string }> = []
   const titled: Array<{ path: string; title: string }> = []
+  const archived: string[] = []
+  const unarchived: string[] = []
   const registry = {
+    archivedSessionIds: archived,
+    unarchiveSession: async (sessionId: string) => {
+      unarchived.push(sessionId)
+      const at = archived.indexOf(sessionId)
+      if (at >= 0) archived.splice(at, 1)
+    },
     resolveByPath: async (path: string) => {
       const title = titles[path]
       if (title === undefined) return undefined
@@ -127,7 +136,7 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
       }
     },
   }
-  return { registry, created, attached, titled }
+  return { registry, created, attached, titled, archived, unarchived }
 }
 
 describe('createWorktreeRpcService（child 侧服务本体——透传插件域）', () => {
@@ -592,7 +601,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
   const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
   const WT_A = 'C:/repo/.forge/worktrees/wt-a'
 
-  /** 被测装配桩：git 项目（resolveProject 计数）+ 会话持久化 + 控制器 */
+  /** 被测装配桩：git 项目（resolveProject 计数）+ 会话持久化 + 控制器 + 归档面捕获 */
   function guardRig(input: {
     events: Record<string, readonly unknown[]>
     headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }>
@@ -610,17 +619,26 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     }
     const { persistence, created } = fakePersistence(input.events, input.headers, opens)
     const { controller, calls, prompts, promptSignals } = fakeController()
+    const archiveCalls: Array<{ sessionId: string; options?: { readonly stopActivity?: boolean } }> = []
+    const registry = {
+      ...fakeWorkspaceRegistry().registry,
+      archiveSession: async (sessionId: string, options?: { readonly stopActivity?: boolean }) => {
+        archiveCalls.push({ sessionId, options })
+      },
+    }
     const service = createWorktreeRpcService({
       gitWorktree: countingExt,
       sessionController: controller,
       sessionPersistence: persistence,
+      workspaceRegistry: registry,
+      ensureDirAcl: async () => {},
       pathPresent: () => true, // fake 路径无盘上实体——活性探测恒真（bug 4a30b193 缝专测单独表驱动）
       listWorktreeEntries: async () => [
         { path: 'C:/repo', branch: 'main' },
         { path: WT_A, branch: 'feat/a' },
       ],
     })
-    return { service, controller, prompts, promptSignals, calls, opens, created, resolveCallsOf: () => resolveCalls }
+    return { service, controller, prompts, promptSignals, calls, opens, created, resolveCallsOf: () => resolveCalls, archiveCalls }
   }
 
   it('A2 竞速败窗：git 项目无绑定 blank 会话 prompt → 原发送拒绝 + 编排产物重路由（原消息内容保真）', async () => {
@@ -708,6 +726,66 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     dispose()
     expect(rig.prompts).toHaveLength(1)
     expect(rig.prompts[0]).toMatchObject({ sessionId: 'blank', text: 'hi' })
+  })
+
+  // ── bug ff324cad 后半：重路由弃置的 blank 源会话就地归档（官方 registry durable 归档集）──
+  it('重路由弃置归档：根绑定占位 blank × 目标 ≠ 自身树 → 产物投递成功后源会话 archiveSession({stopActivity:true}) 恰一次', async () => {
+    const rig = guardRig({
+      events: {
+        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+      },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank') })
+    expect(rig.archiveCalls, '弃置占位未归档——侧栏残留「未命名」会话（bug 在场）').toEqual([
+      { sessionId: 'blank', options: { stopActivity: true } },
+    ])
+  })
+
+  it('重路由弃置归档：无绑定官方 blank（wrap fail-open 世界）走产物径 → 源会话同归档', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank') })
+    expect(rig.archiveCalls).toEqual([{ sessionId: 'blank', options: { stopActivity: true } }])
+  })
+
+  it('重路由弃置归档：reuse-self（目标 ≡ 自身树）零归档——会话仍是在用主体', async () => {
+    const rig = guardRig({
+      events: {
+        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+      },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.prompts[0]).toMatchObject({ sessionId: 'blank' })
+    expect(rig.archiveCalls).toEqual([])
+  })
+
+  it('重路由弃置归档：产物 prompt 失败 → 零归档（源会话保留供重试），失败原样上抛', async () => {
+    const rig = guardRig({
+      events: {
+        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+      },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    rig.controller.prompt = (async (request: { sessionId?: string }) => {
+      if (request.sessionId !== 'blank') throw new Error('product prompt boom')
+      return { accepted: true }
+    }) as SessionControllerFace['prompt']
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toThrow('product prompt boom')
+    dispose()
+    expect(rig.archiveCalls).toEqual([])
   })
 
   it('bug 4a30b193：hero 选中树目录已被强制删除（陈旧 lastSelection）→ 回落会话 cwd 编排，绝不在已删路径上预铸', async () => {
@@ -954,6 +1032,76 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     await service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
     await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(created[0]?.header.cwd).toBe('C:/repo')
+  })
+
+  // ── bug ff324cad 占位回收：弃置归档的 blank 占位循环复用——全局至多一个根占位（累积面收口）──
+  it('占位回收：归档产物再创建 → unarchive 回活复用同一会话（零新建预铸）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const ws = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: ws.registry,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    ws.archived.push(first.sessionId) // 重路由弃置归档后的世界
+    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(second.sessionId, '归档占位未回收——每次新会话新增一个 blank（累积面在场）').toBe(first.sessionId)
+    expect(ws.unarchived).toEqual([first.sessionId])
+    expect(created, '回收必须零新建预铸').toHaveLength(1)
+    // 回收后的 live blank 再创建 → 原路复用（G3 原语义）
+    const third = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(third.sessionId).toBe(first.sessionId)
+    expect(created).toHaveLength(1)
+  })
+
+  it('占位回收：重启世界（G3 产物内存态不在）→ persistence 扫描归档 blank 复用（零新建）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({
+      arch: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
+    })
+    const ws = fakeWorkspaceRegistry()
+    ws.archived.push('arch')
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: ws.registry,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(result.sessionId, '重启后未扫描回收归档占位——新建累积').toBe('arch')
+    expect(ws.unarchived).toEqual(['arch'])
+    expect(created, '重启世界回收零新建').toHaveLength(0)
+  })
+
+  it('占位回收：回收面缺席（registry 无 unarchiveSession）→ 降级新建（现状行为零回归）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const base = fakeWorkspaceRegistry()
+    const broken: Record<string, unknown> = { ...base.registry }
+    delete broken['unarchiveSession']
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: broken as never,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    base.archived.push(first.sessionId)
+    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(second.sessionId).not.toBe(first.sessionId)
+    expect(created).toHaveLength(2)
   })
 
   // ── 绑定表失效锚（onWorktreeSetChanged——外部裸建树首次使用即入表的 sessionCreate 锚）──

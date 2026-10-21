@@ -166,6 +166,15 @@ export interface WorkspaceRegistryFace {
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
   /** 按规范路径只读解析（项目命名继承源 + 存量 title 对齐读面）；缺席 = 旧替身/降级面 */
   resolveByPath?(path: string): Promise<{ readonly title: string; setTitle?(title: string): Promise<void> } | undefined>
+  /** registry 全局归档集只读快照（官方 registry.archivedSessionIds——占位回收判定源；
+   *  缺席 = 旧替身，回收面降级为零回收） */
+  readonly archivedSessionIds?: readonly string[]
+  /** 取消归档（官方 registry.unarchiveSession——bug ff324cad 占位 recycle 唯一写入口）；
+   *  缺席 = 旧替身，回收面降级为零回收 */
+  unarchiveSession?(sessionId: string): Promise<void>
+  /** 归档（官方 registry.archiveSession——bug ff324cad 重路由弃置占位清场唯一写入口）；
+   *  缺席 = 旧替身，清场降级为零归档（侧栏残留占位，可手动归档） */
+  archiveSession?(sessionId: string, options?: { readonly stopActivity?: boolean }): Promise<void>
 }
 
 const noGit: WorktreeListResult = { isGit: false, entries: [] }
@@ -670,20 +679,78 @@ export function createWorktreeRpcService(deps: {
         }
       }
       const key = norm(targetPath)
-      // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用
+      const registry = resolveWorkspaceRegistry()
+      const archivedOf = (): readonly string[] => registry?.archivedSessionIds ?? []
+      // G3 互斥复用：在途编排共享等待；既有 blank 产物直接复用；弃置归档产物（重路由
+      // 清场，见 rerouteInner）unarchive 回活复用——占位全局至多一个（bug ff324cad 累积面收口）
       for (;;) {
         const existing = sessionProducts.get(key)
         if (existing === undefined) break
         const reused = await existing
-        if (await blankOf(reused.sessionId)) return reused
+        if (await blankOf(reused.sessionId)) {
+          if (archivedOf().includes(reused.sessionId)) {
+            try {
+              await registry?.unarchiveSession?.(reused.sessionId)
+            } catch (cause) {
+              warn(`[git-worktree] 占位回收 unarchive 失败（降级新建）：${String(cause)}`)
+              sessionProducts.delete(key)
+              break
+            }
+            if (registry?.unarchiveSession === undefined || archivedOf().includes(reused.sessionId)) {
+              // 归档面缺席或 unarchive 未生效（会话仍不可见）——不可交付，降级新建
+              sessionProducts.delete(key)
+              break
+            }
+          }
+          return reused
+        }
         sessionProducts.delete(key) // 产物已被真实使用（非 blank）→ 允许新建
       }
-      // 绑定表失效锚进 pending 链（首次挂会话时点恰一次——外部裸建树首次使用即入表；
-      // G3 并发等待者共享同链不重复触发；fail-soft 恒不改写产物）
-      const pending = doSessionCreate({ ...request, worktreePath: targetPath }).then(async (result) => {
+      // 占位回收重启世界兜底 + 预铸编排同链（G3 互斥：key 认领后首个 await 前同步 set——
+      // 并发调用方在 loop 段即命中在途产物，scan/预铸不再开双建窗口）：
+      const pending = (async (): Promise<WorktreeSessionCreateResult> => {
+        // persistence 尾扫（cap 200，attachedSessionsOf 同刻度）找绑定目标树的归档 blank，
+        // unarchive 复用；registry 归档面缺席 = 恒不命中（回收面降级，行为同现状新建）
+        const registry2 = registry
+        if (registry2?.unarchiveSession !== undefined) {
+          const persistence = deps.sessionPersistence as { list?: () => Promise<unknown> } | undefined
+          if (persistence !== undefined && typeof persistence.list === 'function') {
+            try {
+              const listed = await persistence.list()
+              const ids = (
+                Array.isArray(listed)
+                  ? listed.map((row) => (row as { header?: { id?: unknown } } | null)?.header?.id ?? row)
+                  : ((listed as { ids?: readonly unknown[] } | null)?.ids ?? [])
+              ) as readonly unknown[]
+              let recycledId: string | undefined
+              for (const id of ids.slice(0, 200)) {
+                const sid = String(id)
+                if (!registry2.archivedSessionIds?.includes(sid)) continue
+                const binding = await readLatestAttach(sid, readFactory).catch(() => null)
+                if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) continue
+                if (!(await blankOf(sid))) continue
+                recycledId = sid // 不 break——尾扫取最后命中（近似最新）
+              }
+              if (recycledId !== undefined) {
+                try {
+                  await registry2.unarchiveSession(recycledId)
+                } catch (cause) {
+                  warn(`[git-worktree] 占位回收 unarchive 失败（降级新建）：${String(cause)}`)
+                  recycledId = undefined
+                }
+                if (recycledId !== undefined && !archivedOf().includes(recycledId)) {
+                  return { sessionId: recycledId, branch: await resolveBranch(targetPath) }
+                }
+              }
+            } catch {
+              // 扫描失败 = 回收面降级（零回收），落预铸现状
+            }
+          }
+        }
+        const result = await doSessionCreate({ ...request, worktreePath: targetPath })
         await notifyWorktreeSetChanged()
         return result
-      })
+      })()
       sessionProducts.set(key, pending)
       try {
         return await pending
@@ -816,7 +883,22 @@ export function createWorktreeRpcService(deps: {
           })
           const productController = deps.sessionController
           if (productController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法重路由 prompt')
-          return (productController.prompt as (r: unknown, ...rest: unknown[]) => unknown)({ ...(request as Record<string, unknown>), sessionId: product.sessionId }, ...args)
+          const result = await (productController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+            { ...(request as Record<string, unknown>), sessionId: product.sessionId },
+            ...args,
+          )
+          // bug ff324cad 弃置清场：产物投递成功后，源会话仍为 blank（未被并发真实使用）
+          // 即就地归档（官方 registry durable 归档集——全分组面隐藏、可 unarchive 恢复；
+          // 占位回收见 sessionCreate——归档占位会被 recycle 复用，全局至多一个根占位）。
+          // prompt 失败不归档（源会话保留供重试）；归档面缺席/失败 fail-soft 只 warn。
+          try {
+            if (await blankOf(sessionId)) {
+              await resolveWorkspaceRegistry()?.archiveSession?.(sessionId, { stopActivity: true })
+            }
+          } catch (cause) {
+            warn(`[git-worktree] 重路由弃置占位归档失败（fail-soft——侧栏残留占位，可手动归档）：${String(cause)}`)
+          }
+          return result
     }
   }
 
