@@ -1008,6 +1008,8 @@ export interface HeroRebindFace {
   openSession(sessionId: string): void
   /** 官方归档（durable 归档集——弃置占位清场唯一正门） */
   archiveSession(sessionId: string): Promise<void>
+  /** 账本变更订阅（官方 sessions.list store subscribe——归档前置确认事件推送源；缺席 = 确认面降级） */
+  subscribeSessionLedger(listener: () => void): () => void
 }
 
 /** 点选即换绑缝构造（inject 闭包内逐次 ctx.get——服务晚于注册就绪不持有陈旧引用） */
@@ -1042,10 +1044,10 @@ export function heroRebindFaceOf(ctx: ForgeClientCtx): HeroRebindFace {
       await uiWorkspace()?.archiveSession?.(sessionId, { stopActivity: true })
     },
     subscribeSessionLedger: (listener) => {
-      const subscribe = (ctx.get('sessions') as { list?: { subscribe?: (l: () => void) => () => void } } | undefined)?.list
-        ?.subscribe
+      const sessions = ctx.get('sessions') as { list?: { subscribe?: (l: () => void) => () => void } } | undefined
+      const subscribe = sessions?.list?.subscribe
       if (typeof subscribe !== 'function') return () => {} // 订阅缝缺席 = 确认面降级（超时路径兜底）
-      return subscribe.call(ctx.get('sessions')?.list, listener)
+      return subscribe.call(sessions?.list, listener)
     },
   }
 }
