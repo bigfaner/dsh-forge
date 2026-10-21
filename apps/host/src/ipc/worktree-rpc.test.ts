@@ -1037,7 +1037,9 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
   // ── bug ff324cad 占位回收：弃置归档的 blank 占位循环复用——全局至多一个根占位（累积面收口）──
   it('占位回收：归档产物再创建 → unarchive 回活复用同一会话（零新建预铸）', async () => {
     const { controller } = fakeController()
-    const { persistence, created } = fakePersistence({})
+    const events: Record<string, readonly unknown[]> = {}
+    const headers: Record<string, { cwd: string }> = {}
+    const { persistence, created } = fakePersistence(events, headers)
     const ws = fakeWorkspaceRegistry()
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
@@ -1049,6 +1051,9 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       ensureDirAcl: async () => {},
     })
     const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    // 交付核验种子：绑定 ≡ 目标树且头 cwd 自洽（1.19 守护面）
+    events[first.sessionId] = [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }]
+    headers[first.sessionId] = { cwd: 'C:/repo' }
     ws.archived.push(first.sessionId) // 重路由弃置归档后的世界
     const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(second.sessionId, '归档占位未回收——每次新会话新增一个 blank（累积面在场）').toBe(first.sessionId)
@@ -1101,6 +1106,56 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     base.archived.push(first.sessionId)
     const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(second.sessionId).not.toBe(first.sessionId)
+    expect(created).toHaveLength(2)
+  })
+
+  it('占位回收：归档产物 cwd 核验不符（绑定 ≠ 目标树）→ 不回收降级新建（占位漂移不可交付）', async () => {
+    const { controller } = fakeController()
+    const events: Record<string, readonly unknown[]> = {}
+    const headers: Record<string, { cwd: string }> = {}
+    const { persistence, created } = fakePersistence(events, headers)
+    const ws = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: ws.registry,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    // 漂移形态一：绑定与头 cwd 自洽但 ≠ 目标树（外部改档/旧世界产物）
+    events[first.sessionId] = [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/elsewhere', branch: 'x' } }]
+    headers[first.sessionId] = { cwd: 'C:/elsewhere' }
+    ws.archived.push(first.sessionId)
+    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(second.sessionId, '绑定 ≠ 目标树的归档占位被当目标树产物交付').not.toBe(first.sessionId)
+    expect(created).toHaveLength(2)
+  })
+
+  it('占位回收：归档产物头 cwd 漂移（header cwd ≠ 绑定树，1.19 强制守护）→ readLatestAttach 拒收降级新建', async () => {
+    const { controller } = fakeController()
+    const events: Record<string, readonly unknown[]> = {}
+    const headers: Record<string, { cwd: string }> = {}
+    const { persistence, created } = fakePersistence(events, headers)
+    const ws = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      workspaceRegistry: ws.registry,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    // 漂移形态二：绑定 ≡ 目标树但头 cwd 漂移——readLatestAttach cwd 强制守护抛错 → 拒收
+    events[first.sessionId] = [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }]
+    headers[first.sessionId] = { cwd: 'C:/drifted' }
+    ws.archived.push(first.sessionId)
+    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    expect(second.sessionId, '头 cwd 漂移的归档占位被交付（1.19 守护被绕过）').not.toBe(first.sessionId)
     expect(created).toHaveLength(2)
   })
 

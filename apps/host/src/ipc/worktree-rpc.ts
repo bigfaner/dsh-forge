@@ -689,6 +689,14 @@ export function createWorktreeRpcService(deps: {
         const reused = await existing
         if (await blankOf(reused.sessionId)) {
           if (archivedOf().includes(reused.sessionId)) {
+            // 归档占位交付前 cwd 核验（bug ff324cad + 1.19 强制守护同判）：绑定经
+            // readLatestAttach 的 header cwd ≡ 绑定树强制校验（漂移抛错 → null 拒收），
+            // 再求绑定 ≡ 目标树——漂移占位不可当目标树产物交付，降级新建。
+            const binding = await readLatestAttach(reused.sessionId, readFactory).catch(() => null)
+            if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) {
+              sessionProducts.delete(key)
+              break
+            }
             try {
               await registry?.unarchiveSession?.(reused.sessionId)
             } catch (cause) {
