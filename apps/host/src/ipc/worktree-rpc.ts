@@ -663,12 +663,15 @@ export function createWorktreeRpcService(deps: {
       if (await absentGitProbe(request.worktreePath)) throw new WorktreeCapabilityAbsentError(request.worktreePath)
       // bug ff324cad 根治级「创建即绑选中树」：hero 选中树记忆消费前移到创建时点——wrap
       // 恒传项目根，此处选中记忆在场且活性可证即直接预铸选中树会话（零主树占位双建，
-      // 首条消息零重路由）；陈旧记忆摘除回落请求路径（bug 4a30b193 同判）；选中树 ≡
-      // 请求路径（主行锚定/无选中）= 原语义零差异。重路由径目标本就取自本记忆， Consult
-      // 幂等同值。
+      // 首条消息零重路由）；陈旧记忆摘除回落请求路径（bug 4a30b193 同判）。消费仅限
+      // 「请求 ≡ 项目根」的占位语义请求：显式树请求（点选即换绑编排 / 重路由产物径）
+      // 目标本就是点选结果，记忆劫持 = 绑错树。
       let targetPath = request.worktreePath
       const resolution = await cachedResolve(request.worktreePath).catch(() => null)
-      if (resolution !== null) {
+      if (
+        resolution !== null &&
+        norm(request.worktreePath) === norm(resolution.projectRoot)
+      ) {
         const selected = lastSelection.get(norm(resolution.projectRoot))
         if (selected !== undefined) {
           if (presentOf(selected)) {

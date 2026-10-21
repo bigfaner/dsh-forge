@@ -31,7 +31,7 @@ import {
   selectedProjectOf,
   selectedProjectRootOf,
 } from './hero-picker-model.js'
-import { ForgeHeroWorktreeMount } from './WorktreeFaces.js'
+import { ForgeHeroWorktreeMount, type HeroRebindFace } from './WorktreeFaces.js'
 import type { KitSelectorHook } from './ConversationViews.js'
 
 /** 「添加项目…」行 id（菜单内保留字——项目行 id 恒为 dsh workspace uuid，无碰撞面） */
@@ -54,6 +54,8 @@ export interface ForgeHeroWorkspacePickerProps {
   readonly onClose: () => void
   /** workspace 归属观察钩子（root 作用域标准 prop——项目重拉锚，外部注册后快照身份变化） */
   readonly useWorkspaces?: KitSelectorHook
+  /** 点选即换绑编排缝（方案 A——hero slot inject 递达；缺席 = 零编排纯选中态） */
+  readonly rebindFace?: HeroRebindFace
   /** RPC 构造器（测试替身注入；缺省 preload 真身） */
   readonly makeRpc?: () => ForgeRpcClient
 }
@@ -70,6 +72,7 @@ export function ForgeHeroWorkspacePicker({
   onPick,
   onClose,
   useWorkspaces,
+  rebindFace,
   makeRpc = preloadRpcClientFactory,
 }: ForgeHeroWorkspacePickerProps): ReactNode {
   // 项目源（RPC）+ 重拉锚（workspace 归属快照身份——注册/删除 workspace 即触发，与左栏
@@ -184,7 +187,7 @@ export function ForgeHeroWorkspacePicker({
       {/* worktree 第二 chip（难点 A 落法③产品自增行——影子渲染面就地并列，原型「chip 行
           两 chip」构图；非 git / 未选中项目零注入整体退回现状）。点选 = 纯选中态 +
           点选时点跨分支确认（1.19），会话创建 = 官方 create 调用点 wrap 改道预铸。 */}
-      <ForgeHeroWorktreeMount projectRoot={selectedProjectRoot} makeRpc={makeRpc} />
+      <ForgeHeroWorktreeMount projectRoot={selectedProjectRoot} rebindFace={rebindFace} makeRpc={makeRpc} />
     </>
   )
 }

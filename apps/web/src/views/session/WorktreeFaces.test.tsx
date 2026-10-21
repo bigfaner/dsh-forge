@@ -10,6 +10,7 @@ import {
   ForgeWorktreeSealOverlay,
   anchorDefaultWorktreePath,
   createFollowup,
+  rebindOnSelect,
 } from './WorktreeFaces.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
@@ -61,6 +62,56 @@ describe('创建跟进次序（bug 6593d708——清单刷新先于选中态落�
       },
     })
     expect(order).toEqual(['refresh', 'select'])
+  })
+})
+
+// ───────────── bug ff324cad 方案 A：点选即换绑（纯编排——rebindOnSelect）─────────────
+
+describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）', () => {
+  const deps = (overrides: Partial<Parameters<typeof rebindOnSelect>[1]> = {}) => {
+    const order: string[] = []
+    const placeholderId = 's-placeholder'
+    const full: Parameters<typeof rebindOnSelect>[1] = {
+      rootPlaceholderBlankId: async () => placeholderId,
+      sessionCreate: async (path) => {
+        order.push(`create:${path}`)
+        return { sessionId: 's-tree' }
+      },
+      openSession: (sessionId) => {
+        order.push(`open:${sessionId}`)
+      },
+      archiveSession: async (sessionId) => {
+        order.push(`archive:${sessionId}`)
+      },
+      ...overrides,
+    }
+    return { full, order, placeholderId }
+  }
+
+  it('主树占位 blank 在场 → 预铸选中树 + 先切后归档（次序契约：hero 不落归档会话）', async () => {
+    const { full, order } = deps()
+    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
+    expect(order).toEqual([
+      'create:C:/repo/.forge/worktrees/wt-a',
+      'open:s-tree',
+      'archive:s-placeholder',
+    ])
+  })
+
+  it('无活跃占位（非 blank / 非主树绑定）→ 零编排（纯选中态）', async () => {
+    const { full, order } = deps({ rootPlaceholderBlankId: async () => undefined })
+    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
+    expect(order).toEqual([])
+  })
+
+  it('预铸失败 → 原样上抛（调用方 fail-soft；零切换零归档——占位保留供重路由兜底）', async () => {
+    const { full, order } = deps({
+      sessionCreate: async () => {
+        throw new Error('precast boom')
+      },
+    })
+    await expect(rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)).rejects.toThrow('precast boom')
+    expect(order).toEqual([])
   })
 })
 

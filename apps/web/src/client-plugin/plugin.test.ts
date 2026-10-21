@@ -697,7 +697,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + 零 inject（数据面组件自源 RPC）', () => {
+  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + inject = 点选即换绑缝（bug ff324cad 方案 A）', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -709,10 +709,14 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.component).toBe(views.ForgeHeroWorkspacePicker)
     // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
     expect(hero.options.children).toBeUndefined()
-    // W3 arm 退役：hero worktree face（openSession/blankSessionByCwd/sessionsList/
-    // composerDraft 编排缝）随 arm 效应链退役——零 inject（点选纯选中态组件自源 RPC，
-    // 会话创建走官方 create 调用点 wrap 改道预铸）
-    expect(hero.options.inject).toBeUndefined()
+    // bug ff324cad 方案 A：inject = 点选即换绑缝（rebindFace——activeId/blank 判读 +
+    // openSession/archiveSession 官方窄面经 heroRebindFaceOf 递达挂载面）
+    const injected = (hero.options.inject as (() => { rebindFace?: unknown }) | undefined)?.()
+    expect(injected?.rebindFace).toBeDefined()
+    expect(typeof (injected?.rebindFace as { activeSessionId?: unknown } | undefined)?.activeSessionId).toBe('function')
+    expect(typeof (injected?.rebindFace as { isBlank?: unknown } | undefined)?.isBlank).toBe('function')
+    expect(typeof (injected?.rebindFace as { openSession?: unknown } | undefined)?.openSession).toBe('function')
+    expect(typeof (injected?.rebindFace as { archiveSession?: unknown } | undefined)?.archiveSession).toBe('function')
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__

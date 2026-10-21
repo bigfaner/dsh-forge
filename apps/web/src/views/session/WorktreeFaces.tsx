@@ -44,6 +44,45 @@ import {
 import './session.css'
 
 /**
+ * 点选即换绑编排缝（方案 A——bug ff324cad 体验收口）：hero worktree chip 点选非主树且
+ * 活跃会话为主树占位 blank 时，预铸选中树会话 + 官方 openSession 切换 + 占位归档清场
+ * （官方切工作区同构语义：切换 = 让目标 workspace 诞生/复用它自己的会话，弃置空占位
+ * 归档）。结构窄面——plugin.ts heroRebindFaceOf 同形镜像（bundle 自含零 import）；
+ * 任一成员缺席 = 零编排（退回纯选中态，发送时必绑重路由兜底）。
+ */
+export interface HeroRebindFace {
+  activeSessionId(): string | undefined
+  isBlank(sessionId: string): boolean
+  openSession(sessionId: string): void
+  archiveSession(sessionId: string): Promise<void>
+}
+
+/** 点选即换绑编排依赖（纯函数注入面——face×seal 判读合成在调用方，本面只管次序） */
+export interface RebindOrchestrationDeps {
+  /** 活跃主树占位 blank 会话 id（face.activeSessionId × isBlank × seal 绑定 ≡ 项目根合成）；undefined = 零编排 */
+  readonly rootPlaceholderBlankId: () => Promise<string | undefined>
+  /** 预铸选中树会话（forge:worktree/session-create——显式树请求不被选中记忆劫持） */
+  readonly sessionCreate: (path: string) => Promise<{ readonly sessionId: string }>
+  /** 官方 openSession（先切——hero 不落在归档会话上） */
+  readonly openSession: (sessionId: string) => void
+  /** 官方归档（后清场——弃置占位入 durable 归档集，可恢复、回收径复用） */
+  readonly archiveSession: (sessionId: string) => Promise<void>
+}
+
+/**
+ * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为主树占位 blank
+ * → 预铸选中树会话 → openSession 切换 → 占位归档。次序契约 = 先切后归档；非占位/无活跃
+ * 会话 = 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
+ */
+export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
+  const placeholderId = await deps.rootPlaceholderBlankId()
+  if (placeholderId === undefined) return
+  const product = await deps.sessionCreate(path)
+  deps.openSession(product.sessionId)
+  await deps.archiveSession(placeholderId)
+}
+
+/**
  * 分支组合框输入面样式（字体令牌 + mono——盒模型不在此处：宽度/内距/边框由
  * .dswt-field-control 共享规则承载在官方 Input 外层 .wrap 上，与基准分支触发器同源等宽）
  */
@@ -144,10 +183,13 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
+  rebindFace,
   makeRpc = preloadRpcClientFactory,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
+  /** 点选即换绑编排缝（方案 A——plugin.ts hero slot inject 递达；缺席 = 零编排） */
+  readonly rebindFace?: HeroRebindFace
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -213,6 +255,39 @@ export function ForgeHeroWorktreeMount({
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
   // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
+  // 点选即换绑（方案 A，applySelection 后 fire-and-forget）：face 在场 ∧ 非主行 ∧ 活跃
+  // 会话为主树占位 blank（seal 绑定 ≡ 项目根 × 账本 blank）→ 预铸选中树会话 + 官方
+  // openSession 切换 + 占位归档清场——抖动收敛到点选瞬间（用户尚未输入），输入/发送全程
+  // 在最终会话，侧栏全程只见一个会话，发送时零重路由。任一环节失败 fail-soft 静默退回
+  // 现状（发送时必绑重路由兜底）。
+  const maybeRebind = useCallback(
+    (path: string): void => {
+      if (rebindFace === undefined || projectRoot === null) return
+      const mainPath = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.isMain)?.path : undefined
+      if (mainPath !== undefined && cwdKey(path) === cwdKey(mainPath)) return // 主行：零换绑
+      void rebindOnSelect(path, {
+        rootPlaceholderBlankId: async () => {
+          const activeId = rebindFace.activeSessionId()
+          if (activeId === undefined || !rebindFace.isBlank(activeId)) return undefined // 非占位：纯选中态
+          const seal = await makeRpc().worktree.seal({ sessionId: activeId })
+          if (!seal.isGit || seal.binding === null) return undefined
+          if (cwdKey(seal.binding.worktreePath) !== cwdKey(projectRoot)) return undefined // 非主树占位
+          return activeId
+        },
+        sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
+        openSession: (sessionId) => {
+          rebindFace.openSession(sessionId)
+        },
+        archiveSession: async (sessionId) => {
+          await rebindFace.archiveSession(sessionId)
+        },
+      }).catch(() => {
+        // fail-soft：换绑失败 = 现状世界（占位仍在，发送时重路由兜底）
+      })
+    },
+    [rebindFace, projectRoot, phase, makeRpc],
+  )
+
   const onSelectConfirmed = useCallback(
     (path: string): void => {
       const row = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path) : undefined
@@ -228,8 +303,9 @@ export function ForgeHeroWorktreeMount({
         return
       }
       applySelection(path)
+      maybeRebind(path)
     },
-    [phase, riskDismissed, riskConfirmedLatch, applySelection],
+    [phase, riskDismissed, riskConfirmedLatch, applySelection, maybeRebind],
   )
 
   // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
@@ -499,6 +575,7 @@ export function ForgeHeroWorktreeMount({
             if (path !== null) {
               setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
               applySelection(path)
+              maybeRebind(path)
             }
           }}
         />

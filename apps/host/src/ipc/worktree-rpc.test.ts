@@ -1159,6 +1159,28 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(created).toHaveLength(2)
   })
 
+  it('创建即绑选中树：显式树请求不被选中记忆劫持——select 推送他树后 sessionCreate(显式树) 恒预铸显式树（点选即换绑编排前置）', async () => {
+    const { controller, calls } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const WT_B = 'C:/repo/.forge/worktrees/wt-b'
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [
+        { path: 'C:/repo', branch: 'main' },
+        { path: WT_A, branch: 'feat/a' },
+        { path: WT_B, branch: 'feat/b' },
+      ],
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    await service.select({ projectRoot: 'C:/repo', path: WT_B })
+    const result = await service.sessionCreate({ worktreePath: WT_A })
+    expect(created[0]?.header.cwd, '显式树请求被记忆劫持到选中树').toBe(WT_A)
+    expect(calls).toEqual([{ sessionId: result.sessionId, cwd: WT_A }])
+  })
+
   // ── 绑定表失效锚（onWorktreeSetChanged——外部裸建树首次使用即入表的 sessionCreate 锚）──
   it('锚恰一次：全新 sessionCreate 成功后触发 onWorktreeSetChanged 恰一次（进 pending 链——G3 并发等待者不重复触发）；blank 复用不重触发', async () => {
     const { controller } = fakeController()
