@@ -723,42 +723,33 @@ export function createWorktreeRpcService(deps: {
       // 占位回收重启世界兜底 + 预铸编排同链（G3 互斥：key 认领后首个 await 前同步 set——
       // 并发调用方在 loop 段即命中在途产物，scan/预铸不再开双建窗口）：
       const pending = (async (): Promise<WorktreeSessionCreateResult> => {
-        // persistence 尾扫（cap 200，attachedSessionsOf 同刻度）找绑定目标树的归档 blank，
-        // unarchive 复用；registry 归档面缺席 = 恒不命中（回收面降级，行为同现状新建）
+        // 归档集精确候选扫描（bug 8af836eb 后续性能收口：候选源 = registry.archivedSessionIds
+        // 本身——只有产品归档的占位会进该集合，通常一两个条目；替代初版 persistence.list
+        // 全量尾扫 cap 200 逐会话开读句柄——真实项目秒级，是「点新会话打开 hero 明显延迟」
+        // 的根因）。registry 归档面缺席 = 恒不命中（回收面降级，行为同现状新建）。
         const registry2 = registry
-        if (registry2?.unarchiveSession !== undefined) {
-          const persistence = deps.sessionPersistence as { list?: () => Promise<unknown> } | undefined
-          if (persistence !== undefined && typeof persistence.list === 'function') {
-            try {
-              const listed = await persistence.list()
-              const ids = (
-                Array.isArray(listed)
-                  ? listed.map((row) => (row as { header?: { id?: unknown } } | null)?.header?.id ?? row)
-                  : ((listed as { ids?: readonly unknown[] } | null)?.ids ?? [])
-              ) as readonly unknown[]
-              let recycledId: string | undefined
-              for (const id of ids.slice(0, 200)) {
-                const sid = String(id)
-                if (!registry2.archivedSessionIds?.includes(sid)) continue
-                const binding = await readLatestAttach(sid, readFactory).catch(() => null)
-                if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) continue
-                if (!(await blankOf(sid))) continue
-                recycledId = sid // 不 break——尾扫取最后命中（近似最新）
-              }
-              if (recycledId !== undefined) {
-                try {
-                  await registry2.unarchiveSession(recycledId)
-                } catch (cause) {
-                  warn(`[git-worktree] 占位回收 unarchive 失败（降级新建）：${String(cause)}`)
-                  recycledId = undefined
-                }
-                if (recycledId !== undefined && !archivedOf().includes(recycledId)) {
-                  return { sessionId: recycledId, branch: await resolveBranch(targetPath) }
-                }
-              }
-            } catch {
-              // 扫描失败 = 回收面降级（零回收），落预铸现状
+        if (registry2?.unarchiveSession !== undefined && registry2.archivedSessionIds !== undefined) {
+          try {
+            let recycledId: string | undefined
+            for (const sid of registry2.archivedSessionIds) {
+              const binding = await readLatestAttach(sid, readFactory).catch(() => null)
+              if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) continue
+              if (!(await blankOf(sid))) continue
+              recycledId = sid // 不 break——归档序取最后命中（近似最新）
             }
+            if (recycledId !== undefined) {
+              try {
+                await registry2.unarchiveSession(recycledId)
+              } catch (cause) {
+                warn(`[git-worktree] 占位回收 unarchive 失败（降级新建）：${String(cause)}`)
+                recycledId = undefined
+              }
+              if (recycledId !== undefined && !archivedOf().includes(recycledId)) {
+                return { sessionId: recycledId, branch: await resolveBranch(targetPath) }
+              }
+            }
+          } catch {
+            // 扫描失败 = 回收面降级（零回收），落预铸现状
           }
         }
         const result = await doSessionCreate({ ...request, worktreePath: targetPath })
