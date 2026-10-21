@@ -50,7 +50,7 @@ const quoteReferenceClient: ProductClientEntry = {
   id: '@dsh-forge/quote-reference',
   url: `quote-reference-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
   rev: __DSH_FORGE_BUILD_REV__,
-  inject: ['@deepseek-ai/dsh-api-session-controller'],
+  inject: ['@deepseek-ai/dsh-api-session-controller', '@deepseek-ai/dsh-client-ui-conversation'],
 }
 
 // super-composer 插件缺省装载行（super-composer/1.9，input-history 判例同构）：
@@ -60,7 +60,12 @@ const superComposerClient: ProductClientEntry = {
   id: '@dsh-forge/super-composer',
   url: `super-composer-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
   rev: __DSH_FORGE_BUILD_REV__,
-  inject: ['@deepseek-ai/dsh-api-session-controller'],
+  inject: [
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-ui-input-trigger',
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
+  ],
 }
 
 const el = document.getElementById('root')
