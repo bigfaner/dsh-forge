@@ -46,7 +46,6 @@ export {
 } from './worktree-ops.js'
 export {
   preseedWorktreeSession,
-  refreshRecycledAttach,
   latestAttachEvent,
   readLatestAttach,
   isWorktreeAttachEventType,
