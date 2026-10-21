@@ -204,6 +204,19 @@ export function invalidateResolveCaches(projectRoot?: string): void {
 
 const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
 
+/** unborn HEAD 分支名缺省探测（git symbolic-ref --short HEAD——真机 git execFile；失败 null） */
+const defaultSymbolicRefOf = async (worktreePath: string): Promise<string | null> => {
+  try {
+    const { stdout } = await promisify(execFile)('git', ['-C', worktreePath, 'symbolic-ref', '--short', 'HEAD'], {
+      windowsHide: true,
+    })
+    const branch = stdout.trim()
+    return branch === '' ? null : branch
+  } catch {
+    return null
+  }
+}
+
 /**
  * 目录 ACL 预防性补权（bug 4209c531——与官方 diagnose-windows-sandbox-acl 修复同语义，
  * 前置到编排创建时点）。平台分派（钩子三平台均在，动作按需）：
@@ -270,7 +283,9 @@ export function createWorktreeRpcService(deps: {
   readonly listWorktreeEntries?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null }[]>) | undefined
   /** worktree 清单行注入缝（list 通道本体——缺省 = 插件域 listWorktrees 真机 git） */
   readonly listWorktreeRows?: ((projectRoot: string) => Promise<readonly { path: string; branch: string | null; detached: boolean; bare: boolean }[]>) | undefined
-  /** 默认 agentPreset 解析缝（官方 agentPresets registry——缺席/拒绝 = 头缺席零猜测，bug eae18b5c） */
+  /** unborn HEAD 分支名探测缝（git symbolic-ref --short HEAD——清单无 branch 行时兜底；
+   *  缺省 = 真机 git execFile；测试注入桩。失败 = null 落空显式拒原语义） */
+  readonly symbolicRefOf?: ((worktreePath: string) => Promise<string | null>) | undefined  /** 默认 agentPreset 解析缝（官方 agentPresets registry——缺席/拒绝 = 头缺席零猜测，bug eae18b5c） */
   readonly resolveDefaultPreset?: (() => Promise<string | undefined>) | undefined
   /** 目录 ACL 预防性补权缝（bug 4209c531——缺省 = win32 icacls 当前用户 FullControl；测试注入桩） */
   readonly ensureDirAcl?: ((path: string) => Promise<void>) | undefined
@@ -591,13 +606,22 @@ export function createWorktreeRpcService(deps: {
     }
   }
 
-  /** worktree 分支解析（attach/sessionCreate 共源——分支缺省自查 worktree list） */
+  /**
+   * worktree 分支解析（attach/sessionCreate 共源——分支缺省自查 worktree list）。
+   * bug 9eb9d6cb 真机反馈：unborn HEAD 仓库（git init 后零提交——temp fixture 形态）
+   * 的 porcelain 无 branch 行 → 清单解析 null → 落空显式拒。兜底 = symbolic-ref 取
+   * unborn 分支名（main 等——HEAD 指向存在的分支 ref， unborn 也有合法分支名）。
+   */
   const resolveBranch = async (worktreePath: string, branch?: string): Promise<string> => {
     if (branch !== undefined && branch !== '') return branch
     const resolution = await ext().resolveProject(worktreePath).catch(() => null)
     const root = resolution?.projectRoot ?? worktreePath
     const entries = await (deps.listWorktreeEntries ?? listWorktrees)(root).catch(() => [])
-    return entries.find((row) => norm(row.path) === norm(worktreePath))?.branch ?? ''
+    const listed = entries.find((row) => norm(row.path) === norm(worktreePath))?.branch
+    if (listed !== undefined && listed !== null && listed !== '') return listed
+    // unborn HEAD 兜底：symbolic-ref 取 HEAD 指向的分支短名（null/探测失败一律归 '' 落空显式拒）
+    const probe = deps.symbolicRefOf ?? defaultSymbolicRefOf
+    return (await probe(worktreePath).catch(() => '')) ?? ''
   }
 
   const service: WorktreeRpcService = {

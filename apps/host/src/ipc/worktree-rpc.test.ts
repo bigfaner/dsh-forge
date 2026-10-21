@@ -23,6 +23,7 @@ import {
   defaultEnsureDirAcl,
   interceptRequiredBinding,
   interceptSessionSends,
+  invalidateResolveCaches,
   registerWorktreeChannels,
   verifySendGuardInstalled,
   WorktreeCapabilityAbsentError,
@@ -163,6 +164,28 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(first).toEqual({ isGit: false, entries: [] })
     expect(second).toEqual({ isGit: false, entries: [] })
     expect(resolveCalls, '非 git 结果未缓存——弹窗/挂载每次白跑 git 子进程（bug 在场）').toBe(1)
+  })
+
+  // ── bug 9eb9d6cb 后续收口：解析缓存失效缝（G7② null 记忆化保留——失效代自愈）──
+  it('G8 失效缝：invalidateResolveCaches 后负结果重探（registerProject 陈旧自愈）', async () => {
+    let resolveCalls = 0
+    const countingExt = {
+      getExtensionPoints: () => ({
+        resolveProject: async (_cwd: string) => {
+          resolveCalls += 1
+          return null
+        },
+        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
+      }),
+    }
+    invalidateResolveCaches() // 用例隔离：清其他用例残留缓存
+    const service = createWorktreeRpcService({ gitWorktree: countingExt })
+    await service.list({ projectRoot: 'C:/plain' } satisfies WorktreeListRequest)
+    await service.list({ projectRoot: 'C:/plain' } satisfies WorktreeListRequest)
+    expect(resolveCalls, 'G8 负缓存未命中（缓存语义回归）').toBe(1)
+    invalidateResolveCaches('C:/plain')
+    await service.list({ projectRoot: 'C:/plain' } satisfies WorktreeListRequest)
+    expect(resolveCalls, '失效缝未清缓存——注册后清单停在 isGit:false（bug 在场）').toBe(2)
   })
 
   it('bug 925c96d5：sessionCreate 后 find-or-create 树路径工作区 + attachSession（官方 registry 面——composer 门控/侧栏归属单源）', async () => {
@@ -1179,6 +1202,42 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(second.sessionId, '头 cwd 漂移的归档占位被交付（1.19 守护被绕过）').not.toBe(first.sessionId)
     expect(created).toHaveLength(2)
+  })
+
+  // ── bug 9eb9d6cb 真机反馈：unborn HEAD 仓库（temp fixture：git init 后零提交）──
+  it('unborn HEAD 兜底：清单无 branch 行 → symbolic-ref 取分支短名，预铸成功', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const FIXTURE = 'C:/Users/panda/AppData/Local/Temp/v2-b-fixture'
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: FIXTURE, branch: null }], // unborn HEAD：porcelain 无 branch 行
+      symbolicRefOf: async () => 'main', // HEAD 指向存在的分支 ref——unborn 也有合法分支名
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const result = await service.sessionCreate({ worktreePath: FIXTURE })
+    expect(created, 'unborn HEAD 兜底缺席 = 每次点击 typed 报错（bug 在场）').toHaveLength(1)
+    expect(created[0]?.header.cwd).toBe(FIXTURE)
+    expect(result.branch).toBe('main')
+  })
+
+  it('unborn HEAD 兜底：symbolic-ref 探测失败（null）→ 落空显式拒原语义（零猜测）', async () => {
+    const { controller } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: null }],
+      symbolicRefOf: async () => null,
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    await expect(service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow('分支解析失败')
+    expect(created).toHaveLength(0)
   })
 
   it('创建即绑选中树：显式树请求不被选中记忆劫持——select 推送他树后 sessionCreate(显式树) 恒预铸显式树（点选即换绑编排前置）', async () => {
