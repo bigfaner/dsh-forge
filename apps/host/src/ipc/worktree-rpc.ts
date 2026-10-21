@@ -686,6 +686,10 @@ export function createWorktreeRpcService(deps: {
           }
         }
       }
+      // 前置活性守卫（bug 9eb9d6cb 真机反馈——temp fixture 残留路径以生裸「分支解析失败」
+      // 冒出）：目标路径盘上缺席 → WorktreeTargetAbsentError typed 显式拒绝。wrap 径
+      // fail-open 回官方原流（零行为差异）；重路由径本就前置同判（本守卫为纵深）。
+      if (!presentOf(targetPath)) throw new WorktreeTargetAbsentError(targetPath)
       const key = norm(targetPath)
       const registry = resolveWorkspaceRegistry()
       const archivedOf = (): readonly string[] => registry?.archivedSessionIds ?? []

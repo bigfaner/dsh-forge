@@ -174,6 +174,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       workspaceRegistry: registry,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(created.map((row) => row.path), '树路径未 find-or-create 工作区（bug 在场）').toEqual([
@@ -193,6 +194,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       workspaceRegistry: registry,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
@@ -209,6 +211,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       workspaceRegistry: registry,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(created[0]!.title, '树工作区未继承项目名（hero 项目 chip 跟随树名）').toBe('dsh-forge')
@@ -228,6 +231,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       ensureDirAcl: async (path) => {
         aclPaths.push(path)
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(aclPaths, '编排链未做 ACL 补权（新树首条命令必撞沙箱拒绝）').toEqual(['C:/repo/.forge/worktrees/wt-a'])
@@ -246,6 +250,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       ensureDirAcl: async () => {
         throw new Error('icacls failed')
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
       sessionId: expect.stringMatching(/^session-[0-9a-f-]{36}$/),
@@ -262,6 +267,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       workspaceRegistry: registry,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(titled).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' }])
@@ -323,6 +329,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       workspaceRegistry: bare,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
       sessionId: expect.stringMatching(/^session-[0-9a-f-]{36}$/),
@@ -337,6 +344,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
       resolveDefaultPreset: async () => 'expedition',
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(created[0]!.header, '预铸头缺 agentPreset（bug 在场——模式标签消失）').toMatchObject({
@@ -355,6 +363,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       resolveDefaultPreset: async () => {
         throw new Error('registry absent')
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
       sessionId: expect.stringMatching(/^session-/),
@@ -369,6 +378,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     expect(result.sessionId).toMatch(/^session-[0-9a-f-]{36}$/)
@@ -398,6 +408,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionController: trackingController,
       sessionPersistence: trackingPersistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
     // 自铸 id（session-<uuid> 形态）且 header 极薄契约（id/createdAt/cwd）
@@ -445,12 +456,16 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
 
   it('sessionCreate：sessionPersistence 缺席 / 无 create 面 → 明确错误（不做半截预铸）', async () => {
     const { controller } = fakeController()
-    const bare = createWorktreeRpcService({ sessionController: controller })
+    const bare = createWorktreeRpcService({
+      sessionController: controller,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
+    })
     await expect(bare.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
     const legacy = createWorktreeRpcService({
       sessionController: controller,
       // 无 create 面桩（运行期契约探测面——1.16 预铸缝缺席即明确错误；类型断言豁免编译面）
       sessionPersistence: { open: (async () => ({})) as SessionPersistenceFace['open'] } as unknown as SessionPersistenceFace,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(legacy.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionPersistence')
   })
@@ -463,6 +478,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: null }], // detached 检出
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
       /分支解析失败.*wt-a/s,
@@ -478,6 +494,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-other', branch: 'feat/x' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
       /分支解析失败.*wt-a/s,
@@ -498,6 +515,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     const sealedSvc = createWorktreeRpcService({
       gitWorktree: fakeExt,
       sessionPersistence: fakePersistence({ s1: binding('C:/repo/.forge/worktrees/gone') }).persistence,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     expect(await sealedSvc.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)).toMatchObject({
       isGit: true,
@@ -508,11 +526,13 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
       gitWorktree: fakeExt,
       sessionPersistence: fakePersistence({ s1: binding('C:/repo') }).persistence,
       listPresent: async () => ['C:/repo', 'C:/repo/.forge/worktrees/wt-a'],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     expect(await liveSvc.seal({ sessionId: 's1' })).toMatchObject({ isGit: true, sealed: false })
     const unboundSvc = createWorktreeRpcService({
       gitWorktree: fakeExt,
       sessionPersistence: fakePersistence({}).persistence,
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     expect(await unboundSvc.seal({ sessionId: 's1' })).toEqual({ isGit: false, sealed: false, binding: null })
   })
@@ -947,6 +967,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
       resolveDefaultPreset: async () => 'expedition',
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await service.sessionCreate({ worktreePath: WT_A, agentPreset: 'blitz' })
     expect(created[0]?.header, '请求显式档缺席 = 重路由随档面无处落地').toMatchObject({ agentPreset: 'blitz' })
@@ -959,6 +980,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const [a, b] = await Promise.all([
       service.sessionCreate({ worktreePath: WT_A }),
@@ -1193,6 +1215,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       onWorktreeSetChanged: async () => {
         fired += 1
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const [a, b] = await Promise.all([
       service.sessionCreate({ worktreePath: WT_A }),
@@ -1216,6 +1239,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
         throw new Error('refresh boom')
       },
       warn: (line) => warnings.push(line),
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: WT_A })
     expect(result.sessionId).toBe(created[0]?.header.id) // 产物原样返回
@@ -1234,6 +1258,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
       onSessionAdopted: async (sessionId) => {
         adopted.push(sessionId)
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const [a, b] = await Promise.all([
       service.sessionCreate({ worktreePath: WT_A }),
@@ -1261,6 +1286,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
         throw new Error('pin boom')
       },
       warn: (line) => warnings.push(line),
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: WT_A })
     expect(result.sessionId).toMatch(/^session-/)
@@ -1313,6 +1339,7 @@ describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     return { service, controller, calls, prompts, probesOf: () => probes }
   }
@@ -1375,6 +1402,7 @@ describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
       sessionController: controller,
       sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const result = await service.sessionCreate({ worktreePath: WT_A })
     expect(result).toMatchObject({ sessionId: expect.any(String) })
@@ -1549,6 +1577,7 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
       failOpenDiag: (message) => {
         emits.push({ message, traceId: alsJudge.getStore()?.traceId })
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     const guard = service.requiredBindingGuard()
     expect(guard).toBeDefined()
@@ -1633,6 +1662,7 @@ describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 
       ensureDirAcl: async (path) => {
         aclPaths.push(path)
       },
+      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(aclPaths, '主行补权在场——项目根每次编排都跑分钟级全子树传播（bug 在场）').toEqual([])
