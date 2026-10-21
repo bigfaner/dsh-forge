@@ -325,7 +325,8 @@ describe("发送链与输入", () => {
     act(() => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(onDraftChange).toHaveBeenCalledWith("x");
+    // 1.7 起 onDraftChange 携带 caret（mention 官方 track 检测入口的光标偏移）
+    expect(onDraftChange).toHaveBeenCalledWith("x", expect.any(Number));
   });
 
   it("流式中发送钮呈现停止语义（aria-label），点击不重复提交", () => {

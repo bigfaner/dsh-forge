@@ -36,10 +36,16 @@ export interface MiniComposerProps {
   readonly messages: readonly MiniComposerMessage[]
   /** 流式进行中（钉死一切自动收起） */
   readonly streaming: boolean
-  /** 草稿变更（同草稿机 setDraft 同径） */
-  readonly onDraftChange: (text: string) => void
+  /** 草稿变更（同草稿机 setDraft 同径；caret = 光标偏移——mention 官方检测入口） */
+  readonly onDraftChange: (text: string, caret?: number) => void
   /** 发送（官方发送链 submit 同径；空草稿不触发） */
   readonly onSend: (text: string) => void
+  /**
+   * mention 菜单同壳面（官方 inputTriggers controller 模型投影——data-face
+   * mentionMenuOf 组装；菜单闭/服务缺席 = undefined 不渲染）。候选与开合全在
+   * 官方 controller：↑↓/Enter/Esc 走 arbitrate，点击走 pick——替身零自造源。
+   */
+  readonly mention?: MiniMentionMenu
   /**「⧉」退出全屏（恢复常规模式视图） */
   readonly onExitFullscreen: () => void
   /** 空闲阈值 ms（默认 30_000；测试注入缩短） */
@@ -53,6 +59,27 @@ interface MiniComposerView {
   collapsed: boolean
   expanded: boolean
   preview: boolean
+}
+
+/** mention 菜单同壳面（官方 inputTriggers controller 模型投影——data-face 组装）。 */
+export interface MiniMentionMenu {
+  readonly open: boolean
+  readonly groups: readonly {
+    readonly source: string
+    readonly items: readonly { readonly name: string; readonly label?: string; readonly description?: string }[]
+  }[]
+  readonly highlight: { readonly source: string; readonly index: number } | null
+  onArbitrate(key: "up" | "down" | "enter" | "escape"): "consumed" | "pick-highlighted" | "pass"
+  onPick(source: string, index: number): void
+}
+
+/** 菜单键盘键 → 官方 arbitrate key（同壳键盘词汇——ArrowUp/Down 归一）。 */
+export function mentionKeyOf(key: string): "up" | "down" | "enter" | "escape" | null {
+  if (key === "ArrowUp") return "up"
+  if (key === "ArrowDown") return "down"
+  if (key === "Enter") return "enter"
+  if (key === "Escape") return "escape"
+  return null
 }
 
 /** active 判据：加 chip ∨ 草稿非空 ∨ 有消息（proposal 状态机表 S1 进入条件）。 */
@@ -113,9 +140,11 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null)
   const [unread, setUnread] = useState(false)
   const seenCountRef = useRef(0)
+  const messagesRef = useRef<HTMLDivElement | null>(null)
 
   const phase = derivePhase(props, view)
   const expandable = isExpandable(props)
+  const expanded = phase === "s2"
 
   // 未读追踪：卡体在场即清账（seen = 当前消息数）；球态期间流式增长 = 未读。
   useEffect(() => {
@@ -160,16 +189,25 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   }, [props, setViewSafe])
 
   // Esc 逐层退：S2 → S1（只留标题栏 + 输入区）→ C；球态不再动作。
+  // mention 菜单开 = 菜单 Esc 优先（官方 arbitrate 消费）——状态机不动作。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || view.collapsed) return
+      if (props.mention?.open === true) return
       event.preventDefault()
       if (view.expanded) setViewSafe({ expanded: false, preview: false })
       else setViewSafe({ collapsed: true, preview: false })
     }
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [view.collapsed, view.expanded, setViewSafe])
+  }, [view.collapsed, view.expanded, props.mention, setViewSafe])
+
+  // 消息流滚动吸底（快照增量上屏后钉在底部——proposal 消息流行）。
+  useEffect(() => {
+    const scroller = messagesRef.current
+    if (scroller === null) return
+    scroller.scrollTop = scroller.scrollHeight
+  }, [props.messages, expanded])
 
   // 标题栏热区点击（可展开判定 = 消息流非空；不可展开纯展示零动作）。
   const onHotzoneClick = useCallback((): void => {
@@ -214,8 +252,6 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       </div>
     )
   }
-
-  const expanded = phase === "s2"
 
   return (
     <div
@@ -343,6 +379,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
 
       {expanded ? (
         <div
+          ref={messagesRef}
           data-testid="dscf-messages"
           data-streaming={props.streaming ? "true" : "false"}
           style={{
@@ -370,6 +407,55 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         </div>
       ) : null}
 
+      {props.mention?.open === true ? (
+        <div
+          data-testid="dscf-mention"
+          role="listbox"
+          style={{
+            margin: "0 16px",
+            maxHeight: "30vh",
+            overflowY: "auto",
+            borderRadius: "var(--dsw-radius-md, 12px)",
+            border: "0.5px solid var(--dsw-alias-border-l2)",
+            background: "var(--dsw-alias-bg-layer-1)",
+            boxShadow: "var(--dsw-alias-shadow-menu, 0 4px 16px rgba(0,0,0,.08))",
+          }}
+        >
+          {props.mention.groups.map((group) => (
+            <div key={group.source}>
+              {group.items.map((item, index) => {
+                const highlighted =
+                  props.mention?.highlight !== null &&
+                  props.mention?.highlight?.source === group.source &&
+                  props.mention?.highlight?.index === index
+                return (
+                  <div
+                    key={item.name}
+                    role="option"
+                    aria-selected={highlighted}
+                    data-testid={`dscf-mention-item-${group.source}-${index}`}
+                    onClick={(): void => props.mention?.onPick(group.source, index)}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 13,
+                      lineHeight: "20px",
+                      cursor: "pointer",
+                      background: highlighted ? "var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04))" : "transparent",
+                      color: "var(--dsw-alias-label-primary)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {item.label ?? item.name}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {props.chipCount > 0 ? (
         <div
           data-testid="dscf-chips"
@@ -383,10 +469,26 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         <textarea
           data-testid="dscf-input"
           value={props.draft}
-          onChange={(event): void => props.onDraftChange(event.target.value)}
+          onChange={(event): void =>
+            props.onDraftChange(event.target.value, event.target.selectionStart ?? event.target.value.length)
+          }
           onFocus={(): void => setFocused(true)}
           onBlur={(): void => setFocused(false)}
           onKeyDown={(event): void => {
+            // mention 菜单开 = 官方 arbitrate 先裁（↑↓/Enter/Esc 同壳键盘链）——
+            // pass 才落回本 composer 语义（Enter 发送 / Esc 逐层退）。
+            if (props.mention?.open === true) {
+              const menuKey = mentionKeyOf(event.key)
+              if (menuKey !== null) {
+                const outcome = props.mention.onArbitrate(menuKey)
+                if (outcome !== "pass") {
+                  event.preventDefault()
+                  return
+                }
+                // pass = 官方菜单不消费（无高亮/菜单闭）——落回本 composer 键盘语义。
+                if (menuKey !== "enter" && menuKey !== "escape") return
+              }
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault()
               handleSend()
