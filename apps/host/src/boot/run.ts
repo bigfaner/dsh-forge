@@ -194,6 +194,15 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
   const diagListeners = new Set<(line: string) => void>()
+  // bug ae1f737a 死闩（熔断）：通道死亡（close / send 失败）后后续 call 立即以首因拒绝——
+  // 零 send 尝试、观测行同因只落一次。现场（2026-10-21 06:26Z）：child 运行期死亡零 exit
+  // 记录（死因失明）+ host 带死通道 23 分钟逐发逐报同因错误。
+  let deadError: Error | undefined
+  const markDead = (error: Error, alarm?: string): void => {
+    if (deadError !== undefined) return
+    deadError = error
+    if (alarm !== undefined && !gracefulShutdownChildren.has(child as unknown as object)) console.error(alarm)
+  }
   child.on('message', (message) => {
     // fix-23 diag 分支：诊断日志行 → onDiag 订阅方扇出（main.ts → harness.log；畸形信封静默忽略）
     const diag = asDiagMessage(message)
@@ -227,20 +236,38 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
     if (m.ok) waiter.resolve(m.data)
     else waiter.reject(rebuildBridgeError(m.error ?? `bridge rpc #${String(m.id)} 失败（无错误信息）`))
   })
-  child.once('close', () => {
+  child.once('close', (code?: number | null, signal?: string | null) => {
+    // 观测行（bug ae1f737a）：运行期退出 code/signal 落诊断链一次——死因可考（此前
+    // ready 后零 exit 挂接，崩溃/被杀/OOM 全部无声）；优雅关停（shutdownChild）不告警。
+    markDead(
+      new Error('boot child 已退出——RPC 面不可用'),
+      `[boot] boot child exited code=${String(code ?? 'null')}${signal ? ` signal=${String(signal)}` : ''} — bridge rpc 面熔断（后续调用快速拒绝）`,
+    )
     for (const waiter of pending.values()) waiter.reject(new Error('boot child 已退出——RPC 面不可用'))
     pending.clear()
   })
   return {
     call: (service, method, args) =>
       new Promise((resolve, reject) => {
+        // 死闩熔断：通道已死 → 立即以首因拒绝（零 send、零逐发报错）
+        if (deadError !== undefined) {
+          reject(deadError)
+          return
+        }
         const id = nextId++
         // trace_id 显式携带（ALS 过 IPC 序列化断点——main 侧读数随请求面入 child）
         const traceId = traceIdOf?.()
         pending.set(id, { resolve, reject })
         if (!sendToChild(child, { type: 'rpc', id, service, method, args, ...(traceId !== undefined && traceId !== '' ? { traceId } : {}) })) {
           pending.delete(id)
-          reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
+          const failure = new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`)
+          // 首因胜出观测：send 失败径（close 事件未达/不达的窗口）同样留一次退出行——
+          // 随后 close 事件到来时 markDead 已置位，零重复（同因去重）。
+          markDead(
+            failure,
+            '[boot] boot child exited (send failed: IPC channel closed) — bridge rpc 面熔断（后续调用快速拒绝）',
+          )
+          reject(failure)
         }
       }),
     onEvent: (listener) => {
@@ -496,9 +523,13 @@ function waitForReady(child: ChildProcess): Promise<BridgeReadyMessage> {
   })
 }
 
+/** 优雅关停中的 child（桥通道观测行不告警——正常关停非事故；bug ae1f737a 配套） */
+const gracefulShutdownChildren = new WeakSet<object>()
+
 /** 优雅关停（bounded）：shutdown 消息 → 等退出；超时 kill 兜底（子侧 ProcessShutdown 5s 升级先行） */
 async function shutdownChild(child: ChildProcess): Promise<void> {
   if (child.killed) return
+  gracefulShutdownChildren.add(child)
   sendToChild(child, { type: 'shutdown' })
   await new Promise<void>((resolve) => {
     const done = (): void => {

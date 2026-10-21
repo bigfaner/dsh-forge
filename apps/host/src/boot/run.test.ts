@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import { PassThrough } from 'node:stream'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, wireChildPipes, type BridgeChildFace } from './run.js'
 import { dispatchRpc } from './bridge.js'
@@ -393,6 +393,42 @@ describe('createBridgeChannel · RPC 结算面（既有语义回归——提取�
     const plain = createBridgeChannel(child)
     plain.call('forgeTasks', 'listTasks', [])
     expect(sent[1]).not.toHaveProperty('traceId')
+  })
+})
+
+// ── bug ae1f737a：运行期 child 退出观测 + 死通道熔断 ──
+// 现场（2026-10-21 06:26Z）：boot child 运行期死亡无任何 exit 记录（死因失明），host 带死
+// 通道对每次 UI 触发逐发逐报同因错误（23 分钟 9+ 次）。
+describe('createBridgeChannel · 运行期退出观测 + 死通道熔断（bug ae1f737a）', () => {
+  it('child close → 退出观测行恰一次（code 呈现）；后续 call 立即以同因拒绝且零 send 尝试', async () => {
+    const { child, sent } = fakeChild()
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    try {
+      const channel = createBridgeChannel(child)
+      child.emit('close', 1) // 运行期异常退出形态（code=1）
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/boot child 已退出/)
+      expect(sent).toHaveLength(0) // 熔断：死通道零 send 尝试（逐发逐报根治）
+      expect(errors.filter((line) => line.includes('boot child exited'))).toHaveLength(1) // 观测行恰一次
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('send 失败亦置死闩：观测行一次，后续调用不再 send（同因去重）', async () => {
+    const { child, sent, failNextSend } = fakeChild()
+    failNextSend()
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    try {
+      const channel = createBridgeChannel(child)
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败/)
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败/)
+      expect(sent).toHaveLength(0) // 第二次调用零 send（死闩已置）
+      expect(errors.filter((line) => line.includes('boot child exited'))).toHaveLength(1)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 
