@@ -72,7 +72,7 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
     const order: string[] = []
     const placeholderId = 's-placeholder'
     const full: Parameters<typeof rebindOnSelect>[1] = {
-      rootPlaceholderBlankId: async () => placeholderId,
+      rebindableBlankId: async () => placeholderId,
       sessionCreate: async (path) => {
         order.push(`create:${path}`)
         return { sessionId: 's-tree' }
@@ -88,7 +88,7 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
     return { full, order, placeholderId }
   }
 
-  it('主树占位 blank 在场 → 预铸选中树 + 先切后归档（次序契约：hero 不落归档会话）', async () => {
+  it('可换绑 blank 在场（主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树 + 先切后归档（次序契约：hero 不落归档会话）', async () => {
     const { full, order } = deps()
     await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
     expect(order).toEqual([
@@ -98,8 +98,8 @@ describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）',
     ])
   })
 
-  it('无活跃占位（非 blank / 非主树绑定）→ 零编排（纯选中态）', async () => {
-    const { full, order } = deps({ rootPlaceholderBlankId: async () => undefined })
+  it('无可换绑 blank（非 blank / 绑定 ≡ 新选树）→ 零编排（纯选中态）', async () => {
+    const { full, order } = deps({ rebindableBlankId: async () => undefined })
     await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
     expect(order).toEqual([])
   })

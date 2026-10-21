@@ -13,7 +13,7 @@
 // + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   CreateWorktreeDialog,
   DeleteWorktreeDialog,
@@ -59,27 +59,28 @@ export interface HeroRebindFace {
 
 /** 点选即换绑编排依赖（纯函数注入面——face×seal 判读合成在调用方，本面只管次序） */
 export interface RebindOrchestrationDeps {
-  /** 活跃主树占位 blank 会话 id（face.activeSessionId × isBlank × seal 绑定 ≡ 项目根合成）；undefined = 零编排 */
-  readonly rootPlaceholderBlankId: () => Promise<string | undefined>
-  /** 预铸选中树会话（forge:worktree/session-create——显式树请求不被选中记忆劫持） */
+  /** 可换绑 blank 会话 id（活跃 × blank × 绑定 ≠ 新选树 合成）；undefined = 零编排 */
+  readonly rebindableBlankId: () => Promise<string | undefined>
+  /** 预铸新选树会话（forge:worktree/session-create——显式树请求不被选中记忆劫持） */
   readonly sessionCreate: (path: string) => Promise<{ readonly sessionId: string }>
   /** 官方 openSession（先切——hero 不落在归档会话上） */
   readonly openSession: (sessionId: string) => void
-  /** 官方归档（后清场——弃置占位入 durable 归档集，可恢复、回收径复用） */
+  /** 官方归档（后清场——弃置 blank 入 durable 归档集，可恢复、回收径复用） */
   readonly archiveSession: (sessionId: string) => Promise<void>
 }
 
 /**
- * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为主树占位 blank
- * → 预铸选中树会话 → openSession 切换 → 占位归档。次序契约 = 先切后归档；非占位/无活跃
- * 会话 = 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
+ * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
+ * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → openSession
+ * 切换 → 旧 blank 归档。次序契约 = 先切后归档；无可换绑 blank = 零编排（纯选中态）；
+ * 失败原样上抛（调用方 fail-soft 退现状，发送时重路由兜底）。
  */
 export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
-  const placeholderId = await deps.rootPlaceholderBlankId()
-  if (placeholderId === undefined) return
+  const staleBlankId = await deps.rebindableBlankId()
+  if (staleBlankId === undefined) return
   const product = await deps.sessionCreate(path)
   deps.openSession(product.sessionId)
-  await deps.archiveSession(placeholderId)
+  await deps.archiveSession(staleBlankId)
 }
 
 /**
@@ -239,6 +240,8 @@ export function ForgeHeroWorktreeMount({
   const [riskConfirmedLatch, setRiskConfirmedLatch] = useState<RiskConfirmLatch>(null)
   // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
   const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
+  // 换绑在途闸（快速连点零并发编排——两次 sessionCreate 双 blank 竞态防线）
+  const rebindInFlight = useRef(false)
 
   // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + 项目粒度记忆写入 +
   // host 选中记忆推送（host sessionCreate 创建时点消费 + 必绑重路由兜底单源）。
@@ -263,16 +266,16 @@ export function ForgeHeroWorktreeMount({
   const maybeRebind = useCallback(
     (path: string): void => {
       if (rebindFace === undefined || projectRoot === null) return
-      const mainPath = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.isMain)?.path : undefined
-      if (mainPath !== undefined && cwdKey(path) === cwdKey(mainPath)) return // 主行：零换绑
+      if (rebindInFlight.current) return // 在途闸：快速连点零并发编排（记忆已更新，漏拍由发送时重路由兜底）
+      rebindInFlight.current = true
       void rebindOnSelect(path, {
-        rootPlaceholderBlankId: async () => {
+        rebindableBlankId: async () => {
           const activeId = rebindFace.activeSessionId()
-          if (activeId === undefined || !rebindFace.isBlank(activeId)) return undefined // 非占位：纯选中态
+          if (activeId === undefined || !rebindFace.isBlank(activeId)) return undefined // 非 blank：真会话零编排
           const seal = await makeRpc().worktree.seal({ sessionId: activeId })
-          if (!seal.isGit || seal.binding === null) return undefined
-          if (cwdKey(seal.binding.worktreePath) !== cwdKey(projectRoot)) return undefined // 非主树占位
-          return activeId
+          if (!seal.isGit || seal.binding === null) return undefined // 无绑定（官方域）：零编排
+          if (cwdKey(seal.binding.worktreePath) === cwdKey(path)) return undefined // 已绑目标树：零编排
+          return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
         },
         sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
         openSession: (sessionId) => {
@@ -281,9 +284,13 @@ export function ForgeHeroWorktreeMount({
         archiveSession: async (sessionId) => {
           await rebindFace.archiveSession(sessionId)
         },
-      }).catch(() => {
-        // fail-soft：换绑失败 = 现状世界（占位仍在，发送时重路由兜底）
       })
+        .catch(() => {
+          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送时重路由兜底）
+        })
+        .finally(() => {
+          rebindInFlight.current = false
+        })
     },
     [rebindFace, projectRoot, phase, makeRpc],
   )
