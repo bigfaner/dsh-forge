@@ -66,6 +66,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { SESSION_CREATE_CHANNEL, installSessionCreateWrap } from './create-wrap.js'
+import { installConnectionLostBanner } from './connection-lost-banner.js'
 export { SESSION_CREATE_CHANNEL, installSessionCreateWrap, treeOf } from './create-wrap.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
@@ -2292,6 +2293,11 @@ export function forgeClientPlugin(): ForgeClientPlugin {
               })
             : undefined
 
+        // 断连终态横幅（问题①——官方 connection.state 订阅，connecting 卡死 60s 升级
+        // 终态条带，connected 自动撤除；服务缺席 = 零安装 fail-soft。与 host 侧死通道
+        // 熔断互补——renderer 侧用户显性告知）。撤销随 revoke 链与 overlay 洞 dispose。
+        const disposeConnectionBanner = installConnectionLostBanner(clientCtx)
+
         // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
         // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
         const disposeLocale = locale.register(FORGE_LOCALE_NS, {
@@ -2390,6 +2396,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           mermaidEnhancer.stop()
           disposeSessionCreateWrap?.()
           disposeServiceListener?.()
+          disposeConnectionBanner?.()
           ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
         }
 
@@ -2492,6 +2499,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             mermaidEnhancer.stop()
             disposeSessionCreateWrap?.()
             disposeServiceListener?.()
+            disposeConnectionBanner?.()
             ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
           }
         })
