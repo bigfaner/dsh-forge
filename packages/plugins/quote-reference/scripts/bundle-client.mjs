@@ -20,7 +20,17 @@ const PLUGIN_ID = "@dsh-forge/quote-reference";
 // 种子位：后续任务（selection-menu primitives Menu 缝合）组件化消费一旦出现，
 // require 必须落到壳层冻结种子表单例——内联第二份 react 会使 shell 渲染树组件
 // hooks 读到另一副本的 dispatcher（Invalid hook call）。表外依赖全部内联。
-const PLATFORM_MODULES = ["react"];
+// react 家族种子（组件 hooks 与 jsx transform 均须共用壳层单例）+ react-dom/client
+//（弹层 createRoot/flushSync）+ primitives（Menu 原样材质——与壳层同一模块实例，
+// 零内联副本、零 css 副产物问题）。全部落在官方冻结种子表口径内（dsh-client-web
+// platform.ts PLATFORM_MODULES 逐位核对）。
+const PLATFORM_MODULES = [
+  "react",
+  "react/jsx-runtime",
+  "react-dom",
+  "react-dom/client",
+  "@deepseek-ai/dsh-client-ui-primitives",
+];
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/client/index.js")],

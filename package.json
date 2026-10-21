@@ -32,6 +32,7 @@
     "oxlint": "1.86.0",
     "typescript": "7.0.2",
     "vitest": "5.0.3",
+    "happy-dom": "^20.0.0",
     "better-sqlite3": "13.0.3",
     "@types/better-sqlite3": "9.6.0"
   }

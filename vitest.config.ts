@@ -46,8 +46,20 @@ export default defineConfig({
       },
       // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）
       { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
-      // quote-reference 插件包（纯 client 包——client bundle 装载契约守卫 + face 单测）
-      { test: { name: 'quote-reference', include: ['packages/plugins/quote-reference/tests/**/*.test.ts'] } },
+      // quote-reference 插件包（纯 client 包——client bundle 装载契约守卫 + face 单测 +
+      // selection-menu 缝合：primitives Menu 消费——css 副产物走 vite 转换管道（inline，
+      // git-worktree 判例同构）；真实 DOM 链路测试以文件级 @vitest-environment 声明）
+      {
+        test: {
+          name: 'quote-reference',
+          include: ['packages/plugins/quote-reference/tests/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）

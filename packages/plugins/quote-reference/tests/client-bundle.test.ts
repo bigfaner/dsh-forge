@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -11,12 +12,24 @@ import { QUOTE_REFERENCE_STYLE_MARKER } from "../src/client/styles.js";
  * var module = …; …cjs 体…; return module.exports; } })`。
  *
  * proposal 硬门 ⑨：client 半 esbuild 单文件预打包，守卫测试断言产物**非相对 import
- * 说明符为空集**——表外依赖全部内联（PLATFORM_MODULES 种子表当前零消费），任何新
- * 非相对 require 漂移即测试失败，阻止「表外依赖真机 require 缺席」形态上机。
+ * 说明符全部落在 PLATFORM_MODULES 声明种子表内**——react 种子位（selection-menu
+ * primitives Menu 组件化消费：组件 hooks 须与壳层渲染树共用同一 react dispatcher
+ * 单例）；种子表之外的任何新非相对 require 漂移即测试失败，阻止「表外依赖真机
+ * require 缺席」形态上机。
  */
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = resolve(pkgDir, "dist/client.js");
 const PLUGIN_ID = "@dsh-forge/quote-reference";
+/** 声明种子表（与 scripts/bundle-client.mjs PLATFORM_MODULES 逐位对齐——全部落在
+ * 官方 dsh-client-web platform.ts 冻结种子表口径内：react 家族（组件 hooks/jsx
+ * transform/react-dom 弹层）+ primitives（Menu 原样材质同模块实例）。 */
+const PLATFORM_MODULES = [
+  "react",
+  "react/jsx-runtime",
+  "react-dom",
+  "react-dom/client",
+  "@deepseek-ai/dsh-client-ui-primitives",
+];
 
 interface Registration {
   id?: unknown;
@@ -48,17 +61,22 @@ function evalBundleAsClassicScript(doc?: unknown): Registration[] {
   return registrations;
 }
 
-/** 产物中全部 require/import 说明符（静态扫描——cjs 体 esbuild 只产 require 调用）。 */
+/** 产物中全部 require 说明符（静态扫描——cjs 体 esbuild 只产 require 调用；
+ * from/import 形态不扫——primitives 源内字符串字面量含 "from" 会误命中）。 */
 function bundleImportSpecifiers(): string[] {
   const source = readFileSync(bundlePath, "utf8");
   const specifiers: string[] = [];
   for (const m of source.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
     specifiers.push(m[1]!);
   }
-  for (const m of source.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
-    specifiers.push(m[1]!);
-  }
   return specifiers;
+}
+
+/** 真实 react 家族单例（种子位供给——与壳层同语义模块；primitives 的 ESM 体携带
+ * .css 副产物、Node require 不可达，以形状桩供给——factory 物化期不触达组件面）。 */
+function requireReal(spec: string): unknown {
+  if (spec === "@deepseek-ai/dsh-client-ui-primitives") return { Menu: undefined };
+  return createRequire(import.meta.url)(spec);
 }
 
 /** 求值并物化（注册捕获 + factory 调用——factory 同步段语义 = 物化期执行；globals 在 factory 调用期间保持供给）。 */
@@ -77,6 +95,7 @@ function materialize(doc?: unknown): Record<string, unknown> {
     const registration = registrations[0]!;
     expect(registration.id).toBe(PLUGIN_ID);
     const seedRequire = (spec: string): unknown => {
+      if (PLATFORM_MODULES.includes(spec)) return requireReal(spec);
       throw new Error(`种子表之外的 require: ${spec}`);
     };
     return (registration.factory as (req: (s: string) => unknown) => Record<string, unknown>)(seedRequire);
@@ -129,11 +148,12 @@ describe("client bundle 装载契约（官方 clientBundle 配方）", () => {
     expect(registrations[0]!.factory).toBeTypeOf("function");
   });
 
-  it("工厂可物化——零种子 require，exports 顶层为 cordis 插件面（apply）", () => {
+  it("工厂可物化——种子 require 全落 PLATFORM_MODULES，exports 顶层为 cordis 插件面（apply）", () => {
     const [registration] = evalBundleAsClassicScript();
     const requested: string[] = [];
     const seedRequire = (spec: string): unknown => {
       requested.push(spec);
+      if (PLATFORM_MODULES.includes(spec)) return requireReal(spec);
       throw new Error(`种子表之外的 require: ${spec}`);
     };
     const exports = (
@@ -142,14 +162,19 @@ describe("client bundle 装载契约（官方 clientBundle 配方）", () => {
       ) => Record<string, unknown>
     )(seedRequire);
     expect(typeof exports.apply, "loader 正门：顶层 apply（嵌套导出不被识别）").toBe("function");
-    expect(requested, "物化期零平台 require").toEqual([]);
+    expect(
+      [...new Set(requested)].filter((spec) => !PLATFORM_MODULES.includes(spec)),
+      "物化期平台 require 全部落在声明种子表内（react 家族 + primitives）",
+    ).toEqual([]);
   });
 
-  it("守卫硬门：产物非相对 import 说明符为空集（表外依赖全内联）", () => {
+  it("守卫硬门：产物非相对 import 说明符全落 PLATFORM_MODULES 种子表（表外依赖全内联）", () => {
     const nonRelative = bundleImportSpecifiers().filter(
       (spec) => !spec.startsWith(".") && !spec.startsWith("/"),
     );
-    expect(nonRelative).toEqual([]);
+    expect(
+      [...new Set(nonRelative)].filter((spec) => !PLATFORM_MODULES.includes(spec)),
+    ).toEqual([]);
   });
 });
 

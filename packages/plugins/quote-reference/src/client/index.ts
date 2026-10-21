@@ -9,21 +9,29 @@
 // conversation 走 ctx.reflect.get 只读反射（官方面：绕过 inject 义务的只读反射，
 // 缺席 = undefined——apps/web/src/client-plugin/plugin.ts 惰性配方先例，非规避硬门）。
 //
-// 骨架接线（功能本体——选区监听/浮出菜单/quote chip source/插入径——由后续任务在
-// 本 apply 内组装，参考 apps/web/src/client-plugin/open-session.ts#insertReferenceAtTail）：
-//   ① sessions 注入缝解析（装配序兜底：boot-graph inject 边只保证 bundle 装载序，
-//      服务 provide 仍可能晚于本插件 apply——运行期注入，provide 时接线）；
-//   ② 样式 factory 同步段注入（styles.ts——进官方 claimStyles 清点窗口，§5 二法取一）。
+// 接线本体（selection-menu 缝合）：sessions 在场 + document 在场 = mountSelectionMenu
+//（document mouseup → scope 过滤 → primitives Menu 弹层 → insertReferenceAtTail 同径
+// 落 quote chip → 自动聚焦）。活跃会话 = sessions.list 快照 retainedBy.mainView 在留行
+//（官方 SessionListState 无 current 字段——apps/web activeSessionIdOf 判例同构镜像）。
 // 全缝 fail-soft：sessions/document 任一缺席只降本面，不炸 cordis 组合。
 import type { Context } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { installQuoteReferenceStyles, type StyleDocument } from './styles.js'
+import { resolveSelectionScope } from './scope.js'
+import {
+  mountSelectionMenu,
+  type QuoteInsertServices,
+  type QuoteComposerFace,
+  type ScopedEventBail,
+  type SelectionMenuHandle,
+} from './selection-menu.js'
+import { createQuoteReferenceSource } from './quote-source.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
 export interface QuoteReferenceClientFace {
   /** sessions 注入缝在场性（desktop 组合常态供给；缺席 = 空态降级，不炸组合） */
   readonly sessionsAvailable: boolean
-  /** 全量撤销（后续任务接线面的 disposer 聚合点；幂等） */
+  /** 全量撤销（监听/弹层卸载 disposer 聚合点；幂等） */
   dispose(): void
 }
 
@@ -33,6 +41,72 @@ function readSessionsOf(source: unknown): ISessions | undefined {
     return (source as { sessions?: ISessions }).sessions ?? undefined
   } catch {
     return undefined
+  }
+}
+
+/** conversation 只读反射读取（ctx.reflect.get——缺席 = undefined）。 */
+function readConversationOf(ctx: Context): unknown {
+  try {
+    const reflect = (ctx as { reflect?: { get?: (name: string) => unknown } }).reflect
+    if (typeof reflect?.get === 'function') return reflect.get('conversation')
+    return (ctx as { conversation?: unknown }).conversation ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** ctx.bail 窄面读取（缺席 = undefined）。 */
+function readBailOf(ctx: Context): ScopedEventBail | undefined {
+  const bail = (ctx as { bail?: (actx: unknown, name: string, payload: unknown) => unknown }).bail
+  if (typeof bail !== 'function') return undefined
+  return bail.bind(ctx)
+}
+
+/**
+ * 活跃会话解析（官方快照形状——retainedBy.mainView 锚，apps/web 判例同构镜像）：
+ * byId 行 `retainedBy.mainView > 0` 即主视图在留（该会话已被 retain——binding 按
+ * 「borrow an already-retained binding」语义可用）。快照缺席/形状漂移 = undefined。
+ */
+export function activeSessionIdOf(list: unknown): string | undefined {
+  if (typeof list !== 'object' || list === null) return undefined
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return undefined
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return undefined
+  }
+  const byId = (snapshot as { byId?: unknown } | null)?.byId
+  if (typeof byId !== 'object' || byId === null) return undefined
+  for (const row of Object.values(byId as Record<string, unknown>)) {
+    const id = (row as { id?: unknown } | null)?.id
+    const mainView = (row as { retainedBy?: { mainView?: unknown } } | null)?.retainedBy?.mainView
+    if (typeof id === 'string' && id !== '' && typeof mainView === 'number' && mainView > 0) return id
+  }
+  return undefined
+}
+
+/** composer 输入 face 结构同型读取（官方 SessionInput 消费切片——形状漂移 = undefined）。 */
+function composerFaceOf(conversation: unknown, actx: unknown): QuoteComposerFace | undefined {
+  if (typeof conversation !== 'object' || conversation === null) return undefined
+  try {
+    return (conversation as { input?: { for?: (a: unknown) => QuoteComposerFace | undefined } }).input?.for?.(actx)
+  } catch {
+    return undefined
+  }
+}
+
+/** 引用插入服务组装（真实 ctx 服务切片 → QuoteInsertServices 窄面）。 */
+function quoteInsertServicesFrom(ctx: Context): QuoteInsertServices | undefined {
+  const sessions = readSessionsOf(ctx)
+  const bail = readBailOf(ctx)
+  if (sessions === undefined || bail === undefined) return undefined
+  const conversation = readConversationOf(ctx)
+  return {
+    sessions: { binding: (id) => sessions.binding(id as Parameters<typeof sessions.binding>[0]) },
+    conversation: { input: { for: (actx) => composerFaceOf(conversation, actx) } },
+    bail,
   }
 }
 
@@ -56,6 +130,26 @@ function mountDisposeOnContext(ctx: Context, mount: () => () => void): void {
 installQuoteReferenceStyles((globalThis as { document?: StyleDocument }).document)
 
 /**
+ * 选区浮出菜单装配（sessions + document 在场前提）：
+ * mouseup → scope 过滤 → primitives Menu 弹层 → insertReferenceAtTail 同径落 chip
+ * → 自动聚焦对应面。全屏替身聚焦缝（focusFullscreenInput）由 super-composer 组合
+ * 注入——本包不感知全屏（两包正交边界）。任一前提缺席 = 不装配（undefined）。
+ */
+export function mountQuoteSelectionMenu(ctx: Context): SelectionMenuHandle | undefined {
+  if (typeof document === 'undefined') return undefined
+  const sessions = readSessionsOf(ctx)
+  const services = quoteInsertServicesFrom(ctx)
+  if (sessions === undefined || services === undefined) return undefined
+  return mountSelectionMenu({
+    doc: document,
+    roots: resolveSelectionScope().selectionRoots,
+    resolveSessionId: () => activeSessionIdOf(sessions.list),
+    services,
+    source: createQuoteReferenceSource(),
+  })
+}
+
+/**
  * 组合 apply 插件对象（装载器物化后由 cordis 组合调用 apply）。返回值铁律：cordis
  * 组合把 apply 返回值当 effect 消费（真机判例——返回任意非空对象 = TypeError
  * 「Invalid effect」→ entry failed → 壳整页 boot 失败），apply 必须返回 undefined。
@@ -67,7 +161,8 @@ export const quoteReferenceClient = {
     try {
       const sessions = readSessionsOf(ctx)
       if (sessions != null) {
-        mountDisposeOnContext(ctx, () => () => undefined)
+        const menu = mountQuoteSelectionMenu(ctx)
+        mountDisposeOnContext(ctx, () => () => menu?.dispose())
         return
       }
       // 装配序兜底（官方 inject face——AGENTS.md §1.1 合法缝）：服务 provide 晚于本
@@ -83,15 +178,17 @@ export const quoteReferenceClient = {
   },
 }
 
-/** 接线本体（测试与诊断显式取面；骨架期 = sessions 在场性判读 + disposer 聚合点）。 */
+/** 接线本体（测试与诊断显式取面；sessions 在场性判读 + 选区菜单装配/撤销聚合）。 */
 export function wireQuoteReferenceClient(ctx: Context): QuoteReferenceClientFace {
   const sessionsAvailable = readSessionsOf(ctx) != null
+  const menu = sessionsAvailable ? mountQuoteSelectionMenu(ctx) : undefined
   let disposed = false
   return {
     sessionsAvailable,
     dispose(): void {
       if (disposed) return
       disposed = true
+      menu?.dispose()
     },
   }
 }
