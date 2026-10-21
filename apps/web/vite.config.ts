@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { assertClientBundleClassicScript } from './src/build/client-bundle-shape.js'
-import { assertInputHistorySteeringLine } from './src/build/input-history-manifest.js'
+import { assertPluginSteeringLine } from './src/build/plugin-manifest.js'
 
 const src = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url))
 const STANDALONE_ERROR = 'apps/web 不是独立应用：bare vite serve 无 __DSH_BOOT__ 注入。'
@@ -44,44 +44,48 @@ function pinClientBundleShape(): Plugin {
 
 /** input-history 插件 bundle 在壳 dist 的落位名（掌舵 url 文档相对引用同名）。 */
 export const INPUT_HISTORY_BUNDLE_FILE = 'input-history-client.js'
+/** quote-reference / super-composer 插件 bundle 在壳 dist 的落位名（super-composer/1.9）。 */
+export const QUOTE_REFERENCE_BUNDLE_FILE = 'quote-reference-client.js'
+export const SUPER_COMPOSER_BUNDLE_FILE = 'super-composer-client.js'
 
 /**
- * input-history 插件 bundle 发射（构建期原样复制 @dsh-forge/input-history dist/client.js
- * 入壳 dist 根——该产物已按官方 clientBundle 配方自注册（classic script），壳只运输，
- * 掌舵行由 shell/boot.ts 追加；缺构建产物 = fail-loud 指路先 build 插件包）。
+ * 独立插件包 bundle 发射（构建期原样复制 <pkg> dist/client.js 入壳 dist 根——该产物已按
+ * 官方 clientBundle 配方自注册（classic script），壳只运输，掌舵行由 shell/boot.ts 追加；
+ * 缺构建产物 = fail-loud 指路先 build 插件包）。input-history 判例通用形
+ * （super-composer/1.9：quote-reference / super-composer 并入同一发射通道）。
  */
-function emitInputHistoryBundle(): Plugin {
+function emitPluginBundle(pkgName: string, bundleFile: string): Plugin {
   return {
-    name: 'dsh-forge-emit-input-history-bundle',
+    name: `dsh-forge-emit-plugin-bundle(${pkgName})`,
     generateBundle() {
       const req = createRequire(import.meta.url)
       // 经 exports["./client"] 正门解析产物路径（包 exports 未暴露 ./package.json）
-      const bundlePath = req.resolve('@dsh-forge/input-history/client')
+      const bundlePath = req.resolve(`${pkgName}/client`)
       let source: string
       try {
         source = readFileSync(bundlePath, 'utf8')
       } catch {
-        throw new Error(`vite: @dsh-forge/input-history client bundle 缺席（${bundlePath}）——先 pnpm -C packages/plugins/input-history build`)
+        throw new Error(`vite: ${pkgName} client bundle 缺席（${bundlePath}）——先 pnpm -C packages/plugins/${pkgName.split('/')[1]!} build`)
       }
-      if (!source.includes('window.__ModuleLoader__.load') || !source.includes('"@dsh-forge/input-history"')) {
-        throw new Error(`vite: @dsh-forge/input-history client bundle 非官方自注册形状（${bundlePath}）`)
+      if (!source.includes('window.__ModuleLoader__.load') || !source.includes(`"${pkgName}"`)) {
+        throw new Error(`vite: ${pkgName} client bundle 非官方自注册形状（${bundlePath}）`)
       }
-      this.emitFile({ type: 'asset', fileName: INPUT_HISTORY_BUNDLE_FILE, source })
+      this.emitFile({ type: 'asset', fileName: bundleFile, source })
     },
   }
 }
 
 /**
- * input-history 装载双真相源断言（构建期 fail-loud）：main.ts 掌舵行的
- * id/inject 字面量与 @dsh-forge/input-history package.json dsh.client 清单
+ * 独立插件包装载双真相源断言（构建期 fail-loud，input-history 判例通用形）：
+ * main.ts 掌舵行的 id/inject 字面量与 <pkg> package.json dsh.client 清单
  * 是同一契约的两处表达——漂移即构建失败，不靠人工同步。
  */
-function assertInputHistoryManifest(): Plugin {
+function assertPluginManifest(pkgName: string, block: RegExp): Plugin {
   return {
-    name: 'dsh-forge-assert-input-history-manifest',
+    name: `dsh-forge-assert-plugin-manifest(${pkgName})`,
     generateBundle() {
       const req = createRequire(import.meta.url)
-      const clientEntry = req.resolve('@dsh-forge/input-history/client')
+      const clientEntry = req.resolve(`${pkgName}/client`)
       const pkgPath = resolve(dirname(clientEntry), '../package.json')
       let manifest: { name: string; inject: readonly string[] }
       try {
@@ -91,17 +95,32 @@ function assertInputHistoryManifest(): Plugin {
         }
         manifest = { name: pkg.name ?? '', inject: pkg.dsh?.client?.inject ?? [] }
       } catch (error) {
-        throw new Error(`vite: 读 @dsh-forge/input-history package.json 失败（${pkgPath}）: ${String(error)}`)
+        throw new Error(`vite: 读 ${pkgName} package.json 失败（${pkgPath}）: ${String(error)}`)
       }
-      assertInputHistorySteeringLine(readFileSync(src('./src/main.ts'), 'utf8'), manifest)
+      assertPluginSteeringLine(readFileSync(src('./src/main.ts'), 'utf8'), block, manifest, pkgName)
     },
   }
 }
 
+/** main.ts 掌舵行块锚点（双真相源断言用——块体到缩进收敛的闭花括号）。 */
+const STEERING_BLOCKS = {
+  quoteReference: /const quoteReferenceClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
+  superComposer: /const superComposerClient: ProductClientEntry = \{([\s\S]*?)\n\}/,
+} as const
+
 export default defineConfig({
   // 相对资产 URL：宿主自定义 scheme 于任意挂载深度服务本 dist，文档相对路由（plugins/…）同源解析
   base: './',
-  plugins: [rejectStandaloneServe(), pinClientBundleShape(), assertInputHistoryManifest(), emitInputHistoryBundle()],
+  plugins: [
+    rejectStandaloneServe(),
+    pinClientBundleShape(),
+    assertPluginManifest('@dsh-forge/input-history', /const inputHistoryClient: ProductClientEntry = \{([\s\S]*?)\n\}/),
+    assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference),
+    assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer),
+    emitPluginBundle('@dsh-forge/input-history', INPUT_HISTORY_BUNDLE_FILE),
+    emitPluginBundle('@dsh-forge/quote-reference', QUOTE_REFERENCE_BUNDLE_FILE),
+    emitPluginBundle('@dsh-forge/super-composer', SUPER_COMPOSER_BUNDLE_FILE),
+  ],
   define: {
     __DSH_FORGE_BUILD_REV__: JSON.stringify(BUILD_REV),
     // 已发布 cordis-plugin-loader 的 Node 探测替身（母本同款 define 集）
