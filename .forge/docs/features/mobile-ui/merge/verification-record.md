@@ -39,6 +39,25 @@ flowchart LR
 - d639b91b
 - 04699b06（f54f54ee 现存同族症状的新成因）
 
+## hero 族 e2e 平价结论
+
+合并分支与纯 main 基线同跑 7 支 hero 族 spec，结果逐支一致——本分支不多败、不新败，**平价通过**：
+
+| spec | 合并分支（7c919b34 基） | 纯 main（6e98bef3） |
+|---|---|---|
+| worktree-workspace-membership-1-28 | ✅ | ✅ |
+| worktree-p1-guards-1-31 | ✅ | ✅ |
+| worktree-hero-chip | ✅ | ✅ |
+| worktree-risk-confirmation | ✅ | ✅ |
+| worktree-mandatory-bind-1-27 | ❌ :164 | ❌ 同断言行 |
+| worktree-pure-selection-1-29 | ❌ :138 | ❌ 同断言行 |
+| worktree-confirm-latch-1-34 | ❌ :152 | ❌ 同断言行 |
+
+- 合并分支运行证据：`{task_logs}/mobile-ui/1.104/001-hero-family-e2e/run.log` + `004-failed-rerun/rerun.log`（两轮独立复跑，3 红均复现、4 绿均稳定）。
+- 纯 main 基线复跑：2026-10-22 主会话在 6e98bef3 实测，同 3 支 spec 同断言行失败（d639b91b / 04699b06 为 main 预存回归），其余 4 支通过。
+
+**核销收口**：bug 84edc6ff / f54f54ee 原症状于合并后代码不复现（A++ 预铸链 / 条件卸载覆盖，弃修核销）；3 支红 spec 为 main 预存回归，保留 open 转用户决断是否顺带修。
+
 ## TS2559 定性更正
 
 - **更正前定性**：main 预存——**不成立**。
