@@ -20,7 +20,7 @@
 //   - 座位菜单序 = order 1（远征）/ 2（突击）——SC1② 已断相对序。
 //
 // Outcome → 测试映射：
-//   Step1 success（座位在场 + 折叠标签远征 + 菜单双入口中文直出）……………………………「T1」
+//   Step1 success（座位在场 + 折叠标签突击（registry 缺省 blitz——bug 2ba146d8）+ 菜单双入口中文直出）……「T1」
 //   Step2 success（blank 期点选突击 → 组合即时切换）…………………………………………………「T1」
 //   Step2b idempotent-default-select（点选当前已选 = 投影稳定零漂移）……………………「T1」
 //   Step4 success（提案绑定入口自动对齐——座位标签突击）…………………………………………「T2」
@@ -153,8 +153,8 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
 
     // ── Step4b：无溯源提案（mode NULL）经绑定入口 → 不切换——open-session.ts 机制：
     // mode 缺席 = agentPreset.select 不调用，座位沿 registry 当前选择（Step4 已立 = 突击；
-    // 「registry 默认 = 远征」的净默认世界由 T1 Step1 承载）。不切换的可观测 = 座位横跨
-    // 本动作保持既有选择不变（若误按默认重绑远征，此处即红）──
+    // registry 缺省 = blitz 的净默认世界由 T1 Step1 承载——bug 2ba146d8）。不切换的可观测 =
+    // 座位横跨本动作保持既有选择不变（若误按缺省重绑远征，此处即红）──
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     const unmarkedRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 无溯源提案（扫描吸收形态）' }).first()
@@ -201,7 +201,7 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
     const projectId = project.id
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
-    // Step5b 世界：hero 自由远征会话（默认——无提案上下文）+ 带直挂任务的 blitz 提案
+    // Step5b 世界：hero 自由会话（registry 缺省 = blitz——bug 2ba146d8，无提案上下文无切面）+ 带直挂任务的 blitz 提案
     const blitzProp = (await driver.call('forgeProposals', 'createProposal', {
       projectId, slug: 'jmsa-guard', title: 'Jmsa 错配守卫演示提案', mode: 'blitz',
     })) as { proposalId: string; slug: string }
@@ -210,9 +210,10 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
     })) as { taskId: string; slug: string; localId: string }
     await selectWorkspaceViaChip(page, WS_NAME)
 
-    // 会话组合 = 远征（hero 自由——座位标签对照面）
+    // 会话组合 = 突击（hero 自由——座位标签对照面；registry 缺省 = blitz，bug 2ba146d8——
+    // 会话无显式 mode 溯源时缺省已非远征，旧「远征」口径随 cordis.patch.yml:7 翻正）
     const seat = await awaitSeatLabel(page)
-    expect(seat.includes('远征') || seat.includes('expedition'), `会话组合 = 远征（label=${seat}——hero 自由会话）`).toBe(true)
+    expect(seat.includes('突击') || seat.includes('blitz'), `会话组合 = 突击（label=${seat}——registry 缺省 blitz，bug 2ba146d8）`).toBe(true)
 
     // 所打开内容模式 = blitz（提案行 mode chip + 任务容器琥珀点——mode chip 对照面）
     await openOverviewDock(page)
