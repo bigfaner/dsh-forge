@@ -27,7 +27,7 @@ import {
   type KvStorage,
   type TunnelMode,
 } from './core/tunnel.ts'
-import { createTunnelTransport, type TunnelMaterial, type TunnelSession } from './core/tunnel-transport.ts'
+import { createTunnelTransport, type TunnelMaterial, type TunnelSession, type TunnelTransport } from './core/tunnel-transport.ts'
 import {
   createForgeStreamSource,
   type ForgeStreamSource,
@@ -467,7 +467,6 @@ export function mount(root: HTMLElement): void {
     ctx.tunnel = true
     stream?.close()
     stream = null
-    const plain = defaultApiDeps()
     const transport = createTunnelTransport(material, ctx.session, {
       post: async (path, body) => {
         const response = await fetch(path, {
@@ -479,7 +478,7 @@ export function mount(root: HTMLElement): void {
       },
     })
     ctx.rpc = createRemoteRpc({ post: transport.post })
-    ctx.api = createOfficialApi(tunnelApiDeps(plain))
+    ctx.api = createOfficialApi(tunnelApiDeps(transport))
   }
 
   // ---- 启动流：模式探测 → 直连/配对 → 主视图链 ----
@@ -540,9 +539,40 @@ function reportLanding(line: string): void {
   }
 }
 
-/** 隧道域官方面：POST 走信封化传输（/remote/__rpc 咽喉），GET/时区沿用明文同源面。 */
-function tunnelApiDeps(plain: ApiDeps): ApiDeps {
-  return { ...plain }
+/**
+ * 隧道域官方面（2026-10-22 bug：/api/rpc 被回环围栏 403——hero 官方面径建会话静默失败
+ * 恒留 hero）。修法：/api/rpc 的官方面调用按 method 映射到 forge:proxy/* 信封通道
+ * （同一 host 官方 controller 直调——形状逐字同官方网关），未代理 method 回显 ok:false
+ * 信封（调用面既有 catch 诚实降级）。
+ */
+const TUNNEL_OFFICIAL_RPC_PROXY: Readonly<Record<string, string>> = {
+  'session.create': 'forge:proxy/session-create',
+  'session.prompt': 'forge:proxy/session-prompt',
+  'session.selectModel': 'forge:proxy/session-select-model',
+  'session.cancel': 'forge:proxy/session-cancel',
+}
+
+function tunnelApiDeps(transport: TunnelTransport): ApiDeps {
+  const plain = defaultApiDeps()
+  return {
+    ...plain,
+    post: async (path, body) => {
+      if (path !== '/api/rpc') return plain.post(path, body)
+      const frame = body as { method?: unknown; payload?: unknown }
+      const method = typeof frame?.method === 'string' ? frame.method : ''
+      const channel = TUNNEL_OFFICIAL_RPC_PROXY[method]
+      if (channel === undefined) {
+        return { status: 200, json: { ok: false, error: `隧道域官方面未代理：${method}` } }
+      }
+      const result = await transport.post('/remote/__rpc', { channel, payload: frame.payload })
+      const envelope = result.json as { ok?: boolean; data?: unknown; error?: unknown }
+      if (envelope?.ok === true) return { status: 200, json: { ok: true, value: envelope.data } }
+      return {
+        status: 200,
+        json: { ok: false, error: typeof envelope?.error === 'object' && envelope.error !== null ? (envelope.error as { message?: unknown }).message : envelope?.error },
+      }
+    },
+  }
 }
 
 const app = document.querySelector<HTMLElement>('#app')
