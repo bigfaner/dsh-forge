@@ -300,6 +300,33 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     expect(parsed.data.unassigned.map((s) => s.sessionId)).toEqual(['s-3'])
   })
 
+  it('bug 4a9c：hero 透传通道注册——forge:worktree/list + forge:worktree/session-create 可达（此前 not-found）', async () => {
+    const created: unknown[] = []
+    const proxy = proxyDeps({
+      worktrees: {
+        list: async () => ({ isGit: true, entries: WORKTREES }),
+        sessionCreate: async (request: unknown) => (created.push(request), { sessionId: 's-new', branch: 'main' }),
+      },
+    } as never)
+    const resList = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:worktree/list', payload: { projectRoot: 'Z:/proj' } }) as never, resList, deps({ proxy }))
+    expect((JSON.parse(resList.body) as { ok: boolean }).ok).toBe(true)
+    const resCreate = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:worktree/session-create', payload: { worktreePath: 'Z:/proj' } }) as never, resCreate, deps({ proxy }))
+    const parsed = JSON.parse(resCreate.body) as { ok: boolean; data: { sessionId: string } }
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data.sessionId).toBe('s-new')
+    expect(created).toHaveLength(1)
+  })
+
+  it('bug 4a9c 对照：worktrees 缝缺席 = fail-soft 错误信封（非崩溃）', async () => {
+    const res = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:worktree/list', payload: { projectRoot: 'Z:/proj' } }) as never, res, deps({ proxy: proxyDeps({ worktrees: undefined } as never) }))
+    const parsed = JSON.parse(res.body) as { ok: boolean; error: { message: string } }
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error.message).toContain('gitWorktree')
+  })
+
   it('worktree 读法失败 = 零 worktree 行降级（wsPath 子树归组仍成立）', async () => {
     const res = fakeRes()
     const proxy = proxyDeps({ worktrees: { list: async () => { throw new Error('git down') } } })

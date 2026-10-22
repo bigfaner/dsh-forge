@@ -872,7 +872,11 @@ async function main(): Promise<void> {
                 get worktrees() {
                   return worktreeRpcService === undefined
                     ? undefined
-                    : { list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request) }
+                    : {
+                        list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request),
+                        // bug a1e087a6：hero 透传建会话正门（预铸采纳单门——host 守卫内建）
+                        sessionCreate: (request: unknown) => worktreeRpcService!.sessionCreate(request as never),
+                      }
                 },
                 disconnect: () => send({ type: 'pair-disconnected' }),
               },

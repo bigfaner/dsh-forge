@@ -21,7 +21,7 @@ import type {
   RemoteApprovalForwardResult,
   WorktreeEntryDto,
 } from '@dsh-forge/contracts'
-import { REMOTE_CHANNELS } from '@dsh-forge/contracts'
+import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/contracts'
 
 /** forge:proxy/* 通道名族（mobile 唯一数据通道——LAN/隧道同构） */
 export const PROXY_CHANNELS = {
@@ -81,9 +81,10 @@ export interface ProxyUserQuestionsFace {
   answer?(request: unknown): Promise<unknown>
 }
 
-/** worktree 清单读法（gitWorktree 桥服务切片——grouped 归组数据源） */
+/** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门） */
 export interface ProxyWorktreeFace {
   list(request: { readonly projectRoot: string }): Promise<{ readonly isGit: boolean; readonly worktreeDir?: string; readonly entries: readonly WorktreeEntryDto[] }>
+  sessionCreate?(request: unknown): Promise<unknown>
 }
 
 /** agentPreset registry 消费切片（官方 remoteExportList roster + select 换预设） */
@@ -410,6 +411,16 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
     [PROXY_CHANNELS.file]: async (payload) => {
       const record = asRecord(payload)
       return readFileChunk(asString(record, 'path'), typeof record['offset'] === 'number' ? record['offset'] : 0, record['manifest'] === true)
+    },
+    // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单与建会话
+    // 正门 not-found）。sessionCreate = 预铸采纳单门（host 建会话守卫内建），缺席缝 fail-soft。
+    [WORKTREE_CHANNELS.list]: async (payload) => {
+      const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
+      return requireMethod(worktrees.list, 'worktree.list').bind(worktrees)(asRecord(payload) as never)
+    },
+    [WORKTREE_CHANNELS.sessionCreate]: async (payload) => {
+      const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
+      return requireMethod(worktrees.sessionCreate, 'worktree.sessionCreate').bind(worktrees)(asRecord(payload) as never)
     },
   }
 }
