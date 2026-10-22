@@ -96,7 +96,8 @@ function resolveFullscreen(options: FullscreenTrackerOptions): boolean {
 export function createFullscreenTracker(options: FullscreenTrackerOptions): FullscreenTracker {
   const listeners = new Set<(fullscreen: boolean) => void>()
   let disposed = false
-  let lastKnown: boolean | undefined
+  // 首值即拉取时点读数：watch 首拍与初值相同不广播（subscribe 语义 = 仅变化通知）
+  let lastKnown: boolean | undefined = resolveFullscreen(options)
   let stopWatch: (() => void) | undefined
   if (options.watch !== undefined) {
     stopWatch = options.watch(() => {

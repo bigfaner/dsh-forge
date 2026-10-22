@@ -8,6 +8,14 @@ import { superComposerClient } from "../src/client/index.js";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * 轮询等待 DOM 驱动的重挂载落位（childList 观察后 DOM 变更经 MutationObserver 扇出，
+ * React 并发提交落点为调度序——固定 tick 数与调度竞争，以谓词成立为准）。
+ */
+async function waitFor(predicate: () => boolean, ticks = 100): Promise<void> {
+  for (let i = 0; i < ticks && !predicate(); i++) await tick();
+}
+
 /** 全屏呈现源标记（tracker DOM 兜底读数——在场 = 替身可见；兼 dockkit pane 供 ⧉ target 捕获）。 */
 function setFullscreenMarker(on: boolean): void {
   document.querySelectorAll("[data-sidebar-right-panel]").forEach((el) => el.remove());
@@ -166,8 +174,7 @@ describe("bug 1ab2f4e6: apply 提供 superComposer 服务（cordis reflect.provi
     expect(svc.focusFullscreenInput()).toBe(false);
     // 全屏激活 → 替身浮现 → 聚焦替身输入区（官方复制件 contenteditable 锚）并返回 true
     setFullscreenMarker(true);
-    await tick();
-    await tick();
+    await waitFor(() => svc.focusFullscreenInput());
     expect(svc.focusFullscreenInput()).toBe(true);
     const input = document.querySelector("[data-dscf-official-input] [data-composer-input]") as HTMLElement | null;
     expect(input, "替身输入区锚 [data-composer-input] 不在场").not.toBeNull();
@@ -180,7 +187,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     setFullscreenMarker(true);
     const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
     expect(document.querySelector('[data-dscf-official-input] [data-composer-input]')).not.toBeNull();
     const effects = (ctx as unknown as { __effects: Array<() => unknown> }).__effects;
@@ -192,6 +199,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     // 消息流非空 = 可展开 → s2
     const ctx = stubCtx({ sessions: sessionsWithMessage });
     superComposerClient.apply(ctx);
+    await waitFor(() => document.querySelector('[data-testid="dscf-hotzone"]') !== null);
     await tick();
     const hotzone = document.querySelector('[data-testid="dscf-hotzone"]') as HTMLElement | null;
     expect(hotzone).not.toBeNull();
@@ -206,6 +214,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     setFullscreenMarker(true);
     const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
+    await waitFor(() => document.querySelectorAll('[data-testid="dscf-root"]').length > 0);
     await tick();
     const effects = (ctx as unknown as { __effects: Array<() => unknown> }).__effects;
     const before = document.querySelectorAll('[data-testid="dscf-root"]').length;
@@ -213,7 +222,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     // cordis 语义：effect mount 返回 disposer，fiber unload 时执行返回值
     const dispose = effects[0]!() as () => void;
     dispose();
-    await tick();
+    await waitFor(() => document.querySelectorAll('[data-testid="dscf-root"]').length === before - 1);
     expect(document.querySelectorAll('[data-testid="dscf-root"]').length).toBe(before - 1);
     expect(() => dispose()).not.toThrow();
   });
@@ -227,8 +236,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(before, "前置测试残留替身须为零").toBe(0);
     // 全屏激活（DOM 标记出现）→ tracker 扇出重渲染 → 替身浮现
     setFullscreenMarker(true);
-    await tick();
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
@@ -236,7 +244,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     setFullscreenMarker(true);
     const ctx = stubCtx({ inject: true, sessions: sessionsStub });
     superComposerClient.apply(ctx);
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
@@ -244,7 +252,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     setFullscreenMarker(true);
     const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
@@ -263,7 +271,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     document.body.appendChild(panel);
     const ctx = stubCtx({ inject: true, sessions: sessionsWithMessage });
     superComposerClient.apply(ctx);
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-fullscreen"]') !== null);
     const btn = document.querySelector('[data-testid="dscf-fullscreen"]');
     expect(btn).not.toBeNull();
     (btn as HTMLElement).click();
@@ -279,7 +287,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     capturedTargets.length = 0;
     const ctx = stubCtx({ inject: true, sessions: sessionsWithMessage });
     superComposerClient.apply(ctx);
-    await tick();
+    await waitFor(() => document.querySelector('[data-testid="dscf-fullscreen"]') !== null);
     const btn = document.querySelector('[data-testid="dscf-fullscreen"]');
     expect(btn).not.toBeNull();
     (btn as HTMLElement).click();

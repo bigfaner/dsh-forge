@@ -9,6 +9,11 @@ import { superComposerClient } from "../src/client/index.js";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** 轮询等待 DOM 驱动的重挂载落位（childList 观察后提交落点为调度序——以谓词成立为准）。 */
+async function waitFor(predicate: () => boolean, ticks = 100): Promise<void> {
+  for (let i = 0; i < ticks && !predicate(); i++) await tick();
+}
+
 /** 全屏呈现源标记（tracker DOM 兜底读数）。 */
 function setFullscreenMarker(on: boolean): void {
   document.querySelectorAll("[data-sidebar-right-panel]").forEach((el) => el.remove());
@@ -133,14 +138,60 @@ describe("1.39 可见性合取（apply 正门 + MutationObserver 扇出）", () 
       section.appendChild(anchor);
       surface.appendChild(section);
       anchor.setAttribute("data-textpreview-url", "dsh-resource://file/a.md");
-      await tick();
-      await tick();
+      await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
       expect(document.querySelector('[data-testid="dscf-root"]'), "文档 tab 回场须恢复显示").not.toBeNull();
       // 切回非文档 tab（官方 dockkit 切 tab = aria-hidden 翻转）→ 隐藏
       section.setAttribute("aria-hidden", "true");
-      await tick();
-      await tick();
+      await waitFor(() => document.querySelector('[data-testid="dscf-root"]') === null);
       expect(document.querySelector('[data-testid="dscf-root"]'), "切走文档 tab 须隐藏").toBeNull();
+    } finally {
+      if (effects.length > 0) (effects[0]!() as () => void)();
+      panel.remove();
+      surface.remove();
+      setFullscreenMarker(false);
+    }
+  });
+
+  it("bug 06a56121: 会话切换（文档锚 childList 摘换 + 既有节点属性翻转触发中间态卸载）后须回挂", async () => {
+    setFullscreenMarker(true);
+    const panel = document.createElement("div");
+    panel.setAttribute("data-sidebar-right-panel", "fullscreen");
+    document.body.appendChild(panel);
+    const surface = document.createElement("div");
+    surface.setAttribute("data-dockkit-surface", "true");
+    document.body.appendChild(surface);
+    // 会话 A：可见文档锚在场 → 替身挂载
+    const sectionA = document.createElement("section");
+    sectionA.setAttribute("data-dockkit-content", "tab-a");
+    const anchorA = document.createElement("div");
+    anchorA.setAttribute("data-textpreview-url", "dsh-resource://file/a.md");
+    sectionA.appendChild(anchorA);
+    surface.appendChild(sectionA);
+    const { ctx, effects } = stubCtx();
+    try {
+      superComposerClient.apply(ctx);
+      await tick();
+      expect(document.querySelector('[data-testid="dscf-root"]'), "文档锚在场须挂载").not.toBeNull();
+      // 会话切换：官方 chat-view 重挂 = 旧会话 DOM childList 摘除 + 新会话子树插入；
+      // 切换瞬间的既有节点属性翻转（aria-hidden/class）触发 notify，此时文档锚缺席
+      // → 中间态读数 false → 卸载；随后新锚以 childList 插入（插入后不再改属性）
+      // ——attributes-only observer 不扇出 → 卡死不回挂。
+      sectionA.remove();
+      const tabHost = document.createElement("div");
+      tabHost.setAttribute("data-dockkit-tabhost", "");
+      surface.appendChild(tabHost);
+      tabHost.setAttribute("aria-hidden", "false"); // 既有节点属性翻转 → notify（锚缺席 → false）
+      await waitFor(() => document.querySelector('[data-testid="dscf-root"]') === null);
+      expect(document.querySelector('[data-testid="dscf-root"]'), "中间态（锚缺席）须隐藏").toBeNull();
+      // 会话 B：新文档锚插入（属性在插入前已定，插入后零属性变更）
+      const sectionB = document.createElement("section");
+      sectionB.setAttribute("data-dockkit-content", "tab-b");
+      const anchorB = document.createElement("div");
+      anchorB.setAttribute("data-textpreview-url", "dsh-resource://file/b.md");
+      sectionB.appendChild(anchorB);
+      surface.appendChild(sectionB);
+      await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+      expect(document.querySelector('[data-testid="dscf-root"]'), "新会话文档锚落位须回挂").not.toBeNull();
     } finally {
       if (effects.length > 0) (effects[0]!() as () => void)();
       panel.remove();

@@ -308,7 +308,10 @@ function mutationWatch(doc: Document): ((notify: () => void) => () => void) | un
   if (typeof observerCtor !== 'function') return undefined
   return (notify) => {
     const observer = new observerCtor(() => notify())
-    observer.observe(doc, { attributes: true, subtree: true })
+    // Root cause (bug 1b807ddb): 会话切换以 childList 摘/插文档锚——attributes-only
+    // observer 在中间态卸载替身后收不到新锚落位，卡死不回挂；补 childList 使
+    // 结构变化同样扇出 notify（MutationObserver 回调按微任务合批，同步换装零闪卸）。
+    observer.observe(doc, { attributes: true, childList: true, subtree: true })
     return () => observer.disconnect()
   }
 }
