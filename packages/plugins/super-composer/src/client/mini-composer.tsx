@@ -10,10 +10,16 @@
 //（淡化 + 提示，任一条件恢复即取消）→ 收球 / 点球：未读直达 S2 否则回 S1/S0 /
 // 鼠标离开不收起（鼠标位置 ≠ 注意力归属）。
 //
+// 球面信号（1.35 用户裁决）：流式中 = 官方 StateDot ongoing spinner（同源动效
+// 词汇）；流式停止 ∧ 未读 = 右上角官方 warning 圆点（官方 unread 指示词汇——
+// sidebar pendingInteraction→warning 同源），查看（点球/展开）即消失；未读面
+// 流式增量与非流式补账合并记账。
+//
 // 标题栏：左「—」、中会话 title（热区承载）、右「⧉」；热区光标 = 应用风格 chevron
 // 自定义光标（styles.ts 注入的 svg data-uri cursor，随主题暗色锚切换），tooltip =
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { StateDot } from "@deepseek-ai/dsh-client-ui-primitives";
 import { SurrogateComposer } from "./official-input/surrogate-composer.js";
 import { FactoryChatView } from "./factory-bridge.js";
 import type { SuperComposerDataFace } from "./data-face.js";
@@ -215,15 +221,17 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     seenMessagesRef.current = props.messages.length
   }, [expanded, props.messages.length])
 
-  // 未读追踪：卡体在场即清账（seen = 当前消息数）；球态期间流式增长 = 未读。
+  // 未读追踪（1.35 合并语义）：球态期间消息流增长（流式增量 ∨ 非流式补账）= 未读；
+  // 卡体在场即清账（seen = 当前消息数）。圆点面 = 未读 ∧ 非流式（流式期间球面由
+  // spinner 动效承担，停止后未读转圆点提示——查看（点球/展开）即消失）。
   useEffect(() => {
     if (view.collapsed) {
-      if (props.streaming && props.messages.length > seenCountRef.current) setUnread(true)
+      if (props.messages.length > seenCountRef.current) setUnread(true)
       return
     }
     seenCountRef.current = props.messages.length
     setUnread(false)
-  }, [view.collapsed, props.streaming, props.messages.length])
+  }, [view.collapsed, props.messages.length])
 
   const setViewSafe = useCallback((patch: Partial<MiniComposerView>) => {
     setView((prev) => ({ ...prev, ...patch }))
@@ -277,13 +285,19 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const tooltipLabel = view.expanded ? "收起对话" : "展开对话"
 
   if (view.collapsed) {
-    // C 悬浮球：点球——有未读流式回复 → 直达 S2；否则回 S1/S0。
+    // C 悬浮球（1.35 用户裁决）：流式中 = 官方 StateDot ongoing spinner 动效
+    // （dsh-client-ui-primitives 同源动效词汇，零自造动画）；流式停止 ∧ 未读 =
+    // 右上角官方 warning 未读圆点（官方 sidebar pendingInteraction→warning 同源
+    // 指示词汇，琥珀 user-attention 语义色）；点球——未读直达 S2，否则回 S1/S0。
+    const showUnreadDot = unread && !props.streaming
     return (
       <div data-testid="dscf-root" data-phase="ball">
         <button
         type="button"
         data-testid="dscf-ball"
-        aria-label={unread ? "有新回复，展开对话" : "展开对话"}
+        data-streaming={props.streaming ? "true" : undefined}
+        data-unread={showUnreadDot ? "true" : undefined}
+        aria-label={props.streaming ? "回复生成中，展开对话" : unread ? "有新回复，展开对话" : "展开对话"}
         onClick={(): void => {
           setViewSafe({ collapsed: false, expanded: expandable && unread, preview: false })
         }}
@@ -309,7 +323,23 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           boxShadow: "var(--dsw-alias-shadow-menu, 0 4px 16px rgba(0,0,0,.08))",
         }}
       >
-        <BallGlyph />
+        {props.streaming ? <StateDot state="ongoing" size={20} /> : <BallGlyph />}
+        {showUnreadDot ? (
+          <span
+            data-testid="dscf-ball-unread"
+            style={{
+              position: "absolute",
+              top: 3,
+              right: 3,
+              display: "flex",
+              padding: 1.5,
+              borderRadius: "50%",
+              background: "var(--dsw-alias-bg-layer-1)",
+            }}
+          >
+            <StateDot state="warning" size={9} />
+          </span>
+        ) : null}
         </button>
       </div>
     )

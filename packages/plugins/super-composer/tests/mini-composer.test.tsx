@@ -279,6 +279,63 @@ describe("点球 C 回归", () => {
   });
 });
 
+describe("悬浮球流式动效 + 未读圆点（1.35 用户裁决）", () => {
+  /** 收球前置：有消息卡体 → minimize 进球态。 */
+  function toBall(): void {
+    harness = mount({ messages: [msg("m1", "user", "hi")] });
+    fire(harness, "dscf-minimize", "click");
+  }
+
+  it("流式接收中：球面 = 官方 ongoing spinner（StateDot 动效词汇），无未读圆点", () => {
+    toBall();
+    harness!.rerender({ streaming: true });
+    const ball = q(harness!, "dscf-ball")!;
+    expect(ball.getAttribute("data-streaming")).toBe("true");
+    expect(ball.querySelector("[data-state='ongoing']")).not.toBeNull();
+    expect(q(harness!, "dscf-ball-unread")).toBeNull();
+  });
+
+  it("流式停止（未读）：球面回到静态 glyph，右上角出现未读圆点（官方 warning 点词汇）", () => {
+    toBall();
+    harness!.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")], streaming: true });
+    harness!.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")], streaming: false });
+    const ball = q(harness!, "dscf-ball")!;
+    expect(ball.getAttribute("data-streaming")).toBeNull();
+    expect(ball.querySelector("[data-state='ongoing']")).toBeNull();
+    const dot = q(harness!, "dscf-ball-unread");
+    expect(dot).not.toBeNull();
+    expect(dot!.querySelector("[data-state='warning']")).not.toBeNull();
+    expect(ball.getAttribute("aria-label")).toContain("新回复");
+  });
+
+  it("用户查看（点球恢复）后圆点消失；再收球不再带圆点", () => {
+    toBall();
+    harness!.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")], streaming: true });
+    harness!.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")], streaming: false });
+    expect(q(harness!, "dscf-ball-unread")).not.toBeNull();
+    fire(harness!, "dscf-ball", "click");
+    expect(phaseOf(harness!)).toBe("s2");
+    fire(harness!, "dscf-minimize", "click");
+    expect(q(harness!, "dscf-ball-unread")).toBeNull();
+  });
+
+  it("新消息到达（非流式，球态）复用同一未读面：圆点同形出现", () => {
+    toBall();
+    harness!.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "异步补账")] });
+    expect(q(harness!, "dscf-ball-unread")).not.toBeNull();
+  });
+
+  it("无新消息静态球：无 spinner 无圆点（glyph 在场）", () => {
+    toBall();
+    const ball = q(harness!, "dscf-ball")!;
+    expect(ball.getAttribute("data-streaming")).toBeNull();
+    expect(ball.getAttribute("data-unread")).toBeNull();
+    expect(ball.querySelector("[data-state='ongoing']")).toBeNull();
+    expect(q(harness!, "dscf-ball-unread")).toBeNull();
+    expect(ball.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+  });
+});
+
 describe("30s 空闲 + 3s 预告（可拦截）", () => {
   function armIdle(): void {
     act(() => {
