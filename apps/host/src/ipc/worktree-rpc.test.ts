@@ -509,6 +509,25 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(created).toHaveLength(0) // 未落半截预铸会话
   })
 
+  it('bug 878192ec：非 git 目录（resolveProject null）cwd 直建回退——controller.create({cwd}) 零预铸零分支，sessionId 返回（远程域非 git 项目建会话正门）', async () => {
+    const { controller, calls } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'main' }],
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/foreign-dir' })
+    expect(result.branch).toBe('')
+    expect(calls[0]?.cwd).toBe('C:/foreign-dir')
+    expect(calls[0]?.sessionId).toBeUndefined() // 官方 create 自铸 id（缺省不传）
+    expect(result.sessionId).toBe('s-created')
+    expect(created).toHaveLength(0) // 非 git 零预铸（无挂靠事件语义）
+  })
+
   it('bug 488e860d 存量选中自愈（host 侧）：分支解析落空拒绝即摘 lastSelection 记忆——后续 selected() 不再回传不可挂靠树', async () => {
     const { persistence } = fakePersistence({})
     const { controller } = fakeController()

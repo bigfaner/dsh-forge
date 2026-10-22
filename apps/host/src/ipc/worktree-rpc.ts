@@ -1005,6 +1005,18 @@ export function createWorktreeRpcService(deps: {
     // 空串直达预铸深处由 requireNonEmpty 抛无业务语义的 TypeError（bug b6b88f49）。
     // 挂靠事件契约 = 分支非空（一 worktree 一分支），落空即显式拒绝、不落半截预铸会话。
     if (branch === '') {
+      // bug 878192ec（用户裁决 2026-10-22）：非 git 目录（resolveProject null——如 Z:\tmp）
+      // cwd 直建回退——非 git 项目本无 worktree/分支语义，桌面端经官方 workspaceId 径可建，
+      // 远程域唯一数据门 = 本通道，拒绝即「无建会话路径」。controller.create({cwd}) 零预铸
+      // 零分支（无挂靠事件语义），权限补钉 + 工作区归属 fail-soft（会话已建不因归属面回滚）。
+      // git 仓库（含 detached HEAD）不回退——挂靠契约拒绝原语义不变（b6b88f49/488e860d）。
+      const isRepo = (await cachedResolve(cwd).catch(() => null)) !== null
+      if (!isRepo) {
+        const created = await controller.create({ cwd })
+        await pinAdoptedPermission(created.sessionId).catch(() => {})
+        await attachWorkspace(cwd, created.sessionId).catch(() => {})
+        return { sessionId: created.sessionId, branch: '' }
+      }
       // bug 488e860d 存量选中自愈（host 侧）：拒绝即摘 lastSelection 中该树记忆——
       // 桌面 create-wrap 每次首条消息按 selected() 携带 worktreePath，不清则同一
       // 不可挂靠树失败循环（fail-open 每次都带同一路径）。
