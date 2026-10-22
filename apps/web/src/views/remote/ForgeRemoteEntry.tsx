@@ -1144,9 +1144,6 @@ export function RemoteDialogHead(props: {
         <IconCloseOutlineRegular size={16} />
       </button>
       {props.trailing !== undefined && (
-        <div className="dswf-remote-dialog-switch">{props.trailing}</div>
-      )}
-      {props.trailing !== undefined && (
         <div className="dswf-remote-dialog-title-row">
           <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
           {props.trailing}

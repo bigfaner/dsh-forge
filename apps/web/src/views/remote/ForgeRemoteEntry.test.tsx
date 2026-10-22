@@ -289,7 +289,9 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
       />,
     )
     expect(head).toMatch(/role="switch"[\s\S]*?aria-checked="true"/)
-    expect(head).toContain('dswf-remote-dialog-switch')
+    expect(head).toContain('dswf-remote-dialog-title-row')
+    expect(head).not.toContain('dswf-remote-dialog-switch') // 旧绝对定位容器退役——不得重复渲染（曾叠挡 Harness 菜单）
+    expect(head.split('aria-label="远程访问开关"').length - 1).toBe(1) // 开关只渲染一份
     expect(head).not.toMatch(/type="checkbox"/)
     expect(head).not.toMatch(/>远程访问</) // 可见文本不留「远程访问」字样（aria-label 元数据不算）
   })
