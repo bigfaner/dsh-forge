@@ -289,6 +289,17 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     expect(sessionCwdInProject('z:/PROJ/file', 'Z:\\proj', [])).toBe(true)
   })
 
+  it('bug 5a4f：官方 list 真形 {items:[...]}（SessionListValue）——归组不再落空', async () => {
+    // 源码核销：dsh-api-session-controller list(_request) → { items: await listState.list() }
+    const res = fakeRes()
+    const proxy = proxyDeps({ session: { list: async () => ({ items: SESSIONS }) } as never })
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.projectsGrouped }) as never, res, deps({ proxy }))
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { projects: { sessions: { sessionId: string }[] }[]; unassigned: { sessionId: string }[] } }
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data.projects[0]!.sessions.map((s) => s.sessionId)).toEqual(['s-1', 's-2'])
+    expect(parsed.data.unassigned.map((s) => s.sessionId)).toEqual(['s-3'])
+  })
+
   it('worktree 读法失败 = 零 worktree 行降级（wsPath 子树归组仍成立）', async () => {
     const res = fakeRes()
     const proxy = proxyDeps({ worktrees: { list: async () => { throw new Error('git down') } } })

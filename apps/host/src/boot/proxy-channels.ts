@@ -246,12 +246,16 @@ export function sessionCwdInProject(cwd: string | undefined, wsPath: string, wor
   })
 }
 
-/** SessionSummary 提取面（官方原样透传——cwd 归组判定读 cwd 字段，其余零裁剪） */
+/** SessionSummary 提取面（官方原样透传——cwd 归组判定读 cwd 字段，其余零裁剪）。
+ *  bug 09b2bf93：官方 sessionController.list 真返回 {items:[...]}（SessionListValue——
+ *  源码核销 dsh-api-session-controller list(_request)），缺 items 形 = 归组会话恒空集。 */
 function sessionRows(listResult: unknown): Record<string, unknown>[] {
-  const rows = Array.isArray(listResult)
-    ? listResult
-    : Array.isArray((listResult as Record<string, unknown> | null)?.['sessions'])
-      ? (listResult as { sessions: unknown[] }).sessions
+  if (Array.isArray(listResult)) return listResult.filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
+  const frame = listResult as Record<string, unknown> | null
+  const rows = Array.isArray(frame?.['items'])
+    ? (frame as { items: unknown[] }).items
+    : Array.isArray(frame?.['sessions'])
+      ? (frame as { sessions: unknown[] }).sessions
       : []
   return rows.filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
 }
