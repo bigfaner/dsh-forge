@@ -177,7 +177,8 @@ export async function handleRemoteHttpRpc(
       const message = error instanceof Error ? error.message : String(error)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
       res.end(verdict.replyError(message))
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error`)
+      // bug 7d26b074：消息落 diag（宿主自产错误文本非通道枚举面——channel 仍 <redacted>）
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error ${message}`)
     }
     return
   }
@@ -213,6 +214,7 @@ export async function handleRemoteHttpRpc(
     const message = error instanceof Error ? error.message : String(error)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message } }))
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error`)
+    // bug 7d26b074：消息落 diag（宿主自产错误文本非通道枚举面——channel 仍 <redacted>）
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error ${message}`)
   }
 }

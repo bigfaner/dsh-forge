@@ -247,4 +247,21 @@ describe('handleRemoteHttpRpc 边界', () => {
     expect(lines[0]).toContain('channel=<redacted>')
     expect(lines[0]).not.toContain(REMOTE_CHANNELS.progress)
   })
+
+  it('bug 7d26b074：handler 抛错 diag 行必带错误消息（channel 仍脱敏——真机连发 error 可归因）', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-x' } }) as never,
+      res,
+      deps({
+        diag: (line) => lines.push(line),
+        tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0 }) },
+      }),
+    )
+    expect(lines[0]).toContain('status=error')
+    expect(lines[0]).toContain('store down')
+    expect(lines[0]).toContain('channel=<redacted>')
+    expect(lines[0]).not.toContain(REMOTE_CHANNELS.progress)
+  })
 })

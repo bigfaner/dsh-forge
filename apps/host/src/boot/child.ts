@@ -840,11 +840,13 @@ async function main(): Promise<void> {
           // 才可达（官方 BrowserAuth 会话，未配对官方 401/403）；请求经 diag 落 harness.log）
           if (isRemoteHttpRpcRequest(method, requestUrl)) {
             void handleRemoteHttpRpc(req, res, {
+              // bug 7d26b074：getter 走 lazyCordisService 守卫——cordis 解析抛错 = undefined
+              // 降级（handler 内 fail-soft 错误信封语义），不因 getter 异常升级成 handler 抛错
               get tasks() {
-                return servicesFace.get('forgeTasks') as RemoteChannelService | undefined
+                return lazyCordisService(servicesFace, 'forgeTasks') as RemoteChannelService | undefined
               },
               get projects() {
-                return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
+                return lazyCordisService(servicesFace, 'forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
               },
               forwardApproval: (input) =>
                 approvalRelay?.deposit(input) ?? Promise.resolve({ forwarded: false, reason: 'unavailable' as const }),
