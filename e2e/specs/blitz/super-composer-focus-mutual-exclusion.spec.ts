@@ -5,6 +5,10 @@
 // 语义单测正本 = packages/plugins/quote-reference/tests/selection-menu.test.tsx（布尔回落）
 // + packages/plugins/super-composer/tests/mini-composer-mount.test.ts；本 spec = git 内
 // 真机 e2e 锚（过程件 walkthrough 探针不进 git，驱动逻辑在此收编）。
+// chip 落地断言投影链联动：真因 = 订阅闩锁 1d1e07af（fixed@073c107b），前置登记
+// 74a341e8 已回填 fixed、85ca6ba5 终态 unresolved 由 74a341e8 销账——真机 1 passed 实证投影存活；
+// 断言用直读（替身 textarea value）+ 投影（dscf-chips textContent）双活腿（data-draft 死腿已删：
+// 全插件源码零生产者恒 null）。
 // 驱动链：launchHost → 会话装配 → dockkit 文档打开 → 全屏开关（官方 chrome「全屏」按钮
 // 进入 / ⧉ = 官方 ISidebarRight.toggleFullscreen 同径退出）→ 文档划选（mouseup 触发径）
 // → 菜单「添加到对话」→ 断言 document.activeElement 对应面。
@@ -121,7 +125,7 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
       activeIsDscf: document.activeElement?.getAttribute('data-dscf-composer-input') === '' ||
         document.activeElement?.closest('[data-testid="dscf-root"]') !== null,
       dscfMounted: document.querySelectorAll('[data-testid="dscf-root"]').length,
-      chipLanded: (document.querySelector('[data-testid="dscf-root"]')?.getAttribute('data-draft') ?? '').includes('](quote:') ||
+      chipLanded: (document.querySelector('[data-dscf-composer-input]')?.value ?? '').includes('](quote:') ||
         (document.querySelector('[data-testid="dscf-chips"]')?.textContent ?? '').length > 0,
     }))
     expect(stateFullscreen.dscfMounted, '全屏态替身在挂（互斥：替身为唯一合法输入面）').toBe(1)
