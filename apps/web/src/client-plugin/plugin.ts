@@ -1800,6 +1800,7 @@ function snapshotOfReads(
     tunnelUnexpectedlyClosed?: boolean
     remotePin?: string
     remotePinExpiresAt?: number
+    remotePinDurable?: boolean
   } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
@@ -1838,7 +1839,9 @@ function snapshotOfReads(
   const expiresAt = manifest?.remotePairExpiresAt
   const pairExpiresAt =
     typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
-  // fix-17 ③ PIN 缝（镜像口径）：6 位数字 × 正有限 TTL 齐备才携带（remote-status 同判）。
+  // fix-17 ③ PIN 缝（镜像口径）：6 位数字 ×（正有限 TTL 或长效位）齐备才携带（remote-status
+  // 同判——bug df86240d 同族：缺 durable 分支 = 长效 PIN 整体丢弃，PIN 卡缺席 + 勾选框未勾，
+  // 真机实证 2026-10-22 用户报告「重开 dialog 未勾选长期生效」）。
   const pin =
     typeof manifest?.remotePin === 'string' && /^\d{6}$/.test(manifest.remotePin) ? manifest.remotePin : undefined
   const pinExpiresAtRaw = manifest?.remotePinExpiresAt
@@ -1846,12 +1849,19 @@ function snapshotOfReads(
     typeof pinExpiresAtRaw === 'number' && Number.isFinite(pinExpiresAtRaw) && pinExpiresAtRaw > 0
       ? pinExpiresAtRaw
       : undefined
+  const pinDurable = manifest?.remotePinDurable === true
   return {
     phase: 'listening',
     lanAddress,
     ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
     ...(tunnel !== undefined ? { tunnel } : {}),
-    ...(pin !== undefined && pinExpiresAt !== undefined ? { pin, pinExpiresAt } : {}),
+    ...(pin !== undefined && (pinExpiresAt !== undefined || pinDurable)
+      ? {
+          pin,
+          ...(pinExpiresAt !== undefined ? { pinExpiresAt } : {}),
+          ...(pinDurable ? { pinDurable: true } : {}),
+        }
+      : {}),
   }
 }
 
