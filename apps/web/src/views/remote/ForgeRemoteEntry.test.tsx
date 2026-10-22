@@ -14,6 +14,7 @@ import {
   RemotePanel,
   REMOTE_DIALOG_TITLE,
   REMOTE_STATUS_POLL_MS,
+  remoteDisconnectToast,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
   harnessBridgeOf,
@@ -314,8 +315,7 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-10：完成钮 = onClose 缝；断开连接钮 = onDisconnect 缝（撤该设备会话动作）', () => {
-    const calls: string[] = []
+  it('fix-10：完成钮 = onClose 缝；断开连接钮 = onDisconnect 缝（撤该设备会话动作）', () => {    const calls: string[] = []
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ phase: 'connected' }}
@@ -880,6 +880,18 @@ describe('fix-26 走查批次（八点）', () => {
 })
 
 // ── fix-19：规格差值清尾 ⑥-⑨（单源规格 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
+
+describe('remoteDisconnectToast（用户裁决 2026-10-22：断开 → 不限时错误 toast，点击关闭）', () => {
+  it('仅 connected → 非 connected 转换回报；listening/off/pending 互转零打扰', () => {
+    expect(remoteDisconnectToast('connected', 'listening')).toBe('手机连接已断开——等待重新配对')
+    expect(remoteDisconnectToast('connected', 'off')).toBe('手机连接已断开（远程访问已关闭）')
+    expect(remoteDisconnectToast('connected', 'pending')).toBe('手机连接已断开——等待重新配对')
+    expect(remoteDisconnectToast('listening', 'off')).toBeUndefined()
+    expect(remoteDisconnectToast('listening', 'connected')).toBeUndefined()
+    expect(remoteDisconnectToast('off', 'listening')).toBeUndefined()
+    expect(remoteDisconnectToast('connected', 'connected')).toBeUndefined()
+  })
+})
 
 describe('fix-19 ⑥ 已连接态标题与 manage-connected 二级形态（官方 §2）', () => {
   it('remoteDialogTitleOf：connected = 「管理手机连接」；其余 = 「连接移动设备」', () => {

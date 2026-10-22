@@ -73,6 +73,15 @@ export const PAIRING_COUNTDOWN_SECONDS = 300
  *  connected 位变化经 refresh → getBootManifest 单源回流，任何失败路径可收敛不冻结） */
 export const REMOTE_STATUS_POLL_MS = 800
 
+/** 断开 toast 文案派生（用户裁决 2026-10-22：连接断开 → 错误 toast 不限时、点击关闭）。
+ *  仅 connected → 非 connected 转换回报（listening/off/pending 间互转零打扰）。 */
+export function remoteDisconnectToast(prev: RemotePhase, next: RemotePhase): string | undefined {
+  if (prev !== 'connected' || next === 'connected') return undefined
+  return next === 'off'
+    ? '手机连接已断开（远程访问已关闭）'
+    : '手机连接已断开——等待重新配对'
+}
+
 /** 隧道空态文案（fix-10：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——互联网 tab
  *  内空态收敛，不禁用 tab、不停留「正在建立隧道」无限进行态） */
 export function tunnelEmptyText(): string {
@@ -1292,6 +1301,15 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
   // fix-12 圆点态（纯派生——图标本体恒 currentColor，右上角小圆点承载四态；now 取渲染
   // 时刻——面板开启期 800ms 轮询与挂载初刷驱动收敛，关闭期随快照事件刷新）
   const dot: RemoteDotState = remoteDotStateOf(snapshot, Date.now())
+  // 用户裁决 2026-10-22：connected → 非 connected 转换 = 不限时错误 toast（点击关闭——
+  // 无自动消退；断开因由随相位分型，host 粘性位收回由既有 pair-disconnected 缝承载）
+  const [disconnectToast, setDisconnectToast] = useState<string | undefined>(undefined)
+  const prevPhaseRef = useRef<RemotePhase>(snapshot.phase)
+  useEffect(() => {
+    const message = remoteDisconnectToast(prevPhaseRef.current, snapshot.phase)
+    prevPhaseRef.current = snapshot.phase
+    if (message !== undefined) setDisconnectToast(message)
+  }, [snapshot.phase])
   // fix-3 挂载期初刷：重启后装配期绑定只在挂载时捕获一次（一次性——零轮询，SC2 纪律）
   useEffect(() => {
     void refresh?.()
@@ -1330,6 +1348,18 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
           {dot !== 'none' && <span className="dswf-remote-dot" data-state={dot} aria-hidden="true" />}
         </button>
       </Tooltip>
+      {/* 断开 toast（不限时 + 点击关闭——用户裁决 2026-10-22） */}
+      {disconnectToast !== undefined && (
+        <button
+          type="button"
+          className="dswf-remote-toast"
+          role="alert"
+          data-testid="dswf-remote-disconnect-toast"
+          onClick={() => setDisconnectToast(undefined)}
+        >
+          {disconnectToast}
+        </button>
+      )}
       {/* fix-8 官方 Modal dialog（关态 = 官方件自身返回 null；开合/Esc/遮罩归官方机械） */}
       <ForgeRemoteDialog
         open={open}
