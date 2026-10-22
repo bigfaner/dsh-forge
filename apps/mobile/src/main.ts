@@ -359,30 +359,52 @@ export function mount(root: HTMLElement): void {
         ensureStream()
         const sessionId = match.params['id'] ?? ''
         setCurrentSession(sessionId)
-        return {
-          key: `chat:${sessionId}`,
-          root: createChatView(sessionId, {
-            api: ctx.api,
-            pairDomain,
-            // 用户裁决 2026-10-22（双域统一代理化）：会话流引擎统一 forge-stream 镜像帧
-            // （/remote/forge-stream LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream +
-            // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）
-            createEngine: createForgeStreamEngine(),
-            onOpenDrawer: openDrawer,
-            onOpenHero: openHero,
-            onOpenSettings: openSettings,
-            onOpenDoc: openReader,
-            resolveDocSize: async (path) => {
-              const manifest = await ctx.rpc!.call<{ size?: unknown }>(PROXY_FILE_CHANNEL, {
-                path,
-                offset: 0,
-                manifest: true,
-              })
-              return manifest.ok && typeof manifest.data.size === 'number' ? manifest.data.size : undefined
-            },
-            tunnel: ctx.tunnel,
-          }),
-        }
+        // bug 会话标题：LLM 标题在官方 title 投影不在事件——grouped 异步解析注入回退链
+        const fallbackTitleRef = { current: '' }
+        const root = createChatView(sessionId, {
+          api: ctx.api,
+          pairDomain,
+          // 用户裁决 2026-10-22（双域统一代理化）：会话流引擎统一 forge-stream 镜像帧
+          // （/remote/forge-stream LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream +
+          // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）
+          createEngine: createForgeStreamEngine(),
+          fallbackTitleRef,
+          onOpenDrawer: openDrawer,
+          onOpenHero: openHero,
+          onOpenSettings: openSettings,
+          onOpenDoc: openReader,
+          resolveDocSize: async (path) => {
+            const manifest = await ctx.rpc!.call<{ size?: unknown }>(PROXY_FILE_CHANNEL, {
+              path,
+              offset: 0,
+              manifest: true,
+            })
+            return manifest.ok && typeof manifest.data.size === 'number' ? manifest.data.size : undefined
+          },
+          tunnel: ctx.tunnel,
+        })
+        void (async () => {
+          try {
+            const result = await ctx.rpc!.call('forge:proxy/projects-grouped', {})
+            if (!result.ok || rendered?.key !== `chat:${sessionId}`) return
+            const data = result.data as { projects?: ReadonlyArray<{ sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown } } }> }> } | undefined
+            for (const project of data?.projects ?? []) {
+              for (const session of project.sessions ?? []) {
+                if (session.sessionId !== sessionId) continue
+                const title = session.projections?.values?.title
+                if (typeof title === 'string' && title !== '') {
+                  fallbackTitleRef.current = title
+                  const el = root.querySelector('.topbar .title')
+                  if (el !== null && (el.textContent === '…' || el.textContent === '会话')) el.textContent = title
+                }
+                return
+              }
+            }
+          } catch {
+            /* grouped 不可达 = 标题保持事件面回退（诚实降级） */
+          }
+        })()
+        return { key: `chat:${sessionId}`, root }
       }
       case 'drawer': {
         ensureStream()

@@ -112,6 +112,8 @@ export interface ChatDeps {
   readonly worktree?: string
   /** 隧道模式位（1.31——覆盖层文案区分「隧道模式（降级）」/ LAN 断线文案）。 */
   readonly tunnel?: boolean
+  /** 会话标题回退（bug：LLM 标题在官方 title 投影不在事件——装配侧自 grouped 注入；事件面优先）。 */
+  readonly fallbackTitleRef?: { current: string }
 }
 
 type OverlayMode = 'hidden' | 'degraded' | 'offline' | 'pairing'
@@ -136,7 +138,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   const menuButton = el('button', 'iconbtn')
   menuButton.innerHTML = '<svg class="ic"><use href="#i-menu"/></svg><span class="dot-badge" hidden></span>'
   menuButton.addEventListener('click', () => deps.onOpenDrawer?.())
-  const title = el('div', 'title', '…')
+  const title = el('div', 'title', deps.fallbackTitleRef?.current !== undefined && deps.fallbackTitleRef.current !== '' ? deps.fallbackTitleRef.current : '…')
   const newButton = el('button', 'iconbtn')
   newButton.innerHTML = '<svg class="ic"><use href="#i-new"/></svg>'
   newButton.addEventListener('click', () => deps.onOpenHero?.())
@@ -336,6 +338,8 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
         : null
       : deps.store
 
+  // bug 会话标题（用户裁决 2026-10-22）：title 回退链 = 事件 session/title → 官方 title
+  // 投影（抽屉同行显示源——LLM 标题在投影不在事件）→ 「会话」。投影值经 titleRef 装配侧注入。
   function deriveTitle(entries: readonly WireEvent[]): string {
     for (let index = entries.length - 1; index >= 0; index--) {
       const event = entries[index]
@@ -343,7 +347,9 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
         return (event.data as { title?: string }).title ?? '…'
       }
     }
-    return '会话'
+    return deps.fallbackTitleRef?.current !== undefined && deps.fallbackTitleRef.current !== ''
+      ? deps.fallbackTitleRef.current
+      : '会话'
   }
 
   // ---- 发送（斜杠仲裁单一发送路径）----
