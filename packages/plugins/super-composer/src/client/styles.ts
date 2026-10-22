@@ -66,3 +66,30 @@ export function installSuperComposerStyles(doc: StyleDocument | undefined): unkn
   doc.head.appendChild(style)
   return style
 }
+
+/** official-input 复制件样式收集器（bundle 期 css-module 插件按文件推入——见 bundle-client.mjs） */
+export interface OfficialCssCarrier {
+  __DSCF_OFFICIAL_CSS__?: string[]
+}
+
+/** 样式元素标识（复制件 CSS 注入幂等判据） */
+export const OFFICIAL_INPUT_STYLE_MARKER = 'data-dsh-forge-super-composer-official-input'
+
+/**
+ * official-input 复制件样式注入（factory 同步段，同上判别）：bundle 顶层 import 的
+ * .module.css 经 esbuild 插件转译为「类名恒等映射 + 原文推入全局收集器」，本函数把
+ * 收集到的官方 CSS 逐字落一个 <style>（选择器已在转译期作用域化
+ * [data-dscf-official-input]——官方 .card/.root 等通用类名不碰撞宿主）。幂等同上。
+ */
+export function installOfficialInputStyles(doc: StyleDocument | undefined): unknown | undefined {
+  if (doc === undefined) return undefined
+  const existing = doc.querySelectorAll(`[${OFFICIAL_INPUT_STYLE_MARKER}]`)
+  if (existing.length > 0) return existing[0]
+  const sheets = (globalThis as unknown as OfficialCssCarrier).__DSCF_OFFICIAL_CSS__
+  if (sheets === undefined || sheets.length === 0) return undefined
+  const style = doc.createElement('style')
+  style.setAttribute(OFFICIAL_INPUT_STYLE_MARKER, '')
+  style.textContent = sheets.join('\n')
+  doc.head.appendChild(style)
+  return style
+}

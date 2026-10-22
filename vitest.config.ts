@@ -60,11 +60,18 @@ export default defineConfig({
           },
         },
       },
-      // super-composer 插件包（纯 client 包——client bundle 装载契约守卫 + 全屏感知纯逻辑单测）
+      // super-composer 插件包（纯 client 包——client bundle 装载契约守卫 + 全屏感知纯逻辑单测；
+      // fix-12 复制件消费官方 primitives——css 副产物走 vite 转换管道（inline，
+      // git-worktree 判例同构））
       {
         test: {
           name: 'super-composer',
           include: ['packages/plugins/super-composer/tests/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
         },
       },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },

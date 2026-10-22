@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { SUPER_COMPOSER_STYLE_MARKER } from "../src/client/styles.js";
+import { OFFICIAL_INPUT_STYLE_MARKER, SUPER_COMPOSER_STYLE_MARKER } from "../src/client/styles.js";
 
 /**
  * 浏览器半装载契约守卫（dsh-client-modules，官方 clientBundle 生成形状——
@@ -21,13 +21,19 @@ const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = resolve(pkgDir, "dist/client.js");
 const PLUGIN_ID = "@dsh-forge/super-composer";
 /** 声明种子表（与 scripts/bundle-client.mjs PLATFORM_MODULES 逐位对齐——全部落在
- * 官方 dsh-client-web platform.ts 冻结种子表口径内：react 家族 + primitives）。 */
+ * 官方 dsh-client-web platform.ts 冻结种子表口径内：react 家族 + primitives +
+ * Lexical 家族（fix-12 复制件外置——官方壳层同款 0.49.0 单例）。 */
 const PLATFORM_MODULES = [
   "react",
   "react/jsx-runtime",
   "react-dom",
   "react-dom/client",
   "@deepseek-ai/dsh-client-ui-primitives",
+  "lexical",
+  "@lexical/plain-text",
+  "@lexical/history",
+  "@lexical/utils",
+  "@lexical/text",
 ];
 
 interface Registration {
@@ -177,37 +183,39 @@ describe("client bundle 装载契约（官方 clientBundle 配方）", () => {
   });
 });
 
-describe("发送钮对齐 artifact 保鲜 pin（bug d5bae340）", () => {
-  // Root cause: 真机黑方块复发 = vite 发射链复制 dist/client.js 入壳 dist——源码修复
-  // 后插件 dist 未重建时，发射产物仍是旧钮（button-primary-fill 近黑 + 文本「↑」），
-  // 单测（读源码）全绿而真机仍旧形态。本 pin 直接断言发射源产物（dist/client.js）
-  // 含对齐形态，dist 过期即红——补上「产物层」这一缺失的保鲜判据。
-  it("dist/client.js 产物含官方 InputBar .primary 对齐钮（info-fill 令牌 + 官方箭头 path）", () => {
+describe("发送钮对齐 artifact 保鲜 pin（bug d5bae340 / fix-12 官方同源切换）", () => {
+  // fix-12 起发送钮/输入形态 = 官方 InputBar 复制件（自绘 dscf-send 钮已退役）——
+  // pin 改锚官方同源签名：作用域化官方 CSS 在场 + 官方主钮背景令牌 + 官方箭头 path。
+  it("dist/client.js 产物含官方 InputBar 复制件（作用域 CSS + .primary 令牌 + 官方箭头 path）", () => {
     const bundle = readFileSync(bundlePath, "utf8");
     expect(
       bundle,
-      "发送钮背景 = 官方 button-info-fill 令牌（主题蓝圆钮）",
-    ).toContain('"var(--dsw-alias-button-info-fill)"');
+      "复制件 CSS 已随 bundle 作用域化收集（[data-dscf-official-input] 前缀）",
+    ).toContain("[data-dscf-official-input] .primary");
+    expect(
+      bundle,
+      "发送钮背景 = 官方 .primary 令牌（--dsw-alias-state-business-primary 主题圆钮）",
+    ).toContain("var(--dsw-alias-state-business-primary)");
     expect(
       bundle,
       "发送图标 = 官方 16×16 箭头 svg path（非文本「↑」）",
     ).toContain("M8.3125 0.980183");
     expect(
       bundle,
-      "旧形态（button-primary-fill 作发送钮背景）不得回流",
-    ).not.toContain('background: "var(--dsw-alias-button-primary-fill)"');
+      "旧形态（自绘 dscf-send 钮）不得回流",
+    ).not.toContain('"dscf-send"');
   });
 });
 
 describe("样式生命周期（dev-guide §5：factory 同步段注入——claimStyles 清点窗口）", () => {
-  it("物化注入：求值产物（factory 同步段）即在 head 落未打标 <style>——可被官方 claim", () => {
+  it("物化注入：求值产物（factory 同步段）即在 head 落未打标 <style>（本体 + 复制件官方 CSS）", () => {
     const { doc, head } = stubDocument();
     materialize(doc);
-    expect(head.length, "factory 同步段样式未注入").toBe(1);
+    expect(head.length, "factory 同步段样式未注入").toBe(2);
     expect(head[0]!.tagName).toBe("style");
     expect(head[0]!.attrs.has(SUPER_COMPOSER_STYLE_MARKER)).toBe(true);
     // 未携带官方 data-plugin 标 = 处于 claimStyles 清点窗口（官方物化后打标）
-    expect(head[0]!.attrs.has("data-plugin")).toBe(false);
+    expect(head.every((el) => el.attrs.has("data-plugin") === false)).toBe(true);
   });
 
   it("无 document 环境（Node 求值）静默跳过，不炸装载", () => {
@@ -216,14 +224,19 @@ describe("样式生命周期（dev-guide §5：factory 同步段注入——clai
 
   it("幂等：同标记元素在场 = 不重插", () => {
     const { doc, head } = stubDocument();
-    // 先注入一枚，再求值 bundle——factory 段应识别在场元素跳过
+    // 先注入两枚（本体 + 复制件），再求值 bundle——factory 段应识别在场元素跳过
     head.push({
       tagName: "style",
       attrs: new Map([[SUPER_COMPOSER_STYLE_MARKER, ""]]),
       textContent: "",
     });
+    head.push({
+      tagName: "style",
+      attrs: new Map([[OFFICIAL_INPUT_STYLE_MARKER, ""]]),
+      textContent: "",
+    });
     evalBundleAsClassicScript(doc);
     materialize(doc);
-    expect(head.length).toBe(1);
+    expect(head.length).toBe(2);
   });
 });

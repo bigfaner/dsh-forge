@@ -1,0 +1,33 @@
+/* // PROVENANCE: 复制自官方 dsh 源码 ui-conversation/src/client/input/editor/ReferenceChip.module.css @ deepseek-harness f059f01ce367748392d8f665c0705fb4302a626b（0.2.0-rc.2，2026-10-22）；升级需人工 re-copy，漂移自担。 */
+/* Atomic reference metrics stay inside the composer line. */
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 240px;
+  color: var(--dsw-alias-state-business-primary);
+  user-select: none;
+}
+
+.marker {
+  flex: none;
+  font-weight: 500;
+}
+
+.icon {
+  flex: none;
+  align-self: center;
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invalid {
+  color: var(--dsw-alias-state-error-primary);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
