@@ -738,6 +738,80 @@ export function PskTrioSection(props: {
  * 重取 boot manifest 换 token——宿主轮换推送经 refresh 单源回流）。
  * fix-7 对齐（零回退）：双模式 tab 卡 + 「手机已连接」态卡（connected 收回 QR）+ 地址条带 +
  * 复制图标按钮（复制成功绿圆勾徽 1.8s 反馈）+ 官方说明文案。 */
+/**
+ * 连接成功态内联面（用户裁决 2026-10-22 二次）：绿卡不再置顶独占 dialog——内联到内容流
+ * 原 QR/隧道卡位；QR 隐藏、原位显示地址（互联网 = 隧道 URL / WiFi = LAN 地址）+ 断开连接；
+ * manage-connected 二级态收窄（隐藏 closeHint 与「完成」只留「断开连接」）语义保持。
+ */
+function ConnectedFace(props: {
+  readonly url?: string
+  readonly manageConnected?: boolean
+  readonly onDisconnect?: () => void | Promise<void>
+  readonly onClose?: () => void
+}): ReactNode {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1800)
+    return () => clearTimeout(timer)
+  }, [copied])
+  return (
+    <div className="dswf-remote-connected-wrap" data-testid="dswf-remote-connected-wrap">
+      <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
+        <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
+        <span className="dswf-remote-connected-title">手机已连接</span>
+      </div>
+      {props.manageConnected !== true && (
+        <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
+      )}
+      {props.url !== undefined && (
+        <div className="dswf-remote-address dswf-remote-pill">
+          <span className="dswf-remote-address-text" title={props.url}>{props.url}</span>
+          <Tooltip label="复制地址" portal>
+            <button
+              type="button"
+              className="dswf-remote-copy"
+              aria-label="复制地址"
+              onClick={() => {
+                writeClipboard(props.url ?? '')
+                setCopied(true)
+              }}
+            >
+              {copied ? (
+                <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+              ) : (
+                <IconCopyOutlineRegular size={14} />
+              )}
+            </button>
+          </Tooltip>
+        </div>
+      )}
+      <div className="dswf-remote-actions">
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="dswf-remote-disconnect"
+          disabled={props.onDisconnect === undefined}
+          onClick={() => void props.onDisconnect?.()}
+        >
+          断开连接
+        </Button>
+        {props.manageConnected !== true && (
+          <Button
+            variant="primary"
+            size="sm"
+            data-testid="dswf-remote-done"
+            disabled={props.onClose === undefined}
+            onClick={() => props.onClose?.()}
+          >
+            完成
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function RemotePanel(props: {
   readonly snapshot: RemoteStatusSnapshot
   readonly onToggle?: (next: boolean) => Promise<void> | void
@@ -908,52 +982,20 @@ export function RemotePanel(props: {
     <div className="dswf-remote-panel" aria-label="手机远程">
       {/* fix-26 ②：面板头（「手机远程」标题 + 相位文字行）退役——状态语义由入口圆点与
           连接态卡承载，官方页面无此头 */}
-      {/* 用户裁决 2026-10-22：连接成功态仍持续展示配对 PIN/密钥段（换机/重装/隧道换 URL 随时可取）——绿卡置顶，配对面常驻不退场 */}
-      {snapshot.phase === 'connected' && (
-        // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
-        // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
-        // 完成（primary——关 dialog）双钮。
-        // fix-18 ①：连接态独占——配对面（tab/QR/倒计时/地址条/PIN/说明卡）整体退场
-        // （官方 .pairing-content display:none + tab disabled 同语义），仅态卡 + 双钮。
-        // fix-19 ⑥：manage-connected 二级态收窄——隐藏 closeHint 与「完成」钮只留「断开连接」
-        // （官方 manage 态语义：连接已在前台保持过，无需再提示关窗）。
-        <div className="dswf-remote-connected-wrap">
-          <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
-            <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
-            <span className="dswf-remote-connected-title">手机已连接</span>
-          </div>
-          {props.manageConnected !== true && (
-            <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
-          )}
-          <div className="dswf-remote-actions">
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="dswf-remote-disconnect"
-              disabled={props.onDisconnect === undefined}
-              onClick={() => void props.onDisconnect?.()}
-            >
-              断开连接
-            </Button>
-            {props.manageConnected !== true && (
-              <Button
-                variant="primary"
-                size="sm"
-                data-testid="dswf-remote-done"
-                disabled={props.onClose === undefined}
-                onClick={() => props.onClose?.()}
-              >
-                完成
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* 用户裁决 2026-10-22（二次）：连接态不再置顶独占——绿卡内联到内容流（原 QR/隧道卡位），
+          QR 隐藏、原位显示隧道 URL + 断开连接；配对 PIN/密钥段常驻不退场 */}
         <>
         <ModeTabs active={mode} disabled={switching} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
           <>
-          {displayTunnel === undefined ? (
+          {snapshot.phase === 'connected' ? (
+            <ConnectedFace
+              url={displayTunnel?.url}
+              manageConnected={props.manageConnected}
+              onDisconnect={props.onDisconnect}
+              onClose={props.onClose}
+            />
+          ) : displayTunnel === undefined ? (
             // fix-10（隧道卡死收敛）：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——
             // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）。
             // fix-20：切换进行中经 displayTunnel 冻结派生不落此分支（QR 恒挂载防闪屏）
@@ -1041,7 +1083,14 @@ export function RemotePanel(props: {
           </>
         ) : (
           <div className="dswf-remote-pair">
-            {pairValue !== undefined ? (
+            {snapshot.phase === 'connected' ? (
+              <ConnectedFace
+                url={snapshot.lanAddress}
+                manageConnected={props.manageConnected}
+                onDisconnect={props.onDisconnect}
+                onClose={props.onClose}
+              />
+            ) : pairValue !== undefined ? (
               <>
                 <Tooltip label="手机扫码打开配对地址" portal>
                 <div className="dswf-remote-qr-wrap">

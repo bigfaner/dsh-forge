@@ -739,7 +739,7 @@ const TUNNEL_ONLINE: RemoteStatusSnapshot = {
 }
 
 describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :1176 连接态卡）', () => {
-  it('connected：绿卡置顶 + 配对面常驻（tab/隧道卡/PIN 三件套共存——用户裁决 2026-10-22：连接后仍可取 PIN/密钥）', () => {
+  it('connected：绿卡内联（不置顶独占）+ QR 隐藏、原位显示隧道 URL——tab/PIN/三件套共存（用户裁决 2026-10-22 二次）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ phase: 'connected', tunnel: TUNNEL_ONLINE.tunnel, pin: '654321', pinExpiresAt: TUNNEL_ONLINE.pinExpiresAt }}
@@ -748,6 +748,9 @@ describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :
       />,
     )
     expect(html).toContain('data-testid="dswf-remote-connected"')
+    expect(html).toContain('dswf-remote-connected-wrap')
+    expect(html).not.toContain('data-testid="dswf-remote-qr"') // QR 隐藏
+    expect(html).toContain('dswf-remote-address-text') // 原 QR 位 = 隧道 URL pill + 复制
     expect(html).toContain('dswf-remote-tab-lan')
     expect(html).toContain('dswf-remote-tab-internet')
     expect(html).toContain('data-testid="dswf-remote-pin"')
