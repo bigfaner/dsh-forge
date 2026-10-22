@@ -80,7 +80,7 @@ function emitPluginBundle(pkgName: string, bundleFile: string): Plugin {
  * main.ts 掌舵行的 id/inject 字面量与 <pkg> package.json dsh.client 清单
  * 是同一契约的两处表达——漂移即构建失败，不靠人工同步。
  */
-function assertPluginManifest(pkgName: string, block: RegExp): Plugin {
+function assertPluginManifest(pkgName: string, block: RegExp, bundleFile: string): Plugin {
   return {
     name: `dsh-forge-assert-plugin-manifest(${pkgName})`,
     generateBundle() {
@@ -97,7 +97,14 @@ function assertPluginManifest(pkgName: string, block: RegExp): Plugin {
       } catch (error) {
         throw new Error(`vite: 读 ${pkgName} package.json 失败（${pkgPath}）: ${String(error)}`)
       }
-      assertPluginSteeringLine(readFileSync(src('./src/main.ts'), 'utf8'), block, manifest, pkgName)
+      const mainTs = readFileSync(src('./src/main.ts'), 'utf8')
+      assertPluginSteeringLine(mainTs, block, manifest, pkgName)
+      // 评审 C5：pkgName ↔ bundleFile 配对小断言——掌舵块 url 字面量必须引用本包
+      // 发射落位文件（emitPluginBundle 的 fileName 与掌舵 url 双处字面量防漂移）。
+      const bodyStart = mainTs.indexOf(`id: '${pkgName}'`)
+      if (bodyStart === -1 || !mainTs.slice(bodyStart, bodyStart + 400).includes(`url: \`${bundleFile}?rev=`)) {
+        throw new Error(`vite: main.ts ${pkgName} 掌舵块 url 未引用发射落位 ${bundleFile}（pkgName↔bundleFile 漂移）`)
+      }
     },
   }
 }
@@ -114,9 +121,9 @@ export default defineConfig({
   plugins: [
     rejectStandaloneServe(),
     pinClientBundleShape(),
-    assertPluginManifest('@dsh-forge/input-history', /const inputHistoryClient: ProductClientEntry = \{([\s\S]*?)\n\}/),
-    assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference),
-    assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer),
+    assertPluginManifest('@dsh-forge/input-history', /const inputHistoryClient: ProductClientEntry = \{([\s\S]*?)\n\}/, INPUT_HISTORY_BUNDLE_FILE),
+    assertPluginManifest('@dsh-forge/quote-reference', STEERING_BLOCKS.quoteReference, QUOTE_REFERENCE_BUNDLE_FILE),
+    assertPluginManifest('@dsh-forge/super-composer', STEERING_BLOCKS.superComposer, SUPER_COMPOSER_BUNDLE_FILE),
     emitPluginBundle('@dsh-forge/input-history', INPUT_HISTORY_BUNDLE_FILE),
     emitPluginBundle('@dsh-forge/quote-reference', QUOTE_REFERENCE_BUNDLE_FILE),
     emitPluginBundle('@dsh-forge/super-composer', SUPER_COMPOSER_BUNDLE_FILE),
