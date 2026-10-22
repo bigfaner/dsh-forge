@@ -385,6 +385,50 @@ describe("bug f863404a: 输入以本地态为源（官方投影回摆不清空 t
   });
 });
 
+describe("bug 008d44e7: 发送钮逐位对齐官方 composer（InputBar .primary 形态）", () => {
+  function openS2(): Harness {
+    harness = mount({ messages: [msg("m1", "user", "hi")], draft: "" });
+    fire(harness, "dscf-hotzone", "click");
+    return harness;
+  }
+
+  it("发送钮 = 官方主题色圆钮：info-fill 令牌背景 + #fff + 999px 圆 + 34×34 + 右下定位", () => {
+    openS2();
+    const send = q(harness, "dscf-send") as HTMLButtonElement;
+    const style = send.style;
+    expect(style.background).toContain("var(--dsw-alias-button-info-fill)");
+    expect(style.color).toBe("#fff");
+    expect(style.borderRadius).toBe("999px");
+    expect(style.width).toBe("34px");
+    expect(style.height).toBe("34px");
+    // 右下定位：控件行内 flex 尾随（前置 flex:1 占位把钮推到行尾=卡体右下）
+    const row = q(harness, "dscf-controls")!;
+    expect(row.children[row.children.length - 1]).toBe(send);
+    // 官方 transition / hover / disabled 态令牌
+    expect(style.transition).toContain("background-color");
+  });
+
+  it("发送钮图标 = 官方 16×16 svg 箭头（viewBox 0 0 16 16），非文本字形", () => {
+    openS2();
+    const send = q(harness, "dscf-send")!;
+    const svg = send.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute("viewBox")).toBe("0 0 16 16");
+    expect(svg!.getAttribute("width")).toBe("16");
+    expect(send.textContent!.trim()).not.toContain("↑");
+  });
+
+  it("流式停止图标 = 官方圆角方块 rect（rx 3），非文本「■」", () => {
+    harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true });
+    fire(harness, "dscf-hotzone", "click");
+    const send = q(harness, "dscf-send")!;
+    const rect = send.querySelector("svg rect");
+    expect(rect).not.toBeNull();
+    expect(rect!.getAttribute("rx")).toBe("3");
+    expect(send.textContent!.trim()).not.toContain("■");
+  });
+});
+
 describe("标题栏热区光标 + 浮层 tooltip（应用风格，非原生 title）", () => {
   it("可展开/可折叠类名切换 + 热区不落原生 title 属性", () => {
     harness = mount({ messages: [msg("m1", "user", "hi")] });

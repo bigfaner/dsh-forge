@@ -130,6 +130,27 @@ function BallGlyph(): React.JSX.Element {
   )
 }
 
+/** 发送箭头图标（官方 InputBar 主钮同源 path——16×16、fill currentColor）。 */
+function SendArrowGlyph(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path
+        d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+/** 流式停止图标（官方 InputBar 停止钮同源——圆角方块 rect rx 3）。 */
+function StopGlyph(): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** 一体卡替身组件（状态机本体；全部样式令牌化——--dsw-alias-* 随主题）。 */
 export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const idleMs = props.idleMs ?? DEFAULT_IDLE_MS
@@ -556,14 +577,25 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
               disabled={props.streaming}
               onClick={handleSend}
               style={{
-                ...controlBtnStyle,
-                background: "var(--dsw-alias-button-primary-fill)",
-                color: "var(--dsw-alias-label-primary)",
+                // 官方 InputBar `.primary` 逐位对齐（bug 008d44e7；官方
+                // dsh-client-ui-conversation lib/client.js:17169 CSS 取证）：主题色
+                // 圆钮 + 白色图标 + hover/disabled 态。Root cause: 原实现引用了
+                // 官方令牌表不存在的 --dsw-alias-button-primary-fill（正确令牌 =
+                // button-info-fill），令牌未定义回落 UA 默认即黑方块。
+                flex: "none",
+                width: 34,
+                height: 34,
                 border: "none",
-                borderRadius: "var(--dsw-radius-sm, 8px)",
+                borderRadius: 999,
+                background: "var(--dsw-alias-button-info-fill)",
+                color: "#fff",
+                cursor: "pointer",
+                display: "grid",
+                placeItems: "center",
+                transition: "background-color .1s",
               }}
             >
-              {props.streaming ? "■" : "↑"}
+              {props.streaming ? <StopGlyph /> : <SendArrowGlyph />}
             </button>
           </div>
         ) : null}
