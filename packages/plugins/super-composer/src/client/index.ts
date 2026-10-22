@@ -23,6 +23,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createFullscreenTracker, type FullscreenTracker } from './fullscreen.js'
+import {
+  createDocumentActivityTracker,
+  type DocumentActivityTracker,
+  type DocActivityDom,
+} from './document-activity.js'
 import { MiniComposerCard } from './mini-composer.js'
 import { createSuperComposerDataFace, mentionMenuOf, miniComposerPropsOf, type SessionInputFaceMirror } from './data-face.js'
 import { installFactoryBridge } from './factory-bridge.js'
@@ -32,6 +37,8 @@ import { installSuperComposerStyles, installOfficialInputStyles, type StyleDocum
 export interface SuperComposerClientFace {
   /** 全屏感知 tracker（document 在场时装配；缺席 = undefined 空态） */
   readonly tracker: FullscreenTracker | undefined
+  /** 文档活动 tracker（1.39：dockkit 布局面缺席 = 恒 true 降级） */
+  readonly activity: DocumentActivityTracker | undefined
   /** 全量撤销（tracker 停 watch；幂等） */
   dispose(): void
 }
@@ -130,6 +137,8 @@ export interface MountMiniComposerOptions {
   readonly source?: unknown
   /** 全屏感知 tracker（在场 = 替身按全屏呈现门控挂载可见） */
   readonly tracker?: FullscreenTracker
+  /** 文档活动 tracker（1.39：在场 = 替身按「全屏 ∧ 文档活动」合取门控挂载可见） */
+  readonly activity?: DocumentActivityTracker
   /**「⧉」退全屏动作（缺省 = no-op） */
   readonly exitFullscreen?: () => void
 }
@@ -230,8 +239,21 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     return true
   }
   const render = (): void => {
-    // 全屏门控：非全屏呈现态不渲染替身（fullscreenMarkers=0 时不常驻——AC5）
+    // 可见性门控（1.39 两信号合取）：①全屏呈现（fullscreenMarkers>0，AC5 既有）；
+    // ②文档活动（dockkit 布局面在场时可见 content 内文档体锚在场——官方
+    // documentpreview textpreview 锚 ∨ 产品 doc panel 锚；离文档/插件页/非文档
+    // tab 即隐藏；布局面缺席 = 判据未知降级不收窄）。activity 缺席
+    // （未装配方）= 不引入第二信号，保持全屏单信号语义。
+    // 交叉真值表（终态）：
+    //   全屏 ∧ 文档     → 显示；全屏 ∧ 非文档（dockkit 切走/关闭文档/插件页）→ 隐藏
+    //   非全屏 ∧ 文档   → 隐藏（AC5）；非全屏 ∧ 非文档 → 隐藏
+    // 隐藏期 = render(null) 整卡卸载：30s 空闲收球/Esc 状态机/未读圆点计时随组件
+    // 卸载冻结（定时器 effect 清理），恢复显示即全新挂载重算——隐藏期间不误触发。
     if (options.tracker !== undefined && !options.tracker.isFullscreen()) {
+      root.render(null)
+      return
+    }
+    if (options.activity !== undefined && !options.activity.isActive()) {
       root.render(null)
       return
     }
@@ -250,6 +272,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
   }
   const off = face.subscribe(render)
   const offFullscreen = options.tracker?.subscribe(render)
+  const offActivity = options.activity?.subscribe(render)
   let torn = false
   // 晚序服务补挂重试（conversation/inputTriggers provide 晚于挂载——有界轮询直至全源
   // 挂上；真机判例 inputTriggers provide 晚序可达分钟级，上界 150 次 = 5 分钟）
@@ -269,6 +292,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     if (torn) return
     torn = true
     clearInterval(syncTimer)
+    offActivity?.()
     offFullscreen?.()
     off()
     for (const disposeBridge of bridgeDisposers) disposeBridge()
@@ -299,6 +323,14 @@ export function mountFullscreenTracker(doc: Document): FullscreenTracker {
 }
 
 /**
+ * 文档活动感知装配（document 在场前提）：官方文档体锚读数 + MutationObserver watch。
+ * 判据与降级语义见 document-activity.ts 文件头（官方源码核销注记）。
+ */
+export function mountDocumentActivityTracker(doc: Document): DocumentActivityTracker {
+  return createDocumentActivityTracker({ doc: doc as unknown as DocActivityDom, watch: mutationWatch(doc) })
+}
+
+/**
  * 组合 apply 插件对象（装载器物化后由 cordis 组合调用 apply）。返回值铁律：cordis
  * 组合把 apply 返回值当 effect 消费（真机判例——返回任意非空对象 = TypeError
  * 「Invalid effect」→ entry failed → 壳整页 boot 失败），apply 必须返回 undefined。
@@ -311,6 +343,7 @@ export const superComposerClient = {
       const doc = (globalThis as { document?: Document }).document
       if (doc === undefined) return
       const tracker = mountFullscreenTracker(doc)
+      const activity = mountDocumentActivityTracker(doc)
       // Root cause: 真机 web 壳 sessions provide 晚于本 apply——主径恒走兜底分支，
       // 兜底回调必须以注入后 scope 完成接线（空回调/ctx 重读 = 替身数据面恒空态）。
       let disposeCard = (): void => {}
@@ -321,6 +354,7 @@ export const superComposerClient = {
         disposeCard = mountMiniComposer(doc, ctx, {
           source,
           tracker,
+          activity,
           exitFullscreen: exitFullscreenOf(ctx, doc, source),
         })
       }
@@ -353,6 +387,7 @@ export const superComposerClient = {
       }
       mountDisposeOnContext(ctx, () => () => {
         tracker.dispose()
+        activity.dispose()
         disposeCard()
       })
     } catch (error) {
@@ -365,14 +400,16 @@ export const superComposerClient = {
 export function wireSuperComposerClient(ctx: Context): SuperComposerClientFace {
   const doc = (globalThis as { document?: Document }).document
   const tracker = doc !== undefined ? mountFullscreenTracker(doc) : undefined
+  const activity = doc !== undefined ? mountDocumentActivityTracker(doc) : undefined
   let disposed = false
   const dispose = (): void => {
     if (disposed) return
     disposed = true
     tracker?.dispose()
+    activity?.dispose()
   }
   if (tracker !== undefined) mountDisposeOnContext(ctx, () => dispose)
-  return { tracker, dispose }
+  return { tracker, activity, dispose }
 }
 
 /**

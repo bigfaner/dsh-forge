@@ -240,6 +240,14 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
+  it("1.39 降级：dockkit 布局面缺席（无 surface）= 文档判据未知，保持全屏单信号语义", async () => {
+    setFullscreenMarker(true);
+    const ctx = stubCtx({ sessions: sessionsStub });
+    superComposerClient.apply(ctx);
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
+  });
+
   it("bug d976ed15: ⧉ 退全屏捕获真实全屏 pane（fullscreen panel 内 dockkit pane）", async () => {
     sidebarRightCalls.length = 0;
     capturedTargets.length = 0;
