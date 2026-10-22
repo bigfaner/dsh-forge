@@ -312,8 +312,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     controller.pickBranch('Z:/wt/fix')
     await controller.send('开工')
     controller.resolveGuard('confirm')
-    await Promise.resolve()
-    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(h.createSession).toHaveBeenCalledWith('ws-1')
     expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
     expect(controller.state().pendingGuard).toBeNull()
@@ -339,4 +338,56 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(h.createSession).toHaveBeenCalledWith('ws-1')
     expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
   })
+
+  it('bug 38ab5a8d：新会话默认档暂存在场——建会话后 select-model 下发（含推理等级）+ 清除暂存', async () => {
+    const selectModels: [string, string, string, string?][] = []
+    const cleared: number[] = []
+    const { deps, h } = makeDeps({
+      api: {
+        createSession: async (workspaceId: string) => h.createSession(workspaceId),
+        prompt: async (...args: Parameters<typeof h.prompt>) => h.prompt(...args),
+        selectAgentPreset: async (...args: Parameters<typeof h.selectAgentPreset>) => h.selectAgentPreset(...args),
+        listAgentPresets: async () => h.listAgentPresets(),
+        selectModel: async (sessionId, provider, model, reasoningEffort) => {
+          selectModels.push([sessionId, provider, model, reasoningEffort])
+          return {}
+        },
+      },
+      modelDefault: {
+        read: () => ({ provider: 'DeepSeek', id: 'deepseek-r1', name: 'DeepSeek-R1', reasoningEffort: 'low' }),
+        clear: () => void cleared.push(1),
+      },
+    })
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.send('你好')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
+    expect(selectModels).toContainEqual(['s-ws-1', 'DeepSeek', 'deepseek-r1', 'low'])
+    expect(cleared).toHaveLength(1)
+  })
+
+  it('bug 38ab5a8d：暂存缺席 = 零 select-model 调用（行为不变）', async () => {
+    const selectModels: unknown[] = []
+    const { deps } = makeDeps({
+      api: {
+        createSession: h_create(),
+        prompt: async () => ({}),
+        selectAgentPreset: async () => ({}),
+        listAgentPresets: async () => ({ presets: [] }),
+        selectModel: async (...args: unknown[]) => {
+          selectModels.push(args)
+          return {}
+        },
+      },
+      modelDefault: { read: () => undefined, clear: () => {} },
+    })
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.send('你好')
+    expect(selectModels).toHaveLength(0)
+  })
+
+  function h_create(): (workspaceId: string) => Promise<{ sessionId: string }> {
+    return async (workspaceId: string) => ({ sessionId: `s-${workspaceId || 'main'}` })
+  }
 })

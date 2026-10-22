@@ -185,6 +185,72 @@ export function defaultStore(): KeyValueStore | null {
 }
 
 // ---------------------------------------------------------------------------
+// 纯函数：新会话默认档暂存（bug 38ab5a8d——hero 阶段选模型/推理等级，建会话后下发）
+// ---------------------------------------------------------------------------
+
+/** hero 阶段暂存的新会话默认档（模型 + 可选推理等级）。 */
+export interface PendingModelDefault {
+  readonly provider: string
+  readonly id: string
+  readonly name: string
+  readonly reasoningEffort?: string
+}
+
+/** 配对域隔离键（recentStorageKey 同制）。 */
+export function modelDefaultStorageKey(pairDomain: string): string {
+  return `dshf.mobile.models.default.${pairDomain}`
+}
+
+/** 暂存档收敛（缺 provider/id/name 剔除；reasoningEffort 非串剔除）。 */
+export function coercePendingModelDefault(raw: unknown): PendingModelDefault | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const record = raw as { provider?: unknown; id?: unknown; name?: unknown; reasoningEffort?: unknown }
+  if (typeof record.provider !== 'string' || record.provider === '') return undefined
+  if (typeof record.id !== 'string' || record.id === '') return undefined
+  if (typeof record.name !== 'string' || record.name === '') return undefined
+  return {
+    provider: record.provider,
+    id: record.id,
+    name: record.name,
+    ...(typeof record.reasoningEffort === 'string' && record.reasoningEffort !== ''
+      ? { reasoningEffort: record.reasoningEffort }
+      : {}),
+  }
+}
+
+/** 读暂存档；存储不可用/形状损坏 → undefined。 */
+export function loadPendingModelDefault(storage: KeyValueStore | null, key: string): PendingModelDefault | undefined {
+  if (storage === null) return undefined
+  try {
+    const raw = storage.getItem(key)
+    if (raw === null) return undefined
+    return coercePendingModelDefault(JSON.parse(raw) as unknown)
+  } catch {
+    return undefined
+  }
+}
+
+/** 写暂存档；存储不可用 → 静默丢弃。 */
+export function savePendingModelDefault(storage: KeyValueStore | null, key: string, value: PendingModelDefault): void {
+  if (storage === null) return
+  try {
+    storage.setItem(key, JSON.stringify(value))
+  } catch {
+    /* 静默降级 */
+  }
+}
+
+/** 清暂存档（建会话下发后消费）；存储不可用 → 静默。 */
+export function clearPendingModelDefault(storage: KeyValueStore | null, key: string): void {
+  if (storage === null) return
+  try {
+    storage.setItem(key, JSON.stringify(null))
+  } catch {
+    /* 静默降级 */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 纯函数：检索防抖
 // ---------------------------------------------------------------------------
 
@@ -231,6 +297,12 @@ export interface ModelsDeps {
   readonly onSelected?: (model: ModelSelection) => void
   readonly store?: KeyValueStore | null
   readonly timers?: DebounceTimers
+  /**
+   * 新会话默认档暂存键（bug 38ab5a8d：hero 阶段 sessionId='' 的选模型语义——用户裁决
+   * 2026-10-22「新会话默认档」：暂存本机按配对域隔离，建会话后由 hero 侧 select-model
+   * 下发；推理等级 = 模型行内二跳。缺席 = 维持「无会话不可选」守卫。
+   */
+  readonly defaultKey?: string
 }
 
 export function createModelsView(deps: ModelsDeps): HTMLElement {
@@ -265,6 +337,9 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
   let catalog: ModelCatalog = { models: [] }
   let query = ''
   const collapsed = new Set<string>()
+  // 新会话默认档（hero 态内存镜像——装载初读、pick 即写、渲染取对勾）
+  let pending: PendingModelDefault | undefined =
+    deps.defaultKey === undefined ? undefined : loadPendingModelDefault(store, deps.defaultKey)
 
   const applyQuery = createDebounce(() => {
     query = input.value
@@ -285,11 +360,34 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
 
   function renderModelRow(model: ModelInfo): HTMLElement {
     const current = catalog.current
-    const picked = current !== undefined && isSameModel(model, current)
+    const picked =
+      (current !== undefined && isSameModel(model, current)) ||
+      (pending !== undefined && isSameModel(model, pending))
     const row = el('button', `mrow${picked ? ' picked' : ''}`)
     row.appendChild(document.createTextNode(model.name))
     if (picked) row.insertAdjacentHTML('beforeend', '<span class="chk"><svg class="ic"><use href="#i-check"/></svg></span>')
     row.addEventListener('click', () => void pick(model))
+    // 行内二跳（bug 38ab5a8d 用户裁决）：暂存默认模型行展开推理等级选项（per-model 适配档）
+    if (
+      pending !== undefined &&
+      isSameModel(model, pending) &&
+      model.efforts.length > 0
+    ) {
+      const effortRow = el('div', 'mrow-efforts')
+      for (const effort of model.efforts) {
+        const chip = el('button', `effort-chip${pending.reasoningEffort === effort.id ? ' picked' : ''}`)
+        chip.appendChild(document.createTextNode(effort.name))
+        chip.addEventListener('click', (event) => {
+          event.stopPropagation()
+          if (pending === undefined) return
+          pending = { ...pending, reasoningEffort: effort.id }
+          if (deps.defaultKey !== undefined) savePendingModelDefault(store, deps.defaultKey, pending)
+          render()
+        })
+        effortRow.appendChild(chip)
+      }
+      row.insertAdjacentElement('afterend', effortRow)
+    }
     return row
   }
 
@@ -330,6 +428,15 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
   }
 
   async function pick(model: ModelInfo): Promise<void> {
+    // hero 态（sessionId=''）+ 暂存键在场 = 新会话默认档语义（bug 38ab5a8d 用户裁决）：
+    // 暂存本机不调 select-model（无会话可下发），建会话后由 hero 侧下发并清除。
+    if (deps.sessionId === '' && deps.defaultKey !== undefined) {
+      pending = { provider: model.provider, id: model.id, name: model.name }
+      savePendingModelDefault(store, deps.defaultKey, pending)
+      render()
+      list.appendChild(el('div', 'msearch-hint', '已设为新会话默认档——行内可选推理等级'))
+      return
+    }
     const blocked = selectionBlockedReason(deps.sessionId)
     if (blocked !== undefined) {
       list.appendChild(el('div', 'msearch-hint err', blocked))

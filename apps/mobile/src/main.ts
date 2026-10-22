@@ -39,7 +39,14 @@ import { createHeroView } from './views/hero.ts'
 import { coerceHistoryWindow, createChatView, defaultStreamEngine } from './views/chat.ts'
 import { createDrawerView, defaultFetchStatus } from './views/drawer.ts'
 import { createSettingsSheet, type SettingsHandle } from './views/settings.ts'
-import { createModelsView, recentStorageKey, type KeyValueStore } from './views/models.ts'
+import {
+  clearPendingModelDefault,
+  createModelsView,
+  loadPendingModelDefault,
+  modelDefaultStorageKey,
+  recentStorageKey,
+  type KeyValueStore,
+} from './views/models.ts'
 import { createTasksView } from './views/tasks.ts'
 import { catalogProjection, createWorkerSessionView } from './views/worker.ts'
 import { createAskView } from './views/ask.ts'
@@ -265,6 +272,11 @@ export function mount(root: HTMLElement): void {
     return {
       rpc: ctx.rpc!,
       api: ctx.api!,
+      // bug 38ab5a8d：hero 暂存的新会话默认档（模型视图写入、建会话后下发并清除）
+      modelDefault: {
+        read: () => loadPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
+        clear: () => clearPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
+      },
       onOpenSession: openSession,
       onOpenDrawer: openDrawer,
       onOpenSettings: openSettings,
@@ -372,6 +384,8 @@ export function mount(root: HTMLElement): void {
             rpc: ctx.rpc,
             sessionId: currentSessionId(),
             recentKey: recentStorageKey(pairDomain),
+            // bug 38ab5a8d：hero 态（sessionId=''）选模型 = 新会话默认档暂存
+            defaultKey: modelDefaultStorageKey(pairDomain),
             onBack: () => history.back(),
             onSelected: () => void settingsSheet?.refresh(),
             store: viewStore(),

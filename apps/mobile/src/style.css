@@ -1436,6 +1436,38 @@ body[data-ds-dark-theme] .mrow .chk {
   height: 16px;
   stroke-width: 2.2;
 }
+/* bug 38ab5a8d：暂存默认模型行内二跳——推理等级 chips（per-model 适配档，点选即改暂存） */
+.mrow-efforts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.effort-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #5b6069;
+  background: rgba(0, 0, 0, 0.04);
+  border: 0.5px solid transparent;
+  cursor: pointer;
+}
+.dark .effort-chip,
+body[data-ds-dark-theme] .effort-chip {
+  color: #b9bdc4;
+  background: rgba(255, 255, 255, 0.07);
+}
+.effort-chip.picked {
+  color: #4176e6;
+  background: rgba(65, 118, 230, 0.09);
+  border-color: #4176e6;
+}
+.dark .effort-chip.picked,
+body[data-ds-dark-theme] .effort-chip.picked {
+  color: #7aaaff;
+  background: rgba(122, 170, 255, 0.12);
+  border-color: #7aaaff;
+}
 .msearch-hint {
   font-size: 11px;
   color: #81858c;

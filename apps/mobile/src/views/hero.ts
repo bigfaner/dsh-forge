@@ -15,6 +15,7 @@
  */
 import type { OfficialApi } from '../core/api.ts'
 import type { RemoteRpc } from '../core/rpc.ts'
+import type { PendingModelDefault } from './models.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 import { createComposer, type ComposerHandle } from '../widgets/composer.ts'
 import { showConfirm } from '../widgets/confirm.ts'
@@ -174,13 +175,18 @@ export interface HeroState {
 
 export interface HeroDeps {
   readonly rpc: RemoteRpc
-  readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset' | 'listAgentPresets'>
+  readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset' | 'listAgentPresets' | 'selectModel'>
   /** 项目根（forge:worktree/list payload；缺席 = 不拉清单，composer 只显当前分支）。 */
   readonly projectRoot?: string
   /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
   readonly currentBranch?: string
   readonly currentWorktreePath?: string
   readonly workspaceId?: string
+  /**
+   * 新会话默认档（bug 38ab5a8d 用户裁决 2026-10-22）：hero 模型视图暂存的默认档——
+   * 建会话成功即 select-model 下发（含推理等级）并清除；read 缺席 = 行为不变。
+   */
+  readonly modelDefault?: { read(): PendingModelDefault | undefined; clear(): void }
   readonly onOpenSession: (sessionId: string) => void
   readonly modes?: readonly string[]
   /** 状态变更通知（视图重绘挂点；缺席 = 纯控制器单测）。 */
@@ -241,6 +247,19 @@ export function createHeroController(deps: HeroDeps): HeroController {
       })
   }
 
+  /** 新会话默认档下发（bug 38ab5a8d）：select-model（含推理等级）→ 无论成败清暂存（会话
+   *  已定向，滞留暂存会错发到下一个新会话）；失败 = 默认档不生效（诚实降级，不阻断进入）。 */
+  async function applyPendingDefault(sessionId: string): Promise<void> {
+    const pendingDefault = deps.modelDefault?.read()
+    if (pendingDefault === undefined) return
+    deps.modelDefault?.clear()
+    try {
+      await deps.api.selectModel(sessionId, pendingDefault.provider, pendingDefault.id, pendingDefault.reasoningEffort)
+    } catch {
+      /* 下发失败不阻断进入会话 */
+    }
+  }
+
   async function enter(sessionId: string, text: string): Promise<void> {
     // agentPreset 模式 = select 下发（roster id 单源）；forge 双预设走 prompt mode。
     // 官方面缺席（隧道域 /api 403 族）不阻断进入会话——预设保持部署默认（诚实降级）。
@@ -252,6 +271,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
         /* 预设下发失败不阻断——会话已建 */
       }
     }
+    await applyPendingDefault(sessionId)
     if (text.trim() !== '') {
       try {
         await deps.api.prompt(sessionId, text, promptModeOf(mode))
@@ -373,7 +393,8 @@ export function createHeroController(deps: HeroDeps): HeroController {
       }
       // 仍要切换：保留选中态，会话经官方面落主树（首条消息落主树语义）
       void createPlainSession()
-        .then((sessionId) => {
+        .then(async (sessionId) => {
+          await applyPendingDefault(sessionId)
           busy = false
           deps.onOpenSession(sessionId)
           emit()

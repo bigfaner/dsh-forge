@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clearPendingModelDefault,
   coerceModelCatalog,
   createDebounce,
   filterModels,
   groupByProvider,
   isSameModel,
+  loadPendingModelDefault,
   loadRecentModels,
+  modelDefaultStorageKey,
   pushRecentModel,
   RECENT_LIMIT,
   recentStorageKey,
+  savePendingModelDefault,
   saveRecentModels,
   SEARCH_DEBOUNCE_MS,
   selectionBlockedReason,
@@ -140,6 +144,47 @@ describe('最近使用（localStorage 按配对域隔离，不可用静默降级
     }
     expect(loadRecentModels(throwing, 'k')).toEqual([])
     expect(() => saveRecentModels(throwing, 'k', ['x'])).not.toThrow()
+  })
+})
+
+describe('新会话默认档暂存（bug 38ab5a8d——hero 阶段选模型/推理等级，建会话后下发）', () => {
+  const memory = () => {
+    const map = new Map<string, string>()
+    return {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+    }
+  }
+  const value = { provider: 'DeepSeek', id: 'deepseek-r1', name: 'DeepSeek-R1', reasoningEffort: 'low' }
+
+  it('键按配对域隔离（recent 同制）', () => {
+    expect(modelDefaultStorageKey('pair-a')).toBe('dshf.mobile.models.default.pair-a')
+    expect(modelDefaultStorageKey('pair-b')).not.toBe(modelDefaultStorageKey('pair-a'))
+  })
+
+  it('读写回路 + 推理等级随存', () => {
+    const store = memory()
+    expect(loadPendingModelDefault(store, 'k')).toBeUndefined()
+    savePendingModelDefault(store, 'k', value)
+    expect(loadPendingModelDefault(store, 'k')).toEqual(value)
+  })
+
+  it('损坏形状 fail-soft → undefined', () => {
+    const store = memory()
+    store.setItem('k', '{oops')
+    expect(loadPendingModelDefault(store, 'k')).toBeUndefined()
+    store.setItem('k', '{"provider":"DeepSeek"}') // 缺 id/name
+    expect(loadPendingModelDefault(store, 'k')).toBeUndefined()
+    expect(loadPendingModelDefault(null, 'k')).toBeUndefined()
+  })
+
+  it('清除后不可读；null store 写入静默', () => {
+    const store = memory()
+    savePendingModelDefault(store, 'k', value)
+    clearPendingModelDefault(store, 'k')
+    expect(loadPendingModelDefault(store, 'k')).toBeUndefined()
+    expect(() => savePendingModelDefault(null, 'k', value)).not.toThrow()
+    expect(() => clearPendingModelDefault(null, 'k')).not.toThrow()
   })
 })
 
