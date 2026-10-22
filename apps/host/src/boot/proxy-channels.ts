@@ -22,6 +22,7 @@ import type {
   WorktreeEntryDto,
 } from '@dsh-forge/contracts'
 import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/contracts'
+import { typertDispatch, typertSessionDescriptor } from './typert-dispatch.js'
 
 /** forge:proxy/* 通道名族（mobile 唯一数据通道——LAN/隧道同构） */
 export const PROXY_CHANNELS = {
@@ -142,33 +143,37 @@ type ChannelHandler = (payload: unknown) => Promise<unknown>
  *  listModels+resolveModelInfo 网络探测——秒级时延 × 手机每次打开即触发，60s TTL 收口）。 */
 export const MODEL_CATALOG_CACHE_TTL_MS = 60_000
 
-/** session 族直调通道（方法名 → 控制器方法绑定——逐通道表项，禁分支堆积）。
- *  bug 344dd76b：官方 ApiSessionController 方法体依赖 this 实例态（this.listState 等）——
- *  requireMethod 裸提函数调用 = this undefined；直调一律 bind 控制器。 */
+/** session 族通道（bug 30d44e5a A 案根治——用户裁决 2026-10-22）：经官方 typert 编组分发
+ *  （typert-dispatch.ts——strict schema 边界 + cancellation signal 尾参注入 + result codec），
+ *  与官方网关编组语义等价。特例保留：session-select-model（选档缓存失效）、session-history
+ *  （page 拆包回手机窗口形）、session-model-catalog（TTL 缓存 + 探测失败回退旧目录）。
+ *  bug 344dd76b 同族：编组分发 bind 控制器实例（官方方法体依赖 this 实例态）。 */
 function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelHandler> {
   const bound = <F extends (...args: never[]) => unknown>(method: F | undefined, name: string): F =>
     requireMethod(method, name).bind(session) as F
-  // bug 1eb525b7：官方 signal 族（prompt/page 等）实现内 signal.throwIfAborted() 无可选
-  // 守卫——代理直调只传 (request) 即 TypeError。补传永不 abort 的 signal（host 侧执行至
-  // 完成；客户端断开中止语义远程面不承载）。
-  const boundSignal = (method: unknown, name: string): ((payload: unknown) => Promise<unknown>) => {
-    const fn = requireMethod(method, name) as (...a: unknown[]) => unknown
-    return (payload: unknown) => fn.bind(session)(payload, new AbortController().signal) as Promise<unknown>
+  const dispatch = (method: string): ChannelHandler => {
+    const descriptor = typertSessionDescriptor(method)
+    if (descriptor === undefined) {
+      return async () => {
+        throw new Error(`session.${method} 无官方 typert descriptor——通道不可达`)
+      }
+    }
+    return async (payload) => typertDispatch(descriptor, session, payload, new AbortController().signal)
   }
   // model-catalog 短缓存（读即触探官方 provider I/O——TTL 内复用；探测失败回退旧值不空手）
   let catalogCache: { at: number; data: unknown } | undefined
   return {
-    [PROXY_CHANNELS.sessionList]: async () => bound(session.list, 'session.list')(undefined as never),
-    [PROXY_CHANNELS.sessionCreate]: async (payload) => bound(session.create, 'session.create')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionPage]: async (payload) => boundSignal(session.page, 'session.page')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionPrompt]: async (payload) => boundSignal(session.prompt, 'session.prompt')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionCancel]: async (payload) => bound(session.cancel, 'session.cancel')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionProjections]: async (payload) => boundSignal(session.projections, 'session.projections')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionRename]: async (payload) => bound(session.rename, 'session.rename')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionFork]: async (payload) => bound(session.fork, 'session.fork')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionSearch]: async (payload) => boundSignal(session.search, 'session.search')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionList]: dispatch('list'),
+    [PROXY_CHANNELS.sessionCreate]: dispatch('create'),
+    [PROXY_CHANNELS.sessionPage]: dispatch('page'),
+    [PROXY_CHANNELS.sessionPrompt]: dispatch('prompt'),
+    [PROXY_CHANNELS.sessionCancel]: dispatch('cancel'),
+    [PROXY_CHANNELS.sessionProjections]: dispatch('projections'),
+    [PROXY_CHANNELS.sessionRename]: dispatch('rename'),
+    [PROXY_CHANNELS.sessionFork]: dispatch('fork'),
+    [PROXY_CHANNELS.sessionSearch]: dispatch('search'),
     [PROXY_CHANNELS.sessionSelectModel]: async (payload) => {
-      const result = await bound(session.selectModel, 'session.selectModel')(asRecord(payload))
+      const result = await dispatch('selectModel')(payload)
       catalogCache = undefined // 选档改变部署 default——缓存即刻失效
       return result
     },
@@ -178,11 +183,11 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
     [PROXY_CHANNELS.sessionHistory]: async (payload) => {
       const record = asRecord(payload)
       const sessionId = asString(record, 'sessionId')
-      const page = (await boundSignal(session.page, 'session.page')({
+      const page = (await dispatch('page')({
         address: { kind: 'session', sessionId },
         throughSeq: typeof record['throughSeq'] === 'number' ? record['throughSeq'] : -1,
         ...(typeof record['maxMessages'] === 'number' ? { maxMessages: record['maxMessages'] } : {}),
-      } as never)) as { records?: readonly { event?: unknown }[]; hasMore?: unknown }
+      })) as { records?: readonly { event?: unknown }[]; hasMore?: unknown }
       return {
         entries: (page.records ?? []).map((entry) => (entry as { event?: unknown }).event),
         hasMore: page.hasMore === true,
@@ -201,8 +206,8 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
         throw error
       }
     },
-    [PROXY_CHANNELS.sessionAttachment]: async (payload) => bound(session.attachment, 'session.attachment')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionUpdateQueue]: async (payload) => bound(session.updateQueue, 'session.updateQueue')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionAttachment]: dispatch('attachment'),
+    [PROXY_CHANNELS.sessionUpdateQueue]: dispatch('updateQueue'),
   }
 }
 

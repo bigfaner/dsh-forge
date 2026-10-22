@@ -50,12 +50,14 @@ function fakeRes(): FakeRes {
 // ── forge:proxy/* 通道族（LAN 旧门语义——deps.proxy 注入）────────────
 
 const SESSIONS = [
-  { sessionId: 's-1', title: 'one', cwd: 'Z:/proj', running: true, updatedAt: '2026-10-18T10:00:00Z' },
-  { sessionId: 's-2', title: 'two', cwd: 'Z:/proj/.forge/worktrees/wt-a', running: false, updatedAt: '2026-10-18T09:00:00Z' },
-  { sessionId: 's-3', title: 'stray', cwd: 'Z:/elsewhere', running: false, updatedAt: '2026-10-18T11:00:00Z' },
-  // bug 会话数对不上：官方 blank 会话（建了零消息——blankBit 初始 true，首条 prompt 才翻转）
+  // bug 30d44e5a：fixture 即官方 SessionSummary 形（编组 result codec strict——补
+  // agentAvailable/blank 必填位）
+  { sessionId: 's-1', title: 'one', cwd: 'Z:/proj', running: true, agentAvailable: true, blank: false, updatedAt: 3000 },
+  { sessionId: 's-2', title: 'two', cwd: 'Z:/proj/.forge/worktrees/wt-a', running: false, agentAvailable: false, blank: false, updatedAt: 2000 },
+  { sessionId: 's-3', title: 'stray', cwd: 'Z:/elsewhere', running: false, agentAvailable: false, blank: false, updatedAt: 4000 },
+  // bug 5b9e405b：官方 blank 会话（建了零消息——blankBit 初始 true，首条 prompt 才翻转）
   // 桌面列表不展示，grouped 同语义过滤（fixture 即官方 summary 行形状）
-  { sessionId: 's-4', title: '', cwd: 'Z:/proj', running: false, updatedAt: '2026-10-18T08:00:00Z', blank: true },
+  { sessionId: 's-4', title: '', cwd: 'Z:/proj', running: false, agentAvailable: false, blank: true, updatedAt: 1000 },
 ]
 
 const WORKTREES: WorktreeEntryDto[] = [
@@ -66,7 +68,8 @@ const WORKTREES: WorktreeEntryDto[] = [
 function proxyDeps(overrides: Partial<ProxyChannelDeps> = {}): ProxyChannelDeps {
   return {
     session: {
-      list: async () => SESSIONS,
+      // bug 30d44e5a：编组 result codec 需官方形——list → {items}
+      list: async () => ({ items: SESSIONS }),
       prompt: async (request) => ({ accepted: true, echo: request }),
       page: async () => ({ entries: [], hasMore: false }),
       projections: async () => ({ active: [], settled: [] }),
@@ -103,18 +106,17 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
   it('session-list：控制器 list 直调原样透传', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionList }) as never, res, deps({ proxy: proxyDeps() }))
-    const parsed = JSON.parse(res.body) as { ok: boolean; data: unknown[] }
-    expect(res.status).toBe(200)
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { items: unknown[] } }
     expect(parsed.ok).toBe(true)
-    expect(parsed.data).toHaveLength(4)
+    expect(parsed.data.items).toHaveLength(4)
   })
 
-  it('session-prompt：payload 直调控制器（意图信封往返）', async () => {
+  it('session-prompt：payload 经官方编组直调控制器（strict schema 边界）', async () => {
     const res = fakeRes()
     const seen: unknown[] = []
     const proxy = proxyDeps({ session: { prompt: async (r) => (seen.push(r), { accepted: true }) } })
-    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', text: 'hi' } }) as never, res, deps({ proxy }))
-    expect(seen).toEqual([{ sessionId: 's-1', text: 'hi' }])
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', requestId: 'r-1', mode: 'queue', content: [{ type: 'text', text: 'hi' }] } }) as never, res, deps({ proxy }))
+    expect(seen).toHaveLength(1)
     expect((JSON.parse(res.body) as { data: { accepted: boolean } }).data.accepted).toBe(true)
   })
 
@@ -303,6 +305,39 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     expect(parsed.data.unassigned.map((s) => s.sessionId)).toEqual(['s-3'])
   })
 
+
+  it('bug 30d44e5a A 案：session 族经官方 typert 编组分发——strict schema 边界 + signal 注入', async () => {
+    const seen: Array<{ request?: unknown; signal?: unknown }> = []
+    const session = {
+      prompt: async (request: unknown, signal: AbortSignal) => {
+        seen.push({ request, signal })
+        signal.throwIfAborted() // 官方实现同款无守卫调用
+        return { accepted: true }
+      },
+      list: async () => ({ items: SESSIONS }),
+    }
+    const depsWith = (s: unknown) => deps({ proxy: proxyDeps({ session: s as never }) })
+
+    // ① 缺 requestId（官方 SessionPromptRequest 必填）→ strict schema 边界拒绝（fail-soft 信封）
+    const resMissing = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', mode: 'queue', content: [{ type: 'text', text: 'x' }] } }) as never,
+      resMissing,
+      depsWith(session),
+    )
+    expect((JSON.parse(resMissing.body) as { ok: boolean }).ok).toBe(false)
+
+    // ② 载荷齐全 → 编组 parse 后直调 + signal 注入
+    const resOk = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', requestId: 'r-1', mode: 'queue', content: [{ type: 'text', text: 'x' }], clientTimeZone: 'UTC' } }) as never,
+      resOk,
+      depsWith(session),
+    )
+    expect((JSON.parse(resOk.body) as { ok: boolean; data: { accepted: boolean } }).data.accepted).toBe(true)
+    const promptSeen = seen.find((s) => 'request' in s)
+    expect(promptSeen?.signal).toBeInstanceOf(AbortSignal)
+  })
   it('bug 4a9c：hero 透传通道注册——forge:worktree/list + forge:worktree/session-create 可达（此前 not-found）', async () => {
     const created: unknown[] = []
     const proxy = proxyDeps({
@@ -345,7 +380,7 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
       },
     }
     const resPrompt = fakeRes()
-    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1' } }) as never, resPrompt, deps({ proxy: proxyDeps({ session: session as never }) }))
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', requestId: 'r-1', mode: 'queue', content: [{ type: 'text', text: 'x' }] } }) as never, resPrompt, deps({ proxy: proxyDeps({ session: session as never }) }))
     const resHistory = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionHistory, payload: { sessionId: 's-1' } }) as never, resHistory, deps({ proxy: proxyDeps({ session: session as never }) }))
     expect((JSON.parse(resPrompt.body) as { ok: boolean }).ok).toBe(true)
@@ -422,7 +457,7 @@ describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）',
     expect(verifyPayload(KP.publicDer, sigMaterial(ct, iv, envelope.seq), Buffer.from(envelope.sig, 'base64'))).toBe(true)
     const plain = JSON.parse(openFrame(dk, 's2c', 'device-A', 1, envelope.seq, iv, ct).toString('utf8')) as { ok: boolean; data: unknown[] }
     expect(plain.ok).toBe(true)
-    expect(plain.data).toHaveLength(4)
+    expect((plain.data as { items: unknown[] }).items).toHaveLength(4)
     expect(wm.nextSendSeq('device-A', 1)).toBe(2) // s2c seq 单调推进
   })
 
