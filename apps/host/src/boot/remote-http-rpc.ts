@@ -169,16 +169,19 @@ export async function handleRemoteHttpRpc(
     try {
       const handler = table[verdict.channel]
       if (handler === undefined) throw new Error('通道不在受限 allowlist')
+      // bug 8b97047a：准入后通道 ∈ allowlist 白名单常量集——diag 落真实通道名（无注入/枚举面；
+      // 未准入路径仍 <redacted>）
+      const diagChannel = `channel=${verdict.channel}`
       const data = await handler(verdict.payload)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
       res.end(verdict.reply(data))
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=ok`)
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${diagChannel} status=ok`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
       res.end(verdict.replyError(message))
-      // bug 7d26b074：消息落 diag（宿主自产错误文本非通道枚举面——channel 仍 <redacted>）
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error ${message}`)
+      // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${verdict.channel} status=error ${message}`)
     }
     return
   }
@@ -209,12 +212,13 @@ export async function handleRemoteHttpRpc(
     const data = await handler(payload)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: true, data }))
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=ok`)
+    // bug 8b97047a：allowlist 命中后通道名落 diag（常量集——无注入/枚举面）
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=ok`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message } }))
-    // bug 7d26b074：消息落 diag（宿主自产错误文本非通道枚举面——channel 仍 <redacted>）
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=error ${message}`)
+    // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=error ${message}`)
   }
 }

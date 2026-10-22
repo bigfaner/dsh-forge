@@ -367,15 +367,15 @@ describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）',
     expect(res.status).toBe(200)
   })
 
-  it('diag 全程脱敏：401/ok/error 行均不含 channel 字面量', async () => {
+  it('diag 分域脱敏：401（未准入）行恒 <redacted>；准入后 ok 行落真实通道名（bug 8b97047a——白名单常量无注入/枚举面）', async () => {
     const lines: string[] = []
     await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionList }, 'tunnel.example') as never, fakeRes(), deps({ proxy, psk: pskDeps(), diag: (l) => lines.push(l) }))
     await handleRemoteHttpRpc(fakeReq(sealRequest(PROXY_CHANNELS.sessionList, {}), 'tunnel.example') as never, fakeRes(), deps({ proxy, psk: pskDeps(), diag: (l) => lines.push(l) }))
     expect(lines).toHaveLength(2)
-    for (const line of lines) {
-      expect(line).toContain(DIAG_CHANNEL_REDACTED)
-      expect(line).not.toContain(PROXY_CHANNELS.sessionList)
-    }
+    expect(lines[0]).toContain(DIAG_CHANNEL_REDACTED)
+    expect(lines[0]).not.toContain(PROXY_CHANNELS.sessionList)
+    expect(lines[1]).toContain(`channel=${PROXY_CHANNELS.sessionList}`)
+    expect(lines[1]).toContain('status=ok')
   })
 })
 

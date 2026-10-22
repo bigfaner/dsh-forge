@@ -243,12 +243,12 @@ describe('handleRemoteHttpRpc 边界', () => {
     )
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('/remote/__rpc')
-    // 1.11：解密前 channel 字面量不进 diag（定长标记替代——日志注入/枚举分型消解）
-    expect(lines[0]).toContain('channel=<redacted>')
-    expect(lines[0]).not.toContain(REMOTE_CHANNELS.progress)
+    // bug 8b97047a：准入后通道 ∈ allowlist 白名单常量集——diag 落真实通道名（可归因）
+    expect(lines[0]).toContain(`channel=${REMOTE_CHANNELS.progress}`)
+    expect(lines[0]).toContain('status=ok')
   })
 
-  it('bug 7d26b074：handler 抛错 diag 行必带错误消息（channel 仍脱敏——真机连发 error 可归因）', async () => {
+  it('bug 7d26b074：handler 抛错 diag 行必带错误消息 + 通道名（真机连发 error 可归因）', async () => {
     const res = fakeRes()
     const lines: string[] = []
     await handleRemoteHttpRpc(
@@ -261,7 +261,6 @@ describe('handleRemoteHttpRpc 边界', () => {
     )
     expect(lines[0]).toContain('status=error')
     expect(lines[0]).toContain('store down')
-    expect(lines[0]).toContain('channel=<redacted>')
-    expect(lines[0]).not.toContain(REMOTE_CHANNELS.progress)
+    expect(lines[0]).toContain(`channel=${REMOTE_CHANNELS.progress}`)
   })
 })
