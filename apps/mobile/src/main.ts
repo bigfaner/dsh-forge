@@ -243,6 +243,8 @@ export function mount(root: HTMLElement): void {
     if (ctx.rpc === null) return
     closeSettings()
     settingsSheet = createSettingsSheet({
+      // 用户裁决 2026-10-22：点面板外收起
+      onClose: closeSettings,
       rpc: ctx.rpc,
       sessionId: currentSessionId(),
       onOpenModels: () => router.navigate('models'),

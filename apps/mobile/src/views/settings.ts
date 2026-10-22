@@ -73,6 +73,8 @@ export interface SettingsDeps {
   readonly sessionId: string
   /** 模型行点击 → 打开 #/models 唯一子视图（路由侧装配）。 */
   readonly onOpenModels?: () => void
+  /** 点面板外收起（用户裁决 2026-10-22，与抽屉点外收起同制；路由侧装配 closeSettings）。 */
+  readonly onClose?: () => void
 }
 
 export interface SettingsHandle {
@@ -90,6 +92,10 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
   const sheet = el('div', 'sheet settings-sheet')
   sheet.appendChild(el('div', 'grab'))
   root.appendChild(sheet)
+  // 用户裁决 2026-10-22：点面板外区域收起（mask 命中判定——sheet 内点击不冒泡误关）
+  root.addEventListener('click', (event) => {
+    if (event.target === root) deps.onClose?.()
+  })
   ensureIconSprite(root)
 
   let catalog: ModelCatalog = { models: [] }
