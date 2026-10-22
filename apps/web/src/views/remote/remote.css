@@ -279,6 +279,7 @@
 }
 
 .dswf-remote-empty {
+  box-sizing: border-box; /* Root cause: width:100% + padding 在 content-box 下总宽=父宽+24px 右溢出——左右边距不对称（bug 7cb675cf） */
   width: 100%;
   margin: 0;
   padding: 24px 12px; /* dsw-raw 配对空态内距（局部刻度） */
@@ -610,6 +611,7 @@
 
 /* Pinggy TTL 失效横幅（「约 N 分钟后失效」——琥珀警示带） */
 .dswf-remote-tunnel-banner {
+  box-sizing: border-box; /* 同 7cb675cf：width:100% + padding content-box 右溢出 20px */
   width: 100%;
   margin: 0;
   padding: 6px 10px; /* dsw-raw 横幅内距（局部刻度） */

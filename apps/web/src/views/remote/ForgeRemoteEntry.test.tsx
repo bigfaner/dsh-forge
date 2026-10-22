@@ -587,6 +587,11 @@ describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.
     expect(css).not.toMatch(/\.dswf-remote-harness\s*\{[^}]*left:\s*-24px/)
   })
 
+  it('bug 7cb675cf：隧道空态虚线框 + TTL 横幅 border-box（width:100% + padding 不向右溢出，左右边距对称）', () => {
+    expect(css).toMatch(/\.dswf-remote-empty\s*\{[^}]*box-sizing:\s*border-box/)
+    expect(css).toMatch(/\.dswf-remote-tunnel-banner\s*\{[^}]*box-sizing:\s*border-box/)
+  })
+
   it('③fix-12 翻转：图标本体恒 currentColor（零 per-phase 着色）+ 圆点四态令牌（无/橙/绿/红）', () => {
     // 旧口径退役：入口钮不再按 phase 整体变色
     expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='off'\]/)
