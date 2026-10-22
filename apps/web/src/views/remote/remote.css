@@ -830,11 +830,12 @@
   background: var(--dsw-alias-bg-layer-2); /* panel 底 */
 }
 
-/* 用户裁决 2026-10-22：段标题行右侧携「重新生成」图标钮 */
+/* 用户裁决 2026-10-22：↻ 紧贴「连接密钥」标题同行相邻（整体居中，非两端分布） */
 .dswf-remote-psk-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 6px;
 }
 
 .dswf-remote-psk-title {
