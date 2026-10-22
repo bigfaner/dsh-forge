@@ -165,6 +165,19 @@ describe('AC5 G0–G2 门脚本与测试基座', () => {
     expect(scripts.dev).toContain('scripts/dev.mjs')
     expect(existsSync(join(ROOT, 'scripts/dev.mjs'))).toBe(true)
   })
+
+  it('bug 0459d067: dev.mjs 冷启动序——electron 拉起前先 run-once vite 全量构建（竞态收口）', () => {
+    const dev = readFileSync(join(ROOT, 'scripts/dev.mjs'), 'utf8')
+    const runOnceIdx = dev.indexOf("['-C', 'apps/web', 'run', 'build:vite']")
+    const watchStartIdx = dev.indexOf("start('vite'")
+    const electronIdx = dev.indexOf('electronSpawnExe, [HOST_DIR')
+    // run-once 构建先于 watch 起跑，watch 起跑先于 electron 拉起
+    expect(runOnceIdx).toBeGreaterThanOrEqual(0)
+    expect(watchStartIdx).toBeGreaterThan(runOnceIdx)
+    expect(electronIdx).toBeGreaterThan(watchStartIdx)
+    // fail-soft：run-once 构建失败不拦 dev，但须显性告警（不静默）
+    expect(dev).toContain('vite 初始构建失败')
+  })
 })
 
 describe('Hard Rule 2 子模块占位（按设计定位标注建立）', () => {

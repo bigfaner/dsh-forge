@@ -86,6 +86,22 @@ if (ensurePluginClientBundle.status !== 0) {
 	);
 }
 
+// vite 初始构建收口（Root cause: electron 旧序仅等 HOST_MAIN（tsc 产物）就绪即拉起，
+// vite 初始构建（数十秒）未完成时壳加载旧 web bundle，inject 缝缺席呈空态——bug 0459d067）。
+// 两段式：先 run-once 全量 build（复用 ensure-host-dist 同型缝，stdio inherit 提供进度
+// 可见性）→ 再起 watch（--no-emptyOutDir 不抹 run-once 产物）→ electron 拉起时壳 dist
+// 必为本次源码产物。构建失败 fail-soft 不拦 dev（electron 沿旧 dist 呈旧态 + 显性告警）。
+const ensureViteBuild = spawnSync('pnpm', ['-C', 'apps/web', 'run', 'build:vite'], {
+	stdio: 'inherit',
+	shell: true,
+	cwd: ROOT
+});
+if (ensureViteBuild.status !== 0) {
+	console.error(
+		'[dev] vite 初始构建失败——electron 将沿旧壳 dist 拉起（旧态呈现，非本次源码）；请排查上方 vite 报错'
+	);
+}
+
 start('vite', 'pnpm -C apps/web watch');
 start('tsc', 'pnpm exec tsc -b --watch');
 
