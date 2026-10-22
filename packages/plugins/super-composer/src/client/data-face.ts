@@ -373,6 +373,10 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
           //（agent-preset apply → ctx 代理链）交织，真机实测 Maximum call stack 递归
           // 爆栈；出循环微任务执行，语义不变（list 扇出仍是变更后必达）。
           queueMicrotask(() => {
+            // bug 0b94b710：dispose 后已排队微任务仍会重挂订阅并对已 unmount root 调
+            // listener → render——微任务体首行 disposed 守卫（Root cause: 微任务延迟体
+            // 与 dispose 无 happens-before，出循环重挂决策必须在执行时点复核存活态）。
+            if (disposed) return
             attachSessionSubs(listener)
             listener()
           })

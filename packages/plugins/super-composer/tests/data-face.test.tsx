@@ -514,6 +514,39 @@ describe("活跃会话切换订阅重挂（bug 1d1e07af：订阅闩锁首会话�
   });
 });
 
+// ─────────────────────────── 卸载竞态（bug 0b94b710） ───────────────────────────
+
+describe("dispose 后微任务重挂竞态守卫（bug 0b94b710）", () => {
+  it("sessions.list 通知后立即 dispose：已排队微任务不重挂订阅、不触发 render", async () => {
+    const state = storeOf(makeInputState({ draft: "" }));
+    const faceImpl = { setDraft: vi.fn(), submit: vi.fn(), focus: vi.fn(), state: { getSnapshot: () => state.getSnapshot(), subscribe: (l: () => void) => state.subscribe(l) } };
+    const binding = { sessionId: "s-1", ctx: { tag: "actx" }, eventSource: storeOf<{ entries: EventEntryMirror[] }>({ entries: [] }) };
+    const listStore = storeOf<unknown>({ byId: { "s-1": { id: "s-1", retainedBy: { mainView: 1 } } } });
+    const services: DataFaceServices = {
+      sessions: {
+        binding: () => binding,
+        list: { getSnapshot: () => listStore.getSnapshot(), subscribe: (l: () => void) => listStore.subscribe(l) },
+      },
+      conversation: { input: { for: () => faceImpl } },
+    };
+    const face = createSuperComposerDataFace(services);
+    let renders = 0;
+    face.subscribe(() => {
+      renders += 1;
+    });
+    expect(renders).toBe(0);
+    // 通知 sessions.list → 已排微任务；随后立即 dispose（卸载竞态窗口）
+    listStore.setSnapshot({ byId: { "s-1": { id: "s-1", retainedBy: { mainView: 2 } } } });
+    face.dispose();
+    // 微任务推进：dispose 后已排队微任务不得执行 attachSessionSubs / listener
+    await Promise.resolve();
+    await Promise.resolve();
+    // 零重挂判据：state store 上无替身订阅残留——发布不触达 listener
+    state.setSnapshot(makeInputState({ draft: "dispose 后变更" }));
+    expect(renders).toBe(0);
+  });
+});
+
 // ─────────────────────────── 纯函数边角 ───────────────────────────
 
 describe("纯函数边角", () => {
