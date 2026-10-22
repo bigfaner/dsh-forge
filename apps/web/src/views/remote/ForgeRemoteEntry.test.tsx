@@ -27,6 +27,7 @@ import {
   PIN_HINT_TEMP_TEXT,
   PSK_EMPTY_TEXT,
   PSK_REGEN_CONFIRM_TITLE,
+  pskTrioCopyText,
   remoteDialogTitleOf,
   tunnelAutoReopenOf,
   pinCountdownText,
@@ -1246,6 +1247,15 @@ describe('1.107 连接密钥三件套段（读数即显 + 复制 + 轮换确认�
     expect(html).not.toContain('dswf-remote-psk-empty')
     expect(PSK_EMPTY_TEXT).toContain('连接密钥暂不可用')
     expect(PSK_REGEN_CONFIRM_TITLE).toBe('重新生成连接密钥？')
+  })
+
+  it('一键复制全部：标题行复制钮（读数在场才出现）+ 文本格式 = 一行 label 一行 value 再一个空行（用户裁决 2026-10-22）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} onPskRotate={() => Promise.resolve(TRIO)} />,
+    )
+    expect(html).toContain('dswf-remote-psk-copy-all')
+    expect(html).toContain('复制全部连接密钥')
+    expect(pskTrioCopyText(TRIO)).toBe('PSK\nABCDE-FGHJK-LMNOP\n\n校验段\nab12\n\nSPKI\nc3R1Yg==')
   })
 
   it('段样式：410px / 14px 圆角 / panel 底（PIN 方框同型）+ mono 值不换行省略（用户裁决 2026-10-22：尽量不换行）', () => {

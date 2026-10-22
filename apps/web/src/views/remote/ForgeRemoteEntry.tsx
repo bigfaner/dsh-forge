@@ -577,6 +577,11 @@ function PskTrioRow(props: {
   )
 }
 
+/** 一键复制全部文本格式（用户裁决 2026-10-22：一行 label 一行 value 再一个空行） */
+export function pskTrioCopyText(t: PskTrioFace): string {
+  return `PSK\n${t.display}\n\n校验段\n${t.checksum}\n\nSPKI\n${t.spki}`
+}
+
 /**
  * 连接密钥三件套段（1.107——互联网 tab 连接密码下方）：PSK 分组展示 + 校验段 + host 公钥
  * （SPKI）+ 连接密码已配置态提示；各字段一键复制。读数即显零缓存——挂载期 pskRead 取一次
@@ -621,7 +626,7 @@ export function PskTrioSection(props: {
         setConfirmOpen(false)
       })
   }, [props.onPskRotate, rotating])
-  // 复制反馈（per-field——绿圆勾徽 1.8s 自动消退）
+  // 复制反馈（per-field / all——绿圆勾徽 1.8s 自动消退）
   const [copiedKey, setCopiedKey] = useState('')
   useEffect(() => {
     if (copiedKey === '') return
@@ -632,6 +637,10 @@ export function PskTrioSection(props: {
     writeClipboard(value)
     setCopiedKey(key)
   }
+  // 一键复制全部（用户裁决 2026-10-22：一行 label 一行 value 再一个空行——直接粘贴对端录入面板）
+  const copyAll = (t: PskTrioFace): void => {
+    copyField('all', pskTrioCopyText(t))
+  }
   // PSK 私钥材料默认掩码（用户裁决 2026-10-22「不展示私钥」——复制钮恒取全文，展示面不落明文）
   const [pskRevealed, setPskRevealed] = useState(false)
   return (
@@ -639,6 +648,23 @@ export function PskTrioSection(props: {
       {/* 用户裁决 2026-10-22：重新生成 = 标题行右侧图标钮（原底部文字钮退役） */}
       <div className="dswf-remote-psk-head">
         <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
+        {trio !== undefined && (
+          <Tooltip label="复制全部（PSK / 校验段 / SPKI）" portal>
+            <button
+              type="button"
+              className="dswf-remote-copy"
+              aria-label="复制全部连接密钥"
+              data-testid="dswf-remote-psk-copy-all"
+              onClick={() => copyAll(trio)}
+            >
+              {copiedKey === 'all' ? (
+                <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+              ) : (
+                <IconCopyOutlineRegular size={14} />
+              )}
+            </button>
+          </Tooltip>
+        )}
         <Tooltip label="重新生成连接密钥（旧密钥 5 分钟宽限期）" portal>
           <button
             type="button"
