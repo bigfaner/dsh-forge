@@ -7,7 +7,7 @@
 // 起跑前 ensure-host-dist 新鲜度自检（2026-10-15 事故：tsbuildinfo 与输出脱节后
 // tsc -b/--watch 永判 up-to-date 零 emit——半新半旧 dist 令 electron ESM 崩）。
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -144,6 +144,28 @@ setTimeout(() => {
 		DSH_FORGE_USER_DATA: join(HOST_DIR, 'userdata.dev')
 	};
 	delete electronEnv.ELECTRON_RUN_AS_NODE;
+	// DSH 派生终端内 %TEMP% 写拒（EPERM dsh-spill mkdtemp，fix-9 未覆盖 dev 路径的已知族）：
+	// 派生环境（DSH_SHELL）时把 TMP/TEMP/TMPDIR 重定向到项目内可写目录——与 e2e
+	// global-setup 的 .e2e-tmp 重定向同语义。
+	if (process.env.DSH_SHELL === '1') {
+		const devTmp = join(ROOT, '.dev-tmp');
+		try {
+			mkdirSync(devTmp, { recursive: true });
+			electronEnv.TMP = devTmp;
+			electronEnv.TEMP = devTmp;
+			electronEnv.TMPDIR = devTmp;
+		} catch {
+			console.warn('[dev] .dev-tmp 创建失败——沿原 TEMP 启动（派生环境可能写拒）');
+		}
+		// 派生终端继承的 DSH_HOME 指向 GUI 实例 live home——其凭据锁对派生进程写拒
+		// （EPERM .credentials.yaml.lock，0x80000003 族同根）。剥离继承后走 fix-26 缺省
+		// 隔离（DSH_FORGE_USER_DATA 派生 home + 一次性凭据复制）。有意用特殊 DSH_HOME
+		// 调试时请在非派生终端跑 dev 或显式设 DSH_HOME 指向可写目录。
+		if (electronEnv.DSH_HOME) {
+			delete electronEnv.DSH_HOME;
+			console.warn('[dev] 派生环境：剥离继承 DSH_HOME——dev 走 userdata.dev 隔离 home（fix-26 桥）');
+		}
+	}
 	// dev 进程名区分（2026-10-19 用户裁决）：进程名 = exe 文件名，electron.exe 改不了名——
 	// 在 electron dist 内复制一份 dsh-forge-dev.exe（同目录：DLL/资源邻接解析全部有效），
 	// spawn 该副本 → 任务管理器进程名 dsh-forge-dev，与打包版 dsh-forge.exe 一眼区分。
@@ -162,7 +184,13 @@ setTimeout(() => {
 	}
 	// 透传附加参数（dev:debug 调试面：--remote-debugging-port=9222 → CDP 外接诊断）
 	const extraArgs = process.argv.slice(2);
-	const p = spawn(electronSpawnExe, [HOST_DIR, ...extraArgs], {
+	// DSH 派生终端进程树内 chromium sandbox 初始化即崩（0x80000003，e2e/support/launch.ts
+	// 同款实证）——检测到派生环境（DSH_SHELL）时自动注入 --no-sandbox 等开关，
+	// 与 E2E_ELECTRON_SWITCHES 自愈语义一致（显式传 E2E_ELECTRON_SWITCHES=0 可禁用）。
+	const harnessDerived = process.env.DSH_SHELL === '1';
+	const devSwitchesOn = (process.env.E2E_ELECTRON_SWITCHES ?? (harnessDerived ? '1' : undefined)) === '1';
+	const healSwitches = devSwitchesOn ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server'] : [];
+	const p = spawn(electronSpawnExe, [HOST_DIR, ...healSwitches, ...extraArgs], {
 		stdio: 'inherit',
 		cwd: ROOT,
 		env: electronEnv
