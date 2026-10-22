@@ -132,6 +132,33 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect(parsed3.error.message).toContain('commands')
   })
 
+  it('bug 344dd76b：控制器方法以控制器为 this 调用（官方 ApiSessionController 方法体依赖 this 实例态——裸提函数 = this undefined 抛 listState）', async () => {
+    const controller = {
+      state: { rows: SESSIONS },
+      list(this: { state: { rows: unknown[] } }) {
+        if (this === undefined || this.state === undefined) throw new TypeError("Cannot read properties of undefined (reading 'listState')")
+        return this.state.rows
+      },
+    }
+    const res = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionList }) as never,
+      res,
+      deps({ proxy: proxyDeps({ session: controller as never }) }),
+    )
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: unknown[] }
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data).toHaveLength(3)
+
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.projectsGrouped }) as never,
+      res2,
+      deps({ proxy: proxyDeps({ session: controller as never }) }),
+    )
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))

@@ -124,22 +124,26 @@ function requireMethod<F>(face: F | undefined, name: string): F {
 
 type ChannelHandler = (payload: unknown) => Promise<unknown>
 
-/** session 族直调通道（方法名 → 控制器方法绑定——逐通道表项，禁分支堆积） */
+/** session 族直调通道（方法名 → 控制器方法绑定——逐通道表项，禁分支堆积）。
+ *  bug 344dd76b：官方 ApiSessionController 方法体依赖 this 实例态（this.listState 等）——
+ *  requireMethod 裸提函数调用 = this undefined；直调一律 bind 控制器。 */
 function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelHandler> {
+  const bound = <F extends (...args: never[]) => unknown>(method: F | undefined, name: string): F =>
+    requireMethod(method, name).bind(session) as F
   return {
-    [PROXY_CHANNELS.sessionList]: async () => requireMethod(session.list, 'session.list')(undefined),
-    [PROXY_CHANNELS.sessionCreate]: async (payload) => requireMethod(session.create, 'session.create')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionPage]: async (payload) => requireMethod(session.page, 'session.page')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionPrompt]: async (payload) => requireMethod(session.prompt, 'session.prompt')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionCancel]: async (payload) => requireMethod(session.cancel, 'session.cancel')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionProjections]: async (payload) => requireMethod(session.projections, 'session.projections')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionRename]: async (payload) => requireMethod(session.rename, 'session.rename')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionFork]: async (payload) => requireMethod(session.fork, 'session.fork')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionSearch]: async (payload) => requireMethod(session.search, 'session.search')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionSelectModel]: async (payload) => requireMethod(session.selectModel, 'session.selectModel')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionModelCatalog]: async (payload) => requireMethod(session.modelCatalog, 'session.modelCatalog')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionAttachment]: async (payload) => requireMethod(session.attachment, 'session.attachment')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionUpdateQueue]: async (payload) => requireMethod(session.updateQueue, 'session.updateQueue')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionList]: async () => bound(session.list, 'session.list')(undefined as never),
+    [PROXY_CHANNELS.sessionCreate]: async (payload) => bound(session.create, 'session.create')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionPage]: async (payload) => bound(session.page, 'session.page')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionPrompt]: async (payload) => bound(session.prompt, 'session.prompt')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionCancel]: async (payload) => bound(session.cancel, 'session.cancel')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionProjections]: async (payload) => bound(session.projections, 'session.projections')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionRename]: async (payload) => bound(session.rename, 'session.rename')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionFork]: async (payload) => bound(session.fork, 'session.fork')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionSearch]: async (payload) => bound(session.search, 'session.search')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionSelectModel]: async (payload) => bound(session.selectModel, 'session.selectModel')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionModelCatalog]: async (payload) => bound(session.modelCatalog, 'session.modelCatalog')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionAttachment]: async (payload) => bound(session.attachment, 'session.attachment')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionUpdateQueue]: async (payload) => bound(session.updateQueue, 'session.updateQueue')(asRecord(payload)),
   }
 }
 
@@ -208,7 +212,8 @@ function sessionRows(listResult: unknown): Record<string, unknown>[] {
 export async function assembleGrouped(deps: Pick<ProxyChannelDeps, 'projects' | 'session' | 'worktrees'>, now: number): Promise<GroupedResult> {
   const projects = requireService(deps.projects, 'forgeProjects')
   const session = requireMethod(deps.session, 'sessionController')
-  const list = requireMethod(session.list, 'session.list')
+  // bug 344dd76b：list 同为控制器实例态方法——bind 后直调（this 语义同 session 族）
+  const list = requireMethod(session.list, 'session.list').bind(session)
   const [projectRows, listResult] = await Promise.all([projects.listProjects(), list(undefined)])
   const sessions = sessionRows(listResult)
   const assigned = new Set<Record<string, unknown>>()
