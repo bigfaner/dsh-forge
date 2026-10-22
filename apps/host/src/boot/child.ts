@@ -1089,7 +1089,15 @@ async function main(): Promise<void> {
         }
         if (tunnelManager.state === undefined) {
           diag(`[pair-diag] tunnel toggle → start（当前无活动链路）`)
-          void tunnelManager.start().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+          void tunnelManager.start()
+            .then((state) => {
+              diag(`[pair-diag] tunnel toggle start ok（${state.provider}）`)
+              sendTunnelState(state)
+            })
+            .catch((cause) => {
+              diag(`[pair-diag] tunnel toggle start 失败（撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
+              sendTunnelState(undefined)
+            })
           return
         }
         diag(`[pair-diag] tunnel toggle → 重推当前状态（读数刷新）`)
