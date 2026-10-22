@@ -48,7 +48,7 @@ import {
   recentStorageKey,
   type KeyValueStore,
 } from './views/models.ts'
-import { createTasksView } from './views/tasks.ts'
+import { createTasksView, deriveTaskRuns } from './views/tasks.ts'
 import { catalogProjection, createWorkerSessionView } from './views/worker.ts'
 import { createAskView } from './views/ask.ts'
 import { createReader } from './views/reader.ts'
@@ -304,6 +304,8 @@ export function mount(root: HTMLElement): void {
     dispose?: () => void
   }
   let rendered: RenderedView | null = null
+  /** chat 路由 FAB 帧同步退订（路由重建前清理——帧监听泄漏防护） */
+  let chatFabSync: (() => void) | null = null
 
   const openSession = (sessionId: string): void => {
     setCurrentSession(sessionId)
@@ -479,14 +481,31 @@ export function mount(root: HTMLElement): void {
     closeSettings()
     tasksHandle?.root.remove()
     tasksHandle = null
+    chatFabSync?.()
     rendered?.dispose?.()
     rendered?.root.remove()
     rendered = buildView(match)
     container.appendChild(rendered.root)
-    // 会话面 FAB（任务浮球——1.16 意图入口；chat 路由在场）
+    // 会话面 FAB（任务浮球——1.16 意图入口；chat 路由在场）。
+    // 用户裁决 2026-10-22：无任务循环的会话不展示悬浮球——可见位 = 会话日志 forge/progress
+    // 投影非空（快照装载 + 帧失效同步）。
     if (rendered.key.startsWith('chat:')) {
+      const sid = match.params['id'] ?? ''
       const fab = createFab({ onActivate: openTasks })
+      // .fab 显式 display 规则压制 hidden 属性——可见位走 style.display
+      fab.root.style.display = 'none'
+      const syncFab = (): void => {
+        fab.root.style.display = deriveTaskRuns(logCache.get(sid) ?? []).length === 0 ? 'none' : ''
+      }
+      void refreshLog(sid).then(syncFab)
+      ctx.frameListeners.add(syncFab)
+      chatFabSync = () => {
+        ctx.frameListeners.delete(syncFab)
+        chatFabSync = null
+      }
       rendered.root.appendChild(fab.root)
+    } else if (chatFabSync !== null) {
+      chatFabSync()
     }
     if (rendered.key === 'hero') void enrichHero()
   }
