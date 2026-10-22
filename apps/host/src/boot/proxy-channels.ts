@@ -292,6 +292,9 @@ export async function assembleGrouped(deps: Pick<ProxyChannelDeps, 'projects' | 
       // worktree 读法失败 = 零 worktree 行降级（归组路径仍按 wsPath 子树成立）
     }
     const members = sessions.filter((s) => !assigned.has(s) && sessionCwdInProject(typeof s['cwd'] === 'string' ? s['cwd'] as string : undefined, project.wsPath, entries, worktreeDir))
+      // bug 5b9e405b：官方 blank 会话（建了零消息——blankBit 初始 true，首条 prompt 翻转）
+      // 桌面列表不展示；grouped 同语义过滤，与桌面可见集对齐（blank 位缺席 = 兼容保留）
+      .filter((s) => s['blank'] !== true)
     for (const m of members) assigned.add(m)
     projectsOut.push({
       id: project.id,
@@ -305,7 +308,7 @@ export async function assembleGrouped(deps: Pick<ProxyChannelDeps, 'projects' | 
   return {
     generatedAt: now,
     projects: projectsOut,
-    unassigned: sortSessionsDesc(sessions.filter((s) => !assigned.has(s))),
+    unassigned: sortSessionsDesc(sessions.filter((s) => !assigned.has(s) && s['blank'] !== true)), // bug 5b9e405b 同上
   }
 }
 

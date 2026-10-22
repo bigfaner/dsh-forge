@@ -1,4 +1,4 @@
-// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
+﻿// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
 // 强制位（统一 401 唯一 owner + 填充 + diag 脱敏 + LAN 旧门维持）。
 // 纯 handler fake 面——零真实 socket（remote-http-rpc.test.ts 同型）。
 import { describe, expect, it } from 'vitest'
@@ -53,6 +53,9 @@ const SESSIONS = [
   { sessionId: 's-1', title: 'one', cwd: 'Z:/proj', running: true, updatedAt: '2026-10-18T10:00:00Z' },
   { sessionId: 's-2', title: 'two', cwd: 'Z:/proj/.forge/worktrees/wt-a', running: false, updatedAt: '2026-10-18T09:00:00Z' },
   { sessionId: 's-3', title: 'stray', cwd: 'Z:/elsewhere', running: false, updatedAt: '2026-10-18T11:00:00Z' },
+  // bug 会话数对不上：官方 blank 会话（建了零消息——blankBit 初始 true，首条 prompt 才翻转）
+  // 桌面列表不展示，grouped 同语义过滤（fixture 即官方 summary 行形状）
+  { sessionId: 's-4', title: '', cwd: 'Z:/proj', running: false, updatedAt: '2026-10-18T08:00:00Z', blank: true },
 ]
 
 const WORKTREES: WorktreeEntryDto[] = [
@@ -103,7 +106,7 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     const parsed = JSON.parse(res.body) as { ok: boolean; data: unknown[] }
     expect(res.status).toBe(200)
     expect(parsed.ok).toBe(true)
-    expect(parsed.data).toHaveLength(3)
+    expect(parsed.data).toHaveLength(4)
   })
 
   it('session-prompt：payload 直调控制器（意图信封往返）', async () => {
@@ -148,7 +151,7 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     )
     const parsed = JSON.parse(res.body) as { ok: boolean; data: unknown[] }
     expect(parsed.ok).toBe(true)
-    expect(parsed.data).toHaveLength(3)
+    expect(parsed.data).toHaveLength(4)
 
     const res2 = fakeRes()
     await handleRemoteHttpRpc(
@@ -419,7 +422,7 @@ describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）',
     expect(verifyPayload(KP.publicDer, sigMaterial(ct, iv, envelope.seq), Buffer.from(envelope.sig, 'base64'))).toBe(true)
     const plain = JSON.parse(openFrame(dk, 's2c', 'device-A', 1, envelope.seq, iv, ct).toString('utf8')) as { ok: boolean; data: unknown[] }
     expect(plain.ok).toBe(true)
-    expect(plain.data).toHaveLength(3)
+    expect(plain.data).toHaveLength(4)
     expect(wm.nextSendSeq('device-A', 1)).toBe(2) // s2c seq 单调推进
   })
 
