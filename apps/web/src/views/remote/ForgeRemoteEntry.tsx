@@ -539,22 +539,24 @@ function PskTrioRow(props: {
   readonly label: string
   readonly value: string
   readonly testId: string
-  readonly copied: boolean
-  readonly onCopy: () => void
+  readonly copied?: boolean
+  readonly onCopy?: () => void
 }): ReactNode {
   return (
     <div className="dswf-remote-psk-row" data-testid={props.testId}>
       <span className="dswf-remote-psk-label">{props.label}</span>
       <span className="dswf-remote-psk-value">{props.value}</span>
-      <Tooltip label={`复制${props.label}`} portal>
-        <button type="button" className="dswf-remote-copy" aria-label={`复制${props.label}`} onClick={props.onCopy}>
-          {props.copied ? (
-            <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
-          ) : (
-            <IconCopyOutlineRegular size={14} />
-          )}
-        </button>
-      </Tooltip>
+      {props.onCopy !== undefined && (
+        <Tooltip label={`复制${props.label}`} portal>
+          <button type="button" className="dswf-remote-copy" aria-label={`复制${props.label}`} onClick={props.onCopy}>
+            {props.copied ? (
+              <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+            ) : (
+              <IconCopyOutlineRegular size={14} />
+            )}
+          </button>
+        </Tooltip>
+      )}
     </div>
   )
 }
@@ -570,8 +572,6 @@ export function PskTrioSection(props: {
   readonly trio?: PskTrioFace
   readonly pskRead?: () => Promise<PskTrioFace | undefined>
   readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
-  /** 连接密码读数（PIN 卡同源快照——在场才携复制钮） */
-  readonly pinValue?: string
 }): ReactNode {
   const [liveTrio, setLiveTrio] = useState<PskTrioFace | undefined>(undefined)
   const [loaded, setLoaded] = useState(false)
@@ -616,7 +616,6 @@ export function PskTrioSection(props: {
     writeClipboard(value)
     setCopiedKey(key)
   }
-  const pinValue = props.pinValue
   return (
     <div className="dswf-remote-psk" data-testid="dswf-remote-psk">
       <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
@@ -650,13 +649,9 @@ export function PskTrioSection(props: {
             onCopy={() => copyField('spki', trio.spki)}
           />
           <PskTrioRow
-            label="连接密码"
-            value={pinValue ?? (trio.pinConfigured === true ? '已配置' : '未配置')}
+            label="配对 PIN（= 上方连接密码，非独立生成）"
+            value={trio.pinConfigured === true ? '已配置——手机配对面输入它即可' : '未配置——先在上方设置连接密码'}
             testId="dswf-remote-psk-pin"
-            copied={copiedKey === 'pin'}
-            onCopy={() => {
-              if (pinValue !== undefined) copyField('pin', pinValue)
-            }}
           />
           <small className="dswf-remote-pin-privacy">{PSK_GRACE_HINT_TEXT}</small>
           <div className="dswf-remote-pin-actions">
@@ -992,7 +987,6 @@ export function RemotePanel(props: {
             trio={props.trio}
             pskRead={props.pskRead}
             onPskRotate={props.onPskRotate}
-            pinValue={snapshot.pin}
           />
           </>
         ) : (
