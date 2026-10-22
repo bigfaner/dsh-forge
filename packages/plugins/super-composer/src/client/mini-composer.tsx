@@ -490,6 +490,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       <div style={{ padding: "8px 16px 12px" }}>
         <textarea
           data-testid="dscf-input"
+          data-dscf-composer-input=""
           value={draftLocal}
           onChange={(event): void => {
             const text = event.target.value

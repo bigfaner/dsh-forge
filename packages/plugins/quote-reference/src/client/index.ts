@@ -156,8 +156,10 @@ installQuoteReferenceStyles((globalThis as { document?: StyleDocument }).documen
 /**
  * 选区浮出菜单装配（sessions + document 在场前提）：
  * mouseup → scope 过滤 → primitives Menu 弹层 → insertReferenceAtTail 同径落 chip
- * → 自动聚焦对应面。全屏替身聚焦缝（focusFullscreenInput）由 super-composer 组合
- * 注入——本包不感知全屏（两包正交边界）。任一前提缺席 = 不装配（undefined）。
+ * → 自动聚焦对应面。全屏替身聚焦缝（focusFullscreenInput）经 cordis 具名服务
+ * `superComposer` 组合注入（super-composer apply 经 ctx.reflect.provide 注册——
+ * host core forgeServices 判例同缝；每点击时点惰性读取，服务缺席/替身不在场 = 回落
+ * 主 composer face。本包不感知全屏实现，只消费聚焦结果布尔）。任一前提缺席 = 不装配。
  * @param source 服务切片源（inject 兜底回调传入注入后 scope——scope 优先、ctx 兜底；
  *   直驱/快路径缺省 = ctx。Root cause: inject 回调时点服务落在注入 scope 上，
  *   重读 ctx.sessions = undefined → 菜单永不挂载）
@@ -168,12 +170,25 @@ export function mountQuoteSelectionMenu(ctx: Context, source?: unknown, quoteSou
   const sessions = readSessionsOf(origin) ?? readSessionsOf(ctx)
   const services = quoteInsertServicesFrom(ctx, source)
   if (sessions === undefined || services === undefined) return undefined
+  // 全屏替身聚焦缝：每点击时点读 cordis `superComposer` 服务（super-composer 晚于本包
+  // provide 也可达——挂载期一次性捕获会把缺席焊死）。服务/方法/调用任一漂移 = false 回落。
+  const focusFullscreenInput = (): boolean => {
+    const svc = readServiceOf(origin, 'superComposer') ?? readServiceOf(ctx, 'superComposer')
+    const focus = (svc as { focusFullscreenInput?: unknown } | null | undefined)?.focusFullscreenInput
+    if (typeof focus !== 'function') return false
+    try {
+      return (focus as () => unknown).call(svc) === true
+    } catch {
+      return false
+    }
+  }
   return mountSelectionMenu({
     doc: document,
     roots: resolveSelectionScope().selectionRoots,
     resolveSessionId: () => activeSessionIdOf(sessions.list),
     services,
     source: quoteSource ?? createQuoteReferenceSource(),
+    focusFullscreenInput,
   })
 }
 

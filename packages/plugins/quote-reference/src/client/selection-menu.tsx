@@ -250,8 +250,9 @@ export interface SelectionMenuDeps {
   readonly services: QuoteInsertServices
   /** quote trigger source（快照入池——@ 菜单候选 + serialize 全文块） */
   readonly source: QuoteReferenceSource
-  /** 全屏替身输入区聚焦面（super-composer 替身提供；缺席 = 聚焦主 composer face） */
-  readonly focusFullscreenInput?: () => void
+  /** 全屏替身输入区聚焦面（super-composer 替身提供——cordis 服务惰性读取闭包；
+   * true = 替身已聚焦；false/异常 = 替身不在场，回落主 composer face） */
+  readonly focusFullscreenInput?: () => boolean
 }
 
 /** 装配产物（撤销句柄：监听摘除 + portal 卸载；幂等）。 */
@@ -342,15 +343,17 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
       applied = false
     }
     if (applied) {
-      // 自动聚焦对应面：全屏替身在（hook 提供）→ 替身输入区；否则主 composer face
-      //（insertReferenceAtTail 已核 face 在场——聚焦同面，best effort 不回滚）。
+      // 自动聚焦对应面：全屏替身在（hook/服务提供且聚焦成功）→ 替身输入区；否则主
+      // composer face（insertReferenceAtTail 已核 face 在场——聚焦同面，best effort 不回滚）。
+      let replacementFocused = false
       if (focusFullscreenInput !== undefined) {
         try {
-          focusFullscreenInput()
+          replacementFocused = focusFullscreenInput() === true
         } catch {
-          // best effort
+          replacementFocused = false
         }
-      } else {
+      }
+      if (!replacementFocused) {
         const binding = services.sessions.binding(sessionId)
         if (binding !== undefined) {
           try {

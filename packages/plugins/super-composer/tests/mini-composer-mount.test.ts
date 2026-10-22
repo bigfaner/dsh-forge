@@ -128,6 +128,53 @@ afterEach(() => {
   setFullscreenMarker(false);
 });
 
+describe("bug 1ab2f4e6: apply 提供 superComposer 服务（cordis reflect.provide——quote-reference 全屏聚焦缝组合面）", () => {
+  function ctxWithReflect(options: { sessions?: unknown } = {}): Context {
+    const ctx = stubCtx(options) as unknown as Record<string, unknown>;
+    const provided: Record<string, unknown> = {};
+    ctx.reflect = {
+      provide: (name: string, value?: unknown) => {
+        provided[name] = value;
+        return () => undefined;
+      },
+      get: (name: string) => provided[name],
+    };
+    (ctx as { __provided: Record<string, unknown> }).__provided = provided;
+    return ctx as unknown as Context;
+  }
+
+  it("apply 经 ctx.reflect.provide('superComposer', { focusFullscreenInput }) 注册组合服务", async () => {
+    setFullscreenMarker(true);
+    const ctx = ctxWithReflect({ sessions: sessionsStub });
+    superComposerClient.apply(ctx);
+    await tick();
+    const provided = (ctx as unknown as { __provided: Record<string, unknown> }).__provided;
+    const svc = provided["superComposer"] as { focusFullscreenInput?: unknown } | undefined;
+    expect(svc, "superComposer 服务未注册——quote-reference 全屏聚焦缝零接线").toBeDefined();
+    expect(typeof svc?.focusFullscreenInput).toBe("function");
+  });
+
+  it("focusFullscreenInput：全屏替身在场 = 聚焦 dscf-input 返回 true；非全屏（替身不在场）= 返回 false", async () => {
+    setFullscreenMarker(false);
+    const ctx = ctxWithReflect({ sessions: sessionsStub });
+    superComposerClient.apply(ctx);
+    await tick();
+    const svc = (ctx as unknown as { __provided: Record<string, unknown> }).__provided["superComposer"] as {
+      focusFullscreenInput(): boolean;
+    };
+    // 非全屏：替身未渲染 → false
+    expect(svc.focusFullscreenInput()).toBe(false);
+    // 全屏激活 → 替身浮现 → 聚焦替身输入区并返回 true
+    setFullscreenMarker(true);
+    await tick();
+    await tick();
+    expect(svc.focusFullscreenInput()).toBe(true);
+    const input = document.querySelector("[data-dscf-composer-input]") as HTMLTextAreaElement | null;
+    expect(input, "替身输入区锚 [data-dscf-composer-input] 不在场").not.toBeNull();
+    expect(document.activeElement).toBe(input);
+  });
+});
+
 describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace 真实接线）", () => {
   it("apply（sessions 在场 + 全屏标记）后 DOM 在场 dscf-root/dscf-input 锚", async () => {
     setFullscreenMarker(true);

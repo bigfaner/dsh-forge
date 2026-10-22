@@ -13,6 +13,7 @@ import {
 } from '../src/client/selection-menu.js'
 import { createQuoteReferenceSource, QUOTE_REF_PREFIX, type QuoteReferenceSource } from '../src/client/quote-source.js'
 import { DEFAULT_SELECTION_ROOTS } from '../src/client/scope.js'
+import { mountQuoteSelectionMenu } from '../src/client/index.js'
 
 const PARA_TEXT = '文本引用锚定的核心是把一段选区映射为稳定描述符。'
 
@@ -234,6 +235,7 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
       services,
       focusFullscreenInput: () => {
         fullscreenFocused += 1
+        return true
       },
     })
     selectPara()
@@ -241,6 +243,25 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
     menuItems()[0]!.click()
     expect(fullscreenFocused).toBe(1)
     expect(face.focusCalls).toBe(0)
+    handle.dispose()
+  })
+
+  it('全屏面：focusFullscreenInput 返回 false（替身不在场）= 回落主 composer face 聚焦', () => {
+    const face = makeFaceSpy()
+    const { services } = makeServices(face)
+    let attempted = 0
+    const handle = mount({
+      services,
+      focusFullscreenInput: () => {
+        attempted += 1
+        return false
+      },
+    })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(attempted).toBe(1)
+    expect(face.focusCalls).toBe(1)
     handle.dispose()
   })
 
@@ -298,6 +319,86 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
     selectPara()
     document.dispatchEvent(new MouseEvent('mouseup'))
     expect(menuItems()).toHaveLength(0)
+  })
+})
+
+describe('mountQuoteSelectionMenu 生产装配（bug 1ab2f4e6 全屏聚焦缝接线）', () => {
+  /** 带 superComposer 服务的最小 ctx（cordis reflect 缝——super-composer provide 面同型）。 */
+  function ctxWithSuperComposer(focusImpl?: () => boolean): {
+    ctx: Parameters<typeof mountQuoteSelectionMenu>[0]
+    focusCalls: () => number
+    faceFocusCalls: () => number
+  } {
+    const face = makeFaceSpy()
+    const { services, bails } = makeServices(face)
+    let focused = 0
+    const ctx = {
+      sessions: {
+        list: { getSnapshot: () => ({ byId: { 's-1': { id: 's-1', retainedBy: { mainView: 1 } } } }) },
+        binding: services.sessions.binding,
+      },
+      conversation: services.conversation,
+      bail: services.bail,
+      reflect: {
+        get: (name: string) =>
+          name === 'superComposer'
+            ? {
+                focusFullscreenInput: () => {
+                  focused += 1
+                  return focusImpl === undefined ? true : focusImpl()
+                },
+              }
+            : name === 'conversation'
+              ? services.conversation
+              : undefined,
+      },
+    }
+    return { ctx: ctx as unknown as Parameters<typeof mountQuoteSelectionMenu>[0], focusCalls: () => focused, faceFocusCalls: () => face.focusCalls, bails }
+  }
+
+  it('ctx 读到 superComposer 服务 = 落 chip 聚焦替身输入（不落主 composer face）', () => {
+    const { ctx, focusCalls, faceFocusCalls, bails } = ctxWithSuperComposer()
+    const handle = mountQuoteSelectionMenu(ctx)
+    expect(handle).toBeDefined()
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(bails).toHaveLength(1)
+    expect(focusCalls()).toBe(1)
+    expect(faceFocusCalls()).toBe(0)
+    handle?.dispose()
+  })
+
+  it('superComposer 服务缺席 = 回落主 composer face 聚焦（非全屏常态）', () => {
+    const face = makeFaceSpy()
+    const { services } = makeServices(face)
+    const ctx = {
+      sessions: {
+        list: { getSnapshot: () => ({ byId: { 's-1': { id: 's-1', retainedBy: { mainView: 1 } } } }) },
+        binding: services.sessions.binding,
+      },
+      conversation: services.conversation,
+      bail: services.bail,
+      reflect: { get: (name: string) => (name === 'conversation' ? services.conversation : undefined) },
+    }
+    const handle = mountQuoteSelectionMenu(ctx as unknown as Parameters<typeof mountQuoteSelectionMenu>[0])
+    expect(handle).toBeDefined()
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(face.focusCalls).toBe(1)
+    handle?.dispose()
+  })
+
+  it('superComposer 服务在场但替身不在场（focusFullscreenInput → false）= 回落主 composer face 聚焦', () => {
+    const { ctx, focusCalls, faceFocusCalls } = ctxWithSuperComposer(() => false)
+    const handle = mountQuoteSelectionMenu(ctx)
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(focusCalls()).toBe(1)
+    expect(faceFocusCalls()).toBe(1)
+    handle?.dispose()
   })
 })
 

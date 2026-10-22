@@ -133,6 +133,36 @@ export interface MountMiniComposerOptions {
   readonly exitFullscreen?: () => void
 }
 
+/** 服务注册官方面（ctx.reflect.provide 窄面——host core forgeServices 判例同缝；
+ * reflect 缝缺席/漂移 = 静默跳过，不炸组合）。 */
+function provideServiceOnContext(ctx: Context, name: string, value: unknown): void {
+  try {
+    const reflect = (ctx as { reflect?: { provide?: (n: string, v?: unknown) => unknown } }).reflect
+    if (typeof reflect?.provide !== 'function') return
+    reflect.provide(name, value)
+  } catch {
+    // fail-soft：服务注册失败只降本面
+  }
+}
+
+/**
+ * 全屏替身输入区聚焦缝（bug 1ab2f4e6 组合面）：替身容器内 dscf 输入锚在场（= 全屏
+ * 替身已渲染，非全屏门控 render(null) 不常驻）→ 聚焦并返回 true；替身不在场/聚焦
+ * 失败 = false（quote-reference 回落主 composer face）。零 DOM 之外的全局态。
+ */
+function focusFullscreenInputOf(container: HTMLElement): () => boolean {
+  return () => {
+    const input = container.querySelector('textarea[data-dscf-composer-input]') as HTMLTextAreaElement | null
+    if (input === null) return false
+    try {
+      input.focus()
+    } catch {
+      return false
+    }
+    return true
+  }
+}
+
 /**
  * mini-composer 替身挂载（document 在场前提）：createRoot 替身容器渲染
  * MiniComposerCard——数据面 = createSuperComposerDataFace（真实服务切片：
@@ -171,6 +201,9 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     } as never,
   })
   const root = createRoot(container)
+  // bug 1ab2f4e6：全屏聚焦缝跨包组合——cordis 具名服务注册（quote-reference 每点击
+  // 时点经 ctx 读 `superComposer`；本包 provide 即正门装配，无全局变量/事件魔改）。
+  provideServiceOnContext(ctx, 'superComposer', { focusFullscreenInput: focusFullscreenInputOf(container) })
   const render = (): void => {
     // 全屏门控：非全屏呈现态不渲染替身（fullscreenMarkers=0 时不常驻——AC5）
     if (options.tracker !== undefined && !options.tracker.isFullscreen()) {
