@@ -290,15 +290,18 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     expect('pin' in absent.source.getSnapshot()).toBe(false)
   })
 
-  it('fix-17 ②：tunnelEnsure 上行 dsh-forge:remote/tunnel-toggle 并即时 refresh（tab 切换重连缝）', async () => {
+  it('fix-17 ②：tunnelEnsure 走 tunnelToggle 具名缝并即时 refresh（tab 切换重连缝——bug febc51d9 同族：域外直转不经 forge invoke allowlist）', async () => {
     const written: { channel: string; payload?: unknown }[] = []
     installed = (globalThis as { dshForge?: unknown }).dshForge
     const bridge = {
       invoke: (channel: string, payload?: unknown) => {
         written.push({ channel, payload })
         if (channel === 'forge:settings/get') return Promise.resolve({ ok: true, data: { remoteApproval: { enabled: true } } })
-        if (channel === 'dsh-forge:remote/tunnel-toggle') return Promise.resolve(true)
         return Promise.reject(new Error(`unexpected channel ${channel}`))
+      },
+      tunnelToggle: () => {
+        written.push({ channel: 'dsh-forge:remote/tunnel-toggle' })
+        return Promise.resolve(true)
       },
       getBootManifest: () => Promise.resolve({ url: 'http://127.0.0.1:1/', remoteHost: '0.0.0.0' }),
     }
@@ -333,11 +336,14 @@ describe('1.107 三件套读数/轮换面（psk-read / psk-rotate 直转）', ()
   function pskBridge(overrides: { readonly read?: unknown; readonly rotate?: unknown; readonly fail?: boolean } = {}) {
     installed = (globalThis as { dshForge?: unknown }).dshForge
     const bridge = {
-      invoke: (channel: string) => {
+      invoke: () => Promise.reject(new Error('unexpected forge invoke——域外直转须走具名缝')),
+      pskRead: () => {
         if (overrides.fail === true) return Promise.reject(new Error('boom'))
-        if (channel === 'dsh-forge:remote/psk-read') return Promise.resolve(overrides.read ?? TRIO)
-        if (channel === 'dsh-forge:remote/psk-rotate') return Promise.resolve(overrides.rotate ?? TRIO)
-        return Promise.reject(new Error(`unexpected channel ${channel}`))
+        return Promise.resolve(overrides.read ?? TRIO)
+      },
+      pskRotate: () => {
+        if (overrides.fail === true) return Promise.reject(new Error('boom'))
+        return Promise.resolve(overrides.rotate ?? TRIO)
       },
       getBootManifest: () => Promise.resolve({}),
     }
@@ -345,7 +351,7 @@ describe('1.107 三件套读数/轮换面（psk-read / psk-rotate 直转）', ()
     return buildRemoteStatusSource({} as unknown as ForgeClientCtx)
   }
 
-  it('pskRead 上行 psk-read 通道并形状收拢（display/checksum/spki 三串齐备才携带）', async () => {
+  it('pskRead 走 pskRead 具名缝并形状收拢（display/checksum/spki 三串齐备才携带）', async () => {
     const remote = pskBridge()
     await expect(remote.pskRead()).resolves.toEqual({
       display: 'ABCDE-FGHJK',
@@ -361,7 +367,7 @@ describe('1.107 三件套读数/轮换面（psk-read / psk-rotate 直转）', ()
     await expect(pskBridge({ fail: true }).pskRead()).resolves.toBeUndefined()
   })
 
-  it('pskRotate 上行 psk-rotate 通道（rotatePsk 再生成——结果即新读数）', async () => {
+  it('pskRotate 走 pskRotate 具名缝（rotatePsk 再生成——结果即新读数）', async () => {
     const next = { configured: true, display: 'NEW', checksum: 'ff00', spki: 'c3R1Yg==' }
     const remote = pskBridge({ rotate: next })
     await expect(remote.pskRotate()).resolves.toEqual({ display: 'NEW', checksum: 'ff00', spki: 'c3R1Yg==' })

@@ -1692,7 +1692,10 @@ export interface ForgeRemoteStatusFace {
   pskRotate(): Promise<PskTrioFace | undefined>
 }
 
-/** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
+/** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import）。
+ *  域外直转族（tunnel/pin/psk）= preload 具名函数直通（不经 forge invoke allowlist——
+ *  bug febc51d9 同族实证：bridge.invoke 打守卫门，dsh-forge:* 通道全数被拒且 fail-soft
+ *  掩蔽——tunnelEnsure 靠 host 装配期自动建隧道、PIN 靠 manifest 回流而长期未显形）。 */
 interface ForgePreloadBridge {
   invoke(channel: string, payload?: unknown): Promise<unknown>
   getBootManifest(): Promise<{
@@ -1709,6 +1712,12 @@ interface ForgePreloadBridge {
     remotePinExpiresAt?: number
     remotePinDurable?: boolean
   }>
+  tunnelToggle?(): Promise<void>
+  tunnelFallback?(): Promise<void>
+  pinReset?(): Promise<void>
+  pinConsent?(consent: boolean): Promise<void>
+  pskRead?(): Promise<unknown>
+  pskRotate?(): Promise<unknown>
 }
 
 /** dshForge 桥读取（缺席/形状不符 = undefined——fail-soft off 面，不炸装配） */
@@ -1746,22 +1755,6 @@ const SETTINGS_CHANNEL_SET = 'forge:settings/set'
 
 /** fix-10 断开连接通道字面量（contracts REMOTE_CHANNELS.disconnect 同源镜像——bundle 零外部 import） */
 const REMOTE_CHANNEL_DISCONNECT = 'forge:remote/disconnect'
-
-/** fix-17 ② tab 重连通道字面量（host ipc/tunnel-channel.ts TUNNEL_TOGGLE_CHANNEL 同源镜像——dshForge 域外直转面） */
-const TUNNEL_TOGGLE_CHANNEL = 'dsh-forge:remote/tunnel-toggle'
-
-/** fix-18 换线通道字面量（host ipc/tunnel-channel.ts TUNNEL_FALLBACK_CHANNEL 同源镜像——dshForge 域外直转面） */
-const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
-
-/** fix-18 PIN 重置通道字面量（host ipc/tunnel-channel.ts PIN_RESET_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
-/** fix-26 长效密码开关通道字面量（host ipc/tunnel-channel.ts PIN_CONSENT_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PIN_CONSENT_CHANNEL = 'dsh-forge:remote/pin-consent'
-
-/** 1.107 三件套读数通道字面量（host ipc/tunnel-channel.ts PSK_READ_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PSK_READ_CHANNEL = 'dsh-forge:remote/psk-read'
-/** 1.107 三件套轮换通道字面量（host ipc/tunnel-channel.ts PSK_ROTATE_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PSK_ROTATE_CHANNEL = 'dsh-forge:remote/psk-rotate'
 
 /** 读数形状守卫（dshForge 直转返回值——display/checksum/spki 三串齐备才携带；门未配置/畸形 = undefined） */
 function pskTrioFaceOf(raw: unknown): PskTrioFace | undefined {
@@ -1927,56 +1920,56 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-17 ②：tab 切换重连（tunnel-toggle 直转——结果经 manifest 轮询单源回流；失败 = false fail-soft）
+    // fix-17 ②：tab 切换重连（tunnelToggle 具名缝直转——结果经 manifest 轮询单源回流；失败 = false fail-soft）
     tunnelEnsure: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.tunnelToggle === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(TUNNEL_TOGGLE_CHANNEL))
+        .then(() => bridge.tunnelToggle!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-18 ②：显式换线（tunnel-fallback 直转——新链路经 tunnel 推送 + manifest 轮询单源回流）
+    // fix-18 ②：显式换线（tunnelFallback 具名缝直转——新链路经 tunnel 推送 + manifest 轮询单源回流）
     tunnelFallback: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.tunnelFallback === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(TUNNEL_FALLBACK_CHANNEL))
+        .then(() => bridge.tunnelFallback!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-18 ③：PIN 重置（pin-reset 直转——新 PIN 经 pair 推送 + manifest 轮询单源回流）
+    // fix-18 ③：PIN 重置（pinReset 具名缝直转——新 PIN 经 pair 推送 + manifest 轮询单源回流）
     pinReset: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.pinReset === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(PIN_RESET_CHANNEL))
+        .then(() => bridge.pinReset!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-26：长效密码开关（pin-consent 直转——durable 面经 pair 推送 + manifest 轮询单源回流）
+    // fix-26：长效密码开关（pinConsent 具名缝直转——durable 面经 pair 推送 + manifest 轮询单源回流）
     pinConsent: (consent: boolean) => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.pinConsent === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(PIN_CONSENT_CHANNEL, consent))
+        .then(() => bridge.pinConsent!(consent))
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // 1.107：三件套读数（psk-read 直转——读数即显零缓存；桥缺席/失败/门未配置 = undefined）。
-    // 失败路径显性化（console.warn——桌面壳 CONSOLE 管道可达 dev 终端）：区分桥缺席 / invoke
+    // 1.107：三件套读数（pskRead 具名缝直转——读数即显零缓存；桥/缝缺席/失败/门未配置 = undefined）。
+    // 失败路径显性化（console.warn——桌面壳 CONSOLE 管道可达 dev 终端）：区分缝缺席 / invoke
     // 拒绝 / 形状收拢失败三断点，链路诊断不再盲区。
     pskRead: () => {
       const bridge = preloadBridgeOf()
@@ -1984,8 +1977,12 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
         console.warn('[dswf-client] psk-read: preload bridge 缺席（invokeFace 未注入）')
         return Promise.resolve(undefined)
       }
+      if (bridge.pskRead === undefined) {
+        console.warn('[dswf-client] psk-read: 具名缝缺席（旧 preload bundle？）')
+        return Promise.resolve(undefined)
+      }
       return Promise.resolve()
-        .then(() => bridge.invoke(PSK_READ_CHANNEL))
+        .then(() => bridge.pskRead!())
         .then(
           (raw) => {
             const face = pskTrioFaceOf(raw)
@@ -1998,12 +1995,12 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
           },
         )
     },
-    // 1.107：三件套轮换（psk-rotate 直转——结果 = 新读数，展示面即时换新；失败 = undefined）
+    // 1.107：三件套轮换（pskRotate 具名缝直转——结果 = 新读数，展示面即时换新；失败 = undefined）
     pskRotate: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(undefined)
+      if (bridge === undefined || bridge.pskRotate === undefined) return Promise.resolve(undefined)
       return Promise.resolve()
-        .then(() => bridge.invoke(PSK_ROTATE_CHANNEL))
+        .then(() => bridge.pskRotate!())
         .then(pskTrioFaceOf, () => undefined)
     },
   }
