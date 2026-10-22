@@ -257,7 +257,7 @@ describe("insertReference（官方 scoped 事件径）", () => {
     source: "quote",
     ref: "quote:abc",
     label: "选段摘要",
-    clipboardText: "@[选段摘要](quote:abc)",
+    clipboardText: "〔引用：选段摘要〕",
   };
 
   it("bail 返回 true：tail span-CAS 载荷 + 聚焦归还", () => {
@@ -381,6 +381,78 @@ describe("mention 菜单（官方 controller 同壳）", () => {
 });
 
 // ─────────────────────────── 消息流投影（同一 session eventSource） ───────────────────────────
+
+describe("bug e9fec642：streamProjection 历史分页（loadOlder 官方缝补齐超窗 durable 历史）", () => {
+  function makePagingWorld(): {
+    world: FakeWorld;
+    loadOlder: ReturnType<typeof vi.fn>;
+  } {
+    const world = makeWorld();
+    const loadOlder = vi.fn(async () => {
+      // 官方 loadOlder 同型：异步拉页——prepend 一页更早历史 + 收敛 hasMore
+      await Promise.resolve();
+      const current = world.eventWindow.getSnapshot() as { entries: EventEntryMirror[]; hasMore?: boolean };
+      world.eventWindow.setSnapshot({
+        entries: [
+          { type: "event", event: { type: "user/message", seq: 0, data: { id: "m0", role: "user", content: [{ type: "text", text: "更早历史消息" }] } } },
+          ...current.entries,
+        ],
+        hasMore: false,
+      } as never);
+    });
+    (world.services.sessions as { binding: (id: string) => unknown }).binding = (id: string) =>
+      id === "s-1"
+        ? { sessionId: "s-1", ctx: world.actx, eventSource: world.eventWindow, session: { loadOlder } }
+        : undefined;
+    return { world, loadOlder };
+  }
+
+  it("window.hasMore=true → 经 binding.session.loadOlder 拉页；补齐后投影含更早历史", async () => {
+    const { world, loadOlder } = makePagingWorld();
+    world.eventWindow.setSnapshot({
+      entries: [{ type: "event", event: { type: "user/message", seq: 9, data: { id: "m9", role: "user", content: [{ type: "text", text: "窗口内消息" }] } } }],
+      hasMore: true,
+    } as never);
+    harness = mountWithFace(world);
+    const first = harness.face.streamProjection();
+    expect(first.messages.map((m) => m.id)).toEqual(["m9"]);
+    // 分页为 fire-and-forget 官方异步缝——微任务推进后收敛
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    const settled = harness.face.streamProjection();
+    expect(settled.messages.map((m) => m.id)).toEqual(["m0", "m9"]);
+  });
+
+  it("hasMore 收敛后不再拉页（单飞 + 终态零重复调用）；无 session 面 = 静默跳过", async () => {
+    const { world, loadOlder } = makePagingWorld();
+    world.eventWindow.setSnapshot({ entries: [], hasMore: true } as never);
+    harness = mountWithFace(world);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    harness.face.streamProjection();
+    harness.face.streamProjection();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+    // 无 session 面的 binding：投影不抛、不拉页
+    const bare = createSuperComposerDataFace({
+      sessions: {
+        binding: () => ({ sessionId: "s-1", ctx: world.actx, eventSource: world.eventWindow }),
+        list: world.services.sessions!.list,
+      },
+      conversation: world.services.conversation,
+    });
+    expect(() => bare.streamProjection()).not.toThrow();
+    bare.dispose();
+  });
+});
 
 describe("消息流投影（同一 eventSource 快照）", () => {
   it("projectEventWindow：durable user/assistant message + live-chunk 流式增量聚合", () => {

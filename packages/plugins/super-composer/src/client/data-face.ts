@@ -71,6 +71,8 @@ export interface BindingMirror {
   readonly sessionId: string
   readonly ctx: unknown
   readonly eventSource: EventSourceMirror
+  /** ISession 行为缝切片（contract/session.d.ts:122-127——loadOlder 历史分页动词） */
+  readonly session?: { readonly loadOlder?: () => Promise<unknown> }
 }
 
 /** ISessions 消费切片（binding 寻址 + list 快照） */
@@ -85,9 +87,11 @@ export interface StreamChunkMirror {
   readonly text?: string
 }
 
-/** SessionEventWindow 消费切片（contract/events.d.ts:20-63） */
+/** SessionEventWindow 消费切片（contract/events.d.ts:20-63——窗口有界：hasMore=true
+ * 表示仍有更早历史页，官方 ChatView 经 loadOlder prepend 补齐） */
 export interface EventWindowMirror {
   readonly entries: readonly EventEntryMirror[]
+  readonly hasMore?: boolean
 }
 
 export type EventEntryMirror =
@@ -306,6 +310,28 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
   // sessions.list 订阅退订（生命周期级——不在会话切换摘除面：detach 时或正处在 list
   // 通知回调内，摘自身通知源不安全且会断掉后续会话变更扇出）
   let listOff: (() => void) | undefined
+  // 历史分页单飞闩锁 + 有界上界（bug e9fec642：防重入拉页；20 页 = 官方 loadOlder
+  // 每页 ≥50 条的上万条余量，超界收敛为只投影当前窗口）
+  let drainInFlight = false
+  const DRAIN_MAX_PAGES = 20
+  const drainHistory = (binding: BindingMirror): void => {
+    if (drainInFlight) return
+    const loadOlder = binding.session?.loadOlder
+    if (typeof loadOlder !== 'function') return
+    drainInFlight = true
+    void (async () => {
+      try {
+        for (let page = 0; page < DRAIN_MAX_PAGES; page++) {
+          if (binding.eventSource.getSnapshot().hasMore !== true) return
+          await loadOlder()
+        }
+      } catch {
+        // fail-soft：loadOlder 失败（快照 openState/loadingOlder 承载）只降本面
+      } finally {
+        drainInFlight = false
+      }
+    })()
+  }
 
   const detachSessionSubs = (): void => {
     for (const off of inputOffs) {
@@ -449,11 +475,18 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
     streamProjection() {
       const binding = bindingOf(services)
       if (binding === undefined) return { messages: [], streaming: false }
+      let window: EventWindowMirror
       try {
-        return projectEventWindow(binding.eventSource.getSnapshot())
+        window = binding.eventSource.getSnapshot()
       } catch {
         return { messages: [], streaming: false }
       }
+      // bug e9fec642：窗口有界（官方 follow 开场快照截尾 maxMessages=500/turnWindow，
+      // hasMore=true = 仍有更早 durable 历史）——经 binding.session.loadOlder 官方动词
+      // 按页 prepend 补齐（fire-and-forget，每页发布驱动既有订阅重渲染），对齐官方
+      // ChatView 取数面。session 面缺席 = 静默跳过（仅投影当前窗口）。
+      if (window.hasMore === true) drainHistory(binding)
+      return projectEventWindow(window)
     },
     mention() {
       const binding = bindingOf(services)
