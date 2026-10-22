@@ -293,10 +293,34 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
   let stateSubAttached = false
   let menuSubAttached = false
   let eventSourceSubAttached = false
+  // 每会话订阅的 binding 身份（bug 1d1e07af）：活跃会话变更（sessions.list 主会话切换
+  // ∨ 同 id 会话 scope 重物化铸造新 binding）时，旧会话的 state/menu/eventSource store
+  // 永不再发布当前会话的事实——须摘旧重挂，单标志闩锁会把替身钉死在首会话的 store 上
+  //（chip 行/草稿投影「冻结」假象；官方 DOM 绑定链本身健康，face 与可见编辑器同代纪）。
+  let attachedBinding: unknown
+  // sessions.list 订阅退订（生命周期级——不在会话切换摘除面：detach 时或正处在 list
+  // 通知回调内，摘自身通知源不安全且会断掉后续会话变更扇出）
+  let listOff: (() => void) | undefined
+
+  const detachSessionSubs = (): void => {
+    for (const off of inputOffs) {
+      try {
+        off()
+      } catch {
+        // fail-soft
+      }
+    }
+    inputOffs.clear()
+    stateSubAttached = false
+    menuSubAttached = false
+    eventSourceSubAttached = false
+  }
 
   const attachSessionSubs = (listener: () => void): boolean => {
     const binding = bindingOf(services)
     if (binding === undefined) return false
+    if (attachedBinding !== undefined && attachedBinding !== binding) detachSessionSubs()
+    attachedBinding = binding
     if (!stateSubAttached) {
       const state = faceOf(services)?.state
       if (state?.subscribe !== undefined) {
@@ -344,10 +368,18 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       const list = (services.sessions as { list?: { subscribe?: (l: () => void) => () => void } } | undefined)?.list
       if (typeof list?.subscribe === 'function') {
         const off = list.subscribe(() => {
-          attachSessionSubs(listener)
-          listener()
+          // bug 1d1e07af 续：摘旧重挂不得在 sessions.list 通知循环内同步进行——循环内
+          // 触发会话 scope 解析/每会话 store 订阅变更会与官方 list-change applier
+          //（agent-preset apply → ctx 代理链）交织，真机实测 Maximum call stack 递归
+          // 爆栈；出循环微任务执行，语义不变（list 扇出仍是变更后必达）。
+          queueMicrotask(() => {
+            attachSessionSubs(listener)
+            listener()
+          })
         })
-        if (typeof off === 'function') inputOffs.add(off)
+        // bug 1d1e07af：list 退订走独立生命周期（不入 inputOffs——会话切换摘旧订阅时
+        // 不得摘掉 list 扇出源，且 detach 可发生在 list 通知回调内）
+        if (typeof off === 'function') listOff = off
       }
     } catch {
       // fail-soft
@@ -441,14 +473,14 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       if (disposed) return () => undefined
       onSources(listener)
       return () => {
-        for (const off of inputOffs) {
-          try {
-            off()
-          } catch {
-            // fail-soft
-          }
+        detachSessionSubs()
+        attachedBinding = undefined
+        try {
+          listOff?.()
+        } catch {
+          // fail-soft
         }
-        inputOffs.clear()
+        listOff = undefined
       }
     },
     syncSubscriptions(listener) {
@@ -457,14 +489,14 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
     },
     dispose() {
       disposed = true
-      for (const off of inputOffs) {
-        try {
-          off()
-        } catch {
-          // fail-soft
-        }
+      detachSessionSubs()
+      attachedBinding = undefined
+      try {
+        listOff?.()
+      } catch {
+        // fail-soft
       }
-      inputOffs.clear()
+      listOff = undefined
     },
   }
 }

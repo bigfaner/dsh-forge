@@ -470,6 +470,50 @@ describe("消息流投影（同一 eventSource 快照）", () => {
   });
 });
 
+// ─────────────────────────── 会话切换订阅重挂（bug 1d1e07af） ───────────────────────────
+
+describe("活跃会话切换订阅重挂（bug 1d1e07af：订阅闩锁首会话）", () => {
+  it("binding 变更 → 摘旧会话订阅、重挂新会话——新会话 state 发布驱动替身投影", async () => {
+    const actx1 = { tag: "actx-1" };
+    const actx2 = { tag: "actx-2" };
+    const state1 = storeOf(makeInputState({ draft: "旧会话稿" }));
+    const state2 = storeOf(makeInputState({ draft: "" }));
+    const eventWindow2 = storeOf<{ entries: EventEntryMirror[] }>({ entries: [] });
+    const face1 = { setDraft: vi.fn(), submit: vi.fn(), focus: vi.fn(), state: { getSnapshot: () => state1.getSnapshot(), subscribe: (l: () => void) => state1.subscribe(l) } };
+    const face2 = { setDraft: vi.fn(), submit: vi.fn(), focus: vi.fn(), state: { getSnapshot: () => state2.getSnapshot(), subscribe: (l: () => void) => state2.subscribe(l) } };
+    const binding1 = { sessionId: "s-1", ctx: actx1, eventSource: storeOf<{ entries: EventEntryMirror[] }>({ entries: [] }) };
+    const binding2 = { sessionId: "s-2", ctx: actx2, eventSource: eventWindow2 };
+    let listSnap: unknown = { byId: { "s-1": { id: "s-1", retainedBy: { mainView: 1 } }, "s-2": { id: "s-2", retainedBy: { mainView: 0 } } } };
+    const listSubs = new Set<() => void>();
+    const services: DataFaceServices = {
+      sessions: {
+        binding: (id: string) => (id === "s-1" ? binding1 : id === "s-2" ? binding2 : undefined),
+        list: { getSnapshot: () => listSnap, subscribe: (l: () => void) => (listSubs.add(l), () => listSubs.delete(l)) },
+      },
+      conversation: { input: { for: (a: unknown) => (a === actx1 ? face1 : a === actx2 ? face2 : undefined) } },
+    };
+    const face = createSuperComposerDataFace(services);
+    try {
+      const fired: string[] = [];
+      face.subscribe(() => fired.push(face.draftProjection().draft));
+      // 切换活跃会话 s-1 → s-2（sessions.list 快照变更通知；重挂出通知循环微任务执行）
+      await act(async () => {
+        listSnap = { byId: { "s-1": { id: "s-1", retainedBy: { mainView: 0 } }, "s-2": { id: "s-2", retainedBy: { mainView: 1 } } } };
+        Array.from(listSubs).forEach((listener) => listener());
+        await Promise.resolve();
+      });
+      // 新会话 state 发布（官方 shell.publish 径）→ 须驱动替身
+      act(() => {
+        state2.setSnapshot(makeInputState({ draft: "新会话稿", draftRev: 6, occurrences: [{ start: 0, end: 5 }] }));
+      });
+      expect(fired.at(-1)).toBe("新会话稿");
+      expect(face.draftProjection()).toEqual({ draft: "新会话稿", chipCount: 1 });
+    } finally {
+      face.dispose();
+    }
+  });
+});
+
 // ─────────────────────────── 纯函数边角 ───────────────────────────
 
 describe("纯函数边角", () => {
