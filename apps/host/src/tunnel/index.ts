@@ -67,6 +67,9 @@ export class TunnelManager {
   private readonly diagLine: (line: string) => void
   /** 各 provider 最近一次失败原因（重试/撤面诊断取证面） */
   private readonly lastFailure = new Map<TunnelProvider, string>()
+  /** 编排互斥门（bug f0550585：start/fallback/stop/自愈串行化——捕获窗内并发编排交错
+   *  = 句柄孤儿 + 面发散；后到编排等在门上，以收敛后的句柄态为基准执行） */
+  private gate: Promise<unknown> = Promise.resolve()
 
   constructor(
     private readonly deps: TunnelDeps,
@@ -90,29 +93,45 @@ export class TunnelManager {
     }
   }
 
+  /** 编排互斥入口（前序编排收敛（含失败）后才放行后到——串行不吞错） */
+  private gated<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.gate.then(op, op)
+    this.gate = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+
   /** 启动链路：cloudflared 首选，任何失败（下载/校验/起进程/URL 捕获）→ Pinggy 兜底 */
-  async start(): Promise<TunnelState> {
-    if (this.stopped) throw new Error('隧道已停机——不可复用（重建管理器再启）')
-    try {
-      return await this.startCloudflared()
-    } catch (error) {
-      if (this.stopped) throw error
-      return await this.startPinggy()
-    }
+  start(): Promise<TunnelState> {
+    if (this.stopped) return Promise.reject(new Error('隧道已停机——不可复用（重建管理器再启）'))
+    return this.gated(async () => {
+      try {
+        return await this.startCloudflared()
+      } catch (error) {
+        if (this.stopped) throw error
+        return await this.startPinggy()
+      }
+    })
   }
 
   /** 显式换线（官方 fallback 语义）：停当前链路 → 起另一条（cloudflared↔Pinggy） */
-  async fallback(): Promise<TunnelState> {
-    if (this.stopped) throw new Error('隧道已停机——不可换线')
-    const currentProvider = this.handle?.provider
-    await this.stopCurrent()
-    return currentProvider === 'pinggy' ? await this.startCloudflared() : await this.startPinggy()
+  fallback(): Promise<TunnelState> {
+    if (this.stopped) return Promise.reject(new Error('隧道已停机——不可换线'))
+    return this.gated(async () => {
+      const currentProvider = this.handle?.provider
+      await this.stopCurrent()
+      return currentProvider === 'pinggy' ? await this.startCloudflared() : await this.startPinggy()
+    })
   }
 
   /** 停机清理：杀当前句柄，置 stopped 使后续退出事件不再触发自动兜底（无孤儿） */
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
     this.stopped = true
-    await this.stopCurrent()
+    return this.gated(async () => {
+      await this.stopCurrent()
+    })
   }
 
   private async startCloudflared(): Promise<TunnelState> {
@@ -159,7 +178,9 @@ export class TunnelManager {
 
   private async handleAutoFallback(dead: TunnelHandle): Promise<void> {
     if (this.stopped || this.handle !== dead) return
-    this.handle = undefined
+    await this.gated(async () => {
+      if (this.stopped || this.handle !== dead) return // 排队期间态已收敛（stop/换线先行）——弃过期自愈
+      this.handle = undefined
     if (this.lastDeath !== undefined) this.diagLine(`[tunnel-diag] ${this.lastDeath}`)
     const same = (): Promise<TunnelState> =>
       dead.provider === 'cloudflared' ? this.startCloudflared() : this.startPinggy()
@@ -180,6 +201,8 @@ export class TunnelManager {
         this.diagLine(`[tunnel-diag] ${dead.provider} 重试失败（${String(attempt)}/${String(RETRY_LIMIT)}）：${message}`)
       }
     }
+    // 双链兜底前复查 stopped（stop() 同步置位即生效——退避/重试窗内停机不派生 ssh）
+    if (this.stopped) return
     try {
       await other()
     } catch (cause) {
@@ -191,6 +214,7 @@ export class TunnelManager {
       )
       this.emit({ provider: dead.provider, url: dead.state.url, remainingTtlMs: 0 })
     }
+    })
   }
 
   private async stopCurrent(): Promise<void> {

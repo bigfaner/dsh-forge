@@ -411,6 +411,23 @@ describe('TunnelManager 链路编排（首选/兜底/换线/停机）', () => {
     expect(manager.state?.provider).toBe('pinggy')
   })
 
+  it('bug f0550585：start 捕获窗内并发 fallback → 互斥串行（fallback 等 start 收敛再换线）——无孤儿、终态 pinggy、cloudflared 被 kill', async () => {
+    const t = makeDeps()
+    primeCloudflared(t)
+    const manager = new TunnelManager(t.deps, { localPort: 43127, captureTimeoutMs: 200 })
+    const startPending = manager.start()
+    const cf = await untilSpawn(t) // start 已起 cloudflared 进程、URL 未捕获（捕获窗）
+    const fallbackPending = manager.fallback() // 并发换线——必须排队而非交错
+    cf.feed(CF_URL) // start 收敛
+    await startPending
+    const pg = await untilSpawn(t, 2) // mutex 放行后才起 pinggy
+    pg.feed(PG_URL)
+    const state = await fallbackPending
+    expect(state.provider).toBe('pinggy')
+    expect(manager.state?.provider).toBe('pinggy')
+    expect(cf.wasKilled()).toBe(true) // start 的 cloudflared 被换线收口——无孤儿
+  })
+
   it('stop() 清理进程句柄无孤儿：kill 调用 + 退出不再触发兜底', async () => {
     const t = makeDeps()
     primeCloudflared(t)
