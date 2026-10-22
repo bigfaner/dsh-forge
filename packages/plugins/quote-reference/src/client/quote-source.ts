@@ -88,9 +88,15 @@ export function quoteIdOfRef(ref: string): string | undefined {
     : undefined
 }
 
-/** mention 明文投影：@[摘要](quote:<uuid>)——草稿/会话日志单一真相（提案 §2.3） */
-export function mentionTextOf(summary: string, id: string): string {
-  return `@[${summary}](${quoteRefOf(id)})`
+/**
+ * mention 明文投影：`〔引用：${summary}〕`——草稿/会话日志单一真相（提案 §2.3，
+ * bug aced6f28 形状改判）。Root cause: 旧形状 `@[摘要](quote:uuid)` 与官方
+ * projectUserText 硬编码投影形状集碰撞（`@[^\s]+` token 一律投影 file chip，显示名
+ * 取路径末段 = quote:uuid，点击 openFile 报文件找不到）——新形状不含 `@`/`/` 起始
+ * token，官方形状集零命中（纯文本投影），uuid 只落 `<quote>` 结构化块不入明面。
+ */
+export function mentionTextOf(summary: string, _id: string): string {
+  return `〔引用：${summary}〕`
 }
 
 /** 摘要缺省占位（永不抛错口径的兜底文案） */
@@ -120,10 +126,10 @@ export function serializeQuoteSnapshot(snapshot: QuoteSnapshot): string {
   return `${mentionTextOf(snapshot.summary, snapshot.id)}\n<quote id="${quoteRefOf(snapshot.id)}"${attr}>\n${snapshot.text}\n</quote>`
 }
 
-/** 末级回退最小块（快照缺失：mention 保留、不追加块——永不抛错口径的兜底形态） */
-export function minimalQuoteBlock(id: string, summary?: string): string {
-  const label = summary !== undefined && summary !== '' ? summary : `${id} 摘要不可用`
-  return mentionTextOf(label, id)
+/** 末级回退最小块（快照缺失：mention 保留、不追加块、uuid 不入明面——永不抛错口径的兜底形态） */
+export function minimalQuoteBlock(_id: string, summary?: string): string {
+  const label = summary !== undefined && summary !== '' ? summary : '摘要不可用'
+  return mentionTextOf(label, _id)
 }
 
 /** 快照 → 候选行投影（name=id / label=摘要 / description=来源 / hint=原文前缀预览） */
@@ -208,7 +214,7 @@ export function createQuoteReferenceSource(deps?: { readonly name?: string }): Q
           const id = quoteIdOfRef(ref)
           if (id === undefined) return ''
           const summary = snapshots.get(id)?.summary
-          return mentionTextOf(summary !== undefined && summary !== '' ? summary : `${id} 摘要不可用`, id)
+          return mentionTextOf(summary !== undefined && summary !== '' ? summary : '摘要不可用', id)
         } catch {
           return ''
         }

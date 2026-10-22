@@ -431,16 +431,18 @@ describe("bug 008d44e7: 发送钮逐位对齐官方 composer（InputBar .primary
 });
 
 describe("bug 49368004: 替身输入区 quote chip 原子渲染（textarea + 叠加 chip 层）", () => {
-  const REF = "@[文档摘要](quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3)";
+  // bug aced6f28 形状改判：序列化 mention = `〔引用：label〕`（无 @ token——官方
+  // projectUserText 形状集不命中；uuid 不入明面）。QUOTE_TOKEN_RE（mini-composer.tsx）
+  // 与 quote-reference mentionTextOf 同形镜像。
+  const REF = "〔引用：文档摘要〕";
 
-  it("分段纯函数：明文与引用段逐段拆分（raw/label/ref 保真）", () => {
+  it("分段纯函数：明文与引用段逐段拆分（raw/label 保真）", () => {
     expect(splitQuoteSegments(`前文${REF}后文`)).toEqual([
       { kind: "text", text: "前文" },
       {
         kind: "quote",
         raw: REF,
         label: "文档摘要",
-        ref: "quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3",
       },
       { kind: "text", text: "后文" },
     ]);

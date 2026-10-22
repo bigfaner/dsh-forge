@@ -74,16 +74,18 @@ export interface MiniMentionMenu {
 }
 
 /**
- * 草稿分段（bug 49368004）：quote 引用 token（`@[label](quote:uuid)`——quote-reference
- * serialize codec 形状）与普通明文拆开，供叠加层把明文段替换为原子 chip 渲染。
- * 只识别 `quote:` scheme——官方 file mention `@"path"` 语法不误伤（主 composer 中其
- * 明文投影语义与替身一致，不在本缺陷范围）。
+ * 草稿分段（bug 49368004）：quote 引用 token（`〔引用：label〕`——quote-reference
+ * mentionTextOf 序列化形状同形镜像，bug aced6f28 形状改判：旧 `@[label](quote:uuid)`
+ * 与官方 projectUserText file-chip 投影形状集碰撞且 uuid 明面暴露）与普通明文拆开，
+ * 供叠加层把明文段替换为原子 chip 渲染。
+ * 官方 file mention `@"path"` / session wire `@[..](dsh-session:..)` 语法不误伤（新
+ * 形状不含 `@`，形状集零交集）。
  */
 export type QuoteSegment =
   | { readonly kind: "text"; readonly text: string }
-  | { readonly kind: "quote"; readonly raw: string; readonly label: string; readonly ref: string }
+  | { readonly kind: "quote"; readonly raw: string; readonly label: string }
 
-const QUOTE_TOKEN_RE = /@\[([^\]\n]*)\]\((quote:[^)\s]*)\)/g
+const QUOTE_TOKEN_RE = /〔引用：([^〕\n]*)〕/g
 
 export function splitQuoteSegments(draft: string): readonly QuoteSegment[] {
   const segments: QuoteSegment[] = []
@@ -91,7 +93,7 @@ export function splitQuoteSegments(draft: string): readonly QuoteSegment[] {
   for (const match of draft.matchAll(QUOTE_TOKEN_RE)) {
     const start = match.index
     if (start > cursor) segments.push({ kind: "text", text: draft.slice(cursor, start) })
-    segments.push({ kind: "quote", raw: match[0], label: match[1] ?? "", ref: match[2] ?? "" })
+    segments.push({ kind: "quote", raw: match[0], label: match[1] ?? "" })
     cursor = start + match[0].length
   }
   if (cursor < draft.length) segments.push({ kind: "text", text: draft.slice(cursor) })

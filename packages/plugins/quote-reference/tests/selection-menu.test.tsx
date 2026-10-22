@@ -192,7 +192,9 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
     const payload = bails[0]!.payload
     expect(payload.reference.ref.startsWith(QUOTE_REF_PREFIX)).toBe(true)
     expect(payload.span).toEqual({ start: 0, end: 0, draftRev: 3 })
-    expect(payload.reference.clipboardText).toContain(QUOTE_REF_PREFIX)
+    // bug aced6f28 形状改判：clipboardText = `〔引用：…〕`——uuid 不入明面
+    expect(payload.reference.clipboardText).toContain('〔引用：')
+    expect(payload.reference.clipboardText).not.toContain(QUOTE_REF_PREFIX)
     // 快照入池（serialize 可取全文块）
     const ref = payload.reference.ref
     expect(source.codec.clipboardText(ref)).toBe(payload.reference.clipboardText)
@@ -415,7 +417,7 @@ describe('insertReferenceAtTail（同径插入纯编排——open-session 判例
         source: 'quote',
         ref: `${QUOTE_REF_PREFIX}u1`,
         label: '摘要',
-        clipboardText: '@[摘要](quote:u1)',
+        clipboardText: '〔引用：摘要〕',
       }),
     ).toBe(true)
   })
@@ -424,9 +426,9 @@ describe('insertReferenceAtTail（同径插入纯编排——open-session 判例
     const face = makeFaceSpy()
     const { services } = makeServices(face, () => {
       face.snapshot = {
-        draft: face.snapshot.draft + '@[摘要](quote:u1)',
+        draft: face.snapshot.draft + '〔引用：摘要〕',
         draftRev: face.snapshot.draftRev + 1,
-        occurrences: [...face.snapshot.occurrences, '@[摘要](quote:u1)'],
+        occurrences: [...face.snapshot.occurrences, '〔引用：摘要〕'],
       }
       return false
     })
@@ -435,7 +437,7 @@ describe('insertReferenceAtTail（同径插入纯编排——open-session 判例
         source: 'quote',
         ref: `${QUOTE_REF_PREFIX}u1`,
         label: '摘要',
-        clipboardText: '@[摘要](quote:u1)',
+        clipboardText: '〔引用：摘要〕',
       }),
     ).toBe(true)
   })
@@ -448,7 +450,7 @@ describe('insertReferenceAtTail（同径插入纯编排——open-session 判例
         source: 'quote',
         ref: `${QUOTE_REF_PREFIX}u1`,
         label: '摘要',
-        clipboardText: '@[摘要](quote:u1)',
+        clipboardText: '〔引用：摘要〕',
       }),
     ).toBe(false)
   })
@@ -461,7 +463,7 @@ describe('insertReferenceAtTail（同径插入纯编排——open-session 判例
         source: 'quote',
         ref: `${QUOTE_REF_PREFIX}u1`,
         label: '摘要',
-        clipboardText: '@[摘要](quote:u1)',
+        clipboardText: '〔引用：摘要〕',
       }),
     ).toBe(false)
   })

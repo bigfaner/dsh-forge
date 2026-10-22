@@ -92,8 +92,21 @@ describe("pick 与 codec 往返", () => {
     expect(outcome.insert.ref).toBe("quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3");
     expect(outcome.insert.source).toBe("quote");
     expect(outcome.insert.clipboardText).toBe(
-      "@[文本引用锚定的核心是…](quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3)",
+      "〔引用：文本引用锚定的核心是…〕",
     );
+  });
+
+  it("bug aced6f28：序列化 mention 形状避开官方 file-chip 投影碰撞（无 @ token、uuid 不入明面）", () => {
+    const snap = snapshot();
+    const mention = mentionTextOf(snap.summary, snap.id);
+    // 官方 projectUserText plain-token 形状集 = /(^|\s)(\/[\w-]+|@"…"|@[^\s]+)/
+    // ——mention 不得含 `@` 起始 token，亦不得含 `/` 起始 token。
+    expect(mention).not.toMatch(/@/);
+    expect(mention.trim().startsWith("/")).toBe(false);
+    // uuid 只落在 <quote> 结构化块（模型语境），mention 明文不暴露。
+    expect(mention).not.toContain(snap.id);
+    const serialized = `x ${mention} y\n${`<quote id="${quoteRefOf(snap.id)}">`}`;
+    expect(serialized).toContain("〔引用：文本引用锚定的核心是…〕");
   });
 
   it("codec 往返：pick 落快照后 clipboardText / serialize 命中全量（mention + <quote> 块）", async () => {
@@ -101,11 +114,9 @@ describe("pick 与 codec 往返", () => {
     const snap = snapshot();
     src.cacheQuoteSnapshot(snap);
     const ref = quoteRefOf(snap.id);
-    expect(src.codec.clipboardText(ref)).toBe(
-      `@[${snap.summary}](${ref})`,
-    );
+    expect(src.codec.clipboardText(ref)).toBe(`〔引用：${snap.summary}〕`);
     const serialized = await src.codec.serialize(ref, ABORT);
-    expect(serialized).toContain(`@[${snap.summary}](${ref})`);
+    expect(serialized).toContain(`〔引用：${snap.summary}〕`);
     expect(serialized).toContain(`<quote id="${ref}" source="${snap.source}">`);
     expect(serialized).toContain(snap.text);
     expect(serialized).toContain("</quote>");
@@ -123,14 +134,15 @@ describe("快照缺失回退（永不抛错）", () => {
   it("无快照 serialize 回退最小块（mention 保留、不追加 quote 块、不抛错）", async () => {
     const src = createQuoteReferenceSource();
     const serialized = await src.codec.serialize("quote:ghost", ABORT);
-    expect(serialized).toBe(mentionTextOf("ghost 摘要不可用", "ghost"));
+    expect(serialized).toBe(mentionTextOf("摘要不可用", "ghost"));
     expect(serialized).not.toContain("<quote");
   });
 
-  it("clipboardText 无快照不抛错（ref id 兜底投影）", () => {
+  it("clipboardText 无快照不抛错（uuid 不入明面的兜底投影）", () => {
     const src = createQuoteReferenceSource();
     expect(() => src.codec.clipboardText("quote:ghost")).not.toThrow();
-    expect(src.codec.clipboardText("quote:ghost")).toBe("@[ghost 摘要不可用](quote:ghost)");
+    expect(src.codec.clipboardText("quote:ghost")).toBe("〔引用：摘要不可用〕");
+    expect(src.codec.clipboardText("quote:ghost")).not.toContain("ghost");
   });
 
   it("非 quote 引用 serialize/clipboardText 安全空投影", async () => {
