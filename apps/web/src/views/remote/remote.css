@@ -856,7 +856,9 @@
   font-size: 12px; /* dsw-raw 官方地址读数 12px（xxs-12 同值） */
   line-height: 1.35; /* dsw-raw 官方 1.35 行高 */
   color: var(--dsw-alias-label-primary-bluish);
-  overflow-wrap: anywhere; /* SPKI 长串换行（复制取全文不截断） */
+  white-space: nowrap; /* 用户裁决 2026-10-22：尽量不换行——溢出省略号截断（复制取全文，悬停 title 显全文） */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dswf-remote-psk-empty {

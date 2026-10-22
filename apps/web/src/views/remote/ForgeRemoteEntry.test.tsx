@@ -681,13 +681,14 @@ describe('fix-16 RemotePanel tab 内容随模式切换', () => {
     expect(html).toContain('http://192.168.1.7:8787')
   })
 
-  it('fix-19 ⑨ internet 模式 = 官方 tunnelHint 逐字（单源 §1）；无 WiFi 文案/LAN 地址条残留', () => {
+  it('用户裁决 2026-10-22：internet 模式零说明卡（explainer 及外框移除）；无 WiFi 文案/LAN 地址条残留', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={LAN_SNAPSHOT} onToggle={() => undefined} mode="internet" />,
     )
-    expect(html).toMatch(/移动设备通过互联网（如 4G\/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等/)
+    expect(html).not.toMatch(/移动设备通过互联网/)
     expect(html).not.toMatch(/无需同一 WiFi/)
     expect(html).not.toMatch(/同一 WiFi，同步实时性高/)
+    expect(html).not.toContain('dswf-remote-note-card')
     expect(html).not.toContain('dswf-remote-address')
     expect(html).not.toContain('http://192.168.1.7:8787')
   })
@@ -783,18 +784,18 @@ describe('fix-18 ④ 切换中 QR 灰色半透明遮罩 + tab 防重入', () => 
 })
 
 describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作', () => {
-  it('PIN 读数在场：方框卡（label「连接密码」+ 大字值 + 倒计时）；非 consent 态零双钮（fix-26 ④ pin-actions 仅 consent 态显示）', () => {
+  it('PIN 读数在场：方框卡（label「配对 PIN」+ 大字值 + 倒计时）；非 consent 态零双钮（fix-26 ④ pin-actions 仅 consent 态显示）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onPinReset={() => undefined} />,
     )
     expect(html).toContain('data-testid="dswf-remote-pin"')
-    expect(html).toContain('连接密码')
+    expect(html).toContain('配对 PIN')
     expect(html).toContain('654321')
     expect(html).not.toContain('data-testid="dswf-remote-pin-reset"')
     expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 
-  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 双钮呈现（重置密码/取消长效密码）', () => {
+  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 双钮呈现（重置 PIN/取消长效 PIN）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }}
@@ -803,16 +804,16 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
         onPinConsent={() => undefined}
       />,
     )
-    expect(html).toMatch(/长效密码保存在本机，可随时重置或取消。/)
+    expect(html).toMatch(/长效 PIN 保存在本机，可随时重置或取消。/)
     expect(html).not.toMatch(/\(\d+s\)/)
     expect(html).toMatch(/dswf-remote-pin-consent[^>]*>[\s\S]*?checked/)
     expect(html).toContain('data-testid="dswf-remote-pin-reset"')
-    expect(html).toContain('重置密码')
+    expect(html).toContain('重置 PIN')
     expect(html).toContain('data-testid="dswf-remote-pin-cancel"')
-    expect(html).toContain('取消长效密码')
+    expect(html).toContain('取消长效 PIN')
   })
 
-  it('fix-26 ⑤⑧：取消钮文案 = 「取消长效密码」（官方 pinCancel 逐字）；onPinReset/onPinConsent 缺席 = 双钮禁用态（缝缺席 fail-soft）', () => {
+  it('fix-26 ⑤⑧：取消钮文案 = 「取消长效 PIN」（用户裁决 2026-10-22 词汇表）；onPinReset/onPinConsent 缺席 = 双钮禁用态（缝缺席 fail-soft）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }} mode="internet" />,
     )
@@ -832,9 +833,9 @@ describe('fix-26 走查批次（八点）', () => {
   })
 
   it('⑦⑧：hint 文案常量逐字（官方 pinHintDurable/pinHintTemp §1）', () => {
-    expect(PIN_HINT_DURABLE_TEXT).toBe('长效密码保存在本机，可随时重置或取消。')
+    expect(PIN_HINT_DURABLE_TEXT).toBe('长效 PIN 保存在本机，可随时重置或取消。')
     expect(PIN_HINT_TEMP_TEXT).toBe('5 分钟内有效，过期后需重新扫码。')
-    expect(PIN_CANCEL_TEXT).toBe('取消长效密码')
+    expect(PIN_CANCEL_TEXT).toBe('取消长效 PIN')
   })
 
   it('④ 非长效：PIN 正下方 hint = 「5 分钟内有效，过期后需重新扫码。 (Ns)」实时秒倒计时', () => {
@@ -1117,7 +1118,7 @@ describe('fix-21 §2⑥⑦⑧ PIN 方框 + 连接卡 + 说明 hint 行', () => {
   it('consent checkbox 行渲染（官方 label + 隐私 small 字）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
     expect(html).toContain('dswf-remote-pin-consent')
-    expect(html).toContain('生成长期有效的连接密码')
+    expect(html).toContain('生成长期有效的配对 PIN')
     expect(html).toContain('不上云、不写入二维码')
   })
 
@@ -1185,34 +1186,23 @@ const TRIO = { display: 'ABCDE-FGHJK-LMNOP', checksum: 'ab12', spki: 'c3R1Yg==',
 describe('1.107 连接密钥三件套段（读数即显 + 复制 + 轮换确认弹窗）', () => {
   const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
 
-  it('三件套渲染：PSK 分组 + 校验段 + SPKI + 连接密码行（各字段复制钮）+ 重新生成入口 + 宽限期 hint', () => {
+  it('三件套渲染：PSK 掩码 + 校验段 + SPKI（各字段复制钮）+ 重新生成入口 + 宽限期 hint——PIN 行已移除（用户裁决 2026-10-22）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} onPskRotate={() => Promise.resolve(TRIO)} />,
     )
     expect(html).toContain('dswf-remote-psk-display')
-    expect(html).toContain('ABCDE-FGHJK-LMNOP')
+    expect(html).not.toContain('ABCDE-FGHJK-LMNOP') // 掩码态不落明文（用户裁决：不展示私钥材料）
+    expect(html).toContain('•••••-•••••-•••••')
+    expect(html).toContain('显示连接密钥')
     expect(html).toContain('dswf-remote-psk-checksum')
     expect(html).toContain('ab12')
     expect(html).toContain('dswf-remote-psk-spki')
     expect(html).toContain('c3R1Yg==')
-    expect(html).toContain('dswf-remote-psk-pin')
-    expect(html).toContain('654321')
+    expect(html).not.toContain('dswf-remote-psk-pin')
     expect(html).not.toContain('123456')
     expect(html).toContain('dswf-remote-psk-regen')
     expect(html).toContain('重新生成')
     expect(html).toContain('5 分钟宽限期')
-  })
-
-  it('PIN 读数缺席 = 提示「已配置」行（pinConfigured 位驱动，不伪装数值）', () => {
-    const html = renderToStaticMarkup(
-      <RemotePanel
-        snapshot={{ ...TUNNEL_ONLINE, pin: undefined, pinExpiresAt: undefined }}
-        mode="internet"
-        trio={TRIO}
-        onPskRotate={() => Promise.resolve(TRIO)}
-      />,
-    )
-    expect(html).toContain('已配置')
   })
 
   it('轮换缝缺席 = 重新生成禁用态（fail-soft）；确认弹窗关合态零正文（防误触弹窗不随段渲染）', () => {
@@ -1233,10 +1223,11 @@ describe('1.107 连接密钥三件套段（读数即显 + 复制 + 轮换确认�
     expect(PSK_REGEN_CONFIRM_TITLE).toBe('重新生成连接密钥？')
   })
 
-  it('段样式：410px / 14px 圆角 / panel 底（PIN 方框同型）+ mono 值换行不省略', () => {
+  it('段样式：410px / 14px 圆角 / panel 底（PIN 方框同型）+ mono 值不换行省略（用户裁决 2026-10-22：尽量不换行）', () => {
     expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*width:\s*410px/)
     expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*border-radius:\s*14px/)
     expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
-    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*overflow-wrap:\s*anywhere/)
+    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*white-space:\s*nowrap/)
+    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*text-overflow:\s*ellipsis/)
   })
 })

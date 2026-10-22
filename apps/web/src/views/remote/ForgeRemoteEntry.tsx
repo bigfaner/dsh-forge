@@ -102,20 +102,20 @@ export const FALLBACK_LINK_TEXT = '扫码打不开？换一条线路'
 /** 换线进行中文案（官方 fallbackLoading——遮罩承载） */
 export const FALLBACK_LOADING_TEXT = '正在切换备用线路'
 /** PIN 方框 label（官方 pinLabel） */
-export const PIN_LABEL_TEXT = '连接密码'
+export const PIN_LABEL_TEXT = '配对 PIN'
 /** PIN 临时 hint 前段（官方 pinHintTemp——§1 逐字；后缀 ` (Ns)` 实时秒倒计时 fix-26 ⑧） */
 export const PIN_HINT_TEMP_TEXT = '5 分钟内有效，过期后需重新扫码。'
 /** PIN 长效 hint（官方 pinHintDurable——§1 逐字；fix-26 ⑦） */
-export const PIN_HINT_DURABLE_TEXT = '长效密码保存在本机，可随时重置或取消。'
+export const PIN_HINT_DURABLE_TEXT = '长效 PIN 保存在本机，可随时重置或取消。'
 /** PIN 重置动作逐字文案（官方 pinReset——pinIssuer rotate 缝触发） */
-export const PIN_RESET_TEXT = '重置密码'
+export const PIN_RESET_TEXT = '重置 PIN'
 /** PIN 取消动作逐字文案（官方 pinCancel——fix-26 ⑤ 对齐：解除长效回临时 PIN + QR 换新） */
-export const PIN_CANCEL_TEXT = '取消长效密码'
+export const PIN_CANCEL_TEXT = '取消长效 PIN'
 /** PIN consent checkbox label（官方 pinConsent——§1 逐字；fix-21 §2⑥ 样式对齐面，
  *  durable 后端机制 host 端点缺（§4 差值③在途）——本任务只落展示行） */
-export const PIN_CONSENT_TEXT = '生成长期有效的连接密码'
+export const PIN_CONSENT_TEXT = '生成长期有效的配对 PIN'
 /** PIN consent 隐私 small 字（官方 pinPrivacy——§1 逐字） */
-export const PIN_PRIVACY_TEXT = '长效密码只保存在本机，不上云、不写入二维码，可随时重置或取消。'
+export const PIN_PRIVACY_TEXT = '长效 PIN 只保存在本机，不上云、不写入二维码，可随时重置或取消。'
 
 // ── 1.107 互联网模式带外秘钥展示面（连接密钥三件套——位置 = 连接密码下方，用户裁决 2026-10-19） ──
 
@@ -151,9 +151,6 @@ export const PSK_EMPTY_TEXT = '连接密钥暂不可用——宿主密钥未就�
 
 /** fix-19 ⑥ 已连接态标题（官方 manageHeading——§1 逐字；dialog 标题随相位切换单源） */
 export const REMOTE_MANAGE_TITLE = '管理手机连接'
-/** fix-19 ⑨ 互联网说明文案（官方 tunnelHint——§1 逐字；产品旧语义近似文案退役） */
-export const TUNNEL_HINT_TEXT =
-  '移动设备通过互联网（如 4G/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等'
 /** fix-19 ⑨ 隧道建立中文案（官方 tunnelLoading——§1 逐字） */
 export const TUNNEL_LOADING_TEXT = '正在建立全球网络链接'
 /** fix-19 ⑨ LAN 切换 loading 文案（官方 lanLoading——§1 逐字） */
@@ -541,11 +538,21 @@ function PskTrioRow(props: {
   readonly testId: string
   readonly copied?: boolean
   readonly onCopy?: () => void
+  /** 掩码切换（私钥材料行——默认掩码，点击显/隐；公钥行不携） */
+  readonly onToggleMask?: () => void
+  readonly masked?: boolean
 }): ReactNode {
   return (
     <div className="dswf-remote-psk-row" data-testid={props.testId}>
       <span className="dswf-remote-psk-label">{props.label}</span>
-      <span className="dswf-remote-psk-value">{props.value}</span>
+      <span className="dswf-remote-psk-value" title={props.value}>{props.value}</span>
+      {props.onToggleMask !== undefined && (
+        <Tooltip label={props.masked ? '显示' : '隐藏'} portal>
+          <button type="button" className="dswf-remote-copy" aria-label={props.masked ? '显示连接密钥' : '隐藏连接密钥'} onClick={props.onToggleMask}>
+            {props.masked ? '显' : '隐'}
+          </button>
+        </Tooltip>
+      )}
       {props.onCopy !== undefined && (
         <Tooltip label={`复制${props.label}`} portal>
           <button type="button" className="dswf-remote-copy" aria-label={`复制${props.label}`} onClick={props.onCopy}>
@@ -616,6 +623,8 @@ export function PskTrioSection(props: {
     writeClipboard(value)
     setCopiedKey(key)
   }
+  // PSK 私钥材料默认掩码（用户裁决 2026-10-22「不展示私钥」——复制钮恒取全文，展示面不落明文）
+  const [pskRevealed, setPskRevealed] = useState(false)
   return (
     <div className="dswf-remote-psk" data-testid="dswf-remote-psk">
       <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
@@ -629,10 +638,12 @@ export function PskTrioSection(props: {
         <>
           <PskTrioRow
             label="连接密钥（PSK）"
-            value={trio.display}
+            value={pskRevealed ? trio.display : trio.display.replace(/[^-]/g, '•')}
             testId="dswf-remote-psk-display"
             copied={copiedKey === 'display'}
             onCopy={() => copyField('display', trio.display)}
+            onToggleMask={() => setPskRevealed((v) => !v)}
+            masked={!pskRevealed}
           />
           <PskTrioRow
             label="校验段"
@@ -647,11 +658,6 @@ export function PskTrioSection(props: {
             testId="dswf-remote-psk-spki"
             copied={copiedKey === 'spki'}
             onCopy={() => copyField('spki', trio.spki)}
-          />
-          <PskTrioRow
-            label="配对 PIN（= 上方连接密码，非独立生成）"
-            value={trio.pinConfigured === true ? '已配置——手机配对面输入它即可' : '未配置——先在上方设置连接密码'}
-            testId="dswf-remote-psk-pin"
           />
           <small className="dswf-remote-pin-privacy">{PSK_GRACE_HINT_TEXT}</small>
           <div className="dswf-remote-pin-actions">
@@ -1045,11 +1051,8 @@ export function RemotePanel(props: {
           />
         </div>
         {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
-            internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
-        {mode === 'internet' ? (
-          // fix-19 ⑨：互联网说明 = 官方 tunnelHint 逐字（§1——产品旧语义近似文案退役）
-          <p className="dswf-remote-note-card">{TUNNEL_HINT_TEXT}</p>
-        ) : (
+            internet = 无说明卡（用户裁决 2026-10-22：互联网 explainer 及外框移除） */}
+        {mode !== 'internet' && (
           <>
             {/* fix-9 ③：说明文案居中置圆角卡内 */}
             <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
