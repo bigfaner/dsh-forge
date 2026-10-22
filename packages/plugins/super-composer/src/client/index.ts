@@ -25,7 +25,7 @@ import { createRoot } from 'react-dom/client'
 import { createFullscreenTracker, type FullscreenTracker } from './fullscreen.js'
 import { MiniComposerCard } from './mini-composer.js'
 import { createSuperComposerDataFace, mentionMenuOf, miniComposerPropsOf, type SessionInputFaceMirror } from './data-face.js'
-import { installSuperComposerStyles, type StyleDocument } from './styles.js'
+import { installSuperComposerStyles, installOfficialInputStyles, type StyleDocument } from './styles.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
 export interface SuperComposerClientFace {
@@ -152,7 +152,9 @@ function provideServiceOnContext(ctx: Context, name: string, value: unknown): vo
  */
 function focusFullscreenInputOf(container: HTMLElement): () => boolean {
   return () => {
-    const input = container.querySelector('textarea[data-dscf-composer-input]') as HTMLTextAreaElement | null
+    // 复制件输入面（fix-12）：官方 DraftEditor 的 Lexical contenteditable（textarea
+    // 旧径已退役）
+    const input = container.querySelector('[data-dscf-official-input] [data-composer-input]') as HTMLElement | null
     if (input === null) return false
     try {
       input.focus()
@@ -201,6 +203,18 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     } as never,
   })
   const root = createRoot(container)
+  // 替身 composer 专用数据面（fix-12：复制件 InputBar/DraftEditor 宿主的单一订阅者
+  // ——与外层渲染扇出 face 分实例，互不覆写订阅）
+  const composerFace = createSuperComposerDataFace({
+    sessions: readSessionsOf(origin) as never ?? readSessionsOf(ctx) as never,
+    conversation: { input: { for: composerFaceOf } },
+    bail: readBailOf(ctx) ?? readBailOf(origin),
+    inputTriggers: {
+      get sessionOf(): ((actx: unknown) => never) | undefined {
+        return (readInputTriggersOf(ctx) ?? readInputTriggersOf(origin))?.sessionOf as never
+      },
+    } as never,
+  })
   // bug 1ab2f4e6：全屏聚焦缝跨包组合——cordis 具名服务注册（quote-reference 每点击
   // 时点经 ctx 读 `superComposer`；本包 provide 即正门装配，无全局变量/事件魔改）。
   provideServiceOnContext(ctx, 'superComposer', { focusFullscreenInput: focusFullscreenInputOf(container) })
@@ -218,6 +232,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
         miniComposerPropsOf(face, {
           onExitFullscreen: options.exitFullscreen ?? (() => undefined),
           mention: mentionMenuOf(face),
+          composer: composerFace,
         }),
       ),
     )
@@ -242,6 +257,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     root.unmount()
     container.remove()
     face.dispose()
+    composerFace.dispose()
   }
 }
 function mutationWatch(doc: Document): ((notify: () => void) => () => void) | undefined {
@@ -350,5 +366,7 @@ export const apply = superComposerClient.apply.bind(superComposerClient)
 
 // 样式 factory 同步段注入（§5 取一：bundle 顶层、apply 之外——官方 modules 在模块
 // factory 物化同步返回后清点未打标 <style>（claimStyles）打 data-plugin 标，停用时
-// 随卸载移除；Node/无 DOM 求值环境由 styles.ts 静默跳过）。
+// 随卸载移除；Node/无 DOM 求值环境由 styles.ts 静默跳过）。复制件官方 CSS 同段注入
+//（bundle 期 css-module 插件已把作用域化样式推入全局收集器——import 先于模块体求值）。
 installSuperComposerStyles((globalThis as { document?: StyleDocument }).document)
+installOfficialInputStyles((globalThis as { document?: StyleDocument }).document)

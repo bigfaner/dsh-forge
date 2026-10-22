@@ -154,7 +154,7 @@ describe("bug 1ab2f4e6: apply 提供 superComposer 服务（cordis reflect.provi
     expect(typeof svc?.focusFullscreenInput).toBe("function");
   });
 
-  it("focusFullscreenInput：全屏替身在场 = 聚焦 dscf-input 返回 true；非全屏（替身不在场）= 返回 false", async () => {
+  it("focusFullscreenInput：全屏替身在场 = 聚焦官方复制件输入区返回 true；非全屏（替身不在场）= 返回 false", async () => {
     setFullscreenMarker(false);
     const ctx = ctxWithReflect({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
@@ -164,30 +164,30 @@ describe("bug 1ab2f4e6: apply 提供 superComposer 服务（cordis reflect.provi
     };
     // 非全屏：替身未渲染 → false
     expect(svc.focusFullscreenInput()).toBe(false);
-    // 全屏激活 → 替身浮现 → 聚焦替身输入区并返回 true
+    // 全屏激活 → 替身浮现 → 聚焦替身输入区（官方复制件 contenteditable 锚）并返回 true
     setFullscreenMarker(true);
     await tick();
     await tick();
     expect(svc.focusFullscreenInput()).toBe(true);
-    const input = document.querySelector("[data-dscf-composer-input]") as HTMLTextAreaElement | null;
-    expect(input, "替身输入区锚 [data-dscf-composer-input] 不在场").not.toBeNull();
+    const input = document.querySelector("[data-dscf-official-input] [data-composer-input]") as HTMLElement | null;
+    expect(input, "替身输入区锚 [data-composer-input] 不在场").not.toBeNull();
     expect(document.activeElement).toBe(input);
   });
 });
 
 describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace 真实接线）", () => {
-  it("apply（sessions 在场 + 全屏标记）后 DOM 在场 dscf-root/dscf-input 锚", async () => {
+  it("apply（sessions 在场 + 全屏标记）后 DOM 在场 dscf-root/官方复制件输入锚", async () => {
     setFullscreenMarker(true);
     const ctx = stubCtx({ sessions: sessionsStub });
     superComposerClient.apply(ctx);
     await tick();
     expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
-    expect(document.querySelector('[data-testid="dscf-input"]')).not.toBeNull();
+    expect(document.querySelector('[data-dscf-official-input] [data-composer-input]')).not.toBeNull();
     const effects = (ctx as unknown as { __effects: Array<() => unknown> }).__effects;
     expect(effects.length).toBe(1);
   });
 
-  it("评审 C3：流式期发送按钮 = 禁用态 + aria-label 生成中（不再假「停止生成」标签）", async () => {
+  it("fix-12：流式期发送形态 = 官方同源（空草稿 + running → Stop 钮禁用，无 stop 面）", async () => {
     setFullscreenMarker(true);
     // transient live-chunk 在场 = streaming 投影 true（data-face projectEventWindow）
     const streamingSessions = {
@@ -213,10 +213,10 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(hotzone).not.toBeNull();
     hotzone!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await tick();
-    const send = document.querySelector('[data-testid="dscf-send"]') as HTMLButtonElement | null;
-    expect(send).not.toBeNull();
-    expect(send!.disabled, "流式期发送按钮禁用（UI 语义与行为一致）").toBe(true);
-    expect(send!.getAttribute("aria-label")).toBe("生成中");
+    // 官方同源形态：running ∧ 空草稿 → 主钮 = Stop（替身无 stop 面 = 禁用）
+    const stop = document.querySelector('[data-dscf-official-input] button[aria-label="停止生成"]') as HTMLButtonElement | null;
+    expect(stop).not.toBeNull();
+    expect(stop!.disabled, "流式期 Stop 钮禁用（替身无 stop 面，官方降级同源）").toBe(true);
   });
 
   it("disposer 收口：root.unmount 摘除替身 DOM（幂等不抛）", async () => {

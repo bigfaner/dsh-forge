@@ -25,6 +25,7 @@ import type {
   MiniComposerProps,
   MiniMentionMenu,
 } from './mini-composer.js'
+import { splitQuoteSegments } from './mini-composer.js'
 
 // ─────────────────────────── 官方面结构同型镜像 ───────────────────────────
 
@@ -40,6 +41,7 @@ export interface InputStateMirror {
   readonly draftRev: number
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   readonly occurrences?: readonly unknown[]
+  readonly queue?: readonly unknown[]
 }
 
 /** ReferenceInsert 消费切片（draft-editor contract） */
@@ -114,6 +116,8 @@ export interface TriggerControllerMirror {
   arbitrate(key: 'up' | 'down' | 'enter' | 'escape' | 'tab' | 'tabBack', composing: boolean): 'consumed' | 'pick-highlighted' | 'pass'
   pick(source: string, index: number, action?: 'pick' | 'drill'): void
   dismiss(): void
+  /** Space 仲裁（官方 controller.onSpace——复制件 keyboard.space 消费；漂移 = undefined） */
+  onSpace?(composing?: boolean): boolean
 }
 
 /** MenuState 消费切片（input-trigger core/contract.d.ts） */
@@ -239,14 +243,16 @@ export function referenceApplied(
 export interface SuperComposerDataFace {
   /** 活跃会话 binding（缺席 = undefined——全部操作降空态） */
   activeBinding(): BindingMirror | undefined
-  /** 草稿投影（draft + occurrences chip 行计数；会话缺席 = 空态） */
+  /** 草稿投影（draft + chip 计数；会话缺席 = 空态） */
   draftProjection(): { readonly draft: string; readonly chipCount: number }
+  /** 官方 input state 全量快照（复制件 surrogate-composer 的 phase/queue 消费面） */
+  inputState(): InputStateMirror | undefined
   /** 整体替换草稿（同一草稿机 setDraft 同径） */
   setDraft(text: string): void
   /** 草稿尾插入原生引用 chip（span-CAS + bail slash/input-insert-reference 官方径） */
   insertReference(reference: ReferenceInsertMirror): boolean
-  /** 进入提交（官方发送链 submit 同径——含 slash 仲裁与默认 sink） */
-  submit(): void
+  /** 进入提交（官方发送链 submit 同径——mode 透传 busyEnter 投影，含 slash 仲裁与默认 sink） */
+  submit(mode?: unknown, source?: 'click' | 'enter'): void
   /** 消息流投影（同一 eventSource 快照——durable + 流式增量 + streaming 旗标） */
   streamProjection(): { readonly messages: readonly MiniComposerMessage[]; readonly streaming: boolean }
   /** mention 官方 controller（inputTriggers.sessionOf；服务/会话缺席 = undefined） */
@@ -426,7 +432,15 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
     activeBinding: () => bindingOf(services),
     draftProjection() {
       const state = readState(services)
-      return { draft: state?.draft ?? '', chipCount: state?.occurrences?.length ?? 0 }
+      const draft = state?.draft ?? ''
+      // chip 计数双源（复制件切换后官方 editor 不再承载替身 chips）：官方 occurrences
+      // 在场取官方；替身本地 chip 的机器侧痕迹 = 草稿内引用 token（quote-reference
+      // 序列化形状）计数——两源取大（同草稿机，不会双计同一 chip）。
+      const tokenCount = splitQuoteSegments(draft).filter((s) => s.kind === 'quote').length
+      return { draft, chipCount: Math.max(state?.occurrences?.length ?? 0, tokenCount) }
+    },
+    inputState() {
+      return readState(services)
     },
     setDraft(text) {
       try {
@@ -465,9 +479,9 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       }
       return true
     },
-    submit() {
+    submit(mode, source) {
       try {
-        faceOf(services)?.submit(undefined, 'enter')
+        faceOf(services)?.submit(mode, source)
       } catch {
         // fail-soft
       }

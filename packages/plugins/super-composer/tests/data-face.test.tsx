@@ -137,10 +137,13 @@ interface Harness {
   rerender(): void;
   unmount(): void;
   face: ReturnType<typeof createSuperComposerDataFace>;
+  composerFace: ReturnType<typeof createSuperComposerDataFace>;
 }
 
 function mountWithFace(world: FakeWorld): Harness {
   const face = createSuperComposerDataFace(world.services);
+  // fix-12：替身输入面 = 官方复制件宿主的专用数据面（单订阅者——与外层渲染扇出分实例）
+  const composerFace = createSuperComposerDataFace(world.services);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -149,6 +152,7 @@ function mountWithFace(world: FakeWorld): Harness {
     const props: MiniComposerProps = {
       ...miniComposerPropsOf(face, { title: "示例会话" }),
       ...(mention === undefined ? {} : { mention }),
+      composer: composerFace,
     };
     root.render(<MiniComposerCard {...props} />);
   };
@@ -158,6 +162,7 @@ function mountWithFace(world: FakeWorld): Harness {
     root,
     container,
     face,
+    composerFace,
     rerender() {
       act(() => render());
     },
@@ -168,12 +173,19 @@ function mountWithFace(world: FakeWorld): Harness {
       });
       container.remove();
       face.dispose();
+      composerFace.dispose();
     },
   };
 }
 
 function q(h: Harness, testId: string): HTMLElement | null {
   return h.container.querySelector(`[data-testid="${testId}"]`);
+}
+
+function editorOf(h: Harness): HTMLElement {
+  const editor = h.container.querySelector("[data-dscf-official-input] [data-composer-input]");
+  if (editor === null) throw new Error("missing official composer input");
+  return editor;
 }
 
 function fireKey(target: EventTarget, key: string, init: KeyboardEventInit = {}): void {
@@ -200,15 +212,14 @@ describe("同草稿机操作（ctx.conversation.input.for(actx) 同一 facade）
     expect(harness.face.draftProjection()).toEqual({ draft: "你好", chipCount: 0 });
   });
 
-  it("草稿投影驱动卡片输入值——共享 state 快照变更 → 卡片 rerender 上屏", () => {
+  it("草稿投影驱动复制件 editor——共享 state 快照变更 → 官方机器草稿同步入复制件", () => {
     const world = makeWorld();
     harness = mountWithFace(world);
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    expect(input.value).toBe("");
+    expect(editorOf(harness).textContent).toBe("");
     act(() => {
       harness!.face.setDraft("共享草稿");
     });
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("共享草稿");
+    expect(editorOf(harness).textContent).toBe("共享草稿");
   });
 
   it("退出全屏共享无损：卡片卸载后草稿仍在共享 state——重读投影不丢", () => {
@@ -222,16 +233,20 @@ describe("同草稿机操作（ctx.conversation.input.for(actx) 同一 facade）
     face.dispose();
   });
 
-  it("occurrences 投影 chip 行：state.occurrences 增长 → 卡片 chip 行计数上屏", () => {
+  it("occurrences 投影 → chipCount 判据（叠加 chip 计数行已退役，native chip 走复制件）", () => {
     const world = makeWorld();
     harness = mountWithFace(world);
     expect(q(harness, "dscf-chips")).toBeNull();
     act(() => {
       world.inputState.setSnapshot(makeInputState({ occurrences: [{ start: 0, end: 5 }, { start: 6, end: 9 }] }));
     });
-    const chips = q(harness, "dscf-chips");
-    expect(chips?.textContent).toContain("2");
+    // chip 计数进 active 判据：无草稿无消息但有 chip → S1
+    expect(phaseOf(harness)).toBe("s1");
   });
+
+  function phaseOf(h: Harness): string {
+    return q(h, "dscf-root")!.getAttribute("data-phase") ?? "";
+  }
 
   it("submit 走官方发送链（face.submit 同径）；会话寻址失败 = fail-soft 不抛", () => {
     const world = makeWorld();
@@ -310,21 +325,14 @@ describe("mention 菜单（官方 controller 同壳）", () => {
     bare.dispose();
   });
 
-  it("track：草稿变更携带 caret + 官方 guard tier（phase 映射）", () => {
+  it("track：guard tier 映射（phase）+ 替身 trackMention 路由 controller.track", () => {
     expect(trackGuardOf("plain")).toBe("plain");
     expect(trackGuardOf("adjudicating")).toBe("claimed");
     expect(trackGuardOf("claimed")).toBe("claimed");
     expect(trackGuardOf("submitting")).toBe("frozen");
     const world = makeWorld();
     harness = mountWithFace(world);
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    act(() => {
-      // 绕过 React value tracker（原型 setter）——否则 React 判定值未变不派发 onChange
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-      setter.call(input, "/he");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    // onChange → onDraftChange(text, caret) → face.trackMention → controller.track
+    harness.face.trackMention("/he", 3);
     expect(world.track).toHaveBeenCalledWith("/he", 3, { tier: "plain" }, expect.any(Number));
   });
 
@@ -337,29 +345,28 @@ describe("mention 菜单（官方 controller 同壳）", () => {
     });
     world.arbitrate.mockImplementation((key: string) => (key === "enter" ? "pick-highlighted" : "consumed"));
     harness = mountWithFace(world);
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
+    const editor = editorOf(harness);
     expect(q(harness, "dscf-mention")).not.toBeNull();
-    fireKey(input, "ArrowDown");
+    fireKey(editor, "ArrowDown");
     expect(world.arbitrate).toHaveBeenLastCalledWith("down", false);
-    fireKey(input, "ArrowUp");
+    fireKey(editor, "ArrowUp");
     expect(world.arbitrate).toHaveBeenLastCalledWith("up", false);
-    fireKey(input, "Enter");
+    fireKey(editor, "Enter");
     expect(world.arbitrate).toHaveBeenLastCalledWith("enter", false);
     expect(world.submit).not.toHaveBeenCalled();
-    fireKey(input, "Escape");
+    fireKey(editor, "Escape");
     expect(world.arbitrate).toHaveBeenLastCalledWith("escape", false);
   });
 
-  it("键盘链（菜单开 + arbitrate pass）：Enter 落回发送链", () => {
+  it("键盘链（菜单开 + arbitrate pass）：Enter 落回发送链（复制件 keymap submit → face.submit）", () => {
     const world = makeWorld();
     world.menu.setSnapshot({ open: true, groups: [], highlight: null });
     world.arbitrate.mockReturnValue("pass");
     harness = mountWithFace(world);
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
     act(() => {
       harness!.face.setDraft("发送我");
     });
-    fireKey(input, "Enter");
+    fireKey(editorOf(harness), "Enter");
     expect(world.submit).toHaveBeenCalledTimes(1);
   });
 
@@ -492,11 +499,7 @@ describe("消息流投影（同一 eventSource 快照）", () => {
     const world = makeWorld();
     harness = mountWithFace(world);
     expect(q(harness, "dscf-messages")).toBeNull();
-    // 发送首条 → 自动展开 S2；durable user message + transient chunk 同窗投影
-    act(() => {
-      harness!.face.setDraft("问");
-    });
-    fireKey(q(harness, "dscf-input") as HTMLTextAreaElement, "Enter");
+    // durable user message + transient chunk 同窗投影 → 消息非空（可展开）→ 热区展开 S2
     act(() => {
       world.eventWindow.set({
         entries: [
@@ -504,6 +507,9 @@ describe("消息流投影（同一 eventSource 快照）", () => {
           { type: "transient", event: { type: "assistant/live-chunk", seq: 2, data: { attemptId: "a1", chunk: { type: "text-delta", text: "流" } } } },
         ],
       });
+    });
+    act(() => {
+      q(harness, "dscf-hotzone")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const messages = q(harness, "dscf-messages");
     expect(messages?.textContent).toContain("流");
@@ -523,14 +529,15 @@ describe("消息流投影（同一 eventSource 快照）", () => {
     expect(scroller.scrollTop).toBe(scroller.scrollHeight);
   });
 
-  it("发送自动展开：onSend（face.submit 径）→ 消息流展开", () => {
+  it("发送自动展开：复制件 Enter 提交（face.submit 径）→ 消息流展开", () => {
     const world = makeWorld();
+    world.menu.setSnapshot({ open: false, groups: [], highlight: null });
+    world.arbitrate.mockReturnValue("pass");
     harness = mountWithFace(world);
     act(() => {
       harness!.face.setDraft("首条");
     });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    fireKey(input, "Enter");
+    fireKey(editorOf(harness), "Enter");
     expect(world.submit).toHaveBeenCalledTimes(1);
     act(() => {
       world.eventWindow.set({
@@ -538,7 +545,6 @@ describe("消息流投影（同一 eventSource 快照）", () => {
       });
     });
     expect(q(harness, "dscf-messages")).not.toBeNull();
-    expect(q(harness, "dscf-controls")).not.toBeNull();
   });
 });
 

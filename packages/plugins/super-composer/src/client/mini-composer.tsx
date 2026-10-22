@@ -14,6 +14,8 @@
 // 自定义光标（styles.ts 注入的 svg data-uri cursor，随主题暗色锚切换），tooltip =
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SurrogateComposer } from "./official-input/surrogate-composer.js";
+import type { SuperComposerDataFace } from "./data-face.js";
 
 export type MiniComposerPhase = "s0" | "s1" | "s2" | "ball";
 
@@ -48,6 +50,11 @@ export interface MiniComposerProps {
   readonly mention?: MiniMentionMenu
   /**「⧉」退出全屏（恢复常规模式视图） */
   readonly onExitFullscreen: () => void
+  /**
+   * 替身 composer 数据面（官方 InputBar/DraftEditor 复制件宿主——挂载方为替身
+   * 创建的专用实例，单订阅者契约；缺席 = 不渲染输入区）。
+   */
+  readonly composer?: SuperComposerDataFace
   /** 空闲阈值 ms（默认 30_000；测试注入缩短） */
   readonly idleMs?: number
   /** 预告时长 ms（默认 3_000；测试注入缩短） */
@@ -157,52 +164,20 @@ function BallGlyph(): React.JSX.Element {
   )
 }
 
-/** 发送箭头图标（官方 InputBar 主钮同源 path——16×16、fill currentColor）。 */
-function SendArrowGlyph(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <path
-        d="M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
-
-/** 流式停止图标（官方 InputBar 停止钮同源——圆角方块 rect rx 3）。 */
-function StopGlyph(): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <rect x="3" y="3" width="10" height="10" rx="3" fill="currentColor" />
-    </svg>
-  )
-}
-
 /** 一体卡替身组件（状态机本体；全部样式令牌化——--dsw-alias-* 随主题）。 */
 export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const idleMs = props.idleMs ?? DEFAULT_IDLE_MS
   const previewMs = props.previewMs ?? DEFAULT_PREVIEW_MS
   const [view, setView] = useState<MiniComposerView>({ collapsed: false, expanded: false, preview: false })
+  // 输入面 = 官方 InputBar/DraftEditor 复制件（SurrogateComposer 宿主）——草稿真值
+  // 在复制件 Lexical editor（本地机器快照店），官方机器草稿经数据面双向同步
+  //（surrogate-composer.tsx 同步协议）；卡片只消费投影判据（draft/chipCount/messages）。
   const [focused, setFocused] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null)
   const [unread, setUnread] = useState(false)
-  // 输入以本地态为源（bug f863404a）：官方共享 store 对替身 setDraft 的回灌投影存在
-  // 周期性回摆（真机 fix-8 001-diag run3/run4 取证：post-setDraft 快照即时正确，~2s
-  // 周期投影回读回摆空串）——受控源落在共享投影上会被 React 回滚清空 DOM。本地态承
-  // DOM 真值，数据面经 onDraftChange 同步（即时发布已证），投影仅在外部值非本机回声
-  // 且非空时采纳（chip 插入 / 他端写入）；空串不采纳（发送清稿由本组件显式收口）。
-  const [draftLocal, setDraftLocal] = useState(props.draft)
-  const pushedRef = useRef<string | null>(null)
   const seenCountRef = useRef(0)
   const messagesRef = useRef<HTMLDivElement | null>(null)
-  const mirrorRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const external = props.draft
-    if (external === draftLocal || external === pushedRef.current || external === "") return
-    setDraftLocal(external)
-  }, [props.draft, draftLocal])
 
   const phase = derivePhase(props, view)
   const expandable = isExpandable(props)
@@ -242,19 +217,8 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     return () => clearTimeout(timer)
   }, [view.preview, idle, previewMs, setViewSafe])
 
-  const handleSend = useCallback((): void => {
-    const text = draftLocal.trim()
-    if (text === "" || props.streaming) return
-    props.onSend(text)
-    // 发送自动进入 S2（消息流展开 + 完整控件行）；本地清稿（官方 submit 同步清空
-    // 共享草稿，本地态为源须显式收口）
-    setDraftLocal("")
-    pushedRef.current = ""
-    setViewSafe({ expanded: true, preview: false })
-  }, [props, draftLocal, setViewSafe])
-
   // Esc 逐层退：S2 → S1（只留标题栏 + 输入区）→ C；球态不再动作。
-  // mention 菜单开 = 菜单 Esc 优先（官方 arbitrate 消费）——状态机不动作。
+  // mention 菜单开 = 菜单 Esc 优先（复制件 keymap 内官方 arbitrate 消费）——状态机不动作。
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || view.collapsed) return
@@ -527,169 +491,18 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         </div>
       ) : null}
 
-      {props.chipCount > 0 ? (
-        <div
-          data-testid="dscf-chips"
-          style={{ padding: "4px 16px 0", fontSize: 12, color: "var(--dsw-alias-label-tertiary)" }}
-        >
-          {props.chipCount} 个引用
-        </div>
-      ) : null}
-
-      <div style={{ position: "relative", padding: "8px 16px 12px" }}>
-        {/* 叠加 chip 层（bug 49368004，方案②——walkthrough/111-fix11-alternatives.md）：
-            textarea 文本透明 + 同度量 mirror 层逐字重绘；quote 明文段 visibility:hidden
-            保位（宽度与折行与 textarea 一致 ⇒ 光标/后续文本零错位），原位绝对覆盖原子
-            chip。脆弱点核销：折行（同字体/行高/宽度/内边距 + pre-wrap）与滚动（onScroll
-            同步 scrollTop）；余量：超长引用段跨行时 chip 只覆盖首行起位（度量为真）。 */}
-        <div
-          ref={mirrorRef}
-          data-testid="dscf-mirror"
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: "8px 16px 12px",
-            pointerEvents: "none",
-            overflow: "hidden",
-            whiteSpace: "pre-wrap",
-            wordWrap: "break-word",
-            padding: 0,
-            color: "var(--dsw-alias-label-primary)",
-            fontSize: 14,
-            lineHeight: "22px",
-          }}
-        >
-          {splitQuoteSegments(draftLocal).map((segment, index) =>
-            segment.kind === "text" ? (
-              <span key={index}>{segment.text}</span>
-            ) : (
-              <span key={index} style={{ position: "relative" }}>
-                <span style={{ visibility: "hidden" }}>{segment.raw}</span>
-                <span
-                  data-testid="dscf-quote-chip"
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 1,
-                    maxWidth: "100%",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    height: 20,
-                    padding: "0 8px",
-                    borderRadius: 999,
-                    border: "0.5px solid var(--dsw-alias-border-l2)",
-                    background: "var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04))",
-                    color: "var(--dsw-alias-label-secondary)",
-                    fontSize: 12,
-                    lineHeight: "18px",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {segment.label}
-                </span>
-              </span>
-            ),
-          )}
-        </div>
-        <textarea
-          data-testid="dscf-input"
-          data-dscf-composer-input=""
-          value={draftLocal}
-          onChange={(event): void => {
-            const text = event.target.value
-            setDraftLocal(text)
-            pushedRef.current = text
-            props.onDraftChange(text, event.target.selectionStart ?? event.target.value.length)
-          }}
-          onScroll={(event): void => {
-            // textarea 内部滚动（rows=1 多行草稿）→ mirror 同步折行对位
-            const mirror = mirrorRef.current
-            if (mirror !== null) mirror.scrollTop = event.currentTarget.scrollTop
-          }}
-          onFocus={(): void => setFocused(true)}
-          onBlur={(): void => setFocused(false)}
-          onKeyDown={(event): void => {
-            // mention 菜单开 = 官方 arbitrate 先裁（↑↓/Enter/Esc 同壳键盘链）——
-            // pass 才落回本 composer 语义（Enter 发送 / Esc 逐层退）。
-            if (props.mention?.open === true) {
-              const menuKey = mentionKeyOf(event.key)
-              if (menuKey !== null) {
-                const outcome = props.mention.onArbitrate(menuKey)
-                if (outcome !== "pass") {
-                  event.preventDefault()
-                  return
-                }
-                // pass = 官方菜单不消费（无高亮/菜单闭）——落回本 composer 键盘语义。
-                if (menuKey !== "enter" && menuKey !== "escape") return
-              }
-            }
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault()
-              handleSend()
-            }
-          }}
-          placeholder="输入消息…（Enter 发送 / Shift+Enter 换行）"
-          rows={1}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            resize: "none",
-            border: "none",
-            outline: "none",
-            background: "transparent",
-            // 文本透明（bug 49368004：可见字形由 mirror 叠加层承载）；光标显式着色
-            color: "transparent",
-            caretColor: "var(--dsw-alias-label-primary)",
-            padding: 0,
-            fontSize: 14,
-            lineHeight: "22px",
-          }}
-        />
-        {expanded ? (
-          <div
-            data-testid="dscf-controls"
-            style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6 }}
-          >
-            <button type="button" aria-label="添加附件" style={controlBtnStyle}>
-              ＋
-            </button>
-            <button type="button" aria-label="完全权限" style={controlBtnStyle}>
-              完全权限
-            </button>
-            <button type="button" aria-label="模型选择器" style={controlBtnStyle}>
-              模型
-            </button>
-            <span style={{ flex: 1 }} />
-            <button
-              type="button"
-              data-testid="dscf-send"
-              aria-label={props.streaming ? "生成中" : "发送"}
-              disabled={props.streaming}
-              onClick={handleSend}
-              style={{
-                // 官方 InputBar `.primary` 逐位对齐（bug 008d44e7；官方
-                // dsh-client-ui-conversation lib/client.js:17169 CSS 取证）：主题色
-                // 圆钮 + 白色图标 + hover/disabled 态。Root cause: 原实现引用了
-                // 官方令牌表不存在的 --dsw-alias-button-primary-fill（正确令牌 =
-                // button-info-fill），令牌未定义回落 UA 默认即黑方块。
-                flex: "none",
-                width: 34,
-                height: 34,
-                border: "none",
-                borderRadius: 999,
-                background: "var(--dsw-alias-button-info-fill)",
-                color: "#fff",
-                cursor: "pointer",
-                display: "grid",
-                placeItems: "center",
-                transition: "background-color .1s",
-              }}
-            >
-              {props.streaming ? <StopGlyph /> : <SendArrowGlyph />}
-            </button>
-          </div>
+      <div style={{ padding: "0 16px 12px" }}>
+        {/* 官方 InputBar/DraftEditor 复制件宿主（fix-12 用户裁决源码复制径）：
+            quote chip 原生原子渲染（Lexical ReferenceChipNode 装饰器 portal），发送钮/
+            输入形态与官方同源；textarea 旧径与叠加 chip 层已退役（bug 49368004 叠加层
+            方案②连同 bug 008d44e7 自绘发送钮一并退役）。 */}
+        {props.composer !== undefined ? (
+          <SurrogateComposer
+            face={props.composer}
+            streaming={props.streaming}
+            onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
+            onFocusChange={setFocused}
+          />
         ) : null}
       </div>
     </div>
@@ -707,16 +520,4 @@ const headerBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 13,
   lineHeight: "20px",
-}
-
-const controlBtnStyle: React.CSSProperties = {
-  flex: "none",
-  border: "none",
-  background: "transparent",
-  color: "var(--dsw-alias-label-tertiary)",
-  borderRadius: "var(--dsw-radius-xs, 4px)",
-  cursor: "pointer",
-  fontSize: 12,
-  lineHeight: "20px",
-  padding: "0 6px",
 }

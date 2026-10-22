@@ -3,6 +3,10 @@
 // 30s 空闲 + 3s 预告时序）。转换表逐条（proposal §UI/UX 交互规格）：
 // 标题栏热区开合 /「—」收球 /「⧉」退全屏 / Esc 逐层 / 发送自动展开 / 流式钉死 /
 // 30s 四条件 + 3s 预告（可拦截）/ 点球未读直达 S2 / 鼠标离开不收起。
+//
+// fix-12 输入面切换：官方 InputBar/DraftEditor 复制件（SurrogateComposer 宿主）——
+// textarea 旧径退役；输入/发送断言改走复制件官方面（data-composer-card / .primary
+// 官方钮 / face.setDraft·submit 官方发送链）。
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +17,8 @@ import {
   type MiniComposerProps,
 } from "../src/client/mini-composer.js";
 import { SUPER_COMPOSER_CSS } from "../src/client/styles.js";
+import type { SuperComposerDataFace } from "../src/client/data-face.js";
+import type { InputStateMirror } from "../src/client/data-face.js";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,6 +27,45 @@ interface Harness {
   container: HTMLElement;
   rerender(props: Partial<MiniComposerProps>): void;
   unmount(): void;
+}
+
+/** 替身数据面桩（单订阅者——notify 手动扇出；state 由用例直改后 notify）。 */
+function makeFace(initial?: Partial<InputStateMirror>): SuperComposerDataFace & {
+  state: InputStateMirror;
+  notify(): void;
+  setDraft: ReturnType<typeof vi.fn>;
+  submit: ReturnType<typeof vi.fn>;
+  trackMention: ReturnType<typeof vi.fn>;
+} {
+  let listener: (() => void) | null = null;
+  const face = {
+    state: { draft: "", draftRev: 0, phase: "plain" as const, occurrences: [], queue: [], ...initial },
+    notify() {
+      listener?.();
+    },
+    activeBinding: () => undefined,
+    draftProjection() {
+      return { draft: face.state.draft, chipCount: face.state.occurrences?.length ?? 0 };
+    },
+    inputState: () => face.state,
+    setDraft: vi.fn((text: string) => {
+      face.state = { ...face.state, draft: text, draftRev: face.state.draftRev + 1 };
+    }),
+    insertReference: () => false,
+    submit: vi.fn(),
+    streamProjection: () => ({ messages: [], streaming: false }),
+    mention: () => undefined,
+    trackMention: vi.fn(),
+    subscribe(l: () => void) {
+      listener = l;
+      return () => {
+        listener = null;
+      };
+    },
+    syncSubscriptions: () => true,
+    dispose: () => undefined,
+  };
+  return face as never;
 }
 
 function baseProps(): MiniComposerProps {
@@ -66,6 +111,10 @@ function q(h: Harness, testId: string): HTMLElement | null {
   return h.container.querySelector(`[data-testid="${testId}"]`);
 }
 
+function qOff(h: Harness, selector: string): HTMLElement | null {
+  return h.container.querySelector(`[data-dscf-official-input] ${selector}`);
+}
+
 function phaseOf(h: Harness): string {
   const rootNode = q(h, "dscf-root");
   if (rootNode === null) throw new Error("missing dscf-root");
@@ -103,25 +152,25 @@ afterEach(() => {
 });
 
 describe("四态派生（S0/S1/S2/C）", () => {
-  it("初始 = S0 输入卡：无标题栏、无消息流、无控件行（简易 composer）", () => {
-    harness = mount();
+  it("初始 = S0 输入卡：无标题栏、无消息流；输入面 = 官方复制件（textarea 旧径退役）", () => {
+    harness = mount({ composer: makeFace() });
     expect(phaseOf(harness)).toBe("s0");
     expect(q(harness, "dscf-header")).toBeNull();
     expect(q(harness, "dscf-messages")).toBeNull();
-    expect(q(harness, "dscf-controls")).toBeNull();
-    expect(q(harness, "dscf-input")).not.toBeNull();
+    expect(qOff(harness, "[data-composer-card]")).not.toBeNull();
+    expect(qOff(harness, "[data-composer-input]")).not.toBeNull();
+    expect(q(harness, "dscf-input")).toBeNull();
   });
 
   it.each([
     ["chip", { chipCount: 1 }],
     ["草稿", { draft: "hello" }],
     ["消息", { messages: [msg("m1", "user", "hi")] }],
-  ])("active 判据（%s）→ S1 标题栏态：标题栏在场 + composer 仍简易", (_, props) => {
-    harness = mount(props);
+  ])("active 判据（%s）→ S1 标题栏态：标题栏在场 + 输入面仍在", (_, props) => {
+    harness = mount({ ...props, composer: makeFace() });
     expect(phaseOf(harness)).toBe("s1");
     expect(q(harness, "dscf-header")).not.toBeNull();
     expect(q(harness, "dscf-messages")).toBeNull();
-    expect(q(harness, "dscf-controls")).toBeNull();
     expect(q(harness, "dscf-title")?.textContent).toContain("示例会话");
   });
 });
@@ -134,14 +183,19 @@ describe("标题栏转换", () => {
     expect(phaseOf(harness)).toBe("s1");
   });
 
-  it("发送首条消息 → 自动进入 S2（消息流 + 完整控件行）", () => {
-    harness = mount({ draft: "hi" });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    fireKey(input, "Enter");
+  it("官方发送链提交（.primary 钮）→ onSubmitted 自动进入 S2", () => {
+    const face = makeFace({ draft: "hi", draftRev: 1 });
+    harness = mount({ composer: face });
+    const send = qOff(harness, 'button[aria-label="发送消息"]') as HTMLButtonElement;
+    expect(send).not.toBeNull();
+    act(() => {
+      send.click();
+    });
+    expect(face.submit).toHaveBeenCalled();
+    // 发送落账（消息流增长 + 草稿清空）后 S2 自动展开
     harness.rerender({ draft: "", messages: [msg("m1", "user", "hi")] });
     expect(phaseOf(harness)).toBe("s2");
     expect(q(harness, "dscf-messages")).not.toBeNull();
-    expect(q(harness, "dscf-controls")).not.toBeNull();
   });
 
   it("S2 热区点击 → 收起回 S1（composer 回简易态）", () => {
@@ -152,7 +206,6 @@ describe("标题栏转换", () => {
     fire(harness, "dscf-hotzone", "click");
     expect(phaseOf(harness)).toBe("s1");
     expect(q(harness, "dscf-messages")).toBeNull();
-    expect(q(harness, "dscf-controls")).toBeNull();
   });
 
   it("S1（有消息）热区点击 → 展开进 S2", () => {
@@ -188,7 +241,7 @@ describe("Esc 逐层退", () => {
     expect(phaseOf(harness)).toBe("ball");
   });
 
-  it("S0 无标题栏：Esc 直接收球（active 前置只有 S0/S2 之外的中间层 = S1）", () => {
+  it("S0 无标题栏：Esc 直接收球", () => {
     harness = mount();
     expect(phaseOf(harness)).toBe("s0");
     fireKey(document, "Escape");
@@ -268,10 +321,11 @@ describe("30s 空闲 + 3s 预告（可拦截）", () => {
   });
 
   it("焦点在场 → 30s 不进入预告（四条件未齐）", () => {
-    harness = mount({ chipCount: 1 });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
+    const face = makeFace();
+    harness = mount({ chipCount: 1, composer: face });
+    const wrapper = harness.container.querySelector("[data-dscf-official-input]")!;
     act(() => {
-      input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      wrapper.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
     });
     act(() => {
       vi.advanceTimersByTime(60_000);
@@ -297,153 +351,41 @@ describe("30s 空闲 + 3s 预告（可拦截）", () => {
   });
 });
 
-describe("发送链与输入", () => {
-  it("Enter 发送：onSend 携带草稿 + 自动展开；Shift+Enter 不发送", () => {
-    const onSend = vi.fn();
-    harness = mount({ draft: "问题", onSend });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    fireKey(input, "Enter", { shiftKey: true });
-    expect(onSend).not.toHaveBeenCalled();
-    fireKey(input, "Enter");
-    expect(onSend).toHaveBeenCalledWith("问题");
-  });
-
-  it("空草稿 Enter 不发送", () => {
-    const onSend = vi.fn();
-    harness = mount({ onSend });
-    fireKey(q(harness, "dscf-input") as HTMLTextAreaElement, "Enter");
-    expect(onSend).not.toHaveBeenCalled();
-  });
-
-  it("输入触发 onDraftChange", () => {
-    const onDraftChange = vi.fn();
-    harness = mount({ onDraftChange });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    // React value tracker 拦截直接赋值（视为无变化而吞掉 onChange）——走原型原生
-    // setter 绕过 tracker，再派发 input 事件（testing-library 同款配方）。
-    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-    nativeSetter.call(input, "x");
+describe("发送链与输入（官方复制件面）", () => {
+  it("官方机器草稿 → 复制件 editor 回灌（共享草稿同步入复制件）", () => {
+    const face = makeFace();
+    harness = mount({ composer: face });
     act(() => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      face.state = { ...face.state, draft: "外部草稿", draftRev: 3 };
+      face.notify();
     });
-    // 1.7 起 onDraftChange 携带 caret（mention 官方 track 检测入口的光标偏移）
-    expect(onDraftChange).toHaveBeenCalledWith("x", expect.any(Number));
+    expect(qOff(harness, "[data-composer-input]")!.textContent).toContain("外部草稿");
   });
 
-  it("流式中发送钮 = 禁用态（评审 C3：不再假「停止」标签），点击不重复提交", () => {
-    const onSend = vi.fn();
-    harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true, onSend });
+  it("流式中空草稿 = 官方 Stop 钮（禁用，无 stop 面）；非空草稿 = 发送（busy Enter 同径）", () => {
+    const face = makeFace();
+    harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true, composer: face });
     fire(harness, "dscf-hotzone", "click");
-    const send = q(harness, "dscf-send") as HTMLButtonElement;
-    expect(send.disabled).toBe(true);
-    expect(send.getAttribute("aria-label")).toBe("生成中");
-    fire(harness, "dscf-send", "click");
-    expect(onSend).not.toHaveBeenCalled();
-  });
-});
-
-describe("bug f863404a: 输入以本地态为源（官方投影回摆不清空 textarea）", () => {
-  const nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-
-  function typeInto(h: Harness, text: string): void {
-    const input = q(h, "dscf-input") as HTMLTextAreaElement;
-    nativeSetter.call(input, text);
+    const stop = qOff(harness, 'button[aria-label="停止生成"]') as HTMLButtonElement;
+    expect(stop).not.toBeNull();
+    expect(stop.disabled).toBe(true);
+    // 非空草稿 = busy Send（官方 submission policy：queue 投影）
     act(() => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      face.state = { ...face.state, draft: "追 加", draftRev: 1 };
+      face.notify();
     });
-  }
-
-  it("输入后 props.draft 回摆空串：textarea 保持所键文本（受控回读链不回滚）", () => {
-    harness = mount();
-    typeInto(harness, "回读样本");
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("回读样本");
-    // 官方 store 周期性回摆（真机 run3/run4 取证）：投影重渲染以旧值回灌
-    harness.rerender({ draft: "" });
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("回读样本");
-  });
-
-  it("外部非空草稿变更（chip 插入径）采纳投影：textarea 跟随增长", () => {
-    harness = mount();
-    typeInto(harness, "abc");
-    harness.rerender({ draft: "abc@\"docs/x.md\"" });
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("abc@\"docs/x.md\"");
-  });
-
-  it("本机输入回声（props.draft 回灌同值）不抖动", () => {
-    harness = mount();
-    typeInto(harness, "abc");
-    harness.rerender({ draft: "abc" });
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("abc");
-  });
-
-  it("发送后本地清稿：textarea 清空且 onSend 携带所键文本", () => {
-    const onSend = vi.fn();
-    harness = mount({ onSend });
-    typeInto(harness, "替身发送样本");
-    fireKey(q(harness, "dscf-input") as HTMLTextAreaElement, "Enter");
-    expect(onSend).toHaveBeenCalledWith("替身发送样本");
-    expect((q(harness, "dscf-input") as HTMLTextAreaElement).value).toBe("");
+    const send = qOff(harness, 'button[aria-label="排队发送"]') as HTMLButtonElement;
+    expect(send).not.toBeNull();
   });
 });
 
-describe("bug 008d44e7: 发送钮逐位对齐官方 composer（InputBar .primary 形态）", () => {
-  function openS2(): Harness {
-    harness = mount({ messages: [msg("m1", "user", "hi")], draft: "" });
-    fire(harness, "dscf-hotzone", "click");
-    return harness;
-  }
-
-  it("发送钮 = 官方主题色圆钮：info-fill 令牌背景 + #fff + 999px 圆 + 34×34 + 右下定位", () => {
-    openS2();
-    const send = q(harness, "dscf-send") as HTMLButtonElement;
-    const style = send.style;
-    expect(style.background).toContain("var(--dsw-alias-button-info-fill)");
-    expect(style.color).toBe("#fff");
-    expect(style.borderRadius).toBe("999px");
-    expect(style.width).toBe("34px");
-    expect(style.height).toBe("34px");
-    // 右下定位：控件行内 flex 尾随（前置 flex:1 占位把钮推到行尾=卡体右下）
-    const row = q(harness, "dscf-controls")!;
-    expect(row.children[row.children.length - 1]).toBe(send);
-    // 官方 transition / hover / disabled 态令牌
-    expect(style.transition).toContain("background-color");
-  });
-
-  it("发送钮图标 = 官方 16×16 svg 箭头（viewBox 0 0 16 16），非文本字形", () => {
-    openS2();
-    const send = q(harness, "dscf-send")!;
-    const svg = send.querySelector("svg");
-    expect(svg).not.toBeNull();
-    expect(svg!.getAttribute("viewBox")).toBe("0 0 16 16");
-    expect(svg!.getAttribute("width")).toBe("16");
-    expect(send.textContent!.trim()).not.toContain("↑");
-  });
-
-  it("流式停止图标 = 官方圆角方块 rect（rx 3），非文本「■」", () => {
-    harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true });
-    fire(harness, "dscf-hotzone", "click");
-    const send = q(harness, "dscf-send")!;
-    const rect = send.querySelector("svg rect");
-    expect(rect).not.toBeNull();
-    expect(rect!.getAttribute("rx")).toBe("3");
-    expect(send.textContent!.trim()).not.toContain("■");
-  });
-});
-
-describe("bug 49368004: 替身输入区 quote chip 原子渲染（textarea + 叠加 chip 层）", () => {
-  // bug aced6f28 形状改判：序列化 mention = `〔引用：label〕`（无 @ token——官方
-  // projectUserText 形状集不命中；uuid 不入明面）。QUOTE_TOKEN_RE（mini-composer.tsx）
-  // 与 quote-reference mentionTextOf 同形镜像。
+describe("fix-12: quote chip 原生原子渲染（Lexical ReferenceChipNode，叠加层退役）", () => {
   const REF = "〔引用：文档摘要〕";
 
   it("分段纯函数：明文与引用段逐段拆分（raw/label 保真）", () => {
     expect(splitQuoteSegments(`前文${REF}后文`)).toEqual([
       { kind: "text", text: "前文" },
-      {
-        kind: "quote",
-        raw: REF,
-        label: "文档摘要",
-      },
+      { kind: "quote", raw: REF, label: "文档摘要" },
       { kind: "text", text: "后文" },
     ]);
   });
@@ -454,52 +396,28 @@ describe("bug 49368004: 替身输入区 quote chip 原子渲染（textarea + 叠
     ]);
   });
 
-  it("有 quote 引用：mirror 层在场 + 原子 chip 件（label 形态，非明文 token）", () => {
-    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
-    const mirror = q(harness, "dscf-mirror");
-    expect(mirror).not.toBeNull();
-    expect(mirror!.getAttribute("aria-hidden")).toBe("true");
-    const chip = q(harness, "dscf-quote-chip")!;
-    expect(chip).not.toBeNull();
-    expect(chip.textContent).toBe("文档摘要");
-    // 原子形态：圆角 pill + 明文段隐藏（visibility hidden 保位，chip 绝对覆盖）
-    expect(chip.style.borderRadius).toBe("999px");
-    expect(chip.style.position).toBe("absolute");
-  });
-
-  it("明文 token 不直接可见：引用段原文 visibility:hidden，textarea 文本透明 + mirror 不拦截指针", () => {
-    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
-    const hidden = harness.container.querySelector('[data-testid="dscf-mirror"] span[style*="visibility"]') ??
-      [...harness.container.querySelectorAll('[data-testid="dscf-mirror"] span')].find((s) => (s as HTMLElement).style.visibility === "hidden");
-    expect(hidden).toBeDefined();
-    expect((hidden as HTMLElement).textContent).toBe(REF);
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    expect(input.style.color).toBe("transparent");
-    expect(input.style.caretColor).toContain("var(--dsw-alias");
-    const mirror = q(harness, "dscf-mirror")!;
-    expect(mirror.style.pointerEvents).toBe("none");
-  });
-
-  it("无引用草稿：mirror 在场但无 chip 件（纯透传）", () => {
-    harness = mount({ draft: "普通文本" });
-    expect(q(harness, "dscf-mirror")).not.toBeNull();
-    expect(q(harness, "dscf-quote-chip")).toBeNull();
-  });
-
-  it("「N 个引用」计数行不受影响（叠加层不改动 chipCount 投影）", () => {
-    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
-    expect(q(harness, "dscf-chips")?.textContent).toContain("1 个引用");
-  });
-
-  it("textarea 滚动同步 mirror（rows=1 多行草稿折行对位）", () => {
-    harness = mount({ draft: `前${REF}后` });
-    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
-    const mirror = q(harness, "dscf-mirror") as HTMLElement;
-    input.scrollTop = 22;
+  it("官方机器草稿含 quote token → 复制件以原生 chip 呈现（非明文 token）", () => {
+    const face = makeFace({ draft: `前${REF}后`, draftRev: 1 });
+    harness = mount({ composer: face });
     act(() => {
-      input.dispatchEvent(new Event("scroll", { bubbles: true }));
+      face.notify();
     });
-    expect(mirror.scrollTop).toBe(22);
+    const editorRoot = qOff(harness, "[data-composer-input]")!;
+    expect(editorRoot.textContent).toContain("前");
+    expect(editorRoot.textContent).toContain("后");
+    // 原子 chip：官方 ReferenceChip portal 在场（label 形态），明文 token 不见裸形
+    const chip = harness.container.querySelector("[data-dscf-official-input] .dsh-composer-reference-chip, [data-dscf-official-input] [class*='reference']");
+    expect(chip).not.toBeNull();
+    expect(harness.container.querySelector("[data-dscf-official-input]")!.textContent).toContain("文档摘要");
+    expect(editorRoot.textContent).not.toContain("〔引用：");
+  });
+
+  it("叠加 chip 层旧径退役（dscf-mirror / dscf-quote-chip / dscf-chips 计数行不在场）", () => {
+    const face = makeFace({ draft: `前${REF}后`, draftRev: 1 });
+    harness = mount({ composer: face, chipCount: 1 });
+    expect(q(harness, "dscf-mirror")).toBeNull();
+    expect(q(harness, "dscf-quote-chip")).toBeNull();
+    expect(q(harness, "dscf-chips")).toBeNull();
   });
 });
 
