@@ -159,6 +159,41 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
   })
 
+  it('bug 017b0e5b：commands/userQuestions 服务方法以服务为 this 调用（commands.list 官方实现 this.view 依赖实例态）', async () => {
+    const commandsService = {
+      rows: [{ name: 'bound-cmd' }],
+      list(this: { rows: { name: string }[] }) {
+        if (this === undefined || this.rows === undefined) throw new TypeError('this-lost: commands.list')
+        return this.rows
+      },
+      execute: async () => ({ executed: true }),
+    }
+    const res = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.commandsList }) as never,
+      res,
+      deps({ proxy: proxyDeps({ commands: commandsService as never }) }),
+    )
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { name: string }[] }
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data[0]?.name).toBe('bound-cmd')
+
+    const questionsService = {
+      answered: true,
+      answer(this: { answered: boolean }) {
+        if (this === undefined || this.answered === undefined) throw new TypeError('this-lost: userQuestions.answer')
+        return Promise.resolve({ answered: this.answered })
+      },
+    }
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.userQuestionsAnswer, payload: { questionId: 'q1', answer: 'a' } }) as never,
+      res2,
+      deps({ proxy: proxyDeps({ userQuestions: questionsService as never }) }),
+    )
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))

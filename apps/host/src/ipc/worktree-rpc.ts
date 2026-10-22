@@ -954,7 +954,8 @@ export function createWorktreeRpcService(deps: {
           if (existingBinding !== null && norm(existingBinding.worktreePath) === norm(target)) {
             const selfController = deps.sessionController
             if (selfController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法投递 prompt')
-            return (selfController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+            // bug 017b0e5b：裸提调用丢 this（拦截层箭头包装时被掩盖，dispose 恢复官方原方法即暴露）
+            return (selfController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(selfController)(
               { ...(request as Record<string, unknown>), sessionId },
               ...args,
             )
@@ -968,7 +969,7 @@ export function createWorktreeRpcService(deps: {
           })
           const productController = deps.sessionController
           if (productController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法重路由 prompt')
-          const result = await (productController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+          const result = await (productController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(productController)(
             { ...(request as Record<string, unknown>), sessionId: product.sessionId },
             ...args,
           )

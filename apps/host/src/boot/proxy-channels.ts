@@ -312,9 +312,19 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
   const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session) : {}
   return {
     ...sessionTable,
-    [PROXY_CHANNELS.commandsList]: async (payload) => requireMethod(requireService(deps.commands, 'commands').list, 'commands.list')(payload ?? {}),
-    [PROXY_CHANNELS.commandsExecute]: async (payload) => requireMethod(requireService(deps.commands, 'commands').execute, 'commands.execute')(asRecord(payload)),
-    [PROXY_CHANNELS.userQuestionsAnswer]: async (payload) => requireMethod(requireService(deps.userQuestions, 'userQuestions').answer, 'userQuestions.answer')(asRecord(payload)),
+    // bug 017b0e5b：commands.list 官方实现 this.view(agent) 依赖实例态——同 344dd76b 一律 bind 后直调
+    [PROXY_CHANNELS.commandsList]: (payload) => {
+      const commands = requireService(deps.commands, 'commands')
+      return requireMethod(commands.list, 'commands.list').bind(commands)(payload ?? {})
+    },
+    [PROXY_CHANNELS.commandsExecute]: (payload) => {
+      const commands = requireService(deps.commands, 'commands')
+      return requireMethod(commands.execute, 'commands.execute').bind(commands)(asRecord(payload))
+    },
+    [PROXY_CHANNELS.userQuestionsAnswer]: (payload) => {
+      const questions = requireService(deps.userQuestions, 'userQuestions')
+      return requireMethod(questions.answer, 'userQuestions.answer').bind(questions)(asRecord(payload))
+    },
     [PROXY_CHANNELS.projectsGrouped]: async () => assembleGrouped(deps, Date.now()),
     [PROXY_CHANNELS.approval]: async (payload) =>
       deps.forwardApproval !== undefined
