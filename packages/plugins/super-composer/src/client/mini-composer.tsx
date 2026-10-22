@@ -73,6 +73,31 @@ export interface MiniMentionMenu {
   onPick(source: string, index: number): void
 }
 
+/**
+ * 草稿分段（bug 49368004）：quote 引用 token（`@[label](quote:uuid)`——quote-reference
+ * serialize codec 形状）与普通明文拆开，供叠加层把明文段替换为原子 chip 渲染。
+ * 只识别 `quote:` scheme——官方 file mention `@"path"` 语法不误伤（主 composer 中其
+ * 明文投影语义与替身一致，不在本缺陷范围）。
+ */
+export type QuoteSegment =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "quote"; readonly raw: string; readonly label: string; readonly ref: string }
+
+const QUOTE_TOKEN_RE = /@\[([^\]\n]*)\]\((quote:[^)\s]*)\)/g
+
+export function splitQuoteSegments(draft: string): readonly QuoteSegment[] {
+  const segments: QuoteSegment[] = []
+  let cursor = 0
+  for (const match of draft.matchAll(QUOTE_TOKEN_RE)) {
+    const start = match.index
+    if (start > cursor) segments.push({ kind: "text", text: draft.slice(cursor, start) })
+    segments.push({ kind: "quote", raw: match[0], label: match[1] ?? "", ref: match[2] ?? "" })
+    cursor = start + match[0].length
+  }
+  if (cursor < draft.length) segments.push({ kind: "text", text: draft.slice(cursor) })
+  return segments
+}
+
 /** 菜单键盘键 → 官方 arbitrate key（同壳键盘词汇——ArrowUp/Down 归一）。 */
 export function mentionKeyOf(key: string): "up" | "down" | "enter" | "escape" | null {
   if (key === "ArrowUp") return "up"
@@ -169,6 +194,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const pushedRef = useRef<string | null>(null)
   const seenCountRef = useRef(0)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  const mirrorRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const external = props.draft
@@ -508,7 +534,63 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         </div>
       ) : null}
 
-      <div style={{ padding: "8px 16px 12px" }}>
+      <div style={{ position: "relative", padding: "8px 16px 12px" }}>
+        {/* 叠加 chip 层（bug 49368004，方案②——walkthrough/111-fix11-alternatives.md）：
+            textarea 文本透明 + 同度量 mirror 层逐字重绘；quote 明文段 visibility:hidden
+            保位（宽度与折行与 textarea 一致 ⇒ 光标/后续文本零错位），原位绝对覆盖原子
+            chip。脆弱点核销：折行（同字体/行高/宽度/内边距 + pre-wrap）与滚动（onScroll
+            同步 scrollTop）；余量：超长引用段跨行时 chip 只覆盖首行起位（度量为真）。 */}
+        <div
+          ref={mirrorRef}
+          data-testid="dscf-mirror"
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: "8px 16px 12px",
+            pointerEvents: "none",
+            overflow: "hidden",
+            whiteSpace: "pre-wrap",
+            wordWrap: "break-word",
+            padding: 0,
+            color: "var(--dsw-alias-label-primary)",
+            fontSize: 14,
+            lineHeight: "22px",
+          }}
+        >
+          {splitQuoteSegments(draftLocal).map((segment, index) =>
+            segment.kind === "text" ? (
+              <span key={index}>{segment.text}</span>
+            ) : (
+              <span key={index} style={{ position: "relative" }}>
+                <span style={{ visibility: "hidden" }}>{segment.raw}</span>
+                <span
+                  data-testid="dscf-quote-chip"
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 1,
+                    maxWidth: "100%",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    height: 20,
+                    padding: "0 8px",
+                    borderRadius: 999,
+                    border: "0.5px solid var(--dsw-alias-border-l2)",
+                    background: "var(--dsw-alias-bg-layer-2, rgba(0,0,0,.04))",
+                    color: "var(--dsw-alias-label-secondary)",
+                    fontSize: 12,
+                    lineHeight: "18px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {segment.label}
+                </span>
+              </span>
+            ),
+          )}
+        </div>
         <textarea
           data-testid="dscf-input"
           data-dscf-composer-input=""
@@ -518,6 +600,11 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
             setDraftLocal(text)
             pushedRef.current = text
             props.onDraftChange(text, event.target.selectionStart ?? event.target.value.length)
+          }}
+          onScroll={(event): void => {
+            // textarea 内部滚动（rows=1 多行草稿）→ mirror 同步折行对位
+            const mirror = mirrorRef.current
+            if (mirror !== null) mirror.scrollTop = event.currentTarget.scrollTop
           }}
           onFocus={(): void => setFocused(true)}
           onBlur={(): void => setFocused(false)}
@@ -550,7 +637,10 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
             border: "none",
             outline: "none",
             background: "transparent",
-            color: "var(--dsw-alias-label-primary)",
+            // 文本透明（bug 49368004：可见字形由 mirror 叠加层承载）；光标显式着色
+            color: "transparent",
+            caretColor: "var(--dsw-alias-label-primary)",
+            padding: 0,
             fontSize: 14,
             lineHeight: "22px",
           }}

@@ -31,6 +31,8 @@ export const SUPER_COMPOSER_CSS = [
   `body[data-ds-dark-theme] .dscf-hotzone.dscf-hotzone-expand { cursor: ${chevronCursor("up", DARK)}; }`,
   `body[data-ds-dark-theme] .dscf-hotzone.dscf-hotzone-collapse { cursor: ${chevronCursor("down", DARK)}; }`,
   `[data-testid="dscf-root"] { transition: opacity .2s var(--ds-ease-in-out, ease); }`,
+  // placeholder 显式着色（bug 49368004：textarea color 透明化后 placeholder 不得跟随透明）
+  `[data-dscf-composer-input]::placeholder { color: var(--dsw-alias-label-tertiary); }`,
   "",
 ].join("\n")
 

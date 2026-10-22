@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MiniComposerCard,
+  splitQuoteSegments,
   type MiniComposerMessage,
   type MiniComposerProps,
 } from "../src/client/mini-composer.js";
@@ -426,6 +427,77 @@ describe("bug 008d44e7: 发送钮逐位对齐官方 composer（InputBar .primary
     expect(rect).not.toBeNull();
     expect(rect!.getAttribute("rx")).toBe("3");
     expect(send.textContent!.trim()).not.toContain("■");
+  });
+});
+
+describe("bug 49368004: 替身输入区 quote chip 原子渲染（textarea + 叠加 chip 层）", () => {
+  const REF = "@[文档摘要](quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3)";
+
+  it("分段纯函数：明文与引用段逐段拆分（raw/label/ref 保真）", () => {
+    expect(splitQuoteSegments(`前文${REF}后文`)).toEqual([
+      { kind: "text", text: "前文" },
+      {
+        kind: "quote",
+        raw: REF,
+        label: "文档摘要",
+        ref: "quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3",
+      },
+      { kind: "text", text: "后文" },
+    ]);
+  });
+
+  it("无引用草稿 = 单明文段（不误伤 @\"path\" 官方 file mention 语法）", () => {
+    expect(splitQuoteSegments('看 @"docs/x.md" 即可')).toEqual([
+      { kind: "text", text: '看 @"docs/x.md" 即可' },
+    ]);
+  });
+
+  it("有 quote 引用：mirror 层在场 + 原子 chip 件（label 形态，非明文 token）", () => {
+    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
+    const mirror = q(harness, "dscf-mirror");
+    expect(mirror).not.toBeNull();
+    expect(mirror!.getAttribute("aria-hidden")).toBe("true");
+    const chip = q(harness, "dscf-quote-chip")!;
+    expect(chip).not.toBeNull();
+    expect(chip.textContent).toBe("文档摘要");
+    // 原子形态：圆角 pill + 明文段隐藏（visibility hidden 保位，chip 绝对覆盖）
+    expect(chip.style.borderRadius).toBe("999px");
+    expect(chip.style.position).toBe("absolute");
+  });
+
+  it("明文 token 不直接可见：引用段原文 visibility:hidden，textarea 文本透明 + mirror 不拦截指针", () => {
+    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
+    const hidden = harness.container.querySelector('[data-testid="dscf-mirror"] span[style*="visibility"]') ??
+      [...harness.container.querySelectorAll('[data-testid="dscf-mirror"] span')].find((s) => (s as HTMLElement).style.visibility === "hidden");
+    expect(hidden).toBeDefined();
+    expect((hidden as HTMLElement).textContent).toBe(REF);
+    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
+    expect(input.style.color).toBe("transparent");
+    expect(input.style.caretColor).toContain("var(--dsw-alias");
+    const mirror = q(harness, "dscf-mirror")!;
+    expect(mirror.style.pointerEvents).toBe("none");
+  });
+
+  it("无引用草稿：mirror 在场但无 chip 件（纯透传）", () => {
+    harness = mount({ draft: "普通文本" });
+    expect(q(harness, "dscf-mirror")).not.toBeNull();
+    expect(q(harness, "dscf-quote-chip")).toBeNull();
+  });
+
+  it("「N 个引用」计数行不受影响（叠加层不改动 chipCount 投影）", () => {
+    harness = mount({ draft: `前${REF}后`, chipCount: 1 });
+    expect(q(harness, "dscf-chips")?.textContent).toContain("1 个引用");
+  });
+
+  it("textarea 滚动同步 mirror（rows=1 多行草稿折行对位）", () => {
+    harness = mount({ draft: `前${REF}后` });
+    const input = q(harness, "dscf-input") as HTMLTextAreaElement;
+    const mirror = q(harness, "dscf-mirror") as HTMLElement;
+    input.scrollTop = 22;
+    act(() => {
+      input.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(mirror.scrollTop).toBe(22);
   });
 });
 
