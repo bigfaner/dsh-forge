@@ -25,6 +25,8 @@ export interface TunnelManagerOptions {
   captureTimeoutMs?: number
   /** cloudflared 种子候选（官方 DSH Desktop 已下载二进制——校验一致则拷贝进产品缓存，非运行期引用） */
   externalSeeds?: readonly string[]
+  /** 诊断行出口（harness.log 链——死亡原因/重试失败/双链皆败撤面原因可观测）；缺省 = 静默 */
+  diag?: (line: string) => void
 }
 
 export interface TunnelHandle {
@@ -36,6 +38,25 @@ export interface TunnelHandle {
 /** 链路事件订阅（换线/失效横幅消费面）；返回退订器 */
 export type TunnelEventListener = (state: TunnelState) => void
 
+/** 同链路意外死亡后的退避重试上限（原始 + ≤2 次重试）与节奏（1s/4s 指数退避） */
+const RETRY_LIMIT = 2
+const RETRY_BACKOFF_MS = [1_000, 4_000] as const
+/** diag 行内输出截断上界（末行 stderr 取证——防异常超长行刷爆日志） */
+const DEATH_LINE_MAX = 200
+
+/** 意外死亡原因行（exit code + 末行输出——快速隧道闪断取证面） */
+function deathReason(provider: TunnelProvider, code: number | null, lastLine: string | undefined): string {
+  const tail =
+    lastLine !== undefined
+      ? `，末行输出：${lastLine.length > DEATH_LINE_MAX ? `${lastLine.slice(0, DEATH_LINE_MAX)}…` : lastLine}`
+      : ''
+  return `${provider} 进程意外退出（code=${String(code)}${tail}）`
+}
+
+function causeMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
+}
+
 export class TunnelManager {
   private handle: TunnelHandle | undefined
   private stopped = false
@@ -43,6 +64,9 @@ export class TunnelManager {
   private readonly captureTimeoutMs: number
   private readonly localPort: number
   private readonly externalSeeds: readonly string[]
+  private readonly diagLine: (line: string) => void
+  /** 各 provider 最近一次失败原因（重试/撤面诊断取证面） */
+  private readonly lastFailure = new Map<TunnelProvider, string>()
 
   constructor(
     private readonly deps: TunnelDeps,
@@ -51,6 +75,7 @@ export class TunnelManager {
     this.localPort = options.localPort
     this.captureTimeoutMs = options.captureTimeoutMs ?? 15_000
     this.externalSeeds = options.externalSeeds ?? []
+    this.diagLine = options.diag ?? (() => {})
   }
 
   /** 当前链路状态（未启动/已停 = undefined） */
@@ -111,24 +136,59 @@ export class TunnelManager {
     return await this.attach({ provider: 'pinggy', state, process: tunnel.process })
   }
 
-  /** 挂接当前句柄 + 自动兜底：链路进程意外退出（非停机）→ 自动切另一条 */
+  /**
+   * 挂接当前句柄 + 韧性状态机：链路进程意外退出（非停机）→ 同链路退避重试（≤2 次，
+   * 1s/4s）→ 仍败切另一 provider 兜底。attach 期追踪末行输出——死亡原因（exit code +
+   * 末行 stderr）落诊断。
+   */
   private async attach(handle: TunnelHandle): Promise<TunnelState> {
     this.handle = handle
     this.emit(handle.state)
-    handle.process.onExit(() => {
+    let lastLine: string | undefined
+    handle.process.onLine((line) => {
+      if (line.trim() !== '') lastLine = line
+    })
+    handle.process.onExit((code) => {
+      this.lastDeath = deathReason(handle.provider, code, lastLine)
       void this.handleAutoFallback(handle)
     })
     return handle.state
   }
 
+  private lastDeath: string | undefined
+
   private async handleAutoFallback(dead: TunnelHandle): Promise<void> {
     if (this.stopped || this.handle !== dead) return
     this.handle = undefined
+    if (this.lastDeath !== undefined) this.diagLine(`[tunnel-diag] ${this.lastDeath}`)
+    const same = (): Promise<TunnelState> =>
+      dead.provider === 'cloudflared' ? this.startCloudflared() : this.startPinggy()
+    const otherProvider: TunnelProvider = dead.provider === 'cloudflared' ? 'pinggy' : 'cloudflared'
+    const other = (): Promise<TunnelState> =>
+      otherProvider === 'cloudflared' ? this.startCloudflared() : this.startPinggy()
+    // 同链路退避重试（≤2 次，1s/4s——快速隧道闪断自愈）；stopped 即弃（无复活竞态）
+    for (let attempt = 1; attempt <= RETRY_LIMIT; attempt++) {
+      if (this.stopped) return
+      await this.deps.sleep(RETRY_BACKOFF_MS[attempt - 1] ?? 4_000)
+      if (this.stopped) return
+      try {
+        await same()
+        return
+      } catch (cause) {
+        const message = causeMessage(cause)
+        this.lastFailure.set(dead.provider, message)
+        this.diagLine(`[tunnel-diag] ${dead.provider} 重试失败（${String(attempt)}/${String(RETRY_LIMIT)}）：${message}`)
+      }
+    }
     try {
-      if (dead.provider === 'cloudflared') await this.startPinggy()
-      else await this.startCloudflared()
-    } catch {
-      // 双链路皆不可用——保持停机态（state undefined），横幅消费面可见失效
+      await other()
+    } catch (cause) {
+      this.lastFailure.set(otherProvider, causeMessage(cause))
+      // 双链路皆败撤面前：最后一次各链失败原因均落诊断行（fix-19 ⑦ 死亡 emit 消费面不变）
+      this.diagLine(
+        `[tunnel-diag] 双链路皆败撤面：${dead.provider} 最后失败=${this.lastFailure.get(dead.provider) ?? '未知'}；` +
+          `${otherProvider} 最后失败=${this.lastFailure.get(otherProvider) ?? '未知'}`,
+      )
       this.emit({ provider: dead.provider, url: dead.state.url, remainingTtlMs: 0 })
     }
   }

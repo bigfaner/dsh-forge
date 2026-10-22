@@ -269,6 +269,7 @@ function createNodeTunnelDeps(): TunnelDeps {
       return createChildProcessHandle(child)
     },
     now: Date.now,
+    sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
   }
 }
 
@@ -1058,6 +1059,8 @@ async function main(): Promise<void> {
           // bug be04ce95：dsh-desktop 已下载的 cloudflared 作种子（sha256 对 pin 清单校验
           // 一致才拷贝进产品自身缓存——非运行期引用，用户无 dsh 时纯下载链自洽）
           externalSeeds: officialCloudflaredSeedCandidates(),
+          // 韧性状态机诊断行（死亡原因/重试失败/双链皆败撤面）→ harness.log 既有链
+          diag: (line) => diag(line),
         })
         tunnelManager.onEvent(sendTunnelState)
         void tunnelManager
