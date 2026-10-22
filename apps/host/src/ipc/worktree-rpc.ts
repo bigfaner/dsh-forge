@@ -1005,6 +1005,12 @@ export function createWorktreeRpcService(deps: {
     // 空串直达预铸深处由 requireNonEmpty 抛无业务语义的 TypeError（bug b6b88f49）。
     // 挂靠事件契约 = 分支非空（一 worktree 一分支），落空即显式拒绝、不落半截预铸会话。
     if (branch === '') {
+      // bug 488e860d 存量选中自愈（host 侧）：拒绝即摘 lastSelection 中该树记忆——
+      // 桌面 create-wrap 每次首条消息按 selected() 携带 worktreePath，不清则同一
+      // 不可挂靠树失败循环（fail-open 每次都带同一路径）。
+      for (const [key, value] of lastSelection) {
+        if (norm(value) === norm(cwd)) lastSelection.delete(key)
+      }
       throw new Error(`worktree 分支解析失败（detached HEAD 检出或清单失配），无法预铸挂靠会话：${cwd}`)
     }
     // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话
