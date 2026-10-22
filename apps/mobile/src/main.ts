@@ -272,13 +272,14 @@ export function mount(root: HTMLElement): void {
   }
 
   async function enrichHero(): Promise<void> {
-    // worktree 清单锚（best-effort：workspace.list 首行 path——缺席 = composer 只显当前分支）
-    if (ctx.api === null) return
+    // worktree 清单锚（best-effort：projects-grouped 首项目 wsPath——隧道域同源可达；
+    // 官方 workspace.list 异源 + 隧道域 403，弃用）。缺席 = composer 只显当前分支。
+    if (ctx.rpc === null) return
     try {
-      const { items } = await ctx.api.listWorkspaces()
-      const first = items.find((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
-      const path = typeof first?.['path'] === 'string' ? first['path'] : undefined
-      if (path === undefined || path === '' || rendered?.key !== 'hero') return
+      const result = await ctx.rpc.call<{ projects?: ReadonlyArray<{ wsPath?: unknown }> }>('forge:proxy/projects-grouped', {})
+      if (!result.ok) return
+      const path = result.data?.projects?.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')?.wsPath
+      if (typeof path !== 'string' || path === '' || rendered?.key !== 'hero') return
       rendered.root.remove()
       rendered = { key: 'hero', root: createHeroView({ ...heroDeps(), projectRoot: path }) }
       container.appendChild(rendered.root)
@@ -551,7 +552,9 @@ const TUNNEL_OFFICIAL_RPC_PROXY: Readonly<Record<string, string>> = {
   'session.selectModel': 'forge:proxy/session-select-model',
   'session.cancel': 'forge:proxy/session-cancel',
   'session.list': 'forge:proxy/session-list',
+  'session.history': 'forge:proxy/session-history',
   'commands.execute': 'forge:proxy/commands-execute',
+  'agentPreset.select': 'forge:proxy/agent-preset-select',
 }
 
 function tunnelApiDeps(transport: TunnelTransport): ApiDeps {

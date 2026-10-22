@@ -194,6 +194,48 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
   })
 
+  it('session-history / agent-preset-select 官方面直调通道（隧道域 chat 历史 + 换预设唯一数据面）', async () => {
+    let pageRequest: unknown
+    const session = {
+      page: async (request: unknown) => {
+        pageRequest = request
+        return {
+          records: [{ type: 'event', event: { type: 'user/message', seq: 0 } }, { type: 'event', event: { type: 'assistant/message', seq: 1 } }],
+          hasMore: true,
+        }
+      },
+      resolveAgent: async (sessionId: string) => ({ id: sessionId, ctx: {} }),
+    }
+    const registry = {
+      presets: [] as unknown[],
+      remoteExportList: async () => ({ presets: registry.presets }),
+      select: async (agent: { id: string }, preset: string) => {
+        registry.presets.push({ agent: agent.id, preset })
+        return preset
+      },
+    }
+    const res = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionHistory, payload: { sessionId: 's-1', maxMessages: 10 } }) as never,
+      res,
+      deps({ proxy: proxyDeps({ session: session as never, agentPresets: registry as never }) }),
+    )
+    expect((JSON.parse(res.body) as { ok: boolean }).ok).toBe(true)
+    expect(pageRequest).toMatchObject({ address: { kind: 'session', sessionId: 's-1' }, throughSeq: -1, maxMessages: 10 })
+    const history = JSON.parse(res.body) as { data: { entries: unknown[]; hasMore: boolean } }
+    expect(history.data.entries).toHaveLength(2) // records[].event 拆包回 wire events
+    expect(history.data.hasMore).toBe(true)
+
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.agentPresetSelect, payload: { sessionId: 's-1', agentPreset: 'standard' } }) as never,
+      res2,
+      deps({ proxy: proxyDeps({ session: session as never, agentPresets: registry as never }) }),
+    )
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
+    expect(registry.presets).toEqual([{ agent: 's-1', preset: 'standard' }])
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))

@@ -34,6 +34,7 @@ export const PROXY_CHANNELS = {
   sessionRename: 'forge:proxy/session-rename',
   sessionFork: 'forge:proxy/session-fork',
   sessionSearch: 'forge:proxy/session-search',
+  sessionHistory: 'forge:proxy/session-history',
   sessionSelectModel: 'forge:proxy/session-select-model',
   sessionModelCatalog: 'forge:proxy/session-model-catalog',
   sessionAttachment: 'forge:proxy/session-attachment',
@@ -44,6 +45,7 @@ export const PROXY_CHANNELS = {
   projectsGrouped: 'forge:proxy/projects-grouped',
   approval: 'forge:proxy/approval',
   agentPresets: 'forge:proxy/agent-presets',
+  agentPresetSelect: 'forge:proxy/agent-preset-select',
   file: 'forge:proxy/file',
 } as const
 
@@ -64,6 +66,8 @@ export interface ProxySessionFace {
   modelCatalog?(request: unknown): Promise<unknown>
   attachment?(request: unknown): Promise<unknown>
   updateQueue?(request: unknown): Promise<unknown>
+  /** 官方 resolveAgent（公开面——agentPreset.select 需 live agent 实参） */
+  resolveAgent?(sessionId: string): Promise<unknown>
 }
 
 /** 官方 commands 消费切片（ctx.commands） */
@@ -82,9 +86,10 @@ export interface ProxyWorktreeFace {
   list(request: { readonly projectRoot: string }): Promise<{ readonly isGit: boolean; readonly worktreeDir?: string; readonly entries: readonly WorktreeEntryDto[] }>
 }
 
-/** agentPreset registry 消费切片（官方 remoteExportList roster——预设增减动态单源） */
+/** agentPreset registry 消费切片（官方 remoteExportList roster + select 换预设） */
 export interface ProxyAgentPresetsFace {
   remoteExportList?(): Promise<unknown>
+  select?(agent: unknown, agentPreset: string): Promise<unknown>
 }
 
 /** 装配依赖缝（child.ts 注入真身；测试注入 fake） */
@@ -158,6 +163,22 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
       const result = await bound(session.selectModel, 'session.selectModel')(asRecord(payload))
       catalogCache = undefined // 选档改变部署 default——缓存即刻失效
       return result
+    },
+    // 会话历史（官方 session.history 网关形的 host 直调面）：controller.page + records[].event
+    // 还原 wire events（官方 pageRecords 包装 {type:'event',event}——此处拆包回手机窗口形）。
+    // bug 2714e40d 同族收口：隧道域 /api/rpc 403，chat 历史首屏/翻页唯一数据面。
+    [PROXY_CHANNELS.sessionHistory]: async (payload) => {
+      const record = asRecord(payload)
+      const sessionId = asString(record, 'sessionId')
+      const page = (await bound(session.page, 'session.page')({
+        address: { kind: 'session', sessionId },
+        throughSeq: typeof record['throughSeq'] === 'number' ? record['throughSeq'] : -1,
+        ...(typeof record['maxMessages'] === 'number' ? { maxMessages: record['maxMessages'] } : {}),
+      } as never)) as { records?: readonly { event?: unknown }[]; hasMore?: unknown }
+      return {
+        entries: (page.records ?? []).map((entry) => (entry as { event?: unknown }).event),
+        hasMore: page.hasMore === true,
+      }
     },
     [PROXY_CHANNELS.sessionModelCatalog]: async (payload) => {
       if (catalogCache !== undefined && Date.now() - catalogCache.at < MODEL_CATALOG_CACHE_TTL_MS) {
@@ -361,6 +382,17 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
     [PROXY_CHANNELS.agentPresets]: async () => {
       const registry = requireService(deps.agentPresets, 'agentPresets')
       return requireMethod(registry.remoteExportList, 'agentPresets.remoteExportList').bind(registry)()
+    },
+    // 换预设（官方 agentPreset.select 网关形的 host 直调面）：sessionId → live agent
+    // （controller.resolveAgent 公开面）→ registry.select(agent, preset)。
+    [PROXY_CHANNELS.agentPresetSelect]: async (payload) => {
+      const record = asRecord(payload)
+      const sessionId = asString(record, 'sessionId')
+      const agentPreset = asString(record, 'agentPreset')
+      const controller = requireService(deps.session, 'sessionController')
+      const agent = await requireMethod(controller.resolveAgent, 'session.resolveAgent').bind(controller)(sessionId)
+      const registry = requireService(deps.agentPresets, 'agentPresets')
+      return requireMethod(registry.select, 'agentPresets.select').bind(registry)(agent, agentPreset)
     },
     [PROXY_CHANNELS.approval]: async (payload) =>
       deps.forwardApproval !== undefined
