@@ -117,6 +117,8 @@ export interface TunnelPanelDeps {
   readonly pairDomain?: string
   /** 缓存存储注入（测试；缺省 localStorage）。 */
   readonly cacheStore?: TunnelCacheStore | null
+  /** 已激活初态（抽屉内嵌形态——材料在装配方持有时状态行直显已激活）。 */
+  readonly activated?: boolean
 }
 
 export interface TunnelPanel {
@@ -137,7 +139,7 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
   let statusLine: HTMLElement | undefined
   let active: TunnelMaterial | undefined
 
-  const IDLE_STATUS = TUNNEL_COPY.readonlyGate
+  const IDLE_STATUS = deps.activated === true ? '已激活 · 连接保持中' : TUNNEL_COPY.readonlyGate
 
   /** 字段块：label 行（+ ? 帮助钮——点按展开内联解释）+ 输入框。 */
   function fieldBlock(label: string, input: HTMLInputElement, helpText: string): HTMLElement {

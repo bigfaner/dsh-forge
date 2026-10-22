@@ -326,11 +326,28 @@ export function mount(root: HTMLElement): void {
           key: 'drawer',
           root: createDrawerView({
             rpc: ctx.rpc,
-            fetchStatus: defaultFetchStatus,
+            // 用户裁决 2026-10-22：隧道域 /api 被回环围栏 403——状态走 PSK 信封 RPC 心跳
+            fetchStatus: async () => {
+              if (ctx.tunnel !== true) return defaultFetchStatus()
+              try {
+                const result = await ctx.rpc.call<unknown>('forge:proxy/projects-grouped', {})
+                return { ok: result.ok, tunnelExpiresAt: null, tunnel: true }
+              } catch {
+                return { ok: false, tunnelExpiresAt: null, tunnel: true }
+              }
+            },
             onOpenSession: openSession,
             onDisconnected: () => showPairing(),
-            // 用户裁决 2026-10-22：连接详情「激活连接」钮 → 激活连接界面（配对面）
-            onActivateConnection: () => showPairing(),
+            // 用户裁决 2026-10-22（二次）：隧道配置面板内嵌连接详情（与状态同处）
+            tunnelPanel: createTunnelPanel({
+              sid: identity.sid,
+              pairDomain,
+              activated: ctx.tunnel === true,
+              onActivated: (material) => {
+                applyTunnelMaterial(material)
+                ensureStream()
+              },
+            }),
             // 用户裁决 2026-10-22：点抽屉外自动收起——回当前会话（无会话回 hero）
             onClose: () => {
               const sid = store.get().currentSessionId

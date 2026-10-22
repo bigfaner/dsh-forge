@@ -228,6 +228,8 @@ export interface DrawerStatus {
   readonly ok: boolean
   /** 隧道有效期（在场 = PSK 隧道域；缺席 = LAN 直连）。 */
   readonly tunnelExpiresAt: number | null
+  /** 隧道域位（true = PSK 隧道域——通道行显「PSK 隧道」；TTL 读数缺席不伪装到期时刻）。 */
+  readonly tunnel?: boolean
 }
 
 export interface DrawerDeps {
@@ -241,6 +243,8 @@ export interface DrawerDeps {
   readonly onClose?: () => void
   /** 连接详情「激活连接」钮 → 跳转激活连接界面（用户裁决 2026-10-22：隧道配置不进模型面）。 */
   readonly onActivateConnection?: () => void
+  /** 用户裁决 2026-10-22（二次）：隧道配置面板内嵌连接详情（与状态同处——缺席不渲染）。 */
+  readonly tunnelPanel?: { readonly root: HTMLElement }
   readonly currentSessionId?: string
   readonly pairDomain: string
   readonly store?: KeyValueStore | null
@@ -442,19 +446,15 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
     const stateRow = el('div', 'row')
     stateRow.innerHTML = `<span class="k">状态</span>`
     stateRow.appendChild(el('b', undefined, disconnected ? '已断开' : status.ok ? '已连接' : '连接中断'))
-    const tunnel = status.tunnelExpiresAt !== null
+    const tunnel = status.tunnel === true || status.tunnelExpiresAt !== null
     const channelRow = el('div', 'row')
     channelRow.innerHTML = '<span class="k">通道</span>'
     channelRow.appendChild(
-      el('b', undefined, tunnel ? `PSK 隧道 · 有效期至 ${new Date(status.tunnelExpiresAt!).toLocaleTimeString()}` : `LAN 直连 · ${location.host}`),
+      el('b', undefined, tunnel ? `PSK 隧道${status.tunnelExpiresAt !== null ? ` · 有效期至 ${new Date(status.tunnelExpiresAt).toLocaleTimeString()}` : ''}` : `LAN 直连 · ${location.host}`),
     )
     connPop.append(stateRow, channelRow)
-    // 用户裁决 2026-10-22：隧道连接配置入口归抽屉连接详情——钮跳激活连接界面
-    if (deps.onActivateConnection !== undefined) {
-      const activate = el('button', 'activate', '激活连接')
-      activate.addEventListener('click', () => deps.onActivateConnection?.())
-      connPop.appendChild(activate)
-    }
+    // 用户裁决 2026-10-22（二次）：隧道连接配置与连接状态同处——激活面板内嵌连接详情
+    if (deps.tunnelPanel !== undefined) connPop.appendChild(deps.tunnelPanel.root)
     if (!disconnected) {
       const button = el('button', 'disconnect', '断开连接')
       button.addEventListener('click', () => void doDisconnect())
@@ -511,7 +511,12 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   let pollHandle: unknown = null
   const schedulePoll = (): void => {
     pollHandle = timers.setTimeout(() => {
-      void refresh().finally(schedulePoll)
+      void refresh()
+        .catch(() => undefined)
+        .finally(() => {
+          void refreshStatus()
+          schedulePoll()
+        })
     }, deps.pollMs ?? DRAWER_POLL_MS)
   }
   schedulePoll()
