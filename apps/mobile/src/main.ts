@@ -434,6 +434,7 @@ export function mount(root: HTMLElement): void {
     screen.appendChild(
       createTunnelPanel({
         sid: identity.sid,
+        pairDomain,
         onActivated: (material) => {
           applyTunnelMaterial(material)
           startMain()

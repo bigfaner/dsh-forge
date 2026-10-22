@@ -48,6 +48,62 @@ export function gateCopy(kind: GateKind, tunnel: boolean): string {
 }
 
 // ---------------------------------------------------------------------------
+// 纯函数：非密材料缓存（方案 A 2026-10-22——SPKI/PIN 本机预填，PSK 恒不落 storage）
+// ---------------------------------------------------------------------------
+
+export interface TunnelCacheStore {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+  removeItem(key: string): void
+}
+
+/** 配对域隔离键（models recentStorageKey 同制）。 */
+export function tunnelCacheKey(pairDomain: string, field: 'pin' | 'hostKey'): string {
+  return `dshf.mobile.tunnel.${field}.${pairDomain}`
+}
+
+/** 读缓存（损坏/缺席 = undefined 静默降级——非密材料，零安全面）。 */
+export function loadCachedField(store: TunnelCacheStore | null, key: string): string | undefined {
+  if (store === null) return undefined
+  try {
+    const raw = store.getItem(key)
+    return typeof raw === 'string' && raw !== '' ? raw : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 写缓存（存储不可用静默丢弃）。 */
+export function saveCachedField(store: TunnelCacheStore | null, key: string, value: string): void {
+  if (store === null) return
+  try {
+    store.setItem(key, value)
+  } catch {
+    /* 静默降级 */
+  }
+}
+
+/** 清缓存（重置钮——配置信息一并清空）。 */
+export function clearCachedField(store: TunnelCacheStore | null, key: string): void {
+  if (store === null) return
+  try {
+    store.removeItem(key)
+  } catch {
+    /* 静默降级 */
+  }
+}
+
+/** localStorage 适配（不可用环境 → null）。 */
+export function defaultCacheStore(): TunnelCacheStore | null {
+  try {
+    if (typeof window === 'undefined' || window.localStorage === null) return null
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 视图装配
 // ---------------------------------------------------------------------------
 
@@ -57,6 +113,10 @@ export interface TunnelPanelDeps {
   readonly sid: string
   /** 期望校验段（host 带外告知；缺席 = 跳过核对）。 */
   readonly expectedChecksum?: string
+  /** 配对域（方案 A 缓存隔离键——缺席 = 不缓存不预填）。 */
+  readonly pairDomain?: string
+  /** 缓存存储注入（测试；缺省 localStorage）。 */
+  readonly cacheStore?: TunnelCacheStore | null
 }
 
 export interface TunnelPanel {
@@ -67,6 +127,9 @@ export interface TunnelPanel {
 
 export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
   const root = el('div', 'tunnel-panel')
+  const cache = deps.cacheStore !== undefined ? deps.cacheStore : defaultCacheStore()
+  const pinCacheKey = deps.pairDomain !== undefined ? tunnelCacheKey(deps.pairDomain, 'pin') : undefined
+  const hostCacheKey = deps.pairDomain !== undefined ? tunnelCacheKey(deps.pairDomain, 'hostKey') : undefined
 
   let pskInput: HTMLInputElement | undefined
   let pinInput: HTMLInputElement | undefined
@@ -110,6 +173,9 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
     hostInput.value = ''
     active = undefined
     setStatus(IDLE_STATUS)
+    // 重置 = 配置信息一并清空（缓存 PIN/SPKI + 信任基线）
+    if (pinCacheKey !== undefined) clearCachedField(cache, pinCacheKey)
+    if (hostCacheKey !== undefined) clearCachedField(cache, hostCacheKey)
     try {
       if (typeof window !== 'undefined' && window.localStorage !== null) {
         window.localStorage.removeItem('forge.psk.trustBaseline')
@@ -144,6 +210,13 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
     hostInput.placeholder = 'base64 SPKI 串'
     hostInput.autocomplete = 'off'
     hostInput.spellcheck = false
+
+    // 方案 A 预填：SPKI/PIN 本机缓存回填（PSK 红线——恒不落 storage，恒手输）
+    if (pinCacheKey !== undefined) pinInput.value = loadCachedField(cache, pinCacheKey) ?? ''
+    if (hostCacheKey !== undefined) hostInput.value = loadCachedField(cache, hostCacheKey) ?? ''
+    if ((pinInput.value !== '' || hostInput.value !== '') && statusLine !== undefined) {
+      statusLine.textContent = '已记住配对 PIN 与 host 公钥——仅需录入连接密钥（PSK）'
+    }
 
     const activate = el('button', 'tunnel-activate', '激活连接')
     activate.type = 'button'
@@ -192,9 +265,11 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
       statusLine.textContent = result.reason === 'checksum' ? '校验段不符——请核对密钥' : `激活失败（${result.reason}）`
       return
     }
-    // 明文即时清除（红线：明文串不落 DOM/storage）
+    // 明文即时清除（红线：PSK 明文串不落 DOM/storage——value = ''）
     pskInput.value = ''
-    pinInput.value = ''
+    // 方案 A：PIN/SPKI 非密材料激活成功即记本机（下次预填免重输）
+    if (pinCacheKey !== undefined) saveCachedField(cache, pinCacheKey, input.pin.trim())
+    if (hostCacheKey !== undefined) saveCachedField(cache, hostCacheKey, input.hostKey.trim())
     active = result.material
     statusLine.textContent = `已激活 · host ${result.hostKeyId}`
     deps.onActivated(result.material, result.hostKeyId)
