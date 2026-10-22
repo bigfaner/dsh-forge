@@ -8,16 +8,18 @@ import {
   settleEffort,
 } from './settings.ts'
 
-describe('推理档位映射（随模型 efforts 联动）', () => {
-  it('档位取值 → 显示词；未知取值原样展示', () => {
-    expect(effortOptions(['default', 'low', 'medium', 'high'])).toEqual([
+import type { EffortOptionInfo } from './models.ts'
+
+const effort = (id: string, name: string): EffortOptionInfo => ({ id, name })
+
+describe('推理档位映射（用户裁决 2026-10-22：显示词 = 官方 adapter 下发 name 逐字透传）', () => {
+  it('档位 {id,name} → 分段选项（label = adapter name——默认/低/高/极高 同桌面端同源同词）', () => {
+    expect(effortOptions([effort('default', '默认'), effort('low', '低'), effort('high', '高'), effort('ultra', '极高')])).toEqual([
       { value: 'default', label: '默认' },
       { value: 'low', label: '低' },
-      { value: 'medium', label: '中' },
       { value: 'high', label: '高' },
+      { value: 'ultra', label: '极高' },
     ])
-    expect(effortOptions(['max'])[0]?.label).toBe('最高')
-    expect(effortOptions(['turbo'])[0]?.label).toBe('turbo')
   })
 })
 
@@ -27,9 +29,10 @@ describe('当前档收敛', () => {
   })
 
   it('会话档在支持列表内取之；缺席 default 兜底 / 首个兜底', () => {
-    expect(currentEffort(['low', 'medium', 'high'], 'medium')).toBe('medium')
-    expect(currentEffort(['default', 'low'], 'medium')).toBe(DEFAULT_EFFORT)
-    expect(currentEffort(['low', 'medium'], undefined)).toBe('low')
+    const efforts = [effort('low', '低'), effort('medium', '中'), effort('high', '高')]
+    expect(currentEffort(efforts, 'medium')).toBe('medium')
+    expect(currentEffort([effort('default', '默认'), effort('low', '低')], 'medium')).toBe(DEFAULT_EFFORT)
+    expect(currentEffort([effort('low', '低'), effort('medium', '中')], undefined)).toBe('low')
   })
 })
 

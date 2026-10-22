@@ -15,12 +15,18 @@ import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 // 纯函数：catalog 收敛（官方 session-model-catalog groups 形状，缺字段 fail-soft）
 // ---------------------------------------------------------------------------
 
+export interface EffortOptionInfo {
+  readonly id: string
+  /** 官方 adapter 下发显示名（默认/低/高/极高等——逐字透传不自造映射）。 */
+  readonly name: string
+}
+
 export interface ModelInfo {
   readonly provider: string
   readonly id: string
   readonly name: string
   /** 推理档位取值（随模型 reasoning.efforts 联动；空 = 不支持，隐藏分段）。 */
-  readonly efforts: readonly string[]
+  readonly efforts: readonly EffortOptionInfo[]
 }
 
 export interface ModelSelection {
@@ -35,13 +41,15 @@ export interface ModelCatalog {
   readonly current?: ModelSelection
 }
 
-/** efforts 项收敛（官方 ModelReasoningEffort {id,name,…}——非法项剔除，取值 = id）。 */
-function coerceEfforts(raw: unknown): readonly string[] {
+/** efforts 项收敛（官方 ModelReasoningEffort {id,name,…}——非法项剔除；name 透传 adapter 显示词）。 */
+function coerceEfforts(raw: unknown): readonly EffortOptionInfo[] {
   const efforts = (typeof raw === 'object' && raw !== null ? (raw as { reasoning?: { efforts?: unknown } }) : {})
   const list = efforts.reasoning?.efforts
   return Array.isArray(list)
-    ? list.filter((item): item is { id: string } => typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'string')
-        .map((item) => item.id)
+    ? list
+        .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+        .map((item) => ({ id: typeof item['id'] === 'string' ? item['id'] : '', name: typeof item['name'] === 'string' ? item['name'] : '' }))
+        .filter((item): item is EffortOptionInfo => item.id !== '' && item.name !== '')
     : []
 }
 

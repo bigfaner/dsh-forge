@@ -124,12 +124,18 @@ function requireMethod<F>(face: F | undefined, name: string): F {
 
 type ChannelHandler = (payload: unknown) => Promise<unknown>
 
+/** model-catalog 缓存 TTL（2026-10-22 判例：官方 buildModelCatalog 每呼逐 provider
+ *  listModels+resolveModelInfo 网络探测——秒级时延 × 手机每次打开即触发，60s TTL 收口）。 */
+export const MODEL_CATALOG_CACHE_TTL_MS = 60_000
+
 /** session 族直调通道（方法名 → 控制器方法绑定——逐通道表项，禁分支堆积）。
  *  bug 344dd76b：官方 ApiSessionController 方法体依赖 this 实例态（this.listState 等）——
  *  requireMethod 裸提函数调用 = this undefined；直调一律 bind 控制器。 */
 function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelHandler> {
   const bound = <F extends (...args: never[]) => unknown>(method: F | undefined, name: string): F =>
     requireMethod(method, name).bind(session) as F
+  // model-catalog 短缓存（读即触探官方 provider I/O——TTL 内复用；探测失败回退旧值不空手）
+  let catalogCache: { at: number; data: unknown } | undefined
   return {
     [PROXY_CHANNELS.sessionList]: async () => bound(session.list, 'session.list')(undefined as never),
     [PROXY_CHANNELS.sessionCreate]: async (payload) => bound(session.create, 'session.create')(asRecord(payload)),
@@ -140,8 +146,24 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
     [PROXY_CHANNELS.sessionRename]: async (payload) => bound(session.rename, 'session.rename')(asRecord(payload)),
     [PROXY_CHANNELS.sessionFork]: async (payload) => bound(session.fork, 'session.fork')(asRecord(payload)),
     [PROXY_CHANNELS.sessionSearch]: async (payload) => bound(session.search, 'session.search')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionSelectModel]: async (payload) => bound(session.selectModel, 'session.selectModel')(asRecord(payload)),
-    [PROXY_CHANNELS.sessionModelCatalog]: async (payload) => bound(session.modelCatalog, 'session.modelCatalog')(asRecord(payload)),
+    [PROXY_CHANNELS.sessionSelectModel]: async (payload) => {
+      const result = await bound(session.selectModel, 'session.selectModel')(asRecord(payload))
+      catalogCache = undefined // 选档改变部署 default——缓存即刻失效
+      return result
+    },
+    [PROXY_CHANNELS.sessionModelCatalog]: async (payload) => {
+      if (catalogCache !== undefined && Date.now() - catalogCache.at < MODEL_CATALOG_CACHE_TTL_MS) {
+        return catalogCache.data
+      }
+      try {
+        const data = await bound(session.modelCatalog, 'session.modelCatalog')(asRecord(payload))
+        catalogCache = { at: Date.now(), data }
+        return data
+      } catch (error) {
+        if (catalogCache !== undefined) return catalogCache.data // 探测失败回退旧目录（不空手）
+        throw error
+      }
+    },
     [PROXY_CHANNELS.sessionAttachment]: async (payload) => bound(session.attachment, 'session.attachment')(asRecord(payload)),
     [PROXY_CHANNELS.sessionUpdateQueue]: async (payload) => bound(session.updateQueue, 'session.updateQueue')(asRecord(payload)),
   }

@@ -10,41 +10,36 @@
  */
 import type { RemoteRpc } from '../core/rpc.ts'
 import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, proxyCall } from '../core/rpc.ts'
-import type { ModelCatalog, ModelSelection } from './models.ts'
+import type { EffortOptionInfo, ModelCatalog, ModelSelection } from './models.ts'
 import { coerceModelCatalog, isSameModel } from './models.ts'
+
+/** 推理档位信息（models.ts EffortOptionInfo 同型窄面）。 */
+type EffortInfo = EffortOptionInfo
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 
 // ---------------------------------------------------------------------------
-// 纯函数：推理档位
+// 纯函数：推理档位（用户裁决 2026-10-22：显示词 = 官方 adapter 下发 name 逐字透传
+// ——默认/低/高/极高等由模型提供方定义，不自造映射；与桌面端同源同词）
 // ---------------------------------------------------------------------------
-
-/** 档位取值 → 显示词（mockup 口径：默认/低/中/高；越界取值原样展示）。 */
-const EFFORT_LABELS: Readonly<Record<string, string>> = {
-  default: '默认',
-  minimal: '极低',
-  low: '低',
-  medium: '中',
-  high: '高',
-  max: '最高',
-}
 
 export interface EffortOption {
   readonly value: string
   readonly label: string
 }
 
-/** 模型支持档位 → 分段选项（空数组 = 不支持，调用方隐藏分段）。 */
-export function effortOptions(efforts: readonly string[]): readonly EffortOption[] {
-  return efforts.map((value) => ({ value, label: EFFORT_LABELS[value] ?? value }))
+/** 模型支持档位 → 分段选项（空数组 = 不支持，调用方隐藏分段；label = adapter name）。 */
+export function effortOptions(efforts: readonly EffortInfo[]): readonly EffortOption[] {
+  return efforts.map((effort) => ({ value: effort.id, label: effort.name }))
 }
 
 export const DEFAULT_EFFORT = 'default'
 
 /** 当前选中档：会话档在支持列表内取之；否则取列表首个（default 优先缺席时兜底）。 */
-export function currentEffort(efforts: readonly string[], reasoningEffort: string | undefined): string | undefined {
+export function currentEffort(efforts: readonly EffortInfo[], reasoningEffort: string | undefined): string | undefined {
   if (efforts.length === 0) return undefined
-  if (reasoningEffort !== undefined && efforts.includes(reasoningEffort)) return reasoningEffort
-  return efforts.includes(DEFAULT_EFFORT) ? DEFAULT_EFFORT : efforts[0]
+  const ids = efforts.map((effort) => effort.id)
+  if (reasoningEffort !== undefined && ids.includes(reasoningEffort)) return reasoningEffort
+  return ids.includes(DEFAULT_EFFORT) ? DEFAULT_EFFORT : ids[0]
 }
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ import {
   type ModelInfo,
 } from './models.ts'
 
-const model = (id: string, provider = 'DeepSeek', efforts: string[] = []): ModelInfo => ({
+const model = (id: string, provider = 'DeepSeek', efforts: readonly { id: string; name: string }[] = []): ModelInfo => ({
   provider,
   id,
   name: id,
@@ -47,7 +47,7 @@ describe('catalog 收敛（官方 session-model-catalog groups 形状，缺字�
     })
     expect(catalog.models).toHaveLength(2)
     expect(catalog.models[0]?.provider).toBe('DeepSeek')
-    expect(catalog.models[0]?.efforts).toEqual(['low', 'medium'])
+    expect(catalog.models[0]?.efforts).toEqual([{ id: 'low', name: 'Low' }, { id: 'medium', name: 'Medium' }])
     expect(catalog.current?.id).toBe('deepseek-r1')
     expect(catalog.current?.provider).toBe('DeepSeek')
     expect(catalog.current?.name).toBe('DeepSeek-R1')
@@ -61,7 +61,7 @@ describe('catalog 收敛（官方 session-model-catalog groups 形状，缺字�
       ],
     })
     expect(catalog.models).toHaveLength(2)
-    expect(catalog.models[0]?.efforts).toEqual(['low'])
+    expect(catalog.models[0]?.efforts).toEqual([]) // {id:'low'} 缺 name 剔除（name = 显示词单源）
     expect(catalog.models[1]?.efforts).toEqual([])
     expect(catalog.current).toBeUndefined()
   })

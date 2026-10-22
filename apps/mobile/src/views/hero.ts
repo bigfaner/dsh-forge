@@ -29,8 +29,21 @@ export const HERO_WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
 export const HERO_SESSION_CREATE_CHANNEL = 'forge:worktree/session-create'
 /** 默认模式（US-6：默认突击）。 */
 export const HERO_DEFAULT_MODE = '突击'
-/** hero 模式目录（composer 模式弹层行序）。 */
-export const HERO_MODES: readonly string[] = ['突击', '远征']
+
+/** forge 自有预设（突击 = steer 抢占 / 远征 = queue 排队）。 */
+export const FORGE_MODES: readonly string[] = ['突击', '远征']
+
+/** dsh 内置四预设（官方 dsh-client-ui-agent-preset roster——id 'standard'/'ptc'/'minimal'/'cordis'
+ *  源码核销；显示名取官方 zh 词典「标准模式/PTC 模式/极简模式/创造模式」短形）。 */
+export const BUILTIN_AGENT_PRESETS: Readonly<Record<string, string>> = {
+  标准: 'standard',
+  PTC: 'ptc',
+  极简: 'minimal',
+  创造: 'cordis',
+}
+
+/** hero 模式目录 = forge 双预设 + dsh 内置四模式（用户裁决 2026-10-22）。 */
+export const HERO_MODES: readonly string[] = [...FORGE_MODES, ...Object.keys(BUILTIN_AGENT_PRESETS)]
 
 // ---------------------------------------------------------------------------
 // 纯函数：清单收敛 + 行派生
@@ -152,7 +165,7 @@ export interface HeroState {
 
 export interface HeroDeps {
   readonly rpc: RemoteRpc
-  readonly api: Pick<OfficialApi, 'createSession' | 'prompt'>
+  readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset'>
   /** 项目根（forge:worktree/list payload；缺席 = 不拉清单，composer 只显当前分支）。 */
   readonly projectRoot?: string
   /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
@@ -200,6 +213,16 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   async function enter(sessionId: string, text: string): Promise<void> {
+    // dsh 内置四模式 = agentPreset.select 下发（官方 roster id）； forge 双预设走 prompt mode。
+    // 官方面缺席（隧道域 /api 403 族）不阻断进入会话——预设保持部署默认（诚实降级）。
+    const presetId = BUILTIN_AGENT_PRESETS[mode]
+    if (presetId !== undefined) {
+      try {
+        await deps.api.selectAgentPreset(sessionId, presetId)
+      } catch {
+        /* 预设下发失败不阻断——会话已建 */
+      }
+    }
     if (text.trim() !== '') {
       try {
         await deps.api.prompt(sessionId, text, promptModeOf(mode))
