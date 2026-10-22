@@ -1975,13 +1975,28 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // 1.107：三件套读数（psk-read 直转——读数即显零缓存；桥缺席/失败/门未配置 = undefined）
+    // 1.107：三件套读数（psk-read 直转——读数即显零缓存；桥缺席/失败/门未配置 = undefined）。
+    // 失败路径显性化（console.warn——桌面壳 CONSOLE 管道可达 dev 终端）：区分桥缺席 / invoke
+    // 拒绝 / 形状收拢失败三断点，链路诊断不再盲区。
     pskRead: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(undefined)
+      if (bridge === undefined) {
+        console.warn('[dswf-client] psk-read: preload bridge 缺席（invokeFace 未注入）')
+        return Promise.resolve(undefined)
+      }
       return Promise.resolve()
         .then(() => bridge.invoke(PSK_READ_CHANNEL))
-        .then(pskTrioFaceOf, () => undefined)
+        .then(
+          (raw) => {
+            const face = pskTrioFaceOf(raw)
+            if (face === undefined) console.warn('[dswf-client] psk-read: 形状收拢失败——raw =', JSON.stringify(raw))
+            return face
+          },
+          (cause) => {
+            console.warn('[dswf-client] psk-read: invoke 拒绝——', cause instanceof Error ? cause.message : String(cause))
+            return undefined
+          },
+        )
     },
     // 1.107：三件套轮换（psk-rotate 直转——结果 = 新读数，展示面即时换新；失败 = undefined）
     pskRotate: () => {
