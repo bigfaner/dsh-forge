@@ -327,6 +327,30 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     expect(parsed.error.message).toContain('gitWorktree')
   })
 
+  it('bug signal：官方 signal 族（prompt/page）代理直调补 AbortSignal——官方实现 signal.throwIfAborted 无守卫', async () => {
+    const seen: Array<unknown> = []
+    const session = {
+      prompt: async (request: unknown, signal: AbortSignal) => {
+        seen.push(signal)
+        signal.throwIfAborted() // 官方实现同款无守卫调用
+        return { accepted: true }
+      },
+      page: async (request: unknown, signal: AbortSignal) => {
+        seen.push(signal)
+        signal.throwIfAborted()
+        return { records: [], hasMore: false }
+      },
+    }
+    const resPrompt = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1' } }) as never, resPrompt, deps({ proxy: proxyDeps({ session: session as never }) }))
+    const resHistory = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionHistory, payload: { sessionId: 's-1' } }) as never, resHistory, deps({ proxy: proxyDeps({ session: session as never }) }))
+    expect((JSON.parse(resPrompt.body) as { ok: boolean }).ok).toBe(true)
+    expect((JSON.parse(resHistory.body) as { ok: boolean }).ok).toBe(true)
+    expect(seen).toHaveLength(2)
+    expect(seen.every((s) => s instanceof AbortSignal)).toBe(true)
+  })
+
   it('worktree 读法失败 = 零 worktree 行降级（wsPath 子树归组仍成立）', async () => {
     const res = fakeRes()
     const proxy = proxyDeps({ worktrees: { list: async () => { throw new Error('git down') } } })
