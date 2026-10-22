@@ -50,7 +50,11 @@ const quoteReferenceClient: ProductClientEntry = {
   id: '@dsh-forge/quote-reference',
   url: `quote-reference-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
   rev: __DSH_FORGE_BUILD_REV__,
-  inject: ['@deepseek-ai/dsh-api-session-controller', '@deepseek-ai/dsh-client-ui-conversation'],
+  inject: [
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-ui-input-trigger',
+  ],
 }
 
 // super-composer 插件缺省装载行（super-composer/1.9，input-history 判例同构）：

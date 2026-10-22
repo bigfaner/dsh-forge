@@ -4,8 +4,10 @@
 // gotcha-web-boot:43 判例（client face 为 DI 库件、无 apply → 真机 cordis
 // `invalid plugin, expect function or object with an "apply" method`）。
 //
-// inject 声明硬门：本 face 引用的 ctx 服务 = sessions（dsh.client.inject 清单已声明
-// `@deepseek-ai/dsh-api-session-controller`——装载序落在其后，属性访问运行期可达）；
+// inject 声明硬门：本 face 引用的 ctx 服务 = sessions + inputTriggers（dsh.client.inject
+// 清单已声明 `@deepseek-ai/dsh-api-session-controller` 与 `@deepseek-ai/dsh-client-ui-
+// input-trigger`——装载序落在其后，属性访问运行期可达；运行期读取仍走 fail-soft 结构
+// 读取，服务缺席 = 降级不炸）；
 // conversation 走 ctx.reflect.get 只读反射（官方面：绕过 inject 义务的只读反射，
 // 缺席 = undefined——apps/web/src/client-plugin/plugin.ts 惰性配方先例，非规避硬门）。
 //
@@ -247,6 +249,17 @@ export const quoteReferenceClient = {
           clearInterval(registrationTimer)
         }
       }, 2_000)
+      // 评审 A5：registrationTimer 有界泄漏缝兜底——wire 只在 sessions 到达后挂卸载，
+      // sessions 恒不 provide + fiber 早 unload 时轮询定时器无人清。顶层 ctx.effect
+      // 兜底清算（与 wire 内 disposer 叠加，clearInterval 幂等）；effect 缝缺席
+      //（非 cordis ctx）不注册——直驱场景定时器由 30 次上界自然收敛。
+      const topEffect = (ctx as { effect?: (execute: () => unknown) => unknown }).effect
+      if (typeof topEffect === 'function') {
+        topEffect.call(ctx, () => () => {
+          disposedFlag = true
+          clearInterval(registrationTimer)
+        })
+      }
       const wire = (source?: unknown): void => {
         if (disposeWired) return // 幂等防重挂：已接线不再二次 mount/dispose
         disposeWired = true

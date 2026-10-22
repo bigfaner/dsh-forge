@@ -32,8 +32,11 @@ describe("组合包形态清单（proposal 硬门 ⑧）", () => {
     expect(pkg.exports["./client"]).toBeDefined();
   });
 
-  it("inject 声明硬门：引用的 ctx 服务（sessions）全部在 inject 清单", () => {
+  it("inject 声明硬门：引用的 ctx 服务（sessions + inputTriggers）全部在 inject 清单", () => {
     expect(pkg.dsh.client.inject).toContain("@deepseek-ai/dsh-api-session-controller");
+    // 评审 A3：与 super-composer 对称——inputTriggers 读取虽走 fail-soft 反射，
+    // 装配期注入边声明入清单（装载序落在 input-trigger 之后，服务可达性同源保障）。
+    expect(pkg.dsh.client.inject).toContain("@deepseek-ai/dsh-client-ui-input-trigger");
   });
 });
 
@@ -58,7 +61,8 @@ describe("client face apply 骨架", () => {
       },
     };
     expect(() => quoteReferenceClient.apply(ctx as never)).not.toThrow();
-    expect(effects.length).toBe(1);
+    // 评审 A5：wire 内 disposer + registrationTimer 顶层兜底 = 两条 effect
+    expect(effects.length, "wire 卸载 + registrationTimer 顶层兜底").toBe(2);
     const face = wireQuoteReferenceClient(ctx as never);
     expect(face.sessionsAvailable).toBe(true);
     face.dispose();
@@ -93,7 +97,7 @@ describe("client face apply 骨架", () => {
     quoteReferenceClient.apply(ctx as never);
     // provide 晚于 apply：宿主 provide 时以注入后 scope 触发回调
     callback?.({ sessions: { list: [] } });
-    expect(effects.length, "兜底回调必须完成接线（dispose 挂 ctx.effect）").toBe(1);
+    expect(effects.length, "兜底回调必须完成接线（dispose 挂 ctx.effect + registrationTimer 顶层兜底）").toBe(2);
   });
 
   it("bug: 兜底回调幂等防重挂（二次触发不再重复接线）", () => {
@@ -112,6 +116,6 @@ describe("client face apply 骨架", () => {
     quoteReferenceClient.apply(ctx as never);
     callback?.({ sessions: { list: [] } });
     callback?.({ sessions: { list: [] } });
-    expect(effects.length).toBe(1);
+    expect(effects.length).toBe(2);
   });
 });
