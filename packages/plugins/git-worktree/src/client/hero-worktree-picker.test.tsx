@@ -4,7 +4,7 @@
 // 头注同口径；开弹层交互归 e2e）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { HeroWorktreePicker, heroWorktreeRows } from './hero-worktree-picker.js'
+import { HeroWorktreePicker, heroWorktreeRows, pickerRowDisabled } from './hero-worktree-picker.js'
 import { pendingAheadBehindPaths, type WorktreeRow } from './model.js'
 
 const ROWS: WorktreeRow[] = [
@@ -77,6 +77,17 @@ describe('HeroWorktreePicker（组件闭态渲染面）', () => {
 
   it('非 git 项目：零注入（hero 区不渲染任何 chip/菜单——退回现状）', () => {
     expect(renderPicker({ isGit: false })).toBe('')
+  })
+
+  it('bug 488e860d（桌面同族）：detached 行（branch null）禁选——预铸挂靠契约一 worktree 一分支，选中必被 session-create typed 拒绝', () => {
+    const rows: WorktreeRow[] = [
+      { path: 'Z:/proj', branch: 'main', worktreeName: 'main', isMain: true, present: true },
+      { path: 'Z:\\tmp', branch: null, worktreeName: 'tmp', isMain: false, present: true },
+      { path: 'Z:/gone', branch: 'feat/gone', worktreeName: 'gone', isMain: false, present: false },
+    ]
+    expect(pickerRowDisabled(rows[0]!)).toBe(false) // 健康行可选
+    expect(pickerRowDisabled(rows[1]!)).toBe(true) // detached 行禁选（present 但无分支）
+    expect(pickerRowDisabled(rows[2]!)).toBe(true) // 失配行禁选（既有语义）
   })
 })
 
