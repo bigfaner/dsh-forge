@@ -1088,16 +1088,34 @@ async function main(): Promise<void> {
           return
         }
         if (tunnelManager.state === undefined) {
+          diag(`[pair-diag] tunnel toggle → start（当前无活动链路）`)
           void tunnelManager.start().then(sendTunnelState).catch(() => sendTunnelState(undefined))
           return
         }
+        diag(`[pair-diag] tunnel toggle → 重推当前状态（读数刷新）`)
         sendTunnelState(tunnelManager.state)
       }
       // fix-18：显式换线缝——TunnelManager.fallback（停旧链起新链；状态事件/回推经
       // onEvent + then 双面送达，UI 遮罩随 switching 收敛）
       tunnelFallback = () => {
-        if (tunnelManager === undefined) return
-        void tunnelManager.fallback().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+        if (tunnelManager === undefined) {
+          diag(`[pair-diag] tunnel fallback 落空：管理器未装配`)
+          return
+        }
+        diag(`[pair-diag] tunnel fallback 触发（停当前链路起另一条）`)
+        void tunnelManager.fallback()
+          .then((state) => {
+            diag(`[pair-diag] tunnel fallback 收敛（新链路建立）`)
+            sendTunnelState(state)
+          })
+          .catch((cause) => {
+            // bug cf0db7e5 CDP 回归实证竞态：fallback 的 startPinggy 捕获窗口内并发 ensure
+            // 已建新链——catch 无条件撤面会把活链路面抹掉（ABSENT 永挂）。仅当此刻确无
+            // 活动链路才撤面；有则回推活面。
+            const live = tunnelManager.state
+            diag(`[pair-diag] tunnel fallback 失败（${cause instanceof Error ? cause.message : String(cause)}）——${live !== undefined ? '并发链路在场，回推活面' : '无活动链路，撤面'}`)
+            sendTunnelState(live)
+          })
       }
       // fix-26：pair 消息 PIN 面统一构造（durable = PIN + 长效位、零 TTL；临时 = PIN + TTL——
       // UI hint 双态单源：长效无倒计时、临时实时秒倒计时）
