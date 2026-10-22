@@ -115,10 +115,19 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
       return
     }
     statusLine.textContent = '校验中…'
-    const result: ActivateResult = await establishTunnelMaterial(
-      { pskText: input.psk, pin: input.pin, hostSpkiB64: input.hostKey.trim() },
-      { sid: deps.sid, ...(deps.expectedChecksum !== undefined ? { expectedChecksum: deps.expectedChecksum } : {}) },
-    )
+    let result: ActivateResult
+    try {
+      result = await establishTunnelMaterial(
+        { pskText: input.psk, pin: input.pin, hostSpkiB64: input.hostKey.trim() },
+        { sid: deps.sid, ...(deps.expectedChecksum !== undefined ? { expectedChecksum: deps.expectedChecksum } : {}) },
+      )
+    } catch (error) {
+      // Ed25519 缺席等 WebCrypto 能力缺口在此显性化（否则 await 抛出 = 状态行永停「校验中…」）
+      statusLine.textContent = `激活失败（${
+        error instanceof Error && error.message !== '' ? error.message.slice(0, 80) : '浏览器加密能力不可用'
+      }）`
+      return
+    }
     if (!result.ok) {
       statusLine.textContent = result.reason === 'checksum' ? '校验段不符——请核对密钥' : `激活失败（${result.reason}）`
       return
