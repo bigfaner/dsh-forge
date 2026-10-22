@@ -6,9 +6,9 @@
 // import——官方 input-trigger 契约面（InputTriggerSource/ReferenceCodec/
 // InputTriggerCandidate/ReferenceInsert/PickOutcome）以结构同型镜像承载。
 //
-// 快照语义（提案 §2.3）：pick 时落选段全文快照；serialize 快照优先（mention +
-// <quote> 结构化块）、缺失回退最小块（mention 保留、不追加块）——永不抛错，规避
-// 官方「serialize 失败阻断发送」语义在会话重启回放、快照缺失时的误伤。
+// 快照语义（提案 §2.3）：pick 时落选段全文快照；serialize 快照优先（只出 <quote>
+// 结构化块，1.32 格式改判——无 mention 前缀行）、缺失回退最小块（摘要垫体）——永不
+// 抛错，规避官方「serialize 失败阻断发送」语义在会话重启回放、快照缺失时的误伤。
 //
 // 共存约束②（bug-source 同则）：不实现 lexicon 装饰——引用只以原子 chip / 明文投影
 // 两种形态存在，无 subscribeLexicon 面。
@@ -89,8 +89,9 @@ export function quoteIdOfRef(ref: string): string | undefined {
 }
 
 /**
- * mention 明文投影：`〔引用：${summary}〕`——草稿/会话日志单一真相（提案 §2.3，
- * bug aced6f28 形状改判）。Root cause: 旧形状 `@[摘要](quote:uuid)` 与官方
+ * mention 明文投影：`〔引用：${summary}〕`——草稿 chip 投影单一真相（1.24 形状改判，
+ * 1.32 起只承担草稿态 chip/occurrences 明文；发送序列化不再产出 mention 行）。
+ * Root cause: 旧形状 `@[摘要](quote:uuid)` 与官方
  * projectUserText 硬编码投影形状集碰撞（`@[^\s]+` token 一律投影 file chip，显示名
  * 取路径末段 = quote:uuid，点击 openFile 报文件找不到）——新形状不含 `@`/`/` 起始
  * token，官方形状集零命中（纯文本投影），uuid 只落 `<quote>` 结构化块不入明面。
@@ -106,30 +107,51 @@ export const QUOTE_SUMMARY_UNAVAILABLE = 'quote:ref 摘要不可用'
 export interface QuoteSnapshot {
   /** 选段锚定 uuid（ref scheme quote:<uuid>） */
   readonly id: string
-  /** 选段摘要（mention 投影 label；截断由监听面负责，纯模型原样承载） */
+  /** 选段摘要（chip 投影 label；截断由监听面负责，纯模型原样承载） */
   readonly summary: string
   /** 选段全文（<quote> 块体） */
   readonly text: string
-  /** 选段来源（文档标题等——<quote> 块 source 属性；缺席 = 不出属性） */
+  /** 来源类型（1.32 source 语义：doc=文档选区 / sessionMsg=当前会话消息选区） */
+  readonly sourceType?: 'doc' | 'sessionMsg'
+  /** 文档选区的文件相对路径（sourceType=doc 时 source 属性取值） */
+  readonly sourcePath?: string
+  /** 会话消息选区的消息序号（sourceType=sessionMsg 时 source=currentSessionMsg/{seq}） */
+  readonly sourceSeq?: number
+  /** legacy 来源描述（结构化字段缺席时的回退——旧快照兼容；缺席 = 不出属性） */
   readonly source?: string
+}
+
+/**
+ * 快照 → <quote> source 属性值（1.32 语义单源）：doc → 文件相对路径；sessionMsg →
+ * `currentSessionMsg/{seq}`；结构化字段缺席回退 legacy source；全缺 = undefined。
+ */
+export function quoteSourceAttrOf(snapshot: QuoteSnapshot): string | undefined {
+  if (snapshot.sourceType === 'doc' && snapshot.sourcePath !== undefined && snapshot.sourcePath !== '') {
+    return snapshot.sourcePath
+  }
+  if (snapshot.sourceType === 'sessionMsg' && typeof snapshot.sourceSeq === 'number' && Number.isSafeInteger(snapshot.sourceSeq)) {
+    return `currentSessionMsg/${snapshot.sourceSeq}`
+  }
+  return snapshot.source !== undefined && snapshot.source !== '' ? snapshot.source : undefined
 }
 
 /** 快照缓存（pick/offer 时落 Map——serialize/clipboardText 快照优先） */
 export type QuoteSnapshotCache = Map<string, QuoteSnapshot>
 
 /**
- * QuoteSnapshot → 结构化块（提案示例形态：mention 明文投影 + 尾部 <quote> 结构化块，
- * 块内为选段全文语境）。
+ * QuoteSnapshot → 结构化块（1.32 格式改判：只落 `<quote id source>选中全文</quote>`
+ * 块——不再产出 `〔引用：…〕` mention 前缀行，块内已含全文，气泡与块不重复）。
  */
 export function serializeQuoteSnapshot(snapshot: QuoteSnapshot): string {
-  const attr = snapshot.source !== undefined && snapshot.source !== '' ? ` source="${snapshot.source}"` : ''
-  return `${mentionTextOf(snapshot.summary, snapshot.id)}\n<quote id="${quoteRefOf(snapshot.id)}"${attr}>\n${snapshot.text}\n</quote>`
+  const source = quoteSourceAttrOf(snapshot)
+  const attr = source !== undefined ? ` source="${source}"` : ''
+  return `<quote id="${quoteRefOf(snapshot.id)}"${attr}>\n${snapshot.text}\n</quote>`
 }
 
-/** 末级回退最小块（快照缺失：mention 保留、不追加块、uuid 不入明面——永不抛错口径的兜底形态） */
-export function minimalQuoteBlock(_id: string, summary?: string): string {
+/** 末级回退最小 quote 块（快照缺失：uuid 落块锚点、摘要垫体、无 mention 行——永不抛错口径的兜底形态） */
+export function minimalQuoteBlock(id: string, summary?: string): string {
   const label = summary !== undefined && summary !== '' ? summary : '摘要不可用'
-  return mentionTextOf(label, _id)
+  return `<quote id="${quoteRefOf(id)}">\n${label}\n</quote>`
 }
 
 /** 快照 → 候选行投影（name=id / label=摘要 / description=来源 / hint=原文前缀预览） */
@@ -137,7 +159,7 @@ export function quoteCandidateFrom(snapshot: QuoteSnapshot): QuoteTriggerCandida
   return {
     name: snapshot.id,
     label: snapshot.summary,
-    description: snapshot.source,
+    description: quoteSourceAttrOf(snapshot),
     hint: snapshot.text.slice(0, 48),
     value: quoteRefOf(snapshot.id),
   }
@@ -223,10 +245,10 @@ export function createQuoteReferenceSource(deps?: { readonly name?: string }): Q
         try {
             const id = quoteIdOfRef(ref)
           if (id === undefined) return ''
-          // 快照优先（全文真值在即出 mention + <quote> 块）
+          // 快照优先（全文真值在即出 <quote> 块——1.32 格式改判：无 mention 行）
           const snapshotted = snapshots.get(id)
           if (snapshotted !== undefined && snapshotted.text) return serializeQuoteSnapshot(snapshotted)
-          // 末级回退：mention 最小块（快照缺失——会话重启回放等；永不抛错阻断发送）
+          // 末级回退：最小 quote 块（快照缺失——会话重启回放等；永不抛错阻断发送）
           return minimalQuoteBlock(id, snapshotted?.summary)
         } catch {
           return ''

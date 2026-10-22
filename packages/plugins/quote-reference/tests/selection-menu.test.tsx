@@ -7,6 +7,7 @@ import {
   insertReferenceAtTail,
   mountSelectionMenu,
   referenceApplied,
+  resolveSelectionSource,
   tailSpanOf,
   type QuoteInsertServices,
   type SelectionExtraction,
@@ -158,6 +159,46 @@ describe('extractSelection（DOM → SelectionProbe 提取）', () => {
     selection.removeAllRanges()
     selection.addRange(range)
     expect(extractSelection(document, DEFAULT_SELECTION_ROOTS).scopeRoot).toBeNull()
+  })
+})
+
+describe('resolveSelectionSource（1.32 source 语义：doc=相对路径 / sessionMsg=行序）', () => {
+  it('文档预览选区：sourceType=doc + sourcePath=data-textpreview-path 投影文本', () => {
+    document.body.innerHTML = `
+      <div data-dockkit-pane>
+        <div data-document-preview="tab-1">
+          <div data-textpreview-path="true">docs/dockkit.md</div>
+          <p id="dpara">预览正文</p>
+        </div>
+      </div>`
+    const para = document.getElementById('dpara')
+    if (para === null) throw new Error('missing #dpara')
+    expect(resolveSelectionSource(document, para.firstChild)).toEqual({
+      sourceType: 'doc',
+      sourcePath: 'docs/dockkit.md',
+    })
+  })
+
+  it('会话消息选区：sourceType=sessionMsg + sourceSeq=anchor 行在 chat flow 内的序数（1 起）', () => {
+    document.body.innerHTML = `
+      <div data-chat-flow>
+        <div data-chat-anchor-key="a" data-chat-flow-kind="user"><p id="m1">第一条</p></div>
+        <div data-chat-anchor-key="b" data-chat-flow-kind="assistant"><p id="m2">第二条</p></div>
+      </div>`
+    const m2 = document.getElementById('m2')
+    if (m2 === null) throw new Error('missing #m2')
+    expect(resolveSelectionSource(document, m2.firstChild)).toEqual({
+      sourceType: 'sessionMsg',
+      sourceSeq: 2,
+    })
+  })
+
+  it('两者皆非（域外/无 path 投影/无 anchor 行）：undefined——serialize 不出 source 属性', () => {
+    document.body.innerHTML = '<div id="bare">裸文本</div>'
+    const bare = document.getElementById('bare')
+    if (bare === null) throw new Error('missing #bare')
+    expect(resolveSelectionSource(document, bare.firstChild)).toBeUndefined()
+    expect(resolveSelectionSource(document, null)).toBeUndefined()
   })
 })
 

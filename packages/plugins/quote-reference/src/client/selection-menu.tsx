@@ -30,6 +30,8 @@ export interface SelectionExtraction extends SelectionProbe {
   readonly text: string
   /** 选区 DOMRect（弹层 getAnchorRect 锚定量；不可得 = null） */
   readonly rect: DOMRect | null
+  /** 选区起点容器（source 语义解析锚点；不可得 = null） */
+  readonly anchor: Node | null
 }
 
 /** 编辑域排除选择器（proposal §2 判例同构：input/textarea/[contenteditable]）。 */
@@ -42,6 +44,37 @@ function closestOf(node: Node | null): Element | null {
   if (node === null) return null
   const candidate = node.nodeType === node.ELEMENT_NODE ? node : node.parentNode
   return candidate instanceof Element ? candidate : null
+}
+
+/** 1.32 source 语义解析产物（快照结构化来源字段）。 */
+export type SelectionSource =
+  | { readonly sourceType: 'doc'; readonly sourcePath: string }
+  | { readonly sourceType: 'sessionMsg'; readonly sourceSeq: number }
+
+/**
+ * 选区落点 → source 语义解析（纯读，1.32 改判——替代 document.title 形态）：
+ * 文档预览域（官方 sidebar-documentpreview TextPreview，`[data-document-preview]`）
+ * 取 `[data-textpreview-path]` 投影文本 = workspace 文件相对路径；chat flow 域
+ *（官方 ChatView `[data-chat-flow]`）取选区所在 `[data-chat-anchor-key]` 行在 flow
+ * 内的序数（1 起 = 会话消息序号）。皆非 = undefined（serialize 不出 source 属性）。
+ */
+export function resolveSelectionSource(_doc: Document, anchor: Node | null): SelectionSource | undefined {
+  const anchorEl = closestOf(anchor)
+  if (anchorEl === null) return undefined
+  const preview = anchorEl.closest('[data-document-preview]')
+  if (preview !== null) {
+    const sourcePath = preview.querySelector('[data-textpreview-path]')?.textContent?.trim() ?? ''
+    if (sourcePath !== '') return { sourceType: 'doc', sourcePath }
+  }
+  const flow = anchorEl.closest('[data-chat-flow]')
+  if (flow !== null) {
+    const row = anchorEl.closest('[data-chat-anchor-key]')
+    if (row !== null) {
+      const index = Array.from(flow.querySelectorAll('[data-chat-anchor-key]')).indexOf(row)
+      if (index >= 0) return { sourceType: 'sessionMsg', sourceSeq: index + 1 }
+    }
+  }
+  return undefined
 }
 
 /**
@@ -57,6 +90,7 @@ export function extractSelection(doc: Document, roots: readonly string[]): Selec
     scopeRoot: null,
     text: '',
     rect: null,
+    anchor: null,
   }
   const selection = doc.getSelection()
   if (selection === null || selection.rangeCount === 0) return empty
@@ -84,7 +118,7 @@ export function extractSelection(doc: Document, roots: readonly string[]): Selec
   } catch {
     rect = null
   }
-  return { collapsed: false, editableTarget, overlayRole, scopeRoot, text, rect }
+  return { collapsed: false, editableTarget, overlayRole, scopeRoot, text, rect, anchor: range.startContainer }
 }
 
 // ─────────────────────────── insertReferenceAtTail 同径（open-session 判例镜像） ───────────────────────────
@@ -287,6 +321,7 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
   let rect: DOMRect | null = null
   let side: 'bottom' | 'top' = 'bottom'
   let pendingText = ''
+  let pendingAnchor: Node | null = null
   let disposed = false
 
   function render(): void {
@@ -326,13 +361,11 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
     }
     const id = randomQuoteId()
     const summary = summaryOf(snapshotText)
-    const title = doc.title
-    const snapshot = {
-      id,
-      summary,
-      text: snapshotText,
-      source: title !== '' ? title : undefined,
-    }
+    // 1.32 source 语义：doc=文件相对路径 / sessionMsg=会话消息序号（结构化字段随快照入池）
+    const selectionSource = resolveSelectionSource(doc, pendingAnchor)
+    const snapshot = selectionSource === undefined
+      ? { id, summary, text: snapshotText }
+      : { id, summary, text: snapshotText, ...selectionSource }
     // 快照入池（offerSelection 同时落缓存——@ 菜单候选 + serialize 全文块单源）
     source.offerSelection(snapshot)
     const reference = quoteReferenceInsertOf({ id, summary })
@@ -387,6 +420,7 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
       return
     }
     pendingText = extraction.text
+    pendingAnchor = extraction.anchor
     open = true
     rect = extraction.rect
     side = sideFor(extraction)

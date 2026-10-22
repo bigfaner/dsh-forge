@@ -5,6 +5,8 @@ import {
   mentionTextOf,
   quoteIdOfRef,
   quoteRefOf,
+  quoteSourceAttrOf,
+  serializeQuoteSnapshot,
   type QuoteSnapshot,
 } from "../src/client/quote-source.js";
 
@@ -14,7 +16,8 @@ function snapshot(overrides: Partial<QuoteSnapshot> = {}): QuoteSnapshot {
     id: "3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3",
     summary: "文本引用锚定的核心是…",
     text: "文本引用锚定的核心是把一段选区映射为稳定描述符。",
-    source: "dockkit 文档示例：锚定与重定位",
+    sourceType: "doc",
+    sourcePath: "docs/dockkit.md",
     ...overrides,
   };
 }
@@ -46,7 +49,7 @@ describe("候选投影（选段快照 → @ 菜单候选）", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe("3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3");
     expect(rows[0]?.label).toContain("文本引用锚定的核心");
-    expect(rows[0]?.description).toBe("dockkit 文档示例：锚定与重定位");
+    expect(rows[0]?.description).toBe("docs/dockkit.md");
     expect(rows[0]?.value).toBe("quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3");
   });
 
@@ -109,17 +112,43 @@ describe("pick 与 codec 往返", () => {
     expect(serialized).toContain("〔引用：文本引用锚定的核心是…〕");
   });
 
-  it("codec 往返：pick 落快照后 clipboardText / serialize 命中全量（mention + <quote> 块）", async () => {
+  it("bug 1.32 格式改判：serializeQuoteSnapshot 只落 quote 块（无 mention 前缀行）", () => {
+    const serialized = serializeQuoteSnapshot(snapshot());
+    expect(serialized.startsWith(`<quote id="${quoteRefOf(snapshot().id)}"`)).toBe(true);
+    expect(serialized.endsWith("</quote>")).toBe(true);
+    expect(serialized).not.toContain("〔引用：");
+    expect(serialized).toContain(snapshot().text);
+  });
+
+  it("source 语义：doc 选区 source={filepath}", () => {
+    expect(quoteSourceAttrOf(snapshot())).toBe("docs/dockkit.md");
+    expect(serializeQuoteSnapshot(snapshot())).toContain(
+      `<quote id="${quoteRefOf(snapshot().id)}" source="docs/dockkit.md">`,
+    );
+  });
+
+  it("source 语义：会话消息选区 source=currentSessionMsg/{seq}", () => {
+    const snap = snapshot({ sourceType: "sessionMsg", sourcePath: undefined, sourceSeq: 3 });
+    expect(quoteSourceAttrOf(snap)).toBe("currentSessionMsg/3");
+    expect(serializeQuoteSnapshot(snap)).toContain('source="currentSessionMsg/3"');
+  });
+
+  it("source 语义：结构化字段缺席回退 legacy source；全缺 = 不出属性", () => {
+    expect(quoteSourceAttrOf(snapshot({ sourceType: undefined, sourcePath: undefined }))).toBeUndefined();
+    expect(quoteSourceAttrOf(snapshot({ sourcePath: undefined }))).toBeUndefined();
+  });
+
+  it("codec 往返：pick 落快照后 clipboardText（chip 投影）/ serialize（仅 quote 块）", async () => {
     const src = createQuoteReferenceSource();
     const snap = snapshot();
     src.cacheQuoteSnapshot(snap);
     const ref = quoteRefOf(snap.id);
     expect(src.codec.clipboardText(ref)).toBe(`〔引用：${snap.summary}〕`);
     const serialized = await src.codec.serialize(ref, ABORT);
-    expect(serialized).toContain(`〔引用：${snap.summary}〕`);
-    expect(serialized).toContain(`<quote id="${ref}" source="${snap.source}">`);
+    expect(serialized.startsWith(`<quote id="${ref}" source="${snap.sourcePath}">`)).toBe(true);
     expect(serialized).toContain(snap.text);
     expect(serialized).toContain("</quote>");
+    expect(serialized).not.toContain("〔引用：");
   });
 
   it("serialize 快照优先：cacheQuoteSnapshot 后补缓存即命中（无需 pick）", async () => {
@@ -131,11 +160,11 @@ describe("pick 与 codec 往返", () => {
 });
 
 describe("快照缺失回退（永不抛错）", () => {
-  it("无快照 serialize 回退最小块（mention 保留、不追加 quote 块、不抛错）", async () => {
+  it("无快照 serialize 回退最小 quote 块（摘要不可用、无 mention 行、不抛错）", async () => {
     const src = createQuoteReferenceSource();
     const serialized = await src.codec.serialize("quote:ghost", ABORT);
-    expect(serialized).toBe(mentionTextOf("摘要不可用", "ghost"));
-    expect(serialized).not.toContain("<quote");
+    expect(serialized).toBe('<quote id="quote:ghost">\n摘要不可用\n</quote>');
+    expect(serialized).not.toContain("〔引用：");
   });
 
   it("clipboardText 无快照不抛错（uuid 不入明面的兜底投影）", () => {
