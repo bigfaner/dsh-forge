@@ -118,6 +118,31 @@ setTimeout(() => {
 		);
 		return;
 	}
+	// electron dist ACL 解毒（bug 5c830524）：沙箱令牌下的 pnpm install 会给 dist 烙显式
+	// Everyone:(DENY)(DC) 与 Low 完整性标签（区别于全树无害的继承态根保护 ACE），桌面令牌
+	// 启动该 electron 时 chromium 早期初始化即崩 0x80000003（早于一切日志）。dev 启动自检：
+	// 检出非继承（无 (I) 标）毒化条目即摘除；失败 fail-soft 仅告警（本会话令牌可读可执行时不受影响）。
+	if (process.platform === 'win32') {
+		try {
+			const distDir = dirname(ELECTRON_EXE);
+			for (const target of [ELECTRON_EXE, distDir]) {
+				const acl = spawnSync('icacls', [target], { encoding: 'utf8' });
+				const text = acl.stdout ?? '';
+				const poisoned = /(Everyone|Mandatory Label\\Low Mandatory Level):(?!\(I\))(?=[^:]*\(DENY\))|Mandatory Label\\Low Mandatory Level:(?!\(I\))/i.test(
+					text
+				);
+				if (poisoned) {
+					spawnSync('icacls', [target, '/remove:d', 'Everyone', 'Mandatory Label'], { stdio: 'inherit' });
+					if (target === ELECTRON_EXE) {
+						spawnSync('icacls', [target, '/setintegritylevel', 'M'], { stdio: 'inherit' });
+					}
+					console.warn(`[dev] electron ACL 解毒：${target}（摘除安装期显式 deny/低标签烙印，bug 5c830524）`);
+				}
+			}
+		} catch {
+			console.warn('[dev] electron ACL 自检失败（fail-soft）——若桌面令牌启动崩 0x80000003，手动执行：icacls <electron dist> /remove:d Everyone "Mandatory Label" 并对 electron.exe /setintegritylevel M');
+		}
+	}
 	// 预设底稿刷新（根治 src→dist 遮蔽）：copy-preset-assets.mjs 只挂 pnpm build，tsc watch
 	// 不拷非 TS 资产——dist 旧副本（历次 build 残留）在 presets.ts 双锚解析里优先于 src，
 	// 改底稿后仅重启 dev 会被旧副本遮蔽。electron 拉起前同步刷新一次，保证本次启动读到
