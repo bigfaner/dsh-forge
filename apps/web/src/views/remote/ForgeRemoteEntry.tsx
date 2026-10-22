@@ -733,8 +733,7 @@ export function RemotePanel(props: {
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——隐藏 closeHint 与「完成」钮） */
   readonly manageConnected?: boolean
 }): ReactNode {
-  const { snapshot, onToggle, busy, onRefresh } = props
-  const checked = snapshot.phase !== 'off'
+  const { snapshot, busy, onRefresh } = props
   const pairValue = remotePairQrOf(snapshot)
   // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
   const [modeState, setModeState] = useState<RemoteMode>('lan')
@@ -1044,18 +1043,7 @@ export function RemotePanel(props: {
             )}
           </div>
         )}
-        {/* fix-9 ⑦：官方 Switch 件（dsh-client-ui-primitives 在场——弃原生 checkbox） */}
-        <div className="dswf-remote-panel-row">
-          <span>远程访问</span>
-          <Switch
-            checked={checked}
-            disabled={onToggle === undefined || busy === true}
-            label="远程访问开关"
-            onChange={(next) => {
-              void onToggle?.(next)
-            }}
-          />
-        </div>
+        {/* 用户裁决 2026-10-22：远程访问开关上移 dialog 标题右侧（只留钮）——面板行退役 */}
         {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
             internet = 无说明卡（用户裁决 2026-10-22：互联网 explainer 及外框移除） */}
         {mode !== 'internet' && (
@@ -1103,6 +1091,8 @@ export function RemoteDialogHead(props: {
   readonly harness?: DshForgeHarnessBridge
   /** fix-19 ⑥：标题读数（缺省 = 配对标题——已连接态由 ForgeRemoteDialog 传管理标题） */
   readonly title?: string
+  /** 用户裁决 2026-10-22：远程访问开关上移标题右侧（只留钮不留文字） */
+  readonly trailing?: ReactNode
 }): ReactNode {
   return (
     <div className="dswf-remote-dialog">
@@ -1115,6 +1105,9 @@ export function RemoteDialogHead(props: {
       >
         <IconCloseOutlineRegular size={16} />
       </button>
+      {props.trailing !== undefined && (
+        <div className="dswf-remote-dialog-switch">{props.trailing}</div>
+      )}
       <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
     </div>
   )
@@ -1157,7 +1150,22 @@ export function ForgeRemoteDialog(props: {
       headless
       className="dswf-remote-modal"
     >
-      <RemoteDialogHead onClose={props.onClose} harness={harnessBridgeOf()} title={title} />
+      <RemoteDialogHead
+        onClose={props.onClose}
+        harness={harnessBridgeOf()}
+        title={title}
+        trailing={
+          /* 用户裁决 2026-10-22：远程访问开关上移标题右侧——只留钮不留文字 */
+          <Switch
+            checked={props.snapshot.phase !== 'off'}
+            disabled={props.onToggle === undefined || props.busy === true}
+            label="远程访问开关"
+            onChange={(next) => {
+              void props.onToggle?.(next)
+            }}
+          />
+        }
+      />
       <RemotePanel
         snapshot={props.snapshot}
         onToggle={props.onToggle}

@@ -120,6 +120,12 @@
   padding-top: 22px; /* dsw-raw 官方 Modal .header 上距同值 */
 }
 
+.dswf-remote-dialog-switch {
+  position: absolute; /* 用户裁决 2026-10-22：远程访问开关上移标题右侧（只留钮不留文字） */
+  top: 20px;
+  right: 30px; /* 关钮（右 -10，宽 28）左侧——两钮不重叠 */
+}
+
 .dswf-remote-dialog-close {
   position: absolute;
   top: 18px; /* dsw-raw 关闭钮垂直落点（22 header 上距 − 钮半高微调） */

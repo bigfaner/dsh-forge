@@ -4,6 +4,7 @@
 // 本层钉渲染语言与状态类名。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   ForgeRemoteEntry,
   HARNESS_MENU_ITEMS,
@@ -15,6 +16,7 @@ import {
   REMOTE_STATUS_POLL_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
+  ForgeRemoteDialog,
   harnessBridgeOf,
   harnessMenuFocusLeft,
   harnessMenuPointerOutside,
@@ -178,33 +180,53 @@ describe('ForgeRemoteEntry 图标三态', () => {
 })
 
 describe('RemotePanel 面板', () => {
-  it('默认关：开关未选中 + 空态提示（地址条不呈现）', () => {
-    const html = renderToStaticMarkup(
+  it('默认关：开关未选中 + 空态提示（地址条不呈现）——开关已上移 dialog 标题右侧（用户裁决 2026-10-22）', () => {
+    const panel = renderToStaticMarkup(
       <RemotePanel snapshot={{ phase: 'off' }} onToggle={() => undefined} />,
     )
-    expect(html).toMatch(/role="switch"/)
-    expect(html).toMatch(/aria-checked="false"/)
-    expect(html).not.toMatch(/type="checkbox"/)
-    expect(html).toMatch(/远程已关闭——开启远程并重启宿主后生成配对二维码/)
-    expect(html).not.toContain('dswf-remote-address')
-    expect(html).not.toMatch(/待重启生效提示/)
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={
+          <Switch checked={false} disabled={false} label="远程访问开关" onChange={() => undefined} />
+        }
+      />,
+    )
+    expect(head).toMatch(/role="switch"/)
+    expect(head).toMatch(/aria-checked="false"/)
+    expect(panel).not.toMatch(/type="checkbox"/)
+    expect(panel).toMatch(/远程已关闭——开启远程并重启宿主后生成配对二维码/)
+    expect(panel).not.toContain('dswf-remote-address')
+    expect(panel).not.toMatch(/待重启生效提示/)
   })
 
   it('监听中：开关选中 + 官方连接文案 + 局域网地址展示', () => {
-    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(html).toMatch(/aria-checked="true"/)
-    expect(html).toMatch(/扫码即可连接/)
-    expect(html).toContain('http://192.168.1.7:8787')
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
+    )
+    const panel = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(head).toMatch(/aria-checked="true"/)
+    expect(panel).toMatch(/扫码即可连接/)
+    expect(panel).toContain('http://192.168.1.7:8787')
   })
 
   it('fix-3 待重启生效：开关选中 + 重启提示行（不呈现局域网地址——不伪装已监听）', () => {
-    const html = renderToStaticMarkup(
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
+    )
+    const panel = renderToStaticMarkup(
       <RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />,
     )
-    expect(html).toMatch(/checked/)
-    expect(html).toContain('dswf-remote-pending-hint')
-    expect(html).toMatch(/重启宿主后生效/)
-    expect(html).not.toContain('http://')
+    expect(head).toMatch(/checked/)
+    expect(panel).toContain('dswf-remote-pending-hint')
+    expect(panel).toMatch(/重启宿主后生效/)
+    expect(panel).not.toContain('http://')
   })
 
   it('fix-26 ②：面板头「手机远程」「等待扫码」文字退役（状态语义由圆点/连接卡承载——面板头不渲染）', () => {
@@ -259,12 +281,17 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).not.toContain('已复制')
   })
 
-  it('⑦远程访问开关 = 官方 Switch 件（role="switch" aria-checked 全托管；fix-18 ① 起连接态独占——开关行属配对面，判读取 listening 态）', () => {
-    const html = renderToStaticMarkup(
-      <RemotePanel snapshot={LISTENING} onToggle={() => undefined} />,
+  it('⑦远程访问开关 = 官方 Switch 件上移 dialog 标题右侧（role="switch" aria-checked 全托管——用户裁决 2026-10-22 只留钮不留文字）', () => {
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
     )
-    expect(html).toMatch(/role="switch"[\s\S]*aria-checked="true"/)
-    expect(html).not.toMatch(/type="checkbox"/)
+    expect(head).toMatch(/role="switch"[\s\S]*?aria-checked="true"/)
+    expect(head).toContain('dswf-remote-dialog-switch')
+    expect(head).not.toMatch(/type="checkbox"/)
+    expect(head).not.toMatch(/>远程访问</) // 可见文本不留「远程访问」字样（aria-label 元数据不算）
   })
 
   it('fix-10（bug ec239552）：连接成功态绿卡——✓ 手机已连接 + 后台保持文案 + 断开连接/完成双钮（官方锚 main.js:1176）', () => {
