@@ -272,6 +272,20 @@ export function defaultFetchStatus(): Promise<DrawerStatus> {
   })
 }
 
+// 状态闪断抑制（2026-10-22 真机判例：激活后首包 __rpc 偶发 unauthorized（信封时序瞬态），
+// 单次失败即翻「连接中断」= 闪断——连续失败达阈值才翻，任一次成功即清零）。
+export const STATUS_FAIL_STREAK_THRESHOLD = 2
+
+/** 连续失败计数推进（ok = 清零；失败 = +1）。 */
+export function nextStatusFailStreak(prev: number, ok: boolean): number {
+  return ok ? 0 : prev + 1
+}
+
+/** 计数 → 显示态（未达阈值 = 仍显已连接——瞬态不闪）。 */
+export function statusDisplayOk(failStreak: number): boolean {
+  return failStreak < STATUS_FAIL_STREAK_THRESHOLD
+}
+
 export function createDrawerView(deps: DrawerDeps): HTMLElement {
   const root = el('div', 'drawer-mask')
   ensureIconSprite(root)
@@ -301,6 +315,7 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   const workerExpanded = new Set<string>()
   let query = ''
   let status: DrawerStatus = { ok: true, tunnelExpiresAt: null }
+  let statusFailStreak = 0
   let showConnPop = false
   let disconnected = false
 
@@ -489,11 +504,15 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   }
 
   async function refreshStatus(): Promise<void> {
+    let next: DrawerStatus
     try {
-      status = await deps.fetchStatus()
+      next = await deps.fetchStatus()
     } catch {
-      status = { ok: false, tunnelExpiresAt: null }
+      next = { ok: false, tunnelExpiresAt: null, ...(status.tunnel === true ? { tunnel: true } : {}) }
     }
+    statusFailStreak = nextStatusFailStreak(statusFailStreak, next.ok)
+    // 隧道域位保持（心跳语义域不随单次结果漂移）；未达连续失败阈值不翻断开（瞬态不闪）
+    status = { ...next, ok: next.ok || statusDisplayOk(statusFailStreak) }
     renderConn()
   }
 

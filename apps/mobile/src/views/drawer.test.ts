@@ -6,9 +6,12 @@ import {
   DRAWER_TOP_N,
   DRAWER_WINDOW_MS,
   filterSessions,
+  nextStatusFailStreak,
   orderVisible,
   pinnedKey,
   splitWorkers,
+  statusDisplayOk,
+  STATUS_FAIL_STREAK_THRESHOLD,
   toggleString,
   unreadOf,
   type DrawerSession,
@@ -157,5 +160,18 @@ describe('worker 筛选 + 检索 + 偏好 toggle', () => {
     expect(toggleString(['a'], 'b')).toEqual(['a', 'b'])
     expect(pinnedKey('pair')).toBe('dshf.mobile.drawer.pins.pair')
     expect(collapsedKey('pair')).toBe('dshf.mobile.drawer.collapsed.pair')
+  })
+})
+
+describe('状态闪断抑制（激活后首包 unauthorized 瞬态不翻断开）', () => {
+  it('单次失败计 1 未达阈值仍显已连接；连续达阈值才断开；成功清零', () => {
+    expect(STATUS_FAIL_STREAK_THRESHOLD).toBe(2)
+    let streak = nextStatusFailStreak(0, false)
+    expect(statusDisplayOk(streak)).toBe(true) // 第 1 次失败——瞬态不闪
+    streak = nextStatusFailStreak(streak, false)
+    expect(statusDisplayOk(streak)).toBe(false) // 第 2 次连续失败——真断开
+    streak = nextStatusFailStreak(streak, true)
+    expect(streak).toBe(0)
+    expect(statusDisplayOk(streak)).toBe(true)
   })
 })
