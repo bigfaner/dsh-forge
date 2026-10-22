@@ -2479,12 +2479,18 @@ body[data-ds-dark-theme] .worker-readonly-hint {
   border-color: #303034;
 }
 
-/* ---- 配对面（main.ts showPairing——tunnel PSK+PIN 双因子输入面） ---- */
+/* ---- 配对面（main.ts showPairing——激活连接界面；卡片式同 app 视觉词汇） ---- */
 .pairing-root {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 24px 20px;
+  background: #f5f6f8;
+  overflow-y: auto;
+}
+.dark .pairing-root,
+body[data-ds-dark-theme] .pairing-root {
+  background: #151517;
 }
 
 .pairing-hint {
@@ -2500,32 +2506,88 @@ body[data-ds-dark-theme] .worker-readonly-hint {
   opacity: 0.72;
 }
 
+/* 激活卡：白底圆角卡（conn-pop 同型）——状态行 + 三字段块 + 激活/重置双钮 */
 .tunnel-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px;
+}
+.dark .tunnel-panel,
+body[data-ds-dark-theme] .tunnel-panel {
+  background: #1d1d20;
+  border-color: #2c2c2e;
 }
 
-/* ---- 隧道字段行（? 帮助钮 + 内联解释） ---- */
+.tunnel-status {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #81858c;
+  text-align: center;
+  padding: 2px 0 4px;
+}
+
+/* 字段块：label 行（label + ? 帮助钮）在上、输入框在下 */
 .tunnel-field {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.tunnel-field .msearch-input {
-  flex: 1;
-  min-width: 0;
+.tunnel-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tunnel-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f1115;
+}
+.dark .tunnel-label,
+body[data-ds-dark-theme] .tunnel-label {
+  color: #f5f5f6;
+}
+
+.tunnel-input {
+  height: 40px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f7f8fa;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tunnel-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+}
+.dark .tunnel-input,
+body[data-ds-dark-theme] .tunnel-input {
+  background: #2c2c2e;
+  border-color: #3a3a3c;
+}
+.dark .tunnel-input:focus,
+body[data-ds-dark-theme] .tunnel-input:focus {
+  border-color: #3b82f6;
+  background: #232325;
 }
 
 .tunnel-help {
   flex: none;
   width: 22px;
   height: 22px;
-  border: 1px solid var(--dsw-alias-border-l2, #ccc);
+  border: 1px solid #d5d8dc;
   border-radius: 50%;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, #888);
+  color: #81858c;
   font-size: 12px;
   line-height: 20px;
   text-align: center;
@@ -2536,8 +2598,43 @@ body[data-ds-dark-theme] .worker-readonly-hint {
 .tunnel-hint {
   font-size: 12px;
   line-height: 1.5;
-  color: var(--dsw-alias-label-secondary, #666);
-  padding: 6px 8px;
+  color: #5f6368;
+  padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
+  background: #f1f3f4;
+}
+.dark .tunnel-hint,
+body[data-ds-dark-theme] .tunnel-hint {
+  color: #a8abb2;
+  background: #2c2c2e;
+}
+
+/* 激活 = 主钮（蓝底反差白，全宽圆角）；重置 = 中性次钮（描边灰） */
+.tunnel-activate {
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tunnel-activate:active {
+  background: #2f6fd6;
+}
+
+.tunnel-reset {
+  height: 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: transparent;
+  color: #81858c;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dark .tunnel-reset,
+body[data-ds-dark-theme] .tunnel-reset {
+  border-color: #3a3a3c;
+  color: #a8abb2;
 }

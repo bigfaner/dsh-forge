@@ -113,6 +113,11 @@ export function readTrustBaseline(storage: KvStorage): TrustBaseline | undefined
   }
 }
 
+/** 清除信任基线（用户裁决 2026-10-22：激活面「重置」钮——PSK/PIN/SPKI 录入与本机基线一并清空）。 */
+export function clearTrustBaseline(storage: KvStorage): void {
+  storage.set(BASELINE_KEY, '')
+}
+
 export type EntryTrust = 'trusted' | 'unverified'
 
 /**

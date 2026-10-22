@@ -74,63 +74,95 @@ export function createTunnelPanel(deps: TunnelPanelDeps): TunnelPanel {
   let statusLine: HTMLElement | undefined
   let active: TunnelMaterial | undefined
 
-  /** 字段行：输入框 + ? 帮助钮（点按展开内联解释——触屏无 hover，零依赖实现） */
-  function fieldRow(input: HTMLInputElement, helpText: string): HTMLElement {
-    const row = el('div', 'tunnel-field')
-    let hint: HTMLElement | undefined
+  const IDLE_STATUS = TUNNEL_COPY.readonlyGate
+
+  /** 字段块：label 行（+ ? 帮助钮——点按展开内联解释）+ 输入框。 */
+  function fieldBlock(label: string, input: HTMLInputElement, helpText: string): HTMLElement {
+    const block = el('div', 'tunnel-field')
+    const head = el('div', 'tunnel-label-row')
     const btn = el('button', 'tunnel-help', '?')
     btn.type = 'button'
-    btn.setAttribute('aria-label', `字段说明：${input.placeholder ?? ''}`)
+    btn.setAttribute('aria-label', `字段说明：${label}`)
     btn.addEventListener('click', () => {
-      if (hint === undefined) {
-        hint = el('div', 'tunnel-hint', helpText)
-        row.append(hint)
+      const existing = block.querySelector('.tunnel-hint')
+      if (existing === null) {
+        block.append(el('div', 'tunnel-hint', helpText))
         btn.textContent = '×'
       } else {
-        hint.remove()
-        hint = undefined
+        existing.remove()
         btn.textContent = '?'
       }
     })
-    row.append(input, btn)
-    return row
+    head.append(el('span', 'tunnel-label', label), btn)
+    block.append(head, input)
+    return block
+  }
+
+  function setStatus(text: string): void {
+    if (statusLine !== undefined) statusLine.textContent = text
+  }
+
+  /** 重置（用户裁决 2026-10-22）：清空 PSK/PIN/SPKI 录入 + 本机信任基线，回待激活态。 */
+  function resetFields(): void {
+    if (pskInput === undefined || pinInput === undefined || hostInput === undefined) return
+    pskInput.value = ''
+    pinInput.value = ''
+    hostInput.value = ''
+    active = undefined
+    setStatus(IDLE_STATUS)
+    try {
+      if (typeof window !== 'undefined' && window.localStorage !== null) {
+        window.localStorage.removeItem('forge.psk.trustBaseline')
+      }
+    } catch {
+      /* 存储不可用静默跳过 */
+    }
+    for (const node of root.querySelectorAll('.tunnel-hint')) node.remove()
+    for (const btn of root.querySelectorAll('.tunnel-help')) btn.textContent = '?'
   }
 
   function build(): void {
     root.textContent = ''
-    statusLine = el('div', 'msearch-hint', active === undefined ? TUNNEL_COPY.readonlyGate : `已激活 · host ${active.hostKeyId}`)
+    statusLine = el('div', 'tunnel-status', IDLE_STATUS)
 
     pskInput = document.createElement('input')
-    pskInput.className = 'msearch-input'
+    pskInput.className = 'tunnel-input'
     pskInput.type = 'password'
-    pskInput.placeholder = 'PSK（桌面「连接密钥」生成）'
+    pskInput.placeholder = '粘贴或逐字录入'
     pskInput.autocomplete = 'off'
 
     pinInput = document.createElement('input')
-    pinInput.className = 'msearch-input'
+    pinInput.className = 'tunnel-input'
     pinInput.type = 'password'
-    pinInput.placeholder = '配对 PIN（= 桌面「配对 PIN」）'
+    pinInput.placeholder = '6 位数字'
     pinInput.autocomplete = 'off'
+    pinInput.inputMode = 'numeric'
 
     hostInput = document.createElement('input')
-    hostInput.className = 'msearch-input'
+    hostInput.className = 'tunnel-input'
     hostInput.type = 'text'
-    hostInput.placeholder = 'SPKI（桌面「HOST 公钥」）'
+    hostInput.placeholder = 'base64 SPKI 串'
     hostInput.autocomplete = 'off'
     hostInput.spellcheck = false
 
-    const activate = el('button', 'ask-btn primary', '激活连接')
+    const activate = el('button', 'tunnel-activate', '激活连接')
+    activate.type = 'button'
     activate.addEventListener('click', () => void activateConnection())
+
+    const reset = el('button', 'tunnel-reset', '重置')
+    reset.type = 'button'
+    reset.addEventListener('click', resetFields)
 
     root.append(
       statusLine,
-      fieldRow(pskInput, 'PSK（预共享密钥）：加密隧道的根——桌面「连接密钥」生成的 base32 串，逐字录入或粘贴'),
-      fieldRow(pinInput, '配对 PIN：与 PSK 共同派生会话密钥的第二因子——与桌面「配对 PIN」同值'),
-      fieldRow(hostInput, 'SPKI：电脑的签名公钥——验证响应确实来自你的电脑，防中间人伪造'),
+      fieldBlock('连接密钥（PSK）', pskInput, 'PSK（预共享密钥）：加密隧道的根——桌面「连接密钥」面板一键复制全部后逐字段粘贴'),
+      fieldBlock('配对 PIN', pinInput, '配对 PIN：与 PSK 共同派生会话密钥的第二因子——与桌面「配对 PIN」同值'),
+      fieldBlock('host 公钥（SPKI）', hostInput, 'SPKI：电脑的签名公钥——验证响应确实来自你的电脑，防中间人伪造'),
       activate,
+      reset,
     )
     void isEd25519Supported().then((supported) => {
-      if (!supported && statusLine !== undefined) statusLine.textContent = TUNNEL_COPY.ed25519Floor
+      if (!supported) setStatus(TUNNEL_COPY.ed25519Floor)
     })
   }
 
