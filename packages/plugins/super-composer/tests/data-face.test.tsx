@@ -524,8 +524,9 @@ describe("消息流投影（同一 eventSource 快照）", () => {
       });
     });
     expect(q(harness, "dscf-messages")?.textContent).toContain("流式回复");
-    // 滚动吸底：消息流变更后 scrollTop 钉在底部
-    const scroller = q(harness, "dscf-messages") as HTMLElement;
+    // 滚动吸底：消息流变更后官方复制件 scrollport（data-conversation-scroll）scrollTop 钉在底部
+    const scroller = q(harness, "dscf-messages")!.querySelector("[data-conversation-scroll]") as HTMLElement;
+    expect(scroller).not.toBeNull();
     expect(scroller.scrollTop).toBe(scroller.scrollHeight);
   });
 

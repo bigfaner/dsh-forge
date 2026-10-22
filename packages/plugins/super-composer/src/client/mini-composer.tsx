@@ -15,6 +15,7 @@
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SurrogateComposer } from "./official-input/surrogate-composer.js";
+import { SurrogateChatView } from "./official-chatview/surrogate-chatview.js";
 import type { SuperComposerDataFace } from "./data-face.js";
 
 export type MiniComposerPhase = "s0" | "s1" | "s2" | "ball";
@@ -177,7 +178,6 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null)
   const [unread, setUnread] = useState(false)
   const seenCountRef = useRef(0)
-  const messagesRef = useRef<HTMLDivElement | null>(null)
 
   const phase = derivePhase(props, view)
   const expandable = isExpandable(props)
@@ -231,12 +231,8 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     return () => document.removeEventListener("keydown", onKeyDown)
   }, [view.collapsed, view.expanded, props.mention, setViewSafe])
 
-  // 消息流滚动吸底（快照增量上屏后钉在底部——proposal 消息流行）。
-  useEffect(() => {
-    const scroller = messagesRef.current
-    if (scroller === null) return
-    scroller.scrollTop = scroller.scrollHeight
-  }, [props.messages, expanded])
+  // 消息流滚动吸底由 SurrogateChatView 承接（官方 ConversationContent 复制件的
+  // scrollport `[data-conversation-scroll]`——1.28 渲染层复制件切换）。
 
   // 标题栏热区点击（可展开判定 = 消息流非空；不可展开纯展示零动作）。
   const onHotzoneClick = useCallback((): void => {
@@ -413,33 +409,23 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       ) : null}
 
       {expanded ? (
-        <div
-          ref={messagesRef}
-          data-testid="dscf-messages"
-          data-streaming={props.streaming ? "true" : "false"}
-          style={{
-            maxHeight: "40vh",
-            overflowY: "auto",
-            padding: "8px 16px",
-            borderTop: "0.5px solid var(--dsw-alias-border-l2)",
-          }}
-        >
-          {props.messages.map((message) => (
-            <div key={message.id} data-role={message.role} style={{ padding: "4px 0" }}>
-              <span
-                style={{
-                  fontSize: 13,
-                  lineHeight: "22px",
-                  color: "var(--dsw-alias-label-primary)",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {message.content}
-              </span>
-              {message.role === "assistant" && props.streaming ? " ▍" : ""}
-            </div>
-          ))}
-        </div>
+        /* S2 对话态：官方 ConversationContent 复制件（消息行 = MessageItem/
+           AssistantMarkdown 官方渲染闭包 + sticky composerSeat 承载输入区复制件）——
+           自绘消息列表退役（1.28 用户裁决渲染层同源）。 */
+        <SurrogateChatView
+          messages={props.messages}
+          streaming={props.streaming}
+          composerBar={
+            props.composer !== undefined ? (
+              <SurrogateComposer
+                face={props.composer}
+                streaming={props.streaming}
+                onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
+                onFocusChange={setFocused}
+              />
+            ) : null
+          }
+        />
       ) : null}
 
       {props.mention?.open === true ? (
@@ -491,20 +477,23 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         </div>
       ) : null}
 
-      <div style={{ padding: "0 16px 12px" }}>
-        {/* 官方 InputBar/DraftEditor 复制件宿主（fix-12 用户裁决源码复制径）：
-            quote chip 原生原子渲染（Lexical ReferenceChipNode 装饰器 portal），发送钮/
-            输入形态与官方同源；textarea 旧径与叠加 chip 层已退役（bug 49368004 叠加层
-            方案②连同 bug 008d44e7 自绘发送钮一并退役）。 */}
-        {props.composer !== undefined ? (
-          <SurrogateComposer
-            face={props.composer}
-            streaming={props.streaming}
-            onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
-            onFocusChange={setFocused}
-          />
-        ) : null}
-      </div>
+      {!expanded ? (
+        <div style={{ padding: "0 16px 12px" }}>
+          {/* 官方 InputBar/DraftEditor 复制件宿主（fix-12 用户裁决源码复制径）：
+              quote chip 原生原子渲染（Lexical ReferenceChipNode 装饰器 portal），发送钮/
+              输入形态与官方同源；textarea 旧径与叠加 chip 层已退役（bug 49368004 叠加层
+              方案②连同 bug 008d44e7 自绘发送钮一并退役）。S2 对话态输入区移入官方
+              composerSeat（SurrogateChatView composerBar 槽）。 */}
+          {props.composer !== undefined ? (
+            <SurrogateComposer
+              face={props.composer}
+              streaming={props.streaming}
+              onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
+              onFocusChange={setFocused}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
