@@ -791,7 +791,8 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
     expect(html).toContain('data-testid="dswf-remote-pin"')
     expect(html).toContain('配对 PIN')
     expect(html).toContain('654321')
-    expect(html).not.toContain('data-testid="dswf-remote-pin-reset"')
+    // 用户裁决 2026-10-22：重置 PIN 恒在 consent 行右侧（非 consent 态不消失）；取消钮仍仅 consent 态
+    expect(html).toContain('data-testid="dswf-remote-pin-reset"')
     expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 

@@ -294,7 +294,7 @@
   align-items: center;
   justify-content: center;
   min-height: 38px; /* dsw-raw 官方 hint 行 38px min-height */
-  margin: 0;
+  margin: 0 20px; /* 用户裁决 2026-10-22：不贴近/不超出 dialog 边缘 */
   padding: 10px 12px; /* dsw-raw 说明卡内距（局部刻度） */
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
@@ -785,6 +785,14 @@
 
 /* fix-21 §2⑥：官方 consent checkbox 行（label + 隐私 small 字——durable 后端机制 §4 差值③
  * 在途，本任务只落展示行） */
+/* 用户裁决 2026-10-22：consent checkbox 行右侧携「重置 PIN」钮（同行右对齐） */
+.dswf-remote-pin-consent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .dswf-remote-pin-consent {
   display: flex;
   align-items: center;
@@ -820,6 +828,13 @@
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 14px; /* dsw-raw 官方 14px（radius 标尺无等价令牌） */
   background: var(--dsw-alias-bg-layer-2); /* panel 底 */
+}
+
+/* 用户裁决 2026-10-22：段标题行右侧携「重新生成」图标钮 */
+.dswf-remote-psk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .dswf-remote-psk-title {

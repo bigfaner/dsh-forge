@@ -627,7 +627,22 @@ export function PskTrioSection(props: {
   const [pskRevealed, setPskRevealed] = useState(false)
   return (
     <div className="dswf-remote-psk" data-testid="dswf-remote-psk">
-      <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
+      {/* 用户裁决 2026-10-22：重新生成 = 标题行右侧图标钮（原底部文字钮退役） */}
+      <div className="dswf-remote-psk-head">
+        <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
+        <Tooltip label="重新生成连接密钥（旧密钥 5 分钟宽限期）" portal>
+          <button
+            type="button"
+            className="dswf-remote-copy"
+            aria-label="重新生成连接密钥"
+            data-testid="dswf-remote-psk-regen"
+            disabled={props.onPskRotate === undefined || rotating}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {rotating ? '…' : '↻'}
+          </button>
+        </Tooltip>
+      </div>
       {trio === undefined ? (
         loaded ? (
           <p className="dswf-remote-psk-empty" data-testid="dswf-remote-psk-empty">
@@ -660,17 +675,6 @@ export function PskTrioSection(props: {
             onCopy={() => copyField('spki', trio.spki)}
           />
           <small className="dswf-remote-pin-privacy">{PSK_GRACE_HINT_TEXT}</small>
-          <div className="dswf-remote-pin-actions">
-            <button
-              type="button"
-              className="dswf-remote-pin-action"
-              data-testid="dswf-remote-psk-regen"
-              disabled={props.onPskRotate === undefined}
-              onClick={() => setConfirmOpen(true)}
-            >
-              {PSK_REGEN_TEXT}
-            </button>
-          </div>
         </>
       )}
       {/* 轮换确认弹窗（官方 Modal 件——防误触；v3.1 宽限期语义正文） */}
@@ -944,34 +948,36 @@ export function RemotePanel(props: {
               <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-hint">
                 {pinConsentOn ? PIN_HINT_DURABLE_TEXT : pinCountdownText(pinSecondsLeft)}
               </span>
-              {/* fix-21 §2⑥ + fix-26 ④：官方 consent checkbox 行（label + 隐私 small 字）——
-                  勾选 = 长效机制（pin-consent 缝触发 setDurable，PIN 长期生效不轮换） */}
-              <label className="dswf-remote-pin-consent">
-                <input
-                  type="checkbox"
-                  checked={pinConsentOn}
-                  onChange={(event) => {
-                    const next = event.target.checked
-                    setPinConsent(next)
-                    void props.onPinConsent?.(next)
-                  }}
-                />
-                <span>{PIN_CONSENT_TEXT}</span>
-              </label>
+              {/* fix-21 §2⑥ + fix-26 ④：官方 consent checkbox 行——勾选 = 长效机制；
+                  用户裁决 2026-10-22：重置 PIN 钮移至 consent 同行右侧 */}
+              <div className="dswf-remote-pin-consent-row">
+                <label className="dswf-remote-pin-consent">
+                  <input
+                    type="checkbox"
+                    checked={pinConsentOn}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                      setPinConsent(next)
+                      void props.onPinConsent?.(next)
+                    }}
+                  />
+                  <span>{PIN_CONSENT_TEXT}</span>
+                </label>
+                <button
+                  type="button"
+                  className="dswf-remote-pin-action"
+                  data-testid="dswf-remote-pin-reset"
+                  disabled={props.onPinReset === undefined}
+                  onClick={() => void props.onPinReset?.()}
+                >
+                  {PIN_RESET_TEXT}
+                </button>
+              </div>
               <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
               {/* fix-26 ④⑤：pin-actions 仅 consent 态呈现（官方 :1190 同语义）——取消 =
-                  解除长效回临时 PIN（onPinConsent(false) 缝），按钮/label 刻度归 §2 样式 */}
+                  解除长效回临时 PIN（onPinConsent(false) 缝） */}
               {pinConsentOn && (
                 <div className="dswf-remote-pin-actions">
-                  <button
-                    type="button"
-                    className="dswf-remote-pin-action"
-                    data-testid="dswf-remote-pin-reset"
-                    disabled={props.onPinReset === undefined}
-                    onClick={() => void props.onPinReset?.()}
-                  >
-                    {PIN_RESET_TEXT}
-                  </button>
                   <button
                     type="button"
                     className="dswf-remote-pin-action"
