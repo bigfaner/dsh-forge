@@ -239,6 +239,8 @@ export interface DrawerDeps {
   readonly onDisconnected?: () => void
   /** 用户裁决 2026-10-22：点抽屉之外区域自动收起（spacer = 抽屉右侧遮罩区）。 */
   readonly onClose?: () => void
+  /** 连接详情「激活连接」钮 → 跳转激活连接界面（用户裁决 2026-10-22：隧道配置不进模型面）。 */
+  readonly onActivateConnection?: () => void
   readonly currentSessionId?: string
   readonly pairDomain: string
   readonly store?: KeyValueStore | null
@@ -447,6 +449,12 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
       el('b', undefined, tunnel ? `PSK 隧道 · 有效期至 ${new Date(status.tunnelExpiresAt!).toLocaleTimeString()}` : `LAN 直连 · ${location.host}`),
     )
     connPop.append(stateRow, channelRow)
+    // 用户裁决 2026-10-22：隧道连接配置入口归抽屉连接详情——钮跳激活连接界面
+    if (deps.onActivateConnection !== undefined) {
+      const activate = el('button', 'activate', '激活连接')
+      activate.addEventListener('click', () => deps.onActivateConnection?.())
+      connPop.appendChild(activate)
+    }
     if (!disconnected) {
       const button = el('button', 'disconnect', '断开连接')
       button.addEventListener('click', () => void doDisconnect())

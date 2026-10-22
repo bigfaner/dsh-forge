@@ -1852,6 +1852,22 @@ body[data-ds-dark-theme] .conn-pop .row {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.conn-pop .activate {
+  width: 100%;
+  height: 32px;
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 1px solid #3b82f6;
+  background: #fff;
+  color: #3b82f6;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dark .conn-pop .activate,
+body[data-ds-dark-theme] .conn-pop .activate {
+  background: #2c2c2e;
+}
 .conn-pop .disconnect {
   width: 100%;
   height: 32px;

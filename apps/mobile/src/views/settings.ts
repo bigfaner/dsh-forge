@@ -13,7 +13,6 @@ import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL
 import type { ModelCatalog, ModelSelection } from './models.ts'
 import { coerceModelCatalog, isSameModel } from './models.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
-import { type TunnelPanel } from '../widgets/tunnel-panel.ts'
 
 // ---------------------------------------------------------------------------
 // 纯函数：推理档位
@@ -79,8 +78,6 @@ export interface SettingsDeps {
   readonly sessionId: string
   /** 模型行点击 → 打开 #/models 唯一子视图（路由侧装配）。 */
   readonly onOpenModels?: () => void
-  /** 隧道连接段（1.31——PSK+PIN+host 公钥录入；缺席 = 不渲染该段）。 */
-  readonly tunnelPanel?: TunnelPanel
 }
 
 export interface SettingsHandle {
@@ -127,12 +124,6 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
     row.insertAdjacentHTML('beforeend', '<span class="chev-r"><svg class="ic"><use href="#i-chev"/></svg></span>')
     row.addEventListener('click', () => deps.onOpenModels?.())
     sheet.appendChild(row)
-
-    // 隧道连接段（1.31——PSK+PIN+host 公钥同屏录入；装配注入才渲染）
-    if (deps.tunnelPanel !== undefined) {
-      sheet.appendChild(el('div', 'grp-title', '隧道连接'))
-      sheet.appendChild(deps.tunnelPanel.root)
-    }
 
     // 推理等级分段：随模型 efforts 联动，不支持则整段隐藏
     const efforts = supportedEfforts()

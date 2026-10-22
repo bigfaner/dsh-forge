@@ -195,22 +195,10 @@ export function mount(root: HTMLElement): void {
       rpc: ctx.rpc,
       sessionId: currentSessionId(),
       onOpenModels: () => router.navigate('models'),
-      tunnelPanel: ctx.tunnel ? tunnelPanelForSettings() : undefined,
     })
     container.appendChild(settingsSheet.root)
     void settingsSheet.open()
   }
-  /** 设置面隧道段（1.31——激活后重建传输腿）。 */
-  function tunnelPanelForSettings() {
-    return createTunnelPanel({
-      sid: identity.sid,
-      onActivated: (material) => {
-        applyTunnelMaterial(material)
-        ensureStream()
-      },
-    })
-  }
-
   function openReader(path: string): void {
     if (ctx.rpc === null) return
     const handle = createReader({
@@ -341,6 +329,8 @@ export function mount(root: HTMLElement): void {
             fetchStatus: defaultFetchStatus,
             onOpenSession: openSession,
             onDisconnected: () => showPairing(),
+            // 用户裁决 2026-10-22：连接详情「激活连接」钮 → 激活连接界面（配对面）
+            onActivateConnection: () => showPairing(),
             // 用户裁决 2026-10-22：点抽屉外自动收起——回当前会话（无会话回 hero）
             onClose: () => {
               const sid = store.get().currentSessionId
