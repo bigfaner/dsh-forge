@@ -326,3 +326,45 @@ describe('buildRemoteStatusSource（fix-3 产品配置通道）', () => {
     dispose()
   })
 })
+
+describe('1.107 三件套读数/轮换面（psk-read / psk-rotate 直转）', () => {
+  const TRIO = { configured: true, display: 'ABCDE-FGHJK', checksum: 'ab12', spki: 'c3R1Yg==', pinConfigured: true }
+
+  function pskBridge(overrides: { readonly read?: unknown; readonly rotate?: unknown; readonly fail?: boolean } = {}) {
+    installed = (globalThis as { dshForge?: unknown }).dshForge
+    const bridge = {
+      invoke: (channel: string) => {
+        if (overrides.fail === true) return Promise.reject(new Error('boom'))
+        if (channel === 'dsh-forge:remote/psk-read') return Promise.resolve(overrides.read ?? TRIO)
+        if (channel === 'dsh-forge:remote/psk-rotate') return Promise.resolve(overrides.rotate ?? TRIO)
+        return Promise.reject(new Error(`unexpected channel ${channel}`))
+      },
+      getBootManifest: () => Promise.resolve({}),
+    }
+    ;(globalThis as { dshForge?: unknown }).dshForge = bridge
+    return buildRemoteStatusSource({} as unknown as ForgeClientCtx)
+  }
+
+  it('pskRead 上行 psk-read 通道并形状收拢（display/checksum/spki 三串齐备才携带）', async () => {
+    const remote = pskBridge()
+    await expect(remote.pskRead()).resolves.toEqual({
+      display: 'ABCDE-FGHJK',
+      checksum: 'ab12',
+      spki: 'c3R1Yg==',
+      pinConfigured: true,
+    })
+  })
+
+  it('门未配置（configured:false）/ 畸形读数 / 桥失败 = undefined（fail-soft）', async () => {
+    await expect(pskBridge({ read: { configured: false } }).pskRead()).resolves.toBeUndefined()
+    await expect(pskBridge({ read: { configured: true, display: 'A' } }).pskRead()).resolves.toBeUndefined()
+    await expect(pskBridge({ fail: true }).pskRead()).resolves.toBeUndefined()
+  })
+
+  it('pskRotate 上行 psk-rotate 通道（rotatePsk 再生成——结果即新读数）', async () => {
+    const next = { configured: true, display: 'NEW', checksum: 'ff00', spki: 'c3R1Yg==' }
+    const remote = pskBridge({ rotate: next })
+    await expect(remote.pskRotate()).resolves.toEqual({ display: 'NEW', checksum: 'ff00', spki: 'c3R1Yg==' })
+    await expect(pskBridge({ fail: true }).pskRotate()).resolves.toBeUndefined()
+  })
+})

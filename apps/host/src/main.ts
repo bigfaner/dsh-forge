@@ -132,6 +132,9 @@ void (async () => {
     registerTunnelChannel(ipcMain, {
       toggle: () => host.toggleTunnel?.(), fallback: () => host.fallbackTunnel?.(),
       pinReset: () => host.resetPin?.(), consentPin: (consent) => host.consentPin?.(consent),
+      // 1.107：三件套读数/轮换（bridge remotePsk 服务直转——boot 面缺席 = reject 由 renderer fail-soft 消费）
+      pskRead: () => host.pskRead(),
+      pskRotate: () => host.pskRotate(),
     })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: APP_IDENTITY })

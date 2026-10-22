@@ -39,6 +39,10 @@ export interface ForgeRemoteEntryProps {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关动作（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：连接密钥三件套读数缝（读数即显——缺席 = 段内空态） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  /** 1.107：连接密钥轮换动作缝（重新生成——确认弹窗防误触；缺席 = 动作禁用态） */
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -112,6 +116,36 @@ export const PIN_CANCEL_TEXT = '取消长效密码'
 export const PIN_CONSENT_TEXT = '生成长期有效的连接密码'
 /** PIN consent 隐私 small 字（官方 pinPrivacy——§1 逐字） */
 export const PIN_PRIVACY_TEXT = '长效密码只保存在本机，不上云、不写入二维码，可随时重置或取消。'
+
+// ── 1.107 互联网模式带外秘钥展示面（连接密钥三件套——位置 = 连接密码下方，用户裁决 2026-10-19） ──
+
+/** 连接密钥三件套读数（读数即显——桌面零缓存零 storage，轮换后旧读数失效） */
+export interface PskTrioFace {
+  /** PSK 展示串（base32 5 字符 ×8 组 `-` 分隔） */
+  readonly display: string
+  /** 校验段（SHA-256 hex 前 4 字符——带外核对锚） */
+  readonly checksum: string
+  /** host Ed25519 公钥（SPKI DER base64——手机端静态验签根） */
+  readonly spki: string
+  /** 连接密码已配置态提示位 */
+  readonly pinConfigured?: boolean
+  /** 长效密码位（true = PIN 不随 TTL 轮换） */
+  readonly pinDurable?: boolean
+}
+
+/** 三件套段标题 */
+export const PSK_TRIO_TITLE = '连接密钥'
+/** 轮换动作文案 */
+export const PSK_REGEN_TEXT = '重新生成'
+/** 轮换确认弹窗标题 */
+export const PSK_REGEN_CONFIRM_TITLE = '重新生成连接密钥？'
+/** 轮换确认弹窗正文（v3.1 宽限期语义） */
+export const PSK_REGEN_CONFIRM_BODY =
+  '重新生成后当前连接密钥立即被替换；旧密钥在 5 分钟宽限期内仅用于验证、到期彻底失效，手机端需使用新密钥重新激活。'
+/** 段内宽限期 hint 行 */
+export const PSK_GRACE_HINT_TEXT = '重新生成后旧密钥 5 分钟宽限期内仅验证不加密，到期彻底失效。'
+/** 三件套空态文案（读数缝缺席/门未配置——不伪装可用） */
+export const PSK_EMPTY_TEXT = '连接密钥暂不可用——宿主密钥未就绪，重开此面板重试。'
 
 // ── fix-19 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
 
@@ -500,6 +534,162 @@ export function TunnelCard(props: {
   )
 }
 
+/** 三件套读数行（label + mono 值 + 复制图标钮——官方复制成功绿圆勾徽 1.8s 反馈复用） */
+function PskTrioRow(props: {
+  readonly label: string
+  readonly value: string
+  readonly testId: string
+  readonly copied: boolean
+  readonly onCopy: () => void
+}): ReactNode {
+  return (
+    <div className="dswf-remote-psk-row" data-testid={props.testId}>
+      <span className="dswf-remote-psk-label">{props.label}</span>
+      <span className="dswf-remote-psk-value">{props.value}</span>
+      <Tooltip label={`复制${props.label}`} portal>
+        <button type="button" className="dswf-remote-copy" aria-label={`复制${props.label}`} onClick={props.onCopy}>
+          {props.copied ? (
+            <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+          ) : (
+            <IconCopyOutlineRegular size={14} />
+          )}
+        </button>
+      </Tooltip>
+    </div>
+  )
+}
+
+/**
+ * 连接密钥三件套段（1.107——互联网 tab 连接密码下方）：PSK 分组展示 + 校验段 + host 公钥
+ * （SPKI）+ 连接密码已配置态提示；各字段一键复制。读数即显零缓存——挂载期 pskRead 取一次
+ * 读数（不进 storage 不入快照）；轮换 = 确认弹窗防误触（官方 Modal 件）→ onPskRotate →
+ * 结果即新读数原位换新（旧读数失效）。读数缝缺席/门未配置 = 段内空态（不伪装可用）。
+ */
+export function PskTrioSection(props: {
+  /** 受控读数缝（测试/装配可控——缺省组件挂载期 pskRead 自持一次） */
+  readonly trio?: PskTrioFace
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
+  /** 连接密码读数（PIN 卡同源快照——在场才携复制钮） */
+  readonly pinValue?: string
+}): ReactNode {
+  const [liveTrio, setLiveTrio] = useState<PskTrioFace | undefined>(undefined)
+  const [loaded, setLoaded] = useState(false)
+  const trio = props.trio ?? liveTrio
+  // 挂载期读数一次（读数即显——零轮询零缓存；seam 闭包随注入面生命周期稳定）
+  useEffect(() => {
+    let alive = true
+    void Promise.resolve(props.pskRead?.()).then((next) => {
+      if (!alive) return
+      setLiveTrio(next)
+      setLoaded(true)
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载一次性（pskRead 闭包随注入面生命周期稳定）
+  }, [])
+  // 轮换（确认弹窗确认后触发）——结果即新读数原位换新，旧读数失效
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  const handleRotate = useCallback(() => {
+    if (props.onPskRotate === undefined || rotating) return
+    setRotating(true)
+    void Promise.resolve(props.onPskRotate())
+      .then((next) => {
+        if (next !== undefined) setLiveTrio(next)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setRotating(false)
+        setConfirmOpen(false)
+      })
+  }, [props.onPskRotate, rotating])
+  // 复制反馈（per-field——绿圆勾徽 1.8s 自动消退）
+  const [copiedKey, setCopiedKey] = useState('')
+  useEffect(() => {
+    if (copiedKey === '') return
+    const timer = setTimeout(() => setCopiedKey(''), 1800)
+    return () => clearTimeout(timer)
+  }, [copiedKey])
+  const copyField = (key: string, value: string): void => {
+    writeClipboard(value)
+    setCopiedKey(key)
+  }
+  const pinValue = props.pinValue
+  return (
+    <div className="dswf-remote-psk" data-testid="dswf-remote-psk">
+      <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
+      {trio === undefined ? (
+        loaded ? (
+          <p className="dswf-remote-psk-empty" data-testid="dswf-remote-psk-empty">
+            {PSK_EMPTY_TEXT}
+          </p>
+        ) : null
+      ) : (
+        <>
+          <PskTrioRow
+            label="连接密钥（PSK）"
+            value={trio.display}
+            testId="dswf-remote-psk-display"
+            copied={copiedKey === 'display'}
+            onCopy={() => copyField('display', trio.display)}
+          />
+          <PskTrioRow
+            label="校验段"
+            value={trio.checksum}
+            testId="dswf-remote-psk-checksum"
+            copied={copiedKey === 'checksum'}
+            onCopy={() => copyField('checksum', trio.checksum)}
+          />
+          <PskTrioRow
+            label="host 公钥（SPKI）"
+            value={trio.spki}
+            testId="dswf-remote-psk-spki"
+            copied={copiedKey === 'spki'}
+            onCopy={() => copyField('spki', trio.spki)}
+          />
+          <PskTrioRow
+            label="连接密码"
+            value={pinValue ?? (trio.pinConfigured === true ? '已配置' : '未配置')}
+            testId="dswf-remote-psk-pin"
+            copied={copiedKey === 'pin'}
+            onCopy={() => {
+              if (pinValue !== undefined) copyField('pin', pinValue)
+            }}
+          />
+          <small className="dswf-remote-pin-privacy">{PSK_GRACE_HINT_TEXT}</small>
+          <div className="dswf-remote-pin-actions">
+            <button
+              type="button"
+              className="dswf-remote-pin-action"
+              data-testid="dswf-remote-psk-regen"
+              disabled={props.onPskRotate === undefined}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {PSK_REGEN_TEXT}
+            </button>
+          </div>
+        </>
+      )}
+      {/* 轮换确认弹窗（官方 Modal 件——防误触；v3.1 宽限期语义正文） */}
+      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title={PSK_REGEN_CONFIRM_TITLE} closeLabel="关闭">
+        <div className="dswf-remote-psk-confirm">
+          <p className="dswf-remote-psk-confirm-body">{PSK_REGEN_CONFIRM_BODY}</p>
+          <div className="dswf-remote-actions">
+            <Button variant="outline" size="sm" data-testid="dswf-remote-psk-regen-cancel" onClick={() => setConfirmOpen(false)}>
+              取消
+            </Button>
+            <Button variant="primary" size="sm" data-testid="dswf-remote-psk-regen-confirm" disabled={rotating} onClick={handleRotate}>
+              {PSK_REGEN_TEXT}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
 /** 配对面（受控呈现——1.7 起静态测试面同源直出；承载由 ForgeRemoteDialog 官方 Modal）。
  * fix-6 保留：QR 220×220 + 官方文案 + 倒计时（1s interval）到期自动刷新（onRefresh =
  * 重取 boot manifest 换 token——宿主轮换推送经 refresh 单源回流）。
@@ -519,6 +709,12 @@ export function RemotePanel(props: {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关缝（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：三件套受控读数缝（测试/装配可控） */
+  readonly trio?: PskTrioFace
+  /** 1.107：三件套读数缝（缺席 = 段内空态） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  /** 1.107：三件套轮换动作缝（确认弹窗防误触——缺席 = 动作禁用态） */
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
   /** fix-18 ④：受控 switching 缝（测试/装配可控——缺省组件内自持） */
   readonly switching?: boolean
   /** fix-20：受控冻结隧道面缝（switching 态冻结展示面——测试/装配可控；缺省组件内自持） */
@@ -791,6 +987,13 @@ export function RemotePanel(props: {
               )}
             </div>
           )}
+          {/* 1.107：连接密钥三件套段（位置 = 连接密码下方——读数即显 + 复制 + 轮换确认弹窗） */}
+          <PskTrioSection
+            trio={props.trio}
+            pskRead={props.pskRead}
+            onPskRotate={props.onPskRotate}
+            pinValue={snapshot.pin}
+          />
           </>
         ) : (
           <div className="dswf-remote-pair">
@@ -935,6 +1138,9 @@ export function ForgeRemoteDialog(props: {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关缝（透传 RemotePanel——consent checkbox/「取消长效密码」触发） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：三件套读数/轮换缝（透传 RemotePanel——读数即显 + 重新生成确认弹窗） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——透传 RemotePanel） */
   readonly manageConnected?: boolean
 }): ReactNode {
@@ -960,6 +1166,8 @@ export function ForgeRemoteDialog(props: {
         onFallback={props.onFallback}
         onPinReset={props.onPinReset}
         onPinConsent={props.onPinConsent}
+        pskRead={props.pskRead}
+        onPskRotate={props.onPskRotate}
         manageConnected={props.manageConnected}
       />
     </Modal>
@@ -968,7 +1176,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset, onPinConsent }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset, onPinConsent, pskRead, onPskRotate }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   // fix-19 ⑥：manage-connected 判定（dialog 打开时刻已连接 = 管理形态——closeHint/完成收窄；
   // 打开后即时达成连接 = 官方连接全形态，零收窄）
@@ -1030,6 +1238,8 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
         onFallback={onFallback}
         onPinReset={onPinReset}
         onPinConsent={onPinConsent}
+        pskRead={pskRead}
+        onPskRotate={onPskRotate}
         manageConnected={manageConnected}
       />
     </div>

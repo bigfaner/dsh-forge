@@ -92,6 +92,28 @@ function signingOfNew(): PskPersistShape['signing'] {
   }
 }
 
+// ── 桌面读数面（1.107 带外秘钥展示——读数即显，桌面零缓存零落 storage）─────────
+
+/** 桌面展示三件套（PSK 分组展示 + 校验段 + host 公钥 SPKI base64） */
+export interface PskTrio {
+  readonly display: string
+  readonly checksum: string
+  readonly spki: string
+}
+
+/** 持久化形状 → 展示三件套（与 generatePsk 同源口径——base32 5 字符分组 + 校验段） */
+export function pskTrioOf(shape: PskPersistShape): PskTrio {
+  const raw = Buffer.from(shape.psk, 'base64')
+  return { display: displayOf(raw), checksum: checksumOf(raw), spki: shape.signing.spki }
+}
+
+/** 装配期 ensure 单源：无持久化 → 生成并落盘（新钥 + 新签名钥对）；有 → 原样加载 */
+export function ensurePskPersist(file: string): PskPersistShape {
+  const existing = loadPskPersist(file)
+  if (existing !== undefined) return existing
+  return rotatePsk(file, undefined, Date.now()).shape
+}
+
 // ── 准入门（唯一 401 owner 判定核）───────────────────────────────────
 
 export interface PskGateDeps {

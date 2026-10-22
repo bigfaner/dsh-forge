@@ -58,7 +58,16 @@ import {
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
 // mobile-ui 1.11：PSK v3 host 侧 + forge:proxy 通道族 + 加密 forge-stream（tunnel-psk v3.1）
 import { isPskEnforcedHost, staticSignatureHeaders, writeConstant401 } from './psk.js'
-import { createStreamSealer, loadPskPersist, loadWatermarks, saveWatermarks, type PskGateDeps } from './psk-gate.js'
+import {
+  createStreamSealer,
+  ensurePskPersist,
+  loadPskPersist,
+  loadWatermarks,
+  pskTrioOf,
+  rotatePsk,
+  saveWatermarks,
+  type PskGateDeps,
+} from './psk-gate.js'
 import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
@@ -681,6 +690,13 @@ async function main(): Promise<void> {
     watermarks: pskWatermarks,
     now: Date.now,
   }
+  // 1.107 装配期 ensure 单源（tunnel-psk v3.1）：无持久化 → 生成并落盘（新钥 + 新签名钥对）；
+  // 有 → 原样加载。IO 失败 fail-soft——门未配置 = 旧门语义过渡期，boot 不受阻。
+  try {
+    ensurePskPersist(pskFile)
+  } catch (cause) {
+    diag(`[pair-diag] remote-psk ensure 失败（门未配置降级——旧门语义）：${String(cause)}`)
+  }
   // fix-31 bug df86240d：长效位自持久态回读（Root cause: pinDurable 模块变量默认 false 且
   // ready 恒发临时面——重启后 issuer 虽回读文件恢复长效 grant，manifest 长效位仍恒 false
   // + remotePinExpiresAt = 假 TTL，UI 重启/重开恒未勾选 = 用户视角「长效被取消」）。
@@ -1145,6 +1161,19 @@ async function main(): Promise<void> {
     forgeWorktree: worktreeRpcService ?? undefined,
     // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
     approval: approvalRelay,
+    // 1.107 连接密钥三件套读数/轮换（桌面读数即显——PSK 明文不经 manifest 快照，
+    // 读数缝单源 = remote-psk.json；轮换 = rotatePsk 再生成，旧钥宽限期 ≤5min 只验不密）
+    remotePsk: {
+      read: () => {
+        const shape = loadPskPersist(pskFile)
+        if (shape === undefined) return { configured: false }
+        return { configured: true, ...pskTrioOf(shape), pinConfigured: true, pinDurable: pinIssuer.isDurable() }
+      },
+      rotate: () => {
+        const rotated = rotatePsk(pskFile, loadPskPersist(pskFile), Date.now())
+        return { configured: true, ...pskTrioOf(rotated.shape), pinConfigured: true, pinDurable: pinIssuer.isDurable() }
+      },
+    },
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
@@ -1177,6 +1206,7 @@ async function main(): Promise<void> {
       forgeBugs: services.forgeBugs !== undefined,
       forgeWorktree: worktreeRpcService !== undefined,
       approval: services.approval !== undefined,
+      remotePsk: services.remotePsk !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
     // bug 2ffb0a82：knowledge 插件装载位（renderer 知识 UI 面门控单源——见上方 knowledgeRow 注记）

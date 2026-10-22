@@ -35,6 +35,7 @@ import {
   asReadyMessage,
   asTunnelMessage,
   createBridgeProxy,
+  decodeWire,
   DOCS_SERVICE_METHODS,
   FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
@@ -110,9 +111,26 @@ export interface DshHostServices {
   forgeWorktree: WorktreeRpcService
 }
 
+/**
+ * 连接密钥三件套读数（1.107——child remotePsk 服务读数面；configured = false 时其余字段缺席）。
+ * 桌面读数即显零缓存：PSK 明文不入 manifest 快照，仅经本缝按需回流。
+ */
+export interface PskTrioRead {
+  readonly configured: boolean
+  /** PSK 展示串（base32 5 字符 ×8 组 `-` 分隔） */
+  readonly display?: string
+  /** 校验段（SHA-256 hex 前 4 字符——带外核对锚） */
+  readonly checksum?: string
+  /** host Ed25519 公钥（SPKI DER base64——手机端静态验签根） */
+  readonly spki?: string
+  /** 连接密码已配置态（PIN 卡读数随 manifest 既有面，本位只作提示） */
+  readonly pinConfigured?: boolean
+  /** 长效密码位（true = PIN 不随 TTL 轮换） */
+  readonly pinDurable?: boolean
+}
+
 export interface DshHostHandle {
-  manifest: BootManifest
-  /** 产品七服务（缺席任一 = core 插件行未装载 / 对应装配缝降级——main 侧 fail-soft 记日志不注册对应通道族） */
+  manifest: BootManifest  /** 产品七服务（缺席任一 = core 插件行未装载 / 对应装配缝降级——main 侧 fail-soft 记日志不注册对应通道族） */
   services: Partial<DshHostServices>
   /**
    * boot 就绪时子进程 ToolRuntime 已注册 tool 名全集（3.4 冒烟观测面——plugin-forge
@@ -157,6 +175,16 @@ export interface DshHostHandle {
   consentPin?(consent: boolean): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
+  /**
+   * 1.107：连接密钥三件套读数缝（remotePsk.read——读数即显，桌面零缓存；门未配置 =
+   * {configured:false}；旧 boot 会话/桥缺席 = reject，消费侧 fail-soft）。
+   */
+  pskRead: () => Promise<PskTrioRead>
+  /**
+   * 1.107：连接密钥轮换动作缝（remotePsk.rotate——rotatePsk 再生成，旧钥宽限期 ≤5min
+   * 只验不密；结果 = 新三件套读数，展示面即时换新）。
+   */
+  pskRotate: () => Promise<PskTrioRead>
 }
 
 /** boot child 优雅关停上限（子侧 ProcessShutdown 内部 5s 升级强退——上限略高于之为 kill 兜底位） */
@@ -475,6 +503,9 @@ export async function bootDshHost(
     },
     onEvent: channel.onEvent,
     onDiag: channel.onDiag,
+    // 1.107：三件套读数/轮换（既有 bridge RPC 缝直转 remotePsk 服务——只插孔不改制）
+    pskRead: () => call('remotePsk', 'read', []).then(decodeWire) as Promise<PskTrioRead>,
+    pskRotate: () => call('remotePsk', 'rotate', []).then(decodeWire) as Promise<PskTrioRead>,
     shutdown: () => shutdownChild(child),
   }
 }

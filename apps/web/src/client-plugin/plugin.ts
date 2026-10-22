@@ -37,6 +37,7 @@
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // mobile-remote-approval 1.2：远程状态快照窄类型（type-only——bundle 自含纪律不破；
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
+import type { PskTrioFace } from '../views/remote/ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
@@ -1271,6 +1272,9 @@ function registerRemoteEntry(
           onPinReset: (): Promise<void> => remote.pinReset().then(() => undefined),
           // fix-26：长效密码开关（consent checkbox/「取消长效密码」→ pin-consent 触发 setDurable + refresh）
           onPinConsent: (consent: boolean): Promise<void> => remote.pinConsent(consent).then(() => undefined),
+          // 1.107：三件套读数/轮换（psk-read/psk-rotate 直转——读数即显零缓存，轮换结果即时换新展示面）
+          pskRead: (): Promise<PskTrioFace | undefined> => remote.pskRead(),
+          onPskRotate: (): Promise<PskTrioFace | undefined> => remote.pskRotate(),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1682,6 +1686,10 @@ export interface ForgeRemoteStatusFace {
   pinReset(): Promise<boolean>
   /** fix-26：长效密码开关（dsh-forge:remote/pin-consent 触发 pinIssuer.setDurable + refresh——durable 面随 manifest 回流；桥缺席/失败 = false） */
   pinConsent(consent: boolean): Promise<boolean>
+  /** 1.107：三件套读数（dsh-forge:remote/psk-read——读数即显；桥缺席/失败/形状非法 = undefined） */
+  pskRead(): Promise<PskTrioFace | undefined>
+  /** 1.107：三件套轮换（dsh-forge:remote/psk-rotate——rotatePsk 再生成，结果 = 新读数；桥缺席/失败 = undefined） */
+  pskRotate(): Promise<PskTrioFace | undefined>
 }
 
 /** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
@@ -1749,6 +1757,31 @@ const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
 const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
 /** fix-26 长效密码开关通道字面量（host ipc/tunnel-channel.ts PIN_CONSENT_CHANNEL 同源镜像——dshForge 域外直转面） */
 const PIN_CONSENT_CHANNEL = 'dsh-forge:remote/pin-consent'
+
+/** 1.107 三件套读数通道字面量（host ipc/tunnel-channel.ts PSK_READ_CHANNEL 同源镜像——dshForge 域外直转面） */
+const PSK_READ_CHANNEL = 'dsh-forge:remote/psk-read'
+/** 1.107 三件套轮换通道字面量（host ipc/tunnel-channel.ts PSK_ROTATE_CHANNEL 同源镜像——dshForge 域外直转面） */
+const PSK_ROTATE_CHANNEL = 'dsh-forge:remote/psk-rotate'
+
+/** 读数形状守卫（dshForge 直转返回值——display/checksum/spki 三串齐备才携带；门未配置/畸形 = undefined） */
+function pskTrioFaceOf(raw: unknown): PskTrioFace | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const record = raw as Record<string, unknown>
+  if (record['configured'] !== true) return undefined
+  const display = record['display']
+  const checksum = record['checksum']
+  const spki = record['spki']
+  if (typeof display !== 'string' || display === '' || typeof checksum !== 'string' || typeof spki !== 'string' || spki === '') {
+    return undefined
+  }
+  return {
+    display,
+    checksum,
+    spki,
+    ...(record['pinConfigured'] === true ? { pinConfigured: true } : {}),
+    ...(record['pinDurable'] === true ? { pinDurable: true } : {}),
+  }
+}
 
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
@@ -1941,6 +1974,22 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
+    },
+    // 1.107：三件套读数（psk-read 直转——读数即显零缓存；桥缺席/失败/门未配置 = undefined）
+    pskRead: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(undefined)
+      return Promise.resolve()
+        .then(() => bridge.invoke(PSK_READ_CHANNEL))
+        .then(pskTrioFaceOf, () => undefined)
+    },
+    // 1.107：三件套轮换（psk-rotate 直转——结果 = 新读数，展示面即时换新；失败 = undefined）
+    pskRotate: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) return Promise.resolve(undefined)
+      return Promise.resolve()
+        .then(() => bridge.invoke(PSK_ROTATE_CHANNEL))
+        .then(pskTrioFaceOf, () => undefined)
     },
   }
   return face

@@ -805,6 +805,82 @@
   text-align: center;
 }
 
+/* ── 1.107 连接密钥三件套段（互联网 tab 连接密码下方——PIN 方框卡同型：410px/16px 内距/
+ * 14px 圆角/panel 底/1px 描边；读数行 label 11px·600 uppercase + mono 值 + 28px 复制钮；
+ * SPKI 长串换行不省略——复制取全文） ── */
+.dswf-remote-psk {
+  box-sizing: border-box;
+  display: flex;
+  align-self: center; /* 面板列内居中（PIN/mode-panel 同轴） */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px; /* dsw-raw 卡内行缝（PIN 卡同款局部刻度） */
+  width: 410px; /* dsw-raw 官方 PIN 方框 410px 同型 */
+  padding: 16px; /* dsw-raw 官方 PIN 方框内距同值 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px; /* dsw-raw 官方 14px（radius 标尺无等价令牌） */
+  background: var(--dsw-alias-bg-layer-2); /* panel 底 */
+}
+
+.dswf-remote-psk-title {
+  font-size: 11px; /* dsw-raw 官方 pinLabel 11px uppercase 弱色（局部刻度） */
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.dswf-remote-psk-row {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw 行内缝（地址条带同款局部刻度） */
+}
+
+.dswf-remote-psk-label {
+  flex: none;
+  min-width: 108px; /* dsw-raw label 列对齐宽（四行 label 单行最宽——局部刻度） */
+  font-size: 11px; /* dsw-raw 官方 pinLabel 11px uppercase 弱色（局部刻度） */
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dswf-remote-psk-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ds-font-family-code); /* 等宽字体——官方实机地址/PIN 排 */
+  font-size: 12px; /* dsw-raw 官方地址读数 12px（xxs-12 同值） */
+  line-height: 1.35; /* dsw-raw 官方 1.35 行高 */
+  color: var(--dsw-alias-label-primary-bluish);
+  overflow-wrap: anywhere; /* SPKI 长串换行（复制取全文不截断） */
+}
+
+.dswf-remote-psk-empty {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* 轮换确认弹窗（官方 Modal body 内距同款；正文 + 双钮行复用 connected 态双钮刻度） */
+.dswf-remote-psk-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* dsw-raw 弹窗正文与双钮行距（官方 Modal body 局部刻度） */
+  padding: 0 24px 24px; /* dsw-raw 官方 Modal body 同款侧/底内距 */
+}
+
+.dswf-remote-psk-confirm-body {
+  margin: 0;
+  font: var(--dsw-font-s-14);
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 /* ── fix-18 ② 换线链接（官方 fallback-link：无边框下划线文本链接 12.5px muted 色） ── */
 .dswf-remote-fallback-link {
   padding: 2px 4px; /* dsw-raw 链接命中区微距（局部刻度） */

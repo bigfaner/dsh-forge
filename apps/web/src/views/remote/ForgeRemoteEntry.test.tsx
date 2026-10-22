@@ -24,6 +24,8 @@ import {
   PIN_CANCEL_TEXT,
   PIN_HINT_DURABLE_TEXT,
   PIN_HINT_TEMP_TEXT,
+  PSK_EMPTY_TEXT,
+  PSK_REGEN_CONFIRM_TITLE,
   remoteDialogTitleOf,
   tunnelAutoReopenOf,
   pinCountdownText,
@@ -1173,5 +1175,68 @@ describe('fix-24（bug d8986cac）互联网 tab 分段器/容器/居中/遮罩�
     expect(masked).toContain('正在切换备用线路') // 遮罩内文案仍在
     const bare = renderToStaticMarkup(<TunnelCard phase="switching" onFallback={() => undefined} />)
     expect(bare).toMatch(/dswf-remote-tunnel-status/)
+  })
+})
+
+// ── 1.107 互联网模式带外秘钥展示面（连接密钥三件套——PSK/校验段/SPKI + PIN 提示 + 轮换确认） ──
+
+const TRIO = { display: 'ABCDE-FGHJK-LMNOP', checksum: 'ab12', spki: 'c3R1Yg==', pinConfigured: true }
+
+describe('1.107 连接密钥三件套段（读数即显 + 复制 + 轮换确认弹窗）', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('三件套渲染：PSK 分组 + 校验段 + SPKI + 连接密码行（各字段复制钮）+ 重新生成入口 + 宽限期 hint', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} onPskRotate={() => Promise.resolve(TRIO)} />,
+    )
+    expect(html).toContain('dswf-remote-psk-display')
+    expect(html).toContain('ABCDE-FGHJK-LMNOP')
+    expect(html).toContain('dswf-remote-psk-checksum')
+    expect(html).toContain('ab12')
+    expect(html).toContain('dswf-remote-psk-spki')
+    expect(html).toContain('c3R1Yg==')
+    expect(html).toContain('dswf-remote-psk-pin')
+    expect(html).toContain('654321')
+    expect(html).not.toContain('123456')
+    expect(html).toContain('dswf-remote-psk-regen')
+    expect(html).toContain('重新生成')
+    expect(html).toContain('5 分钟宽限期')
+  })
+
+  it('PIN 读数缺席 = 提示「已配置」行（pinConfigured 位驱动，不伪装数值）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel
+        snapshot={{ ...TUNNEL_ONLINE, pin: undefined, pinExpiresAt: undefined }}
+        mode="internet"
+        trio={TRIO}
+        onPskRotate={() => Promise.resolve(TRIO)}
+      />,
+    )
+    expect(html).toContain('已配置')
+  })
+
+  it('轮换缝缺席 = 重新生成禁用态（fail-soft）；确认弹窗关合态零正文（防误触弹窗不随段渲染）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} />,
+    )
+    expect(html).toMatch(/dswf-remote-psk-regen"[^>]*disabled/)
+    expect(html).not.toContain('重新生成后当前连接密钥立即被替换')
+  })
+
+  it('读数缝缺席 = 段不伪装读数（挂载期 pskRead 取数后呈现/空态——静态面零行）；确认弹窗文案常量 pin', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />,
+    )
+    expect(html).not.toContain('dswf-remote-psk-display')
+    expect(html).not.toContain('dswf-remote-psk-empty')
+    expect(PSK_EMPTY_TEXT).toContain('连接密钥暂不可用')
+    expect(PSK_REGEN_CONFIRM_TITLE).toBe('重新生成连接密钥？')
+  })
+
+  it('段样式：410px / 14px 圆角 / panel 底（PIN 方框同型）+ mono 值换行不省略', () => {
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*width:\s*410px/)
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*border-radius:\s*14px/)
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
+    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*overflow-wrap:\s*anywhere/)
   })
 })

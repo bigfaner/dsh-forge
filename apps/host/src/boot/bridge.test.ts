@@ -213,6 +213,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     })
     expect(ready).toEqual({
@@ -230,12 +231,13 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     })
   })
 
-  it('M2 四域 + M3 设置域 + bugs 域 + approval 位缺席任一 → undefined（九位齐备才可作 manifest 面）', () => {
-    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs', 'approval'] as const) {
+  it('M2 四域 + M3 设置域 + bugs 域 + approval 位缺席任一 → undefined（十位齐备才可作 manifest 面）', () => {
+    for (const missing of ['forgeTasks', 'forgeFeatures', 'forgeProposals', 'forgeDocs', 'forgeSettings', 'forgeBugs', 'approval', 'remotePsk'] as const) {
       const services = {
         forgeProjects: true,
         forgeKnowledge: true,
@@ -247,6 +249,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
         [missing]: undefined,
       }
       expect(asReadyMessage({ type: 'ready', url: 'http://x', injections: [], services })).toBeUndefined()
@@ -276,6 +279,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     } as const
     expect(asReadyMessage({ ...base, knowledgePlugin: true })?.knowledgePlugin).toBe(true)
@@ -300,6 +304,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     } as const
     expect(asReadyMessage({ ...base, tools: ['addTask', 'claimTask'] })?.tools).toEqual(['addTask', 'claimTask'])
@@ -324,6 +329,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     } as const
     expect(asReadyMessage({ ...base, remotePairUrl: 'http://192.168.1.7:1/?token=t' })?.remotePairUrl).toBe(
@@ -350,6 +356,7 @@ describe('asReadyMessage（ready 守卫）', () => {
         forgeBugs: true,
         forgeWorktree: true,
         approval: true,
+  remotePsk: true,
       },
     } as const
     expect(asReadyMessage({ ...base, remotePairExpiresAt: 123456 })?.remotePairExpiresAt).toBe(123456)
@@ -411,6 +418,7 @@ describe('asReadyMessage/asPairMessage PIN 读数透传（fix-17 ③）', () => 
       forgeBugs: true,
       forgeWorktree: true,
       approval: true,
+  remotePsk: true,
     },
   } as const
 
@@ -497,6 +505,7 @@ describe('fix-26 ready/pair：remotePinDurable 透传（长效位——UI hint �
       forgeBugs: true,
       forgeWorktree: true,
       approval: true,
+  remotePsk: true,
     },
   } as Record<string, unknown>
 
@@ -781,6 +790,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       'forgeWorktree',
       // mobile-remote-approval fix-2：审批决策中继面（main → worker 单向 deposit）
       'approval',
+      // 1.107：连接密钥三件套读数/轮换（child remote-psk.json 单源——桌面读数即显）
+      'remotePsk',
     ])
   })
 })
@@ -886,6 +897,7 @@ describe('sendGuarded（fix-33 ①：子侧消息发送防护）', () => {
       forgeBugs: true,
       forgeWorktree: true,
       approval: true,
+  remotePsk: true,
     }
     expect(() => sendGuarded({ type: 'ready', url: 'http://x', injections: [], services: sixBits }, failAll)).not.toThrow()
     expect(() => sendGuarded({ type: 'fatal', message: 'boom' }, failAll)).not.toThrow()
@@ -930,7 +942,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(BUGS_SERVICE_METHODS).toHaveLength(3) // fix-bug +listBugs/commitFiles/fileDiff
     expect(APPROVAL_SERVICE_METHODS).toHaveLength(1) // fix-2 审批桥 +deposit
     expect(PROJECTS_M2_SERVICE_METHODS).toHaveLength(1)
-    expect(BRIDGE_SERVICE_NAMES).toHaveLength(10) // fix-2 worktree RPC 域 +forgeWorktree、审批桥 +approval
+    expect(BRIDGE_SERVICE_NAMES).toHaveLength(11) // fix-2 worktree + approval；1.107 +remotePsk
   })
 })
 

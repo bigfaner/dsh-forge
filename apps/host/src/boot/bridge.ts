@@ -54,6 +54,8 @@ export type BridgeServiceName =
   | 'forgeBugs'
   | 'forgeWorktree'
   | 'approval'
+  /** 1.107 连接密钥三件套读数/轮换（child 侧 remote-psk.json 单源——桌面读数即显） */
+  | 'remotePsk'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
@@ -67,6 +69,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeBugs',
   'forgeWorktree',
   'approval',
+  'remotePsk',
 ] as const satisfies readonly BridgeServiceName[]
 
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
