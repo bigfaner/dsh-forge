@@ -41,6 +41,9 @@ export const SUPER_COMPOSER_CSS = [
   `[data-testid="dscf-root"] { transition: opacity .2s var(--ds-ease-in-out, ease); }`,
   // placeholder 显式着色（bug 49368004：textarea color 透明化后 placeholder 不得跟随透明）
   `[data-dscf-composer-input]::placeholder { color: var(--dsw-alias-label-tertiary); }`,
+  // 1.34 S2 布局融合：composer seat 与消息流同面之间的分隔线（DESIGN.md Border L1
+  // 分隔线令牌 + 官方分隔线词汇 0.5px——官方 conversation header 同为 0.5px 细线）
+  `[data-dscf-factory-host] [data-composer-seat] { border-top: .5px solid var(--dsw-alias-border-l1); }`,
   "",
 ].join("\n")
 

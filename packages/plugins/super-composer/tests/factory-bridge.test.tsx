@@ -123,6 +123,33 @@ describe("installFactoryBridge（shell.overlay 官方缝注册）", () => {
   });
 });
 
+describe("FactoryChatView S2 布局（1.34 融合 + 发送增高）", () => {
+  it("未增高（进入 S2 未发送）：宿主 40vh 初始块 + 高度过渡动效在场", () => {
+    chat = mountChatView();
+    const host = chat.host()!;
+    expect(host.style.height).toBe("40vh");
+    expect(host.style.transition).toContain("height");
+  });
+
+  it("增高态（发送触发）：宿主高度 = 标题栏分隔线锚 calc 上限，过渡动效保持", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <FactoryChatView streaming={false} grown={true} grownMaxHeight="calc(100dvh - var(--dsw-space-6, 24px) - 40px)" />,
+      );
+    });
+    const host = container.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
+    expect(host.style.height).toBe("calc(100dvh - var(--dsw-space-6, 24px) - 40px)");
+    expect(host.style.transition).toContain("height");
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+});
+
 describe("桥入口 ↔ 替身卡宿主锚（跨 root portal）", () => {
   it("锚在场 = conversation.content 工厂 occurrence 渲进宿主元素（portal 落点 + props 形状）", () => {
     chat = mountChatView();

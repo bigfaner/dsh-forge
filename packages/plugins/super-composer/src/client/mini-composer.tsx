@@ -13,7 +13,7 @@
 // 标题栏：左「—」、中会话 title（热区承载）、右「⧉」；热区光标 = 应用风格 chevron
 // 自定义光标（styles.ts 注入的 svg data-uri cursor，随主题暗色锚切换），tooltip =
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SurrogateComposer } from "./official-input/surrogate-composer.js";
 import { FactoryChatView } from "./factory-bridge.js";
 import type { SuperComposerDataFace } from "./data-face.js";
@@ -183,6 +183,38 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const expandable = isExpandable(props)
   const expanded = phase === "s2"
 
+  // ── 1.34 S2 布局融合 + 发送增高 ──
+  // 尺寸锚 = 标题栏底部分隔线（dscf-header 底缘，DOM 锚核销后定值——headerH 实测，
+  // happy-dom 等无布局环境回落 40px 定值）。增高上限 = 100dvh - 底部留白 - 标题栏高，
+  // 即 chat-view 顶缘与标题栏下方分隔线齐平。
+  const headerRef = useRef<HTMLDivElement | null>(null)
+  const [headerH, setHeaderH] = useState(40)
+  useLayoutEffect(() => {
+    if (phase === "s0") return
+    const measure = (): void => {
+      const measured = headerRef.current?.offsetHeight ?? 0
+      if (measured > 0) setHeaderH(measured)
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [phase])
+  const grownMaxHeight = `calc(100dvh - var(--dsw-space-6, 24px) - ${headerH}px)`
+
+  // 发送触发增高：S2 展开期间消息流增长（发送落账/流式回复）→ grown；收起复位，
+  // 再展开（无新消息）回初始块。热区展开既有消息流不误触发（离开展开态时同步基线）。
+  const [grown, setGrown] = useState(false)
+  const seenMessagesRef = useRef(0)
+  useEffect(() => {
+    if (!expanded) {
+      seenMessagesRef.current = props.messages.length
+      setGrown(false)
+      return
+    }
+    if (props.messages.length > seenMessagesRef.current) setGrown(true)
+    seenMessagesRef.current = props.messages.length
+  }, [expanded, props.messages.length])
+
   // 未读追踪：卡体在场即清账（seen = 当前消息数）；球态期间流式增长 = 未读。
   useEffect(() => {
     if (view.collapsed) {
@@ -315,6 +347,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     >
       {phase !== "s0" ? (
         <div
+          ref={headerRef}
           data-testid="dscf-header"
           style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px" }}
         >
@@ -413,8 +446,15 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
            shell.overlay 桥 portal 渲染，消息流/composer bar 官方子槽自供）；
            1.28 复制件消息渲染与 S2 复制件输入区（SurrogateChatView + composerSeat
            承载 SurrogateComposer）退役。S0/S1 简易态输入区仍为复制件（官方工厂
-           无裁剪缝——declaring-is-claiming 红线，见台账）。 */
-        <FactoryChatView streaming={props.streaming} />
+           无裁剪缝——declaring-is-claiming 红线，见台账）。
+           1.34 布局融合：composer 与 chat-view 同一平面（工厂宿主单面承载，无
+           独立高度块），composer seat 分隔线按 DESIGN.md 令牌（styles.ts 注入）；
+           发送后 chat-view 增高至上限 = 标题栏底部分隔线（grownMaxHeight 锚）。 */
+        <FactoryChatView
+          streaming={props.streaming}
+          grown={grown}
+          grownMaxHeight={grownMaxHeight}
+        />
       ) : null}
 
       {props.mention?.open === true ? (

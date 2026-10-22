@@ -468,6 +468,51 @@ describe("标题栏热区光标 + 浮层 tooltip（应用风格，非原生 titl
   });
 });
 
+describe("S2 布局融合 + 发送增高（1.34）", () => {
+  function hostOf(h: Harness): HTMLElement {
+    const host = h.container.querySelector<HTMLElement>("[data-dscf-factory-host]");
+    if (host === null) throw new Error("missing factory host");
+    return host;
+  }
+
+  it("进入 S2（未发送新高）：chat-view 40vh 初始块；composer 与 chat-view 同面（工厂宿主单面承载，分隔线规则在注入样式表）", () => {
+    harness = mount({ messages: [msg("m1", "user", "hi")] });
+    fire(harness, "dscf-hotzone", "click");
+    expect(phaseOf(harness)).toBe("s2");
+    expect(hostOf(harness).style.height).toBe("40vh");
+    // composer seat 分隔线（DESIGN.md 令牌 border-l1，官方分隔线词汇 0.5px）
+    expect(SUPER_COMPOSER_CSS).toMatch(/\[data-dscf-factory-host\] \[data-composer-seat\][^}]*border-top:\s*\.5px solid var\(--dsw-alias-border-l1\)/);
+  });
+
+  it("S2 期间消息增长（发送落账）→ chat-view 增高至标题栏分隔线锚（calc 上限 + 平滑过渡）", () => {
+    harness = mount({ messages: [msg("m1", "user", "hi")] });
+    fire(harness, "dscf-hotzone", "click");
+    harness.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")] });
+    const host = hostOf(harness);
+    expect(host.style.height).toContain("calc(100dvh");
+    expect(host.style.height).toContain("- 40px");
+    expect(host.style.transition).toContain("height");
+  });
+
+  it("未发送新高不误触发：热区展开既有消息流（消息数不变）保持 40vh", () => {
+    harness = mount({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")] });
+    fire(harness, "dscf-hotzone", "click");
+    expect(hostOf(harness).style.height).toBe("40vh");
+  });
+
+  it("收起（Esc → S1）复位：再展开（无新消息）回 40vh，各态布局不破", () => {
+    harness = mount({ messages: [msg("m1", "user", "hi")] });
+    fire(harness, "dscf-hotzone", "click");
+    harness.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")] });
+    expect(hostOf(harness).style.height).toContain("calc(100dvh");
+    fireKey(document, "Escape");
+    expect(phaseOf(harness)).toBe("s1");
+    fire(harness, "dscf-hotzone", "click");
+    expect(phaseOf(harness)).toBe("s2");
+    expect(hostOf(harness).style.height).toBe("40vh");
+  });
+});
+
 describe("消息流投影（S2 宿主锚）", () => {
   it("S2 = 工厂宿主锚（conversation.content occurrence 经桥 portal 渲入——factory-bridge 测试承载内容面）+ 流式标记", () => {
     harness = mount({

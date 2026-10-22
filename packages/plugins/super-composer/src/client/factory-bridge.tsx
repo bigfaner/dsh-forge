@@ -114,8 +114,19 @@ export function installFactoryBridge(ctx: unknown, fallbackSource?: unknown): ((
  * 替身卡 S2 对话态宿主：落工厂宿主锚（mount 置锚 / unmount 清锚），工厂 occurrence
  * （官方 ConversationContent：消息流 + composer bar）经桥 portal 渲进本元素。
  * data-testid="dscf-messages" 沿用 1.28 前消息流锚（状态机测试口径不变）。
+ *
+ * 1.34 布局融合：composer 与 chat-view 同面（宿主单面承载工厂 occurrence，官方
+ * embedded 布局 composerSeat 常驻底部——无独立高度块）；grown = 发送触发增高，
+ * 高度上限 grownMaxHeight = 标题栏底部分隔线锚（mini-composer 传入），height 过渡
+ * 承担平滑动效。
  */
-export function FactoryChatView(props: { streaming: boolean }): React.JSX.Element {
+export function FactoryChatView(props: {
+  streaming: boolean;
+  /** 发送触发增高（mini-composer 消息流增长判据；缺省 false = 初始 40vh 块） */
+  grown?: boolean;
+  /** 增高上限（标题栏底部分隔线锚 calc——mini-composer 按实测标题栏高计算） */
+  grownMaxHeight?: string;
+}): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     setFactoryTarget(hostRef.current);
@@ -128,14 +139,16 @@ export function FactoryChatView(props: { streaming: boolean }): React.JSX.Elemen
       ref={hostRef}
       data-testid="dscf-messages"
       data-streaming={props.streaming ? "true" : undefined}
+      data-grown={props.grown === true ? "true" : undefined}
       data-dscf-factory-host=""
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "40vh",
+        height: props.grown === true && props.grownMaxHeight !== undefined ? props.grownMaxHeight : "40vh",
         minHeight: 140,
         borderTop: "0.5px solid var(--dsw-alias-border-l2)",
         overflow: "hidden",
+        transition: "height .35s var(--ds-ease-in-out, ease)",
       }}
     />
   );
