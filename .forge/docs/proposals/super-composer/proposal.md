@@ -44,7 +44,7 @@ flowchart LR
 模块设计（client 域四件）：
 
 1. **选区监听 + 过滤**：document 级 mouseup（dockkit pane/浮窗均在主 Document React 树内，同文档监听天然覆盖，已核销无 iframe/ShadowDOM）；可引用域 = **dockkit 文档内容 + 对话消息**（声明式 scope 清单，见使用范围）；过滤复用既有判例——排除 `input/textarea/[contenteditable]`、浮层自身；range 非折叠才触发。
-2. **选区浮出菜单**：`@deepseek-ai/dsh-client-ui-primitives` 的 `Menu`（portal 到 body + `getAnchorRect`=选区 DOMRect），仅一项「添加到对话」；不劫持 contextmenu 默认行为。**点击后 chip 落草稿并自动聚焦 composer 输入区**（全屏聚焦替身、常规聚焦主 composer）；全屏下加 chip 即显标题栏（仅标题栏），发送后消息流才长出。
+2. **选区浮出菜单**：`@deepseek-ai/dsh-client-ui-primitives` 的 `Menu`（portal 到 body + `getAnchorRect`=选区 DOMRect），仅一项「添加到对话」；不劫持 contextmenu 默认行为。**点击后 chip 落草稿并自动聚焦 composer 输入区**（全屏聚焦替身、常规聚焦主 composer）。**硬规则：正式 composer 与全屏替身互斥、不同时出现**——全屏态下替身是唯一合法输入面，落 chip 必聚焦替身；非全屏态聚焦主 composer（全屏判据与 super-composer fullscreen tracker 同源）。全屏下加 chip 即显标题栏（仅标题栏），发送后消息流才长出。
 3. **quote chip source**：自建 `@` 触发源（bug mention chip 判例同构）：ref scheme `quote:<uuid>`、候选/serialize codec 产出 `@[选段摘要](quote:uuid)` 文本、快照缓存选段全文；「添加到对话」= `insertReferenceAtTail` 同径——`conversation.input.for(actx)` 取 state 快照 → tail span-CAS → session 作用域 `actx.bail('slash/input-insert-reference', {reference, span})` + bail 漂移症状级复核（bug 2d5434d1 判例）。零官方包改制（appearance 留缺省）。
 
    **chip 发出后的双重形态**（bug mention chip 判例同构——`agent/pre-step` waterfall 发送期展开）：
@@ -53,12 +53,12 @@ flowchart LR
 
    - **草稿态**（发送前）：quote chip 是 Lexical 原子节点（视觉 chip）；草稿搬迁/持久化只搬投影文本，chip 退化为明文 `@[摘要](quote:uuid)`——可选 **chip-restore 同构缝**（bug 4b34e5d8 判例：订阅 InputState 扫明文段 → span-CAS 还原为 chip，occurrences 增长为应用判据）在草稿重建时还原 chip 形态。
 
-   - **发送后消息内（UI 展示形式）**：mention **保持明文投影** `@[文本引用锚定的核心是…](quote:uuid)`。官方自身 @ file mention 发送后仍是 chip——实现为消息渲染侧 `projectUserText` 按**硬编码 token 形状**投影（`@path`/`@"path"` → file chip、`@[label](dsh-session:…)` → session chip；明文标记落会话日志为单一真相，chip 仅展示层投影）；**自定义 `quote:` 语法不在该形状集内**，用户气泡中保持纯文本（ui-chat/user-text.d.ts:1-36「logged model text remains the single truth; this is presentation only」）。插件侧既有缝均不适用：`chatFileMentions` 仅解析 assistant markdown 的 inline-code token 且 chip 样式/语义固定为官方 fileMention（deliverables 判例）；`conversation.chat.node` 槽仅可注册自定义 node kind——**穷尽核查无自定义 mention chip 通道，自建即改制**。若未来官方开放自定义 mention 投影缝，chip 投影可作为自然演进升级（机制不变，仅展示层增强）。
+   - **发送后消息内（UI 展示形式）**：mention 以**防碰撞明文投影** `〔引用：摘要〕` 呈现（bug 形状改判，真机事实修订）：官方 `projectUserText` 按**硬编码 token 形状集**投影（`@[label](dsh-session:…)` → session chip、`@"path"`/`@token` → file chip，primitives lib/index.js:6686-6753）——原设计形状 `@[摘要](quote:uuid)` 真机被命中为 file chip（显示名 = 路径末段 `quote:uuid`，点击按 uuid 当路径 openFile 报「文件找不到」），§2.3 前版「quote: 语法不在形状集内保持纯文本」裁决与真机事实不符。官方无自定义 mention 投影注册缝（`chatFileMentions` 仅 assistant inline-code、`conversation.chat.node` 仅自定义 node kind——穷尽核查结论不变），故序列化形状改判：mention 明文不含 `@`/`/` 起始 token（官方形状集零命中、两消息流形态一致），**uuid 不入明面**、只落 `<quote id>` 结构化块（模型语境）；明文标记落会话日志为单一真相，chip 仅草稿层投影（ui-chat/user-text.d.ts:1-36 不变）。
 
    - **LLM 所见形式**（消息 content 文本；mention 原文保留，发送期 pre-step 在尾部**追加**结构化引用块——只追加不替换，幂等）：
 
      ```text
-     @[文本引用锚定的核心是…](quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3) 这段什么意思？
+     〔引用：文本引用锚定的核心是…〕 这段什么意思？
      <quote id="quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3" source="dockkit 文档示例：锚定与重定位">
      文本引用锚定的核心是把一段选区映射为稳定描述符：精确前缀 + 引用文本 + 精确后缀三段拼合，在文档树变化后仍可通过模糊匹配重定位到原文位置。
      </quote>
@@ -107,7 +107,7 @@ flowchart LR
 
 **标题栏**：左「—」（收成球）、中会话 title、右「⧉」（退出全屏恢复常规视图）；无 ✕。非按钮区域为开合热区：光标 = **应用风格 chevron 自定义光标**（可展开 = 主题色向上箭头，可折叠 = 向下），tooltip = **应用风格浮层**（跟随光标、非原生 title）；「—」「⧉」为普通按钮。
 
-**消息流**：官方 ChatView 的消息渲染语义投影（同 eventSource 快照），滚动吸底、流式增量上屏；用户消息内 quote 引用以**明文 mention 投影**呈现（官方 `projectUserText` 形状投影不含自定义语法，见 chip 发出后双重形态）；**替身内消息正文同样可划选引用**（可引用域含替身消息，排除其输入/控件区）。
+**消息流**：官方 ChatView 的消息渲染语义投影（同 eventSource 快照），滚动吸底、流式增量上屏；用户消息内 quote 引用以**防碰撞明文投影** `〔引用：摘要〕` 呈现（与主消息流形态一致，见 chip 发出后双重形态）；**替身内消息正文同样可划选引用**（可引用域含替身消息，排除其输入/控件区）。
 
 **composer 双形态**：简易态（无控件行，Enter 发送、Shift+Enter 换行）↔ 完整态（官方控件行回归）；**功能完全一致**——mention 菜单（`/` 指令、`@` 引用）、chip、草稿、发送链全同源；键盘语义两面一致。实现复用官方 composer 本体件（conversation.composer.bar 面）裁剪呈现，裁剪只删不改制。
 
@@ -150,8 +150,10 @@ packages/plugins/super-composer/
 宿主侧（plugin-forge 域，bug-mention-prestep 同构）：
 
 ```text
-packages/plugin-forge/src/agent/quote-mention-prestep.ts   # 发送期展开：quote mention → <quote> 结构化块
+（无——quote mention 发送期展开不落宿主侧，见下方改判）
 ```
+
+> **改判（评审 bug 99ce9088）**：§2.3 原设计的宿主侧发送期展开链（`agent/pre-step` waterfall + 内存快照 store）为死路径，已裁决移除。依据：①快照唯一产生点在客户端进程（quote-reference client 内存 Map，pick/offer 时落缓存），宿主 store.cache() 无任何合法供数通道——客户端插件与宿主分属两进程，官方 input-trigger source 面为零 RPC 自含纪律，自造推送机制违反 AGENTS §1.1/1.2；②模型可见 `<quote>` 块由客户端 serialize 径单源承载（快照优先出 mention+块，缺失回退 minimalQuoteBlock——mention 保留、不伪造语境），会话切换/重启后快照丢失的边界与宿主径行为完全一致，宿主径零增量价值；③幂等让路成立——客户端径为唯一追加方，块不会重复出现。
 
 两包边界：quote-reference 不感知全屏；super-composer 不感知划选（chip 由草稿 occurrences 投影自然呈现）——全屏内划选加 chip = 两包同装的正交组合。
 
@@ -174,7 +176,9 @@ packages/plugin-forge/src/agent/quote-mention-prestep.ts   # 发送期展开：q
 | dockkit 文档选区可达性 | 同主 Document React 树，无 iframe/ShadowDOM，document 级监听天然覆盖 | sidebar-right client.js:76,96-97 |
 | 全屏呈现态 | 正门 `sidebar.fullscreen`（tabInfo hook）+ `rightbarFullscreen`（ui-layout store）；无独立事件 | sidebar-right contract/slots.d.ts:170-174；layout stores.d.ts:42-43 |
 | ChatView 选区弹层 | 官方没有，自建（弹层容器用 primitives Menu，不改制） | ui-chat 全量 grep 零命中 |
-| 发送后 mention 消息内形态 | 官方 @ file mention 发送后仍是 chip（`projectUserText` 硬编码形状投影：@path/dsh-session:）；自定义 `quote:` 语法不在形状集 → 明文；`chatFileMentions`/`conversation.chat.node` 缝均不适用自定义 mention chip（穷尽核查） | primitives user-text.d.ts:1-36、lib/index.js:6684-6779；ui-chat slots.d.ts:83-98,118-123；deliverables client.js:2320-2324 |
+| 发送后 mention 消息内形态 | 官方 `projectUserText` 硬编码形状集真机实证：`@[..](quote:uuid)` 命中 file chip（uuid 当路径点击报错）——mention 序列化形状改判 `〔引用：摘要〕` 避开碰撞、uuid 只落 `<quote>` 块；无自定义投影注册缝（`chatFileMentions`/`conversation.chat.node` 均不适用，穷尽核查不变） | primitives user-text.d.ts:1-36、lib/index.js:6684-6779；ui-chat slots.d.ts:83-98,118-123；deliverables client.js:2320-2324 |
+| 官方 Composer 组件直接复用（替身输入区装配官方 InputBar） | **不可行**：① `InputBar` 非公开导出件（`lib/types/client/index.d.ts` 无此导出，package exports 仅 `.`/`./client`/`./src/*`）；②唯一合法呈现面 = `conversation.composer.bar` slot，renderSlot 授权 =「declaring is claiming」（仅声明 entry 可渲染），InputBar 为官方自有 entry；③嵌入需全套包私有注入面 `ComposerBarInjected`（useInput/inputActions/keyboard/stop/useNotices/useLexicon/useMenuLauncher/useProjection…），由 conversation shell 在 render 机制内注入——替身是独立 React root fixed portal，不在 conversation 树内，自造注入即改制（违反 §1.1）。→ 替身自绘输入段保留，发送钮等视觉件逐位对齐官方形态 | dsh-client-ui-conversation lib/types/client/index.d.ts、lib/types/client/skeleton/InputBar.d.ts、contract/slots.d.ts:489、lib/client.js:16287/17169/17575 |
+| 替身发送钮形态基准（官方 InputBar `.primary`） | 主题色圆钮：`--dsw-alias-button-info-fill` 背景 + `#fff` 图标色 + `border-radius:999px` + 34×34 grid + `transition:background-color .1s`；图标 = 官方 16×16 svg（箭头 path / 流式停止圆角方块 rect rx3）；hover = `--dsw-alias-button-info-hover`、disabled = opacity .4 | dsh-client-ui-conversation lib/client.js:17169（`.uV2eYG_primary` CSS）、17575-17601（按钮 DOM+svg） |
 
 ## 4. 验收标准
 
@@ -198,3 +202,19 @@ packages/plugin-forge/src/agent/quote-mention-prestep.ts   # 发送期展开：q
 ## 5. 意图推断
 
 **new-feature**：两个全新独立插件包（quote-reference：选区菜单/quote chip source/发送期展开；super-composer：全屏简易 chat view 替身。三能力均无既有实现），不改 annotutor、不改官方包。
+
+## 6. 用户裁决台账（fix-12，2026-10-22）
+
+- 官方 dsh 源码仓库在本地 `Z:\project\github\deepseek-harness`——**直接复制官方 composer 源码实现替身不算 vendor**：本提案 §3「官方 Composer 组件直接复用 = 不可行」结论中的复用禁令被推翻（该结论仅对「npm 公开包 import」成立）；源码复制径经用户裁决放行，漂移责任自担并锚定版本（升级须人工 re-copy）。
+- 落档：`packages/plugins/super-composer/src/client/official-input/PROVENANCE.md`（复制清单 / 版本锚 f059f01ce3 / imports 适配政策）。
+
+## 7. 用户裁决台账（1.28，2026-10-22）
+
+- fix-12 同口径裁决扩展：替身消息流渲染层升级为官方 `ConversationContent.tsx` 复制件 + 消息渲染闭包（MessageItem/MessageIconActions/AssistantMarkdown/ReasoningRow 及支撑件，源位 ui-conversation skeleton + ui-chat chat）——复制裁决、版本锚（f059f01ce3）与适配政策落档 `src/client/official-chatview/PROVENANCE.md`；官方公开 npm 包（primitives 的 `projectUserText`/`MarkdownText` 等）维持直依赖不复制；不可达内部面（slots contract、workspace-path、locale 词典消费键）以结构同型/逐字镜像承载。
+
+## 8. 用户裁决台账（1.30，2026-10-22）——slots 工厂复用：复制件消息渲染退役
+
+- **核销结论：能复用。** `ConversationContent` 注册在官方 slots 工厂注册表 `conversation.content`（ui-conversation lib/client.js registerFactory，scope `session-maybe`，inject 闭包 composerBlock store/selectWorkspace 由官方插件注册时自带）。公开机制 = `@deepseek-ai/dsh-client-ui-slots@0.2.0-rc.2`；但 `renderFactorySlot`/`useFactorySlot` 是 renderer 交付给 renderer-created 组件的 props 面（SlotRegistry ctx 级仅 `renderSlot('root')`），且 FactoryOccurrence/scope 绑定走 React context——替身卡独立 createRoot 内渲染工厂必然断 context。
+- **合法缝 = 官方树内槽位入口**：`shell.overlay`（ui-layout AppFrame 声明的 list 槽，registry.d.ts 官方注释点名浮动面用途）。替身卡保持独立 createRoot；S2 对话态落 `[data-dscf-factory-host]` 宿主锚进快照店，官方树内桥入口经 createPortal 把 `conversation.content` 工厂 occurrence 渲进宿主锚——portal 保官方根 context，react 单实例不破。装配真机判例：list 槽注册须带 `id`（缺 id fail-loud）；slots 服务晚序 provide（sessions/inputTriggers 同判例）→ 立即尝试 + 有界补挂。
+- **裁决（slots 径成立，真机逐拍取证 walkthrough/130-*）**：替身消息流切官方工厂渲染；`src/client/official-chatview/` 复制件目录（1.28）连同其测试整体退役删除；1.24 loadOlder 分页缝随复制件退役（历史供数由官方 session 子槽自担）。**S2 输入区同样升级**：工厂自带官方 `conversation.composer.bar`（真机实证可输入、发送同链落主转录），S2 复制件输入退役；**S0/S1 简易态输入区保留 fix-12 复制件径**——官方工厂无裁剪缝（declaring-is-claiming 红线，改制违规），简易态呈现只能复制件承载。
+- **双挂载取证**：全屏态官方主面板仍在场（2× conversation-content/session/composer-bar 共存），零渲染错误、pageErrors 空——无冲突；互斥语义保持（替身卡全屏态唯一浮现输入面，dscf-root=1）。
