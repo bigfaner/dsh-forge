@@ -420,7 +420,7 @@ export function mount(root: HTMLElement): void {
   function bootScreen(): HTMLElement {
     const screen = document.createElement('div')
     screen.className = 'phone-root'
-    screen.appendChild(elText('div', 'boot-line', '连接中…'))
+    screen.appendChild(elText('boot-line', '连接中…'))
     return screen
   }
 
@@ -431,9 +431,9 @@ export function mount(root: HTMLElement): void {
     container.textContent = ''
     const screen = document.createElement('div')
     screen.className = 'phone-root pairing-root'
-    screen.appendChild(elText('div', 'title', '会话配对'))
+    screen.appendChild(elText('title', '会话配对'))
     screen.appendChild(
-      elText('div', 'pairing-hint', '录入桌面端「连接密钥 + 配对 PIN + host 公钥」建立加密隧道'),
+      elText('pairing-hint', '录入桌面端「连接密钥 + 配对 PIN + host 公钥」建立加密隧道'),
     )
     screen.appendChild(
       createTunnelPanel({
@@ -478,6 +478,7 @@ export function mount(root: HTMLElement): void {
           () => 0,
         ),
     })
+    reportLanding(`landing mode=${verdict.mode} probe=${verdict.probe ?? '-'} host=${typeof window !== 'undefined' ? window.location.host : ''}`)
     if (verdict.mode === ('lan' satisfies TunnelMode)) {
       const deps = defaultApiDeps()
       ctx.rpc = createRemoteRpc(deps)
@@ -500,7 +501,7 @@ export function mount(root: HTMLElement): void {
 
   void start().catch(() => {
     container.textContent = ''
-    container.appendChild(elText('div', 'conn-overlay', '启动失败，请刷新重试'))
+    container.appendChild(elText('conn-overlay', '启动失败，请刷新重试'))
   })
 }
 
@@ -513,6 +514,16 @@ function elText(className: string, text: string): HTMLElement {
   node.className = className
   node.textContent = text
   return node
+}
+
+/** fix-22 落地诊断信标（child.ts /__rvdiag 对接）：落地判定 fire-and-forget 上报——真机
+ * 302 链断点定位的唯手机侧遥测（零状态触碰、失败静默）。 */
+function reportLanding(line: string): void {
+  try {
+    void fetch(`/__rvdiag?line=${encodeURIComponent(line)}`, { cache: 'no-store' }).catch(() => {})
+  } catch {
+    /* 无网络/上下文异常——静默 */
+  }
 }
 
 /** 隧道域官方面：POST 走信封化传输（/remote/__rpc 咽喉），GET/时区沿用明文同源面。 */

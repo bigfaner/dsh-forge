@@ -2462,3 +2462,30 @@ body[data-ds-dark-theme] .worker-row.running .wk-act {
 body[data-ds-dark-theme] .worker-readonly-hint {
   border-color: #303034;
 }
+
+/* ---- 配对面（main.ts showPairing——tunnel PSK+PIN 双因子输入面） ---- */
+.pairing-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 20px;
+}
+
+.pairing-hint {
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.72;
+}
+
+.boot-line {
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.72;
+}
+
+.tunnel-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
