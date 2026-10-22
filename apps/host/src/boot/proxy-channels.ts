@@ -43,6 +43,7 @@ export const PROXY_CHANNELS = {
   userQuestionsAnswer: 'forge:proxy/user-questions-answer',
   projectsGrouped: 'forge:proxy/projects-grouped',
   approval: 'forge:proxy/approval',
+  agentPresets: 'forge:proxy/agent-presets',
   file: 'forge:proxy/file',
 } as const
 
@@ -81,6 +82,11 @@ export interface ProxyWorktreeFace {
   list(request: { readonly projectRoot: string }): Promise<{ readonly isGit: boolean; readonly worktreeDir?: string; readonly entries: readonly WorktreeEntryDto[] }>
 }
 
+/** agentPreset registry 消费切片（官方 remoteExportList roster——预设增减动态单源） */
+export interface ProxyAgentPresetsFace {
+  remoteExportList?(): Promise<unknown>
+}
+
 /** 装配依赖缝（child.ts 注入真身；测试注入 fake） */
 export interface ProxyChannelDeps {
   readonly session?: ProxySessionFace
@@ -88,6 +94,8 @@ export interface ProxyChannelDeps {
   readonly userQuestions?: ProxyUserQuestionsFace
   readonly projects?: Pick<ProjectService, 'listProjects' | 'getProject'>
   readonly worktrees?: ProxyWorktreeFace
+  /** agentPreset registry 切片（缺席 = 预设清单通道 fail-soft 错误信封） */
+  readonly agentPresets?: ProxyAgentPresetsFace
   readonly forwardApproval?: (input: RemoteApprovalDecisionInput) => Promise<RemoteApprovalForwardResult>
   /** pair-disconnected 对偶缝（缺席 = fail-soft revoked:false） */
   readonly disconnect?: () => void
@@ -348,6 +356,12 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       return requireMethod(questions.answer, 'userQuestions.answer').bind(questions)(asRecord(payload))
     },
     [PROXY_CHANNELS.projectsGrouped]: async () => assembleGrouped(deps, Date.now()),
+    // 预设 roster（官方 remoteExportList——{presets:[{id,name,isDefault}]}；增减动态单源。
+    // bug 344dd76b 同族：registry 方法绑定后直调）
+    [PROXY_CHANNELS.agentPresets]: async () => {
+      const registry = requireService(deps.agentPresets, 'agentPresets')
+      return requireMethod(registry.remoteExportList, 'agentPresets.remoteExportList').bind(registry)()
+    },
     [PROXY_CHANNELS.approval]: async (payload) =>
       deps.forwardApproval !== undefined
         ? deps.forwardApproval(asRecord(payload) as unknown as RemoteApprovalDecisionInput)

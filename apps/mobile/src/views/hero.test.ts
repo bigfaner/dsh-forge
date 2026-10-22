@@ -27,6 +27,8 @@ interface Harness {
   rpcCalls: [string, unknown][]
   createSession: (workspaceId: string) => Promise<{ sessionId: string }>
   prompt: (sessionId: string, text: string, mode: 'steer' | 'queue') => Promise<unknown>
+  selectAgentPreset: (sessionId: string, preset: string) => Promise<unknown>
+  listAgentPresets: () => Promise<{ presets: readonly unknown[] }>
   onOpenSession: (sessionId: string) => void
   changes: number
   /** session-create 通道回执（可改写——成功径用例注入 ok 载荷）。 */
@@ -41,6 +43,8 @@ function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harne
       return { sessionId: `s-${workspaceId || 'main'}` }
     }),
     prompt: vi.fn(async (_sessionId: string, _text: string, _mode: 'steer' | 'queue'): Promise<unknown> => ({})),
+    selectAgentPreset: vi.fn(async (_sessionId: string, _preset: string): Promise<unknown> => ({})),
+    listAgentPresets: vi.fn(async (): Promise<{ presets: readonly unknown[] }> => ({ presets: [] })),
     onOpenSession: vi.fn((_sessionId: string): void => {}),
     changes: 0,
     sessionCreateResult: { ok: false, error: { code: 'invalid-state', reason: 'worktree 不在场' } },
@@ -53,7 +57,7 @@ function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harne
         return h.sessionCreateResult as RpcResult<T>
       },
     },
-    api: { createSession: h.createSession, prompt: h.prompt },
+    api: { createSession: h.createSession, prompt: h.prompt, selectAgentPreset: h.selectAgentPreset, listAgentPresets: h.listAgentPresets },
     projectRoot: 'Z:/proj',
     currentBranch: 'main',
     currentWorktreePath: 'Z:/proj',
@@ -153,6 +157,62 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
     expect(controller.state().busy).toBe(false)
     expect(h.rpcCalls).toHaveLength(1)
+  })
+
+  it('模式清单随 roster 动态增减（用户裁决 2026-10-22）：roster 追加 forge 双预设之后；broken 剔行；选 roster 模式 = agentPreset.select(id) 下发', async () => {
+    const presetSelects: [string, string][] = []
+    const { deps } = makeDeps({
+      api: {
+        createSession: async () => ({ sessionId: 's-x' }),
+        prompt: async () => ({}),
+        selectAgentPreset: async (sessionId, preset) => {
+          presetSelects.push([sessionId, preset])
+          return {}
+        },
+        listAgentPresets: async () => ({
+          presets: [
+            { id: 'standard', name: '标准模式' },
+            { id: 'ptc', name: 'PTC 模式' },
+            { id: 'minimal', name: '极简模式' },
+            { id: 'cordis', name: '创造模式' },
+            { id: 'custom-x', name: '我的预设' }, // 健康自定义预设——动态追加
+            { id: 'bad', name: '坏预设', broken: '配置损坏' }, // broken 剔行
+          ],
+        }),
+      },
+    })
+    const controller = createHeroController(deps)
+    await controller.load()
+    const modes = controller.state().modes
+    expect(modes.slice(0, 2)).toEqual(['突击', '远征']) // forge 双预设恒前
+    expect(modes).toContain('我的预设')
+    expect(modes).not.toContain('坏预设')
+    controller.pickMode('我的预设')
+    await controller.send('hi')
+    expect(presetSelects).toContainEqual(['s-x', 'custom-x']) // roster id 下发
+  })
+
+  it('roster 不可达（官方面缺席）= 回退内置四静态清单；内置模式经 BUILTIN 映射 select', async () => {
+    const presetSelects: [string, string][] = []
+    const { deps } = makeDeps({
+      api: {
+        createSession: async () => ({ sessionId: 's-y' }),
+        prompt: async () => ({}),
+        selectAgentPreset: async (sessionId, preset) => {
+          presetSelects.push([sessionId, preset])
+          return {}
+        },
+        listAgentPresets: async () => {
+          throw new Error('403')
+        },
+      },
+    })
+    const controller = createHeroController(deps)
+    await controller.load()
+    expect(controller.state().modes).toEqual(['突击', '远征', '标准', 'PTC', '极简', '创造'])
+    controller.pickMode('创造')
+    await controller.send('hi')
+    expect(presetSelects).toContainEqual(['s-y', 'cordis'])
   })
 
   it('非默认 worktree 发送：session-create 透传（预铸采纳）成功直达会话', async () => {

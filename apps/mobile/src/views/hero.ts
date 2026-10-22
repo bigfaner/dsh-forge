@@ -165,7 +165,7 @@ export interface HeroState {
 
 export interface HeroDeps {
   readonly rpc: RemoteRpc
-  readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset'>
+  readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset' | 'listAgentPresets'>
   /** 项目根（forge:worktree/list payload；缺席 = 不拉清单，composer 只显当前分支）。 */
   readonly projectRoot?: string
   /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
@@ -196,7 +196,10 @@ export interface HeroController {
 }
 
 export function createHeroController(deps: HeroDeps): HeroController {
-  const modes = deps.modes ?? HERO_MODES
+  // 模式清单 = forge 双预设（恒前）+ 官方 roster 动态追加（增减随 host——不可达回退内置四）
+  let modes: readonly string[] = deps.modes ?? [...FORGE_MODES, ...Object.keys(BUILTIN_AGENT_PRESETS)]
+  /** 模式名 → agentPreset id（roster/内置映射——forge 双预设无 id = prompt mode 语义）。 */
+  let presetIdOf: Readonly<Record<string, string>> = BUILTIN_AGENT_PRESETS
   let rows: readonly HeroWorktreeRow[] = []
   let defaultRow: HeroWorktreeRow | null = null
   let selectedPath: string | null = null
@@ -213,9 +216,9 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   async function enter(sessionId: string, text: string): Promise<void> {
-    // dsh 内置四模式 = agentPreset.select 下发（官方 roster id）； forge 双预设走 prompt mode。
+    // agentPreset 模式 = select 下发（roster id 单源）；forge 双预设走 prompt mode。
     // 官方面缺席（隧道域 /api 403 族）不阻断进入会话——预设保持部署默认（诚实降级）。
-    const presetId = BUILTIN_AGENT_PRESETS[mode]
+    const presetId = presetIdOf[mode]
     if (presetId !== undefined) {
       try {
         await deps.api.selectAgentPreset(sessionId, presetId)
@@ -239,6 +242,28 @@ export function createHeroController(deps: HeroDeps): HeroController {
     state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy }),
 
     async load() {
+      // 预设 roster 装载（用户裁决 2026-10-22：模式清单非固定——增减随 host。
+      // forge 双预设恒前；roster 行 name 缺席回退 id；broken 预设剔行；不可达 = 回退内置四）
+      try {
+        const { presets } = await deps.api.listAgentPresets()
+        const roster = presets
+          .filter((row): row is { id: string; name?: string; broken?: string } => typeof row === 'object' && row !== null && typeof (row as { id?: unknown }).id === 'string')
+          .filter((row) => typeof row.broken !== 'string' || row.broken === '')
+        if (roster.length > 0) {
+          const idOf: Record<string, string> = {}
+          const names = roster.map((row) => {
+            const name = typeof row.name === 'string' && row.name !== '' ? row.name : row.id
+            idOf[name] = row.id
+            return name
+          })
+          presetIdOf = idOf
+          modes = [...FORGE_MODES, ...names.filter((name) => !FORGE_MODES.includes(name))]
+          if (!modes.includes(mode)) mode = HERO_DEFAULT_MODE
+          emit()
+        }
+      } catch {
+        /* roster 不可达——回退内置四静态清单 */
+      }
       if (deps.projectRoot === undefined || deps.projectRoot === '') return
       const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: deps.projectRoot })
       if (!result.ok) return

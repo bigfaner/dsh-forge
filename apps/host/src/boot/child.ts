@@ -863,6 +863,9 @@ async function main(): Promise<void> {
                 get userQuestions() {
                   return lazyCordisService(servicesFace, 'userQuestions') as ProxyUserQuestionsFace | undefined
                 },
+                get agentPresets() {
+                  return lazyCordisService(servicesFace, 'agentPresets') as { remoteExportList?(): Promise<unknown> } | undefined
+                },
                 get projects() {
                   return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
                 },
