@@ -73,6 +73,7 @@ export function createOfficialApi(deps: ApiDeps): OfficialApi {
     prompt: (sessionId, text, mode) =>
       rpc(deps, 'session.prompt', {
         sessionId,
+        requestId: crypto.randomUUID(), // bug 82f9ceb6：官方 SessionPromptRequest schema 必填——缺失 = bindPrompt 链路不可序列化，inbox splice 落盘被拒
         mode,
         content: [{ type: 'text', text }],
         clientTimeZone: deps.timeZone(),

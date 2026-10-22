@@ -209,7 +209,12 @@ describe('official api 窄面', () => {
       'agentPreset.select',
     ])
     expect(methodCalls[2]?.payload).toEqual({ sessionId: 's-1', maxMessages: 10 })
+    // bug 82f9ceb6：requestId 官方 schema 必填（缺失 → bindPrompt 链路不可序列化 → inbox
+    // splice 落盘被拒「prompt rejected」）——逐发 UUID
     expect(methodCalls[3]?.payload).toMatchObject({ sessionId: 's-1', mode: 'steer', clientTimeZone: 'UTC' })
+    const promptPayload = methodCalls[3]?.payload as { requestId?: unknown }
+    expect(typeof promptPayload.requestId).toBe('string')
+    expect((promptPayload.requestId as string).length).toBeGreaterThan(0)
     expect(methodCalls[8]?.payload).toEqual({ rpcId: 'rpc-1', sessionId: 's-1', answers: [{ id: 'q', selected: ['a'] }] })
   })
 
