@@ -476,6 +476,11 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
 
   root.append(topbar, hero, composer.root)
 
+  // bug 45e635af：chip 初始可见 + load() 早退路径（projectRoot 缺席 / 清单调用失败）不 emit
+  // ——非 git 项目呈现「无选项的分支控件」。挂载即按初始态渲染一次（gitReady=false = 隐藏），
+  // 之后仅由清单收敛的 emit 翻可见位。
+  renderChips()
+
   // ---- 渲染（按状态快照重绘弹层/chip + 守卫确认框挂点）----
   function renderPop(): void {
     const state = controller.state()
