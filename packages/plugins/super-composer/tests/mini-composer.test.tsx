@@ -540,6 +540,20 @@ describe("标题栏热区光标 + 浮层 tooltip（应用风格，非原生 titl
     // 暗色锚随主题切换（body[data-ds-dark-theme] 覆写光标色）
     expect(SUPER_COMPOSER_CSS).toContain("data-ds-dark-theme");
   });
+
+  it("bug 64817807: data-uri 内色值须转义 #（裸 # 截断 URI → 光标加载失败回落 ns-resize 双向箭头）", () => {
+    // URL 片段语义：data-uri 中裸 `#` 起始 fragment，svg 截断解析失败，浏览器回落
+    // ns-resize（↕ 双向）——用户所见双向箭头即此回落。色值必须 %23 转义。
+    expect(SUPER_COMPOSER_CSS).toMatch(/%23[0-9a-fA-F]{6}/);
+    expect(SUPER_COMPOSER_CSS).not.toMatch(/stroke='#|stroke="#/);
+  });
+
+  it("bug 64817807: 光标回落不得为双向箭头（expand=n-resize 单向上 / collapse=s-resize 单向下）", () => {
+    // 光标与点击语义一致：可展开态单向上、可折叠态单向下；ns-resize（↕ 双向）禁用。
+    expect(SUPER_COMPOSER_CSS).not.toContain("ns-resize");
+    expect(SUPER_COMPOSER_CSS).toMatch(/dscf-hotzone-expand[^}]*n-resize/);
+    expect(SUPER_COMPOSER_CSS).toMatch(/dscf-hotzone-collapse[^}]*s-resize/);
+  });
 });
 
 describe("消息流投影", () => {
