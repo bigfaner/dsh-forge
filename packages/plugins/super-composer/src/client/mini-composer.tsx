@@ -26,6 +26,24 @@ import type { SuperComposerDataFace } from "./data-face.js";
 
 export type MiniComposerPhase = "s0" | "s1" | "s2" | "ball";
 
+declare const __DSH_FORGE_BUILD_REV__: string | undefined;
+
+/**
+ * 构建版本戳解析（data-dscf-rev，供用户/排查者肉眼对账当前构建）：
+ * ① 壳掌舵装载的 bundle URL ?rev=（= apps/web 构建期 __DSH_FORGE_BUILD_REV__ 缓存戳
+ * ——脚本标签常驻 DOM，真机装载必命中）；② 同名全局（若宿主以 define 注入）；
+ * ③ 兜底 "unknown"（单测等无装载链环境——属性仍在场非空）。
+ */
+function resolveBuildRev(): string {
+  const src = document.querySelector<HTMLScriptElement>('script[src*="super-composer-client.js"]')?.src;
+  const fromUrl = src?.match(/[?&]rev=([^&]+)/)?.[1];
+  if (fromUrl !== undefined && fromUrl !== "") return decodeURIComponent(fromUrl);
+  if (typeof __DSH_FORGE_BUILD_REV__ === "string" && __DSH_FORGE_BUILD_REV__ !== "") {
+    return __DSH_FORGE_BUILD_REV__;
+  }
+  return "unknown";
+}
+
 /** 会话消息投影（同 binding eventSource 快照切片——宿主任务注入数据渠道）。 */
 export interface MiniComposerMessage {
   readonly id: string
@@ -291,7 +309,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     // 指示词汇，琥珀 user-attention 语义色）；点球——未读直达 S2，否则回 S1/S0。
     const showUnreadDot = unread && !props.streaming
     return (
-      <div data-testid="dscf-root" data-phase="ball">
+      <div data-testid="dscf-root" data-phase="ball" data-dscf-rev={resolveBuildRev()}>
         <button
         type="button"
         data-testid="dscf-ball"
@@ -349,6 +367,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     <div
       data-testid="dscf-root"
       data-phase={phase}
+      data-dscf-rev={resolveBuildRev()}
       data-previewing={view.preview ? "true" : "false"}
       onMouseOver={(): void => setHovered(true)}
       onMouseOut={(event): void => {

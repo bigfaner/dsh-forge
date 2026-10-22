@@ -175,6 +175,39 @@ describe("四态派生（S0/S1/S2/C）", () => {
   });
 });
 
+describe("构建版本戳（data-dscf-rev）", () => {
+  /** rev 属性在场且非空（新旧产物肉眼可辨——自查口径：看 DOM 属性）。 */
+  function expectRev(h: Harness): void {
+    const rev = q(h, "dscf-root")?.getAttribute("data-dscf-rev");
+    expect(rev).not.toBeNull();
+    expect(rev).not.toBe("");
+  }
+
+  it("卡体态（S0）根节点暴露 rev 属性且非空", () => {
+    harness = mount();
+    expectRev(harness);
+  });
+
+  it("悬浮球态（C）根节点暴露 rev 属性且非空", () => {
+    harness = mount({ chipCount: 1 });
+    fire(harness, "dscf-minimize", "click");
+    expect(phaseOf(harness)).toBe("ball");
+    expectRev(harness);
+  });
+
+  it("bundle URL ?rev= 命中：rev = 掌舵注入的构建版本戳", () => {
+    const script = document.createElement("script");
+    script.src = "super-composer-client.js?rev=b1a2c3";
+    document.head.appendChild(script);
+    try {
+      harness = mount();
+      expect(q(harness, "dscf-root")?.getAttribute("data-dscf-rev")).toBe("b1a2c3");
+    } finally {
+      script.remove();
+    }
+  });
+});
+
 describe("标题栏转换", () => {
   it("无消息（不可展开）：热区点击无动作（纯展示）", () => {
     harness = mount({ chipCount: 1 });
