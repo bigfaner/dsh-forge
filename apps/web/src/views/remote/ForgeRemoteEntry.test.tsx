@@ -310,6 +310,7 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).toMatch(/连接会在后台保持，现在可以关闭此窗口。/)
     expect(html).toMatch(/data-testid="dswf-remote-disconnect"[^>]*>[\s\S]*断开连接/)
     expect(html).toMatch(/data-testid="dswf-remote-done"[^>]*>[\s\S]*完成/)
+    expect(html).toContain('dswf-remote-connected-row') // 用户裁决 2026-10-22（三次）：断开连接与绿卡同行
     expect(html).not.toContain('dswf-remote-qr')
   })
 

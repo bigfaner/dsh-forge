@@ -624,6 +624,17 @@
   gap: 10px; /* dsw-raw 面板纵向行距（面板局部刻度同源） */
 }
 
+/* 用户裁决 2026-10-22（三次）：绿卡与断开连接/完成钮同行——卡 flex:1 占满，钮右侧 */
+.dswf-remote-connected-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dswf-remote-connected-row .dswf-remote-connected {
+  flex: 1;
+}
+
 .dswf-remote-connected-check {
   display: inline-flex;
   align-items: center;

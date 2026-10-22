@@ -757,9 +757,32 @@ function ConnectedFace(props: {
   }, [copied])
   return (
     <div className="dswf-remote-connected-wrap" data-testid="dswf-remote-connected-wrap">
-      <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
-        <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
-        <span className="dswf-remote-connected-title">手机已连接</span>
+      {/* 用户裁决 2026-10-22（三次）：断开连接（+完成）与绿卡同行右侧 */}
+      <div className="dswf-remote-connected-row">
+        <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
+          <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
+          <span className="dswf-remote-connected-title">手机已连接</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="dswf-remote-disconnect"
+          disabled={props.onDisconnect === undefined}
+          onClick={() => void props.onDisconnect?.()}
+        >
+          断开连接
+        </Button>
+        {props.manageConnected !== true && (
+          <Button
+            variant="primary"
+            size="sm"
+            data-testid="dswf-remote-done"
+            disabled={props.onClose === undefined}
+            onClick={() => props.onClose?.()}
+          >
+            完成
+          </Button>
+        )}
       </div>
       {props.manageConnected !== true && (
         <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
@@ -786,28 +809,6 @@ function ConnectedFace(props: {
           </Tooltip>
         </div>
       )}
-      <div className="dswf-remote-actions">
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="dswf-remote-disconnect"
-          disabled={props.onDisconnect === undefined}
-          onClick={() => void props.onDisconnect?.()}
-        >
-          断开连接
-        </Button>
-        {props.manageConnected !== true && (
-          <Button
-            variant="primary"
-            size="sm"
-            data-testid="dswf-remote-done"
-            disabled={props.onClose === undefined}
-            onClick={() => props.onClose?.()}
-          >
-            完成
-          </Button>
-        )}
-      </div>
     </div>
   )
 }
