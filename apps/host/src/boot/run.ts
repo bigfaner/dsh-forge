@@ -613,6 +613,12 @@ function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildM
 export function applyPairMessage(manifest: BootManifest, message: unknown): BootManifest {
   const pair = asPairMessage(message)
   if (pair === undefined) return manifest
+  // bug aa419a85：长效位以 pair 载荷为权威——桥面 asPairMessage 只透传 true（false 剥除为
+  // 缺席），?? 回退把「取消长效」的合法缺席误读成「保留旧 true」→ durable 位永不可清、UI
+  // 勾选卡死。pair 携 PIN 面（remotePin 在场）时缺席 = 临时面（false）；零 PIN 载荷 = 旧
+  // child 兼容，保留旧位。
+  const pairBearsPin = pair.remotePin !== undefined
+  const pinDurable = pairBearsPin ? pair.remotePinDurable === true : manifest.remotePinDurable === true
   return buildBootManifest(
     manifest.url,
     manifest.injections,
@@ -623,7 +629,7 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     tunnelStateOf(manifest), // dsh-mobile-tunnel：轮换重建保留隧道面（新 token URL 由后续 tunnel 推送换新）
     pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
     pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
-    pair.remotePinDurable ?? manifest.remotePinDurable === true, // fix-26：长效位随轮换换新/保留
+    pinDurable,
     manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留（boot 期事实不随轮换漂移）
   )
 }

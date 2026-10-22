@@ -294,6 +294,25 @@ describe('fix-17 ③ PIN 读数 manifest 面（轮换换新 / 重建保留）', 
     expect(next.remotePinExpiresAt).toBe(5000)
   })
 
+  it('bug aa419a85：长效位以 pair 载荷为权威——携 PIN 面缺席 durable 位 = 取消长效（manifest 位清除，不回退旧 true）', () => {
+    const durableBase = buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, '111111', undefined, true)
+    const next = applyPairMessage(durableBase, {
+      type: 'pair',
+      remotePairUrl: 'http://192.168.1.7:1/pair?token=new',
+      remotePairExpiresAt: 2000,
+      remotePin: '222222',
+      remotePinExpiresAt: 8000,
+    })
+    expect(next.remotePinDurable).toBeUndefined()
+    expect(next.remotePinExpiresAt).toBe(8000)
+  })
+
+  it('bug aa419a85 对照：零 PIN 载荷 pair 仍保留旧长效位（旧 child 兼容）', () => {
+    const durableBase = buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, '111111', undefined, true)
+    const next = applyPairMessage(durableBase, { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(next.remotePinDurable).toBe(true)
+  })
+
   it('connected/断开/隧道重建 → PIN 读数保留（粘性面不动）', () => {
     expect(applyPairConnected(base()).remotePin).toBe('111111')
     expect(applyPairDisconnected(base()).remotePinExpiresAt).toBe(5000)
