@@ -495,7 +495,7 @@ describe("消息流投影（同一 eventSource 快照）", () => {
     ]);
   });
 
-  it("流式增量上屏 + 滚动吸底：eventSource append → 卡片消息流增长且 scrollTop 吸底", () => {
+  it("流式投影驱动 S2 工厂宿主：eventSource append → 可展开/S2 宿主锚在场且流式标记跟随（消息内容渲染 = 官方工厂，真机取证）", () => {
     const world = makeWorld();
     harness = mountWithFace(world);
     expect(q(harness, "dscf-messages")).toBeNull();
@@ -512,9 +512,9 @@ describe("消息流投影（同一 eventSource 快照）", () => {
       q(harness, "dscf-hotzone")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const messages = q(harness, "dscf-messages");
-    expect(messages?.textContent).toContain("流");
-    expect(messages?.getAttribute("data-streaming")).toBe("true");
-    // 流式增量：追加 chunk → 同一行文本增长
+    expect(messages).not.toBeNull();
+    expect(messages!.getAttribute("data-streaming")).toBe("true");
+    // 流式增量：追加 chunk → 投影面增长（卡片判据跟随；渲染本体 = conversation.content 工厂）
     act(() => {
       world.eventWindow.set({
         entries: [
@@ -523,11 +523,8 @@ describe("消息流投影（同一 eventSource 快照）", () => {
         ],
       });
     });
-    expect(q(harness, "dscf-messages")?.textContent).toContain("流式回复");
-    // 滚动吸底：消息流变更后官方复制件 scrollport（data-conversation-scroll）scrollTop 钉在底部
-    const scroller = q(harness, "dscf-messages")!.querySelector("[data-conversation-scroll]") as HTMLElement;
-    expect(scroller).not.toBeNull();
-    expect(scroller.scrollTop).toBe(scroller.scrollHeight);
+    expect(q(harness, "dscf-messages")).not.toBeNull();
+    expect(q(harness, "dscf-messages")!.getAttribute("data-streaming")).toBe("true");
   });
 
   it("发送自动展开：复制件 Enter 提交（face.submit 径）→ 消息流展开", () => {

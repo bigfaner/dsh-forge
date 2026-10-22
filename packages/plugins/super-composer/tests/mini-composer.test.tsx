@@ -362,20 +362,14 @@ describe("发送链与输入（官方复制件面）", () => {
     expect(qOff(harness, "[data-composer-input]")!.textContent).toContain("外部草稿");
   });
 
-  it("流式中空草稿 = 官方 Stop 钮（禁用，无 stop 面）；非空草稿 = 发送（busy Enter 同径）", () => {
+  it("S2 输入区 = 工厂自带官方 composer.bar（复制件输入退役；流式 Stop 形态由官方子槽自供，真机取证）", () => {
     const face = makeFace();
     harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true, composer: face });
     fire(harness, "dscf-hotzone", "click");
-    const stop = qOff(harness, 'button[aria-label="停止生成"]') as HTMLButtonElement;
-    expect(stop).not.toBeNull();
-    expect(stop.disabled).toBe(true);
-    // 非空草稿 = busy Send（官方 submission policy：queue 投影）
-    act(() => {
-      face.state = { ...face.state, draft: "追 加", draftRev: 1 };
-      face.notify();
-    });
-    const send = qOff(harness, 'button[aria-label="排队发送"]') as HTMLButtonElement;
-    expect(send).not.toBeNull();
+    // S2 复制件输入区退役（1.30 slots 复用裁决）：工厂宿主在场，复制件官方面不在场
+    expect(q(harness, "dscf-messages")).not.toBeNull();
+    expect(harness.container.querySelector("[data-dscf-factory-host]")).not.toBeNull();
+    expect(qOff(harness, "[data-composer-card]")).toBeNull();
   });
 });
 
@@ -474,16 +468,15 @@ describe("标题栏热区光标 + 浮层 tooltip（应用风格，非原生 titl
   });
 });
 
-describe("消息流投影", () => {
-  it("S2 渲染消息文本 + 流式尾部标记", () => {
+describe("消息流投影（S2 宿主锚）", () => {
+  it("S2 = 工厂宿主锚（conversation.content occurrence 经桥 portal 渲入——factory-bridge 测试承载内容面）+ 流式标记", () => {
     harness = mount({
       messages: [msg("m1", "user", "问题"), msg("m2", "assistant", "回答中")],
       streaming: true,
     });
     fire(harness, "dscf-hotzone", "click");
     const flow = q(harness, "dscf-messages")!;
-    expect(flow.textContent).toContain("问题");
-    expect(flow.textContent).toContain("回答中");
     expect(flow.getAttribute("data-streaming")).toBe("true");
+    expect(flow.getAttribute("data-dscf-factory-host")).not.toBeNull();
   });
 });

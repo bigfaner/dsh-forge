@@ -25,6 +25,7 @@ import { createRoot } from 'react-dom/client'
 import { createFullscreenTracker, type FullscreenTracker } from './fullscreen.js'
 import { MiniComposerCard } from './mini-composer.js'
 import { createSuperComposerDataFace, mentionMenuOf, miniComposerPropsOf, type SessionInputFaceMirror } from './data-face.js'
+import { installFactoryBridge } from './factory-bridge.js'
 import { installSuperComposerStyles, installOfficialInputStyles, type StyleDocument } from './styles.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
@@ -218,6 +219,16 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
   // bug 1ab2f4e6：全屏聚焦缝跨包组合——cordis 具名服务注册（quote-reference 每点击
   // 时点经 ctx 读 `superComposer`；本包 provide 即正门装配，无全局变量/事件魔改）。
   provideServiceOnContext(ctx, 'superComposer', { focusFullscreenInput: focusFullscreenInputOf(container) })
+  // 1.30 slots 复用裁决：conversation.content 工厂桥（官方树内 shell.overlay 入口
+  // 持 renderFactorySlot，portal 进替身卡 S2 宿主锚）。slots 服务晚序 provide 判例
+  // 同构（sessions/inputTriggers）——立即尝试 + syncTimer 有界补挂；服务缺席 = 降级。
+  let bridgeDisposers: Array<() => void> = []
+  const tryInstallBridge = (): boolean => {
+    const dispose = installFactoryBridge(ctx, origin)
+    if (dispose === undefined) return false
+    bridgeDisposers.push(dispose)
+    return true
+  }
   const render = (): void => {
     // 全屏门控：非全屏呈现态不渲染替身（fullscreenMarkers=0 时不常驻——AC5）
     if (options.tracker !== undefined && !options.tracker.isFullscreen()) {
@@ -245,7 +256,13 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
   let syncTries = 0
   const syncTimer = setInterval(() => {
     syncTries += 1
-    if (torn || syncTries > 150 || face.syncSubscriptions(render)) clearInterval(syncTimer)
+    if (torn || syncTries > 150) {
+      clearInterval(syncTimer)
+      return
+    }
+    // 工厂桥晚序补挂（slots 服务 provide 晚于挂载——成功即不再尝试）
+    if (bridgeDisposers.length === 0) tryInstallBridge()
+    if (face.syncSubscriptions(render)) clearInterval(syncTimer)
   }, 2_000)
   render()
   return () => {
@@ -254,6 +271,8 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     clearInterval(syncTimer)
     offFullscreen?.()
     off()
+    for (const disposeBridge of bridgeDisposers) disposeBridge()
+    bridgeDisposers = []
     root.unmount()
     container.remove()
     face.dispose()

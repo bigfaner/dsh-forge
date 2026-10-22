@@ -15,7 +15,7 @@
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SurrogateComposer } from "./official-input/surrogate-composer.js";
-import { SurrogateChatView } from "./official-chatview/surrogate-chatview.js";
+import { FactoryChatView } from "./factory-bridge.js";
 import type { SuperComposerDataFace } from "./data-face.js";
 
 export type MiniComposerPhase = "s0" | "s1" | "s2" | "ball";
@@ -409,23 +409,12 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       ) : null}
 
       {expanded ? (
-        /* S2 对话态：官方 ConversationContent 复制件（消息行 = MessageItem/
-           AssistantMarkdown 官方渲染闭包 + sticky composerSeat 承载输入区复制件）——
-           自绘消息列表退役（1.28 用户裁决渲染层同源）。 */
-        <SurrogateChatView
-          messages={props.messages}
-          streaming={props.streaming}
-          composerBar={
-            props.composer !== undefined ? (
-              <SurrogateComposer
-                face={props.composer}
-                streaming={props.streaming}
-                onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
-                onFocusChange={setFocused}
-              />
-            ) : null
-          }
-        />
+        /* S2 对话态：官方 conversation.content 工厂（slots 复用裁决 1.30——经
+           shell.overlay 桥 portal 渲染，消息流/composer bar 官方子槽自供）；
+           1.28 复制件消息渲染与 S2 复制件输入区（SurrogateChatView + composerSeat
+           承载 SurrogateComposer）退役。S0/S1 简易态输入区仍为复制件（官方工厂
+           无裁剪缝——declaring-is-claiming 红线，见台账）。 */
+        <FactoryChatView streaming={props.streaming} />
       ) : null}
 
       {props.mention?.open === true ? (
@@ -481,9 +470,9 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         <div style={{ padding: "0 16px 12px" }}>
           {/* 官方 InputBar/DraftEditor 复制件宿主（fix-12 用户裁决源码复制径）：
               quote chip 原生原子渲染（Lexical ReferenceChipNode 装饰器 portal），发送钮/
-              输入形态与官方同源；textarea 旧径与叠加 chip 层已退役（bug 49368004 叠加层
-              方案②连同 bug 008d44e7 自绘发送钮一并退役）。S2 对话态输入区移入官方
-              composerSeat（SurrogateChatView composerBar 槽）。 */}
+              输入形态与官方同源；S0/S1 简易态保留复制件径（官方工厂无裁剪缝——
+              declaring-is-claiming 红线）。S2 对话态输入区 = 工厂自带官方
+              conversation.composer.bar（1.30 slots 复用裁决）。 */}
           {props.composer !== undefined ? (
             <SurrogateComposer
               face={props.composer}

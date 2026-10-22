@@ -187,36 +187,19 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(effects.length).toBe(1);
   });
 
-  it("fix-12：流式期发送形态 = 官方同源（空草稿 + running → Stop 钮禁用，无 stop 面）", async () => {
+  it("1.30：S2 展开后复制件输入退役——工厂宿主锚在场（官方 composer.bar 经桥 portal 自供）", async () => {
     setFullscreenMarker(true);
-    // transient live-chunk 在场 = streaming 投影 true（data-face projectEventWindow）
-    const streamingSessions = {
-      list: { getSnapshot: () => ({ byId: { s1: { id: "s1", retainedBy: { mainView: 1 } } } }) },
-      binding: () => ({
-        sessionId: "s1",
-        ctx: {},
-        eventSource: {
-          getSnapshot: () => ({
-            entries: [
-              { type: "event", event: { type: "user/message", data: { id: "m1", content: [{ type: "text", text: "hi" }] } } },
-              { type: "transient", event: { type: "assistant/live-chunk", data: { attemptId: "a1", chunk: { type: "text-delta", text: "…" } } } },
-            ],
-          }),
-          subscribe: () => () => undefined,
-        },
-      }),
-    };
-    superComposerClient.apply(stubCtx({ sessions: streamingSessions }));
+    // 消息流非空 = 可展开 → s2
+    const ctx = stubCtx({ sessions: sessionsWithMessage });
+    superComposerClient.apply(ctx);
     await tick();
-    // 消息流非空 → 热区可展开 → s2 控件行在场
     const hotzone = document.querySelector('[data-testid="dscf-hotzone"]') as HTMLElement | null;
     expect(hotzone).not.toBeNull();
     hotzone!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await tick();
-    // 官方同源形态：running ∧ 空草稿 → 主钮 = Stop（替身无 stop 面 = 禁用）
-    const stop = document.querySelector('[data-dscf-official-input] button[aria-label="停止生成"]') as HTMLButtonElement | null;
-    expect(stop).not.toBeNull();
-    expect(stop!.disabled, "流式期 Stop 钮禁用（替身无 stop 面，官方降级同源）").toBe(true);
+    // S2 = 工厂宿主锚（conversation.content occurrence 渲入）；复制件输入面退役
+    expect(document.querySelector('[data-testid="dscf-messages"] [data-dscf-factory-host], [data-dscf-factory-host]')).not.toBeNull();
+    expect(document.querySelector('[data-dscf-official-input] [data-composer-card]')).toBeNull();
   });
 
   it("disposer 收口：root.unmount 摘除替身 DOM（幂等不抛）", async () => {
