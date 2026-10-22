@@ -550,6 +550,8 @@ const TUNNEL_OFFICIAL_RPC_PROXY: Readonly<Record<string, string>> = {
   'session.prompt': 'forge:proxy/session-prompt',
   'session.selectModel': 'forge:proxy/session-select-model',
   'session.cancel': 'forge:proxy/session-cancel',
+  'session.list': 'forge:proxy/session-list',
+  'commands.execute': 'forge:proxy/commands-execute',
 }
 
 function tunnelApiDeps(transport: TunnelTransport): ApiDeps {
