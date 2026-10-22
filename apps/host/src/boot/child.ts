@@ -224,15 +224,25 @@ function remoteApprovalEnabledOf(settingsFile: string | undefined): boolean {
 /**
  * dsh-desktop cloudflared 种子候选（userData/bin——main.js:22502 `join(app.getPath
  * ("userData"), "bin")`；二进制名 win32=cloudflared.exe 其余=cloudflared，:578）。仅作字节
- * 来源：sha256 对 pin 清单校验一致才拷贝进产品缓存；缺席环境（无 APPDATA/未装 dsh）=
- * 空候选，纯下载链自洽。
+ * 来源：sha256 对 pin 清单校验一致才拷贝进产品缓存；缺席环境（无 APPDATA/HOME、未装
+ * dsh-desktop）= 空候选，纯下载链自洽。平台化：win=APPDATA，darwin/linux=Electron
+ * appData 锚（见函数体）。
  */
 export function officialCloudflaredSeedCandidates(): string[] {
-  const roaming = process.env['APPDATA']
-  if (roaming === undefined || roaming === '') return []
-  const bin = `${roaming.replace(/[\\/]+$/, '')}\\dsh-desktop\\bin`
-  const name = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
-  return [`${bin}\\${name}`]
+  // Electron appData 锚（main.js:22502 join(app.getPath('userData'), 'bin')）：
+  // win=%APPDATA%、darwin=~/Library/Application Support、linux=~/.config
+  if (process.platform === 'win32') {
+    const roaming = process.env['APPDATA']
+    if (roaming === undefined || roaming === '') return []
+    return [`${roaming.replace(/[\\/]+$/, '')}\\dsh-desktop\\bin\\cloudflared.exe`]
+  }
+  const home = process.env['HOME']
+  if (home === undefined || home === '') return []
+  const appData =
+    process.platform === 'darwin'
+      ? `${home}/Library/Application Support`
+      : `${home}/.config`
+  return [`${appData}/dsh-desktop/bin/cloudflared`]
 }
 
 /**
