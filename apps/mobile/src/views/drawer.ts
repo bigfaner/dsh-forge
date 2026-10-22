@@ -237,6 +237,8 @@ export interface DrawerDeps {
   readonly onOpenSession: (sessionId: string) => void
   /** 断开成功后的上层处置（粘性位收回 → 回等待配对覆盖层）。 */
   readonly onDisconnected?: () => void
+  /** 用户裁决 2026-10-22：点抽屉之外区域自动收起（spacer = 抽屉右侧遮罩区）。 */
+  readonly onClose?: () => void
   readonly currentSessionId?: string
   readonly pairDomain: string
   readonly store?: KeyValueStore | null
@@ -270,6 +272,8 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   const drawer = el('div', 'drawer')
   root.appendChild(drawer)
   root.appendChild(el('div', 'drawer-spacer'))
+  // 用户裁决 2026-10-22：点抽屉之外区域自动收起
+  root.lastElementChild?.addEventListener('click', () => deps.onClose?.())
 
   const storage = deps.store === undefined ? defaultStore() : deps.store
   const timers: DebounceTimers =

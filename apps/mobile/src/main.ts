@@ -341,6 +341,12 @@ export function mount(root: HTMLElement): void {
             fetchStatus: defaultFetchStatus,
             onOpenSession: openSession,
             onDisconnected: () => showPairing(),
+            // 用户裁决 2026-10-22：点抽屉外自动收起——回当前会话（无会话回 hero）
+            onClose: () => {
+              const sid = store.get().currentSessionId
+              if (typeof sid === 'string' && sid !== '') openSession(sid)
+              else openHero()
+            },
             currentSessionId: store.get().currentSessionId ?? undefined,
             pairDomain,
             store: viewStore(),
