@@ -1828,17 +1828,6 @@ function snapshotOfReads(
       : undefined
   if (enabled !== exposureActive) return { phase: 'pending', ...(tunnel !== undefined ? { tunnel } : {}) }
   if (!enabled) return { phase: 'off' }
-  // fix-7：/pair 握手成功读数抬 connected（等待扫码 → 手机已连接——remoteSnapshotOf 镜像口径）
-  if (devicesConnected) return { phase: 'connected', ...(tunnel !== undefined ? { tunnel } : {}) }
-  // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
-  // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 /pair?token= 官方配对地址
-  // 单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
-  const pairUrl = manifest?.remotePairUrl
-  const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
-  // fix-6 倒计时缝（镜像口径）：token TTL 读数透传（桌面 QR 倒计时单源）。
-  const expiresAt = manifest?.remotePairExpiresAt
-  const pairExpiresAt =
-    typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
   // fix-17 ③ PIN 缝（镜像口径）：6 位数字 ×（正有限 TTL 或长效位）齐备才携带（remote-status
   // 同判——bug df86240d 同族：缺 durable 分支 = 长效 PIN 整体丢弃，PIN 卡缺席 + 勾选框未勾，
   // 真机实证 2026-10-22 用户报告「重开 dialog 未勾选长期生效」）。
@@ -1850,6 +1839,29 @@ function snapshotOfReads(
       ? pinExpiresAtRaw
       : undefined
   const pinDurable = manifest?.remotePinDurable === true
+  // fix-7：/pair 握手成功读数抬 connected（等待扫码 → 手机已连接——remoteSnapshotOf 镜像口径）。
+  // 用户裁决 2026-10-22：connected 态 PIN/三件套常驻展示——pin 面随态卡共存，不随连接退场。
+  if (devicesConnected)
+    return {
+      phase: 'connected',
+      ...(tunnel !== undefined ? { tunnel } : {}),
+      ...(pin !== undefined && (pinExpiresAt !== undefined || pinDurable)
+        ? {
+            pin,
+            ...(pinExpiresAt !== undefined ? { pinExpiresAt } : {}),
+            ...(pinDurable ? { pinDurable: true } : {}),
+          }
+        : {}),
+    }
+  // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
+  // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 /pair?token= 官方配对地址
+  // 单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
+  const pairUrl = manifest?.remotePairUrl
+  const lanAddress = typeof pairUrl === 'string' && pairUrl !== '' ? pairUrl : undefined
+  // fix-6 倒计时缝（镜像口径）：token TTL 读数透传（桌面 QR 倒计时单源）。
+  const expiresAt = manifest?.remotePairExpiresAt
+  const pairExpiresAt =
+    typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
   return {
     phase: 'listening',
     lanAddress,

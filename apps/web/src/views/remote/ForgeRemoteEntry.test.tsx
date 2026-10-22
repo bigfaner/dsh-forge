@@ -16,7 +16,6 @@ import {
   REMOTE_STATUS_POLL_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
-  ForgeRemoteDialog,
   harnessBridgeOf,
   harnessMenuFocusLeft,
   harnessMenuPointerOutside,
@@ -737,7 +736,7 @@ const TUNNEL_ONLINE: RemoteStatusSnapshot = {
 }
 
 describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :1176 连接态卡）', () => {
-  it('connected：仅连接卡+说明+双钮——tab/隧道卡/PIN/说明卡/地址条全部退场', () => {
+  it('connected：绿卡置顶 + 配对面常驻（tab/隧道卡/PIN 三件套共存——用户裁决 2026-10-22：连接后仍可取 PIN/密钥）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ phase: 'connected', tunnel: TUNNEL_ONLINE.tunnel, pin: '654321', pinExpiresAt: TUNNEL_ONLINE.pinExpiresAt }}
@@ -746,13 +745,11 @@ describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :
       />,
     )
     expect(html).toContain('data-testid="dswf-remote-connected"')
-    expect(html).not.toContain('dswf-remote-tab-lan')
-    expect(html).not.toContain('dswf-remote-tab-internet')
-    expect(html).not.toContain('data-testid="dswf-remote-tunnel"')
-    expect(html).not.toContain('data-testid="dswf-remote-pin"')
-    expect(html).not.toContain('dswf-remote-note-card')
-    expect(html).not.toContain('dswf-remote-address')
-    expect(html).not.toContain('data-testid="dswf-remote-countdown"')
+    expect(html).toContain('dswf-remote-tab-lan')
+    expect(html).toContain('dswf-remote-tab-internet')
+    expect(html).toContain('data-testid="dswf-remote-pin"')
+    expect(html).toContain('654321')
+    expect(html).toContain('断开连接')
   })
 })
 

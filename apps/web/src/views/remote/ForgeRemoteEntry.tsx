@@ -733,7 +733,7 @@ export function RemotePanel(props: {
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——隐藏 closeHint 与「完成」钮） */
   readonly manageConnected?: boolean
 }): ReactNode {
-  const { snapshot, busy, onRefresh } = props
+  const { snapshot, onRefresh } = props
   const pairValue = remotePairQrOf(snapshot)
   // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
   const [modeState, setModeState] = useState<RemoteMode>('lan')
@@ -870,7 +870,8 @@ export function RemotePanel(props: {
     <div className="dswf-remote-panel" aria-label="手机远程">
       {/* fix-26 ②：面板头（「手机远程」标题 + 相位文字行）退役——状态语义由入口圆点与
           连接态卡承载，官方页面无此头 */}
-      {snapshot.phase === 'connected' ? (
+      {/* 用户裁决 2026-10-22：连接成功态仍持续展示配对 PIN/密钥段（换机/重装/隧道换 URL 随时可取）——绿卡置顶，配对面常驻不退场 */}
+      {snapshot.phase === 'connected' && (
         // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
         // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
         // 完成（primary——关 dialog）双钮。
@@ -909,7 +910,7 @@ export function RemotePanel(props: {
             )}
           </div>
         </div>
-      ) : (
+      )}
         <>
         <ModeTabs active={mode} disabled={switching} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
@@ -1077,7 +1078,6 @@ export function RemotePanel(props: {
         )}
         <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
         </>
-      )}
     </div>
   )
 }
