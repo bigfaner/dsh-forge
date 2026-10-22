@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applySessionSelection,
   clearPendingModelDefault,
   coerceModelCatalog,
+  coerceSessionModelSelection,
   createDebounce,
   filterModels,
   groupByProvider,
@@ -144,6 +146,32 @@ describe('最近使用（localStorage 按配对域隔离，不可用静默降级
     }
     expect(loadRecentModels(throwing, 'k')).toEqual([])
     expect(() => saveRecentModels(throwing, 'k', ['x'])).not.toThrow()
+  })
+})
+
+describe('会话级选型回显（bug f994d7c0——current 读 modelSelection 投影而非部署默认）', () => {
+  const catalog = coerceModelCatalog({
+    default: { provider: 'zai-coding-cn', model: 'glm-5.3' },
+    groups: [{ id: 'zai-coding-cn', name: 'zai-coding-cn', models: [
+      { id: 'glm-5.3', name: 'GLM-5.3' },
+      { id: 'glm-4.6v', name: 'GLM-4.6V' },
+    ] }],
+  })
+
+  it('coerceSessionModelSelection：wire view {next, lastUsed} → 生效选型（next 优先）；畸形 fail-soft', () => {
+    const view = { lastUsed: { provider: 'zai-coding-cn', model: 'glm-5.3' }, next: { provider: 'zai-coding-cn', model: 'glm-4.6v', reasoningEffort: 'high' } }
+    expect(coerceSessionModelSelection({ modelSelection: view })).toEqual({
+      provider: 'zai-coding-cn', id: 'glm-4.6v', name: 'glm-4.6v', reasoningEffort: 'high',
+    })
+    expect(coerceSessionModelSelection({ modelSelection: { next: null, lastUsed: null } })).toBeUndefined()
+    expect(coerceSessionModelSelection(null)).toBeUndefined()
+    expect(coerceSessionModelSelection({ modelSelection: { next: { provider: 'x' } } })).toBeUndefined()
+  })
+
+  it('applySessionSelection：current 换投影选型，name 自目录解析；缺席选型原样返回', () => {
+    const applied = applySessionSelection(catalog, { provider: 'zai-coding-cn', id: 'glm-4.6v', name: 'glm-4.6v' })
+    expect(applied.current).toEqual({ provider: 'zai-coding-cn', id: 'glm-4.6v', name: 'GLM-4.6V' })
+    expect(applySessionSelection(catalog, undefined)).toEqual(catalog)
   })
 })
 

@@ -11,7 +11,7 @@
 import type { RemoteRpc } from '../core/rpc.ts'
 import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, proxyCall } from '../core/rpc.ts'
 import type { EffortOptionInfo, ModelCatalog, ModelSelection } from './models.ts'
-import { coerceModelCatalog, isSameModel } from './models.ts'
+import { applySessionSelection, coerceModelCatalog, isSameModel, loadSessionSelection } from './models.ts'
 
 /** 推理档位信息（models.ts EffortOptionInfo 同型窄面）。 */
 type EffortInfo = EffortOptionInfo
@@ -169,6 +169,14 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
       catalog = coerceModelCatalog(await proxyCall(deps.rpc, PROXY_SESSION_MODEL_CATALOG_CHANNEL, {}))
     } catch {
       /* 拉取失败保留旧数据，面板保持可用 */
+    }
+    // bug f994d7c0：current 并入会话级生效选型（modelSelection 投影）——部署默认回显即「不生效」
+    if (deps.sessionId !== '') {
+      try {
+        catalog = applySessionSelection(catalog, await loadSessionSelection(deps.rpc, deps.sessionId))
+      } catch {
+        /* 投影缺席 = 回退部署默认（诚实降级） */
+      }
     }
     draft = { pending: false, picked: undefined }
     render()

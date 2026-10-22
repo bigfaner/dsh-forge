@@ -41,6 +41,48 @@ export interface ModelCatalog {
   readonly current?: ModelSelection
 }
 
+// ---------------------------------------------------------------------------
+// 纯函数：会话级选型回显（bug f994d7c0——current 读 modelSelection 投影而非部署默认）
+// ---------------------------------------------------------------------------
+
+/** 官方 modelSelection 投影 wire view（{lastUsed, next}——next = pending ?? lastUsed 为生效选型）。 */
+export function coerceSessionModelSelection(raw: unknown): ModelSelection | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const view = (raw as { modelSelection?: unknown }).modelSelection
+  if (typeof view !== 'object' || view === null) return undefined
+  const effective = (view as { next?: unknown; lastUsed?: unknown }).next ?? (view as { lastUsed?: unknown }).lastUsed
+  if (typeof effective !== 'object' || effective === null) return undefined
+  const record = effective as { provider?: unknown; model?: unknown; reasoningEffort?: unknown }
+  if (typeof record.provider !== 'string' || record.provider === '') return undefined
+  if (typeof record.model !== 'string' || record.model === '') return undefined
+  return {
+    provider: record.provider,
+    id: record.model,
+    name: record.model,
+    ...(typeof record.reasoningEffort === 'string' && record.reasoningEffort !== ''
+      ? { reasoningEffort: record.reasoningEffort }
+      : {}),
+  }
+}
+
+/** 会话级选型并入 catalog：current 换投影选型，name 自目录成员解析；缺席选型原样返回。 */
+export function applySessionSelection(catalog: ModelCatalog, selection: ModelSelection | undefined): ModelCatalog {
+  if (selection === undefined) return catalog
+  const name = catalog.models.find((model) => isSameModel(model, selection))?.name ?? selection.name
+  return { ...catalog, current: { ...selection, name } }
+}
+
+/** 会话级选型装载（models/settings 共用——投影缺席/失败 = 回退部署默认，诚实降级）。 */
+export async function loadSessionSelection(
+  rpc: { call<T = unknown>(channel: string, payload: unknown): Promise<{ ok: boolean; data?: T; error?: { reason?: string } }> },
+  sessionId: string,
+): Promise<ModelSelection | undefined> {
+  const result = await rpc.call<Record<string, unknown>>('forge:proxy/session-projections', { sessionId })
+  if (!result.ok) return undefined
+  const values = (result.data as { values?: unknown } | null)?.values
+  return coerceSessionModelSelection(values)
+}
+
 /** efforts 项收敛（官方 ModelReasoningEffort {id,name,…}——非法项剔除；name 透传 adapter 显示词）。 */
 function coerceEfforts(raw: unknown): readonly EffortOptionInfo[] {
   const efforts = (typeof raw === 'object' && raw !== null ? (raw as { reasoning?: { efforts?: unknown } }) : {})
@@ -477,6 +519,15 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
         el('div', 'msearch-hint err', error instanceof DisconnectedError ? '连接已断开' : '模型列表加载失败'),
       )
       return
+    }
+    // bug f994d7c0：current 并入会话级生效选型（modelSelection 投影）——catalog default 是
+    // 部署默认，会话切档后回显默认 = 用户视角「切换不生效」
+    if (deps.sessionId !== '') {
+      try {
+        catalog = applySessionSelection(catalog, await loadSessionSelection(deps.rpc, deps.sessionId))
+      } catch {
+        /* 投影缺席 = 回退部署默认（诚实降级） */
+      }
     }
     render()
   }
