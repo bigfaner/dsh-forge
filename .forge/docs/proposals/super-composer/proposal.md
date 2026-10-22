@@ -53,18 +53,18 @@ flowchart LR
 
    - **草稿态**（发送前）：quote chip 是 Lexical 原子节点（视觉 chip）；草稿搬迁/持久化只搬投影文本，chip 退化为明文 `@[摘要](quote:uuid)`——可选 **chip-restore 同构缝**（bug 4b34e5d8 判例：订阅 InputState 扫明文段 → span-CAS 还原为 chip，occurrences 增长为应用判据）在草稿重建时还原 chip 形态。
 
-   - **发送后消息内（UI 展示形式）**：mention 以**防碰撞明文投影** `〔引用：摘要〕` 呈现（bug 形状改判，真机事实修订）：官方 `projectUserText` 按**硬编码 token 形状集**投影（`@[label](dsh-session:…)` → session chip、`@"path"`/`@token` → file chip，primitives lib/index.js:6686-6753）——原设计形状 `@[摘要](quote:uuid)` 真机被命中为 file chip（显示名 = 路径末段 `quote:uuid`，点击按 uuid 当路径 openFile 报「文件找不到」），§2.3 前版「quote: 语法不在形状集内保持纯文本」裁决与真机事实不符。官方无自定义 mention 投影注册缝（`chatFileMentions` 仅 assistant inline-code、`conversation.chat.node` 仅自定义 node kind——穷尽核查结论不变），故序列化形状改判：mention 明文不含 `@`/`/` 起始 token（官方形状集零命中、两消息流形态一致），**uuid 不入明面**、只落 `<quote id>` 结构化块（模型语境）；明文标记落会话日志为单一真相，chip 仅草稿层投影（ui-chat/user-text.d.ts:1-36 不变）。
+   - **发送后消息内（UI 展示形式）**：发送 content 只落 **`<quote id source>` 结构化块**（1.32 格式改判——用户裁决：块内已含选段全文，`〔引用：…〕` mention 前缀行冗余，发送序列化不再产出；气泡与块不重复显示选中文本）。`〔引用：摘要〕` 防碰撞明文投影仅保留在**草稿态 chip 投影**——官方 `projectUserText` 硬编码形状集碰撞的 bug 形状改判事实不变（`@[label](dsh-session:…)` → session chip、`@"path"`/`@token` → file chip，primitives lib/index.js:6686-6753；`@[摘要](quote:uuid)` 曾真机被命中为 file chip）。`source` 属性语义落地：**文档选区 → `{filepath}`（workspace 文件相对路径）**；**当前会话消息选区 → `currentSessionMsg/{seq}`（seq = 消息序号）**——quote-source 快照结构承载来源类型（doc|sessionMsg）+ 路径/序号字段，serializeQuoteSnapshot 按来源产出。
 
-   - **LLM 所见形式**（消息 content 文本；mention 原文保留，发送期 pre-step 在尾部**追加**结构化引用块——只追加不替换，幂等）：
+   - **LLM 所见形式**（消息 content 文本；quote chip 发送期展开为结构化引用块）：
 
      ```text
-     〔引用：文本引用锚定的核心是…〕 这段什么意思？
-     <quote id="quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3" source="dockkit 文档示例：锚定与重定位">
+     这段什么意思？
+     <quote id="quote:3f9c2a1e-8b14-4c6d-9a77-2e5f0b81c9d3" source="docs/dockkit.md">
      文本引用锚定的核心是把一段选区映射为稳定描述符：精确前缀 + 引用文本 + 精确后缀三段拼合，在文档树变化后仍可通过模糊匹配重定位到原文位置。
      </quote>
      ```
 
-     模型侧拿到可追溯的原文全文语境 + 引用锚点，而非转述。选段快照由插件内存缓存（零业务耦合、不落库）；快照缺失（会话重启后回放）时 Mention 原文保留、块不追加——永不抛错阻断发送（bug-source 快照末级回退同则）。quote source 与 bug source 同则：**不实现 lexicon 装饰**（引用只以原子 chip / 明文投影两种形态存在）。曾评估借用 @ 形状语法（`@"选段"`）换取发送后视觉 chip——file 语义错位、点击落空、会话日志落畸形路径，裁决不采用。
+     模型侧拿到可追溯的原文全文语境 + 引用锚点，而非转述。选段快照由插件内存缓存（零业务耦合、不落库）；快照缺失（会话重启后回放）时回退最小 quote 块（摘要垫体）——永不抛错阻断发送（bug-source 快照末级回退同则）。quote source 与 bug source 同则：**不实现 lexicon 装饰**（引用只以原子 chip / 明文投影两种形态存在）。曾评估借用 @ 形状语法（`@"选段"`）换取发送后视觉 chip——file 语义错位、点击落空、会话日志落畸形路径，裁决不采用。
 4. **全屏简易 chat view 替身**：感知 rightbar fullscreen（正门 `SidebarRightTabInfo.sidebar.fullscreen` tabInfo hook 订阅；DOM 标记 `[data-sidebar-right-panel=fullscreen]` / `[data-dockkit-*]` 兜底）——**全屏语义 = 文档展开占据中间+右侧区域，左侧栏保持不变**；替身居中于文档区域内、视口底部固定**一体卡**（构成与状态机见 UI/UX 交互规格）：
    - **composer 简易态**：chip 行（输入区上方，读草稿 occurrences 投影）+ 单行输入；无控件行——Enter 发送、Shift+Enter 换行；**mention 菜单在场**（`/` 指令、`@` 引用，官方 inputTriggers 源同壳菜单）；
    - **chat view 态（消息流）**：发送后消息流在横线上方长出，投影当前会话消息流（同一 binding eventSource 数据渠道），流式增量实时上屏——不退全屏即可查看回复；消息流在场时 composer 升为**完整形态**（官方控件行回归）；
@@ -87,7 +87,7 @@ flowchart LR
 | S0 输入卡 | 简易 composer（chip 行 + 单行输入，无控件行） | 全屏替身初始 |
 | S1 标题栏态 | 标题栏 + 横线 + 输入区（composer 仍简易） | `active`：加 chip ∨ 草稿非空 ∨ 有消息 |
 | S2 对话态 | S1 + 消息流 + 完整 composer（官方控件行回归：＋/完全权限/模型选择器/↑）；**同面融合布局**（1.34）：composer 与 chat-view 同一平面（工厂宿主单面承载，无独立高度块），之间以分隔线分隔（DESIGN.md Border L1 令牌 + 官方 0.5px 细线词汇）；**发送后 chat-view 增高**：高度上限 = 顶部标题栏底部分隔线（`100dvh - 底部留白 - 标题栏实测高`，DOM 锚核销定值），`height .35s` 过渡平滑动效；收起复位，再展开（无新消息）回初始块（真机取证 walkthrough/113-34-*） | 发送消息（自动展开）/ 标题栏展开 |
-| C 悬浮球 | 右下角 💬 球 | 「—」点击 / Esc 逐层退到底 / 30s 四条件空闲 |
+| C 悬浮球 | 右下角 💬 球；**球面信号**（1.35）：流式中 = 官方 `StateDot ongoing` spinner 动效（dsh-client-ui-primitives 同源动效词汇，零自造动画）；流式停止 ∧ 未读 = **右上角未读圆点**（官方 `StateDot warning` 琥珀点——官方 unread 指示词汇，sidebar pendingInteraction→warning 同源；查看即消失） | 「—」点击 / Esc 逐层退到底 / 30s 四条件空闲 |
 
 **可展开判定**：标题栏开合热区**仅在替身消息流非空（发过消息）时激活**；无消息时标题栏纯展示、点击无动作。发送首条消息后自动进入 S2。
 
@@ -102,12 +102,14 @@ flowchart LR
 | 发送（Enter / ↑） | 自动进入 S2，流式回复上屏 |
 | 流式进行中 | **钉死**——一切自动收起禁用 |
 | 无流式 ∧ 无草稿 ∧ 无焦点 ∧ 无 hover 持续 **30s** | 先 **3s 预告**（卡淡化 ~70% + 「即将收起 · 移入即保留」，任一条件恢复即取消）→ 收成球 C |
-| 点球 C | 有未读流式回复 → 直达 S2；否则回 S1/S0 |
+| 点球 C | 有未读 → 直达 S2；否则回 S1/S0 |
+
+**未读状态机（1.35）**：未读 = 球态期间消息流增长（**流式增量 ∨ 非流式补账合并记账**——同一未读面，不分支）。圆点显示条件 = 未读 ∧ 非流式（流式期间球面由 spinner 动效承担，停止后未读转圆点提示）；**查看（点球恢复 / 展开消息流）即清账**，圆点消失；卡体在场期间消息增长不记未读。
 | 鼠标离开 | **不收起**（鼠标位置 ≠ 注意力归属——UX 重设计裁决） |
 
 **标题栏**：左「—」（收成球）、中会话 title、右「⧉」（退出全屏恢复常规视图）；无 ✕。非按钮区域为开合热区：光标 = **应用风格 chevron 自定义光标**（可展开 = 主题色向上箭头，可折叠 = 向下），tooltip = **应用风格浮层**（跟随光标、非原生 title）；「—」「⧉」为普通按钮。
 
-**消息流**：官方 ChatView 的消息渲染语义投影（同 eventSource 快照），滚动吸底、流式增量上屏；用户消息内 quote 引用以**防碰撞明文投影** `〔引用：摘要〕` 呈现（与主消息流形态一致，见 chip 发出后双重形态）；**替身内消息正文同样可划选引用**（可引用域含替身消息，排除其输入/控件区）。
+**消息流**：官方 ChatView 的消息渲染语义投影（同 eventSource 快照），滚动吸底、流式增量上屏；用户消息内 quote 引用只落 `<quote id source>` 结构化块（1.32 格式改判，见 chip 发出后双重形态）；**替身内消息正文同样可划选引用**（可引用域含替身消息，排除其输入/控件区）。
 
 **composer 双形态**：简易态（无控件行，Enter 发送、Shift+Enter 换行）↔ 完整态（官方控件行回归）；**功能完全一致**——mention 菜单（`/` 指令、`@` 引用）、chip、草稿、发送链全同源；键盘语义两面一致。实现复用官方 composer 本体件（conversation.composer.bar 面）裁剪呈现，裁剪只删不改制。
 
