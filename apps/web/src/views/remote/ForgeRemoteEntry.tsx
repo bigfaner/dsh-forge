@@ -88,6 +88,14 @@ export function tunnelEmptyText(): string {
   return '隧道暂不可用——宿主建立公网隧道失败或已关闭。可稍后重开此面板重试，或使用 WiFi 连接模式。'
 }
 
+/** 换线/重置 PIN 重建收敛上界（毫秒——双链路皆败撤面时兜底解遮落失败态，不永挂）。 */
+export const TUNNEL_REBUILD_UPPER_BOUND_MS = 15_000
+
+/** 重建收敛判定（纯函数单源）：tunnel 面回归 ∨ 上界到点。 */
+export function rebuildConverged(nowTs: number, deadline: number, hasTunnel: boolean): boolean {
+  return hasTunnel || (deadline !== 0 && nowTs > deadline)
+}
+
 /** 倒计时余秒（纯函数——token TTL 读数驱动；缺席 = 官方 300s 兜底；过期收敛 0） */
 export function secondsLeftOf(pairExpiresAt: number | undefined, now: number): number {
   if (pairExpiresAt === undefined) return PAIRING_COUNTDOWN_SECONDS
@@ -863,6 +871,7 @@ export function RemotePanel(props: {
   // fix-18 ④：切换进行态（受控缝优先——fallback/tab-ensure 在途 = true；遮罩 + tab 禁用单源）
   const [switchingState, setSwitchingState] = useState(false)
   const switching = props.switching ?? switchingState
+  const [rebuildDeadline, setRebuildDeadline] = useState(0)
   // fix-20：切换冻结展示面（受控缝优先）——换线/tab-ensure 触发时同步捕获当时 live 面；
   // switching 期快照隧道面瞬时清空（撤面先到/新面未到）回退冻结面（QR 恒挂载 + 遮罩承载，
   // 官方 §2 .qr-loading 覆盖同形），切换收敛清冻结（新面原子换新，冻结零残留）。
@@ -915,15 +924,27 @@ export function RemotePanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 派生读数取当值（切换时刻判定），依赖面刻意收窄
     [props.mode, props.onTunnelEnsure, onRefresh, snapshot.tunnel, switching],
   )
-  // fix-18 ②：换线链接触发——置 switching 态（QR 遮罩 + tab 禁用），动作结算即解遮。
+  // fix-18 ②：换线链接触发——置 switching 态（QR 遮罩 + tab 禁用）。收敛不再绑 IPC 时长
+  // （毫秒返回 vs 隧道重建秒级——早撤 = 瞬态落「暂不可用」失败态闪屏，bug cf0db7e5）：
+  // 收敛 = tunnel 面回归 ∨ 15s 上界（rebuildDeadline，双链路皆败撤面时兜底解遮落失败态）。
   const handleFallback = useCallback(() => {
     if (props.onFallback === undefined || switching) return
     setSwitchingState(true)
     setFrozenTunnelState(snapshot.tunnel) // fix-20：切换起点同步冻结 live 面
-    void Promise.resolve(props.onFallback())
-      .catch(() => undefined)
-      .then(() => setSwitchingState(false))
+    setRebuildDeadline(Date.now() + TUNNEL_REBUILD_UPPER_BOUND_MS)
+    reopenGuardRef.current = false // bug cf0db7e5「永不恢复」根因：守卫重臂（每 shell 一次 → 动作后可重试）
+    void Promise.resolve(props.onFallback()).catch(() => undefined)
   }, [props.onFallback, switching, snapshot.tunnel])
+  // 重置 PIN：撤隧道重连 + token 轮换（fix-26 ④）——同换线收敛形（旧 URL 冻结仍正确：
+  // pinReset 不换 URL，仅换 PIN/token）。
+  const handlePinReset = useCallback(() => {
+    if (props.onPinReset === undefined || switching) return
+    setSwitchingState(true)
+    setFrozenTunnelState(snapshot.tunnel)
+    setRebuildDeadline(Date.now() + TUNNEL_REBUILD_UPPER_BOUND_MS)
+    reopenGuardRef.current = false // 同 fallback：守卫重臂（撤面窗口撞上 ensure 后仍有重试源）
+    void Promise.resolve(props.onPinReset()).catch(() => undefined)
+  }, [props.onPinReset, switching, snapshot.tunnel])
   // 1.4 隧道相位派生（manifest 隧道面单源——换线中优先；TTL 过期 = 失败）
   const tunnel: TunnelFace | undefined = snapshot.tunnel
   const [nowTs, setNowTs] = useState(() => Date.now())
@@ -941,6 +962,13 @@ export function RemotePanel(props: {
   // fix-6/1.4/fix-17 倒计时：1s interval 渲染读数（LAN QR 倒计时 / 隧道 TTL 横幅 / PIN 倒
   // 计时同刻度）；到期触发 onRefresh 重取（新 token/TTL/PIN 随快照回流——官方刷新机制对齐）。
   const pinLive = snapshot.pin !== undefined
+  // 重建收敛（bug cf0db7e5）：tunnel 面回归即解遮；上界到点解遮落失败态（不再永挂）。
+  useEffect(() => {
+    if (switchingState && rebuildConverged(nowTs, rebuildDeadline, snapshot.tunnel !== undefined)) {
+      setSwitchingState(false)
+      setRebuildDeadline(0)
+    }
+  }, [switchingState, snapshot.tunnel, rebuildDeadline, nowTs])
   const ttlLive = mode === 'internet' && tunnelPhase === 'online' && tunnel?.expiresAt !== undefined
   useEffect(() => {
     if (pairValue === undefined && !ttlLive && !pinLive) return
@@ -1058,7 +1086,7 @@ export function RemotePanel(props: {
                   className="dswf-remote-pin-action"
                   data-testid="dswf-remote-pin-reset"
                   disabled={props.onPinReset === undefined}
-                  onClick={() => void props.onPinReset?.()}
+                  onClick={handlePinReset}
                 >
                   {PIN_RESET_TEXT}
                 </button>

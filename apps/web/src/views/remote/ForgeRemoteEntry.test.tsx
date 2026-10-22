@@ -15,6 +15,8 @@ import {
   REMOTE_DIALOG_TITLE,
   REMOTE_STATUS_POLL_MS,
   remoteDisconnectToast,
+  rebuildConverged,
+  TUNNEL_REBUILD_UPPER_BOUND_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
   harnessBridgeOf,
@@ -881,8 +883,20 @@ describe('fix-26 走查批次（八点）', () => {
 
 // ── fix-19：规格差值清尾 ⑥-⑨（单源规格 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
 
-describe('remoteDisconnectToast（用户裁决 2026-10-22：断开 → 不限时错误 toast，点击关闭）', () => {
-  it('仅 connected → 非 connected 转换回报；listening/off/pending 互转零打扰', () => {
+describe('bug cf0db7e5 重建收敛（换线/重置 PIN 窗口不再误显失败态/永不恢复）', () => {
+  it('收敛判定：tunnel 面回归即收敛；未设上界（0）时无 tunnel 不收敛；上界到点收敛兜底', () => {
+    expect(rebuildConverged(1_000, 0, true)).toBe(true)
+    expect(rebuildConverged(1_000, 0, false)).toBe(false)
+    expect(rebuildConverged(1_000, 2_000, false)).toBe(false)
+    expect(rebuildConverged(2_001, 2_000, false)).toBe(true)
+  })
+
+  it('上界 = 15s（双链路皆败撤面兜底解遮，不永挂）', () => {
+    expect(TUNNEL_REBUILD_UPPER_BOUND_MS).toBe(15_000)
+  })
+})
+
+describe('remoteDisconnectToast（用户裁决 2026-10-22：断开 → 不限时错误 toast，点击关闭）', () => {  it('仅 connected → 非 connected 转换回报；listening/off/pending 互转零打扰', () => {
     expect(remoteDisconnectToast('connected', 'listening')).toBe('手机连接已断开——等待重新配对')
     expect(remoteDisconnectToast('connected', 'off')).toBe('手机连接已断开（远程访问已关闭）')
     expect(remoteDisconnectToast('connected', 'pending')).toBe('手机连接已断开——等待重新配对')
