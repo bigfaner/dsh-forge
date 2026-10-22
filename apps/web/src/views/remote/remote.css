@@ -120,11 +120,7 @@
   padding-top: 22px; /* dsw-raw 官方 Modal .header 上距同值 */
 }
 
-.dswf-remote-dialog-switch {
-  position: absolute; /* 用户裁决 2026-10-22：远程访问开关上移标题右侧（只留钮不留文字） */
-  top: 20px;
-  right: 30px; /* 关钮（右 -10，宽 28）左侧——两钮不重叠 */
-}
+/* （旧绝对定位形态退役——开关并入标题行 flex 相邻排布） */
 
 .dswf-remote-dialog-close {
   position: absolute;
@@ -217,8 +213,16 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.dswf-remote-dialog-title {
+/* 用户裁决 2026-10-22：开关紧贴「连接移动设备」标题相邻（行居中，非贴边绝对定位） */
+.dswf-remote-dialog-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   margin: 8px 0 0; /* dsw-raw dialog 标题上距（排版行高刻度） */
+}
+
+.dswf-remote-dialog-title {
   font: var(--dsw-font-l-20);
   color: var(--dsw-alias-label-primary);
   text-align: center;

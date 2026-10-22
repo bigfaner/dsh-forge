@@ -1120,7 +1120,15 @@ export function RemoteDialogHead(props: {
       {props.trailing !== undefined && (
         <div className="dswf-remote-dialog-switch">{props.trailing}</div>
       )}
-      <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+      {props.trailing !== undefined && (
+        <div className="dswf-remote-dialog-title-row">
+          <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+          {props.trailing}
+        </div>
+      )}
+      {props.trailing === undefined && (
+        <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+      )}
     </div>
   )
 }
