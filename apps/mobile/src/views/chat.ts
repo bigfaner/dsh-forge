@@ -347,10 +347,20 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   }
 
   // ---- 发送（斜杠仲裁单一发送路径）----
+  // bug 1eb525b7 后继（裁决 2026-10-22）：prompt 模式按 agent 运行态——运行中 steer 抢占 /
+  // 空闲 queue followup 即启（官方 steer 对空闲 agent 恒拒绝）。运行态自活动事件外推。
+  let agentRunning = false
+  const trackRunning = (events: readonly WireEvent[]): void => {
+    for (const event of events) {
+      if (event.type === 'api-session/activity') {
+        agentRunning = (event.data as { running?: unknown } | null)?.running === true
+      }
+    }
+  }
   async function send(text: string): Promise<void> {
     composer.setSending(true)
     try {
-      await sendComposerInput(text, { api: deps.api, sessionId, catalog: [] })
+      await sendComposerInput(text, { api: deps.api, sessionId, catalog: [], promptMode: agentRunning ? 'steer' : 'queue' })
     } catch (error) {
       if (error instanceof DisconnectedError) setOverlay('pairing')
     } finally {
@@ -362,6 +372,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   const sink: SseSink = {
     snapshot(frame) {
       adoptEntries(frame.events, false)
+      trackRunning(frame.events)
       title.textContent = deriveTitle(state.entries)
     },
     delta(frame) {
@@ -382,6 +393,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
         return
       }
       adoptEntries([event], true)
+      trackRunning([event])
       title.textContent = deriveTitle(state.entries)
     },
     stateChange(next: SseState) {

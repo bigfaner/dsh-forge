@@ -274,7 +274,9 @@ export function createHeroController(deps: HeroDeps): HeroController {
     await applyPendingDefault(sessionId)
     if (text.trim() !== '') {
       try {
-        await deps.api.prompt(sessionId, text, promptModeOf(mode))
+        // bug 1eb525b7 后继：首条消息恒 queue（followup）——新会话 agent 必空闲，官方 steer
+        // 对空闲 agent 恒拒绝（session/agent-busy「prompt rejected」）；followup 即启等价达成
+        await deps.api.prompt(sessionId, text, 'queue')
       } catch {
         /* 首条消息投递失败不阻断进入会话（会话已建） */
       }

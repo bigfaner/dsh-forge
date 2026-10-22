@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+﻿import { describe, expect, it, vi } from 'vitest'
 import {
   coerceWorktreeList,
   composerWorktreeLabel,
@@ -176,13 +176,13 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(controller.state().selectedPath).toBe('Z:/proj')
   })
 
-  it('默认分支发送：直走官方面 session.create（零守卫调用）+ prompt（突击=steer）+ 进入会话', async () => {
+  it('默认分支发送：直走官方面 session.create（零守卫调用）+ prompt（首条消息恒 queue——新会话 agent 必空闲）+ 进入会话', async () => {
     const { deps, h } = makeDeps()
     const controller = createHeroController(deps)
     await controller.load()
     await controller.send('你好')
     expect(h.createSession).toHaveBeenCalledWith('ws-1')
-    expect(h.prompt).toHaveBeenCalledWith('s-ws-1', '你好', 'steer')
+    expect(h.prompt).toHaveBeenCalledWith('s-ws-1', '你好', 'queue')
     expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
     expect(controller.state().busy).toBe(false)
     expect(h.rpcCalls).toHaveLength(1)
@@ -196,7 +196,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     await controller.send('你好')
     expect(h.createSession).not.toHaveBeenCalled()
     expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/proj' }])
-    expect(h.prompt).toHaveBeenCalledWith('s-forge', '你好', 'steer')
+    expect(h.prompt).toHaveBeenCalledWith('s-forge', '你好', 'queue')
     expect(h.onOpenSession).toHaveBeenCalledWith('s-forge')
   })
 
@@ -274,7 +274,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     h.sessionCreateResult = { ok: true, data: { sessionId: 's-bound', branch: 'feat/pin-durable' } }
     await controller.send('开工')
     expect(h.rpcCalls).toEqual([[HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/wt/feat' }]])
-    expect(h.prompt).toHaveBeenCalledWith('s-bound', '开工', 'steer')
+    expect(h.prompt).toHaveBeenCalledWith('s-bound', '开工', 'queue')
     expect(h.onOpenSession).toHaveBeenCalledWith('s-bound')
   })
 

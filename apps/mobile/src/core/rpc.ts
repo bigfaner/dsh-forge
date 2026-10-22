@@ -160,6 +160,12 @@ export interface ComposerSendDeps {
   readonly sessionId: string
   /** 指令目录（远程 registry 快照；测试注入）。 */
   readonly catalog: readonly string[]
+  /**
+   * prompt 模式（bug 1eb525b7 后继裁决 2026-10-22：官方 steer 仅对运行中 agent 合法——
+   * 空闲 agent steer 被 session/agent-busy「prompt rejected」拒绝。调用方按运行态选：
+   * 运行中 = steer 抢占 / 空闲或新会话 = queue followup 即启）。
+   */
+  readonly promptMode: 'steer' | 'queue'
 }
 
 export type ComposerSendOutcome = 'command-executed' | 'command-unmatched' | 'message-sent'
@@ -175,7 +181,7 @@ export async function sendComposerInput(text: string, deps: ComposerSendDeps): P
     await deps.api.executeCommand(deps.sessionId, verdict.parsed.line)
     return 'command-executed'
   }
-  await deps.api.prompt(deps.sessionId, verdict.text, 'steer')
+  await deps.api.prompt(deps.sessionId, verdict.text, deps.promptMode)
   return 'message-sent'
 }
 

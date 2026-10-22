@@ -130,7 +130,7 @@ describe('sendComposerInput 派发', () => {
     }
     return { methodCalls, deps }
   }
-  const base = { sessionId: 's-9', catalog: ['run-dag-tasks'] }
+  const base = { sessionId: 's-9', catalog: ['run-dag-tasks'], promptMode: 'steer' as const }
 
   it('命中：官方指令执行远程面 commands.execute（整行，同源会话）', async () => {
     const { methodCalls, deps } = apiDeps()
