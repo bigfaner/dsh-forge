@@ -8,6 +8,7 @@ import {
   estimateLineCount,
   formatSize,
   isShellTool,
+  toolCollapsedLabel,
   loopKindOf,
   loopBadge,
   pairToolActivity,
@@ -54,6 +55,27 @@ describe('shell 判别（终端块 vs ioCard 双段）', () => {
   it('非 shell（subagent/job/read 等）= ioCard 分段卡', () => {
     expect(isShellTool('subagent.start')).toBe(false)
     expect(isShellTool('read')).toBe(false)
+  })
+})
+
+describe('收起态标签（用户裁决 2026-10-22：命令工具收起 = 「运行命令 {description}」）', () => {
+  it('shell 工具：label=运行命令，preview=入参 description', () => {
+    const out = toolCollapsedLabel('pwsh', JSON.stringify({ command: 'pnpm dev:debug', description: 'Restart dev:debug' }))
+    expect(out.label).toBe('运行命令')
+    expect(out.preview).toBe('Restart dev:debug')
+  })
+
+  it('shell 工具无 description：preview 回退参数原文', () => {
+    const out = toolCollapsedLabel('shell', JSON.stringify({ command: 'ls' }))
+    expect(out.label).toBe('运行命令')
+    expect(out.preview).toBe(JSON.stringify({ command: 'ls' }))
+  })
+
+  it('非 shell 工具：label=工具名、preview=参数原文（现状不变）', () => {
+    const args = JSON.stringify({ path: 'a.ts' })
+    const out = toolCollapsedLabel('read', args)
+    expect(out.label).toBe('read')
+    expect(out.preview).toBe(args)
   })
 })
 

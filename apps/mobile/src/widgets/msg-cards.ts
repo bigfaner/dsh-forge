@@ -60,6 +60,24 @@ export function isShellTool(name: string): boolean {
   return SHELL_TOOL_NAMES.has(name.toLowerCase())
 }
 
+/**
+ * 收起态标签（用户裁决 2026-10-22：命令工具收起 = 「运行命令 {description}」，对齐桌面
+ * ui-tool 行）。shell 族 label 恒「运行命令」、preview 取入参 description（缺席回退参数
+ * 原文）；非 shell 工具维持「工具名 + 参数预览」现状。
+ */
+export function toolCollapsedLabel(name: string, args: string): { readonly label: string; readonly preview: string } {
+  if (!isShellTool(name)) return { label: name, preview: args }
+  try {
+    const parsed = JSON.parse(args) as { description?: unknown }
+    if (typeof parsed.description === 'string' && parsed.description !== '') {
+      return { label: '运行命令', preview: parsed.description }
+    }
+  } catch {
+    /* 参数非 JSON——回退原文 */
+  }
+  return { label: '运行命令', preview: args }
+}
+
 // ---------------------------------------------------------------------------
 // 纯函数：折叠空间纪律
 // ---------------------------------------------------------------------------
@@ -270,10 +288,12 @@ function toolSummary(activity: ToolActivity): HTMLElement {
     activity.state === 'error' ? 'i-warn' : activity.state === 'done' ? 'i-check' : 'i-tool'
   const iconClass = activity.state === 'error' ? 'ic act-ic st-err' : activity.state === 'done' ? 'ic act-ic st-done' : 'ic act-ic'
   summary.appendChild(svgIcon(symbol, iconClass))
-  summary.appendChild(el('span', undefined, activity.call.name))
+  // 用户裁决 2026-10-22：收起态标签经 toolCollapsedLabel（命令工具 = 「运行命令 {description}」）
+  const { label, preview } = toolCollapsedLabel(activity.call.name, activity.call.arguments)
+  summary.appendChild(el('span', undefined, label))
   summary.appendChild(el('span', 'act-dot'))
   summary.appendChild(
-    el('span', 'act-sum', activity.result === undefined ? textPreview(activity.call.arguments) : textPreview(activity.result.text)),
+    el('span', 'act-sum', activity.result === undefined ? textPreview(preview) : textPreview(activity.result.text)),
   )
   summary.appendChild(el('span', 'chev', '▶'))
   return summary
