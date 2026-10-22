@@ -232,7 +232,8 @@ export async function handleRemoteHttpRpc(
     const message = error instanceof Error ? error.message : String(error)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message } }))
-    // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=error ${message}`)
+    // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag；官方 RemoteError details 同批（PSK 分支同改）
+    const details = (error as { details?: unknown }).details
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)
   }
 }
