@@ -977,3 +977,20 @@
     width: 99%;
   }
 }
+
+/* ---- 三件套 ? 帮助图标（label 旁——Tooltip 悬浮呈现字段含义） ---- */
+.dswf-remote-psk-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  font-size: 10px;
+  line-height: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: help;
+  vertical-align: middle;
+}

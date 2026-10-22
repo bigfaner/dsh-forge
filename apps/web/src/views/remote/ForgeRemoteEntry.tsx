@@ -541,10 +541,19 @@ function PskTrioRow(props: {
   /** 掩码切换（私钥材料行——默认掩码，点击显/隐；公钥行不携） */
   readonly onToggleMask?: () => void
   readonly masked?: boolean
+  /** 字段含义与作用（? 图标 Tooltip 悬浮/点按呈现） */
+  readonly help?: string
 }): ReactNode {
   return (
     <div className="dswf-remote-psk-row" data-testid={props.testId}>
-      <span className="dswf-remote-psk-label">{props.label}</span>
+      <span className="dswf-remote-psk-label">
+        {props.label}
+        {props.help !== undefined && (
+          <Tooltip label={props.help} portal>
+            <span className="dswf-remote-psk-help" role="note" aria-label={props.help}>?</span>
+          </Tooltip>
+        )}
+      </span>
       <span className="dswf-remote-psk-value" title={props.value}>{props.value}</span>
       {props.onToggleMask !== undefined && (
         <Tooltip label={props.masked ? '显示' : '隐藏'} portal>
@@ -652,7 +661,8 @@ export function PskTrioSection(props: {
       ) : (
         <>
           <PskTrioRow
-            label="连接密钥（PSK）"
+            label="PSK"
+            help="PSK（预共享密钥）：加密隧道的根——与配对 PIN 共同派生会话密钥，两端一致才能建立连接"
             value={pskRevealed ? trio.display : trio.display.replace(/[^-]/g, '•')}
             testId="dswf-remote-psk-display"
             copied={copiedKey === 'display'}
@@ -662,13 +672,15 @@ export function PskTrioSection(props: {
           />
           <PskTrioRow
             label="校验段"
+            help="校验段：PSK 的指纹（SHA-256 前 4 位）——快速核对两端密钥是否一致"
             value={trio.checksum}
             testId="dswf-remote-psk-checksum"
             copied={copiedKey === 'checksum'}
             onCopy={() => copyField('checksum', trio.checksum)}
           />
           <PskTrioRow
-            label="host 公钥（SPKI）"
+            label="SPKI"
+            help="SPKI（host 公钥）：电脑的 Ed25519 签名公钥——手机逐帧验证响应确实来自你的电脑，防中间人伪造"
             value={trio.spki}
             testId="dswf-remote-psk-spki"
             copied={copiedKey === 'spki'}
