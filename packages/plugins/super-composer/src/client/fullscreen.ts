@@ -8,8 +8,8 @@
 // - 正门：`SidebarRightTabInfo.sidebar.fullscreen`（官方 contract/slots.d.ts:169-174，
 //   tabInfo hook 订阅面）——本模块只消费 hook 已取出的布尔快照
 //   （`readFullscreenFromHook` 注入缝），React 渲染侧订阅由 client face 组装缝承担；
-// - 兜底：DOM 标记（`[data-sidebar-right-panel="fullscreen"]` 主标记 +
-//   `[data-dockkit-*]` 全屏标记族）——hook 形状漂移/缺席时的降级读数。
+// - 兜底：DOM 标记（`[data-sidebar-right-panel="fullscreen"]` 主标记）——hook 形状
+//   漂移/缺席时的降级读数。
 // 纯逻辑可注入（doc / hook getter / watch 均注入）——无 React、无全局硬依赖。
 
 /** tabInfo hook 快照的窄面（只消费 sidebar.fullscreen 切片——形状漂移不抛） */
@@ -28,15 +28,13 @@ export function fullscreenFromTabInfo(info: unknown): boolean | undefined {
 }
 
 /**
- * DOM 兜底选择器清单：right panel 全屏主标记 + dockkit 全屏标记族。
- * （官方 sidebar-right 以 `data-sidebar-right-panel="fullscreen"|"push"` 落 DOM；
- * dockkit 呈现面全屏标记族为声明式兜底，与提案 `fullscreen.surface` 声明式
- * 换绑语义同构——后续任务可经配置增删收窄。）
+ * DOM 兜底选择器清单：right panel 全屏主标记（官方 sidebar-right 以
+ * `data-sidebar-right-panel="fullscreen"|"push"` 落 DOM）。评审 A2：曾列
+ * `[data-dockkit-*][data-fullscreen="true"]` 两条——官方无该形状生产者
+ * （data-fullscreen 仅 html OS 级全屏），已删。
  */
 export const DOM_FULLSCREEN_SELECTORS: readonly string[] = [
   '[data-sidebar-right-panel="fullscreen"]',
-  '[data-dockkit-pane][data-fullscreen="true"]',
-  '[data-dockkit-float][data-fullscreen="true"]',
 ]
 
 /** 兜底 DOM 窄面（真实 Document 与测试桩同型——不锁 Document 全量形状） */

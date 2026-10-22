@@ -329,12 +329,13 @@ describe("发送链与输入", () => {
     expect(onDraftChange).toHaveBeenCalledWith("x", expect.any(Number));
   });
 
-  it("流式中发送钮呈现停止语义（aria-label），点击不重复提交", () => {
+  it("流式中发送钮 = 禁用态（评审 C3：不再假「停止」标签），点击不重复提交", () => {
     const onSend = vi.fn();
     harness = mount({ messages: [msg("m1", "user", "hi")], streaming: true, onSend });
     fire(harness, "dscf-hotzone", "click");
     const send = q(harness, "dscf-send") as HTMLButtonElement;
-    expect(send.getAttribute("aria-label")).toContain("停止");
+    expect(send.disabled).toBe(true);
+    expect(send.getAttribute("aria-label")).toBe("生成中");
     fire(harness, "dscf-send", "click");
     expect(onSend).not.toHaveBeenCalled();
   });

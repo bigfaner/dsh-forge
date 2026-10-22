@@ -187,6 +187,38 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(effects.length).toBe(1);
   });
 
+  it("评审 C3：流式期发送按钮 = 禁用态 + aria-label 生成中（不再假「停止生成」标签）", async () => {
+    setFullscreenMarker(true);
+    // transient live-chunk 在场 = streaming 投影 true（data-face projectEventWindow）
+    const streamingSessions = {
+      list: { getSnapshot: () => ({ byId: { s1: { id: "s1", retainedBy: { mainView: 1 } } } }) },
+      binding: () => ({
+        sessionId: "s1",
+        ctx: {},
+        eventSource: {
+          getSnapshot: () => ({
+            entries: [
+              { type: "event", event: { type: "user/message", data: { id: "m1", content: [{ type: "text", text: "hi" }] } } },
+              { type: "transient", event: { type: "assistant/live-chunk", data: { attemptId: "a1", chunk: { type: "text-delta", text: "…" } } } },
+            ],
+          }),
+          subscribe: () => () => undefined,
+        },
+      }),
+    };
+    superComposerClient.apply(stubCtx({ sessions: streamingSessions }));
+    await tick();
+    // 消息流非空 → 热区可展开 → s2 控件行在场
+    const hotzone = document.querySelector('[data-testid="dscf-hotzone"]') as HTMLElement | null;
+    expect(hotzone).not.toBeNull();
+    hotzone!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await tick();
+    const send = document.querySelector('[data-testid="dscf-send"]') as HTMLButtonElement | null;
+    expect(send).not.toBeNull();
+    expect(send!.disabled, "流式期发送按钮禁用（UI 语义与行为一致）").toBe(true);
+    expect(send!.getAttribute("aria-label")).toBe("生成中");
+  });
+
   it("disposer 收口：root.unmount 摘除替身 DOM（幂等不抛）", async () => {
     setFullscreenMarker(true);
     const ctx = stubCtx({ sessions: sessionsStub });

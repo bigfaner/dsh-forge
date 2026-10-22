@@ -14,12 +14,10 @@ const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/super-composer";
 
 // 平台基线外置表（对齐官方 packages/client/web/src/platform.ts 冻结种子表口径）：
-// 收敛为本 client face 运行期经 factory require 实际可达的依赖。当前骨架零运行期
-// 平台 require（全屏感知为纯逻辑，react 家族只在宿主壳层消费、type-only import
-// 构建期已擦除——esbuild 不会为类型引用发 require）。保留 react 家族 + primitives
-// 种子位：后续任务（mini-composer 一体卡替身组件化消费）一旦出现，require 必须落
-// 到壳层冻结种子表单例——内联第二份 react 会使 shell 渲染树组件 hooks 读到另一副本
-// 的 dispatcher（Invalid hook call）。表外依赖全部内联。
+// react 家族（MiniComposerCard 组件 hooks 与 jsx transform 均须共用壳层单例——内联
+// 第二份 react 会使 shell 渲染树组件 hooks 读到另一副本的 dispatcher，Invalid hook
+// call）+ react-dom/client（替身容器 createRoot）+ primitives（同模块实例）。
+// 上述为运行期经 factory require 实际可达的外置依赖；表外依赖全部内联。
 const PLATFORM_MODULES = [
   "react",
   "react/jsx-runtime",

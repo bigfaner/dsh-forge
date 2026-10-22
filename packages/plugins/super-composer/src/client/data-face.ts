@@ -249,7 +249,12 @@ export interface SuperComposerDataFace {
   mention(): TriggerControllerMirror | undefined
   /** 官方 trigger 检测入口转发（草稿/光标变更时调用——菜单开合由官方 controller 决定） */
   trackMention(draft: string, caret: number): void
-  /** 变更订阅（input state store + eventSource 扇出；返回退订） */
+  /**
+   * 变更订阅（input state store + eventSource 扇出；返回退订）。
+   * 单订阅者契约（评审 C2）：本面状态即单槽——二次 subscribe 会覆写 listOff 并与
+   * 前一订阅共享 inputOffs（前订阅退订会连带拆掉后订阅的每会话源）。当前唯一消费方
+   * = mountMiniComposer 的单一 render 扇出；新增订阅方须先经扇出聚合，不得直订。
+   */
   subscribe(listener: () => void): () => void
   /** 订阅补挂重试（晚序服务就绪后调用——全源挂上 = true） */
   syncSubscriptions(listener: () => void): boolean

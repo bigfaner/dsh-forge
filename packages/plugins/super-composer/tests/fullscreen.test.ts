@@ -40,21 +40,12 @@ describe("fullscreenFromTabInfo（正门——tabInfo hook 快照消费）", () 
 });
 
 describe("fullscreenFromDocument（兜底——DOM 标记）", () => {
-  it("默认选择器清单含 right panel fullscreen 标记与 dockkit 全屏标记", () => {
-    expect(DOM_FULLSCREEN_SELECTORS).toContain('[data-sidebar-right-panel="fullscreen"]');
-    expect(
-      DOM_FULLSCREEN_SELECTORS.some((s) => s.startsWith("[data-dockkit-")),
-      "dockkit 全屏标记选择器在场",
-    ).toBe(true);
+  it("默认选择器清单 = right panel fullscreen 主标记（评审 A2：dockkit 死选择器已删）", () => {
+    expect(DOM_FULLSCREEN_SELECTORS).toEqual(['[data-sidebar-right-panel="fullscreen"]']);
   });
 
-  it("命中任一标记 = true（right panel 主标记）", () => {
+  it("命中标记 = true（right panel 主标记）", () => {
     expect(fullscreenFromDocument(stubDom(['[data-sidebar-right-panel="fullscreen"]']))).toBe(true);
-  });
-
-  it("命中 dockkit 标记 = true（兜底标记族）", () => {
-    const dockkitSelector = DOM_FULLSCREEN_SELECTORS.find((s) => s.startsWith("[data-dockkit-"))!;
-    expect(fullscreenFromDocument(stubDom([dockkitSelector]))).toBe(true);
   });
 
   it("无命中 = false；doc 缺席 = false", () => {

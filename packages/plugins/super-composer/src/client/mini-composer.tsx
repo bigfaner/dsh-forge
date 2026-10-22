@@ -552,7 +552,8 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
             <button
               type="button"
               data-testid="dscf-send"
-              aria-label={props.streaming ? "停止生成" : "发送"}
+              aria-label={props.streaming ? "生成中" : "发送"}
+              disabled={props.streaming}
               onClick={handleSend}
               style={{
                 ...controlBtnStyle,

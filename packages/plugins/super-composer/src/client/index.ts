@@ -224,6 +224,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
   }
   const off = face.subscribe(render)
   const offFullscreen = options.tracker?.subscribe(render)
+  let torn = false
   // 晚序服务补挂重试（conversation/inputTriggers provide 晚于挂载——有界轮询直至全源
   // 挂上；真机判例 inputTriggers provide 晚序可达分钟级，上界 150 次 = 5 分钟）
   let syncTries = 0
@@ -232,7 +233,6 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     if (torn || syncTries > 150 || face.syncSubscriptions(render)) clearInterval(syncTimer)
   }, 2_000)
   render()
-  let torn = false
   return () => {
     if (torn) return
     torn = true
@@ -298,6 +298,8 @@ export const superComposerClient = {
           const inject = (ctx as {
             inject?: (names: readonly string[], cb: (scope: unknown) => void) => unknown
           }).inject
+          // 评审 C4：inject 缝缺席 = 装配断裂（sessions 晚 provide 时替身永不挂载）
+          //——不再零日志静默，console 留痕供真机判读。
           if (typeof inject === 'function') {
             inject.call(ctx, ['sessions'], (scope: unknown) => {
               if (readSessionsOf(scope) == null) return
@@ -307,6 +309,8 @@ export const superComposerClient = {
                 console.error('[dsh-forge/super-composer] late wiring failed——降级空态', error)
               }
             })
+          } else {
+            console.error('[dsh-forge/super-composer] ctx.inject 缝缺席且 sessions 未就绪——装配断裂，替身不挂载')
           }
         }
       } catch (error) {
