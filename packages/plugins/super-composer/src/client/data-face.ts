@@ -163,6 +163,34 @@ export function activeSessionIdOf(list: unknown): string | undefined {
   return undefined
 }
 
+/**
+ * 活跃会话标题解析（1.41 用户裁决——标题栏左侧会话标题）：
+ * sessions.list 快照活跃行（activeSessionIdOf 现径）的 `title`（官方 rename/自动
+ * title 落的 list 投影列）优先，未命名回落 `displayTitle`（官方 manager 投影的
+ * 展示口径 = durable title → project basename → session id，与官方侧栏同源同值）。
+ * 快照缺席/形状漂移 fail-soft 回空串。
+ */
+export function sessionTitleOf(list: unknown): string {
+  if (typeof list !== 'object' || list === null) return ''
+  const getSnapshot = (list as { getSnapshot?: () => unknown }).getSnapshot
+  if (typeof getSnapshot !== 'function') return ''
+  let snapshot: unknown
+  try {
+    snapshot = getSnapshot.call(list)
+  } catch {
+    return ''
+  }
+  const id = activeSessionIdOf(list)
+  if (id === undefined) return ''
+  const row = (snapshot as { byId?: Record<string, unknown> } | null)?.byId?.[id]
+  if (typeof row !== 'object' || row === null) return ''
+  const title = (row as { title?: unknown }).title
+  if (typeof title === 'string' && title !== '') return title
+  const displayTitle = (row as { displayTitle?: unknown }).displayTitle
+  if (typeof displayTitle === 'string' && displayTitle !== '') return displayTitle
+  return ''
+}
+
 /** PromptContentPart 文本拼合（text parts 投影；非文本 part 跳过——消息流只投文本）。 */
 export function messageTextOf(content: unknown): string {
   if (!Array.isArray(content)) return ''
@@ -255,6 +283,8 @@ export interface SuperComposerDataFace {
   submit(mode?: unknown, source?: 'click' | 'enter'): void
   /** 消息流投影（同一 eventSource 快照——durable + 流式增量 + streaming 旗标） */
   streamProjection(): { readonly messages: readonly MiniComposerMessage[]; readonly streaming: boolean }
+  /** 活跃会话标题投影（sessions.list title/displayTitle 口径；会话缺席 = 空串） */
+  titleProjection(): string
   /** mention 官方 controller（inputTriggers.sessionOf；服务/会话缺席 = undefined） */
   mention(): TriggerControllerMirror | undefined
   /** 官方 trigger 检测入口转发（草稿/光标变更时调用——菜单开合由官方 controller 决定） */
@@ -502,6 +532,13 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       if (window.hasMore === true) drainHistory(binding)
       return projectEventWindow(window)
     },
+    titleProjection() {
+      try {
+        return sessionTitleOf(services.sessions?.list)
+      } catch {
+        return ''
+      }
+    },
     mention() {
       const binding = bindingOf(services)
       const triggers = services.inputTriggers
@@ -612,7 +649,7 @@ export function miniComposerPropsOf(
   const draft = face.draftProjection()
   const stream = face.streamProjection()
   return {
-    title: '',
+    title: face.titleProjection(),
     draft: draft.draft,
     chipCount: draft.chipCount,
     messages: stream.messages,

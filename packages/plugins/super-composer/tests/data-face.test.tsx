@@ -17,6 +17,7 @@ import {
   mentionMenuOf,
   miniComposerPropsOf,
   projectEventWindow,
+  sessionTitleOf,
   trackGuardOf,
   type DataFaceServices,
   type EventEntryMirror,
@@ -639,5 +640,90 @@ describe("纯函数边角", () => {
     expect(
       projectEventWindow({ entries: [{ type: "event", event: { type: "turn/start", seq: 1, data: {} } }] }).messages,
     ).toEqual([]);
+  });
+});
+
+describe("1.41 标题栏左侧会话标题（sessions.list title/displayTitle 口径）", () => {
+  const listOf = (byId: unknown): unknown => ({ getSnapshot: () => ({ byId }) });
+
+  it("sessionTitleOf：durable title 优先；未命名回落 displayTitle（官方侧栏同口径）", () => {
+    expect(
+      sessionTitleOf(listOf({ s1: { id: "s1", title: "重命名后", displayTitle: "重命名后", retainedBy: { mainView: 1 } } })),
+    ).toBe("重命名后");
+    expect(
+      sessionTitleOf(listOf({ s1: { id: "s1", displayTitle: "proj-basename", retainedBy: { mainView: 1 } } })),
+    ).toBe("proj-basename");
+    // 官方 manager 投影保证 displayTitle 在场；双缺 = 回空串（fail-soft）
+    expect(sessionTitleOf(listOf({ s1: { id: "s1", retainedBy: { mainView: 1 } } }))).toBe("");
+  });
+
+  it("sessionTitleOf：非活跃行不取；快照/形状缺席 = 空串不抛", () => {
+    expect(
+      sessionTitleOf(listOf({
+        s1: { id: "s1", title: "主会话", retainedBy: { mainView: 1 } },
+        s2: { id: "s2", title: "后台会话", retainedBy: { mainView: 0 } },
+      })),
+    ).toBe("主会话");
+    expect(sessionTitleOf(null)).toBe("");
+    expect(sessionTitleOf(undefined)).toBe("");
+    expect(sessionTitleOf({})).toBe("");
+  });
+
+  it("titleProjection/miniComposerPropsOf：标题注入 props.title；重命名经 list 通知后投影更新", async () => {
+    const world = makeWorld();
+    const listStore = storeOf({
+      byId: { s1: { id: "s1", title: "首会话", displayTitle: "首会话", retainedBy: { mainView: 1 } } },
+    });
+    world.services.sessions = {
+      binding: world.services.sessions!.binding,
+      list: {
+        getSnapshot: () => listStore.getSnapshot(),
+        subscribe: (l: () => void) => listStore.subscribe(l),
+      },
+    };
+    const face = createSuperComposerDataFace(world.services);
+    try {
+      expect(face.titleProjection()).toBe("首会话");
+      expect(miniComposerPropsOf(face).title).toBe("首会话");
+
+      // 活跃会话切换：list 快照换代 → 投影随行
+      listStore.setSnapshot({
+        byId: {
+          s1: { id: "s1", title: "首会话", retainedBy: { mainView: 0 } },
+          s2: { id: "s2", title: "切到的会话", displayTitle: "切到的会话", retainedBy: { mainView: 1 } },
+        },
+      });
+      expect(face.titleProjection()).toBe("切到的会话");
+
+      // 重命名：官方 manager rename → list 投影列更新 → 通知扇出后重读
+      let notified = 0;
+      const off = face.subscribe(() => {
+        notified += 1;
+      });
+      listStore.setSnapshot({
+        byId: {
+          s1: { id: "s1", title: "首会话", retainedBy: { mainView: 0 } },
+          s2: { id: "s2", title: "重命名后的标题", displayTitle: "重命名后的标题", retainedBy: { mainView: 1 } },
+        },
+      });
+      await Promise.resolve();
+      expect(notified, "list 通知扇出（订阅链驱动实时更新）").toBeGreaterThan(0);
+      expect(miniComposerPropsOf(face).title).toBe("重命名后的标题");
+      off();
+    } finally {
+      face.dispose();
+    }
+  });
+
+  it("会话缺席（binding 不可寻）= 标题空投影不抛", () => {
+    const world = makeWorld();
+    world.services.sessions = {
+      binding: () => undefined,
+      list: { getSnapshot: () => ({ byId: {} }) },
+    };
+    const face = createSuperComposerDataFace(world.services);
+    expect(face.titleProjection()).toBe("");
+    expect(miniComposerPropsOf(face).title).toBe("");
+    face.dispose();
   });
 });

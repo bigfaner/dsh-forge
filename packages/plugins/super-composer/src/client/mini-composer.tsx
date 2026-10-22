@@ -15,7 +15,10 @@
 // sidebar pendingInteraction→warning 同源），查看（点球/展开）即消失；未读面
 // 流式增量与非流式补账合并记账。
 //
-// 标题栏：左「—」、中会话 title（热区承载）、右「⧉」；热区光标 = 应用风格 chevron
+// 标题栏：左「—」+ 会话 title（1.41 用户裁决——header 左侧当前会话标题，官方
+// sessions.list title/displayTitle 口径，切换/重命名经既有订阅实时更新；单行溢出
+// 裁剪按 DESIGN.md PathLabel 规格）、中热区（承载开合 affordance）、右「⧉」；热区
+// 光标 = 应用风格 chevron
 // 自定义光标（styles.ts 注入的 svg data-uri cursor，随主题暗色锚切换），tooltip =
 // 应用风格浮层（跟随光标，非原生 title）。样式令牌化（--dsw-alias-*）随主题。
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -53,7 +56,7 @@ export interface MiniComposerMessage {
 
 /** 替身属性面（状态输入全部注入——组件不感知 cordis 服务与数据渠道装配）。 */
 export interface MiniComposerProps {
-  /** 会话 title（标题栏中位展示） */
+  /** 会话 title（标题栏左侧展示——官方 sessions.list title/displayTitle 口径） */
   readonly title: string
   /** 共享草稿（同草稿机投影；空串 = 无草稿） */
   readonly draft: string
@@ -410,6 +413,24 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           >
             —
           </button>
+          <span
+            data-testid="dscf-title"
+            style={{
+              flex: "0 1 auto",
+              minWidth: 0,
+              maxWidth: "40%",
+              fontSize: 13,
+              lineHeight: "20px",
+              fontWeight: 500,
+              color: "var(--dsw-alias-label-primary)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              userSelect: "none",
+            }}
+          >
+            {props.title}
+          </span>
           <div
             data-testid="dscf-hotzone"
             className={hotzoneClass}
@@ -426,21 +447,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
               padding: "6px 0",
               userSelect: "none",
             }}
-          >
-            <span
-              data-testid="dscf-title"
-              style={{
-                fontSize: 13,
-                lineHeight: "20px",
-                color: "var(--dsw-alias-label-secondary)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {props.title}
-            </span>
-          </div>
+          />
           <button
             type="button"
             data-testid="dscf-fullscreen"

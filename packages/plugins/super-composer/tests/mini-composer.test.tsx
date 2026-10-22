@@ -175,6 +175,33 @@ describe("四态派生（S0/S1/S2/C）", () => {
   });
 });
 
+describe("1.41 标题栏左侧会话标题（用户标注位：header 左）", () => {
+  it("标题段在 header 左侧（先于热区；左对齐、单行溢出截断样式在场）", () => {
+    harness = mount({ chipCount: 1, composer: makeFace() });
+    const header = q(harness, "dscf-header");
+    const title = q(harness, "dscf-title");
+    const hotzone = q(harness, "dscf-hotzone");
+    expect(header).not.toBeNull();
+    expect(title).not.toBeNull();
+    expect(hotzone).not.toBeNull();
+    // 左侧判据：标题段在热区之前（「—」之后），且水平位置不越过热区中点
+    const titleRect = title!.getBoundingClientRect();
+    const hotRect = hotzone!.getBoundingClientRect();
+    expect(titleRect.right).toBeLessThanOrEqual(hotRect.left + hotRect.width / 2);
+    const style = title!.style;
+    expect(style.whiteSpace).toBe("nowrap");
+    expect(style.overflow).toBe("hidden");
+    expect(style.textOverflow).toBe("ellipsis");
+  });
+
+  it("props.title 变更（切换/重命名投影）→ 标题文本实时跟随", () => {
+    harness = mount({ chipCount: 1, title: "会话甲", composer: makeFace() });
+    expect(q(harness, "dscf-title")?.textContent).toBe("会话甲");
+    harness.rerender({ title: "会话乙-重命名" });
+    expect(q(harness, "dscf-title")?.textContent).toBe("会话乙-重命名");
+  });
+});
+
 describe("构建版本戳（data-dscf-rev）", () => {
   /** rev 属性在场且非空（新旧产物肉眼可辨——自查口径：看 DOM 属性）。 */
   function expectRev(h: Harness): void {
