@@ -123,7 +123,7 @@ describe("installFactoryBridge（shell.overlay 官方缝注册）", () => {
   });
 });
 
-describe("FactoryChatView S2 布局（1.34 融合 + 发送增高）", () => {
+describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展开）", () => {
   it("未增高（进入 S2 未发送）：宿主 40vh 初始块 + 高度过渡动效在场", () => {
     chat = mountChatView();
     const host = chat.host()!;
@@ -131,7 +131,7 @@ describe("FactoryChatView S2 布局（1.34 融合 + 发送增高）", () => {
     expect(host.style.transition).toContain("height");
   });
 
-  it("增高态（发送触发）：宿主高度 = 标题栏分隔线锚 calc 上限，过渡动效保持", () => {
+  it("增高态（无布局环境回落）：宿主高度 = 上限锚减顶缘留白 32px（不顶格）+ maxHeight 钳制，过渡动效保持", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -141,12 +141,72 @@ describe("FactoryChatView S2 布局（1.34 融合 + 发送增高）", () => {
       );
     });
     const host = container.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
-    expect(host.style.height).toBe("calc(100dvh - var(--dsw-space-6, 24px) - 40px)");
+    expect(host.style.height).toBe(
+      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))",
+    );
+    expect(host.style.maxHeight).toBe(
+      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))",
+    );
     expect(host.style.transition).toContain("height");
     act(() => {
       root.unmount();
     });
     container.remove();
+  });
+
+  it("内容驱动递进（RO 实测）：高度 = 实测内容高逐块跟随增长，maxHeight = 上限减留白 32px 承担钳制（不顶格）", () => {
+    class ROStub {
+      static instances: ROStub[] = [];
+      cb: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) {
+        this.cb = cb;
+        ROStub.instances.push(this);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+      fire(blockSize: number): void {
+        this.cb(
+          [{ borderBoxSize: [{ blockSize }] }] as unknown as ResizeObserverEntry[],
+          this as unknown as ResizeObserver,
+        );
+      }
+    }
+    const original = globalThis.ResizeObserver;
+    (globalThis as Record<string, unknown>).ResizeObserver = ROStub;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const cap = "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))";
+    act(() => {
+      root.render(
+        <FactoryChatView streaming={true} grown={true} grownMaxHeight="calc(100dvh - var(--dsw-space-6, 24px) - 40px)" />,
+      );
+    });
+    const host = container.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
+    expect(host.style.height).toBe(cap);
+    expect(host.style.maxHeight).toBe(cap);
+    const stub = ROStub.instances.at(-1)!;
+    // 流中内容增长一帧 → 高度跟随（不一步到顶）
+    act(() => {
+      stub.fire(300);
+    });
+    expect(host.style.height).toBe("300px");
+    act(() => {
+      stub.fire(520);
+    });
+    expect(host.style.height).toBe("520px");
+    // 内容超限 → 高度交 max-height 钳到上限（顶缘留白 32px，不顶标题栏分隔线）
+    act(() => {
+      stub.fire(99999);
+    });
+    expect(host.style.height).toBe("99999px");
+    expect(host.style.maxHeight).toBe(cap);
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    (globalThis as Record<string, unknown>).ResizeObserver = original;
   });
 });
 

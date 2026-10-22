@@ -207,10 +207,11 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   const expandable = isExpandable(props)
   const expanded = phase === "s2"
 
-  // ── 1.34 S2 布局融合 + 发送增高 ──
+  // ── 1.34 S2 布局融合 + 1.38 渐进展开 ──
   // 尺寸锚 = 标题栏底部分隔线（dscf-header 底缘，DOM 锚核销后定值——headerH 实测，
-  // happy-dom 等无布局环境回落 40px 定值）。增高上限 = 100dvh - 底部留白 - 标题栏高，
-  // 即 chat-view 顶缘与标题栏下方分隔线齐平。
+  // happy-dom 等无布局环境回落 40px 定值）。增高上限 = 100dvh - 底部留白 - 标题栏高
+  // （再减 factory-bridge 的 GROW_RESERVE 顶缘留白——不顶格）；高度本体随内容实测
+  // 递进（factory-bridge ResizeObserver），此处只交上限锚。
   const headerRef = useRef<HTMLDivElement | null>(null)
   const [headerH, setHeaderH] = useState(40)
   useLayoutEffect(() => {
@@ -498,7 +499,8 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
            无裁剪缝——declaring-is-claiming 红线，见台账）。
            1.34 布局融合：composer 与 chat-view 同一平面（工厂宿主单面承载，无
            独立高度块），composer seat 分隔线按 DESIGN.md 令牌（styles.ts 注入）；
-           发送后 chat-view 增高至上限 = 标题栏底部分隔线（grownMaxHeight 锚）。 */
+           1.38 发送/流式后 chat-view 随内容渐进展开（不一步到顶），上限 = 标题栏
+           底部分隔线锚减顶缘留白（grownMaxHeight + factory-bridge GROW_RESERVE）。 */
         <FactoryChatView
           streaming={props.streaming}
           grown={grown}

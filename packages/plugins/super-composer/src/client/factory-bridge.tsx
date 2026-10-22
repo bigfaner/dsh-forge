@@ -19,7 +19,14 @@
 // sessionId 来自 session-maybe 标准 seat（ui-session merge：sessionId | undefined），
 // 消息流（conversation.session）/composer bar（conversation.composer.bar）由官方
 // 子槽自供——1.28 复制件消息渲染退役（official-chatview 目录删除）。
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { createSnapshotStore, type SnapshotStore } from "./official-input/store.js";
 
@@ -116,24 +123,87 @@ export function installFactoryBridge(ctx: unknown, fallbackSource?: unknown): ((
  * data-testid="dscf-messages" 沿用 1.28 前消息流锚（状态机测试口径不变）。
  *
  * 1.34 布局融合：composer 与 chat-view 同面（宿主单面承载工厂 occurrence，官方
- * embedded 布局 composerSeat 常驻底部——无独立高度块）；grown = 发送触发增高，
- * 高度上限 grownMaxHeight = 标题栏底部分隔线锚（mini-composer 传入），height 过渡
- * 承担平滑动效。
+ * embedded 布局 composerSeat 常驻底部——无独立高度块）。
+ * 1.38 渐进展开（用户 UX 裁决 2026-10-22）：不再发送/流式一步伸到最高——增高态
+ * （grown）高度 = min(实测内容高, 上限)；内容每增长，高度平滑跟着增长（逐块递进，
+ * ResizeObserver 监听工厂 occurrence 内容尺寸）。上限 = 标题栏底部分隔线锚
+ * （grownMaxHeight）再减留白 GROW_RESERVE——顶缘与分隔线保留一段距离，不顶格。
+ * 无布局环境（happy-dom 等 RO 缺席）回落 = 上限定值（锚核销口径不丢）。
  */
+/** 增长上限留白（1.38 落档定值）：chat-view 顶缘距标题栏底部分隔线的保留距离。 */
+const GROW_RESERVE = "var(--dsw-space-8, 32px)";
+
 export function FactoryChatView(props: {
   streaming: boolean;
   /** 发送触发增高（mini-composer 消息流增长判据；缺省 false = 初始 40vh 块） */
   grown?: boolean;
-  /** 增高上限（标题栏底部分隔线锚 calc——mini-composer 按实测标题栏高计算） */
+  /** 增高上限锚（标题栏底部分隔线 calc——mini-composer 按实测标题栏高计算） */
   grownMaxHeight?: string;
 }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // 内容驱动递进：真实内容实测高（null = 未测量/无 RO 环境 → 回落上限锚）。
+  // 测量面 = 官方 embedded 消息流的内部滚动容器（[data-conversation-scroll]）的
+  // 内容盒（首子元素——消息列表本体，盒高随消息/流式增量真实增长）+ chrome
+  // （宿主盒 − scrollport 视口 = composer seat + 间距）。直接观察 occurrence 根
+  // 不可用——根 flex:1 拉伸至宿主高（自反馈环，1.38 真机判例 sc138）。
+  const [contentH, setContentH] = useState<number | null>(null);
   useEffect(() => {
     setFactoryTarget(hostRef.current);
     return () => {
       setFactoryTarget(null);
     };
   }, []);
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (host == null || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      let block = 0;
+      for (const entry of entries) {
+        block = Math.max(block, entry.borderBoxSize?.[0]?.blockSize ?? 0);
+      }
+      if (block <= 0) return;
+      const child = host.firstElementChild as HTMLElement | null;
+      const scroll = child?.querySelector<HTMLElement>("[data-conversation-scroll]") ?? null;
+      const chrome =
+        child != null && scroll != null
+          ? Math.max(0, child.offsetHeight - scroll.clientHeight)
+          : 0;
+      const measured = block + chrome;
+      // 单调递增：只长不缩（渐进展开语义——回落/收起由状态机整体复位）
+      setContentH((prev) => (prev == null ? measured : Math.max(prev, measured)));
+    });
+    let observed: Element | null = null;
+    const sync = (): void => {
+      const child = host.firstElementChild;
+      if (child == null) return;
+      const scroll = child.querySelector<HTMLElement>("[data-conversation-scroll]");
+      const content = (scroll?.firstElementChild as HTMLElement | null) ?? child;
+      if (content === observed) return;
+      if (observed != null) ro.unobserve(observed);
+      observed = content;
+      ro.observe(content);
+    };
+    const mo =
+      typeof MutationObserver !== "undefined" ? new MutationObserver(sync) : null;
+    mo?.observe(host, { childList: true, subtree: true });
+    sync();
+    return () => {
+      ro.disconnect();
+      mo?.disconnect();
+    };
+  }, []);
+  const capHeight =
+    props.grownMaxHeight !== undefined
+      ? `calc(${props.grownMaxHeight} - ${GROW_RESERVE})`
+      : undefined;
+  // 高度 = 实测内容高（逐块递进）；钳制交给 maxHeight = 上限锚减留白（不顶格）——
+  // 避免 CSS min()（测试环境 CSS 解析不识别，且 max-height 语义更直白）。
+  const grown = props.grown === true && capHeight !== undefined;
+  const height = grown
+    ? contentH !== null
+      ? `${Math.ceil(contentH)}px`
+      : capHeight
+    : "40vh";
   return (
     <div
       ref={hostRef}
@@ -144,11 +214,12 @@ export function FactoryChatView(props: {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: props.grown === true && props.grownMaxHeight !== undefined ? props.grownMaxHeight : "40vh",
+        height,
+        maxHeight: grown ? capHeight : undefined,
         minHeight: 140,
         borderTop: "0.5px solid var(--dsw-alias-border-l2)",
         overflow: "hidden",
-        transition: "height .35s var(--ds-ease-in-out, ease)",
+        transition: "height .25s var(--ds-ease-in-out, ease)",
       }}
     />
   );
