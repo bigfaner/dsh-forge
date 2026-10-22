@@ -102,7 +102,22 @@ if (ensureViteBuild.status !== 0) {
 	);
 }
 
+// mobile dist 初始构建（run-once）+ 受管 watch（2026-10-22 判例：手机静态面 = host 服务
+// apps/mobile/dist 单文件产物，vite/tsc watch 不覆盖 apps/mobile——不接线则手机端迭代恒吃
+// 旧 bundle）。与 vite 同款两段式：run-once 全量 → watch 增量；子进程入 procs 由 bye() 杀树。
+const ensureMobileBuild = spawnSync('pnpm', ['-C', 'apps/mobile', 'run', 'build'], {
+	stdio: 'inherit',
+	shell: true,
+	cwd: ROOT
+});
+if (ensureMobileBuild.status !== 0) {
+	console.error(
+		'[dev] mobile dist 初始构建失败——手机端将沿旧 dist（旧态呈现，非本次源码）；请排查上方 esbuild 报错'
+	);
+}
+
 start('vite', 'pnpm -C apps/web watch');
+start('mobile-esbuild', 'pnpm -C apps/mobile exec node esbuild.mjs --watch');
 start('tsc', 'pnpm exec tsc -b --watch');
 
 const HOST_DIR = join(ROOT, 'apps/host');
