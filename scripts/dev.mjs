@@ -7,7 +7,7 @@
 // 起跑前 ensure-host-dist 新鲜度自检（2026-10-15 事故：tsbuildinfo 与输出脱节后
 // tsc -b/--watch 永判 up-to-date 零 emit——半新半旧 dist 令 electron ESM 崩）。
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -97,13 +97,41 @@ const HOST_MAIN = join(HOST_DIR, 'dist/main.js');
 // ——ESM main 的 `import { BrowserWindow } from 'electron'` 链接到未初始化的空模块，
 // 报 "does not provide an export named 'BrowserWindow'" 退出（实测复现/修复）。
 // 垫片的 @set 在子进程内部重新注入该变量，故必须绕开垫片链 + 显式 delete。
-const ELECTRON_EXE = join(
-	HOST_DIR,
-	'node_modules',
-	'electron',
-	'dist',
-	process.platform === 'win32' ? 'electron.exe' : 'electron'
-);
+// electron 二进制解析（方案 A，bug 5c830524 预防面）：electron exe 位置与应用加载无关
+// （app 目录经首参传入），worktree 可不装 250MB dist、复用主仓二进制——从源头避开
+// 「沙箱令牌装入 → 桌面令牌执行」的 ACL 毒化窗口。解析顺序：
+// ① 本 worktree dist 在场 → 用（配合启动期 ACL 自愈缝兜底）
+// ② 主仓（.forge/worktrees/<slug> 布局反推 ../../..）dist 在场且版本与本仓
+//    apps/host devDep electron 精确 pin 一致 → 复用（版本漂移即拒绝，绝不混版）
+// ③ 都缺 → 返回本地路径（走下方「未安装」守卫的补装指引）
+function resolveElectronExe() {
+	const exeName = process.platform === 'win32' ? 'electron.exe' : 'electron';
+	const local = join(HOST_DIR, 'node_modules', 'electron', 'dist', exeName);
+	if (existsSync(local)) return local;
+	const mainRoot = resolve(ROOT, '..', '..', '..');
+	const mainPkgJson = join(mainRoot, 'apps', 'host', 'node_modules', 'electron', 'package.json');
+	if (!existsSync(mainPkgJson)) return local;
+	let want = '';
+	let got = '';
+	try {
+		want = JSON.parse(readFileSync(join(HOST_DIR, 'package.json'), 'utf8')).devDependencies?.electron ?? '';
+		got = JSON.parse(readFileSync(mainPkgJson, 'utf8')).version ?? '';
+	} catch {
+		return local;
+	}
+	if (!want || !got) return local;
+	if (want !== got) {
+		console.warn(`[dev] 主仓 electron ${got} 与本仓 pin ${want} 不一致——不复用，走本地/补装`);
+		return local;
+	}
+	const shared = join(dirname(mainPkgJson), 'dist', exeName);
+	if (existsSync(shared)) {
+		console.warn(`[dev] worktree 未装 electron——复用主仓二进制（版本 ${got} 一致）：${shared}`);
+		return shared;
+	}
+	return local;
+}
+const ELECTRON_EXE = resolveElectronExe();
 setTimeout(() => {
 	if (!existsSync(HOST_MAIN)) {
 		console.warn(
