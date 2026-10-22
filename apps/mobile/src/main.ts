@@ -3,7 +3,7 @@
  *
  * 首屏流（bug 63ee4a3d 修复——脚手架占位升级为正式接线）：
  *   模式探测（hostnameMode + GET /remote/forge-stream 语义）→
- *   · lan（IP 字面量/回环）：defaultApiDeps 直连 → createRemoteRpc + createOfficialApi → 主视图链；
+ *   · lan（IP 字面量/回环）：明文代理传输（配对 cookie）→ createRemoteRpc + createOfficialApi → 主视图链；
  *   · tunnel（域名形态）：PSK+PIN 双因子配对面（1.31 语义：sid-epoch 身份、加密 forge-stream、
  *     host 公钥静态验签）→ establishTunnelMaterial 激活 → createTunnelTransport 信封化 rpc → 主视图链。
  * 主视图链：createRouter(windowHashSource()) 六路由（hero/chat/drawer/settings/models/worker）
@@ -12,7 +12,7 @@
  * （drawer/tasks/worker 重投影 + user-questions/request → ask 浮层），轮询兜底在视图层既有面。
  */
 import './style.css'
-import { createOfficialApi, defaultApiDeps, type ApiDeps, type OfficialApi } from './core/api.ts'
+import { createOfficialApi, type ApiDeps, type OfficialApi } from './core/api.ts'
 import {
   createRemoteRpc,
   PROXY_FILE_CHANNEL,
@@ -36,8 +36,9 @@ import type { WireEvent } from './core/wire.ts'
 import { createTunnelPanel } from './widgets/tunnel-panel.ts'
 import { createFab } from './widgets/fab.ts'
 import { createHeroView } from './views/hero.ts'
-import { coerceHistoryWindow, createChatView, defaultStreamEngine } from './views/chat.ts'
-import { createDrawerView, defaultFetchStatus } from './views/drawer.ts'
+import { coerceHistoryWindow, createChatView, type StreamEngine } from './views/chat.ts'
+import type { SseSink } from './core/sse.ts'
+import { createDrawerView } from './views/drawer.ts'
 import { createSettingsSheet, type SettingsHandle } from './views/settings.ts'
 import {
   clearPendingModelDefault,
@@ -181,6 +182,49 @@ export function mount(root: HTMLElement): void {
       })
   }
 
+  // ---- 会话流引擎（用户裁决 2026-10-22 双域统一代理化）：chat 视图流统一 forge-stream
+  // 镜像帧（LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream SSE + /api/rpc 轮询旧引擎
+  // 双域皆被 api-guard 403（死面）退役。快照 = api.history 代理装载（logCache 单源），
+  // 增量 = 帧失效重拉后的 logCache 尾序外推（seq 单调，不重不漏）。
+  const createForgeStreamEngine = (): ((sessionId: string, sink: SseSink) => StreamEngine) => {
+    return (sessionId, sink) => {
+      let listener: (() => void) | null = null
+      let lastSeq = -1
+      return {
+        start() {
+          ensureStream()
+          void refreshLog(sessionId)
+            .then(() => {
+              const events = logCache.get(sessionId) ?? []
+              for (const event of events) if (event.seq > lastSeq) lastSeq = event.seq
+              sink.snapshot({ kind: 'snapshot', events, projections: undefined })
+              sink.stateChange('live')
+            })
+            .catch(() => sink.stateChange('degraded'))
+          listener = () => {
+            for (const event of logCache.get(sessionId) ?? []) {
+              if (event.seq > lastSeq) {
+                lastSeq = event.seq
+                sink.delta({ kind: 'event', event })
+              }
+            }
+          }
+          ctx.frameListeners.add(listener)
+        },
+        teardown() {
+          if (listener !== null) ctx.frameListeners.delete(listener)
+          listener = null
+        },
+        retry() {
+          void refreshLog(sessionId)
+        },
+        setPollActive() {
+          /* 镜像帧恒活——官方活跃/空闲轮询节奏不适用 */
+        },
+      }
+    }
+  }
+
   // ---- 当前会话（chat/worker 路由写入；settings/models/tasks/ask 注入消费）----
   const currentSessionId = (): string => store.get().currentSessionId ?? ''
   const setCurrentSession = (sessionId: string): void => {
@@ -316,7 +360,10 @@ export function mount(root: HTMLElement): void {
           root: createChatView(sessionId, {
             api: ctx.api,
             pairDomain,
-            createEngine: (sid, sink) => defaultStreamEngine(sid, sink),
+            // 用户裁决 2026-10-22（双域统一代理化）：会话流引擎统一 forge-stream 镜像帧
+            // （/remote/forge-stream LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream +
+            // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）
+            createEngine: createForgeStreamEngine(),
             onOpenDrawer: openDrawer,
             onOpenHero: openHero,
             onOpenSettings: openSettings,
@@ -339,14 +386,14 @@ export function mount(root: HTMLElement): void {
           key: 'drawer',
           root: createDrawerView({
             rpc: ctx.rpc,
-            // 用户裁决 2026-10-22：隧道域 /api 被回环围栏 403——状态走 PSK 信封 RPC 心跳
+            // 用户裁决 2026-10-22（双域统一代理化）：心跳统一 grouped 通道——/api/status
+            // 双域皆被 api-guard 403（LAN 明文 __rpc 携配对 cookie / 隧道 PSK 信封同缝）
             fetchStatus: async () => {
-              if (ctx.tunnel !== true) return defaultFetchStatus()
               try {
                 const result = await ctx.rpc.call<unknown>('forge:proxy/projects-grouped', {})
-                return { ok: result.ok, tunnelExpiresAt: null, tunnel: true }
+                return { ok: result.ok, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
               } catch {
-                return { ok: false, tunnelExpiresAt: null, tunnel: true }
+                return { ok: false, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
               }
             },
             onOpenSession: openSession,
@@ -508,9 +555,21 @@ export function mount(root: HTMLElement): void {
     })
     reportLanding(`landing mode=${verdict.mode} probe=${verdict.probe ?? '-'} host=${typeof window !== 'undefined' ? window.location.host : ''}`)
     if (verdict.mode === ('lan' satisfies TunnelMode)) {
-      const deps = defaultApiDeps()
-      ctx.rpc = createRemoteRpc(deps)
-      ctx.api = createOfficialApi(deps)
+      // 用户裁决 2026-10-22（双域统一代理化）：LAN 与隧道域同策略——官方面调用全部映射
+      // forge:proxy/* 走 /remote/__rpc（明文 + /pair 配对 cookie），官方 /api 裸面保留
+      // api-guard 403（1.32 收敛判例）。代理传输与隧道域同契约（post → {status,json}）。
+      const proxyTransport = {
+        post: async (path: string, body: unknown): Promise<{ status: number; json: unknown }> => {
+          const response = await fetch(path, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          return { status: response.status, json: await response.json().catch(() => null) }
+        },
+      }
+      ctx.rpc = createRemoteRpc(proxyTransport)
+      ctx.api = createOfficialApi(tunnelApiDeps(proxyTransport))
       startMain()
       return
     }
@@ -571,17 +630,17 @@ const TUNNEL_OFFICIAL_RPC_PROXY: Readonly<Record<string, string>> = {
   'agentPreset.select': 'forge:proxy/agent-preset-select',
 }
 
-function tunnelApiDeps(transport: TunnelTransport): ApiDeps {
-  const plain = defaultApiDeps()
+function tunnelApiDeps(transport: Pick<TunnelTransport, 'post'>): ApiDeps {
   return {
-    ...plain,
     post: async (path, body) => {
-      if (path !== '/api/rpc') return plain.post(path, body)
+      if (path !== '/api/rpc') {
+        return { status: 200, json: { ok: false, error: `代理域官方面未代理：${path}` } }
+      }
       const frame = body as { method?: unknown; payload?: unknown }
       const method = typeof frame?.method === 'string' ? frame.method : ''
       const channel = TUNNEL_OFFICIAL_RPC_PROXY[method]
       if (channel === undefined) {
-        return { status: 200, json: { ok: false, error: `隧道域官方面未代理：${method}` } }
+        return { status: 200, json: { ok: false, error: `代理域官方面未代理：${method}` } }
       }
       const result = await transport.post('/remote/__rpc', { channel, payload: frame.payload })
       const envelope = result.json as { ok?: boolean; data?: unknown; error?: unknown }
@@ -591,6 +650,12 @@ function tunnelApiDeps(transport: TunnelTransport): ApiDeps {
         json: { ok: false, error: typeof envelope?.error === 'object' && envelope.error !== null ? (envelope.error as { message?: unknown }).message : envelope?.error },
       }
     },
+    get: async () => {
+      // /api/status 心跳双域皆被 api-guard 403（1.32）——状态面走 grouped 通道心跳
+      // （drawer/hero fetchStatus 装配），本 get 仅诚实回非可达（status() = false）。
+      return { status: 403, json: null }
+    },
+    timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   }
 }
 

@@ -9,7 +9,7 @@ import type { OfficialApi } from '../core/api.ts'
 import { DisconnectedError } from '../core/api.ts'
 import { readCursorKey, writeReadCursor, type KeyValueStore } from '../core/read-cursor.ts'
 import { sendComposerInput } from '../core/rpc.ts'
-import { createSseEngine, type SseSink, type SseState } from '../core/sse.ts'
+import { type SseSink, type SseState } from '../core/sse.ts'
 import {
   createAttemptSettler,
   mergeBySeq,
@@ -86,33 +86,9 @@ export interface StreamEngine {
   setPollActive(active: boolean): void
 }
 
-export function defaultStreamEngine(sessionId: string, sink: SseSink): StreamEngine {
-  return createSseEngine(
-    {
-      openSource: (url, handlers) => {
-        const source = new EventSource(url)
-        source.addEventListener('snapshot', (event) => handlers.onSnapshot((event as MessageEvent).data as string))
-        source.addEventListener('event', (event) => handlers.onEvent((event as MessageEvent).data as string))
-        source.onopen = () => handlers.onOpen()
-        source.onerror = () => handlers.onError()
-        return source
-      },
-      poll: () =>
-        fetch(`/api/rpc`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ method: 'session.history', payload: { sessionId, maxMessages: 1 } }),
-        }).then((response) => {
-          if (response.status === 401) throw new DisconnectedError()
-        }),
-      now: () => Date.now(),
-      setTimeout: (handler, timeoutMs) => window.setTimeout(handler, timeoutMs),
-      clearTimeout: (handle) => window.clearTimeout(handle as number),
-      requestFrame: (fn) => requestAnimationFrame(() => fn()),
-    },
-    sink,
-  )
-}
+// 用户裁决 2026-10-22（双域统一代理化）：defaultStreamEngine（/api/session/stream SSE +
+// /api/rpc 轮询）退役——双域皆被 api-guard 403 的死面；装配侧统一 forge-stream 镜像帧引擎
+//（main.ts createForgeStreamEngine）。
 
 // ---------------------------------------------------------------------------
 // 视图装配
