@@ -180,12 +180,19 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
     // 会话历史（官方 session.history 网关形的 host 直调面）：controller.page + records[].event
     // 还原 wire events（官方 pageRecords 包装 {type:'event',event}——此处拆包回手机窗口形）。
     // bug 2714e40d 同族收口：隧道域 /api/rpc 403，chat 历史首屏/翻页唯一数据面。
+    // bug 会话空白：page 的 throughSeq 是字面上界（-1 = 空集，paginate 源码核销）——载荷缺席
+    // 时自解析官方 projections cursor（asOfSeq）为上界；显式 throughSeq（翻页）原样透传。
     [PROXY_CHANNELS.sessionHistory]: async (payload) => {
       const record = asRecord(payload)
       const sessionId = asString(record, 'sessionId')
+      let throughSeq = typeof record['throughSeq'] === 'number' ? record['throughSeq'] : undefined
+      if (throughSeq === undefined) {
+        const projections = (await dispatch('projections')({ sessionId })) as { asOfSeq?: unknown } | null
+        throughSeq = typeof projections?.asOfSeq === 'number' ? projections.asOfSeq : -1
+      }
       const page = (await dispatch('page')({
         address: { kind: 'session', sessionId },
-        throughSeq: typeof record['throughSeq'] === 'number' ? record['throughSeq'] : -1,
+        throughSeq,
         ...(typeof record['maxMessages'] === 'number' ? { maxMessages: record['maxMessages'] } : {}),
       })) as { records?: readonly { event?: unknown }[]; hasMore?: unknown }
       return {

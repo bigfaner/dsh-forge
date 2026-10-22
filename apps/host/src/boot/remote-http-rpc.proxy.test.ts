@@ -1,4 +1,4 @@
-﻿// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
+// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
 // 强制位（统一 401 唯一 owner + 填充 + diag 脱敏 + LAN 旧门维持）。
 // 纯 handler fake 面——零真实 socket（remote-http-rpc.test.ts 同型）。
 import { describe, expect, it } from 'vitest'
@@ -210,6 +210,8 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
         }
       },
       resolveAgent: async (sessionId: string) => ({ id: sessionId, ctx: {} }),
+      // bug 会话空白：throughSeq 缺席时自解析官方 projections cursor（page 的 throughSeq 是字面上界，-1 = 空集）
+      projections: async () => ({ asOfSeq: 41, values: {} }),
     }
     const registry = {
       presets: [] as unknown[],
@@ -226,7 +228,7 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
       deps({ proxy: proxyDeps({ session: session as never, agentPresets: registry as never }) }),
     )
     expect((JSON.parse(res.body) as { ok: boolean }).ok).toBe(true)
-    expect(pageRequest).toMatchObject({ address: { kind: 'session', sessionId: 's-1' }, throughSeq: -1, maxMessages: 10 })
+    expect(pageRequest).toMatchObject({ address: { kind: 'session', sessionId: 's-1' }, throughSeq: 41, maxMessages: 10 })
     const history = JSON.parse(res.body) as { data: { entries: unknown[]; hasMore: boolean } }
     expect(history.data.entries).toHaveLength(2) // records[].event 拆包回 wire events
     expect(history.data.hasMore).toBe(true)
@@ -378,6 +380,7 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
         signal.throwIfAborted()
         return { records: [], hasMore: false }
       },
+      projections: async () => ({ asOfSeq: 0, values: {} }), // bug 会话空白：history 缺 throughSeq 自解析 cursor
     }
     const resPrompt = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionPrompt, payload: { sessionId: 's-1', requestId: 'r-1', mode: 'queue', content: [{ type: 'text', text: 'x' }] } }) as never, resPrompt, deps({ proxy: proxyDeps({ session: session as never }) }))
