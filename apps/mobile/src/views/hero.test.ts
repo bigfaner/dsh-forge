@@ -188,6 +188,27 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(h.rpcCalls).toHaveLength(1)
   })
 
+  it('bug 16ac5bc2：workspaceId 缺席（隧道域）默认分支发送走 forge 单门（主树路径）——空 workspaceId 不直达官方面', async () => {
+    const { deps, h } = makeDeps({ workspaceId: undefined })
+    h.sessionCreateResult = { ok: true, data: { sessionId: 's-forge', branch: 'main' } }
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.send('你好')
+    expect(h.createSession).not.toHaveBeenCalled()
+    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/proj' }])
+    expect(h.prompt).toHaveBeenCalledWith('s-forge', '你好', 'steer')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-forge')
+  })
+
+  it('bug 16ac5bc2：workspaceId 缺席且主树锚也缺席（projectRoot 无）= 发送失败解冻可重试（不再发空 workspaceId）', async () => {
+    const { deps, h } = makeDeps({ workspaceId: undefined, projectRoot: undefined, currentWorktreePath: undefined })
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.send('你好')
+    expect(h.createSession).not.toHaveBeenCalled()
+    expect(controller.state().busy).toBe(false)
+  })
+
   it('模式清单随 roster 动态增减（用户裁决 2026-10-22）：roster 追加 forge 双预设之后；broken 剔行；选 roster 模式 = agentPreset.select(id) 下发', async () => {
     const presetSelects: [string, string][] = []
     const { deps } = makeDeps({

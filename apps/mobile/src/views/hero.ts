@@ -222,7 +222,23 @@ export function createHeroController(deps: HeroDeps): HeroController {
   const selectedRow = (): HeroWorktreeRow | null => rows.find((row) => row.path === selectedPath) ?? null
 
   function createPlainSession(): Promise<string> {
-    return deps.api.createSession(deps.workspaceId ?? '').then((created) => created.sessionId)
+    // bug 16ac5bc2（Root cause: 隧道域 workspaceId 恒缺席——官方 workspace.list 已弃用不
+    // 供给，空串直达官方 controller 被 workspace 解析拒绝「workspace "" not found」）：
+    // workspaceId 在场才走官方面；缺席回退 forge:worktree/session-create 单门（预铸采纳，
+    // 主树锚 = 当前所在 worktree ?? 项目根）——与桌面 create-wrap 同一建会话正门。
+    if (deps.workspaceId !== undefined && deps.workspaceId !== '') {
+      return deps.api.createSession(deps.workspaceId).then((created) => created.sessionId)
+    }
+    const anchor = deps.currentWorktreePath ?? deps.projectRoot
+    if (anchor === undefined || anchor === '') {
+      return Promise.reject(new Error('无 workspaceId 且无主树锚——无法建会话（workspaceId/projectRoot 均缺席）'))
+    }
+    return deps.rpc
+      .call<{ sessionId: string; branch: string }>(HERO_SESSION_CREATE_CHANNEL, { worktreePath: anchor })
+      .then((result) => {
+        if (result.ok) return result.data.sessionId
+        throw new Error(`forge 建会话拒绝：${result.error.reason}`)
+      })
   }
 
   async function enter(sessionId: string, text: string): Promise<void> {
