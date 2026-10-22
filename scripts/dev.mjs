@@ -185,10 +185,10 @@ setTimeout(() => {
 	// 透传附加参数（dev:debug 调试面：--remote-debugging-port=9222 → CDP 外接诊断）
 	const extraArgs = process.argv.slice(2);
 	// DSH 派生终端进程树内 chromium sandbox 初始化即崩（0x80000003，e2e/support/launch.ts
-	// 同款实证）——检测到派生环境（DSH_SHELL）时自动注入 --no-sandbox 等开关，
-	// 与 E2E_ELECTRON_SWITCHES 自愈语义一致（显式传 E2E_ELECTRON_SWITCHES=0 可禁用）。
-	const harnessDerived = process.env.DSH_SHELL === '1';
-	const devSwitchesOn = (process.env.E2E_ELECTRON_SWITCHES ?? (harnessDerived ? '1' : undefined)) === '1';
+	// 同款实证）。dev 场景令牌形态不可枚举（派生标记 DSH_SHELL 并不总在场——实测存在
+	// DSH_SHELL 缺席但令牌同样受限的终端），故 dev 开关默认无条件启用 --no-sandbox 等
+	// （仅本地开发面，非打包产物）；显式设 E2E_ELECTRON_SWITCHES=0 可禁用。
+	const devSwitchesOn = (process.env.E2E_ELECTRON_SWITCHES ?? '1') === '1';
 	const healSwitches = devSwitchesOn ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server'] : [];
 	const p = spawn(electronSpawnExe, [HOST_DIR, ...healSwitches, ...extraArgs], {
 		stdio: 'inherit',
