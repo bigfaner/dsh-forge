@@ -14,25 +14,19 @@ import { fileURLToPath } from "node:url";
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/super-composer";
 
-// 平台基线外置表（对齐官方 packages/client/web/src/platform.ts 冻结种子表口径）：
-// react 家族（MiniComposerCard 组件 hooks 与 jsx transform 均须共用壳层单例——内联
-// 第二份 react 会使 shell 渲染树组件 hooks 读到另一副本的 dispatcher，Invalid hook
-// call）+ react-dom/client（替身容器 createRoot）+ primitives（同模块实例）。
-// 上述为运行期经 factory require 实际可达的外置依赖；表外依赖全部内联。
+// 平台基线外置表（逐位对齐官方 dsh-client-web getStaticModules 冻结种子表——
+// react 家族（组件 hooks 须共用壳层单例——内联第二份 react 会使 shell 渲染树组件
+// hooks 读到另一副本的 dispatcher，Invalid hook call）+ react-dom/client（替身容器
+// createRoot）+ primitives（同模块实例）。上述为运行期经 factory require 实际可达的
+// 外置依赖；表外依赖全部内联。
+// Lexical 家族不外置（1.23 判例）：官方种子表无 lexical——外置即真机 require 缺席、
+// 插件激活失败；复制件 editor 全链（runtime/nodes/commands）自洽用同一内联副本。
 const PLATFORM_MODULES = [
   "react",
   "react/jsx-runtime",
   "react-dom",
   "react-dom/client",
   "@deepseek-ai/dsh-client-ui-primitives",
-  // 复制件（official-input）的 Lexical 家族：官方壳层同款版本外置（bundle 内第二份
-  // Lexical = Invalid hook call 判例红线——官方 editor 节点类与替身 editor 必须同模块
-  // 实例）。react 家族同上。
-  "lexical",
-  "@lexical/plain-text",
-  "@lexical/history",
-  "@lexical/utils",
-  "@lexical/text",
 ];
 
 /**
@@ -43,7 +37,10 @@ const PLATFORM_MODULES = [
  * ——官方 .card/.root 等通用类名不碰撞宿主样式；@keyframes/@font-face 原样保留，
  * @media/@supports 内层递归作用域化。
  */
-function scopeOfficialCss(css) {
+function scopeOfficialCss(cssInput) {
+  // 注释先剥（1.23 判例：depth-0 注释文本漏进选择器 → 浏览器整条丢弃规则 →
+  // .primary 基规则失效 = 替身发送钮黑方块）；字符串体内无注释语法面，全局剥离安全。
+  const css = cssInput.replace(/\/\*[\s\S]*?\*\//g, "");
   const out = [];
   let depth = 0;
   let buffer = "";

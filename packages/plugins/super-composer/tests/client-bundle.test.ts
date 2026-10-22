@@ -20,20 +20,15 @@ import { OFFICIAL_INPUT_STYLE_MARKER, SUPER_COMPOSER_STYLE_MARKER } from "../src
 const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundlePath = resolve(pkgDir, "dist/client.js");
 const PLUGIN_ID = "@dsh-forge/super-composer";
-/** 声明种子表（与 scripts/bundle-client.mjs PLATFORM_MODULES 逐位对齐——全部落在
- * 官方 dsh-client-web platform.ts 冻结种子表口径内：react 家族 + primitives +
- * Lexical 家族（fix-12 复制件外置——官方壳层同款 0.49.0 单例）。 */
+/** 官方种子表（dsh-client-web getStaticModules 冻结口径逐位对齐——react 家族 +
+ * cordis + store/slots/primitives/dockkit；官方壳层不共享 Lexical——fix-12 复制件
+ * 的 Lexical 家族必须内联，外置即真机 require 缺席、插件激活失败判例 1.23）。 */
 const PLATFORM_MODULES = [
   "react",
   "react/jsx-runtime",
   "react-dom",
   "react-dom/client",
   "@deepseek-ai/dsh-client-ui-primitives",
-  "lexical",
-  "@lexical/plain-text",
-  "@lexical/history",
-  "@lexical/utils",
-  "@lexical/text",
 ];
 
 interface Registration {
@@ -194,12 +189,20 @@ describe("发送钮对齐 artifact 保鲜 pin（bug d5bae340 / fix-12 官方同�
     ).toContain("[data-dscf-official-input] .primary");
     expect(
       bundle,
+      "作用域化不漏注释——.primary 基规则选择器洁净（注释漏入 = 浏览器整条丢弃 = 黑方块，1.23 判例）",
+    ).toMatch(/\[data-dscf-official-input\] \.primary\{/);
+    expect(
+      bundle,
       "发送钮背景 = 官方 .primary 令牌（--dsw-alias-state-business-primary 主题圆钮）",
     ).toContain("var(--dsw-alias-state-business-primary)");
     expect(
       bundle,
       "发送图标 = 官方 16×16 箭头 svg path（非文本「↑」）",
     ).toContain("M8.3125 0.980183");
+    expect(
+      bundle,
+      "Lexical 家族必须内联（官方种子表无 lexical——外置即真机 require 缺席）",
+    ).not.toContain('require("lexical")');
     expect(
       bundle,
       "旧形态（自绘 dscf-send 钮）不得回流",
