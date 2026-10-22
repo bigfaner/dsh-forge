@@ -130,8 +130,8 @@ export function installFactoryBridge(ctx: unknown, fallbackSource?: unknown): ((
  * （grownMaxHeight）再减留白 GROW_RESERVE——顶缘与分隔线保留一段距离，不顶格。
  * 无布局环境（happy-dom 等 RO 缺席）回落 = 上限定值（锚核销口径不丢）。
  */
-/** 增长上限留白（1.38 落档定值）：chat-view 顶缘距标题栏底部分隔线的保留距离。 */
-const GROW_RESERVE = "var(--dsw-space-8, 32px)";
+/** 增长上限留白（1.40 参数裁决 2026-10-22：32px→100px）：chat-view 顶缘距标题栏底部分隔线的保留距离。 */
+const GROW_RESERVE = "100px";
 
 export function FactoryChatView(props: {
   streaming: boolean;

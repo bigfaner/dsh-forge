@@ -131,7 +131,7 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
     expect(host.style.transition).toContain("height");
   });
 
-  it("增高态（无布局环境回落）：宿主高度 = 上限锚减顶缘留白 32px（不顶格）+ maxHeight 钳制，过渡动效保持", () => {
+  it("增高态（无布局环境回落）：宿主高度 = 上限锚减顶缘留白 100px（不顶格，1.40 参数裁决）+ maxHeight 钳制，过渡动效保持", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -142,10 +142,10 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
     });
     const host = container.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
     expect(host.style.height).toBe(
-      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))",
+      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - 100px)",
     );
     expect(host.style.maxHeight).toBe(
-      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))",
+      "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - 100px)",
     );
     expect(host.style.transition).toContain("height");
     act(() => {
@@ -154,7 +154,7 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
     container.remove();
   });
 
-  it("内容驱动递进（RO 实测）：高度 = 实测内容高逐块跟随增长，maxHeight = 上限减留白 32px 承担钳制（不顶格）", () => {
+  it("内容驱动递进（RO 实测）：高度 = 实测内容高逐块跟随增长，maxHeight = 上限减留白 100px 承担钳制（不顶格）", () => {
     class ROStub {
       static instances: ROStub[] = [];
       cb: ResizeObserverCallback;
@@ -177,7 +177,7 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    const cap = "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - var(--dsw-space-8, 32px))";
+    const cap = "calc(calc(100dvh - var(--dsw-space-6, 24px) - 40px) - 100px)";
     act(() => {
       root.render(
         <FactoryChatView streaming={true} grown={true} grownMaxHeight="calc(100dvh - var(--dsw-space-6, 24px) - 40px)" />,
@@ -196,7 +196,7 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
       stub.fire(520);
     });
     expect(host.style.height).toBe("520px");
-    // 内容超限 → 高度交 max-height 钳到上限（顶缘留白 32px，不顶标题栏分隔线）
+    // 内容超限 → 高度交 max-height 钳到上限（顶缘留白 100px，不顶标题栏分隔线）
     act(() => {
       stub.fire(99999);
     });
