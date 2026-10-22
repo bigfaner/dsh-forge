@@ -234,4 +234,15 @@ describe('staleSelectionResetOf（bug 4a30b193 陈旧选中自愈判定）', () 
     const plan = staleSelectionResetOf(noMain, 'C:/gone')
     expect(plan).toEqual({ stale: true, worktreeName: 'gone', mainPath: undefined })
   })
+
+  it('bug fcc6f37b 同族：选中行在场实存但不可挂靠（branch null = detached）→ stale 切回主行（存量选中驱动 create-wrap 必败）', () => {
+    const detachedRows = [
+      { path: 'C:/repo', worktreeName: 'repo', isMain: true, present: true, branch: 'main' as string | null },
+      { path: 'Z:\\tmp', worktreeName: 'tmp', isMain: false, present: true, branch: null },
+    ]
+    const plan = staleSelectionResetOf(detachedRows, 'Z:\\tmp')
+    expect(plan).toEqual({ stale: true, worktreeName: 'tmp', mainPath: 'C:/repo' })
+    // 健康行（branch 在场）不受新判定影响
+    expect(staleSelectionResetOf(detachedRows, 'C:/repo')).toEqual({ stale: false })
+  })
 })

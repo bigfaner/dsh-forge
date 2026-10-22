@@ -175,6 +175,8 @@ export interface StaleSelectionRow {
   readonly worktreeName: string
   readonly isMain: boolean
   readonly present: boolean
+  /** 检出分支（bug fcc6f37b 同族：null = detached/bare——不可挂靠行应自愈切回主行） */
+  readonly branch?: string | null
 }
 
 /** 自愈计划（选中行盘上缺席时装配层消费：选中态切回主行 + notice 引述树名） */
@@ -190,6 +192,8 @@ export interface StaleSelectionReset {
 /**
  * 陈旧选中自愈判定（纯函数单源）：选中行在清单中缺席，或行在场但盘上实存为假
  * （git 清单 prune 前保留已删树陈旧行——present 以 existsSync 盘上事实为准）→ stale。
+ * bug fcc6f37b 同族：行在场且实存但不可挂靠（branch null = detached/bare）同样 stale——
+ * 存量选中态驱动 create-wrap 必被 typed 拒绝（fail-open 噪音），自愈切回主行。
  * 选中态缺席/命中健康行 = 不自愈（用户显式选中零覆盖）。
  */
 export function staleSelectionResetOf(
@@ -198,7 +202,7 @@ export function staleSelectionResetOf(
 ): StaleSelectionReset {
   if (selectedPath === undefined) return { stale: false }
   const row = rows.find((candidate) => candidate.path === selectedPath)
-  if (row !== undefined && row.present) return { stale: false }
+  if (row !== undefined && row.present && row.branch !== null) return { stale: false }
   const main = rows.find((candidate) => candidate.isMain)
   // 行整段消失（清单无行）→ 树名取路径尾段（与 host worktreeNameOf 同判）
   const name = row?.worktreeName ?? selectedPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? selectedPath
