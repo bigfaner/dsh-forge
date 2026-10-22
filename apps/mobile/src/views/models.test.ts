@@ -11,6 +11,7 @@ import {
   recentStorageKey,
   saveRecentModels,
   SEARCH_DEBOUNCE_MS,
+  selectionBlockedReason,
   type ModelInfo,
 } from './models.ts'
 
@@ -19,6 +20,13 @@ const model = (id: string, provider = 'DeepSeek', efforts: string[] = []): Model
   id,
   name: id,
   efforts,
+})
+
+describe('selectionBlockedReason（无会话选档前置守卫——host resume "" 崩溃预防）', () => {
+  it('空 sessionId = 阻断 + 提示；有会话 = 放行', () => {
+    expect(selectionBlockedReason('')).toContain('当前无会话')
+    expect(selectionBlockedReason('s-1')).toBeUndefined()
+  })
 })
 
 describe('catalog 收敛（官方 session-model-catalog groups 形状，缺字段 fail-soft）', () => {

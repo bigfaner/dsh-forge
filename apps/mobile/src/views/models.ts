@@ -82,6 +82,11 @@ export function isSameModel(a: Pick<ModelInfo, 'provider' | 'id'>, b: Pick<Model
   return a.provider === b.provider && a.id === b.id
 }
 
+/** 选档前置守卫（bug：无会话时发 select-model → host resume "" 崩——空 sessionId 显式阻断）。 */
+export function selectionBlockedReason(sessionId: string): string | undefined {
+  return sessionId === '' ? '当前无会话——先新建或选择会话后再切换模型' : undefined
+}
+
 // ---------------------------------------------------------------------------
 // 纯函数：检索过滤 + 分组
 // ---------------------------------------------------------------------------
@@ -317,6 +322,11 @@ export function createModelsView(deps: ModelsDeps): HTMLElement {
   }
 
   async function pick(model: ModelInfo): Promise<void> {
+    const blocked = selectionBlockedReason(deps.sessionId)
+    if (blocked !== undefined) {
+      list.appendChild(el('div', 'msearch-hint err', blocked))
+      return
+    }
     try {
       // 选档即转发（SessionSelectModelRequest {sessionId, provider, model}——preset 锁定语义 host 侧）
       await proxyCall(deps.rpc, PROXY_SESSION_SELECT_MODEL_CHANNEL, {

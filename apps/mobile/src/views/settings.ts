@@ -142,6 +142,8 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
 
   async function selectEffort(value: string): Promise<void> {
     const current = currentModel()
+    // bug：无会话时发 select-model → host resume "" 崩——空 sessionId 显式阻断（面板回显）
+    if (deps.sessionId === '') return
     if (current === undefined || draft.pending) return
     previousEffort = draft.picked ?? currentEffort(supportedEfforts(), current.reasoningEffort)
     draft = commitEffort(draft, value) // 选档即生效：乐观 picked
