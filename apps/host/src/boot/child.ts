@@ -1050,15 +1050,25 @@ async function main(): Promise<void> {
           externalSeeds: officialCloudflaredSeedCandidates(),
         })
         tunnelManager.onEvent(sendTunnelState)
-        void tunnelManager.start().catch(() => sendTunnelState(undefined)) // 双链路皆不可用 → 撤除面
-      } catch {
+        void tunnelManager
+          .start()
+          .then(() => diag(`[pair-diag] tunnel start ok（双链路任一建立成功）`))
+          .catch((cause) => {
+            diag(`[pair-diag] tunnel start 失败（双链路皆败 → 撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
+            sendTunnelState(undefined)
+          })
+      } catch (cause) {
         tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
+        diag(`[pair-diag] tunnel manager 装配失败：${cause instanceof Error ? cause.message : String(cause)}`)
       }
       tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
       // fix-17 ②：tab 切换重连缝——隧道离线（无活动句柄）即触发建立；在线 = 重推当前
       // 状态（读数刷新面）。start/stop/fallback 语义全在 TunnelManager，此处只装配触发。
       tunnelToggle = () => {
-        if (tunnelManager === undefined) return
+        if (tunnelManager === undefined) {
+          diag(`[pair-diag] tunnel toggle 落空：管理器未装配`)
+          return
+        }
         if (tunnelManager.state === undefined) {
           void tunnelManager.start().then(sendTunnelState).catch(() => sendTunnelState(undefined))
           return
