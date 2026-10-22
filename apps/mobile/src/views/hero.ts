@@ -80,12 +80,19 @@ function coerceRow(entry: unknown): HeroWorktreeRow | null {
   }
 }
 
-/** forge:worktree/list 响应收敛（缺字段 fail-soft：isGit 缺席 = false，entries 非数组 = 空集）。 */
+/** forge:worktree/list 响应收敛（缺字段 fail-soft：isGit 缺席 = false，entries 非数组 = 空集）。
+ *  bug 488e860d：detached/bare 行（branch=null）剔行——预铸挂靠契约 = 一 worktree 一分支，
+ *  无分支行选中必被 session-create typed 拒绝（死路 UX）；发送面自动回退官方面。 */
 export function coerceWorktreeList(raw: unknown): HeroWorktreeListModel {
   if (typeof raw !== 'object' || raw === null) return { isGit: false, rows: [] }
   const frame = raw as { isGit?: unknown; entries?: unknown }
   const entries = Array.isArray(frame.entries) ? frame.entries : []
-  return { isGit: frame.isGit === true, rows: entries.map(coerceRow).filter((row): row is HeroWorktreeRow => row !== null) }
+  return {
+    isGit: frame.isGit === true,
+    rows: entries
+      .map(coerceRow)
+      .filter((row): row is HeroWorktreeRow => row !== null && row.branch !== null),
+  }
 }
 
 /** 路径归一键（反斜杠→正斜杠 + 去尾斜杠 + 小写——跨源比对单源）。 */
@@ -161,6 +168,8 @@ export interface HeroState {
   /** 守卫拒绝回执（非 null = 视图须弹确认框——选回/仍要切换）。 */
   readonly pendingGuard: { readonly reason: string } | null
   readonly busy: boolean
+  /** worktree 选择可用位（bug 488e860d：isGit × 可挂靠行在场——false = chip 隐藏、发送恒官方面）。 */
+  readonly gitReady: boolean
 }
 
 export interface HeroDeps {
@@ -207,6 +216,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
   let pop: HeroPop = null
   let pendingGuard: { readonly reason: string } | null = null
   let busy = false
+  let gitReady = false
 
   const emit = (): void => deps.onChange?.()
   const selectedRow = (): HeroWorktreeRow | null => rows.find((row) => row.path === selectedPath) ?? null
@@ -239,7 +249,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   return {
-    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy }),
+    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy, gitReady }),
 
     async load() {
       // 预设 roster 装载（用户裁决 2026-10-22：模式清单非固定——增减随 host。
@@ -267,7 +277,10 @@ export function createHeroController(deps: HeroDeps): HeroController {
       if (deps.projectRoot === undefined || deps.projectRoot === '') return
       const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: deps.projectRoot })
       if (!result.ok) return
-      rows = coerceWorktreeList(result.data).rows
+      const list = coerceWorktreeList(result.data)
+      rows = list.rows
+      gitReady = list.isGit && rows.length > 0
+      if (!gitReady) selectedPath = null
       defaultRow = pickDefaultRow(rows, deps.currentBranch)
       selectedPath = defaultRow?.path ?? null
       emit()
@@ -415,7 +428,11 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
     worktree: '',
     onSend: (text) => void controller.send(text),
     onSettings: () => deps.onOpenSettings?.(),
-    onWorktreeTap: () => controller.openPop('branch'),
+    onWorktreeTap: () => {
+      // bug 488e860d：非 git / 无可挂靠行不开分支弹层（选择面不呈现死路）
+      const state = controller.state()
+      if (state.gitReady && state.rows.length > 0) controller.openPop('branch')
+    },
     onModeTap: () => controller.openPop('mode'),
   })
   composer.root.prepend(bwPop)
@@ -453,6 +470,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   function renderChips(): void {
     const state = controller.state()
     const selected = state.rows.find((row) => row.path === state.selectedPath) ?? null
+    composer.setWorktreeVisible(state.gitReady && state.rows.length > 0)
     composer.setWorktree(composerWorktreeLabel(selected, state.defaultRow))
     composer.setMode(state.mode)
     composer.setSending(state.busy)

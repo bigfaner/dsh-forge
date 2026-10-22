@@ -18,6 +18,8 @@ export interface ComposerHandle {
   setStale(stale: boolean): void
   setSending(sending: boolean): void
   setWorktree(name: string): void
+  /** worktree chip 可见性（bug 488e860d：非 git / 无可挂靠行 = 隐藏——选择面不呈现死路）。 */
+  setWorktreeVisible(visible: boolean): void
   setMode(name: string): void
   focus(): void
 }
@@ -101,6 +103,9 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
     },
     setWorktree(name) {
       worktreeName.textContent = name
+    },
+    setWorktreeVisible(visible) {
+      worktreeChip.hidden = !visible
     },
     setMode(name) {
       modeChip.textContent = ''

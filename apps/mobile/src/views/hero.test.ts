@@ -112,6 +112,18 @@ describe('清单收敛 + 行派生（纯函数）', () => {
     expect(promptModeOf('远征')).toBe('queue')
     expect(promptModeOf('其他')).toBe('steer')
   })
+
+  it('bug 488e860d：detached/bare 行（branch=null）剔行——预铸挂靠契约一 worktree 一分支，不可挂靠行不可选', () => {
+    const list = coerceWorktreeList({
+      isGit: true,
+      entries: [
+        { path: 'Z:/proj', branch: 'main', worktreeName: 'proj', isMain: true, detached: false, bare: false },
+        { path: 'Z:\\tmp', branch: null, worktreeName: 'tmp', isMain: false, detached: true, bare: false },
+        { path: 'Z:/bare', branch: null, worktreeName: 'bare', isMain: false, detached: false, bare: true },
+      ],
+    })
+    expect(list.rows.map((row) => row.path)).toEqual(['Z:/proj'])
+  })
 })
 
 describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
@@ -126,6 +138,23 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(state.selectedPath).toBe('Z:/proj')
     expect(h.rpcCalls).toEqual([[HERO_WORKTREE_LIST_CHANNEL, { projectRoot: 'Z:/proj' }]])
     expect(h.changes).toBe(1)
+  })
+
+  it('bug 488e860d：非 git 项目 gitReady=false（worktree chip 隐藏判据）；发送零透传径全走官方面', async () => {
+    const { deps, h } = makeDeps()
+    const controller = createHeroController(deps)
+    await controller.load()
+    // listPayload isGit:true——换非 git 清单重载
+    h.rpcCalls.length = 0
+    deps.rpc.call = async <T>(channel: string): Promise<RpcResult<T>> => {
+      h.rpcCalls.push([channel, {}])
+      return { ok: true, data: { isGit: false, entries: [] } } as RpcResult<T>
+    }
+    await controller.load()
+    expect(controller.state().gitReady).toBe(false)
+    await controller.send('你好')
+    expect(h.rpcCalls).toHaveLength(1) // 仅清单调用——零 session-create 透传
+    expect(h.createSession).toHaveBeenCalledWith('ws-1')
   })
 
   it('乐观切换：点选即改选中态（零建会话调用）；模式乐观切换 + 弹层开合 + reset 回默认', async () => {
