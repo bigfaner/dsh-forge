@@ -25,7 +25,6 @@ import {
   modeSelectEffectOf,
   pairCountdownLineOf,
   pairCountdownText,
-  PIN_CANCEL_TEXT,
   PIN_HINT_DURABLE_TEXT,
   PIN_HINT_TEMP_TEXT,
   PSK_EMPTY_TEXT,
@@ -834,7 +833,7 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
     expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 
-  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 双钮呈现（重置 PIN/取消长效 PIN）', () => {
+  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 重置 PIN 钮；用户裁决 2026-10-22（二次）：取消长效 PIN 按钮退役——checkbox 唯一开关', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }}
@@ -848,16 +847,16 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
     expect(html).toMatch(/dswf-remote-pin-consent[^>]*>[\s\S]*?checked/)
     expect(html).toContain('data-testid="dswf-remote-pin-reset"')
     expect(html).toContain('重置 PIN')
-    expect(html).toContain('data-testid="dswf-remote-pin-cancel"')
-    expect(html).toContain('取消长效 PIN')
+    expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
+    expect(html).not.toContain('取消长效 PIN')
   })
 
-  it('fix-26 ⑤⑧：取消钮文案 = 「取消长效 PIN」（用户裁决 2026-10-22 词汇表）；onPinReset/onPinConsent 缺席 = 双钮禁用态（缝缺席 fail-soft）', () => {
+  it('fix-26 ⑤⑧（用户裁决 2026-10-22 二次修订）：取消钮退役；onPinReset 缺席 = 重置钮禁用态（缝缺席 fail-soft）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }} mode="internet" />,
     )
     expect(html).toMatch(/dswf-remote-pin-reset[^>]*disabled/)
-    expect(html).toMatch(/dswf-remote-pin-cancel[^>]*disabled/)
+    expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 })
 
@@ -874,7 +873,6 @@ describe('fix-26 走查批次（八点）', () => {
   it('⑦⑧：hint 文案常量逐字（官方 pinHintDurable/pinHintTemp §1）', () => {
     expect(PIN_HINT_DURABLE_TEXT).toBe('长效 PIN 保存在本机，可随时重置或取消。')
     expect(PIN_HINT_TEMP_TEXT).toBe('5 分钟内有效，过期后需重新扫码。')
-    expect(PIN_CANCEL_TEXT).toBe('取消长效 PIN')
   })
 
   it('④ 非长效：PIN 正下方 hint = 「5 分钟内有效，过期后需重新扫码。 (Ns)」实时秒倒计时', () => {

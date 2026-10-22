@@ -126,8 +126,6 @@ export const PIN_HINT_TEMP_TEXT = '5 分钟内有效，过期后需重新扫码�
 export const PIN_HINT_DURABLE_TEXT = '长效 PIN 保存在本机，可随时重置或取消。'
 /** PIN 重置动作逐字文案（官方 pinReset——pinIssuer rotate 缝触发） */
 export const PIN_RESET_TEXT = '重置 PIN'
-/** PIN 取消动作逐字文案（官方 pinCancel——fix-26 ⑤ 对齐：解除长效回临时 PIN + QR 换新） */
-export const PIN_CANCEL_TEXT = '取消长效 PIN'
 /** PIN consent checkbox label（官方 pinConsent——§1 逐字；fix-21 §2⑥ 样式对齐面，
  *  durable 后端机制 host 端点缺（§4 差值③在途）——本任务只落展示行） */
 export const PIN_CONSENT_TEXT = '生成长期有效的配对 PIN'
@@ -1092,24 +1090,8 @@ export function RemotePanel(props: {
                 </button>
               </div>
               <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
-              {/* fix-26 ④⑤：pin-actions 仅 consent 态呈现（官方 :1190 同语义）——取消 =
-                  解除长效回临时 PIN（onPinConsent(false) 缝） */}
-              {pinConsentOn && (
-                <div className="dswf-remote-pin-actions">
-                  <button
-                    type="button"
-                    className="dswf-remote-pin-action"
-                    data-testid="dswf-remote-pin-cancel"
-                    disabled={props.onPinConsent === undefined}
-                    onClick={() => {
-                      setPinConsent(false)
-                      void props.onPinConsent?.(false)
-                    }}
-                  >
-                    {PIN_CANCEL_TEXT}
-                  </button>
-                </div>
-              )}
+              {/* 用户裁决 2026-10-22（二次）：「取消长效 PIN」按钮退役——consent checkbox 是
+                  唯一开关（取消 = uncheck，经 onPinConsent(false) 缝回临时 PIN） */}
             </div>
           )}
           {/* 1.107：连接密钥三件套段（位置 = 连接密码下方——读数即显 + 复制 + 轮换确认弹窗） */}
