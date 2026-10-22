@@ -85,8 +85,7 @@ describe('isRemoteHttpRpcRequest', () => {
 })
 
 describe('handleRemoteHttpRpc 会话门', () => {
-  it('authorize=false：不写响应体不触服务（官方 401 面已写毕）', async () => {
-    const res = fakeRes()
+  it('authorize=false：不写响应体不触服务（官方 401 面已写毕）', async () => {    const res = fakeRes()
     let touched = false
     await handleRemoteHttpRpc(
       fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } }) as never,
@@ -262,5 +261,47 @@ describe('handleRemoteHttpRpc 边界', () => {
     expect(lines[0]).toContain('status=error')
     expect(lines[0]).toContain('store down')
     expect(lines[0]).toContain(`channel=${REMOTE_CHANNELS.progress}`)
+  })
+})
+
+describe('bug 12f3590f 二次派发防护（响应已写出 = 静默返回，绝无二次写出）', () => {
+  it('headersSent=true：零写出零抛错（上游路由二次派发不撞已发头）', async () => {
+    const res = fakeRes()
+    let wrote = false
+    const guarded = {
+      ...res,
+      headersSent: true,
+      writeHead: (code: number, headers?: Record<string, unknown>) => {
+        wrote = true
+        return res.writeHead(code, headers)
+      },
+      end: (text?: string) => {
+        wrote = true
+        return res.end(text)
+      },
+    }
+    const lines: string[] = []
+    await expect(
+      handleRemoteHttpRpc(
+        fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } }) as never,
+        guarded as never,
+        deps({ diag: (line) => lines.push(line) }),
+      ),
+    ).resolves.toBeUndefined()
+    expect(wrote).toBe(false)
+    expect(lines.some((l) => l.includes('status=already-sent'))).toBe(true)
+  })
+
+  it('not-found diag 落真实通道名（allowlist miss 可归因——404 本就暴露无泄露面）', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never,
+      res,
+      deps({ diag: (line) => lines.push(line) }),
+    )
+    expect(res.status).toBe(404)
+    expect(lines[0]).toContain('channel=forge:proxy/session-openWorkspacePath')
+    expect(lines[0]).toContain('status=not-found')
   })
 })

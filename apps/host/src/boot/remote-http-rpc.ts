@@ -36,10 +36,12 @@ export function isRemoteHttpRpcRequest(method: string, requestUrl: string): bool
 /** diag 通道脱敏定长标记（解密前 channel 字面量不进日志——tunnel-psk v2/H2） */
 export const DIAG_CHANNEL_REDACTED = 'channel=<redacted>'
 
-/** RPC 响应写出窄面（http.ServerResponse 消费切片——fake 可测） */
+/** RPC 响应写出窄面（http.ServerResponse 消费切片——fake 可测；headersSent = bug 12f3590f
+ *  二次派发防护——上游路由对同一请求二次进入 handler 时已发头，绝无二次写出） */
 export interface RpcResFace {
   writeHead(code: number, headers?: object): unknown
   end(body?: string): unknown
+  readonly headersSent?: boolean
 }
 
 /** fake 可测响应（测试捕获面——真身 http.ServerResponse 结构兼容） */
@@ -142,6 +144,14 @@ export async function handleRemoteHttpRpc(
   res: RpcResFace,
   deps: RemoteHttpRpcDeps,
 ): Promise<void> {
+  // bug 12f3590f：上游 webserver 路由层对同一 /remote/__rpc 请求可能二次派发（现场：
+  // not-found 404 后紧跟 401 → writeConstant401 撞已发头 → ERR_HTTP_HEADERS_SENT fatal
+  // 宿主崩溃）。headersSent = 前次调用已写毕——diag 落链即静默返回，契约「永不 reject /
+  // 永不二次写出」成立。
+  if (res.headersSent === true) {
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} status=already-sent（二次派发静默跳过）`)
+    return
+  }
   // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth）；false = 官方
   // 401/403 面已写毕，本 handler 静默返回——但先落一行诊断（fix-27 bug b9bfb9d3：401
   // 路径零日志是诊断盲区；method/host/cookie 有无，不含值）
@@ -203,7 +213,9 @@ export async function handleRemoteHttpRpc(
   }
   const handler = table[channel]
   if (handler === undefined) {
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=not-found`)
+    // bug 12f3590f 同批：allowlist miss 落真实通道名（404 本就暴露，无泄露面——重复再现
+    // 的 not-found 可归因到具体通道）
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=not-found`)
     res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message: '通道不在受限 allowlist' } }))
     return
