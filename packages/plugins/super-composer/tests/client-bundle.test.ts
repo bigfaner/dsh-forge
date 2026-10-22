@@ -177,6 +177,28 @@ describe("client bundle 装载契约（官方 clientBundle 配方）", () => {
   });
 });
 
+describe("发送钮对齐 artifact 保鲜 pin（bug d5bae340）", () => {
+  // Root cause: 真机黑方块复发 = vite 发射链复制 dist/client.js 入壳 dist——源码修复
+  // 后插件 dist 未重建时，发射产物仍是旧钮（button-primary-fill 近黑 + 文本「↑」），
+  // 单测（读源码）全绿而真机仍旧形态。本 pin 直接断言发射源产物（dist/client.js）
+  // 含对齐形态，dist 过期即红——补上「产物层」这一缺失的保鲜判据。
+  it("dist/client.js 产物含官方 InputBar .primary 对齐钮（info-fill 令牌 + 官方箭头 path）", () => {
+    const bundle = readFileSync(bundlePath, "utf8");
+    expect(
+      bundle,
+      "发送钮背景 = 官方 button-info-fill 令牌（主题蓝圆钮）",
+    ).toContain('"var(--dsw-alias-button-info-fill)"');
+    expect(
+      bundle,
+      "发送图标 = 官方 16×16 箭头 svg path（非文本「↑」）",
+    ).toContain("M8.3125 0.980183");
+    expect(
+      bundle,
+      "旧形态（button-primary-fill 作发送钮背景）不得回流",
+    ).not.toContain('background: "var(--dsw-alias-button-primary-fill)"');
+  });
+});
+
 describe("样式生命周期（dev-guide §5：factory 同步段注入——claimStyles 清点窗口）", () => {
   it("物化注入：求值产物（factory 同步段）即在 head 落未打标 <style>——可被官方 claim", () => {
     const { doc, head } = stubDocument();
