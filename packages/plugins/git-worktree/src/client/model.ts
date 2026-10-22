@@ -107,14 +107,20 @@ export function isCreateReady(branch: string, worktreeName: string): boolean {
 }
 
 /**
- * 路径拼接单点（1.21 用户裁决——分隔符归一）：全串统一反斜杠系统口径（Windows 实机），
- * 目录尾分隔符（正/反、多枚）与尾段前导分隔符一并归一，杜绝 `${dir}/${name}` 正反混拼。
- * Root cause: 预览与装配两处各自手拼且口径不一（模板串正斜杠 × 系统反斜杠目录）。
+ * 路径拼接单点（1.21 分隔符归一）：按目录所属平台选分隔符口径——Windows（盘符/反斜杠）
+ * 全串统一反斜杠；POSIX（/ 开头绝对目录，macOS/Linux）全串统一正斜杠。
+ * Root cause (bug b974357f)：原口径无条件归一反斜杠，POSIX 目录被拼成 `\Users\...`
+ * 非法路径，git 在仓内创建字面反斜杠名目录后清单比对失败（worktree add succeeded
+ * but entry missing）。
  */
 export function joinWorktreePath(dir: string, name: string): string {
-  const base = dir.replaceAll('/', '\\').replace(/[\\/]+$/, '')
-  const tail = name.replaceAll('/', '\\').replace(/^[\\/]+/, '')
-  return base === '' || tail === '' ? `${base}${tail}` : `${base}\\${tail}`
+  const posix = dir.startsWith('/')
+  const sep = posix ? '/' : '\\'
+  const normalize = (value: string): string =>
+    posix ? value.replaceAll('\\', '/') : value.replaceAll('/', '\\')
+  const base = normalize(dir).replace(/[\\/]+$/, '')
+  const tail = normalize(name).replace(/^[\\/]+/, '')
+  return base === '' || tail === '' ? `${base}${tail}` : `${base}${sep}${tail}`
 }
 
 /**
