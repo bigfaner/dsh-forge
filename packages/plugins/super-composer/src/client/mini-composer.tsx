@@ -88,15 +88,11 @@ export interface MiniComposerProps {
   /** 预告时长 ms（默认 3_000；测试注入缩短） */
   readonly previewMs?: number
   /**
-   * 1.45 引用现身：选区菜单「添加到对话」插入成功后替身以球态表面化（true = 强制
-   * 球态 + 「有新引用」warning 圆点；点球展开查看 chip——挂载层现身豁免在替身门控
-   * 隐藏时渲染球态用）。
+   * 1.47 引用自动展开：expandRequest 计数变化 = 选区菜单「添加到对话」插入成功
+   * （挂载层 surfaceOnReference 触发）——替身收起时直接回卡片输入态（chip 落稿
+   * 可见），计数值不变不动作（不重复展开）。
    */
-  readonly surfaceChip?: boolean
-  /** 现身球态被点开（点球展开——挂载层现身豁免转段：ball → card，现身持续） */
-  readonly onSurfaceExpand?: () => void
-  /** 现身球态被 Esc 解除（现身豁免解除——挂载层恢复常规门控，非全屏即隐藏） */
-  readonly onSurfaceDismiss?: () => void
+  readonly expandRequest?: number
   /** 展开卡体收回球态（「—」/Esc/idle 收球——挂载层现身豁免解除，恢复常规门控） */
   readonly onCollapseFromCard?: () => void
   /** 折叠态读数上报（挂载层现身判据探测——门控隐藏期视同收起；每次渲染同步） */
@@ -269,31 +265,35 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     setUnread(false)
   }, [view.collapsed, props.messages.length])
 
-  // 1.45 引用现身：surfaceChip 强制球态（选区菜单插入成功后的表面化面——挂载层在
-  // 门控隐藏期以球态渲染替身）。折叠态读数上报 + 转段上报：现身豁免在「点球展开」
-  // 转 card 持续、「Esc/收球」解除恢复常规门控；surfaceChip 强制的球态不算收球转换
-  //（现身态本体，继续现身）。
-  const surface = props.surfaceChip === true
-  const collapsedNow = view.collapsed || surface
+  // 折叠态读数上报 + 收球转段上报（挂载层现身判据/豁免解除探测——1.45 语义保留）。
+  const collapsedNow = view.collapsed
   const wasCollapsedRef = useRef(true)
   useEffect(() => {
     props.reportCollapsed?.(collapsedNow)
-    if (!wasCollapsedRef.current && collapsedNow && !surface) props.onCollapseFromCard?.()
+    if (!wasCollapsedRef.current && collapsedNow) props.onCollapseFromCard?.()
     wasCollapsedRef.current = collapsedNow
   })
+
+  // 1.47 引用自动展开：expandRequest 计数变化（收起替身收到「添加到会话」插入成功
+  // 信号）→ 直接回卡片输入态（跳过球态中间步，chip 落稿可见）；计数不变不动作。
+  const expandSeq = props.expandRequest ?? 0
 
   const setViewSafe = useCallback((patch: Partial<MiniComposerView>) => {
     setView((prev) => ({ ...prev, ...patch }))
   }, [])
 
+  useEffect(() => {
+    if (expandSeq > 0) setViewSafe({ collapsed: false, expanded: false, preview: false })
+  }, [expandSeq, setViewSafe])
+
   // 空闲时序：四条件连续满足 idleMs → 预告；预告期间任一条件恢复即取消；
   // 预告满 previewMs → 收球。流式钉死 = streaming 使四条件恒不满足，两条链全停。
   const idle = isIdleEligible(props, focused, hovered)
   useEffect(() => {
-    if (view.collapsed || surface || view.preview || !idle) return
+    if (view.collapsed || view.preview || !idle) return
     const timer = setTimeout(() => setViewSafe({ preview: true }), idleMs)
     return () => clearTimeout(timer)
-  }, [idle, view.collapsed, view.preview, idleMs, surface, setViewSafe])
+  }, [idle, view.collapsed, view.preview, idleMs, setViewSafe])
 
   useEffect(() => {
     if (!view.preview) return
@@ -313,17 +313,12 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
       if (event.key !== "Escape" || view.collapsed) return
       if (props.mention?.open === true) return
       event.preventDefault()
-      // 1.45 现身球态：Esc = 现身豁免解除（挂载层恢复常规门控——非全屏隐藏）。
-      if (props.surfaceChip === true) {
-        props.onSurfaceDismiss?.()
-        return
-      }
       if (view.expanded) setViewSafe({ expanded: false, preview: false })
       else setViewSafe({ collapsed: true, preview: false })
     }
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [view.collapsed, view.expanded, props.mention, props.surfaceChip, props.onSurfaceDismiss, setViewSafe])
+  }, [view.collapsed, view.expanded, props.mention, setViewSafe])
 
   // 消息流滚动吸底由 SurrogateChatView 承接（官方 ConversationContent 复制件的
   // scrollport `[data-conversation-scroll]`——1.28 渲染层复制件切换）。
@@ -343,10 +338,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     // （dsh-client-ui-primitives 同源动效词汇，零自造动画）；流式停止 ∧ 未读 =
     // 右上角官方 warning 未读圆点（官方 sidebar pendingInteraction→warning 同源
     // 指示词汇，琥珀 user-attention 语义色）；点球——未读直达 S2，否则回 S1/S0。
-    // 1.45 引用现身：surfaceChip 现身态共用球面 + 圆点词汇（「有新引用可查看」
-    // ——点球展开查看 chip；Esc = 现身豁免解除）。
-    const showUnreadDot = (unread || surface) && !props.streaming
-    const surfaceRef = props.surfaceChip === true
+    const showUnreadDot = unread && !props.streaming
     return (
       <div data-testid="dscf-root" data-phase="ball" data-dscf-rev={resolveBuildRev()}>
         <button
@@ -354,19 +346,15 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
         data-testid="dscf-ball"
         data-streaming={props.streaming ? "true" : undefined}
         data-unread={showUnreadDot ? "true" : undefined}
-        data-surface={surfaceRef ? "true" : undefined}
         aria-label={
           props.streaming
             ? "回复生成中，展开对话"
-            : surfaceRef
-              ? "有新引用，展开查看"
-              : unread
-                ? "有新回复，展开对话"
-                : "展开对话"
+            : unread
+              ? "有新回复，展开对话"
+              : "展开对话"
         }
         onClick={(): void => {
           setViewSafe({ collapsed: false, expanded: expandable && unread, preview: false })
-          if (surfaceRef) props.onSurfaceExpand?.()
         }}
         style={{
           position: "fixed",

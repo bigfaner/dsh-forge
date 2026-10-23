@@ -237,26 +237,27 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     bridgeDisposers.push(dispose)
     return true
   }
-  // ── 1.45 引用现身（选区菜单「添加到对话」→ 悬浮球表面化）──
-  // surfaceState：off（常规门控）/ ball（现身球态——强制 collapsed + 「有新引用」
-  // 圆点）/ card（点球展开后现身持续）。组合语义（1.45 落档）：
+  // ── 1.45→1.47 引用自动展开（选区菜单「添加到对话」→ 替身卡片输入态）──
+  // surfaceState：off（常规门控）/ card（现身持续——非全屏豁免在场，直至收球）。
+  // 组合语义（1.47 落档——1.45 现身球态中间步退役）：
   //   ① 触发：插入成功（quote-reference applied=true 后回调，不重复插入）∧ 文档活动
-  //      门控内（activity 判活跃；activity 缺席 = 恒真降级）→ ball。文档活动门控
-  //      优先于现身（非文档页/非 dockkit 文档触发 = 静默不现身）。
-  //   ② 非全屏现身：AC5「非全屏不常驻」的显式用户动作豁免——用户刚点了「添加到
-  //      对话」，注意力反馈面成立；全屏内已挂载时若替身展开在场则不收球（用户看得
-  //      见 chip 落稿，无现身必要），收起/隐藏态才浮球。
-  //   ③ 解除：点球展开 → card（现身持续至收球）；「—」/Esc/idle 收球 → off（非
-  //      全屏恢复门控隐藏）；现身球态 Esc → off 同解除。
+  //      门控内（activity 判活跃；activity 缺席 = 恒真降级）→ card + expandRequest
+  //      计数 +1（替身收起时直接回卡片输入态，chip 落稿可见）。文档活动门控
+  //      优先于现身（非文档页/非 dockkit 文档触发 = 静默不展开不现身）。
+  //   ② 已展开在场（collapsedProbe.collapsed===false）→ 不动作（用户看得见 chip
+  //      落稿，无展开必要）。
+  //   ③ 解除：「—」/Esc/idle 收球 → off（非全屏恢复门控隐藏）。
   //   ④ 门控翻非活动（切走文档/插件页）→ 常规门控隐藏（现身不豁免文档活动门控）。
-  let surfaceState: 'off' | 'ball' | 'card' = 'off'
+  let surfaceState: 'off' | 'card' = 'off'
+  let expandRequest = 0
   // 折叠态探测（card 上报——门控隐藏期组件不在场，视同收起）
   const collapsedProbe = { collapsed: true }
   const surfaceOnReference = (): void => {
     if (options.activity !== undefined && !options.activity.isActive()) return
     if (surfaceState !== 'off') return
     if (!collapsedProbe.collapsed) return
-    surfaceState = 'ball'
+    surfaceState = 'card'
+    expandRequest += 1
     render()
   }
   const render = (): void => {
@@ -282,17 +283,9 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
           onExitFullscreen: options.exitFullscreen ?? (() => undefined),
           mention: mentionMenuOf(face),
           composer: composerFace,
-          surfaceChip: surfaceState === 'ball',
+          expandRequest,
           reportCollapsed: (collapsed: boolean) => {
             collapsedProbe.collapsed = collapsed
-          },
-          onSurfaceExpand: () => {
-            surfaceState = 'card'
-            render()
-          },
-          onSurfaceDismiss: () => {
-            surfaceState = 'off'
-            render()
           },
           onCollapseFromCard: () => {
             surfaceState = 'off'

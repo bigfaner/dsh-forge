@@ -643,71 +643,55 @@ describe("消息流投影（S2 宿主锚）", () => {
   });
 });
 
-describe("1.45 引用现身（surfaceChip 状态机触发段）", () => {
-  it("surfaceChip=true = 强制球态 + 「有新引用」圆点（data-surface 标记 + aria 词汇），点球展开回调 onSurfaceExpand", () => {
-    let expanded = 0;
-    harness = mount({
-      surfaceChip: true,
-      draft: "〔引用：摘要〕",
-      chipCount: 1,
-      onSurfaceExpand: () => {
-        expanded += 1;
-      },
-    });
+describe("1.47 引用自动展开（expandRequest 状态机触发段）", () => {
+  it("expandRequest 计数变化 = 收起球态直接回卡片输入态（跳过球态中间步，chip 落稿可见）", () => {
+    harness = mount({ draft: "草稿", chipCount: 0 });
+    fire(harness, "dscf-minimize", "click");
     expect(phaseOf(harness)).toBe("ball");
-    const ball = q(harness, "dscf-ball")!;
-    expect(ball.getAttribute("data-surface")).toBe("true");
-    expect(ball.getAttribute("data-unread")).toBe("true");
-    expect(q(harness, "dscf-ball-unread")).not.toBeNull();
-    expect(ball.getAttribute("aria-label")).toBe("有新引用，展开查看");
-    fire(harness, "dscf-ball", "click");
-    expect(expanded).toBe(1);
-    // 挂载层转段（ball → card）后 surfaceChip 解除：展开后（chip 在场）= S1——点球可查看 chip
-    harness.rerender({ surfaceChip: false });
+    harness.rerender({ expandRequest: 1, draft: "〔引用：摘要〕", chipCount: 1 });
     expect(phaseOf(harness)).toBe("s1");
+    expect(q(harness, "dscf-ball")).toBeNull();
   });
 
-  it("现身球态 Esc = onSurfaceDismiss（现身豁免解除——不展开不收球）", () => {
-    let dismissed = 0;
-    harness = mount({ surfaceChip: true, draft: "〔引用：摘要〕", chipCount: 1, onSurfaceDismiss: () => { dismissed += 1; } });
-    fireKey(document, "Escape");
-    expect(dismissed).toBe(1);
+  it("expandRequest 计数不变 = 不动作（不重复展开——收球后保持球态）", () => {
+    harness = mount({ expandRequest: 1, draft: "〔引用：摘要〕", chipCount: 1 });
+    expect(phaseOf(harness)).toBe("s1");
+    fire(harness, "dscf-minimize", "click");
+    expect(phaseOf(harness)).toBe("ball");
+    harness.rerender({ expandRequest: 1 });
     expect(phaseOf(harness)).toBe("ball");
   });
 
   it("展开卡收球（「—」）= onCollapseFromCard 一次（挂载层解除现身豁免恢复常规门控）", () => {
     let collapsed = 0;
     harness = mount({
-      surfaceChip: true,
+      expandRequest: 1,
       draft: "〔引用：摘要〕",
       chipCount: 1,
       onCollapseFromCard: () => {
         collapsed += 1;
       },
     });
-    fire(harness, "dscf-ball", "click");
-    harness.rerender({ surfaceChip: false });
     expect(phaseOf(harness)).toBe("s1");
     fire(harness, "dscf-minimize", "click");
     expect(phaseOf(harness)).toBe("ball");
     expect(collapsed).toBe(1);
   });
 
-  it("reportCollapsed 读数上报：现身球态 true / 展开卡 false（挂载层现身判据探测）", () => {
+  it("reportCollapsed 读数上报：展开卡 false / 收起球 true（挂载层现身判据探测）", () => {
     const readings: boolean[] = [];
     harness = mount({
-      surfaceChip: true,
+      expandRequest: 1,
       draft: "〔引用：摘要〕",
       chipCount: 1,
       reportCollapsed: (collapsed) => readings.push(collapsed),
     });
-    expect(readings).toContain(true);
-    fire(harness, "dscf-ball", "click");
-    harness.rerender({ surfaceChip: false });
     expect(readings).toContain(false);
+    fire(harness, "dscf-minimize", "click");
+    expect(readings).toContain(true);
   });
 
-  it("既有状态机零回归：surfaceChip 缺省（undefined）时球态词汇/收球路径不变", () => {
+  it("既有状态机零回归：expandRequest 缺省（undefined）时球态词汇/收球路径不变", () => {
     harness = mount({ draft: "草稿", chipCount: 0 });
     expect(phaseOf(harness)).toBe("s1");
     fire(harness, "dscf-minimize", "click");

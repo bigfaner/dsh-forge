@@ -319,7 +319,7 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
   });
 });
 
-describe("1.45 引用现身（surfaceOnReference——非全屏 AC5 豁免 + 门控组合）", () => {
+describe("1.47 引用自动展开（surfaceOnReference——收起态直展卡片 + 门控组合）", () => {
   function ctxWithReflect(sessions: unknown = sessionsStub): Context {
     const ctx = stubCtx({ sessions }) as unknown as Record<string, unknown>;
     const provided: Record<string, unknown> = {};
@@ -340,7 +340,7 @@ describe("1.45 引用现身（surfaceOnReference——非全屏 AC5 豁免 + 门
     return svc;
   }
 
-  it("非全屏触发现身：门控隐藏态 surfaceOnReference() → 替身以球态现身（现身球 + 圆点 + surface 标记）", async () => {
+  it("门控隐藏态 surfaceOnReference() → 替身以卡片输入态自动展开（跳过球态中间步；非全屏现身豁免在场）", async () => {
     setFullscreenMarker(false);
     const ctx = ctxWithReflect();
     superComposerClient.apply(ctx);
@@ -349,26 +349,19 @@ describe("1.45 引用现身（surfaceOnReference——非全屏 AC5 豁免 + 门
     svcOf(ctx).surfaceOnReference();
     await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
     const rootEl = document.querySelector('[data-testid="dscf-root"]')!;
-    expect(rootEl.getAttribute("data-phase")).toBe("ball");
-    const ball = document.querySelector('[data-testid="dscf-ball"]')!;
-    expect(ball.getAttribute("data-surface")).toBe("true");
-    expect(ball.getAttribute("data-unread")).toBe("true");
-    expect(document.querySelector('[data-testid="dscf-ball-unread"]')).not.toBeNull();
+    expect(rootEl.getAttribute("data-phase"), "直接卡片态——球态中间步退役").not.toBe("ball");
+    expect(document.querySelector('[data-testid="dscf-ball"]')).toBeNull();
   });
 
-  it("现身球点球展开（surfaceChip 转段）→ 非全屏下卡体现身持续；收球 → 现身豁免解除恢复门控隐藏", async () => {
+  it("卡片态现身持续（非全屏豁免）；Esc 收球 → 现身豁免解除恢复门控隐藏", async () => {
     setFullscreenMarker(false);
     const ctx = ctxWithReflect();
     superComposerClient.apply(ctx);
     await tick();
     svcOf(ctx).surfaceOnReference();
-    await waitFor(() => document.querySelector('[data-testid="dscf-ball"]') !== null);
-    (document.querySelector('[data-testid="dscf-ball"]') as HTMLElement).click();
-    await tick();
-    const rootEl = document.querySelector('[data-testid="dscf-root"]');
-    expect(rootEl, "点球展开：现身持续（非全屏豁免未解除）").not.toBeNull();
-    expect(rootEl!.getAttribute("data-phase")).not.toBe("ball");
-    // 收球（s0 无标题栏——Esc 逐层）→ 现身豁免解除 → 非全屏隐藏
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+    await tick(); // passive effects（keydown 监听挂载）flush
+    // Esc 逐层收球（卡片 → 球 → 挂载层豁免解除）→ 非全屏隐藏
     fireEsc();
     await waitFor(() => document.querySelector('[data-testid="dscf-root"]') === null);
     expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
