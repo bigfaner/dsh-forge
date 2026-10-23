@@ -7,7 +7,8 @@
 // 断言锚 = 稳定 data 属性（[data-composer-chip="quote"] 计数，替身/官方各一面）+
 // 官方草稿 InputState occurrences 经页面取证径读回（sc-fix9-diag 同径）；不测视觉坐标。
 // chip 注入编排 = sc-fix26 同径（文档选区投影 DOM → 划选 → 添加到对话 → chip）。
-// 证据归档 {forge.project_logs_dir}/super-composer/1.66/003-backspace-chip/
+// 证据归档 {forge.project_logs_dir}/super-composer/1.66/005-backspace-chip/（fix-19
+// fix-30 复跑轮——003 为修复前红态轮，续编号不覆盖）
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,7 +20,7 @@ import { rmDirBestEffort } from '../../support/cleanup.js'
 import { forgeInvoke, selectWorkspaceViaChip } from '../../support/rpc.js'
 
 const EVIDENCE_DIR =
-  'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/super-composer/1.66/003-backspace-chip'
+  'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/super-composer/1.66/005-backspace-chip'
 
 const NEEDLES = ['文档选段甲-回删一', '文档选段乙-回删二'] as const
 
