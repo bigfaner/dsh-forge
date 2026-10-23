@@ -121,13 +121,16 @@ test('@web-e2e @blitz 互斥聚焦两态：全屏落 chip 聚焦替身输入 / �
     await expect(page.locator('[data-testid="dscf-root"]'), '全屏态替身挂载').toHaveCount(1, { timeout: 10_000 })
 
     await selectAndAddToChat(page, docPanelSel)
-    const stateFullscreen = await page.evaluate(() => ({
-      activeIsDscf: document.activeElement?.getAttribute('data-dscf-composer-input') === '' ||
-        document.activeElement?.closest('[data-testid="dscf-root"]') !== null,
+    // 观察腿现状对齐（1.24 chip 明文形状改判 + 1.30 官方复制件输入面 + 1.47 现身展开）：
+    // 替身输入 = [data-dscf-official-input] 内官方复制件 contenteditable [data-composer-input]
+    // （旧 data-dscf-composer-input 属性 / dscf-chips 计数行已退役）；chip 明文形状随官方
+    // 投影演进（真机取证 = 选段摘要在替身草稿在场，形状无关断言防再漂移）。
+    const stateFullscreen = await page.evaluate((needle) => ({
+      activeIsDscf: document.activeElement?.closest('[data-dscf-official-input]') !== null,
       dscfMounted: document.querySelectorAll('[data-testid="dscf-root"]').length,
-      chipLanded: (document.querySelector('[data-dscf-composer-input]')?.value ?? '').includes('](quote:') ||
-        (document.querySelector('[data-testid="dscf-chips"]')?.textContent ?? '').length > 0,
-    }))
+      chipLanded: (document.querySelector('[data-dscf-official-input] [data-composer-input]')?.textContent ?? '')
+        .includes(needle),
+    }), DOC_NEEDLE)
     expect(stateFullscreen.dscfMounted, '全屏态替身在挂（互斥：替身为唯一合法输入面）').toBe(1)
     expect(stateFullscreen.chipLanded, '全屏态：chip 落替身草稿').toBe(true)
     expect(stateFullscreen.activeIsDscf, '互斥硬规则：全屏态落 chip 后 activeElement=替身输入锚').toBe(true)

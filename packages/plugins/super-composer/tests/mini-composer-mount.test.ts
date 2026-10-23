@@ -340,31 +340,35 @@ describe("1.47 引用自动展开（surfaceOnReference——收起态直展卡�
     return svc;
   }
 
-  it("门控隐藏态 surfaceOnReference() → 替身以卡片输入态自动展开（跳过球态中间步；非全屏现身豁免在场）", async () => {
+  it("fix-17: 非全屏门控隐藏态 surfaceOnReference() → 不现身（现身态不豁免全屏门）", async () => {
     setFullscreenMarker(false);
     const ctx = ctxWithReflect();
     superComposerClient.apply(ctx);
     await tick();
     expect(document.querySelector('[data-testid="dscf-root"]'), "AC5 基线：非全屏不常驻").toBeNull();
     svcOf(ctx).surfaceOnReference();
-    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
-    const rootEl = document.querySelector('[data-testid="dscf-root"]')!;
-    expect(rootEl.getAttribute("data-phase"), "直接卡片态——球态中间步退役").not.toBe("ball");
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]'), "现身态不豁免全屏门——非全屏保持隐藏").toBeNull();
     expect(document.querySelector('[data-testid="dscf-ball"]')).toBeNull();
   });
 
-  it("卡片态现身持续（非全屏豁免）；Esc 收球 → 现身豁免解除恢复门控隐藏", async () => {
-    setFullscreenMarker(false);
+  it("fix-17: 全屏内现身展开后退出全屏 → 替身自动隐藏；重进全屏恢复可见（1.47 展开不回归）", async () => {
+    setFullscreenMarker(true);
     const ctx = ctxWithReflect();
     superComposerClient.apply(ctx);
-    await tick();
-    svcOf(ctx).surfaceOnReference();
     await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
-    await tick(); // passive effects（keydown 监听挂载）flush
-    // Esc 逐层收球（卡片 → 球 → 挂载层豁免解除）→ 非全屏隐藏
-    fireEsc();
+    // 全屏内「添加到会话」→ 现身展开（AC2 基线）
+    svcOf(ctx).surfaceOnReference();
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]'), "全屏内现身展开在场").not.toBeNull();
+    // 退出全屏 → 现身态不豁免全屏门 → 自动隐藏
+    setFullscreenMarker(false);
     await waitFor(() => document.querySelector('[data-testid="dscf-root"]') === null);
     expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
+    // 重进全屏 → 可见性恢复正常
+    setFullscreenMarker(true);
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+    expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
   });
 
   it("全屏内已挂载（展开在场）触发现身 = 不收球（用户看得见 chip 落稿，无现身必要）", async () => {
@@ -441,7 +445,3 @@ describe("fix-19: 单一数据面收敛（composerFace 第二实例退役——�
   });
 });
 
-/** Esc 键直发（现身球态解除径）。 */
-function fireEsc(): void {
-  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-}

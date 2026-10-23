@@ -12,3 +12,4 @@
 | 0.1.0 → 0.1.1 | patch | 本提案累积缺陷修复面（2026-10-23 用户裁决）；功能面 minor bump 由后续功能任务各自承担 |
 | 0.1.1 → 0.2.0 | minor | 1.47 添加到会话后替身自动展开为卡片输入态（1.45 现身球态中间步退役——surfaceChip/onSurfaceExpand/onSurfaceDismiss 双轨摘除，expandRequest 计数缝替代） |
 | 0.2.0 → 0.2.1 | patch | fix-19 双 composer 草稿同步收敛为通用机制（bug 65b8e9d0）：复制件回写 chip 保持正门（bail insert-text）+ composerFace 第二数据面实例退役（挂载层扇出）+ data-face tailSpanOf 对齐 detect 平面 |
+| 0.2.1 → 0.2.2 | patch | fix-17 退出全屏后现身态不豁免全屏门（bug 2a6ebd3a）：1.47 card 现身态不再绕过可见性门控②——退出全屏替身自动隐藏，重进全屏恢复 |

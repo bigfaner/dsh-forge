@@ -249,7 +249,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     return true
   }
   // ── 1.45→1.47 引用自动展开（选区菜单「添加到对话」→ 替身卡片输入态）──
-  // surfaceState：off（常规门控）/ card（现身持续——非全屏豁免在场，直至收球）。
+  // surfaceState：off（常规门控）/ card（现身持续，直至收球；fix-17：现身态不豁免全屏门）。
   // 组合语义（1.47 落档——1.45 现身球态中间步退役）：
   //   ① 触发：插入成功（quote-reference applied=true 后回调，不重复插入）∧ 文档活动
   //      门控内（activity 判活跃；activity 缺席 = 恒真降级）→ card + expandRequest
@@ -272,15 +272,19 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     render()
   }
   const render = (): void => {
-    // 可见性门控（1.39 两信号合取 + 1.45 现身豁免）：①文档活动（最高门控——非文档
-    // 隐藏，现身不豁免）；②全屏呈现（fullscreenMarkers>0，AC5）——现身豁免仅扩此门。
+    // 可见性门控（1.39 两信号合取；fix-17：现身态不豁免任一门）：①文档活动（最高门控
+    // ——非文档隐藏）；②全屏呈现（fullscreenMarkers>0，AC5）——全屏内现身展开可见，
+    // 退出全屏一律隐藏，重进全屏恢复。
     if (options.activity !== undefined && !options.activity.isActive()) {
       collapsedProbe.collapsed = true // 隐藏期视同收起（现身判据）
       root.render(null)
       return
     }
     const fullscreenOk = options.tracker === undefined || options.tracker.isFullscreen()
-    if (!fullscreenOk && surfaceState === 'off') {
+    // fix-17：全屏门不豁免现身态（Root cause: 1.45 现身豁免语义只扩球态现身；1.47 球态
+    // 中间步退役后直接 card 态，豁免面被扩到 card 常驻——退出全屏卡片驻留）。退出全屏
+    // 一律隐藏；重进全屏门控放行恢复可见。
+    if (!fullscreenOk) {
       collapsedProbe.collapsed = true // 隐藏期视同收起（现身判据）
       root.render(null)
       return
