@@ -167,6 +167,38 @@ function projectUserMessage(event: WireEvent): Projection | null {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TODO 面板数据源（桌面端 composer 上方清单对齐——官方 TodoItem{content,status}，
+// dsh-tool-todo STATUSES 三态核销；取最后一条 todo/write 快照 = 实时更新随重拉到达）
+// ---------------------------------------------------------------------------
+
+export interface TodoItemView {
+  readonly content: string
+  readonly status: 'pending' | 'in_progress' | 'completed'
+}
+
+/** 事件流 → 最新 TODO 清单（最后一条 todo/write；无/todo 形状非法 = null 面板隐藏）。 */
+export function latestTodosOf(entries: readonly WireEvent[]): readonly TodoItemView[] | null {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const event = entries[index]
+    if (event === undefined || event.type !== 'todo/write') continue
+    const todos = (event.data as { todos?: unknown }).todos
+    if (!Array.isArray(todos)) return null
+    const items: TodoItemView[] = []
+    for (const raw of todos) {
+      const item = (typeof raw === 'object' && raw !== null ? raw : {}) as { content?: unknown; status?: unknown }
+      const content = typeof item.content === 'string' ? item.content : ''
+      if (content === '') continue
+      items.push({
+        content,
+        status: item.status === 'in_progress' || item.status === 'completed' ? item.status : 'pending',
+      })
+    }
+    return items
+  }
+  return null
+}
+
 /** 单事件投影：E 档返回 null（零渲染），D 档中性/错误卡。 */
 export function projectEvent(event: WireEvent): Projection | null {
   switch (event.type) {
@@ -282,8 +314,7 @@ export function projectEvent(event: WireEvent): Projection | null {
     // bug db09ac00：有意渲染面——todo/write（模型任务清单更新，data.todos 数组源码核销
     // dsh-client-ui-tool todoWriteDefinition）与 developer/message（data.message.content 同
     // 消息形）→ 中性行
-    case 'todo/write': {
-      const todos = (event.data as { todos?: unknown }).todos
+    case 'todo/write': {      const todos = (event.data as { todos?: unknown }).todos
       return {
         kind: 'neutral-line',
         seq: event.seq,

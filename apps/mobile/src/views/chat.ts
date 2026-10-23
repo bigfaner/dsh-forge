@@ -11,6 +11,7 @@ import { sendComposerInput } from '../core/rpc.ts'
 import { type SseSink, type SseState } from '../core/sse.ts'
 import {
   createAttemptSettler,
+  latestTodosOf,
   mergeBySeq,
   projectHistory,
   type Projection,
@@ -284,7 +285,26 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   // 分支控制完全隐藏——chip 初始可见且本视图从不调 setWorktreeVisible，空标签芯片恒挂
   composer.setWorktreeVisible((deps.worktree ?? '') !== '')
 
-  root.append(topbar, view, jump, composer.root, overlay)
+  // TODO 面板（桌面端 composer 上方清单对齐）：最新 todo/write 快照驱动，随 render 实时更新
+  const todoPanel = el('div', 'todo-panel')
+  todoPanel.hidden = true
+  function renderTodoPanel(): void {
+    const todos = latestTodosOf(state.entries)
+    todoPanel.textContent = ''
+    if (todos === null || todos.length === 0) {
+      todoPanel.hidden = true
+      return
+    }
+    todoPanel.hidden = false
+    for (const todo of todos) {
+      const row = el('div', `todo-row ${todo.status}`)
+      row.appendChild(el('span', 'todo-mark', todo.status === 'completed' ? '✓' : todo.status === 'in_progress' ? '●' : '○'))
+      row.appendChild(el('span', 'todo-content', todo.content))
+      todoPanel.appendChild(row)
+    }
+  }
+
+  root.append(topbar, view, jump, todoPanel, composer.root, overlay)
 
   // ---- 渲染 ----
   function renderTurnFold(seg: TurnSegment, bySeq: Map<number, Projection>, activityMap: Map<string, ReturnType<typeof pairToolActivity>[number]>): HTMLElement {
@@ -421,6 +441,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     if (streaming) view.appendChild(el('div', undefined)).appendChild(el('span', 'turn-status', 'Deep diving...'))
     const wasAtBottom = state.atBottom
     if (wasAtBottom) scrollToBottom()
+    renderTodoPanel()
   }
 
   // 渲染合帧（rAF）：settle 渲染 + 600ms 重拉渲染背靠背发生，逐次全量重建 view = 闪屏；

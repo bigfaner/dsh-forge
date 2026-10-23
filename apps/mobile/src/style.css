@@ -1000,6 +1000,55 @@ body[data-ds-dark-theme] .turn-fold > summary .fold-line {
   margin: 4px 6px;
 }
 
+/* TODO 面板（桌面端 composer 上方清单对齐——最新 todo/write 快照，实时更新） */
+.todo-panel {
+  margin: 0 10px 6px;
+  padding: 6px 10px;
+  border: 0.5px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafbfc;
+  max-height: 132px;
+  overflow-y: auto;
+}
+.dark .todo-panel,
+body[data-ds-dark-theme] .todo-panel {
+  border-color: #303034;
+  background: #232326;
+}
+.todo-row {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 2px 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #3c4043;
+}
+.dark .todo-row,
+body[data-ds-dark-theme] .todo-row {
+  color: #d5d7da;
+}
+.todo-row .todo-mark {
+  flex: none;
+  width: 13px;
+  text-align: center;
+  font-size: 11px;
+}
+.todo-row.completed {
+  color: #9aa0a6;
+  text-decoration: line-through;
+}
+.todo-row.completed .todo-mark {
+  color: #1a8a4a;
+}
+.todo-row.in_progress .todo-mark {
+  color: #4176e6;
+}
+.dark .todo-row.in_progress .todo-mark,
+body[data-ds-dark-theme] .todo-row.in_progress .todo-mark {
+  color: #7ba2f0;
+}
+
 .crow {
   display: flex;
   align-items: center;

@@ -4,6 +4,7 @@ import {
   clampLastReadSeq,
   createAttemptSettler,
   createSeqGate,
+  latestTodosOf,
   mergeBySeq,
   projectEvent,
   projectHistory,
@@ -391,5 +392,30 @@ describe('消息元信息投影（桌面端对齐：time + usage）', () => {
   it('usage 缺席 = undefined（不显示）', () => {
     const projection = projectEvent(ev('assistant/message', 16, { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: '回' }] } }))
     expect((projection as { usage?: number }).usage).toBeUndefined()
+  })
+})
+describe('latestTodosOf（TODO 面板数据源——桌面端 composer 上方对齐）', () => {
+  it('取最后一条 todo/write 的 todos（content+status 归一）', () => {
+    const entries = [
+      ev('todo/write', 1, { todos: [{ content: 'a', status: 'completed' }] }),
+      ev('assistant/message', 2, { message: { content: [] } }),
+      ev('todo/write', 3, { todos: [{ content: 'b', status: 'in_progress' }, { content: 'c' }] }),
+    ]
+    const todos = latestTodosOf(entries)
+    expect(todos).toEqual([
+      { content: 'b', status: 'in_progress' },
+      { content: 'c', status: 'pending' },
+    ])
+  })
+
+  it('无 todo/write = null（面板隐藏）', () => {
+    expect(latestTodosOf([ev('user/message', 1, { content: [], source: { kind: 'user' } })])).toBeNull()
+  })
+
+  it('todos 形状非法 = null；空 content 项剔除', () => {
+    expect(latestTodosOf([ev('todo/write', 1, {})])).toBeNull()
+    expect(latestTodosOf([ev('todo/write', 1, { todos: [{ content: '' }, { content: 'ok', status: 'completed' }] })])).toEqual([
+      { content: 'ok', status: 'completed' },
+    ])
   })
 })
