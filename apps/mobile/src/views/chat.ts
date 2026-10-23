@@ -37,6 +37,59 @@ import {
 
 export const HISTORY_PAGE_SIZE = 10
 
+// ---------------------------------------------------------------------------
+// 纯函数：turn 分段折叠（历史 turn 露「输入+回复」，思考/工具折进可展开组；
+// 进行中 turn 全展开——用户裁决 2026-10-23）
+// ---------------------------------------------------------------------------
+
+/** turn 段：起点 = user-bubble（首段可为载入尾部历史）；活动 = 思考/工具调用。 */
+export interface TurnSegment {
+  /** 段首投影下标。 */
+  readonly start: number
+  /** true = 段内已有「尾活动之后的回复」（turn 完成）→ 活动折进组。 */
+  readonly collapsed: boolean
+  /** 段内活动投影 seq 序列（原位顺序）。 */
+  readonly activitySeqs: readonly number[]
+}
+
+const isActivityProjection = (projection: Projection): boolean =>
+  projection.kind === 'tool-call' || isReasoningOnly(projection)
+
+const hasVisibleReply = (projection: Projection): boolean =>
+  projection.kind === 'assistant-message' && projection.text !== ''
+
+/** 投影流 → turn 段（user-bubble 分段；折叠判定 = 尾活动之后存在可见回复）。 */
+export function partitionTurnSegments(projections: readonly Projection[]): readonly TurnSegment[] {
+  const segments: TurnSegment[] = []
+  let start = 0
+  let activity: number[] = []
+  let lastActivityIndex = -1
+  const flush = (end: number): void => {
+    if (end > start) {
+      const replyAfterLastActivity = projections.some(
+        (p, index) => index > lastActivityIndex && index < end && hasVisibleReply(p),
+      )
+      segments.push({ start, collapsed: activity.length > 0 && replyAfterLastActivity, activitySeqs: activity })
+    }
+    start = end
+    activity = []
+    lastActivityIndex = -1
+  }
+  for (let index = 0; index < projections.length; index++) {
+    const projection = projections[index]!
+    if (projection.kind === 'user-bubble') {
+      flush(index)
+      continue
+    }
+    if (isActivityProjection(projection)) {
+      activity.push(projection.seq)
+      lastActivityIndex = index
+    }
+  }
+  flush(projections.length)
+  return segments
+}
+
 export interface HistoryWindow {
   readonly entries: readonly WireEvent[]
   readonly hasMore: boolean
@@ -191,15 +244,52 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   root.append(topbar, view, jump, composer.root, overlay)
 
   // ---- 渲染 ----
+  function renderTurnFold(seg: TurnSegment, bySeq: Map<number, Projection>, activityMap: Map<string, ReturnType<typeof pairToolActivity>[number]>): HTMLElement {
+    // 折叠组：段内思考/工具卡原序收入（用户裁决 2026-10-23——历史 turn 露输入+回复）
+    const details = el('details', 'turn-fold')
+    const summary = el('summary')
+    summary.appendChild(el('span', 'fold-label', `思考与执行 · ${seg.activitySeqs.length} 项`))
+    details.appendChild(summary)
+    for (const seq of seg.activitySeqs) {
+      const projection = bySeq.get(seq)
+      if (projection === undefined) continue
+      if (projection.kind === 'tool-call') {
+        const activity = activityMap.get(projection.callId)
+        if (activity !== undefined) details.appendChild(renderToolCard(activity))
+      } else if (isReasoningOnly(projection)) {
+        details.appendChild(renderThinkCard(projection.reasoning))
+      }
+    }
+    return details
+  }
+
   function render(): void {
     const projections = projectHistory(state.entries)
     const activities = pairToolActivity(projections)
     const activityByCallId = new Map(activities.map((activity) => [activity.call.callId, activity]))
     const seenCalls = new Set<string>()
     const degradedNarratives = degradedNarrativeSeqs(projections)
+    // turn 分段折叠（用户裁决 2026-10-23）：折叠段的活动卡原序收入组，首活动位落组
+    const segments = partitionTurnSegments(projections)
+    const segBySeq = new Map<number, { seg: TurnSegment; first: boolean }>()
+    for (const seg of segments) {
+      for (let index = 0; index < seg.activitySeqs.length; index++) {
+        segBySeq.set(seg.activitySeqs[index]!, { seg, first: index === 0 })
+      }
+    }
+    const foldEmitted = new Set<number>()
+    const bySeq = new Map(projections.map((projection) => [projection.seq, projection] as const))
     view.textContent = ''
     for (const projection of projections) {
       if (projection.kind === 'tool-result') continue
+      const segInfo = segBySeq.get(projection.seq)
+      if (segInfo?.seg.collapsed === true) {
+        if (!foldEmitted.has(segInfo.seg.start)) {
+          foldEmitted.add(segInfo.seg.start)
+          view.appendChild(renderTurnFold(segInfo.seg, bySeq, activityByCallId))
+        }
+        continue
+      }
       if (projection.kind === 'tool-call') {
         if (seenCalls.has(projection.callId)) continue
         seenCalls.add(projection.callId)

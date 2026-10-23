@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import type { WireEvent } from '../core/wire.ts'
+import type { Projection, WireEvent } from '../core/wire.ts'
 import {
   anchorDelta,
   coerceHistoryWindow,
   HISTORY_PAGE_SIZE,
   isAtBottom,
   mergeOlderPage,
+  partitionTurnSegments,
 } from './chat.ts'
 
 const event = (type: string, seq: number): WireEvent =>
   ({ type, seq, time: 0, data: {} }) as WireEvent
+
+const proj = (p: Partial<Projection> & { kind: Projection['kind']; seq: number }): Projection => p as Projection
+const userBubble = (seq: number, text = 'hi'): Projection => ({ kind: 'user-bubble', seq, text })
+const assistantText = (seq: number, text = '回复'): Projection => ({ kind: 'assistant-message', seq, text, reasoning: '', toolCalls: [] })
+const think = (seq: number): Projection => ({ kind: 'assistant-message', seq, text: '', reasoning: '想', toolCalls: [] })
+const toolCall = (seq: number, callId = 'c'): Projection => ({ kind: 'tool-call', seq, callId, name: 'grep', arguments: '{}' })
+const toolResult = (seq: number, callId = 'c'): Projection => ({ kind: 'tool-result', seq, callId, isError: false, text: 'ok' })
 
 describe('历史窗口收敛（默认最近 10 条）', () => {
   it('entries 形状 + hasMore 直传', () => {
@@ -49,5 +57,41 @@ describe('触底判据（滚动到底 / 未读归零口径）', () => {
   it('距底 < 24px = 触底', () => {
     expect(isAtBottom(976, 1000, 600)).toBe(true) // 差 16
     expect(isAtBottom(300, 1000, 600)).toBe(false)
+  })
+})
+
+describe('turn 分段折叠（历史露输入+回复；活动折叠；进行中展开）', () => {
+  it('无活动段 = 不折叠（纯对话）', () => {
+    const segments = partitionTurnSegments([userBubble(1), assistantText(2)])
+    expect(segments).toHaveLength(1)
+    expect(segments[0]!.collapsed).toBe(false)
+    expect(segments[0]!.activitySeqs).toEqual([])
+  })
+  it('有活动 + 回复在其后 = 折叠（历史 turn）', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3), toolResult(4), assistantText(5)])
+    expect(segments[0]!.collapsed).toBe(true)
+    expect(segments[0]!.activitySeqs).toEqual([2, 3])
+  })
+  it('活动在无回复段（进行中）= 展开（当前 turn）', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3), toolResult(4)])
+    expect(segments[0]!.collapsed).toBe(false)
+    expect(segments[0]!.activitySeqs).toEqual([2, 3])
+  })
+  it('回复后新活动再起 = 重新展开（同 turn 内 follow-up 步骤）', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), assistantText(3), toolCall(4)])
+    expect(segments[0]!.collapsed).toBe(false)
+    expect(segments[0]!.activitySeqs).toEqual([2, 4])
+  })
+  it('多 turn 各自判定；首用户消息前的历史活动独立成段', () => {
+    const segments = partitionTurnSegments([
+      think(0), toolCall(1), toolResult(2),
+      userBubble(3), think(4), assistantText(5),
+      userBubble(6), assistantText(7),
+    ])
+    expect(segments).toHaveLength(3)
+    expect(segments[0]!.collapsed).toBe(false) // 载入尾部（当前视点）——展开
+    expect(segments[1]!.collapsed).toBe(true)
+    expect(segments[1]!.activitySeqs).toEqual([4])
+    expect(segments[2]!.collapsed).toBe(false)
   })
 })
