@@ -885,8 +885,9 @@ body[data-ds-dark-theme] .jump {
 }
 
 /* ---- 输入区：composer 底行 = 模式 · worktree · 滑杆 · 发送（固定） ---- */
+/* 用户裁决 2026-10-23：composer 尽量利用屏幕宽——侧距收到 6px（屏幕边缘留一线） */
 .inputbar {
-  padding: 8px 14px 14px;
+  padding: 8px 6px 14px;
   flex: none;
 }
 /* 唤醒菜单（/ 命令 + @ mention）——文档流块在输入卡上方（mini-composer 同壳：
@@ -1002,7 +1003,7 @@ body[data-ds-dark-theme] .turn-fold > summary .fold-line {
 
 /* TODO 面板（桌面端 TodoPanel 对齐——header 折叠 + StateDot 三态；官方色/动效同径） */
 .todo-panel {
-  margin: 0 10px 6px;
+  margin: 0 6px 0; /* 宽度对齐 composer（inputbar 侧距同值）；与 composer 间隔 8px（原 14px 减半，用户裁决 2026-10-23） */
   border: 0.5px solid #e5e7eb;
   border-radius: 10px;
   background: #fafbfc;
