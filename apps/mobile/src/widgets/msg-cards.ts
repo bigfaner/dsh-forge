@@ -267,7 +267,7 @@ function textPreview(text: string): string {
   return firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine
 }
 
-/** thinking 活动卡（reasoning 摘要 + 展开 body）。 */
+/** thinking 活动卡（reasoning 摘要 + 展开 body）。展开/收起 = details 点击（用户裁决：无 ▶ 指示）。 */
 export function renderThinkCard(reasoning: string): HTMLElement {
   const details = el('details', 'think')
   const summary = el('summary')
@@ -275,7 +275,6 @@ export function renderThinkCard(reasoning: string): HTMLElement {
   summary.appendChild(el('span', undefined, '思考中'))
   summary.appendChild(el('span', 'act-dot'))
   summary.appendChild(el('span', 'act-sum', textPreview(reasoning)))
-  summary.appendChild(el('span', 'chev', '▶'))
   const body = el('div', 'think-body')
   body.textContent = reasoning
   details.append(summary, body)
@@ -295,7 +294,7 @@ function toolSummary(activity: ToolActivity): HTMLElement {
   summary.appendChild(
     el('span', 'act-sum', activity.result === undefined ? textPreview(preview) : textPreview(activity.result.text)),
   )
-  summary.appendChild(el('span', 'chev', '▶'))
+  // 用户裁决：无 ▶ 指示——展开/收起 = summary 点击（details 原生语义不变）
   return summary
 }
 
