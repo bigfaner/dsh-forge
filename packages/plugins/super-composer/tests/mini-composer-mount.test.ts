@@ -318,3 +318,100 @@ describe("bug: apply 挂载 mini-composer 替身（MiniComposerCard + DataFace �
     expect(document.querySelector('[data-testid="dscf-mention"]')).not.toBeNull();
   });
 });
+
+describe("1.45 引用现身（surfaceOnReference——非全屏 AC5 豁免 + 门控组合）", () => {
+  function ctxWithReflect(sessions: unknown = sessionsStub): Context {
+    const ctx = stubCtx({ sessions }) as unknown as Record<string, unknown>;
+    const provided: Record<string, unknown> = {};
+    ctx.reflect = {
+      provide: (name: string, value?: unknown) => {
+        provided[name] = value;
+        return () => undefined;
+      },
+      get: (name: string) => provided[name],
+    };
+    (ctx as { __provided: Record<string, unknown> }).__provided = provided;
+    return ctx as unknown as Context;
+  }
+
+  function svcOf(ctx: Context): { focusFullscreenInput(): boolean; surfaceOnReference(): void } {
+    const svc = (ctx as unknown as { __provided: Record<string, unknown> }).__provided["superComposer"] as never;
+    expect(svc, "superComposer 服务未注册").toBeDefined();
+    return svc;
+  }
+
+  it("非全屏触发现身：门控隐藏态 surfaceOnReference() → 替身以球态现身（现身球 + 圆点 + surface 标记）", async () => {
+    setFullscreenMarker(false);
+    const ctx = ctxWithReflect();
+    superComposerClient.apply(ctx);
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]'), "AC5 基线：非全屏不常驻").toBeNull();
+    svcOf(ctx).surfaceOnReference();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+    const rootEl = document.querySelector('[data-testid="dscf-root"]')!;
+    expect(rootEl.getAttribute("data-phase")).toBe("ball");
+    const ball = document.querySelector('[data-testid="dscf-ball"]')!;
+    expect(ball.getAttribute("data-surface")).toBe("true");
+    expect(ball.getAttribute("data-unread")).toBe("true");
+    expect(document.querySelector('[data-testid="dscf-ball-unread"]')).not.toBeNull();
+  });
+
+  it("现身球点球展开（surfaceChip 转段）→ 非全屏下卡体现身持续；收球 → 现身豁免解除恢复门控隐藏", async () => {
+    setFullscreenMarker(false);
+    const ctx = ctxWithReflect();
+    superComposerClient.apply(ctx);
+    await tick();
+    svcOf(ctx).surfaceOnReference();
+    await waitFor(() => document.querySelector('[data-testid="dscf-ball"]') !== null);
+    (document.querySelector('[data-testid="dscf-ball"]') as HTMLElement).click();
+    await tick();
+    const rootEl = document.querySelector('[data-testid="dscf-root"]');
+    expect(rootEl, "点球展开：现身持续（非全屏豁免未解除）").not.toBeNull();
+    expect(rootEl!.getAttribute("data-phase")).not.toBe("ball");
+    // 收球（s0 无标题栏——Esc 逐层）→ 现身豁免解除 → 非全屏隐藏
+    fireEsc();
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') === null);
+    expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
+  });
+
+  it("全屏内已挂载（展开在场）触发现身 = 不收球（用户看得见 chip 落稿，无现身必要）", async () => {
+    setFullscreenMarker(true);
+    const ctx = ctxWithReflect();
+    superComposerClient.apply(ctx);
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+    await tick();
+    const before = document.querySelector('[data-testid="dscf-root"]')!.getAttribute("data-phase");
+    svcOf(ctx).surfaceOnReference();
+    await tick();
+    const rootEl = document.querySelector('[data-testid="dscf-root"]');
+    expect(rootEl).not.toBeNull();
+    expect(rootEl!.getAttribute("data-phase")).toBe(before);
+    expect(document.querySelector('[data-testid="dscf-ball"]')).toBeNull();
+  });
+
+  it("文档活动门控优先：activity 判非活动时现身不豁免（替身保持隐藏）", async () => {
+    setFullscreenMarker(false);
+    const trackerStub = { isFullscreen: () => false, subscribe: () => () => undefined, dispose: () => undefined };
+    const activityStub = { isActive: () => false, subscribe: () => () => undefined, dispose: () => undefined };
+    const { mountMiniComposer } = await import("../src/client/index.js");
+    const ctx = ctxWithReflect();
+    const dispose = mountMiniComposer(document, ctx, {
+      tracker: trackerStub as never,
+      activity: activityStub as never,
+    });
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
+    // 非文档页触发 = 静默不现身（surfaceOnReference no-op）
+    const svc = (ctx as unknown as { __provided: Record<string, unknown> }).__provided["superComposer"] as { surfaceOnReference(): void };
+    expect(svc).toBeDefined();
+    svc.surfaceOnReference();
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
+    dispose();
+  });
+});
+
+/** Esc 键直发（现身球态解除径）。 */
+function fireEsc(): void {
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+}

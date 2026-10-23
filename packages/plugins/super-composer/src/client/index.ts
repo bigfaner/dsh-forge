@@ -225,9 +225,8 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
       },
     } as never,
   })
-  // bug 1ab2f4e6：全屏聚焦缝跨包组合——cordis 具名服务注册（quote-reference 每点击
-  // 时点经 ctx 读 `superComposer`；本包 provide 即正门装配，无全局变量/事件魔改）。
-  provideServiceOnContext(ctx, 'superComposer', { focusFullscreenInput: focusFullscreenInputOf(container) })
+  // bug 1ab2f4e6：全屏聚焦缝跨包组合 + 1.45 引用现身缝——cordis 具名服务注册在
+  // render 装配之后（下方，surfaceOnReference 声明依赖 render）。
   // 1.30 slots 复用裁决：conversation.content 工厂桥（官方树内 shell.overlay 入口
   // 持 renderFactorySlot，portal 进替身卡 S2 宿主锚）。slots 服务晚序 provide 判例
   // 同构（sessions/inputTriggers）——立即尝试 + syncTimer 有界补挂；服务缺席 = 降级。
@@ -238,22 +237,39 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     bridgeDisposers.push(dispose)
     return true
   }
+  // ── 1.45 引用现身（选区菜单「添加到对话」→ 悬浮球表面化）──
+  // surfaceState：off（常规门控）/ ball（现身球态——强制 collapsed + 「有新引用」
+  // 圆点）/ card（点球展开后现身持续）。组合语义（1.45 落档）：
+  //   ① 触发：插入成功（quote-reference applied=true 后回调，不重复插入）∧ 文档活动
+  //      门控内（activity 判活跃；activity 缺席 = 恒真降级）→ ball。文档活动门控
+  //      优先于现身（非文档页/非 dockkit 文档触发 = 静默不现身）。
+  //   ② 非全屏现身：AC5「非全屏不常驻」的显式用户动作豁免——用户刚点了「添加到
+  //      对话」，注意力反馈面成立；全屏内已挂载时若替身展开在场则不收球（用户看得
+  //      见 chip 落稿，无现身必要），收起/隐藏态才浮球。
+  //   ③ 解除：点球展开 → card（现身持续至收球）；「—」/Esc/idle 收球 → off（非
+  //      全屏恢复门控隐藏）；现身球态 Esc → off 同解除。
+  //   ④ 门控翻非活动（切走文档/插件页）→ 常规门控隐藏（现身不豁免文档活动门控）。
+  let surfaceState: 'off' | 'ball' | 'card' = 'off'
+  // 折叠态探测（card 上报——门控隐藏期组件不在场，视同收起）
+  const collapsedProbe = { collapsed: true }
+  const surfaceOnReference = (): void => {
+    if (options.activity !== undefined && !options.activity.isActive()) return
+    if (surfaceState !== 'off') return
+    if (!collapsedProbe.collapsed) return
+    surfaceState = 'ball'
+    render()
+  }
   const render = (): void => {
-    // 可见性门控（1.39 两信号合取）：①全屏呈现（fullscreenMarkers>0，AC5 既有）；
-    // ②文档活动（dockkit 布局面在场时可见 content 内文档体锚在场——官方
-    // documentpreview textpreview 锚 ∨ 产品 doc panel 锚；离文档/插件页/非文档
-    // tab 即隐藏；布局面缺席 = 判据未知降级不收窄）。activity 缺席
-    // （未装配方）= 不引入第二信号，保持全屏单信号语义。
-    // 交叉真值表（终态）：
-    //   全屏 ∧ 文档     → 显示；全屏 ∧ 非文档（dockkit 切走/关闭文档/插件页）→ 隐藏
-    //   非全屏 ∧ 文档   → 隐藏（AC5）；非全屏 ∧ 非文档 → 隐藏
-    // 隐藏期 = render(null) 整卡卸载：30s 空闲收球/Esc 状态机/未读圆点计时随组件
-    // 卸载冻结（定时器 effect 清理），恢复显示即全新挂载重算——隐藏期间不误触发。
-    if (options.tracker !== undefined && !options.tracker.isFullscreen()) {
+    // 可见性门控（1.39 两信号合取 + 1.45 现身豁免）：①文档活动（最高门控——非文档
+    // 隐藏，现身不豁免）；②全屏呈现（fullscreenMarkers>0，AC5）——现身豁免仅扩此门。
+    if (options.activity !== undefined && !options.activity.isActive()) {
+      collapsedProbe.collapsed = true // 隐藏期视同收起（现身判据）
       root.render(null)
       return
     }
-    if (options.activity !== undefined && !options.activity.isActive()) {
+    const fullscreenOk = options.tracker === undefined || options.tracker.isFullscreen()
+    if (!fullscreenOk && surfaceState === 'off') {
+      collapsedProbe.collapsed = true // 隐藏期视同收起（现身判据）
       root.render(null)
       return
     }
@@ -266,10 +282,34 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
           onExitFullscreen: options.exitFullscreen ?? (() => undefined),
           mention: mentionMenuOf(face),
           composer: composerFace,
+          surfaceChip: surfaceState === 'ball',
+          reportCollapsed: (collapsed: boolean) => {
+            collapsedProbe.collapsed = collapsed
+          },
+          onSurfaceExpand: () => {
+            surfaceState = 'card'
+            render()
+          },
+          onSurfaceDismiss: () => {
+            surfaceState = 'off'
+            render()
+          },
+          onCollapseFromCard: () => {
+            surfaceState = 'off'
+            render()
+          },
         }),
       ),
     )
   }
+  // bug 1ab2f4e6：全屏聚焦缝跨包组合——cordis 具名服务注册（quote-reference 每点击
+  // 时点经 ctx 读 `superComposer`；本包 provide 即正门装配，无全局变量/事件魔改）。
+  // 1.45 引用现身缝：surfaceOnReference 同服务承载——quote-reference 插入成功后触发
+  // 替身悬浮球表面化（只作表面化信号，插入径语义零联动）。
+  provideServiceOnContext(ctx, 'superComposer', {
+    focusFullscreenInput: focusFullscreenInputOf(container),
+    surfaceOnReference,
+  })
   const off = face.subscribe(render)
   const offFullscreen = options.tracker?.subscribe(render)
   const offActivity = options.activity?.subscribe(render)

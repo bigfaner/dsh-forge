@@ -172,17 +172,26 @@ export function mountQuoteSelectionMenu(ctx: Context, source?: unknown, quoteSou
   const sessions = readSessionsOf(origin) ?? readSessionsOf(ctx)
   const services = quoteInsertServicesFrom(ctx, source)
   if (sessions === undefined || services === undefined) return undefined
-  // 全屏替身聚焦缝：每点击时点读 cordis `superComposer` 服务（super-composer 晚于本包
-  // provide 也可达——挂载期一次性捕获会把缺席焊死）。服务/方法/调用任一漂移 = false 回落。
-  const focusFullscreenInput = (): boolean => {
+  // 全屏替身聚焦缝 + 引用现身反馈缝（1.45）：每点击时点读 cordis `superComposer`
+  // 服务（super-composer 晚于本包 provide 也可达——挂载期一次性捕获会把缺席焊死）。
+  // 服务/方法/调用任一漂移：聚焦 = false 回落；现身 = 静默跳过。
+  const superComposerFace = (): { focusFullscreenInput?: unknown; surfaceOnReference?: unknown } | undefined => {
     const svc = readServiceOf(origin, 'superComposer') ?? readServiceOf(ctx, 'superComposer')
-    const focus = (svc as { focusFullscreenInput?: unknown } | null | undefined)?.focusFullscreenInput
+    return typeof svc === 'object' && svc !== null ? (svc as { focusFullscreenInput?: unknown; surfaceOnReference?: unknown }) : undefined
+  }
+  const focusFullscreenInput = (): boolean => {
+    const focus = superComposerFace()?.focusFullscreenInput
     if (typeof focus !== 'function') return false
     try {
-      return (focus as () => unknown).call(svc) === true
+      return (focus as () => unknown).call(undefined) === true
     } catch {
       return false
     }
+  }
+  const surfaceReplacement = (): void => {
+    const surface = superComposerFace()?.surfaceOnReference
+    if (typeof surface !== 'function') return
+    ;(surface as () => unknown).call(undefined)
   }
   return mountSelectionMenu({
     doc: document,
@@ -191,6 +200,7 @@ export function mountQuoteSelectionMenu(ctx: Context, source?: unknown, quoteSou
     services,
     source: quoteSource ?? createQuoteReferenceSource(),
     focusFullscreenInput,
+    surfaceReplacement,
   })
 }
 

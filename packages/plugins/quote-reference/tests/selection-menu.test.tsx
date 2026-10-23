@@ -15,6 +15,7 @@ import {
 import { createQuoteReferenceSource, QUOTE_REF_PREFIX, type QuoteReferenceSource } from '../src/client/quote-source.js'
 import { DEFAULT_SELECTION_ROOTS } from '../src/client/scope.js'
 import { mountQuoteSelectionMenu } from '../src/client/index.js'
+import { installQuoteReferenceStyles, QUOTE_REFERENCE_CSS, type StyleDocument } from '../src/client/styles.js'
 
 const PARA_TEXT = '文本引用锚定的核心是把一段选区映射为稳定描述符。'
 
@@ -366,16 +367,77 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
   })
 })
 
+describe('1.45 菜单项紧凑化（styles + listClassName 挂钩）', () => {
+  it('QUOTE_REFERENCE_CSS 收缩规则：命中 dshf-quote-selection-menu——min-width 归零 + max-content（官方 .list min-width 144 下界破除）', () => {
+    expect(QUOTE_REFERENCE_CSS).toContain('.dshf-quote-selection-menu')
+    expect(QUOTE_REFERENCE_CSS).toMatch(/min-width:\s*0/)
+    expect(QUOTE_REFERENCE_CSS).toMatch(/width:\s*max-content/)
+  })
+
+  it('注入样式后弹层 list 元素携带紧凑类（portal 到 body 直接命中规则——锚定/可点区不破：行元素随卡收缩）', () => {
+    installQuoteReferenceStyles(document as unknown as StyleDocument)
+    const face = makeFaceSpy()
+    const { services } = makeServices(face)
+    const handle = mount({ services })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    const menu = document.querySelector('[role="menu"].dshf-quote-selection-menu')
+    expect(menu, '弹层 list 未携带紧凑类——CSS 规则落不中').not.toBeNull()
+    handle.dispose()
+  })
+})
+
+describe('1.45 引用现身反馈缝（surfaceReplacement）', () => {
+  it('插入成功 = surfaceReplacement 触发（现身信号——插入径语义零联动：bail 载荷不变）', () => {
+    const face = makeFaceSpy()
+    const { services, bails } = makeServices(face)
+    let surfaced = 0
+    const handle = mount({ services, surfaceReplacement: () => { surfaced += 1 } })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(bails).toHaveLength(1)
+    expect(surfaced).toBe(1)
+    handle.dispose()
+  })
+
+  it('插入失败（bail false 且复核无变化）= 现身信号不触发', () => {
+    const face = makeFaceSpy()
+    const { services } = makeServices(face, () => false)
+    let surfaced = 0
+    const handle = mount({ services, surfaceReplacement: () => { surfaced += 1 } })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(surfaced).toBe(0)
+    handle.dispose()
+  })
+
+  it('现身缝异常 = best effort 不外溢（插入与聚焦照常）', () => {
+    const face = makeFaceSpy()
+    const { services } = makeServices(face)
+    const handle = mount({ services, surfaceReplacement: () => { throw new Error('boom') } })
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(face.focusCalls).toBe(1)
+    handle.dispose()
+  })
+})
+
 describe('mountQuoteSelectionMenu 生产装配（bug 1ab2f4e6 全屏聚焦缝接线）', () => {
   /** 带 superComposer 服务的最小 ctx（cordis reflect 缝——super-composer provide 面同型）。 */
   function ctxWithSuperComposer(focusImpl?: () => boolean): {
     ctx: Parameters<typeof mountQuoteSelectionMenu>[0]
     focusCalls: () => number
     faceFocusCalls: () => number
+    bails: unknown
+    surfaceCalls: () => number
   } {
     const face = makeFaceSpy()
     const { services, bails } = makeServices(face)
     let focused = 0
+    let surfaced = 0
     const ctx = {
       sessions: {
         list: { getSnapshot: () => ({ byId: { 's-1': { id: 's-1', retainedBy: { mainView: 1 } } } }) },
@@ -391,14 +453,48 @@ describe('mountQuoteSelectionMenu 生产装配（bug 1ab2f4e6 全屏聚焦缝接
                   focused += 1
                   return focusImpl === undefined ? true : focusImpl()
                 },
+                surfaceOnReference: () => {
+                  surfaced += 1
+                },
               }
             : name === 'conversation'
               ? services.conversation
               : undefined,
       },
     }
-    return { ctx: ctx as unknown as Parameters<typeof mountQuoteSelectionMenu>[0], focusCalls: () => focused, faceFocusCalls: () => face.focusCalls, bails }
+    return { ctx: ctx as unknown as Parameters<typeof mountQuoteSelectionMenu>[0], focusCalls: () => focused, faceFocusCalls: () => face.focusCalls, bails, surfaceCalls: () => surfaced }
   }
+
+  it('ctx superComposer.surfaceOnReference = 插入成功后现身信号触达（1.45）', () => {
+    const { ctx, surfaceCalls, bails } = ctxWithSuperComposer()
+    const handle = mountQuoteSelectionMenu(ctx)
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(bails).toHaveLength(1)
+    expect(surfaceCalls()).toBe(1)
+    handle?.dispose()
+  })
+
+  it('ctx superComposer 服务缺席 = 现身信号静默跳过（聚焦回落主 face）', () => {
+    const face = makeFaceSpy()
+    const { services } = makeServices(face)
+    const ctx = {
+      sessions: {
+        list: { getSnapshot: () => ({ byId: { 's-1': { id: 's-1', retainedBy: { mainView: 1 } } } }) },
+        binding: services.sessions.binding,
+      },
+      conversation: services.conversation,
+      bail: services.bail,
+      reflect: { get: (name: string) => (name === 'conversation' ? services.conversation : undefined) },
+    }
+    const handle = mountQuoteSelectionMenu(ctx as unknown as Parameters<typeof mountQuoteSelectionMenu>[0])
+    selectPara()
+    document.dispatchEvent(new MouseEvent('mouseup'))
+    menuItems()[0]!.click()
+    expect(face.focusCalls).toBe(1)
+    handle?.dispose()
+  })
 
   it('ctx 读到 superComposer 服务 = 落 chip 聚焦替身输入（不落主 composer face）', () => {
     const { ctx, focusCalls, faceFocusCalls, bails } = ctxWithSuperComposer()

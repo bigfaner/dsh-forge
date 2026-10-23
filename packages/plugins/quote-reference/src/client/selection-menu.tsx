@@ -305,6 +305,10 @@ export interface SelectionMenuDeps {
   /** 全屏替身输入区聚焦面（super-composer 替身提供——cordis 服务惰性读取闭包；
    * true = 替身已聚焦；false/异常 = 替身不在场，回落主 composer face） */
   readonly focusFullscreenInput?: () => boolean
+  /** 引用落稿现身反馈（1.45——super-composer 替身提供：插入成功后触发替身悬浮球
+   * 表面化，用户可点球查看 chip。只作表面化信号，不参与插入——fix-15 插入径语义
+   * 联动：本回调仅在 applied=true 后触发，不重复插入） */
+  readonly surfaceReplacement?: () => void
 }
 
 /** 装配产物（撤销句柄：监听摘除 + portal 卸载；幂等）。 */
@@ -319,7 +323,7 @@ export interface SelectionMenuHandle {
  * 同径成功即 face 在场）。dispose 幂等。
  */
 export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle {
-  const { doc, roots, resolveSessionId, services, source, focusFullscreenInput } = deps
+  const { doc, roots, resolveSessionId, services, source, focusFullscreenInput, surfaceReplacement } = deps
   // 零固定税：空清单静默不挂监听（scope.ts listening 语义同源）。
   if (roots.length === 0) {
     return { dispose() {} }
@@ -394,6 +398,16 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
       applied = false
     }
     if (applied) {
+      // 1.45 现身反馈：插入事实已落 → 通知替身悬浮球表面化（best effort——服务缺席/
+      // 异常只降反馈面，不影响插入与聚焦）。先于聚焦：替身以球态现身时复制件输入区
+      // 未挂载，聚焦面会如实回落主 composer face。
+      if (surfaceReplacement !== undefined) {
+        try {
+          surfaceReplacement()
+        } catch {
+          // best effort
+        }
+      }
       // 自动聚焦对应面：全屏替身在（hook/服务提供且聚焦成功）→ 替身输入区；否则主
       // composer face（insertReferenceAtTail 已核 face 在场——聚焦同面，best effort 不回滚）。
       let replacementFocused = false

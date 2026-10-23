@@ -4,14 +4,20 @@
 // modules/system.ts:304-306）打 data-plugin 标，停用时 removeOwnedStyles 随卸载移除。
 // 不用「apply 内注入 + ctx.effect 自管」备选——两法取一，不混。
 //
-// 本体样式（选段浮出菜单/chip 视觉）由后续任务按 DESIGN.md 令牌表填充；本骨架落
-// 注入/幂等/生命周期机械与清点窗口契约，样式规则集占位为零规则注释块。
-
 /** 样式元素标识（幂等重入判据 + 诊断锚；非官方 claim 标——官方只认未打标元素清点） */
 export const QUOTE_REFERENCE_STYLE_MARKER = 'data-dsh-forge-quote-reference'
 
-/** 样式规则集（骨架占位：零规则；后续任务按 DESIGN.md 令牌表填充菜单/chip 规则） */
-export const QUOTE_REFERENCE_CSS = '/* quote-reference: rules land with selection-menu task (DESIGN.md tokens) */\n'
+// 本体样式（1.45 选段浮出菜单紧凑化）：官方 Menu `.list` 带 `min-width: 144px`
+//（设计外卡宽度下界——含内边距），单行「添加到对话」短标签撑不满下界 → 右侧大片
+// 空白。紧凑化 = 收缩至内容+内边距（`min-width: 0` + `width: max-content`）：
+// Menu 锚定/翻上/视口钳制均按 offsetWidth 实测读数（官方 place()），卡宽变化不破
+// 锚定；行元素 `.item` width:100% 随卡收缩，可点区同缩（零空白可点带）。
+export const QUOTE_REFERENCE_CSS = [
+  '.dshf-quote-selection-menu {',
+  '  min-width: 0;',
+  '  width: max-content;',
+  '}\n',
+].join('\n')
 
 /** 最小文档窄面（真实 DOM 与测试注入同型——不锁 Document 全量形状） */
 export interface StyleDocument {
