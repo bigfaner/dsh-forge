@@ -112,6 +112,7 @@ body[data-ds-dark-theme] .iconbtn:hover {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden; /* bug：工具输出宽内容触发水平滚动条（composer 上方黑色横条） */
   overscroll-behavior: contain;
   padding: 6px 14px 12px;
   scrollbar-width: thin;

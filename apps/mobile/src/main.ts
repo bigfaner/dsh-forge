@@ -133,6 +133,15 @@ export function mount(root: HTMLElement): void {
       /* 历史拉取失败保持旧快照（轮询/帧腿下轮重试） */
     }
   }
+  // 节流刷新（每会话 ~600ms 一次——运行期事件密集，逐事件 history 拉取打爆通道）
+  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const scheduleRefresh = (sessionId: string): void => {
+    if (refreshTimers.has(sessionId)) return
+    refreshTimers.set(sessionId, setTimeout(() => {
+      refreshTimers.delete(sessionId)
+      void refreshLog(sessionId)
+    }, 600))
+  }
 
   // ---- forge-stream（懒开：会话面路由首达时订阅；hero 首屏零长连）----
   // 订阅前先探测端点语义（200 + text/event-stream）——缺席/静态预览形态 fail-soft 跳过
@@ -153,10 +162,10 @@ export function mount(root: HTMLElement): void {
       },
       {
         onEvent: (event) => {
-          if (event.type === 'api-session/activity' || event.type === 'forge/progress') {
-            const payload = event.payload as { sessionId?: unknown } | null
-            if (typeof payload?.sessionId === 'string') void refreshLog(payload.sessionId)
-          }
+          // bug 未读徽标恒零：任意带 sessionId 的事件都触发节流日志刷新（原先仅 activity/
+          // progress——普通 durable 消息事件不刷新 logCache，chat 增量与未读永不外推）
+          const payload = event.payload as { sessionId?: unknown } | null
+          if (typeof payload?.sessionId === 'string') scheduleRefresh(payload.sessionId)
           emitFrames()
           if (event.type === 'user-questions/request') openAsk()
         },
