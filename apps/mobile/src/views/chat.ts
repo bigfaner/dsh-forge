@@ -184,6 +184,9 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     onSettings: () => deps.onOpenSettings?.(),
     onWorktreeTap: () => deps.onWorktreeTap?.(),
   })
+  // bug 33b70446（用户裁决 2026-10-22 多次重申）：非 git 项目/未注入 worktree 标签 =
+  // 分支控制完全隐藏——chip 初始可见且本视图从不调 setWorktreeVisible，空标签芯片恒挂
+  composer.setWorktreeVisible((deps.worktree ?? '') !== '')
 
   root.append(topbar, view, jump, composer.root, overlay)
 
