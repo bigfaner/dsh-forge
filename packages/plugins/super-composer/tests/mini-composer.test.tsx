@@ -592,11 +592,11 @@ describe("S2 布局融合 + 发送增高（1.34）", () => {
     return host;
   }
 
-  it("进入 S2（未发送新高）：chat-view 40vh 初始块；composer 与 chat-view 同面（工厂宿主单面承载，分隔线规则在注入样式表）", () => {
+  it("进入 S2（fix-22 箭头展开即增高）：chat-view 增高态（无 RO 环境回落上限锚）；composer 与 chat-view 同面（工厂宿主单面承载，分隔线规则在注入样式表）", () => {
     harness = mount({ messages: [msg("m1", "user", "hi")] });
     fire(harness, "dscf-hotzone", "click");
     expect(phaseOf(harness)).toBe("s2");
-    expect(hostOf(harness).style.height).toBe("40vh");
+    expect(hostOf(harness).style.height).toContain("calc(100dvh");
     // composer seat 分隔线（DESIGN.md 令牌 border-l1，官方分隔线词汇 0.5px）
     expect(SUPER_COMPOSER_CSS).toMatch(/\[data-dscf-factory-host\] \[data-composer-seat\][^}]*border-top:\s*\.5px solid var\(--dsw-alias-border-l1\)/);
   });
@@ -611,13 +611,14 @@ describe("S2 布局融合 + 发送增高（1.34）", () => {
     expect(host.style.transition).toContain("height");
   });
 
-  it("未发送新高不误触发：热区展开既有消息流（消息数不变）保持 40vh", () => {
+  it("fix-22 箭头展开即增高：热区展开既有消息流（消息数不变）也置增高态（无 RO 回落上限锚）", () => {
     harness = mount({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")] });
     fire(harness, "dscf-hotzone", "click");
-    expect(hostOf(harness).style.height).toBe("40vh");
+    expect(hostOf(harness).getAttribute("data-grown")).toBe("true");
+    expect(hostOf(harness).style.height).toContain("calc(100dvh");
   });
 
-  it("收起（Esc → S1）复位：再展开（无新消息）回 40vh，各态布局不破", () => {
+  it("收起（Esc → S1）复位：再展开（无新消息）回增高态（fix-22——箭头展开即增高），各态布局不破", () => {
     harness = mount({ messages: [msg("m1", "user", "hi")] });
     fire(harness, "dscf-hotzone", "click");
     harness.rerender({ messages: [msg("m1", "user", "hi"), msg("m2", "assistant", "答")] });
@@ -626,7 +627,7 @@ describe("S2 布局融合 + 发送增高（1.34）", () => {
     expect(phaseOf(harness)).toBe("s1");
     fire(harness, "dscf-hotzone", "click");
     expect(phaseOf(harness)).toBe("s2");
-    expect(hostOf(harness).style.height).toBe("40vh");
+    expect(hostOf(harness).style.height).toContain("calc(100dvh");
   });
 });
 
@@ -638,8 +639,20 @@ describe("消息流投影（S2 宿主锚）", () => {
     });
     fire(harness, "dscf-hotzone", "click");
     const flow = q(harness, "dscf-messages")!;
+    expect(flow).not.toBeNull();
     expect(flow.getAttribute("data-streaming")).toBe("true");
     expect(flow.getAttribute("data-dscf-factory-host")).not.toBeNull();
+  });
+});
+
+describe("fix-22 展开直达最大高度（箭头展开 grown 置位）", () => {
+  it("历史消息多时标题栏箭头展开即增高（grown 置位，直达上限锚）", () => {
+    const harness = mount({ messages: [msg("m1", "user", "历史"), msg("m2", "assistant", "很多历史消息")] });
+    fire(harness, "dscf-hotzone", "click");
+    const host = q(harness, "dscf-messages")!;
+    expect(host).not.toBeNull();
+    expect(host.getAttribute("data-grown")).toBe("true");
+    harness.unmount();
   });
 });
 

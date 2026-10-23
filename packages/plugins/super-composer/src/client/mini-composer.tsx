@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StateDot } from "@deepseek-ai/dsh-client-ui-primitives";
 import { SurrogateComposer } from "./official-input/surrogate-composer.js";
-import { FactoryChatView } from "./factory-bridge.js";
+import { FactoryChatView, GROW_RESERVE_PX } from "./factory-bridge.js";
 import type { SuperComposerDataFace } from "./data-face.js";
 
 export type MiniComposerPhase = "s0" | "s1" | "s2" | "ball";
@@ -249,6 +249,12 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
     return () => window.removeEventListener("resize", measure)
   }, [phase])
   const grownMaxHeight = `calc(100dvh - var(--dsw-space-6, 24px) - ${headerH}px)`
+  // fix-22（bug f959ab05）：上限数值锚（与 grownMaxHeight 同源的数值面）——实测内容
+  // 高 ≥ 上限（历史消息多）时展开高度一次钳到上限，不经 .25s 渐进中间值。
+  const maxHeightPx =
+    typeof window !== "undefined" && Number.isFinite(window.innerHeight)
+      ? Math.max(0, window.innerHeight - 24 - headerH - GROW_RESERVE_PX)
+      : undefined
 
   // 发送触发增高：S2 展开期间消息流增长（发送落账/流式回复）→ grown；收起复位，
   // 再展开（无新消息）回初始块。热区展开既有消息流不误触发（离开展开态时同步基线）。
@@ -335,8 +341,12 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
   // scrollport `[data-conversation-scroll]`——1.28 渲染层复制件切换）。
 
   // 标题栏热区点击（可展开判定 = 消息流非空；不可展开纯展示零动作）。
+  // fix-22（bug f959ab05）：手动展开即增高（grown 置位）——历史消息内容自然高 ≥
+  // 上限时经 maxHeightPx 数值钳制直达最大高度，不经渐进增长；流式/发送增量仍走
+  // 消息数增长判据（1.40 渐进语义不回归）。
   const onHotzoneClick = useCallback((): void => {
     if (!expandable) return
+    if (!view.expanded) setGrown(true)
     setViewSafe({ expanded: !view.expanded, preview: false })
   }, [expandable, view.expanded, setViewSafe])
 
@@ -556,6 +566,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           streaming={props.streaming}
           grown={grown}
           grownMaxHeight={grownMaxHeight}
+          maxHeightPx={maxHeightPx}
           onFactoryUnmount={props.onS2FactoryUnmount}
         />
       ) : null}

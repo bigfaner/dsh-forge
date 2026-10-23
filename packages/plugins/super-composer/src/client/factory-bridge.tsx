@@ -131,7 +131,8 @@ export function installFactoryBridge(ctx: unknown, fallbackSource?: unknown): ((
  * 无布局环境（happy-dom 等 RO 缺席）回落 = 上限定值（锚核销口径不丢）。
  */
 /** 增长上限留白（1.40 参数裁决 2026-10-22：32px→100px）：chat-view 顶缘距标题栏底部分隔线的保留距离。 */
-const GROW_RESERVE = "100px";
+export const GROW_RESERVE_PX = 100;
+const GROW_RESERVE = `${GROW_RESERVE_PX}px`;
 
 export function FactoryChatView(props: {
   streaming: boolean;
@@ -139,6 +140,12 @@ export function FactoryChatView(props: {
   grown?: boolean;
   /** 增高上限锚（标题栏底部分隔线 calc——mini-composer 按实测标题栏高计算） */
   grownMaxHeight?: string;
+  /**
+   * fix-22（bug f959ab05）：上限数值锚（100dvh − 24px − 标题栏高 − GROW_RESERVE，
+   * mini-composer 计算）——实测内容高 ≥ 上限（历史消息多）时高度在此数值面一次钳到
+   * 上限（直达，不经 .25s 渐进中间值）；低于上限仍随内容逐块渐进（1.40 语义）。
+   */
+  maxHeightPx?: number;
   /**
    * fix-21（bug 0cf1818b）：本视图卸载（S2 收起）回调——S2 官方 composer 副本
    * 卸载会把 shell editor root 置 null（官方 ComposerContentEditable cleanup），
@@ -208,12 +215,18 @@ export function FactoryChatView(props: {
     props.grownMaxHeight !== undefined
       ? `calc(${props.grownMaxHeight} - ${GROW_RESERVE})`
       : undefined;
-  // 高度 = 实测内容高（逐块递进）；钳制交给 maxHeight = 上限锚减留白（不顶格）——
-  // 避免 CSS min()（测试环境 CSS 解析不识别，且 max-height 语义更直白）。
+  // 高度 = 实测内容高（逐块递进）；钳制两级：maxHeightPx 在场时数值面 min()
+  // 钳到上限（fix-22——内容自然高 ≥ 上限的历史消息展开首测即直达最大高度，
+  // 不呈现超出上限的渐进中间值；真实环境 RO 首测先于绘制，回落面不可见），
+  // 仅 capHeight 字符串锚时交 maxHeight CSS 钳制（不顶格）——避免 CSS min()
+  // （测试环境 CSS 解析不识别）。未测量（RO 缺席）回落 = 上限锚定值（1.38 口径）。
+  // Root cause: 旧实现高度恒等于实测内容高、钳制只在 CSS 面，展开高内容时
+  // inline height 呈现超出上限的渐进中间值，无法一次到位。
   const grown = props.grown === true && capHeight !== undefined;
+  const capPx = props.maxHeightPx;
   const height = grown
     ? contentH !== null
-      ? `${Math.ceil(contentH)}px`
+      ? `${Math.ceil(capPx !== undefined ? Math.min(contentH, capPx) : contentH)}px`
       : capHeight
     : "40vh";
   return (

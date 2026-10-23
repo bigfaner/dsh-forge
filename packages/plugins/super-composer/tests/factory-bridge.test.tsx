@@ -208,6 +208,69 @@ describe("FactoryChatView S2 布局（1.34 融合 + 1.38 内容驱动渐进展�
     container.remove();
     (globalThis as Record<string, unknown>).ResizeObserver = original;
   });
+
+  it("fix-22 数值钳制（maxHeightPx）：内容自然高 ≥ 上限 → 高度一次钳到上限（不渐进）；低于上限随内容增长（渐进语义不回归）", () => {
+    class ROStub {
+      static instances: ROStub[] = [];
+      cb: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) {
+        this.cb = cb;
+        ROStub.instances.push(this);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+      fire(blockSize: number): void {
+        this.cb(
+          [{ borderBoxSize: [{ blockSize }] }] as unknown as ResizeObserverEntry[],
+          this as unknown as ResizeObserver,
+        );
+      }
+    }
+    const original = globalThis.ResizeObserver;
+    (globalThis as Record<string, unknown>).ResizeObserver = ROStub;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <FactoryChatView streaming={false} grown={true} grownMaxHeight="calc(100dvh - 24px - 40px)" maxHeightPx={600} />,
+      );
+    });
+    const host = container.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
+    // 内容超限（历史消息多）→ 首测即数值钳到上限（直达，不呈现 99999px 渐进中间值）
+    act(() => {
+      ROStub.instances.at(-1)!.fire(99999);
+    });
+    expect(host.style.height).toBe("600px");
+    act(() => {
+      root.unmount();
+    });
+    // 内容矮 → 随内容逐块增长（1.40 渐进语义保留）
+    const container2 = document.createElement("div");
+    document.body.appendChild(container2);
+    const root2 = createRoot(container2);
+    act(() => {
+      root2.render(
+        <FactoryChatView streaming={true} grown={true} grownMaxHeight="calc(100dvh - 24px - 40px)" maxHeightPx={600} />,
+      );
+    });
+    const host2 = container2.querySelector<HTMLElement>("[data-dscf-factory-host]")!;
+    act(() => {
+      ROStub.instances.at(-1)!.fire(300);
+    });
+    expect(host2.style.height).toBe("300px");
+    act(() => {
+      ROStub.instances.at(-1)!.fire(520);
+    });
+    expect(host2.style.height).toBe("520px");
+    act(() => {
+      root2.unmount();
+    });
+    container.remove();
+    container2.remove();
+    (globalThis as Record<string, unknown>).ResizeObserver = original;
+  });
 });
 
 describe("桥入口 ↔ 替身卡宿主锚（跨 root portal）", () => {
