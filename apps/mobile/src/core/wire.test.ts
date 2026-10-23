@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   clampLastReadSeq,
@@ -113,6 +113,38 @@ describe('wire 投影：37 类持久事件样本', () => {
     expect(projectEvent(modelSelection)).toMatchObject({ kind: 'model-selection-chip' })
     const unknownKind = ev('user/message', 32, { ...data, source: { kind: 'mystery' } })
     expect(projectEvent(unknownKind)).toMatchObject({ kind: 'neutral-line' })
+  })
+
+  it('bug f796e254：harness 机械注入（runtime-context / skill-catalog）零渲染——真机取证 kind 实值', () => {
+    // 真机形（session-6c491ef3 session-history 取证）：kind=form 快照/目录 + 长文本
+    const runtimeContext = ev('user/message', 9, {
+      content: [{ type: 'text', text: 'Current runtime context. This snapshot supersedes…' }],
+      source: { kind: 'runtime-context', form: 'snapshot', sections: [] },
+    })
+    expect(projectEvent(runtimeContext)).toBeNull()
+    const skillCatalog = ev('user/message', 10, {
+      content: [{ type: 'text', text: '<system-reminder>\nA skill is a reusable…' }],
+      source: { kind: 'skill-catalog', form: 'catalog', entries: [] },
+    })
+    expect(projectEvent(skillCatalog)).toBeNull()
+  })
+
+  it('bug f796e254：未知 kind 有文本 = 文本预览中性行（不再裸渲 type 名）；无文本回退 type 名', () => {
+    const unknownWithText = ev('user/message', 32, {
+      content: [{ type: 'text', text: '一段生产者注入文本' }],
+      source: { kind: 'mystery' },
+    })
+    expect(projectEvent(unknownWithText)).toMatchObject({ kind: 'neutral-line', type: '一段生产者注入文本' })
+    const unknownNoText = ev('user/message', 33, { content: [], source: { kind: 'mystery' } })
+    expect(projectEvent(unknownNoText)).toMatchObject({ kind: 'neutral-line', type: 'user/message' })
+  })
+
+  it('bug f796e254：model-selection 官方 notice summary 优先（真机形 summary="旧 → 新"）', () => {
+    const notice = ev('user/message', 96, {
+      content: [{ type: 'text', text: '[model changed: …]' }],
+      source: { kind: 'model-selection', form: 'notice', summary: 'glm-5.3-flash → glm-5.3' },
+    })
+    expect(projectEvent(notice)).toMatchObject({ kind: 'model-selection-chip', model: 'glm-5.3-flash → glm-5.3' })
   })
 
   it('forge-loop source 字段缺席 = runId/state 空串兜底（face 不强求调用方知情）', () => {

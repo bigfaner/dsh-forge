@@ -118,13 +118,23 @@ function textOf(parts: readonly TextPart[] | undefined): string {
 
 interface UserMessageData {
   readonly content?: readonly TextPart[]
-  readonly source?: { readonly kind?: string; readonly rpcId?: string; readonly runId?: string; readonly state?: string }
+  readonly source?: { readonly kind?: string; readonly rpcId?: string; readonly runId?: string; readonly state?: string; readonly summary?: string }
 }
 
-function projectUserMessage(event: WireEvent): Projection {
+/** 官方 harness 机械上下文注入（真机取证 session-6c491ef3：runtime-context 快照 /
+ *  skill-catalog 目录以 user-role 落账）——对手机读者零信息，E 档零渲染
+ *  （bug f796e254：原落 default 渲染裸 type 名 = 没头没尾噪音）。 */
+const HARNESS_CONTEXT_KINDS: ReadonlySet<string> = new Set(['runtime-context', 'skill-catalog'])
+
+/** 中性文本预览上界（developer/message 同口径）。 */
+const NEUTRAL_PREVIEW_CHARS = 80
+
+function projectUserMessage(event: WireEvent): Projection | null {
   const data = event.data as UserMessageData
   const text = textOf(data.content)
-  switch (data.source?.kind) {
+  const kind = data.source?.kind
+  if (kind !== undefined && HARNESS_CONTEXT_KINDS.has(kind)) return null
+  switch (kind) {
     case 'user':
       return { kind: 'user-bubble', seq: event.seq, text, rpcId: data.source.rpcId }
     case 'forge-loop':
@@ -136,12 +146,22 @@ function projectUserMessage(event: WireEvent): Projection {
         state: data.source?.state ?? '',
       }
     case 'model-selection': {
+      // 官方真形 form:'notice' + summary（如 "glm-5.3-flash → glm-5.3"）优先；
+      // text 劈 provider/model 仅作旧形兜底（bug f796e254 真机取证）。
+      const summary = typeof data.source?.summary === 'string' ? data.source.summary : ''
+      if (summary !== '') return { kind: 'model-selection-chip', seq: event.seq, provider: '', model: summary }
       const model = text
       const [provider = '', name = ''] = model.split('/')
       return { kind: 'model-selection-chip', seq: event.seq, provider, model: name || model }
     }
     default:
-      return { kind: 'neutral-line', seq: event.seq, type: 'user/message' }
+      // 开放词汇 fall-through（dsh-llm message.d.ts：user 消息可携任意 producer kind）——
+      // 有文本显示文本预览，无文本回退类型名（不再裸渲 type 名）。
+      return {
+        kind: 'neutral-line',
+        seq: event.seq,
+        type: text === '' ? 'user/message' : text.length > NEUTRAL_PREVIEW_CHARS ? `${text.slice(0, NEUTRAL_PREVIEW_CHARS)}…` : text,
+      }
   }
 }
 
