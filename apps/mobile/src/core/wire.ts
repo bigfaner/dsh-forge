@@ -323,16 +323,11 @@ export function projectEvent(event: WireEvent): Projection | null {
     // D 特判
     case 'assistant/attempt':
       return null
-    // bug db09ac00：有意渲染面——todo/write（模型任务清单更新，data.todos 数组源码核销
-    // dsh-client-ui-tool todoWriteDefinition）与 developer/message（data.message.content 同
-    // 消息形）→ 中性行
-    case 'todo/write': {      const todos = (event.data as { todos?: unknown }).todos
-      return {
-        kind: 'neutral-line',
-        seq: event.seq,
-        type: Array.isArray(todos) ? `任务清单已更新（${todos.length} 项）` : 'todo/write',
-      }
-    }
+    // bug ed37dee6：todo/write 零渲染——TODO 面板（composer 上方实时清单）承载该信息，
+    // 消息流内逐条「任务清单已更新」中性行是重复噪音（db09ac00 渲染面裁决由此修订）
+    case 'todo/write':
+      return null
+    // developer/message（data.message.content 同消息形）→ 中性行
     case 'developer/message': {
       const data = event.data as { message?: { content?: readonly TextPart[] } }
       const text = textOf(data.message?.content)

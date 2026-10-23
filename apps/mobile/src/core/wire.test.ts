@@ -361,11 +361,8 @@ describe('bug db09ac00：官方词表覆盖守卫（projectEvent 永不落 error
     })
   }
 
-  it('todo/write → 中性行「任务清单已更新（N 项）」（data.todos 数组）', () => {
-    expect(projectEvent(ev('todo/write', 1, { todos: [{ content: 'a' }, { content: 'b' }] }))).toMatchObject({
-      kind: 'neutral-line',
-      type: '任务清单已更新（2 项）',
-    })
+  it('todo/write → 零渲染（bug ed37dee6：TODO 面板承载，消息流不重复）', () => {
+    expect(projectEvent(ev('todo/write', 1, { todos: [{ content: 'a' }, { content: 'b' }] }))).toBeNull()
   })
 
   it('developer/message → 中性行文本预览（data.message.content 同消息形）', () => {

@@ -968,15 +968,15 @@ body[data-ds-dark-theme] .composer {
   background: transparent;
 }
 .turn-fold > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   padding: 6px 4px 6px 0;
   font-size: 11.5px;
   font-weight: 550;
   color: #81858c;
   cursor: pointer;
   list-style: none;
+  /* 分隔线固定在摘要文字下方，恒单条（展开不加线——用户裁决 2026-10-23） */
+  border-bottom: 0.5px solid #e5e7eb;
 }
 .turn-fold > summary::-webkit-details-marker {
   display: none;
@@ -984,17 +984,13 @@ body[data-ds-dark-theme] .composer {
 .turn-fold > summary:hover {
   color: #4176e6;
 }
-.turn-fold > summary .fold-line {
-  flex: 1;
-  height: 0.5px;
-  background: #e5e7eb;
+.dark .turn-fold > summary,
+body[data-ds-dark-theme] .turn-fold > summary {
+  color: #6f7379;
 }
-.dark .turn-fold > summary .fold-line,
-body[data-ds-dark-theme] .turn-fold > summary .fold-line {
-  background: #303034;
-}
-.turn-fold[open] > summary {
-  border-bottom: 0.5px solid #e5e7eb;
+.dark .turn-fold > summary,
+body[data-ds-dark-theme] .turn-fold > summary {
+  border-bottom-color: #303034;
 }
 .turn-fold .tool,
 .turn-fold .think {

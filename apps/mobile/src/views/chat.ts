@@ -354,8 +354,8 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     const label = meta.durationMs > 0
       ? `${meta.status} · ${meta.steps} 步 · 用时 ${formatDuration(meta.durationMs)}`
       : `${meta.status} · ${meta.steps} 步`
+    // 分隔线固定在摘要文字下方（CSS border-bottom，恒单条）——文字右侧悬空线/展开双线均已废除
     summary.appendChild(el('span', 'fold-label', label))
-    summary.appendChild(el('span', 'fold-line'))
     details.appendChild(summary)
     for (const seq of seg.activitySeqs) {
       const projection = bySeq.get(seq)
@@ -412,7 +412,6 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
             const details = el('details', 'turn-fold')
             const summary = el('summary')
             summary.appendChild(el('span', 'fold-label', `思考与执行 · ${settledRows.length} 项`))
-            summary.appendChild(el('span', 'fold-line'))
             details.appendChild(summary)
             for (const row of settledRows) details.appendChild(renderThinkCard(row.reasoning))
             return details
