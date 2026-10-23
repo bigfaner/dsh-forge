@@ -63,3 +63,12 @@
   - `.forge/docs/**/*.png` 已被 `.gitignore` 默认忽略——**禁止 force-add**（d32/d35 的 force-add 归档是旧先例，已被本裁决取代）。
   - 过程文件归档到 `.forge/docs/proposals/<slug>/walkthrough/` 等工作区目录即可（留在盘上、留在 git 外），在提交说明里用相对路径引用。
   - 提交只含代码、测试与文档（`.md` 台账/走查记录属文档，可提交）。
+
+## 6. mobile 端（apps/mobile）
+
+移动端项目架构、与 host 的交互逻辑（forge:proxy 通道 + forge-stream 镜像 + ask 桥）、核心流程（流式/折叠/ask/TODO/元信息行/文档卡）与验收流程的正本在 `docs/mobile/`，改 mobile 前必读：
+
+- **架构**：`docs/mobile/architecture.md`——目录职责、路由、双腿渲染管线（durable 重拉单源 + 瞬态流式穿透、rAF 合帧）。
+- **host 交互**：`docs/mobile/host-interaction.md`——`/remote/__rpc` 通道族与 allowlist、forge-stream 镜像三源、mobile-bridge 插件缝（waterfall answerer 组合期注册）与已核销死缝清单、已读游标 host 单点。
+- **核心流程**：`docs/mobile/core-flows.md`——建会话/发送、流式与 turn 折叠、ask_user_question 全链、消息元信息行、TODO 面板、文档卡、已读/未读的当前语义（含用户裁决日期锚）。
+- **验收**：`docs/mobile/acceptance.md`——质量门序列、生效路径判据（bundle 刷新 vs host 重启 vs 仅新数据）、真机 WiFi 验收程序（实例启动/探针/走查锚点/证据归档）与已知环境事实。
