@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createOfficialApi, DisconnectedError, type ApiDeps } from './api.ts'
+import { createOfficialApi, DisconnectedError, randomRequestId, type ApiDeps } from './api.ts'
 import { arbitrate, createRemoteRpc, parseSlashLine, proxyCall, sendComposerInput, type RemoteRpcDeps } from './rpc.ts'
 import { PROXY_SESSION_MODEL_CATALOG_CHANNEL, PROXY_SESSION_PROJECTIONS_CHANNEL, PROXY_SESSION_SELECT_MODEL_CHANNEL, PROXY_USER_QUESTIONS_ANSWER_CHANNEL, type RemoteRpc, type RpcResult } from './rpc.ts'
 import { createStore } from './store.ts'
@@ -21,6 +21,29 @@ function rpcDeps(responder: (path: string, body: unknown) => { status: number; j
 }
 
 describe('__rpc 信封客户端', () => {
+  it('bug c227e548：非安全上下文（LAN http）无 crypto.randomUUID——getRandomValues 兜底仍产出 uuid 形请求 id', () => {
+    // LAN 真机 = http://<IP>:<port> 非安全上下文：randomUUID 缺席，getRandomValues 在场
+    const insecure = { getRandomValues: (array: Uint8Array) => (array.fill(7), array) }
+    const id = randomRequestId(insecure)
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    const secure = { randomUUID: () => 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }
+    expect(randomRequestId(secure)).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee') // 安全上下文走原 API
+  })
+  it('prompt requestId 经 randomRequestId（非安全上下文不抛）', async () => {
+    const calls: { method: string; payload: unknown }[] = []
+    const deps: ApiDeps = {
+      post: async (_path, body) => {
+        calls.push({ method: (body as { method: string }).method, payload: (body as { payload: unknown }).payload })
+        return { status: 200, json: { ok: true, value: {} } }
+      },
+      get: async () => ({ status: 200, json: {} }),
+      timeZone: () => 'UTC',
+    }
+    await createOfficialApi(deps).prompt('s-1', 'hi', 'steer')
+    const payload = calls[0]?.payload as { requestId?: unknown }
+    expect(typeof payload.requestId).toBe('string')
+    expect((payload.requestId as string).length).toBeGreaterThan(0)
+  })
   it('POST /remote/__rpc {channel, payload} → {ok:true, data} 原样透传', async () => {
     const { calls, deps } = rpcDeps(() => ({ status: 200, json: { ok: true, data: { unread: 3 } } }))
     const rpc = createRemoteRpc(deps)

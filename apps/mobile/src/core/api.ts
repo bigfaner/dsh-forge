@@ -65,6 +65,27 @@ async function rpc<T>(deps: ApiDeps, method: string, payload: unknown): Promise<
   return envelope.value as T
 }
 
+/** 请求 id 生成源（结构性收窄——测试可注入，不全量依赖 DOM Crypto 类型） */
+export interface RandomSource {
+  /** 仅安全上下文（https/localhost）暴露 */
+  randomUUID?: () => string
+  /** 全上下文在场 */
+  getRandomValues(array: Uint8Array): Uint8Array
+}
+
+/** 请求 id 生成（bug c227e548）：crypto.randomUUID 仅安全上下文（https/localhost）暴露
+ *  ——LAN 域真机走 http://<IP>:<port> 非安全上下文函数缺席，发送全败。getRandomValues
+ *  全上下文在场 → v4 形自拼兜底；安全上下文仍走原生路径。 */
+export function randomRequestId(scope: RandomSource = globalThis.crypto): string {
+  if (typeof scope.randomUUID === 'function') return scope.randomUUID()
+  const bytes = new Uint8Array(16)
+  scope.getRandomValues(bytes)
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80 // variant 10x
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`
+}
+
 export function createOfficialApi(deps: ApiDeps): OfficialApi {
   return {
     listSessions: () => rpc<{ items: readonly unknown[] }>(deps, 'session.list', {}),
@@ -73,7 +94,7 @@ export function createOfficialApi(deps: ApiDeps): OfficialApi {
     prompt: (sessionId, text, mode) =>
       rpc(deps, 'session.prompt', {
         sessionId,
-        requestId: crypto.randomUUID(), // bug 82f9ceb6：官方 SessionPromptRequest schema 必填——缺失 = bindPrompt 链路不可序列化，inbox splice 落盘被拒
+        requestId: randomRequestId(), // bug 82f9ceb6：官方 SessionPromptRequest schema 必填——缺失 = bindPrompt 链路不可序列化，inbox splice 落盘被拒
         mode,
         content: [{ type: 'text', text }],
         clientTimeZone: deps.timeZone(),
