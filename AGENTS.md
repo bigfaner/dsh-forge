@@ -72,4 +72,4 @@
 - **host 交互**：`docs/mobile/host-interaction.md`——`/remote/__rpc` 通道族与 allowlist、forge-stream 镜像事件来源、mobile-bridge 插件缝（waterfall 应答者组合期注册）与已排除路径清单、已读游标 host 单点、配对/审批/模型等其它宿主面索引。
 - **API 与加密**：`docs/mobile/api-and-crypto.md`——RPC/推送接口清单（含示例载荷）、隧道域 PSK 加密解密全过程（密钥层级/信封/签名/防重放，配流程图）。
 - **核心流程**：`docs/mobile/core-flows.md`——建会话/发送、流式与 turn 折叠、ask_user_question 全链、消息元信息行、TODO 面板、文档卡、已读/未读的当前语义（含用户裁决日期锚）。
-- **验收**：`docs/mobile/acceptance.md`——质量门序列、生效路径判据（bundle 刷新 vs host 重启 vs 仅新数据）、真机 WiFi 验收程序（实例启动/探针/走查锚点/证据归档）与已知环境事实。
+- **验收**：`docs/mobile/acceptance.md`——质量门序列、生效路径判据（bundle 刷新 vs host 重启 vs 仅新数据）、六条验收规则与真机 WiFi 验收程序；规则判例见 `docs/mobile/acceptance-examples.md`。
