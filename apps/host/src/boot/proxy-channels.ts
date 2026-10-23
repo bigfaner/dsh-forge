@@ -86,9 +86,14 @@ export interface ProxyCommandsFace {
   execute?(request: unknown): Promise<unknown>
 }
 
-/** 官方 userQuestions 消费切片（ask 提交缝） */
+/** 官方 userQuestions 消费切片（ask 提交缝——continued 题回灌） */
 export interface ProxyUserQuestionsFace {
   answer?(request: unknown): Promise<unknown>
+}
+
+/** mobile ask 桥消费切片（waterfall 在途题回灌——bug f73315a1） */
+export interface ProxyUserQuestionsBridge {
+  resolve(callId: string, answer: unknown): boolean
 }
 
 /** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门） */
@@ -108,6 +113,8 @@ export interface ProxyChannelDeps {
   readonly session?: ProxySessionFace
   readonly commands?: ProxyCommandsFace
   readonly userQuestions?: ProxyUserQuestionsFace
+  /** mobile ask 桥（waterfall 在途题回灌——缺席 = 全走官方 continued 面） */
+  readonly userQuestionsBridge?: ProxyUserQuestionsBridge
   readonly projects?: Pick<ProjectService, 'listProjects' | 'getProject'>
   readonly worktrees?: ProxyWorktreeFace
   /** agentPreset registry 切片（缺席 = 预设清单通道 fail-soft 错误信封） */
@@ -422,7 +429,14 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       const commands = requireService(deps.commands, 'commands')
       return requireMethod(commands.execute, 'commands.execute').bind(commands)(asRecord(payload))
     },
-    [PROXY_CHANNELS.userQuestionsAnswer]: (payload) => {
+    [PROXY_CHANNELS.userQuestionsAnswer]: async (payload) => {
+      const record = asRecord(payload)
+      // mobile ask 桥优先：waterfall 在途题（callId 命中）直接回灌 answerer（bug f73315a1）
+      const rawCallId = record['callId']
+      const callId = typeof rawCallId === 'string' && rawCallId !== '' ? rawCallId : ''
+      if (deps.userQuestionsBridge !== undefined && callId !== '' && deps.userQuestionsBridge.resolve(callId, record['answer'])) {
+        return { resolved: true }
+      }
       const questions = requireService(deps.userQuestions, 'userQuestions')
       return requireMethod(questions.answer, 'userQuestions.answer').bind(questions)(asRecord(payload))
     },

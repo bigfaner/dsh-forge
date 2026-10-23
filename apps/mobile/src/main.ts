@@ -165,7 +165,12 @@ export function mount(root: HTMLElement): void {
           if (sessionId !== undefined) scheduleRefresh(sessionId)
           // 打字机腿：瞬态帧原样穿透给引擎（assistant-stream 密帧 → settler 增量渲染）
           emitFrames(event.type === 'agent/assistant-stream' ? event : undefined)
-          if (event.type === 'user-questions/request') openAsk()
+          if (event.type === 'user-questions/request') {
+            const payload = event.payload as { sessionId?: unknown; callId?: unknown; questions?: unknown }
+            const sid = typeof payload?.sessionId === 'string' ? payload.sessionId : undefined
+            // 会话归属过滤：非当前会话的推送不开面板（无跨会话打断——未来可挂徽标）
+            if (sid === undefined || sid === '' || sid === currentSessionId()) openAsk(payload)
+          }
         },
         onError: () => {
           /* EventSource 自带重连；视图层轮询兜底自理（sse.ts 判活口径） */
@@ -308,11 +313,15 @@ export function mount(root: HTMLElement): void {
     container.appendChild(handle.root)
   }
 
-  function openAsk(): void {
+  function openAsk(direct?: { sessionId?: unknown; callId?: unknown; questions?: unknown }): void {
     if (ctx.rpc === null || currentSessionId() === '') return
+    // bug f73315a1：waterfall 请求推送直开（不再等投影——flash 类模型投影不落 active）
+    const directCallId = typeof direct?.callId === 'string' && direct.callId !== '' ? direct.callId : undefined
+    const directQuestions = Array.isArray(direct?.questions) ? direct.questions : undefined
     const view = createAskView({
       rpc: ctx.rpc,
       sessionId: currentSessionId(),
+      ...(directCallId !== undefined ? { initialCallId: directCallId, initialQuestions: directQuestions } : {}),
       onDone: () => view.remove(),
       subscribeStream: (onFrame) => {
         ctx.frameListeners.add(onFrame)

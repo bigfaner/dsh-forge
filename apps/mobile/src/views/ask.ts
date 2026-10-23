@@ -150,6 +150,9 @@ export interface AskDeps {
   readonly onDone?: () => void
   /** forge-stream `user-questions/request` 到达腿（帧到达 → 重拉投影；缺席 = 打开时静态投影）。 */
   readonly subscribeStream?: (onFrame: () => void) => () => void
+  /** 推送直挂（bug f73315a1——waterfall 推送直开：投影不落 active 的题也有面板可答）。 */
+  readonly initialCallId?: string
+  readonly initialQuestions?: readonly unknown[]
 }
 
 export function createAskView(deps: AskDeps): HTMLElement {
@@ -167,7 +170,15 @@ export function createAskView(deps: AskDeps): HTMLElement {
   const view = el('div', 'view ask-view')
   root.append(topbar, view)
 
-  let pending: PendingInteraction | null = null
+  let pending: PendingInteraction | null = coercePending({
+    values: {
+      userQuestions: {
+        active: deps.initialCallId !== undefined ? [{ callId: deps.initialCallId, questions: deps.initialQuestions ?? [], state: 'open' }] : [],
+        settled: [],
+      },
+    },
+  })
+  const directSeeded = pending !== null
   let page = 0
   const drafts = new Map<string, QuestionDraft>()
   const skipped = new Set<string>()
@@ -186,7 +197,17 @@ export function createAskView(deps: AskDeps): HTMLElement {
   async function load(): Promise<void> {
     try {
       const raw = await proxyCall(deps.rpc, PROXY_SESSION_PROJECTIONS_CHANNEL, { sessionId: deps.sessionId })
-      pending = coercePending(raw)
+      const fromProjection = coercePending(raw)
+      // 直挂 pending 优先（waterfall 推送题投影不落 active——不被空投影清掉）；同题幂等不重置草稿
+      if (fromProjection === null && directSeeded) {
+        render()
+        return
+      }
+      if (fromProjection !== null && pending !== null && pending.rpcId === fromProjection.rpcId) {
+        render()
+        return
+      }
+      pending = fromProjection
       page = 0
       drafts.clear()
       skipped.clear()

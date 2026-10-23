@@ -72,6 +72,7 @@ import {
 } from './psk-gate.js'
 import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
 import { subscribeAssistantStreamMirror } from './assistant-stream-mirror.js'
+import { createUserQuestionsBridge } from './user-questions-bridge.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
@@ -374,6 +375,59 @@ async function main(): Promise<void> {
   //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
   const diagAls = createDiagContextStore()
   relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
+  // mobile-ui ask 桥（bug f73315a1）：user-questions/request 是 cordis waterfall——必须有
+  // answerer 返回答案。单例桥注册为 answerer：请求镜像到全部存活 forge-stream 连接，
+  // 等待手机应答通道回灌（无桥侧超时——桌面同语义）；中止 = next() 透传。
+  const streamPushes = new Set<(event: { type: string; payload: unknown; at: number }) => void>()
+  const userQuestionsBridge = createUserQuestionsBridge({
+    emit: (event) => {
+      for (const push of streamPushes) {
+        try {
+          push(event)
+        } catch {
+          // 单连接失败不反压桥
+        }
+      }
+    },
+    diag,
+  })
+  try {
+    // 官方缝核销：桌面端 answerer = ctx.remote.$on("user-questions/request", ...)（
+    // dsh-client-ui-user-questions lib/client.js）——waterfall 链在 remote 层；ctx.on
+    // 直挂不参与分发（真机取证：桥 handle 零进入）。无桌面客户端时官方 answerer next()
+    // 链到本桥（挂起至手机应答——桌面同语义，无桥侧超时）。
+    const rawRemote = (ctx as unknown as Record<string, unknown>)['remote']
+    let remote: { $on?: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown } | undefined
+    if (typeof rawRemote === 'object' && rawRemote !== null && typeof (rawRemote as Record<string, unknown>)['$on'] === 'function') {
+      remote = rawRemote as { $on: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }
+    } else {
+      try {
+        const gotten = (ctx as unknown as { get(name: string): unknown }).get('remote')
+        if (typeof gotten === 'object' && gotten !== null && typeof (gotten as Record<string, unknown>)['$on'] === 'function') {
+          remote = gotten as { $on: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }
+        }
+      } catch {
+        // get 拒绝 = 服务缺席
+      }
+    }
+    diag(`[diag] uq 桥：typeof ctx.remote=${typeof rawRemote} has$on=${remote !== undefined}`)
+    const register = typeof remote?.$on === 'function'
+      ? (h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => { remote!.$on!('user-questions/request', h) }
+      : (() => {
+        const ctxOnUq = (ctx as unknown as { on?: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }).on
+        if (typeof ctxOnUq !== 'function') return undefined
+        diag('[diag] user-questions 桥：ctx.remote 缺席——降级 ctx.on（可能不参与 waterfall 分发）')
+        return (h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => { ctxOnUq.call(ctx, 'user-questions/request', h) }
+      })()
+    if (register === undefined) {
+      diag('[diag] user-questions 桥：ctx.remote/ctx.on 均缺席——未挂接（fail-soft）')
+    } else {
+      register((request, next) => userQuestionsBridge.handle(request, next))
+      diag(`[diag] user-questions waterfall answerer 挂接完成（remote 层=${remote !== undefined ? 'yes' : 'no'}）`)
+    }
+  } catch (cause) {
+    diag(`[diag] user-questions 桥挂接失败：${String(cause)}`)
+  }
   const failOpenDiag = (line: string): void => {
     diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
     try {
@@ -870,6 +924,8 @@ async function main(): Promise<void> {
                 get userQuestions() {
                   return lazyCordisService(servicesFace, 'userQuestions') as ProxyUserQuestionsFace | undefined
                 },
+                // mobile ask 桥（bug f73315a1）：waterfall 在途题回灌单点
+                userQuestionsBridge,
                 get agentPresets() {
                   return lazyCordisService(servicesFace, 'agentPresets') as { remoteExportList?(): Promise<unknown> } | undefined
                 },
@@ -934,6 +990,8 @@ async function main(): Promise<void> {
             }
             createForgeStreamHandler({
               subscribe: (push) => {
+                // mobile ask 桥扇出面注册（bridge emit → 全部存活连接；退订随连接）
+                streamPushes.add(push)
                 const offOfficial = subscribeOfficialEvents(
                   (name, handler) =>
                     (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
@@ -951,6 +1009,7 @@ async function main(): Promise<void> {
                 return () => {
                   offOfficial()
                   offAssistant()
+                  streamPushes.delete(push)
                 }
               },
               seal: (event) => (sealer !== undefined ? sealer(event) : JSON.stringify(event)),
