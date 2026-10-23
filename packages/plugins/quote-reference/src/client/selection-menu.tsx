@@ -78,9 +78,38 @@ export function resolveSelectionSource(_doc: Document, anchor: Node | null): Sel
 }
 
 /**
+ * 选区 client rects → 菜单锚矩形（纯函数，fix-27）：取末个非退化矩形（多行/跨元素
+ * 选区的末行位置），锚在其下一行（top = 末行 bottom，行高沿用末矩形）——菜单浮出在
+ * 选中内容末尾的下一行，不遮挡选区。末矩形为零宽高空壳时回落前一非空者；全部退化
+ * 或空清单 = null（调用方回落包围盒）。
+ */
+export function selectionAnchorRect(rects: readonly DOMRect[]): DOMRect | null {
+  let last: DOMRect | null = null
+  for (const r of rects) {
+    if (r.width > 0 || r.height > 0) last = r
+  }
+  if (last === null) return null
+  const left = last.left
+  const top = last.bottom
+  const height = last.height
+  return {
+    left,
+    top,
+    right: left + last.width,
+    bottom: top + height,
+    width: last.width,
+    height,
+    x: left,
+    y: top,
+    toJSON: last.toJSON?.bind(last),
+  } as DOMRect
+}
+
+/**
  * DOM Selection → 提取产物（纯读函数）。无 selection / 无 range / 折叠 = collapsed
  * 空产物；编辑域/浮层角色从选区落点元素向上 closest 判定；scopeRoot = 声明清单内
- * 首个命中选择器（声明外 = null）。
+ * 首个命中选择器（声明外 = null）。锚矩形 = 选区末矩形下一行（fix-27，selectionAnchorRect
+ * 纯函数）；rects 不可得/全退化时回落整体包围盒。
  */
 export function extractSelection(doc: Document, roots: readonly string[]): SelectionExtraction {
   const empty: SelectionExtraction = {
@@ -114,7 +143,10 @@ export function extractSelection(doc: Document, roots: readonly string[]): Selec
   }
   let rect: DOMRect | null = null
   try {
-    rect = range.getBoundingClientRect()
+    // Root cause (fix-27 bug 21b01a7e): 旧实现取 range.getBoundingClientRect() 整体
+    // 包围盒——顶边即首行顶、左缘即最左，菜单浮出在选区起始处遮住选中内容。改为
+    // clientRects 末个非空矩形的下一行（selectionAnchorRect 纯函数）。
+    rect = selectionAnchorRect(Array.from(range.getClientRects())) ?? range.getBoundingClientRect()
   } catch {
     rect = null
   }

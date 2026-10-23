@@ -8,6 +8,7 @@ import {
   mountSelectionMenu,
   referenceApplied,
   resolveSelectionSource,
+  selectionAnchorRect,
   tailSpanOf,
   type QuoteInsertServices,
   type SelectionExtraction,
@@ -161,6 +162,49 @@ describe('extractSelection（DOM → SelectionProbe 提取）', () => {
     selection.removeAllRanges()
     selection.addRange(range)
     expect(extractSelection(document, DEFAULT_SELECTION_ROOTS).scopeRoot).toBeNull()
+  })
+})
+
+/** 矩形桩（DOMRect 只读面同型——clientRects 产物即可，不依赖真实布局）。 */
+function rectOf(left: number, top: number, width: number, height: number): DOMRect {
+  return { left, top, right: left + width, bottom: top + height, width, height, x: left, y: top } as DOMRect
+}
+
+describe('selectionAnchorRect（fix-27 菜单锚点纯函数——rects → 末行下一行锚矩形）', () => {
+  it('单行选区：锚矩形 top/bottom = 末矩形 bottom（下一行），左对齐末矩形左缘，行高沿用末矩形', () => {
+    const anchor = selectionAnchorRect([rectOf(100, 200, 300, 24)])
+    expect(anchor).not.toBeNull()
+    expect(anchor!.top).toBe(224)
+    expect(anchor!.bottom).toBe(248) // bottom + 一行距（末行高）
+    expect(anchor!.left).toBe(100)
+    expect(anchor!.height).toBe(24)
+  })
+
+  it('多行选区：锚定末行（末矩形）而非首行——top 取末矩形 bottom 而非包围盒顶', () => {
+    const anchor = selectionAnchorRect([
+      rectOf(100, 200, 300, 24),
+      rectOf(100, 224, 300, 24),
+      rectOf(100, 248, 200, 24),
+    ])
+    expect(anchor!.top).toBe(272) // 末行底部
+    expect(anchor!.bottom).toBe(296) // + 一行距
+    expect(anchor!.left).toBe(100)
+  })
+
+  it('跨元素选区：取末尾矩形（末元素行），不是整体包围盒左上角', () => {
+    const anchor = selectionAnchorRect([rectOf(50, 10, 400, 24), rectOf(50, 400, 260, 30)])
+    expect(anchor!.top).toBe(430)
+    expect(anchor!.left).toBe(50)
+    expect(anchor!.height).toBe(30)
+  })
+
+  it('末矩形退化（零宽零高空壳）= 回落前一非空矩形；全部退化 = null（调用方兜底）', () => {
+    const anchor = selectionAnchorRect([rectOf(100, 200, 300, 24), rectOf(100, 224, 0, 0)])
+    expect(anchor!.top).toBe(224)
+    expect(anchor!.bottom).toBe(248)
+    expect(anchor!.left).toBe(100)
+    expect(selectionAnchorRect([rectOf(0, 0, 0, 0), rectOf(0, 0, 0, 0)])).toBeNull()
+    expect(selectionAnchorRect([])).toBeNull()
   })
 })
 

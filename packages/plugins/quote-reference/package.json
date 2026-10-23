@@ -1,9 +1,9 @@
 {
   "name": "@dsh-forge/quote-reference",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
-  "description": "quote-reference cordis 插件（选段引用：划选菜单 + 原生 quote chip + 发送期展开）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch。",
+  "description": "quote-reference cordis 插件（选段引用：划选菜�?+ 原生 quote chip + 发送期展开）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注�?CJS + dsh.client 清单 + dsh.bundle patch�?,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
