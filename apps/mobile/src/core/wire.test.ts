@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   clampLastReadSeq,
@@ -10,7 +10,7 @@ import {
   visibleCount,
   type Projection,
 } from './wire.ts'
-import { DURABLE_SAMPLES, ev, liveChunk, USER_MESSAGE_SAMPLE } from './wire.fixtures.ts'
+import { DURABLE_SAMPLES, ev, OFFICIAL_SESSION_EVENT_TYPES, liveChunk, USER_MESSAGE_SAMPLE } from './wire.fixtures.ts'
 
 // ---------------------------------------------------------------------------
 // 37 类持久事件样本：逐类型处置表（AD-4 白名单五档）
@@ -314,5 +314,28 @@ describe('投影判别集形状', () => {
     if (chip.kind === 'command-chip') expect(chip.done).toBeUndefined()
     const approval: Projection = { kind: 'approval-card', seq: 2, id: 'a', phase: 'asked' }
     expect(approval.phase).toBe('asked')
+  })
+})
+
+describe('bug db09ac00：官方词表覆盖守卫（projectEvent 永不落 error-card）', () => {
+  for (const type of OFFICIAL_SESSION_EVENT_TYPES) {
+    it(`${type} → 投影或忽略，绝不 error-card`, () => {
+      const projection = projectEvent(ev(type, 1, {}))
+      expect(projection === null ? null : projection.kind).not.toBe('error-card')
+    })
+  }
+
+  it('todo/write → 中性行「任务清单已更新（N 项）」（data.todos 数组）', () => {
+    expect(projectEvent(ev('todo/write', 1, { todos: [{ content: 'a' }, { content: 'b' }] }))).toMatchObject({
+      kind: 'neutral-line',
+      type: '任务清单已更新（2 项）',
+    })
+  })
+
+  it('developer/message → 中性行文本预览（data.message.content 同消息形）', () => {
+    expect(projectEvent(ev('developer/message', 2, { message: { role: 'developer', content: [{ type: 'text', text: '开发指引' }] } }))).toMatchObject({
+      kind: 'neutral-line',
+      type: expect.stringContaining('开发指引'),
+    })
   })
 })

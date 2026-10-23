@@ -251,7 +251,29 @@ export function projectEvent(event: WireEvent): Projection | null {
     // D 特判
     case 'assistant/attempt':
       return null
-    // E 忽略（状态与机械）——含 command/done（并入 command-chip 配对口径）
+    // bug db09ac00：有意渲染面——todo/write（模型任务清单更新，data.todos 数组源码核销
+    // dsh-client-ui-tool todoWriteDefinition）与 developer/message（data.message.content 同
+    // 消息形）→ 中性行
+    case 'todo/write': {
+      const todos = (event.data as { todos?: unknown }).todos
+      return {
+        kind: 'neutral-line',
+        seq: event.seq,
+        type: Array.isArray(todos) ? `任务清单已更新（${todos.length} 项）` : 'todo/write',
+      }
+    }
+    case 'developer/message': {
+      const data = event.data as { message?: { content?: readonly TextPart[] } }
+      const text = textOf(data.message?.content)
+      return {
+        kind: 'neutral-line',
+        seq: event.seq,
+        type: text === '' ? 'developer/message' : text.length > 80 ? `${text.slice(0, 80)}…` : text,
+      }
+    }
+    // E 忽略（状态与机械）——含 command/done（并入 command-chip 配对口径）。
+    // bug db09ac00：机械事件全集补齐（官方词表源码核销 dsh-session KNOWN_SESSION_EVENT_TYPES
+    // ——词表覆盖守卫见 wire.test OFFICIAL_SESSION_EVENT_TYPES）
     case 'command/done':
     case 'permission/preset':
     case 'sandbox/mode':
@@ -276,6 +298,27 @@ export function projectEvent(event: WireEvent): Projection | null {
     case 'compaction/prune':
     case 'subagent/catalog':
     case 'model/selection':
+    case 'feedback/message-delete':
+    case 'feedback/message-put':
+    case 'feedback/record':
+    case 'goal/change':
+    case 'hook/invoked':
+    case 'hook/result':
+    case 'image/offload':
+    case 'schedule/change':
+    case 'session-log-deepseek/delivery-accepted':
+    case 'subagent/descriptor':
+    case 'subagent/model-selection-policy':
+    case 'team/member':
+    case 'team/message/delivered':
+    case 'team/message/queued':
+    case 'team/task':
+    case 'tool-workflow/agent-end':
+    case 'tool-workflow/agent-start':
+    case 'tool-workflow/run-end':
+    case 'tool-workflow/run-start':
+    case 'tool/ptc-dispatch':
+    case 'tool/ptc-dispatch-start':
       return null
     default:
       // 白名单外的 plugin 扩展类型：ignorable → 安全跳过；否则不静默吞。

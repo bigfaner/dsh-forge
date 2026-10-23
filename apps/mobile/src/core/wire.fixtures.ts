@@ -1,4 +1,4 @@
-/**
+﻿/**
  * T1 钉样本 fixtures：37 类持久事件（wire-samples.md 同源——真实会话 v4 JSONL
  * 提取样本，长字符串截断）+ 录制瞬态判别集（官方类型构造）。
  * 仅保留投影判读所需字段；判别面（type/seq/time/data/surfaceOp/sourceEventSeqs）
@@ -190,3 +190,66 @@ export const DURABLE_SAMPLES: readonly WireEvent[] = [
 
 export const USER_MESSAGE_SAMPLE = DURABLE_SAMPLES.find((e) => e.type === 'user/message')!
 export const ASSISTANT_MESSAGE_SAMPLE = DURABLE_SAMPLES.find((e) => e.type === 'assistant/message')!
+
+// ── 官方会话事件词表（bug db09ac00 覆盖守卫锚）────────────────────────
+// 源码核销 = @deepseek-ai/dsh-session lib/index.js KNOWN_SESSION_EVENT_TYPES（生产 runtime
+// 0.2.0-rc.2 实测 52 型）。手机投影∪忽略集合必须覆盖全集——新官方类型出现时此清单随源码
+// 核销扩充，projectEvent 对全集永不落 error-card。
+export const OFFICIAL_SESSION_EVENT_TYPES: readonly string[] = [
+  'agent-preset/selected',
+  'agent/inbox/spliced',
+  'approval/asked',
+  'approval/decided',
+  'approval/policy',
+  'assistant/attempt',
+  'assistant/message',
+  'command/done',
+  'command/run',
+  'compaction/end',
+  'compaction/prune',
+  'compaction/start',
+  'compaction/summary',
+  'deliverables/presented',
+  'developer/message',
+  'feedback/message-delete',
+  'feedback/message-put',
+  'feedback/record',
+  'goal/change',
+  'hook/invoked',
+  'hook/result',
+  'image/offload',
+  'llm/retry',
+  'llm/retry-started',
+  'model/selection',
+  'permission/preset',
+  'plan/mode',
+  'request/context',
+  'request/header',
+  'sandbox/mode',
+  'schedule/change',
+  'session-log-deepseek/delivery-accepted',
+  'session/end-seed',
+  'session/title',
+  'session/title-llm-request',
+  'step/end',
+  'step/start',
+  'subagent/catalog',
+  'subagent/descriptor',
+  'subagent/model-selection-policy',
+  'system/message',
+  'team/member',
+  'team/message/delivered',
+  'team/message/queued',
+  'team/task',
+  'todo/write',
+  'tool-workflow/agent-end',
+  'tool-workflow/agent-start',
+  'tool-workflow/run-end',
+  'tool-workflow/run-start',
+  'tool/call',
+  'tool/ptc-dispatch',
+  'tool/ptc-dispatch-start',
+  'tool/result',
+  'turn/end',
+  'turn/start',
+]
