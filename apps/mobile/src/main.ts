@@ -434,7 +434,7 @@ export function mount(root: HTMLElement): void {
           try {
             const result = await ctx.rpc!.call('forge:proxy/projects-grouped', {})
             if (!result.ok || rendered?.key !== `chat:${sessionId}`) return
-            const data = result.data as { projects?: ReadonlyArray<{ sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown } } }> }> } | undefined
+            const data = result.data as { projects?: ReadonlyArray<{ sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown }; asOfSeq?: unknown } }> }> } | undefined
             for (const project of data?.projects ?? []) {
               if (chatRootRef.current === undefined && typeof project?.wsPath === 'string' && project.wsPath !== '') {
                 chatRootRef.current = project.wsPath
@@ -446,6 +446,13 @@ export function mount(root: HTMLElement): void {
                   fallbackTitleRef.current = title
                   const el = root.querySelector('.topbar .title')
                   if (el !== null && (el.textContent === '…' || el.textContent === '会话')) el.textContent = title
+                }
+                // bug bee0845e 续：打开即已读的游标 = 会话 asOfSeq（全量）——chat 初始装载
+                // 只知窗口尾巴（maxMessages 截断），残余事件会残留徽标；grouped 收敛的单源
+                // 上界在此落盘（晚到的标题/上界同次收敛，幂等单调写）
+                const asOfSeq = session.projections?.asOfSeq
+                if (typeof asOfSeq === 'number' && Number.isSafeInteger(asOfSeq)) {
+                  void ctx.rpc?.call('forge:remote/read-state-write', { sessionId, seq: asOfSeq })
                 }
                 return
               }

@@ -296,6 +296,9 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     title.textContent = deriveTitle(state.entries)
     render()
     scrollToBottom()
+    // bug bee0845e：打开即已读（与抽屉行点击同语义）——非抽屉径（hero/深链）进 chat
+    // 也写 host 已读游标，抽屉徽标不再残留全量未读
+    writeReadState()
   }
 
   async function loadOlder(): Promise<void> {
