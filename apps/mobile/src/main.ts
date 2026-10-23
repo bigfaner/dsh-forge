@@ -30,6 +30,7 @@ import {
 import { createTunnelTransport, type TunnelMaterial, type TunnelSession, type TunnelTransport } from './core/tunnel-transport.ts'
 import {
   createForgeStreamSource,
+  frameSessionIdOf,
   type ForgeStreamSource,
 } from './core/forge-stream-source.ts'
 import type { WireEvent } from './core/wire.ts'
@@ -163,9 +164,11 @@ export function mount(root: HTMLElement): void {
       {
         onEvent: (event) => {
           // bug 未读徽标恒零：任意带 sessionId 的事件都触发节流日志刷新（原先仅 activity/
-          // progress——普通 durable 消息事件不刷新 logCache，chat 增量与未读永不外推）
-          const payload = event.payload as { sessionId?: unknown } | null
-          if (typeof payload?.sessionId === 'string') scheduleRefresh(payload.sessionId)
+          // progress——普通 durable 消息事件不刷新 logCache，chat 增量与未读永不外推）。
+          // bug 6f2c0a57：api-session/* 帧载荷是裸 sessionId 字符串（官方载荷透传）——
+          // 旧 {sessionId} 对象取形恒 undefined = scheduleRefresh 永不触发（chat 静止）
+          const sessionId = frameSessionIdOf(event.payload)
+          if (sessionId !== undefined) scheduleRefresh(sessionId)
           emitFrames()
           if (event.type === 'user-questions/request') openAsk()
         },

@@ -1,7 +1,7 @@
 // 加密 forge-stream 订阅单测（1.31——逐帧解密+验签 / LAN 明文直传 / bad 帧丢弃）。
 import { createCipheriv, generateKeyPairSync, hkdfSync, randomBytes, sign } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { createForgeStreamSource, decodeForgeStreamFrame, forgeStreamUrl, type ForgeStreamEvent } from './forge-stream-source.ts'
+import { createForgeStreamSource, decodeForgeStreamFrame, forgeStreamUrl, frameSessionIdOf, type ForgeStreamEvent } from './forge-stream-source.ts'
 import { establishTunnelMaterial, type TunnelMaterial } from './tunnel-transport.ts'
 
 const SALT = Buffer.from('dsh-forge-psk')
@@ -58,6 +58,16 @@ async function material(): Promise<TunnelMaterial> {
 describe('forgeStreamUrl（sid/epoch 查询串注册）', () => {
   it('URL 携带 sid + epoch', () => {
     expect(forgeStreamUrl({ sid: 'a/b', epoch: 2 })).toBe('/remote/forge-stream?sid=a%2Fb&epoch=2')
+  })
+})
+
+describe('frameSessionIdOf（bug 6f2c0a57——api-session/* 帧载荷为裸 sessionId 字符串）', () => {
+  it('裸字符串载荷 = 该会话 id；{sessionId} 对象 = 取键（防御双形）；其余 = undefined', () => {
+    expect(frameSessionIdOf('session-abc')).toBe('session-abc')
+    expect(frameSessionIdOf({ sessionId: 'session-abc' })).toBe('session-abc')
+    expect(frameSessionIdOf({})).toBeUndefined()
+    expect(frameSessionIdOf(null)).toBeUndefined()
+    expect(frameSessionIdOf(42)).toBeUndefined()
   })
 })
 

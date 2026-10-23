@@ -49,6 +49,19 @@ export interface ForgeStreamOpen {
   readonly material: TunnelMaterial | undefined
 }
 
+/** 帧载荷 → 会话 id（bug 6f2c0a57 根治面）：host api-session/* 帧的 payload 是裸
+ *  sessionId 字符串（subscribeOfficialEvents 官方载荷原样透传）；{sessionId} 对象形
+ *  为防御双形兜底。main.ts onEvent 据此触发 scheduleRefresh——旧对象取形恒 undefined
+ *  = logCache 永不刷新，chat 静止到刷新页面。 */
+export function frameSessionIdOf(payload: unknown): string | undefined {
+  if (typeof payload === 'string') return payload === '' ? undefined : payload
+  if (typeof payload === 'object' && payload !== null) {
+    const sessionId = (payload as { sessionId?: unknown }).sessionId
+    if (typeof sessionId === 'string' && sessionId !== '') return sessionId
+  }
+  return undefined
+}
+
 /** 单帧解码：信封解密+验签（隧道）或明文 JSON（LAN）→ ForgeStreamEvent；失败 = null。 */
 export async function decodeForgeStreamFrame(data: string, material: TunnelMaterial | undefined): Promise<ForgeStreamEvent | null> {
   let parsed: unknown
