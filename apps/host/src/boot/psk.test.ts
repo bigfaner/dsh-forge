@@ -176,13 +176,19 @@ describe('⑤ 强制位生效域（A3 裁决）', () => {
 })
 
 describe('⑥ 统一 401（唯一 owner 响应面）', () => {
-  it('恒定 401 + 恒定语义体 + 填充至固定目标长度', () => {
+  it('恒定 401 + 填充至固定目标长度', () => {
     const res = fakeRes()
     writeConstant401(res)
     expect(res.status).toBe(401)
-    // 恒定语义体前缀（抗时序/状态码分型——语义恒定，尾部为随机填充）
-    expect(res.body.startsWith('{"ok":false,"error":{"code":"unauthorized"')).toBe(true)
     expect(res.body).toHaveLength(4096)
+  })
+
+  it('bug f6b9a233：拒绝体全不透明——零 JSON 结构零明文语义（状态码 401 即全部对外语义）', () => {
+    const res = fakeRes()
+    writeConstant401(res)
+    expect(res.body.startsWith('{')).toBe(false)
+    expect(() => JSON.parse(res.body)).toThrow()
+    expect(res.body).not.toContain('unauthorized')
   })
 })
 

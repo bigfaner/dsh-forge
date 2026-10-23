@@ -266,19 +266,16 @@ export class ReplayWatermark {
   }
 }
 
-// ── 统一 401（唯一 owner——恒定体 + 填充）────────────────────────────
+// ── 统一 401（唯一 owner——恒定状态码 + 全不透明定长体）────────────────
 
-const CONSTANT_401_BODY = JSON.stringify({ ok: false, error: { code: 'unauthorized', message: 'unauthorized' } })
-
-/** 统一 401 响应：恒定状态码 + 恒定语义体 + 随机填充至固定长度（抗时序/体积分型） */
+// bug f6b9a233（用户质询「明文与密文共存」）：拒绝体原携明文 JSON 语义（{ok:false,code:
+// unauthorized}）——「PSK 门端点」特征可被观察者指纹化，与恒定体抗分型意图相悖。改为纯随
+// 机定长体：状态码 401 + 固定长度即全部对外语义（数据面加密语义不变——401 不含任何敏感数据）。
+/** 统一 401 响应：恒定状态码 + 全不透明随机定长体（抗时序/体积分型/内容指纹） */
 export function writeConstant401(res: RpcResFace): void {
-  const pad = PSK_PAD_TARGET - Buffer.byteLength(CONSTANT_401_BODY, 'utf8')
-  const body =
-    pad > 1
-      ? CONSTANT_401_BODY + ' ' + randomBytes(pad).toString('base64').slice(0, pad - 1)
-      : CONSTANT_401_BODY
-  res.writeHead(401, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(body)
+  res.writeHead(401, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' })
+  // 3072 随机字节 → base64 恰 4096 字符（PSK_PAD_TARGET 定长语义不变）
+  res.end(randomBytes((PSK_PAD_TARGET * 3) / 4).toString('base64'))
 }
 
 // ── 信封解析（结构面——密钥层失败归拦截器统一 401）───────────────────
