@@ -16,6 +16,7 @@ import { renderIndexInjections } from '@deepseek-ai/dsh-host-webserver'
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -335,6 +336,17 @@ async function main(): Promise<void> {
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
   const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  // mobile ask 桥插件行注行门（bug f73315a1——gitWorktreeRow 双形态探测同径）∪ dev 形态
+  // 第三位：host 自身 node_modules（loader 进程解析根——dev workspace link 挂点）。
+  let mobileBridgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/mobile-bridge')
+  if (!mobileBridgeRow) {
+    try {
+      // exports map 不含 ./package.json——按 host dist 相对定位 node_modules 链接（dist/boot → ../../）
+      mobileBridgeRow = existsSync(join(fileURLToPath(new URL('../../node_modules/@dsh-forge/mobile-bridge/package.json', import.meta.url))))
+    } catch {
+      mobileBridgeRow = false
+    }
+  }
   // bug 2ffb0a82：knowledge 插件装载位（与 overlay 注行门同源单值——child 侧唯一探测点，
   // ready 消息上送 renderer 知识面门控；dev 树在场 true / 打包形态暂不含 false）
   const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
@@ -345,6 +357,7 @@ async function main(): Promise<void> {
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     knowledgeRow, // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
     gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
+    mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
     port: options.port, // fix-3 webserver 覆写行 port 字面量单源（boot 实参）
@@ -360,6 +373,24 @@ async function main(): Promise<void> {
         }
       : {}),
   })
+  // mobile-ui ask 桥（bug f73315a1）：桥单例在 runProfile 前经全局锚注入 mobile-bridge
+  // 插件（组合期 answerer 注册——先于 api-remotes 捕获监听）；emit 扇出 = 全部存活
+  // forge-stream 连接；等待手机应答通道回灌（无桥侧超时——桌面同语义）；中止 = next() 透传。
+  const streamPushes = new Set<(event: { type: string; payload: unknown; at: number }) => void>()
+  const userQuestionsBridge = createUserQuestionsBridge({
+    emit: (event) => {
+      for (const push of streamPushes) {
+        try {
+          push(event)
+        } catch {
+          // 单连接失败不反压桥
+        }
+      }
+    },
+    diag,
+    pushCount: () => streamPushes.size,
+  })
+  ;(globalThis as Record<string, unknown>)['__dshMobileAskBridge'] = userQuestionsBridge
   const { ctx, shutdown: processShutdown } = await runProfile({
     environment: dshAppBoot.loadLayeredEnv('dsh'),
     profile: 'dsh-forge',
@@ -375,59 +406,6 @@ async function main(): Promise<void> {
   //   ③ fail-open 计数：拦截层降级放行每笔落诊断事件（UI 零呈现——方案 9）。
   const diagAls = createDiagContextStore()
   relayDiagOverBridge(ctx, (line) => send({ type: 'diag', line }), diagAls)
-  // mobile-ui ask 桥（bug f73315a1）：user-questions/request 是 cordis waterfall——必须有
-  // answerer 返回答案。单例桥注册为 answerer：请求镜像到全部存活 forge-stream 连接，
-  // 等待手机应答通道回灌（无桥侧超时——桌面同语义）；中止 = next() 透传。
-  const streamPushes = new Set<(event: { type: string; payload: unknown; at: number }) => void>()
-  const userQuestionsBridge = createUserQuestionsBridge({
-    emit: (event) => {
-      for (const push of streamPushes) {
-        try {
-          push(event)
-        } catch {
-          // 单连接失败不反压桥
-        }
-      }
-    },
-    diag,
-  })
-  try {
-    // 官方缝核销：桌面端 answerer = ctx.remote.$on("user-questions/request", ...)（
-    // dsh-client-ui-user-questions lib/client.js）——waterfall 链在 remote 层；ctx.on
-    // 直挂不参与分发（真机取证：桥 handle 零进入）。无桌面客户端时官方 answerer next()
-    // 链到本桥（挂起至手机应答——桌面同语义，无桥侧超时）。
-    const rawRemote = (ctx as unknown as Record<string, unknown>)['remote']
-    let remote: { $on?: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown } | undefined
-    if (typeof rawRemote === 'object' && rawRemote !== null && typeof (rawRemote as Record<string, unknown>)['$on'] === 'function') {
-      remote = rawRemote as { $on: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }
-    } else {
-      try {
-        const gotten = (ctx as unknown as { get(name: string): unknown }).get('remote')
-        if (typeof gotten === 'object' && gotten !== null && typeof (gotten as Record<string, unknown>)['$on'] === 'function') {
-          remote = gotten as { $on: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }
-        }
-      } catch {
-        // get 拒绝 = 服务缺席
-      }
-    }
-    diag(`[diag] uq 桥：typeof ctx.remote=${typeof rawRemote} has$on=${remote !== undefined}`)
-    const register = typeof remote?.$on === 'function'
-      ? (h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => { remote!.$on!('user-questions/request', h) }
-      : (() => {
-        const ctxOnUq = (ctx as unknown as { on?: (event: string, h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => unknown }).on
-        if (typeof ctxOnUq !== 'function') return undefined
-        diag('[diag] user-questions 桥：ctx.remote 缺席——降级 ctx.on（可能不参与 waterfall 分发）')
-        return (h: (request: unknown, next: (req: unknown) => Promise<unknown>) => Promise<unknown>) => { ctxOnUq.call(ctx, 'user-questions/request', h) }
-      })()
-    if (register === undefined) {
-      diag('[diag] user-questions 桥：ctx.remote/ctx.on 均缺席——未挂接（fail-soft）')
-    } else {
-      register((request, next) => userQuestionsBridge.handle(request, next))
-      diag(`[diag] user-questions waterfall answerer 挂接完成（remote 层=${remote !== undefined ? 'yes' : 'no'}）`)
-    }
-  } catch (cause) {
-    diag(`[diag] user-questions 桥挂接失败：${String(cause)}`)
-  }
   const failOpenDiag = (line: string): void => {
     diag(line) // 既有 harness.log 链保留（双轨兼容——评审 Note-2）
     try {
