@@ -337,9 +337,8 @@ export function createAskView(deps: AskDeps): HTMLElement {
         const selected = draft.selected.includes(option.label)
         // 推荐徽标 = label 后缀约定（桌面端同构）；答案值保持原 label 不变
         const parsed = parseRecommendedLabel(option.label)
+        // 选中态仅靠行高亮表达（radio/box 圆点勾选标记冗余——用户裁决 2026-10-23 简洁化）
         const button = el('button', `ask-option${selected ? ' picked' : ''}`)
-        const mark = el('span', `mark ${multi ? 'box' : 'radio'}`)
-        if (selected) mark.innerHTML = multi ? '✓' : '●'
         const body = el('div', 'opt-body')
         const labelRow = el('div', 'opt-label')
         labelRow.appendChild(document.createTextNode(parsed.label))
@@ -347,7 +346,7 @@ export function createAskView(deps: AskDeps): HTMLElement {
         body.appendChild(labelRow)
         if (option.description !== undefined)
           body.appendChild(el('div', 'opt-desc', option.description))
-        button.append(mark, body)
+        button.append(body)
         button.addEventListener('click', () => setDraft(question, pickOption(question, draft, option.label)))
         list.appendChild(button)
       }
@@ -366,14 +365,14 @@ export function createAskView(deps: AskDeps): HTMLElement {
     // 按钮族（桌面端对齐：← 上一个 · 提交/下一个 →；跳过仅整页形态保留——未答题提交按
     // skipped 条目口径本就成立，嵌入态省按钮保简洁）
     const nav = el('div', 'ask-nav')
-    const previous = el('button', 'ask-btn ghost', '← 上一个')
+    const previous = el('button', 'ask-btn ghost', '上一个')
     previous.disabled = index === 0
     previous.addEventListener('click', () => {
       page = Math.max(0, index - 1)
       render()
     })
     const isLast = index === total - 1
-    const continueButton = el('button', 'ask-btn primary', isLast ? '提交' : '下一个 →')
+    const continueButton = el('button', 'ask-btn primary', isLast ? '提交' : '下一个')
     continueButton.disabled = !canSubmit(question, draft)
     continueButton.addEventListener('click', () => {
       advance(

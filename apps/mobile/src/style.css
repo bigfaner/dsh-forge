@@ -888,24 +888,19 @@ body[data-ds-dark-theme] .jump {
 .ask-slot {
   flex: none;
 }
-/* 嵌入态面板 = composer 同壳卡片（槽位内替换 composer）；整页形态（#/ask 路由）不变 */
+/* 嵌入态面板：单层面板——题目卡即唯一可见卡（嵌套双框冗余——用户裁决 2026-10-23）；
+ * 整页形态（#/ask 路由）不变 */
 .ask-root.ask-embedded {
   height: auto;
   max-height: 60vh;
   margin: 0 6px;
-  border: 1px solid #dadce0;
-  border-radius: 22px;
-  background: #fff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   overflow-y: auto;
 }
 .ask-root.ask-embedded .view {
   overflow: visible;
-}
-.dark .ask-root.ask-embedded,
-body[data-ds-dark-theme] .ask-root.ask-embedded {
-  background: #1d1d20;
-  border-color: #303034;
 }
 
 /* ---- 输入区：composer 底行 = 模式 · worktree · 滑杆 · 发送（固定） ---- */
@@ -1347,9 +1342,9 @@ body[data-ds-dark-theme] .setbtn {
 .ask-option {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 11px 12px;
+  padding: 9px 11px;
   border: 1px solid #e8e8e8;
   border-radius: 12px;
   background: transparent;
@@ -1364,28 +1359,6 @@ body[data-ds-dark-theme] .setbtn {
 .ask-option.picked {
   border-color: #4176e6;
   background: rgba(65, 118, 230, 0.07);
-}
-.ask-option .mark {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  border: 1.5px solid #c7c7cc;
-  font-size: 11px;
-  color: #fff;
-}
-.ask-option .mark.radio {
-  border-radius: 50%;
-}
-.ask-option .mark.box {
-  border-radius: 5px;
-}
-.ask-option.picked .mark {
-  border-color: #4176e6;
-  background: #4176e6;
 }
 .opt-body {
   display: flex;
