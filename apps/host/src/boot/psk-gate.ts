@@ -126,6 +126,15 @@ export interface PskGateDeps {
   readonly now: () => number
   /** unwrap 缝（默认恒等） */
   readonly unwrap?: WrapSeam
+  /** bug 1792cc7a：设备公钥绑定持久 store（host 重启后长命 Tab sig-only 帧验签依赖；
+   *  缺席 = 进程内存表——重启即失，跨重启 sig-only 帧全拒） */
+  readonly devicePubs?: DevicePubStore
+}
+
+/** 设备公钥绑定 store（sid → Ed25519 SPKI der；持久化由装配缝承担） */
+export interface DevicePubStore {
+  get(sid: string): Buffer | undefined
+  set(sid: string, publicDer: Buffer): void
 }
 
 export type AdmitVerdict =
@@ -139,7 +148,7 @@ export type AdmitVerdict =
       readonly reply: (data: unknown) => string
       readonly replyError: (message: string) => string
     }
-  | { readonly ok: false }
+  | { readonly ok: false; readonly reason: string }
 
 /** KDF salt（跨端互操作锚——tunnel-psk §4 salt=pairingId 的固定配对身份实现） */
 export const PSK_SALT = Buffer.from('dsh-forge-psk', 'utf8')
@@ -150,15 +159,15 @@ export const PSK_SALT = Buffer.from('dsh-forge-psk', 'utf8')
  */
 export function admitPskRequest(deps: PskGateDeps, rawBody: string, channelAdmitted: (channel: string) => boolean): AdmitVerdict {
   const shape = deps.load()
-  if (shape === undefined) return { ok: false }
+  if (shape === undefined) return { ok: false, reason: 'psk-gate 未配置' }
   let envelopeJson: unknown
   try {
     envelopeJson = JSON.parse(rawBody)
   } catch {
-    return { ok: false }
+    return { ok: false, reason: 'body 非 JSON' }
   }
   const env = parseEnvelope(envelopeJson)
-  if (env === undefined) return { ok: false }
+  if (env === undefined) return { ok: false, reason: 'envelope 形状非法' }
   const unwrap = deps.unwrap ?? ((b: Buffer) => b)
   const current = unwrap(Buffer.from(shape.psk, 'base64'))
   const keys: Buffer[] = [deriveCommKey(current, deps.pin(), PSK_SALT)]
@@ -177,24 +186,26 @@ export function admitPskRequest(deps: PskGateDeps, rawBody: string, channelAdmit
       // 换宽限钥重试
     }
   }
-  if (plain === undefined || deviceKey === undefined) return { ok: false }
-  // 设备签名层（注册后强制——PSK 泄露后 c2s 仍防伪造的独立失效域；注册帧仅 AEAD 信任）
+  if (plain === undefined || deviceKey === undefined) return { ok: false, reason: 'AEAD 解封失败（PSK/PIN/sid 不匹配）' }
+  // 设备签名层（注册后强制——PSK 泄露后 c2s 仍防伪造的独立失效域；注册帧仅 AEAD 信任）。
+  // bug 1792cc7a：绑定查找/落定经 deps.devicePubs 持久 store（host 重启不清）——长命 Tab
+  // sig-only 帧跨重启仍验签；缺席缝 = 进程内存表（旧行为）。
   if (env.sig !== undefined || env.dpk !== undefined) {
-    if (!verifyDeviceSignature(env)) return { ok: false }
+    if (!verifyDeviceSignature(deps, env)) return { ok: false, reason: verifyFailReason(deps, env) }
   }
   // 水位（签名核后推进——重复帧同 seq 二次准入被高水位拒）
-  if (!deps.watermarks.admit(env.sid, env.epoch, env.seq, deps.now())) return { ok: false }
+  if (!deps.watermarks.admit(env.sid, env.epoch, env.seq, deps.now())) return { ok: false, reason: '重放（seq ≤ 高水位）' }
   let inner: unknown
   try {
     inner = JSON.parse(plain.toString('utf8'))
   } catch {
-    return { ok: false }
+    return { ok: false, reason: '解封后非 JSON' }
   }
   const channel = typeof (inner as Record<string, unknown> | null)?.['channel'] === 'string'
     ? (inner as Record<string, unknown>)['channel'] as string
     : ''
   // 未知通道 = 同一 401 归一（防通道枚举分型）
-  if (!channelAdmitted(channel)) return { ok: false }
+  if (!channelAdmitted(channel)) return { ok: false, reason: '通道不在受限 allowlist' }
   const epoch = env.epoch
   const sid = env.sid
   const dk = deviceKey
@@ -203,26 +214,26 @@ export function admitPskRequest(deps: PskGateDeps, rawBody: string, channelAdmit
   return { ok: true, sid, epoch, channel, payload: (inner as Record<string, unknown>)?.['payload'], reply, replyError }
 }
 
-/** 设备签名核（sig 覆盖 ct‖iv‖seq；dpk 仅未绑定 sid 的注册帧允许携带） */
-function verifyDeviceSignature(env: PskEnvelope): boolean {
+/** 设备签名核（sig 覆盖 ct‖iv‖seq；dpk 仅未绑定 sid 的注册帧允许携带）。绑定读写经
+ *  deps.devicePubs 持久 store（缺席 = 进程内存表旧行为）。 */
+function verifyDeviceSignature(deps: PskGateDeps, env: PskEnvelope): boolean {
   if (env.sig === undefined) return false
-  const publicDer = env.dpk !== undefined ? Buffer.from(env.dpk, 'base64') : devicePubOf(env.sid)
+  const publicDer = env.dpk !== undefined ? Buffer.from(env.dpk, 'base64') : deps.devicePubs?.get(env.sid)
   if (publicDer === undefined) return false
   const material = sigMaterial(Buffer.from(env.ct, 'base64'), Buffer.from(env.iv, 'base64'), env.seq)
-  if (!verifyPayload(publicDer, material, Buffer.from(env.sig, 'base64'))) return false
-  if (env.dpk !== undefined) bindDevicePub(env.sid, publicDer)
+  const ok = verifyPayload(publicDer, material, Buffer.from(env.sig, 'base64'))
+  if (!ok) console.log('[verify-dbg]', { dpkLen: env.dpk?.length, sigLen: env.sig?.length, materialLen: material.length, pubLen: publicDer.length })
+  if (!ok) return false
+  if (env.dpk !== undefined) deps.devicePubs?.set(env.sid, publicDer)
   return true
 }
 
-/** sid → 设备公钥绑定表（进程内——注册后请求凭绑定钥核签） */
-const devicePubs = new Map<string, Buffer>()
+/** sid → 设备公钥绑定表（进程内默认表——deps.devicePubs 缺席时的旧行为缝） */
+const legacyDevicePubs = new Map<string, Buffer>()
 
-function devicePubOf(sid: string): Buffer | undefined {
-  return devicePubs.get(sid)
-}
-
-function bindDevicePub(sid: string, publicDer: Buffer): void {
-  devicePubs.set(sid, publicDer)
+/** 验签失败归因（诊断面——未绑定 sid = 需 dpk 注册帧 / 已绑定 = 签名不匹配） */
+function verifyFailReason(deps: PskGateDeps, env: PskEnvelope): string {
+  return deps.devicePubs?.get(env.sid) !== undefined ? '设备签名不匹配' : 'sid 未绑定设备公钥（需 dpk 注册帧）'
 }
 
 /** s2c 应答封帧（host Ed25519 逐帧签名——v3/§4.2） */
