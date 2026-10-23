@@ -105,7 +105,8 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
       worktreeName.textContent = name
     },
     setWorktreeVisible(visible) {
-      worktreeChip.hidden = !visible
+      // bug 45e635af 残留：`.plugin` 显式 display 压制 hidden 属性——可见位走 style.display
+      worktreeChip.style.display = visible ? '' : 'none'
     },
     setMode(name) {
       modeChip.textContent = ''

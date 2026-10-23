@@ -1,4 +1,4 @@
-// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
+﻿// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
 // 强制位（统一 401 唯一 owner + 填充 + diag 脱敏 + LAN 旧门维持）。
 // 纯 handler fake 面——零真实 socket（remote-http-rpc.test.ts 同型）。
 import { describe, expect, it } from 'vitest'
@@ -428,7 +428,7 @@ function pskDeps(overrides: Partial<PskGateDeps> = {}): PskGateDeps {
 }
 
 /** 客户端侧封帧（c2s——与 host 门同派生链；携设备公钥注册帧——sig 核绑定 sid） */
-function sealRequest(channel: string, payload: unknown, opts: { sid?: string; epoch?: number; seq?: number; pin?: string } = {}): string {
+function sealRequest(channel: string, payload: unknown, opts: { sid?: string; epoch?: number; seq?: number; pin?: string; dpk?: boolean } = {}): string {
   const sid = opts.sid ?? 'device-A'
   const epoch = opts.epoch ?? 1
   const seq = opts.seq ?? 1
@@ -436,7 +436,7 @@ function sealRequest(channel: string, payload: unknown, opts: { sid?: string; ep
   const dk = deriveDeviceKey(comm, sid)
   const { iv, ct } = sealFrame(dk, 'c2s', sid, epoch, seq, Buffer.from(JSON.stringify({ channel, payload }), 'utf8'))
   const sig = signPayload(KP, sigMaterial(ct, iv, seq))
-  return JSON.stringify({ v: PSK_VERSION, sid, epoch, iv: iv.toString('base64'), seq, ct: ct.toString('base64'), sig: sig.toString('base64'), dpk: KP.publicDer.toString('base64') })
+  return JSON.stringify({ v: PSK_VERSION, sid, epoch, iv: iv.toString('base64'), seq, ct: ct.toString('base64'), sig: sig.toString('base64'), ...(opts.dpk === false ? {} : { dpk: KP.publicDer.toString('base64') }) })
 }
 
 describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）', () => {
@@ -464,6 +464,21 @@ describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）',
     expect(wm.nextSendSeq('device-A', 1)).toBe(2) // s2c seq 单调推进
   })
 
+
+  it('bug 1792cc7a：设备公钥绑定持久化——host 重启（新 watermarks + 持久 store）后长命 Tab sig-only 帧仍验签通过', async () => {
+    const store = new Map<string, Buffer>()
+    // 第一次准入：dpk 注册帧（绑定 sid → 设备公钥）
+    const wm1 = new ReplayWatermark()
+    const res1 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq(sealRequest(PROXY_CHANNELS.sessionList, {}, { seq: 1 }), tunnelHost) as never, res1, deps({ proxy, psk: pskDeps({ watermarks: wm1, devicePubs: store }) }))
+    expect(res1.status).toBe(200)
+    expect(store.has('device-A')).toBe(true)
+    // 模拟 host 重启：watermarks 从文件恢复（此处新实例），持久 store 保留绑定
+    const wm2 = new ReplayWatermark()
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq(sealRequest(PROXY_CHANNELS.sessionList, {}, { seq: 2, dpk: false }), tunnelHost) as never, res2, deps({ proxy, psk: pskDeps({ watermarks: wm2, devicePubs: store }) }))
+    expect(res2.status).toBe(200)
+  })
   it('隧道域 + 无信封明文 = 统一 401 恒定体（零明文降级——dswf/authorizeIndex 放行也拒）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.sessionList }, tunnelHost) as never, res, deps({ proxy, psk: pskDeps() }))
