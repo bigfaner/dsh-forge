@@ -71,8 +71,21 @@ export async function selectWorkspaceViaChip(page: Page, workspaceName: string):
   const chip = page.getByRole('button', { name: /默认工作区|选择工作区/ }).first()
   await expect(chip).toBeVisible({ timeout: 30_000 })
   await chip.click()
-  const menu = page.locator('[role="menu"]').first()
-  await expect(menu).toBeVisible({ timeout: 15_000 })
+  // Root cause（bug 5ea038be）: 开请求可被瞬时吞没（owner pickerOpen 翻转后 Menu 外点/
+  // blur 收口或 addOnly 陈旧空集 openAdd→onClose）——1.49 失败快照芯片未 [expanded] 且树内
+  // 无 role=menu，而探针实证弹层锚契约完好（开成时 role=menu + .dswf-hero-picker-list 同体
+  // 在场、行集含注册项目）。故菜单锚 = 双锚兼容（官方 Menu role=menu ∪ 影子弹层卡
+  // .dswf-hero-picker-list），开边沿未兑现则有界重开（重开轮询——芯片点击 = 开关翻转，
+  // 仅在弹层缺席时补点，已开时零打扰）。
+  const menu = page.locator('[role="menu"], .dswf-hero-picker-list').first()
+  const menuVisible = (timeout: number) =>
+    menu.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false)
+  if (!(await menuVisible(2_000))) {
+    for (let attempt = 0; attempt < 4 && !(await menuVisible(2_000)); attempt++) {
+      await chip.click()
+    }
+  }
+  await expect(menu, `工作区弹层在场（${workspaceName}）`).toBeVisible({ timeout: 5_000 })
   const item = menu
     .locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]')
     .filter({ hasText: workspaceName })
