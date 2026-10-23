@@ -12,12 +12,12 @@ import {
 const event = (type: string, seq: number): WireEvent =>
   ({ type, seq, time: 0, data: {} }) as WireEvent
 
-const proj = (p: Partial<Projection> & { kind: Projection['kind']; seq: number }): Projection => p as Projection
+const _proj = (p: Partial<Projection> & { kind: Projection['kind']; seq: number }): Projection => p as Projection
 const userBubble = (seq: number, text = 'hi'): Projection => ({ kind: 'user-bubble', seq, text })
 const assistantText = (seq: number, text = '回复'): Projection => ({ kind: 'assistant-message', seq, text, reasoning: '', toolCalls: [] })
 const think = (seq: number): Projection => ({ kind: 'assistant-message', seq, text: '', reasoning: '想', toolCalls: [] })
 const toolCall = (seq: number, callId = 'c'): Projection => ({ kind: 'tool-call', seq, callId, name: 'grep', arguments: '{}' })
-const toolResult = (seq: number, callId = 'c'): Projection => ({ kind: 'tool-result', seq, callId, isError: false, text: 'ok' })
+const _toolResult = (seq: number, callId = 'c'): Projection => ({ kind: 'tool-result', seq, callId, isError: false, text: 'ok' })
 
 describe('历史窗口收敛（默认最近 10 条）', () => {
   it('entries 形状 + hasMore 直传', () => {
