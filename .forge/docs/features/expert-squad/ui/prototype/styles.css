@@ -85,7 +85,7 @@ body { background: var(--bg-base); color: var(--text-primary);
 /* dialog */
 .modal { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: #0003; z-index: 5; }
 .modal.show { display: flex; }
-.dialog { width: 480px; max-width: 92%; max-height: 84%; overflow: auto; background: var(--layer-2);
+.dialog { width: 680px; max-width: 94%; max-height: 88%; overflow: auto; background: var(--layer-2);
   border-radius: 16px; box-shadow: var(--lv3); border: .5px solid var(--border-l4); }
 .dialog > header { display: flex; align-items: center; gap: 8px; padding: 14px; border-bottom: .5px solid var(--border-l2); }
 .dialog > header b { font-size: 16px; font-weight: 500; margin-right: auto; }
@@ -96,7 +96,6 @@ body { background: var(--bg-base); color: var(--text-primary);
 .seg-title { font-size: 13px; color: var(--text-caption); }
 .meta { color: var(--text-secondary); font-size: 13px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.timeline { border-left: 1px solid var(--border-l4); margin-left: 4px; padding-left: 14px; display: grid; gap: 10px; }
 .tl-item b { font-size: 13px; font-weight: 500; display: block; }
 .tl-item span { font-size: 12px; color: var(--text-secondary); }
 .dlg-foot { display: flex; gap: 8px; padding: 12px 14px; border-top: .5px solid var(--border-l2); }
@@ -104,17 +103,27 @@ body { background: var(--bg-base); color: var(--text-primary);
 .field label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
 .field input[type=text], .field textarea { width: 100%; font: inherit; font-size: 14px; padding: 6px 10px;
   border-radius: 8px; border: .5px solid var(--border-l2); background: var(--bg-base); color: var(--text-primary); }
-.field textarea { min-height: 56px; resize: vertical; }
+.field textarea { resize: vertical; line-height: 22px; overflow-wrap: break-word; white-space: pre-wrap; }
 .field .err { color: var(--error); font-size: 12px; margin-top: 2px; display: none; }
 .field.bad input, .field.bad textarea { border-color: var(--error); }
 .field.bad .err { display: block; }
 .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 13px; }
 .checks label { display: flex; gap: 6px; align-items: center; }
-.chipedit { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; border: .5px solid var(--border-l2); border-radius: 8px; padding: 6px 8px; background: var(--bg-base); }
-.chipedit .chip { cursor: pointer; border: .5px solid transparent; user-select: none; }
-.chipedit .chip.sel { background: var(--hover-bg); color: var(--text-primary); border-color: var(--border-l4); }
-.chipedit .chip.uns { opacity: .5; }
-.chipedit input { border: none; outline: none; flex: 1; min-width: 90px; font-size: 13px; background: transparent; color: var(--text-primary); padding: 2px 4px; }
+/* multi-select */
+.msel { position: relative; }
+.msel-box { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 34px;
+  border: .5px solid var(--border-l2); border-radius: 8px; padding: 4px 8px; background: var(--bg-base); cursor: pointer; }
+.msel-box:hover { border-color: var(--border-l4); }
+.msel-box .placeholder { color: var(--text-tertiary); font-size: 13px; }
+.msel-caret { margin-left: auto; color: var(--text-caption); font-size: 11px; }
+.msel-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 8; display: none;
+  background: var(--layer-2); border: .5px solid var(--border-l4); border-radius: 8px; box-shadow: var(--lv2);
+  padding: 6px; max-height: 200px; overflow: auto; }
+.msel.open .msel-menu { display: block; }
+.msel-row { display: flex; gap: 8px; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.msel-row:hover { background: var(--hover-bg); }
+.msel-add { display: flex; gap: 6px; padding: 4px 8px; border-top: .5px solid var(--border-l2); margin-top: 4px; }
+.msel-add input { flex: 1; font-size: 13px; padding: 3px 8px; border-radius: 6px; border: .5px solid var(--border-l2); background: var(--bg-base); color: var(--text-primary); }
 input, textarea { font: inherit; }
 
 /* HR recruit chat */
