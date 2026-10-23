@@ -276,7 +276,7 @@ describe("insertReference（官方 scoped 事件径）", () => {
     clipboardText: "〔引用：选段摘要〕",
   };
 
-  it("bail 返回 true：tail span-CAS 载荷 + 聚焦归还", () => {
+  it("bail 返回 true：tail span-CAS 载荷 + 零还焦（fix-31：还焦抢替身键击焦点，官方 facade.insertReference 契约不含 focus）", () => {
     const world = makeWorld();
     harness = mountWithFace(world);
     expect(harness.face.insertReference(REFERENCE)).toBe(true);
@@ -284,7 +284,7 @@ describe("insertReference（官方 scoped 事件径）", () => {
       reference: REFERENCE,
       span: { start: 0, end: 0, draftRev: 1 },
     });
-    expect(world.focus).toHaveBeenCalledTimes(1);
+    expect(world.focus).not.toHaveBeenCalled();
   });
 
   it("bail 返回值漂移但 occurrences 增长（bug 2d5434d1 症状级复核）= 仍判成功", () => {

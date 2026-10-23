@@ -68,6 +68,18 @@ export function quoteOccurrencesOf(draft: string, startSeq = 0): readonly Occurr
 const QUOTE_DRAFT_TOKEN_RE = /〔引用：[^〕\n]*〕/g
 
 /**
+ * chip 边缘空白归一（fix-31）：折叠紧贴 quote token 的空白——官方 insertReference
+ * 尾规则（chip 后无分隔空格则补一，ui-conversation runtime.insertReference 核销）
+ * 使 chip 邻接空白在回写兜底（setDraft + 重物化）后必然回到官方归一形态，用户对
+ * chip 邻接空白的删除无法经官方动词在官方机保持。同步判据（回写回声门 + fix-28
+ * 回灌判据）按此归一比较：token 集与 chip 计数一致、仅 chip 邻接空白有差 = 等价
+ * （已知边界：该空白删除在官方机一侧保留官方归一形态，不逐字逐字镜像）。
+ */
+export function chipEdgeNormalized(draft: string): string {
+  return draft.replace(/\s+〔引用：/g, '〔引用：').replace(/〕[ \t]+/g, '〕')
+}
+
+/**
  * 回写差量（fix-19 纯插入识别）：公共前缀 + 公共后缀收敛——中间段即插入差量。
  * 非纯插入（删除/替换/无差量语义不明）= undefined（调用方走兜底径）。
  */
@@ -152,6 +164,18 @@ export class SurrogateComposerModel {
   private readonly quoteMemo = new Map<string, { source: string; ref: string; label: string; clipboardText: string }>()
   private unregisterEditor: (() => void) | undefined
   private unsubscribeFace: (() => void) | undefined
+  /**
+   * 自身回写进行中旗标（fix-31）：writeBack 触发的官方 notify 会在本 editor update
+   * 批内同步进入 onOfficialSync，此时 setDraft 兜底刚清零官方 occurrences、
+   * rematerialize 尚未补回——fix-28 的 chip 计数判据把这一瞬态差量判为双面分歧而
+   * restoreDraft 重建复制件 editor。实测（logs/super-composer/fix-20/005、008 取证）：
+   * 首次删除本可落稿，但重建把编辑器 DOM/选区测量基准打碎后，双面（含官方 composer）
+   * 后续 Backspace 全部空删——键击链一次性报废。写中一拍抑制重建：真键击径复制件
+   * chip 节点本就是删除后真值，rematerialize 补回后计数自洽零重建；写毕补偿同步
+   * 补跑 fix-28 判据——程序化 setDraft 径（chip 被整稿替换摧毁、计数不等）仍回灌
+   * 重物化复制件 chip，官方持 chip 复制件残留明文的持久分歧不受此豁免。
+   */
+  private writingBack = false
 
   constructor(
     private readonly face: DraftSyncFace,
@@ -291,7 +315,9 @@ export class SurrogateComposerModel {
     this.runtime.refreshProjection()
     const projection = this.runtime.projection
     const text = projection.clipboardText
-    if (text !== this.syncedDraft) this.writeBack(text)
+    // fix-31：回声门按 chip 边缘归一比较（官方重物化尾规则使 chip 邻接空白在官方机
+    // 侧恒为归一形态；字面不等会驱动 setDraft+重物化逐键空转回写环）。
+    if (chipEdgeNormalized(text) !== chipEdgeNormalized(this.syncedDraft)) this.writeBack(text)
     try {
       this.face.trackMention(text, projection.selection?.end ?? projection.detectText.length)
     } catch {
@@ -309,28 +335,36 @@ export class SurrogateComposerModel {
       state = undefined
     }
     this.harvestQuoteMemo(state?.occurrences ?? [])
-    const occurrences = (state?.occurrences ?? []) as readonly { readonly offset?: unknown; readonly length?: unknown }[]
-    const chipsInvolved =
-      occurrences.length > 0 || QUOTE_DRAFT_TOKEN_RE.test(text) || QUOTE_DRAFT_TOKEN_RE.test(this.syncedDraft)
-    QUOTE_DRAFT_TOKEN_RE.lastIndex = 0
-    if (!chipsInvolved) {
-      try {
-        this.face.setDraft(text)
-      } catch {
-        // fail-soft
+    this.writingBack = true
+    try {
+      const occurrences = (state?.occurrences ?? []) as readonly { readonly offset?: unknown; readonly length?: unknown }[]
+      const chipsInvolved =
+        occurrences.length > 0 || QUOTE_DRAFT_TOKEN_RE.test(text) || QUOTE_DRAFT_TOKEN_RE.test(this.syncedDraft)
+      QUOTE_DRAFT_TOKEN_RE.lastIndex = 0
+      if (!chipsInvolved) {
+        try {
+          this.face.setDraft(text)
+        } catch {
+          // fail-soft
+        }
+        return
       }
-      return
-    }
-    const delta = insertDeltaOf(this.syncedDraft, text)
-    if (delta !== undefined && state !== undefined && this.face.insertText !== undefined) {
-      const start = detectOffsetAtClipboardOffset(this.syncedDraft, occurrences, delta.at)
-      try {
-        if (this.face.insertText(delta.text, { start, end: start, draftRev: state.draftRev }) === true) return
-      } catch {
-        // fail-soft（回落症状级）
+      const delta = insertDeltaOf(this.syncedDraft, text)
+      if (delta !== undefined && state !== undefined && this.face.insertText !== undefined) {
+        const start = detectOffsetAtClipboardOffset(this.syncedDraft, occurrences, delta.at)
+        try {
+          if (this.face.insertText(delta.text, { start, end: start, draftRev: state.draftRev }) === true) return
+        } catch {
+          // fail-soft（回落症状级）
+        }
       }
+      this.fallbackSetDraft(text)
+    } finally {
+      this.writingBack = false
+      // 回写收尾补偿同步（fix-31）：写中脉冲被抑制后补跑 fix-28 chip 真值判据
+      //（真键击径计数相等 → 零重建；程序化 setDraft 径计数不等 → 仍回灌重物化）。
+      this.onOfficialSync()
     }
-    this.fallbackSetDraft(text)
   }
 
   /**
@@ -410,9 +444,13 @@ export class SurrogateComposerModel {
       // 重物化后官方草稿字符串与复制件 projection 相等但官方持 chip、复制件残留明文
       // token，字符串回声抑制会把双面 chip 性分歧钉死（Root cause 同源：删除收敛须
       // 双面 chip 真值一致，不只 clipboard 投影一致）。
+      // fix-31：字符串与计数比较均按 chip 边缘归一（chipEdgeNormalized）——官方
+      // insertReference 尾规则使 chip 邻接空白在官方机侧恒为归一形态，字面比较会把
+      // 用户对 chip 邻接空白的合法删除逐键回灌回滚（吞键根因之一）。
       if (
-        state.draft !== this.runtime.projection.clipboardText
-        || (state.occurrences?.length ?? 0) !== this.runtime.projection.occurrences.length
+        (chipEdgeNormalized(state.draft) !== chipEdgeNormalized(this.runtime.projection.clipboardText)
+          || (state.occurrences?.length ?? 0) !== this.runtime.projection.occurrences.length)
+        && !this.writingBack
       ) {
         this.runtime.restoreDraft(state.draft, quoteOccurrencesOf(state.draft))
         this.runtime.refreshProjection()

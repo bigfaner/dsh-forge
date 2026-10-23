@@ -11,6 +11,7 @@
 // runtime.ts）：setDraft 纯文本整稿替换（occurrences 清零）、insertReference span
 // 覆盖域替换 chip（$replaceDetectSpanWithNodes）、insert-text bail 按 detect span 插文本。
 import { describe, expect, it, vi } from "vitest";
+import { $getRoot, $getSelection, $isRangeSelection, $isTextNode } from "lexical";
 import { createSuperComposerDataFace, tailSpanOf, type DataFaceServices } from "../src/client/data-face.js";import {
   SurrogateComposerModel,
   insertDeltaOf,
@@ -228,12 +229,15 @@ describe("fix-18: setDraft 兜底不摧毁 quote chip 真值（bug d7fe1ab6）",
     const model = new SurrogateComposerModel(face, () => {});
     model.start();
     officialInsertReference(official, "〔引用：文档摘要〕");
+    officialSetDraft(official, "〔引用：文档摘要〕 x"); // 尾部普通字符（非 chip 边缘空白）
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev += 1;
     face.notify();
-    // 复制件端破坏性差量：删去尾部空格（长度收缩 = 非纯插入 → 旧径 setDraft 兜底）
-    model.runtime.setDraft("〔引用：文档摘要〕");
+    // 复制件端破坏性差量：删去尾部 x（长度收缩 = 非纯插入 → 兜底径）
+    model.runtime.setDraft("〔引用：文档摘要〕 ");
     // 修复后：token 被换回官方 chip（occurrences 1）；修复前 occurrences=0 → 发送明文
     expect(official.occurrences).toHaveLength(1);
-    expect(official.draft).toBe("〔引用：文档摘要〕");
+    expect(official.draft).toBe("〔引用：文档摘要〕 ");
     expect(face.insertReference).toHaveBeenCalledWith(
       expect.objectContaining({ source: "quote", ref: "quote:文档摘要", clipboardText: "〔引用：文档摘要〕" }),
       expect.objectContaining({ start: 0, end: 9 }),
@@ -273,10 +277,13 @@ describe("fix-18: setDraft 兜底不摧毁 quote chip 真值（bug d7fe1ab6）",
     const model = new SurrogateComposerModel(face, () => {});
     model.start();
     officialInsertReference(official, "〔引用：文档摘要〕");
+    officialSetDraft(official, "〔引用：文档摘要〕 x");
+    official.occurrences = occurrencesOf(official.draft, false);
+    official.draftRev += 1;
     face.notify();
-    model.runtime.setDraft("〔引用：文档摘要〕");
+    model.runtime.setDraft("〔引用：文档摘要〕 "); // 删尾部 x（非 chip 边缘空白）
     expect(face.insertReference).not.toHaveBeenCalled();
-    expect(official.draft).toBe("〔引用：文档摘要〕");
+    expect(official.draft).toBe("〔引用：文档摘要〕 ");
   });
 });
 
@@ -415,6 +422,82 @@ describe("fix-28: Backspace 删 chip 收敛（真实 data-face insertReference s
     );
     const req = bail.mock.calls[0]?.[2] as { span: { start: number; end: number; draftRev: number } };
     expect(req.span).toEqual({ start: 2, end: 8, draftRev: 0 });
+  });
+});
+
+// ─────────────────────────── fix-31：Backspace 真键击径在 chip 边界收敛（bug 0c6f7504） ───────────────────────────
+//
+// 上面的删除测试都用 runtime.setDraft 程序化整稿写模拟删除——绕开了真键击径。
+// 真机证据（logs/super-composer/1.66/003-backspace-chip/，commit da48dfa1）：替身
+// 输入面真机 Backspace 在 chip 边界被吞（6 击零删减），'x' 对照可删。此处按 Lexical
+// plain-text KEY_BACKSPACE 语义（caret 置末 → RangeSelection.deleteCharacter(true)）
+// 驱动复制件 editor 的真删除径，验证删除经 writeBack→官方写入→onOfficialSync 回灌
+// 全链后收敛不回滚。
+
+/** 删除方向驱动（happy-dom 无 domSelection.modify——Lexical 0.49 向后删除的 DOM
+ * 测量前提缺席）：按 deleteCharacter 扩展后的等价 RangeSelection 驱动共享删除原语
+ * removeText——文本单元 = 尾字符；chip = 尾节点整体。 */
+function backspaceUnitAtEnd(editor: { update: (fn: () => void, opts?: unknown) => void }): "text" | "chip" | "noop" {
+  let kind: "text" | "chip" | "noop" = "noop";
+  editor.update(() => {
+    const root = $getRoot();
+    const para = root.getLastChild();
+    if (para === null || !("getChildren" in para)) return;
+    const kids = (para as { getChildren: () => { getKey(): string }[] }).getChildren();
+    const last = kids[kids.length - 1];
+    if (last === undefined) return;
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) return;
+    const paraKey = para.getKey();
+    if ($isTextNode(last as never)) {
+      const size = (last as unknown as { getTextContentSize(): number }).getTextContentSize();
+      if (size === 0) return;
+      selection.anchor.set(last.getKey(), size - 1, "text");
+      selection.focus.set(last.getKey(), size, "text");
+      kind = "text";
+    } else {
+      const index = kids.length - 1;
+      selection.anchor.set(paraKey, index, "element");
+      selection.focus.set(paraKey, index + 1, "element");
+      kind = "chip";
+    }
+    selection.removeText();
+  }, { discrete: true });
+  return kind;
+}
+
+describe("fix-31: Backspace 真键击径（deleteCharacter）在 chip 边界收敛（bug 0c6f7504）", () => {
+  it("Backspace 删 chip 尾空格 → 复制件保持删除、官方保归一形态、chip 计数双面一致（fix-31 已知边界）", () => {
+    const { official, face, notify } = realFaceWorld();
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialSetDraft(official, "〔引用：甲〕 〔引用：乙〕 ");
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev = 1;
+    notify();
+    expect(model.runtime.projection.clipboardText).toBe("〔引用：甲〕 〔引用：乙〕 ");
+    expect(backspaceUnitAtEnd(model.runtime.editor)).toBe("text");
+    // 收敛：尾空格删除在复制件保持（不回灌回滚）；官方机经重物化尾规则保持归一
+    // 形态（官方 insertReference 契约不可表达「chip 结尾无尾随空格」）；双面 chip
+    // 真值一致、无增殖。
+    expect(model.runtime.projection.clipboardText).toBe("〔引用：甲〕 〔引用：乙〕");
+    expect(official.draft).toBe("〔引用：甲〕 〔引用：乙〕 ");
+    expect(official.occurrences).toHaveLength(2);
+  });
+
+  it("连续 Backspace 删到 chip 本体 → chip 删除、官方 occurrences 单调减、零增殖", () => {
+    const { official, face, notify } = realFaceWorld();
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialSetDraft(official, "〔引用：甲〕 〔引用：乙〕 ");
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev = 1;
+    notify();
+    backspaceUnitAtEnd(model.runtime.editor); // 删尾空格
+    expect(backspaceUnitAtEnd(model.runtime.editor)).toBe("chip"); // 删 chip 乙
+    expect(model.runtime.projection.clipboardText).toBe("〔引用：甲〕 ");
+    expect(official.occurrences).toHaveLength(1);
+    expect(official.draft).toBe("〔引用：甲〕 ");
   });
 });
 

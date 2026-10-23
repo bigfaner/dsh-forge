@@ -525,11 +525,11 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
         }
         if (after === undefined || !referenceApplied(before, after, reference.clipboardText)) return false
       }
-      try {
-        face.focus()
-      } catch {
-        // best effort（插入已落——还焦失败不回滚）
-      }
+      // 无还焦（fix-31，bug 0c6f7504）：官方 facade.insertReference 契约不含 focus
+      //（ui-conversation facade.ts:435 逐条核销——纯插入动词，还焦是 pick 路径自己的
+      // 事，index.ts 添加到对话径自带 input.focus）。替身删除径经此重物化时，还焦会
+      // 在键击中把 activeElement 从替身输入面抢到官方 composer——后续 Backspace 落
+      // 官方面，替身 chip 边界删除被吞。
       return true
     },
     insertText(text, span) {
