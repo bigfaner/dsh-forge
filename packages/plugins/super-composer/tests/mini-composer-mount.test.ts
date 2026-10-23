@@ -404,6 +404,43 @@ describe("1.47 引用自动展开（surfaceOnReference——收起态直展卡�
   });
 });
 
+describe("fix-19: 单一数据面收敛（composerFace 第二实例退役——挂载层扇出承载复制件同步）", () => {
+  it("卡片在场时官方草稿变更 → 复制件输入区同步（扇出链：face → fanout → 模型同步）", async () => {
+    // 官方 conversation.input 面（state store 可订阅 + setDraft 官方契约语义）
+    const listeners = new Set<() => void>();
+    const official = { draft: "", draftRev: 0, phase: "plain" as const, occurrences: [] as unknown[], queue: [] };
+    const inputFace = {
+      setDraft: (text: string) => {
+        official.draft = text;
+        official.draftRev += 1;
+        for (const l of Array.from(listeners)) l();
+      },
+      submit: () => undefined,
+      focus: () => undefined,
+      state: {
+        getSnapshot: () => official,
+        subscribe: (l: () => void) => {
+          listeners.add(l);
+          return () => listeners.delete(l);
+        },
+      },
+    };
+    const ctx = stubCtx({ sessions: sessionsLiveWithInput });
+    (ctx as unknown as Record<string, unknown>).conversation = { input: { for: () => inputFace } };
+    setFullscreenMarker(true);
+    superComposerClient.apply(ctx);
+    await waitFor(() => document.querySelector("[data-dscf-official-input] [data-composer-input]") !== null);
+    // 官方机器草稿变更（他端写入）→ 单一 face 扇出 → 复制件回灌
+    official.draft = "官方侧新草稿";
+    official.draftRev += 1;
+    for (const l of Array.from(listeners)) l();
+    await waitFor(() =>
+      document.querySelector("[data-dscf-official-input] [data-composer-input]")!.textContent === "官方侧新草稿",
+    );
+    expect(document.querySelector("[data-dscf-official-input] [data-composer-input]")!.textContent).toBe("官方侧新草稿");
+  });
+});
+
 /** Esc 键直发（现身球态解除径）。 */
 function fireEsc(): void {
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/super-composer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "super-composer cordis 插件（全屏简易 chat view 替身：全屏感知 + 底部一体卡替身）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch。",

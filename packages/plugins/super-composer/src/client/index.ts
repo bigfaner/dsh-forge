@@ -213,18 +213,29 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     } as never,
   })
   const root = createRoot(container)
-  // 替身 composer 专用数据面（fix-12：复制件 InputBar/DraftEditor 宿主的单一订阅者
-  // ——与外层渲染扇出 face 分实例，互不覆写订阅）
-  const composerFace = createSuperComposerDataFace({
-    sessions: readSessionsOf(origin) as never ?? readSessionsOf(ctx) as never,
-    conversation: { input: { for: composerFaceOf } },
-    bail: readBailOf(ctx) ?? readBailOf(origin),
-    inputTriggers: {
-      get sessionOf(): ((actx: unknown) => never) | undefined {
-        return (readInputTriggersOf(ctx) ?? readInputTriggersOf(origin))?.sessionOf as never
-      },
-    } as never,
-  })
+  // ── fix-19 草稿同步通用机制（用户架构裁决正本）──
+  // 唯一数据面 = 上方单一 face（官方 conversation.input.for(actx) 草稿源镜像）；
+  // 数据订阅单槽（data-face 单订阅者契约）由挂载层扇出聚合：face → fanout →
+  // { render, 复制件模型同步 }。可见性门控（tracker/activity/surfaceState）只决定
+  // 替身显不显示，永不承载草稿数据职责；替身对草稿的全部读取/回写都经同一 face
+  // 投影与官方动词正门（bail insert-text / setDraft / submit）——无第二份各自为政
+  // 的数据面实例（原 composerFace 独立实例退役）。
+  const syncListeners = new Set<() => void>()
+  const fanout = (): void => {
+    for (const listener of Array.from(syncListeners)) {
+      try {
+        listener()
+      } catch {
+        // 单监听者异常不外溢扇出
+      }
+    }
+  }
+  const subscribeSync = (listener: () => void): (() => void) => {
+    syncListeners.add(listener)
+    return () => {
+      syncListeners.delete(listener)
+    }
+  }
   // bug 1ab2f4e6：全屏聚焦缝跨包组合 + 1.45 引用现身缝——cordis 具名服务注册在
   // render 装配之后（下方，surfaceOnReference 声明依赖 render）。
   // 1.30 slots 复用裁决：conversation.content 工厂桥（官方树内 shell.overlay 入口
@@ -282,7 +293,8 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
         miniComposerPropsOf(face, {
           onExitFullscreen: options.exitFullscreen ?? (() => undefined),
           mention: mentionMenuOf(face),
-          composer: composerFace,
+          composer: face,
+          subscribeSync,
           expandRequest,
           reportCollapsed: (collapsed: boolean) => {
             collapsedProbe.collapsed = collapsed
@@ -303,7 +315,8 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     focusFullscreenInput: focusFullscreenInputOf(container),
     surfaceOnReference,
   })
-  const off = face.subscribe(render)
+  const off = face.subscribe(fanout)
+  syncListeners.add(render)
   const offFullscreen = options.tracker?.subscribe(render)
   const offActivity = options.activity?.subscribe(render)
   let torn = false
@@ -333,7 +346,6 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     root.unmount()
     container.remove()
     face.dispose()
-    composerFace.dispose()
   }
 }
 function mutationWatch(doc: Document): ((notify: () => void) => () => void) | undefined {

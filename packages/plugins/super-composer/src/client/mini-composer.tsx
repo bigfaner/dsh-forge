@@ -83,6 +83,11 @@ export interface MiniComposerProps {
    * 创建的专用实例，单订阅者契约；缺席 = 不渲染输入区）。
    */
   readonly composer?: SuperComposerDataFace
+  /**
+   * 挂载层草稿同步信号扇出（fix-19 单一数据面收敛：复制件模型经此取官方机器
+   * 变更，不再私挂第二份数据面订阅；缺席 = 复制件直订 composer face）。
+   */
+  readonly subscribeSync?: (listener: () => void) => () => void
   /** 空闲阈值 ms（默认 30_000；测试注入缩短） */
   readonly idleMs?: number
   /** 预告时长 ms（默认 3_000；测试注入缩短） */
@@ -607,6 +612,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           {props.composer !== undefined ? (
             <SurrogateComposer
               face={props.composer}
+              subscribeSync={props.subscribeSync}
               streaming={props.streaming}
               onSubmitted={(): void => setViewSafe({ expanded: true, preview: false })}
               onFocusChange={setFocused}

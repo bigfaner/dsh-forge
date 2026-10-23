@@ -248,9 +248,20 @@ export function trackGuardOf(phase: InputStateMirror['phase']): 'plain' | 'claim
   return 'claimed'
 }
 
-/** span-CAS 构造（草稿末尾 + 当前 draftRev——open-session.ts tailSpanOf 同源）。 */
+/**
+ * span-CAS 构造（草稿 detect 末尾 + 当前 draftRev）。fix-19 对齐官方 span-map 平面
+ * 契约（quote-reference bug 043166fc 同源判例）：chip 在 detect 投影坍缩为单字符，
+ * InputState.draft 是 clipboard 投影——occurrences 反推 detect 尾 = draft.length −
+ * Σ(chip 长 − 1)；clipboard 平面旧径在 chip 在稿时 span.end 越界 → bail 拒绝 →
+ * 替身径插入静默被吞。
+ */
 export function tailSpanOf(state: InputStateMirror): TokenSpanMirror {
-  return { start: state.draft.length, end: state.draft.length, draftRev: state.draftRev }
+  const chipExtra = (state.occurrences ?? []).reduce<number>((n, occ) => {
+    const len = (occ as { length?: unknown } | null | undefined)?.length
+    return n + (typeof len === 'number' && Number.isFinite(len) ? Math.max(0, len - 1) : 0)
+  }, 0)
+  const at = state.draft.length - chipExtra
+  return { start: at, end: at, draftRev: state.draftRev }
 }
 
 /** 插入事实复核（bug 2d5434d1 症状级：occurrences 增长 ∨ 草稿尾接 clipboardText）。 */
@@ -279,6 +290,11 @@ export interface SuperComposerDataFace {
   setDraft(text: string): void
   /** 草稿尾插入原生引用 chip（span-CAS + bail slash/input-insert-reference 官方径） */
   insertReference(reference: ReferenceInsertMirror): boolean
+  /**
+   * chip 保持文本插入（fix-19 单写者正门：bail slash/input-insert-text + span-CAS；
+   * 复制件回写与替身径文本插入共用——官方 editor 动词，chip 节点零损伤）。
+   */
+  insertText(text: string, span: TokenSpanMirror): boolean
   /** 进入提交（官方发送链 submit 同径——mode 透传 busyEnter 投影，含 slash 仲裁与默认 sink） */
   submit(mode?: unknown, source?: 'click' | 'enter'): void
   /** 消息流投影（同一 eventSource 快照——durable + 流式增量 + streaming 旗标） */
@@ -508,6 +524,16 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
         // best effort（插入已落——还焦失败不回滚）
       }
       return true
+    },
+    insertText(text, span) {
+      const bail = services.bail
+      const binding = bindingOf(services)
+      if (bail === undefined || binding === undefined) return false
+      try {
+        return bail(binding.ctx, 'slash/input-insert-text', { text, span }) === true
+      } catch {
+        return false
+      }
     },
     submit(mode, source) {
       try {
