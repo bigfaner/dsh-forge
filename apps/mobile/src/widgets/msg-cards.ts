@@ -549,11 +549,18 @@ export function renderCard(projection: Projection, opts: RenderCardOptions = {})
       renderInline(bubble, projection.text)
       return bubble
     }
-    case 'assistant-message':
+    case 'assistant-message': {
+      // bug 9053cfbe：纯 tool-call 载体轮零渲染——hidden 占位保 appendChild 面
+      if (isEmptyAssistantTurn(projection, opts.streamingSeq)) {
+        const stub = el('div')
+        stub.hidden = true
+        return stub
+      }
       return renderAssistantBubble(projection.text, {
         ...(projection.interrupted ? { interrupted: true } : {}),
         ...(opts.streamingSeq === projection.seq ? { streaming: true } : {}),
       })
+    }
     case 'tool-call':
     case 'tool-result':
       // 未配对的散卡不渲染——由 pairToolActivity 配对后经 renderToolCard 输出
@@ -601,6 +608,20 @@ export function isReasoningOnly(
   projection: Projection,
 ): projection is Extract<Projection, { kind: 'assistant-message' }> {
   return projection.kind === 'assistant-message' && projection.text === '' && projection.reasoning !== ''
+}
+
+/** bug 9053cfbe：纯 tool-call 载体轮判定——零文本零思考非 interrupted 非 streaming 尾，
+ *  渲染层跳过（否则渲染空灰气泡噪音条）。 */
+export function isEmptyAssistantTurn(
+  projection: Extract<Projection, { kind: 'assistant-message' }>,
+  streamingSeq?: number,
+): boolean {
+  return (
+    projection.text === '' &&
+    projection.reasoning === '' &&
+    projection.interrupted !== true &&
+    streamingSeq !== projection.seq
+  )
 }
 
 export type { TextPart }

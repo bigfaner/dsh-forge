@@ -7,6 +7,7 @@ import {
   docFileName,
   estimateLineCount,
   formatSize,
+  isEmptyAssistantTurn,
   isShellTool,
   toolCollapsedLabel,
   loopKindOf,
@@ -155,5 +156,15 @@ describe('文档卡五类识别与 size 刻度（屏⑨——纯函数面，DOM 
     expect(formatSize(6349)).toBe('6.2 KB')
     expect(formatSize(18432)).toBe('18 KB')
     expect(formatSize(2 * 1024 * 1024 + 512 * 1024)).toBe('2.5 MB')
+  })
+})
+
+describe('bug 9053cfbe：零文本零思考 assistant 轮不渲染空灰气泡', () => {
+  const emptyTurn: Projection = { kind: 'assistant-message', seq: 7, text: '', reasoning: '', toolCalls: [{ id: 'c1', name: 'grep', arguments: '{}' }] }
+  it('纯工具载体轮（零文本零思考非 interrupted）= 空轮判定', () => {
+    expect(isEmptyAssistantTurn(emptyTurn)).toBe(true)
+    expect(isEmptyAssistantTurn({ ...emptyTurn, interrupted: true })).toBe(false)
+    expect(isEmptyAssistantTurn({ ...emptyTurn, text: '正文' })).toBe(false)
+    expect(isEmptyAssistantTurn({ kind: 'assistant-message', seq: 8, text: '', reasoning: '想', toolCalls: [] })).toBe(false)
   })
 })
