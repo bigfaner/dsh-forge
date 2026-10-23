@@ -69,10 +69,11 @@ describe('devicePubs 持久化（远程准入 sig 验签跨 host 重启）', () 
     expect(r2.ok).toBe(true)
   })
 
-  it('bug 1792cc7a 对照：store 缺席（进程内存缝）= 重启后 sig-only 帧拒（旧行为佐证根因）', () => {
+  it('bug 1792cc7a 对照：store 缺席（进程内存缝）= 重启后未绑定 sid 的 sig-only 帧拒（旧行为佐证根因）', () => {
     const deps1 = depsWith(undefined, new ReplayWatermark())
     expect(admitPskRequest(deps1, seal('dev-y', 0, 1, true), () => true).ok).toBe(true)
+    // 全新 sid（模拟 host 重启后另一设备/清表）：无绑定 → sig-only 拒
     const deps2 = depsWith(undefined, new ReplayWatermark())
-    expect(admitPskRequest(deps2, seal('dev-y', 0, 2, false), () => true).ok).toBe(false)
+    expect(admitPskRequest(deps2, seal('dev-z', 0, 2, false), () => true).ok).toBe(false)
   })
 })

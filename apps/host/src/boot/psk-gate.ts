@@ -218,18 +218,27 @@ export function admitPskRequest(deps: PskGateDeps, rawBody: string, channelAdmit
  *  deps.devicePubs 持久 store（缺席 = 进程内存表旧行为）。 */
 function verifyDeviceSignature(deps: PskGateDeps, env: PskEnvelope): boolean {
   if (env.sig === undefined) return false
-  const publicDer = env.dpk !== undefined ? Buffer.from(env.dpk, 'base64') : deps.devicePubs?.get(env.sid)
+  const publicDer = env.dpk !== undefined ? Buffer.from(env.dpk, 'base64') : deps.devicePubs !== undefined ? deps.devicePubs.get(env.sid) : devicePubOf(env.sid)
   if (publicDer === undefined) return false
   const material = sigMaterial(Buffer.from(env.ct, 'base64'), Buffer.from(env.iv, 'base64'), env.seq)
-  const ok = verifyPayload(publicDer, material, Buffer.from(env.sig, 'base64'))
-  if (!ok) console.log('[verify-dbg]', { dpkLen: env.dpk?.length, sigLen: env.sig?.length, materialLen: material.length, pubLen: publicDer.length })
-  if (!ok) return false
-  if (env.dpk !== undefined) deps.devicePubs?.set(env.sid, publicDer)
+  if (!verifyPayload(publicDer, material, Buffer.from(env.sig, 'base64'))) return false
+  if (env.dpk !== undefined) {
+    if (deps.devicePubs !== undefined) deps.devicePubs.set(env.sid, publicDer)
+    else bindDevicePub(env.sid, publicDer)
+  }
   return true
 }
 
 /** sid → 设备公钥绑定表（进程内默认表——deps.devicePubs 缺席时的旧行为缝） */
 const legacyDevicePubs = new Map<string, Buffer>()
+
+function devicePubOf(sid: string): Buffer | undefined {
+  return legacyDevicePubs.get(sid)
+}
+
+function bindDevicePub(sid: string, publicDer: Buffer): void {
+  legacyDevicePubs.set(sid, publicDer)
+}
 
 /** 验签失败归因（诊断面——未绑定 sid = 需 dpk 注册帧 / 已绑定 = 签名不匹配） */
 function verifyFailReason(deps: PskGateDeps, env: PskEnvelope): string {
