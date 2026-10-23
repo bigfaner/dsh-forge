@@ -478,7 +478,7 @@ export function mount(root: HTMLElement): void {
           try {
             const result = await ctx.rpc!.call('forge:proxy/projects-grouped', {})
             if (!result.ok || rendered?.key !== `chat:${sessionId}`) return
-            const data = result.data as { projects?: ReadonlyArray<{ sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown }; asOfSeq?: unknown } }> }> } | undefined
+            const data = result.data as { projects?: ReadonlyArray<{ wsPath?: unknown; sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown }; asOfSeq?: unknown } }> }> } | undefined
             for (const project of data?.projects ?? []) {
               if (chatRootRef.current === undefined && typeof project?.wsPath === 'string' && project.wsPath !== '') {
                 chatRootRef.current = project.wsPath
@@ -521,7 +521,7 @@ export function mount(root: HTMLElement): void {
             // 双域皆被 api-guard 403（LAN 明文 __rpc 携配对 cookie / 隧道 PSK 信封同缝）
             fetchStatus: async () => {
               try {
-                const result = await groupedGate.run(() => ctx.rpc.call<unknown>('forge:proxy/projects-grouped', {}))
+                const result = await groupedGate.run(() => ctx.rpc!.call<unknown>('forge:proxy/projects-grouped', {}))
                 return { ok: result.ok, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
               } catch {
                 return { ok: false, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
