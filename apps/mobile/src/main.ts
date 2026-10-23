@@ -53,7 +53,6 @@ import {
 } from './views/models.ts'
 import { createTasksView, deriveTaskRuns } from './views/tasks.ts'
 import { catalogProjection, createWorkerSessionView } from './views/worker.ts'
-import { createAskView } from './views/ask.ts'
 import { createReader } from './views/reader.ts'
 
 // ---------------------------------------------------------------------------
@@ -174,9 +173,10 @@ export function mount(root: HTMLElement): void {
               callId: typeof payload?.callId === 'string' ? payload.callId : undefined,
               questions: Array.isArray(payload?.questions) ? payload.questions : undefined,
             }
-            // 同位互斥（用户裁决 2026-10-23）：当前 chat 视图在 → 嵌入槽位替换 composer；否则整页兜底
+            // 同位互斥（用户裁决 2026-10-23）：面板只存在于 chat 槽位——uq 帧仅当
+            // 当前会话且 chat 视图在时直导槽位；否则忽略（刷新/进入会话时经
+            // user-questions-pending 查询自愈恢复面板）
             if (chatAskMountRef.current !== undefined) chatAskMountRef.current(direct, sid)
-            else openAsk(payload)
           }
         },
         onError: () => {
@@ -318,24 +318,6 @@ export function mount(root: HTMLElement): void {
       onExit: () => handle.root.remove(),
     })
     container.appendChild(handle.root)
-  }
-
-  function openAsk(direct?: { sessionId?: unknown; callId?: unknown; questions?: unknown }): void {
-    if (ctx.rpc === null || currentSessionId() === '') return
-    // bug f73315a1：waterfall 请求推送直开（不再等投影——flash 类模型投影不落 active）
-    const directCallId = typeof direct?.callId === 'string' && direct.callId !== '' ? direct.callId : undefined
-    const directQuestions = Array.isArray(direct?.questions) ? direct.questions : undefined
-    const view = createAskView({
-      rpc: ctx.rpc,
-      sessionId: currentSessionId(),
-      ...(directCallId !== undefined ? { initialCallId: directCallId, initialQuestions: directQuestions } : {}),
-      onDone: () => view.remove(),
-      subscribeStream: (onFrame) => {
-        ctx.frameListeners.add(onFrame)
-        return () => ctx.frameListeners.delete(onFrame)
-      },
-    })
-    container.appendChild(view)
   }
 
   let tasksHandle: { root: HTMLElement } | null = null

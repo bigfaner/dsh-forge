@@ -160,19 +160,26 @@ export interface AskDeps {
 }
 
 export function createAskView(deps: AskDeps): HTMLElement {
-  const root = el('div', deps.embedded === true ? 'ask-root ask-embedded' : 'phone-root ask-root')
-  const topbar = el('div', 'topbar')
-  const back = el('button', 'iconbtn')
-  back.innerHTML = '<svg class="ic"><use href="#i-chev"/></svg>'
-  back.style.transform = 'rotate(90deg)'
-  const title = el('div', 'title', '待回答')
-  const skipAll = el('button', 'iconbtn')
-  skipAll.innerHTML = '<svg class="ic"><use href="#i-down"/></svg>'
-  skipAll.title = '关闭面板（本地收起——R12 通道族无交互取消面）'
-  topbar.append(back, title, skipAll)
-
+  const embedded = deps.embedded === true
+  // 嵌入态不套外层面板（用户裁决 2026-10-23：直接渲染题目卡，拒绝 topbar 卡中卡冗余）
+  const root = el('div', embedded ? 'ask-root ask-embedded' : 'phone-root ask-root')
   const view = el('div', 'view ask-view')
-  root.append(topbar, view)
+  let back: HTMLButtonElement | undefined
+  let skipAll: HTMLButtonElement | undefined
+  if (!embedded) {
+    const topbar = el('div', 'topbar')
+    back = el('button', 'iconbtn')
+    back.innerHTML = '<svg class="ic"><use href="#i-chev"/></svg>'
+    back.style.transform = 'rotate(90deg)'
+    const title = el('div', 'title', '待回答')
+    skipAll = el('button', 'iconbtn')
+    skipAll.innerHTML = '<svg class="ic"><use href="#i-down"/></svg>'
+    skipAll.title = '关闭面板（本地收起——R12 通道族无交互取消面）'
+    topbar.append(back, title, skipAll)
+    root.append(topbar, view)
+  } else {
+    root.append(view)
+  }
 
   let pending: PendingInteraction | null = coercePending({
     values: {
@@ -196,8 +203,8 @@ export function createAskView(deps: AskDeps): HTMLElement {
     deps.onClose?.()
     render()
   }
-  back.addEventListener('click', dismiss)
-  skipAll.addEventListener('click', dismiss)
+  back?.addEventListener('click', dismiss)
+  skipAll?.addEventListener('click', dismiss)
 
   async function load(): Promise<void> {
     try {
@@ -305,10 +312,9 @@ export function createAskView(deps: AskDeps): HTMLElement {
     const multi = isMulti(question)
     const card = el('div', 'ask-card')
 
-    // 序号徽标 + 问题同行（桌面端对齐——用户裁决 2026-10-23 简洁化）
+    // 序号徽标 + 问题同行（桌面端对齐）；header 不展示（模型 header 与问题前缀重复——用户裁决 2026-10-23）
     const topRow = el('div', 'ask-toprow')
     topRow.appendChild(el('span', 'ask-counter', `${index + 1}/${total}`))
-    if (question.header !== undefined) topRow.appendChild(el('span', 'ask-header', question.header))
     topRow.appendChild(el('span', 'ask-question', question.question))
     card.appendChild(topRow)
     if (question.detail !== undefined && question.detail !== '') card.appendChild(renderMarkdown(question.detail))
