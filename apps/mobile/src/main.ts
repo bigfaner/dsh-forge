@@ -335,10 +335,12 @@ export function mount(root: HTMLElement): void {
   const openHero = (): void => router.navigate('hero')
 
   /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——双通道装配单点）。 */
-  async function suggestItems(kind: '/' | '@', projectRoot?: string): Promise<{ insert: string; label: string }[]> {
+  async function suggestItems(kind: '/' | '@', projectRoot?: string, sessionId?: string): Promise<{ insert: string; label: string }[]> {
     if (ctx.rpc === null) return []
     if (kind === '/') {
-      const result = await ctx.rpc.call<{ name?: unknown; description?: unknown }[]>('forge:proxy/commands-list', {})
+      // 官方 scoping（dsh-commands list(agent)）：携会话 id 取收敛清单（全局 + agent 阴影层
+      // ——forge 指令走 agent 作用域注册，无 sessionId 只有全局层）
+      const result = await ctx.rpc.call<{ name?: unknown; description?: unknown }[]>('forge:proxy/commands-list', sessionId !== undefined ? { sessionId } : {})
       if (!result.ok || !Array.isArray(result.data)) return []
       return result.data
         .filter((row): row is { name: string; description?: string } => typeof row?.name === 'string' && row.name !== '')
@@ -406,7 +408,7 @@ export function mount(root: HTMLElement): void {
         const chatRootRef = { current: undefined as string | undefined }
         const root = createChatView(sessionId, {
           api: ctx.api,
-          suggest: (kind) => suggestItems(kind, chatRootRef.current),
+          suggest: (kind) => suggestItems(kind, chatRootRef.current, sessionId),
           // bug 1dd4b437：已读游标 host 侧单点（localStorage 随 origin churn 丢失 → 未读全量误报）
           writeReadState: (sid, seq) => {
             void ctx.rpc?.call('forge:remote/read-state-write', { sessionId: sid, seq })

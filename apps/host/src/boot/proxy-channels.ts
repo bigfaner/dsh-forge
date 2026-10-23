@@ -401,10 +401,22 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
   const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session) : {}
   return {
     ...sessionTable,
-    // bug 017b0e5b：commands.list 官方实现 this.view(agent) 依赖实例态——同 344dd76b 一律 bind 后直调
-    [PROXY_CHANNELS.commandsList]: (payload) => {
+    // bug 017b0e5b：commands.list 官方实现 this.view(agent) 依赖实例态——同 344dd76b 一律 bind 后直调。
+    // feature（官方 scoping 语义核销：dsh-commands index.d.ts:76-106——list(agent) = 全局层 +
+    // 该 agent 阴影层，user 指令走 agent 作用域注册）：payload.sessionId 在场 → resolveAgent
+    // 解析活 agent 取收敛清单；缺席/解析失败回退既有调用形态（全局层）。
+    [PROXY_CHANNELS.commandsList]: async (payload) => {
       const commands = requireService(deps.commands, 'commands')
-      return requireMethod(commands.list, 'commands.list').bind(commands)(payload ?? {})
+      const list = requireMethod(commands.list, 'commands.list').bind(commands)
+      const sessionId =
+        typeof (payload as Record<string, unknown> | null)?.['sessionId'] === 'string'
+          ? (payload as Record<string, unknown>)['sessionId'] as string
+          : undefined
+      if (sessionId === undefined || deps.session?.resolveAgent === undefined) return list(payload ?? {})
+      const resolved = await requireMethod(deps.session.resolveAgent, 'session.resolveAgent').call(deps.session, sessionId)
+      const agent = (resolved as { agent?: unknown } | null)?.agent
+      if (agent === undefined) return list({})
+      return list(agent)
     },
     [PROXY_CHANNELS.commandsExecute]: (payload) => {
       const commands = requireService(deps.commands, 'commands')

@@ -305,6 +305,30 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(false)
   })
 
+  it('feature：commands-list 携 sessionId → resolveAgent 收敛 list(agent)（作用域清单）；解析失败回退全局层', async () => {
+    const seenAgents: unknown[] = []
+    const commands = {
+      list: (agent: unknown) => {
+        seenAgents.push(agent)
+        return [{ name: 'run-dag-tasks', description: '派发' }, { name: 'export' }]
+      },
+    }
+    const session = {
+      list: async () => ({ items: SESSIONS }),
+      resolveAgent: async (id: string) => (id === 's-live' ? { agent: { id } } : { error: { code: 'session/not-found' } }),
+    }
+    // ① sessionId 在场 + 活根 → list(agent)
+    const res = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.commandsList, payload: { sessionId: 's-live' } }) as never, res, deps({ proxy: proxyDeps({ commands: commands as never, session: session as never }) }))
+    expect((JSON.parse(res.body) as { data: { name: string }[] }).data.map((c) => c.name)).toContain('run-dag-tasks')
+    expect(seenAgents).toEqual([{ id: 's-live' }])
+    // ② 解析失败（error 形）→ 回退全局层调用（agent 传参回退既有形态）
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: PROXY_CHANNELS.commandsList, payload: { sessionId: 's-gone' } }) as never, res2, deps({ proxy: proxyDeps({ commands: commands as never, session: session as never }) }))
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
+    expect(seenAgents).toEqual([{ id: 's-live' }, {}])
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))
