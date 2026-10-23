@@ -41,6 +41,7 @@ export const DIAG_CHANNEL_REDACTED = 'channel=<redacted>'
 export interface RpcResFace {
   writeHead(code: number, headers?: object): unknown
   end(body?: string): unknown
+  /** bug fc7741a8：真身 ServerResponse 首次写头才翻转——写出前复核位（并发竞态守卫） */
   readonly headersSent?: boolean
 }
 
@@ -135,6 +136,21 @@ function readBody(req: { on(event: string, cb: (chunk: unknown) => void): unknow
 }
 
 /**
+ * RPC 响应安全写（bug fc7741a8 根治）：写出前复核 headersSent——入口守卫只拦顺序二次
+ * 派发，并发双派发窗口内（两调用都过入口守卫，先者在 await handler 期间写头）后到写
+ * 会撞已发头，且异常在其 catch 块内二次抛出穿出「永不 reject」契约 → 上游 fatal 宿主
+ * 崩溃。后到写 = diag 落链 + 静默跳过（响应语义由先到写承载）。
+ */
+function writeRpcReply(res: RpcResFace, code: number, body: string, deps: RemoteHttpRpcDeps, domain: string): void {
+  if (res.headersSent === true) {
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} [${domain}] status=already-sent（并发写竞态静默跳过）`)
+    return
+  }
+  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' })
+  res.end(body)
+}
+
+/**
  * HTTP RPC 分发（/remote/__rpc 单点——child.ts 静态路由内分诊后调用）：
  * 会话门 → body 读取 → 隧道域 PSK 信封强制（唯一 401 owner）→ allowlist 分发 → 信封写出
  * → diag 落链（channel 脱敏）。永不 reject。
@@ -175,6 +191,11 @@ export async function handleRemoteHttpRpc(
     const verdict = admitPskRequest(deps.psk, rawBody, (channel) => table[channel] !== undefined)
     if (!verdict.ok) {
       deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} [${domain}] status=unauthorized`)
+      // bug fc7741a8：写出前复核（入口守卫的窄化对真身运行期翻转无效——Boolean 装箱断路）
+      if (res.headersSent) {
+        deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} [${domain}] status=already-sent（并发写竞态静默跳过）`)
+        return
+      }
       writeConstant401(res)
       return
     }
@@ -185,13 +206,11 @@ export async function handleRemoteHttpRpc(
       // 未准入路径仍 <redacted>）
       const diagChannel = `channel=${verdict.channel}`
       const data = await handler(verdict.payload)
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(verdict.reply(data))
+      writeRpcReply(res, 200, verdict.reply(data), deps, domain)
       deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${diagChannel} [${domain}] status=ok`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(verdict.replyError(message))
+      writeRpcReply(res, 200, verdict.replyError(message), deps, domain)
       // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag；官方 RemoteError 携 details
       // （如 session/agent-busy 的 reason=内层异常串）——一并落链可归因
       const details = (error as { details?: unknown }).details
@@ -211,8 +230,7 @@ export async function handleRemoteHttpRpc(
   } catch {
     // 畸形 body = 400（信封面外——协议层失败）
     deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} [${domain}] status=bad-request`)
-    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
-    res.end()
+    writeRpcReply(res, 400, '', deps, domain)
     return
   }
   const handler = table[channel]
@@ -220,20 +238,17 @@ export async function handleRemoteHttpRpc(
     // bug 12f3590f 同批：allowlist miss 落真实通道名（404 本就暴露，无泄露面——重复再现
     // 的 not-found 可归因到具体通道）
     deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=not-found`)
-    res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify({ ok: false, error: { message: '通道不在受限 allowlist' } }))
+    writeRpcReply(res, 404, JSON.stringify({ ok: false, error: { message: '通道不在受限 allowlist' } }), deps, domain)
     return
   }
   try {
     const data = await handler(payload)
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify({ ok: true, data }))
+    writeRpcReply(res, 200, JSON.stringify({ ok: true, data }), deps, domain)
     // bug 8b97047a：allowlist 命中后通道名落 diag（常量集——无注入/枚举面）
     deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=ok`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify({ ok: false, error: { message } }))
+    writeRpcReply(res, 200, JSON.stringify({ ok: false, error: { message } }), deps, domain)
     // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag；官方 RemoteError details 同批（PSK 分支同改）
     const details = (error as { details?: unknown }).details
     deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)

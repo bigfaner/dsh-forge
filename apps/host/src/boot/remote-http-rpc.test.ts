@@ -308,6 +308,41 @@ describe('bug 12f3590f 二次派发防护（响应已写出 = 静默返回，绝
     expect(lines.some((l) => l.includes('status=already-sent'))).toBe(true)
   })
 
+  it('bug fc7741a8：并发双派发（写头前才翻 headersSent）= 后到写静默跳过，绝不抛错穿出', async () => {
+    // 真实 ServerResponse.headersSent 在首次 writeHead 才翻转——入口守卫拦不住并发窗口
+    const res = fakeRes()
+    let writeCalls = 0
+    const racing = {
+      ...res,
+      get headersSent() {
+        return writeCalls > 0
+      },
+      writeHead: (code: number, headers?: Record<string, unknown>) => {
+        writeCalls += 1
+        if (writeCalls > 1) throw new Error('ERR_HTTP_HEADERS_SENT') // 真身同款抛错
+        return res.writeHead(code, headers)
+      },
+      end: (text?: string) => res.end(text),
+    }
+    let releaseTasks: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseTasks = resolve
+    })
+    const listTasks = async () => {
+      await gate
+      return []
+    }
+    const lines: string[] = []
+    const depsWith = () => deps({ diag: (line) => lines.push(line), tasks: { listTasks, taskStats: async () => ({}) } })
+    const p1 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
+    const p2 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
+    releaseTasks!()
+    // 修复前：后到写头在 catch 内二次抛 ERR_HTTP_HEADERS_SENT 穿出（宿主 fatal）
+    await expect(p1).resolves.toBeUndefined()
+    await expect(p2).resolves.toBeUndefined()
+    expect(lines.some((l) => l.includes('status=already-sent'))).toBe(true)
+  })
+
   it('not-found diag 落真实通道名（allowlist miss 可归因——404 本就暴露无泄露面）', async () => {
     const res = fakeRes()
     const lines: string[] = []
