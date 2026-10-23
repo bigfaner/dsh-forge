@@ -245,6 +245,35 @@ function verifyFailReason(deps: PskGateDeps, env: PskEnvelope): string {
   return deps.devicePubs?.get(env.sid) !== undefined ? '设备签名不匹配' : 'sid 未绑定设备公钥（需 dpk 注册帧）'
 }
 
+/** 设备公钥绑定持久 store（JSON 文件 0600 同型缝——bug 1792cc7a：host 重启后长命 Tab
+ *  sig-only 帧验签依赖绑定表跨重启存活） */
+export function createDevicePubStore(file: string): DevicePubStore {
+  const map = new Map<string, Buffer>()
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
+    for (const [sid, der] of Object.entries(raw)) map.set(sid, Buffer.from(der, 'base64'))
+  } catch {
+    /* 缺席/损坏 = 空表起算 */
+  }
+  const persist = (): void => {
+    try {
+      const out: Record<string, string> = {}
+      for (const [sid, der] of map) out[sid] = der.toString('base64')
+      mkdirSync(dirname(file), { recursive: true })
+      writeFileSync(file, JSON.stringify(out), { mode: 0o600 })
+    } catch {
+      /* 持久化失败不阻门 */
+    }
+  }
+  return {
+    get: (sid) => map.get(sid),
+    set: (sid, der) => {
+      map.set(sid, der)
+      persist()
+    },
+  }
+}
+
 /** s2c 应答封帧（host Ed25519 逐帧签名——v3/§4.2） */
 function sealReply(deps: PskGateDeps, shape: PskPersistShape, deviceKey: Buffer, sid: string, epoch: number, body: unknown): string {
   const seq = deps.watermarks.nextSendSeq(sid, epoch)

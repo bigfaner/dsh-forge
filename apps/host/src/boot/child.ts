@@ -59,6 +59,7 @@ import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from 
 // mobile-ui 1.11：PSK v3 host 侧 + forge:proxy 通道族 + 加密 forge-stream（tunnel-psk v3.1）
 import { isPskEnforcedHost, staticSignatureHeaders, writeConstant401 } from './psk.js'
 import {
+  createDevicePubStore,
   createStreamSealer,
   ensurePskPersist,
   loadPskPersist,
@@ -700,6 +701,8 @@ async function main(): Promise<void> {
     pin: () => pinIssuer.current().pin,
     watermarks: pskWatermarks,
     now: Date.now,
+    // bug 1792cc7a ②：设备公钥绑定持久 store（host 重启后长命 Tab sig-only 帧验签依赖）
+    devicePubs: createDevicePubStore(join(dirname(options.stateDb), 'remote-psk-device-pubs.json')),
   }
   // 1.107 装配期 ensure 单源（tunnel-psk v3.1）：无持久化 → 生成并落盘（新钥 + 新签名钥对）；
   // 有 → 原样加载。IO 失败 fail-soft——门未配置 = 旧门语义过渡期，boot 不受阻。
