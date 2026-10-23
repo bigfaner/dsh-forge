@@ -145,7 +145,7 @@ describe("pick 与 codec 往返", () => {
     const ref = quoteRefOf(snap.id);
     expect(src.codec.clipboardText(ref)).toBe(`〔引用：${snap.summary}〕`);
     const serialized = await src.codec.serialize(ref, ABORT);
-    expect(serialized.startsWith(`<quote id="${ref}" source="${snap.sourcePath}">`)).toBe(true);
+    expect(serialized.trim().startsWith(`<quote id="${ref}" source="${snap.sourcePath}">`)).toBe(true);
     expect(serialized).toContain(snap.text);
     expect(serialized).toContain("</quote>");
     expect(serialized).not.toContain("〔引用：");
@@ -163,7 +163,7 @@ describe("快照缺失回退（永不抛错）", () => {
   it("无快照 serialize 回退最小 quote 块（摘要不可用、无 mention 行、不抛错）", async () => {
     const src = createQuoteReferenceSource();
     const serialized = await src.codec.serialize("quote:ghost", ABORT);
-    expect(serialized).toBe('<quote id="quote:ghost">\n摘要不可用\n</quote>');
+    expect(serialized).toBe('\n\n<quote id="quote:ghost">\n摘要不可用\n</quote>\n\n');
     expect(serialized).not.toContain("〔引用：");
   });
 
@@ -184,6 +184,78 @@ describe("快照缺失回退（永不抛错）", () => {
     const src = createQuoteReferenceSource();
     await expect(src.codec.serialize("", ABORT)).resolves.toBe("");
     expect(src.codec.clipboardText("")).toBe("");
+  });
+});
+
+/**
+ * 官方 sinkSerialized 拼接镜面（dsh-client-ui-conversation lib/client.js）：
+ * `out += draft.slice(cursor, part.offset) + part.text` 逐 chip 展开，尾部
+ * `defaultSink(out.trim(), …)`——产品代码不可改，序列化分隔只能由 codec.serialize
+ * 输出形态承担。此镜面仅作单测装配面，以官方源码为承重依据。
+ */
+async function assembleSubmitText(
+  src: ReturnType<typeof createQuoteReferenceSource>,
+  draft: string,
+  occurrences: readonly { offset: number; length: number; ref: string }[],
+): Promise<string> {
+  const parts = await Promise.all(
+    occurrences.map(async (o) => ({
+      offset: o.offset,
+      length: o.length,
+      text: await src.codec.serialize(o.ref, ABORT),
+    })),
+  );
+  let out = "";
+  let cursor = 0;
+  for (const part of parts) {
+    out += draft.slice(cursor, part.offset) + part.text;
+    cursor = part.offset + part.length;
+  }
+  out += draft.slice(cursor);
+  return out.trim();
+}
+
+describe("发送序列化拼接形态（fix-25 引用块与文本空行分隔）", () => {
+  const TOKEN = "〔引用：文本引用锚定的核心是…〕";
+
+  it("引用块 + 其后文本：块尾与文本之间空行分隔", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    const draft = `${TOKEN}请看这段`;
+    const out = await assembleSubmitText(src, draft, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    expect(out).toMatch(/<\/quote>\n\n请看这段$/);
+  });
+
+  it("引用块 + 其前文本：文本与块之间空行分隔", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    const draft = `先看这个${TOKEN}`;
+    const out = await assembleSubmitText(src, draft, [{ offset: 4, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    expect(out).toMatch(/^先看这个\n\n<quote /);
+    expect(out.endsWith("</quote>")).toBe(true);
+  });
+
+  it("仅引用块：消息首尾不残留空行", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    const out = await assembleSubmitText(src, TOKEN, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    expect(out.startsWith("<quote ")).toBe(true);
+    expect(out.endsWith("</quote>")).toBe(true);
+  });
+
+  it("多 chip + 文本：块与块、块与文本之间均空行分隔", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    src.cacheQuoteSnapshot(snapshot({ id: "second", text: "第二段引用全文" }));
+    const draft = `${TOKEN}${TOKEN}总结一下`;
+    const out = await assembleSubmitText(src, draft, [
+      { offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) },
+      { offset: TOKEN.length, length: TOKEN.length, ref: quoteRefOf("second") },
+    ]);
+    // 相邻双 chip：两侧包裹叠加 → ≥1 空行分隔（拼接零分隔已封堵，叠加留白可接受）。
+    expect(out).toMatch(/<\/quote>\n{2,}<quote /);
+    expect(out).toMatch(/<\/quote>\n\n总结一下$/);
+    expect(out.startsWith("<quote ")).toBe(true);
   });
 });
 

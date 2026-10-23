@@ -247,9 +247,12 @@ export function createQuoteReferenceSource(deps?: { readonly name?: string }): Q
           if (id === undefined) return ''
           // 快照优先（全文真值在即出 <quote> 块——1.32 格式改判：无 mention 行）
           const snapshotted = snapshots.get(id)
-          if (snapshotted !== undefined && snapshotted.text) return serializeQuoteSnapshot(snapshotted)
+          // Root cause: 官方 sinkSerialized 把 codec 输出与草稿切片零分隔拼接——块体
+          // 与相邻用户文本粘连。分隔只能由本 codec 输出承担：\n\n 前后包裹，官方
+          // defaultSink 末端 trim() 削去消息首尾残留（块在端部 = 不多空行）。
+          if (snapshotted !== undefined && snapshotted.text) return `\n\n${serializeQuoteSnapshot(snapshotted)}\n\n`
           // 末级回退：最小 quote 块（快照缺失——会话重启回放等；永不抛错阻断发送）
-          return minimalQuoteBlock(id, snapshotted?.summary)
+          return `\n\n${minimalQuoteBlock(id, snapshotted?.summary)}\n\n`
         } catch {
           return ''
         }
