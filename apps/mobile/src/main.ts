@@ -34,6 +34,7 @@ import {
   type ForgeStreamSource,
 } from './core/forge-stream-source.ts'
 import type { WireEvent } from './core/wire.ts'
+import { createLogSync } from './core/log-sync.ts'
 import { createTunnelPanel } from './widgets/tunnel-panel.ts'
 import { createFab } from './widgets/fab.ts'
 import { createHeroView } from './views/hero.ts'
@@ -117,31 +118,23 @@ export function mount(root: HTMLElement): void {
   const pairDomain = (typeof window !== 'undefined' ? window.location.host : '') || 'default'
 
   // ---- 会话日志缓存（tasks/worker 投影数据源：api.history 快照 + 帧失效重拉）----
-  const logCache = new Map<string, readonly WireEvent[]>()
+  // bug 55d50769：重拉完成即 notify（frameListeners 重读缓存增量外推）——原先帧到达瞬间的
+  // emitFrames 只读旧缓存、重拉完成无通知，显示恒滞后一拍，末帧后的回复/turn-end 永不传播。
   const emitFrames = (): void => {
     for (const listener of Array.from(ctx.frameListeners)) listener()
   }
+  const logSync = createLogSync({
+    history: (sessionId, limit) => ctx.api!.history(sessionId, limit),
+    coerce: coerceHistoryWindow,
+    notify: emitFrames,
+  })
   const getEvents =
     (sessionId: string) =>
     (): readonly WireEvent[] =>
-      logCache.get(sessionId) ?? []
-  const refreshLog = async (sessionId: string): Promise<void> => {
-    if (ctx.api === null || sessionId === '') return
-    try {
-      const raw = await ctx.api.history(sessionId, 500)
-      logCache.set(sessionId, coerceHistoryWindow(raw, 500).entries)
-    } catch {
-      /* 历史拉取失败保持旧快照（轮询/帧腿下轮重试） */
-    }
-  }
+      logSync.get(sessionId)
   // 节流刷新（每会话 ~600ms 一次——运行期事件密集，逐事件 history 拉取打爆通道）
-  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const scheduleRefresh = (sessionId: string): void => {
-    if (refreshTimers.has(sessionId)) return
-    refreshTimers.set(sessionId, setTimeout(() => {
-      refreshTimers.delete(sessionId)
-      void refreshLog(sessionId)
-    }, 600))
+    logSync.schedule(sessionId)
   }
 
   // ---- forge-stream（懒开：会话面路由首达时订阅；hero 首屏零长连）----
@@ -214,16 +207,16 @@ export function mount(root: HTMLElement): void {
       return {
         start() {
           ensureStream()
-          void refreshLog(sessionId)
+          void logSync.refresh(sessionId)
             .then(() => {
-              const events = logCache.get(sessionId) ?? []
+              const events = logSync.get(sessionId) ?? []
               for (const event of events) if (event.seq > lastSeq) lastSeq = event.seq
               sink.snapshot({ kind: 'snapshot', events, projections: undefined })
               sink.stateChange('live')
             })
             .catch(() => sink.stateChange('degraded'))
           listener = () => {
-            for (const event of logCache.get(sessionId) ?? []) {
+            for (const event of logSync.get(sessionId) ?? []) {
               if (event.seq > lastSeq) {
                 lastSeq = event.seq
                 sink.delta({ kind: 'event', event })
@@ -237,7 +230,7 @@ export function mount(root: HTMLElement): void {
           listener = null
         },
         retry() {
-          void refreshLog(sessionId)
+          void logSync.refresh(sessionId)
         },
         setPollActive() {
           /* 镜像帧恒活——官方活跃/空闲轮询节奏不适用 */
@@ -251,7 +244,7 @@ export function mount(root: HTMLElement): void {
   const setCurrentSession = (sessionId: string): void => {
     if (store.get().currentSessionId === sessionId) return
     store.set({ currentSessionId: sessionId })
-    void refreshLog(sessionId)
+    void logSync.refresh(sessionId)
   }
 
   // ---- 浮层（不走路由——router.openOverlay 语义族；此处直挂 container）----
@@ -531,7 +524,7 @@ export function mount(root: HTMLElement): void {
         ensureStream()
         const sessionId = match.params['sessionId'] ?? ''
         const parent = store.get().currentSessionId ?? sessionId
-        const entry = catalogProjection(logCache.get(parent) ?? []).get(sessionId)
+        const entry = catalogProjection(logSync.get(parent) ?? []).get(sessionId)
         const mode = entry?.mode === 'one-shot' ? ('one-shot' as const) : ('continuable' as const)
         const handle = createWorkerSessionView({
           sessionId,
@@ -542,7 +535,7 @@ export function mount(root: HTMLElement): void {
           subscribe: (onEvent) => {
             let emitted = -1
             const listener = (): void => {
-              const fresh = (logCache.get(sessionId) ?? []).filter((event) => event.seq > emitted)
+              const fresh = (logSync.get(sessionId) ?? []).filter((event) => event.seq > emitted)
               if (fresh.length === 0) return
               emitted = fresh.reduce((max, event) => Math.max(max, event.seq), emitted)
               for (const event of fresh) onEvent(event)
@@ -581,9 +574,9 @@ export function mount(root: HTMLElement): void {
       // .fab 显式 display 规则压制 hidden 属性——可见位走 style.display
       fab.root.style.display = 'none'
       const syncFab = (): void => {
-        fab.root.style.display = deriveTaskRuns(logCache.get(sid) ?? []).length === 0 ? 'none' : ''
+        fab.root.style.display = deriveTaskRuns(logSync.get(sid) ?? []).length === 0 ? 'none' : ''
       }
-      void refreshLog(sid).then(syncFab)
+      void logSync.refresh(sid).then(syncFab)
       ctx.frameListeners.add(syncFab)
       chatFabSync = () => {
         ctx.frameListeners.delete(syncFab)
