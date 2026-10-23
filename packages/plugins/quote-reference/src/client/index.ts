@@ -27,7 +27,7 @@ import {
   type ScopedEventBail,
   type SelectionMenuHandle,
 } from './selection-menu.js'
-import { createQuoteReferenceSource, type QuoteReferenceSource } from './quote-source.js'
+import { createQuoteReferenceSource, normalizeQuoteMessageText, type QuoteReferenceSource } from './quote-source.js'
 
 /** client face 激活产物（组合 apply 接线面）。 */
 export interface QuoteReferenceClientFace {
@@ -226,7 +226,27 @@ export const quoteReferenceClient = {
       // serialize codec 的 owner 缺席 = 发送期 serializeReference 拒绝 → 发送被阻断）。
       // 注册依赖服务 provide 晚序——短周期重试直至生效（registered 幂等判据），上限 30 次。
       let registered = false
+      let sinkWrapped = false
       let tries = 0
+      // bug e12a37ed：块间空行归一化落点——conversation 服务 sendSession 方法 wrap
+      // （AGENTS §1.1 合法缝·方法 wrap）。官方 sinkSerialized 零分隔拼接 + 逐块
+      // serialize 无法感知邻居，含 quote 块消息的连续 ≥3 换行在全文汇聚点收敛为
+      // 恰一空行（normalizeQuoteMessageText；无 quote 块文本原样透传——非介入面
+      // 零行为差异）。conversation 与 inputTriggers 同为 provide 晚序服务——同一
+      // 有界重试循环内补挂；缺席 = 降级不炸（引用块间留白退回 fix-25 形态）。
+      const wrapSink = (): void => {
+        if (sinkWrapped) return
+        const conversation = readConversationOf(ctx) as
+          | { sendSession?: (...args: unknown[]) => unknown }
+          | null
+        if (typeof conversation?.sendSession !== 'function') return
+        const original = conversation.sendSession.bind(conversation)
+        conversation.sendSession = (...args: unknown[]): unknown => {
+          if (typeof args[1] === 'string') args[1] = normalizeQuoteMessageText(args[1])
+          return original(...args)
+        }
+        sinkWrapped = true
+      }
       const registerTriggerSource = (): boolean => {
         if (registered) return true
         const service = readServiceOf(ctx, 'inputTriggers') as
@@ -251,11 +271,12 @@ export const quoteReferenceClient = {
       }
       const registrationTimer = setInterval(() => {
         tries += 1
-        if (registered || disposedFlag || tries > 30) {
+        wrapSink()
+        if ((registered && sinkWrapped) || disposedFlag || tries > 30) {
           clearInterval(registrationTimer)
           return
         }
-        if (registerTriggerSource()) {
+        if (registerTriggerSource() && sinkWrapped) {
           clearInterval(registrationTimer)
         }
       }, 2_000)

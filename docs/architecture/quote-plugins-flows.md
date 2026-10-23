@@ -130,7 +130,7 @@ sequenceDiagram
 
 - chip 在草稿明文中投影为 `〔引用：摘要〕` token——该形状不含 `@`/`/` 起始 token，与官方 file chip 投影形状集零交集，uuid 不出现在展示面；替身渲染时把该 token 分段替换为原子 chip。
 - `source` 属性单源（`quoteSourceAttrOf`）：`sourceType=doc` → 文件相对路径；`sourceType=sessionMsg` → `currentSessionMsg/{seq}`；结构化字段缺席回退 legacy `source`，全缺 = 不出属性。
-- 分隔规范：quote codec.serialize 输出以 `\n\n` 前后包裹——官方发送链把 codec 输出与草稿文本零分隔拼接，包裹保证 `<quote>` 块与相邻用户文本空行分隔；官方默认 sink 对整条消息末端 trim，引用块位于消息首尾时不残留空行。
+- 分隔规范：quote codec.serialize 输出以 `\n\n` 前后包裹——官方发送链把 codec 输出与草稿文本零分隔拼接，包裹保证 `<quote>` 块与相邻用户文本空行分隔；相邻块之间恰一空行（`\n\n`）——quote-reference client 对 conversation 服务 `sendSession` 方法 wrap（AGENTS §1.1 合法缝），含 quote 块消息在全文汇聚点把连续 ≥3 换行收敛为恰一空行（无 quote 块文本零改动）；官方默认 sink 对整条消息末端 trim，消息首尾不残留空行。
 - quote source 以 `registerSource` 挂官方 `inputTriggers` 注册表（codec 的 owner 缺席 = 发送期序列化拒绝）；服务晚序 provide 时短周期重试直至生效（有界 30 次），重复注册视同成功。
 
 ## 4. 构建与生效流程

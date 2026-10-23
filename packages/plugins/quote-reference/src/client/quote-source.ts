@@ -154,6 +154,19 @@ export function minimalQuoteBlock(id: string, summary?: string): string {
   return `<quote id="${quoteRefOf(id)}">\n${label}\n</quote>`
 }
 
+/**
+ * 消息文本块间空行归一化（bug e12a37ed）。逐块包裹叠加：相邻两块 = 前块尾 `\n\n` +
+ * 后块头 `\n\n` = 4 换行 = 2 空行——官方 sinkSerialized 零分隔拼接、逐块 serialize
+ * 无法感知邻居，归一化只能在全文汇聚点做。落点 = quote-reference client 对
+ * conversation 服务 sendSession 的方法 wrap（AGENTS §1.1 合法缝）：含 quote 块的
+ * 消息把连续 ≥3 换行收敛为恰一空行、首尾 trim；无 quote 块文本原样返回（非介入面
+ * 零行为差异——用户手输多空行不受影响）。
+ */
+export function normalizeQuoteMessageText(text: string): string {
+  if (!text.includes('<quote id=')) return text
+  return text.replace(/\n{3,}/g, '\n\n').trim()
+}
+
 /** 快照 → 候选行投影（name=id / label=摘要 / description=来源 / hint=原文前缀预览） */
 export function quoteCandidateFrom(snapshot: QuoteSnapshot): QuoteTriggerCandidate {
   return {

@@ -3,6 +3,7 @@ import {
   QUOTE_REF_PREFIX,
   createQuoteReferenceSource,
   mentionTextOf,
+  normalizeQuoteMessageText,
   quoteIdOfRef,
   quoteRefOf,
   quoteSourceAttrOf,
@@ -215,6 +216,19 @@ async function assembleSubmitText(
   return out.trim();
 }
 
+/**
+ * 完整发送链镜面 = 官方 sinkSerialized（上）+ 插件侧 sendSession 方法 wrap
+ * （fix e12a37ed——AGENTS §1.1 方法 wrap 合法缝：quote-reference client 对
+ * conversation 服务 sendSession 包归一化）。返回值 = 落到会话的最终消息文本。
+ */
+function assembleFullMessage(
+  src: ReturnType<typeof createQuoteReferenceSource>,
+  draft: string,
+  occurrences: readonly { offset: number; length: number; ref: string }[],
+): Promise<string> {
+  return assembleSubmitText(src, draft, occurrences).then(normalizeQuoteMessageText);
+}
+
 describe("发送序列化拼接形态（fix-25 引用块与文本空行分隔）", () => {
   const TOKEN = "〔引用：文本引用锚定的核心是…〕";
 
@@ -222,7 +236,7 @@ describe("发送序列化拼接形态（fix-25 引用块与文本空行分隔）
     const src = createQuoteReferenceSource();
     src.cacheQuoteSnapshot(snapshot());
     const draft = `${TOKEN}请看这段`;
-    const out = await assembleSubmitText(src, draft, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    const out = await assembleFullMessage(src, draft, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
     expect(out).toMatch(/<\/quote>\n\n请看这段$/);
   });
 
@@ -230,7 +244,7 @@ describe("发送序列化拼接形态（fix-25 引用块与文本空行分隔）
     const src = createQuoteReferenceSource();
     src.cacheQuoteSnapshot(snapshot());
     const draft = `先看这个${TOKEN}`;
-    const out = await assembleSubmitText(src, draft, [{ offset: 4, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    const out = await assembleFullMessage(src, draft, [{ offset: 4, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
     expect(out).toMatch(/^先看这个\n\n<quote /);
     expect(out.endsWith("</quote>")).toBe(true);
   });
@@ -238,24 +252,68 @@ describe("发送序列化拼接形态（fix-25 引用块与文本空行分隔）
   it("仅引用块：消息首尾不残留空行", async () => {
     const src = createQuoteReferenceSource();
     src.cacheQuoteSnapshot(snapshot());
-    const out = await assembleSubmitText(src, TOKEN, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
+    const out = await assembleFullMessage(src, TOKEN, [{ offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) }]);
     expect(out.startsWith("<quote ")).toBe(true);
     expect(out.endsWith("</quote>")).toBe(true);
   });
 
-  it("多 chip + 文本：块与块、块与文本之间均空行分隔", async () => {
+  it("多 chip + 文本：块与块、块与文本之间均恰一空行分隔", async () => {
     const src = createQuoteReferenceSource();
     src.cacheQuoteSnapshot(snapshot());
     src.cacheQuoteSnapshot(snapshot({ id: "second", text: "第二段引用全文" }));
     const draft = `${TOKEN}${TOKEN}总结一下`;
-    const out = await assembleSubmitText(src, draft, [
+    const out = await assembleFullMessage(src, draft, [
       { offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) },
       { offset: TOKEN.length, length: TOKEN.length, ref: quoteRefOf("second") },
     ]);
-    // 相邻双 chip：两侧包裹叠加 → ≥1 空行分隔（拼接零分隔已封堵，叠加留白可接受）。
-    expect(out).toMatch(/<\/quote>\n{2,}<quote /);
+    expect(out).toMatch(/<\/quote>\n\n<quote /);
     expect(out).toMatch(/<\/quote>\n\n总结一下$/);
     expect(out.startsWith("<quote ")).toBe(true);
+  });
+});
+
+describe("块间空行归一化（bug e12a37ed 相邻块间双空行）", () => {
+  const TOKEN = "〔引用：文本引用锚定的核心是…〕";
+
+  it("三引用相邻：块间各恰一空行（无连续 ≥3 换行）、首尾零空行", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    src.cacheQuoteSnapshot(snapshot({ id: "second", text: "第二段引用全文" }));
+    src.cacheQuoteSnapshot(snapshot({ id: "third", text: "第三段引用全文" }));
+    const draft = `${TOKEN}${TOKEN}${TOKEN}`;
+    const out = await assembleFullMessage(src, draft, [
+      { offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) },
+      { offset: TOKEN.length, length: TOKEN.length, ref: quoteRefOf("second") },
+      { offset: TOKEN.length * 2, length: TOKEN.length, ref: quoteRefOf("third") },
+    ]);
+    expect(out).toMatch(/^<quote /);
+    expect(out).toMatch(/<\/quote>\n\n<quote \n?[^]*<\/quote>\n\n<quote /);
+    expect(out).not.toMatch(/\n{3,}/);
+    expect(out.endsWith("</quote>")).toBe(true);
+  });
+
+  it("文本夹引用间：文本与两侧引用块各恰一空行", async () => {
+    const src = createQuoteReferenceSource();
+    src.cacheQuoteSnapshot(snapshot());
+    src.cacheQuoteSnapshot(snapshot({ id: "second", text: "第二段引用全文" }));
+    const draft = `${TOKEN}中间这段话${TOKEN}`;
+    const out = await assembleFullMessage(src, draft, [
+      { offset: 0, length: TOKEN.length, ref: quoteRefOf(snapshot().id) },
+      { offset: TOKEN.length + 5, length: TOKEN.length, ref: quoteRefOf("second") },
+    ]);
+    expect(out).toMatch(/<\/quote>\n\n中间这段话\n\n<quote /);
+    expect(out).not.toMatch(/\n{3,}/);
+  });
+
+  it("normalizeQuoteMessageText 恒等面：无 quote 块文本零改动（非介入面零行为差异）", () => {
+    const text = "普通消息\n\n\n保留多空行\n\n尾";
+    expect(normalizeQuoteMessageText(text)).toBe(text);
+  });
+
+  it("normalizeQuoteMessageText：含 quote 块的文本连续 ≥3 换行收敛为恰一空行", () => {
+    const text = '<quote id="quote:a">\nx\n</quote>\n\n\n\n<y> 后文';
+    expect(normalizeQuoteMessageText(text)).toBe('<quote id="quote:a">\nx\n</quote>\n\n<y> 后文');
+    expect(normalizeQuoteMessageText(`  ${text}`)).toBe('<quote id="quote:a">\nx\n</quote>\n\n<y> 后文');
   });
 });
 
