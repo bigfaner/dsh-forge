@@ -840,7 +840,8 @@ body[data-ds-dark-theme] .composer {
   background: #1d1d20;
   border-color: #303034;
 }
-.composer input {
+.composer input,
+.composer textarea {
   width: 100%;
   border: 0;
   outline: 0;
@@ -848,6 +849,12 @@ body[data-ds-dark-theme] .composer {
   background: transparent;
   color: inherit;
   padding: 2px 4px 10px;
+}
+.composer textarea {
+  resize: none;
+  min-height: 44px; /* 默认 2 行（用户裁决）——随内容自增高（composer syncHeight，上限 180px） */
+  line-height: 20px;
+  overflow-y: auto;
 }
 .crow {
   display: flex;

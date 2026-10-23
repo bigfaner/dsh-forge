@@ -29,8 +29,20 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
   inputbar.className = 'inputbar'
   const composer = document.createElement('div')
   composer.className = 'composer'
-  const input = document.createElement('input')
+  // 用户裁决 2026-10-22：composer 多行化——textarea 默认 2 行、随内容自增高；Enter=换行，
+  // 发送只走按钮（移动端惯例——软键盘回车即换行）
+  const input = document.createElement('textarea')
   input.placeholder = '发消息或输入指令…'
+  input.rows = 2
+  input.maxLength = 32_000
+  const syncHeight = (): void => {
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(input.scrollHeight, 180)}px`
+  }
+  input.addEventListener('input', () => {
+    syncHeight()
+    syncSend()
+  })
   const crow = document.createElement('div')
   crow.className = 'crow'
 
@@ -71,17 +83,11 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
     sendButton.disabled = stale || sending || input.value.trim() === ''
   }
   input.addEventListener('input', syncSend)
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !sendButton.disabled) {
-      options.onSend(input.value)
-      input.value = ''
-      syncSend()
-    }
-  })
   sendButton.addEventListener('click', () => {
     if (sendButton.disabled) return
     options.onSend(input.value)
     input.value = ''
+    syncHeight()
     syncSend()
   })
 
@@ -100,6 +106,10 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
     setSending(next) {
       sending = next
       syncSend()
+      if (next) {
+        input.value = ''
+        syncHeight()
+      }
     },
     setWorktree(name) {
       worktreeName.textContent = name
