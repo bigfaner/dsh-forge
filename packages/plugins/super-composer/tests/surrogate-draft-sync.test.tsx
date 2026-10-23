@@ -11,8 +11,7 @@
 // runtime.ts）：setDraft 纯文本整稿替换（occurrences 清零）、insertReference span
 // 覆盖域替换 chip（$replaceDetectSpanWithNodes）、insert-text bail 按 detect span 插文本。
 import { describe, expect, it, vi } from "vitest";
-import { tailSpanOf } from "../src/client/data-face.js";
-import {
+import { createSuperComposerDataFace, tailSpanOf, type DataFaceServices } from "../src/client/data-face.js";import {
   SurrogateComposerModel,
   insertDeltaOf,
   detectOffsetAtClipboardOffset,
@@ -295,6 +294,127 @@ describe("fix-19: 回写增量纯函数", () => {
     expect(detectOffsetAtClipboardOffset("〔引用：文档摘要〕hi", occ, 10)).toBe(3);
     expect(detectOffsetAtClipboardOffset("〔引用：文档摘要〕hi", occ, 0)).toBe(0);
     expect(detectOffsetAtClipboardOffset("plain", [], 3)).toBe(3);
+  });
+});
+
+// ─────────────────────────── fix-28：真实 data-face 集成径（bug Backspace 删 chip 增殖） ───────────────────────────
+//
+// 上面的 faceStubOf 用 span 覆盖域语义 mock 了 insertReference，掩盖真实
+// createSuperComposerDataFace.insertReference 的行为。此处按官方源码核销语义
+//（ui-conversation facade.insertReference → draftEditor.insertReference(span,…)：
+// span 覆盖域换 chip + draftRev CAS）铸造真实 bail 径官方机，集成验证删除收敛。
+
+/** 真实 bail 径官方机（span 覆盖域 insertReference + draftRev CAS）。 */
+function realFaceWorld() {
+  const official = makeOfficial(true);
+  const listeners = new Set<() => void>();
+  const notify = (): void => {
+    for (const l of listeners) l();
+  };
+  const publish = (): void => {
+    official.occurrences = occurrencesOf(official.draft, official.withChipTruth);
+    official.draftRev += 1;
+    notify();
+  };
+  const ctx = {};
+  const state = {
+    getSnapshot: () => ({
+      draft: official.draft,
+      draftRev: official.draftRev,
+      phase: "plain" as const,
+      occurrences: official.occurrences,
+      queue: [],
+    }),
+    subscribe: (l: () => void) => {
+      listeners.add(l);
+      return () => {
+        listeners.delete(l);
+      };
+    },
+  };
+  const bail = vi.fn((_ctx: unknown, name: string, req: unknown): true | undefined => {
+    if (name === "slash/input-insert-reference") {
+      const { reference, span } = req as {
+        reference: { clipboardText: string };
+        span: { start: number; end: number; draftRev: number };
+      };
+      if (span.draftRev !== official.draftRev) return undefined; // 官方 span-CAS
+      official.draft =
+        official.draft.slice(0, span.start) + reference.clipboardText + official.draft.slice(span.end);
+      publish();
+      return true;
+    }
+    return undefined;
+  });
+  const services: DataFaceServices = {
+    sessions: {
+      binding: () => ({
+        sessionId: "s1",
+        ctx,
+        eventSource: { getSnapshot: () => ({ entries: [] as never[] }), subscribe: () => () => undefined },
+      }),
+      list: { getSnapshot: () => ({ byId: { s1: { id: "s1", retainedBy: { mainView: 1 } } } }) },
+    },
+    conversation: {
+      input: {
+        for: () => ({
+          setDraft: (text: string) => {
+            officialSetDraft(official, text);
+            notify();
+          },
+          submit: () => undefined,
+          focus: () => undefined,
+          state,
+        }),
+      },
+    },
+    bail: bail as unknown as DataFaceServices["bail"],
+  };
+  return { official, face: createSuperComposerDataFace(services), bail, notify };
+}
+
+describe("fix-28: Backspace 删 chip 收敛（真实 data-face insertReference span 尊重）", () => {
+  it("删 1 个 chip：官方草稿 token 单调减，不产生复制；同步后替身一致", () => {
+    const { official, face, notify } = realFaceWorld();
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialSetDraft(official, "〔引用：甲〕 〔引用：乙〕");
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev = 1;
+    notify();
+    // 模拟替身 Backspace 删 chip 乙（整稿收缩差量 → writeBack 兜底径）
+    model.runtime.setDraft("〔引用：甲〕 ");
+    // 删除是合法单向变更：官方草稿不再含乙，且甲不复制（修复前：甲明文 + 尾插 chip 双份）
+    expect(official.draft).toBe("〔引用：甲〕 ");
+    expect(official.occurrences).toHaveLength(1);
+    expect(model.runtime.projection.clipboardText).toBe("〔引用：甲〕 ");
+    expect(model.runtime.projection.occurrences).toHaveLength(1);
+  });
+
+  it("连续删除至空：occurrences 单调减到 0，全程无 chip 增殖", () => {
+    const { official, face, notify } = realFaceWorld();
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialSetDraft(official, "〔引用：甲〕 〔引用：乙〕");
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev = 1;
+    notify();
+    model.runtime.setDraft("〔引用：甲〕 ");
+    expect(official.occurrences).toHaveLength(1);
+    model.runtime.setDraft("");
+    expect(official.draft).toBe("");
+    expect(official.occurrences).toHaveLength(0);
+    expect(model.runtime.projection.occurrences).toHaveLength(0);
+  });
+
+  it("data-face.insertReference 显式 span 载荷直达 bail（不回落尾插）", () => {
+    const { face, bail } = realFaceWorld();
+    face.insertReference(
+      { source: "quote", ref: "quote:甲", label: "甲", clipboardText: "〔引用：甲〕" },
+      { start: 2, end: 8, draftRev: 0 },
+    );
+    const req = bail.mock.calls[0]?.[2] as { span: { start: number; end: number; draftRev: number } };
+    expect(req.span).toEqual({ start: 2, end: 8, draftRev: 0 });
   });
 });
 

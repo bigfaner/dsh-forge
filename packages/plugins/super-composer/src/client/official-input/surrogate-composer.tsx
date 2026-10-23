@@ -381,6 +381,9 @@ export class SurrogateComposerModel {
         return
       }
       if (state === undefined) return
+      // fix-28：兜底 setDraft 已清零官方 occurrences → clipboard 坐标 == detect 坐标，
+      // span 直传为覆盖域替换（Root cause fix-28：data-face 旧径丢 span 恒尾插，删除
+      // 场景幸存 token 明文原位保留 + 尾插复制 chip，回灌令 chip 越删越多）。
       const start = match.index ?? 0
       try {
         this.face.insertReference(reference, { start, end: start + match[0].length, draftRev: state.draftRev })
@@ -403,7 +406,14 @@ export class SurrogateComposerModel {
       this.officialQueue = state.queue ?? []
       this.syncedDraft = state.draft
       this.harvestQuoteMemo(state.occurrences ?? [])
-      if (state.draft !== this.runtime.projection.clipboardText) {
+      // fix-28：回灌判据除草稿字符串外加 chip 计数——删除径兜底 setDraft + span 覆盖
+      // 重物化后官方草稿字符串与复制件 projection 相等但官方持 chip、复制件残留明文
+      // token，字符串回声抑制会把双面 chip 性分歧钉死（Root cause 同源：删除收敛须
+      // 双面 chip 真值一致，不只 clipboard 投影一致）。
+      if (
+        state.draft !== this.runtime.projection.clipboardText
+        || (state.occurrences?.length ?? 0) !== this.runtime.projection.occurrences.length
+      ) {
         this.runtime.restoreDraft(state.draft, quoteOccurrencesOf(state.draft))
         this.runtime.refreshProjection()
       }

@@ -288,8 +288,15 @@ export interface SuperComposerDataFace {
   inputState(): InputStateMirror | undefined
   /** 整体替换草稿（同一草稿机 setDraft 同径） */
   setDraft(text: string): void
-  /** 草稿尾插入原生引用 chip（span-CAS + bail slash/input-insert-reference 官方径） */
-  insertReference(reference: ReferenceInsertMirror): boolean
+  /**
+   * 草稿插入原生引用 chip（官方 bail slash/input-insert-reference 径）。span 缺席 =
+   * 尾插（tailSpanOf span-CAS）；显式 span = 覆盖域替换语义直达官方 shell
+   *（facade.insertReference → draftEditor.insertReference(span,…) 换 chip，span 为
+   * detect 坐标——重物化径在 setDraft 兜底后官方 occurrences 清零，clipboard 坐标
+   * == detect 坐标，可直达。Root cause fix-28：旧径丢 span 恒尾插，删除场景幸存
+   * token 明文原位保留 + 尾插复制 chip，同步回灌令 chip 越删越多）。
+   */
+  insertReference(reference: ReferenceInsertMirror, span?: TokenSpanMirror): boolean
   /**
    * chip 保持文本插入（fix-19 单写者正门：bail slash/input-insert-text + span-CAS；
    * 复制件回写与替身径文本插入共用——官方 editor 动词，chip 节点零损伤）。
@@ -495,7 +502,7 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
         // fail-soft
       }
     },
-    insertReference(reference) {
+    insertReference(reference, span) {
       const binding = bindingOf(services)
       const face = faceOf(services)
       const bail = services.bail
@@ -504,7 +511,7 @@ export function createSuperComposerDataFace(services: DataFaceServices): SuperCo
       if (before === undefined) return false
       let applied: unknown
       try {
-        applied = bail(binding.ctx, 'slash/input-insert-reference', { reference, span: tailSpanOf(before) })
+        applied = bail(binding.ctx, 'slash/input-insert-reference', { reference, span: span ?? tailSpanOf(before) })
       } catch {
         return false
       }
