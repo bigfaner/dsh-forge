@@ -13,3 +13,4 @@
 | 0.1.1 → 0.2.0 | minor | 1.47 添加到会话后替身自动展开为卡片输入态（1.45 现身球态中间步退役——surfaceChip/onSurfaceExpand/onSurfaceDismiss 双轨摘除，expandRequest 计数缝替代） |
 | 0.2.0 → 0.2.1 | patch | fix-19 双 composer 草稿同步收敛为通用机制（bug 65b8e9d0）：复制件回写 chip 保持正门（bail insert-text）+ composerFace 第二数据面实例退役（挂载层扇出）+ data-face tailSpanOf 对齐 detect 平面 |
 | 0.2.1 → 0.2.2 | patch | fix-17 退出全屏后现身态不豁免全屏门（bug 2a6ebd3a）：1.47 card 现身态不再绕过可见性门控②——退出全屏替身自动隐藏，重进全屏恢复 |
+| 0.2.2 → 0.2.3 | patch | fix-18 替身回写 setDraft 兜底摧毁官方 quote chip（bug d7fe1ab6）：兜底后按官方 occurrences 备忘逆序重物化幸存 token 为 chip——官方发送链对零 occurrence 草稿跳过 serializeReference，clipboard 投影 `〔引用：…〕` 明文原样落会话消息的面封堵 |

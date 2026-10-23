@@ -118,6 +118,16 @@ export type DraftSyncFace = Pick<
 > & {
   /** chip 保持文本插入（span-CAS 正门；漂移/缺席 = undefined 走 setDraft 兜底） */
   insertText?(text: string, span: { readonly start: number; readonly end: number; readonly draftRev: number }): boolean
+  /**
+   * 引用 chip 插入（官方 insertReference span 覆盖域替换语义——fix-18 setDraft 兜底后
+   * quote token 重物化动词；漂移/缺席 = 跳过重物化，保持症状级兜底）。
+   */
+  insertReference?(reference: {
+    readonly source: string
+    readonly ref: string
+    readonly label: string
+    readonly clipboardText: string
+  }, span: { readonly start: number; readonly end: number; readonly draftRev: number }): boolean
 }
 
 /** 替身 composer 模型（editor + 本地机器快照 + 键盘面；一个替身卡一个实例）。 */
@@ -133,6 +143,13 @@ export class SurrogateComposerModel {
   private started = false
   /** 最近一次同步的官方草稿投影（回写判据基线——fix-19 单一草稿源同步协议） */
   private syncedDraft = ''
+  /**
+   * quote token → reference 备忘（fix-18：官方 occurrences 投影带 chip 真值
+   * source/ref/label/clipboardText——clipboardText 即草稿 token 全文；setDraft 兜底
+   * 摧毁 chip 后据此把幸存 token 重物化回官方 chip，发送链才走 serializeReference
+   * 出裸 <quote> 块。官方 occurrences 缺 ref 的 legacy 面 = 无备忘不重物化）。
+   */
+  private readonly quoteMemo = new Map<string, { source: string; ref: string; label: string; clipboardText: string }>()
   private unregisterEditor: (() => void) | undefined
   private unsubscribeFace: (() => void) | undefined
 
@@ -266,8 +283,9 @@ export class SurrogateComposerModel {
    *      root.clear + 纯文本节点，官方 chip 节点被摧毁 → 官方 composer placeholder
    *      消失但 chip 不渲染、chip 只剩替身可见的双面不一致）。
    *   ④ chip 在稿 ∧ 破坏性差量（删除/替换）→ 官方无 chip 保持删除动词，症状级回落
-   *      setDraft（明文整稿替换——已知边界，官方侧 chip 退化为明文 token，与现状
-   *      一致不外溢）。
+   *      setDraft + quote chip 逆序重物化（fix-18：官方 occurrences 备忘把幸存 token
+   *      换回 chip——官方发送链对零 occurrence 草稿不做 serializeReference，不重物化
+   *      则 clipboard 投影明文原样落会话消息）。
    */
   private onEditorUpdate(): void {
     this.runtime.refreshProjection()
@@ -290,6 +308,7 @@ export class SurrogateComposerModel {
     } catch {
       state = undefined
     }
+    this.harvestQuoteMemo(state?.occurrences ?? [])
     const occurrences = (state?.occurrences ?? []) as readonly { readonly offset?: unknown; readonly length?: unknown }[]
     const chipsInvolved =
       occurrences.length > 0 || QUOTE_DRAFT_TOKEN_RE.test(text) || QUOTE_DRAFT_TOKEN_RE.test(this.syncedDraft)
@@ -311,10 +330,63 @@ export class SurrogateComposerModel {
         // fail-soft（回落症状级）
       }
     }
+    this.fallbackSetDraft(text)
+  }
+
+  /**
+   * setDraft 兜底 + quote chip 重物化（fix-18 根因修复落点）：
+   * Root cause: 官方 setDraft 契约 = 纯文本整稿替换，摧毁 chip 节点（occurrences
+   * 清零）——官方发送链 sinkSerialized 对零 occurrence 草稿跳过 serializeReference，
+   * clipboard 投影 `〔引用：摘要…〕` 明文原样落会话消息（fix-19 注释「不外溢」假设
+   * 不成立）。修法：兜底 setDraft 后按备忘逆序把幸存 token 换回官方 chip
+   *（insertReference span 覆盖域替换语义；逆序 = 已插入 chip 全在当前 token 之后，
+   * detect 偏移不漂移、draftRev 每步取官方 fresh 快照）。
+   */
+  private fallbackSetDraft(text: string): void {
     try {
       this.face.setDraft(text)
     } catch {
-      // fail-soft
+      return
+    }
+    this.rematerializeQuotes(text)
+  }
+
+  /** 官方 occurrences → token 备忘采集（clipboardText 全文为键；缺 ref 的行跳过）。 */
+  private harvestQuoteMemo(occurrences: readonly unknown[]): void {
+    for (const occ of occurrences) {
+      const row = occ as { source?: unknown; ref?: unknown; label?: unknown; clipboardText?: unknown }
+      if (typeof row.ref !== 'string' || row.ref === '') continue
+      const clipboardText = typeof row.clipboardText === 'string' ? row.clipboardText : undefined
+      if (clipboardText === undefined || clipboardText === '') continue
+      this.quoteMemo.set(clipboardText, {
+        source: typeof row.source === 'string' && row.source !== '' ? row.source : 'quote',
+        ref: row.ref,
+        label: typeof row.label === 'string' ? row.label : clipboardText,
+        clipboardText,
+      })
+    }
+  }
+
+  /** 幸存 quote token 逆序重物化为官方 chip（备忘未命中跳过；全缝 fail-soft）。 */
+  private rematerializeQuotes(text: string): void {
+    const tokens = [...text.matchAll(new RegExp(QUOTE_DRAFT_TOKEN_RE.source, 'g'))]
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const match = tokens[i]!
+      const reference = this.quoteMemo.get(match[0])
+      if (reference === undefined || this.face.insertReference === undefined) continue
+      let state: ReturnType<SuperComposerDataFace['inputState']>
+      try {
+        state = this.face.inputState()
+      } catch {
+        return
+      }
+      if (state === undefined) return
+      const start = match.index ?? 0
+      try {
+        this.face.insertReference(reference, { start, end: start + match[0].length, draftRev: state.draftRev })
+      } catch {
+        // fail-soft（单 token 重物化失败不阻断余量）
+      }
     }
   }
 
@@ -330,6 +402,7 @@ export class SurrogateComposerModel {
       this.officialPhase = state.phase
       this.officialQueue = state.queue ?? []
       this.syncedDraft = state.draft
+      this.harvestQuoteMemo(state.occurrences ?? [])
       if (state.draft !== this.runtime.projection.clipboardText) {
         this.runtime.restoreDraft(state.draft, quoteOccurrencesOf(state.draft))
         this.runtime.refreshProjection()

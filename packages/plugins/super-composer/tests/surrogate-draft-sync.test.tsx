@@ -5,9 +5,11 @@
 //     span 正门）；自身回声零写。
 //   - data-face tailSpanOf 必须输出 detect 平面 span（clipboard 平面旧径 = 官方
 //     span-map 契约错位，chip 在稿时 span-CAS 必败 → 替身径插入静默被吞）。
+// fix-18（bug d7fe1ab6）：setDraft 兜底摧毁官方 chip → 发送链零 occurrence 跳过
+//   serializeReference，`〔引用：…〕` 明文原样落会话消息——兜底后按备忘逆序重物化。
 // fake 官方 world 按官方源码核销语义铸造（ui-conversation 0.2.0-rc.2 facade.ts /
-// runtime.ts）：setDraft 纯文本整稿替换（occurrences 清零）、insertReference 尾插
-// chip（occurrences 增长）、insert-text bail 按 detect span 插文本。
+// runtime.ts）：setDraft 纯文本整稿替换（occurrences 清零）、insertReference span
+// 覆盖域替换 chip（$replaceDetectSpanWithNodes）、insert-text bail 按 detect span 插文本。
 import { describe, expect, it, vi } from "vitest";
 import { tailSpanOf } from "../src/client/data-face.js";
 import {
@@ -24,21 +26,37 @@ const QUOTE_TOKEN_RE = /〔引用：([^〕\n]*)〕/g;
 interface FakeOfficial {
   draft: string;
   draftRev: number;
-  occurrences: readonly { offset: number; length: number; clipboardText: string }[];
+  occurrences: readonly {
+    offset: number;
+    length: number;
+    clipboardText: string;
+    source?: string;
+    ref?: string;
+    label?: string;
+  }[];
   /** setDraft spy（断言回写径） */
   setDraftCalls: string[];
+  /** occurrences 投影是否带 chip 真值（legacy 无 ref 面测试旗标） */
+  withChipTruth: boolean;
 }
 
-function occurrencesOf(draft: string): FakeOfficial["occurrences"] {
+function occurrencesOf(draft: string, withChipTruth: boolean): FakeOfficial["occurrences"] {
   const out: NonNullable<FakeOfficial["occurrences"]> = [];
   for (const match of draft.matchAll(QUOTE_TOKEN_RE)) {
-    out.push({ offset: match.index, length: match[0].length, clipboardText: match[0] });
+    const clipboardText = match[0];
+    const label = match[1] ?? "";
+    out.push(
+      withChipTruth
+        ? // 官方 $projectComposer 投影带 chip 真值（source/ref/label/clipboardText）
+          { source: "quote", ref: `quote:${label}`, offset: match.index, length: clipboardText.length, label, clipboardText }
+        : { offset: match.index, length: clipboardText.length, clipboardText },
+    );
   }
   return out;
 }
 
-function makeOfficial(): FakeOfficial {
-  return { draft: "", draftRev: 0, occurrences: [], setDraftCalls: [] };
+function makeOfficial(withChipTruth = true): FakeOfficial {
+  return { draft: "", draftRev: 0, occurrences: [], setDraftCalls: [], withChipTruth };
 }
 
 /** 官方 setDraft 契约（facade.ts:215 → runtime.setDraft）：等值早退；否则纯文本
@@ -51,10 +69,10 @@ function officialSetDraft(official: FakeOfficial, text: string): void {
   official.draftRev += 1;
 }
 
-/** 官方 insertReference bail（tail span-CAS 尾插 chip + 空格尾规则）。 */
+/** 官方 insertReference bail（span 覆盖域换 chip + 尾插规则——测试用尾插形态）。 */
 function officialInsertReference(official: FakeOfficial, clipboardText: string): void {
   official.draft = `${official.draft}${clipboardText} `;
-  official.occurrences = occurrencesOf(official.draft);
+  official.occurrences = occurrencesOf(official.draft, official.withChipTruth);
   official.draftRev += 1;
 }
 
@@ -76,14 +94,18 @@ function detectToClipboard(official: FakeOfficial, detectTarget: number): number
 function officialInsertText(official: FakeOfficial, text: string, start: number): void {
   const clipboardAt = detectToClipboard(official, start);
   official.draft = official.draft.slice(0, clipboardAt) + text + official.draft.slice(clipboardAt);
-  official.occurrences = occurrencesOf(official.draft);
+  official.occurrences = occurrencesOf(official.draft, official.withChipTruth);
   official.draftRev += 1;
 }
 
 /** 替身数据面桩（模型消费切片——直连 fake 官方机）。 */
-function faceStubOf(official: FakeOfficial, bailSpy?: ReturnType<typeof vi.fn>): DraftSyncFace & {
+function faceStubOf(
+  official: FakeOfficial,
+  bailSpy?: ReturnType<typeof vi.fn>,
+): DraftSyncFace & {
   setDraft: ReturnType<typeof vi.fn>;
   insertText: ReturnType<typeof vi.fn>;
+  insertReference: ReturnType<typeof vi.fn>;
   notify(): void;
 } {
   let listener: (() => void) | null = null;
@@ -104,6 +126,21 @@ function faceStubOf(official: FakeOfficial, bailSpy?: ReturnType<typeof vi.fn>):
       officialInsertText(official, text, span.start);
       return true;
     }),
+    // 官方 insertReference 契约（draftEditor.insertReference）：span 覆盖域被 chip
+    // 节点替换（$replaceDetectSpanWithNodes）——重物化径的 fake 同语义。
+    insertReference: vi.fn(
+      (
+        reference: { source: string; ref: string; label: string; clipboardText: string },
+        span: { start: number; end: number; draftRev: number },
+      ) => {
+        bailSpy?.("slash/input-insert-reference", { reference, span });
+        official.draft =
+          official.draft.slice(0, span.start) + reference.clipboardText + official.draft.slice(span.end);
+        official.occurrences = occurrencesOf(official.draft, official.withChipTruth);
+        official.draftRev += 1;
+        return true;
+      },
+    ),
     trackMention: vi.fn(),
     mention: () => undefined,
     subscribe(l: () => void) {
@@ -174,6 +211,73 @@ describe("fix-19: 复制件编辑回写不摧毁官方 chip 真值（bug 65b8e9d
     model.runtime.paste("hello");
     expect(faceSetDraft).toHaveBeenCalledWith("hello");
     expect(official.draft).toBe("hello");
+  });
+});
+
+// ─────────────────────────── fix-18：setDraft 兜底后 chip 重物化（bug d7fe1ab6） ───────────────────────────
+//
+// 根因链：writeBack 兜底 face.setDraft（官方契约 = 纯文本整稿替换）摧毁官方 chip 节点
+// （occurrences 清零）→ 官方发送链 sinkSerialized 对零 occurrence 草稿跳过
+// serializeReference → clipboard 投影 `〔引用：…〕` 明文原样落会话消息。
+// 修复：兜底 setDraft 后按 label→reference 备忘逆序把幸存 token 重物化为官方 chip
+//（insertReference span 覆盖域替换语义，官方 draftEditor.insertReference 核销）。
+
+describe("fix-18: setDraft 兜底不摧毁 quote chip 真值（bug d7fe1ab6）", () => {
+  it("chip 在稿破坏性差量（回落 setDraft）→ 官方 chip 重物化（occurrences 保真，token 不落明文）", () => {
+    const official = makeOfficial();
+    const face = faceStubOf(official);
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialInsertReference(official, "〔引用：文档摘要〕");
+    face.notify();
+    // 复制件端破坏性差量：删去尾部空格（长度收缩 = 非纯插入 → 旧径 setDraft 兜底）
+    model.runtime.setDraft("〔引用：文档摘要〕");
+    // 修复后：token 被换回官方 chip（occurrences 1）；修复前 occurrences=0 → 发送明文
+    expect(official.occurrences).toHaveLength(1);
+    expect(official.draft).toBe("〔引用：文档摘要〕");
+    expect(face.insertReference).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "quote", ref: "quote:文档摘要", clipboardText: "〔引用：文档摘要〕" }),
+      expect.objectContaining({ start: 0, end: 9 }),
+    );
+  });
+
+  it("insert-text 正门漂移回落 setDraft → 同径重物化（纯插入丢 chip 面同堵）", () => {
+    const official = makeOfficial();
+    const face = faceStubOf(official);
+    face.insertText.mockReturnValueOnce(false); // bail 正门漂移
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialInsertReference(official, "〔引用：文档摘要〕");
+    face.notify();
+    model.runtime.paste("hi");
+    expect(official.occurrences).toHaveLength(1);
+    expect(official.draft).toBe("〔引用：文档摘要〕 hi");
+  });
+
+  it("多 chip 稿破坏性差量 → 全部幸存 token 逆序重物化（offset 不漂移）", () => {
+    const official = makeOfficial();
+    const face = faceStubOf(official);
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialSetDraft(official, "〔引用：甲〕 和 〔引用：乙〕");
+    official.occurrences = occurrencesOf(official.draft, true);
+    official.draftRev = 1;
+    face.notify();
+    model.runtime.setDraft("〔引用：甲〕 〔引用：乙〕"); // 删「 和 」
+    expect(official.draft).toBe("〔引用：甲〕 〔引用：乙〕");
+    expect(official.occurrences).toHaveLength(2);
+  });
+
+  it("无 chip 真值备忘（legacy occurrences 无 ref）→ 保持 setDraft 兜底现行为（不重物化、不炸）", () => {
+    const official = makeOfficial(false);
+    const face = faceStubOf(official);
+    const model = new SurrogateComposerModel(face, () => {});
+    model.start();
+    officialInsertReference(official, "〔引用：文档摘要〕");
+    face.notify();
+    model.runtime.setDraft("〔引用：文档摘要〕");
+    expect(face.insertReference).not.toHaveBeenCalled();
+    expect(official.draft).toBe("〔引用：文档摘要〕");
   });
 });
 
