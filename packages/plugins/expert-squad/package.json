@@ -1,0 +1,43 @@
+{
+  "name": "@dsh-forge/expert-squad",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用/双通道委派——骨架容器（1.1），功能面由后续任务填充。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "dist",
+    "experts",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -b && node scripts/bundle-client.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.4"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@types/node": "24.19.0",
+    "esbuild": "0.24.2"
+  }
+}

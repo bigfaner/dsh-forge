@@ -48,6 +48,8 @@ export default defineConfig({
       },
       // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）
       { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
+      // expert-squad 插件包（双面包装载范式——bundle 声明结构镜像守卫）
+      { test: { name: 'expert-squad', include: ['packages/plugins/expert-squad/tests/**/*.test.ts'] } },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
       { test: { name: 'mobile', include: ['apps/mobile/src/**/*.test.ts'] } },

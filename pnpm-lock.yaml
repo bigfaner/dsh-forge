@@ -414,6 +414,18 @@ importers:
         specifier: 8.20.0
         version: 8.20.0
 
+  packages/plugins/expert-squad:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.4
+        version: 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@types/node':
+        specifier: 24.19.0
+        version: 24.19.0
+      esbuild:
+        specifier: 0.24.2
+        version: 0.24.2
+
   packages/plugins/git-worktree:
     devDependencies:
       '@deepseek-ai/cordis':
