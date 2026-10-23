@@ -40,7 +40,7 @@ export interface TextPart {
 }
 
 export type Projection =
-  | { readonly kind: 'user-bubble'; readonly seq: number; readonly text: string; readonly rpcId?: string }
+  | { readonly kind: 'user-bubble'; readonly seq: number; readonly text: string; readonly rpcId?: string; readonly time?: number }
   | {
       /** forge-loop 叙述卡（1.19）：runId/state 取自类型化 source（forge-loop-source.ts 正本）。 */
       readonly kind: 'loop-narrative'
@@ -57,6 +57,9 @@ export type Projection =
       readonly reasoning: string
       readonly toolCalls: readonly { readonly id: string; readonly name: string; readonly arguments: string }[]
       readonly interrupted?: true
+      readonly time?: number
+      /** data.usage.totalTokens（durable 落账，真机取证 seq16 keys）——缺席不显示。 */
+      readonly usage?: number
     }
   | { readonly kind: 'tool-call'; readonly seq: number; readonly callId: string; readonly name: string; readonly arguments: string }
   | {
@@ -135,7 +138,7 @@ function projectUserMessage(event: WireEvent): Projection | null {
   if (kind !== undefined && HARNESS_CONTEXT_KINDS.has(kind)) return null
   switch (kind) {
     case 'user':
-      return { kind: 'user-bubble', seq: event.seq, text, rpcId: data.source.rpcId }
+      return { kind: 'user-bubble', seq: event.seq, text, rpcId: data.source.rpcId, time: event.time }
     case 'forge-loop':
       return {
         kind: 'loop-narrative',
@@ -173,9 +176,11 @@ export function projectEvent(event: WireEvent): Projection | null {
     case 'assistant/message': {
       const data = event.data as {
         message?: { content?: readonly ({ type: string; text?: string; id?: string; name?: string; arguments?: string })[] }
+        usage?: { totalTokens?: unknown }
         interrupted?: true
       }
       const blocks = data.message?.content ?? []
+      const usage = typeof data.usage?.totalTokens === 'number' ? data.usage.totalTokens : undefined
       return {
         kind: 'assistant-message',
         seq: event.seq,
@@ -188,6 +193,8 @@ export function projectEvent(event: WireEvent): Projection | null {
           .filter((b) => b.type === 'tool-call')
           .map((b) => ({ id: b.id ?? '', name: b.name ?? '', arguments: b.arguments ?? '' })),
         ...(data.interrupted ? { interrupted: true } : {}),
+        time: event.time,
+        ...(usage !== undefined ? { usage } : {}),
       }
     }
     case 'tool/call': {

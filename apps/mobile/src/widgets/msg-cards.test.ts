@@ -6,7 +6,9 @@ import {
   degradedNarrativeSeqs,
   docFileName,
   estimateLineCount,
+  formatMsgTime,
   formatSize,
+  formatUsage,
   isEmptyAssistantTurn,
   isShellTool,
   toolCollapsedLabel,
@@ -167,4 +169,18 @@ describe('bug 9053cfbe：零文本零思考 assistant 轮不渲染空灰气泡',
     expect(isEmptyAssistantTurn({ ...emptyTurn, text: '正文' })).toBe(false)
     expect(isEmptyAssistantTurn({ kind: 'assistant-message', seq: 8, text: '', reasoning: '想', toolCalls: [] })).toBe(false)
   })
+})
+describe('消息元信息行（桌面端对齐：时间+复制+用量）', () => {
+  it('formatMsgTime：epoch ms → HH:MM（补零）', () => {
+    expect(formatMsgTime(new Date(2026, 9, 23, 16, 50).getTime())).toBe('16:50')
+    expect(formatMsgTime(new Date(2026, 9, 23, 8, 5).getTime())).toBe('08:05')
+    expect(formatMsgTime(undefined)).toBe('')
+  })
+
+  it('formatUsage：totalTokens → K 缩写；缺席不显示', () => {
+    expect(formatUsage(14669)).toBe('14.7K tok')
+    expect(formatUsage(860)).toBe('860 tok')
+    expect(formatUsage(undefined)).toBe('')
+  })
+
 })

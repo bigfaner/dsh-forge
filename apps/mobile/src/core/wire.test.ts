@@ -373,3 +373,23 @@ describe('bug db09ac00：官方词表覆盖守卫（projectEvent 永不落 error
     })
   })
 })
+describe('消息元信息投影（桌面端对齐：time + usage）', () => {
+  it('user/message → user-bubble 携 time（epoch ms）', () => {
+    const event = ev('user/message', 9, { content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' } })
+    const projection = projectEvent(event)
+    expect(projection?.kind).toBe('user-bubble')
+    expect((projection as { time?: number }).time).toBe(event.time)
+  })
+
+  it('assistant/message → 携 time 与 usage.totalTokens', () => {
+    const event = ev('assistant/message', 16, { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: '回' }] }, usage: { inputTokens: 100, outputTokens: 5, totalTokens: 105 } })
+    const projection = projectEvent(event)
+    expect((projection as { usage?: number }).usage).toBe(105)
+    expect((projection as { time?: number }).time).toBe(event.time)
+  })
+
+  it('usage 缺席 = undefined（不显示）', () => {
+    const projection = projectEvent(ev('assistant/message', 16, { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: '回' }] } }))
+    expect((projection as { usage?: number }).usage).toBeUndefined()
+  })
+})

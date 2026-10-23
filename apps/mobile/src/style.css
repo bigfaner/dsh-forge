@@ -161,6 +161,67 @@ body[data-ds-dark-theme] .msg.agent {
   margin-top: -12px;
   margin-bottom: 16px;
 }
+/* 消息元信息行（桌面端对齐——时间+复制+用量；气泡包一层 msg-block 后 .msg margin 归零） */
+.msg-block {
+  margin-bottom: 16px;
+}
+.msg-block + .msg-block,
+.msg-block + .msg,
+.msg + .msg-block {
+  margin-top: -12px;
+  margin-bottom: 16px;
+}
+.msg-block .msg {
+  margin-bottom: 0;
+}
+.msg-block.user-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: #9aa0a6;
+  min-height: 18px;
+}
+.msg-meta.meta-end {
+  justify-content: flex-end;
+}
+.meta-usage {
+  white-space: nowrap;
+}
+.meta-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9aa0a6;
+  cursor: pointer;
+}
+.meta-copy svg {
+  width: 13px;
+  height: 13px;
+}
+.meta-copy.copied {
+  color: #1a8a4a;
+}
+.dark .msg-meta,
+body[data-ds-dark-theme] .msg-meta {
+  color: #6f7379;
+}
+.dark .meta-copy,
+body[data-ds-dark-theme] .meta-copy {
+  color: #6f7379;
+}
 .mention {
   color: #1a56c4;
   font-weight: 550;

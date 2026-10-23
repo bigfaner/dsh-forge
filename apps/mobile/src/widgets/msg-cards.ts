@@ -191,6 +191,7 @@ export function ensureIconSprite(root: HTMLElement): void {
     <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3h6l-1 7 3 3H7l3-3z"/><path d="M12 13v7"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
   </svg>`
   root.prepend(holder)
 }
@@ -542,12 +543,87 @@ export interface RenderCardOptions {
   readonly degradedNarrative?: boolean
 }
 
-export function renderCard(projection: Projection, opts: RenderCardOptions = {}): HTMLElement {
-  switch (projection.kind) {
+// ---------------------------------------------------------------------------
+// 消息元信息行（桌面端对齐——时间 + 复制 + 用量；用户裁决 2026-10-23）
+// ---------------------------------------------------------------------------
+
+/** epoch ms → HH:MM（补零；缺席/非有限 = 空串不显示）。 */
+export function formatMsgTime(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms)) return ''
+  const date = new Date(ms)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** totalTokens → K 缩写（桌面端「14.6K tok」同形）；缺席 = 空串不显示。 */
+export function formatUsage(totalTokens: number | undefined): string {
+  if (totalTokens === undefined || !Number.isFinite(totalTokens)) return ''
+  return totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}K tok` : `${totalTokens} tok`
+}
+
+/** 剪贴板写入（clipboard API 优先，非安全上下文回退 execCommand——LAN http 无 navigator.clipboard）。 */
+function copyToClipboard(text: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard !== undefined && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(
+        () => resolve(true),
+        () => resolve(false),
+      )
+      return
+    }
+    try {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const ok = document.execCommand('copy')
+      textarea.remove()
+      resolve(ok)
+    } catch {
+      resolve(false)
+    }
+  })
+}
+
+function renderMsgMeta(options: { time?: number; copyText: string; usage?: number; align: 'start' | 'end' }): HTMLElement {
+  const meta = el('div', `msg-meta ${options.align === 'end' ? 'meta-end' : 'meta-start'}`)
+  if (options.align === 'end') {
+    meta.appendChild(el('span', 'meta-time', formatMsgTime(options.time)))
+    meta.appendChild(renderCopyButton(options.copyText))
+  } else {
+    meta.appendChild(renderCopyButton(options.copyText))
+    if (options.usage !== undefined) meta.appendChild(el('span', 'meta-usage', formatUsage(options.usage)))
+    meta.appendChild(el('span', 'meta-time', formatMsgTime(options.time)))
+  }
+  return meta
+}
+
+function renderCopyButton(text: string): HTMLElement {
+  const button = el('button', 'meta-copy')
+  button.type = 'button'
+  button.title = '复制'
+  button.appendChild(svgIcon('i-copy'))
+  button.addEventListener('click', () => {
+    void copyToClipboard(text).then((ok) => {
+      if (!ok) return
+      button.classList.add('copied')
+      setTimeout(() => button.classList.remove('copied'), 1200)
+    })
+  })
+  return button
+}
+
+export function renderCard(projection: Projection, opts: RenderCardOptions = {}): HTMLElement {  switch (projection.kind) {
     case 'user-bubble': {
+      // 桌面端对齐：气泡下元信息行（时间+复制）——msg-block 包裹（气泡本体 .msg.user 不变）
+      const block = el('div', 'msg-block user-block')
       const bubble = el('div', 'msg user')
       renderInline(bubble, projection.text)
-      return bubble
+      block.appendChild(bubble)
+      block.appendChild(renderMsgMeta({ time: projection.time, copyText: projection.text, align: 'end' }))
+      return block
     }
     case 'assistant-message': {
       // bug 9053cfbe：纯 tool-call 载体轮零渲染——hidden 占位保 appendChild 面
@@ -556,10 +632,15 @@ export function renderCard(projection: Projection, opts: RenderCardOptions = {})
         stub.hidden = true
         return stub
       }
-      return renderAssistantBubble(projection.text, {
+      const bubble = renderAssistantBubble(projection.text, {
         ...(projection.interrupted ? { interrupted: true } : {}),
         ...(opts.streamingSeq === projection.seq ? { streaming: true } : {}),
       })
+      if (opts.streamingSeq === projection.seq) return bubble // 流式瞬态——不挂元信息
+      const block = el('div', 'msg-block')
+      block.appendChild(bubble)
+      block.appendChild(renderMsgMeta({ time: projection.time, copyText: projection.text, usage: projection.usage, align: 'start' }))
+      return block
     }
     case 'tool-call':
     case 'tool-result':
