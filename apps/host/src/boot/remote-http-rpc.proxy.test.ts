@@ -272,6 +272,39 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect((JSON.parse(resW3.body) as { ok: boolean; data: { saved: boolean } }).data.saved).toBe(false)
   })
 
+  it('forge:proxy/file-list：工作区文件清单（忽略重目录 + 上限 + 相对路径 / 归一）', async () => {
+    const { mkdtemp: mkd, writeFile: wf, mkdir: mkd2 } = await import('node:fs/promises')
+    const dir = await mkd(join(tmpdir(), 'filelist-'))
+    await mkd2(join(dir, 'src', 'sub'), { recursive: true })
+    await mkd2(join(dir, 'node_modules', 'x'), { recursive: true })
+    await mkd2(join(dir, '.git'), { recursive: true })
+    await wf(join(dir, 'README.md'), 'x')
+    await wf(join(dir, 'src', 'app.ts'), 'x')
+    await wf(join(dir, 'src', 'sub', '深加深.py'), 'x')
+    await wf(join(dir, 'node_modules', 'x', 'skip.js'), 'x')
+    await wf(join(dir, '.git', 'skip.js'), 'x')
+    const res = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/file-list', payload: { projectRoot: dir } }) as never, res, deps({ proxy: proxyDeps() }))
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { root: string; truncated: boolean; entries: { path: string; dir: boolean }[] } }
+    expect(parsed.ok).toBe(true)
+    const paths = parsed.data.entries.map((e) => e.path)
+    expect(paths).toContain('README.md')
+    expect(paths).toContain('src/app.ts')
+    expect(paths).toContain('src/sub/深加深.py')
+    expect(paths.some((p) => p.includes('node_modules'))).toBe(false)
+    expect(paths.some((p) => p.startsWith('.git'))).toBe(false)
+    expect(parsed.data.truncated).toBe(false)
+  })
+
+  it('forge:proxy/file-list：payload 形状非法 = fail-soft 错误信封；缺席目录同', async () => {
+    const res = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/file-list', payload: {} }) as never, res, deps({ proxy: proxyDeps() }))
+    expect((JSON.parse(res.body) as { ok: boolean }).ok).toBe(false)
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/file-list', payload: { projectRoot: 'Z:/definitely-absent-dir-xyz' } }) as never, res2, deps({ proxy: proxyDeps() }))
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(false)
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))

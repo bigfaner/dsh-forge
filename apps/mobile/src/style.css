@@ -828,6 +828,49 @@ body[data-ds-dark-theme] .jump {
   padding: 8px 14px 14px;
   flex: none;
 }
+/* 唤醒菜单（/ 命令 + @ mention）——文档流块在输入卡上方（mini-composer 同壳：
+ * 非光标锚定浮层，maxHeight 30vh，圆角/边框对齐 composer 刻度） */
+.suggest {
+  max-height: 30vh;
+  overflow-y: auto;
+  margin: 0 6px 6px;
+  border: 1px solid #dadce0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+}
+.dark .suggest,
+body[data-ds-dark-theme] .suggest {
+  background: #1d1d20;
+  border-color: #303034;
+}
+.suggest .mi {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.suggest .mi.picked {
+  background: rgba(65, 118, 230, 0.09);
+}
+.suggest .mi .k {
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest .mi .hint {
+  color: #81858c;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .composer {
   border: 1px solid #dadce0;
   border-radius: 22px;

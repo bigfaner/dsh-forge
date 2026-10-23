@@ -334,10 +334,33 @@ export function mount(root: HTMLElement): void {
   const openDrawer = (): void => router.navigate('drawer')
   const openHero = (): void => router.navigate('hero')
 
+  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——双通道装配单点）。 */
+  async function suggestItems(kind: '/' | '@', projectRoot?: string): Promise<{ insert: string; label: string }[]> {
+    if (ctx.rpc === null) return []
+    if (kind === '/') {
+      const result = await ctx.rpc.call<{ name?: unknown; description?: unknown }[]>('forge:proxy/commands-list', {})
+      if (!result.ok || !Array.isArray(result.data)) return []
+      return result.data
+        .filter((row): row is { name: string; description?: string } => typeof row?.name === 'string' && row.name !== '')
+        .map((row) => ({
+          insert: `/${row.name} `,
+          label: row.name,
+          ...(typeof row.description === 'string' && row.description !== '' ? { description: row.description } : {}),
+        }))
+    }
+    if (projectRoot === undefined || projectRoot === '') return []
+    const result = await ctx.rpc.call<{ entries?: { path?: unknown; dir?: unknown }[] }>('forge:proxy/file-list', { projectRoot })
+    if (!result.ok || !Array.isArray(result.data?.entries)) return []
+    return result.data!.entries
+      .filter((row): row is { path: string; dir: boolean } => typeof row?.path === 'string' && row.path !== '' && row.dir === false)
+      .map((row) => ({ insert: `@${row.path} `, label: row.path }))
+  }
+
   function heroDeps(): Parameters<typeof createHeroView>[0] {
     return {
       rpc: ctx.rpc!,
       api: ctx.api!,
+      suggest: (kind) => suggestItems(kind),
       // bug 38ab5a8d：hero 暂存的新会话默认档（模型视图写入、建会话后下发并清除）
       modelDefault: {
         read: () => loadPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
@@ -359,7 +382,7 @@ export function mount(root: HTMLElement): void {
       const path = result.data?.projects?.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')?.wsPath
       if (typeof path !== 'string' || path === '' || rendered?.key !== 'hero') return
       rendered.root.remove()
-      rendered = { key: 'hero', root: createHeroView({ ...heroDeps(), projectRoot: path }) }
+      rendered = { key: 'hero', root: createHeroView({ ...heroDeps(), projectRoot: path, suggest: (kind) => suggestItems(kind, path) }) }
       container.appendChild(rendered.root)
     } catch {
       /* 清单锚缺席 = hero 降级形态（零清单直开） */
@@ -379,8 +402,11 @@ export function mount(root: HTMLElement): void {
         setCurrentSession(sessionId)
         // bug 会话标题：LLM 标题在官方 title 投影不在事件——grouped 异步解析注入回退链
         const fallbackTitleRef = { current: '' }
+        // @ mention 根（grouped 异步收敛——best-effort，缺席 = @ 候选空态）
+        const chatRootRef = { current: undefined as string | undefined }
         const root = createChatView(sessionId, {
           api: ctx.api,
+          suggest: (kind) => suggestItems(kind, chatRootRef.current),
           // bug 1dd4b437：已读游标 host 侧单点（localStorage 随 origin churn 丢失 → 未读全量误报）
           writeReadState: (sid, seq) => {
             void ctx.rpc?.call('forge:remote/read-state-write', { sessionId: sid, seq })
@@ -410,6 +436,9 @@ export function mount(root: HTMLElement): void {
             if (!result.ok || rendered?.key !== `chat:${sessionId}`) return
             const data = result.data as { projects?: ReadonlyArray<{ sessions?: ReadonlyArray<{ sessionId?: unknown; projections?: { values?: { title?: unknown } } }> }> } | undefined
             for (const project of data?.projects ?? []) {
+              if (chatRootRef.current === undefined && typeof project?.wsPath === 'string' && project.wsPath !== '') {
+                chatRootRef.current = project.wsPath
+              }
               for (const session of project.sessions ?? []) {
                 if (session.sessionId !== sessionId) continue
                 const title = session.projections?.values?.title

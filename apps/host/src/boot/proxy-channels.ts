@@ -22,6 +22,7 @@ import type {
   WorktreeEntryDto,
 } from '@dsh-forge/contracts'
 import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/contracts'
+import { listWorkspaceFiles } from './file-list.js'
 import type { ReadCursorStore } from './read-cursor-store.js'
 import { typertDispatch, typertSessionDescriptor } from './typert-dispatch.js'
 
@@ -49,6 +50,7 @@ export const PROXY_CHANNELS = {
   agentPresets: 'forge:proxy/agent-presets',
   agentPresetSelect: 'forge:proxy/agent-preset-select',
   file: 'forge:proxy/file',
+  fileList: 'forge:proxy/file-list',
 } as const
 
 /** 已读游标通道族（bug 1dd4b437——host 侧持久游标，跨重启/端口churn存活） */
@@ -450,6 +452,19 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
     [PROXY_CHANNELS.file]: async (payload) => {
       const record = asRecord(payload)
       return readFileChunk(asString(record, 'path'), typeof record['offset'] === 'number' ? record['offset'] : 0, record['manifest'] === true)
+    },
+    // feature：移动端 composer @ 文件 mention 候选源（工作区相对路径清单——
+    // 轻量 walk 忽略重目录 + 条目上限；payload 形状非法/目录缺席 = fail-soft 错误信封）
+    [PROXY_CHANNELS.fileList]: async (payload) => {
+      const record = asRecord(payload)
+      const projectRoot = asString(record, 'projectRoot')
+      let result
+      try {
+        result = listWorkspaceFiles(projectRoot)
+      } catch (cause) {
+        throw new Error(`工作区清单不可达：${String(cause)}`)
+      }
+      return result
     },
     // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单与建会话
     // 正门 not-found）。sessionCreate = 预铸采纳单门（host 建会话守卫内建），缺席缝 fail-soft。

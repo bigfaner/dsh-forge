@@ -111,6 +111,8 @@ export interface ChatDeps {
   readonly tunnel?: boolean
   /** 会话标题回退（bug：LLM 标题在官方 title 投影不在事件——装配侧自 grouped 注入；事件面优先）。 */
   readonly fallbackTitleRef?: { current: string }
+  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒）。 */
+  readonly suggest?: (kind: '/' | '@') => Promise<readonly { insert: string; label: string; description?: string }[]>
 }
 
 type OverlayMode = 'hidden' | 'degraded' | 'offline' | 'pairing'
@@ -177,6 +179,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     mode: deps.mode ?? '远征',
     worktree: deps.worktree ?? '',
     modeReadOnly: true,
+    suggest: deps.suggest,
     onSend: (text) => void send(text),
     onSettings: () => deps.onOpenSettings?.(),
     onWorktreeTap: () => deps.onWorktreeTap?.(),

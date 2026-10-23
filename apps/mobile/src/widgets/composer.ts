@@ -1,7 +1,21 @@
 /**
  * composer 底行：输入框 + 模式 · worktree（截断）· 滑杆设置钮 · 发送。
  * mockup 屏① 刻度；stale 置灰 = 发送/模式钮 disabled（数据驱动，AD-1）。
+ * feature：/ 命令 + @ 文件 mention 唤醒菜单（super-composer InputTriggerController
+ * 语义的移动端轻量镜像——触发判定/过滤/span 替换为纯函数，候选源由视图注入，
+ * 发送原文不动：host 端斜杠仲裁照旧，@path 为纯文本由 agent 以文本理解）。
  */
+
+/** 唤醒候选项（insert = 选中后替换触发 span 的完整文本，尾带空格）。 */
+export interface SuggestItem {
+  readonly insert: string
+  readonly label: string
+  readonly description?: string
+}
+
+export type SuggestKind = '/' | '@'
+
+import { el } from './msg-cards.ts'
 
 export interface ComposerOptions {
   readonly mode: string
@@ -11,6 +25,44 @@ export interface ComposerOptions {
   readonly onWorktreeTap?: () => void
   readonly onModeTap?: () => void
   readonly modeReadOnly?: boolean
+  /** 唤醒候选源（缺席 = 对应触发不唤醒——视图按能力注入）。 */
+  readonly suggest?: (kind: SuggestKind) => Promise<readonly SuggestItem[]>
+}
+
+// ── 纯逻辑面（触发判定 / 过滤 / span 替换——单测主战场）──────────────
+
+export interface TriggerHit {
+  readonly kind: SuggestKind
+  readonly query: string
+  /** 触发符在文本中的下标。 */
+  readonly start: number
+}
+
+/** 触发判定（official scanTextRefs 同语义）：行首/空白后的 / 或 @，query 至光标；
+ *  / 的 query = 词字符（命令名），@ 的 query 允许路径字符（含 /）与 CJK；
+ *  词中触发符（3/4、a@b）不触发；query 后随空白 = 已完成，菜单关。 */
+export function detectTrigger(text: string, caret: number): TriggerHit | null {
+  if (caret <= 0 || caret > text.length) return null
+  const before = text.slice(0, caret)
+  const slash = /(?:^|[\s])\/([\w-]*)$/.exec(before)
+  if (slash !== null) return { kind: '/', query: slash[1] ?? '', start: caret - (slash[1]!.length + 1) }
+  const at = /(?:^|[\s])@([^\s@]*)$/.exec(before)
+  if (at !== null) return { kind: '@', query: at[1] ?? '', start: caret - (at[1]!.length + 1) }
+  return null
+}
+
+/** 候选过滤：label 子串不区分大小写；空 query 全量。 */
+export function filterItems(items: readonly SuggestItem[], query: string): readonly SuggestItem[] {
+  const needle = query.toLowerCase()
+  if (needle === '') return items
+  return items.filter((item) => item.label.toLowerCase().includes(needle))
+}
+
+/** span 替换：触发符起至光标 → insert；返回新文本 + 落位光标。 */
+export function applySuggestion(text: string, hit: TriggerHit, insert: string): { readonly text: string; readonly caret: number } {
+  const head = text.slice(0, hit.start)
+  const tail = text.slice(hit.start + (hit.query.length + 1))
+  return { text: `${head}${insert}${tail}`, caret: hit.start + insert.length }
 }
 
 export interface ComposerHandle {
@@ -79,6 +131,121 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
   sendButton.title = '发送'
   sendButton.innerHTML = '<svg class="ic"><use href="#i-send"/></svg>'
 
+  // ---- 唤醒菜单（/ 命令 + @ mention——文档流块在输入卡上方，非光标锚定浮层）----
+  const suggestBox = document.createElement('div')
+  suggestBox.className = 'suggest'
+  suggestBox.hidden = true
+  let openHit: TriggerHit | null = null
+  let openItems: readonly SuggestItem[] = []
+  let itemsLoading = false
+  let highlight = 0
+  let composing = false
+  let itemsToken = 0 // 异步候选源竞态守卫（新一轮触发使旧回执作废）
+  const closeSuggest = (): void => {
+    openHit = null
+    openItems = []
+    itemsLoading = false
+    suggestBox.hidden = true
+    suggestBox.textContent = ''
+  }
+  const renderSuggest = (): void => {
+    if (openHit === null) return
+    const visible = filterItems(openItems, openHit.query)
+    // 加载中/暂无命中 = 菜单不显但触发态保留（候选回执到达后即显——bug：先前
+    // 空列表即 closeSuggest 会把 in-flight 回执作废，菜单永不弹出）
+    if (itemsLoading || visible.length === 0) {
+      suggestBox.hidden = true
+      suggestBox.textContent = ''
+      return
+    }
+    if (highlight >= visible.length) highlight = 0
+    suggestBox.hidden = false
+    suggestBox.textContent = ''
+    visible.forEach((item, index) => {
+      const row = el('div', `mi${index === highlight ? ' picked' : ''}`)
+      const label = el('span', 'k', item.label)
+      row.appendChild(label)
+      if (item.description !== undefined) row.appendChild(el('span', 'hint', item.description))
+      // mousedown preventDefault——点击落选不抢 textarea 焦（official InputBar keepFocus 同径）
+      row.addEventListener('mousedown', (event) => event.preventDefault())
+      row.addEventListener('click', () => {
+        pickSuggest(item)
+      })
+      suggestBox.appendChild(row)
+    })
+  }
+  const pickSuggest = (item: SuggestItem): void => {
+    if (openHit === null) return
+    const applied = applySuggestion(input.value, openHit, item.insert)
+    input.value = applied.text
+    input.selectionStart = input.selectionEnd = applied.caret
+    closeSuggest()
+    syncHeight()
+    syncSend()
+    input.focus()
+  }
+  const updateSuggest = (): void => {
+    if (options.suggest === undefined || composing) return
+    const hit = detectTrigger(input.value, input.selectionStart ?? input.value.length)
+    if (hit === null) {
+      if (openHit !== null) closeSuggest()
+      return
+    }
+    if (openHit === null || openHit.kind !== hit.kind) {
+      openHit = hit
+      highlight = 0
+      openItems = []
+      itemsLoading = true
+      const token = ++itemsToken
+      void options
+        .suggest(hit.kind)
+        .then((items) => {
+          if (token !== itemsToken) return
+          itemsLoading = false
+          openItems = items
+          renderSuggest()
+        })
+        .catch(() => {
+          if (token === itemsToken) closeSuggest()
+        })
+    } else {
+      openHit = hit
+    }
+    renderSuggest()
+  }
+  input.addEventListener('compositionstart', () => {
+    composing = true
+  })
+  input.addEventListener('compositionend', () => {
+    composing = false
+    updateSuggest()
+  })
+  input.addEventListener('input', () => {
+    syncHeight()
+    syncSend()
+    updateSuggest()
+  })
+  input.addEventListener('keyup', updateSuggest)
+  input.addEventListener('click', updateSuggest)
+  input.addEventListener('keydown', (event) => {
+    if (openHit === null || suggestBox.hidden) return
+    const visible = filterItems(openItems, openHit.query)
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const delta = event.key === 'ArrowDown' ? 1 : -1
+      highlight = (highlight + delta + visible.length) % Math.max(visible.length, 1)
+      renderSuggest()
+    } else if (event.key === 'Enter') {
+      // 菜单开 = Enter 选中高亮（菜单关 = 换行——多行化裁决不变）
+      event.preventDefault()
+      const item = visible[highlight]
+      if (item !== undefined) pickSuggest(item)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      closeSuggest()
+    }
+  })
+
   let stale = false
   let sending = false
   const syncSend = (): void => {
@@ -87,6 +254,7 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
   input.addEventListener('input', syncSend)
   sendButton.addEventListener('click', () => {
     if (sendButton.disabled) return
+    closeSuggest()
     options.onSend(input.value)
     input.value = ''
     syncHeight()
@@ -95,7 +263,7 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
 
   crow.append(modeChip, worktreeChip, settingsButton, sendButton)
   composer.append(input, crow)
-  inputbar.appendChild(composer)
+  inputbar.append(suggestBox, composer)
   syncSend()
 
   return {

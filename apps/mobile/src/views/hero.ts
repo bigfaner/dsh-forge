@@ -430,6 +430,8 @@ export interface HeroViewDeps extends HeroDeps {
   readonly projectName?: string
   readonly onOpenDrawer?: () => void
   readonly onOpenSettings?: () => void
+  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒）。 */
+  readonly suggest?: (kind: '/' | '@') => Promise<readonly { insert: string; label: string; description?: string }[]>
 }
 
 export function createHeroView(deps: HeroViewDeps): HTMLElement {
@@ -493,6 +495,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   const composer: ComposerHandle = createComposer({
     mode: HERO_DEFAULT_MODE,
     worktree: '',
+    suggest: deps.suggest,
     // bug 53b5d685：文本留存视图侧——失败时回填（controller.send 无 composer 引用）
     onSend: (text) => {
       lastSentText = text
