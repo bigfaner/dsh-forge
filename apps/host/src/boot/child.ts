@@ -885,7 +885,13 @@ async function main(): Promise<void> {
               // fix-27 bug b9bfb9d3：__rpc 门 = 官方 authorizeIndex 优先 + dswf_forge_remote
               // cookie 自持兜底（配对握手已认证语义；官方会话门仅用于 GET 页面——隧道域下
               // 手机 POST 被官方 Host 绑定会话门拒绝，真断点由 401 诊断行真机定位）
-              authorize: (rq, rs) => authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1])),
+              // bug 1792cc7a ①：会话门拒绝落 diag（官方门拒 + dswf cookie 回退未命中——隧道域
+              // 配对后 sealed 帧全拒的归因面；此前该路径零日志）
+              authorize: (rq, rs) => {
+                const ok = authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1]))
+                if (!ok) diag('[pair-diag] /remote/__rpc authorize=deny（官方门拒 + dswf cookie 回退未命中）')
+                return ok
+              },
               diag,
             })
             return
