@@ -406,6 +406,49 @@ describe("1.47 引用自动展开（surfaceOnReference——收起态直展卡�
     expect(document.querySelector('[data-testid="dscf-root"]')).toBeNull();
     dispose();
   });
+
+  it("fix-20 集成：挂载层 surfaceOnReference 经合取门——非全屏触发零现身，重进全屏 1.50 展开反馈不回归", async () => {
+    setFullscreenMarker(false);
+    const ctx = ctxWithReflect();
+    superComposerClient.apply(ctx);
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]'), "AC5 基线：非全屏不常驻").toBeNull();
+    svcOf(ctx).surfaceOnReference();
+    await tick();
+    expect(document.querySelector('[data-testid="dscf-root"]'), "非全屏触发零现身").toBeNull();
+    expect(document.querySelector('[data-testid="dscf-ball"]')).toBeNull();
+    // 重进全屏 + 文档活动 → 1.50 展开反馈不回归（现身态未被非全屏触发污染）
+    setFullscreenMarker(true);
+    await waitFor(() => document.querySelector('[data-testid="dscf-root"]') !== null);
+    expect(document.querySelector('[data-testid="dscf-root"]')).not.toBeNull();
+  });
+});
+
+describe("fix-20: 现身门通用合取判定（surfaceGateOk——全屏呈现 ∧ 文档活动，无降级恒真）", () => {
+  const tracker = (fullscreen: boolean) =>
+    ({ isFullscreen: () => fullscreen, subscribe: () => () => undefined, dispose: () => undefined }) as never;
+  const activity = (active: boolean) =>
+    ({ isActive: () => active, subscribe: () => () => undefined, dispose: () => undefined }) as never;
+
+  it("activity 缺席（undefined）= 判据未知 → 不现身（不得降级恒真误现身）", async () => {
+    const { surfaceGateOk } = await import("../src/client/index.js");
+    expect(surfaceGateOk(tracker(true), undefined)).toBe(false);
+  });
+
+  it("tracker 缺席（undefined）= 判据未知 → 不现身（不得降级恒真误现身）", async () => {
+    const { surfaceGateOk } = await import("../src/client/index.js");
+    expect(surfaceGateOk(undefined, activity(true))).toBe(false);
+  });
+
+  it("非全屏 ∧ 文档活动 → 不现身（chip 落正式 composer 场景 = 零现身反馈）", async () => {
+    const { surfaceGateOk } = await import("../src/client/index.js");
+    expect(surfaceGateOk(tracker(false), activity(true))).toBe(false);
+  });
+
+  it("全屏 ∧ 文档活动 → 现身（1.50 替身自动展开反馈语义不回归）", async () => {
+    const { surfaceGateOk } = await import("../src/client/index.js");
+    expect(surfaceGateOk(tracker(true), activity(true))).toBe(true);
+  });
 });
 
 describe("fix-19: 单一数据面收敛（composerFace 第二实例退役——挂载层扇出承载复制件同步）", () => {

@@ -131,8 +131,19 @@ function exitFullscreenOf(source: unknown, doc: Document, fallback?: unknown): (
   }
 }
 
-/** mini-composer 替身挂载选项（服务切片源 + 全屏门控 + 退全屏动作可注入）。 */
-export interface MountMiniComposerOptions {
+/**
+ * fix-20（bug 5773b86f）现身门——通用合取判定：全屏呈现 ∧ 文档活动。感知面缺席
+ * （undefined = 判据未知）不降级恒真，一律不现身；与 render 可见性门控同语义组合
+ * （1.39 两信号合取），无 per-scenario 分支。只管替身现身反馈，不管数据落点。
+ */
+export function surfaceGateOk(
+  tracker: { isFullscreen(): boolean } | undefined,
+  activity: { isActive(): boolean } | undefined,
+): boolean {
+  return tracker !== undefined && tracker.isFullscreen() && activity !== undefined && activity.isActive()
+}
+
+/** mini-composer 替身挂载选项（服务切片源 + 全屏门控 + 退全屏动作可注入）。 */export interface MountMiniComposerOptions {
   /** 服务切片源（inject 兜底回调传入注入后 scope——scope 优先、ctx 兜底） */
   readonly source?: unknown
   /** 全屏感知 tracker（在场 = 替身按全屏呈现门控挂载可见） */
@@ -264,7 +275,10 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
   // 折叠态探测（card 上报——门控隐藏期组件不在场，视同收起）
   const collapsedProbe = { collapsed: true }
   const surfaceOnReference = (): void => {
-    if (options.activity !== undefined && !options.activity.isActive()) return
+    // fix-20（bug 5773b86f）：现身门 = 通用合取判定（全屏呈现 ∧ 文档活动），任一感知面
+    // 缺席（判据未知）= 不现身——activity 缺席旧径恒真放行，非全屏会话视图引用时替身
+    // 误现身。门控只管替身可见性，不管数据落点（chip 始终落官方 composer，1.53 语义）。
+    if (!surfaceGateOk(options.tracker, options.activity)) return
     if (surfaceState !== 'off') return
     if (!collapsedProbe.collapsed) return
     surfaceState = 'card'
