@@ -667,12 +667,17 @@ export function mount(root: HTMLElement): void {
     container.appendChild(screen)
   }
 
-  /** 隧道材料落地：信封化传输 → rpc/api 重建 + 加密 forge-stream 会话沿用 sid/epoch。 */
+  /** 隧道材料落地：信封化传输 → rpc/api 重建 + 加密 forge-stream（每代传输换新 sid/epoch 世代）。 */
   function applyTunnelMaterial(material: TunnelMaterial): void {
     ctx.material = material
     ctx.tunnel = true
     stream?.close()
     stream = null
+    // bug 3579f34f：传输重建必须换新 (sid,epoch) 世代——transport 内 seq 从 0 起算，若沿用
+    // 上一代 (sid,epoch)，host 防重放高水位已推高 → 新传输前 N 帧全 401 且误触轮换引导；
+    // 并发旧传输（视图持旧 api 引用）交错时零星单帧 401。epoch 自增 = host 水位按新世代
+    // 从零起算（ReplayWatermark 键 (sid,epoch)），重建即全帧放行。
+    ctx.session = identity.beginSession()
     const transport = createTunnelTransport(material, ctx.session, {
       post: async (path, body) => {
         const response = await fetch(path, {
