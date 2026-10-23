@@ -33,6 +33,7 @@
     "build": "tsc -b && node scripts/bundle-client.mjs"
   },
   "dependencies": {
+    "chokidar": "5.0.0",
     "gray-matter": "4.0.3"
   },
   "peerDependencies": {
