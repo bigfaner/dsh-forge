@@ -305,12 +305,12 @@ export function createAskView(deps: AskDeps): HTMLElement {
     const multi = isMulti(question)
     const card = el('div', 'ask-card')
 
-    // 序号/总数（左上角）
-    const counter = el('div', 'ask-counter', `${index + 1}/${total}`)
-    card.appendChild(counter)
-
-    if (question.header !== undefined) card.appendChild(el('div', 'ask-header', question.header))
-    card.appendChild(el('div', 'ask-question', question.question))
+    // 序号徽标 + 问题同行（桌面端对齐——用户裁决 2026-10-23 简洁化）
+    const topRow = el('div', 'ask-toprow')
+    topRow.appendChild(el('span', 'ask-counter', `${index + 1}/${total}`))
+    if (question.header !== undefined) topRow.appendChild(el('span', 'ask-header', question.header))
+    topRow.appendChild(el('span', 'ask-question', question.question))
+    card.appendChild(topRow)
     if (question.detail !== undefined && question.detail !== '') card.appendChild(renderMarkdown(question.detail))
 
     const options = question.options ?? []
@@ -335,30 +335,26 @@ export function createAskView(deps: AskDeps): HTMLElement {
       card.appendChild(list)
     }
 
-    // other = customAnswer 自由文本域（每题附带，非选项成员）
+    // other = customAnswer 自由文本（每题附带，非选项成员）——选项行同壳行内输入（简洁化）
     const custom = document.createElement('textarea')
     custom.className = 'ask-custom'
-    custom.placeholder = '其他…（自定义回答）'
-    custom.rows = 2
+    custom.placeholder = '其他： 输入即额外选中此项'
+    custom.rows = 1
     custom.value = draft.custom
     custom.addEventListener('input', () => setDraft(question, setCustom(question, draft, custom.value)))
     card.appendChild(custom)
 
-    // previous/skip/continue 按钮族
+    // 按钮族（桌面端对齐：← 上一个 · 提交/下一个 →；跳过仅整页形态保留——未答题提交按
+    // skipped 条目口径本就成立，嵌入态省按钮保简洁）
     const nav = el('div', 'ask-nav')
-    const previous = el('button', 'ask-btn ghost', '上一个')
+    const previous = el('button', 'ask-btn ghost', '← 上一个')
     previous.disabled = index === 0
     previous.addEventListener('click', () => {
       page = Math.max(0, index - 1)
       render()
     })
-    const skip = el('button', 'ask-btn ghost', '跳过')
-    skip.addEventListener('click', () => {
-      skipped.add(question.id)
-      advance(index, total, [...collectAnswered(0, index), buildSkipped(question)])
-    })
     const isLast = index === total - 1
-    const continueButton = el('button', 'ask-btn primary', isLast ? '提交' : '下一个')
+    const continueButton = el('button', 'ask-btn primary', isLast ? '提交' : '下一个 →')
     continueButton.disabled = !canSubmit(question, draft)
     continueButton.addEventListener('click', () => {
       advance(
@@ -373,7 +369,16 @@ export function createAskView(deps: AskDeps): HTMLElement {
         render()
       }
     })
-    nav.append(previous, skip, continueButton)
+    nav.append(previous)
+    if (deps.embedded !== true) {
+      const skip = el('button', 'ask-btn ghost', '跳过')
+      skip.addEventListener('click', () => {
+        skipped.add(question.id)
+        advance(index, total, [...collectAnswered(0, index), buildSkipped(question)])
+      })
+      nav.append(skip)
+    }
+    nav.append(continueButton)
     card.appendChild(nav)
     return card
   }

@@ -1297,30 +1297,43 @@ body[data-ds-dark-theme] .setbtn {
 .ask-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
   border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  border-radius: 12px;
   background: #fff;
 }
 .dark .ask-card {
   border-color: #2a2a2c;
   background: #1e1e20;
 }
+/* 序号徽标与问题同行（桌面端对齐——用户裁决 2026-10-23 简洁化） */
+.ask-toprow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .ask-counter {
-  font-size: 12px;
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(65, 118, 230, 0.12);
+  color: #4176e6;
+  font-size: 11px;
   font-weight: 600;
-  color: #8e8e93;
 }
 .ask-header {
+  flex: none;
   font-size: 12px;
   font-weight: 600;
   color: #4176e6;
 }
 .ask-question {
-  font-size: 15px;
+  min-width: 0;
+  font-size: 14.5px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.4;
   color: #1a1a1a;
 }
 .dark .ask-question {
@@ -1410,7 +1423,9 @@ body[data-ds-dark-theme] .setbtn {
   font: inherit;
   font-size: 14px;
   color: inherit;
-  resize: vertical;
+  resize: none;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .dark .ask-custom {
   border-color: #2a2a2c;
