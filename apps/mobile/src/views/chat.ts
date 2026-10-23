@@ -318,7 +318,19 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
       renderTodoPanel()
     })
     todoPanel.appendChild(head)
-    if (todoCollapsed) return
+    if (todoCollapsed) {
+      // 收起态补行：正在进行中的事项内容仍可见（用户裁决 2026-10-23——折叠不丢当前进展）
+      for (const todo of todos) {
+        if (todo.status !== 'in_progress') continue
+        const row = el('div', 'todo-row in_progress todo-current')
+        const glyph = el('span', 'todo-glyph')
+        glyph.innerHTML = TODO_GLYPHS['in_progress']!
+        row.appendChild(glyph)
+        row.appendChild(el('span', 'todo-content', todo.content))
+        todoPanel.appendChild(row)
+      }
+      return
+    }
     const list = el('div', 'todo-list')
     for (const todo of todos) {
       const row = el('div', `todo-row ${todo.status}`)
