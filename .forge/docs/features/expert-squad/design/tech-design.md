@@ -226,6 +226,6 @@ model: sonnet              # 可选，派发模型偏好
 | 4 安装/启停真机 | §3 构建配方 + §10 真机结算门 |
 | 5 热刷新 + 坏档案隔离 | §5 store/* + §9 FMEA 前两行 |
 | 6 独立装载 + 通道一通用派发 | §5 dispatch/* + §12 未触及判据 |
-| 7 persona scope 唯一 + 契约附前置约束 | AD4《取用 API 契约》文档 + §13 D1 |
+| 7 persona scope 唯一 + 契约附前置约束 | 《取用 API 契约》（design/api-contract.md，提案目录归副本）+ §13 D1 |
 | 8 三层来源/遮蔽/禁用隔离 | AD3 + AD2 + §7 registerRoot |
 | 用户故事 US1–US15 | §6 双通道时序、§8 数据模型、§9 错误处理、ui-design（已批原型） |
