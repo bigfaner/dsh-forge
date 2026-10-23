@@ -3,12 +3,15 @@ import {
   badgeText,
   collapsedKey,
   coerceGrouped,
+  coerceReadCursors,
   DRAWER_TOP_N,
   DRAWER_WINDOW_MS,
   filterSessions,
   nextStatusFailStreak,
   orderVisible,
   pinnedKey,
+  READ_STATE_CHANNEL,
+  READ_STATE_WRITE_CHANNEL,
   splitWorkers,
   statusDisplayOk,
   STATUS_FAIL_STREAK_THRESHOLD,
@@ -16,7 +19,6 @@ import {
   unreadOf,
   type DrawerSession,
 } from './drawer.ts'
-import { loadReadCursors, readCursorKey, writeReadCursor } from '../core/read-cursor.ts'
 
 const session = (overrides: Partial<DrawerSession> & { sessionId: string }): DrawerSession => ({
   title: overrides.sessionId,
@@ -73,7 +75,7 @@ describe('grouped 响应收敛（缺字段 fail-soft）', () => {
   })
 })
 
-describe('双级未读（localStorage 游标合并）', () => {
+describe('双级未读（host 侧游标——bug 1dd4b437 localStorage 随 origin churn 丢失）', () => {
   it('unreadOf = asOfSeq − lastReadSeq；游标缺席 = 全量；不可知 = 0', () => {
     const row = session({ sessionId: 'a', asOfSeq: 12 })
     expect(unreadOf(row, undefined)).toBe(12)
@@ -89,23 +91,13 @@ describe('双级未读（localStorage 游标合并）', () => {
     expect(badgeText(100)).toBe('99+')
   })
 
-  it('read-cursor：单调写 + 损坏静默降级', () => {
-    const memory = new Map<string, string>()
-    const store = {
-      getItem: (key: string) => memory.get(key) ?? null,
-      setItem: (key: string, value: string) => void memory.set(key, value),
-    }
-    const key = readCursorKey('pair-a')
-    writeReadCursor(store, key, 's-1', 10)
-    writeReadCursor(store, key, 's-1', 8) // 回退拒绝
-    writeReadCursor(store, key, 's-1', 12) // 前进接受
-    writeReadCursor(store, key, 's-2', 3)
-    expect(loadReadCursors(store, key)).toEqual({ 's-1': 12, 's-2': 3 })
-    expect(loadReadCursors(store, 'missing')).toEqual({})
-    const corrupt = { getItem: () => '{broken', setItem: () => {} }
-    expect(loadReadCursors(corrupt, key)).toEqual({})
-    expect(loadReadCursors(null, key)).toEqual({})
-    writeReadCursor(null, key, 's-1', 1) // 不抛
+  it('游标 host 通道名钉死（host proxy-channels 同源）+ read-state 响应收敛 fail-soft', () => {
+    expect(READ_STATE_CHANNEL).toBe('forge:remote/read-state')
+    expect(READ_STATE_WRITE_CHANNEL).toBe('forge:remote/read-state-write')
+    expect(coerceReadCursors({ cursors: { 's-1': 12, 's-2': 3 } })).toEqual({ 's-1': 12, 's-2': 3 })
+    expect(coerceReadCursors({})).toEqual({})
+    expect(coerceReadCursors(null)).toEqual({})
+    expect(coerceReadCursors({ cursors: { bad: 'x', ok: 2.5, good: 7 } })).toEqual({ good: 7 })
   })
 })
 

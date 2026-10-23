@@ -56,6 +56,7 @@ import {
   type PinPersist,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+import { createReadCursorStore } from './read-cursor-store.js'
 // mobile-ui 1.11：PSK v3 host 侧 + forge:proxy 通道族 + 加密 forge-stream（tunnel-psk v3.1）
 import { isPskEnforcedHost, staticSignatureHeaders, writeConstant401 } from './psk.js'
 import {
@@ -704,6 +705,8 @@ async function main(): Promise<void> {
     // bug 1792cc7a ②：设备公钥绑定持久 store（host 重启后长命 Tab sig-only 帧验签依赖）
     devicePubs: createDevicePubStore(join(dirname(options.stateDb), 'remote-psk-device-pubs.json')),
   }
+  // bug 1dd4b437：手机已读游标 host 侧持久 store（localStorage 随 origin churn 丢失 → 未读全量误报）
+  const readCursors = createReadCursorStore(join(dirname(options.stateDb), 'remote-read-cursors.json'))
   // 1.107 装配期 ensure 单源（tunnel-psk v3.1）：无持久化 → 生成并落盘（新钥 + 新签名钥对）；
   // 有 → 原样加载。IO 失败 fail-soft——门未配置 = 旧门语义过渡期，boot 不受阻。
   try {
@@ -882,6 +885,8 @@ async function main(): Promise<void> {
                       }
                 },
                 disconnect: () => send({ type: 'pair-disconnected' }),
+                // bug 1dd4b437：已读游标 host 侧持久 store 接线
+                readCursors,
               },
               // PSK 准入门（隧道域强制位——门未配置 = 旧门语义过渡期）
               psk: pskGate,

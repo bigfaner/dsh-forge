@@ -7,7 +7,6 @@
  */
 import type { OfficialApi } from '../core/api.ts'
 import { DisconnectedError } from '../core/api.ts'
-import { readCursorKey, writeReadCursor, type KeyValueStore } from '../core/read-cursor.ts'
 import { sendComposerInput } from '../core/rpc.ts'
 import { type SseSink, type SseState } from '../core/sse.ts'
 import {
@@ -96,10 +95,8 @@ export interface StreamEngine {
 
 export interface ChatDeps {
   readonly api: OfficialApi
-  /** 已读游标载体（mobile 页 localStorage——1.12 裁决：host read-state 面不建）。 */
-  readonly store?: KeyValueStore | null
-  /** 游标键配对域（与 drawer readCursorKey 同源对账）。 */
-  readonly pairDomain?: string
+  /** 已读游标写缝（bug 1dd4b437——host read-state 单点；装配层注入，缺席静默跳过）。 */
+  readonly writeReadState?: (sessionId: string, seq: number) => void
   readonly createEngine: (sessionId: string, sink: SseSink) => StreamEngine
   readonly onOpenDrawer?: () => void
   readonly onOpenHero?: () => void
@@ -329,17 +326,11 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     if (view.scrollTop === 0) void loadOlder()
   })
 
-  /** 触底/回底写已读游标（显示层乐观归零；drawer 打开/轮询按同键对账，1.12）。 */
+  /** 触底/回底写已读游标（显示层乐观归零；host 单点持久——bug 1dd4b437）。 */
   function writeReadState(): void {
     if (state.tailSeq < 0) return
-    writeReadCursor(readStore, readCursorKey(deps.pairDomain ?? 'default'), sessionId, state.tailSeq)
+    deps.writeReadState?.(sessionId, state.tailSeq)
   }
-  const readStore: KeyValueStore | null =
-    deps.store === undefined
-      ? typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage
-        : null
-      : deps.store
 
   // bug 会话标题（用户裁决 2026-10-22）：title 回退链 = 事件 session/title → 官方 title
   // 投影（抽屉同行显示源——LLM 标题在投影不在事件）→ 「会话」。投影值经 titleRef 装配侧注入。

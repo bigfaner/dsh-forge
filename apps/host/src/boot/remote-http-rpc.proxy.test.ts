@@ -1,4 +1,4 @@
-﻿// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
+// mobile-ui 1.11 dispatch 面单测：forge:proxy/* 代理通道族（信封/归组/断言）+ PSK 隧道域
 // 强制位（统一 401 唯一 owner + 填充 + diag 脱敏 + LAN 旧门维持）。
 // 纯 handler fake 面——零真实 socket（remote-http-rpc.test.ts 同型）。
 import { describe, expect, it } from 'vitest'
@@ -241,6 +241,35 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     )
     expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
     expect(registry.presets).toEqual([{ agent: 's-1', preset: 'standard' }])
+  })
+
+  it('bug 1dd4b437：forge:remote/read-state 通道族——已读游标 host 侧读写（单调写 + 缺席 fail-soft）', async () => {
+    const { createReadCursorStore } = await import('./read-cursor-store.js')
+    const dir = await mkdtemp(join(tmpdir(), 'readcur-rpc-'))
+    const store = createReadCursorStore(join(dir, 'cursors.json'))
+    const proxyWith = (readCursors: unknown) => deps({ proxy: proxyDeps({ readCursors } as never) })
+
+    // write 单调落盘
+    const resW = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state-write', payload: { sessionId: 's-1', seq: 7 } }) as never, resW, proxyWith(store))
+    expect((JSON.parse(resW.body) as { ok: boolean; data: { saved: boolean } }).data.saved).toBe(true)
+    // 读回
+    const resG = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state', payload: {} }) as never, resG, proxyWith(store))
+    expect((JSON.parse(resG.body) as { data: { cursors: Record<string, number> } }).data.cursors).toEqual({ 's-1': 7 })
+    // 旧值不回退
+    const resW2 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state-write', payload: { sessionId: 's-1', seq: 3 } }) as never, resW2, proxyWith(store))
+    const resG2 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state', payload: {} }) as never, resG2, proxyWith(store))
+    expect((JSON.parse(resG2.body) as { data: { cursors: Record<string, number> } }).data.cursors['s-1']).toBe(7)
+    // 缺席 = fail-soft（读空表 / 写不崩）
+    const resG3 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state', payload: {} }) as never, resG3, proxyWith(undefined))
+    expect((JSON.parse(resG3.body) as { ok: boolean; data: { cursors: Record<string, number> } }).data.cursors).toEqual({})
+    const resW3 = fakeRes()
+    await handleRemoteHttpRpc(fakeReq({ channel: 'forge:remote/read-state-write', payload: { sessionId: 's-1', seq: 1 } }) as never, resW3, proxyWith(undefined))
+    expect((JSON.parse(resW3.body) as { ok: boolean; data: { saved: boolean } }).data.saved).toBe(false)
   })
 
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {

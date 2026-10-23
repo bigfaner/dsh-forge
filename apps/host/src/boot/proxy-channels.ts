@@ -22,6 +22,7 @@ import type {
   WorktreeEntryDto,
 } from '@dsh-forge/contracts'
 import { REMOTE_CHANNELS, WORKTREE_CHANNELS } from '@dsh-forge/contracts'
+import type { ReadCursorStore } from './read-cursor-store.js'
 import { typertDispatch, typertSessionDescriptor } from './typert-dispatch.js'
 
 /** forge:proxy/* 通道名族（mobile 唯一数据通道——LAN/隧道同构） */
@@ -48,6 +49,12 @@ export const PROXY_CHANNELS = {
   agentPresets: 'forge:proxy/agent-presets',
   agentPresetSelect: 'forge:proxy/agent-preset-select',
   file: 'forge:proxy/file',
+} as const
+
+/** 已读游标通道族（bug 1dd4b437——host 侧持久游标，跨重启/端口churn存活） */
+export const READ_STATE_CHANNELS = {
+  read: 'forge:remote/read-state',
+  write: 'forge:remote/read-state-write',
 } as const
 
 export type ProxyChannel = (typeof PROXY_CHANNELS)[keyof typeof PROXY_CHANNELS]
@@ -106,6 +113,8 @@ export interface ProxyChannelDeps {
   readonly forwardApproval?: (input: RemoteApprovalDecisionInput) => Promise<RemoteApprovalForwardResult>
   /** pair-disconnected 对偶缝（缺席 = fail-soft revoked:false） */
   readonly disconnect?: () => void
+  /** 已读游标持久 store（bug 1dd4b437——缺席 = 读空表/写 fail-soft） */
+  readonly readCursors?: ReadCursorStore
 }
 
 /** 文件分块读常量（tunnel-psk §4.4——64KB/块） */
@@ -429,6 +438,14 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       if (deps.disconnect === undefined) return { revoked: false } // fail-soft（remote-rpc.ts 同口径）
       deps.disconnect()
       return { revoked: true }
+    },
+    // bug 1dd4b437：已读游标 host 侧读写（手机 localStorage 随 origin churn 丢失 → 未读全量误报）
+    [READ_STATE_CHANNELS.read]: async () => ({ cursors: deps.readCursors?.getAll() ?? {} }),
+    [READ_STATE_CHANNELS.write]: async (payload) => {
+      if (deps.readCursors === undefined) return { saved: false } // fail-soft
+      const record = asRecord(payload)
+      deps.readCursors.set(asString(record, 'sessionId'), typeof record['seq'] === 'number' ? record['seq'] : Number.NaN)
+      return { saved: true }
     },
     [PROXY_CHANNELS.file]: async (payload) => {
       const record = asRecord(payload)

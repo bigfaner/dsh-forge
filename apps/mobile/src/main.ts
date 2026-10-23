@@ -381,7 +381,10 @@ export function mount(root: HTMLElement): void {
         const fallbackTitleRef = { current: '' }
         const root = createChatView(sessionId, {
           api: ctx.api,
-          pairDomain,
+          // bug 1dd4b437：已读游标 host 侧单点（localStorage 随 origin churn 丢失 → 未读全量误报）
+          writeReadState: (sid, seq) => {
+            void ctx.rpc?.call('forge:remote/read-state-write', { sessionId: sid, seq })
+          },
           // 用户裁决 2026-10-22（双域统一代理化）：会话流引擎统一 forge-stream 镜像帧
           // （/remote/forge-stream LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream +
           // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）

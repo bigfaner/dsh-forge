@@ -2,7 +2,9 @@
  * drawer 抽屉会话列表（mockup 屏④，浮层 `#/drawer`）——
  * 数据源 = `__rpc` `forge:proxy/projects-grouped` 单次调用（host 分组薄方法：
  * 项目 → worktree → sessions（SessionSummary 官方原样）+ unassigned 桶）；
- * 未读游标 = 手机页 localStorage（core/read-cursor，host read-state 面不建）。
+ * 未读游标 = host 侧持久 store（forge:remote/read-state 通道族——bug 1dd4b437：
+ * localStorage 按 origin 含端口隔离，实例重启端口 churn 即游标全丢 → 未读全量误报；
+ * host 单点跨重启/跨端口存活，读单呼 / 写即发即忘 + 本地乐观）。
  *
  * 展示口径：项目分组折叠（同桌面规则；不展示会话数量与归档）+ 会话行
  * （updatedAt 降序、running 排前、24h top10 可配）+ `origin:'subagent'` worker
@@ -15,8 +17,6 @@
  * 纯逻辑面（单测主战场）：grouped 收敛 / 未读游标合并 / 排序与窗口截断 /
  * worker 筛选 / 检索过滤 / 徽标聚合。
  */
-import type { KeyValueStore } from '../core/read-cursor.ts'
-import { loadReadCursors, readCursorKey, writeReadCursor } from '../core/read-cursor.ts'
 import type { RemoteRpc } from '../core/rpc.ts'
 import type { DebounceTimers } from './models.ts'
 import { createDebounce, defaultStore } from './models.ts'
@@ -30,6 +30,9 @@ import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 export const DRAWER_GROUPED_CHANNEL = 'forge:proxy/projects-grouped'
 /** 断开连接通道（pair-disconnected 对偶缝）。 */
 export const DRAWER_DISCONNECT_CHANNEL = 'forge:remote/disconnect'
+/** 已读游标 host 通道族（bug 1dd4b437——host proxy-channels READ_STATE_CHANNELS 同源）。 */
+export const READ_STATE_CHANNEL = 'forge:remote/read-state'
+export const READ_STATE_WRITE_CHANNEL = 'forge:remote/read-state-write'
 /** 轮询兜底间隔（ forge-stream 帧为主路径）。 */
 export const DRAWER_POLL_MS = 15_000
 /** 会话可见时间窗（24h 可配）。 */
@@ -138,6 +141,17 @@ export function unreadOf(session: DrawerSession, lastReadSeq: number | undefined
 export function badgeText(unread: number): string {
   if (unread <= 0) return ''
   return unread > DRAWER_BADGE_CAP ? `${DRAWER_BADGE_CAP}+` : String(unread)
+}
+
+/** read-state 响应收敛：{cursors:{sessionId:seq}} → 有限数表；畸形 fail-soft 空表。 */
+export function coerceReadCursors(raw: unknown): Record<string, number> {
+  const cursors = (raw as { cursors?: unknown } | null)?.cursors
+  if (typeof cursors !== 'object' || cursors === null) return {}
+  const out: Record<string, number> = {}
+  for (const [sessionId, seq] of Object.entries(cursors as Record<string, unknown>)) {
+    if (sessionId !== '' && typeof seq === 'number' && Number.isSafeInteger(seq)) out[sessionId] = seq
+  }
+  return out
 }
 
 /**
@@ -303,13 +317,12 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
       clearTimeout: (handle) => window.clearTimeout(handle as number),
     }
   const now = deps.now ?? (() => Date.now())
-  const cursorKey = readCursorKey(deps.pairDomain)
   const pinsStorageKey = pinnedKey(deps.pairDomain)
   const collapsedStorageKey = collapsedKey(deps.pairDomain)
 
   // ---- 状态 ----
   let grouped: GroupedModel = { generatedAt: null, projects: [], unassigned: [] }
-  let cursors: Record<string, number> = loadReadCursors(storage, cursorKey)
+  let cursors: Record<string, number> = {} // host read-state 拉取（refresh 对账）
   let pinned = loadStringList(storage, pinsStorageKey)
   let collapsed = loadStringList(storage, collapsedStorageKey)
   const workerExpanded = new Set<string>()
@@ -388,10 +401,10 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
     ops.appendChild(pinToggle)
     row.appendChild(ops)
     row.addEventListener('click', () => {
-      // 打开即视为已读：写本地游标（触底归零同游标源——下次拉取对账）
-      if (session.asOfSeq !== null) {
-        writeReadCursor(storage, cursorKey, session.sessionId, session.asOfSeq)
-        cursors = loadReadCursors(storage, cursorKey)
+      // 打开即视为已读：写 host 游标（即发即忘）+ 本地乐观（bug 1dd4b437——host 单点跨重启存活）
+      if (session.asOfSeq !== null && session.asOfSeq > (cursors[session.sessionId] ?? -1)) {
+        cursors[session.sessionId] = session.asOfSeq
+        void deps.rpc.call(READ_STATE_WRITE_CHANNEL, { sessionId: session.sessionId, seq: session.asOfSeq })
       }
       deps.onOpenSession(session.sessionId)
     })
@@ -499,7 +512,8 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   async function refresh(): Promise<void> {
     const result = await deps.rpc.call<unknown>(DRAWER_GROUPED_CHANNEL, {})
     if (result.ok) grouped = coerceGrouped(result.data)
-    cursors = loadReadCursors(storage, cursorKey)
+    const state = await deps.rpc.call<unknown>(READ_STATE_CHANNEL, {})
+    cursors = state.ok ? coerceReadCursors(state.data) : cursors
     render()
   }
 
