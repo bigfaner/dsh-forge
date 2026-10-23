@@ -52,3 +52,17 @@ describe('createUserQuestionsBridge', () => {
     await expect(first).resolves.toEqual({ answers: [] })
   })
 })
+
+describe('pendingFor（刷新后面板重渲染数据源）', () => {
+  it('按 sessionId 过滤在途题，应答后移除', async () => {
+    const bridge = createUserQuestionsBridge({ emit: () => {}, diag: noopDiag() })
+    const w1 = bridge.handle({ questions: [{ id: 'q1' }], agent: { session: { id: 's-a' } }, wait: { callId: 'c1' } }, async () => 'x')
+    bridge.handle({ questions: [{ id: 'q2' }], agent: { session: { id: 's-b' } }, callId: 'c2' }, async () => 'y')
+    expect(bridge.pendingFor('s-a')).toEqual([{ callId: 'c1', questions: [{ id: 'q1' }] }])
+    expect(bridge.pendingFor('s-b')).toHaveLength(1)
+    expect(bridge.pendingFor('s-none')).toHaveLength(0)
+    bridge.resolve('c1', { answers: [] })
+    await w1
+    expect(bridge.pendingFor('s-a')).toHaveLength(0)
+  })
+})

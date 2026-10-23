@@ -45,6 +45,7 @@ export const PROXY_CHANNELS = {
   commandsList: 'forge:proxy/commands-list',
   commandsExecute: 'forge:proxy/commands-execute',
   userQuestionsAnswer: 'forge:proxy/user-questions-answer',
+  userQuestionsPending: 'forge:proxy/user-questions-pending',
   projectsGrouped: 'forge:proxy/projects-grouped',
   approval: 'forge:proxy/approval',
   agentPresets: 'forge:proxy/agent-presets',
@@ -91,9 +92,10 @@ export interface ProxyUserQuestionsFace {
   answer?(request: unknown): Promise<unknown>
 }
 
-/** mobile ask 桥消费切片（waterfall 在途题回灌——bug f73315a1） */
+/** mobile ask 桥消费切片（waterfall 在途题回灌 + 在途题枚举供刷新后重渲染面板） */
 export interface ProxyUserQuestionsBridge {
   resolve(callId: string, answer: unknown): boolean
+  pendingFor(sessionId: string): readonly { readonly callId: string; readonly questions: unknown }[]
 }
 
 /** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门） */
@@ -439,6 +441,13 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       }
       const questions = requireService(deps.userQuestions, 'userQuestions')
       return requireMethod(questions.answer, 'userQuestions.answer').bind(questions)(asRecord(payload))
+    },
+    // 在途题枚举（页面刷新后面板重渲染数据源——推送只发一次，刷新即丢）
+    [PROXY_CHANNELS.userQuestionsPending]: async (payload) => {
+      const record = asRecord(payload)
+      const sessionId = asString(record, 'sessionId')
+      if (deps.userQuestionsBridge !== undefined) return { pending: deps.userQuestionsBridge.pendingFor(sessionId) }
+      return { pending: [] }
     },
     [PROXY_CHANNELS.projectsGrouped]: async () => assembleGrouped(deps, Date.now()),
     // 预设 roster（官方 remoteExportList——{presets:[{id,name,isDefault}]}；增减动态单源。

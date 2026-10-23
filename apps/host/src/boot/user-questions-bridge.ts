@@ -27,6 +27,7 @@ export interface UQBridgeDeps {
 export interface UQPendingEntry {
   readonly sessionId: string
   readonly callId: string
+  readonly questions: unknown
   resolve(answer: unknown): void
 }
 
@@ -36,6 +37,8 @@ export interface UserQuestionsBridge {
   /** 手机应答回灌（forge:proxy/user-questions-answer 消费）；false = 非桥内 pending。 */
   resolve(callId: string, answer: unknown): boolean
   pendingCount(): number
+  /** 某会话的全部在途题（页面刷新后面板重渲染的数据源——推送只发一次，刷新即丢）。 */
+  pendingFor(sessionId: string): readonly { readonly callId: string; readonly questions: unknown }[]
 }
 
 /** 请求 → 会话 id（agent.session.id 官方取法）。 */
@@ -83,6 +86,7 @@ export function createUserQuestionsBridge(deps: UQBridgeDeps): UserQuestionsBrid
         const entry: UQPendingEntry = {
           sessionId,
           callId,
+          questions: (request as UQRequestEvent)?.questions ?? [],
           resolve: (answer) => {
             pending.delete(callId)
             const signal = (request as UQRequestEvent)?.signal
@@ -113,5 +117,12 @@ export function createUserQuestionsBridge(deps: UQBridgeDeps): UserQuestionsBrid
       return true
     },
     pendingCount: () => pending.size,
+    pendingFor(sessionId) {
+      const out: { callId: string; questions: unknown }[] = []
+      for (const entry of pending.values()) {
+        if (entry.sessionId === sessionId) out.push({ callId: entry.callId, questions: entry.questions })
+      }
+      return out
+    },
   }
 }

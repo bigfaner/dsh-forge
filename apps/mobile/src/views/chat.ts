@@ -7,7 +7,7 @@
  */
 import type { OfficialApi } from '../core/api.ts'
 import { DisconnectedError } from '../core/api.ts'
-import { sendComposerInput, type RemoteRpc } from '../core/rpc.ts'
+import { proxyCall, sendComposerInput, type RemoteRpc } from '../core/rpc.ts'
 import { type SseSink, type SseState } from '../core/sse.ts'
 import {
   createAttemptSettler,
@@ -380,6 +380,33 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   if (deps.askMountRef !== undefined) {
     deps.askMountRef.current = showAskPanel
   }
+  // 刷新后面板重渲染（推送只发一次，刷新即丢）：出现「未回结果的 ask_user_question
+  // 调用」且未挂面板时，拉取桥内在途题挂载（每个 callId 只拉一次）
+  const askPendingFetched = new Set<string>()
+  function maybeFetchAskPending(activities: ReturnType<typeof pairToolActivity>): void {
+    if (deps.askRpc === undefined) return
+    if (deps.askMountRef?.current === undefined) return
+    if (askSlot.querySelector('.ask-root') !== null) return
+    for (const activity of activities) {
+      if (activity.call.name !== 'ask_user_question' || activity.state !== 'running') continue
+      const callId = activity.call.callId
+      if (askPendingFetched.has(callId)) continue
+      askPendingFetched.add(callId)
+      void proxyCall(deps.askRpc, 'forge:proxy/user-questions-pending', { sessionId })
+        .then((result) => {
+          const pending = (result as { pending?: readonly { callId?: unknown; questions?: unknown }[] }).pending ?? []
+          const entry = pending.find((item) => typeof item.callId === 'string')
+          if (entry !== undefined && typeof entry.callId === 'string') {
+            showAskPanel(
+              { callId: entry.callId, questions: Array.isArray(entry.questions) ? entry.questions : [] },
+              sessionId,
+            )
+          }
+        })
+        .catch(() => {})
+      return
+    }
+  }
   root.append(topbar, view, jump, todoPanel, askSlot, composer.root, overlay)
 
   // ---- 渲染 ----
@@ -411,6 +438,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     const projections = projectHistory(state.entries)
     const activities = pairToolActivity(projections)
     const activityByCallId = new Map(activities.map((activity) => [activity.call.callId, activity]))
+    maybeFetchAskPending(activities)
     const seenCalls = new Set<string>()
     const degradedNarratives = degradedNarrativeSeqs(projections)
     // turn 分段折叠（用户裁决 2026-10-23）：折叠段的活动卡原序收入组，首活动位落组；
