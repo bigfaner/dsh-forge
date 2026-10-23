@@ -46,7 +46,7 @@ export const HISTORY_PAGE_SIZE = 10
 export interface TurnSegment {
   /** 段首投影下标。 */
   readonly start: number
-  /** true = 段内已有「尾活动之后的回复」（turn 完成）→ 活动折进组。 */
+  /** true = 段内活动全部落在最后一个 turn/end 之前（历史 turn 完成）→ 活动折进组。 */
   readonly collapsed: boolean
   /** 段内活动投影 seq 序列（原位顺序）。 */
   readonly activitySeqs: readonly number[]
@@ -55,25 +55,25 @@ export interface TurnSegment {
 const isActivityProjection = (projection: Projection): boolean =>
   projection.kind === 'tool-call' || isReasoningOnly(projection)
 
-const hasVisibleReply = (projection: Projection): boolean =>
-  projection.kind === 'assistant-message' && projection.text !== ''
-
-/** 投影流 → turn 段（user-bubble 分段；折叠判定 = 尾活动之后存在可见回复）。 */
-export function partitionTurnSegments(projections: readonly Projection[]): readonly TurnSegment[] {
+/** 投影流 → turn 段（user-bubble 分段）。折叠判定 = 官方 turn/end 边界（v2——用户裁决
+ *  2026-10-23 迭代：尾随活动/打断 turn 的旧「回复后置」启发式漏折叠，real 信号是
+ *  durable log 的 turn/end 事件）：活动 seq 全部 < lastTurnEndSeq = 历史折叠；
+ *  之后（或无 turn/end——中断 turn）= 进行中展开。 */
+export function partitionTurnSegments(
+  projections: readonly Projection[],
+  lastTurnEndSeq: number,
+): readonly TurnSegment[] {
   const segments: TurnSegment[] = []
   let start = 0
   let activity: number[] = []
-  let lastActivityIndex = -1
   const flush = (end: number): void => {
     if (end > start) {
-      const replyAfterLastActivity = projections.some(
-        (p, index) => index > lastActivityIndex && index < end && hasVisibleReply(p),
-      )
-      segments.push({ start, collapsed: activity.length > 0 && replyAfterLastActivity, activitySeqs: activity })
+      const maxActivitySeq = activity.length > 0 ? Math.max(...activity) : -1
+      const completed = lastTurnEndSeq >= 0 && maxActivitySeq < lastTurnEndSeq
+      segments.push({ start, collapsed: activity.length > 0 && completed, activitySeqs: activity })
     }
     start = end
     activity = []
-    lastActivityIndex = -1
   }
   for (let index = 0; index < projections.length; index++) {
     const projection = projections[index]!
@@ -83,7 +83,6 @@ export function partitionTurnSegments(projections: readonly Projection[]): reado
     }
     if (isActivityProjection(projection)) {
       activity.push(projection.seq)
-      lastActivityIndex = index
     }
   }
   flush(projections.length)
@@ -269,8 +268,13 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     const activityByCallId = new Map(activities.map((activity) => [activity.call.callId, activity]))
     const seenCalls = new Set<string>()
     const degradedNarratives = degradedNarrativeSeqs(projections)
-    // turn 分段折叠（用户裁决 2026-10-23）：折叠段的活动卡原序收入组，首活动位落组
-    const segments = partitionTurnSegments(projections)
+    // turn 分段折叠（用户裁决 2026-10-23）：折叠段的活动卡原序收入组，首活动位落组；
+    // 边界 = 原始事件流的最后一个 turn/end（v2——官方 turn 边界，尾随活动/打断也正确折叠）
+    let lastTurnEndSeq = -1
+    for (const entry of state.entries) {
+      if (entry.type === 'turn/end' && entry.seq > lastTurnEndSeq) lastTurnEndSeq = entry.seq
+    }
+    const segments = partitionTurnSegments(projections, lastTurnEndSeq)
     const segBySeq = new Map<number, { seg: TurnSegment; first: boolean }>()
     for (const seg of segments) {
       for (let index = 0; index < seg.activitySeqs.length; index++) {

@@ -60,38 +60,36 @@ describe('触底判据（滚动到底 / 未读归零口径）', () => {
   })
 })
 
-describe('turn 分段折叠（历史露输入+回复；活动折叠；进行中展开）', () => {
+describe('turn 分段折叠 v2（官方 turn/end 边界——尾随活动/打断 turn 也正确折叠）', () => {
   it('无活动段 = 不折叠（纯对话）', () => {
-    const segments = partitionTurnSegments([userBubble(1), assistantText(2)])
+    const segments = partitionTurnSegments([userBubble(1), assistantText(2)], -1)
     expect(segments).toHaveLength(1)
     expect(segments[0]!.collapsed).toBe(false)
     expect(segments[0]!.activitySeqs).toEqual([])
   })
-  it('有活动 + 回复在其后 = 折叠（历史 turn）', () => {
-    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3), toolResult(4), assistantText(5)])
+  it('活动全部落在 turn/end 之前 = 折叠（历史 turn——含尾随 ask 工具）', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3), assistantText(4), toolCall(5, 'ask')], 6)
     expect(segments[0]!.collapsed).toBe(true)
-    expect(segments[0]!.activitySeqs).toEqual([2, 3])
+    expect(segments[0]!.activitySeqs).toEqual([2, 3, 5])
   })
-  it('活动在无回复段（进行中）= 展开（当前 turn）', () => {
-    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3), toolResult(4)])
+  it('活动在最后一个 turn/end 之后 = 展开（进行中 turn）', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3)], 1)
     expect(segments[0]!.collapsed).toBe(false)
     expect(segments[0]!.activitySeqs).toEqual([2, 3])
   })
-  it('回复后新活动再起 = 重新展开（同 turn 内 follow-up 步骤）', () => {
-    const segments = partitionTurnSegments([userBubble(1), think(2), assistantText(3), toolCall(4)])
+  it('无 turn/end（中断 turn）= 展开', () => {
+    const segments = partitionTurnSegments([userBubble(1), think(2), toolCall(3)], -1)
     expect(segments[0]!.collapsed).toBe(false)
-    expect(segments[0]!.activitySeqs).toEqual([2, 4])
   })
-  it('多 turn 各自判定；首用户消息前的历史活动独立成段', () => {
+  it('多 turn：end 前折叠、end 后展开，各段独立', () => {
     const segments = partitionTurnSegments([
-      think(0), toolCall(1), toolResult(2),
-      userBubble(3), think(4), assistantText(5),
-      userBubble(6), assistantText(7),
-    ])
-    expect(segments).toHaveLength(3)
-    expect(segments[0]!.collapsed).toBe(false) // 载入尾部（当前视点）——展开
-    expect(segments[1]!.collapsed).toBe(true)
-    expect(segments[1]!.activitySeqs).toEqual([4])
-    expect(segments[2]!.collapsed).toBe(false)
+      userBubble(1), think(2), assistantText(3), // turn1（end#4）
+      userBubble(5), think(6), toolCall(7),      // turn2 进行中
+    ], 4)
+    expect(segments).toHaveLength(2)
+    expect(segments[0]!.collapsed).toBe(true)
+    expect(segments[0]!.activitySeqs).toEqual([2])
+    expect(segments[1]!.collapsed).toBe(false)
+    expect(segments[1]!.activitySeqs).toEqual([6, 7])
   })
 })
