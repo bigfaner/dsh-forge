@@ -177,6 +177,15 @@ export function mount(root: HTMLElement): void {
   }
   const ensureStream = (): void => {
     if (stream !== null || streamOpening || ctx.rpc === null) return
+    // bug 59c02cd5：隧道域已激活（material 在场）→ 跳过无参探测直连真流——无参 GET 在隧道域
+    // 必被 PSK 门 401（sealer 需 sid/epoch），探测永不过 = openStream 从未执行、实时帧全死。
+    // forgeStreamUrl 自带 sid/epoch，宿主流分支直接 200 SSE。
+    if (ctx.material !== undefined) {
+      streamOpening = true
+      openStream()
+      streamOpening = false
+      return
+    }
     streamOpening = true
     void fetch('/remote/forge-stream', { cache: 'no-store' })
       .then((response) => {
