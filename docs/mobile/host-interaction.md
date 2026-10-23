@@ -23,9 +23,16 @@ mobile 与宿主（`apps/host` child 进程）的全部交互走两条物理通�
 
 ## 3. 宿主侧插件（dsh-forge 专有缝）
 
-- `@dsh-forge/mobile-bridge`（boot overlay insert 行）：组合期注册 `user-questions/request` waterfall answerer——**必须先于 api-remotes 捕获监听装载**（scoped 分发 + 客户端子树 `ctx.remote` 私有，根 ctx.on 不参与分发）。桥本体经全局锚 `__dshMobileAskBridge` 注入（child runProfile 前），emit 扇出到 streamPushes；无桥侧超时（桌面同语义），中止透传 next。
-- 已核销的死缝（勿再走）：根 ctx.on 收不到 scoped waterfall；`ctx.remote` 在 child 根 ctx 不存在（客户端插件子树私有）。
+- `@dsh-forge/mobile-bridge`（boot overlay insert 行）：组合期注册 `user-questions/request` waterfall answerer——**必须先于 api-remotes 的捕获监听装载**（scoped 分发 + 客户端子树 `ctx.remote` 私有，根 ctx.on 不参与分发）。桥本体经全局锚 `__dshMobileAskBridge` 注入（child runProfile 前），emit 扇出到 streamPushes；无桥侧超时（桌面同语义），中止透传 next。
+- 已排除路径（勿再走）：根 ctx.on 收不到 scoped waterfall；`ctx.remote` 在 child 根 ctx 不存在（客户端插件子树私有）。
 
 ## 4. 已读游标
 
 host 单点持久（`read-cursor-store`，state.db 邻接 JSON 0600，单调写）；mobile 触底/开屏写、抽屉行消费显示未读徽标。localStorage 因 origin 含端口每次启动变化，不可用。
+
+## 5. 其它宿主面（索引）
+
+- **配对与隧道**：展示密钥 + PIN 激活、PSK v3 帧加密、密钥轮换——协议正本 `.forge/docs/features/mobile-ui/design/tunnel-psk.md`，加密过程详解 `api-and-crypto.md` §3–4。
+- **审批桥接**：`forge:remote/approval` → approvalRelay 中继到宿主审批瀑布；配方修正先例 `mobile-remote-approval/disc-1`（AGENTS §1.5）。
+- **模型/设置**：`session-model-catalog` / `select-model` / `agent-presets`；默认模型暂存 localStorage（同 origin 内有效），建会话成功即下发并清除。
+- **worker 视图**：`session-list` origin=subagent 过滤 + worker 会话进入（env 只读，一次性任务直发）。

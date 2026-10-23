@@ -27,8 +27,8 @@ hash 路由：`#/`（hero 建会话）、`#/chat/:sessionId`（主视图）、`#
 
 ## 渲染管线
 
-- **数据单源**：`log-sync` 每会话一份 durable 历史快照（`api.history` 尾窗）；SSE 镜像帧只做失效信号（600ms 节流重拉，**重拉完成即 notify**，frameListeners 按 seq 尾序增量外推——不重不漏）。
-- **瞬态腿**：`assistant/live-chunk` 等瞬态帧不落账，经 frameListeners 原样穿透 → settler（per-attemptId 状态机）打字机渲染；durable 结算卡原子取代。
+- **数据单源**：`log-sync` 每会话一份 durable 历史快照（`api.history` 尾窗）；SSE 镜像帧只做失效信号（600ms 节流重拉，**重拉完成即通知**，frameListeners 按 seq 尾序增量外推——不重不漏）。
+- **瞬态流**：`assistant/live-chunk` 等瞬态帧不落账，经 frameListeners 原样穿透 → settler（per-attemptId 状态机）打字机渲染；durable 结算卡原子取代。
 - **渲染合帧**：`scheduleRender()`（rAF，非浏览器 setTimeout 16ms 兜底）——一帧内多次变更合并为单次全量重建；加载路径（loadInitial/loadOlder）同步 render（滚动锚依赖同步 DOM）。
 
-细节正本：`docs/mobile/core-flows.md`。
+细节正本：`docs/mobile/core-flows.md`；接口与加密正本：`docs/mobile/api-and-crypto.md`。
