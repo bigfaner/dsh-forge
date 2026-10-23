@@ -541,7 +541,7 @@ describe('dispatchRpc trace_id 显式携带复原（ALS 包裹——1.2 bridge �
       { type: 'rpc', id: 2, service: 'forgeTasks', method: 'listTasks', args: [], traceId: 'tr-e2e' },
       als,
     )
-    expect(parseDiagRelayLine(lines[0])).toMatchObject({ traceId: 'tr-e2e' })
+    expect(parseDiagRelayLine(lines[0]!)).toMatchObject({ traceId: 'tr-e2e' })
     expect(runWithDiagContext(als, { traceId: 'x' }, () => als.getStore()?.traceId)).toBe('x')
   })
 })
