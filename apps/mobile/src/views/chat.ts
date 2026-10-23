@@ -7,7 +7,7 @@
  */
 import type { OfficialApi } from '../core/api.ts'
 import { DisconnectedError } from '../core/api.ts'
-import { sendComposerInput } from '../core/rpc.ts'
+import { sendComposerInput, type RemoteRpc } from '../core/rpc.ts'
 import { type SseSink, type SseState } from '../core/sse.ts'
 import {
   createAttemptSettler,
@@ -18,6 +18,7 @@ import {
   type Projection,
   type WireEvent,
 } from '../core/wire.ts'
+import { createAskView } from './ask.ts'
 import {
   createComposer,
   type ComposerHandle,
@@ -211,6 +212,12 @@ export interface ChatDeps {
   readonly fallbackTitleRef?: { current: string }
   /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒）。 */
   readonly suggest?: (kind: '/' | '@') => Promise<readonly { insert: string; label: string; description?: string }[]>
+  /** ask 嵌入面板（用户裁决 2026-10-23 同位互斥）：rpc 缺席 = 不挂载；装配层注入。 */
+  readonly askRpc?: RemoteRpc
+  /** ask 帧 × SSE 到达腿（frameListeners 订阅——装配层注入）。 */
+  readonly askStreamSubscribe?: (onFrame: () => void) => () => void
+  /** 挂载登记（装配侧 uq 帧据此把推送直导进本视图槽位）。 */
+  readonly askMountRef?: { current: ((direct: { callId?: string; questions?: readonly unknown[] }, sessionId: string) => void) | undefined }
 }
 
 type OverlayMode = 'hidden' | 'degraded' | 'offline' | 'pairing'
@@ -344,6 +351,36 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   }
 
   root.append(topbar, view, jump, todoPanel, composer.root, overlay)
+
+  // ask 槽位（用户裁决 2026-10-23：问题面板与 composer 同位互斥——面板出现即替换 composer；
+  // 原整页 append 到容器尾 = 排在 100dvh chat 根之下视口外，真机取证 askTop=844）
+  const askSlot = el('div', 'ask-slot')
+  askSlot.hidden = true
+  const showAskPanel = (direct: { callId?: string; questions?: readonly unknown[] }, sessionId: string): void => {
+    if (deps.askRpc === undefined) return
+    composer.root.style.display = 'none'
+    askSlot.hidden = false
+    askSlot.textContent = ''
+    const restore = (): void => {
+      composer.root.style.display = ''
+      askSlot.hidden = true
+      askSlot.textContent = ''
+    }
+    const view = createAskView({
+      rpc: deps.askRpc,
+      sessionId,
+      embedded: true,
+      ...(direct.callId !== undefined ? { initialCallId: direct.callId, initialQuestions: direct.questions } : {}),
+      subscribeStream: deps.askStreamSubscribe,
+      onClose: restore,
+      onDone: restore,
+    })
+    askSlot.appendChild(view)
+  }
+  if (deps.askMountRef !== undefined) {
+    deps.askMountRef.current = showAskPanel
+  }
+  root.append(topbar, view, jump, todoPanel, askSlot, composer.root, overlay)
 
   // ---- 渲染 ----
   function renderTurnFold(seg: TurnSegment, bySeq: Map<number, Projection>, activityMap: Map<string, ReturnType<typeof pairToolActivity>[number]>): HTMLElement {

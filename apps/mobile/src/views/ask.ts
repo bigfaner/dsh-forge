@@ -153,10 +153,14 @@ export interface AskDeps {
   /** 推送直挂（bug f73315a1——waterfall 推送直开：投影不落 active 的题也有面板可答）。 */
   readonly initialCallId?: string
   readonly initialQuestions?: readonly unknown[]
+  /** 嵌入态（chat composer 槽位挂载——同位互斥，替代整页 phone-root）。 */
+  readonly embedded?: boolean
+  /** 面板收起/返回（嵌入态 = 恢复 composer 的通知点；与 onDone 独立）。 */
+  readonly onClose?: () => void
 }
 
 export function createAskView(deps: AskDeps): HTMLElement {
-  const root = el('div', 'phone-root ask-root')
+  const root = el('div', deps.embedded === true ? 'ask-root ask-embedded' : 'phone-root ask-root')
   const topbar = el('div', 'topbar')
   const back = el('button', 'iconbtn')
   back.innerHTML = '<svg class="ic"><use href="#i-chev"/></svg>'
@@ -189,6 +193,7 @@ export function createAskView(deps: AskDeps): HTMLElement {
     pending = null
     drafts.clear()
     skipped.clear()
+    deps.onClose?.()
     render()
   }
   back.addEventListener('click', dismiss)

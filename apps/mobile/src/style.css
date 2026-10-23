@@ -884,6 +884,30 @@ body[data-ds-dark-theme] .jump {
   padding: 0 4px;
 }
 
+/* ---- ask 槽位（与 composer 同位互斥——用户裁决 2026-10-23） ---- */
+.ask-slot {
+  flex: none;
+}
+/* 嵌入态面板 = composer 同壳卡片（槽位内替换 composer）；整页形态（#/ask 路由）不变 */
+.ask-root.ask-embedded {
+  height: auto;
+  max-height: 60vh;
+  margin: 0 6px;
+  border: 1px solid #dadce0;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+}
+.ask-root.ask-embedded .view {
+  overflow: visible;
+}
+.dark .ask-root.ask-embedded,
+body[data-ds-dark-theme] .ask-root.ask-embedded {
+  background: #1d1d20;
+  border-color: #303034;
+}
+
 /* ---- 输入区：composer 底行 = 模式 · worktree · 滑杆 · 发送（固定） ---- */
 /* 用户裁决 2026-10-23：composer 尽量利用屏幕宽——侧距收到 6px（屏幕边缘留一线） */
 .inputbar {

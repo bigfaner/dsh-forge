@@ -169,7 +169,14 @@ export function mount(root: HTMLElement): void {
             const payload = event.payload as { sessionId?: unknown; callId?: unknown; questions?: unknown }
             const sid = typeof payload?.sessionId === 'string' ? payload.sessionId : undefined
             // 会话归属过滤：非当前会话的推送不开面板（无跨会话打断——未来可挂徽标）
-            if (sid === undefined || sid === '' || sid === currentSessionId()) openAsk(payload)
+            if (sid === undefined || sid === '' || sid !== currentSessionId()) return
+            const direct = {
+              callId: typeof payload?.callId === 'string' ? payload.callId : undefined,
+              questions: Array.isArray(payload?.questions) ? payload.questions : undefined,
+            }
+            // 同位互斥（用户裁决 2026-10-23）：当前 chat 视图在 → 嵌入槽位替换 composer；否则整页兜底
+            if (chatAskMountRef.current !== undefined) chatAskMountRef.current(direct, sid)
+            else openAsk(payload)
           }
         },
         onError: () => {
@@ -397,6 +404,8 @@ export function mount(root: HTMLElement): void {
 
   // hero 模式外推（用户裁决 2026-10-23：chat composer 芯片跟随 hero 选择——发送后不再恒显远征）
   const heroModeRef: { current: string } = { current: HERO_DEFAULT_MODE }
+  // 当前 chat 视图的 ask 槽位挂载点（用户裁决 2026-10-23 同位互斥——uq 帧直导进槽位）
+  const chatAskMountRef: { current: ((direct: { callId?: string; questions?: readonly unknown[] }, sessionId: string) => void) | undefined } = { current: undefined }
 
   function heroDeps(): Parameters<typeof createHeroView>[0] {
     return {
@@ -436,6 +445,7 @@ export function mount(root: HTMLElement): void {
 
   function buildView(match: RouteMatch): RenderedView {
     if (ctx.rpc === null || ctx.api === null) return { key: 'boot', root: bootScreen() }
+    if (match.name !== 'chat') chatAskMountRef.current = undefined // 视图切走：槽位挂载点失效（防操作已卸载 DOM）
     switch (match.name) {
       case 'hero': {
         ensureStream()
@@ -461,6 +471,12 @@ export function mount(root: HTMLElement): void {
           // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）
           createEngine: createForgeStreamEngine(),
           mode: heroModeRef.current,
+          askRpc: ctx.rpc,
+          askStreamSubscribe: (onFrame) => {
+            ctx.frameListeners.add(onFrame)
+            return () => ctx.frameListeners.delete(onFrame)
+          },
+          askMountRef: chatAskMountRef,
           fallbackTitleRef,
           onOpenDrawer: openDrawer,
           onOpenHero: openHero,
