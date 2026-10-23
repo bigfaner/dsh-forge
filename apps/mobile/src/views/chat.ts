@@ -55,6 +55,50 @@ export interface TurnSegment {
 const isActivityProjection = (projection: Projection): boolean =>
   projection.kind === 'tool-call' || isReasoningOnly(projection)
 
+/** 折叠组摘要元信息（桌面端 turn 头对齐：状态 + 步数 + 耗时）。 */
+export interface TurnFoldMeta {
+  /** 桌面端同语义状态文案（折叠 ⇒ turn 已完结）。 */
+  readonly status: string
+  /** 步数（step/end 计数；缺席回退活动项数）。 */
+  readonly steps: number
+  /** turn 耗时 ms（turn/start→turn/end；事件缺席/负值 = 0 不展示）。 */
+  readonly durationMs: number
+}
+
+/** turn 摘要元信息推断（官方 durable 边界）：turn/end = 完结；步数 = 段内 step/end 数，
+ *  无 step 事件回退活动项数；耗时 = 最近 turn/start→匹配 turn/end 的 time 差。 */
+export function turnFoldMeta(entries: readonly WireEvent[], activitySeqs: readonly number[]): TurnFoldMeta {
+  if (activitySeqs.length === 0) return { status: '已完成', steps: 0, durationMs: 0 }
+  const minActivity = Math.min(...activitySeqs)
+  const maxActivity = Math.max(...activitySeqs)
+  const turnEnd = entries.find((entry) => entry.type === 'turn/end' && entry.seq > maxActivity)
+  const steps =
+    entries.filter((entry) => entry.type === 'step/end' && entry.seq > minActivity && (turnEnd === undefined || entry.seq <= turnEnd.seq))
+      .length || activitySeqs.length
+  let durationMs = 0
+  if (turnEnd !== undefined) {
+    let turnStartSeq = -1
+    for (const entry of entries) {
+      if (entry.seq >= turnEnd.seq) break
+      if (entry.type === 'turn/start') turnStartSeq = entry.seq
+    }
+    const turnStart = entries.find((entry) => entry.seq === turnStartSeq)
+    if (turnStart !== undefined) {
+      const delta = turnEnd.time - turnStart.time
+      if (Number.isFinite(delta) && delta > 0) durationMs = delta
+    }
+  }
+  return { status: '已完成', steps, durationMs }
+}
+
+/** 桌面端 turn 头同语义时长文案：「2 分 25 秒」/「45 秒」。 */
+export function formatDuration(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes} 分 ${seconds} 秒` : `${seconds} 秒`
+}
+
 /** 投影流 → turn 段（user-bubble 分段）。折叠判定 = 官方 turn/end 边界（v2——用户裁决
  *  2026-10-23 迭代：尾随活动/打断 turn 的旧「回复后置」启发式漏折叠，real 信号是
  *  durable log 的 turn/end 事件）：活动 seq 全部 < lastTurnEndSeq = 历史折叠；
@@ -244,10 +288,15 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
 
   // ---- 渲染 ----
   function renderTurnFold(seg: TurnSegment, bySeq: Map<number, Projection>, activityMap: Map<string, ReturnType<typeof pairToolActivity>[number]>): HTMLElement {
-    // 折叠组：段内思考/工具卡原序收入（用户裁决 2026-10-23——历史 turn 露输入+回复）
+    // 折叠组：段内思考/工具卡原序收入；摘要行 = 桌面端 turn 头同语义（状态·步数·耗时 + 分隔线）
+    const meta = turnFoldMeta(state.entries, seg.activitySeqs)
     const details = el('details', 'turn-fold')
     const summary = el('summary')
-    summary.appendChild(el('span', 'fold-label', `思考与执行 · ${seg.activitySeqs.length} 项`))
+    const label = meta.durationMs > 0
+      ? `${meta.status} · ${meta.steps} 步 · 用时 ${formatDuration(meta.durationMs)}`
+      : `${meta.status} · ${meta.steps} 步`
+    summary.appendChild(el('span', 'fold-label', label))
+    summary.appendChild(el('span', 'fold-line'))
     details.appendChild(summary)
     for (const seq of seg.activitySeqs) {
       const projection = bySeq.get(seq)

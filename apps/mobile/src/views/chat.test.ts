@@ -3,14 +3,19 @@ import type { Projection, WireEvent } from '../core/wire.ts'
 import {
   anchorDelta,
   coerceHistoryWindow,
+  formatDuration,
   HISTORY_PAGE_SIZE,
   isAtBottom,
   mergeOlderPage,
   partitionTurnSegments,
+  turnFoldMeta,
 } from './chat.ts'
 
 const event = (type: string, seq: number): WireEvent =>
   ({ type, seq, time: 0, data: {} }) as WireEvent
+
+const timedEvent = (type: string, seq: number, time: number): WireEvent =>
+  ({ type, seq, time, data: {} }) as WireEvent
 
 const _proj = (p: Partial<Projection> & { kind: Projection['kind']; seq: number }): Projection => p as Projection
 const userBubble = (seq: number, text = 'hi'): Projection => ({ kind: 'user-bubble', seq, text })
@@ -91,5 +96,37 @@ describe('turn 分段折叠 v2（官方 turn/end 边界——尾随活动/打断
     expect(segments[0]!.activitySeqs).toEqual([2])
     expect(segments[1]!.collapsed).toBe(false)
     expect(segments[1]!.activitySeqs).toEqual([6, 7])
+  })
+})
+describe('turnFoldMeta / formatDuration（折叠组摘要：状态·步数·耗时）', () => {
+  const turn = (start: number, end: number, stepCount: number): WireEvent[] => {
+    const entries = [timedEvent('turn/start', start, 1000)]
+    for (let index = 0; index < stepCount; index++) entries.push(timedEvent('step/end', start + 1 + index, 2000 + index * 1000))
+    entries.push(timedEvent('turn/end', end, 1000 + (stepCount + 1) * 25000))
+    return entries
+  }
+
+  it('状态/步数/耗时：step/end 计数 + turn/start→turn/end 时长', () => {
+    const entries = turn(1, 10, 3) // seq: start=1, step/end=2..4, end=10
+    const meta = turnFoldMeta(entries, [5, 6, 7])
+    expect(meta.status).toBe('已完成')
+    expect(meta.steps).toBe(3)
+    expect(meta.durationMs).toBe(100000)
+  })
+
+  it('无 step 事件回退活动项数；无 turn 事件时长为 0', () => {
+    const entries = [event('user/message', 1), event('assistant/message', 3)]
+    const meta = turnFoldMeta(entries, [2])
+    expect(meta.steps).toBe(1)
+    expect(meta.durationMs).toBe(0)
+  })
+
+  it('空活动段：零值元信息', () => {
+    expect(turnFoldMeta([], [])).toEqual({ status: '已完成', steps: 0, durationMs: 0 })
+  })
+
+  it('formatDuration：分秒/仅秒', () => {
+    expect(formatDuration(145_000)).toBe('2 分 25 秒')
+    expect(formatDuration(45_000)).toBe('45 秒')
   })
 })
