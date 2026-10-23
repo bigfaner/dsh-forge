@@ -83,6 +83,57 @@ describe('1.14 · 提交落点核验（settleWorkerRun cwd 钉定收口）', () 
     expect(settlement.case).toBe('settled')
   })
 
+  it('跨分支结算特例：纯 .forge/docs/ 文档提交落错分支 → 放行 settled（用户裁决 2026-10-24）', async () => {
+    const docsQuery: QueryTaskResult = {
+      task: snapshot({ taskType: 'doc', taskStatus: 'completed', title: '撰写契约文档' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'completed',
+          summary: '文档落盘',
+          commitHash: 'abc1234',
+          files: ['.forge/docs/features/feat-x/design/api-contract.md', '.forge/docs/proposals/feat-x/proposal.md'],
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+        },
+      ],
+    }
+    const settled = await settleWorkerRun(
+      { tasks: tasksStub(docsQuery), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot({ taskType: 'doc', taskStatus: 'completed' }), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(settled.case).toBe('settled')
+  })
+
+  it('特例 fail-closed：files 缺席或含文档外路径 → 仍 landing-rejected', async () => {
+    const base = (files?: string[]): QueryTaskResult => ({
+      task: snapshot({ taskType: 'doc', taskStatus: 'completed' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'completed',
+          summary: '提交',
+          commitHash: 'abc1234',
+          ...(files !== undefined ? { files } : {}),
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+        },
+      ],
+    })
+    const noFiles = await settleWorkerRun(
+      { tasks: tasksStub(base(undefined)), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(noFiles.case).toBe('landing-rejected')
+    const mixed = await settleWorkerRun(
+      { tasks: tasksStub(base(['.forge/docs/a.md', 'packages/core/src/index.ts'])), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(mixed.case).toBe('landing-rejected')
+  })
+
   it('落点不一致（判例 366bec6a 落 main）→ landing-rejected 显式处置：任务真化 interrupted（可恢复态）+ cause 自解释', async () => {
     const transitions: TransitionTaskInput[] = []
     const settlement = await settleWorkerRun(

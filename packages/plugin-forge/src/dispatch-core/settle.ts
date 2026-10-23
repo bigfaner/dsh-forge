@@ -238,7 +238,14 @@ export async function settleWorkerRun(
     const verify = deps.commitLanding ?? gitCommitLanding
     try {
       const verdict = await verify(ctx.worktreeCwd, submitRecord.commitHash)
-      if (!verdict.ok) {
+      // 跨分支结算特例（用户裁决 2026-10-24）：纯 .forge/docs/ 文档提交允许落容器分支之外
+      // （文档属工作区留盘产物，不入容器分支交付面）。fail-closed：files 缺席（无法证明
+      // 纯文档）或含任一文档外路径仍走 landing-rejected，不静默放行。
+      const docsOnly =
+        submitRecord.files !== undefined &&
+        submitRecord.files.length > 0 &&
+        submitRecord.files.every((f) => f.startsWith('.forge/docs/'))
+      if (!verdict.ok && !docsOnly) {
         return await rejectLanding(deps, ctx, new Error(
           `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝`,
         ))
