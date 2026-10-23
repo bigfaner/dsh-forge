@@ -3,6 +3,11 @@
 * {
   box-sizing: border-box;
 }
+/* bug 6d4a4a2f：hidden 属性全局生效（HTML 标准语义）——显式 display 规则不再压制
+   hidden（FAB/分支 chip/conn-overlay 三例同款陷阱的根治，避免逐处 style.display 打补丁） */
+[hidden] {
+  display: none !important;
+}
 html,
 body {
   margin: 0;
