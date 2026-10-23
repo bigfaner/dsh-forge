@@ -434,13 +434,23 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       return requireMethod(registry.remoteExportList, 'agentPresets.remoteExportList').bind(registry)()
     },
     // 换预设（官方 agentPreset.select 网关形的 host 直调面）：sessionId → live agent
-    // （controller.resolveAgent 公开面）→ registry.select(agent, preset)。
+    // （controller.resolveAgent 公开面，{agent}|{error} 包装须解包——bug 同 344dd76b 族：
+    // 整包装直传 registry.select 官方读 wrapper.header 崩）→ registry.select(agent, preset)。
     [PROXY_CHANNELS.agentPresetSelect]: async (payload) => {
       const record = asRecord(payload)
       const sessionId = asString(record, 'sessionId')
       const agentPreset = asString(record, 'agentPreset')
       const controller = requireService(deps.session, 'sessionController')
-      const agent = await requireMethod(controller.resolveAgent, 'session.resolveAgent').bind(controller)(sessionId)
+      const resolved = await requireMethod(controller.resolveAgent, 'session.resolveAgent').bind(controller)(sessionId)
+      const agent = (resolved as { agent?: unknown; error?: unknown } | null)?.agent
+      if (agent === undefined || agent === null) {
+        return {
+          error: {
+            code: 'session/agent-unavailable',
+            message: `会话无活 agent（${JSON.stringify((resolved as { error?: unknown } | null)?.error ?? 'unknown')}）`,
+          },
+        }
+      }
       const registry = requireService(deps.agentPresets, 'agentPresets')
       return requireMethod(registry.select, 'agentPresets.select').bind(registry)(agent, agentPreset)
     },

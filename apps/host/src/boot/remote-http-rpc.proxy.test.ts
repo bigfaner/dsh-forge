@@ -209,7 +209,8 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
           hasMore: true,
         }
       },
-      resolveAgent: async (sessionId: string) => ({ id: sessionId, ctx: {} }),
+      // 官方真形 ApiSessionAgentResult = {agent}|{error}（dsh-api-session-controller agent.d.ts）
+      resolveAgent: async (sessionId: string) => ({ agent: { id: sessionId } }),
       // bug 会话空白：throughSeq 缺席时自解析官方 projections cursor（page 的 throughSeq 是字面上界，-1 = 空集）
       projections: async () => ({ asOfSeq: 41, values: {} }),
     }
@@ -241,6 +242,17 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     )
     expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
     expect(registry.presets).toEqual([{ agent: 's-1', preset: 'standard' }])
+
+    // 官方错误包装 {error} = 无活 agent → fail-soft 错误信封（registry.select 不被调用）
+    const sessionDead = { ...session, resolveAgent: async () => ({ error: { code: 'session/not-found' } }) }
+    const registryGuard = { select: async () => { throw new Error('select must not be called') } }
+    const res3 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.agentPresetSelect, payload: { sessionId: 's-x', agentPreset: 'standard' } }) as never,
+      res3,
+      deps({ proxy: proxyDeps({ session: sessionDead as never, agentPresets: registryGuard as never }) }),
+    )
+    expect((JSON.parse(res3.body) as { ok: boolean }).ok).toBe(true)
   })
 
   it('bug 1dd4b437：forge:remote/read-state 通道族——已读游标 host 侧读写（单调写 + 缺席 fail-soft）', async () => {
