@@ -148,8 +148,13 @@ export async function handleRemoteHttpRpc(
   // not-found 404 后紧跟 401 → writeConstant401 撞已发头 → ERR_HTTP_HEADERS_SENT fatal
   // 宿主崩溃）。headersSent = 前次调用已写毕——diag 落链即静默返回，契约「永不 reject /
   // 永不二次写出」成立。
+  const hostHeader = typeof (req as { headers?: Record<string, unknown> }).headers?.['host'] === 'string'
+    ? (req as { headers: Record<string, unknown> }).headers['host'] as string
+    : undefined
+  // bug 7e5ef681：pair-diag 分域标记（isPskEnforcedHost 单源——隧道强制域 vs LAN/回环）
+  const domain = isPskEnforcedHost(hostHeader) ? 'tunnel' : 'lan'
   if (res.headersSent === true) {
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} status=already-sent（二次派发静默跳过）`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} [${domain}] status=already-sent（二次派发静默跳过）`)
     return
   }
   // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth）；false = 官方
@@ -158,21 +163,18 @@ export async function handleRemoteHttpRpc(
   if (!deps.authorize(req, res)) {
     const { method, headers } = req as { method?: unknown; headers?: Record<string, unknown> }
     deps.diag(
-      `[pair-diag] ${REMOTE_HTTP_RPC_PATH} method=${String(method ?? '')} host=${JSON.stringify(String(headers?.['host'] ?? ''))} cookie=${typeof headers?.['cookie'] === 'string' ? 'present' : 'absent'} status=unauthorized`,
+      `[pair-diag] ${REMOTE_HTTP_RPC_PATH} method=${String(method ?? '')} host=${JSON.stringify(String(headers?.['host'] ?? ''))} cookie=${typeof headers?.['cookie'] === 'string' ? 'present' : 'absent'} [${domain}] status=unauthorized`,
     )
     return
   }
   const table = channelTableOf(deps)
   const rawBody = await readBody(req)
-  const hostHeader = typeof (req as { headers?: Record<string, unknown> }).headers?.['host'] === 'string'
-    ? (req as { headers: Record<string, unknown> }).headers['host'] as string
-    : undefined
   // 隧道域 + PSK 配置在场 ⇒ 信封强制（v2/C1+H4，A3 生效域）：无信封/验签失败/未知通道
   // 一律统一 401（恒定体 + 填充）——dswf/authorizeIndex 放行也拒；明文零降级路径。
   if (deps.psk !== undefined && isPskEnforcedHost(hostHeader) && deps.psk.load() !== undefined) {
     const verdict = admitPskRequest(deps.psk, rawBody, (channel) => table[channel] !== undefined)
     if (!verdict.ok) {
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=unauthorized`)
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} [${domain}] status=unauthorized`)
       writeConstant401(res)
       return
     }
@@ -185,7 +187,7 @@ export async function handleRemoteHttpRpc(
       const data = await handler(verdict.payload)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
       res.end(verdict.reply(data))
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${diagChannel} status=ok`)
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${diagChannel} [${domain}] status=ok`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
@@ -193,7 +195,7 @@ export async function handleRemoteHttpRpc(
       // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag；官方 RemoteError 携 details
       // （如 session/agent-busy 的 reason=内层异常串）——一并落链可归因
       const details = (error as { details?: unknown }).details
-      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${verdict.channel} status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)
+      deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${verdict.channel} [${domain}] status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)
     }
     return
   }
@@ -208,7 +210,7 @@ export async function handleRemoteHttpRpc(
     payload = (body as Record<string, unknown> | null)?.['payload']
   } catch {
     // 畸形 body = 400（信封面外——协议层失败）
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} status=bad-request`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} ${DIAG_CHANNEL_REDACTED} [${domain}] status=bad-request`)
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
     res.end()
     return
@@ -217,7 +219,7 @@ export async function handleRemoteHttpRpc(
   if (handler === undefined) {
     // bug 12f3590f 同批：allowlist miss 落真实通道名（404 本就暴露，无泄露面——重复再现
     // 的 not-found 可归因到具体通道）
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=not-found`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=not-found`)
     res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message: '通道不在受限 allowlist' } }))
     return
@@ -227,13 +229,13 @@ export async function handleRemoteHttpRpc(
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: true, data }))
     // bug 8b97047a：allowlist 命中后通道名落 diag（常量集——无注入/枚举面）
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=ok`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=ok`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
     res.end(JSON.stringify({ ok: false, error: { message } }))
     // bug 7d26b074 + 8b97047a：准入后通道名 + 消息落 diag；官方 RemoteError details 同批（PSK 分支同改）
     const details = (error as { details?: unknown }).details
-    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)
+    deps.diag(`[pair-diag] ${REMOTE_HTTP_RPC_PATH} channel=${channel} [${domain}] status=error ${message}${details === undefined ? '' : ` details=${JSON.stringify(details)}`}`)
   }
 }

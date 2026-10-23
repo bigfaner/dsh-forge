@@ -85,6 +85,22 @@ describe('isRemoteHttpRpcRequest', () => {
 })
 
 describe('handleRemoteHttpRpc 会话门', () => {
+  it('bug 7e5ef681：diag 行分域标记——隧道 Host=[tunnel]、回环/LAN=[lan]', async () => {
+    const lines: string[] = []
+    const tunnelReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    tunnelReq.headers.host = 'x.trycloudflare.com'
+    await handleRemoteHttpRpc(tunnelReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[0]).toContain('[tunnel]')
+    const lanReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    lanReq.headers.host = '192.168.1.7:3000'
+    await handleRemoteHttpRpc(lanReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[1]).toContain('[lan]')
+    const loopReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    loopReq.headers.host = '127.0.0.1:19440'
+    await handleRemoteHttpRpc(loopReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[2]).toContain('[lan]')
+  })
+
   it('authorize=false：不写响应体不触服务（官方 401 面已写毕）', async () => {    const res = fakeRes()
     let touched = false
     await handleRemoteHttpRpc(

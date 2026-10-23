@@ -910,6 +910,8 @@ async function main(): Promise<void> {
               }
               sealer = sid !== '' && epoch >= 0 ? createStreamSealer(pskGate, sid, epoch) : undefined
               if (sealer === undefined) {
+                // bug 7e5ef681：准入失败落 diag（域别 + 原因——此前零日志盲区，隧道域流 401 无归因）
+                diag(`[pair-diag] /remote/forge-stream [${tunnelDomain ? 'tunnel' : 'lan'}] status=unauthorized（sid/epoch 查询参数缺席或非法）`)
                 // 隧道域强制位：无有效封帧参数 = 统一 401（零明文降级路径）
                 writeConstant401(res)
                 return
