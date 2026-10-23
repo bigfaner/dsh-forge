@@ -21,6 +21,8 @@ export interface ComposerHandle {
   /** worktree chip 可见性（bug 488e860d：非 git / 无可挂靠行 = 隐藏——选择面不呈现死路）。 */
   setWorktreeVisible(visible: boolean): void
   setMode(name: string): void
+  /** 草稿回填（bug 53b5d685：发送失败文本退回输入框可重试）。 */
+  setDraft(value: string): void
   focus(): void
 }
 
@@ -122,6 +124,12 @@ export function createComposer(options: ComposerOptions): ComposerHandle {
       modeChip.textContent = ''
       modeChip.innerHTML = '<svg class="ic"><use href="#i-mode"/></svg>'
       modeChip.appendChild(document.createTextNode(name))
+    },
+    // bug 53b5d685：发送失败文本退回输入框可重试
+    setDraft(value: string) {
+      input.value = value
+      syncHeight()
+      syncSend()
     },
     focus: () => input.focus(),
   }

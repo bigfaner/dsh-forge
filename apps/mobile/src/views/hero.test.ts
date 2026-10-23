@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   coerceWorktreeList,
   composerWorktreeLabel,
@@ -327,6 +327,36 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(h.onOpenSession).not.toHaveBeenCalled()
     expect(controller.state().busy).toBe(false)
     expect(controller.state().pendingGuard).toBeNull()
+  })
+
+  it('bug 53b5d685：首条 prompt 失败 = 错误态 + 文本回填草稿，不静默进入空会话', async () => {
+    let promptFails = true
+    const { deps, h } = makeDeps({
+      api: {
+        createSession: async (workspaceId: string) => h.createSession(workspaceId),
+        prompt: async (...args: Parameters<typeof h.prompt>) => {
+          if (promptFails) {
+            promptFails = false
+            throw new Error('prompt rejected')
+          }
+          return h.prompt(...args)
+        },
+        selectAgentPreset: async (...args: Parameters<typeof h.selectAgentPreset>) => h.selectAgentPreset(...args),
+        listAgentPresets: async () => h.listAgentPresets(),
+      },
+    })
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.send('你好')
+    expect(h.onOpenSession).not.toHaveBeenCalled() // 不进空会话
+    expect(controller.state().busy).toBe(false)
+    expect(controller.state().error).toContain('prompt rejected')
+    expect(controller.state().draft).toBe('你好') // 文本退回 composer
+    // 重试成功 = 错误清零
+    await controller.send('你好')
+    expect(h.onOpenSession).toHaveBeenCalled()
+    expect(controller.state().error).toBeNull()
+    expect(controller.state().draft).toBeNull()
   })
 
   it('守卫待决期间发送零重入；无清单（projectRoot 缺席）双径全走官方面', async () => {

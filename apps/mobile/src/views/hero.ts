@@ -171,6 +171,10 @@ export interface HeroState {
   readonly busy: boolean
   /** worktree 选择可用位（bug 488e860d：isGit × 可挂靠行在场——false = chip 隐藏、发送恒官方面）。 */
   readonly gitReady: boolean
+  /** 发送失败提示（bug 53b5d685：非 null = 视图显错误行 + draft 回填 composer）。 */
+  readonly error: string | null
+  /** 发送失败退回的草稿文本（成功/重发即清）。 */
+  readonly draft: string | null
 }
 
 export interface HeroDeps {
@@ -223,6 +227,9 @@ export function createHeroController(deps: HeroDeps): HeroController {
   let pendingGuard: { readonly reason: string } | null = null
   let busy = false
   let gitReady = false
+  // bug 53b5d685：发送失败反馈面（错误提示行 + 草稿回填）
+  let error: string | null = null
+  let draft: string | null = null
 
   const emit = (): void => deps.onChange?.()
   const selectedRow = (): HeroWorktreeRow | null => rows.find((row) => row.path === selectedPath) ?? null
@@ -273,13 +280,10 @@ export function createHeroController(deps: HeroDeps): HeroController {
     }
     await applyPendingDefault(sessionId)
     if (text.trim() !== '') {
-      try {
-        // bug 1eb525b7 后继：首条消息恒 queue（followup）——新会话 agent 必空闲，官方 steer
-        // 对空闲 agent 恒拒绝（session/agent-busy「prompt rejected」）；followup 即启等价达成
-        await deps.api.prompt(sessionId, text, 'queue')
-      } catch {
-        /* 首条消息投递失败不阻断进入会话（会话已建） */
-      }
+      // bug 1eb525b7 后继：首条消息恒 queue（followup）——新会话 agent 必空闲，官方 steer
+      // 对空闲 agent 恒拒绝（session/agent-busy「prompt rejected」）；followup 即启等价达成。
+      // bug 53b5d685：投递失败不再静默吞——上抛 send 面（错误提示 + 文本回填，不进空会话）
+      await deps.api.prompt(sessionId, text, 'queue')
     }
     busy = false
     deps.onOpenSession(sessionId)
@@ -287,7 +291,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   return {
-    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy, gitReady }),
+    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy, gitReady, error, draft }),
 
     async load() {
       // 预设 roster 装载（用户裁决 2026-10-22：模式清单非固定——增减随 host。
@@ -352,12 +356,16 @@ export function createHeroController(deps: HeroDeps): HeroController {
       mode = HERO_DEFAULT_MODE
       selectedPath = defaultRow?.path ?? null
       pop = null
+      error = null
+      draft = null
       emit()
     },
 
     async send(text) {
       if (busy || pendingGuard !== null) return
       busy = true
+      error = null
+      draft = null
       emit()
       try {
         const selected = selectedRow()
@@ -377,8 +385,11 @@ export function createHeroController(deps: HeroDeps): HeroController {
         }
         // 官方面径：默认分支/当前所在（不触守卫）
         await enter(await createPlainSession(), text)
-      } catch {
+      } catch (cause) {
+        // bug 53b5d685：失败面 = 错误提示 + 文本退回 composer（不再静默进空会话）
         busy = false
+        error = cause instanceof Error && cause.message !== '' ? `发送失败：${cause.message}` : '发送失败，请重试'
+        draft = text
         emit()
       }
     },
@@ -401,8 +412,10 @@ export function createHeroController(deps: HeroDeps): HeroController {
           deps.onOpenSession(sessionId)
           emit()
         })
-        .catch(() => {
+        .catch((cause) => {
+          // bug 53b5d685：守卫切换径失败同面——错误提示（无草稿可回填，守卫径无首条文本）
           busy = false
+          error = cause instanceof Error && cause.message !== '' ? `建会话失败：${cause.message}` : '建会话失败，请重试'
           emit()
         })
     },
@@ -427,6 +440,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
       renderPop()
       renderChips()
       renderGuard()
+      renderError()
     },
   })
   const root = el('div', 'phone-root')
@@ -462,10 +476,28 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   const bwPop = el('div', 'bw-pop')
   bwPop.hidden = true
 
+  // bug 53b5d685：发送失败错误行（hidden 占位——成功径零占位）
+  const errLine = el('div', 'sys-line err')
+  errLine.hidden = true
+  let lastSentText = ''
+  let lastRenderedError: string | null = null
+  function renderError(): void {
+    const state = controller.state()
+    if (state.error === lastRenderedError) return
+    lastRenderedError = state.error
+    errLine.hidden = state.error === null
+    errLine.textContent = state.error ?? ''
+    if (state.error !== null) composer.setDraft(lastSentText)
+  }
+
   const composer: ComposerHandle = createComposer({
     mode: HERO_DEFAULT_MODE,
     worktree: '',
-    onSend: (text) => void controller.send(text),
+    // bug 53b5d685：文本留存视图侧——失败时回填（controller.send 无 composer 引用）
+    onSend: (text) => {
+      lastSentText = text
+      void controller.send(text)
+    },
     onSettings: () => deps.onOpenSettings?.(),
     onWorktreeTap: () => {
       // bug 488e860d：非 git / 无可挂靠行不开分支弹层（选择面不呈现死路）
@@ -476,7 +508,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   })
   composer.root.prepend(bwPop)
 
-  root.append(topbar, hero, composer.root)
+  root.append(topbar, hero, errLine, composer.root)
 
   // bug 45e635af：chip 初始可见 + load() 早退路径（projectRoot 缺席 / 清单调用失败）不 emit
   // ——非 git 项目呈现「无选项的分支控件」。挂载即按初始态渲染一次（gitReady=false = 隐藏），
