@@ -38,7 +38,7 @@ import type { WireEvent } from './core/wire.ts'
 import { createLogSync } from './core/log-sync.ts'
 import { createTunnelPanel } from './widgets/tunnel-panel.ts'
 import { createFab } from './widgets/fab.ts'
-import { createHeroView } from './views/hero.ts'
+import { HERO_DEFAULT_MODE, createHeroView } from './views/hero.ts'
 import { coerceHistoryWindow, createChatView, type StreamEngine } from './views/chat.ts'
 import type { SseSink } from './core/sse.ts'
 import { createDrawerView } from './views/drawer.ts'
@@ -386,6 +386,9 @@ export function mount(root: HTMLElement): void {
       .map((row) => ({ insert: `@${row.path} `, label: row.path }))
   }
 
+  // hero 模式外推（用户裁决 2026-10-23：chat composer 芯片跟随 hero 选择——发送后不再恒显远征）
+  const heroModeRef: { current: string } = { current: HERO_DEFAULT_MODE }
+
   function heroDeps(): Parameters<typeof createHeroView>[0] {
     return {
       rpc: ctx.rpc!,
@@ -395,6 +398,9 @@ export function mount(root: HTMLElement): void {
       modelDefault: {
         read: () => loadPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
         clear: () => clearPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
+      },
+      onModeChange: (mode) => {
+        heroModeRef.current = mode
       },
       onOpenSession: openSession,
       onOpenDrawer: openDrawer,
@@ -445,6 +451,7 @@ export function mount(root: HTMLElement): void {
           // （/remote/forge-stream LAN 明文 / 隧道 AEAD 同缝）——/api/session/stream +
           // /api/rpc 轮询旧引擎退役（两域皆被 api-guard 403 的死面）
           createEngine: createForgeStreamEngine(),
+          mode: heroModeRef.current,
           fallbackTitleRef,
           onOpenDrawer: openDrawer,
           onOpenHero: openHero,

@@ -195,6 +195,8 @@ export interface HeroDeps {
   readonly modes?: readonly string[]
   /** 状态变更通知（视图重绘挂点；缺席 = 纯控制器单测）。 */
   readonly onChange?: () => void
+  /** 模式变更外推（用户裁决 2026-10-23：chat composer 芯片跟随 hero 选择——装配侧注入）。 */
+  readonly onModeChange?: (mode: string) => void
 }
 
 export interface HeroController {
@@ -339,6 +341,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
       if (!modes.includes(next)) return
       mode = next
       pop = null
+      deps.onModeChange?.(next)
       emit()
     },
 
@@ -358,6 +361,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
       pop = null
       error = null
       draft = null
+      deps.onModeChange?.(mode)
       emit()
     },
 

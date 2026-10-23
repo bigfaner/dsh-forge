@@ -49,7 +49,7 @@ const EXPECTED_KIND: Record<string, string | null> = {
   'tool/result': 'tool-result',
   // B 系统层轻投影
   'forge/progress': 'loop-progress',
-  'session/title': 'session-title-line',
+  'session/title': null, // 标题只在顶栏（deriveTitle）——正文零渲染
   'compaction/summary': 'compaction-summary-line',
   'command/run': 'command-chip',
   'deliverables/presented': 'deliverables-card',
@@ -233,14 +233,16 @@ describe('per-attemptId 结算状态机', () => {
     expect(settler.rows()[0]).toMatchObject({ text: 'ab', lastSeq: 71 })
   })
 
-  it('settle-assistant：Streaming→Settled，transient 载荷原子清空（持久卡取代）', () => {
+  it('settle-assistant：Streaming→Settled，text 清空（持久卡取代）reasoning 保留（折叠面）', () => {
     const settler = createAttemptSettler()
-    settler.chunk(liveChunk(80, 'att-1', { type: 'text-delta', index: 0, text: 'live' }))
+    settler.chunk(liveChunk(80, 'att-1', { type: 'block-start', index: 0, blockType: 'reasoning' }))
+    settler.chunk(liveChunk(80, 'att-1', { type: 'reasoning-delta', index: 0, text: '思考' }))
+    settler.chunk(liveChunk(80, 'att-1', { type: 'text-delta', index: 1, text: 'live' }))
     settler.settle('att-1', {
       type: 'event',
       event: ev('assistant/message', 81, { turn: 1, step: 1, message: { role: 'assistant', content: [] }, stream: [] }),
     } as SessionEventLikeEntry)
-    expect(settler.rows()).toEqual([{ attemptId: 'att-1', text: '', reasoning: '', state: 'settled', lastSeq: 80 }])
+    expect(settler.rows()).toEqual([{ attemptId: 'att-1', text: '', reasoning: '思考', state: 'settled', lastSeq: 80 }])
   })
 
   it('abandoned 判别帧：Streaming→Abandoned，保留前缀 + 中断标记', () => {

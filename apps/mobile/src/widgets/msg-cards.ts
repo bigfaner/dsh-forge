@@ -585,8 +585,6 @@ export function renderCard(projection: Projection, opts: RenderCardOptions = {})
       return renderCommandChip(projection)
     case 'approval-card':
       return renderApprovalCard(projection)
-    case 'session-title-line':
-      return el('div', 'sys-line', projection.title)
     case 'compaction-summary-line': {
       const line = el('div', 'sys-line', textPreview(projection.text))
       return line

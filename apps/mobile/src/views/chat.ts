@@ -332,6 +332,35 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     }
     const foldEmitted = new Set<number>()
     const bySeq = new Map(projections.map((projection) => [projection.seq, projection] as const))
+    // 结算瞬态折叠（用户裁决 2026-10-23：流式结束后过程卡折叠而非消失）——flash 类模型
+    // reasoning 不落 durable，settler 结算行是唯一过程内容；仅当尾段无 durable 活动投影
+    // 时渲染（有 durable 活动的 turn 走上方折叠组，瞬态行让位防重复）。插入位 = 尾段
+    // user-bubble 之后的第一个非用户投影前（气泡→过程折叠→回复的会话语序）。
+    const lastSeg = segments.length > 0 ? segments[segments.length - 1] : undefined
+    const tailSegHasDurableActivity =
+      lastSeg !== undefined &&
+      projections.some(
+        (projection, index) =>
+          index > lastSeg.start && isActivityProjection(projection),
+      )
+    const settledRows =
+      lastSeg !== undefined && !tailSegHasDurableActivity
+        ? settler.rows().filter((row) => row.state === 'settled' && row.reasoning !== '')
+        : []
+    const settledFold =
+      settledRows.length > 0
+        ? (() => {
+            const details = el('details', 'turn-fold')
+            const summary = el('summary')
+            summary.appendChild(el('span', 'fold-label', `思考与执行 · ${settledRows.length} 项`))
+            summary.appendChild(el('span', 'fold-line'))
+            details.appendChild(summary)
+            for (const row of settledRows) details.appendChild(renderThinkCard(row.reasoning))
+            return details
+          })()
+        : null
+    let settledFoldPending = settledFold !== null
+    let tailSegOpened = false
     view.textContent = ''
     for (const projection of projections) {
       if (projection.kind === 'tool-result') continue
@@ -342,6 +371,15 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
           view.appendChild(renderTurnFold(segInfo.seg, bySeq, activityByCallId))
         }
         continue
+      }
+      if (projection.kind === 'user-bubble') {
+        view.appendChild(renderCard(projection, { onOpenDoc: deps.onOpenDoc, resolveDocSize: deps.resolveDocSize }))
+        tailSegOpened = settledFoldPending && lastSeg !== undefined && projections[lastSeg.start]?.seq === projection.seq
+        continue
+      }
+      if (settledFoldPending && tailSegOpened) {
+        view.appendChild(settledFold!)
+        settledFoldPending = false
       }
       if (projection.kind === 'tool-call') {
         if (seenCalls.has(projection.callId)) continue
@@ -364,10 +402,10 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
         }),
       )
     }
-    // 流式瞬态行（settler 子状态机）
+    // 流式瞬态行（settler 子状态机）——settled 行已在上方折叠（或让位 durable 折叠组）
     let streaming = false
     for (const row of settler.rows()) {
-      if (row.state === 'settled') continue
+      if (row.state !== 'streaming' && row.state !== 'abandoned') continue
       streaming = row.state === 'streaming'
       if (row.text !== '' || row.reasoning !== '') {
         if (row.reasoning !== '' && row.text === '') view.appendChild(renderThinkCard(row.reasoning))
@@ -379,9 +417,23 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
       if (row.state === 'abandoned') view.lastElementChild?.appendChild(el('span', 'interrupted-line', '— 已中断 —'))
       else if (streaming) view.lastElementChild?.appendChild(el('span', 'streaming'))
     }
+    if (settledFoldPending && settledFold !== null) view.appendChild(settledFold)
     if (streaming) view.appendChild(el('div', undefined)).appendChild(el('span', 'turn-status', 'Deep diving...'))
     const wasAtBottom = state.atBottom
     if (wasAtBottom) scrollToBottom()
+  }
+
+  // 渲染合帧（rAF）：settle 渲染 + 600ms 重拉渲染背靠背发生，逐次全量重建 view = 闪屏；
+  // 同帧合并为一次重建（用户裁决 2026-10-23）
+  let renderQueued = false
+  function scheduleRender(): void {
+    if (renderQueued) return
+    renderQueued = true
+    const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn: () => void) => setTimeout(fn, 16)
+    raf(() => {
+      renderQueued = false
+      render()
+    })
   }
 
   function scrollToBottom(): void {
@@ -423,7 +475,7 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
       const fresh = state.entries.filter((event) => event.seq > previousTail)
       state.unread += fresh.length
     }
-    render()
+    scheduleRender()
     syncUnread()
   }
 
@@ -528,17 +580,17 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
       const event = frame.event as WireEvent & { kind?: string; attemptId?: string }
       if (event.type === 'assistant/live-chunk' && 'attemptId' in (event.data as object)) {
         settler.chunk(event as Parameters<typeof settler.chunk>[0])
-        render()
+        scheduleRender()
         return
       }
       if (event.kind === 'settle-assistant') {
         settler.settle(event.attemptId ?? '')
-        render()
+        scheduleRender()
         return
       }
       if (event.kind === 'abandoned') {
         settler.abandon(event.attemptId ?? '')
-        render()
+        scheduleRender()
         return
       }
       adoptEntries([event], true)

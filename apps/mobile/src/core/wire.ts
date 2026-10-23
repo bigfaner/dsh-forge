@@ -75,7 +75,6 @@ export type Projection =
       readonly taskKey: string
       readonly counts: Readonly<Record<string, number>>
     }
-  | { readonly kind: 'session-title-line'; readonly seq: number; readonly title: string }
   | { readonly kind: 'compaction-summary-line'; readonly seq: number; readonly text: string }
   | {
       readonly kind: 'deliverables-card'
@@ -227,7 +226,9 @@ export function projectEvent(event: WireEvent): Projection | null {
       }
     }
     case 'session/title':
-      return { kind: 'session-title-line', seq: event.seq, title: (event.data as { title: string }).title }
+      // 标题只在顶栏呈现（deriveTitle 直读事件流）——正文零渲染（用户裁决 2026-10-23：
+      // 首条用户消息与 agent 响应之间出现标题中性行 = 噪音）
+      return null
     case 'compaction/summary': {
       const data = event.data as { summary?: readonly TextPart[] }
       return { kind: 'compaction-summary-line', seq: event.seq, text: textOf(data.summary) }
@@ -496,9 +497,11 @@ export function createAttemptSettler(): AttemptSettler {
     settle(attemptId, _entry) {
       const buffer = bufferOf(attemptId)
       if (buffer === undefined || buffer.state !== 'streaming') return
+      // 结算保留 reasoning（用户裁决 2026-10-23：流式结束后过程卡折叠而非消失）——
+      // flash 类模型 reasoning 不落 durable，清空 = 过程内容无处可折；text 清空
+      // （持久 assistant/message 卡原子取代，重复即噪音）；渲染侧按需折叠
       buffer.state = 'settled'
       buffer.text = ''
-      buffer.reasoning = ''
     },
     abandon(attemptId) {
       const buffer = bufferOf(attemptId)
