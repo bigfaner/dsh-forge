@@ -42,12 +42,13 @@ function selectPara(): void {
 }
 
 /** composer 输入 face 桩（state 快照 + focus 间谍）。 */
+type OccurrenceStub = string | { offset: number; length: number; clipboardText: string }
 interface FaceSpy {
   focusCalls: number
-  snapshot: { draft: string; draftRev: number; occurrences: string[] }
+  snapshot: { draft: string; draftRev: number; occurrences: OccurrenceStub[] }
   face: {
     focus(): void
-    state: { getSnapshot(): { draft: string; draftRev: number; occurrences: readonly string[] } }
+    state: { getSnapshot(): { draft: string; draftRev: number; occurrences: readonly OccurrenceStub[] } }
   }
 }
 
@@ -448,6 +449,47 @@ describe('mountQuoteSelectionMenu 生产装配（bug 1ab2f4e6 全屏聚焦缝接
 describe('insertReferenceAtTail（同径插入纯编排——open-session 判例同构）', () => {
   it('tail span-CAS 构造：草稿末尾 + 当前 draftRev', () => {
     expect(tailSpanOf({ draft: 'abc', draftRev: 7 })).toEqual({ start: 3, end: 3, draftRev: 7 })
+  })
+
+  it('bug 043166fc: 草稿已含 chip 时 tail span 须用 detect 坐标（官方 span-map selectSpan 边界核销：span.end > detectLength = null → bail 拒绝 → 第二次添加静默 no-op）', () => {
+    // 官方守卫镜像：InputState.draft 为 clipboard 投影（chip 展开为 token 全文），
+    // 官方 $replaceDetectSpanWithNodes 以 detect 平面映射（chip 坍缩单字符）——
+    // span.end 越界 detectLength 即拒绝。clipboard 长度 8 的 chip 使两平面差 7。
+    const TOKEN = '〔引用：已有〕'
+    const face = makeFaceSpy()
+    face.snapshot = {
+      draft: `ab${TOKEN} cd`, // clipboard 投影；detect 末尾 = draft.length − (TOKEN.length − 1)
+      draftRev: 5,
+      occurrences: [{ offset: 2, length: TOKEN.length, clipboardText: TOKEN }],
+    }
+    const detectLength = face.snapshot.draft.length - (TOKEN.length - 1)
+    let rejectedSpan: unknown
+    const { services, bails } = makeServices(face, (payload) => {
+      const span = (payload as { span: { start: number; end: number } }).span
+      const bound = face.snapshot.draft.length
+        - face.snapshot.occurrences.reduce((n, o) => n + Math.max(0, (o.length ?? 1) - 1), 0)
+      if (span.end > bound) {
+        rejectedSpan = span
+        return false
+      }
+      face.snapshot = {
+        draft: face.snapshot.draft + '〔引用：新引用〕 ',
+        draftRev: face.snapshot.draftRev + 1,
+        occurrences: [...face.snapshot.occurrences, { offset: bound, length: 8, clipboardText: '〔引用：新引用〕' }],
+      }
+      return true
+    })
+    expect(
+      insertReferenceAtTail(services, 's-1', {
+        source: 'quote',
+        ref: `${QUOTE_REF_PREFIX}u2`,
+        label: '新引用',
+        clipboardText: '〔引用：新引用〕',
+      }),
+    ).toBe(true)
+    // 修复判据：span 落在 detect 末尾，而非 clipboard 末尾（被官方守卫拒绝）
+    expect(rejectedSpan).toBeUndefined()
+    expect(bails[0]?.payload.span).toEqual({ start: detectLength, end: detectLength, draftRev: 5 })
   })
 
   it('bail true = 已应用', () => {

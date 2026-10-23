@@ -151,9 +151,27 @@ export interface TokenSpanMirror {
   readonly draftRev: number
 }
 
-/** tail span-CAS 构造（纯函数）：草稿末尾 + 当前 InputState.draftRev。 */
-export function tailSpanOf(state: { readonly draft: string; readonly draftRev: number }): TokenSpanMirror {
-  return { start: state.draft.length, end: state.draft.length, draftRev: state.draftRev }
+/**
+ * tail span-CAS 构造（纯函数）：草稿 detect 末尾 + 当前 InputState.draftRev。
+ * Root cause (bug 043166fc): 官方 span-map 契约（ui-conversation span-map.ts selectSpan
+ * 源码核销）以 detect 平面映射 span——chip 在 detect 投影中坍缩为单字符，而
+ * InputState.draft 是 clipboard 投影（chip 展开 token 全文）；旧实现直接取
+ * state.draft.length，空草稿两平面数值相等掩盖错位，草稿含 chip 后 span.end 越界
+ * detectLength → selectSpan 返 null → bail 拒绝 → 「添加到对话」再次点击静默 no-op
+ * （插入次数语义破坏）。修法：occurrences（clipboard offset/length 契约）反推
+ * detect 长度 = draft.length − Σ(token 长 − 1)。
+ */
+export function tailSpanOf(state: {
+  readonly draft: string
+  readonly draftRev: number
+  readonly occurrences?: readonly unknown[]
+}): TokenSpanMirror {
+  const chipExtra = (state.occurrences ?? []).reduce<number>((n, occ) => {
+    const len = (occ as { length?: unknown } | null | undefined)?.length
+    return n + (typeof len === 'number' && Number.isFinite(len) ? Math.max(0, len - 1) : 0)
+  }, 0)
+  const at = state.draft.length - chipExtra
+  return { start: at, end: at, draftRev: state.draftRev }
 }
 
 /**
