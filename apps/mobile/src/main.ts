@@ -31,6 +31,7 @@ import { createTunnelTransport, type TunnelMaterial, type TunnelSession, type Tu
 import {
   createForgeStreamSource,
   frameSessionIdOf,
+  type ForgeStreamEvent,
   type ForgeStreamSource,
 } from './core/forge-stream-source.ts'
 import type { WireEvent } from './core/wire.ts'
@@ -66,8 +67,8 @@ interface AssemblyContext {
   material: TunnelMaterial | undefined
   tunnel: boolean
   session: TunnelSession
-  /** forge-stream 帧订阅腿（帧到达 → 逐订阅者通知；视图轮询兜底自理）。 */
-  readonly frameListeners: Set<() => void>
+  /** forge-stream 帧订阅腿（帧到达 → 逐订阅者通知，瞬态帧原样穿透；视图轮询兜底自理）。 */
+  readonly frameListeners: Set<(event?: ForgeStreamEvent) => void>
 }
 
 /** 内存 Kv 兜底（storage 缺席环境——identity/游标/最近模型降级为页内态）。 */
@@ -120,8 +121,8 @@ export function mount(root: HTMLElement): void {
   // ---- 会话日志缓存（tasks/worker 投影数据源：api.history 快照 + 帧失效重拉）----
   // bug 55d50769：重拉完成即 notify（frameListeners 重读缓存增量外推）——原先帧到达瞬间的
   // emitFrames 只读旧缓存、重拉完成无通知，显示恒滞后一拍，末帧后的回复/turn-end 永不传播。
-  const emitFrames = (): void => {
-    for (const listener of Array.from(ctx.frameListeners)) listener()
+  const emitFrames = (event?: ForgeStreamEvent): void => {
+    for (const listener of Array.from(ctx.frameListeners)) listener(event)
   }
   const logSync = createLogSync({
     history: (sessionId, limit) => ctx.api!.history(sessionId, limit),
@@ -162,7 +163,8 @@ export function mount(root: HTMLElement): void {
           // 旧 {sessionId} 对象取形恒 undefined = scheduleRefresh 永不触发（chat 静止）
           const sessionId = frameSessionIdOf(event.payload)
           if (sessionId !== undefined) scheduleRefresh(sessionId)
-          emitFrames()
+          // 打字机腿：瞬态帧原样穿透给引擎（assistant-stream 密帧 → settler 增量渲染）
+          emitFrames(event.type === 'agent/assistant-stream' ? event : undefined)
           if (event.type === 'user-questions/request') openAsk()
         },
         onError: () => {
@@ -215,7 +217,37 @@ export function mount(root: HTMLElement): void {
               sink.stateChange('live')
             })
             .catch(() => sink.stateChange('degraded'))
-          listener = () => {
+          // 打字机腿：assistant-stream 瞬态帧 → settler 增量（chunk）/结算（end→settle/abandoned）；
+          // durable 路径不变——logCache 尾序外推（结算卡由重拉到达，settler 瞬态行原子取代）。
+          listener = (frameEvent?: ForgeStreamEvent) => {
+            if (frameEvent?.type === 'agent/assistant-stream') {
+              const payload = frameEvent.payload as { sessionId?: unknown; frame?: { type?: unknown; attemptId?: unknown; index?: unknown; time?: unknown; turn?: unknown; step?: unknown; chunk?: unknown; outcome?: { kind?: unknown } } }
+              if (payload.sessionId !== sessionId) return
+              const frame = payload.frame ?? {}
+              if (frame.type === 'chunk' && typeof frame.attemptId === 'string') {
+                sink.delta({
+                  kind: 'event',
+                  event: {
+                    type: 'assistant/live-chunk',
+                    seq: typeof frame.index === 'number' ? frame.index : 0,
+                    time: typeof frame.time === 'number' ? frame.time : Date.now(),
+                    data: {
+                      attemptId: frame.attemptId,
+                      turn: typeof frame.turn === 'number' ? frame.turn : 0,
+                      step: typeof frame.step === 'number' ? frame.step : 0,
+                      chunk: frame.chunk,
+                    },
+                  },
+                } as never)
+                return
+              }
+              if (frame.type === 'end' && typeof frame.attemptId === 'string') {
+                const kind = frame.outcome?.kind === 'abandoned' ? 'abandoned' : 'settle-assistant'
+                sink.delta({ kind: 'event', event: { kind, attemptId: frame.attemptId } } as never)
+                return
+              }
+              return // start 帧——settler 由首 chunk 开机，无需处理
+            }
             for (const event of logSync.get(sessionId) ?? []) {
               if (event.seq > lastSeq) {
                 lastSeq = event.seq

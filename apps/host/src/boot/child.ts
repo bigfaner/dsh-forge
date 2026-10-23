@@ -71,6 +71,7 @@ import {
   type PskGateDeps,
 } from './psk-gate.js'
 import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
+import { subscribeAssistantStreamMirror } from './assistant-stream-mirror.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
 import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
@@ -932,13 +933,26 @@ async function main(): Promise<void> {
               }
             }
             createForgeStreamHandler({
-              subscribe: (push) =>
-                subscribeOfficialEvents(
+              subscribe: (push) => {
+                const offOfficial = subscribeOfficialEvents(
                   (name, handler) =>
                     (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
                   push,
                   diag,
-                ),
+                )
+                // mobile-ui 打字机腿：官方 agent/assistant-stream 瞬态帧镜像（start/chunk/end
+                // 密帧——text/reasoning delta 直达 mobile settler；durable 结算仍走历史重拉）
+                const offAssistant = subscribeAssistantStreamMirror({
+                  ctxOn: (name, handler) =>
+                    (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
+                  emit: push,
+                  diag,
+                })
+                return () => {
+                  offOfficial()
+                  offAssistant()
+                }
+              },
               seal: (event) => (sealer !== undefined ? sealer(event) : JSON.stringify(event)),
               diag,
             })(req, res)
