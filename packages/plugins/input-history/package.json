@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/input-history",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "input-history cordis 插件（纯 client 包）：composer 方向键输入历史——双面包装载范式首建（client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch，后续 edit-resend 插件复用）。",
