@@ -5,6 +5,7 @@ import {
   createAttemptSettler,
   createSeqGate,
   latestTodosOf,
+  todoProgressLabel,
   mergeBySeq,
   projectEvent,
   projectHistory,
@@ -417,5 +418,13 @@ describe('latestTodosOf（TODO 面板数据源——桌面端 composer 上方对
     expect(latestTodosOf([ev('todo/write', 1, { todos: [{ content: '' }, { content: 'ok', status: 'completed' }] })])).toEqual([
       { content: 'ok', status: 'completed' },
     ])
+  })
+})
+describe('todoProgressLabel（桌面端 todo.progress 同构）', () => {
+  const item = (status: 'pending' | 'in_progress' | 'completed'): { content: string; status: string } => ({ content: 'x', status })
+  it('计数段拼接 · 分隔，零段省略', () => {
+    expect(todoProgressLabel([item('completed'), item('completed'), item('in_progress'), item('pending')])).toBe('2 已完成 · 1 进行中 · 1 待处理')
+    expect(todoProgressLabel([item('in_progress'), item('pending')])).toBe('1 进行中 · 1 待处理')
+    expect(todoProgressLabel([item('completed')])).toBe('1 已完成')
   })
 })

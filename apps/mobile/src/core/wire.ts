@@ -199,6 +199,18 @@ export function latestTodosOf(entries: readonly WireEvent[]): readonly TodoItemV
   return null
 }
 
+/** 进度摘要（桌面端 todo.progress 同构：done/active/pending 计数，零段省略）。 */
+export function todoProgressLabel(todos: readonly TodoItemView[]): string {
+  const done = todos.filter((item) => item.status === 'completed').length
+  const active = todos.filter((item) => item.status === 'in_progress').length
+  const pending = todos.length - done - active
+  const parts: string[] = []
+  if (done > 0) parts.push(`${done} 已完成`)
+  if (active > 0) parts.push(`${active} 进行中`)
+  if (pending > 0) parts.push(`${pending} 待处理`)
+  return parts.join(' · ')
+}
+
 /** 单事件投影：E 档返回 null（零渲染），D 档中性/错误卡。 */
 export function projectEvent(event: WireEvent): Projection | null {
   switch (event.type) {

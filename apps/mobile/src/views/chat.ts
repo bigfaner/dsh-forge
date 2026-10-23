@@ -14,6 +14,7 @@ import {
   latestTodosOf,
   mergeBySeq,
   projectHistory,
+  todoProgressLabel,
   type Projection,
   type WireEvent,
 } from '../core/wire.ts'
@@ -285,9 +286,19 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   // 分支控制完全隐藏——chip 初始可见且本视图从不调 setWorktreeVisible，空标签芯片恒挂
   composer.setWorktreeVisible((deps.worktree ?? '') !== '')
 
-  // TODO 面板（桌面端 composer 上方清单对齐）：最新 todo/write 快照驱动，随 render 实时更新
+  // TODO 面板（桌面端 TodoPanel 对齐）：默认收起只显 header（清单图标+「任务」+进度摘要+
+  // chevron），点按展开列表；行图标 = StateDot 三态（completed 绿核点/in_progress 旋转
+  // spinner/pending 中性点），随 render 实时更新
   const todoPanel = el('div', 'todo-panel')
   todoPanel.hidden = true
+  let todoCollapsed = true
+  const TODO_GLYPHS: Record<string, string> = {
+    completed:
+      '<svg class="tdot" data-state="done" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    in_progress:
+      '<svg class="tdot spin" data-state="ongoing" viewBox="0 0 24 24"><circle class="track" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5"/><circle class="arc" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="14 90"/></svg>',
+    pending: '<svg class="tdot" data-state="idle" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/></svg>',
+  }
   function renderTodoPanel(): void {
     const todos = latestTodosOf(state.entries)
     todoPanel.textContent = ''
@@ -296,12 +307,28 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
       return
     }
     todoPanel.hidden = false
+    const head = el('button', 'todo-head')
+    head.type = 'button'
+    head.appendChild(el('span', 'todo-lead', '☰'))
+    head.appendChild(el('span', 'todo-title', '任务'))
+    head.appendChild(el('span', 'todo-progress', todoProgressLabel(todos)))
+    head.appendChild(el('span', `todo-chev${todoCollapsed ? '' : ' open'}`, todoCollapsed ? '▸' : '▾'))
+    head.addEventListener('click', () => {
+      todoCollapsed = !todoCollapsed
+      renderTodoPanel()
+    })
+    todoPanel.appendChild(head)
+    if (todoCollapsed) return
+    const list = el('div', 'todo-list')
     for (const todo of todos) {
       const row = el('div', `todo-row ${todo.status}`)
-      row.appendChild(el('span', 'todo-mark', todo.status === 'completed' ? '✓' : todo.status === 'in_progress' ? '●' : '○'))
+      const glyph = el('span', 'todo-glyph')
+      glyph.innerHTML = TODO_GLYPHS[todo.status] ?? TODO_GLYPHS['pending']!
+      row.appendChild(glyph)
       row.appendChild(el('span', 'todo-content', todo.content))
-      todoPanel.appendChild(row)
+      list.appendChild(row)
     }
+    todoPanel.appendChild(list)
   }
 
   root.append(topbar, view, jump, todoPanel, composer.root, overlay)
