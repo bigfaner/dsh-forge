@@ -100,6 +100,17 @@ export function emptyDraft(): QuestionDraft {
 
 const isMulti = (question: AskQuestion): boolean => question.multiSelect === true
 
+/**
+ * 推荐后缀解析（桌面端 parseRecommendedLabel 逐字符同构——dsh-client-ui-user-questions
+ * client.js：label 以 (recommended)/（推荐） 后缀结尾 = 推荐项，剥离展示；不改答案值）。
+ */
+export function parseRecommendedLabel(label: string): { label: string; recommended: boolean } {
+  const suffix = /\s*[(（]\s*(?:recommended|推荐)\s*[)）]\s*$/i
+  return suffix.test(label)
+    ? { label: label.replace(suffix, ''), recommended: true }
+    : { label, recommended: false }
+}
+
 /** 点击选项：单选替换（占位互斥——清空 custom）；多选 toggle。 */
 export function pickOption(question: AskQuestion, draft: QuestionDraft, label: string): QuestionDraft {
   if (isMulti(question)) {
@@ -324,13 +335,15 @@ export function createAskView(deps: AskDeps): HTMLElement {
       const list = el('div', `ask-options ${multi ? 'multi' : 'single'}`)
       for (const option of options) {
         const selected = draft.selected.includes(option.label)
+        // 推荐徽标 = label 后缀约定（桌面端同构）；答案值保持原 label 不变
+        const parsed = parseRecommendedLabel(option.label)
         const button = el('button', `ask-option${selected ? ' picked' : ''}`)
         const mark = el('span', `mark ${multi ? 'box' : 'radio'}`)
         if (selected) mark.innerHTML = multi ? '✓' : '●'
         const body = el('div', 'opt-body')
         const labelRow = el('div', 'opt-label')
-        labelRow.appendChild(document.createTextNode(option.label))
-        if (option.recommended === true) labelRow.appendChild(el('span', 'ask-badge', '推荐'))
+        labelRow.appendChild(document.createTextNode(parsed.label))
+        if (parsed.recommended || option.recommended === true) labelRow.appendChild(el('span', 'ask-badge', '推荐'))
         body.appendChild(labelRow)
         if (option.description !== undefined)
           body.appendChild(el('div', 'opt-desc', option.description))

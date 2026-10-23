@@ -5,6 +5,7 @@ import {
   canSubmit,
   coercePending,
   emptyDraft,
+  parseRecommendedLabel,
   pickOption,
   setCustom,
 } from './ask.ts'
@@ -146,5 +147,16 @@ describe('校验与提交载荷（官方契约 {id, selected, custom} + skipped�
       custom: '',
       skipped: true,
     })
+  })
+})
+
+describe('parseRecommendedLabel（桌面端推荐徽标同构——label 后缀约定）', () => {
+  it('英文/中文圆括号后缀剥离并标记 recommended', () => {
+    expect(parseRecommendedLabel('保持受限视图 (recommended)')).toEqual({ label: '保持受限视图', recommended: true })
+    expect(parseRecommendedLabel('保持受限视图（推荐）')).toEqual({ label: '保持受限视图', recommended: true })
+    expect(parseRecommendedLabel('普通选项')).toEqual({ label: '普通选项', recommended: false })
+  })
+  it('仅后缀在末尾生效（中间出现不算）', () => {
+    expect(parseRecommendedLabel('推荐 开头')).toEqual({ label: '推荐 开头', recommended: false })
   })
 })
