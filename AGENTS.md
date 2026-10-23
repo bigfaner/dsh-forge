@@ -59,6 +59,7 @@
 
 ### 5.2 提交纪律
 - 提交按逻辑单元分批，指名路径 add，禁 `add -A/.` 一把梭；不夹带无关改动与过程产物。
+- **插件版本随改动同步 bump**（`packages/plugins/*/package.json`，semver 位）：修 bug → patch 位 +1（0.1.**x**）；功能升级/新增 → minor 位 +1（0.**x**.0）；bump 与对应改动同一提交落。先例：input-history 0.1.1（bug ce803be8 修复）。
 - **不要提交过程文件**：走查截图、临时取证图、探针脚本输出等过程产物一律不进 git 提交。
   - `.forge/docs/**/*.png` 已被 `.gitignore` 默认忽略——**禁止 force-add**（d32/d35 的 force-add 归档是旧先例，已被本裁决取代）。
   - 过程文件归档到 `.forge/docs/proposals/<slug>/walkthrough/` 等工作区目录即可（留在盘上、留在 git 外），在提交说明里用相对路径引用。
