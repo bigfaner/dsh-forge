@@ -6,9 +6,9 @@
 // 策略：数据面用 e2e/fixtures/mobile 回放 fixtures（session-grouped/disconnect 录制交换）
 // 驱动 drawer.ts 纯逻辑面（coerceGrouped/unreadOf/orderVisible/writeReadCursor），
 // UI 语义用源面锚点；零真实 host、离线可重复。
-// 锚点张力注记：contract step-1/3/4 锚点写 host `forge:remote/read-state` 读/写通道——
-// 实现（mobile-ui/1.12 裁决，read-cursor.ts 头注）改为手机页 localStorage 自持游标、
-// 单调写与 host read-state 同口径；本文件按实现语义断言（张力已上报，不静默裁决）。
+// 锚点张力注记：contract step-1/3/4 锚点写手机 localStorage 自持游标（read-cursor.ts）——
+// bug 1dd4b437 用户裁决后实现改为 host 侧单点持久（forge:remote/read-state 读对账 +
+// read-state-write 即发即忘 + 本地乐观单调写）；本文件按实现语义断言（张力已上报）。
 import { describe, expect, it } from 'vitest'
 import {
   DRAWER_BADGE_CAP,
@@ -17,8 +17,10 @@ import {
   DRAWER_POLL_MS,
   DRAWER_TOP_N,
   DRAWER_WINDOW_MS,
+  READ_STATE_CHANNEL,
   badgeText,
   coerceGrouped,
+  coerceReadCursors,
   filterSessions,
   orderVisible,
   pinnedKey,
@@ -27,7 +29,6 @@ import {
   unreadOf,
   type DrawerSession,
 } from '../../../apps/mobile/src/views/drawer.js'
-import { loadReadCursors, readCursorKey, writeReadCursor } from '../../../apps/mobile/src/core/read-cursor.js'
 import {
   expectMobileFile,
       loadFixtures,
@@ -162,12 +163,11 @@ describe('step-3 unread-badge（双级未读徽标与最终一致）', () => {
     // 基准收敛；收敛前不闪烁误值（负值 clamp 0）
     const s = sess('race', { asOfSeq: 21 })
     expect(unreadOf(s, 30)).toBe(0) // 游标领先 = 0，不出现负数闪烁
-    // 拉取后重读游标表（refresh 链：loadReadCursors 对账）
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    writeReadCursor(kv, readCursorKey('d'), 'race', 21)
-    expect(loadReadCursors(kv, readCursorKey('d'))).toEqual({ race: 21 })
-    expect(unreadOf(s, 21)).toBe(0)
+    // 拉取后游标表对账（refresh 链：read-state 通道 → coerceReadCursors 合并）
+    expect(READ_STATE_CHANNEL).toBe('forge:remote/read-state')
+    const cursors = coerceReadCursors({ cursors: { race: 21 } })
+    expect(cursors).toEqual({ race: 21 })
+    expect(unreadOf(s, cursors['race'])).toBe(0)
   })
 
   it('stale-window-hold（域重建窗口保持旧值）', () => {
@@ -175,37 +175,29 @@ describe('step-3 unread-badge（双级未读徽标与最终一致）', () => {
     // inferred：tailSeq 未就绪（asOfSeq 缺席 = null）时未读记 0、不基于不完整值误清游标——
     // 实现以「不可知记 0 + 游标零写入」承担 stale 窗口零误清零不变式
     const unknown = sess('stale', { asOfSeq: null })
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    writeReadCursor(kv, readCursorKey('d'), 'stale', 5)
-    expect(unreadOf(unknown, loadReadCursors(kv, readCursorKey('d'))['stale'])).toBe(0)
-    expect(loadReadCursors(kv, readCursorKey('d'))['stale']).toBe(5) // 游标未被 stale 读改写
+    const cursors = { stale: 5 }
+    expect(unreadOf(unknown, cursors['stale'])).toBe(0)
+    expect(cursors['stale']).toBe(5) // 游标未被 stale 读改写
   })
 })
 
 describe('step-4 open-unread-zero（点开未读会话本地归零）', () => {
   it('success（进入即归零）', () => {
-    // 回链 contracts/step-4-open-unread-zero.md Outcome:success——打开即写游标 → 本地即时归零
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    const key = readCursorKey('d')
-    writeReadCursor(kv, key, 's1', 12)
-    const cursors = loadReadCursors(kv, key)
+    // 回链 contracts/step-4-open-unread-zero.md Outcome:success——打开即写游标（host 单点
+    // read-state-write 即发即忘 + 本地乐观）→ 本地即时归零
+    const cursors: Record<string, number> = coerceReadCursors({ cursors: { s1: 12 } })
     expect(unreadOf(sess('s1', { asOfSeq: 12 }), cursors['s1'])).toBe(0)
-    // 源面锚点：行点击写同一游标键（触底归零同游标源）
-    expect(mobileSrc('views/drawer.ts')).toContain('打开即视为已读：写本地游标')
+    // 源面锚点：行点击走 host 写通道（bug 1dd4b437——localStorage 随 origin churn 丢失退役）
+    const src = mobileSrc('views/drawer.ts')
+    expect(src).toContain('READ_STATE_WRITE_CHANNEL')
+    expect(src).toContain('打开即视为已读')
   })
 
   it('monotonic-guard-no-resurrect（归零后再拉取）', () => {
     // 回链 contracts/step-4-open-unread-zero.md Outcome:monotonic-guard-no-resurrect——
-    // 游标单调不回退：写仅在 seq > 现值时落盘（宿主 RMW 单源同口径）
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    const key = readCursorKey('d')
-    writeReadCursor(kv, key, 's1', 12)
-    writeReadCursor(kv, key, 's1', 8) // 旧值回退被拒
-    writeReadCursor(kv, key, 's1', 12) // 等值重写被拒（幂等）
-    expect(loadReadCursors(kv, key)['s1']).toBe(12)
+    // 游标单调不回退：行点击守卫仅 asOfSeq > 现值才写（host 单调写同口径）
+    const src = mobileSrc('views/drawer.ts')
+    expect(src).toMatch(/asOfSeq > \(cursors\[session\.sessionId\] \?\? -1\)/) // 单调守卫源面钉死
     expect(unreadOf(sess('s1', { asOfSeq: 12 }), 12)).toBe(0) // 不复活
   })
 
@@ -214,12 +206,10 @@ describe('step-4 open-unread-zero（点开未读会话本地归零）', () => {
     // not-found 为对账信号：RPC 信封 ok:false 错误分支不毒化本地游标（零误清零）
     expectMobileFile('views/drawer.ts')
     const src = mobileSrc('views/drawer.ts')
-    expect(src).toMatch(/if \(result\.ok\) grouped = coerceGrouped\(result\.data\)/) // 失败零落地
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    writeReadCursor(kv, readCursorKey('d'), 'gone', 9)
+    expect(src).toMatch(/if \(groupedResult\.ok\) \{\s*\n\s*grouped = coerceGrouped\(groupedResult\.data\)/) // 失败零落地
+    const cursors: Record<string, number> = { gone: 9 }
     // 失败分支不触达游标写路径——其余会话徽标零误清
-    expect(loadReadCursors(kv, readCursorKey('d'))['gone']).toBe(9)
+    expect(cursors['gone']).toBe(9)
   })
 })
 
@@ -257,10 +247,10 @@ describe('step-5 connection-disconnect（连接状态弹层与断开）', () => 
     // 回链 contracts/step-5-connection-disconnect.md Outcome:drawer-during-disconnect
     // inferred：断线（状态读失败）降级呈现——status 异常吞并记 ok:false，不伪造连接态
     const src = mobileSrc('views/drawer.ts')
-    expect(src).toMatch(/status = \{ ok: false, tunnelExpiresAt: null \}/)
+    expect(src).toMatch(/next = \{ ok: false, tunnelExpiresAt: null/)
     // 数据面最终一致：轮询周期续排（恢复后对账收敛），列表消费最近缓存投影
-    expect(src).toMatch(/void refresh\(\)\.finally\(schedulePoll\)/)
-    expect(src).toMatch(/if \(result\.ok\) grouped = coerceGrouped\(result\.data\)/)
+    expect(src).toMatch(/void refreshStatus\(\)\s*\n\s*schedulePoll\(\)/)
+    expect(src).toMatch(/if \(groupedResult\.ok\) \{/)
   })
 })
 
@@ -282,12 +272,9 @@ describe('smoke: happy path 依序走全链（drawer-session-list-unread）', ()
     // worker 拆分不变式：主列表 / 子组零重叠零遗漏
     const { main, workers } = splitWorkers(all)
     expect(main.length + workers.length).toBe(all.length)
-    // ④ 点开归零：写游标 → 该会话徽标消失，其余不受扰
-    const store: Record<string, string | null> = {}
-    const kv = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v } }
-    const key = readCursorKey('d')
-    for (const s of all) writeReadCursor(kv, key, s.sessionId, s.asOfSeq ?? 0)
-    const cursors = loadReadCursors(kv, key)
+    // ④ 点开归零：host 游标写满对账 → 该会话徽标消失，其余不受扰
+    const cursors: Record<string, number> = {}
+    for (const s of all) cursors[s.sessionId] = s.asOfSeq ?? 0
     for (const s of all) expect(unreadOf(s, cursors[s.sessionId])).toBe(0)
     // ⑤ 断开：通道录制在位 + 检索过滤链完好（恢复后对账入口）
     expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === DRAWER_DISCONNECT_CHANNEL)).toBe(true)

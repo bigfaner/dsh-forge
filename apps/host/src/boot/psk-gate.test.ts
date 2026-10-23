@@ -42,7 +42,7 @@ describe('devicePubs 持久化（远程准入 sig 验签跨 host 重启）', () 
   const KP = generateSigningKeyPair()
   const PSK_RAW = randomBytes(32)
   const PIN = '123456'
-  const depsWith = (store: DevicePubStore, watermarks: ReplayWatermark): PskGateDeps => ({
+  const depsWith = (store: DevicePubStore | undefined, watermarks: ReplayWatermark): PskGateDeps => ({
     load: () => ({ v: 3, psk: PSK_RAW.toString('base64'), signing: { spki: KP.publicDer.toString('base64'), pkcs8: KP.secret.export({ format: 'der', type: 'pkcs8' }).toString('base64') } }),
     pin: () => PIN,
     watermarks,

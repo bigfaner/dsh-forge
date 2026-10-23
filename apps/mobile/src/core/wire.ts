@@ -134,11 +134,12 @@ const NEUTRAL_PREVIEW_CHARS = 80
 function projectUserMessage(event: WireEvent): Projection | null {
   const data = event.data as UserMessageData
   const text = textOf(data.content)
-  const kind = data.source?.kind
+  const source = data.source
+  const kind = source?.kind
   if (kind !== undefined && HARNESS_CONTEXT_KINDS.has(kind)) return null
   switch (kind) {
     case 'user':
-      return { kind: 'user-bubble', seq: event.seq, text, rpcId: data.source.rpcId, time: event.time }
+      return { kind: 'user-bubble', seq: event.seq, text, rpcId: source?.rpcId, time: event.time }
     case 'forge-loop':
       return {
         kind: 'loop-narrative',

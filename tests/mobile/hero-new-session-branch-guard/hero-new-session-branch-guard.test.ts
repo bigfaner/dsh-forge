@@ -63,6 +63,9 @@ function makeHarness(over: { listOk?: boolean; createOk?: boolean; guardReason?:
         opened.push(`${sessionId}:${content}:${mode}`)
         return {}
       },
+      selectAgentPreset: async () => ({}),
+      listAgentPresets: async () => ({ presets: [] }),
+      selectModel: async () => ({ selected: true }),
     },
     currentBranch: 'main',
     currentWorktreePath: 'Z:\\proj',
@@ -115,7 +118,7 @@ describe('step-2 create-default（保持默认直接开建会话）', () => {
     expect(h.getCreateCalls()).toBe(1) // 官方面 createSession
     expect(h.calls.filter((c) => c.channel === HERO_SESSION_CREATE_CHANNEL)).toEqual([]) // 零守卫触达
     expect(h.opened).toContain('s-plain')
-    expect(h.opened.some((o) => o.startsWith('s-plain:开始:steer'))).toBe(true) // 首条消息随创建转发（突击 = steer）
+    expect(h.opened.some((o) => o.startsWith('s-plain:开始:queue'))).toBe(true) // 首条消息随创建转发（恒 queue followup——新会话 agent 必空闲，官方 steer 拒绝队列外抢占）
   })
 
   it('reopen-no-residue（快速连开与返回）', async () => {

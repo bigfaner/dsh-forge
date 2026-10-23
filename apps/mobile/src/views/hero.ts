@@ -34,7 +34,7 @@ export const HERO_DEFAULT_MODE = '突击'
 /** forge 自有预设（突击 = steer 抢占 / 远征 = queue 排队）。 */
 export const FORGE_MODES: readonly string[] = ['突击', '远征']
 
-/** dsh 内置四预设（官方 dsh-client-ui-agent-preset roster——id 'standard'/'ptc'/'minimal'/'cordis'
+/** dsh 内置四预设（官方 agent-preset roster——id 'standard'/'ptc'/'minimal'/'cordis'
  *  源码核销；显示名取官方 zh 词典「标准模式/PTC 模式/极简模式/创造模式」短形）。 */
 export const BUILTIN_AGENT_PRESETS: Readonly<Record<string, string>> = {
   标准: 'standard',

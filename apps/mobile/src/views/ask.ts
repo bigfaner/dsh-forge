@@ -101,8 +101,8 @@ export function emptyDraft(): QuestionDraft {
 const isMulti = (question: AskQuestion): boolean => question.multiSelect === true
 
 /**
- * 推荐后缀解析（桌面端 parseRecommendedLabel 逐字符同构——dsh-client-ui-user-questions
- * client.js：label 以 (recommended)/（推荐） 后缀结尾 = 推荐项，剥离展示；不改答案值）。
+ * 推荐后缀解析（桌面端 parseRecommendedLabel 逐字符同构——官方 user-questions 客户端面：
+ * label 以 (recommended)/（推荐） 后缀结尾 = 推荐项，剥离展示；不改答案值）。
  */
 export function parseRecommendedLabel(label: string): { label: string; recommended: boolean } {
   const suffix = /\s*[(（]\s*(?:recommended|推荐)\s*[)）]\s*$/i

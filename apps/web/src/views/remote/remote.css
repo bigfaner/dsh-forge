@@ -15,16 +15,16 @@
   bottom: 16px;
   z-index: 10000;
   max-width: 360px;
-  padding: 10px 14px;
-  border: 1px solid var(--dsw-alias-state-error-primary, #e5484d);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-2, #fff);
-  color: var(--dsw-alias-label-primary, inherit);
-  font-size: 13px;
+  padding: 10px 14px; /* dsw-raw toast 内距（局部刻度） */
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 10px; /* dsw-raw toast 圆角（局部刻度） */
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px; /* dsw-raw 官方 13px 字（xs-13 同值） */
   line-height: 1.5;
   text-align: left;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  cursor: var(--dsh-cursor-pointer, pointer);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16); /* dsw-raw toast 投影（局部刻度） */
 }
 
 /* ── fix-4（bug d025a0da）：底行行内合并——手机图标与设置图标同一行 ──
@@ -237,7 +237,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 10px; /* dsw-raw dialog 标题行缝（局部刻度） */
   margin: 8px 0 0; /* dsw-raw dialog 标题上距（排版行高刻度） */
 }
 
@@ -324,7 +324,7 @@
   align-items: center;
   justify-content: center;
   min-height: 38px; /* dsw-raw 官方 hint 行 38px min-height */
-  margin: 0 20px; /* 用户裁决 2026-10-22：不贴近/不超出 dialog 边缘 */
+  margin: 0 20px; /* 用户裁决 2026-10-22：不贴近/不超出 dialog 边缘（dsw-raw 局部刻度） */
   padding: 10px 12px; /* dsw-raw 说明卡内距（局部刻度） */
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
@@ -649,7 +649,7 @@
 .dswf-remote-connected-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 10px; /* dsw-raw 连接状态行缝（局部刻度） */
 }
 
 .dswf-remote-connected-row .dswf-remote-connected {
@@ -832,7 +832,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 8px; /* dsw-raw PIN 行缝（局部刻度） */
 }
 
 .dswf-remote-pin-consent {
@@ -877,7 +877,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 6px; /* dsw-raw 密钥三件套标题行缝（局部刻度） */
 }
 
 .dswf-remote-psk-title {
@@ -1021,10 +1021,10 @@
   justify-content: center;
   width: 14px;
   height: 14px;
-  margin-left: 4px;
+  margin-left: 4px; /* dsw-raw 徽标左缝（局部刻度） */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 50%;
-  font-size: 10px;
+  font-size: 10px; /* dsw-raw 徽内问号刻度（局部刻度，同 :760 徽件口径） */
   line-height: 12px;
   color: var(--dsw-alias-label-tertiary);
   cursor: help;

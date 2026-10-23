@@ -569,7 +569,9 @@ function PskTrioRow(props: {
           </Tooltip>
         )}
       </span>
-      <span className="dswf-remote-psk-value" title={props.value}>{props.value}</span>
+      <Tooltip label={props.value} portal>
+        <span className="dswf-remote-psk-value">{props.value}</span>
+      </Tooltip>
       {props.onToggleMask !== undefined && (
         <Tooltip label={props.masked ? '显示' : '隐藏'} portal>
           <button type="button" className="dswf-remote-copy" aria-label={props.masked ? '显示连接密钥' : '隐藏连接密钥'} onClick={props.onToggleMask}>
@@ -804,7 +806,9 @@ function ConnectedFace(props: {
       )}
       {props.url !== undefined && (
         <div className="dswf-remote-address dswf-remote-pill">
-          <span className="dswf-remote-address-text" title={props.url}>{props.url}</span>
+          <Tooltip label={props.url} portal>
+            <span className="dswf-remote-address-text">{props.url}</span>
+          </Tooltip>
           <Tooltip label="复制地址" portal>
             <button
               type="button"

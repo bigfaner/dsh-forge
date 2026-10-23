@@ -40,7 +40,7 @@ const CATALOG = {
       id: 'zai-coding-cn',
       name: 'zai-coding-cn',
       models: [
-        { id: 'glm-5.3', name: 'GLM 5.3', reasoning: { efforts: [{ id: 'min' }, { id: 'default' }, { id: 'max' }] } },
+        { id: 'glm-5.3', name: 'GLM 5.3', reasoning: { efforts: [{ id: 'min', name: '极低' }, { id: 'default', name: '默认' }, { id: 'max', name: '高' }] } },
         { id: 'glm-4.6v', name: 'GLM 4.6V' },
       ],
     },
@@ -48,12 +48,15 @@ const CATALOG = {
       id: 'deepseek',
       name: 'deepseek',
       models: [
-        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', reasoning: { efforts: [{ id: 'default' }] } },
-        { id: 'deepseek-r2', name: 'DeepSeek R2', reasoning: { efforts: [{ id: 'max' }] } },
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', reasoning: { efforts: [{ id: 'default', name: '默认' }] } },
+        { id: 'deepseek-r2', name: 'DeepSeek R2', reasoning: { efforts: [{ id: 'max', name: '高' }] } },
       ],
     },
   ],
 }
+
+/** EffortOptionInfo 构造（当前契约 efforts = {id,name}[]——name 缺席即滤除）。 */
+const eff = (id: string, name = id): { id: string; name: string } => ({ id, name })
 
 function makeKv(): { store: KeyValueStore; backing: Map<string, string> } {
   const backing = new Map<string, string>()
@@ -158,7 +161,7 @@ describe('step-5 select-model（点选模型转发选择意图）', () => {
   it('success（选中态 + 回执更新）', () => {
     // 回链 contracts/step-5-select-model.md Outcome:success——新模型 efforts 重新呈现档位集
     const target = coerceModelCatalog(CATALOG).models[2]! // deepseek-v4-flash（efforts 非空）
-    expect(target.efforts).toEqual(['default'])
+    expect(target.efforts).toEqual([eff('default', '默认')])
     expect(effortOptions(target.efforts).map((o) => o.value)).toEqual(['default'])
     // 官方参照腿：session/selectModel 已录（协议形状参照）
     expect(FIX.apiRef.some((e) => (e.request as { method?: string }).method === 'session/selectModel')).toBe(true)
@@ -210,7 +213,7 @@ describe('step-6 recent-used（最近使用置顶区）', () => {
 describe('step-7 reasoning-tier（切换推理等级档位）', () => {
   it('success（选档即生效）', () => {
     // 回链 contracts/step-7-reasoning-tier.md Outcome:success——选档即转发（乐观呈现，无确认步骤）
-    const efforts = ['minimal', 'default', 'high']
+    const efforts = [eff('minimal', '极低'), eff('default', '默认'), eff('high', '高')]
     let draft: EffortDraft = { pending: false, picked: DEFAULT_EFFORT }
     draft = commitEffort(draft, 'high')
     expect(draft).toEqual({ pending: true, picked: 'high' }) // 乐观（回执前呈现）
@@ -219,16 +222,16 @@ describe('step-7 reasoning-tier（切换推理等级档位）', () => {
     expect(currentEffort(efforts, 'high')).toBe('high') // 会话档在支持列表内取之
     expect(currentEffort(efforts, undefined)).toBe('default') // 缺席取 default
     expect(DEFAULT_EFFORT).toBe('default')
-    // 档位显示词映射（mockup 口径）
+    // 档位显示词映射（adapter name 单源——mockup 口径）
     expect(effortOptions(efforts).map((o) => o.label)).toEqual(['极低', '默认', '高'])
   })
 
   it('out-of-range-fallback（档位越界恢复）', () => {
     // 回链 contracts/step-7-reasoning-tier.md Outcome:out-of-range-fallback——档位值域恒合法
-    const newEfforts = ['low', 'high'] // 切模型后的新档位集
+    const newEfforts = [eff('low', '低'), eff('high', '高')] // 切模型后的新档位集
     expect(currentEffort(newEfforts, 'max')).toBe('low') // 旧档越界 → 回退首档（不残留越界选中）
     expect(currentEffort(newEfforts, 'high')).toBe('high')
-    expect(currentEffort(['default', 'high'], 'max')).toBe('default') // default 优先兜底
+    expect(currentEffort(['default', 'high'].map((id) => eff(id)), 'max')).toBe('default') // default 优先兜底
     // 回执失败回滚 + 越界回退默认档
     const draft = commitEffort({ pending: false, picked: 'low' }, 'max')
     expect(rollbackEffort(draft, 'low').picked).toBe('low')

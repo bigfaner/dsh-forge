@@ -189,7 +189,7 @@ describe('loadDrawerData：grouped 与 read-state 并行（bug ef6afa2a——串
         return new Promise((resolve) => { resolveState = resolve })
       },
     }
-    const pending = loadDrawerData(rpc)
+    const pending = loadDrawerData(rpc as unknown as Parameters<typeof loadDrawerData>[0])
     // 同步窗口内两通道均已发出（并行判据——串行实现此处只有第一通道）
     expect(calls).toEqual([DRAWER_GROUPED_CHANNEL, READ_STATE_CHANNEL])
     resolveState({ ok: true, data: { cursors: { 's-1': 7 } } })
@@ -224,7 +224,7 @@ describe('grouped 快照缓存（bug ef6afa2a——零缓存，每次打开白�
     storeGroupedCache(model)
     const hit = peekGroupedCache()
     expect(hit?.projects[0]?.sessions[0]?.sessionId).toBe('s-1')
-    hit!.projects[0]!.sessions[0]!.sessionId = 'tampered'
+    ;(hit!.projects[0]!.sessions[0] as { sessionId: string }).sessionId = 'tampered'
     expect(peekGroupedCache()?.projects[0]?.sessions[0]?.sessionId).toBe('s-1')
   })
 })

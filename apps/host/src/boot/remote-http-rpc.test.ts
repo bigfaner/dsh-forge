@@ -26,7 +26,7 @@ function fakeReq(body: unknown, url = REMOTE_HTTP_RPC_PATH, method = 'POST') {
   return {
     method,
     url,
-    headers: {},
+    headers: {} as Record<string, string | undefined>,
     on(event: string, cb: (v: unknown) => void) {
       ;(listeners[event] ??= []).push(cb)
       if (event === 'end') queueMicrotask(() => this.emitData()) // body 自动到达（订阅 end 即流毕）
@@ -333,7 +333,7 @@ describe('bug 12f3590f 二次派发防护（响应已写出 = 静默返回，绝
       return []
     }
     const lines: string[] = []
-    const depsWith = () => deps({ diag: (line) => lines.push(line), tasks: { listTasks, taskStats: async () => ({}) } })
+    const depsWith = () => deps({ diag: (line) => lines.push(line), tasks: { listTasks, taskStats: async () => ({}) as never } })
     const p1 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
     const p2 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
     releaseTasks!()

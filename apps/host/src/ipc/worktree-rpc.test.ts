@@ -510,6 +510,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
   })
 
   it('bug 878192ec：非 git 目录（resolveProject null）cwd 直建回退——controller.create({cwd}) 零预铸零分支，sessionId 返回（远程域非 git 项目建会话正门）', async () => {
+    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
     const { controller, calls } = fakeController()
     const { persistence, created } = fakePersistence({})
     const service = createWorktreeRpcService({
@@ -1648,6 +1649,7 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
   })
 
   it('fix-3 judge 判读链异常 fail-open 放行：failOpenDiag emit 于 ALS 上下文内（行带同 trace_id）；放行语义不变', async () => {
+    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
     const alsJudge = createDiagContextStore()
     let openCalls = 0
     const persistence = {

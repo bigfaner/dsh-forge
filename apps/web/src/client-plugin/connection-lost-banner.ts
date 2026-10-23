@@ -39,8 +39,8 @@ function mountBanner(): HTMLElement {
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    'gap:8px',
-    'padding:8px 16px',
+    'gap:8px', // dsw-raw 全宽条带行内缝（局部刻度）
+    'padding:8px 16px', // dsw-raw 全宽条带内距（局部刻度）
     'font:var(--dsw-font-xs-13, 13px sans-serif)',
     'color:var(--dsw-alias-label-on-primary, #fff)',
     'background:var(--dsw-alias-state-error-primary, #d64545)',

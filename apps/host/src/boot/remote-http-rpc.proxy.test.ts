@@ -558,7 +558,7 @@ describe('PSK 隧道域强制位（__rpc 入口拦截器 = 唯一 401 owner）',
     expect(verifyPayload(KP.publicDer, sigMaterial(ct, iv, envelope.seq), Buffer.from(envelope.sig, 'base64'))).toBe(true)
     const plain = JSON.parse(openFrame(dk, 's2c', 'device-A', 1, envelope.seq, iv, ct).toString('utf8')) as { ok: boolean; data: unknown[] }
     expect(plain.ok).toBe(true)
-    expect((plain.data as { items: unknown[] }).items).toHaveLength(4)
+    expect((plain.data as unknown as { items: unknown[] }).items).toHaveLength(4)
     expect(wm.nextSendSeq('device-A', 1)).toBe(2) // s2c seq 单调推进
   })
 

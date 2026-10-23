@@ -76,7 +76,7 @@ export interface RandomSource {
 /** 请求 id 生成（bug c227e548）：crypto.randomUUID 仅安全上下文（https/localhost）暴露
  *  ——LAN 域真机走 http://<IP>:<port> 非安全上下文函数缺席，发送全败。getRandomValues
  *  全上下文在场 → v4 形自拼兜底；安全上下文仍走原生路径。 */
-export function randomRequestId(scope: RandomSource = globalThis.crypto): string {
+export function randomRequestId(scope: RandomSource = globalThis.crypto as RandomSource): string {
   if (typeof scope.randomUUID === 'function') return scope.randomUUID()
   const bytes = new Uint8Array(16)
   scope.getRandomValues(bytes)

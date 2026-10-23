@@ -107,7 +107,7 @@ export function createSettingsSheet(deps: SettingsDeps): SettingsHandle {
     return catalog.current
   }
 
-  function supportedEfforts(): readonly string[] {
+  function supportedEfforts(): readonly EffortOptionInfo[] {
     const current = currentModel()
     if (current === undefined) return []
     return catalog.models.find((model) => isSameModel(model, current))?.efforts ?? []

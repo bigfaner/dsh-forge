@@ -18,7 +18,7 @@
  * worker 筛选 / 检索过滤 / 徽标聚合。
  */
 import type { RemoteRpc } from '../core/rpc.ts'
-import type { DebounceTimers } from './models.ts'
+import type { DebounceTimers, KeyValueStore } from './models.ts'
 import { createDebounce, defaultStore } from './models.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 

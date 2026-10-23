@@ -279,8 +279,9 @@ export function createWorkerSessionView(deps: WorkerSessionDeps): WorkerSessionH
     if (composer === null) return
     composer.setSending(true)
     try {
-      // 注入下一轮：session.prompt steer（目录空 = 字面消息径，无斜杠仲裁扩张）
-      await sendComposerInput(text, { api: deps.api, sessionId: deps.sessionId, catalog: [] })
+      // 注入下一轮：session.prompt steer（目录空 = 字面消息径，无斜杠仲裁扩张；worker 注入
+      // 恒 steer——一次性直发语义，composer 强制档位不适用）
+      await sendComposerInput(text, { api: deps.api, sessionId: deps.sessionId, catalog: [], promptMode: 'steer' })
     } finally {
       composer?.setSending(false)
     }

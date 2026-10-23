@@ -48,6 +48,9 @@ function makeGuardHarness(guardRejects: boolean) {
         return { sessionId: 's-plain' }
       },
       prompt: async () => ({}),
+      selectAgentPreset: async () => ({}),
+      listAgentPresets: async () => ({ presets: [] }),
+      selectModel: async () => ({ selected: true }),
     },
     projectRoot: 'Z:\\proj',
     currentBranch: 'main',

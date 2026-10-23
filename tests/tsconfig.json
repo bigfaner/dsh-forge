@@ -9,6 +9,7 @@
     "declarationMap": false,
     "allowJs": true,
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "allowImportingTsExtensions": true
   },
   "include": ["**/*.ts"]

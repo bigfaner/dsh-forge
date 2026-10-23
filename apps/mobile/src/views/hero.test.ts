@@ -57,7 +57,7 @@ function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harne
         return h.sessionCreateResult as RpcResult<T>
       },
     },
-    api: { createSession: h.createSession, prompt: h.prompt, selectAgentPreset: h.selectAgentPreset, listAgentPresets: h.listAgentPresets },
+    api: { createSession: h.createSession, prompt: h.prompt, selectAgentPreset: h.selectAgentPreset, listAgentPresets: h.listAgentPresets, selectModel: async () => ({ selected: true }) },
     projectRoot: 'Z:/proj',
     currentBranch: 'main',
     currentWorktreePath: 'Z:/proj',
@@ -214,6 +214,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     const { deps } = makeDeps({
       api: {
         createSession: async () => ({ sessionId: 's-x' }),
+        selectModel: async () => ({ selected: true }),
         prompt: async () => ({}),
         selectAgentPreset: async (sessionId, preset) => {
           presetSelects.push([sessionId, preset])
@@ -247,6 +248,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     const { deps } = makeDeps({
       api: {
         createSession: async () => ({ sessionId: 's-y' }),
+        selectModel: async () => ({ selected: true }),
         prompt: async () => ({}),
         selectAgentPreset: async (sessionId, preset) => {
           presetSelects.push([sessionId, preset])
@@ -334,6 +336,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     const { deps, h } = makeDeps({
       api: {
         createSession: async (workspaceId: string) => h.createSession(workspaceId),
+        selectModel: async () => ({ selected: true }),
         prompt: async (...args: Parameters<typeof h.prompt>) => {
           if (promptFails) {
             promptFails = false

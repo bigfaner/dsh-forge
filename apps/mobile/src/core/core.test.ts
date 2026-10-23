@@ -26,7 +26,7 @@ describe('__rpc 信封客户端', () => {
     const insecure = { getRandomValues: (array: Uint8Array) => (array.fill(7), array) }
     const id = randomRequestId(insecure)
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
-    const secure = { randomUUID: () => 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }
+    const secure = { randomUUID: () => 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', getRandomValues: (array: Uint8Array) => array }
     expect(randomRequestId(secure)).toBe('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee') // 安全上下文走原 API
   })
   it('prompt requestId 经 randomRequestId（非安全上下文不抛）', async () => {
