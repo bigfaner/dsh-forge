@@ -139,6 +139,12 @@ export function FactoryChatView(props: {
   grown?: boolean;
   /** 增高上限锚（标题栏底部分隔线 calc——mini-composer 按实测标题栏高计算） */
   grownMaxHeight?: string;
+  /**
+   * fix-21（bug 0cf1818b）：本视图卸载（S2 收起）回调——S2 官方 composer 副本
+   * 卸载会把 shell editor root 置 null（官方 ComposerContentEditable cleanup），
+   * 挂载层据此重绑主视图官方 composer。挂载层注入稳定引用。
+   */
+  onFactoryUnmount?: () => void;
 }): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   // 内容驱动递进：真实内容实测高（null = 未测量/无 RO 环境 → 回落上限锚）。
@@ -147,10 +153,16 @@ export function FactoryChatView(props: {
   // （宿主盒 − scrollport 视口 = composer seat + 间距）。直接观察 occurrence 根
   // 不可用——根 flex:1 拉伸至宿主高（自反馈环，1.38 真机判例 sc138）。
   const [contentH, setContentH] = useState<number | null>(null);
+  const factoryUnmountRef = useRef(props.onFactoryUnmount);
+  factoryUnmountRef.current = props.onFactoryUnmount;
   useEffect(() => {
     setFactoryTarget(hostRef.current);
     return () => {
       setFactoryTarget(null);
+      // fix-21（bug 0cf1818b）：官方 S2 InputBar 卸载 cleanup（shell editor root
+      // 置 null）晚于本 effect——延迟一拍到挂载层重绑缝（rebind 内 root 在场即
+      // 零干预，幂等；重试时序由挂载层有界承担）。
+      setTimeout(() => factoryUnmountRef.current?.(), 0);
     };
   }, []);
   useLayoutEffect(() => {

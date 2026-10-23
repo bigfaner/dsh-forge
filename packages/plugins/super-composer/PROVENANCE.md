@@ -15,3 +15,4 @@
 | 0.2.1 → 0.2.2 | patch | fix-17 退出全屏后现身态不豁免全屏门（bug 2a6ebd3a）：1.47 card 现身态不再绕过可见性门控②——退出全屏替身自动隐藏，重进全屏恢复 |
 | 0.2.2 → 0.2.3 | patch | fix-18 替身回写 setDraft 兜底摧毁官方 quote chip（bug d7fe1ab6）：兜底后按官方 occurrences 备忘逆序重物化幸存 token 为 chip——官方发送链对零 occurrence 草稿跳过 serializeReference，clipboard 投影 `〔引用：…〕` 明文原样落会话消息的面封堵 |
 | 0.2.3 → 0.2.4 | patch | fix-20 引用落正式 composer 时替身误现身（bug 5773b86f）：surfaceOnReference 现身门收敛为通用合取判定 surfaceGateOk（全屏呈现 ∧ 文档活动）——activity/tracker 缺席不再降级恒真放行，非全屏会话视图引用 chip 落官方 composer 时替身零现身 |
+| 0.2.4 → 0.2.5 | patch | fix-21 S2 官方 composer 副本卸载窃 shell editor root、主 composer 写空（bug 0cf1818b）：S2 工厂桥官方 InputBar 卸载把 root 置 null 后主视图永不重绑（官方 ComposerContentEditable 每实例只绑一次）——S2 卸载信号回传挂载层，有界重试以官方 setRootElement 正门重绑主 composer editable（root 在场零干预、fail-soft 全缝） |

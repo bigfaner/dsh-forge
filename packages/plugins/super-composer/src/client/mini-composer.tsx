@@ -102,6 +102,12 @@ export interface MiniComposerProps {
   readonly onCollapseFromCard?: () => void
   /** 折叠态读数上报（挂载层现身判据探测——门控隐藏期视同收起；每次渲染同步） */
   readonly reportCollapsed?: (collapsed: boolean) => void
+  /**
+   * fix-21（bug 0cf1818b）：S2 对话态收起（FactoryChatView 卸载）信号——挂载层
+   * 据此重绑 shell editor root（S2 官方 composer 副本卸载置 null 后主视图官方
+   * composer 空白）。
+   */
+  readonly onS2FactoryUnmount?: () => void
 }
 
 /** 视觉态（collapsed = C 球；expanded = 消息流展开） */
@@ -550,6 +556,7 @@ export function MiniComposerCard(props: MiniComposerProps): React.JSX.Element {
           streaming={props.streaming}
           grown={grown}
           grownMaxHeight={grownMaxHeight}
+          onFactoryUnmount={props.onS2FactoryUnmount}
         />
       ) : null}
 

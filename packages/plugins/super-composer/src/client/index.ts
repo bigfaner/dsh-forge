@@ -187,6 +187,50 @@ function focusFullscreenInputOf(container: HTMLElement): () => boolean {
 }
 
 /**
+ * 官方 shell editor root 窄面（结构读取——漂移/缺席 = undefined 语义 fail-soft）。
+ * 核销：ui-conversation SessionInputShell 暴露 `get editor()`（shell-owned Lexical
+ * editor，facade.ts:119）——SessionInput 接口不载它，但组合层结构读取同 readServiceOf 缝。
+ */
+export interface EditorRootFace {
+  getRootElement(): unknown
+  setRootElement(el: unknown): void
+}
+
+/**
+ * S2 卸载后 shell editor root 重绑主 composer（fix-21，bug 0cf1818b 根因修复落点）。
+ * Root cause: 替身卡 S2 经工厂桥 portal 渲染第二个官方 InputBar occurrence——官方
+ * ComposerContentEditable mount=editor.setRootElement(el)/cleanup=setRootElement(null)
+ * 且每实例只绑一次；S2 卸载把 shell editor root 置 null 后，主视图官方 composer 的
+ * contenteditable 已挂载不再重跑绑定 effect → 官方 composer 空白（草稿仍在 shell）。
+ * 修法：检测「root 为 null ∧ 主 composer editable 在场」时以官方 setRootElement 正门
+ * 重绑（语义同官方绑定 effect）；绑定健康（root 在场）零干预；替身复制件 editable
+ *（data-dscf-official-input 子树）不作目标。全缝 fail-soft。
+ */
+export function rebindMainComposerRoot(doc: Document, editor: EditorRootFace | undefined): boolean {
+  if (editor === undefined || typeof editor !== 'object') return false
+  if (typeof editor.getRootElement !== 'function' || typeof editor.setRootElement !== 'function') return false
+  let root: unknown
+  try {
+    root = editor.getRootElement()
+  } catch {
+    return false
+  }
+  if (root !== null && root !== undefined) return false
+  const inputs = doc.querySelectorAll('[data-composer-input]')
+  for (let i = 0; i < inputs.length; i++) {
+    const el = inputs[i]!
+    if (el.closest('[data-dscf-official-input]') !== null) continue
+    try {
+      editor.setRootElement(el)
+    } catch {
+      return false
+    }
+    return true
+  }
+  return false
+}
+
+/**
  * mini-composer 替身挂载（document 在场前提）：createRoot 替身容器渲染
  * MiniComposerCard——数据面 = createSuperComposerDataFace（真实服务切片：
  * sessions + conversation.input.for + bail + inputTriggers，同 quote-reference 模式）。
@@ -245,6 +289,30 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
     syncListeners.add(listener)
     return () => {
       syncListeners.delete(listener)
+    }
+  }
+  // fix-21（bug 0cf1818b）：S2 官方 composer 副本卸载后 shell editor root 重绑缝。
+  // 替身卡 S2 经工厂桥 portal 的官方 InputBar 卸载时把 shell editor root 置 null
+  //（官方 ComposerContentEditable 每实例只绑一次）→ 主视图官方 composer 空白。
+  // S2 卸载信号由卡片经 FactoryChatView unmount 回传（onS2FactoryUnmount），此处
+  // 有界重试重绑（0/100/300ms——官方子树卸载 cleanup 晚于回调时点也覆盖；root 已在
+  // 即零干预，幂等）。editor 经 composerFaceOf 结构读取（SessionInputShell.editor）。
+  const officialEditorOf = (): EditorRootFace | undefined => {
+    const binding = face.activeBinding()
+    if (binding === undefined) return undefined
+    const officialFace = composerFaceOf(binding.ctx)
+    const editor = (officialFace as { editor?: unknown } | null | undefined)?.editor
+    return editor as EditorRootFace | undefined
+  }
+  const scheduleRootRepair = (): void => {
+    for (const delay of [0, 100, 300]) {
+      setTimeout(() => {
+        try {
+          rebindMainComposerRoot(doc, officialEditorOf())
+        } catch {
+          // fail-soft（官方面漂移只降本面）
+        }
+      }, delay)
     }
   }
   // bug 1ab2f4e6：全屏聚焦缝跨包组合 + 1.45 引用现身缝——cordis 具名服务注册在
@@ -314,6 +382,7 @@ export function mountMiniComposer(doc: Document, ctx: Context, options: MountMin
           composer: face,
           subscribeSync,
           expandRequest,
+          onS2FactoryUnmount: scheduleRootRepair,
           reportCollapsed: (collapsed: boolean) => {
             collapsedProbe.collapsed = collapsed
           },
