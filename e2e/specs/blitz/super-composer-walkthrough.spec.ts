@@ -375,10 +375,17 @@ test('@web-e2e @probe super-composer 真机取证走查（AC1/2/6/7 可达面 + 
     await dscfInput.fill('')
 
     // mention 菜单：替身输入 '@' → 菜单在场性（真机事实面）
-    await dscfInput.click()
-    await page.keyboard.insertText('@')
-    await page.waitForTimeout(800)
-    F.ac4Mention = { visible: await page.locator('[data-testid="dscf-mention"]').isVisible().catch(() => false) }
+    // 加固（1.66 fix-30）：AC4 在 1.66/001 复跑为一次性假阴（fresh bundle 复跑通过定性
+    // 时序敏感噪声）——等待径加固为有界重试（重注入 '@' + 菜单可见轮询），断言语义不变
+    let mentionVisible = false
+    for (let attempt = 0; attempt < 4 && !mentionVisible; attempt++) {
+      await dscfInput.click()
+      await dscfInput.fill('')
+      await page.keyboard.insertText('@')
+      mentionVisible = await page.locator('[data-testid="dscf-mention"]')
+        .waitFor({ state: 'visible', timeout: 2_500 }).then(() => true).catch(() => false)
+    }
+    F.ac4Mention = { visible: mentionVisible }
     console.log('[walkthrough] AC4 mention menu', JSON.stringify(F.ac4Mention))
     expect(F.ac4Mention.visible, 'AC4：替身内 @ 触发官方 mention 菜单投影为 dscf-mention 可见').toBe(true)
     await page.screenshot({ path: join(WALKTHROUGH, '110-11-mention.png'), fullPage: false }).catch(() => undefined)
