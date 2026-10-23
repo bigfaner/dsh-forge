@@ -47,6 +47,7 @@ export async function startPinggyTunnel(
   const startedAt = deps.now()
   return await new Promise<PinggyTunnel>((resolve, reject) => {
     let settled = false
+    let firstErrorLine: string | undefined // stderr/stdout 首个非 URL 非空行（失败原因取证）
     const cleanup = (): void => {
       clearTimeout(timer)
       proc.onLine(noop)
@@ -64,9 +65,16 @@ export async function startPinggyTunnel(
     proc.onLine((line) => {
       const url = PINGGY_URL_RE.exec(line)?.[0]
       if (url !== undefined) settle(() => resolve({ url, process: proc, startedAt }))
+      else if (firstErrorLine === undefined && line.trim() !== '') firstErrorLine = line
     })
     proc.onExit((code) => {
-      settle(() => reject(new Error(`ssh 提前退出（code=${String(code)}）——pinggy 兜底不可用`)))
+      settle(() =>
+        reject(
+          new Error(
+            `ssh 提前退出（code=${String(code)}）${firstErrorLine !== undefined ? `：${firstErrorLine}` : ''}——pinggy 兜底不可用`,
+          ),
+        ),
+      )
     })
     function noop(): void {}
   })

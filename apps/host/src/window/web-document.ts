@@ -66,6 +66,22 @@ export function resolveWebDistDir(env: { DSH_FORGE_WEB_DIST?: string; DSH_FORGE_
   return join(hostRoot(), '..', 'web', 'dist')
 }
 
+/**
+ * mobile-ui 1.7（AD-3）：/remote/ 静态面 dist 根解析——mobile-ui-mockup 单文件产物。
+ * dev = workspace apps/mobile/dist（hostRoot 上溯）；DSH_FORGE_MOBILE_DIST 覆盖（绝对或
+ * 相对 hostRoot）；打包形态默认 = {resources}/mobile-dist（与 web-dist 同构，预留 4.1 同族
+ * 物化位）。与共享 resolveWebDistDir 刻意分立：主进程壳窗口 dist 根语义不被本改指触碰。
+ */
+export function resolveMobileDistDir(env: { DSH_FORGE_MOBILE_DIST?: string; DSH_FORGE_RESOURCES_DIR?: string }): string {
+  if (env.DSH_FORGE_MOBILE_DIST !== undefined && env.DSH_FORGE_MOBILE_DIST !== '') {
+    return resolveFromHost(env.DSH_FORGE_MOBILE_DIST)
+  }
+  if (env.DSH_FORGE_RESOURCES_DIR !== undefined && env.DSH_FORGE_RESOURCES_DIR !== '') {
+    return join(resolveFromHost(env.DSH_FORGE_RESOURCES_DIR), 'mobile-dist')
+  }
+  return join(hostRoot(), '..', 'mobile', 'dist')
+}
+
 /** 相对路径锚 hostRoot（与 profile/paths.ts resolveFromHost 同语义；绝对值原样） */
 function resolveFromHost(p: string): string {
   return isAbsolute(p) ? p : join(hostRoot(), p)

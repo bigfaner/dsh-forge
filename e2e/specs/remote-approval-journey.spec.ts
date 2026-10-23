@@ -16,17 +16,18 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { test, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test'
 import { closeApp, launchHost } from '../support/launch.js'
 import { dismissOnboardingModals } from '../support/modals.js'
 import { registerProject } from '../support/rpc.js'
 import { rmDirBestEffort } from '../support/cleanup.js'
 import { COMPOSER_INPUT } from '../support/anchors.js'
 
-/** 手机远程入口/面板锚（views/remote/ForgeRemoteEntry.tsx 渲染面字面量） */
+/** 手机远程入口/面板锚（views/remote/ForgeRemoteEntry.tsx 渲染面字面量；开关为官方 Switch 件——无 dswf-remote-switch class，以可访问名定位） */
 const REMOTE_ENTRY = '.dswf-remote-entry'
 const REMOTE_PANEL = '.dswf-remote-panel'
-const REMOTE_SWITCH = '.dswf-remote-switch'
+/** 官方 Switch 件（ForgeRemoteEntry.tsx:838-848，props.label 作 accessible name） */
+const remoteSwitchIn = (panel: Locator) => panel.getByRole('switch', { name: '远程访问开关' })
 
 /** 工作区夹具目录（{root}/<name>——注册链承接 canonical 化） */
 function makeWorkspaceFixture(name: string): string {
@@ -119,7 +120,7 @@ test('远程配对→监控→审批旅程：默认关→开启(待重启)→重
     await page.locator(REMOTE_ENTRY).click()
     let panel = page.locator(REMOTE_PANEL)
     await expect(panel, '远程面板开').toBeVisible({ timeout: 10_000 })
-    await panel.locator(REMOTE_SWITCH).click()
+    await remoteSwitchIn(panel).click()
     // 断言一：配置写入成功（forge:settings/get 回读 remoteApproval.enabled = true）
     await expect.poll(() => remoteConfigEnabledOf(page), '产品配置写入成功（remoteApproval.enabled = true）')
       .toBe(true, { timeout: 15_000 })
@@ -202,7 +203,7 @@ test('远程配对→监控→审批旅程：默认关→开启(待重启)→重
     await page.locator(REMOTE_ENTRY).click()
     panel = page.locator(REMOTE_PANEL)
     await expect(panel, '远程面板复开').toBeVisible({ timeout: 10_000 })
-    await panel.locator(REMOTE_SWITCH).click()
+    await remoteSwitchIn(panel).click()
     await expect.poll(() => remoteConfigEnabledOf(page), '产品配置回写 false（remoteApproval.enabled = false）')
       .toBe(false, { timeout: 15_000 })
     await expect(page.locator(REMOTE_ENTRY), '关闭后图标待重启收回提示态（pending）')

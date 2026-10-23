@@ -1,0 +1,65 @@
+# mobile-ui 合并核销记录（verification-record）
+
+记录日期：2026-10-22。本文件只呈现当前事实。
+
+## 结论总览
+
+```mermaid
+flowchart LR
+    A[弃修核销<br/>84edc6ff / f54f54ee<br/>我方 fix-29 / fix-33 弃] --> C[转用户决断<br/>main 预存回归<br/>d639b91b / 04699b06]
+    B[定性更正<br/>TS2559 合并引入<br/>3b629cf6 已修复] --> D[tsc -b 全绿]
+```
+
+## bug 84edc6ff —— 弃修核销
+
+- **症状**：首条消息主树绑定断链。
+- **复现点**：会话发送链首条消息写入时主树绑定缺失，后续消息落错树。
+- **A++ 对应机制**：A++ 预铸串行链下不复现——预铸阶段树绑定已在装配期单点完成，不存在首条消息时的绑定空窗。
+- **处置**：我方 fix-29（9a851d6e）正式弃，价值保留为分支自洽；症状不再出现。
+
+## bug f54f54ee —— 弃修核销
+
+- **症状**：风险框取消后残留草稿重弹。
+- **复现点**：风险确认框取消操作后，草稿未被卸载、再次弹出。
+- **A++ 对应机制**：原症状由 A++ 条件卸载机制覆盖（取消即条件卸载草稿）；现存同族症状为新成因，已另立 bug 04699b06 追踪。
+- **处置**：我方 fix-33（f49214eb）正式弃，价值保留为分支自洽。
+
+## main 基线事实（纯 main 6e98bef3，merge 父；2026-10-22 主会话实测）
+
+纯 main 上以下 3 支 spec 均在同断言行失败，与合并分支上的失败一致：
+
+| spec | 结果 |
+|---|---|
+| worktree-mandatory-bind-1-27 | 同断言行失败 |
+| worktree-pure-selection-1-29 | 同断言行失败 |
+| worktree-confirm-latch-1-34 | 同断言行失败 |
+
+**main 预存回归清单**（转用户决断，不属合并范围）：
+
+- d639b91b
+- 04699b06（f54f54ee 现存同族症状的新成因）
+
+## hero 族 e2e 平价结论
+
+合并分支与纯 main 基线同跑 7 支 hero 族 spec，结果逐支一致——本分支不多败、不新败，**平价通过**：
+
+| spec | 合并分支（7c919b34 基） | 纯 main（6e98bef3） |
+|---|---|---|
+| worktree-workspace-membership-1-28 | ✅ | ✅ |
+| worktree-p1-guards-1-31 | ✅ | ✅ |
+| worktree-hero-chip | ✅ | ✅ |
+| worktree-risk-confirmation | ✅ | ✅ |
+| worktree-mandatory-bind-1-27 | ❌ :164 | ❌ 同断言行 |
+| worktree-pure-selection-1-29 | ❌ :138 | ❌ 同断言行 |
+| worktree-confirm-latch-1-34 | ❌ :152 | ❌ 同断言行 |
+
+- 合并分支运行证据：`{task_logs}/mobile-ui/1.104/001-hero-family-e2e/run.log` + `004-failed-rerun/rerun.log`（两轮独立复跑，3 红均复现、4 绿均稳定）。
+- 纯 main 基线复跑：2026-10-22 主会话在 6e98bef3 实测，同 3 支 spec 同断言行失败（d639b91b / 04699b06 为 main 预存回归），其余 4 支通过。
+
+**核销收口**：bug 84edc6ff / f54f54ee 原症状于合并后代码不复现（A++ 预铸链 / 条件卸载覆盖，弃修核销）；3 支红 spec 为 main 预存回归，保留 open 转用户决断是否顺带修。
+
+## TS2559 定性更正
+
+- **更正前定性**：main 预存——**不成立**。
+- **更正后定性**：合并引入。根 package.json 残留 `@types/node@22.10.2` pin 与子包 24.19.0 双版本并存，导致 `ProcessEnv` 类型分裂，触发 TS2559。
+- **修复**：commit 3b629cf6（移除残留 pin），修复后 `pnpm lint:types`（tsc -b）全绿。

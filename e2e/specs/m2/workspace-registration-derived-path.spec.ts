@@ -5,8 +5,8 @@
 //
 // 载体形态：降桥口径（fix-14——OS 对话框不可 e2e：launchHost 缺省 directoryPickerOff
 // → 目录选择 = 内嵌 2.8 DirectoryBrowser；「系统对话框一步」的 e2e 载体 = 浏览器面，
-// 表单回填/派生行语义同源）。TMP 红线：夹具根置于继承的用户 Temp（勿重定向——
-// 浏览器导航硬编码 AppData/Local/Temp 段）。
+// 表单回填/派生行语义同源）。TMP 口径：夹具根经 os.tmpdir()（fix-10 dispatch 重定向在期
+// 即落 .e2e-tmp）——浏览器导航段从夹具绝对路径推导（fix-11），无 %TEMP% 位置假设。
 //
 // Fact Table 摘录（源码核实）：
 //   - 两段模态相位 .dswf-ap[data-dswf-ap="browser|form|success"]（addProjectPhase）；
@@ -48,7 +48,7 @@ import { deriveTaskStoreDir, flattenWorkspacePath, hash8OfPath } from '../../../
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
-import { enterDir, dirRow } from '../../support/navigation.js'
+import { enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import { AP_ANY, CTA_ADD_PROJECT, DSR_DIR, DSR_ERROR, NAV_ADD_PROJECT, addProjectPhase, dsrOf, projectRowOf, rfBrowsing, rfIssue } from '../../support/anchors.js'
 
 /** 表单段走查：入口 → 浏览器 → 夹具根 → 选目录 → 下一步 → 表单就位（sc-branch 同径） */
@@ -59,10 +59,9 @@ async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: 
     await page.locator(NAV_ADD_PROJECT).first().click()
   }
   await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-  for (const segment of ['AppData', 'Local', 'Temp']) {
+  for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -353,10 +352,9 @@ test('@web-e2e @m2 注册派生·Step3d 已注册幂等复用：StateChip + 挂�
     // 次轮：对已注册目录再次提交 → 表单事前「已注册」StateChip + 幂等返回（不报错不建重复库）
     await page.locator(NAV_ADD_PROJECT).first().click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible({ timeout: 30_000 })
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
     // 单击选中（双击 = 进入目录——DirectoryBrowser 行语言）→ 选中行呈现「已注册」标记
     await dirRow(page, 'ws-idem').click()
     await expect(dirRow(page, 'ws-idem'), '浏览器行「已注册」标记在场（行级标记判据）').toContainText('已注册')
@@ -412,10 +410,9 @@ test('@web-e2e @m2 注册派生·Step2b 同主体异路径：hash8 消歧各自�
     for (const [dir, name] of [[nestedDir, '嵌套路径'], [flatDir, '连字符路径']] as const) {
       await page.locator(NAV_ADD_PROJECT).first().click()
       await expect(page.locator(addProjectPhase('browser'))).toBeVisible({ timeout: 30_000 })
-      for (const segment of ['AppData', 'Local', 'Temp']) {
+      for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
         await enterDir(page, segment)
       }
-      await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
       if (dir === nestedDir) await enterDir(page, 'aa')
       await dirRow(page, dir === nestedDir ? 'bb' : 'aa-bb').click()
       await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()

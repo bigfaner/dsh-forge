@@ -10,21 +10,19 @@ ui-baseline: .forge/docs/proposals/mobile-ui/mobile-ui-mockup-final.html
 
 ## 概述
 
-mobile = 纯 view 层独立工程（`apps/mobile`）：TypeScript 源码经 esbuild 打包为单文件 dist，由 host `/remote/` 静态面服务；数据面双通道——官方 API 面（`/api/rpc` + `/api/session/stream`，零改动）直连 + forge 扩展面（`/remote/__rpc` allowlist 扩充 + 薄方法）。手机端只做「接收数据、渲染页面、转发输入与动作意图」。
+mobile = 纯 view 层独立工程（`apps/mobile`）：TypeScript 源码经 esbuild 打包为单文件 dist，由 host `/remote/` 静态面服务；数据面单通道——`POST /remote/__rpc`（`forge:proxy/*` 官方能力 in-process 代理 + `forge:remote/*` forge 原生通道，R12 终版）；事件流 = 加密 SSE `GET /remote/forge-stream`（host 事件镜像逐帧推送）。手机端不 boot 官方 client、不消费 `/api` 官方面。手机端只做「接收数据、渲染页面、转发输入与动作意图」。（传输面裁决正本 = tech-research R12。）
 
 ## 架构图
 
 ```mermaid
 flowchart LR
     subgraph host [apps/host（改动收敛于两面）]
-        STATIC["/remote/ 静态面<br/>remoteViewIndexTap 改指 mobile dist"]
-        RPC["/remote/__rpc<br/>allowlist 扩充 + 薄方法"]
-        OFFICIAL["官方 /api/rpc + SSE<br/>零改动"]
-        READSTATE["read-state 已读游标<br/>dsh-storage domain 表"]
-        RPC --> READSTATE
+        STATIC["/remote/ 静态面<br/>mobile dist + 官方注入行<br/>plugins 302 / api 307 通道重定向"]
+        RPC["/remote/__rpc<br/>forge:proxy/* in-process 代理<br/>+ forge:remote/* 原生通道"]
+        FSTREAM["/remote/forge-stream<br/>加密 SSE 事件镜像"]
     end
     subgraph mobile [apps/mobile（新工程）]
-        CORE["core/：rpc 客户端·SSE 引擎·store·router"]
+        CORE["core/：rpc 客户端·forge-stream 引擎<br/>wire 投影·store·router"]
         VIEWS["views/：chat·drawer·hero·ask·settings·models·tasks·worker·reader"]
         WIDGETS["widgets/：消息卡家族·composer·悬浮球·文档卡"]
     end
@@ -33,8 +31,8 @@ flowchart LR
     PHONE -->|GET /remote/| STATIC
     STATIC --> MOBILE_DIST
     MOBILE_DIST -.->|单文件产物| PHONE
-    CORE -->|对话全链| OFFICIAL
-    CORE -->|任务/分支/未读/断开| RPC
+    CORE -->|对话数据（forge:proxy）| RPC
+    CORE -->|会话事件流| FSTREAM
     VIEWS --> CORE
     WIDGETS --> CORE
 ```
@@ -48,7 +46,7 @@ flowchart LR
 | UI runtime | vanilla DOM / Preact / lit | 提案裁决无框架 runtime（重评阈值未触发）；桌面组件不可迁移（pointer/hover 密度） | **vanilla DOM**（模板函数 + 事件委托，零运行时依赖） |
 | 路由 | 自写 hash router / naive-router 库 | 页面 ≤9、无嵌套守卫需求；引库违背零依赖 | **自写 hash router**（~60 行：`#/chat/:id` 等 5 路由 + 浮层不走路由） |
 | md 渲染 | 自写轻量函数 / markdown-it / 照搬官方页实现 | 官方手机页自带 `markdown()`/`inlineMarkdown()` vanilla 实现（tech-research R8 实证）——同构分叉下照搬即最大化复用 | **实现照搬官方 md 函数语义 + 样式以原型（DESIGN.md 令牌）为准**（用户裁决 2026-10-17）+ `@dsh-forge/md-mermaid` DOM 增强器动态 import |
-| 状态 | 模块级 store（发布订阅） / Redux 类 | 单页单会话、SSE 单源；发布订阅足矣 | **自写 20 行 store**（`{get,set,subscribe}`），revision 守卫内置 |
+| 状态 | 模块级 store（发布订阅） / Redux 类 | 单页单会话、forge-stream 单源；发布订阅足矣 | **自写 20 行 store**（`{get,set,subscribe}`），revision 守卫内置 |
 
 ## 架构决策（ADR 风格）
 
@@ -58,11 +56,11 @@ flowchart LR
 - 权衡：②减少一次往返但引入双源真值（手机判 stale vs host 判冲突），分歧路径不可测；①的代价仅为一次 RTT，且确认框交互已定稿。
 - 决策：**①**。手机端所有动作 = `POST /remote/__rpc {channel, payload}` 意图信封；校验失败 = host 回 `{ok:false, error:{code, reason}}` → 手机端渲染确认框/提示。判据字段（`mode`/`activity`/`label`/`source.kind`）只读不推理。
 
-### AD-2 双通道分工（官方面管对话，forge 面管任务域）
+### AD-2 单通道分工（forge:proxy 管对话，forge:remote 管任务域）
 
-- 候选：①全部走 `/remote/__rpc` 转发；②官方面直连 + forge 面扩展。
-- 权衡：①需在 host 重实现 session.proxy 层（转发即新增 host 代码，违背零改动裁决）；②对话链复用官方已实证契约（SSE 合帧/重连/revision 守卫），host 零改动。
-- 决策：**②**。手机页同源 fetch/EventSource 直连官方面；任务域走 forge 扩展面。
+- 候选：①（原）官方面直连 + forge 面扩展；②全部经 `/remote/__rpc` 单通道。
+- 权衡：①已被 R12 安全裁决证伪——mobile 不 boot 官方 client 运行时、不消费 `/api` 官方面（含 LAN）；②单通道 + PSK v3 安全层同构覆盖 LAN/隧道，官方能力经 host in-process 直调零损耗。
+- 决策：**②**。对话链数据 = `forge:proxy/*` 代理通道（官方能力 in-process 直调——`_request` 问题不存在）；事件流 = `forge-stream` 镜像；任务域 = `forge:remote/*` 原生通道。
 
 ### AD-3 dist 接入 = 静态面改指，不动官方 webServer
 
@@ -85,7 +83,7 @@ flowchart LR
 | B 系统层轻投影 | `forge/progress`（循环卡正本）、`user/message`·`source.kind:'forge-loop'`（**followup 循环叙述卡——特殊处理，非用户气泡**）、`model-selection` notice、`compaction/summary`、`session/title`（标题）、`command/run`+`command/done`（**成对投影**——开始态必须有配对终态，防悬挂「进行中」）、`deliverables/presented`（文档卡双行确定处置：卡+链接行）、`plan/mode` | 循环卡/循环叙述卡/chip/系统行 |
 | C 只读提示 | `approval/asked`、`approval/decided` | 只读审批提示卡（成对：decided 到达更新 asked 卡；手机端不做审批交互——既有 approval 通道负责） |
 | D 特判 | `assistant/attempt`（失败尝试）、`user/message`·`source.kind` **未知（中性系统行，非蓝气泡——unknown≠人工）** | 默认不渲染 / 中性系统行 |
-| E 忽略（状态与机械） | `system/message`（**source.kind:'system-prompt' 的系统提示——surfaceOp:'append' 也不投影**）、`turn/start·end`、`step/start·end`、`request/header·context`、`permission/preset`、`sandbox/mode`、`approval/policy`、`agent-preset/selected`、`agent/inbox/spliced`、`session/title-llm-request`、`llm/retry·retry-started`、`web/deepseek-search-llm-request`、`workspace/changes`、`session/end-seed`、`compaction/start·end·prune`（prune 需钳制 lastReadSeq 与可见计数——被裁事件不计为未读）、`command/done`（并入 B 配对口径）、`subagent/catalog`（task 浮层经薄方法读，非消息流）、`model/selection`（结构事件） | 零渲染，skippable 纪律兜底 |
+| E 忽略（状态与机械） | `system/message`（**source.kind:'system-prompt' 的系统提示——surfaceOp:'append' 也不投影**）、`turn/start·end`、`step/start·end`、`request/header·context`、`permission/preset`、`sandbox/mode`、`approval/policy`、`agent-preset/selected`、`agent/inbox/spliced`、`session/title-llm-request`、`llm/retry·retry-started`、`web/deepseek-search-llm-request`、`workspace/changes`、`session/end-seed`、`compaction/start·end·prune`（prune 需钳制本地游标与可见计数——被裁事件不计为未读）、`command/done`（并入 B 配对口径）、`subagent/catalog`（task 浮层经薄方法读，非消息流）、`model/selection`（结构事件） | 零渲染，skippable 纪律兜底 |
 
 **判定顺序与信封注记**：`user/message` 判定顺序 = `source.kind` 分派（'user'→A / 'forge-loop'→B 叙述卡 / 'model-selection'→B chip / 未知→D 中性系统行）；`surfaceOp` 为**条件字段**（仅五类 SurfaceEventType 携带，`tool/call` 等无）——投影判据 = 事件类型 + kind 白名单，不得以「surfaceOp:'append'」为投影条件；**成对纪律**：开始态事件（command/run、approval/asked）必须声明配对终态，终态缺失 = 渲染为可收起 chip 而非常驻卡。
 
@@ -93,54 +91,17 @@ flowchart LR
 
 - 决策：mobile 构建一律 run-once 命令（禁 `--watch` 形态）；host 质量门/dev 流程同既有仓库口径。`/remote/` 启动时若 dist 缺席 fail-soft 降级为提示页。
 
-### AD-6 未读 = seq 游标（read-state），非时间戳
+### AD-6 未读 = 手机端 localStorage 已读游标（2026-10-17 裁决——read-state host 面不建）
 
-- 候选：①时间戳 lastSeen（对比新消息 time）；②seq 游标 lastReadSeq（对比 SessionEvent.seq）。
-- 权衡：①时钟依赖、乱序敏感，且 dsh 消息体的排序/守卫正本本就是单调 seq；②O(1) 计算（**unread = host append 监听按可见事件白名单维护的计数器**——A/B 档投影类型才计，机械事件不计防虚大）、与 revision 守卫同源（seq 重放重建）。
-- 决策：**②**。命名随之正名为 `read-state`（`forge:remote/read-state` 通道 / `ReadStateEntry`——lastseen 的时间戳词不再名不副实）。host 进程内监听 session append 维护 `tailSeq` 与可见事件计数（内存，零持久化）；持久侧只存游标（载体见 AD-7）。
-- **计算单源纪律**：`unread` 只在 host 计算（tailSeq 监听仅在 host 进程可达）；移动端/桌面端一律经通道读结果，**不各自独立计算**——移动端「触底后本地置 0」仅为显示层乐观更新，下次读即对账，不构成第二计算源（与 AD-1 无双源真值同纪律）。
-
-### AD-7 read-state 载体 = 官方 dsh-storage domain 域表（不自持文件、不进会话日志）
-
-- 候选：①写进会话日志（session store）；②手机页 localStorage；③自持独立 JSON 文件；④**官方 `dsh-storage-domain` 域表**。
-- 权衡：①读端视图状态不是会话数据，写日志撞「会话格式零改动」裁决；②换设备丢失、抽屉跨会话聚合无源、桌面复用不了；③自持文件要自己实现原子写/写链/损坏恢复——而官方 `dsh-storage` + `dsh-storage-domain` + `dsh-storage-json`（dsh-home storages/*.json 即其产物）已提供 DomainSpec 声明、KvTable 类型化读写、单域写链原子化、`domain/changed` 事件、损坏边界——自持即重复造轮子；④零基础设施新增，只声明一个 DomainSpec。
-- 决策：**④**。`read-state` 注册为独立 domain（表 `sessionReadState`，键 = SessionId，值 = `{lastReadSeq}`）——**独立性只到 domain 层（与其它域数据隔离、可单独演进 schema），基础设施（原子写/落盘/事件）全部复用官方存储缝**。目录树中 `remote-read-state.ts` 相应改为 `read-state-domain.ts`（DomainSpec 注册 + 薄方法 handler），无自持文件、无自写原子写。
-- **复用前提（2026-10-17 核实）**：host package.json 现无 `dsh-storage*` 依赖、仓内零 import——但存储缝已在运行时活动（`dsh-home/storages/*.json` 由官方发行组合的存储域路由写：`dsh-schedule` 的 tasks 表即 DomainTableSpec、`dsh-session-projection-cache` spec 注明「shipped composition's json」medium）。落地（R9#4 已核实简化）：**dsh-base 组合已挂载三件**（hub/json-domain——json root 已指 dsh-home/storages），host profile.dev bundles 含 dsh-base → 直接声明 read-state DomainSpec 即可；仅 devDeps 补类型引用（传递依赖已装）。三包能力/边界全谱与 read-state 实现精化（**single 布局 + `KvTable.update()` 原子 RMW 实现单调守卫**）见 [tech-research.md](tech-research.md) R6。
-- **实时未读口径 = 轮询 + 本地归零**（配对隧道无常连推送）：抽屉打开时批量读；抽屉存留期间轻 RPC 轮询（默认 15s，可配常量——同源 POST 成本极低，与 SSE 断线退避同族口径）；会话内触底写游标后**本地即时置 0**（不等网络往返）。
-
-### read-state 写入与消费流程
-
-**写入流程**（谁在什么时候推进游标）：
-
-```mermaid
-flowchart TD
-    A[session append 事件<br/>host 进程内监听] --> B[tailSeq 更新<br/>可见事件 → 计数器++]
-    B --> C[unread = tailSeq − lastReadSeq<br/>内存即时可读]
-    D[手机端打开会话 / 消息区触底] --> E["write 意图信封<br/>sessionId + seq=tailSeq"]
-    E --> F["host 校验 seq ≤ tailSeq<br/>domain put（写链原子落盘）"]
-    F --> G[计数器清零·unread=0]
-    D2[桌面端打开会话<br/>同通道复用] --> E
-```
-
-**消费流程**（抽屉双级未读徽标聚合）：
-
-```mermaid
-sequenceDiagram
-    participant P as 手机页·抽屉
-    participant RPC as /remote/__rpc
-    participant H as host read-state 服务
-    P->>RPC: read-state batch read {sessionIds}
-    RPC->>H: 逐会话 {seq, unread}
-    H-->>RPC: [{sessionId, unread}...]
-    RPC-->>P: 聚合：会话行徽标 + 项目组徽标（双级求和）
-    Note over P: 点进会话 → 触底 → write 游标 → 徽标归零
-```
+- 裁决：read-state host 面**不建**——不注册 domain 域表、不建 `forge:remote/read-state` 薄方法、不做 host tailSeq 监听。手机端未读游标 = **localStorage**。
+- 口径：游标与可见计数存手机端 localStorage（按配对域隔离）；会话内打开/触底推进游标，抽屉双级未读徽标本地聚合计算；写路径纯本地零网络往返。换设备/清存储未读丢失可接受——视图级状态，进会话即对齐。
+- 已撤销候选留痕：seq 游标 + 官方 `dsh-storage-domain` 域表（原 AD-6/AD-7 方案）——存储缝能力核销结论仍见 tech-research R6，仅方案撤销（2026-10-17）。
 
 ## 模块/包设计（apps/mobile）
 
-- **能力边界**：只管「契约字段 → DOM」与「用户输入 → 意图信封」；不管校验、循环、缓存策略（分页由 `hasMore` 驱动）、任何持久化（唯一例外 localStorage 最近使用模型——纯视图偏好）。
+- **能力边界**：只管「契约字段 → DOM」与「用户输入 → 意图信封」；不管校验、循环、缓存策略（分页由 `hasMore` 驱动）、任何持久化（唯一例外 localStorage——最近使用模型 + 未读游标，纯视图状态）。
 - **职责划分**：
-  - `core/`：`rpc.ts`（`__rpc` 信封客户端）、`api.ts`（官方面窄面）、`sse.ts`（EventSource + rAF 合帧 + 退避轮询 + 心跳判活）、`wire.ts`（SessionEvent 判别集窄化 + 投影纯函数——fake 可测主战场）、`store.ts`、`router.ts`。
+  - `core/`：`rpc.ts`（`__rpc` 信封客户端——forge:proxy/forge:remote 双族）、`api.ts`（forge:proxy 通道族窄面：session-page·session-prompt·session-projections·user-questions-answer·session-select-model·session-model-catalog·commands-execute·session-list·session-create）、`stream.ts`（forge-stream SSE 客户端——rAF 合帧 + 自研三值退避 + 心跳判活 + 覆盖层状态机）、`wire.ts`（SessionEvent 判别集窄化 + 投影纯函数——fake 可测主战场）、`store.ts`、`router.ts`。
   - `views/`：一屏一文件（chat/drawer/hero/ask/settings/models/tasks/worker/reader），只做装配。
   - `widgets/`：消息卡家族（气泡/thinking/ioCard/终端块/循环卡/chip/acard/文档卡）、composer、悬浮球、确认框。
 - **依赖方向**：`views → widgets → core`，禁止反向；`core` 不 import views/widgets。
@@ -156,9 +117,9 @@ apps/mobile/
 ├─ src/
 │  ├─ main.ts                  # mount(root)：路由注册 + 首屏装配
 │  ├─ core/
-│  │  ├─ rpc.ts                # /remote/__rpc 信封客户端（{channel,payload}→{ok,data}|{ok,error}）
-│  │  ├─ api.ts                # 官方面窄面：session.history/prompt/rpc、interaction.*、workspace.list
-│  │  ├─ sse.ts                # EventSource(命名事件 snapshot/event) + rAF 合帧 + 官方三值退避轮询(250/750/5000ms) + 心跳判活 + 覆盖层状态机
+│  │  ├─ rpc.ts                # /remote/__rpc 信封客户端（{channel,payload}→{ok,data}|{ok,error}）——forge:proxy/forge:remote 双族
+│  │  ├─ api.ts                # forge:proxy 通道族窄面：session-page·session-projections·user-questions-answer·session-select-model·session-model-catalog·commands-execute·session-list·session-create
+│  │  ├─ stream.ts             # forge-stream SSE 客户端：加密帧 + rAF 合帧 + 自研三值退避(250/750/5000ms) + 心跳判活 + 覆盖层状态机
 │  │  ├─ wire.ts               # SessionEvent 判别集窄化 + 投影纯函数（fake 可测主战场）
 │  │  ├─ store.ts              # {get,set,subscribe} + revision 守卫
 │  │  └─ router.ts             # hash router（5 路由 + 浮层管理）
@@ -174,22 +135,21 @@ apps/mobile/
 └─ dist/                       # 构建产物（run-once 产出；静态面服务目标）
 
 apps/host/src/boot/
-├─ child.ts                    # 改：/remote/ 静态面改指 + rpc deps 注入扩充
-├─ remote-http-rpc.ts          # 改：allowlist 扩充 + 薄方法 handler（纯函数）
-└─ read-state-domain.ts        # 新：read-state DomainSpec + 薄方法 handler（官方存储缝；host 共享能力，非 mobile 专属）
+├─ child.ts                    # 改：/remote/ 静态面改指 + rpc deps 注入扩充（forge:proxy 代理服务）
+└─ remote-http-rpc.ts          # 改：allowlist 扩充（forge:proxy 通道族）+ 薄方法 handler（纯函数）
 
 packages/contracts/src/
-└─ remote-channels.ts          # 改：REMOTE_CHANNELS 扩充（read-state）
+└─ remote-channels.ts          # 改：forge:proxy/* 通道族 DTO 类型（zod）
 ```
 
 ### 关键逻辑 UML
 
-**SSE 连接状态机**（`core/sse.ts`——对话可用性的核心逻辑；含心跳判活与 teardown 纪律）：
+**连接状态机**（`core/stream.ts`——对话可用性的核心逻辑；事件源 = forge-stream SSE，恢复策略 = 自研三值退避，心跳判活与 teardown 纪律保留）：
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Live : EventSource open
-    Live --> Live : message 事件→rAF 合帧投影·心跳时间戳刷新
+    [*] --> Live : EventSource open（forge-stream）
+    Live --> Live : forge-stream 帧→rAF 合帧投影·心跳时间戳刷新
     Live --> Degraded : error / 心跳超时(15s 间隔·30s 无数据判死→close)
     Degraded --> Degraded : 轮询 250ms(活跃)/750ms(空闲)→5s 封顶退避 + 覆盖层
     Degraded --> Live : 轮询成功→EventSource 重建
@@ -200,7 +160,7 @@ stateDiagram-v2
     Offline --> [*] : 路由离开会话（teardown 同上）
 ```
 
-- **双通道写纪律**：Degraded 期间轮询与 EventSource 重连并存时，全部写入经 store 的 **seq 单调门**（每事件按 seq 丢弃 ≤ 已应用 seq 的写入；live-chunk 按 attemptId+index 去重）——20 行 revision 守卫之上再加此单调合并层，禁止双通道裸写。
+- **双通道写纪律**：Degraded 期间轮询与 forge-stream 重连并存时，全部写入经 store 的 **seq 单调门**（每事件按 seq 丢弃 ≤ 已应用 seq 的写入；live-chunk 按 attemptId+index 去重）——20 行 revision 守卫之上再加此单调合并层，禁止双通道裸写。
 - **半开连接**：心跳判活即半开对策（readyState OPEN 但 30s 无数据 → 主动 close → Degraded）。
 
 **消息结算状态机**（`core/wire.ts`——**per-attemptId 子状态机**；配对键来自 `window.change` 判别帧 `{kind:'settle-assistant', attemptId, entry}`——持久 `assistant/message.data` 无 attemptId 字段，不得与 live-chunk 直接配对）：
@@ -233,61 +193,43 @@ flowchart TD
     G -->|仍要| D
 ```
 
-**未读计算与已读上报**（AD-6 seq 游标）：
-
-```mermaid
-sequenceDiagram
-    participant H as host（read-state 服务）
-    participant F as read-state domain 表
-    participant P as 手机页
-    Note over H: 监听 session append（进程内）<br/>tailSeq[session]++ · 可见事件计数器++
-    P->>H: read {sessionId}（打开抽屉/会话列表）
-    H->>F: 载入 lastReadSeq
-    H-->>P: {seq, unread = tailSeq − lastReadSeq}
-    P->>P: 打开会话/触底 → 转发写意图
-    P->>H: write {sessionId, seq: tailSeq}
-    H->>F: 原子重写游标
-    H-->>P: {seq, unread: 0}
-    Note over H: 重启后：session store 按 seq 范围重放重建计数
-```
-
-**历史分页时序**（`session.history` + `hasMore`）：
+**历史分页时序**（`forge:proxy/session-page` + `hasMore`）：
 
 ```mermaid
 sequenceDiagram
     participant V as chat 视图
     participant S as store
-    participant API as /api/rpc
-    V->>API: session.history(id, maxMessages=10)
+    participant API as /remote/__rpc（forge:proxy）
+    V->>API: forge:proxy/session-page {sessionId, maxMessages:10}
     API-->>S: window{entries, hasMore:true, revision}
     V->>V: 渲染窗口·上翻到顶触发
-    V->>API: history 更早页（锚 = 首条 seq）
+    V->>API: session-page 更早页（锚 = 首条 seq）
     API-->>S: prepend 旧页 + hasMore
     S-->>V: revision 递增→比对守卫后重渲染（滚动锚保持）
 ```
 
 ## 跨模块交互契约
 
-- **流通道（官方手机页实证，tech-research R1）**：
-`new EventSource('/api/session/stream?sessionId=…')`，两个**命名事件**——`snapshot`（`{records, projections}` 全量应用）与 `event`（增量，`frame.event || frame`，帧内瞬态类型真名 `assistant/chunk`，非 chunk 触发 pending 同步 150ms 防抖）；`onerror` → 降级轮询。RPC = `POST /api/rpc {method,payload}` → `{ok,error?}`，401/fetch 异常 → disconnected 覆盖层。轮询常量照官方三值：活跃 250ms / 空闲 750ms / 封顶 5000ms；`visibilitychange` 前台回连（官方同款）。
+- **通道（R12 终版口径，tech-research R12）**：
+单呼 = `POST /remote/__rpc {channel:'forge:proxy/<方法>', payload}` → `{ok,data}|{ok,error}`（官方能力 host in-process 直调）；事件流 = 加密 SSE `GET /remote/forge-stream`（host 事件镜像逐帧推送：api-session/*、审批、任务进度）；降级轮询保留（活跃 250ms / 空闲 750ms / 封顶 5000ms）；`visibilitychange` 前台回连。401/fetch 异常 → disconnected 覆盖层。
 
-### 流程时序 1：对话全链（官方面，零 host 改动）
+### 流程时序 1：对话全链（forge:proxy + forge-stream）
 
 ```mermaid
 sequenceDiagram
     participant P as 手机页
-    participant API as /api/rpc
-    participant SSE as /api/session/stream
-    P->>API: session.history(sessionId, maxMessages=10)
-    API-->>P: SessionEventWindow{entries, hasMore, revision}
-    P->>API: session.prompt(mode:steer)
-    P->>SSE: EventSource 订阅
+    participant RPC as /remote/__rpc（forge:proxy）
+    participant SSE as /remote/forge-stream
+    P->>RPC: forge:proxy/session-page {sessionId, maxMessages:10}
+    RPC-->>P: SessionEventWindow{entries, hasMore, revision}
+    P->>RPC: forge:proxy/session-prompt {sessionId, mode:steer}
+    P->>SSE: forge-stream 订阅
     SSE-->>P: assistant/live-chunk{attemptId, chunk}
     Note over P: rAF 合帧→text/reasoning delta 投影
     SSE-->>P: assistant/message（终态）
     Note over P: settle-assistant：按 attemptId 原子取代 transient 行
-    SSE--xP: 断线
-    Note over P: 轮询 250/750ms→5s 封顶 + 断线覆盖层；恢复后自愈续流
+    SSE--xP: 断流
+    Note over P: 自研三值退避重连 + 轮询 250/750ms→5s 封顶 + 断线覆盖层；恢复后自愈续流
 ```
 
 ### 流程时序 2：任务意图转发（forge 面，host 守卫）
@@ -297,8 +239,8 @@ sequenceDiagram
     participant P as 手机页
     participant RPC as /remote/__rpc
     participant H as host 守卫
-    P->>API: 官方指令执行远程面（/ 前缀仲裁后——CommandRuntime 同径）
-    P->>API: session.prompt 指令文本（/run-dag-tasks、/stop-dag-tasks——与发消息同流）
+    P->>RPC: forge:proxy/commands-execute（/ 前缀仲裁后——CommandRuntime 同径）
+    P->>RPC: forge:proxy/session-prompt 指令文本（/run-dag-tasks、/stop-dag-tasks——与发消息同流）
     alt 校验通过
         H-->>RPC: {ok:true, data:{task}}
         RPC-->>P: 刷新任务卡
@@ -310,7 +252,7 @@ sequenceDiagram
 
 ### 交互方式
 
-同步 HTTP RPC（信封 `{ok,data}|{ok,error}`，ipc 信封同语义——既有 `remote-http-rpc.ts` 口径不变）；对话流 = SSE 推 + 断线轮询兜底。选型理由：任务域低频、强守卫，同步信封足够；对话流高频单向，SSE 原生重连最小成本。
+同步 HTTP RPC（信封 `{ok,data}|{ok,error}`，ipc 信封同语义——既有 `remote-http-rpc.ts` 口径不变）；对话流 = forge-stream 推 + 断线轮询兜底。选型理由：任务域低频、强守卫，同步信封足够；对话流高频单向，SSE 原生重连最小成本。
 
 ### 契约数据模型（forge 扩展面 allowlist 增量）
 
@@ -319,30 +261,30 @@ sequenceDiagram
 | `forge:remote/progress`（已有） | 读 | `RemoteProgressQuery` → `{tasks, stats}` | 不变 |
 | `forge:remote/approval`（已有） | 意图 | `RemoteApprovalDecisionInput` → `RemoteApprovalForwardResult` | 不变 |
 
-| 指令动作（**无专用通道**，源码核实修正 2026-10-17） | 意图 | 手机端 UI-adapter 仲裁：`/` 前缀解析 → 官方指令执行远程面（CommandRuntime=TypertRemoteService）；未命中目录 → 字面消息 | slash 仲裁本就在 interactive UI adapter（官方 CommandUiRuntime 契约）——手机页履行同契约，host 零新代码；执行 RPC 形状批次①录制钉死 |
+| 指令动作（**无专用通道**，源码核实修正 2026-10-17） | 意图 | 手机端 UI-adapter 仲裁：`/` 前缀解析 → `forge:proxy/commands-execute`（官方 CommandRuntime in-process 直调）；未命中目录 → 字面消息 | 手机页履行官方 UI adapter 契约（slash 仲裁本在 interactive UI adapter）；执行 RPC 形状批次①录制钉死 |
+| `forge:proxy/*`（**新增代理通道族**——官方能力 in-process 直调） | 读/意图 | session-page·session-prompt·session-projections·user-questions-answer·session-select-model·session-model-catalog·commands-execute·session-list·session-create（DTO zod 校验） | host 侧代理 handler（纯函数，fake 可测）；R12 终版——mobile 不直调 `/api` |
 | `forge:worktree/branches`、`forge:worktree/list`、`forge:worktree/sessionCreate`（透传） | 读/意图 | 桥上已有通道透传 | child.ts 桥直通 |
 | ~~`forge:remote/session-links`~~（**延后可选**） | 读 | —— | hero 乐观切换 + 建会话守卫回执兜底；预检组合收益/侵入比最低（api-handbook 1.2） |
-| `forge:remote/read-state`（**唯一新增薄方法**） | 读/写 | 读 `{sessionId}` → `{seq, unread}`（域重建窗口返回 `stale:true`）；写 `{sessionId, seq}` → `{seq, unread}`（**host 单调守卫：仅接受 seq > 当前 lastReadSeq**，防旧端写回退；越界 clamp 至 tailSeq） | read-state domain 表（**官方 dsh-storage 缝，host 共享能力**；AD-6/AD-7；写链 + 单调守卫） |
-| ~~`forge:remote/workers`~~（**撤销——官方面派生**） | 读 | —— | `session.list`（parentSessionId/origin/running）视图过滤 + 父会话 `subagent/catalog` 持久事件投影（mode/label）；见 api-handbook 1.2 |
+| ~~`forge:remote/read-state`~~（**撤销——2026-10-17 裁决**） | 读/写 | —— | 手机端未读游标 = localStorage（AD-6） |
+| ~~`forge:remote/workers`~~（**撤销——官方面派生**） | 读 | —— | `forge:proxy/session-list`（parentSessionId/origin/running）视图过滤 + 父会话 `subagent/catalog` 持久事件投影（mode/label）；见 api-handbook 1.2 |
 | `forge:remote/disconnect`（已有）+ 状态读 | 意图/读 | — | 不变 |
 
-## 数据模型（db-schema: yes）
+## 数据模型（db-schema: no）
 
-持久化仅一处：per-session `lastReadSeq`（已读游标），载体 = **官方 `dsh-storage-domain` 域表**（`read-state` domain / 表 `sessionReadState`；JSON backend 落 dsh-home storages，原子写链与 change 事件由存储缝提供，零自持文件）。**定位 = host 共享数据能力，不绑定移动端**：通道与 DomainSpec 注册在 host 侧 contracts，桌面端（web-app/IPC）可直接复用同一域表与通道。未读 = **可见事件计数器**（AD-6：host append 监听按可见类型白名单计数；重放重建按 seq 范围数可见事件）。ER 与结构声明见 [er-diagram.md](er-diagram.md) / [schema.sql](schema.sql)（独立评审单元）。
+host 侧零新增持久化——read-state 域表方案已撤销（2026-10-17 裁决，[er-diagram.md](er-diagram.md) / [schema.sql](schema.sql) 作废登记）。手机端持久化仅 localStorage：未读游标（按配对域隔离）+ 最近使用模型，均纯视图状态。
 
 ## 错误处理（FMEA 摘要）
 
 | 故障模式 | 严重度 | 对策 |
 |---|---|---|
-| SSE 断线且轮询也失败 | 高 | 断线覆盖层 + 手动重试钮；`/api/status` 心跳判活 |
+| forge-stream 断线且轮询也失败 | 高 | 断线覆盖层 + 手动重试钮；自研心跳判活（`core/stream.ts`） |
 | `/remote/__rpc` 服务缺席 | 中 | fail-soft 错误信封（既有口径）→ 任务浮层显示不可用态，对话不受影响 |
 | dist 缺席/构建失败 | 中 | 静态面降级提示页（含诊断行） |
 | 未知 SessionEvent 类型 | 中 | `skippable:true` 跳过；必选类型拒绝 → 会话渲染错误卡（不静默吞） |
-| read-state 域数据损坏 | 低 | 官方存储缝损坏边界处理；游标丢失 = unread 全量重算（seq 重放自愈） |
-| localStorage 不可用（隐私模式） | 低 | 最近使用模型静默降级为空列表 |
+| localStorage 不可用（隐私模式） | 低 | 最近使用模型静默降级为空列表；未读徽标退化为会话内即时态 |
 | commit 耗尽（Windows） | 高 | run-once 构建纪律（AD-5）；诊断正本见 `docs/conventions/windows-commit-exhaustion.md` |
-| 配对 cookie/隧道过期中途 | 高 | 全端点 401 → 全屏重新配对覆盖层 + 停止轮询/SSE（防打失效端点）；重配对成功自动恢复 |
-| domain 表 put 失败 | 中 | 域写链拒绝即回滚（官方保证读写不发散）；薄方法回 fail-soft 信封，游标不变 |
+| 配对 cookie/隧道过期中途 | 高 | 全端点 401 → 全屏重新配对覆盖层 + 停止轮询/forge-stream（防打失效端点）；重配对成功自动恢复 |
+| localStorage 游标丢失/换设备 | 低 | 未读重置为全未读；进会话触底即重新对齐（视图级状态，可接受） |
 
 ## 测试策略（分层 + 录制回放）
 
@@ -350,15 +292,15 @@ sequenceDiagram
 
 - `core/wire.ts` 投影纯函数：**钉住真实 wire 样本**——[wire-samples.md](wire-samples.md)（从 dsh-home 真实会话 v4 JSONL 提取的 **37 种事件类型**逐类型样本，含 `surfaceOp` 条件字段、`subagent/catalog`、`forge/progress` 实证）；持久类 fixture 以同法提取的未截断样本为准，不手造；**瞬态类（live-chunk/settle/interrupted）由 T3 首任务录制补证**——判别集：settle-assistant 判别帧、skippable/必选、source.kind 分派、成对纪律。
 - `rpc.ts` 信封、`store.ts` revision 守卫、`router.ts`、md 函数、ask 选项语义（单选即选/多选组合/other 输入态）。
-- host 侧：allowlist 新通道沿用 `remote-http-rpc.test.ts` 纯 handler fake 模式；read-state 读写与损坏重建（fake fs）。
+- host 侧：allowlist 新通道沿用 `remote-http-rpc.test.ts` 纯 handler fake 模式；forge:proxy 代理 handler（DTO zod 校验）同型覆盖。
 
 ### T2 契约测试（防漂移）
 
-- `@dsh-forge/contracts` 新通道类型 + 官方包 `.d.ts` 关键判别面（SessionEventType、SubagentCatalogRow.mode）pin 测试——上游包升级破坏契约时编译/测试即红（先例：官方 pin 契约测试）。
+- `@dsh-forge/contracts` 通道类型 + 官方包 `.d.ts` 关键判别面（SessionEventType、SubagentCatalogRow.mode）pin 测试——上游包升级破坏契约时编译/测试即红（先例：官方 pin 契约测试）。
 
 ### T3 e2e（Playwright + Chrome 设备模拟 + 录制回放——PRD 裁决）
 
-- **录制真实响应回放**：e2e 基建带录制器——首跑连真实 host（本地起服，配对绕过测试门），把 `/api/rpc`、`/api/session/stream`（SSE 逐事件）、`/remote/__rpc` 的真实响应录成回放 fixtures（HAR 扩展或自建 JSONL：method/url/事件序列）；后续 e2e 一律 **Playwright `page.route` 回放**（SSE 按 timed 事件序列重放），离线可重复、断言稳定。
+- **录制真实响应回放**：e2e 基建带录制器——首跑连配对 origin（回环 authority，只读面零凭据），把 `/remote/__rpc`（forge:proxy/forge:remote 通道交换）与 `/remote/forge-stream`（SSE 逐事件帧）的真实响应录成回放 fixtures（自建 JSONL：channel/payload/事件序列）；涉及 prompt/ask 的录制腿走 E2E_MOBILE_RECORD 凭据门；后续 e2e 一律 **Playwright `page.route` 回放**（SSE 按 timed 事件序列重放），离线可重复、断言稳定。
 - **mobile 项目**：`e2e/playwright.config.ts` 新增 project，设备描述符（视口 390×844、触摸、移动 UA）。
 - **旅程**：mockup 十屏逐位对照走查 + 对话（流式/断线恢复/分页）/ask 三题型/抽屉未读/hero 确认框/任务意图守卫/worker 双形态/文档阅读，全部跑在回放 fixtures 上。
 - fixtures 落 `e2e/fixtures/mobile/`（进 git——测试资产非过程产物）。
@@ -373,22 +315,21 @@ sequenceDiagram
 
 ## 实现纪律（用户裁决 2026-10-17：代码清晰，host 侧改动入口/分支清楚，不与既有业务混合）
 
-1. **新逻辑新文件**：host 侧新增能力一律独立文件（`read-state-domain.ts` 等），不往 `child.ts`/`remote-http-rpc.ts` 既有函数体内塞业务分支；既有文件只做「装配行」级改动（import + 注入 + 路由注册），每处 ≤ 数行。
+1. **新逻辑新文件**：host 侧新增能力一律独立文件（forge:proxy 代理 handler 模块等），不往 `child.ts`/`remote-http-rpc.ts` 既有函数体内塞业务分支；既有文件只做「装配行」级改动（import + 注入 + 路由注册），每处 ≤ 数行。
 2. **allowlist 扩充 = 表项增量**：新通道以独立 handler 模块 + `channelTableOf` 表项一行挂入；禁止在既有通道 handler（progress/approval/projects）内加分支。
 3. **分支即判别键**：所有分发以显式判别键 switch（`channel`/`error.code`/`source.kind`/事件 `type`），禁止隐式条件链；每个分支的入口在签名或表项上可一眼定位。
 4. **改动面可审计**：每任务提交只含指名文件（工作区提交规范）；`child.ts` 的改动行数是评审硬指标（预期仅装配行——超出即说明逻辑放错了地方，应外提为新文件）。
 5. 此纪律写入 breakdown 任务简报与 code review 清单。
-6. **官方机械拦截对照**：本设计五处 host 侧改动（session/event global 监听、storage domain 声明、MessageSourceMap 声明合并、followup source.kind、/remote/ 静态面改指）均落在官方合法缝，遵 `docs/conventions/official-mechanics-interception.md`（只插孔不改制；单写者铁律；正确性 host 单点）。
+6. **官方机械拦截对照**：本设计 host 侧改动（forge:proxy in-process 直调官方服务、MessageSourceMap 声明合并、followup source.kind、/remote/ 静态面改指）均落在官方合法缝，遵 `docs/conventions/official-mechanics-interception.md`（只插孔不改制；单写者铁律；正确性 host 单点）。
 
 ## 改动范围
 
 | 位置 | 改动 |
 |---|---|
 | `apps/mobile/`（新） | 源码 core/views/widgets、esbuild 构建脚本、tsconfig、package.json |
-| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（worktree 桥/read-state/disconnect） |
-| `apps/host/src/boot/remote-http-rpc.ts` | channelTable allowlist 扩充 + 薄方法 handler（纯函数，fake 可测） |
-| `apps/host/src/boot/read-state-domain.ts`（新） | read-state DomainSpec 注册 + 薄方法 handler + tailSeq 监听（官方存储缝） |
-| `packages/contracts/` | 新通道名与 payload 类型（`REMOTE_CHANNELS` 扩充） |
+| `apps/host/src/boot/child.ts` | `/remote/` 静态面改指 mobile dist；`/remote/__rpc` deps 注入扩充（forge:proxy 代理服务/worktree 桥/disconnect） |
+| `apps/host/src/boot/remote-http-rpc.ts` | channelTable allowlist 扩充（forge:proxy 通道族）+ 薄方法 handler（纯函数，fake 可测） |
+| `packages/contracts/` | `forge:proxy/*` 通道族 DTO 类型（zod） |
 | `packages/plugin-forge/src/faces.ts` + `src/notify/` + `src/commands/run-dag-tasks.ts` + `src/loop/` | 注入面 `source.kind:'forge-loop'` 声明合并与落点改造（AD-4；**批次③先行任务**——循环叙述卡判据前置） |
 | `e2e/` | mobile Playwright 项目 + 设备描述符 + 录制回放基建 + fixtures |
 | 根 `package.json` / `pnpm-workspace` | `apps/mobile` 工作区接入 + esbuild devDep（精确 pin） |
@@ -396,7 +337,7 @@ sequenceDiagram
 ## 影响范围
 
 - **下游消费方**：`/remote/` 现有桌面裁剪分支入口被替换（唯一行为变化点）；`@dsh-forge/contracts` 消费方（apps/web remote-transport——channel 枚举只增不改，向后兼容）；循环注入面消费方（桌面消息流将看到 source.kind 判别的新循环消息——桌面端投影按 unknown-kind opaque 默认容忍，官方 documented default 保证）。
-- **运行时影响**：构建面新增 esbuild 管线（run-once）；`/remote/` 表面产物更换；无 schema 迁移（read-state 为新增域表，无历史数据）。
+- **运行时影响**：构建面新增 esbuild 管线（run-once）；`/remote/` 表面产物更换；无 schema 迁移（read-state 域表方案已撤销；手机端仅 localStorage 视图状态）。
 - **未触及**：官方 webServer API、配对/PIN/隧道机械、桌面 web-app UI、会话格式——判据：PRD Out of Scope + AD-2/AD-3 零改动决策。
 
 ## PRD Coverage Map
@@ -404,12 +345,12 @@ sequenceDiagram
 | PRD AC（用户故事） | 设计元素 |
 |---|---|
 | US-1 独立产物 | AD-3 静态面改指；`apps/mobile` 独立构建单元（零桌面 import——lint-imports 钉住） |
-| US-2 流式对话 | 时序 1；`core/sse.ts` 状态机；`wire.ts` live-chunk/settle 投影；历史 10 条 = `session.history maxMessages` |
-| US-3 ask 面板（单选即选/多选/other） | views/ask（`interaction.answer` 直连官方面）；选项语义状态（T1 单测覆盖） |
-| US-4 模型切换 | views/settings+models（`session.rpc` 模型面 + localStorage 最近使用） |
-| US-5 抽屉未读 | views/drawer；`forge:remote/read-state` 薄方法（AD-6 seq 游标；双级未读） |
+| US-2 流式对话 | 时序 1；`core/stream.ts`（forge-stream）状态机；`wire.ts` live-chunk/settle 投影；历史 10 条 = `forge:proxy/session-page` |
+| US-3 ask 面板（单选即选/多选/other） | views/ask（`forge:proxy/user-questions-answer` 提交）；选项语义状态（T1 单测覆盖） |
+| US-4 模型切换 | views/settings+models（`forge:proxy/session-select-model`·`session-model-catalog` + localStorage 最近使用） |
+| US-5 抽屉未读 | views/drawer；未读 = 手机端 localStorage 游标（AD-6；双级未读本地聚合） |
 | US-6 hero | views/hero；`forge:worktree/*` 透传；乐观切换 + 建会话守卫回执 → 确认框（session-links 延后可选） |
-| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress`（**多 run chips = tasks 按 source_slug 分组派生**）+ 指令经 UI-adapter 仲裁走官方指令执行面（时序 2） |
-| US-8 worker 会话 | views/worker；官方面派生（`session.list` parentSessionId 过滤 + `subagent/catalog` 事件投影；`mode` 定只读/可续聊） |
+| US-7 任务进度 | views/tasks 悬浮球；`forge:remote/progress`（**多 run chips = tasks 按 source_slug 分组派生**）+ 指令经 UI-adapter 仲裁走 `forge:proxy/commands-execute`（时序 2） |
+| US-8 worker 会话 | views/worker；官方面派生（`forge:proxy/session-list` parentSessionId 过滤 + `subagent/catalog` 事件投影；`mode` 定只读/可续聊） |
 | US-9 循环卡/文档 | AD-4 source.kind 判别；widgets 循环卡家族；文档卡 `meta` 通道（批次③探针确认）+ views/reader |
 | US-10 宿主守卫 | AD-1 意图信封唯一动作通道；stale 置灰 = 数据驱动 |

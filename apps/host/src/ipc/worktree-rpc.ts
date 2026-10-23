@@ -954,7 +954,8 @@ export function createWorktreeRpcService(deps: {
           if (existingBinding !== null && norm(existingBinding.worktreePath) === norm(target)) {
             const selfController = deps.sessionController
             if (selfController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法投递 prompt')
-            return (selfController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+            // bug 017b0e5b：裸提调用丢 this（拦截层箭头包装时被掩盖，dispose 恢复官方原方法即暴露）
+            return (selfController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(selfController)(
               { ...(request as Record<string, unknown>), sessionId },
               ...args,
             )
@@ -968,7 +969,7 @@ export function createWorktreeRpcService(deps: {
           })
           const productController = deps.sessionController
           if (productController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法重路由 prompt')
-          const result = await (productController.prompt as (r: unknown, ...rest: unknown[]) => unknown)(
+          const result = await (productController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(productController)(
             { ...(request as Record<string, unknown>), sessionId: product.sessionId },
             ...args,
           )
@@ -1004,6 +1005,24 @@ export function createWorktreeRpcService(deps: {
     // 空串直达预铸深处由 requireNonEmpty 抛无业务语义的 TypeError（bug b6b88f49）。
     // 挂靠事件契约 = 分支非空（一 worktree 一分支），落空即显式拒绝、不落半截预铸会话。
     if (branch === '') {
+      // bug 878192ec（用户裁决 2026-10-22）：非 git 目录（resolveProject null——如 Z:\tmp）
+      // cwd 直建回退——非 git 项目本无 worktree/分支语义，桌面端经官方 workspaceId 径可建，
+      // 远程域唯一数据门 = 本通道，拒绝即「无建会话路径」。controller.create({cwd}) 零预铸
+      // 零分支（无挂靠事件语义），权限补钉 + 工作区归属 fail-soft（会话已建不因归属面回滚）。
+      // git 仓库（含 detached HEAD）不回退——挂靠契约拒绝原语义不变（b6b88f49/488e860d）。
+      const isRepo = (await cachedResolve(cwd).catch(() => null)) !== null
+      if (!isRepo) {
+        const created = await controller.create({ cwd })
+        await pinAdoptedPermission(created.sessionId).catch(() => {})
+        await attachWorkspace(cwd, created.sessionId).catch(() => {})
+        return { sessionId: created.sessionId, branch: '' }
+      }
+      // bug 488e860d 存量选中自愈（host 侧）：拒绝即摘 lastSelection 中该树记忆——
+      // 桌面 create-wrap 每次首条消息按 selected() 携带 worktreePath，不清则同一
+      // 不可挂靠树失败循环（fail-open 每次都带同一路径）。
+      for (const [key, value] of lastSelection) {
+        if (norm(value) === norm(cwd)) lastSelection.delete(key)
+      }
       throw new Error(`worktree 分支解析失败（detached HEAD 检出或清单失配），无法预铸挂靠会话：${cwd}`)
     }
     // 1.16 预铸采纳配方（Root cause: 官方 agent loop 自 controller.create 起即持有会话

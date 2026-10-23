@@ -1,8 +1,10 @@
 // @feature:mobile-remote-approval @web-e2e
 // fix-22 真机修复链：/pair 302 → /remote/（携 token）→ 官方根交换 303 → 官方 index 弹射 →
 // /remote/ 移动面（产品 dist 静态服务）200。dswf_forge_remote=1 与官方 dsh-auth 会话 cookie
-// 全程在 jar 存活；/remote/ 入口 no-store + 产品入口脚本在场（bug cbb9131e 架构级根因：
-// webserver 面从未服务产品 bundle——本链曾假阴性于官方前端落地页）。
+// 全程在 jar 存活；/remote/ 入口 no-store + mobile 产品入口在场。承载断言锚 apps/mobile
+// dist 单文件产物的稳定形态标记「dsh-forge mobile」（源码携带、非构建哈希——1.7 AD-3 已将
+// /remote/ 静态面改指 apps/mobile/dist，bug cbb9131e「webserver 面从未服务产品 bundle」随之
+// 收口，旧 vite 入口标记断言作废）。
 // 载体：预写 forge-settings.json（remoteApproval.enabled=true）直启——装配期读数即全卡绑定，
 // 不经桌面 UI 开关（旅程 spec 的开关段承载开启→重启语义，本 spec 只承载 HTTP 链）。
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -81,8 +83,8 @@ test('配对链 cookie-jar：/pair 302 → /remote/ 换官方根 → 303 → 弹
     ).toContain('no-store')
     const remoteHtml = await remoteRes.text()
     expect(
-      remoteHtml.includes('assets/index-') || remoteHtml.includes('forge-client'),
-      '移动面承载产品入口（vite 主入口/产品 client 脚本任一在场）',
+      remoteHtml.includes('dsh-forge mobile'),
+      '移动面承载 mobile 产品入口（apps/mobile dist 单文件形态标记，非桌面裁剪分支）',
     ).toBe(true)
   } finally {
     if (app !== undefined) await closeApp(app)

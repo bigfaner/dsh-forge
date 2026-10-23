@@ -68,6 +68,8 @@ export interface BootOverlayInput {
    *  runtime/node_modules，2026-10-18 启动崩 fix 起 staged 随包）；true = 注 loader
    *  行（插件装载面；扩展点注入不经 config——函数值走 ctx 服务缝，见 ipc/worktree-identity.ts） */
   readonly gitWorktreeRow?: boolean
+  /** mobile ask 桥插件行（bug f73315a1——缺席不注行 = 零挂接语义）。 */
+  readonly mobileBridgeRow?: boolean
   /** M3 预设装配（3.7）：三底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
   readonly presets?: PresetOverlayInput
   /** 手机远程暴露（mobile-remote-approval fix-3 重启生效形态）：true = 注 webserver 行
@@ -213,6 +215,11 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     // RPC 恒独立模式）：须以 insert 形态注行（用户层 cordis.patch.yml 同款语义）。
     ...(input.gitWorktreeRow === true
       ? ['- insert:', '    - id: dsh-forge-git-worktree', "      name: '@dsh-forge/git-worktree'"]
+      : []),
+    // mobile-ui ask 桥（bug f73315a1）：mobile-bridge 插件行（组合期 answerer 注册——
+    // 先于 api-remotes 捕获监听；桥本体经全局锚注入）。insert 形态（fix-4 同径）。
+    ...(input.mobileBridgeRow === true
+      ? ['- insert:', '    - id: dsh-forge-mobile-bridge', "      name: '@dsh-forge/mobile-bridge'"]
       : []),
     '- id: ui-settings-general',
     '  config:',

@@ -8,6 +8,8 @@
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import type { NarrationChannel } from './notify/index.js'
+import { forgeLoopSource } from './forge-loop-source.js'
+import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'
 
 /** dsh 官方 ContentBlock 的文本块子面（output.render 产物） */
 export interface TextContentBlock {
@@ -334,8 +336,11 @@ function clampSummary(text: string): string {
 }
 
 /** 叙述文本 → 官方 UserMessage 形状（createUserMessage 语义结构化最小面：id 铸造 + role/content/source）。
- * headline = 预构建场景单行摘要（可选——传入则 source.summary=headline；缺省回退整段截断，兼容不破坏） */
-function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: string): unknown {
+ * headline = 预构建场景单行摘要（可选——传入则 source.summary=headline；缺省回退整段截断，兼容不破坏）。
+ * followup 径（1.18 AD-4 循环哨兵）source.kind='forge-loop'——机器发出的 user-role 消息带类型化
+ * source，消费端按 kind 分派为循环叙述卡而非人工输入蓝气泡；loop 上下文挂结构化字段
+ * {loopKind,runId,task,state}（runId 铸发唯一）。notice 径保持 forge-dispatch 生产者归因不变。 */
+function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: string, loop?: ForgeLoopNarrationMeta): unknown {
   const summary = clampSummary(headline !== undefined && headline !== '' ? headline : text)
   return {
     id: crypto.randomUUID(),
@@ -344,22 +349,23 @@ function forgeUserMessage(text: string, form: 'notice' | 'followup', headline?: 
     source:
       form === 'notice'
         ? { kind: FORGE_NOTICE_SOURCE_KIND, form: 'notice', summary }
-        : { kind: 'user' },
+        : forgeLoopSource({ ...loop, summary }),
   }
 }
 
 /**
  * 指令行消息（S2 producer 显式提交——/plan 先例的 forge 消费形）：known command 经上游
  * slash 仲裁路由 command plane 执行时注册表本身零转录（"the registry itself submits
- * nothing"），指令单行的转录承载 = producer 显式提交的 user 消息（source kind user——
- * 与 composer 默认 sink 同形；经 agent.followup 收件开新回合——会话非 blank 化）。
+ * nothing"），指令单行的转录承载 = producer 显式提交的 user 消息（1.18 AD-4——source
+ * kind 'forge-loop'：机器发出的指令单行非人工输入，消费端按循环叙述面分派；经
+ * agent.followup 收件开新回合——会话非 blank 化）。
  */
-export function forgeCommandLineMessage(text: string): unknown {
+export function forgeCommandLineMessage(text: string, loop?: ForgeLoopNarrationMeta): unknown {
   return {
     id: crypto.randomUUID(),
     role: 'user',
     content: [{ type: 'text', text }],
-    source: { kind: 'user' },
+    source: forgeLoopSource({ ...loop, summary: clampSummary(text) }),
   }
 }
 
@@ -403,9 +409,9 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationCh
       if (typeof agent?.inject === 'function') agent.inject(forgeUserMessage(text, 'notice', headline))
       return Promise.resolve()
     },
-    followup(sessionId: string, text: string): Promise<void> {
+    followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
       const agent = agents.get(sessionId) as { followup?(message: unknown): void } | undefined
-      if (typeof agent?.followup === 'function') agent.followup(forgeUserMessage(text, 'followup'))
+      if (typeof agent?.followup === 'function') agent.followup(forgeUserMessage(text, 'followup', undefined, loop))
       return Promise.resolve()
     },
     settle(sessionId: string, text: string): Promise<void> {

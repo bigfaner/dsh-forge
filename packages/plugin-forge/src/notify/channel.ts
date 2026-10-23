@@ -7,13 +7,17 @@
 //
 // 通道分流归属（decisions #28）：notice = 常规进行事件（样例 ①-⑫）；followup = 终局
 // 事件（样例 ⑬-⑰，每循环 1–2 条）。路由表见 templates.ts SCENARIOS。
+//
+// 1.18 AD-4 循环哨兵：followup 径携带可选 ForgeLoopNarrationMeta（task/state）——faces.ts
+// 铸发 source.kind='forge-loop' 消息时的结构化字段载体；notice/settle 径归因形态不变。
+import type { ForgeLoopNarrationMeta } from '../forge-loop-source.js'
 
 /** 主会话叙述通道（装配方把上游 agent.inject/agent.followup 适配到本双方法面） */
 export interface NarrationChannel {
   /** 常规事件注入（notice 形态——零模型回合；headline = 预构建场景单行摘要，缺席 = 折叠位回退整段截断） */
   notice(sessionId: string, text: string, headline?: string): Promise<void>
-  /** 终局事件注入（完整消息——主会话新回合并唤醒） */
-  followup(sessionId: string, text: string): Promise<void>
+  /** 终局事件注入（完整消息——主会话新回合并唤醒；loop = 循环叙述上下文，缺席 = 字段兜底） */
+  followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void>
   /**
    * 结算投递（3b④ settlement 形态——dispatch-loop-hardening 1.11）：持久 user message
    * （source {kind:'dispatch-loop-settled'}）三径投递——空闲→followup / 运行中→steer /
@@ -37,10 +41,10 @@ export function failSoftNarrationChannel(
         // 静默降级（SC7——叙述缺席不拖垮循环；仅看板+问询仍可达）
       }
     },
-    async followup(sessionId: string, text: string): Promise<void> {
+    async followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
       if (sessionId === '') return
       try {
-        await inner.followup(sessionId, text)
+        await inner.followup(sessionId, text, loop)
       } catch {
         // 静默降级（同上）
       }

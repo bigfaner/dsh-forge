@@ -24,7 +24,7 @@ import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { openOverviewDock, enterDir, dirRow } from '../../support/navigation.js'
+import { openOverviewDock, enterDir, dirRow, fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 import {
   AP_ANY,
   CTA_ADD_PROJECT,
@@ -68,10 +68,9 @@ async function selectWorkspaceAndNext(page: Page, fixtureRoot: string, dirName: 
     await page.locator(NAV_ADD_PROJECT).first().click()
   }
   await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-  for (const segment of ['AppData', 'Local', 'Temp']) {
+  for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) {
     await enterDir(page, segment)
   }
-  await enterDir(page, fixtureRoot.split(/[\\/]/).at(-1) as string)
   await dirRow(page, dirName).click()
   await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
   await expect(page.locator(addProjectPhase('form'))).toBeVisible()

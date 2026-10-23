@@ -39,6 +39,8 @@ export interface TunnelDeps {
   tmpDir(): string
   spawn: ProcessSpawner
   now(): number
+  /** 退避重试等待缝（真实实现 = setTimeout；测试 = 即时 resolve 记录延迟） */
+  sleep(ms: number): Promise<void>
 }
 
 /** cloudflared pin 版本（官方锚 DSH Desktop 0.10.0 main.js:508 = 2026.8.2；版本漂移风险收敛于此单点 + sha256 清单同步） */

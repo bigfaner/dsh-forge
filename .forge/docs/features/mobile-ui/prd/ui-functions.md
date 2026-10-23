@@ -70,11 +70,11 @@ flowchart LR
 
 ### F1 对话主视图（屏 1/2/3）`new-page #/chat/:sessionId`
 
-官方 API/SSE 对话引擎全链：SSE→rAF 合帧→末条补丁、乐观提示、revision 守卫、触底跟随、EventSource 原生重连 + 心跳判活 + 断线覆盖层。消息投影与视觉三层级、折叠空间纪律、shell 终端块、异步结果卡、循环哨兵卡（kind 定色条：dispatch 蓝/followup 浅蓝/state 灰/done 绿）、历史默认最近 10 条（可配置常量）+ 上翻分页，均按 prd-spec「消息渲染要点」执行。
+forge:proxy 对话链全托管：forge-stream→rAF 合帧→末条补丁、乐观提示、revision 守卫、触底跟随、自研退避重连 + 心跳判活 + 断线覆盖层。消息投影与视觉三层级、折叠空间纪律、shell 终端块、异步结果卡、循环哨兵卡（kind 定色条：dispatch 蓝/followup 浅蓝/state 灰/done 绿）、历史默认最近 10 条（可配置常量）+ 上翻分页，均按 prd-spec「消息渲染要点」执行。
 
 ### F2 ask 分页面板（屏 6）`new-page #/ask`
 
-一屏一题，左上角序号/总数；上一个｜提交｜下一个；主按钮 #4176e6；占位输入框（互斥）。经 `interaction.answer` 提交。
+一屏一题，左上角序号/总数；上一个｜提交｜下一个；主按钮 #4176e6；占位输入框（互斥）。经 `forge:proxy/user-questions-answer` 提交。
 
 选项语义（按题型互斥呈现）：
 
@@ -89,7 +89,7 @@ composer 滑杆设置钮 → 最小化面板（无标题/无说明文本）：�
 
 ### F4 抽屉会话列表（屏 4）`浮层`
 
-项目树分组（桌面同折叠规则，不展示会话数量）· 置顶/归档（手机不展示归档）· 双级未读徽标（host read-state 游标）· 底部连接状态（点看详情 + 断开）。
+项目树分组（桌面同折叠规则，不展示会话数量）· 置顶/归档（手机不展示归档）· 双级未读徽标（手机端 localStorage 游标，本地聚合）· 底部连接状态（点看详情 + 断开）。
 
 ### F5 新会话 hero（屏 5）`new-page #/new`
 

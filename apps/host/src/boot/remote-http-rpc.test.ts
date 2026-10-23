@@ -26,7 +26,7 @@ function fakeReq(body: unknown, url = REMOTE_HTTP_RPC_PATH, method = 'POST') {
   return {
     method,
     url,
-    headers: {},
+    headers: {} as Record<string, string | undefined>,
     on(event: string, cb: (v: unknown) => void) {
       ;(listeners[event] ??= []).push(cb)
       if (event === 'end') queueMicrotask(() => this.emitData()) // body 自动到达（订阅 end 即流毕）
@@ -61,8 +61,9 @@ const TASKS: Pick<ForgeTasksService, 'listTasks' | 'taskStats'> = {
   listTasks: async () => [{ taskId: 't-1', title: 'X', taskStatus: 'in_progress' } as TaskCard],
   taskStats: async () => ({ total: 1, byStatus: { in_progress: 1 } as TaskStats['byStatus'], unmetPending: 0 }),
 }
-const PROJECTS: Pick<ProjectService, 'listProjects'> = {
+const PROJECTS: Pick<ProjectService, 'listProjects' | 'getProject'> = {
   listProjects: async () => [{ id: 'p-1', name: 'demo' } as ProjectSummary],
+  getProject: async () => null,
 }
 
 function deps(overrides: Partial<Parameters<typeof handleRemoteHttpRpc>[2]> = {}) {
@@ -84,8 +85,23 @@ describe('isRemoteHttpRpcRequest', () => {
 })
 
 describe('handleRemoteHttpRpc 会话门', () => {
-  it('authorize=false：不写响应体不触服务（官方 401 面已写毕）', async () => {
-    const res = fakeRes()
+  it('bug 7e5ef681：diag 行分域标记——隧道 Host=[tunnel]、回环/LAN=[lan]', async () => {
+    const lines: string[] = []
+    const tunnelReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    tunnelReq.headers.host = 'x.trycloudflare.com'
+    await handleRemoteHttpRpc(tunnelReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[0]).toContain('[tunnel]')
+    const lanReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    lanReq.headers.host = '192.168.1.7:3000'
+    await handleRemoteHttpRpc(lanReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[1]).toContain('[lan]')
+    const loopReq = fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } })
+    loopReq.headers.host = '127.0.0.1:19440'
+    await handleRemoteHttpRpc(loopReq as never, fakeRes(), deps({ diag: (l) => lines.push(l) }))
+    expect(lines[2]).toContain('[lan]')
+  })
+
+  it('authorize=false：不写响应体不触服务（官方 401 面已写毕）', async () => {    const res = fakeRes()
     let touched = false
     await handleRemoteHttpRpc(
       fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } }) as never,
@@ -242,6 +258,101 @@ describe('handleRemoteHttpRpc 边界', () => {
     )
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('/remote/__rpc')
-    expect(lines[0]).toContain(REMOTE_CHANNELS.progress)
+    // bug 8b97047a：准入后通道 ∈ allowlist 白名单常量集——diag 落真实通道名（可归因）
+    expect(lines[0]).toContain(`channel=${REMOTE_CHANNELS.progress}`)
+    expect(lines[0]).toContain('status=ok')
+  })
+
+  it('bug 7d26b074：handler 抛错 diag 行必带错误消息 + 通道名（真机连发 error 可归因）', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-x' } }) as never,
+      res,
+      deps({
+        diag: (line) => lines.push(line),
+        tasks: { listTasks: async () => { throw new Error('store down') }, taskStats: async () => ({ total: 0, byStatus: {} as TaskStats['byStatus'], unmetPending: 0 }) },
+      }),
+    )
+    expect(lines[0]).toContain('status=error')
+    expect(lines[0]).toContain('store down')
+    expect(lines[0]).toContain(`channel=${REMOTE_CHANNELS.progress}`)
+  })
+})
+
+describe('bug 12f3590f 二次派发防护（响应已写出 = 静默返回，绝无二次写出）', () => {
+  it('headersSent=true：零写出零抛错（上游路由二次派发不撞已发头）', async () => {
+    const res = fakeRes()
+    let wrote = false
+    const guarded = {
+      ...res,
+      headersSent: true,
+      writeHead: (code: number, headers?: Record<string, unknown>) => {
+        wrote = true
+        return res.writeHead(code, headers)
+      },
+      end: (text?: string) => {
+        wrote = true
+        return res.end(text)
+      },
+    }
+    const lines: string[] = []
+    await expect(
+      handleRemoteHttpRpc(
+        fakeReq({ channel: REMOTE_CHANNELS.progress, payload: { projectId: 'p-1' } }) as never,
+        guarded as never,
+        deps({ diag: (line) => lines.push(line) }),
+      ),
+    ).resolves.toBeUndefined()
+    expect(wrote).toBe(false)
+    expect(lines.some((l) => l.includes('status=already-sent'))).toBe(true)
+  })
+
+  it('bug fc7741a8：并发双派发（写头前才翻 headersSent）= 后到写静默跳过，绝不抛错穿出', async () => {
+    // 真实 ServerResponse.headersSent 在首次 writeHead 才翻转——入口守卫拦不住并发窗口
+    const res = fakeRes()
+    let writeCalls = 0
+    const racing = {
+      ...res,
+      get headersSent() {
+        return writeCalls > 0
+      },
+      writeHead: (code: number, headers?: Record<string, unknown>) => {
+        writeCalls += 1
+        if (writeCalls > 1) throw new Error('ERR_HTTP_HEADERS_SENT') // 真身同款抛错
+        return res.writeHead(code, headers)
+      },
+      end: (text?: string) => res.end(text),
+    }
+    let releaseTasks: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseTasks = resolve
+    })
+    const listTasks = async () => {
+      await gate
+      return []
+    }
+    const lines: string[] = []
+    const depsWith = () => deps({ diag: (line) => lines.push(line), tasks: { listTasks, taskStats: async () => ({}) as never } })
+    const p1 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
+    const p2 = handleRemoteHttpRpc(fakeReq({ channel: REMOTE_CHANNELS.progress, payload: {} }) as never, racing as never, depsWith())
+    releaseTasks!()
+    // 修复前：后到写头在 catch 内二次抛 ERR_HTTP_HEADERS_SENT 穿出（宿主 fatal）
+    await expect(p1).resolves.toBeUndefined()
+    await expect(p2).resolves.toBeUndefined()
+    expect(lines.some((l) => l.includes('status=already-sent'))).toBe(true)
+  })
+
+  it('not-found diag 落真实通道名（allowlist miss 可归因——404 本就暴露无泄露面）', async () => {
+    const res = fakeRes()
+    const lines: string[] = []
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never,
+      res,
+      deps({ diag: (line) => lines.push(line) }),
+    )
+    expect(res.status).toBe(404)
+    expect(lines[0]).toContain('channel=forge:proxy/session-openWorkspacePath')
+    expect(lines[0]).toContain('status=not-found')
   })
 })

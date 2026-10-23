@@ -52,6 +52,11 @@ const FIXTURES = [
     imp: ['SC2 无投影', '运行期边界'],
   },
   {
+    path: 'apps/mobile/src/core/_lintneg_mobile_to_web.ts',
+    code: `import { web } from '@dsh-forge/web'\nexport const v = web\n`,
+    imp: ['mobile 边界'],
+  },
+  {
     path: 'apps/web/src/rpc/_lintneg_rpc_import.ts',
     code: `import { knowledgeSvc } from '@dsh-forge/knowledge'\nexport const v = knowledgeSvc\n`,
     imp: ['运行期边界'],

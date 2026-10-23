@@ -572,7 +572,7 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect(rec.followuped).toEqual([
-      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
+      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' },
     ])
   })
 
@@ -584,7 +584,7 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     const out = await d.handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: '' })
     expect(out.kind).toBe('success')
     expect(rec.followuped).toEqual([
-      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' },
+      { role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' },
     ])
   })
 
@@ -640,7 +640,7 @@ describe('派发指令单行提交（fix-1 + 1.14/1.20——提交成功 = 会�
     const out = await d.handler({ agent: wrapped as never, rawInput: '' })
     expect(out.kind).toBe('success')
     expect(trace).toEqual(['followup', 'start'])
-    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' }])
   })
 
   it('未启动径（未知 slug）：零提交', async () => {
@@ -704,7 +704,7 @@ describe('1.18 followup 目标经 agentsRegistry 活根解析（真机 undefined
     const out = await d.handler({ agent: agentOf(SESSION, CWD, parent.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
     expect((out as { text?: string }).text).toContain('已启动')
-    expect(reg.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }]) // 活根收件
+    expect(reg.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' }]) // 活根收件
     expect(parent.followuped).toEqual([]) // ctx.parent 不再是 followup 目标
   })
 
@@ -776,7 +776,7 @@ describe('1.19 未进入态处理：先进入（sessionController.resolveAgent�
     expect((out as { text?: string }).text).toContain('已启动')
     expect((out as { text?: string }).text).not.toContain('提交失败')
     expect(order).toEqual(['enter', 'followup']) // 先进入再提交（undefined.send 根因面不再触达）
-    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' }])
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
@@ -933,7 +933,7 @@ describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: newAgent(rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' }])
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 
@@ -943,7 +943,7 @@ describe('1.22 新会话门控：既有会话零 followup 直接启动（防活 
     const d = depsOf({ cards, driver: stub.driver })
     const out = await d.handler({ agent: commandOnlyAgent(rec.fn) as never, rawInput: 'feat-x' })
     expect(out.kind).toBe('success')
-    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'user' }])
+    expect(rec.followuped).toEqual([{ role: 'user', text: '/run-dag-tasks feat-x', sourceKind: 'forge-loop' }])
     expect(stub.loops.has(SESSION)).toBe(true)
   })
 

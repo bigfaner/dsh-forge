@@ -37,7 +37,7 @@ describe('trace_id / repeat 字段透传（app-observability 1.2）', () => {
     })
     appender.handleEvent({ ...BASE, traceId: 'tr-relay' })
     await appender.idle()
-    expect(JSON.parse(captured[0]).trace_id).toBe('tr-relay')
+    expect(JSON.parse(captured[0]!).trace_id).toBe('tr-relay')
   })
 
   it('repeat 字段透传入行；缺席省略', async () => {
@@ -51,8 +51,8 @@ describe('trace_id / repeat 字段透传（app-observability 1.2）', () => {
     appender.handleEvent({ ...BASE, repeat: 4 })
     appender.handleEvent({ ...BASE })
     await appender.idle()
-    expect(JSON.parse(captured[0]).repeat).toBe(4)
-    expect(JSON.parse(captured[1])).not.toHaveProperty('repeat')
+    expect(JSON.parse(captured[0]!).repeat).toBe(4)
+    expect(JSON.parse(captured[1]!)).not.toHaveProperty('repeat')
   })
 })
 

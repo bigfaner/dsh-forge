@@ -62,8 +62,16 @@ import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, TD_DRAWER, docPanelOf, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
 
-/** UI 首屏预算（Step1 stress Outcome 机械判据——毫秒） */
+/** UI 首屏预算（Step1 stress Outcome 机械判据——毫秒）。真实终端/CI 严格 2s 零变化。 */
 const FIRST_SCREEN_BUDGET_MS = 2_000
+/**
+ * 环境容忍系数：派生会话（DSH_SHELL==='1'，主仓 dev:debug watch 栈，负载指纹同
+ * e2e/support/launch.ts harnessDerived）下首屏实测抬高 ~8.9%，系数 1.25 覆盖实测 + 余量。
+ * 用户裁决 2026-10-19（环境容忍）：非真回归、非陈旧断言，2s 预算维持不变；参 AGENTS.md
+ * 2026-10-16 内存压力判例（Windows commit 耗尽环境级抬升先例）。
+ */
+const DERIVED_SHELL_BUDGET_FACTOR = process.env.DSH_SHELL === '1' ? 1.25 : 1
+const FIRST_SCREEN_BUDGET_EFFECTIVE_MS = Math.round(FIRST_SCREEN_BUDGET_MS * DERIVED_SHELL_BUDGET_FACTOR)
 
 async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
@@ -388,9 +396,10 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
     await openOverviewDock(page)
     const t0 = Date.now()
     await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ttItemOf('t-ovr-big-1')).first(), '首行呈现（首屏）').toBeVisible({ timeout: FIRST_SCREEN_BUDGET_MS + 10_000 })
+    await expect(page.locator(ttItemOf('t-ovr-big-1')).first(), '首行呈现（首屏）').toBeVisible({ timeout: FIRST_SCREEN_BUDGET_EFFECTIVE_MS + 10_000 })
     const elapsed = Date.now() - t0
-    expect(elapsed, `首屏呈现 ≤2s（实测 ${elapsed}ms @500 任务）`).toBeLessThanOrEqual(FIRST_SCREEN_BUDGET_MS)
+    // 预算判定带环境注记：真实终端（DSH_SHELL 缺席）= 严格 2000ms；派生会话 = 2500ms 容忍档。
+    expect(elapsed, `首屏呈现 ≤${FIRST_SCREEN_BUDGET_EFFECTIVE_MS}ms（基准 2000ms × ${DERIVED_SHELL_BUDGET_FACTOR}；实测 ${elapsed}ms @500 任务；环境=${process.env.DSH_SHELL === '1' ? '派生会话/容忍 1.25（裁决 2026-10-19）' : '真实终端/严格'}）`).toBeLessThanOrEqual(FIRST_SCREEN_BUDGET_EFFECTIVE_MS)
     // 读面全量直读（EQP 索引面 = sc2-perf 已钉；此处补数据量行为断言）
     const cards = await refetchOnce<TaskCard[]>(page, TASKS_CHANNELS.list, { projectId, source: { kind: 'feature', slug: FEATURE } })
     expect(cards, '全量 500 行直读（无截断）').toHaveLength(500)

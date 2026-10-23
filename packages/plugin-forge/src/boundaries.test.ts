@@ -26,10 +26,12 @@ const DSH_RUNTIME_ALLOWLIST = [
 ] as const
 
 /** @deepseek-ai 类型面 import 白名单（S7——投影模块的类型合并；1.17 增员 dsh-session/types
- *  ——'forge/progress' SessionEventMap 合并锚；零运行时 import 面） */
+ *  ——'forge/progress' SessionEventMap 合并锚；1.18 增员 dsh-llm/message——AD-4 循环哨兵
+ *  MessageSourceMap 'forge-loop' 合并锚；零运行时 import 面） */
 const DSH_TYPE_IMPORT_ALLOWLIST = [
   '@deepseek-ai/dsh-session-projection/types',
   '@deepseek-ai/dsh-session/types',
+  '@deepseek-ai/dsh-llm/message',
 ] as const
 
 function srcFiles(): string[] {
@@ -83,7 +85,7 @@ describe('AC1 插件依赖边界（构建图机械自证——3.4 修订：drive
       expect(offending, `${rel} 白名单外 @deepseek-ai import`).toEqual([])
       if (specifiers.length > 0) importers.push(rel)
     }
-    expect(importers.sort()).toEqual(['src/progress/index.ts', 'src/projection/dispatch-loop.ts', 'src/spawn/in-process-driver.ts'])
+    expect(importers.sort()).toEqual(['src/forge-loop-source.ts', 'src/progress/index.ts', 'src/projection/dispatch-loop.ts', 'src/spawn/in-process-driver.ts'])
   })
 
   it('类型面收窄（S7 续）：@deepseek-ai/dsh-session-projection 仅投影模块 type-only import + declare-module 合并——零运行时 import 语法', () => {

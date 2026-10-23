@@ -8,6 +8,25 @@
   flex: none;
 }
 
+/* 断开 toast（用户裁决 2026-10-22：不限时 + 点击关闭——error 红描边卡，锚宿主左下） */
+.dswf-remote-toast {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10000;
+  max-width: 360px;
+  padding: 10px 14px; /* dsw-raw toast 内距（局部刻度） */
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 10px; /* dsw-raw toast 圆角（局部刻度） */
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px; /* dsw-raw 官方 13px 字（xs-13 同值） */
+  line-height: 1.5;
+  text-align: left;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16); /* dsw-raw toast 投影（局部刻度） */
+}
+
 /* ── fix-4（bug d025a0da）：底行行内合并——手机图标与设置图标同一行 ──
  * 官方 DOM 实测（e2e 探针 bbox 取证）：官方 ui-sidebar footArea = column——
  * footer.action 槽行（footerActions，槽锚 display:contents 后组件根即行内项）与
@@ -120,6 +139,8 @@
   padding-top: 22px; /* dsw-raw 官方 Modal .header 上距同值 */
 }
 
+/* （旧绝对定位形态退役——开关并入标题行 flex 相邻排布） */
+
 .dswf-remote-dialog-close {
   position: absolute;
   top: 18px; /* dsw-raw 关闭钮垂直落点（22 header 上距 − 钮半高微调） */
@@ -211,8 +232,16 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.dswf-remote-dialog-title {
+/* 用户裁决 2026-10-22：开关紧贴「连接移动设备」标题相邻（行居中，非贴边绝对定位） */
+.dswf-remote-dialog-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px; /* dsw-raw dialog 标题行缝（局部刻度） */
   margin: 8px 0 0; /* dsw-raw dialog 标题上距（排版行高刻度） */
+}
+
+.dswf-remote-dialog-title {
   font: var(--dsw-font-l-20);
   color: var(--dsw-alias-label-primary);
   text-align: center;
@@ -250,6 +279,7 @@
 }
 
 .dswf-remote-empty {
+  box-sizing: border-box; /* Root cause: width:100% + padding 在 content-box 下总宽=父宽+24px 右溢出——左右边距不对称（bug 7cb675cf） */
   width: 100%;
   margin: 0;
   padding: 24px 12px; /* dsw-raw 配对空态内距（局部刻度） */
@@ -294,7 +324,7 @@
   align-items: center;
   justify-content: center;
   min-height: 38px; /* dsw-raw 官方 hint 行 38px min-height */
-  margin: 0;
+  margin: 0 20px; /* 用户裁决 2026-10-22：不贴近/不超出 dialog 边缘（dsw-raw 局部刻度） */
   padding: 10px 12px; /* dsw-raw 说明卡内距（局部刻度） */
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-md);
@@ -581,6 +611,7 @@
 
 /* Pinggy TTL 失效横幅（「约 N 分钟后失效」——琥珀警示带） */
 .dswf-remote-tunnel-banner {
+  box-sizing: border-box; /* 同 7cb675cf：width:100% + padding content-box 右溢出 20px */
   width: 100%;
   margin: 0;
   padding: 6px 10px; /* dsw-raw 横幅内距（局部刻度） */
@@ -612,6 +643,17 @@
   display: flex;
   flex-direction: column;
   gap: 10px; /* dsw-raw 面板纵向行距（面板局部刻度同源） */
+}
+
+/* 用户裁决 2026-10-22（三次）：绿卡与断开连接/完成钮同行——卡 flex:1 占满，钮右侧 */
+.dswf-remote-connected-row {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* dsw-raw 连接状态行缝（局部刻度） */
+}
+
+.dswf-remote-connected-row .dswf-remote-connected {
+  flex: 1;
 }
 
 .dswf-remote-connected-check {
@@ -785,6 +827,14 @@
 
 /* fix-21 §2⑥：官方 consent checkbox 行（label + 隐私 small 字——durable 后端机制 §4 差值③
  * 在途，本任务只落展示行） */
+/* 用户裁决 2026-10-22：consent checkbox 行右侧携「重置 PIN」钮（同行右对齐） */
+.dswf-remote-pin-consent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px; /* dsw-raw PIN 行缝（局部刻度） */
+}
+
 .dswf-remote-pin-consent {
   display: flex;
   align-items: center;
@@ -803,6 +853,92 @@
   font: var(--dsw-font-xxs-12); /* ⑥ 隐私 small 字 12px */
   color: var(--dsw-alias-label-tertiary);
   text-align: center;
+}
+
+/* ── 1.107 连接密钥三件套段（互联网 tab 连接密码下方——PIN 方框卡同型：410px/16px 内距/
+ * 14px 圆角/panel 底/1px 描边；读数行 label 11px·600 uppercase + mono 值 + 28px 复制钮；
+ * SPKI 长串换行不省略——复制取全文） ── */
+.dswf-remote-psk {
+  box-sizing: border-box;
+  display: flex;
+  align-self: center; /* 面板列内居中（PIN/mode-panel 同轴） */
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px; /* dsw-raw 卡内行缝（PIN 卡同款局部刻度） */
+  width: 410px; /* dsw-raw 官方 PIN 方框 410px 同型 */
+  padding: 16px; /* dsw-raw 官方 PIN 方框内距同值 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 14px; /* dsw-raw 官方 14px（radius 标尺无等价令牌） */
+  background: var(--dsw-alias-bg-layer-2); /* panel 底 */
+}
+
+/* 用户裁决 2026-10-22：↻ 紧贴「连接密钥」标题同行相邻（整体居中，非两端分布） */
+.dswf-remote-psk-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* dsw-raw 密钥三件套标题行缝（局部刻度） */
+}
+
+.dswf-remote-psk-title {
+  font-size: 11px; /* dsw-raw 官方 pinLabel 11px uppercase 弱色（局部刻度） */
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.dswf-remote-psk-row {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw 行内缝（地址条带同款局部刻度） */
+}
+
+.dswf-remote-psk-label {
+  flex: none;
+  min-width: 108px; /* dsw-raw label 列对齐宽（四行 label 单行最宽——局部刻度） */
+  font-size: 11px; /* dsw-raw 官方 pinLabel 11px uppercase 弱色（局部刻度） */
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dswf-remote-psk-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ds-font-family-code); /* 等宽字体——官方实机地址/PIN 排 */
+  font-size: 12px; /* dsw-raw 官方地址读数 12px（xxs-12 同值） */
+  line-height: 1.35; /* dsw-raw 官方 1.35 行高 */
+  color: var(--dsw-alias-label-primary-bluish);
+  white-space: nowrap; /* 用户裁决 2026-10-22：尽量不换行——溢出省略号截断（复制取全文，悬停 title 显全文） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dswf-remote-psk-empty {
+  margin: 0;
+  font: var(--dsw-font-xs-13);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* 轮换确认弹窗（官方 Modal body 内距同款；正文 + 双钮行复用 connected 态双钮刻度） */
+.dswf-remote-psk-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* dsw-raw 弹窗正文与双钮行距（官方 Modal body 局部刻度） */
+  padding: 0 24px 24px; /* dsw-raw 官方 Modal body 同款侧/底内距 */
+}
+
+.dswf-remote-psk-confirm-body {
+  margin: 0;
+  font: var(--dsw-font-s-14);
+  line-height: 22px;
+  color: var(--dsw-alias-label-secondary);
 }
 
 /* ── fix-18 ② 换线链接（官方 fallback-link：无边框下划线文本链接 12.5px muted 色） ── */
@@ -876,4 +1012,21 @@
     animation: none; /* 官方 reduced-motion 关动画（静止 99% 封顶态） */
     width: 99%;
   }
+}
+
+/* ---- 三件套 ? 帮助图标（label 旁——Tooltip 悬浮呈现字段含义） ---- */
+.dswf-remote-psk-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px; /* dsw-raw 徽标左缝（局部刻度） */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  font-size: 10px; /* dsw-raw 徽内问号刻度（局部刻度，同 :760 徽件口径） */
+  line-height: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: help;
+  vertical-align: middle;
 }

@@ -509,6 +509,42 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(created).toHaveLength(0) // 未落半截预铸会话
   })
 
+  it('bug 878192ec：非 git 目录（resolveProject null）cwd 直建回退——controller.create({cwd}) 零预铸零分支，sessionId 返回（远程域非 git 项目建会话正门）', async () => {
+    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+    const { controller, calls } = fakeController()
+    const { persistence, created } = fakePersistence({})
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'main' }],
+      pathPresent: () => true,
+      ensureDirAcl: async () => {},
+    })
+    const result = await service.sessionCreate({ worktreePath: 'C:/foreign-dir' })
+    expect(result.branch).toBe('')
+    expect(calls[0]?.cwd).toBe('C:/foreign-dir')
+    expect(calls[0]?.sessionId).toBeUndefined() // 官方 create 自铸 id（缺省不传）
+    expect(result.sessionId).toBe('s-created')
+    expect(created).toHaveLength(0) // 非 git 零预铸（无挂靠事件语义）
+  })
+
+  it('bug 488e860d 存量选中自愈（host 侧）：分支解析落空拒绝即摘 lastSelection 记忆——后续 selected() 不再回传不可挂靠树', async () => {
+    const { persistence } = fakePersistence({})
+    const { controller } = fakeController()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: null }], // detached 检出
+      pathPresent: () => true,
+    })
+    await service.select({ projectRoot: 'C:/repo', path: 'C:/repo/.forge/worktrees/wt-a' })
+    expect(await service.selected({ projectRoot: 'C:/repo' })).toEqual({ path: 'C:/repo/.forge/worktrees/wt-a' })
+    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(/分支解析失败/)
+    expect(await service.selected({ projectRoot: 'C:/repo' })).toEqual({}) // 记忆摘除——create-wrap 后续不再携该树
+  })
+
   it('bug b6b88f49：worktree list 清单失配（查无该树条目）→ 同径边界显式拒绝，不抛预铸深处 TypeError', async () => {
     const { persistence } = fakePersistence({})
     const { controller } = fakeController()
@@ -1613,6 +1649,7 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
   })
 
   it('fix-3 judge 判读链异常 fail-open 放行：failOpenDiag emit 于 ALS 上下文内（行带同 trace_id）；放行语义不变', async () => {
+    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
     const alsJudge = createDiagContextStore()
     let openCalls = 0
     const persistence = {

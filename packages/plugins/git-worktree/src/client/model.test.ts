@@ -190,6 +190,11 @@ describe('joinWorktreePath（1.21 分隔符归一单点——统一反斜杠系�
     expect(joinWorktreePath('', 'wt-a')).toBe('wt-a')
     expect(joinWorktreePath('Z:\\p\\wt\\', '')).toBe('Z:\\p\\wt')
   })
+  it('bug b974357f: POSIX 绝对目录（/ 开头，macOS/Linux）→ 输出保持正斜杠，不产反斜杠非法路径', () => {
+    expect(joinWorktreePath('/Users/faner/proj/.forge/worktrees', 'wt-a')).toBe('/Users/faner/proj/.forge/worktrees/wt-a')
+    expect(joinWorktreePath('/Users/faner/proj/.forge/worktrees/', '/wt-a')).toBe('/Users/faner/proj/.forge/worktrees/wt-a')
+    expect(joinWorktreePath('/srv/wt', 'feat/my-branch')).toBe('/srv/wt/feat/my-branch')
+  })
 })
 
 describe('sortBaseBranchOptions（1.22 基准分支选项排序——main > master > default > current > 其余字母序）', () => {

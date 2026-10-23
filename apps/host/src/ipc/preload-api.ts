@@ -12,7 +12,7 @@ import {
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
-import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
+import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, PSK_READ_CHANNEL, PSK_ROTATE_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL } from './tunnel-channel.js'
 import {
   HARNESS_RELAUNCH_CHANNEL,
   HARNESS_SAFE_MODE_CHANNEL,
@@ -103,6 +103,17 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
      */
     pinConsent: (consent: boolean): Promise<void> =>
       invokeFace.invoke(PIN_CONSENT_CHANNEL, consent) as Promise<void>,
+    /**
+     * 1.107：连接密钥三件套读数缝（dshForge 域外直转面同制）：bridge remotePsk.read 读数
+     * 即显（{configured,display,checksum,spki,pinConfigured,pinDurable}）——桌面零缓存，
+     * PSK 明文不经 manifest 快照。
+     */
+    pskRead: (): Promise<unknown> => invokeFace.invoke(PSK_READ_CHANNEL) as Promise<unknown>,
+    /**
+     * 1.107：连接密钥轮换缝（dshForge 域外直转面同制）：bridge remotePsk.rotate 再生成
+     * （旧钥宽限期 ≤5min 只验不密），结果 = 新三件套读数。
+     */
+    pskRotate: (): Promise<unknown> => invokeFace.invoke(PSK_ROTATE_CHANNEL) as Promise<unknown>,
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝）。
      *  trace_id 单点生成（1.2 链 A——renderer 侧唯一生成点，三镜像消费面零改动）：
      *  以第三参随 invoke 入 main，rpcEnvelope 信封单点读入诊断 ALS。 */

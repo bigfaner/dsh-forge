@@ -7,6 +7,8 @@ probe-source: .forge/docs/probes/official-mobile-page.js.txt
 
 ## R1 官方手机页实现实证（AD-2 条件项钉死）
 
+> **已证伪，见 R11**（探针实证 `/api/rpc` + `/api/session/stream` SSE 通道不存在）；R12 进一步裁决 **mobile 不消费 `/api` 官方面**（端点仅形状参照，消费经 `forge:proxy/*` in-process 直调）。本节保留为官方手机页**机械实证**（轮询常量/rAF 合帧/末条补丁/心跳/键盘视口），通道与端点口径以 R11/R12 为准。
+
 来源：本机官方安装物 `D:\software\DSH Desktop\resources\app.asar` 内 `renderMobilePage`（70KB 单文件页，提取件见 probe-source）。**这是批次①「SSE 抓样」的前置答案——端点形状已钉死，批次①首任务降为回放录制**。
 
 ### R1.1 流通道（SSE）
@@ -113,7 +115,7 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - per-record 键即路径段：必须 `[a-zA-Z0-9_-]+`，不安全键写时拒绝。
 - 无查询、无通知（通知在域层）、无跨进程仲裁。
 
-### R6.4 对 read-state 的实现精化
+### R6.4 对 read-state 的实现精化（**方案已撤销——2026-10-17 裁决 read-state host 面不建，未读游标 = 手机端 localStorage（tech-design AD-6）；本节仅留档**）
 
 | 决策点 | 结论 | 依据 |
 |---|---|---|
@@ -157,3 +159,26 @@ esbuild 原生无 html 入口：方案 = `esbuild.mjs` 以 `--bundle --format=ii
 - **F3 循环卡色条映射**：kind（dispatch 蓝/followup 浅蓝/state 灰/done 绿）↔ `forge/progress.verb` 值集映射，批次③实现时从 `loop/driver.ts` 取 verb 全集对齐（实证仅见 claim）。
 - **F5 派发寻址（用户裁决 2026-10-17·甲）**：dispatch 指令发用户当前浏览会话——零映射需求（同源独占守卫防重复）；不建专用 dispatch 会话映射。
 - **F4 唯一剩余实现级未知**：typert `commands` 服务（list/execute）的 **wire 暴露形态**——能否经 `/api/rpc {method:"commands.list"}` 直调未实证（官方手机页只用 session.* 族 JSON 面）——批次①录制桌面浏览器调指令的真实请求钉死（任务 1.1 AC 已含）。
+
+## R11 探针钉死（2026-10-17 connection 探针全绿——`/api/rpc` 假设证伪后的传输面重钉）
+
+| # | 项 | 结论（证据：connection-probe 绿跑 + 官方源码核销） |
+|---|---|---|
+| 1 | `/api/rpc` 信封通道 | ❌ **不存在**：本 host 配对 origin 对 `/api/rpc` 返回 404 "not found"；全部官方包 dist/lib 零命中。原 R9#5「官方手机页 rpc('session.list')」的真实通道 = **官方 client-connection 传输面**（下条），非 `{method,payload}` 信封 |
+| 2 | 官方传输面（真实形状） | ✅ host webserver 同源挂载：单呼 = `POST /api/<service>/<method>`（信封 `{type:"client-request",rpcId,method,payload}` → `{type:"server-response",rpcId,result:{ok,value\|error}}`）；事件流 = `WS /api/remote.mux` 逻辑流复用（`$events` generation 源）。client 半 = `installConnection`（`@deepseek-ai/dsh-client-connection`），desktop 壳经 custom scheme 转发同组协议 |
+| 3 | 组合缺口（必须补） | ❌→✅ **dsh-base 出厂只挂 `typert-gateway`，`api-session-controller` / `api-workspace-controller` 缺席**（`/api/session/list` 405 实证）——profile patch 插两行启用行 + profile deps 即点亮（探针已入 dev 形态；打包模板 template.ts 同源跟进） |
+| 4 | `/remote/` 挂载适配（已落地 commit `7921232d`） | ✅ 三缝：index 经 `renderIndexInjections` 注入官方行（facade + 组合脚本 + `__DSH_BOOT__`；tapIndex 弹射跳过——弹射终点即本页）；`/remote/plugins/*` 302 → 官方 `/plugins` 组合路由；`/remote/api/*` 307 → 官方 `/api` 通道（client http transport 发文档相对 URL；302 会降级 POST） |
+| 5 | client 半装载（mobile 页） | ✅ 最小路径实证：facade queue 模式下 app 组合 factory 入 `pendingQueue`（boot 只预载不执行）——按需补加载组合 `<script>` 后从队列直取 `@deepseek-ai/dsh-client-connection` factory 物化（bundle 自包含）；`installConnection` 缺省 web transport 同源直连 **（R12 作废——mobile 不 boot 官方 client，client 半不引入，见 R12#5）** |
+| 6 | 认证 | ✅ 配对链 302→302→303 铸官方 `dsh-auth-*` cookie（BrowserAuth，绑定 authority）；`_request` 上下文域由官方 typert client 运行时注入——手搓 payload 到不了（`gateway/arguments-invalid` 实证），**session.prompt 等业务单呼必须经官方 client 运行时** **（R12 作废——`_request` 随 forge:proxy in-process 直调消失，认证面见 tunnel-psk PSK v3，见 R12#5）** |
+| 7 | 架构裁决 | ~~方案 B（官方协议）~~ **R12 已改向**（见下） |
+
+## R12 最终裁决（2026-10-17：`/api` 官方 RPC 面整体放弃——安全裁决）
+
+| # | 项 | 结论 |
+|---|---|---|
+| 1 | 裁决 | **mobile 不消费 `/api` 官方 RPC 面**（含 LAN）：不 boot 官方 client 运行时、不引入 typert client。**事实修正（可行性检查 73726851）**：api 控制器经 `dsh-web-app` 组合行本就激活（桌面 /api 面依赖，dsh-web-app/cordis.patch.yml:121/147/230）——「组合行撤销=攻击面收窄」不成立已撤回，**组合不动**；R12 安全语义 = mobile 自有单一通道（`__rpc` + PSK）+ 传输面简化（官方 client boot 的全部复杂度退役） |
+| 2 | 数据通道（唯一） | `POST /remote/__rpc` 单通道 + PSK v3 安全层（tunnel-psk.md）：`forge:proxy/*`（官方能力 in-process 代理——同 ctx 直调 sessionController/typert 服务类方法，参数校验 = contracts DTO zod，`_request` 问题不存在）+ `forge:remote/*`（forge 原生） |
+| 3 | 流式（唯一） | 加密 SSE `GET /remote/forge-stream`（forge 侧订阅 host 事件镜像：api-session/*、approval、任务进度逐帧 AEAD 推送）——LAN/隧道同通道，隧道恢复推送能力 |
+| 4 | 用户的疑问收敛 | ①`_request` 问题随「不经 typert 网关」消失；②`session/follow` 流由 forge-stream 镜像等价承载；③官方 client-connection 的 client 半**不再引入 mobile**（handle/退避等能力由自研 stream.ts 轮询+SSE 重连承担——v1 设计残留复用）；④`dsh-client-connection` 在 mobile 的角色退为「协议形状参照 + 静态签名验证对端」 |
+| 5 | 由此作废 | 1.29 旧口径（官方 client 引导）、fix-3 旧目标（boot 核销）、1.11 typert 化、todo #74 现行推进（typert 化转 shelved 远期——若未来桌面统一协议可重启）、R11 #5/#6/#7 中与 typert/client-boot 相关的结论 |
+| 6 | PSK v3 不受影响 | tunnel-psk.md v3 全部有效（PSK/PIN-KDF/签名/逐渠道规范/forge-stream/静态签名）——它本来就设计在 `__rpc` 通道上 |

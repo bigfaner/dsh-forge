@@ -10,6 +10,9 @@
 // - stablePhase：'wait'（30s 相位稳定门——常态）| 'probe'（复启链路 60s 逐拍留痕探针
 //   ——comp 形态：settle 慢尾诊断）| 'none'（hero-control：相位由调用侧按项目态断言）。
 // - timeouts：安装形态慢盘 120s（缺省 60/90/60）。
+import { spawn } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,6 +28,38 @@ import { WORKBENCH } from './anchors.js'
  *  `spawn cmd.exe ENOENT` 即时失败（fix-40 勘察实证，回迁母本三段口径）。 */
 export const ROOT = join(fileURLToPath(import.meta.url), '..', '..', '..')
 export const HOST_DIR = join(ROOT, 'apps', 'host')
+
+/**
+ * harness 派生会话自愈（fix-9——1.34 归因分类 1 升级形态）：
+ *  - 指纹 = DSH_SHELL === '1'（dispatch worker 会话 env 实测在案）。
+ *  - E2E_ELECTRON_SWITCHES 缺省视为 '1'：派生进程树内 chromium sandbox 初始化即崩
+ *    （0x80000003 实证），--no-sandbox 等开关必须自动启用——替代「跑批环境统一注入」
+ *    （派发器 env 注入不可控，自愈一次落地全池受益）。
+ *  - e2eUserDataRoot()：E2E_USER_DATA_ROOT 覆写优先；harness 派生 → <ROOT>/.e2e-ud
+ *    （workspace 可写基目录，%TEMP% chromium 锁写拒实证）；真实终端 → tmpdir() 缺省
+ *    零变化。与 sanitizedLaunchEnv 摘 ELECTRON_RUN_AS_NODE 同语义：e2e 支撑层对派生
+ *    环境自愈，不依赖调用方手工置 env。
+ */
+const harnessDerived = process.env.DSH_SHELL === '1'
+
+/** electron 启动开关门：显式 env 优先；缺省仅 harness 派生会话自愈启用 */
+const e2eElectronSwitches = process.env.E2E_ELECTRON_SWITCHES ?? (harnessDerived ? '1' : undefined)
+
+/** userData 基目录：env 覆写 → harness 派生 workspace 可写路径 → 真实终端 tmpdir() 缺省
+ *  （覆写与自愈路径均 ensure 存在——消除调用侧预建依赖；tmpdir() 平台保证在场） */
+export function e2eUserDataRoot(): string {
+  const override = process.env.E2E_USER_DATA_ROOT
+  if (override !== undefined && override !== '') {
+    mkdirSync(override, { recursive: true })
+    return override
+  }
+  if (harnessDerived) {
+    const root = join(ROOT, '.e2e-ud')
+    mkdirSync(root, { recursive: true })
+    return root
+  }
+  return tmpdir()
+}
 
 /** electron 二进制（apps/host 依赖闭包解析——pnpm 隔离布局根 node_modules 无 electron） */
 export const electronBinary = createRequire(join(HOST_DIR, 'package.json'))('electron') as unknown as string
@@ -58,6 +93,12 @@ function sanitizedLaunchEnv(): Record<string, string> {
   const env = { ...process.env } as Record<string, string>
   delete env.ELECTRON_RUN_AS_NODE
   delete env.DSH_HOME
+  // fix-11 根因伴生面：回退浏览器起始根 = 宿主 os.homedir()（fs-rpc listDir 缺省）。
+  // fix-10 dispatch TMP 重定向在期（env 标记随进程树继承）→ 夹具落重定向根，与真 home
+  // 常跨盘符（行双击无法跨盘）——宿主 USERPROFILE 对齐重定向根，起始根 = 夹具所在根；
+  // 真实终端无标记零变化。
+  const redirected = process.env.__E2E_TMP_REDIRECTED__
+  if (redirected !== undefined && redirected !== '') env.USERPROFILE = redirected
   return env
 }
 
@@ -67,7 +108,24 @@ export async function launchElectron(opts: RawLaunchOptions = {}): Promise<Elect
   const installed = opts.executablePath !== undefined && opts.executablePath !== electronBinary
   return _electron.launch({
     executablePath: opts.executablePath ?? electronBinary,
-    ...(installed ? {} : { args: [...(opts.args ?? ['.'])], cwd: opts.cwd ?? HOST_DIR }),
+    ...(installed
+      ? {}
+      : {
+          args: [
+            // chromium 启动开关（置于 app 路径前才生效——electron 参数序：switches * 前置）。
+            // --no-sandbox：宿主派生进程树内 chromium sandbox 初始化即崩（0x80000003 实证）
+            //   ——仅 e2e 隔离面放行；真实终端非必需、无害。
+            // --disable-gpu：无头 e2e 无渲染保真诉求。
+            // --no-proxy-server：系统代理会劫持 LAN origin 页面导航（node fetch 绕代理而
+            //   chromium 不绕——jar 可达而 page.goto 挂起实证）；e2e 直连。
+            ...(e2eElectronSwitches === '1'
+              ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server']
+              : []),
+            ...(opts.args ?? []),
+            '.',
+          ],
+          cwd: opts.cwd ?? HOST_DIR,
+        }),
     env: {
       ...sanitizedLaunchEnv(),
       DSH_FORGE_PORT: String(opts.port ?? allocatePort()),
@@ -255,20 +313,77 @@ export async function launchHost(opts: LaunchHostOptions): Promise<Launched> {
 }
 
 /**
+ * closeApp 有界看门狗（fix-20 防御性加固——fix-19 裁决②，非缺陷修复）：
+ * 判例留档——1.72 基线单次 closeApp 挂死（480s 测试超时 + 60s teardown = 540s 代价），
+ * 四次定向复现全绿且退出链全链有界核销在案（bug 3fe6d3f5 裁决「环境级疑似而非代码缺陷」，
+ * 与 AGENTS.md「Windows commit 耗尽」症状族一致——随机进程冻结，与代码路径无关）。
+ * 本看门狗是防御面：优雅 close 30s 未决 → taskkill /T /F 强制进程树回收，把单次偶发
+ * 挂死代价封顶到 ~30s；正常路径优雅 close 秒级完成，永不触及 kill 分支。
+ */
+const CLOSE_WATCHDOG_MS = 30_000
+
+/** 进程树强杀：Windows taskkill /T /F（含子进程树）；其余平台 SIGKILL 直杀主进程；
+ *  pid 缺席（进程已退出竞态）退回 playwright 进程句柄 kill 兜底 */
+function killProcessTree(pid: number | undefined, fallback: () => void): void {
+  if (pid !== undefined) {
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' })
+    } else {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // 进程已退出——竞态无害
+      }
+    }
+  } else {
+    fallback()
+  }
+}
+
+/**
  * 关闭宿主并等待主进程退出 + 2s 静置（句柄/端口复用竞态防护——既有 specs 同源；
  * fix-34 止血形态，fix-37 收编单源——全员强制消费，禁止裸 app.close()）。
+ * 优雅退出链（app.close → exit 等待）整体置于 30s 看门狗之下（头注判例）。
  */
 export async function closeApp(app: ElectronApplication): Promise<void> {
   const proc = app.process()
-  await app.close().catch(() => undefined)
-  if (proc.exitCode === null) {
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, 10_000)
-      proc.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
+  let watchdog: NodeJS.Timeout | undefined
+  let watchdogFired = false
+  const deadline = new Promise<void>((resolve) => {
+    watchdog = setTimeout(() => {
+      watchdogFired = true
+      killProcessTree(proc.pid, () => {
+        proc.kill('SIGKILL')
       })
-    })
+      resolve()
+    }, CLOSE_WATCHDOG_MS)
+  })
+  proc.once('exit', () => {
+    if (watchdog !== undefined) clearTimeout(watchdog)
+  })
+  try {
+    await app.close().catch(() => undefined)
+    if (proc.exitCode === null) {
+      await Promise.race([
+        new Promise<void>((resolve) => proc.once('exit', resolve)),
+        deadline,
+      ])
+    }
+  } finally {
+    if (watchdog !== undefined) clearTimeout(watchdog)
+    // 看门狗已强杀（或 exit 尚未落地）时仍等待进程真正退出——有界 10s 兜底
+    if (proc.exitCode === null) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 10_000)
+        proc.once('exit', () => {
+          clearTimeout(timer)
+          resolve()
+        })
+      })
+    }
+    if (watchdogFired) {
+      console.warn(`[closeApp] 优雅退出超 ${CLOSE_WATCHDOG_MS / 1000}s，看门狗强制进程树回收 (pid=${String(proc.pid)})`)
+    }
   }
   await new Promise((resolve) => setTimeout(resolve, 2_000))
 }

@@ -1,7 +1,15 @@
 // fix-17 ②：隧道 tab 重连缝 IPC 通道单测（registerTunnelChannel/removeTunnelChannel——
 // dshForge 域外直转面先例同制：harness-channel 同构，不进 forge invoke allowlist）。
 import { describe, expect, it } from 'vitest'
-import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL, registerTunnelChannel, removeTunnelChannel } from './tunnel-channel.js'
+import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, PSK_READ_CHANNEL, PSK_ROTATE_CHANNEL, TUNNEL_FALLBACK_CHANNEL, TUNNEL_TOGGLE_CHANNEL, registerTunnelChannel, removeTunnelChannel } from './tunnel-channel.js'
+
+/** psk 双缝替身动作（1.107——读数/轮换带值返回） */
+function pskSeams() {
+  return {
+    pskRead: () => Promise.resolve({ configured: false }),
+    pskRotate: () => Promise.resolve({ configured: false }),
+  }
+}
 
 /** ipcMain 替身（handle/removeHandler 收集——forge-channels IpcMainLike 消费切片） */
 function fakeIpcMain() {
@@ -36,6 +44,7 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
       fallback: () => true,
       pinReset: () => true,
       consentPin: () => undefined,
+      ...pskSeams(),
     })
     expect(ipcMain.handles.has(TUNNEL_TOGGLE_CHANNEL)).toBe(true)
     await ipcMain.handles.get(TUNNEL_TOGGLE_CHANNEL)!.call(undefined)
@@ -50,6 +59,7 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
       fallback: () => void calls.push('fallback'),
       pinReset: () => void calls.push('pinReset'),
       consentPin: () => void calls.push('consentPin'),
+      ...pskSeams(),
     })
     expect(ipcMain.handles.has(TUNNEL_TOGGLE_CHANNEL)).toBe(true)
     expect(ipcMain.handles.has(TUNNEL_FALLBACK_CHANNEL)).toBe(true)
@@ -61,7 +71,7 @@ describe('tunnel-toggle 通道（fix-17 ② tab 切换重连缝）', () => {
 
   it('removeTunnelChannel → handler 撤除（before-quit 清理面——fix-18 起三缝同撤）', () => {
     const ipcMain = fakeIpcMain()
-    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true, consentPin: () => undefined })
+    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true, consentPin: () => undefined, ...pskSeams() })
     removeTunnelChannel(ipcMain)
     expect(ipcMain.handles.size).toBe(0)
     expect([...ipcMain.removed]).toEqual(
@@ -88,6 +98,7 @@ describe('fix-26 pin-consent 通道（长效密码开关——官方 POST /deskt
       consentPin: (consent) => {
         calls.push(consent)
       },
+      ...pskSeams(),
     })
     await ipcMain.handles.get(PIN_CONSENT_CHANNEL)?.(undefined, true)
     await ipcMain.handles.get(PIN_CONSENT_CHANNEL)?.(undefined, false)
@@ -101,10 +112,35 @@ describe('fix-26 pin-consent 通道（长效密码开关——官方 POST /deskt
       fallback: () => true,
       pinReset: () => true,
       consentPin: () => undefined,
+      ...pskSeams(),
     })
     removeTunnelChannel(ipcMain)
     expect(ipcMain.handles.size).toBe(0)
     expect(PIN_CONSENT_CHANNEL).toBe('dsh-forge:remote/pin-consent')
     expect([...ipcMain.removed]).toContain(PIN_CONSENT_CHANNEL)
+  })
+})
+
+describe('1.107 psk 双缝（连接密钥三件套读数/轮换——bridge remotePsk 服务直转）', () => {
+  it('通道名 pin：psk-read / psk-rotate（dshForge 直转面命名制）', () => {
+    expect(PSK_READ_CHANNEL).toBe('dsh-forge:remote/psk-read')
+    expect(PSK_ROTATE_CHANNEL).toBe('dsh-forge:remote/psk-rotate')
+  })
+
+  it('invoke psk-read / psk-rotate → actions 带值返回（读数即显）', async () => {
+    const ipcMain = fakeIpcMain()
+    const trio = { configured: true, display: 'A', checksum: 'b', spki: 'c' }
+    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true, consentPin: () => undefined, pskRead: () => Promise.resolve(trio), pskRotate: () => Promise.resolve(trio) })
+    await expect(ipcMain.handles.get(PSK_READ_CHANNEL)!.call(undefined)).resolves.toEqual(trio)
+    await expect(ipcMain.handles.get(PSK_ROTATE_CHANNEL)!.call(undefined)).resolves.toEqual(trio)
+  })
+
+  it('removeTunnelChannel 六缝同撤（含 psk 双缝）', () => {
+    const ipcMain = fakeIpcMain()
+    registerTunnelChannel(ipcMain, { toggle: () => true, fallback: () => true, pinReset: () => true, consentPin: () => undefined, ...pskSeams() })
+    removeTunnelChannel(ipcMain)
+    expect(ipcMain.handles.size).toBe(0)
+    expect([...ipcMain.removed]).toContain(PSK_READ_CHANNEL)
+    expect([...ipcMain.removed]).toContain(PSK_ROTATE_CHANNEL)
   })
 })

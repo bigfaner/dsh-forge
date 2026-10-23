@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   authenticateWebHost, createShellProtocolHandler, forwardToHost, installShellStreamRewrite,
-  registerShellScheme, resolveWebDistDir, rewriteStreamHeaders, serveShellDocument,
+  registerShellScheme, resolveMobileDistDir, resolveWebDistDir, rewriteStreamHeaders, serveShellDocument,
   SHELL_ENTRY_URL, SHELL_PAGE_ORIGIN, SHELL_SCHEME, type WebRequestLike,
 } from './web-document.js'
 
@@ -192,5 +192,27 @@ describe('resolveWebDistDir', () => {
   it('DSH_FORGE_WEB_DIST 显式覆盖仍最优先（调试口径，压过 resources 默认）', () => {
     const over = resolveWebDistDir({ DSH_FORGE_WEB_DIST: 'x/y', DSH_FORGE_RESOURCES_DIR: 'X:/res' })
     expect(over.replace(/\\/g, '/')).toMatch(/apps[/]host[/]x[/]y$/)
+  })
+})
+
+describe('resolveMobileDistDir（mobile-ui 1.7 AD-3：/remote/ 静态面改指 apps/mobile/dist）', () => {
+  it('默认 = hostRoot 上溯 apps/mobile/dist；DSH_FORGE_MOBILE_DIST 覆盖（相对锚 hostRoot）', () => {
+    const def = resolveMobileDistDir({})
+    expect(def.replace(/\\/g, '/')).toMatch(/apps[/]mobile[/]dist$/)
+    expect(resolveMobileDistDir({ DSH_FORGE_MOBILE_DIST: 'x/y' }).replace(/\\/g, '/')).toMatch(/apps[/]host[/]x[/]y$/)
+  })
+
+  it('打包形态：DSH_FORGE_RESOURCES_DIR 置位 → {resources}/mobile-dist（与 web-dist 同构物化位）', () => {
+    const abs = resolveMobileDistDir({ DSH_FORGE_RESOURCES_DIR: 'X:/install/resources' })
+    expect(abs.replace(/\\/g, '/')).toBe('X:/install/resources/mobile-dist')
+    expect(resolveMobileDistDir({ DSH_FORGE_RESOURCES_DIR: 'rel/res' }).replace(/\\/g, '/')).toMatch(
+      /apps[/]host[/]rel[/]res[/]mobile-dist$/,
+    )
+  })
+
+  it('DSH_FORGE_MOBILE_DIST 显式覆盖仍最优先；不与 resolveWebDistDir 共享语义', () => {
+    const over = resolveMobileDistDir({ DSH_FORGE_MOBILE_DIST: 'x/y', DSH_FORGE_RESOURCES_DIR: 'X:/res' })
+    expect(over.replace(/\\/g, '/')).toMatch(/apps[/]host[/]x[/]y$/)
+    expect(resolveWebDistDir({}).replace(/\\/g, '/')).toMatch(/apps[/]web[/]dist$/)
   })
 })

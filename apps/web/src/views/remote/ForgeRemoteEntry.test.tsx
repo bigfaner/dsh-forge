@@ -4,6 +4,7 @@
 // 本层钉渲染语言与状态类名。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   ForgeRemoteEntry,
   HARNESS_MENU_ITEMS,
@@ -13,6 +14,9 @@ import {
   RemotePanel,
   REMOTE_DIALOG_TITLE,
   REMOTE_STATUS_POLL_MS,
+  remoteDisconnectToast,
+  rebuildConverged,
+  TUNNEL_REBUILD_UPPER_BOUND_MS,
   TUNNEL_PROVIDER_LABEL,
   TunnelCard,
   harnessBridgeOf,
@@ -21,9 +25,11 @@ import {
   modeSelectEffectOf,
   pairCountdownLineOf,
   pairCountdownText,
-  PIN_CANCEL_TEXT,
   PIN_HINT_DURABLE_TEXT,
   PIN_HINT_TEMP_TEXT,
+  PSK_EMPTY_TEXT,
+  PSK_REGEN_CONFIRM_TITLE,
+  pskTrioCopyText,
   remoteDialogTitleOf,
   tunnelAutoReopenOf,
   pinCountdownText,
@@ -176,33 +182,53 @@ describe('ForgeRemoteEntry 图标三态', () => {
 })
 
 describe('RemotePanel 面板', () => {
-  it('默认关：开关未选中 + 空态提示（地址条不呈现）', () => {
-    const html = renderToStaticMarkup(
+  it('默认关：开关未选中 + 空态提示（地址条不呈现）——开关已上移 dialog 标题右侧（用户裁决 2026-10-22）', () => {
+    const panel = renderToStaticMarkup(
       <RemotePanel snapshot={{ phase: 'off' }} onToggle={() => undefined} />,
     )
-    expect(html).toMatch(/role="switch"/)
-    expect(html).toMatch(/aria-checked="false"/)
-    expect(html).not.toMatch(/type="checkbox"/)
-    expect(html).toMatch(/远程已关闭——开启远程并重启宿主后生成配对二维码/)
-    expect(html).not.toContain('dswf-remote-address')
-    expect(html).not.toMatch(/待重启生效提示/)
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={
+          <Switch checked={false} disabled={false} label="远程访问开关" onChange={() => undefined} />
+        }
+      />,
+    )
+    expect(head).toMatch(/role="switch"/)
+    expect(head).toMatch(/aria-checked="false"/)
+    expect(panel).not.toMatch(/type="checkbox"/)
+    expect(panel).toMatch(/远程已关闭——开启远程并重启宿主后生成配对二维码/)
+    expect(panel).not.toContain('dswf-remote-address')
+    expect(panel).not.toMatch(/待重启生效提示/)
   })
 
   it('监听中：开关选中 + 官方连接文案 + 局域网地址展示', () => {
-    const html = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
-    expect(html).toMatch(/aria-checked="true"/)
-    expect(html).toMatch(/扫码即可连接/)
-    expect(html).toContain('http://192.168.1.7:8787')
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
+    )
+    const panel = renderToStaticMarkup(<RemotePanel snapshot={LISTENING} onToggle={() => undefined} />)
+    expect(head).toMatch(/aria-checked="true"/)
+    expect(panel).toMatch(/扫码即可连接/)
+    expect(panel).toContain('http://192.168.1.7:8787')
   })
 
   it('fix-3 待重启生效：开关选中 + 重启提示行（不呈现局域网地址——不伪装已监听）', () => {
-    const html = renderToStaticMarkup(
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
+    )
+    const panel = renderToStaticMarkup(
       <RemotePanel snapshot={{ phase: 'pending' }} onToggle={() => undefined} />,
     )
-    expect(html).toMatch(/checked/)
-    expect(html).toContain('dswf-remote-pending-hint')
-    expect(html).toMatch(/重启宿主后生效/)
-    expect(html).not.toContain('http://')
+    expect(head).toMatch(/checked/)
+    expect(panel).toContain('dswf-remote-pending-hint')
+    expect(panel).toMatch(/重启宿主后生效/)
+    expect(panel).not.toContain('http://')
   })
 
   it('fix-26 ②：面板头「手机远程」「等待扫码」文字退役（状态语义由圆点/连接卡承载——面板头不渲染）', () => {
@@ -257,12 +283,19 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).not.toContain('已复制')
   })
 
-  it('⑦远程访问开关 = 官方 Switch 件（role="switch" aria-checked 全托管；fix-18 ① 起连接态独占——开关行属配对面，判读取 listening 态）', () => {
-    const html = renderToStaticMarkup(
-      <RemotePanel snapshot={LISTENING} onToggle={() => undefined} />,
+  it('⑦远程访问开关 = 官方 Switch 件上移 dialog 标题右侧（role="switch" aria-checked 全托管——用户裁决 2026-10-22 只留钮不留文字）', () => {
+    const head = renderToStaticMarkup(
+      <RemoteDialogHead
+        onClose={() => undefined}
+        trailing={<Switch checked disabled={false} label="远程访问开关" onChange={() => undefined} />}
+      />,
     )
-    expect(html).toMatch(/role="switch"[\s\S]*aria-checked="true"/)
-    expect(html).not.toMatch(/type="checkbox"/)
+    expect(head).toMatch(/role="switch"[\s\S]*?aria-checked="true"/)
+    expect(head).toContain('dswf-remote-dialog-title-row')
+    expect(head).not.toContain('dswf-remote-dialog-switch') // 旧绝对定位容器退役——不得重复渲染（曾叠挡 Harness 菜单）
+    expect(head.split('aria-label="远程访问开关"').length - 1).toBe(1) // 开关只渲染一份
+    expect(head).not.toMatch(/type="checkbox"/)
+    expect(head).not.toMatch(/>远程访问</) // 可见文本不留「远程访问」字样（aria-label 元数据不算）
   })
 
   it('fix-10（bug ec239552）：连接成功态绿卡——✓ 手机已连接 + 后台保持文案 + 断开连接/完成双钮（官方锚 main.js:1176）', () => {
@@ -279,11 +312,11 @@ describe('fix-9 配对 dialog 样式对齐官方（bug d9affbdf）', () => {
     expect(html).toMatch(/连接会在后台保持，现在可以关闭此窗口。/)
     expect(html).toMatch(/data-testid="dswf-remote-disconnect"[^>]*>[\s\S]*断开连接/)
     expect(html).toMatch(/data-testid="dswf-remote-done"[^>]*>[\s\S]*完成/)
+    expect(html).toContain('dswf-remote-connected-row') // 用户裁决 2026-10-22（三次）：断开连接与绿卡同行
     expect(html).not.toContain('dswf-remote-qr')
   })
 
-  it('fix-10：完成钮 = onClose 缝；断开连接钮 = onDisconnect 缝（撤该设备会话动作）', () => {
-    const calls: string[] = []
+  it('fix-10：完成钮 = onClose 缝；断开连接钮 = onDisconnect 缝（撤该设备会话动作）', () => {    const calls: string[] = []
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ phase: 'connected' }}
@@ -553,6 +586,11 @@ describe('fix-11 配对 dialog 样式裁决（宽度翻倍 + 三态色，remote.
     expect(css).not.toMatch(/\.dswf-remote-harness\s*\{[^}]*left:\s*-24px/)
   })
 
+  it('bug 7cb675cf：隧道空态虚线框 + TTL 横幅 border-box（width:100% + padding 不向右溢出，左右边距对称）', () => {
+    expect(css).toMatch(/\.dswf-remote-empty\s*\{[^}]*box-sizing:\s*border-box/)
+    expect(css).toMatch(/\.dswf-remote-tunnel-banner\s*\{[^}]*box-sizing:\s*border-box/)
+  })
+
   it('③fix-12 翻转：图标本体恒 currentColor（零 per-phase 着色）+ 圆点四态令牌（无/橙/绿/红）', () => {
     // 旧口径退役：入口钮不再按 phase 整体变色
     expect(css).not.toMatch(/\.dswf-remote-entry\[data-phase='off'\]/)
@@ -679,13 +717,14 @@ describe('fix-16 RemotePanel tab 内容随模式切换', () => {
     expect(html).toContain('http://192.168.1.7:8787')
   })
 
-  it('fix-19 ⑨ internet 模式 = 官方 tunnelHint 逐字（单源 §1）；无 WiFi 文案/LAN 地址条残留', () => {
+  it('用户裁决 2026-10-22：internet 模式零说明卡（explainer 及外框移除）；无 WiFi 文案/LAN 地址条残留', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={LAN_SNAPSHOT} onToggle={() => undefined} mode="internet" />,
     )
-    expect(html).toMatch(/移动设备通过互联网（如 4G\/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等/)
+    expect(html).not.toMatch(/移动设备通过互联网/)
     expect(html).not.toMatch(/无需同一 WiFi/)
     expect(html).not.toMatch(/同一 WiFi，同步实时性高/)
+    expect(html).not.toContain('dswf-remote-note-card')
     expect(html).not.toContain('dswf-remote-address')
     expect(html).not.toContain('http://192.168.1.7:8787')
   })
@@ -707,7 +746,7 @@ const TUNNEL_ONLINE: RemoteStatusSnapshot = {
 }
 
 describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :1176 连接态卡）', () => {
-  it('connected：仅连接卡+说明+双钮——tab/隧道卡/PIN/说明卡/地址条全部退场', () => {
+  it('connected：绿卡内联（不置顶独占）+ QR 隐藏、原位显示隧道 URL——tab/PIN/三件套共存（用户裁决 2026-10-22 二次）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ phase: 'connected', tunnel: TUNNEL_ONLINE.tunnel, pin: '654321', pinExpiresAt: TUNNEL_ONLINE.pinExpiresAt }}
@@ -716,13 +755,14 @@ describe('fix-18 ① 连接成功态独占（配对面整体退场——官方 :
       />,
     )
     expect(html).toContain('data-testid="dswf-remote-connected"')
-    expect(html).not.toContain('dswf-remote-tab-lan')
-    expect(html).not.toContain('dswf-remote-tab-internet')
-    expect(html).not.toContain('data-testid="dswf-remote-tunnel"')
-    expect(html).not.toContain('data-testid="dswf-remote-pin"')
-    expect(html).not.toContain('dswf-remote-note-card')
-    expect(html).not.toContain('dswf-remote-address')
-    expect(html).not.toContain('data-testid="dswf-remote-countdown"')
+    expect(html).toContain('dswf-remote-connected-wrap')
+    expect(html).not.toContain('data-testid="dswf-remote-qr"') // QR 隐藏
+    expect(html).toContain('dswf-remote-address-text') // 原 QR 位 = 隧道 URL pill + 复制
+    expect(html).toContain('dswf-remote-tab-lan')
+    expect(html).toContain('dswf-remote-tab-internet')
+    expect(html).toContain('data-testid="dswf-remote-pin"')
+    expect(html).toContain('654321')
+    expect(html).toContain('断开连接')
   })
 })
 
@@ -781,18 +821,19 @@ describe('fix-18 ④ 切换中 QR 灰色半透明遮罩 + tab 防重入', () => 
 })
 
 describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作', () => {
-  it('PIN 读数在场：方框卡（label「连接密码」+ 大字值 + 倒计时）；非 consent 态零双钮（fix-26 ④ pin-actions 仅 consent 态显示）', () => {
+  it('PIN 读数在场：方框卡（label「配对 PIN」+ 大字值 + 倒计时）；非 consent 态零双钮（fix-26 ④ pin-actions 仅 consent 态显示）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" onPinReset={() => undefined} />,
     )
     expect(html).toContain('data-testid="dswf-remote-pin"')
-    expect(html).toContain('连接密码')
+    expect(html).toContain('配对 PIN')
     expect(html).toContain('654321')
-    expect(html).not.toContain('data-testid="dswf-remote-pin-reset"')
+    // 用户裁决 2026-10-22：重置 PIN 恒在 consent 行右侧（非 consent 态不消失）；取消钮仍仅 consent 态
+    expect(html).toContain('data-testid="dswf-remote-pin-reset"')
     expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 
-  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 双钮呈现（重置密码/取消长效密码）', () => {
+  it('fix-26 ④ 勾选长效（pinDurable）：PIN 不倒计时（hint = 长效文案）+ 重置 PIN 钮；用户裁决 2026-10-22（二次）：取消长效 PIN 按钮退役——checkbox 唯一开关', () => {
     const html = renderToStaticMarkup(
       <RemotePanel
         snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }}
@@ -801,21 +842,21 @@ describe('fix-18 ③ PIN 独立方框卡（官方布局）+ 重置/取消动作'
         onPinConsent={() => undefined}
       />,
     )
-    expect(html).toMatch(/长效密码保存在本机，可随时重置或取消。/)
+    expect(html).toMatch(/长效 PIN 保存在本机，可随时重置或取消。/)
     expect(html).not.toMatch(/\(\d+s\)/)
     expect(html).toMatch(/dswf-remote-pin-consent[^>]*>[\s\S]*?checked/)
     expect(html).toContain('data-testid="dswf-remote-pin-reset"')
-    expect(html).toContain('重置密码')
-    expect(html).toContain('data-testid="dswf-remote-pin-cancel"')
-    expect(html).toContain('取消长效密码')
+    expect(html).toContain('重置 PIN')
+    expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
+    expect(html).not.toContain('取消长效 PIN')
   })
 
-  it('fix-26 ⑤⑧：取消钮文案 = 「取消长效密码」（官方 pinCancel 逐字）；onPinReset/onPinConsent 缺席 = 双钮禁用态（缝缺席 fail-soft）', () => {
+  it('fix-26 ⑤⑧（用户裁决 2026-10-22 二次修订）：取消钮退役；onPinReset 缺席 = 重置钮禁用态（缝缺席 fail-soft）', () => {
     const html = renderToStaticMarkup(
       <RemotePanel snapshot={{ ...TUNNEL_ONLINE, pinDurable: true }} mode="internet" />,
     )
     expect(html).toMatch(/dswf-remote-pin-reset[^>]*disabled/)
-    expect(html).toMatch(/dswf-remote-pin-cancel[^>]*disabled/)
+    expect(html).not.toContain('data-testid="dswf-remote-pin-cancel"')
   })
 })
 
@@ -830,9 +871,8 @@ describe('fix-26 走查批次（八点）', () => {
   })
 
   it('⑦⑧：hint 文案常量逐字（官方 pinHintDurable/pinHintTemp §1）', () => {
-    expect(PIN_HINT_DURABLE_TEXT).toBe('长效密码保存在本机，可随时重置或取消。')
+    expect(PIN_HINT_DURABLE_TEXT).toBe('长效 PIN 保存在本机，可随时重置或取消。')
     expect(PIN_HINT_TEMP_TEXT).toBe('5 分钟内有效，过期后需重新扫码。')
-    expect(PIN_CANCEL_TEXT).toBe('取消长效密码')
   })
 
   it('④ 非长效：PIN 正下方 hint = 「5 分钟内有效，过期后需重新扫码。 (Ns)」实时秒倒计时', () => {
@@ -845,6 +885,30 @@ describe('fix-26 走查批次（八点）', () => {
 })
 
 // ── fix-19：规格差值清尾 ⑥-⑨（单源规格 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
+
+describe('bug cf0db7e5 重建收敛（换线/重置 PIN 窗口不再误显失败态/永不恢复）', () => {
+  it('收敛判定：tunnel 面回归即收敛；未设上界（0）时无 tunnel 不收敛；上界到点收敛兜底', () => {
+    expect(rebuildConverged(1_000, 0, true)).toBe(true)
+    expect(rebuildConverged(1_000, 0, false)).toBe(false)
+    expect(rebuildConverged(1_000, 2_000, false)).toBe(false)
+    expect(rebuildConverged(2_001, 2_000, false)).toBe(true)
+  })
+
+  it('上界 = 15s（双链路皆败撤面兜底解遮，不永挂）', () => {
+    expect(TUNNEL_REBUILD_UPPER_BOUND_MS).toBe(15_000)
+  })
+})
+
+describe('remoteDisconnectToast（用户裁决 2026-10-22：断开 → 不限时错误 toast，点击关闭）', () => {  it('仅 connected → 非 connected 转换回报；listening/off/pending 互转零打扰', () => {
+    expect(remoteDisconnectToast('connected', 'listening')).toBe('手机连接已断开——等待重新配对')
+    expect(remoteDisconnectToast('connected', 'off')).toBe('手机连接已断开（远程访问已关闭）')
+    expect(remoteDisconnectToast('connected', 'pending')).toBe('手机连接已断开——等待重新配对')
+    expect(remoteDisconnectToast('listening', 'off')).toBeUndefined()
+    expect(remoteDisconnectToast('listening', 'connected')).toBeUndefined()
+    expect(remoteDisconnectToast('off', 'listening')).toBeUndefined()
+    expect(remoteDisconnectToast('connected', 'connected')).toBeUndefined()
+  })
+})
 
 describe('fix-19 ⑥ 已连接态标题与 manage-connected 二级形态（官方 §2）', () => {
   it('remoteDialogTitleOf：connected = 「管理手机连接」；其余 = 「连接移动设备」', () => {
@@ -1115,7 +1179,7 @@ describe('fix-21 §2⑥⑦⑧ PIN 方框 + 连接卡 + 说明 hint 行', () => {
   it('consent checkbox 行渲染（官方 label + 隐私 small 字）', () => {
     const html = renderToStaticMarkup(<RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />)
     expect(html).toContain('dswf-remote-pin-consent')
-    expect(html).toContain('生成长期有效的连接密码')
+    expect(html).toContain('生成长期有效的配对 PIN')
     expect(html).toContain('不上云、不写入二维码')
   })
 
@@ -1173,5 +1237,67 @@ describe('fix-24（bug d8986cac）互联网 tab 分段器/容器/居中/遮罩�
     expect(masked).toContain('正在切换备用线路') // 遮罩内文案仍在
     const bare = renderToStaticMarkup(<TunnelCard phase="switching" onFallback={() => undefined} />)
     expect(bare).toMatch(/dswf-remote-tunnel-status/)
+  })
+})
+
+// ── 1.107 互联网模式带外秘钥展示面（连接密钥三件套——PSK/校验段/SPKI + PIN 提示 + 轮换确认） ──
+
+const TRIO = { display: 'ABCDE-FGHJK-LMNOP', checksum: 'ab12', spki: 'c3R1Yg==', pinConfigured: true }
+
+describe('1.107 连接密钥三件套段（读数即显 + 复制 + 轮换确认弹窗）', () => {
+  const css = readFileSync(new URL('./remote.css', import.meta.url), 'utf8')
+
+  it('三件套渲染：PSK 掩码 + 校验段 + SPKI（各字段复制钮）+ 重新生成入口 + 宽限期 hint——PIN 行已移除（用户裁决 2026-10-22）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} onPskRotate={() => Promise.resolve(TRIO)} />,
+    )
+    expect(html).toContain('dswf-remote-psk-display')
+    expect(html).not.toContain('ABCDE-FGHJK-LMNOP') // 掩码态不落明文（用户裁决：不展示私钥材料）
+    expect(html).toContain('•••••-•••••-•••••')
+    expect(html).toContain('显示连接密钥')
+    expect(html).toContain('dswf-remote-psk-checksum')
+    expect(html).toContain('ab12')
+    expect(html).toContain('dswf-remote-psk-spki')
+    expect(html).toContain('c3R1Yg==')
+    expect(html).not.toContain('dswf-remote-psk-pin')
+    expect(html).not.toContain('123456')
+    expect(html).toContain('dswf-remote-psk-regen')
+    expect(html).toContain('重新生成')
+    expect(html).toContain('5 分钟宽限期')
+  })
+
+  it('轮换缝缺席 = 重新生成禁用态（fail-soft）；确认弹窗关合态零正文（防误触弹窗不随段渲染）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} />,
+    )
+    expect(html).toMatch(/dswf-remote-psk-regen"[^>]*disabled/)
+    expect(html).not.toContain('重新生成后当前连接密钥立即被替换')
+  })
+
+  it('读数缝缺席 = 段不伪装读数（挂载期 pskRead 取数后呈现/空态——静态面零行）；确认弹窗文案常量 pin', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" />,
+    )
+    expect(html).not.toContain('dswf-remote-psk-display')
+    expect(html).not.toContain('dswf-remote-psk-empty')
+    expect(PSK_EMPTY_TEXT).toContain('连接密钥暂不可用')
+    expect(PSK_REGEN_CONFIRM_TITLE).toBe('重新生成连接密钥？')
+  })
+
+  it('一键复制全部：标题行复制钮（读数在场才出现）+ 文本格式 = 一行 label 一行 value 再一个空行（用户裁决 2026-10-22）', () => {
+    const html = renderToStaticMarkup(
+      <RemotePanel snapshot={TUNNEL_ONLINE} mode="internet" trio={TRIO} onPskRotate={() => Promise.resolve(TRIO)} />,
+    )
+    expect(html).toContain('dswf-remote-psk-copy-all')
+    expect(html).toContain('复制全部连接密钥')
+    expect(pskTrioCopyText(TRIO)).toBe('PSK\nABCDE-FGHJK-LMNOP\n\n校验段\nab12\n\nSPKI\nc3R1Yg==')
+  })
+
+  it('段样式：410px / 14px 圆角 / panel 底（PIN 方框同型）+ mono 值不换行省略（用户裁决 2026-10-22：尽量不换行）', () => {
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*width:\s*410px/)
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*border-radius:\s*14px/)
+    expect(css).toMatch(/\.dswf-remote-psk\s*\{[^}]*background:\s*var\(--dsw-alias-bg-layer-2\)/)
+    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*white-space:\s*nowrap/)
+    expect(css).toMatch(/\.dswf-remote-psk-value\s*\{[^}]*text-overflow:\s*ellipsis/)
   })
 })
