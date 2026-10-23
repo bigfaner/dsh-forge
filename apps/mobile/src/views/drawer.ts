@@ -267,6 +267,8 @@ export interface DrawerDeps {
   readonly pollMs?: number
   /** forge-stream `api-session/*` 镜像帧订阅（帧到达 → 防抖刷新；缺席 = 纯轮询兜底）。 */
   readonly subscribeStream?: (onFrame: () => void) => () => void
+  /** bug ef6afa2a：grouped 去重门（装配面与 fetchStatus 共享——同一次打开只算一次；缺席直调）。 */
+  readonly groupedGate?: GroupedGate
 }
 
 /** 默认状态读法：GET /api/status（401/异常 = 断开）。 */
@@ -289,6 +291,55 @@ export function defaultFetchStatus(): Promise<DrawerStatus> {
 // 状态闪断抑制（2026-10-22 真机判例：激活后首包 __rpc 偶发 unauthorized（信封时序瞬态），
 // 单次失败即翻「连接中断」= 闪断——连续失败达阈值才翻，任一次成功即清零）。
 export const STATUS_FAIL_STREAK_THRESHOLD = 2
+
+// ---------------------------------------------------------------------------
+// bug ef6afa2a：抽屉数据装载三面（并行 / 去重门 / 快照缓存）
+// ---------------------------------------------------------------------------
+
+/** grouped+read-state 并行装载（原串行 await——公网 RTT × 2 = 白屏放大）。 */
+export interface DrawerData {
+  readonly grouped: GroupedModel
+  readonly cursors: Record<string, number>
+}
+
+export function loadDrawerData(rpc: Pick<RemoteRpc, 'call'>): Promise<DrawerData> {
+  return Promise.all([
+    rpc.call<unknown>(DRAWER_GROUPED_CHANNEL, {}),
+    rpc.call<unknown>(READ_STATE_CHANNEL, {}),
+  ] as const).then(([groupedResult, state]) => ({
+    grouped: groupedResult.ok ? coerceGrouped(groupedResult.data) : coerceGrouped(null),
+    cursors: state.ok ? coerceReadCursors(state.data) : {},
+  }))
+}
+
+/** 同窗去重门（in-flight 共享 + TTL 缓存命中——同一次打开 grouped 只算一次）。 */
+export interface GroupedGate {
+  run<T>(fn: () => Promise<T>): Promise<T>
+}
+
+export function createGroupedGate(ttlMs: number, now: () => number = Date.now): GroupedGate {
+  let lastAt = Number.NEGATIVE_INFINITY
+  let last: Promise<unknown> | null = null
+  return {
+    run<T>(fn: () => Promise<T>): Promise<T> {
+      if (last !== null && now() - lastAt < ttlMs) return last as Promise<T>
+      lastAt = now()
+      last = fn()
+      return last as Promise<T>
+    },
+  }
+}
+
+/** 模块级 grouped 快照（视图实例随路由重建——跨打开存续的 stale-while-revalidate 面）。 */
+let groupedCache: GroupedModel | null = null
+
+export function storeGroupedCache(model: GroupedModel): void {
+  groupedCache = structuredClone(model)
+}
+
+export function peekGroupedCache(): GroupedModel | null {
+  return groupedCache !== null ? structuredClone(groupedCache) : null
+}
 
 /** 连续失败计数推进（ok = 清零；失败 = +1）。 */
 export function nextStatusFailStreak(prev: number, ok: boolean): number {
@@ -320,8 +371,9 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   const pinsStorageKey = pinnedKey(deps.pairDomain)
   const collapsedStorageKey = collapsedKey(deps.pairDomain)
 
-  // ---- 状态 ----
-  let grouped: GroupedModel = { generatedAt: null, projects: [], unassigned: [] }
+// ---- 状态 ----
+  // bug ef6afa2a：模块级 grouped 快照（stale-while-revalidate——打开即渲染上次数据，刷新后更替）
+  let grouped: GroupedModel = peekGroupedCache() ?? { generatedAt: null, projects: [], unassigned: [] }
   let cursors: Record<string, number> = {} // host read-state 拉取（refresh 对账）
   let pinned = loadStringList(storage, pinsStorageKey)
   let collapsed = loadStringList(storage, collapsedStorageKey)
@@ -509,10 +561,18 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   }
 
   // ---- 数据 ----
+  // bug ef6afa2a：grouped 与 read-state 并行（原串行 await 全回来才 render——公网 RTT 放大
+  // 成肉眼可见白屏）；grouped 快照入模块缓存，下次打开先渲染缓存再后台刷新。
   async function refresh(): Promise<void> {
-    const result = await deps.rpc.call<unknown>(DRAWER_GROUPED_CHANNEL, {})
-    if (result.ok) grouped = coerceGrouped(result.data)
-    const state = await deps.rpc.call<unknown>(READ_STATE_CHANNEL, {})
+    const callGrouped = (): Promise<{ readonly ok: boolean; readonly data?: unknown }> => deps.rpc.call<unknown>(DRAWER_GROUPED_CHANNEL, {})
+    const [groupedResult, state] = await Promise.all([
+      deps.groupedGate !== undefined ? deps.groupedGate.run(callGrouped) : callGrouped(),
+      deps.rpc.call<unknown>(READ_STATE_CHANNEL, {}),
+    ] as const)
+    if (groupedResult.ok) {
+      grouped = coerceGrouped(groupedResult.data)
+      storeGroupedCache(grouped)
+    }
     cursors = state.ok ? coerceReadCursors(state.data) : cursors
     render()
   }
@@ -554,6 +614,8 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
   }
   schedulePoll()
 
+  // bug ef6afa2a：缓存快照先行渲染（零等待出列表）——refresh 回来后原位更替
+  if (grouped.projects.length > 0 || grouped.unassigned.length > 0) render()
   void refresh()
   void refreshStatus()
 

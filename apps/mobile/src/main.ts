@@ -41,7 +41,7 @@ import { createFab } from './widgets/fab.ts'
 import { HERO_DEFAULT_MODE, createHeroView } from './views/hero.ts'
 import { coerceHistoryWindow, createChatView, type StreamEngine } from './views/chat.ts'
 import type { SseSink } from './core/sse.ts'
-import { createDrawerView } from './views/drawer.ts'
+import { createDrawerView, createGroupedGate } from './views/drawer.ts'
 import { createSettingsSheet, type SettingsHandle } from './views/settings.ts'
 import {
   clearPendingModelDefault,
@@ -509,15 +509,19 @@ export function mount(root: HTMLElement): void {
       }
       case 'drawer': {
         ensureStream()
+        // bug ef6afa2a：drawer refresh 与 fetchStatus 心跳共享 grouped 去重门——同一次打开
+        // 重型分组调用只算一次（原两遍 × 公网 RTT = 抽屉白屏主因之一）。
+        const groupedGate = createGroupedGate(2000)
         return {
           key: 'drawer',
           root: createDrawerView({
             rpc: ctx.rpc,
+            groupedGate,
             // 用户裁决 2026-10-22（双域统一代理化）：心跳统一 grouped 通道——/api/status
             // 双域皆被 api-guard 403（LAN 明文 __rpc 携配对 cookie / 隧道 PSK 信封同缝）
             fetchStatus: async () => {
               try {
-                const result = await ctx.rpc.call<unknown>('forge:proxy/projects-grouped', {})
+                const result = await groupedGate.run(() => ctx.rpc.call<unknown>('forge:proxy/projects-grouped', {}))
                 return { ok: result.ok, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
               } catch {
                 return { ok: false, tunnelExpiresAt: null, tunnel: ctx.tunnel === true }
