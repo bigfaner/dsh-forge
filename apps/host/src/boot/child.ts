@@ -85,6 +85,7 @@ import {
   interceptRequiredBinding,
   interceptSessionSends,
   verifySendGuardInstalled,
+  type LiveSessionFace,
   type SessionControllerFace,
   type SessionPersistenceFace,
   type WorktreeRpcService,
@@ -435,6 +436,16 @@ async function main(): Promise<void> {
       // 诊断面异常不反压业务链（红线①同构）
     }
   }
+  // binding-derivation §2.6：session-bind 留痕 append 失败诊断 emit 缝（warn 级——AC
+  // 「append 失败 fail-soft + emitDiag('session-bind', warn)」）
+  const sessionBindWarnDiag = (line: string): void => {
+    diag(line)
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'session-bind', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
   {
     let foldAttached = false
     const attachFold = (): void => {
@@ -642,18 +653,25 @@ async function main(): Promise<void> {
           if (target === 'custom' || face.current(session) === target) return
           face.set(session, target)
         },
-        // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
-        // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
-        resolveDefaultPreset: async () => {
-          let presets: unknown
+        // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
+        bindWarnDiag: sessionBindWarnDiag,
+        // binding-derivation §2.2：session/created 监听装配缝（官方事件——fork 亦发布，同径
+        // 覆盖；进程内 Session.append 直调 = ignorable 事件直写合法缝）。注册失败 fail-soft
+        // （留痕由 seal 漂移校验惰性补写兜底）。
+        onSessionCreated: (handler) => {
           try {
-            presets = (ctx as unknown as { agentPresets?: unknown }).agentPresets
+            return ctx.on('session/created', (session) => handler(session.id))
           } catch {
             return undefined
           }
-          const resolve = (presets as { resolve?: (id?: string) => Promise<{ id: string }> } | undefined)?.resolve
-          if (typeof resolve !== 'function') return undefined
-          return (await resolve.call(presets, undefined)).id
+        },
+        // binding-derivation §2.2：活会话解析缝（官方 sessions store——留痕 append 面解析）
+        liveSessions: () => {
+          try {
+            return servicesFace.get('sessions') as { get(id: string): LiveSessionFace | undefined } | undefined
+          } catch {
+            return undefined
+          }
         },
         warn: (line) => diag(line),
         // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
