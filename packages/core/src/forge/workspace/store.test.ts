@@ -51,8 +51,8 @@ function seedTask(db: Database.Database, taskId = 't1'): void {
   ).run(taskId, 'demo-feature-f1', '1.1', '任务一', 'coding.feature', NOW, NOW)
 }
 
-describe('AC1 全 DDL 在临时库执行零错（十三表 + 八索引 + 四触发器 + FK/CHECK 负样例）', () => {
-  it('首开空目录：十三表全部在场（八域表 + bugs + schema_meta + app_key_logs + migration_digests + tasks_surface_archive）', () => {
+describe('AC1 全 DDL 在临时库执行零错（十四表 + 九索引 + 六触发器 + FK/CHECK 负样例）', () => {
+  it('首开空目录：十四表全部在场（八域表 + bugs + implementation_checkpoints + schema_meta + app_key_logs + migration_digests + tasks_surface_archive）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const tables = db
@@ -67,6 +67,7 @@ describe('AC1 全 DDL 在临时库执行零错（十三表 + 八索引 + 四触�
       'feature_documents',
       'feature_records',
       'features',
+      'implementation_checkpoints',
       'migration_digests',
       'proposals',
       'schema_meta',
@@ -79,7 +80,7 @@ describe('AC1 全 DDL 在临时库执行零错（十三表 + 八索引 + 四触�
     store.dispose()
   })
 
-  it('八索引全部创建（idx_* 前缀——M3：idx_tasks_source_status 取代 feature_status 形态；fix-bug：+idx_bugs_status）', () => {
+  it('九索引全部创建（idx_* 前缀——M3：idx_tasks_source_status 取代 feature_status 形态；fix-bug：+idx_bugs_status；机械①：+idx_impl_cp_proposal）', () => {
     const store = createWorkspaceStore({ resolveDir: () => wsDir() })
     const db = store.ensureOpen('p1')
     const indexes = db
@@ -92,6 +93,7 @@ describe('AC1 全 DDL 在临时库执行零错（十三表 + 八索引 + 四触�
       'idx_bugs_status',
       'idx_edges_prerequisite',
       'idx_fr_feature',
+      'idx_impl_cp_proposal',
       'idx_records_session',
       'idx_records_task',
       'idx_tasks_source',

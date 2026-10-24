@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 4
+export const FORGE_DB_SCHEMA_VERSION = 5
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -274,6 +274,39 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
         sql: `ALTER TABLE tasks DROP COLUMN surface_type`,
         dropGuard: { table: 'tasks', column: 'surface_type' },
       },
+    ],
+  },
+  {
+    // v5（forge-verification-hardening 机械①）：implementation_checkpoints 实现检查点流水
+    // （append-only——容器实现过程关键节点序列，提案「实体设计」节为契约 DDL 单源）。
+    // 唯一约束 (proposal_id, mark, wave_seq) 仅作用于五类里程碑标记 → partial unique index
+    // （关系标记 derived-to-child 豁免——每派生一个改进提案落一行）；wave_seq 列 NULL 直入
+    // （SQLite UNIQUE 视 NULL 互异，故不用表级约束而取 partial index 精确圈定作用域）。
+    // 索引 (proposal_id, created_at) = 时序查询主径；append-only 双触发器（feature_records 同构）。
+    version: 5,
+    statements: [
+      `CREATE TABLE implementation_checkpoints (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id           TEXT NOT NULL REFERENCES proposals(id),
+    mark                  TEXT NOT NULL
+                          CONSTRAINT ck_impl_cp_mark CHECK (mark IN
+                            ('first-pass-complete', 'retro-done', 'review-wave-N',
+                             'stabilized', 'merged', 'derived-to-child')),
+    wave_seq              INTEGER,
+    created_at            TEXT NOT NULL,
+    base_commit_hash      TEXT NOT NULL,
+    tasks_total           INTEGER NOT NULL,
+    commits_total         INTEGER NOT NULL,
+    fixes_total           INTEGER NOT NULL,
+    evidence_debts_total  INTEGER NOT NULL
+)`,
+      `CREATE UNIQUE INDEX uq_impl_cp_milestone ON implementation_checkpoints(proposal_id, mark, wave_seq)
+     WHERE mark IN ('first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged')`,
+      `CREATE INDEX idx_impl_cp_proposal ON implementation_checkpoints(proposal_id, created_at)`,
+      `CREATE TRIGGER trg_impl_cp_no_update BEFORE UPDATE ON implementation_checkpoints
+BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (update)'); END`,
+      `CREATE TRIGGER trg_impl_cp_no_delete BEFORE DELETE ON implementation_checkpoints
+BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
     ],
   },
 ]
