@@ -34,7 +34,7 @@ import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation 
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
-import { createForgeDispatchLoopProjection } from './projection/index.js'
+import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
@@ -387,7 +387,14 @@ const forgePlugin: ForgePlugin = Object.assign(
         | { register?: (definition: unknown) => () => void }
         | undefined
       if (projections !== undefined && typeof projections.register === 'function') {
-        disposeProjection = projections.register(createForgeDispatchLoopProjection())
+        const disposeLoop = projections.register(createForgeDispatchLoopProjection())
+        // 1.6 进度事件流投影键（loop-event-delivery——fold 'forge/progress' 事件，
+        // registry 逐事件驱动 fold，面板实时刷新；同注册表、同 fail-soft 语义）。
+        const disposeEvents = projections.register(createForgeDispatchEventsProjection())
+        disposeProjection = () => {
+          disposeLoop()
+          disposeEvents()
+        }
       }
     } catch {
       disposeProjection = undefined
