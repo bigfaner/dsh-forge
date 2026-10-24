@@ -17,9 +17,10 @@ mobile 与宿主（`apps/host` child 进程）的全部交互走两条物理通�
 
 ## 2. 推送通道：`GET /remote/forge-stream`（SSE 镜像）
 
-- 每连接注册：8 个官方事件名镜像（`subscribeOfficialEvents`）+ assistant 流式密帧镜像（`subscribeAssistantStreamMirror`，`agent/assistant-stream` → `{sessionId, frame}`）+ ask 桥扇出（连接注册进 `streamPushes` 集）。
+- 每连接注册：8 个官方事件名镜像（`subscribeOfficialEvents`）+ assistant 流式密帧镜像（`subscribeAssistantStreamMirror`，`agent/assistant-stream` → `{sessionId, frame}`）+ 投影变更帧镜像（`subscribeProjectionMirror`，loop-event-delivery 1.10）+ ask 桥扇出（连接注册进 `streamPushes` 集）。
 - 帧体 `{type, payload, at}`；隧道域逐帧 AEAD + host Ed25519 签名，LAN 明文。
 - mobile `onEvent` 消费：`frameSessionIdOf(payload)` → `scheduleRefresh`（节流重拉）；`agent/assistant-stream` 瞬态帧穿透 settler；`user-questions/request` → 直开 ask 面板。
+- **投影变更帧镜像**（`session/projection` → `{sessionId, key, seq}`）：官方投影变更走 control 流帧、未镜像进 forge-stream——host 把 `sessionProjections.onChanged` 帧源接进 forge-stream 同一订阅-扇出（`subscribeOfficialEvents` 同径，零新物理通道）；注册表缺席 = 零镜像 fail-soft。帧只当失效信号：值恒走 `forge:proxy/session-projections` RPC 全量键读取（消费面 = 任务浮层进度流段，键 `forge-dispatch-events`）。
 
 ## 3. 宿主侧插件（dsh-forge 专有缝）
 

@@ -71,7 +71,7 @@ import {
   saveWatermarks,
   type PskGateDeps,
 } from './psk-gate.js'
-import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
+import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents, subscribeProjectionMirror } from './forge-stream.js'
 import { subscribeAssistantStreamMirror } from './assistant-stream-mirror.js'
 import { createUserQuestionsBridge } from './user-questions-bridge.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
@@ -984,9 +984,24 @@ async function main(): Promise<void> {
                   emit: push,
                   diag,
                 })
+                // loop-event-delivery 1.10：投影变更帧镜像（mobile 实时刷新腿）——官方投影
+                // 变更走 control 流帧、未镜像进 forge-stream；此把 sessionProjections
+                // onChanged 帧源接进同一订阅-扇出（subscribeOfficialEvents 同径，零新物理
+                // 通道）。载荷 {sessionId, key, seq}——mobile 据此重拉 session-projections
+                // RPC（值恒走 RPC 全量键读取，帧只当失效信号）。注册表缺席 fail-soft 零镜像。
+                let projectionFace: Parameters<typeof subscribeProjectionMirror>[0]
+                try {
+                  projectionFace = (ctx as unknown as { reflect?: { get?: (name: string) => unknown } }).reflect?.get?.('sessionProjections') as
+                    | Parameters<typeof subscribeProjectionMirror>[0]
+                    | undefined
+                } catch {
+                  projectionFace = undefined
+                }
+                const offProjection = subscribeProjectionMirror(projectionFace, push, diag)
                 return () => {
                   offOfficial()
                   offAssistant()
+                  offProjection()
                   streamPushes.delete(push)
                 }
               },

@@ -2487,6 +2487,143 @@ body[data-ds-dark-theme] .dispatch-bar {
   color: #151517;
 }
 
+/* ---- 进度流（loop-event-delivery 1.10——投影键 forge-dispatch-events 窄幅形态：
+        单列轨 + 状态点 + title，prototype.html mobile 三态令牌） ---- */
+.pstream {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border: 0.5px solid #dadce0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.dark .pstream,
+body[data-ds-dark-theme] .pstream {
+  border-color: #303034;
+}
+.pstream-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #eceef0;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.dark .pstream-bar,
+body[data-ds-dark-theme] .pstream-bar {
+  border-color: #303034;
+}
+.pstream-bar .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #4176e6;
+  flex: none;
+}
+.dark .pstream-bar .dot,
+body[data-ds-dark-theme] .pstream-bar .dot {
+  background: #7aaaff;
+}
+.pstream-bar .total {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: #81858c;
+  font-variant-numeric: tabular-nums;
+}
+.pstream-flow {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.pstream-hint {
+  color: #81858c;
+  font-size: 12px;
+  text-align: center;
+  padding: 10px 0;
+}
+.prow {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 8px;
+  padding: 5px 12px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.prow:hover {
+  background: #f5f6f7;
+}
+.dark .prow:hover,
+body[data-ds-dark-theme] .prow:hover {
+  background: #2c2c2e;
+}
+.prow .rail {
+  position: relative;
+  align-self: stretch;
+}
+.prow .rail::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #e5e7eb;
+}
+.prow:first-child .rail::before {
+  top: 50%;
+}
+.prow:last-child .rail::before {
+  bottom: 50%;
+}
+.dark .prow .rail::before,
+body[data-ds-dark-theme] .prow .rail::before {
+  background: #303034;
+}
+.prow .rail i {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #adb2b8;
+}
+.prow.run .rail i {
+  background: #4176e6;
+  box-shadow: 0 0 0 3px rgba(65, 118, 230, 0.12);
+}
+.prow.done .rail i {
+  background: #22c55e;
+}
+.prow.blk .rail i {
+  background: #dd8629;
+}
+.dark .prow.run .rail i,
+body[data-ds-dark-theme] .prow.run .rail i {
+  background: #7aaaff;
+}
+.prow .t {
+  min-width: 0;
+}
+.prow .t .ttl {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prow .t .note {
+  display: block;
+  font-size: 11px;
+  line-height: 16px;
+  color: #81858c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- 全屏阅读页（屏⑩⑪——mockup .reader 逐位刻度） ---- */
 .reader {
   position: absolute;
