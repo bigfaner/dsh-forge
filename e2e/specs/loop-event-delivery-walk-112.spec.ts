@@ -356,10 +356,22 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       await parentRow.evaluate((el) => (el as HTMLElement).click()).catch(() => undefined)
       badgeRestored = await page.locator(DEP_BADGE).first().waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false)
     }
+    if (!badgeRestored) {
+      // 恢复兜底（间歇面收口）：worker 子会话上面板/列表隐藏——parentRow 点击无效；
+      // 经会话层级条切回父会话（banner navigation「会话层级」内的父会话名按钮）。
+      const crumb = page.getByRole('navigation', { name: '会话层级' }).getByText(WS_NAME, { exact: true })
+      await crumb.click({ timeout: 10_000 }).catch(() => undefined)
+      badgeRestored = await page.locator(DEP_BADGE).first().waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false)
+    }
     meta.badgeRestored = badgeRestored
     console.log(`[walk112] badge restored after jump = ${String(badgeRestored)}`)
 
     // ── 等结算（两任务完成）──
+    // 面板收起则先展开（结算断言以展开态统计条为承载）。
+    if (!(await page.locator(DEP_STAT).first().isVisible().catch(() => false))) {
+      const badgeNow = page.locator(DEP_BADGE).first()
+      if (await badgeNow.isVisible().catch(() => false)) await badgeNow.click()
+    }
     await expect(
       page.locator(DEP_STAT).first(),
       '结算完成（完成 2）',
