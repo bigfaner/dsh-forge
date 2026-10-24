@@ -37,6 +37,7 @@ import {
   type WorktreeResolveResult,
   type WorktreeSessionCreateRequest,
   type WorktreeSessionCreateResult,
+  type SessionBindingMismatchEvent,
 } from '@dsh-forge/contracts'
 import {
   createWorktree,
@@ -148,12 +149,10 @@ export interface WorktreeRpcService {
   requiredBindingGuard(): RequiredBindingGuardFace | undefined
 }
 
-/** 必绑拦截 guard 面（judge/reroute——interceptRequiredBinding 消费） */
+/** 绑定哨兵 guard 面（judge——interceptRequiredBinding 消费） */
 export interface RequiredBindingGuardFace {
-  /** 'pass' = 放行；'route' = 无绑定 blank（必绑拦截命中）→ reroute */
-  judge(sessionId: string): Promise<'pass' | 'route'>
-  /** 编排（等待既有在途产物）+ 以原消息内容 prompt 产物会话；args 尾巴（官方 signal 等）原样透传；失败显式报错 */
-  reroute(sessionId: string, request: unknown, ...args: unknown[]): Promise<unknown>
+  /** 恒 'pass'（WYSIWYG 哨兵——失配只发事件 + 日志，投递零干预）；异常 = typed 拒绝上抛 */
+  judge(sessionId: string): Promise<'pass'>
 }
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
@@ -313,6 +312,9 @@ export function createWorktreeRpcService(deps: {
   readonly failOpenDiag?: (message: string) => void
   /** 重路由目标活性探测缝（bug 4a30b193——缺省 = existsSync 盘上事实；测试注入桩） */
   readonly pathPresent?: ((path: string) => boolean) | undefined
+  /** 绑定失配哨兵发射缝（WYSIWYG——用户裁决 2026-10-24）：child 经 process.send 进事件链
+   *  （bridge → webContents.send → preload 订阅面 → 客户端 toast）；缺席 = 只落日志。 */
+  readonly emitSessionBindingMismatch?: ((event: SessionBindingMismatchEvent) => void) | undefined
 }): WorktreeRpcService {
   const warn = deps.warn ?? console.warn
   // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）。
@@ -443,34 +445,9 @@ export function createWorktreeRpcService(deps: {
    * agent-preset/selected 事件顺序推进；blank 会话仅 select 事件，折叠即现值）。读失败
    * = undefined（零猜测，回落 registry 默认——eae18b5c 同径 fail-soft）。
    */
-  const sourcePresetOf = async (sessionId: string): Promise<string | undefined> => {
-    try {
-      const handle = await readFactory.openRead(sessionId)
-      try {
-        const header = (handle as { header?: { agentPreset?: unknown } }).header
-        let preset = typeof header?.agentPreset === 'string' ? header.agentPreset : undefined
-        const events = (await (handle as { read?: () => Promise<{ events?: readonly unknown[] }> }).read?.())?.events ?? []
-        for (const event of events) {
-          const typed = event as { type?: unknown; data?: { agentPreset?: unknown } } | null
-          if (typed?.type !== 'agent-preset/selected') continue
-          const next = typed.data?.agentPreset
-          if (typeof next === 'string') preset = next
-        }
-        return preset
-      } finally {
-        await (handle as { close?: () => Promise<void> }).close?.()
-      }
-    } catch {
-      return undefined
-    }
-  }
 
-  // hero 选中树记忆（select 通道推送——重路由目标单源；键 = 归一 projectRoot）
+  // hero 选中树记忆（select 通道推送——创建锚定与失配哨兵的显示单源；键 = 归一 projectRoot）
   const lastSelection = new Map<string, string>()
-
-  // 重路由在途重入保护：reroute 对「目标 ≡ 会话自身树」径 reuse 自身 blank 后原样
-  // prompt——judge 若再判 route 将无限重入。在途标记使重入判读恒 pass。
-  const routing = new Set<string>()
 
   // G3 双建互斥（host 重路由 × client arm 共享互斥面）：sessionCreate 按 cwd 归一键记忆
   // 产物 Promise——并发调用共享同一在途编排（等待编排完成），已产物 blank 会话直接复用
@@ -883,13 +860,13 @@ export function createWorktreeRpcService(deps: {
     requiredBindingGuard() {
       if (deps.sessionController === undefined || deps.sessionPersistence === undefined) return undefined
       return {
-        // 判据（设计 §7 + bug 82cab5fe 修订）：git 项目 ∧ 目标会话 blank ∧ 无绑定 ∧ 顶层
-        // 会话（header.parentSession 缺席——worker/fork 子会话归官方子代理机械所有，恒放行）；
-        // cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）；非 blank 既有会话零打扰。
+        // WYSIWYG 哨兵（用户裁决 2026-10-24）：绑定树必须 == chip 显示树（main worktree 也是
+        // worktree——缺省显示 = 项目根）。git 项目 ∧ blank ∧ 绑定 ≠ 显示 → 失配事件（toast + 日志）
+        // + 原样投递（不重路由、不搬家、不归档）。非 blank 既有会话零打扰；worker/fork 子会话
+        // 归官方子代理机械所有恒放行；cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）。
         judge: async (sessionId) => {
-          if (routing.has(sessionId)) return 'pass' // 重路由在途重入保护（reuse-self 径）
           const header = await headerOf(sessionId)
-          if (header.parentSession !== undefined) return 'pass' // 子会话零重路由（非 hero 人口）
+          if (header.parentSession !== undefined) return 'pass' // 子会话非 hero 人口
           const cwd = header.cwd
           if (cwd === undefined || cwd === '') return 'pass'
           // W2 能力缺席显式拒绝（fail-closed）：git 项目 × 能力缺席 → 稳定 name 错误上抛
@@ -904,97 +881,29 @@ export function createWorktreeRpcService(deps: {
             if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause // A5 拒绝
             // Root cause: 判读链异常此前静默 'pass'——链 B 派生失败旅程零日志行（fix-2 实证）。
             // fail-open 放行语义不变，仅补诊断 emit（ALS 上下文内——行带同 trace_id）。
-            deps.failOpenDiag?.(`[git-worktree] 必绑判读链异常 fail-open 放行（attach 读失败）：${String(cause)}`)
+            deps.failOpenDiag?.(`[git-worktree] 绑定哨兵判读链异常 fail-open 放行（attach 读失败）：${String(cause)}`)
             return 'pass' // 判读链异常 fail-open（正确性不依赖此径）
           }
-          if (binding !== null) {
-            // W3 预铸占位（bug ac0246f5）：create-wrap 改道产物 blank 恒绑项目根——那是
-            // 「待重路由占位」不是绑定决定，选中树由首条消息重路由兑现；非 blank（已真实
-            // 使用）或绑定他树 = 绑定决定，零打扰。
-            const rootPlaceholder = norm(binding.worktreePath) === norm(resolution.projectRoot)
-            if (!rootPlaceholder || !(await blankOf(sessionId))) return 'pass'
-            return 'route'
-          }
-          return (await blankOf(sessionId)) ? 'route' : 'pass'
-        },
-        // 编排（与 client arm 共享 sessionCreate 互斥面——在途即等待）+ 重路由：
-        // 目标 = hero 选中树（select 推送记忆）缺席回退会话 cwd 树；原消息内容保真换绑；
-        // 模式随档（bug 82cab5fe——源会话 preset 折叠值显式入请求，registry 默认不覆盖源档）。
-        // bug dcdc1b4d：官方 prompt 契约 = (request, signal)（gateway 面 prompt 首行
-        // signal.throwIfAborted()）——重路由漏传 signal 使内层 prompt 拿到 undefined →
-        // TypeError 被网关 dispatch 折叠为 gateway/internal 回包（toast + 无回复）。
-        // args 尾巴原样透传（signal 等调用方上下文保真）。
-        reroute: async (sessionId, request, ...args) => {
-          routing.add(sessionId) // 重入保护：reuse-self 径的原样 prompt 判读恒 pass
-          try {
-            return await rerouteInner(sessionId, request, ...args)
-          } finally {
-            routing.delete(sessionId)
-          }
+          if (!(await blankOf(sessionId))) return 'pass' // 非 blank 既有会话 = 绑定决定，零打扰
+          // 所见 = chip 显示树（选中记忆；缺席回落主根 = 项目根——chip 缺省显示主行同判）
+          const displayed = lastSelection.get(norm(resolution.projectRoot)) ?? resolution.projectRoot
+          const boundPath = binding?.worktreePath ?? null
+          if (boundPath !== null && norm(boundPath) === norm(displayed)) return 'pass' // 绑定 ≡ 显示 ✓
+          // 失配哨兵：toast 事件 + 日志；消息按原会话投递（不重路由——显式原则）
+          deps.emitSessionBindingMismatch?.({
+            sessionId,
+            binding: boundPath,
+            displayed,
+          })
+          deps.failOpenDiag?.(
+            `[git-worktree] 绑定失配（WYSIWYG 哨兵）：会话 ${sessionId} 绑定 ${boundPath ?? '(未绑定)'} ≠ chip 显示 ${displayed}`,
+          )
+          return 'pass'
         },
       }
     },
 
     seal: sealStateOf,
-  }
-
-  /** 重路由编排本体（guard.reroute 的 inner——routing 重入标记由外层承担） */
-  async function rerouteInner(sessionId: string, request: unknown, ...args: unknown[]): Promise<unknown> {
-    {
-      const header = await headerOf(sessionId)
-          const cwd = header.cwd
-          const resolution = cwd !== undefined && cwd !== '' ? await cachedResolve(cwd) : null
-          // bug 4a30b193：Root cause——hero 选中树记忆（lastSelection）从不失效，树目录被
-          // 强制删除后重路由仍以其为目标编排（realpath ENOENT 链 / adopt 到不存在 cwd /
-          // AbortError 显式拒绝——实机发送长时间无响应）。消费时点验活性：陈旧选中树摘除
-          // 并回落会话 cwd；cwd 亦不在场 = 显式报错，绝不对已删路径静默编排。
-          const presentOf = deps.pathPresent ?? defaultPathPresent
-          const selected = resolution !== null ? lastSelection.get(norm(resolution.projectRoot)) : undefined
-          let target = selected !== undefined && presentOf(selected) ? selected : undefined
-          if (target === undefined && selected !== undefined && resolution !== null) {
-            lastSelection.delete(norm(resolution.projectRoot)) // 陈旧记忆摘除——后续发送不再走失效径
-          }
-          if (target === undefined && cwd !== undefined && cwd !== '') target = cwd
-          if (target === undefined) throw new Error('worktree 必绑重路由失败：会话 cwd 缺席且无选中树')
-          if (!presentOf(target)) throw new WorktreeTargetAbsentError(target)
-          // 已绑定目标树（根绑定占位 × 目标 ≡ 自身树）→ 免再编排，原样投递（routing 标记
-          // 使重入判读 pass）；无绑定 blank 同目标仍走产物径（G2——绑定语义由预铸兑现）。
-          const existingBinding = await readLatestAttach(sessionId, readFactory).catch(() => null)
-          if (existingBinding !== null && norm(existingBinding.worktreePath) === norm(target)) {
-            const selfController = deps.sessionController
-            if (selfController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法投递 prompt')
-            // bug 017b0e5b：裸提调用丢 this（拦截层箭头包装时被掩盖，dispose 恢复官方原方法即暴露）
-            return (selfController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(selfController)(
-              { ...(request as Record<string, unknown>), sessionId },
-              ...args,
-            )
-          }
-          // 走 sessionCreate 公开面（G3 双建互斥：在途共享、产物 blank 复用）——直调
-          // doSessionCreate 会绕过互斥，与 client arm 并发时同 cwd 双建。
-          const preset = await sourcePresetOf(sessionId)
-          const product = await service.sessionCreate({
-            worktreePath: target,
-            ...(preset === undefined ? {} : { agentPreset: preset }),
-          })
-          const productController = deps.sessionController
-          if (productController === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法重路由 prompt')
-          const result = await (productController.prompt as (this: unknown, r: unknown, ...rest: unknown[]) => unknown).bind(productController)(
-            { ...(request as Record<string, unknown>), sessionId: product.sessionId },
-            ...args,
-          )
-          // bug ff324cad 弃置清场：产物投递成功后，源会话仍为 blank（未被并发真实使用）
-          // 即就地归档（官方 registry durable 归档集——全分组面隐藏、可 unarchive 恢复；
-          // 占位回收见 sessionCreate——归档占位会被 recycle 复用，全局至多一个根占位）。
-          // prompt 失败不归档（源会话保留供重试）；归档面缺席/失败 fail-soft 只 warn。
-          try {
-            if (await blankOf(sessionId)) {
-              await resolveWorkspaceRegistry()?.archiveSession?.(sessionId, { stopActivity: true })
-            }
-          } catch (cause) {
-            warn(`[git-worktree] 重路由弃置占位归档失败（fail-soft——侧栏残留占位，可手动归档）：${String(cause)}`)
-          }
-          return result
-    }
   }
 
   /** 预铸采纳单会话创建（1.16 配方本体——G3 互斥面与 guard 共用的原始创建径）。
@@ -1138,11 +1047,11 @@ export interface PromptTraceSpan {
 }
 
 /**
- * 1.30 第二层 prompt 拦截（必绑 + 重路由）——叠加现役 interceptSessionSends 之上（官方
- * commands.prompt 调用时属性查找：本层先于封存层执行，judge 'route' 时以 guard.reroute
- * 的 promise 替代原发送；dispose 恢复封存层包装 = 逆序撤销安全）。
- * 判读链异常 fail-open 放行；SessionCwdMismatchError（A5）与重路由失败显式拒绝。
- * trace 缝注入（1.2 链 B）：prompt 入口生成 trace_id 并以 ALS 包裹整链（缺席 = 原样零差异）。
+ * 1.30 第二层 prompt 拦截（绑定哨兵）——叠加现役 interceptSessionSends 之上（官方
+ * commands.prompt 调用时属性查找：本层先于封存层执行）。judge 恒 'pass'（失配只发
+ * 哨兵事件 + 日志，投递零干预）；判读链异常 fail-open 放行；SessionCwdMismatchError
+ * （A5）与 W2 缺席 typed 拒绝原样上抛。trace 缝注入（1.2 链 B）：prompt 入口生成
+ * trace_id 并以 ALS 包裹整链（缺席 = 原样零差异）。
  */
 export function interceptRequiredBinding(
   controller: SessionControllerFace,
@@ -1158,28 +1067,13 @@ export function interceptRequiredBinding(
     const sessionId = typeof request?.sessionId === 'string' ? request.sessionId : undefined
     const inner = async (): Promise<unknown> => {
       if (sessionId !== undefined) {
-        // 判读（fail-open 域）：judge 链异常放行（正确性不依赖此径）；A5/W2 typed 拒绝原样上抛
-        let verdict: 'route' | 'pass'
+        // 哨兵判读（fail-open 域）：judge 链异常放行（正确性不依赖此径）；A5/W2 typed 拒绝原样上抛
         try {
-          verdict = await guard.judge(sessionId)
+          await guard.judge(sessionId)
         } catch (cause) {
           const name = (cause as Error)?.name
           if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
-          warn(`[git-worktree] 必绑拦截判读失败（fail-open 放行）：${String(cause)}`)
-          verdict = 'pass'
-        }
-        if (verdict === 'route') {
-          // 拒绝原发送：编排（等待既有在途产物）后以原消息内容 prompt 产物会话。
-          // 重路由失败 = 显式拒绝（不 fail-open）——独立 try 使 rejection 不落入判读
-          // fail-open 径；catch 仅补派生失败取证 emit（ALS 上下文内——行带同 trace_id，
-          // fix-2 实证 rejection 裸 return 时结构性零日志）后原样上抛。
-          try {
-            // args 尾巴（signal 等调用方上下文）原样透传——bug dcdc1b4d 根因即漏传
-            return await guard.reroute(sessionId, request, ...args.slice(1))
-          } catch (cause) {
-            warn(`[git-worktree] 必绑重路由派生失败（显式拒绝，取证 emit）：${String(cause)}`)
-            throw cause
-          }
+          warn(`[git-worktree] 绑定哨兵判读失败（fail-open 放行）：${String(cause)}`)
         }
       }
       return bound(...args)

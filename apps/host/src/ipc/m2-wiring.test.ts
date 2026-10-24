@@ -29,7 +29,7 @@ function fakeIpcMain() {
   return { ipcMain, handlers }
 }
 
-/** host 替身（services 局部在场 + onEvent 记录订阅 + emit 测试发射面） */
+/** host 替身（services 局部在场 + onEvent 记录订阅 + emit 测试发射面；哨兵通道 no-op 订阅） */
 function fakeHost(services: Partial<DshHostServices>) {
   const listeners: Array<(payload: TasksChangedEvent) => void> = []
   return {
@@ -38,6 +38,7 @@ function fakeHost(services: Partial<DshHostServices>) {
       listeners.push(listener)
       return () => {}
     },
+    onSessionBindingMismatch: (): (() => void) => () => {},
     emit: (payload: TasksChangedEvent): void => {
       for (const listener of listeners) listener(payload)
     },

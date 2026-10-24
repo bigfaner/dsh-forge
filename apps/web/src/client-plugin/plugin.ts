@@ -67,6 +67,13 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { SESSION_CREATE_CHANNEL, installSessionCreateWrap } from './create-wrap.js'
+import {
+  installStartSessionWrap,
+  type SessionsListSlice,
+  type StartSessionFace,
+  type WorkspacesListSlice,
+} from './start-session-wrap.js'
+import { showBindingMismatchToast, type SessionBindingMismatchEventLike } from './binding-mismatch-toast.js'
 import { installConnectionLostBanner } from './connection-lost-banner.js'
 export { SESSION_CREATE_CHANNEL, installSessionCreateWrap, treeOf } from './create-wrap.js'
 
@@ -1304,6 +1311,8 @@ export const PROJECTS_LIST_CHANNEL = 'forge:projects/list'
 export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
 /** forge:worktree/resolve 通道字面量（contracts WORKTREE_CHANNELS.resolve 同源镜像——wrap 树归属门） */
 export const WORKTREE_RESOLVE_CHANNEL = 'forge:worktree/resolve'
+/** forge:worktree/selected 通道字面量（contracts WORKTREE_CHANNELS.selected 同源镜像——start-session wrap 所见即所得读镜像） */
+export const WORKTREE_SELECTED_CHANNEL = 'forge:worktree/selected'
 
 /**
  * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
@@ -2403,6 +2412,71 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 },
               )
 
+        // 绑错树修复（所见即所得）：官方壳「新建会话」无参 startSession 锚点 =
+        // currentWorkspaceId/recent，可落在树工作区——blank 复用采纳/A2 显式树预铸
+        // 双双绕过 hero chip 选中记忆。wrap 按选中记忆（forge:worktree/selected，与
+        // chip 回填同源）把入口路由到所选树的 workspace（复用即所选树 blank；树
+        // workspace 未建 = 直接预铸该树会话并打开）。判定链异常 fail-open 官方原流。
+        const disposeStartSessionWrap =
+          forgeInvoke === undefined
+            ? undefined
+            : installStartSessionWrap({
+                uiWorkspace: uiWorkspace as unknown as StartSessionFace,
+                sessionsList: sessions.list as SessionsListSlice,
+                workspacesList: workspaces.list as WorkspacesListSlice,
+                resolveRoot: async (path) => {
+                  const data = await unwrapRpcEnvelope<{ resolved?: Array<{ path?: unknown; projectRoot?: unknown }> }>(
+                    forgeInvoke(WORKTREE_RESOLVE_CHANNEL, { paths: [path] }),
+                  )
+                  const hit = data.resolved?.find((entry) => entry.path === path)
+                  return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
+                },
+                selectedTree: async (projectRoot) => {
+                  const data = await unwrapRpcEnvelope<{ path?: unknown }>(
+                    forgeInvoke(WORKTREE_SELECTED_CHANNEL, { projectRoot }),
+                  )
+                  return typeof data?.path === 'string' && data.path !== '' ? data.path : undefined
+                },
+                createSession: async (tree) => {
+                  // 全新树（workspace 行未建）径 = 预铸采纳完整配方：forge session-create
+                  // （自铸 id + 挂靠事件 + workspace attach）→ 官方 create adopt 补客户端账本
+                  // （create-wrap ③ 同配方——bug 2bc90d64）。
+                  const product = await unwrapRpcEnvelope<{ sessionId?: unknown; cwd?: unknown }>(
+                    forgeInvoke(SESSION_CREATE_CHANNEL, { worktreePath: tree }),
+                  ).then((p) => {
+                    if (typeof p?.sessionId !== 'string' || p.sessionId === '') {
+                      throw new Error('dsh-forge web-client: sessionCreate 产物缺 sessionId（形状漂移）')
+                    }
+                    return {
+                      sessionId: p.sessionId,
+                      ...(typeof p.cwd === 'string' && p.cwd !== '' ? { cwd: p.cwd } : {}),
+                    }
+                  })
+                  return await (sessions as unknown as {
+                    create: (opts: { cwd?: string; sessionId: string }) => Promise<string>
+                  }).create(product)
+                },
+              })
+
+        // 绑定失配哨兵消费（WYSIWYG 哨兵——用户裁决 2026-10-24）：host 判读「绑定树 ≠ chip
+        // 显示树」→ toast 呈现（6s 自动消失，点击关闭）+ console.warn；消息按原会话投递
+        // （不重路由不搬家）。通道缺席（非 Electron 载体/旧 host）= 零订阅。
+        const disposeSessionBindingMismatchToast =
+          forgeInvoke === undefined
+            ? undefined
+            : (globalThis as {
+                dshForge?: {
+                  onForgeSessionBindingMismatch?: (
+                    cb: (event: SessionBindingMismatchEventLike) => void,
+                  ) => () => void
+                }
+              }).dshForge?.onForgeSessionBindingMismatch?.((event) => {
+                console.warn(
+                  `[dswf-client] 绑定失配：会话 ${event.sessionId} 绑定 ${event.binding ?? '（未绑定）'} ≠ chip 显示 ${event.displayed}`,
+                )
+                showBindingMismatchToast(event)
+              })
+
         // W4 激活自证①（wrap 换芯证据）：装配前 create 面在场时，装配后读回必须 ≠ 原引用
         // （host verifySendGuardInstalled 同判）；未换芯 = wrap 静默残缺 → fail-loud
         // （console.error + 上抛 → apply catch 全族 error UI 态 + 回滚）。官方 create 面
@@ -2561,6 +2635,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeDockTabs()
           mermaidEnhancer.stop()
           disposeSessionCreateWrap?.()
+          disposeStartSessionWrap?.()
+          disposeSessionBindingMismatchToast?.()
           disposeServiceListener?.()
           disposeConnectionBanner?.()
           ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
@@ -2664,6 +2740,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             disposeDockTabs()
             mermaidEnhancer.stop()
             disposeSessionCreateWrap?.()
+            disposeStartSessionWrap?.()
+            disposeSessionBindingMismatchToast?.()
             disposeServiceListener?.()
             disposeConnectionBanner?.()
             ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined

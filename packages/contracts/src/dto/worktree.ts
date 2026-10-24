@@ -119,6 +119,19 @@ export interface WorktreeSessionCreateResult {
   readonly cwd: string
 }
 
+/**
+ * forge:events/session-binding-mismatch 载荷（WYSIWYG 哨兵——用户裁决 2026-10-24）：
+ * 发送时点绑定树 ≠ chip 显示树 → toast 呈现 + 日志；消息按原会话投递（不搬家、不归档）。
+ * main worktree 也是一种 worktree（path 恰好等于项目根）；binding null = 未绑定（同为失配）。
+ */
+export interface SessionBindingMismatchEvent {
+  readonly sessionId: string
+  /** 实际绑定树（null = 未绑定） */
+  readonly binding: string | null
+  /** chip 显示树（选中记忆；缺席回落主根 = 项目根） */
+  readonly displayed: string
+}
+
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */
 export interface WorktreeSealRequest {
   readonly sessionId: string

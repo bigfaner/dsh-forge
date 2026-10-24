@@ -92,7 +92,7 @@ import {
 // fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
 // @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
 import type {} from '@dsh-forge/git-worktree'
-import type { ProjectService } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS, type ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -554,6 +554,15 @@ async function main(): Promise<void> {
         sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
+        // 绑定失配哨兵发射缝（WYSIWYG）：event 信封经 process.send 进主侧事件链
+        // （bridge → webContents.send → preload 订阅面 → 客户端 toast）。IPC 缺席静默。
+        emitSessionBindingMismatch: (event) => {
+          process.send?.({
+            type: 'event',
+            channel: FORGE_EVENT_CHANNELS.sessionBindingMismatch,
+            payload: event,
+          })
+        },
         // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。

@@ -232,6 +232,9 @@ export const FORGE_CHANNEL_ALLOWLIST: readonly ForgeChannel[] = Object.values(FO
  */
 export const FORGE_EVENT_CHANNELS = {
   tasksChanged: 'forge:events/tasks-changed',
+  /** 绑定失配哨兵（WYSIWYG 哨兵——用户裁决 2026-10-24）：绑定树 ≠ chip 显示树 → toast + 日志；
+   *  消息按原会话投递，不重路由、不搬家、不归档。 */
+  sessionBindingMismatch: 'forge:events/session-binding-mismatch',
 } as const
 
 export type ForgeEventChannel = (typeof FORGE_EVENT_CHANNELS)[keyof typeof FORGE_EVENT_CHANNELS]

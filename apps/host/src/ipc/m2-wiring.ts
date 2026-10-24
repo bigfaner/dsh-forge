@@ -32,7 +32,7 @@ export type EventTargetFace = { send?(channel: string, ...args: unknown[]): unkn
  */
 export function registerM2Channels(
   ipc: ForgeIpc,
-  host: Pick<DshHostHandle, 'services' | 'onEvent' | 'clearRemoteDeviceConnected'>,
+  host: Pick<DshHostHandle, 'services' | 'onEvent' | 'onSessionBindingMismatch' | 'clearRemoteDeviceConnected'>,
   getEventTarget: () => EventTargetFace,
   openPath: (target: string) => Promise<string>,
   warn: (message: string) => void = console.warn,
@@ -70,5 +70,9 @@ export function registerM2Channels(
   if (services.forgeWorktree !== undefined) registerWorktreeChannels(ipc, services.forgeWorktree)
   else warn('forgeWorktree 服务缺席（git-worktree 插件行未装载）——forge:worktree/* 通道未注册')
   host.onEvent((payload) => getEventTarget()?.send?.(FORGE_EVENT_CHANNELS.tasksChanged, payload))
+  // 绑定失配哨兵广播（WYSIWYG）：host 判读失配 → webContents.send → preload 订阅 → 客户端 toast
+  host.onSessionBindingMismatch?.((payload) =>
+    getEventTarget()?.send?.(FORGE_EVENT_CHANNELS.sessionBindingMismatch, payload),
+  )
   registerTestBridge(host, testEnv) // 5.1：env 门控测试钩子（缺席 = 零注册零痕迹）
 }

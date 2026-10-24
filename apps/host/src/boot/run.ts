@@ -24,7 +24,9 @@ import type {
   ForgeTasksService,
   ProjectServiceM2,
   TasksChangedEvent,
+  SessionBindingMismatchEvent,
 } from '@dsh-forge/contracts'
+import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import {
   APPROVAL_SERVICE_METHODS,
   asEventMessage,
@@ -143,6 +145,8 @@ export interface DshHostHandle {
    * 订阅方异常隔离（不阻断其余订阅与 RPC 面）。
    */
   onEvent: (listener: (payload: TasksChangedEvent) => void) => () => void
+  /** 绑定失配哨兵事件订阅（WYSIWYG——session-binding-mismatch 通道；返回退订器） */
+  onSessionBindingMismatch: (listener: (payload: SessionBindingMismatchEvent) => void) => () => void
   /**
    * fix-23：诊断日志行订阅（child [pair-diag] 决策链经桥消息回流——main.ts 消费
    * noteHarnessLog 落 harness.log；返回退订器；订阅方异常隔离）。
@@ -205,8 +209,10 @@ export interface BridgeChildFace {
 export interface BridgeChannel {
   /** 主 → 子 RPC 调用（rpc-result 按 id 结算；child 退出 → 全量拒绝） */
   call(service: BridgeServiceName, method: string, args: readonly unknown[]): Promise<unknown>
-  /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者扇出） */
+  /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者按通道扇出） */
   onEvent(listener: (payload: TasksChangedEvent) => void): () => void
+  /** 绑定失配哨兵事件订阅（session-binding-mismatch 通道扇出） */
+  onSessionBindingMismatch(listener: (payload: SessionBindingMismatchEvent) => void): () => void
   /** fix-23 子 → 主诊断行订阅（diag 分支——[pair-diag] 决策链落 harness.log 的通道半边） */
   onDiag(listener: (line: string) => void): () => void
 }
@@ -222,6 +228,7 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
   const pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
+  const mismatchListeners = new Set<(payload: SessionBindingMismatchEvent) => void>()
   const diagListeners = new Set<(line: string) => void>()
   // bug ae1f737a 死闩（熔断）：通道死亡（close / send 失败）后后续 call 立即以首因拒绝——
   // 零 send 尝试、观测行同因只落一次。现场（2026-10-21 06:26Z）：child 运行期死亡零 exit
@@ -245,12 +252,22 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
       }
       return
     }
-    // event 分支（3.1 交互二）：写推送事件 → onEvent 订阅方扇出（畸形信封静默忽略）
+    // event 分支（3.1 交互二）：写推送事件 → 按通道判别扇出（畸形信封静默忽略）
     const event = asEventMessage(message)
     if (event !== undefined) {
+      if (event.channel === FORGE_EVENT_CHANNELS.sessionBindingMismatch) {
+        for (const listener of mismatchListeners) {
+          try {
+            listener(event.payload as SessionBindingMismatchEvent)
+          } catch {
+            // 订阅方异常隔离——其余订阅与 RPC 面照常
+          }
+        }
+        return
+      }
       for (const listener of eventListeners) {
         try {
-          listener(event.payload)
+          listener(event.payload as TasksChangedEvent)
         } catch {
           // 订阅方异常隔离——其余订阅与 RPC 面照常
         }
@@ -303,6 +320,12 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
       eventListeners.add(listener)
       return () => {
         eventListeners.delete(listener)
+      }
+    },
+    onSessionBindingMismatch: (listener) => {
+      mismatchListeners.add(listener)
+      return () => {
+        mismatchListeners.delete(listener)
       }
     },
     onDiag: (listener) => {
@@ -502,6 +525,7 @@ export async function bootDshHost(
         : undefined,
     },
     onEvent: channel.onEvent,
+    onSessionBindingMismatch: channel.onSessionBindingMismatch,
     onDiag: channel.onDiag,
     // 1.107：三件套读数/轮换（既有 bridge RPC 缝直转 remotePsk 服务——只插孔不改制）
     pskRead: () => call('remotePsk', 'read', []).then(decodeWire) as Promise<PskTrioRead>,

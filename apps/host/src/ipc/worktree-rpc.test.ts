@@ -41,6 +41,11 @@ const fakeExt = {
   }),
 }
 
+/** 挂靠事件构造（跨 describe 共享——绑定哨兵/孤儿测试区共用） */
+const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
+/** 树 A 路径（跨 describe 共享常量——绑定哨兵/孤儿测试区共用） */
+const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+
 /** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获；
  *  headers 表驱动（sessionId → SessionHeader 消费切片：cwd + agentPreset/parentSession 选填）；
  *  opts.countOpens = open 调用计数器（G7② 性能钉：非 git 判读零日志读）。 */
@@ -678,262 +683,137 @@ describe('interceptSessionSends（发送拦截——「不可发送」硬保证�
   })
 })
 
-// ───────────── 1.30 host 必绑拦截 + 重路由（A2/A5 + G2/G3/G7）─────────────
-describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦截）', () => {
-  const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
+// ───────────── 1.30 host 绑定哨兵（WYSIWYG：绑定树必须 == chip）─────────────
+describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵）', () => {
   const WT_A = 'C:/repo/.forge/worktrees/wt-a'
+  const ROOT = 'C:/repo'
 
-  /** 被测装配桩：git 项目（resolveProject 计数）+ 会话持久化 + 控制器 + 归档面捕获 */
+  interface MismatchEvent {
+    sessionId: string
+    binding: string | null
+    displayed: string
+  }
+
+  /** 被测装配桩：git 项目 + 会话持久化 + 控制器 + 失配哨兵事件捕获 */
   function guardRig(input: {
     events: Record<string, readonly unknown[]>
     headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }>
   }) {
     const opens = { value: 0 }
-    let resolveCalls = 0
     const countingExt = {
       getExtensionPoints: () => ({
-        resolveProject: async (cwd: string) => {
-          resolveCalls += 1
-          return cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true }
-        },
+        resolveProject: async (cwd: string) =>
+          cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true },
         getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
       }),
     }
-    const { persistence, created } = fakePersistence(input.events, input.headers, opens)
-    const { controller, calls, prompts, promptSignals } = fakeController()
-    const archiveCalls: Array<{ sessionId: string; options?: { readonly stopActivity?: boolean } }> = []
-    const registry = {
-      ...fakeWorkspaceRegistry().registry,
-      archiveSession: async (sessionId: string, options?: { readonly stopActivity?: boolean }) => {
-        archiveCalls.push({ sessionId, options })
-      },
-    }
+    const { persistence } = fakePersistence(input.events, input.headers, opens)
+    const { controller, prompts } = fakeController()
+    const mismatchEvents: MismatchEvent[] = []
     const service = createWorktreeRpcService({
       gitWorktree: countingExt,
       sessionController: controller,
       sessionPersistence: persistence,
-      workspaceRegistry: registry,
+      workspaceRegistry: fakeWorkspaceRegistry().registry,
       ensureDirAcl: async () => {},
       pathPresent: () => true, // fake 路径无盘上实体——活性探测恒真（bug 4a30b193 缝专测单独表驱动）
       listWorktreeEntries: async () => [
         { path: 'C:/repo', branch: 'main' },
         { path: WT_A, branch: 'feat/a' },
       ],
+      emitSessionBindingMismatch: (event) => mismatchEvents.push(event),
     })
-    return { service, controller, prompts, promptSignals, calls, opens, created, resolveCallsOf: () => resolveCalls, archiveCalls }
+    return { service, controller, prompts, mismatchEvents, opens }
   }
 
-  it('A2 竞速败窗：git 项目无绑定 blank 会话 prompt → 原发送拒绝 + 编排产物重路由（原消息内容保真）', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    const guard = rig.service.requiredBindingGuard()
-    expect(guard).toBeDefined()
-    const dispose = interceptRequiredBinding(rig.controller, guard!)
-    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
-    dispose()
-    // 原会话零直发；产物会话收到原消息内容（sessionId 换绑）
-    expect(rig.prompts).toHaveLength(1)
-    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank'), text: 'hello' })
-    // 产物 = 预铸采纳的挂靠会话（cwd = 重路由目标树）
-    expect(rig.calls).toHaveLength(1)
-  })
-
-  it('bug dcdc1b4d 回归：重路由透传调用方 signal（官方 prompt 契约 (request, signal) 首行 throwIfAborted）', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    const sentinel = new AbortController().signal
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' }, sentinel)
-    dispose()
-    expect(rig.prompts).toHaveLength(1)
-    expect(
-      rig.promptSignals[0],
-      '重路由内层 prompt 必须收到调用方 signal——漏传 = 官方 prompt 首行 signal.throwIfAborted() 崩溃（gateway/internal toast + 无回复）',
-    ).toBe(sentinel)
-  })
-
-  it('G2 同树也不放行：无选中（selection 缺席）无绑定 blank → 重路由目标 = 会话 cwd 树（主行绑定）', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.calls[0]?.cwd).toBe('C:/repo')
-  })
-
-  it('重路由目标 = hero 选中树（select 推送 → 编排目标树随选中）', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.calls[0]?.cwd).toBe(WT_A)
-  })
-
-  it('bug ac0246f5：W3 预铸 blank（绑定 ≡ 项目根）首条消息仍重路由选中树——根绑定占位 ≠ 绑定决定', async () => {
+  it('核心：blank 绑定主根 × chip 选中树 A → 失配事件恰一发射 + 原会话原消息投递（不搬家零预铸）', async () => {
     const rig = guardRig({
-      events: {
-        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
-      },
+      events: { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
       headers: { blank: { cwd: 'C:/repo' } },
     })
     await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
     const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
     dispose()
-    expect(rig.calls[0]?.cwd, '产物应预铸在选中树上（W3 改道产物 blank 仍可重路由）').toBe(WT_A)
-    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank'), text: 'hi' })
+    expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: 'C:/repo', displayed: WT_A }])
+    // 消息按原会话投递（不重路由不搬家）；零产物预铸（controller.create 零调用——无预铸即无 calls 面）
+    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hello' }])
   })
 
-  it('bug ac0246f5 伴例：绑定项目根但已非 blank（真实使用过）→ pass 零打扰', async () => {
+  it('绑定 ≡ 显示（chip 未选回落主根 = 绑定主根）→ pass 零事件', async () => {
+    const rig = guardRig({
+      events: { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
+      headers: { blank: { cwd: 'C:/repo' } },
+    })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.mismatchEvents).toEqual([])
+    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
+  })
+
+  it('未绑定 blank（binding null）× chip 选中树 A → 失配事件（binding null 也是失配——main 也是 worktree）', async () => {
+    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
+    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    dispose()
+    expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: null, displayed: WT_A }])
+    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
+  })
+
+  it('chip 选主根 × 绑定树 A → 失配事件（binding ≠ chip 即失配，无论方向）', async () => {
+    const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 's1', text: 'hi' })
+    dispose()
+    expect(rig.mismatchEvents).toEqual([{ sessionId: 's1', binding: WT_A, displayed: 'C:/repo' }])
+    expect(rig.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
+  })
+
+  it('非 blank 既有会话零打扰（失配也不发射——绑定决定不重审）', async () => {
     const rig = guardRig({
       events: {
-        s1: [
-          { type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } },
+        s2: [
+          { type: 'forge/worktree-attach', seq: 0, data: { worktreePath: WT_A, branch: 'feat/a' } },
           { type: 'turn/start', seq: 1, data: { turn: 1 } },
         ],
       },
-      headers: { s1: { cwd: 'C:/repo' } },
+      headers: { s2: { cwd: WT_A } },
     })
-    const verdict = await rig.service.requiredBindingGuard()!.judge('s1')
-    expect(verdict).toBe('pass')
-  })
-
-  it('bug ac0246f5 伴例：根绑定 blank × 目标 ≡ 自身树 → reuse-self 恰一次投递不重入', async () => {
-    const rig = guardRig({
-      events: {
-        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
-      },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
+    await rig.service.select({ projectRoot: 'C:/repo', path: ROOT })
     const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
+    await rig.controller.prompt({ sessionId: 's2', text: 'hi' })
     dispose()
-    expect(rig.prompts).toHaveLength(1)
-    expect(rig.prompts[0]).toMatchObject({ sessionId: 'blank', text: 'hi' })
+    expect(rig.mismatchEvents).toEqual([])
+    expect(rig.prompts).toEqual([{ sessionId: 's2', text: 'hi' }])
   })
 
-  // ── bug ff324cad 后半：重路由弃置的 blank 源会话就地归档（官方 registry durable 归档集）──
-  it('重路由弃置归档：根绑定占位 blank × 目标 ≠ 自身树 → 产物投递成功后源会话 archiveSession({stopActivity:true}) 恰一次', async () => {
-    const rig = guardRig({
-      events: {
-        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
-      },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank') })
-    expect(rig.archiveCalls, '弃置占位未归档——侧栏残留「未命名」会话（bug 在场）').toEqual([
-      { sessionId: 'blank', options: { stopActivity: true } },
-    ])
-  })
-
-  it('重路由弃置归档：无绑定官方 blank（wrap fail-open 世界）走产物径 → 源会话同归档', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('blank') })
-    expect(rig.archiveCalls).toEqual([{ sessionId: 'blank', options: { stopActivity: true } }])
-  })
-
-  it('重路由弃置归档：reuse-self（目标 ≡ 自身树）零归档——会话仍是在用主体', async () => {
-    const rig = guardRig({
-      events: {
-        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
-      },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.prompts[0]).toMatchObject({ sessionId: 'blank' })
-    expect(rig.archiveCalls).toEqual([])
-  })
-
-  it('重路由弃置归档：产物 prompt 失败 → 零归档（源会话保留供重试），失败原样上抛', async () => {
-    const rig = guardRig({
-      events: {
-        blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
-      },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
-    rig.controller.prompt = (async (request: { sessionId?: string }) => {
-      if (request.sessionId !== 'blank') throw new Error('product prompt boom')
-      return { accepted: true }
-    }) as SessionControllerFace['prompt']
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toThrow('product prompt boom')
-    dispose()
-    expect(rig.archiveCalls).toEqual([])
-  })
-
-  it('bug 4a30b193：hero 选中树目录已被强制删除（陈旧 lastSelection）→ 回落会话 cwd 编排，绝不在已删路径上预铸', async () => {
-    const GHOST = 'C:/repo/.forge/worktrees/gone'
-    const { persistence, created } = fakePersistence({ blank: [] }, { blank: { cwd: 'C:/repo' } })
-    const { controller, calls, prompts } = fakeController()
+  it('发射缝缺席（旧装配方）→ 哨兵只落日志，判读照常 pass 不抛', async () => {
+    const opens = { value: 0 }
+    const countingExt = {
+      getExtensionPoints: () => ({
+        resolveProject: async () => ({ projectId: 'p1', projectRoot: 'C:/repo', isGit: true }),
+        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
+      }),
+    }
+    const { persistence } = fakePersistence(
+      { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
+      { blank: { cwd: 'C:/repo' } },
+      opens,
+    )
+    const { controller, prompts } = fakeController()
     const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
+      gitWorktree: countingExt,
       sessionController: controller,
       sessionPersistence: persistence,
-      listWorktreeEntries: async () => [
-        { path: 'C:/repo', branch: 'main' },
-        { path: GHOST, branch: 'feat/gone' }, // git 未 prune 的陈旧清单行——分支解析仍可「成功」
-      ],
-      pathPresent: (p) => p === 'C:/repo', // 选中树目录已被强制删除，仅主根在场
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
     })
-    await service.select({ projectRoot: 'C:/repo', path: GHOST })
+    await service.select({ projectRoot: 'C:/repo', path: WT_A })
     const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
-    await expect(controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
+    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).resolves.toEqual({ accepted: true })
     dispose()
-    expect(calls, '编排在已删路径上预铸采纳（bug 在场）').toHaveLength(1)
-    expect(calls[0]!.cwd, '产物 cwd 应回落会话 cwd（主根）').toBe('C:/repo')
-    expect(created[0]!.header.cwd).toBe('C:/repo')
-    expect(prompts[0]).toMatchObject({ sessionId: created[0]!.header.id, text: 'hello' })
-  })
-
-  it('bug 4a30b193：会话 cwd 树目录亦不在场 → 显式报错（可读错误含路径），不静默编排半截会话', async () => {
-    const GHOST = 'C:/repo/.forge/worktrees/gone'
-    const { persistence, created } = fakePersistence({ blank: [] }, { blank: { cwd: GHOST } })
-    const { controller, calls } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: GHOST, branch: 'feat/gone' }],
-      pathPresent: () => false,
-    })
-    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
-    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toMatchObject({
-      name: 'WorktreeTargetAbsentError',
-      code: 'ERR_WORKTREE_TARGET_ABSENT',
-      targetPath: GHOST,
-      message: expect.stringContaining('已不存在'),
-    })
-    dispose()
-    expect(calls, 'controller.create 被调用（半截预铸在场）').toHaveLength(0)
-    expect(created).toHaveLength(0)
-  })
-
-  it('有绑定会话放行（原 prompt 直通，零重路由）；非 blank 无绑定既有会话零打扰放行', async () => {
-    const bound = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
-    const disposeBound = interceptRequiredBinding(bound.controller, bound.service.requiredBindingGuard()!)
-    await expect(bound.controller.prompt({ sessionId: 's1', text: 'hi' })).resolves.toEqual({ accepted: true })
-    disposeBound()
-    expect(bound.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
-    expect(bound.calls).toHaveLength(0)
-
-    const used = guardRig({
-      events: { s2: [{ type: 'turn/start', seq: 1, data: { turn: 1 } }, { type: 'user/message', seq: 2, data: {} }] },
-      headers: { s2: { cwd: 'C:/repo' } },
-    })
-    const disposeUsed = interceptRequiredBinding(used.controller, used.service.requiredBindingGuard()!)
-    await expect(used.controller.prompt({ sessionId: 's2', text: 'hi' })).resolves.toEqual({ accepted: true })
-    disposeUsed()
-    expect(used.prompts).toEqual([{ sessionId: 's2', text: 'hi' }])
-    expect(used.calls).toHaveLength(0)
+    expect(prompts).toHaveLength(1)
   })
 
   it('G7② 性能钉：非 git 项目 prompt 零 git 探测扩散、会话日志读只有 cwd 探测一次（逐会话记忆后零读）', async () => {
@@ -943,8 +823,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     await rig.controller.prompt({ sessionId: 'f1', text: 'b' })
     dispose()
     expect(rig.prompts).toHaveLength(2) // 非 git 零行为差异：两次都原会话直发
-    expect(rig.resolveCallsOf(), '非 git 判读未按 projectRoot 记忆化（每消息 git 子进程固定税）').toBe(1)
-    expect(rig.opens.value, '非 git 项目会话日志被反复读（cwd 记忆缺席）').toBe(1)
+    expect(rig.opens.value, '非 git 判读在 blankOf 前短路（基线 1 次读 = seal 判读；judge 零增量）').toBe(1)
   })
 
   it('A5：SessionCwdMismatchError 拦截面拒绝不放行（不再 fail-open）', async () => {
@@ -955,61 +834,11 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     expect(rig.prompts).toHaveLength(0)
   })
 
-  it('重路由失败显式报错（编排失败不静默丢消息）', async () => {
-    const opens = { value: 0 }
-    const { persistence } = fakePersistence({ blank: [] }, { blank: { cwd: 'C:/repo' } }, opens)
-    const { controller, prompts } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      pathPresent: () => true, // fake 路径无盘上实体——本测专查编排失败径，活性恒真
-      listWorktreeEntries: async () => {
-        throw new Error('git crashed')
-      },
-    })
-    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
-    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).rejects.toThrow()
-    dispose()
-    expect(prompts as unknown[]).toHaveLength(0) // 原会话零直发（失败显式报错，不静默丢消息）
+  it('W2 能力缺席 typed 拒绝：独立 absentRig describe 专测（见「W2 能力缺席显式拒绝」）', async () => {
+    expect(true).toBe(true)
   })
 
-  // ── bug 82cab5fe：官方直建会话（首回合前种子事件非 ignorable）blank 判据 + 模式随档 ──
-  const officialSeedEvents = [
-    { type: 'permission/preset', seq: 0, data: { preset: 'danger-full-access' } },
-    { type: 'sandbox/mode', seq: 1, data: { mode: 'danger-full-access' } },
-    { type: 'approval/policy', seq: 2, data: { policy: 'never' } },
-  ]
-
-  it('bug 82cab5fe：官方直建会话（种子事件非 ignorable、无 turn/start）→ 必绑重路由进预铸链（官方投影 blank 语义：种子事件 ≠ 已用）', async () => {
-    const rig = guardRig({ events: { seeded: officialSeedEvents }, headers: { seeded: { cwd: 'C:/repo' } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'seeded', text: '你好' })
-    dispose()
-    expect(rig.calls, '官方直建 blank 会话应重路由绑定（bug 在场 = blankOf 恒 false 恒 pass 永无绑定）').toHaveLength(1)
-    expect(rig.prompts[0]).toMatchObject({ sessionId: expect.not.stringContaining('seeded'), text: '你好' })
-  })
-
-  it('bug 82cab5fe 模式随档：源会话 selected 事件 blitz → 产物预铸头随 blitz（registry 默认不覆盖源档）', async () => {
-    const rig = guardRig({
-      events: { src: [{ type: 'agent-preset/selected', seq: 0, data: { agentPreset: 'blitz' } }] },
-      headers: { src: { cwd: 'C:/repo', agentPreset: 'expedition' } },
-    })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'src', text: 'hi' })
-    dispose()
-    expect(rig.created[0]?.header, '重路由产物丢源档 = 模式 chip 顾此失彼').toMatchObject({ agentPreset: 'blitz' })
-  })
-
-  it('bug 82cab5fe 模式随档：源会话头 agentPreset（无 selected 事件）→ 产物预铸头随同值', async () => {
-    const rig = guardRig({ events: { src: [] }, headers: { src: { cwd: 'C:/repo', agentPreset: 'expedition' } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'src', text: 'hi' })
-    dispose()
-    expect(rig.created[0]?.header).toMatchObject({ agentPreset: 'expedition' })
-  })
-
-  it('子会话（header.parentSession 在场——worker/fork）恒放行零重路由（官方子代理机械所有，非 hero 人口）', async () => {
+  it('子会话（header.parentSession 在场——worker/fork）恒放行零事件（官方子代理机械所有，非 hero 人口）', async () => {
     const rig = guardRig({
       events: { child: [] },
       headers: { child: { cwd: 'C:/repo', parentSession: 'session-parent' } },
@@ -1017,9 +846,10 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
     await rig.controller.prompt({ sessionId: 'child', text: 'hi' })
     dispose()
-    expect(rig.calls, '子会话不得被重路由绑树').toHaveLength(0)
+    expect(rig.mismatchEvents).toEqual([])
     expect(rig.prompts).toEqual([{ sessionId: 'child', text: 'hi' }])
   })
+})
 
   it('显式 agentPreset 请求覆盖 registry 默认（sessionCreate 请求面——源档 > 默认单源）', async () => {
     const { controller } = fakeController()
@@ -1406,13 +1236,11 @@ describe('requiredBindingGuard + interceptRequiredBinding（第二层 prompt 拦
     interceptSessionSends(controller, async () => ({ isGit: true, sealed: true, binding: { worktreePath: 'x', branch: 'b' } }))
     const outer = interceptRequiredBinding(controller, {
       judge: async () => 'pass',
-      reroute: async () => undefined,
     })
     outer()
     await expect(controller.prompt({ sessionId: 's1' })).rejects.toThrow(SessionSealedError)
     expect(prompts).toHaveLength(0)
   })
-})
 
 describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
   const WT_A = 'C:/repo/.forge/worktrees/wt-a'
@@ -1624,15 +1452,14 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
     expect(rig3.seenTraceIds).toEqual([undefined])
   })
 
-  // ── app-observability fix-3：派生失败处 emit 诊断事件（ALS 上下文内——行带链 B trace_id）──
-  it('fix-3 重路由派生失败（sessionCreate 抛错）：显式拒绝语义不变 + warn 通道 emit 于 ALS 上下文内（行带同 trace_id）', async () => {
+  // ── app-observability fix-3：判读失败处 warn 诊断（ALS 上下文内——行带链 B trace_id）──
+  it('fix-3 判读失败 fail-open：warn 通道 emit 于 ALS 上下文内（行带同 trace_id），消息原会话投递', async () => {
     const seen: Array<string | undefined> = []
     const controller = {
       prompt: async (): Promise<unknown> => ({ accepted: true }),
     } as unknown as SessionControllerFace
     const guard = {
-      judge: async (): Promise<'route'> => 'route',
-      reroute: async () => {
+      judge: async (): Promise<'pass'> => {
         throw new TypeError('forge/worktree-attach: branch 必须为非空字符串')
       },
     } as unknown as Parameters<typeof interceptRequiredBinding>[1]
@@ -1645,9 +1472,9 @@ describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——
       run: <T,>(traceId: string, _s: string | undefined, fn: () => Promise<T>): Promise<T> =>
         runWithDiagContext(als, { traceId }, fn),
     })
-    await expect(controller.prompt({ sessionId: 's-inject', text: 'hi' })).rejects.toThrow(/branch 必须为非空字符串/)
+    await expect(controller.prompt({ sessionId: 's-inject', text: 'hi' })).resolves.toEqual({ accepted: true })
     dispose()
-    expect(warns, '派生失败处诊断 emit 缺席（bug ba763219——重路由失败零日志）').toHaveLength(1)
+    expect(warns, '判读失败处诊断 emit 缺席（bug ba763219——失败零日志）').toHaveLength(1)
     expect(seen, 'emit 发生在 ALS 上下文外——trace_id 断链').toEqual(['tr-inject'])
   })
 
