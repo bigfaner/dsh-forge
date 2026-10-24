@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>loop-event-delivery · 进度流 HTML 原型</title>
+<style>
+  /* 本地镜像 DESIGN.md --dsw-* 令牌（静态原型自持，双主题） */
+  :root {
+    --dsw-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --bg-base: #ffffff; --layer-1: #ffffff; --layer-2: #ffffff;
+    --sidebar-fill: #f9fafb; --module-bg: #f5f6f7;
+    --border-l1: #0000000a; --border-l2: #0000001a; --border-l4: #0000001f;
+    --label-primary: #0f1115; --label-secondary: #61666b; --label-tertiary: #81858c; --label-caption: #adb2b8;
+    --accent: #4176e6; --accent-soft: #4176e61f;
+    --success: #22c55e; --success-tertiary: #e6faed;
+    --warn: #dd8629; --warn-tertiary: #fdf3e3;
+    --error: #ec1313; --error-tertiary: #fdecec;
+    --code-bg: #f9fafb;
+    --shadow-card: 0 4px 12px 0 #00000005, 0 2px 8px 0 #0000000a;
+  }
+  body[data-dark] {
+    --bg-base: #151517; --layer-1: #232324; --layer-2: #2c2c2e;
+    --sidebar-fill: #1b1b1c; --module-bg: #353638;
+    --border-l1: #ffffff0f; --border-l2: #ffffff1f; --border-l4: #ffffff29;
+    --label-primary: #f9fafb; --label-secondary: #cfd3d6; --label-tertiary: #adb2b8; --label-caption: #81858c;
+    --accent: #7aaaff; --accent-soft: #7aaaff29;
+    --success-tertiary: #233c2c; --warn-tertiary: #3c2f1d; --error-tertiary: #3c2323;
+    --code-bg: #1b1b1c;
+    --shadow-card: 0 4px 12px 0 #00000040, 0 2px 8px 0 #00000030;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--dsw-font-family); background: var(--bg-base); color: var(--label-primary);
+         font-size: 14px; line-height: 22px; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 500; line-height: 28px; margin: 0 0 4px; }
+  .sub { color: var(--label-secondary); font-size: 13px; margin: 0 0 20px; }
+  .toggle { position: fixed; top: 16px; right: 16px; z-index: 9; }
+  .toggle button { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+                   border: .5px solid var(--border-l4); background: var(--layer-2); color: var(--label-secondary); }
+  .frame { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* ── 桌面：消息流中的事件折叠条目 + 侧栏进度流 ── */
+  .desk { flex: 2 1 560px; min-width: 520px; }
+  .conv { background: var(--bg-base); border: .5px solid var(--border-l4); border-radius: 12px;
+          padding: 20px; box-shadow: var(--shadow-card); }
+  .msg { margin: 0 0 16px; }
+  .msg .who { font-size: 11px; color: var(--label-caption); margin-bottom: 4px; }
+  .bubble { background: var(--layer-1); border: .5px solid var(--border-l2); border-radius: 8px; padding: 10px 14px; }
+  .msg.user .bubble { background: var(--accent-soft); border-color: transparent; }
+
+  /* 消息面：forge 事件条目（source.kind 分流后的折叠形态） */
+  .evt-group { border: .5px solid var(--border-l2); border-radius: 8px; overflow: hidden; margin: 0 0 16px; }
+  .evt-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer;
+              background: var(--module-bg); font-size: 13px; color: var(--label-secondary); }
+  .evt-head .count { margin-left: auto; font-size: 11px; color: var(--label-caption); }
+  .evt-head svg { transition: transform .2s cubic-bezier(.4,0,.2,1); }
+  .evt-group.open .evt-head svg { transform: rotate(180deg); }
+  .evt-body { display: none; border-top: .5px solid var(--border-l1); }
+  .evt-group.open .evt-body { display: block; }
+  .evt-row { display: flex; gap: 10px; align-items: baseline; padding: 7px 14px; font-size: 13px;
+             border-bottom: .5px solid var(--border-l1); }
+  .evt-row:last-child { border-bottom: 0; }
+  .evt-row:hover { background: var(--module-bg); }
+  .evt-time { font-size: 11px; color: var(--label-caption); flex: none; font-variant-numeric: tabular-nums; }
+  .evt-kind { flex: none; width: 56px; text-align: center; font-size: 11px; line-height: 18px;
+              border-radius: 999px; border: .5px solid var(--border-l2); color: var(--label-secondary); }
+  .evt-kind.run  { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .evt-kind.done { color: var(--success); border-color: var(--success); background: var(--success-tertiary); }
+  .evt-kind.blk  { color: var(--warn); border-color: var(--warn); background: var(--warn-tertiary); }
+  .evt-text { color: var(--label-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evt-text b { font-weight: 500; }
+  .evt-text .why { color: var(--label-tertiary); }
+
+  /* 侧栏：投影键 forge-dispatch-events 进度流 */
+  .side { flex: 1 1 300px; min-width: 300px; }
+  .panel { background: var(--sidebar-fill); border: .5px solid var(--border-l4); border-radius: 12px;
+           box-shadow: var(--shadow-card); overflow: hidden; }
+  .panel + .panel { margin-top: 16px; }
+  .panel-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: .5px solid var(--border-l1);
+                font-size: 13px; font-weight: 500; }
+  .panel-head .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); flex: none; }
+  .panel-head .live { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--label-caption); }
+  .flow { padding: 8px 0; max-height: 420px; overflow: auto; }
+  .frow { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; padding: 6px 14px; align-items: baseline; }
+  .frow:hover { background: var(--module-bg); }
+  .frow .rail { position: relative; align-self: stretch; }
+  .frow .rail::before { content: ""; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px; background: var(--border-l2); }
+  .frow:first-child .rail::before { top: 50%; }
+  .frow:last-child .rail::before { bottom: 50%; }
+  .frow .rail i { position: absolute; left: 2.5px; top: 50%; transform: translateY(-50%);
+                  width: 8px; height: 8px; border-radius: 999px; background: var(--label-caption); }
+  .frow.done .rail i { background: var(--success); }
+  .frow.run  .rail i { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .frow.blk  .rail i { background: var(--warn); }
+  .frow .t { font-size: 13px; min-width: 0; }
+  .frow .t .ttl { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow .t .note { display: block; font-size: 11px; line-height: 18px; color: var(--label-tertiary);
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow .when { font-size: 11px; color: var(--label-caption); font-variant-numeric: tabular-nums; }
+  .stat { display: flex; gap: 12px; padding: 10px 14px; border-top: .5px solid var(--border-l1); font-size: 12px; color: var(--label-secondary); }
+  .stat b { color: var(--label-primary); font-weight: 500; }
+
+  /* ── mobile 窄幅（同契约键的紧凑形态） ── */
+  .mob { flex: 0 0 320px; }
+  .phone { width: 320px; border: .5px solid var(--border-l4); border-radius: 20px; background: var(--bg-base);
+           box-shadow: var(--shadow-card); overflow: hidden; }
+  .phone .bar { padding: 10px 16px; font-size: 13px; font-weight: 500; border-bottom: .5px solid var(--border-l1);
+                display: flex; align-items: center; gap: 8px; }
+  .phone .bar .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+  .phone .flow { max-height: 360px; }
+  .phone .frow { grid-template-columns: 12px 1fr; padding: 7px 14px; }
+  .phone .frow .when { display: none; }
+</style>
+</head>
+<body>
+<div class="toggle"><button onclick="document.body.toggleAttribute('data-dark')">明 / 暗</button></div>
+
+<h1>loop-event-delivery · 进度流原型</h1>
+<p class="sub">左：web 消息面事件折叠条目（send(wakeup=false) 落库消息的折叠形态）。右：投影键 <code>forge-dispatch-events</code> 独立进度流（零模型上下文）。下：mobile 同契约紧凑形态。样式令牌对齐 DESIGN.md。</p>
+
+<div class="frame">
+
+  <!-- ── 桌面消息面 + 侧栏 ── -->
+  <div class="desk">
+    <div class="conv">
+      <div class="msg user">
+        <div class="who">你</div>
+        <div class="bubble">继续推进 loop-event-delivery 的探针卡。</div>
+      </div>
+      <div class="msg">
+        <div class="who">forge · 任务循环事件（12）· 展开/收起</div>
+        <div class="evt-group open">
+          <div class="evt-head" onclick="this.parentElement.classList.toggle('open')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 6l4 4 4-4"/></svg>
+            [forge·调度] loop-event-delivery
+            <span class="count">12 条 · 今日 14:02–14:31</span>
+          </div>
+          <div class="evt-body">
+            <div class="evt-row"><span class="evt-time">14:02:11</span><span class="evt-kind run">启动</span><span class="evt-text"><b>loop-event-delivery</b>（feature）· 接续执行 — 任务 2.3，重新执行</span></div>
+            <div class="evt-row"><span class="evt-time">14:02:19</span><span class="evt-kind run">领取</span><span class="evt-text"><b>2.3 投影键 fold unit 落地</b></span></div>
+            <div class="evt-row"><span class="evt-time">14:09:41</span><span class="evt-kind done">完成</span><span class="evt-text"><b>2.3</b> — fold unit 六字段注册，契约测试 8 通过</span></div>
+            <div class="evt-row"><span class="evt-time">14:09:44</span><span class="evt-kind run">领取</span><span class="evt-text"><b>2.4 web 进度流渲染</b></span></div>
+            <div class="evt-row"><span class="evt-time">14:18:03</span><span class="evt-kind blk">阻塞</span><span class="evt-text"><b>2.4</b> — 阻塞 <span class="why">投影账本行窄读类型缺失</span> · 已自动创建修复任务 fix-1，继续执行</span></div>
+            <div class="evt-row"><span class="evt-time">14:24:57</span><span class="evt-kind done">完成</span><span class="evt-text"><b>fix-1 修复任务</b> — 补 declare-module 扩展类型，2.4 自动恢复</span></div>
+            <div class="evt-row"><span class="evt-time">14:25:02</span><span class="evt-kind run">领取</span><span class="evt-text"><b>2.4 web 进度流渲染</b>（恢复自中断 — fix-1 完成）</span></div>
+            <div class="evt-row"><span class="evt-time">14:31:28</span><span class="evt-kind done">完成</span><span class="evt-text"><b>2.4</b> — 侧栏窄读 + 进度流面板，走查截图归档</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="msg user">
+        <div class="who">你</div>
+        <div class="bubble">fix-1 的修法为什么走 declare-module 而不是鸭子面？</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 侧栏投影进度流 ── -->
+  <div class="side">
+    <div class="panel">
+      <div class="panel-head"><span class="dot"></span>任务进度<span class="live">live · 不经模型</span></div>
+      <div class="flow">
+        <div class="frow done"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.3 投影键 fold unit 落地</span><span class="note">完成 · 契约测试 8 通过</span></span><span class="when">14:09</span></div>
+        <div class="frow blk"><span class="rail"><i></i></span><span class="t"><span class="ttl">fix-1 修复任务</span><span class="note">阻塞 → 已自动处理 · 窄读类型缺失</span></span><span class="when">14:18</span></div>
+        <div class="frow done"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.4 web 进度流渲染</span><span class="note">完成 · 侧栏窄读 + 面板</span></span><span class="when">14:31</span></div>
+        <div class="frow run"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.5 mobile 同契约消费</span><span class="note">领取 · 执行中</span></span><span class="when">14:31</span></div>
+        <div class="frow"><span class="rail"><i></i></span><span class="t"><span class="ttl">3.1 探针卡落盘取证</span><span class="note">待前置完成</span></span><span class="when">—</span></div>
+      </div>
+      <div class="stat"><span>完成 <b>2</b></span><span>执行中 <b>1</b></span><span>阻塞 <b>0</b></span><span>待执行 <b>1</b></span></div>
+    </div>
+  </div>
+
+  <!-- ── mobile 窄幅 ── -->
+  <div class="mob">
+    <div class="phone">
+      <div class="bar"><span class="dot"></span>任务进度 · loop-event-delivery</div>
+      <div class="flow">
+        <div class="frow done"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.3 投影键 fold unit 落地</span><span class="note">完成 · 14:09</span></span></div>
+        <div class="frow blk"><span class="rail"><i></i></span><span class="t"><span class="ttl">fix-1 修复任务</span><span class="note">已自动处理 · 14:18</span></span></div>
+        <div class="frow done"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.4 web 进度流渲染</span><span class="note">完成 · 14:31</span></span></div>
+        <div class="frow run"><span class="rail"><i></i></span><span class="t"><span class="ttl">2.5 mobile 同契约消费</span><span class="note">执行中 · 14:31</span></span></div>
+      </div>
+      <div class="stat"><span>完成 <b>2</b></span><span>执行中 <b>1</b></span><span>待执行 <b>1</b></span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
