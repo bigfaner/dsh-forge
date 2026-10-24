@@ -6,7 +6,7 @@
 import type { Migration } from '../../db/index.js'
 
 /** 工作区库 schema 版本上限（独立版本线；版本门：库内 version 超出即拒绝打开）。 */
-export const FORGE_DB_SCHEMA_VERSION = 5
+export const FORGE_DB_SCHEMA_VERSION = 6
 
 /**
  * v1（M3 终态·直改）：八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器。
@@ -307,6 +307,21 @@ BEGIN SELECT RAISE(ABORT, 'task_records: append-only violation (delete)'); END`,
 BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (update)'); END`,
       `CREATE TRIGGER trg_impl_cp_no_delete BEFORE DELETE ON implementation_checkpoints
 BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
+    ],
+  },
+  {
+    // v6（forge-verification-hardening 机械②）：proposals.parent_proposal_id 承接链左列
+    // （nullable 自联结 FK——飞轮改进链承接；悬空引用由域服务 FK 校验拒写，列约束兜底）。
+    // 守卫式 ALTER（列已在场跳过——v2/v3 谱系先例同构）；idx_proposals_parent =
+    // 承接链递归自联结读面（listDerivedProposals）主径。checkpoints 不承载承接
+    // （保持纯净，仅 derived-to-child 时序锚）。
+    version: 6,
+    statements: [
+      {
+        sql: `ALTER TABLE proposals ADD COLUMN parent_proposal_id TEXT REFERENCES proposals(id)`,
+        columnGuard: { table: 'proposals', column: 'parent_proposal_id' },
+      },
+      `CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)`,
     ],
   },
 ]

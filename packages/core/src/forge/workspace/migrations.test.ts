@@ -113,6 +113,15 @@ BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (up
 BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
 ]
 
+/**
+ * 机械②（forge-verification-hardening）v6：proposals.parent_proposal_id 承接链列 pin
+ * （守卫式 ALTER + 自联结递归读面索引——guard 字段不在文本面）。
+ */
+const PARENT_V6_SQL = [
+  `ALTER TABLE proposals ADD COLUMN parent_proposal_id TEXT REFERENCES proposals(id)`,
+  `CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)`,
+]
+
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
   s
@@ -158,6 +167,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
       ...BUGS_V3_SQL.map(norm),
       ...WORKSPACE_MIGRATIONS[3]!.statements.map(stmtText),
       ...CHECKPOINTS_V5_SQL.map(norm),
+      ...PARENT_V6_SQL.map(norm),
     ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
@@ -174,7 +184,7 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
       m.statements.filter((s) => /^CREATE TRIGGER/i.test(stmtText(s))),
     )
     expect(tables).toHaveLength(14)
-    expect(indexes).toHaveLength(11)
+    expect(indexes).toHaveLength(12)
     expect(triggers).toHaveLength(6)
   })
 
@@ -225,7 +235,19 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(5)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(6)
+  })
+
+  it('v6（机械②）：proposals.parent_proposal_id 承接链——守卫式 ALTER（nullable 自联结 FK）+ 自联结索引', () => {
+    const v6 = WORKSPACE_MIGRATIONS.find((m) => m.version === 6)
+    expect(v6?.statements[0]).toEqual({
+      sql: `ALTER TABLE proposals ADD COLUMN parent_proposal_id TEXT REFERENCES proposals(id)`,
+      columnGuard: { table: 'proposals', column: 'parent_proposal_id' },
+    })
+    expect(stmtText(v6!.statements[1]!)).toBe(
+      'CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)',
+    )
+    expect(stmtText(v6!.statements[0]!)).not.toMatch(/ON DELETE/i)
   })
 
   it('v5（机械①）：implementation_checkpoints DDL——partial unique index 圈定里程碑唯一约束 + 时序索引 + append-only 双触发器', () => {

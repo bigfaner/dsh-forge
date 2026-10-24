@@ -62,6 +62,19 @@ describe('createProposal', () => {
     expect(parseCreateProposalArgs({ slug: 'idea', title: 'T', rel_path: 'proposals/idea/proposal.md' })).toMatchObject({
       rel_path: 'proposals/idea/proposal.md',
     })
+    // 机械②承接链：parent_proposal_id 可选透传（FK 校验经服务）
+    expect(parseCreateProposalArgs({ slug: 'idea', title: 'T', parent_proposal_id: 'pr-0' })).toEqual({
+      slug: 'idea',
+      title: 'T',
+      parent_proposal_id: 'pr-0',
+    })
+  })
+
+  it('parent_proposal_id 透传（机械②承接链——FK 校验经服务，tool 面零业务逻辑）', async () => {
+    const { deps, created } = depsWithCapture()
+    const tool = createCreateProposalTool(deps)
+    await tool.execute({ slug: 'fly', title: 'T', parent_proposal_id: 'pr-9' }, EXEC)
+    expect(created[0]).toMatchObject({ slug: 'fly', parentProposalId: 'pr-9' })
   })
 
   it('mode 缺省 → 按会话当前预设自动填充（出生头——未切换会话的回退源）', async () => {
@@ -152,6 +165,17 @@ describe('transitionProposal', () => {
     expect(transitioned).toEqual([
       { projectId: 'p-1', proposalId: 'pr-1', toStatus: 'superseded', supersededBy: 'pr-2' },
     ])
+  })
+
+  it('parent_proposal_id 透传（机械②承接链——缺省不携带 = 保留既有，FK 校验经服务）', async () => {
+    const { deps, transitioned } = depsWithCapture()
+    const tool = createTransitionProposalTool(deps)
+    await tool.execute({ proposal_id: 'pr-1', to_status: 'under-review', parent_proposal_id: 'pr-0' }, EXEC)
+    expect(transitioned).toEqual([
+      { projectId: 'p-1', proposalId: 'pr-1', toStatus: 'under-review', parentProposalId: 'pr-0' },
+    ])
+    await tool.execute({ proposal_id: 'pr-1', to_status: 'accepted' }, EXEC)
+    expect(transitioned[1]).toEqual({ projectId: 'p-1', proposalId: 'pr-1', toStatus: 'accepted' })
   })
 
   it('服务侧缺带校验 → 失败 DTO（如目标提案不在场 ERR_PROPOSAL_NOT_FOUND）', async () => {

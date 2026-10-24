@@ -167,6 +167,9 @@ describe('注册面集合 pin（十四 tool：M3 九员 + recordBug/resolveBug �
     // createProposal mode 预设自动填充（参数面不收 mode——所处容器即溯源）/ transitionProposal superseded_by 透传
     expect(byName.get('createProposal')?.parameters.properties).not.toHaveProperty('mode')
     expect(byName.get('transitionProposal')?.parameters.properties).toHaveProperty('superseded_by')
+    // 机械②承接链：两动词 parent_proposal_id 透传参数在场
+    expect(byName.get('createProposal')?.parameters.properties).toHaveProperty('parent_proposal_id')
+    expect(byName.get('transitionProposal')?.parameters.properties).toHaveProperty('parent_proposal_id')
     // 任务定位两显式参口径
     expect(byName.get('submitTask')?.parameters.required).toEqual(['slug', 'local_id', 'result'])
     expect(byName.get('queryTask')?.parameters.required).toEqual(['slug', 'local_id'])

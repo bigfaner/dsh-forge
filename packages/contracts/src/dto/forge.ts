@@ -831,6 +831,8 @@ export interface CreateProposalInput {
   status?: ProposalStatus
   /** 模式溯源（远征/突击；缺省 = NULL 占位——成链门按 NULL 边界处理） */
   mode?: Mode
+  /** 承接链左列（飞轮改进链父提案 id；缺省 = 无承接。FK 校验指向存在提案） */
+  parentProposalId?: string
 }
 
 /** transitionProposal 入参（M3 双面：tool + RPC（UF-1 人工裁决）——M2「tool 专属」纪律 drift 修订；
@@ -841,6 +843,8 @@ export interface TransitionProposalInput {
   toStatus: ProposalStatus
   /** superseded 必带（目标提案 id 在场校验 → 写 proposals.superseded_by——UF-1 取代链数据面） */
   supersededBy?: string
+  /** 承接链左列（飞轮改进链父提案 id；提供即写，缺席 = 保留既有。FK 校验指向存在提案） */
+  parentProposalId?: string
 }
 
 /** transitionProposal 返回体（行 + 成链水化——toStatus=accepted ∧ mode='expedition' ∧ 无同链
@@ -880,6 +884,13 @@ export interface ListProposalsQuery {
   sort?: 'active' | 'created'
 }
 
+/** listDerivedProposals 查询（机械②承接链自联结读面——递归闭包） */
+export interface ListDerivedProposalsQuery {
+  projectId: string
+  /** 承接链根提案 id */
+  proposalId: string
+}
+
 /** proposals 行应用层形状（身份与名称分离——slug 可改名，关联走 id）。
  *  M3 增 mode（CHECK expedition|blitz|NULL——扫描吸收旧行 = NULL 缺省占位）与
  *  supersededBy（自引用 FK——取代链谱系）。 */
@@ -897,6 +908,8 @@ export interface ProposalRow {
   mode?: Mode
   /** 取代链目标提案 id（superseded 转移写入；UF-1 谱系右列数据面） */
   supersededBy?: string
+  /** 承接链左列（飞轮改进链父提案 id；NULL = 键缺席 = 无承接） */
+  parentProposalId?: string
   /** ISO-8601 */
   createdAt: string
   /** ISO-8601 */
@@ -924,6 +937,8 @@ export interface ForgeProposalsService {
   /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰；UI 专属） */
   setProposalMode(input: SetProposalModeInput): Promise<ProposalRow>
   listProposals(q: ListProposalsQuery): Promise<ProposalCard[]>
+  /** 承接链自联结读面（机械②）：给定提案 id 递归查出其派生的全部改进提案（传递闭包，恒不含自身） */
+  listDerivedProposals(q: ListDerivedProposalsQuery): Promise<ProposalRow[]>
   /** 提案文档区只读扫描（评审缺口#1 处置——零状态零写径） */
   listProposalDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
 }

@@ -94,6 +94,7 @@ describe('AC1 全 DDL 在临时库执行零错（十四表 + 九索引 + 六触�
       'idx_edges_prerequisite',
       'idx_fr_feature',
       'idx_impl_cp_proposal',
+      'idx_proposals_parent',
       'idx_records_session',
       'idx_records_task',
       'idx_tasks_source',
