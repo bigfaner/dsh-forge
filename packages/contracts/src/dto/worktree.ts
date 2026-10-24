@@ -1,11 +1,11 @@
 // @dsh-forge/contracts —— worktree/branch 管理 DTO。
-// 通道族 forge:worktree/*（十通道：list/create/delete/ahead-behind/branches/checks/
-// session-create/seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
+// 通道族 forge:worktree/*（九通道：list/create/delete/ahead-behind/branches/checks/
+// seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
 // → host ipc worktree-rpc；域实现 = packages/plugins/git-worktree——host ipc 装配透传）。
 // 面分治：list/create/delete/ahead-behind/branches/checks = 管理域读+封闭写集（create/delete
-// ——提案「数据源与命令面」）；session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘，
-// 绑定写面唯一时点）；seal = 封存判定快照（chip 失效态 / notice / composer 占位数据源）；
-// select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
+// ——提案「数据源与命令面」）；seal = 封存判定快照（chip 失效态 / notice / composer 占位
+// 数据源）；select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
+// session-create 预铸采纳单门已退役（bug 82e92933，binding-derivation §2.3）。
 
 /** worktree 清单条目（= 插件域 WorktreeEntry + 行渲染派生面） */
 export interface WorktreeEntryDto {
@@ -97,33 +97,9 @@ export interface WorktreeChecksResult {
 }
 
 /**
- * forge:worktree/session-create（1.16 预铸采纳配方——单 RPC 原子）：
- * host 预铸会话（persistence.create 自铸 id + worktreePath cwd 头 → 初始句柄写挂靠事件
- * seq 0 → close）→ controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄生命
- * 周期零交叠，单写者铁律满足（活会话上不再另开写句柄；原 attach 通道已废——绑定写面
- * 唯一时点 = 预铸）。
+ * forge:worktree/session-create 载荷已退役（bug 82e92933——预铸采纳单门整体退役，
+ * binding-derivation §2.3：换绑由官方 blank 复用天然生效）。
  */
-export interface WorktreeSessionCreateRequest {
-  /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */
-  readonly worktreePath: string
-  /**
-   * 预铸头 agentPreset 显式档（bug 82cab5fe 重路由模式随档——源会话 preset 折叠值优先于
-   * registry 默认；缺席 = resolveDefaultPreset registry 单源，bug eae18b5c 同径）。
-   */
-  readonly agentPreset?: string
-}
-export interface WorktreeSessionCreateResult {
-  readonly sessionId: string
-  /** 挂靠分支（host 自查 worktree list——预铸挂靠事件内同一值） */
-  readonly branch: string
-  /**
-   * 产物头 cwd（realpath 归一；bug 2bc90d64）：可能 ≠ 请求 worktreePath——「创建即绑选中树」
-   * 会把项目根请求改写为选中树。客户端改道后经官方 session.create({sessionId, cwd}) adopt
-   * 正门补客户端账本（官方契约：create 成功即时并入 summaries，调用方拿 id 即 retain），
-   * cwd 即 adopt 校验 header.cwd 相等的对位键。
-   */
-  readonly cwd: string
-}
 
 /**
  * forge:events/session-binding-mismatch 载荷（WYSIWYG 哨兵——用户裁决 2026-10-24）：

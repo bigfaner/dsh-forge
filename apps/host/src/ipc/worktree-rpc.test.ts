@@ -519,9 +519,10 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     }
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
-    // 建会话单门退役——session-create 通道不再注册（host 会话创建中继收敛为
+    // 建会话单门退役——session-create 通道键已自 contracts WORKTREE_CHANNELS 摘除
+    // （bug 82e92933——web 残留消费即 not-found；host 会话创建中继收敛为
     // forge:proxy/session-create 一条腿，binding-derivation §2.3）
-    expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).filter((c) => c !== WORKTREE_CHANNELS.sessionCreate).sort())
+    expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
     expect(registered).toHaveLength(10)
   })
 })

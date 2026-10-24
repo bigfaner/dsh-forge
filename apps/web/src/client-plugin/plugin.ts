@@ -997,66 +997,6 @@ function registerCenterPanels(
 }
 
 /**
- * 点选即换绑编排缝（bug ff324cad 体验收口·方案 A——hero worktree chip 点选非主树且活跃
- * 会话为主树占位 blank 时：预铸选中树会话 + 官方 openSession 切换 + 占位归档清场。官方
- * 切工作区同构语义：切换 = 让目标 workspace 名下诞生/复用它自己的会话，弃置空占位归档——
- * 官方 reuseOrCreateBlank 本就排除归档行）。四窄面全官方缝、逐次现取（ctx.get 惰性）；
- * 形状漂移/缺席 = undefined/零动作（fail-soft 退回纯选中态，发送时必绑重路由兜底）。
- */
-export interface HeroRebindFace {
-  /** 活跃会话 id（官方 mainView 在留判读——activeSessionIdOf 同源）；缺席 = 无活跃会话 */
-  activeSessionId(): string | undefined
-  /** 账本 blank 判读（官方 summary.blank 投影——reuseOrCreateBlank 同判据） */
-  isBlank(sessionId: string): boolean
-  /** 官方导航动作面（会话选择+呈现一体——fix-11 口径） */
-  openSession(sessionId: string): void
-  /** 官方归档（durable 归档集——弃置占位清场唯一正门） */
-  archiveSession(sessionId: string): Promise<void>
-  /** 账本变更订阅（官方 sessions.list store subscribe——归档前置确认事件推送源；缺席 = 确认面降级） */
-  subscribeSessionLedger(listener: () => void): () => void
-}
-
-/** 点选即换绑缝构造（inject 闭包内逐次 ctx.get——服务晚于注册就绪不持有陈旧引用） */
-export function heroRebindFaceOf(ctx: ForgeClientCtx): HeroRebindFace {
-  const uiWorkspace = (): {
-    openSession?: (target: string) => void
-    archiveSession?: (sessionId: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
-  } | undefined => ctx.get('uiWorkspace') as never
-  const ledgerSnapshot = (): { byId?: Record<string, unknown> } | undefined => {
-    const sessions = ctx.get('sessions') as { list?: unknown } | undefined
-    const getSnapshot = (sessions?.list as { getSnapshot?: () => unknown } | undefined)?.getSnapshot
-    if (typeof getSnapshot !== 'function') return undefined
-    try {
-      return (getSnapshot.call(sessions?.list) as { byId?: Record<string, unknown> } | null) ?? undefined
-    } catch {
-      return undefined
-    }
-  }
-  return {
-    activeSessionId: () => {
-      const sessions = ctx.get('sessions') as { list?: unknown } | undefined
-      return sessions?.list === undefined ? undefined : activeSessionIdOf(sessions.list)
-    },
-    isBlank: (sessionId) => {
-      const row = ledgerSnapshot()?.byId?.[sessionId]
-      return (row as { blank?: unknown } | null)?.blank === true
-    },
-    openSession: (sessionId) => {
-      uiWorkspace()?.openSession?.(sessionId)
-    },
-    archiveSession: async (sessionId) => {
-      await uiWorkspace()?.archiveSession?.(sessionId, { stopActivity: true })
-    },
-    subscribeSessionLedger: (listener) => {
-      const sessions = ctx.get('sessions') as { list?: { subscribe?: (l: () => void) => () => void } } | undefined
-      const subscribe = sessions?.list?.subscribe
-      if (typeof subscribe !== 'function') return () => {} // 订阅缝缺席 = 确认面降级（超时路径兜底）
-      return subscribe.call(sessions?.list, listener)
-    },
-  }
-}
-
-/**
  * views 族登记（fix-36 自 apply 拆出）：官方页签 roster（conversation.view——UF-4 知识
  * 召回单登记；对话 = 官方 'chat' 直用、轨迹 = 官方 'trajectory' 直用——fix-29 退役产品
  * 复刻，同 order 10 双『轨迹』冲突不再；label 经 locale NS thunk——fix-33 ⑧）+ hero
@@ -1102,9 +1042,8 @@ function registerConversationViews(
       {
         name: HERO_WORKSPACE_SLOT,
         priority: SIDEBAR_SHADOW_PRIORITY,
-        // 方案 A（bug ff324cad 体验收口）：点选即换绑编排缝经 inject 递达挂载面——
-        // activeId/blank 判读 + openSession/archiveSession 官方窄面（heroRebindFaceOf）。
-        inject: () => ({ rebindFace: heroRebindFaceOf(ctx) }),
+        // bug 82e92933（binding-derivation §2.3）：点选即换绑编排退役——零 inject
+        // （换绑由官方 blank 复用天然生效，非改道官方面再包一层）。
       },
       views.ForgeHeroWorkspacePicker,
     ),

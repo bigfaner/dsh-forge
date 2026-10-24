@@ -138,8 +138,8 @@ export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNEL
 /**
  * forge:worktree/*（worktree-branch-management fix-2：worktree/branch 管理域 + 会话绑定面）。
  * 域实现 = packages/plugins/git-worktree（通用层），host ipc/worktree-rpc 装配透传；
- * session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘——绑定写面唯一时点，活会话
- * 补写被单写者铁律禁止，attach 通道已废）；seal = 封存判定快照（三通道提示数据源）。
+ * seal = 封存判定快照（三通道提示数据源）。session-create 通道已退役（bug 82e92933——
+ * 预铸采纳单门整体退役，binding-derivation §2.3：换绑由官方 blank 复用天然生效）。
  * 封闭写集仅 create/delete（提案「命令面」裁决）。
  */
 export const WORKTREE_CHANNELS = {
@@ -149,7 +149,6 @@ export const WORKTREE_CHANNELS = {
   aheadBehind: 'forge:worktree/ahead-behind',
   branches: 'forge:worktree/branches',
   checks: 'forge:worktree/checks',
-  sessionCreate: 'forge:worktree/session-create',
   seal: 'forge:worktree/seal',
   select: 'forge:worktree/select',
   selected: 'forge:worktree/selected',
@@ -201,7 +200,6 @@ export const FORGE_CHANNELS = {
   worktreeAheadBehind: WORKTREE_CHANNELS.aheadBehind,
   worktreeBranches: WORKTREE_CHANNELS.branches,
   worktreeChecks: WORKTREE_CHANNELS.checks,
-  worktreeSessionCreate: WORKTREE_CHANNELS.sessionCreate,
   worktreeSeal: WORKTREE_CHANNELS.seal,
   worktreeSelect: WORKTREE_CHANNELS.select,
   worktreeSelected: WORKTREE_CHANNELS.selected,
