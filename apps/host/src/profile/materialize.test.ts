@@ -77,12 +77,6 @@ describe('AC2 首启落地：模板三件 + 空根兜底', () => {
     // 现值 pin：knowledge 关（重开放 = 改 contracts PRODUCT_PLUGINS + 本 pin 反转）
     expect(PRODUCT_PLUGINS['knowledge']).toEqual({ userLayerRow: false, staged: false })
     expect(patch).not.toContain("name: '@dsh-forge/knowledge'")
-    // 现值 pin：选段引用双插件内置产品插件（产品裁决 2026-10-24——用户层全局装载，
-    // staging 随 userLayerRow 种子自动推导；重开 = 改 contracts PRODUCT_PLUGINS + 本 pin）
-    expect(PRODUCT_PLUGINS['quote-reference']).toEqual({ userLayerRow: true })
-    expect(PRODUCT_PLUGINS['super-composer']).toEqual({ userLayerRow: true })
-    expect(patch).toContain("name: '@dsh-forge/quote-reference'")
-    expect(patch).toContain("name: '@dsh-forge/super-composer'")
     // 预设携带插件不入配置表（行在预设底稿内——产品裁决 2026-10-09 标准模式零 forge
     // 面；staging 由 assemble 从底稿扫描 + 依赖闭包自动推导）
     expect(PRODUCT_PLUGINS).not.toHaveProperty('plugin-forge')

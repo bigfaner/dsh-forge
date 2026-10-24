@@ -62,8 +62,6 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
 export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/md-mermaid': 'plugins',
   '@dsh-forge/git-worktree': 'plugins',
-  '@dsh-forge/quote-reference': 'plugins',
-  '@dsh-forge/super-composer': 'plugins',
 }
 
 /** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。 */

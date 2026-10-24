@@ -190,12 +190,6 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       // 打包主进程 ERR_MODULE_NOT_FOUND 启动即崩（staged:true 覆写物化）
       'runtime/node_modules/@dsh-forge/git-worktree/package.json',
       'runtime/node_modules/@dsh-forge/git-worktree/dist/index.js',
-      // 选段引用双插件内置（产品裁决 2026-10-24）：node 半空载 dist/index.js（物化双件
-      // 口径）+ cordis.patch.yml 组合行；client bundle 走 web-dist *-client.js 面
-      'runtime/node_modules/@dsh-forge/quote-reference/package.json',
-      'runtime/node_modules/@dsh-forge/quote-reference/dist/index.js',
-      'runtime/node_modules/@dsh-forge/super-composer/package.json',
-      'runtime/node_modules/@dsh-forge/super-composer/dist/index.js',
       'runtime/node_modules/better-sqlite3/prebuilds/win32-x64.node',
       'web-dist/index.html',
       'icon.png',
@@ -232,18 +226,7 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      [
-        'contracts',
-        'core',
-        'path-key',
-        'plugin-forge',
-        'plugin-forge-spec',
-        'plugins/git-worktree',
-        'plugins/md-mermaid',
-        // 选段引用双插件内置（产品裁决 2026-10-24——userLayerRow 种子自动入 staging）
-        'plugins/quote-reference',
-        'plugins/super-composer',
-      ].sort(),
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
     )
   })
 

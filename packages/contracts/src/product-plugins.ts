@@ -45,11 +45,5 @@ export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true
   // 显式入 staging。行装载不走用户层：boot overlay presence 门注行（dev 同径单源）。
   'git-worktree': { userLayerRow: false, staged: true },
-  // 选段引用双插件（产品裁决 2026-10-24：内置产品插件）：纯 client 包（node 半空载
-  // 合法），用户层全局装载；staged 缺省 = userLayerRow 种子自动推导随包发货。
-  // client bundle 交付前置：根 build 需先构建两包 dist（bundle-client 产物 *-client.js
-  // 经 apps/web vite 原样发射入 web-dist）。
-  'quote-reference': { userLayerRow: true },
-  'super-composer': { userLayerRow: true },
   knowledge: { userLayerRow: false, staged: false },
 }
