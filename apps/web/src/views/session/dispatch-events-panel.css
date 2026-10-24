@@ -1,0 +1,203 @@
+/* 悬浮进度流面板样式（定位：业务——loop-event-delivery 1.8：对话列内 · 页签行之下 · 随
+ * dock 展开自动左移）。结构基准 = prototype.html .panel/.flow/.frow（信息结构）+ 令牌对齐
+ * DESIGN.md；落位 = shell overlay（DispatchPanel 判例缝承袭——fixed + pointer-events:auto +
+ * dockkit 浮层层级）；视觉一律官方令牌（色/字/距/圆角/阴影——lint-tokens 机械执行）。
+ * dsw-raw 豁免刻度（原型结构为准——TECH-styling-002）：宽 480[fix bug 570fa4e2 判例承袭] /
+ * 头高 34 / 列表滚动高 264 / 组头行 26 / 行 min-h 30 / 悬浮球高 26 × 定宽 52 / 右缘 16 /
+ * 顶距 8 / 拖移边距 4；组头微距 4/10、行内距 6/12 = 原型行内距刻度（官方字阶令牌无对应
+ * 微距档）。 */
+
+/* ── 面板壳：对话列内浮层（left/top 经 style 注入——锚定或拖移位）── */
+.dswf-dep {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 480px; /* DEP_WIDTH 同值单源——长 title/摘要不换行挤压的宽度保障 */
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  z-index: var(--dsh-dockkit-float-layer, 60); /* 官方 dockkit 浮层层级令牌（弹窗同径） */
+  pointer-events: auto; /* 壳宿主舞台零交互——面板本体恢复命中 */
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md); /* 原型 12px 圆角 */
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* 拖移包装层（零视觉——pointer 捕获拖移的挂接面） */
+.dswf-dep-dragwrap {
+  display: contents;
+}
+
+/* ── 头：拖移手柄（cursor move；折叠钮/行命中不劫持——组件面守卫）── */
+.dswf-dep-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+  height: 34px;
+  padding: 0 6px 0 12px; /* dsw-raw 原型头内距刻度 */
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: var(--dsh-cursor-move, move);
+  user-select: none;
+  touch-action: none;
+}
+
+/* 头部活点（原型 .panel-head .dot——运行中视觉锚） */
+.dswf-dep-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px; /* dsw-raw 原型活点圆点刻度 */
+  background: var(--dsw-alias-link);
+}
+
+.dswf-dep-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* live 标记（原型 .panel-head .live——不经模型的实时面提示） */
+.dswf-dep-live {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dep-btn {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 分组列表（major 组头 + 组内细分行——原型 .flow 滚动面）── */
+.dswf-dep-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: var(--dsw-font-xxxs-11-line-height) 0;
+}
+
+.dswf-dep-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* major 组头：场景族中文章 + 组内计数（原型 .evt-head 语言——module-bg 弱化底） */
+.dswf-dep-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxxs-11-line-height);
+  min-height: 26px;
+  padding: 2px 12px; /* dsw-raw 原型组头内距刻度 */
+  background: var(--dsw-alias-bg-layer-2);
+  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dep-group-count {
+  margin-left: auto;
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 行：标题/副行 + 相对时间 + 状态章（原型 .frow 同构——hover 交互底）── */
+.dswf-dep-row {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+  min-height: 30px;
+  padding: 3px 12px; /* dsw-raw 原型行内距刻度 */
+}
+
+.dswf-dep-row[role='button'] {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-dep-row[role='button']:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dswf-dep-row-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-dep-row-title {
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* minor 细分行（note/scenario——原型 .frow .note 次级弱化） */
+.dswf-dep-row-note {
+  overflow: hidden;
+  font: var(--dsw-font-xxxs-11);
+  line-height: var(--dsw-font-xxxs-11-line-height);
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-dep-row-time {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.dswf-dep-row-tag {
+  flex: none;
+}
+
+/* ── 底部统计条（原型 .stat——完成/执行中/阻塞/已中断）── */
+.dswf-dep-stat {
+  display: flex;
+  gap: 12px; /* dsw-raw 原型统计条列距刻度 */
+  padding: 8px 12px; /* dsw-raw 原型统计条内距刻度 */
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-dep-stat b {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 半透明折叠悬浮球（⟡N——悬浮态不遮挡对话内容；hover 实化）── */
+.dswf-dep-badge {
+  position: fixed;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dsw-font-xxxs-11-line-height);
+  height: 26px;
+  width: 52px; /* DEP_BADGE_WIDTH 同值单源（右上锚右对齐不随计数漂移） */
+  padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-link);
+  font: var(--dsw-font-xxs-strong-12);
+  z-index: var(--dsh-dockkit-float-layer, 60);
+  pointer-events: auto;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  opacity: 0.55; /* 半透明悬浮球态——对话内容透见不遮挡 */
+  transition: opacity 0.15s var(--ds-ease-in-out, ease-in-out);
+}
+
+.dswf-dep-badge:hover,
+.dswf-dep-badge:focus-visible {
+  opacity: 1; /* 悬停/聚焦实化（官方 fading 等价机制） */
+}

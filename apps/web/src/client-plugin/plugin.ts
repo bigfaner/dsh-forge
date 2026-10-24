@@ -39,6 +39,8 @@ import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
 import type { PskTrioFace } from '../views/remote/ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
+// 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
+import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -2585,8 +2587,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主
-        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 派发任务悬浮面板
-        // [m3.1 D6——行点击开弹窗经桥，⟞ 开 worker 子会话经 openWorkerSession]；
+        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 悬浮进度流面板
+        // [loop-event-delivery 1.8——行点击开 worker 子会话经 onOpenWorkerSession，数据 =
+        // 账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新]；
         // selectPanel/rightbar/bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
         // 卸载期顺带撤销桥发布、locale 词典、dock tab 类型注册与 mermaid DOM 增强器观察
         // + 清 __DSH_FORGE_CLIENT__
@@ -2642,9 +2645,13 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 会话名解析器（task-ui-info-density-blitz S1 通道——账本快照 displayTitle
                 // 窄读；账本未命中 = undefined，调用方回退显示 sessionId fail-soft）
                 sessionTitleOf: makeSessionTitleResolver(sessions),
+                // 悬浮进度流面板数据源（loop-event-delivery 1.8——ctx.sessions.list 快照源
+                // 直递：面板经账本行 projectionValues['forge-dispatch-events'] 窄读 + store
+                // subscribe 实时刷新，零新增读取 API）
+                sessions: sessions.list as SnapshotSource<LedgerSessionsSnapshot>,
                 // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
                 // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
-                // 单源）——DispatchPanel 库侧解析 miss 时经 ShellHost 递达消费。
+                // 单源）——旧载荷（无 workerSessionId）消费面。
                 resolveWorkerSession: (parentSessionId: string, taskKey?: string): Promise<string | undefined> =>
                   resolveWorkerChildSession(sessions, parentSessionId, taskKey),
               }),

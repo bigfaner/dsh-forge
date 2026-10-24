@@ -141,7 +141,7 @@ const TOOLTIP_FILES = [
   'apps/web/src/views/overview/task-tab/list-view.tsx',
   'apps/web/src/views/overview/task-tab/swimlane-view.tsx',
   'apps/web/src/views/overview/task-tab/task-tab.tsx',
-  'apps/web/src/views/session/DispatchPanel.tsx',
+  'apps/web/src/views/session/DispatchEventsPanel.tsx',
   'apps/web/src/views/session/RecallTab.tsx',
   'apps/web/src/views/sidebar/ForgeWorkspacePanel.tsx',
 ] as const

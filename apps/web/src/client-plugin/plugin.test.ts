@@ -229,6 +229,8 @@ function fakeClientCtx(
     list: {
       tag: 'sessions-list',
       getSnapshot: () => ({ byId: sessionsById }),
+      // 悬浮进度流面板实时刷新缝（loop-event-delivery 1.8——useSyncExternalStore 订阅面）
+      subscribe: () => () => {},
     },
     get refresh(): (() => Promise<unknown>) | undefined {
       return sessionsRefresh.current
@@ -489,7 +491,8 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
     const face = workspaces.options.inject!()
     expect(face).toEqual({
       // m3.1 D6：账本快源含 getSnapshot（worker ⟞ parentId 判读面——面板数据直读）
-      sessions: { tag: 'sessions-list', getSnapshot: expect.any(Function) },
+      // + subscribe（loop-event-delivery 1.8——进度流面板实时刷新缝）
+      sessions: { tag: 'sessions-list', getSnapshot: expect.any(Function), subscribe: expect.any(Function) },
       workspaces: { tag: 'workspaces-list' },
       openSession: expect.any(Function),
       startSession: expect.any(Function),
@@ -800,10 +803,12 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       onOpenWorkerSession: (childSessionId: string) => void
       sessionTitleOf: (sessionId: string) => string | undefined
       resolveWorkerSession: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
+      sessions: { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
     // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
     // + ⟞ 父反查兜底（fix：进行中 worker 无 record 审计行 → 库侧解析恒空的修复面）
+    // + 悬浮进度流面板账本源（loop-event-delivery 1.8——projectionValues 窄读 + 实时刷新）
     expect(Object.keys(face).sort()).toEqual([
       'bridge',
       'onOpenSession',
@@ -814,7 +819,10 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       'rightbar',
       'selectPanel',
       'sessionTitleOf',
+      'sessions',
     ])
+    expect(typeof face.sessions.getSnapshot).toBe('function')
+    expect(typeof face.sessions.subscribe).toBe('function')
     expect(typeof face.onOpenSession).toBe('function')
     // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
     expect(typeof face.onOpenWorkerSession).toBe('function')

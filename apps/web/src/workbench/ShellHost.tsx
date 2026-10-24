@@ -9,16 +9,16 @@
 //   - 任务详情弹窗宿主（m3.1 D21/D23：挂载独立于 dock——桥 drawerTaskId 受控条件挂载，
 //     对话中不经概览 tab 直接打开；弹窗几何逐开本地态随条件挂载弃置 = 不记忆；转移
 //     对话框随弹窗同宿主——任意面板态可用）。
-//   - 派发任务悬浮面板宿主（m3.1 D5/D6：会话视图 + 主视图会话锚 + 单库锚三键齐备时
-//     挂载——仅本会话派发 link 源；行点击 = 桥 openTaskDrawer 就地开弹窗（零跳转/零
-//     dock 强开），行尾 ⟞ = openWorkerSession 开 worker 执行子会话（树零联动）；key =
-//     sessionId 切会话整体重置折叠/拖移本地态）。
+//   - 悬浮进度流面板宿主（loop-event-delivery 1.8：会话视图 + 主视图会话锚 + 账本源齐备
+//     时挂载——账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新；
+//     行点击 = openWorkerSession 开 worker 执行子会话（树零联动）；key = sessionId 切会话
+//     整体重置折叠/拖移本地态）。
 // 官方缝：shell.overlay（ui-layout AppFrame root 五子槽之一，list/root——常驻不随 main
 // 面板互换卸载）；标准 props 面 = root 作用域观察钩子（useWorkspaces/usePanelInfo）。
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { DispatchPanel } from '../views/session/DispatchPanel.js'
+import { DispatchEventsPanel } from '../views/session/DispatchEventsPanel.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
 import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
@@ -26,6 +26,7 @@ import type { TaskStatus } from '@dsh-forge/contracts'
 import type { SessionOpenRequest } from '../views/overview/message-format.js'
 import { useProjectDocsRoot } from '../views/overview/overview-data.js'
 import type { OpenSessionOrchestrator } from '../client-plugin/open-session.js'
+import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
 import { MainSessionAnchor, useAnchoredProjects, useWorkspaceProjectMap } from './anchored-projects.js'
 import {
   HERO_PANEL_KEY,
@@ -78,15 +79,16 @@ export interface ForgeShellHostProps {
    * 缺席 = 非交互呈现） */
   readonly onOpenSession?: (sessionId: string, parentSessionId?: string) => void
   /**
-   * 悬浮面板 ⟞ 打开 worker 执行子会话（m3.1 D6 插件 inject face——显式父（库侧 link
-   * 派发源）优先地址形态，账本判读兜底；缺席 = ⟞ 非交互呈现）。
+   * 悬浮进度流面板行点击 = 打开 worker 执行子会话（loop-event-delivery 1.8 插件 inject
+   * face——载荷 workerSessionId + 显式父（面板会话）地址形态；缺席 = 行非交互呈现）。
    */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
-  /** ⟞ worker 父反查兜底（插件 inject face——账本子行 parentId 扫描 + refresh 一次；
-   *  taskKey 在场 = displayTitle 前缀判别同父多 worker）：
-   *  DispatchPanel 库侧 record 源 miss（进行中任务无 record 审计行——修复面）时消费；
-   *  缺席 = 无兜底 */
-  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
+  /**
+   * dsh 会话账本快照源（插件 inject face——ctx.sessions.list；悬浮进度流面板的数据源 =
+   * 账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新；缺席 =
+   * 面板不出场）。
+   */
+  readonly sessions?: SnapshotSource<LedgerSessionsSnapshot>
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**
@@ -335,19 +337,18 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
       {props.usePanelInfo !== undefined ? (
         <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
       ) : null}
-      {/* 派发任务悬浮面板（m3.1 D5/D6：会话视图 + 主视图会话锚 + 单库锚三键齐备时挂载——
-          仅本会话派发 link 源（useSessionTaskPills 既有装载 + 写推送刷新）；行点击 = 桥
-          openTaskDrawer 就地开弹窗（零会话跳转/零 dock 强开）；⟞ = openWorkerSession 开
-          worker 子会话（树零联动）；key = 主视图会话（切会话/worker 子会话开闭整体重置
-          折叠与拖移本地态） */}
-      {view === 'session' && mainSessionId !== null && overviewContext.projectId !== null ? (
-        <DispatchPanel
+      {/* 悬浮进度流面板（loop-event-delivery 1.8——派发任务悬浮面板的继任面，替代不并存）：
+          会话视图 + 主视图会话锚 + 账本源齐备时挂载；数据 = 账本行
+          projectionValues['forge-dispatch-events'] 窄读 + store subscribe 实时刷新（零新增
+          读取 API）；条目按场景码 major 分组、行状态章 = 载荷 status 四值；行点击 = 载荷
+          workerSessionId 开 worker 子会话（树零联动）；可见性随所属会话（非循环会话/切走
+          = 投影判读隐藏）；key = 主视图会话（切会话整体重置折叠与拖移本地态） */}
+      {view === 'session' && mainSessionId !== null && props.sessions !== undefined ? (
+        <DispatchEventsPanel
           key={mainSessionId}
           sessionId={mainSessionId}
-          projectId={overviewContext.projectId}
-          {...(bridge !== undefined ? { onOpenTask: bridge.openTaskDrawer } : {})}
+          sessions={props.sessions}
           {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
-          {...(props.resolveWorkerSession !== undefined ? { resolveWorkerSession: props.resolveWorkerSession } : {})}
         />
       ) : null}
       {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/
