@@ -184,7 +184,8 @@ test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数
     await expect(page.locator(statusBtn('all')), '过滤钮·全部').toBeVisible()
     await expect(page.locator(statusBtn('enabled')), '过滤钮·启用').toBeVisible()
     await expect(page.locator(statusBtn('disabled')), '过滤钮·禁用').toBeVisible()
-    // 召唤钮断言由 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证（依赖 1.21 装配 onSummon）
+    // 召唤钮（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话，面板内零对话面）
+    // 断言归 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证
     // 数据态：夹具卡呈现 + 页脚计数形态
     await expect(page.locator(cardOf('test-reviewer')), '夹具卡·test-reviewer').toBeVisible()
     await expect(page.locator(cardOf('data-miner')), '夹具卡·data-miner').toBeVisible()
