@@ -162,16 +162,16 @@ describe('改进7 · e2e 取证债（settleWorkerRun 欠账任务生成）', () 
   it('欠账卡文案与简报行存在性一致（bug ca061ef6）：简报红灯在场 → 指示比对行；缺席 → 兜底文案', async () => {
     const withRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: withRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: ['e2e/specs/a.spec.ts'] })
-    expect(withRed.addTaskInputs[0]!.taskDesc).toContain('先比对任务简报 E2E_BASELINE_RED 行')
+    expect(withRed.addTaskInputs[0]!.taskDesc).toContain('先比对任务说明中的 E2E_BASELINE_RED 行')
 
     const withoutRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: withoutRed.tasks }, ctxOf())
-    expect(withoutRed.addTaskInputs[0]!.taskDesc).toContain('简报无 E2E_BASELINE_RED 行')
-    expect(withoutRed.addTaskInputs[0]!.taskDesc).not.toContain('先比对任务简报')
+    expect(withoutRed.addTaskInputs[0]!.taskDesc).toContain('说明中没有 E2E_BASELINE_RED 行')
+    expect(withoutRed.addTaskInputs[0]!.taskDesc).not.toContain('先比对任务说明中的 E2E_BASELINE_RED 行')
 
     const emptyRed = harness(completedQuery(true))
     await settleWorkerRun({ tasks: emptyRed.tasks }, { ...ctxOf(), e2eBaselineRedCases: [] })
-    expect(emptyRed.addTaskInputs[0]!.taskDesc).toContain('简报无 E2E_BASELINE_RED 行')
+    expect(emptyRed.addTaskInputs[0]!.taskDesc).toContain('说明中没有 E2E_BASELINE_RED 行')
   })
 })
 

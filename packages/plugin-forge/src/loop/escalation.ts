@@ -145,13 +145,13 @@ export function renderEscalationReceipt(
       }
     }
     return {
-      text: [head, ...taskLines, `裁决: 已收到「${outcome.label}」——循环已收口，任务保持当前状态`].join('\n'),
+      text: [head, ...taskLines, `裁决: 已收到「${outcome.label}」——循环已结束，任务保持当前状态`].join('\n'),
       headline: `裁决已收到——${outcome.label}`,
     }
   }
   if (outcome.kind === 'cancelled') {
     return {
-      text: [head, ...taskLines, '裁决: 问询已关闭（未选择）——循环已收口，任务保持当前状态'].join('\n'),
+      text: [head, ...taskLines, '裁决: 问询已关闭（未选择）——循环已结束，任务保持当前状态'].join('\n'),
       headline: '问询已关闭（未选择）',
     }
   }
@@ -227,7 +227,7 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
     case 'settle-landing-rejected':
       return {
         header: '派发循环裁决',
-        question: `任务 ${escalation.taskKey} 的提交落点核验失败（提交落错分支或核验故障），任务已转移为可恢复态，需要你决定下一步`,
+        question: `任务 ${escalation.taskKey} 的提交不在其所属分支上（或核验过程出错），任务已恢复为可重新执行的状态，需要你决定下一步`,
         detail: [
           `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
           `任务: ${escalation.taskKey}`,

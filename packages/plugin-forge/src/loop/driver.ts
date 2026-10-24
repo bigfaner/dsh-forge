@@ -1270,7 +1270,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       source: record.source,
       task,
       reason,
-      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
     })
   }
 

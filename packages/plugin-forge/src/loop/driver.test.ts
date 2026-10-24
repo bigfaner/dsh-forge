@@ -491,7 +491,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     expect(built.h.addTaskInputs[0]).toMatchObject({
       projectId: PROJECT,
       source: SOURCE,
-      title: 'e2e 基线红灯归因：e2e/specs/a.spec.ts',
+      title: 'e2e 基线红灯排查：e2e/specs/a.spec.ts',
       type: 'test-run',
       priority: 'P1',
       vars: { BASELINE_SPEC: 'e2e/specs/a.spec.ts' },
@@ -676,8 +676,8 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
     expect(built.h.addTaskInputs.map((t) => t.title)).toEqual([
-      'e2e 基线红灯归因：e2e/specs/old.spec.ts', // 启动时点
-      'e2e 基线红灯归因：e2e/specs/new.spec.ts', // 漂移重算新增——补发
+      'e2e 基线红灯排查：e2e/specs/old.spec.ts', // 启动时点
+      'e2e 基线红灯排查：e2e/specs/new.spec.ts', // 漂移重算新增——补发
     ])
     expect(built.h.addTaskInputs[1]).toMatchObject({ type: 'test-run', vars: { BASELINE_SPEC: 'e2e/specs/new.spec.ts' } })
   })
@@ -814,7 +814,7 @@ describe('blocked 结算分支（图 C）', () => {
       source: SOURCE,
       task: expect.objectContaining({ localId: '2.5' }),
       reason: 'tests hang on flaky selector',
-      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
     })
     expect(suspended.since).toEqual(expect.any(Number))
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领

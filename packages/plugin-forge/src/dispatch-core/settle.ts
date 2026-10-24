@@ -99,17 +99,17 @@ async function createE2eDebtTask(
     const added = await tasks.addTask({
       projectId: ctx.projectId,
       source: ctx.task.source,
-      title: `e2e 取证债：${ctx.task.title}`,
+      title: `e2e 补充验证：${ctx.task.title}`,
       type: 'test-run',
       taskDesc: [
-        `实现卡 ${ctx.task.slug}/${ctx.task.localId} 已按实现态结算（实现+单测绿），本卡承接其真机 e2e 断言取证欠账。`,
-        `取证套件：${debt.suite}；欠账 spec：${specsLine}。`,
-        ...(debt.note !== undefined ? [`欠账说明：${debt.note}`] : []),
+        `任务 ${ctx.task.slug}/${ctx.task.localId} 已完成实现与单元测试；本任务补做它还未完成的真机 e2e 验证。`,
+        `e2e 套件：${debt.suite}；待验证 spec：${specsLine}。`,
+        ...(debt.note !== undefined ? [`补充说明：${debt.note}`] : []),
         // 文案与简报行真实存在性一致（bug ca061ef6）：简报红灯清单在场才指示比对——
         // 无红灯/基线门未接线时兜底文案，不指示真机不存在的简报行
         e2eBaselineRedCases !== undefined && e2eBaselineRedCases.length > 0
-          ? '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。'
-          : '执行 e2e 并断言上述 spec；本卡生成时简报无 E2E_BASELINE_RED 行（基线门未接线或入场基线零红灯）——遇失败不默认归因到本实现，按归因流程（环境/陈旧断言/真回归三分流）自行分流上报。',
+          ? '执行 e2e 并断言上述 spec；如遇失败，先比对任务说明中的 E2E_BASELINE_RED 行——其中列出的失败在本任务开始前就已存在，不是本任务造成的回归；上报结论时注明这一背景。'
+          : '执行 e2e 并断言上述 spec；本任务创建时说明中没有 E2E_BASELINE_RED 行（基线未启用，或当时没有已知的既有失败）——遇失败不要默认当作本任务的回归，先区分三类原因（环境问题 / 断言过时 / 真实回归）再上报。',
       ].join('\n'),
       dependsOn: [ctx.task.localId],
       priority: 'P1',
@@ -266,7 +266,7 @@ export async function settleWorkerRun(
             : `files 含文档外路径：${submitRecord.files.filter((f) => !fileInsideDocsRoot(f)).join('、')}`
         return await rejectLanding(deps, ctx, new Error(
           [
-            `[settle-cwd-pin] 提交落点核验失败：提交 ${submitRecord.commitHash} 不在容器检出分支 ${verdict.branch} 上（所在分支：${verdict.commitBranches.join(', ') || '任一本地分支均不可达'}），结算拒绝`,
+            `[settle-cwd-pin] 提交分支核验未通过：提交 ${submitRecord.commitHash} 不在容器检出分支 ${verdict.branch} 上（所在分支：${verdict.commitBranches.join(', ') || '任一本地分支均不可达'}），结算拒绝`,
             `原因：${causeHint}，不适用纯文档跨分支特例`,
             `纠正（按改动性质二选一）：① 含代码/测试 → git checkout ${verdict.branch} 后按任务范围重新提交，重新 submitTask 附新 commitHash；② 纯文档 → 重新 submitTask，files 逐文件如实列出且全部归属于 .forge/docs/`,
           ].join('\n'),
