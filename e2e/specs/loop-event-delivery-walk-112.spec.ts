@@ -57,8 +57,12 @@ async function clipShot(page: Page, locator: ReturnType<Page['locator']>, path: 
 }
 
 /** 全窗截图（CDP captureScreenshot 零稳定门——循环流式期 Playwright 截图稳定门不收敛；
- *  合成器偶发忙碌致单次悬挂——有界重试 ×3）。electron 与 chromium Page 通吃。 */
-async function fullShot(page: Page, path: string): Promise<void> {
+ *  合成器偶发忙碌致单次悬挂——有界重试 ×3；仍失败则降级 Playwright 全窗截图（有界 15s），
+ *  再失败记录 screenshotOk:false 并跳过——证据步容错化，不作断言（fix-5）。electron 与
+ *  chromium Page 通吃。 */
+const screenshotResults: { path: string; ok: boolean; via: string }[] = []
+
+async function fullShot(page: Page, path: string): Promise<boolean> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     const session = await page.context().newCDPSession(page)
     try {
@@ -67,13 +71,24 @@ async function fullShot(page: Page, path: string): Promise<void> {
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`captureScreenshot 悬挂 15s (#${String(attempt)})`)), 15_000)),
       ])) as { data: string }
       writeFileSync(path, Buffer.from(shot.data, 'base64'))
-      return
-    } catch (cause) {
-      if (attempt === 3) throw cause
+      screenshotResults.push({ path, ok: true, via: `cdp#${String(attempt)}` })
+      return true
+    } catch {
+      // 有界重试耗尽后走降级路径
     } finally {
       await session.detach().catch(() => undefined)
     }
     await page.waitForTimeout(1_000)
+  }
+  try {
+    await page.screenshot({ path, fullPage: true, timeout: 15_000 })
+    console.warn(`[walk112] fullShot CDP ×3 失败，降级 Playwright 全窗截图：${path}`)
+    screenshotResults.push({ path, ok: true, via: 'playwright-fallback' })
+    return true
+  } catch (cause) {
+    console.warn(`[walk112] fullShot 降级仍失败（screenshotOk:false，跳过证据图，不作断言）：${path} — ${String(cause)}`)
+    screenshotResults.push({ path, ok: false, via: 'skipped' })
+    return false
   }
 }
 
@@ -380,10 +395,12 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     ).toContainText(/完成\s*2/, { timeout: 600_000 })
     await page.waitForTimeout(3_000)
     await fullShot(page, join(WALKTHROUGH, 'web-settled-light.png'))
+    meta.screenshots = screenshotResults
     writeFileSync(join(WALKTHROUGH, 'meta.json'), JSON.stringify(meta, null, 2))
 
     console.log(`[walk112] archived to ${WALKTHROUGH}`)
   } finally {
+    meta.screenshots = screenshotResults
     writeFileSync(join(WALKTHROUGH, 'meta.json'), JSON.stringify(meta, null, 2))
     await closeApp(app)
     console.log(`[walk112] fixture ws kept at ${fixtureRoot} (log forensics)`)
