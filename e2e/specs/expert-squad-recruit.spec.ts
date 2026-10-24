@@ -202,8 +202,10 @@ test('@feature expert-squad recruit step-3 closed-panel：建档在面板打开�
     await registerProject(page, wsDir, 'xsq-recruit-fixture')
     await dismissOnboardingModals(page)
     await installListCapture(page)
-    // 面板未开时建档（页面级 /api 桥在位即可走建档通道）
-    const wsParam = await captureWorkspaceParam(page)
+    // 面板未开时建档（页面级 /api 桥在位即可走建档通道）。装置注记：面板未开即无
+    // list 请求，captureWorkspaceParam 判例在此无缓冲可用——workspace 参数按 D4
+    // 取值点直取注册项目根（registerProject 的 wsDir），D4 一致性由其余用例捕获面承载。
+    const wsParam = wsDir
     const wrote = await postUpdate(page, wsParam, recruitPayload)
     expect(wrote.ok, `建档通道成功（HTTP ${wrote.status}）`).toBe(true)
     // 随后打开面板 → 列表即时含新专家（数据来自即时全量拉取）

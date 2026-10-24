@@ -16,6 +16,7 @@
 import { readdirSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { closeApp, launchHost } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { dismissOnboardingModals } from '../support/modals.js'
@@ -27,7 +28,8 @@ const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
 
 const KEY = 'test-reviewer'
 const OTHER_KEY = 'data-miner'
-const PLUGIN_PKG_DIR = join(process.cwd(), 'packages', 'plugins', 'expert-squad')
+// 包目录以本 spec 文件位置锚定（e2e/specs/ → 仓根两级上），不随 Playwright cwd 漂移
+const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../packages/plugins/expert-squad', import.meta.url))
 
 /** 上层业务词汇表（service-key-access step-5 契约——基础能力而非某应用专属） */
 const FORBIDDEN_VOCAB = /\b(forge|expedition|proposal|worktree|dispatch-loop|task-delegation)\b/i

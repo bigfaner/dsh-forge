@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { closeApp, launchHost } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { dismissOnboardingModals } from '../support/modals.js'
@@ -29,7 +30,8 @@ const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
 
 /** 随包内置专家键（packages/plugins/expert-squad/experts/code-reviewer.md——正本事实） */
 const BUILTIN_KEY = 'code-reviewer'
-const PLUGIN_PKG_DIR = join(process.cwd(), 'packages', 'plugins', 'expert-squad')
+// 包目录以本 spec 文件位置锚定（e2e/specs/ → 仓根两级上），不随 Playwright cwd 漂移
+const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../packages/plugins/expert-squad', import.meta.url))
 const BUILTIN_SRC = join(PLUGIN_PKG_DIR, 'experts', `${BUILTIN_KEY}.md`)
 
 /** 随包内置档案的 title（遮蔽/回落断言的期望值——以包内正本为期望单源） */
