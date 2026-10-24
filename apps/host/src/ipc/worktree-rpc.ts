@@ -774,6 +774,7 @@ export function createWorktreeRpcService(deps: {
         // 的根因）。registry 归档面缺席 = 恒不命中（回收面降级，行为同现状新建）。
         const registry2 = registry
         if (registry2?.unarchiveSession !== undefined && registry2.archivedSessionIds !== undefined) {
+          const scanStart = Date.now()
           try {
             let recycledId: string | undefined
             for (const sid of registry2.archivedSessionIds) {
@@ -782,6 +783,10 @@ export function createWorktreeRpcService(deps: {
               if (!(await blankOf(sid))) continue
               recycledId = sid // 不 break——归档序取最后命中（近似最新）
             }
+            warn(
+              `[git-worktree] 创建会话回收扫描：候选=${registry2.archivedSessionIds.length} ` +
+                `命中=${recycledId ?? '无'} 耗时=${Date.now() - scanStart}ms`,
+            )
             if (recycledId !== undefined) {
               try {
                 await registry2.unarchiveSession(recycledId)
