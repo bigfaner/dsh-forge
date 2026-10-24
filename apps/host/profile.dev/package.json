@@ -16,6 +16,7 @@
     "@dsh-forge/knowledge": "link:../../../packages/knowledge",
     "@dsh-forge/md-mermaid": "link:../../../packages/plugins/md-mermaid",
     "@dsh-forge/plugin-forge": "link:../../../packages/plugin-forge",
+    "@dsh-forge/expert-squad": "link:../../../packages/plugins/expert-squad",
     "better-sqlite3": "13.0.3",
     "gray-matter": "4.0.3",
     "@dsh-forge/plugin-forge-spec": "link:../../../packages/plugin-forge-spec"

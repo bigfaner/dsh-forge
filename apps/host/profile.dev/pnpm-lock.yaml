@@ -32,6 +32,9 @@ importers:
       '@dsh-forge/core':
         specifier: link:../../../packages/core
         version: link:../../../packages/core
+      '@dsh-forge/expert-squad':
+        specifier: link:../../../packages/plugins/expert-squad
+        version: link:../../../packages/plugins/expert-squad
       '@dsh-forge/git-worktree':
         specifier: link:../../../packages/plugins/git-worktree
         version: link:../../../packages/plugins/git-worktree

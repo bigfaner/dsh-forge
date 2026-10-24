@@ -30,6 +30,8 @@
 - insert:
     - id: dsh-forge-core
       name: '@dsh-forge/core'
+    - id: expert-squad
+      name: '@dsh-forge/expert-squad'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
 - id: llm-pi-ai
