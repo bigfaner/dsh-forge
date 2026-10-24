@@ -227,11 +227,14 @@ describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件�
     expect(bodyLines).toHaveLength(6)
   })
 
-  it('工具绑定 = expert-squad 单增量行（管理 5 工具随插件 tool 面上场）；零委派面（AC3 结构断言）', () => {
+  it('工具绑定 = expert-squad 单增量行（管理 5 工具随插件 tool 面上场）；委派面 scoped restrict 显式排除（AC3 结构断言，fix-10 落法）', () => {
     expect(rows.has('expert-squad')).toBe(true)
     expect(rows.get('expert-squad')).toContain("            name: '@dsh-forge/expert-squad'")
-    // HR 组合物理不含委派：底稿零 delegate_expert 声明、零 dispatch/expert_dispatch 面
-    expect(text).not.toContain('delegate_expert')
+    // HR 组合零委派可见面：preset scope 层官方 scoped tools.restrict 显式 deny
+    // delegate_expert（fix-10 AC2 裁决——注册面全局交付，限制落 preset 绑定层）；
+    // 零 dispatch/expert_dispatch 装配面。
+    expect(rows.get('expert-squad')).toContain('              restrictTools:')
+    expect(rows.get('expert-squad')).toContain('                  - delegate_expert')
     expect(text).not.toContain('dispatch:')
     expect(text).not.toContain('expert_dispatch')
   })
