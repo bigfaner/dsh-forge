@@ -5,7 +5,8 @@
 //
 // 接口收窄（loop-event-delivery §接口收窄）：notice/followup/settle 三方法收敛为 send
 // 统一单出口——官方 agent.send(message, target, wakeup) 一等把手（InboxTarget
-// 'next-turn'|'next-step'，承重口径 = nextStep：claim 时 next-step 队列整批并取）。
+// 'next-turn'|'next-step'，承重口径 = 'next-step'（官方合法值——bug 8d1a18bd 真机定罪
+// 非法 'nextStep' 零落库）：claim 时 next-step 队列整批并取）。
 // 唤醒与否只以 wakeup 参数区分（场景表路由：⑩⑬⑭⑮⑯⑰ true，其余 false）；消息形态
 // （source.kind 铸造：forge-dispatch / forge-loop / dispatch-loop-settled）由 form 载体
 // 声明，faces.ts 适配层单点兑现。
@@ -28,7 +29,7 @@ export interface NarrationSendOptions {
 
 /**
  * 主会话叙述通道（send 单出口——装配方把上游 agent.send 适配到本面；旧 notice/followup/
- * settle 三方法已收敛消失）。统一 target=nextStep：积压消息在下次 claim 整批并取
+ * settle 三方法已收敛消失）。统一 target='next-step'：积压消息在下次 claim 整批并取
  * （dsh-agent-loop claim 语义，probe-1 实证），不逐条 drain 烧多回合。
  */
 export interface NarrationChannel {

@@ -410,14 +410,14 @@ describe('e2e dogfood · owner 会话失活：不投死信 + 必达告警（AC 9
     expect(warn.mock.calls[0]?.[0]).toContain('sess-gone')
     expect(warn.mock.calls[0]?.[0]).toContain('凭容器 slug 认领')
 
-    // 活根会话：send(msg, nextStep, true) 单点唤醒 + dispatch-loop-settled source（持久 user message）
+    // 活根会话：send(msg, next-step, true) 单点唤醒 + dispatch-loop-settled source（持久 user message）
     const sent: { message: unknown; target: string; wakeup?: boolean }[] = []
     agents.set('sess-idle', {
       send: (message: unknown, target: string, wakeup?: boolean) => sent.push({ message, target, wakeup }),
     })
     await channel.send('sess-idle', 'settle-text', { form: 'settle', wakeup: true })
     expect(sent).toHaveLength(1)
-    expect(sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(sent[0]).toMatchObject({ target: 'next-step', wakeup: true })
     expect(sent[0]?.message).toMatchObject({ role: 'user', source: { kind: 'dispatch-loop-settled' } })
   })
 })

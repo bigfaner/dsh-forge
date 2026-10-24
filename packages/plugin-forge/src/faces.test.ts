@@ -97,7 +97,7 @@ describe('adaptDispatchJobs（适配层——channel 单点硬编码）', () => 
 
 // ─────────────────────────── S2 adaptAgentNarrationChannel（agents 注册表 → send 单出口） ───────────────────────────
 
-describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口：agent.send(msg, nextStep, wakeup)）', () => {
+describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口：agent.send(msg, next-step, wakeup)）', () => {
   function agentSpy() {
     const sent: { message: unknown; target: string; wakeup?: boolean }[] = []
     const agent = {
@@ -112,12 +112,12 @@ describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口�
     ((call?.message as { source?: { kind?: string; form?: string; summary?: string } })?.source ?? {})
   const messageOf = (call: { message: unknown } | undefined): unknown => call?.message
 
-  it('事件径（notice 形态）：send(msg, nextStep, false)——写入不唤醒 + forge 事件 source（kind forge-dispatch / form notice / summary）', async () => {
+  it('事件径（notice 形态）：send(msg, next-step, false)——写入不唤醒 + forge 事件 source（kind forge-dispatch / form notice / summary）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: (id) => (id === 's-1' ? spy.agent : undefined) })
     await channel.send('s-1', '已领取任务 2.5')
     expect(spy.sent).toHaveLength(1)
-    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: false })
+    expect(spy.sent[0]).toMatchObject({ target: 'next-step', wakeup: false })
     expect(spy.sent[0]?.message).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: '已领取任务 2.5' }],
@@ -152,11 +152,11 @@ describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口�
     expect(clamped.endsWith('…')).toBe(true)
   })
 
-  it('唤醒径（followup 形态）：send(msg, nextStep, true)——source kind forge-loop 循环哨兵（非人工输入蓝气泡）', async () => {
+  it('唤醒径（followup 形态）：send(msg, next-step, true)——source kind forge-loop 循环哨兵（非人工输入蓝气泡）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
     await channel.send('s-1', '任务源 feat-x 全部完成', { form: 'followup', wakeup: true })
-    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(spy.sent[0]).toMatchObject({ target: 'next-step', wakeup: true })
     expect(spy.sent[0]?.message).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: '任务源 feat-x 全部完成' }],
@@ -185,11 +185,11 @@ describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口�
     expect(first.runId).not.toBe(second.runId)
   })
 
-  it('结算径（settle 形态）：send(msg, nextStep, true) 单点唤醒——source {kind: dispatch-loop-settled}', async () => {
+  it('结算径（settle 形态）：send(msg, next-step, true) 单点唤醒——source {kind: dispatch-loop-settled}', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
     await channel.send('s-1', '【任务循环结束】全部任务已完成', { form: 'settle', wakeup: true })
-    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(spy.sent[0]).toMatchObject({ target: 'next-step', wakeup: true })
     expect(spy.sent[0]?.message).toMatchObject({
       role: 'user',
       source: { kind: 'dispatch-loop-settled' },
@@ -206,6 +206,51 @@ describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口�
       await expect(partial.send('s-1', 'x')).resolves.toBeUndefined()
       expect(warnSpy).toHaveBeenCalledTimes(1)
       expect(warnSpy.mock.calls[0]?.[0]).toContain('结算通知未送达')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('激活缝在场（bug 8d1a18bd）：激活恒先行——registry 陈旧把手（send 面在场而运行时死）不吞消息，激活活根优先收件', async () => {
+    const stale = agentSpy()
+    const live = agentSpy()
+    let registryHits = 0
+    const channel = adaptAgentNarrationChannel(
+      { get: (id) => { registryHits++; return id === 's-1' ? stale.agent : undefined } },
+      async (id) => (id === 's-1' ? live.agent : undefined),
+    )
+    await channel.send('s-1', '已领取任务 2.5')
+    await channel.send('s-1', '【任务循环结束】全部任务已完成', { form: 'settle', wakeup: true })
+    expect(live.sent).toHaveLength(2)
+    expect(stale.sent).toHaveLength(0) // 陈旧把手零触达——不静默丢消息
+    expect(registryHits).toBe(0)
+    expect(live.sent[0]).toMatchObject({ target: 'next-step', wakeup: false })
+    expect(live.sent[1]).toMatchObject({ target: 'next-step', wakeup: true })
+  })
+
+  it('激活失败/返回非活根/抛错：registry 把手兜底（fail-soft warn 留痕）；双缺时 settle 必达告警语义保留', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const registry = agentSpy()
+      const okChannel = adaptAgentNarrationChannel(
+        { get: () => registry.agent },
+        async () => undefined, // 激活面返回非活根（error 路）
+      )
+      await okChannel.send('s-1', '事件径消息')
+      expect(registry.sent).toHaveLength(1)
+
+      const throwChannel = adaptAgentNarrationChannel(
+        { get: () => registry.agent },
+        async () => { throw new Error('activation exploded') },
+      )
+      await throwChannel.send('s-1', '第二条')
+      expect(registry.sent).toHaveLength(2)
+
+      const none = adaptAgentNarrationChannel({ get: () => undefined }, async () => undefined)
+      await expect(none.send('s-gone', 'x')).resolves.toBeUndefined()
+      await expect(none.send('s-gone', '结算文本', { form: 'settle', wakeup: true })).resolves.toBeUndefined()
+      const settleWarns = warnSpy.mock.calls.filter((c) => String(c[0]).includes('结算通知未送达'))
+      expect(settleWarns).toHaveLength(1)
     } finally {
       warnSpy.mockRestore()
     }

@@ -185,7 +185,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       askFace = undefined
     }
     const narrationChannel: NarrationChannel =
-      agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { send: async () => {} }
+      agentsRegistry !== undefined
+        ? // bug 8d1a18bd：叙述径激活缝与指令径同源（enterAgent——sessionController.resolveAgent
+          // 活根前置）；激活恒先行，registry 把手仅兜底（陈旧把手不静默丢消息）。
+          adaptAgentNarrationChannel(agentsRegistry, enterAgent)
+        : { send: async () => {} }
     // 1.17 循环进度 append 面（'forge/progress' 会话事件——同 agents 注册表鸭子消费，
     // 链 = agent.session.append；注册表缺席 = 面不注入，驱动器零发射 fail-soft）。
     const progressAppend = adaptSessionProgressAppend(agentsRegistry)

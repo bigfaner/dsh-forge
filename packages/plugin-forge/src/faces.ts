@@ -394,24 +394,45 @@ interface SendAgentFace {
   send?: (message: unknown, target: string, wakeup?: boolean) => void
 }
 
-/** 官方 InboxTarget 承重值（loop-event-delivery——next-step 队列 claim 整批并取，probe-1 实证） */
-const INBOX_TARGET_NEXT_STEP = 'nextStep' as const
+/** 官方 InboxTarget 承重值（loop-event-delivery——官方 dsh-agent InboxTarget = 'next-turn' |
+ * 'next-step'，真机定罪 bug 8d1a18bd：非法 target 'nextStep' 的 send 永不落 agent/inbox/spliced；
+ * next-step 队列 claim 整批并取）。 */
+const INBOX_TARGET_NEXT_STEP = 'next-step' as const
+
+/**
+ * 未进入态激活缝（bug 8d1a18bd 修复——叙述径与指令径 run-dag-tasks enterLiveRoot 同源）：
+ * host sessionController.resolveAgent 活根解析闭包（装配期经 index.ts enterAgent 惰性
+ * reflect.get 注入）。可选：缺席 = 单参形态向后兼容（registry 把手直用）。
+ */
+export type NarrationActivationFace = (ownerSessionId: string) => Promise<unknown>
 
 /**
  * 适配层：agents 注册表 → 叙述 send 单出口通道（loop-event-delivery §接口收窄——旧
- * notice/followup/settle 三方法收敛消失）。全部消息统一 `agent.send(message, 'nextStep',
+ * notice/followup/settle 三方法收敛消失）。全部消息统一 `agent.send(message, 'next-step',
  * wakeup)`：wakeup=false 持久留痕不唤醒驱动器（①-⑨⑪⑫ 事件径），wakeup=true 即时唤醒
  * （⑩⑬⑭⑮⑯⑰ 唤醒径 + 结算单点，路由由 narrator 按 SCENARIOS 场景表换算）；消息 source
  * kind 铸造（forge-dispatch / forge-loop / dispatch-loop-settled）供 GUI 折叠判别。
- * 会话无活根（主会话已关闭/删除）或 send 面缺席 = 静默跳过（settle 形态加必达告警——
- * 降级为任意会话凭 slug 认领处置）；narrator fail-soft 包装之外的第二道防线。
+ * 激活恒先行（bug 8d1a18bd——真机定罪：注册表可持陈旧把手，send 面在场而运行时内件已死，
+ * 调用静默无效即零落库）：激活缝在场即每 send 调用先解析活根，激活活根为收件目标首选；
+ * registry 把手仅在激活面缺席/失败/返回非活根时兜底。会话无活根（主会话已关闭/删除）或
+ * send 面缺席 = 静默跳过（settle 形态加必达告警——降级为任意会话凭 slug 认领处置）；
+ * narrator fail-soft 包装之外的第二道防线。
  */
-export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationChannel {
+export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: NarrationActivationFace): NarrationChannel {
   return {
     async send(sessionId: string, text: string, options: NarrationSendOptions = {}): Promise<void> {
       const form = options.form ?? 'notice'
-      const agent = agents.get(sessionId) as SendAgentFace | undefined
-      if (typeof agent?.send !== 'function') {
+      let target: SendAgentFace | undefined
+      if (activate !== undefined) {
+        try {
+          const activated = (await activate(sessionId)) as SendAgentFace | undefined
+          if (typeof activated?.send === 'function') target = activated
+        } catch (cause) {
+          console.warn(`forge narration activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
+        }
+      }
+      if (target === undefined) target = agents.get(sessionId) as SendAgentFace | undefined
+      if (typeof target?.send !== 'function') {
         if (form === 'settle') warnSettleUndelivered(sessionId, text, '已失活/无活根或 send 面缺席')
         return
       }
@@ -419,7 +440,7 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationCh
         form === 'settle'
           ? forgeSettleMessage(text)
           : forgeUserMessage(text, form, options.headline, options.loop)
-      agent.send(message, INBOX_TARGET_NEXT_STEP, options.wakeup === true)
+      target.send(message, INBOX_TARGET_NEXT_STEP, options.wakeup === true)
     },
   }
 }
