@@ -55,6 +55,23 @@ export {
   ExpertDetailDialog,
   type AllSkills,
 } from "./detail-dialog.js";
+export {
+  deriveRecruit,
+  recruitTitle,
+  recruitTools,
+  receiptText,
+  errorText,
+  thinkingText,
+  OPENING_GUIDE,
+  RECEIPT_REF,
+} from "./summon-logic.js";
+export {
+  SummonChatController,
+  type SummonCreator,
+  type SummonMessage,
+  type SummonState,
+} from "./summon-source.js";
+export { SummonDialog } from "./summon-dialog.js";
 
 /**
  * 面板行字形（官方 sidebar.panellist 占用者 owner props = { size, active }——

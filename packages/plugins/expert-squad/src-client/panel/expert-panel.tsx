@@ -21,6 +21,8 @@ import {
   type DetailMutations,
 } from "./detail-source.js";
 import { ExpertDetailDialog } from "./detail-dialog.js";
+import { SummonChatController } from "./summon-source.js";
+import { SummonDialog } from "./summon-dialog.js";
 import { ensurePanelStyles } from "./styles.js";
 
 /** 官方 workspace 归属快照选择钩子（root 标准props——结构窄面，缺席 = 降级）。 */
@@ -156,12 +158,39 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     [detailController],
   )
   const detailState = useSyncExternalStore(detailSubscribe, detailGetSnapshot, detailGetSnapshot)
+
+  // 召唤对话控制器：建档经 update 路由 upsert（key 时间基生成），成功回调即时重拉
+  // 列表（卡片网格联动刷新，不待 5s 轮询）。
+  const summonController = useMemo(() => {
+    const base = props.mutations ?? (workspacePath === undefined ? undefined : defaultDetailMutations(workspacePath))
+    if (base === undefined) return undefined
+    return new SummonChatController(
+      (key, draft) => base.update(key, draft),
+      () => controller?.retry(),
+    )
+  }, [props.mutations, workspacePath, controller])
+  const summonSubscribe = useCallback(
+    (onChange: () => void): (() => void) =>
+      summonController?.subscribe(onChange) ?? (() => undefined),
+    [summonController],
+  )
+  const summonGetSnapshot = useCallback(
+    () => summonController?.getSnapshot() ?? undefined,
+    [summonController],
+  )
+  const summonState = useSyncExternalStore(summonSubscribe, summonGetSnapshot, summonGetSnapshot)
+  const onSummon = useCallback(() => {
+    // 互斥：召唤 Modal 与详情 Dialog 不同时开启（page-map Dialog 间互斥）
+    detailController?.close()
+    summonController?.open()
+  }, [detailController, summonController])
   const onCardActivate = useCallback(
     (key: string) => {
+      summonController?.close()
       const expert = controller?.getSnapshot().entries.find((entry) => entry.name === key)
       if (expert !== undefined) detailController?.open(expert)
     },
-    [controller, detailController],
+    [controller, detailController, summonController],
   )
 
   const subscribe = useCallback(
@@ -191,8 +220,12 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         onQueryChange={setQuery}
         onStatusChange={setStatus}
         {...(controller !== undefined ? { onRetry } : {})}
+        {...(summonController !== undefined ? { onSummon } : {})}
         {...(detailController !== undefined ? { onCardActivate } : {})}
       />
+      {summonState !== undefined && summonController !== undefined && summonState.open ? (
+        <SummonDialog controller={summonController} />
+      ) : null}
       {detailState === undefined || detailController === undefined || !detailState.open ? null : (
         <ExpertDetailDialog
           controller={detailController}

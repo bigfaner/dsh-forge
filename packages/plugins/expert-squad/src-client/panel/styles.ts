@@ -84,6 +84,19 @@ export const PANEL_CSS = `
 .dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
+/* 召唤对话 Modal（HR 招聘对话 · 原型 hrchat：宽 520、radius 16、lv3） */
+.dswf-hr-overlay { z-index: 100; }
+.dswf-hrchat { display: flex; flex-direction: column; width: 520px; max-width: calc(100vw - 32px); height: 480px; max-height: 84%; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.pad16}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
+.dswf-hrchat > header { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-hrchat > header b { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; margin-right: auto; }
+.dswf-hr-msgs { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.dswf-hr-msgs .msg { max-width: 82%; padding: ${T.gap8} ${T.pad12}; border-radius: ${T.r12}; font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
+.msg.hr { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-top-left-radius: 4px; align-self: flex-start; } /* dsw-raw 原型气泡角刻度 */
+.msg.me { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); border-top-right-radius: 4px; align-self: flex-end; }
+.dswf-msg-ref { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; }
+.dswf-hr-input { display: flex; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-hr-input input { flex: 1; min-width: 0; font: var(--dsw-font-xs-13); padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
+.dswf-hr-input input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 `;
 
 /** 已注入标记（模块级单例——classic script 装载一次）。 */
