@@ -50,6 +50,10 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   ERR_AC_NOT_MET: 'error-bar',
   ERR_AC_CRITERIA_MISMATCH: 'error-bar',
   ERR_FILES_UNION_MISMATCH: 'error-bar',
+  // ── forge-verification-hardening 机械⑤（强制域取证声明校验兜底）──
+  // 强制域缺取证声明 / 证据与债务并存 → 错误条（结算语境原地反馈，二选一改参重试）
+  ERR_RUNTIME_EVIDENCE_REQUIRED: 'error-bar',
+  ERR_RUNTIME_EVIDENCE_CONFLICT: 'error-bar',
   // ── main-agent-task-tools（updateTask 锁定面）──
   // 锁定态改写 / 派生边改写 → 错误条（修改语境原地反馈，改参重试）
   ERR_TASK_LOCKED: 'error-bar',

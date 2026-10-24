@@ -154,6 +154,19 @@ export interface TaskEvidenceDebt {
 }
 
 /**
+ * 真机取证证据声明（forge-verification-hardening 机械⑤——强制域结算证据路径）：success 结算
+ * 携带 = 真机端到端取证已做（AGENTS 1.4 正本口径），与 evidenceDebt 二选一（并存 = 口径歧义拒）。
+ */
+export interface TaskRuntimeEvidence {
+  /** 取证主交付面（最终消费者直接感知行为的运行面——多类交叉就高不就低选取） */
+  face: string
+  /** 取证工件清单（截图/日志/trace 路径——非空，留盘路径） */
+  artifacts: string[]
+  /** 取证方式与取证环境说明（可选） */
+  note?: string
+}
+
+/**
  * 提交记录结构化字段（worker-lean-execution S3——task_records.record_fields_json 解码形；
  * keyDecisions/testsPassed/testsFailed/coverage/notes——从 summary 自由文本拆出的结构化面）。
  */
@@ -167,6 +180,10 @@ export interface TaskRecordFields {
   notes?: string
   /** e2e 取证债（改进7——实现态部分结算声明；读面经 TaskRecordEntry 投影） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——强制域判定输入；缺省 = 未声明即豁免域） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一） */
+  runtimeEvidence?: TaskRuntimeEvidence
 }
 
 /**
@@ -278,6 +295,10 @@ export interface TaskRecordEntry {
   commitHash?: string
   /** e2e 取证债（改进7——record_fields_json 解码形；旧行键缺席） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——record_fields_json 解码形；旧行键缺席） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——record_fields_json 解码形；旧行键缺席） */
+  runtimeEvidence?: TaskRuntimeEvidence
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -537,6 +558,10 @@ export interface SubmitTaskInput {
   commitHash?: string
   /** e2e 取证债声明（改进7——success 专用：实现态部分结算，结算核自动生成欠账 test-run 任务） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——强制域判定输入：交付物声明触达的运行面；清单外命中判据同入强制域） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一；强制域无此二者即拒） */
+  runtimeEvidence?: TaskRuntimeEvidence
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */
   sessionId: string
 }

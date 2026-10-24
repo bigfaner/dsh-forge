@@ -21,6 +21,7 @@ import type {
   AcNotMetData,
   DependenciesUnmetData,
   FilesUnionMismatchData,
+  RuntimeEvidenceRequiredData,
   TaskRef,
   TaskStatus,
   TestEvidenceRequiredData,
@@ -364,6 +365,52 @@ export class FilesUnionMismatchError extends Error {
         `files=${JSON.stringify(data.files)} created=${JSON.stringify(data.created)} modified=${JSON.stringify(data.modified)}`,
     )
     this.name = 'FilesUnionMismatchError'
+    this.data = data
+  }
+}
+
+// ───────────── forge-verification-hardening 机械⑤：submitTask 强制域取证声明校验兜底 ─────────────
+
+/** ERR_RUNTIME_EVIDENCE_REQUIRED 附载（contracts RuntimeEvidenceRequiredData 同形：装配面声明原样带回） */
+
+/**
+ * 强制域任务缺取证声明（400）：success ∧ runtimeSurface 命中运行期装配面判据 ∧
+ * runtimeEvidence 与 evidenceDebt 均缺席——引导二选一：带真机取证证据重提交，或以
+ * evidence_debt 声明债务走欠账 test-run 路径。判据正本 = AGENTS 1.4 +
+ * docs/conventions/external-dependency-verification.md（技能判据为正，本门为兜底）；
+ * blocked submit 不经此门（C4 同族）。
+ */
+export class RuntimeEvidenceRequiredError extends Error {
+  readonly code = 'ERR_RUNTIME_EVIDENCE_REQUIRED' as const
+  readonly data: RuntimeEvidenceRequiredData
+
+  constructor(data: RuntimeEvidenceRequiredData) {
+    super(
+      `submitTask 强制域结算缺取证声明：交付物声明运行期装配面 [${data.faces.join(', ')}]——` +
+        `真机取证证据（runtime_evidence）与取证债声明（evidence_debt）二选一必带（AGENTS 1.4：` +
+        `fake 契约测试全绿不算交付；豁免域 = 纯逻辑/纯文档/纯库边界不受影响）`,
+    )
+    this.name = 'RuntimeEvidenceRequiredError'
+    this.data = data
+  }
+}
+
+/** ERR_RUNTIME_EVIDENCE_CONFLICT 附载（取证声明二选一——并存即口径歧义） */
+export interface RuntimeEvidenceConflictData {
+  readonly verb: 'submitTask'
+}
+
+/** 取证声明并存（400）：runtimeEvidence 与 evidenceDebt 同时在场——二选一路径口径歧义拒绝 */
+export class RuntimeEvidenceConflictError extends Error {
+  readonly code = 'ERR_RUNTIME_EVIDENCE_CONFLICT' as const
+  readonly data: RuntimeEvidenceConflictData
+
+  constructor(data: RuntimeEvidenceConflictData) {
+    super(
+      `${data.verb} 取证声明二选一：runtime_evidence（真机取证已做）与 evidence_debt（欠账声明）` +
+        `不可并存——证据在手走证据路径，取证未做走债务路径`,
+    )
+    this.name = 'RuntimeEvidenceConflictError'
     this.data = data
   }
 }
