@@ -25,6 +25,16 @@ user-invocable: false
 - `ac_met`——每条标准一个布尔；
 - `ac_evidence`——每条标准一行证据：覆盖用例/命令 + 其结果（"AC-2 由 `dispatch-task.test.ts` 的 describe 块 'pool verdict' 覆盖——通过"）。证据输出过长时，按工件归档约定归档，叙述里只引用子目录路径。某条 AC 没有覆盖测试即不构成 success——要么补测试，要么以 blocked 结算并点名未覆盖的标准。
 
+### M1 强制域结算校验——无取证证据不得 `result=success`
+
+**强制域判定**（按交付物性质，不随 AC 文案漂移）：交付物含**运行期装配面**（进程、网络端点、真实调度/时钟、对外部系统/硬件的真实副作用）的任务属强制域——UI、API、CLI、TUI、Desktop、Web server、MQ 为常见示例，非白名单；清单外命中判据同样入域。纯逻辑（单测可判）与纯文档/规格（评审可判）为豁免域，不受本节约束。
+
+强制域任务结算时的口径：
+
+- 无真机端到端取证证据 → **不得 `result=success`**，即使 compile/lint/test 门全绿——fake 契约测试全绿不算取证。
+- 唯一替代路径 = **evidence_debt 债务声明**：实现 + 单测绿、唯一缺口是真机取证时，以 `evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）声明欠账照常结算（实现态），欠账 test-run 任务由循环自动派生。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」。
+- 已取得取证证据的，在 `ac_evidence` 对应条目引用（截图/trace/走查记录的归档子目录路径）；取证方式与取证环境以任务 AC 条目为锚。
+
 ### e2e 取证债——实现态部分结算，不为欠账 blocked
 
 真机 e2e 断言取证是外部依赖装配面的结算门，但它不挂死实现卡：实现 + 单测绿、唯一缺口是真机 e2e 断言取证时，以 `evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）声明欠账并照常 `success` 结算（实现态）——欠账 test-run 任务由循环自动生成（依赖你的实现卡），取证在后继卡完成。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」；单测/门禁没绿就不许走这条路（那是 blocked）。
