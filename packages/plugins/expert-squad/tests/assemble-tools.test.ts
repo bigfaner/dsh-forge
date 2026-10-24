@@ -3,7 +3,7 @@
 // （5 管理 + delegate_expert，D1 注册面零改动）；preset 绑定 restrictTools 透传官方
 // scoped tools.restrict（HR 组合 deny delegate_expert）；tools 面缺席 fail-soft 不崩。
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import expertSquadPlugin from "../src/index.js";
 import { EXPERT_TOOLS } from "../src/tools.js";
 import { DELEGATE_EXPERT_TOOL_NAME } from "../src/dispatch/dispatch.js";
@@ -56,17 +56,32 @@ function makeCtx(tools: unknown, subagents: unknown = undefined) {
 
 const SUBAGENTS = { startContinuable: async () => ({ childId: "c", messageId: "m" }) };
 
-describe("fix-10: 工具面接线（apply 装配缝）", () => {
+// 热刷新接线后每次 boot 会注册真实 watcher（registryFor(process.cwd())）——afterEach
+// 统一 disposer 回收，避免遍历成本跨用例外溢。
+let pendingEffects: Array<() => unknown> = [];
+
+afterEach(async () => {
+  // cordis effect 契约：effect(cb) 的 cb() 返回值才是 disposer。
+  for (const effect of pendingEffects) {
+    const dispose = effect();
+    if (typeof dispose === "function") await dispose();
+  }
+  pendingEffects = [];
+});
+
+describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, () => {
   it("apply 后 tools face 恰收 6 枚工具注册：5 管理工具 + delegate_expert（D1 注册面零改动）", async () => {
     const { face, registered } = makeToolsFace();
-    const { ctx } = makeCtx(face, SUBAGENTS);
+    const { ctx, effects } = makeCtx(face, SUBAGENTS);
+    pendingEffects = effects as Array<() => unknown>;
     await expertSquadPlugin(ctx);
     expect([...registered].sort()).toEqual([...EXPERT_TOOLS, DELEGATE_EXPERT_TOOL_NAME].sort());
   });
 
   it("preset 绑定 restrictTools 透传官方 scoped tools.restrict（HR 组合 deny delegate_expert）", async () => {
     const { face, restrict, restricts } = makeToolsFace();
-    const { ctx } = makeCtx(face, SUBAGENTS);
+    const { ctx, effects } = makeCtx(face, SUBAGENTS);
+    pendingEffects = effects as Array<() => unknown>;
     await expertSquadPlugin(ctx, { restrictTools: { deny: [DELEGATE_EXPERT_TOOL_NAME] } });
     expect(restrict).toHaveBeenCalledTimes(1);
     expect(restricts[0]).toEqual({ deny: [DELEGATE_EXPERT_TOOL_NAME] });
@@ -74,7 +89,8 @@ describe("fix-10: 工具面接线（apply 装配缝）", () => {
 
   it("未配置 restrictTools = 全量注册零限制（D1 全局语义不变）", async () => {
     const { face, restrict } = makeToolsFace();
-    const { ctx } = makeCtx(face, SUBAGENTS);
+    const { ctx, effects } = makeCtx(face, SUBAGENTS);
+    pendingEffects = effects as Array<() => unknown>;
     await expertSquadPlugin(ctx);
     expect(restrict).not.toHaveBeenCalled();
   });
@@ -82,7 +98,8 @@ describe("fix-10: 工具面接线（apply 装配缝）", () => {
   it("tools 面缺席 fail-soft：warn + 跳过 tool 注册，路由族照常装配", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const { ctx } = makeCtx(undefined, SUBAGENTS);
+      const { ctx, effects } = makeCtx(undefined, SUBAGENTS);
+      pendingEffects = effects as Array<() => unknown>;
       await expect(expertSquadPlugin(ctx)).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("ctx.tools absent"));
     } finally {
@@ -94,7 +111,8 @@ describe("fix-10: 工具面接线（apply 装配缝）", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const { face, registered } = makeToolsFace();
-      const { ctx } = makeCtx(face, undefined);
+      const { ctx, effects } = makeCtx(face, undefined);
+      pendingEffects = effects as Array<() => unknown>;
       await expertSquadPlugin(ctx);
       expect(registered).toEqual([...EXPERT_TOOLS]);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("ctx.subagents absent"));

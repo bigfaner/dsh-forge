@@ -27,6 +27,7 @@ import {
   resolveUserExpertsRoot,
   type ExpertRoot,
 } from "./store/scan.js";
+import { ExpertWatchManager, makeFsObservedInvalidator, type FsObservedTarget } from "./store/watch.js";
 
 export const EXPERT_SQUAD_PLUGIN_NAME = 'expert-squad' as const
 
@@ -52,11 +53,13 @@ export interface ExpertSquadPluginConfig {
   };
 }
 
-/** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect）。 */
+/** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。 */
 interface ExpertSquadCtx {
   readonly storage?: StorageFace;
   readonly connection?: ConnectionLike;
   readonly tools?: ExpertSquadToolsFace;
+  /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
+  on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
   effect(dispose: () => unknown): unknown;
 }
 
@@ -104,7 +107,21 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   }
 
   // 每工作区一 registry（首用刷新一代快照；启停态经 state 落盘——registry 内存缓存同步读）。
+  // 热刷新双通道（bug 09356510 装配接线）：通道一 = 每工作区 ExpertWatchManager
+  // （chokidar 深度 1，真 FS 增量）；通道二 = ctx.on("fs/observed") 首方失效
+  // （官方 skill-filesystem 同缝）。失效回调经串行链 refresh 整体换代——同代内竞速
+  // 事件合并（watch 层 microtask）+ 重扫互斥（promise 链）。
   const registries = new Map<string, Promise<ExpertsRegistry>>();
+  const watchManagers: ExpertWatchManager[] = [];
+  const refreshChains = new Map<string, Promise<void>>();
+  const enqueueRefresh = (workspace: string, registry: ExpertsRegistry): void => {
+    const prior = refreshChains.get(workspace) ?? Promise.resolve();
+    const next = prior.then(
+      () => registry.refresh(),
+      () => registry.refresh(), // 上代刷新失败不阻塞换代
+    );
+    refreshChains.set(workspace, next);
+  };
   const registryFor = (workspace: string): Promise<ExpertsRegistry> => {
     let hit = registries.get(workspace);
     if (hit === undefined) {
@@ -112,11 +129,33 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
         roots: () => expertRootsFor(workspace),
         state,
         workspace,
-      });      hit = registry.refresh().then(() => registry);
+      });
+      hit = registry.refresh().then(() => registry);
       registries.set(workspace, hit);
+      const manager = new ExpertWatchManager(expertRootsFor(workspace), {
+        onInvalidated: () => enqueueRefresh(workspace, registry),
+        onError: (error) => console.warn(`[expert-squad] ${String(error)}`),
+      });
+      watchManagers.push(manager);
+      ctx.effect(() => () => void manager.dispose());
+      void manager.start().catch(() => {}); // openWatcher 内部已上报，start 聚合面兜底
     }
     return hit;
   };
+  // 通道二：首方（模型 edit/write）失效直呼——路径按各工作区 manager 的包含判定路由
+  // （observeHostMutation 对非本工作区路径零操作）；事件面缺席 = 宿主形状降级（仅 warn）。
+  if (ctx.on !== undefined) {
+    const invalidate = makeFsObservedInvalidator({
+      observeHostMutation: (path: string) => {
+        for (const manager of watchManagers) manager.observeHostMutation(path);
+      },
+    });
+    ctx.on("fs/observed", (target: unknown, observation: unknown, actor: unknown) => {
+      invalidate(target as FsObservedTarget, observation, actor);
+    });
+  } else {
+    console.warn("[expert-squad] ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
+  }
 
   const routes: Parameters<typeof registerExpertSquadRoutes>[1] = {
     list: async (workspace, includeDisabled) =>

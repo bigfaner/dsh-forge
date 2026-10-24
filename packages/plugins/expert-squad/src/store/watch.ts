@@ -7,7 +7,7 @@
 // 合并同代内竞速事件。root 目录缺失为正常形态（静默空）；root 被删/监听出错 →
 // warn + 重挂（scheduleRewatch 语义）。dispose 关闭全部 watcher 并吞掉迟到回调。
 
-import { dirname, resolve, relative, sep, isAbsolute } from "node:path";
+import { basename, dirname, resolve, relative, sep, isAbsolute } from "node:path";
 import { statSync } from "node:fs";
 import chokidar from "chokidar";
 import type { FSWatcher } from "chokidar";
@@ -153,6 +153,12 @@ export class ExpertWatchManager {
       ignoreInitial: true,
       depth,
       atomic: true,
+      // 锚点爬升可能落在超大目录（如仓根）——剪枝对 flat .md 语义永不相干的依赖
+      // 目录（node_modules/.git），初始遍历与事件面不受影响（这些目录内不可能出现
+      // root 链上的路径）。
+      ignored: (path: string, stats?: { isDirectory(): boolean }) =>
+        stats?.isDirectory() === true &&
+        (basename(path) === "node_modules" || basename(path) === ".git"),
       awaitWriteFinish: {
         stabilityThreshold: this.options.stabilityThresholdMs ?? 100,
         pollInterval: this.options.pollIntervalMs ?? 20,

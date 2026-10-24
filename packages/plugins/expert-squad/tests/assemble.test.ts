@@ -33,6 +33,7 @@ function expertMd(name: string, title: string): string {
 }
 
 let wsDir: string | undefined;
+let disposers: Array<() => unknown> = [];
 
 function makeWorkspace(): string {
   wsDir = mkdtempSync(join(tmpdir(), "dsh-forge-xsq-assemble-ws-"));
@@ -42,7 +43,15 @@ function makeWorkspace(): string {
   return wsDir;
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // 先 disposer（关 watcher）再删夹具：root 删除会触发重挂爬升至 Temp 祖先（热刷新
+  // 接线后的真实语义），先关 watcher 避免遍历成本外溢到后续用例。
+  // cordis effect 契约：effect(cb) 的 cb() 返回值才是 disposer。
+  for (const effect of disposers) {
+    const dispose = effect();
+    if (typeof dispose === "function") await dispose();
+  }
+  disposers = [];
   if (wsDir !== undefined) rmSync(wsDir, { recursive: true, force: true });
   wsDir = undefined;
 });
@@ -59,7 +68,10 @@ async function boot(): Promise<FetchRouteLike[]> {
         },
       },
     },
-    effect: (): unknown => undefined,
+    effect: (dispose: () => unknown): unknown => {
+      disposers.push(dispose);
+      return undefined;
+    },
   });
   return routes;
 }
@@ -111,7 +123,7 @@ describe("bug 34a284e3: enable/disable 回包契约（换新档案而非 {ok:tru
 });
 
 describe("bug 4ed8549f: expert update 通道装配（host 装配缝）", () => {
-  it("POST update：档案写盘到 project 层 + 回包换新档案（enabled 在场）", async () => {
+  it("POST update：档案写盘到 project 层 + 回包换新档案（enabled 在场）", { timeout: 20_000 }, async () => {
     const ws = makeWorkspace();
     const routes = await boot();
     const result = await post(routeOf(routes, "update"), {
@@ -135,7 +147,7 @@ describe("bug 4ed8549f: expert update 通道装配（host 装配缝）", () => {
     expect(file).toContain("bash");
   });
 
-  it("POST update：裸 {{ 人设 → 400 且不落盘（frontmatter 门与 tool 写路径同源）", async () => {
+  it("POST update：裸 {{ 人设 → 400 且不落盘（frontmatter 门与 tool 写路径同源）", { timeout: 20_000 }, async () => {
     const ws = makeWorkspace();
     const routes = await boot();
     const before = readFileSync(join(ws, ".dsh", "experts", `${KEY}.md`), "utf8");
