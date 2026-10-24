@@ -44,7 +44,7 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
     expect(Object.keys((pkg.devDependencies as Record<string, unknown>) ?? {}).every((k) => k === '@types/node')).toBe(true)
   })
 
-  it('根 solution tsconfig references 十一工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/git-worktree/input-history 先后入 packages/plugins/ 子居所）', () => {
+  it('根 solution tsconfig references 十三工件（tsc -b 全拓扑入口；fix-30 增 path-key；M2 3.2 增 plugin-forge；M3 3.1 增 plugin-forge-spec；md-mermaid/git-worktree/input-history/quote-reference/super-composer 先后入 packages/plugins/ 子居所）', () => {
     const refs = ((readJson('tsconfig.json').references ?? []) as { path: string }[]).map((r) => rel(r.path))
     expect([...refs].sort()).toEqual(
       [
@@ -59,6 +59,8 @@ describe('AC1 workspace 工件与 references 拓扑', () => {
         'packages/plugins/git-worktree',
         'packages/plugins/input-history',
         'packages/plugins/md-mermaid',
+        'packages/plugins/quote-reference',
+        'packages/plugins/super-composer',
       ].sort(),
     )
   })
