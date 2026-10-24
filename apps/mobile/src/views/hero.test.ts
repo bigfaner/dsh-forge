@@ -3,9 +3,7 @@ import {
   coerceWorktreeList,
   composerWorktreeLabel,
   createHeroController,
-  HERO_SESSION_CREATE_CHANNEL,
   HERO_WORKTREE_LIST_CHANNEL,
-  needsWorktreeBinding,
   pickDefaultRow,
   promptModeOf,
   rowHintText,
@@ -16,29 +14,27 @@ import type { RpcResult } from '../core/rpc.ts'
 const listPayload = {
   isGit: true,
   entries: [
-    { path: 'Z:/proj', branch: 'main', worktreeName: 'proj', isMain: true },
-    { path: 'Z:/wt/fix', branch: 'fix/mobile-rpc', worktreeName: 'wt-fix' },
-    { path: 'Z:/wt/feat', branch: 'feat/pin-durable', worktreeName: 'wt-feat' },
+    { path: 'Z:/proj', workspaceId: 'ws-main', branch: 'main', worktreeName: 'proj', isMain: true },
+    { path: 'Z:/wt/fix', workspaceId: 'ws-fix', branch: 'fix/mobile-rpc', worktreeName: 'wt-fix' },
+    { path: 'Z:/wt/feat', workspaceId: 'ws-feat', branch: 'feat/pin-durable', worktreeName: 'wt-feat' },
     { path: '', branch: 'main' },
   ],
 }
 
 interface Harness {
   rpcCalls: [string, unknown][]
-  createSession: (workspaceId: string) => Promise<{ sessionId: string }>
+  createSession: (workspaceId: string, worktreePath?: string) => Promise<{ sessionId: string }>
   prompt: (sessionId: string, text: string, mode: 'steer' | 'queue') => Promise<unknown>
   selectAgentPreset: (sessionId: string, preset: string) => Promise<unknown>
   listAgentPresets: () => Promise<{ presets: readonly unknown[] }>
   onOpenSession: (sessionId: string) => void
   changes: number
-  /** session-create 通道回执（可改写——成功径用例注入 ok 载荷）。 */
-  sessionCreateResult: RpcResult<unknown>
 }
 
 function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harness } {
   const h: Harness = {
     rpcCalls: [],
-    createSession: vi.fn(async (workspaceId: string): Promise<{ sessionId: string }> => {
+    createSession: vi.fn(async (workspaceId: string, _worktreePath?: string): Promise<{ sessionId: string }> => {
       if (workspaceId === 'fail') throw new Error('boom')
       return { sessionId: `s-${workspaceId || 'main'}` }
     }),
@@ -47,21 +43,18 @@ function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harne
     listAgentPresets: vi.fn(async (): Promise<{ presets: readonly unknown[] }> => ({ presets: [] })),
     onOpenSession: vi.fn((_sessionId: string): void => {}),
     changes: 0,
-    sessionCreateResult: { ok: false, error: { code: 'invalid-state', reason: 'worktree 不在场' } },
   }
   const deps: HeroDeps = {
     rpc: {
       call: async <T>(channel: string, payload: unknown): Promise<RpcResult<T>> => {
         h.rpcCalls.push([channel, payload])
-        if (channel === HERO_WORKTREE_LIST_CHANNEL) return { ok: true, data: listPayload } as RpcResult<T>
-        return h.sessionCreateResult as RpcResult<T>
+        return { ok: true, data: listPayload } as RpcResult<T>
       },
     },
     api: { createSession: h.createSession, prompt: h.prompt, selectAgentPreset: h.selectAgentPreset, listAgentPresets: h.listAgentPresets, selectModel: async () => ({ selected: true }) },
     projectRoot: 'Z:/proj',
     currentBranch: 'main',
-    currentWorktreePath: 'Z:/proj',
-    workspaceId: 'ws-1',
+    workspaceId: 'ws-root',
     onOpenSession: h.onOpenSession,
     onChange: () => {
       h.changes += 1
@@ -71,13 +64,50 @@ function makeDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harne
   return { deps, h }
 }
 
+const otherListPayload = {
+  isGit: true,
+  entries: [{ path: 'Z:/other', workspaceId: 'ws-other', branch: 'master', worktreeName: 'other', isMain: true }],
+}
+
+function makeProjectDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harness } {
+  const { deps, h } = makeDeps({
+    projects: [
+      { name: 'proj', path: 'Z:/proj' },
+      { name: 'other', path: 'Z:/other' },
+    ],
+    ...overrides,
+  })
+  h.rpcCalls.length = 0
+  deps.rpc.call = async <T>(channel: string, payload: unknown): Promise<RpcResult<T>> => {
+    h.rpcCalls.push([channel, payload])
+    if (channel === HERO_WORKTREE_LIST_CHANNEL) {
+      const root = (payload as { projectRoot?: string }).projectRoot
+      return { ok: true, data: root === 'Z:/other' ? otherListPayload : listPayload } as RpcResult<T>
+    }
+    return { ok: false, error: { code: 'not-found', reason: 'unknown channel' } } as RpcResult<T>
+  }
+  return { deps, h }
+}
+
 describe('清单收敛 + 行派生（纯函数）', () => {
-  it('coerceWorktreeList：isGit 收敛 + 缺 path 剔行 + 空 payload fail-soft', () => {
+  it('coerceWorktreeList：isGit 收敛 + 缺 path 剔行 + workspaceId 缺席剔行 + 空 payload fail-soft', () => {
     const list = coerceWorktreeList(listPayload)
     expect(list.isGit).toBe(true)
     expect(list.rows).toHaveLength(3)
+    expect(list.rows.every((row) => row.workspaceId !== '')).toBe(true)
     expect(coerceWorktreeList(null)).toEqual({ isGit: false, rows: [] })
     expect(coerceWorktreeList({}).rows).toHaveLength(0)
+  })
+
+  it('binding-derivation：workspaceId 缺席行剔除（chip 双发硬前置——恒缺席 = 死路选项）', () => {
+    const list = coerceWorktreeList({
+      isGit: true,
+      entries: [
+        { path: 'Z:/proj', workspaceId: 'ws-main', branch: 'main', worktreeName: 'proj', isMain: true },
+        { path: 'Z:/wt/lost', branch: 'feat/lost', worktreeName: 'lost' },
+      ],
+    })
+    expect(list.rows.map((row) => row.path)).toEqual(['Z:/proj'])
   })
 
   it('pickDefaultRow：当前分支命中优先，未命中回退主行，空集 null（不强切）', () => {
@@ -98,35 +128,26 @@ describe('清单收敛 + 行派生（纯函数）', () => {
     expect(composerWorktreeLabel(null, defaultRow)).toBe('')
   })
 
-  it('needsWorktreeBinding：主行 false；当前路径同行 false（斜杠归一）；他树 true', () => {
-    const rows = coerceWorktreeList(listPayload).rows
-    expect(needsWorktreeBinding(rows[0]!, 'Z:/proj')).toBe(false)
-    expect(needsWorktreeBinding(rows[1]!, 'z:/wt/fix/')).toBe(false)
-    expect(needsWorktreeBinding(rows[1]!, 'Z:/proj')).toBe(true)
-    expect(needsWorktreeBinding(rows[1]!, undefined)).toBe(true)
-    expect(needsWorktreeBinding(null, 'Z:/proj')).toBe(false)
-  })
-
   it('promptModeOf：突击=steer、远征=queue、未知回退 steer', () => {
     expect(promptModeOf('突击')).toBe('steer')
     expect(promptModeOf('远征')).toBe('queue')
     expect(promptModeOf('其他')).toBe('steer')
   })
 
-  it('bug 488e860d：detached/bare 行（branch=null）剔行——预铸挂靠契约一 worktree 一分支，不可挂靠行不可选', () => {
+  it('bug 488e860d：detached/bare 行（branch=null）剔行——一 worktree 一分支，不可挂靠行不可选', () => {
     const list = coerceWorktreeList({
       isGit: true,
       entries: [
-        { path: 'Z:/proj', branch: 'main', worktreeName: 'proj', isMain: true, detached: false, bare: false },
-        { path: 'Z:\\tmp', branch: null, worktreeName: 'tmp', isMain: false, detached: true, bare: false },
-        { path: 'Z:/bare', branch: null, worktreeName: 'bare', isMain: false, detached: false, bare: true },
+        { path: 'Z:/proj', workspaceId: 'ws-main', branch: 'main', worktreeName: 'proj', isMain: true, detached: false, bare: false },
+        { path: 'Z:\\tmp', workspaceId: 'ws-tmp', branch: null, worktreeName: 'tmp', isMain: false, detached: true, bare: false },
+        { path: 'Z:/bare', workspaceId: 'ws-bare', branch: null, worktreeName: 'bare', isMain: false, detached: false, bare: true },
       ],
     })
     expect(list.rows.map((row) => row.path)).toEqual(['Z:/proj'])
   })
 })
 
-describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
+describe('hero 控制器（乐观切换 + 官方面单径建会话）', () => {
   it('load：清单收敛 + 默认模式=突击 + 默认选中=当前所在分支（不强切）', async () => {
     const { deps, h } = makeDeps()
     const controller = createHeroController(deps)
@@ -140,7 +161,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(h.changes).toBe(1)
   })
 
-  it('bug 488e860d：非 git 项目 gitReady=false（worktree chip 隐藏判据）；发送零透传径全走官方面', async () => {
+  it('bug 488e860d：非 git 项目 gitReady=false（worktree chip 隐藏判据）；发送走官方面（deps.workspaceId 回退）', async () => {
     const { deps, h } = makeDeps()
     const controller = createHeroController(deps)
     await controller.load()
@@ -153,8 +174,7 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     await controller.load()
     expect(controller.state().gitReady).toBe(false)
     await controller.send('你好')
-    expect(h.rpcCalls).toHaveLength(1) // 仅清单调用——零 session-create 透传
-    expect(h.createSession).toHaveBeenCalledWith('ws-1')
+    expect(h.createSession).toHaveBeenCalledWith('ws-root', undefined)
   })
 
   it('乐观切换：点选即改选中态（零建会话调用）；模式乐观切换 + 弹层开合 + reset 回默认', async () => {
@@ -176,37 +196,60 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(controller.state().selectedPath).toBe('Z:/proj')
   })
 
-  it('默认分支发送：直走官方面 session.create（零守卫调用）+ prompt（首条消息恒 queue——新会话 agent 必空闲）+ 进入会话', async () => {
+  it('binding-derivation M2：chip 选中双发 {workspaceId, worktreePath} 直呼官方面——原官方面死代码激活为唯一路径', async () => {
     const { deps, h } = makeDeps()
     const controller = createHeroController(deps)
     await controller.load()
     await controller.send('你好')
-    expect(h.createSession).toHaveBeenCalledWith('ws-1')
-    expect(h.prompt).toHaveBeenCalledWith('s-ws-1', '你好', 'queue')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
+    expect(h.createSession).toHaveBeenCalledWith('ws-main', 'Z:/proj')
+    expect(h.prompt).toHaveBeenCalledWith('s-ws-main', '你好', 'queue')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-main')
     expect(controller.state().busy).toBe(false)
+    // 零预铸单门调用——forge:worktree/session-create 退役，rpc 面仅清单一呼
     expect(h.rpcCalls).toHaveLength(1)
   })
 
-  it('bug 16ac5bc2：workspaceId 缺席（隧道域）默认分支发送走 forge 单门（主树路径）——空 workspaceId 不直达官方面', async () => {
-    const { deps, h } = makeDeps({ workspaceId: undefined })
-    h.sessionCreateResult = { ok: true, data: { sessionId: 's-forge', branch: 'main' } }
+  it('非默认 worktree 发送：选中行 workspaceId 双发官方面（WYSIWYG——显示什么传什么）', async () => {
+    const { deps, h } = makeDeps()
     const controller = createHeroController(deps)
     await controller.load()
-    await controller.send('你好')
-    expect(h.createSession).not.toHaveBeenCalled()
-    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/proj' }])
-    expect(h.prompt).toHaveBeenCalledWith('s-forge', '你好', 'queue')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-forge')
+    controller.pickBranch('Z:/wt/feat')
+    h.rpcCalls.length = 0
+    await controller.send('开工')
+    expect(h.createSession).toHaveBeenCalledWith('ws-feat', 'Z:/wt/feat')
+    expect(h.prompt).toHaveBeenCalledWith('s-ws-feat', '开工', 'queue')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-feat')
+    expect(h.rpcCalls).toHaveLength(0)
   })
 
-  it('bug 16ac5bc2：workspaceId 缺席且主树锚也缺席（projectRoot 无）= 发送失败解冻可重试（不再发空 workspaceId）', async () => {
-    const { deps, h } = makeDeps({ workspaceId: undefined, projectRoot: undefined, currentWorktreePath: undefined })
+  it('binding-derivation M5：树锚 hack 退役——切项目后发送锚 = 新项目选中行自带 workspaceId（零 wsPath 推导）', async () => {
+    const { deps, h } = makeProjectDeps()
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.pickProject('Z:/other')
+    await controller.send('你好')
+    expect(h.createSession).toHaveBeenCalledWith('ws-other', 'Z:/other')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-other')
+  })
+
+  it('清单缺席：deps.workspaceId 回退单发官方面（当前工作区语义）', async () => {
+    const { deps, h } = makeDeps({ projectRoot: undefined })
+    const controller = createHeroController(deps)
+    await controller.load()
+    expect(controller.state().rows).toHaveLength(0)
+    await controller.send('你好')
+    expect(h.createSession).toHaveBeenCalledWith('ws-root', undefined)
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-root')
+  })
+
+  it('清单与回退锚双缺席：发送失败解冻可重试（零猜测零空发）', async () => {
+    const { deps, h } = makeDeps({ projectRoot: undefined, workspaceId: undefined })
     const controller = createHeroController(deps)
     await controller.load()
     await controller.send('你好')
     expect(h.createSession).not.toHaveBeenCalled()
     expect(controller.state().busy).toBe(false)
+    expect(controller.state().error).toContain('无 workspaceId')
   })
 
   it('模式清单随 roster 动态增减（用户裁决 2026-10-22）：roster 追加 forge 双预设之后；broken 剔行；选 roster 模式 = agentPreset.select(id) 下发', async () => {
@@ -267,75 +310,26 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(presetSelects).toContainEqual(['s-y', 'cordis'])
   })
 
-  it('非默认 worktree 发送：session-create 透传（预铸采纳）成功直达会话', async () => {
+  it('官方面 createSession 失败：不进入会话、busy 解冻可重试（错误面 + 草稿回填）', async () => {
     const { deps, h } = makeDeps()
-    const controller = createHeroController(deps)
-    await controller.load()
-    controller.pickBranch('Z:/wt/feat')
-    h.rpcCalls.length = 0
-    h.sessionCreateResult = { ok: true, data: { sessionId: 's-bound', branch: 'feat/pin-durable' } }
-    await controller.send('开工')
-    expect(h.rpcCalls).toEqual([[HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/wt/feat' }]])
-    expect(h.prompt).toHaveBeenCalledWith('s-bound', '开工', 'queue')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-bound')
-  })
-
-  it('守卫拒绝回执 → 确认框待决（busy 冻结、零预检文本语义）', async () => {
-    const { deps } = makeDeps()
-    const controller = createHeroController(deps)
-    await controller.load()
-    controller.pickBranch('Z:/wt/fix')
-    await controller.send('开工')
-    const state = controller.state()
-    expect(state.pendingGuard?.reason).toBe('worktree 不在场')
-    expect(state.busy).toBe(true)
-    expect(state.selectedPath).toBe('Z:/wt/fix') // 乐观选中态保持——待用户裁决
-  })
-
-  it('守卫拒绝 → 选回：选中态回退默认行、不建会话、发送面解冻', async () => {
-    const { deps, h } = makeDeps()
-    const controller = createHeroController(deps)
-    await controller.load()
-    controller.pickBranch('Z:/wt/feat')
-    await controller.send('开工')
-    controller.resolveGuard('cancel')
-    const state = controller.state()
-    expect(state.pendingGuard).toBeNull()
-    expect(state.selectedPath).toBe('Z:/proj')
-    expect(state.busy).toBe(false)
-    expect(h.createSession).not.toHaveBeenCalled()
-    expect(h.onOpenSession).not.toHaveBeenCalled()
-  })
-
-  it('守卫拒绝 → 仍要切换：官方面 session.create 兜底（落主树）+ 进入会话', async () => {
-    const { deps, h } = makeDeps()
-    const controller = createHeroController(deps)
-    await controller.load()
-    controller.pickBranch('Z:/wt/fix')
-    await controller.send('开工')
-    controller.resolveGuard('confirm')
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(h.createSession).toHaveBeenCalledWith('ws-1')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
-    expect(controller.state().pendingGuard).toBeNull()
-    expect(controller.state().busy).toBe(false)
-  })
-
-  it('官方面 createSession 失败：不进入会话、busy 解冻可重试', async () => {
-    const { deps, h } = makeDeps({ workspaceId: 'fail' })
+    h.createSession = vi.fn(async () => {
+      throw new Error('boom')
+    })
+    deps.api.createSession = h.createSession
     const controller = createHeroController(deps)
     await controller.load()
     await controller.send('你好')
     expect(h.onOpenSession).not.toHaveBeenCalled()
     expect(controller.state().busy).toBe(false)
-    expect(controller.state().pendingGuard).toBeNull()
+    expect(controller.state().error).toContain('发送失败')
+    expect(controller.state().draft).toBe('你好')
   })
 
   it('bug 53b5d685：首条 prompt 失败 = 错误态 + 文本回填草稿，不静默进入空会话', async () => {
     let promptFails = true
     const { deps, h } = makeDeps({
       api: {
-        createSession: async (workspaceId: string) => h.createSession(workspaceId),
+        createSession: async (workspaceId: string, worktreePath?: string) => h.createSession(workspaceId, worktreePath),
         selectModel: async () => ({ selected: true }),
         prompt: async (...args: Parameters<typeof h.prompt>) => {
           if (promptFails) {
@@ -362,22 +356,12 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(controller.state().draft).toBeNull()
   })
 
-  it('守卫待决期间发送零重入；无清单（projectRoot 缺席）双径全走官方面', async () => {
-    const { deps, h } = makeDeps({ projectRoot: undefined })
-    const controller = createHeroController(deps)
-    await controller.load()
-    expect(controller.state().rows).toHaveLength(0)
-    await controller.send('你好')
-    expect(h.createSession).toHaveBeenCalledWith('ws-1')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
-  })
-
   it('bug 38ab5a8d：新会话默认档暂存在场——建会话后 select-model 下发（含推理等级）+ 清除暂存', async () => {
     const selectModels: [string, string, string, string?][] = []
     const cleared: number[] = []
     const { deps, h } = makeDeps({
       api: {
-        createSession: async (workspaceId: string) => h.createSession(workspaceId),
+        createSession: async (workspaceId: string, worktreePath?: string) => h.createSession(workspaceId, worktreePath),
         prompt: async (...args: Parameters<typeof h.prompt>) => h.prompt(...args),
         selectAgentPreset: async (...args: Parameters<typeof h.selectAgentPreset>) => h.selectAgentPreset(...args),
         listAgentPresets: async () => h.listAgentPresets(),
@@ -394,8 +378,8 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     const controller = createHeroController(deps)
     await controller.load()
     await controller.send('你好')
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-1')
-    expect(selectModels).toContainEqual(['s-ws-1', 'DeepSeek', 'deepseek-r1', 'low'])
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-main')
+    expect(selectModels).toContainEqual(['s-ws-main', 'DeepSeek', 'deepseek-r1', 'low'])
     expect(cleared).toHaveLength(1)
   })
 
@@ -420,37 +404,12 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     expect(selectModels).toHaveLength(0)
   })
 
-  function h_create(): (workspaceId: string) => Promise<{ sessionId: string }> {
+  function h_create(): (workspaceId: string, worktreePath?: string) => Promise<{ sessionId: string }> {
     return async (workspaceId: string) => ({ sessionId: `s-${workspaceId || 'main'}` })
   }
 })
 
 describe('项目切换（bug e046b3bf——hero 新会话面项目切换控件缺席）', () => {
-  const otherListPayload = {
-    isGit: true,
-    entries: [{ path: 'Z:/other', branch: 'master', worktreeName: 'other', isMain: true }],
-  }
-
-  function makeProjectDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harness } {
-    const { deps, h } = makeDeps({
-      projects: [
-        { name: 'proj', path: 'Z:/proj' },
-        { name: 'other', path: 'Z:/other' },
-      ],
-      ...overrides,
-    })
-    h.rpcCalls.length = 0
-    deps.rpc.call = async <T>(channel: string, payload: unknown): Promise<RpcResult<T>> => {
-      h.rpcCalls.push([channel, payload])
-      if (channel === HERO_WORKTREE_LIST_CHANNEL) {
-        const root = (payload as { projectRoot?: string }).projectRoot
-        return { ok: true, data: root === 'Z:/other' ? otherListPayload : listPayload } as RpcResult<T>
-      }
-      return h.sessionCreateResult as RpcResult<T>
-    }
-    return { deps, h }
-  }
-
   it('多项目在场：state 投影项目清单 + 选中项目', async () => {
     const { deps } = makeProjectDeps()
     const controller = createHeroController(deps)
@@ -475,25 +434,13 @@ describe('项目切换（bug e046b3bf——hero 新会话面项目切换控件�
     expect(controller.state().selectedProjectPath).toBe('Z:/other')
   })
 
-  it('切项目后发送：forge 单门锚 = 新项目主树（WYSIWYG——显示什么传什么）', async () => {
-    const { deps, h } = makeProjectDeps({ workspaceId: undefined })
-    h.sessionCreateResult = { ok: true, data: { sessionId: 's-other', branch: 'master' } }
+  it('切项目后发送：新项目主行 workspaceId 双发官方面（WYSIWYG——显示什么传什么）', async () => {
+    const { deps, h } = makeProjectDeps()
     const controller = createHeroController(deps)
     await controller.load()
     await controller.pickProject('Z:/other')
     await controller.send('你好')
-    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/other' }])
-    expect(h.onOpenSession).toHaveBeenCalledWith('s-other')
-  })
-
-  it('切回原项目：currentWorktreePath 锚恢复（当前所在树语义）', async () => {
-    const { deps, h } = makeProjectDeps({ workspaceId: undefined, currentBranch: 'main', currentWorktreePath: 'Z:/wt/fix' })
-    const controller = createHeroController(deps)
-    await controller.load()
-    await controller.pickProject('Z:/other')
-    await controller.pickProject('Z:/proj')
-    await controller.send('你好')
-    // 首项目内当前所在树（非主行）——仍走透传径
-    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/wt/fix' }])
+    expect(h.createSession).toHaveBeenCalledWith('ws-other', 'Z:/other')
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-ws-other')
   })
 })

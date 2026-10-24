@@ -712,6 +712,19 @@ body[data-ds-dark-theme] .st.done {
 .sys-line.err {
   color: #e34d59;
 }
+/* branch 漂移警示 banner（binding-derivation §2.6——mobile chat 顶部非阻断警示；
+ * 桌面同语义 = dswf-binding-mismatch toast，amber 警示刻度） */
+.bind-drift-banner {
+  margin: 6px auto 0;
+  max-width: 92%;
+  padding: 8px 12px;
+  border: 1px solid #c08a2d;
+  border-radius: 10px;
+  background: rgba(192, 138, 45, 0.12);
+  color: #c08a2d;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .doc-stack {
   display: flex;
   flex-direction: column;

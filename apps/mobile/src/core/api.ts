@@ -26,7 +26,9 @@ export interface CommandExecuteResult {
 
 export interface OfficialApi {
   listSessions(): Promise<{ items: readonly unknown[] }>
-  createSession(workspaceId: string): Promise<{ sessionId: string }>
+  /** 建会话（binding-derivation §2.3 chip 双发）：workspaceId 定 cwd（官方 blank 复用即路由）；
+   *  worktreePath 为显示选中树的透传对位字段（host proxy 载荷自包含——官方 schema 收敛后裁剪）。 */
+  createSession(workspaceId: string, worktreePath?: string): Promise<{ sessionId: string }>
   history(sessionId: string, maxMessages: number): Promise<unknown>
   prompt(sessionId: string, text: string, mode: 'queue' | 'steer'): Promise<unknown>
   cancel(sessionId: string): Promise<unknown>
@@ -89,7 +91,8 @@ export function randomRequestId(scope: RandomSource = globalThis.crypto as Rando
 export function createOfficialApi(deps: ApiDeps): OfficialApi {
   return {
     listSessions: () => rpc<{ items: readonly unknown[] }>(deps, 'session.list', {}),
-    createSession: (workspaceId) => rpc(deps, 'session.create', { workspaceId }),
+    createSession: (workspaceId, worktreePath) =>
+      rpc(deps, 'session.create', { workspaceId, ...(worktreePath !== undefined && worktreePath !== '' ? { worktreePath } : {}) }),
     history: (sessionId, maxMessages) => rpc(deps, 'session.history', { sessionId, maxMessages }),
     prompt: (sessionId, text, mode) =>
       rpc(deps, 'session.prompt', {

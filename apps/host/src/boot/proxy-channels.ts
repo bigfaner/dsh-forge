@@ -252,6 +252,8 @@ export interface GroupedProjectRow {
   readonly name: string
   readonly wsPath: string
   readonly archived: boolean
+  /** 官方 workspace id（binding-derivation：mobile hero 建会话回退锚——ProjectSummary 自带） */
+  readonly workspaceId: string
   readonly worktrees: readonly GroupedWorktreeRow[]
   readonly sessions: readonly Record<string, unknown>[]
 }
@@ -333,6 +335,7 @@ export async function assembleGrouped(deps: Pick<ProxyChannelDeps, 'projects' | 
       name: project.name,
       wsPath: project.wsPath,
       archived: project.archived,
+      workspaceId: project.workspaceId,
       worktrees: entries.map((w): GroupedWorktreeRow => ({ path: w.path, branch: w.branch, worktreeName: w.worktreeName, isMain: w.isMain, present: w.present })),
       sessions: sortSessionsDesc(members),
     })
