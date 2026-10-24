@@ -14,7 +14,13 @@ import {
   type ExpertView,
   type StatusFilter,
 } from "./filter.js";
+import { unionSkills } from "./detail-logic.js";
 import { ExpertListController, type ListFetcher, type ListState } from "./list-source.js";
+import {
+  ExpertDetailController,
+  type DetailMutations,
+} from "./detail-source.js";
+import { ExpertDetailDialog } from "./detail-dialog.js";
 import { ensurePanelStyles } from "./styles.js";
 
 /** 官方 workspace 归属快照选择钩子（root 标准props——结构窄面，缺席 = 降级）。 */
@@ -63,6 +69,35 @@ export function defaultListFetcher(workspace: string): ListFetcher {
   }
 }
 
+/** 详情变更 fetch 路由前缀（routes.ts 精确路由族；client 侧零服务端代码引入）。 */
+const DETAIL_UPDATE_URL = "/api/expert-squad/update";
+const DETAIL_ENABLE_URL = "/api/expert-squad/enable";
+const DETAIL_DISABLE_URL = "/api/expert-squad/disable";
+
+/** POST 路由公共请求面（非 2xx → 抛业务错消息）。 */
+async function postJson(url: string, body: unknown): Promise<unknown> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+/** 默认详情变更缝（POST update / enable / disable；返回换新后的档案）。 */
+export function defaultDetailMutations(workspace: string): DetailMutations {
+  return {
+    update: async (name, draft) =>
+      (await postJson(DETAIL_UPDATE_URL, { workspace, name, ...draft })) as ExpertView,
+    setEnabled: async (name, enabled) =>
+      (await postJson(enabled ? DETAIL_ENABLE_URL : DETAIL_DISABLE_URL, {
+        workspace,
+        key: name,
+      })) as ExpertView,
+  };
+}
+
 const LOADING_SNAPSHOT: ListState = { phase: { kind: "loading" }, entries: [] }
 
 /** ExpertPanelApp 入参（官方 main keyed 槽占用者组合 props 的消费切片）。 */
@@ -71,6 +106,8 @@ export interface ExpertPanelAppProps {
   readonly useWorkspaces?: WorkspacesHook
   /** 取数缝（测试/装配注入；缺省 = /api 桥 fetch）。 */
   readonly fetchList?: ListFetcher
+  /** 详情变更缝（测试/装配注入；缺省 = update/enable/disable POST fetch）。 */
+  readonly mutations?: DetailMutations
 }
 
 /**
@@ -91,6 +128,41 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     return instance
   }, [workspacePath, props.fetchList])
   useEffect(() => () => controller?.stop(), [controller])
+
+  // 详情 Dialog 控制器：变更成功回写列表控制器（卡片即时同步，不待轮询）
+  const detailController = useMemo(() => {
+    const base = props.mutations ?? (workspacePath === undefined ? undefined : defaultDetailMutations(workspacePath))
+    if (base === undefined) return undefined
+    return new ExpertDetailController({
+      update: async (name, draft) => {
+        const updated = await base.update(name, draft)
+        controller?.patchEntry(updated)
+        return updated
+      },
+      setEnabled: async (name, enabled) => {
+        const updated = await base.setEnabled(name, enabled)
+        controller?.patchEntry(updated)
+        return updated
+      },
+    })
+  }, [props.mutations, workspacePath, controller])
+  const detailSubscribe = useCallback(
+    (onChange: () => void): (() => void) =>
+      detailController?.subscribe(onChange) ?? (() => undefined),
+    [detailController],
+  )
+  const detailGetSnapshot = useCallback(
+    () => detailController?.getSnapshot() ?? undefined,
+    [detailController],
+  )
+  const detailState = useSyncExternalStore(detailSubscribe, detailGetSnapshot, detailGetSnapshot)
+  const onCardActivate = useCallback(
+    (key: string) => {
+      const expert = controller?.getSnapshot().entries.find((entry) => entry.name === key)
+      if (expert !== undefined) detailController?.open(expert)
+    },
+    [controller, detailController],
+  )
 
   const subscribe = useCallback(
     (onChange: () => void): (() => void) => controller?.subscribe(onChange) ?? (() => undefined),
@@ -119,7 +191,14 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         onQueryChange={setQuery}
         onStatusChange={setStatus}
         {...(controller !== undefined ? { onRetry } : {})}
+        {...(detailController !== undefined ? { onCardActivate } : {})}
       />
+      {detailState === undefined || detailController === undefined || !detailState.open ? null : (
+        <ExpertDetailDialog
+          controller={detailController}
+          allSkills={unionSkills(state.entries)}
+        />
+      )}
     </div>
   )
 }

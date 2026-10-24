@@ -80,6 +80,19 @@ export class ExpertListController {
     void this.load(true);
   }
 
+  /**
+   * 单条档案原子换新（详情 Dialog 保存/启停成功后的卡片即时同步——不待 5s 轮询）。
+   * 未在列的键不落（新建档走轮询拉取），换新后通知订阅者。
+   */
+  patchEntry(entry: ExpertView): void {
+    const index = this.state.entries.findIndex((row) => row.name === entry.name);
+    if (index === -1) return;
+    const entries = this.state.entries.slice();
+    entries[index] = entry;
+    this.state = { ...this.state, entries };
+    this.emit();
+  }
+
   private emit(): void {
     // 快照迭代（订阅者在回调内退订不扰动遍历序）
     for (const listener of Array.from(this.listeners)) listener();

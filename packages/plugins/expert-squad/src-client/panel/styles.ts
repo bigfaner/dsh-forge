@@ -54,6 +54,35 @@ export const PANEL_CSS = `
 .dswf-empty { grid-column: 1 / -1; text-align: center; padding: 56px 20px; color: var(--dsw-alias-label-secondary); }
 .dswf-empty b { display: block; color: var(--dsw-alias-label-primary); font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; margin-bottom: 6px; }
 .dswf-errorbar { grid-column: 1 / -1; display: flex; align-items: center; gap: ${T.pad20}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-danger-primary); font: var(--dsw-font-xs-13); }
+/* 详情 Dialog（ui-design F2：radius-lg 16 / lv3 阴影 / 宽 680 / max-height 88%） */
+.dswf-dlg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-mask, rgba(0,0,0,0.4)); z-index: 100; }
+.dswf-dlg { position: relative; display: flex; flex-direction: column; width: 680px; max-width: calc(100vw - 32px); max-height: 88%; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
+.dswf-dlg-head { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
+.dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
+.dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
+.dswf-dlg-foot { display: flex; justify-content: flex-end; padding: ${T.pad12} ${T.pad16}; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.dswf-dlg-seg { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); margin-top: ${T.gap8}; }
+.dswf-dlg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.dswf-dlg-md { font: var(--dsw-font-s-14); line-height: var(--dsw-font-s-14-line-height); color: var(--dsw-alias-label-primary); }
+.dswf-dlg-md ul { margin: 2px 0 2px 18px; padding: 0; }
+.dswf-dlg-md-h { display: block; margin-top: ${T.gap8}; font-weight: 500; }
+.dswf-dlg-md code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
+.dswf-dlg-field { display: flex; flex-direction: column; gap: 6px; }
+.dswf-dlg-field > label { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; color: var(--dsw-alias-label-caption); }
+.dswf-dlg-input { font: var(--dsw-font-s-14); padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
+.dswf-dlg-input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dswf-dlg-textarea { font: var(--dsw-font-s-14); line-height: ${T.lh20}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; resize: none; overflow-y: auto; }
+.dswf-dlg-textarea:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dswf-dlg-err { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-state-danger-primary); }
+.dswf-msel { position: relative; }
+.dswf-msel-box { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 32px; padding: 4px ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-msel-placeholder { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
+.dswf-msel-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 10; max-height: 220px; overflow: auto; padding: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); }
+.dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
+.dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
 `;
 
 /** 已注入标记（模块级单例——classic script 装载一次）。 */

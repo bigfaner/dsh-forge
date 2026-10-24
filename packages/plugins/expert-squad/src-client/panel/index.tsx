@@ -21,6 +21,7 @@ export {
 } from "./list-source.js";
 export {
   defaultListFetcher,
+  defaultDetailMutations,
   ExpertPanel,
   ExpertPanelApp,
   listUrl,
@@ -29,6 +30,31 @@ export {
   type ExpertPanelProps,
   type WorkspacesHook,
 } from "./expert-panel.js";
+export {
+  addSkill,
+  DESCRIPTION_MAX,
+  draftOf,
+  hasBareMustache,
+  mdInline,
+  personaBlocks,
+  TOOL_CANDIDATES,
+  toggleInList,
+  unionSkills,
+  validateDraft,
+  type ExpertDraft,
+  type MdBlock,
+  type MdInline,
+} from "./detail-logic.js";
+export {
+  ExpertDetailController,
+  type DetailMode,
+  type DetailMutations,
+  type DetailState,
+} from "./detail-source.js";
+export {
+  ExpertDetailDialog,
+  type AllSkills,
+} from "./detail-dialog.js";
 
 /**
  * 面板行字形（官方 sidebar.panellist 占用者 owner props = { size, active }——
