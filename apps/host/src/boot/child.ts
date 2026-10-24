@@ -434,6 +434,15 @@ async function main(): Promise<void> {
       // 诊断面异常不反压业务链（红线①同构）
     }
   }
+  // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除边沿，
+  // message 行内携带 sessionId/cwd/留痕 branch/实时 branch）
+  const bindDriftDiag = (line: string): void => {
+    try {
+      emitDiag(ctx, { level: 'info', process: 'child', event: 'bind-drift', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
   {
     let foldAttached = false
     const attachFold = (): void => {
@@ -623,6 +632,20 @@ async function main(): Promise<void> {
         createDiag: worktreeCreateDiag,
         // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
         bindDiag: sessionBindDiag,
+        // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除）
+        bindDriftDiag: bindDriftDiag,
+        // binding-derivation M6：forge/binding-mismatch 漂移推送（ctx.emit → /remote/forge-stream
+        // 镜像目录逐帧推送；原 session-binding-mismatch 发射缝退役并入——mobile 消费归任务 1.8）
+        bindingMismatchEmit: (payload) => {
+          try {
+            ;(ctx as unknown as { emit?: (event: string, payload: unknown) => void }).emit?.(
+              'forge/binding-mismatch',
+              payload,
+            )
+          } catch {
+            // 推送失败不反压 seal 判定链（fail-soft）
+          }
+        },
       })
       worktreeRpcService = worktreeRpc
 

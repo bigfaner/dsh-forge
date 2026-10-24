@@ -24,6 +24,7 @@ import {
   type WorktreeChecksResult,
   type WorktreeCreateRequest,
   type WorktreeCreateResult,
+  type ForgeBindingMismatchEvent,
   type WorktreeDeleteRequest,
   type WorktreeDeleteResult,
   type WorktreeEntryDto,
@@ -258,6 +259,13 @@ export function createWorktreeRpcService(deps: {
   /** 留痕 append 失败诊断 emit 缝（binding-derivation §2.6 session-bind 域，warn 级——AC：
    *  append 失败 fail-soft + emitDiag('session-bind', warn)）；缺席 = 零 emit。 */
   readonly bindWarnDiag?: (message: string) => void
+  /** bind-drift 漂移埋点 emit 缝（binding-derivation §2.6，info 级——触发与消除边沿各一条，
+   *  携带 sessionId/cwd/两侧分支名）；缺席 = 零 emit。 */
+  readonly bindDriftDiag?: (message: string) => void
+  /** forge/binding-mismatch 漂移推送缝（binding-derivation M6——原 session-binding-mismatch
+   *  发射缝并入 /remote/forge-stream 镜像；装配方 ctx.emit 接线，mobile 消费归 1.8）；
+   *  缺席 = 零推送。 */
+  readonly bindingMismatchEmit?: ((payload: ForgeBindingMismatchEvent) => void) | undefined
   /** session/created 监听装配缝（binding-derivation §2.2 留痕前台触发源——fork 亦发布
    *  session/created，同径覆盖）：装配方以官方 ctx.on('session/created', …) 接线并传会话
    *  id，返回撤销面；缺席 = 留痕只靠惰性补写兜底。 */
@@ -335,8 +343,11 @@ export function createWorktreeRpcService(deps: {
     if (typeof cwd !== 'string' || cwd === '') return
     void appendBindMarker(sessionId, cwd, target)
   })
-  // 留痕校验记忆（性能钉：seal 通道高频——每 (session, cwd) 只做一次「缺留痕」读+补写判定）
-  const bindMarkerMemo = new Map<string, boolean>()
+  // 留痕校验记忆（性能钉：seal 通道高频——每 (session, cwd) 只做一次「缺留痕」读+补写判定；
+  // 值 = 留痕 branch（'' = 读失败按「有留痕=当前」降级），留痕一旦落定不再重读）。
+  const bindBranchMemo = new Map<string, string>()
+  // 漂移态记忆（边沿源：每会话上一 seal 的漂移态；触发/消除跳变才 emit——埋点与推送各一条）
+  const driftMemo = new Map<string, boolean>()
 
   const resolveWorkspaceRegistry = (): WorkspaceRegistryFace | undefined =>
     typeof deps.workspaceRegistry === 'function' ? deps.workspaceRegistry() : deps.workspaceRegistry
@@ -466,19 +477,44 @@ export function createWorktreeRpcService(deps: {
     // aheadBehind = 树级操作（cwd 纪律同 aheadBehind 通道）——host 解析面单点，随 seal 通道
     // 一次带回（chip §2.3.1 内联展示数据源）；branch 落空（detached/unborn）= null 零注入
     const counts = branch === '' ? null : await aheadBehindOp(cwd, branch).catch(() => null)
-    // 惰性补写（binding-derivation §2.2 兜底）：缺留痕时首次漂移校验以实时 branch 补写——
-    // 留痕 = 创建时刻快照，缺失（session/created 监听缺席窗口 / 历史会话）即以此刻 branch
-    // 近似（诞生到首次校验之间完成切分支的概率可忽略，语义不失真）。有留痕（含 per-session
-    // 记忆）零增量读。补写失败 fail-soft（appendBindMarker 内 emit warn）。
-    if (branch !== '' && !bindMarkerMemo.get(norm(cwd) + '|' + request.sessionId)) {
-      bindMarkerMemo.set(norm(cwd) + '|' + request.sessionId, true)
-      let hasMarker = false
-      try {
-        hasMarker = (await readLatestWorktreeBind(request.sessionId, readFactory)) !== null
-      } catch {
-        hasMarker = true // 读失败不补写（fail-soft——漂移校验按无留痕降级，路由不受影响）
+    // 漂移判定（binding-derivation §2.2/§2.6）：实时 branch ≠ 留痕 branch → branchDrift
+    // （banner 数据源，判定随 seal 现算）+ 触发/消除边沿 bind-drift 埋点（info）与
+    // forge/binding-mismatch 推送。留痕缺读：缺留痕时首次校验以实时 branch 惰性补写
+    // （补写值 ≈ 创建时刻快照，语义不失真）；读失败按「有留痕=当前」降级（fail-soft，
+    // 不补写不警示）。branch 落空（detached/unborn）= 不判漂移。
+    let branchDrift: { readonly bindBranch: string; readonly branch: string } | null = null
+    if (branch !== '') {
+      const memoKey = norm(cwd) + '|' + request.sessionId
+      let bindBranch = bindBranchMemo.get(memoKey)
+      if (bindBranch === undefined) {
+        let found: string | null = null
+        try {
+          found = (await readLatestWorktreeBind(request.sessionId, readFactory))?.branch ?? null
+        } catch {
+          found = branch // 读失败降级（不补写——漂移校验按无漂移走，路由不受影响）
+        }
+        if (found === null) {
+          await appendBindMarker(request.sessionId, cwd) // 惰性补写（失败 fail-soft + warn）
+          found = branch
+        }
+        bindBranch = found
+        bindBranchMemo.set(memoKey, bindBranch)
       }
-      if (!hasMarker) await appendBindMarker(request.sessionId, cwd)
+      if (bindBranch !== '' && bindBranch !== branch) branchDrift = { bindBranch, branch }
+      const drifted = branchDrift !== null
+      const prev = driftMemo.get(request.sessionId)
+      if (prev !== undefined && prev !== drifted) {
+        const line =
+          `[git-worktree] bind-drift ${drifted ? '触发' : '消除'}：sessionId=${request.sessionId} cwd=${cwd} ` +
+          `留痕=${bindBranch} 实时=${branch}`
+        deps.bindDriftDiag?.(line)
+        try {
+          deps.bindingMismatchEmit?.({ sessionId: request.sessionId, cwd, bindBranch, branch, drifted })
+        } catch {
+          // 推送失败不反压 seal 判定链（fail-soft）
+        }
+      }
+      driftMemo.set(request.sessionId, drifted)
     }
     deps.bindDiag?.(
       `[git-worktree] session-bind 推导判定：sessionId=${request.sessionId} cwd=${cwd} branch=${branch || '(落空)'} ` +
@@ -491,6 +527,7 @@ export function createWorktreeRpcService(deps: {
       projectRoot: resolution.projectRoot,
       worktreeName: worktreeNameOf(cwd),
       aheadBehind: counts,
+      branchDrift,
     }
   }
 

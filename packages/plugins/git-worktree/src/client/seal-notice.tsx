@@ -87,6 +87,51 @@ export function SealedComposerPlaceholder(): ReactNode {
   )
 }
 
+export interface BranchDriftNoticeProps {
+  /** 留痕 branch（forge/worktree-bind 创建时刻快照） */
+  readonly bindBranch: string
+  /** 实时 branch（host 解析面） */
+  readonly branch: string
+}
+
+/**
+ * branch 漂移 warning banner（binding-derivation §2.2——非阻断，切回即消失：判定随
+ * seal 渲染现算，无关闭态无状态残留；SealNotice 同款警告形态但保留圆角）。data 锚：
+ * data-dswt-bind-drift-notice。
+ */
+export function BranchDriftNotice({ bindBranch, branch }: BranchDriftNoticeProps): ReactNode {
+  return (
+    <div
+      data-dswt-bind-drift-notice=""
+      role="status"
+      style={{
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start',
+        border: '0.5px solid var(--dsw-alias-state-warn-primary)',
+        borderRadius: 12,
+        padding: '10px 14px',
+        marginBottom: 12,
+        fontSize: 13,
+        lineHeight: '20px',
+        color: 'var(--dsw-alias-label-primary)',
+        background: 'color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent)',
+      }}
+    >
+      <span style={{ display: 'inline-flex', color: 'var(--dsw-alias-state-warn-primary)' }} aria-hidden="true">
+        <IconWarningTriangleOutlineRegular size={15} />
+      </span>
+      <span>
+        该会话创建于分支{' '}
+        <b style={{ fontFamily: 'var(--ds-font-family-code, monospace)' }}>{bindBranch}</b>
+        ，当前工作区已切换至{' '}
+        <b style={{ fontFamily: 'var(--ds-font-family-code, monospace)' }}>{branch}</b>
+        ——如非预期请切回（仅提示，不影响使用）。
+      </span>
+    </div>
+  )
+}
+
 export interface StaleSelectionNoticeProps {
   /** 被删 worktree 名（banner 引述） */
   readonly worktreeName: string

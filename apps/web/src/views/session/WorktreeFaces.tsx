@@ -15,6 +15,7 @@
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  BranchDriftNotice,
   CreateWorktreeDialog,
   DeleteWorktreeDialog,
   HeroWorktreePicker,
@@ -653,9 +654,18 @@ export interface WorktreeSealPhase {
   readonly sealed: boolean
   readonly branch: string | null
   readonly worktreeName: string | null
+  /** branch 漂移（binding-derivation §2.2——实时 ≠ 留痕；null = 无漂移/不警示） */
+  readonly branchDrift: { readonly bindBranch: string; readonly branch: string } | null
 }
 
-const sealEmpty: WorktreeSealPhase = { state: 'loading', isGit: false, sealed: false, branch: null, worktreeName: null }
+const sealEmpty: WorktreeSealPhase = {
+  state: 'loading',
+  isGit: false,
+  sealed: false,
+  branch: null,
+  worktreeName: null,
+  branchDrift: null,
+}
 
 /** 封存快照拉取（seal 通道单源——chip 失效态与 notice/占位两提示通道共读） */
 function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => ForgeRpcClient): WorktreeSealPhase {
@@ -673,10 +683,11 @@ function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => ForgeRpcC
           sealed: result.sealed,
           branch: result.binding?.branch ?? null,
           worktreeName: result.worktreeName ?? null,
+          branchDrift: result.branchDrift ?? null,
         })
       })
       .catch(() => {
-        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null })
+        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
       })
     return () => {
       alive = false
@@ -746,20 +757,29 @@ export function ForgeWorktreeSealOverlay({
 }): ReactNode {
   const phase = useWorktreeSeal(sessionId, makeRpc)
   const [dismissed, setDismissed] = useState(false)
-  if (sessionId === undefined || !phase.isGit || !phase.sealed) return null
+  if (sessionId === undefined || !phase.isGit) return null
   const worktreeName = phase.worktreeName ?? ''
   return (
     <div style={{ display: 'flex', flexDirection: 'column', rowGap: 'var(--dsw-radius-sm)' }}>
-      {!dismissed && !dismissedSealSessions.has(sessionId) && (
-        <SealNotice
-          worktreeName={worktreeName}
-          onClose={() => {
-            dismissedSealSessions.add(sessionId)
-            setDismissed(true)
-          }}
-        />
+      {/* branch 漂移 warning banner（binding-derivation §2.2——非阻断，切回即消失：判定随
+          seal 渲染现算；与封存通道并列但语义独立） */}
+      {phase.branchDrift !== null && (
+        <BranchDriftNotice bindBranch={phase.branchDrift.bindBranch} branch={phase.branchDrift.branch} />
       )}
-      <SealedComposerPlaceholder />
+      {phase.sealed && (
+        <>
+          {!dismissed && !dismissedSealSessions.has(sessionId) && (
+            <SealNotice
+              worktreeName={worktreeName}
+              onClose={() => {
+                dismissedSealSessions.add(sessionId)
+                setDismissed(true)
+              }}
+            />
+          )}
+          <SealedComposerPlaceholder />
+        </>
+      )}
     </div>
   )
 }

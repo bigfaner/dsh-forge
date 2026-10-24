@@ -335,6 +335,57 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     })
   })
 
+  it('bind-drift 漂移判定（binding-derivation §2.2/§2.6）：实时 ≠ 留痕 → branchDrift + 触发/消除边沿埋点与推送', async () => {
+    let listed: readonly { path: string; branch: string }[] = [{ path: 'C:/repo', branch: 'main' }]
+    const diagLines: string[] = []
+    const pushes: unknown[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo' } }).persistence,
+      listWorktreeEntries: async () => listed,
+      listPresent: async () => ['C:/repo'],
+      bindDriftDiag: (line) => diagLines.push(line),
+      bindingMismatchEmit: (payload) => pushes.push(payload),
+    })
+    // 首次 seal：无留痕 → 惰性补写（值 = 实时 branch），无漂移零 emit（初始态不属边沿）
+    await service.seal({ sessionId: 's1' })
+    expect(diagLines).toEqual([])
+    expect(pushes).toEqual([])
+    // 手动切分支：实时 feat/x ≠ 留痕 main → 漂移触发（banner 数据源 + 埋点 + 推送各一条）
+    listed = [{ path: 'C:/repo', branch: 'feat/x' }]
+    const drifted = await service.seal({ sessionId: 's1' })
+    expect(drifted.branchDrift).toEqual({ bindBranch: 'main', branch: 'feat/x' })
+    expect(diagLines.join('\n')).toContain('bind-drift 触发')
+    expect(pushes).toEqual([
+      { sessionId: 's1', cwd: 'C:/repo', bindBranch: 'main', branch: 'feat/x', drifted: true },
+    ])
+    // 漂移持续：边沿不重复 emit
+    await service.seal({ sessionId: 's1' })
+    expect(diagLines).toHaveLength(1)
+    expect(pushes).toHaveLength(1)
+    // 切回：branchDrift 归 null + 消除边沿
+    listed = [{ path: 'C:/repo', branch: 'main' }]
+    const back = await service.seal({ sessionId: 's1' })
+    expect(back.branchDrift).toBeNull()
+    expect(diagLines.join('\n')).toContain('bind-drift 消除')
+    expect(pushes).toHaveLength(2)
+    expect(pushes[1]).toMatchObject({ bindBranch: 'main', branch: 'main', drifted: false })
+  })
+
+  it('bind-drift 缝缺席零抛；branch 落空不判漂移', async () => {
+    let listed: readonly { path: string; branch: string }[] = [{ path: 'C:/repo', branch: 'main' }]
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo' } }).persistence,
+      listWorktreeEntries: async () => listed,
+      listPresent: async () => ['C:/repo'],
+    })
+    await service.seal({ sessionId: 's1' })
+    listed = [{ path: 'C:/repo', branch: '' }] // detached/unborn——落空
+    const result = await service.seal({ sessionId: 's1' })
+    expect(result.branchDrift).toBeNull()
+  })
+
   it('resolve：批量归属解析（身份归并单点）——命中带 projectId/projectName，未命中不进结果', async () => {
     const service = createWorktreeRpcService({ gitWorktree: fakeExt })
     const result = await service.resolve({

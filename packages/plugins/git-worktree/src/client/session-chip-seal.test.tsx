@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { SessionWorktreeChip, SessionWorktreeInfoCard } from './session-worktree-chip.js'
-import { SealNotice, SealedComposerPlaceholder, StaleSelectionNotice } from './seal-notice.js'
+import { SealNotice, SealedComposerPlaceholder, StaleSelectionNotice, BranchDriftNotice } from './seal-notice.js'
 
 const chip = (over: Partial<Parameters<typeof SessionWorktreeChip>[0]> = {}): string =>
   renderToStaticMarkup(<SessionWorktreeChip isGit branch="feat/api" worktreeName="wt-api" {...over} />)
@@ -70,14 +70,20 @@ describe('SessionWorktreeInfoCard（点击展示的完整信息卡）', () => {
       />,
     )
 
-  it('完整信息：分支/worktree/完整路径/项目根/ahead-behind 逐行', () => {
+  it('§2.3.1 完整信息卡：分支（内联 2↓ 16↑）/worktree/项目/工作区 逐行——行序 分支→worktree→项目→工作区', () => {
     const markup = card()
     expect(markup).toContain('data-dswt-session-chip-popover')
     expect(markup).toContain('feat/api')
     expect(markup).toContain('wt-api')
     expect(markup).toContain('Z:/repo/.forge/worktrees/wt-api')
     expect(markup).toContain('Z:/repo')
-    expect(markup).toContain('↑2 ↓1')
+    expect(markup).toContain('1↓ 2↑') // ahead/behind 内联于分支名旁（落后在前）
+    expect(markup).toContain('工作区') // 「路径」label 更名「工作区」
+    expect(markup).not.toContain('路径')
+    expect(markup).not.toContain('领先/落后') // 独立领先/落后行移除
+    expect(markup.indexOf('分支')).toBeLessThan(markup.indexOf('worktree'))
+    expect(markup.indexOf('worktree')).toBeLessThan(markup.indexOf('项目'))
+    expect(markup.indexOf('项目')).toBeLessThan(markup.indexOf('工作区'))
     expect(markup).toContain('max-content') // 卡片随内容加宽——路径不换行
     expect(markup).toContain('nowrap')
   })
@@ -89,9 +95,20 @@ describe('SessionWorktreeInfoCard（点击展示的完整信息卡）', () => {
 
   it('可选行缺席不占位（worktreePath/projectRoot/aheadBehind 缺省）', () => {
     const markup = renderToStaticMarkup(<SessionWorktreeInfoCard branch="b" worktreeName="w" />)
-    expect(markup).not.toContain('路径')
+    expect(markup).not.toContain('工作区')
     expect(markup).not.toContain('项目')
     expect(markup).not.toContain('↑')
+  })
+})
+
+describe('BranchDriftNotice（binding-derivation §2.2——branch 漂移 warning banner）', () => {
+  it('警告形态 + 引述两侧分支名 + 非阻断（无关闭态——切回即消失）', () => {
+    const markup = renderToStaticMarkup(<BranchDriftNotice bindBranch="main" branch="feat/x" />)
+    expect(markup).toContain('data-dswt-bind-drift-notice')
+    expect(markup).toContain('main')
+    expect(markup).toContain('feat/x')
+    expect(markup).toContain('切回')
+    expect(markup).not.toContain('-close')
   })
 })
 

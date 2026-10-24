@@ -4,7 +4,7 @@
 // 完整路径/项目根/ahead-behind/封存警示），失焦 1 秒后自动消失（焦点出入卡片内部不断开）。
 // 封存态 = 失效变体（警示色 + 删除线）；非 git 项目零注入。
 import { useRef, useState, type ReactNode } from 'react'
-import { aheadBehindSegments } from './model.js'
+import { aheadBehindInline, aheadBehindSegments } from './model.js'
 import type { AheadBehind } from '../worktree-ops.js'
 import { IconBranchOutlineRegular } from './icons.js'
 
@@ -34,11 +34,8 @@ export function SessionWorktreeInfoCard({
   aheadBehind,
   sealed = false,
 }: Omit<SessionWorktreeChipProps, 'isGit'>): ReactNode {
-  const segments = aheadBehind !== undefined ? aheadBehindSegments(aheadBehind) : null
-  const ab =
-    segments !== null && (segments.ahead !== null || segments.behind !== null)
-      ? [segments.ahead, segments.behind].filter(Boolean).join(' ')
-      : null
+  // chip §2.3.1：ahead/behind 内联于分支名旁（`2↓ 16↑` 落后在前），独立「领先/落后」行移除
+  const inlineAb = aheadBehind !== undefined ? aheadBehindInline(aheadBehind) : null
   const row = (label: string, value: ReactNode): ReactNode => (
     <div key={label} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
       <span style={{ flex: 'none', color: 'var(--dsw-alias-label-tertiary)', fontSize: 12 }}>{label}</span>
@@ -71,11 +68,20 @@ export function SessionWorktreeInfoCard({
           worktree 已被删除，会话已封存——可查看历史，不可发送消息
         </div>
       )}
-      {row('分支', branch)}
+      {row(
+        '分支',
+        <>
+          {branch}
+          {inlineAb !== null && (
+            <span data-dswt-chip-ab-inline="" style={{ marginLeft: 6, color: 'var(--dsw-alias-label-caption)' }}>
+              {inlineAb}
+            </span>
+          )}
+        </>,
+      )}
       {row('worktree', worktreeName)}
-      {worktreePath !== undefined && row('路径', worktreePath)}
       {projectRoot !== undefined && row('项目', projectRoot)}
-      {ab !== null && row('领先/落后', ab)}
+      {worktreePath !== undefined && row('工作区', worktreePath)}
     </div>
   )
 }

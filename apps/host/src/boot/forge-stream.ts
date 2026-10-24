@@ -103,6 +103,7 @@ export const FORGE_STREAM_EVENT_NAMES = [
   'approval/request',
   'user-questions/request',
   'forge/progress',
+  'forge/binding-mismatch', // binding-derivation §2.6：branch 漂移推送（原 session-binding-mismatch 发射缝并入）
 ] as const
 
 /**

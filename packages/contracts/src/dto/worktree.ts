@@ -138,6 +138,22 @@ export interface SessionBindingMismatchEvent {
   readonly displayed: string
 }
 
+/**
+ * forge/binding-mismatch 载荷（binding-derivation §2.6——branch 漂移推送，原
+ * session-binding-mismatch 发射缝改造并入 /remote/forge-stream 镜像目录；mobile banner
+ * 触发源）。drifted = true 触发（实时 branch ≠ 留痕 branch）；false 消除（切回）。
+ */
+export interface ForgeBindingMismatchEvent {
+  readonly sessionId: string
+  /** 会话 cwd（= 绑定 worktree 路径，header.cwd 推导） */
+  readonly cwd: string
+  /** 留痕 branch（forge/worktree-bind 创建时刻快照） */
+  readonly bindBranch: string
+  /** 实时 branch（host 解析面） */
+  readonly branch: string
+  readonly drifted: boolean
+}
+
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */
 export interface WorktreeSealRequest {
   readonly sessionId: string
@@ -156,6 +172,11 @@ export interface WorktreeSealResult {
   /** ahead/behind 实时解析（host 解析面单点——worktree-ops aheadBehind；branch 落空 /
    *  无 upstream = null 零注入）。chip §2.3.1 内联展示数据源（随 seal 通道一次带回） */
   readonly aheadBehind?: { readonly ahead: number; readonly behind: number } | null
+  /**
+   * branch 漂移（binding-derivation §2.2——实时 branch ≠ forge/worktree-bind 留痕 branch）：
+   * chat-view warning banner 数据源（判定随渲染现算；留痕缺席/惰性补写刚落 = null 不警示）。
+   */
+  readonly branchDrift?: { readonly bindBranch: string; readonly branch: string } | null
   /** 已退役（binding-derivation §2.1）：seal 改 header.cwd 推导后不再产出 blank 事件判读
    *  ——消费面回落账本 isBlank；字段保留 = 旧 web bundle 兼容读面 */
   readonly blank?: boolean
