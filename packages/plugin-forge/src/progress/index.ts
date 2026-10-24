@@ -46,12 +46,16 @@ export interface ForgeProgressCounts {
 export interface ForgeProgressEventData {
   /** 任务源标识（/run-dag-tasks 绑定语义同源值） */
   readonly sourceSlug: string
-  /** 循环动词（claim=领取 / claim-resume=恢复领取 / settle=结算 / stop=停止） */
-  readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop'
+  /** 循环动词（claim=领取 / claim-resume=恢复领取 / settle=结算 / stop=停止 / suspend=挂起待处置） */
+  readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop' | 'suspend'
   /** 结果状态（running=进行中 / completed=已完成 / blocked=阻塞 / interrupted=已中断） */
   readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
   /** 任务键（`slug/localId`——领取/结算/停止的归属任务；缺席 = 循环级事件） */
   readonly taskKey?: string
+  /** 挂起场景码（verb=suspend 时在列——suspend/{minor} 四值，loop-event-delivery ⑱-㉑） */
+  readonly scenario?: 'suspend/spawn-rate-limited' | 'suspend/worker-rate-limited' | 'suspend/abort-over-limit' | 'suspend/landing-rejected'
+  /** 挂起原因（verb=suspend 时在列——用户/agent 双端可见的原因全文） */
+  readonly note?: string
   /** 池计数快照（claim 时点——可选） */
   readonly counts?: ForgeProgressCounts
   /** 时间戳（epoch 毫秒——驱动器发射点打点） */
@@ -63,9 +67,11 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
   if (typeof value !== 'object' || value === null) return false
   const raw = value as Record<string, unknown>
   if (typeof raw['sourceSlug'] !== 'string' || raw['sourceSlug'] === '') return false
-  if (raw['verb'] !== 'claim' && raw['verb'] !== 'claim-resume' && raw['verb'] !== 'settle' && raw['verb'] !== 'stop') return false
+  if (raw['verb'] !== 'claim' && raw['verb'] !== 'claim-resume' && raw['verb'] !== 'settle' && raw['verb'] !== 'stop' && raw['verb'] !== 'suspend') return false
   if (raw['status'] !== 'running' && raw['status'] !== 'completed' && raw['status'] !== 'blocked' && raw['status'] !== 'interrupted') return false
   if (raw['taskKey'] !== undefined && typeof raw['taskKey'] !== 'string') return false
+  if (raw['scenario'] !== undefined && typeof raw['scenario'] !== 'string') return false
+  if (raw['note'] !== undefined && typeof raw['note'] !== 'string') return false
   if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false
   return true
 }

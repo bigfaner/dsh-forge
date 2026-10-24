@@ -1446,6 +1446,139 @@ describe('流控分类器 isRateLimitFailure', () => {
   })
 })
 
+// ─────────────────────────── 静默挂起径补录（⑱-㉑——唤醒 + forge/progress suspend 事件） ───────────────────────────
+
+describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + forge/progress suspend 事件）', () => {
+  /** incident 仓记录桩（落盘委派观察——路径注入供唤醒消息指向断言） */
+  function incidentStub(inputs: unknown[], path: string): IncidentStore {
+    return {
+      record: (input) => {
+        inputs.push(input)
+        return path
+      },
+    }
+  }
+
+  /** 四径共用断言：唤醒一条（form followup·wakeup true·原因摘要 + incident 子文件夹路径）
+   *  + progress suspend 事件一枚（scenario 场景码 + note 携带原因）+ incident 落盘委派 */
+  function expectWakeupAndProgress(
+    built: ReturnType<typeof build>,
+    input: { scenario: string; path: string; reasonPart: string; headlinePart: string },
+  ): void {
+    const wakeup = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeup).toHaveLength(1)
+    expect(wakeup[0]?.text).toContain(input.headlinePart)
+    expect(wakeup[0]?.text).toContain(input.path)
+    const suspend = built.progressCalls.find((p) => p.verb === 'suspend')
+    expect(suspend).toMatchObject({
+      verb: 'suspend',
+      status: 'blocked',
+      taskKey: 'feat-x/2.5',
+      scenario: input.scenario,
+    })
+    expect(suspend !== undefined && suspend.note?.includes(input.reasonPart)).toBe(true)
+  }
+
+  it('⑱ spawn-rate-limited：唤醒 + progress suspend（suspend/spawn-rate-limited）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-spawn-rate-limited/'),
+    })
+    built.spawn.setBehavior(async () => {
+      throw new Error('provider rejected session start: 429 rate limit exceeded')
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: 'suspend/spawn-rate-limited',
+      path: 'logs/feat-x/2.5/001-spawn-rate-limited/',
+      reasonPart: '429',
+      headlinePart: '启动被限流',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'spawn-rate-limited', taskKey: '2.5', projectId: PROJECT })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('⑲ worker-rate-limited：唤醒 + progress suspend（suspend/worker-rate-limited）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      query: [queryOf('in_progress')],
+      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-worker-rate-limited/'),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.resolve({ stopReason: 'error', output: 'provider error: 429 Too Many Requests, rate limit exceeded' }),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: 'suspend/worker-rate-limited',
+      path: 'logs/feat-x/2.5/001-worker-rate-limited/',
+      reasonPart: 'rate limit exceeded',
+      headlinePart: '执行被限流',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'worker-rate-limited', taskKey: '2.5' })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('⑳ worker-abort-over-limit：唤醒 + progress suspend（suspend/abort-over-limit）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-abort-over-limit/'),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.reject(new Error('worker crashed mid-run')),
+      dispose: async () => {},
+    }))
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'worker-abort-over-limit', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: 'suspend/abort-over-limit',
+      path: 'logs/feat-x/2.5/001-abort-over-limit/',
+      reasonPart: 'worker crashed mid-run',
+      headlinePart: '反复异常退出',
+    })
+    // 既有 worker-aborted 逐次落盘不回归（超限末次也照旧落盘）+ 超限径独立落盘一枚
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-aborted')).toHaveLength(4)
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-abort-over-limit')).toHaveLength(1)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('㉑ settle-landing-rejected：唤醒 + progress suspend（suspend/landing-rejected）+ incident 落盘', async () => {
+    const incidentInputs: unknown[] = []
+    const badLanding: CommitLandingVerifier = async () => ({ ok: false, branch: 'feat-x', commitBranches: ['main'] })
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ interrupted: 1 })],
+      query: [queryOf('completed')],
+      commitLanding: badLanding,
+      incidents: incidentStub(incidentInputs, 'logs/feat-x/2.5/001-landing-rejected/'),
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt' })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
+    expectWakeupAndProgress(built, {
+      scenario: 'suspend/landing-rejected',
+      path: 'logs/feat-x/2.5/001-landing-rejected/',
+      reasonPart: '[settle-cwd-pin]',
+      headlinePart: '落点核验',
+    })
+    expect(incidentInputs).toEqual([expect.objectContaining({ eventType: 'settle-landing-rejected', taskKey: '2.5' })])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
 // ─────────────────────────── no-task 三态判词 ───────────────────────────
 
 describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {

@@ -22,6 +22,7 @@ const VERB_LABELS: Record<string, string> = {
   'claim-resume': '恢复领取',
   settle: '结算',
   stop: '停止',
+  suspend: '挂起',
 }
 
 /** 状态标签 */

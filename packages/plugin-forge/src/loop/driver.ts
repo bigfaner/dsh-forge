@@ -41,7 +41,7 @@ import { renderHeadline, renderNarrative, summarizeReason } from '../notify/inde
 import type { Narrator } from '../notify/index.js'
 import { renderEndOfLoop } from './injection.js'
 import type { InjectionPayload } from './injection.js'
-import type { ForgeProgressCounts, ProgressAppendFace } from '../progress/index.js'
+import type { ForgeProgressCounts, ForgeProgressEventData, ProgressAppendFace } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
 import { attributionTaskInput, baselineForHead, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
@@ -591,6 +591,60 @@ function suspendForVerdict(loop: ActiveLoop, escalation: LoopEscalation): RoundO
   return 'suspend'
 }
 
+/** 静默挂起径场景（loop-event-delivery ⑱-㉑——四径各自独立不合并，用户裁决 2026-10-24） */
+const SUSPEND_SCENARIOS = {
+  'spawn-rate-limited': 'suspend/spawn-rate-limited',
+  'worker-rate-limited': 'suspend/worker-rate-limited',
+  'abort-over-limit': 'suspend/abort-over-limit',
+  'landing-rejected': 'suspend/landing-rejected',
+} as const
+type SuspendMinor = keyof typeof SUSPEND_SCENARIOS
+
+/**
+ * 静默挂起径补录收口（loop-event-delivery 1.4——⑱-㉑）：现状挂起时人类与模型均无感知，
+ * 三面一次补齐——① event 子文件夹落盘（原因全文，行为与既有 recordIncident 同径）；
+ * ② forge/progress suspend 事件（scenario 场景码 + note 原因全文，fail-soft 同 1.17）；
+ * ③ send(nextStep, true) 唤醒一条（原因摘要 + 子文件夹路径进消息，即时唤醒主会话）。
+ * 收尾仍走 suspendForVerdict（挂起投影语义零变更）。
+ */
+async function suspendWithWakeup(
+  loop: ActiveLoop,
+  escalation: LoopEscalation,
+  input: {
+    readonly minor: SuspendMinor
+    readonly eventType: string
+    /** 原因全文（落盘 + note 原样；叙述只带摘要 + 子文件夹路径） */
+    readonly reason: string
+    /** incident 落盘任务键（localId 口径——既有 incident-log 行为不回归） */
+    readonly incidentTaskKey: string
+    /** 进度事件任务键（`slug/localId` 口径——既有 forge/progress 行为同源） */
+    readonly progressTaskKey: string
+    /** 唤醒消息单行摘要（用户视角原因——无机制词） */
+    readonly headline: string
+  },
+): Promise<RoundOutcome> {
+  const incidentPath = loop.deps.narrator.recordIncident({
+    projectId: loop.record.projectId,
+    sourceSlug: loop.record.source.slug,
+    taskKey: input.incidentTaskKey,
+    eventType: input.eventType,
+    error: input.reason,
+  })
+  emitProgress(loop, {
+    verb: 'suspend',
+    status: 'blocked',
+    scenario: SUSPEND_SCENARIOS[input.minor],
+    note: input.reason,
+    taskKey: input.progressTaskKey,
+  })
+  const detail = incidentPath !== undefined ? `原因全文：${incidentPath}` : '原因全文落盘降级（事件子文件夹不可用）'
+  await loop.deps.narrator.followup(
+    loop.record.ownerSessionId,
+    `${input.headline}。\n原因摘要：${summarizeReason(input.reason)}\n${detail}`,
+  )
+  return suspendForVerdict(loop, escalation)
+}
+
 /** 处置回流返回（re-entry——无活登记 / 非挂起态拒绝） */
 export type LoopResumeResult =
   | { readonly ok: true; readonly loopId: LoopInstanceId }
@@ -609,7 +663,7 @@ function taskLabelOf(task: TaskSnapshot): string {
  */
 function emitProgress(
   loop: ActiveLoop,
-  event: { readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop'; readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'; readonly taskKey?: string; readonly counts?: ForgeProgressCounts },
+  event: { readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop' | 'suspend'; readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'; readonly taskKey?: string; readonly scenario?: ForgeProgressEventData['scenario']; readonly note?: string; readonly counts?: ForgeProgressCounts },
 ): void {
   try {
     loop.deps.progress?.append(loop.record.ownerSessionId, {
@@ -617,6 +671,8 @@ function emitProgress(
       verb: event.verb,
       status: event.status,
       ...(event.taskKey !== undefined ? { taskKey: event.taskKey } : {}),
+      ...(event.scenario !== undefined ? { scenario: event.scenario } : {}),
+      ...(event.note !== undefined ? { note: event.note } : {}),
       ...(event.counts !== undefined ? { counts: event.counts } : {}),
       at: Date.now(),
     })
@@ -1132,8 +1188,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 流控分流（bug 63112ab2）：限流窗口内退避重试必再撞限流——零重试直接挂起返回主会话
     // （附流控原因），择时重派由主会话决定；非流控照旧走退避阶梯。
     if (isRateLimitFailure(failure.message)) {
-      loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'spawn-rate-limited', error: failure.message })
-      return suspendForVerdict(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: failure.message })
+      // ⑱ 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: failure.message }, {
+        minor: 'spawn-rate-limited',
+        eventType: 'spawn-rate-limited',
+        reason: failure.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        headline: '任务启动被限流——循环已挂起，择时重派由你决定',
+      })
     }
     // 第一层机械守卫：退避后幂等重入（不立即重试——间隔递增 base×N；×3 halted 由 guard 兑现，decisions #11）
     loop.spawnFailures += 1
@@ -1181,14 +1244,20 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 结算核已把任务 completed → interrupted 真化（可恢复态）；此处事件留痕 + 挂起升级
   // 问询——重入 claim 对 completed 任务结构性不可达（旧径静默 finished-all 的根因）。
   if ('kind' in settled && settled.kind === 'landing-rejected') {
-    loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'settle-landing-rejected', error: settled.reason })
-    emitProgress(loop, { verb: 'settle', status: 'interrupted', taskKey })
-    return suspendForVerdict(loop, {
+    // ㉑ 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+    return await suspendWithWakeup(loop, {
       kind: 'settle-landing-rejected',
       ownerSessionId: owner,
       source: record.source,
       taskKey,
       reason: settled.reason,
+    }, {
+      minor: 'landing-rejected',
+      eventType: 'settle-landing-rejected',
+      reason: settled.reason,
+      incidentTaskKey: task.localId,
+      progressTaskKey: taskKey,
+      headline: '任务结算落点核验未通过——任务已转中断、循环挂起待处置',
     })
   }
   if ('ok' in settled) {
@@ -1197,20 +1266,35 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // ⑫ bounded 立即重入（claim 面按 links 幂等重入同任务，不退避）→ 超限第三层（decisions #16）
     // 流控分流（bug 63112ab2）：限流终态（输出原文随判词在场）零重入——挂起返回主会话择时重派
     if (isRateLimitFailure(settled.message)) {
-      loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-rate-limited', error: settled.message })
-      return suspendForVerdict(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: settled.message })
+      // ⑲ 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, { kind: 'rate-limit', ownerSessionId: owner, source: record.source, taskKey, reason: settled.message }, {
+        minor: 'worker-rate-limited',
+        eventType: 'worker-rate-limited',
+        reason: settled.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        headline: '子代理执行被限流——循环已挂起，择时重派由你决定',
+      })
     }
     loop.workerAborts += 1
     const attempt = loop.workerAborts
     loop.deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'worker-aborted', error: settled.message })
     if (attempt > LOOP_WORKER_ABORT_MAX_RETRIES) {
       // 3b 裁决①：worker-abort-over-limit → 挂起待裁决（执行面反复崩溃需人裁决——非终局）
-      return suspendForVerdict(loop, {
+      // ⑳ 静默挂起径补录：incident 落盘 + forge/progress suspend + send(nextStep, true) 唤醒
+      return await suspendWithWakeup(loop, {
         kind: 'worker-abort-over-limit',
         ownerSessionId: owner,
         source: record.source,
         taskKey,
         attempts: attempt,
+      }, {
+        minor: 'abort-over-limit',
+        eventType: 'worker-abort-over-limit',
+        reason: settled.message,
+        incidentTaskKey: task.localId,
+        progressTaskKey: taskKey,
+        headline: `子代理反复异常退出（第 ${attempt} 次，超过重试上限）——循环已挂起待处置`,
       })
     }
     const abortedPayload = { sourceSlug: slug, taskKey: task.localId, attempt, maxAttempts: LOOP_WORKER_ABORT_MAX_RETRIES }
