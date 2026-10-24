@@ -38,6 +38,8 @@ const ERR = `${DIALOG} .dswf-dlg-err`
 const TOAST = '.dswf-toast[role="status"]'
 const mselChip = (field: string, value: string): string =>
   `${DIALOG} .dswf-msel[data-msel="${field}"] .chip[data-msel-chip="${value}"]`
+const mselBox = (field: string): string =>
+  `${DIALOG} .dswf-msel[data-msel="${field}"] .dswf-msel-box`
 
 const KEY = 'test-reviewer'
 const OTHER_KEY = 'data-miner'
@@ -56,6 +58,7 @@ const HARNESS_SOURCE = `(() => {
       w.__xsqCalls.push({ url: String(url), method: String(init?.method ?? 'GET').toUpperCase(), body: typeof init?.body === 'string' ? init.body : '' })
       const mode = w.__xsqStubMode
       if (mode === 'update-fail' && url.includes('/update')) {
+        w.__xsqStubMode = null // 一次性注入：仅首个 update 失败，随后移除——修正后保存走真实通道
         return new Response('xsq e2e stub: update rejected', { status: 500 })
       }
       if (mode === 'toggle-fail' && (url.includes('/enable') || url.includes('/disable'))) {
@@ -89,6 +92,12 @@ async function setStubMode(page: Page, mode: 'update-fail' | 'toggle-fail' | nul
   await page.evaluate((m) => {
     ;(window as unknown as XsqWin).__xsqStubMode = m
   }, mode)
+}
+
+/** msel 菜单收起（外点收起——原型语义；head 名称点击 = Dialog 内部安全外区）。 */
+async function collapseMsel(page: Page): Promise<void> {
+  await page.locator('.dswf-dlg-name').click()
+  await expect(page.locator(`${DIALOG} .dswf-msel[data-msel-open]`), '菜单已收起').toHaveCount(0)
 }
 
 /** 捕获缓冲轮询：取最近一条命中子串的请求（expect.poll 消除读取时机竞态——fix-3 判例）。 */
@@ -283,7 +292,8 @@ test('@feature expert-squad dlg step-2 markdown-render：人设分块渲染—�
     await openDetail(page, KEY)
     const md = page.locator('.dswf-dlg-md')
     await expect(md.locator('.dswf-dlg-md-h'), '标题块（## 剥离）').toHaveText('职责')
-    await expect(md.locator('strong'), '加粗（** 剥离）').toContainText('严格')
+    // 标题块以 strong.dswf-dlg-md-h 承载（detail-dialog.tsx:90）——行内加粗定位排除标题承载
+    await expect(md.locator('strong:not(.dswf-dlg-md-h)'), '加粗（** 剥离）').toContainText('严格')
     await expect(md.locator('code'), '行内代码（反引号剥离）').toHaveText('tsc')
     await expect(md.locator('ul li'), '列表项（- 剥离）').toContainText(['逐条核对 AC', '拒绝空岗位档案'])
     const raw = await md.innerText()
@@ -314,11 +324,16 @@ test('@feature expert-squad dlg step-3 success：编辑态字段集预填（工�
     // 工具白名单 multi-select：已选 chips + 固定候选清单
     await expect(page.locator(mselChip('tools', 'read')), '已选工具 chip·read').toBeVisible()
     await expect(page.locator(mselChip('tools', 'grep')), '已选工具 chip·grep').toBeVisible()
+    // 工具菜单展开（fix-6 默认收起——box 点击开合）→ 候选清单取证
+    await page.locator(mselBox('tools')).click()
     const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
     expect(await toolRows.count(), '工具候选=固定清单 6 项').toBe(6)
-    // 技能 multi-select：已选 chips + 新增输入框
+    await collapseMsel(page)
+    // 技能 multi-select：已选 chips + 展开后新增输入框在场
     await expect(page.locator(mselChip('skills', 'review')), '已选技能 chip·review').toBeVisible()
+    await page.locator(mselBox('skills')).click()
     await expect(page.locator(FIELD_ADD_SKILL), '技能新增输入框在场').toBeVisible()
+    await collapseMsel(page)
     // 统一排序：工具在上、技能在下
     const toolY = (await page.locator(`${DIALOG} .dswf-msel[data-msel="tools"]`).boundingBox())?.y ?? 0
     const skillY = (await page.locator(`${DIALOG} .dswf-msel[data-msel="skills"]`).boundingBox())?.y ?? 0
@@ -338,6 +353,8 @@ test('@feature expert-squad dlg step-3 skill-add-local：技能新增入草稿�
     const { page } = session
     await openDetail(page, KEY)
     await page.locator(dlgBtn('编辑')).click()
+    await collapseMsel(page)
+    await page.locator(mselBox('skills')).click()
     await page.locator(FIELD_ADD_SKILL).fill('rust-lint')
     await page.locator(FIELD_ADD_SKILL).press('Enter')
     await expect(page.locator(mselChip('skills', 'rust-lint')), '新值即入已选 chips').toBeVisible()
@@ -380,7 +397,9 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     await page.locator(dlgBtn('编辑')).click()
     // 修改：岗位 + 勾选新工具 bash
     await page.locator(FIELD_TITLE).fill('夹具评审·复核')
+    await page.locator(mselBox('tools')).click()
     await page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: 'bash' }).locator('input').check()
+    await collapseMsel(page) // 勾选完成后收起菜单——外点收起解除对底部钮的遮挡（fix-6 交互语义）
     await page.locator(dlgBtn('保存')).click()
     // update 载荷捕获（name 键定址 + 新值在 body）
     const update = await capturedCall(page, '/api/expert-squad/update')
@@ -484,9 +503,13 @@ test('@feature expert-squad dlg step-5 disable-success：底部禁用即时生�
   try {
     const { page } = session
     await openDetail(page, KEY)
+    const wsParam = await captureWorkspaceParam(page)
     await page.locator(dlgBtn('禁用')).click()
     const disable = await capturedCall(page, '/api/expert-squad/disable')
-    expect(JSON.parse(disable.body) as { key?: string }, 'disable 以 key=name 键定址').toEqual({ key: KEY })
+    expect(
+      JSON.parse(disable.body) as { workspace?: string; key?: string },
+      'disable 载荷 = {workspace, key}（workspace 与真实 list 请求同参——D4 一致性契约）',
+    ).toEqual({ workspace: wsParam, key: KEY })
     await expect(page.locator('.dswf-dlg-head .dot.off'), '头部灯变 off').toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.dswf-dlg-meta').first(), 'meta 变已禁用').toContainText('已禁用')
     await expect(page.locator(dlgBtn('启用')), '底部钮变 [启用]').toBeVisible()
@@ -506,6 +529,7 @@ test('@feature expert-squad dlg step-5 enable-success：再启用对称恢复—
     await openDetail(page, KEY)
     await page.locator(dlgBtn('禁用')).click()
     await expect(page.locator(dlgBtn('启用')), '禁用生效').toBeVisible({ timeout: 10_000 })
+    await collapseMsel(page) // 收起菜单（外点收起）——解除遮挡后再点 [启用]
     // 再启用
     await page.locator(dlgBtn('启用')).click()
     await capturedCall(page, '/api/expert-squad/enable')
@@ -612,7 +636,8 @@ test('@feature expert-squad dlg 冒烟：开Dialog→查看分段→编辑保存
     await expect(page.locator(dlgBtn('编辑')), '保存后回查看态').toBeVisible({ timeout: 10_000 })
     await expect(page.locator(TOAST), 'Toast 热刷新生效').toContainText('热刷新生效')
     await expect(page.locator(`${cardOf(KEY)} .xc-title`), '卡片同步新岗位').toHaveText('冒烟复核岗', { timeout: 10_000 })
-    // 步骤5：禁用（四位同步）
+    // 步骤5：收起菜单（外点收起）→ 禁用（四位同步）
+    await collapseMsel(page)
     await page.locator(dlgBtn('禁用')).click()
     await expect(page.locator('.dswf-dlg-head .dot.off'), '灯变 off').toBeVisible({ timeout: 10_000 })
     await expect(page.locator(cardOf(KEY)), '卡片降透明').toHaveClass(/off/, { timeout: 10_000 })
