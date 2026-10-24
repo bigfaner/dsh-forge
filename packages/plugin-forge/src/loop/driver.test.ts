@@ -237,15 +237,24 @@ function tasksHarness() {
   }
 }
 
-type NarrationCall = { readonly method: 'notice' | 'followup' | 'settle'; readonly sessionId: string; readonly text: string }
+type NarrationCall = {
+  readonly method: 'notice' | 'followup' | 'settle'
+  readonly sessionId: string
+  readonly text: string
+  /** loop-event-delivery 投递面：原始 send options 直录（form 铸造形态 + wakeup 路由） */
+  readonly form: 'notice' | 'followup' | 'settle'
+  readonly wakeup: boolean
+}
 
-/** NarrationChannel send 桩（loop-event-delivery 接口收窄——wakeup/form 路由换算：
- *  settle 形态 → settle / wakeup=true → followup / 其余 → notice），旧断言语汇不变 */
+/** NarrationChannel send 桩（loop-event-delivery 接口收窄——form/wakeup 原样直录，
+ *  method = 兼容换算：settle 形态 → settle / wakeup=true → followup / 其余 → notice） */
 function sendRecordingChannel(calls: NarrationCall[], onSend?: (sessionId: string, text: string) => void): NarrationChannel {
   return {
     send: async (sessionId, text, options) => {
-      const method = options?.form === 'settle' ? 'settle' : options?.wakeup === true ? 'followup' : 'notice'
-      calls.push({ method, sessionId, text })
+      const form = options?.form ?? 'notice'
+      const wakeup = options?.wakeup === true
+      const method = form === 'settle' ? 'settle' : wakeup ? 'followup' : 'notice'
+      calls.push({ method, sessionId, text, form, wakeup })
       onSend?.(sessionId, text)
     },
   }
@@ -399,6 +408,9 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
     })
     // 叙述四连：①启动（notice）/ ④领取（notice）/ ⑥完成（notice）/ ⑯结算单点（settle·wakeup=true）
     expect(built.calls.map((c) => c.method)).toEqual(['notice', 'notice', 'notice', 'settle'])
+    // 投递面形态（AC）：①④⑥ 事件径 send(nextStep, false) 写入不唤醒；⑯ 结算单点 send(nextStep, true)
+    expect(built.calls.map((c) => c.form)).toEqual(['notice', 'notice', 'notice', 'settle'])
+    expect(built.calls.map((c) => c.wakeup)).toEqual([false, false, false, true])
     expect(built.calls[0]?.text).toContain('[forge·启动] 任务源: feat-x（feature）')
     expect(built.calls[0]?.text).toContain('待执行 1')
     expect(built.calls[1]?.text).toContain('[forge·领取] 任务源: feat-x')
@@ -812,6 +824,9 @@ describe('blocked 结算分支（图 C）', () => {
     // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 挂起族通道）
     const ask = built.calls.find((c) => c.method === 'followup')
     expect(ask?.text).toContain('无法自动处理——已向你发起问询')
+    // ⑩ 即时唤醒（AC）：send(nextStep, true)——阻塞上下文随 claim 整批进入主 agent
+    expect(ask?.form).toBe('followup')
+    expect(ask?.wakeup).toBe(true)
     // 直达挂起：blocked-ask-user + 无进展处置历史（跳过阶梯的机械证据）进挂起载荷
     expect(suspended.escalation).toEqual({
       kind: 'blocked-ask-user',
@@ -878,6 +893,39 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.spawn.requests[1]?.label).toContain('feat-x/fix-1')
     // 处置钩子未注入时 blocked-with-fix 不触发（fix 链已在 worker 侧机械闭合）
     expect(built.calls.some((c) => c.text.includes('[forge·自动处理]'))).toBe(false)
+  })
+
+  it('投递面全景（loop-event-delivery AC）：一次含 ⑦ 自愈阻塞的运行——进行中事件全 send(nextStep, false)，真终局唯一 settle send(nextStep, true)，零 steer 插队', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOf('blocked'), queryOf('completed')],
+    })
+    built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' } })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // ①-⑫ 组（本运行覆盖 ①④⑥⑦）：全部 send(nextStep, wakeup=false)——驱动器不被逐事件唤醒
+    const inProgress = built.calls.filter((c) => c.method === 'notice')
+    expect(inProgress.length).toBeGreaterThanOrEqual(4)
+    for (const call of inProgress) {
+      expect(call.form).toBe('notice')
+      expect(call.wakeup).toBe(false)
+    }
+    // 真终局单点（⑯）：恰一次 settle send(nextStep, true)——结算与积压事件唤醒后整批消费
+    const settles = built.calls.filter((c) => c.method === 'settle')
+    expect(settles).toHaveLength(1)
+    expect(settles[0]?.form).toBe('settle')
+    expect(settles[0]?.wakeup).toBe(true)
+    // 全运行 wakeup=true 集合 = 终局单点（⑦ 自愈阻塞不问询不唤醒；运行中零 steer 插队）
+    expect(built.calls.filter((c) => c.wakeup)).toEqual(settles)
   })
 
   it('静默边界（改进 1）：后继任务自身 blocked 且无再下级活后继 → 问询恢复上浮（triage ask-user 挂起待裁决）', async () => {
@@ -1276,6 +1324,7 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     expect(retries[1]?.text).toContain('启动子代理失败（第 2 次）')
     const halted = built.calls.find((c) => c.method === 'settle')
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
+    expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
     expect(halted?.text).toContain('提示用户"环境排查后重新开始 /run-dag-tasks feat-x"，并在问询中决定')
     // 同实例不自动复活（登记表已删、无定时器存活）；新实例 = 新 guard 计数（可正常跑完）
     const recovery = build({ claim: [claimed('2.9'), NO_TASK], stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })] })
@@ -1411,6 +1460,9 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     const blocked = built.calls.find((c) => c.method === 'followup')
     expect(blocked?.text).toContain('没有可执行的任务，且有任务阻塞中')
     expect(blocked?.text).toContain('3.1（Task 3.1）· 4.1（Task 4.1）')
+    // ⑭ 即时唤醒（AC）：send(nextStep, true)——阻塞清单上下文供主 agent 分析可解除性
+    expect(blocked?.form).toBe('followup')
+    expect(blocked?.wakeup).toBe(true)
     expect(suspended.escalation).toEqual({
       kind: 'deadlock',
       ownerSessionId: OWNER,
@@ -1432,6 +1484,7 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     expect(built.h.claimInputs).toHaveLength(3) // 三轮等待判词后耐心耗尽
     const timeout = built.calls.find((c) => c.method === 'settle')
     expect(timeout?.text).toContain('结束（等待超时）')
+    expect(timeout?.wakeup).toBe(true) // ⑮ 结算单点唤醒（AC）
     expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
     expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
   })
@@ -1497,6 +1550,12 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
     expect(stoppedNotice?.text).toContain('下一步动作: 无')
     expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
+    // ⑰ 结算单点唤醒（AC）：send(nextStep, true)
+    expect(stoppedNotice?.form).toBe('settle')
+    expect(stoppedNotice?.wakeup).toBe(true)
+    // ⑰ 双面落会话日志（AC）：forge/progress stopped 事件载 inFlightTaskKey（与结算消息同事实两面）
+    const stopProgress = built.progressCalls.find((e) => e.verb === 'stop')
+    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5' })
     // 登记注销 + 再停 = no-op
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
@@ -1785,6 +1844,7 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
     ])
     const halted = built.calls.find((c) => c.method === 'settle')
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
+    expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
   })
 })
 

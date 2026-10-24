@@ -2,9 +2,10 @@
 // implementation-blueprint §3 runRound 状态机，v1 严格串行）。
 //
 // 全链宿主代码驱动、零模型参与：每轮 = 领取（dispatch-core 阶段一，identity.loopSourced=true、
-// guardKey = LoopInstanceId）→ 领取通知（S4 notify·notice 零模型回合）→ in-process spawn
-// （dispatch-core 阶段二——SpawnWorkerHandle 直持不经 jobs，decisions #14）→ 结算（阶段三，
-// killSignal = 循环控制器）→ 结果通知 → 判定 → 下一轮，直到任务源 settled 收口。
+// guardKey = LoopInstanceId）→ 领取通知（S4 notify·send(nextStep, false) 写入不唤醒）→ in-process
+// spawn（dispatch-core 阶段二——SpawnWorkerHandle 直持不经 jobs，decisions #14）→ 结算（阶段三，
+// killSignal = 循环控制器）→ 结果通知 → 判定 → 下一轮，直到任务源 settled 收口（结算单点
+// send(nextStep, true) 一次唤醒）。
 //
 // 状态机要点（任务 1.4 验收面）：
 // ① in-flight 集合建模（LoopRecord.inFlight——v1 恒 ≤1，串行结构保证：结算返回后才续领）；
@@ -667,7 +668,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', taskKey: captured.taskKey })
     }
     const stats = await statsFailSoft(loop)
-    // ⑰ 停止收口 = settlement 形态（3b④——dispatch-loop-settled source + 三径投递）
+    // ⑰ 停止收口 = settlement 形态（3b④——结算单点 send(nextStep, true) 唤醒；与 in-flight
+  // 真化的 forge/progress stopped 事件双面落会话日志，均载 inFlightTaskKey）
     await deps.narrator.settle(
       record.ownerSessionId,
       renderNarrative('stopped-by-command', {
