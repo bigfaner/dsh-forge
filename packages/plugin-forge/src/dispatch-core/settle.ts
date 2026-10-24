@@ -14,6 +14,143 @@ import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'
 
+// ─────────────────────────── review-wave-N 修正波标记（机械④） ───────────────────────────
+// 提案 forge-verification-hardening M5「标记体系」：每轮 review/走查修正波结算落
+// review-wave-N 检查点（Blocker 返工批 / fix 链收口），附标记时刻四列累计计数快照
+// （tasks_total / commits_total / fixes_total / evidence_debts_total——提案统计口径）。
+// fail-soft：标记失败 console.warn 留痕，不回滚已定结算；依赖缺席（checkpoints 面 /
+// proposalId 映射）= 机制惰性不判，行为零变化。
+
+/** checkpoints 域服务的结算侧结构化消费面（结构兼容 core createCheckpointsService——插件禁 import core） */
+export interface SettleCheckpointsFace {
+  appendCheckpoint(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly mark: 'review-wave-N'
+    readonly baseCommitHash: string
+    readonly snapshots: {
+      readonly tasksTotal: number
+      readonly commitsTotal: number
+      readonly fixesTotal: number
+      readonly evidenceDebtsTotal: number
+    }
+  }): Promise<unknown>
+}
+
+/** 容器分支 HEAD 解析器（标记时点 base_commit_hash 来源——单测注入桩） */
+export type HeadCommitResolver = (worktreeDir: string) => Promise<string | undefined>
+
+/** git 真解析：容器检出当前 HEAD（rev-parse HEAD；故障 = undefined——fail-soft 跳过标记） */
+export const gitHeadCommit: HeadCommitResolver = async (worktreeDir) => {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const git = execFile('git', ['-C', worktreeDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }, (error, out) =>
+        error == null ? resolve(out) : reject(error),
+      )
+      noteHostOwnedChild(git) // 结算期 git 子进程 = 宿主自有（job-tree 防误收编——1.14 同口径）
+    })
+    const hash = stdout.trim()
+    return hash === '' ? undefined : hash
+  } catch {
+    return undefined
+  }
+}
+
+/** 四列计数快照（标记时刻累计值——提案「计数基准与起点」节口径） */
+export interface WaveSnapshot {
+  readonly tasksTotal: number
+  readonly commitsTotal: number
+  readonly fixesTotal: number
+  readonly evidenceDebtsTotal: number
+}
+
+/**
+ * 标记时刻计数快照（容器任务域全集 = source 限定）：
+ * - tasks_total：completed 任务数（taskStats 七态分布直读）
+ * - fixes_total：completed 且 fix 类（coding-fix 类型 ∨ fix 链派生 sourceTask）数
+ * - commits_total：completed 任务结算记录 commit_hash 去重集合大小
+ * - evidence_debts_total：结算记录 evidenceDebt 声明次数
+ */
+export async function computeWaveSnapshot(
+  tasks: ForgeTasksService,
+  projectId: string,
+  source: ContainerRef,
+): Promise<WaveSnapshot> {
+  const stats = await tasks.taskStats({ projectId, source })
+  const cards = await tasks.listTasks({ projectId, source, sort: 'created' })
+  const completed = cards.filter((c) => c.taskStatus === 'completed')
+  let commitsTotal = 0
+  let evidenceDebtsTotal = 0
+  const seenCommits = new Set<string>()
+  for (const card of completed) {
+    const detail = await tasks.queryTask({
+      projectId,
+      taskRef: { slug: card.slug, localId: card.localId },
+      include: { records: true },
+    })
+    for (const record of detail.records ?? []) {
+      if (record.commitHash !== undefined && record.commitHash !== '' && !seenCommits.has(record.commitHash)) {
+        seenCommits.add(record.commitHash)
+        commitsTotal += 1
+      }
+      if (record.evidenceDebt !== undefined) evidenceDebtsTotal += 1
+    }
+  }
+  return {
+    tasksTotal: stats.byStatus.completed,
+    commitsTotal,
+    fixesTotal: completed.filter((c) => c.taskType === 'coding-fix' || c.sourceTask !== undefined).length,
+    evidenceDebtsTotal,
+  }
+}
+
+/** 修正波落点判定：blocked 结算 = Blocker 返工批；success 结算的 fix 类任务 = fix 链收口（用户裁决批不经结算核——循环/走查侧另记） */
+function isReviewWavePoint(task: TaskSnapshot, outcome: 'success' | 'blocked'): boolean {
+  if (outcome === 'blocked') return true
+  return task.taskType === 'coding-fix' || task.sourceTaskId !== undefined
+}
+
+/** review-wave-N 标记落行（fail-soft——任何失败 console.warn 留痕，不回滚已定结算） */
+async function recordWaveCheckpoint(
+  deps: {
+    readonly tasks: ForgeTasksService
+    readonly checkpoints?: SettleCheckpointsFace
+    readonly resolveHeadCommit?: HeadCommitResolver
+  },
+  ctx: {
+    readonly projectId: string
+    readonly task: TaskSnapshot
+    readonly proposalId?: string
+    readonly worktreeCwd?: string
+    readonly submitCommitHash?: string
+    readonly outcome: 'success' | 'blocked'
+  },
+): Promise<void> {
+  try {
+    if (deps.checkpoints === undefined || ctx.proposalId === undefined) return
+    if (!isReviewWavePoint(ctx.task, ctx.outcome)) return
+    const headCommit =
+      (ctx.worktreeCwd !== undefined ? await (deps.resolveHeadCommit ?? gitHeadCommit)(ctx.worktreeCwd) : undefined) ??
+      ctx.submitCommitHash
+    if (headCommit === undefined) {
+      console.warn(`forge settle: review-wave mark skipped (no base commit) for ${ctx.task.slug}/${ctx.task.localId}`)
+      return
+    }
+    const snapshots = await computeWaveSnapshot(deps.tasks, ctx.projectId, ctx.task.source)
+    await deps.checkpoints.appendCheckpoint({
+      projectId: ctx.projectId,
+      proposalId: ctx.proposalId,
+      mark: 'review-wave-N', // wave_seq 缺省自动递增（检查点域 max+1——多波标记免记序数）
+      baseCommitHash: headCommit,
+      snapshots,
+    })
+  } catch (cause) {
+    console.warn(
+      `forge settle: review-wave checkpoint failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
+}
+
 /** 末条 submit record（结算摘要/commit 来源） */
 function lastSubmitRecordOf(records: readonly TaskRecordEntry[] | undefined): TaskRecordEntry | undefined {
   if (records === undefined) return undefined
@@ -172,6 +309,10 @@ export async function settleWorkerRun(
     readonly tasks: ForgeTasksService
     /** 提交落点核验器（可选——缺席回落 gitCommitLanding 真核验；单测注入桩） */
     readonly commitLanding?: CommitLandingVerifier
+    /** checkpoints 域服务消费面（可选——机械④修正波标记；缺席 = 机制惰性不判，行为零变化） */
+    readonly checkpoints?: SettleCheckpointsFace
+    /** 容器分支 HEAD 解析器（可选——缺席回落 gitHeadCommit 真解析；单测注入桩） */
+    readonly resolveHeadCommit?: HeadCommitResolver
   },
   ctx: {
     readonly projectId: string
@@ -195,6 +336,11 @@ export async function settleWorkerRun(
     readonly docsRoot?: string
     /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
     readonly e2eBaselineRedCases?: readonly string[]
+    /**
+     * 容器 → 提案 id 映射（机械④——review-wave-N 检查点 proposal_id 归属；由装配/循环侧
+     * 经提案谱系解析传入。缺席 = 不落修正波标记，行为零变化）。
+     */
+    readonly proposalId?: string
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -278,6 +424,19 @@ export async function settleWorkerRun(
       ))
     }
   }
+  // 机械④：修正波结算点落 review-wave-N 检查点（blocked = Blocker 返工批；fix 类任务收口
+  // = fix 链收口）——fail-soft，落点核验拒绝径（landing-rejected 提前返回）不落标记
+  await recordWaveCheckpoint(
+    { tasks: deps.tasks, checkpoints: deps.checkpoints, resolveHeadCommit: deps.resolveHeadCommit },
+    {
+      projectId: ctx.projectId,
+      task: ctx.task,
+      proposalId: ctx.proposalId,
+      worktreeCwd: ctx.worktreeCwd,
+      submitCommitHash: submitRecord?.commitHash,
+      outcome,
+    },
+  )
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =
