@@ -424,3 +424,76 @@ describe('hero 控制器（乐观切换 + 守卫回执确认框）', () => {
     return async (workspaceId: string) => ({ sessionId: `s-${workspaceId || 'main'}` })
   }
 })
+
+describe('项目切换（bug e046b3bf——hero 新会话面项目切换控件缺席）', () => {
+  const otherListPayload = {
+    isGit: true,
+    entries: [{ path: 'Z:/other', branch: 'master', worktreeName: 'other', isMain: true }],
+  }
+
+  function makeProjectDeps(overrides: Partial<HeroDeps> = {}): { deps: HeroDeps; h: Harness } {
+    const { deps, h } = makeDeps({
+      projects: [
+        { name: 'proj', path: 'Z:/proj' },
+        { name: 'other', path: 'Z:/other' },
+      ],
+      ...overrides,
+    })
+    h.rpcCalls.length = 0
+    deps.rpc.call = async <T>(channel: string, payload: unknown): Promise<RpcResult<T>> => {
+      h.rpcCalls.push([channel, payload])
+      if (channel === HERO_WORKTREE_LIST_CHANNEL) {
+        const root = (payload as { projectRoot?: string }).projectRoot
+        return { ok: true, data: root === 'Z:/other' ? otherListPayload : listPayload } as RpcResult<T>
+      }
+      return h.sessionCreateResult as RpcResult<T>
+    }
+    return { deps, h }
+  }
+
+  it('多项目在场：state 投影项目清单 + 选中项目', async () => {
+    const { deps } = makeProjectDeps()
+    const controller = createHeroController(deps)
+    await controller.load()
+    expect(controller.state().projects.map((p) => p.path)).toEqual(['Z:/proj', 'Z:/other'])
+    expect(controller.state().selectedProjectPath).toBe('Z:/proj')
+  })
+
+  it('切项目：pickProject 换锚重拉 worktree 清单，默认行 = 新项目主行（无当前分支锚）', async () => {
+    const { deps, h } = makeProjectDeps()
+    const controller = createHeroController(deps)
+    await controller.load()
+    controller.pickBranch('Z:/wt/fix') // 旧项目内先选他树——切项目应整体失效
+    await controller.pickProject('Z:/other')
+    expect(controller.state().selectedProjectPath).toBe('Z:/other')
+    expect(h.rpcCalls).toContainEqual([HERO_WORKTREE_LIST_CHANNEL, { projectRoot: 'Z:/other' }])
+    expect(controller.state().rows.map((r) => r.path)).toEqual(['Z:/other'])
+    expect(controller.state().defaultRow?.path).toBe('Z:/other')
+    expect(controller.state().selectedPath).toBe('Z:/other')
+    // 未知路径 no-op
+    await controller.pickProject('Z:/nope')
+    expect(controller.state().selectedProjectPath).toBe('Z:/other')
+  })
+
+  it('切项目后发送：forge 单门锚 = 新项目主树（WYSIWYG——显示什么传什么）', async () => {
+    const { deps, h } = makeProjectDeps({ workspaceId: undefined })
+    h.sessionCreateResult = { ok: true, data: { sessionId: 's-other', branch: 'master' } }
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.pickProject('Z:/other')
+    await controller.send('你好')
+    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/other' }])
+    expect(h.onOpenSession).toHaveBeenCalledWith('s-other')
+  })
+
+  it('切回原项目：currentWorktreePath 锚恢复（当前所在树语义）', async () => {
+    const { deps, h } = makeProjectDeps({ workspaceId: undefined, currentBranch: 'main', currentWorktreePath: 'Z:/wt/fix' })
+    const controller = createHeroController(deps)
+    await controller.load()
+    await controller.pickProject('Z:/other')
+    await controller.pickProject('Z:/proj')
+    await controller.send('你好')
+    // 首项目内当前所在树（非主行）——仍走透传径
+    expect(h.rpcCalls).toContainEqual([HERO_SESSION_CREATE_CHANNEL, { worktreePath: 'Z:/wt/fix' }])
+  })
+})

@@ -409,16 +409,34 @@ export function mount(root: HTMLElement): void {
   }
 
   async function enrichHero(): Promise<void> {
-    // worktree 清单锚（best-effort：projects-grouped 首项目 wsPath——隧道域同源可达；
+    // 项目清单 + worktree 锚（bug e046b3bf：projects-grouped 全项目清单注入 hero——
+    // ≥2 项 proj 徽标可点切换；首项目 wsPath 仍为默认锚。隧道域同源可达；
     // 官方 workspace.list 异源 + 隧道域 403，弃用）。缺席 = composer 只显当前分支。
     if (ctx.rpc === null) return
     try {
-      const result = await ctx.rpc.call<{ projects?: ReadonlyArray<{ wsPath?: unknown }> }>('forge:proxy/projects-grouped', {})
+      const result = await ctx.rpc.call<{ projects?: ReadonlyArray<{ wsPath?: unknown; name?: unknown; archived?: unknown }> }>('forge:proxy/projects-grouped', {})
       if (!result.ok) return
-      const path = result.data?.projects?.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')?.wsPath
+      const rawProjects = result.data?.projects ?? []
+      const path = rawProjects.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')?.wsPath
       if (typeof path !== 'string' || path === '' || rendered?.key !== 'hero') return
+      const projects = rawProjects
+        .filter((project) => typeof project?.wsPath === 'string' && project.wsPath !== '' && project.archived !== true)
+        .map((project) => ({
+          name: typeof project.name === 'string' && project.name !== '' ? project.name : (project.wsPath as string),
+          path: project.wsPath as string,
+        }))
+      const name = projects.find((project) => project.path === path)?.name
       rendered.root.remove()
-      rendered = { key: 'hero', root: createHeroView({ ...heroDeps(), projectRoot: path, suggest: (kind) => suggestItems(kind, path) }) }
+      rendered = {
+        key: 'hero',
+        root: createHeroView({
+          ...heroDeps(),
+          projectRoot: path,
+          projects,
+          projectName: name,
+          suggest: (kind, root) => suggestItems(kind, root ?? path),
+        }),
+      }
       container.appendChild(rendered.root)
     } catch {
       /* 清单锚缺席 = hero 降级形态（零清单直开） */

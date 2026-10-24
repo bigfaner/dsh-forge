@@ -1816,6 +1816,15 @@ body[data-ds-dark-theme] .hero .proj {
   background: #2c2c2e;
   color: #9aa0a6;
 }
+/* bug e046b3bf：多项目在场——proj 徽标可点（下拉尖角示可切换） */
+.hero .proj.tap {
+  cursor: pointer;
+  padding-right: 6px;
+}
+.hero .proj.tap::after {
+  content: '▾';
+  font-size: 10px;
+}
 .hero .logo {
   width: 64px;
   height: 64px;

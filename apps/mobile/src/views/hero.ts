@@ -51,6 +51,13 @@ export const HERO_MODES: readonly string[] = [...FORGE_MODES, ...Object.keys(BUI
 // ---------------------------------------------------------------------------
 
 /** bw-pop 分支行模型（WorktreeEntryDto 窄化——缺字段 fail-soft 剔行）。 */
+/** hero 项目行（projects-grouped 窄化——bug e046b3bf：新会话项目切换控件）。 */
+export interface HeroProjectRow {
+  readonly name: string
+  /** 项目根（wsPath——切项目即换 worktree 清单/建会话锚）。 */
+  readonly path: string
+}
+
 export interface HeroWorktreeRow {
   /** worktree 绝对路径（session-create worktreePath；主行 = 项目根） */
   readonly path: string
@@ -155,7 +162,7 @@ export function promptModeOf(mode: string): 'steer' | 'queue' {
 // 控制器（纯状态机——单测主战场，零 DOM；load() 为唯一显式 I/O 挂点）
 // ---------------------------------------------------------------------------
 
-export type HeroPop = 'branch' | 'mode' | null
+export type HeroPop = 'branch' | 'mode' | 'project' | null
 
 /** hero 可渲染状态快照（视图按快照重绘弹层/chip + 守卫确认框挂点）。 */
 export interface HeroState {
@@ -164,6 +171,10 @@ export interface HeroState {
   readonly defaultRow: HeroWorktreeRow | null
   /** 乐观选中行路径（null = 无清单/composer 只显当前分支名）。 */
   readonly selectedPath: string | null
+  /** 项目清单（bug e046b3bf：多项目在场 = proj 徽标可点切换；缺席 = 静态徽标单项目语义）。 */
+  readonly projects: readonly HeroProjectRow[]
+  /** 选中项目根（WYSIWYG：worktree 清单与建会话锚随显示选中走）。 */
+  readonly selectedProjectPath: string | null
   readonly mode: string
   readonly modes: readonly string[]
   /** 守卫拒绝回执（非 null = 视图须弹确认框——选回/仍要切换）。 */
@@ -185,6 +196,8 @@ export interface HeroDeps {
   /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
   readonly currentBranch?: string
   readonly currentWorktreePath?: string
+  /** 项目清单（bug e046b3bf：≥2 项 = proj 徽标可点开项目弹层切换）。 */
+  readonly projects?: readonly HeroProjectRow[]
   readonly workspaceId?: string
   /**
    * 新会话默认档（bug 38ab5a8d 用户裁决 2026-10-22）：hero 模型视图暂存的默认档——
@@ -205,6 +218,8 @@ export interface HeroController {
   load(): Promise<void>
   /** 乐观切换：点选即改选中态（零网络、零预检）。 */
   pickBranch(path: string): void
+  /** 切项目（bug e046b3bf）：换锚重拉 worktree 清单，默认行 = 新项目主行。 */
+  pickProject(path: string): Promise<void>
   pickMode(mode: string): void
   openPop(kind: Exclude<HeroPop, null>): void
   closePop(): void
@@ -224,6 +239,9 @@ export function createHeroController(deps: HeroDeps): HeroController {
   let rows: readonly HeroWorktreeRow[] = []
   let defaultRow: HeroWorktreeRow | null = null
   let selectedPath: string | null = null
+  // bug e046b3bf：项目锚可变（pickProject 换锚重拉清单）——初值 = deps.projectRoot
+  let projectRoot: string | undefined = deps.projectRoot
+  const projects: readonly HeroProjectRow[] = deps.projects ?? []
   let mode = HERO_DEFAULT_MODE
   let pop: HeroPop = null
   let pendingGuard: { readonly reason: string } | null = null
@@ -244,7 +262,10 @@ export function createHeroController(deps: HeroDeps): HeroController {
     if (deps.workspaceId !== undefined && deps.workspaceId !== '') {
       return deps.api.createSession(deps.workspaceId).then((created) => created.sessionId)
     }
-    const anchor = deps.currentWorktreePath ?? deps.projectRoot
+    const anchor =
+      pathKey(projectRoot ?? '') === pathKey(deps.projectRoot ?? '')
+        ? (deps.currentWorktreePath ?? projectRoot)
+        : projectRoot
     if (anchor === undefined || anchor === '') {
       return Promise.reject(new Error('无 workspaceId 且无主树锚——无法建会话（workspaceId/projectRoot 均缺席）'))
     }
@@ -267,6 +288,22 @@ export function createHeroController(deps: HeroDeps): HeroController {
     } catch {
       /* 下发失败不阻断进入会话 */
     }
+  }
+
+  /** worktree 清单装载（load/pickProject 共用；跨项目时无「当前所在」锚——默认行取主行）。 */
+  async function loadWorktrees(): Promise<void> {
+    const root = projectRoot
+    if (root === undefined || root === '') return
+    const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: root })
+    if (!result.ok) return
+    const list = coerceWorktreeList(result.data)
+    rows = list.rows
+    gitReady = list.isGit && rows.length > 0
+    if (!gitReady) selectedPath = null
+    const branch = pathKey(root) === pathKey(deps.projectRoot ?? '') ? deps.currentBranch : undefined
+    defaultRow = pickDefaultRow(rows, branch)
+    selectedPath = defaultRow?.path ?? null
+    emit()
   }
 
   async function enter(sessionId: string, text: string): Promise<void> {
@@ -293,7 +330,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   return {
-    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy, gitReady, error, draft }),
+    state: () => ({ pop, rows, defaultRow, selectedPath, projects, selectedProjectPath: projectRoot ?? null, mode, modes, pendingGuard, busy, gitReady, error, draft }),
 
     async load() {
       // 预设 roster 装载（用户裁决 2026-10-22：模式清单非固定——增减随 host。
@@ -318,16 +355,22 @@ export function createHeroController(deps: HeroDeps): HeroController {
       } catch {
         /* roster 不可达——回退内置四静态清单 */
       }
-      if (deps.projectRoot === undefined || deps.projectRoot === '') return
-      const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: deps.projectRoot })
-      if (!result.ok) return
-      const list = coerceWorktreeList(result.data)
-      rows = list.rows
-      gitReady = list.isGit && rows.length > 0
-      if (!gitReady) selectedPath = null
-      defaultRow = pickDefaultRow(rows, deps.currentBranch)
-      selectedPath = defaultRow?.path ?? null
-      emit()
+      if (projectRoot === undefined || projectRoot === '') return
+      await loadWorktrees()
+    },
+
+    async pickProject(path) {
+      if (!projects.some((row) => row.path === path)) return
+      if (pathKey(path) === pathKey(projectRoot ?? '')) {
+        pop = null
+        emit()
+        return
+      }
+      projectRoot = path
+      pop = null
+      rows = []
+      selectedPath = null
+      await loadWorktrees()
     },
 
     pickBranch(path) {
@@ -434,8 +477,9 @@ export interface HeroViewDeps extends HeroDeps {
   readonly projectName?: string
   readonly onOpenDrawer?: () => void
   readonly onOpenSettings?: () => void
-  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒）。 */
-  readonly suggest?: (kind: '/' | '@') => Promise<readonly { insert: string; label: string; description?: string }[]>
+  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒；projectRoot
+   *  随选中项目传——bug e046b3bf：@ 候选随切换项目走，不滞留首项目）。 */
+  readonly suggest?: (kind: '/' | '@', projectRoot?: string) => Promise<readonly { insert: string; label: string; description?: string }[]>
 }
 
 export function createHeroView(deps: HeroViewDeps): HTMLElement {
@@ -465,10 +509,20 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
 
   // ---- hero 主区（proj 徽标 / logo / slogan / 问候）----
   const hero = el('div', 'hero')
-  if (deps.projectName !== undefined && deps.projectName !== '') {
+  // bug e046b3bf：多项目在场 = proj 徽标可点开项目弹层切换（单项目/缺席 = 静态徽标）
+  const projectRows = deps.projects ?? []
+  const projectLabel =
+    projectRows.find((row) => row.path === deps.projectRoot)?.name ??
+    (projectRows.length > 0 ? projectRows[0]!.name : deps.projectName)
+  if (projectLabel !== undefined && projectLabel !== '') {
     const proj = el('div', 'proj')
     proj.innerHTML = '<svg class="ic" style="width:13px;height:13px"><use href="#i-folder"/></svg>'
-    proj.appendChild(document.createTextNode(deps.projectName))
+    proj.appendChild(document.createTextNode(projectLabel))
+    if (projectRows.length > 1) {
+      proj.classList.add('tap')
+      proj.title = '切换项目'
+      proj.addEventListener('click', () => controller.openPop('project'))
+    }
     hero.appendChild(proj)
   }
   hero.insertAdjacentHTML(
@@ -499,7 +553,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   const composer: ComposerHandle = createComposer({
     mode: HERO_DEFAULT_MODE,
     worktree: '',
-    suggest: deps.suggest,
+    suggest: (kind) => deps.suggest?.(kind, controller.state().selectedProjectPath ?? deps.projectRoot),
     // bug 53b5d685：文本留存视图侧——失败时回填（controller.send 无 composer 引用）
     onSend: (text) => {
       lastSentText = text
@@ -539,6 +593,15 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
       const addRow = el('div', 'mi add')
       addRow.appendChild(document.createTextNode('＋ 新建分支 / worktree…'))
       bwPop.appendChild(addRow)
+    } else if (state.pop === 'project') {
+      // bug e046b3bf：项目弹层——选中项目即换锚重拉 worktree 清单
+      for (const row of state.projects) {
+        const item = el('div', `mi${row.path === state.selectedProjectPath ? ' picked' : ''}`)
+        item.innerHTML = '<svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg>'
+        item.appendChild(document.createTextNode(row.name))
+        item.addEventListener('click', () => void controller.pickProject(row.path))
+        bwPop.appendChild(item)
+      }
     } else if (state.pop === 'mode') {
       for (const item of state.modes) {
         const row = el('div', `mi${item === state.mode ? ' picked' : ''}`)
