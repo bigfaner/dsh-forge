@@ -1,5 +1,6 @@
 // loop-event-delivery 1.12 —— 真机走查（web + mobile + 全链实测）。过程产物（不进 git）：
-// 真实凭据（主检出 userdata.dev/dsh-home/.credentials.yaml 同字节播种进隔离 dsh-home）驱动
+// 真实凭据（真 home {homedir}/.dsh/.credentials.yaml 全文播种进隔离 dsh-home——bug eb0aacc8
+// 起单一真源，禁 dev 实例陈旧副本；缺源留痕 skip）驱动
 // 真实派发循环（worker 子代理真实 spawn/complete/结算 finish-all），forge-settings 预写
 // remoteApproval.enabled → LAN 0.0.0.0 绑定 → chromium iPhone 上下文走 WiFi 同源面取证 mobile。
 // 断言面：
@@ -8,12 +9,13 @@
 //          turn-fold 零回归 + 运行期面板实时更新（行数递增且转录零新模型回合）。
 //   mobile = .pstream 进度流渲染（bar/轨行/统计条）+ 无刷新实时更新 + 双主题截图。
 //   全链 = 会话日志 post-hoc 按每回合新增 user/message 口径核对（meta.json 落 sessionId）。
-import { mkdirSync, mkdtempSync, copyFileSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 import { launchHost, closeApp } from '../support/launch.js'
+import { realCredentials, seedDshHome } from '../support/dogfood.js'
 import { registerProject } from '../support/rpc.js'
 import { createBridgeDriver } from '../support/replay/executor.js'
 import { CONVERSATION_CONTENT } from '../support/anchors.js'
@@ -28,8 +30,6 @@ const DEP_ROW = '[data-dswf-dep-row]'
 const DEP_JUMP = '[data-dswf-dep-jump]'
 const ENTRIES = '[data-dswf-event-entries]'
 const WALKTHROUGH = join(process.cwd(), '.forge', 'docs', 'proposals', 'loop-event-delivery', 'walkthrough', '1-12')
-/** 真实凭据源（主检出 dev 实例 dsh-home——同文件同字节播种，dogfood seedDshHome 先例） */
-const CRED_SRC = join(process.cwd(), '..', '..', '..', 'apps', 'host', 'userdata.dev', 'dsh-home', '.credentials.yaml')
 
 async function clipShot(page: Page, locator: ReturnType<Page['locator']>, path: string): Promise<void> {
   const box = await locator.boundingBox()
@@ -91,9 +91,11 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
   execFileSync('git', ['add', '.'], { cwd: wsDir })
   execFileSync('git', ['commit', '-q', '-m', 'fixture'], { cwd: wsDir })
   const userData = mkdtempSync(join(tmpdir(), 'dsh-walk112-ud-'))
-  // 真实凭据播种 + LAN 绑定设置
-  mkdirSync(join(userData, 'dsh-home'), { recursive: true })
-  copyFileSync(CRED_SRC, join(userData, 'dsh-home', '.credentials.yaml'))
+  // 真实凭据播种（bug eb0aacc8：源 = 真 home 全文含 refs 段，dogfood realCredentials 单源；
+  // 缺源 fail-soft = 留痕 skip 不伪造）+ LAN 绑定设置
+  const credentials = realCredentials()
+  test.skip(credentials === undefined, 'dogfood 前置缺口：真实凭据（~/.dsh/.credentials.yaml）不在场——留痕 skip')
+  seedDshHome(join(userData, 'dsh-home'), credentials as string)
   writeFileSync(join(userData, 'forge-settings.json'), JSON.stringify({ remoteApproval: { enabled: true } }), 'utf8')
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched

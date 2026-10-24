@@ -433,7 +433,8 @@ export function renderLoopCard(projection: Extract<Projection, { kind: 'loop-pro
   hd.appendChild(svgIcon('i-loop'))
   hd.appendChild(el('span', undefined, `任务循环 · ${projection.sourceSlug}`))
   hd.appendChild(statusBadge(projection.status))
-  const counts = Object.entries(projection.counts)
+  // fail-soft（bug b6a5f2bc）：counts 缺席不抛——计数段整体省略
+  const counts = Object.entries(projection.counts ?? {})
     .map(([key, value]) => `${key} ${value}`)
     .join(' · ')
   const bd = el('div', 'bd', `${projection.verb} ${projection.taskKey}${counts === '' ? '' : ` · ${counts}`}`)
