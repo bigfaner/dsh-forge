@@ -57,6 +57,17 @@ describe("ExpertListController（四态源）", () => {
     controller.stop();
   });
 
+  it("轮询间隔可配置（constructor pollMs 注入——非钉死 5s）", async () => {
+    const fetcher = fetcherOf(async () => []);
+    const controller = new ExpertListController(fetcher, 500);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetcher.calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetcher.calls).toBe(2);
+    controller.stop();
+  });
+
   it("D2：start 即拉一次，此后按 5s 周期轻轮询", async () => {
     const fetcher = fetcherOf(async () => []);
     const controller = new ExpertListController(fetcher);
@@ -124,5 +135,54 @@ describe("ExpertListController（四态源）", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(fetcher.calls).toBe(1);
     expect(controller.getSnapshot().phase.kind).toBe("loading");
+  });
+
+  it("零固定税：stop 后周期定时器不再触发（卸载即停）", async () => {
+    const fetcher = fetcherOf(async () => []);
+    const controller = new ExpertListController(fetcher);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetcher.calls).toBe(1);
+    controller.stop();
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(fetcher.calls).toBe(1);
+  });
+
+  it("连接重置自恢复：error 态下轮询持续在跑，连接恢复后自动转 ready（不需手动 retry）", async () => {
+    let failing = true;
+    const fetcher = fetcherOf(async () => {
+      if (failing) throw new Error("conn-reset");
+      return [];
+    });
+    const controller = new ExpertListController(fetcher);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(controller.getSnapshot().phase.kind).toBe("error");
+
+    failing = false;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(controller.getSnapshot().phase.kind).toBe("ready");
+    controller.stop();
+  });
+
+  it("连接重置自恢复：ready 态轮询失败静默，恢复后拾取新 entries（外部建档联动）", async () => {
+    let failing = false;
+    const fetcher = fetcherOf(async () => {
+      if (failing) throw new Error("conn-reset");
+      return failing ? [] : [entry("fresh")];
+    });
+    const controller = new ExpertListController(fetcher);
+    controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(controller.getSnapshot().entries.map((e) => e.name)).toEqual(["fresh"]);
+
+    failing = true;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(controller.getSnapshot().phase.kind).toBe("ready");
+
+    failing = false;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(controller.getSnapshot().entries.map((e) => e.name)).toEqual(["fresh"]);
+    controller.stop();
   });
 });
