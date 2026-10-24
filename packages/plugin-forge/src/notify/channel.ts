@@ -5,8 +5,9 @@
 // 结束」的机械落点：主会话删除/关闭等注入故障静默降级（异常不外抛不影响调用方），
 // 循环正确性只依赖宿主事件。
 //
-// 通道分流归属（decisions #28）：notice = 常规进行事件（样例 ①-⑫）；followup = 终局
-// 事件（样例 ⑬-⑰，每循环 1–2 条）。路由表见 templates.ts SCENARIOS。
+// 通道分流归属（decisions #28）：notice = 常规进行事件（样例 ①-⑨⑪⑫）；followup = 终局
+// 事件（样例 ⑩⑬-⑰，每循环 1–2 条——⑩ 无法自动处理需人工裁决）。路由表见 templates.ts
+// SCENARIOS。
 //
 // 1.18 AD-4 循环哨兵：followup 径携带可选 ForgeLoopNarrationMeta（task/state）——faces.ts
 // 铸发 source.kind='forge-loop' 消息时的结构化字段载体；notice/settle 径归因形态不变。

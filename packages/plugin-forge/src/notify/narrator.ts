@@ -8,7 +8,7 @@ import type { NarrationChannel } from './channel.js'
 import { createIncidentStore } from './incident-log.js'
 import type { IncidentInput, IncidentStore } from './incident-log.js'
 import { localDateTimeLine, summarizeReason } from './skeleton.js'
-import { renderHeadline, renderNarrative } from './templates.js'
+import { renderHeadline, renderNarrative, SCENARIOS } from './templates.js'
 import type { NarrativePayloadMap } from './templates.js'
 import type { ForgeLoopNarrationMeta } from '../forge-loop-source.js'
 
@@ -101,12 +101,12 @@ export function createNarrator(deps: NarratorDeps): Narrator {
         ...(incidentPath !== undefined ? { incidentPath } : {}),
       } as NarrativePayloadMap[S]
       const text = renderNarrative(scenario, payload)
-      // ⑩ blocked-ask-user 是终局事件（无法自动处理→人工裁决）：走 followup 新回合唤醒主
-      // agent——阻塞上下文进会话触发分析（2026-10-13 用户定罪「收到阻塞上下文未触发主
-      // agent 分析」；与 ⑬-⑰ 终局族通道对齐）；裁决仍走问询 UI（decisions #16 不变——
-      // 分析入会话，裁决不经会话）。⑦-⑨ 循环中段场景保持 notice 零模型注入（fix 链续领/
-      // 外部等待，循环未终——不逐事件烧模型回合）。
-      if (scenario === 'blocked-ask-user') {
+      // 通道路由单源 = SCENARIOS 表（templates.ts）——表改通道即改投递径，零硬编码场景 id。
+      // ⑩ blocked-ask-user = followup（无法自动处理→人工裁决）：新回合唤醒主 agent——阻塞
+      // 上下文进会话触发分析（2026-10-13 用户定罪「收到阻塞上下文未触发主 agent 分析」）；
+      // 裁决仍走问询 UI（decisions #16 不变——分析入会话，裁决不经会话）。⑦-⑨ 循环中段
+      // 场景 notice 零模型注入（fix 链续领/外部等待，循环未终——不逐事件烧模型回合）。
+      if (SCENARIOS[scenario].channel === 'followup') {
         await safe.followup(sessionId, `${text}\n${localDateTimeLine()}`, { task: meta.taskKey, state: scenario })
         return
       }
