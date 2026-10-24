@@ -23,6 +23,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { TunnelManager, type TunnelDeps, type TunnelState } from '../tunnel/index.js'
+import { assembleTunnel, type TunnelAssemblyHandle } from './tunnel-assembly.js'
 import { createChildProcessHandle } from '../tunnel/process-handle.js'
 import {
   approvalWaterfallAnswer,
@@ -1098,103 +1099,50 @@ async function main(): Promise<void> {
         },
       })
       remotePairUrl = remotePairUrlOf(lanIpv4, pairPort, pairGrant.token)
-      // dsh-mobile-tunnel：隧道管理器装配（互联网连接模式——隧道 URL 与 LAN remotePairUrl
-      // 并存同一 /pair 缝）。TunnelManager 状态事件 → tunnel 消息推送（run.ts 原位重建
-      // manifest 隧道面：激活/换线即换新，关闭/失效即撤除——WiFi 面不受影响）；token 轮换
-      // → 隧道 URL 换签重推（Pinggy TTL 读数随 pair 旋转刷新——fix-7 pair 通道同形态）。
+      // dsh-mobile-tunnel：隧道段装配（互联网连接模式——隧道 URL 与 LAN remotePairUrl
+      // 并存同一 /pair 缝）。bug ebadf4ad（Root cause：boot 装配后无条件自启隧道——用户
+      // 从未打开远程控制界面也在后台拉起 cloudflared/Pinggy 并反复自愈重试）：装配零副
+      // 作用，隧道只在用户打开远程控制界面（互联网 tab ensure → tunnel-toggle）时按需
+      // 建立；token 轮换换签经 pairUrlOf 闭包读 currentPairToken（装配段不持 mutable 锚）。
       let tunnelManager: TunnelManager | undefined
-      const sendTunnelState = (state: TunnelState | undefined): void => {
-        if (state === undefined) {
-          send({ type: 'tunnel' }) // 零载荷 = 关闭/失效撤除面
-          return
-        }
-        if (state.remainingTtlMs === 0) {
-          // fix-19 ⑦（Root cause：remainingTtlMs===0 唯一来源 = TunnelManager 自动兜底双链路
-          // 皆败的死亡 emit——即官方 :1188 unexpectedlyClosed 语义）：意外死亡撤面事件携位，
-          // UI 一次性守卫（reopeningDeadPinggy 形态）据此自动重开隧道。
-          send({
-            type: 'tunnel',
-            tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
-            tunnelProvider: state.provider,
-            unexpectedlyClosed: true,
-          })
-          return
-        }
-        send({
-          type: 'tunnel',
-          tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
-          tunnelProvider: state.provider,
-          ...(state.remainingTtlMs !== undefined
-            ? { tunnelExpiresAt: Date.now() + state.remainingTtlMs }
-            : {}),
-        })
-      }
+      let tunnelHandle: TunnelAssemblyHandle | undefined
+      let tunnelPushState: (state?: TunnelState) => void = () => {}
       try {
-        tunnelManager = new TunnelManager(createNodeTunnelDeps(), {
+        const tunnel = assembleTunnel({
+          deps: createNodeTunnelDeps(),
           localPort: pairPort,
           // bug be04ce95：dsh-desktop 已下载的 cloudflared 作种子（sha256 对 pin 清单校验
           // 一致才拷贝进产品自身缓存——非运行期引用，用户无 dsh 时纯下载链自洽）
           externalSeeds: officialCloudflaredSeedCandidates(),
-          // 韧性状态机诊断行（死亡原因/重试失败/双链皆败撤面）→ harness.log 既有链
           diag: (line) => diag(line),
+          send: (message) => send(message as ChildToMainMessage),
+          pairUrlOf: (tunnelUrl) => tunnelPairUrlOf(tunnelUrl, currentPairToken),
         })
-        tunnelManager.onEvent(sendTunnelState)
-        void tunnelManager
-          .start()
-          .then(() => diag(`[pair-diag] tunnel start ok（双链路任一建立成功）`))
-          .catch((cause) => {
-            diag(`[pair-diag] tunnel start 失败（双链路皆败 → 撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
-            sendTunnelState(undefined)
-          })
+        tunnelManager = tunnel.manager
+        tunnelHandle = tunnel
+        tunnelPushState = tunnel.refresh
       } catch (cause) {
         tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
         diag(`[pair-diag] tunnel manager 装配失败：${cause instanceof Error ? cause.message : String(cause)}`)
       }
       tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
       // fix-17 ②：tab 切换重连缝——隧道离线（无活动句柄）即触发建立；在线 = 重推当前
-      // 状态（读数刷新面）。start/stop/fallback 语义全在 TunnelManager，此处只装配触发。
+      // 状态（读数刷新面）。start/stop/fallback 语义全在隧道段/TunnelManager，此处只装配触发。
       tunnelToggle = () => {
-        if (tunnelManager === undefined) {
+        if (tunnelHandle === undefined) {
           diag(`[pair-diag] tunnel toggle 落空：管理器未装配`)
           return
         }
-        if (tunnelManager.state === undefined) {
-          diag(`[pair-diag] tunnel toggle → start（当前无活动链路）`)
-          void tunnelManager.start()
-            .then((state) => {
-              diag(`[pair-diag] tunnel toggle start ok（${state.provider}）`)
-              sendTunnelState(state)
-            })
-            .catch((cause) => {
-              diag(`[pair-diag] tunnel toggle start 失败（撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
-              sendTunnelState(undefined)
-            })
-          return
-        }
-        diag(`[pair-diag] tunnel toggle → 重推当前状态（读数刷新）`)
-        sendTunnelState(tunnelManager.state)
+        tunnelHandle.toggle()
       }
       // fix-18：显式换线缝——TunnelManager.fallback（停旧链起新链；状态事件/回推经
       // onEvent + then 双面送达，UI 遮罩随 switching 收敛）
       tunnelFallback = () => {
-        if (tunnelManager === undefined) {
+        if (tunnelHandle === undefined) {
           diag(`[pair-diag] tunnel fallback 落空：管理器未装配`)
           return
         }
-        diag(`[pair-diag] tunnel fallback 触发（停当前链路起另一条）`)
-        void tunnelManager.fallback()
-          .then((state) => {
-            diag(`[pair-diag] tunnel fallback 收敛（新链路建立）`)
-            sendTunnelState(state)
-          })
-          .catch((cause) => {
-            // bug cf0db7e5 CDP 回归实证竞态：fallback 的 startPinggy 捕获窗口内并发 ensure
-            // 已建新链——catch 无条件撤面会把活链路面抹掉（ABSENT 永挂）。仅当此刻确无
-            // 活动链路才撤面；有则回推活面。
-            const live = tunnelManager.state
-            diag(`[pair-diag] tunnel fallback 失败（${cause instanceof Error ? cause.message : String(cause)}）——${live !== undefined ? '并发链路在场，回推活面' : '无活动链路，撤面'}`)
-            sendTunnelState(live)
-          })
+        tunnelHandle.fallback()
       }
       // fix-26：pair 消息 PIN 面统一构造（durable = PIN + 长效位、零 TTL；临时 = PIN + TTL——
       // UI hint 双态单源：长效无倒计时、临时实时秒倒计时）
@@ -1219,8 +1167,8 @@ async function main(): Promise<void> {
           void tunnelManager
             .stop()
             .then(() => tunnelManager?.start())
-            .then(sendTunnelState)
-            .catch(() => sendTunnelState(undefined))
+            .then((state) => tunnelPushState(state))
+            .catch(() => tunnelPushState(undefined))
         }
         sendPairState(rotatedToken, rotated)
       }
@@ -1242,7 +1190,7 @@ async function main(): Promise<void> {
         // fix-26：长效态 pinIssuer.rotate 零换签——PIN 面保持 durable 位不携 TTL）
         const rotatedPin = pinIssuer.rotate()
         sendPairState(rotated, rotatedPin)
-        sendTunnelState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
+        tunnelPushState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
       }, PAIRING_TTL_MS)
       rotationTimer.unref?.() // 轮换器不阻进程退出（shutdown 面归 ProcessShutdown 既有链）
     } catch {
