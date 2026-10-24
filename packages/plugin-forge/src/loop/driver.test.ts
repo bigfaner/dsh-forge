@@ -763,6 +763,9 @@ describe('adopt 重入与启动分类（①②③）', () => {
     expect(built.calls[0]?.text).toContain('接续执行 — 任务 2.7 正在执行，等它完成后继续')
     expect(built.calls.at(-1)?.text).toContain('结束（等待超时）')
     expect(built.calls.at(-1)?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
+    // 1.5 场景码：③ 启动接续在飞 + ⑮ 等待超时（循环级）
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: 'startup/resume-inflight', taskKey: 'feat-x/2.7', taskTitle: 'Task 2.7' })
+    expect(built.progressCalls.find((e) => e.verb === 'timeout')).toMatchObject({ verb: 'timeout', status: 'blocked', scenario: 'loop/timeout', note: '等待超时' })
   })
 
   it('干净任务源：① 启动从头执行（pending 计数）', async () => {
@@ -838,6 +841,8 @@ describe('blocked 结算分支（图 C）', () => {
     })
     expect(suspended.since).toEqual(expect.any(Number))
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
+    // 1.5 场景码：⑩ 阻塞（循环无法自行处理——无进展硬停）
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/ask-user', taskKey: 'feat-x/2.5', note: 'tests hang on flaky selector' })
     await built.driver.stop({ ownerSessionId: OWNER }) // 断言后收口
   })
 
@@ -1015,6 +1020,8 @@ describe('blocked 结算分支（图 C）', () => {
     expect(blockedNotice?.text).toContain('fix-2')
     // 零 blocked-ask-user 挂起（静默径——挂起为 deadlock 族）
     expect(built.driver.activeOf(OWNER)?.suspended?.escalation.kind).toBe('deadlock')
+    // 1.5 场景码：⑦ 阻塞（已带修复任务——静默 notify 同点）
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/with-fix', taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', workerSessionId: 'worker-1' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
@@ -1052,6 +1059,8 @@ describe('blocked 结算分支（图 C）', () => {
     // ⑧ 阻塞（已自动分析并创建修复任务——用户视角文案，机制词零出现）
     const fixed = built.calls.find((c) => c.text.includes('[forge·自动处理]'))
     expect(fixed?.text).toContain('已自动分析原因并创建修复任务 fix-2（修选择器等待），继续执行')
+    // 1.5 场景码：⑧ blocked/auto-fixed
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/auto-fixed', taskKey: 'feat-x/2.5' })
   })
 
   it('blocked 无 follow-up + 处置钩子 split-remainder：addTask(blockSource:false) 继任落账 + 源任务保持 blocked + ⑧b 叙述 → 续领', async () => {
@@ -1089,6 +1098,8 @@ describe('blocked 结算分支（图 C）', () => {
     expect(split?.text).not.toContain('处置历史')
     // 循环续领：分割后继续 claim（pending 继任路径在场——池态判词不误报）
     expect(built.h.claimInputs.length).toBeGreaterThanOrEqual(2)
+    // 1.5 场景码：⑧b blocked/split
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/split', taskKey: 'feat-x/2.5' })
   })
 
   it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领（后池 blocked → deadlock 挂起，3b）', async () => {
@@ -1688,7 +1699,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(stoppedNotice?.wakeup).toBe(true)
     // ⑰ 双面落会话日志（AC）：forge/progress stopped 事件载 inFlightTaskKey（与结算消息同事实两面）
     const stopProgress = built.progressCalls.find((e) => e.verb === 'stop')
-    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5' })
+    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', scenario: 'loop/stopped' })
     // 登记注销 + 再停 = no-op
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
@@ -1978,6 +1989,72 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
     const halted = built.calls.find((c) => c.method === 'settle')
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
     expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
+    // 1.5 场景码：⑬ loop/halt（循环级进度事件）
+    expect(built.progressCalls.find((e) => e.verb === 'halt')).toMatchObject({ verb: 'halt', status: 'blocked', scenario: 'loop/halt', note: HALTED_REASON })
+  })
+})
+
+// ─────────────────────────── 1.5 发射点全场景覆盖（retry 族场景码） ───────────────────────────
+
+describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径进度事件）', () => {
+  it('⑪ spawn 失败退避重试：retry/spawn-failed（任务标题 + 失败原因入 note）——退避后重试成功续跑', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) throw new Error('subagent factory rejected')
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
+      verb: 'retry',
+      status: 'blocked',
+      scenario: 'retry/spawn-failed',
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+    })
+    const retryEvt = built.progressCalls.find((e) => e.verb === 'retry')
+    expect(retryEvt !== undefined && retryEvt.note?.includes('subagent factory rejected')).toBe(true)
+  })
+
+  it('⑫ worker 异常退出重入：retry/worker-aborted（worker 会话 id + 原因入 note）——重入后成功收口', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    let calls = 0
+    built.spawn.setBehavior(async (n) => {
+      calls += 1
+      if (calls === 1) return { workerSessionId: `worker-${n}`, result: Promise.reject(new Error('worker crashed mid-run')), dispose: async () => {} }
+      return { workerSessionId: `worker-${n}`, result: Promise.resolve({ stopReason: 'end_turn', output: 'done' }), dispose: async () => {} }
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
+      verb: 'retry',
+      status: 'blocked',
+      scenario: 'retry/worker-aborted',
+      taskKey: 'feat-x/2.5',
+      workerSessionId: 'worker-1',
+    })
   })
 })
 
@@ -2045,26 +2122,41 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     const before = Date.now()
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.progressCalls).toHaveLength(2)
-    const [claimEvt, settleEvt] = built.progressCalls
-    // 领取点：动词 claim + running + 任务键 + 计数快照 + 时间戳界内
+    expect(built.progressCalls).toHaveLength(4)
+    const [startupEvt, claimEvt, settleEvt] = built.progressCalls
+    // 启动点（1.5——① startup/from-scratch）：循环级事件，零任务键
+    expect(startupEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'startup',
+      status: 'running',
+      scenario: 'startup/from-scratch',
+      at: expect.any(Number),
+    })
+    // 领取点：动词 claim + running + 任务键 + 任务标题 + 计数快照 + 场景码 + 时间戳界内
     expect(claimEvt).toEqual({
       sourceSlug: 'feat-x',
       verb: 'claim',
       status: 'running',
+      scenario: 'claim/new',
       taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
       counts: { pending: 0, running: 1, done: 0 },
       at: expect.any(Number),
     })
     expect(claimEvt!.at).toBeGreaterThanOrEqual(before)
-    // 结算点：动词 settle + completed + 同任务键（零计数——claim 后快照过期不虚报）
+    // 结算点：动词 settle + completed + 任务键 + 任务标题 + worker 会话 id + ⑥ task/complete 场景码
     expect(settleEvt).toEqual({
       sourceSlug: 'feat-x',
       verb: 'settle',
       status: 'completed',
+      scenario: 'task/complete',
       taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
       at: expect.any(Number),
     })
+    // ⑯ 结束（全部完成）——循环级进度事件（1.5）
+    expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all' })
     // 纯 JSON（Session.append 契约——序列化往返无损）
     expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
   })
@@ -2083,7 +2175,8 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.progressCalls[0]).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5', scenario: 'claim/interrupted', taskTitle: 'Implement the thing' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ verb: 'startup', status: 'running', scenario: 'startup/resume-stopped', taskKey: 'feat-x/2.5', taskTitle: 'Task 2.5' })
   })
 
   it('停止真化：stop 面 in-flight → interrupted（状态迁移点——动词 stop + 中断任务键）', async () => {
@@ -2097,7 +2190,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     )
     await built.driver.stop({ ownerSessionId: OWNER })
     expect(built.progressCalls.filter((e) => e.verb === 'stop')).toEqual([
-      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', at: expect.any(Number) },
+      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', scenario: 'loop/stopped', taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', at: expect.any(Number) },
     ])
   })
 
@@ -2116,7 +2209,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
-    expect(built.progressCalls[1]).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle')).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5', scenario: 'blocked/wait-external', note: '等待 feat-y 先完成' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
