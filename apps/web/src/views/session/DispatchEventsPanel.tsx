@@ -40,6 +40,7 @@ import {
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { timeLabelZh } from '../../components/index.js'
+import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
 import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '../sidebar/sidebar-model.js'
 import './dispatch-events-panel.css'
 
@@ -82,8 +83,8 @@ export function isDispatchEventEntry(value: unknown): value is DispatchEventEntr
   return true
 }
 
-/** 投影键（1.6 fold unit 注册面单源——mobile progress.ts 同值） */
-export const DISPATCH_EVENTS_PROJECTION_KEY = 'forge-dispatch-events'
+/** 投影键（contracts SESSION_PROJECTION_KEYS 单源——mobile progress.ts 同源消费） */
+export const DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS.dispatchEvents
 
 /** 账本行 projectionValues 按键窄读 forge-dispatch-events 视图（键缺席/形状漂移 = undefined；bug e56d8351——调用点传映射本体，函数内按键取值） */
 export function dispatchEventsOf(values: unknown): DispatchEventsView | undefined {

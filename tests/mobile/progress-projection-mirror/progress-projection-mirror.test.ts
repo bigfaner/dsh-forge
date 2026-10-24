@@ -34,7 +34,9 @@ describe('step-2 mobile RPC 全量键读取（零传输改动）', () => {
   it('success（既有 session-projections 通道窄读 forge-dispatch-events 键）', async () => {
     expectMobileFile('views/progress.ts')
     expect(mobileSrc('views/progress.ts')).toMatch(/forge:proxy\/session-projections/)
-    expect(mobileSrc('views/progress.ts')).toMatch(DISPATCH_EVENTS_PROJECTION_KEY)
+    // 键单源（1.19）：字面量收敛到 contracts SESSION_PROJECTION_KEYS——mobile 面以常量名消费
+    expect(mobileSrc('views/progress.ts')).toMatch(/DISPATCH_EVENTS_PROJECTION_KEY/)
+    expect(mobileSrc('views/progress.ts')).not.toMatch(/'forge-dispatch-events'/)
     // 值收敛 fail-soft：非法形状 = undefined（诚实空态）
     expect(coerceDispatchEvents({ entries: [], total: 0 })).toEqual({ entries: [], total: 0 })
     expect(coerceDispatchEvents('x')).toBeUndefined()

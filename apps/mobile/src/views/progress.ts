@@ -12,14 +12,15 @@
  */
 import type { RemoteRpc } from '../core/rpc.ts'
 import { PROXY_SESSION_PROJECTIONS_CHANNEL } from '../core/rpc.ts'
+import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
 import { el } from '../widgets/msg-cards.ts'
 
 // ---------------------------------------------------------------------------
 // 纯函数：投影值收敛（fail-soft——键缺席/形状非法 = undefined，视图诚实降级）
 // ---------------------------------------------------------------------------
 
-/** 投影键（host dispatch-events.ts FORGE_DISPATCH_EVENTS_PROJECTION_KEY 字面量同源镜像） */
-export const DISPATCH_EVENTS_PROJECTION_KEY = 'forge-dispatch-events'
+/** 投影键（contracts SESSION_PROJECTION_KEYS 单源——host fold 与 web 面同源） */
+export const DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS.dispatchEvents
 
 /** 窗口内单条进度事件条目（host ForgeProgressEventData 载荷切片——plain JSON） */
 export interface ProgressEntry {

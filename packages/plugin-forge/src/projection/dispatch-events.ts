@@ -15,12 +15,13 @@
 //   - state 规模上界：entries 只保留最近 N=200 条 + total 全量计数（更早历史本次不回看，
 //     proposal 边界 6——日志恒为权威）；
 //   - view = { entries 窗口, total 总数 }（client 可见整值，plain JSON）。
+import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
 import { FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from '../progress/index.js'
 import type { ForgeProgressEventData } from '../progress/index.js'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 
-/** 投影键（SessionProjectionMap 合并键 = GUI 账本行 projectionValues 窄读键，字面量同源） */
-export const FORGE_DISPATCH_EVENTS_PROJECTION_KEY = 'forge-dispatch-events'
+/** 投影键（SessionProjectionMap 合并键 = GUI 账本行 projectionValues 窄读键——contracts 单源） */
+export const FORGE_DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS.dispatchEvents
 
 /** 折叠语义版本（持久化投影缓存失配判据——首版 1） */
 export const FORGE_DISPATCH_EVENTS_STATE_VERSION = 1

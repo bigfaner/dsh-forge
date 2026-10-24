@@ -246,6 +246,10 @@ describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口�
       await throwChannel.send('s-1', '第二条')
       expect(registry.sent).toHaveLength(2)
 
+      // 评审备忘：激活失败走 registry 兜底 = 陈旧把手风险 → 必达告警留痕（激活成功径零日志）
+      const staleWarns = warnSpy.mock.calls.filter((c) => String(c[0]).includes('registry 兜底'))
+      expect(staleWarns).toHaveLength(2)
+
       const none = adaptAgentNarrationChannel({ get: () => undefined }, async () => undefined)
       await expect(none.send('s-gone', 'x')).resolves.toBeUndefined()
       await expect(none.send('s-gone', '结算文本', { form: 'settle', wakeup: true })).resolves.toBeUndefined()

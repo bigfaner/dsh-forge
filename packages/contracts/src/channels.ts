@@ -235,3 +235,13 @@ export const FORGE_EVENT_CHANNELS = {
 } as const
 
 export type ForgeEventChannel = (typeof FORGE_EVENT_CHANNELS)[keyof typeof FORGE_EVENT_CHANNELS]
+
+/**
+ * 会话投影键（loop-event-delivery 1.19 单源——sessionProjections 注册表 fold/client 键）。
+ * host 折叠（plugin-forge dispatch-events）与 web/mobile 消费面共享本常量，双份字面量镜像消除。
+ */
+export const SESSION_PROJECTION_KEYS = {
+  dispatchEvents: 'forge-dispatch-events',
+} as const
+
+export type SessionProjectionKey = (typeof SESSION_PROJECTION_KEYS)[keyof typeof SESSION_PROJECTION_KEYS]

@@ -423,15 +423,27 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
     async send(sessionId: string, text: string, options: NarrationSendOptions = {}): Promise<void> {
       const form = options.form ?? 'notice'
       let target: SendAgentFace | undefined
+      let activationFailed = false
       if (activate !== undefined) {
         try {
           const activated = (await activate(sessionId)) as SendAgentFace | undefined
           if (typeof activated?.send === 'function') target = activated
+          else activationFailed = true
         } catch (cause) {
+          activationFailed = true
           console.warn(`forge narration activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
         }
       }
-      if (target === undefined) target = agents.get(sessionId) as SendAgentFace | undefined
+      if (target === undefined) {
+        target = agents.get(sessionId) as SendAgentFace | undefined
+        // 激活失败走 registry 兜底：注册表可持陈旧把手（send 面在场而运行时内件已死，
+        // 调用静默无效即零落库——bug 8d1a18bd 同源）——必达告警留痕（激活成功径零日志）。
+        if (activationFailed && typeof target?.send === 'function') {
+          console.warn(
+            `[forge·必达告警] 激活失败走 registry 兜底（会话 ${sessionId}）——注册表把手可能陈旧，send 静默无效即零落库。`,
+          )
+        }
+      }
       if (typeof target?.send !== 'function') {
         if (form === 'settle') warnSettleUndelivered(sessionId, text, '已失活/无活根或 send 面缺席')
         return

@@ -15,6 +15,9 @@ import { renderIndexInjections } from '@deepseek-ai/dsh-host-webserver'
 // mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
+// loop-event-delivery 1.19：ctx.sessionProjections 具名服务类型（disc-1 同款配方——
+// type-only import 官方包拉入 cordis Context 增强 + 运行期存在性检查承担 fail-soft）
+import type {} from '@deepseek-ai/dsh-session-projection'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn as nodeSpawn } from 'node:child_process'
@@ -989,11 +992,17 @@ async function main(): Promise<void> {
                 // onChanged 帧源接进同一订阅-扇出（subscribeOfficialEvents 同径，零新物理
                 // 通道）。载荷 {sessionId, key, seq}——mobile 据此重拉 session-projections
                 // RPC（值恒走 RPC 全量键读取，帧只当失效信号）。注册表缺席 fail-soft 零镜像。
+                // 1.19 取法收口（disc-1 同款配方）：ctx.sessionProjections 具名服务取法
+                // （type-only import 官方包拉入 Context 增强）+ 运行期存在性检查承担 fail-soft。
                 let projectionFace: Parameters<typeof subscribeProjectionMirror>[0]
                 try {
-                  projectionFace = (ctx as unknown as { reflect?: { get?: (name: string) => unknown } }).reflect?.get?.('sessionProjections') as
-                    | Parameters<typeof subscribeProjectionMirror>[0]
+                  const registry = ctx.sessionProjections as
+                    | { onChanged?: unknown }
                     | undefined
+                  projectionFace =
+                    registry !== undefined && registry !== null && typeof registry.onChanged === 'function'
+                      ? (registry as Parameters<typeof subscribeProjectionMirror>[0])
+                      : undefined
                 } catch {
                   projectionFace = undefined
                 }
