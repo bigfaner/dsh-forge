@@ -29,7 +29,7 @@ describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）
 
   it('extraResources 自 release/staging 显式 filter 嵌入（root 级 node_modules 剔除规避 + 内容边界自证）', () => {
     expect(config.extraResources).toEqual([
-      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
+      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'mobile-dist/**', 'icon.png', 'staging-manifest.json'] },
     ])
   })
 
@@ -197,6 +197,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'app/package.json',
     ]
     for (const rel of must) expect(KEY_FILES, `关键文件口径缺席 ${rel}`).toContain(rel)
+  })
+
+  it('bug: 打包产物必含 mobile-dist——/remote 移动视图打包形态 dist 根 = {resources}/mobile-dist（resolveMobileDistDir），物化/口径/filter 任一缺席即 mobile-dist-missing 提示页', () => {
+    expect(KEY_FILES, '关键文件口径缺席 mobile-dist/index.html（--check 不可达）').toContain('mobile-dist/index.html')
   })
 
   it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步）', () => {
