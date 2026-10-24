@@ -6,7 +6,7 @@
 // 行条件化——打包形态暂不含知识库插件，knowledgeRow 门控注行；dev 形态在场才注）。产品裁决
 // （2026-10-09：标准模式零 forge 面）：全局 plugin-forge 行与全局 skill-filesystem 行
 // 废除——forge 工具/技能仅远征/突击预设组合携带（预设行内增量行 + customSkillDirs）。
-// M3 3.7 预设装配：registry default 覆写 + 远征/突击双预设行每启注行（物化分叉——
+// M3 3.7 预设装配：registry default 覆写 + 远征/突击/HR 预设行每启注行（物化分叉——
 // customSkillDirs 当形态绝对路径；!!js 全形态死刑零表达式残留；缺席 fail-soft 不注行）。
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -234,7 +234,7 @@ describe('凭据桥官方缝 pin（fix-26）', () => {
 
 describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const base = { stateDb: '/x/s.db', bindingsFile: '/x/b.json' }
-  // 真实三底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
+  // 真实四底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
   const patches = loadPresetPatches()!
   const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string } = {}) => ({
     ...base,
@@ -249,7 +249,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     },
   })
 
-  it('双预设上场（AC6 形制）：registry default = 突击覆写（bug 2ba146d8）+ 预设声明行（中文 name 直出·order 1/2）', () => {
+  it('三预设上场（AC6 形制）：registry default = 突击覆写（bug 2ba146d8）+ 预设声明行（中文 name 直出·order 1/2/3）', () => {
     const text = renderBootOverlay(withPresets())
     expect(text).toContain('- id: agent-preset-registry\n  config:\n    default: blitz')
     expect(text).toContain("    - id: preset-expedition\n      name: '@deepseek-ai/dsh-agent-preset'")
@@ -258,8 +258,12 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain("    - id: preset-blitz\n      name: '@deepseek-ai/dsh-agent-preset'")
     expect(text).toContain('        id: blitz\n        name: 突击模式')
     expect(text).toContain('        order: 2')
-    // 远征/突击顺序 = 声明序（registry 菜单 order 排序数据面）
+    expect(text).toContain("    - id: preset-hr\n      name: '@deepseek-ai/dsh-agent-preset'")
+    expect(text).toContain('        id: hr\n        name: HR · 专家管理')
+    expect(text).toContain('        order: 3')
+    // 预设顺序 = 声明序（registry 菜单 order 排序数据面）
     expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
+    expect(text.indexOf('preset-blitz')).toBeLessThan(text.indexOf('preset-hr'))
   })
 
   it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core,blitz]', () => {

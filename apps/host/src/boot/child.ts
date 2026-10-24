@@ -319,7 +319,7 @@ async function main(): Promise<void> {
   const profile = dshAppBoot.loadProfileDirectory('dsh', options.profileDir, options.installAnchor)
   dshAppBoot.reportSkippedBundles('dsh', profile)
   // 产品插件行 config 装配期注入（用户层之后应用的 patchFiles 叠层——见 overlay.ts 动机）
-  // M3 3.7 预设装配：三底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
+  // M3 3.7 预设装配：四底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
   // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
   // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
   // skill-filesystem 行（forge 技能/工具仅预设组合，标准模式零 forge 面）。

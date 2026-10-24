@@ -23,7 +23,7 @@
 // installAnchor BFS，故物化锚仍经本缝注入）。
 // M3 3.8：core 行增 settingsFile（设置域存储——{userData}/forge-settings.json，守卫基准
 // = dirname(dbFile) 同域；缺席 = forgeSettings 服务降级缺席，六服务形制不动）。
-// M3 3.7 预设装配：cordis/expedition/blitz 三底稿（apps/host/src/profile/presets/）每启
+// M3 3.7 预设装配：cordis/expedition/blitz/hr 四底稿（apps/host/src/profile/presets/）每启
 // 注行（行所有权 = 产品工件——用户不可经 UI 改组合；ui-settings 开关行走首启预置让位
 // 用户，两径不混）。customSkillDirs 物化分叉：占位符解析为当形态绝对路径（dev = repo /
 // packaged = resources 物化路径）；!!js 全形态死刑（spike S5-4 判决反转）——物化输出零
@@ -70,7 +70,7 @@ export interface BootOverlayInput {
   readonly gitWorktreeRow?: boolean
   /** mobile ask 桥插件行（bug f73315a1——缺席不注行 = 零挂接语义）。 */
   readonly mobileBridgeRow?: boolean
-  /** M3 预设装配（3.7）：三底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
+  /** M3 预设装配（3.7）：四底稿 + 技能目录物化锚（缺席 = 预设面整体不注行 fail-soft） */
   readonly presets?: PresetOverlayInput
   /** 手机远程暴露（mobile-remote-approval fix-3 重启生效形态）：true = 注 webserver 行
    *  覆写（host 0.0.0.0 全卡绑定——装配期 patch 叠层即官方既有缝，非运行期 rebind）；
@@ -81,7 +81,7 @@ export interface BootOverlayInput {
   readonly port?: number
 }
 
-/** 预设装配输入（3.7）：三底稿全文 + customSkillDirs 双目录物化锚 + bindingsFile 物化锚（fix-1） */
+/** 预设装配输入（3.7）：四底稿全文 + customSkillDirs 双目录物化锚 + bindingsFile 物化锚（fix-1） */
 export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge skills 当形态绝对路径（customSkillDirs[core]；缺席 = 剔除该目录行） */
   readonly coreSkillsDir?: string
@@ -241,14 +241,15 @@ export function renderBootOverlay(input: BootOverlayInput): string {
           '    compressionThresholdBytes: 1024',
         ]
       : []),
-    // M3 预设装配（3.7）：registry 覆写 + 远征/突击双预设行——每启注行产品工件
-    //（customSkillDirs 已物化当形态绝对路径；预设组合用户不可经 UI 改）
+    // M3 预设装配（3.7）：registry 覆写 + 远征/突击/HR 三预设行——每启注行产品工件
+    //（customSkillDirs 已物化当形态绝对路径；HR 组合零 forge 行——expert-squad 管理面）
     ...(input.presets !== undefined
       ? [
-          '# ── M3 预设装配（3.7）：registry default 覆写 + 双预设行（boot overlay 每启注行）──',
+          '# ── M3 预设装配（3.7）：registry default 覆写 + 预设行族（boot overlay 每启注行）──',
           ...materializePresetPatch(input.presets.cordis, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.expedition, input.presets).split('\n'),
           ...materializePresetPatch(input.presets.blitz, input.presets).split('\n'),
+          ...materializePresetPatch(input.presets.hr, input.presets).split('\n'),
         ]
       : []),
     '',

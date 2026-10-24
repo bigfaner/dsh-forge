@@ -1,4 +1,4 @@
-// M3 3.7 预设底稿契约 pin（AC1/AC4）：三底稿落面 + 镜像行 ↔ 上游 standard.patch.yml
+// M3 3.7 预设底稿契约 pin（AC1/AC4）：四底稿落面 + 镜像行 ↔ 上游 standard.patch.yml
 // 机械 diff 一致 + 镜像行 config 全集（spike S5 教训：缺必填 config = 行 schema 拒 →
 // 整预设 broken 不上菜单）+ 装载面（双锚解析/all-or-nothing fail-soft）。
 // 上游读取 = profile.dev 物化树（runtime-packages 语境——RUNTIME_PACKAGES 同源供应面，
@@ -189,13 +189,78 @@ for (const preset of ['expedition', 'blitz'] as const) {
   })
 }
 
+describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件零感知）', () => {
+  const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.hr), 'utf8')
+  const rows = pluginRowBlocks(text)
+  /** HR 产品增量行（上游没有——机械 diff 豁免面） */
+  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'expert-squad'])
+
+  it('预设声明行：agent-preset 包名 + id hr / name（中文直出）/ description / order 3（远征·突击之后）', () => {
+    expect(text).toContain('    - id: preset-hr')
+    expect(text).toContain("      name: '@deepseek-ai/dsh-agent-preset'")
+    expect(text).toContain('        id: hr')
+    expect(text).toContain('        name: HR · 专家管理')
+    expect(text).toContain('        description: "')
+    expect(text).toContain('        order: 3')
+  })
+
+  it('standard 基础行 ↔ 上游机械 diff 一致（分叉行外逐字节——行集不缺不增）', () => {
+    expect([...rows.keys()].filter((id) => !HR_PRODUCT_ROWS.has(id))).toEqual([...upstreamRows.keys()])
+    for (const [id, block] of upstreamRows) {
+      if (FORKED_ROWS.has(id)) continue
+      expect(rows.get(id), `hr 行 ${id} ↔ 上游漂移`).toBe(block)
+    }
+  })
+
+  it('persona 分叉：HR 招聘/管理 SOP 四层结构（角色锚词 + HR 作风 + 纪律句全 preset 同句 + ≤12 行）', () => {
+    const persona = rows.get('persona')!
+    expect(persona).toContain('              suffix: Your working directory is {{cwd}}.')
+    expect(persona).toContain('              prefix: >-')
+    expect(persona).toContain('                You are a coding agent powered by the {{model}} model.')
+    expect(persona).toContain('专家团 HR')
+    expect(persona).toMatch(/HR 作风：/)
+    expect(persona).toContain('行为纪律：')
+    expect(persona).toContain('反模式禁令：')
+    // 纪律句逐字一致（dual-mode-overhaul 同径：全 preset 互补不冲突）
+    expect(lineOf(persona, '行为纪律：')).toBe(lineOf(expeditionPersona, '行为纪律：'))
+    const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
+    expect(bodyLines).toHaveLength(6)
+  })
+
+  it('工具绑定 = expert-squad 单增量行（管理 5 工具随插件 tool 面上场）；零委派面（AC3 结构断言）', () => {
+    expect(rows.has('expert-squad')).toBe(true)
+    expect(rows.get('expert-squad')).toContain("            name: '@dsh-forge/expert-squad'")
+    // HR 组合物理不含委派：底稿零 delegate_expert 声明、零 dispatch/expert_dispatch 面
+    expect(text).not.toContain('delegate_expert')
+    expect(text).not.toContain('dispatch:')
+    expect(text).not.toContain('expert_dispatch')
+  })
+
+  it('零 forge 面（产品裁决 2026-10-09 同径）：物理无 plugin-forge[+spec]/md-mermaid/skill 目录占位符', () => {
+    expect(rows.has('plugin-forge')).toBe(false)
+    expect(rows.has('plugin-forge-spec')).toBe(false)
+    expect(rows.has('md-mermaid')).toBe(false)
+    expect(text).not.toContain('@dsh-forge/plugin-forge')
+    expect(text).not.toContain('{{plugin-forge')
+    expect(text).not.toContain('bindingsFile')
+    // skill-filesystem 回归上游裸形态（HR 组合物理不含 forge 技能目录）
+    expect(rows.get('skill-filesystem')).toBe("          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'")
+  })
+
+  it('底稿零 dogfood 专用行（llm-pi-ai/agent-default-model 不入产品底稿——同远征/突击）', () => {
+    expect(text).not.toContain('agent-default-model')
+    expect(text).not.toContain('llm-pi-ai')
+  })
+})
+
 describe('底稿装载（presets.ts）', () => {
-  it('src 同邻目录三件齐装载（vitest 语境——cordis/expedition/blitz 全文在手）', () => {
+  it('src 同邻目录四件齐装载（vitest 语境——cordis/expedition/blitz/hr 全文在手）', () => {
     const patches = loadPresetPatches()
     expect(patches).toBeDefined()
     expect(patches!.cordis).toContain('- id: agent-preset-registry')
     expect(patches!.expedition).toContain('    - id: preset-expedition')
     expect(patches!.blitz).toContain('    - id: preset-blitz')
+    expect(patches!.hr).toContain('    - id: preset-hr')
   })
 
   it('模块同邻锚：sibling presets/ 命中即取（不落 repo 回退）', () => {
