@@ -7,9 +7,11 @@
 // [data-expert-key]、过滤钮 button.dswf-menu-btn[data-status]、页脚 .dswf-panel-footer、
 // 错误条 .dswf-errorbar[role=alert]、空态 .dswf-empty；panellist 行 = 官方 aria 锚
 // button[aria-label="专家团"]（KNOWLEDGE_ENTRY 同径）。
-// 故障/空态注入走 page.route 拦 /api/expert-squad/list（既有 fetch 桥通道）；禁用态
-// 经面板同款通道 POST /api/expert-squad/disable（workspace 参数取自面板真实 list
-// 请求——performance resource entry，D4 同参）。
+// 故障/空态注入：dsh-forge:// 自定义 scheme 的页内 fetch 对 page.route 不生效（页面恒收
+// 真实响应）——改为页面上下文内包装 window.fetch 的注入式拦截（scheme 无关），注入/还原
+// 对称（用例 finally 还原，幂等）；禁用态经面板同款通道 POST /api/expert-squad/disable
+// （workspace 参数取自面板真实 list 请求——页面上下文内 fetch 捕获缓冲 + expect.poll，
+// D4 同参；dsh-forge:// scheme 下该 fetch 不进 performance resource entry）。
 // Hard Rules：零产品源码改动（断言失败 → 归因上报）；夹具 = 仓外 tmp；断言对齐
 // ui-design.md F1 与 tech-design §10.4 真机结算门，不编造断言。
 // @feature expert-squad @web-e2e
@@ -63,16 +65,74 @@ function makeWorkspace(): string {
   return dir
 }
 
-/** 面板真实 list 请求的 workspace 参数（启停通道同参——D4 取值一致性） */
-async function captureWorkspaceParam(page: Page): Promise<string> {
-  const url = await page.evaluate(() => {
-    const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
-    const hit = [...entries].reverse().find((entry) => entry.name.includes('/api/expert-squad/list'))
-    return hit?.name ?? null
+/** 面板真实 list 请求捕获：dsh-forge:// scheme 下 fetch 不进 performance resource
+ *  entry（run1 实证 entry 恒缺）——改为页面上下文内包装 fetch 记录请求 URL 到缓冲。
+ *  面板激活前安装（openPanelWithFixture），与 scheme 无关。 */
+async function installListCapture(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __xsqListUrls?: string[]; __xsqCaptureInstalled?: boolean }
+    if (w.__xsqCaptureInstalled) return
+    w.__xsqCaptureInstalled = true
+    w.__xsqListUrls = []
+    const original = window.fetch.bind(window)
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/api/expert-squad/list')) w.__xsqListUrls?.push(url)
+      return original(input as RequestInfo, init)
+    }
   })
-  const match = /workspace=([^&]+)/.exec(url ?? '')
-  if (match === null) throw new Error(`list 请求缺 workspace 参数：${String(url)}`)
+}
+
+/** 面板真实 list 请求的 workspace 参数（启停通道同参——D4 取值一致性）。
+ *  expect.poll 轮询捕获缓冲，消除读取时机竞态。 */
+async function captureWorkspaceParam(page: Page): Promise<string> {
+  let hit: string | null = null
+  await expect
+    .poll(
+      async () => {
+        const urls = await page.evaluate(() => {
+          const w = window as typeof window & { __xsqListUrls?: string[] }
+          return w.__xsqListUrls ?? []
+        })
+        hit = urls.reverse().find((url) => url.includes('workspace=')) ?? null
+        return hit
+      },
+      { timeout: 30_000, message: 'list 请求捕获缓冲出现 workspace 参数' },
+    )
+    .toBeTruthy()
+  const match = /workspace=([^&]+)/.exec(hit ?? '')
+  if (match === null) throw new Error(`list 请求缺 workspace 参数：${String(hit)}`)
   return decodeURIComponent(match[1])
+}
+
+/** list 注入拦截（页面上下文内包装 window.fetch——对 dsh-forge:// scheme 生效）：
+ *  error = list 请求拒绝；empty = list 返回空数组。幂等，restoreListStub 对称还原。 */
+async function injectListStub(page: Page, mode: 'error' | 'empty'): Promise<void> {
+  await page.evaluate((stubMode) => {
+    const w = window as typeof window & { __xsqOriginalFetch?: typeof window.fetch }
+    if (w.__xsqOriginalFetch) return
+    const original = window.fetch.bind(window)
+    w.__xsqOriginalFetch = original
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/api/expert-squad/list')) {
+        if (stubMode === 'error') throw new TypeError('xsq e2e stub: list request rejected')
+        return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return original(input as RequestInfo, init)
+    }
+  }, mode)
+}
+
+/** 还原 window.fetch 包装（对称清理；未注入时为空操作） */
+async function restoreListStub(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as typeof window & { __xsqOriginalFetch?: typeof window.fetch }
+    if (w.__xsqOriginalFetch) {
+      window.fetch = w.__xsqOriginalFetch
+      delete w.__xsqOriginalFetch
+    }
+  })
 }
 
 interface PanelSession {
@@ -91,6 +151,7 @@ async function openPanelWithFixture(): Promise<PanelSession> {
   const page = launched.page
   await registerProject(page, wsDir, 'xsq-panel-fixture')
   await dismissOnboardingModals(page)
+  await installListCapture(page) // 面板激活前安装 list 请求捕获（scheme 无关）
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场（panellist 注册缝）').toBeVisible({ timeout: 30_000 })
   await row.click()
@@ -117,22 +178,22 @@ test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 头部结构（F1）：标题 + 搜索 + 三态过滤 + 召唤
+    // 头部结构（F1）：标题 + 搜索 + 三态过滤
     await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
     await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
     await expect(page.locator(statusBtn('all')), '过滤钮·全部').toBeVisible()
     await expect(page.locator(statusBtn('enabled')), '过滤钮·启用').toBeVisible()
     await expect(page.locator(statusBtn('disabled')), '过滤钮·禁用').toBeVisible()
-    await expect(page.getByRole('button', { name: '召唤' }), '召唤钮在场').toBeVisible()
+    // 召唤钮断言由 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证（依赖 1.21 装配 onSummon）
     // 数据态：夹具卡呈现 + 页脚计数形态
     await expect(page.locator(cardOf('test-reviewer')), '夹具卡·test-reviewer').toBeVisible()
     await expect(page.locator(cardOf('data-miner')), '夹具卡·data-miner').toBeVisible()
     await expect(page.locator(FOOTER), '页脚计数形态「N 位专家 · 显示 M」').toContainText('位专家 · 显示')
-    // list 请求形态：includeDisabled=true（全量视图含禁用）
+    // list 请求形态：includeDisabled=true（全量视图含禁用）——捕获缓冲读取
+    //（dsh-forge:// scheme 下 fetch 不进 performance resource entry，run1 实证）
     const listUrl = await page.evaluate(() => {
-      const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[]
-      const hit = [...entries].reverse().find((entry) => entry.name.includes('/api/expert-squad/list'))
-      return hit?.name ?? ''
+      const w = window as typeof window & { __xsqListUrls?: string[] }
+      return [...(w.__xsqListUrls ?? [])].reverse().find((url) => url.includes('workspace=')) ?? ''
     })
     expect(listUrl, 'list 请求带 includeDisabled=true').toContain('includeDisabled=true')
   } finally {
@@ -201,8 +262,8 @@ test('@feature expert-squad step-2 error-state：list 故障 → ErrorBar+重试
     const { page } = session
     await registerProject(page, wsDir, 'xsq-panel-fixture')
     await dismissOnboardingModals(page)
-    // 取数故障注入：list 拒绝
-    await page.route(LIST_URL, (route) => route.abort('failed'))
+    // 取数故障注入：list 拒绝（页面上下文内 fetch 包装——scheme 兼容）
+    await injectListStub(page, 'error')
     await page.locator(PANEL_ROW).click()
     const errorbar = page.locator(ERRORBAR)
     await expect(errorbar, '错误条呈现（role=alert）').toBeVisible({ timeout: 30_000 })
@@ -210,8 +271,8 @@ test('@feature expert-squad step-2 error-state：list 故障 → ErrorBar+重试
     await expect(page.locator(EMPTY), '错误态禁落空态分支').toHaveCount(0)
     const retry = errorbar.getByRole('button', { name: '重试' })
     await expect(retry, '重试钮在场').toBeVisible()
-    // 解除注入 → 重试恢复
-    await page.unroute(LIST_URL)
+    // 解除注入（对称还原）→ 重试恢复
+    await restoreListStub(page)
     await retry.click()
     await expect(page.locator(cardOf('test-reviewer')), '重试后网格恢复').toBeVisible({ timeout: 30_000 })
     await expect(errorbar, '错误条退场').toHaveCount(0)
@@ -230,16 +291,15 @@ test('@feature expert-squad step-2 empty-state：list 空 → 建档引导空态
     const { page } = session
     await registerProject(page, wsDir, 'xsq-panel-fixture')
     await dismissOnboardingModals(page)
-    // 零专家注入：list 返回空数组（真机零目录形态的等价通道——路由注入）
-    await page.route(LIST_URL, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
-    )
+    // 零专家注入：list 返回空数组（真机零目录形态的等价通道——页面上下文内 fetch 包装）
+    await injectListStub(page, 'empty')
     await page.locator(PANEL_ROW).click()
     const empty = page.locator(EMPTY)
     await expect(empty, '建档引导空态呈现').toBeVisible({ timeout: 30_000 })
     await expect(empty, '零专家引导文案').toContainText('还没有专家')
     await expect(empty, 'HR 招募引导').toContainText('招募一个专家')
     await expect(page.locator(FOOTER), '页脚 0 位专家').toContainText('0 位专家')
+    await restoreListStub(page)
   } finally {
     await closeSession(session)
   }
