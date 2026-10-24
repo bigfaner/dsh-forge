@@ -41,6 +41,26 @@ export interface DetailMutations {
 
 const IDLE: DetailState["errors"] = {};
 
+/** 关闭态缺省快照（引用稳定单例——useSyncExternalStore 快照契约，见 getSnapshot 注记）。 */
+const IDLE_SNAPSHOT: DetailState = {
+  open: false,
+  mode: "view",
+  expert: {
+    name: "",
+    title: "",
+    description: "",
+    personaMd: "",
+    tools: [],
+    skills: [],
+    origin: "",
+    enabled: false,
+  },
+  draft: { title: "", description: "", personaMd: "", tools: [], skills: [] },
+  errors: IDLE,
+  busy: false,
+  toast: undefined,
+};
+
 /**
  * 详情 Dialog 控制器：open/startEdit/cancelEdit/setField/toggleTool/toggleSkill/
  * addSkill/save/toggleEnabled/close。save 通过校验门才调 update；成功换新专家并
@@ -54,26 +74,9 @@ export class ExpertDetailController {
   constructor(private readonly mutations: DetailMutations) {}
 
   getSnapshot(): DetailState {
-    return (
-      this.state ?? {
-        open: false,
-        mode: "view",
-        expert: {
-          name: "",
-          title: "",
-          description: "",
-          personaMd: "",
-          tools: [],
-          skills: [],
-          origin: "",
-          enabled: false,
-        },
-        draft: { title: "", description: "", personaMd: "", tools: [], skills: [] },
-        errors: IDLE,
-        busy: false,
-        toast: undefined,
-      }
-    );
+    // 关闭态返回引用稳定单例（useSyncExternalStore 快照契约：每次调用同引用——
+    // 新对象字面量会被判为快照变化 → 无限重渲染 React #185，面板恒骨架，fix-4）
+    return this.state ?? IDLE_SNAPSHOT;
   }
 
   subscribe(listener: () => void): () => void {

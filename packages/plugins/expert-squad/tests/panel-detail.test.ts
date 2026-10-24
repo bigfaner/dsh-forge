@@ -129,6 +129,17 @@ describe("personaBlocks（查看态 Markdown 分块）", () => {
 // ---- 控制器状态机 -----------------------------------------------------------
 
 describe("ExpertDetailController（F2 双模式状态机）", () => {
+  it("关闭态 getSnapshot 引用稳定（useSyncExternalStore 快照契约——fix-4 恒骨架回归钉）", () => {
+    const ctl = new ExpertDetailController(noMutations());
+    // state === undefined（Dialog 未开/已关）时连续读取必须同一引用——
+    // 每次新对象会被 useSyncExternalStore 判为快照变化 → 无限重渲染（React #185）
+    expect(ctl.getSnapshot()).toBe(ctl.getSnapshot());
+    ctl.open(entry());
+    ctl.close();
+    // close 回 undefined 后同理：关闭态快照引用仍稳定
+    expect(ctl.getSnapshot()).toBe(ctl.getSnapshot());
+  });
+
   it("open → 查看态快照；startEdit → 编辑态预填草稿", () => {
     const ctl = new ExpertDetailController(noMutations());
     expect(ctl.getSnapshot().open).toBe(false);
