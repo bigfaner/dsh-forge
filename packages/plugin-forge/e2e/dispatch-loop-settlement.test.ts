@@ -165,7 +165,13 @@ function settlingSpawn(delayMs = 5): SpawnWorker {
   }
 }
 
-type Call = { readonly method: 'notice' | 'followup' | 'settle'; readonly sessionId: string; readonly text: string }
+type Call = {
+  readonly method: 'notice' | 'followup' | 'settle'
+  readonly sessionId: string
+  readonly text: string
+  /** probe-1 口径：唤醒径判别（true = 即时唤醒主 agent；false/缺席 = 写入不唤醒整批积压） */
+  readonly wakeup?: boolean
+}
 
 interface Built {
   driver: LoopDriver
@@ -184,7 +190,7 @@ function build(options: { claim?: ClaimTaskResult[]; stats?: TaskStats[]; query?
   const channel: NarrationChannel = {
     send: async (sessionId, text, options) => {
       const method = options?.form === 'settle' ? 'settle' : options?.wakeup === true ? 'followup' : 'notice'
-      calls.push({ method, sessionId, text })
+      calls.push({ method, sessionId, text, ...(options?.wakeup === true ? { wakeup: true } : {}) })
     },
   }
   const narrator: Narrator = createNarrator({ channel })
@@ -313,6 +319,14 @@ describe('e2e dogfood · 终局 settlement + 零残留（AC 8/11）', () => {
     const settle = built.calls.find((c) => c.method === 'settle')
     expect(settle).toBeDefined()
     expect(settle?.sessionId).toBe(OWNER)
+    // 结算单点唤醒（loop-event-delivery §结算径）：全循环仅此一次 wakeup=true；
+    // 其余事件径投递一律写入不唤醒（next-step 积压整批消费形态——probe-1 口径 B）
+    const wakeups = built.calls.filter((c) => c.wakeup === true)
+    expect(wakeups).toEqual([settle])
+    // 整批消费形态（probe-1 A/B）：中段事件（领取/完成）零唤醒静默积压，仅结算唤醒一次整批消费
+    const notices = built.calls.filter((c) => c.method === 'notice')
+    expect(notices.length).toBeGreaterThan(0)
+    for (const n of notices) expect(n.wakeup).toBeUndefined()
     expect(settle?.text).toContain('[forge·结束] 任务源: feat-x — 全部任务已完成')
     // P8 评审指示段追加（四重点逐字在文——机制断言）
     expect(settle?.text).toContain('【代码评审指示】')
