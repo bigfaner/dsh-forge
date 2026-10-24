@@ -220,10 +220,11 @@ describe('renderDocStyleSection——独立段（dual-mode-overhaul 拆段）', 
     expect(XML_TAGS.docStyle).toBe('doc-style')
   })
 
-  it('三要点在场：mermaid 优先 / 文字精简 / 不留调整修复叙事，约束全部产出文档', () => {
+  it('四要点在场：mermaid 优先 / 分点阐述 / 文字精简 / 不留调整修复叙事，约束全部产出文档', () => {
     expect(docStyle).toContain('文档风格公约')
     expect(docStyle).toContain('全部产出文档')
     expect(docStyle).toContain('mermaid')
+    expect(docStyle).toContain('分点阐述')
     expect(docStyle).toContain('文字精简')
     expect(docStyle).toContain('不留调整修复叙事')
   })
