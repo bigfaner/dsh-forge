@@ -33,25 +33,37 @@ interface SlotsFace {
   }, component: unknown): () => void;
 }
 
-/** main 面板 + panellist 行登记（返回联合释放器；register 缺席 = 降级 no-op）。 */
-function registerExpertPanel(slots: SlotsFace): (() => void) | undefined {
-  if (typeof slots.register !== "function") {
-    console.warn("[dsh-forge/expert-squad] ctx.slots.register absent; panel not registered")
-    return undefined
+/** 单行登记（注册面异常只降本行——console 留痕，不外溢炸组合；返回联合释放器随 fiber 级联）。 */
+function safeRegister(slots: SlotsFace, options: Parameters<NonNullable<SlotsFace["register"]>>[0], component: unknown): (() => void) | undefined {
+  if (typeof slots.register !== "function") return undefined;
+  try {
+    return slots.register(options, component);
+  } catch (error) {
+    console.error("[dsh-forge/expert-squad] panel registration failed——降级空态", error);
+    return undefined;
   }
-  const disposePanel = slots.register({ name: MAIN_SLOT, key: PANEL_KEY }, ExpertPanelApp)
-  const disposeRow = slots.register(
-    { name: PANEL_LIST_SLOT, id: PANEL_KEY, order: PANEL_ORDER, label: PANEL_LABEL },
-    ExpertPanelGlyph,
-  )
-  return () => {
-    disposePanel?.()
-    disposeRow?.()
+}
+
+/** main 面板 + panellist 行登记（登记挂所属槽的 inject 回调——槽声明在场即装、随 fiber 卸载级联回收）。 */
+function registerExpertPanel(slots: SlotsFace): void {
+  if (typeof slots.inject !== "function") {
+    console.warn("[dsh-forge/expert-squad] ctx.slots.inject absent; panel not mounted");
+    return;
   }
+  slots.inject(MAIN_SLOT, () =>
+    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY }, ExpertPanelApp));
+  // 行注册挂 panellist 槽自身的声明缝——ui-sidebar 插件声明该槽后才合法（先注册 = 
+  // `slot "sidebar.panellist" is not declared`；web-client registerSlotEntry 同径）。
+  slots.inject(PANEL_LIST_SLOT, () =>
+    safeRegister(slots, { name: PANEL_LIST_SLOT, id: PANEL_KEY, order: PANEL_ORDER, label: PANEL_LABEL }, ExpertPanelGlyph));
 }
 
 /** client face 组合 apply 插件对象（main 槽登记缝 + 面板本体）。 */
 export const expertSquadClient = {
+  // cordis 装载契约：取 ctx.slots 前必须声明注入边（缺声明 = apply 期
+  // `cannot get property "slots" without inject`，fiber FAILED——web-client
+  // FORGE_CLIENT_INJECT 同径先例，slots 为唯一消费服务）。
+  inject: ["slots"],
   apply(ctx: unknown): void {
     const slots = (ctx as { slots?: SlotsFace } | undefined)?.slots
     if (typeof slots?.inject !== "function") {
@@ -59,21 +71,17 @@ export const expertSquadClient = {
       console.warn("[dsh-forge/expert-squad] ctx.slots.inject absent; panel not mounted")
       return
     }
-    // 官方装配序缝（plugin.ts 同径）：登记挂 inject 回调——洞位声明在场即装、随 fiber
-    // 卸载级联回收；注册动作面异常只降本面板（console 留痕），不外溢炸组合。
-    slots.inject(MAIN_SLOT, () => {
-      try {
-        return registerExpertPanel(slots)
-      } catch (error) {
-        console.error("[dsh-forge/expert-squad] panel registration failed——降级空态", error)
-        return undefined
-      }
-    })
+    // 官方装配序缝（plugin.ts registerSlotEntry 同径）：登记动作面异常只降本面板。
+    registerExpertPanel(slots)
   },
 }
 
 /**
  * 装载器正门（client-modules 装载契约）：materialize 后的 module.exports 须本身为
  * cordis 插件面——function 或含 apply 方法的对象（input-history 同型判例）。
+ * esbuild CJS namespace 会丢 `inject` 声明（cordis 只在 unwrapExports 后的插件对象上
+ * 读 plugin.inject，缺声明 = apply 期 `cannot get property "slots" without inject`）——
+ * default 导出经 unwrapExports（__esModule → default）还原插件对象本体。
  */
+export default expertSquadClient
 export const apply = expertSquadClient.apply.bind(expertSquadClient)
