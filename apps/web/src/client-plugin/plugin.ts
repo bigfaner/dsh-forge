@@ -72,7 +72,6 @@ import {
   type StartSessionFace,
   type WorkspacesListSlice,
 } from './start-session-wrap.js'
-import { showBindingMismatchToast, type SessionBindingMismatchEventLike } from './binding-mismatch-toast.js'
 import { installConnectionLostBanner } from './connection-lost-banner.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
@@ -1299,7 +1298,7 @@ export async function unwrapRpcEnvelope<T>(call: Promise<unknown>): Promise<T> {
   const result = raw as { ok: boolean; data?: T }
   if (!result.ok) {
     // typed !ok 信封保真（rpc/client.ts RpcClientError 反序列化结构同型镜像——bundle 自含零
-    // import）：code/message/data 原样透传，typed 拒绝码（如 W2 ERR_WORKTREE_CAPABILITY_ABSENT）
+    // import）：code/message/data 原样透传，typed 拒绝码（如 ERR_SPAWN_FAILED）
     // 才能到达消费方判定点；形状漂移/缺 error = 泛型降格照旧（fail-soft 不变）。
     const err = (raw as { error?: { code?: unknown; message?: unknown; data?: unknown } }).error
     const message = typeof err?.message === 'string' && err.message !== '' ? err.message : 'RPC 信封 !ok'
@@ -2347,25 +2346,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 },
               })
 
-        // 绑定失配哨兵消费（WYSIWYG 哨兵——用户裁决 2026-10-24）：host 判读「绑定树 ≠ chip
-        // 显示树」→ toast 呈现（6s 自动消失，点击关闭）+ console.warn；消息按原会话投递
-        // （不重路由不搬家）。通道缺席（非 Electron 载体/旧 host）= 零订阅。
-        const disposeSessionBindingMismatchToast =
-          forgeInvoke === undefined
-            ? undefined
-            : (globalThis as {
-                dshForge?: {
-                  onForgeSessionBindingMismatch?: (
-                    cb: (event: SessionBindingMismatchEventLike) => void,
-                  ) => () => void
-                }
-              }).dshForge?.onForgeSessionBindingMismatch?.((event) => {
-                console.warn(
-                  `[dswf-client] 绑定失配：会话 ${event.sessionId} 绑定 ${event.binding ?? '（未绑定）'} ≠ chip 显示 ${event.displayed}`,
-                )
-                showBindingMismatchToast(event)
-              })
-
         // W4 激活自证①（RPC 试呼轻探）：forge:worktree/list 空 projectRoot = 零副作用读面
         // （host resolveProject('') → null → isGit:false 空清单）——信封往返通 = IPC 装配链通。
         // 异步 fire-and-forget：失败 console.error + selfCheck 呈现（UI 态），不阻断激活主链。
@@ -2504,7 +2484,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           disposeDockTabs()
           mermaidEnhancer.stop()
           disposeStartSessionWrap?.()
-          disposeSessionBindingMismatchToast?.()
           disposeServiceListener?.()
           disposeConnectionBanner?.()
           ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
@@ -2608,7 +2587,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             disposeDockTabs()
             mermaidEnhancer.stop()
             disposeStartSessionWrap?.()
-            disposeSessionBindingMismatchToast?.()
             disposeServiceListener?.()
             disposeConnectionBanner?.()
             ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined

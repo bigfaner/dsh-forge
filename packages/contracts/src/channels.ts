@@ -138,8 +138,9 @@ export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNEL
 /**
  * forge:worktree/*（worktree-branch-management fix-2：worktree/branch 管理域 + 会话绑定面）。
  * 域实现 = packages/plugins/git-worktree（通用层），host ipc/worktree-rpc 装配透传；
- * seal = 封存判定快照（三通道提示数据源）。session-create 通道已退役（bug 82e92933——
- * 预铸采纳单门整体退役，binding-derivation §2.3：换绑由官方 blank 复用天然生效）。
+ * seal = 封存判定快照（三通道提示数据源）。会话创建不走本族——桌面端客户端直呼官方
+ * `session.create({ workspaceId })`，移动端经 `forge:proxy/session-create` 中继同一
+ * sessionController；绑定 = header.cwd 推导（binding-derivation §2.1/§2.3）。
  * 封闭写集仅 create/delete（提案「命令面」裁决）。
  */
 export const WORKTREE_CHANNELS = {
@@ -230,9 +231,6 @@ export const FORGE_CHANNEL_ALLOWLIST: readonly ForgeChannel[] = Object.values(FO
  */
 export const FORGE_EVENT_CHANNELS = {
   tasksChanged: 'forge:events/tasks-changed',
-  /** 绑定失配哨兵（WYSIWYG 哨兵——用户裁决 2026-10-24）：绑定树 ≠ chip 显示树 → toast + 日志；
-   *  消息按原会话投递，不重路由、不搬家、不归档。 */
-  sessionBindingMismatch: 'forge:events/session-binding-mismatch',
 } as const
 
 export type ForgeEventChannel = (typeof FORGE_EVENT_CHANNELS)[keyof typeof FORGE_EVENT_CHANNELS]

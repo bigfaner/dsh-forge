@@ -1,15 +1,15 @@
-// worktree-branch-management 1.19 真机 UI e2e：切换分支风险确认框 + 零 checkout/cwd 三重纪律。
+// worktree-branch-management 1.19 真机 UI e2e：切换分支风险确认框 + 零 checkout 纪律。
 // 设计 A 重锚（用户裁决 2026-10-18）：确认框在点选时点弹出——
 //   · hero chip 点选跨分支行 → 官方 RiskConfirmation 立现；取消保持原选（mask 退场干净）；
 //     确认才切换选中态（chip 回填目标行）；
 //   · 同分支重选（目标 = 主树当前检出分支）不弹框直接切换；
-//   · 新建表单基准分支 ≠ 主树检出分支 → 创建前同款确认框；取消不进 git，确认才创建；
-//   · 挂靠会话 cwd 强制：sessionCreate 真机预铸 → 落盘 SessionHeader.cwd = worktree 根，
-//     且在该 cwd 下实测 pwd 语义面（git rev-parse --show-toplevel）= worktree 根。
+//   · 新建表单基准分支 ≠ 主树检出分支 → 创建前同款确认框；取消不进 git，确认才创建。
+//   （会话落树语义 = 官方 session.create({workspaceId}) 直通、cwd 即绑定——
+//     worktree-pure-selection-1-29.spec 承载，本 spec 不再覆盖创建面。）
 // data 锚：chip = [data-dswt-hero-trigger]；新建提交 = [data-dswt-create-submit]；
 // 弹窗锚 = role=dialog + aria-label（官方 Modal 语义）；菜单锚 = .dswt-hero-menu。
-import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeApp, launchElectron } from '../support/launch.js'
@@ -122,10 +122,10 @@ async function listNames(page: Page, wsDir: string): Promise<string[]> {
   return entries.map((entry) => entry.worktreeName ?? '')
 }
 
-test('1.19 UI：点选时点跨分支风险确认框（hero 改选 + 新建基准）+ 挂靠会话 cwd 强制', async () => {
+test('1.19 UI：点选时点跨分支风险确认框（hero 改选 + 新建基准）', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-19-risk-'))
-  const { dir: wsDir, wtDir } = makeGitRepo()
+  const { dir: wsDir } = makeGitRepo()
   const app = await launchElectron({
     env: { DSH_FORGE_DEV_PROFILE: 'dev', DSH_FORGE_USER_DATA: userData },
   })
@@ -197,123 +197,9 @@ test('1.19 UI：点选时点跨分支风险确认框（hero 改选 + 新建基�
       }, { timeout: 30_000, message: '确认后应创建同名 worktree（分支 feat/new → 树名 new）' })
       .toBe(true)
     await snap(page, 'create-confirmed.png')
-
-    // ── AC5：挂靠会话 cwd 强制（真机预铸 → 落盘头 cwd = worktree 根 → cwd 下 pwd 实测） ──
-    const raw = (await forgeRpc(page, 'forge:worktree/session-create', { worktreePath: wtDir })) as {
-      data?: { sessionId?: string }
-      sessionId?: string
-    } | null
-    const sessionId = raw?.data?.sessionId ?? raw?.sessionId
-    expect(typeof sessionId).toBe('string')
-    // 落盘证据双面：① session_projcache 快照 cwd 字段；② 官方存储按会话 cwd 分组——
-    // session-<id> 目录必落 `…-wt-a--` 组（分组键 = SessionHeader.cwd）
-    const headerCwd = findSessionHeaderCwd(userData, sessionId as string)
-    // 分隔符归一比对（落盘 cwd 为 Windows 原生反斜杠形态——语义面等值判定）
-    const norm = (p: string | undefined): string => (p ?? '').replaceAll('\\', '/').toLowerCase()
-    expect(norm(headerCwd), 'session_projcache 快照 cwd 应 = 挂靠 worktree 根').toBe(norm(wtDir))
-    const sessionDir = findSessionDir(userData, sessionId as string)
-    expect(sessionDir, '会话存储目录应按 wt-a worktree cwd 分组').toContain('wt-a')
-    // cwd 实测：该目录下 pwd 语义面（git rev-parse --show-toplevel）= worktree 根；零 checkout（主树仍在 main）
-    const toplevel = spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: headerCwd, encoding: 'utf8' }).stdout.trim().replaceAll('\\', '/')
-    expect(toplevel.toLowerCase()).toBe(wtDir.toLowerCase())
-    const mainBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: wsDir, encoding: 'utf8' }).trim()
-    expect(mainBranch, '零 checkout：主树 HEAD 不因建树/挂靠而切换').toBe('main')
   } finally {
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
     rmSync(wsDir, { recursive: true, force: true })
   }
 })
-
-/** 在 userData 下定位会话存储目录（session-<id> 目录——官方按会话 cwd 分组） */
-function findSessionDir(userData: string, sessionId: string): string | undefined {
-  const visit = (dir: string, depth: number): string | undefined => {
-    if (depth > 8) return undefined
-    let rows: string[] = []
-    try {
-      rows = readdirSync(dir)
-    } catch {
-      return undefined
-    }
-    for (const row of rows) {
-      const full = join(dir, row)
-      let stat
-      try {
-        stat = statSync(full)
-      } catch {
-        continue
-      }
-      if (stat.isDirectory()) {
-        if (row === `session-${sessionId}` || row === sessionId) return full
-        const hit = visit(full, depth + 1)
-        if (hit !== undefined) return hit
-      }
-    }
-    return undefined
-  }
-  for (const root of [join(userData, 'dsh-home'), userData]) {
-    if (existsSync(root)) {
-      const hit = visit(root, 0)
-      if (hit !== undefined) return hit
-    }
-  }
-  return undefined
-}
-
-/** 在 userData 下定位会话存储并解析头 cwd（session_projcache 快照 json 的 cwd 字段） */
-function findSessionHeaderCwd(userData: string, sessionId: string): string | undefined {
-  const visit = (dir: string, depth: number): string | undefined => {
-    if (depth > 8) return undefined
-    let rows: string[] = []
-    try {
-      rows = readdirSync(dir)
-    } catch {
-      return undefined
-    }
-    for (const row of rows) {
-      const full = join(dir, row)
-      let stat
-      try {
-        stat = statSync(full)
-      } catch {
-        continue
-      }
-      if (stat.isDirectory()) {
-        const hit = visit(full, depth + 1)
-        if (hit !== undefined) return hit
-        continue
-      }
-      if (row.includes(sessionId) && row.endsWith('.json')) {
-        try {
-          // session_projcache 快照（真机落盘面）——全量解析抽 cwd 字段
-          const parsed = JSON.parse(readFileSync(full, 'utf8')) as {
-            cwd?: string
-            header?: { cwd?: string }
-          } & Record<string, unknown>
-          const cwd = parsed.header?.cwd ?? parsed.cwd
-          if (typeof cwd === 'string') return cwd
-          // 通用深取：任意层级的 cwd 字符串字段
-          const stack: unknown[] = [parsed]
-          while (stack.length > 0) {
-            const node = stack.pop()
-            if (node === null || typeof node !== 'object') continue
-            for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-              if (key === 'cwd' && typeof value === 'string') return value
-              if (value !== null && typeof value === 'object') stack.push(value)
-            }
-          }
-        } catch {
-          continue
-        }
-      }
-    }
-    return undefined
-  }
-  for (const root of [join(userData, 'dsh-home'), userData]) {
-    if (existsSync(root)) {
-      const hit = visit(root, 0)
-      if (hit !== undefined) return hit
-    }
-  }
-  return undefined
-}

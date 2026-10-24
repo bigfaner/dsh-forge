@@ -125,10 +125,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:events/* 推送面（主→渲染单向，preload 订阅面）：tasks-changed + session-binding-mismatch', () => {
+  it('forge:events/* 推送面（主→渲染单向，preload 订阅面）：tasks-changed', () => {
     expect(FORGE_EVENT_CHANNELS).toEqual({
       tasksChanged: 'forge:events/tasks-changed',
-      sessionBindingMismatch: 'forge:events/session-binding-mismatch',
     })
   })
 })

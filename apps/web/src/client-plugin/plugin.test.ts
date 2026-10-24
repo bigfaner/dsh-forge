@@ -2082,7 +2082,7 @@ describe('unwrapRpcEnvelope typed !ok 信封保真（RpcClientError 形态同型
   it('typed !ok 信封：code/message/data 原样透传；形状漂移/缺 error = 泛型降格照旧（fail-soft 不变）', async () => {
     const fail = Promise.resolve({
       ok: false,
-      error: { code: 'ERR_WORKTREE_CAPABILITY_ABSENT', message: 'git 绑定能力缺席', data: { k: 1 } },
+      error: { code: 'ERR_SPAWN_FAILED', message: 'driver spawn 失败', data: { k: 1 } },
     })
     const caught = await unwrapRpcEnvelope(fail).then(
       () => null,
@@ -2091,8 +2091,8 @@ describe('unwrapRpcEnvelope typed !ok 信封保真（RpcClientError 形态同型
     expect(caught).toBeInstanceOf(Error)
     const typed = caught as Error & { code?: unknown; data?: unknown }
     expect(typed.name).toBe('RpcClientError')
-    expect(typed.code).toBe('ERR_WORKTREE_CAPABILITY_ABSENT')
-    expect(typed.message).toBe('git 绑定能力缺席')
+    expect(typed.code).toBe('ERR_SPAWN_FAILED')
+    expect(typed.message).toBe('driver spawn 失败')
     expect(typed.data).toEqual({ k: 1 })
   })
 })

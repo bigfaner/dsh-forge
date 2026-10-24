@@ -28,7 +28,7 @@
 | `forge:proxy/file-list` | `{projectRoot}` | `{entries:[{path,dir}],truncated}` | listWorkspaceFiles（忽略目录 + 2000 上限） |
 | `forge:remote/read-state` / `-write` | `{sessionId}` / `{sessionId,seq}` | 游标值 / 写回执 | read-cursor-store（单调写） |
 | `forge:remote/approval` | 审批决策输入 | `{forwarded,reason?}` | approvalRelay 中继 |
-| `forge:worktree/session-create` | `{worktreePath,…}` | 会话描述 | worktree 桥（预铸采纳单门） |
+| `forge:proxy/session-create` | `{workspaceId, worktreePath}` | 会话描述 | sessionController 进内直调（官方 `session.create`） |
 | `forge:remote/disconnect` | — | `{revoked}` | 撤配对粘性位 |
 
 ## 2. 推送通道（`GET /remote/forge-stream`，SSE）

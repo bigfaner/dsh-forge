@@ -713,7 +713,7 @@ body[data-ds-dark-theme] .st.done {
   color: #e34d59;
 }
 /* branch 漂移警示 banner（binding-derivation §2.6——mobile chat 顶部非阻断警示；
- * 桌面同语义 = dswf-binding-mismatch toast，amber 警示刻度） */
+ * 桌面同语义 = chat-view warning banner，amber 警示刻度） */
 .bind-drift-banner {
   margin: 6px auto 0;
   max-width: 92%;

@@ -9,17 +9,15 @@ import {
   DOCS_CHANNELS,
   FEATURES_CHANNELS,
   FORGE_EVENT_CHANNELS,
-  FORGE_CHANNELS,
   PROJECTS_M2_CHANNELS,
   PROPOSALS_CHANNELS,
   REMOTE_CHANNELS,
   SETTINGS_CHANNELS,
   TASKS_CHANNELS,
 } from '../channels.js'
-import type { BridgeEventPayload, TasksChangedEvent } from './forge.js'
+import type { TasksChangedEvent } from './forge.js'
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
-import type { SessionBindingMismatchEvent } from './worktree.js'
 import { CONTAINER_KINDS, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
 import type { ReasoningEffortLevel } from './forge.js'
 import type {
@@ -229,7 +227,7 @@ describe('AC5 BridgeEventMessage 信封（Interface 6：channel/payload 只读�
     expect(message.channel).toBe('forge:events/tasks-changed')
     expect((message.payload as TasksChangedEvent).projectId).toBe('p-1')
     expectTypeOf<BridgeEventMessage['channel']>().toEqualTypeOf<ForgeEventChannel>()
-    expectTypeOf<BridgeEventMessage['payload']>().toEqualTypeOf<BridgeEventPayload>()
+    expectTypeOf<BridgeEventMessage['payload']>().toEqualTypeOf<TasksChangedEvent>()
   })
 
   it('sessionLinks 双源分型卡（links=派发 / record=执行；SC6③ 双源相异断言面）', () => {

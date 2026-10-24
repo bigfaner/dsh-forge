@@ -5,7 +5,8 @@
 // 面分治：list/create/delete/ahead-behind/branches/checks = 管理域读+封闭写集（create/delete
 // ——提案「数据源与命令面」）；seal = 封存判定快照（chip 失效态 / notice / composer 占位
 // 数据源）；select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
-// session-create 预铸采纳单门已退役（bug 82e92933，binding-derivation §2.3）。
+// 会话创建不经本族——官方 `session.create({ workspaceId })` 直通（移动端经
+// forge:proxy/session-create 中继）；绑定 = header.cwd 推导（binding-derivation §2.1）。
 
 /** worktree 清单条目（= 插件域 WorktreeEntry + 行渲染派生面） */
 export interface WorktreeEntryDto {
@@ -97,27 +98,9 @@ export interface WorktreeChecksResult {
 }
 
 /**
- * forge:worktree/session-create 载荷已退役（bug 82e92933——预铸采纳单门整体退役，
- * binding-derivation §2.3：换绑由官方 blank 复用天然生效）。
- */
-
-/**
- * forge:events/session-binding-mismatch 载荷（WYSIWYG 哨兵——用户裁决 2026-10-24）：
- * 发送时点绑定树 ≠ chip 显示树 → toast 呈现 + 日志；消息按原会话投递（不搬家、不归档）。
- * main worktree 也是一种 worktree（path 恰好等于项目根）；binding null = 未绑定（同为失配）。
- */
-export interface SessionBindingMismatchEvent {
-  readonly sessionId: string
-  /** 实际绑定树（null = 未绑定） */
-  readonly binding: string | null
-  /** chip 显示树（选中记忆；缺席回落主根 = 项目根） */
-  readonly displayed: string
-}
-
-/**
- * forge/binding-mismatch 载荷（binding-derivation §2.6——branch 漂移推送，原
- * session-binding-mismatch 发射缝改造并入 /remote/forge-stream 镜像目录；mobile banner
- * 触发源）。drifted = true 触发（实时 branch ≠ 留痕 branch）；false 消除（切回）。
+ * forge/binding-mismatch 载荷（binding-derivation §2.6——branch 漂移推送，经
+ * /remote/forge-stream 镜像目录逐帧推送；mobile banner 触发源）。
+ * drifted = true 触发（实时 branch ≠ 留痕 branch）；false 消除（切回）。
  */
 export interface ForgeBindingMismatchEvent {
   readonly sessionId: string

@@ -635,7 +635,7 @@ async function main(): Promise<void> {
         // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除）
         bindDriftDiag: bindDriftDiag,
         // binding-derivation M6：forge/binding-mismatch 漂移推送（ctx.emit → /remote/forge-stream
-        // 镜像目录逐帧推送；原 session-binding-mismatch 发射缝退役并入——mobile 消费归任务 1.8）
+        // 镜像目录逐帧推送——mobile banner 消费面）
         bindingMismatchEmit: (payload) => {
           try {
             ;(ctx as unknown as { emit?: (event: string, payload: unknown) => void }).emit?.(

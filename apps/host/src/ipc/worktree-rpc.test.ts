@@ -75,21 +75,16 @@ function fakePersistence(
 }
 
 function fakeController() {
-  const calls: Array<{ sessionId?: string; cwd?: string }> = []
   const prompts: Array<unknown> = []
   const promptSignals: Array<unknown> = []
   const controller: SessionControllerFace = {
-    create: async (request) => {
-      calls.push({ sessionId: request.sessionId, cwd: request.cwd })
-      return { sessionId: request.sessionId ?? `s-created-${calls.length}` }
-    },
     prompt: async (request, signal) => {
       prompts.push(request)
       promptSignals.push(signal)
       return { accepted: true }
     },
   }
-  return { controller, calls, prompts, promptSignals }
+  return { controller, prompts, promptSignals }
 }
 
 /** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
@@ -102,6 +97,7 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
   const workspaces = new Map<string, { id: string; title?: string; sessions: string[] }>()
   const entityFor = (path: string, ws: { id: string; title?: string; sessions: string[] }) => ({
     id: ws.id,
+    title: ws.title ?? '',
     sessionIds: ws.sessions,
     attachSession: async (sessionId: string) => {
       if (attachError !== undefined) throw attachError
@@ -208,7 +204,12 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
         resolvedPaths.push(path)
         return undefined
       },
-      create: async (_path: string, _title?: string) => ({ id: 'ws-bare', attachSession: async () => {} }),
+      create: async (_path: string, _title?: string) => ({
+        id: 'ws-bare',
+        title: '',
+        sessionIds: [],
+        attachSession: async () => {},
+      }),
     }
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,

@@ -262,9 +262,8 @@ export function createWorktreeRpcService(deps: {
   /** bind-drift 漂移埋点 emit 缝（binding-derivation §2.6，info 级——触发与消除边沿各一条，
    *  携带 sessionId/cwd/两侧分支名）；缺席 = 零 emit。 */
   readonly bindDriftDiag?: (message: string) => void
-  /** forge/binding-mismatch 漂移推送缝（binding-derivation M6——原 session-binding-mismatch
-   *  发射缝并入 /remote/forge-stream 镜像；装配方 ctx.emit 接线，mobile 消费归 1.8）；
-   *  缺席 = 零推送。 */
+  /** forge/binding-mismatch 漂移推送缝（binding-derivation M6——经 /remote/forge-stream
+   *  镜像逐帧推送；装配方 ctx.emit 接线，mobile banner 消费）；缺席 = 零推送。 */
   readonly bindingMismatchEmit?: ((payload: ForgeBindingMismatchEvent) => void) | undefined
   /** session/created 监听装配缝（binding-derivation §2.2 留痕前台触发源——fork 亦发布
    *  session/created，同径覆盖）：装配方以官方 ctx.on('session/created', …) 接线并传会话
