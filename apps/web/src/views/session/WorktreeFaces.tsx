@@ -96,7 +96,10 @@ export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps
   void deps
     .awaitSwitchSettled(product.sessionId)
     .then((settled) => (settled ? deps.archiveSession(staleBlankId) : undefined))
-    .catch(() => {})
+    .catch((cause: unknown) => {
+      // 落定确认/归档失败留痕（不静默）——旧 blank 残留交由 recycle 清理
+      console.warn(`[dswf-worktree] 点选即换绑后置段失败（blank=${staleBlankId}）：${String(cause)}`)
+    })
 }
 
 /**
@@ -211,7 +214,10 @@ export function ForgeHeroWorktreeMount({
       if (projectRoot === null) return
       void makeRpc()
         .worktree.select({ projectRoot, ...(path !== undefined ? { path } : {}) })
-        .catch(() => {})
+        .catch((cause: unknown) => {
+          // 选中推送失败留痕（不静默）——host 记忆缺席会使创建显示源裁决回落解析树
+          console.warn(`[dswf-worktree] 选中推送失败（projectRoot=${projectRoot} path=${path}）：${String(cause)}`)
+        })
     },
     [projectRoot, makeRpc],
   )
@@ -227,7 +233,9 @@ export function ForgeHeroWorktreeMount({
       .then((settings) => {
         if (alive) setRiskDismissed(settings.worktree?.crossBranchRiskDismissed === true)
       })
-      .catch(() => {})
+      .catch((cause: unknown) => {
+        console.warn(`[dswf-worktree] 跨分支确认记忆读失败（默认重问）：${String(cause)}`)
+      })
     return () => {
       alive = false
     }
@@ -268,7 +276,10 @@ export function ForgeHeroWorktreeMount({
       return rebindOnSelect(path, {
         rebindableBlankId: async () => {
           const activeId = rebindFace.activeSessionId()
-          if (activeId === undefined) return undefined
+          if (activeId === undefined) {
+            console.warn('[dswf-worktree] 点选即换绑零编排：无 mainView 在留活跃会话')
+            return undefined
+          }
           const seal = await makeRpc().worktree.seal({ sessionId: activeId })
           if (!seal.isGit || seal.binding === null) return undefined // 无绑定（官方域）：零编排
           // blank 判读双源：seal.blank（host 事件判读——账本标志 host 重启恢复后失真，
@@ -321,8 +332,9 @@ export function ForgeHeroWorktreeMount({
           await rebindFace.archiveSession(sessionId)
         },
       })
-        .catch(() => {
-          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送哨兵提示兜底）
+        .catch((cause: unknown) => {
+          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送哨兵提示兜底）——失败留痕不静默
+          console.warn(`[dswf-worktree] 点选即换绑编排失败（目标=${path}）：${String(cause)}`)
         })
         .finally(() => {
           rebindInFlight.current = false

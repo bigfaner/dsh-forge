@@ -2376,20 +2376,29 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             : installSessionCreateWrap(
                 sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
                 {
-                  sessionCreate: (tree) =>
-                    unwrapRpcEnvelope<{ sessionId?: unknown; cwd?: unknown }>(
+                  sessionCreate: (tree) => {
+                    const startedAt = Date.now()
+                    return unwrapRpcEnvelope<{ sessionId?: unknown; cwd?: unknown }>(
                       forgeInvoke(SESSION_CREATE_CHANNEL, { worktreePath: tree }),
-                    ).then((product) => {
-                      if (typeof product?.sessionId !== 'string' || product.sessionId === '') {
-                        throw new Error('dsh-forge web-client: sessionCreate 产物缺 sessionId（形状漂移）')
-                      }
-                      // bug 2bc90d64：cwd（产物头 cwd）透传——wrap 经官方 adopt 正门补账本
-                      // 的对位键；旧 host 形态缺席 = undefined（wrap 跳过 adopt，现状行为）。
-                      return {
-                        sessionId: product.sessionId,
-                        ...(typeof product.cwd === 'string' && product.cwd !== '' ? { cwd: product.cwd } : {}),
-                      }
-                    }),
+                    )
+                      .then((product) => {
+                        // 创建会话全链留痕（用户裁决 2026-10-24——host 计时分段 + 客户端 RTT）
+                        console.warn(`[dswf-client] session-create RTT ${Date.now() - startedAt}ms（目标=${tree}）`)
+                        if (typeof product?.sessionId !== 'string' || product.sessionId === '') {
+                          throw new Error('dsh-forge web-client: sessionCreate 产物缺 sessionId（形状漂移）')
+                        }
+                        // bug 2bc90d64：cwd（产物头 cwd）透传——wrap 经官方 adopt 正门补账本
+                        // 的对位键；旧 host 形态缺席 = undefined（wrap 跳过 adopt，现状行为）。
+                        return {
+                          sessionId: product.sessionId,
+                          ...(typeof product.cwd === 'string' && product.cwd !== '' ? { cwd: product.cwd } : {}),
+                        }
+                      })
+                      .catch((cause: unknown) => {
+                        console.warn(`[dswf-client] session-create 失败（目标=${tree} RTT=${Date.now() - startedAt}ms）：${String(cause)}`)
+                        throw cause
+                      })
+                  },
                   // WYSIWYG 复用守卫（用户裁决 2026-10-24）：采纳前探测 blank 绑定（seal
                   // 读镜像）——绑定 ≠ 目标 workspace 树（含未绑定）→ 不复用，改开目标树
                   // 新会话（toast + 日志呈现）；探测失败 fail-open 现状采纳。
