@@ -726,7 +726,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     return { service, controller, prompts, mismatchEvents, opens }
   }
 
-  it('核心：blank 绑定主根 × chip 选中树 A → 失配事件恰一发射 + 原会话原消息投递（不搬家零预铸）', async () => {
+  it('核心：blank 绑定主根 × chip 选中树 A → 失配事件 + 改投显示树会话（首条消息落 chip 树——换绑竞态抢跑收口）', async () => {
     const rig = guardRig({
       events: { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
       headers: { blank: { cwd: 'C:/repo' } },
@@ -736,8 +736,10 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
     dispose()
     expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: 'C:/repo', displayed: WT_A }])
-    // 消息按原会话投递（不重路由不搬家）；零产物预铸（controller.create 零调用——无预铸即无 calls 面）
-    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hello' }])
+    // 首条消息改投显示树会话（预铸产物 id ≠ blank 原会话），文本原样
+    expect(rig.prompts).toHaveLength(1)
+    expect((rig.prompts[0] as { sessionId: string }).sessionId, '消息未改投显示树会话（仍在原 blank）').not.toBe('blank')
+    expect((rig.prompts[0] as { text: string }).text).toBe('hello')
   })
 
   it('绑定 ≡ 显示（chip 未选回落主根 = 绑定主根）→ pass 零事件', async () => {
@@ -752,23 +754,37 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
   })
 
-  it('未绑定 blank（binding null）× chip 选中树 A → 失配事件（binding null 也是失配——main 也是 worktree）', async () => {
+  it('未绑定 blank（binding null）× chip 选中树 A → 失配事件 + 改投显示树会话（binding null 也是失配——main 也是 worktree）', async () => {
     const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
     await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
     const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
     await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
     dispose()
     expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: null, displayed: WT_A }])
-    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
+    expect(rig.prompts).toHaveLength(1)
+    expect((rig.prompts[0] as { sessionId: string }).sessionId).not.toBe('blank')
+    expect((rig.prompts[0] as { text: string }).text).toBe('hi')
   })
 
-  it('chip 选主根 × 绑定树 A → 失配事件（binding ≠ chip 即失配，无论方向）', async () => {
+  it('chip 选中缺席（用户未做树选择）→ 打开的 blank 绑定即所见：零事件零干预（误报源收口——存量会话打开再发送不是失配）', async () => {
     const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
     const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
     await rig.controller.prompt({ sessionId: 's1', text: 'hi' })
     dispose()
-    expect(rig.mismatchEvents).toEqual([{ sessionId: 's1', binding: WT_A, displayed: 'C:/repo' }])
+    expect(rig.mismatchEvents).toEqual([])
     expect(rig.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
+  })
+
+  it('chip 选主根 × 绑定树 A（select 推送在场）→ 失配事件 + 改投主根会话（binding ≠ chip 即失配，无论方向）', async () => {
+    const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
+    await rig.service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
+    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
+    await rig.controller.prompt({ sessionId: 's1', text: 'hi' })
+    dispose()
+    expect(rig.mismatchEvents).toEqual([{ sessionId: 's1', binding: WT_A, displayed: 'C:/repo' }])
+    expect(rig.prompts).toHaveLength(1)
+    expect((rig.prompts[0] as { sessionId: string }).sessionId).not.toBe('s1')
+    expect((rig.prompts[0] as { text: string }).text).toBe('hi')
   })
 
   it('非 blank 既有会话零打扰（失配也不发射——绑定决定不重审）', async () => {

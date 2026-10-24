@@ -151,8 +151,9 @@ export interface WorktreeRpcService {
 
 /** 绑定哨兵 guard 面（judge——interceptRequiredBinding 消费） */
 export interface RequiredBindingGuardFace {
-  /** 恒 'pass'（WYSIWYG 哨兵——失配只发事件 + 日志，投递零干预）；异常 = typed 拒绝上抛 */
-  judge(sessionId: string): Promise<'pass'>
+  /** 'pass' = 原会话投递；{ routeTo } = 改投显示树会话（blank 失配——换绑竞态抢跑收口，
+   *  用户裁决 2026-10-24「创建的会话还是属于上一次选中的 worktree」）；异常 = typed 拒绝上抛 */
+  judge(sessionId: string): Promise<'pass' | { routeTo: string }>
 }
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
@@ -862,9 +863,11 @@ export function createWorktreeRpcService(deps: {
       if (deps.sessionController === undefined || deps.sessionPersistence === undefined) return undefined
       return {
         // WYSIWYG 哨兵（用户裁决 2026-10-24）：绑定树必须 == chip 显示树（main worktree 也是
-        // worktree——缺省显示 = 项目根）。git 项目 ∧ blank ∧ 绑定 ≠ 显示 → 失配事件（toast + 日志）
-        // + 原样投递（不重路由、不搬家、不归档）。非 blank 既有会话零打扰；worker/fork 子会话
-        // 归官方子代理机械所有恒放行；cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）。
+        // worktree）。git 项目 ∧ blank ∧ chip 选中在场 ∧ 绑定 ≠ 显示 → 失配事件（toast + 日志）
+        // + 改投显示树会话（预铸/复用——换绑竞态抢跑收口：预铸 0.7~2.2s 窗口里首条消息总落
+        // 旧树）。chip 选中缺席 = 用户未做树选择，打开的会话绑定即所见——零干预零提示。
+        // 非 blank 既有会话零打扰；worker/fork 子会话归官方子代理机械所有恒放行；
+        // cwd 漂移（SessionCwdMismatchError）原样上抛 = 拒绝（A5）。
         judge: async (sessionId) => {
           const header = await headerOf(sessionId)
           if (header.parentSession !== undefined) return 'pass' // 子会话非 hero 人口
@@ -886,20 +889,32 @@ export function createWorktreeRpcService(deps: {
             return 'pass' // 判读链异常 fail-open（正确性不依赖此径）
           }
           if (!(await blankOf(sessionId))) return 'pass' // 非 blank 既有会话 = 绑定决定，零打扰
-          // 所见 = chip 显示树（选中记忆；缺席回落主根 = 项目根——chip 缺省显示主行同判）
-          const displayed = lastSelection.get(norm(resolution.projectRoot)) ?? resolution.projectRoot
+          // 所见 = chip 显示树（选中记忆）。缺席 = 用户本回合并未做树选择——打开的会话
+          // 其绑定即所见（会话 chip 直出绑定），零干预零提示（误报源收口——存量 blank
+          // 会话打开再发送不再是「失配」）。
+          const selected = lastSelection.get(norm(resolution.projectRoot))
+          if (selected === undefined) return 'pass'
+          const displayed = selected
           const boundPath = binding?.worktreePath ?? null
           if (boundPath !== null && norm(boundPath) === norm(displayed)) return 'pass' // 绑定 ≡ 显示 ✓
-          // 失配哨兵：toast 事件 + 日志；消息按原会话投递（不重路由——显式原则）
+          // 失配（blank）：事件（toast）+ 日志 + **改投显示树会话**（预铸/复用）——换绑
+          // 编排 0.7~2.2s 竞态窗口里首条消息总落旧树（bug 实证日志 18:04-18:06 全程
+          // 复现），原会话投递即所见即所得违约。改投链失败 = fail-open 原会话投递。
           deps.emitSessionBindingMismatch?.({
             sessionId,
             binding: boundPath,
             displayed,
           })
           deps.failOpenDiag?.(
-            `[git-worktree] 绑定失配（WYSIWYG 哨兵）：会话 ${sessionId} 绑定 ${boundPath ?? '(未绑定)'} ≠ chip 显示 ${displayed}`,
+            `[git-worktree] 绑定失配（WYSIWYG 哨兵）：会话 ${sessionId} 绑定 ${boundPath ?? '(未绑定)'} ≠ chip 显示 ${displayed}——改投显示树`,
           )
-          return 'pass'
+          try {
+            const product = await service.sessionCreate({ worktreePath: displayed })
+            return { routeTo: product.sessionId }
+          } catch (cause) {
+            deps.failOpenDiag?.(`[git-worktree] 哨兵改投失败（fail-open 原会话投递）：${String(cause)}`)
+            return 'pass'
+          }
         },
       }
     },
@@ -1092,7 +1107,14 @@ export function interceptRequiredBinding(
       if (sessionId !== undefined) {
         // 哨兵判读（fail-open 域）：judge 链异常放行（正确性不依赖此径）；A5/W2 typed 拒绝原样上抛
         try {
-          await guard.judge(sessionId)
+          const verdict = await guard.judge(sessionId)
+          if (typeof verdict === 'object' && verdict !== null) {
+            // 改投（blank 失配——首条消息投显示树会话）：请求体换 sessionId 后原链投递
+            warn(`[git-worktree] 绑定哨兵改投：${sessionId} → ${verdict.routeTo}（首条消息投显示树）`)
+            if (args[0] !== undefined && typeof args[0] === 'object') {
+              args[0] = { ...(args[0] as Record<string, unknown>), sessionId: verdict.routeTo }
+            }
+          }
         } catch (cause) {
           const name = (cause as Error)?.name
           if (name === 'SessionCwdMismatchError' || name === 'WorktreeCapabilityAbsentError') throw cause // A5：拒绝不放行；W2 缺席拒绝同径
