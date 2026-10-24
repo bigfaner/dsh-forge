@@ -67,6 +67,12 @@ import {
 } from './plugin.js'
 import type { SessionCreateWrapDeps } from './create-wrap.js'
 import { FORGE_PROGRESS_NODE_KIND, FORGE_PROGRESS_NODE_SLOT, forgeProgressDefinition } from './progress-node.js'
+import {
+  FORGE_EVENT_NODE_KIND,
+  FORGE_EVENT_NODE_SLOT,
+  forgeEventGroupDefinition,
+  forgeEventStreamDefinition,
+} from './forge-event-node.js'
 import { HERO_PANEL_KEY as SHELL_HERO_KEY, KNOWLEDGE_PANEL_KEY as SHELL_KNOWLEDGE_KEY } from '../workbench/panel-model.js'
 import {
   DSWF_DOC_ADDRESS_PREFIX as DOCK_DOC_PREFIX,
@@ -328,6 +334,7 @@ function publishFakeViews() {
     ForgeRecallView: 'COMP:recall-view',
     ForgeDispatchToolRow: 'COMP:dispatch-tool-row',
     ForgeProgressNode: 'COMP:progress-node',
+    ForgeEventEntries: 'COMP:event-entries',
     ForgeOverviewTab: 'COMP:overview-tab',
     ForgeDocsTab: 'COMP:docs-tab',
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
@@ -456,6 +463,7 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       HERO_WORKSPACE_SLOT,
       TOOL_CALL_TOOLVIEW_SLOT,
       FORGE_PROGRESS_NODE_SLOT, // 1.17 'forge/progress' keyed node body
+      FORGE_EVENT_NODE_SLOT, // 1.9 消息面事件折叠条目组 keyed node body
       SESSION_HEADER_ACTIONS_SLOT, // fix-2 worktree 会话头只读 chip
       CONVERSATION_INPUT_OVERLAY_SLOT, // fix-2 封存提示 overlay（composer 区官方缝）
       CONVERSATION_INPUT_OVERLAY_SLOT, // bug 4b34e5d8 chip 重建缝（零视觉效应行）
@@ -695,7 +703,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(typeof face.openKnowledgeEntry).toBe('function')
     void selectPanel
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.17 progress 节点；fix-2 封存提示；bug 4b34e5d8 chip 重建效应行
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, FORGE_EVENT_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // fix-24 ① hero 影子；1.17 progress 节点；1.9 事件折叠条目组；fix-2 封存提示；bug 4b34e5d8 chip 重建效应行
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -723,7 +731,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // bug 4b34e5d8 起双 overlay 登记口径
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, FORGE_EVENT_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT]) // bug 4b34e5d8 起双 overlay 登记口径
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })
@@ -754,17 +762,33 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     const views = publishFakeViews()
     const { ctx, registers, eventDefinitions } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
-    // 第一段：uiConversation.events.register 节点 Definition 恰一
-    expect(eventDefinitions).toHaveLength(1)
+    // 第一段：uiConversation.events.register 节点 Definition 恰一（1.9 起三件：progress + 事件流状态机 + 组节点）
+    expect(eventDefinitions).toHaveLength(3)
     expect(eventDefinitions[0]).toBe(forgeProgressDefinition)
-    // 第二段：keyed node body 恰一——key = 节点 kind（buildViewNode.kind 字面量同源）
-    const bodies = registers.filter((r) => r.key === FORGE_PROGRESS_NODE_SLOT)
+    expect(eventDefinitions[1]).toBe(forgeEventStreamDefinition)
+    expect(eventDefinitions[2]).toBe(forgeEventGroupDefinition)
+    // 第二段：keyed node body 恰一——key = 节点 kind（buildViewNode.kind 字面量同源；1.9 起同槽双 body，按 key 过滤）
+    const bodies = registers.filter((r) => r.key === FORGE_PROGRESS_NODE_SLOT && r.options.key === FORGE_PROGRESS_NODE_KIND)
     expect(bodies, 'conversation.chat.node 恰一登记（只接管 forge-progress kind）').toHaveLength(1)
     const body = bodies[0]!
     expect(body.options.key).toBe(FORGE_PROGRESS_NODE_KIND)
     expect(body.options.key).toBe('forge-progress')
     expect(body.options.locale).toBe(FORGE_LOCALE_NS)
     expect(body.component).toBe(views.ForgeProgressNode)
+    unpublishViews()
+  })
+
+  it("1.9 消息面事件折叠条目组（source.kind 铸造 send 落库消息）：events.register 定义对 + conversation.chat.node keyed 'forge-event-group' body（发布组件 + locale NS）——人类插话分组锚点面", () => {
+    const views = publishFakeViews()
+    const { ctx, registers } = fakeClientCtx()
+    forgeClientPlugin().apply(ctx)
+    // keyed node body：key = 组块节点 kind（buildViewNode.kind 字面量同源）
+    const bodies = registers.filter((r) => r.key === FORGE_EVENT_NODE_SLOT)
+    expect(bodies.filter((body) => body.options.key === FORGE_EVENT_NODE_KIND), 'forge-event-group body 恰一').toHaveLength(1)
+    const body = bodies.find((candidate) => candidate.options.key === FORGE_EVENT_NODE_KIND)!
+    expect(body.options.key).toBe('forge-event-group')
+    expect(body.options.locale).toBe(FORGE_LOCALE_NS)
+    expect(body.component).toBe(views.ForgeEventEntries)
     unpublishViews()
   })
 
@@ -782,6 +806,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.views?.error).toBeUndefined()
     expect(marker?.views?.registered).not.toContain(FORGE_PROGRESS_NODE_SLOT)
+    expect(marker?.views?.registered).not.toContain(FORGE_EVENT_NODE_SLOT)
     unpublishViews()
   })
 
@@ -1367,7 +1392,7 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     const { ctx } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
+    expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_PROGRESS_NODE_SLOT, FORGE_EVENT_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
     expect(marker?.views?.error).toBeUndefined()
     unpublishViews()
   })

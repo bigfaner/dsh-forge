@@ -14,6 +14,9 @@
 | `dispatch-events-panel.css` | 悬浮进度流面板样式（全令牌 + prototype.html 结构刻度注记；半透明悬浮球 hover 实化） |
 | `DispatchPanel.tsx` | worker 执行会话解析辅助面（1.8 后残面——悬浮面板 UI 由 DispatchEventsPanel 接替退役；概览任务 tab 消费 `fetchWorkerSession`/`workerSessionOf`/`parentSessionOf`） |
 | `session.css` | 视图 pane/召回行样式（全令牌；头部/页签行/对话面/轨迹表样式归官方件——零自绘；dswf-stp pill 样式随 D5 退役删除） |
+| `ForgeEventEntries.tsx` | 消息面事件折叠条目组（loop-event-delivery 1.9——`conversation.chat.node` keyed 'forge-event-group' 占用者）：组头（forge 徽记点 + 条数 + HH:mm 时间范围）+ 展开逐条（HH:mm:ss + 场景章胶囊族色 + 任务标题 + 摘要）；`isLatest` 默认展开（前组收起——人类插话 = 分组锚点）；他形/ kind 漂移 null 零残留 |
+| `forge-event-data.ts` | 组块数据守卫（`isForgeEventGroupData` 形状防御——buildViewNode data 镜像）+ 场景章族色映射（run/done/blk）+ HH:mm/HH:mm:ss 时刻刻度 |
+| `forge-event-entries.css` | 折叠条目组样式（prototype.html 左栏形态——hairline 组块 + 胶囊场景章；全令牌 dsw-raw 刻度注记） |
 
 ## 官方 roster 契约（fix-25 降位形态）
 

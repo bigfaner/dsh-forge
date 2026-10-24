@@ -42,6 +42,7 @@ import {
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
 import { ForgeDispatchToolRow, type ForgeDispatchToolRowProps } from './views/session/DispatchToolRow.js'
 import { ForgeProgressNode, type ForgeProgressNodeProps } from './views/session/ForgeProgressNode.js'
+import { ForgeEventEntries, type ForgeEventEntriesProps } from './views/session/ForgeEventEntries.js'
 import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
@@ -90,6 +91,8 @@ export interface ForgePublishedViews {
   readonly ForgeDispatchToolRow: ComponentType<ForgeDispatchToolRowProps>
   /** conversation.chat.node keyed 'forge-progress' 占用者（1.17 'forge/progress' 折叠行节点） */
   readonly ForgeProgressNode: ComponentType<ForgeProgressNodeProps>
+  /** conversation.chat.node keyed 'forge-event-group' 占用者（1.9 消息面事件折叠条目组） */
+  readonly ForgeEventEntries: ComponentType<ForgeEventEntriesProps>
   /** sidebar.right.pane.tab keyed 'dswf-overview' 占用者（M2 UF-1 概览 dock tab body——4.1） */
   readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
   /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
@@ -132,6 +135,7 @@ declare global {
   ForgeRecallView,
   ForgeDispatchToolRow,
   ForgeProgressNode,
+  ForgeEventEntries,
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,

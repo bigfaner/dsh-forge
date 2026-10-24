@@ -48,6 +48,13 @@ import {
   forgeProgressDefinition,
   type ForgeUiConversationService,
 } from './progress-node.js'
+// loop-event-delivery 1.9 消息面事件折叠条目组定义对（纯模块零 import——同上）
+import {
+  FORGE_EVENT_NODE_KIND,
+  FORGE_EVENT_NODE_SLOT,
+  forgeEventGroupDefinition,
+  forgeEventStreamDefinition,
+} from './forge-event-node.js'
 // 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
 import {
   createOpenSessionOrchestrator,
@@ -749,6 +756,7 @@ export interface ForgeViewsGlobal {
     ForgeRecallView: unknown
     ForgeDispatchToolRow: unknown
     ForgeProgressNode: unknown
+    ForgeEventEntries: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
@@ -1118,6 +1126,7 @@ function registerConversationViews(
     ),
   )
   registerProgressNode(ctx, views, diagnostics)
+  registerEventEntriesNode(ctx, views, diagnostics)
 }
 
 /**
@@ -1192,6 +1201,41 @@ function registerProgressNode(ctx: ForgeClientCtx, views: PublishedViews, diagno
       // 声明（行内 t 座——组件自足标签暂零词条，注册面留语言归属锚）
       { name: FORGE_PROGRESS_NODE_SLOT, key: FORGE_PROGRESS_NODE_KIND, locale: FORGE_LOCALE_NS },
       views.ForgeProgressNode,
+    ),
+  )
+}
+
+/**
+ * loop-event-delivery 1.9 消息面事件折叠条目组（source.kind 铸造的 send 落库消息——
+ * 人类插话为分组锚点的折叠条目组）：三段注册（progress-node 两段同型 + 状态机一段）
+ * ——① `uiConversation.events.register` stream 状态机（常量 id 单 Context 折叠全会话
+ * user/message 流：人类插话开新组；revision 随消息递增驱动组节点重放）；② 同注册表
+ * 组节点定义（每条 forge 事件消息一个 Context——id 键控增量渲染；仅组末成员发射组块，
+ * anchorSeq = 组末 seq）；③ `conversation.chat.node` keyed 'forge-event-group' body
+ * （prototype 左栏形态组块——组件经发布面递达）。uiConversation 缺席/定义注册被拒 =
+ * 全跳 fail-soft 不炸（capability absence = 无节点）。事件径消息在官方 input-message
+ * 定义下本为不可见 context 行——本面纯增量渲染，人类气泡/既有流零回归。
+ */
+function registerEventEntriesNode(ctx: ForgeClientCtx, views: PublishedViews, diagnostics: { registered?: string[] }): void {
+  let uiConversation: ForgeUiConversationService | undefined
+  try {
+    uiConversation = ctx.get('uiConversation') as ForgeUiConversationService | undefined
+  } catch {
+    uiConversation = undefined
+  }
+  const registerEvents = uiConversation?.events?.register
+  if (uiConversation === undefined || typeof registerEvents !== 'function') return
+  try {
+    registerEvents.call(uiConversation.events, forgeEventStreamDefinition)
+    registerEvents.call(uiConversation.events, forgeEventGroupDefinition)
+  } catch {
+    return // Definition 注册被拒（重复 kind 等）——渲染段不落半座
+  }
+  registerSlotEntry(ctx, FORGE_EVENT_NODE_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // keyed node body：key = 节点 kind（buildViewNode.kind 字面量同源）；locale NS 声明
+      { name: FORGE_EVENT_NODE_SLOT, key: FORGE_EVENT_NODE_KIND, locale: FORGE_LOCALE_NS },
+      views.ForgeEventEntries,
     ),
   )
 }
