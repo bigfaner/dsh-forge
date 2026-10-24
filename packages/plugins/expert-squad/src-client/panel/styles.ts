@@ -1,0 +1,73 @@
+// panel/styles —— 专家卡片网格样式（ui-design F1 已批原型 · DESIGN.md 令牌消费）。
+// 经典 script 装载无 CSS 管道——ensurePanelStyles 以 <style data-dswf-expert-squad>
+// 单例注入（幂等）。纪律：色/字/距零裸值，一律 var(--dsw-*) 令牌；刻度取官方排版
+// 行高与圆角标尺（原型 10/14px → 最近令牌，先例 dispatch-panel.css 注记口径）。
+
+/** 令牌刻度别名（读性——原型值 → 官方最近令牌映射的唯一注记点）。 */
+const T = {
+  gap8: "var(--dsw-radius-sm)", // 8
+  pad12: "var(--dsw-radius-md)", // 12（原型 14 → 最近令牌）
+  pad16: "var(--dsw-radius-lg)", // 16
+  pad20: "var(--dsw-font-xs-13-line-height)", // 20
+  lh14: "var(--dsw-font-xxxs-11-line-height)", // 14
+  lh18: "var(--dsw-font-xxs-12-line-height)", // 18
+  lh20: "var(--dsw-font-xs-13-line-height)", // 20
+  r8: "var(--dsw-radius-sm)",
+  r12: "var(--dsw-radius-md)",
+  pill: "999px", // dsw-raw 官方 Tag 胶囊刻度同值
+} as const;
+
+/** 面板样式表（.dswf-* 自绘面前缀；双主题经 --dsw-alias 令牌自动切换）。 */
+export const PANEL_CSS = `
+.dswf-expert-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; color: var(--dsw-alias-label-primary); }
+.dswf-panel-header { display: flex; align-items: center; flex-wrap: wrap; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-panel-title { margin: 0 auto 0 0; font: var(--dsw-font-l-20); font-weight: 500; }
+.dswf-search { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; width: 170px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
+.dswf-search::placeholder { color: var(--dsw-alias-label-tertiary); }
+.dswf-search:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dswf-menu-btn { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-menu-btn.on { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l4); }
+.dswf-btn { font: var(--dsw-font-xs-13); font-weight: 500; padding: 0 ${T.pad20}; height: ${T.lh20}; border: none; border-radius: ${T.r8}; cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-btn-primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); }
+.dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
+.dswf-btn-ghost { background: transparent; color: var(--dsw-alias-label-secondary); border: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dswf-card-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: ${T.pad12}; padding: ${T.pad12}; align-content: start; overflow: auto; min-height: 0; }
+.dswf-xcard { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; cursor: var(--dsh-cursor-pointer, pointer); transition: box-shadow 0.2s var(--ds-ease-in-out); }
+.dswf-xcard:hover { box-shadow: var(--dsw-elevation-soft); }
+.dswf-xcard.off { opacity: 0.55; } /* dsw-raw 原型禁用卡降透明刻度 */
+.xc-head { display: flex; align-items: center; gap: ${T.gap8}; }
+.xc-name { font-size: var(--dsw-font-s-14-font-size); line-height: var(--dsw-font-s-14-line-height); font-weight: 500; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; } /* dsw-raw 原型状态灯点径刻度 */
+.dot.on { background: var(--dsw-alias-state-success-primary); }
+.dot.off { background: var(--dsw-alias-label-caption); }
+.xc-title { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* dsw-raw 灯后文本对齐缩进 */
+.xc-creed { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.xc-seg { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
+.xc-tags { display: flex; gap: 6px; flex-wrap: wrap; } /* dsw-raw 原型 chips 间距刻度 */
+.chip { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; height: 20px; padding: 0 ${T.pad20}; border-radius: ${T.pill}; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
+.chip.tool { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); }
+.xc-foot { display: flex; justify-content: space-between; align-items: center; padding-top: ${T.gap8}; margin-top: 2px; border-top: 0.5px solid var(--dsw-alias-border-l2); font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
+.dswf-panel-footer { padding: ${T.gap8} ${T.pad16}; border-top: 0.5px solid var(--dsw-alias-border-l2); font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
+.dswf-skeleton-card { height: 108px; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; background: linear-gradient(90deg, transparent, var(--dsw-alias-interactive-bg-hover), transparent); background-size: 200% 100%; animation: dswf-xcard-sk 1.2s infinite; }
+@keyframes dswf-xcard-sk { to { background-position: -200% 0; } }
+.dswf-empty { grid-column: 1 / -1; text-align: center; padding: 56px 20px; color: var(--dsw-alias-label-secondary); }
+.dswf-empty b { display: block; color: var(--dsw-alias-label-primary); font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; margin-bottom: 6px; }
+.dswf-errorbar { grid-column: 1 / -1; display: flex; align-items: center; gap: ${T.pad20}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-danger-primary); font: var(--dsw-font-xs-13); }
+`;
+
+/** 已注入标记（模块级单例——classic script 装载一次）。 */
+let injected = false;
+
+/**
+ * 幂等注入面板样式（document 缺席 = 静默跳过——SSR/Node 测试面）。
+ * 重复调用零副作用；卸载不回收（经典 script 插件生命周期 = 宿主页生命周期）。
+ */
+export function ensurePanelStyles(doc: Document | undefined = globalThis.document): void {
+  if (injected || doc === undefined) return;
+  const style = doc.createElement("style");
+  style.setAttribute("data-dswf-expert-squad", "");
+  style.textContent = PANEL_CSS;
+  doc.head.appendChild(style);
+  injected = true;
+}

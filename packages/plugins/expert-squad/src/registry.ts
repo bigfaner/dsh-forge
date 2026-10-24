@@ -53,10 +53,12 @@ export interface ExpertsStateFace {
   setEnabled(workspacePath: string, expertId: string, enabled: boolean): Promise<void>;
 }
 
-/** 取用记录：档案半 + origin/enabled（§7 ExpertRecord 全字段）。 */
+/** 取用记录：档案半 + origin/enabled/updatedAt（§7 ExpertRecord 全字段）。 */
 export type ExpertEntry = ExpertRecord & {
   origin: ExpertOrigin;
   enabled: boolean;
+  /** 来源文件 mtime（ISO-8601——面板卡片更新时间页脚数据源）。 */
+  updatedAt: string;
 };
 
 /** 服务键 `experts` 契约面（§7）。 */
@@ -156,6 +158,7 @@ function buildEntry(scanned: ExpertSnapshot["experts"] extends ReadonlyMap<strin
     model: scanned.model,
     origin: scanned.origin,
     enabled,
+    updatedAt: scanned.updatedAt,
   };
 }
 

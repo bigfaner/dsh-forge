@@ -1,0 +1,118 @@
+// panel 视图静态渲染单测（ui-design F1 四态 + 卡片字段集 + 页脚）：SSR 静态标记
+// 逐位断言——骨架/空（零专家 & 无匹配）/错误/数据四态、卡片字段（状态灯/名称/标识
+// chip/岗位/人设三行截断/技能与白名单 chips/更新时间页脚）、面板页脚计数、禁用卡降级。
+
+import { describe, expect, it } from "vitest";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ExpertPanel, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
+import type { ExpertView } from "../src-client/panel/filter.js";
+
+function entry(overrides: Partial<ExpertView> = {}): ExpertView {
+  return {
+    name: "code-reviewer",
+    title: "资深评审",
+    description: "Runs code review",
+    personaMd: "## 职责\n- 评审 diff 与正确性\n- 意见按严重度分级",
+    tools: ["read", "edit"],
+    skills: ["review", "tsc"],
+    origin: "project",
+    enabled: true,
+    updatedAt: "2026-10-18T08:30:00.000Z",
+    ...overrides,
+  };
+}
+
+function renderPanel(overrides: Partial<ExpertPanelProps> = {}): string {
+  const props: ExpertPanelProps = {
+    phase: "ready",
+    entries: [entry()],
+    query: "",
+    status: "all",
+    onQueryChange: () => undefined,
+    onStatusChange: () => undefined,
+    ...overrides,
+  };
+  return renderToStaticMarkup(React.createElement(ExpertPanel, props));
+}
+
+describe("ExpertPanel 四态（ui-design F1）", () => {
+  it("骨架态：6 张骨架卡 + 页脚「扫描专家目录…」", () => {
+    const html = renderPanel({ phase: "loading", entries: [] });
+    expect(html.match(/dswf-skeleton-card/g)?.length).toBe(6);
+    expect(html).toContain("扫描专家目录…");
+  });
+
+  it("错误态：ErrorBar（role=alert）+ 重试入口，页脚计数空", () => {
+    let retried = 0;
+    const html = renderPanel({
+      phase: "error",
+      entries: [],
+      errorMessage: "boom",
+      onRetry: () => {
+        retried += 1;
+      },
+    });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("重试");
+    expect(html).toContain("boom");
+    expect(html).not.toContain("位专家");
+    expect(retried).toBe(0); // SSR 静态：动作面在挂载期
+  });
+
+  it("空态（零专家）：建档引导文案，页脚 0 位专家", () => {
+    const html = renderPanel({ entries: [] });
+    expect(html).toContain("还没有专家");
+    expect(html).toContain("招募一个专家");
+    expect(html).toContain("0 位专家");
+  });
+
+  it("无匹配空态：搜索过滤清零文案", () => {
+    const html = renderPanel({ query: "nope" });
+    expect(html).toContain("无匹配专家");
+    expect(html).toContain("换个关键词或过滤条件试试");
+    expect(html).not.toContain("dswf-xcard ");
+  });
+
+  it("数据态：卡片字段集逐位在场（灯/名称/标识 chip/岗位/人设/chips/更新页脚）", () => {
+    const html = renderPanel();
+    expect(html).toContain("dswf-xcard");
+    expect(html).toContain("dot on");
+    expect(html).toContain("code-reviewer"); // 名称与英文标识 chip 同源（键正本）
+    expect(html).toContain("资深评审"); // 岗位 ← title
+    expect(html).toContain("评审 diff 与正确性"); // 人设摘要（Markdown 剥离后）
+    expect(html).toContain("技能标签");
+    expect(html).toContain("工具白名单（子会话强制）");
+    expect(html).toContain("更新于 2026-10-18"); // 页脚更新时间
+    expect(html).toContain("1 位专家 · 显示 1");
+  });
+
+  it("禁用卡：状态灯 off、岗位附「· 已禁用」、整卡降透明类", () => {
+    const html = renderPanel({ entries: [entry({ enabled: false })] });
+    expect(html).toContain("dot off");
+    expect(html).toContain("已禁用");
+    expect(html).toContain("dswf-xcard off");
+  });
+
+  it("计数页脚：总数 × 过滤后显示数", () => {
+    const entries = [entry(), entry({ name: "b" }), entry({ name: "c", enabled: false })];
+    const html = renderPanel({ entries, status: "enabled" });
+    expect(html).toContain("3 位专家 · 显示 2");
+  });
+});
+
+describe("ExpertPanel 头部交互面", () => {
+  it("搜索框回填 query；状态过滤钮三枚、激活态标 on", () => {
+    const html = renderPanel({ query: "rev", status: "enabled" });
+    expect(html).toContain('value="rev"');
+    expect(html).toContain('data-status="all"');
+    expect(html).toContain('data-status="enabled"');
+    expect(html).toContain('data-status="disabled"');
+    expect(html.match(/dswf-menu-btn on/g)?.length).toBe(1);
+  });
+
+  it("onSummon 在场 = 召唤钮呈现（HR 预设招聘对话入口）；缺席不呈现", () => {
+    expect(renderPanel({ onSummon: () => undefined })).toContain("召唤");
+    expect(renderPanel({})).not.toContain(">召唤<");
+  });
+});

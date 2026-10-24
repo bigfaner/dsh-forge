@@ -86,7 +86,7 @@ describe("get：fail-loud 错误语义（AD1）", () => {
   it("存在且启用 → 返回 ExpertRecord 全字段", async () => {
     const reg = await makeRegistry();
     const record = reg.get("code-reviewer");
-    expect(record).toEqual({
+    expect(record).toMatchObject({
       name: "code-reviewer",
       title: "资深评审",
       description: "Runs code review on diffs and files.",
@@ -97,6 +97,8 @@ describe("get：fail-loud 错误语义（AD1）", () => {
       origin: "project",
       enabled: true,
     });
+    // updatedAt = 来源文件 mtime（ISO 串；面板更新时间页脚数据源）
+    expect(record.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it("可选 model 字段在档案载明时透传", async () => {

@@ -447,12 +447,18 @@ importers:
       '@types/react':
         specifier: 18.3.12
         version: 18.3.12
+      '@types/react-dom':
+        specifier: 18.3.0
+        version: 18.3.0
       esbuild:
         specifier: 0.24.2
         version: 0.24.2
       react:
         specifier: 18.3.1
         version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
       zod:
         specifier: 4.6.5
         version: 4.6.5

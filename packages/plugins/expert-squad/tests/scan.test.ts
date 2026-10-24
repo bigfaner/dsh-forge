@@ -184,4 +184,13 @@ describe("root 不可读降级（§9：warn + 跳过该 root，其余正常）",
     expect(snap.experts.has("ok")).toBe(true);
     expect(snap.warnings).toEqual([]);
   });
+
+  it("updatedAt：来源文件 mtime 的 ISO 串（面板更新时间页脚数据源）", async () => {
+    const l = await makeThreeLayers();
+    await writeFile(join(l.plugin, "timed.md"), expertMd("timed", "t"));
+    const snap = await scanExpertRoots(rootsOf(l));
+    const updatedAt = snap.experts.get("timed")?.updatedAt ?? "";
+    expect(updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(Number.isNaN(Date.parse(updatedAt))).toBe(false);
+  });
 });

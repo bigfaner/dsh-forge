@@ -17,10 +17,12 @@ import { parseExpertFile, type ExpertRecord } from "./frontmatter.js";
 /** 三层来源（优先级 project > user > plugin，AD3）。 */
 export type ExpertOrigin = "project" | "user" | "plugin";
 
-/** 取用结果：档案半 + 扫描层附加的 origin 与来源文件路径。 */
+/** 取用结果：档案半 + 扫描层附加的 origin、来源文件路径与更新时间。 */
 export type ScannedExpert = ExpertRecord & {
   origin: ExpertOrigin;
   filePath: string;
+  /** 来源文件 mtime（ISO-8601；面板卡片更新时间页脚数据源）。 */
+  updatedAt: string;
 };
 
 /** 一代完整索引快照：冻结对象，整体换代，无半代形态。 */
@@ -118,13 +120,27 @@ async function scanRoot(
       warnings.push(`同层撞名，后者跳过：键 ${parsed.record.name} 同时由 ${prior.filePath} 与 ${filePath} 提供（同层同键拒绝写入）`);
       continue;
     }
-    found.set(parsed.record.name, { ...parsed.record, origin: root.origin, filePath });
+    found.set(parsed.record.name, {
+      ...parsed.record,
+      origin: root.origin,
+      filePath,
+      updatedAt: updatedIsoOf(filePath),
+    });
   }
   return found;
 }
 
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** 来源文件 mtime → ISO 串（stat 失败 = 纪元兜底——页脚降级不阻断取用）。 */
+function updatedIsoOf(filePath: string): string {
+  try {
+    return statSync(filePath).mtime.toISOString();
+  } catch {
+    return new Date(0).toISOString();
+  }
 }
 
 /**

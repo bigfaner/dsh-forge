@@ -13,9 +13,9 @@ const pkgDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_ID = "@dsh-forge/expert-squad";
 
 // 平台基线外置表（对齐官方冻结种子表口径；react 永不内联——内联第二副本会使
-// shell 渲染树 hooks 读到另一副本 dispatcher，Invalid hook call）。骨架期 client
-// face 零平台 require；后续面板组件化消费出现时仍保持 react 外置。
-const PLATFORM_MODULES = ["react"];
+// shell 渲染树 hooks 读到另一副本 dispatcher，Invalid hook call）。面板组件化后
+// jsx-runtime 消费出现，与 react 同列外置（官方 clientBundle 种子表同形）。
+const PLATFORM_MODULES = ["react", "react/jsx-runtime"];
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/client/index.js")],
