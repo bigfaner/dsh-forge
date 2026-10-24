@@ -147,7 +147,7 @@ describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回�
     expect(clamped.endsWith('…')).toBe(true)
   })
 
-  it('followup → 活根 followup：完整消息（source kind user——主会话新回合并唤醒）', async () => {
+  it('followup → 活根 followup：完整消息（1.18 AD-4——source kind forge-loop 循环哨兵，非人工输入蓝气泡）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
     await channel.followup('s-1', '任务源 feat-x 全部完成')
@@ -155,8 +155,25 @@ describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回�
     expect(spy.followed[0]).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: '任务源 feat-x 全部完成' }],
-      source: { kind: 'user' },
+      source: { kind: 'forge-loop', loopKind: 'dispatch', form: 'notice', summary: '任务源 feat-x 全部完成' },
     })
+    const source = (spy.followed[0] as { source: { runId?: string; task?: string; state?: string } }).source
+    expect(typeof source.runId).toBe('string')
+    expect((source.runId as string).length).toBeGreaterThan(0)
+    expect(source.task).toBe('')
+    expect(source.state).toBe('followup')
+  })
+
+  it('followup 携带循环上下文（task/state 透传；runId 铸发唯一——两次注入不同 runId）', async () => {
+    const spy = agentSpy()
+    const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
+    await channel.followup('s-1', '无法自动处理——已向你发起问询', { task: '4.2', state: 'blocked-ask-user' })
+    await channel.followup('s-1', '第二次注入')
+    const first = (spy.followed[0] as { source: { task?: string; state?: string; runId?: string } }).source
+    const second = (spy.followed[1] as { source: { runId?: string } }).source
+    expect(first.task).toBe('4.2')
+    expect(first.state).toBe('blocked-ask-user')
+    expect(first.runId).not.toBe(second.runId)
   })
 
   it('会话无活根 / 面 non-function：静默跳过不抛（R4 叙述通道存活依赖 fail-soft 第二道防线）', async () => {

@@ -102,8 +102,8 @@ describe('preload 暴露面（window.dshForge）', () => {
     await api.invoke('forge:projects/list', undefined)
     await api.invoke('forge:projects/list', undefined)
     const calls = face.invoke.mock.calls as unknown as Array<[string, unknown, string]>
-    expect(calls[0][2]).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/)
-    expect(calls[1][2]).not.toBe(calls[0][2])
+    expect(calls[0]![2]).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/)
+    expect(calls[1]![2]).not.toBe(calls[0]![2])
   })
 
   it('负样例：未列通道拒绝（forge 前缀伪通道 / 邪恶前缀 / boot 通道混用）——不触 ipcRenderer', () => {

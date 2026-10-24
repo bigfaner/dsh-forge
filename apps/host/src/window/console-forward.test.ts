@@ -60,7 +60,7 @@ describe('forwardRendererConsole（折叠计数 + 诊断域 emit）', () => {
     for (let i = 0; i < 5; i++) h.listeners[0]?.({ level: 'warn', message: 'changes.summary 404' })
     h.forward.flush()
     expect(h.emitted).toHaveLength(1)
-    expect(h.emitted[0].repeat).toBe(4)
+    expect(h.emitted[0]!.repeat).toBe(4)
   })
 
   it('bug 84b5216a：真机 warning closer 行收口先行 error 折叠组（无须显式 flush）', () => {

@@ -39,6 +39,10 @@ export interface ForgeRemoteEntryProps {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关动作（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：连接密钥三件套读数缝（读数即显——缺席 = 段内空态） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  /** 1.107：连接密钥轮换动作缝（重新生成——确认弹窗防误触；缺席 = 动作禁用态） */
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
 }
 
 /** 四态人面语言（图标 aria-label 与面板状态行同源）——fix-7 语义对齐官方：等待扫码 /
@@ -69,10 +73,27 @@ export const PAIRING_COUNTDOWN_SECONDS = 300
  *  connected 位变化经 refresh → getBootManifest 单源回流，任何失败路径可收敛不冻结） */
 export const REMOTE_STATUS_POLL_MS = 800
 
+/** 断开 toast 文案派生（用户裁决 2026-10-22：连接断开 → 错误 toast 不限时、点击关闭）。
+ *  仅 connected → 非 connected 转换回报（listening/off/pending 间互转零打扰）。 */
+export function remoteDisconnectToast(prev: RemotePhase, next: RemotePhase): string | undefined {
+  if (prev !== 'connected' || next === 'connected') return undefined
+  return next === 'off'
+    ? '手机连接已断开（远程访问已关闭）'
+    : '手机连接已断开——等待重新配对'
+}
+
 /** 隧道空态文案（fix-10：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——互联网 tab
  *  内空态收敛，不禁用 tab、不停留「正在建立隧道」无限进行态） */
 export function tunnelEmptyText(): string {
   return '隧道暂不可用——宿主建立公网隧道失败或已关闭。可稍后重开此面板重试，或使用 WiFi 连接模式。'
+}
+
+/** 换线/重置 PIN 重建收敛上界（毫秒——双链路皆败撤面时兜底解遮落失败态，不永挂）。 */
+export const TUNNEL_REBUILD_UPPER_BOUND_MS = 15_000
+
+/** 重建收敛判定（纯函数单源）：tunnel 面回归 ∨ 上界到点。 */
+export function rebuildConverged(nowTs: number, deadline: number, hasTunnel: boolean): boolean {
+  return hasTunnel || (deadline !== 0 && nowTs > deadline)
 }
 
 /** 倒计时余秒（纯函数——token TTL 读数驱动；缺席 = 官方 300s 兜底；过期收敛 0） */
@@ -98,28 +119,53 @@ export const FALLBACK_LINK_TEXT = '扫码打不开？换一条线路'
 /** 换线进行中文案（官方 fallbackLoading——遮罩承载） */
 export const FALLBACK_LOADING_TEXT = '正在切换备用线路'
 /** PIN 方框 label（官方 pinLabel） */
-export const PIN_LABEL_TEXT = '连接密码'
+export const PIN_LABEL_TEXT = '配对 PIN'
 /** PIN 临时 hint 前段（官方 pinHintTemp——§1 逐字；后缀 ` (Ns)` 实时秒倒计时 fix-26 ⑧） */
 export const PIN_HINT_TEMP_TEXT = '5 分钟内有效，过期后需重新扫码。'
 /** PIN 长效 hint（官方 pinHintDurable——§1 逐字；fix-26 ⑦） */
-export const PIN_HINT_DURABLE_TEXT = '长效密码保存在本机，可随时重置或取消。'
+export const PIN_HINT_DURABLE_TEXT = '长效 PIN 保存在本机，可随时重置或取消。'
 /** PIN 重置动作逐字文案（官方 pinReset——pinIssuer rotate 缝触发） */
-export const PIN_RESET_TEXT = '重置密码'
-/** PIN 取消动作逐字文案（官方 pinCancel——fix-26 ⑤ 对齐：解除长效回临时 PIN + QR 换新） */
-export const PIN_CANCEL_TEXT = '取消长效密码'
+export const PIN_RESET_TEXT = '重置 PIN'
 /** PIN consent checkbox label（官方 pinConsent——§1 逐字；fix-21 §2⑥ 样式对齐面，
  *  durable 后端机制 host 端点缺（§4 差值③在途）——本任务只落展示行） */
-export const PIN_CONSENT_TEXT = '生成长期有效的连接密码'
+export const PIN_CONSENT_TEXT = '生成长期有效的配对 PIN'
 /** PIN consent 隐私 small 字（官方 pinPrivacy——§1 逐字） */
-export const PIN_PRIVACY_TEXT = '长效密码只保存在本机，不上云、不写入二维码，可随时重置或取消。'
+export const PIN_PRIVACY_TEXT = '长效 PIN 只保存在本机，不上云、不写入二维码，可随时重置或取消。'
+
+// ── 1.107 互联网模式带外秘钥展示面（连接密钥三件套——位置 = 连接密码下方，用户裁决 2026-10-19） ──
+
+/** 连接密钥三件套读数（读数即显——桌面零缓存零 storage，轮换后旧读数失效） */
+export interface PskTrioFace {
+  /** PSK 展示串（base32 5 字符 ×8 组 `-` 分隔） */
+  readonly display: string
+  /** 校验段（SHA-256 hex 前 4 字符——带外核对锚） */
+  readonly checksum: string
+  /** host Ed25519 公钥（SPKI DER base64——手机端静态验签根） */
+  readonly spki: string
+  /** 连接密码已配置态提示位 */
+  readonly pinConfigured?: boolean
+  /** 长效密码位（true = PIN 不随 TTL 轮换） */
+  readonly pinDurable?: boolean
+}
+
+/** 三件套段标题 */
+export const PSK_TRIO_TITLE = '连接密钥'
+/** 轮换动作文案 */
+export const PSK_REGEN_TEXT = '重新生成'
+/** 轮换确认弹窗标题 */
+export const PSK_REGEN_CONFIRM_TITLE = '重新生成连接密钥？'
+/** 轮换确认弹窗正文（v3.1 宽限期语义） */
+export const PSK_REGEN_CONFIRM_BODY =
+  '重新生成后当前连接密钥立即被替换；旧密钥在 5 分钟宽限期内仅用于验证、到期彻底失效，手机端需使用新密钥重新激活。'
+/** 段内宽限期 hint 行 */
+export const PSK_GRACE_HINT_TEXT = '重新生成后旧密钥 5 分钟宽限期内仅验证不加密，到期彻底失效。'
+/** 三件套空态文案（读数缝缺席/门未配置——不伪装可用） */
+export const PSK_EMPTY_TEXT = '连接密钥暂不可用——宿主密钥未就绪，重开此面板重试。'
 
 // ── fix-19 官方逐字文案（单源对照 = .forge/docs/probes/official-pairing-page-spec.md §1-§3） ──
 
 /** fix-19 ⑥ 已连接态标题（官方 manageHeading——§1 逐字；dialog 标题随相位切换单源） */
 export const REMOTE_MANAGE_TITLE = '管理手机连接'
-/** fix-19 ⑨ 互联网说明文案（官方 tunnelHint——§1 逐字；产品旧语义近似文案退役） */
-export const TUNNEL_HINT_TEXT =
-  '移动设备通过互联网（如 4G/5G 或其他 WiFi 网络等）均可远程操控，同步实时性中等'
 /** fix-19 ⑨ 隧道建立中文案（官方 tunnelLoading——§1 逐字） */
 export const TUNNEL_LOADING_TEXT = '正在建立全球网络链接'
 /** fix-19 ⑨ LAN 切换 loading 文案（官方 lanLoading——§1 逐字） */
@@ -500,11 +546,292 @@ export function TunnelCard(props: {
   )
 }
 
+/** 三件套读数行（label + mono 值 + 复制图标钮——官方复制成功绿圆勾徽 1.8s 反馈复用） */
+function PskTrioRow(props: {
+  readonly label: string
+  readonly value: string
+  readonly testId: string
+  readonly copied?: boolean
+  readonly onCopy?: () => void
+  /** 掩码切换（私钥材料行——默认掩码，点击显/隐；公钥行不携） */
+  readonly onToggleMask?: () => void
+  readonly masked?: boolean
+  /** 字段含义与作用（? 图标 Tooltip 悬浮/点按呈现） */
+  readonly help?: string
+}): ReactNode {
+  return (
+    <div className="dswf-remote-psk-row" data-testid={props.testId}>
+      <span className="dswf-remote-psk-label">
+        {props.label}
+        {props.help !== undefined && (
+          <Tooltip label={props.help} portal>
+            <span className="dswf-remote-psk-help" role="note" aria-label={props.help}>?</span>
+          </Tooltip>
+        )}
+      </span>
+      <Tooltip label={props.value} portal>
+        <span className="dswf-remote-psk-value">{props.value}</span>
+      </Tooltip>
+      {props.onToggleMask !== undefined && (
+        <Tooltip label={props.masked ? '显示' : '隐藏'} portal>
+          <button type="button" className="dswf-remote-copy" aria-label={props.masked ? '显示连接密钥' : '隐藏连接密钥'} onClick={props.onToggleMask}>
+            {props.masked ? '显' : '隐'}
+          </button>
+        </Tooltip>
+      )}
+      {props.onCopy !== undefined && (
+        <Tooltip label={`复制${props.label}`} portal>
+          <button type="button" className="dswf-remote-copy" aria-label={`复制${props.label}`} onClick={props.onCopy}>
+            {props.copied ? (
+              <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+            ) : (
+              <IconCopyOutlineRegular size={14} />
+            )}
+          </button>
+        </Tooltip>
+      )}
+    </div>
+  )
+}
+
+/** 一键复制全部文本格式（用户裁决 2026-10-22：一行 label 一行 value 再一个空行） */
+export function pskTrioCopyText(t: PskTrioFace): string {
+  return `PSK\n${t.display}\n\n校验段\n${t.checksum}\n\nSPKI\n${t.spki}`
+}
+
+/**
+ * 连接密钥三件套段（1.107——互联网 tab 连接密码下方）：PSK 分组展示 + 校验段 + host 公钥
+ * （SPKI）+ 连接密码已配置态提示；各字段一键复制。读数即显零缓存——挂载期 pskRead 取一次
+ * 读数（不进 storage 不入快照）；轮换 = 确认弹窗防误触（官方 Modal 件）→ onPskRotate →
+ * 结果即新读数原位换新（旧读数失效）。读数缝缺席/门未配置 = 段内空态（不伪装可用）。
+ */
+export function PskTrioSection(props: {
+  /** 受控读数缝（测试/装配可控——缺省组件挂载期 pskRead 自持一次） */
+  readonly trio?: PskTrioFace
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
+}): ReactNode {
+  const [liveTrio, setLiveTrio] = useState<PskTrioFace | undefined>(undefined)
+  const [loaded, setLoaded] = useState(false)
+  const trio = props.trio ?? liveTrio
+  // 挂载期读数一次（读数即显——零轮询零缓存；seam 闭包随注入面生命周期稳定）
+  useEffect(() => {
+    let alive = true
+    void Promise.resolve(props.pskRead?.()).then((next) => {
+      if (!alive) return
+      setLiveTrio(next)
+      setLoaded(true)
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 挂载一次性（pskRead 闭包随注入面生命周期稳定）
+  }, [])
+  // 轮换（确认弹窗确认后触发）——结果即新读数原位换新，旧读数失效
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  const handleRotate = useCallback(() => {
+    if (props.onPskRotate === undefined || rotating) return
+    setRotating(true)
+    void Promise.resolve(props.onPskRotate())
+      .then((next) => {
+        if (next !== undefined) setLiveTrio(next)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setRotating(false)
+        setConfirmOpen(false)
+      })
+  }, [props.onPskRotate, rotating])
+  // 复制反馈（per-field / all——绿圆勾徽 1.8s 自动消退）
+  const [copiedKey, setCopiedKey] = useState('')
+  useEffect(() => {
+    if (copiedKey === '') return
+    const timer = setTimeout(() => setCopiedKey(''), 1800)
+    return () => clearTimeout(timer)
+  }, [copiedKey])
+  const copyField = (key: string, value: string): void => {
+    writeClipboard(value)
+    setCopiedKey(key)
+  }
+  // 一键复制全部（用户裁决 2026-10-22：一行 label 一行 value 再一个空行——直接粘贴对端录入面板）
+  const copyAll = (t: PskTrioFace): void => {
+    copyField('all', pskTrioCopyText(t))
+  }
+  // PSK 私钥材料默认掩码（用户裁决 2026-10-22「不展示私钥」——复制钮恒取全文，展示面不落明文）
+  const [pskRevealed, setPskRevealed] = useState(false)
+  return (
+    <div className="dswf-remote-psk" data-testid="dswf-remote-psk">
+      {/* 用户裁决 2026-10-22：重新生成 = 标题行右侧图标钮（原底部文字钮退役） */}
+      <div className="dswf-remote-psk-head">
+        <span className="dswf-remote-psk-title">{PSK_TRIO_TITLE}</span>
+        {trio !== undefined && (
+          <Tooltip label="复制全部（PSK / 校验段 / SPKI）" portal>
+            <button
+              type="button"
+              className="dswf-remote-copy"
+              aria-label="复制全部连接密钥"
+              data-testid="dswf-remote-psk-copy-all"
+              onClick={() => copyAll(trio)}
+            >
+              {copiedKey === 'all' ? (
+                <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+              ) : (
+                <IconCopyOutlineRegular size={14} />
+              )}
+            </button>
+          </Tooltip>
+        )}
+        <Tooltip label="重新生成连接密钥（旧密钥 5 分钟宽限期）" portal>
+          <button
+            type="button"
+            className="dswf-remote-copy"
+            aria-label="重新生成连接密钥"
+            data-testid="dswf-remote-psk-regen"
+            disabled={props.onPskRotate === undefined || rotating}
+            onClick={() => setConfirmOpen(true)}
+          >
+            {rotating ? '…' : '↻'}
+          </button>
+        </Tooltip>
+      </div>
+      {trio === undefined ? (
+        loaded ? (
+          <p className="dswf-remote-psk-empty" data-testid="dswf-remote-psk-empty">
+            {PSK_EMPTY_TEXT}
+          </p>
+        ) : null
+      ) : (
+        <>
+          <PskTrioRow
+            label="PSK"
+            help="PSK（预共享密钥）：加密隧道的根——与配对 PIN 共同派生会话密钥，两端一致才能建立连接"
+            value={pskRevealed ? trio.display : trio.display.replace(/[^-]/g, '•')}
+            testId="dswf-remote-psk-display"
+            copied={copiedKey === 'display'}
+            onCopy={() => copyField('display', trio.display)}
+            onToggleMask={() => setPskRevealed((v) => !v)}
+            masked={!pskRevealed}
+          />
+          <PskTrioRow
+            label="校验段"
+            help="校验段：PSK 的指纹（SHA-256 前 4 位）——快速核对两端密钥是否一致"
+            value={trio.checksum}
+            testId="dswf-remote-psk-checksum"
+            copied={copiedKey === 'checksum'}
+            onCopy={() => copyField('checksum', trio.checksum)}
+          />
+          <PskTrioRow
+            label="SPKI"
+            help="SPKI（host 公钥）：电脑的 Ed25519 签名公钥——手机逐帧验证响应确实来自你的电脑，防中间人伪造"
+            value={trio.spki}
+            testId="dswf-remote-psk-spki"
+            copied={copiedKey === 'spki'}
+            onCopy={() => copyField('spki', trio.spki)}
+          />
+          <small className="dswf-remote-pin-privacy">{PSK_GRACE_HINT_TEXT}</small>
+        </>
+      )}
+      {/* 轮换确认弹窗（官方 Modal 件——防误触；v3.1 宽限期语义正文） */}
+      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title={PSK_REGEN_CONFIRM_TITLE} closeLabel="关闭">
+        <div className="dswf-remote-psk-confirm">
+          <p className="dswf-remote-psk-confirm-body">{PSK_REGEN_CONFIRM_BODY}</p>
+          <div className="dswf-remote-actions">
+            <Button variant="outline" size="sm" data-testid="dswf-remote-psk-regen-cancel" onClick={() => setConfirmOpen(false)}>
+              取消
+            </Button>
+            <Button variant="primary" size="sm" data-testid="dswf-remote-psk-regen-confirm" disabled={rotating} onClick={handleRotate}>
+              {PSK_REGEN_TEXT}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
 /** 配对面（受控呈现——1.7 起静态测试面同源直出；承载由 ForgeRemoteDialog 官方 Modal）。
  * fix-6 保留：QR 220×220 + 官方文案 + 倒计时（1s interval）到期自动刷新（onRefresh =
  * 重取 boot manifest 换 token——宿主轮换推送经 refresh 单源回流）。
  * fix-7 对齐（零回退）：双模式 tab 卡 + 「手机已连接」态卡（connected 收回 QR）+ 地址条带 +
  * 复制图标按钮（复制成功绿圆勾徽 1.8s 反馈）+ 官方说明文案。 */
+/**
+ * 连接成功态内联面（用户裁决 2026-10-22 二次）：绿卡不再置顶独占 dialog——内联到内容流
+ * 原 QR/隧道卡位；QR 隐藏、原位显示地址（互联网 = 隧道 URL / WiFi = LAN 地址）+ 断开连接；
+ * manage-connected 二级态收窄（隐藏 closeHint 与「完成」只留「断开连接」）语义保持。
+ */
+function ConnectedFace(props: {
+  readonly url?: string
+  readonly manageConnected?: boolean
+  readonly onDisconnect?: () => void | Promise<void>
+  readonly onClose?: () => void
+}): ReactNode {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1800)
+    return () => clearTimeout(timer)
+  }, [copied])
+  return (
+    <div className="dswf-remote-connected-wrap" data-testid="dswf-remote-connected-wrap">
+      {/* 用户裁决 2026-10-22（三次）：断开连接（+完成）与绿卡同行右侧 */}
+      <div className="dswf-remote-connected-row">
+        <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
+          <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
+          <span className="dswf-remote-connected-title">手机已连接</span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          data-testid="dswf-remote-disconnect"
+          disabled={props.onDisconnect === undefined}
+          onClick={() => void props.onDisconnect?.()}
+        >
+          断开连接
+        </Button>
+        {props.manageConnected !== true && (
+          <Button
+            variant="primary"
+            size="sm"
+            data-testid="dswf-remote-done"
+            disabled={props.onClose === undefined}
+            onClick={() => props.onClose?.()}
+          >
+            完成
+          </Button>
+        )}
+      </div>
+      {props.manageConnected !== true && (
+        <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
+      )}
+      {props.url !== undefined && (
+        <div className="dswf-remote-address dswf-remote-pill">
+          <Tooltip label={props.url} portal>
+            <span className="dswf-remote-address-text">{props.url}</span>
+          </Tooltip>
+          <Tooltip label="复制地址" portal>
+            <button
+              type="button"
+              className="dswf-remote-copy"
+              aria-label="复制地址"
+              onClick={() => {
+                writeClipboard(props.url ?? '')
+                setCopied(true)
+              }}
+            >
+              {copied ? (
+                <span className="dswf-remote-copy-done" aria-hidden="true">✓</span>
+              ) : (
+                <IconCopyOutlineRegular size={14} />
+              )}
+            </button>
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function RemotePanel(props: {
   readonly snapshot: RemoteStatusSnapshot
   readonly onToggle?: (next: boolean) => Promise<void> | void
@@ -519,6 +846,12 @@ export function RemotePanel(props: {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关缝（consent checkbox/「取消长效密码」触发——缺席 = 动作禁用态） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：三件套受控读数缝（测试/装配可控） */
+  readonly trio?: PskTrioFace
+  /** 1.107：三件套读数缝（缺席 = 段内空态） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  /** 1.107：三件套轮换动作缝（确认弹窗防误触——缺席 = 动作禁用态） */
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
   /** fix-18 ④：受控 switching 缝（测试/装配可控——缺省组件内自持） */
   readonly switching?: boolean
   /** fix-20：受控冻结隧道面缝（switching 态冻结展示面——测试/装配可控；缺省组件内自持） */
@@ -532,8 +865,7 @@ export function RemotePanel(props: {
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——隐藏 closeHint 与「完成」钮） */
   readonly manageConnected?: boolean
 }): ReactNode {
-  const { snapshot, onToggle, busy, onRefresh } = props
-  const checked = snapshot.phase !== 'off'
+  const { snapshot, onRefresh } = props
   const pairValue = remotePairQrOf(snapshot)
   // 1.4 双模式 tab：受控 mode 缝优先，缺省组件内自持（互联网 tab 激活 → 隧道卡呈现）
   const [modeState, setModeState] = useState<RemoteMode>('lan')
@@ -541,6 +873,7 @@ export function RemotePanel(props: {
   // fix-18 ④：切换进行态（受控缝优先——fallback/tab-ensure 在途 = true；遮罩 + tab 禁用单源）
   const [switchingState, setSwitchingState] = useState(false)
   const switching = props.switching ?? switchingState
+  const [rebuildDeadline, setRebuildDeadline] = useState(0)
   // fix-20：切换冻结展示面（受控缝优先）——换线/tab-ensure 触发时同步捕获当时 live 面；
   // switching 期快照隧道面瞬时清空（撤面先到/新面未到）回退冻结面（QR 恒挂载 + 遮罩承载，
   // 官方 §2 .qr-loading 覆盖同形），切换收敛清冻结（新面原子换新，冻结零残留）。
@@ -593,15 +926,27 @@ export function RemotePanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 派生读数取当值（切换时刻判定），依赖面刻意收窄
     [props.mode, props.onTunnelEnsure, onRefresh, snapshot.tunnel, switching],
   )
-  // fix-18 ②：换线链接触发——置 switching 态（QR 遮罩 + tab 禁用），动作结算即解遮。
+  // fix-18 ②：换线链接触发——置 switching 态（QR 遮罩 + tab 禁用）。收敛不再绑 IPC 时长
+  // （毫秒返回 vs 隧道重建秒级——早撤 = 瞬态落「暂不可用」失败态闪屏，bug cf0db7e5）：
+  // 收敛 = tunnel 面回归 ∨ 15s 上界（rebuildDeadline，双链路皆败撤面时兜底解遮落失败态）。
   const handleFallback = useCallback(() => {
     if (props.onFallback === undefined || switching) return
     setSwitchingState(true)
     setFrozenTunnelState(snapshot.tunnel) // fix-20：切换起点同步冻结 live 面
-    void Promise.resolve(props.onFallback())
-      .catch(() => undefined)
-      .then(() => setSwitchingState(false))
+    setRebuildDeadline(Date.now() + TUNNEL_REBUILD_UPPER_BOUND_MS)
+    reopenGuardRef.current = false // bug cf0db7e5「永不恢复」根因：守卫重臂（每 shell 一次 → 动作后可重试）
+    void Promise.resolve(props.onFallback()).catch(() => undefined)
   }, [props.onFallback, switching, snapshot.tunnel])
+  // 重置 PIN：撤隧道重连 + token 轮换（fix-26 ④）——同换线收敛形（旧 URL 冻结仍正确：
+  // pinReset 不换 URL，仅换 PIN/token）。
+  const handlePinReset = useCallback(() => {
+    if (props.onPinReset === undefined || switching) return
+    setSwitchingState(true)
+    setFrozenTunnelState(snapshot.tunnel)
+    setRebuildDeadline(Date.now() + TUNNEL_REBUILD_UPPER_BOUND_MS)
+    reopenGuardRef.current = false // 同 fallback：守卫重臂（撤面窗口撞上 ensure 后仍有重试源）
+    void Promise.resolve(props.onPinReset()).catch(() => undefined)
+  }, [props.onPinReset, switching, snapshot.tunnel])
   // 1.4 隧道相位派生（manifest 隧道面单源——换线中优先；TTL 过期 = 失败）
   const tunnel: TunnelFace | undefined = snapshot.tunnel
   const [nowTs, setNowTs] = useState(() => Date.now())
@@ -619,6 +964,13 @@ export function RemotePanel(props: {
   // fix-6/1.4/fix-17 倒计时：1s interval 渲染读数（LAN QR 倒计时 / 隧道 TTL 横幅 / PIN 倒
   // 计时同刻度）；到期触发 onRefresh 重取（新 token/TTL/PIN 随快照回流——官方刷新机制对齐）。
   const pinLive = snapshot.pin !== undefined
+  // 重建收敛（bug cf0db7e5）：tunnel 面回归即解遮；上界到点解遮落失败态（不再永挂）。
+  useEffect(() => {
+    if (switchingState && rebuildConverged(nowTs, rebuildDeadline, snapshot.tunnel !== undefined)) {
+      setSwitchingState(false)
+      setRebuildDeadline(0)
+    }
+  }, [switchingState, snapshot.tunnel, rebuildDeadline, nowTs])
   const ttlLive = mode === 'internet' && tunnelPhase === 'online' && tunnel?.expiresAt !== undefined
   useEffect(() => {
     if (pairValue === undefined && !ttlLive && !pinLive) return
@@ -670,51 +1022,20 @@ export function RemotePanel(props: {
     <div className="dswf-remote-panel" aria-label="手机远程">
       {/* fix-26 ②：面板头（「手机远程」标题 + 相位文字行）退役——状态语义由入口圆点与
           连接态卡承载，官方页面无此头 */}
-      {snapshot.phase === 'connected' ? (
-        // fix-10（bug ec239552）官方连接成功态（锚 main.js:1176）：绿色成功卡 ✓ 手机已连接 +
-        // 「连接会在后台保持，现在可以关闭此窗口。」+ 断开连接（outline——撤该设备会话缝）/
-        // 完成（primary——关 dialog）双钮。
-        // fix-18 ①：连接态独占——配对面（tab/QR/倒计时/地址条/PIN/说明卡）整体退场
-        // （官方 .pairing-content display:none + tab disabled 同语义），仅态卡 + 双钮。
-        // fix-19 ⑥：manage-connected 二级态收窄——隐藏 closeHint 与「完成」钮只留「断开连接」
-        // （官方 manage 态语义：连接已在前台保持过，无需再提示关窗）。
-        <div className="dswf-remote-connected-wrap">
-          <div className="dswf-remote-connected" data-testid="dswf-remote-connected">
-            <span className="dswf-remote-connected-check" aria-hidden="true">✓</span>
-            <span className="dswf-remote-connected-title">手机已连接</span>
-          </div>
-          {props.manageConnected !== true && (
-            <p className="dswf-remote-connected-note">连接会在后台保持，现在可以关闭此窗口。</p>
-          )}
-          <div className="dswf-remote-actions">
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="dswf-remote-disconnect"
-              disabled={props.onDisconnect === undefined}
-              onClick={() => void props.onDisconnect?.()}
-            >
-              断开连接
-            </Button>
-            {props.manageConnected !== true && (
-              <Button
-                variant="primary"
-                size="sm"
-                data-testid="dswf-remote-done"
-                disabled={props.onClose === undefined}
-                onClick={() => props.onClose?.()}
-              >
-                完成
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : (
+      {/* 用户裁决 2026-10-22（二次）：连接态不再置顶独占——绿卡内联到内容流（原 QR/隧道卡位），
+          QR 隐藏、原位显示隧道 URL + 断开连接；配对 PIN/密钥段常驻不退场 */}
         <>
         <ModeTabs active={mode} disabled={switching} onSelect={handleModeSelect} />
         {mode === 'internet' ? (
           <>
-          {displayTunnel === undefined ? (
+          {snapshot.phase === 'connected' ? (
+            <ConnectedFace
+              url={displayTunnel?.url}
+              manageConnected={props.manageConnected}
+              onDisconnect={props.onDisconnect}
+              onClose={props.onClose}
+            />
+          ) : displayTunnel === undefined ? (
             // fix-10（隧道卡死收敛）：manifest 隧道面缺席 = 双链路失败撤面/读数缝降级——
             // 互联网 tab 内空态收敛（禁无限「正在建立隧道」进行态；tab 不禁用）。
             // fix-20：切换进行中经 displayTunnel 冻结派生不落此分支（QR 恒挂载防闪屏）
@@ -747,54 +1068,53 @@ export function RemotePanel(props: {
               <span className="dswf-remote-panel-note dswf-remote-countdown" data-testid="dswf-remote-pin-hint">
                 {pinConsentOn ? PIN_HINT_DURABLE_TEXT : pinCountdownText(pinSecondsLeft)}
               </span>
-              {/* fix-21 §2⑥ + fix-26 ④：官方 consent checkbox 行（label + 隐私 small 字）——
-                  勾选 = 长效机制（pin-consent 缝触发 setDurable，PIN 长期生效不轮换） */}
-              <label className="dswf-remote-pin-consent">
-                <input
-                  type="checkbox"
-                  checked={pinConsentOn}
-                  onChange={(event) => {
-                    const next = event.target.checked
-                    setPinConsent(next)
-                    void props.onPinConsent?.(next)
-                  }}
-                />
-                <span>{PIN_CONSENT_TEXT}</span>
-              </label>
-              <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
-              {/* fix-26 ④⑤：pin-actions 仅 consent 态呈现（官方 :1190 同语义）——取消 =
-                  解除长效回临时 PIN（onPinConsent(false) 缝），按钮/label 刻度归 §2 样式 */}
-              {pinConsentOn && (
-                <div className="dswf-remote-pin-actions">
-                  <button
-                    type="button"
-                    className="dswf-remote-pin-action"
-                    data-testid="dswf-remote-pin-reset"
-                    disabled={props.onPinReset === undefined}
-                    onClick={() => void props.onPinReset?.()}
-                  >
-                    {PIN_RESET_TEXT}
-                  </button>
-                  <button
-                    type="button"
-                    className="dswf-remote-pin-action"
-                    data-testid="dswf-remote-pin-cancel"
-                    disabled={props.onPinConsent === undefined}
-                    onClick={() => {
-                      setPinConsent(false)
-                      void props.onPinConsent?.(false)
+              {/* fix-21 §2⑥ + fix-26 ④：官方 consent checkbox 行——勾选 = 长效机制；
+                  用户裁决 2026-10-22：重置 PIN 钮移至 consent 同行右侧 */}
+              <div className="dswf-remote-pin-consent-row">
+                <label className="dswf-remote-pin-consent">
+                  <input
+                    type="checkbox"
+                    checked={pinConsentOn}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                      setPinConsent(next)
+                      void props.onPinConsent?.(next)
                     }}
-                  >
-                    {PIN_CANCEL_TEXT}
-                  </button>
-                </div>
-              )}
+                  />
+                  <span>{PIN_CONSENT_TEXT}</span>
+                </label>
+                <button
+                  type="button"
+                  className="dswf-remote-pin-action"
+                  data-testid="dswf-remote-pin-reset"
+                  disabled={props.onPinReset === undefined}
+                  onClick={handlePinReset}
+                >
+                  {PIN_RESET_TEXT}
+                </button>
+              </div>
+              <small className="dswf-remote-pin-privacy">{PIN_PRIVACY_TEXT}</small>
+              {/* 用户裁决 2026-10-22（二次）：「取消长效 PIN」按钮退役——consent checkbox 是
+                  唯一开关（取消 = uncheck，经 onPinConsent(false) 缝回临时 PIN） */}
             </div>
           )}
+          {/* 1.107：连接密钥三件套段（位置 = 连接密码下方——读数即显 + 复制 + 轮换确认弹窗） */}
+          <PskTrioSection
+            trio={props.trio}
+            pskRead={props.pskRead}
+            onPskRotate={props.onPskRotate}
+          />
           </>
         ) : (
           <div className="dswf-remote-pair">
-            {pairValue !== undefined ? (
+            {snapshot.phase === 'connected' ? (
+              <ConnectedFace
+                url={snapshot.lanAddress}
+                manageConnected={props.manageConnected}
+                onDisconnect={props.onDisconnect}
+                onClose={props.onClose}
+              />
+            ) : pairValue !== undefined ? (
               <>
                 <Tooltip label="手机扫码打开配对地址" portal>
                 <div className="dswf-remote-qr-wrap">
@@ -835,24 +1155,10 @@ export function RemotePanel(props: {
             )}
           </div>
         )}
-        {/* fix-9 ⑦：官方 Switch 件（dsh-client-ui-primitives 在场——弃原生 checkbox） */}
-        <div className="dswf-remote-panel-row">
-          <span>远程访问</span>
-          <Switch
-            checked={checked}
-            disabled={onToggle === undefined || busy === true}
-            label="远程访问开关"
-            onChange={(next) => {
-              void onToggle?.(next)
-            }}
-          />
-        </div>
+        {/* 用户裁决 2026-10-22：远程访问开关上移 dialog 标题右侧（只留钮）——面板行退役 */}
         {/* fix-16：说明文案随模式切换（tab 分流内）——lan = WiFi 文案 + LAN 地址条；
-            internet = 互联网说明文案（地址条退役——TunnelCard 已含隧道 URL 与复制） */}
-        {mode === 'internet' ? (
-          // fix-19 ⑨：互联网说明 = 官方 tunnelHint 逐字（§1——产品旧语义近似文案退役）
-          <p className="dswf-remote-note-card">{TUNNEL_HINT_TEXT}</p>
-        ) : (
+            internet = 无说明卡（用户裁决 2026-10-22：互联网 explainer 及外框移除） */}
+        {mode !== 'internet' && (
           <>
             {/* fix-9 ③：说明文案居中置圆角卡内 */}
             <p className="dswf-remote-note-card">扫码即可连接。移动设备与电脑需连接至同一 WiFi，同步实时性高。</p>
@@ -883,7 +1189,6 @@ export function RemotePanel(props: {
         )}
         <p className="dswf-remote-panel-note dswf-remote-countdown">未配对设备不可见任何内容；关闭远程后通道即断。</p>
         </>
-      )}
     </div>
   )
 }
@@ -897,6 +1202,8 @@ export function RemoteDialogHead(props: {
   readonly harness?: DshForgeHarnessBridge
   /** fix-19 ⑥：标题读数（缺省 = 配对标题——已连接态由 ForgeRemoteDialog 传管理标题） */
   readonly title?: string
+  /** 用户裁决 2026-10-22：远程访问开关上移标题右侧（只留钮不留文字） */
+  readonly trailing?: ReactNode
 }): ReactNode {
   return (
     <div className="dswf-remote-dialog">
@@ -909,7 +1216,15 @@ export function RemoteDialogHead(props: {
       >
         <IconCloseOutlineRegular size={16} />
       </button>
-      <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+      {props.trailing !== undefined && (
+        <div className="dswf-remote-dialog-title-row">
+          <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+          {props.trailing}
+        </div>
+      )}
+      {props.trailing === undefined && (
+        <h2 className="dswf-remote-dialog-title">{props.title ?? REMOTE_DIALOG_TITLE}</h2>
+      )}
     </div>
   )
 }
@@ -935,6 +1250,9 @@ export function ForgeRemoteDialog(props: {
   readonly onPinReset?: () => Promise<void> | void
   /** fix-26：长效密码开关缝（透传 RemotePanel——consent checkbox/「取消长效密码」触发） */
   readonly onPinConsent?: (consent: boolean) => Promise<void> | void
+  /** 1.107：三件套读数/轮换缝（透传 RemotePanel——读数即显 + 重新生成确认弹窗） */
+  readonly pskRead?: () => Promise<PskTrioFace | undefined>
+  readonly onPskRotate?: () => Promise<PskTrioFace | undefined>
   /** fix-19 ⑥：manage-connected 二级态（dialog 打开时已连接——透传 RemotePanel） */
   readonly manageConnected?: boolean
 }): ReactNode {
@@ -948,7 +1266,22 @@ export function ForgeRemoteDialog(props: {
       headless
       className="dswf-remote-modal"
     >
-      <RemoteDialogHead onClose={props.onClose} harness={harnessBridgeOf()} title={title} />
+      <RemoteDialogHead
+        onClose={props.onClose}
+        harness={harnessBridgeOf()}
+        title={title}
+        trailing={
+          /* 用户裁决 2026-10-22：远程访问开关上移标题右侧——只留钮不留文字 */
+          <Switch
+            checked={props.snapshot.phase !== 'off'}
+            disabled={props.onToggle === undefined || props.busy === true}
+            label="远程访问开关"
+            onChange={(next) => {
+              void props.onToggle?.(next)
+            }}
+          />
+        }
+      />
       <RemotePanel
         snapshot={props.snapshot}
         onToggle={props.onToggle}
@@ -960,6 +1293,8 @@ export function ForgeRemoteDialog(props: {
         onFallback={props.onFallback}
         onPinReset={props.onPinReset}
         onPinConsent={props.onPinConsent}
+        pskRead={props.pskRead}
+        onPskRotate={props.onPskRotate}
         manageConnected={props.manageConnected}
       />
     </Modal>
@@ -968,7 +1303,7 @@ export function ForgeRemoteDialog(props: {
 
 /** 底行手机图标入口（官方 footer.action 槽占用者——设置按钮同排右侧；fix-8：点击开合
  *  主窗内官方 Modal 配对 dialog——独立窗承载退役） */
-export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset, onPinConsent }: ForgeRemoteEntryProps): ReactNode {
+export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTunnelEnsure, onFallback, onPinReset, onPinConsent, pskRead, onPskRotate }: ForgeRemoteEntryProps): ReactNode {
   const [open, setOpen] = useState(false)
   // fix-19 ⑥：manage-connected 判定（dialog 打开时刻已连接 = 管理形态——closeHint/完成收窄；
   // 打开后即时达成连接 = 官方连接全形态，零收窄）
@@ -980,6 +1315,15 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
   // fix-12 圆点态（纯派生——图标本体恒 currentColor，右上角小圆点承载四态；now 取渲染
   // 时刻——面板开启期 800ms 轮询与挂载初刷驱动收敛，关闭期随快照事件刷新）
   const dot: RemoteDotState = remoteDotStateOf(snapshot, Date.now())
+  // 用户裁决 2026-10-22：connected → 非 connected 转换 = 不限时错误 toast（点击关闭——
+  // 无自动消退；断开因由随相位分型，host 粘性位收回由既有 pair-disconnected 缝承载）
+  const [disconnectToast, setDisconnectToast] = useState<string | undefined>(undefined)
+  const prevPhaseRef = useRef<RemotePhase>(snapshot.phase)
+  useEffect(() => {
+    const message = remoteDisconnectToast(prevPhaseRef.current, snapshot.phase)
+    prevPhaseRef.current = snapshot.phase
+    if (message !== undefined) setDisconnectToast(message)
+  }, [snapshot.phase])
   // fix-3 挂载期初刷：重启后装配期绑定只在挂载时捕获一次（一次性——零轮询，SC2 纪律）
   useEffect(() => {
     void refresh?.()
@@ -1018,6 +1362,18 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
           {dot !== 'none' && <span className="dswf-remote-dot" data-state={dot} aria-hidden="true" />}
         </button>
       </Tooltip>
+      {/* 断开 toast（不限时 + 点击关闭——用户裁决 2026-10-22） */}
+      {disconnectToast !== undefined && (
+        <button
+          type="button"
+          className="dswf-remote-toast"
+          role="alert"
+          data-testid="dswf-remote-disconnect-toast"
+          onClick={() => setDisconnectToast(undefined)}
+        >
+          {disconnectToast}
+        </button>
+      )}
       {/* fix-8 官方 Modal dialog（关态 = 官方件自身返回 null；开合/Esc/遮罩归官方机械） */}
       <ForgeRemoteDialog
         open={open}
@@ -1030,6 +1386,8 @@ export function ForgeRemoteEntry({ status, onToggle, refresh, onDisconnect, onTu
         onFallback={onFallback}
         onPinReset={onPinReset}
         onPinConsent={onPinConsent}
+        pskRead={pskRead}
+        onPskRotate={onPskRotate}
         manageConnected={manageConnected}
       />
     </div>

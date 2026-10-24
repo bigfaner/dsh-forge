@@ -13,10 +13,10 @@ function remoteError(code: string): Error {
   return e
 }
 
-function fakeGateway(): { prepareInvocation: () => never; invokePrepared: () => never; wireStream: { failure: (e: unknown) => unknown } } {
+function fakeGateway(): { prepareInvocation: () => Promise<never>; invokePrepared: () => Promise<never>; wireStream: { failure: (e: unknown) => unknown } } {
   return {
-    prepareInvocation: () => { throw new TypeError('boom at prepare') },
-    invokePrepared: () => { throw new TypeError('boom at invoke') },
+    prepareInvocation: async () => { throw new TypeError('boom at prepare') },
+    invokePrepared: async () => { throw new TypeError('boom at invoke') },
     wireStream: { failure: (e) => ({ folded: String(e) }) },
   }
 }
@@ -38,7 +38,7 @@ describe('attachGatewayFoldDiag（unary 双段 wrap + stream failure 替换）',
     attachGatewayFoldDiag(gateway, (error, phase) => emitted.push({ error, phase }))
     await expect(gateway.prepareInvocation()).rejects.toThrow(TypeError)
     expect(emitted).toEqual([{ error: expect.any(TypeError), phase: 'unary' }])
-    expect((emitted[0].error as Error).stack).toContain('TypeError')
+    expect((emitted[0]!.error as Error).stack).toContain('TypeError')
   })
 
   it('invokePrepared 抛错同构', async () => {
@@ -97,7 +97,7 @@ describe('causeStack 生境注入（fix-1 方案 6——dev 附栈 / 生产零�
     attachGatewayFoldDiag(gateway, () => {}, { causeStack: true })
     const caught = await gateway.prepareInvocation().then(
       () => { throw new Error('should reject') },
-      (e) => e,
+      (e: unknown) => e,
     )
     const wire = rpcFailure(caught)
     expect(wire.error.code).toBe('gateway/internal')

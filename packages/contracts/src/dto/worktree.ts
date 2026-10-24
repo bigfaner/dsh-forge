@@ -143,6 +143,19 @@ export interface WorktreeSelectResult {
 }
 
 /**
+ * forge:worktree/selected（host 唯一事实源读面——bug 9eb9d6cb 后续收敛）：读该项目
+ * host 侧选中记忆（select 推送的读镜像）。hero chip 回填唯一事实源——web sessionStorage
+ * 记忆已退役（漂移源拆除）；host 重启后记忆为空 = 无记忆（web 走锚定链回填）。
+ */
+export interface WorktreeSelectedRequest {
+  readonly projectRoot: string
+}
+export interface WorktreeSelectedResult {
+  /** 选中树路径；undefined = 无记忆（重启后/未点选过） */
+  readonly path?: string
+}
+
+/**
  * forge:worktree/resolve（批量归属解析——身份归并单点）：路径集 → 各自归属项目
  * （identity resolveProject：git common-dir 锚 + 主树行必胜仲裁 + 归档行跳过，
  * 与 hero 编排/必绑拦截同一归属判断基础设施）。未解析（非 git/未注册）不出现在结果。

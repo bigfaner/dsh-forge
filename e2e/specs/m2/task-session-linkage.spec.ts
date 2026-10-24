@@ -63,6 +63,7 @@ import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../supp
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { bestSessionLog, findFixtureSession } from '../../support/session-files.js'
+import { expandDispatchPanel } from '../../support/dispatch-panel.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { newBlankSession } from '../../support/m3.js'
@@ -168,14 +169,6 @@ async function linkedTask(
   })) as AddTaskResult
   const sessionId = await openRealSession(page, userData, projectId)
   return { added, sessionId }
-}
-
-/** 展开派发面板（fix bug 570fa4e2：默认折叠悬浮球——行/面板断言前先点 ⟡N 展开） */
-async function expandDispatchPanel(page: Page): Promise<void> {
-  const badge = page.locator(DP_BADGE).first()
-  await expect(badge, '默认折叠悬浮球在场（不默认展开遮挡消息）').toBeVisible({ timeout: 30_000 })
-  await expect(page.locator(DP_PANEL), '默认零展开面板（悬浮球形态）').toHaveCount(0)
-  await badge.click()
 }
 
 test('@web-e2e @m2 挂接双侧·冒烟：双源分型全链（副行计数 + 面板行 + 行点击弹窗零跳转）', async () => {

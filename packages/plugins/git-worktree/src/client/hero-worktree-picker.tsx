@@ -225,6 +225,12 @@ function rowLabel(
   )
 }
 
+/** 行禁选判定（bug 488e860d 桌面同族：detached 检出行 branch=null——预铸挂靠契约
+ *  「一 worktree 一分支」必被 session-create typed 拒绝；失配行既有语义并入单源）。 */
+export function pickerRowDisabled(row: WorktreeRow): boolean {
+  return !row.present || row.branch === null
+}
+
 /**
  * hero worktree 选择控件（非 git 项目返回 null——hero 区零注入，退回现状）。
  * data 锚：触发 chip = data-dswt-hero-trigger；弹层卡 = .dswt-hero-menu（Menu
@@ -283,7 +289,7 @@ export function HeroWorktreePicker({
         </span>
       ),
     icon: <IconBranchOutlineRegular size={14} />,
-    disabled: !row.present, // 失配行置灰（不可选中——提示清理后随刷新自愈）
+    disabled: pickerRowDisabled(row), // 失配/detached 行置灰（不可选中——删除钮保留，管理面不回归）
   }))
 
   return (

@@ -21,7 +21,7 @@ source-proposal: mobile-ui
 **当** 我在会话中发送消息时，**我要** 看到流式回复与断线自愈，**以便** 在弱网下也能持续对话。
 
 - Given 打开的会话 → When assistant 回复中 → Then 消息流式渲染，仅消息区滚动，顶栏与输入框固定。
-- Given SSE 断线 → When 连接中断 → Then 降级为轮询（退避 750ms→5s），恢复后自动续流，期间出现断线覆盖层。
+- Given 事件流断线 → When 连接中断 → Then 降级为轮询（退避 750ms→5s），恢复后自动续流，期间出现断线覆盖层。
 - Given 打开会话 → When 历史加载 → Then 默认只加载最近 10 条，上翻到顶分页拉取更早消息。
 
 ### US-3 回答 ask 面板（批次①）
@@ -29,7 +29,7 @@ source-proposal: mobile-ui
 **当** 会话产生待回答问题时，**我要** 在分页面板逐题作答，**以便** 在小屏上准确完成多题输入。
 
 - Given 存在多个 pending 交互 → When 打开 ask 面板 → Then 一屏一题，左上角显示序号/总数，可上一个/提交/下一个分页。
-- Given 题目为单选 → When 点击某一选项 → Then 该选项即时呈选中态（圆形 radio，可改选）；提交经 `interaction.answer` 生效。
+- Given 题目为单选 → When 点击某一选项 → Then 该选项即时呈选中态（圆形 radio，可改选）；提交经 `forge:proxy/user-questions-answer` 生效。
 - Given 题目为多选 → When 勾选选项组合 → Then checkbox 方框对勾，任意组合可勾选/取消。
 - Given 题目含 other 选项 → When 用户输入值 → Then 单选表示选中 other；多选表示额外选中 other（不影响已勾选项）。
 - Given 多题 → When 分页作答 → Then 一屏一题、序号/总数、上一个/提交/下一个可用。
@@ -47,7 +47,7 @@ source-proposal: mobile-ui
 **当** 我打开抽屉时，**我要** 按项目树浏览会话并看到未读，**以便** 快速定位目标会话。
 
 - Given 打开抽屉 → When 列表呈现 → Then 项目树分组折叠规则同桌面端、不展示会话数量与归档、支持置顶。
-- Given 存在未读会话 → When 查看徽标 → Then 双级未读徽标与 host read-state 游标**最终一致**（抽屉打开即拉取；存留期 15s 轮询；写游标后本地即时归零，下次拉取对账）。
+- Given 存在未读会话 → When 查看徽标 → Then 双级未读徽标由手机端 localStorage 游标本地计算（打开会话/触底即推进游标并即时归零；零网络往返依赖，换设备未读重置可接受）。
 - Given 点底部连接状态 → When 弹层展开 → Then 可查看详情并断开连接。
 
 ### US-6 发起新会话（批次②）

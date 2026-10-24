@@ -11,10 +11,12 @@
 // 以下 type-only 引入仅为拉入 cordis Context 模块增强（ctx.connection / ctx.webServer 类型）
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import { renderIndexInjections } from '@deepseek-ai/dsh-host-webserver'
 // mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { dirname, join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -33,6 +35,7 @@ import {
   redactTokenQuery,
   remoteViewFilePathOf,
   remoteViewIndexTap,
+  renderRemoteDistMissingPage,
   REMOTE_VIEW_MOUNT,
   sanitizeLogLine,
   sendGuarded,
@@ -54,6 +57,25 @@ import {
   type PinPersist,
 } from './pairing.js'
 import { authorizeRemoteRpc, handleRemoteHttpRpc, isRemoteHttpRpcRequest } from './remote-http-rpc.js'
+import { createReadCursorStore } from './read-cursor-store.js'
+// mobile-ui 1.11：PSK v3 host 侧 + forge:proxy 通道族 + 加密 forge-stream（tunnel-psk v3.1）
+import { isPskEnforcedHost, staticSignatureHeaders, writeConstant401 } from './psk.js'
+import {
+  createDevicePubStore,
+  createStreamSealer,
+  ensurePskPersist,
+  loadPskPersist,
+  loadWatermarks,
+  pskTrioOf,
+  rotatePsk,
+  saveWatermarks,
+  type PskGateDeps,
+} from './psk-gate.js'
+import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
+import { subscribeAssistantStreamMirror } from './assistant-stream-mirror.js'
+import { createUserQuestionsBridge } from './user-questions-bridge.js'
+import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
+import { apiLoopbackGuardListener } from './api-loopback-guard.js'
 import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
@@ -70,7 +92,7 @@ import {
 // @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
 import type {} from '@dsh-forge/git-worktree'
 import type { ProjectService } from '@dsh-forge/contracts'
-import { MIME, resolveWebDistDir } from '../window/web-document.js'
+import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
 import { productPackagePresent } from '../profile/paths.js'
@@ -86,6 +108,16 @@ import type { PromptTraceSpan } from '../ipc/worktree-rpc.js'
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
   get(name: string): unknown
+}
+
+/** cordis 可选具名服务惰性取法（AGENTS.md 裁决——具名访问 + 运行期存在性检查承担 fail-soft；
+ *  服务未装载/未 provide = undefined 降级，不抛） */
+function lazyCordisService(face: ServiceGetFace, name: string): unknown {
+  try {
+    return face.get(name) ?? undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** 官方 ToolRuntime 的结构化窄面（tools 服务——dsh-tools Service，super(ctx, "tools") 注册名） */
@@ -197,15 +229,25 @@ function remoteApprovalEnabledOf(settingsFile: string | undefined): boolean {
 /**
  * dsh-desktop cloudflared 种子候选（userData/bin——main.js:22502 `join(app.getPath
  * ("userData"), "bin")`；二进制名 win32=cloudflared.exe 其余=cloudflared，:578）。仅作字节
- * 来源：sha256 对 pin 清单校验一致才拷贝进产品缓存；缺席环境（无 APPDATA/未装 dsh）=
- * 空候选，纯下载链自洽。
+ * 来源：sha256 对 pin 清单校验一致才拷贝进产品缓存；缺席环境（无 APPDATA/HOME、未装
+ * dsh-desktop）= 空候选，纯下载链自洽。平台化：win=APPDATA，darwin/linux=Electron
+ * appData 锚（见函数体）。
  */
 export function officialCloudflaredSeedCandidates(): string[] {
-  const roaming = process.env['APPDATA']
-  if (roaming === undefined || roaming === '') return []
-  const bin = `${roaming.replace(/[\\/]+$/, '')}\\dsh-desktop\\bin`
-  const name = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
-  return [`${bin}\\${name}`]
+  // Electron appData 锚（main.js:22502 join(app.getPath('userData'), 'bin')）：
+  // win=%APPDATA%、darwin=~/Library/Application Support、linux=~/.config
+  if (process.platform === 'win32') {
+    const roaming = process.env['APPDATA']
+    if (roaming === undefined || roaming === '') return []
+    return [`${roaming.replace(/[\\/]+$/, '')}\\dsh-desktop\\bin\\cloudflared.exe`]
+  }
+  const home = process.env['HOME']
+  if (home === undefined || home === '') return []
+  const appData =
+    process.platform === 'darwin'
+      ? `${home}/Library/Application Support`
+      : `${home}/.config`
+  return [`${appData}/dsh-desktop/bin/cloudflared`]
 }
 
 /**
@@ -232,6 +274,7 @@ function createNodeTunnelDeps(): TunnelDeps {
       return createChildProcessHandle(child)
     },
     now: Date.now,
+    sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
   }
 }
 
@@ -293,6 +336,17 @@ async function main(): Promise<void> {
   // node_modules（anchor = {resources}/runtime/package.json 邻接拓扑）→ 包已 staging 也恒
   // false：不注行 + 装配段跳过 = 能力恒 absent，git 项目 W2 fail-closed 双入口拒绝。
   const gitWorktreeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/git-worktree')
+  // mobile ask 桥插件行注行门（bug f73315a1——gitWorktreeRow 双形态探测同径）∪ dev 形态
+  // 第三位：host 自身 node_modules（loader 进程解析根——dev workspace link 挂点）。
+  let mobileBridgeRow = productPackagePresent(options.profileDir, options.installAnchor, '@dsh-forge/mobile-bridge')
+  if (!mobileBridgeRow) {
+    try {
+      // exports map 不含 ./package.json——按 host dist 相对定位 node_modules 链接（dist/boot → ../../）
+      mobileBridgeRow = existsSync(join(fileURLToPath(new URL('../../node_modules/@dsh-forge/mobile-bridge/package.json', import.meta.url))))
+    } catch {
+      mobileBridgeRow = false
+    }
+  }
   // bug 2ffb0a82：knowledge 插件装载位（与 overlay 注行门同源单值——child 侧唯一探测点，
   // ready 消息上送 renderer 知识面门控；dev 树在场 true / 打包形态暂不含 false）
   const knowledgeRow = existsSync(join(options.profileDir, 'node_modules', '@dsh-forge', 'knowledge', 'package.json'))
@@ -303,6 +357,7 @@ async function main(): Promise<void> {
     settingsFile: options.settingsFile, // M3 3.8 设置域存储（缺席 = forgeSettings 服务降级缺席）
     knowledgeRow, // 知识库插件行注行门（dev 树在场才注——打包形态暂不含该插件）
     gitWorktreeRow, // 1.7 git-worktree 插件行注行门（dev 树 link 在场才注——打包形态暂不含该插件）
+    mobileBridgeRow, // mobile ask 桥插件行注行门（组合期 answerer 注册）
     credentialsPath: options.credentialsPath, // fix-26 凭据桥（隔离态 undefined 不桥）
     remoteExpose, // fix-3 装配期绑定暴露缝（true = webserver 行覆写全卡绑定——重启生效）
     port: options.port, // fix-3 webserver 覆写行 port 字面量单源（boot 实参）
@@ -318,6 +373,24 @@ async function main(): Promise<void> {
         }
       : {}),
   })
+  // mobile-ui ask 桥（bug f73315a1）：桥单例在 runProfile 前经全局锚注入 mobile-bridge
+  // 插件（组合期 answerer 注册——先于 api-remotes 捕获监听）；emit 扇出 = 全部存活
+  // forge-stream 连接；等待手机应答通道回灌（无桥侧超时——桌面同语义）；中止 = next() 透传。
+  const streamPushes = new Set<(event: { type: string; payload: unknown; at: number }) => void>()
+  const userQuestionsBridge = createUserQuestionsBridge({
+    emit: (event) => {
+      for (const push of streamPushes) {
+        try {
+          push(event)
+        } catch {
+          // 单连接失败不反压桥
+        }
+      }
+    },
+    diag,
+    pushCount: () => streamPushes.size,
+  })
+  ;(globalThis as Record<string, unknown>)['__dshMobileAskBridge'] = userQuestionsBridge
   const { ctx, shutdown: processShutdown } = await runProfile({
     environment: dshAppBoot.loadLayeredEnv('dsh'),
     profile: 'dsh-forge',
@@ -386,6 +459,18 @@ async function main(): Promise<void> {
       attachFold()
     }, 60_000).unref?.()
     attachFold()
+  }
+  // 1.32 /api 非回环拦截（connection/request waterfall 硬化）：remoteExpose（fix-3 行覆写
+  // 0.0.0.0）使 /api 面 LAN 可达——官方围栏自动信任 IP 字面量 Host + 会话 cookie 明文可嗅。
+  // 官方多听者插槽 `connection/request`（dsh-client-connection README「Browser authentication
+  // and request trust」节，桌面安装锁同缝先例；勿用 registerInterceptor 单槽——组合内已有
+  // 占用风险）：时序 = 官方 admit（围栏 + 认证）之后、body 之前——围栏 403 与本拦截双保险
+  // （trustedHosts/隧道域被围栏放行的非回环形态由本面恒定 403 收口）。回环 → next() 放行，
+  // 桌面 /api 零影响；/__rpc、/remote、/pair 走 webserver 具名路由不经此 waterfall，不受扰。
+  try {
+    ctx.on('connection/request', apiLoopbackGuardListener(diag))
+  } catch {
+    // 监听器注册失败 = 拦截面缺席（围栏仍在），boot 不受阻——fail-soft 同 /pair 缝先例
   }
   // fix-25：cordis 服务解析窄面（/remote/__rpc 端点惰性取 forgeTasks/forgeProjects 只读切片）
   const servicesFace = ctx as unknown as ServiceGetFace
@@ -471,7 +556,10 @@ async function main(): Promise<void> {
         // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
-        onWorktreeSetChanged: async () => {
+        // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
+        // 先查绑定行在册，在册即跳过（省 N×git worktree list + 文件重写，~百 ms/点击）；
+        // 缺席（新树首次使用/建删树无路径）才全量刷新。读失败 = 现状全量刷新（fail-soft）。
+        onWorktreeSetChanged: async (worktreePath?: string) => {
           let projects: Pick<ProjectService, 'listProjects'> | undefined
           try {
             projects = servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
@@ -479,6 +567,22 @@ async function main(): Promise<void> {
             projects = undefined
           }
           if (projects === undefined) return
+          if (worktreePath !== undefined) {
+            try {
+              const { readFileSync } = await import('node:fs')
+              const raw = readFileSync(options.bindingsFile, 'utf8')
+              const parsed = JSON.parse(raw) as { projects?: readonly { wsPath?: unknown }[] }
+              const normalized = worktreePath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+              const present = (parsed.projects ?? []).some(
+                (row) =>
+                  typeof row.wsPath === 'string' &&
+                  row.wsPath.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase() === normalized,
+              )
+              if (present) return // 绑定行已在册——锚目的（首次入表）已达成，零刷新
+            } catch {
+              // 读失败（首建/损坏）→ 落全量刷新现状
+            }
+          }
           await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
         },
         // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
@@ -616,6 +720,33 @@ async function main(): Promise<void> {
   // 会话；签发/校验/限速/TTL 全语义在 pairing.ts 纯逻辑面，此处只装配路由）。
   // fix-30 ③：durable 态持久化到 dsh-home（跨 boot worker 存活——断开/重启不动长效）。
   const pinIssuer = createPinIssuer(Date.now, createFilePinPersist(join(dirname(options.stateDb), 'remote-pin.json')))
+  // mobile-ui 1.11 PSK v3 host 侧装配（tunnel-psk v3.1 §3/§5）：密钥文件（0600——remote-pin
+  // 同型缝）+ 水位账本（持久化——host 重启防重放窗）+ epoch TTL 清理。门未配置（密钥文件
+  // 缺席）= 旧门语义过渡期；PIN 读法逐请求取——PIN 轮换 = 通信密钥重派生即旧密文作废。
+  const pskFile = join(dirname(options.stateDb), 'remote-psk.json')
+  const pskWatermarkFile = join(dirname(options.stateDb), 'remote-psk-watermarks.json')
+  const pskWatermarks = loadWatermarks(pskWatermarkFile)
+  setInterval(() => {
+    pskWatermarks.sweep(Date.now())
+    saveWatermarks(pskWatermarkFile, pskWatermarks)
+  }, 60_000).unref?.()
+  const pskGate: PskGateDeps = {
+    load: () => loadPskPersist(pskFile),
+    pin: () => pinIssuer.current().pin,
+    watermarks: pskWatermarks,
+    now: Date.now,
+    // bug 1792cc7a ②：设备公钥绑定持久 store（host 重启后长命 Tab sig-only 帧验签依赖）
+    devicePubs: createDevicePubStore(join(dirname(options.stateDb), 'remote-psk-device-pubs.json')),
+  }
+  // bug 1dd4b437：手机已读游标 host 侧持久 store（localStorage 随 origin churn 丢失 → 未读全量误报）
+  const readCursors = createReadCursorStore(join(dirname(options.stateDb), 'remote-read-cursors.json'))
+  // 1.107 装配期 ensure 单源（tunnel-psk v3.1）：无持久化 → 生成并落盘（新钥 + 新签名钥对）；
+  // 有 → 原样加载。IO 失败 fail-soft——门未配置 = 旧门语义过渡期，boot 不受阻。
+  try {
+    ensurePskPersist(pskFile)
+  } catch (cause) {
+    diag(`[pair-diag] remote-psk ensure 失败（门未配置降级——旧门语义）：${String(cause)}`)
+  }
   // fix-31 bug df86240d：长效位自持久态回读（Root cause: pinDurable 模块变量默认 false 且
   // ready 恒发临时面——重启后 issuer 虽回读文件恢复长效 grant，manifest 长效位仍恒 false
   // + remotePinExpiresAt = 假 TTL，UI 重启/重开恒未勾选 = 用户视角「长效被取消」）。
@@ -687,10 +818,12 @@ async function main(): Promise<void> {
       // fix-22 真机修复（bug cbb9131e 架构级根因：产品 dist 仅经 dsh-forge://app 自定义协议
       // 在主窗分发——webServer 面 fallback 服务的是官方 web 前端，手机 302 链落地「桌面版」
       // 实为官方工作台，beacon 零到达）。①/remote 前缀路由 = webserver 移动面静态服务产品
-      // dist（dist 根 resolveWebDistDir 同源口径——env 透传经 spawn 继承 + resourcesDir 兜底）；
+      // dist（mobile-ui 1.7 AD-3：dist 根改指 apps/mobile/dist——resolveMobileDistDir 局部
+      // 装配单源，共享 resolveWebDistDir 主窗语义不动；桌面 web-app 产物不再进 /remote/）；
       // ②官方 index tapIndex 弹射（dswf cookie 在场 → /remote/——根交换落 "/" 后的唯一合缝
-      // 跳转点，不改写官方面行为）；③入口 HTML no-store（防手机端缓存旧态）。
-      const webDistRoot = resolveWebDistDir({
+      // 跳转点，不改写官方面行为）；③入口 HTML no-store（防手机端缓存旧态）；
+      // ④dist 缺席 fail-soft 降级提示页（AD-5——bridge.renderRemoteDistMissingPage + diag）。
+      const webDistRoot = resolveMobileDistDir({
         ...process.env,
         ...(options.resourcesDir !== undefined && options.resourcesDir !== ''
           ? { DSH_FORGE_RESOURCES_DIR: options.resourcesDir }
@@ -723,26 +856,143 @@ async function main(): Promise<void> {
             res.end()
             return
           }
+          // mobile-ui connection 探针：官方注入行的 combo URL 是文档相对路径（plugins/??…，
+          // 官方根挂载下解析为 /plugins）——/remote/ 挂载下浏览器解析为 /remote/plugins/…。
+          // 302 弹回官方根组合路由（client-modules Node half 的既有服务面，零新服务逻辑；
+          // 同 origin cookie 全随）。
+          if (requestUrl.startsWith(`${REMOTE_VIEW_MOUNT}/plugins/`)) {
+            res.writeHead(302, { location: requestUrl.slice(REMOTE_VIEW_MOUNT.length), 'cache-control': 'no-store' })
+            res.end()
+            return
+          }
+          // 官方 client http transport 以文档相对 URL 发单呼（`${channel}/${endpoint}`.slice(1)
+          // ——/remote/ 挂载下解析为 /remote/api/…）。307 保方法重定向回官方 /api 通道
+          // （302 会把 POST 降级为 GET——信封体丢失）；同 origin cookie 全随。
+          if (requestUrl.startsWith(`${REMOTE_VIEW_MOUNT}/api/`)) {
+            res.writeHead(307, { location: requestUrl.slice(REMOTE_VIEW_MOUNT.length), 'cache-control': 'no-store' })
+            res.end()
+            return
+          }
           // fix-25 webserver HTTP RPC 桥分诊（POST /remote/__rpc——受限只读 + 审批端点：
           // progress = listTasks/taskStats 装配只读、projects/list = 项目上下文只读、
           // approval = 决策转发——与 forge:remote/* 通道同语义。鉴权 = 会话 cookie 在场
           // 才可达（官方 BrowserAuth 会话，未配对官方 401/403）；请求经 diag 落 harness.log）
           if (isRemoteHttpRpcRequest(method, requestUrl)) {
             void handleRemoteHttpRpc(req, res, {
+              // bug 7d26b074：getter 走 lazyCordisService 守卫——cordis 解析抛错 = undefined
+              // 降级（handler 内 fail-soft 错误信封语义），不因 getter 异常升级成 handler 抛错
               get tasks() {
-                return servicesFace.get('forgeTasks') as RemoteChannelService | undefined
+                return lazyCordisService(servicesFace, 'forgeTasks') as RemoteChannelService | undefined
               },
               get projects() {
-                return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects'> | undefined
+                return lazyCordisService(servicesFace, 'forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
               },
               forwardApproval: (input) =>
                 approvalRelay?.deposit(input) ?? Promise.resolve({ forwarded: false, reason: 'unavailable' as const }),
+              // mobile-ui 1.11 forge:proxy/* 代理通道族装配（官方能力 in-process 直调——
+              // 控制器/commands/userQuestions 惰性取法 + 运行期存在性检查承担 fail-soft；
+              // worktrees = worktreeRpc 桥单源；disconnect = pair-disconnected 对偶缝）
+              proxy: {
+                get session() {
+                  return lazyCordisService(servicesFace, 'sessionController') as ProxySessionFace | undefined
+                },
+                get commands() {
+                  return lazyCordisService(servicesFace, 'commands') as ProxyCommandsFace | undefined
+                },
+                get userQuestions() {
+                  return lazyCordisService(servicesFace, 'userQuestions') as ProxyUserQuestionsFace | undefined
+                },
+                // mobile ask 桥（bug f73315a1）：waterfall 在途题回灌单点
+                userQuestionsBridge,
+                get agentPresets() {
+                  return lazyCordisService(servicesFace, 'agentPresets') as { remoteExportList?(): Promise<unknown> } | undefined
+                },
+                get projects() {
+                  return servicesFace.get('forgeProjects') as Pick<ProjectService, 'listProjects' | 'getProject'> | undefined
+                },
+                get worktrees() {
+                  return worktreeRpcService === undefined
+                    ? undefined
+                    : {
+                        list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request),
+                        // bug a1e087a6：hero 透传建会话正门（预铸采纳单门——host 守卫内建）
+                        sessionCreate: (request: unknown) => worktreeRpcService!.sessionCreate(request as never),
+                      }
+                },
+                disconnect: () => send({ type: 'pair-disconnected' }),
+                // bug 1dd4b437：已读游标 host 侧持久 store 接线
+                readCursors,
+              },
+              // PSK 准入门（隧道域强制位——门未配置 = 旧门语义过渡期）
+              psk: pskGate,
               // fix-27 bug b9bfb9d3：__rpc 门 = 官方 authorizeIndex 优先 + dswf_forge_remote
               // cookie 自持兜底（配对握手已认证语义；官方会话门仅用于 GET 页面——隧道域下
               // 手机 POST 被官方 Host 绑定会话门拒绝，真断点由 401 诊断行真机定位）
-              authorize: (rq, rs) => authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1])),
+              // bug 1792cc7a ①：会话门拒绝落 diag（官方门拒 + dswf cookie 回退未命中——隧道域
+              // 配对后 sealed 帧全拒的归因面；此前该路径零日志）
+              authorize: (rq, rs) => {
+                const ok = authorizeRemoteRpc(rq, rs, (q, s) => ctx.connection.authorizeIndex(q as Parameters<typeof ctx.connection.authorizeIndex>[0], s as Parameters<typeof ctx.connection.authorizeIndex>[1]))
+                if (!ok) diag('[pair-diag] /remote/__rpc authorize=deny（官方门拒 + dswf cookie 回退未命中）')
+                return ok
+              },
               diag,
             })
+            return
+          }
+          // mobile-ui 1.11 加密 forge-stream SSE（tunnel-psk v3 §4.1——事件镜像逐帧推送；
+          // 隧道域 + PSK 配置在场 = 逐帧 AEAD + host 签名（sid/epoch 经查询串注册），
+          // LAN/回环 = 明文镜像旧门语义。缺席订阅名 fail-soft 零装配）
+          if (isForgeStreamRequest(method, requestUrl)) {
+            const tunnelDomain = isPskEnforcedHost(typeof req.headers.host === 'string' ? req.headers.host : undefined)
+            const pskOn = loadPskPersist(pskFile) !== undefined
+            let sealer: ((event: unknown) => string) | undefined
+            if (tunnelDomain && pskOn) {
+              let sid = ''
+              let epoch = 0
+              try {
+                const query = new URL(requestUrl, 'http://dsh.invalid').searchParams
+                sid = query.get('sid') ?? ''
+                const epochRaw = Number(query.get('epoch') ?? '')
+                epoch = Number.isInteger(epochRaw) && epochRaw >= 0 ? epochRaw : -1
+              } catch {
+                sid = ''
+              }
+              sealer = sid !== '' && epoch >= 0 ? createStreamSealer(pskGate, sid, epoch) : undefined
+              if (sealer === undefined) {
+                // bug 7e5ef681：准入失败落 diag（域别 + 原因——此前零日志盲区，隧道域流 401 无归因）
+                diag(`[pair-diag] /remote/forge-stream [${tunnelDomain ? 'tunnel' : 'lan'}] status=unauthorized（sid/epoch 查询参数缺席或非法）`)
+                // 隧道域强制位：无有效封帧参数 = 统一 401（零明文降级路径）
+                writeConstant401(res)
+                return
+              }
+            }
+            createForgeStreamHandler({
+              subscribe: (push) => {
+                // mobile ask 桥扇出面注册（bridge emit → 全部存活连接；退订随连接）
+                streamPushes.add(push)
+                const offOfficial = subscribeOfficialEvents(
+                  (name, handler) =>
+                    (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
+                  push,
+                  diag,
+                )
+                // mobile-ui 打字机腿：官方 agent/assistant-stream 瞬态帧镜像（start/chunk/end
+                // 密帧——text/reasoning delta 直达 mobile settler；durable 结算仍走历史重拉）
+                const offAssistant = subscribeAssistantStreamMirror({
+                  ctxOn: (name, handler) =>
+                    (ctx as unknown as { on?: (event: string, h: (payload: unknown) => void) => unknown }).on?.(name, handler),
+                  emit: push,
+                  diag,
+                })
+                return () => {
+                  offOfficial()
+                  offAssistant()
+                  streamPushes.delete(push)
+                }
+              },
+              seal: (event) => (sealer !== undefined ? sealer(event) : JSON.stringify(event)),
+              diag,
+            })(req, res)
             return
           }
           // 会话门 = 官方 authorizeIndex（cookie 认证语义全归官方 BrowserAuth——零自持；
@@ -766,18 +1016,39 @@ async function main(): Promise<void> {
             return
           }
           readFile(target)
-            .then((body) => {
+            .then(async (body) => {
               const isIndex = rel === 'index.html'
               const ext = target.slice(target.lastIndexOf('.'))
+              // mobile-ui connection 探针（R9 证伪续作）：index 响应注入官方结构化行
+              // （ModuleLoader facade + client bundle 组合脚本 + __DSH_BOOT__ 图）——与官方
+              // frontend-static 同缝。用 renderIndexInjections（官方导出纯函数）而非
+              // renderIndex：tapIndex 弹射（dswf cookie → location.replace('/remote/')）
+              // 对移动面自身是自跳环（探针 netLog ⇄ nav 实证），弹射终点 = 本页，跳过。
+              const out = isIndex
+                ? renderIndexInjections(body.toString('utf8'), ctx.webServer.collectIndexInjections())
+                : body
+              // mobile-ui 1.11 静态资源签名头（tunnel-psk v3.1 §4.5——X-Forge-Sig 覆盖
+              // path‖body，mobile 动态资源验签后才执行；PSK 未配置 = 钥未生成 → 头缺席）
+              const pskShape = loadPskPersist(pskFile)
+              const sigHeaders = pskShape !== undefined ? staticSignatureHeaders(pskShape.signing, `/${rel}`, out) : undefined
               res.writeHead(200, {
                 'content-type': MIME[ext] ?? 'application/octet-stream',
                 // 入口 HTML no-store（④）；hash 命名资产默认缓存（content-type 已按扩展名钉）
                 ...(isIndex ? { 'cache-control': 'no-store' } : {}),
+                ...sigHeaders,
               })
-              res.end(method === 'HEAD' ? undefined : body)
+              res.end(method === 'HEAD' ? undefined : out)
             })
             .catch((error: unknown) => {
               if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+                // mobile-ui 1.7 AD-5：index 缺席 = mobile dist 未构建——fail-soft 提示页
+                // （含诊断行，diag 落 harness.log）；非 index 资产缺席保持 404 既有语义。
+                if (rel === 'index.html') {
+                  diag(`[pair-diag] /remote mobile dist 缺席 root=${webDistRoot} → fail-soft 提示页`)
+                  res.writeHead(503, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+                  res.end(method === 'HEAD' ? undefined : renderRemoteDistMissingPage(webDistRoot))
+                  return
+                }
                 res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
                 res.end()
                 return
@@ -864,28 +1135,66 @@ async function main(): Promise<void> {
           // bug be04ce95：dsh-desktop 已下载的 cloudflared 作种子（sha256 对 pin 清单校验
           // 一致才拷贝进产品自身缓存——非运行期引用，用户无 dsh 时纯下载链自洽）
           externalSeeds: officialCloudflaredSeedCandidates(),
+          // 韧性状态机诊断行（死亡原因/重试失败/双链皆败撤面）→ harness.log 既有链
+          diag: (line) => diag(line),
         })
         tunnelManager.onEvent(sendTunnelState)
-        void tunnelManager.start().catch(() => sendTunnelState(undefined)) // 双链路皆不可用 → 撤除面
-      } catch {
+        void tunnelManager
+          .start()
+          .then(() => diag(`[pair-diag] tunnel start ok（双链路任一建立成功）`))
+          .catch((cause) => {
+            diag(`[pair-diag] tunnel start 失败（双链路皆败 → 撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
+            sendTunnelState(undefined)
+          })
+      } catch (cause) {
         tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
+        diag(`[pair-diag] tunnel manager 装配失败：${cause instanceof Error ? cause.message : String(cause)}`)
       }
       tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
       // fix-17 ②：tab 切换重连缝——隧道离线（无活动句柄）即触发建立；在线 = 重推当前
       // 状态（读数刷新面）。start/stop/fallback 语义全在 TunnelManager，此处只装配触发。
       tunnelToggle = () => {
-        if (tunnelManager === undefined) return
-        if (tunnelManager.state === undefined) {
-          void tunnelManager.start().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+        if (tunnelManager === undefined) {
+          diag(`[pair-diag] tunnel toggle 落空：管理器未装配`)
           return
         }
+        if (tunnelManager.state === undefined) {
+          diag(`[pair-diag] tunnel toggle → start（当前无活动链路）`)
+          void tunnelManager.start()
+            .then((state) => {
+              diag(`[pair-diag] tunnel toggle start ok（${state.provider}）`)
+              sendTunnelState(state)
+            })
+            .catch((cause) => {
+              diag(`[pair-diag] tunnel toggle start 失败（撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
+              sendTunnelState(undefined)
+            })
+          return
+        }
+        diag(`[pair-diag] tunnel toggle → 重推当前状态（读数刷新）`)
         sendTunnelState(tunnelManager.state)
       }
       // fix-18：显式换线缝——TunnelManager.fallback（停旧链起新链；状态事件/回推经
       // onEvent + then 双面送达，UI 遮罩随 switching 收敛）
       tunnelFallback = () => {
-        if (tunnelManager === undefined) return
-        void tunnelManager.fallback().then(sendTunnelState).catch(() => sendTunnelState(undefined))
+        if (tunnelManager === undefined) {
+          diag(`[pair-diag] tunnel fallback 落空：管理器未装配`)
+          return
+        }
+        diag(`[pair-diag] tunnel fallback 触发（停当前链路起另一条）`)
+        void tunnelManager.fallback()
+          .then((state) => {
+            diag(`[pair-diag] tunnel fallback 收敛（新链路建立）`)
+            sendTunnelState(state)
+          })
+          .catch((cause) => {
+            // bug cf0db7e5 CDP 回归实证竞态：fallback 的 startPinggy 捕获窗口内并发 ensure
+            // 已建新链——catch 无条件撤面会把活链路面抹掉（ABSENT 永挂）。仅当此刻确无
+            // 活动链路才撤面；有则回推活面。
+            const live = tunnelManager.state
+            diag(`[pair-diag] tunnel fallback 失败（${cause instanceof Error ? cause.message : String(cause)}）——${live !== undefined ? '并发链路在场，回推活面' : '无活动链路，撤面'}`)
+            sendTunnelState(live)
+          })
       }
       // fix-26：pair 消息 PIN 面统一构造（durable = PIN + 长效位、零 TTL；临时 = PIN + TTL——
       // UI hint 双态单源：长效无倒计时、临时实时秒倒计时）
@@ -977,6 +1286,19 @@ async function main(): Promise<void> {
     forgeWorktree: worktreeRpcService ?? undefined,
     // fix-2 审批桥（官方 ctx.approval 在场时 provide 内存中继——缺席 = 审批转发面降级）
     approval: approvalRelay,
+    // 1.107 连接密钥三件套读数/轮换（桌面读数即显——PSK 明文不经 manifest 快照，
+    // 读数缝单源 = remote-psk.json；轮换 = rotatePsk 再生成，旧钥宽限期 ≤5min 只验不密）
+    remotePsk: {
+      read: () => {
+        const shape = loadPskPersist(pskFile)
+        if (shape === undefined) return { configured: false }
+        return { configured: true, ...pskTrioOf(shape), pinConfigured: true, pinDurable: pinIssuer.isDurable() }
+      },
+      rotate: () => {
+        const rotated = rotatePsk(pskFile, loadPskPersist(pskFile), Date.now())
+        return { configured: true, ...pskTrioOf(rotated.shape), pinConfigured: true, pinDurable: pinIssuer.isDurable() }
+      },
+    },
   }
   // 已注册 tool 名清单（3.4 冒烟观测面）：官方 ToolRuntime.schemas() 全局视图投影 name。
   // 读取失败 = 观测降级（tools 缺席），boot 本体不受阻——断言面由冒烟承载。
@@ -1009,6 +1331,7 @@ async function main(): Promise<void> {
       forgeBugs: services.forgeBugs !== undefined,
       forgeWorktree: worktreeRpcService !== undefined,
       approval: services.approval !== undefined,
+      remotePsk: services.remotePsk !== undefined,
     },
     ...(toolNames !== undefined ? { tools: toolNames } : {}),
     // bug 2ffb0a82：knowledge 插件装载位（renderer 知识 UI 面门控单源——见上方 knowledgeRow 注记）

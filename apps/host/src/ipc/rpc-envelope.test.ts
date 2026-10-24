@@ -111,7 +111,7 @@ describe('rpcEnvelope 诊断埋点（app-observability 1.2 单点 emit）', () =
     await expect(handler(undefined, {})).resolves.toEqual({ ok: false, error: expect.anything() })
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ level: 'error', process: 'main', event: 'ipc-handler', message: expect.stringContaining('工作区创建失败') })
-    expect(events[0].stack).toContain('WorkspaceCreateError')
+    expect(events[0]!.stack).toContain('WorkspaceCreateError')
   })
 
   it('非 typed rethrow 前也落诊断事件（Note-1 同文件闭合）', async () => {
@@ -122,8 +122,8 @@ describe('rpcEnvelope 诊断埋点（app-observability 1.2 单点 emit）', () =
     })
     await expect(handler(undefined, {})).rejects.toThrow('programmer error')
     expect(events).toHaveLength(1)
-    expect(events[0].message).toBe('programmer error')
-    expect(events[0].stack).toBeDefined()
+    expect(events[0]!.message).toBe('programmer error')
+    expect(events[0]!.stack).toBeDefined()
   })
 
   it('成功路径零埋点', async () => {
@@ -170,7 +170,7 @@ describe('rpcEnvelope 诊断埋点（app-observability 1.2 单点 emit）', () =
       throw new Error('with trace')
     })
     await expect(handler(undefined, {}, 'tr-full')).rejects.toThrow()
-    expect(events[0].traceId).toBeUndefined() // payload 不带——trace 经 ALS 由订阅侧 appender 补
+    expect(events[0]!.traceId).toBeUndefined() // payload 不带——trace 经 ALS 由订阅侧 appender 补
     const line = { timestamp: 't', level: 'error' as const, trace_id: '-', process: 'main' as const, message: '', event: '' }
     expect(line).toBeDefined()
     expect(runWithDiagContext(als, { traceId: 'tr-full' }, () => 'x')).toBe('x')

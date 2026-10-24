@@ -54,6 +54,8 @@ export type BridgeServiceName =
   | 'forgeBugs'
   | 'forgeWorktree'
   | 'approval'
+  /** 1.107 连接密钥三件套读数/轮换（child 侧 remote-psk.json 单源——桌面读数即显） */
+  | 'remotePsk'
 
 /** 服务名全集常量（ready 在场位逐名校验的迭代面；完备性经 ServiceNamesCoverage 收敛 never） */
 export const BRIDGE_SERVICE_NAMES = [
@@ -67,6 +69,7 @@ export const BRIDGE_SERVICE_NAMES = [
   'forgeBugs',
   'forgeWorktree',
   'approval',
+  'remotePsk',
 ] as const satisfies readonly BridgeServiceName[]
 
 /** 服务名全集完备性（= never：BridgeServiceName 新增名未入常量在此编译期点名） */
@@ -189,6 +192,14 @@ export interface BridgePairConnectedMessage {
 }
 
 /**
+ * mobile-ui 1.11 子 → 主：断开连接推送（forge:remote/disconnect 通道对偶缝——run.ts 消费
+ * applyPairDisconnected 收回 manifest connected 粘性位；url/绑定/配对/隧道面全保留）。
+ */
+export interface BridgePairDisconnectedMessage {
+  readonly type: 'pair-disconnected'
+}
+
+/**
  * dsh-mobile-tunnel 子 → 主：隧道状态推送（child 侧 TunnelManager 事件/pair 轮换驱动——
  * run.ts 消费重建 manifest 隧道面）。激活态携 tunnelUrl（`${tunnelUrl}/pair?token=` 形状，
  * token 随 pair 轮换换新）+ 链路类型 + Pinggy TTL 到期时刻；零载荷 `{type:'tunnel'}` =
@@ -239,6 +250,7 @@ export type ChildToMainMessage =
   | BridgeEventMessage
   | BridgePairMessage
   | BridgePairConnectedMessage
+  | BridgePairDisconnectedMessage
   | BridgeTunnelMessage
   | BridgeDiagMessage
 
@@ -597,6 +609,16 @@ export function asPairConnectedMessage(message: unknown): BridgePairConnectedMes
 }
 
 /**
+ * mobile-ui 1.11 pair-disconnected 消息守卫（子 → 主断开连接推送分流——run.ts 消费收回
+ * manifest connected 粘性位）。零载荷面：type 恒等即通过；他形 = undefined 静默忽略。
+ */
+export function asPairDisconnectedMessage(message: unknown): BridgePairDisconnectedMessage | undefined {
+  if (typeof message !== 'object' || message === null) return undefined
+  if ((message as Record<string, unknown>).type !== 'pair-disconnected') return undefined
+  return { type: 'pair-disconnected' }
+}
+
+/**
  * dsh-mobile-tunnel tunnel 消息守卫（子 → 主隧道状态推送分流——run.ts tunnel 分支消费）。
  * 激活态：tunnelUrl 非空串 + tunnelProvider ∈ {cloudflared, pinggy} 齐备（expiresAt 正有限
  * 数可选）；零载荷 = 关闭/失效撤除面；畸形（单边在场/provider 越域/TTL 非法）→ undefined
@@ -920,4 +942,29 @@ export const REMOTE_VIEW_BOUNCE_MARKUP =
 /** fix-22：tapIndex 纯变换——<head> 开标签后注入弹射脚本（无 <head> = 原样返回 fail-soft）。 */
 export function remoteViewIndexTap(html: string): string {
   return html.replace(/<head(?:\s[^>]*)?>/i, (open) => `${open}${REMOTE_VIEW_BOUNCE_MARKUP}`)
+}
+
+/**
+ * mobile-ui 1.7（AD-5）：mobile dist 缺席时 /remote/ 静态面 fail-soft 降级提示页（含诊断行
+ * ——dist 根逐字呈现，harness.log diag 行同径可回放）。纯函数：装配与诊断面在 child.ts。
+ */
+export function renderRemoteDistMissingPage(distRoot: string): string {
+  const safeRoot = distRoot.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>移动视图未就绪</title>',
+    '</head>',
+    '<body style="font-family:system-ui,sans-serif;background:#111;color:#eee;margin:0;display:grid;place-items:center;min-height:100vh">',
+    '<main style="padding:24px;text-align:center">',
+    '<p>移动视图尚未构建——请在工作区执行 <code>apps/mobile</code> 构建后重试。</p>',
+    `<p style="opacity:.6;font-size:12px">[mobile-dist-missing] root=${safeRoot}</p>`,
+    '</main>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n')
 }

@@ -172,16 +172,18 @@ describe('buildSidebarTree（项目树派生）', () => {
     expect(out.currentSessionId).toBe('blank-cur')
   })
 
-  // bug 3d26a1be：官方行口径——标题消费持久 title（缺席 = 「未命名」），
-  // 不消费 displayTitle 的目录名/id 兜底（官方 sessionTitle：blank → ''、title?.trim() ?? ''）
+  // bug 3d26a1be：官方行口径——标题消费持久 title，不消费 displayTitle 的目录名/id 兜底
+  // （官方 sessionTitle：blank → ''、title?.trim() ?? ''）。
+  // bug 9eb9d6cb 后续用户裁决：空 title 回退词统一「新会话」——title 漂移链收敛为
+  // 新会话 → 有意义的名称（「未命名」中间态退役）。
   describe('会话行标题派生（bug 3d26a1be——不消费 displayTitle 目录名兜底）', () => {
-    it('bug：无持久标题会话显示「未命名」而非 displayTitle 目录名；savedTitle 空串供改名种子', () => {
+    it('bug：无持久标题会话显示「新会话」而非 displayTitle 目录名；savedTitle 空串供改名种子', () => {
       const out = buildSidebarTree({
         projects: [project('p1', 'w1')],
         sessions: ledger([ledgerRow('s1', { title: undefined, displayTitle: 'dsh-forge' })]),
         workspaces: workspaces([{ workspaceId: 'w1', sessionIds: ['s1'] }]),
       })
-      expect(out.tree[0]!.sessions[0]!.title).toBe('未命名')
+      expect(out.tree[0]!.sessions[0]!.title).toBe('新会话')
       expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
     })
 
@@ -197,7 +199,7 @@ describe('buildSidebarTree（项目树派生）', () => {
       expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('')
     })
 
-    it('有持久标题：显示 trim 后标题，savedTitle 同步；空白串标题按未命名判（官方 trim 口径）', () => {
+    it('有持久标题：显示 trim 后标题，savedTitle 同步；空白串标题回退「新会话」（官方 trim 口径）', () => {
       const out = buildSidebarTree({
         projects: [project('p1', 'w1')],
         sessions: ledger([
@@ -208,7 +210,7 @@ describe('buildSidebarTree（项目树派生）', () => {
       })
       expect(out.tree[0]!.sessions[0]!.title).toBe('登录修复')
       expect(out.tree[0]!.sessions[0]!.savedTitle).toBe('登录修复')
-      expect(out.tree[0]!.sessions[1]!.title).toBe('未命名')
+      expect(out.tree[0]!.sessions[1]!.title).toBe('新会话')
     })
   })
 

@@ -159,16 +159,16 @@ export function attributionTaskInput(
   return {
     projectId: extra.projectId,
     source,
-    title: `e2e 基线红灯归因：${spec}`,
+    title: `e2e 基线红灯排查：${spec}`,
     type: 'test-run',
     priority: 'P1' as TaskPriority,
     taskDesc: [
-      `本 spec 在 e2e 红灯基线（循环入场跑批）中已失败——先于本容器当前任务存在，不得归因为当前任务回归。`,
-      '执行该 spec 并按三分流给出归因结论（结论写进结算 summary，附证据路径）：',
-      '1. 环境——环境/依赖/时序问题：记录复现条件与证据，交由主会话裁决环境修复；',
-      '2. 陈旧断言——spec 断言与现状脱节：给出断言更新建议（不直接改断言，交主会话裁决）；',
-      '3. 真回归——既有行为破坏：recordBug 登记缺陷（trigger/expected/actual 全带），由主会话派修复。',
-      '结论分流前禁止顺手修复 spec 或产品代码。',
+      `本 spec 在循环启动时运行的 e2e 基线中已失败——在当前任务开始前就已存在，不是当前任务造成的回归。`,
+      '执行该 spec，并按下列三类给出结论（结论写入完成摘要，附证据路径）：',
+      '1. 环境——环境/依赖/时序问题：记录复现条件与证据，交由主会话决定环境修复；',
+      '2. 陈旧断言——spec 断言与现状脱节：给出断言更新建议（不直接改断言，交主会话决定）；',
+      '3. 真回归——既有行为破坏：用 recordBug 登记缺陷（trigger/expected/actual 齐全），由主会话安排修复。',
+      '得出结论之前，不要顺手修复 spec 或产品代码。',
     ].join('\n'),
     vars: { BASELINE_SPEC: spec },
   }

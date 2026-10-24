@@ -28,6 +28,7 @@ import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../supp
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
+import { expandDispatchPanel } from '../../support/dispatch-panel.js'
 import {
   COMPOSER_INPUT,
   DP_PANEL,
@@ -101,7 +102,9 @@ test('@web-e2e @m2 5.2 SC6③：挂接双侧双源相异断言（悬浮面板呈
     expect(cards.map((c) => c.source).sort(), '分型相异：link + record 各一').toEqual(['link', 'record'])
     expect(cards.every((c) => c.taskId === added.taskId && c.sessionId === sessionId), '两卡同任务同会话（taskId 含卡）').toBe(true)
 
-    // UI 面：悬浮面板 link 行呈现（事件驱动刷新收敛面；record 卡过滤——面板恒单行）
+    // UI 面：展开悬浮面板（默认折叠悬浮球，fix bug 570fa4e2——球在场 + 面板零挂载
+    // 顺带承接 L88「挂接前面板不出场」语义）→ link 行呈现（事件驱动刷新收敛面）
+    await expandDispatchPanel(page)
     const row = page.locator(dpRowOf(added.taskId)).first()
     await expect(page.locator(DP_PANEL).first(), '悬浮面板在场（对话列内浮层）').toBeVisible({ timeout: 15_000 })
     await expect(row, '面板行在场（link 源——键 + 标题）').toBeVisible({ timeout: 15_000 })

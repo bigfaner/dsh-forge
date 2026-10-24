@@ -254,7 +254,7 @@ describe('attributionTaskInput（三分流归因卡载荷）', () => {
     expect(input).toMatchObject({
       projectId: 'p-1',
       source: { kind: 'feature', slug: 'feat-x' },
-      title: 'e2e 基线红灯归因：e2e/specs/a.spec.ts',
+      title: 'e2e 基线红灯排查：e2e/specs/a.spec.ts',
       type: 'test-run',
       priority: 'P1',
       vars: { BASELINE_SPEC: 'e2e/specs/a.spec.ts' },

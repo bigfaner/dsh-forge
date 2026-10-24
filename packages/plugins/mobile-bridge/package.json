@@ -1,0 +1,24 @@
+{
+  "name": "@dsh-forge/mobile-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "mobile ask 桥插件（组合期装载）：user-questions/request waterfall answerer 注册——桥本体由 child 经全局锚注入（emit 扇出/fan-out 属宿主装配面），插件只负责把 answerer 挂进分发链（先于 api-remotes 捕获监听）。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0"
+  }
+}

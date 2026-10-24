@@ -133,9 +133,9 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十二 invoke 族 49 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道 + worktree 十通道[1.30 增 select]；main 侧 allowlist 校验唯一源）', () => {
-    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(49)
-    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(49)
+  it('allowlist = 十二 invoke 族 50 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道 + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像]；main 侧 allowlist 校验唯一源）', () => {
+    expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(50)
+    expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(50)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(
       [
         ...Object.values(PROJECTS_CHANNELS),

@@ -43,6 +43,9 @@ export interface SessionReadHandleFactory {
 /**
  * 在调用方已持有的写句柄上落一条挂靠事件（append + flush；close 由调用方负责）。
  * 模块内部面——不导出（信封构造不外泄：调用方只能给「绑定语义」）。
+ * bug 8af836eb 边界记账：本函数唯一合法调用窗 = 预铸 pre-adopt（会话从未被 adopt——
+ * adopt 后写句柄被官方 agent loop 持有，post-adopt 写入 SessionAlreadyOwnedError 实证；
+ * 「回收复用刷新时间戳」即撞此边界撤收）。
  */
 async function appendAttachEvent(
   handle: Pick<SessionHandle, 'read' | 'append' | 'flush'>,

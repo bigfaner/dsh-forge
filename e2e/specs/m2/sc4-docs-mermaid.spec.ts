@@ -1,13 +1,14 @@
 // @feature:dsh-forge-m2-pipeline @web-e2e
-// 5.2 SC4 文档浏览（AC2）：仓内/仓外各一 + erDiagram 渲染（文档 tab SVG 在场）+
-// 非法源回退占位卡——tech-design Per-Layer e2e 行 + PRD ③。
+// 5.2 SC4 文档浏览（AC2）：仓内/仓外各一 + erDiagram 渲染（DOM 增强器出图）+
+// 非法源官方代码块纯文本兜底——tech-design Per-Layer e2e 行 + PRD ③。
 //   · 仓内 = 本仓 worktree 注册为项目（forge_dir = 仓根——docs/features 与 docs/proposals
 //     所在地；knowledgeDir 重定向 tmp 隔离目录 + 仓内两目录齐备 → 注册链 fix-39 建面
 //     零写入，仓树只读）→ 真实发现面建行 → 提案子 tab 文档行 → dock 开文档 tab；
 //   · 仓外 = 临时夹具预置约定目录结构（docs/proposals/<slug>/proposal.md 内嵌 mermaid
 //     段——erDiagram 验收锚 / 非法源）→ 真实发现链建行（S9① 口径）→ 只读渲染 +
 //     canonical 路径栏 + 回退占位卡；
-//   · 断言经 anchors 单源（docPanelOf/DOC_MERMAID_SVG/DOC_MERMAID_FALLBACK——Hard Rule）。
+//   · 断言经 anchors 单源（docPanelOf/MD_MERMAID_FIGURE/MD_MERMAID_ENHANCED_BLOCK/DOC_CODE_BLOCK
+//     ——Hard Rule；mermaid 出图 = DOM 增强器旁插 figure，非法源 = 官方代码块纯文本兜底）。
 // M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
 // 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
 
@@ -23,9 +24,10 @@ import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import {
   DOCKKIT_STRIP_TAB,
-  DOC_MERMAID_FALLBACK,
-  DOC_MERMAID_SVG,
+  DOC_CODE_BLOCK,
   DOC_PATH_LABEL,
+  MD_MERMAID_ENHANCED_BLOCK,
+  MD_MERMAID_FIGURE,
   OV_PARENT_ANY,
   docPanelOf,
   ovDocRowOf,
@@ -122,7 +124,7 @@ test('@web-e2e @m2 5.2 SC4 仓内：本仓注册发现链 → 提案文档 dock 
 // ─────────────────────────────────────────────────────────────────────────────
 // 仓外：约定目录结构夹具 → erDiagram SVG 渲染 + 非法源回退占位卡 + 多文档 tab 并存
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 渲染 SVG 在场 + 非法源回退占位卡 + 双 tab 并存', async () => {
+test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 增强器出图 + 非法源代码块兜底 + 双 tab 并存', async () => {
   test.setTimeout(360_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-sc4-out-'))
   const wsDir = join(fixtureRoot, 'ws-docs')
@@ -189,17 +191,20 @@ test('@web-e2e @m2 5.2 SC4 仓外：erDiagram 渲染 SVG 在场 + 非法源回�
     const erPanel = page.locator(docPanelOf(projectId, erRel)).first()
     await expect(erPanel).toBeVisible({ timeout: 30_000 })
     await expect(erPanel.locator('[data-dswf-doc-body]')).toContainText('SC4-OUT-BODY')
-    await expect(erPanel.locator(DOC_MERMAID_SVG).locator('svg'), 'erDiagram 渲染：SVG 在场（验收锚）').toBeVisible({ timeout: 30_000 })
-    await expect(erPanel.locator(DOC_MERMAID_FALLBACK)).toHaveCount(0)
+    await expect(
+      erPanel.locator(MD_MERMAID_FIGURE).locator('.dswf-doc-mermaid-canvas svg'),
+      'erDiagram 渲染：SVG 在场（验收锚）',
+    ).toBeVisible({ timeout: 30_000 })
+    await expect(erPanel.locator(MD_MERMAID_ENHANCED_BLOCK).first(), '原 mermaid 块已渲染隐藏态').not.toBeVisible()
 
-    // ② 非法源回退：占位卡在场（源码呈现 + 回退注记——异常不外溢）
+    // ② 非法源兜底：增强器不产 figure（无占位卡面）——官方代码块纯文本在场（源码原样、异常不外溢）
     const badRel = 'docs/proposals/demo-bad/proposal.md'
     await openProposalDoc(page, badRel, '非法 mermaid 源回退演示')
     const badPanel = page.locator(docPanelOf(projectId, badRel)).first()
     await expect(badPanel).toBeVisible({ timeout: 30_000 })
-    await expect(badPanel.locator(DOC_MERMAID_FALLBACK), '非法源 → 回退占位卡在场').toBeVisible({ timeout: 30_000 })
-    await expect(badPanel.locator(DOC_MERMAID_FALLBACK)).toContainText('回退')
-    await expect(badPanel.locator(DOC_MERMAID_SVG)).toHaveCount(0)
+    await expect(badPanel.locator(MD_MERMAID_FIGURE), '非法源 → 增强器不出图').toHaveCount(0)
+    await expect(badPanel.locator(DOC_CODE_BLOCK), '非法源 → 官方代码块兜底在场').toBeVisible({ timeout: 30_000 })
+    await expect(badPanel.locator(DOC_CODE_BLOCK)).toContainText('valid mermaid')
 
     // ③ 多文档 tab 并存（multiple + 地址去重——strip 两页签；keyed body 非激活即卸载
     //    是官方语义，DOM 并存面 = 页签行）

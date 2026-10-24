@@ -65,6 +65,9 @@ void (async () => {
     const tele = attachHostTelemetry(app.getPath('userData'), { causeStack: paths.form === 'dev' })
     if (process.env.DSH_HOME) console.warn(`[host] shell 继承 DSH_HOME=${process.env.DSH_HOME} 压过 fix-26 缺省隔离（paths.ts 第三层）——确认有意（调试/特殊布局）`)
     process.env.DSH_HOME ??= paths.dshHome // 须先于 boot 重定向（fix-26：缺省隔离 {userData}/dsh-home 数据两界，凭据经 overlay 桥真 home）
+    // job-tree 指令队列基址注入（数据集中裁决——worker 守卫队列目录落 {userData}/runtime/jobtree，
+    // 消除 Temp 清理器掏目录竞态；child 经 env 继承链拿到，插件侧 deps/env/Temp 三级解析兜底）
+    process.env.DSH_FORGE_JOBTREE_DIR ??= join(app.getPath('userData'), 'runtime', 'jobtree')
     // fix-12 B：安全模式（HARNESS_SAFE_MODE_ENV 跨进程存活——relaunch 环境承载 profile
     // 切换；安全模式 = 官方基座三件套隔离区，跳过用户层与第三方 bundle）。
     let profileDir = paths.profileDir
@@ -129,6 +132,8 @@ void (async () => {
     registerTunnelChannel(ipcMain, {
       toggle: () => host.toggleTunnel?.(), fallback: () => host.fallbackTunnel?.(),
       pinReset: () => host.resetPin?.(), consentPin: (consent) => host.consentPin?.(consent),
+      // 1.107：三件套读数/轮换（bridge remotePsk 服务直转——boot 面缺席 = reject 由 renderer fail-soft 消费）
+      pskRead: () => host.pskRead(), pskRotate: () => host.pskRotate(),
     })
     const preloadPath = fileURLToPath(new URL('./ipc/preload.mjs', import.meta.url))
     mainWindow = await createMainWindow(BrowserWindow, { url: SHELL_ENTRY_URL, preloadPath, title: APP_IDENTITY })
@@ -140,11 +145,8 @@ void (async () => {
     app.on('before-quit', () => {
       forgeIpc.unregisterAll()
       for (const channel of [BOOT_CHANNEL, DIRECTORY_PICKER_CHANNEL]) ipcMain.removeHandler(channel)
-      removeHarnessChannels(ipcMain)
-      removeTunnelChannel(ipcMain) // fix-17 ②：隧道重连缝清理面
-      hostRef = undefined
-      consoleForward.flush() // 折叠组收口（尾部重复计数不丢行）
-      tele.appender.flushSync() // 退出前 flush（红线③ flush 语义——队列残留确定落盘）
+      removeHarnessChannels(ipcMain); removeTunnelChannel(ipcMain) // fix-17 ②：隧道重连缝清理面；hostRef 释放见下行
+      hostRef = undefined; consoleForward.flush(); tele.appender.flushSync() // 折叠组收口（尾部重复计数不丢行）
       void host.shutdown()
     })
     console.log(`[host] 壳窗口就绪 entry=${SHELL_ENTRY_URL} dist=${resolveWebDistDir(process.env)} injections=${host.manifest.injections.length}`)

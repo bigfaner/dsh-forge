@@ -17,6 +17,8 @@ export default defineConfig({
       // 0.2.0-rc.2 的公开面（npm 包导出与运行时契约），与 core/web 单测分池——
       // G1 单一入口 = pnpm test 固定子集（pnpm test:contract）。
       { test: { name: 'contract', include: ['tests/contract/**/*.test.ts'] } },
+      // mobile 表面 Journey 回归池（gen-test-scripts——回放 fixtures 驱动的契约钉面测试）
+      { test: { name: 'mobile-journeys', include: ['tests/mobile/**/*.test.ts'] } },
       { test: { name: 'contracts', include: ['packages/contracts/src/**/*.test.ts'] } },
       { test: { name: 'path-key', include: ['packages/path-key/src/**/*.test.ts'] } },
       { test: { name: 'core', include: ['packages/core/src/**/*.test.ts'] } },
@@ -75,9 +77,11 @@ export default defineConfig({
         },
       },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
+      // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
+      { test: { name: 'mobile', include: ['apps/mobile/src/**/*.test.ts'] } },
       // e2e 支撑层纯逻辑单测（5.1 replay 层起步——format/fixtures/executor/db-insert；
       // 走查面归 Playwright（e2e/specs），此处只收不启 Electron 的纯函数/纯 Node 面）
-      { test: { name: 'e2e-support', include: ['e2e/support/**/*.test.ts'] } },
+      { test: { name: 'e2e-support', include: ['e2e/support/**/*.test.ts', 'e2e/mobile/**/*.test.ts'] } },
       {
         test: {
           name: 'web',

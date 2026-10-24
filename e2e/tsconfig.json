@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "types": [],
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "declaration": false,
     "declarationMap": false,
     "lib": [
@@ -15,6 +16,7 @@
   "include": [
     "playwright.config.ts",
     "specs/**/*.ts",
-    "support/**/*.ts"
+    "support/**/*.ts",
+    "mobile/**/*.ts"
   ]
 }

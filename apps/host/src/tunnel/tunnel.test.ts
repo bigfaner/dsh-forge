@@ -16,7 +16,7 @@ import {
   type TunnelDeps,
 } from './cloudflared.js'
 import { PINGGY_TTL_MS, pinggyRemainingMs, startPinggyTunnel } from './pinggy.js'
-import { TunnelManager } from './index.js'
+import { TunnelManager, type TunnelState } from './index.js'
 
 const GOOD_SHA = 'a'.repeat(64)
 const TMP = '/tmp-fake'
@@ -62,6 +62,7 @@ function makeDeps(): {
   files: Map<string, Uint8Array>
   mkdirs: string[]
   spawnCalls: Array<{ cmd: string; args: readonly string[] }>
+  sleeps: number[]
   setBody(url: string, data: Uint8Array): void
   tick(ms: number): void
 } {
@@ -70,6 +71,7 @@ function makeDeps(): {
   const mkdirs: string[] = []
   const spawned: FakeProcess[] = []
   const spawnCalls: Array<{ cmd: string; args: readonly string[] }> = []
+  const sleeps: number[] = []
   const fetchCalls: string[] = []
   let clock = 0
   const deps: TunnelDeps = {
@@ -100,6 +102,10 @@ function makeDeps(): {
       return proc
     },
     now: () => clock,
+    // 退避退避缝：即时 resolve 但记录延迟——状态机用例断言 1s/4s 节奏，不真实等待
+    sleep: async (ms) => {
+      sleeps.push(ms)
+    },
   }
   return {
     deps,
@@ -108,6 +114,7 @@ function makeDeps(): {
     files,
     mkdirs,
     spawnCalls,
+    sleeps,
     setBody: (url, data) => bodies.set(url, data),
     tick: (ms) => {
       clock += ms
@@ -295,12 +302,20 @@ describe('Pinggy SSH 兜底与 TTL 读数', () => {
     expect(pinggyRemainingMs(startedAt, t.deps.now())).toBe(0)
   })
 
-  it('ssh 提前退出 → 兜底不可用错误', async () => {
+  it('ssh 提前退出 → 兜底不可用错误（stderr 首错误行随行）', async () => {
     const t = makeDeps()
     const pending = startPinggyTunnel(1, t.deps, 5_000)
     const proc = spawnOf(t)
+    proc.feed('ssh: connect to host free.pinggy.io port 22: Connection refused')
     proc.exit(255)
-    await expect(pending).rejects.toThrow(/ssh 提前退出/)
+    await expect(pending).rejects.toThrow(/ssh 提前退出（code=255）：ssh: connect to host free\.pinggy\.io/)
+  })
+
+  it('ssh 零输出提前退出 → 错误不带原因尾注', async () => {
+    const t = makeDeps()
+    const pending = startPinggyTunnel(1, t.deps, 5_000)
+    spawnOf(t).exit(255)
+    await expect(pending).rejects.toThrow(/^ssh 提前退出（code=255）——pinggy 兜底不可用$/)
   })
 })
 
@@ -321,19 +336,34 @@ describe('TunnelManager 链路编排（首选/兜底/换线/停机）', () => {
     expect(manager.state?.url).toBe(CF_URL)
   })
 
-  it('cloudflared 提前退出 → 自动兜底 Pinggy（换线）', async () => {
+  it('cloudflared 意外退出 → 同链路退避重试（1s/4s）仍败 → 自动兜底 Pinggy（换线）', async () => {
     const t = makeDeps()
     primeCloudflared(t)
     const manager = new TunnelManager(t.deps, { localPort: 43127, captureTimeoutMs: 200 })
     const pending = manager.start()
     const cf = await untilSpawn(t)
+    cf.feed(CF_URL)
+    await pending // 先建立成功——意外死亡语义属于 attach 后状态机（捕获窗死亡走 start() 既有兜底）
     cf.exit(1)
-    const pg = await untilSpawn(t, 2)
+    // 重试 1（1s 退避后）：仍是 cloudflared，再败
+    const cf2 = await untilSpawn(t, 2)
+    expect(t.spawnCalls[1]?.cmd).not.toBe('ssh')
+    expect(t.sleeps).toEqual([1_000])
+    cf2.exit(1)
+    // 重试 2（4s 退避后）：仍败 → 切 Pinggy
+    const cf3 = await untilSpawn(t, 3)
+    expect(t.sleeps).toEqual([1_000, 4_000])
+    cf3.exit(1)
+    const pg = await untilSpawn(t, 4)
+    const pinggySeen = new Promise<TunnelState>((resolve) => {
+      manager.onEvent((s) => {
+        if (s.provider === 'pinggy') resolve(s)
+      })
+    })
     pg.feed(PG_URL)
-    const state = await pending
+    const state = await pinggySeen // pending = 首次 start 的 cloudflared 态；最终态走事件面
     expect(state.provider).toBe('pinggy')
     expect(state.remainingTtlMs).toBe(PINGGY_TTL_MS)
-    await untilSpawn(t, 2)
     expect(t.spawnCalls.at(-1)?.cmd).toBe('ssh')
   })
 
@@ -353,7 +383,12 @@ describe('TunnelManager 链路编排（首选/兜底/换线/停机）', () => {
       })
     })
     cf.exit(0)
-    const pg = await untilSpawn(t, 2)
+    // 重试链（1s/4s）全败后才切 Pinggy
+    const cf2 = await untilSpawn(t, 2)
+    cf2.exit(1)
+    const cf3 = await untilSpawn(t, 3)
+    cf3.exit(1)
+    const pg = await untilSpawn(t, 4)
     pg.feed(PG_URL)
     await pinggySeen
     expect(events).toContain('pinggy')
@@ -374,6 +409,23 @@ describe('TunnelManager 链路编排（首选/兜底/换线/停机）', () => {
     expect(state.provider).toBe('pinggy')
     expect(cf.wasKilled()).toBe(true)
     expect(manager.state?.provider).toBe('pinggy')
+  })
+
+  it('bug f0550585：start 捕获窗内并发 fallback → 互斥串行（fallback 等 start 收敛再换线）——无孤儿、终态 pinggy、cloudflared 被 kill', async () => {
+    const t = makeDeps()
+    primeCloudflared(t)
+    const manager = new TunnelManager(t.deps, { localPort: 43127, captureTimeoutMs: 200 })
+    const startPending = manager.start()
+    const cf = await untilSpawn(t) // start 已起 cloudflared 进程、URL 未捕获（捕获窗）
+    const fallbackPending = manager.fallback() // 并发换线——必须排队而非交错
+    cf.feed(CF_URL) // start 收敛
+    await startPending
+    const pg = await untilSpawn(t, 2) // mutex 放行后才起 pinggy
+    pg.feed(PG_URL)
+    const state = await fallbackPending
+    expect(state.provider).toBe('pinggy')
+    expect(manager.state?.provider).toBe('pinggy')
+    expect(cf.wasKilled()).toBe(true) // start 的 cloudflared 被换线收口——无孤儿
   })
 
   it('stop() 清理进程句柄无孤儿：kill 调用 + 退出不再触发兜底', async () => {
@@ -402,5 +454,108 @@ describe('TunnelManager 链路编排（首选/兜底/换线/停机）', () => {
     const state = await pending
     expect(state.provider).toBe('pinggy')
     expect(t.files.size).toBe(0)
+  })
+})
+
+describe('隧道韧性：同链路退避重试 + 死亡/失败原因落诊断', () => {
+  function primeCloudflared(t: ReturnType<typeof makeDeps>): void {
+    t.setBody(cloudflaredDownloadUrl(CLOUDFLARED_VERSION, ASSET), new Uint8Array([1]))
+  }
+
+  it('cloudflared 闪断 → 同链路重试第 1 次成功：零 Pinggy 派生，状态维持 cloudflared', async () => {
+    const t = makeDeps()
+    primeCloudflared(t)
+    const manager = new TunnelManager(t.deps, { localPort: 43127, captureTimeoutMs: 200 })
+    const pending = manager.start()
+    const cf = await untilSpawn(t)
+    cf.feed(CF_URL)
+    await pending
+    cf.exit(1)
+    const cf2 = await untilSpawn(t, 2)
+    expect(t.spawnCalls[1]?.cmd).not.toBe('ssh')
+    expect(t.sleeps).toEqual([1_000]) // 重试前 1s 退避
+    cf2.feed(CF_URL)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(manager.state?.provider).toBe('cloudflared')
+    expect(t.spawnCalls.some((c) => c.cmd === 'ssh')).toBe(false)
+    expect(t.sleeps).toEqual([1_000]) // 成功即止——无第二次退避
+  })
+
+  it('重试期间 stop() → 状态机即弃：不再派生任何链路进程', async () => {
+    const t = makeDeps()
+    primeCloudflared(t)
+    const manager = new TunnelManager(t.deps, { localPort: 43127, captureTimeoutMs: 200 })
+    const pending = manager.start()
+    const cf = await untilSpawn(t)
+    cf.feed(CF_URL)
+    await pending
+    cf.exit(1)
+    await untilSpawn(t, 2)
+    t.spawned[1]?.exit(1) // 重试 1 败 → 进入 4s 退避窗
+    await new Promise((resolve) => setImmediate(resolve)) // 失败结算微任务冲刷
+    expect(t.sleeps).toContain(4_000)
+    await manager.stop()
+    const count = t.spawned.length
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(t.spawned).toHaveLength(count) // 退避窗内停机 → 零复活
+    expect(manager.state).toBeUndefined()
+    expect(t.spawnCalls.some((c) => c.cmd === 'ssh')).toBe(false)
+    void pending
+  })
+
+  it('Pinggy 死亡 → 同链路重试 ×2 败 → 切 cloudflared；撤面 diag 携带双链最后失败原因', async () => {
+    const t = makeDeps() // cloudflared 链恒败（无下载体）
+    const diagLines: string[] = []
+    const manager = new TunnelManager(t.deps, {
+      localPort: 43127,
+      captureTimeoutMs: 200,
+      diag: (line) => diagLines.push(line),
+    })
+    const pending = manager.start()
+    const cf = await untilSpawn(t)
+    cf.feed(PG_URL) // 下载链失败误喂无害——start 兜底起 Pinggy
+    await pending
+    const pg = t.spawned.find((_, i) => t.spawnCalls[i]?.cmd === 'ssh')
+    expect(pg).toBeDefined()
+    const dead = new Promise<TunnelState>((resolve) => {
+      manager.onEvent((s) => {
+        if (s.remainingTtlMs === 0) resolve(s)
+      })
+    })
+    pg?.exit(255)
+    const pg2 = await untilSpawn(t, 2)
+    expect(t.spawnCalls[1]?.cmd).toBe('ssh')
+    pg2.exit(255)
+    const pg3 = await untilSpawn(t, 3)
+    expect(t.sleeps).toEqual([1_000, 4_000])
+    pg3.exit(255)
+    const deadState = await dead // 双链路皆败 → 死亡撤面 emit
+    expect(deadState.remainingTtlMs).toBe(0)
+    const joined = diagLines.join('\n')
+    expect(joined).toMatch(/pinggy.*code=255/)
+    expect(joined).toMatch(/cloudflared/)
+    expect(joined).toContain('双链路皆败')
+  })
+
+  it('cloudflared 死亡原因（exit code + 末行 stderr）落 diag；重试成功不撤面', async () => {
+    const t = makeDeps()
+    primeCloudflared(t)
+    const diagLines: string[] = []
+    const manager = new TunnelManager(t.deps, {
+      localPort: 43127,
+      captureTimeoutMs: 200,
+      diag: (line) => diagLines.push(line),
+    })
+    const pending = manager.start()
+    const cf = await untilSpawn(t)
+    cf.feed(CF_URL)
+    await pending
+    cf.feed('ERR | connection closed unexpectedly')
+    cf.exit(7)
+    const cf2 = await untilSpawn(t, 2)
+    cf2.feed(CF_URL)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(manager.state?.provider).toBe('cloudflared')
+    expect(diagLines.join('\n')).toMatch(/cloudflared.*code=7.*connection closed unexpectedly/)
   })
 })

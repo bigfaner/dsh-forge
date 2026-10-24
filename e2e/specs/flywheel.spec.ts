@@ -32,7 +32,7 @@ import type { ProjectSummary } from '../../packages/contracts/src/dto/project.js
 import type { RecallGroup } from '../../packages/contracts/src/dto/knowledge.js'
 import { closeApp, launchHost, type Launched } from '../support/launch.js'
 import { forgeInvoke, invokeHeat } from '../support/rpc.js'
-import { dirRow, enterDir } from '../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import { waitForFixtureSession, waitForSessionEvents } from '../support/session-files.js'
 import { realCredentials, seedDshHome, writeDogfoodOverlay } from '../support/dogfood.js'
 import { rmDirBestEffort, rmFileBestEffort } from '../support/cleanup.js'
@@ -95,10 +95,10 @@ test('4.2·飞轮 6 步链：注册 → 会话 → agent 召回 → 事件落库
     // ── 步 1/6 注册（两段式：文件浏览器 → 注册表单默认值 → 确认——AC「注册（两段式）」 ──
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="browser"]')).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    // 导航段从夹具绝对路径推导（fix-11——去 %TEMP% 位置假设，含夹具目录名）
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'demo-proj').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator('.dswf-ap[data-dswf-ap="form"]')).toBeVisible()

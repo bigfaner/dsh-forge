@@ -11,10 +11,11 @@
 // 草稿缝/1.25 失败文案族随 arm 效应链一并退役，本文件只剩映射面 + 确认闩锁。
 import type { ProjectSummary } from '@dsh-forge/contracts'
 
-/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链） */
+/** 弹层项目行（id = workspaceId——owner 契约 selectedId/onPick 零变化走官方链；wsPath = 树 ws 判据源） */
 export interface HeroPickerRow {
   readonly id: string
   readonly name: string
+  readonly wsPath: string
 }
 
 /** 弹层面（行集 + 入口形态派生——组件消费的唯一计划对象） */
@@ -35,7 +36,7 @@ export function heroPickerPlan(
   const rows: HeroPickerRow[] = []
   for (const project of projects) {
     if (project.archived) continue // 过滤口径：archived 排除（与左栏一致）
-    rows.push({ id: project.workspaceId, name: project.name })
+    rows.push({ id: project.workspaceId, name: project.name, wsPath: project.wsPath })
   }
   return { rows, pinAdd: rows.length > 0, addIsTheOnlyEntry: settled && rows.length === 0 }
 }
@@ -49,17 +50,45 @@ export function selectedProjectOf(
   return rows.find((row) => row.id === selectedId)
 }
 
+/** 路径归一（跨源比较键：反斜杠→斜杠 + 小写 + 去尾斜杠——worktree 选中记忆键同判） */
+function normRootPath(value: string): string {
+  const slashed = value.replaceAll('\\', '/')
+  const trimmed = slashed.length > 1 && slashed.endsWith('/') ? slashed.slice(0, -1) : slashed
+  return trimmed.toLowerCase()
+}
+
 /**
  * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
  * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
  * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
  * （ForgeHeroWorkspacePicker）经官方 owner onPick 链拾取——与用户点选同行同语义。
+ * bug 9eb9d6cb：A2 后 selectedId 可合法指向树 workspace（官方 selectWorkspace 切树后
+ * sessionWorkspace = 树 ws id，永不命中项目行）——官方快照中该 id 的 path 落在活跃项目
+ * 根之下 = 合法选中，零拾取；数据缺席（快照未到）= 现状行为（d353536f 在场门兜住不盲拾）。
  */
 export function heroDefaultPickId(
   rows: readonly HeroPickerRow[],
   selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
 ): string | undefined {
   if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRows.find(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
+        typeof (row as { path?: unknown }).path === 'string',
+    ) as { path: string } | undefined
+    if (path !== undefined) {
+      const normalized = normRootPath(path.path)
+      const underActiveProject = rows.some((row) => {
+        const root = normRootPath(row.wsPath)
+        return normalized === root || normalized.startsWith(`${root}/`)
+      })
+      if (underActiveProject) return undefined // 树 ws 合法选中——零拾取（bug 9eb9d6cb）
+    }
+  }
   return rows[0]?.id
 }
 
@@ -146,6 +175,8 @@ export interface StaleSelectionRow {
   readonly worktreeName: string
   readonly isMain: boolean
   readonly present: boolean
+  /** 检出分支（bug fcc6f37b 同族：null = detached/bare——不可挂靠行应自愈切回主行） */
+  readonly branch?: string | null
 }
 
 /** 自愈计划（选中行盘上缺席时装配层消费：选中态切回主行 + notice 引述树名） */
@@ -161,6 +192,8 @@ export interface StaleSelectionReset {
 /**
  * 陈旧选中自愈判定（纯函数单源）：选中行在清单中缺席，或行在场但盘上实存为假
  * （git 清单 prune 前保留已删树陈旧行——present 以 existsSync 盘上事实为准）→ stale。
+ * bug fcc6f37b 同族：行在场且实存但不可挂靠（branch null = detached/bare）同样 stale——
+ * 存量选中态驱动 create-wrap 必被 typed 拒绝（fail-open 噪音），自愈切回主行。
  * 选中态缺席/命中健康行 = 不自愈（用户显式选中零覆盖）。
  */
 export function staleSelectionResetOf(
@@ -169,7 +202,7 @@ export function staleSelectionResetOf(
 ): StaleSelectionReset {
   if (selectedPath === undefined) return { stale: false }
   const row = rows.find((candidate) => candidate.path === selectedPath)
-  if (row !== undefined && row.present) return { stale: false }
+  if (row !== undefined && row.present && row.branch !== null) return { stale: false }
   const main = rows.find((candidate) => candidate.isMain)
   // 行整段消失（清单无行）→ 树名取路径尾段（与 host worktreeNameOf 同判）
   const name = row?.worktreeName ?? selectedPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? selectedPath

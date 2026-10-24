@@ -33,7 +33,7 @@ export {
   type SealNoticeProps,
   type StaleSelectionNoticeProps,
 } from './seal-notice.js'
-export { HeroWorktreePicker, heroWorktreeRows, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
+export { HeroWorktreePicker, heroWorktreeRows, pickerRowDisabled, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
 export {
   aheadBehindSegments,
   collectSlugCandidates,

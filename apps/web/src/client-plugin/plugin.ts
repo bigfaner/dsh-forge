@@ -37,6 +37,7 @@
 import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // mobile-remote-approval 1.2：远程状态快照窄类型（type-only——bundle 自含纪律不破；
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
+import type { PskTrioFace } from '../views/remote/ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
@@ -66,6 +67,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { SESSION_CREATE_CHANNEL, installSessionCreateWrap } from './create-wrap.js'
+import { installConnectionLostBanner } from './connection-lost-banner.js'
 export { SESSION_CREATE_CHANNEL, installSessionCreateWrap, treeOf } from './create-wrap.js'
 
 /** 插件 id（= 注册键 = Loader entry 名 = 掌舵入图 id；与 shell/boot.ts 掌舵参数同源） */
@@ -992,6 +994,66 @@ function registerCenterPanels(
 }
 
 /**
+ * 点选即换绑编排缝（bug ff324cad 体验收口·方案 A——hero worktree chip 点选非主树且活跃
+ * 会话为主树占位 blank 时：预铸选中树会话 + 官方 openSession 切换 + 占位归档清场。官方
+ * 切工作区同构语义：切换 = 让目标 workspace 名下诞生/复用它自己的会话，弃置空占位归档——
+ * 官方 reuseOrCreateBlank 本就排除归档行）。四窄面全官方缝、逐次现取（ctx.get 惰性）；
+ * 形状漂移/缺席 = undefined/零动作（fail-soft 退回纯选中态，发送时必绑重路由兜底）。
+ */
+export interface HeroRebindFace {
+  /** 活跃会话 id（官方 mainView 在留判读——activeSessionIdOf 同源）；缺席 = 无活跃会话 */
+  activeSessionId(): string | undefined
+  /** 账本 blank 判读（官方 summary.blank 投影——reuseOrCreateBlank 同判据） */
+  isBlank(sessionId: string): boolean
+  /** 官方导航动作面（会话选择+呈现一体——fix-11 口径） */
+  openSession(sessionId: string): void
+  /** 官方归档（durable 归档集——弃置占位清场唯一正门） */
+  archiveSession(sessionId: string): Promise<void>
+  /** 账本变更订阅（官方 sessions.list store subscribe——归档前置确认事件推送源；缺席 = 确认面降级） */
+  subscribeSessionLedger(listener: () => void): () => void
+}
+
+/** 点选即换绑缝构造（inject 闭包内逐次 ctx.get——服务晚于注册就绪不持有陈旧引用） */
+export function heroRebindFaceOf(ctx: ForgeClientCtx): HeroRebindFace {
+  const uiWorkspace = (): {
+    openSession?: (target: string) => void
+    archiveSession?: (sessionId: string, options?: { readonly stopActivity?: boolean }) => Promise<void>
+  } | undefined => ctx.get('uiWorkspace') as never
+  const ledgerSnapshot = (): { byId?: Record<string, unknown> } | undefined => {
+    const sessions = ctx.get('sessions') as { list?: unknown } | undefined
+    const getSnapshot = (sessions?.list as { getSnapshot?: () => unknown } | undefined)?.getSnapshot
+    if (typeof getSnapshot !== 'function') return undefined
+    try {
+      return (getSnapshot.call(sessions?.list) as { byId?: Record<string, unknown> } | null) ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+  return {
+    activeSessionId: () => {
+      const sessions = ctx.get('sessions') as { list?: unknown } | undefined
+      return sessions?.list === undefined ? undefined : activeSessionIdOf(sessions.list)
+    },
+    isBlank: (sessionId) => {
+      const row = ledgerSnapshot()?.byId?.[sessionId]
+      return (row as { blank?: unknown } | null)?.blank === true
+    },
+    openSession: (sessionId) => {
+      uiWorkspace()?.openSession?.(sessionId)
+    },
+    archiveSession: async (sessionId) => {
+      await uiWorkspace()?.archiveSession?.(sessionId, { stopActivity: true })
+    },
+    subscribeSessionLedger: (listener) => {
+      const sessions = ctx.get('sessions') as { list?: { subscribe?: (l: () => void) => () => void } } | undefined
+      const subscribe = sessions?.list?.subscribe
+      if (typeof subscribe !== 'function') return () => {} // 订阅缝缺席 = 确认面降级（超时路径兜底）
+      return subscribe.call(sessions?.list, listener)
+    },
+  }
+}
+
+/**
  * views 族登记（fix-36 自 apply 拆出）：官方页签 roster（conversation.view——UF-4 知识
  * 召回单登记；对话 = 官方 'chat' 直用、轨迹 = 官方 'trajectory' 直用——fix-29 退役产品
  * 复刻，同 order 10 双『轨迹』冲突不再；label 经 locale NS thunk——fix-33 ⑧）+ hero
@@ -1037,10 +1099,9 @@ function registerConversationViews(
       {
         name: HERO_WORKSPACE_SLOT,
         priority: SIDEBAR_SHADOW_PRIORITY,
-        // W3 arm 退役（session-binding-guarantee）：hero worktree face（openSession/
-        // blankSessionByCwd/sessionsList/composerDraft 编排缝）随 arm 效应链退役——
-        // 点选 = 纯选中态（挂载面本地闭环 + pushSelection），会话创建 = 官方 create
-        // 调用点 wrap 改道预铸（零 inject，数据面组件自源 RPC）。
+        // 方案 A（bug ff324cad 体验收口）：点选即换绑编排缝经 inject 递达挂载面——
+        // activeId/blank 判读 + openSession/archiveSession 官方窄面（heroRebindFaceOf）。
+        inject: () => ({ rebindFace: heroRebindFaceOf(ctx) }),
       },
       views.ForgeHeroWorkspacePicker,
     ),
@@ -1211,6 +1272,9 @@ function registerRemoteEntry(
           onPinReset: (): Promise<void> => remote.pinReset().then(() => undefined),
           // fix-26：长效密码开关（consent checkbox/「取消长效密码」→ pin-consent 触发 setDurable + refresh）
           onPinConsent: (consent: boolean): Promise<void> => remote.pinConsent(consent).then(() => undefined),
+          // 1.107：三件套读数/轮换（psk-read/psk-rotate 直转——读数即显零缓存，轮换结果即时换新展示面）
+          pskRead: (): Promise<PskTrioFace | undefined> => remote.pskRead(),
+          onPskRotate: (): Promise<PskTrioFace | undefined> => remote.pskRotate(),
         }),
       },
       views.ForgeRemoteEntry,
@@ -1238,6 +1302,8 @@ export const BUGS_LIST_CHANNEL = 'forge:bugs/list'
 export const PROJECTS_LIST_CHANNEL = 'forge:projects/list'
 /** forge:worktree/list 通道字面量（contracts WORKTREE_CHANNELS.list 同源镜像——W4 激活自证轻探） */
 export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
+/** forge:worktree/resolve 通道字面量（contracts WORKTREE_CHANNELS.resolve 同源镜像——wrap 树归属门） */
+export const WORKTREE_RESOLVE_CHANNEL = 'forge:worktree/resolve'
 
 /**
  * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
@@ -1620,9 +1686,16 @@ export interface ForgeRemoteStatusFace {
   pinReset(): Promise<boolean>
   /** fix-26：长效密码开关（dsh-forge:remote/pin-consent 触发 pinIssuer.setDurable + refresh——durable 面随 manifest 回流；桥缺席/失败 = false） */
   pinConsent(consent: boolean): Promise<boolean>
+  /** 1.107：三件套读数（dsh-forge:remote/psk-read——读数即显；桥缺席/失败/形状非法 = undefined） */
+  pskRead(): Promise<PskTrioFace | undefined>
+  /** 1.107：三件套轮换（dsh-forge:remote/psk-rotate——rotatePsk 再生成，结果 = 新读数；桥缺席/失败 = undefined） */
+  pskRotate(): Promise<PskTrioFace | undefined>
 }
 
-/** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import） */
+/** dshForge preload 桥窄面（结构同型镜像——bundle 自持禁跨 chunk import）。
+ *  域外直转族（tunnel/pin/psk）= preload 具名函数直通（不经 forge invoke allowlist——
+ *  bug febc51d9 同族实证：bridge.invoke 打守卫门，dsh-forge:* 通道全数被拒且 fail-soft
+ *  掩蔽——tunnelEnsure 靠 host 装配期自动建隧道、PIN 靠 manifest 回流而长期未显形）。 */
 interface ForgePreloadBridge {
   invoke(channel: string, payload?: unknown): Promise<unknown>
   getBootManifest(): Promise<{
@@ -1639,6 +1712,12 @@ interface ForgePreloadBridge {
     remotePinExpiresAt?: number
     remotePinDurable?: boolean
   }>
+  tunnelToggle?(): Promise<void>
+  tunnelFallback?(): Promise<void>
+  pinReset?(): Promise<void>
+  pinConsent?(consent: boolean): Promise<void>
+  pskRead?(): Promise<unknown>
+  pskRotate?(): Promise<unknown>
 }
 
 /** dshForge 桥读取（缺席/形状不符 = undefined——fail-soft off 面，不炸装配） */
@@ -1677,16 +1756,25 @@ const SETTINGS_CHANNEL_SET = 'forge:settings/set'
 /** fix-10 断开连接通道字面量（contracts REMOTE_CHANNELS.disconnect 同源镜像——bundle 零外部 import） */
 const REMOTE_CHANNEL_DISCONNECT = 'forge:remote/disconnect'
 
-/** fix-17 ② tab 重连通道字面量（host ipc/tunnel-channel.ts TUNNEL_TOGGLE_CHANNEL 同源镜像——dshForge 域外直转面） */
-const TUNNEL_TOGGLE_CHANNEL = 'dsh-forge:remote/tunnel-toggle'
-
-/** fix-18 换线通道字面量（host ipc/tunnel-channel.ts TUNNEL_FALLBACK_CHANNEL 同源镜像——dshForge 域外直转面） */
-const TUNNEL_FALLBACK_CHANNEL = 'dsh-forge:remote/tunnel-fallback'
-
-/** fix-18 PIN 重置通道字面量（host ipc/tunnel-channel.ts PIN_RESET_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PIN_RESET_CHANNEL = 'dsh-forge:remote/pin-reset'
-/** fix-26 长效密码开关通道字面量（host ipc/tunnel-channel.ts PIN_CONSENT_CHANNEL 同源镜像——dshForge 域外直转面） */
-const PIN_CONSENT_CHANNEL = 'dsh-forge:remote/pin-consent'
+/** 读数形状守卫（dshForge 直转返回值——display/checksum/spki 三串齐备才携带；门未配置/畸形 = undefined） */
+function pskTrioFaceOf(raw: unknown): PskTrioFace | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const record = raw as Record<string, unknown>
+  if (record['configured'] !== true) return undefined
+  const display = record['display']
+  const checksum = record['checksum']
+  const spki = record['spki']
+  if (typeof display !== 'string' || display === '' || typeof checksum !== 'string' || typeof spki !== 'string' || spki === '') {
+    return undefined
+  }
+  return {
+    display,
+    checksum,
+    spki,
+    ...(record['pinConfigured'] === true ? { pinConfigured: true } : {}),
+    ...(record['pinDurable'] === true ? { pinDurable: true } : {}),
+  }
+}
 
 /** 信封 ok 判（set 返回 data 为空——ok 布尔本身即结果面） */
 function isOkEnvelope(envelope: unknown): boolean {
@@ -1712,6 +1800,7 @@ function snapshotOfReads(
     tunnelUnexpectedlyClosed?: boolean
     remotePin?: string
     remotePinExpiresAt?: number
+    remotePinDurable?: boolean
   } | undefined,
 ): RemoteStatusSnapshot {
   if (enabled === undefined) return { phase: 'off' }
@@ -1739,8 +1828,31 @@ function snapshotOfReads(
       : undefined
   if (enabled !== exposureActive) return { phase: 'pending', ...(tunnel !== undefined ? { tunnel } : {}) }
   if (!enabled) return { phase: 'off' }
-  // fix-7：/pair 握手成功读数抬 connected（等待扫码 → 手机已连接——remoteSnapshotOf 镜像口径）
-  if (devicesConnected) return { phase: 'connected', ...(tunnel !== undefined ? { tunnel } : {}) }
+  // fix-17 ③ PIN 缝（镜像口径）：6 位数字 ×（正有限 TTL 或长效位）齐备才携带（remote-status
+  // 同判——bug df86240d 同族：缺 durable 分支 = 长效 PIN 整体丢弃，PIN 卡缺席 + 勾选框未勾，
+  // 真机实证 2026-10-22 用户报告「重开 dialog 未勾选长期生效」）。
+  const pin =
+    typeof manifest?.remotePin === 'string' && /^\d{6}$/.test(manifest.remotePin) ? manifest.remotePin : undefined
+  const pinExpiresAtRaw = manifest?.remotePinExpiresAt
+  const pinExpiresAt =
+    typeof pinExpiresAtRaw === 'number' && Number.isFinite(pinExpiresAtRaw) && pinExpiresAtRaw > 0
+      ? pinExpiresAtRaw
+      : undefined
+  const pinDurable = manifest?.remotePinDurable === true
+  // fix-7：/pair 握手成功读数抬 connected（等待扫码 → 手机已连接——remoteSnapshotOf 镜像口径）。
+  // 用户裁决 2026-10-22：connected 态 PIN/三件套常驻展示——pin 面随态卡共存，不随连接退场。
+  if (devicesConnected)
+    return {
+      phase: 'connected',
+      ...(tunnel !== undefined ? { tunnel } : {}),
+      ...(pin !== undefined && (pinExpiresAt !== undefined || pinDurable)
+        ? {
+            pin,
+            ...(pinExpiresAt !== undefined ? { pinExpiresAt } : {}),
+            ...(pinDurable ? { pinDurable: true } : {}),
+          }
+        : {}),
+    }
   // fix-5 地址缝（remoteSnapshotOf 镜像口径）：真宿主载体自定 scheme（location.hostname
   // 非可达地址）——lanAddress 只认 manifest.remotePairUrl（宿主 /pair?token= 官方配对地址
   // 单源），缺席 = undefined（面板回退提示），不再由页面 location 自造拼接。
@@ -1750,20 +1862,18 @@ function snapshotOfReads(
   const expiresAt = manifest?.remotePairExpiresAt
   const pairExpiresAt =
     typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : undefined
-  // fix-17 ③ PIN 缝（镜像口径）：6 位数字 × 正有限 TTL 齐备才携带（remote-status 同判）。
-  const pin =
-    typeof manifest?.remotePin === 'string' && /^\d{6}$/.test(manifest.remotePin) ? manifest.remotePin : undefined
-  const pinExpiresAtRaw = manifest?.remotePinExpiresAt
-  const pinExpiresAt =
-    typeof pinExpiresAtRaw === 'number' && Number.isFinite(pinExpiresAtRaw) && pinExpiresAtRaw > 0
-      ? pinExpiresAtRaw
-      : undefined
   return {
     phase: 'listening',
     lanAddress,
     ...(pairExpiresAt !== undefined ? { pairExpiresAt } : {}),
     ...(tunnel !== undefined ? { tunnel } : {}),
-    ...(pin !== undefined && pinExpiresAt !== undefined ? { pin, pinExpiresAt } : {}),
+    ...(pin !== undefined && (pinExpiresAt !== undefined || pinDurable)
+      ? {
+          pin,
+          ...(pinExpiresAt !== undefined ? { pinExpiresAt } : {}),
+          ...(pinDurable ? { pinDurable: true } : {}),
+        }
+      : {}),
   }
 }
 
@@ -1832,53 +1942,88 @@ export function buildRemoteStatusSource(_clientCtx: ForgeClientCtx): ForgeRemote
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-17 ②：tab 切换重连（tunnel-toggle 直转——结果经 manifest 轮询单源回流；失败 = false fail-soft）
+    // fix-17 ②：tab 切换重连（tunnelToggle 具名缝直转——结果经 manifest 轮询单源回流；失败 = false fail-soft）
     tunnelEnsure: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.tunnelToggle === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(TUNNEL_TOGGLE_CHANNEL))
+        .then(() => bridge.tunnelToggle!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-18 ②：显式换线（tunnel-fallback 直转——新链路经 tunnel 推送 + manifest 轮询单源回流）
+    // fix-18 ②：显式换线（tunnelFallback 具名缝直转——新链路经 tunnel 推送 + manifest 轮询单源回流）
     tunnelFallback: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.tunnelFallback === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(TUNNEL_FALLBACK_CHANNEL))
+        .then(() => bridge.tunnelFallback!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-18 ③：PIN 重置（pin-reset 直转——新 PIN 经 pair 推送 + manifest 轮询单源回流）
+    // fix-18 ③：PIN 重置（pinReset 具名缝直转——新 PIN 经 pair 推送 + manifest 轮询单源回流）
     pinReset: () => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.pinReset === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(PIN_RESET_CHANNEL))
+        .then(() => bridge.pinReset!())
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
     },
-    // fix-26：长效密码开关（pin-consent 直转——durable 面经 pair 推送 + manifest 轮询单源回流）
+    // fix-26：长效密码开关（pinConsent 具名缝直转——durable 面经 pair 推送 + manifest 轮询单源回流）
     pinConsent: (consent: boolean) => {
       const bridge = preloadBridgeOf()
-      if (bridge === undefined) return Promise.resolve(false)
+      if (bridge === undefined || bridge.pinConsent === undefined) return Promise.resolve(false)
       return Promise.resolve()
-        .then(() => bridge.invoke(PIN_CONSENT_CHANNEL, consent))
+        .then(() => bridge.pinConsent!(consent))
         .then(
           () => true,
           () => false,
         )
         .then((ok) => face.refresh().then(() => ok))
+    },
+    // 1.107：三件套读数（pskRead 具名缝直转——读数即显零缓存；桥/缝缺席/失败/门未配置 = undefined）。
+    // 失败路径显性化（console.warn——桌面壳 CONSOLE 管道可达 dev 终端）：区分缝缺席 / invoke
+    // 拒绝 / 形状收拢失败三断点，链路诊断不再盲区。
+    pskRead: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined) {
+        console.warn('[dswf-client] psk-read: preload bridge 缺席（invokeFace 未注入）')
+        return Promise.resolve(undefined)
+      }
+      if (bridge.pskRead === undefined) {
+        console.warn('[dswf-client] psk-read: 具名缝缺席（旧 preload bundle？）')
+        return Promise.resolve(undefined)
+      }
+      return Promise.resolve()
+        .then(() => bridge.pskRead!())
+        .then(
+          (raw) => {
+            const face = pskTrioFaceOf(raw)
+            if (face === undefined) console.warn('[dswf-client] psk-read: 形状收拢失败——raw =', JSON.stringify(raw))
+            return face
+          },
+          (cause) => {
+            console.warn('[dswf-client] psk-read: invoke 拒绝——', cause instanceof Error ? cause.message : String(cause))
+            return undefined
+          },
+        )
+    },
+    // 1.107：三件套轮换（pskRotate 具名缝直转——结果 = 新读数，展示面即时换新；失败 = undefined）
+    pskRotate: () => {
+      const bridge = preloadBridgeOf()
+      if (bridge === undefined || bridge.pskRotate === undefined) return Promise.resolve(undefined)
+      return Promise.resolve()
+        .then(() => bridge.pskRotate!())
+        .then(pskTrioFaceOf, () => undefined)
     },
   }
   return face
@@ -2233,6 +2378,23 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                     const data = await unwrapRpcEnvelope<unknown>(forgeInvoke(PROJECTS_LIST_CHANNEL))
                     return Array.isArray(data) ? data : []
                   },
+                  // bug ff324cad A2：树 workspace 切换径判定面——官方 workspaces 快照窄镜像
+                  // （items {workspaceId, path}）+ 树归属门（forge:worktree/resolve 现查）。
+                  // 缺席/形状漂移 = 判定面降级（零改道，现状 fail-soft）。
+                  workspaceRows: async () => {
+                    const getSnapshot = (workspaces.list as { getSnapshot?: () => unknown } | undefined)?.getSnapshot
+                    if (typeof getSnapshot !== 'function') return []
+                    const snapshot = getSnapshot.call(workspaces.list) as { items?: unknown } | null
+                    const items = Array.isArray(snapshot?.items) ? snapshot.items : []
+                    return items
+                  },
+                  resolveRoot: async (path) => {
+                    const data = await unwrapRpcEnvelope<{ resolved?: Array<{ path?: unknown; projectRoot?: unknown }> }>(
+                      forgeInvoke(WORKTREE_RESOLVE_CHANNEL, { paths: [path] }),
+                    )
+                    const hit = data.resolved?.find((entry) => entry.path === path)
+                    return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
+                  },
                 },
               )
 
@@ -2291,6 +2453,11 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 if (name === 'sessions' && value === undefined) health.check()
               })
             : undefined
+
+        // 断连终态横幅（问题①——官方 connection.state 订阅，connecting 卡死 60s 升级
+        // 终态条带，connected 自动撤除；服务缺席 = 零安装 fail-soft。与 host 侧死通道
+        // 熔断互补——renderer 侧用户显性告知）。撤销随 revoke 链与 overlay 洞 dispose。
+        const disposeConnectionBanner = installConnectionLostBanner(clientCtx)
 
         // fix-33 ⑧ 行 label locale 面（官方 ui-trajectory 同径）：登记产品词典（zh 缺省
         // 文案不变；en 补英文）+ 绑定翻译器——label thunk 逐读，active locale 切换免重注册
@@ -2390,6 +2557,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           mermaidEnhancer.stop()
           disposeSessionCreateWrap?.()
           disposeServiceListener?.()
+          disposeConnectionBanner?.()
           ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
         }
 
@@ -2492,6 +2660,7 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             mermaidEnhancer.stop()
             disposeSessionCreateWrap?.()
             disposeServiceListener?.()
+            disposeConnectionBanner?.()
             ;(globalThis as { __DSH_FORGE_HEALTH__?: unknown }).__DSH_FORGE_HEALTH__ = undefined
           }
         })

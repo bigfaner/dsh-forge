@@ -491,7 +491,7 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     expect(built.h.addTaskInputs[0]).toMatchObject({
       projectId: PROJECT,
       source: SOURCE,
-      title: 'e2e 基线红灯归因：e2e/specs/a.spec.ts',
+      title: 'e2e 基线红灯排查：e2e/specs/a.spec.ts',
       type: 'test-run',
       priority: 'P1',
       vars: { BASELINE_SPEC: 'e2e/specs/a.spec.ts' },
@@ -676,8 +676,8 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
     expect(built.h.addTaskInputs.map((t) => t.title)).toEqual([
-      'e2e 基线红灯归因：e2e/specs/old.spec.ts', // 启动时点
-      'e2e 基线红灯归因：e2e/specs/new.spec.ts', // 漂移重算新增——补发
+      'e2e 基线红灯排查：e2e/specs/old.spec.ts', // 启动时点
+      'e2e 基线红灯排查：e2e/specs/new.spec.ts', // 漂移重算新增——补发
     ])
     expect(built.h.addTaskInputs[1]).toMatchObject({ type: 'test-run', vars: { BASELINE_SPEC: 'e2e/specs/new.spec.ts' } })
   })
@@ -814,7 +814,7 @@ describe('blocked 结算分支（图 C）', () => {
       source: SOURCE,
       task: expect.objectContaining({ localId: '2.5' }),
       reason: 'tests hang on flaky selector',
-      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
     })
     expect(suspended.since).toEqual(expect.any(Number))
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
@@ -1486,11 +1486,12 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(built.h.transitions).toEqual([
       { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
     ])
-    // ⑰ 停止终局叙述
+    // ⑰ 停止终局叙述（用户主动停止 = 不引导续跑，下一步动作 = 无）
     const stoppedNotice = built.calls.find((c) => c.method === 'followup')
     expect(stoppedNotice?.text).toContain('[forge·停止] 任务源: feat-x — 已按你的指令停止')
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
-    expect(stoppedNotice?.text).toContain('提示用户"继续执行 /run-dag-tasks feat-x"')
+    expect(stoppedNotice?.text).toContain('下一步动作: 无')
+    expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
     // 登记注销 + 再停 = no-op
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
@@ -2391,7 +2392,7 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
-    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('继续执行 /run-dag-tasks feat-x'))).toBe(true)
+    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('[forge·停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
     expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
   })
 

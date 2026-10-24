@@ -697,7 +697,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     unpublishViews()
   })
 
-  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + 零 inject（数据面组件自源 RPC）', () => {
+  it('hero 工作区控件影子（fix-24 ①）：conversation.hero.workspace single 影子登记——发布组件 + -100 优先级 + 零 children + inject = 点选即换绑缝（bug ff324cad 方案 A）', () => {
     const views = publishFakeViews()
     const { ctx, registers } = fakeClientCtx()
     forgeClientPlugin().apply(ctx)
@@ -709,10 +709,14 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     expect(hero.component).toBe(views.ForgeHeroWorkspacePicker)
     // 不声明 children：官方登记行的 children 声明持续供养 directoryFlow 子洞（重声明即 throw）
     expect(hero.options.children).toBeUndefined()
-    // W3 arm 退役：hero worktree face（openSession/blankSessionByCwd/sessionsList/
-    // composerDraft 编排缝）随 arm 效应链退役——零 inject（点选纯选中态组件自源 RPC，
-    // 会话创建走官方 create 调用点 wrap 改道预铸）
-    expect(hero.options.inject).toBeUndefined()
+    // bug ff324cad 方案 A：inject = 点选即换绑缝（rebindFace——activeId/blank 判读 +
+    // openSession/archiveSession 官方窄面经 heroRebindFaceOf 递达挂载面）
+    const injected = (hero.options.inject as (() => { rebindFace?: unknown }) | undefined)?.()
+    expect(injected?.rebindFace).toBeDefined()
+    expect(typeof (injected?.rebindFace as { activeSessionId?: unknown } | undefined)?.activeSessionId).toBe('function')
+    expect(typeof (injected?.rebindFace as { isBlank?: unknown } | undefined)?.isBlank).toBe('function')
+    expect(typeof (injected?.rebindFace as { openSession?: unknown } | undefined)?.openSession).toBe('function')
+    expect(typeof (injected?.rebindFace as { archiveSession?: unknown } | undefined)?.archiveSession).toBe('function')
     expect(hero.options.id).toBeUndefined()
     expect(hero.options.key).toBeUndefined()
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
@@ -2304,6 +2308,37 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(await treeOf({ workspaceId: WS }, [])).toBeNull()
     expect(await treeOf(undefined, rows)).toBeNull()
     expect(await treeOf({ sessionId: 's' }, rows)).toBeNull()
+  })
+
+  // ── bug ff324cad A2：树 workspace 切换径（workspaceRows + 树归属门）──
+  const TREE_WS = 'ws-tree'
+  const TREE_PATH = 'C:/repo/.forge/worktrees/wt-a'
+  const ROOT_PATH = 'C:/repo'
+  const wsRows = [
+    { junk: true },
+    { workspaceId: TREE_WS }, // 缺 path
+    { workspaceId: TREE_WS, path: TREE_PATH },
+  ]
+
+  it('treeOf 树归属门：workspaceId 命中树 workspace × resolve 命中注册项目 ≠ 根 → 改道树路径', async () => {
+    const tree = await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => ROOT_PATH)
+    expect(tree, '树 workspace 未改道（官方切树会话零绑定——重路由二建）').toBe(TREE_PATH)
+  })
+
+  it('treeOf 树归属门：resolve 未命中注册项目（外部 workspace）→ null 官方原流（行为面零扩张）', async () => {
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => null)).toBeNull()
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => TREE_PATH)).toBeNull() // 自身即根（他项目主行形态）
+  })
+
+  it('treeOf 树归属门：项目行优先（主行 workspaceId 恒项目根，树门不触）；resolve 抛错 = null fail-soft', async () => {
+    expect(await treeOf({ workspaceId: WS }, [{ workspaceId: WS, wsPath: WS_PATH }], wsRows, async () => ROOT_PATH)).toBe(WS_PATH)
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows, async () => { throw new Error('boom') })).toBeNull()
+  })
+
+  it('treeOf 树归属门：cwd 形态同判（workspace 行 path 命中 → 归属门 → cwd）；判定面缺席（deps 未注入）→ null 现状', async () => {
+    expect(await treeOf({ cwd: TREE_PATH }, [], wsRows, async () => ROOT_PATH)).toBe(TREE_PATH)
+    expect(await treeOf({ workspaceId: TREE_WS }, [], wsRows)).toBeNull() // resolveRoot 缺席
+    expect(await treeOf({ cwd: TREE_PATH }, [], wsRows)).toBeNull()
   })
 
   // 移动端语义契约钉（mobile-ui 一致逻辑——提案 §移动端一致逻辑：判定单源在 host，

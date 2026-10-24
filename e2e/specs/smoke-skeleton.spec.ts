@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import { deriveTaskStoreDir } from '../../packages/core/src/forge/workspace/derive-dir.js'
 import { bridgeDispatch, closeApp, launchHost, stablePhase } from '../support/launch.js'
-import { dirRow, enterDir } from '../support/navigation.js'
+import { dirRow, enterDir, fixtureDirSegments, pickerStartRoot } from '../support/navigation.js'
 import {
   DOCKKIT_CONTENT,
   DOCKKIT_STRIP_TAB,
@@ -294,11 +294,10 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
       'L3·浏览器相位内容右缘 = 卡片右缘（无溢出）',
     ).toBe(browserGeo.dialog!.right)
 
-    // 导航至夹具根（home → AppData → Local → Temp → 夹具；名称精确匹配防误中）
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    // 导航至夹具根（段 = 夹具绝对路径推导——fix-11；名称精确匹配防误中）
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     // L760 ① 单击选中 → 按钮解禁
     await dirRow(page, 'dsh-demo').click()
     await expect(confirmBtn).toBeEnabled()
@@ -372,13 +371,14 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     })
     expect(forgeAboveKn, 'L779 forge 目录字段在知识库目录之上').toBe(true)
     // L783 ② 目录字段均带「浏览…」（文件浏览器改选）
-    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(2)
+    await expect(page.getByRole('button', { name: '浏览…' })).toHaveCount(3)
     // L784 ② 文档位置 = forge 目录输入（仓内/仓外 radio 已并入——chip 呈现）
     await expect(page.locator('.dswf-rf input[type="radio"]')).toHaveCount(0)
     await expect(page.locator('.dswf-rf-relation', { hasText: '仓内' }).first()).toBeVisible()
     // L785 ② 默认召回域字段已移除（载体适配，台账 #170：以字段全集盘点承载「无此字段」；
-    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn）
-    await expect(page.locator('.dswf-rf input')).toHaveCount(4)
+    // fix-7 计数随 4.3 派生行零输入位化 5→4——ws/name/forge/kn；fix-26 随 1.6 AC3
+    // worktree 目录行 4→5——ws/name/forge/kn/worktree）
+    await expect(page.locator('.dswf-rf input')).toHaveCount(5)
     // L786 ② 底部按钮 =「确认」
     await expect(page.locator('.dswf-rf-confirm')).toHaveText('确认')
 
@@ -391,8 +391,8 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
       .click()
     await expect(page.locator('[data-dswf-rf="browsing"][data-dswf-rf-target="knowledgeDir"]')).toBeVisible()
     await expect(page.getByText('选择知识库目录').first()).toBeVisible()
-    // 浏览起点 = 当前知识库目录（demo/.knowledge，无子目录）→ 上一级到 dsh-demo → 选 .knowledge
-    await page.locator('.dswf-fb-up').click()
+    // 浏览起点 = 知识库目录值的父目录（dsh-demo——startDir 父目录口径，form-model
+    // browseStartDirOf）→ 直接选 .knowledge（旧「上一级」导航随口径随迁移除）
     await expect(page.locator('.dswf-fb-crumb-current')).toHaveText('dsh-demo', { timeout: 15_000 })
     await dirRow(page, '.knowledge').click()
     await page.locator('.dswf-fb-confirm', { hasText: '选择此文件夹' }).click()
@@ -423,7 +423,7 @@ test('骨架组·向导两段走查 ①–④（smoke L753–L811 实机；L766/
     // L810 ④ 任务清单随工作区重新派生（fix-7 载体适配同 L771：派生行 core 单源同值断言）
     const rederivedExpected = deriveTaskStoreDir(join(userData, 'forge-workspaces'), realpathSync(legacyDir))
     await expect(page.locator(dsrOf('ready')), 'L810 任务清单派生行 ready（换选复检收敛）').toBeVisible({ timeout: 30_000 })
-    expect(((await page.locator(DSR_DIR).textContent()) ?? '').trim(), 'L810 任务清单随工作区重新派生').toBe(rederivedExpected)
+    await expect(page.locator(DSR_DIR), 'L810 任务清单随工作区重新派生（RPC 重派生在途——轮询至收敛）').toHaveText(rederivedExpected, { timeout: 30_000 })
     // L811 ④ 浏览选定的知识库目录保留（不随工作区重构）
     await expect(kn).toHaveValue(`${join(demoDir, '.knowledge')}`)
 
@@ -465,11 +465,10 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     await page.locator('[data-dswf-cta="add-project"]').click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
 
-    // 走查至 legacy-app（home → … → 夹具根 → 选中）
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    // 走查至 legacy-app（夹具绝对路径推导段 → 选中）
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     await dirRow(page, 'legacy-app').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()
@@ -493,10 +492,9 @@ test('骨架组·hero 相位 + ⑤ 确认入库 + 已注册标记（前置 host 
     // ── L766 ① 已注册目录带标记（注册后实机：重开向导 → 目录行「已注册」标记）──
     await page.locator('[data-dswf-nav="add-project"]').first().click()
     await expect(page.locator(addProjectPhase('browser'))).toBeVisible()
-    for (const segment of ['AppData', 'Local', 'Temp']) {
+    for (const segment of fixtureDirSegments(fixture, pickerStartRoot())) {
       await enterDir(page, segment)
     }
-    await enterDir(page, fixture.split(/[\\/]/).at(-1) as string)
     const legacyRow = page.locator('.dswf-fb-item', { hasText: 'legacy-app' }).first()
     await expect(legacyRow).toHaveAttribute('data-registered')
     await expect(legacyRow.locator('.dswf-fb-reg', { hasText: '已注册' })).toBeVisible()

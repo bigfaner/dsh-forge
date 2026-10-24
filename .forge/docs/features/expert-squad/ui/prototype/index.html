@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>专家团管理面板 · 原型 v2</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="proto-bar">
+  <b>原型控制台</b>
+  <button onclick="setMode('data')" class="on">有数据</button>
+  <button onclick="setMode('loading')">加载态</button>
+  <button onclick="setMode('empty2')">空态</button>
+  <button onclick="setMode('error')">错误态</button>
+  <button onclick="document.body.toggleAttribute('data-ds-dark-theme')">主题切换</button>
+</div>
+
+<div class="stage"><div class="panel-wrap">
+<div class="dswf-expert-panel">
+  <div class="dswf-panel-header">
+    <h1>专家团</h1>
+    <input class="dswf-search" id="q" placeholder="搜索名称/技能标签">
+    <button class="dswf-menu-btn on" data-f onclick="setFilter('all',this)">全部</button>
+    <button class="dswf-menu-btn" data-f onclick="setFilter('on',this)">启用</button>
+    <button class="dswf-menu-btn" data-f onclick="setFilter('off',this)">禁用</button>
+    <button class="btn btn-primary" onclick="openHr()">召唤</button>
+    <span class="dswf-menu-btn plain" style="color:var(--text-caption);cursor:default">修改/委派 → 会话对话</span>  </div>
+  <div class="dswf-card-grid" id="grid"></div>
+  <div class="dswf-panel-footer" id="count"></div>
+</div>
+
+<div class="modal show" id="ov" style="display:none" onclick="closeDialog()"></div>
+
+<div class="modal" id="dlgHost" style="background:none;pointer-events:none">
+  <div class="dialog" style="pointer-events:auto" id="dlg">
+    <header>
+      <b id="dlgName"></b>
+      <button class="btn btn-ghost" id="dlgEdit" onclick="switchMode()">编辑</button>
+      <button class="btn btn-info" id="dlgSave" onclick="saveDialog()" style="display:none">保存</button>
+      <button class="iconbtn" onclick="closeDialog()">✕</button>
+    </header>
+    <div class="dlg-body" id="dlgBody"></div>
+    <div class="dlg-foot">
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="dlgToggle" onclick="toggleX(state.selected)">禁用</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="hrHost" style="background:none;pointer-events:none">
+  <div class="hrchat" style="pointer-events:auto" id="hr">
+    <header>
+      <b>HR · 专家招聘与管理</b>
+      <button class="iconbtn" onclick="closeHr()">✕</button>
+    </header>
+    <div class="hr-msgs" id="hrMsgs"></div>
+    <div class="hr-input">
+      <input id="hrIn" placeholder="对 HR 说：招募一个 XX 专家，工具只留…（Enter 发送）">
+      <button class="btn btn-info" onclick="hrSend()">发送</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div></div>
+<script src="app.js"></script>
+</body>
+</html>

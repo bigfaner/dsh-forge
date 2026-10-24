@@ -95,11 +95,10 @@ export const LOOP_STOP_TRANSITION_REASON = '派发循环停止'
 /** ⑯ 结束（全部完成）的「下一步动作」指示（notification-samples 逐字口径——无 slug 参数位） */
 export const LOOP_INSTRUCTION_ALL_DONE = '若想派发其它提案或feature的任务，执行 /run-dag-tasks'
 
-/** 终局叙述的「下一步动作」指示文本（notification-samples ⑬⑮⑰ 逐字口径的 slug 参数化） */
-export function loopInstructionOf(kind: 'halted' | 'timeout' | 'resume', slug: string): string {
+/** 终局叙述的「下一步动作」指示文本（notification-samples ⑬⑮ 逐字口径的 slug 参数化） */
+export function loopInstructionOf(kind: 'halted' | 'timeout', slug: string): string {
   if (kind === 'halted') return `环境排查后重新开始 /run-dag-tasks ${slug}`
-  if (kind === 'timeout') return `稍后重新执行 /run-dag-tasks ${slug}`
-  return `继续执行 /run-dag-tasks ${slug}`
+  return `稍后重新执行 /run-dag-tasks ${slug}`
 }
 
 // ─────────────────────────── 处置钩子接口（S1b 桩位——阶梯实现 = 任务 S1c） ───────────────────────────
@@ -281,6 +280,12 @@ export interface LoopStartInput {
    * 缺席 = 未携带（spawn/结算零核销）。
    */
   readonly worktree?: string
+  /**
+   * 本项目文档根绝对路径（<工作区根>/.forge/docs——装配面按 projectId 解析工作区根派生）：
+   * 登记进 LoopRecord.docsRoot——纯文档跨分支特例的归属判据锚（结算核 resolve 绝对路径
+   * 核验包含，他项目 .forge/docs 不命中）。缺席 = 特例回落前缀判据（fail-soft）。
+   */
+  readonly docsRoot?: string
 }
 
 /** 启动返回（3b 两拒绝码：loop-active = 该容器已有活循环（他源他会话并行不受限）；
@@ -669,7 +674,6 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         sourceSlug: record.source.slug,
         completed: stats.byStatus.completed,
         inFlightTaskKey: captured?.taskKey ?? '无',
-        instruction: loopInstructionOf('resume', record.source.slug),
       }),
     )
     registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）
@@ -721,6 +725,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         ownerSessionId: input.ownerSessionId,
         projectId,
         ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
+        ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
         takeoverSessions: new Set<string>(), // 3b 接管集（登记绑定——remove 随之蒸发）
       }
       const controller = new AbortController()
@@ -1161,6 +1166,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     guardOnFailure: false,
     // 提交落点核验（1.14——cwd 钉定收口）：容器检出 = 发起循环 worktree
     ...(record.worktree !== undefined ? { worktreeCwd: record.worktree } : {}),
+    ...(record.docsRoot !== undefined ? { docsRoot: record.docsRoot } : {}),
     // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
@@ -1264,7 +1270,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       source: record.source,
       task,
       reason,
-      history: ['无进展硬停——结算零 commit hash 且零 files 增量，跳过处置阶梯直达问人'],
+      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
     })
   }
 

@@ -10,6 +10,7 @@ import type { IncidentInput, IncidentStore } from './incident-log.js'
 import { localDateTimeLine, summarizeReason } from './skeleton.js'
 import { renderHeadline, renderNarrative } from './templates.js'
 import type { NarrativePayloadMap } from './templates.js'
+import type { ForgeLoopNarrationMeta } from '../forge-loop-source.js'
 
 /** 阻塞族五场景（blocked 发射径的 id 域——样例 ⑦-⑧b-⑩；泛型约束即编译期封闭） */
 export type BlockedScenarioId = 'blocked-with-fix' | 'blocked-auto-fixed' | 'blocked-split' | 'blocked-wait-external' | 'blocked-ask-user'
@@ -40,8 +41,9 @@ export interface Narrator {
   /** 常规进行事件（样例 ①-⑫）——notice 通道（inject·零模型回合）；fail-soft。
    * headline = 预构建场景单行摘要（renderHeadline 产物——折叠位不再整段截断；缺席 = 回退截断） */
   notice(sessionId: string, text: string, headline?: string): Promise<void>
-  /** 终局事件（样例 ⑬-⑰，每循环 1–2 条）——followup 通道（完整消息）；fail-soft */
-  followup(sessionId: string, text: string): Promise<void>
+  /** 终局事件（样例 ⑬-⑰，每循环 1–2 条）——followup 通道（完整消息）；fail-soft。
+   * loop = 循环叙述上下文（1.18 AD-4——faces 铸发 source.kind='forge-loop' 的结构化字段） */
+  followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void>
   /**
    * 结算投递（3b④ settlement 形态——dispatch-loop-hardening 1.11）：循环终局（settled/
    * halted/timeout/stopped）经 settlement 通道投递——持久 user message（source
@@ -71,8 +73,8 @@ export function createNarrator(deps: NarratorDeps): Narrator {
       // 骨架收尾行，本地时区完整日期时间；headline 不变）
       return safe.notice(sessionId, `${text}\n${localDateTimeLine()}`, headline)
     },
-    followup(sessionId: string, text: string): Promise<void> {
-      return safe.followup(sessionId, `${text}\n${localDateTimeLine()}`)
+    followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
+      return safe.followup(sessionId, `${text}\n${localDateTimeLine()}`, loop)
     },
     settle(sessionId: string, text: string): Promise<void> {
       return safe.settle(sessionId, `${text}\n${localDateTimeLine()}`)
@@ -105,7 +107,7 @@ export function createNarrator(deps: NarratorDeps): Narrator {
       // 分析入会话，裁决不经会话）。⑦-⑨ 循环中段场景保持 notice 零模型注入（fix 链续领/
       // 外部等待，循环未终——不逐事件烧模型回合）。
       if (scenario === 'blocked-ask-user') {
-        await safe.followup(sessionId, `${text}\n${localDateTimeLine()}`)
+        await safe.followup(sessionId, `${text}\n${localDateTimeLine()}`, { task: meta.taskKey, state: scenario })
         return
       }
       // 折叠摘要 = 场景专用单行摘要（S4 增强——同源载荷事实，替代整段截断）

@@ -30,10 +30,12 @@ import {
   asEventMessage,
   asDiagMessage,
   asPairConnectedMessage,
+  asPairDisconnectedMessage,
   asPairMessage,
   asReadyMessage,
   asTunnelMessage,
   createBridgeProxy,
+  decodeWire,
   DOCS_SERVICE_METHODS,
   FEATURES_SERVICE_METHODS,
   KNOWLEDGE_SERVICE_METHODS,
@@ -109,9 +111,26 @@ export interface DshHostServices {
   forgeWorktree: WorktreeRpcService
 }
 
+/**
+ * 连接密钥三件套读数（1.107——child remotePsk 服务读数面；configured = false 时其余字段缺席）。
+ * 桌面读数即显零缓存：PSK 明文不入 manifest 快照，仅经本缝按需回流。
+ */
+export interface PskTrioRead {
+  readonly configured: boolean
+  /** PSK 展示串（base32 5 字符 ×8 组 `-` 分隔） */
+  readonly display?: string
+  /** 校验段（SHA-256 hex 前 4 字符——带外核对锚） */
+  readonly checksum?: string
+  /** host Ed25519 公钥（SPKI DER base64——手机端静态验签根） */
+  readonly spki?: string
+  /** 连接密码已配置态（PIN 卡读数随 manifest 既有面，本位只作提示） */
+  readonly pinConfigured?: boolean
+  /** 长效密码位（true = PIN 不随 TTL 轮换） */
+  readonly pinDurable?: boolean
+}
+
 export interface DshHostHandle {
-  manifest: BootManifest
-  /** 产品七服务（缺席任一 = core 插件行未装载 / 对应装配缝降级——main 侧 fail-soft 记日志不注册对应通道族） */
+  manifest: BootManifest  /** 产品七服务（缺席任一 = core 插件行未装载 / 对应装配缝降级——main 侧 fail-soft 记日志不注册对应通道族） */
   services: Partial<DshHostServices>
   /**
    * boot 就绪时子进程 ToolRuntime 已注册 tool 名全集（3.4 冒烟观测面——plugin-forge
@@ -156,6 +175,16 @@ export interface DshHostHandle {
   consentPin?(consent: boolean): void
   /** dsh 应用树优雅关停（shutdown 消息 → 子侧有界处置；5s 升级 + kill 兜底；before-quit 消费） */
   shutdown: () => Promise<void>
+  /**
+   * 1.107：连接密钥三件套读数缝（remotePsk.read——读数即显，桌面零缓存；门未配置 =
+   * {configured:false}；旧 boot 会话/桥缺席 = reject，消费侧 fail-soft）。
+   */
+  pskRead: () => Promise<PskTrioRead>
+  /**
+   * 1.107：连接密钥轮换动作缝（remotePsk.rotate——rotatePsk 再生成，旧钥宽限期 ≤5min
+   * 只验不密；结果 = 新三件套读数，展示面即时换新）。
+   */
+  pskRotate: () => Promise<PskTrioRead>
 }
 
 /** boot child 优雅关停上限（子侧 ProcessShutdown 内部 5s 升级强退——上限略高于之为 kill 兜底位） */
@@ -194,6 +223,15 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
   let nextId = 1
   const eventListeners = new Set<(payload: TasksChangedEvent) => void>()
   const diagListeners = new Set<(line: string) => void>()
+  // bug ae1f737a 死闩（熔断）：通道死亡（close / send 失败）后后续 call 立即以首因拒绝——
+  // 零 send 尝试、观测行同因只落一次。现场（2026-10-21 06:26Z）：child 运行期死亡零 exit
+  // 记录（死因失明）+ host 带死通道 23 分钟逐发逐报同因错误。
+  let deadError: Error | undefined
+  const markDead = (error: Error, alarm?: string): void => {
+    if (deadError !== undefined) return
+    deadError = error
+    if (alarm !== undefined && !gracefulShutdownChildren.has(child as unknown as object)) console.error(alarm)
+  }
   child.on('message', (message) => {
     // fix-23 diag 分支：诊断日志行 → onDiag 订阅方扇出（main.ts → harness.log；畸形信封静默忽略）
     const diag = asDiagMessage(message)
@@ -227,20 +265,38 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
     if (m.ok) waiter.resolve(m.data)
     else waiter.reject(rebuildBridgeError(m.error ?? `bridge rpc #${String(m.id)} 失败（无错误信息）`))
   })
-  child.once('close', () => {
+  child.once('close', (code?: number | null, signal?: string | null) => {
+    // 观测行（bug ae1f737a）：运行期退出 code/signal 落诊断链一次——死因可考（此前
+    // ready 后零 exit 挂接，崩溃/被杀/OOM 全部无声）；优雅关停（shutdownChild）不告警。
+    markDead(
+      new Error('boot child 已退出——RPC 面不可用'),
+      `[boot] boot child exited code=${String(code ?? 'null')}${signal ? ` signal=${String(signal)}` : ''} — bridge rpc 面熔断（后续调用快速拒绝）`,
+    )
     for (const waiter of pending.values()) waiter.reject(new Error('boot child 已退出——RPC 面不可用'))
     pending.clear()
   })
   return {
     call: (service, method, args) =>
       new Promise((resolve, reject) => {
+        // 死闩熔断：通道已死 → 立即以首因拒绝（零 send、零逐发报错）
+        if (deadError !== undefined) {
+          reject(deadError)
+          return
+        }
         const id = nextId++
         // trace_id 显式携带（ALS 过 IPC 序列化断点——main 侧读数随请求面入 child）
         const traceId = traceIdOf?.()
         pending.set(id, { resolve, reject })
         if (!sendToChild(child, { type: 'rpc', id, service, method, args, ...(traceId !== undefined && traceId !== '' ? { traceId } : {}) })) {
           pending.delete(id)
-          reject(new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`))
+          const failure = new Error(`bridge rpc ${service}.${method} 发送失败（IPC 通道已关）`)
+          // 首因胜出观测：send 失败径（close 事件未达/不达的窗口）同样留一次退出行——
+          // 随后 close 事件到来时 markDead 已置位，零重复（同因去重）。
+          markDead(
+            failure,
+            '[boot] boot child exited (send failed: IPC channel closed) — bridge rpc 面熔断（后续调用快速拒绝）',
+          )
+          reject(failure)
         }
       }),
     onEvent: (listener) => {
@@ -329,8 +385,13 @@ export async function bootDshHost(
   spawnOptions: BootSpawnOverrides = {},
 ): Promise<DshHostHandle> {
   const childEntry = spawnOptions.childEntry ?? resolveChildEntry(import.meta.url, options.resourcesDir)
+  // Root cause（fix-6）：harness 派生会话注入 ELECTRON_RUN_AS_NODE 毒化变量——spawn env
+  // 先摘除继承值再按本 spawn 约定重建 '1'（e2e/support/launch.ts sanitizedLaunchEnv:57-62
+  // 同语义消毒），消除对「调用方手工净化环境」的隐式依赖。
+  const inheritedEnv = { ...process.env }
+  delete inheritedEnv.ELECTRON_RUN_AS_NODE
   const child = spawn(spawnOptions.execPath ?? process.execPath, ['--expose-internals', childEntry, JSON.stringify(options)], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
+    env: { ...inheritedEnv, ELECTRON_RUN_AS_NODE: '1' }, // DSH_HOME/叠层等经 env 继承（语义与 direct 形态一致）
     // app-observability 1.2：inherit → pipe（评审 Blocker-2 修订——inherit 直通父 stdio
     // 不可拦截，打包版无终端即全丢）。stdout/stderr 双管道 → main 逐行转译（stdioSink
     // 缺省回显 process 直写，dev:debug 终端可见性不丢）。
@@ -363,6 +424,11 @@ export async function bootDshHost(
     // 轮换 pair 消息经 applyPairMessage 保留该位，connected 态卡不因 token 轮换丢态）
     if (asPairConnectedMessage(message) !== undefined) {
       manifest = applyPairConnected(manifest)
+      return
+    }
+    // mobile-ui 1.11：forge:remote/disconnect 通道对偶缝——断开连接推送收回粘性位
+    if (asPairDisconnectedMessage(message) !== undefined) {
+      manifest = applyPairDisconnected(manifest)
       return
     }
     // dsh-mobile-tunnel：隧道状态推送（激活/换线/TTL 旋转/关闭撤除）→ manifest 隧道面原位重建
@@ -437,6 +503,9 @@ export async function bootDshHost(
     },
     onEvent: channel.onEvent,
     onDiag: channel.onDiag,
+    // 1.107：三件套读数/轮换（既有 bridge RPC 缝直转 remotePsk 服务——只插孔不改制）
+    pskRead: () => call('remotePsk', 'read', []).then(decodeWire) as Promise<PskTrioRead>,
+    pskRotate: () => call('remotePsk', 'rotate', []).then(decodeWire) as Promise<PskTrioRead>,
     shutdown: () => shutdownChild(child),
   }
 }
@@ -496,9 +565,13 @@ function waitForReady(child: ChildProcess): Promise<BridgeReadyMessage> {
   })
 }
 
+/** 优雅关停中的 child（桥通道观测行不告警——正常关停非事故；bug ae1f737a 配套） */
+const gracefulShutdownChildren = new WeakSet<object>()
+
 /** 优雅关停（bounded）：shutdown 消息 → 等退出；超时 kill 兜底（子侧 ProcessShutdown 5s 升级先行） */
 async function shutdownChild(child: ChildProcess): Promise<void> {
   if (child.killed) return
+  gracefulShutdownChildren.add(child)
   sendToChild(child, { type: 'shutdown' })
   await new Promise<void>((resolve) => {
     const done = (): void => {
@@ -540,6 +613,12 @@ function sendToChild(child: Pick<BridgeChildFace, 'send'>, message: MainToChildM
 export function applyPairMessage(manifest: BootManifest, message: unknown): BootManifest {
   const pair = asPairMessage(message)
   if (pair === undefined) return manifest
+  // bug aa419a85：长效位以 pair 载荷为权威——桥面 asPairMessage 只透传 true（false 剥除为
+  // 缺席），?? 回退把「取消长效」的合法缺席误读成「保留旧 true」→ durable 位永不可清、UI
+  // 勾选卡死。pair 携 PIN 面（remotePin 在场）时缺席 = 临时面（false）；零 PIN 载荷 = 旧
+  // child 兼容，保留旧位。
+  const pairBearsPin = pair.remotePin !== undefined
+  const pinDurable = pairBearsPin ? pair.remotePinDurable === true : manifest.remotePinDurable === true
   return buildBootManifest(
     manifest.url,
     manifest.injections,
@@ -550,7 +629,7 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     tunnelStateOf(manifest), // dsh-mobile-tunnel：轮换重建保留隧道面（新 token URL 由后续 tunnel 推送换新）
     pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
     pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
-    pair.remotePinDurable ?? manifest.remotePinDurable === true, // fix-26：长效位随轮换换新/保留
+    pinDurable,
     manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留（boot 期事实不随轮换漂移）
   )
 }

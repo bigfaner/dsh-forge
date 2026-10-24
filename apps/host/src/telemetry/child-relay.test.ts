@@ -13,7 +13,7 @@ describe('relayDiagOverBridge（child 侧）', () => {
     relayDiagOverBridge(ctx, (line) => lines.push(line))
     emitDiag(ctx, { level: 'warn', process: 'child', event: 'fail-open', message: 'boom' })
     expect(lines).toHaveLength(1)
-    const payload = parseDiagRelayLine(lines[0])
+    const payload = parseDiagRelayLine(lines[0]!)
     expect(payload).toMatchObject({ level: 'warn', process: 'child', event: 'fail-open', message: 'boom' })
   })
 
@@ -25,7 +25,7 @@ describe('relayDiagOverBridge（child 侧）', () => {
     runWithDiagContext(als, { traceId: 'tr-child', sessionId: 's1' }, () => {
       emitDiag(ctx, { level: 'error', process: 'child', event: 'gateway-fold', message: 'm' })
     })
-    expect(parseDiagRelayLine(lines[0])).toMatchObject({ traceId: 'tr-child', sessionId: 's1' })
+    expect(parseDiagRelayLine(lines[0]!)).toMatchObject({ traceId: 'tr-child', sessionId: 's1' })
   })
 
   it('send 抛异常不落回 emit 点（红线①——relay 内吞）', () => {

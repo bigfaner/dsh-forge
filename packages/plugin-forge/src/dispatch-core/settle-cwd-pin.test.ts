@@ -83,6 +83,103 @@ describe('1.14 · 提交落点核验（settleWorkerRun cwd 钉定收口）', () 
     expect(settlement.case).toBe('settled')
   })
 
+  it('跨分支结算特例：纯本项目 .forge/docs/ 文档提交落错分支 → 放行 settled（用户裁决 2026-10-24）', async () => {
+    const docsQuery: QueryTaskResult = {
+      task: snapshot({ taskType: 'doc', taskStatus: 'completed', title: '撰写契约文档' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'completed',
+          summary: '文档落盘',
+          commitHash: 'abc1234',
+          files: ['.forge/docs/features/feat-x/design/api-contract.md', '.forge/docs/proposals/feat-x/proposal.md'],
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+        },
+      ],
+    }
+    // docsRoot 在场 = 绝对路径归属判据：相对 '.forge/docs/…' resolve 后落文档根内 → 命中
+    const settled = await settleWorkerRun(
+      { tasks: tasksStub(docsQuery), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot({ taskType: 'doc', taskStatus: 'completed' }), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt', docsRoot: 'Z:\\proj\\.forge\\docs' },
+    )
+    expect(settled.case).toBe('settled')
+    // docsRoot 缺席 = 前缀判据回落（fail-soft——装配未接线时零变化）
+    const fallback = await settleWorkerRun(
+      { tasks: tasksStub(docsQuery), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot({ taskType: 'doc', taskStatus: 'completed' }), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(fallback.case).toBe('settled')
+  })
+
+  it('特例归属判据（docsRoot 在场）：他项目 .forge/docs 文档与越界相对路径 → 仍 landing-rejected', async () => {
+    const base = (files: string[]): QueryTaskResult => ({
+      task: snapshot({ taskType: 'doc', taskStatus: 'completed' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'completed',
+          summary: '提交',
+          commitHash: 'abc1234',
+          files,
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+        },
+      ],
+    })
+    const run = (files: string[]) =>
+      settleWorkerRun(
+        { tasks: tasksStub(base(files)), commitLanding: badLanding },
+        { projectId: 'p-1', task: snapshot({ taskType: 'doc', taskStatus: 'completed' }), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt', docsRoot: 'Z:\\proj\\.forge\\docs' },
+      )
+    // 他项目绝对路径（前缀同为 .forge/docs 但落他项目文档根外）→ 拒绝
+    const foreign = await run(['Z:\\other\\.forge\\docs\\a.md'])
+    expect(foreign.case).toBe('landing-rejected')
+    if (foreign.case !== 'landing-rejected') return
+    expect(foreign.cause.message).toContain('Z:\\other\\.forge\\docs\\a.md')
+    // 相对路径穿越出本项目文档根（../other-proj/.forge/docs/…）→ 拒绝
+    const traversal = await run(['.forge/docs/in.md', '../other-proj/.forge/docs/b.md'])
+    expect(traversal.case).toBe('landing-rejected')
+  })
+
+  it('特例 fail-closed：files 缺席或含文档外路径 → 仍 landing-rejected', async () => {
+    const base = (files?: string[]): QueryTaskResult => ({
+      task: snapshot({ taskType: 'doc', taskStatus: 'completed' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        {
+          verb: 'submit',
+          toStatus: 'completed',
+          summary: '提交',
+          commitHash: 'abc1234',
+          ...(files !== undefined ? { files } : {}),
+          actor: 'plugin-tool',
+          createdAt: '2026-10-11T01:00:00.000Z',
+        },
+      ],
+    })
+    const noFiles = await settleWorkerRun(
+      { tasks: tasksStub(base(undefined)), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(noFiles.case).toBe('landing-rejected')
+    if (noFiles.case !== 'landing-rejected') return
+    // 人/agent 双友好判词：事实行 + 原因行 + 二选一纠正行
+    expect(noFiles.cause.message).toContain('未申报 files')
+    expect(noFiles.cause.message).toContain('纠正（按改动性质二选一）')
+    expect(noFiles.cause.message).toContain('.forge/docs/')
+    const mixed = await settleWorkerRun(
+      { tasks: tasksStub(base(['.forge/docs/a.md', 'packages/core/src/index.ts'])), commitLanding: badLanding },
+      { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
+    )
+    expect(mixed.case).toBe('landing-rejected')
+    if (mixed.case !== 'landing-rejected') return
+    expect(mixed.cause.message).toContain('packages/core/src/index.ts')
+    expect(mixed.cause.message).toContain('不适用纯文档跨分支特例')
+  })
+
   it('落点不一致（判例 366bec6a 落 main）→ landing-rejected 显式处置：任务真化 interrupted（可恢复态）+ cause 自解释', async () => {
     const transitions: TransitionTaskInput[] = []
     const settlement = await settleWorkerRun(

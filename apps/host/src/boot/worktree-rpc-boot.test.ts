@@ -43,7 +43,12 @@ it(
     expect(existsSync(electronExe), `electron 二进制缺席（dist 未下载）：${electronExe}`).toBe(true)
 
     // ── 隔离装配 + git 仓库夹具（真实 git CLI）──
-    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-fix4-e2e-'))
+    // Root cause（fix-5）：宿主派生会话下 Electron 子进程写 %TEMP% EPERM（环境边界）——
+    // mkdtemp 基目录可经 HOST_TEST_TMP_ROOT 覆写（E2E_USER_DATA_ROOT 先例 d11818ae）；
+    // 缺省 tmpdir() 不变——真实终端零变化。
+    const tmpBase = process.env.HOST_TEST_TMP_ROOT ?? tmpdir()
+    if (process.env.HOST_TEST_TMP_ROOT) mkdirSync(tmpBase, { recursive: true })
+    const root = mkdtempSync(join(tmpBase, 'dsh-forge-fix4-e2e-'))
     const userData = join(root, 'user-data')
     const wsDir = join(root, 'demo-repo')
     mkdirSync(wsDir, { recursive: true })

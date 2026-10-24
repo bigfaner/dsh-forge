@@ -21,6 +21,7 @@ import { registerProject } from '../../support/rpc.js'
 import { openStateDb, deleteProjectRowById } from '../../support/sqlite.js'
 import { addProjectPhase, AP_ANY, COMPOSER_INPUT, WORKBENCH } from '../../support/anchors.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
+import { fixtureDirSegments, pickerStartRoot } from '../../support/navigation.js'
 
 /** 工作区夹具根：{root}/<name> 三目录（alpha/beta 列表行 + gamma 未绑定行源） */
 function makeFixtureRoot(names: readonly string[]): string {
@@ -132,15 +133,14 @@ test('@web-e2e @p1mvp hero-control·AC3 「添加项目…」→ 注册流端到
     await menuItem(page, '添加项目…').click()
     await expect(page.locator(addProjectPhase('browser')), '产品注册流打开（回退浏览器面）').toBeVisible({ timeout: 15_000 })
 
-    // 段一：home → AppData → Local → Temp → 夹具根 → 选中 hero-add-new → 下一步
+    // 段一：起始根 → 夹具根（段 = 夹具绝对路径推导——fix-11）→ 选中 hero-add-new → 下一步
     const dirRow = (name: string) =>
       page.locator('.dswf-fb-item', { hasText: new RegExp(`(?:^|\\s)${name}(?=\\s|$|[^\\w.-])`) }).first()
     async function enterDir(name: string): Promise<void> {
       await dirRow(name).dblclick()
       await expect(page.locator('.dswf-fb-crumb-current')).toHaveText(name, { timeout: 15_000 })
     }
-    for (const segment of ['AppData', 'Local', 'Temp']) await enterDir(segment)
-    await enterDir(fixtureRoot.split(/[\\/]/).at(-1) as string)
+    for (const segment of fixtureDirSegments(fixtureRoot, pickerStartRoot())) await enterDir(segment)
     await dirRow('hero-add-new').click()
     await page.locator('.dswf-fb-confirm', { hasText: '下一步' }).click()
     await expect(page.locator(addProjectPhase('form'))).toBeVisible()

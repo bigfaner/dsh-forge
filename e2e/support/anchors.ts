@@ -199,10 +199,8 @@ export const docPanelOf = (projectId: string, docRel: string): string =>
 export const DOC_DANGLING = '[data-dswf-doc-dangling]'
 /** 单行头路径标签（1.6 收敛——官方 PathLabel 自带 data-path-label 锚：目录段弱化/左缘渐隐裁剪/悬浮全值官方自带） */
 export const DOC_PATH_LABEL = '[data-path-label]'
-/** mermaid 渲染成功面（SVG 在场——erDiagram 验收锚） */
-export const DOC_MERMAID_SVG = '[data-dswf-doc-mermaid-svg]'
-/** mermaid 渲染回退占位卡（非法源/渲染失败） */
-export const DOC_MERMAID_FALLBACK = '[data-dswf-doc-mermaid-fallback]'
+/** 官方代码块卡（PR 稳定全局类 .md-code-block——增强器扫描判据；渲染链退役后非法源兜底形态锚） */
+export const DOC_CODE_BLOCK = '.md-code-block'
 /** DOM 增强图容器（增强器旁插 figure——源 hash 值锚，md-mermaid-plugin blitz） */
 export const MD_MERMAID_FIGURE = '[data-dswf-md-mermaid]'
 /** DOM 增强已渲染原块标记（值 = 已渲染源 hash——增强后原块隐藏态断言面） */

@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import { PassThrough } from 'node:stream'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FORGE_EVENT_CHANNELS } from '@dsh-forge/contracts'
 import { applyPairConnected, applyPairDisconnected, applyPairMessage, applyTunnelMessage, createBridgeChannel, resolveChildEntry, wireChildPipes, type BridgeChildFace } from './run.js'
 import { dispatchRpc } from './bridge.js'
@@ -294,6 +294,25 @@ describe('fix-17 ③ PIN 读数 manifest 面（轮换换新 / 重建保留）', 
     expect(next.remotePinExpiresAt).toBe(5000)
   })
 
+  it('bug aa419a85：长效位以 pair 载荷为权威——携 PIN 面缺席 durable 位 = 取消长效（manifest 位清除，不回退旧 true）', () => {
+    const durableBase = buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, '111111', undefined, true)
+    const next = applyPairMessage(durableBase, {
+      type: 'pair',
+      remotePairUrl: 'http://192.168.1.7:1/pair?token=new',
+      remotePairExpiresAt: 2000,
+      remotePin: '222222',
+      remotePinExpiresAt: 8000,
+    })
+    expect(next.remotePinDurable).toBeUndefined()
+    expect(next.remotePinExpiresAt).toBe(8000)
+  })
+
+  it('bug aa419a85 对照：零 PIN 载荷 pair 仍保留旧长效位（旧 child 兼容）', () => {
+    const durableBase = buildBootManifest('http://127.0.0.1:1/#t', [], '0.0.0.0', 'http://192.168.1.7:1/pair?token=old', 1000, undefined, undefined, '111111', undefined, true)
+    const next = applyPairMessage(durableBase, { type: 'pair', remotePairUrl: 'http://192.168.1.7:1/pair?token=new', remotePairExpiresAt: 2000 })
+    expect(next.remotePinDurable).toBe(true)
+  })
+
   it('connected/断开/隧道重建 → PIN 读数保留（粘性面不动）', () => {
     expect(applyPairConnected(base()).remotePin).toBe('111111')
     expect(applyPairDisconnected(base()).remotePinExpiresAt).toBe(5000)
@@ -396,6 +415,42 @@ describe('createBridgeChannel · RPC 结算面（既有语义回归——提取�
   })
 })
 
+// ── bug ae1f737a：运行期 child 退出观测 + 死通道熔断 ──
+// 现场（2026-10-21 06:26Z）：boot child 运行期死亡无任何 exit 记录（死因失明），host 带死
+// 通道对每次 UI 触发逐发逐报同因错误（23 分钟 9+ 次）。
+describe('createBridgeChannel · 运行期退出观测 + 死通道熔断（bug ae1f737a）', () => {
+  it('child close → 退出观测行恰一次（code 呈现）；后续 call 立即以同因拒绝且零 send 尝试', async () => {
+    const { child, sent } = fakeChild()
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    try {
+      const channel = createBridgeChannel(child)
+      child.emit('close', 1) // 运行期异常退出形态（code=1）
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/boot child 已退出/)
+      expect(sent).toHaveLength(0) // 熔断：死通道零 send 尝试（逐发逐报根治）
+      expect(errors.filter((line) => line.includes('boot child exited'))).toHaveLength(1) // 观测行恰一次
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('send 失败亦置死闩：观测行一次，后续调用不再 send（同因去重）', async () => {
+    const { child, sent, failNextSend } = fakeChild()
+    failNextSend()
+    const errors: string[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((line) => errors.push(String(line)))
+    try {
+      const channel = createBridgeChannel(child)
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败/)
+      await expect(channel.call('forgeProjects', 'listProjects', [])).rejects.toThrow(/发送失败/)
+      expect(sent).toHaveLength(0) // 第二次调用零 send（死闩已置）
+      expect(errors.filter((line) => line.includes('boot child exited'))).toHaveLength(1)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
 describe('wireChildPipes（app-observability 1.2——inherit→pipe 回显转写）', () => {
   function fakePipes() {
     return { stdout: new PassThrough(), stderr: new PassThrough() }
@@ -486,7 +541,7 @@ describe('dispatchRpc trace_id 显式携带复原（ALS 包裹——1.2 bridge �
       { type: 'rpc', id: 2, service: 'forgeTasks', method: 'listTasks', args: [], traceId: 'tr-e2e' },
       als,
     )
-    expect(parseDiagRelayLine(lines[0])).toMatchObject({ traceId: 'tr-e2e' })
+    expect(parseDiagRelayLine(lines[0]!)).toMatchObject({ traceId: 'tr-e2e' })
     expect(runWithDiagContext(als, { traceId: 'x' }, () => als.getStore()?.traceId)).toBe('x')
   })
 })

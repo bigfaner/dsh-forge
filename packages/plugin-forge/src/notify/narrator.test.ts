@@ -22,15 +22,15 @@ afterEach(() => {
   }
 })
 
-function recordingChannel(): NarrationChannel & { calls: { method: string; sessionId: string; text: string; headline?: string }[] } {
-  const calls: { method: string; sessionId: string; text: string; headline?: string }[] = []
+function recordingChannel(): NarrationChannel & { calls: { method: string; sessionId: string; text: string; headline?: string; loop?: unknown }[] } {
+  const calls: { method: string; sessionId: string; text: string; headline?: string; loop?: unknown }[] = []
   return {
     calls,
     notice: vi.fn(async (sessionId: string, text: string, headline?: string) => {
       calls.push({ method: 'notice', sessionId, text, ...(headline !== undefined ? { headline } : {}) })
     }),
-    followup: vi.fn(async (sessionId: string, text: string) => {
-      calls.push({ method: 'followup', sessionId, text })
+    followup: vi.fn(async (sessionId: string, text: string, loop?: unknown) => {
+      calls.push({ method: 'followup', sessionId, text, ...(loop !== undefined ? { loop } : {}) })
     }),
   }
 }
@@ -139,6 +139,8 @@ describe('S4 · 阻塞族发射机械防线（AC4——reason 全文只落盘）
     expect(channel.calls[0]?.text).toContain('详情: logs/m2-pipeline/4.2/001-blocked/')
     expect(channel.calls[0]?.text).not.toContain(REASON)
     expect(channel.calls[0]?.text).toMatch(/\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    // 1.18 AD-4 循环哨兵：⑩ 终局 followup 携带循环叙述上下文（task=任务键、state=场景 id）
+    expect(channel.calls[0]?.loop).toEqual({ task: '4.2', state: 'blocked-ask-user' })
     // 中段场景（wait-external）不受影响：notice 零模型注入保持
     await narrator.blocked(
       'session-1',
