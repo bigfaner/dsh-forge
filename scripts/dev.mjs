@@ -72,18 +72,21 @@ if (ensureHostDist.status !== 0) {
 	);
 }
 
-// input-history client bundle 打包步（Root cause: 根 tsc -b 只产 tsc 输出 dist/client/，
-// exports["./client"] 指向的 dist/client.js 由包内 bundle-client.mjs esbuild 产出——
-// 管线不跑它则 vite watch 初始构建 req.resolve 失败。run-once 增量，幂等便宜）。
-const ensurePluginClientBundle = spawnSync(
-	'pnpm',
-	['-C', 'packages/plugins/input-history', 'build'],
-	{ stdio: 'inherit', shell: true, cwd: ROOT }
-);
-if (ensurePluginClientBundle.status !== 0) {
-	console.error(
-		'[dev] input-history client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席'
+// 产品 client 插件 bundle 打包步（Root cause: 根 tsc -b 只产 tsc 输出 dist/client/，
+// exports["./client"] 指向的 dist/client.js 由各包 bundle-client.mjs esbuild 产出——
+// 管线不跑它则 vite watch 初始构建 req.resolve 失败；tsc 类重建亦会抹掉该产物，
+// 每次 dev 起跑 ensure。run-once 增量，幂等便宜）。
+for (const plugin of ['input-history', 'quote-reference', 'super-composer']) {
+	const ensurePluginClientBundle = spawnSync(
+		'pnpm',
+		['-C', `packages/plugins/${plugin}`, 'build'],
+		{ stdio: 'inherit', shell: true, cwd: ROOT }
 	);
+	if (ensurePluginClientBundle.status !== 0) {
+		console.error(
+			`[dev] ${plugin} client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席`
+		);
+	}
 }
 
 // vite 初始构建收口（Root cause: electron 旧序仅等 HOST_MAIN（tsc 产物）就绪即拉起，
