@@ -71,6 +71,35 @@ function emitInputHistoryBundle(): Plugin {
   }
 }
 
+/** expert-squad 插件 bundle 在壳 dist 的落位名（掌舵 url 文档相对引用同名）。 */
+export const EXPERT_SQUAD_BUNDLE_FILE = 'expert-squad-client.js'
+
+/**
+ * expert-squad 插件 bundle 发射（构建期原样复制 @dsh-forge/expert-squad dist/client.js
+ * 入壳 dist 根——该产物已按官方 clientBundle 配方自注册（classic script），壳只运输，
+ * 掌舵行由 shell/boot.ts 追加；缺构建产物 = fail-loud 指路先 build 插件包）。
+ */
+function emitExpertSquadBundle(): Plugin {
+  return {
+    name: 'dsh-forge-emit-expert-squad-bundle',
+    generateBundle() {
+      const req = createRequire(import.meta.url)
+      // 经 exports["./client"] 正门解析产物路径（包 exports 未暴露 ./package.json）
+      const bundlePath = req.resolve('@dsh-forge/expert-squad/client')
+      let source: string
+      try {
+        source = readFileSync(bundlePath, 'utf8')
+      } catch {
+        throw new Error(`vite: @dsh-forge/expert-squad client bundle 缺席（${bundlePath}）——先 pnpm -C packages/plugins/expert-squad build`)
+      }
+      if (!source.includes('window.__ModuleLoader__.load') || !source.includes('"@dsh-forge/expert-squad"')) {
+        throw new Error(`vite: @dsh-forge/expert-squad client bundle 非官方自注册形状（${bundlePath}）`)
+      }
+      this.emitFile({ type: 'asset', fileName: EXPERT_SQUAD_BUNDLE_FILE, source })
+    },
+  }
+}
+
 /**
  * input-history 装载双真相源断言（构建期 fail-loud）：main.ts 掌舵行的
  * id/inject 字面量与 @dsh-forge/input-history package.json dsh.client 清单
@@ -101,7 +130,7 @@ function assertInputHistoryManifest(): Plugin {
 export default defineConfig({
   // 相对资产 URL：宿主自定义 scheme 于任意挂载深度服务本 dist，文档相对路由（plugins/…）同源解析
   base: './',
-  plugins: [rejectStandaloneServe(), pinClientBundleShape(), assertInputHistoryManifest(), emitInputHistoryBundle()],
+  plugins: [rejectStandaloneServe(), pinClientBundleShape(), assertInputHistoryManifest(), emitInputHistoryBundle(), emitExpertSquadBundle()],
   define: {
     __DSH_FORGE_BUILD_REV__: JSON.stringify(BUILD_REV),
     // 已发布 cordis-plugin-loader 的 Node 探测替身（母本同款 define 集）

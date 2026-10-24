@@ -43,6 +43,16 @@ const inputHistoryClient: ProductClientEntry = {
   inject: ['@deepseek-ai/dsh-api-session-controller'],
 }
 
+// 独立插件包缺省装载行（expert-squad 装配面）：bundle = vite 构建期原样发射的
+// @dsh-forge/expert-squad dist/client.js（官方 clientBundle 配方自注册 classic script，
+// vite.config emit 插件）；id 字面量与本包 bundle-client.mjs PLUGIN_ID 同源（自注册头）
+// ——不 import（资产零代码耦合）；rev 同用构建戳；无注入边（dsh.client 清单不声明 inject）。
+const expertSquadClient: ProductClientEntry = {
+  id: '@dsh-forge/expert-squad',
+  url: `expert-squad-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
+  rev: __DSH_FORGE_BUILD_REV__,
+}
+
 const el = document.getElementById('root')
 if (el === null) throw new Error('dsh-forge web: #root 挂载点缺席')
 
@@ -64,7 +74,7 @@ if (decision.branch === 'restricted') {
   createRoot(el).render(createElement(ForgeRemoteView))
 } else {
   const entry = new AppWebEntry(el)
-  void bootShell([productClient, inputHistoryClient])
+  void bootShell([productClient, inputHistoryClient, expertSquadClient])
   // W4 行存续看门（session-binding-guarantee §W4）：活在壳 bundle 全局面——插件 fiber 内
   // 看门随插件同殁，检不出 prune。周期查 __DSH_FORGE_CLIENT__ 激活标记 + forge 洞位
   // ctx.slots.entries 计数（经插件发布的 __DSH_FORGE_HEALTH__ 探针）；插件侧 cordis
