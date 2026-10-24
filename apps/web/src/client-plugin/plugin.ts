@@ -2366,13 +2366,18 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
                 {
                   sessionCreate: (tree) =>
-                    unwrapRpcEnvelope<{ sessionId?: unknown }>(
+                    unwrapRpcEnvelope<{ sessionId?: unknown; cwd?: unknown }>(
                       forgeInvoke(SESSION_CREATE_CHANNEL, { worktreePath: tree }),
                     ).then((product) => {
                       if (typeof product?.sessionId !== 'string' || product.sessionId === '') {
                         throw new Error('dsh-forge web-client: sessionCreate 产物缺 sessionId（形状漂移）')
                       }
-                      return product.sessionId
+                      // bug 2bc90d64：cwd（产物头 cwd）透传——wrap 经官方 adopt 正门补账本
+                      // 的对位键；旧 host 形态缺席 = undefined（wrap 跳过 adopt，现状行为）。
+                      return {
+                        sessionId: product.sessionId,
+                        ...(typeof product.cwd === 'string' && product.cwd !== '' ? { cwd: product.cwd } : {}),
+                      }
                     }),
                   projectRows: async () => {
                     const data = await unwrapRpcEnvelope<unknown>(forgeInvoke(PROJECTS_LIST_CHANNEL))

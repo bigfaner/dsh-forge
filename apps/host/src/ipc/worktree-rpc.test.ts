@@ -453,6 +453,9 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(order).toEqual(['precast', 'adopt'])
     expect(calls).toEqual([{ sessionId: result.sessionId, cwd: 'C:/repo/.forge/worktrees/wt-a' }])
     expect(result.branch).toBe('feat/a')
+    // bug 2bc90d64：产物回带头 cwd（客户端 wrap 官方 adopt 正门补账本的对位键）——
+    // realpath 归一同预铸头口径（fake 路径无盘上实体 = fail-soft 回退原拼写）
+    expect(result.cwd).toBe('C:/repo/.forge/worktrees/wt-a')
   })
 
   it('A12：sessionCreate 预铸头 cwd realpath 归一（第四维——链接/短名/../拼写形态收敛磁盘真值，controller.create 同口径；不可达 fail-soft 回退原拼写）', async () => {

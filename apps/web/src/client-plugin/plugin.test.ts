@@ -2094,6 +2094,8 @@ describe('buildBugQuickAdder（1.4——有活跃会话 scoped 插入 / 无活�
 describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail-open）', () => {
   const WS = 'ws-git'
   const WS_PATH = 'C:/repo'
+  /** 预铸产品 fixture 的头 cwd（host 契约回带——可能 ≠ 请求树：创建即绑选中树改写目标） */
+  const WT_PRECAST_CWD = 'C:/repo/.forge/worktrees/wt-a'
 
   /** 项目行 fixture（ProjectSummary 消费切片：id/workspaceId/wsPath/archived） */
   function rowsFixture(rows: Array<{ workspaceId?: string; wsPath?: string; archived?: boolean }>): unknown[] {
@@ -2106,22 +2108,27 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     }))
   }
 
-  /** wrap 装配 harness：官方 create spy + 项目行现查 spy + sessionCreate RPC spy */
+  /** wrap 装配 harness：官方 create spy + 项目行现查 spy + sessionCreate RPC spy。
+   *  官方 create mock 契约保真（bug 2bc90d64）：显式 sessionId = adopt 幂等径，回同 id；
+   *  无 sessionId = 官方新建，回 'X-official'。sessionCreate 默认回预铸产品
+   *  { sessionId, cwd }（host 契约——cwd = 预铸头 cwd，官方 adopt 正门对位键）。 */
   function fixture(options?: {
     rows?: unknown[] | (() => unknown[] | Promise<unknown[]>) | Error
-    sessionCreate?: (tree: string) => Promise<string>
+    sessionCreate?: (tree: string) => Promise<unknown>
     create?: (opts?: { sessionId?: string; workspaceId?: string; cwd?: string }) => Promise<string>
   }) {
-    const original = options?.create ?? vi.fn(() => Promise.resolve('X-official'))
+    const original =
+      options?.create ??
+      vi.fn((opts?: { sessionId?: string }) => Promise.resolve(opts?.sessionId ?? 'X-official'))
     const sessions = { create: original } as { create: unknown }
     const projectRows = vi.fn(() => {
       if (options?.rows instanceof Error) return Promise.reject(options.rows)
       const value = typeof options?.rows === 'function' ? options.rows() : (options?.rows ?? [])
       return Promise.resolve(value)
     })
-    const sessionCreate = options?.sessionCreate ?? vi.fn(() => Promise.resolve('Y-precast'))
+    const sessionCreate = options?.sessionCreate ?? vi.fn(() => Promise.resolve({ sessionId: 'Y-precast', cwd: WT_PRECAST_CWD }))
     const deps: SessionCreateWrapDeps = {
-      sessionCreate: sessionCreate as (tree: string) => Promise<string>,
+      sessionCreate: sessionCreate as unknown as SessionCreateWrapDeps['sessionCreate'],
       projectRows: projectRows as unknown as SessionCreateWrapDeps['projectRows'],
       warn: vi.fn(),
     }
@@ -2142,7 +2149,7 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
   it('① adopt 径直通：带 sessionId = 官方复用采纳，零判定零改道（original 透传、零 RPC）', async () => {
     const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
     const out = await f.sessions.create({ sessionId: 's-adopt', workspaceId: WS })
-    expect(out).toBe('X-official')
+    expect(out).toBe('s-adopt') // 官方 create 契约：显式 sessionId 幂等回同 id
     expect(f.original).toHaveBeenCalledTimes(1)
     expect(f.projectRows).not.toHaveBeenCalled()
     expect(f.sessionCreate).not.toHaveBeenCalled()
@@ -2154,7 +2161,38 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(out).toBe('Y-precast')
     expect(f.sessionCreate).toHaveBeenCalledTimes(1)
     expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+  })
+
+  it('bug 2bc90d64：改道产物经官方 adopt 正门补账本——bound 以 {cwd: 产物 cwd, sessionId: 预铸 id} 再调（官方 create 契约即时记账，retain 恒可解析）', async () => {
+    const f = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('Y-precast')
+    // 预铸后官方 adopt 正门恰一调：cwd = 产物回带头 cwd（≠ 请求树——选中树改写场景对位），
+    // 非 caller 原参（workspaceId 径改 cwd 径——header.cwd 相等校验的键就是头 cwd）
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.original).toHaveBeenCalledWith({ cwd: WT_PRECAST_CWD, sessionId: 'Y-precast' })
+  })
+
+  it('bug 2bc90d64：adopt 补账本异常 fail-soft——warn 一行 + 直返预铸 id（产物已可用，不上抛）', async () => {
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      create: vi.fn(() => Promise.reject(new Error('session/writer-held'))),
+    })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('Y-precast')
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.deps.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('bug 2bc90d64：产物缺 cwd（旧 host 形态）= 跳过 adopt 直返预铸 id（fail-soft 现状行为，零 warn）', async () => {
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      sessionCreate: () => Promise.resolve({ sessionId: 'Y-legacy' }),
+    })
+    const out = await f.sessions.create({ workspaceId: WS })
+    expect(out).toBe('Y-legacy')
     expect(f.original).not.toHaveBeenCalled()
+    expect(f.deps.warn).not.toHaveBeenCalled()
   })
 
   it('② 资格门命中（cwd 命中注册行 ws_path）：改道预铸（跨源反斜杠/大小写归一命中）', async () => {
@@ -2162,7 +2200,7 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     const out = await f.sessions.create({ cwd: 'c:/repo' })
     expect(out).toBe('Y-precast')
     expect(f.sessionCreate).toHaveBeenCalledWith('c:/repo')
-    expect(f.original).not.toHaveBeenCalled()
+    expect(f.original).toHaveBeenCalledWith({ cwd: WT_PRECAST_CWD, sessionId: 'Y-precast' }) // adopt 正门（bug 2bc90d64）
   })
 
   it('② 资格门不命中矩阵：未注册 workspaceId / 归档行 / cwd 未注册 / 双缺（零参）→ 官方原流零介入', async () => {
@@ -2349,12 +2387,14 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
   // 本用例即共享契约的断言单源：mobile-ui 侧契约测试须钉同两条（通道字面量
   // forge:worktree/session-create + 失败回退），实现归 mobile-ui 工程。
   it('移动端 hero 预铸优先 + fail-open 回退——语义契约钉（与桌面 wrap ④ 出口同语义）', async () => {
-    // ① 预铸优先：资格命中 = sessionCreate 恰一调先行，官方原流零调用
+    // ① 预铸优先：资格命中 = sessionCreate 恰一调先行；官方面只出 adopt 正门补账本一调
+    //    （bug 2bc90d64——cwd/sessionId 形态），caller 原参零调用（非回退）
     const prefer = fixture({ rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]) })
     expect(await prefer.sessions.create({ workspaceId: WS })).toBe('Y-precast')
     expect(prefer.sessionCreate).toHaveBeenCalledTimes(1)
     expect(prefer.sessionCreate).toHaveBeenCalledWith(WS_PATH)
-    expect(prefer.original).not.toHaveBeenCalled()
+    expect(prefer.original).toHaveBeenCalledTimes(1)
+    expect(prefer.original).toHaveBeenCalledWith({ cwd: WT_PRECAST_CWD, sessionId: 'Y-precast' })
     // ② fail-open 回退：预铸失败 = 官方原流（回退语义与④出口同源）
     const rejectSessionCreate = vi.fn((_tree: string) => Promise.reject(new Error('预铸失败')))
     const fallback = fixture({

@@ -110,6 +110,13 @@ export interface WorktreeSessionCreateResult {
   readonly sessionId: string
   /** 挂靠分支（host 自查 worktree list——预铸挂靠事件内同一值） */
   readonly branch: string
+  /**
+   * 产物头 cwd（realpath 归一；bug 2bc90d64）：可能 ≠ 请求 worktreePath——「创建即绑选中树」
+   * 会把项目根请求改写为选中树。客户端改道后经官方 session.create({sessionId, cwd}) adopt
+   * 正门补客户端账本（官方契约：create 成功即时并入 summaries，调用方拿 id 即 retain），
+   * cwd 即 adopt 校验 header.cwd 相等的对位键。
+   */
+  readonly cwd: string
 }
 
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */

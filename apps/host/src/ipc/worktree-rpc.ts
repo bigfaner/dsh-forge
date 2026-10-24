@@ -475,7 +475,8 @@ export function createWorktreeRpcService(deps: {
   // G3 双建互斥（host 重路由 × client arm 共享互斥面）：sessionCreate 按 cwd 归一键记忆
   // 产物 Promise——并发调用共享同一在途编排（等待编排完成），已产物 blank 会话直接复用
   // （每 cwd 至多一个 blank 产物）；产物已非 blank（真实使用过）→ 除名允许新建。
-  const sessionProducts = new Map<string, Promise<WorktreeSessionCreateResult>>()
+  // 产物本体不含 cwd（外层 sessionCreate 统一回带——realpath 归一）。
+  const sessionProducts = new Map<string, Promise<Omit<WorktreeSessionCreateResult, 'cwd'>>>()
 
   /** 会话工作区归属（bug 925c96d5 根因级修复）：以树路径 find-or-create 官方工作区
    *  （registry.create realpath 归一比对——契约条件 header.cwd realpath ≡ workspace.path
@@ -753,6 +754,11 @@ export function createWorktreeRpcService(deps: {
       // 冒出）：目标路径盘上缺席 → WorktreeTargetAbsentError typed 显式拒绝。wrap 径
       // fail-open 回官方原流（零行为差异）；重路由径本就前置同判（本守卫为纵深）。
       if (!presentOf(targetPath)) throw new WorktreeTargetAbsentError(targetPath)
+      // bug 2bc90d64：产物头 cwd 回带（realpath 归一——与 doSessionCreate 预铸头同口径；
+      // 可能 ≠ 请求路径：创建即绑选中树已改写 targetPath）。客户端 wrap 拿它走官方
+      // session.create({sessionId, cwd}) adopt 正门补客户端账本——cwd 即 header.cwd
+      // 相等校验的对位键。
+      const productCwd = await realpath(targetPath).catch(() => targetPath)
       const key = norm(targetPath)
       const registry = resolveWorkspaceRegistry()
       const archivedOf = (): readonly string[] => registry?.archivedSessionIds ?? []
@@ -788,13 +794,13 @@ export function createWorktreeRpcService(deps: {
               break
             }
           }
-          return reused
+          return { ...reused, cwd: productCwd }
         }
         sessionProducts.delete(key) // 产物已被真实使用（非 blank）→ 允许新建
       }
       // 占位回收重启世界兜底 + 预铸编排同链（G3 互斥：key 认领后首个 await 前同步 set——
       // 并发调用方在 loop 段即命中在途产物，scan/预铸不再开双建窗口）：
-      const pending = (async (): Promise<WorktreeSessionCreateResult> => {
+      const pending = (async (): Promise<Omit<WorktreeSessionCreateResult, 'cwd'>> => {
         // 归档集精确候选扫描（bug 8af836eb 后续性能收口：候选源 = registry.archivedSessionIds
         // 本身——只有产品归档的占位会进该集合，通常一两个条目；替代初版 persistence.list
         // 全量尾扫 cap 200 逐会话开读句柄——真实项目秒级，是「点新会话打开 hero 明显延迟」
@@ -832,7 +838,10 @@ export function createWorktreeRpcService(deps: {
       })()
       sessionProducts.set(key, pending)
       try {
-        return await pending
+        // bug 2bc90d64：预铸/回收两径统一补产物头 cwd（adopt 正门对位键）——非 git 回退径
+        // 的 controller.create({cwd}) 同用 realpath(targetPath) 作头 cwd，同键成立。
+        const product = await pending
+        return { ...product, cwd: productCwd }
       } catch (cause) {
         sessionProducts.delete(key)
         throw cause
@@ -988,8 +997,9 @@ export function createWorktreeRpcService(deps: {
     }
   }
 
-  /** 预铸采纳单会话创建（1.16 配方本体——G3 互斥面与 guard 共用的原始创建径） */
-  async function doSessionCreate(request: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult> {
+  /** 预铸采纳单会话创建（1.16 配方本体——G3 互斥面与 guard 共用的原始创建径）。
+   *  cwd 由 sessionCreate 外层统一回带（realpath 归一），本径不产。 */
+  async function doSessionCreate(request: WorktreeSessionCreateRequest): Promise<Omit<WorktreeSessionCreateResult, 'cwd'>> {
     const controller = deps.sessionController
     if (controller === undefined) throw new Error('sessionController 缺席（host 装配漂移）——无法以 worktree cwd 建会话')
     const persistence: SessionPersistenceFace | undefined = deps.sessionPersistence

@@ -8,10 +8,12 @@
 // 三条铁律：
 //   ① 内部零触碰——wrap 只有整调用改道与原样透传两种动作，不读/不改官方 createOrAdopt 分支；
 //   ② 判定逐次独立——每次创建现查项目行，零缓存（git 项目可变非 git、行可增删）；
-//   ③ fail-open 透传——original 永不落改道 try 域：官方自身错误原样上抛（不吞不重调），
-//      改道链任何瞬态异常（项目行现查失败 / host 判非 git / RPC 失败）= 官方原流（guard 兜底）；
-//      唯一例外 = W2 typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT（fail-closed 确定性拒绝——
-//      单独放行上抛呈现，不降级回主树，用户裁决 2026-10-18）。
+//   ③ fail-open 透传——caller 原参形态的 original 永不落改道 try 域：官方自身错误原样
+//      上抛（不吞不重调），改道链任何瞬态异常（项目行现查失败 / host 判非 git / RPC 失败）
+//      = 官方原流（guard 兜底）；唯一例外 = W2 typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT
+//      （fail-closed 确定性拒绝——单独放行上抛呈现，不降级回主树，用户裁决 2026-10-18）。
+//      bug 2bc90d64 增补：预铸成功后以 {sessionId, cwd} 形态调 original 一次 = 官方 adopt
+//      正门补客户端账本（消费面调用，非改官方内部）；该腿异常 fail-soft 直返预铸 id。
 //
 // bundle 自含纪律（client-plugin 经典 script 形状）：本文件零运行时 import——官方/contracts
 // 面以结构同型镜像窄接口承载（open-session.ts / plugin.ts 先例）。
@@ -40,10 +42,17 @@ export interface ForgeProjectRowSlice {
 /** 项目行现查返回（forge:projects/list 行集——形状漂移容忍，由本模块正规化剔除） */
 export type ProjectRowsSnapshot = readonly unknown[]
 
+/** 预铸产品（forge:worktree/session-create 产物消费切片——bug 2bc90d64：cwd 必带） */
+export interface SessionPrecastProduct {
+  readonly sessionId: string
+  /** 产物头 cwd（host realpath 归一回带；缺席 = 旧 host 形态，跳过 adopt 补账本） */
+  readonly cwd?: string
+}
+
 /** wrap 依赖（注入面——生产 = 页内 RPC 传输镜像，测试 = spy） */
 export interface SessionCreateWrapDeps {
   /** 预铸采纳单门（forge:worktree/session-create——信封拆装由装配面承担；拒绝/异常 = reject） */
-  readonly sessionCreate: (worktreePath: string) => Promise<string>
+  readonly sessionCreate: (worktreePath: string) => Promise<SessionPrecastProduct>
   /** 注册项目行现查（每次创建现拉零缓存——列表 RPC 逐次 fresh） */
   readonly projectRows: () => Promise<ProjectRowsSnapshot>
   /** 官方 workspace 行现查（bug ff324cad A2——workspaces.list 快照窄面镜像 {workspaceId, path}；
@@ -188,14 +197,28 @@ export function installSessionCreateWrap(
       tree = null
     }
     if (tree === null) return bound(opts)
-    // ③ 改道预铸（try 域只罩改道链——original 永不落入）：git 判定与模式随档在 host
-    //    doSessionCreate 逐次现跑；G3 互斥与 guard/arm 共享同树 blank 产物，零双建
+    // ③ 改道预铸（try 域只罩改道链——caller 原参形态的 original 永不落入）：git 判定与
+    //    模式随档在 host doSessionCreate 逐次现跑；G3 互斥与 guard/arm 共享同树 blank
+    //    产物，零双建
     try {
-      const sessionId = await deps.sessionCreate(tree)
-      if (typeof sessionId !== 'string' || sessionId === '') {
+      const product = await deps.sessionCreate(tree)
+      if (typeof product?.sessionId !== 'string' || product.sessionId === '') {
         throw new Error('sessionCreate 产物缺 sessionId（形状漂移）')
       }
-      return sessionId
+      // Root cause (bug 2bc90d64): 整调用改道绕过了官方 create 的 placeholder 即时记账，
+      // 调用方随后的 retain 只能赌 api-session/added 广播（官方 gateway 事件通道）赶在
+      // retain 之前落地——预铸响应走 forge IPC，跨通道竞速无序 → 偶发 unknown session。
+      // 修复 = 预铸后经官方 adopt 正门补账本：bound({sessionId, cwd}) 走官方 create 契约
+      // （"on success merge into summaries immediately"——为「拿 id 即 retain」设计），host
+      // 面幂等（ensureSession 对活/持久会话回同 id）。cwd = 产物头 cwd（≠ 请求树：创建即绑
+      // 选中树改写），非 caller 原参。adopt 异常 fail-soft 直返预铸 id（产物已可用）。
+      if (typeof product.cwd !== 'string' || product.cwd === '') return product.sessionId
+      try {
+        return await bound({ cwd: product.cwd, sessionId: product.sessionId })
+      } catch (cause) {
+        warn(`[dswf-client] sessions.create 改道产物 adopt 补账本失败（fail-soft 直返预铸 id）：${String(cause)}`)
+        return product.sessionId
+      }
     } catch (cause) {
       // ④a W2 fail-closed 单独放行（用户裁决 2026-10-18）：typed 拒绝码 ERR_WORKTREE_CAPABILITY_ABSENT
       //    = host 确定性拒绝（能力缺席），不是瞬态降级——原样上抛呈现（官方 createFailed toast /
