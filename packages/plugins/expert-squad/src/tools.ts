@@ -190,7 +190,7 @@ export function zToJSONSchema(schema: z.ZodType, io: "input" | "output"): unknow
 // 档案序列化（写路径——写盘前经 frontmatter 校验，校验不过不落盘）
 // ---------------------------------------------------------------------------
 
-interface ArchiveFields {
+export interface ArchiveFields {
   name: string;
   title: string;
   description: string;
@@ -199,7 +199,7 @@ interface ArchiveFields {
   model?: string;
 }
 
-function serializeExpertMd(fields: ArchiveFields, personaMd: string): string {
+export function serializeExpertMd(fields: ArchiveFields, personaMd: string): string {
   const data: Record<string, unknown> = {
     name: fields.name,
     title: fields.title,

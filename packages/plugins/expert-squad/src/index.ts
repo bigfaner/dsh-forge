@@ -8,10 +8,13 @@
 // tool 面（delegate_expert / 查询工具）由后续任务按 tech-design 填充（不在本装配缝）。
 
 import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import { parseExpertFile } from "./store/frontmatter.js";
 import { ExpertsRegistry } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
+import { serializeExpertMd } from "./tools.js";
 import {
   resolvePluginExpertsRoot,
   resolveUserExpertsRoot,
@@ -102,9 +105,36 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
         console.warn(`[expert-squad] setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
       });
     },
-    // 档案 upsert 写面（store 层序列化器）由后续任务填充——通道存在、fail-loud 文本应答。
-    update: async () => {
-      throw new Error("expert update channel not assembled yet（档案写面后续任务填充）");
+    // 档案 upsert 写面（bug 4ed8549f 装配）：落点 = project 层 <workspace>/.dsh/experts/
+    // <key>.md（面板 workspace 域内；对 user/plugin 层同键档案构成遮蔽——scan 层
+    // 既有语义）。写路径与 recruit/update_expert tool 同源：serializeExpertMd →
+    // parseExpertFile 全量门（必填/裸 {{/name 不可改——文件名即建档键），不过不落盘；
+    // 写后 refresh 一代换新，回包 = 换新 ExpertEntry。
+    update: async (input) => {
+      const registry = await registryFor(input.workspace);
+      const expertsDir = join(input.workspace, ".dsh", "experts");
+      const file = join(expertsDir, `${input.name}.md`);
+      const content = serializeExpertMd(
+        {
+          name: input.name,
+          title: input.title,
+          description: input.description,
+          tools: input.tools,
+          skills: input.skills,
+          ...(input.model !== undefined ? { model: input.model } : {}),
+        },
+        input.personaMd ?? "",
+      );
+      const verdict = parseExpertFile(file, content);
+      if (!verdict.ok) throw new Error(verdict.reason);
+      await mkdir(expertsDir, { recursive: true });
+      await writeFile(file, content, "utf8");
+      await registry.refresh();
+      const fresh = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === input.name);
+      if (fresh === undefined) throw new Error(`expert not found after update: ${input.name}`);
+      return fresh;
     },
   };
   registerExpertSquadRoutes(connection, routes);
