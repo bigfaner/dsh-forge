@@ -237,7 +237,19 @@ function tasksHarness() {
   }
 }
 
-type NarrationCall = { readonly method: 'notice' | 'followup'; readonly sessionId: string; readonly text: string }
+type NarrationCall = { readonly method: 'notice' | 'followup' | 'settle'; readonly sessionId: string; readonly text: string }
+
+/** NarrationChannel send 桩（loop-event-delivery 接口收窄——wakeup/form 路由换算：
+ *  settle 形态 → settle / wakeup=true → followup / 其余 → notice），旧断言语汇不变 */
+function sendRecordingChannel(calls: NarrationCall[], onSend?: (sessionId: string, text: string) => void): NarrationChannel {
+  return {
+    send: async (sessionId, text, options) => {
+      const method = options?.form === 'settle' ? 'settle' : options?.wakeup === true ? 'followup' : 'notice'
+      calls.push({ method, sessionId, text })
+      onSend?.(sessionId, text)
+    },
+  }
+}
 
 interface Built {
   driver: LoopDriver
@@ -284,14 +296,7 @@ function build(options: {
   if (options.stats !== undefined) h.setStats(options.stats)
   if (options.query !== undefined) h.setQuery(options.query)
   const calls: NarrationCall[] = []
-  const channel: NarrationChannel = {
-    notice: async (sessionId, text) => {
-      calls.push({ method: 'notice', sessionId, text })
-    },
-    followup: async (sessionId, text) => {
-      calls.push({ method: 'followup', sessionId, text })
-    },
-  }
+  const channel: NarrationChannel = sendRecordingChannel(calls)
   const narrator: Narrator = createNarrator({
     channel,
     // incident 仓缺目录解析 = 零 I/O fail-soft；显式桩时观察落盘委派
@@ -392,8 +397,8 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
       label: 'feat-x/2.5 · Implement the thing',
       parent: { tag: 'parent' },
     })
-    // 叙述四连：①启动（notice）/ ④领取（notice）/ ⑥完成（notice）/ ⑯结束·全部完成（followup）
-    expect(built.calls.map((c) => c.method)).toEqual(['notice', 'notice', 'notice', 'followup'])
+    // 叙述四连：①启动（notice）/ ④领取（notice）/ ⑥完成（notice）/ ⑯结算单点（settle·wakeup=true）
+    expect(built.calls.map((c) => c.method)).toEqual(['notice', 'notice', 'notice', 'settle'])
     expect(built.calls[0]?.text).toContain('[forge·启动] 任务源: feat-x（feature）')
     expect(built.calls[0]?.text).toContain('待执行 1')
     expect(built.calls[1]?.text).toContain('[forge·领取] 任务源: feat-x')
@@ -1269,7 +1274,7 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     expect(retries).toHaveLength(2)
     expect(retries[0]?.text).toContain('启动子代理失败（第 1 次）')
     expect(retries[1]?.text).toContain('启动子代理失败（第 2 次）')
-    const halted = built.calls.find((c) => c.method === 'followup')
+    const halted = built.calls.find((c) => c.method === 'settle')
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
     expect(halted?.text).toContain('提示用户"环境排查后重新开始 /run-dag-tasks feat-x"，并在问询中决定')
     // 同实例不自动复活（登记表已删、无定时器存活）；新实例 = 新 guard 计数（可正常跑完）
@@ -1425,7 +1430,7 @@ describe('no-task 三态判词（settled / 等待 / halted-受阻）', () => {
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
     expect(built.h.claimInputs).toHaveLength(3) // 三轮等待判词后耐心耗尽
-    const timeout = built.calls.find((c) => c.method === 'followup')
+    const timeout = built.calls.find((c) => c.method === 'settle')
     expect(timeout?.text).toContain('结束（等待超时）')
     expect(timeout?.text).toContain('完成 4 · 阻塞 0 · 待处理 2')
     expect(timeout?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
@@ -1487,7 +1492,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
       { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
     ])
     // ⑰ 停止终局叙述（用户主动停止 = 不引导续跑，下一步动作 = 无）
-    const stoppedNotice = built.calls.find((c) => c.method === 'followup')
+    const stoppedNotice = built.calls.find((c) => c.method === 'settle')
     expect(stoppedNotice?.text).toContain('[forge·停止] 任务源: feat-x — 已按你的指令停止')
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
     expect(stoppedNotice?.text).toContain('下一步动作: 无')
@@ -1533,18 +1538,12 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
   it('停止竞态（claim 通知窗口被叫停）：stop 面接管真化——循环醒来让渡，零 spawn 零续领', async () => {
     let stopPromise: Promise<unknown> | undefined
     const channelCalls: NarrationCall[] = []
-    const channel: NarrationChannel = {
-      notice: async (sessionId, text) => {
-        channelCalls.push({ method: 'notice', sessionId, text })
-        // 竞态注入点：领取通知 await 窗口内敲 stop（此时 in-flight 已登记、spawn 未发生）
-        if (text.includes('[forge·领取]') && stopPromise === undefined) {
-          stopPromise = driver.stop({ ownerSessionId: OWNER })
-        }
-      },
-      followup: async (sessionId, text) => {
-        channelCalls.push({ method: 'followup', sessionId, text })
-      },
-    }
+    const channel: NarrationChannel = sendRecordingChannel(channelCalls, (_sessionId, text) => {
+      // 竞态注入点：领取通知 await 窗口内敲 stop（此时 in-flight 已登记、spawn 未发生）
+      if (text.includes('[forge·领取]') && stopPromise === undefined) {
+        stopPromise = driver.stop({ ownerSessionId: OWNER })
+      }
+    })
     const h = tasksHarness()
     h.setClaim([claimed()])
     const deps: LoopDriverDeps = {
@@ -1784,7 +1783,7 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
     expect(built.escalations).toEqual([
       { kind: 'halted', ownerSessionId: OWNER, source: SOURCE, attempts: 3, reason: HALTED_REASON },
     ])
-    const halted = built.calls.find((c) => c.method === 'followup')
+    const halted = built.calls.find((c) => c.method === 'settle')
     expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
   })
 })
@@ -1825,7 +1824,7 @@ describe('S2 面：active() 单活读数与 projectId 覆盖（S2 指令层消�
 
   it('projectId 双缺席（deps 与 input 均无）：start 拒绝（fail-loud——不落不可归属的循环）', async () => {
     const h = tasksHarness()
-    const channel: NarrationChannel = { notice: async () => {}, followup: async () => {} }
+    const channel: NarrationChannel = { send: async () => {} }
     const driver = createLoopDriver({
       tasks: h.tasks,
       spawn: trackedSpawn().spawn,
@@ -1932,7 +1931,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     const h = tasksHarness()
     h.setClaim([claimed(), NO_TASK])
     h.setStats([statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })])
-    const channel: NarrationChannel = { notice: async () => {}, followup: async () => {} }
+    const channel: NarrationChannel = { send: async () => {} }
     const driver = createLoopDriver({
       projectId: PROJECT,
       tasks: h.tasks,
@@ -2307,14 +2306,7 @@ describe('start 会话级单活门控（3b——用户裁决 2026-10-17：一会
     const h = tasksHarness()
     const calls: NarrationCall[] = []
     const narrator: Narrator = createNarrator({
-      channel: {
-        notice: async (sessionId, text) => {
-          calls.push({ method: 'notice', sessionId, text })
-        },
-        followup: async (sessionId, text) => {
-          calls.push({ method: 'followup', sessionId, text })
-        },
-      },
+      channel: sendRecordingChannel(calls),
     })
     const driver = createLoopDriver({
       projectId: PROJECT,
@@ -2392,7 +2384,7 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
-    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('[forge·停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
+    expect(built.calls.some((c) => c.method === 'settle' && c.text.includes('[forge·停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
     expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
   })
 

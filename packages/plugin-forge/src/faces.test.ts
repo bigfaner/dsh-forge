@@ -4,10 +4,15 @@
 // 结构性不可达，F4 通道矩阵唯 log 被模型消费读滤除）/ hooks（cancel + done）恒等交还注册表。
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { Project } from '@dsh-forge/contracts'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
 import type { DispatchJobsRegistryFace } from './faces.js'
+import type { NarrationChannel } from './notify/index.js'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 /** 容器目录桩值（平台无关绝对路径——#61：'D:/...' 盘符拼写 POSIX 下为相对路径） */
 const DEMO_CONTAINER_DIR = join(tmpdir(), 'dsh-forge-containers', 'demo@abcd1234')
@@ -90,74 +95,74 @@ describe('adaptDispatchJobs（适配层——channel 单点硬编码）', () => 
   })
 })
 
-// ─────────────────────────── S2 adaptAgentNarrationChannel（agents 注册表 → 叙述双通道） ───────────────────────────
+// ─────────────────────────── S2 adaptAgentNarrationChannel（agents 注册表 → send 单出口） ───────────────────────────
 
-describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回合 / followup=agent.followup 新回合）', () => {
+describe('adaptAgentNarrationChannel（loop-event-delivery——send 单出口：agent.send(msg, nextStep, wakeup)）', () => {
   function agentSpy() {
-    const injected: unknown[] = []
-    const followed: unknown[] = []
+    const sent: { message: unknown; target: string; wakeup?: boolean }[] = []
     const agent = {
-      inject: (m: unknown) => injected.push(m),
-      followup: (m: unknown) => followed.push(m),
+      send: (message: unknown, target: string, wakeup?: boolean) => {
+        sent.push({ message, target, wakeup })
+      },
     }
-    return { agent, injected, followed }
+    return { agent, sent }
   }
 
-  it('notice → 活根 inject：user 消息 + producer 归因（kind forge-dispatch / form notice / summary）', async () => {
+  const sourceOf = (call: { message: unknown } | undefined): { kind?: string; form?: string; summary?: string } =>
+    ((call?.message as { source?: { kind?: string; form?: string; summary?: string } })?.source ?? {})
+  const messageOf = (call: { message: unknown } | undefined): unknown => call?.message
+
+  it('事件径（notice 形态）：send(msg, nextStep, false)——写入不唤醒 + forge 事件 source（kind forge-dispatch / form notice / summary）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: (id) => (id === 's-1' ? spy.agent : undefined) })
-    await channel.notice('s-1', '已领取任务 2.5')
-    expect(spy.followed).toHaveLength(0) // 零模型回合——followup 通道零触达
-    expect(spy.injected).toHaveLength(1)
-    expect(spy.injected[0]).toMatchObject({
+    await channel.send('s-1', '已领取任务 2.5')
+    expect(spy.sent).toHaveLength(1)
+    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: false })
+    expect(spy.sent[0]?.message).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: '已领取任务 2.5' }],
       source: { kind: 'forge-dispatch', form: 'notice' },
     })
-    const summary = (spy.injected[0] as { source: { summary?: string } }).source.summary
-    expect(summary).toBe('已领取任务 2.5')
-    expect(typeof (spy.injected[0] as { id?: unknown }).id).toBe('string')
+    expect(sourceOf(spy.sent[0]).summary).toBe('已领取任务 2.5')
+    expect(typeof (messageOf(spy.sent[0]) as { id?: unknown }).id).toBe('string')
   })
 
-  it('长文本 notice：summary 界内截断（≤120 字符——上游 CONTEXT_SUMMARY_MAX_CHARS 同值）', async () => {
+  it('长文本事件径：summary 界内截断（≤120 字符——上游 CONTEXT_SUMMARY_MAX_CHARS 同值），全文完整进 content', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
     const long = '长'.repeat(300)
-    await channel.notice('s-1', long)
-    const summary = (spy.injected[0] as { source: { summary?: string } }).source.summary ?? ''
+    await channel.send('s-1', long)
+    const summary = sourceOf(spy.sent[0]).summary ?? ''
     expect(summary.length).toBeLessThanOrEqual(120)
     expect(summary.endsWith('…')).toBe(true)
-    // 全文仍完整进 content——截断只发生在折叠摘要位
-    expect((spy.injected[0] as { content: { text: string }[] }).content[0]?.text).toBe(long)
+    expect((messageOf(spy.sent[0]) as { content: { text: string }[] }).content[0]?.text).toBe(long)
   })
 
-  it('传入预构建摘要（headline）：summary=headline 原样（缺省回退整段截断——兼容不破坏）', async () => {
+  it('传入预构建摘要（headline）：summary=headline 原样（缺省回退整段截断）；headline 超界保底钳制', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
     const longBody = '长'.repeat(300)
     const headline = '[forge·领取] 2.8 诊断弹窗装配（Apps web）· 待执行 3 · 执行中 1'
-    await channel.notice('s-1', longBody, headline)
-    expect((spy.injected[0] as { source: { summary?: string } }).source.summary).toBe(headline)
-    // 全文仍完整进 content——headline 只替换折叠摘要位
-    expect((spy.injected[0] as { content: { text: string }[] }).content[0]?.text).toBe(longBody)
-    // headline 超界同样保底钳制（≤120 + 省略号）
-    await channel.notice('s-1', 'x', '标'.repeat(200))
-    const clamped = (spy.injected[1] as { source: { summary?: string } }).source.summary ?? ''
+    await channel.send('s-1', longBody, { headline })
+    expect(sourceOf(spy.sent[0]).summary).toBe(headline)
+    expect((messageOf(spy.sent[0]) as { content: { text: string }[] }).content[0]?.text).toBe(longBody)
+    await channel.send('s-1', 'x', { headline: '标'.repeat(200) })
+    const clamped = sourceOf(spy.sent[1]).summary ?? ''
     expect(clamped.length).toBeLessThanOrEqual(120)
     expect(clamped.endsWith('…')).toBe(true)
   })
 
-  it('followup → 活根 followup：完整消息（1.18 AD-4——source kind forge-loop 循环哨兵，非人工输入蓝气泡）', async () => {
+  it('唤醒径（followup 形态）：send(msg, nextStep, true)——source kind forge-loop 循环哨兵（非人工输入蓝气泡）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
-    await channel.followup('s-1', '任务源 feat-x 全部完成')
-    expect(spy.injected).toHaveLength(0)
-    expect(spy.followed[0]).toMatchObject({
+    await channel.send('s-1', '任务源 feat-x 全部完成', { form: 'followup', wakeup: true })
+    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(spy.sent[0]?.message).toMatchObject({
       role: 'user',
       content: [{ type: 'text', text: '任务源 feat-x 全部完成' }],
       source: { kind: 'forge-loop', loopKind: 'dispatch', form: 'notice', summary: '任务源 feat-x 全部完成' },
     })
-    const source = (spy.followed[0] as { source: { runId?: string; task?: string; state?: string } }).source
+    const source = (messageOf(spy.sent[0]) as { source: { runId?: string; task?: string; state?: string } }).source
     expect(typeof source.runId).toBe('string')
     expect((source.runId as string).length).toBeGreaterThan(0)
     expect(source.task).toBe('')
@@ -167,21 +172,52 @@ describe('adaptAgentNarrationChannel（S2——notice=agent.inject 零模型回�
   it('followup 携带循环上下文（task/state 透传；runId 铸发唯一——两次注入不同 runId）', async () => {
     const spy = agentSpy()
     const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
-    await channel.followup('s-1', '无法自动处理——已向你发起问询', { task: '4.2', state: 'blocked-ask-user' })
-    await channel.followup('s-1', '第二次注入')
-    const first = (spy.followed[0] as { source: { task?: string; state?: string; runId?: string } }).source
-    const second = (spy.followed[1] as { source: { runId?: string } }).source
+    await channel.send('s-1', '无法自动处理——已向你发起问询', {
+      form: 'followup',
+      wakeup: true,
+      loop: { task: '4.2', state: 'blocked-ask-user' },
+    })
+    await channel.send('s-1', '第二次注入', { form: 'followup', wakeup: true })
+    const first = (messageOf(spy.sent[0]) as { source: { task?: string; state?: string; runId?: string } }).source
+    const second = (messageOf(spy.sent[1]) as { source: { runId?: string } }).source
     expect(first.task).toBe('4.2')
     expect(first.state).toBe('blocked-ask-user')
     expect(first.runId).not.toBe(second.runId)
   })
 
-  it('会话无活根 / 面 non-function：静默跳过不抛（R4 叙述通道存活依赖 fail-soft 第二道防线）', async () => {
-    const channel = adaptAgentNarrationChannel({ get: () => undefined })
-    await expect(channel.notice('s-gone', 'x')).resolves.toBeUndefined()
-    await expect(channel.followup('s-gone', 'x')).resolves.toBeUndefined()
-    const partial = adaptAgentNarrationChannel({ get: () => ({ inject: 'not-a-function' }) })
-    await expect(partial.notice('s-1', 'x')).resolves.toBeUndefined()
+  it('结算径（settle 形态）：send(msg, nextStep, true) 单点唤醒——source {kind: dispatch-loop-settled}', async () => {
+    const spy = agentSpy()
+    const channel = adaptAgentNarrationChannel({ get: () => spy.agent })
+    await channel.send('s-1', '【任务循环结束】全部任务已完成', { form: 'settle', wakeup: true })
+    expect(spy.sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(spy.sent[0]?.message).toMatchObject({
+      role: 'user',
+      source: { kind: 'dispatch-loop-settled' },
+    })
+  })
+
+  it('会话无活根 / send 面缺席：静默跳过不抛（settle 形态加必达告警——降级凭 slug 认领）', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const channel = adaptAgentNarrationChannel({ get: () => undefined })
+      await expect(channel.send('s-gone', 'x')).resolves.toBeUndefined()
+      await expect(channel.send('s-gone', '结算文本', { form: 'settle', wakeup: true })).resolves.toBeUndefined()
+      const partial = adaptAgentNarrationChannel({ get: () => ({ send: 'not-a-function' }) })
+      await expect(partial.send('s-1', 'x')).resolves.toBeUndefined()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(warnSpy.mock.calls[0]?.[0]).toContain('结算通知未送达')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('类型面断言：NarrationChannel 仅 send 单出口——旧 notice/followup/settle 三方法消失', () => {
+    type ExtinctKeys = 'notice' | 'followup' | 'settle'
+    type Remaining = Extract<keyof NarrationChannel, ExtinctKeys>
+    const extinct: readonly Remaining[] = []
+    expect(extinct).toHaveLength(0)
+    const channel: NarrationChannel = { send: async () => {} }
+    expect(typeof channel.send).toBe('function')
   })
 })
 

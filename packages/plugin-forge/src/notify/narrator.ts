@@ -1,8 +1,9 @@
 // notify · 叙述面组装（S4 纯模块——循环驱动器的单一叙述出口；不依赖循环）。
-// 三职责：① 通道委派（notice/followup 两法——#28 分流的调用点表述，fail-soft 在此
-// 机械保证：注入任何故障静默降级，SC7「注入失败循环照常结束」）；② 事件子文件夹落盘
-// 委派（incident-log）；③ 阻塞族发射径（blocked——reason 全文的机械防线：全文只进
-// 落盘与裁决问询，叙述经 summarizeReason 只带摘要 + 事件子文件夹路径，decisions #24）。
+// 三职责：① 通道委派（send 单出口——loop-event-delivery 接口收窄后 NarrationChannel 仅
+// send；#28 分流换算为 wakeup 路由，fail-soft 在此机械保证：注入任何故障静默降级，SC7
+// 「注入失败循环照常结束」）；② 事件子文件夹落盘委派（incident-log）；③ 阻塞族发射径
+// （blocked——reason 全文的机械防线：全文只进落盘与裁决问询，叙述经 summarizeReason 只带
+// 摘要 + 事件子文件夹路径，decisions #24）。
 import { failSoftNarrationChannel } from './channel.js'
 import type { NarrationChannel } from './channel.js'
 import { createIncidentStore } from './incident-log.js'
@@ -70,14 +71,26 @@ export function createNarrator(deps: NarratorDeps): Narrator {
   return {
     notice(sessionId: string, text: string, headline?: string): Promise<void> {
       // 时间行统一追加（2026-10-12 用户裁决「注入消息内容要完整：时间使用 LocalDateTime」——
-      // 骨架收尾行，本地时区完整日期时间；headline 不变）
-      return safe.notice(sessionId, `${text}\n${localDateTimeLine()}`, headline)
+      // 骨架收尾行，本地时区完整日期时间；headline 不变）。事件径 = send(nextStep, false)
+      // 写入不唤醒（持久留痕，人类进度看 forge/progress 链，模型下次 claim 整批消费）。
+      return safe.send(sessionId, `${text}\n${localDateTimeLine()}`, {
+        form: 'notice',
+        ...(headline !== undefined ? { headline } : {}),
+      })
     },
     followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
-      return safe.followup(sessionId, `${text}\n${localDateTimeLine()}`, loop)
+      // 唤醒径 = send(nextStep, true) 即时唤醒主 agent（⑩⑬⑭⑮⑯⑰ 场景族——调用方为
+      // 表内场景才走本面）。
+      return safe.send(sessionId, `${text}\n${localDateTimeLine()}`, {
+        form: 'followup',
+        wakeup: true,
+        ...(loop !== undefined ? { loop } : {}),
+      })
     },
     settle(sessionId: string, text: string): Promise<void> {
-      return safe.settle(sessionId, `${text}\n${localDateTimeLine()}`)
+      // 结算单点唤醒（loop-event-delivery §结算径）：真终局一次 send(nextStep, true)——
+      // 结算消息与 next-step 积压在唤醒后的 claim 整批消费；不再运行中 steer 插队。
+      return safe.send(sessionId, `${text}\n${localDateTimeLine()}`, { form: 'settle', wakeup: true })
     },
     async blocked<S extends BlockedScenarioId>(
       sessionId: string,
@@ -101,17 +114,23 @@ export function createNarrator(deps: NarratorDeps): Narrator {
         ...(incidentPath !== undefined ? { incidentPath } : {}),
       } as NarrativePayloadMap[S]
       const text = renderNarrative(scenario, payload)
-      // 通道路由单源 = SCENARIOS 表（templates.ts）——表改通道即改投递径，零硬编码场景 id。
-      // ⑩ blocked-ask-user = followup（无法自动处理→人工裁决）：新回合唤醒主 agent——阻塞
-      // 上下文进会话触发分析（2026-10-13 用户定罪「收到阻塞上下文未触发主 agent 分析」）；
-      // 裁决仍走问询 UI（decisions #16 不变——分析入会话，裁决不经会话）。⑦-⑨ 循环中段
-      // 场景 notice 零模型注入（fix 链续领/外部等待，循环未终——不逐事件烧模型回合）。
+      // wakeup 路由单源 = SCENARIOS 表（templates.ts）——表改通道即改唤醒径，零硬编码场景 id。
+      // channel 'followup' ↔ wakeup true（⑩ blocked-ask-user / ⑬-⑰ 终局族，提案事件表
+      // ⑩⑬⑭⑮⑯⑰ true 组）；其余中段场景 notice 写入不唤醒（fix 链续领/外部等待，循环
+      // 未终——不逐事件烧模型回合）。
       if (SCENARIOS[scenario].channel === 'followup') {
-        await safe.followup(sessionId, `${text}\n${localDateTimeLine()}`, { task: meta.taskKey, state: scenario })
+        await safe.send(sessionId, `${text}\n${localDateTimeLine()}`, {
+          form: 'followup',
+          wakeup: true,
+          loop: { task: meta.taskKey, state: scenario },
+        })
         return
       }
       // 折叠摘要 = 场景专用单行摘要（S4 增强——同源载荷事实，替代整段截断）
-      await safe.notice(sessionId, text, renderHeadline(scenario, payload))
+      await safe.send(sessionId, `${text}\n${localDateTimeLine()}`, {
+        form: 'notice',
+        headline: renderHeadline(scenario, payload),
+      })
     },
     recordIncident(input: IncidentInput): string | undefined {
       return incidents.record(input)

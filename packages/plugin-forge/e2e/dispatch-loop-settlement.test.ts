@@ -180,16 +180,11 @@ function build(options: { claim?: ClaimTaskResult[]; stats?: TaskStats[]; query?
   if (options.stats !== undefined) h.setStats(options.stats)
   if (options.query !== undefined) h.setQuery(options.query)
   const calls: Call[] = []
-  // 结算通道真实现形态：settle = 独立录制（不回落 followup——settlement 形态可判别）
+  // 结算通道真实现形态：send(form settle, wakeup=true) 单点唤醒（settlement 形态可判别）
   const channel: NarrationChannel = {
-    notice: async (sessionId, text) => {
-      calls.push({ method: 'notice', sessionId, text })
-    },
-    followup: async (sessionId, text) => {
-      calls.push({ method: 'followup', sessionId, text })
-    },
-    settle: async (sessionId, text) => {
-      calls.push({ method: 'settle', sessionId, text })
+    send: async (sessionId, text, options) => {
+      const method = options?.form === 'settle' ? 'settle' : options?.wakeup === true ? 'followup' : 'notice'
+      calls.push({ method, sessionId, text })
     },
   }
   const narrator: Narrator = createNarrator({ channel })
@@ -395,26 +390,21 @@ describe('e2e dogfood · owner 会话失活：不投死信 + 必达告警（AC 9
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const agents = new Map<string, unknown>()
     const channel = adaptAgentNarrationChannel({ get: (id) => agents.get(id) })
-    await channel.settle!('sess-gone', '【任务循环结束】\n- feat-x 没有可领取的任务。全部任务已完成。')
+    await channel.send('sess-gone', '【任务循环结束】\n- feat-x 没有可领取的任务。全部任务已完成。', { form: 'settle', wakeup: true })
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('必达告警')
     expect(warn.mock.calls[0]?.[0]).toContain('sess-gone')
     expect(warn.mock.calls[0]?.[0]).toContain('凭容器 slug 认领')
 
-    // 空闲会话：followup 径 + dispatch-loop-settled source（持久 user message）
-    const followuped: unknown[] = []
-    agents.set('sess-idle', { followup: (m: unknown) => followuped.push(m) })
-    await channel.settle!('sess-idle', 'settle-text')
-    expect(followuped).toHaveLength(1)
-    expect(followuped[0]).toMatchObject({ role: 'user', source: { kind: 'dispatch-loop-settled' } })
-
-    // 运行中会话：steer 径（同 settled source）
-    const steered: unknown[] = []
-    agents.set('sess-busy', { isBusy: () => true, steer: (m: unknown) => steered.push(m), followup: () => {} })
-    await channel.settle!('sess-busy', 'settle-text')
-    expect(steered).toHaveLength(1)
-    expect(steered[0]).toMatchObject({ source: { kind: 'dispatch-loop-settled' } })
-    expect(followuped).toHaveLength(1) // busy 会话零 followup——投递径分流成立
+    // 活根会话：send(msg, nextStep, true) 单点唤醒 + dispatch-loop-settled source（持久 user message）
+    const sent: { message: unknown; target: string; wakeup?: boolean }[] = []
+    agents.set('sess-idle', {
+      send: (message: unknown, target: string, wakeup?: boolean) => sent.push({ message, target, wakeup }),
+    })
+    await channel.send('sess-idle', 'settle-text', { form: 'settle', wakeup: true })
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ target: 'nextStep', wakeup: true })
+    expect(sent[0]?.message).toMatchObject({ role: 'user', source: { kind: 'dispatch-loop-settled' } })
   })
 })
 

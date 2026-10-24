@@ -7,7 +7,7 @@
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
-import type { NarrationChannel } from './notify/index.js'
+import type { NarrationChannel, NarrationSendOptions } from './notify/index.js'
 import { forgeLoopSource } from './forge-loop-source.js'
 import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'
 
@@ -389,46 +389,37 @@ function warnSettleUndelivered(sessionId: string, text: string, reason: string):
   )
 }
 
-/** 上游 agent 结算投递面收窄（followup/steer/isBusy 鸭子——结构化最小面，零上游 import） */
-interface SettleAgentFace {
-  followup?: (message: unknown) => void
-  steer?: (message: unknown) => void
-  isBusy?: () => boolean
+/** 上游 agent send 把手收窄（官方 Agent.send(message, target, wakeup) 鸭子——结构化最小面，零上游 import） */
+interface SendAgentFace {
+  send?: (message: unknown, target: string, wakeup?: boolean) => void
 }
 
+/** 官方 InboxTarget 承重值（loop-event-delivery——next-step 队列 claim 整批并取，probe-1 实证） */
+const INBOX_TARGET_NEXT_STEP = 'nextStep' as const
+
 /**
- * 适配层：agents 注册表 → 叙述双通道（S2 装配方消费——decisions #17/#28 分流：
- * notice = agent.inject（零模型回合、不唤醒）；followup = agent.followup（完整消息开新回合））。
- * 会话无活根（主会话已关闭/删除）或面 non-function = 静默跳过——narrator fail-soft 包装之外
- * 的第二道防线（R4 叙述通道存活依赖；循环正确性只依赖宿主事件）。
+ * 适配层：agents 注册表 → 叙述 send 单出口通道（loop-event-delivery §接口收窄——旧
+ * notice/followup/settle 三方法收敛消失）。全部消息统一 `agent.send(message, 'nextStep',
+ * wakeup)`：wakeup=false 持久留痕不唤醒驱动器（①-⑨⑪⑫ 事件径），wakeup=true 即时唤醒
+ * （⑩⑬⑭⑮⑯⑰ 唤醒径 + 结算单点，路由由 narrator 按 SCENARIOS 场景表换算）；消息 source
+ * kind 铸造（forge-dispatch / forge-loop / dispatch-loop-settled）供 GUI 折叠判别。
+ * 会话无活根（主会话已关闭/删除）或 send 面缺席 = 静默跳过（settle 形态加必达告警——
+ * 降级为任意会话凭 slug 认领处置）；narrator fail-soft 包装之外的第二道防线。
  */
 export function adaptAgentNarrationChannel(agents: AgentLookupFace): NarrationChannel {
   return {
-    notice(sessionId: string, text: string, headline?: string): Promise<void> {
-      const agent = agents.get(sessionId) as { inject?(message: unknown): void } | undefined
-      if (typeof agent?.inject === 'function') agent.inject(forgeUserMessage(text, 'notice', headline))
-      return Promise.resolve()
-    },
-    followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
-      const agent = agents.get(sessionId) as { followup?(message: unknown): void } | undefined
-      if (typeof agent?.followup === 'function') agent.followup(forgeUserMessage(text, 'followup', undefined, loop))
-      return Promise.resolve()
-    },
-    settle(sessionId: string, text: string): Promise<void> {
-      // settlement 三径（3b④）：空闲→followup（完整消息开新回合）/ 运行中→steer（在途回合
-      // 插队投递）/ 会话失活（无活根）→不投死信 + 必达告警——降级为任意会话凭 slug 认领处置。
-      // steer 面缺席的运行中会话回退 followup（投递完整性优先于路径精确）。
-      const agent = agents.get(sessionId) as SettleAgentFace | undefined
-      if (agent === undefined) {
-        warnSettleUndelivered(sessionId, text, '已失活/无活根')
-        return Promise.resolve()
+    async send(sessionId: string, text: string, options: NarrationSendOptions = {}): Promise<void> {
+      const form = options.form ?? 'notice'
+      const agent = agents.get(sessionId) as SendAgentFace | undefined
+      if (typeof agent?.send !== 'function') {
+        if (form === 'settle') warnSettleUndelivered(sessionId, text, '已失活/无活根或 send 面缺席')
+        return
       }
-      const message = forgeSettleMessage(text)
-      const busy = typeof agent.isBusy === 'function' && agent.isBusy() === true
-      if (busy && typeof agent.steer === 'function') agent.steer(message)
-      else if (typeof agent.followup === 'function') agent.followup(message)
-      else warnSettleUndelivered(sessionId, text, '投递面缺席')
-      return Promise.resolve()
+      const message =
+        form === 'settle'
+          ? forgeSettleMessage(text)
+          : forgeUserMessage(text, form, options.headline, options.loop)
+      agent.send(message, INBOX_TARGET_NEXT_STEP, options.wakeup === true)
     },
   }
 }

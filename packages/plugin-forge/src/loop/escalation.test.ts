@@ -218,14 +218,14 @@ describe('userQuestions 投递（ask 面——载荷与 fail-soft）', () => {
 
 describe('裁决回执（闭环断环修复——人已答必须有回响）', () => {
   interface ReceiptBuilt {
-    readonly receipts: { sessionId: string; text: string; headline?: string }[]
+    readonly receipts: { sessionId: string; text: string; wakeup?: boolean; headline?: string }[]
     failWith(cause: unknown): void
     escalate(): Promise<void>
   }
 
   /** 回执形态桩：ask 脚本化应答/故障 + notifyReceipt 捕获 */
   function receiptOf(escalation: LoopEscalation, answer: unknown): ReceiptBuilt {
-    const receipts: { sessionId: string; text: string; headline?: string }[] = []
+    const receipts: { sessionId: string; text: string; wakeup?: boolean; headline?: string }[] = []
     let cause: unknown
     const ask: EscalationAskFace = {
       ask: async () => {
@@ -241,8 +241,8 @@ describe('裁决回执（闭环断环修复——人已答必须有回响）', (
       escalate: () =>
         createUserQuestionsEscalation({
           ask,
-          notifyReceipt: async (sessionId, text, headline) => {
-            receipts.push({ sessionId, text, headline })
+          notifyReceipt: async (sessionId, text, options) => {
+            receipts.push({ sessionId, text, wakeup: options?.wakeup, headline: options?.headline })
           },
         }).escalate(escalation),
     }
@@ -267,6 +267,8 @@ describe('裁决回执（闭环断环修复——人已答必须有回响）', (
     expect(r.receipts[0]?.text).toContain('已收到「保持现状」')
     expect(r.receipts[0]?.text).toContain('保持当前状态')
     expect(r.receipts[0]?.headline).toBe('裁决已收到——保持现状')
+    // loop-event-delivery 回执唤醒径：send(nextStep, true)——含答案文本且即时唤醒
+    expect(r.receipts[0]?.wakeup).toBe(true)
   })
 
   it('选中「重新派发」→ 回执带 /run-dag-tasks <slug> 指引并明示不自动重启', async () => {
