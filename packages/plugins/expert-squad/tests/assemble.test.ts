@@ -87,6 +87,29 @@ async function post(route: FetchRouteLike, body: unknown): Promise<{ status: num
   return { status: res.status, json, text };
 }
 
+describe("bug 34a284e3: enable/disable 回包契约（换新档案而非 {ok:true}）", () => {
+  it("POST disable：回包 = 换新档案（enabled=false）且状态即时生效", async () => {
+    const ws = makeWorkspace();
+    const routes = await boot();
+    const result = await post(routeOf(routes, "disable"), { workspace: ws, key: KEY });
+    expect(result.status, `disable 应成功：${result.text}`).toBe(200);
+    const entry = result.json as { name?: string; enabled?: boolean };
+    expect(entry.name).toBe(KEY);
+    expect(entry.enabled, "回包档案 enabled=false（client defaultDetailMutations 契约）").toBe(false);
+  });
+
+  it("POST enable：回包 = 换新档案（enabled=true）", async () => {
+    const ws = makeWorkspace();
+    const routes = await boot();
+    await post(routeOf(routes, "disable"), { workspace: ws, key: KEY });
+    const result = await post(routeOf(routes, "enable"), { workspace: ws, key: KEY });
+    expect(result.status).toBe(200);
+    const entry = result.json as { name?: string; enabled?: boolean };
+    expect(entry.name).toBe(KEY);
+    expect(entry.enabled, "回包档案 enabled=true").toBe(true);
+  });
+});
+
 describe("bug 4ed8549f: expert update 通道装配（host 装配缝）", () => {
   it("POST update：档案写盘到 project 层 + 回包换新档案（enabled 在场）", async () => {
     const ws = makeWorkspace();

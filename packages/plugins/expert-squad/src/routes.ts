@@ -92,8 +92,8 @@ export interface ExpertRoutesDeps {
   list(workspace: string, includeDisabled: boolean): Promise<ExpertEntry[]>;
   /** 单专家取用（不存在/禁用 → 抛业务错，404/400 文本应答）。 */
   get(workspace: string, key: string): Promise<ExpertEntry>;
-  /** 启停切换（workspace 经 state 层 canonical 化后做禁用状态 key，D4）。 */
-  setEnabled(workspace: string, key: string, enabled: boolean): Promise<void>;
+  /** 启停切换（workspace 经 state 层 canonical 化后做禁用状态 key，D4）；成功返回换新档案。 */
+  setEnabled(workspace: string, key: string, enabled: boolean): Promise<ExpertEntry>;
   /** 档案 upsert（update 通道；持久化层由装配侧供给）。 */
   update(input: ExpertUpdateInput): Promise<ExpertEntry>;
 }
@@ -162,15 +162,15 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
     post("update", async (payload) =>
       deps.update(expertUpdateBodySchema.parse(payload)),
     ),
+    // 启停回包 = 换新档案（bug 34a284e3 契约收敛：client defaultDetailMutations 消费
+    // updated.enabled 切状态灯——{ok:true} 即渲染断链；与 update 路由同型）。
     post("enable", async (payload) => {
       const body = expertEnableBodySchema.parse(payload);
-      await deps.setEnabled(body.workspace, body.key, true);
-      return { ok: true };
+      return deps.setEnabled(body.workspace, body.key, true);
     }),
     post("disable", async (payload) => {
       const body = expertEnableBodySchema.parse(payload);
-      await deps.setEnabled(body.workspace, body.key, false);
-      return { ok: true };
+      return deps.setEnabled(body.workspace, body.key, false);
     }),
   ];
 }

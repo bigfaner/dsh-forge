@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import { parseExpertFile } from "./store/frontmatter.js";
-import { ExpertsRegistry } from "./registry.js";
+import { ExpertsRegistry, ExpertNotFoundError } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { serializeExpertMd } from "./tools.js";
@@ -99,11 +99,21 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
     list: async (workspace, includeDisabled) =>
       (await registryFor(workspace)).list({ includeDisabled }),
     get: async (workspace, key) => (await registryFor(workspace)).get(key),
+    // 启停（bug 34a284e3）：await registry.setEnabled（键不存在 fail-loud → 400）；
+    // 落盘失败仅降级告警（FMEA 内存态生效），回包 = 换新档案（含新 enabled）。
     setEnabled: async (workspace, key, enabled) => {
       const registry = await registryFor(workspace);
-      registry.setEnabled(key, enabled).catch((error) => {
+      try {
+        await registry.setEnabled(key, enabled);
+      } catch (error) {
+        if (error instanceof ExpertNotFoundError) throw error;
         console.warn(`[expert-squad] setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
-      });
+      }
+      const fresh = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === key);
+      if (fresh === undefined) throw new Error(`expert not found: ${key}`);
+      return fresh;
     },
     // 档案 upsert 写面（bug 4ed8549f 装配）：落点 = project 层 <workspace>/.dsh/experts/
     // <key>.md（面板 workspace 域内；对 user/plugin 层同键档案构成遮蔽——scan 层

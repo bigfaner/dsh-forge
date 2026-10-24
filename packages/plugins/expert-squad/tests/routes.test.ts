@@ -48,7 +48,7 @@ function makeDeps(): ExpertRoutesDeps & {
     if (key !== "code-reviewer") throw new Error(`expert not found: ${key}`);
     return { ...entry };
   });
-  const setEnabled = vi.fn(async () => {});
+  const setEnabled = vi.fn(async () => ({ ...entry }));
   const update = vi.fn(async (input) => ({ ...entry, ...input, enabled: true }));
   return { list, get, setEnabled, update } as never;
 }
@@ -129,6 +129,11 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
     );
     expect(res.status).toBe(200);
     expect(deps.setEnabled).toHaveBeenCalledWith("C:\\ws\\b", "code-reviewer", false);
+    const body = (await res.json()) as { name?: string; enabled?: boolean };
+    expect(body, "回包 = 换新档案（bug 34a284e3 契约，非 {ok:true}）").toMatchObject({
+      name: "code-reviewer",
+      enabled: true,
+    });
   });
 
   it("POST disable：非法载荷（缺 workspace / 空 key）→ 400 文本，handler 不运行", async () => {
