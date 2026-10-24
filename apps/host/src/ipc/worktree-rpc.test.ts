@@ -36,9 +36,9 @@ const fakeExt = {
   }),
 }
 
-/** 挂靠事件构造（跨 describe 共享——绑定哨兵/孤儿测试区共用） */
+/** 挂靠事件构造（跨 describe 共享——留痕/孤儿测试区共用） */
 const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
-/** 树 A 路径（跨 describe 共享常量——绑定哨兵/孤儿测试区共用） */
+/** 树 A 路径（跨 describe 共享常量——留痕/孤儿测试区共用） */
 const WT_A = 'C:/repo/.forge/worktrees/wt-a'
 
 /** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；headers 表驱动
