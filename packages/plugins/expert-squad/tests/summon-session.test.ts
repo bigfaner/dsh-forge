@@ -1,8 +1,10 @@
 // summon-session 单测（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话）：
 // workspace 锚取值径（同参同源 D4）+ openSummonSession 编排逐阶段（锚缺席降级引导 /
 // openWorkspace 失败 / beforeOpen 被取代 / HR 预设被拒引导 / 成功），mock 平台窄面。
+// 降级条阶段化文案口径（fix-14）：create/preset 阶段呈现用户可读人话文案，原始错误
+// 细节降级到 console.error 留痕，不直出 error.message 原文。
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   HR_PRESET_ID,
   openSummonSession,
@@ -72,15 +74,25 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
     expect(p.calls).toEqual([]);
   });
 
-  it("openWorkspace 抛错 = create 阶段失败（fail-soft，消息含原因）", async () => {
-    const p = platform({
-      openWorkspace: async () => {
-        throw new Error("unknown workspace");
-      },
-    });
-    const outcome = await openSummonSession(p, ROW);
-    expect(outcome).toMatchObject({ ok: false, stage: "create" });
-    if (!outcome.ok) expect(outcome.message).toContain("unknown workspace");
+  it("openWorkspace 抛错 = create 阶段失败（人话文案，原始错误 console 留痕不直出）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const p = platform({
+        openWorkspace: async () => {
+          throw new TypeError("Cannot read properties of undefined (reading 'client')");
+        },
+      });
+      const outcome = await openSummonSession(p, ROW);
+      expect(outcome).toMatchObject({ ok: false, stage: "create" });
+      if (!outcome.ok) {
+        expect(outcome.message).toContain("召唤会话打开失败");
+        expect(outcome.message).not.toContain("Cannot read properties");
+      }
+      expect(errSpy).toHaveBeenCalled();
+      expect(String(errSpy.mock.calls.flat().join(" "))).toContain("Cannot read properties");
+    } finally {
+      errSpy.mockRestore();
+    }
   });
 
   it("beforeOpen 被后续导航取代 = create 阶段失败（官方语义口径）", async () => {
@@ -89,30 +101,53 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
     expect(outcome).toMatchObject({ ok: false, stage: "create" });
   });
 
-  it("HR 预设被拒 = preset 阶段降级引导（文案含 preset-hr 装配提示）", async () => {
-    const p = platform({
-      selectPreset: async () =>
-        ({
-          ok: false,
-          error: { message: "preset not found", details: { reason: "not installed" } },
-        }) as SummonPresetSelectResult,
-    });
-    const outcome = await openSummonSession(p, ROW);
-    expect(outcome).toMatchObject({ ok: false, stage: "preset" });
-    if (!outcome.ok) {
-      expect(outcome.message).toContain("not installed");
-      expect(outcome.message).toContain("preset-hr");
+  it("HR 预设被拒 = preset 阶段人话引导（装配提示，拒绝细节 console 留痕不直出）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const p = platform({
+        selectPreset: async () =>
+          ({
+            ok: false,
+            error: { message: "preset not found", details: { reason: "not installed" } },
+          }) as SummonPresetSelectResult,
+      });
+      const outcome = await openSummonSession(p, ROW);
+      expect(outcome).toMatchObject({ ok: false, stage: "preset" });
+      if (!outcome.ok) {
+        expect(outcome.message).toContain("preset-hr");
+        expect(outcome.message).toContain("已装配");
+        expect(outcome.message).not.toContain("not installed");
+        expect(outcome.message).not.toContain("preset not found");
+      }
+      expect(errSpy).toHaveBeenCalled();
+      expect(String(errSpy.mock.calls.flat().join(" "))).toContain("not installed");
+    } finally {
+      errSpy.mockRestore();
     }
   });
 
-  it("selectPreset 抛错 = preset 阶段失败（fail-soft）", async () => {
-    const p = platform({
-      selectPreset: async () => {
-        throw new Error("remote down");
-      },
-    });
-    const outcome = await openSummonSession(p, ROW);
-    expect(outcome).toMatchObject({ ok: false, stage: "preset" });
-    if (!outcome.ok) expect(outcome.message).toContain("remote down");
+  it("selectPreset 抛错 = preset 阶段失败（人话文案，原始错误 console 留痕不直出）", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const p = platform({
+        selectPreset: async () => {
+          throw new TypeError("remote of undefined is not a function");
+        },
+      });
+      const outcome = await openSummonSession(p, ROW);
+      expect(outcome).toMatchObject({ ok: false, stage: "preset" });
+      if (!outcome.ok) {
+        expect(outcome.message).toContain("HR 预设切换失败");
+        expect(outcome.message).not.toContain("is not a function");
+      }
+      expect(errSpy).toHaveBeenCalled();
+      expect(String(errSpy.mock.calls.flat().join(" "))).toContain("is not a function");
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 });

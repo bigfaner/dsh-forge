@@ -58,11 +58,14 @@ export type SummonOutcome =
   | { readonly ok: true; readonly sessionId: string; readonly presetApplied: boolean }
   | { readonly ok: false; readonly stage: "workspace" | "create" | "preset"; readonly message: string };
 
-/** HR 预设缺席/被拒的降级引导（明确提示装配，不炸面板——裁决④）。 */
+/** HR 预设缺席/被拒的阶段化降级引导（人话文案——裁决④；拒绝细节 console 留痕不直出）。 */
 function presetRefusalMessage(result: SummonPresetSelectResult & { ok: false }): string {
-  const reason = result.error.details?.reason;
-  const detail = reason !== undefined && reason !== "" ? reason : result.error.message;
-  return `HR 预设切换被拒：${detail}——请确认 HR · 专家管理预设（preset-hr）已装配后再试`;
+  const reason = result.error.details?.reason ?? result.error.message;
+  console.error(
+    "[dsh-forge/expert-squad] HR preset select refused:",
+    reason,
+  );
+  return "HR 预设切换被拒——请确认 HR · 专家管理预设（preset-hr）已装配后再试";
 }
 
 /**
@@ -90,10 +93,13 @@ export async function openSummonSession(
       sessionId = id;
     });
   } catch (error) {
+    // Root cause（fix-14）：降级条直出原始错误文本（TypeError 原文）对用户不可读——
+    // 阶段化人话文案呈现，原始错误细节 console.error 留痕。
+    console.error("[dsh-forge/expert-squad] summon openWorkspace failed:", error);
     return {
       ok: false,
       stage: "create",
-      message: `召唤会话打开失败：${error instanceof Error ? error.message : String(error)}`,
+      message: "召唤会话打开失败，请稍后重试或检查工作区连接状态",
     };
   }
   if (sessionId === undefined) {
@@ -111,10 +117,11 @@ export async function openSummonSession(
     }
     return { ok: true, sessionId: id, presetApplied: true };
   } catch (error) {
+    console.error("[dsh-forge/expert-squad] summon selectPreset failed:", error);
     return {
       ok: false,
       stage: "preset",
-      message: `HR 预设切换失败：${error instanceof Error ? error.message : String(error)}`,
+      message: "HR 预设切换失败，请稍后重试",
     };
   }
 }
