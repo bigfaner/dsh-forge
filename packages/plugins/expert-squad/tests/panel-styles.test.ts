@@ -1,0 +1,28 @@
+// panel 样式令牌守门（fix-14）：错误态令牌必须用官方正名 --dsw-alias-state-error-primary
+//（全仓 126 处正名先例），禁用不存在的 --dsw-alias-state-danger-primary——var() 无效
+// 回落继承色，错误态文本双主题呈灰而非 Error 红。
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const stylesSource = readFileSync(
+  fileURLToPath(new URL("../src-client/panel/styles.ts", import.meta.url)),
+  "utf-8",
+);
+
+describe("panel styles 令牌正名（error-primary）", () => {
+  const ruleOf = (selector: string): string =>
+    stylesSource
+      .split("\n")
+      .find((line) => line.includes(selector + " {")) ?? "";
+
+  it("错误态面消费官方正名 --dsw-alias-state-error-primary（errorbar + dlg-err）", () => {
+    expect(ruleOf(".dswf-errorbar")).toContain("var(--dsw-alias-state-error-primary)");
+    expect(ruleOf(".dswf-dlg-err")).toContain("var(--dsw-alias-state-error-primary)");
+  });
+
+  it("不消费不存在的 --dsw-alias-state-danger-primary", () => {
+    expect(stylesSource).not.toContain("--dsw-alias-state-danger-primary");
+  });
+});
