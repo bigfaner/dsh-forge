@@ -26,6 +26,7 @@
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
 - **任何原生内存崩溃先查 commit charge 再定位进程**：症状族（exit 3221226505 / heap OOM / PowerShell 0x800705AF）在 commit ≥ 95% limit 时是环境级耗尽，崩在哪个进程纯看运气——对具体进程做配方排查即误诊。诊断命令与清理流程正本见 `docs/conventions/windows-commit-exhaustion.md`。根治已落地：worker 任意终态经进程树 Job Object 整树回收（`packages/plugin-forge/src/spawn/job-tree.ts`）；pagefile 扩容记录暂缓（用户裁决：记录不实施）。
 - **对目录做可继承 ACE 授权（icacls /grant (OI)(CI)）必须预铸时序 + 幂等短路 + 超时上界**：可继承 ACE 写入触发 NTFS 全子树物化传播——满树分钟级独占 1 核，空目录毫秒级；先建空目录授权再填充内容则文件出生即继承、零回溯成本。判例 bug f9a23367（曾阻塞会话发送链路）。正本见 `docs/conventions/ntfs-acl-grant-timing.md`。
+- **CDP 调试脚本统一放 `cdp/` 目录**（真机取证/驱动 renderer 的 eval、截图、探测脚本等），不散落 `.forge/tmp` 等临时位置；过程产物（截图、解压转储）不进 git（§5.2）。
 
 ## 3. UI 与设计
 
