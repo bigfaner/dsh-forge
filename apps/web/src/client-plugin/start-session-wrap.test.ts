@@ -1,9 +1,10 @@
-// installStartSessionWrap 单测（bug 绑错树·所见即所得契约）：
-// 官方壳「新建会话」无参 startSession 锚点 = currentWorkspaceId/recent，可落在树工作区，
-// blank 复用采纳/A2 显式树预铸双双绕过 hero chip 选中记忆 → 新会话绑到「上一个活跃的树」。
-// 修复（WYSIWYG）：无参径按 host 选中记忆（与 chip 回填同源）直接路由所选树的 workspace
-// （复用即所选树 blank；树 workspace 未建 = 直接预铸该树会话并打开）——会话一出生即属于
-// 所选树，零中间态。显示 ≡ 当前锚 / 未注册 / 判定链异常 → 官方原流零漂移。
+// installStartSessionWrap 单测（绑定推导制·入口锚定 workspaceId 直通——binding-derivation §2.3）：
+// 官方壳「新建会话」无参 startSession 锚点 = currentWorkspaceId/recent，可落在树工作区而绕过
+// hero chip 显示。修复：无参径按 chip 显示选中（forge:worktree/selected）解析所选树 workspaceId
+// （chip 双发数据源 WorktreeEntryDto.workspaceId 优先，官方 workspaces.list path 匹配回退），
+// 直通官方 startSession(workspaceId)——官方内部 session.create({workspaceId}) 原生 blank 复用，
+// 桌面创建零 forge 改道（预铸采纳单门已退役，依赖面无 forge 建会话通道）。
+// 显示 ≡ 当前锚 / 未注册 / 判定链异常 → 官方原流零漂移。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installStartSessionWrap, type StartSessionWrapDeps } from './start-session-wrap.js'
 
@@ -50,18 +51,18 @@ function fixture(options?: {
   resolveRoot?: string | null
   resolveRootThrows?: boolean
   selectedThrows?: boolean
-  createSession?: (cwd: string) => Promise<string>
-  createSessionThrows?: unknown
+  /** chip 双发数据源（WorktreeEntryDto.workspaceId）：path → workspaceId；缺省 = 行缺席（undefined） */
+  dtoWorkspaceId?: (worktreePath: string, projectRoot: string) => Promise<string | undefined>
+  dtoThrows?: boolean
 }) {
   const { sessionsList, workspacesList } = snapshotFaces(options)
   const original = vi.fn()
-  const openSession = vi.fn()
-  const createSession = vi.fn((cwd: string) => {
-    if (options?.createSessionThrows) return Promise.reject(options.createSessionThrows)
-    return (options?.createSession ?? (async () => 'S-precast'))(cwd)
+  const worktreeWorkspaceId = vi.fn((path: string, root: string) => {
+    if (options?.dtoThrows) return Promise.reject(new Error('list 失败'))
+    return (options?.dtoWorkspaceId ?? (async () => undefined))(path, root)
   })
   const deps: StartSessionWrapDeps = {
-    uiWorkspace: { startSession: original, openSession },
+    uiWorkspace: { startSession: original },
     sessionsList,
     workspacesList,
     resolveRoot: async () => {
@@ -72,13 +73,14 @@ function fixture(options?: {
       if (options?.selectedThrows) throw new Error('selected 失败')
       return options?.selected
     },
-    createSession: createSession as unknown as StartSessionWrapDeps['createSession'],
+    worktreeWorkspaceId: worktreeWorkspaceId as unknown as StartSessionWrapDeps['worktreeWorkspaceId'],
     warn: vi.fn(),
   }
   const dispose = installStartSessionWrap(deps)
-  return { original, openSession, createSession, warn: deps.warn as (m: string) => void, dispose, deps }
+  return { original, worktreeWorkspaceId, warn: deps.warn as (m: string) => void, dispose, deps }
 }
 
+/** 官方 workspaces.list 行集（workspaceId 回退解析源——DTO 缺席时的对位） */
 const WS_ROWS = (extra: ItemShape[] = []): ItemShape[] => [
   { workspaceId: ROOT_WS_ID, path: ROOT, sessionIds: [] },
   { workspaceId: TREE_A_WS_ID, path: TREE_A, sessionIds: [] },
@@ -86,82 +88,78 @@ const WS_ROWS = (extra: ItemShape[] = []): ItemShape[] => [
   ...extra,
 ]
 
-describe('installStartSessionWrap（bug 绑错树·所见即所得：新会话锚定 chip 所选树）', () => {
+/** DTO 数据源（WorktreeEntryDto.workspaceId——forge:worktree/list 行集窄镜像） */
+const DTO_ROWS = (extra: Array<{ path: string; workspaceId: string }> = []) => {
+  const rows = new Map(extra.map((row) => [row.path, row.workspaceId]))
+  return async (worktreePath: string): Promise<string | undefined> => rows.get(worktreePath)
+}
+
+describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId 直通 + 显示源路由保留）', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('① 显式 workspaceId = 官方原流透传（项目行新会话钮径零介入）', async () => {
-    const f = fixture({
-      currentSessionId: 'S1',
-      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
-      selected: ROOT,
-    })
-    await f.deps.uiWorkspace.startSession!(ROOT_WS_ID)
-    expect(f.original).toHaveBeenCalledWith(ROOT_WS_ID)
-    expect(f.createSession).not.toHaveBeenCalled()
-  })
-
-  it('② 核心修复：锚在树 A、chip 选中树 B → 路由 B 的 workspace（复用池对齐所见）', async () => {
+  it('① 显式 workspaceId = 官方直通零介入（chip 双发径显式传参——判定链零触发）', async () => {
     const f = fixture({
       currentSessionId: 'S1',
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       selected: TREE_B,
     })
-    await f.deps.uiWorkspace.startSession!()
+    await f.deps.uiWorkspace.startSession!(TREE_B_WS_ID)
     expect(f.original).toHaveBeenCalledTimes(1)
     expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
-    expect(f.createSession).not.toHaveBeenCalled()
-    expect(f.openSession).not.toHaveBeenCalled()
+    expect(f.worktreeWorkspaceId).not.toHaveBeenCalled()
   })
 
-  it('③ chip 选中主根 → 路由根 workspace（复用根 blank = 所选树本体，非占位）', async () => {
+  it('② 核心语义：锚在树 A、chip 显示树 B → 按显示选中的 workspaceId 直通官方（零 forge 改道）', async () => {
+    const f = fixture({
+      currentSessionId: 'S1',
+      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+      selected: TREE_B,
+      dtoWorkspaceId: DTO_ROWS([{ path: TREE_B, workspaceId: TREE_B_WS_ID }]),
+    })
+    await f.deps.uiWorkspace.startSession!()
+    // 调用形态钉：官方 startSession 收到显式 workspaceId（官方内部 session.create({workspaceId})）
+    expect(f.original).toHaveBeenCalledTimes(1)
+    expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID)
+    // 数据源钉：workspaceId 取自 chip 双发 DTO（WorktreeEntryDto.workspaceId）
+    expect(f.worktreeWorkspaceId).toHaveBeenCalledWith(TREE_B, ROOT)
+  })
+
+  it('③ DTO 回退：chip 双发数据源行缺席 → 官方 workspaces.list path 归一匹配直通', async () => {
+    const f = fixture({
+      currentSessionId: 'S1',
+      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+      selected: TREE_B,
+      dtoWorkspaceId: async () => undefined, // DTO 行缺席（漂移/旧 host）
+    })
+    await f.deps.uiWorkspace.startSession!()
+    expect(f.original).toHaveBeenCalledWith(TREE_B_WS_ID) // 回退源命中同一树
+  })
+
+  it('④ chip 显示主根 → 直通根 workspace（官方 blank 复用即主树，非占位）', async () => {
     const f = fixture({
       currentSessionId: 'S1',
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       selected: ROOT,
+      dtoWorkspaceId: DTO_ROWS([{ path: ROOT, workspaceId: ROOT_WS_ID }]),
     })
     await f.deps.uiWorkspace.startSession!()
     expect(f.original).toHaveBeenCalledWith(ROOT_WS_ID)
   })
 
-  it('④ 所选树 workspace 未建（行缺席）→ 直接预铸该树会话 + openSession（所见即所得零中间态）', async () => {
-    const f = fixture({
-      currentSessionId: 'S1',
-      items: [
-        { workspaceId: ROOT_WS_ID, path: ROOT, sessionIds: [] },
-        { workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] },
-      ],
-      selected: TREE_B,
-    })
-    await f.deps.uiWorkspace.startSession!()
-    expect(f.createSession).toHaveBeenCalledTimes(1)
-    expect(f.createSession).toHaveBeenCalledWith(TREE_B)
-    expect(f.openSession).toHaveBeenCalledWith('S-precast')
-    expect(f.original).not.toHaveBeenCalled()
-  })
-
-  it('⑤ 显示 ≡ 当前锚（用户就在所选树里）→ 官方原流（既有 blank 复用本即所见即所得）', async () => {
+  it('⑤ 显示 ≡ 当前锚：workspaceId 解析在场仍显式直通（与官方原流同效——既有 blank 复用即所见）', async () => {
     const f = fixture({
       currentSessionId: 'S1',
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       selected: TREE_A,
+      dtoWorkspaceId: DTO_ROWS([{ path: TREE_A, workspaceId: TREE_A_WS_ID }]),
     })
     await f.deps.uiWorkspace.startSession!()
-    expect(f.original).toHaveBeenCalledTimes(1)
-    expect(f.original).toHaveBeenCalledWith(undefined)
-    expect(f.createSession).not.toHaveBeenCalled()
+    expect(f.original).toHaveBeenCalledWith(TREE_A_WS_ID)
   })
 
-  it('⑥ 零介入矩阵：未注册项目 / 判定面漂移 / 记忆缺席回落主根命中当前锚 → 官方原流或同效路由', async () => {
-    // 无当前会话 + recent=树 A + 记忆缺席（回落主根 ≠ 锚 → 路由根 workspace）
-    const heroMemoryAbsent = fixture({
-      currentSessionId: undefined,
-      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S9'] }]),
-      selected: undefined,
-    })
-    await heroMemoryAbsent.deps.uiWorkspace.startSession!()
-    expect(heroMemoryAbsent.original).toHaveBeenCalledWith(ROOT_WS_ID)
+  it('⑥ 零介入矩阵：未注册项目 / 记忆缺席回落主根 / 官方锚缺席 / workspaceId 解析缺席 → 官方原流', async () => {
     // 未注册项目（resolveRoot null）
     const foreign = fixture({
       currentSessionId: 'S1',
@@ -171,42 +169,62 @@ describe('installStartSessionWrap（bug 绑错树·所见即所得：新会话�
     })
     await foreign.deps.uiWorkspace.startSession!()
     expect(foreign.original).toHaveBeenCalledWith(undefined)
-    // 目标 workspace 在快照查无（漂移容错）→ recent 亦无 → 官方原流
-    const noPath = fixture({ currentSessionId: 'S1', items: [], selected: TREE_A })
-    await noPath.deps.uiWorkspace.startSession!()
-    expect(noPath.original).toHaveBeenCalledWith(undefined)
-    expect(foreign.createSession).not.toHaveBeenCalled()
-    expect(noPath.createSession).not.toHaveBeenCalled()
+    // 显示选中缺席 → 回落项目根；DTO 与官方行集均未命中（无 workspace 行）→ 官方原流
+    const noHit = fixture({ currentSessionId: 'S1', items: [], selected: undefined })
+    await noHit.deps.uiWorkspace.startSession!()
+    expect(noHit.original).toHaveBeenCalledWith(undefined)
+    // 记忆缺席 + 回落主根命中官方行集 → 直通根 workspace（显示 ≡ chip 缺省主行同判）
+    const memoryAbsent = fixture({
+      currentSessionId: undefined,
+      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S9'] }]),
+      selected: undefined,
+    })
+    await memoryAbsent.deps.uiWorkspace.startSession!()
+    expect(memoryAbsent.original).toHaveBeenCalledWith(ROOT_WS_ID)
+    expect(foreign.worktreeWorkspaceId).not.toHaveBeenCalled() // 未注册项目零解析
   })
 
-  it('⑦ 判定链异常 fail-open：selected/resolveRoot/createSession 抛错 → warn + 官方原流', async () => {
+  it('⑦ fail-open：DTO 抛错回退官方行集 / DTO 与回退双缺席 / 判定链异常 → 官方原流', async () => {
     const base = {
       currentSessionId: 'S1',
       items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
       selected: TREE_B,
     }
+    // DTO 抛错 → 回退官方行集命中 → 直通
+    const dtoThrow = fixture({ ...base, dtoThrows: true })
+    await dtoThrow.deps.uiWorkspace.startSession!()
+    expect(dtoThrow.original).toHaveBeenCalledWith(TREE_B_WS_ID)
+    expect(dtoThrow.warn).not.toHaveBeenCalled()
+    // 双缺席 → 官方原流（零 warn——解析缺席 = 现状同判）
+    const bothAbsent = fixture({ ...base, dtoWorkspaceId: async () => undefined, items: [] })
+    await bothAbsent.deps.uiWorkspace.startSession!()
+    expect(bothAbsent.original).toHaveBeenCalledWith(undefined)
+    // resolveRoot/selectedTree 抛错 = 意图不可知 → 静默官方原流
+    const resolveThrow = fixture({ ...base, resolveRootThrows: true })
+    await resolveThrow.deps.uiWorkspace.startSession!()
+    expect(resolveThrow.original).toHaveBeenCalledWith(undefined)
     const selThrow = fixture({ ...base, selectedThrows: true })
     await selThrow.deps.uiWorkspace.startSession!()
     expect(selThrow.original).toHaveBeenCalledWith(undefined)
-    expect(selThrow.warn).not.toHaveBeenCalled() // 记忆读失败 = 意图不可知 → 静默官方原流
-    const resolveThrow = fixture({ ...base, resolveRootThrows: true })
-    await resolveThrow.deps.uiWorkspace.startSession!()
-    expect(resolveThrow.original).toHaveBeenCalledWith(undefined) // resolve 失败 = 未注册同判（fail-soft 零 warn）
-    const createThrow = fixture({
-      currentSessionId: 'S1',
-      items: [
-        { workspaceId: ROOT_WS_ID, path: ROOT, sessionIds: [] },
-        { workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] },
-      ],
-      selected: TREE_B, // 树 B workspace 未建 → 预铸径（抛错 → fail-open）
-      createSessionThrows: new Error('预铸失败'),
-    })
-    await createThrow.deps.uiWorkspace.startSession!()
-    expect(createThrow.original).toHaveBeenCalledWith(undefined)
-    expect(createThrow.warn).toHaveBeenCalledTimes(1)
+    expect(selThrow.warn).not.toHaveBeenCalled()
   })
 
-  it('⑧ dispose 恢复原方法且幂等；缺席 startSession 面 = no-op 安装', async () => {
+  it('⑧ 路由链意外异常 fail-loud → warn 一行 + 官方原流', async () => {
+    const f = fixture({
+      currentSessionId: 'S1',
+      items: WS_ROWS([{ workspaceId: 'x', path: TREE_A, sessionIds: ['S1'] }]),
+      selected: TREE_B,
+    })
+    // workspacesList 快照抛错（官方面漂移）→ then/catch 兜底
+    ;(f.deps.workspacesList as { getSnapshot: () => unknown }).getSnapshot = () => {
+      throw new Error('快照漂移')
+    }
+    await f.deps.uiWorkspace.startSession!()
+    expect(f.original).toHaveBeenCalledWith(undefined)
+    expect(f.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('⑨ dispose 恢复原方法且幂等；缺席 startSession 面 = no-op 安装', async () => {
     const f = fixture({ currentSessionId: 'S1', selected: ROOT })
     f.dispose()
     f.dispose()
