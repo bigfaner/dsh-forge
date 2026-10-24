@@ -81,20 +81,22 @@ export interface RebindOrchestrationDeps {
 }
 
 /**
- * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
- * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → switchToProduct
- * 切换 → **事件驱动等官方切换落定**（账本订阅推送 mainView 在留通知，零轮询）→ 旧 blank
- * 归档。归档前置确认（bug ff324cad 症状：归档仍居 main 的会话，官方投影对账释放 main →
- * 弹回 hero）：awaitSwitchSettled false = 本轮跳过归档（残留交由下次旅程 recycle/reroute
- * 清理）。无可换绑 blank = 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状）。
+ * 点选即换绑编排（同步编排——用户裁决 2026-10-24「点选即换绑改成同步编排」）：活跃会话为
+ * 可换绑 blank（任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 →
+ * switchToProduct 切换，**关键段到此为止**——本函数 resolve 即切换已落调用；落定确认
+ * （事件驱动等 mainView 在留）与旧 blank 归档转后台分离（fire-and-forget，不阻塞选中
+ * 返回——归档前置确认只影响清场时机，不影响所见即所得）。无可换绑 blank = 零编排
+ * （纯选中态）；失败原样上抛（调用方 fail-soft 退现状）。
  */
 export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
   const staleBlankId = await deps.rebindableBlankId()
   if (staleBlankId === undefined) return
   const product = await deps.sessionCreate(path)
   deps.switchToProduct(path, product.sessionId)
-  if (!(await deps.awaitSwitchSettled(product.sessionId))) return // 未落定跳过归档
-  await deps.archiveSession(staleBlankId)
+  void deps
+    .awaitSwitchSettled(product.sessionId)
+    .then((settled) => (settled ? deps.archiveSession(staleBlankId) : undefined))
+    .catch(() => {})
 }
 
 /**
@@ -259,16 +261,20 @@ export function ForgeHeroWorktreeMount({
   // 在最终会话，侧栏全程只见一个会话，发送时零重路由。任一环节失败 fail-soft 静默退回
   // 现状（发送时必绑重路由兜底）。
   const maybeRebind = useCallback(
-    (path: string): void => {
-      if (rebindFace === undefined || projectRoot === null) return
-      if (rebindInFlight.current) return // 在途闸：快速连点零并发编排（记忆已更新，漏拍由发送时重路由兜底）
+    (path: string): Promise<void> => {
+      if (rebindFace === undefined || projectRoot === null) return Promise.resolve()
+      if (rebindInFlight.current) return Promise.resolve() // 在途闸：快速连点零并发编排（记忆已更新）
       rebindInFlight.current = true
-      void rebindOnSelect(path, {
+      return rebindOnSelect(path, {
         rebindableBlankId: async () => {
           const activeId = rebindFace.activeSessionId()
-          if (activeId === undefined || !rebindFace.isBlank(activeId)) return undefined // 非 blank：真会话零编排
+          if (activeId === undefined) return undefined
           const seal = await makeRpc().worktree.seal({ sessionId: activeId })
           if (!seal.isGit || seal.binding === null) return undefined // 无绑定（官方域）：零编排
+          // blank 判读双源：seal.blank（host 事件判读——账本标志 host 重启恢复后失真，
+          // bug c931aa28 同族实证）优先；缺席（旧 host）回退账本标志
+          const blank = seal.blank ?? rebindFace.isBlank(activeId)
+          if (!blank) return undefined // 非 blank：真会话零编排
           if (cwdKey(seal.binding.worktreePath) === cwdKey(path)) return undefined // 已绑目标树：零编排
           return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
         },
@@ -316,7 +322,7 @@ export function ForgeHeroWorktreeMount({
         },
       })
         .catch(() => {
-          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送时重路由兜底）
+          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送哨兵提示兜底）
         })
         .finally(() => {
           rebindInFlight.current = false
@@ -339,7 +345,10 @@ export function ForgeHeroWorktreeMount({
         return
       }
       applySelection(path)
-      maybeRebind(path)
+      // 同步编排（用户裁决 2026-10-24）：关键段 = 预铸显示树会话 + 切换——本调用链内联
+      // 等待到切换发出；落定确认/归档在 rebindOnSelect 内部转后台。onSelect 消费面
+      // （HeroWorktreePicker）忽略 promise，零签名漂移。
+      void maybeRebind(path)
     },
     [phase, riskDismissed, riskConfirmedLatch, applySelection, maybeRebind],
   )

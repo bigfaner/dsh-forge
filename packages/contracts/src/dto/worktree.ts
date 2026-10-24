@@ -147,6 +147,9 @@ export interface WorktreeSealResult {
   /** 归并项目根（ahead/behind 懒加载 cwd；无绑定 = 缺席） */
   readonly projectRoot?: string
   readonly worktreeName?: string
+  /** blank 判读（host 事件判读——turn 缺席 = true；缺席 = 未判/旧 host 形态）。
+   *  点选即换绑的可换绑判读源：账本 blank 标志在 host 重启恢复后可能失真，以事件为准 */
+  readonly blank?: boolean
 }
 
 /**

@@ -591,6 +591,9 @@ export function createWorktreeRpcService(deps: {
       binding: { worktreePath: binding.worktreePath, branch: binding.branch },
       projectRoot: resolution.projectRoot,
       worktreeName: worktreeNameOf(binding.worktreePath),
+      // blank 事件判读（点选即换绑可换绑判读源——账本 blank 标志 host 重启恢复后失真，
+      // bug c931aa28 同族实证；读失败 = false fail-closed 不误换绑）
+      blank: await blankOf(request.sessionId),
     }
   }
 
