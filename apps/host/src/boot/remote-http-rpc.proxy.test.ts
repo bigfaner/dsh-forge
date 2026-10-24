@@ -341,6 +341,42 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect(seenAgents).toEqual([{ id: 's-live' }, {}])
   })
 
+  it('commands-execute：sessionId 解析活 agent 后按官方四参 execute(agent, line, submittedAttachments, signal) 直调（签名失配 = admission miss 静默根因）', async () => {
+    const seen: unknown[][] = []
+    const commands = {
+      list: async () => [],
+      execute: async (...args: unknown[]) => (seen.push(args), { commandId: 'c-1', result: { kind: 'success' } }),
+    }
+    const base = proxyDeps({ commands: commands as never })
+    const session = {
+      ...(base.session as Record<string, unknown>),
+      resolveAgent: async (id: string) => (id === 's-live' ? { agent: { id } } : { error: { code: 'session/not-found' } }),
+    }
+    const res = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.commandsExecute, payload: { sessionId: 's-live', line: '/run-dag-tasks feat-x', submittedAttachments: [] } }) as never,
+      res,
+      deps({ proxy: { ...base, session: session as never } }),
+    )
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { commandId: string } | null }
+    expect(parsed.ok).toBe(true)
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.[0]).toEqual({ id: 's-live' })
+    expect(seen[0]?.[1]).toBe('/run-dag-tasks feat-x')
+    expect(seen[0]?.[2]).toEqual([])
+    expect(seen[0]?.[3]).toBeDefined()
+    expect(parsed.data?.commandId).toBe('c-1')
+
+    // agent 解析失败（error 形）= admission miss 静默（data: null，不外抛）
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.commandsExecute, payload: { sessionId: 's-gone', line: '/run-dag-tasks feat-x', submittedAttachments: [] } }) as never,
+      res2,
+      deps({ proxy: { ...base, session: session as never } }),
+    )
+    expect((JSON.parse(res2.body) as { ok: boolean }).ok).toBe(true)
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))
