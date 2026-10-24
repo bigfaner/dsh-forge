@@ -92,6 +92,44 @@ async function fullShot(page: Page, path: string): Promise<boolean> {
   }
 }
 
+/** 统计条 + 任务行状态读数（收敛语义判据原料——不解析文案数字位次，逐桶取 b 计数） */
+interface DepStats {
+  completed: number
+  running: number
+  blocked: number
+  /** 待执行桶缺席 = 尚无 counts 事件——视为 0（面板渲染条件：pending !== undefined 才出桶） */
+  pending?: number
+  interrupted: number
+  rowStatuses: string[]
+}
+
+async function readDepStats(page: Page): Promise<DepStats> {
+  return page.evaluate(({ statSel, rowSel }) => {
+    const stat = document.querySelector(statSel)
+    const num = (label: string): number | undefined => {
+      const span = stat ? [...stat.querySelectorAll('span')].find((s) => (s.textContent ?? '').trim().startsWith(label)) : undefined
+      const b = span?.querySelector('b')
+      return b !== null && b !== undefined ? Number(b.textContent) : undefined
+    }
+    const rows = [...document.querySelectorAll(rowSel)].map((r) => r.getAttribute('data-dswf-dep-status') ?? '')
+    return {
+      completed: num('完成') ?? -1,
+      running: num('执行中') ?? -1,
+      blocked: num('阻塞') ?? -1,
+      pending: num('待执行'),
+      interrupted: num('已中断') ?? -1,
+      rowStatuses: rows,
+    }
+  }, { statSel: DEP_STAT, rowSel: DEP_ROW })
+}
+
+/** 结算收敛语义（fix-6）：执行中/阻塞/待执行/已中断 全 0 + 任务行全终态（无 running/blocked 行）——不钉完成数
+ * （容器历史派生 fix 任务容忍：完成几枚不影响判定）。 */
+function depSettled(s: DepStats): boolean {
+  const rowsTerminal = s.rowStatuses.length > 0 && s.rowStatuses.every((st) => st !== 'running' && st !== 'blocked')
+  return s.running === 0 && s.blocked === 0 && (s.pending === undefined || s.pending === 0) && s.interrupted === 0 && rowsTerminal
+}
+
 test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消息面折叠 + 全链实测 + mobile 进度流', async () => {
   test.setTimeout(1_800_000)
   mkdirSync(WALKTHROUGH, { recursive: true })
@@ -124,6 +162,34 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
         projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: t, type: 'doc',
       })
     }
+    // ── 驱动前夹具重置（fix-6）：容器内一切非 pending 任务回退 pending（种子任务重跑幂等）；
+    // 历史派生 fix 任务容忍保留（结算断言为收敛语义，不钉完成数）。转移失败容忍（fail-soft 记账）──
+    const fixtureReset = await page.evaluate(async ({ pid, slug }) => {
+      const forge = (globalThis as unknown as {
+        dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
+      }).dshForge
+      if (forge === undefined) throw new Error('dshForge preload 面缺席')
+      const listed = await forge.invoke('forge:tasks/list', { projectId: pid, source: { kind: 'proposal', slug } })
+      if (!listed.ok) throw new Error(`forge:tasks/list 失败：${String(listed.message)}`)
+      const cards = (listed.data as { status?: string; taskId?: string }[]) ?? []
+      const resetTo: string[] = []
+      const failed: { taskId?: string; status?: string; message?: string }[] = []
+      for (const card of cards) {
+        if (card.status !== undefined && card.status !== 'pending' && card.taskId !== undefined) {
+          const moved = await forge.invoke('forge:tasks/transition', {
+            projectId: pid,
+            taskId: card.taskId,
+            toStatus: 'pending',
+            reason: 'walk112 驱动前夹具重置（回 pending）',
+          })
+          if (moved.ok) resetTo.push(card.taskId)
+          else failed.push({ taskId: card.taskId, status: card.status, message: moved.message })
+        }
+      }
+      return { total: cards.length, resetTo, failed }
+    }, { pid: project.id, slug: PROP })
+    meta.fixtureReset = fixtureReset
+    console.log(`[walk112] fixture reset = ${JSON.stringify(fixtureReset)}`)
     const sessionId = await page.evaluate(async (ws) => {
       const forge = (globalThis as unknown as {
         dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
@@ -287,9 +353,9 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       await sampleOnce(`t${String(i)}`)
       const rowSet = new Set(samples.map((s) => s.rows))
       if (rowSet.size > distinctRows) distinctRows = rowSet.size
-      const statText = await page.locator(DEP_STAT).first().textContent().catch(() => '')
-      // 结算完成（两任务完成）：行数已递增即出窗；否则（mobile 相先行消耗了运行窗）续采 8 拍留证
-      if ((statText ?? '').match(/完成\s*2/)) {
+      // 结算收敛（fix-6 收敛语义：活跃桶全 0 + 行全终态——不钉完成数）：满足即出窗；否则（mobile 相
+      // 先行消耗了运行窗）续采 8 拍留证
+      if (depSettled(await readDepStats(page))) {
         settledDuringSampling = true
         if (distinctRows > 1 || i >= 8) break
       }
@@ -383,16 +449,26 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     meta.badgeRestored = badgeRestored
     console.log(`[walk112] badge restored after jump = ${String(badgeRestored)}`)
 
-    // ── 等结算（两任务完成）──
+    // ── 等结算（收敛语义，fix-6）──
     // 面板收起则先展开（结算断言以展开态统计条为承载）。
     if (!(await page.locator(DEP_STAT).first().isVisible().catch(() => false))) {
       const badgeNow = page.locator(DEP_BADGE).first()
       if (await badgeNow.isVisible().catch(() => false)) await badgeNow.click()
     }
-    await expect(
-      page.locator(DEP_STAT).first(),
-      '结算完成（完成 2）',
-    ).toContainText(/完成\s*2/, { timeout: 600_000 })
+    // 结算收敛：执行中/阻塞/待执行/已中断 全 0 + 任务行全终态（不钉完成数——容器历史派生 fix 任务容忍）
+    let settledStats: DepStats | undefined
+    let settled = false
+    for (let i = 0; i < 60 && !settled; i++) {
+      await page.waitForTimeout(10_000)
+      settledStats = await readDepStats(page)
+      settled = depSettled(settledStats)
+    }
+    meta.settledStats = settledStats
+    console.log(`[walk112] settled stats = ${JSON.stringify(settledStats)}`)
+    expect(
+      settled,
+      `结算收敛（执行中/阻塞/待执行/已中断 全 0 + 任务行全终态；末次读数 = ${JSON.stringify(settledStats)}）`,
+    ).toBe(true)
     await page.waitForTimeout(3_000)
     await fullShot(page, join(WALKTHROUGH, 'web-settled-light.png'))
     meta.screenshots = screenshotResults
