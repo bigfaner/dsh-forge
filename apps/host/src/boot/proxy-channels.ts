@@ -98,10 +98,10 @@ export interface ProxyUserQuestionsBridge {
   pendingFor(sessionId: string): readonly { readonly callId: string; readonly questions: unknown }[]
 }
 
-/** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门） */
+/** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门——
+ *  建会话单门已退役：mobile 建会话走 forge:proxy/session-create（sessionController 直调）） */
 export interface ProxyWorktreeFace {
   list(request: { readonly projectRoot: string }): Promise<{ readonly isGit: boolean; readonly worktreeDir?: string; readonly entries: readonly WorktreeEntryDto[] }>
-  sessionCreate?(request: unknown): Promise<unknown>
 }
 
 /** agentPreset registry 消费切片（官方 remoteExportList roster + select 换预设） */
@@ -511,15 +511,12 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       }
       return result
     },
-    // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单与建会话
-    // 正门 not-found）。sessionCreate = 预铸采纳单门（host 建会话守卫内建），缺席缝 fail-soft。
+    // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单 not-found）。
+    // 建会话预铸单门（WORKTREE_CHANNELS.sessionCreate）已退役——mobile 建会话统一走
+    // PROXY_CHANNELS.sessionCreate（上方 dispatch('create')——sessionController 进内直调）。
     [WORKTREE_CHANNELS.list]: async (payload) => {
       const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
       return requireMethod(worktrees.list, 'worktree.list').bind(worktrees)(asRecord(payload) as never)
-    },
-    [WORKTREE_CHANNELS.sessionCreate]: async (payload) => {
-      const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
-      return requireMethod(worktrees.sessionCreate, 'worktree.sessionCreate').bind(worktrees)(asRecord(payload) as never)
     },
   }
 }

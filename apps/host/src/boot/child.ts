@@ -82,9 +82,7 @@ import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
   createWorktreeRpcService,
-  interceptRequiredBinding,
   interceptSessionSends,
-  verifySendGuardInstalled,
   type LiveSessionFace,
   type SessionControllerFace,
   type SessionPersistenceFace,
@@ -93,7 +91,7 @@ import {
 // fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
 // @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
 import type {} from '@dsh-forge/git-worktree'
-import { FORGE_EVENT_CHANNELS, type ProjectService } from '@dsh-forge/contracts'
+import { type ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -102,10 +100,8 @@ import {
   createDiagContextStore,
   emitDiag,
   relayDiagOverBridge,
-  runWithDiagContext,
 } from '../telemetry/index.js'
 import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
-import type { PromptTraceSpan } from '../ipc/worktree-rpc.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -158,14 +154,6 @@ const diag = (line: string): void => {
 
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），
 // boot 完成后置换为真处理器；listen 常驻不拆（消息零丢失窗）。
-/** trace_id 生成（child 侧——链 B prompt 入口；crypto.randomUUID 同 preload 口径） */
-const newTraceIdChild = (): string => {
-  try {
-    return globalThis.crypto.randomUUID()
-  } catch {
-    return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  }
-}
 let handleMessage: (message: MainToChildMessage) => void = () => {}
 process.on('message', (message: unknown) => {
   handleMessage(message as MainToChildMessage)
@@ -538,9 +526,6 @@ async function main(): Promise<void> {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
     }
     try {
-      // W2 缺席拒绝面判定源：60s 能力轮询放弃路径盖 'absent'（注入 createWorktreeRpcService
-      // ——sessionCreate/prompt 两入口据此判定是否跑 core git 探针显式拒绝）。
-      let worktreeGuardState: 'absent' | undefined
       // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
       // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
       // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
@@ -579,20 +564,9 @@ async function main(): Promise<void> {
       }
       const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
         gitWorktree: getGitWorktree as never,
-        guardState: () => worktreeGuardState,
-        sessionController,
         sessionPersistence,
         workspaceRegistry: getWorkspaceRegistry as never,
-        // 绑定失配哨兵发射缝（WYSIWYG）：event 信封经 process.send 进主侧事件链
-        // （bridge → webContents.send → preload 订阅面 → 客户端 toast）。IPC 缺席静默。
-        emitSessionBindingMismatch: (event) => {
-          process.send?.({
-            type: 'event',
-            channel: FORGE_EVENT_CHANNELS.sessionBindingMismatch,
-            payload: event,
-          })
-        },
-        // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
+        // 绑定表失效锚（worktree 集合变化——建/删树）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
         // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
@@ -624,35 +598,6 @@ async function main(): Promise<void> {
           }
           await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
         },
-        // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
-        // adopt = resume 既有日志 → 官方恢复链补 end-seed → permission 钉档走「已种子化」
-        // 分支按组合缺省落档，绕过 defaultPreset（设置>通用>权限）。官方正缝修正：live
-        // session 上经 permissionPresets.set（UI 选择器同径公共 API）补钉解析后的用户缺省
-        // 档；服务/会话缺席、已同档或 custom = no-op fail-soft。
-        onSessionAdopted: async (sessionId: string) => {
-          let presets: unknown
-          let sessions: unknown
-          try {
-            presets = servicesFace.get('permissionPresets')
-            sessions = servicesFace.get('sessions')
-          } catch {
-            return
-          }
-          const face = presets as
-            | {
-                readonly defaultPreset: string
-                current(session: unknown): string
-                set(session: unknown, name: string): void
-              }
-            | undefined
-          const store = sessions as { get(id: string): unknown } | undefined
-          if (face === undefined || store === undefined) return
-          const session = store.get(sessionId)
-          if (session === undefined) return
-          const target = face.defaultPreset
-          if (target === 'custom' || face.current(session) === target) return
-          face.set(session, target)
-        },
         // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
         bindWarnDiag: sessionBindWarnDiag,
         // binding-derivation §2.2：session/created 监听装配缝（官方事件——fork 亦发布，同径
@@ -674,9 +619,6 @@ async function main(): Promise<void> {
           }
         },
         warn: (line) => diag(line),
-        // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
-        // failOpenDiag = diag 双轨 + emitDiag（ALS 上下文内被调 → 行带链 B trace_id）。
-        failOpenDiag,
         // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
         createDiag: worktreeCreateDiag,
         // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
@@ -696,24 +638,9 @@ async function main(): Promise<void> {
           return
         }
         const disposers: Array<() => void> = []
-        // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
-        const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
         disposers.push(
           interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), failOpenDiag),
         )
-        // 1.30 第二层必绑拦截（A2/G2 拒绝 + 编排重路由；A5 cwd 漂移拒绝）——叠加封存层之上
-        const guard = worktreeRpc.requiredBindingGuard()
-        if (guard !== undefined) {
-          // app-observability 1.2 链 B：prompt dispatch 入口生成 trace_id + ALS 包裹整链
-          const traceSpan: PromptTraceSpan = {
-            next: () => newTraceIdChild(),
-            run: <T,>(traceId: string, sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
-              runWithDiagContext(diagAls, { traceId, sessionId }, fn),
-          }
-          disposers.push(interceptRequiredBinding(sessionController, guard, failOpenDiag, traceSpan))
-        } else {
-          diag('[git-worktree] 必绑拦截 guard 缺席（sessionPersistence 缺席）——仅封存层接线')
-        }
         revokeWorktreeSendGuard = () => {
           for (const dispose of disposers) {
             try {
@@ -723,10 +650,6 @@ async function main(): Promise<void> {
             }
           }
         }
-        // W4 装载自证（session-binding-guarantee §W4）：wrap 换芯读回——controller.prompt 已换
-        // （≠ 装配前留底）+ 必绑 guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛
-        // （不静默降级为无拦截宿主）。
-        verifySendGuardInstalled(sessionController, { promptBefore, guardPresent: guard !== undefined })
       }
       const wrapGate = setInterval(() => {
         if (getGitWorktree() !== undefined) {
@@ -738,12 +661,7 @@ async function main(): Promise<void> {
       setTimeout(() => {
         clearInterval(wrapGate)
         if (!sendGuardInstalled) {
-          // W2 能力缺席 fail-closed 收口：盖缺席状态位 + 接线拒绝面（judge/sessionCreate
-          // 入口对 git 项目显式拒绝；非 git 探针 null 走官方原流零差异）。能力在场路径
-          // （wrapGate 命中先行安装）零改动。
-          worktreeGuardState = 'absent'
-          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——guardState 盖 absent，缺席拒绝面接线')
-          installSendGuard()
+          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——发送拦截保持零装配（零 wrap 零固定税）')
         }
       }, 60_000).unref?.()
     } catch (cause) {
@@ -965,8 +883,6 @@ async function main(): Promise<void> {
                     ? undefined
                     : {
                         list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request),
-                        // bug a1e087a6：hero 透传建会话正门（预铸采纳单门——host 守卫内建）
-                        sessionCreate: (request: unknown) => worktreeRpcService!.sessionCreate(request as never),
                       }
                 },
                 disconnect: () => send({ type: 'pair-disconnected' }),

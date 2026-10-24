@@ -438,12 +438,10 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     const promptSeen = seen.find((s) => 'request' in s)
     expect(promptSeen?.signal).toBeInstanceOf(AbortSignal)
   })
-  it('bug 4a9c：hero 透传通道注册——forge:worktree/list + forge:worktree/session-create 可达（此前 not-found）', async () => {
-    const created: unknown[] = []
+  it('bug 4a9c：hero 透传通道注册——forge:worktree/list 可达（此前 not-found）；建会话单门退役（session-create 通道未注册）', async () => {
     const proxy = proxyDeps({
       worktrees: {
         list: async () => ({ isGit: true, entries: WORKTREES }),
-        sessionCreate: async (request: unknown) => (created.push(request), { sessionId: 's-new', branch: 'main' }),
       },
     } as never)
     const resList = fakeRes()
@@ -451,10 +449,8 @@ describe('forge:proxy/projects-grouped（api-handbook §6.0 响应体）', () =>
     expect((JSON.parse(resList.body) as { ok: boolean }).ok).toBe(true)
     const resCreate = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:worktree/session-create', payload: { worktreePath: 'Z:/proj' } }) as never, resCreate, deps({ proxy }))
-    const parsed = JSON.parse(resCreate.body) as { ok: boolean; data: { sessionId: string } }
-    expect(parsed.ok).toBe(true)
-    expect(parsed.data.sessionId).toBe('s-new')
-    expect(created).toHaveLength(1)
+    const parsed = JSON.parse(resCreate.body) as { ok: boolean; error?: { message?: string } }
+    expect(parsed.ok).toBe(false) // 预铸采纳单门已退役——mobile 建会话走 forge:proxy/session-create
   })
 
   it('bug 4a9c 对照：worktrees 缝缺席 = fail-soft 错误信封（非崩溃）', async () => {

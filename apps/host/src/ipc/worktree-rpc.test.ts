@@ -1,38 +1,31 @@
 // forge:worktree/* 装配面单测：
-//   · createWorktreeRpcService——官方 create 直通建会话（binding-derivation §2.1：零预铸零
-//     自铸 id）+ forge/worktree-bind 留痕（session/created append / 惰性补写 / fail-soft 诊断）
-//     + 封存判定快照（在场性比对）/ 非 git 零清单 / 必绑拦截 guard；
+//   · createWorktreeRpcService——forge/worktree-bind 留痕（session/created append / 惰性补写 /
+//     fail-soft 诊断）+ 封存判定快照（在场性比对）/ 非 git 零清单 + 流程 A workspace 前移创建；
 //   · registerWorktreeChannels——allowlist 注册（键键对应 contracts WORKTREE_CHANNELS）；
 //   · interceptSessionSends——assertSendable 接入 host 消息处理链（封存拒绝 + 明确错误；
 //     未绑定/未封存放行；判读异常 fail-open）。
 // ops 真机 git 面归独立模式走查（1.8 e2e 记录）——本文件全 fake 注入，零 git 依赖。
-import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   WORKTREE_CHANNELS,
   type WorktreeListRequest,
   type WorktreeSealRequest,
-  type WorktreeSessionCreateRequest,
 } from '@dsh-forge/contracts'
 import { SessionSealedError } from '@dsh-forge/git-worktree'
 import type { ForgeIpc } from './forge-channels.js'
-import { rpcEnvelope } from './rpc-envelope.js'
 import {
   createWorktreeRpcService,
   defaultEnsureDirAcl,
-  interceptRequiredBinding,
   interceptSessionSends,
   invalidateResolveCaches,
   registerWorktreeChannels,
-  verifySendGuardInstalled,
-  WorktreeCapabilityAbsentError,
   type LiveSessionFace,
   type SessionControllerFace,
   type SessionPersistenceFace,
 } from './worktree-rpc.js'
-import { createDiagContextStore, runWithDiagContext } from '../telemetry/diag-context.js'
 
 /** 插件域扩展点桩（resolveProject 恒命中 C:/repo 主项目；worktreeDir 默认式样） */
 const fakeExt = {
@@ -48,17 +41,15 @@ const attachEvent = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, 
 /** 树 A 路径（跨 describe 共享常量——绑定哨兵/孤儿测试区共用） */
 const WT_A = 'C:/repo/.forge/worktrees/wt-a'
 
-/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；create 预铸捕获
- *  （生产 create 面已随预铸配方退役——桩保留仅服务于「生产零调用」断言与历史事件造数）；
- *  headers 表驱动（sessionId → SessionHeader 消费切片：cwd + agentPreset/parentSession 选填）；
- *  opts.countOpens = open 调用计数器（G7② 性能钉：非 git 判读零日志读）。 */
+/** 会话持久化桩：events 表驱动（sessionId → 尾部事件集）；append 捕获写面；headers 表驱动
+ *  （sessionId → SessionHeader 消费切片：cwd + parentSession 选填）；opts.countOpens = open
+ *  调用计数器（G7② 性能钉：非 git 判读零日志读）。 */
 function fakePersistence(
   events: Record<string, readonly unknown[]>,
   headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }> = {},
   countOpens?: { value: number },
 ) {
   const appended: Array<{ id: string; events: readonly unknown[] }> = []
-  const created: Array<{ header: Record<string, unknown> }> = []
   const closedFor: Record<string, boolean> = {}
   const makeHandle = (id: string, access: 'read' | 'write') => ({
     header: headers[id],
@@ -77,15 +68,10 @@ function fakePersistence(
       if (countOpens !== undefined) countOpens.value += 1
       return makeHandle(id, access)
     }) as SessionPersistenceFace['open'],
-    create: (async (header: { id: string }) => {
-      created.push({ header: { ...header } })
-      return makeHandle(header.id, 'write')
-    }) as never,
-    // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）——运行期
-    // 探测缝（attachedSessionsOf as {list?}），不在 SessionPersistenceFace 类型面
+    // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）
     list: (async () => Object.keys(events).map((id) => ({ header: { id } }))) as never,
   } as unknown as SessionPersistenceFace
-  return { persistence, appended, created, closedFor, events }
+  return { persistence, appended, closedFor, events }
 }
 
 function fakeController() {
@@ -107,14 +93,11 @@ function fakeController() {
 }
 
 /** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
- *  titles = resolveByPath 项目 title 映射——继承命名面；archive 可选档 = 归档集 +
- *  unarchive 捕获——bug ff324cad 占位回收面；create 复用不改 title（官方语义）） */
+ *  titles = resolveByPath 项目 title 映射——继承命名面；create 复用不改 title（官方语义）） */
 function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, string> = {}) {
   const created: Array<{ path: string; title?: string }> = []
   const attached: Array<{ path: string; sessionId: string }> = []
   const titled: Array<{ path: string; title: string }> = []
-  const archived: string[] = []
-  const unarchived: string[] = []
   // find-or-create 复用面（官方语义：同规范路径已存在即复用，title 仅新建时生效）
   const workspaces = new Map<string, { id: string; title?: string; sessions: string[] }>()
   const entityFor = (path: string, ws: { id: string; title?: string; sessions: string[] }) => ({
@@ -131,12 +114,6 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
     },
   })
   const registry = {
-    archivedSessionIds: archived,
-    unarchiveSession: async (sessionId: string) => {
-      unarchived.push(sessionId)
-      const at = archived.indexOf(sessionId)
-      if (at >= 0) archived.splice(at, 1)
-    },
     resolveByPath: async (path: string) => {
       const title = titles[path]
       const ws = workspaces.get(path)
@@ -152,7 +129,7 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
       return entityFor(path, ws)
     },
   }
-  return { registry, created, attached, titled, archived, unarchived }
+  return { registry, created, attached, titled }
 }
 
 describe('createWorktreeRpcService（child 侧服务本体——透传插件域）', () => {
@@ -203,114 +180,6 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(resolveCalls, '失效缝未清缓存——注册后清单停在 isGit:false（bug 在场）').toBe(2)
   })
 
-  it('bug 925c96d5：sessionCreate 后 find-or-create 树路径工作区 + attachSession（官方 registry 面——composer 门控/侧栏归属单源）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry, created, attached } = fakeWorkspaceRegistry()
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(created.map((row) => row.path), '树路径未 find-or-create 工作区（bug 在场）').toEqual([
-      'C:/repo/.forge/worktrees/wt-a',
-    ])
-    expect(attached, '预铸会话无工作区归属（bug 在场）').toEqual([
-      { path: 'C:/repo/.forge/worktrees/wt-a', sessionId: result.sessionId },
-    ])
-  })
-
-  it('bug 925c96d5：workspace attach 失败 fail-soft——sessionCreate 仍返回 sessionId（不因归属面阻断创建主链）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry, created } = fakeWorkspaceRegistry(new Error('cwd 漂移'))
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(result.sessionId).toMatch(/^s-created-/)
-    expect(created.map((row) => row.path)).toEqual(['C:/repo/.forge/worktrees/wt-a'])
-  })
-
-  it('树工作区标题继承项目命名（resolveByPath(项目根).title 单源）——hero 项目 chip 恒显项目名；映射缺席回退树名', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry, created } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge' })
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(created[0]!.title, '树工作区未继承项目名（hero 项目 chip 跟随树名）').toBe('dsh-forge')
-  })
-
-  it('bug 4209c531：编排链预防性 ACL 补权——attachWorkspace 对树路径调 ensureDirAcl（沙箱授权链需有效 WRITE_DAC/WRITE_OWNER；失败 fail-soft 不阻断）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry } = fakeWorkspaceRegistry()
-    const aclPaths: string[] = []
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      ensureDirAcl: async (path) => {
-        aclPaths.push(path)
-      },
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(aclPaths, '编排链未做 ACL 补权（新树首条命令必撞沙箱拒绝）').toEqual(['C:/repo/.forge/worktrees/wt-a'])
-  })
-
-  it('bug 4209c531：ensureDirAcl 拒绝 → 编排链 fail-soft 照常产出会话（不因 ACL 面阻断创建）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry } = fakeWorkspaceRegistry()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      ensureDirAcl: async () => {
-        throw new Error('icacls failed')
-      },
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
-      sessionId: expect.stringMatching(/^s-created-/),
-    })
-  })
-
-  it('存量树工作区 healing：create 复用不改 title（官方语义）→ setTitle 显式回写项目名', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry, titled } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge' })
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: registry,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(titled).toEqual([{ path: 'C:/repo/.forge/worktrees/wt-a', title: 'dsh-forge' }])
-  })
-
   it('存量 healing 第二触发点：list 顺带对齐树工作区 title（主行跳过；已在途打开/选择的旧工作区自愈）', async () => {
     const { registry, titled } = fakeWorkspaceRegistry(undefined, {
       'C:/repo/.forge/worktrees/wt-a': 'redesign', // 旧工作区残留错误 title
@@ -357,164 +226,21 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     expect(resolvedPaths).toEqual(['C:/repo'])
   })
 
-  it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const bare = {
-      create: async (_path: string, _title?: string) => ({ id: 'ws-bare', attachSession: async () => {} }),
-    }
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      workspaceRegistry: bare,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).resolves.toMatchObject({
-      sessionId: expect.any(String),
-    })
-  })
-
-  it('官方 create 直通：controller.create({cwd}) 单门——零预铸（零自铸 id、零 persistence.create、零挂靠事件写入；agentPreset 归官方 composeAgent 链原生解析）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence, appended, created } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    // 官方 create 自铸 id（请求不携 sessionId）——预铸两段式（自铸 id + adopt 回填）整体退役
-    expect(calls).toEqual([{ sessionId: undefined, cwd: 'C:/repo/.forge/worktrees/wt-a' }])
-    expect(result.sessionId).toMatch(/^s-created-/)
-    expect(result.branch).toBe('feat/a')
-    expect(created).toHaveLength(0) // 零 persistence.create（预铸面退役）
-    expect(appended).toHaveLength(0) // 零预铸挂靠事件（forge/worktree-attach 退役）
-  })
-
-  it('workspaceRegistry 缺席（旧环境）→ sessionCreate 照常（零归属面降级，不抛错）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(result.sessionId).toMatch(/^s-created-/)
-  })
-
-  it('A12：入 create 前 cwd realpath 归一（第四维——链接/短名/../拼写形态收敛磁盘真值；不可达 fail-soft 回退原拼写）', async () => {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'wt-a12-')))
-    try {
-      const variant = `${join(dir, 'sub')}${sep}..` // 可达但非磁盘真值拼写（join 不折叠尾 '..'——realpath 收敛）
-      const { persistence } = fakePersistence({})
-      const { controller, calls } = fakeController()
-      const service = createWorktreeRpcService({
-        gitWorktree: fakeExt,
-        sessionController: controller,
-        sessionPersistence: persistence,
-        // git worktree list 本就返回 canonical 拼写——realpath 归一前置使变体拼写也能命中清单分支
-        listWorktreeEntries: async () => [{ path: dir, branch: 'feat/a' }],
-      })
-      const result = await service.sessionCreate({ worktreePath: variant })
-      expect(calls[0]!.cwd).toBe(dir)
-      expect(result.sessionId).toMatch(/^s-created-/)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('sessionCreate：sessionController 缺席 → 明确错误（不做半截创建）', async () => {
-    const bare = createWorktreeRpcService({
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await expect(bare.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow('sessionController')
-  })
-
-  it('bug b6b88f49：分支解析落空（detached HEAD）→ 边界显式拒绝（可读错误含 worktree 路径），不落半截会话', async () => {
-    const { persistence } = fakePersistence({})
-    const { controller, calls } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: null }], // detached 检出
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
-      /分支解析失败.*wt-a/s,
-    )
-    expect(calls).toHaveLength(0) // 未落半截会话
-  })
-
-  it('bug 878192ec：非 git 目录（resolveProject null）cwd 直建回退——controller.create({cwd}) 零分支，sessionId 返回（远程域非 git 项目建会话正门）', async () => {
-    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'main' }],
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const result = await service.sessionCreate({ worktreePath: 'C:/foreign-dir' })
-    expect(result.branch).toBe('')
-    expect(calls).toEqual([{ sessionId: undefined, cwd: 'C:/foreign-dir' }])
-    expect(result.sessionId).toMatch(/^s-created-/)
-  })
-
-  it('bug 488e860d 存量选中自愈（host 侧）：分支解析落空拒绝即摘 lastSelection 记忆——后续 selected() 不再回传不可挂靠树', async () => {
-    const { persistence } = fakePersistence({})
-    const { controller } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-a', branch: null }], // detached 检出
-      pathPresent: () => true,
-    })
-    await service.select({ projectRoot: 'C:/repo', path: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(await service.selected({ projectRoot: 'C:/repo' })).toEqual({ path: 'C:/repo/.forge/worktrees/wt-a' })
-    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(/分支解析失败/)
-    expect(await service.selected({ projectRoot: 'C:/repo' })).toEqual({}) // 记忆摘除——create-wrap 后续不再携该树
-  })
-
-  it('bug b6b88f49：worktree list 清单失配（查无该树条目）→ 同径边界显式拒绝，不抛预铸深处 TypeError', async () => {
-    const { persistence } = fakePersistence({})
-    const { controller } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/wt-other', branch: 'feat/x' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await expect(service.sessionCreate({ worktreePath: 'C:/repo/.forge/worktrees/wt-a' })).rejects.toThrow(
-      /分支解析失败.*wt-a/s,
-    )
-  })
-
   it('checks：attachedSessions 读官方 workspace record sessionIds（推导制——attachSession 挂账即计数单源，不再遍历 attach 事件）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry } = fakeWorkspaceRegistry()
+    const { registry, created } = fakeWorkspaceRegistry()
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
       listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
       workspaceRegistry: registry,
       pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
-    const created = await service.sessionCreate({ worktreePath: WT_A })
+    // 官方 create（桌面直通/移动端 proxy 中继）attachSession 挂账后的世界
+    const ws = await registry.create(WT_A, 'wt-a')
+    await ws.attachSession('s-official')
+    expect(created).toEqual([{ path: WT_A, title: 'wt-a' }])
     const result = await service.checks({ projectRoot: 'C:/repo', path: WT_A })
     expect(result.attachedSessions).toBe(1)
-    expect((await registry.resolveByPath(WT_A))?.sessionIds).toEqual([created.sessionId])
+    expect((await registry.resolveByPath(WT_A))?.sessionIds).toEqual(['s-official'])
   })
 
   it('checks 降级：registry 缺席 → attachedSessions = 0（零计数不抛）', async () => {
@@ -742,8 +468,10 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     }
     const service = createWorktreeRpcService({})
     registerWorktreeChannels(ipc, service)
-    expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(11) // 十通道 + selected（选中态读镜像——host 唯一事实源）
+    // 建会话单门退役——session-create 通道不再注册（host 会话创建中继收敛为
+    // forge:proxy/session-create 一条腿，binding-derivation §2.3）
+    expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).filter((c) => c !== WORKTREE_CHANNELS.sessionCreate).sort())
+    expect(registered).toHaveLength(10)
   })
 })
 
@@ -782,504 +510,6 @@ describe('interceptSessionSends（发送拦截——「不可发送」硬保证�
 })
 
 // ───────────── 1.30 host 绑定哨兵（WYSIWYG：绑定树必须 == chip）─────────────
-describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵）', () => {
-  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-  const ROOT = 'C:/repo'
-
-  interface MismatchEvent {
-    sessionId: string
-    binding: string | null
-    displayed: string
-  }
-
-  /** 被测装配桩：git 项目 + 会话持久化 + 控制器 + 失配哨兵事件捕获 */
-  function guardRig(input: {
-    events: Record<string, readonly unknown[]>
-    headers: Record<string, { cwd: string; agentPreset?: string; parentSession?: string }>
-  }) {
-    const opens = { value: 0 }
-    const countingExt = {
-      getExtensionPoints: () => ({
-        resolveProject: async (cwd: string) =>
-          cwd.includes('foreign') ? null : { projectId: 'p1', projectRoot: 'C:/repo', isGit: true },
-        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
-      }),
-    }
-    const { persistence } = fakePersistence(input.events, input.headers, opens)
-    const { controller, prompts } = fakeController()
-    const mismatchEvents: MismatchEvent[] = []
-    const service = createWorktreeRpcService({
-      gitWorktree: countingExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      workspaceRegistry: fakeWorkspaceRegistry().registry,
-      ensureDirAcl: async () => {},
-      pathPresent: () => true, // fake 路径无盘上实体——活性探测恒真（bug 4a30b193 缝专测单独表驱动）
-      listWorktreeEntries: async () => [
-        { path: 'C:/repo', branch: 'main' },
-        { path: WT_A, branch: 'feat/a' },
-      ],
-      emitSessionBindingMismatch: (event) => mismatchEvents.push(event),
-    })
-    return { service, controller, prompts, mismatchEvents, opens }
-  }
-
-  it('核心：blank 绑定主根 × chip 选中树 A → 失配事件 + 改投显示树会话（首条消息落 chip 树——换绑竞态抢跑收口）', async () => {
-    const rig = guardRig({
-      events: { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await expect(rig.controller.prompt({ sessionId: 'blank', text: 'hello' })).resolves.toEqual({ accepted: true })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: 'C:/repo', displayed: WT_A }])
-    // 首条消息改投显示树会话（预铸产物 id ≠ blank 原会话），文本原样
-    expect(rig.prompts).toHaveLength(1)
-    expect((rig.prompts[0] as { sessionId: string }).sessionId, '消息未改投显示树会话（仍在原 blank）').not.toBe('blank')
-    expect((rig.prompts[0] as { text: string }).text).toBe('hello')
-  })
-
-  it('绑定 ≡ 显示（chip 未选回落主根 = 绑定主根）→ pass 零事件', async () => {
-    const rig = guardRig({
-      events: { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
-      headers: { blank: { cwd: 'C:/repo' } },
-    })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([])
-    expect(rig.prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
-  })
-
-  it('未绑定 blank（推导制无「未绑定」——cwd 即绑定）× chip 选中树 A → 失配事件 + 改投显示树会话（main 也是 worktree）', async () => {
-    const rig = guardRig({ events: { blank: [] }, headers: { blank: { cwd: 'C:/repo' } } })
-    await rig.service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'blank', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([{ sessionId: 'blank', binding: 'C:/repo', displayed: WT_A }])
-    expect(rig.prompts).toHaveLength(1)
-    expect((rig.prompts[0] as { sessionId: string }).sessionId).not.toBe('blank')
-    expect((rig.prompts[0] as { text: string }).text).toBe('hi')
-  })
-
-  it('chip 选中缺席（用户未做树选择）→ 打开的 blank 绑定即所见：零事件零干预（误报源收口——存量会话打开再发送不是失配）', async () => {
-    const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 's1', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([])
-    expect(rig.prompts).toEqual([{ sessionId: 's1', text: 'hi' }])
-  })
-
-  it('chip 选主根 × 绑定树 A（select 推送在场）→ 失配事件 + 改投主根会话（binding ≠ chip 即失配，无论方向）', async () => {
-    const rig = guardRig({ events: { s1: attachEvent(WT_A) }, headers: { s1: { cwd: WT_A } } })
-    await rig.service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 's1', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([{ sessionId: 's1', binding: WT_A, displayed: 'C:/repo' }])
-    expect(rig.prompts).toHaveLength(1)
-    expect((rig.prompts[0] as { sessionId: string }).sessionId).not.toBe('s1')
-    expect((rig.prompts[0] as { text: string }).text).toBe('hi')
-  })
-
-  it('非 blank 既有会话零打扰（失配也不发射——绑定决定不重审）', async () => {
-    const rig = guardRig({
-      events: {
-        s2: [
-          { type: 'forge/worktree-attach', seq: 0, data: { worktreePath: WT_A, branch: 'feat/a' } },
-          { type: 'turn/start', seq: 1, data: { turn: 1 } },
-        ],
-      },
-      headers: { s2: { cwd: WT_A } },
-    })
-    await rig.service.select({ projectRoot: 'C:/repo', path: ROOT })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 's2', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([])
-    expect(rig.prompts).toEqual([{ sessionId: 's2', text: 'hi' }])
-  })
-
-  it('发射缝缺席（旧装配方）→ 哨兵只落日志，判读照常 pass 不抛', async () => {
-    const opens = { value: 0 }
-    const countingExt = {
-      getExtensionPoints: () => ({
-        resolveProject: async () => ({ projectId: 'p1', projectRoot: 'C:/repo', isGit: true }),
-        getWorktreeDir: (root: string) => `${root}/.forge/worktrees`,
-      }),
-    }
-    const { persistence } = fakePersistence(
-      { blank: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }] },
-      { blank: { cwd: 'C:/repo' } },
-      opens,
-    )
-    const { controller, prompts } = fakeController()
-    const service = createWorktreeRpcService({
-      gitWorktree: countingExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-    })
-    await service.select({ projectRoot: 'C:/repo', path: WT_A })
-    const dispose = interceptRequiredBinding(controller, service.requiredBindingGuard()!)
-    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).resolves.toEqual({ accepted: true })
-    dispose()
-    expect(prompts).toHaveLength(1)
-  })
-
-  it('G7② 性能钉：非 git 项目 prompt 零 git 探测扩散、会话日志读只有 cwd 探测一次（逐会话记忆后零读）', async () => {
-    const rig = guardRig({ events: { f1: [] }, headers: { f1: { cwd: 'C:/foreign/plain' } } })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'f1', text: 'a' })
-    await rig.controller.prompt({ sessionId: 'f1', text: 'b' })
-    dispose()
-    expect(rig.prompts).toHaveLength(2) // 非 git 零行为差异：两次都原会话直发
-    expect(rig.opens.value, '非 git 判读在 blankOf 前短路（基线 1 次读 = seal 判读；judge 零增量）').toBe(1)
-  })
-
-  it('A5 退役（推导制）：header.cwd 即绑定——事件台账缺席/陈旧零影响判读，无 cwd 漂移拒绝位', async () => {
-    const rig = guardRig({ events: { s1: attachEvent('C:/elsewhere') }, headers: { s1: { cwd: WT_A } } })
-    await rig.service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    // 陈旧 attach 事件不再引发拒绝/改道判读偏差：绑定 = header.cwd（WT_A）≠ chip 主根 → 失配改投
-    await expect(rig.controller.prompt({ sessionId: 's1', text: 'hi' })).resolves.toEqual({ accepted: true })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([{ sessionId: 's1', binding: WT_A, displayed: 'C:/repo' }])
-    expect(rig.prompts).toHaveLength(1)
-  })
-
-  it('W2 能力缺席 typed 拒绝：独立 absentRig describe 专测（见「W2 能力缺席显式拒绝」）', async () => {
-    expect(true).toBe(true)
-  })
-
-  it('子会话（header.parentSession 在场——worker/fork）恒放行零事件（官方子代理机械所有，非 hero 人口）', async () => {
-    const rig = guardRig({
-      events: { child: [] },
-      headers: { child: { cwd: 'C:/repo', parentSession: 'session-parent' } },
-    })
-    const dispose = interceptRequiredBinding(rig.controller, rig.service.requiredBindingGuard()!)
-    await rig.controller.prompt({ sessionId: 'child', text: 'hi' })
-    dispose()
-    expect(rig.mismatchEvents).toEqual([])
-    expect(rig.prompts).toEqual([{ sessionId: 'child', text: 'hi' }])
-  })
-})
-
-  it('G3 双建互斥：并发 sessionCreate 同 cwd 单产物；后续调用复用产物（每 cwd 至多一个 blank 产物）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const [a, b] = await Promise.all([
-      service.sessionCreate({ worktreePath: WT_A }),
-      service.sessionCreate({ worktreePath: WT_A }),
-    ])
-    expect(a.sessionId).toBe(b.sessionId)
-    expect(calls, '并发双建：同一 cwd 只走一次官方 create').toHaveLength(1)
-    const c = await service.sessionCreate({ worktreePath: WT_A })
-    expect(c.sessionId).toBe(a.sessionId)
-    expect(calls).toHaveLength(1)
-  })
-
-  // ── WYSIWYG 收敛（用户裁决 2026-10-24「为什么要记忆」）：请求路径即创建目标——
-  //    host 零选中记忆劫持；选中记忆只剩 selected() 读镜像与哨兵 displayed 判读 ──
-  it('WYSIWYG：select 推送他树在场 → sessionCreate(项目根) 恒落项目根（请求即目标，零记忆劫持——bug bf377bea 回归锚：记忆与显示错位时按传参建，不猜）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [
-        { path: 'C:/repo', branch: 'main' },
-        { path: WT_A, branch: 'feat/a' },
-      ],
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    await service.select({ projectRoot: 'C:/repo', path: WT_A })
-    await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(calls, '项目根请求被记忆劫持到选中树（WYSIWYG 违约）').toEqual([
-      { sessionId: undefined, cwd: 'C:/repo' },
-    ])
-  })
-
-  it('WYSIWYG：选中记忆为陈旧树（盘上缺席）→ sessionCreate(项目根) 恒落项目根（记忆不参与创建路由）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const ghost = 'C:/repo/.forge/worktrees/ghost'
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      pathPresent: (path) => path !== ghost,
-      ensureDirAcl: async () => {},
-    })
-    await service.select({ projectRoot: 'C:/repo', path: ghost })
-    await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(calls[0]?.cwd, '陈旧选中树被用作创建目标（记忆参与路由——bug 4a30b193 同族回归）').toBe('C:/repo')
-  })
-
-  // ── bug ff324cad 占位回收：弃置归档的 blank 占位循环复用——全局至多一个根占位（累积面收口）──
-  it('占位回收：归档产物再创建 → unarchive 回活复用同一会话（零新建；推导制核验 = header cwd ≡ 目标树）', async () => {
-    const { controller, calls } = fakeController()
-    const headers: Record<string, { cwd: string }> = {}
-    const { persistence } = fakePersistence({}, headers)
-    const ws = fakeWorkspaceRegistry()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      workspaceRegistry: ws.registry,
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    // 交付核验种子：头 cwd ≡ 目标树（推导制绑定 = header.cwd）
-    headers[first.sessionId] = { cwd: 'C:/repo' }
-    ws.archived.push(first.sessionId) // 重路由弃置归档后的世界
-    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(second.sessionId, '归档占位未回收——每次新会话新增一个 blank（累积面在场）').toBe(first.sessionId)
-    expect(ws.unarchived).toEqual([first.sessionId])
-    expect(calls, '回收必须零新建').toHaveLength(1)
-    // 回收后的 live blank 再创建 → 原路复用（G3 原语义）
-    const third = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(third.sessionId).toBe(first.sessionId)
-    expect(calls).toHaveLength(1)
-  })
-
-  it('占位回收：重启世界（G3 产物内存态不在）→ persistence 扫描归档 blank 复用（零新建）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence, events: logEvents } = fakePersistence(
-      {},
-      { arch: { cwd: 'C:/repo' } }, // 推导制绑定 = header.cwd（事件台账读侧退役）
-    )
-    const ws = fakeWorkspaceRegistry()
-    ws.archived.push('arch')
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      workspaceRegistry: ws.registry,
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    // 回收扫描后台化（性能收口）：首建交付后扫描入池，零新建累积判定落第二次创建
-    expect(calls, '重启世界首建一次').toHaveLength(1)
-    await new Promise<void>((resolve) => setTimeout(resolve, 20)) // 后台扫描微任务排空（unarchive + 入池）
-    expect(ws.unarchived).toEqual(['arch'])
-    // 首建产物已被真实使用（turn/start）——G3 活池不复用，落回收池命中
-    logEvents[first.sessionId] = [...(logEvents[first.sessionId] ?? []), { type: 'turn/start' }]
-    const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(result.sessionId, '重启后未扫描回收归档占位——新建累积').toBe('arch')
-    expect(calls, '重启世界回收零新建').toHaveLength(1)
-    expect(first.sessionId).not.toBe('arch')
-  })
-
-  it('占位回收：回收面缺席（registry 无 unarchiveSession）→ 降级新建（现状行为零回归）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const base = fakeWorkspaceRegistry()
-    const broken: Record<string, unknown> = { ...base.registry }
-    delete broken['unarchiveSession']
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      workspaceRegistry: broken as never,
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    base.archived.push(first.sessionId)
-    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(second.sessionId).not.toBe(first.sessionId)
-    expect(calls).toHaveLength(2)
-  })
-
-  it('占位回收：归档产物 cwd 核验不符（header cwd ≠ 目标树）→ 不回收降级新建（占位漂移不可交付）', async () => {
-    const { controller, calls } = fakeController()
-    const headers: Record<string, { cwd: string }> = {}
-    const { persistence } = fakePersistence({}, headers)
-    const ws = fakeWorkspaceRegistry()
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      workspaceRegistry: ws.registry,
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    // 漂移形态：头 cwd 与目标树不自洽（外部改档/旧世界产物）——推导制下绑定即头 cwd
-    headers[first.sessionId] = { cwd: 'C:/elsewhere' }
-    ws.archived.push(first.sessionId)
-    const second = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(second.sessionId, 'cwd ≠ 目标树的归档占位被当目标树产物交付').not.toBe(first.sessionId)
-    expect(calls).toHaveLength(2)
-  })
-
-  // ── bug 9eb9d6cb 真机反馈：unborn HEAD 仓库（temp fixture：git init 后零提交）──
-  it('unborn HEAD 兜底：清单无 branch 行 → symbolic-ref 取分支短名，创建成功', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const FIXTURE = 'C:/Users/panda/AppData/Local/Temp/v2-b-fixture'
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: FIXTURE, branch: null }], // unborn HEAD：porcelain 无 branch 行
-      symbolicRefOf: async () => 'main', // HEAD 指向存在的分支 ref——unborn 也有合法分支名
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    const result = await service.sessionCreate({ worktreePath: FIXTURE })
-    expect(calls, 'unborn HEAD 兜底缺席 = 每次点击 typed 报错（bug 在场）').toHaveLength(1)
-    expect(calls[0]?.cwd).toBe(FIXTURE)
-    expect(result.branch).toBe('main')
-  })
-
-  it('unborn HEAD 兜底：symbolic-ref 探测失败（null）→ 落空显式拒原语义（零猜测）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: null }],
-      symbolicRefOf: async () => null,
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    await expect(service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow('分支解析失败')
-    expect(calls).toHaveLength(0)
-  })
-
-  it('WYSIWYG：显式树请求恒落显式树——select 推送他树不影响（请求即目标，点选即换绑编排前置）', async () => {
-    const { controller, calls } = fakeController()
-    const { persistence } = fakePersistence({})
-    const WT_B = 'C:/repo/.forge/worktrees/wt-b'
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [
-        { path: 'C:/repo', branch: 'main' },
-        { path: WT_A, branch: 'feat/a' },
-        { path: WT_B, branch: 'feat/b' },
-      ],
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    await service.select({ projectRoot: 'C:/repo', path: WT_B })
-    await service.sessionCreate({ worktreePath: WT_A })
-    expect(calls[0]?.cwd, '显式树请求未按传参创建').toBe(WT_A)
-  })
-
-  // ── 绑定表失效锚（onWorktreeSetChanged——外部裸建树首次使用即入表的 sessionCreate 锚）──
-  it('锚恰一次：全新 sessionCreate 成功后触发 onWorktreeSetChanged 恰一次（进 pending 链——G3 并发等待者不重复触发）；blank 复用不重触发', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    let fired = 0
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      onWorktreeSetChanged: async () => {
-        fired += 1
-      },
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const [a, b] = await Promise.all([
-      service.sessionCreate({ worktreePath: WT_A }),
-      service.sessionCreate({ worktreePath: WT_A }),
-    ])
-    expect(a.sessionId).toBe(b.sessionId)
-    expect(fired, '并发共享同链——锚恰一次').toBe(1)
-    await service.sessionCreate({ worktreePath: WT_A }) // blank 复用径
-    expect(fired, '复用不重触发').toBe(1)
-  })
-
-  it('锚 fail-soft：onWorktreeSetChanged 抛错不改写 sessionCreate 产物（只记 warn）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const warnings: string[] = []
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      onWorktreeSetChanged: async () => {
-        throw new Error('refresh boom')
-      },
-      warn: (line) => warnings.push(line),
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: WT_A })
-    expect(result.sessionId).toMatch(/^s-created-/) // 产物原样返回
-    expect(warnings.some((line) => line.includes('绑定表刷新锚失败'))).toBe(true)
-  })
-
-  // ── 权限补钉锚（bug e5059ee1——adopt 钉档绕过 defaultPreset，装配方经官方 permissionPresets.set 补钉）──
-  it('权限补钉：全新 sessionCreate 成功后触发 onSessionAdopted 恰一次（产物已活——controller.create 已返回）；blank 复用不重触发', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const adopted: string[] = []
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      onSessionAdopted: async (sessionId) => {
-        adopted.push(sessionId)
-      },
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const [a, b] = await Promise.all([
-      service.sessionCreate({ worktreePath: WT_A }),
-      service.sessionCreate({ worktreePath: WT_A }),
-    ])
-    expect(a.sessionId).toBe(b.sessionId)
-    expect(adopted, '并发共享同链 + 复用不重触发——恰一次').toEqual([a.sessionId])
-    await service.sessionCreate({ worktreePath: WT_A })
-    expect(adopted).toHaveLength(1)
-  })
-
-  it('权限补钉 fail-soft：onSessionAdopted 抛错不改写产物、不阻断绑定表锚（两者独立）', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const warnings: string[] = []
-    let refreshed = 0
-    const service = createWorktreeRpcService({
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      onWorktreeSetChanged: async () => {
-        refreshed += 1
-      },
-      onSessionAdopted: async () => {
-        throw new Error('pin boom')
-      },
-      warn: (line) => warnings.push(line),
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: WT_A })
-    expect(result.sessionId).toMatch(/^s-created-/)
-    expect(warnings.some((line) => line.includes('权限补钉失败'))).toBe(true)
-    expect(refreshed).toBe(1) // 绑定表锚不受影响
-  })
-
   it('G7② seal 判序反转：request.cwd 命中非 git 能力缓存 → 零会话日志读', async () => {
     const opens = { value: 0 }
     const { persistence } = fakePersistence({ s1: attachEvent(WT_A) }, { s1: { cwd: 'C:/foreign/x' } }, opens)
@@ -1289,281 +519,36 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     expect(opens.value, '非 git 封存判定仍全量读会话日志（判序未反转）').toBe(0)
   })
 
-  it('逆序撤销安全：外层 dispose 后内层封存拦截仍在', async () => {
-    const { controller, prompts } = fakeController()
-    interceptSessionSends(controller, async () => ({ isGit: true, sealed: true, binding: { worktreePath: 'x', branch: 'b' } }))
-    const outer = interceptRequiredBinding(controller, {
-      judge: async () => 'pass',
-    })
-    outer()
-    await expect(controller.prompt({ sessionId: 's1' })).rejects.toThrow(SessionSealedError)
-    expect(prompts).toHaveLength(0)
-  })
-
-describe('W2 能力缺席显式拒绝（fail-closed 收口）', () => {
-  const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-
-  /** 缺席装配桩：gitWorktree 能力缺席 + guardState/探针表驱动 + 预铸采纳两缝在场 */
-  function absentRig(input: {
-    guardState?: 'absent'
-    probe?: (dir: string) => Promise<string | null>
-    headers?: Record<string, { cwd: string }>
-  }) {
-    const probes: string[] = []
-    const probeGitAnchor = async (dir: string): Promise<string | null> => {
-      probes.push(dir)
-      return input.probe ? input.probe(dir) : null
-    }
-    const { persistence } = fakePersistence({}, input.headers ?? {})
-    const { controller, calls, prompts } = fakeController()
-    const service = createWorktreeRpcService({
-      // gitWorktree 能力缺席（不传）+ 60s 放弃位表驱动 + 探针注入桩
-      guardState: input.guardState === 'absent' ? (() => 'absent' as const) : undefined,
-      probeGitAnchor,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    return { service, controller, calls, prompts, probesOf: () => probes }
-  }
-
-  it('git 拒：能力缺席 + guardState absent + 探针有锚 → sessionCreate typed error 显式拒绝（controller.create 零调用）', async () => {
-    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo' })
-    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toMatchObject({
-      name: 'WorktreeCapabilityAbsentError',
-      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
-    })
-    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow(/git 绑定能力缺席/)
-    expect(rig.calls).toHaveLength(0)
-  })
-
-  it('typed error 经 rpcEnvelope 序列化为 RpcErr 信封（code ∈ ERROR_CODES——前端 RpcClientError 链可达）', async () => {
-    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo' })
-    const handler = rpcEnvelope((q: WorktreeSessionCreateRequest) => rig.service.sessionCreate(q))
-    const result = await handler(undefined, { worktreePath: WT_A })
-    expect(result).toMatchObject({
-      ok: false,
-      error: { code: 'ERR_WORKTREE_CAPABILITY_ABSENT', message: expect.stringContaining('git 绑定能力缺席') },
-    })
-  })
-
-  it('非 git 照常：探针 null → 官方原流（预铸采纳照常，行为零差异）', async () => {
-    const rig = absentRig({ guardState: 'absent', probe: async () => null })
-    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
-    expect(result).toMatchObject({ sessionId: expect.any(String), branch: 'feat/a' })
-    expect(rig.calls).toHaveLength(1)
-  })
-
-  it('探针逐次现跑、零缓存：git 仓库移除后下一次创建立刻判非 git（探针两次现跑）', async () => {
-    let repoPresent = true
-    const rig = absentRig({ guardState: 'absent', probe: async () => (repoPresent ? 'C:/repo' : null) })
-    await expect(rig.service.sessionCreate({ worktreePath: WT_A })).rejects.toThrow(WorktreeCapabilityAbsentError)
-    repoPresent = false // 模拟 git 仓库被移除
-    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
-    expect(result).toMatchObject({ sessionId: expect.any(String) })
-    expect(rig.probesOf()).toHaveLength(2) // 逐次现跑——判定结果未作会话期记忆
-  })
-
-  it('瞬态窗口 fail-open 现状：guardState 未盖位（能力轮询未放弃）→ 探针不跑、sessionCreate 照常（D1 拆分）', async () => {
-    const rig = absentRig({ probe: async () => 'C:/repo' })
-    const result = await rig.service.sessionCreate({ worktreePath: WT_A })
-    expect(result).toMatchObject({ sessionId: expect.any(String) })
-    expect(rig.probesOf()).toHaveLength(0)
-  })
-
-  it('能力在场零改动：gitWorktree 在场时探针不跑（粘性能力位优先，非介入面零固定税）', async () => {
-    const probes: string[] = []
-    const { persistence } = fakePersistence({})
-    const { controller, calls } = fakeController()
+  // ── bug 9eb9d6cb 真机反馈：unborn HEAD 仓库（git init 后零提交——porcelain 无 branch 行）──
+  it('unborn HEAD 兜底（seal 径）：清单无 branch 行 → symbolic-ref 取分支短名（留痕快照有 branch）', async () => {
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
-      guardState: () => 'absent',
-      probeGitAnchor: async (dir) => {
-        probes.push(dir)
-        return 'C:/repo'
-      },
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    const result = await service.sessionCreate({ worktreePath: WT_A })
-    expect(result).toMatchObject({ sessionId: expect.any(String) })
-    expect(calls).toHaveLength(1)
-    expect(probes).toHaveLength(0)
-  })
-
-  it('prompt 拦截拒：能力缺席 + 探针有锚 → judge 抛稳定 name 错误（显式拒绝不 fail-open）', async () => {
-    const rig = absentRig({ guardState: 'absent', probe: async () => 'C:/repo', headers: { blank: { cwd: 'C:/repo' } } })
-    const guard = rig.service.requiredBindingGuard()
-    expect(guard).toBeDefined()
-    await expect(guard!.judge('blank')).rejects.toMatchObject({
-      name: 'WorktreeCapabilityAbsentError',
-      code: 'ERR_WORKTREE_CAPABILITY_ABSENT',
-    })
-    await expect(guard!.judge('blank')).rejects.toThrow(/git 绑定能力缺席/)
-  })
-
-  it('prompt 拦截非 git 照常：探针 null → judge pass 原流放行', async () => {
-    const rig = absentRig({ guardState: 'absent', probe: async () => null, headers: { blank: { cwd: 'C:/repo' } } })
-    const { controller, prompts } = rig
-    const dispose = interceptRequiredBinding(controller, rig.service.requiredBindingGuard()!)
-    await expect(controller.prompt({ sessionId: 'blank', text: 'hi' })).resolves.toEqual({ accepted: true })
-    dispose()
-    expect(prompts).toEqual([{ sessionId: 'blank', text: 'hi' }])
-  })
-})
-
-// ── W4 装载自证（session-binding-guarantee §W4）——wrap 换芯读回判读核 ──────────────────
-describe('verifySendGuardInstalled（成功路径自证：prompt 已换 + guard 非空，失败 fail-loud）', () => {
-  const fakeController = (prompt: unknown): SessionControllerFace =>
-    ({ prompt }) as unknown as SessionControllerFace
-
-  it('换芯（prompt ≠ 装配前留底）+ guard 在场 → 通过不抛', () => {
-    const original = (): Promise<unknown> => Promise.resolve()
-    const wrapped = (): Promise<unknown> => Promise.resolve()
-    expect(() =>
-      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: true }),
-    ).not.toThrow()
-  })
-
-  it('prompt 未换芯（= 装配前留底）→ 抛 fail-loud（不静默残缺）', () => {
-    const original = (): Promise<unknown> => Promise.resolve()
-    expect(() =>
-      verifySendGuardInstalled(fakeController(original), { promptBefore: original, guardPresent: true }),
-    ).toThrow(/未换芯/)
-  })
-
-  it('必绑 guard 缺席（sessionPersistence 缺席）→ 抛 fail-loud', () => {
-    const original = (): Promise<unknown> => Promise.resolve()
-    const wrapped = (): Promise<unknown> => Promise.resolve()
-    expect(() =>
-      verifySendGuardInstalled(fakeController(wrapped), { promptBefore: original, guardPresent: false }),
-    ).toThrow(/guard 缺席/)
-  })
-
-  it('装配前留底非函数（prompt 面漂移）→ 抛 fail-loud', () => {
-    expect(() =>
-      verifySendGuardInstalled(fakeController(undefined), { promptBefore: undefined, guardPresent: true }),
-    ).toThrow(/留底缺席/)
-  })
-})
-
-describe('interceptRequiredBinding trace 缝（app-observability 1.2 链 B——prompt 入口生成 + ALS 包裹）', () => {
-  const als = createDiagContextStore()
-
-  function rig(judgeResult: 'route' | 'pass' = 'pass') {
-    const seenTraceIds: Array<string | undefined> = []
-    const controller = {
-      prompt: async (request: { sessionId: string; text: string }) => {
-        seenTraceIds.push(als.getStore()?.traceId)
-        return { accepted: true, request }
-      },
-    } as unknown as SessionControllerFace
-    const guard = {
-      judge: async () => judgeResult,
-      reroute: async (sessionId: string) => {
-        seenTraceIds.push(als.getStore()?.traceId)
-        return { rerouted: sessionId }
-      },
-    } as unknown as Parameters<typeof interceptRequiredBinding>[1]
-    return { controller, guard, seenTraceIds }
-  }
-
-  it('prompt 入口生成 trace_id，judge/原发送同链 ALS 可读（一次 prompt 全链同 trace_id）', async () => {
-    const rig1 = rig()
-    const issued: string[] = []
-    const dispose = interceptRequiredBinding(rig1.controller, rig1.guard, console.warn, {
-      next: () => {
-        const id = `tr-${issued.length}`
-        issued.push(id)
-        return id
-      },
-      run: <T,>(traceId: string, _sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
-        runWithDiagContext(als, { traceId }, fn),
-    })
-    await rig1.controller.prompt({ sessionId: 's1', text: 'hello' })
-    dispose()
-    expect(issued).toEqual(['tr-0'])
-    expect(rig1.seenTraceIds).toEqual(['tr-0'])
-    expect(als.getStore()?.traceId).toBeUndefined() // 链外零残留
-  })
-
-  it('重路由派生调用同 trace_id（judge=route 分支）', async () => {
-    const rig2 = rig('route')
-    const dispose = interceptRequiredBinding(rig2.controller, rig2.guard, console.warn, {
-      next: () => 'tr-route',
-      run: <T,>(traceId: string, _s: string | undefined, fn: () => Promise<T>): Promise<T> =>
-        runWithDiagContext(als, { traceId }, fn),
-    })
-    await rig2.controller.prompt({ sessionId: 's2', text: 'hi' })
-    dispose()
-    expect(rig2.seenTraceIds).toEqual(['tr-route']) // route 分支：仅重路由派生调用（原发送被拒）
-  })
-
-  it('trace 缝缺席 → 原样零差异（ALS 零注入）', async () => {
-    const rig3 = rig()
-    const dispose = interceptRequiredBinding(rig3.controller, rig3.guard)
-    await rig3.controller.prompt({ sessionId: 's3', text: 'x' })
-    dispose()
-    expect(rig3.seenTraceIds).toEqual([undefined])
-  })
-
-  // ── app-observability fix-3：判读失败处 warn 诊断（ALS 上下文内——行带链 B trace_id）──
-  it('fix-3 判读失败 fail-open：warn 通道 emit 于 ALS 上下文内（行带同 trace_id），消息原会话投递', async () => {
-    const seen: Array<string | undefined> = []
-    const controller = {
-      prompt: async (): Promise<unknown> => ({ accepted: true }),
-    } as unknown as SessionControllerFace
-    const guard = {
-      judge: async (): Promise<'pass'> => {
-        throw new TypeError('forge/worktree-attach: branch 必须为非空字符串')
-      },
-    } as unknown as Parameters<typeof interceptRequiredBinding>[1]
-    const warns: string[] = []
-    const dispose = interceptRequiredBinding(controller, guard, (message) => {
-      seen.push(als.getStore()?.traceId)
-      warns.push(message)
-    }, {
-      next: () => 'tr-inject',
-      run: <T,>(traceId: string, _s: string | undefined, fn: () => Promise<T>): Promise<T> =>
-        runWithDiagContext(als, { traceId }, fn),
-    })
-    await expect(controller.prompt({ sessionId: 's-inject', text: 'hi' })).resolves.toEqual({ accepted: true })
-    dispose()
-    expect(warns, '判读失败处诊断 emit 缺席（bug ba763219——失败零日志）').toHaveLength(1)
-    expect(seen, 'emit 发生在 ALS 上下文外——trace_id 断链').toEqual(['tr-inject'])
-  })
-
-  it('fix-3 改投失败 fail-open 放行：failOpenDiag emit 于 ALS 上下文内（行带同 trace_id）；放行语义不变', async () => {
-    const WT_A = 'C:/repo/.forge/worktrees/wt-a'
-    const alsJudge = createDiagContextStore()
-    const emits: Array<{ message: string; traceId: string | undefined }> = []
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: fakeController().controller,
       sessionPersistence: fakePersistence({}, { s1: { cwd: WT_A } }).persistence,
-      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
-      // 改投目标盘上缺席 → sessionCreate 抛 WorktreeTargetAbsentError → fail-open 原会话投递
-      pathPresent: () => false,
-      failOpenDiag: (message) => {
-        emits.push({ message, traceId: alsJudge.getStore()?.traceId })
-      },
+      listWorktreeEntries: async () => [{ path: WT_A, branch: null }], // unborn HEAD：porcelain 无 branch 行
+      symbolicRefOf: async () => 'main', // HEAD 指向存在的分支 ref——unborn 也有合法分支名
+      listPresent: async () => ['C:/repo', WT_A],
     })
-    await service.select({ projectRoot: 'C:/repo', path: 'C:/repo' }) // chip 选主根 ≠ 绑定树 → 失配改投
-    const guard = service.requiredBindingGuard()
-    expect(guard).toBeDefined()
-    const verdict = await runWithDiagContext(alsJudge, { traceId: 'tr-open' }, () => guard!.judge('s1'))
-    expect(verdict, '改投失败 fail-open 放行语义不变').toBe('pass')
-    expect(emits, '失配 + 改投失败两处诊断 emit（bug ba763219——失败零日志）').toHaveLength(2)
-    expect(emits[0]?.traceId, 'emit 发生在 ALS 上下文外——trace_id 断链').toBe('tr-open')
-    expect(emits[1]?.traceId).toBe('tr-open')
-    expect(emits[1]?.message).toContain('哨兵改投失败')
+    await expect(service.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)).resolves.toMatchObject({
+      isGit: true,
+      binding: { worktreePath: WT_A, branch: 'main' },
+    })
   })
-})
 
-describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 / B 幂等短路 / C 主行跳过 / D 超时上界）', () => {
+  it('unborn HEAD 兜底落空（seal 径）：symbolic-ref 探测失败（null）→ branch 落空（零猜测）', async () => {
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: WT_A } }).persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: null }],
+      symbolicRefOf: async () => null,
+      listPresent: async () => ['C:/repo', WT_A],
+    })
+    await expect(service.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)).resolves.toMatchObject({
+      isGit: true,
+      binding: { worktreePath: WT_A, branch: '' },
+    })
+  })
+
+describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 / B 幂等短路 / D 超时上界）', () => {
   /** B/D 面注入 runner——记录调用面（args + opts），读查询回 canned DACL */
   const mkRunner = (dacl: string) => {
     const calls: Array<{ file: string; args: string[]; opts?: { timeout?: number } }> = []
@@ -1620,26 +605,6 @@ describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-
-  it('C：主行（worktreePath ≡ projectRoot）不做预防性 ACL 补权——非 worktree add 产物零全子树传播', async () => {
-    const { controller } = fakeController()
-    const { persistence } = fakePersistence({})
-    const { registry } = fakeWorkspaceRegistry()
-    const aclPaths: string[] = []
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      workspaceRegistry: registry,
-      ensureDirAcl: async (path) => {
-        aclPaths.push(path)
-      },
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
-    })
-    await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(aclPaths, '主行补权在场——项目根每次编排都跑分钟级全子树传播（bug 在场）').toEqual([])
   })
 
   it("A′：create 预铸空目录并先于 worktree add 授权（授权时目录必空——毫秒级，检出文件出生即继承）", async () => {
