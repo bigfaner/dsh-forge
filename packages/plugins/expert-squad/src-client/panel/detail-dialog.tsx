@@ -117,6 +117,33 @@ export function mselNextOpen(
 }
 
 /**
+ * document 外点收起监听装配（捕获阶段）。
+ * Root cause: Dialog 的 React 合成 stopPropagation 在 React root 委托处停掉原生
+ * click，冒泡期挂 document 的监听收不到 Dialog 内任何点击——外点收起对 Dialog 内
+ * 点击恒失效。捕获阶段先于 root 委托触发，Dialog 内非 msel 点击照常视为「外部」。
+ */
+export function attachMselCollapse(
+  doc: {
+    addEventListener(type: string, listener: (event: unknown) => void, capture: boolean): void;
+    removeEventListener(type: string, listener: (event: unknown) => void, capture: boolean): void;
+  },
+  root: () => { contains(target: unknown): boolean } | null,
+  setOpen: (updater: (current: boolean) => boolean) => void,
+): () => void {
+  const onDocClick = (event: unknown): void => {
+    const r = root();
+    const target = (event as { target?: unknown })?.target;
+    if (r && r.contains(target)) {
+      setOpen((current) => mselNextOpen(current, "inside"));
+      return;
+    }
+    setOpen((current) => mselNextOpen(current, "outside"));
+  };
+  doc.addEventListener("click", onDocClick, true);
+  return () => doc.removeEventListener("click", onDocClick, true);
+}
+
+/**
  * multi-select：box 显已选 chips + 下拉勾选菜单（allowAdd 技能可新增）。
  * 对齐已批原型：菜单默认收起（条件渲染），box 点击开合，document 外点收起。
  * Root cause: 产品实现曾恒渲染菜单（无 open 态），偏离原型 mountMsel 交互。
@@ -135,17 +162,8 @@ function MultiSelect(props: {
   const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!open) return;
-    const onDocClick = (event: MouseEvent): void => {
-      const root = rootRef.current;
-      const target = event.target;
-      if (root && target instanceof Node && root.contains(target)) {
-        setOpen((current) => mselNextOpen(current, "inside"));
-        return;
-      }
-      setOpen((current) => mselNextOpen(current, "outside"));
-    };
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
+    // 捕获阶段挂载（attachMselCollapse 注记——冒泡期监听被 Dialog 合成 stopPropagation 截停）
+    return attachMselCollapse(document, () => rootRef.current, setOpen);
   }, [open]);
   const options = [...new Set([...props.candidates, ...props.selected])];
   return (

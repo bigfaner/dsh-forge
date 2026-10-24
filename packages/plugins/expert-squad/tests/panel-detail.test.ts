@@ -23,6 +23,7 @@ import {
 } from "../src-client/panel/detail-source.js";
 import {
   ExpertDetailDialog,
+  attachMselCollapse,
   mselNextOpen,
 } from "../src-client/panel/detail-dialog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
@@ -359,6 +360,48 @@ describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + bo
     expect(html).toContain("dswf-msel-menu");
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('data-msel-open=""');
+  });
+
+  it("bug 1e1e30b5: 外点收起监听以捕获阶段挂载（Dialog 内 React 合成 stopPropagation 截停冒泡——冒泡期监听收不到 Dialog 内点击）", () => {
+    const registered: { type: string; capture: boolean }[] = [];
+    const removed: { type: string; capture: boolean }[] = [];
+    const listener = (): void => undefined;
+    const doc = {
+      addEventListener: (type: string, _fn: unknown, capture: boolean): void => {
+        registered.push({ type, capture });
+      },
+      removeEventListener: (type: string, _fn: unknown, capture: boolean): void => {
+        removed.push({ type, capture });
+      },
+    };
+    const dispose = attachMselCollapse(doc, () => null, () => undefined);
+    // 装配即挂 document click 捕获监听；收起后按同 capture 形态摘除
+    expect(registered).toContainEqual({ type: "click", capture: true });
+    dispose();
+    expect(removed).toContainEqual({ type: "click", capture: true });
+  });
+
+  it("bug 1e1e30b5: Dialog 内非 msel 点击（root 外）→ 收起（outside）；msel 内部点击（root 内）→ 保持展开（inside）", () => {
+    let captured: ((event: { target: unknown }) => void) | undefined;
+    const doc = {
+      addEventListener: (_type: string, fn: (event: { target: unknown }) => void): void => {
+        captured = fn;
+      },
+      removeEventListener: (): void => undefined,
+    };
+    const root = { contains: (target: unknown): boolean => target === "in-root" };
+    let open = true;
+    attachMselCollapse(doc, () => root, (updater) => {
+      open = updater(open);
+    });
+    expect(captured).toBeTypeOf("function");
+    // Dialog 内点击（如头部名称、底部钮）：target 在 msel root 外 → 收起
+    captured!({ target: "dialog-body" });
+    expect(open).toBe(false);
+    // msel 内部点击（勾选行/新增输入）：保持展开（收起态内部点击不误开——box 才开合）
+    open = true;
+    captured!({ target: "in-root" });
+    expect(open).toBe(true);
   });
 });
 
