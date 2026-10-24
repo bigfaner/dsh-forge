@@ -30,7 +30,8 @@ import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
-import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
+import { createLoopDriver, createE2eBaselineFace, createEnsureCheckpointsFace, createUserQuestionsEscalation } from './loop/index.js'
+import { gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
@@ -287,6 +288,20 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
+      // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 经
+      // ensure 语义包装（append-only 面 → 循环侧 LoopCheckpointsFace，插件域内闭合不 import
+      // core）；proposalId 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席
+      // 时四类标记机制为死代码——此注入是生产路径落标记的装配前提。
+      checkpoints: createEnsureCheckpointsFace(ctx.forgeCheckpoints),
+      resolveProposalId: async (projectId, source) => {
+        try {
+          const rows = await ctx.forgeProposals.listProposals({ projectId })
+          return rows.find((p) => p.slug === source.slug)?.proposalId
+        } catch {
+          return undefined // fail-soft——机制惰性不判
+        }
+      },
+      resolveHeadCommit: gitHeadCommit,
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),

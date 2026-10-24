@@ -738,6 +738,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
         statsOf({ pending: 1 }), // 启动读
         statsOf({ in_progress: 1 }), // claim1 领取通知读
         statsOf({ in_progress: 1 }), // claim1 结算核池读
+        statsOf({ completed: 1 }), // claim1 review-wave 快照计数读（机械④结算点真实触发——装配修复后）
         statsOf({ completed: 1 }), // 次轮 no-task 池读（first-pass done）
         statsOf({ completed: 1 }), // 标记快照计数读（completed 1 = first-pass 基线）
         statsOf({ in_progress: 1 }), // 复盘任务领取通知读
@@ -750,9 +751,9 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    // first-pass-complete 标记：两轮 done 各一次 ensure 调用、恰一次 appended（幂等——次 done no-op）；
-    // HEAD = 结算 commit 回落锚
-    expect(built.cpEnsures).toHaveLength(2)
+    // first-pass-complete 标记：已锚定后（ensureFirstPassClosure list 前置判读）不再重复 ensure——
+    // 恰一次调用、一次 appended；HEAD = 结算 commit 回落锚
+    expect(built.cpEnsures).toHaveLength(1)
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.cpEnsures[0]).toMatchObject({
       projectId: PROJECT,
@@ -818,8 +819,8 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
     // 补标记：mark=merged + baseCommitHash = 循环检出 HEAD（解析缝桩）+ 收口时刻计数快照；
-    // 首轮 done 另有一次 first-pass ensure（已在场 = appended false 零重落）
-    expect(built.cpEnsures).toHaveLength(2)
+    // 首轮 done：first-pass 已在校 = 已锚定（ensureFirstPassClosure list 前置判读）→ 零 ensure 零复盘派生
+    expect(built.cpEnsures).toHaveLength(1)
     const mergedCall = built.cpEnsures.find((c) => c.mark === 'merged')
     expect(mergedCall).toMatchObject({
       projectId: PROJECT,
