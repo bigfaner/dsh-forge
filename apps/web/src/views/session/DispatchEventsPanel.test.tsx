@@ -75,18 +75,21 @@ function body(overrides: Partial<Parameters<typeof DispatchEventsPanelBody>[0]> 
 
 // ─────────────────── 投影窄读 ───────────────────
 
-describe('dispatchEventsOf（projectionValues 窄读——形状防御）', () => {
-  it('合法投影整值 → {entries,total}', () => {
-    expect(dispatchEventsOf({ entries: [entry()], total: 3 })).toEqual({ entries: [entry()], total: 3 })
+describe('dispatchEventsOf（projectionValues 按键窄读——形状防御）', () => {
+  const VIEW = { entries: [entry()], total: 3 }
+  it('bug e56d8351：传入 projectionValues 映射自身按键窄读 forge-dispatch-events（非直喂视图）', () => {
+    expect(dispatchEventsOf({ 'forge-dispatch-events': VIEW })).toEqual(VIEW)
+    expect(dispatchEventsOf({ 'other-key': VIEW })).toBeUndefined()
+    expect(dispatchEventsOf({})).toBeUndefined()
   })
   it('键缺席/形状漂移 → undefined（面板隐藏）', () => {
     expect(dispatchEventsOf(undefined)).toBeUndefined()
     expect(dispatchEventsOf('garbage')).toBeUndefined()
-    expect(dispatchEventsOf({ entries: 'x', total: 1 })).toBeUndefined()
-    expect(dispatchEventsOf({ entries: [], total: 'x' })).toBeUndefined()
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: 'x', total: 1 } })).toBeUndefined()
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: [], total: 'x' } })).toBeUndefined()
   })
   it('畸形条目逐条剔除（合法行保留——渲染面不猜不炸）', () => {
-    const view = dispatchEventsOf({ entries: [entry(), { sourceSlug: '' }, 42], total: 3 })
+    const view = dispatchEventsOf({ 'forge-dispatch-events': { entries: [entry(), { sourceSlug: '' }, 42], total: 3 } })
     expect(view?.entries).toHaveLength(1)
     expect(view?.total).toBe(3)
   })
@@ -257,7 +260,7 @@ describe('DispatchEventsPanel 装载壳（SSR 首帧——effect 零执行）', 
   })
   it('非循环会话（投影键缺席/零条目）= 可见性判读隐藏（dispatchEventsOf 零条目）', () => {
     expect(dispatchEventsOf(undefined)).toBeUndefined()
-    expect(dispatchEventsOf({ entries: [], total: 0 })?.entries).toHaveLength(0)
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: [], total: 0 } })?.entries).toHaveLength(0)
   })
   it('SSR 首帧（effect 零执行——锚定缺席不出场）；可见性条目判读 + 锚定归 e2e', () => {
     expect(renderToStaticMarkup(<DispatchEventsPanel sessionId="s-1" />)).toBe('')

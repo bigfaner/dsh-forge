@@ -77,13 +77,19 @@ export function isDispatchEventEntry(value: unknown): value is DispatchEventEntr
   return true
 }
 
-/** 账本行 projectionValues['forge-dispatch-events'] 窄读（键缺席/形状漂移 = undefined） */
+/** 投影键（1.6 fold unit 注册面单源——mobile progress.ts 同值） */
+export const DISPATCH_EVENTS_PROJECTION_KEY = 'forge-dispatch-events'
+
+/** 账本行 projectionValues 按键窄读 forge-dispatch-events 视图（键缺席/形状漂移 = undefined；bug e56d8351——调用点传映射本体，函数内按键取值） */
 export function dispatchEventsOf(values: unknown): DispatchEventsView | undefined {
   if (typeof values !== 'object' || values === null) return undefined
   const raw = values as Record<string, unknown>
-  if (!Array.isArray(raw['entries']) || typeof raw['total'] !== 'number') return undefined
-  const entries = raw['entries'].filter(isDispatchEventEntry)
-  return { entries, total: raw['total'] }
+  const view = raw[DISPATCH_EVENTS_PROJECTION_KEY]
+  if (typeof view !== 'object' || view === null) return undefined
+  const shape = view as Record<string, unknown>
+  if (!Array.isArray(shape['entries']) || typeof shape['total'] !== 'number') return undefined
+  const entries = shape['entries'].filter(isDispatchEventEntry)
+  return { entries, total: shape['total'] }
 }
 
 /** 场景码 major → 面板组中文章（事件清单场景族——值域封闭七族） */
