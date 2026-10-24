@@ -280,6 +280,12 @@ export interface LoopStartInput {
    * 缺席 = 未携带（spawn/结算零核销）。
    */
   readonly worktree?: string
+  /**
+   * 本项目文档根绝对路径（<工作区根>/.forge/docs——装配面按 projectId 解析工作区根派生）：
+   * 登记进 LoopRecord.docsRoot——纯文档跨分支特例的归属判据锚（结算核 resolve 绝对路径
+   * 核验包含，他项目 .forge/docs 不命中）。缺席 = 特例回落前缀判据（fail-soft）。
+   */
+  readonly docsRoot?: string
 }
 
 /** 启动返回（3b 两拒绝码：loop-active = 该容器已有活循环（他源他会话并行不受限）；
@@ -719,6 +725,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         ownerSessionId: input.ownerSessionId,
         projectId,
         ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
+        ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
         takeoverSessions: new Set<string>(), // 3b 接管集（登记绑定——remove 随之蒸发）
       }
       const controller = new AbortController()
@@ -1159,6 +1166,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     guardOnFailure: false,
     // 提交落点核验（1.14——cwd 钉定收口）：容器检出 = 发起循环 worktree
     ...(record.worktree !== undefined ? { worktreeCwd: record.worktree } : {}),
+    ...(record.docsRoot !== undefined ? { docsRoot: record.docsRoot } : {}),
     // 改进7（bug ca061ef6）：欠账卡文案与简报行真实存在性一致——本轮 claim 简报红灯清单
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）

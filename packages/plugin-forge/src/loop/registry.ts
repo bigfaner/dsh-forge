@@ -52,6 +52,12 @@ export interface LoopRecord {
    * 缺席 = 未携带（老路径——spawn/结算零核销）。
    */
   readonly worktree?: string
+  /**
+   * 本项目文档根绝对路径（<工作区根>/.forge/docs——start 时点装配面按 projectId 解析派生）：
+   * 纯文档跨分支特例的归属判据锚（结算核 resolve 绝对路径核验包含，他项目 .forge/docs 不
+   * 命中）。缺席 = 特例回落 '.forge/docs/' 前缀判据（fail-soft）。
+   */
+  readonly docsRoot?: string
   inFlight?: LoopInFlight
   /** 在场即挂起态（3b——suspendForVerdict 写入、处置回流清除；投影按此分流 P1 vs P3+P9） */
   suspended?: SuspendedPayload

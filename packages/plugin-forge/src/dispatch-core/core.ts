@@ -450,6 +450,12 @@ export interface SettleStageInput {
    */
   readonly worktreeCwd?: string
   /**
+   * 本项目文档根绝对路径（<工作区根>/.forge/docs——循环径透传 LoopRecord.docsRoot）：纯文档
+   * 跨分支特例的归属判据锚（resolve 绝对路径核验包含，他项目 .forge/docs 不命中）；缺席 =
+   * 回落 '.forge/docs/' 前缀判据（fail-soft——工具壳行为零变化）。
+   */
+  readonly docsRoot?: string
+  /**
    * 本轮 claim 简报红灯清单（改进7——欠账卡文案与简报行真实存在性一致的判据）：
    * 在场且非空 = 欠账卡指示「比对 E2E_BASELINE_RED 行」；缺席/空 = 兜底文案。
    */
@@ -485,6 +491,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     spawnStartedAt,
     ...(scope.source !== undefined ? { poolSource: scope.source } : {}),
     ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
+    ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
     ...(input.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: input.e2eBaselineRedCases } : {}),
   })
   if (settlement.case === 'settled') {

@@ -6,6 +6,7 @@
 // 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
 // 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import { execFile } from 'node:child_process'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { forgetWorkerSourceTask } from './assemble.js'
@@ -186,6 +187,12 @@ export async function settleWorkerRun(
      * 核验提交落点（commit 所属分支 = 容器检出分支）；缺席 = 不核验（工具壳行为零变化）。
      */
     readonly worktreeCwd?: string
+    /**
+     * 本项目文档根绝对路径（<工作区根>/.forge/docs——跨分支特例归属判据锚）：在场时纯文档
+     * 特例按绝对路径归属核验（resolve 后必须落在 docsRoot 内——他项目 .forge/docs 文档不命中）；
+     * 缺席 = 回落 '.forge/docs/' 前缀判据（fail-soft——装配未接线时零变化）。
+     */
+    readonly docsRoot?: string
     /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
     readonly e2eBaselineRedCases?: readonly string[]
     readonly handle: SpawnWorkerHandle
@@ -238,24 +245,30 @@ export async function settleWorkerRun(
     const verify = deps.commitLanding ?? gitCommitLanding
     try {
       const verdict = await verify(ctx.worktreeCwd, submitRecord.commitHash)
-      // 跨分支结算特例（用户裁决 2026-10-24）：纯 .forge/docs/ 文档提交允许落容器分支之外
-      // （文档属工作区留盘产物，不入容器分支交付面）。fail-closed：files 缺席（无法证明
-      // 纯文档）或含任一文档外路径仍走 landing-rejected，不静默放行。
+      // 跨分支结算特例（用户裁决 2026-10-24）：纯本项目 .forge/docs/ 文档提交允许落容器分支
+      // 之外（文档属工作区留盘产物，不入容器分支交付面）。判据 = files 全量归属于文档根——
+      // docsRoot 在场时 resolve 到绝对路径核验包含关系（他项目 .forge/docs 不命中）；缺席
+      // 回落 '.forge/docs/' 前缀判据。fail-closed：files 缺席或含任一文档外路径仍拒绝。
+      const fileInsideDocsRoot = (f: string): boolean => {
+        if (ctx.docsRoot === undefined) return f.replaceAll('\\', '/').startsWith('.forge/docs/')
+        const abs = isAbsolute(f) ? f : resolve(resolve(ctx.docsRoot, '..', '..'), f)
+        const rel = relative(ctx.docsRoot, abs)
+        return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+      }
       const docsOnly =
-        submitRecord.files !== undefined &&
-        submitRecord.files.length > 0 &&
-        submitRecord.files.every((f) => f.startsWith('.forge/docs/'))
+        submitRecord.files !== undefined && submitRecord.files.length > 0 && submitRecord.files.every(fileInsideDocsRoot)
       if (!verdict.ok && !docsOnly) {
         // 特例未命中原因（申报缺漏 vs 范围越界，一一对应纠正路径①②的前提差异）
+        const docsBasis = ctx.docsRoot !== undefined ? `本项目文档根 ${ctx.docsRoot}` : "'.forge/docs/' 前缀"
         const causeHint =
           submitRecord.files === undefined || submitRecord.files.length === 0
-            ? 'submitTask 未申报 files（特例判据 = files 全量以 .forge/docs/ 开头）'
-            : `files 含文档外路径：${submitRecord.files.filter((f) => !f.startsWith('.forge/docs/')).join('、')}`
+            ? `submitTask 未申报 files（特例判据 = files 全量归属于 ${docsBasis}）`
+            : `files 含文档外路径：${submitRecord.files.filter((f) => !fileInsideDocsRoot(f)).join('、')}`
         return await rejectLanding(deps, ctx, new Error(
           [
             `[settle-cwd-pin] 提交落点核验失败：提交 ${submitRecord.commitHash} 不在容器检出分支 ${verdict.branch} 上（所在分支：${verdict.commitBranches.join(', ') || '任一本地分支均不可达'}），结算拒绝`,
             `原因：${causeHint}，不适用纯文档跨分支特例`,
-            `纠正（按改动性质二选一）：① 含代码/测试 → git checkout ${verdict.branch} 后按任务范围重新提交，重新 submitTask 附新 commitHash；② 纯文档 → 重新 submitTask，files 逐文件如实列出且全部以 .forge/docs/ 开头`,
+            `纠正（按改动性质二选一）：① 含代码/测试 → git checkout ${verdict.branch} 后按任务范围重新提交，重新 submitTask 附新 commitHash；② 纯文档 → 重新 submitTask，files 逐文件如实列出且全部归属于 .forge/docs/`,
           ].join('\n'),
         ))
       }

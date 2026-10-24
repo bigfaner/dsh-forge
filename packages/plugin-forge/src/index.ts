@@ -314,6 +314,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       start: async (input) => {
         // resolve 首调仅触发懒解析（记忆化桥接——同步读数恒 undefined）；有界轮询等解析
         // 收敛（≤2s——装配期 warm 未覆盖的运行期注册项目），未命中 = 不记忆（fail-soft 丢行）
+        let docsRoot: string | undefined
         if (input.projectId !== undefined) {
           const deadline = Date.now() + 2_000
           for (;;) {
@@ -325,8 +326,21 @@ const forgePlugin: ForgePlugin = Object.assign(
             if (Date.now() >= deadline) break
             await new Promise((r) => setTimeout(r, 50))
           }
+          // 本项目文档根（跨分支特例归属判据锚——getProject().wsPath 工作区根派生，
+          // 他项目 .forge/docs 不命中；解析失败 = 缺席回落前缀判据，fail-soft）
+          try {
+            const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
+            if (typeof projects.getProject === 'function') {
+              const project = await projects.getProject(input.projectId)
+              if (project !== null && typeof project.wsPath === 'string' && project.wsPath.trim() !== '') {
+                docsRoot = join(project.wsPath, '.forge', 'docs')
+              }
+            }
+          } catch {
+            docsRoot = undefined
+          }
         }
-        return loopDriverBase.start(input)
+        return loopDriverBase.start({ ...input, ...(docsRoot !== undefined ? { docsRoot } : {}) })
       },
     }
     const resolveProjectId = createProjectResolver(config.projects ?? [], config.bindingsFile)
