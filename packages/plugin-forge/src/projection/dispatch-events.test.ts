@@ -115,7 +115,23 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
     const view = unit.wire!.view(state)
     expect(view.entries).toEqual(state.entries)
     expect(view.total).toBe(3)
+    // 1.16——携 counts 事件刷新池级 pending（claim 计数快照同径）
+    expect(view.pending).toBe(2)
     expect(unit.wire!.viewSchema.parse(view)).toEqual(view)
+  })
+
+  it('1.16 池级 pending 快照：pool/pending 事件即刷新 pending；无 counts 事件 = pending 缺席（旧载荷兼容）', () => {
+    const bare = fold([progress({ at: 1 }), progress({ verb: 'settle', status: 'completed', at: 2 })])
+    expect(bare.pending).toBeUndefined()
+    expect(unit.wire!.view(bare).pending).toBeUndefined()
+    const withPool = unit.apply(bare, progress({
+      verb: 'loop',
+      scenario: 'pool/pending',
+      counts: { pending: 4, running: 1, done: 2 },
+      at: 3,
+    }) as never)
+    expect(withPool.pending).toBe(4)
+    expect(unit.wire!.viewSchema.parse(unit.wire!.view(withPool))).toMatchObject({ pending: 4 })
   })
 })
 
@@ -140,6 +156,15 @@ describe('恢复：stateSchema 种子重放（checkpoint 冷读链）', () => {
     const resumed = unit.apply(cold, progress({ verb: 'claim', at: 3 }) as never)
     expect(resumed.total).toBe(3)
     expect(resumed.entries).toHaveLength(3)
+  })
+
+  it('1.16 向后兼容：旧缓存形状 {entries,total} 可读（pending 缺席）；pending 键合法；pending 错型抛错', () => {
+    const legacy = unit.stateSchema.parse({ entries: [progress({ at: 1 }).data], total: 1 })
+    expect(legacy.pending).toBeUndefined()
+    expect(unit.stateSchema.parse({ entries: [], total: 0, pending: 3 })).toMatchObject({ pending: 3 })
+    expect(() => unit.stateSchema.parse({ entries: [], total: 0, pending: -1 })).toThrow()
+    expect(() => unit.stateSchema.parse({ entries: [], total: 0, pending: 'x' })).toThrow()
+    expect(() => unit.wire!.viewSchema.parse({ entries: [], total: 0, pending: 1.5 })).toThrow()
   })
 
   it('外来 state 形状（缺键/多键/越界窗口/错型/坏条目）parse 抛错——回退重折', () => {

@@ -84,6 +84,11 @@ export interface ForgeShellHostProps {
    */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
   /**
+   * worker 父反查兜底（loop-event-delivery 1.16 插件 inject face——载荷 workerSessionId
+   * 缺席行：账本子行 parentId + taskKey 反查定位子会话，落空 = 行保持非交互不空跳）。
+   */
+  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
+  /**
    * dsh 会话账本快照源（插件 inject face——ctx.sessions.list；悬浮进度流面板的数据源 =
    * 账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新；缺席 =
    * 面板不出场）。
@@ -340,15 +345,17 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
       {/* 悬浮进度流面板（loop-event-delivery 1.8——派发任务悬浮面板的继任面，替代不并存）：
           会话视图 + 主视图会话锚 + 账本源齐备时挂载；数据 = 账本行
           projectionValues['forge-dispatch-events'] 窄读 + store subscribe 实时刷新（零新增
-          读取 API）；条目按场景码 major 分组、行状态章 = 载荷 status 四值；行点击 = 载荷
-          workerSessionId 开 worker 子会话（树零联动）；可见性随所属会话（非循环会话/切走
-          = 投影判读隐藏）；key = 主视图会话（切会话整体重置折叠与拖移本地态） */}
+          读取 API）；行 = 任务轨形态（1.16——任务键时间线每任务最新态一行）；行点击 = 载荷
+          workerSessionId 开 worker 子会话（缺席行 resolveWorkerSession 父反查兜底，落空
+          非交互；树零联动）；可见性随所属会话（非循环会话/切走 = 投影判读隐藏）；key =
+          主视图会话（切会话整体重置折叠与拖移本地态） */}
       {view === 'session' && mainSessionId !== null && props.sessions !== undefined ? (
         <DispatchEventsPanel
           key={mainSessionId}
           sessionId={mainSessionId}
           sessions={props.sessions}
           {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
+          {...(props.resolveWorkerSession !== undefined ? { resolveWorkerSession: props.resolveWorkerSession } : {})}
         />
       ) : null}
       {/* 任务详情弹窗（D23：挂载独立于 dock——对话中经桥直接打开，不依赖 dock 展开/

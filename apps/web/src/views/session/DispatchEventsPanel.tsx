@@ -6,10 +6,13 @@
 //     'forge/progress' 事件——官方 session-projection registry 产物，wire view =
 //     {entries 最近 200 条窗口, total}）；官方 sessions.list store subscribe = onChanged
 //     实时刷新（useSyncExternalStore 直连——SC2 零缓存零副本，sidebar 同缝）。
-//   - 行状态章 = 载荷 status 四值派生（running=执行中/completed=已完成/blocked=阻塞/
-//     interrupted=已中断——⑰ stopped 事件载 inFlightTaskKey 即中断态行，语义与原任务面板
-//     中断章对齐）；条目按场景码 major 分组渲染、minor 为组内细分行（scenario 缺席旧载荷
-//     = verb 回退映射）。
+//   - 行聚合口径 = 任务键时间线（1.16 用户裁决：每任务最新态一行，组内时序；循环级事件
+//     各占一行；分组/章语义并入备注行「状态 · 摘要」文案）；行形态 = 任务轨（rail 竖线 +
+//     状态点：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断 caption + 右侧时间）；
+//     可跳转行带 jump 徽标（↗——「可点开子会话」可见 affordance）。
+//   - 行点击 = 打开 worker 执行子会话（1.16 用户裁决①：除未开始执行外全部任务行可交互
+//     ——载荷 workerSessionId 直跳；缺席行经 resolveWorkerSession 父反查兜底，落空记 ''
+//     行保持非交互不空跳）。
 // 落位/交互（DispatchPanel 既有缝原样承袭——fix bug 570fa4e2 判例同径）：
 //   - shell overlay 常驻树挂载（fixed + pointer-events:auto + dockkit 浮层层级）；几何 =
 //     对话真盒官方锚（[data-conversation-scroll] + [data-conversation-tabs]），dock 展开
@@ -22,6 +25,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -31,10 +35,9 @@ import {
 import {
   Button,
   IconChevronUpOutlineRegular,
+  IconRightUpOutlineRegular,
   IconSparkleRegular,
-  Tag,
   Tooltip,
-  type TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { timeLabelZh } from '../../components/index.js'
 import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '../sidebar/sidebar-model.js'
@@ -55,10 +58,12 @@ export interface DispatchEventEntry {
   readonly at: number
 }
 
-/** 投影整值窄形状（wire view {entries 窗口, total} 消费切片） */
+/** 投影整值窄形状（wire view {entries 窗口, total, pending?} 消费切片） */
 export interface DispatchEventsView {
   readonly entries: readonly DispatchEventEntry[]
   readonly total: number
+  /** 池级待执行计数（1.16——fold pending 字段透传；缺席 = 旧缓存不呈现该项） */
+  readonly pending?: number
 }
 
 /** 条目守卫（渲染面防御——必填面收紧校验，可选面类型错即弃行；不猜不炸） */
@@ -88,41 +93,42 @@ export function dispatchEventsOf(values: unknown): DispatchEventsView | undefine
   if (typeof view !== 'object' || view === null) return undefined
   const shape = view as Record<string, unknown>
   if (!Array.isArray(shape['entries']) || typeof shape['total'] !== 'number') return undefined
+  if (shape['pending'] !== undefined && (typeof shape['pending'] !== 'number' || !Number.isFinite(shape['pending']))) return undefined
   const entries = shape['entries'].filter(isDispatchEventEntry)
-  return { entries, total: shape['total'] }
+  return {
+    entries,
+    total: shape['total'],
+    ...(shape['pending'] !== undefined ? { pending: shape['pending'] as number } : {}),
+  }
 }
 
-/** 场景码 major → 面板组中文章（事件清单场景族——值域封闭七族） */
-export const DISPATCH_EVENT_MAJOR_LABELS: Readonly<Record<string, string>> = {
-  startup: '启动',
-  claim: '领取',
-  task: '任务',
-  blocked: '阻塞',
-  retry: '重试',
-  loop: '循环',
-  suspend: '挂起',
-}
+/** 池级快照场景码（pool/pending 事件只承载统计条 pending 计数——不进任务时间线） */
+export const DISPATCH_POOL_PENDING_SCENARIO = 'pool/pending'
 
-/** scenario 缺席（旧载荷兼容）的 verb → major 回退映射 */
-const VERB_MAJOR_FALLBACK: Readonly<Record<string, string>> = {
-  startup: 'startup',
-  claim: 'claim',
-  'claim-resume': 'claim',
-  settle: 'task',
-  stop: 'loop',
-  suspend: 'suspend',
-  retry: 'retry',
-  halt: 'loop',
-  timeout: 'loop',
-  'finish-all': 'loop',
-  loop: 'loop',
-}
-
-/** 场景码 major 解析（scenario 前缀单源；缺席 = verb 回退；未知 = loop 兜底不炸） */
-export function dispatchEventMajorOf(entry: DispatchEventEntry): string {
-  const scenario = entry.scenario
-  if (scenario !== undefined && scenario.includes('/')) return scenario.slice(0, scenario.indexOf('/'))
-  return VERB_MAJOR_FALLBACK[entry.verb] ?? 'loop'
+/** 场景 minor 中文章（分组/章语义并入备注行文案——1.16 行聚合口径；键 = minor 段） */
+export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
+  'from-scratch': '从头执行',
+  'resume-stopped': '接续执行',
+  'resume-inflight': '接续在飞',
+  new: '领取',
+  interrupted: '恢复中断',
+  complete: '完成',
+  'with-fix': '已带修复',
+  'auto-fixed': '已自动处理',
+  split: '已分割',
+  'wait-external': '等待外部',
+  'ask-user': '待你裁决',
+  'spawn-failed': '启动失败',
+  'worker-aborted': '执行中断',
+  halt: '连续失败',
+  'blocked-pool': '池阻塞',
+  timeout: '超时',
+  'finish-all': '全部完成',
+  stopped: '已停止',
+  'spawn-rate-limited': '启动限流',
+  'worker-rate-limited': '执行限流',
+  'abort-over-limit': '中止超限',
+  'landing-rejected': '结算被拒',
 }
 
 /** 行标题（taskTitle 优先 → taskKey → sourceSlug 三级兜底） */
@@ -130,46 +136,59 @@ export function dispatchEventTitleOf(entry: DispatchEventEntry): string {
   return entry.taskTitle ?? entry.taskKey ?? entry.sourceSlug
 }
 
-/** 行副行（note 优先 → scenario minor → 无） */
-function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefined {
-  if (entry.note !== undefined) return entry.note
+/** 备注行文案（「状态 · 摘要」——状态词 + 场景章语义 + 叙述注记；全缺 = undefined 不渲染） */
+export function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefined {
+  const parts: string[] = [DISPATCH_EVENT_STATUS_WORD[entry.status]]
   if (entry.scenario !== undefined && entry.scenario.includes('/')) {
-    return entry.scenario.slice(entry.scenario.indexOf('/') + 1)
+    const minor = entry.scenario.slice(entry.scenario.indexOf('/') + 1)
+    const label = DISPATCH_EVENT_MINOR_LABELS[minor]
+    if (label !== undefined && label !== parts[0]) parts.push(label)
   }
-  return undefined
+  if (entry.note !== undefined) parts.push(entry.note)
+  return parts.length > 1 ? parts.join(' · ') : undefined
 }
 
-/** 场景分组（major 首次出现序保序——组内条目时序；未知 major 落 loop 兜底） */
-export interface DispatchEventGroup {
-  readonly major: string
-  readonly label: string
-  readonly entries: readonly DispatchEventEntry[]
-}
-
-export function groupDispatchEvents(entries: readonly DispatchEventEntry[]): readonly DispatchEventGroup[] {
-  const groups: DispatchEventGroup[] = []
-  const index = new Map<string, DispatchEventEntry[]>()
+/**
+ * 行聚合（1.16 用户裁决——任务键时间线口径）：每任务最新态一行（后写覆盖 = 最新态，
+ * 组内时序排序），无任务键的循环级事件各占一行；池级 pending 快照（pool/pending）不进
+ * 时间线——只承载统计条「待执行」计数。
+ */
+export function aggregateDispatchRows(entries: readonly DispatchEventEntry[]): readonly DispatchEventEntry[] {
+  const latest = new Map<string, DispatchEventEntry>()
+  const singles: DispatchEventEntry[] = []
   for (const entry of entries) {
-    const major = DISPATCH_EVENT_MAJOR_LABELS[dispatchEventMajorOf(entry)] !== undefined ? dispatchEventMajorOf(entry) : 'loop'
-    let bucket = index.get(major)
-    if (bucket === undefined) {
-      bucket = []
-      index.set(major, bucket)
-      groups.push({ major, label: DISPATCH_EVENT_MAJOR_LABELS[major] ?? major, entries: bucket })
+    if (entry.scenario === DISPATCH_POOL_PENDING_SCENARIO) continue
+    if (entry.taskKey === undefined) {
+      singles.push(entry)
+      continue
     }
-    bucket.push(entry)
+    latest.set(entry.taskKey, entry)
   }
-  return groups
+  return [...latest.values(), ...singles].sort((a, b) => a.at - b.at)
 }
 
-/** 状态章（载荷 status 四值单源——官方 Tag tone + 语义中文） */
-export const DISPATCH_EVENT_STATUS_BADGE: Readonly<
-  Record<DispatchEventEntry['status'], { readonly label: string; readonly tone: TagTone }>
-> = {
-  running: { label: '执行中', tone: 'info' },
-  completed: { label: '已完成', tone: 'success' },
-  blocked: { label: '阻塞', tone: 'warning' },
-  interrupted: { label: '已中断', tone: 'danger' },
+/** 状态词（备注行首段 + 统计条口径——prototype「状态 · 摘要」同语） */
+export const DISPATCH_EVENT_STATUS_WORD: Readonly<Record<DispatchEventEntry['status'], string>> = {
+  running: '执行中',
+  completed: '完成',
+  blocked: '阻塞',
+  interrupted: '已中断',
+}
+
+/** 轨状态点色档（prototype .frow 同款：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断与待定 caption） */
+export type DispatchEventDotTone = 'run' | 'done' | 'blk' | 'stop'
+
+export function dispatchEventDotToneOf(status: DispatchEventEntry['status']): DispatchEventDotTone {
+  switch (status) {
+    case 'running':
+      return 'run'
+    case 'completed':
+      return 'done'
+    case 'blocked':
+      return 'blk'
+    case 'interrupted':
+      return 'stop'
+  }
 }
 
 /** 底部统计（任务键最新态归桶——循环级事件不计；返回 = [完成, 执行中, 阻塞, 已中断]） */
@@ -315,8 +334,8 @@ export interface DispatchEventsPanelBodyProps {
   readonly entries: readonly DispatchEventEntry[]
   /** 本会话事件总数（窗口外历史仍计数——「窗口 + 总数」承载） */
   readonly total: number
-  /** 面板标题 slug（事件源任务链 slug——载荷 sourceSlug 单值判读归壳） */
-  readonly sourceSlug: string
+  /** 池级待执行计数（1.16 用户裁决②——缺席 = 统计条不呈现「待执行」项） */
+  readonly pending?: number
   /** 面板几何（锚定或拖移位——壳注入） */
   readonly geometry: DispatchPanelGeometry
   /** 折叠态（壳持有） */
@@ -325,35 +344,51 @@ export interface DispatchEventsPanelBodyProps {
   readonly dragged: boolean
   /** 相对时间基准（注入——纯渲染可测） */
   readonly now: number
+  /** 父反查兜底已解析表（taskKey → worker 子会话 id；'' = 已反查落空——行保持非交互；壳注入） */
+  readonly resolvedWorker?: ReadonlyMap<string, string>
   readonly onCollapse: () => void
   readonly onExpand: () => void
   /** 行点击 = 打开 worker 执行子会话（装配接线；缺席 = 非交互呈现） */
   readonly onOpenWorker?: (childSessionId: string, taskKey?: string) => void
 }
 
-/** 单行：rail 状态点 + 标题/副行 + 相对时间 + 状态章（workerSessionId 在场 = 可点击行） */
+/** 行跳转锚解析（纯函数）：载荷 workerSessionId 直跳 → 父反查已解析表命中 → 落空 = undefined（非交互不空跳） */
+export function dispatchRowSessionOf(
+  entry: DispatchEventEntry,
+  resolvedWorker: ReadonlyMap<string, string> | undefined,
+): string | undefined {
+  if (entry.workerSessionId !== undefined) return entry.workerSessionId
+  if (entry.taskKey === undefined) return undefined
+  const resolved = resolvedWorker?.get(entry.taskKey)
+  return resolved === '' || resolved === undefined ? undefined : resolved
+}
+
+/** 单行：任务轨形态（rail 竖线 + 状态点 + 标题/备注 + 右侧时间；可跳转行带 jump 徽标） */
 function DispatchEventRowView({
   entry,
   now,
+  resolvedWorker,
   onOpenWorker,
 }: {
   entry: DispatchEventEntry
   now: number
+  resolvedWorker?: ReadonlyMap<string, string>
   onOpenWorker?: (childSessionId: string, taskKey?: string) => void
 }): ReactNode {
-  const badge = DISPATCH_EVENT_STATUS_BADGE[entry.status]
+  const tone = dispatchEventDotToneOf(entry.status)
   const note = dispatchEventNoteOf(entry)
+  const session = dispatchRowSessionOf(entry, resolvedWorker)
   const open =
-    onOpenWorker === undefined || entry.workerSessionId === undefined
+    onOpenWorker === undefined || session === undefined
       ? undefined
       : (): void => {
-          onOpenWorker(entry.workerSessionId as string, entry.taskKey)
+          onOpenWorker(session, entry.taskKey)
         }
   return (
     <Tooltip label={open !== undefined ? `打开 worker 子会话：${dispatchEventTitleOf(entry)}` : dispatchEventTitleOf(entry)} portal>
       <div
-        className="dswf-dep-row"
-        data-dswf-dep-row={entry.workerSessionId}
+        className={`dswf-dep-row dswf-dep-${tone}`}
+        data-dswf-dep-row={session}
         data-dswf-dep-status={entry.status}
         {...(open !== undefined ? { role: 'button', tabIndex: 0, onClick: open } : {})}
         onKeyDown={
@@ -367,14 +402,21 @@ function DispatchEventRowView({
               }
         }
       >
-        <span className="dswf-dep-row-main">
+        <span className="dswf-dep-rail" aria-hidden="true">
+          <i />
+        </span>
+        <span className="dswf-dep-row-t">
           <span className="dswf-dep-row-title">{dispatchEventTitleOf(entry)}</span>
           {note !== undefined ? <span className="dswf-dep-row-note">{note}</span> : null}
         </span>
-        <span className="dswf-dep-row-time">{timeLabelZh(entry.at, now)}</span>
-        <Tag tone={badge.tone} className="dswf-dep-row-tag">
-          {badge.label}
-        </Tag>
+        <span className="dswf-dep-row-side">
+          <span className="dswf-dep-row-time">{timeLabelZh(entry.at, now)}</span>
+          {open !== undefined ? (
+            <span className="dswf-dep-row-jump" data-dswf-dep-jump="" aria-hidden="true">
+              <IconRightUpOutlineRegular size={11} />
+            </span>
+          ) : null}
+        </span>
       </div>
     </Tooltip>
   )
@@ -383,12 +425,12 @@ function DispatchEventRowView({
 /** 悬浮进度流纯渲染（展开面板 ↔ 半透明悬浮球双形态） */
 export function DispatchEventsPanelBody({
   entries,
-  total,
-  sourceSlug,
+  pending,
   geometry,
   collapsed,
   dragged,
   now,
+  resolvedWorker,
   onCollapse,
   onExpand,
   onOpenWorker,
@@ -410,7 +452,7 @@ export function DispatchEventsPanelBody({
       </Tooltip>
     )
   }
-  const groups = groupDispatchEvents(entries)
+  const rows = aggregateDispatchRows(entries)
   const stats = dispatchEventStats(entries)
   return (
     <div
@@ -423,8 +465,8 @@ export function DispatchEventsPanelBody({
     >
       <div className="dswf-dep-head" data-dswf-dep-head="">
         <span className="dswf-dep-dot" aria-hidden="true" />
-        <span className="dswf-dep-title">任务进度 · {sourceSlug}</span>
-        <span className="dswf-dep-live">live · {total} 条</span>
+        <span className="dswf-dep-title">任务进度</span>
+        <span className="dswf-dep-live">live · 不经模型</span>
         <Tooltip label="折叠" portal>
           <Button
             variant="ghost"
@@ -439,22 +481,23 @@ export function DispatchEventsPanelBody({
         </Tooltip>
       </div>
       <div className="dswf-dep-list" data-dswf-dep-list="">
-        {groups.map((group) => (
-          <section key={group.major} className="dswf-dep-group" data-dswf-dep-group={group.major}>
-            <div className="dswf-dep-group-head">
-              <span className="dswf-dep-group-label">{group.label}</span>
-              <span className="dswf-dep-group-count">{group.entries.length}</span>
-            </div>
-            {group.entries.map((entry, i) => (
-              <DispatchEventRowView key={`${entry.at}-${entry.taskKey ?? entry.verb}-${i}`} entry={entry} now={now} onOpenWorker={onOpenWorker} />
-            ))}
-          </section>
+        {rows.map((entry, i) => (
+          <DispatchEventRowView
+            key={`${entry.at}-${entry.taskKey ?? entry.verb}-${i}`}
+            entry={entry}
+            now={now}
+            resolvedWorker={resolvedWorker}
+            onOpenWorker={onOpenWorker}
+          />
         ))}
       </div>
       <div className="dswf-dep-stat" data-dswf-dep-stat="">
         <span>完成 <b>{stats.completed}</b></span>
         <span>执行中 <b>{stats.running}</b></span>
         <span>阻塞 <b>{stats.blocked}</b></span>
+        {pending !== undefined ? (
+          <span>待执行 <b>{pending}</b></span>
+        ) : null}
         <span>已中断 <b>{stats.interrupted}</b></span>
       </div>
     </div>
@@ -471,6 +514,11 @@ export interface DispatchEventsPanelProps {
   readonly sessions?: SnapshotSource<LedgerSessionsSnapshot>
   /** 行点击 = 打开 worker 执行子会话（插件 inject face；缺席 = 非交互） */
   readonly onOpenWorkerSession?: (childSessionId: string, parentSessionId?: string) => void
+  /**
+   * worker 父反查兜底（1.16 用户裁决①——载荷 workerSessionId 缺席行：账本子行 parentId +
+   * taskKey 反查定位子会话；resolve 落空 = 行保持非交互不空跳；缺席 = 仅直跳径）
+   */
+  readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
 }
 
 /** 账本缺席快照（undefined 源的稳定 SSR 参照——useSyncExternalStore 快照稳定性纪律） */
@@ -565,17 +613,42 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
   )
   const snap = useSyncExternalStore(subscribe, read, read)
   const row: LedgerSessionRow | undefined = snap.byId[props.sessionId]
-  const view = dispatchEventsOf(row?.projectionValues)
-  const entries = view?.entries ?? []
+  // 窄读记忆化（projectionValues 引用恒定 = view/entries 身份稳定——反查效应依赖不抖动）
+  const view = useMemo(() => dispatchEventsOf(row?.projectionValues), [row?.projectionValues])
+  const entries = useMemo(() => view?.entries ?? [], [view])
   const active = entries.length > 0
-  const sourceSlug = entries[0]?.sourceSlug ?? ''
   const anchor = useDepAnchor(active)
   const [collapsed, setCollapsed] = useState(DEP_DEFAULT_COLLAPSED)
   const [dragged, setDragged] = useState(false)
   const [dragPos, setDragPos] = useState<DispatchPanelGeometry | null>(null)
   const [badgePos, setBadgePos] = useState<DispatchPanelGeometry | null>(null)
+  // 父反查兜底已解析表（taskKey → 子会话 id；'' = 已反查落空——不再重查，行保持非交互）
+  const [resolvedWorker, setResolvedWorker] = useState<ReadonlyMap<string, string>>(new Map())
   const dragRef = useRef<DragSession | null>(null)
   const badgeMovedRef = useRef(false)
+  // 反查效应（1.16 用户裁决①）：载荷 workerSessionId 缺席且带 taskKey 的行逐个父反查；
+  // resolver 缺席 / 反查落空（undefined）= 记 '' 不重查——行保持非交互不空跳。
+  const resolver = props.resolveWorkerSession
+  useEffect(() => {
+    if (resolver === undefined) return
+    let cancelled = false
+    for (const entry of entries) {
+      if (entry.workerSessionId !== undefined || entry.taskKey === undefined) continue
+      if (resolvedWorker.has(entry.taskKey)) continue
+      void resolver(props.sessionId, entry.taskKey)
+        .then((childId) => {
+          if (cancelled) return
+          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, childId ?? '')))
+        })
+        .catch(() => {
+          if (cancelled) return
+          setResolvedWorker((prev) => (prev.has(entry.taskKey as string) ? prev : new Map(prev).set(entry.taskKey as string, '')))
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [entries, resolver, props.sessionId, resolvedWorker])
   if (!active || anchor === null || sessions === undefined) return null
   const geometry = dragged && dragPos !== null ? dragPos : anchor
 
@@ -647,11 +720,12 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
       <DispatchEventsPanelBody
         entries={entries}
         total={view?.total ?? entries.length}
-        sourceSlug={sourceSlug}
+        pending={view?.pending}
         geometry={collapsed ? dispatchPanelBadgeGeometry(badgePos, dispatchPanelBadgeAnchor(anchor)) : geometry}
         collapsed={collapsed}
         dragged={dragged}
         now={Date.now()}
+        resolvedWorker={resolvedWorker}
         onCollapse={() => {
           // 收起 = 悬浮球回对话框右上角初始位（丢弃角标拖移位——fix bug 570fa4e2 承袭）
           setCollapsed(true)

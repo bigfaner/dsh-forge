@@ -45,10 +45,10 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
   })
 })
 
-describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——22 值）', () => {
-  it('恰 22 值，值域 = 提案事件清单 {major}/{minor} 七族', () => {
-    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(22)
-    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(22)
+describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——23 值）', () => {
+  it('恰 23 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族', () => {
+    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(23)
+    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(23)
     expect([...FORGE_PROGRESS_SCENARIOS]).toEqual([
       'startup/from-scratch',
       'startup/resume-stopped',
@@ -72,6 +72,7 @@ describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——22 值）', (
       'suspend/worker-rate-limited',
       'suspend/abort-over-limit',
       'suspend/landing-rejected',
+      'pool/pending',
     ])
   })
   it('编码格式：纯英文 + 中划线，{major}/{minor} 两段', () => {

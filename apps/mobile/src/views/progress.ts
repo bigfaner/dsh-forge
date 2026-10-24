@@ -34,10 +34,12 @@ export interface ProgressEntry {
   readonly at: number
 }
 
-/** 投影 wire 值（{entries 窗口, total 总数}——host ForgeDispatchEventsProjection 同形） */
+/** 投影 wire 值（{entries 窗口, total 总数, pending? 待执行}——host ForgeDispatchEventsProjection 同形） */
 export interface DispatchEventsProjection {
   readonly entries: readonly ProgressEntry[]
   readonly total: number
+  /** 池级待执行计数（1.16——fold pending 字段透传；缺席 = 旧缓存不呈现该项） */
+  readonly pending?: number
 }
 
 const STATUS_SET: ReadonlySet<string> = new Set(['running', 'completed', 'blocked', 'interrupted'])
@@ -66,11 +68,38 @@ function coerceEntry(raw: unknown): ProgressEntry | undefined {
 /** 投影值收敛（entries 逐条守卫；非法整体 = undefined） */
 export function coerceDispatchEvents(raw: unknown): DispatchEventsProjection | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined
-  const view = raw as { entries?: unknown; total?: unknown }
+  const view = raw as { entries?: unknown; total?: unknown; pending?: unknown }
   if (!Array.isArray(view.entries)) return undefined
   if (typeof view.total !== 'number' || !Number.isInteger(view.total) || view.total < 0) return undefined
+  if (view.pending !== undefined && (typeof view.pending !== 'number' || !Number.isFinite(view.pending))) return undefined
   const entries = view.entries.map(coerceEntry).filter((entry): entry is ProgressEntry => entry !== undefined)
-  return { entries, total: view.total }
+  return {
+    entries,
+    total: view.total,
+    ...(view.pending !== undefined ? { pending: view.pending as number } : {}),
+  }
+}
+
+/** 池级 pending 快照场景码（不进时间线/任务统计——只承载待执行计数） */
+const POOL_PENDING_SCENARIO = 'pool/pending'
+
+/** 任务键最新态统计（后写覆盖 = 最新态；循环级/池级事件不计） */
+export interface ProgressStats {
+  completed: number
+  running: number
+  blocked: number
+  interrupted: number
+}
+
+export function progressStats(entries: readonly ProgressEntry[]): ProgressStats {
+  const latest = new Map<string, ProgressEntry['status']>()
+  for (const entry of entries) {
+    if (entry.taskKey === undefined || entry.scenario === POOL_PENDING_SCENARIO) continue
+    latest.set(entry.taskKey, entry.status)
+  }
+  const stats: ProgressStats = { completed: 0, running: 0, blocked: 0, interrupted: 0 }
+  for (const status of latest.values()) stats[status] += 1
+  return stats
 }
 
 /** RPC 全量键读取（session-projections 既有通道——零传输改动）：键缺席/失败 = undefined。 */
@@ -155,10 +184,12 @@ export function createProgressStream(deps: ProgressStreamDeps): ProgressStreamHa
   const totalEl = el('span', 'total', '')
   bar.appendChild(totalEl)
   const flow = el('div', 'pstream-flow')
-  root.append(bar, flow)
+  const stat = el('div', 'pstream-stat')
+  root.append(bar, flow, stat)
 
   function render(projection: DispatchEventsProjection | undefined): void {
     flow.textContent = ''
+    stat.textContent = ''
     if (projection === undefined || projection.entries.length === 0) {
       totalEl.textContent = ''
       flow.appendChild(el('div', 'pstream-hint', '暂无进度事件'))
@@ -167,6 +198,7 @@ export function createProgressStream(deps: ProgressStreamDeps): ProgressStreamHa
     totalEl.textContent = String(projection.total)
     const tail = projection.entries.slice(-PROGRESS_STREAM_WINDOW)
     for (const entry of tail) {
+      if (entry.scenario === POOL_PENDING_SCENARIO) continue // 池级快照行不进时间线
       const row = progressRow(entry)
       const line = el('div', `prow ${row.tone}`)
       const rail = el('span', 'rail')
@@ -177,6 +209,16 @@ export function createProgressStream(deps: ProgressStreamDeps): ProgressStreamHa
       line.append(rail, t)
       flow.appendChild(line)
     }
+    // 统计条（1.16——完成/执行中/阻塞/待执行/已中断；pending 缺席 = 不呈现该项）
+    const stats = progressStats(projection.entries)
+    const parts = [
+      `完成 ${stats.completed}`,
+      `执行中 ${stats.running}`,
+      `阻塞 ${stats.blocked}`,
+      ...(projection.pending !== undefined ? [`待执行 ${projection.pending}`] : []),
+      `已中断 ${stats.interrupted}`,
+    ]
+    stat.textContent = parts.join('  ')
   }
 
   async function refresh(): Promise<void> {

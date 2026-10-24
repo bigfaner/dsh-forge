@@ -1207,6 +1207,14 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     taskTitle: task.title,
     counts: progressCountsOf(stats),
   })
+  // 池级 pending 快照（1.16 用户裁决②——统计条「待执行」计数承载：池级事件 + counts，
+  // fold unit 提取为 pending 字段，web/mobile 统计条消费；无任务键 = 不进任务时间线）
+  emitProgress(loop, {
+    verb: 'loop',
+    status: 'running',
+    scenario: 'pool/pending',
+    counts: progressCountsOf(stats),
+  })
   // 通知 await 窗口的停止竞态收口（同上——stop 已接管则让渡）
   if (await bailIfAborted(loop, claim)) return 'terminal'
 

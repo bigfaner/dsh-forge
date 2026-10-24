@@ -8,11 +8,11 @@ import { describe, expect, it } from 'vitest'
 import {
   DEP_BADGE_WIDTH,
   DEP_WIDTH,
-  DISPATCH_EVENT_MAJOR_LABELS,
   DispatchEventsPanel,
   DispatchEventsPanelBody,
+  aggregateDispatchRows,
   dispatchBadgePointerIsClick,
-  dispatchEventMajorOf,
+  dispatchEventNoteOf,
   dispatchEventStats,
   dispatchEventTitleOf,
   dispatchEventsAnchor,
@@ -21,7 +21,7 @@ import {
   dispatchPanelBadgeAnchor,
   dispatchPanelExpandGeometry,
   dispatchPanelBadgeGeometry,
-  groupDispatchEvents,
+  dispatchRowSessionOf,
   type DispatchAnchorRects,
   type DispatchEventEntry,
   type DispatchPanelGeometry,
@@ -60,7 +60,6 @@ function body(overrides: Partial<Parameters<typeof DispatchEventsPanelBody>[0]> 
   const props: Parameters<typeof DispatchEventsPanelBody>[0] = {
     entries: [entry()],
     total: 1,
-    sourceSlug: 'feat-x',
     geometry: { left: 900, top: 96 },
     collapsed: false,
     dragged: false,
@@ -93,38 +92,63 @@ describe('dispatchEventsOf（projectionValues 按键窄读——形状防御）'
     expect(view?.entries).toHaveLength(1)
     expect(view?.total).toBe(3)
   })
+  it('1.16 pending 可选字段：数字透传 / 缺席 undefined / 错型整体拒绝', () => {
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: [], total: 0, pending: 4 } })?.pending).toBe(4)
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: [], total: 0 } })?.pending).toBeUndefined()
+    expect(dispatchEventsOf({ 'forge-dispatch-events': { entries: [], total: 0, pending: 'x' } })).toBeUndefined()
+  })
 })
 
-// ─────────────────── 场景码分组 ───────────────────
+// ─────────────────── 任务键行聚合 / 备注行 / 跳转锚 ───────────────────
 
-describe('dispatchEventMajorOf / groupDispatchEvents（场景码 major 分组）', () => {
-  it('scenario 在场 = major 取 scenario 前缀', () => {
-    expect(dispatchEventMajorOf(entry({ scenario: 'blocked/with-fix' }))).toBe('blocked')
-    expect(dispatchEventMajorOf(entry({ scenario: 'loop/finish-all' }))).toBe('loop')
-  })
-  it('scenario 缺席（旧载荷兼容）= verb 回退映射', () => {
-    expect(dispatchEventMajorOf(entry({ verb: 'claim-resume' }))).toBe('claim')
-    expect(dispatchEventMajorOf(entry({ verb: 'settle' }))).toBe('task')
-    expect(dispatchEventMajorOf(entry({ verb: 'finish-all' }))).toBe('loop')
-    expect(dispatchEventMajorOf(entry({ verb: 'suspend' }))).toBe('suspend')
-  })
-  it('分组保首次出现序；minor 行随组内时序', () => {
-    const groups = groupDispatchEvents([
-      entry({ taskKey: 'a', scenario: 'claim/new' }),
-      entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete' }),
-      entry({ taskKey: 'c', scenario: 'claim/interrupted' }),
+describe('aggregateDispatchRows（1.16 任务键时间线——每任务最新态一行）', () => {
+  it('每任务最新态一行（后写覆盖），行按时间时序；循环级事件各占一行', () => {
+    const rows = aggregateDispatchRows([
+      entry({ taskKey: 'a', at: 100 }),
+      entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 200 }),
+      entry({ taskKey: 'a', at: 150 }), // a 的最新态
+      entry({ taskKey: undefined, verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all', at: 300 }),
     ])
-    expect(groups.map((g) => g.major)).toEqual(['claim', 'task'])
-    expect(groups[0]?.label).toBe(DISPATCH_EVENT_MAJOR_LABELS['claim'])
-    expect(groups[0]?.entries).toHaveLength(2)
+    expect(rows.map((r) => r.taskKey ?? r.verb)).toEqual(['a', 'b', 'finish-all'])
+    expect(rows[0]?.at).toBe(150)
   })
-  it('未知 major（守卫外形状）落 loop 组兜底不炸', () => {
-    const groups = groupDispatchEvents([entry({ scenario: 'weird/xx' } as unknown as DispatchEventEntry)])
-    expect(groups).toHaveLength(1)
+  it('池级 pending 快照（pool/pending）不进时间线——只承载统计条计数', () => {
+    const rows = aggregateDispatchRows([
+      entry({ taskKey: 'a', at: 100 }),
+      entry({ taskKey: undefined, verb: 'loop', scenario: 'pool/pending', at: 150 }),
+    ])
+    expect(rows).toHaveLength(1)
   })
 })
 
-// ─────────────────── 状态章 / 统计 / 标题 ───────────────────
+describe('dispatchEventNoteOf（备注行「状态 · 摘要」——分组/章语义并入文案）', () => {
+  it('状态词 + 场景章 + 叙述注记', () => {
+    expect(dispatchEventNoteOf(entry({ scenario: 'claim/new' }))).toBe('执行中 · 领取')
+    expect(dispatchEventNoteOf(entry({ verb: 'settle', status: 'completed', scenario: 'task/complete', note: '契约测试 8 通过' }))).toBe(
+      '完成 · 契约测试 8 通过',
+    )
+    expect(dispatchEventNoteOf(entry({ scenario: 'blocked/auto-fixed', status: 'blocked', note: '窄读类型缺失' }))).toBe(
+      '阻塞 · 已自动处理 · 窄读类型缺失',
+    )
+  })
+  it('仅状态可辨（无场景无注记）= undefined 不渲染备注行', () => {
+    expect(dispatchEventNoteOf(entry())).toBeUndefined()
+  })
+})
+
+describe('dispatchRowSessionOf（跳转锚——直跳 → 父反查命中 → 落空非交互）', () => {
+  it("workerSessionId 在场直跳；缺席走反查表；落空（''）= undefined", () => {
+    const e = entry({ workerSessionId: 'w-1' })
+    expect(dispatchRowSessionOf(e, undefined)).toBe('w-1')
+    const plain = entry()
+    expect(dispatchRowSessionOf(plain, new Map([['feat-x/2.4', 'w-2']]))).toBe('w-2')
+    expect(dispatchRowSessionOf(plain, new Map([['feat-x/2.4', '']]))).toBeUndefined()
+    expect(dispatchRowSessionOf(plain, undefined)).toBeUndefined()
+    expect(dispatchRowSessionOf(entry({ taskKey: undefined }), new Map<string, string>())).toBeUndefined()
+  })
+})
+
+// ─────────────────── 状态 / 统计 / 标题 ───────────────────
 
 describe('状态章与统计（执行中/已完成/阻塞/已中断——⑰ inFlightTaskKey 中断态随载荷）', () => {
   it('dispatchEventStats：任务键最新态归桶；循环级事件不计', () => {
@@ -147,58 +171,72 @@ describe('状态章与统计（执行中/已完成/阻塞/已中断——⑰ inF
 // ─────────────────── 纯渲染（展开面板形态） ───────────────────
 
 describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
-  it('面板壳 + 标题（任务进度 · slug）+ live 标记 + 折叠钮', () => {
+  it('面板壳 + head（任务进度 + live · 不经模型）+ 折叠钮', () => {
     const markup = body()
     expect(markup).toContain('data-dswf-dep')
     expect(markup).toContain('任务进度')
-    expect(markup).toContain('feat-x')
-    expect(markup).toContain('live')
+    expect(markup).toContain('live · 不经模型')
     expect(markup).toContain('data-dswf-dep-collapse')
   })
-  it('major 分组渲染 = 组头（中文章 + 计数）+ 组内细分行', () => {
+  it('任务轨行形态：rail + 状态点色档 + 标题 + 备注行（场景分组组头已由任务键时间线替换）', () => {
     const markup = body({
       entries: [
-        entry({ taskKey: 'a', scenario: 'claim/new' }),
-        entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete' }),
+        entry({ taskKey: 'a', scenario: 'claim/new', at: 100 }),
+        entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 200 }),
       ],
       total: 2,
     })
-    expect(markup).toContain('data-dswf-dep-group')
-    expect(markup).toContain('领取')
-    expect(markup).toContain('任务')
+    expect(markup).toContain('dswf-dep-rail')
+    expect(markup).toContain('dswf-dep-run')
+    expect(markup).toContain('dswf-dep-done')
+    expect(markup).toContain('执行中 · 领取')
+    expect(markup).not.toContain('data-dswf-dep-group')
   })
-  it('行状态章：执行中/已完成/阻塞/已中断', () => {
+  it('行状态备注：执行中/完成/阻塞/已中断 状态词与注记', () => {
     const markup = body({
       entries: [
         entry({ taskKey: 'a', status: 'running' }),
-        entry({ taskKey: 'b', status: 'completed', verb: 'settle' }),
+        entry({ taskKey: 'b', status: 'completed', verb: 'settle', scenario: 'task/complete' }),
         entry({ taskKey: 'c', status: 'blocked', scenario: 'blocked/with-fix', note: '投影类型缺失' }),
         entry({ taskKey: 'd', status: 'interrupted', verb: 'stop', scenario: 'loop/stopped' }),
       ],
       total: 4,
     })
     expect(markup).toContain('执行中')
-    expect(markup).toContain('已完成')
-    expect(markup).toContain('阻塞')
+    expect(markup).toContain('完成')
+    expect(markup).toContain('阻塞 · 已带修复 · 投影类型缺失')
     expect(markup).toContain('已中断')
-    expect(markup).toContain('投影类型缺失')
   })
-  it('行点击跳 worker 子会话：workerSessionId 在场 = role button + 打开锚；缺席 = 非交互行', () => {
-    const interactive = body({ entries: [entry({ workerSessionId: 'w-1' })], onOpenWorker: () => {} })
-    expect(interactive).toContain('role="button"')
-    expect(interactive).toContain('data-dswf-dep-row="w-1"')
+  it('行点击跳 worker 子会话：直跳行 = role button + jump 徽标；反查命中行同交互；落空 = 非交互无徽标', () => {
+    const direct = body({ entries: [entry({ workerSessionId: 'w-1' })], onOpenWorker: () => {} })
+    expect(direct).toContain('role="button"')
+    expect(direct).toContain('data-dswf-dep-row="w-1"')
+    expect(direct).toContain('data-dswf-dep-jump')
+    const resolved = body({
+      entries: [entry()],
+      onOpenWorker: () => {},
+      resolvedWorker: new Map([['feat-x/2.4', 'w-2']]),
+    })
+    expect(resolved).toContain('role="button"')
+    expect(resolved).toContain('data-dswf-dep-row="w-2"')
     const plain = body({ entries: [entry()], onOpenWorker: () => {} })
     expect(plain).not.toContain('role="button"')
+    expect(plain).not.toContain('data-dswf-dep-jump')
     const noFace = body({ entries: [entry({ workerSessionId: 'w-1' })] })
     expect(noFace).not.toContain('role="button"')
   })
-  it('底部统计条：完成/执行中/阻塞/已中断计数', () => {
-    const markup = body({
-      entries: [entry({ status: 'completed', verb: 'settle' }), entry()],
-      total: 2,
+  it('底部统计条：完成/执行中/阻塞/已中断 + 待执行（pending 在场呈现，缺席不呈现）', () => {
+    const withPending = body({
+      entries: [entry({ status: 'completed', verb: 'settle', scenario: 'task/complete' }), entry()],
+      total: 3,
+      pending: 2,
     })
-    expect(markup).toContain('data-dswf-dep-stat')
-    expect(markup).toContain('完成')
+    expect(withPending).toContain('data-dswf-dep-stat')
+    expect(withPending).toContain('待执行')
+    expect(withPending).toContain('完成')
+    const withoutPending = body({ entries: [entry()], total: 1 })
+    expect(withoutPending).toContain('data-dswf-dep-stat')
+    expect(withoutPending).not.toContain('待执行')
   })
 })
 

@@ -1,10 +1,11 @@
-// D33 结构 pin——悬浮面板锚源与状态章单源（任务 dsh-forge-m3.1-ui-alignment/1.18 机械面锚
+// D33 结构 pin——悬浮面板锚源与行状态单源（任务 dsh-forge-m3.1-ui-alignment/1.18 机械面锚
 // + loop-event-delivery 1.8 面板继任随迁；读文件法 = 本目录 overview-chips-subtab/scaffold
 // 先例——apps/web 测试面无 node 类型位）。
-// 悬浮面板 = DispatchEventsPanel（1.8 接替 DispatchPanel UI）。行为断言分工：真 DOM 同形
-// 几何 stub 与状态章呈现归 DispatchEventsPanel.test.tsx（web 池），此处 pin 源级单点——
-// ① 锚源常量 = 真盒官方锚（display:contents 槽宿主零盒退役）；② 状态章 = TagTone 常量表
-// 单点（零行内硬编码 tone 字面量）。
+// 悬浮面板 = DispatchEventsPanel（1.8 接替 DispatchPanel UI；1.16 行状态章退役——状态章
+// pills 由任务轨状态点 + 备注行「状态 · 摘要」文案接替，语义词单源随迁）。行为断言分工：
+// 真 DOM 同形几何 stub 与状态呈现归 DispatchEventsPanel.test.tsx（web 池），此处 pin 源级
+// 单点——① 锚源常量 = 真盒官方锚（display:contents 槽宿主零盒退役）；② 行状态 = 状态词
+// 常量表单点（零散落字面量、零 Tag tone 行内硬编码）。
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,9 +23,9 @@ describe('D33 残差①：锚源 = 真盒官方锚（槽宿主零盒退役）', 
   })
 })
 
-describe('D33 残差②：行状态章 = DISPATCH_EVENT_STATUS_BADGE 单源（零硬编码 tone）', () => {
-  it('状态章常量表（载荷 status 四值 → 官方 TagTone——语义章单源）', () => {
-    expect(src).toContain('DISPATCH_EVENT_STATUS_BADGE')
+describe('D33 残差②：行状态 = DISPATCH_EVENT_STATUS_WORD 单源（1.16 状态章退役随迁）', () => {
+  it('状态词常量表（载荷 status 四值 → 备注行/统计条语义词——单源）', () => {
+    expect(src).toContain('DISPATCH_EVENT_STATUS_WORD')
   })
   it('行 Tag 零硬编码 tone 字面量（tone="neutral" 同灰退役）', () => {
     expect(src).not.toContain('tone="neutral"')

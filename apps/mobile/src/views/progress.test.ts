@@ -7,6 +7,7 @@ import {
   coerceDispatchEvents,
   loadDispatchEvents,
   progressRow,
+  progressStats,
   progressTone,
 } from './progress.ts'
 
@@ -26,11 +27,31 @@ describe('coerceDispatchEvents（投影值收敛）', () => {
     expect(view).toEqual({ entries: [entry(), entry({ verb: 'settle', status: 'completed' })], total: 3 })
   })
 
-  it('整体形状非法 = undefined（键缺席/负 total/entries 非数组）', () => {
+  it('整体形状非法 = undefined（键缺席/负 total/entries 非数组/pending 错型）', () => {
     expect(coerceDispatchEvents(undefined)).toBeUndefined()
     expect(coerceDispatchEvents({})).toBeUndefined()
     expect(coerceDispatchEvents({ entries: [], total: -1 })).toBeUndefined()
     expect(coerceDispatchEvents({ entries: 'x', total: 0 })).toBeUndefined()
+    expect(coerceDispatchEvents({ entries: [], total: 0, pending: 'x' })).toBeUndefined()
+  })
+
+  it('1.16 pending 可选字段：数字透传 / 缺席 undefined（旧缓存向后兼容）', () => {
+    expect(coerceDispatchEvents({ entries: [], total: 0, pending: 3 })).toEqual({ entries: [], total: 0, pending: 3 })
+    expect(coerceDispatchEvents({ entries: [], total: 0 })?.pending).toBeUndefined()
+  })
+})
+
+describe('progressStats（1.16 任务键最新态统计 + 池级快照不计）', () => {
+  it('每任务最新态归桶；无 taskKey / pool/pending 快照不计', () => {
+    const stats = progressStats([
+      entry({ taskKey: 'a' }) as never,
+      { ...entry({ taskKey: 'a', status: 'completed', verb: 'settle' }), at: 2 } as never,
+      entry({ taskKey: 'b', status: 'blocked', scenario: 'blocked/with-fix' }) as never,
+      entry({ taskKey: 'c', status: 'interrupted', verb: 'stop', scenario: 'loop/stopped' }) as never,
+      entry({ taskKey: undefined, verb: 'loop', scenario: 'pool/pending' }) as never,
+      entry({ taskKey: undefined, verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all' }) as never,
+    ])
+    expect(stats).toEqual({ completed: 1, running: 0, blocked: 1, interrupted: 1 })
   })
 })
 

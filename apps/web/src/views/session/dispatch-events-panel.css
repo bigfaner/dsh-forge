@@ -74,45 +74,23 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 分组列表（major 组头 + 组内细分行——原型 .flow 滚动面）── */
+/* ── 任务轨列表（1.16 行聚合口径：每任务最新态一行——原型 .flow 滚动面）── */
 .dswf-dep-list {
   display: flex;
   flex-direction: column;
   max-height: 264px;
   overflow-y: auto;
-  padding: var(--dsw-font-xxxs-11-line-height) 0;
+  padding: 8px 0; /* dsw-raw 原型 .flow 内距刻度 */
 }
 
-.dswf-dep-group {
-  display: flex;
-  flex-direction: column;
-}
-
-/* major 组头：场景族中文章 + 组内计数（原型 .evt-head 语言——module-bg 弱化底） */
-.dswf-dep-group-head {
-  display: flex;
-  align-items: center;
-  gap: var(--dsw-font-xxxs-11-line-height);
-  min-height: 26px;
-  padding: 2px 12px; /* dsw-raw 原型组头内距刻度 */
-  background: var(--dsw-alias-bg-layer-2);
-  font: var(--dsw-font-xxxs-strong-11);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.dswf-dep-group-count {
-  margin-left: auto;
-  font: var(--dsw-font-xxxs-11);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── 行：标题/副行 + 相对时间 + 状态章（原型 .frow 同构——hover 交互底）── */
+/* ── 行：任务轨形态（grid 14px 1fr auto——rail 竖线 + 状态点 + 标题/备注 + 右侧时间）── */
 .dswf-dep-row {
-  display: flex;
-  align-items: center;
-  gap: var(--dsw-font-xxs-12-line-height);
+  display: grid;
+  grid-template-columns: 14px 1fr auto; /* dsw-raw 原型 .frow 轨道刻度 */
+  gap: 8px; /* dsw-raw 原型 .frow 列距刻度 */
+  align-items: baseline;
   min-height: 30px;
-  padding: 3px 12px; /* dsw-raw 原型行内距刻度 */
+  padding: 6px 14px; /* dsw-raw 原型行内距刻度 */
 }
 
 .dswf-dep-row[role='button'] {
@@ -123,8 +101,57 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.dswf-dep-row-main {
-  flex: 1 1 0;
+/* rail：竖线贯通（首行上半 / 末行下半截断）+ 状态点 */
+.dswf-dep-rail {
+  position: relative;
+  align-self: stretch;
+}
+
+.dswf-dep-rail::before {
+  content: '';
+  position: absolute;
+  left: 6px; /* dsw-raw 原型轨线位刻度 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.dswf-dep-row:first-child .dswf-dep-rail::before {
+  top: 50%;
+}
+
+.dswf-dep-row:last-child .dswf-dep-rail::before {
+  bottom: 50%;
+}
+
+.dswf-dep-rail i {
+  position: absolute;
+  left: 2.5px; /* dsw-raw 原型状态点位刻度 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 999px; /* dsw-raw 原型状态点圆点刻度 */
+  background: var(--dsw-alias-label-caption); /* 待定/兜底档 */
+}
+
+.dswf-dep-done .dswf-dep-rail i {
+  background: var(--dsw-alias-state-success-primary); /* 完成 = success */
+}
+
+.dswf-dep-run .dswf-dep-rail i {
+  background: var(--dsw-alias-link); /* 执行中 = accent 带光晕 */
+  box-shadow: 0 0 0 3px var(--dsw-alias-state-business-tertiary); /* dsw-raw 原型 accent-soft 光晕刻度（官方 tertiary 最近语义） */
+}
+
+.dswf-dep-blk .dswf-dep-rail i {
+  background: var(--dsw-alias-state-warn-primary); /* 阻塞 = warn */
+}
+
+/* 中断与待定 = caption（默认档） */
+
+.dswf-dep-row-t {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -138,7 +165,7 @@
   white-space: nowrap;
 }
 
-/* minor 细分行（note/scenario——原型 .frow .note 次级弱化） */
+/* 备注行（「状态 · 摘要」——分组/章语义并入文案；原型 .frow .note 次级弱化） */
 .dswf-dep-row-note {
   overflow: hidden;
   font: var(--dsw-font-xxxs-11);
@@ -148,22 +175,38 @@
   white-space: nowrap;
 }
 
+.dswf-dep-row-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 时间/jump 徽标间距刻度 */
+}
+
 .dswf-dep-row-time {
-  flex: none;
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-caption);
   font-variant-numeric: tabular-nums;
 }
 
-.dswf-dep-row-tag {
-  flex: none;
+/* jump 徽标（可跳转子会话行的可见 affordance——11px 级 tertiary，hover 提亮） */
+.dswf-dep-row-jump {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
 }
 
-/* ── 底部统计条（原型 .stat——完成/执行中/阻塞/已中断）── */
+.dswf-dep-row-jump svg {
+  width: 11px; /* dsw-raw 原型徽标 11px 级刻度 */
+  height: 11px;
+}
+
+.dswf-dep-row[role='button']:hover .dswf-dep-row-jump {
+  color: var(--dsw-alias-label-secondary); /* hover 提亮 */
+}
+
+/* ── 底部统计条（原型 .stat——完成/执行中/阻塞/待执行/已中断）── */
 .dswf-dep-stat {
   display: flex;
   gap: 12px; /* dsw-raw 原型统计条列距刻度 */
-  padding: 8px 12px; /* dsw-raw 原型统计条内距刻度 */
+  padding: 10px 14px; /* dsw-raw 原型统计条内距刻度 */
   border-top: 1px solid var(--dsw-alias-border-l2);
   font: var(--dsw-font-xxs-12);
   color: var(--dsw-alias-label-secondary);

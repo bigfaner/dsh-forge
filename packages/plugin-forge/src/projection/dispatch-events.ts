@@ -37,6 +37,8 @@ export interface ForgeDispatchEventsProjection {
   readonly entries: readonly ForgeDispatchEventEntry[]
   /** 本会话进度事件总数（窗口外历史仍计数——面板「窗口 + 总数」承载） */
   readonly total: number
+  /** 池级待执行计数（1.16 用户裁决②——最近一枚携 counts 事件的 pending 快照；缺席 = 旧缓存/旧载荷，消费面不呈现该项） */
+  readonly pending?: number
 }
 
 /** host 折叠态（SessionProjectionStateMap 合并键——plain JSON，持久化缓存前置条件） */
@@ -45,6 +47,8 @@ export interface ForgeDispatchEventsUnitState {
   readonly entries: readonly ForgeDispatchEventEntry[]
   /** 事件总数（全量计数，窗口裁剪不减） */
   readonly total: number
+  /** 池级待执行计数（最近一枚携 counts 事件的 pending 快照；缺席 = 尚无 counts 事件） */
+  readonly pending?: number
 }
 
 /** zod ZodType 消费切片（registry 唯一调用位 = parse——结构同型镜像，零上游运行时 import） */
@@ -88,19 +92,33 @@ function parseEntries(value: unknown): ForgeDispatchEventEntry[] {
   return value.map((entry) => assertProgressData(entry))
 }
 
+/** 可选 pending 校验（非负整数；缺席 = undefined——旧缓存/旧载荷向后兼容） */
+function parsePending(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) fail('pending must be a non-negative integer')
+  return value
+}
+
+/** 键集校验（entries+total 必需、pending 可选——1.16 前旧缓存 {entries,total} 原样可读） */
+function parseStateShape(raw: Record<string, unknown>): { entries: ForgeDispatchEventEntry[]; total: number; pending?: number } {
+  const known = Object.keys(raw).filter((key) => key !== 'pending').sort()
+  if (known.join(',') !== 'entries,total') fail(`unexpected state keys ${known.join(',')}`)
+  return { entries: parseEntries(raw['entries']), total: parseTotal(raw['total']), pending: parsePending(raw['pending']) }
+}
+
+/** total 校验（非负整数） */
+function parseTotal(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) fail('total must be a non-negative integer')
+  return value
+}
+
 /** state 纯 JSON 严格校验（restore 种子面——外来形状拒绝回退重折） */
 const stateSchema: ForgeProjectionSchema<ForgeDispatchEventsUnitState> = {
   parse(value: unknown): ForgeDispatchEventsUnitState {
     if (typeof value !== 'object' || value === null) fail('state must be an object')
-    const raw = value as Record<string, unknown>
-    const keys = Object.keys(raw).sort()
-    if (keys.join(',') !== 'entries,total') fail(`unexpected state keys ${keys.join(',')}`)
-    if (typeof raw['total'] !== 'number' || !Number.isInteger(raw['total']) || raw['total'] < 0) {
-      fail('total must be a non-negative integer')
-    }
-    const entries = parseEntries(raw['entries'])
-    if (entries.length > FORGE_DISPATCH_EVENTS_WINDOW_SIZE) fail('entries exceed window size')
-    return { entries, total: raw['total'] }
+    const shape = parseStateShape(value as Record<string, unknown>)
+    if (shape.entries.length > FORGE_DISPATCH_EVENTS_WINDOW_SIZE) fail('entries exceed window size')
+    return shape
   },
 }
 
@@ -108,13 +126,7 @@ const stateSchema: ForgeProjectionSchema<ForgeDispatchEventsUnitState> = {
 const viewSchema: ForgeProjectionSchema<ForgeDispatchEventsProjection> = {
   parse(value: unknown): ForgeDispatchEventsProjection {
     if (typeof value !== 'object' || value === null) fail('view must be an object')
-    const raw = value as Record<string, unknown>
-    const keys = Object.keys(raw).sort()
-    if (keys.join(',') !== 'entries,total') fail(`unexpected view keys ${keys.join(',')}`)
-    if (typeof raw['total'] !== 'number' || !Number.isInteger(raw['total']) || raw['total'] < 0) {
-      fail('total must be a non-negative integer')
-    }
-    return { entries: parseEntries(raw['entries']), total: raw['total'] }
+    return parseStateShape(value as Record<string, unknown>)
   },
 }
 
@@ -135,11 +147,13 @@ export function createForgeDispatchEventsProjection(): ForgeDispatchEventsProjec
       const entries = state.entries.length >= FORGE_DISPATCH_EVENTS_WINDOW_SIZE
         ? [...state.entries.slice(state.entries.length - FORGE_DISPATCH_EVENTS_WINDOW_SIZE + 1), data]
         : [...state.entries, data]
-      return { entries, total: state.total + 1 }
+      // 池级 pending 快照（1.16——携 counts 事件即刷新；无 counts = 保持先前值）
+      const pending = typeof data.counts?.pending === 'number' ? data.counts.pending : state.pending
+      return { entries, total: state.total + 1, ...(pending !== undefined ? { pending } : {}) }
     },
     wire: {
       viewSchema,
-      view: (state) => ({ entries: state.entries, total: state.total }),
+      view: (state) => ({ entries: state.entries, total: state.total, ...(state.pending !== undefined ? { pending: state.pending } : {}) }),
     },
   }
 }

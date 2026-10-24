@@ -39,7 +39,7 @@ export interface ForgeProgressCounts {
 }
 
 /**
- * 场景码单源常量表（loop-event-delivery 事件清单——22 值）：编码 = `{major}/{minor}`
+ * 场景码单源常量表（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 = 23 值）：编码 = `{major}/{minor}`
  * 纯英文 + 中划线，major = 场景族分组 / minor = 组内细分。载荷 scenario 字段值域、
  * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量）。
  */
@@ -73,6 +73,8 @@ export const FORGE_PROGRESS_SCENARIOS = [
   'suspend/worker-rate-limited',
   'suspend/abort-over-limit',
   'suspend/landing-rejected',
+  // 池级族（1.16 用户裁决②——统计条「待执行」计数承载：池级事件 + counts，无任务键）
+  'pool/pending',
 ] as const
 
 /** 场景码值域类型（= FORGE_PROGRESS_SCENARIOS 成员并集） */
@@ -111,7 +113,7 @@ export interface ForgeProgressEventData {
   readonly taskTitle?: string
   /** worker 子会话 id（行点击跳转锚——spawn 成功后的事件在列） */
   readonly workerSessionId?: string
-  /** 场景码（{major}/{minor}——值域 = FORGE_PROGRESS_SCENARIOS 单源 22 值；缺席 = 旧载荷兼容） */
+  /** 场景码（{major}/{minor}——值域 = FORGE_PROGRESS_SCENARIOS 单源 23 值；缺席 = 旧载荷兼容） */
   readonly scenario?: ForgeProgressScenario
   /** 叙述注记（阻塞/挂起原因摘要等——用户/agent 双端可见） */
   readonly note?: string

@@ -2122,8 +2122,8 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     const before = Date.now()
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.progressCalls).toHaveLength(4)
-    const [startupEvt, claimEvt, settleEvt] = built.progressCalls
+    expect(built.progressCalls).toHaveLength(5)
+    const [startupEvt, claimEvt, , settleEvt] = built.progressCalls
     // 启动点（1.5——① startup/from-scratch）：循环级事件，零任务键
     expect(startupEvt).toEqual({
       sourceSlug: 'feat-x',
@@ -2144,6 +2144,15 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       at: expect.any(Number),
     })
     expect(claimEvt!.at).toBeGreaterThanOrEqual(before)
+    // 池级 pending 快照（1.16 用户裁决②——claim 后随发，无任务键，counts 承载待执行）
+    expect(built.progressCalls[2]).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'loop',
+      status: 'running',
+      scenario: 'pool/pending',
+      counts: { pending: 0, running: 1, done: 0 },
+      at: expect.any(Number),
+    })
     // 结算点：动词 settle + completed + 任务键 + 任务标题 + worker 会话 id + ⑥ task/complete 场景码
     expect(settleEvt).toEqual({
       sourceSlug: 'feat-x',
