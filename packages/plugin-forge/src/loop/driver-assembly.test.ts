@@ -16,6 +16,7 @@ import type {
   TaskStatus,
 } from '@dsh-forge/contracts'
 import { createEnsureCheckpointsFace, createLoopDriver } from './driver.js'
+import type { CoreCheckpointsAppendFace, LoopCheckpointRowLite, LoopCheckpointSnapshot } from './driver.js'
 import type { LoopDriverDeps } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { NarrationChannel, Narrator } from '../notify/index.js'
@@ -96,15 +97,15 @@ function cardOf(localId: string, over: Partial<TaskCard> = {}): TaskCard {
 
 /** ctx.forgeCheckpoints 同形核心面桩（appendCheckpoint/listCheckpoints——无 ensure，录追加行） */
 function coreCheckpointsStub() {
-  const appends: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }> = []
-  const rows: Array<{ mark: string }> = []
-  const core = {
-    appendCheckpoint: async (input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => {
-      appends.push({ ...input })
-      rows.push({ mark: input.mark })
-      return { id: rows.length, ...input }
+  const appends: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: LoopCheckpointSnapshot }> = []
+  const rows: LoopCheckpointRowLite[] = []
+  const core: CoreCheckpointsAppendFace = {
+    appendCheckpoint: async (input) => {
+      appends.push({ projectId: input.projectId, proposalId: input.proposalId, mark: input.mark, baseCommitHash: input.baseCommitHash, snapshots: input.snapshots })
+      rows.push({ mark: input.mark, ...input.snapshots })
+      return { id: rows.length }
     },
-    listCheckpoints: async (q: { marks?: readonly string[] }) => rows.filter((r) => q.marks === undefined || q.marks.includes(r.mark)),
+    listCheckpoints: async (q) => rows.filter((r) => q.marks === undefined || q.marks.includes(r.mark)),
   }
   return { core, appends }
 }
@@ -156,8 +157,9 @@ function build(options: { claim: ClaimTaskResult[]; stats?: TaskStats[]; lists?:
   const h = tasksStub({ claim: options.claim, lists: options.lists })
   if (options.stats !== undefined) h.setStats(options.stats)
   const cp = coreCheckpointsStub()
-  const spawn: SpawnWorker = async (req, seq) => {
-    void req
+  let seq = 0
+  const spawn: SpawnWorker = async () => {
+    seq += 1
     const handle: SpawnWorkerHandle = {
       workerSessionId: `worker-${seq}`,
       result: Promise.resolve({ stopReason: 'completed', output: '' }),

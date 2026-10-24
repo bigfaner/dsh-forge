@@ -454,7 +454,11 @@ async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
       marks: ['first-pass-complete'],
     })
     if (rows.some((r) => r.mark === 'first-pass-complete')) return false // 已锚定——照旧收口
-    if (!(await deriveRetroTask(loop))) return false // 派生失败不落标记——下轮重试
+    // Root cause（bug 9c350e5f）：先派生后落标记序下，deriveRetroTask 执行时 first-pass-complete
+    // 行尚未落库——直接 list 读不到 first 帧致 flywheelMetricsOf 恒兜底。派生时点独立取当前池
+    // 快照合成 first 帧（与标记快照同口径），不依赖标记行先行。
+    const pendingSnapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
+    if (!(await deriveRetroTask(loop, pendingSnapshots))) return false // 派生失败不落标记——下轮重试
     return await ensureFirstPassMark(loop)
   } catch (cause) {
     console.warn(
@@ -501,14 +505,19 @@ async function ensureFirstPassMark(loop: ActiveLoop): Promise<boolean> {
  * 判定规则（阈值取机械⑦ settings 键）、多 agent 交叉核验要求、learn 技能调用要求；越阈时
  * AC 硬门要求已注册改进提案（未注册不得 success）。fail-soft：派生失败 warn 留痕不阻收口。
  */
-async function deriveRetroTask(loop: ActiveLoop): Promise<boolean> {
+async function deriveRetroTask(loop: ActiveLoop, pendingFirstPass?: LoopCheckpointSnapshot): Promise<boolean> {
   const { deps, record } = loop
   const checkpoints = deps.checkpoints
   if (checkpoints === undefined || loop.proposalId === undefined) return false
   try {
     const rows = await checkpoints.listCheckpoints({ projectId: loop.scope.projectId, proposalId: loop.proposalId })
+    // 标记行缺席（先派生后落标记序）+ 快照在场 = 以派生时点池快照合成 first 帧补位（bug 9c350e5f）
+    const effectiveRows =
+      pendingFirstPass === undefined || rows.some((r) => r.mark === 'first-pass-complete')
+        ? rows
+        : [...rows, { mark: 'first-pass-complete' as const, ...pendingFirstPass }]
     const threshold = await reviewWaveThresholdOf(loop)
-    const metrics = flywheelMetricsOf(rows, threshold)
+    const metrics = flywheelMetricsOf(effectiveRows, threshold)
     await deps.tasks.addTask({
       projectId: loop.scope.projectId,
       source: record.source,

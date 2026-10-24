@@ -23,7 +23,8 @@ import type {
   TaskStatus,
   TransitionTaskInput,
 } from '@dsh-forge/contracts'
-import { createLoopDriver } from './driver.js'
+import { createEnsureCheckpointsFace, createLoopDriver } from './driver.js'
+import type { CoreCheckpointsAppendFace } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
@@ -328,6 +329,7 @@ function build(options: {
       cpRows.push({ mark: input.mark, tasksTotal: 0, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 })
       return { appended: true as const }
     },
+    appendCheckpoint: async (_input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => ({}),
     listCheckpoints: async (q: { marks?: readonly string[] }) => cpRows.filter((r) => q.marks === undefined || q.marks.includes(r.mark)),
   }
   // 1.17 进度事件录制（'forge/progress' append 形状——形状/序断言消费）
@@ -730,6 +732,31 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
 // ─────────────────────────── 机械③（forge-verification-hardening） ───────────────────────────
 
+describe('createEnsureCheckpointsFace · ensure 语义包装 no-op 分支', () => {
+  it('标记行已在场：ensureCheckpoint no-op（appended=false）零底层 append；缺席才真实追加（appended=true）', async () => {
+    const appends: string[] = []
+    const core: CoreCheckpointsAppendFace = {
+      appendCheckpoint: async (input) => {
+        appends.push(input.mark)
+      },
+      listCheckpoints: async () => [{ mark: 'first-pass-complete', tasksTotal: 1, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 }],
+    }
+    const face = createEnsureCheckpointsFace(core)
+    const snapshots = { tasksTotal: 1, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 }
+    // 在场：no-op——零 append
+    expect(
+      await face.ensureCheckpoint({ projectId: 'p-1', proposalId: 'prop-1', mark: 'first-pass-complete', baseCommitHash: 'h1', snapshots }),
+    ).toEqual({ appended: false })
+    expect(appends).toEqual([])
+    // 缺席：真实追加
+    expect(
+      await face.ensureCheckpoint({ projectId: 'p-1', proposalId: 'prop-1', mark: 'merged', baseCommitHash: 'h2', snapshots }),
+    ).toEqual({ appended: true })
+    expect(appends).toEqual(['merged'])
+  })
+})
+
+
 describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记', () => {
   it('first-pass 幂等 + 复盘派生（未越阈）：首次 done 落标记一枚（HEAD 回落结算 commit）+ doc 复盘任务注入指标/交叉核验/learn；次 done 不重落不重派', async () => {
     const built = build({
@@ -740,6 +767,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
         statsOf({ in_progress: 1 }), // claim1 结算核池读
         statsOf({ completed: 1 }), // claim1 review-wave 快照计数读（机械④结算点真实触发——装配修复后）
         statsOf({ completed: 1 }), // 次轮 no-task 池读（first-pass done）
+        statsOf({ completed: 1 }), // 派生时点池快照计数读（bug 9c350e5f——先派生后落标记序）
         statsOf({ completed: 1 }), // 标记快照计数读（completed 1 = first-pass 基线）
         statsOf({ in_progress: 1 }), // 复盘任务领取通知读
         statsOf({ in_progress: 1 }), // 复盘任务结算核池读
@@ -782,6 +810,60 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、复盘不重派（addTask 仍 1）
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.h.addTaskInputs).toHaveLength(1)
+  })
+
+  it('复盘指标真值（bug 9c350e5f）：先派生后落标记窗口内以派生时点池快照合成 first 帧——fixDensity 不恒兜底', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })], // shift-末项重复——派生/落标记快照计数读同值
+      checkpointRows: [{ mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 }],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    // 池中一枚 completed fix 类任务（带 commit 记录）——派生时点快照 = tasks 1 / commits 1 / fixes 1
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    // 真值：first 帧合成（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('fix 密度：100.0%')
+  })
+
+  it('复盘指标真值（bug 9c350e5f）：merged 帧在场 + first 帧合成——reworkRatio 取 (current-baseline)/current 真值', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })],
+      checkpointRows: [
+        { mark: 'merged', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+        { mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+      ],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    // 真值：first 基线 commits 1（合成帧）、current = merged 帧 commits 3 → (3-1)/3；兜底缺陷下恒 0.0%
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('返工增量比：66.7%')
   })
 
   it('复盘派生（越阈）：修正波次 ≥ 阈值（默认 6）→ AC 硬门「已注册改进提案」入验收清单', async () => {
