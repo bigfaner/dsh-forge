@@ -21,6 +21,12 @@ export interface WorktreeEntryDto {
   readonly present: boolean
   readonly detached: boolean
   readonly bare: boolean
+  /**
+   * 官方 workspace id（binding-derivation 流程 A——chip 双发数据源：session.create
+   * {workspaceId} 硬前置）。list / create 返回均携带（present 行 resolveByPath 只读解析；
+   * registry 缺席 / 降级面 / 盘上缺席行 = undefined 零注入）。
+   */
+  readonly workspaceId?: string
 }
 
 /** forge:worktree/list */

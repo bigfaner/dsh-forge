@@ -417,6 +417,16 @@ async function main(): Promise<void> {
   }
   // 网关折叠点落栈（方案 3——官方缝 wrap，官方包零改制）：typertGateway 服务惰性解析
   // （cordis Service 激活晚于本装配段可达——250ms 轮询，60s 放弃；形状不符 = 零挂接 fail-soft）。
+  // binding-derivation 流程 A：service.create 官方 workspace 前移创建失败面 emit 缝
+  // （diag 双轨 + emitDiag('worktree-create', warn)）。
+  const worktreeCreateDiag = (line: string): void => {
+    diag(line)
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'worktree-create', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
   {
     let foldAttached = false
     const attachFold = (): void => {
@@ -641,6 +651,8 @@ async function main(): Promise<void> {
         // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
         // failOpenDiag = diag 双轨 + emitDiag（ALS 上下文内被调 → 行带链 B trace_id）。
         failOpenDiag,
+        // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
+        createDiag: worktreeCreateDiag,
       })
       worktreeRpcService = worktreeRpc
 

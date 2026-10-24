@@ -82,7 +82,7 @@ function fakePersistence(
     // 探测缝（attachedSessionsOf as {list?}），不在 SessionPersistenceFace 类型面
     list: (async () => Object.keys(events).map((id) => ({ header: { id } }))) as never,
   } as unknown as SessionPersistenceFace
-  return { persistence, appended, created, closedFor }
+  return { persistence, appended, created, closedFor, events }
 }
 
 function fakeController() {
@@ -105,13 +105,26 @@ function fakeController() {
 
 /** 官方 workspaceRegistry 消费窄面桩（find-or-create + attachSession/setTitle 捕获；
  *  titles = resolveByPath 项目 title 映射——继承命名面；archive 可选档 = 归档集 +
- *  unarchive 捕获——bug ff324cad 占位回收面） */
+ *  unarchive 捕获——bug ff324cad 占位回收面；create 复用不改 title（官方语义）） */
 function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, string> = {}) {
   const created: Array<{ path: string; title?: string }> = []
   const attached: Array<{ path: string; sessionId: string }> = []
   const titled: Array<{ path: string; title: string }> = []
   const archived: string[] = []
   const unarchived: string[] = []
+  // find-or-create 复用面（官方语义：同规范路径已存在即复用，title 仅新建时生效）
+  const workspaces = new Map<string, { id: string; title?: string }>()
+  const entityFor = (path: string, ws: { id: string; title?: string }) => ({
+    id: ws.id,
+    attachSession: async (sessionId: string) => {
+      if (attachError !== undefined) throw attachError
+      attached.push({ path, sessionId })
+    },
+    setTitle: async (next: string) => {
+      ws.title = next
+      titled.push({ path, title: next })
+    },
+  })
   const registry = {
     archivedSessionIds: archived,
     unarchiveSession: async (sessionId: string) => {
@@ -121,25 +134,17 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
     },
     resolveByPath: async (path: string) => {
       const title = titles[path]
-      if (title === undefined) return undefined
-      return {
-        title,
-        setTitle: async (next: string): Promise<void> => {
-          titled.push({ path, title: next })
-        },
-      }
+      const ws = workspaces.get(path)
+      if (title === undefined && ws === undefined) return undefined
+      return entityFor(path, ws ?? { id: `ws-${path}`, title })
     },
     create: async (path: string, title?: string) => {
       created.push({ path, title })
-      return {
-        attachSession: async (sessionId: string) => {
-          if (attachError !== undefined) throw attachError
-          attached.push({ path, sessionId })
-        },
-        setTitle: async (next: string) => {
-          titled.push({ path, title: next })
-        },
-      }
+      const existing = workspaces.get(path)
+      if (existing !== undefined) return entityFor(path, existing) // 复用不改 title（官方语义）
+      const ws = { id: `ws-${path}`, title }
+      workspaces.set(path, ws)
+      return entityFor(path, ws)
     },
   }
   return { registry, created, attached, titled, archived, unarchived }
@@ -329,7 +334,7 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
         resolvedPaths.push(path)
         return undefined
       },
-      create: async (_path: string, _title?: string) => ({ attachSession: async () => {} }),
+      create: async (_path: string, _title?: string) => ({ id: 'ws-bare', attachSession: async () => {} }),
     }
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
@@ -342,15 +347,16 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     })
     await service.list({ projectRoot: 'C:/repo' })
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
-    // 主行 isMain 跳过 + 缺席行 present=false 跳过 → resolveByPath 零触达（现场 26 次/天 ENOENT warn 根治）
-    expect(resolvedPaths).toEqual([])
+    // workspaceId 解析只触达 present 主行；缺席行 present=false 跳过（workspaceId 解析与
+    // heal 同径）→ resolveByPath 零 ENOENT 空转（现场 26 次/天噪音根治）
+    expect(resolvedPaths).toEqual(['C:/repo'])
   })
 
   it('bug 4eab48ea：registry 无 resolveByPath（旧替身/降级面）→ 树工作区标题回退树名（零抛错）', async () => {
     const { controller } = fakeController()
     const { persistence } = fakePersistence({})
     const bare = {
-      create: async (_path: string, _title?: string) => ({ attachSession: async () => {} }),
+      create: async (_path: string, _title?: string) => ({ id: 'ws-bare', attachSession: async () => {} }),
     }
     const service = createWorktreeRpcService({
       sessionController: controller,
@@ -978,7 +984,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
 
   it('占位回收：重启世界（G3 产物内存态不在）→ persistence 扫描归档 blank 复用（零新建）', async () => {
     const { controller } = fakeController()
-    const { persistence, created } = fakePersistence({
+    const { persistence, created, events: logEvents } = fakePersistence({
       arch: [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo', branch: 'main' } }],
     })
     const ws = fakeWorkspaceRegistry()
@@ -992,10 +998,17 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
       pathPresent: () => true,
       ensureDirAcl: async () => {},
     })
+    const first = await service.sessionCreate({ worktreePath: 'C:/repo' })
+    // 回收扫描后台化（性能收口）：首建交付后扫描入池，零新建累积判定落第二次创建
+    expect(created, '重启世界首建预铸一次').toHaveLength(1)
+    await new Promise<void>((resolve) => setTimeout(resolve, 20)) // 后台扫描微任务排空（unarchive + 入池）
+    expect(ws.unarchived).toEqual(['arch'])
+    // 首建产物已被真实使用（turn/start）——G3 活池不复用，落回收池命中
+    logEvents[first.sessionId] = [...(logEvents[first.sessionId] ?? []), { type: 'turn/start' }]
     const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
     expect(result.sessionId, '重启后未扫描回收归档占位——新建累积').toBe('arch')
-    expect(ws.unarchived).toEqual(['arch'])
-    expect(created, '重启世界回收零新建').toHaveLength(0)
+    expect(created, '重启世界回收零新建').toHaveLength(1)
+    expect(first.sessionId).not.toBe('arch')
   })
 
   it('占位回收：回收面缺席（registry 无 unarchiveSession）→ 降级新建（现状行为零回归）', async () => {
@@ -1617,5 +1630,122 @@ describe('bug f9a23367：icacls 补权全子树传播阻塞（A′ 预铸时序 
     } finally {
       rmSync(ws, { recursive: true, force: true })
     }
+  })
+})
+
+/** 流程 A 前移创建 + workspaceId 携带（binding-derivation §2.4）。
+ *  service.create 前置目录预创建走真机 fs——create 类用例统一落 temp 目录（零真机路径污染）。 */
+describe('worktree create 前移官方 workspace 幂等创建 + WorktreeEntryDto.workspaceId', () => {
+  const withTempWs = async (fn: (ws: string, wt: string) => Promise<void>): Promise<void> => {
+    const ws = mkdtempSync(join(tmpdir(), 'dswf-wsid-'))
+    const wt = join(ws, 'wt-a').replaceAll('\\', '/')
+    try {
+      await fn(ws, wt)
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
+  }
+  const createRowOf = (wt: string) => async () => ({ path: wt, head: 'ab' + '0'.repeat(38), branch: 'feat/a', detached: false, bare: false })
+
+  it('A4：service.create 在 git worktree add 成功后前移 registry.create(path, worktreeName)——entry.workspaceId 随返回携带', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const order: string[] = []
+      const { registry, created } = fakeWorkspaceRegistry()
+      const baseCreate = registry.create.bind(registry)
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        createWorktreeOp: async () => {
+          order.push('add')
+          return createRowOf(wt)()
+        },
+        workspaceRegistry: Object.assign(registry, {
+          create: async (path: string, title?: string) => {
+            order.push('workspace')
+            return baseCreate(path, title)
+          },
+        }),
+      })
+      const result = await service.create({ projectRoot: 'C:/repo', branch: 'feat/a', path: wt, base: 'main' })
+      expect(order, 'workspace 创建未后移于 git worktree add（时序错误）').toEqual(['add', 'workspace'])
+      expect(created).toEqual([{ path: wt, title: 'wt-a' }])
+      expect(result.entry.workspaceId, 'create 返回未携带 workspaceId').toBe(`ws-${wt}`)
+      expect(result.entry.worktreeName).toBe('wt-a')
+    })
+  })
+
+  it('A4 title 语义：title 仅新建时生效——同路径二次 create 复用既有工作区（id 稳定，title 不被改写）', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const { registry, created } = fakeWorkspaceRegistry()
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        createWorktreeOp: createRowOf(wt),
+        workspaceRegistry: registry,
+      })
+      const req = { projectRoot: 'C:/repo', branch: 'feat/a', path: wt, base: 'main' }
+      const first = await service.create(req)
+      const second = await service.create({ ...req, branch: 'feat/b' })
+      expect(created.length).toBe(2)
+      expect(first.entry.workspaceId).toBe(second.entry.workspaceId)
+      expect(created[1]!.path).toBe(wt) // 幂等 find-or-create 仍被调用
+      expect(created[1]!.title).toBe('wt-a') // 传入 title，但复用面不生效（官方语义，桩内裁）
+    })
+  })
+
+  it('A4 fail-soft：registry.create 失败不阻断创建（git 树不回滚）——entry 返回 + warn + emitDiag(worktree-create) 缝触发', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const diagLines: string[] = []
+      const warns: string[] = []
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        createWorktreeOp: createRowOf(wt),
+        workspaceRegistry: {
+          create: async () => {
+            throw new Error('registry boom')
+          },
+        },
+        warn: (line) => warns.push(line),
+        createDiag: (line) => diagLines.push(line),
+      })
+      const result = await service.create({ projectRoot: 'C:/repo', branch: 'feat/a', path: wt, base: 'main' })
+      expect(result.entry.branch).toBe('feat/a')
+      expect(result.entry.workspaceId, '失败面 workspaceId 应缺席').toBeUndefined()
+      expect(warns.join('\n')).toContain('官方 workspace 前移创建失败')
+      expect(diagLines.join('\n'), 'worktree-create 诊断缝未触发').toContain('registry boom')
+    })
+  })
+
+  it('A6：list 行携带 workspaceId——resolveByPath 只读解析；盘上缺席陈旧行 workspaceId 缺席', async () => {
+    const { registry } = fakeWorkspaceRegistry(undefined, { 'C:/repo': 'dsh-forge', [WT_A]: 'dsh-forge' })
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [
+        { path: 'C:/repo', branch: 'main', detached: false, bare: false },
+        { path: WT_A, branch: 'feat/a', detached: false, bare: false },
+        { path: 'C:/repo/.forge/worktrees/gone', branch: 'feat/gone', detached: false, bare: false },
+      ],
+      pathPresent: (p) => p !== 'C:/repo/.forge/worktrees/gone',
+      workspaceRegistry: registry,
+    })
+    const result = await service.list({ projectRoot: 'C:/repo' })
+    expect(result.entries.map((entry) => [entry.worktreeName, entry.workspaceId])).toEqual([
+      ['repo', 'ws-C:/repo'],
+      ['wt-a', `ws-${WT_A}`],
+      ['gone', undefined], // present=false 行零注入
+    ])
+  })
+
+  it('降级面：registry 缺席 → create/list 照常（workspaceId undefined 零注入，不阻断主链）', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const service = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        createWorktreeOp: createRowOf(wt),
+        listWorktreeRows: async () => [{ path: wt, branch: 'feat/a', detached: false, bare: false }],
+        pathPresent: (p) => p === wt,
+      })
+      const created = await service.create({ projectRoot: 'C:/repo', branch: 'feat/a', path: wt, base: 'main' })
+      expect(created.entry.workspaceId).toBeUndefined()
+      const listed = await service.list({ projectRoot: 'C:/repo' })
+      expect(listed.entries[0]!.workspaceId).toBeUndefined()
+    })
   })
 })

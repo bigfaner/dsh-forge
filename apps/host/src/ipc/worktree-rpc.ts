@@ -158,6 +158,8 @@ export interface RequiredBindingGuardFace {
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
 export interface WorkspaceEntityFace {
+  /** 官方 Workspace.id（durable）——WorktreeEntryDto.workspaceId 携带源（chip 双发） */
+  readonly id: string
   attachSession(sessionId: string): Promise<void>
   /** 官方 Workspace.setTitle（durable 改名）——存量树工作区 title 回写缝；替身可缺席 */
   setTitle?(title: string): Promise<void>
@@ -167,7 +169,9 @@ export interface WorkspaceRegistryFace {
   /** find-or-create：realpath 归一比对，同规范路径已存在即复用不改 title（官方 registry 面） */
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
   /** 按规范路径只读解析（项目命名继承源 + 存量 title 对齐读面）；缺席 = 旧替身/降级面 */
-  resolveByPath?(path: string): Promise<{ readonly title: string; setTitle?(title: string): Promise<void> } | undefined>
+  resolveByPath?(path: string): Promise<
+    { readonly id: string; readonly title: string; setTitle?(title: string): Promise<void> } | undefined
+  >
   /** registry 全局归档集只读快照（官方 registry.archivedSessionIds——占位回收判定源；
    *  缺席 = 旧替身，回收面降级为零回收） */
   readonly archivedSessionIds?: readonly string[]
@@ -311,6 +315,9 @@ export function createWorktreeRpcService(deps: {
   /** 派生失败诊断 emit 缝（app-observability fix-3）：judge 判读链 fail-open 放行处 emit
    *  诊断事件（装配方注入 failOpenDiag——ALS 上下文内被调，行带链 B trace_id）；缺席 = 零 emit。 */
   readonly failOpenDiag?: (message: string) => void
+  /** service.create 失败诊断 emit 缝（binding-derivation 流程 A）：官方 workspace 前移创建
+   *  fail-soft 处 emit 诊断事件（装配方注入 emitDiag('worktree-create', warn)）；缺席 = 零 emit。 */
+  readonly createDiag?: (message: string) => void
   /** 重路由目标活性探测缝（bug 4a30b193——缺省 = existsSync 盘上事实；测试注入桩） */
   readonly pathPresent?: ((path: string) => boolean) | undefined
   /** 绑定失配哨兵发射缝（WYSIWYG——用户裁决 2026-10-24）：child 经 process.send 进事件链
@@ -455,6 +462,8 @@ export function createWorktreeRpcService(deps: {
   // （每 cwd 至多一个 blank 产物）；产物已非 blank（真实使用过）→ 除名允许新建。
   // 产物本体不含 cwd（外层 sessionCreate 统一回带——realpath 归一）。
   const sessionProducts = new Map<string, Promise<Omit<WorktreeSessionCreateResult, 'cwd'>>>()
+  /** 后台回收入池产物（键 = 目标树 norm——与 sessionProducts 分层，命中即免预铸交付） */
+  const recycledPool = new Map<string, Omit<WorktreeSessionCreateResult, 'cwd'>>()
 
   /** 会话工作区归属（bug 925c96d5 根因级修复）：以树路径 find-or-create 官方工作区
    *  （registry.create realpath 归一比对——契约条件 header.cwd realpath ≡ workspace.path
@@ -635,11 +644,27 @@ export function createWorktreeRpcService(deps: {
       // present 兑现盘上事实（bug 4a30b193 UI 面）：git 清单在 prune 前保留已删树陈旧行
       // ——UI 陈旧选中自愈判定源 = existsSync 盘上实存（与重路由活性同源 presentOf）
       const dtos = entries.map((entry) => ({ ...entryToDto(entry, resolution.projectRoot), present: presentOf(entry.path) }))
-      healWorkspaceTitles(resolution, dtos)
+      // A6（binding-derivation 流程 A）：workspaceId 随行——present 行 resolveByPath 只读
+      // 解析（官方 realpath 归一；缺席/失败/registry 缺席 = undefined 零注入；盘上缺席陈旧
+      // 行跳过——bug 63180253 同径零 ENOENT 空转）
+      const registry = resolveWorkspaceRegistry()
+      const resolveWorkspaceId = async (path: string): Promise<string | undefined> => {
+        if (registry === undefined) return undefined
+        try {
+          return (await registry.resolveByPath?.(path))?.id
+        } catch {
+          return undefined
+        }
+      }
+      const workspaceIds = await Promise.all(
+        dtos.map((dto) => (dto.present ? resolveWorkspaceId(dto.path) : Promise.resolve(undefined))),
+      )
+      const entriesWithIds = dtos.map((dto, i) => ({ ...dto, workspaceId: workspaceIds[i] }))
+      healWorkspaceTitles(resolution, entriesWithIds)
       return {
         isGit: true,
         worktreeDir: dir,
-        entries: dtos,
+        entries: entriesWithIds,
       }
     },
 
@@ -662,8 +687,22 @@ export function createWorktreeRpcService(deps: {
         path: request.path,
         base: request.base,
       })
+      // A4（binding-derivation 流程 A）：官方 workspace 前移创建——幂等 find-or-create
+      // （realpath 归一，title 仅新建时生效）。失败 fail-soft 不回滚 git 树（官方 create
+      // 幂等，下次 list / find-or-create 自愈补齐），emitDiag('worktree-create', warn)。
+      let workspaceId: string | undefined
+      const wsRegistry = resolveWorkspaceRegistry()
+      if (wsRegistry !== undefined) {
+        try {
+          workspaceId = (await wsRegistry.create(request.path, worktreeNameOf(request.path))).id
+        } catch (cause) {
+          const message = `[git-worktree] 官方 workspace 前移创建失败（fail-soft——不回滚 git 树，下次 find-or-create 自愈）：${request.path}：${String(cause)}`
+          warn(message)
+          deps.createDiag?.(message)
+        }
+      }
       await notifyWorktreeSetChanged(request.path) // 绑定表失效锚：新树路径即需路由行
-      return { entry: entryToDto(entry, request.projectRoot) }
+      return { entry: { ...entryToDto(entry, request.projectRoot), workspaceId } }
     },
 
     async remove(request) {
@@ -765,46 +804,21 @@ export function createWorktreeRpcService(deps: {
         }
         sessionProducts.delete(key) // 产物已被真实使用（非 blank）→ 允许新建
       }
-      warn(`[git-worktree] 创建会话入口：请求=${request.worktreePath} 目标=${targetPath}（G3 无可复用产物——走回收扫描/预铸）`)
-      // 占位回收重启世界兜底 + 预铸编排同链（G3 互斥：key 认领后首个 await 前同步 set——
-      // 并发调用方在 loop 段即命中在途产物，scan/预铸不再开双建窗口）：
-      const pending = (async (): Promise<Omit<WorktreeSessionCreateResult, 'cwd'>> => {
-        // 归档集精确候选扫描（bug 8af836eb 后续性能收口：候选源 = registry.archivedSessionIds
-        // 本身——只有产品归档的占位会进该集合，通常一两个条目；替代初版 persistence.list
-        // 全量尾扫 cap 200 逐会话开读句柄——真实项目秒级，是「点新会话打开 hero 明显延迟」
-        // 的根因）。registry 归档面缺席 = 恒不命中（回收面降级，行为同现状新建）。
-        const registry2 = registry
-        if (registry2?.unarchiveSession !== undefined && registry2.archivedSessionIds !== undefined) {
-          const scanStart = Date.now()
-          try {
-            let recycledId: string | undefined
-            for (const sid of registry2.archivedSessionIds) {
-              const binding = await readLatestAttach(sid, readFactory).catch(() => null)
-              if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) continue
-              if (!(await blankOf(sid))) continue
-              recycledId = sid // 不 break——归档序取最后命中（近似最新）
-            }
-            warn(
-              `[git-worktree] 创建会话回收扫描：候选=${registry2.archivedSessionIds.length} ` +
-                `命中=${recycledId ?? '无'} 耗时=${Date.now() - scanStart}ms`,
-            )
-            if (recycledId !== undefined) {
-              try {
-                await registry2.unarchiveSession(recycledId)
-              } catch (cause) {
-                warn(`[git-worktree] 占位回收 unarchive 失败（降级新建）：${String(cause)}`)
-                recycledId = undefined
-              }
-              if (recycledId !== undefined && !archivedOf().includes(recycledId)) {
-                warn(`[git-worktree] 创建会话回收复用：id=${recycledId} 目标=${targetPath}`)
-                return { sessionId: recycledId, branch: await resolveBranch(targetPath) }
-              }
-            }
-          } catch (cause) {
-            // 扫描失败 = 回收面降级（零回收），落预铸现状——降级留痕不静默
-            warn(`[git-worktree] 创建会话回收扫描失败（降级预铸）：${String(cause)}`)
-          }
+      // 复用池先行（后台回收的产物——不入 G3 活池避免覆盖语义，分层独立）：命中且活性/
+      // blank 复验通过 → 直接交付（零预铸）。不可用 = 弃池降级预铸。
+      const pooled = recycledPool.get(key)
+      if (pooled !== undefined) {
+        recycledPool.delete(key)
+        if (!archivedOf().includes(pooled.sessionId) && (await blankOf(pooled.sessionId))) {
+          warn(`[git-worktree] 创建会话复用入池产物：id=${pooled.sessionId} 目标=${targetPath}`)
+          return { ...pooled, cwd: productCwd }
         }
+        warn(`[git-worktree] 入池产物失效（弃池降级预铸）：id=${pooled.sessionId}`)
+      }
+      warn(`[git-worktree] 创建会话入口：请求=${request.worktreePath} 目标=${targetPath}（G3 无可复用产物——走预铸，回收转后台）`)
+      // G3 互斥：预铸编排先行交付（业务顺序优先——回收扫描 36 候选 5.4s 实证不能占关键
+      // 路径），命中入池供后续创建复用：
+      const pending = (async (): Promise<Omit<WorktreeSessionCreateResult, 'cwd'>> => {
         const result = await doSessionCreate({ ...request, worktreePath: targetPath })
         // 绑定表锚后台化（性能收口）：刷新（N×git worktree list + 文件重写，~百 ms）不阻塞
         // 会话交付——会话本体已可用，绑定表晚几拍落盘无正确性影响（fail-soft 自愈语义不变）
@@ -813,6 +827,11 @@ export function createWorktreeRpcService(deps: {
           warn(`[git-worktree] 创建会话绑定表锚失败（fail-soft 自愈语义不变）：${String(cause)}`)
         })
         warn(`[git-worktree] 创建会话预铸完成（绑定表锚后台化 ${Date.now() - anchorStart}ms 已发起）`)
+        // 占位回收后台化（性能收口——用户裁决「先保证业务正常，再考虑异步提升性能」）：
+        // 扫描本会话交付后后台跑，命中 → unarchive + 入池，下一次 sessionCreate 走 G3
+        // 复用快路径（235ms 实测）。业务正确性零依赖——本会话已交付，命中与否只影响
+        // 下一次创建快慢。registry 归档面缺席 = 恒不命中（回收面降级，行为同新建）。
+        void recycleArchivedBlank(targetPath, key)
         return result
       })()
       sessionProducts.set(key, pending)
@@ -1007,6 +1026,43 @@ export function createWorktreeRpcService(deps: {
         `总耗时=${Date.now() - t0}ms`,
     )
     return { sessionId: preseeded.sessionId, branch }
+  }
+
+  /**
+   * 占位回收后台扫描（性能收口——用户裁决「先保证业务正常，再考虑异步提升性能」）：
+   * 归档集逐候选判 绑定 ≡ 目标树 ∧ blank，命中 → unarchive 回活 + 入 G3 产物池（幂等：
+   * key 已有在途/既有产物不覆盖）。命中与否零影响已交付会话——只决定下一次创建走
+   * 复用快路径（实测 235ms）还是再预铸。全链日志留痕，失败降级不静默。
+   */
+  async function recycleArchivedBlank(targetPath: string, key: string): Promise<void> {
+    const scanStart = Date.now()
+    try {
+      const registry = resolveWorkspaceRegistry()
+      if (registry?.unarchiveSession === undefined || registry.archivedSessionIds === undefined) return
+      let recycledId: string | undefined
+      for (const sid of registry.archivedSessionIds) {
+        const binding = await readLatestAttach(sid, readFactory).catch(() => null)
+        if (binding === null || norm(binding.worktreePath) !== norm(targetPath)) continue
+        if (!(await blankOf(sid))) continue
+        recycledId = sid // 不 break——归档序取最后命中（近似最新）
+      }
+      warn(
+        `[git-worktree] 占位回收扫描（后台）：目标=${targetPath} 候选=${registry.archivedSessionIds.length} ` +
+          `命中=${recycledId ?? '无'} 耗时=${Date.now() - scanStart}ms`,
+      )
+      if (recycledId === undefined) return
+      try {
+        await registry.unarchiveSession(recycledId)
+      } catch (cause) {
+        warn(`[git-worktree] 占位回收 unarchive 失败（放弃本轮回收）：${String(cause)}`)
+        return
+      }
+      if (recycledPool.has(key)) return // 入池幂等：重复扫描不覆盖
+      recycledPool.set(key, { sessionId: recycledId, branch: await resolveBranch(targetPath) })
+      warn(`[git-worktree] 占位回收入池：id=${recycledId} 目标=${targetPath}（下次创建走复用快路径）`)
+    } catch (cause) {
+      warn(`[git-worktree] 占位回收扫描失败（降级——下次创建再扫）：${String(cause)}`)
+    }
   }
 
   return service
