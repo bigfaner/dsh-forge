@@ -707,34 +707,18 @@ export function createWorktreeRpcService(deps: {
       // W2 能力缺席显式拒绝（fail-closed）：git 项目 × 能力缺席 → typed error（rpcEnvelope
       // 序列化 → 前端 RpcClientError → Toast）；非 git / 瞬态窗口 → 官方原流零差异。
       if (await absentGitProbe(request.worktreePath)) throw new WorktreeCapabilityAbsentError(request.worktreePath)
-      // bug ff324cad 根治级「创建即绑选中树」：hero 选中树记忆消费前移到创建时点——wrap
-      // 恒传项目根，此处选中记忆在场且活性可证即直接预铸选中树会话（零主树占位双建，
-      // 首条消息零重路由）；陈旧记忆摘除回落请求路径（bug 4a30b193 同判）。消费仅限
-      // 「请求 ≡ 项目根」的占位语义请求：显式树请求（点选即换绑编排 / 重路由产物径）
-      // 目标本就是点选结果，记忆劫持 = 绑错树。
-      let targetPath = request.worktreePath
-      const resolution = await cachedResolve(request.worktreePath).catch(() => null)
-      if (
-        resolution !== null &&
-        norm(request.worktreePath) === norm(resolution.projectRoot)
-      ) {
-        const selected = lastSelection.get(norm(resolution.projectRoot))
-        if (selected !== undefined) {
-          if (presentOf(selected)) {
-            if (norm(selected) !== norm(request.worktreePath)) targetPath = selected
-          } else {
-            lastSelection.delete(norm(resolution.projectRoot)) // 陈旧记忆摘除——后续创建不再走失效径
-          }
-        }
-      }
+      // WYSIWYG 收敛（用户裁决 2026-10-24「为什么要记忆」）：请求路径即创建目标——调用方
+      // 显式传参承担所见即所得（UI 显示什么就传什么，主树也是显式传根），host 零选中记忆
+      // 劫持、零猜测。选中记忆（lastSelection）只剩两个消费者：selected() 读镜像（chip
+      // 回填/显示恢复）与发送哨兵 displayed 判读，均不参与创建路由。
+      const targetPath = request.worktreePath
       // 前置活性守卫（bug 9eb9d6cb 真机反馈——temp fixture 残留路径以生裸「分支解析失败」
       // 冒出）：目标路径盘上缺席 → WorktreeTargetAbsentError typed 显式拒绝。wrap 径
-      // fail-open 回官方原流（零行为差异）；重路由径本就前置同判（本守卫为纵深）。
+      // fail-open 回官方原流（零行为差异）。
       if (!presentOf(targetPath)) throw new WorktreeTargetAbsentError(targetPath)
-      // bug 2bc90d64：产物头 cwd 回带（realpath 归一——与 doSessionCreate 预铸头同口径；
-      // 可能 ≠ 请求路径：创建即绑选中树已改写 targetPath）。客户端 wrap 拿它走官方
-      // session.create({sessionId, cwd}) adopt 正门补客户端账本——cwd 即 header.cwd
-      // 相等校验的对位键。
+      // bug 2bc90d64：产物头 cwd 回带（realpath 归一——与 doSessionCreate 预铸头同口径）。
+      // 客户端 wrap 拿它走官方 session.create({sessionId, cwd}) adopt 正门补客户端账本——
+      // cwd 即 header.cwd 相等校验的对位键。
       const productCwd = await realpath(targetPath).catch(() => targetPath)
       const key = norm(targetPath)
       const registry = resolveWorkspaceRegistry()

@@ -885,12 +885,11 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     expect(created).toHaveLength(1)
   })
 
-  // ── bug ff324cad 根治级：创建即绑选中树（hero 选中记忆消费前移到 sessionCreate——
-  //    wrap 请求项目根时直接预铸选中树会话，零主树占位双建）──
-  it('创建即绑选中树：select 推送在场 → sessionCreate(项目根) 直接预铸选中树会话（预铸头 cwd / adopt cwd / 工作区归属三面全落选中树，零主树占位）', async () => {
+  // ── WYSIWYG 收敛（用户裁决 2026-10-24「为什么要记忆」）：请求路径即创建目标——
+  //    host 零选中记忆劫持；选中记忆只剩 selected() 读镜像与哨兵 displayed 判读 ──
+  it('WYSIWYG：select 推送他树在场 → sessionCreate(项目根) 恒预铸项目根（请求即目标，零记忆劫持——bug bf377bea 回归锚：记忆与显示错位时按传参建，不猜）', async () => {
     const { controller, calls } = fakeController()
     const { persistence, created } = fakePersistence({})
-    const { registry, created: wsCreated } = fakeWorkspaceRegistry()
     const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
       sessionController: controller,
@@ -899,22 +898,20 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
         { path: 'C:/repo', branch: 'main' },
         { path: WT_A, branch: 'feat/a' },
       ],
-      workspaceRegistry: registry,
       pathPresent: () => true,
       ensureDirAcl: async () => {},
     })
     await service.select({ projectRoot: 'C:/repo', path: WT_A })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(created, '预铸头 cwd 未落选中树——创建即绑选中树未兑现（bug 在场）').toEqual([
-      { header: expect.objectContaining({ cwd: WT_A, id: result.sessionId }) },
+    expect(created, '项目根请求被记忆劫持到选中树（WYSIWYG 违约）').toEqual([
+      { header: expect.objectContaining({ cwd: 'C:/repo', id: result.sessionId }) },
     ])
-    expect(calls, 'controller.create adopt 未落选中树').toEqual([
-      { sessionId: result.sessionId, cwd: WT_A },
+    expect(calls, 'controller.create adopt 未落项目根').toEqual([
+      { sessionId: result.sessionId, cwd: 'C:/repo' },
     ])
-    expect(wsCreated.map((row) => row.path), '工作区归属未落选中树（主树占位会话出现）').toEqual([WT_A])
   })
 
-  it('创建即绑选中树：选中记忆为陈旧树（盘上缺席）→ 记忆摘除回落项目根（不对已删路径预铸）', async () => {
+  it('WYSIWYG：选中记忆为陈旧树（盘上缺席）→ sessionCreate(项目根) 恒预铸项目根（记忆不参与创建路由）', async () => {
     const { controller, calls } = fakeController()
     const { persistence, created } = fakePersistence({})
     const ghost = 'C:/repo/.forge/worktrees/ghost'
@@ -928,24 +925,8 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     })
     await service.select({ projectRoot: 'C:/repo', path: ghost })
     const result = await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(created[0]?.header.cwd, '陈旧选中树被用作预铸目标（bug 4a30b193 同族回归）').toBe('C:/repo')
+    expect(created[0]?.header.cwd, '陈旧选中树被用作预铸目标（记忆参与路由——bug 4a30b193 同族回归）').toBe('C:/repo')
     expect(calls).toEqual([{ sessionId: result.sessionId, cwd: 'C:/repo' }])
-  })
-
-  it('创建即绑选中树：选中树 ≡ 项目根（主行锚定）→ 原语义预铸项目根（零行为差异）', async () => {
-    const { controller } = fakeController()
-    const { persistence, created } = fakePersistence({})
-    const service = createWorktreeRpcService({
-      gitWorktree: fakeExt,
-      sessionController: controller,
-      sessionPersistence: persistence,
-      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
-      pathPresent: () => true,
-      ensureDirAcl: async () => {},
-    })
-    await service.select({ projectRoot: 'C:/repo', path: 'C:/repo' })
-    await service.sessionCreate({ worktreePath: 'C:/repo' })
-    expect(created[0]?.header.cwd).toBe('C:/repo')
   })
 
   // ── bug ff324cad 占位回收：弃置归档的 blank 占位循环复用——全局至多一个根占位（累积面收口）──
@@ -1109,7 +1090,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     expect(created).toHaveLength(0)
   })
 
-  it('创建即绑选中树：显式树请求不被选中记忆劫持——select 推送他树后 sessionCreate(显式树) 恒预铸显式树（点选即换绑编排前置）', async () => {
+  it('WYSIWYG：显式树请求恒预铸显式树——select 推送他树不影响（请求即目标，点选即换绑编排前置）', async () => {
     const { controller, calls } = fakeController()
     const { persistence, created } = fakePersistence({})
     const WT_B = 'C:/repo/.forge/worktrees/wt-b'
@@ -1127,7 +1108,7 @@ describe('requiredBindingGuard + interceptRequiredBinding（WYSIWYG 绑定哨兵
     })
     await service.select({ projectRoot: 'C:/repo', path: WT_B })
     const result = await service.sessionCreate({ worktreePath: WT_A })
-    expect(created[0]?.header.cwd, '显式树请求被记忆劫持到选中树').toBe(WT_A)
+    expect(created[0]?.header.cwd, '显式树请求未按传参预铸').toBe(WT_A)
     expect(calls).toEqual([{ sessionId: result.sessionId, cwd: WT_A }])
   })
 
