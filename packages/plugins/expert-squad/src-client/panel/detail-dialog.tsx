@@ -6,7 +6,7 @@
 // 官方 MarkdownDoc 组件不在插件 client bundle 外置表内（classic script 缝仅 react
 // 外置），按原型近似语义以 .dswf-* 自绘面分块渲染（标题/加粗/行内代码/列表）。
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import {
   DESCRIPTION_MAX,
@@ -103,22 +103,64 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
   return <>{out}</>;
 }
 
-/** multi-select：box 显已选 chips + 下拉勾选菜单（allowAdd 技能可新增）。 */
+/**
+ * multi-select 开合纯决策（原型 mountMsel 语义）：box 点击开合、点击 wrap 外部收起、
+ * 内部点击（勾选行/新增输入）保持展开。
+ */
+export function mselNextOpen(
+  open: boolean,
+  area: "box" | "outside" | "inside",
+): boolean {
+  if (area === "box") return !open;
+  if (area === "outside") return false;
+  return open;
+}
+
+/**
+ * multi-select：box 显已选 chips + 下拉勾选菜单（allowAdd 技能可新增）。
+ * 对齐已批原型：菜单默认收起（条件渲染），box 点击开合，document 外点收起。
+ * Root cause: 产品实现曾恒渲染菜单（无 open 态），偏离原型 mountMsel 交互。
+ */
 function MultiSelect(props: {
   readonly field: "tools" | "skills";
   readonly label: string;
   readonly selected: readonly string[];
   readonly candidates: readonly string[];
   readonly allowAdd: boolean;
+  readonly defaultOpen?: boolean;
   readonly onToggle: (value: string) => void;
   readonly onAdd: (value: string) => void;
 }): ReactNode {
+  const [open, setOpen] = useState(props.defaultOpen === true);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (event: MouseEvent): void => {
+      const root = rootRef.current;
+      const target = event.target;
+      if (root && target instanceof Node && root.contains(target)) {
+        setOpen((current) => mselNextOpen(current, "inside"));
+        return;
+      }
+      setOpen((current) => mselNextOpen(current, "outside"));
+    };
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, [open]);
   const options = [...new Set([...props.candidates, ...props.selected])];
   return (
     <div className="dswf-dlg-field">
       <label>{props.label}</label>
-      <div className="dswf-msel" data-msel={props.field}>
-        <div className="dswf-msel-box">
+      <div
+        ref={rootRef}
+        className={open ? "dswf-msel dswf-msel-open" : "dswf-msel"}
+        data-msel={props.field}
+        data-msel-open={open ? "" : undefined}
+      >
+        <div
+          className="dswf-msel-box"
+          onClick={() => setOpen((current) => mselNextOpen(current, "box"))}
+        >
           {props.selected.map((value) => (
             <span key={value} className="chip" data-msel-chip={value}>
               {value}
@@ -127,34 +169,37 @@ function MultiSelect(props: {
           <span className="dswf-msel-placeholder">
             {props.selected.length === 0 ? "点击选择" : ""}
           </span>
+          <span className="dswf-msel-caret">▾</span>
         </div>
-        <div className="dswf-msel-menu" data-msel-menu={props.field}>
-          {options.map((option) => (
-            <label key={option} className="dswf-msel-row">
-              <input
-                type="checkbox"
-                checked={props.selected.includes(option)}
-                onChange={() => props.onToggle(option)}
-              />
-              {option}
-            </label>
-          ))}
-          {props.allowAdd ? (
-            <div className="dswf-msel-add">
-              <input
-                type="text"
-                placeholder="新增后回车"
-                aria-label="新增技能"
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    props.onAdd((event.target as HTMLInputElement).value);
-                    (event.target as HTMLInputElement).value = "";
-                  }
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
+        {open ? (
+          <div className="dswf-msel-menu" data-msel-menu={props.field}>
+            {options.map((option) => (
+              <label key={option} className="dswf-msel-row">
+                <input
+                  type="checkbox"
+                  checked={props.selected.includes(option)}
+                  onChange={() => props.onToggle(option)}
+                />
+                {option}
+              </label>
+            ))}
+            {props.allowAdd ? (
+              <div className="dswf-msel-add">
+                <input
+                  type="text"
+                  placeholder="新增后回车"
+                  aria-label="新增技能"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      props.onAdd((event.target as HTMLInputElement).value);
+                      (event.target as HTMLInputElement).value = "";
+                    }
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -164,6 +209,8 @@ function MultiSelect(props: {
 export function ExpertDetailDialog(props: {
   readonly controller: ExpertDetailController;
   readonly allSkills: AllSkills;
+  /** multi-select 初始展开态（SSR 测试/调试面；默认收起 = 原型语义）。 */
+  readonly mselDefaultOpen?: boolean;
 }): ReactNode {
   const state = useSyncExternalStore(
     props.controller.subscribe.bind(props.controller),
@@ -223,6 +270,7 @@ export function ExpertDetailDialog(props: {
         selected={state.draft.tools}
         candidates={TOOL_CANDIDATES}
         allowAdd={false}
+        defaultOpen={props.mselDefaultOpen}
         onToggle={(value) => props.controller.toggleTool(value)}
         onAdd={() => undefined}
       />
@@ -232,6 +280,7 @@ export function ExpertDetailDialog(props: {
         selected={state.draft.skills}
         candidates={props.allSkills}
         allowAdd={true}
+        defaultOpen={props.mselDefaultOpen}
         onToggle={(value) => props.controller.toggleSkill(value)}
         onAdd={(value) => props.controller.appendSkill(value)}
       />

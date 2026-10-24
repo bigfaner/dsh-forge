@@ -79,6 +79,7 @@ export const PANEL_CSS = `
 .dswf-msel { position: relative; }
 .dswf-msel-box { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 32px; padding: 4px ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-msel-placeholder { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
+.dswf-msel-caret { margin-left: auto; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
 .dswf-msel-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 10; max-height: 220px; overflow: auto; padding: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); }
 .dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }

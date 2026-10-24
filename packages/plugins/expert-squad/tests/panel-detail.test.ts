@@ -21,7 +21,10 @@ import {
   ExpertDetailController,
   type DetailMutations,
 } from "../src-client/panel/detail-source.js";
-import { ExpertDetailDialog } from "../src-client/panel/detail-dialog.js";
+import {
+  ExpertDetailDialog,
+  mselNextOpen,
+} from "../src-client/panel/detail-dialog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
 import { ExpertListController } from "../src-client/panel/list-source.js";
 
@@ -314,6 +317,48 @@ describe("ExpertDetailDialog 编辑态（F2 字段集）", () => {
       }),
     );
     expect(html).toContain("岗位不能为空");
+  });
+});
+
+describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + box 开合 + 外点收起）", () => {
+  it("bug: 默认收起——编辑态 markup 不渲染下拉菜单（恒展开缺陷在场则失败）", () => {
+    const html = renderDialog({ mode: "edit" });
+    expect(html).not.toContain("dswf-msel-menu");
+  });
+
+  it("开合纯决策：box 点击开合、点击外部收起、内部点击（勾选）保持展开", () => {
+    expect(mselNextOpen(false, "box")).toBe(true);
+    expect(mselNextOpen(true, "box")).toBe(false);
+    expect(mselNextOpen(true, "outside")).toBe(false);
+    expect(mselNextOpen(true, "inside")).toBe(true);
+  });
+
+  it("展开态渲染菜单：box caret 在场；空已选时占位「点击选择」语义保持", () => {
+    const html = renderDialog({ mode: "edit" });
+    expect(html).toContain("dswf-msel-caret");
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry({ tools: [], skills: [] }));
+    ctl.startEdit();
+    const emptyHtml = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, { controller: ctl, allSkills: [] }),
+    );
+    expect(emptyHtml).toContain("点击选择");
+  });
+
+  it("defaultOpen 展开态：菜单 + 勾选行 + data-msel-open 标记在场", () => {
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry());
+    ctl.startEdit();
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, {
+        controller: ctl,
+        allSkills: [],
+        mselDefaultOpen: true,
+      }),
+    );
+    expect(html).toContain("dswf-msel-menu");
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain('data-msel-open=""');
   });
 });
 
