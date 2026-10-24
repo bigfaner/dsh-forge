@@ -365,7 +365,6 @@ describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + bo
   it("bug 1e1e30b5: 外点收起监听以捕获阶段挂载（Dialog 内 React 合成 stopPropagation 截停冒泡——冒泡期监听收不到 Dialog 内点击）", () => {
     const registered: { type: string; capture: boolean }[] = [];
     const removed: { type: string; capture: boolean }[] = [];
-    const listener = (): void => undefined;
     const doc = {
       addEventListener: (type: string, _fn: unknown, capture: boolean): void => {
         registered.push({ type, capture });
