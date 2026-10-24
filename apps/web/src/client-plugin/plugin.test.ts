@@ -2116,6 +2116,10 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     rows?: unknown[] | (() => unknown[] | Promise<unknown[]>) | Error
     sessionCreate?: (tree: string) => Promise<unknown>
     create?: (opts?: { sessionId?: string; workspaceId?: string; cwd?: string }) => Promise<string>
+    workspaceRows?: readonly unknown[]
+    resolveRoot?: (path: string) => Promise<string | null>
+    sessionBinding?: (sessionId: string) => Promise<string | null>
+    notifyMismatch?: (event: { sessionId: string; binding: string | null; displayed: string }) => void
   }) {
     const original =
       options?.create ??
@@ -2127,11 +2131,17 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
       return Promise.resolve(value)
     })
     const sessionCreate = options?.sessionCreate ?? vi.fn(() => Promise.resolve({ sessionId: 'Y-precast', cwd: WT_PRECAST_CWD }))
-    const deps: SessionCreateWrapDeps = {
+    const deps = {
       sessionCreate: sessionCreate as unknown as SessionCreateWrapDeps['sessionCreate'],
       projectRows: projectRows as unknown as SessionCreateWrapDeps['projectRows'],
+      ...(options?.workspaceRows !== undefined
+        ? { workspaceRows: async () => options.workspaceRows }
+        : {}),
+      ...(options?.resolveRoot !== undefined ? { resolveRoot: options.resolveRoot } : {}),
+      ...(options?.sessionBinding !== undefined ? { sessionBinding: options.sessionBinding } : {}),
+      ...(options?.notifyMismatch !== undefined ? { notifyMismatch: options.notifyMismatch } : {}),
       warn: vi.fn(),
-    }
+    } as SessionCreateWrapDeps
     const dispose = installSessionCreateWrap(
       sessions as unknown as Parameters<typeof installSessionCreateWrap>[0],
       deps,
@@ -2152,6 +2162,49 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(out).toBe('s-adopt') // 官方 create 契约：显式 sessionId 幂等回同 id
     expect(f.original).toHaveBeenCalledTimes(1)
     expect(f.projectRows).not.toHaveBeenCalled()
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('①b 复用守卫（所见即所得）：blank 绑定 ≠ 目标 workspace 树 → 不采纳，改在目标树开新会话（失配呈现 + adopt 补账本）', async () => {
+    const mismatches: Array<{ sessionId: string; binding: string | null; displayed: string }> = []
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      workspaceRows: [{ workspaceId: WS, path: WS_PATH }],
+      sessionBinding: async () => 'C:/repo/.forge/worktrees/wt-old', // blank 旧绑定 ≠ ws 树
+      notifyMismatch: (e) => mismatches.push(e),
+    })
+    const out = await f.sessions.create({ sessionId: 's-stale', workspaceId: WS })
+    expect(out).toBe('Y-precast') // 目标树新会话（G3 复用/预铸），失配 blank 未被采纳
+    expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    expect(mismatches).toEqual([
+      { sessionId: 's-stale', binding: 'C:/repo/.forge/worktrees/wt-old', displayed: WS_PATH },
+    ])
+    expect(f.original).toHaveBeenCalledWith({ cwd: WT_PRECAST_CWD, sessionId: 'Y-precast' }) // adopt 正门补账本
+  })
+
+  it('①c 复用守卫：绑定 ≡ 目标树 → 现状采纳（零预铸——复用即所见）', async () => {
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      workspaceRows: [{ workspaceId: WS, path: WS_PATH }],
+      sessionBinding: async () => WS_PATH,
+    })
+    const out = await f.sessions.create({ sessionId: 's-ok', workspaceId: WS })
+    expect(out).toBe('s-ok')
+    expect(f.original).toHaveBeenCalledWith({ sessionId: 's-ok', workspaceId: WS })
+    expect(f.sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('①d 复用守卫 fail-open：探测抛错 → 现状采纳（零预铸零改道）', async () => {
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      workspaceRows: [{ workspaceId: WS, path: WS_PATH }],
+      sessionBinding: async () => {
+        throw new Error('seal 读失败')
+      },
+    })
+    const out = await f.sessions.create({ sessionId: 's-adopt', workspaceId: WS })
+    expect(out).toBe('s-adopt')
+    expect(f.original).toHaveBeenCalledTimes(1)
     expect(f.sessionCreate).not.toHaveBeenCalled()
   })
 

@@ -1313,6 +1313,8 @@ export const WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
 export const WORKTREE_RESOLVE_CHANNEL = 'forge:worktree/resolve'
 /** forge:worktree/selected 通道字面量（contracts WORKTREE_CHANNELS.selected 同源镜像——start-session wrap 所见即所得读镜像） */
 export const WORKTREE_SELECTED_CHANNEL = 'forge:worktree/selected'
+/** forge:worktree/seal 通道字面量（contracts WORKTREE_CHANNELS.seal 同源镜像——blank 复用守卫绑定探测） */
+export const WORKTREE_SEAL_CHANNEL = 'forge:worktree/seal'
 
 /**
  * W4 看门计数探针的洞位清单（产品占用/声明的洞名——entries 求和面）。官方占用者计入基线、
@@ -2388,6 +2390,17 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                         ...(typeof product.cwd === 'string' && product.cwd !== '' ? { cwd: product.cwd } : {}),
                       }
                     }),
+                  // WYSIWYG 复用守卫（用户裁决 2026-10-24）：采纳前探测 blank 绑定（seal
+                  // 读镜像）——绑定 ≠ 目标 workspace 树（含未绑定）→ 不复用，改开目标树
+                  // 新会话（toast + 日志呈现）；探测失败 fail-open 现状采纳。
+                  sessionBinding: async (sessionId) => {
+                    const data = await unwrapRpcEnvelope<{ binding?: { worktreePath?: unknown } | null }>(
+                      forgeInvoke(WORKTREE_SEAL_CHANNEL, { sessionId }),
+                    )
+                    const path = data?.binding?.worktreePath
+                    return typeof path === 'string' && path !== '' ? path : null
+                  },
+                  notifyMismatch: showBindingMismatchToast,
                   projectRows: async () => {
                     const data = await unwrapRpcEnvelope<unknown>(forgeInvoke(PROJECTS_LIST_CHANNEL))
                     return Array.isArray(data) ? data : []

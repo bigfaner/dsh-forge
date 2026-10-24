@@ -61,6 +61,11 @@ export interface SessionCreateWrapDeps {
   /** 树归属门（forge:worktree/resolve 窄面——path → 注册项目根；null = 未注册）。
    *  缺席 = workspaceRows 判定面同缺席 */
   readonly resolveRoot?: (path: string) => Promise<string | null>
+  /** blank 绑定探测（forge:worktree/seal 窄面——sessionId → 绑定树；null = 未绑定。
+   *  WYSIWYG 复用守卫：采纳前探测 blank 绑定，失配不复用。缺席 = 跳过守卫（现状采纳） */
+  readonly sessionBinding?: (sessionId: string) => Promise<string | null>
+  /** 失配呈现缝（WYSIWYG 哨兵——toast + 日志的消费面；缺席 = 零呈现） */
+  readonly notifyMismatch?: (event: { sessionId: string; binding: string | null; displayed: string }) => void
   /** fail-open 诊断行（缺省 console.warn——e2e/诊断消费） */
   readonly warn?: (message: string) => void
 }
@@ -167,6 +172,48 @@ function isCapabilityAbsentTyped(cause: unknown): boolean {
   )
 }
 
+/** 会话绑定探测记忆（会话级——blank 绑定出生即定，会话期一探测零重复 RPC） */
+const bindingMemo = new Map<string, string | null>()
+
+/**
+ * WYSIWYG 复用守卫（采纳前探测）：目标 workspace 的树解析 + blank 绑定探测——绑定树 ≠
+ * 目标树（含未绑定）→ 失配呈现 + 预铸/复用目标树新会话；判定面缺席/探测失败 →
+ * undefined = 官方原样采纳（现状）。bound 调用不落本函数（官方错误必须单次上抛，
+ * 禁 fail-open 重调——三铁律①）。
+ */
+async function adoptMismatchDetour(
+  opts: SessionCreateCallOpts & { sessionId: string },
+  deps: SessionCreateWrapDeps,
+  warn: (message: string) => void,
+): Promise<{ sessionId: string; cwd?: string } | undefined> {
+  try {
+    // 判定面缺席 = 现状采纳（fail-open——探测是体验守卫，非正确性依赖）
+    if (deps.sessionBinding === undefined || deps.workspaceRows === undefined) return undefined
+    const workspaceId = typeof opts.workspaceId === 'string' ? opts.workspaceId : undefined
+    if (workspaceId === undefined || workspaceId === '') return undefined
+    const wsRow = (await deps.workspaceRows().catch(() => []))
+      .map(normalizeWorkspaceRow)
+      .find((row) => row !== null && row.workspaceId === workspaceId)
+    if (wsRow === null || wsRow === undefined) return undefined
+    let binding: string | null | undefined = bindingMemo.get(opts.sessionId)
+    if (binding === undefined) {
+      binding = await deps.sessionBinding(opts.sessionId)
+      bindingMemo.set(opts.sessionId, binding)
+    }
+    // 绑定 ≡ 目标树 → 现状采纳（复用即所见）
+    if (binding !== null && normPath(binding) === normPath(wsRow.path)) return undefined
+    // 失配（含未绑定）：不复用——toast + 日志呈现，改在目标树开新会话（G3 复用该树
+    // blank / 预铸该树；调用方经官方 adopt 正门补账本——bug 2bc90d64 同配方）
+    warn(`[dswf-client] blank 复用守卫：会话 ${opts.sessionId} 绑定 ${binding ?? '(未绑定)'} ≠ 目标树 ${wsRow.path}——不复用，改开目标树新会话`)
+    deps.notifyMismatch?.({ sessionId: opts.sessionId, binding, displayed: wsRow.path })
+    const product = await deps.sessionCreate(wsRow.path)
+    return { sessionId: product.sessionId, ...(product.cwd !== undefined ? { cwd: product.cwd } : {}) }
+  } catch (cause) {
+    warn(`[dswf-client] blank 复用守卫探测失败（fail-open 现状采纳）：${String(cause)}`)
+    return undefined
+  }
+}
+
 /**
  * 装配期安装（插件 apply() 内 sessions 到手后恰一次）：留底官方原方法 → 影子替换 →
  * 返回 dispose（恢复原方法，host interceptRequiredBinding 同配方；幂等）。
@@ -181,8 +228,16 @@ export function installSessionCreateWrap(
   const bound = (original as SessionCreateMethod).bind(sessions)
   const warn = deps.warn ?? ((message: string): void => console.warn(message))
   const wrapped = async (opts?: SessionCreateCallOpts): Promise<string> => {
-    // ① adopt 径直通：带 sessionId = 官方复用采纳既有会话，改道无意义（try 域之外）
-    if (opts?.sessionId !== undefined && opts.sessionId !== '') return bound(opts)
+    // ① adopt 径（复用采纳）+ WYSIWYG 复用守卫：blank 绑定 ≠ 目标 workspace 树 → 不复用，
+    //    改在该树开新会话（失配 blank 留给哨兵提示）。探测失败 = 现状采纳（fail-open）。
+    if (opts?.sessionId !== undefined && opts.sessionId !== '') {
+      const detour = await adoptMismatchDetour({ ...opts, sessionId: opts.sessionId }, deps, warn)
+      if (detour !== undefined) {
+        // 官方 adopt 正门（补账本）——官方错误原样上抛，单次调用（铁律①禁 fail-open 重调）
+        return await bound({ cwd: detour.cwd, sessionId: detour.sessionId })
+      }
+      return await bound(opts)
+    }
     // ② 目标树逐次独立判定（零缓存）：现查项目行 + 官方 workspace 行（树归属门）；
     //    异常/不命中 = null = 官方原流
     let tree: string | null = null
@@ -236,5 +291,6 @@ export function installSessionCreateWrap(
     if (disposed) return
     disposed = true
     ;(sessions as unknown as Record<string, unknown>)['create'] = original
+    bindingMemo.clear()
   }
 }
