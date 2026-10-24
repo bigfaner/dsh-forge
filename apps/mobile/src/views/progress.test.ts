@@ -39,6 +39,11 @@ describe('coerceDispatchEvents（投影值收敛）', () => {
     expect(coerceDispatchEvents({ entries: [], total: 0, pending: 3 })).toEqual({ entries: [], total: 0, pending: 3 })
     expect(coerceDispatchEvents({ entries: [], total: 0 })?.pending).toBeUndefined()
   })
+
+  it('bug 3bd8b829：claim/spawned 确认事件收敛（workerSessionId/scenario 新码透传——守卫零改容忍）', () => {
+    const view = coerceDispatchEvents({ entries: [entry({ scenario: 'claim/spawned', workerSessionId: 'w-1' })], total: 1 })
+    expect(view).toEqual({ entries: [entry({ scenario: 'claim/spawned', workerSessionId: 'w-1' })], total: 1 })
+  })
 })
 
 describe('progressStats（1.16 任务键最新态统计 + 池级快照不计）', () => {

@@ -2122,8 +2122,8 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     const before = Date.now()
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.progressCalls).toHaveLength(5)
-    const [startupEvt, claimEvt, , settleEvt] = built.progressCalls
+    expect(built.progressCalls).toHaveLength(6)
+    const [startupEvt, claimEvt, , spawnedEvt, settleEvt] = built.progressCalls
     // 启动点（1.5——① startup/from-scratch）：循环级事件，零任务键
     expect(startupEvt).toEqual({
       sourceSlug: 'feat-x',
@@ -2153,6 +2153,17 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       counts: { pending: 0, running: 1, done: 0 },
       at: expect.any(Number),
     })
+    // 领取确认点（bug 3bd8b829——spawn 成功回填后补发，载荷带 workerSessionId 直跳锚）
+    expect(spawnedEvt).toEqual({
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      scenario: 'claim/spawned',
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
+      at: expect.any(Number),
+    })
     // 结算点：动词 settle + completed + 任务键 + 任务标题 + worker 会话 id + ⑥ task/complete 场景码
     expect(settleEvt).toEqual({
       sourceSlug: 'feat-x',
@@ -2168,6 +2179,36 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all' })
     // 纯 JSON（Session.append 契约——序列化往返无损）
     expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
+  })
+
+  it('bug 3bd8b829：spawn 成功后补发领取确认事件（claim/spawned——载荷含 taskKey/taskTitle/workerSessionId；claim 原事件时序语义不变）', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 确认事件在 claim 原事件之后、结算事件之前（执行中窗口内面板即可取到跳转锚）
+    const claimIdx = built.progressCalls.findIndex((e) => e.scenario === 'claim/new')
+    const spawnedIdx = built.progressCalls.findIndex((e) => e.scenario === 'claim/spawned')
+    const settleIdx = built.progressCalls.findIndex((e) => e.verb === 'settle')
+    expect(claimIdx).toBeGreaterThanOrEqual(0)
+    expect(spawnedIdx).toBeGreaterThan(claimIdx)
+    expect(spawnedIdx).toBeLessThan(settleIdx)
+    expect(built.progressCalls[spawnedIdx]).toMatchObject({
+      verb: 'claim',
+      status: 'running',
+      scenario: 'claim/spawned',
+      taskKey: 'feat-x/2.5',
+      taskTitle: 'Implement the thing',
+      workerSessionId: 'worker-1',
+    })
   })
 
   it('adopt 恢复径：动词 claim-resume（⑤ 领取（恢复中断））', async () => {

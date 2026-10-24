@@ -111,6 +111,7 @@ export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
   'resume-stopped': '接续执行',
   'resume-inflight': '接续在飞',
   new: '领取',
+  spawned: '已启动执行',
   interrupted: '恢复中断',
   complete: '完成',
   'with-fix': '已带修复',

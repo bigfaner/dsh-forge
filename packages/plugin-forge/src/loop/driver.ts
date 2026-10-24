@@ -1274,6 +1274,16 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   }
   inFlight.workerSessionId = spawned.handle.workerSessionId // 对账锚回填（登记表 worker 子会话位）
   const workerSessionId = spawned.handle.workerSessionId // 结算/挂起径进度事件 workerSessionId 段同源
+  // 领取确认事件（bug 3bd8b829——claim 原事件先于 spawn 发出、载荷缺 workerSessionId，
+  // 执行中行两路跳转皆断；spawn 成功回填后补发本枚，面板按任务键聚合取最新态即得直跳锚）
+  emitProgress(loop, {
+    verb: 'claim',
+    status: 'running',
+    scenario: 'claim/spawned',
+    taskKey,
+    taskTitle: task.title,
+    workerSessionId,
+  })
 
   // ④ 结算（dispatch-core 阶段三）：await handle.result（事件循环挂起零线程占用）；
   //    killSignal = 循环控制器（stop 主动终态按 killed 分类——零 bump 零 tool-error）；

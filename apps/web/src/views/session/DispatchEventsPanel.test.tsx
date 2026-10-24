@@ -119,6 +119,21 @@ describe('aggregateDispatchRows（1.16 任务键时间线——每任务最新�
     ])
     expect(rows).toHaveLength(1)
   })
+  it('bug 3bd8b829：claim/spawned 确认事件后写覆盖——执行中行即取到 workerSessionId（可交互）', () => {
+    const rows = aggregateDispatchRows([
+      entry({ taskKey: 'a', scenario: 'claim/new', at: 100 }),
+      entry({ taskKey: 'a', scenario: 'claim/spawned', workerSessionId: 'w-1', at: 150 }),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ status: 'running', scenario: 'claim/spawned', workerSessionId: 'w-1' })
+    // 行可交互：聚合行跳转锚直跳命中（↗ 徽标 + 点击打开 worker 子会话）
+    expect(dispatchRowSessionOf(rows[0]!, undefined)).toBe('w-1')
+    const markup = body({ entries: rows, onOpenWorker: () => {} })
+    expect(markup).toContain('role="button"')
+    expect(markup).toContain('data-dswf-dep-row="w-1"')
+    expect(markup).toContain('data-dswf-dep-jump')
+    expect(markup).toContain('执行中 · 已启动执行')
+  })
 })
 
 describe('dispatchEventNoteOf（备注行「状态 · 摘要」——分组/章语义并入文案）', () => {

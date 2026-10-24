@@ -120,6 +120,13 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
     expect(unit.wire!.viewSchema.parse(view)).toEqual(view)
   })
 
+  it('bug 3bd8b829：claim/spawned 确认事件整载荷透传（workerSessionId 随条目到达面板）', () => {
+    const state = fold([progress({ scenario: 'claim/spawned', at: 200, taskKey: 'feat-x/2.5', taskTitle: 'Impl', workerSessionId: 'ws-9' })])
+    expect(state.total).toBe(1)
+    expect(state.entries[0]).toMatchObject({ verb: 'claim', scenario: 'claim/spawned', taskKey: 'feat-x/2.5', workerSessionId: 'ws-9' })
+    expect(unit.wire!.viewSchema.parse(unit.wire!.view(state))).toMatchObject({ total: 1 })
+  })
+
   it('1.16 池级 pending 快照：pool/pending 事件即刷新 pending；无 counts 事件 = pending 缺席（旧载荷兼容）', () => {
     const bare = fold([progress({ at: 1 }), progress({ verb: 'settle', status: 'completed', at: 2 })])
     expect(bare.pending).toBeUndefined()
