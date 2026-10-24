@@ -103,7 +103,10 @@ function parsePending(value: unknown): number | undefined {
 function parseStateShape(raw: Record<string, unknown>): { entries: ForgeDispatchEventEntry[]; total: number; pending?: number } {
   const known = Object.keys(raw).filter((key) => key !== 'pending').sort()
   if (known.join(',') !== 'entries,total') fail(`unexpected state keys ${known.join(',')}`)
-  return { entries: parseEntries(raw['entries']), total: parseTotal(raw['total']), pending: parsePending(raw['pending']) }
+  const pending = parsePending(raw['pending'])
+  // 可选键缺席 = 不写键（显式 undefined 违官方无损 JSON 契约——bug 9344622d：pending:undefined
+  // 经 api-session/added 转发校验打断全部会话创建）
+  return { entries: parseEntries(raw['entries']), total: parseTotal(raw['total']), ...(pending !== undefined ? { pending } : {}) }
 }
 
 /** total 校验（非负整数） */

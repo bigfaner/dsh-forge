@@ -188,4 +188,15 @@ describe('恢复：stateSchema 种子重放（checkpoint 冷读链）', () => {
     expect(() => unit.wire!.viewSchema.parse({ entries: [{}], total: 1 })).toThrow()
     expect(() => unit.wire!.viewSchema.parse({ entries: [], total: -1 })).toThrow()
   })
+
+  it('bug 9344622d 回归：pending 缺席时 parse 输出零 pending 键（官方无损 JSON 契约——显式 undefined 打断会话创建）', () => {
+    const input: Record<string, unknown> = { entries: [progress({ at: 1 }).data], total: 1 }
+    const state = unit.stateSchema.parse(input)
+    expect(Object.keys(state)).toEqual(['entries', 'total'])
+    const view = unit.wire!.viewSchema.parse(unit.wire!.view(state as ForgeDispatchEventsUnitState))
+    expect(Object.keys(view)).toEqual(['entries', 'total'])
+    // 携 pending 路径：键在场（parity——缺席不写键，在场必写）
+    const withPending = unit.stateSchema.parse({ entries: [], total: 0, pending: 2 })
+    expect(Object.keys(withPending).sort()).toEqual(['entries', 'pending', 'total'])
+  })
 })
