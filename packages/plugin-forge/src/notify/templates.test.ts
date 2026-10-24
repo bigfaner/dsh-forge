@@ -266,11 +266,10 @@ const SAMPLES: readonly SampleCase[] = [
         sourceSlug: 'm2-pipeline',
         completed: 5,
         inFlightTaskKey: '2.9',
-        instruction: '继续执行 /run-dag-tasks m2-pipeline',
       }),
     expected: `[forge·停止] 任务源: m2-pipeline — 已按你的指令停止
 状态: 完成 5 · 执行中任务 2.9 已标记为中断
-下一步动作: 提示用户"继续执行 /run-dag-tasks m2-pipeline"`,
+下一步动作: 无`,
   },
 ]
 
@@ -384,7 +383,7 @@ const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId;
   { no: '⑭', id: 'blocked-pool', payload: { sourceSlug: 'm2-pipeline', blockedItems: [{ taskKey: '3.1', note: 'a' }, { taskKey: '4.1', note: 'b' }] }, mustContain: ['[forge·受阻]', '阻塞 2 项（3.1、4.1）'] },
   { no: '⑮', id: 'finished-timeout', payload: { sourceSlug: 'm2-pipeline', reason: '等待超时', completed: 4, blocked: 2, pending: 1, instruction: '稍后重试' }, mustContain: ['[forge·结束] m2-pipeline — 结束（等待超时）', '完成 4', '阻塞 2', '待处理 1'] },
   { no: '⑯', id: 'finished-all', payload: { sourceSlug: 'm2-pipeline', completed: 8, blocked: 0, instruction: '若想派发其它任务，执行 /run-dag-tasks' }, mustContain: ['[forge·结束] m2-pipeline — 全部任务已完成', '完成 8'] },
-  { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9', instruction: '继续执行' }, mustContain: ['[forge·停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
+  { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9' }, mustContain: ['[forge·停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
 ]
 
 describe('1.15 · 十八场景专用单行摘要（折叠位丰富——替代整段前 120 字符截断）', () => {

@@ -148,12 +148,11 @@ export interface FinishedAllPayload {
   readonly instruction: string
 }
 
-/** ⑰ 停止（/stop-dag-tasks）（终局） */
+/** ⑰ 停止（/stop-dag-tasks）（终局）——用户主动停止，不引导续跑（下一步动作 = 无） */
 export interface StoppedByCommandPayload {
   readonly sourceSlug: string
   readonly completed: number
   readonly inFlightTaskKey: string
-  readonly instruction: string
 }
 
 // ─────────────────────────── 场景表（id → 序号/通道/标题） ───────────────────────────
@@ -389,7 +388,7 @@ export function stoppedByCommand(p: StoppedByCommandPayload): string {
   return [
     typeLine('停止', '任务源', `${p.sourceSlug} — 已按你的指令停止`),
     line('状态', `完成 ${p.completed} · 执行中任务 ${p.inFlightTaskKey} 已标记为中断`),
-    nextActionLine(nextActionPromptUser(p.instruction)),
+    nextActionLine(NEXT_ACTION_NONE),
   ].join('\n')
 }
 

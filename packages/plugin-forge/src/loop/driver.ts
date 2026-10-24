@@ -95,11 +95,10 @@ export const LOOP_STOP_TRANSITION_REASON = '派发循环停止'
 /** ⑯ 结束（全部完成）的「下一步动作」指示（notification-samples 逐字口径——无 slug 参数位） */
 export const LOOP_INSTRUCTION_ALL_DONE = '若想派发其它提案或feature的任务，执行 /run-dag-tasks'
 
-/** 终局叙述的「下一步动作」指示文本（notification-samples ⑬⑮⑰ 逐字口径的 slug 参数化） */
-export function loopInstructionOf(kind: 'halted' | 'timeout' | 'resume', slug: string): string {
+/** 终局叙述的「下一步动作」指示文本（notification-samples ⑬⑮ 逐字口径的 slug 参数化） */
+export function loopInstructionOf(kind: 'halted' | 'timeout', slug: string): string {
   if (kind === 'halted') return `环境排查后重新开始 /run-dag-tasks ${slug}`
-  if (kind === 'timeout') return `稍后重新执行 /run-dag-tasks ${slug}`
-  return `继续执行 /run-dag-tasks ${slug}`
+  return `稍后重新执行 /run-dag-tasks ${slug}`
 }
 
 // ─────────────────────────── 处置钩子接口（S1b 桩位——阶梯实现 = 任务 S1c） ───────────────────────────
@@ -669,7 +668,6 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         sourceSlug: record.source.slug,
         completed: stats.byStatus.completed,
         inFlightTaskKey: captured?.taskKey ?? '无',
-        instruction: loopInstructionOf('resume', record.source.slug),
       }),
     )
     registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）

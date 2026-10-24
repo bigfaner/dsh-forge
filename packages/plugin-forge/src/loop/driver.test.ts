@@ -1486,11 +1486,12 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(built.h.transitions).toEqual([
       { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
     ])
-    // ⑰ 停止终局叙述
+    // ⑰ 停止终局叙述（用户主动停止 = 不引导续跑，下一步动作 = 无）
     const stoppedNotice = built.calls.find((c) => c.method === 'followup')
     expect(stoppedNotice?.text).toContain('[forge·停止] 任务源: feat-x — 已按你的指令停止')
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
-    expect(stoppedNotice?.text).toContain('提示用户"继续执行 /run-dag-tasks feat-x"')
+    expect(stoppedNotice?.text).toContain('下一步动作: 无')
+    expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
     // 登记注销 + 再停 = no-op
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
@@ -2391,7 +2392,7 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
-    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('继续执行 /run-dag-tasks feat-x'))).toBe(true)
+    expect(built.calls.some((c) => c.method === 'followup' && c.text.includes('[forge·停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
     expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
   })
 
