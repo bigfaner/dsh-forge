@@ -111,8 +111,17 @@ describe("ExpertPanel 头部交互面", () => {
     expect(html.match(/dswf-menu-btn on/g)?.length).toBe(1);
   });
 
-  it("onSummon 在场 = 召唤钮呈现（HR 预设招聘对话入口）；缺席不呈现", () => {
+  it("onSummon 在场 = 召唤钮呈现（HR 预设官方会话入口，在途禁用）；缺席不呈现", () => {
     expect(renderPanel({ onSummon: () => undefined })).toContain("召唤");
+    expect(renderPanel({ onSummon: () => undefined })).toContain('aria-label="召唤 HR 预设会话"');
+    expect(renderPanel({ onSummon: () => undefined, summonBusy: true })).toContain("disabled");
     expect(renderPanel({})).not.toContain(">召唤<");
+  });
+
+  it("召唤降级引导条：summonNotice 在场呈现（role=status）；缺席不呈现", () => {
+    expect(renderPanel({ onSummon: () => undefined, summonNotice: "HR 预设切换被拒" })).toContain(
+      "HR 预设切换被拒",
+    );
+    expect(renderPanel({ onSummon: () => undefined })).not.toContain("dswf-summon-notice");
   });
 });

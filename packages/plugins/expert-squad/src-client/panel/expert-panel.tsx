@@ -5,6 +5,9 @@
 // ExpertPanelApp = 装配壳：官方 main keyed 槽占用者（root 标准props useWorkspaces 递达
 // ——workspace 参数来源 D4）+ ExpertListController 数据源订阅；/workspace 未就绪期 =
 // 骨架态（中间态不落空态分支——DESIGN.md 稳定性裁决）。
+// [召唤] = 经官方缝打开/切换 HR 预设官方会话（summon-session——零面板内对话面；
+// 失败降级 = 头部引导条，不炸面板）。建档联动依赖既有 fs/observed + 5s 轮询通道
+//（1.4/1.22）——零新增旁路。
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   filterExperts,
@@ -21,35 +24,34 @@ import {
   type DetailMutations,
 } from "./detail-source.js";
 import { ExpertDetailDialog } from "./detail-dialog.js";
-import { SummonChatController } from "./summon-source.js";
-import { SummonDialog } from "./summon-dialog.js";
+import {
+  summonWorkspaceOf,
+  type SummonOutcome,
+  type SummonWorkspaceRow,
+} from "./summon-session.js";
 import { ensurePanelStyles } from "./styles.js";
 
 /** 官方 workspace 归属快照选择钩子（root 标准props——结构窄面，缺席 = 降级）。 */
 export type WorkspacesHook = (selector: (snapshot: unknown) => unknown) => unknown
 
-/** workspace 归属快照 → 工作区路径（D4 取值来源 = WorkspaceView.path；单库兜底取首行）。 */
-export function workspacePathOf(snapshot: unknown): string | undefined {
-  const items = (snapshot as { items?: readonly unknown[] } | undefined)?.items
-  if (!Array.isArray(items)) return undefined
-  for (const row of items as readonly { path?: unknown }[]) {
-    if (typeof row?.path === "string" && row.path !== "") return row.path
-  }
-  return undefined
+/** workspace 归属快照 → 当前选中 WorkspaceView 行（D4 取值来源 = WorkspaceView.path；
+ *  单库兜底取首行；workspaceId 随行递达——召唤绑定官方 openWorkspace 寻址面）。 */
+export function workspaceRowOf(snapshot: unknown): SummonWorkspaceRow | undefined {
+  return summonWorkspaceOf(snapshot)
 }
 
 /** workspace 路径锚子件（钩子形制：kit hook 缺席不挂载、在场则子件内无条件调用）。 */
-function WorkspacePathAnchor({
+function WorkspaceRowAnchor({
   hook,
-  onPath,
+  onRow,
 }: {
   readonly hook: WorkspacesHook
-  readonly onPath: (path: string | undefined) => void
+  readonly onRow: (row: SummonWorkspaceRow | undefined) => void
 }): ReactNode {
-  const path = workspacePathOf(hook((snapshot) => snapshot))
+  const row = workspaceRowOf(hook((snapshot) => snapshot))
   useEffect(() => {
-    onPath(path)
-  }, [path, onPath])
+    onRow(row)
+  }, [row, onRow])
   return null
 }
 
@@ -102,6 +104,9 @@ export function defaultDetailMutations(workspace: string): DetailMutations {
 
 const LOADING_SNAPSHOT: ListState = { phase: { kind: "loading" }, entries: [] }
 
+/** [召唤] 官方会话缝（装配壳 inject face 递达；测试/装配注入）。 */
+export type SummonOpener = (workspace: SummonWorkspaceRow) => Promise<SummonOutcome>
+
 /** ExpertPanelApp 入参（官方 main keyed 槽占用者组合 props 的消费切片）。 */
 export interface ExpertPanelAppProps {
   /** workspace 归属观察钩子（root 标准props 自动递达；缺席 = 骨架降级）。 */
@@ -110,6 +115,8 @@ export interface ExpertPanelAppProps {
   readonly fetchList?: ListFetcher
   /** 详情变更缝（测试/装配注入；缺省 = update/enable/disable POST fetch）。 */
   readonly mutations?: DetailMutations
+  /** [召唤] 官方会话缝（装配壳 inject face；缺席 = 召唤钮不呈现）。 */
+  readonly summon?: SummonOpener
 }
 
 /**
@@ -118,9 +125,12 @@ export interface ExpertPanelAppProps {
  */
 export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   ensurePanelStyles()
-  const [workspacePath, setWorkspacePath] = useState<string | undefined>(undefined)
+  const [workspaceRow, setWorkspaceRow] = useState<SummonWorkspaceRow | undefined>(undefined)
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<StatusFilter>("all")
+  const workspacePath = workspaceRow?.path
+  const [summonBusy, setSummonBusy] = useState(false)
+  const [summonNotice, setSummonNotice] = useState<string | undefined>(undefined)
 
   // 控制器随 workspace 建立与换代（旧实例随 effect 清理 stop——轮询零泄漏）
   const controller = useMemo(() => {
@@ -159,39 +169,33 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   )
   const detailState = useSyncExternalStore(detailSubscribe, detailGetSnapshot, detailGetSnapshot)
 
-  // 召唤对话控制器：建档经 update 路由 upsert（key 时间基生成），成功回调即时重拉
-  // 列表（卡片网格联动刷新，不待 5s 轮询）。
-  const summonController = useMemo(() => {
-    const base = props.mutations ?? (workspacePath === undefined ? undefined : defaultDetailMutations(workspacePath))
-    if (base === undefined) return undefined
-    return new SummonChatController(
-      (key, draft) => base.update(key, draft),
-      () => controller?.retry(),
-    )
-  }, [props.mutations, workspacePath, controller])
-  const summonSubscribe = useCallback(
-    (onChange: () => void): (() => void) =>
-      summonController?.subscribe(onChange) ?? (() => undefined),
-    [summonController],
-  )
-  const summonGetSnapshot = useCallback(
-    () => summonController?.getSnapshot() ?? undefined,
-    [summonController],
-  )
-  const summonState = useSyncExternalStore(summonSubscribe, summonGetSnapshot, summonGetSnapshot)
-  const onSummon = useCallback(() => {
-    // 互斥：召唤 Modal 与详情 Dialog 不同时开启（page-map Dialog 间互斥）
-    detailController?.close()
-    summonController?.open()
-  }, [detailController, summonController])
   const onCardActivate = useCallback(
     (key: string) => {
-      summonController?.close()
       const expert = controller?.getSnapshot().entries.find((entry) => entry.name === key)
       if (expert !== undefined) detailController?.open(expert)
     },
-    [controller, detailController, summonController],
+    [controller, detailController],
   )
+
+  // [召唤]：经官方缝打开 HR 预设会话（绑定当前工作区——workspace 锚同参同源 D4）。
+  // 失败降级 = 引导条（不弹选择器、不空绑定、不炸面板）；成功 = 官方 chat-view 呈现，
+  // 面板零对话面；建档联动靠既有 fs/observed + 5s 轮询（list-source 既有通道）。
+  const summon = props.summon
+  const onSummon = useCallback(() => {
+    if (summon === undefined || summonBusy) return
+    setSummonNotice(undefined)
+    setSummonBusy(true)
+    summon(workspaceRow ?? {})
+      .then((outcome) => {
+        if (!outcome.ok) setSummonNotice(outcome.message)
+      })
+      .catch((error: unknown) => {
+        setSummonNotice(`召唤失败：${error instanceof Error ? error.message : String(error)}`)
+      })
+      .finally(() => {
+        setSummonBusy(false)
+      })
+  }, [summon, summonBusy, workspaceRow])
 
   const subscribe = useCallback(
     (onChange: () => void): (() => void) => controller?.subscribe(onChange) ?? (() => undefined),
@@ -209,7 +213,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   return (
     <div className="dswf-expert-panel" data-dswf-expert-panel="">
       {props.useWorkspaces === undefined ? null : (
-        <WorkspacePathAnchor hook={props.useWorkspaces} onPath={setWorkspacePath} />
+        <WorkspaceRowAnchor hook={props.useWorkspaces} onRow={setWorkspaceRow} />
       )}
       <ExpertPanel
         phase={phase}
@@ -220,12 +224,10 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         onQueryChange={setQuery}
         onStatusChange={setStatus}
         {...(controller !== undefined ? { onRetry } : {})}
-        {...(summonController !== undefined ? { onSummon } : {})}
+        {...(summon !== undefined ? { onSummon, summonBusy } : {})}
+        {...(summonNotice !== undefined ? { summonNotice } : {})}
         {...(detailController !== undefined ? { onCardActivate } : {})}
       />
-      {summonState !== undefined && summonController !== undefined && summonState.open ? (
-        <SummonDialog controller={summonController} />
-      ) : null}
       {detailState === undefined || detailController === undefined || !detailState.open ? null : (
         <ExpertDetailDialog
           controller={detailController}
@@ -248,6 +250,10 @@ export interface ExpertPanelProps {
   readonly onRetry?: () => void
   readonly onCardActivate?: (key: string) => void
   readonly onSummon?: () => void
+  /** 召唤在途（防重——钮禁用态）。 */
+  readonly summonBusy?: boolean
+  /** 召唤降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席）。 */
+  readonly summonNotice?: string
 }
 
 const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: string }[] = [
@@ -380,11 +386,22 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           </button>
         ))}
         {props.onSummon === undefined ? null : (
-          <button type="button" className="dswf-btn dswf-btn-primary" onClick={props.onSummon}>
+          <button
+            type="button"
+            className="dswf-btn dswf-btn-primary"
+            aria-label="召唤 HR 预设会话"
+            disabled={props.summonBusy === true}
+            onClick={props.onSummon}
+          >
             召唤
           </button>
         )}
       </header>
+      {props.summonNotice === undefined ? null : (
+        <div className="dswf-summon-notice" role="status" data-dswf-summon-notice="">
+          {props.summonNotice}
+        </div>
+      )}
       <div className="dswf-card-grid">{gridBody}</div>
       <footer className="dswf-panel-footer">{countText}</footer>
     </>

@@ -5,7 +5,12 @@
 //   ① main keyed 'expert-squad' 占用者 = 专家卡片网格面板（panel/，ui-design F1）；
 //   ② sidebar.panellist 行（id = main key 同源）= 左栏面板入口（字形 + label）。
 // 返回值铁律：apply 必须返回 undefined（cordis 组合把返回值当 effect 消费）。
-import { ExpertPanelApp, ExpertPanelGlyph } from "./panel/index.js";
+import { ExpertPanelApp, ExpertPanelGlyph, type SummonOpener } from "./panel/index.js";
+import {
+  openSummonSession,
+  type SummonOutcome,
+  type SummonPlatform,
+} from "./panel/summon-session.js";
 
 /** 官方 ui-layout main keyed 槽键（ui-layout SlotMap——中区面板 roster）。 */
 const MAIN_SLOT = "main";
@@ -22,7 +27,8 @@ const PANEL_LABEL = "专家团";
 interface SlotsFace {
   /** 依赖洞位声明：声明在场即装 cb；cb 返回即释放器（随 fiber 卸载级联）。 */
   inject?(key: string, callback: () => (() => void) | undefined): () => void;
-  /** 注册占用者（options.name = 洞名；key = keyed 槽键；id/order = list 槽行）。 */
+  /** 注册占用者（options.name = 洞名；key = keyed 槽键；id/order = list 槽行；
+   *  inject = 注入面工厂（组件 props 递达——plugin.ts main keyed 注入同径）。 */
   register?(options: {
     name: string;
     key?: string;
@@ -30,7 +36,62 @@ interface SlotsFace {
     order?: number;
     label?: string;
     priority?: number;
+    inject?: () => unknown;
   }, component: unknown): () => void;
+}
+
+/** cordis ctx 窄面（可选服务惰性取法——ctx.reflect.get 缺席返 undefined，异常吞为缺席；
+ *  host 半 index.ts readOptionalService 同径先例：uiWorkspace/remote 为可选服务，
+ *  静态 inject 声明会使 fiber 在服务缺席环境永久 pending——调用期惰性解析）。 */
+interface LazyCtx {
+  reflect?: { get(name: string): unknown };
+}
+
+/** uiWorkspace 官方面消费切片（openWorkspace 缝——官方 startSession 同径 reuse-or-create）。 */
+function uiWorkspaceOf(ctx: LazyCtx): SummonPlatform["openWorkspace"] | undefined {
+  try {
+    const open = (ctx.reflect?.get("uiWorkspace") as { openWorkspace?: unknown } | undefined)
+      ?.openWorkspace;
+    return typeof open === "function" ? (open as SummonPlatform["openWorkspace"]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** remote.agentPresets 官方面消费切片（'remote' 嵌套双径——plugin.ts model catalog 同径）。 */
+function agentPresetsOf(ctx: LazyCtx): SummonPlatform["selectPreset"] | undefined {
+  try {
+    const reflect = ctx.reflect;
+    if (reflect === undefined) return undefined;
+    const direct = reflect.get("remote.agentPresets") as { select?: unknown } | undefined;
+    const ns = (direct ?? (reflect.get("remote") as { agentPresets?: { select?: unknown } } | undefined)?.agentPresets) as
+      | { select?: unknown }
+      | undefined;
+    return typeof ns?.select === "function" ? (ns.select as SummonPlatform["selectPreset"]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * [召唤] 官方会话缝装配（调用期惰性解析——服务缺席/形状漂移 = 阶段化失败降级引导，
+ * 不炸面板）。返回编排闭包（openSummonSession 纯编排面 + ctx 解析适配）。
+ */
+export function summonOpenerOf(ctx: LazyCtx): SummonOpener {
+  return (workspace) => {
+    const openWorkspace = uiWorkspaceOf(ctx);
+    const selectPreset = agentPresetsOf(ctx);
+    if (openWorkspace === undefined || selectPreset === undefined) {
+      const outcome: SummonOutcome = {
+        ok: false,
+        stage: "create",
+        message: "官方会话缝缺席（uiWorkspace.openWorkspace / remote.agentPresets.select）——无法打开 HR 会话",
+      };
+      return Promise.resolve(outcome);
+    }
+    const platform: SummonPlatform = { openWorkspace, selectPreset };
+    return openSummonSession(platform, workspace);
+  };
 }
 
 /** 单行登记（注册面异常只降本行——console 留痕，不外溢炸组合；返回联合释放器随 fiber 级联）。 */
@@ -45,13 +106,13 @@ function safeRegister(slots: SlotsFace, options: Parameters<NonNullable<SlotsFac
 }
 
 /** main 面板 + panellist 行登记（登记挂所属槽的 inject 回调——槽声明在场即装、随 fiber 卸载级联回收）。 */
-function registerExpertPanel(slots: SlotsFace): void {
+function registerExpertPanel(ctx: LazyCtx, slots: SlotsFace): void {
   if (typeof slots.inject !== "function") {
     console.warn("[dsh-forge/expert-squad] ctx.slots.inject absent; panel not mounted");
     return;
   }
   slots.inject(MAIN_SLOT, () =>
-    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY }, ExpertPanelApp));
+    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY, inject: () => ({ summon: summonOpenerOf(ctx) }) }, ExpertPanelApp));
   // 行注册挂 panellist 槽自身的声明缝——ui-sidebar 插件声明该槽后才合法（先注册 = 
   // `slot "sidebar.panellist" is not declared`；web-client registerSlotEntry 同径）。
   slots.inject(PANEL_LIST_SLOT, () =>
@@ -72,7 +133,7 @@ export const expertSquadClient = {
       return
     }
     // 官方装配序缝（plugin.ts registerSlotEntry 同径）：登记动作面异常只降本面板。
-    registerExpertPanel(slots)
+    registerExpertPanel(ctx as LazyCtx, slots)
   },
 }
 
