@@ -105,6 +105,23 @@ describe('fix-45 入仓图标资产自证（build/ 一次生成物）', () => {
   })
 })
 
+describe('dev 启动器控制台编码归一（bug: electron 日志中文乱码）', () => {
+  const devSource = readFileSync(join(ROOT, 'scripts', 'dev.mjs'), 'utf8')
+
+  it('electron 拉起前将控制台代码页归一到 UTF-8（chcp 65001）——Chromium stderr 恒写 UTF-8，CP936 控制台直读即乱码（UTF-8 的「绑定失配」经 GBK 解码呈「缁戝畾澶遍厤」）', () => {
+    expect(devSource, 'dev.mjs 缺 chcp 65001 归一步（bug 在场——dev:debug 中文日志乱码）').toContain('chcp')
+    expect(devSource).toContain('65001')
+  })
+
+  it('归一步在 electron spawn 之前执行（时序 pin——后置则首屏日志仍乱码）', () => {
+    const chcpAt = devSource.indexOf('65001')
+    const spawnAt = devSource.indexOf('spawn(electronSpawnExe')
+    expect(chcpAt).toBeGreaterThan(-1)
+    expect(spawnAt).toBeGreaterThan(-1)
+    expect(chcpAt, 'chcp 归一须先于 electron spawn').toBeLessThan(spawnAt)
+  })
+})
+
 describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫）', () => {
   const install = readJson('apps/host/profile.install/package.json') as { dependencies: Record<string, string> }
   const expected: Record<string, string> = {
