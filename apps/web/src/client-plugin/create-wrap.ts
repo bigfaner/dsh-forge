@@ -61,6 +61,10 @@ export interface SessionCreateWrapDeps {
   /** 树归属门（forge:worktree/resolve 窄面——path → 注册项目根；null = 未注册）。
    *  缺席 = workspaceRows 判定面同缺席 */
   readonly resolveRoot?: (path: string) => Promise<string | null>
+  /** 显示选中读镜像（forge:worktree/selected——与 hero chip 显示同通道同源）。
+   *  显示源裁决（所见即所得）：调用 cwd/workspaceId 可能是官方内部锚点（上一个活跃
+   *  工作区），用户可见的选择 = chip 显示。在场且 ≠ 解析树 → 按显示选中建 */
+  readonly selectedTree?: (projectRoot: string) => Promise<string | undefined>
   /** blank 绑定探测（forge:worktree/seal 窄面——sessionId → 绑定树；null = 未绑定。
    *  WYSIWYG 复用守卫：采纳前探测 blank 绑定，失配不复用。缺席 = 跳过守卫（现状采纳） */
   readonly sessionBinding?: (sessionId: string) => Promise<string | null>
@@ -252,6 +256,24 @@ export function installSessionCreateWrap(
       tree = null
     }
     if (tree === null) return bound(opts)
+    // ②′ 显示源裁决（所见即所得）：调用 cwd/workspaceId 可能是官方内部锚点（hero 发送
+    //    链把上一个活跃工作区当 cwd 传入——bug c931aa28 实证），用户可见的选择 = chip
+    //    显示（forge:worktree/selected，与 chip 显示同通道同源读取）。显示选中在场且
+    //    ≠ 解析树 → 按显示选中建。判定链任何异常 = null = 按解析树（fail-open）。
+    try {
+      if (deps.selectedTree !== undefined && deps.resolveRoot !== undefined) {
+        const projectRoot = await deps.resolveRoot(tree)
+        if (projectRoot !== null && projectRoot !== '') {
+          const selected = await deps.selectedTree(projectRoot)
+          if (selected !== undefined && selected !== '' && normPath(selected) !== normPath(tree)) {
+            warn(`[dswf-client] 创建显示源裁决：调用目标 ${tree} ≠ chip 显示 ${selected}——按显示选中建`)
+            tree = selected
+          }
+        }
+      }
+    } catch (cause) {
+      warn(`[dswf-client] 创建显示源裁决失败（fail-open 按解析树）：${String(cause)}`)
+    }
     // ③ 改道预铸（try 域只罩改道链——caller 原参形态的 original 永不落入）：git 判定与
     //    模式随档在 host doSessionCreate 逐次现跑；G3 互斥与 guard/arm 共享同树 blank
     //    产物，零双建

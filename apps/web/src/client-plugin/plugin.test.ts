@@ -2120,6 +2120,7 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     resolveRoot?: (path: string) => Promise<string | null>
     sessionBinding?: (sessionId: string) => Promise<string | null>
     notifyMismatch?: (event: { sessionId: string; binding: string | null; displayed: string }) => void
+    selectedTree?: (projectRoot: string) => Promise<string | undefined>
   }) {
     const original =
       options?.create ??
@@ -2140,6 +2141,7 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
       ...(options?.resolveRoot !== undefined ? { resolveRoot: options.resolveRoot } : {}),
       ...(options?.sessionBinding !== undefined ? { sessionBinding: options.sessionBinding } : {}),
       ...(options?.notifyMismatch !== undefined ? { notifyMismatch: options.notifyMismatch } : {}),
+      ...(options?.selectedTree !== undefined ? { selectedTree: options.selectedTree } : {}),
       warn: vi.fn(),
     } as SessionCreateWrapDeps
     const dispose = installSessionCreateWrap(
@@ -2214,6 +2216,51 @@ describe('installSessionCreateWrap（W3：sessions.create 资格门分流 + fail
     expect(out).toBe('Y-precast')
     expect(f.sessionCreate).toHaveBeenCalledTimes(1)
     expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+  })
+
+  // ── ②′ 显示源裁决（所见即所得——bug c931aa28 实证收口）：调用 cwd/workspaceId 可能
+  //    是官方内部锚点（hero 发送链传入上一个活跃工作区），chip 显示（selected）在场且
+  //    ≠ 解析树 → 按显示选中建 ──
+  it('②′ 显示源裁决：解析树 ≠ chip 显示选中 → 按显示选中预铸（内部锚点不劫持所见）', async () => {
+    const TREE_A = 'C:/repo/.forge/worktrees/wt-a'
+    const TREE_B = 'C:/repo/.forge/worktrees/wt-b'
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: TREE_A }]),
+      resolveRoot: async (path) => (path === TREE_A ? 'C:/repo' : null),
+      selectedTree: async () => TREE_B, // chip 显示 b——调用携带的锚点 a 不作数
+    })
+    const out = await f.sessions.create({ workspaceId: WS }) // 官方锚点 = 树 a 工作区
+    expect(out).toBe('Y-precast')
+    expect(f.sessionCreate).toHaveBeenCalledWith(TREE_B)
+  })
+
+  it('②′ 显示源裁决：显示选中 ≡ 解析树 → 按解析树（零行为差异）', async () => {
+    const f = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      resolveRoot: async () => 'C:/repo',
+      selectedTree: async () => WS_PATH,
+    })
+    await f.sessions.create({ workspaceId: WS })
+    expect(f.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+  })
+
+  it('②′ 显示源裁决：显示选中缺席（未选过 chip）→ 按解析树（现状）；读失败 fail-open 同判', async () => {
+    const absent = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      resolveRoot: async () => 'C:/repo',
+      selectedTree: async () => undefined,
+    })
+    await absent.sessions.create({ workspaceId: WS })
+    expect(absent.sessionCreate).toHaveBeenCalledWith(WS_PATH)
+    const failing = fixture({
+      rows: rowsFixture([{ workspaceId: WS, wsPath: WS_PATH }]),
+      resolveRoot: async () => 'C:/repo',
+      selectedTree: async () => {
+        throw new Error('selected 读失败')
+      },
+    })
+    await failing.sessions.create({ workspaceId: WS })
+    expect(failing.sessionCreate).toHaveBeenCalledWith(WS_PATH)
   })
 
   it('bug 2bc90d64：改道产物经官方 adopt 正门补账本——bound 以 {cwd: 产物 cwd, sessionId: 预铸 id} 再调（官方 create 契约即时记账，retain 恒可解析）', async () => {

@@ -2422,6 +2422,14 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                     const hit = data.resolved?.find((entry) => entry.path === path)
                     return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
                   },
+                  // 显示源裁决（所见即所得）：hero 发送链的调用 cwd = 官方内部锚点（上一个
+                  // 活跃工作区）——按 chip 显示同源选中覆盖（bug c931aa28 实证收口）。
+                  selectedTree: async (projectRoot) => {
+                    const data = await unwrapRpcEnvelope<{ path?: unknown }>(
+                      forgeInvoke(WORKTREE_SELECTED_CHANNEL, { projectRoot }),
+                    )
+                    return typeof data?.path === 'string' && data.path !== '' ? data.path : undefined
+                  },
                 },
               )
 
