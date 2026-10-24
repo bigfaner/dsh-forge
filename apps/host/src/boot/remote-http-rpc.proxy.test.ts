@@ -341,6 +341,51 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     expect(seenAgents).toEqual([{ id: 's-live' }, {}])
   })
 
+  it('binding-derivation 1.12：session-create 透传专门面——{workspaceId, worktreePath} 直调；缺 workspaceId = host 硬门显式拒绝（不透传官方，防静默落默认工作区）', async () => {
+    const seen: unknown[] = []
+    const session = {
+      list: async () => ({ items: SESSIONS }),
+      create: async (request: unknown) => (seen.push(request), { sessionId: 's-new' }),
+    }
+    // ① 载荷含 {workspaceId, worktreePath} → 经官方编组直调 sessionController.create
+    const res = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionCreate, payload: { workspaceId: 'ws-1', worktreePath: 'Z:/proj' } }) as never,
+      res,
+      deps({ proxy: proxyDeps({ session: session as never }) }),
+    )
+    const parsed = JSON.parse(res.body) as { ok: boolean; data: { sessionId: string } }
+    expect(parsed.ok).toBe(true)
+    expect(parsed.data.sessionId).toBe('s-new')
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ workspaceId: 'ws-1' }) // 官方 codec strip 附加键，workspaceId 透传
+
+    // ② 缺 workspaceId → host 硬门拒绝 + emitDiag warn 缝触发；官方 create 不被调用
+    const warns: Array<{ event: string; message: string }> = []
+    const res2 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionCreate, payload: { worktreePath: 'Z:/proj' } }) as never,
+      res2,
+      deps({ proxy: proxyDeps({ session: session as never, diagWarn: (event, message) => warns.push({ event, message }) }) }),
+    )
+    const parsed2 = JSON.parse(res2.body) as { ok: boolean; error: { message: string } }
+    expect(parsed2.ok).toBe(false)
+    expect(parsed2.error.message).toContain('workspaceId')
+    expect(seen).toHaveLength(1)
+    expect(warns).toHaveLength(1)
+    expect(warns[0]!.event).toBe('session-bind')
+
+    // ③ 空 workspaceId 同拒
+    const res3 = fakeRes()
+    await handleRemoteHttpRpc(
+      fakeReq({ channel: PROXY_CHANNELS.sessionCreate, payload: { workspaceId: '' } }) as never,
+      res3,
+      deps({ proxy: proxyDeps({ session: session as never, diagWarn: () => {} }) }),
+    )
+    expect((JSON.parse(res3.body) as { ok: boolean }).ok).toBe(false)
+    expect(seen).toHaveLength(1)
+  })
+
   it('allowlist 外 proxy 通道 = 404（allowlist 纪律不因代理族放宽）', async () => {
     const res = fakeRes()
     await handleRemoteHttpRpc(fakeReq({ channel: 'forge:proxy/session-openWorkspacePath' }) as never, res, deps({ proxy: proxyDeps() }))

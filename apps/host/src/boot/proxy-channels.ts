@@ -126,6 +126,8 @@ export interface ProxyChannelDeps {
   readonly disconnect?: () => void
   /** 已读游标持久 store（bug 1dd4b437——缺席 = 读空表/写 fail-soft） */
   readonly readCursors?: ReadCursorStore
+  /** diag 埋点缝（child.ts 接 emitDiag；缺席 = 纯 handler 静默——测试面免接线） */
+  readonly diagWarn?: (event: string, message: string) => void
 }
 
 /** 文件分块读常量（tunnel-psk §4.4——64KB/块） */
@@ -168,7 +170,7 @@ export const MODEL_CATALOG_CACHE_TTL_MS = 60_000
  *  与官方网关编组语义等价。特例保留：session-select-model（选档缓存失效）、session-history
  *  （page 拆包回手机窗口形）、session-model-catalog（TTL 缓存 + 探测失败回退旧目录）。
  *  bug 344dd76b 同族：编组分发 bind 控制器实例（官方方法体依赖 this 实例态）。 */
-function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelHandler> {
+function sessionChannelTable(session: ProxySessionFace, deps: ProxyChannelDeps): Record<string, ChannelHandler> {
   const bound = <F extends (...args: never[]) => unknown>(method: F | undefined, name: string): F =>
     requireMethod(method, name).bind(session) as F
   const dispatch = (method: string): ChannelHandler => {
@@ -180,11 +182,23 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
     }
     return async (payload) => typertDispatch(descriptor, session, payload, new AbortController().signal)
   }
+  // binding-derivation 1.12：workspaceId 缺席硬门（host 零猜测——官方 create codec 对
+  // 缺 workspaceId 的载荷照单放行并静默落默认工作区，探针核销 typert codec parse({}) ok；
+  // mobile 客户端单侧兜底不算 host 保证）。缺席/空值 = 显式错误信封 + emitDiag warn，
+  // 不透传官方。Root cause: 官方 schema 未把 workspaceId 定为必填，host 代理层须单点收口。
+  const guardedCreate: ChannelHandler = async (payload) => {
+    const record = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>
+    if (typeof record['workspaceId'] !== 'string' || record['workspaceId'] === '') {
+      deps.diagWarn?.('session-bind', 'forge:proxy/session-create 载荷缺 workspaceId——拒绝透传官方 create（host 零猜测，防静默落默认工作区）')
+      throw new Error('forge:proxy/session-create：payload.workspaceId 缺席/非法（应为非空字符串）——拒绝透传官方 create')
+    }
+    return dispatch('create')(payload)
+  }
   // model-catalog 短缓存（读即触探官方 provider I/O——TTL 内复用；探测失败回退旧值不空手）
   let catalogCache: { at: number; data: unknown } | undefined
   return {
     [PROXY_CHANNELS.sessionList]: dispatch('list'),
-    [PROXY_CHANNELS.sessionCreate]: dispatch('create'),
+    [PROXY_CHANNELS.sessionCreate]: guardedCreate,
     [PROXY_CHANNELS.sessionPage]: dispatch('page'),
     [PROXY_CHANNELS.sessionPrompt]: dispatch('prompt'),
     [PROXY_CHANNELS.sessionCancel]: dispatch('cancel'),
@@ -410,7 +424,7 @@ async function hashFile(handle: import('node:fs').promises.FileHandle): Promise<
 
 /** allowlist 全集（含既有 forge:remote/disconnect——pair-disconnected 对偶缝） */
 export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, ChannelHandler> {
-  const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session) : {}
+  const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session, deps) : {}
   return {
     ...sessionTable,
     // bug 017b0e5b：commands.list 官方实现 this.view(agent) 依赖实例态——同 344dd76b 一律 bind 后直调。

@@ -909,6 +909,8 @@ async function main(): Promise<void> {
                       }
                 },
                 disconnect: () => send({ type: 'pair-disconnected' }),
+                // binding-derivation 1.12：diag 埋点缝——session-create workspaceId 硬门拒绝时 emitDiag warn
+                diagWarn: (event, message) => emitDiag(ctx, { level: 'warn', process: 'child', event, message }),
                 // bug 1dd4b437：已读游标 host 侧持久 store 接线
                 readCursors,
               },
