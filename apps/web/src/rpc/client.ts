@@ -226,7 +226,7 @@ export interface ForgeSettingsRpc {
 }
 
 /**
- * forge:worktree/* 面方法集（九通道；域实现 = packages/plugins/git-worktree，
+ * forge:worktree/* 面方法集（10 方法；域实现 = packages/plugins/git-worktree，
  * host ipc/worktree-rpc 装配透传。seal = 封存判定快照；select = hero 选中树推送；
  * resolve = 批量归属解析。session-create 通道已退役——bug 82e92933，binding-derivation
  * §2.3：换绑由官方 blank 复用天然生效，选树零 forge 建会话 RPC）。
