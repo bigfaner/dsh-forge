@@ -113,11 +113,13 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
   const archived: string[] = []
   const unarchived: string[] = []
   // find-or-create 复用面（官方语义：同规范路径已存在即复用，title 仅新建时生效）
-  const workspaces = new Map<string, { id: string; title?: string }>()
-  const entityFor = (path: string, ws: { id: string; title?: string }) => ({
+  const workspaces = new Map<string, { id: string; title?: string; sessions: string[] }>()
+  const entityFor = (path: string, ws: { id: string; title?: string; sessions: string[] }) => ({
     id: ws.id,
+    sessionIds: ws.sessions,
     attachSession: async (sessionId: string) => {
       if (attachError !== undefined) throw attachError
+      ws.sessions.push(sessionId)
       attached.push({ path, sessionId })
     },
     setTitle: async (next: string) => {
@@ -136,13 +138,13 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
       const title = titles[path]
       const ws = workspaces.get(path)
       if (title === undefined && ws === undefined) return undefined
-      return entityFor(path, ws ?? { id: `ws-${path}`, title })
+      return entityFor(path, ws ?? { id: `ws-${path}`, title, sessions: [] })
     },
     create: async (path: string, title?: string) => {
       created.push({ path, title })
       const existing = workspaces.get(path)
       if (existing !== undefined) return entityFor(path, existing) // 复用不改 title（官方语义）
-      const ws = { id: `ws-${path}`, title }
+      const ws = { id: `ws-${path}`, title, sessions: [] }
       workspaces.set(path, ws)
       return entityFor(path, ws)
     },
@@ -574,40 +576,114 @@ describe('createWorktreeRpcService（child 侧服务本体——透传插件域�
     )
   })
 
-  it('checks：attachedSessions 反查（snapshot list 形态 header.id + 挂靠事件归并）', async () => {
-    const { persistence } = fakePersistence({
-      's-pre': [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: 'C:/repo/.forge/worktrees/wt-a', branch: 'feat/a' } }],
-    })
-    const service = createWorktreeRpcService({ gitWorktree: fakeExt, sessionPersistence: persistence })
-    const result = await service.checks({ projectRoot: 'C:/repo', path: 'C:/repo/.forge/worktrees/wt-a' })
-    expect(result.attachedSessions).toBe(1)
-  })
-
-  it('seal：挂靠 worktree 不在场 → sealed（worktree-missing）；在场 → false；无绑定 → 零注入面', async () => {
-    const binding = (path: string) => [{ type: 'forge/worktree-attach', seq: 0, data: { worktreePath: path, branch: 'feat/a' } }]
-    const sealedSvc = createWorktreeRpcService({
+  it('checks：attachedSessions 读官方 workspace record sessionIds（推导制——attachSession 挂账即计数单源，不再遍历 attach 事件）', async () => {
+    const { controller } = fakeController()
+    const { persistence } = fakePersistence({})
+    const { registry } = fakeWorkspaceRegistry()
+    const service = createWorktreeRpcService({
       gitWorktree: fakeExt,
-      sessionPersistence: fakePersistence({ s1: binding('C:/repo/.forge/worktrees/gone') }).persistence,
+      sessionController: controller,
+      sessionPersistence: persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      workspaceRegistry: registry,
       pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
-    expect(await sealedSvc.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)).toMatchObject({
+    const created = await service.sessionCreate({ worktreePath: WT_A })
+    const result = await service.checks({ projectRoot: 'C:/repo', path: WT_A })
+    expect(result.attachedSessions).toBe(1)
+    expect((await registry.resolveByPath(WT_A))?.sessionIds).toEqual([created.sessionId])
+  })
+
+  it('checks 降级：registry 缺席 → attachedSessions = 0（零计数不抛）', async () => {
+    const service = createWorktreeRpcService({ gitWorktree: fakeExt })
+    const result = await service.checks({ projectRoot: 'C:/repo', path: WT_A })
+    expect(result.attachedSessions).toBe(0)
+  })
+
+  it('seal（推导制读侧）：绑定 = header.cwd——不在场 sealed；在场未封存 + 实时 branch；无 cwd 零注入面', async () => {
+    const sealedSvc = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo/.forge/worktrees/gone' } }).persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo/.forge/worktrees/gone', branch: 'feat/gone' }],
+      listPresent: async () => ['C:/repo'], // gone 树已删——不在场
+    })
+    const sealedResult = await sealedSvc.seal({ sessionId: 's1' } satisfies WorktreeSealRequest)
+    expect(sealedResult).toMatchObject({
       isGit: true,
       sealed: true,
       worktreeName: 'gone',
+      binding: { worktreePath: 'C:/repo/.forge/worktrees/gone', branch: 'feat/gone' },
     })
+    expect(sealedResult.aheadBehind).toBeNull() // fake 路径 git 解析失败 → null 零注入
+    expect(sealedResult.blank).toBeUndefined() // seal.blank 事件判读退役
     const liveSvc = createWorktreeRpcService({
       gitWorktree: fakeExt,
-      sessionPersistence: fakePersistence({ s1: binding('C:/repo') }).persistence,
-      listPresent: async () => ['C:/repo', 'C:/repo/.forge/worktrees/wt-a'],
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo' } }).persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      listPresent: async () => ['C:/repo', WT_A],
     })
-    expect(await liveSvc.seal({ sessionId: 's1' })).toMatchObject({ isGit: true, sealed: false })
+    expect(await liveSvc.seal({ sessionId: 's1' })).toMatchObject({
+      isGit: true,
+      sealed: false,
+      binding: { worktreePath: 'C:/repo', branch: 'main' },
+    })
     const unboundSvc = createWorktreeRpcService({
       gitWorktree: fakeExt,
       sessionPersistence: fakePersistence({}).persistence,
-      pathPresent: () => true, // fake 路径无盘上实体——前置活性守卫恒真（缺席专测单独表驱动）
     })
     expect(await unboundSvc.seal({ sessionId: 's1' })).toEqual({ isGit: false, sealed: false, binding: null })
+  })
+
+  it('seal 非零注入短路：request.cwd 命中非 git 能力缓存 → 零会话日志读（G7② 判序）+ bindDiag 零 emit', async () => {
+    const opens = { value: 0 }
+    const diagLines: string[] = []
+    const { persistence } = fakePersistence({ s1: attachEvent(WT_A) }, { s1: { cwd: 'C:/foreign/x' } }, opens)
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: persistence,
+      bindDiag: (line) => diagLines.push(line),
+    })
+    await service.seal({ sessionId: 's1', cwd: 'C:/foreign/x' })
+    expect(opens.value, '非 git 封存判定仍全量读会话日志（判序未反转）').toBe(0)
+    expect(diagLines).toEqual([])
+  })
+
+  it('session-bind 埋点：seal 推导判定结果 bindDiag(info) 缝触发；缺席 = 零 emit 不抛', async () => {
+    const diagLines: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo' } }).persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      listPresent: async () => ['C:/repo'],
+      bindDiag: (line) => diagLines.push(line),
+    })
+    await service.seal({ sessionId: 's1' })
+    expect(diagLines.join('\n')).toContain('session-bind 推导判定')
+    expect(diagLines.join('\n')).toContain('C:/repo')
+    const bare = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence({}, { s1: { cwd: 'C:/repo' } }).persistence,
+      listWorktreeEntries: async () => [{ path: 'C:/repo', branch: 'main' }],
+      listPresent: async () => ['C:/repo'],
+    })
+    await expect(bare.seal({ sessionId: 's1' })).resolves.toBeDefined() // 缝缺席零抛
+  })
+
+  it('1.19 SessionCwdMismatch 读侧拒绝位退役：推导即真——stale attach 事件不再引发 seal 抛错（绑定 = header.cwd）', async () => {
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: fakePersistence(
+        { s1: attachEvent('C:/elsewhere') }, // 陈旧预铸事件指向他树
+        { s1: { cwd: WT_A } }, // header.cwd 才是绑定事实
+      ).persistence,
+      listWorktreeEntries: async () => [{ path: WT_A, branch: 'feat/a' }],
+      listPresent: async () => ['C:/repo', WT_A],
+    })
+    await expect(service.seal({ sessionId: 's1' })).resolves.toMatchObject({
+      isGit: true,
+      sealed: false,
+      binding: { worktreePath: WT_A },
+    })
   })
 
   it('resolve：批量归属解析（身份归并单点）——命中带 projectId/projectName，未命中不进结果', async () => {

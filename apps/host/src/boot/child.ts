@@ -427,6 +427,14 @@ async function main(): Promise<void> {
       // 诊断面异常不反压业务链（红线①同构）
     }
   }
+  // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级——seal 判定结果留痕）
+  const sessionBindDiag = (line: string): void => {
+    try {
+      emitDiag(ctx, { level: 'info', process: 'child', event: 'session-bind', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
   {
     let foldAttached = false
     const attachFold = (): void => {
@@ -653,6 +661,8 @@ async function main(): Promise<void> {
         failOpenDiag,
         // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
         createDiag: worktreeCreateDiag,
+        // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
+        bindDiag: sessionBindDiag,
       })
       worktreeRpcService = worktreeRpc
 

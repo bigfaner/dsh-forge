@@ -160,6 +160,8 @@ export interface RequiredBindingGuardFace {
 export interface WorkspaceEntityFace {
   /** 官方 Workspace.id（durable）——WorktreeEntryDto.workspaceId 携带源（chip 双发） */
   readonly id: string
+  /** 官方 workspace record 挂账集（durable）——attachedSessionsOf 计数单源（推导制读面） */
+  readonly sessionIds: readonly string[]
   attachSession(sessionId: string): Promise<void>
   /** 官方 Workspace.setTitle（durable 改名）——存量树工作区 title 回写缝；替身可缺席 */
   setTitle?(title: string): Promise<void>
@@ -170,7 +172,12 @@ export interface WorkspaceRegistryFace {
   create(path: string, title?: string): Promise<WorkspaceEntityFace>
   /** 按规范路径只读解析（项目命名继承源 + 存量 title 对齐读面）；缺席 = 旧替身/降级面 */
   resolveByPath?(path: string): Promise<
-    { readonly id: string; readonly title: string; setTitle?(title: string): Promise<void> } | undefined
+    {
+      readonly id: string
+      readonly title: string
+      readonly sessionIds: readonly string[]
+      setTitle?(title: string): Promise<void>
+    } | undefined
   >
   /** registry 全局归档集只读快照（官方 registry.archivedSessionIds——占位回收判定源；
    *  缺席 = 旧替身，回收面降级为零回收） */
@@ -318,6 +325,9 @@ export function createWorktreeRpcService(deps: {
   /** service.create 失败诊断 emit 缝（binding-derivation 流程 A）：官方 workspace 前移创建
    *  fail-soft 处 emit 诊断事件（装配方注入 emitDiag('worktree-create', warn)）；缺席 = 零 emit。 */
   readonly createDiag?: (message: string) => void
+  /** seal 推导判定诊断 emit 缝（binding-derivation §2.6 session-bind 域，info 级）：
+   *  装配方注入 emitDiag('session-bind', info)；缺席 = 零 emit。 */
+  readonly bindDiag?: (message: string) => void
   /** 重路由目标活性探测缝（bug 4a30b193——缺省 = existsSync 盘上事实；测试注入桩） */
   readonly pathPresent?: ((path: string) => boolean) | undefined
   /** 绑定失配哨兵发射缝（WYSIWYG——用户裁决 2026-10-24）：child 经 process.send 进事件链
@@ -551,59 +561,53 @@ export function createWorktreeRpcService(deps: {
     bare: entry.bare,
   })
 
-  /** 挂靠会话反查（checks/seal 共用——sessionPersistence.list 全量扫尾部，best-effort cap 200） */
+  /** 挂靠会话计数（checks 通道）：官方 workspace record sessionIds（attachSession durable
+   *  挂账——dsh-workspace entity.sessionIds）。推导制读面（binding-derivation §2.1）：
+   *  归属事实读官方单源，不再遍历 forge/worktree-attach 事件。registry 缺席/解析 miss = 0
+   *  （降级零计数）；读失败 fail-soft 0。 */
   const attachedSessionsOf = async (path: string): Promise<number> => {
-    const persistence = deps.sessionPersistence as { list?: () => Promise<unknown> } | undefined
-    if (persistence === undefined || typeof persistence.list !== 'function') return 0
+    const registry = resolveWorkspaceRegistry()
+    if (registry?.resolveByPath === undefined) return 0
     try {
-      const listed = await persistence.list()
-      // 官方 SessionPersistence.list 返回 SessionPersistenceSnapshot[]（header.id）；
-      // 兼容 {ids} 形态（历史替身）。
-      const ids = (
-        Array.isArray(listed)
-          ? listed.map((row) => (row as { header?: { id?: unknown } } | null)?.header?.id ?? row)
-          : ((listed as { ids?: readonly unknown[] } | null)?.ids ?? [])
-      ) as readonly unknown[]
-      let count = 0
-      for (const id of ids.slice(0, 200)) {
-        const binding = await readLatestAttach(String(id), readFactory).catch(() => null)
-        if (binding !== null && norm(binding.worktreePath) === norm(path)) count += 1
-      }
-      return count
+      return (await registry.resolveByPath(path))?.sessionIds.length ?? 0
     } catch (cause) {
-      warn(`[git-worktree] 挂靠会话反查失败（拦截检查降级 0）：${String(cause)}`)
+      warn(`[git-worktree] 挂靠会话计数失败（workspace record 读降级 0）：${String(cause)}`)
       return 0
     }
   }
 
-  /** 封存判定快照（seal 通道 + 发送拦截共源）。
-   *  cwd 强制守护（1.19）：readLatestAttach 校验 SessionHeader.cwd ≡ 绑定 worktreePath，
-   *  漂移即 SessionCwdMismatchError 显式上抛（RPC 错误面回传 web）——不做静默降级。
-   *  G7② 判序反转：request.cwd 在场时先查项目能力缓存——判非 git 直接返回（零会话日志读）；
-   *  有绑定会话仍先读日志（绑定即 git 事实）。 */
+  /** 封存判定快照（seal 通道——chip/notice/composer 数据源）。
+   *  推导制读侧（binding-derivation §2.1/§2.3）：绑定 = header.cwd——实时 branch
+   *  （resolveBranch）+ 盘上在场性（evaluateSeal）+ aheadBehind（worktree-ops host 解析面
+   *  单点）现算；seal.blank 事件判读退役（web 回落账本 isBlank）；1.19 SessionCwdMismatch
+   *  读侧拒绝位随预铸事件退役消失（推导即真，无漂移可判）。
+   *  G7② 判序：request.cwd 在场时先查项目能力缓存——判非 git 直接返回（零会话日志读）。 */
   const sealStateOf = async (request: WorktreeSealRequest): Promise<WorktreeSealResult> => {
-    if (request.cwd !== undefined) {
-      const resolution = await cachedResolve(request.cwd)
-      if (resolution === null) return { isGit: false, sealed: false, binding: null }
+    if (request.cwd !== undefined && (await cachedResolve(request.cwd)) === null) {
+      return { isGit: false, sealed: false, binding: null }
     }
-    const binding = await readLatestAttach(request.sessionId, readFactory).catch((cause: unknown) => {
-      if ((cause as Error)?.name === 'SessionCwdMismatchError') throw cause
-      return null
-    })
-    if (binding === null) return { isGit: false, sealed: false, binding: null }
-    const resolution = await cachedResolve(binding.worktreePath)
-    if (resolution === null) return { isGit: false, sealed: false, binding: { worktreePath: binding.worktreePath, branch: binding.branch } }
+    const header = await headerOf(request.sessionId)
+    const cwd = header.cwd ?? request.cwd
+    if (cwd === undefined || cwd === '') return { isGit: false, sealed: false, binding: null }
+    const resolution = await cachedResolve(cwd)
+    if (resolution === null) return { isGit: false, sealed: false, binding: null }
+    const branch = await resolveBranch(cwd)
     const present = await listPresent(resolution.projectRoot).catch(() => [] as string[])
-    const decision = evaluateSeal(binding, present)
+    const decision = evaluateSeal({ worktreePath: cwd, branch }, present)
+    // aheadBehind = 树级操作（cwd 纪律同 aheadBehind 通道）——host 解析面单点，随 seal 通道
+    // 一次带回（chip §2.3.1 内联展示数据源）；branch 落空（detached/unborn）= null 零注入
+    const counts = branch === '' ? null : await aheadBehindOp(cwd, branch).catch(() => null)
+    deps.bindDiag?.(
+      `[git-worktree] session-bind 推导判定：sessionId=${request.sessionId} cwd=${cwd} branch=${branch || '(落空)'} ` +
+        `sealed=${decision.sealed} aheadBehind=${counts === null ? 'null' : `${counts.ahead}/${counts.behind}`}`,
+    )
     return {
       isGit: true,
       sealed: decision.sealed,
-      binding: { worktreePath: binding.worktreePath, branch: binding.branch },
+      binding: { worktreePath: cwd, branch },
       projectRoot: resolution.projectRoot,
-      worktreeName: worktreeNameOf(binding.worktreePath),
-      // blank 事件判读（点选即换绑可换绑判读源——账本 blank 标志 host 重启恢复后失真，
-      // bug c931aa28 同族实证；读失败 = false fail-closed 不误换绑）
-      blank: await blankOf(request.sessionId),
+      worktreeName: worktreeNameOf(cwd),
+      aheadBehind: counts,
     }
   }
 
@@ -1108,10 +1112,11 @@ export function interceptSessionSends(
           const state = await sealOf(sessionId)
           assertSendable({ sealed: state.sealed })
         } catch (cause) {
-          // SessionSealedError / SessionCwdMismatchError 原样上抛（明确错误提示——A5：cwd
-          // 漂移改拒绝不放行）；其余判读链异常 fail-open 放行
+          // SessionSealedError 原样上抛（明确错误提示）；其余判读链异常 fail-open 放行。
+          // 1.19 SessionCwdMismatch 读侧拒绝位随预铸绑定事件退役消失（binding-derivation
+          // §2.1——seal 判读改 header.cwd 推导即真，无漂移可判）。
           const name = (cause as Error)?.name
-          if (name === 'SessionSealedError' || name === 'SessionCwdMismatchError') throw cause
+          if (name === 'SessionSealedError') throw cause
           warn(`[git-worktree] 发送拦截判读失败（fail-open 放行）：${String(cause)}`)
         }
       }

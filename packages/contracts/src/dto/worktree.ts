@@ -153,8 +153,11 @@ export interface WorktreeSealResult {
   /** 归并项目根（ahead/behind 懒加载 cwd；无绑定 = 缺席） */
   readonly projectRoot?: string
   readonly worktreeName?: string
-  /** blank 判读（host 事件判读——turn 缺席 = true；缺席 = 未判/旧 host 形态）。
-   *  点选即换绑的可换绑判读源：账本 blank 标志在 host 重启恢复后可能失真，以事件为准 */
+  /** ahead/behind 实时解析（host 解析面单点——worktree-ops aheadBehind；branch 落空 /
+   *  无 upstream = null 零注入）。chip §2.3.1 内联展示数据源（随 seal 通道一次带回） */
+  readonly aheadBehind?: { readonly ahead: number; readonly behind: number } | null
+  /** 已退役（binding-derivation §2.1）：seal 改 header.cwd 推导后不再产出 blank 事件判读
+   *  ——消费面回落账本 isBlank；字段保留 = 旧 web bundle 兼容读面 */
   readonly blank?: boolean
 }
 
