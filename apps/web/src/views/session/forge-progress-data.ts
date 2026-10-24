@@ -11,9 +11,22 @@
  * 镜像守卫曾误要求 data.seq（append 契约无此位）恒 false → 组件静默 null 空行） */
 export interface ForgeProgressNodeData {
   readonly sourceSlug: string
-  readonly verb: 'claim' | 'claim-resume' | 'settle' | 'stop' | 'suspend'
+  readonly verb:
+    | 'claim'
+    | 'claim-resume'
+    | 'settle'
+    | 'stop'
+    | 'suspend'
+    | 'startup'
+    | 'retry'
+    | 'halt'
+    | 'timeout'
+    | 'finish-all'
+    | 'loop'
   readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
   readonly taskKey?: string
+  readonly taskTitle?: string
+  readonly workerSessionId?: string
   readonly scenario?: string
   readonly note?: string
   readonly counts?: { readonly pending: number; readonly running: number; readonly done: number }
@@ -27,9 +40,12 @@ export function isForgeProgressNodeData(value: unknown): value is ForgeProgressN
   return (
     typeof raw['sourceSlug'] === 'string' &&
     raw['sourceSlug'] !== '' &&
-    (raw['verb'] === 'claim' || raw['verb'] === 'claim-resume' || raw['verb'] === 'settle' || raw['verb'] === 'stop' || raw['verb'] === 'suspend') &&
+    (raw['verb'] === 'claim' || raw['verb'] === 'claim-resume' || raw['verb'] === 'settle' || raw['verb'] === 'stop' || raw['verb'] === 'suspend' ||
+      raw['verb'] === 'startup' || raw['verb'] === 'retry' || raw['verb'] === 'halt' || raw['verb'] === 'timeout' || raw['verb'] === 'finish-all' || raw['verb'] === 'loop') &&
     (raw['status'] === 'running' || raw['status'] === 'completed' || raw['status'] === 'blocked' || raw['status'] === 'interrupted') &&
     (raw['taskKey'] === undefined || typeof raw['taskKey'] === 'string') &&
+    (raw['taskTitle'] === undefined || typeof raw['taskTitle'] === 'string') &&
+    (raw['workerSessionId'] === undefined || typeof raw['workerSessionId'] === 'string') &&
     (raw['scenario'] === undefined || typeof raw['scenario'] === 'string') &&
     (raw['note'] === undefined || typeof raw['note'] === 'string') &&
     typeof raw['at'] === 'number' &&
