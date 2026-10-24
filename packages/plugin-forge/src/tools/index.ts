@@ -20,6 +20,9 @@ import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
 import { createCreateProposalTool } from './create-proposal.js'
 import { createDispatchTaskTool } from './dispatch-task.js'
+import type {
+  ForgeCheckpointsToolFace,
+} from './impl-checkpoint.js'
 import { createGetBugTool } from './get-bug.js'
 import { createListBugsTool } from './list-bugs.js'
 import { createListTasksTool } from './list-tasks.js'
@@ -32,6 +35,23 @@ import { createTaskStatsTool } from './task-stats.js'
 import type { LoopToolDeps } from './dispatch-task.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createUpdateTaskTool } from './update-task.js'
+import {
+  createListImplCheckpointsTool,
+  createQueryImplCheckpointTool,
+  createRecordImplCheckpointTool,
+} from './impl-checkpoint.js'
+
+/** 机械⑥三工具定义组（键序 = FORGE_TOOL_NAMES 尾三员列序——注册序单源） */
+function createImplCheckpointTools(deps: DispatchForgeToolDeps): Pick<
+  ForgeTools,
+  'recordImplCheckpoint' | 'queryImplCheckpoint' | 'listImplCheckpoints'
+> {
+  return {
+    recordImplCheckpoint: createRecordImplCheckpointTool(deps),
+    queryImplCheckpoint: createQueryImplCheckpointTool(deps),
+    listImplCheckpoints: createListImplCheckpointsTool(deps),
+  }
+}
 
 /**
  * core bug 域服务的插件侧结构化消费面（fix-bug 两写径——core createBugsService 结构兼容，
@@ -71,6 +91,12 @@ export interface ForgeBugsToolFace {
   getBug(q: { readonly projectId: string; readonly bugId: string }): Promise<GetBugResponse>
 }
 
+/**
+ * core checkpoints 域服务的插件侧结构化消费面（机械⑥——core createCheckpointsService 结构兼容；
+ * 类型定义于 impl-checkpoint.ts，工具面注释引用）。
+ */
+export type { CheckpointListEntry, CheckpointMark, CheckpointMetrics, CheckpointRow, CheckpointSnapshots, ForgeCheckpointsToolFace } from './impl-checkpoint.js'
+
 /** 链上下文投影重导出（getBug 响应载荷形状——工具面注释引用） */
 export type { BugChainContext }
 
@@ -82,6 +108,8 @@ export interface ForgeToolDeps {
   proposals: ForgeProposalsService
   /** core bug 域服务（fix-bug 两写径 recordBug/resolveBug 的服务面——装配注入） */
   bugs: ForgeBugsToolFace
+  /** core checkpoints 域服务（机械⑥实现检查点三工具的服务面——装配注入） */
+  checkpoints: ForgeCheckpointsToolFace
   /** 会话 cwd → projectId 解析器（session.ts 绑定表/bindingsFile 产物） */
   resolveProjectId: ProjectIdResolver
   /** 事件发射面（3.4——可选：缺席 = 零事件降级；task-submitted/task-error 等发射点共消费） */
@@ -102,7 +130,7 @@ export interface ForgeToolDeps {
   jobs?: DispatchJobsFace
 }
 
-/** tool 定义组（顺序 = Interface 4 列序扩展——十四员；注册面与断言面共消费） */
+/** tool 定义组（顺序 = Interface 4 列序扩展——十七员；注册面与断言面共消费） */
 export interface ForgeTools {
   readonly addTask: ReturnType<typeof createAddTaskTool>
   readonly submitTask: ReturnType<typeof createSubmitTaskTool>
@@ -118,9 +146,12 @@ export interface ForgeTools {
   readonly resolveBug: ReturnType<typeof createResolveBugTool>
   readonly listBugs: ReturnType<typeof createListBugsTool>
   readonly getBug: ReturnType<typeof createGetBugTool>
+  readonly recordImplCheckpoint: ReturnType<typeof createRecordImplCheckpointTool>
+  readonly queryImplCheckpoint: ReturnType<typeof createQueryImplCheckpointTool>
+  readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
 }
 
-/** 注册面全集（十四 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+/** 注册面全集（十七 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
  *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）；面分治：
  *  listBugs 仅主 agent，getBug 主 + worker——WORKER_FORGE_TOOLS 五动词，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
@@ -138,6 +169,9 @@ export const FORGE_TOOL_NAMES = [
   'resolveBug',
   'listBugs',
   'getBug',
+  'recordImplCheckpoint',
+  'queryImplCheckpoint',
+  'listImplCheckpoints',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -160,6 +194,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     resolveBug: createResolveBugTool(deps),
     listBugs: createListBugsTool(deps),
     getBug: createGetBugTool(deps),
+    ...createImplCheckpointTools(deps),
   }
 }
 
@@ -216,6 +251,18 @@ export { parseListBugsArgs, LIST_BUGS_OUTPUT_SCHEMA } from './list-bugs.js'
 export type { ListBugsToolArgs } from './list-bugs.js'
 export { parseGetBugArgs, GET_BUG_OUTPUT_SCHEMA } from './get-bug.js'
 export type { GetBugToolArgs } from './get-bug.js'
+export {
+  CHECKPOINT_MARKS,
+  computeCheckpointMetrics,
+  parseListImplCheckpointsArgs,
+  parseQueryImplCheckpointArgs,
+  parseRecordImplCheckpointArgs,
+} from './impl-checkpoint.js'
+export type {
+  ListImplCheckpointsToolArgs,
+  QueryImplCheckpointToolArgs,
+  RecordImplCheckpointToolArgs,
+} from './impl-checkpoint.js'
 export { parseListTasksArgs } from './list-tasks.js'
 export type { ListTasksToolArgs } from './list-tasks.js'
 export {

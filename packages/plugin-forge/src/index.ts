@@ -365,6 +365,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
+      checkpoints: ctx.forgeCheckpoints,
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -515,6 +516,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.resolveBug),
       ctx.tools.register(tools.listBugs),
       ctx.tools.register(tools.getBug),
+      ctx.tools.register(tools.recordImplCheckpoint),
+      ctx.tools.register(tools.queryImplCheckpoint),
+      ctx.tools.register(tools.listImplCheckpoints),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
@@ -533,7 +537,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt'] as const,
+    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt'] as const,
   },
 )
 
