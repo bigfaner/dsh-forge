@@ -349,7 +349,7 @@ describe('forge:proxy 代理通道族（in-process 直调信封）', () => {
     }
     const base = proxyDeps({ commands: commands as never })
     const session = {
-      ...(base.session as Record<string, unknown>),
+      ...(base.session as unknown as Record<string, unknown>),
       resolveAgent: async (id: string) => (id === 's-live' ? { agent: { id } } : { error: { code: 'session/not-found' } }),
     }
     const res = fakeRes()

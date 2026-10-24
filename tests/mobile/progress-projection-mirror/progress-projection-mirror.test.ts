@@ -39,7 +39,7 @@ describe('step-2 mobile RPC 全量键读取（零传输改动）', () => {
     expect(coerceDispatchEvents({ entries: [], total: 0 })).toEqual({ entries: [], total: 0 })
     expect(coerceDispatchEvents('x')).toBeUndefined()
     // 空会话零调用；键缺席 = undefined
-    expect(await loadDispatchEvents({ call: async () => ({ ok: true, data: { values: {} } }) }, 's-1')).toBeUndefined()
+    expect(await loadDispatchEvents({ call: async () => ({ ok: true, data: { values: {} } }) } as never, 's-1')).toBeUndefined()
   })
 })
 
