@@ -32,7 +32,7 @@ export interface ExpertToolDefinition {
     readonly schema: unknown;
     render(args: unknown, value: unknown): readonly TextContentBlock[];
   };
-  execute(args: unknown): Promise<unknown>;
+  execute(args: unknown, exec?: unknown): Promise<unknown>;
 }
 
 /** dsh tools 服务子面（官方 ToolRuntime.register——全局注册即用，D1）。 */
@@ -181,7 +181,8 @@ function sanitizeProperties(value: unknown): Record<string, unknown> {
   return out;
 }
 
-function zToJSONSchema(schema: z.ZodType, io: "input" | "output"): unknown {
+/** zod → 官方 register 门受支持子集 JSON Schema（工具面共用净化单点）。 */
+export function zToJSONSchema(schema: z.ZodType, io: "input" | "output"): unknown {
   return toSupportedJsonSchema(z.toJSONSchema(schema, { io }));
 }
 
