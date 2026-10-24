@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path'
 import {
+  FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT,
   REASONING_LEVELS,
   type ForgeSettings,
   type ForgeSettingsService,
@@ -100,9 +101,22 @@ function assertValidInput(input: SetForgeSettingsInput): void {
       throw new InvalidSettingsInputError('worktree.crossBranchRiskDismissed 必须为布尔')
     }
   }
-  if (w === undefined && ra === undefined && wt === undefined) {
-    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval / worktree）')
+  const fw: unknown = input.flywheel
+  if (fw !== undefined) {
+    if (typeof fw !== 'object' || fw === null) throw new InvalidSettingsInputError('flywheel 段缺失')
+    const threshold = (fw as Record<string, unknown>)['reviewWaveThreshold']
+    if (threshold !== undefined && !(typeof threshold === 'number' && Number.isInteger(threshold) && threshold >= 1)) {
+      throw new InvalidSettingsInputError('flywheel.reviewWaveThreshold 必须为 ≥1 的整数')
+    }
   }
+  if (w === undefined && ra === undefined && wt === undefined && fw === undefined) {
+    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval / worktree / flywheel）')
+  }
+}
+
+/** 机械⑦：飞轮修正波次阈值取值——settings 键缺席 = 默认值生效（机械③复盘派生时越阈判定注入源） */
+export function flywheelReviewWaveThreshold(settings: ForgeSettings): number {
+  return settings.flywheel?.reviewWaveThreshold ?? FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core） */
@@ -123,6 +137,9 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
       if (parsed.worktree !== undefined) {
         next.worktree = parsed.worktree as WorktreeSettings
       }
+      if (parsed.flywheel !== undefined) {
+        next.flywheel = parsed.flywheel as ForgeSettings['flywheel']
+      }
       return next
     },
     async set(input: SetForgeSettingsInput): Promise<void> {
@@ -135,6 +152,7 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
         ...(input.worker !== undefined ? { worker: input.worker } : {}),
         ...(input.remoteApproval !== undefined ? { remoteApproval: input.remoteApproval } : {}),
         ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
+        ...(input.flywheel !== undefined ? { flywheel: input.flywheel } : {}),
       }
       // 原子写：同目录 tmp + rename（Windows MoveFileEx REPLACE_EXISTING 语义——崩溃无半写）
       const tmp = `${deps.settingsFile}.${randomUUID()}.tmp`

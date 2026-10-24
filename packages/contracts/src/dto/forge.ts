@@ -1027,12 +1027,22 @@ export interface WorktreeSettings {
   crossBranchRiskDismissed?: boolean
 }
 
+/** 飞轮修正波次阈值默认值（机械⑦：修正波次 ≥ 阈值视为流程级 Blocker 强制 M5 复盘；
+ *  settings 键缺席 = 默认值生效；无 UI，暂经文件/服务面配置） */
+export const FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT = 6
+
+/** flywheel 段——飞轮修正波次阈值（机械③复盘派生时指标越阈判定的注入配置源） */
+export interface FlywheelSettings {
+  reviewWaveThreshold?: number
+}
+
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
  *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
+  flywheel?: FlywheelSettings
 }
 
 /** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
@@ -1041,6 +1051,7 @@ export interface SetForgeSettingsInput {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
+  flywheel?: FlywheelSettings
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，

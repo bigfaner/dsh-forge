@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { InvalidSettingsInputError, SettingsPathInvalidError } from './errors.js'
-import { createSettingsService } from './service.js'
+import { createSettingsService, flywheelReviewWaveThreshold } from './service.js'
 
 let root: string | undefined
 afterEach(() => {
@@ -113,6 +113,44 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
       svc.set({ worktree: { crossBranchRiskDismissed: 'yes' as never } }),
     ).rejects.toBeInstanceOf(InvalidSettingsInputError)
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ worker })
+  })
+
+  // ── 机械⑦（forge-verification-hardening）：flywheel 分节——飞轮修正波次阈值（无 UI，文件/服务面配置） ──
+  it('flywheel 默认值生效：键缺席（未配置文件 / 文件无 flywheel 节）→ flywheelReviewWaveThreshold = 默认 6', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    const unconfigured = await svc.get()
+    expect(flywheelReviewWaveThreshold(unconfigured)).toBe(6) // 文件缺席 = 未配置态
+    await svc.set({ worker })
+    expect(flywheelReviewWaveThreshold(await svc.get())).toBe(6) // 文件在、flywheel 键缺席同样默认
+  })
+
+  it('flywheel 显式配置：set { reviewWaveThreshold } → get 往返一致、取值反映显式值；分节覆写不冲掉其它节', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await svc.set({ flywheel: { reviewWaveThreshold: 4 } })
+    const settings = await svc.get()
+    expect(settings.flywheel).toEqual({ reviewWaveThreshold: 4 })
+    expect(flywheelReviewWaveThreshold(settings)).toBe(4)
+    expect(settings.worker).toEqual(worker) // 读-改-写分节合并保留既有节
+    // 持久化：新服务实例（同路径）读旧 set——文件即事实源
+    await expect(createSettingsService({ settingsFile, userDataDir }).get()).resolves.toEqual({
+      worker,
+      flywheel: { reviewWaveThreshold: 4 },
+    })
+  })
+
+  it('flywheel 写校验：reviewWaveThreshold 非 ≥1 整数（0 / 负数 / 小数 / 非数值）→ InvalidSettingsInputError，既有文件不被触碰', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ flywheel: { reviewWaveThreshold: 6 } })
+    for (const bad of [0, -1, 1.5, 'six', true, null]) {
+      await expect(
+        svc.set({ flywheel: { reviewWaveThreshold: bad as never } }),
+      ).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    }
+    expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ flywheel: { reviewWaveThreshold: 6 } })
   })
 })
 
