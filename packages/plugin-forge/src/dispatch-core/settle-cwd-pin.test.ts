@@ -127,11 +127,19 @@ describe('1.14 · 提交落点核验（settleWorkerRun cwd 钉定收口）', () 
       { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
     )
     expect(noFiles.case).toBe('landing-rejected')
+    if (noFiles.case !== 'landing-rejected') return
+    // 人/agent 双友好判词：事实行 + 原因行 + 二选一纠正行
+    expect(noFiles.cause.message).toContain('未申报 files')
+    expect(noFiles.cause.message).toContain('纠正（按改动性质二选一）')
+    expect(noFiles.cause.message).toContain('.forge/docs/')
     const mixed = await settleWorkerRun(
       { tasks: tasksStub(base(['.forge/docs/a.md', 'packages/core/src/index.ts'])), commitLanding: badLanding },
       { projectId: 'p-1', task: snapshot(), digest: 'd', handle: handle(), spawnStartedAt: Date.now(), worktreeCwd: 'Z:\\wt' },
     )
     expect(mixed.case).toBe('landing-rejected')
+    if (mixed.case !== 'landing-rejected') return
+    expect(mixed.cause.message).toContain('packages/core/src/index.ts')
+    expect(mixed.cause.message).toContain('不适用纯文档跨分支特例')
   })
 
   it('落点不一致（判例 366bec6a 落 main）→ landing-rejected 显式处置：任务真化 interrupted（可恢复态）+ cause 自解释', async () => {

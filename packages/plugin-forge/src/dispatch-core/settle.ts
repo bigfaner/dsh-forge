@@ -246,8 +246,17 @@ export async function settleWorkerRun(
         submitRecord.files.length > 0 &&
         submitRecord.files.every((f) => f.startsWith('.forge/docs/'))
       if (!verdict.ok && !docsOnly) {
+        // 特例未命中原因（申报缺漏 vs 范围越界，一一对应纠正路径①②的前提差异）
+        const causeHint =
+          submitRecord.files === undefined || submitRecord.files.length === 0
+            ? 'submitTask 未申报 files（特例判据 = files 全量以 .forge/docs/ 开头）'
+            : `files 含文档外路径：${submitRecord.files.filter((f) => !f.startsWith('.forge/docs/')).join('、')}`
         return await rejectLanding(deps, ctx, new Error(
-          `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝`,
+          [
+            `[settle-cwd-pin] 提交落点核验失败：提交 ${submitRecord.commitHash} 不在容器检出分支 ${verdict.branch} 上（所在分支：${verdict.commitBranches.join(', ') || '任一本地分支均不可达'}），结算拒绝`,
+            `原因：${causeHint}，不适用纯文档跨分支特例`,
+            `纠正（按改动性质二选一）：① 含代码/测试 → git checkout ${verdict.branch} 后按任务范围重新提交，重新 submitTask 附新 commitHash；② 纯文档 → 重新 submitTask，files 逐文件如实列出且全部以 .forge/docs/ 开头`,
+          ].join('\n'),
         ))
       }
     } catch (cause) {
