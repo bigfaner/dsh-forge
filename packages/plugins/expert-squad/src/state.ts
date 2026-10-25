@@ -57,6 +57,11 @@ export class ExpertSquadState {
     let hit = this.canonical.get(workspacePath)
     if (!hit) {
       hit = canonicalWorkspacePath(workspacePath)
+      // Root cause: rejected promise 永久缓存 = 毒化缓存（路径就绪后仍恒败）——
+      // 失败即逐出条目，下次请求重新解析（bug f9410209）。
+      hit.catch(() => {
+        if (this.canonical.get(workspacePath) === hit) this.canonical.delete(workspacePath)
+      })
       this.canonical.set(workspacePath, hit)
     }
     return hit

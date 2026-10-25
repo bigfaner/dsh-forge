@@ -121,6 +121,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
       () => registry.refresh(), // 上代刷新失败不阻塞换代
     );
     refreshChains.set(workspace, next);
+    next.catch(() => {}); // watch 链 fire-and-forget：刷新失败不落 unhandled rejection（registryFor 侧失败逐出重试）
   };
   const registryFor = (workspace: string): Promise<ExpertsRegistry> => {
     let hit = registries.get(workspace);
@@ -131,6 +132,11 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
         workspace,
       });
       hit = registry.refresh().then(() => registry);
+      // Root cause: 首刷 rejected promise 永久缓存 = 五路由恒 400（毒化缓存）——
+      // 失败即逐出条目，下次请求重建 registry 重试（bug f9410209）。
+      hit.catch(() => {
+        if (registries.get(workspace) === hit) registries.delete(workspace);
+      });
       registries.set(workspace, hit);
       const manager = new ExpertWatchManager(expertRootsFor(workspace), {
         onInvalidated: () => enqueueRefresh(workspace, registry),
@@ -150,9 +156,11 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
         for (const manager of watchManagers) manager.observeHostMutation(path);
       },
     });
-    ctx.on("fs/observed", (target: unknown, observation: unknown, actor: unknown) => {
+    const disposeOn = ctx.on("fs/observed", (target: unknown, observation: unknown, actor: unknown) => {
       invalidate(target as FsObservedTarget, observation, actor);
     });
+    // 通道二监听器 disposer 消费（cordis effect 契约：cb 返回值即 disposer——卸载摘除）。
+    if (typeof disposeOn === "function") ctx.effect(() => () => disposeOn());
   } else {
     console.warn("[expert-squad] ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
   }

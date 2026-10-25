@@ -163,3 +163,59 @@ describe("bug 4ed8549f: expert update 通道装配（host 装配缝）", () => {
     expect(readFileSync(join(ws, ".dsh", "experts", `${KEY}.md`), "utf8")).toBe(before);
   });
 });
+
+describe("bug f9410209: registry 首刷 rejected promise 逐出（下次请求重试而非恒 400）", () => {
+  /** flaky state 存储面：blocked 期间 table().get 抛错（registry 刷新 reject），解除后恢复。 */
+  function bootWithFlakyStorage(blocked: { value: boolean }): Promise<FetchRouteLike[]> {
+    const routes: FetchRouteLike[] = [];
+    const fakeDomain = {
+      // 官方 Domain 表契约：table().get 同步返回记录或 undefined（state.isDisabled
+      // 直接 `!== undefined` 判读，不 await）——fake 必须同形同步。
+      table: () => ({
+        get: (): undefined => {
+          if (blocked.value) throw new Error("storage 首刷抖动");
+          return undefined;
+        },
+        put: (): void => undefined,
+        delete: (): void => undefined,
+      }),
+      close: async (): Promise<void> => undefined,
+    };
+    const storage = {
+      domain: { open: async () => fakeDomain },
+    };
+    return expertSquadPlugin({
+      connection: {
+        fetch: {
+          register: (route: FetchRouteLike): unknown => {
+            routes.push(route);
+            return route;
+          },
+        },
+      },
+      reflect: { get: (name: string) => (name === "storage" ? storage : undefined) },
+      effect: (dispose: () => unknown): unknown => {
+        disposers.push(dispose);
+        return undefined;
+      },
+    } as never).then(() => routes);
+  }
+
+  async function get(route: FetchRouteLike, url: string): Promise<{ status: number; text: string }> {
+    const res = await route.fetch(new Request(`http://host${url}`, { method: "GET" }));
+    return { status: res.status, text: await res.text() };
+  }
+
+  it("首刷拒绝 → list 如实 400；同 workspace 下次请求重试成功", { timeout: 20_000 }, async () => {
+    const ws = makeWorkspace();
+    const blocked = { value: true };
+    const routes = await bootWithFlakyStorage(blocked);
+    const list = routeOf(routes, "list");
+    const url = `/api/expert-squad/list?workspace=${encodeURIComponent(ws)}&includeDisabled=true`;
+    const first = await get(list, url);
+    expect(first.status, `首刷失败应如实 400：${first.text}`).toBe(400);
+    blocked.value = false;
+    const second = await get(list, url);
+    expect(second.status, `逐出后重试应 200：${second.text}`).toBe(200);
+  });
+});

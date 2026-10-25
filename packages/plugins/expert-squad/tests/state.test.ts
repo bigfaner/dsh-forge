@@ -2,7 +2,7 @@
 // 自有 domain 表，key = disabled/<canonicalWorkspacePath>/<expertId>——
 // 同一专家 A 工作区禁用、B 工作区可用的工作区隔离 + 真实 domain 层落盘持久性。
 
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
@@ -104,5 +104,18 @@ describe("启停状态工作区隔离（AD2）", () => {
     // 同一中转目录 → 同一 domain 单元 → 记录恢复
     expect(await second.state.isDisabled(workspace, "code-reviewer")).toBe(true);
     await second.state.close();
+  });
+
+  it("bug f9410209: canonical 路径解析失败逐出缓存——路径就绪后重试成功", async () => {
+    const { state } = await makeState();
+    const workspace = await mkdtemp(join(tmpdir(), "expert-squad-ws-e-"));
+    tmpRoots.push(workspace);
+    const late = join(workspace, "late-dir");
+    // 路径尚不存在：canon 解析 reject，缓存不得永久持有 rejected promise
+    await expect(state.isDisabled(late, "code-reviewer")).rejects.toThrow();
+    await mkdir(late, { recursive: true });
+    // 路径就绪后：同 workspace 键再次请求必须重试（而非复用毒化 promise）
+    await expect(state.isDisabled(late, "code-reviewer")).resolves.toBe(false);
+    await state.close();
   });
 });
