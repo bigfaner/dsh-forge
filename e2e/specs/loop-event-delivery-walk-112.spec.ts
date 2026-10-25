@@ -225,7 +225,11 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     console.log(`[walk112] sessionId = ${String(sessionId)}`)
 
     const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
-    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
+    if ((await row.count()) === 0) {
+      // HTTP 线建会话不经页面 invoke——桌面账本无实时推送，reload 拉侧栏（会话行为证据不受影响）
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(4_000)
+    }
     await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
     await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
 

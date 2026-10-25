@@ -137,7 +137,11 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     // disabled 形态、dock 派发按钮缺席），记环境局限非产品断言面；零凭据 spawn 失败 →
     // 重试 ×3 → halt，循环事件链照常发射）──
     const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
-    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
+    if ((await row.count()) === 0) {
+      // HTTP 线建会话不经页面 invoke——桌面账本无实时推送，reload 拉侧栏（会话行为证据不受影响）
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(4_000)
+    }
     await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
     await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
     // 官方 commands HTTP transport（POST /api/<method>——api-ref.jsonl wire 形：client-request 信封
