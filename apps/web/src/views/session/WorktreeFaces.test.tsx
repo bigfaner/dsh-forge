@@ -3,14 +3,13 @@
 // ——SSR 不可达，归集成模式实机走查（1.8 e2e 同口径惯例）。
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ForgeRpcClient } from '../../rpc/client.js'
+import { createForgeRpcClient, type ForgeRpcClient } from '../../rpc/client.js'
 import {
   ForgeHeroWorktreeMount,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
   anchorDefaultWorktreePath,
   createFollowup,
-  rebindOnSelect,
 } from './WorktreeFaces.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
@@ -65,133 +64,16 @@ describe('创建跟进次序（bug 6593d708——清单刷新先于选中态落�
   })
 })
 
-// ───────────── bug ff324cad 方案 A：点选即换绑（纯编排——rebindOnSelect）─────────────
+// ───────────── bug 82e92933：点选即换绑编排退役（binding-derivation §2.3 口径——
+// 换绑由官方 blank 复用天然生效，点选回归纯选中态；通道 host 注册已删，web 残留消费
+// 必 not-found + rebindOnSelect fail-soft 静默失效 / maybeRebind unhandled rejection）─────────────
 
-describe('点选即换绑编排（bug ff324cad 方案 A——rebindOnSelect）', () => {
-  const deps = (overrides: Partial<Parameters<typeof rebindOnSelect>[1]> = {}) => {
-    const order: string[] = []
-    const placeholderId = 's-placeholder'
-    const full: Parameters<typeof rebindOnSelect>[1] = {
-      rebindableBlankId: async () => placeholderId,
-      sessionCreate: async (path) => {
-        order.push(`create:${path}`)
-        return { sessionId: 's-tree' }
-      },
-      switchToProduct: (path, productSessionId) => {
-        order.push(`open:${productSessionId}(${path})`)
-      },
-      // 事件驱动确认替身：立即落定（零轮询——等待由账本订阅推送驱动，测试直给落定态）
-      awaitSwitchSettled: async () => true,
-      archiveSession: async (sessionId) => {
-        order.push(`archive:${sessionId}`)
-      },
-      ...overrides,
-    }
-    return { full, order, placeholderId }
-  }
-
-  it('可换绑 blank 在场（主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树 + 先切后归档（次序契约：hero 不落归档会话）', async () => {
-    const { full, order } = deps()
-    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
-    expect(order).toEqual([
-      'create:C:/repo/.forge/worktrees/wt-a',
-      'open:s-tree(C:/repo/.forge/worktrees/wt-a)',
-      'archive:s-placeholder',
-    ])
-  })
-
-  it('无可换绑 blank（非 blank / 绑定 ≡ 新选树）→ 零编排（纯选中态）', async () => {
-    const { full, order } = deps({ rebindableBlankId: async () => undefined })
-    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
-    expect(order).toEqual([])
-  })
-
-  it('预铸失败 → 原样上抛（调用方 fail-soft；零切换零归档——占位保留供重路由兜底）', async () => {
-    const { full, order } = deps({
-      sessionCreate: async () => {
-        throw new Error('precast boom')
-      },
+describe('点选即换绑编排退役（bug 82e92933）', () => {
+  it('rpc client worktree 面零 sessionCreate 方法——点选路径零 forge 建会话 RPC', () => {
+    const client = createForgeRpcClient(async () => {
+      throw new Error('no-op')
     })
-    await expect(rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)).rejects.toThrow('precast boom')
-    expect(order).toEqual([])
-  })
-
-  it('确认未落定（超时/订阅缝缺席）→ 跳过归档（残留交由下次旅程 recycle/reroute 清理，绝不归档仍居 main 的会话）', async () => {
-    const { full, order } = deps({ awaitSwitchSettled: async () => false })
-    await rebindOnSelect('C:/repo/.forge/worktrees/wt-a', full)
-    expect(order).not.toContain('archive:s-placeholder')
-  })
-
-  // 订阅式确认本体（awaitSwitchSettled mount 闭包同构）——账本事件推送驱动，零轮询：
-  describe('awaitSwitchSettled 订阅式确认（mount 闭包同构纯实现）', () => {
-    /** mount 闭包同构替身：账本 store 手动推送（{getSnapshot, subscribe} 官方形状） */
-    function makeLedger() {
-      let mainView: string | undefined = undefined
-      const listeners = new Set<() => void>()
-      const store = {
-        getSnapshot: () => undefined,
-        subscribe: (listener: () => void) => {
-          listeners.add(listener)
-          return () => listeners.delete(listener)
-        },
-      }
-      const activeSessionId = (): string | undefined => mainView
-      const settle = (id: string | undefined): void => {
-        mainView = id
-        for (const listener of listeners) listener()
-      }
-      const subscribedCount = (): number => listeners.size
-      return { store, activeSessionId, settle, subscribedCount }
-    }
-
-    /** 与 WorktreeFaces.tsx mount 闭包同构的确认实现（订阅推送驱动 + 超时退订兜底） */
-    function awaitSwitchSettled(
-      productSessionId: string,
-      face: { activeSessionId(): string | undefined; subscribeSessionLedger(l: () => void): () => void },
-      timeoutMs: number,
-    ): Promise<boolean> {
-      return new Promise<boolean>((resolve) => {
-        if (face.activeSessionId() === productSessionId) {
-          resolve(true)
-          return
-        }
-        let settled = false
-        const finish = (value: boolean): void => {
-          if (settled) return
-          settled = true
-          unsubscribe()
-          clearTimeout(timer)
-          resolve(value)
-        }
-        const unsubscribe = face.subscribeSessionLedger(() => {
-          if (face.activeSessionId() === productSessionId) finish(true)
-        })
-        const timer = setTimeout(() => finish(false), timeoutMs)
-      })
-    }
-
-    it('账本事件推送 mainView 在留 → resolve true + 恰一次退订（零轮询）', async () => {
-      const ledger = makeLedger()
-      const face = {
-        activeSessionId: ledger.activeSessionId,
-        subscribeSessionLedger: (listener: () => void) => ledger.store.subscribe(listener),
-      }
-      const pending = awaitSwitchSettled('s-tree', face, 1000)
-      expect(ledger.subscribedCount()).toBe(1)
-      ledger.settle('s-tree') // 官方投影推送
-      expect(await pending).toBe(true)
-      expect(ledger.subscribedCount()).toBe(0)
-    })
-
-    it('上界超时 → resolve false + 退订（确认面降级语义）', async () => {
-      const ledger = makeLedger()
-      const face = {
-        activeSessionId: ledger.activeSessionId,
-        subscribeSessionLedger: (listener: () => void) => ledger.store.subscribe(listener),
-      }
-      expect(await awaitSwitchSettled('s-tree', face, 30)).toBe(false)
-      expect(ledger.subscribedCount()).toBe(0)
-    })
+    expect('sessionCreate' in client.worktree).toBe(false)
   })
 })
 

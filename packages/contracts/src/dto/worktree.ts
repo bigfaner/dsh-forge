@@ -1,11 +1,12 @@
 // @dsh-forge/contracts —— worktree/branch 管理 DTO。
-// 通道族 forge:worktree/*（十通道：list/create/delete/ahead-behind/branches/checks/
-// session-create/seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
+// 通道族 forge:worktree/*（九通道：list/create/delete/ahead-behind/branches/checks/
+// seal/select/resolve）的请求/响应载荷唯一源（三处一体：contracts → web/rpc
 // → host ipc worktree-rpc；域实现 = packages/plugins/git-worktree——host ipc 装配透传）。
 // 面分治：list/create/delete/ahead-behind/branches/checks = 管理域读+封闭写集（create/delete
-// ——提案「数据源与命令面」）；session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘，
-// 绑定写面唯一时点）；seal = 封存判定快照（chip 失效态 / notice / composer 占位数据源）；
-// select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
+// ——提案「数据源与命令面」）；seal = 封存判定快照（chip 失效态 / notice / composer 占位
+// 数据源）；select = hero 选中树推送；resolve = 批量归属解析（host 身份归并单点）。
+// 会话创建不经本族——官方 `session.create({ workspaceId })` 直通（移动端经
+// forge:proxy/session-create 中继）；绑定 = header.cwd 推导（binding-derivation §2.1）。
 
 /** worktree 清单条目（= 插件域 WorktreeEntry + 行渲染派生面） */
 export interface WorktreeEntryDto {
@@ -97,45 +98,19 @@ export interface WorktreeChecksResult {
 }
 
 /**
- * forge:worktree/session-create（1.16 预铸采纳配方——单 RPC 原子）：
- * host 预铸会话（persistence.create 自铸 id + worktreePath cwd 头 → 初始句柄写挂靠事件
- * seq 0 → close）→ controller.create({sessionId, cwd}) 官方 adopt/resume——写句柄生命
- * 周期零交叠，单写者铁律满足（活会话上不再另开写句柄；原 attach 通道已废——绑定写面
- * 唯一时点 = 预铸）。
+ * forge/binding-mismatch 载荷（binding-derivation §2.6——branch 漂移推送，经
+ * /remote/forge-stream 镜像目录逐帧推送；mobile banner 触发源）。
+ * drifted = true 触发（实时 branch ≠ 留痕 branch）；false 消除（切回）。
  */
-export interface WorktreeSessionCreateRequest {
-  /** 挂靠 worktree 绝对路径（预铸 SessionHeader.cwd 定死——官方 adopt 校验 header.cwd 相等） */
-  readonly worktreePath: string
-  /**
-   * 预铸头 agentPreset 显式档（bug 82cab5fe 重路由模式随档——源会话 preset 折叠值优先于
-   * registry 默认；缺席 = resolveDefaultPreset registry 单源，bug eae18b5c 同径）。
-   */
-  readonly agentPreset?: string
-}
-export interface WorktreeSessionCreateResult {
+export interface ForgeBindingMismatchEvent {
   readonly sessionId: string
-  /** 挂靠分支（host 自查 worktree list——预铸挂靠事件内同一值） */
-  readonly branch: string
-  /**
-   * 产物头 cwd（realpath 归一；bug 2bc90d64）：可能 ≠ 请求 worktreePath——「创建即绑选中树」
-   * 会把项目根请求改写为选中树。客户端改道后经官方 session.create({sessionId, cwd}) adopt
-   * 正门补客户端账本（官方契约：create 成功即时并入 summaries，调用方拿 id 即 retain），
-   * cwd 即 adopt 校验 header.cwd 相等的对位键。
-   */
+  /** 会话 cwd（= 绑定 worktree 路径，header.cwd 推导） */
   readonly cwd: string
-}
-
-/**
- * forge:events/session-binding-mismatch 载荷（WYSIWYG 哨兵——用户裁决 2026-10-24）：
- * 发送时点绑定树 ≠ chip 显示树 → toast 呈现 + 日志；消息按原会话投递（不搬家、不归档）。
- * main worktree 也是一种 worktree（path 恰好等于项目根）；binding null = 未绑定（同为失配）。
- */
-export interface SessionBindingMismatchEvent {
-  readonly sessionId: string
-  /** 实际绑定树（null = 未绑定） */
-  readonly binding: string | null
-  /** chip 显示树（选中记忆；缺席回落主根 = 项目根） */
-  readonly displayed: string
+  /** 留痕 branch（forge/worktree-bind 创建时刻快照） */
+  readonly bindBranch: string
+  /** 实时 branch（host 解析面） */
+  readonly branch: string
+  readonly drifted: boolean
 }
 
 /** forge:worktree/seal（封存判定快照——会话头 chip / notice / composer 占位数据源） */
@@ -153,8 +128,16 @@ export interface WorktreeSealResult {
   /** 归并项目根（ahead/behind 懒加载 cwd；无绑定 = 缺席） */
   readonly projectRoot?: string
   readonly worktreeName?: string
-  /** blank 判读（host 事件判读——turn 缺席 = true；缺席 = 未判/旧 host 形态）。
-   *  点选即换绑的可换绑判读源：账本 blank 标志在 host 重启恢复后可能失真，以事件为准 */
+  /** ahead/behind 实时解析（host 解析面单点——worktree-ops aheadBehind；branch 落空 /
+   *  无 upstream = null 零注入）。chip §2.3.1 内联展示数据源（随 seal 通道一次带回） */
+  readonly aheadBehind?: { readonly ahead: number; readonly behind: number } | null
+  /**
+   * branch 漂移（binding-derivation §2.2——实时 branch ≠ forge/worktree-bind 留痕 branch）：
+   * chat-view warning banner 数据源（判定随渲染现算；留痕缺席/惰性补写刚落 = null 不警示）。
+   */
+  readonly branchDrift?: { readonly bindBranch: string; readonly branch: string } | null
+  /** 已退役（binding-derivation §2.1）：seal 改 header.cwd 推导后不再产出 blank 事件判读
+   *  ——消费面回落账本 isBlank；字段保留 = 旧 web bundle 兼容读面 */
   readonly blank?: boolean
 }
 

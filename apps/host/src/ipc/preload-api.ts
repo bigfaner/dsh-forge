@@ -9,7 +9,6 @@ import {
   FORGE_EVENT_CHANNELS,
   type ForgeChannel,
   type ForgeEventChannel,
-  type SessionBindingMismatchEvent,
   type TasksChangedEvent,
 } from '@dsh-forge/contracts'
 import { BOOT_CHANNEL } from './boot-channel.js'
@@ -45,11 +44,10 @@ export function newTraceId(random: () => string = () => globalThis.crypto.random
 
 /**
  * forge:events/* 订阅（allowlist 守卫——FORGE_EVENT_CHANNELS 值域唯一源，未列通道
- * fail-loud 拒绝，与 invoke 面同形纪律）；载荷按通道判别守卫（tasks-changed → { projectId }，
- * session-binding-mismatch → SessionBindingMismatchEvent——Hard Rule；畸形载荷静默跳过，
- * 不猜测不转发）；返回退订器（removeListener）。
+ * fail-loud 拒绝，与 invoke 面同形纪律）；载荷只读校验 { projectId }（Hard Rule；
+ * 畸形载荷静默跳过，不猜测不转发）；返回退订器（removeListener）。
  */
-export function subscribeForgeEvent<T extends TasksChangedEvent | SessionBindingMismatchEvent>(
+export function subscribeForgeEvent<T extends TasksChangedEvent>(
   events: PreloadEventFace,
   channel: ForgeEventChannel,
   listener: (payload: T) => void,
@@ -61,15 +59,7 @@ export function subscribeForgeEvent<T extends TasksChangedEvent | SessionBinding
   }
   const onMessage = (_event: unknown, payload: unknown): void => {
     if (typeof payload !== 'object' || payload === null) return
-    const record = payload as Record<string, unknown>
-    if (channel === FORGE_EVENT_CHANNELS.sessionBindingMismatch) {
-      if (typeof record.sessionId !== 'string' || record.sessionId === '') return
-      if (typeof record.displayed !== 'string' || record.displayed === '') return
-      if (record.binding !== null && typeof record.binding !== 'string') return
-      listener(record as T)
-      return
-    }
-    const projectId = record.projectId
+    const projectId = (payload as Record<string, unknown>).projectId
     if (typeof projectId !== 'string') return
     listener({ projectId } as T)
   }
@@ -145,17 +135,6 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
         throw new Error('[preload] 事件订阅面缺席（ipcRenderer 事件面未接）——onForgeTasksChanged 不可用')
       }
       return subscribeForgeEvent(events, FORGE_EVENT_CHANNELS.tasksChanged, cb)
-    },
-    /**
-     * forge:events/session-binding-mismatch 订阅（WYSIWYG 哨兵——用户裁决 2026-10-24：
-     * 绑定树 ≠ chip 显示树 → toast 呈现 + 日志；消息按原会话投递）。载荷只读
-     * SessionBindingMismatchEvent；事件面缺席调用即 fail-loud 拒绝（同 onForgeTasksChanged）。
-     */
-    onForgeSessionBindingMismatch: (cb: (payload: SessionBindingMismatchEvent) => void): (() => void) => {
-      if (events === undefined) {
-        throw new Error('[preload] 事件订阅面缺席（ipcRenderer 事件面未接）——onForgeSessionBindingMismatch 不可用')
-      }
-      return subscribeForgeEvent(events, FORGE_EVENT_CHANNELS.sessionBindingMismatch, cb)
     },
   }
 }

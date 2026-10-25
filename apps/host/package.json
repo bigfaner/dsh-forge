@@ -32,6 +32,7 @@
     "@deepseek-ai/dsh-ptc-runtime": "0.2.0-rc.2",
     "@deepseek-ai/dsh-sandbox": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-persistence": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-query": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-telemetry": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session-title-llm": "0.2.0-rc.2",

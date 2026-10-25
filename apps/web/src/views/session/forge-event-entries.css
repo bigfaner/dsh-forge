@@ -1,0 +1,91 @@
+/* loop-event-delivery 1.9 消息面事件折叠条目组（prototype.html 左栏形态——官方令牌
+ * 直用，ForgeProgressNode 行语言同族；零机制词零平台 fork）。 */
+.dswf-event-entries {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 组块容器（hairline 边框 + 模块底——区别于人类输入气泡面） */
+.dswf-event-entries .dswf-event-entries-row {
+  border: 0.5px solid var(--dsw-alias-border-l2); /* dsw-raw 上游半像素 hairline 边框刻度 */
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* forge 徽记点（组头图标位——远征蓝） */
+.dswf-event-entries-dot {
+  width: 8px; /* dsw-raw 官方 StateDot 点径刻度 */
+  height: 8px; /* dsw-raw 官方 StateDot 点径刻度 */
+  border-radius: 50%; /* dsw-raw 圆点本体 */
+  background: var(--dsw-alias-business-primary);
+  display: inline-block;
+}
+
+.dswf-event-entries-content {
+  padding: 2px 8px 6px 32px; /* dsw-raw 官方行内刻度（图标16+gap 折叠行文本位缩进） */
+}
+
+/* 展开逐条列表（时间 + 场景章 + 任务标题 + 摘要） */
+.dswf-event-entries-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.dswf-event-entries-item {
+  display: flex;
+  gap: 8px; /* dsw-raw 官方行内刻度 */
+  align-items: baseline;
+  padding: 4px 0; /* dsw-raw 官方行内刻度（上下 4px 分行呼吸） */
+  font-size: var(--dsh-content-font-size-secondary); /* dsw-raw 官方 dsh-content 字号令牌 */
+  line-height: var(--dsh-content-font-line-height-secondary, 18px); /* dsw-raw 官方 13px 行高刻度 */
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1); /* dsw-raw hairline 分行刻度 */
+}
+
+.dswf-event-entries-item:last-child {
+  border-bottom: 0;
+}
+
+.dswf-event-entries-time {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 场景章（胶囊——族色描边/浅底） */
+.dswf-event-entries-badge {
+  flex: none;
+  padding: 0 8px; /* dsw-raw 官方胶囊内距刻度 */
+  border-radius: 999px; /* dsw-raw 圆点胶囊本体（原型 evt-kind 同形） */
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  line-height: 18px;
+}
+
+.dswf-event-entries-badge[data-tone='run'] {
+  color: var(--dsw-alias-business-primary);
+  border-color: var(--dsw-alias-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-business-primary) 12%, transparent); /* dsw-raw 浅底刻度（sidebar 径同族 color-mix） */
+}
+
+.dswf-event-entries-badge[data-tone='done'] {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+}
+
+.dswf-event-entries-badge[data-tone='blk'] {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+.dswf-event-entries-text {
+  min-width: 0;
+  color: var(--dsw-alias-label-primary, inherit);
+  overflow-wrap: anywhere;
+}
+
+.dswf-event-entries-text b {
+  font-weight: 500;
+}

@@ -1,10 +1,11 @@
-// worktree-branch-management 1.28 真机 e2e（bug 925c96d5）：每树一工作区 + attachSession——
-// 预铸会话获得官方工作区归属（composer 门控/模式/侧栏可见性的官方单源）。
-// 设计 A 重锚（用户裁决 2026-10-18）：
+// worktree-branch-management 1.28 真机 e2e：每树一工作区 + attachSession——树内会话获得
+// 官方工作区归属（composer 门控/模式/侧栏可见性的官方单源）。
+// 语义（binding-derivation 绑定推导制）：会话创建 = 官方 session.create({workspaceId})
+// 直通（hero chip 选中树即双发锚，发送首条消息时官方 reuseOrCreateBlank 落树）——
 //   · 点选跨分支行 → 点选时点确认框 → 确认后选中态切行（1.28 选中语义）；
-//   · sessionCreate 真机预铸（cwd = wt-a）→ 官方 workspace 快照（renderer domain/changed
-//     推送投影）出现「树路径工作区节点」，其 sessionIds 名单含预铸会话；
-//   · 侧栏会话行打开预铸会话 → composer 可发 + 首条消息落 wt-a cwd 分组目录。
+//   · 发送首条消息（cwd = wt-a）→ 官方 workspace 快照（renderer domain/changed
+//     推送投影）出现「树路径工作区节点」，其 sessionIds 名单非空；
+//   · 首条消息落 wt-a cwd 分组目录（cwd 即绑定）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；composer = [data-composer-input]。
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -169,7 +170,7 @@ function findWorktreeSessionDir(userData: string): string | undefined {
   return hit
 }
 
-test('1.28 UI：点选确认切行 + 预铸会话挂树工作区（sessionIds 名单可见）+ composer 可发落树内', async () => {
+test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名单可见）+ 首条消息落树内', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-28-wsmembership-'))
   const { dir: wsDir, wtDir } = makeGitRepo()
@@ -199,50 +200,7 @@ test('1.28 UI：点选确认切行 + 预铸会话挂树工作区（sessionIds �
       .poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000, message: '确认后选中态应切目标行（1.28 语义）' })
       .toContain('feat-a')
 
-    // ── 真机预铸：sessionCreate（cwd = wt-a）→ 挂靠会话唯一 ──
-    const raw = (await forgeRpc(page, 'forge:worktree/session-create', { worktreePath: wtDir })) as {
-      data?: { sessionId?: string }
-      sessionId?: string
-    } | null
-    const sessionId = raw?.data?.sessionId ?? raw?.sessionId
-    expect(typeof sessionId, `sessionCreate 直调未返回 sessionId：${JSON.stringify(raw)?.slice(0, 300)}`).toBe('string')
-
-    // ── AC 主断言：官方 workspace 投影出现 wt-a 树工作区节点，sessionIds 名单含预铸会话 ──
-    await expect
-      .poll(async () => {
-        const snapshot = await workspaceSnapshot(page, wtDir)
-        return snapshot.target?.sessionIds.includes(sessionId as string) ?? false
-      }, { timeout: 60_000, message: 'wt-a 树工作区节点 sessionIds 名单应含预铸会话（bug 925c96d5 修复面）' })
-      .toBe(true)
-    const membership = await workspaceSnapshot(page, wtDir)
-    await snap(page, 'membership-visible.png')
-
-    // ── composer 可发：侧栏打开预铸会话 → 首条消息落 wt-a cwd 分组目录 ──
-    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click().catch(async () => {
-      // 行锚漂移兜底：按文本兜底点首行含会话的行
-      await page.locator('[data-dswf-session]').first().click()
-    })
-    // 会话行激活判读（data-selected 翻转 = 官方 openSession 落位）
-    await expect
-      .poll(async () => {
-        const rows = page.locator('[data-dswf-session]')
-        const n = await rows.count()
-        for (let i = 0; i < n; i += 1) {
-          if ((await rows.nth(i).getAttribute('data-selected')) !== null) return true
-        }
-        return false
-      }, { timeout: 30_000, message: '会话行点击后应激活（data-selected）' })
-      .toBe(true)
-    await page
-      .waitForFunction(
-        () => {
-          const els = document.querySelectorAll<HTMLElement>('[data-composer-input]')
-          return els.length > 0 && [...els].every((el) => el.isContentEditable)
-        },
-        undefined,
-        { timeout: 60_000 },
-      )
-      .catch(() => undefined)
+    // ── 发送首条消息（官方 session.create({workspaceId}) 直通——cwd = wt-a 落树）──
     const MARKER = '1-28-workspace-membership-first-message'
     const composer = page.locator('[data-composer-input]').first()
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -279,7 +237,16 @@ test('1.28 UI：点选确认切行 + 预铸会话挂树工作区（sessionIds �
     }
     expect(sessionDir, '首条消息应落会话日志（composer 可发证据）').toBeDefined()
     expect(sessionDir, '会话存储目录应按选中 worktree cwd 分组（cwd = wt-a 根）').toContain('wt-a')
-    // 留痕：树工作区 sessionIds 名单（审计面）
+
+    // ── AC 主断言：官方 workspace 投影出现 wt-a 树工作区节点，sessionIds 名单非空 ──
+    await expect
+      .poll(async () => {
+        const snapshot = await workspaceSnapshot(page, wtDir)
+        return (snapshot.target?.sessionIds.length ?? 0) > 0
+      }, { timeout: 60_000, message: 'wt-a 树工作区节点 sessionIds 名单应非空（官方 attachSession 挂账）' })
+      .toBe(true)
+    const membership = await workspaceSnapshot(page, wtDir)
+    await snap(page, 'membership-visible.png')
     try {
       writeFileSync(
         join(EVIDENCE_DIR, 'workspace-membership.json'),

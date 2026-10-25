@@ -11,10 +11,20 @@ import { join } from 'node:path'
 export const DOGFOOD_PROVIDER = process.env.DSH_FORGE_DOGFOOD_PROVIDER ?? 'zai-coding-cn'
 export const DOGFOOD_MODEL = process.env.DSH_FORGE_DOGFOOD_MODEL ?? 'glm-5.3-flash'
 
+/** 真 home 凭据文档路径（bug eb0aacc8：播种单一源——e2e 凭据复制一律取真 home，
+ *  禁实例陈旧副本[dev 实例 dsh-home 快照可能旧格式无 refs/API key]） */
+export function trueHomeCredentialsPath(home: string = homedir()): string {
+  return join(home, '.dsh', '.credentials.yaml')
+}
+
+/** 凭据文档全文读取（缺源 fail-soft = undefined——留痕 skip 前置门） */
+export function readCredentialsAt(path: string): string | undefined {
+  return existsSync(path) ? readFileSync(path, 'utf8') : undefined
+}
+
 /** 真实凭据文件在场？（dogfood 前置门——缺席 = 留痕 skip，不伪造） */
 export function realCredentials(): string | undefined {
-  const candidate = join(homedir(), '.dsh', '.credentials.yaml')
-  return existsSync(candidate) ? readFileSync(candidate, 'utf8') : undefined
+  return readCredentialsAt(trueHomeCredentialsPath())
 }
 
 /** 播种隔离 dsh-home：.credentials.yaml（真实拷贝）——dsh profile 域凭据，产品不经手 */

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { randomBytes } from 'node:crypto'
 import { PSK_VERSION, ReplayWatermark, deriveCommKey, deriveDeviceKey, generateSigningKeyPair, openFrame, sigMaterial, verifyPayload } from './psk.js'
 import { PSK_SALT, createStreamSealer, type PskGateDeps, type PskPersistShape } from './psk-gate.js'
-import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents, type ForgeStreamEvent, type ForgeStreamRes } from './forge-stream.js'
+import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents, subscribeProjectionMirror, type ForgeStreamEvent, type ForgeStreamRes } from './forge-stream.js'
 
 describe('isForgeStreamRequest', () => {
   it('GET /remote/forge-stream 命中；POST/静态路径不命中', () => {
@@ -117,6 +117,40 @@ describe('subscribeOfficialEvents（官方事件订阅装配）', () => {
     )
     expect(() => off()).not.toThrow()
     expect(lines.length).toBeGreaterThan(0)
+  })
+})
+
+describe('subscribeProjectionMirror（投影变更帧镜像——loop-event-delivery 1.10）', () => {
+  it('onChanged → session/projection 帧 {sessionId, key, seq}；非会话/空 id 帧 fail-soft 丢弃', () => {
+    const seen: ForgeStreamEvent[] = []
+    let listener: ((session: unknown, key: string, value: unknown, seq: number) => void) | undefined
+    const off = subscribeProjectionMirror(
+      { onChanged: (l) => { listener = l; return () => {} } },
+      (event) => seen.push(event),
+      () => {},
+    )
+    listener?.({ id: 's-1' }, 'forge-dispatch-events', { entries: [], total: 0 }, 42)
+    expect(seen).toEqual([{ type: 'session/projection', payload: { sessionId: 's-1', key: 'forge-dispatch-events', seq: 42 }, at: seen[0]!.at }])
+    seen.length = 0
+    listener?.(null, 'k', undefined, 1)
+    listener?.({ id: '' }, 'k', undefined, 2)
+    listener?.({}, 'k', undefined, 3)
+    expect(seen).toEqual([])
+    off()
+  })
+
+  it('注册表缺席 / onChanged 面漂移 / 订阅抛错 = 零镜像 fail-soft + diag 留痕；退订恒不抛', () => {
+    const lines: string[] = []
+    expect(subscribeProjectionMirror(undefined, () => {}, (l) => lines.push(l))()).toBeUndefined()
+    expect(subscribeProjectionMirror({}, () => {}, (l) => lines.push(l))()).toBeUndefined()
+    expect(
+      subscribeProjectionMirror(
+        { onChanged: () => { throw new Error('effect rejected') } },
+        () => {},
+        (l) => lines.push(l),
+      )(),
+    ).toBeUndefined()
+    expect(lines.some((l) => l.includes('projection mirror'))).toBe(true)
   })
 })
 

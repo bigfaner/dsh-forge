@@ -12,7 +12,6 @@
 // 定位铁律：纯类型与纯常量，零逻辑零依赖。
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
-import type { SessionBindingMismatchEvent } from './worktree.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
 import type { ProjectService } from './project.js'
@@ -1118,21 +1117,15 @@ export interface TasksChangedEvent {
 }
 
 /**
- * 桥事件信封载荷变体（channel 判别——扩事件变体 = 契约面变更，随 FORGE_EVENT_CHANNELS 同步）。
- * SessionBindingMismatchEvent 域正本 = dto/worktree.ts（worktree 域自持）。
- */
-export type BridgeEventPayload = TasksChangedEvent | SessionBindingMismatchEvent
-
-/**
  * 桥事件信封（子 → 主单向推送：core 写动词闭包尾部 process.send 防护发送——direct 形态
  * IPC 缺席静默降级；run.ts child.on('message') event 分支 → DshHostHandle.onEvent →
  * main webContents.send → renderer 订阅重取，延迟上限 500ms）。
- * channel/payload 只读——扩消息变体 = 契约面变更。
+ * channel/payload 只读——扩消息变体 = 契约面变更（随 FORGE_EVENT_CHANNELS 同步）。
  */
 export interface BridgeEventMessage {
   readonly type: 'event'
   readonly channel: ForgeEventChannel
-  readonly payload: BridgeEventPayload
+  readonly payload: TasksChangedEvent
 }
 
 // ─────────────────────────── Interface 3（M3）：事件两层抽象 + 业务日志（产品自建总线） ───────────────────────────

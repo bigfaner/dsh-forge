@@ -52,9 +52,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
   // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
-  // session-binding-guarantee W2——能力缺席拒绝错误条
+  // session-binding-guarantee W2 / bug 4a30b193——创建入口显式拒绝错误条
   ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
-  // bug 4a30b193——重路由目标树不在场拒绝错误条
   ERR_WORKTREE_TARGET_ABSENT: 'error-bar',
 }
 

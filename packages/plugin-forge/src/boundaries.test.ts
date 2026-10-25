@@ -85,7 +85,7 @@ describe('AC1 插件依赖边界（构建图机械自证——3.4 修订：drive
       expect(offending, `${rel} 白名单外 @deepseek-ai import`).toEqual([])
       if (specifiers.length > 0) importers.push(rel)
     }
-    expect(importers.sort()).toEqual(['src/forge-loop-source.ts', 'src/progress/index.ts', 'src/projection/dispatch-loop.ts', 'src/spawn/in-process-driver.ts'])
+    expect(importers.sort()).toEqual(['src/forge-loop-source.ts', 'src/progress/index.ts', 'src/projection/dispatch-events.ts', 'src/projection/dispatch-loop.ts', 'src/spawn/in-process-driver.ts'])
   })
 
   it('类型面收窄（S7 续）：@deepseek-ai/dsh-session-projection 仅投影模块 type-only import + declare-module 合并——零运行时 import 语法', () => {

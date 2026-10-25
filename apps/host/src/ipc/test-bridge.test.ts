@@ -39,7 +39,6 @@ function fakeHost(services: Partial<DshHostServices>) {
         if (i >= 0) listeners.splice(i, 1)
       }
     },
-    onSessionBindingMismatch: (): (() => void) => () => {},
     emit: (payload: TasksChangedEvent): void => {
       for (const listener of listeners) listener(payload)
     },

@@ -274,7 +274,9 @@ export function projectEvent(event: WireEvent): Projection | null {
         verb: data.verb,
         status: data.status,
         taskKey: data.taskKey,
-        counts: data.counts,
+        // Root cause: 派发侧可选键缺席不写键（9344622d 起）——counts 直接透传会把 undefined
+        // 带进渲染面（Object.entries(undefined) TypeError 风暴，bug b6a5f2bc）；投影边界归一。
+        counts: data.counts ?? {},
       }
     }
     case 'session/title':

@@ -320,11 +320,8 @@ function tasksStub(options: { claim: ClaimTaskResult[]; lists?: TaskCard[] }) {
 function build(options: { claim: ClaimTaskResult[]; stats?: TaskStats[]; lists?: TaskCard[]; face?: LoopCheckpointsFace; seam?: ReturnType<typeof coreCheckpointsDbSeam> }) {
   const calls: Array<{ method: string; text: string }> = []
   const channel: NarrationChannel = {
-    notice: async (_sessionId, text) => {
-      calls.push({ method: 'notice', text })
-    },
-    followup: async (_sessionId, text) => {
-      calls.push({ method: 'followup', text })
+    send: async (_sessionId, text) => {
+      calls.push({ method: 'send', text })
     },
   }
   const narrator: Narrator = createNarrator({ channel })

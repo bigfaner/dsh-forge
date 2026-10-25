@@ -2,8 +2,9 @@
 // 常规 6（①启动×3/领取×2/完成）+ 异常 9（⑦-⑧b-⑩阻塞族/⑪⑫自动重试/⑬⑭终局受阻）+
 // 收口停止 3（⑮⑯⑰）。统一骨架（类型行/任务源/任务键/事实/剩余/详情/系统动作/下一步动作）
 // 经 skeleton 机械拼装（key: val 单冒号·值内零冒号·封闭两值·机制词零出现）。
-// 通道分流表（decisions #28）：①-⑫ 常规进行事件 = notice（inject·零模型回合）；
-// ⑬-⑰ 终局事件 = followup（完整骨架消息）。renderNarrative 为场景分发单入口——
+// 通道分流表（decisions #28）：①-⑨⑪⑫ 常规进行事件 = notice（inject·零模型回合）；
+// ⑩⑬-⑰ 终局事件 = followup（完整骨架消息——⑩ blocked-ask-user 无法自动处理需人工裁决，
+// 唤醒主 agent 分析）。renderNarrative 为场景分发单入口——
 // 循环驱动器按场景 id + 载荷取文，模板函数亦可直调。
 import {
   line,
@@ -191,7 +192,7 @@ export const SCENARIOS: Readonly<Record<ScenarioId, { readonly no: string; reado
   'blocked-auto-fixed': { no: '⑧', channel: 'notice', title: '阻塞（已自动分析并创建修复任务）' },
   'blocked-split': { no: '⑧b', channel: 'notice', title: '阻塞（已分割剩余范围）' },
   'blocked-wait-external': { no: '⑨', channel: 'notice', title: '阻塞（原因在其它任务源）' },
-  'blocked-ask-user': { no: '⑩', channel: 'notice', title: '阻塞（无法自动处理）' },
+  'blocked-ask-user': { no: '⑩', channel: 'followup', title: '阻塞（无法自动处理）' },
   'spawn-failed-retry': { no: '⑪', channel: 'notice', title: '启动子代理失败（自动重试）' },
   'worker-aborted-retry': { no: '⑫', channel: 'notice', title: '子代理异常退出（自动重新执行）' },
   'spawn-failed-halted': { no: '⑬', channel: 'followup', title: '连续失败——已停止' },
@@ -312,7 +313,7 @@ export function blockedWaitExternal(p: BlockedWaitExternalPayload): string {
   ].join('\n')
 }
 
-/** ⑩ 阻塞（无法自动处理——需要你决定；问询已另行发起）（notice） */
+/** ⑩ 阻塞（无法自动处理——需要你决定；问询已另行发起）（followup·终局） */
 export function blockedAskUser(p: BlockedAskUserPayload): string {
   return [
     typeLine('自动处理', '任务源', p.sourceSlug),

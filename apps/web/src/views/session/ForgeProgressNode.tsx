@@ -22,6 +22,13 @@ const VERB_LABELS: Record<string, string> = {
   'claim-resume': '恢复领取',
   settle: '结算',
   stop: '停止',
+  suspend: '挂起',
+  startup: '启动',
+  retry: '自动重试',
+  halt: '受阻停止',
+  timeout: '超时结束',
+  'finish-all': '全部完成',
+  loop: '循环',
 }
 
 /** 状态标签 */
@@ -32,12 +39,26 @@ const STATUS_LABELS: Record<string, string> = {
   interrupted: '已中断',
 }
 
-/** 折叠单行摘要（`动词 · 任务键/任务源 · 状态`——段缺省回退源标识） */
-export function forgeProgressSummary(d: { verb: string; status: string; taskKey?: string; sourceSlug: string }): string {
+/** 折叠单行摘要（`动词 · 任务标题/任务键/任务源 · 状态 · 备注摘要`——taskTitle 优先，
+ * 段缺省逐级回退源标识；note 截断为单行摘要防长文挤压） */
+export function forgeProgressSummary(d: {
+  verb: string
+  status: string
+  taskKey?: string
+  taskTitle?: string
+  note?: string
+  sourceSlug: string
+}): string {
   const verb = VERB_LABELS[d.verb] ?? d.verb
   const status = STATUS_LABELS[d.status] ?? d.status
-  const target = d.taskKey ?? d.sourceSlug
-  return `${verb} · ${target} · ${status}`
+  const target = d.taskTitle ?? d.taskKey ?? d.sourceSlug
+  const note = d.note !== undefined ? ` · ${noteDigest(d.note)}` : ''
+  return `${verb} · ${target} · ${status}${note}`
+}
+
+/** 备注摘要（超长截断——折叠行单行呈现） */
+function noteDigest(note: string): string {
+  return note.length > 24 ? `${note.slice(0, 24)}…` : note
 }
 
 /** 详情时间显示（本地时区完整日期时间 `YYYY-MM-DD HH:mm:ss`——2026-10-12「时间使用
@@ -89,10 +110,25 @@ export function ForgeProgressDetail({ data }: { data: ForgeProgressNodeData }) {
         <dt>任务源</dt>
         <dd>{data.sourceSlug}</dd>
       </div>
-      {data.taskKey !== undefined ? (
+      {data.taskKey !== undefined || data.taskTitle !== undefined ? (
         <div className="dswf-progress-node-detail-row">
           <dt>任务</dt>
-          <dd>{data.taskKey}</dd>
+          <dd>
+            {data.taskTitle ?? data.taskKey}
+            {data.taskTitle !== undefined && data.taskKey !== undefined ? `（${data.taskKey}）` : null}
+          </dd>
+        </div>
+      ) : null}
+      {data.scenario !== undefined ? (
+        <div className="dswf-progress-node-detail-row">
+          <dt>场景</dt>
+          <dd>{data.scenario}</dd>
+        </div>
+      ) : null}
+      {data.note !== undefined ? (
+        <div className="dswf-progress-node-detail-row">
+          <dt>备注</dt>
+          <dd>{data.note}</dd>
         </div>
       ) : null}
       <div className="dswf-progress-node-detail-row">

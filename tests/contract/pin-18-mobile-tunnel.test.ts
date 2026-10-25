@@ -60,10 +60,11 @@ describe('pin 18-1 tunnel/ 模块结构面（注入抽象——外部依赖零�
     }
   })
 
-  it('child.ts 隧道装配经 TunnelManager + createNodeTunnelDeps（真实实现只在装配面）', () => {
-    const src = hostSrc('boot/child.ts')
-    expect(src).toContain("from '../tunnel/index.js'")
-    expect(src).toMatch(/new TunnelManager\(\s*createNodeTunnelDeps\(\)/)
+  it('隧道装配段 = boot/tunnel-assembly.ts 单点（TunnelManager 构建 + 按需建立装配面；child.ts 经 assembleTunnel 消费——7059dfd3 boot 不后台自启）', () => {
+    const assembly = hostSrc('boot/tunnel-assembly.ts')
+    expect(assembly).toContain("from '../tunnel/index.js'")
+    expect(assembly).toMatch(/new TunnelManager\(/)
+    expect(hostSrc('boot/child.ts')).toContain("from './tunnel-assembly.js'")
   })
 })
 

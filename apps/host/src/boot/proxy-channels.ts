@@ -81,10 +81,10 @@ export interface ProxySessionFace {
   resolveAgent?(sessionId: string): Promise<unknown>
 }
 
-/** 官方 commands 消费切片（ctx.commands） */
+/** 官方 commands 消费切片（ctx.commands——execute 官方四参形：dsh-commands lib/index.js 核销，bug 4d02329a） */
 export interface ProxyCommandsFace {
   list?(request: unknown): Promise<unknown>
-  execute?(request: unknown): Promise<unknown>
+  execute?(agent: unknown, line: string, submittedAttachments: readonly unknown[], signal: AbortSignal): Promise<unknown>
 }
 
 /** 官方 userQuestions 消费切片（ask 提交缝——continued 题回灌） */
@@ -98,10 +98,10 @@ export interface ProxyUserQuestionsBridge {
   pendingFor(sessionId: string): readonly { readonly callId: string; readonly questions: unknown }[]
 }
 
-/** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门） */
+/** worktree 桥服务切片（grouped 归组数据源 + bug a1e087a6：hero 透传通道族正门——
+ *  建会话单门已退役：mobile 建会话走 forge:proxy/session-create（sessionController 直调）） */
 export interface ProxyWorktreeFace {
   list(request: { readonly projectRoot: string }): Promise<{ readonly isGit: boolean; readonly worktreeDir?: string; readonly entries: readonly WorktreeEntryDto[] }>
-  sessionCreate?(request: unknown): Promise<unknown>
 }
 
 /** agentPreset registry 消费切片（官方 remoteExportList roster + select 换预设） */
@@ -126,6 +126,8 @@ export interface ProxyChannelDeps {
   readonly disconnect?: () => void
   /** 已读游标持久 store（bug 1dd4b437——缺席 = 读空表/写 fail-soft） */
   readonly readCursors?: ReadCursorStore
+  /** diag 埋点缝（child.ts 接 emitDiag；缺席 = 纯 handler 静默——测试面免接线） */
+  readonly diagWarn?: (event: string, message: string) => void
 }
 
 /** 文件分块读常量（tunnel-psk §4.4——64KB/块） */
@@ -168,7 +170,7 @@ export const MODEL_CATALOG_CACHE_TTL_MS = 60_000
  *  与官方网关编组语义等价。特例保留：session-select-model（选档缓存失效）、session-history
  *  （page 拆包回手机窗口形）、session-model-catalog（TTL 缓存 + 探测失败回退旧目录）。
  *  bug 344dd76b 同族：编组分发 bind 控制器实例（官方方法体依赖 this 实例态）。 */
-function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelHandler> {
+function sessionChannelTable(session: ProxySessionFace, deps: ProxyChannelDeps): Record<string, ChannelHandler> {
   const bound = <F extends (...args: never[]) => unknown>(method: F | undefined, name: string): F =>
     requireMethod(method, name).bind(session) as F
   const dispatch = (method: string): ChannelHandler => {
@@ -180,11 +182,23 @@ function sessionChannelTable(session: ProxySessionFace): Record<string, ChannelH
     }
     return async (payload) => typertDispatch(descriptor, session, payload, new AbortController().signal)
   }
+  // binding-derivation 1.12：workspaceId 缺席硬门（host 零猜测——官方 create codec 对
+  // 缺 workspaceId 的载荷照单放行并静默落默认工作区，探针核销 typert codec parse({}) ok；
+  // mobile 客户端单侧兜底不算 host 保证）。缺席/空值 = 显式错误信封 + emitDiag warn，
+  // 不透传官方。Root cause: 官方 schema 未把 workspaceId 定为必填，host 代理层须单点收口。
+  const guardedCreate: ChannelHandler = async (payload) => {
+    const record = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>
+    if (typeof record['workspaceId'] !== 'string' || record['workspaceId'] === '') {
+      deps.diagWarn?.('session-bind', 'forge:proxy/session-create 载荷缺 workspaceId——拒绝透传官方 create（host 零猜测，防静默落默认工作区）')
+      throw new Error('forge:proxy/session-create：payload.workspaceId 缺席/非法（应为非空字符串）——拒绝透传官方 create')
+    }
+    return dispatch('create')(payload)
+  }
   // model-catalog 短缓存（读即触探官方 provider I/O——TTL 内复用；探测失败回退旧值不空手）
   let catalogCache: { at: number; data: unknown } | undefined
   return {
     [PROXY_CHANNELS.sessionList]: dispatch('list'),
-    [PROXY_CHANNELS.sessionCreate]: dispatch('create'),
+    [PROXY_CHANNELS.sessionCreate]: guardedCreate,
     [PROXY_CHANNELS.sessionPage]: dispatch('page'),
     [PROXY_CHANNELS.sessionPrompt]: dispatch('prompt'),
     [PROXY_CHANNELS.sessionCancel]: dispatch('cancel'),
@@ -252,6 +266,8 @@ export interface GroupedProjectRow {
   readonly name: string
   readonly wsPath: string
   readonly archived: boolean
+  /** 官方 workspace id（binding-derivation：mobile hero 建会话回退锚——ProjectSummary 自带） */
+  readonly workspaceId: string
   readonly worktrees: readonly GroupedWorktreeRow[]
   readonly sessions: readonly Record<string, unknown>[]
 }
@@ -333,6 +349,7 @@ export async function assembleGrouped(deps: Pick<ProxyChannelDeps, 'projects' | 
       name: project.name,
       wsPath: project.wsPath,
       archived: project.archived,
+      workspaceId: project.workspaceId,
       worktrees: entries.map((w): GroupedWorktreeRow => ({ path: w.path, branch: w.branch, worktreeName: w.worktreeName, isMain: w.isMain, present: w.present })),
       sessions: sortSessionsDesc(members),
     })
@@ -407,7 +424,7 @@ async function hashFile(handle: import('node:fs').promises.FileHandle): Promise<
 
 /** allowlist 全集（含既有 forge:remote/disconnect——pair-disconnected 对偶缝） */
 export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, ChannelHandler> {
-  const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session) : {}
+  const sessionTable = deps.session !== undefined ? sessionChannelTable(deps.session, deps) : {}
   return {
     ...sessionTable,
     // bug 017b0e5b：commands.list 官方实现 this.view(agent) 依赖实例态——同 344dd76b 一律 bind 后直调。
@@ -427,9 +444,27 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       if (agent === undefined) return list({})
       return list(agent)
     },
-    [PROXY_CHANNELS.commandsExecute]: (payload) => {
+    // bug 4d02329a：官方 dsh-commands 实签名 execute(agent, line, submittedAttachments, signal)
+    // （lib/index.js：首参 agent + line 独立传参，parseCommand(line) 失败 = admission miss
+    // 静默 undefined）——payload 首参直传 = line 形参恒 undefined，全部指令零执行零回执。
+    // 与 commandsList 同语义：sessionId 在场 → resolveAgent 解析活 agent；解析失败/载荷畸形
+    // = admission miss（undefined，不外抛）。signal 形参官方会读 .aborted——proxy HTTP 一次性
+    // 无取消面，给独立 controller 的未触发 signal 兑现形态。
+    [PROXY_CHANNELS.commandsExecute]: async (payload) => {
       const commands = requireService(deps.commands, 'commands')
-      return requireMethod(commands.execute, 'commands.execute').bind(commands)(asRecord(payload))
+      const execute = requireMethod(commands.execute, 'commands.execute').bind(commands)
+      const record = asRecord(payload)
+      const sessionId =
+        typeof record?.['sessionId'] === 'string' ? (record['sessionId'] as string) : undefined
+      const line = typeof record?.['line'] === 'string' ? (record['line'] as string) : undefined
+      const submittedAttachments = Array.isArray(record?.['submittedAttachments'])
+        ? (record['submittedAttachments'] as readonly unknown[])
+        : []
+      if (sessionId === undefined || line === undefined || deps.session?.resolveAgent === undefined) return undefined
+      const resolved = await requireMethod(deps.session.resolveAgent, 'session.resolveAgent').call(deps.session, sessionId)
+      const agent = (resolved as { agent?: unknown } | null)?.agent
+      if (agent === undefined) return undefined
+      return execute(agent, line, submittedAttachments, new AbortController().signal)
     },
     [PROXY_CHANNELS.userQuestionsAnswer]: async (payload) => {
       const record = asRecord(payload)
@@ -511,15 +546,12 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       }
       return result
     },
-    // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单与建会话
-    // 正门 not-found）。sessionCreate = 预铸采纳单门（host 建会话守卫内建），缺席缝 fail-soft。
+    // bug a1e087a6：hero 透传通道族注册（此前不在远程 allowlist——worktree 清单 not-found）。
+    // 建会话预铸单门（WORKTREE_CHANNELS.sessionCreate）已退役——mobile 建会话统一走
+    // PROXY_CHANNELS.sessionCreate（上方 dispatch('create')——sessionController 进内直调）。
     [WORKTREE_CHANNELS.list]: async (payload) => {
       const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
       return requireMethod(worktrees.list, 'worktree.list').bind(worktrees)(asRecord(payload) as never)
-    },
-    [WORKTREE_CHANNELS.sessionCreate]: async (payload) => {
-      const worktrees = requireService(deps.worktrees, 'gitWorktree 桥')
-      return requireMethod(worktrees.sessionCreate, 'worktree.sessionCreate').bind(worktrees)(asRecord(payload) as never)
     },
   }
 }

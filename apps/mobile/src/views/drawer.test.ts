@@ -135,6 +135,22 @@ describe('排序窗口（置顶 → running → updatedAt 降序；24h top10 可
     expect(pinned[0]?.sessionId).toBe('s-9')
     expect(pinned).toHaveLength(DRAWER_TOP_N + 1)
   })
+
+  it('bug 8eaba45e：当前会话豁免 24h 窗——刚打开的旧会话（窗外/非 running）不消失', () => {
+    const visible = orderVisible(rows, [], now, DRAWER_WINDOW_MS, DRAWER_TOP_N, ['old'])
+    expect(visible.map((row) => row.sessionId)).toContain('old')
+  })
+
+  it('bug 8eaba45e：当前会话豁免 top N 截断', () => {
+    const many = Array.from({ length: DRAWER_TOP_N + 3 }, (_, index) =>
+      session({ sessionId: `s-${index}`, updatedAt: now - index * 1000 }),
+    )
+    // 最旧的行恰是当前打开的会话——截断不得吞掉
+    const current = `s-${DRAWER_TOP_N + 2}`
+    const visible = orderVisible(many, [], now, DRAWER_WINDOW_MS, DRAWER_TOP_N, [current])
+    expect(visible.map((row) => row.sessionId)).toContain(current)
+    expect(visible).toHaveLength(DRAWER_TOP_N + 1)
+  })
 })
 
 describe('worker 筛选 + 检索 + 偏好 toggle', () => {

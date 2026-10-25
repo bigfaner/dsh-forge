@@ -704,9 +704,8 @@ export function asDiagMessage(message: unknown): BridgeDiagMessage | undefined {
 
 /**
  * 事件消息守卫（子 → 主单向推送分流——run.ts child.on('message') event 分支消费）。
- * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷按通道判别只读校验：
- * tasks-changed → { projectId }；session-binding-mismatch → { from? } 否 → { sessionId,
- * binding, displayed }（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
+ * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷只读校验
+ * { projectId }（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
  */
 export function asEventMessage(message: unknown): BridgeEventMessage | undefined {
   if (typeof message !== 'object' || message === null) return undefined
@@ -717,18 +716,7 @@ export function asEventMessage(message: unknown): BridgeEventMessage | undefined
   }
   const payload = m.payload
   if (typeof payload !== 'object' || payload === null) return undefined
-  const record = payload as Record<string, unknown>
-  if (m.channel === FORGE_EVENT_CHANNELS.sessionBindingMismatch) {
-    if (typeof record.sessionId !== 'string' || record.sessionId === '') return undefined
-    if (typeof record.displayed !== 'string' || record.displayed === '') return undefined
-    if (record.binding !== null && typeof record.binding !== 'string') return undefined
-    return {
-      type: 'event',
-      channel: m.channel as BridgeEventMessage['channel'],
-      payload: { sessionId: record.sessionId, binding: record.binding as string | null, displayed: record.displayed },
-    }
-  }
-  const projectId = record.projectId
+  const projectId = (payload as Record<string, unknown>).projectId
   if (typeof projectId !== 'string') return undefined
   return { type: 'event', channel: m.channel as BridgeEventMessage['channel'], payload: { projectId } }
 }

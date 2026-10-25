@@ -87,3 +87,8 @@
 - **API 与加密**：`docs/mobile/api-and-crypto.md`——RPC/推送接口清单（含示例载荷）、隧道域 PSK 加密解密全过程（密钥层级/信封/签名/防重放，配流程图）。
 - **核心流程**：`docs/mobile/core-flows.md`——建会话/发送、流式与 turn 折叠、ask_user_question 全链、消息元信息行、TODO 面板、文档卡、已读/未读的当前语义（含用户裁决日期锚）。
 - **验收**：`docs/mobile/acceptance.md`——质量门序列、生效路径判据（bundle 刷新 vs host 重启 vs 仅新数据）、六条验收规则与真机 WiFi 验收程序；规则判例见 `docs/mobile/acceptance-examples.md`。
+
+## 7. 可观测性
+
+- **各功能必须确保可观测性**：关键流程（成功里程碑与失败路径）必须经现有事件式日志系统输出诊断日志——host 侧统一走 `emitDiag(ctx, payload)`（`apps/host/src/telemetry/diag-events.ts`，官方 cordis `diag/log` 事件域，info/warn/error 三级），新增错误源 = 新增 emit 点、订阅侧零改动；不得以「异常被 fail-soft 吞掉」为由静默失败。
+- 埋点规范：payload 就地携带可得字段（`event` 类别、`message`、`projectId`/`sessionId`/`cwd`/`traceId`），`event` 命名用功能域前缀（如 `worktree-create`、`session-bind`）；提案/设计文档中随流程写明埋点面。
