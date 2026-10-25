@@ -120,7 +120,6 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
       await page.locator('button[aria-label="打开侧边栏"], button[title="打开侧边栏"]').first().click()
       await expect(page.locator(`[data-dswf-project="${project.id}"]`).first()).toBeVisible({ timeout: 15_000 })
     })
-    const projectRow = page.locator(`[data-dswf-project="${project.id}"]`).first()
     await page.locator('.dswf-sidebar-project-row').first().hover()
     await page.waitForTimeout(800)
     console.log('[diag] rowaction boxes:', await page.evaluate(() => JSON.stringify([...document.querySelectorAll('[data-dswf-project-action]')].map((b) => { const r = b.getBoundingClientRect(); const cs = getComputedStyle(b as HTMLElement); return { action: b.getAttribute('data-dswf-project-action'), x: r.x, y: r.y, w: r.width, display: cs.display, opacity: cs.opacity, visibility: cs.visibility } }))))
