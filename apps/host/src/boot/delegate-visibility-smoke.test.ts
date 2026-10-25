@@ -6,7 +6,13 @@
 //     child.ts:1303-1305 toolNamesOf——全局单实例注册面活体）。
 //   · HR deny 守卫清洁生效：diag 窗口零「restrict deny 失败 / restrict 缺席」warn
 //     （denyTools 落 preset scope 官方 restrict 正门；源码级核销 + 官方机械实跑 =
-//     forge 任务日志 expert-squad/1.46/004-restrict-pin/pin-report.md + probe3）。
+//     forge 任务日志 expert-squad/1.46/004-restrict-pin/pin-report.md + probe3，
+//     工作区日志区）。
+//   · HR 侧正向断言（HR 组合 toolNames 不含 delegate_expert）降级留档：boot ready
+//     面只投影全局视图（toolNamesOf 全局 schemas），HR 组合 toolNames 需 preset 域
+//     真会话组装才可达——boot 层不可达不硬造；三节合成口径
+//     （本断言 + deny 部署面 + 官方 restrict 语义链）承载，指针见
+//     hr.patch.yml 头注与 walkthrough/phase4-hr-visibility 记录。
 // 环境前置（fail-loud，同 boot-spawn-smoke 形制）：dist/boot/child.js（tsc -b 产物）、
 // profile.dev @dsh-forge/expert-squad 链接、electron 二进制。
 // 隔离：独立 userData/tasksHome/DSH_HOME（临时目录）；独占端口——不持应用单实例锁。
