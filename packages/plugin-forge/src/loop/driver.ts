@@ -319,6 +319,9 @@ export interface LoopCheckpointsFace {
 export const RETRO_PROPOSAL_AC =
   '已注册改进提案（parent_proposal_id 指向本提案）并在结算记录 ac_evidence 登记派生提案 id 清单——未注册不得 success'
 
+/** 复盘任务终态集（幂等在场判定口径——终态复盘任务不再拦派生，非终态 = 窄窗口现场） */
+const RETRO_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'skipped', 'rejected'])
+
 /** 飞轮硬指标（标记快照直算——提案「派生硬指标」节口径） */
 export interface FlywheelMetrics {
   /** 一次通过率 = first-pass 时任务数 / merged（缺席 = 当前帧）时任务数 */
@@ -401,7 +404,9 @@ async function headHashOf(loop: ActiveLoop): Promise<string | undefined> {
  * first-pass 收口（机械③——no-task done 分流处调用，评审建议1派生锚收口）：标记缺席时先派生
  * 复盘任务、addTask 成功才落 first-pass-complete 标记（append-only 域，标记先行曾致派生
  * fail-soft 失败即复盘任务永久丢失）；addTask 失败不落标记，幂等窗口留给下一轮 no-task done
- * 重试。标记已在校（list 前置判读）= 已锚定 → 不重派不重落，零行为变化。
+ * 重试。标记已在校（list 前置判读）= 已锚定 → 不重派不重落，零行为变化。落标记失败窗口由
+ * 在场判定兜底（hasOpenRetroTask——非终态同源复盘任务在场即跳过派生只补标记，addTask 无幂等键，
+ * 重派将致复盘任务重复入池）。
  * 返回 true = 本轮新落标记且复盘任务已入池（续领下一轮）。
  */
 async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
@@ -418,12 +423,35 @@ async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
     // 行尚未落库——直接 list 读不到 first 帧致 flywheelMetricsOf 恒兜底。派生时点独立取当前池
     // 快照合成 first 帧（与标记快照同口径），不依赖标记行先行。
     const pendingSnapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
-    if (!(await deriveRetroTask(loop, pendingSnapshots))) return false // 派生失败不落标记——下轮重试
+    if (!(await hasOpenRetroTask(loop))) {
+      // 幂等防护（评审建议2）：addTask 成功后落标记失败的窄窗口——同源 doc 复盘任务已在池
+      // （非终态）即不重派，仅补落标记；读面故障 = fail-soft 视为缺席，退化回派生重试现状。
+      if (!(await deriveRetroTask(loop, pendingSnapshots))) return false // 派生失败不落标记——下轮重试
+    }
     return await ensureFirstPassMark(loop)
   } catch (cause) {
     console.warn(
       `forge loop first-pass closure failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
+    return false
+  }
+}
+
+/**
+ * 同源 doc 复盘任务在场判定（幂等防护——first-pass 派生前调用）：容器池内已有同 slug、
+ * 同源、同标题、type=doc 的非终态复盘任务（completed/skipped/rejected 之外）= 曾派生且
+ * 标记落库失败的窄窗口现场，重派将致复盘任务重复入池（addTask 无幂等键）。读面故障 =
+ * fail-soft 返回 false（视为缺席，保持派生重试现状）。
+ */
+async function hasOpenRetroTask(loop: ActiveLoop): Promise<boolean> {
+  const title = `first-pass 复盘：${loop.record.source.slug}`
+  try {
+    const cards = await loop.deps.tasks.listTasks({
+      projectId: loop.scope.projectId,
+      source: { kind: loop.record.source.kind, slug: loop.record.source.slug },
+    })
+    return cards.some((c) => c.taskType === 'doc' && c.title === title && !RETRO_TERMINAL_TASK_STATUSES.has(c.taskStatus))
+  } catch {
     return false
   }
 }

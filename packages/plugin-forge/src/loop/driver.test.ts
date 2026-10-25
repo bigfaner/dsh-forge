@@ -282,6 +282,8 @@ function build(options: {
   commitLanding?: CommitLandingVerifier
   /** 机械③ checkpoints 域桩（初始行集——ensure 追加进行集模拟域侧幂等） */
   checkpointRows?: Array<{ mark: string; tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }>
+  /** 机械③ 标记落库故障注入（前 N 次 ensureCheckpoint 抛错——append 失败窄窗口模拟） */
+  ensureFailures?: number
   /** 机械③ 容器 → 提案 id 解析桩 */
   resolveProposalId?: () => Promise<string | undefined>
   /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
@@ -318,8 +320,13 @@ function build(options: {
   // 机械③ checkpoints 域桩（ensure 追加进行集——域侧幂等语义同构：行集已含 mark = no-op）
   const cpEnsures: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown; appended: boolean }> = []
   const cpRows = [...(options.checkpointRows ?? [])]
+  let ensureFails = options.ensureFailures ?? 0
   const checkpoints = options.checkpointRows === undefined ? undefined : {
     ensureCheckpoint: async (input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => {
+      if (ensureFails > 0) {
+        ensureFails -= 1
+        throw new Error('checkpoint append failed')
+      }
       if (cpRows.some((r) => r.mark === input.mark)) {
         cpEnsures.push({ ...input, appended: false })
         return { appended: false as const }
@@ -789,6 +796,49 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、复盘不重派（addTask 仍 1）
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.h.addTaskInputs).toHaveLength(1)
+  })
+
+  it('幂等防护（评审建议2）：addTask 成功后落标记失败——复盘任务已在场时二次进入不重复派生，仅补落标记', async () => {
+    const built = build({
+      claim: [NO_TASK, NO_TASK, claimed('9.1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ completed: 1 }), // 轮1 claim 池读
+        statsOf({ completed: 1 }), // 轮1 派生时点池快照读（在场判定前置 computeWaveSnapshot）
+        statsOf({ completed: 1 }), // 轮1 静默窗池读①（终态 → 窗内再询）
+        statsOf({ pending: 1 }), // 轮1 静默窗池读②（复盘任务 pending → 续派）
+        statsOf({ completed: 1 }), // 轮2 claim 池读
+        statsOf({ completed: 1 }), // 轮2 标记快照计数读（补落标记）
+        statsOf({ in_progress: 1 }), // 复盘任务领取通知读
+        statsOf({ in_progress: 1 }), // 复盘任务结算核池读
+        statsOf({ completed: 1 }), // review-wave 快照计数读
+        statsOf({ completed: 2 }), // 轮3 no-task 池读（标记已在校）
+        statsOf({ completed: 2 }), // 静默窗池读
+      ],
+      checkpointRows: [],
+      ensureFailures: 1,
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-1',
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    // 窄窗口现场：上一轮派生成功（addTask 已入池）、落标记失败——池中留有 pending 复盘任务
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-9.1',
+      slug: 'feat-x',
+      localId: '9.1',
+      title: 'first-pass 复盘：feat-x',
+      taskType: 'doc',
+      taskStatus: 'pending',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 二次进入：在场 doc 复盘任务即不重派（addTask 零调用）——幂等窗口消除
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    // 失败留待重试语义保持：标记下轮补落恰一次（首次 ensure 抛错、二次 appended）
+    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1' })
   })
 
   it('复盘指标真值（bug 9c350e5f）：先派生后落标记窗口内以派生时点池快照合成 first 帧——fixDensity 不恒兜底', async () => {
