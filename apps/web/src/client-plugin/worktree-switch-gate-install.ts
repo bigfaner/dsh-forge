@@ -34,13 +34,15 @@ export function installWorktreeSwitchGate(options: WorktreeSwitchGateInstallOpti
     warn('[dswf-client] 切换闸 window 锚缺席（共享模块未装载）——composer block 门不安装')
     return
   }
-  const blocksFace = (): { set?: (sessionId: string, block: { reason: string } | undefined) => void } | undefined => {
+  const blocksFace = (): { set(sessionId: string, block: { reason: string } | undefined): void } | undefined => {
     const conversation = (
       options.clientCtx as { reflect?: { get(name: string, strict?: boolean): unknown } }
     )?.reflect?.get('conversation', false)
-    const blocks = (conversation as { blocks?: unknown } | undefined)?.blocks
-    return typeof (blocks as { set?: unknown } | undefined)?.set === 'function'
-      ? (blocks as { set: (sessionId: string, block: { reason: string } | undefined) => void })
+    const blocks = (conversation as { blocks?: unknown } | undefined)?.blocks as
+      | { set?: (sessionId: string, block: { reason: string } | undefined) => void }
+      | undefined
+    return typeof blocks?.set === 'function'
+      ? (blocks as { set(sessionId: string, block: { reason: string } | undefined): void })
       : undefined
   }
   const currentSessionId = (): string | undefined => {
