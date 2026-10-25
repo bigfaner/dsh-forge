@@ -6,6 +6,8 @@
 // worker 首条用户消息；toolFilter = 子作用域 tools.restrict（driver 在 child 创建窗口
 // 施加——可见性与执行同拒）；agentOptions 覆盖父继承；descriptor = 一次性子描述符
 // （version 3 / provider 'forge-dispatch'——绕过 ctx.subagents 服务直驱共享驱动器）。
+// 子代理发布后向父会话日志追加 subagent/catalog 目录事实（官方 establishCatalogChild
+// 同式——ctx.subagents 职责由本缝承担，chat-view 子智能体 chip 由此可见 forge worker）。
 // 动态 import：driver 缺席的环境（极简 profile）以 ERR_SPAWN_FAILED 形态失败而非拖垮
 // 插件加载（五 tool 面不受影响）。
 // 进程树守卫（dispatch-loop-hardening 改进 4）：per-worker Job Object 整树回收——
@@ -23,6 +25,38 @@ const SUBAGENT_DESCRIPTOR_VERSION = 3
 
 /** 子会话描述符 provider 名（事件/日志面可判「forge 派发建立的子会话」） */
 const FORGE_DISPATCH_PROVIDER = 'forge-dispatch'
+
+/** 上游 catalog 事件格式版本（SUBAGENT_CATALOG_VERSION——0.2.0-rc.2 值 0；驱动器类型面不透出常量，
+ *  升级上游 = 此处同步（精确 pin 0.2.0-rc.2，升级即契约面变更） */
+const SUBAGENT_CATALOG_VERSION = 0
+
+/**
+ * 向父会话持久日志追加子代理目录事实（官方同式——establishCatalogChild one-shot 分支的
+ * 缝内等价：{version, childId, childCreatedAt, mode: 'one-shot', label?}）。官方 ctx.subagents
+ * 运行时在子代理发布后承担此追加；forge 派发绕过 ctx.subagents 直驱共享驱动器，故由本缝
+ * 承担——追加后父会话 subagentCatalog 投影即含本 worker（chat-view 子智能体 chip 可见）。
+ * 单写者合规：追加发生在父会话自身工具调用上下文、写自身日志（与官方运行时同位）。
+ * 追加失败 = 官方同语义处置：dispose 该 run、错误上抛（调用方收到 catalog 错误，
+ * 即使 dispose 也失败——dispose 错误就地吞掉不遮蔽主因）。
+ */
+function appendCatalogChild(parent: unknown, run: { readonly id: string; readonly localAgent?: unknown }, label: string | undefined): void {
+  const session = (parent as { session?: unknown } | undefined)?.session
+  if (typeof session !== 'object' || session === null) {
+    throw new Error('[spawn-catalog] 父会话不可读——无法追加 subagent/catalog 目录事实')
+  }
+  const header = (run.localAgent as { session?: { header?: unknown } } | undefined)?.session?.header
+  const childCreatedAt = (header as { createdAt?: unknown } | undefined)?.createdAt
+  if (typeof childCreatedAt !== 'number') {
+    throw new Error(`[spawn-catalog] 子会话 header.createdAt 不可读——目录事实缺 childCreatedAt（还原拒绝面），拒绝追加`)
+  }
+  ;(session as { append(type: string, data: unknown): void }).append('subagent/catalog', {
+    version: SUBAGENT_CATALOG_VERSION,
+    childId: run.id,
+    childCreatedAt,
+    mode: 'one-shot',
+    ...(label !== undefined ? { label } : {}),
+  })
+}
 
 /** dispatchPrompt 全文 text 块（worker 首条用户消息——官方 ContentBlock text 子面） */
 function textPrompt(prompt: string): unknown {
@@ -126,6 +160,17 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
         {},
       )
       child = run.localAgent // 驱动器发布的子代理（abort 转发的 cancel 直调目标）
+      // 官方同式：发布后落父会话目录；追加失败 = dispose 该 run 后错误上抛（dispose 失败不遮蔽主因）
+      try {
+        appendCatalogChild(request.parent, run, request.label)
+      } catch (error) {
+        try {
+          await run.dispose()
+        } catch {
+          // dispose 失败就地吞掉——catalog 错误照旧上抛（官方同语义）
+        }
+        throw error
+      }
       if (cancelled) forward() // 创建窗口内已 abort 的补投（子代理现身后立即取消）
       const handle: SpawnWorkerHandle = {
         workerSessionId: run.id,

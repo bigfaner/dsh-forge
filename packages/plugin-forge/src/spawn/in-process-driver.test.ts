@@ -33,10 +33,11 @@ function guardSpy() {
 
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-/** 官方 SubagentRun 桩（真形状子集——id/result/dispose） */
+/** 官方 SubagentRun 桩（真形状子集——id/localAgent（子 session header）/result/dispose） */
 function runStub(over: Partial<{ id: string; stopReason: string; output: { type: 'text'; text: string }[] }> = {}) {
   return {
     id: over.id ?? 'worker-session-7',
+    localAgent: { session: { header: { id: over.id ?? 'worker-session-7', createdAt: 1_760_000_000_000 } } },
     result: Promise.resolve({
       output: over.output ?? [{ type: 'text', text: 'worker final answer' }],
       stopReason: over.stopReason ?? 'completed',
@@ -45,10 +46,15 @@ function runStub(over: Partial<{ id: string; stopReason: string; output: { type:
   }
 }
 
+/** 派发父会话桩（session.append 可断言——catalog 目录事实落点） */
+function parentStub(over: Record<string, unknown> = {}) {
+  return { session: { id: 'dispatch-1', append: vi.fn(), ...over } }
+}
+
 describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', () => {
   it('请求映射：prompt 文本块 / parent+signal 透传 / toolFilter deny 展开 / agentOptions 携带 / one-shot descriptor v3', async () => {
     const spawn = createInProcessDriverSpawn()
-    const parent = { session: { id: 'dispatch-1' } }
+    const parent = parentStub()
     const signal = new AbortController().signal
     startInProcessRun.mockResolvedValueOnce(runStub())
     const handle = await spawn({
@@ -83,7 +89,7 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     startInProcessRun.mockResolvedValueOnce(runStub())
     await spawn({
       prompt: 'P',
-      parent: {},
+      parent: parentStub(),
       signal: new AbortController().signal,
       toolFilter: { deny: [] },
       label: 'a/1',
@@ -97,7 +103,7 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     startInProcessRun.mockResolvedValueOnce(runStub())
     await spawn({
       prompt: 'P',
-      parent: {},
+      parent: parentStub(),
       signal: new AbortController().signal,
       toolFilter: { deny: [] },
       persona: '你是质量门守卫：只认全绿证据。',
@@ -105,7 +111,7 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     const [request] = startInProcessRun.mock.calls[0] as [Record<string, unknown>]
     expect(request.persona).toBe('你是质量门守卫：只认全绿证据。')
     startInProcessRun.mockResolvedValueOnce(runStub())
-    await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    await spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] } })
     const [request2] = startInProcessRun.mock.calls[1] as [Record<string, unknown>]
     expect('persona' in request2).toBe(false)
   })
@@ -121,7 +127,7 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
       ],
     })
     startInProcessRun.mockResolvedValueOnce(run)
-    const handle = await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    const handle = await spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] } })
     const result = await handle.result
     expect(result).toEqual({ stopReason: 'max-tokens', output: 'part one\npart two' })
     await handle.dispose()
@@ -135,12 +141,13 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     // 同款报错原文）：abort 后转发直调 localAgent.cancel，抛错必须被缝内就地吞掉
     const run = runStub()
     ;(run as { localAgent?: unknown }).localAgent = {
+      session: { header: { id: 'worker-session-7', createdAt: 1_760_000_000_000 } },
       cancel: () => {
         throw new Error(`agent "182ae054" cannot read inbox state: its projection registration is not active`)
       },
     }
     startInProcessRun.mockResolvedValueOnce(run)
-    await spawn({ prompt: 'P', parent: {}, signal: upstream.signal, toolFilter: { deny: [] } })
+    await spawn({ prompt: 'P', parent: parentStub(), signal: upstream.signal, toolFilter: { deny: [] } })
     expect(() => upstream.abort('refresh')).not.toThrow()
     // abort 已送达（cancel 被调用过且抛错被吞）——再 abort 幂等无操作
     expect(() => upstream.abort('refresh-again')).not.toThrow()
@@ -161,11 +168,11 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
           settle = resolve
         }),
         dispose: async () => {},
-        localAgent: { cancel },
+        localAgent: { session: { header: { id: 'worker-session-7', createdAt: 1_760_000_000_000 } }, cancel },
       }
       return run
     })
-    const handle = await spawn({ prompt: 'P', parent: {}, signal: upstream.signal, toolFilter: { deny: [] } })
+    const handle = await spawn({ prompt: 'P', parent: parentStub(), signal: upstream.signal, toolFilter: { deny: [] } })
     expect(driverSignal).toBeDefined()
     expect(driverSignal!.aborted).toBe(false)
     upstream.abort()
@@ -180,7 +187,7 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     const spawn = createInProcessDriverSpawn()
     startInProcessRun.mockRejectedValueOnce(new Error('agent factory rejected'))
     await expect(
-      spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } }),
+      spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] } }),
     ).rejects.toThrow(/agent factory rejected/)
   })
 })
@@ -193,7 +200,7 @@ describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 workt
     startInProcessRun.mockResolvedValueOnce(runStub())
     const handle = await spawn({
       prompt: 'P',
-      parent: { session: { id: 'owner-1', header: { cwd: PIN } } },
+      parent: parentStub({ header: { cwd: PIN } }),
       signal: new AbortController().signal,
       toolFilter: { deny: [] },
       workspaceCwd: PIN.replaceAll('\\', '/'),
@@ -208,7 +215,7 @@ describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 workt
     await expect(
       spawn({
         prompt: 'P',
-        parent: { session: { id: 'owner-1', header: { cwd: 'Z:\\project\\dsh\\dsh-forge' } } },
+        parent: parentStub({ header: { cwd: 'Z:\\project\\dsh\\dsh-forge' } }),
         signal: new AbortController().signal,
         toolFilter: { deny: [] },
         workspaceCwd: PIN,
@@ -220,7 +227,7 @@ describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 workt
   it('parent 会话 cwd 不可读 → spawn 拒绝（不依赖 spawn 时点环境 cwd 的判据面）', async () => {
     const spawn = createInProcessDriverSpawn()
     await expect(
-      spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] }, workspaceCwd: PIN }),
+      spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] }, workspaceCwd: PIN }),
     ).rejects.toThrow(/\[spawn-cwd-pin\].*不可读/)
     expect(startInProcessRun).not.toHaveBeenCalled()
   })
@@ -228,13 +235,13 @@ describe('cwd 钉定核销（1.14 判例修复——worker 会话未钉定 workt
   it('workspaceCwd 缺席（工具壳径）= 不核销，行为零变化', async () => {
     const spawn = createInProcessDriverSpawn()
     startInProcessRun.mockResolvedValueOnce(runStub())
-    const handle = await spawn({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+    const handle = await spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] } })
     expect(handle.workerSessionId).toBe('worker-session-7')
   })
 })
 
 describe('进程树守卫接线（改进 4——清理路径全部终态可达）', () => {
-  const requestOf = () => ({ prompt: 'P', parent: {}, signal: new AbortController().signal, toolFilter: { deny: [] } })
+  const requestOf = () => ({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: { deny: [] } })
 
   it('result 终态（completed）→ reclaim 可达', async () => {
     const { reclaims, factory } = guardSpy()
@@ -275,5 +282,64 @@ describe('进程树守卫接线（改进 4——清理路径全部终态可达�
     await expect(spawn(requestOf())).rejects.toThrow(/agent factory rejected/)
     await flush()
     expect(reclaims.length).toBe(1)
+  })
+})
+
+describe('subagent/catalog 目录事实（官方 establishCatalogChild 同式——父会话日志落点）', () => {
+  const requestOf = (parent: unknown) => ({ prompt: 'P', parent, signal: new AbortController().signal, toolFilter: { deny: [] } })
+
+  it('spawn 发布后向父会话追加 one-shot catalog 事件（version 0 / childId / childCreatedAt / label）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    const parent = parentStub()
+    startInProcessRun.mockResolvedValueOnce(runStub({ id: 'worker-9' }))
+    await spawn(requestOf(parent))
+    expect(parent.session.append).toHaveBeenCalledTimes(1)
+    expect(parent.session.append).toHaveBeenCalledWith('subagent/catalog', {
+      version: 0,
+      childId: 'worker-9',
+      childCreatedAt: 1_760_000_000_000,
+      mode: 'one-shot',
+      // label 缺席 = 不携带键（官方 one-shot 分支同式）
+    })
+  })
+
+  it('label 在场 = 事件携带 label 键', async () => {
+    const spawn = createInProcessDriverSpawn()
+    const parent = parentStub()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    await spawn({ ...requestOf(parent), label: 'feat-x/2.5' })
+    expect(parent.session.append).toHaveBeenCalledWith('subagent/catalog', {
+      version: 0,
+      childId: 'worker-session-7',
+      childCreatedAt: 1_760_000_000_000,
+      mode: 'one-shot',
+      label: 'feat-x/2.5',
+    })
+  })
+
+  it('追加失败 = 官方同语义处置：dispose 该 run + reclaim + spawn 拒绝（catalog 错误上抛）', async () => {
+    const { reclaims, factory } = guardSpy()
+    const spawn = createInProcessDriverSpawn({ treeGuard: factory })
+    const parent = parentStub()
+    parent.session.append.mockImplementation(() => {
+      throw new Error('session log sealed')
+    })
+    const run = runStub()
+    startInProcessRun.mockResolvedValueOnce(run)
+    await expect(spawn(requestOf(parent))).rejects.toThrow(/session log sealed/)
+    expect(run.dispose).toHaveBeenCalledTimes(1)
+    await flush()
+    expect(reclaims.length).toBe(1)
+  })
+
+  it('子会话 header.createdAt 不可读 = 拒绝追加（目录事实缺 childCreatedAt 会拒还原——不落半截事实）', async () => {
+    const spawn = createInProcessDriverSpawn()
+    const parent = parentStub()
+    const run = runStub()
+    ;(run.localAgent as { session: { header: unknown } }).session = { header: {} }
+    startInProcessRun.mockResolvedValueOnce(run)
+    await expect(spawn(requestOf(parent))).rejects.toThrow(/\[spawn-catalog\].*childCreatedAt/)
+    expect(parent.session.append).not.toHaveBeenCalled()
+    expect(run.dispose).toHaveBeenCalledTimes(1)
   })
 })
