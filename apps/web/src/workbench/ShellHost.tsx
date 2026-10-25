@@ -34,6 +34,7 @@ import {
   centerViewOf,
   nextLastReadyCount,
   rightbarViewPlan,
+  sessionPanelActive,
   sessionZonePhase,
 } from './panel-model.js'
 import type { ForgeOverviewContext, WorkbenchBridge } from './workbench-bridge.js'
@@ -343,13 +344,14 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
         <PanelInfoAnchor hook={props.usePanelInfo} onChange={setActivePanelId} />
       ) : null}
       {/* 悬浮进度流面板（loop-event-delivery 1.8——派发任务悬浮面板的继任面，替代不并存）：
-          会话视图 + 主视图会话锚 + 账本源齐备时挂载；数据 = 账本行
+          会话面板在位（activePanelId null——插件页等全局面板即离位隐藏）+ 主视图会话锚 +
+          账本源齐备时挂载；数据 = 账本行
           projectionValues['forge-dispatch-events'] 窄读 + store subscribe 实时刷新（零新增
           读取 API）；行 = 任务轨形态（1.16——任务键时间线每任务最新态一行）；行点击 = 载荷
           workerSessionId 开 worker 子会话（缺席行 resolveWorkerSession 父反查兜底，落空
           非交互；树零联动）；可见性随所属会话（非循环会话/切走 = 投影判读隐藏）；key =
           主视图会话（切会话整体重置折叠与拖移本地态） */}
-      {view === 'session' && mainSessionId !== null && props.sessions !== undefined ? (
+      {sessionPanelActive(activePanelId) && mainSessionId !== null && props.sessions !== undefined ? (
         <DispatchEventsPanel
           key={mainSessionId}
           sessionId={mainSessionId}
