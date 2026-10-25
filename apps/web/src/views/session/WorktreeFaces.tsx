@@ -14,7 +14,7 @@
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { selectedTreeDisplay } from '../../client-plugin/selected-tree-display.js'
+import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
 import {
   BranchDriftNotice,
   CreateWorktreeDialog,
@@ -135,10 +135,11 @@ export function ForgeHeroWorktreeMount({
   // host 态的 UI 镜像，挂载回填经 forge:worktree/selected 读 host，sessionStorage 记忆退役；
   // bug 05c712a4 起本地投影升格为创建路由的显示真源镜像——host 记忆仅余显示恢复职责）
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(undefined)
-  // 显示真源镜像（selected-tree-display，模块单例）：本地投影每次变化即同步——创建路由
-  // （start-session-wrap 无参径）读此态而非 host 选中记忆（内存态易分叉，bug 05c712a4）
+  // 显示真源镜像（window 全局锚，KEY 契约 = state/selected-tree-window.ts）：本地投影
+  // 每次变化即同步——创建路由（start-session-wrap 无参径）读此态而非 host 选中记忆
+  // （内存态易分叉，bug 05c712a4）
   useEffect(() => {
-    selectedTreeDisplay.set(localSelectedPath)
+    setSelectedTreeDisplay(localSelectedPath)
   }, [localSelectedPath])
   // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：建会话通道创建时点
   // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
