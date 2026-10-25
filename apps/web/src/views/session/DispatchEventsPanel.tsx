@@ -194,8 +194,8 @@ export interface DispatchAggregatedRow {
 /**
  * 行聚合（1.16 用户裁决——任务键时间线口径）：每任务最新态一行（后写覆盖 = 最新态，
  * 组内时序排序），无任务键的循环级事件各占一行；池级 pending 快照（pool/pending）不进
- * 时间线——只承载统计条「待执行」计数。排序 = 执行中行置顶（组内最新优先——打开面板
- * 首屏即见在跑任务），其余行保持时序。同任务键首事件时戳随行携带（启动时间面）。
+ * 时间线——只承载统计条「待执行」计数。排序 = 纯时序（执行中行不置顶——可见性由滚动
+ * 跟随效应承担）。同任务键首事件时戳随行携带（启动时间面）。
  */
 export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]): readonly DispatchAggregatedRow[] {
   const latest = new Map<string, { entry: DispatchEventEntry; startAt: number }>()
@@ -209,11 +209,7 @@ export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]
     const held = latest.get(entry.taskKey)
     latest.set(entry.taskKey, { entry, startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at) })
   }
-  return [...latest.values(), ...singles].sort((a, b) => {
-    const rankA = a.entry.status === 'running' ? 0 : 1
-    const rankB = b.entry.status === 'running' ? 0 : 1
-    return rankA !== rankB ? rankA - rankB : a.entry.at - b.entry.at
-  })
+  return [...latest.values(), ...singles].sort((a, b) => a.entry.at - b.entry.at)
 }
 
 /** 行聚合（条目视图——detail 渲染面走 aggregateDispatchRowItems 携启动时间） */
@@ -461,6 +457,7 @@ function DispatchEventRowView({
         className={`dswf-dep-row dswf-dep-${tone}`}
         data-dswf-dep-row={session}
         data-dswf-dep-status={entry.status}
+        {...(entry.status === 'running' ? { 'data-dswf-dep-running': '' } : {})}
         {...(open !== undefined ? { role: 'button', tabIndex: 0, onClick: open } : {})}
         onKeyDown={
           open === undefined
@@ -509,8 +506,8 @@ export function dispatchFollowKeyOf(rows: readonly DispatchAggregatedRow[]): str
 }
 
 /**
- * 任务轨滚动列表：执行中行置顶 + 跟随效应——执行中任务变化时回滚到顶（首屏即见在跑
- * 任务；仅跟随键变化触发，不劫持用户手动滚动）。SSR 零 effect。
+ * 任务轨滚动列表：纯时序行 + 滚动跟随效应——执行中任务变化时把执行中行滚入视口中部
+ * （仅跟随键变化触发，不劫持用户手动滚动）。SSR 零 effect。
  */
 function DispatchEventList({
   rows,
@@ -527,7 +524,14 @@ function DispatchEventList({
 }): ReactNode {
   const listRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    listRef.current?.scrollTo({ top: 0 })
+    const list = listRef.current
+    if (list === null) return
+    const target = list.querySelector<HTMLElement>('[data-dswf-dep-running]')
+    if (target === null) return // 无执行中行 = 不滚动
+    // 执行中行滚入视口中部（getBoundingClientRect 差值换算列表内坐标——不依赖 offsetParent）
+    const listRect = list.getBoundingClientRect()
+    const rowTop = target.getBoundingClientRect().top - listRect.top + list.scrollTop
+    list.scrollTo({ top: Math.max(0, rowTop - list.clientHeight / 2) })
   }, [followKey])
   return (
     <div className="dswf-dep-list" data-dswf-dep-list="" ref={listRef}>

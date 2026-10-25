@@ -154,15 +154,15 @@ describe('aggregateDispatchRowItems（聚合行携启动时间——任务键首
     expect(rows[1]?.startAt).toBe(100)
     expect(rows[1]?.entry.at).toBe(900)
   })
-  it('执行中行置顶（打开面板首屏即见在跑任务），其余行保持时序', () => {
+  it('行序 = 纯时序（执行中行不置顶——可见性由滚动跟随承担）', () => {
     const rows = aggregateDispatchRowItems([
       entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 200 }),
       entry({ taskKey: 'c', at: 300 }),
       entry({ taskKey: 'd', at: 400 }),
       entry({ taskKey: 'd', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 500 }),
-      entry({ taskKey: 'z', at: 900 }), // 执行中（fixture 默认态）——最新事件但置顶
+      entry({ taskKey: 'z', at: 900 }),
     ])
-    expect(rows.map((r) => r.entry.taskKey)).toEqual(['c', 'z', 'b', 'd'])
+    expect(rows.map((r) => r.entry.taskKey)).toEqual(['b', 'c', 'd', 'z'])
   })
   it('aggregateDispatchRows 条目视图与 items 同序同集', () => {
     const entries = [entry({ taskKey: 'a', at: 100 }), entry({ taskKey: 'a', at: 150 })]
@@ -288,6 +288,7 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('dswf-dep-row-key">b')
     expect(markup).toContain('dswf-dep-status-done">完成')
     expect(markup).toContain('dswf-dep-status-run">执行中')
+    expect(markup).toContain('data-dswf-dep-running')
     expect(markup).not.toContain('data-dswf-dep-group')
   })
   it('双行呈现：taskKey 首行 + taskTitle 次行（补充语义并入次行）；右侧绝对启动时间 + 耗时徽标', () => {
