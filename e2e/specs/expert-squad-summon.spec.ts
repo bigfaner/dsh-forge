@@ -265,6 +265,7 @@ test.fixme('@feature expert-squad summon 降级① workspace 锚缺席：无工�
 // 条在该流程不可达（notice 恒缺席、视图已切换、零 pageErrors/TypeError）。AC 期望的
 // 「阶段化文案断言」与现产品语义冲突——preset 阶段拒绝引导面归属（面板外 toast 等）待
 // 产品裁决；编排面返回值由 summon-session.test.ts 单元用例持有）。
+// 产品语义缺口已登记 bug 0ad17dfc-d7d1-470d-b793-9587029a7108（引导面归属跟进项）。
 test.fixme('@feature expert-squad summon 降级② preset 被拒：selectPreset 注入拒绝响应 → 阶段化引导条（引导面现流程不可达——见头注）', async () => {
   test.setTimeout(180_000)
 })
