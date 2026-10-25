@@ -81,8 +81,7 @@ import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
-  createWorktreeRpcService,
-  interceptSessionSends,
+  createHostWorktreeRpc,
   type LiveSessionFace,
   type SessionControllerFace,
   type SessionPersistenceFace,
@@ -559,6 +558,9 @@ async function main(): Promise<void> {
           diag('[git-worktree] gitWorktree 能力服务未解析（插件未装载/git 缺席/provide 失败）——worktree RPC 恒独立模式')
         }
       }, 8_000).unref?.()
+      // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
+      // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门已核迁插件导出工厂
+      // createHostWorktreeRpc（packages/plugins/git-worktree host-assembly.ts）。
       const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
       const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
       // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
@@ -571,10 +573,11 @@ async function main(): Promise<void> {
           return undefined // 服务未装载（旧环境/插件行缺席）——零归属面
         }
       }
-      const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
-        gitWorktree: getGitWorktree as never,
+      const assembled = createHostWorktreeRpc({
+        getGitWorktree: getGitWorktree as never,
+        sessionController,
         sessionPersistence,
-        workspaceRegistry: getWorkspaceRegistry as never,
+        getWorkspaceRegistry: getWorkspaceRegistry as never,
         // 绑定表失效锚（worktree 集合变化——建/删树）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
@@ -609,9 +612,9 @@ async function main(): Promise<void> {
         },
         // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
         bindWarnDiag: sessionBindWarnDiag,
-        // binding-derivation §2.2：session/created 监听装配缝（官方事件——fork 亦发布，同径
-        // 覆盖；进程内 Session.append 直调 = ignorable 事件直写合法缝）。注册失败 fail-soft
-        // （留痕由 seal 漂移校验惰性补写兜底）。
+        // binding-derivation §2.2：session/created 监听装配缝（提案裁决：ctx.on 监听装配留
+        // host——官方事件，fork 亦发布，同径覆盖；进程内 Session.append 直调 = ignorable
+        // 事件直写合法缝）。注册失败 fail-soft（留痕由 seal 漂移校验惰性补写兜底）。
         onSessionCreated: (handler) => {
           try {
             return ctx.on('session/created', (session) => handler(session.id))
@@ -628,6 +631,8 @@ async function main(): Promise<void> {
           }
         },
         warn: (line) => diag(line),
+        // G7① 拦截层 fail-open 降级诊断缝（方案 9）
+        failOpenWarn: failOpenDiag,
         // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
         createDiag: worktreeCreateDiag,
         // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
@@ -647,46 +652,9 @@ async function main(): Promise<void> {
           }
         },
       })
-      worktreeRpcService = worktreeRpc
-
-      // G7① wrap 装配门（1.30）：拦截 wrap 只在 gitWorktree 能力解析成功后装配——git 缺席
-      // 宿主零 wrap、零每消息开销（非介入面零固定税）。能力 provide 异步晚于本装配段可达：
-      // 轮询探测，60s 仍未解析 = 放弃（保持零 wrap，diag 留痕）。
-      let sendGuardInstalled = false
-      const installSendGuard = (): void => {
-        if (sendGuardInstalled) return
-        sendGuardInstalled = true
-        if (sessionController === undefined) {
-          diag('[git-worktree] sessionController 缺席——发送拦截未接线（封存硬保证降级）')
-          return
-        }
-        const disposers: Array<() => void> = []
-        disposers.push(
-          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), failOpenDiag),
-        )
-        revokeWorktreeSendGuard = () => {
-          for (const dispose of disposers) {
-            try {
-              dispose()
-            } catch {
-              // 拦截撤销失败不阻关停链
-            }
-          }
-        }
-      }
-      const wrapGate = setInterval(() => {
-        if (getGitWorktree() !== undefined) {
-          clearInterval(wrapGate)
-          installSendGuard()
-        }
-      }, 250)
-      wrapGate.unref?.()
-      setTimeout(() => {
-        clearInterval(wrapGate)
-        if (!sendGuardInstalled) {
-          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——发送拦截保持零装配（零 wrap 零固定税）')
-        }
-      }, 60_000).unref?.()
+      worktreeRpcService = assembled.service
+      // G7① 发送拦截撤销缝（装配门在工厂内——能力解析后 install，关停链 revoke）
+      revokeWorktreeSendGuard = assembled.revokeSendGuard
     } catch (cause) {
       diag(`[git-worktree] forgeWorktree 服务装配失败（RPC/拦截零装配，宿主不受影响）：${String(cause)}`)
     }

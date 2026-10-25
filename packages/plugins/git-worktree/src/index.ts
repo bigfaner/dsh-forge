@@ -91,6 +91,12 @@ export {
   type WorktreeRpcService,
 } from './rpc-service.js'
 export { interceptSessionSends } from './session-send-wrap.js'
+// host 注入点装配工厂（worktree-domain-migration 1.2——自 boot/child.ts 注入点核迁的装配缝）
+export {
+  createHostWorktreeRpc,
+  type WorktreeRpcHostAssembly,
+  type WorktreeRpcHostInjection,
+} from './host-assembly.js'
 
 /** cordis ctx 的结构化最小面（真 Context 结构兼容；注入服务经 reflect 防御读取） */
 interface PluginCtxFace {

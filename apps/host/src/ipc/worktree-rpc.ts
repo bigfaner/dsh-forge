@@ -31,6 +31,7 @@ export type {
   WorktreeRpcService,
 } from '@dsh-forge/git-worktree'
 export {
+  createHostWorktreeRpc,
   createWorktreeRpcService,
   defaultEnsureDirAcl,
   interceptSessionSends,
