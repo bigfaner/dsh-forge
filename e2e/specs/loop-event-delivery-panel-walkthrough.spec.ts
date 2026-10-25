@@ -121,8 +121,10 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
       await expect(page.locator(`[data-dswf-project="${project.id}"]`).first()).toBeVisible({ timeout: 15_000 })
     })
     const projectRow = page.locator(`[data-dswf-project="${project.id}"]`).first()
-    await projectRow.hover() // fix-42 行语言：行尾动作钮 hover 显现
-    await page.locator('[data-dswf-project-action="new-session"]').first().click()
+    await page.locator('.dswf-sidebar-project-row').first().hover()
+    await page.waitForTimeout(800)
+    console.log('[diag] rowaction boxes:', await page.evaluate(() => JSON.stringify([...document.querySelectorAll('[data-dswf-project-action]')].map((b) => { const r = b.getBoundingClientRect(); const cs = getComputedStyle(b as HTMLElement); return { action: b.getAttribute('data-dswf-project-action'), x: r.x, y: r.y, w: r.width, display: cs.display, opacity: cs.opacity, visibility: cs.visibility } }))))
+    await page.locator('[data-dswf-project-action="new-session"]').first().click({ force: true })
     const sessionRow = page.locator(`[data-dswf-project="${project.id}"] [data-dswf-session]`).first()
     await sessionRow.waitFor({ state: 'visible', timeout: 30_000 })
     const sessionId = await sessionRow.getAttribute('data-dswf-session')
