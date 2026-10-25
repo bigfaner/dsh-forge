@@ -15,7 +15,7 @@ import { ROOT } from './pins.js'
 
 const css = readFileSync(join(ROOT, 'apps/web/src/styles/cursors.css'), 'utf8')
 const drawer = readFileSync(join(ROOT, 'apps/web/src/views/overview/drawer/drawer.css'), 'utf8')
-const dispatch = readFileSync(join(ROOT, 'apps/web/src/views/session/dispatch-panel.css'), 'utf8')
+const dispatch = readFileSync(join(ROOT, 'apps/web/src/views/session/dispatch-events-panel.css'), 'utf8')
 const wco = readFileSync(join(ROOT, 'apps/web/src/styles/wco.css'), 'utf8')
 const main = readFileSync(join(ROOT, 'apps/web/src/main.ts'), 'utf8')
 
@@ -128,8 +128,8 @@ describe('pin ⑰-3 消费面（文字面 / 官方 DragHandle / 产品自持拖�
     expect(ruleOf(drawer, '\\.dswf-td-head')).toContain('cursor: var(--dsh-cursor-move, move)')
   })
 
-  it('dispatch-panel 拖移头 → move 资产（D32 同病面「dispatch-panel move」收口）', () => {
-    expect(ruleOf(dispatch, '\\.dswf-dp-head')).toContain('cursor: var(--dsh-cursor-move, move)')
+  it('dispatch-events-panel 拖移头 → move 资产（1.8 接替面同径接线）', () => {
+    expect(ruleOf(dispatch, '\\.dswf-dep-head')).toContain('cursor: var(--dsh-cursor-move, move)')
   })
 })
 
