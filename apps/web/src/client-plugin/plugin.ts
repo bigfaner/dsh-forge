@@ -67,6 +67,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { selectedTreeDisplay } from './selected-tree-display.js'
+import { installOpenWorkspaceFace } from './open-workspace-face-install.js'
 import {
   installStartSessionWrap,
   type SessionsListSlice,
@@ -2297,6 +2298,10 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         const views = publishedViews()
         const sessions = clientCtx.get('sessions') as ForgeSessionsService
         const uiWorkspace = clientCtx.get('uiWorkspace') as ForgeUiWorkspaceService
+        // bug 05c712a4 composer 腿收口：worktree chip 点选 = 显式传参官方 openWorkspace
+        // （官方唯一创建前决策缝——立即建/复用该树 blank，主视图随之切换）。face 挂 window
+        // 锚供 WorktreeFaces 点选链消费（安装器独立成文件——入口与共享组件禁共 import）。
+        installOpenWorkspaceFace({ uiWorkspace, warn: (message) => console.warn(message) })
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
         const sidebarRightTabs = clientCtx.get('sidebarRightTabs') as ForgeSidebarRightTabsService

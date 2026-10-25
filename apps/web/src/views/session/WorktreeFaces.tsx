@@ -15,6 +15,7 @@
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
+import { openWorkspaceFace } from '../../state/open-workspace-face.js'
 import {
   BranchDriftNotice,
   CreateWorktreeDialog,
@@ -60,6 +61,7 @@ const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>)
     path: entry.path,
     branch: entry.branch,
     worktreeName: entry.worktreeName,
+    workspaceId: entry.workspaceId,
     isMain: entry.isMain,
     present: entry.present,
   }))
@@ -182,16 +184,26 @@ export function ForgeHeroWorktreeMount({
   // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
   const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
 
-  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送
-  // （host 唯一事实源——创建时点消费 + 必绑重路由兜底；本地态只是投影）。
+  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送。
+  // workspaceId 在场（行集 DTO 携带）时显式传参官方 openWorkspace——官方语义「选工作区 =
+  // 立即 connectWorkspace 建/复用该树 blank，主视图随之切换」（bug 05c712a4 composer 腿
+  // 收口：点选纯显示态会使主视图 retain 旧树 blank，composer 发送落旧树——显示 = 实际
+  // 生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态（现状降级，warn 一行）。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
       setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
       pushSelection(path)
       setLocalSelectedPath(path)
+      const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
+      const open = openWorkspaceFace()
+      if (workspaceId !== undefined && workspaceId !== '' && open !== undefined) {
+        open(workspaceId)
+      } else if (workspaceId !== undefined) {
+        console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
+      }
     },
-    [projectRoot, pushSelection],
+    [phase, projectRoot, pushSelection],
   )
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
