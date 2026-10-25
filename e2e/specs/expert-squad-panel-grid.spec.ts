@@ -34,7 +34,6 @@ const FOOTER = '.dswf-panel-footer'
 const ERRORBAR = '.dswf-errorbar[role="alert"]'
 const EMPTY = '.dswf-empty'
 const SEARCH = 'input.dswf-search[aria-label="搜索专家"]'
-const LIST_URL = /\/api\/expert-squad\/list/
 
 /** project 层夹具专家档案（tech-design §8 frontmatter——name/title/description/tools 必填） */
 function expertMd(name: string, title: string, skills: string[]): string {
@@ -106,8 +105,10 @@ async function captureWorkspaceParam(page: Page): Promise<string> {
 }
 
 /** list 注入拦截（页面上下文内包装 window.fetch——对 dsh-forge:// scheme 生效）：
- *  error = list 请求拒绝；empty = list 返回空数组。幂等，restoreListStub 对称还原。 */
-async function injectListStub(page: Page, mode: 'error' | 'empty'): Promise<void> {
+ *  error = list 请求拒绝；empty = list 返回空数组；hang = list 永久挂起（loading-first
+ *  骨架期装置——1.46 修正：page.route 对 dsh-forge:// scheme 不生效（fix-3 判例），
+ *  挂起同走 fetch 包装，骨架断言不再依赖时序侥幸）。幂等，restoreListStub 对称还原。 */
+async function injectListStub(page: Page, mode: 'error' | 'empty' | 'hang'): Promise<void> {
   await page.evaluate((stubMode) => {
     const w = window as typeof window & { __xsqOriginalFetch?: typeof window.fetch }
     if (w.__xsqOriginalFetch) return
@@ -117,6 +118,7 @@ async function injectListStub(page: Page, mode: 'error' | 'empty'): Promise<void
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.includes('/api/expert-squad/list')) {
         if (stubMode === 'error') throw new TypeError('xsq e2e stub: list request rejected')
+        if (stubMode === 'hang') await new Promise(() => undefined)
         return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } })
       }
       return original(input as RequestInfo, init)
@@ -212,10 +214,9 @@ test('@feature expert-squad step-1 loading-first：取数未决 → 骨架卡（
     const { page } = session
     await registerProject(page, wsDir, 'xsq-panel-fixture')
     await dismissOnboardingModals(page)
-    // 取数未决注入：list 挂起不决——激活后即骨架期
-    await page.route(LIST_URL, async () => {
-      await new Promise(() => undefined)
-    })
+    // 取数未决注入：list 永久挂起（页面上下文内 fetch 包装——page.route 对
+    // dsh-forge:// scheme 不生效，fix-3 判例；1.46 装置修正同径）——激活后即骨架期
+    await injectListStub(page, 'hang')
     await page.locator(PANEL_ROW).click()
     await expect(page.locator(PANEL_ROOT), '面板挂载').toBeVisible({ timeout: 30_000 })
     await expect(page.locator('.dswf-skeleton-card').first(), '骨架卡呈现').toBeVisible({ timeout: 10_000 })
