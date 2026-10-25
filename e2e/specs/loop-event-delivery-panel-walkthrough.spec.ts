@@ -1,10 +1,10 @@
 // loop-event-delivery 1.17 —— web 悬浮进度流面板（DispatchEventsPanel）真机走查（fix-3 改道 RPC 驱动）：
 // 真实派发循环会话驱动 forge/progress 事件 → 投影键 forge-dispatch-events fold → 面板任务轨行 +
-// head/统计条真机呈现。fix-3 配方（bug 9344622d 修复后通路）：
-//   注册/建会话/循环启动 = RPC 直注（forge:projects/register + forge:proxy/session-create {workspaceId, worktreePath}
-//   预铸采纳单门 + forge:proxy/commands-execute 官方 commands 通道四参 execute——bug 4d02329a
-//   修复后通路）；composer/dock 官方 GUI 入口在无人值守探针环境不可判读（composer insertText
-//   零效果 = 发送钮 disabled 形态、dock 派发按钮缺席）——记为环境局限，非产品缺陷判定面。
+// head/统计条真机呈现。配方（GUI 直通终态）：
+//   注册 = RPC 直注（forge:projects/register）；建会话 = 官方 GUI（项目行尾新会话钮
+//   startSession(workspaceId)——binding-derivation 官方直通）；循环启动 = 官方 commands HTTP
+//   transport（POST /api/commands/execute 提交 /run-dag-tasks）；composer/dock 官方 GUI 入口
+//   在无人值守探针环境不可判读——记为环境局限，非产品缺陷判定面。
 // 断言：悬浮球两态/拖动、head（圆点/任务进度/live·不经模型）、任务轨行（rail+状态点+标题/备注+时间）、
 // ↗ jump 徽标交互行、行点击跳 worker 子会话（worker 行在场时取证）、五桶统计条（含待执行）、
 // 双主题（明/暗）截图归档 .forge/docs/proposals/loop-event-delivery/walkthrough/1-17/（留盘不进 git）。
@@ -121,8 +121,6 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
       await expect(page.locator(`[data-dswf-project="${project.id}"]`).first()).toBeVisible({ timeout: 15_000 })
     })
     await page.locator('.dswf-sidebar-project-row').first().hover()
-    await page.waitForTimeout(800)
-    console.log('[diag] rowaction boxes:', await page.evaluate(() => JSON.stringify([...document.querySelectorAll('[data-dswf-project-action]')].map((b) => { const r = b.getBoundingClientRect(); const cs = getComputedStyle(b as HTMLElement); return { action: b.getAttribute('data-dswf-project-action'), x: r.x, y: r.y, w: r.width, display: cs.display, opacity: cs.opacity, visibility: cs.visibility } }))))
     await page.locator('[data-dswf-project-action="new-session"]').first().click({ force: true })
     const sessionRow = page.locator(`[data-dswf-project="${project.id}"] [data-dswf-session]`).first()
     await sessionRow.waitFor({ state: 'visible', timeout: 30_000 })
@@ -133,12 +131,6 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     // composer/dock 官方 GUI 入口在无人值守探针环境不可判读（insertText 零效果 = 发送钮
     // disabled 形态、dock 派发按钮缺席），记环境局限非产品断言面；零凭据 spawn 失败 →
     // 重试 ×3 → halt，循环事件链照常发射）──
-    const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
-    if ((await row.count()) === 0) {
-      // HTTP 线建会话不经页面 invoke——桌面账本无实时推送，reload 拉侧栏（会话行为证据不受影响）
-      await page.reload({ waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(4_000)
-    }
     await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
     await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
     // 官方 commands HTTP transport（POST /api/<method>——api-ref.jsonl wire 形：client-request 信封
