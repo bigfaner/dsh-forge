@@ -190,22 +190,7 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     }, { pid: project.id, slug: PROP })
     meta.fixtureReset = fixtureReset
     console.log(`[walk112] fixture reset = ${JSON.stringify(fixtureReset)}`)
-    const sessionId = await page.evaluate(async ({ ws, workspaceId }) => {
-      const forge = (globalThis as unknown as {
-        dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
-      }).dshForge
-      if (forge === undefined) throw new Error('dshForge preload 面缺席')
-      const created = await forge.invoke('forge:proxy/session-create', { workspaceId, worktreePath: ws })
-      if (!created.ok) throw new Error(`session-create 失败：${JSON.stringify(created)}`)
-      return (created.data as { sessionId: string }).sessionId
-    }, { ws: wsDir, workspaceId: project.workspaceId })
-    meta.sessionId = sessionId
-    console.log(`[walk112] sessionId = ${String(sessionId)}`)
-
-    const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
-    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
-    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
-    await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
+    // 官方认证 + boot manifest 前移（会话创建 HTTP 通路前提）
     const manifest = (await page.evaluate(() => {
       const forge = (globalThis as unknown as {
         dshForge?: { getBootManifest(): Promise<{ url: string }> }
@@ -220,6 +205,29 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     const boot = await fetch(manifest.url, { redirect: 'manual' })
     const cookie = (boot.headers.get('set-cookie') ?? '').split(';')[0]
     expect(boot.status, '官方认证交换（303 + set-cookie）').toBe(303)
+    // 会话创建（binding-derivation 单门退役后官方 HTTP 线）：POST /api/session/create
+    const createRes = await fetch(`${rpcBase}/api/session/create`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: 'e2e-walk112-create',
+        method: 'session/create',
+        payload: { args: { request: { workspaceId: project.workspaceId, worktreePath: wsDir } } },
+      }),
+    })
+    expect(createRes.status, 'session/create HTTP 200').toBe(200)
+    const created = (await createRes.json()) as { result?: { ok?: boolean; value?: { sessionId?: string } } }
+    expect(created.result?.ok, 'session/create ok').toBe(true)
+    const sessionId = created.result?.value?.sessionId
+    expect(sessionId, '会话描述（sessionId 在场）').toBeTruthy()
+    meta.sessionId = sessionId
+    console.log(`[walk112] sessionId = ${String(sessionId)}`)
+
+    const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
+    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
+    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
+    await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
 
     // ── 启动真实派发循环（commands HTTP transport）──
     const apiRes = await fetch(`${rpcBase}/api/commands/execute`, {

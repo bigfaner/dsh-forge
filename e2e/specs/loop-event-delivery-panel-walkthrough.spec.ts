@@ -99,27 +99,7 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     await driver.call('forgeTasks', 'addTask', {
       projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: '面板走查任务', type: 'doc',
     })
-    // 会话创建（binding-derivation 单门退役后官方面）：forge:proxy/session-create {workspaceId, worktreePath}
-    const sessionId = await page.evaluate(async ({ ws, workspaceId }) => {
-      const forge = (globalThis as unknown as {
-        dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
-      }).dshForge
-      if (forge === undefined) throw new Error('dshForge preload 面缺席')
-      const created = await forge.invoke('forge:proxy/session-create', { workspaceId, worktreePath: ws })
-      if (!created.ok) throw new Error(`session-create 失败：${JSON.stringify(created)}`)
-      return (created.data as { sessionId: string }).sessionId
-    }, { ws: wsDir, workspaceId: project.workspaceId })
-    expect(sessionId, 'RPC 会话描述（sessionId 在场）').toBeTruthy()
-
-    // ── 打开会话（侧栏会话行）+ RPC 驱动 /run-dag-tasks（fix-2 配方改道：boot manifest.url
-    // 官方认证交换换会话 cookie → 官方 commands HTTP transport（POST /api/commands/execute，
-    // wire 形与 mobile api-ref 录制一致）提交派发指令——composer/dock 官方 GUI 入口在无人值守
-    // 探针环境不可判读（insertText 零效果 = 发送钮 disabled 形态、dock 派发按钮缺席），记环境
-    // 局限非产品断言面；零凭据 spawn 失败 → 重试 ×3 → halt，循环事件链照常发射）──
-    const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
-    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
-    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
-    await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
+    // 官方认证 + boot manifest 前移（会话创建 HTTP 通路前提）
     const manifest = (await page.evaluate(() => {
       const forge = (globalThis as unknown as {
         dshForge?: { getBootManifest(): Promise<{ url: string }> }
@@ -134,6 +114,32 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     const cookie = (boot.headers.get('set-cookie') ?? '').split(';')[0]
     expect(boot.status, '官方认证交换（303 + set-cookie）').toBe(303)
     expect(cookie, '会话 cookie 在场').not.toBe('')
+    // 会话创建（binding-derivation 单门退役后官方 HTTP 线）：POST /api/session/create
+    // {method:'session/create', payload:{args:{request:{workspaceId, worktreePath}}}}（api-ref wire 形）
+    const createRes = await fetch(`${rpcBase}/api/session/create`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: 'e2e-led-panel-create',
+        method: 'session/create',
+        payload: { args: { request: { workspaceId: project.workspaceId, worktreePath: wsDir } } },
+      }),
+    })
+    expect(createRes.status, 'session/create HTTP 200').toBe(200)
+    const created = (await createRes.json()) as { result?: { ok?: boolean; value?: { sessionId?: string } } }
+    expect(created.result?.ok, 'session/create ok').toBe(true)
+    const sessionId = created.result?.value?.sessionId
+    expect(sessionId, '会话描述（sessionId 在场）').toBeTruthy()
+
+    // ── 打开会话（侧栏会话行）+ 官方 commands HTTP transport 驱动 /run-dag-tasks（fix-2 配方：
+    // composer/dock 官方 GUI 入口在无人值守探针环境不可判读（insertText 零效果 = 发送钮
+    // disabled 形态、dock 派发按钮缺席），记环境局限非产品断言面；零凭据 spawn 失败 →
+    // 重试 ×3 → halt，循环事件链照常发射）──
+    const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
+    if ((await row.count()) === 0) await page.waitForTimeout(3_000)
+    await page.locator(`[data-dswf-session="${sessionId}"]`).first().click()
+    await expect(page.locator('[data-composer-input]').last(), '会话 composer 可用（活 agent）').toBeEnabled({ timeout: 30_000 })
     // 官方 commands HTTP transport（POST /api/<method>——api-ref.jsonl wire 形：client-request 信封
     // + method + payload.args；args = commands.execute(agentId, line, submittedAttachments)）
     const apiRes = await fetch(`${rpcBase}/api/commands/execute`, {
