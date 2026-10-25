@@ -157,6 +157,7 @@ export function coerceReadCursors(raw: unknown): Record<string, number> {
 /**
  * 可见会话序：置顶（pin 序）→ running → updatedAt 降序；
  * 非置顶成员限 24h 窗（DRAWER_WINDOW_MS）+ top N（DRAWER_TOP_N）；置顶/running 豁免。
+ * bug 8eaba45e：exempt（当前打开会话）豁免窗与截断——刚打开的旧会话不凭窗消失。
  */
 export function orderVisible(
   rows: readonly DrawerSession[],
@@ -164,13 +165,18 @@ export function orderVisible(
   now: number,
   windowMs = DRAWER_WINDOW_MS,
   topN = DRAWER_TOP_N,
+  exempt: readonly string[] = [],
 ): readonly DrawerSession[] {
   const byRecency = (a: DrawerSession, b: DrawerSession): number => b.updatedAt - a.updatedAt
   const pinnedRows = pinned
     .map((id) => rows.find((row) => row.sessionId === id))
     .filter((row): row is DrawerSession => row !== undefined)
+  const exemptRows = exempt
+    .filter((id) => !pinned.includes(id))
+    .map((id) => rows.find((row) => row.sessionId === id))
+    .filter((row): row is DrawerSession => row !== undefined)
   const rest = rows
-    .filter((row) => !pinned.includes(row.sessionId))
+    .filter((row) => !pinned.includes(row.sessionId) && !exempt.includes(row.sessionId))
     .sort((a, b) => {
       if (a.running !== b.running) return a.running ? -1 : 1
       return byRecency(a, b)
@@ -178,7 +184,7 @@ export function orderVisible(
   const fresh = rest.filter(
     (row) => row.running || now - row.updatedAt <= windowMs,
   )
-  return [...pinnedRows, ...fresh.slice(0, topN)]
+  return [...pinnedRows, ...exemptRows, ...fresh.slice(0, topN)]
 }
 
 /** 主列表 / worker 子组拆分。 */
@@ -491,7 +497,11 @@ export function createDrawerView(deps: DrawerDeps): HTMLElement {
     sessions: readonly DrawerSession[],
   ): void {
     const pinnedIds = pinned.filter((id) => sessions.some((session) => session.sessionId === id))
-    const visible = orderVisible(sessions, pinnedIds, now())
+    // bug 8eaba45e：当前打开会话豁免 24h 窗/top10——刚打开的会话不消失
+    const exempt = deps.currentSessionId !== undefined && sessions.some((session) => session.sessionId === deps.currentSessionId)
+      ? [deps.currentSessionId]
+      : []
+    const visible = orderVisible(sessions, pinnedIds, now(), DRAWER_WINDOW_MS, DRAWER_TOP_N, exempt)
     const { main, workers } = splitWorkers(visible)
     wrap.appendChild(renderGroupHeader(groupKey, label, sessions))
     if (!collapsed.includes(groupKey)) {
