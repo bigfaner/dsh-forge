@@ -44,6 +44,8 @@ export interface ForgeEventEntry {
   readonly summary: string
   /** 消息原文（展开详情整段） */
   readonly text: string
+  /** 归属 turn id（turn/start–turn/end 戳——组卡 re-anchor 基准；旧缓存缺省） */
+  readonly turnId?: string
 }
 
 /** 一个折叠条目组（组内 forge 事件连续无人类插话） */
@@ -61,6 +63,10 @@ export interface ForgeEventGroup {
 export interface ForgeEventStreamState {
   readonly groups: readonly ForgeEventGroup[]
   readonly closed: boolean
+  /** 当前归属 turn id（turn/start–turn/end 戳——条目归属锚） */
+  readonly currentTurn?: string
+  /** 各 turn 的 turn/end seq（组卡 re-anchor 基准——anchorSeq ≥ answerAnchorSeq 脱离过程折叠） */
+  readonly turnEndSeqs?: Readonly<Record<string, number>>
 }
 
 /** 空模型（fold 单元恒等值） */
@@ -129,12 +135,15 @@ export function forgeEventTitle(text: string): string {
   return ''
 }
 
-/** 单条消息 → 条目（文本解析 + summary headline 回退首行；畸形消息保底原样） */
-function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike): ForgeEventEntry {
+/** 单条消息 → 条目（文本解析 + summary headline 回退首行剥徽记；畸形消息保底原样） */
+function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike, turnId: string | undefined): ForgeEventEntry {
   const text = messageText(data)
   const firstLine = text.split('\n')[0] ?? ''
   const summaryRaw = (data.source as { summary?: unknown } | undefined)?.summary
-  const summary = typeof summaryRaw === 'string' && summaryRaw !== '' ? summaryRaw : firstLine
+  const summary =
+    typeof summaryRaw === 'string' && summaryRaw !== ''
+      ? summaryRaw
+      : firstLine.replace(/^\[forge·[^\]]+\]\s*/, '')
   return {
     id: String(data.id),
     seq: event.seq,
@@ -143,34 +152,56 @@ function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike): Forg
     title: forgeEventTitle(text),
     summary,
     text,
+    ...(turnId !== undefined ? { turnId } : {}),
   }
 }
 
-/** fold 单元：一条 user/message → 下一模型（纯函数——重放保真；他形消息原引用返回） */
+/** fold 单元：一条事件 → 下一模型（纯函数——重放保真；他形事件原引用返回） */
 export function foldForgeEventMessage(state: ForgeEventStreamState, event: ForgeMessageEventLike): ForgeEventStreamState {
+  if (event?.type === 'turn/start') {
+    const turnId = (event.data as { turn?: unknown } | undefined)?.turn
+    return typeof turnId === 'string' ? { ...state, currentTurn: turnId } : state
+  }
+  if (event?.type === 'turn/end') {
+    const data = event.data as { turn?: unknown } | undefined
+    const turnId = data?.turn
+    if (typeof turnId !== 'string') return state
+    return {
+      ...state,
+      currentTurn: state.currentTurn === turnId ? undefined : state.currentTurn,
+      turnEndSeqs: { ...state.turnEndSeqs, [turnId]: event.seq },
+    }
+  }
   if (event?.type !== 'user/message') return state
   const data = event.data as ForgeMessageDataLike | undefined
   const id = data !== undefined && typeof data.id === 'string' && data.id !== '' ? data.id : undefined
   if (data === undefined || id === undefined) return state
   const source = data.source
   if (isForgeSource(source)) {
-    const entry = entryOf(event, data)
+    const entry = entryOf(event, data, state.currentTurn)
     const last = state.groups.at(-1)
     // 末组在场且未被插话收口 → 追加行（增量）；否则（首组 / 插话后）开新组
     if (last !== undefined && !state.closed) {
       return {
         closed: false,
+        currentTurn: state.currentTurn,
+        turnEndSeqs: state.turnEndSeqs,
         groups: [
           ...state.groups.slice(0, -1),
           { key: last.key, firstSeq: last.firstSeq, lastSeq: entry.seq, entries: [...last.entries, entry] },
         ],
       }
     }
-    return { closed: false, groups: [...state.groups, { key: id, firstSeq: entry.seq, lastSeq: entry.seq, entries: [entry] }] }
+    return {
+      closed: false,
+      currentTurn: state.currentTurn,
+      turnEndSeqs: state.turnEndSeqs,
+      groups: [...state.groups, { key: id, firstSeq: entry.seq, lastSeq: entry.seq, entries: [entry] }],
+    }
   }
   if ((source as { kind?: unknown } | undefined)?.kind === 'user') {
     // 人类插话 = 分组锚点：下一枚 forge 事件开新组（前组保留——条目不删）
-    return { groups: state.groups, closed: true }
+    return { groups: state.groups, closed: true, currentTurn: state.currentTurn, turnEndSeqs: state.turnEndSeqs }
   }
   return state
 }
@@ -183,7 +214,9 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
 export const forgeEventStreamDefinition = {
   kind: FORGE_EVENT_STREAM_KIND,
   match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null =>
-    event !== undefined && event.type === 'user/message' ? { id: 'stream', role: 'start' } : null,
+    event !== undefined && (event.type === 'user/message' || event.type === 'turn/start' || event.type === 'turn/end')
+      ? { id: 'stream', role: 'start' }
+      : null,
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventStreamState => {
     const base = reader?.previous?.(FORGE_EVENT_STREAM_KIND)?.state
     return foldForgeEventMessage(typeof base === 'object' && base !== null ? (base as ForgeEventStreamState) : EMPTY_FORGE_EVENT_STREAM, match.event)
@@ -203,6 +236,12 @@ export interface ForgeEventGroupNodeState {
   readonly group: ForgeEventGroup
   /** 本消息 seq（发射时点 = 组末 seq——anchorSeq 锚） */
   readonly seq: number
+  /**
+   * 组卡锚 seq：所属 turn 已结束 = 该 turn 的 turn/end seq（≥ answerAnchorSeq——脱离
+   * Turn 过程折叠，卡片落回复下方，文档卡片同位）；turn 未结束 = 组末 seq（活跃 turn
+   * 过程折叠恒开——卡可见随组尾）。
+   */
+  readonly anchorSeq: number
 }
 
 /** stream 状态消费窄读（形状防御——他形不猜） */
@@ -213,11 +252,19 @@ function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
   return value as ForgeEventStreamState
 }
 
+/** 组卡锚 seq（纯函数——所属 turn 的 turn/end seq 优先，缺席回落组末 seq） */
+export function forgeEventGroupAnchorSeq(group: ForgeEventGroup, turnEndSeqs: Readonly<Record<string, number>> | undefined): number {
+  const last = group.entries.at(-1)
+  const end = last?.turnId !== undefined ? turnEndSeqs?.[last.turnId] : undefined
+  return end ?? last?.seq ?? group.lastSeq
+}
+
 /**
  * 组块节点定义（target 'chat'）：每条 forge 事件消息一个 Context（id = 消息 id——
  * id 键控增量渲染）。发射判定 = start 时点经 reader 窄读 stream 状态（挂依赖——
- * 新消息到达 stream revision++ → 全体组 Context 重放，末成员交棒：渲染面恒
- * 一组一块、位置恒锚组尾）。
+ * 新消息/turn 生命周期到达 stream revision++ → 全体组 Context 重放，末成员交棒：
+ * 渲染面恒一组一块、位置恒锚组尾；turn 结束后 re-anchor 到 turn/end seq——卡片落
+ * 回复下方，脱离过程折叠）。
  */
 export const forgeEventGroupDefinition = {
   kind: 'forge-event-group-view',
@@ -233,13 +280,15 @@ export const forgeEventGroupDefinition = {
     const seq = match.event.seq
     const stream = streamStateOf(reader?.previous?.(FORGE_EVENT_STREAM_KIND)?.state)
     const group = stream?.groups.find((candidate) => candidate.entries.some((entry) => entry.id === msgId))
-    if (stream === undefined || group === undefined) return { emit: false, isLatest: false, group: { key: msgId, firstSeq: seq, lastSeq: seq, entries: [] }, seq }
+    if (stream === undefined || group === undefined)
+      return { emit: false, isLatest: false, group: { key: msgId, firstSeq: seq, lastSeq: seq, entries: [] }, seq, anchorSeq: seq }
     const last = stream.groups.at(-1)
     return {
       emit: group.entries.at(-1)?.id === msgId,
       isLatest: last !== undefined && last.key === group.key,
       group,
       seq,
+      anchorSeq: forgeEventGroupAnchorSeq(group, stream.turnEndSeqs),
     }
   },
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
@@ -255,7 +304,7 @@ export const forgeEventGroupDefinition = {
       kind: FORGE_EVENT_NODE_KIND,
       id: context.id,
       target: 'chat',
-      anchorSeq: state.seq,
+      anchorSeq: state.anchorSeq,
       location,
       visibility: 'visible',
       data: { key: state.group.key, firstSeq: state.group.firstSeq, lastSeq: state.group.lastSeq, isLatest: state.isLatest, entries: state.group.entries },

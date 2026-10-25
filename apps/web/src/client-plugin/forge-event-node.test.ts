@@ -108,6 +108,30 @@ describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', 
     const state = EMPTY_FORGE_EVENT_STREAM
     expect(foldForgeEventMessage(state, { type: 'forge/progress', seq: 9 })).toBe(state)
   })
+  it('turn 戳：turn/start 记当前 turn、条目带 turnId；turn/end 记结束 seq 并清当前', () => {
+    let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, { type: 'turn/start', seq: 1, data: { turn: 't-1' } })
+    state = foldForgeEventMessage(state, forgeMsg(2, 'm1', '启动', 'x'))
+    expect(state.currentTurn).toBe('t-1')
+    expect(state.groups[0]?.entries[0]?.turnId).toBe('t-1')
+    state = foldForgeEventMessage(state, { type: 'turn/end', seq: 3, data: { turn: 't-1', reason: { kind: 'completed' } } })
+    expect(state.currentTurn).toBeUndefined()
+    expect(state.turnEndSeqs).toEqual({ 't-1': 3 })
+  })
+  it('summary 回退首行剥徽记（source.summary 缺席——截图污面收口）', () => {
+    const event: ForgeMessageEventLike = {
+      type: 'user/message',
+      seq: 1,
+      data: {
+        id: 'm9',
+        role: 'user',
+        content: [{ type: 'text', text: '[forge·启动] expert-squad（feature）· 接续执行未完成 1.50' }],
+        source: { kind: 'forge-loop', form: 'notice' },
+      },
+    }
+    const state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, event)
+    expect(state.groups[0]?.entries[0]?.summary).toBe('expert-squad（feature）· 接续执行未完成 1.50')
+    expect(state.groups[0]?.entries[0]?.badge).toBe('启动')
+  })
   it('条目解析：徽记/任务标题/摘要 headline 回退首行', () => {
     const state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, forgeMsg(1, 'm1', '启动', '从头执行'))
     const entry = state.groups[0]?.entries[0]
@@ -150,6 +174,24 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
     expect(state.emit).toBe(false)
     expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state })).toBeNull()
+  })
+  it('re-anchor：turn 结束后组卡锚 = turn/end seq（≥ answerAnchorSeq——卡片落回复下方）', () => {
+    const { nodes } = simulate([
+      { type: 'turn/start', seq: 1, data: { turn: 't-1' } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+      forgeMsg(3, 'm2', '完成', 'b'),
+      { type: 'turn/end', seq: 9, data: { turn: 't-1', reason: { kind: 'completed' } } },
+    ])
+    // stream revision 随 turn/end 变更 → 组 Context 重放 → 锚移 turn/end seq
+    expect(nodes.get('m2')).toMatchObject({ anchorSeq: 9 })
+    expect(nodes.get('m1')).toBeNull() // 交棒：末成员独发
+  })
+  it('turn 未结束 = 锚组末 seq（活跃 turn 过程折叠恒开——卡可见随组尾）', () => {
+    const { nodes } = simulate([
+      { type: 'turn/start', seq: 1, data: { turn: 't-1' } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+    ])
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 2 })
   })
   it('重放保真：同日志重放节点恒等（fold 纯函数——事件重放/会话 fork 保留渲染）', () => {
     const events = [forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b'), humanMsg(3, 'h1', '继续'), forgeMsg(4, 'm3', '完成', 'c')]
