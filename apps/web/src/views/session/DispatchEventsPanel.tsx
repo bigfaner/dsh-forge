@@ -474,22 +474,35 @@ function DispatchEventRowView({
           <i />
         </span>
         <span className="dswf-dep-row-t">
-          <span className="dswf-dep-row-head">
-            <span className="dswf-dep-row-key">{keyLabel}</span>
-            {entry.taskKey === undefined ? (
-              // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
-              // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
-              <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
-            ) : (
+          {entry.status === 'running' && entry.taskKey !== undefined && title !== undefined ? (
+            // 执行中任务行 = 完整概要（{slug}/{localId}:{title}——不截断可换行；状态章随行首）
+            <span className="dswf-dep-row-full">
               <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
-            )}
-          </span>
-          {title !== undefined ? (
-            <span className="dswf-dep-row-title">
-              {title}
-              {detail !== undefined ? ` · ${detail}` : ''}
+              <span className="dswf-dep-row-full-t">
+                {keyLabel}:{title}
+                {detail !== undefined ? ` · ${detail}` : ''}
+              </span>
             </span>
-          ) : null}
+          ) : (
+            <>
+              <span className="dswf-dep-row-head">
+                <span className="dswf-dep-row-key">{keyLabel}</span>
+                {entry.taskKey === undefined ? (
+                  // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
+                  // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
+                  <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
+                ) : (
+                  <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
+                )}
+              </span>
+              {title !== undefined ? (
+                <span className="dswf-dep-row-title">
+                  {title}
+                  {detail !== undefined ? ` · ${detail}` : ''}
+                </span>
+              ) : null}
+            </>
+          )}
         </span>
         <span className="dswf-dep-row-side">
           <span className="dswf-dep-row-time">{dispatchEventClockLabel(row.startAt)}</span>

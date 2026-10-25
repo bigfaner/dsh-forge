@@ -291,11 +291,11 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('data-dswf-dep-running')
     expect(markup).not.toContain('data-dswf-dep-group')
   })
-  it('双行呈现：taskKey 首行 + taskTitle 次行（补充语义并入次行）；右侧绝对启动时间 + 耗时徽标', () => {
+  it('执行中任务行 = 完整概要（{slug}/{localId}:{title} 不截断）+ 右侧绝对启动时间/耗时徽标', () => {
     const e = entry({ scenario: 'claim/spawned' })
     const markup = body({ entries: [e], now: e.at + 185_000 })
-    expect(markup).toContain('dswf-dep-row-key">feat-x/2.4')
-    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染 · 已启动执行')
+    expect(markup).toContain('dswf-dep-row-full-t">feat-x/2.4:web 进度流渲染 · 已启动执行')
+    expect(markup).not.toContain('dswf-dep-row-title') // 执行中行不走双行截断形态
     expect(markup).toContain(`dswf-dep-row-time">${dispatchEventClockLabel(e.at)}`)
     expect(markup).toContain('dswf-dep-row-dur">3分5秒')
   })
