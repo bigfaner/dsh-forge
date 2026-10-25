@@ -11,6 +11,7 @@ import {
   type WorktreeChecksRequest,
   type WorktreeCreateRequest,
   type WorktreeDeleteRequest,
+  type WorktreeEnsureWorkspaceRequest,
   type WorktreeListRequest,
   type WorktreeSealRequest,
   type WorktreeSelectRequest,
@@ -51,4 +52,8 @@ export function registerWorktreeChannels(ipc: ForgeIpc, service: WorktreeRpcServ
   ipc.register(WORKTREE_CHANNELS.select, rpcEnvelope((q: WorktreeSelectRequest) => service.select(q)))
   ipc.register(WORKTREE_CHANNELS.selected, rpcEnvelope((q: { projectRoot: string }) => service.selected(q)))
   ipc.register(WORKTREE_CHANNELS.resolve, rpcEnvelope((q: WorktreeResolveRequest) => service.resolve(q)))
+  ipc.register(
+    WORKTREE_CHANNELS.ensureWorkspace,
+    rpcEnvelope((q: WorktreeEnsureWorkspaceRequest) => service.ensureWorkspace(q)),
+  )
 }

@@ -25,6 +25,8 @@ import {
   type ForgeBindingMismatchEvent,
   type WorktreeDeleteRequest,
   type WorktreeDeleteResult,
+  type WorktreeEnsureWorkspaceRequest,
+  type WorktreeEnsureWorkspaceResult,
   type WorktreeEntryDto,
   type WorktreeListRequest,
   type WorktreeListResult,
@@ -89,6 +91,7 @@ export const WORKTREE_RPC_METHODS = [
   'select',
   'selected',
   'resolve',
+  'ensureWorkspace',
 ] as const
 
 /** forge:worktree/* RPC 服务面（child 侧本体 / main 侧桥代理同形） */
@@ -103,6 +106,7 @@ export interface WorktreeRpcService {
   select(request: WorktreeSelectRequest): Promise<WorktreeSelectResult>
   selected(request: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   resolve(request: WorktreeResolveRequest): Promise<WorktreeResolveResult>
+  ensureWorkspace(request: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
 }
 
 /** 官方 workspaceRegistry 消费窄面（结构化本地声明——@deepseek-ai/dsh-workspace Workspace/Registry 同形） */
@@ -585,6 +589,26 @@ export function createWorktreeRpcService(deps: {
         isGit: true,
         worktreeDir: dir,
         entries: entriesWithIds,
+      }
+    },
+
+    /**
+     * bug 9d2b7e6a 点选懒物化：无 workspace 记录的树（git 手建/流程 A 前老树——list
+     * resolveByPath 只读解析不物化）点选时点幂等 find-or-create 官方 workspace 记录，
+     * 客户端拿 id 走官方 openWorkspace 显式传参。盘上缺席 = 不物化（防幽灵记录）；
+     * registry 缺席/失败 = workspaceId undefined fail-soft（点选链退显示态不阻断）。
+     */
+    async ensureWorkspace(request: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult> {
+      const wsRegistry = resolveWorkspaceRegistry()
+      if (wsRegistry === undefined || !existsSync(request.path)) return { workspaceId: undefined }
+      try {
+        const workspace = await wsRegistry.create(request.path, worktreeNameOf(request.path))
+        return { workspaceId: workspace.id }
+      } catch (cause) {
+        const message = `[git-worktree] workspace 懒物化失败（fail-soft——点选退显示态）：${request.path}：${String(cause)}`
+        warn(message)
+        deps.createDiag?.(message)
+        return { workspaceId: undefined }
       }
     },
 

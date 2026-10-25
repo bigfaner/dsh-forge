@@ -5,7 +5,7 @@
 //     未绑定/未封存放行；判读异常 fail-open）。
 // ops 真机 git 面归独立模式走查（1.8 e2e 记录）——本文件全 fake 注入，零 git 依赖。
 // registerWorktreeChannels（main 侧 ipc 注册）属 host wiring——用例留 apps/host 侧。
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -779,6 +779,65 @@ describe('worktree create 前移官方 workspace 幂等创建 + WorktreeEntryDto
       expect(created.entry.workspaceId).toBeUndefined()
       const listed = await service.list({ projectRoot: 'C:/repo' })
       expect(listed.entries[0]!.workspaceId).toBeUndefined()
+    })
+  })
+})
+
+/** 点选时点懒物化（bug 9d2b7e6a）：无 workspace 记录的树（git 手建/流程 A 前老树）点选 →
+ *  ensureWorkspace 幂等 find-or-create 拿 id → 官方 openWorkspace 显式传参。
+ *  存在性走真机 fs（temp 目录）。 */
+describe('worktree ensureWorkspace 点选懒物化（bug 9d2b7e6a）', () => {
+  const withTempWs = async (fn: (ws: string, wt: string) => Promise<void>): Promise<void> => {
+    const ws = mkdtempSync(join(tmpdir(), 'dswf-ensure-'))
+    const wt = join(ws, 'wt-x').replaceAll('\\', '/')
+    mkdirSync(wt)
+    try {
+      await fn(ws, wt)
+    } finally {
+      rmSync(ws, { recursive: true, force: true })
+    }
+  }
+
+  it('在场树 → registry.create(path, worktreeName) 幂等物化并返回 workspaceId', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const { registry, created } = fakeWorkspaceRegistry({ [wt]: 'dsh-forge' })
+      const service = createWorktreeRpcService({ gitWorktree: fakeExt, workspaceRegistry: registry })
+      const result = await service.ensureWorkspace({ projectRoot: 'C:/repo', path: wt })
+      expect(created).toEqual([{ path: wt, title: 'wt-x' }])
+      expect(result.workspaceId).toBe(`ws-${wt}`)
+      // 幂等复用：二次调用同 id（find-or-create 官方语义）
+      const again = await service.ensureWorkspace({ projectRoot: 'C:/repo', path: wt })
+      expect(again.workspaceId).toBe(`ws-${wt}`)
+    })
+  })
+
+  it('盘上缺席树 → 不物化（防幽灵 workspace 记录）——workspaceId undefined', async () => {
+    await withTempWs(async (ws) => {
+      const { registry, created } = fakeWorkspaceRegistry({ 'C:/repo': 'dsh-forge' })
+      const service = createWorktreeRpcService({ gitWorktree: fakeExt, workspaceRegistry: registry })
+      const ghost = join(ws, 'not-exists').replaceAll('\\', '/')
+      const result = await service.ensureWorkspace({ projectRoot: 'C:/repo', path: ghost })
+      expect(created).toEqual([])
+      expect(result.workspaceId).toBeUndefined()
+    })
+  })
+
+  it('registry 缺席 / create 失败 → fail-soft undefined + warn（不阻断点选主链）', async () => {
+    await withTempWs(async (_ws, wt) => {
+      const warns: string[] = []
+      const degraded = createWorktreeRpcService({ gitWorktree: fakeExt, warn: (line) => warns.push(line) })
+      expect((await degraded.ensureWorkspace({ projectRoot: 'C:/repo', path: wt })).workspaceId).toBeUndefined()
+      const failing = createWorktreeRpcService({
+        gitWorktree: fakeExt,
+        workspaceRegistry: {
+          create: async () => {
+            throw new Error('registry boom')
+          },
+        },
+        warn: (line) => warns.push(line),
+      })
+      expect((await failing.ensureWorkspace({ projectRoot: 'C:/repo', path: wt })).workspaceId).toBeUndefined()
+      expect(warns.join('\n')).toContain('registry boom')
     })
   })
 })

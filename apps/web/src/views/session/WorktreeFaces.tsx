@@ -199,6 +199,9 @@ export function ForgeHeroWorktreeMount({
   // bug 267dcac1 竞速收口：openWorkspace 异步敛棋前（~1s）composer 仍系旧树 blank，窗口内
   // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchOverlay），敛棋
   // （promise settle）解除；官方 beforeOpen 同窗草稿迁移（face 安装器内建）。
+  // bug 9d2b7e6a 懒物化：行 workspaceId 缺席（树无 workspace 记录——git 手建/流程 A 前
+  // 老树，list resolveByPath 只读不物化）→ 点选时点 ensure-workspace 幂等 find-or-create
+  // 拿 id 再 openWorkspace（同闸盖住窗口）；失败/缺席 = 退显示态不阻断。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
@@ -207,14 +210,47 @@ export function ForgeHeroWorktreeMount({
       setLocalSelectedPath(path)
       const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
       const open = openWorkspaceFace()
-      if (workspaceId !== undefined && workspaceId !== '' && open !== undefined) {
+      if (open === undefined) {
+        if (workspaceId !== undefined) {
+          console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
+        }
+        return
+      }
+      if (workspaceId !== undefined && workspaceId !== '') {
         const settleSwitch = beginWorktreeSwitch()
         void Promise.resolve(open(workspaceId)).finally(settleSwitch)
-      } else if (workspaceId !== undefined) {
-        console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
+        return
       }
+      if (projectRoot === null) return
+      const settleSwitch = beginWorktreeSwitch()
+      void makeRpc()
+        .worktree.ensureWorkspace({ projectRoot, path })
+        .then((result): Promise<void> => {
+          const ensured = result.workspaceId
+          if (ensured === undefined || ensured === '') {
+            console.warn(`[dswf-worktree] workspace 懒物化缺席——点选退显示态：${path}`)
+            return Promise.resolve()
+          }
+          return Promise.resolve(open(ensured))
+        })
+        .catch((cause: unknown) => {
+          console.warn(`[dswf-worktree] workspace 懒物化失败（fail-soft 退显示态）：${String(cause)}`)
+        })
+        .finally(settleSwitch)
     },
-    [phase, projectRoot, pushSelection],
+    [phase, projectRoot, pushSelection, makeRpc],
+  )
+
+  // 建树自动选中（createFollowup）专用：纯显示态落定——零会话副作用（1.29 spec「建树零
+  // 新增会话」语义，bug 9d2b7e6a 懒物化只随用户点选显式意图走）。开户时点 = 用户后续
+  // 点选 chip / hero 发送（startSession wrap 显示真源路由）。
+  const applySelectionDisplayOnly = useCallback(
+    (path: string): void => {
+      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
+      pushSelection(path)
+      setLocalSelectedPath(path)
+    },
+    [pushSelection],
   )
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
@@ -381,7 +417,7 @@ export function ForgeHeroWorktreeMount({
           // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
           // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
           // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
-          await createFollowup(createdPath, { refresh, onSelectConfirmed })
+          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelectionDisplayOnly })
         })
         .catch((error: unknown) => {
           // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
@@ -389,7 +425,7 @@ export function ForgeHeroWorktreeMount({
         })
         .finally(settle)
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh, onSelectConfirmed, creating],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelectionDisplayOnly, creating],
   )
   const openDelete = useCallback(
     (path: string): void => {

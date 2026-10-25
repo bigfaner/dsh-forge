@@ -38,6 +38,8 @@ import {
   type WorktreeSealRequest,
   type WorktreeSelectRequest,
   type WorktreeSelectResult,
+  type WorktreeEnsureWorkspaceRequest,
+  type WorktreeEnsureWorkspaceResult,
   type WorktreeResolveRequest,
   type WorktreeResolveResult,
   type WorktreeSealResult,
@@ -242,6 +244,7 @@ export interface ForgeWorktreeRpc {
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
   selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
   resolve(q: WorktreeResolveRequest): Promise<WorktreeResolveResult>
+  ensureWorkspace(q: WorktreeEnsureWorkspaceRequest): Promise<WorktreeEnsureWorkspaceResult>
 }
 
 /** forge RPC client（transport 注入：preloadTransport() 真身 / 测试替身） */
@@ -336,6 +339,8 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
       selected: (q) => invokeRpc<{ readonly path?: string }>(transport, WORKTREE_CHANNELS.selected, q),
       resolve: (q) => invokeRpc<WorktreeResolveResult>(transport, WORKTREE_CHANNELS.resolve, q),
+      ensureWorkspace: (q) =>
+        invokeRpc<WorktreeEnsureWorkspaceResult>(transport, WORKTREE_CHANNELS.ensureWorkspace, q),
     },
   }
 }

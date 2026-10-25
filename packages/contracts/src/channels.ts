@@ -154,6 +154,7 @@ export const WORKTREE_CHANNELS = {
   select: 'forge:worktree/select',
   selected: 'forge:worktree/selected',
   resolve: 'forge:worktree/resolve',
+  ensureWorkspace: 'forge:worktree/ensure-workspace',
 } as const
 
 export type WorktreeChannel = (typeof WORKTREE_CHANNELS)[keyof typeof WORKTREE_CHANNELS]
@@ -205,6 +206,7 @@ export const FORGE_CHANNELS = {
   worktreeSelect: WORKTREE_CHANNELS.select,
   worktreeSelected: WORKTREE_CHANNELS.selected,
   worktreeResolve: WORKTREE_CHANNELS.resolve,
+  worktreeEnsureWorkspace: WORKTREE_CHANNELS.ensureWorkspace,
 } as const
 
 export type ForgeChannel =

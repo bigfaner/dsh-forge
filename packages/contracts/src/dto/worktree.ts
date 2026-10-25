@@ -65,8 +65,22 @@ export interface WorktreeDeleteResult {
   readonly removed: boolean
 }
 
-/** forge:worktree/ahead-behind（懒加载读面；无 upstream = counts null） */
-export interface WorktreeAheadBehindRequest {
+/**
+ * forge:worktree/ensure-workspace（bug 9d2b7e6a 点选懒物化）：无 workspace 记录的树
+ * （git 手建/流程 A 前老树）点选时点幂等 find-or-create 官方 workspace 记录——list 的
+ * resolveByPath 只读解析不物化。盘上缺席/registry 缺席/失败 = workspaceId undefined
+ * fail-soft（点选链退显示态，不阻断）。
+ */
+export interface WorktreeEnsureWorkspaceRequest {
+  readonly projectRoot: string
+  /** worktree 绝对路径（存在性校验判据——防幽灵 workspace 记录） */
+  readonly path: string
+}
+export interface WorktreeEnsureWorkspaceResult {
+  readonly workspaceId?: string
+}
+
+/** forge:worktree/ahead-behind（懒加载读面；无 upstream = counts null） */export interface WorktreeAheadBehindRequest {
   readonly projectRoot: string
   readonly path: string
 }
