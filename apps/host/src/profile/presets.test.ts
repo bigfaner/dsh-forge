@@ -227,14 +227,15 @@ describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件�
     expect(bodyLines).toHaveLength(6)
   })
 
-  it('工具绑定 = expert-squad 单增量行（管理 5 工具随插件 tool 面上场）；委派面 scoped restrict 显式排除（AC3 结构断言，fix-10 落法）', () => {
+  it('工具绑定 = expert-squad 单增量行（管理 5 工具随插件 tool 面上场）；委派面 excludeTools 装配期排除（AC3 结构断言，1.46 核销裁定落法）', () => {
     expect(rows.has('expert-squad')).toBe(true)
     expect(rows.get('expert-squad')).toContain("            name: '@dsh-forge/expert-squad'")
-    // HR 组合零委派可见面：preset scope 层官方 scoped tools.restrict 显式 deny
-    // delegate_expert（fix-10 AC2 裁决——注册面全局交付，限制落 preset 绑定层）；
+    // HR 组合零委派可见面：官方 tools.restrict 只支持 inherited global 工具过滤
+    // （dsh-tools lib/index.js:2889-2891，1.46 源码级核销——preset 局部注册工具同
+    // 组合 deny 必 throw 拖垮预设 mount），排除落装配期 excludeTools 跳过注册；
     // 零 dispatch/expert_dispatch 装配面。
-    expect(rows.get('expert-squad')).toContain('              restrictTools:')
-    expect(rows.get('expert-squad')).toContain('                  - delegate_expert')
+    expect(rows.get('expert-squad')).toContain('              excludeTools:')
+    expect(rows.get('expert-squad')).toContain('                - delegate_expert')
     expect(text).not.toContain('dispatch:')
     expect(text).not.toContain('expert_dispatch')
   })

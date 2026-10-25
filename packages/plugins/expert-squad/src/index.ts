@@ -8,8 +8,13 @@
 //      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
 //      （ctx.experts 正门，bug 7b1c9ed4）；
 //   ④ tool 面（fix-10）：registerExpertTools（5 管理工具）+ registerDelegateExpertTool
-//      经官方 ctx.tools.register 正门接线（D1 注册面零改动）；preset 绑定工具子集
-//      经官方 scoped tools.restrict（restrictTools 配置——HR 组合 deny delegate_expert）。
+//      经官方 ctx.tools.register 正门接线（D1 注册面零改动）；组合绑定工具子集经
+//      excludeTools 装配期排除（1.46 核销裁定：官方 tools.restrict 只能命名 restricting
+//      scope 的 inherited global 工具——dsh-tools lib/index.js:2889-2891/:2906-2908 +
+//      view() own-layer 排除 :2959-2978；preset 局部注册的工具不落 inherited 面，
+//      同组合内 deny 必 throw「names unknown global tool」并拖垮整预设 mount
+//      （agent-preset-registry mountPreset audit.failed 拒绝，lib/index.js:270-272）——
+//      故排除语义落装配期：excludeTools 点名工具直接跳过注册，不进可见面）。
 
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -20,6 +25,7 @@ import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
 import {
+  DELEGATE_EXPERT_TOOL_NAME,
   ExpertRunPanelState,
   observeSubagentEnd,
   registerDelegateExpertTool,
@@ -42,19 +48,15 @@ interface StorageFace {
   };
 }
 
-/** dsh tools 服务子面（官方 ToolRuntime.register/restrict——D1 全局注册 + scoped 限制）。 */
-interface ExpertSquadToolsFace extends ToolRegisterFace {
-  /** 官方 scoped tools.restrict（仅 scoped ctx 可用——preset 组合内限定工具子集）。 */
-  restrict?(filter: { allow?: readonly string[]; deny?: readonly string[] }): unknown;
-}
+/** dsh tools 服务窄面（官方 ToolRuntime.register 正门——D1 注册面零改动）。 */
+interface ExpertSquadToolsFace extends ToolRegisterFace {}
 
-/** 插件配置（preset 行 config 传入；缺省 = 全量注册零限制——D1 语义不变）。 */
+/** 插件配置（组合行 config 传入；缺省 = 全量注册——D1 语义不变）。 */
 export interface ExpertSquadPluginConfig {
-  /** preset 绑定工具子集（官方 scoped tools.restrict 同形过滤器；HR 组合 deny delegate_expert）。 */
-  readonly restrictTools?: {
-    readonly allow?: readonly string[];
-    readonly deny?: readonly string[];
-  };
+  /** 组合绑定工具子集（装配期排除：点名工具跳过注册——HR 组合排除 delegate_expert）。
+   *  核销裁定（1.46）：官方 tools.restrict 仅支持 inherited global 工具过滤
+   *  （dsh-tools lib/index.js:2889-2891），preset 局部注册工具不适用。 */
+  readonly excludeTools?: readonly string[];
 }
 
 /** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。 */
@@ -286,7 +288,12 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   // 边界——多工作区宿主为残余风险（fix-10 resume 留痕）。
   const registry = toolRegistry as ExpertsRegistry;
   const subagents = readOptionalService(ctx, "subagents") as SubagentsStartFace | undefined;
-  if (subagents === undefined) {
+  // excludeTools 装配期排除（1.46 核销裁定——官方 tools.restrict 不适用 preset 局部
+  // 注册工具，见文件头 ④）：点名 delegate_expert = 组合零委派可见面（HR 组合语义）。
+  const excluded = new Set(config.excludeTools ?? []);
+  if (excluded.has(DELEGATE_EXPERT_TOOL_NAME)) {
+    console.warn("[expert-squad] excludeTools 排除 delegate_expert——本组合零委派可见面");
+  } else if (subagents === undefined) {
     console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
     registerDelegateExpertTool(toolsFace, {
@@ -297,16 +304,6 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     });
   }
   registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
-
-  // preset 绑定工具子集（fix-10 AC2 裁决：官方 scoped tools.restrict 支持按 preset
-  // 限定——restriction 落在 preset scope 层，对其下 agent（会话）过滤继承面生效；
-  // own-layer 注册豁免 restrict 是官方机械语义，非本层行为）。HR 组合 deny delegate_expert。
-  if (config.restrictTools !== undefined) {
-    if (toolsFace.restrict === undefined) {
-      throw new Error("expert-squad: restrictTools configured but tools face lacks restrict()（宿主形状漂移）");
-    }
-    toolsFace.restrict(config.restrictTools);
-  }
 }
 
 expertSquadPlugin.inject = ['connection'];

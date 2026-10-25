@@ -1,32 +1,25 @@
 // fix-10 工具面接线结构断言（bug cac32a53：registerExpertTools / registerDelegateExpertTool
 // 未接入 apply 装配缝）：修复前必失败——apply 装配后 tools face 应恰收到 6 枚工具注册
-// （5 管理 + delegate_expert，D1 注册面零改动）；preset 绑定 restrictTools 透传官方
-// scoped tools.restrict（HR 组合 deny delegate_expert）；tools 面缺席 fail-soft 不崩。
+// （5 管理 + delegate_expert，D1 注册面零改动）；组合绑定 excludeTools 装配期排除
+// （HR 组合零委派可见面，1.46 核销裁定——官方 tools.restrict 不适用 preset 局部注册
+// 工具，见 src/index.ts 文件头 ④）；tools 面缺席 fail-soft 不崩。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import expertSquadPlugin from "../src/index.js";
 import { EXPERT_TOOLS } from "../src/tools.js";
 import { DELEGATE_EXPERT_TOOL_NAME } from "../src/dispatch/dispatch.js";
 
-/** 捕获注册/限制调用的 tools face 替身（官方 ToolRuntime.register/restrict 结构兼容）。 */
+/** 捕获注册调用的 tools face 替身（官方 ToolRuntime.register 结构兼容）。 */
 function makeToolsFace() {
   const registered: string[] = [];
-  const restricts: unknown[] = [];
-  const restrict = vi.fn((filter: unknown) => {
-    restricts.push(filter);
-    return () => undefined;
-  });
   return {
     face: {
       register: (definition: { name: string }) => {
         registered.push(definition.name);
         return () => undefined;
       },
-      restrict,
     },
     registered,
-    restricts,
-    restrict,
   };
 }
 
@@ -78,21 +71,26 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
     expect([...registered].sort()).toEqual([...EXPERT_TOOLS, DELEGATE_EXPERT_TOOL_NAME].sort());
   });
 
-  it("preset 绑定 restrictTools 透传官方 scoped tools.restrict（HR 组合 deny delegate_expert）", async () => {
-    const { face, restrict, restricts } = makeToolsFace();
-    const { ctx, effects } = makeCtx(face, SUBAGENTS);
-    pendingEffects = effects as Array<() => unknown>;
-    await expertSquadPlugin(ctx, { restrictTools: { deny: [DELEGATE_EXPERT_TOOL_NAME] } });
-    expect(restrict).toHaveBeenCalledTimes(1);
-    expect(restricts[0]).toEqual({ deny: [DELEGATE_EXPERT_TOOL_NAME] });
+  it("组合绑定 excludeTools 装配期排除 delegate_expert（HR 组合零委派可见面；管理 5 工具照常）", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { face, registered } = makeToolsFace();
+      const { ctx, effects } = makeCtx(face, SUBAGENTS);
+      pendingEffects = effects as Array<() => unknown>;
+      await expertSquadPlugin(ctx, { excludeTools: [DELEGATE_EXPERT_TOOL_NAME] });
+      expect([...registered].sort()).toEqual([...EXPERT_TOOLS].sort());
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("excludeTools 排除 delegate_expert"));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
-  it("未配置 restrictTools = 全量注册零限制（D1 全局语义不变）", async () => {
-    const { face, restrict } = makeToolsFace();
+  it("未配置 excludeTools = 全量注册零排除（D1 全局语义不变）", async () => {
+    const { face, registered } = makeToolsFace();
     const { ctx, effects } = makeCtx(face, SUBAGENTS);
     pendingEffects = effects as Array<() => unknown>;
     await expertSquadPlugin(ctx);
-    expect(restrict).not.toHaveBeenCalled();
+    expect([...registered].sort()).toEqual([...EXPERT_TOOLS, DELEGATE_EXPERT_TOOL_NAME].sort());
   });
 
   it("tools 面缺席 fail-soft：warn + 跳过 tool 注册，路由族照常装配", async () => {

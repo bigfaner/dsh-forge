@@ -3,11 +3,13 @@
 # presets.test.ts）+ 产品分叉：persona prefix = 招聘/管理专家 SOP（只谈 HR 作风）/
 # name·description·order / skill-filesystem 裸行（HR 组合物理不含 forge 技能目录）。
 # 产品增量行：expert-squad 单行（插件 tool 面 = 管理 5 工具 recruit/update/enable/
-# disable/list_experts 随组合上场；委派工具注册后经官方 scoped tools.restrict 在
-# preset scope 层显式排除（restrictTools.deny = delegate_expert，fix-10 AC2 裁决：
-# 官方机械支持按 preset 限定工具子集）——HR 组合可见面 = 管理工具，委派走主会话
-# 对专家说任务或使用方经取用 API）。物理无 plugin-forge[+spec] /
-# md-mermaid 行——HR 组合零 forge 工具面（与标准模式同口径，2026-10-09 裁决同径）。
+# disable/list_experts 随组合上场；委派工具经插件 excludeTools 装配期排除
+# （excludeTools = [delegate_expert]，1.46 核销裁定：官方 scoped tools.restrict 只能
+# 命名 restricting scope 的 inherited global 工具——dsh-tools lib/index.js:2889-2891，
+# preset 局部注册工具同组合 deny 必 throw 拖垮预设 mount——排除落装配期跳过注册）。
+# HR 组合可见面 = 管理工具，委派走主会话对专家说任务或使用方经取用 API）。物理无
+# plugin-forge[+spec] / md-mermaid 行——HR 组合零 forge 工具面（与标准模式同口径，
+# 2026-10-09 裁决同径）。
 # 镜像行 config 全集必须重述——缺必填键 = 行 schema 拒 → 整预设 broken 不上菜单。
 # 平台门行（tool-bash/tool-pwsh 的 disabled: !!js）= 上游逐字转写；物化时由 renderBootOverlay
 # 就地求值为具体布尔。
@@ -168,6 +170,5 @@
           - id: expert-squad
             name: '@dsh-forge/expert-squad'
             config:
-              restrictTools:
-                deny:
-                  - delegate_expert
+              excludeTools:
+                - delegate_expert
