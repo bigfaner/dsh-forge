@@ -176,7 +176,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
           const stale = watchManagers.get(workspace);
           if (stale !== undefined) {
             watchManagers.delete(workspace);
-            void stale.dispose();
+            // 逐出时 start 可能在途/迟到（bug 38f87c0f）——close 拒绝不得成未处理 rejection
+            void stale.dispose().catch(() => {});
           }
         }
       });

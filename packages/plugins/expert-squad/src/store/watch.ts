@@ -134,6 +134,10 @@ export class ExpertWatchManager {
   }
 
   private async openWatcher(root: ExpertRoot): Promise<void> {
+    // Root cause: 逐出竞速（bug 38f87c0f）——dispose 后迟到的 start/scheduleRewatch
+    // 仍会开出新 watcher 且无人再持有关闭权（持久句柄泄漏、逐出无界）。入口
+    // closing 短路（对齐 scheduleRewatch 先例）。
+    if (this.closing) return;
     // root 不存在是正常形态（静默空）：chokidar 对缺失路径不触发 ready，改挂最近
     // 存在祖先为 anchor，深度 = 层数差 + 1（skill-filesystem anchor 模式同型）。
     let anchor = resolve(root.dir);

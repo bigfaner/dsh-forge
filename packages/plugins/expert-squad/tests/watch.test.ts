@@ -150,6 +150,19 @@ describe("fs/observed 通道：模型 edit/write 首方变更同步失效（语�
 });
 
 describe("生命周期与降级", () => {
+  it("逐出竞速（bug 38f87c0f）：dispose 时 start 在途/迟到 → 不残留 watcher（有界性）", async () => {
+    const { roots } = await makeRoots();
+    const h = makeManager(roots);
+    // start 在途即逐出：dispose 与未完成的 start 竞速
+    const inFlight = h.manager.start();
+    await h.manager.dispose();
+    // 迟到的 start（逐出后误用同一 manager）也不得开启新 watcher
+    const late = h.manager.start();
+    await Promise.race([Promise.all([inFlight, late]), new Promise((r) => setTimeout(r, 2000))]);
+    const watchers = (h.manager as unknown as { watchers: Map<string, unknown> }).watchers;
+    expect(watchers.size).toBe(0);
+  });
+
   it("dispose 后文件变更不再触发失效", async () => {
     const { dir, roots } = await makeRoots();
     const h = makeManager(roots);

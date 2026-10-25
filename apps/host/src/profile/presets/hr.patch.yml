@@ -6,13 +6,13 @@
 # （主会话可见可用），本 preset 域实例为守卫微件：scoped apply 内官方
 # ctx.tools.restrict({deny:[delegate_expert]}) 摘除 inherited 全局委派工具（官方正门，
 # 1.46 probe2 实证：主会话可见/HR 不可见/deny 解除恢复），零功能面注册与全局单实例
-# 零冲突。可复核落盘（工作区日志区，仓外）：forge 任务日志
-# expert-squad/1.46/004-restrict-pin/pin-report.md（+ probe3-out.txt）。
+# 零冲突。可复核落盘（锚定根 = forge-workspaces 工作区日志区 <workspace>/logs/，仓外）：
+# forge 任务日志 expert-squad/1.46/004-restrict-pin/pin-report.md（+ probe3-out.txt）。
 # HR 侧正向运行时断言（HR 组合 toolNames 不含 delegate_expert）降级留档：boot ready
 # 面只投影全局视图 toolNames（child.ts toolNamesOf = ToolRuntime.schemas() 全局投影），
 # HR 组合 toolNames 需 preset 域真会话组装才可达——boot 层不可达，正向面由
 # 「主会话可见断言 + deny 部署面 + 官方 restrict 语义链」三节合成口径承载
-# （delegate-visibility-smoke.test.ts 注释 + walkthrough/phase4-hr-visibility 记录）。核销留档：dsh-agent-preset[-registry] 无 preset 级 deny/工具排除配置缝
+# （delegate-visibility-smoke.test.ts 注释 + 主工作区 .forge/docs/proposals/expert-squad/walkthrough/phase4-hr-visibility/ 记录）。核销留档：dsh-agent-preset[-registry] 无 preset 级 deny/工具排除配置缝
 # （全量检索两包仅 ToolRestriction 类型声明无消费点），守卫只能以插件 guard 态落
 # preset 行；restrict 抛错 fail-soft warn 不拖垮预设 mount。HR 组合可见面 = 管理工具，
 # 委派走主会话对专家说任务。物理无
