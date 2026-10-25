@@ -50,9 +50,15 @@ interface LazyCtx {
 /** uiWorkspace 官方面消费切片（openWorkspace 缝——官方 startSession 同径 reuse-or-create）。 */
 function uiWorkspaceOf(ctx: LazyCtx): SummonPlatform["openWorkspace"] | undefined {
   try {
-    const open = (ctx.reflect?.get("uiWorkspace") as { openWorkspace?: unknown } | undefined)
-      ?.openWorkspace;
-    return typeof open === "function" ? (open as SummonPlatform["openWorkspace"]) : undefined;
+    const service = ctx.reflect?.get("uiWorkspace") as
+      | { openWorkspace?: SummonPlatform["openWorkspace"] }
+      | undefined;
+    const open = service?.openWorkspace;
+    if (typeof open !== "function") return undefined;
+    // Root cause（bug 9d9d1bd3）：官方方法以 this 消费服务面（首行 this.ctx.layout）——
+    // 裸引用剥离后经 platform 字面量调用即 this 脱绑（召唤必败 TypeError）。包装保持
+    // 方法调用形态（open-session.ts:377 先例同法）。
+    return (workspaceId, beforeOpen) => open.call(service, workspaceId, beforeOpen);
   } catch {
     return undefined;
   }
@@ -65,9 +71,14 @@ function agentPresetsOf(ctx: LazyCtx): SummonPlatform["selectPreset"] | undefine
     if (reflect === undefined) return undefined;
     const direct = reflect.get("remote.agentPresets") as { select?: unknown } | undefined;
     const ns = (direct ?? (reflect.get("remote") as { agentPresets?: { select?: unknown } } | undefined)?.agentPresets) as
-      | { select?: unknown }
+      | { select?: SummonPlatform["selectPreset"] }
       | undefined;
-    return typeof ns?.select === "function" ? (ns.select as SummonPlatform["selectPreset"]) : undefined;
+    // Root cause（bug 9d9d1bd3 同因）：select 同为 this 消费面——包装保持方法调用形态
+    // （ns 闭包窄化失效，先落非可选局部再 .call 保 receiver）。
+    const namespace = ns;
+    const select = namespace?.select;
+    if (namespace === undefined || typeof select !== "function") return undefined;
+    return (sessionId, presetId) => select.call(namespace, sessionId, presetId);
   } catch {
     return undefined;
   }
