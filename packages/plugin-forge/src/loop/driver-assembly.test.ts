@@ -1,8 +1,9 @@
 // 装配层测试（bug 548ea94b——机械③/④生产装配断链复核）：与既有 driver.test.ts 直调带桩
 // 单测不同，本文件验证 createLoopDriver 依赖注入齐备后，**生产运行路径**会真实落检查点标记：
-// checkpoints 面以 ctx.forgeCheckpoints 的真实形状（appendCheckpoint/listCheckpoints，无
-// ensure）经 createEnsureCheckpointsFace 包装注入，resolveProposalId/resolveHeadCommit 同
-// index.ts 装配形态注入——first-pass-complete 与 review-wave-N 各至少一例真实落行。
+// checkpoints 面以 ctx.forgeCheckpoints 的真实形状（appendCheckpoint/ensureCheckpoint/
+// listCheckpoints——ensure 语义同构域侧：在场 no-op/缺席 append）直传注入，
+// resolveProposalId/resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与
+// review-wave-N 各至少一例真实落行。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
@@ -15,8 +16,8 @@ import type {
   TaskStats,
   TaskStatus,
 } from '@dsh-forge/contracts'
-import { createEnsureCheckpointsFace, createLoopDriver } from './driver.js'
-import type { CoreCheckpointsAppendFace, LoopCheckpointRowLite, LoopCheckpointSnapshot } from './driver.js'
+import { createLoopDriver } from './driver.js'
+import type { LoopCheckpointRowLite, LoopCheckpointSnapshot, LoopCheckpointsFace } from './driver.js'
 import type { LoopDriverDeps } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { NarrationChannel, Narrator } from '../notify/index.js'
@@ -95,11 +96,17 @@ function cardOf(localId: string, over: Partial<TaskCard> = {}): TaskCard {
   }
 }
 
-/** ctx.forgeCheckpoints 同形核心面桩（appendCheckpoint/listCheckpoints——无 ensure，录追加行） */
+/** ctx.forgeCheckpoints 同形域面桩（appendCheckpoint/ensureCheckpoint/listCheckpoints——ensure
+ *  幂等语义同构域侧：标记在场 no-op（零底层 append），缺席真实追加；录追加行） */
 function coreCheckpointsStub() {
   const appends: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: LoopCheckpointSnapshot }> = []
   const rows: LoopCheckpointRowLite[] = []
-  const core: CoreCheckpointsAppendFace = {
+  const core: LoopCheckpointsFace = {
+    ensureCheckpoint: async (input) => {
+      if (rows.some((r) => r.mark === input.mark)) return { appended: false }
+      await core.appendCheckpoint(input)
+      return { appended: true }
+    },
     appendCheckpoint: async (input) => {
       appends.push({ projectId: input.projectId, proposalId: input.proposalId, mark: input.mark, baseCommitHash: input.baseCommitHash, snapshots: input.snapshots })
       rows.push({ mark: input.mark, ...input.snapshots })
@@ -167,14 +174,14 @@ function build(options: { claim: ClaimTaskResult[]; stats?: TaskStats[]; lists?:
     }
     return handle
   }
-  // index.ts 装配同形：ctx.forgeCheckpoints 真实形状面经 ensure 语义包装注入
+  // index.ts 装配同形：ctx.forgeCheckpoints 真实形状面（含域侧 ensure）直传注入
   const deps: LoopDriverDeps = {
     projectId: PROJECT,
     tasks: h.tasks,
     spawn,
     narrator,
     events: sink,
-    checkpoints: createEnsureCheckpointsFace(cp.core),
+    checkpoints: cp.core,
     resolveProposalId: async () => 'prop-1',
     resolveHeadCommit: async () => 'head-9',
     commitLanding: async () => ({ ok: true, branch: 'feat-x' }),

@@ -11,7 +11,6 @@ export {
   LOOP_STOP_TRANSITION_REASON,
   LOOP_TRIAGE_MAX_ATTEMPTS,
   LOOP_WORKER_ABORT_MAX_RETRIES,
-  createEnsureCheckpointsFace,
   createLoopDriver,
   loopInstructionOf,
 } from './driver.js'

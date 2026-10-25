@@ -312,47 +312,7 @@ export interface LoopCheckpointsFace {
     readonly projectId: string
     readonly proposalId: string
     readonly marks?: readonly string[]
-  }): Promise<LoopCheckpointRowLite[]>
-}
-
-/** ctx.forgeCheckpoints 的最小结构读影（core checkpoints 域服务插件侧形状——append-only 面，无 ensure） */
-export interface CoreCheckpointsAppendFace {
-  appendCheckpoint(input: {
-    readonly projectId: string
-    readonly proposalId: string
-    readonly mark: 'first-pass-complete' | 'merged' | 'review-wave-N'
-    readonly waveSeq?: number
-    readonly baseCommitHash: string
-    readonly snapshots: LoopCheckpointSnapshot
-  }): Promise<unknown>
-  listCheckpoints(q: {
-    readonly projectId: string
-    readonly proposalId: string
-    readonly marks?: readonly string[]
   }): Promise<readonly LoopCheckpointRowLite[]>
-}
-
-/**
- * ensure 语义包装（bug 548ea94b——装配缝类型面对齐）：ctx.forgeCheckpoints 只有 append-only
- * 面（appendCheckpoint/listCheckpoints），循环侧 LoopCheckpointsFace 要求 ensureCheckpoint——
- * 本包装以「list 在场 no-op（appended=false）/ 缺席 append（appended=true）」补 ensure 语义，
- * 插件域内闭合（不 import core），index.ts 装配期一次性包注入。
- */
-export function createEnsureCheckpointsFace(core: CoreCheckpointsAppendFace): LoopCheckpointsFace {
-  return {
-    async ensureCheckpoint(input) {
-      const rows = await core.listCheckpoints({
-        projectId: input.projectId,
-        proposalId: input.proposalId,
-        marks: [input.mark],
-      })
-      if (rows.some((r) => r.mark === input.mark)) return { appended: false }
-      await core.appendCheckpoint(input)
-      return { appended: true }
-    },
-    appendCheckpoint: (input) => core.appendCheckpoint(input),
-    listCheckpoints: async (q) => [...(await core.listCheckpoints(q))],
-  }
 }
 
 /** 越阈硬门 AC（复盘任务 acceptance_criteria——未注册改进提案不得 success，提案 M7 口径） */

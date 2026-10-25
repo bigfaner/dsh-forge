@@ -70,6 +70,19 @@ export interface ForgeCheckpointsToolFace {
     readonly proposalId: string
     readonly marks?: readonly CheckpointMark[]
   }): Promise<readonly CheckpointRow[]>
+  /**
+   * lazy 补标记（域侧事务内幂等——标记在场 no-op appended=false / 缺席 append appended=true；
+   * 结构兼容 core ensureCheckpoint 唯一索引背书——插件禁 import core，循环侧 ensure 语义
+   * 由此单点落域，装配直传不经包装）
+   */
+  ensureCheckpoint(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly mark: CheckpointMark
+    readonly waveSeq?: number
+    readonly baseCommitHash: string
+    readonly snapshots: CheckpointSnapshots
+  }): Promise<{ readonly appended: boolean; readonly checkpoint?: CheckpointRow }>
 }
 
 /** 四项硬指标（相邻/首末标记帧差值派生——缺帧项键缺席） */

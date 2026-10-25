@@ -23,8 +23,7 @@ import type {
   TaskStatus,
   TransitionTaskInput,
 } from '@dsh-forge/contracts'
-import { createEnsureCheckpointsFace, createLoopDriver } from './driver.js'
-import type { CoreCheckpointsAppendFace } from './driver.js'
+import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
@@ -732,29 +731,9 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 
 // ─────────────────────────── 机械③（forge-verification-hardening） ───────────────────────────
 
-describe('createEnsureCheckpointsFace · ensure 语义包装 no-op 分支', () => {
-  it('标记行已在场：ensureCheckpoint no-op（appended=false）零底层 append；缺席才真实追加（appended=true）', async () => {
-    const appends: string[] = []
-    const core: CoreCheckpointsAppendFace = {
-      appendCheckpoint: async (input) => {
-        appends.push(input.mark)
-      },
-      listCheckpoints: async () => [{ mark: 'first-pass-complete', tasksTotal: 1, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 }],
-    }
-    const face = createEnsureCheckpointsFace(core)
-    const snapshots = { tasksTotal: 1, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 }
-    // 在场：no-op——零 append
-    expect(
-      await face.ensureCheckpoint({ projectId: 'p-1', proposalId: 'prop-1', mark: 'first-pass-complete', baseCommitHash: 'h1', snapshots }),
-    ).toEqual({ appended: false })
-    expect(appends).toEqual([])
-    // 缺席：真实追加
-    expect(
-      await face.ensureCheckpoint({ projectId: 'p-1', proposalId: 'prop-1', mark: 'merged', baseCommitHash: 'h2', snapshots }),
-    ).toEqual({ appended: true })
-    expect(appends).toEqual(['merged'])
-  })
-})
+// ensure no-op/append 语义用例落域侧（core implementation-checkpoints.test.ts），此处不再
+// 于插件域复刻包装（ensure 经 LoopCheckpointsFace 直传域面——直传装配由 driver-assembly
+// 生产路径测试覆盖）。
 
 
 describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记', () => {
