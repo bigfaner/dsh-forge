@@ -21,10 +21,12 @@
   <div class="dswf-panel-header">
     <h1>专家团</h1>
     <input class="dswf-search" id="q" placeholder="搜索名称/技能标签">
-    <button class="dswf-menu-btn on" data-f onclick="setFilter('all',this)">全部</button>
-    <button class="dswf-menu-btn" data-f onclick="setFilter('on',this)">启用</button>
-    <button class="dswf-menu-btn" data-f onclick="setFilter('off',this)">禁用</button>
-    <button class="btn btn-primary" onclick="openHr()">召唤</button>
+    <select class="dswf-status-select" id="f" onchange="setFilter(this.value)">
+      <option value="all">全部</option>
+      <option value="on">启用</option>
+      <option value="off">禁用</option>
+    </select>
+    <button class="btn btn-primary summon-btn" onclick="openHr()">召唤</button>
     <span class="dswf-menu-btn plain" style="color:var(--text-caption);cursor:default">修改/委派 → 会话对话</span>  </div>
   <div class="dswf-card-grid" id="grid"></div>
   <div class="dswf-panel-footer" id="count"></div>

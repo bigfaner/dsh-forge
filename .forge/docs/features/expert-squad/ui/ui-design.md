@@ -25,11 +25,11 @@ v2 范围修订（用户裁决）：卡片网格（大卡、内容丰富：人�
 
 ```text
 └─ dswf-expert-panel
-   ├─ dswf-panel-header
+   ├─ dswf-panel-header（2026-10-25 用户裁决：搜索+筛选左置、召唤独右）
    │  ├─ 标题「专家团」（H1）
-   │  ├─ dswf-search-input（即时过滤名称/技能标签）
-   │  ├─ 状态过滤（全部/启用/禁用）
-   │  └─ Button primary「召唤」→ 打开 HR 预设官方会话（复用 chat-view）
+   │  ├─ dswf-search-input（即时过滤名称/技能标签，左置紧随标题）
+   │  ├─ dswf-status-select（状态筛选 select：全部/启用/禁用 三态；native select 基座 + dswf 令牌包装——官方 primitives 无同语义 Select）
+   │  └─ Button primary「召唤」（独占右侧）→ 打开 HR 预设官方会话（复用 chat-view）
    ├─ dswf-card-grid（auto-fill minmax(280px,1fr)，大卡）
    │  └─ dswf-xcard ×N
    │     ├─ 状态灯（7px 圆点）+ 名称 + **英文标识 chip**（等宽字体，如 `code-reviewer`）
