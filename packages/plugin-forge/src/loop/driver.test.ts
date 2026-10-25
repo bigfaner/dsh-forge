@@ -202,6 +202,18 @@ function tasksHarness() {
       return lists.created
     },
     queryTask: async () => shift(queryQueue),
+    // 1.16 批量结算读面桩（wave 快照数据源——completed created 桶投影，commit/债计数零值）
+    taskSettlements: async () =>
+      lists.created
+        .filter((c) => c.taskStatus === 'completed')
+        .map((c) => ({
+          slug: c.slug,
+          localId: c.localId,
+          taskType: c.taskType,
+          fixDerived: c.sourceTask !== undefined,
+          commitHashes: ['abc1234'], // 同 queryOf('completed') 结算记录 commit——快照口径数据源同值
+          evidenceDebtCount: 0,
+        })),
     addTask: async (input: AddTaskInput) => {
       addTaskInputs.push(input)
       return { taskId: 'fix-uuid', slug: input.source.slug, localId: 'fix-2', reused: false }

@@ -315,6 +315,7 @@ export const TASKS_SERVICE_METHODS = [
   'validateFeatureTasks',
   'listTasks',
   'taskStats',
+  'taskSettlements',
   'taskGraph',
   'taskDetail',
   'sessionLinks',

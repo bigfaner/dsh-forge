@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { TaskStatus } from '@dsh-forge/contracts'
 import { LINKS_BY_SESSION_SQL } from './session-links.js'
-import { listTasks, SQL_STATS_BY_CONTAINER, SQL_TASKS_BY_CONTAINER, taskGraph, taskStats } from './list.js'
+import { listTasks, SQL_STATS_BY_CONTAINER, SQL_TASKS_BY_CONTAINER, taskGraph, taskSettlements, taskStats } from './list.js'
 import { RECORDS_BY_TASK_SQL } from './query.js'
 import {
   createTasksHarness,
@@ -248,6 +248,58 @@ describe('读面直读 Hard Rule（即时判据 = 单次重取见新值——禁
     await expect(listTasks({ store: h!.store }, { projectId: P() })).resolves.toHaveLength(1)
     const [stats1] = [await taskStats({ store: h!.store }, { projectId: P() })]
     expect(stats1.total).toBe(1)
+  })
+})
+
+describe('taskSettlements：容器 completed 任务结算面批量读（1.16 wave 快照单批数据源）', () => {
+  it('单查询聚合：commit 集记录序 / fix 派生判别 / evidenceDebt 计数 / 非 completed 不入', async () => {
+    const d = db()
+    seedFeature(d, { slug: 'f1' })
+    const c1 = seedTask(d, 'f1', '1.1', { status: 'completed', type: 'coding-enhancement', createdAt: TS(1) })
+    const fix = seedTask(d, 'f1', '1.2', { status: 'completed', type: 'coding-fix', createdAt: TS(2) })
+    const derived = seedTask(d, 'f1', '1.3', { status: 'completed', sourceTaskId: c1, createdAt: TS(3) })
+    const pending = seedTask(d, 'f1', '1.4', { status: 'pending', createdAt: TS(4) })
+    seedRecord(d, c1, { verb: 'submit', commitHash: 'c1', createdAt: TS(5) })
+    seedRecord(d, c1, { verb: 'submit', commitHash: 'c1', createdAt: TS(6) }) // 任务内重复保留——去重归消费面
+    seedRecord(d, c1, { verb: 'add', createdAt: TS(7) })
+    seedRecord(d, fix, {
+      verb: 'submit',
+      commitHash: '',
+      recordFieldsJson: JSON.stringify({ evidenceDebt: { suite: 'e2e', specs: ['a.spec.ts'] } }),
+      createdAt: TS(8),
+    })
+    seedRecord(d, fix, {
+      verb: 'submit',
+      commitHash: 'c2',
+      recordFieldsJson: JSON.stringify({ evidenceDebt: { suite: 'e2e', specs: ['b.spec.ts'] } }),
+      createdAt: TS(9),
+    })
+    seedRecord(d, derived, { verb: 'submit', recordFieldsJson: 'not-json', createdAt: TS(10) }) // 畸形负载计 0
+    seedRecord(d, pending, { verb: 'submit', commitHash: 'cx', createdAt: TS(11) }) // 非 completed 不入
+    await expect(
+      taskSettlements({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'f1' } }),
+    ).resolves.toEqual([
+      { slug: 'f1', localId: '1.1', taskType: 'coding-enhancement', fixDerived: false, commitHashes: ['c1', 'c1'], evidenceDebtCount: 0 },
+      { slug: 'f1', localId: '1.2', taskType: 'coding-fix', fixDerived: false, commitHashes: ['c2'], evidenceDebtCount: 2 },
+      { slug: 'f1', localId: '1.3', taskType: 'coding-feature', fixDerived: true, commitHashes: [], evidenceDebtCount: 0 },
+    ])
+  })
+
+  it('proposal 容器双轨同形 + 未命中容器 → 空集（读面零 404）', async () => {
+    const d = db()
+    seedProposal(d, { slug: 'p1' })
+    const src = seedTask(d, 'p1', '1.0', { status: 'completed', kind: 'proposal', createdAt: TS(1) })
+    const t = seedTask(d, 'p1', '1.1', { status: 'completed', kind: 'proposal', sourceTaskId: src, createdAt: TS(2) })
+    seedRecord(d, t, { verb: 'submit', commitHash: 'cp' })
+    await expect(
+      taskSettlements({ store: h!.store }, { projectId: P(), source: { kind: 'proposal', slug: 'p1' } }),
+    ).resolves.toEqual([
+      { slug: 'p1', localId: '1.0', taskType: 'coding-feature', fixDerived: false, commitHashes: [], evidenceDebtCount: 0 },
+      { slug: 'p1', localId: '1.1', taskType: 'coding-feature', fixDerived: true, commitHashes: ['cp'], evidenceDebtCount: 0 },
+    ])
+    await expect(
+      taskSettlements({ store: h!.store }, { projectId: P(), source: { kind: 'feature', slug: 'nope' } }),
+    ).resolves.toEqual([])
   })
 })
 

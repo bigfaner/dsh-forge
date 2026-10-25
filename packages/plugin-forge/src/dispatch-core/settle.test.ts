@@ -87,6 +87,19 @@ function waveHarness(options: {
     queryTask: async (input: { taskRef: { localId: string } }) => detail(input.taskRef.localId),
     listTasks: async () => cards,
     taskStats: async () => ({ total: cards.length, byStatus, unmetPending: 0 }),
+    // 1.16 批量结算读面桩（快照口径数据源——替代逐卡 queryTask）
+    taskSettlements: async () =>
+      completed.map((c) => {
+        const records = options.recordsByTask?.[c.localId] ?? []
+        return {
+          slug: c.slug,
+          localId: c.localId,
+          taskType: c.taskType,
+          fixDerived: c.sourceTask !== undefined,
+          commitHashes: records.map((r) => r.commitHash).filter((h): h is string => h !== undefined && h !== ''),
+          evidenceDebtCount: records.filter((r) => r.evidenceDebt !== undefined).length,
+        }
+      }),
   } as unknown as ForgeTasksService
 }
 

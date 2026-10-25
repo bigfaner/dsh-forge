@@ -171,6 +171,8 @@ export function seedRecord(
     recordFieldsJson?: string
     gateJson?: string
     digest?: string
+    /** 结算提交 hash（1.16 taskSettlements 测试种行受控项） */
+    commitHash?: string
     loopSourced?: boolean
     actor?: string
     sessionId?: string
@@ -181,7 +183,7 @@ export function seedRecord(
   db.prepare(
     `INSERT INTO task_records (task_id, verb, from_status, to_status, reason, summary, files_json,
        ac_json, record_fields_json, gate_json, commit_hash, dispatch_digest, loop_sourced, actor, session_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     taskId,
     o.verb ?? 'add',
@@ -193,6 +195,7 @@ export function seedRecord(
     o.acJson ?? null,
     o.recordFieldsJson ?? null,
     o.gateJson ?? null,
+    o.commitHash ?? null,
     o.digest ?? null,
     o.loopSourced === true ? 1 : 0,
     o.actor ?? 'plugin-tool',

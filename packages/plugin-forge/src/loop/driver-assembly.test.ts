@@ -128,6 +128,18 @@ function tasksStub(options: { claim: ClaimTaskResult[]; lists?: TaskCard[] }) {
     taskStats: async () => shift(statsQueue),
     listTasks: async () => options.lists ?? [],
     queryTask: async () => queryOf('completed'),
+    // 1.16 批量结算读面桩（wave 快照数据源——completed lists 投影，commit/债计数零值）
+    taskSettlements: async () =>
+      (options.lists ?? [])
+        .filter((c) => c.taskStatus === 'completed')
+        .map((c) => ({
+          slug: c.slug,
+          localId: c.localId,
+          taskType: c.taskType,
+          fixDerived: c.sourceTask !== undefined,
+          commitHashes: ['abc1234'], // 同 queryOf('completed') 结算记录 commit——快照口径数据源同值
+          evidenceDebtCount: 0,
+        })),
     addTask: async (input: AddTaskInput) => {
       addTaskInputs.push(input)
       return { taskId: 'retro-uuid', slug: input.source.slug, localId: '9.1', reused: false }

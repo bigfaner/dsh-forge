@@ -660,6 +660,25 @@ export interface TaskStats {
   unmetPending: number
 }
 
+/** taskSettlements 查询（容器作用域 completed 任务结算面批量读——wave 快照聚合单批数据源） */
+export interface TaskSettlementsQuery {
+  projectId: string
+  source: ContainerRef
+}
+
+/** taskSettlements 行（单 completed 任务的结算聚合——提交 hash 集 + fix 派生判别 + 取证债计数） */
+export interface TaskSettlementRow {
+  slug: string
+  localId: string
+  taskType: TaskType
+  /** fix 链派生（source_task_id 在场——fixes_total 判别第二支） */
+  fixDerived: boolean
+  /** 该任务全部记录的非空 commit_hash（记录序保留——跨任务去重归消费面单源） */
+  commitHashes: string[]
+  /** 记录中 evidenceDebt 声明次数 */
+  evidenceDebtCount: number
+}
+
 /** taskGraph 查询（M3 容器化：容器子图） */
 export interface TaskGraphQuery {
   projectId: string
@@ -733,6 +752,8 @@ export interface ForgeTasksService {
   listTasks(q: ListTasksQuery): Promise<TaskCard[]>
   /** 七态计数 */
   taskStats(q: TaskStatsQuery): Promise<TaskStats>
+  /** 容器 completed 任务结算面批量读（wave 快照单批数据源——单查询聚合，替代逐任务 queryTask） */
+  taskSettlements(q: TaskSettlementsQuery): Promise<TaskSettlementRow[]>
   /** feature 任务图（DAG/泳道） */
   taskGraph(q: TaskGraphQuery): Promise<TaskGraph>
   /** 任务详情（allowedTransitions/actualFiles/refs 水化） */

@@ -70,36 +70,37 @@ export interface WaveSnapshot {
  * - fixes_total：completed 且 fix 类（coding-fix 类型 ∨ fix 链派生 sourceTask）数
  * - commits_total：completed 任务结算记录 commit_hash 去重集合大小
  * - evidence_debts_total：结算记录 evidenceDebt 声明次数
+ * 数据面 = core taskSettlements 单批聚合读（1.16——替代逐 completed 任务 queryTask 的
+ * O(N) 域调用；查询次数 O(N·completed) → 常数）。口径单源：跨任务 commit 去重/fix 判别/
+ * evidenceDebt 计数全在本函数。
  */
 export async function computeWaveSnapshot(
   tasks: ForgeTasksService,
   projectId: string,
   source: ContainerRef,
 ): Promise<WaveSnapshot> {
-  const stats = await tasks.taskStats({ projectId, source })
-  const cards = await tasks.listTasks({ projectId, source, sort: 'created' })
-  const completed = cards.filter((c) => c.taskStatus === 'completed')
+  const [stats, settlements] = await Promise.all([
+    tasks.taskStats({ projectId, source }),
+    tasks.taskSettlements({ projectId, source }),
+  ])
   let commitsTotal = 0
   let evidenceDebtsTotal = 0
+  let fixesTotal = 0
   const seenCommits = new Set<string>()
-  for (const card of completed) {
-    const detail = await tasks.queryTask({
-      projectId,
-      taskRef: { slug: card.slug, localId: card.localId },
-      include: { records: true },
-    })
-    for (const record of detail.records ?? []) {
-      if (record.commitHash !== undefined && record.commitHash !== '' && !seenCommits.has(record.commitHash)) {
-        seenCommits.add(record.commitHash)
+  for (const s of settlements) {
+    for (const hash of s.commitHashes) {
+      if (!seenCommits.has(hash)) {
+        seenCommits.add(hash)
         commitsTotal += 1
       }
-      if (record.evidenceDebt !== undefined) evidenceDebtsTotal += 1
     }
+    evidenceDebtsTotal += s.evidenceDebtCount
+    if (s.taskType === 'coding-fix' || s.fixDerived) fixesTotal += 1
   }
   return {
     tasksTotal: stats.byStatus.completed,
     commitsTotal,
-    fixesTotal: completed.filter((c) => c.taskType === 'coding-fix' || c.sourceTask !== undefined).length,
+    fixesTotal,
     evidenceDebtsTotal,
   }
 }
