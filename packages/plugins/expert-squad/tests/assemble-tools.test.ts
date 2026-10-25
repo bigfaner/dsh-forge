@@ -30,7 +30,9 @@ function makeToolsFace() {
   };
 }
 
-/** 宿主 ctx 替身：reflect.get 供可选服务（storage 缺席 = 内存态降级路径）。 */
+/** 宿主 ctx 替身：subagents 走 ctx 具名正门（bug 5a1e1132——官方 cordis Context
+ *  模块扩充 subagents: SubagentRuntime，非 reflect 字符串键）；reflect 只供可选服务
+ *  storage/tools（真可选——cordis 4.0.4 无可选 inject 语法，静态声明会永久 pending）。 */
 function makeCtx(tools: unknown, subagents: unknown = undefined) {
   const effects: unknown[] = [];
   return {
@@ -38,10 +40,10 @@ function makeCtx(tools: unknown, subagents: unknown = undefined) {
       connection: {
         fetch: { register: (): unknown => undefined },
       },
+      ...(subagents !== undefined ? { subagents } : {}),
       reflect: {
         get(name: string) {
           if (name === "tools") return tools;
-          if (name === "subagents") return subagents;
           return undefined;
         },
       },
@@ -126,6 +128,24 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
       pendingEffects = effects as Array<() => unknown>;
       await expect(expertSquadPlugin(ctx)).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("ctx.tools absent"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("subagents 取法正门（bug 5a1e1132）：只经 ctx.subagents 属性取服务——reflect 字符串键供给不误认（取法失配负向断言）", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { face, registered } = makeToolsFace();
+      const { ctx, effects } = makeCtx(face, undefined);
+      // 官方具名正门缺席、仅 reflect 字符串键残留（bug 5a1e1132 失配形态）——
+      // 不得经 reflect 误取并注册委派工具（管理 5 工具照常）。
+      (ctx as { reflect: { get(name: string): unknown } }).reflect.get = (name: string) =>
+        name === "tools" ? face : name === "subagents" ? SUBAGENTS : undefined;
+      pendingEffects = effects as Array<() => unknown>;
+      await expertSquadPlugin(ctx);
+      expect(registered).toEqual([...EXPERT_TOOLS]);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("ctx.subagents absent"));
     } finally {
       warn.mockRestore();
     }

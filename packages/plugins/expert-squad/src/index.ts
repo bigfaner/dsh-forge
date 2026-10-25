@@ -18,6 +18,7 @@
 import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { parseExpertFile } from "./store/frontmatter.js";
 import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
@@ -28,7 +29,6 @@ import {
   observeSubagentEnd,
   registerDelegateExpertTool,
   type SubagentEventsFace,
-  type SubagentsStartFace,
 } from "./dispatch/dispatch.js";
 import {
   resolvePluginExpertsRoot,
@@ -66,11 +66,16 @@ export interface ExpertSquadPluginConfig {
   readonly denyTools?: readonly string[];
 }
 
-/** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。 */
+/** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
+ *  subagents = 官方具名正门（bug 5a1e1132：@deepseek-ai/dsh-subagent 经 cordis Context
+ *  模块扩充声明 `subagents: SubagentRuntime` 非可选，宿主恒供 → 静态 inject + 直取；
+ *  AGENTS 1.5——type-only import 保全量类型安全，不再 reflect 字符串键丢类型取法）。 */
 interface ExpertSquadCtx {
   readonly storage?: StorageFace;
   readonly connection?: ConnectionLike;
   readonly tools?: ExpertSquadToolsFace;
+  /** 官方 subagent 服务正门（inject: ["subagents"]——形状校验保留在取用点）。 */
+  readonly subagents?: Pick<SubagentRuntime, "startContinuable">;
   /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
   on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
   effect(dispose: () => unknown): unknown;
@@ -87,7 +92,15 @@ function expertRootsFor(workspace: string): ExpertRoot[] {
   ];
 }
 
-/** 可选服务读取（守卫外取法：reflect.get 缺席返 undefined；异常吞为缺席）。 */
+/** 可选服务读取（守卫外取法：reflect.get 缺席返 undefined；异常吞为缺席）。
+ *  清扫留档（用户裁决 2026-10-25，具名服务优先）：本函数现仅存 storage/tools 两个
+ *  调用点，均为「官方有具名正门、结构上只能守卫外惰性取」——
+ *  · storage：官方 dsh-storage 声明 `storage: Storage` 正门，但宿主组合不供本服务
+ *    （可选消费），cordis 4.0.4 无 '?' 可选 inject 后缀，静态声明会使 fiber 在缺席
+ *    环境永久 pending（plugin-forge faces.ts forgeSettings 先例同因）；
+ *  · tools：官方 dsh-tools 声明 `tools: ToolRuntime` 正门，但本插件按可选消费
+ *    （denyTools 守卫域 + 缺席 fail-soft 跳过注册），同 fiber-pending 成因。
+ *  subagents 不在此列：官方声明非可选、宿主恒供，已改具名正门直取（inject 边）。 */
 function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
   try {
     return (ctx as { reflect?: { get(name: string): unknown } }).reflect?.get(name);
@@ -99,7 +112,8 @@ function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
 /** host face（Plugin.Function apply；async——state 面（可选）就绪后路由族注册）。
  *  静态 inject：cordis 守卫要求声明注入边方可读 ctx.storage / ctx.connection
  *  （缺声明 = apply 期 `cannot get property ... without inject`——client 侧同因）。
- *  inject 仅 connection（宿主组合恒在场）；storage 宿主组合不供（presence 探测降级
+ *  inject：connection（宿主组合恒在场）+ subagents（官方具名正门，bug 5a1e1132——
+ *  非可选声明，宿主恒供）；storage 宿主组合不供（presence 探测降级
  *  ——registry FMEA：state 缺席 = 启停内存态、重启回全启用，§AD2 降级语义）。 */
 async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginConfig = {}): Promise<void> {
   // Root cause: excludeTools 是插件 apply 期一次性实例 config，全局单实例挂载下无
@@ -325,8 +339,13 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   // 「调用 agent scope cwd」取值点需 tools.ts 面改造（execute 携 exec），超出接线
   // 边界——多工作区宿主为残余风险（fix-10 resume 留痕）。
   const registry = toolRegistry as ExpertsRegistry;
-  const subagents = readOptionalService(ctx, "subagents") as SubagentsStartFace | undefined;
-  if (subagents === undefined) {
+  // subagents 取法（bug 5a1e1132）：官方具名正门 ctx.subagents 直取（cordis Context
+  // 模块扩充，@deepseek-ai/dsh-subagent lib/types/index.d.ts:62-64——subagents:
+  // SubagentRuntime 非可选，宿主恒供 → inject 声明边即可守卫内直读）。此前
+  // readOptionalService 的 reflect 字符串键取法与具名服务失配，真机 delegate_expert
+  // 不注册。形状校验保留：startContinuable 非函数面同按缺席降级。
+  const subagents = ctx.subagents;
+  if (typeof subagents?.startContinuable !== "function") {
     console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
     registerDelegateExpertTool(toolsFace, {
@@ -339,6 +358,6 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
 }
 
-expertSquadPlugin.inject = ['connection'];
+expertSquadPlugin.inject = ['connection', 'subagents'];
 
 export default expertSquadPlugin;

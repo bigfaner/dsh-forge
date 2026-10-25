@@ -42,7 +42,14 @@ interface SlotsFace {
 
 /** cordis ctx 窄面（可选服务惰性取法——ctx.reflect.get 缺席返 undefined，异常吞为缺席；
  *  host 半 index.ts readOptionalService 同径先例：uiWorkspace/remote 为可选服务，
- *  静态 inject 声明会使 fiber 在服务缺席环境永久 pending——调用期惰性解析）。 */
+ *  静态 inject 声明会使 fiber 在服务缺席环境永久 pending——调用期惰性解析）。
+ *  清扫留档（用户裁决 2026-10-25，具名服务优先——两处残留均为「结构性只能惰性」）：
+ *  · uiWorkspace：全量检索官方包 .d.ts 无任何 Context 服务名声明（dsh-client-ui-workspace
+ *    仅导出 UiWorkspace 类型，未扩充 cordis Context）——官方缺正门，reflect 为唯一取法；
+ *  · remote：官方 dsh-api-remotes 确有 `remote: ClientRemote` 具名正门，但本面板
+ *    inject 仅 ["slots"]（挂载不得依赖 remote 可用性——召唤在用户点击时点才解析，
+ *    届时服务必就绪；apps/web client-plugin m3.1 D25 model catalog 同径先例），
+ *    加 inject 边 = 面板挂载被 remote 生命周期绑架，弃直取留惰性。 */
 interface LazyCtx {
   reflect?: { get(name: string): unknown };
 }
