@@ -16,9 +16,9 @@
 
 import { z } from "zod";
 import type {
-  ContinuableStart,
   ContinuableStartSpec,
   SubagentRunEndInfo,
+  SubagentRuntime,
 } from "@deepseek-ai/dsh-subagent";
 import type { ExpertsService } from "../registry.js";
 import {
@@ -42,10 +42,8 @@ export type ParentAgent = ContinuableStartSpec["request"]["parent"];
 /** 停止原因子面（end 事件载荷内字段）。 */
 export type SubagentStopReason = SubagentRunEndInfo["stopReason"];
 
-/** 官方 subagent 服务派发面（startContinuable 正门）。 */
-export interface SubagentsStartFace {
-  startContinuable(spec: ContinuableStartSpec): Promise<ContinuableStart>;
-}
+/** 官方 subagent 服务派发面（startContinuable 正门——type-only Pick 自官方 SubagentRuntime 单源，不手抄签名）。 */
+export type SubagentsStartFace = Pick<SubagentRuntime, "startContinuable">;
 
 /** 官方 subagent 生命周期事件缝（仅消费 subagent/end）。 */
 export interface SubagentEventsFace {

@@ -44,12 +44,14 @@ interface SlotsFace {
  *  host 半 index.ts readOptionalService 同径先例：uiWorkspace/remote 为可选服务，
  *  静态 inject 声明会使 fiber 在服务缺席环境永久 pending——调用期惰性解析）。
  *  清扫留档（用户裁决 2026-10-25，具名服务优先——两处残留均为「结构性只能惰性」）：
- *  · uiWorkspace：全量检索官方包 .d.ts 无任何 Context 服务名声明（dsh-client-ui-workspace
- *    仅导出 UiWorkspace 类型，未扩充 cordis Context）——官方缺正门，reflect 为唯一取法；
- *  · remote：官方 dsh-api-remotes 确有 `remote: ClientRemote` 具名正门，但本面板
- *    inject 仅 ["slots"]（挂载不得依赖 remote 可用性——召唤在用户点击时点才解析，
- *    届时服务必就绪；apps/web client-plugin m3.1 D25 model catalog 同径先例），
- *    加 inject 边 = 面板挂载被 remote 生命周期绑架，弃直取留惰性。 */
+ *  · uiWorkspace：官方有 typed 正门（dsh-client-ui-workspace navigation.d.ts:91-95
+ *    `declare module '@deepseek-ai/cordis' { interface Context { uiWorkspace: UiWorkspace } }`），
+ *    取调用期惰性系生命周期理由而非取法缺失——本面板 inject 仅 ["slots"]，静态 inject
+ *    uiWorkspace 会使 fiber 在服务缺席环境永久 pending（召唤在用户点击时点才解析，
+ *    届时服务必就绪）；
+ *  · remote：官方 dsh-api-remotes 确有 `remote: ClientRemote` 具名正门，同一生命周期理由
+ *    （apps/web client-plugin m3.1 D25 model catalog 同径先例），加 inject 边 = 面板挂载
+ *    被 remote 生命周期绑架，弃直取留惰性。 */
 interface LazyCtx {
   reflect?: { get(name: string): unknown };
 }
@@ -64,7 +66,9 @@ function uiWorkspaceOf(ctx: LazyCtx): SummonPlatform["openWorkspace"] | undefine
     if (typeof open !== "function") return undefined;
     // Root cause（bug 9d9d1bd3）：官方方法以 this 消费服务面（首行 this.ctx.layout）——
     // 裸引用剥离后经 platform 字面量调用即 this 脱绑（召唤必败 TypeError）。包装保持
-    // 方法调用形态（open-session.ts:377 先例同法）。
+    // 方法调用形态。语境注记：open-session.ts:377 先例 = face 内经
+    // services.uiWorkspace.openWorkspace(...) 成员访问调用保 receiver；此处 open 经裸引用
+    // 自 platform 字面量调用，故以 .call 显式保 receiver——同一机制（this 不脱绑）两处落地。
     return (workspaceId, beforeOpen) => open.call(service, workspaceId, beforeOpen);
   } catch {
     return undefined;
@@ -80,8 +84,9 @@ function agentPresetsOf(ctx: LazyCtx): SummonPlatform["selectPreset"] | undefine
     const ns = (direct ?? (reflect.get("remote") as { agentPresets?: { select?: unknown } } | undefined)?.agentPresets) as
       | { select?: SummonPlatform["selectPreset"] }
       | undefined;
-    // Root cause（bug 9d9d1bd3 同因）：select 同为 this 消费面——包装保持方法调用形态
-    // （ns 闭包窄化失效，先落非可选局部再 .call 保 receiver）。
+    // 机制注记（如实——绑定形态未核销）：select 消费 this 面的绑定策略未经源码核销
+    // （疑闭包绑定 namespace），.call 保 receiver 包装中性无害，防御性保留
+    // （先落非可选局部再 .call）。
     const namespace = ns;
     const select = namespace?.select;
     if (namespace === undefined || typeof select !== "function") return undefined;

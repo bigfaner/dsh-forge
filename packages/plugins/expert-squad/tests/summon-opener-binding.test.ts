@@ -3,7 +3,8 @@
 // 抛 TypeError → 降级条「召唤会话打开失败」恒现）。同成因复现：官方服务方法以 this 依赖
 // 形态在场（镜像官方 client.js openWorkspace 首行 AbortSignal.any([this.ctx.layout...])），
 // 经 summonOpenerOf 真实装配路径调用——修复前必败（this 脱绑），修复后（保 receiver）
-// 必过。open-session.ts:377 先例 = 箭头包装内方法调用形态。
+// 必过。语境注记：open-session.ts:377 先例 = face 内经成员访问调用保 receiver；
+// 本处经 platform 字面量，故 .call 显式保 receiver——同一机制两处落地。
 
 import { describe, expect, it } from "vitest";
 import { summonOpenerOf } from "../src-client/index.js";
