@@ -7,11 +7,32 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchRouteLike } from "../src/routes.js";
 import expertSquadPlugin from "../src/index.js";
 
 const KEY = "test-reviewer";
+
+// bug 31a989d2 观测探针：包裹 ExpertWatchManager 记录实例化与 dispose（透明包装，
+// 行为零差异——只多记存活面）。vi.hoisted 供 mock 工厂与用例共享。
+const watchProbe = vi.hoisted(() => ({
+  instances: [] as Array<{ isDisposed: () => boolean }>,
+}));
+vi.mock("../src/store/watch.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/store/watch.js")>();
+  class CountingExpertWatchManager extends actual.ExpertWatchManager {
+    private disposed = false;
+    constructor(...args: ConstructorParameters<typeof actual.ExpertWatchManager>) {
+      super(...args);
+      watchProbe.instances.push({ isDisposed: () => this.disposed });
+    }
+    override async dispose(): Promise<void> {
+      this.disposed = true;
+      await super.dispose();
+    }
+  }
+  return { ...actual, ExpertWatchManager: CountingExpertWatchManager };
+});
 
 /** project 层夹具档案（同 e2e 形状：frontmatter 必填齐 + 人设正文）。 */
 function expertMd(name: string, title: string): string {
@@ -333,5 +354,28 @@ describe("bug f9410209: registry 首刷 rejected promise 逐出（下次请求�
     blocked.value = false;
     const second = await get(list, url);
     expect(second.status, `逐出后重试应 200：${second.text}`).toBe(200);
+  });
+
+  it("bug 31a989d2: 持续首刷失败 + 3 次重试——失败代逐一 dispose，存活 watcher 有界（≤1）", { timeout: 30_000 }, async () => {
+    const ws = makeWorkspace();
+    const blocked = { value: true };
+    const routes = await bootWithFlakyStorage(blocked);
+    const before = watchProbe.instances.length;
+    const list = routeOf(routes, "list");
+    const url = `/api/expert-squad/list?workspace=${encodeURIComponent(ws)}&includeDisabled=true`;
+    for (let i = 0; i < 3; i += 1) {
+      const res = await get(list, url);
+      expect(res.status, `第 ${i + 1} 次重试应如实 400：${res.text}`).toBe(400);
+    }
+    const created = watchProbe.instances.slice(before);
+    expect(created.length, "每次重试都应重建 manager（毒化代不复用）").toBe(3);
+    const alive = created.filter((m) => !m.isDisposed());
+    expect(
+      alive.length,
+      `失败代必须逐一 dispose（存活恒 ≤1 与 workspace 一一对应，有界）：共 ${created.length} 建却 ${alive.length} 存活`,
+    ).toBe(0);
+    for (const [i, m] of created.entries()) {
+      expect(m.isDisposed(), `第 ${i + 1} 个失败代 manager 已 dispose`).toBe(true);
+    }
   });
 });

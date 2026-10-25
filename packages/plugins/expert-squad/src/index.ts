@@ -144,7 +144,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   // （官方 skill-filesystem 同缝）。失效回调经串行链 refresh 整体换代——同代内竞速
   // 事件合并（watch 层 microtask）+ 重扫互斥（promise 链）。
   const registries = new Map<string, Promise<ExpertsRegistry>>();
-  const watchManagers: ExpertWatchManager[] = [];
+  const watchManagers = new Map<string, ExpertWatchManager>();
   const refreshChains = new Map<string, Promise<void>>();
   const enqueueRefresh = (workspace: string, registry: ExpertsRegistry): void => {
     const prior = refreshChains.get(workspace) ?? Promise.resolve();
@@ -167,14 +167,25 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
       // Root cause: 首刷 rejected promise 永久缓存 = 五路由恒 400（毒化缓存）——
       // 失败即逐出条目，下次请求重建 registry 重试（bug f9410209）。
       hit.catch(() => {
-        if (registries.get(workspace) === hit) registries.delete(workspace);
+        if (registries.get(workspace) === hit) {
+          registries.delete(workspace);
+          // Root cause: 逐出只删 registries 条目时旧 manager 仅插件卸载才释放——
+          // 持续失败场景同 workspace watcher 无界累积（bug 31a989d2）。失败逐出
+          // 同步 dispose 并摘除，watcher 数与 workspace 一一对应有界；重试由
+          // 下次请求的 registryFor 重建承担。
+          const stale = watchManagers.get(workspace);
+          if (stale !== undefined) {
+            watchManagers.delete(workspace);
+            void stale.dispose();
+          }
+        }
       });
       registries.set(workspace, hit);
       const manager = new ExpertWatchManager(expertRootsFor(workspace), {
         onInvalidated: () => enqueueRefresh(workspace, registry),
         onError: (error) => console.warn(`[expert-squad] ${String(error)}`),
       });
-      watchManagers.push(manager);
+      watchManagers.set(workspace, manager);
       ctx.effect(() => () => void manager.dispose());
       void manager.start().catch(() => {}); // openWatcher 内部已上报，start 聚合面兜底
     }
@@ -185,7 +196,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   if (ctx.on !== undefined) {
     const invalidate = makeFsObservedInvalidator({
       observeHostMutation: (path: string) => {
-        for (const manager of watchManagers) manager.observeHostMutation(path);
+        for (const manager of watchManagers.values()) manager.observeHostMutation(path);
       },
     });
     const disposeOn = ctx.on("fs/observed", (target: unknown, observation: unknown, actor: unknown) => {
