@@ -104,3 +104,29 @@ export function forgeEventClockSeconds(time: number): string {
     return ''
   }
 }
+
+/** 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀与 `（…）` 修饰——原型 `[forge·调度] {slug}` 同语；全组缺席 = ''） */
+export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[]): string {
+  for (const entry of entries) {
+    // 徽记与 `任务源:` 可同行（`[forge·X] 任务源: feat-x`）——先剥徽记前缀再取值
+    const match = /(?:^|\n)\s*(?:\[forge·[^\]]+\]\s*)?任务源:\s*(.+)/.exec(entry.text)
+    if (match !== null) {
+      return match[1]!
+        .replace(/（[^）]*）/g, '')
+        .trim()
+    }
+  }
+  return ''
+}
+
+/** 组头计数文案（`N 条 · 今日 HH:mm–HH:mm`——原型 evt-head .count 同语；单条单时点；空组 = ''） */
+export function forgeEventGroupCount(entries: readonly ForgeEventEntryData[]): string {
+  const first = entries[0]
+  const last = entries.at(-1)
+  if (first === undefined) return ''
+  const range =
+    last !== undefined && last.id !== first.id
+      ? `${forgeEventClock(first.time)}–${forgeEventClock(last.time)}`
+      : forgeEventClock(first.time)
+  return `今日 ${range}`
+}

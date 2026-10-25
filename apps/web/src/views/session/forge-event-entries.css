@@ -1,15 +1,34 @@
-/* loop-event-delivery 1.9 消息面事件折叠条目组（prototype.html 左栏形态——官方令牌
- * 直用，ForgeProgressNode 行语言同族；零机制词零平台 fork）。 */
+/* loop-event-delivery 1.9 消息面事件折叠条目组（prototype.html 左栏 .evt-group 形态——
+ * 官方令牌直用，ForgeProgressNode 行语言同族；零机制词零平台 fork）。
+ * 组块边框包整组（头 + 展开体）——官方 DisclosureRow 只承头行，边框上移自包裹层。 */
 .dswf-event-entries {
+  position: relative; /* 右贴计数锚（官方 DisclosureRow 无尾部插槽——绝对定位胶水） */
   width: 100%;
   min-width: 0;
-}
-
-/* 组块容器（hairline 边框 + 模块底——区别于人类输入气泡面） */
-.dswf-event-entries .dswf-event-entries-row {
   border: 0.5px solid var(--dsw-alias-border-l2); /* dsw-raw 上游半像素 hairline 边框刻度 */
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-module-platform);
+  overflow: hidden;
+}
+
+/* 组头行（边框已上移自包裹层——本体零边框） */
+.dswf-event-entries .dswf-event-entries-row {
+  border: 0;
+  background: transparent;
+}
+
+/* 右贴计数（`N 条 · 今日 HH:mm–HH:mm`——原型 evt-head .count 右对齐同位） */
+.dswf-event-entries-count {
+  position: absolute;
+  top: 0;
+  right: 14px; /* dsw-raw 原型头内距刻度 */
+  height: 24px; /* 官方 24px 过程行高——垂直居中同值 */
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  font-size: 11px; /* dsw-raw 原型 count 11px 刻度 */
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
 }
 
 /* forge 徽记点（组头图标位——远征蓝） */
@@ -21,8 +40,10 @@
   display: inline-block;
 }
 
+/* 展开体（通栏——原型 evt-body 全宽行；上缘 hairline 分隔头行） */
 .dswf-event-entries-content {
-  padding: 2px 8px 6px 32px; /* dsw-raw 官方行内刻度（图标16+gap 折叠行文本位缩进） */
+  padding: 0; /* dsw-raw 原型 evt-row 通栏刻度（7px 14px 落行本体） */
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 
 /* 展开逐条列表（时间 + 场景章 + 任务标题 + 摘要） */
@@ -36,9 +57,9 @@
 
 .dswf-event-entries-item {
   display: flex;
-  gap: 8px; /* dsw-raw 官方行内刻度 */
+  gap: 10px; /* dsw-raw 原型 evt-row 列距刻度 */
   align-items: baseline;
-  padding: 4px 0; /* dsw-raw 官方行内刻度（上下 4px 分行呼吸） */
+  padding: 7px 14px; /* dsw-raw 原型 evt-row 行内距刻度 */
   font-size: var(--dsh-content-font-size-secondary); /* dsw-raw 官方 dsh-content 字号令牌 */
   line-height: var(--dsh-content-font-line-height-secondary, 18px); /* dsw-raw 官方 13px 行高刻度 */
   border-bottom: 0.5px solid var(--dsw-alias-border-l1); /* dsw-raw hairline 分行刻度 */
@@ -48,42 +69,54 @@
   border-bottom: 0;
 }
 
+.dswf-event-entries-item:hover {
+  background: var(--dsw-alias-bg-module-platform); /* dsw-raw 原型 evt-row:hover 模块底（组内反色） */
+}
+
 .dswf-event-entries-time {
   flex: none;
+  font-size: 11px; /* dsw-raw 原型 evt-time 11px 刻度 */
   color: var(--dsw-alias-label-caption);
   font-variant-numeric: tabular-nums;
 }
 
-/* 场景章（胶囊——族色描边/浅底） */
+/* 场景章（胶囊——定宽居中 + 族色描边/浅底，原型 evt-kind 同形） */
 .dswf-event-entries-badge {
   flex: none;
-  padding: 0 8px; /* dsw-raw 官方胶囊内距刻度 */
-  border-radius: 999px; /* dsw-raw 圆点胶囊本体（原型 evt-kind 同形） */
+  width: 56px; /* dsw-raw 原型 evt-kind 定宽刻度 */
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 999px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-secondary);
-  line-height: 18px;
 }
 
 .dswf-event-entries-badge[data-tone='run'] {
   color: var(--dsw-alias-business-primary);
   border-color: var(--dsw-alias-business-primary);
-  background: color-mix(in srgb, var(--dsw-alias-business-primary) 12%, transparent); /* dsw-raw 浅底刻度（sidebar 径同族 color-mix） */
+  background: var(--dsw-alias-state-business-tertiary);
 }
 
 .dswf-event-entries-badge[data-tone='done'] {
   color: var(--dsw-alias-state-success-primary);
   border-color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
 }
 
 .dswf-event-entries-badge[data-tone='blk'] {
   color: var(--dsw-alias-state-warn-primary);
   border-color: var(--dsw-alias-state-warn-primary);
+  background: var(--dsw-alias-state-warn-tertiary);
 }
 
 .dswf-event-entries-text {
   min-width: 0;
   color: var(--dsw-alias-label-primary, inherit);
-  overflow-wrap: anywhere;
+  overflow: hidden; /* 单行省略（原型 evt-text 单行同语） */
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dswf-event-entries-text b {

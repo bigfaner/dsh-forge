@@ -9,6 +9,8 @@ import {
   forgeEventBadgeTone,
   forgeEventClock,
   forgeEventClockSeconds,
+  forgeEventGroupCount,
+  forgeEventGroupSource,
   isForgeEventGroupData,
   type ForgeEventGroupData,
 } from './forge-event-data.js'
@@ -45,11 +47,21 @@ export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
 function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   // 默认态 = 位置语义（最新组展开 / 前组收起）；用户切换后为本地微观态
   const [open, setOpen] = useState(data.isLatest)
+  // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
+  // `N 条 · 今日 HH:mm–HH:mm`（计数经自包裹层绝对定位——官方 DisclosureRow 无尾部
+  // 插槽，零 fork）；来源缺席回落旧摘要串（计数并入标题，不叠贴）
+  const source = forgeEventGroupSource(data.entries)
+  const title = source !== '' ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
   return (
     <div className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
+      {source !== '' ? (
+        <span className="dswf-event-entries-count" aria-hidden="true">
+          {data.entries.length} 条 · {forgeEventGroupCount(data.entries)}
+        </span>
+      ) : null}
       <DisclosureRow
         icon={<span className="dswf-event-entries-dot" aria-hidden="true" />}
-        title={forgeEventGroupSummary(data)}
+        title={title}
         open={open}
         expandable
         onToggle={() => setOpen((v) => !v)}
