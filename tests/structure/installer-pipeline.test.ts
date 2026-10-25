@@ -221,12 +221,12 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   )
 
   it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
-    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid——远征/突击组合行）
-    expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
+    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid/expert-squad——远征/突击/HR 组合行）
+    expect(presetCarriedPlugins()).toEqual(['expert-squad', 'md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
-      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
+      ['contracts', 'core', 'path-key', 'plugin-forge', 'plugin-forge-spec', 'plugins/expert-squad', 'plugins/git-worktree', 'plugins/md-mermaid'].sort(),
     )
   })
 

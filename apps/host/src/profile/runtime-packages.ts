@@ -58,10 +58,11 @@ export const PRODUCT_PLUGIN_PACKAGES: readonly string[] = [
   '@dsh-forge/md-mermaid',
 ]
 
-/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid / git-worktree 居 packages/plugins/ 子居所）。 */
+/** 仓库内源目录相对 packages/ 的子路径（默认平铺 packages/<short>；md-mermaid / git-worktree / expert-squad 居 packages/plugins/ 子居所）。 */
 export const PRODUCT_PLUGIN_PACKAGE_DIRS: Readonly<Record<string, string>> = {
   '@dsh-forge/md-mermaid': 'plugins',
   '@dsh-forge/git-worktree': 'plugins',
+  '@dsh-forge/expert-squad': 'plugins',
 }
 
 /** 包名 → profile.dev link 相对路径（runtime-packages.test / materialize.test 同源 pin）。 */
