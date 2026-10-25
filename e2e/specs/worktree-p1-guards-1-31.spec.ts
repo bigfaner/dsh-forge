@@ -160,21 +160,21 @@ test('1.31 UI：A1 点选时点确认立现 + A2 mask 退场干净 + A3 确认�
     await typeIntoComposer(page, '1-31 A2 mask-clean typing')
     await snap(page, 'a2-mask-clean-composer.png')
 
-    // ── A3：显式重选 → 确认框重弹（取消非永久否决）→ 确认 → 选中态切行 + 零会话副作用 ──
+    // ── A3：显式重选 → 确认框重弹（取消非永久否决）→ 确认 → 选中态切行 + openWorkspace
+    // 建/复用该树 blank（bug 05c712a4：显示 = 实际生效状态）──
     await pickMenuRow(page, 'feat-a')
     await expect(heroRiskDialog(page), 'A3：显式重选应重弹确认框').toBeVisible({ timeout: 8_000 })
     await snap(page, 'a3-dialog-reopens-after-reselect.png')
     await acknowledgeAndConfirm(page)
     await expect(heroRiskDialog(page)).toBeHidden()
     await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('feat-a')
-    // 点选零编排（结构性无并发第二路）：确认全程 wt-a 与项目根 attachedSessions 恒零
-    //（会话创建唯一时机 = 官方 create 调用点 wrap 预铸；点选 = 纯选中态）
+    // 点选即建/复用：wt-a blank 恰 1（复用零重复）；项目根复用既有 blank（基线不变）
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: 'A3：点选确认不应产生 wt-a 挂靠会话（纯选中态）' })
-      .toBe(0)
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: 'A3：点选确认应开户 wt-a blank（恰 1 零重复）' })
+      .toBe(1)
     expect(
       await attachedSessions(page, wsDir, wsDir),
-      'A3：项目根零并发第二路——点选/确认全程零新增（基线对照）',
+      'A3：项目根复用既有 blank——零新增（基线对照）',
     ).toBe(rootBaseline)
     await snap(page, 'a3-confirmed-switched-zero-sessions.png')
   } finally {

@@ -5,8 +5,9 @@
 //     workspaceId 直通官方）→ 会话 cwd = 项目根（branch = main）；重复点击零重复建；
 //   · 场景 B（选树 wt-a）：worktree 经产品创建弹窗建立（流程 A——官方 workspace 幂等创建
 //     + DTO 携带 workspaceId，选树路由硬前置）→ 点选时点跨分支确认（1.19 语义回归）→
-//     纯选中态（零新增会话副作用）→ 官方壳「新会话」（无参 startSession——入口锚定 wrap
-//     按 chip 显示选中树路由）→ 会话 cwd = 所选树（branch = feat-a）；重复点击零重复建。
+//     点选即 openWorkspace（建/复用该树 blank——bug 05c712a4 显示 = 实际生效状态）→
+//     官方壳「新会话」（无参 startSession——入口锚定 wrap 按 chip 显示选中树路由）→
+//     复用同一 blank → 会话 cwd = 所选树（branch = feat-a）；重复点击零重复建。
 // 断言面 = forge:worktree/seal（header.cwd 推导读侧）+ forge:worktree/checks（官方
 // workspace record sessionIds 计数）。基线取 boot 后快照（官方 boot 默认会话在场——
 // 推导制下计数 = 官方挂账事实，绝对 0 不可达，以「零新增」为口径）。
@@ -218,7 +219,7 @@ test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 
     await snap(page, 'scene-a-root-bound-blank-reuse.png')
 
     // ── 场景 B（选树 wt-a）：产品弹窗建树（流程 A 闭环）→ 点选时点跨分支确认 →
-    // 纯选中态 → 官方壳「新会话」按选中树路由 → 会话 cwd = 所选树 ──
+    // 点选即 openWorkspace（建/复用该树 blank）→ 官方壳「新会话」复用同一 blank ──
     await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
     await chip(page).first().click()
     await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
@@ -227,10 +228,10 @@ test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 
     await acknowledgeUntilSettled(page)
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
-    // 纯选中态：确认后零新增 wt-a 会话
+    // 点选即建/复用（bug 05c712a4：显示 = 实际生效状态——wt-a blank 恰 1）
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选确认不应新增 wt-a 会话（纯选中态）' })
-      .toBe(0)
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选确认应开户 wt-a blank（openWorkspace 显式传参）' })
+      .toBe(1)
     await clickOfficialNewSession(page)
     let wtSessionId = ''
     await expect

@@ -1,11 +1,14 @@
 // binding-derivation 1.29 真机 UI e2e（绑定推导制重写）：快速切换 + 发送落所选树。
-// 点选 worktree 行 = 纯选中态（点选时点跨分支确认，1.19 语义回归）；worktree 经产品创建
-// 弹窗建立（流程 A——官方 workspace 幂等创建 + DTO 携带 workspaceId，选树路由硬前置）。
+// 点选 worktree 行 = 显式传参官方 openWorkspace（建/复用该树 blank，主视图随之切换——
+// bug 05c712a4 composer 腿收口：显示 = 实际生效状态，AGENTS 3.4）；点选时点跨分支确认
+// （1.19 语义回归）；worktree 经产品创建弹窗建立（流程 A——官方 workspace 幂等创建 +
+// DTO 携带 workspaceId，选树路由硬前置）。
 // 创建 = 官方 session.create({workspaceId})（项目行钮显式项目根直通；官方壳「新会话」
 // 无参 startSession 由入口锚定 wrap 按 chip 显示选中树路由），发送走官方原流直落
 // header.cwd 对应 worktree——无哨兵改投（已退役），官方 blank 复用天然命中。
 //   · 挂载/默认锚定回填：零新增会话副作用；
-//   · 根树开户（项目行钮）→ 快速切换 feat-a → main → feat-a：零新增会话副作用；
+//   · 根树开户（项目行钮）→ 快速切换 feat-a → main → feat-a：点选即建/复用该树 blank
+//     （wt-a 恰 1，复用零重复；主树复用既有 blank）；
 //   · 官方壳「新会话」→ 会话 cwd = 所选树（feat-a）；
 //   · 发送 → 首条消息落所选树会话（seal 绑定回读 = cwd 证据；模型运行失败可接受
 //     ——隔离 profile 无模型凭据，user 消息落账不受影响）；零重复建。
@@ -175,7 +178,7 @@ async function snap(page: Page, name: string): Promise<void> {
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
-test('1.29 UI（推导制）：快速切换纯选中态——发送落所选树（官方复用天然命中）', async () => {
+test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显式传参）——发送落所选树（官方复用天然命中）', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-29-pure-'))
   const dshHome = join(userData, 'dsh-home')
@@ -204,7 +207,7 @@ test('1.29 UI（推导制）：快速切换纯选中态——发送落所选树�
     expect(await attachedSessions(page, wsDir, wtDir), '建树零新增 wt-a 会话').toBe(0)
 
     // ── 根树开户（项目行钮——显式项目根 workspaceId 直通官方；wrap 无参路由的官方锚在管
-    // 形态）→ 快速切换 feat-a → main → feat-a：纯选中态零新增 ──
+    // 形态）→ 快速切换 feat-a → main → feat-a：点选即建/复用该树 blank（主视图随之切换）──
     await clickNewSession(page)
     let rootSessionId = ''
     await expect
@@ -224,16 +227,21 @@ test('1.29 UI（推导制）：快速切换纯选中态——发送落所选树�
     expect(norm(rootBinding?.worktreePath), '项目行新会话 cwd = 项目根').toBe(norm(wsDir))
     await selectWorktree(page, 'feat-a')
     await snap(page, 'select-feat-a.png')
+    // 点选即建/复用（bug 05c712a4：显示 = 实际生效状态——wt-a blank 恰 1，composer 发送落点）
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选 feat-a 应开户 wt-a blank（openWorkspace 显式传参）' })
+      .toBe(1)
     await selectWorktree(page, 'main')
     await snap(page, 'select-main.png')
+    // 主树复用既有 blank（root 会话即 blank——零重复）
+    await expect
+      .poll(async () => attachedSessions(page, wsDir, wsDir), { timeout: 30_000, message: '点选 main 复用既有 blank（零重复）' })
+      .toBe(baseRoot)
     await selectWorktree(page, 'feat-a')
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '快速切换不应新增 wt-a 会话（纯选中态）' })
-      .toBe(0)
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wsDir), { timeout: 30_000, message: '快速切换不应新增主树会话（纯选中态）' })
-      .toBe(baseRoot)
-    await snap(page, 'quick-switch-no-session.png')
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '回切 feat-a 复用 blank（恰 1 零重复）' })
+      .toBe(1)
+    await snap(page, 'quick-switch-blank-per-tree.png')
 
     // ── 官方壳「新会话」（无参 startSession——wrap 按 chip 显示选中树路由）→ 会话
     // cwd = 所选树（feat-a）──

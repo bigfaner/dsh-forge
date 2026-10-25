@@ -153,14 +153,14 @@ test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', a
     await snap(page, 'menu-row-dedup.png')
     await page.keyboard.press('Escape')
 
-    // 选中记忆（1.29 纯选中态——自动跟进零挂靠编排）：新 worktree 挂靠会话恒 0，
-    // 会话创建唯一时机 = 首条消息
+    // 创建跟进选中（bug 05c712a4 后语义：选中确认即 openWorkspace 开户该树 blank；
+    // 跨分支确认待决期间选中态不变——自动跟进无人工确认，不开户）
     const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'dup-row')
     expect(created, '新 worktree 路径在场').toBeTruthy()
     await expect
       .poll(async () => attachedSessions(page, wsDir, created!.path), {
         timeout: 30_000,
-        message: '自动跟进不应产生挂靠会话（1.29 纯选中态）',
+        message: '创建跟进不自动开户（跨分支确认待决——确认前选中态不变）',
       })
       .toBe(0)
 
