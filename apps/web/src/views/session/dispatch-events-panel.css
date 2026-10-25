@@ -155,36 +155,90 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px; /* dsw-raw 双行微距刻度 */
 }
 
-.dswf-dep-row-title {
+/* 首行：任务键 + 状态徽标（key 纵向省略——长 slug/localId 不换行挤压） */
+.dswf-dep-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw key/徽标间距刻度 */
+  min-width: 0;
+}
+
+.dswf-dep-row-key {
   overflow: hidden;
-  font: var(--dsw-font-xxs-12);
+  font: var(--dsw-font-xxs-strong-12);
   color: var(--dsw-alias-label-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 备注行（「状态 · 摘要」——分组/章语义并入文案；原型 .frow .note 次级弱化） */
-.dswf-dep-row-note {
-  overflow: hidden;
+/* 状态徽标（key 右侧——feature-tab 章同款 soft tone 胶囊：primary 字/border + tertiary 底） */
+.dswf-dep-status {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   font: var(--dsw-font-xxxs-11);
-  line-height: var(--dsw-font-xxxs-11-line-height);
-  color: var(--dsw-alias-label-tertiary);
+  line-height: 16px;
+}
+
+.dswf-dep-status-run {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+.dswf-dep-status-done {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
+}
+
+.dswf-dep-status-blk {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+  background: var(--dsw-alias-state-warn-tertiary);
+}
+
+.dswf-dep-status-stop {
+  color: var(--dsw-alias-label-caption);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.dswf-dep-row-title {
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dswf-dep-row-side {
+  align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 4px; /* dsw-raw 时间/jump 徽标间距刻度 */
+  gap: 4px; /* dsw-raw 时间/耗时/jump 徽标间距刻度 */
 }
 
 .dswf-dep-row-time {
   font: var(--dsw-font-xxxs-11);
   color: var(--dsw-alias-label-caption);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 耗时徽标（启动时间右侧——caption 弱化胶囊；tabular 对齐不跳宽） */
+.dswf-dep-row-dur {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* jump 徽标（可跳转子会话行的可见 affordance——11px 级 tertiary，hover 提亮） */

@@ -10,8 +10,12 @@ import {
   DEP_WIDTH,
   DispatchEventsPanel,
   DispatchEventsPanelBody,
+  aggregateDispatchRowItems,
   aggregateDispatchRows,
   dispatchBadgePointerIsClick,
+  dispatchEventClockLabel,
+  dispatchEventDetailOf,
+  dispatchEventDurationLabel,
   dispatchEventNoteOf,
   dispatchEventStats,
   dispatchEventTitleOf,
@@ -132,7 +136,52 @@ describe('aggregateDispatchRows（1.16 任务键时间线——每任务最新�
     expect(markup).toContain('role="button"')
     expect(markup).toContain('data-dswf-dep-row="w-1"')
     expect(markup).toContain('data-dswf-dep-jump')
-    expect(markup).toContain('执行中 · 已启动执行')
+    expect(markup).toContain('dswf-dep-status-run">执行中')
+    expect(markup).toContain('已启动执行')
+  })
+})
+
+describe('aggregateDispatchRowItems（聚合行携启动时间——任务键首事件时戳）', () => {
+  it('同任务键首事件时戳 = startAt（终态后写覆盖不前移）；循环级单行 = 自身时戳', () => {
+    const rows = aggregateDispatchRowItems([
+      entry({ taskKey: 'a', at: 100 }),
+      entry({ taskKey: 'a', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 900 }),
+      entry({ taskKey: undefined, verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all', at: 300 }),
+    ])
+    expect(rows.map((r) => r.entry.taskKey ?? r.entry.verb)).toEqual(['finish-all', 'a'])
+    expect(rows[0]?.startAt).toBe(300)
+    expect(rows[1]?.startAt).toBe(100)
+    expect(rows[1]?.entry.at).toBe(900)
+  })
+  it('aggregateDispatchRows 条目视图与 items 同序同集', () => {
+    const entries = [entry({ taskKey: 'a', at: 100 }), entry({ taskKey: 'a', at: 150 })]
+    expect(aggregateDispatchRows(entries)).toEqual(aggregateDispatchRowItems(entries).map((r) => r.entry))
+  })
+})
+
+describe('dispatchEventClockLabel / dispatchEventDurationLabel（绝对启动时间 + 耗时标签）', () => {
+  it('时钟 = 本地时区 YYYY-MM-DD HH:mm（两位补零）', () => {
+    const ts = new Date(2026, 9, 24, 14, 5).getTime()
+    expect(dispatchEventClockLabel(ts)).toBe('2026-10-24 14:05')
+    expect(dispatchEventClockLabel(new Date(2026, 0, 3, 8, 7).getTime())).toBe('2026-01-03 08:07')
+  })
+  it('耗时 zh 紧凑两段档', () => {
+    expect(dispatchEventDurationLabel(0, 45_000)).toBe('45秒')
+    expect(dispatchEventDurationLabel(0, 185_000)).toBe('3分5秒')
+    expect(dispatchEventDurationLabel(0, 3 * 3600_000 + 5 * 60_000)).toBe('3小时5分')
+    expect(dispatchEventDurationLabel(0, 2 * 86400_000 + 3 * 3600_000)).toBe('2天3小时')
+    expect(dispatchEventDurationLabel(5_000, 1_000)).toBe('0秒')
+  })
+})
+
+describe('dispatchEventDetailOf（标题次行补充语义——状态词由徽标承载）', () => {
+  it('场景章 + 注记（不含状态词头）；全缺 = undefined', () => {
+    expect(dispatchEventDetailOf(entry({ scenario: 'claim/spawned' }))).toBe('已启动执行')
+    expect(dispatchEventDetailOf(entry({ status: 'blocked', scenario: 'blocked/with-fix', note: '投影类型缺失' }))).toBe(
+      '已带修复 · 投影类型缺失',
+    )
+    expect(dispatchEventDetailOf(entry({ scenario: 'claim/new', note: '窄读类型缺失' }))).toBe('领取 · 窄读类型缺失')
+    expect(dispatchEventDetailOf(entry())).toBeUndefined()
   })
 })
 
@@ -193,7 +242,7 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('live · 不经模型')
     expect(markup).toContain('data-dswf-dep-collapse')
   })
-  it('任务轨行形态：rail + 状态点色档 + 标题 + 备注行（场景分组组头已由任务键时间线替换）', () => {
+  it('双行任务轨行形态：rail + 状态点色档 + 首行 key/状态徽标 + 次行 title + 场景章补充', () => {
     const markup = body({
       entries: [
         entry({ taskKey: 'a', scenario: 'claim/new', at: 100 }),
@@ -204,23 +253,54 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('dswf-dep-rail')
     expect(markup).toContain('dswf-dep-run')
     expect(markup).toContain('dswf-dep-done')
-    expect(markup).toContain('执行中 · 领取')
+    expect(markup).toContain('dswf-dep-row-key">b')
+    expect(markup).toContain('dswf-dep-status-done">完成')
+    expect(markup).toContain('dswf-dep-status-run">执行中')
     expect(markup).not.toContain('data-dswf-dep-group')
   })
-  it('行状态备注：执行中/完成/阻塞/已中断 状态词与注记', () => {
+  it('双行呈现：taskKey 首行 + taskTitle 次行（补充语义并入次行）；右侧绝对启动时间 + 耗时徽标', () => {
+    const e = entry({ scenario: 'claim/spawned' })
+    const markup = body({ entries: [e], now: e.at + 185_000 })
+    expect(markup).toContain('dswf-dep-row-key">feat-x/2.4')
+    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染 · 已启动执行')
+    expect(markup).toContain(`dswf-dep-row-time">${dispatchEventClockLabel(e.at)}`)
+    expect(markup).toContain('dswf-dep-row-dur">3分5秒')
+  })
+  it('耗时徽标口径：执行中 = now 起算实时耗时；终态单事件行（时长不可辨）不呈现', () => {
+    const start = Date.parse('2026-10-24T14:00:00Z')
+    const running = body({
+      entries: [entry({ taskKey: 'a', at: start }), entry({ taskKey: 'a', scenario: 'claim/spawned', at: start + 60_000 })],
+      now: start + 125_000,
+    })
+    expect(running).toContain('dswf-dep-row-dur">2分5秒')
+    const terminal = body({ entries: [entry({ verb: 'settle', status: 'completed', scenario: 'task/complete' })] })
+    expect(terminal).not.toContain('dswf-dep-row-dur')
+    const terminalSpan = body({
+      entries: [entry({ taskKey: 'b', at: 0 }), entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 75_000 })],
+      now: 90_000,
+    })
+    expect(terminalSpan).toContain('dswf-dep-row-dur">1分15秒')
+  })
+  it('循环级瞬时事件（无 taskKey）= 无耗时徽标；任务行执行中 = now 起算实时耗时', () => {
+    const start = Date.parse('2026-10-24T14:00:00Z')
     const markup = body({
       entries: [
-        entry({ taskKey: 'a', status: 'running' }),
-        entry({ taskKey: 'b', status: 'completed', verb: 'settle', scenario: 'task/complete' }),
-        entry({ taskKey: 'c', status: 'blocked', scenario: 'blocked/with-fix', note: '投影类型缺失' }),
-        entry({ taskKey: 'd', status: 'interrupted', verb: 'stop', scenario: 'loop/stopped' }),
+        entry({ taskKey: undefined, verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all', at: start }),
+        entry({ taskKey: 'a', at: start }),
       ],
-      total: 4,
+      now: start + 185_000,
     })
-    expect(markup).toContain('执行中')
-    expect(markup).toContain('完成')
-    expect(markup).toContain('阻塞 · 已带修复 · 投影类型缺失')
-    expect(markup).toContain('已中断')
+    const dur = markup.match(/dswf-dep-row-dur">([^<]+)</)
+    expect(dur).not.toBeNull()
+    expect(dur![1]).toBe('3分5秒')
+    // 仅任务行一枚耗时徽标（循环级瞬时行零徽标）；循环级行 key = title 兜底链
+    expect(markup.split('dswf-dep-row-dur').length - 1).toBe(1)
+    expect(markup).toContain('dswf-dep-status-done">完成')
+  })
+  it('无 taskTitle 行 = 仅 key 首行（title 兜底链不重复次行）', () => {
+    const markup = body({ entries: [entry({ taskTitle: undefined })] })
+    expect(markup).toContain('dswf-dep-row-key">feat-x/2.4')
+    expect(markup).not.toContain('dswf-dep-row-title')
   })
   it('行点击跳 worker 子会话：直跳行 = role button + jump 徽标；反查命中行同交互；落空 = 非交互无徽标', () => {
     const direct = body({ entries: [entry({ workerSessionId: 'w-1' })], onOpenWorker: () => {} })

@@ -7,8 +7,9 @@
 //     {entries 最近 200 条窗口, total}）；官方 sessions.list store subscribe = onChanged
 //     实时刷新（useSyncExternalStore 直连——SC2 零缓存零副本，sidebar 同缝）。
 //   - 行聚合口径 = 任务键时间线（1.16 用户裁决：每任务最新态一行，组内时序；循环级事件
-//     各占一行；分组/章语义并入备注行「状态 · 摘要」文案）；行形态 = 任务轨（rail 竖线 +
-//     状态点：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断 caption + 右侧时间）；
+//     各占一行；分组/章语义并入次行 title 补充文案）；行形态 = 双行任务轨（rail 竖线 +
+//     状态点：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断 caption + 首行
+//     taskKey/状态徽标 + 次行 taskTitle + 右侧绝对启动时间 + 耗时徽标）；
 //     可跳转行带 jump 徽标（↗——「可点开子会话」可见 affordance）。
 //   - 行点击 = 打开 worker 执行子会话（1.16 用户裁决①：除未开始执行外全部任务行可交互
 //     ——载荷 workerSessionId 直跳；缺席行经 resolveWorkerSession 父反查兜底，落空记 ''
@@ -39,7 +40,6 @@ import {
   IconSparkleRegular,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { timeLabelZh } from '../../components/index.js'
 import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
 import type { SnapshotSource, LedgerSessionRow, LedgerSessionsSnapshot } from '../sidebar/sidebar-model.js'
 import './dispatch-events-panel.css'
@@ -151,22 +151,69 @@ export function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefin
 }
 
 /**
+ * 标题次行的补充语义（场景章语义 + 叙述注记——状态词由状态徽标承载，不再并入本行；
+ * 全缺 = undefined 不渲染）。
+ */
+export function dispatchEventDetailOf(entry: DispatchEventEntry): string | undefined {
+  const parts: string[] = []
+  if (entry.scenario !== undefined && entry.scenario.includes('/')) {
+    const minor = entry.scenario.slice(entry.scenario.indexOf('/') + 1)
+    const label = DISPATCH_EVENT_MINOR_LABELS[minor]
+    if (label !== undefined) parts.push(label)
+  }
+  if (entry.note !== undefined) parts.push(entry.note)
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+/** 绝对启动时间标签（LocalDatetime——本地时区 YYYY-MM-DD HH:mm；tabular 对齐由 CSS 承担） */
+export function dispatchEventClockLabel(ts: number): string {
+  const d = new Date(ts)
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 耗时标签（start→end 毫秒段——zh 紧凑两段档：秒/分/时/天） */
+export function dispatchEventDurationLabel(startMs: number, endMs: number): string {
+  const total = Math.max(0, Math.floor((endMs - startMs) / 1000))
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (days > 0) return `${days}天${hours}小时`
+  if (hours > 0) return `${hours}小时${minutes}分`
+  if (minutes > 0) return `${minutes}分${seconds}秒`
+  return `${seconds}秒`
+}
+
+/** 聚合行（条目 + 启动时间——该任务键窗口内首事件时戳；循环级单行 = 自身时戳） */
+export interface DispatchAggregatedRow {
+  readonly entry: DispatchEventEntry
+  readonly startAt: number
+}
+
+/**
  * 行聚合（1.16 用户裁决——任务键时间线口径）：每任务最新态一行（后写覆盖 = 最新态，
  * 组内时序排序），无任务键的循环级事件各占一行；池级 pending 快照（pool/pending）不进
- * 时间线——只承载统计条「待执行」计数。
+ * 时间线——只承载统计条「待执行」计数。同任务键首事件时戳随行携带（启动时间面）。
  */
-export function aggregateDispatchRows(entries: readonly DispatchEventEntry[]): readonly DispatchEventEntry[] {
-  const latest = new Map<string, DispatchEventEntry>()
-  const singles: DispatchEventEntry[] = []
+export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]): readonly DispatchAggregatedRow[] {
+  const latest = new Map<string, { entry: DispatchEventEntry; startAt: number }>()
+  const singles: DispatchAggregatedRow[] = []
   for (const entry of entries) {
     if (entry.scenario === DISPATCH_POOL_PENDING_SCENARIO) continue
     if (entry.taskKey === undefined) {
-      singles.push(entry)
+      singles.push({ entry, startAt: entry.at })
       continue
     }
-    latest.set(entry.taskKey, entry)
+    const held = latest.get(entry.taskKey)
+    latest.set(entry.taskKey, { entry, startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at) })
   }
-  return [...latest.values(), ...singles].sort((a, b) => a.at - b.at)
+  return [...latest.values(), ...singles].sort((a, b) => a.entry.at - b.entry.at)
+}
+
+/** 行聚合（条目视图——detail 渲染面走 aggregateDispatchRowItems 携启动时间） */
+export function aggregateDispatchRows(entries: readonly DispatchEventEntry[]): readonly DispatchEventEntry[] {
+  return aggregateDispatchRowItems(entries).map((row) => row.entry)
 }
 
 /** 状态词（备注行首段 + 统计条口径——prototype「状态 · 摘要」同语） */
@@ -365,20 +412,37 @@ export function dispatchRowSessionOf(
   return resolved === '' || resolved === undefined ? undefined : resolved
 }
 
-/** 单行：任务轨形态（rail 竖线 + 状态点 + 标题/备注 + 右侧时间；可跳转行带 jump 徽标） */
+/**
+ * 单行：双行任务轨形态（rail 竖线 + 状态点 + 首行 key/状态徽标 + 次行 title + 右侧绝对
+ * 启动时间/耗时徽标；可跳转行带 jump 徽标）。耗时徽标：执行中 = now 起算的实时耗时；
+ * 终态行 = startAt→最新事件时戳（单事件行时长不可辨 = 不呈现）。
+ */
 function DispatchEventRowView({
-  entry,
+  row,
   now,
   resolvedWorker,
   onOpenWorker,
 }: {
-  entry: DispatchEventEntry
+  row: DispatchAggregatedRow
   now: number
   resolvedWorker?: ReadonlyMap<string, string>
   onOpenWorker?: (childSessionId: string, taskKey?: string) => void
 }): ReactNode {
+  const { entry } = row
   const tone = dispatchEventDotToneOf(entry.status)
-  const note = dispatchEventNoteOf(entry)
+  const keyLabel = entry.taskKey ?? dispatchEventTitleOf(entry)
+  const title = entry.taskTitle
+  const detail = dispatchEventDetailOf(entry)
+  // 耗时徽标只属任务行（循环级事件 = 瞬时进度无过程——一律不呈现）：执行中 = now 起算
+  // 的实时耗时；终态行 = startAt→最新事件时戳（单事件行时长不可辨 = 不呈现）。
+  const duration =
+    entry.taskKey === undefined
+      ? undefined
+      : entry.status === 'running'
+        ? dispatchEventDurationLabel(row.startAt, now)
+        : entry.at - row.startAt >= 1000
+          ? dispatchEventDurationLabel(row.startAt, entry.at)
+          : undefined
   const session = dispatchRowSessionOf(entry, resolvedWorker)
   const open =
     onOpenWorker === undefined || session === undefined
@@ -408,11 +472,20 @@ function DispatchEventRowView({
           <i />
         </span>
         <span className="dswf-dep-row-t">
-          <span className="dswf-dep-row-title">{dispatchEventTitleOf(entry)}</span>
-          {note !== undefined ? <span className="dswf-dep-row-note">{note}</span> : null}
+          <span className="dswf-dep-row-head">
+            <span className="dswf-dep-row-key">{keyLabel}</span>
+            <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
+          </span>
+          {title !== undefined ? (
+            <span className="dswf-dep-row-title">
+              {title}
+              {detail !== undefined ? ` · ${detail}` : ''}
+            </span>
+          ) : null}
         </span>
         <span className="dswf-dep-row-side">
-          <span className="dswf-dep-row-time">{timeLabelZh(entry.at, now)}</span>
+          <span className="dswf-dep-row-time">{dispatchEventClockLabel(row.startAt)}</span>
+          {duration !== undefined ? <span className="dswf-dep-row-dur">{duration}</span> : null}
           {open !== undefined ? (
             <span className="dswf-dep-row-jump" data-dswf-dep-jump="" aria-hidden="true">
               <IconRightUpOutlineRegular size={11} />
@@ -454,7 +527,7 @@ export function DispatchEventsPanelBody({
       </Tooltip>
     )
   }
-  const rows = aggregateDispatchRows(entries)
+  const rows = useMemo(() => aggregateDispatchRowItems(entries), [entries])
   const stats = dispatchEventStats(entries)
   return (
     <div
@@ -483,10 +556,10 @@ export function DispatchEventsPanelBody({
         </Tooltip>
       </div>
       <div className="dswf-dep-list" data-dswf-dep-list="">
-        {rows.map((entry, i) => (
+        {rows.map((row, i) => (
           <DispatchEventRowView
-            key={`${entry.at}-${entry.taskKey ?? entry.verb}-${i}`}
-            entry={entry}
+            key={`${row.entry.at}-${row.entry.taskKey ?? row.entry.verb}-${i}`}
+            row={row}
             now={now}
             resolvedWorker={resolvedWorker}
             onOpenWorker={onOpenWorker}
