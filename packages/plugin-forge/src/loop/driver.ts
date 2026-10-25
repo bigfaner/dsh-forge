@@ -322,6 +322,9 @@ export const RETRO_PROPOSAL_AC =
 /** 复盘任务终态集（幂等在场判定口径——终态复盘任务不再拦派生，非终态 = 窄窗口现场） */
 const RETRO_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'skipped', 'rejected'])
 
+/** 复盘任务标题模板（单一常量，派生与在场判定两处消费——字面分叉会静默失配使幂等防护失效） */
+const RETRO_TASK_TITLE_PREFIX = 'first-pass 复盘：'
+
 /** 飞轮硬指标（标记快照直算——提案「派生硬指标」节口径） */
 export interface FlywheelMetrics {
   /** 一次通过率 = first-pass 时任务数 / merged（缺席 = 当前帧）时任务数 */
@@ -444,7 +447,7 @@ async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
  * fail-soft 返回 false（视为缺席，保持派生重试现状）。
  */
 async function hasOpenRetroTask(loop: ActiveLoop): Promise<boolean> {
-  const title = `first-pass 复盘：${loop.record.source.slug}`
+  const title = `${RETRO_TASK_TITLE_PREFIX}${loop.record.source.slug}`
   try {
     const cards = await loop.deps.tasks.listTasks({
       projectId: loop.scope.projectId,
@@ -509,7 +512,7 @@ async function deriveRetroTask(loop: ActiveLoop, pendingFirstPass?: LoopCheckpoi
     await deps.tasks.addTask({
       projectId: loop.scope.projectId,
       source: record.source,
-      title: `first-pass 复盘：${record.source.slug}`,
+      title: `${RETRO_TASK_TITLE_PREFIX}${record.source.slug}`,
       type: 'doc',
       priority: 'P1',
       estimatedTime: '1-2h',

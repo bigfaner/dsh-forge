@@ -10,6 +10,8 @@
 // 约束兜底（重复 append 抛错被 fail-soft 吞、下轮自愈）。DDL 摘录漂移面 = core 迁移单源。
 // resolveProposalId/resolveHeadCommit 同 index.ts 装配形态注入——first-pass-complete 与
 // review-wave-N 各至少一例真实落行。
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AddTaskInput,
@@ -149,6 +151,17 @@ BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (up
   `CREATE TRIGGER trg_impl_cp_no_delete BEFORE DELETE ON implementation_checkpoints
 BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
 ] as const
+
+// DDL 漂移守卫：SEAM_DDL 逐字摘录自 core src/forge/workspace/migrations.ts（v1/v5）——测试内
+// node:fs 直读 core 源文件做 substring 断言（零 import 不破包边界），core DDL 变更时本测试
+// fail-loud，防摘录单边漂移使缝约束失真。
+const CORE_MIGRATIONS_SOURCE = readFileSync(
+  fileURLToPath(new URL('../../../core/src/forge/workspace/migrations.ts', import.meta.url)),
+  'utf8',
+)
+for (const stmt of SEAM_DDL) {
+  expect(CORE_MIGRATIONS_SOURCE, `SEAM_DDL 摘录与 core migrations.ts 漂移：${stmt.slice(0, 60)}…`).toContain(stmt)
+}
 
 /** implementation_checkpoints 存储行读形（snake_case——断言面直读落库行） */
 interface SeamStorageRow {
