@@ -335,12 +335,17 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain('class="chip tool"');
   });
 
-  it("底部启停钮：启用中 → 禁用；已禁用 → 启用 + meta 同步", () => {
-    expect(renderDialog()).toContain(">禁用<");
+  it("头部启停钮：查看态在场（启用中 → 禁用；已禁 → 启用 + meta 同步）；编辑态隐藏；foot 区移除", () => {
+    const html = renderDialog();
+    expect(html).toContain(">禁用<");
+    expect(html).not.toContain("dswf-dlg-foot");
     const off = renderDialog({ enabled: false });
     expect(off).toContain("dot off");
     expect(off).toContain("已禁用");
     expect(off).toContain(">启用<");
+    const edit = renderDialog({ mode: "edit" });
+    expect(edit).not.toContain(">禁用<");
+    expect(edit).not.toContain(">启用<");
   });
 });
 
@@ -349,6 +354,10 @@ describe("ExpertDetailDialog 编辑态（F2 字段集）", () => {
     const html = renderDialog({ mode: "edit" });
     expect(html).toContain('data-field="title"');
     expect(html).toContain('maxLength="120"');
+    expect(html).toContain("min-height:46px");
+    expect(html).toContain("max-height:134px");
+    expect(html).toContain("min-height:266px");
+    expect(html).toContain("max-height:2202px");
     expect(html).toContain('data-field="personaMd"');
     expect(html).toContain(">保存<");
     expect(html).toContain("简介（模型选人依据：何时委派我");

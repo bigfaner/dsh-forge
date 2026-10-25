@@ -1,8 +1,10 @@
 // panel/detail-dialog —— 详情 Dialog（ui-design F2 查看/编辑双模式产品实现）：
-// 头部（状态灯 + 名称 + 英文标识 chip + 编辑/保存 + ✕）、查看态分段（岗位·启停 meta
+// 头部（状态灯 + 名称 + 英文标识 chip + 启停/编辑/保存 + ✕——启停钮查看态在场、编辑态
+// 隐藏）、查看态分段（岗位·启停 meta
 // → 简介 → 人设 Markdown 渲染 → 工具白名单 chips → 技能 chips）、编辑态字段集（岗位
-// Input / 简介 textarea 1→3 行 120 字上限 / 人设 textarea 6→50 行自适应 / multi-select
-// ×2——工具上技能下、技能可新增）、底部禁用/启用钮。Esc / 遮罩 / ✕ 关闭。
+// Input / 简介 textarea 2→6 行 120 字上限 / 人设 textarea 12→100 行自适应 / multi-select
+// ×2——工具上技能下、技能可新增；下拉菜单在 Dialog body 滚动边界内无底部遮挡）。
+// Esc / 遮罩 / ✕ 关闭。
 // 官方 MarkdownDoc 组件不在插件 client bundle 外置表内（classic script 缝仅 react
 // 外置），按原型近似语义以 .dswf-* 自绘面分块渲染（标题/加粗/行内代码/列表）。
 
@@ -19,13 +21,13 @@ import type { ExpertDetailController, DetailState } from "./detail-source.js";
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
 const TEXTAREA_LINE_PX = 22;
 
-/** 简介 textarea：默认 1 行、最多 3 行自适应。 */
-const DESCRIPTION_MIN_PX = TEXTAREA_LINE_PX + 2;
-const DESCRIPTION_MAX_PX = TEXTAREA_LINE_PX * 3 + 2;
+/** 简介 textarea：默认 2 行、最多 6 行自适应（内容上限 120 字不变）。 */
+const DESCRIPTION_MIN_PX = TEXTAREA_LINE_PX * 2 + 2;
+const DESCRIPTION_MAX_PX = TEXTAREA_LINE_PX * 6 + 2;
 
-/** 人设 textarea：默认 6 行、最多 50 行自适应，滚动上界兜底。 */
-const PERSONA_MIN_PX = TEXTAREA_LINE_PX * 6 + 2;
-const PERSONA_MAX_PX = TEXTAREA_LINE_PX * 50 + 2;
+/** 人设 textarea：默认 12 行、最多 100 行自适应，滚动上界兜底。 */
+const PERSONA_MIN_PX = TEXTAREA_LINE_PX * 12 + 2;
+const PERSONA_MAX_PX = TEXTAREA_LINE_PX * 100 + 2;
 
 /** 全目录技能候选面（multi-select 技能下拉 + 面板汇总注入）。 */
 export type AllSkills = readonly string[];
@@ -260,7 +262,7 @@ export function ExpertDetailDialog(props: {
         {state.errors.title === undefined ? null : <div className="dswf-dlg-err">{state.errors.title}</div>}
       </div>
       <div className="dswf-dlg-field" data-field="description">
-        <label>简介（模型选人依据：何时委派我 · 默认 1 行，最多 3 行 ≈ 120 字）</label>
+        <label>简介（模型选人依据：何时委派我 · 默认 2 行，最多 6 行 ≈ 120 字）</label>
         <AutoTextarea
           value={state.draft.description}
           minPx={DESCRIPTION_MIN_PX}
@@ -270,7 +272,7 @@ export function ExpertDetailDialog(props: {
         />
       </div>
       <div className="dswf-dlg-field" data-field="personaMd">
-        <label>人设（Markdown 自由输入 · 派发时作为 persona 注入子会话 · 默认 6 行，最多 50 行）</label>
+        <label>人设（Markdown 自由输入 · 派发时作为 persona 注入子会话 · 默认 12 行，最多 100 行）</label>
         <AutoTextarea
           value={state.draft.personaMd}
           minPx={PERSONA_MIN_PX}
@@ -360,13 +362,24 @@ export function ExpertDetailDialog(props: {
                 保存
               </button>
             ) : (
-              <button
-                type="button"
-                className="dswf-btn dswf-btn-ghost"
-                onClick={() => props.controller.startEdit()}
-              >
-                编辑
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="dswf-btn dswf-btn-ghost"
+                  onClick={() => props.controller.startEdit()}
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  className="dswf-btn dswf-btn-ghost"
+                  data-dswf-toggle-enabled=""
+                  disabled={state.busy}
+                  onClick={() => void props.controller.toggleEnabled()}
+                >
+                  {expert.enabled ? "禁用" : "启用"}
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -379,16 +392,6 @@ export function ExpertDetailDialog(props: {
           </span>
         </div>
         <div className="dswf-dlg-body">{body}</div>
-        <div className="dswf-dlg-foot">
-          <button
-            type="button"
-            className="dswf-btn dswf-btn-ghost"
-            disabled={state.busy}
-            onClick={() => void props.controller.toggleEnabled()}
-          >
-            {expert.enabled ? "禁用" : "启用"}
-          </button>
-        </div>
         {state.toast === undefined ? null : (
           <div className="dswf-toast" role="status">
             {state.toast}

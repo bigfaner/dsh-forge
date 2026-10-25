@@ -64,7 +64,6 @@ export const PANEL_CSS = `
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
 .dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
-.dswf-dlg-foot { display: flex; justify-content: flex-end; padding: ${T.pad12} ${T.pad16}; border-top: 0.5px solid var(--dsw-alias-border-l2); }
 .dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .dswf-dlg-seg { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); margin-top: ${T.gap8}; }
 .dswf-dlg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
