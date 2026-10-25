@@ -50,6 +50,7 @@ import {
 import {
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeWorktreeSwitchOverlay,
 } from './views/session/WorktreeFaces.js'
 import {
   ForgeSettingsSection,
@@ -103,6 +104,8 @@ export interface ForgePublishedViews {
   readonly ForgeSessionWorktreeChip: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽封存提示（fix-2——SealNotice 一次性 + composer 占位文案） */
   readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
+  /** conversation.input.overlay 槽切换闸（bug 267dcac1——worktree 切换 pending 窗口 composer 禁输） */
+  readonly ForgeWorktreeSwitchOverlay: ComponentType
   /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点，纯文本草稿 → chip 还原订阅） */
   readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
@@ -141,6 +144,7 @@ declare global {
   ForgeHeroWorkspacePicker,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeWorktreeSwitchOverlay,
   ForgeBugChipRestoreOverlay,
   ForgeSettingsSection,
   ForgeRemoteEntry,

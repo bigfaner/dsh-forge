@@ -76,7 +76,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { selectedTreeDisplay } from './selected-tree-display.js'
-import { installOpenWorkspaceFace } from './open-workspace-face-install.js'
+import { installOpenWorkspaceFace, type DraftShellFace } from './open-workspace-face-install.js'
 import {
   installStartSessionWrap,
   type SessionsListSlice,
@@ -772,6 +772,8 @@ export interface ForgeViewsGlobal {
     ForgeWorktreeSealOverlay: unknown
     /** bug 4b34e5d8：conversation.input.overlay 槽 chip 重建（零视觉效应挂载点） */
     ForgeBugChipRestoreOverlay: unknown
+    /** bug 267dcac1：conversation.input.overlay 槽切换闸（切换 pending 窗口 composer 禁输） */
+    ForgeWorktreeSwitchOverlay: unknown
     ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
@@ -1111,10 +1113,21 @@ function registerWorktreeFaces(
       views.ForgeBugChipRestoreOverlay,
     ),
   )
+  registerSlotEntry(ctx, CONVERSATION_INPUT_OVERLAY_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // bug 267dcac1 切换闸：worktree 切换 pending 窗口（点选 → openWorkspace 敛棋，~1s）
+      // composer 禁输——虚线外框 + 捕获层键击/指针拦截，防发送落旧树 blank（WYSIWYG 收口）。
+      { name: CONVERSATION_INPUT_OVERLAY_SLOT, id: WORKTREE_SWITCH_ENTRY_ID },
+      views.ForgeWorktreeSwitchOverlay,
+    ),
+  )
 }
 
 /** Bug chip 重建缝 overlay 登记 id（conversation.input.overlay list 槽行键） */
 export const BUG_CHIP_RESTORE_ENTRY_ID = 'dswf-bug-chip-restore'
+
+/** worktree 切换闸 overlay 登记 id（conversation.input.overlay list 槽行键——bug 267dcac1） */
+export const WORKTREE_SWITCH_ENTRY_ID = 'dswf-worktree-switch'
 
 /**
  * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册
@@ -2347,7 +2360,47 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         // bug 05c712a4 composer 腿收口：worktree chip 点选 = 显式传参官方 openWorkspace
         // （官方唯一创建前决策缝——立即建/复用该树 blank，主视图随之切换）。face 挂 window
         // 锚供 WorktreeFaces 点选链消费（安装器独立成文件——入口与共享组件禁共 import）。
-        installOpenWorkspaceFace({ uiWorkspace, warn: (message) => console.warn(message) })
+        // bug 267dcac1：面返回 promise（切换闸敛棋锚）+ beforeOpen 草稿迁移。
+        installOpenWorkspaceFace({
+          uiWorkspace,
+          // bug 267dcac1 草稿迁移 shell 解析（官方 selectWorkspace 同语义）：sessions.binding
+          // 借已 retain 绑定 → conversation.input.for 取 shell（queue dock 同径，
+          // bugReferenceServicesOf 先例）；未 retain/面缺席 = undefined fail-soft 零迁移。
+          resolveShell: (sessionId: string): DraftShellFace | undefined => {
+            const binding = (
+              sessions as unknown as { binding?: (id: string) => unknown }
+            ).binding?.(sessionId)
+            const actx = asRecord(binding)?.['ctx']
+            if (actx === undefined) return undefined
+            const input = asRecord(reflectServiceGet(clientCtx, 'conversation'))?.['input'] as
+              | { for?: (actx: unknown) => unknown }
+              | undefined
+            const shell = input?.for?.(actx)
+            const record = asRecord(shell)
+            if (record === undefined) return undefined
+            const snapshot = asRecord(record['snapshot'])
+            const setDraft = record['setDraft']
+            const attachmentIds = snapshot?.['attachmentIds']
+            if (
+              snapshot === undefined ||
+              typeof snapshot['draft'] !== 'string' ||
+              typeof setDraft !== 'function' ||
+              (attachmentIds !== undefined && !Array.isArray(attachmentIds))
+            ) {
+              return undefined
+            }
+            return {
+              snapshot: {
+                draft: snapshot['draft'],
+                attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : undefined,
+              },
+              setDraft: (text: string): void => {
+                ;(setDraft as (text: string) => void)(text)
+              },
+            }
+          },
+          warn: (message) => console.warn(message),
+        })
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService
         const sidebarRight = clientCtx.get('sidebarRight') as ForgeSidebarRightService
         const sidebarRightTabs = clientCtx.get('sidebarRightTabs') as ForgeSidebarRightTabsService

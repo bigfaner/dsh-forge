@@ -13,9 +13,14 @@
 // + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
 import { openWorkspaceFace } from '../../state/open-workspace-face.js'
+import {
+  beginWorktreeSwitch,
+  isWorktreeSwitchPending,
+  subscribeWorktreeSwitch,
+} from '../../state/worktree-switch-gate.js'
 import {
   BranchDriftNotice,
   CreateWorktreeDialog,
@@ -26,8 +31,10 @@ import {
   SessionWorktreeChip,
   StaleSelectionNotice,
   WorktreeRiskConfirmation,
+  WorktreeSwitchGate,
   isCrossBranchRisk,
   joinWorktreePath,
+  switchGateBlocksKey,
   type CreateWorktreeRequest,
   type DeleteChecks,
 } from '@dsh-forge/git-worktree/client'
@@ -189,6 +196,9 @@ export function ForgeHeroWorktreeMount({
   // 立即 connectWorkspace 建/复用该树 blank，主视图随之切换」（bug 05c712a4 composer 腿
   // 收口：点选纯显示态会使主视图 retain 旧树 blank，composer 发送落旧树——显示 = 实际
   // 生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态（现状降级，warn 一行）。
+  // bug 267dcac1 竞速收口：openWorkspace 异步敛棋前（~1s）composer 仍系旧树 blank，窗口内
+  // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchOverlay），敛棋
+  // （promise settle）解除；官方 beforeOpen 同窗草稿迁移（face 安装器内建）。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
@@ -198,7 +208,8 @@ export function ForgeHeroWorktreeMount({
       const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
       const open = openWorkspaceFace()
       if (workspaceId !== undefined && workspaceId !== '' && open !== undefined) {
-        open(workspaceId)
+        const settleSwitch = beginWorktreeSwitch()
+        void Promise.resolve(open(workspaceId)).finally(settleSwitch)
       } else if (workspaceId !== undefined) {
         console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
       }
@@ -642,4 +653,38 @@ export function ForgeWorktreeSealOverlay({
       )}
     </div>
   )
+}
+
+/**
+ * 切换闸 overlay（bug 267dcac1——conversation.input.overlay 槽第三行）：worktree 切换
+ * pending 窗口（点选 → openWorkspace 敛棋，~1s）composer 禁输——虚线外框面板（官方 hero
+ * 未加载态同形）+ document 捕获层键击/指针拦截（Enter 恒拦防发送落旧树；可编辑目标拦输入
+ * ——全局快捷键不误伤；指针拦截防按钮径）。敛棋/3s 超时自动解除（fail-open 不永锁）。
+ * 草稿迁移在 face 安装器 beforeOpen 窗（官方 selectWorkspace 同语义）。
+ */
+export function ForgeWorktreeSwitchOverlay(): ReactNode {
+  const pending = useSyncExternalStore(subscribeWorktreeSwitch, isWorktreeSwitchPending, isWorktreeSwitchPending)
+  useEffect(() => {
+    if (!pending) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (switchGateBlocksKey(event)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+    }
+    const onPointer = (event: Event): void => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('pointerdown', onPointer, true)
+    document.addEventListener('click', onPointer, true)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('pointerdown', onPointer, true)
+      document.removeEventListener('click', onPointer, true)
+    }
+  }, [pending])
+  if (!pending) return null
+  return <WorktreeSwitchGate />
 }
