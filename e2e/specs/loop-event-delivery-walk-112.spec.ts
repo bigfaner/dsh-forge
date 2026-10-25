@@ -205,21 +205,16 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     const boot = await fetch(manifest.url, { redirect: 'manual' })
     const cookie = (boot.headers.get('set-cookie') ?? '').split(';')[0]
     expect(boot.status, '官方认证交换（303 + set-cookie）').toBe(303)
-    // 会话创建（binding-derivation 单门退役后官方 HTTP 线）：POST /api/session/create
-    const createRes = await fetch(`${rpcBase}/api/session/create`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({
-        type: 'client-request',
-        rpcId: 'e2e-walk112-create',
-        method: 'session/create',
-        payload: { args: { request: { workspaceId: project.workspaceId, worktreePath: wsDir } } },
-      }),
+    // 会话创建（binding-derivation 官方直通，WYSIWYG）：项目行尾新会话钮 = startSession(workspaceId)
+    // ——fresh blank 仅选中者可见（官方口径），行出现即取 sessionId；弃 HTTP 线（不经页面无选中态）
+    await page.locator('[data-dswf-sidebar="wide"]', { has: page.locator(`[data-dswf-project="${project.id}"]`) }).first().waitFor({ state: 'visible', timeout: 30_000 }).catch(async () => {
+      await page.locator('button[aria-label="打开侧边栏"], button[title="打开侧边栏"]').first().click()
+      await expect(page.locator(`[data-dswf-project="${project.id}"]`).first()).toBeVisible({ timeout: 15_000 })
     })
-    expect(createRes.status, 'session/create HTTP 200').toBe(200)
-    const created = (await createRes.json()) as { result?: { ok?: boolean; value?: { sessionId?: string } } }
-    expect(created.result?.ok, 'session/create ok').toBe(true)
-    const sessionId = created.result?.value?.sessionId
+    await page.locator(`[data-dswf-project="${project.id}"] [data-dswf-project-action="new-session"]`).first().click()
+    const sessionRow = page.locator(`[data-dswf-project="${project.id}"] [data-dswf-session]`).first()
+    await sessionRow.waitFor({ state: 'visible', timeout: 30_000 })
+    const sessionId = await sessionRow.getAttribute('data-dswf-session')
     expect(sessionId, '会话描述（sessionId 在场）').toBeTruthy()
     meta.sessionId = sessionId
     console.log(`[walk112] sessionId = ${String(sessionId)}`)
