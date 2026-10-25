@@ -84,6 +84,44 @@ const BUGS_V2_SQL = [
 /** v3（bug-recurrence-chain）：守卫式 ALTER bugs ADD COLUMN recurrence_of（v2 谱系先例同构） */
 const BUGS_V3_SQL = [`ALTER TABLE bugs ADD COLUMN recurrence_of TEXT`]
 
+/**
+ * 机械①（forge-verification-hardening）v5：implementation_checkpoints 实现检查点流水 DDL
+ * pin（proposal.md「实体设计」节为契约单源）。
+ */
+const CHECKPOINTS_V5_SQL = [
+  `CREATE TABLE implementation_checkpoints (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id           TEXT NOT NULL REFERENCES proposals(id),
+    mark                  TEXT NOT NULL
+                          CONSTRAINT ck_impl_cp_mark CHECK (mark IN
+                            ('first-pass-complete', 'retro-done', 'review-wave-N',
+                             'stabilized', 'merged', 'derived-to-child')),
+    wave_seq              INTEGER,
+    created_at            TEXT NOT NULL,
+    base_commit_hash      TEXT NOT NULL,
+    tasks_total           INTEGER NOT NULL,
+    commits_total         INTEGER NOT NULL,
+    fixes_total           INTEGER NOT NULL,
+    evidence_debts_total  INTEGER NOT NULL
+)`,
+  `CREATE UNIQUE INDEX uq_impl_cp_milestone ON implementation_checkpoints(proposal_id, mark, wave_seq)
+     WHERE mark IN ('first-pass-complete', 'retro-done', 'review-wave-N', 'stabilized', 'merged')`,
+  `CREATE INDEX idx_impl_cp_proposal ON implementation_checkpoints(proposal_id, created_at)`,
+  `CREATE TRIGGER trg_impl_cp_no_update BEFORE UPDATE ON implementation_checkpoints
+BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (update)'); END`,
+  `CREATE TRIGGER trg_impl_cp_no_delete BEFORE DELETE ON implementation_checkpoints
+BEGIN SELECT RAISE(ABORT, 'implementation_checkpoints: append-only violation (delete)'); END`,
+]
+
+/**
+ * 机械②（forge-verification-hardening）v6：proposals.parent_proposal_id 承接链列 pin
+ * （守卫式 ALTER + 自联结递归读面索引——guard 字段不在文本面）。
+ */
+const PARENT_V6_SQL = [
+  `ALTER TABLE proposals ADD COLUMN parent_proposal_id TEXT REFERENCES proposals(id)`,
+  `CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)`,
+]
+
 /** 语句归一化（剔注释 + 空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>
   s
@@ -121,19 +159,21 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(existsSync(resolve(ROOT, BLUEPRINT))).toBe(true)
   })
 
-  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段 + v4 surface 退役段）', () => {
+  it('蓝本语句集 = 迁移语句集（逐条精确匹配，防漂移；+fix-bug bugs DDL 追加段 + v2 收敛段 + v4 surface 退役段 + v5 checkpoints 段）', () => {
     const expected = [
       ...blueprintStatements(),
       ...BUGS_DDL.map(norm),
       ...BUGS_V2_SQL.map(norm),
       ...BUGS_V3_SQL.map(norm),
       ...WORKSPACE_MIGRATIONS[3]!.statements.map(stmtText),
+      ...CHECKPOINTS_V5_SQL.map(norm),
+      ...PARENT_V6_SQL.map(norm),
     ]
     const actual = WORKSPACE_MIGRATIONS.flatMap((m) => m.statements.map(stmtText))
     expect(actual).toEqual(expected)
   })
 
-  it('十三表 + 九索引 + 四触发器全量承载（八域表 + schema_meta + app_key_logs + migration_digests 外的 v2 收敛 bugs 表 + v4 归档表；fix-bug bugs 表 + v2 IF NOT EXISTS 形态）', () => {
+  it('十四表 + 十一索引 + 六触发器全量承载（八域表 + schema_meta + app_key_logs + migration_digests 外的 v2 收敛 bugs 表 + v4 归档表 + v5 检查点表；fix-bug bugs 表 + v2 IF NOT EXISTS 形态）', () => {
     const tables = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TABLE/i.test(stmtText(s))),
     )
@@ -143,9 +183,9 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     const triggers = WORKSPACE_MIGRATIONS.flatMap((m) =>
       m.statements.filter((s) => /^CREATE TRIGGER/i.test(stmtText(s))),
     )
-    expect(tables).toHaveLength(13)
-    expect(indexes).toHaveLength(9)
-    expect(triggers).toHaveLength(4)
+    expect(tables).toHaveLength(14)
+    expect(indexes).toHaveLength(12)
+    expect(triggers).toHaveLength(6)
   })
 
   it('bugs 单表 20 列（fix-bug 提案持久化节照建；bug_status CHECK 三态 + source_task_id FK）', () => {
@@ -195,7 +235,49 @@ describe('AC1 工作区 MIGRATIONS 与 design/schema.sql 单一来源对齐（G1
     expect(WORKSPACE_MIGRATIONS.map((m) => m.version)).toEqual(
       Array.from({ length: FORGE_DB_SCHEMA_VERSION }, (_, i) => i + 1),
     )
-    expect(FORGE_DB_SCHEMA_VERSION).toBe(4)
+    expect(FORGE_DB_SCHEMA_VERSION).toBe(6)
+  })
+
+  it('v6（机械②）：proposals.parent_proposal_id 承接链——守卫式 ALTER（nullable 自联结 FK）+ 自联结索引', () => {
+    const v6 = WORKSPACE_MIGRATIONS.find((m) => m.version === 6)
+    expect(v6?.statements[0]).toEqual({
+      sql: `ALTER TABLE proposals ADD COLUMN parent_proposal_id TEXT REFERENCES proposals(id)`,
+      columnGuard: { table: 'proposals', column: 'parent_proposal_id' },
+    })
+    expect(stmtText(v6!.statements[1]!)).toBe(
+      'CREATE INDEX idx_proposals_parent ON proposals(parent_proposal_id)',
+    )
+    expect(stmtText(v6!.statements[0]!)).not.toMatch(/ON DELETE/i)
+  })
+
+  it('v5（机械①）：implementation_checkpoints DDL——partial unique index 圈定里程碑唯一约束 + 时序索引 + append-only 双触发器', () => {
+    const v5 = WORKSPACE_MIGRATIONS.find((m) => m.version === 5)
+    expect(v5?.statements.map(stmtText)).toEqual(CHECKPOINTS_V5_SQL.map(norm))
+    const createTable = stmtText(v5!.statements[0]!)
+    // 零业务引用字段：十列全量 pin（id/proposal_id/mark/wave_seq/created_at/base_commit_hash + 四列计数快照）
+    expect(createTable).toContain('REFERENCES proposals(id)')
+    for (const col of [
+      'proposal_id',
+      'mark',
+      'wave_seq',
+      'created_at',
+      'base_commit_hash',
+      'tasks_total',
+      'commits_total',
+      'fixes_total',
+      'evidence_debts_total',
+    ]) {
+      expect(createTable).toContain(col)
+    }
+    // 唯一约束仅作用于五类里程碑标记（partial index；derived-to-child 豁免）
+    const uq = stmtText(v5!.statements[1]!)
+    expect(uq).toContain('UNIQUE INDEX uq_impl_cp_milestone')
+    expect(uq).toContain('WHERE mark IN')
+    expect(uq).not.toContain('derived-to-child')
+    // 时序查询主径
+    expect(stmtText(v5!.statements[2]!)).toBe(
+      'CREATE INDEX idx_impl_cp_proposal ON implementation_checkpoints(proposal_id, created_at)',
+    )
   })
 
   it('v4：surface 退役——归档表 + 存量归档 + 守卫式 DROP COLUMN×2（dropGuard：列不在场跳过）', () => {

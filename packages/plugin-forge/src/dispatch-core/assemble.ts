@@ -14,7 +14,7 @@ import {
  * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 五动词——submitTask +
  * addTask 两既有动词 + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径
  * （bug-recurrence-chain——fix-bug coding-fix worker 放行）。名单 = 本包
- * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十三员全集中
+ * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十六员全集中
  * worker 可见 = 五动词，其余八员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
  * agent 面——listBugs 台账查询面分治主 agent）。validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
  * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validateMermaid'——工具面仅主 agent，
@@ -32,6 +32,9 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'taskStats',
   'listTasks',
   'listBugs',
+  'recordImplCheckpoint', // 机械⑥实现检查点三工具——仅主 agent 面（记录/查询/跨容器清单）
+  'queryImplCheckpoint',
+  'listImplCheckpoints',
   'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
 ]
 

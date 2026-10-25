@@ -39,6 +39,7 @@ import {
   type FeatureRow,
   type FeatureStatus,
   type ForgeProposalsService,
+  type ListDerivedProposalsQuery,
   type ListProposalDocsQuery,
   type Mode,
   type ProposalCard,
@@ -117,12 +118,13 @@ interface ProposalStorageRow {
   author: string | null
   mode: Mode | null
   superseded_by: string | null
+  parent_proposal_id: string | null
   decided_at: string | null
   created_at: string
   updated_at: string
 }
 
-const SELECT_PROPOSAL = `SELECT id, slug, title, proposal_status, rel_path, author, mode, superseded_by, decided_at, created_at, updated_at FROM proposals`
+const SELECT_PROPOSAL = `SELECT id, slug, title, proposal_status, rel_path, author, mode, superseded_by, parent_proposal_id, decided_at, created_at, updated_at FROM proposals`
 
 /** proposals 行 → ProposalRow DTO（snake_case → DTO 映射唯一落点）。NULL 列条件展开 =
  *  键缺席（tool 返回面 lossless JSON 合规——显式 undefined 属性被 harness 输出快照边界
@@ -141,6 +143,8 @@ function toProposalRow(row: ProposalStorageRow): ProposalRow {
     ...(row.mode !== null ? { mode: row.mode } : {}),
     // 谱系右列数据面（superseded 转移写入——语义写径归 2.2，读面先行直出）
     ...(row.superseded_by !== null ? { supersededBy: row.superseded_by } : {}),
+    // 机械②承接链左列（飞轮改进链——NULL = 键缺席）
+    ...(row.parent_proposal_id !== null ? { parentProposalId: row.parent_proposal_id } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -163,13 +167,23 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
         if (existing !== undefined) {
           throw new Error(`提案已存在：${input.slug}（project ${input.projectId}）——slug UNIQUE 冲突`)
         }
+        // 承接链左列 FK 校验（机械②）：parentProposalId 提供即须指向存在提案——悬空引用
+        // typed 404（supersededBy 在场校验同口径）；列 REFERENCES 约束兜底
+        if (input.parentProposalId !== undefined) {
+          const parent = db
+            .prepare<unknown[], { id: string }>(`SELECT id FROM proposals WHERE id = ?`)
+            .get(input.parentProposalId)
+          if (parent === undefined) {
+            throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.parentProposalId })
+          }
+        }
         const id = randomUUID()
         const now = new Date().toISOString()
         // mode 透传（2.2）：创建技能写入溯源模式；缺省 NULL——扫描吸收旧行同形占位（成链门按 NULL 边界处理）
         db.prepare(
-          `INSERT INTO proposals (id, slug, title, proposal_status, rel_path, author, mode, decided_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?)`,
-        ).run(id, input.slug, input.title, input.status ?? 'draft', input.relPath ?? null, input.mode ?? null, now, now)
+          `INSERT INTO proposals (id, slug, title, proposal_status, rel_path, author, mode, superseded_by, parent_proposal_id, decided_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, ?, NULL, ?, ?)`,
+        ).run(id, input.slug, input.title, input.status ?? 'draft', input.relPath ?? null, input.mode ?? null, input.parentProposalId ?? null, now, now)
         return db.prepare<unknown[], ProposalStorageRow>(`${SELECT_PROPOSAL} WHERE id = ?`).get(id) as ProposalStorageRow
       })
       deps.events.emitTasksChanged(input.projectId)
@@ -203,12 +217,24 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
           }
           supersededBy = input.supersededBy
         }
+        // 承接链左列透传（机械②）：parentProposalId 提供即写（悬空 → typed 404——createProposal
+        // 同口径）；缺席 = 保留既有承接（create 时写入的左列不被非承接转移抹除）
+        if (input.parentProposalId !== undefined) {
+          const parent = db
+            .prepare<unknown[], { id: string }>(`SELECT id FROM proposals WHERE id = ?`)
+            .get(input.parentProposalId)
+          if (parent === undefined) {
+            throw new ProposalNotFoundError({ projectId: input.projectId, proposalId: input.parentProposalId })
+          }
+        }
+        const parentProposalId = input.parentProposalId ?? current.parent_proposal_id
         // 裁决写 decided_at：→ accepted/rejected 覆盖式写最新裁决时刻；其余转移不改写。
         const now = new Date().toISOString()
         const decidedAt = DECIDING_STATUSES.includes(input.toStatus) ? now : current.decided_at
-        db.prepare(`UPDATE proposals SET proposal_status = ?, superseded_by = ?, decided_at = ?, updated_at = ? WHERE id = ?`).run(
+        db.prepare(`UPDATE proposals SET proposal_status = ?, superseded_by = ?, parent_proposal_id = ?, decided_at = ?, updated_at = ? WHERE id = ?`).run(
           input.toStatus,
           supersededBy,
+          parentProposalId,
           decidedAt,
           now,
           input.proposalId,
@@ -301,6 +327,23 @@ export function createProposalsService(deps: ProposalsServiceDeps): ForgeProposa
         createdAt: (c) => c.createdAt,
         id: (c) => c.proposalId,
       })
+    },
+
+    // 机械②承接链自联结读面：给定提案 id 递归查出其派生的全部改进提案（传递闭包——
+    // UNION 去重保环终止；恒不含根自身）。零写径纯读，不发射事件。
+    async listDerivedProposals(q: ListDerivedProposalsQuery): Promise<ProposalRow[]> {
+      const db = deps.store.ensureOpen(q.projectId)
+      const rows = db
+        .prepare<unknown[], ProposalStorageRow>(
+          `WITH RECURSIVE derived(id) AS (
+             SELECT id FROM proposals WHERE parent_proposal_id = ?
+             UNION
+             SELECT p.id FROM proposals p JOIN derived d ON p.parent_proposal_id = d.id
+           )
+           ${SELECT_PROPOSAL} WHERE id IN (SELECT id FROM derived)`,
+        )
+        .all(q.proposalId)
+      return rows.map(toProposalRow)
     },
 
     // M3 2.3：提案文档区只读扫描（评审缺口#1 处置——零状态零写径，文件系统为事实源；

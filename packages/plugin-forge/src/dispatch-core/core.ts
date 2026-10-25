@@ -47,6 +47,7 @@ import {
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchCoreFailure, DispatchTaskResult } from './result.js'
 import { disposeQuietly, settleWorkerRun } from './settle.js'
+import type { HeadCommitResolver, SettleCheckpointsFace } from './settle.js'
 import type { CommitLandingVerifier } from './settle.js'
 import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
 
@@ -100,6 +101,13 @@ export interface DispatchCoreDeps {
   readonly spawn: SpawnWorker
   /** 提交落点核验器（可选——缺席回落 gitCommitLanding 真核验；循环装配注入，单测桩） */
   readonly commitLanding?: CommitLandingVerifier
+  /**
+   * checkpoints 域服务结算侧消费面（可选——机械④ review-wave-N 修正波标记；bug 548ea94b
+   * 装配断链修复：经 loop.core 随驱动器 deps 透传结算核。缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly checkpoints?: SettleCheckpointsFace
+  /** 容器分支 HEAD 解析器（可选——机械④标记 base_commit_hash；缺席回落 gitHeadCommit 真解析） */
+  readonly resolveHeadCommit?: HeadCommitResolver
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */
@@ -460,6 +468,11 @@ export interface SettleStageInput {
    * 在场且非空 = 欠账卡指示「比对 E2E_BASELINE_RED 行」；缺席/空 = 兜底文案。
    */
   readonly e2eBaselineRedCases?: readonly string[]
+  /**
+   * 容器 → 提案 id 映射（机械④——review-wave-N 检查点 proposal_id 归属锚；循环径由
+   * loop.proposalId 透传。缺席 = recordWaveCheckpoint 惰性不判，行为零变化）。
+   */
+  readonly proposalId?: string
 }
 
 /** settle 阶段返回（DispatchTaskResult 的 spawned/失败/halted 三分支 + killed——killed 仅
@@ -493,6 +506,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     ...(input.worktreeCwd !== undefined ? { worktreeCwd: input.worktreeCwd } : {}),
     ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
     ...(input.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: input.e2eBaselineRedCases } : {}),
+    ...(input.proposalId !== undefined ? { proposalId: input.proposalId } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

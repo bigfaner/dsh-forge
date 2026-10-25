@@ -22,6 +22,7 @@ import type { WorkspaceRegistryPort, WorkspaceRenamePort } from './forge/registr
 import { createSettingsService } from './forge/settings/service.js'
 import { createDocsService } from './forge/small-domains/docs.js'
 import { createBugsService } from './forge/small-domains/bugs.js'
+import { createCheckpointsService } from './forge/small-domains/implementation-checkpoints.js'
 import { createFeaturesService, registerFeatureInTx } from './forge/small-domains/features.js'
 import { createProposalsService } from './forge/small-domains/proposals.js'
 import {
@@ -255,6 +256,9 @@ const corePlugin: CorePlugin = Object.assign(
         'forgeBugs',
         createBugsService({ store, events, resolveWsPath: routing.wsPath }),
       )
+      // 机械① 第六小域（forge-verification-hardening）：implementation_checkpoints 实现检查点
+      // 流水三法（appendCheckpoint/ensureCheckpoint/listCheckpoints）——M5 标记域装配
+      ctx.reflect.provide('forgeCheckpoints', createCheckpointsService({ store, events }))
     }
     return () => {
       taskStore?.dispose() // 每工作区任务库句柄统一关闭（3.4 接插件 disposer 前的进程内收口）

@@ -151,6 +151,12 @@ describe('2.7 provide ×4 装配：ctx.forgeTasks / forgeFeatures / forgeProposa
       const docs = provided.get('forgeDocs') as Record<string, unknown> | undefined
       expect(docs).toBeDefined()
       expect(typeof docs?.read).toBe('function')
+      // 机械① 第六小域：检查点流水域三法（M5 标记域装配）
+      const checkpoints = provided.get('forgeCheckpoints') as Record<string, unknown> | undefined
+      expect(checkpoints).toBeDefined()
+      for (const method of ['appendCheckpoint', 'ensureCheckpoint', 'listCheckpoints']) {
+        expect(typeof checkpoints?.[method]).toBe('function')
+      }
       // P1 双服务不受 M2 装配影响
       expect(provided.has('forgeProjects')).toBe(true)
       expect(provided.has('forgeKnowledge')).toBe(true)
@@ -333,9 +339,10 @@ describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）'
     try {
       const dispose = corePlugin(ctx, { dbFile: dbPath(), tasksHome })
       expect(provided.has('forgeSettings')).toBe(false)
-      // 六服务仍齐（P1 双服务 + M2 四域 + fix-bug bug 域）
+      // 六服务仍齐（P1 双服务 + M2 四域 + fix-bug bug 域 + 机械① checkpoints 域）
       expect([...provided.keys()].sort()).toEqual([
         'forgeBugs',
+        'forgeCheckpoints',
         'forgeDocs',
         'forgeFeatures',
         'forgeKnowledge',

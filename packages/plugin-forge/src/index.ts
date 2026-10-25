@@ -31,6 +31,7 @@ import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
+import { gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
@@ -291,6 +292,20 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
+      // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
+      // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
+      // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
+      // 死代码——此注入是生产路径落标记的装配前提。
+      checkpoints: ctx.forgeCheckpoints,
+      resolveProposalId: async (projectId, source) => {
+        try {
+          const rows = await ctx.forgeProposals.listProposals({ projectId })
+          return rows.find((p) => p.slug === source.slug)?.proposalId
+        } catch {
+          return undefined // fail-soft——机制惰性不判
+        }
+      },
+      resolveHeadCommit: gitHeadCommit,
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
@@ -370,6 +385,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
+      checkpoints: ctx.forgeCheckpoints,
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -527,6 +543,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.resolveBug),
       ctx.tools.register(tools.listBugs),
       ctx.tools.register(tools.getBug),
+      ctx.tools.register(tools.recordImplCheckpoint),
+      ctx.tools.register(tools.queryImplCheckpoint),
+      ctx.tools.register(tools.listImplCheckpoints),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
@@ -545,7 +564,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt'] as const,
+    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt'] as const,
   },
 )
 

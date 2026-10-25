@@ -233,6 +233,9 @@ export interface ForgeContextFace {
   /** core bug 域服务（fix-bug——recordBug/resolveBug 两写径的工具面服务源；结构化消费面
    *  ForgeBugsToolFace 定义于 tools/index.ts） */
   forgeBugs: import('./tools/index.js').ForgeBugsToolFace
+  /** core checkpoints 域服务（机械⑥——实现检查点三工具的服务源；结构化消费面
+   *  ForgeCheckpointsToolFace 定义于 tools/impl-checkpoint.ts） */
+  forgeCheckpoints: import('./tools/index.js').ForgeCheckpointsToolFace
   /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
    *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
   readonly reflect?: { get(name: string, strict?: boolean): unknown }

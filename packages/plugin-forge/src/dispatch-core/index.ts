@@ -44,5 +44,7 @@ export { classifyPool, poolOf } from './pool.js'
 export type { PoolSnapshot, PoolVerdict } from './pool.js'
 export type { DispatchCoreFailure, DispatchSpawnedResult, DispatchTaskResult } from './result.js'
 export { settleWorkerRun } from './settle.js'
+// 机械③（forge-verification-hardening）——循环侧标记消费：HEAD 真解析 + 计数快照现算
+export { gitHeadCommit, computeWaveSnapshot } from './settle.js'
 export type { CommitLandingVerifier, WorkerSettlement } from './settle.js'
 export type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './spawn.js'

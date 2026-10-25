@@ -7,6 +7,16 @@ import type { ToolExecFace } from '../faces.js'
 import { createListBugsTool, parseListBugsArgs } from './list-bugs.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 function bugCard(bugId: string, summary: string): BugCard {
@@ -48,6 +58,7 @@ function toolWithCapture(): {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals: {} as ForgeToolDeps['proposals'],
     bugs,
+    checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createListBugsTool(deps), captured }

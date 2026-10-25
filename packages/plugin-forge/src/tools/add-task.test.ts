@@ -11,6 +11,16 @@ import { createAddTaskTool, parseAddTaskArgs, varsEntriesToRecord } from './add-
 import { forgetWorkerSourceTask, rememberWorkerSourceTask } from '../dispatch-core/assemble.js'
 import type { ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 function toolWithCapture(): { tool: ReturnType<typeof createAddTaskTool>; captured: AddTaskInput[] } {
@@ -25,6 +35,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createAddTaskTool>; captur
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createAddTaskTool(deps), captured }
@@ -169,6 +180,7 @@ describe('addTask execute（路由 + 容器直传映射）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     }
     const tool = createAddTaskTool(deps)
@@ -252,6 +264,7 @@ describe('addTask 事件发射（typed 错误 → tool-error；verb=addTask）',
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })

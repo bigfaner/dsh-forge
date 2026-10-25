@@ -30,6 +30,8 @@ import type {
   TaskGraph,
   TaskGraphQuery,
   TaskSnapshot,
+  TaskSettlementRow,
+  TaskSettlementsQuery,
   TaskStats,
   TaskStatsQuery,
   TransitionTaskInput,
@@ -43,7 +45,7 @@ import { addTask } from './add.js'
 import { claimTask } from './claim.js'
 import { taskDetail } from './detail.js'
 import type { GitExecFile } from './git-lookup.js'
-import { listTasks, taskGraph, taskStats } from './list.js'
+import { listTasks, taskGraph, taskSettlements, taskStats } from './list.js'
 import { queryTask } from './query.js'
 import { reconcileInterrupted } from './reconcile.js'
 import { sessionLinks } from './session-links.js'
@@ -113,6 +115,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async taskStats(q: TaskStatsQuery): Promise<TaskStats> {
       return taskStats(deps, q)
+    },
+    async taskSettlements(q: TaskSettlementsQuery): Promise<TaskSettlementRow[]> {
+      return taskSettlements(deps, q)
     },
     async taskGraph(q: TaskGraphQuery): Promise<TaskGraph> {
       return taskGraph(deps, q)

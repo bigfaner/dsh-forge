@@ -753,6 +753,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       'validateFeatureTasks',
       'listTasks',
       'taskStats',
+      // 1.16 computeWaveSnapshot N+1 收口：容器结算面批量读（桥白名单全集锚）
+      'taskSettlements',
       'taskGraph',
       'taskDetail',
       'sessionLinks',
@@ -934,7 +936,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
-    expect(TASKS_SERVICE_METHODS).toHaveLength(14) // S3 +reconcileInterrupted；1.1 +updateTask；78b9227e +recordSpawn
+    expect(TASKS_SERVICE_METHODS).toHaveLength(15) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)

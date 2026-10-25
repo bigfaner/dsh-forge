@@ -54,6 +54,13 @@ export const ERROR_CODES = [
   'ERR_BUG_RECURRENCE_DANGLING', // → BugRecurrenceDanglingError：recordBug recurrenceOf 指向不存在的 bug_id 拒写（404；data 带 dangling bug_id）
   // ── dispatch-loop-hardening 改进 5（调度权收敛——addTask caller 身份分流） ──
   'ERR_WORKER_ADDTASK_DENIED', // → WorkerAddTaskDeniedError：loopSourced spawn 的 worker 会话调 addTask 拒收（403；任务派生权限归主会话/循环处置层——正确动作 = submitTask result=blocked 如实结算）
+  // ── session-binding-guarantee W2（host 能力缺席显式拒绝——fail-closed 收口） ──
+  'ERR_WORKTREE_CAPABILITY_ABSENT', // → WorktreeCapabilityAbsentError：gitWorktree 能力缺席（60s 放弃）+ git 探针有锚——sessionCreate 入口显式拒绝（prompt 入口同因走 SessionSealedError 先例稳定 name 面）
+  // ── bug 4a30b193（必绑重路由目标树活性守护——陈旧选中树/cwd 已删显式拒绝） ──
+  'ERR_WORKTREE_TARGET_ABSENT', // → WorktreeTargetAbsentError：重路由目标树目录不在场（已被外部强制删除）——prompt 径显式拒绝不静默编排（data 带目标路径）
+  // ── forge-verification-hardening 机械⑤（submitTask 强制域取证声明校验兜底） ──
+  'ERR_RUNTIME_EVIDENCE_REQUIRED', // → RuntimeEvidenceRequiredError：强制域任务（声明运行期装配面）success 结算无真机取证证据亦无债务声明（400；data 带装配面清单）
+  'ERR_RUNTIME_EVIDENCE_CONFLICT', // → RuntimeEvidenceConflictError：runtimeEvidence 与 evidenceDebt 并存——取证声明二选一口径歧义（400）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -132,4 +139,12 @@ export interface FilesUnionMismatchData {
 export interface BugRecurrenceDanglingData {
   /** 指向不存在 bug 的 recurrenceOf 值 */
   recurrenceOf: string
+}
+
+// ── forge-verification-hardening 机械⑤：submitTask 强制域取证声明校验兜底 data 载荷 ──
+
+/** ERR_RUNTIME_EVIDENCE_REQUIRED data 载荷：强制域判定的运行期装配面声明清单（原样带回） */
+export interface RuntimeEvidenceRequiredData {
+  /** 提交面 runtimeSurface 声明（强制域判据输入——就高不就低判定后的面清单） */
+  faces: readonly string[]
 }

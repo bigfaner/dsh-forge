@@ -202,6 +202,18 @@ function tasksHarness() {
       return lists.created
     },
     queryTask: async () => shift(queryQueue),
+    // 1.16 批量结算读面桩（wave 快照数据源——completed created 桶投影，commit/债计数零值）
+    taskSettlements: async () =>
+      lists.created
+        .filter((c) => c.taskStatus === 'completed')
+        .map((c) => ({
+          slug: c.slug,
+          localId: c.localId,
+          taskType: c.taskType,
+          fixDerived: c.sourceTask !== undefined,
+          commitHashes: ['abc1234'], // 同 queryOf('completed') 结算记录 commit——快照口径数据源同值
+          evidenceDebtCount: 0,
+        })),
     addTask: async (input: AddTaskInput) => {
       addTaskInputs.push(input)
       return { taskId: 'fix-uuid', slug: input.source.slug, localId: 'fix-2', reused: false }
@@ -269,6 +281,8 @@ interface Built {
   escalations: LoopEscalation[]
   /** 1.17 进度事件录制面（'forge/progress' append 形状观察） */
   progressCalls: ForgeProgressEventData[]
+  /** 机械③ checkpoints 域 ensure 调用录制（mark/baseCommitHash/snapshots/appended 形状断言） */
+  cpEnsures: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown; appended: boolean }>
 }
 
 function build(options: {
@@ -299,6 +313,14 @@ function build(options: {
   }
   /** 1.18 落点核验器注入（错分支提交场景——settleWorkerRun commitLanding 缝） */
   commitLanding?: CommitLandingVerifier
+  /** 机械③ checkpoints 域桩（初始行集——ensure 追加进行集模拟域侧幂等） */
+  checkpointRows?: Array<{ mark: string; tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }>
+  /** 机械③ 标记落库故障注入（前 N 次 ensureCheckpoint 抛错——append 失败窄窗口模拟） */
+  ensureFailures?: number
+  /** 机械③ 容器 → 提案 id 解析桩 */
+  resolveProposalId?: () => Promise<string | undefined>
+  /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
+  resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -321,6 +343,27 @@ function build(options: {
   const spawn = trackedSpawn()
   if (options.spawnBehavior !== undefined) options.spawnBehavior(spawn)
   const escalations: LoopEscalation[] = []
+  // 机械③ checkpoints 域桩（ensure 追加进行集——域侧幂等语义同构：行集已含 mark = no-op）
+  const cpEnsures: Array<{ projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown; appended: boolean }> = []
+  const cpRows = [...(options.checkpointRows ?? [])]
+  let ensureFails = options.ensureFailures ?? 0
+  const checkpoints = options.checkpointRows === undefined ? undefined : {
+    ensureCheckpoint: async (input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => {
+      if (ensureFails > 0) {
+        ensureFails -= 1
+        throw new Error('checkpoint append failed')
+      }
+      if (cpRows.some((r) => r.mark === input.mark)) {
+        cpEnsures.push({ ...input, appended: false })
+        return { appended: false as const }
+      }
+      cpEnsures.push({ ...input, appended: true })
+      cpRows.push({ mark: input.mark, tasksTotal: 0, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 })
+      return { appended: true as const }
+    },
+    appendCheckpoint: async (_input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => ({}),
+    listCheckpoints: async (q: { marks?: readonly string[] }) => cpRows.filter((r) => q.marks === undefined || q.marks.includes(r.mark)),
+  }
   // 1.17 进度事件录制（'forge/progress' append 形状——形状/序断言消费）
   const progressCalls: ForgeProgressEventData[] = []
   const deps: LoopDriverDeps = {
@@ -339,6 +382,9 @@ function build(options: {
     ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
     ...(options.commitLanding !== undefined ? { commitLanding: options.commitLanding } : {}),
     ...(options.e2eBaseline !== undefined ? { e2eBaseline: options.e2eBaseline } : {}),
+    ...(checkpoints !== undefined ? { checkpoints } : {}),
+    ...(options.resolveProposalId !== undefined ? { resolveProposalId: options.resolveProposalId } : {}),
+    ...(options.resolveHeadCommit !== undefined ? { resolveHeadCommit: options.resolveHeadCommit } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -352,7 +398,7 @@ function build(options: {
     },
     ...(options.limits !== undefined ? { limits: options.limits } : {}),
   }
-  return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls }
+  return { driver: createLoopDriver(deps), calls, events, h, spawn, escalations, progressCalls, cpEnsures }
 }
 
 /** 等待循环终局（登记表注销 = 终态唯一机械信号） */
@@ -716,6 +762,228 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
     // start 径 readHead 故障 = 基线机制静默关闭（fail-soft 同套件故障形态）
     expect(built.h.addTaskInputs).toHaveLength(0)
     expect(built.h.claimInputs[0]).not.toHaveProperty('e2eBaselineRedCases')
+  })
+})
+
+// ─────────────────────────── 机械③（forge-verification-hardening） ───────────────────────────
+
+// ensure no-op/append 语义用例落域侧（core implementation-checkpoints.test.ts），此处不再
+// 于插件域复刻包装（ensure 经 LoopCheckpointsFace 直传域面——直传装配由 driver-assembly
+// 生产路径测试覆盖）。
+
+
+describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记', () => {
+  it('first-pass 幂等 + 复盘派生（未越阈）：首次 done 落标记一枚（HEAD 回落结算 commit）+ doc 复盘任务注入指标/交叉核验/learn；次 done 不重落不重派', async () => {
+    const built = build({
+      claim: [claimed(), NO_TASK, claimed('9.1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // claim1 领取通知读
+        statsOf({ in_progress: 1 }), // claim1 结算核池读
+        statsOf({ completed: 1 }), // claim1 review-wave 快照计数读（机械④结算点真实触发——装配修复后）
+        statsOf({ completed: 1 }), // 次轮 no-task 池读（first-pass done）
+        statsOf({ completed: 1 }), // 派生时点池快照计数读（bug 9c350e5f——先派生后落标记序）
+        statsOf({ completed: 1 }), // 标记快照计数读（completed 1 = first-pass 基线）
+        statsOf({ in_progress: 1 }), // 复盘任务领取通知读
+        statsOf({ in_progress: 1 }), // 复盘任务结算核池读
+        statsOf({ completed: 2 }), // 末轮 no-task 池读（标记已在校）
+        statsOf({ completed: 2 }), // quiescence/收口读
+      ],
+      checkpointRows: [],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // first-pass-complete 标记：已锚定后（ensureFirstPassClosure list 前置判读）不再重复 ensure——
+    // 恰一次调用、一次 appended；HEAD = 结算 commit 回落锚
+    expect(built.cpEnsures).toHaveLength(1)
+    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({
+      projectId: PROJECT,
+      proposalId: 'prop-1',
+      mark: 'first-pass-complete',
+      baseCommitHash: 'abc1234',
+      appended: true,
+      snapshots: { tasksTotal: 1 },
+    })
+    // 复盘任务派生：恰一次，type=doc + 指标/越阈规则/交叉核验/learn 全注入；未越阈零 AC 硬门
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    const retro = built.h.addTaskInputs[0]!
+    expect(retro).toMatchObject({ projectId: PROJECT, source: SOURCE, type: 'doc', priority: 'P1', title: 'first-pass 复盘：feat-x' })
+    expect(retro.taskDesc).toContain('一次通过率')
+    expect(retro.taskDesc).toContain('返工增量比')
+    expect(retro.taskDesc).toContain('修正波次')
+    expect(retro.taskDesc).toContain('reviewWaveThreshold')
+    expect(retro.taskDesc).toContain('默认值 6')
+    expect(retro.taskDesc).toContain('交叉核验')
+    expect(retro.taskDesc).toContain('learn')
+    expect(retro.taskDesc).toContain('.knowledge/')
+    expect(retro.taskDesc).toContain('< 6 → 未越阈')
+    expect(retro.acceptanceCriteria).toBeUndefined()
+    // 复盘任务被循环续领后照常收口（⑯ 结束叙述在场）
+    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+    // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、复盘不重派（addTask 仍 1）
+    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+  })
+
+  it('幂等防护（评审建议2）：addTask 成功后落标记失败——复盘任务已在场时二次进入不重复派生，仅补落标记', async () => {
+    const built = build({
+      claim: [NO_TASK, NO_TASK, claimed('9.1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ completed: 1 }), // 轮1 claim 池读
+        statsOf({ completed: 1 }), // 轮1 派生时点池快照读（在场判定前置 computeWaveSnapshot）
+        statsOf({ completed: 1 }), // 轮1 静默窗池读①（终态 → 窗内再询）
+        statsOf({ pending: 1 }), // 轮1 静默窗池读②（复盘任务 pending → 续派）
+        statsOf({ completed: 1 }), // 轮2 claim 池读
+        statsOf({ completed: 1 }), // 轮2 标记快照计数读（补落标记）
+        statsOf({ in_progress: 1 }), // 复盘任务领取通知读
+        statsOf({ in_progress: 1 }), // 复盘任务结算核池读
+        statsOf({ completed: 1 }), // review-wave 快照计数读
+        statsOf({ completed: 2 }), // 轮3 no-task 池读（标记已在校）
+        statsOf({ completed: 2 }), // 静默窗池读
+      ],
+      checkpointRows: [],
+      ensureFailures: 1,
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-1',
+      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
+    })
+    // 窄窗口现场：上一轮派生成功（addTask 已入池）、落标记失败——池中留有 pending 复盘任务
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-9.1',
+      slug: 'feat-x',
+      localId: '9.1',
+      title: 'first-pass 复盘：feat-x',
+      taskType: 'doc',
+      taskStatus: 'pending',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 二次进入：在场 doc 复盘任务即不重派（addTask 零调用）——幂等窗口消除
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    // 失败留待重试语义保持：标记下轮补落恰一次（首次 ensure 抛错、二次 appended）
+    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1' })
+  })
+
+  it('复盘指标真值（bug 9c350e5f）：先派生后落标记窗口内以派生时点池快照合成 first 帧——fixDensity 不恒兜底', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })], // shift-末项重复——派生/落标记快照计数读同值
+      checkpointRows: [{ mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 }],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    // 池中一枚 completed fix 类任务（带 commit 记录）——派生时点快照 = tasks 1 / commits 1 / fixes 1
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    // 真值：first 帧合成（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('fix 密度：100.0%')
+  })
+
+  it('复盘指标真值（bug 9c350e5f）：merged 帧在场 + first 帧合成——reworkRatio 取 (current-baseline)/current 真值', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 1 })],
+      checkpointRows: [
+        { mark: 'merged', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+        { mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 },
+      ],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-2.5',
+      slug: 'feat-x',
+      localId: '2.5',
+      title: 'Task 2.5',
+      taskType: 'coding-fix',
+      taskStatus: 'completed',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    // 真值：first 基线 commits 1（合成帧）、current = merged 帧 commits 3 → (3-1)/3；兜底缺陷下恒 0.0%
+    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('返工增量比：66.7%')
+  })
+
+  it('复盘派生（越阈）：修正波次 ≥ 阈值（默认 6）→ AC 硬门「已注册改进提案」入验收清单', async () => {
+    const wave = { mark: 'review-wave-N', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }
+    const built = build({
+      claim: [claimed(), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      checkpointRows: [
+        { mark: 'merged', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 },
+        wave, wave, wave, wave, wave, wave,
+      ],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    const retro = built.h.addTaskInputs[0]!
+    expect(retro.acceptanceCriteria).toEqual([expect.stringContaining('已注册改进提案')])
+    expect(retro.acceptanceCriteria?.[0]).toContain('未注册不得 success')
+    expect(retro.taskDesc).toContain('≥ 6 → 已越阈')
+    expect(retro.taskDesc).toContain('修正波次：6')
+  })
+
+  it('merged 漏标记 lazy 兜底：循环启动时 first-pass + retro-done 在场、merged 缺席、池全终态 → 补 merged 标记', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 })],
+      checkpointRows: [
+        { mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 },
+        { mark: 'retro-done', tasksTotal: 6, commitsTotal: 9, fixesTotal: 1, evidenceDebtsTotal: 0 },
+      ],
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-9',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 补标记：mark=merged + baseCommitHash = 循环检出 HEAD（解析缝桩）+ 收口时刻计数快照；
+    // 首轮 done：first-pass 已在校 = 已锚定（ensureFirstPassClosure list 前置判读）→ 零 ensure 零复盘派生
+    expect(built.cpEnsures).toHaveLength(1)
+    const mergedCall = built.cpEnsures.find((c) => c.mark === 'merged')
+    expect(mergedCall).toMatchObject({
+      projectId: PROJECT,
+      proposalId: 'prop-1',
+      mark: 'merged',
+      baseCommitHash: 'head-9',
+      appended: true,
+      snapshots: { tasksTotal: 3 },
+    })
+    // 首轮 done：first-pass 已在校 → 零重落零复盘派生（addTask 为空）
+    expect(built.h.addTaskInputs).toHaveLength(0)
+  })
+
+  it('merged lazy 兜底判据不满足：retro-done 缺席（收口前置=复盘已结算）→ 不补标记', async () => {
+    const built = build({
+      claim: [NO_TASK],
+      stats: [statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 }), statsOf({ completed: 3 })],
+      checkpointRows: [{ mark: 'first-pass-complete', tasksTotal: 5, commitsTotal: 8, fixesTotal: 1, evidenceDebtsTotal: 0 }],
+      resolveProposalId: async () => 'prop-1',
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    expect(built.cpEnsures).toHaveLength(0)
   })
 })
 

@@ -46,6 +46,7 @@ const TRANSITION_PROPOSAL_OUTPUT_SCHEMA = withFailureVariant({
     decidedAt: { type: 'string', description: 'Set when the transition is a verdict (accepted/rejected).' },
     mode: { type: 'string' },
     supersededBy: { type: 'string' },
+    parentProposalId: { type: 'string', description: 'Parent proposal id this proposal derives from (flywheel improvement chain; absent = none).' },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
     chained: {
@@ -74,17 +75,21 @@ export interface TransitionProposalToolArgs {
   readonly to_status: ProposalStatus
   /** superseded 必带（取代链目标提案 uuid——在场校验经服务 2.2） */
   readonly superseded_by?: string
+  /** 承接链左列（机械②——飞轮改进链父提案 uuid；提供即写，缺省 = 保留既有） */
+  readonly parent_proposal_id?: string
 }
 
 /** 参数防御性收窄 */
 export function parseTransitionProposalArgs(args: unknown): TransitionProposalToolArgs {
   const a = requireArgsObject(args, TOOL)
-  const out: { proposal_id: string; to_status: ProposalStatus; superseded_by?: string } = {
+  const out: { proposal_id: string; to_status: ProposalStatus; superseded_by?: string; parent_proposal_id?: string } = {
     proposal_id: requiredString(a, 'proposal_id', TOOL),
     to_status: requiredEnum(a, 'to_status', PROPOSAL_STATUSES, TOOL),
   }
   const supersededBy = optionalString(a, 'superseded_by', TOOL)
   if (supersededBy !== undefined) out.superseded_by = supersededBy
+  const parentProposalId = optionalString(a, 'parent_proposal_id', TOOL)
+  if (parentProposalId !== undefined) out.parent_proposal_id = parentProposalId
   return out
 }
 
@@ -114,6 +119,7 @@ export function createTransitionProposalTool(deps: ForgeToolDeps): ForgeToolDefi
         proposal_id: { type: 'string', description: 'Target proposal id (from createProposal or a listing).' },
         to_status: { type: 'string', description: `One of: ${PROPOSAL_STATUSES.join(', ')}.` },
         superseded_by: { type: 'string', description: 'Replacing proposal id (required when to_status is superseded; validated against existing proposals).' },
+        parent_proposal_id: { type: 'string', description: 'Parent proposal id this proposal derives from (flywheel improvement chain; provided = write, omitted = keep existing; validated against existing proposals).' },
       },
       required: ['proposal_id', 'to_status'],
     },
@@ -128,6 +134,7 @@ export function createTransitionProposalTool(deps: ForgeToolDeps): ForgeToolDefi
           proposalId: parsed.proposal_id,
           toStatus: parsed.to_status,
           ...(parsed.superseded_by !== undefined ? { supersededBy: parsed.superseded_by } : {}),
+          ...(parsed.parent_proposal_id !== undefined ? { parentProposalId: parsed.parent_proposal_id } : {}),
         }
         return deps.proposals.transitionProposal(input)
       }, (failure) => emitToolError(deps.events, session.sessionId, slugOfToolArgs(args), TOOL, failure))

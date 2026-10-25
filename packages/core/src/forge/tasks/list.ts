@@ -35,9 +35,12 @@ import {
   type TaskGraphQuery,
   type TaskPrerequisiteSummary,
   type TaskRef,
+  type TaskSettlementRow,
+  type TaskSettlementsQuery,
   type TaskStats,
   type TaskStatsQuery,
   type TaskStatus,
+  type TaskType,
 } from '@dsh-forge/contracts'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { TASK_COLUMNS, type TaskStorageRow } from './query.js'
@@ -310,6 +313,62 @@ function countUnmetPending(db: Database.Database, scope: ContainerScope | undefi
     )
     .get(...args)
   return row?.n ?? 0
+}
+
+/**
+ * taskSettlements——容器 completed 任务结算面批量读（机械④ wave 快照单批数据源）：
+ * 单查询 JOIN task_records 聚合每 completed 任务的 commit hash 集（非空、记录序）/
+ * fix 派生判别（source_task_id 在场）/ evidenceDebt 声明计数。跨任务 commit 去重与
+ * fixes/commits/evidenceDebts 计数口径单源落消费面（settle.computeWaveSnapshot）。
+ */
+export async function taskSettlements(deps: TasksListDeps, q: TaskSettlementsQuery): Promise<TaskSettlementRow[]> {
+  const db = deps.store.ensureOpen(q.projectId)
+  const scope = resolveContainerScope(db, q.source)
+  if (scope === undefined) return [] // 未命中容器 → 空集（读面零 404 同口径）
+  const rows = db
+    .prepare<
+      unknown[],
+      {
+        slug: string
+        local_id: string
+        task_type: TaskType
+        source_task_id: string | null
+        commit_hash: string | null
+        record_fields_json: string | null
+      }
+    >(
+      `SELECT t.slug AS slug, t.local_id AS local_id, t.task_type AS task_type,
+         t.source_task_id AS source_task_id, r.commit_hash AS commit_hash, r.record_fields_json AS record_fields_json
+       FROM tasks t LEFT JOIN task_records r ON r.task_id = t.id
+       WHERE t.source_kind = ? AND t.source_id = ? AND t.task_status = 'completed'
+       ORDER BY t.id, r.id`,
+    )
+    .all(scope.kind, scope.sourceId)
+  const byTask = new Map<string, TaskSettlementRow>()
+  for (const r of rows) {
+    let row = byTask.get(r.local_id)
+    if (row === undefined) {
+      row = {
+        slug: r.slug,
+        localId: r.local_id,
+        taskType: r.task_type,
+        fixDerived: r.source_task_id !== null,
+        commitHashes: [],
+        evidenceDebtCount: 0,
+      }
+      byTask.set(r.local_id, row)
+    }
+    if (r.commit_hash !== null && r.commit_hash !== '') row.commitHashes.push(r.commit_hash)
+    if (r.record_fields_json !== null) {
+      try {
+        const fields = JSON.parse(r.record_fields_json) as { evidenceDebt?: unknown }
+        if (fields.evidenceDebt !== undefined) row.evidenceDebtCount += 1
+      } catch {
+        // 畸形 record_fields = 计 0（降级不炸读面——decodeRecordFiles 同口径）
+      }
+    }
+  }
+  return [...byTask.values()]
 }
 
 /** Interface 1 taskGraph：容器子图（TaskCard 全量水化 + 边三元组——DAG/泳道渲染源）。

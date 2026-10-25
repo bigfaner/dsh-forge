@@ -315,6 +315,7 @@ export const TASKS_SERVICE_METHODS = [
   'validateFeatureTasks',
   'listTasks',
   'taskStats',
+  'taskSettlements',
   'taskGraph',
   'taskDetail',
   'sessionLinks',
@@ -346,6 +347,8 @@ export const PROPOSALS_SERVICE_METHODS = [
   // RPC 通道接线 = 3.8，UI 消费 = 4.x——桥面白名单完备性恒编译期点名）
   'setProposalMode',
   'listProposalDocs',
+  // 机械②承接链自联结读面（纯读零写径——飞轮改进链闭包查询）
+  'listDerivedProposals',
 ] as const satisfies readonly (keyof ForgeProposalsService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeProposalsService 方法在此编译期点名） */

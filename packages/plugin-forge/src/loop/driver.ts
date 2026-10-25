@@ -20,13 +20,19 @@
 // ⑦ 运行时登记表（registry.ts——进程内、重启即空 = S3 对账判据）；
 // ⑧ 循环生命周期入口（start/stop，供 S2 指令层调用）：停止 = 取消 in-flight（控制器 abort →
 //    驱动器取消 worker 剩余回合）+ in-flight 真化 interrupted（S3 transitionTask 面）+ 收口
-//    叙述（⑰）+ 循环终态注销。
+//    叙述（⑰）+ 循环终态注销；
+// ⑨ 机械③（forge-verification-hardening）：no-task done 分流处 first-pass-complete 标记
+//    （首次无可派任务，幂等）+ 代码 review 收口后 doc 复盘任务派生（注入飞轮硬指标 + 越阈
+//    判定规则，阈值取机械⑦ settings 键，越阈 AC 硬门要求已注册改进提案）+ merged 漏标记
+//    lazy 兜底（下个容器循环启动时校验补标记）。术语纪律：first-pass = 首次无可派任务；
+//    收口 = merged 终态，不混用。
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
+import { FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
-import { claimForDispatch, classifyPool, findLiveSuccessor, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
+import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
 import type {
   ClaimedDispatch,
   DispatchChainScope,
@@ -262,6 +268,310 @@ export interface LoopEscalationHook {
   escalate(escalation: LoopEscalation): Promise<void>
 }
 
+// ─────────────────────────── 机械③ · first-pass 标记 / 复盘派生 / merged lazy 兜底 ───────────────────────────
+
+/** 计数快照（标记时刻累计值——机械①检查点四列，口径 = settle.computeWaveSnapshot） */
+export interface LoopCheckpointSnapshot {
+  readonly tasksTotal: number
+  readonly commitsTotal: number
+  readonly fixesTotal: number
+  readonly evidenceDebtsTotal: number
+}
+
+/** 检查点行读影（飞轮指标计算面——mark 词汇宽松读，字段=机械①快照四列） */
+export interface LoopCheckpointRowLite {
+  readonly mark: string
+  readonly tasksTotal: number
+  readonly commitsTotal: number
+  readonly fixesTotal: number
+  readonly evidenceDebtsTotal: number
+}
+
+/**
+ * checkpoints 域服务的循环侧结构化消费面（结构兼容 core createCheckpointsService——插件禁
+ * import core）。ensureCheckpoint 幂等语义 = 域侧既有（标记在场 no-op appended=false）。
+ */
+export interface LoopCheckpointsFace {
+  ensureCheckpoint(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly mark: 'first-pass-complete' | 'merged'
+    readonly baseCommitHash: string
+    readonly snapshots: LoopCheckpointSnapshot
+  }): Promise<{ readonly appended: boolean }>
+  /**
+   * review-wave-N 追加（机械④结算侧透传——loop.core 结构投影 SettleCheckpointsFace 消费；
+   * wave_seq 缺省域侧自动递增）
+   */
+  appendCheckpoint(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly mark: 'review-wave-N'
+    readonly baseCommitHash: string
+    readonly snapshots: LoopCheckpointSnapshot
+  }): Promise<unknown>
+  listCheckpoints(q: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly marks?: readonly string[]
+  }): Promise<readonly LoopCheckpointRowLite[]>
+}
+
+/** 越阈硬门 AC（复盘任务 acceptance_criteria——未注册改进提案不得 success，提案 M7 口径） */
+export const RETRO_PROPOSAL_AC =
+  '已注册改进提案（parent_proposal_id 指向本提案）并在结算记录 ac_evidence 登记派生提案 id 清单——未注册不得 success'
+
+/** 复盘任务终态集（幂等在场判定口径——终态复盘任务不再拦派生，非终态 = 窄窗口现场） */
+const RETRO_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'skipped', 'rejected'])
+
+/** 复盘任务标题模板（单一常量，派生与在场判定两处消费——字面分叉会静默失配使幂等防护失效） */
+const RETRO_TASK_TITLE_PREFIX = 'first-pass 复盘：'
+
+/** 飞轮硬指标（标记快照直算——提案「派生硬指标」节口径） */
+export interface FlywheelMetrics {
+  /** 一次通过率 = first-pass 时任务数 / merged（缺席 = 当前帧）时任务数 */
+  readonly passRate: number
+  /** 返工增量比 = first-pass 后 commit 增量 / 全量 commit（无 merged 帧 = 0） */
+  readonly reworkRatio: number
+  /** 修正波次 = review-wave-N 标记计数 */
+  readonly waveCount: number
+  /** fix 密度 = fix 任务数 / 任务总数（当前帧） */
+  readonly fixDensity: number
+  /** 越阈判定：修正波次 ≥ 阈值（机械⑦ settings flywheel.reviewWaveThreshold，缺席默认 6） */
+  readonly overThreshold: boolean
+}
+
+/** 飞轮硬指标计算（纯函数——快照直算，单测锚） */
+export function flywheelMetricsOf(rows: readonly LoopCheckpointRowLite[], threshold: number): FlywheelMetrics {
+  const first = rows.find((r) => r.mark === 'first-pass-complete')
+  const merged = rows.find((r) => r.mark === 'merged')
+  const current = merged ?? first
+  const firstPassTasks = first?.tasksTotal ?? 0
+  const currentTasks = current?.tasksTotal ?? firstPassTasks
+  const commitsTotal = current?.commitsTotal ?? 0
+  const baselineCommits = first?.commitsTotal ?? commitsTotal
+  return {
+    passRate: currentTasks > 0 ? firstPassTasks / currentTasks : 1,
+    reworkRatio: commitsTotal > 0 ? (commitsTotal - baselineCommits) / commitsTotal : 0,
+    waveCount: rows.filter((r) => r.mark === 'review-wave-N').length,
+    fixDensity: currentTasks > 0 ? (current?.fixesTotal ?? 0) / currentTasks : 0,
+    overThreshold: rows.filter((r) => r.mark === 'review-wave-N').length >= threshold,
+  }
+}
+
+/** 复盘任务简报（指标计算值 + 越阈判定规则 + 多 agent 交叉核验 + learn 技能要求——机械注入面） */
+export function renderRetroBrief(slug: string, m: FlywheelMetrics, threshold: number): string {
+  const pct = (x: number): string => `${(x * 100).toFixed(1)}%`
+  return [
+    `【first-pass 复盘】容器 ${slug} 首次无可派任务（first-pass），代码 review 已收口——对本次特性做经验复盘并沉淀。`,
+    '术语纪律：first-pass = 首次无可派任务；收口 = merged 终态；两者不混用。',
+    '',
+    '一、飞轮硬指标（检查点标记快照直算）：',
+    `- 一次通过率：${m.passRate === 1 ? '1（尚无 merged 帧，基线即当前）' : pct(m.passRate)}`,
+    `- 返工增量比：${pct(m.reworkRatio)}`,
+    `- 修正波次：${String(m.waveCount)}`,
+    `- fix 密度：${pct(m.fixDensity)}`,
+    '',
+    '二、越阈判定规则：修正波次 ≥ 阈值即越阈（阈值 = settings flywheel.reviewWaveThreshold，' +
+      `当前生效值 ${String(threshold)}；settings 键缺席 = 默认值 ${String(FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT)}）。` +
+      `当前判定：修正波次 ${String(m.waveCount)} ${m.overThreshold ? '≥' : '<'} ${String(threshold)} → ` +
+      (m.overThreshold ? '已越阈——本任务 AC 含硬门「已注册改进提案」，未注册不得 success。' : '未越阈——无注册硬门，仍须完成复盘沉淀。'),
+    '',
+    '三、多 agent 交叉核验：各 agent 独立提取本特性验收经验/判例/翻车点，交叉比对后取共识入沉淀，' +
+      '分歧记录待裁决——单视角结论不直接入库。',
+    '',
+    '四、learn 技能调用：三类沉淀（conventions/lessons/examples）全量经 learn 技能提取，落 .knowledge/ 对应目录' +
+      '（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；' +
+      '提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。',
+  ].join('\n')
+}
+
+/** 越阈判定阈值（机械⑦——settings flywheel.reviewWaveThreshold，键缺席/读故障 = 默认值生效） */
+async function reviewWaveThresholdOf(loop: ActiveLoop): Promise<number> {
+  try {
+    const settings = await loop.deps.settings?.get()
+    return settings?.flywheel?.reviewWaveThreshold ?? FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT
+  } catch {
+    return FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT
+  }
+}
+
+/** 标记时点容器分支 HEAD（git rev-parse 优先，回落最近一次结算 commit hash——标记锚不可得 = undefined） */
+async function headHashOf(loop: ActiveLoop): Promise<string | undefined> {
+  if (loop.record.worktree !== undefined) {
+    const head = await (loop.deps.resolveHeadCommit ?? gitHeadCommit)(loop.record.worktree)
+    if (head !== undefined) return head
+  }
+  return loop.lastCommitHash
+}
+
+/**
+ * first-pass 收口（机械③——no-task done 分流处调用，评审建议1派生锚收口）：标记缺席时先派生
+ * 复盘任务、addTask 成功才落 first-pass-complete 标记（append-only 域，标记先行曾致派生
+ * fail-soft 失败即复盘任务永久丢失）；addTask 失败不落标记，幂等窗口留给下一轮 no-task done
+ * 重试。标记已在校（list 前置判读）= 已锚定 → 不重派不重落，零行为变化。落标记失败窗口由
+ * 在场判定兜底（hasOpenRetroTask——非终态同源复盘任务在场即跳过派生只补标记，addTask 无幂等键，
+ * 重派将致复盘任务重复入池）。
+ * 返回 true = 本轮新落标记且复盘任务已入池（续领下一轮）。
+ */
+async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
+  const checkpoints = loop.deps.checkpoints
+  if (checkpoints === undefined || loop.proposalId === undefined) return false
+  try {
+    const rows = await checkpoints.listCheckpoints({
+      projectId: loop.scope.projectId,
+      proposalId: loop.proposalId,
+      marks: ['first-pass-complete'],
+    })
+    if (rows.some((r) => r.mark === 'first-pass-complete')) return false // 已锚定——照旧收口
+    // Root cause（bug 9c350e5f）：先派生后落标记序下，deriveRetroTask 执行时 first-pass-complete
+    // 行尚未落库——直接 list 读不到 first 帧致 flywheelMetricsOf 恒兜底。派生时点独立取当前池
+    // 快照合成 first 帧（与标记快照同口径），不依赖标记行先行。
+    const pendingSnapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
+    if (!(await hasOpenRetroTask(loop))) {
+      // 幂等防护（评审建议2）：addTask 成功后落标记失败的窄窗口——同源 doc 复盘任务已在池
+      // （非终态）即不重派，仅补落标记；读面故障 = fail-soft 视为缺席，退化回派生重试现状。
+      if (!(await deriveRetroTask(loop, pendingSnapshots))) return false // 派生失败不落标记——下轮重试
+    }
+    return await ensureFirstPassMark(loop)
+  } catch (cause) {
+    console.warn(
+      `forge loop first-pass closure failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return false
+  }
+}
+
+/**
+ * 同源 doc 复盘任务在场判定（幂等防护——first-pass 派生前调用）：容器池内已有同 slug、
+ * 同源、同标题、type=doc 的非终态复盘任务（completed/skipped/rejected 之外）= 曾派生且
+ * 标记落库失败的窄窗口现场，重派将致复盘任务重复入池（addTask 无幂等键）。读面故障 =
+ * fail-soft 返回 false（视为缺席，保持派生重试现状）。
+ */
+async function hasOpenRetroTask(loop: ActiveLoop): Promise<boolean> {
+  const title = `${RETRO_TASK_TITLE_PREFIX}${loop.record.source.slug}`
+  try {
+    const cards = await loop.deps.tasks.listTasks({
+      projectId: loop.scope.projectId,
+      source: { kind: loop.record.source.kind, slug: loop.record.source.slug },
+    })
+    return cards.some((c) => c.taskType === 'doc' && c.title === title && !RETRO_TERMINAL_TASK_STATUSES.has(c.taskStatus))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * first-pass-complete 标记（机械③——no-task done 分流处调用）：首次无可派任务时经检查点域
+ * 幂等落标记（域侧 ensure 幂等——已在场 no-op appended=false）。标记锚（HEAD/快照）不可得
+ * 或依赖缺席 = fail-soft 跳过，循环收口零受阻。返回 appended=true 表示本次首次落标记。
+ */
+async function ensureFirstPassMark(loop: ActiveLoop): Promise<boolean> {
+  const checkpoints = loop.deps.checkpoints
+  if (checkpoints === undefined || loop.proposalId === undefined) return false
+  try {
+    const head = await headHashOf(loop)
+    if (head === undefined) {
+      console.warn(`forge loop first-pass mark skipped (no base commit) for ${loop.record.source.slug}`)
+      return false
+    }
+    const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
+    const result = await checkpoints.ensureCheckpoint({
+      projectId: loop.scope.projectId,
+      proposalId: loop.proposalId,
+      mark: 'first-pass-complete',
+      baseCommitHash: head,
+      snapshots,
+    })
+    return result.appended
+  } catch (cause) {
+    console.warn(
+      `forge loop first-pass mark failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return false
+  }
+}
+
+/**
+ * doc 复盘任务派生（机械③——first-pass 首次落标记后调用，即「代码 review 结束后」的机械
+ * 承接：first-pass = 全部任务完成，review 任务含于其中已收口）：注入飞轮硬指标计算值与越阈
+ * 判定规则（阈值取机械⑦ settings 键）、多 agent 交叉核验要求、learn 技能调用要求；越阈时
+ * AC 硬门要求已注册改进提案（未注册不得 success）。fail-soft：派生失败 warn 留痕不阻收口。
+ */
+async function deriveRetroTask(loop: ActiveLoop, pendingFirstPass?: LoopCheckpointSnapshot): Promise<boolean> {
+  const { deps, record } = loop
+  const checkpoints = deps.checkpoints
+  if (checkpoints === undefined || loop.proposalId === undefined) return false
+  try {
+    const rows = await checkpoints.listCheckpoints({ projectId: loop.scope.projectId, proposalId: loop.proposalId })
+    // 标记行缺席（先派生后落标记序）+ 快照在场 = 以派生时点池快照合成 first 帧补位（bug 9c350e5f）
+    const effectiveRows =
+      pendingFirstPass === undefined || rows.some((r) => r.mark === 'first-pass-complete')
+        ? rows
+        : [...rows, { mark: 'first-pass-complete' as const, ...pendingFirstPass }]
+    const threshold = await reviewWaveThresholdOf(loop)
+    const metrics = flywheelMetricsOf(effectiveRows, threshold)
+    await deps.tasks.addTask({
+      projectId: loop.scope.projectId,
+      source: record.source,
+      title: `${RETRO_TASK_TITLE_PREFIX}${record.source.slug}`,
+      type: 'doc',
+      priority: 'P1',
+      estimatedTime: '1-2h',
+      taskDesc: renderRetroBrief(record.source.slug, metrics, threshold),
+      ...(metrics.overThreshold ? { acceptanceCriteria: [RETRO_PROPOSAL_AC] } : {}),
+    })
+    return true
+  } catch (cause) {
+    console.warn(
+      `forge loop retro task derivation failed (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return false
+  }
+}
+
+/**
+ * merged 漏标记 lazy 兜底（机械③——下个容器循环启动时校验补标记，与 stabilized lazy 判定
+ * 同构）：收口判据 = first-pass-complete 与 retro-done 标记在场、merged 缺席（收口前置 =
+ * 复盘已结算，提案 M5 口径）且容器池全终态（done 快照）——四条件齐才 ensureCheckpoint 补
+ * merged（域侧幂等）。fail-soft：任何失败 warn 留痕，循环启动零受阻。
+ */
+async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
+  const checkpoints = loop.deps.checkpoints
+  if (checkpoints === undefined || loop.proposalId === undefined) return
+  try {
+    const rows = await checkpoints.listCheckpoints({
+      projectId: loop.scope.projectId,
+      proposalId: loop.proposalId,
+      marks: ['first-pass-complete', 'retro-done', 'merged'],
+    })
+    const has = (mark: string): boolean => rows.some((r) => r.mark === mark)
+    if (!has('first-pass-complete') || !has('retro-done') || has('merged')) return
+    // 评审建议2（bug 548ea94b 附带收口）：suspended/interrupted 同为非终态——挂起/中断容器
+    // 不得被 lazy 兜底提前补 merged（原 poolOf 四键判定漏此二态，挂起容器可被提前收口标记）
+    const by = (await statsFailSoft(loop)).byStatus
+    if (by.pending !== 0 || by.in_progress !== 0 || by.blocked !== 0 || by.suspended !== 0 || by.interrupted !== 0)
+      return // 容器未收口——不补
+    const head = await headHashOf(loop)
+    if (head === undefined) {
+      console.warn(`forge loop merged backfill skipped (no base commit) for ${loop.record.source.slug}`)
+      return
+    }
+    const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
+    await checkpoints.ensureCheckpoint({
+      projectId: loop.scope.projectId,
+      proposalId: loop.proposalId,
+      mark: 'merged',
+      baseCommitHash: head,
+      snapshots,
+    })
+  } catch (cause) {
+    console.warn(
+      `forge loop merged backfill failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
+}
+
 // ─────────────────────────── 生命周期入口（供 S2 指令层调用） ───────────────────────────
 
 /** 启动入参（S2 指令 handler 透传：agent = 主会话 Agent——worker spawn parent 与叙述目的地） */
@@ -347,6 +657,21 @@ export interface LoopDriverDeps {
   readonly registry?: LoopRegistry
   readonly triage?: LoopTriageHook
   readonly escalation?: LoopEscalationHook
+  /**
+   * checkpoints 域服务消费面（机械③——first-pass-complete 标记 / merged 漏标记 lazy 补；
+   * 结构兼容 core createCheckpointsService。缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly checkpoints?: LoopCheckpointsFace
+  /**
+   * 容器 → 提案 id 解析（机械③——检查点 proposal_id 归属锚，装配面经提案谱系注入；
+   * 缺席/未命中 = 机制惰性不判，行为零变化）
+   */
+  readonly resolveProposalId?: (projectId: string, source: ContainerRef) => Promise<string | undefined>
+  /**
+   * 容器分支 HEAD 解析器（机械③标记时点 base_commit_hash——缺省回落 gitHeadCommit 真解析；
+   * 单测注入桩。worktree 缺席或解析故障 = 回落最近一次结算 commit hash，双缺席 = 标记跳过）
+   */
+  readonly resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
   /**
    * 已知容器集读面（改进 6⑤——wait-external.externalSlug 存在性校验的宿主数据源；
    * 返回该 projectId 下全部已知容器 slug（feature + proposal 双轨并集）。缺席 = 校验
@@ -454,6 +779,10 @@ interface ActiveLoop {
   readonly e2eAttributed: Set<string>
   /** 3c 轮数总量计数（生命周期总量——resume 续用不清零；达 maxRounds 即 ⑮ 终局） */
   rounds: number
+  /** 机械③：容器 → 提案 id（start 时解析一次的检查点归属锚；缺席 = 机制惰性不判） */
+  proposalId?: string
+  /** 机械③：最近一次 success 结算 commit hash（标记时点 HEAD 的回落锚——worktree 缺席径） */
+  lastCommitHash?: string
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -816,6 +1145,11 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           ...(deps.events !== undefined ? { events: deps.events } : {}),
           ...(deps.settings !== undefined ? { settings: deps.settings } : {}),
           ...(deps.resolveModelReasoning !== undefined ? { resolveModelReasoning: deps.resolveModelReasoning } : {}),
+          // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints/HEAD 解析器随 loop.core 透传
+          // 结算核——settleClaimed → settleWorkerRun → recordWaveCheckpoint 的 review-wave-N
+          // 落行依赖此二依赖（缺席 = 机制惰性不判，行为零变化）
+          ...(deps.checkpoints !== undefined ? { checkpoints: deps.checkpoints } : {}),
+          ...(deps.resolveHeadCommit !== undefined ? { resolveHeadCommit: deps.resolveHeadCommit } : {}),
         },
         exec: {
           attribution: {},
@@ -857,6 +1191,16 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         live.delete(id)
         registry.remove(id)
         return { ok: true, loopId: id }
+      }
+      // 机械③：容器 → 提案 id 解析（检查点归属锚——fail-soft，缺席 = 机制惰性不判）
+      if (deps.resolveProposalId !== undefined) {
+        try {
+          loop.proposalId = await deps.resolveProposalId(projectId, source)
+        } catch (cause) {
+          console.warn(
+            `forge loop proposal id resolve failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          )
+        }
       }
       // e2e 红灯基线门（改进7/disc-2/bug 006d8bfe 后台化）：基线跑批移入循环 fiber——
       // start 立即返回启动回执（工具调用面零阻塞——长跑/挂死套件曾把 start 卡满全量窗）。
@@ -1000,6 +1344,9 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
   const { record } = loop
   let suspended = false
   try {
+    // 机械③：merged 漏标记 lazy 兜底——下个容器循环启动时校验补标记（收口判据见函数注；
+    // 机制未装配时零 await 零行为变化——不扰动循环启动时序）
+    if (loop.deps.checkpoints !== undefined && loop.proposalId !== undefined) await ensureMergedBackfill(loop)
     while (!loop.controller.signal.aborted) {
       // 3c 最大轮次封顶（终止条件全集之一）：达上限按 ⑮ 结束叙述收口（建议重派），不再续领。
       // 计数在 ActiveLoop（生命周期总量——resume 续用不清零，反复挂起/回流不绕过封顶）
@@ -1302,6 +1649,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     // 在场时欠账卡才指示「比对 E2E_BASELINE_RED 行」；无红灯/基线未接线 = 兜底文案
     // （不指示真机不存在的简报行）
     ...(baseline !== undefined && baseline.redCases.length > 0 ? { e2eBaselineRedCases: baseline.redCases } : {}),
+    // 机械④（bug 548ea94b 装配断链修复）：提案 id 归属锚随结算输入透传——recordWaveCheckpoint
+    // 的 proposalId 缺席短路恒不触发，此映射是修正波标记的真实结算路径开关
+    ...(loop.proposalId !== undefined ? { proposalId: loop.proposalId } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
   if (signal.aborted) return 'terminal'
@@ -1402,6 +1752,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const label = `${settlement.taskRef.localId} ${settlement.title}`
   if (settlement.outcome === 'success') {
     loop.dispositions.delete(taskKey) // S1c 处置簿清账（任务成功——同任务处置计数归零）
+    loop.lastCommitHash = settlement.commitHash ?? loop.lastCommitHash // 机械③ 标记 HEAD 回落锚
     const donePayload = { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }
     await deps.narrator.notice(owner, renderNarrative('completed', donePayload), renderHeadline('completed', donePayload))
     // 进度事件（1.17——结算成功点：⑥ task/complete）
@@ -1670,6 +2021,13 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
 async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutcome> {
   const verdict = classifyPool(pool)
   if (verdict === 'done') {
+    // 机械③：first-pass 收口（评审建议1——addTask 成功为派生锚）：标记缺席时先派生复盘任务、
+    // 成功才落标记；任一步失败不落标记，幂等窗口留给下一轮 no-task done 重试。复盘任务已入池
+    // → 续领下一轮（本轮跳过静默窗）；标记已在校 = 已锚定 → 照旧 quiescence 收口，零行为变化。
+    // 机制未装配 = 零 await。
+    if (loop.deps.checkpoints !== undefined && loop.proposalId !== undefined) {
+      if (await ensureFirstPassClosure(loop)) return 'continue'
+    }
     // 3c 续派静默窗：⑯ 收口前 wait-for-quiescence——编排层窗内新派任务即自动续派；
     // 窗满静默才收口；窗内叫停 = 用户终止径（收口归停止径，零结束叙述）。
     const quiescence = await waitForQuiescence(loop)

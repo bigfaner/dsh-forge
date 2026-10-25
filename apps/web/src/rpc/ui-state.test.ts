@@ -37,6 +37,9 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_AC_NOT_MET: 'error-bar',
   ERR_AC_CRITERIA_MISMATCH: 'error-bar',
   ERR_FILES_UNION_MISMATCH: 'error-bar',
+  // forge-verification-hardening 机械⑤（强制域取证声明校验兜底）
+  ERR_RUNTIME_EVIDENCE_REQUIRED: 'error-bar',
+  ERR_RUNTIME_EVIDENCE_CONFLICT: 'error-bar',
   // main-agent-task-tools（updateTask 锁定面）
   ERR_TASK_LOCKED: 'error-bar',
   ERR_TASK_EDGE_ORIGIN_LOCKED: 'error-bar',
@@ -49,6 +52,9 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BUG_RECURRENCE_DANGLING: 'error-bar',
   // dispatch-loop-hardening 改进 5（addTask caller 身份分流）——worker 拒收错误条
   ERR_WORKER_ADDTASK_DENIED: 'error-bar',
+  // session-binding-guarantee W2 / bug 4a30b193——创建入口显式拒绝错误条
+  ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
+  ERR_WORKTREE_TARGET_ABSENT: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

@@ -64,6 +64,12 @@ export interface SubmitTaskToolArgs {
   readonly evidence_debt_suite?: string
   readonly evidence_debt_specs?: readonly string[]
   readonly evidence_debt_note?: string
+  /** 运行期装配面声明（机械⑤——强制域判定输入：交付物触达的运行面，如 ui/web-server/mq；library/sdk/pure-logic/docs = 豁免声明；多面交叉就高不就低） */
+  readonly runtime_surface?: readonly string[]
+  /** 真机取证证据声明三参（机械⑤证据路径——与 evidence_debt 二选一，core ERR_RUNTIME_EVIDENCE_CONFLICT） */
+  readonly runtime_evidence_face?: string
+  readonly runtime_evidence_artifacts?: readonly string[]
+  readonly runtime_evidence_note?: string
 }
 
 /** gate 平铺四参 → TaskGateReport（all-or-none + coverage 依赖门在场） */
@@ -120,6 +126,10 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
     evidence_debt_suite?: string
     evidence_debt_specs?: string[]
     evidence_debt_note?: string
+    runtime_surface?: string[]
+    runtime_evidence_face?: string
+    runtime_evidence_artifacts?: string[]
+    runtime_evidence_note?: string
   } = {
     slug: requiredString(a, 'slug', TOOL),
     local_id: requiredString(a, 'local_id', TOOL),
@@ -198,6 +208,27 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   } else if (a['evidence_debt_note'] !== undefined) {
     throw new Error(`${TOOL}: evidence_debt_note requires evidence_debt_suite and evidence_debt_specs`)
   }
+  // 机械⑤取证声明口径（runtime_surface + runtime_evidence 三参）：face/artifacts 成组必带、note 可选
+  const evFace = optionalString(a, 'runtime_evidence_face', TOOL)
+  const evArtifacts = optionalStringArray(a, 'runtime_evidence_artifacts', TOOL)
+  if (evFace !== undefined || evArtifacts !== undefined) {
+    if (evFace === undefined || evArtifacts === undefined || evArtifacts.length === 0) {
+      throw new Error(`${TOOL}: runtime_evidence_face and a non-empty runtime_evidence_artifacts must be given together`)
+    }
+    out.runtime_evidence_face = evFace
+    out.runtime_evidence_artifacts = evArtifacts
+    const evNote = optionalString(a, 'runtime_evidence_note', TOOL)
+    if (evNote !== undefined) out.runtime_evidence_note = evNote
+  } else if (a['runtime_evidence_note'] !== undefined) {
+    throw new Error(`${TOOL}: runtime_evidence_note requires runtime_evidence_face and runtime_evidence_artifacts`)
+  }
+  const runtimeSurface = optionalStringArray(a, 'runtime_surface', TOOL)
+  if (runtimeSurface !== undefined) {
+    if (runtimeSurface.length === 0) {
+      throw new Error(`${TOOL}: runtime_surface must be a non-empty array when given`)
+    }
+    out.runtime_surface = runtimeSurface
+  }
   gateOf(out) // 组合形状先证（all-or-none / coverage 依赖）
   return out
 }
@@ -244,7 +275,7 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source. evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence.',
+      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source. evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence. Mandatory-evidence-domain fallback (AGENTS 1.4): declaring runtime_surface with a runtime assembly face (ui/api/cli/tui/desktop/web-server/mq are examples, not a whitelist; SDK/library is exempt unless it carries its own subprocess/network side effects — mixed faces take the strictest) requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared) on result=success; without either, ERR_RUNTIME_EVIDENCE_REQUIRED rejects and guides you to one of the two paths.',
     parameters: {
       type: 'object',
       properties: {
@@ -308,6 +339,21 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           description: 'Spec paths the owed e2e assertions cover (forward slashes) — required with evidence_debt_suite.',
         },
         evidence_debt_note: { type: 'string', description: 'What evidence is owed and why (optional, with the debt pair).' },
+        runtime_surface: {
+          type: 'array',
+          items: { type: 'string' },
+          description: "Runtime assembly surface declaration (mandatory-evidence-domain input): faces the deliverable touches at runtime — common examples ui/api/cli/tui/desktop/web-server/mq (non-exhaustive; anything with a runtime assembly face qualifies, e.g. browser-extension, mobile-app, cron, db-migration); 'library'/'sdk'/'pure-logic'/'docs' declare the exempt domain; multiple faces take the strictest ('highest') interpretation.",
+        },
+        runtime_evidence_face: {
+          type: 'string',
+          description: "Real-machine evidence primary face (with runtime_evidence_artifacts) — the runtime face the end consumer perceives; the alternative to evidence_debt (both together = ERR_RUNTIME_EVIDENCE_CONFLICT).",
+        },
+        runtime_evidence_artifacts: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Real-machine forensic artifact paths (screenshots/logs/trace, archived on disk) — required with runtime_evidence_face.',
+        },
+        runtime_evidence_note: { type: 'string', description: 'Evidence method and environment notes (optional, with the evidence pair).' },
       },
       required: ['slug', 'local_id', 'result'],
     },
@@ -353,6 +399,16 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
                   suite: parsed.evidence_debt_suite,
                   specs: [...parsed.evidence_debt_specs],
                   ...(parsed.evidence_debt_note !== undefined ? { note: parsed.evidence_debt_note } : {}),
+                },
+              }
+            : {}),
+          ...(parsed.runtime_surface !== undefined ? { runtimeSurface: [...parsed.runtime_surface] } : {}),
+          ...(parsed.runtime_evidence_face !== undefined && parsed.runtime_evidence_artifacts !== undefined
+            ? {
+                runtimeEvidence: {
+                  face: parsed.runtime_evidence_face,
+                  artifacts: [...parsed.runtime_evidence_artifacts],
+                  ...(parsed.runtime_evidence_note !== undefined ? { note: parsed.runtime_evidence_note } : {}),
                 },
               }
             : {}),
