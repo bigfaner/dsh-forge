@@ -116,6 +116,7 @@ function fakeWorkspaceRegistry(attachError?: Error, titles: Record<string, strin
   const workspaces = new Map<string, { id: string; title?: string }>()
   const entityFor = (path: string, ws: { id: string; title?: string }) => ({
     id: ws.id,
+    title: ws.title ?? '',
     attachSession: async (sessionId: string) => {
       if (attachError !== undefined) throw attachError
       attached.push({ path, sessionId })

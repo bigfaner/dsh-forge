@@ -32,7 +32,10 @@ function row(overrides: Partial<CheckpointRow> & { id: number }): CheckpointRow 
   }
 }
 
-function depsWithFace(face: ForgeCheckpointsToolFace, proposals?: ForgeToolDeps['proposals']): ForgeToolDeps {
+function depsWithFace(
+  face: Omit<ForgeCheckpointsToolFace, 'ensureCheckpoint'> & Partial<Pick<ForgeCheckpointsToolFace, 'ensureCheckpoint'>>,
+  proposals?: ForgeToolDeps['proposals'],
+): ForgeToolDeps {
   return {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals:
@@ -43,7 +46,14 @@ function depsWithFace(face: ForgeCheckpointsToolFace, proposals?: ForgeToolDeps[
         },
       } as unknown as ForgeToolDeps['proposals']),
     bugs: {} as ForgeToolDeps['bugs'],
-    checkpoints: face,
+    checkpoints: {
+      ...face,
+      ensureCheckpoint:
+        face.ensureCheckpoint ??
+        (async () => {
+          throw new Error('not used')
+        }),
+    },
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'proj-1' : undefined),
   }
 }

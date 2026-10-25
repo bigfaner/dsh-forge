@@ -5,6 +5,16 @@ import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, TaskStats, TaskStatsQuery } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
+
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
 import { createTaskStatsTool, parseTaskStatsArgs } from './task-stats.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
@@ -15,7 +25,7 @@ const STATS: TaskStats = {
   unmetPending: 1,
 }
 
-function toolWithCapture(overrides?: Partial<Parameters<typeof createTaskStatsTool>[0]>) {
+function toolWithCapture(overrides?: Partial<Omit<Parameters<typeof createTaskStatsTool>[0], 'checkpoints'>>) {
   const captured: TaskStatsQuery[] = []
   const tasks = {
     taskStats: async (input: TaskStatsQuery) => {
@@ -27,6 +37,7 @@ function toolWithCapture(overrides?: Partial<Parameters<typeof createTaskStatsTo
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     ...overrides,
   }

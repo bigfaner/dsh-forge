@@ -13,7 +13,17 @@ import { deriveTriageToolFilter } from '../dispatch-core/assemble.js'
 import { createLoopRegistry } from '../loop/index.js'
 import type { LoopDriver, LoopEscalation, LoopRecord, LoopRegistry } from '../loop/index.js'
 import { payloadOf, renderP1 } from '../loop/injection.js'
-import { FORGE_TOOL_NAMES } from './index.js'
+import { FORGE_TOOL_NAMES, type ForgeToolDeps } from './index.js'
+
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
 import type { DispatchTaskToolDeps } from './dispatch-task.js'
 import {
   classifyPool,
@@ -141,6 +151,7 @@ function harness(): Harness {
     tasks,
     proposals: {} as DispatchTaskToolDeps['proposals'],
     bugs: {} as DispatchTaskToolDeps['bugs'],
+    checkpoints,
     resolveProjectId: (cwd) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     events: sink,
     loop: { driver: driver as unknown as LoopDriver, registry },

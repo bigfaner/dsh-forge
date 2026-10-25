@@ -7,6 +7,16 @@ import type { ToolExecFace } from '../faces.js'
 import { createLoopRegistry } from '../loop/index.js'
 import type { LoopDriver, LoopRecord, LoopRegistry } from '../loop/index.js'
 import type { StopTaskLoopToolDeps } from './stop-task-loop.js'
+
+const checkpoints: StopTaskLoopToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
 import { createStopTaskLoopTool, parseStopTaskLoopArgs } from './stop-task-loop.js'
 
 let sessionSeq = 0
@@ -45,6 +55,7 @@ function harness(options: { stopLoopImpl?: (input: unknown) => unknown } = {}): 
     tasks: {} as StopTaskLoopToolDeps['tasks'],
     proposals: {} as StopTaskLoopToolDeps['proposals'],
     bugs: {} as StopTaskLoopToolDeps['bugs'],
+    checkpoints,
     resolveProjectId: () => 'p-1',
     loop: { driver: driver as unknown as LoopDriver, registry },
   }

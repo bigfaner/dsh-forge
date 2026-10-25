@@ -14,6 +14,16 @@ import { createCreateProposalTool, parseCreateProposalArgs, presetModeOf } from 
 import { createTransitionProposalTool, parseTransitionProposalArgs } from './transition-proposal.js'
 import type { ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 /** 带出生预设 id 的 exec（header.agentPreset——出生头回退源夹具；当前值径见 selected 事件回归用例） */
@@ -47,6 +57,7 @@ function depsWithCapture() {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals,
     bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { deps, created, transitioned }
@@ -190,6 +201,7 @@ describe('transitionProposal', () => {
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
       bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     }
     const tool = createTransitionProposalTool(deps)
@@ -257,6 +269,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
       bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })
@@ -276,6 +289,7 @@ describe('提案域两 tool 事件发射（typed 错误 → tool-error）', () =
       tasks: {} as ForgeToolDeps['tasks'],
       proposals,
       bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })

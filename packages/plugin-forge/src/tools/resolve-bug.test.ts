@@ -8,6 +8,16 @@ import type { ToolExecFace } from '../faces.js'
 import { createResolveBugTool, parseResolveBugArgs } from './resolve-bug.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 function fixedCard(): BugCard {
@@ -66,6 +76,7 @@ function toolWithCapture(resolve: (input: CapturedInput) => Promise<BugCard>): {
     tasks: {} as ForgeToolDeps['tasks'],
     proposals: {} as ForgeToolDeps['proposals'],
     bugs,
+    checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createResolveBugTool(deps), captured }
@@ -165,6 +176,7 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
         },
       },
       resolveProjectId: () => 'p-1',
+      checkpoints,
     }
     const result = await createResolveBugTool(failing).execute({ bug_id: 'bug-1', outcome: 'fixed' }, EXEC)
     expect(result).toMatchObject({ ok: false, code: 'ERR_COMMIT_HASH_REQUIRED' })

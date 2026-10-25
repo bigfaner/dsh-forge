@@ -433,6 +433,15 @@ describe('createForgeTools 直装配（工厂面——注册器之外的单源�
       tasks: {} as ForgeTasksService,
       proposals: {} as ForgeProposalsService,
       bugs: {} as ForgeToolDeps['bugs'],
+      checkpoints: {
+        appendCheckpoint: async () => {
+          throw new Error('not used')
+        },
+        listCheckpoints: async () => [],
+        ensureCheckpoint: async () => {
+          throw new Error('not used')
+        },
+      },
       resolveProjectId: () => undefined,
       loop: { driver: {} as import('./loop/index.js').LoopDriver, registry: createLoopRegistry() },
     })

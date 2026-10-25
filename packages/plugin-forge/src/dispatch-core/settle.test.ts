@@ -3,7 +3,7 @@
 // 机械④（forge-verification-hardening）：review-wave-N 修正波标记——多波递增、快照口径、
 // 触发面（fix 链收口 / Blocker 返工批）与 fail-soft 缺席零变化。
 import { describe, expect, it } from 'vitest'
-import type { ForgeTasksService, QueryTaskResult, TaskCard, TaskSnapshot } from '@dsh-forge/contracts'
+import type { ForgeTasksService, QueryTaskResult, TaskCard, TaskEvidenceDebt, TaskSnapshot } from '@dsh-forge/contracts'
 import { settleWorkerRun } from './settle.js'
 import type { SettleCheckpointsFace, WaveSnapshot } from './settle.js'
 import type { SpawnWorkerHandle } from './spawn.js'
@@ -58,7 +58,7 @@ const ZERO_SNAPSHOT: WaveSnapshot = { tasksTotal: 0, commitsTotal: 0, fixesTotal
 function waveHarness(options: {
   readonly settledStatus: 'completed' | 'blocked'
   readonly cards?: readonly Partial<TaskCard>[]
-  readonly recordsByTask?: Record<string, readonly { commitHash?: string; evidenceDebt?: object }[]>
+  readonly recordsByTask?: Record<string, readonly { commitHash?: string; evidenceDebt?: TaskEvidenceDebt }[]>
 }): ForgeTasksService {
   const base = snapshot()
   const cards: TaskCard[] = (options.cards ?? []).map((c, i) => ({
@@ -77,6 +77,8 @@ function waveHarness(options: {
     container: { kind: 'feature', slug: base.slug, title: base.slug },
     records: (options.recordsByTask?.[localId] ?? []).map((r) => ({
       verb: 'submit' as const,
+      actor: 'plugin-tool' as const,
+      createdAt: '2026-01-01T00:00:00.000Z',
       ...(r.commitHash !== undefined ? { commitHash: r.commitHash } : {}),
       ...(r.evidenceDebt !== undefined ? { evidenceDebt: r.evidenceDebt } : {}),
     })),
