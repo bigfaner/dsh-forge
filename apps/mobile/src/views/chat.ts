@@ -218,6 +218,11 @@ export interface ChatDeps {
   readonly askStreamSubscribe?: (onFrame: () => void) => () => void
   /** 挂载登记（装配侧 uq 帧据此把推送直导进本视图槽位）。 */
   readonly askMountRef?: { current: ((direct: { callId?: string; questions?: readonly unknown[] }, sessionId: string) => void) | undefined }
+  /**
+   * 挂载登记（binding-derivation M6）：装配侧 forge/binding-mismatch 帧据此直导漂移
+   * banner——drifted=true 顶部警示出现，false（切回）消失。
+   */
+  readonly bindingMountRef?: { current: ((event: { bindBranch: string; branch: string; drifted: boolean }) => void) | undefined }
 }
 
 type OverlayMode = 'hidden' | 'degraded' | 'offline' | 'pairing'
@@ -267,6 +272,11 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
   // ---- 覆盖层（degraded 轻提示 / offline 重试 / 401 全屏重新配对）----
   const overlay = el('div', 'conn-overlay')
   overlay.hidden = true
+
+  // ---- branch 漂移 banner（binding-derivation §2.6：实时 branch ≠ 留痕 branch → 顶部
+  // warning 非阻断；切回实时消失。数据源 = forge/binding-mismatch 推送帧，装配侧直导）----
+  const driftBanner = el('div', 'bind-drift-banner')
+  driftBanner.hidden = true
 
   const state: ChatState = {
     entries: [],
@@ -408,6 +418,22 @@ export function createChatView(sessionId: string, deps: ChatDeps): HTMLElement {
     }
   }
   root.append(topbar, view, jump, todoPanel, askSlot, composer.root, overlay)
+  root.insertBefore(driftBanner, view)
+
+  // 漂移 banner 挂载登记（装配侧 forge/binding-mismatch 帧直导——出现/消失实时）
+  if (deps.bindingMountRef !== undefined) {
+    deps.bindingMountRef.current = (event) => {
+      if (!event.drifted) {
+        driftBanner.hidden = true
+        return
+      }
+      driftBanner.hidden = false
+      driftBanner.textContent = ''
+      driftBanner.appendChild(
+        el('span', undefined, `分支已切换：${event.bindBranch} → ${event.branch}，会话仍绑定原 worktree`),
+      )
+    }
+  }
 
   // ---- 渲染 ----
   function renderTurnFold(seg: TurnSegment, bySeq: Map<number, Projection>, activityMap: Map<string, ReturnType<typeof pairToolActivity>[number]>): HTMLElement {

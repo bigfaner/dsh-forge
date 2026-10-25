@@ -205,7 +205,7 @@ export interface BridgeChildFace {
 export interface BridgeChannel {
   /** 主 → 子 RPC 调用（rpc-result 按 id 结算；child 退出 → 全量拒绝） */
   call(service: BridgeServiceName, method: string, args: readonly unknown[]): Promise<unknown>
-  /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者扇出） */
+  /** 子 → 主事件订阅（event 分支——asEventMessage 守卫通过者按通道扇出） */
   onEvent(listener: (payload: TasksChangedEvent) => void): () => void
   /** fix-23 子 → 主诊断行订阅（diag 分支——[pair-diag] 决策链落 harness.log 的通道半边） */
   onDiag(listener: (line: string) => void): () => void
@@ -245,12 +245,12 @@ export function createBridgeChannel(child: BridgeChildFace, traceIdOf?: () => st
       }
       return
     }
-    // event 分支（3.1 交互二）：写推送事件 → onEvent 订阅方扇出（畸形信封静默忽略）
+    // event 分支（3.1 交互二）：写推送事件 → 监听扇出（畸形信封静默忽略）
     const event = asEventMessage(message)
     if (event !== undefined) {
       for (const listener of eventListeners) {
         try {
-          listener(event.payload)
+          listener(event.payload as TasksChangedEvent)
         } catch {
           // 订阅方异常隔离——其余订阅与 RPC 面照常
         }

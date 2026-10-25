@@ -277,6 +277,12 @@ setTimeout(() => {
 	// （仅本地开发面，非打包产物）；显式设 E2E_ELECTRON_SWITCHES=0 可禁用。
 	const devSwitchesOn = (process.env.E2E_ELECTRON_SWITCHES ?? '1') === '1';
 	const healSwitches = devSwitchesOn ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server'] : [];
+	// 控制台代码页归一（Root cause: Windows 控制台默认 CP936，Chromium 日志（--enable-logging
+	// 的 INFO:CONSOLE 行）向 stderr 恒写 UTF-8 字节——GBK 控制台直读即乱码（「绑定失配」呈
+	// 「缁戝畾澶遍厤」）。electron 拉起前 chcp 65001 归一；管道形态（无控制台）下失败静默 fail-soft。
+	if (process.platform === 'win32') {
+		spawnSync('cmd.exe', ['/d', '/s', '/c', 'chcp 65001>nul'], { stdio: 'ignore' });
+	}
 	const p = spawn(electronSpawnExe, [HOST_DIR, ...healSwitches, ...extraArgs], {
 		stdio: 'inherit',
 		cwd: ROOT,

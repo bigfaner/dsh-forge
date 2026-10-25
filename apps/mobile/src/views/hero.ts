@@ -1,13 +1,14 @@
 /**
  * hero 新会话视图（mockup 屏⑤，路由 `#/hero`）——
- * 数据源 = `forge:worktree/list`（透传通道，项目根注入）+ `session.create`（官方面）+
- * `forge:worktree/session-create`（预铸采纳单门透传——host 建会话守卫）。
+ * 数据源 = `forge:worktree/list`（透传通道，项目根注入；WorktreeEntryDto 行自带
+ * workspaceId——chip 双发数据源）+ `session.create`（官方面唯一路径，双域经
+ * forge:proxy/session-create 中继 sessionController 进内直调）。
  *
  * 交互口径（US-6）：默认模式=突击、分支=当前所在（不强切）；乐观切换——点选即改
- * 选中态（零网络、零预检调用）；host 建会话守卫拒绝（session-create 错误回执）→
- * 确认框（选回/仍要切换，widgets/confirm 回执驱动，UI 无预检说明文本）。
- * 建会话双径：默认分支（=当前所在）走官方 `session.create`；非默认 worktree 走
- * `forge:worktree/session-create` 透传。`forge:remote/session-links` 预检不实现
+ * 选中态（零网络、零预检调用）。建会话单径（binding-derivation §2.7——用户裁决无兼容
+ * 窗口）：chip 选中双发 `{workspaceId, worktreePath}` 直呼官方面 `session.create`，
+ * 官方 blank 复用即路由；预铸单门（forge:worktree/session-create）与树锚 hack 退役，
+ * 创建失败走错误面（错误提示 + 草稿回填）。`forge:remote/session-links` 预检不实现
  * （api-handbook 1.2 延后可选）。
  *
  * 结构：createHeroController 纯状态机（单测主战场——load() 为唯一显式 I/O 挂点）+
@@ -18,7 +19,6 @@ import type { RemoteRpc } from '../core/rpc.ts'
 import type { PendingModelDefault } from './models.ts'
 import { el, ensureIconSprite } from '../widgets/msg-cards.ts'
 import { createComposer, type ComposerHandle } from '../widgets/composer.ts'
-import { showConfirm } from '../widgets/confirm.ts'
 
 // ---------------------------------------------------------------------------
 // 常量（口径）
@@ -26,8 +26,6 @@ import { showConfirm } from '../widgets/confirm.ts'
 
 /** worktree 清单通道（contracts WORKTREE_CHANNELS.list 透传）。 */
 export const HERO_WORKTREE_LIST_CHANNEL = 'forge:worktree/list'
-/** 建会话守卫通道（contracts WORKTREE_CHANNELS.sessionCreate 透传——预铸采纳单门）。 */
-export const HERO_SESSION_CREATE_CHANNEL = 'forge:worktree/session-create'
 /** 默认模式（US-6：默认突击）。 */
 export const HERO_DEFAULT_MODE = '突击'
 
@@ -51,9 +49,18 @@ export const HERO_MODES: readonly string[] = [...FORGE_MODES, ...Object.keys(BUI
 // ---------------------------------------------------------------------------
 
 /** bw-pop 分支行模型（WorktreeEntryDto 窄化——缺字段 fail-soft 剔行）。 */
-export interface HeroWorktreeRow {
-  /** worktree 绝对路径（session-create worktreePath；主行 = 项目根） */
+/** hero 项目行（projects-grouped 窄化——bug e046b3bf：新会话项目切换控件）。 */
+export interface HeroProjectRow {
+  readonly name: string
+  /** 项目根（wsPath——切项目即换 worktree 清单/建会话锚）。 */
   readonly path: string
+}
+
+export interface HeroWorktreeRow {
+  /** worktree 绝对路径（session.create worktreePath 双发对位；主行 = 项目根） */
+  readonly path: string
+  /** 官方 workspace id（WorktreeEntryDto 自带——chip 双发建会话硬前置；缺席行剔除） */
+  readonly workspaceId: string
   /** 检出分支短名（detached/bare = null → 展示名退 worktreeName） */
   readonly branch: string | null
   readonly worktreeName: string
@@ -67,11 +74,14 @@ export interface HeroWorktreeListModel {
 
 function coerceRow(entry: unknown): HeroWorktreeRow | null {
   if (typeof entry !== 'object' || entry === null) return null
-  const record = entry as { path?: unknown; branch?: unknown; worktreeName?: unknown; isMain?: unknown }
+  const record = entry as { path?: unknown; workspaceId?: unknown; branch?: unknown; worktreeName?: unknown; isMain?: unknown }
   const path = typeof record.path === 'string' && record.path !== '' ? record.path : ''
-  if (path === '') return null
+  // workspaceId 缺席行剔除（binding-derivation：双发建会话硬前置——恒缺席 = 死路选项）
+  const workspaceId = typeof record.workspaceId === 'string' && record.workspaceId !== '' ? record.workspaceId : ''
+  if (path === '' || workspaceId === '') return null
   return {
     path,
+    workspaceId,
     branch: typeof record.branch === 'string' && record.branch !== '' ? record.branch : null,
     worktreeName:
       typeof record.worktreeName === 'string' && record.worktreeName !== ''
@@ -82,8 +92,8 @@ function coerceRow(entry: unknown): HeroWorktreeRow | null {
 }
 
 /** forge:worktree/list 响应收敛（缺字段 fail-soft：isGit 缺席 = false，entries 非数组 = 空集）。
- *  bug 488e860d：detached/bare 行（branch=null）剔行——预铸挂靠契约 = 一 worktree 一分支，
- *  无分支行选中必被 session-create typed 拒绝（死路 UX）；发送面自动回退官方面。 */
+ *  bug 488e860d：detached/bare 行（branch=null）剔行——一 worktree 一分支，无分支行不可选；
+ *  binding-derivation：workspaceId 缺席行同剔（chip 双发硬前置）。 */
 export function coerceWorktreeList(raw: unknown): HeroWorktreeListModel {
   if (typeof raw !== 'object' || raw === null) return { isGit: false, rows: [] }
   const frame = raw as { isGit?: unknown; entries?: unknown }
@@ -138,14 +148,6 @@ export function composerWorktreeLabel(row: HeroWorktreeRow | null, defaultRow: H
     : rowDisplayName(row)
 }
 
-/** 是否走预铸采纳径（非默认 worktree 才触达 host 建会话守卫）。 */
-export function needsWorktreeBinding(row: HeroWorktreeRow | null, currentWorktreePath: string | undefined): boolean {
-  if (row === null) return false
-  if (row.isMain) return false
-  if (currentWorktreePath === undefined || currentWorktreePath === '') return true
-  return pathKey(row.path) !== pathKey(currentWorktreePath)
-}
-
 /** hero 模式 → session.prompt mode（突击 = steer 抢占、远征 = queue 排队）。 */
 export function promptModeOf(mode: string): 'steer' | 'queue' {
   return mode === '远征' ? 'queue' : 'steer'
@@ -155,7 +157,7 @@ export function promptModeOf(mode: string): 'steer' | 'queue' {
 // 控制器（纯状态机——单测主战场，零 DOM；load() 为唯一显式 I/O 挂点）
 // ---------------------------------------------------------------------------
 
-export type HeroPop = 'branch' | 'mode' | null
+export type HeroPop = 'branch' | 'mode' | 'project' | null
 
 /** hero 可渲染状态快照（视图按快照重绘弹层/chip + 守卫确认框挂点）。 */
 export interface HeroState {
@@ -164,10 +166,12 @@ export interface HeroState {
   readonly defaultRow: HeroWorktreeRow | null
   /** 乐观选中行路径（null = 无清单/composer 只显当前分支名）。 */
   readonly selectedPath: string | null
+  /** 项目清单（bug e046b3bf：多项目在场 = proj 徽标可点切换；缺席 = 静态徽标单项目语义）。 */
+  readonly projects: readonly HeroProjectRow[]
+  /** 选中项目根（WYSIWYG：worktree 清单与建会话锚随显示选中走）。 */
+  readonly selectedProjectPath: string | null
   readonly mode: string
   readonly modes: readonly string[]
-  /** 守卫拒绝回执（非 null = 视图须弹确认框——选回/仍要切换）。 */
-  readonly pendingGuard: { readonly reason: string } | null
   readonly busy: boolean
   /** worktree 选择可用位（bug 488e860d：isGit × 可挂靠行在场——false = chip 隐藏、发送恒官方面）。 */
   readonly gitReady: boolean
@@ -182,9 +186,14 @@ export interface HeroDeps {
   readonly api: Pick<OfficialApi, 'createSession' | 'prompt' | 'selectAgentPreset' | 'listAgentPresets' | 'selectModel'>
   /** 项目根（forge:worktree/list payload；缺席 = 不拉清单，composer 只显当前分支）。 */
   readonly projectRoot?: string
-  /** 当前所在分支/工作树路径（默认选中与双径判定的锚；缺席 = 无在留会话语义）。 */
+  /** 当前所在分支（默认选中锚；缺席 = 无在留会话语义）。 */
   readonly currentBranch?: string
-  readonly currentWorktreePath?: string
+  /** 项目清单（bug e046b3bf：≥2 项 = proj 徽标可点开项目弹层切换）。 */
+  readonly projects?: readonly HeroProjectRow[]
+  /**
+   * 当前项目 workspace id（binding-derivation：清单缺席时的建会话回退锚——单发
+   * workspaceId；清单在场时选中行自带 workspaceId 双发优先，本值不参与）。
+   */
   readonly workspaceId?: string
   /**
    * 新会话默认档（bug 38ab5a8d 用户裁决 2026-10-22）：hero 模型视图暂存的默认档——
@@ -205,15 +214,15 @@ export interface HeroController {
   load(): Promise<void>
   /** 乐观切换：点选即改选中态（零网络、零预检）。 */
   pickBranch(path: string): void
+  /** 切项目（bug e046b3bf）：换锚重拉 worktree 清单，默认行 = 新项目主行。 */
+  pickProject(path: string): Promise<void>
   pickMode(mode: string): void
   openPop(kind: Exclude<HeroPop, null>): void
   closePop(): void
   /** 顶栏新会话钮：回默认模式/默认分支。 */
   reset(): void
-  /** composer 发送：建会话双径 + 首条消息透传。 */
+  /** composer 发送：建会话（chip 双发官方面单径）+ 首条消息透传。 */
   send(text: string): Promise<void>
-  /** 守卫回执确认框点按（选回 = cancel / 仍要切换 = confirm）。 */
-  resolveGuard(choice: 'confirm' | 'cancel'): void
 }
 
 export function createHeroController(deps: HeroDeps): HeroController {
@@ -224,9 +233,11 @@ export function createHeroController(deps: HeroDeps): HeroController {
   let rows: readonly HeroWorktreeRow[] = []
   let defaultRow: HeroWorktreeRow | null = null
   let selectedPath: string | null = null
+  // bug e046b3bf：项目锚可变（pickProject 换锚重拉清单）——初值 = deps.projectRoot
+  let projectRoot: string | undefined = deps.projectRoot
+  const projects: readonly HeroProjectRow[] = deps.projects ?? []
   let mode = HERO_DEFAULT_MODE
   let pop: HeroPop = null
-  let pendingGuard: { readonly reason: string } | null = null
   let busy = false
   let gitReady = false
   // bug 53b5d685：发送失败反馈面（错误提示行 + 草稿回填）
@@ -236,24 +247,17 @@ export function createHeroController(deps: HeroDeps): HeroController {
   const emit = (): void => deps.onChange?.()
   const selectedRow = (): HeroWorktreeRow | null => rows.find((row) => row.path === selectedPath) ?? null
 
-  function createPlainSession(): Promise<string> {
-    // bug 16ac5bc2（Root cause: 隧道域 workspaceId 恒缺席——官方 workspace.list 已弃用不
-    // 供给，空串直达官方 controller 被 workspace 解析拒绝「workspace "" not found」）：
-    // workspaceId 在场才走官方面；缺席回退 forge:worktree/session-create 单门（预铸采纳，
-    // 主树锚 = 当前所在 worktree ?? 项目根）——与桌面 create-wrap 同一建会话正门。
-    if (deps.workspaceId !== undefined && deps.workspaceId !== '') {
-      return deps.api.createSession(deps.workspaceId).then((created) => created.sessionId)
+  /**
+   * 建会话（binding-derivation §2.7 官方面单径）：选中行在场 = chip 双发
+   * `{workspaceId, worktreePath}`；清单缺席回退 deps.workspaceId（单发，当前工作区语义）。
+   * 官方 blank 复用即路由（workspaceId 定 cwd），零 forge 改道零树锚推导。
+   */
+  function createSessionFor(row: HeroWorktreeRow | null): Promise<string> {
+    const workspaceId = row?.workspaceId ?? deps.workspaceId
+    if (workspaceId === undefined || workspaceId === '') {
+      return Promise.reject(new Error('无 workspaceId——无法建会话（选中行与当前工作区均缺席）'))
     }
-    const anchor = deps.currentWorktreePath ?? deps.projectRoot
-    if (anchor === undefined || anchor === '') {
-      return Promise.reject(new Error('无 workspaceId 且无主树锚——无法建会话（workspaceId/projectRoot 均缺席）'))
-    }
-    return deps.rpc
-      .call<{ sessionId: string; branch: string }>(HERO_SESSION_CREATE_CHANNEL, { worktreePath: anchor })
-      .then((result) => {
-        if (result.ok) return result.data.sessionId
-        throw new Error(`forge 建会话拒绝：${result.error.reason}`)
-      })
+    return deps.api.createSession(workspaceId, row?.path).then((created) => created.sessionId)
   }
 
   /** 新会话默认档下发（bug 38ab5a8d）：select-model（含推理等级）→ 无论成败清暂存（会话
@@ -267,6 +271,22 @@ export function createHeroController(deps: HeroDeps): HeroController {
     } catch {
       /* 下发失败不阻断进入会话 */
     }
+  }
+
+  /** worktree 清单装载（load/pickProject 共用；跨项目时无「当前所在」锚——默认行取主行）。 */
+  async function loadWorktrees(): Promise<void> {
+    const root = projectRoot
+    if (root === undefined || root === '') return
+    const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: root })
+    if (!result.ok) return
+    const list = coerceWorktreeList(result.data)
+    rows = list.rows
+    gitReady = list.isGit && rows.length > 0
+    if (!gitReady) selectedPath = null
+    const branch = pathKey(root) === pathKey(deps.projectRoot ?? '') ? deps.currentBranch : undefined
+    defaultRow = pickDefaultRow(rows, branch)
+    selectedPath = defaultRow?.path ?? null
+    emit()
   }
 
   async function enter(sessionId: string, text: string): Promise<void> {
@@ -293,7 +313,7 @@ export function createHeroController(deps: HeroDeps): HeroController {
   }
 
   return {
-    state: () => ({ pop, rows, defaultRow, selectedPath, mode, modes, pendingGuard, busy, gitReady, error, draft }),
+    state: () => ({ pop, rows, defaultRow, selectedPath, projects, selectedProjectPath: projectRoot ?? null, mode, modes, busy, gitReady, error, draft }),
 
     async load() {
       // 预设 roster 装载（用户裁决 2026-10-22：模式清单非固定——增减随 host。
@@ -318,16 +338,22 @@ export function createHeroController(deps: HeroDeps): HeroController {
       } catch {
         /* roster 不可达——回退内置四静态清单 */
       }
-      if (deps.projectRoot === undefined || deps.projectRoot === '') return
-      const result = await deps.rpc.call<unknown>(HERO_WORKTREE_LIST_CHANNEL, { projectRoot: deps.projectRoot })
-      if (!result.ok) return
-      const list = coerceWorktreeList(result.data)
-      rows = list.rows
-      gitReady = list.isGit && rows.length > 0
-      if (!gitReady) selectedPath = null
-      defaultRow = pickDefaultRow(rows, deps.currentBranch)
-      selectedPath = defaultRow?.path ?? null
-      emit()
+      if (projectRoot === undefined || projectRoot === '') return
+      await loadWorktrees()
+    },
+
+    async pickProject(path) {
+      if (!projects.some((row) => row.path === path)) return
+      if (pathKey(path) === pathKey(projectRoot ?? '')) {
+        pop = null
+        emit()
+        return
+      }
+      projectRoot = path
+      pop = null
+      rows = []
+      selectedPath = null
+      await loadWorktrees()
     },
 
     pickBranch(path) {
@@ -366,29 +392,14 @@ export function createHeroController(deps: HeroDeps): HeroController {
     },
 
     async send(text) {
-      if (busy || pendingGuard !== null) return
+      if (busy) return
       busy = true
       error = null
       draft = null
       emit()
       try {
-        const selected = selectedRow()
-        if (needsWorktreeBinding(selected, deps.currentWorktreePath)) {
-          // 透传径：预铸采纳单门 = host 建会话守卫（回执驱动，无预检调用）
-          const result = await deps.rpc.call<{ sessionId: string; branch: string }>(HERO_SESSION_CREATE_CHANNEL, {
-            worktreePath: selected?.path,
-          })
-          if (result.ok) {
-            await enter(result.data.sessionId, text)
-            return
-          }
-          // 守卫拒绝回执 → 确认框待决（busy 保持——确认期间发送面冻结）
-          pendingGuard = { reason: result.error.reason }
-          emit()
-          return
-        }
-        // 官方面径：默认分支/当前所在（不触守卫）
-        await enter(await createPlainSession(), text)
+        // 官方面单径：chip 双发 {workspaceId, worktreePath}（清单缺席回退 deps.workspaceId）
+        await enter(await createSessionFor(selectedRow()), text)
       } catch (cause) {
         // bug 53b5d685：失败面 = 错误提示 + 文本退回 composer（不再静默进空会话）
         busy = false
@@ -396,32 +407,6 @@ export function createHeroController(deps: HeroDeps): HeroController {
         draft = text
         emit()
       }
-    },
-
-    resolveGuard(choice) {
-      if (pendingGuard === null || !busy) return
-      pendingGuard = null
-      if (choice === 'cancel') {
-        // 选回：乐观选中态回退当前所在（默认行）
-        selectedPath = defaultRow?.path ?? null
-        busy = false
-        emit()
-        return
-      }
-      // 仍要切换：保留选中态，会话经官方面落主树（首条消息落主树语义）
-      void createPlainSession()
-        .then(async (sessionId) => {
-          await applyPendingDefault(sessionId)
-          busy = false
-          deps.onOpenSession(sessionId)
-          emit()
-        })
-        .catch((cause) => {
-          // bug 53b5d685：守卫切换径失败同面——错误提示（无草稿可回填，守卫径无首条文本）
-          busy = false
-          error = cause instanceof Error && cause.message !== '' ? `建会话失败：${cause.message}` : '建会话失败，请重试'
-          emit()
-        })
     },
   }
 }
@@ -434,8 +419,9 @@ export interface HeroViewDeps extends HeroDeps {
   readonly projectName?: string
   readonly onOpenDrawer?: () => void
   readonly onOpenSettings?: () => void
-  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒）。 */
-  readonly suggest?: (kind: '/' | '@') => Promise<readonly { insert: string; label: string; description?: string }[]>
+  /** composer 唤醒候选源（feature：/ 命令 + @ 文件 mention——缺席 = 不唤醒；projectRoot
+   *  随选中项目传——bug e046b3bf：@ 候选随切换项目走，不滞留首项目）。 */
+  readonly suggest?: (kind: '/' | '@', projectRoot?: string) => Promise<readonly { insert: string; label: string; description?: string }[]>
 }
 
 export function createHeroView(deps: HeroViewDeps): HTMLElement {
@@ -445,7 +431,6 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
     onChange: () => {
       renderPop()
       renderChips()
-      renderGuard()
       renderError()
     },
   })
@@ -465,10 +450,20 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
 
   // ---- hero 主区（proj 徽标 / logo / slogan / 问候）----
   const hero = el('div', 'hero')
-  if (deps.projectName !== undefined && deps.projectName !== '') {
+  // bug e046b3bf：多项目在场 = proj 徽标可点开项目弹层切换（单项目/缺席 = 静态徽标）
+  const projectRows = deps.projects ?? []
+  const projectLabel =
+    projectRows.find((row) => row.path === deps.projectRoot)?.name ??
+    (projectRows.length > 0 ? projectRows[0]!.name : deps.projectName)
+  if (projectLabel !== undefined && projectLabel !== '') {
     const proj = el('div', 'proj')
     proj.innerHTML = '<svg class="ic" style="width:13px;height:13px"><use href="#i-folder"/></svg>'
-    proj.appendChild(document.createTextNode(deps.projectName))
+    proj.appendChild(document.createTextNode(projectLabel))
+    if (projectRows.length > 1) {
+      proj.classList.add('tap')
+      proj.title = '切换项目'
+      proj.addEventListener('click', () => controller.openPop('project'))
+    }
     hero.appendChild(proj)
   }
   hero.insertAdjacentHTML(
@@ -499,7 +494,7 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
   const composer: ComposerHandle = createComposer({
     mode: HERO_DEFAULT_MODE,
     worktree: '',
-    suggest: deps.suggest,
+    suggest: (kind) => deps.suggest?.(kind, controller.state().selectedProjectPath ?? deps.projectRoot),
     // bug 53b5d685：文本留存视图侧——失败时回填（controller.send 无 composer 引用）
     onSend: (text) => {
       lastSentText = text
@@ -539,6 +534,15 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
       const addRow = el('div', 'mi add')
       addRow.appendChild(document.createTextNode('＋ 新建分支 / worktree…'))
       bwPop.appendChild(addRow)
+    } else if (state.pop === 'project') {
+      // bug e046b3bf：项目弹层——选中项目即换锚重拉 worktree 清单
+      for (const row of state.projects) {
+        const item = el('div', `mi${row.path === state.selectedProjectPath ? ' picked' : ''}`)
+        item.innerHTML = '<svg class="ic" style="width:14px;height:14px"><use href="#i-folder"/></svg>'
+        item.appendChild(document.createTextNode(row.name))
+        item.addEventListener('click', () => void controller.pickProject(row.path))
+        bwPop.appendChild(item)
+      }
     } else if (state.pop === 'mode') {
       for (const item of state.modes) {
         const row = el('div', `mi${item === state.mode ? ' picked' : ''}`)
@@ -557,24 +561,6 @@ export function createHeroView(deps: HeroViewDeps): HTMLElement {
     composer.setWorktree(composerWorktreeLabel(selected, state.defaultRow))
     composer.setMode(state.mode)
     composer.setSending(state.busy)
-  }
-
-  // ---- 守卫回执确认框（选回/仍要切换；回执驱动，UI 无预检说明文本）----
-  let guardShown = false
-  function renderGuard(): void {
-    const state = controller.state()
-    if (state.pendingGuard !== null && !guardShown) {
-      guardShown = true
-      void showConfirm(root, {
-        title: '无法切换到所选分支',
-        body: `host 建会话守卫拒绝：${state.pendingGuard.reason}。选回则留在当前分支，仍要切换则会话落主树。`,
-        cancelLabel: '选回',
-        confirmLabel: '仍要切换',
-      }).then((choice) => {
-        guardShown = false
-        controller.resolveGuard(choice)
-      })
-    }
   }
 
   // ---- 数据：worktree 清单装载（默认分支 = 当前所在，不强切）----

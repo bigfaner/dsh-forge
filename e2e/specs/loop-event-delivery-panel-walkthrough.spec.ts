@@ -1,7 +1,7 @@
 // loop-event-delivery 1.17 —— web 悬浮进度流面板（DispatchEventsPanel）真机走查（fix-3 改道 RPC 驱动）：
 // 真实派发循环会话驱动 forge/progress 事件 → 投影键 forge-dispatch-events fold → 面板任务轨行 +
 // head/统计条真机呈现。fix-3 配方（bug 9344622d 修复后通路）：
-//   注册/建会话/循环启动 = RPC 直注（forge:projects/register + forge:worktree/session-create
+//   注册/建会话/循环启动 = RPC 直注（forge:projects/register + forge:proxy/session-create {workspaceId, worktreePath}
 //   预铸采纳单门 + forge:proxy/commands-execute 官方 commands 通道四参 execute——bug 4d02329a
 //   修复后通路）；composer/dock 官方 GUI 入口在无人值守探针环境不可判读（composer insertText
 //   零效果 = 发送钮 disabled 形态、dock 派发按钮缺席）——记为环境局限，非产品缺陷判定面。
@@ -99,16 +99,16 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     await driver.call('forgeTasks', 'addTask', {
       projectId: project.id, source: { kind: 'proposal', slug: PROP }, title: '面板走查任务', type: 'doc',
     })
-    // 预铸采纳单门：RPC 建会话（host 建会话守卫——活 agent 直挂，worktreePath = 项目根）
-    const sessionId = await page.evaluate(async (ws) => {
+    // 会话创建（binding-derivation 单门退役后官方面）：forge:proxy/session-create {workspaceId, worktreePath}
+    const sessionId = await page.evaluate(async ({ ws, workspaceId }) => {
       const forge = (globalThis as unknown as {
         dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
       }).dshForge
       if (forge === undefined) throw new Error('dshForge preload 面缺席')
-      const created = await forge.invoke('forge:worktree/session-create', { worktreePath: ws })
+      const created = await forge.invoke('forge:proxy/session-create', { workspaceId, worktreePath: ws })
       if (!created.ok) throw new Error(`session-create 失败：${JSON.stringify(created)}`)
       return (created.data as { sessionId: string }).sessionId
-    }, wsDir)
+    }, { ws: wsDir, workspaceId: project.workspaceId })
     expect(sessionId, 'RPC 会话描述（sessionId 在场）').toBeTruthy()
 
     // ── 打开会话（侧栏会话行）+ RPC 驱动 /run-dag-tasks（fix-2 配方改道：boot manifest.url

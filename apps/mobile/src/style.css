@@ -712,6 +712,19 @@ body[data-ds-dark-theme] .st.done {
 .sys-line.err {
   color: #e34d59;
 }
+/* branch 漂移警示 banner（binding-derivation §2.6——mobile chat 顶部非阻断警示；
+ * 桌面同语义 = chat-view warning banner，amber 警示刻度） */
+.bind-drift-banner {
+  margin: 6px auto 0;
+  max-width: 92%;
+  padding: 8px 12px;
+  border: 1px solid #c08a2d;
+  border-radius: 10px;
+  background: rgba(192, 138, 45, 0.12);
+  color: #c08a2d;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .doc-stack {
   display: flex;
   flex-direction: column;
@@ -1815,6 +1828,15 @@ body[data-ds-dark-theme] .effort-chip.picked {
 body[data-ds-dark-theme] .hero .proj {
   background: #2c2c2e;
   color: #9aa0a6;
+}
+/* bug e046b3bf：多项目在场——proj 徽标可点（下拉尖角示可切换） */
+.hero .proj.tap {
+  cursor: pointer;
+  padding-right: 6px;
+}
+.hero .proj.tap::after {
+  content: '▾';
+  font-size: 10px;
 }
 .hero .logo {
   width: 64px;

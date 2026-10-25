@@ -701,8 +701,8 @@ export function asDiagMessage(message: unknown): BridgeDiagMessage | undefined {
 
 /**
  * 事件消息守卫（子 → 主单向推送分流——run.ts child.on('message') event 分支消费）。
- * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷形状 { projectId }
- * 只读校验（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
+ * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷只读校验
+ * { projectId }（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
  */
 export function asEventMessage(message: unknown): BridgeEventMessage | undefined {
   if (typeof message !== 'object' || message === null) return undefined

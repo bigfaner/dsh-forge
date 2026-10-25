@@ -41,8 +41,6 @@ import {
   type WorktreeResolveRequest,
   type WorktreeResolveResult,
   type WorktreeSealResult,
-  type WorktreeSessionCreateRequest,
-  type WorktreeSessionCreateResult,
   type DeriveTaskStoreDirRequest,
   type DeriveTaskStoreDirResult,
   type DirListing,
@@ -228,9 +226,10 @@ export interface ForgeSettingsRpc {
 }
 
 /**
- * forge:worktree/* 面方法集（十通道；域实现 = packages/plugins/git-worktree，
- * host ipc/worktree-rpc 装配透传。session-create = 预铸采纳单门（绑定写面唯一时点）；
- * seal = 封存判定快照；select = hero 选中树推送；resolve = 批量归属解析）。
+ * forge:worktree/* 面方法集（10 方法；域实现 = packages/plugins/git-worktree，
+ * host ipc/worktree-rpc 装配透传。seal = 封存判定快照；select = hero 选中树推送；
+ * resolve = 批量归属解析。session-create 通道已退役——bug 82e92933，binding-derivation
+ * §2.3：换绑由官方 blank 复用天然生效，选树零 forge 建会话 RPC）。
  */
 export interface ForgeWorktreeRpc {
   list(q: WorktreeListRequest): Promise<WorktreeListResult>
@@ -239,7 +238,6 @@ export interface ForgeWorktreeRpc {
   aheadBehind(q: WorktreeAheadBehindRequest): Promise<WorktreeAheadBehindResult>
   branches(q: WorktreeBranchesRequest): Promise<WorktreeBranchesResult>
   checks(q: WorktreeChecksRequest): Promise<WorktreeChecksResult>
-  sessionCreate(q: WorktreeSessionCreateRequest): Promise<WorktreeSessionCreateResult>
   seal(q: WorktreeSealRequest): Promise<WorktreeSealResult>
   select(q: WorktreeSelectRequest): Promise<WorktreeSelectResult>
   selected(q: { readonly projectRoot: string }): Promise<{ readonly path?: string }>
@@ -334,7 +332,6 @@ export function createForgeRpcClient(transport: ForgeTransport): ForgeRpcClient 
       aheadBehind: (q) => invokeRpc<WorktreeAheadBehindResult>(transport, WORKTREE_CHANNELS.aheadBehind, q),
       branches: (q) => invokeRpc<WorktreeBranchesResult>(transport, WORKTREE_CHANNELS.branches, q),
       checks: (q) => invokeRpc<WorktreeChecksResult>(transport, WORKTREE_CHANNELS.checks, q),
-      sessionCreate: (q) => invokeRpc<WorktreeSessionCreateResult>(transport, WORKTREE_CHANNELS.sessionCreate, q),
       seal: (q) => invokeRpc<WorktreeSealResult>(transport, WORKTREE_CHANNELS.seal, q),
       select: (q) => invokeRpc<WorktreeSelectResult>(transport, WORKTREE_CHANNELS.select, q),
       selected: (q) => invokeRpc<{ readonly path?: string }>(transport, WORKTREE_CHANNELS.selected, q),

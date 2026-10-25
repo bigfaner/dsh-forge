@@ -190,15 +190,15 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     }, { pid: project.id, slug: PROP })
     meta.fixtureReset = fixtureReset
     console.log(`[walk112] fixture reset = ${JSON.stringify(fixtureReset)}`)
-    const sessionId = await page.evaluate(async (ws) => {
+    const sessionId = await page.evaluate(async ({ ws, workspaceId }) => {
       const forge = (globalThis as unknown as {
         dshForge?: { invoke(c: string, p?: unknown): Promise<{ ok: boolean; data?: unknown; message?: string }> }
       }).dshForge
       if (forge === undefined) throw new Error('dshForge preload 面缺席')
-      const created = await forge.invoke('forge:worktree/session-create', { worktreePath: ws })
+      const created = await forge.invoke('forge:proxy/session-create', { workspaceId, worktreePath: ws })
       if (!created.ok) throw new Error(`session-create 失败：${JSON.stringify(created)}`)
       return (created.data as { sessionId: string }).sessionId
-    }, wsDir)
+    }, { ws: wsDir, workspaceId: project.workspaceId })
     meta.sessionId = sessionId
     console.log(`[walk112] sessionId = ${String(sessionId)}`)
 

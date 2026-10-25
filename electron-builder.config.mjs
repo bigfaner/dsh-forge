@@ -47,7 +47,7 @@ export function createElectronBuilderConfig(rootVersion = ROOT_VERSION) {
     // node_modules」——运行时树须嵌 runtime/ 一层；filter 同时自证物化内容边界
     // （icon.png = fix-45 窗口图标打包形态解析位 {resources}/icon.png）
     extraResources: [
-      { from: STAGING, to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
+      { from: STAGING, to: '.', filter: ['runtime/**', 'web-dist/**', 'mobile-dist/**', 'icon.png', 'staging-manifest.json'] },
     ],
     // release/app 为 deps-free 物化目录——electron 版本显式声明（无 devDep 可推导）
     electronVersion: '44.0.0', // S1 pin：node-addon-require-builtin 指纹门（43.0.0/44.0.0/45.0.0-alpha.6）

@@ -173,6 +173,24 @@ export function mount(root: HTMLElement): void {
           }
           // 打字机腿：瞬态帧原样穿透给引擎（assistant-stream 密帧 → settler 增量渲染）
           emitFrames(event.type === 'agent/assistant-stream' ? event : undefined)
+          if (event.type === 'forge/binding-mismatch') {
+            // binding-derivation M6：branch 漂移推送（/remote/forge-stream 镜像目录）→
+            // 当前会话 chat 漂移 banner 实时出现（drifted）/消失（切回）
+            const payload = event.payload as { sessionId?: unknown; bindBranch?: unknown; branch?: unknown; drifted?: unknown }
+            if (
+              typeof payload?.sessionId === 'string' &&
+              payload.sessionId === currentSessionId() &&
+              chatBindingMountRef.current !== undefined &&
+              typeof payload.bindBranch === 'string' &&
+              typeof payload.branch === 'string'
+            ) {
+              chatBindingMountRef.current({
+                bindBranch: payload.bindBranch,
+                branch: payload.branch,
+                drifted: payload.drifted === true,
+              })
+            }
+          }
           if (event.type === 'user-questions/request') {
             const payload = event.payload as { sessionId?: unknown; callId?: unknown; questions?: unknown }
             const sid = typeof payload?.sessionId === 'string' ? payload.sessionId : undefined
@@ -421,14 +439,22 @@ export function mount(root: HTMLElement): void {
 
   // hero 模式外推（用户裁决 2026-10-23：chat composer 芯片跟随 hero 选择——发送后不再恒显远征）
   const heroModeRef: { current: string } = { current: HERO_DEFAULT_MODE }
+  // hero 建会话回退锚（binding-derivation：当前项目 workspaceId——清单缺席时单发官方面；
+  // 清单在场时选中行自带 workspaceId 双发优先，本值不参与）
+  const heroWorkspaceIdRef: { current: string | undefined } = { current: undefined }
   // 当前 chat 视图的 ask 槽位挂载点（用户裁决 2026-10-23 同位互斥——uq 帧直导进槽位）
   const chatAskMountRef: { current: ((direct: { callId?: string; questions?: readonly unknown[] }, sessionId: string) => void) | undefined } = { current: undefined }
+  // 当前 chat 视图的漂移 banner 挂载点（binding-derivation M6——forge/binding-mismatch 帧直导）
+  const chatBindingMountRef: { current: ((event: { bindBranch: string; branch: string; drifted: boolean }) => void) | undefined } = { current: undefined }
 
   function heroDeps(): Parameters<typeof createHeroView>[0] {
     return {
       rpc: ctx.rpc!,
       api: ctx.api!,
       suggest: (kind) => suggestItems(kind),
+      // binding-derivation：当前项目 workspaceId（enrichHero 自 grouped 注入——清单缺席
+      // 时建会话回退锚；清单在场时选中行自带 workspaceId 双发优先）
+      workspaceId: heroWorkspaceIdRef.current,
       // bug 38ab5a8d：hero 暂存的新会话默认档（模型视图写入、建会话后下发并清除）
       modelDefault: {
         read: () => loadPendingModelDefault(viewStore(), modelDefaultStorageKey(pairDomain)),
@@ -444,16 +470,40 @@ export function mount(root: HTMLElement): void {
   }
 
   async function enrichHero(): Promise<void> {
-    // worktree 清单锚（best-effort：projects-grouped 首项目 wsPath——隧道域同源可达；
+    // 项目清单 + worktree 锚（bug e046b3bf：projects-grouped 全项目清单注入 hero——
+    // ≥2 项 proj 徽标可点切换；首项目 wsPath 仍为默认锚。隧道域同源可达；
     // 官方 workspace.list 异源 + 隧道域 403，弃用）。缺席 = composer 只显当前分支。
     if (ctx.rpc === null) return
     try {
-      const result = await ctx.rpc.call<{ projects?: ReadonlyArray<{ wsPath?: unknown }> }>('forge:proxy/projects-grouped', {})
+      const result = await ctx.rpc.call<{ projects?: ReadonlyArray<{ wsPath?: unknown; name?: unknown; archived?: unknown; workspaceId?: unknown }> }>('forge:proxy/projects-grouped', {})
       if (!result.ok) return
-      const path = result.data?.projects?.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')?.wsPath
+      const rawProjects = result.data?.projects ?? []
+      const first = rawProjects.find((project) => typeof project?.wsPath === 'string' && project.wsPath !== '')
+      const path = first?.wsPath
       if (typeof path !== 'string' || path === '' || rendered?.key !== 'hero') return
+      // binding-derivation：首项目 workspaceId 注入 hero（树锚 hack 退役——不再从 wsPath
+      // 推锚，清单缺席时的建会话回退锚 = 当前项目官方 workspace id）
+      if (typeof first?.workspaceId === 'string' && first.workspaceId !== '') {
+        heroWorkspaceIdRef.current = first.workspaceId
+      }
+      const projects = rawProjects
+        .filter((project) => typeof project?.wsPath === 'string' && project.wsPath !== '' && project.archived !== true)
+        .map((project) => ({
+          name: typeof project.name === 'string' && project.name !== '' ? project.name : (project.wsPath as string),
+          path: project.wsPath as string,
+        }))
+      const name = projects.find((project) => project.path === path)?.name
       rendered.root.remove()
-      rendered = { key: 'hero', root: createHeroView({ ...heroDeps(), projectRoot: path, suggest: (kind) => suggestItems(kind, path) }) }
+      rendered = {
+        key: 'hero',
+        root: createHeroView({
+          ...heroDeps(),
+          projectRoot: path,
+          projects,
+          projectName: name,
+          suggest: (kind, root) => suggestItems(kind, root ?? path),
+        }),
+      }
       container.appendChild(rendered.root)
     } catch {
       /* 清单锚缺席 = hero 降级形态（零清单直开） */
@@ -462,7 +512,10 @@ export function mount(root: HTMLElement): void {
 
   function buildView(match: RouteMatch): RenderedView {
     if (ctx.rpc === null || ctx.api === null) return { key: 'boot', root: bootScreen() }
-    if (match.name !== 'chat') chatAskMountRef.current = undefined // 视图切走：槽位挂载点失效（防操作已卸载 DOM）
+    if (match.name !== 'chat') {
+      chatAskMountRef.current = undefined // 视图切走：槽位挂载点失效（防操作已卸载 DOM）
+      chatBindingMountRef.current = undefined
+    }
     switch (match.name) {
       case 'hero': {
         ensureStream()
@@ -494,6 +547,8 @@ export function mount(root: HTMLElement): void {
             return () => ctx.frameListeners.delete(onFrame)
           },
           askMountRef: chatAskMountRef,
+          // binding-derivation M6：forge/binding-mismatch 帧 → chat 漂移 banner 实时出现/消失
+          bindingMountRef: chatBindingMountRef,
           fallbackTitleRef,
           onOpenDrawer: openDrawer,
           onOpenHero: openHero,

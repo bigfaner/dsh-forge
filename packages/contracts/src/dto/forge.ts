@@ -1048,7 +1048,7 @@ export interface TasksChangedEvent {
  * 桥事件信封（子 → 主单向推送：core 写动词闭包尾部 process.send 防护发送——direct 形态
  * IPC 缺席静默降级；run.ts child.on('message') event 分支 → DshHostHandle.onEvent →
  * main webContents.send → renderer 订阅重取，延迟上限 500ms）。
- * channel/payload 只读——扩消息变体 = 契约面变更。
+ * channel/payload 只读——扩消息变体 = 契约面变更（随 FORGE_EVENT_CHANNELS 同步）。
  */
 export interface BridgeEventMessage {
   readonly type: 'event'

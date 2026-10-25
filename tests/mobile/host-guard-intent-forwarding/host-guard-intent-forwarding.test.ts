@@ -1,51 +1,44 @@
 // @feature:mobile-ui
 // @mobile-e2e
-// Journey: host-guard-intent-forwarding（三类意图经 host 守卫落地：分支切换/暂停/派发 + 桌面对照）。
-// 溯源：contracts/step-1-branch-switch-intent.md … step-4-desktop-baseline.md（每 Outcome 一测 + 冒烟）。
-// 策略：hero 守卫回执链（复用 hero Journey 控制器夹具）+ tasks 意图面（dispatchLine/pauseLine/
+// Journey: host-guard-intent-forwarding（三类意图经官方面落地：分支切换/暂停/派发 + 桌面对照）。
+// 溯源：contracts/step-1-branch-switch-intent.md … step-4-desktop-baseline.md（随 1.8
+// binding-derivation §2.7 新语义重写——建会话经 forge:proxy/session-create 中继官方
+// session.create（chip 双发 {workspaceId, worktreePath}），预铸守卫面退役）。
+// 策略：hero 行为链（复用 hero Journey 控制器夹具）+ tasks 意图面（dispatchLine/pauseLine/
 // hasActiveSource/stale 置灰）+ 桌面基线核查（mobile 源面零循环写路径 grep 证据）。零真实 host。
 import { describe, expect, it } from 'vitest'
 import type { RemoteRpc, RpcResult } from '../../../apps/mobile/src/core/rpc.js'
-import {
-  HERO_SESSION_CREATE_CHANNEL,
-  HERO_WORKTREE_LIST_CHANNEL,
-  createHeroController,
-  type HeroWorktreeRow,
-} from '../../../apps/mobile/src/views/hero.js'
+import { HERO_WORKTREE_LIST_CHANNEL, createHeroController, type HeroWorktreeRow } from '../../../apps/mobile/src/views/hero.js'
 import { dispatchLine, hasActiveSource, pauseLine, type TaskRun } from '../../../apps/mobile/src/views/tasks.js'
 import { loadFixtures, mobileSrc } from '../support.js'
 
 const FIX = loadFixtures()
 
 const ROWS: readonly HeroWorktreeRow[] = [
-  { path: 'Z:\\proj', branch: 'main', worktreeName: 'proj', isMain: true },
-  { path: 'Z:\\proj\\wt-feature', branch: 'feature', worktreeName: 'wt-feature', isMain: false },
+  { path: 'Z:\\proj', branch: 'main', worktreeName: 'proj', isMain: true, workspaceId: 'ws-main' },
+  { path: 'Z:\\proj\\wt-feature', branch: 'feature', worktreeName: 'wt-feature', isMain: false, workspaceId: 'ws-feature' },
 ]
 
 const RUNNING_RUNS: readonly TaskRun[] = [
   { sourceSlug: 's', taskKey: 's/1.1', number: 1, title: '1.1', status: 'running', counts: {} },
 ]
 
-/** hero 控制器夹具（与 hero Journey 同构——守卫回执链行为实测） */
-function makeGuardHarness(guardRejects: boolean) {
-  const sessionCreates: number[] = []
+/** hero 控制器夹具（与 hero Journey 同构——创建链行为实测） */
+function makeIntentHarness(createOk: boolean) {
+  const createCalls: { workspaceId: string; worktreePath?: string }[] = []
   const opened: string[] = []
   const controller = createHeroController({
     rpc: {
       call: (async (channel: string): Promise<RpcResult<unknown>> => {
         if (channel === HERO_WORKTREE_LIST_CHANNEL) return { ok: true as const, data: { isGit: true, entries: ROWS } }
-        if (channel === HERO_SESSION_CREATE_CHANNEL) {
-          return guardRejects
-            ? { ok: false as const, error: { code: 'invalid-state', reason: '守卫拒绝：工作树未收口' } }
-            : { ok: true as const, data: { sessionId: 's-guarded', branch: 'feature' } }
-        }
         return { ok: false as const, error: { code: 'unknown', reason: channel } }
       }) as RemoteRpc['call'],
     },
     api: {
-      createSession: async () => {
-        sessionCreates.push(1)
-        return { sessionId: 's-plain' }
+      createSession: async (workspaceId: string, worktreePath?: string) => {
+        if (!createOk) throw new Error('创建失败：环境不可用')
+        createCalls.push({ workspaceId, worktreePath })
+        return { sessionId: 's-created' }
       },
       prompt: async () => ({}),
       selectAgentPreset: async () => ({}),
@@ -58,36 +51,47 @@ function makeGuardHarness(guardRejects: boolean) {
     workspaceId: 'ws-1',
     onOpenSession: (id) => opened.push(id),
   })
-  return { controller, sessionCreates, opened }
+  return { controller, createCalls, opened }
 }
 
-describe('step-1 branch-switch-intent（分支切换意图经守卫落地）', () => {
-  it('success（校验通过后落地）', async () => {
-    // 回链 contracts/step-1-branch-switch-intent.md Outcome:success——守卫通过才落地
-    const h = makeGuardHarness(false)
+describe('step-1 branch-switch-intent（分支切换意图经官方面落地）', () => {
+  it('success（创建链通过后落地）', async () => {
+    // 回链 contracts/step-1-branch-switch-intent.md Outcome:success——创建链通过才落地
+    const h = makeIntentHarness(true)
     await h.controller.load()
     h.controller.pickBranch('Z:\\proj\\wt-feature')
     await h.controller.send('切换')
     for (let i = 0; i < 6; i += 1) await Promise.resolve() // 建会话链微任务落定
-    expect(h.opened).toContain('s-guarded') // 通道回执 sessionId → 进入对话（落地一次）
+    // chip 双发：官方面 createSession({workspaceId, worktreePath})——workspaceId 随选中行
+    expect(h.createCalls).toEqual([{ workspaceId: 'ws-feature', worktreePath: 'Z:\\proj\\wt-feature' }])
+    expect(h.opened).toContain('s-created') // 回执 sessionId → 进入对话（落地一次）
     expect(h.controller.state().busy).toBe(false)
-    // 透传通道钉面：forge:worktree/session-create（fixtures 缺录制——404 缺口显性化）
-    expect(HERO_SESSION_CREATE_CHANNEL).toBe('forge:worktree/session-create')
+    // 映射语义钉面：官方面 method 经 forge:proxy/session-create 中继（main.ts 隧道域映射单源）
+    expect(mobileSrc('main.ts')).toMatch(/'session\.create':\s*'forge:proxy\/session-create'/)
+    // 载荷自包含：worktreePath 随载荷透传（host proxy 零猜测，原样转发官方 create）
+    expect(mobileSrc('core/api.ts')).toMatch(/workspaceId, worktreePath/)
+    // 退役通道钉面：预铸单门已退役——已删导出 + 通道字面量零残留（hero 源面 + fixtures 双查）
+    expect(mobileSrc('views/hero.ts')).not.toMatch(/HERO_SESSION_CREATE_CHANNEL|'forge:worktree\/session-create'/)
+    expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === 'forge:worktree/session-create')).toBe(false)
+    // fixtures 缺口显性化：worktree/list 与 proxy/session-create 均未录制（录制期不在 proxy 面）
     expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === HERO_WORKTREE_LIST_CHANNEL)).toBe(false)
+    expect(FIX.proxy.some((e) => (e.request as { channel?: string }).channel === 'forge:proxy/session-create')).toBe(false)
   })
 
-  it('guard-rejected（守卫拒绝分支切换）', async () => {
-    // 回链 contracts/step-1-branch-switch-intent.md Outcome:guard-rejected——
-    // 失败只回传数据：pendingGuard 承载 reason，零半切换状态、零官方面落地
-    const h = makeGuardHarness(true)
+  it('create-rejected（创建失败零落地）', async () => {
+    // 回链 contracts/step-1-branch-switch-intent.md Outcome:guard-rejected（新语义收敛）——
+    // 失败只回传数据：错误面承载 reason，零半切换状态、零会话进入
+    const h = makeIntentHarness(false)
     await h.controller.load()
     h.controller.pickBranch('Z:\\proj\\wt-feature')
     await h.controller.send('切换')
     for (let i = 0; i < 6; i += 1) await Promise.resolve() // 建会话链微任务落定
-    expect(h.controller.state().pendingGuard?.reason).toBe('守卫拒绝：工作树未收口')
-    expect(h.sessionCreates).toHaveLength(0) // 宿主环境零变更
-    h.controller.resolveGuard('cancel') // 选回：零落地收口
-    expect(h.controller.state().pendingGuard).toBeNull()
+    expect(h.controller.state().error).toBe('发送失败：创建失败：环境不可用')
+    expect(h.createCalls).toHaveLength(0) // 失败请求不落地——宿主环境零变更
+    expect(h.opened).toEqual([]) // 零会话进入
+    h.controller.reset() // 选回语义由 reset 承担（确认框退役）
+    expect(h.controller.state().error).toBeNull()
+    expect(h.controller.state().selectedPath).toBe(h.controller.state().defaultRow?.path)
   })
 })
 
@@ -145,20 +149,20 @@ describe('step-4 desktop-baseline（桌面端对照循环主权）', () => {
 })
 
 describe('smoke: happy path 依序走全链（host-guard-intent-forwarding）', () => {
-  it('分支切换守卫 → 暂停/派发意图 → 桌面基线', async () => {
-    // ① 分支切换：守卫通过落地 / 拒绝零落地
-    const pass = makeGuardHarness(false)
+  it('分支切换创建链 → 暂停/派发意图 → 桌面基线', async () => {
+    // ① 分支切换：创建通过落地 / 失败零落地
+    const pass = makeIntentHarness(true)
     await pass.controller.load()
     pass.controller.pickBranch('Z:\\proj\\wt-feature')
     await pass.controller.send('通过径')
     for (let i = 0; i < 6; i += 1) await Promise.resolve() // 建会话链微任务落定
-    expect(pass.opened).toContain('s-guarded')
-    const reject = makeGuardHarness(true)
+    expect(pass.opened).toContain('s-created')
+    const reject = makeIntentHarness(false)
     await reject.controller.load()
     reject.controller.pickBranch('Z:\\proj\\wt-feature')
     await reject.controller.send('拒绝径')
-    expect(reject.controller.state().pendingGuard).not.toBeNull()
-    reject.controller.resolveGuard('cancel')
+    expect(reject.controller.state().error).not.toBeNull()
+    expect(reject.createCalls).toHaveLength(0)
     // ② 暂停/派发 = 官方指令面意图
     expect(pauseLine()).toBe('/stop-dag-tasks')
     expect(dispatchLine('s')).toBe('/run-dag-tasks s')

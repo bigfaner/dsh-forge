@@ -1,15 +1,21 @@
-// worktree-branch-management 1.27 真机 UI e2e（W3 arm 退役升级——创建即绑定）：git 项目
-// 会话在官方 create 调用点即被 wrap 改道预铸（birth binding），零消息意图参与。
-//   · 场景 B（主树绑定）：默认锚定主行 → 「新会话」钮触发官方 create（无消息键入）→
-//     wrap 预铸——挂靠会话出生在场：seal 绑定回读 worktreePath = 项目根、branch = main、
-//     恒不封存；会话落盘目录 = 项目根 cwd 分组；双路防重（零重复建会话）；
-//   · 场景 A（树内点选）：点选 wt-a = 点选时点跨分支确认（1.19 语义回归）→ 确认后纯
-//     选中态（零会话副作用；创建目标 = 注册项目根——选中树消费面 = host 必绑重路由）。
+// binding-derivation 1.27 真机 UI e2e（绑定推导制重写）：选树 → 会话 cwd = 所选树，
+// 官方 blank 复用天然命中。预铸/绑定事件可见行为不再可断言（forge/worktree-attach 与
+// 发送哨兵/换绑编排已退役——绑定 = header.cwd 推导，创建 = 官方 session.create({workspaceId})）。
+//   · 场景 A（默认锚主树）：回填零「新增」会话副作用 → 项目行「新会话」钮（显式项目根
+//     workspaceId 直通官方）→ 会话 cwd = 项目根（branch = main）；重复点击零重复建；
+//   · 场景 B（选树 wt-a）：worktree 经产品创建弹窗建立（流程 A——官方 workspace 幂等创建
+//     + DTO 携带 workspaceId，选树路由硬前置）→ 点选时点跨分支确认（1.19 语义回归）→
+//     点选即 openWorkspace（建/复用该树 blank——bug 05c712a4 显示 = 实际生效状态）→
+//     官方壳「新会话」（无参 startSession——入口锚定 wrap 按 chip 显示选中树路由）→
+//     复用同一 blank → 会话 cwd = 所选树（branch = feat-a）；重复点击零重复建。
+// 断言面 = forge:worktree/seal（header.cwd 推导读侧）+ forge:worktree/checks（官方
+// workspace record sessionIds 计数）。基线取 boot 后快照（官方 boot 默认会话在场——
+// 推导制下计数 = 官方挂账事实，绝对 0 不可达，以「零新增」为口径）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；新会话钮 =
-// [data-dswf-project-action="new-session"]；会话头 chip = [data-dswt-session-chip]；
-// 风险框 = role dialog「跨分支风险确认」。
+// [data-dswf-project-action="new-session"]；创建弹窗 = data-dswt-worktree-input /
+// data-dswt-branch-input / data-dswt-create-submit；风险框 = role dialog「跨分支风险确认」。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeApp, launchHost } from '../support/launch.js'
@@ -18,21 +24,20 @@ import { findFixtureSession } from '../support/session-files.js'
 import { expect, test, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
-  'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/005-create-time-bind'
+  'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/binding-derivation/1.9/001-mandatory-bind'
+mkdirSync(EVIDENCE_DIR, { recursive: true })
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
-function makeGitRepo(): { dir: string; wtDir: string } {
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；worktree 经产品弹窗创建，见流程 A） */
+function makeGitRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-27-orch-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t127@test', '-c', 'user.name=t127', ...args], { cwd, stdio: 'pipe' })
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t127@test', '-c', 'user.name=t127', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
-  writeFileSync(join(dir, 'README.md'), '1.27 create-time-bind fixture\n')
+  writeFileSync(join(dir, 'README.md'), '1.27 binding-derivation fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  const wtDir = join(dir, 'wt-a').replaceAll('\\', '/')
-  git(['worktree', 'add', '-b', 'feat-a', wtDir, 'main'])
-  return { dir, wtDir }
+  return dir
 }
 
 /** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
@@ -69,6 +74,34 @@ const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
 const heroRiskDialog = (page: Page) => page.getByRole('dialog', { name: '跨分支风险确认' })
 const newSessionButton = (page: Page) => page.locator('[data-dswf-project-action="new-session"]').first()
 
+/**
+ * 经产品创建弹窗建 worktree（流程 A：git worktree add + 官方 workspace 幂等创建 + DTO
+ * 携带 workspaceId）。外部 git CLI 建树不产生官方 workspace record（list 只读解析）——
+ * 选树路由（chip 双发 workspaceId）的 fixture 前置必须走此径。
+ */
+async function createWorktreeViaDialog(page: Page, projectRoot: string, branch: string, name: string): Promise<void> {
+  await chip(page).first().click()
+  await heroMenu(page).getByText('新建 worktree…', { exact: false }).first().click()
+  await page.locator('[data-dswt-branch-input]').fill(branch)
+  await page.locator('[data-dswt-worktree-input]').fill(name)
+  await page.locator('[data-dswt-create-submit]').click()
+  // 创建闭环：清单行携带 workspaceId（官方 workspace 幂等创建——选树路由硬前置）
+  await expect
+    .poll(async () => {
+      try {
+        const raw = (await forgeRpc(page, 'forge:worktree/list', { projectRoot })) as {
+          data?: { entries?: Array<{ worktreeName?: string; workspaceId?: string }> }
+          entries?: Array<{ worktreeName?: string; workspaceId?: string }>
+        } | null
+        const entries = raw?.data?.entries ?? raw?.entries ?? []
+        return entries.some((row) => row.worktreeName === name && typeof row.workspaceId === 'string' && row.workspaceId !== '')
+      } catch {
+        return false
+      }
+    }, { timeout: 60_000, message: `worktree ${name} 应入清单且携带 workspaceId（流程 A 闭环）` })
+    .toBe(true)
+}
+
 /** 风险框交互：勾选风险知悉 → 确认继续（1.19 同款），循环至收敛（上限 4 轮） */
 async function acknowledgeUntilSettled(page: Page): Promise<void> {
   for (let round = 0; round < 4; round += 1) {
@@ -86,7 +119,7 @@ async function acknowledgeUntilSettled(page: Page): Promise<void> {
   }
 }
 
-/** 项目行「新会话」钮（行尾动作 = hover 显现——先 hover 项目行再点钮） */
+/** 项目行「新会话」钮（行尾动作 = hover 显现——显式 workspaceId = 项目根 workspace 直通） */
 async function clickNewSession(page: Page): Promise<void> {
   await page
     .locator('.dswf-sidebar-project-row', { hasText: 'orch-repo' })
@@ -95,7 +128,17 @@ async function clickNewSession(page: Page): Promise<void> {
   await newSessionButton(page).click()
 }
 
-/** 挂靠会话计数（checks RPC——编排/封存判定共用源） */
+/** 官方壳「新会话」钮（无参 startSession——入口锚定 wrap 消费 chip 显示选中树路由） */
+async function clickOfficialNewSession(page: Page): Promise<void> {
+  const exact = page.getByRole('button', { name: '新会话', exact: true })
+  if (await exact.first().isVisible().catch(() => false)) {
+    await exact.first().click()
+    return
+  }
+  await page.getByRole('button', { name: /新会话|新建会话/ }).first().click()
+}
+
+/** 挂靠会话计数（checks 通道——官方 workspace record sessionIds 单源） */
 async function attachedSessions(page: Page, wsDir: string, path: string): Promise<number> {
   const raw = (await forgeRpc(page, 'forge:worktree/checks', { projectRoot: wsDir, path })) as {
     data?: { attachedSessions?: number }
@@ -104,29 +147,15 @@ async function attachedSessions(page: Page, wsDir: string, path: string): Promis
   return raw?.data?.attachedSessions ?? raw?.attachedSessions ?? -1
 }
 
-/** seal 绑定回读（header.cwd ≡ worktreePath 由宿主 cwd 守护保证——读到即 cwd 证据） */
+/** seal 绑定回读（推导制读侧：binding.worktreePath = header.cwd——cwd 即绑定证据；
+ *  sessionId = 账本 id（session-<uuid> 全名）） */
 async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePath?: string; branch?: string; sealed?: boolean } | undefined> {
-  const raw = (await forgeRpc(page, 'forge:worktree/seal', { sessionId })) as {
-    data?: { sealed?: boolean; binding?: { worktreePath?: string; branch?: string } | null }
-    sealed?: boolean
-    binding?: { worktreePath?: string; branch?: string } | null
-  } | null
+  const full = sessionId.startsWith('session-') ? sessionId : `session-${sessionId}`
+  const raw = (await forgeRpc(page, 'forge:worktree/seal', { sessionId: full }).catch(() => undefined)) as
+    | { data?: { sealed?: boolean; binding?: { worktreePath?: string; branch?: string } | null }; sealed?: boolean; binding?: { worktreePath?: string; branch?: string } | null }
+    | undefined
   const seal = raw?.data ?? raw
   return seal?.binding === null || seal?.binding === undefined ? undefined : { ...seal.binding, sealed: seal?.sealed }
-}
-
-/** 会话落盘所在的工作区目录名（<dshHome>/sessions/<sanitized-cwd>/session-<id>——cwd 分组证据） */
-function sessionWorkspaceDir(dshHome: string, sessionId: string): string | undefined {
-  const sessionsDir = join(dshHome, 'sessions')
-  if (!existsSync(sessionsDir)) return undefined
-  const target = sessionId.startsWith('session-') ? sessionId : `session-${sessionId}`
-  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
-    if (!wsDir.isDirectory()) continue
-    if (readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true }).some((s) => s.isDirectory() && s.name === target)) {
-      return wsDir.name
-    }
-  }
-  return undefined
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -138,97 +167,97 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.27 UI：创建即绑定——官方 create 调用点 wrap 预铸（主树 + 树内点选确认双场景）', async () => {
+const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
+
+test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 复用天然命中', async () => {
   test.setTimeout(300_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-27-bind-'))
   const dshHome = join(userData, 'dsh-home')
-  const { dir: wsDir, wtDir } = makeGitRepo()
+  const wsDir = makeGitRepo()
+  const wtDir = join(wsDir, '.forge', 'worktrees', 'wt-a')
   const app = await launchHost({ userData })
   try {
     const { page } = app
     await dismissOnboardingModals(page)
     await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-
-    // ── 场景 B（主树绑定·创建即绑定）：默认锚定主行（回填零会话）→ 「新会话」钮触发
-    // 官方 create → wrap 改道预铸——零消息键入即绑定在场 ──
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
     }).toContain('main')
-    // 回填零会话副作用（创建时机 = 官方 create 调用点，不在回填）
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wsDir), {
-        timeout: 30_000,
-        message: '回填不应预建主树挂靠会话',
-      })
-      .toBe(0)
-    // 「新会话」钮 = 官方 startSession → create（无 sessionId）→ wrap 预铸 Y（主树绑定）
+    // boot 后基线快照（官方默认会话在场——绝对 0 不可达，以「零新增」为口径）
+    const baseRoot = await attachedSessions(page, wsDir, wsDir)
+    console.log('[1.27] baseline root =', baseRoot)
+
+    // ── 场景 A（默认锚主树）：回填零新增 → 项目行「新会话」钮 → 会话 cwd = 项目根 ──
+    await page.waitForTimeout(2_000)
+    expect(await attachedSessions(page, wsDir, wsDir), '回填零新增主树会话（展示回填零副作用）').toBe(baseRoot)
     await clickNewSession(page)
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wsDir), {
-        timeout: 60_000,
-        message: '创建即绑定：官方 create 调用点应产出主树挂靠会话（零消息意图参与）',
-      })
-      .toBeGreaterThanOrEqual(1)
-    // seal 绑定回读：worktreePath = 项目根 + branch = main + 恒不封存（主树恒在场）；
-    // header.cwd ≡ worktreePath 由宿主 cwd 守护保证（读到 = cwd 语义证据）
-    let binding: { worktreePath?: string; branch?: string; sealed?: boolean } | undefined
+    let rootSessionId = ''
     await expect
       .poll(async () => {
         const found = findFixtureSession(dshHome, 'orch-repo')
-        if (found === undefined) return false
-        const bare = found.sessionId.replace(/^session-/, '')
-        binding =
-          (await sealBinding(page, bare).catch(() => undefined)) ??
-          (await sealBinding(page, found.sessionId).catch(() => undefined))
-        return binding !== undefined
-      }, { timeout: 60_000, message: 'seal 未读到主树绑定' })
-      .toBe(true)
-    console.log('[1.27-scene-b] seal binding =', JSON.stringify(binding))
-    expect(binding?.worktreePath?.toLowerCase().replaceAll('\\', '/')).toBe(wsDir.toLowerCase().replaceAll('\\', '/'))
-    expect(binding?.branch).toBe('main')
-    expect(binding?.sealed, '主树绑定恒不封存（evaluateSeal 对主树在场恒假）').toBe(false)
-    // cwd 各就各位：会话落盘目录 = 项目根 cwd 分组（目录名含夹具段 orch-repo）
-    const foundMain = findFixtureSession(dshHome, 'orch-repo')
-    expect(foundMain, '主树绑定会话应落盘').toBeDefined()
-    const wsDirName = sessionWorkspaceDir(dshHome, foundMain!.sessionId)
-    console.log('[1.27-scene-b] session ws dir =', wsDirName)
-    expect(wsDirName, '主树绑定会话 cwd = 项目根（落盘分组）').toContain('orch-repo')
-    // 双路防重：wrap 消费后零重复建会话（挂靠计数恒 1）
+        if (found !== undefined) rootSessionId = found.sessionId
+        return rootSessionId
+      }, { timeout: 60_000, message: '主树会话应开户（盘侧 cwd 分组）' })
+      .not.toBe('')
+    let rootBinding: { worktreePath?: string; branch?: string; sealed?: boolean } | undefined
+    await expect
+      .poll(async () => (rootBinding = await sealBinding(page, rootSessionId).catch(() => undefined)), {
+        timeout: 60_000,
+        message: 'seal 未读到主树会话绑定',
+      })
+      .toBeDefined()
+    console.log('[1.27-scene-a] seal binding =', JSON.stringify(rootBinding))
+    expect(norm(rootBinding?.worktreePath), '会话 cwd = 项目根（header.cwd 推导）').toBe(norm(wsDir))
+    expect(rootBinding?.branch).toBe('main')
+    expect(rootBinding?.sealed, '主树恒在场恒不封存').toBe(false)
+    // 官方 blank 复用天然命中：再次点击 → reuseOrCreateBlank 采纳既有 blank——零重复建
+    const countAfterFirst = await attachedSessions(page, wsDir, wsDir)
+    await clickNewSession(page)
     await page.waitForTimeout(10_000)
-    expect(await attachedSessions(page, wsDir, wsDir), '双路防重：主树挂靠不重复建').toBe(1)
-    // 会话头 chip 呈现 main（软探针——header 槽渲染相位，1.25 口径：缺席留痕不判败）
-    const sessionChip = page.locator('[data-dswt-session-chip]')
-    try {
-      await expect(sessionChip.first(), '会话头 worktree chip 呈现（main）').toBeVisible({ timeout: 15_000 })
-      console.log('[1.27-scene-b] session-chip =', await sessionChip.first().textContent())
-      expect(await sessionChip.first().textContent()).toContain('main')
-    } catch {
-      console.log('[1.27-scene-b] session-chip 未呈现（header 槽渲染相位）——留痕')
-    }
-    await snap(page, 'scene-b-main-tree-bound.png')
+    expect(await attachedSessions(page, wsDir, wsDir), '官方复用天然命中：主树零重复建').toBe(countAfterFirst)
+    await snap(page, 'scene-a-root-bound-blank-reuse.png')
 
-    // ── 场景 A（树内点选·点选时点确认）：点选 wt-a = 点选时点跨分支确认（1.19 语义
-    // 回归）→ 确认后纯选中态（零会话副作用）。创建目标 = wrap 消费注册项目根（选中树
-    // 的消费面 = host 必绑重路由，仅对无绑定 blank 生效）——新会话仍绑主树且零 wt-a 会话。──
+    // ── 场景 B（选树 wt-a）：产品弹窗建树（流程 A 闭环）→ 点选时点跨分支确认 →
+    // 点选即 openWorkspace（建/复用该树 blank）→ 官方壳「新会话」复用同一 blank ──
+    await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
     await chip(page).first().click()
     await heroMenu(page).getByText('feat-a', { exact: false }).first().click()
     await expect(heroRiskDialog(page), '点选时点跨分支确认框应立现（1.19 语义回归）').toBeVisible({ timeout: 8_000 })
-    await snap(page, 'scene-a-select-time-risk-dialog.png')
+    await snap(page, 'scene-b-select-time-risk-dialog.png')
     await acknowledgeUntilSettled(page)
     await expect.poll(async () => (await chip(page).first().textContent()) ?? '', { timeout: 30_000 })
       .toContain('feat-a')
-    // 确认后纯选中态：零会话副作用（创建唯一时机 = 官方 create 调用点，点选零编排）
+    // 点选即建/复用（bug 05c712a4：显示 = 实际生效状态——wt-a blank 恰 1）
     await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选确认不应产生 wt-a 挂靠会话（纯选中态）' })
-      .toBe(0)
-    // 「新会话」钮 → 官方 startSession = reuse-or-create（既有 blank 产物直接采纳）→
-    // 挂靠计数恒 1（零重复建）；选中态不改变 wrap 创建目标（wt-a 恒零）
-    await clickNewSession(page)
+      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: '点选确认应开户 wt-a blank（openWorkspace 显式传参）' })
+      .toBe(1)
+    await clickOfficialNewSession(page)
+    let wtSessionId = ''
+    await expect
+      .poll(async () => {
+        const found = findFixtureSession(dshHome, 'wt-a')
+        if (found !== undefined) wtSessionId = found.sessionId
+        return wtSessionId
+      }, { timeout: 60_000, message: 'wt-a 会话应开户（盘侧 cwd 分组 = 所选树）' })
+      .not.toBe('')
+    let wtBinding: { worktreePath?: string; branch?: string; sealed?: boolean } | undefined
+    await expect
+      .poll(async () => (wtBinding = await sealBinding(page, wtSessionId).catch(() => undefined)), {
+        timeout: 60_000,
+        message: 'seal 未读到 wt-a 会话绑定',
+      })
+      .toBeDefined()
+    console.log('[1.27-scene-b] seal binding =', JSON.stringify(wtBinding))
+    expect(norm(wtBinding?.worktreePath), '会话 cwd = 所选树 wt-a').toBe(norm(wtDir))
+    expect(wtBinding?.branch).toBe('feat-a')
+    // 双树各自官方复用：重复点击零重复建
+    const wtCountAfterFirst = await attachedSessions(page, wsDir, wtDir)
+    await clickOfficialNewSession(page)
     await page.waitForTimeout(10_000)
-    expect(await attachedSessions(page, wsDir, wtDir), '选中态不改变 wrap 创建目标（wt-a 零挂靠）').toBe(0)
-    expect(await attachedSessions(page, wsDir, wsDir), 'blank 采纳复用：主树挂靠不重复建').toBe(1)
-    await snap(page, 'scene-a-selection-no-session.png')
+    expect(await attachedSessions(page, wsDir, wtDir), '官方复用天然命中：wt-a 零重复建').toBe(wtCountAfterFirst)
+    expect(await attachedSessions(page, wsDir, wsDir), '主树计数不受选树影响').toBe(countAfterFirst)
+    await snap(page, 'scene-b-wt-bound-blank-reuse.png')
   } finally {
     await closeApp(app.app)
     rmSync(userData, { recursive: true, force: true })

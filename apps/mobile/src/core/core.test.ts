@@ -204,7 +204,8 @@ describe('official api 窄面', () => {
   it('13 方法清单端点名与载荷形状', async () => {
     const { methodCalls, api } = record()
     await api.listSessions()
-    await api.createSession('ws-1')
+    // binding-derivation：chip 双发——worktreePath 透传载荷自包含（host proxy 载荷原样转发）
+    await api.createSession('ws-1', 'Z:/wt/a')
     await api.history('s-1', 10)
     await api.prompt('s-1', 'hi', 'steer')
     await api.cancel('s-1')
@@ -232,6 +233,7 @@ describe('official api 窄面', () => {
       'agentPreset.select',
     ])
     expect(methodCalls[2]?.payload).toEqual({ sessionId: 's-1', maxMessages: 10 })
+    expect(methodCalls[1]?.payload).toEqual({ workspaceId: 'ws-1', worktreePath: 'Z:/wt/a' })
     // bug 82f9ceb6：requestId 官方 schema 必填（缺失 → bindPrompt 链路不可序列化 → inbox
     // splice 落盘被拒「prompt rejected」）——逐发 UUID
     expect(methodCalls[3]?.payload).toMatchObject({ sessionId: 's-1', mode: 'steer', clientTimeZone: 'UTC' })

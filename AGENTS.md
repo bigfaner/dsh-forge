@@ -26,6 +26,7 @@
 - **任务执行/质量门一律 run-once 命令，禁用 `--watch` 形态**（vite build --watch / tsc -b --watch 等）——worker 结束后 watch 子进程成孤儿持续吃 commit，已实证耗尽全局内存（判例 2026-10-16：两个孤儿 watch 共 3.5GB 触发连环原生崩溃误诊）。
 - **任何原生内存崩溃先查 commit charge 再定位进程**：症状族（exit 3221226505 / heap OOM / PowerShell 0x800705AF）在 commit ≥ 95% limit 时是环境级耗尽，崩在哪个进程纯看运气——对具体进程做配方排查即误诊。诊断命令与清理流程正本见 `docs/conventions/windows-commit-exhaustion.md`。根治已落地：worker 任意终态经进程树 Job Object 整树回收（`packages/plugin-forge/src/spawn/job-tree.ts`）；pagefile 扩容记录暂缓（用户裁决：记录不实施）。
 - **对目录做可继承 ACE 授权（icacls /grant (OI)(CI)）必须预铸时序 + 幂等短路 + 超时上界**：可继承 ACE 写入触发 NTFS 全子树物化传播——满树分钟级独占 1 核，空目录毫秒级；先建空目录授权再填充内容则文件出生即继承、零回溯成本。判例 bug f9a23367（曾阻塞会话发送链路）。正本见 `docs/conventions/ntfs-acl-grant-timing.md`。
+- **CDP 调试脚本统一放 `cdp/` 目录**（真机取证/驱动 renderer 的 eval、截图、探测脚本等），不散落 `.forge/tmp` 等临时位置；过程产物（截图、解压转储）不进 git（§5.2）。
 
 ## 3. UI 与设计
 
@@ -43,6 +44,11 @@
   - `docs/architecture/quote-plugins-architecture.md`——插件包结构与构建、装配链路（双真源校验 + 官方模块系统装载）、两插件模块图、数据架构（草稿单一事实源 + 可见性门控分层）。
   - `docs/architecture/quote-plugins-flows.md`——核心流程（划选插入、替身四态状态机、发送序列化、构建生效）与验收流程（分层矩阵、质量门、新增功能验收清单）。
 - 改动这两个插件时先读对应文档；交互流程、序列化格式、构建装载链或验收分层变化时同步回写（只写当前事实，不记修复叙事）。
+
+### 3.4 所见即所得（WYSIWYG）
+- **控件显示的状态 = 实际生效的状态**：选中哪个 worktree，创建的会话就属于哪个；会话一出生即归属所选树，不经过「先落别处、稍后纠正」的中间态。
+- 判据是用户视角，不是实现视角：绑定决策不得依赖用户看不见的内部态（如「上一个活跃工作区」锚点、「延迟到发送时点再纠正」）；凡显示与行为可能分叉的路径，以显示为准收口。
+- 创建绑定 = 创建请求显式传参（显示什么传什么，主树也是显式传项目根），host 零猜测；chip 选中记忆（host 单源）只做显示恢复与哨兵判读，不参与创建路由。判例 2026-10-24：创建时点消费选中记忆即「猜测用户看到什么」——host 重启记忆清空而显示残留（绑 root）、点选与创建时序错位（绑上一个选中的树）两种错位均实证；记忆劫持退役收口。
 
 ## 4. 常用工程命令（质量门参考）
 
@@ -71,6 +77,7 @@
   - 过程文件归档到 `.forge/docs/proposals/<slug>/walkthrough/` 等工作区目录即可（留在盘上、留在 git 外），在提交说明里用相对路径引用。
   - 提交只含代码、测试与文档（`.md` 台账/走查记录属文档，可提交）。
 
+
 ## 6. mobile 端（apps/mobile）
 
 移动端项目架构、与 host 的交互逻辑（forge:proxy 通道 + forge-stream 镜像 + ask 桥）、核心流程（流式/折叠/ask/TODO/元信息行/文档卡）与验收流程的正本在 `docs/mobile/`，改 mobile 前必读：
@@ -80,3 +87,8 @@
 - **API 与加密**：`docs/mobile/api-and-crypto.md`——RPC/推送接口清单（含示例载荷）、隧道域 PSK 加密解密全过程（密钥层级/信封/签名/防重放，配流程图）。
 - **核心流程**：`docs/mobile/core-flows.md`——建会话/发送、流式与 turn 折叠、ask_user_question 全链、消息元信息行、TODO 面板、文档卡、已读/未读的当前语义（含用户裁决日期锚）。
 - **验收**：`docs/mobile/acceptance.md`——质量门序列、生效路径判据（bundle 刷新 vs host 重启 vs 仅新数据）、六条验收规则与真机 WiFi 验收程序；规则判例见 `docs/mobile/acceptance-examples.md`。
+
+## 7. 可观测性
+
+- **各功能必须确保可观测性**：关键流程（成功里程碑与失败路径）必须经现有事件式日志系统输出诊断日志——host 侧统一走 `emitDiag(ctx, payload)`（`apps/host/src/telemetry/diag-events.ts`，官方 cordis `diag/log` 事件域，info/warn/error 三级），新增错误源 = 新增 emit 点、订阅侧零改动；不得以「异常被 fail-soft 吞掉」为由静默失败。
+- 埋点规范：payload 就地携带可得字段（`event` 类别、`message`、`projectId`/`sessionId`/`cwd`/`traceId`），`event` 命名用功能域前缀（如 `worktree-create`、`session-bind`）；提案/设计文档中随流程写明埋点面。

@@ -74,6 +74,18 @@ export function aheadBehindSegments(counts: AheadBehind): AheadBehindSegments {
   }
 }
 
+/**
+ * ahead/behind 内联短串（chip §2.3.1 目标形态——分支名旁 `2↓ 16↑`，落后在前；
+ * 零值段省略、全零/无 upstream = null 不占位）。
+ */
+export function aheadBehindInline(counts: AheadBehind): string | null {
+  const parts = [
+    ...(counts.behind > 0 ? [`${counts.behind}↓`] : []),
+    ...(counts.ahead > 0 ? [`${counts.ahead}↑`] : []),
+  ]
+  return parts.length > 0 ? parts.join(' ') : null
+}
+
 /** 删除二次确认状态清单（弹窗三检查项） */
 export interface DeleteChecks {
   /** 未提交变更计数（git status --porcelain；0 = 干净） */
