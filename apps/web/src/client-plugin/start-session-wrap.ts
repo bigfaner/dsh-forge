@@ -10,10 +10,12 @@
 // 三条纪律：
 //   ① workspaceId 直通——显式 workspaceId 调用原样透传；无参径解析出 workspaceId 后亦
 //      原样直通，全程零 forge 建会话 RPC（预铸改道退役）；
-//   ② 显示源路由保留——显示选中（forge:worktree/selected，与 chip 回填同源）权威于官方
-//      内部锚点；workspaceId 解析 = chip 双发数据源（WorktreeEntryDto.workspaceId，
+//   ② 显示源路由保留——显示真源（displayedTree：与 chip 本地投影同源的客户端态）权威于
+//      官方内部锚点；workspaceId 解析 = chip 双发数据源（WorktreeEntryDto.workspaceId，
 //      forge:worktree/list）优先，官方 workspaces.list path 匹配回退；
-//   ③ fail-open——判定链异常/解析缺席 = 官方原流（选中记忆读失败静默，其余 warn 一行）。
+//      bug 05c712a4 根治：显示真源 = 客户端本地态（selected-tree-display），不再读 host
+//      选中记忆（内存态易与显示分叉：push 丢失/重启清空/多窗覆写即绑错树）；
+//   ③ fail-open——判定链异常/解析缺席 = 官方原流（warn 一行）。
 //
 // bundle 自含纪律：本文件零运行时 import——官方面以结构同型镜像窄接口承载。
 
@@ -42,8 +44,9 @@ export interface StartSessionWrapDeps {
   readonly workspacesList: WorkspacesListSlice
   /** 树归属门（forge:worktree/resolve 窄面——path → 注册项目根；null = 未注册） */
   readonly resolveRoot: (path: string) => Promise<string | null>
-  /** chip 显示选中读镜像（forge:worktree/selected——与 chip 回填同源；undefined = 未选中） */
-  readonly selectedTree: (projectRoot: string) => Promise<string | undefined>
+  /** 显示真源（selected-tree-display——与 chip 本地投影同源；undefined = 未选中，
+   *  调用方回落项目根。bug 05c712a4 根治：替代 host 选中记忆读） */
+  readonly displayedTree: () => string | undefined
   /** chip 双发数据源（WorktreeEntryDto.workspaceId——forge:worktree/list 窄面；
    *  worktreePath → workspaceId；undefined = 行缺席/形状漂移） */
   readonly worktreeWorkspaceId: (worktreePath: string, projectRoot: string) => Promise<string | undefined>
@@ -154,15 +157,9 @@ export function installStartSessionWrap(deps: StartSessionWrapDeps): () => void 
       if (targetPath === undefined) return 'official'
       const projectRoot = await deps.resolveRoot(targetPath).catch(() => null)
       if (projectRoot === null || projectRoot === '') return 'official'
-      // ② 显示源路由（所见即所得）：显示选中权威于官方内部锚点；读失败 = 意图不可知 →
-      //    fail-open 官方原流（静默——与未注册同判）
-      let selected: string | undefined
-      try {
-        selected = await deps.selectedTree(projectRoot)
-      } catch {
-        return 'official'
-      }
-      const displayed = selected ?? projectRoot // 缺席回落项目根（chip 缺省显示主行同判）
+      // ② 显示源路由（所见即所得）：显示真源 = 客户端本地态（与 chip 同源，同步读零
+      //    竞态）；缺席回落项目根（chip 缺省显示主行同判）
+      const displayed = deps.displayedTree() ?? projectRoot
       // ① workspaceId 直通：chip 双发数据源（WorktreeEntryDto.workspaceId）优先，
       //    官方 workspaces.list path 匹配回退——解析即直通官方 startSession(workspaceId)，
       //    官方 session.create({workspaceId}) 原生 blank 复用，零 forge 改道

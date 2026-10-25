@@ -66,6 +66,7 @@ import {
 import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCardSource, type BugReferenceSource } from './bug-source.js'
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
+import { selectedTreeDisplay } from './selected-tree-display.js'
 import {
   installStartSessionWrap,
   type SessionsListSlice,
@@ -2325,12 +2326,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                   const hit = data.resolved?.find((entry) => entry.path === path)
                   return typeof hit?.projectRoot === 'string' && hit.projectRoot !== '' ? hit.projectRoot : null
                 },
-                selectedTree: async (projectRoot) => {
-                  const data = await unwrapRpcEnvelope<{ path?: unknown }>(
-                    forgeInvoke(WORKTREE_SELECTED_CHANNEL, { projectRoot }),
-                  )
-                  return typeof data?.path === 'string' && data.path !== '' ? data.path : undefined
-                },
+                // 显示真源（selected-tree-display 模块单例——与 chip 本地投影同源；
+                // bug 05c712a4 根治：创建路由不再读 host 选中记忆）
+                displayedTree: () => selectedTreeDisplay.get(),
                 // chip 双发数据源（WorktreeEntryDto.workspaceId——任务 1.1 DTO 携带）：
                 // list 行按 path 归一命中取 workspaceId；行缺席/形状漂移 = undefined（回退
                 // 官方 workspaces.list path 匹配，wrap ③）。
