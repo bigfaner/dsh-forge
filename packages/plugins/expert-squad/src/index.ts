@@ -1,10 +1,12 @@
 // @dsh-forge/expert-squad —— host 入口（Node，cordis loader 装载面）。
 // 装配缝（本文件只做 wiring，功能面各居其模块——plugin-portability 装配缝归属插件域）：
 //   ① ctx.storage 自有 domain → ExpertSquadState（启停状态持久层，§13 D4）；
-//   ② ctx.connection.fetch 五条精确路由（list/get/update/enable/disable，§6 D4）；
+//   ② ctx.connection.fetch 六条精确路由（list/get/update/enable/disable/run-state，
+//      §6 D4；run-state = 面板运行状态读口，bug 767e7580）；
 //   ③ ExpertsRegistry（三层 root：project=请求 workspace 向上解析 project root，
 //      无 .git 祖先时以 workspace 本身为 project root——临时工作区等非 git 目录同径
-//      可用；user/plugin 层按 scan 模块正门解析）。
+//      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
+//      （ctx.experts 正门，bug 7b1c9ed4）；
 //   ④ tool 面（fix-10）：registerExpertTools（5 管理工具）+ registerDelegateExpertTool
 //      经官方 ctx.tools.register 正门接线（D1 注册面零改动）；preset 绑定工具子集
 //      经官方 scoped tools.restrict（restrictTools 配置——HR 组合 deny delegate_expert）。
@@ -13,13 +15,15 @@ import { join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import { parseExpertFile } from "./store/frontmatter.js";
-import { ExpertsRegistry, ExpertNotFoundError } from "./registry.js";
+import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
 import {
   ExpertRunPanelState,
+  observeSubagentEnd,
   registerDelegateExpertTool,
+  type SubagentEventsFace,
   type SubagentsStartFace,
 } from "./dispatch/dispatch.js";
 import {
@@ -165,6 +169,21 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     console.warn("[expert-squad] ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
   }
 
+  // 面板运行状态（bug 767e7580 接线）：subagent/end 监听唯一落点（纯 UI，不进会话
+  // 流），经 run-state 读口（路由族第六条）对外取数。监听经 observeSubagentEnd 挂在
+  // 宿主事件总线（ctx.on），disposer 经 effect 消费——fiber 卸载即退订（级联）。
+  const panel = new ExpertRunPanelState();
+  if (ctx.on !== undefined) {
+    const eventsFace: SubagentEventsFace = {
+      on: (event, listener) =>
+        ctx.on!(event, listener as (...args: unknown[]) => unknown) as () => void,
+    };
+    const disposeEnd = observeSubagentEnd(eventsFace, panel);
+    if (typeof disposeEnd === "function") ctx.effect(() => () => disposeEnd());
+  } else {
+    console.warn("[expert-squad] ctx.on absent——subagent/end 面板监听未接线（run-state 恒空）");
+  }
+
   const routes: Parameters<typeof registerExpertSquadRoutes>[1] = {
     list: async (workspace, includeDisabled) =>
       (await registryFor(workspace)).list({ includeDisabled }),
@@ -216,12 +235,47 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
       if (fresh === undefined) throw new Error(`expert not found after update: ${input.name}`);
       return fresh;
     },
+    // 面板读口（bug 767e7580）：subagent/end 换代后的当前快照（纯 UI 数据）。
+    runState: () => panel.list(),
   };
   registerExpertSquadRoutes(connection, routes);
+
+  // 服务键 experts provide（bug 7b1c9ed4）：官方 provide 机械（cordis reflect.ts
+  // `provide(name, value)`——经 fiber.effect 注册，服务生命周期归属插件 fiber、卸载
+  // 级联注销；typed 正门 ctx.provide 的 reflect 层同语义入口，core/index.ts 先例同
+  // 径）。registry 取 cwd 工作区一代（dsh-forge 宿主 = 单工作区进程，tool 面同径）；
+  // registerRoot 追加的 extraRoots 下次 refresh 生效。宿主形状缺席（无 reflect 层或
+  // 无 provide 面）→ warn 降级（ctx.experts 正门不可用，路由/tool 面不受影响）。
+  // reflect 层直读（readOptionalService 语义是 reflect.get 取服务，不适用于层本身）。
+  const reflectLayer = (ctx as { reflect?: { provide?(name: string, value: unknown): unknown } })
+    .reflect;
 
   // tool 面接线（fix-10，AGENTS 1.3 装配缝归属插件域）：tools 面缺席 fail-soft
   // （warn + 跳过 tool 注册，路由/服务面不受影响——client 侧 slots 缺席同径）。
   const toolsFace = readOptionalService(ctx, "tools") as ExpertSquadToolsFace | undefined;
+
+  // cwd registry 仅在服务键 provide 或 tool 面需要时构建（懒建：watch manager 惰性
+  // 挂目录的爬升开销不转嫁给纯路由消费方）。首刷失败不阻断装配（registry 逐出重试
+  // 属读路径，f9410209 同因）——降级为未刷新实例（provide 不缺席；get/list 前经
+  // 读路径换代）。
+  let toolRegistry: ExpertsRegistry | undefined;
+  if (reflectLayer?.provide !== undefined || toolsFace !== undefined) {
+    try {
+      toolRegistry = await registryFor(process.cwd());
+    } catch (error) {
+      console.warn(`[expert-squad] cwd registry 首刷失败（provide 降级为未刷新实例）: ${String(error)}`);
+      toolRegistry = new ExpertsRegistry({
+        roots: () => expertRootsFor(process.cwd()),
+        state,
+        workspace: process.cwd(),
+      });
+    }
+  }
+  if (reflectLayer?.provide === undefined) {
+    console.warn("[expert-squad] ctx.reflect/provide absent——experts 服务键未 provide（ctx.experts 正门不可用）");
+  } else {
+    reflectLayer.provide(EXPERTS_SERVICE_KEY, toolRegistry);
+  }
   if (toolsFace === undefined) {
     console.warn("[expert-squad] ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
     return;
@@ -230,20 +284,19 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   // 以进程 cwd 兜底（dsh-forge 宿主 = 单工作区进程，即注册工作区）；D4 tool 侧
   // 「调用 agent scope cwd」取值点需 tools.ts 面改造（execute 携 exec），超出接线
   // 边界——多工作区宿主为残余风险（fix-10 resume 留痕）。
-  const toolRegistry = await registryFor(process.cwd());
-  const panel = new ExpertRunPanelState();
+  const registry = toolRegistry as ExpertsRegistry;
   const subagents = readOptionalService(ctx, "subagents") as SubagentsStartFace | undefined;
   if (subagents === undefined) {
     console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
     registerDelegateExpertTool(toolsFace, {
-      registry: toolRegistry,
+      registry,
       subagents,
       panel,
       provider: "spawn",
     });
   }
-  registerExpertTools(toolsFace, { registry: toolRegistry, userRoot: resolveUserExpertsRoot });
+  registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
 
   // preset 绑定工具子集（fix-10 AC2 裁决：官方 scoped tools.restrict 支持按 preset
   // 限定——restriction 落在 preset scope 层，对其下 agent（会话）过滤继承面生效；

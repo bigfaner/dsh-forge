@@ -9,18 +9,20 @@
 
 import { workspaceParamSchema } from "./state.js";
 import type { ExpertEntry } from "./registry.js";
+import type { ExpertRunPanelEntry } from "./dispatch/dispatch.js";
 import { z } from "zod";
 
 /** API 基前缀（精确路由：一个 endpoint 一条路由）。 */
 export const EXPERT_SQUAD_API_BASE = "/api/expert-squad";
 
-/** endpoint 名（§6：GET list|get + POST update|enable|disable）。 */
+/** endpoint 名（§6：GET list|get|run-state + POST update|enable|disable）。 */
 export const EXPERT_SQUAD_ENDPOINTS = [
   "list",
   "get",
   "update",
   "enable",
   "disable",
+  "run-state",
 ] as const;
 export type ExpertSquadEndpoint = (typeof EXPERT_SQUAD_ENDPOINTS)[number];
 
@@ -84,6 +86,9 @@ export const expertUpdateBodySchema = z.object({
 
 export type ExpertUpdateInput = z.infer<typeof expertUpdateBodySchema>;
 
+/** GET run-state 查询门：无参（面板运行状态为进程级纯 UI 数据，不带 workspace 维度）。 */
+export const runStateQuerySchema = z.object({}).passthrough();
+
 // ---- 依赖面 -----------------------------------------------------------------
 
 /** 路由依赖面（装配层由 registry/state 组合供给；本层只消费该结构）。 */
@@ -96,6 +101,8 @@ export interface ExpertRoutesDeps {
   setEnabled(workspace: string, key: string, enabled: boolean): Promise<ExpertEntry>;
   /** 档案 upsert（update 通道；持久化层由装配侧供给）。 */
   update(input: ExpertUpdateInput): Promise<ExpertEntry>;
+  /** 面板运行状态读口（subagent/end 换代后的当前快照；纯 UI，不进会话流）。 */
+  runState(): ExpertRunPanelEntry[];
 }
 
 /**
@@ -172,6 +179,23 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
       const body = expertEnableBodySchema.parse(payload);
       return deps.setEnabled(body.workspace, body.key, false);
     }),
+    {
+      path: expertSquadRoute("run-state"),
+      methods: ["GET"],
+      requestBody: "buffered",
+      fetch: async (request) => {
+        try {
+          runStateQuerySchema.parse(
+            Object.fromEntries(new URL(request.url).searchParams),
+          );
+          return Response.json(deps.runState());
+        } catch (err) {
+          return new Response(err instanceof Error ? err.message : String(err), {
+            status: 400,
+          });
+        }
+      },
+    },
   ];
 }
 

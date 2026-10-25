@@ -164,6 +164,122 @@ describe("bug 4ed8549f: expert update 通道装配（host 装配缝）", () => {
   });
 });
 
+describe("bug 767e7580: run-state 读口装配 + subagent/end 监听接线", () => {
+  /** 装配插件（捕获 subagent/end 监听与 effect），收集读口路由。 */
+  async function bootWithEvents(): Promise<{
+    routes: FetchRouteLike[];
+    endListeners: Array<(...args: unknown[]) => unknown>;
+  }> {
+    const routes: FetchRouteLike[] = [];
+    const endListeners: Array<(...args: unknown[]) => unknown> = [];
+    await expertSquadPlugin({
+      connection: {
+        fetch: {
+          register: (route: FetchRouteLike): unknown => {
+            routes.push(route);
+            return route;
+          },
+        },
+      },
+      on: (event: string, listener: (...args: unknown[]) => unknown): unknown => {
+        if (event === "subagent/end") endListeners.push(listener);
+        return undefined;
+      },
+      effect: (dispose: () => unknown): unknown => {
+        disposers.push(dispose);
+        return undefined;
+      },
+    } as never);
+    return { routes, endListeners };
+  }
+
+  it("GET run-state 路由注册（GET 形制对齐既有路由族）", async () => {
+    const { routes } = await bootWithEvents();
+    const route = routes.find((r) => r.path === "/api/expert-squad/run-state");
+    expect(route, "run-state 读口路由必须在装配期注册").toBeDefined();
+    expect(route?.methods).toEqual(["GET"]);
+    const res = await route!.fetch(new Request("http://host/api/expert-squad/run-state"));
+    expect(res.status).toBe(200);
+  });
+
+  it("subagent/end 监听在装配期注册；end 载荷 → 面板换代 → 路由读口可见", async () => {
+    const { routes, endListeners } = await bootWithEvents();
+    expect(endListeners, "subagent/end 监听必须在装配期挂接").toHaveLength(1);
+    // end 载荷 → 面板换代 → 路由读口：同链路单元组装取证（面板闭包在 apply 内，
+    // 监听体即 observeSubagentEnd——markEnded 对未知 childId 零操作，读口恒 200）。
+    endListeners[0]!({ id: "stranger", stopReason: "completed" });
+    const route = routes.find((r) => r.path === "/api/expert-squad/run-state")!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("end 载荷 → state 换代 → 路由读口（observeSubagentEnd + run-state dep 全链）", async () => {
+    const { ExpertRunPanelState, observeSubagentEnd } = await import("../src/dispatch/dispatch.js");
+    const { expertSquadRoutes } = await import("../src/routes.js");
+    const panel = new ExpertRunPanelState();
+    panel.markDispatched("child-1", KEY, "msg-1");
+    const listeners: Array<(info: { id: string; stopReason: string }) => void> = [];
+    observeSubagentEnd(
+      { on: (_e, l) => (listeners.push(l as never), () => void listeners.pop()) },
+      panel,
+    );
+    listeners[0]!({ id: "child-1", stopReason: "completed" });
+    const routes = expertSquadRoutes({
+      list: async () => [],
+      get: async () => {
+        throw new Error("unused");
+      },
+      setEnabled: async () => {
+        throw new Error("unused");
+      },
+      update: async () => {
+        throw new Error("unused");
+      },
+      runState: () => panel.list(),
+    });
+    const route = routes.find((r) => r.path === "/api/expert-squad/run-state")!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
+    const body = (await res.json()) as Array<{ childId: string; stopReason: string }>;
+    expect(body).toEqual([{ childId: "child-1", expert: KEY, messageId: "msg-1", stopReason: "completed" }]);
+  });
+});
+
+describe("bug 7b1c9ed4: experts 服务键 provide（ctx.experts 正门）", () => {
+  it("apply 内以官方 provide 机械注册服务键 experts（ExpertsService 契约面）", async () => {
+    makeWorkspace();
+    const provided: Array<{ name: string; value: unknown }> = [];
+    const routes: FetchRouteLike[] = [];
+    await expertSquadPlugin({
+      connection: {
+        fetch: {
+          register: (route: FetchRouteLike): unknown => {
+            routes.push(route);
+            return route;
+          },
+        },
+      },
+      reflect: {
+        provide: (name: string, value: unknown): unknown => {
+          provided.push({ name, value });
+          return () => undefined;
+        },
+      },
+      effect: (dispose: () => unknown): unknown => {
+        disposers.push(dispose);
+        return undefined;
+      },
+    } as never);
+    const hit = provided.find((p) => p.name === "experts");
+    expect(hit, "服务键 experts 必须 provide（ctx.experts 正门）").toBeDefined();
+    const service = hit!.value as Record<string, unknown>;
+    expect(typeof service.get).toBe("function");
+    expect(typeof service.list).toBe("function");
+    expect(typeof service.registerRoot).toBe("function");
+    expect(typeof service.setEnabled).toBe("function");
+  });
+});
+
 describe("bug f9410209: registry 首刷 rejected promise 逐出（下次请求重试而非恒 400）", () => {
   /** flaky state 存储面：blocked 期间 table().get 抛错（registry 刷新 reject），解除后恢复。 */
   function bootWithFlakyStorage(blocked: { value: boolean }): Promise<FetchRouteLike[]> {

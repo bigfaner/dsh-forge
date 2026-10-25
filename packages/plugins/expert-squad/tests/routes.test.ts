@@ -32,6 +32,7 @@ function makeDeps(): ExpertRoutesDeps & {
   get: ReturnType<typeof vi.fn>;
   setEnabled: ReturnType<typeof vi.fn>;
   update: ReturnType<typeof vi.fn>;
+  runState: ReturnType<typeof vi.fn>;
 } {
   const entry = {
     name: "code-reviewer",
@@ -50,7 +51,10 @@ function makeDeps(): ExpertRoutesDeps & {
   });
   const setEnabled = vi.fn(async () => ({ ...entry }));
   const update = vi.fn(async (input) => ({ ...entry, ...input, enabled: true }));
-  return { list, get, setEnabled, update } as never;
+  const runState = vi.fn(() => [
+    { childId: "child-1", expert: "code-reviewer", messageId: "msg-1", stopReason: "completed" },
+  ]);
+  return { list, get, setEnabled, update, runState } as never;
 }
 
 function text(res: Response): Promise<string> {
@@ -58,10 +62,10 @@ function text(res: Response): Promise<string> {
 }
 
 describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）", () => {
-  it("注册五条精确路由：path/methods/requestBody 镜像官方 ConnectionFetchRoute 面", () => {
+  it("注册六条精确路由：path/methods/requestBody 镜像官方 ConnectionFetchRoute 面", () => {
     const { connection, routes } = makeConnection();
     registerExpertSquadRoutes(connection, makeDeps());
-    expect(connection.fetch.register).toHaveBeenCalledTimes(5);
+    expect(connection.fetch.register).toHaveBeenCalledTimes(6);
     expect(routes.map((r) => r.path)).toEqual(
       EXPERT_SQUAD_ENDPOINTS.map((e) => expertSquadRoute(e)),
     );
@@ -71,13 +75,29 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
       "/api/expert-squad/update",
       "/api/expert-squad/enable",
       "/api/expert-squad/disable",
+      "/api/expert-squad/run-state",
     ]);
     for (const route of routes) {
-      const isGet = route.path.endsWith("/list") || route.path.endsWith("/get");
+      const isGet =
+        route.path.endsWith("/list") ||
+        route.path.endsWith("/get") ||
+        route.path.endsWith("/run-state");
       expect(route.methods).toEqual(isGet ? ["GET"] : ["POST"]);
       expect(route.requestBody).toBe("buffered");
       expect(typeof route.fetch).toBe("function");
     }
+  });
+
+  it("GET run-state：面板运行状态读口（deps.runState JSON 应答）", async () => {
+    const deps = makeDeps();
+    const routes = expertSquadRoutes(deps);
+    const route = routes.find((r) => r.path === expertSquadRoute("run-state"))!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
+    expect(res.status).toBe(200);
+    expect(deps.runState).toHaveBeenCalledTimes(1);
+    const body = (await res.json()) as Array<{ childId?: string; stopReason?: string }>;
+    expect(body[0]?.childId).toBe("child-1");
+    expect(body[0]?.stopReason).toBe("completed");
   });
 
   it("GET list：查询门解析 workspace/includeDisabled，JSON 应答", async () => {

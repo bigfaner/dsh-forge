@@ -1,6 +1,7 @@
 # @dsh-forge/expert-squad 组合层：单行插入本包——host 半 apply 内 provide 服务键
-# `experts` + tool/fetch 注册（后续任务填充）；浏览器半应 dsh.client.platform=web
-# 由 modules 行扫描进花名册（./client = 自注册 CJS bundle）。
+# `experts`（ctx.experts 正门）+ tool/fetch 路由族（六条：list/get/update/enable/
+# disable/run-state）注册；浏览器半应 dsh.client.platform=web 由 modules 行扫描进
+# 花名册（./client = 自注册 CJS bundle）。
 - insert:
     - id: expert-squad
       name: '@dsh-forge/expert-squad'
