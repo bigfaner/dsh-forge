@@ -50,7 +50,7 @@ function renderGrid() {
   $('#count').textContent = `${experts.length} 位专家 · 显示 ${items.length}`
 }
 function setMode(m) { state.mode = m; renderGrid() }
-function setFilter(f, btn) { state.filter = f; document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b === btn)); renderGrid() }
+function setFilter(f) { state.filter = f; renderGrid() }
 $('#q').addEventListener('input', e => { state.q = e.target.value.trim(); renderGrid() })
 function toggleX(key) { const x = experts.find(e => e.id === key); x.enabled = !x.enabled; renderGrid(); toast(`${x.name} 已${x.enabled ? '启用' : '禁用'}`); if (state.selected === key && $('#dlgHost').style.display === 'flex') openDialog(key, state.editing ? 'edit' : 'view') }
 
