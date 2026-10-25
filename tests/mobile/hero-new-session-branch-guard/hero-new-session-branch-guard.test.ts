@@ -70,7 +70,6 @@ function makeHarness(over: { listOk?: boolean; createOk?: boolean; failMessage?:
       selectModel: async () => ({ selected: true }),
     },
     currentBranch: 'main',
-    currentWorktreePath: 'Z:\\proj',
     projectRoot: 'Z:\\proj',
     workspaceId: 'ws-1',
     onOpenSession: (id) => opened.push(id),
