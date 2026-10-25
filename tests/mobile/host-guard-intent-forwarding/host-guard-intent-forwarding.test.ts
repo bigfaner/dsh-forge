@@ -47,7 +47,6 @@ function makeIntentHarness(createOk: boolean) {
     },
     projectRoot: 'Z:\\proj',
     currentBranch: 'main',
-    currentWorktreePath: 'Z:\\proj',
     workspaceId: 'ws-1',
     onOpenSession: (id) => opened.push(id),
   })

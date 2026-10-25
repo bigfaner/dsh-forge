@@ -2,7 +2,7 @@
 // 期望文本 = notification-samples.md 样例块逐字节抄录（含全角括号/逗号、U+2014 破折号、
 // U+00B7 间隔点、ASCII 引号）；入参 = 样例值。附带全场景不变式：骨架校验（AC2）、
 // 「下一步动作:」封闭两值末行（AC2）、机制词黑名单零出现（AC5）、通道分流（#28——
-// ①-⑫ notice / ⑬-⑰ followup）、落盘降级面（详情行随 incidentPath 缺席而省略）。
+// ①-⑨⑪⑫ notice / ⑩⑬-⑰ followup）、落盘降级面（详情行随 incidentPath 缺席而省略）。
 import { describe, expect, it } from 'vitest'
 import { findMechanismWords, validateNarrative } from './skeleton.js'
 import { HEADLINE_MAX_CHARS, SCENARIOS, renderHeadline, renderNarrative } from './templates.js'
@@ -305,7 +305,7 @@ describe('S4 · 场景表与通道分流（decisions #28）', () => {
     expect(Object.keys(SCENARIOS)).toHaveLength(18)
   })
 
-  it('常规进行事件 ①-⑫ 走 notice，终局事件 ⑬-⑰ 走 followup', () => {
+  it('常规进行事件 ①-⑨⑪⑫ 走 notice，终局事件 ⑩⑬-⑰ 走 followup', () => {
     const noticeIds: readonly ScenarioId[] = [
       'startup-from-scratch',
       'startup-resume-stopped',
@@ -317,18 +317,18 @@ describe('S4 · 场景表与通道分流（decisions #28）', () => {
       'blocked-auto-fixed',
       'blocked-split',
       'blocked-wait-external',
-      'blocked-ask-user',
       'spawn-failed-retry',
       'worker-aborted-retry',
     ]
     const followupIds: readonly ScenarioId[] = [
+      'blocked-ask-user',
       'spawn-failed-halted',
       'blocked-pool',
       'finished-timeout',
       'finished-all',
       'stopped-by-command',
     ]
-    expect(Object.keys(SCENARIOS)).toEqual([...noticeIds, ...followupIds])
+    expect(Object.keys(SCENARIOS).sort()).toEqual([...noticeIds, ...followupIds].sort())
     for (const id of noticeIds) expect(SCENARIOS[id].channel).toBe('notice')
     for (const id of followupIds) expect(SCENARIOS[id].channel).toBe('followup')
   })

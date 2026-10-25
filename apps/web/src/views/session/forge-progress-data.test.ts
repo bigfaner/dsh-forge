@@ -19,6 +19,29 @@ describe('isForgeProgressNodeData（形状守卫——append 契约逐位同，�
     expect(isForgeProgressNodeData({ ...DATA, seq: 7 })).toBe(true) // 冗余位不拒（宽容他形 Extra）
     expect(isForgeProgressNodeData({ sourceSlug: 'feat-x', verb: 'settle', status: 'blocked', at: 1 })).toBe(true) // 可选位缺席
   })
+  it('verb 集合随扩展同步（loop-event-delivery 全场景——新场景事件不吞）', () => {
+    for (const verb of ['startup', 'retry', 'halt', 'timeout', 'finish-all', 'suspend', 'loop'] as const) {
+      expect(isForgeProgressNodeData({ ...DATA, verb }), verb).toBe(true)
+    }
+    // ⑰ loop/stopped 中断事件（verb=stop 既有值 + scenario 新码）
+    expect(
+      isForgeProgressNodeData({ ...DATA, verb: 'stop', status: 'interrupted', scenario: 'loop/stopped', taskTitle: '标题' }),
+    ).toBe(true)
+  })
+  it('扩展可选字段（taskTitle/workerSessionId/scenario/note）形状守卫', () => {
+    expect(
+      isForgeProgressNodeData({
+        ...DATA,
+        taskTitle: '登录修复',
+        workerSessionId: 'sess-1',
+        scenario: 'blocked/with-fix',
+        note: '原因摘要',
+      }),
+    ).toBe(true)
+    expect(isForgeProgressNodeData({ ...DATA, taskTitle: 42 })).toBe(false)
+    expect(isForgeProgressNodeData({ ...DATA, workerSessionId: 7 })).toBe(false)
+    expect(isForgeProgressNodeData({ ...DATA, note: [] })).toBe(false)
+  })
   it('漂移/他形 false', () => {
     expect(isForgeProgressNodeData({ ...DATA, status: 'paused' })).toBe(false)
     expect(isForgeProgressNodeData({ ...DATA, verb: 'reboot' })).toBe(false)

@@ -34,7 +34,7 @@ import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation 
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
-import { createForgeDispatchLoopProjection } from './projection/index.js'
+import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
@@ -143,9 +143,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       jobsFace = undefined
     }
     // agents 注册表可选消费（S2——叙述通道/裁决问询的活根解析，同 reflect.get 防御读取
-    // 三先例）：适配为 NarrationChannel（notice=agent.inject 零模型回合 / followup=agent
-    // .followup 新回合，decisions #17/#28）。服务缺席/异常 = 通道降级为 no-op（R4——叙述
-    // 静默缺席，循环正确性只依赖宿主事件）。
+    // 三先例）：适配为 NarrationChannel（loop-event-delivery 接口收窄——send 单出口，
+    // 统一 agent.send(msg, nextStep, wakeup)；wakeup 路由见 narrator/SCENARIOS 场景表）。
+    // 服务缺席/异常 = 通道降级为 no-op（R4——叙述静默缺席，循环正确性只依赖宿主事件）。
     let agentsRegistry: AgentLookupFace | undefined
     try {
       const viaReflect = ctx.reflect?.get('agents') as AgentLookupFace | undefined
@@ -185,7 +185,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       askFace = undefined
     }
     const narrationChannel: NarrationChannel =
-      agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { notice: async () => {}, followup: async () => {} }
+      agentsRegistry !== undefined
+        ? // bug 8d1a18bd：叙述径激活缝与指令径同源（enterAgent——sessionController.resolveAgent
+          // 活根前置）；激活恒先行，registry 把手仅兜底（陈旧把手不静默丢消息）。
+          adaptAgentNarrationChannel(agentsRegistry, enterAgent)
+        : { send: async () => {} }
     // 1.17 循环进度 append 面（'forge/progress' 会话事件——同 agents 注册表鸭子消费，
     // 链 = agent.session.append；注册表缺席 = 面不注入，驱动器零发射 fail-soft）。
     const progressAppend = adaptSessionProgressAppend(agentsRegistry)
@@ -301,9 +305,10 @@ const forgePlugin: ForgePlugin = Object.assign(
         ? {
             escalation: createUserQuestionsEscalation({
               ask: askFace,
-              // 裁决回执经叙述通道注入主会话（agent.inject 零模型回合——闭环断环修复：
-              // 裁决绕主会话、回执不绕；通道缺席形态 notice 已为 no-op，fail-soft 同源）
-              notifyReceipt: (sessionId, text, headline) => narrationChannel.notice(sessionId, text, headline),
+              // 裁决回执经叙述通道唤醒径送达主会话（send(nextStep, true) 即时唤醒——闭环
+              // 断环修复的唤醒面升级：回执含答案文本；通道缺席形态 send 已为 no-op，
+              // fail-soft 同源）
+              notifyReceipt: (sessionId, text, options) => narrationChannel.send(sessionId, text, options),
               ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
             }),
           }
@@ -386,7 +391,14 @@ const forgePlugin: ForgePlugin = Object.assign(
         | { register?: (definition: unknown) => () => void }
         | undefined
       if (projections !== undefined && typeof projections.register === 'function') {
-        disposeProjection = projections.register(createForgeDispatchLoopProjection())
+        const disposeLoop = projections.register(createForgeDispatchLoopProjection())
+        // 1.6 进度事件流投影键（loop-event-delivery——fold 'forge/progress' 事件，
+        // registry 逐事件驱动 fold，面板实时刷新；同注册表、同 fail-soft 语义）。
+        const disposeEvents = projections.register(createForgeDispatchEventsProjection())
+        disposeProjection = () => {
+          disposeLoop()
+          disposeEvents()
+        }
       }
     } catch {
       disposeProjection = undefined
@@ -656,6 +668,8 @@ export {
 export type { ForgeLoopMessageSource, ForgeLoopNarrationMeta } from './forge-loop-source.js'
 export type {
   NarrationChannel,
+  NarrationForm,
+  NarrationSendOptions,
   NarrationRoute,
   Narrator,
   NarratorDeps,

@@ -81,10 +81,10 @@ export interface ProxySessionFace {
   resolveAgent?(sessionId: string): Promise<unknown>
 }
 
-/** 官方 commands 消费切片（ctx.commands） */
+/** 官方 commands 消费切片（ctx.commands——execute 官方四参形：dsh-commands lib/index.js 核销，bug 4d02329a） */
 export interface ProxyCommandsFace {
   list?(request: unknown): Promise<unknown>
-  execute?(request: unknown): Promise<unknown>
+  execute?(agent: unknown, line: string, submittedAttachments: readonly unknown[], signal: AbortSignal): Promise<unknown>
 }
 
 /** 官方 userQuestions 消费切片（ask 提交缝——continued 题回灌） */
@@ -444,9 +444,27 @@ export function proxyChannelTableOf(deps: ProxyChannelDeps): Record<string, Chan
       if (agent === undefined) return list({})
       return list(agent)
     },
-    [PROXY_CHANNELS.commandsExecute]: (payload) => {
+    // bug 4d02329a：官方 dsh-commands 实签名 execute(agent, line, submittedAttachments, signal)
+    // （lib/index.js：首参 agent + line 独立传参，parseCommand(line) 失败 = admission miss
+    // 静默 undefined）——payload 首参直传 = line 形参恒 undefined，全部指令零执行零回执。
+    // 与 commandsList 同语义：sessionId 在场 → resolveAgent 解析活 agent；解析失败/载荷畸形
+    // = admission miss（undefined，不外抛）。signal 形参官方会读 .aborted——proxy HTTP 一次性
+    // 无取消面，给独立 controller 的未触发 signal 兑现形态。
+    [PROXY_CHANNELS.commandsExecute]: async (payload) => {
       const commands = requireService(deps.commands, 'commands')
-      return requireMethod(commands.execute, 'commands.execute').bind(commands)(asRecord(payload))
+      const execute = requireMethod(commands.execute, 'commands.execute').bind(commands)
+      const record = asRecord(payload)
+      const sessionId =
+        typeof record?.['sessionId'] === 'string' ? (record['sessionId'] as string) : undefined
+      const line = typeof record?.['line'] === 'string' ? (record['line'] as string) : undefined
+      const submittedAttachments = Array.isArray(record?.['submittedAttachments'])
+        ? (record['submittedAttachments'] as readonly unknown[])
+        : []
+      if (sessionId === undefined || line === undefined || deps.session?.resolveAgent === undefined) return undefined
+      const resolved = await requireMethod(deps.session.resolveAgent, 'session.resolveAgent').call(deps.session, sessionId)
+      const agent = (resolved as { agent?: unknown } | null)?.agent
+      if (agent === undefined) return undefined
+      return execute(agent, line, submittedAttachments, new AbortController().signal)
     },
     [PROXY_CHANNELS.userQuestionsAnswer]: async (payload) => {
       const record = asRecord(payload)

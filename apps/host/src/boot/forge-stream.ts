@@ -106,6 +106,47 @@ export const FORGE_STREAM_EVENT_NAMES = [
   'forge/binding-mismatch', // binding-derivation §2.6：branch 漂移推送
 ] as const
 
+// ---------------------------------------------------------------------------
+// 投影变更帧镜像（loop-event-delivery 1.10——mobile 实时刷新腿）
+// ---------------------------------------------------------------------------
+
+/** 投影变更镜像帧类型（载荷 {sessionId, key, seq}——值恒走 session-projections RPC 全量键读取，帧只当失效信号） */
+export const FORGE_STREAM_PROJECTION_EVENT_TYPE = 'session/projection'
+
+/** sessionProjections 注册表 onChanged 窄面（官方 registry 鸭子消费——缺席 = 零镜像） */
+export interface ProjectionChangeFeed {
+  onChanged?: (listener: (session: unknown, key: string, value: unknown, seq: number) => void) => unknown
+}
+
+/**
+ * 投影变更帧镜像装配（child.ts 消费——subscribeOfficialEvents 同径：同一 forge-stream
+ * 订阅-扇出，零新物理通道）。官方投影变更走 control 流帧、未镜像进 forge-stream；
+ * 此把 sessionProjections.onChanged 帧源接进镜像：每 client-visible 键变更一次 →
+ * `{type:'session/projection', payload:{sessionId, key, seq}}` 帧。注册表缺席/
+ * onChanged 面漂移/订阅抛错 = 零镜像 fail-soft 留痕；退订 = 官方 disposer（teardown 纪律）。
+ */
+export function subscribeProjectionMirror(
+  projections: ProjectionChangeFeed | undefined,
+  emit: (event: ForgeStreamEvent) => void,
+  diag: (line: string) => void,
+): () => void {
+  if (projections === undefined || typeof projections.onChanged !== 'function') {
+    diag(`[pair-diag] ${FORGE_STREAM_PATH} projection mirror：sessionProjections 注册表缺席——零订阅 fail-soft`)
+    return () => {}
+  }
+  try {
+    const off = projections.onChanged((session, key, _value, seq) => {
+      const sessionId = (session as { id?: unknown } | null | undefined)?.id
+      if (typeof sessionId !== 'string' || sessionId === '') return // 非会话帧 fail-soft 丢弃（assistant-stream 镜像同纪律）
+      emit({ type: FORGE_STREAM_PROJECTION_EVENT_TYPE, payload: { sessionId, key, seq }, at: Date.now() })
+    })
+    return typeof off === 'function' ? (off as () => void) : () => {}
+  } catch (cause) {
+    diag(`[pair-diag] ${FORGE_STREAM_PATH} projection mirror 订阅失败：${String(cause)}`)
+    return () => {}
+  }
+}
+
 /**
  * 官方事件订阅装配（child.ts 消费——ctx.on 逐名尝试，缺席/拒绝 = 零订阅 fail-soft 留痕）。
  * 返回聚合退订（注册成功的名字逐一退订——teardown 纪律）。

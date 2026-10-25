@@ -95,8 +95,10 @@ export interface UserQuestionsEscalationDeps {
   readonly ask: EscalationAskFace
   /** 主会话 id → 活根 Agent（可选——在场则随问询携带 agent；缺席/未命中 = 无 agent 问询） */
   readonly resolveAgent?: (ownerSessionId: string) => unknown
-  /** 裁决回执面（可选——用户裁决/取消/投递失败回执送达主会话；缺席/故障 = warn 降级不拖垮终态） */
-  readonly notifyReceipt?: (sessionId: string, text: string, headline?: string) => Promise<void>
+  /** 裁决回执面（可选——用户裁决/取消/投递失败回执送达主会话；缺席/故障 = warn 降级不拖垮终态）。
+   *  loop-event-delivery 回执唤醒径：options.wakeup=true——回执改走 send(nextStep, true)
+   *  即时唤醒主 agent（含答案文本，闭环断环修复的唤醒面升级；headline 为折叠摘要） */
+  readonly notifyReceipt?: (sessionId: string, text: string, options?: { readonly wakeup?: boolean; readonly headline?: string }) => Promise<void>
 }
 
 /** 问询材料（renderEscalationAsk 产物——纯文本面，单测锚） */
@@ -299,7 +301,9 @@ export function createUserQuestionsEscalation(deps: UserQuestionsEscalationDeps)
       if (deps.notifyReceipt === undefined) return
       const receipt = renderEscalationReceipt(escalation, outcome)
       try {
-        await deps.notifyReceipt(escalation.ownerSessionId, receipt.text, receipt.headline)
+        // 回执唤醒径（loop-event-delivery）：send(nextStep, true) 即时唤醒主 agent——
+        // 含答案文本（裁决 label 全文在 receipt.text），人已答必有回响且有唤醒。
+        await deps.notifyReceipt(escalation.ownerSessionId, receipt.text, { wakeup: true, headline: receipt.headline })
       } catch (cause) {
         console.warn(
           `forge loop adjudication receipt failed (${escalation.kind}): ${cause instanceof Error ? cause.message : String(cause)}`,

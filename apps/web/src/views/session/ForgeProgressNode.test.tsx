@@ -23,6 +23,22 @@ describe('forgeProgressSummary（纯模型面）', () => {
     expect(forgeProgressSummary(DATA)).toBe('领取 · feat-x/2.5 · 进行中')
     expect(forgeProgressSummary({ verb: 'settle', status: 'completed', sourceSlug: 'feat-x' })).toBe('结算 · feat-x · 已完成')
   })
+  it('taskTitle 优先显示（任务键前）', () => {
+    expect(forgeProgressSummary({ ...DATA, taskTitle: '登录修复' })).toBe('领取 · 登录修复 · 进行中')
+    expect(forgeProgressSummary({ ...DATA, taskTitle: '登录修复', note: '等待外部任务先完成' })).toBe(
+      '领取 · 登录修复 · 进行中 · 等待外部任务先完成',
+    )
+    expect(forgeProgressSummary({ ...DATA, note: '原因'.repeat(20) })).toBe(`领取 · feat-x/2.5 · 进行中 · ${'原因'.repeat(12)}…`)
+  })
+  it('verb 标签随扩展同步（新场景事件用户视角动词，不吞）', () => {
+    expect(forgeProgressSummary({ verb: 'startup', status: 'running', sourceSlug: 'feat-x' })).toBe('启动 · feat-x · 进行中')
+    expect(forgeProgressSummary({ verb: 'retry', status: 'running', sourceSlug: 'feat-x' })).toBe('自动重试 · feat-x · 进行中')
+    expect(forgeProgressSummary({ verb: 'halt', status: 'blocked', sourceSlug: 'feat-x' })).toBe('受阻停止 · feat-x · 阻塞')
+    expect(forgeProgressSummary({ verb: 'timeout', status: 'blocked', sourceSlug: 'feat-x' })).toBe('超时结束 · feat-x · 阻塞')
+    expect(forgeProgressSummary({ verb: 'finish-all', status: 'completed', sourceSlug: 'feat-x' })).toBe('全部完成 · feat-x · 已完成')
+    expect(forgeProgressSummary({ verb: 'loop', status: 'blocked', sourceSlug: 'feat-x' })).toBe('循环 · feat-x · 阻塞')
+    expect(forgeProgressSummary({ verb: 'stop', status: 'interrupted', sourceSlug: 'feat-x' })).toBe('停止 · feat-x · 已中断')
+  })
 })
 
 describe('ForgeProgressNode（DisclosureRow 同族折叠行）', () => {
@@ -41,6 +57,22 @@ describe('ForgeProgressNode（DisclosureRow 同族折叠行）', () => {
     expect(html).toContain('2026-10-11 12:34:56') // LocalDateTime 完整口径
     expect(html).not.toContain('待执行') // 2026-10-12「去掉状态计数」——进度行不再呈现
     expect(html).not.toContain('已完成 3')
+  })
+  it('展开态呈现扩展字段（taskTitle 优先 + 任务键括注；场景/备注行；扩展位缺席零残留）', () => {
+    const html = renderToStaticMarkup(
+      <ForgeProgressDetail
+        data={{ ...DATA, taskTitle: '登录修复', scenario: 'blocked/with-fix', note: '等待外部任务先完成', status: 'blocked' }}
+      />,
+    )
+    expect(html).toContain('登录修复')
+    expect(html).toContain('feat-x/2.5') // taskTitle 优先、任务键括注保留
+    expect(html).toContain('场景')
+    expect(html).toContain('blocked/with-fix')
+    expect(html).toContain('备注')
+    expect(html).toContain('等待外部任务先完成')
+    const bare = renderToStaticMarkup(<ForgeProgressDetail data={DATA} />)
+    expect(bare).not.toContain('场景')
+    expect(bare).not.toContain('备注')
   })
   it('他形数据 / kind 漂移 = null（官方流零残留）', () => {
     expect(renderToStaticMarkup(<ForgeProgressNode node={nodeOf({ sourceSlug: 'x' })} />)).toBe('')

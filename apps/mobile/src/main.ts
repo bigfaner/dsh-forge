@@ -52,6 +52,7 @@ import {
   type KeyValueStore,
 } from './views/models.ts'
 import { createTasksView, deriveTaskRuns } from './views/tasks.ts'
+import { DISPATCH_EVENTS_PROJECTION_KEY, createProgressStream } from './views/progress.ts'
 import { catalogProjection, createWorkerSessionView } from './views/worker.ts'
 import { createReader } from './views/reader.ts'
 
@@ -162,6 +163,14 @@ export function mount(root: HTMLElement): void {
           // 旧 {sessionId} 对象取形恒 undefined = scheduleRefresh 永不触发（chat 静止）
           const sessionId = frameSessionIdOf(event.payload)
           if (sessionId !== undefined) scheduleRefresh(sessionId)
+          // loop-event-delivery 1.10：投影变更帧镜像（host subscribeProjectionMirror 同缝）——
+          // {sessionId, key, seq} 只当失效信号，值恒走 session-projections RPC 重拉。
+          if (event.type === 'session/projection') {
+            const payload = event.payload as { sessionId?: unknown; key?: unknown }
+            const sid = typeof payload?.sessionId === 'string' ? payload.sessionId : ''
+            const key = typeof payload?.key === 'string' ? payload.key : ''
+            if (sid !== '') emitFrames({ type: `projection:${key}`, payload: { sessionId: sid }, at: event.at })
+          }
           // 打字机腿：瞬态帧原样穿透给引擎（assistant-stream 密帧 → settler 增量渲染）
           emitFrames(event.type === 'agent/assistant-stream' ? event : undefined)
           if (event.type === 'forge/binding-mismatch') {
@@ -338,11 +347,32 @@ export function mount(root: HTMLElement): void {
     container.appendChild(handle.root)
   }
 
-  let tasksHandle: { root: HTMLElement } | null = null
+  let tasksHandle: { root: HTMLElement; dispose?: () => void } | null = null
   function openTasks(): void {
     if (ctx.rpc === null) return
+    tasksHandle?.dispose?.()
     tasksHandle?.root.remove()
     const sessionId = currentSessionId()
+    // loop-event-delivery 1.10：窄幅进度流（单列轨 + 状态点 + title）——数据源 =
+    // session-projections RPC 全量键读取（forge-dispatch-events），实时刷新 = 投影
+    // 变更帧镜像（projection:<key> 失效信号 → RPC 重拉）。
+    const sid = sessionId
+    const progress = createProgressStream({
+      rpc: ctx.rpc,
+      sessionId,
+      subscribe: (onRefresh) => {
+        const listener = (event?: ForgeStreamEvent): void => {
+          if (event === undefined || event.type !== `projection:${DISPATCH_EVENTS_PROJECTION_KEY}`) return
+          const payload = event.payload as { sessionId?: unknown }
+          if (payload?.sessionId !== sid) return
+          onRefresh()
+        }
+        ctx.frameListeners.add(listener)
+        return () => {
+          ctx.frameListeners.delete(listener)
+        }
+      },
+    })
     const handle = createTasksView({
       rpc: ctx.rpc,
       sessionId,
@@ -353,11 +383,16 @@ export function mount(root: HTMLElement): void {
       },
       isStale: () => false,
       onClose: () => {
+        progress.dispose()
         handle.root.remove()
         tasksHandle = null
       },
     })
-    tasksHandle = handle
+    // 进度流段挂进任务浮层头部（tasks-hd 之后——窄幅形态随浮层同开同关）
+    const header = handle.root.querySelector('.tasks-hd')
+    if (header !== null) header.insertAdjacentElement('afterend', progress.root)
+    else handle.root.insertBefore(progress.root, handle.root.firstChild)
+    tasksHandle = { root: handle.root, dispose: () => progress.dispose() }
     container.appendChild(handle.root)
   }
 
@@ -663,6 +698,7 @@ export function mount(root: HTMLElement): void {
       return
     }
     closeSettings()
+    tasksHandle?.dispose?.()
     tasksHandle?.root.remove()
     tasksHandle = null
     chatFabSync?.()

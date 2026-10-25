@@ -39,6 +39,8 @@ import type { ModuleLoaderFacade } from '../shell/dsh-globals.js'
 // 解析逻辑本文件 remote-face 段结构同型镜像 views/remote/remote-status.ts）
 import type { PskTrioFace } from '../views/remote/ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
+// 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
+import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -46,6 +48,13 @@ import {
   forgeProgressDefinition,
   type ForgeUiConversationService,
 } from './progress-node.js'
+// loop-event-delivery 1.9 消息面事件折叠条目组定义对（纯模块零 import——同上）
+import {
+  FORGE_EVENT_NODE_KIND,
+  FORGE_EVENT_NODE_SLOT,
+  forgeEventGroupDefinition,
+  forgeEventStreamDefinition,
+} from './forge-event-node.js'
 // 4.6 打开新会话编排器（open-session.ts = 纯模块零 import——bundle 自含纪律不破）
 import {
   createOpenSessionOrchestrator,
@@ -753,6 +762,7 @@ export interface ForgeViewsGlobal {
     ForgeRecallView: unknown
     ForgeDispatchToolRow: unknown
     ForgeProgressNode: unknown
+    ForgeEventEntries: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
     ForgeHeroWorkspacePicker: unknown
@@ -1059,6 +1069,7 @@ function registerConversationViews(
     ),
   )
   registerProgressNode(ctx, views, diagnostics)
+  registerEventEntriesNode(ctx, views, diagnostics)
 }
 
 /**
@@ -1133,6 +1144,41 @@ function registerProgressNode(ctx: ForgeClientCtx, views: PublishedViews, diagno
       // 声明（行内 t 座——组件自足标签暂零词条，注册面留语言归属锚）
       { name: FORGE_PROGRESS_NODE_SLOT, key: FORGE_PROGRESS_NODE_KIND, locale: FORGE_LOCALE_NS },
       views.ForgeProgressNode,
+    ),
+  )
+}
+
+/**
+ * loop-event-delivery 1.9 消息面事件折叠条目组（source.kind 铸造的 send 落库消息——
+ * 人类插话为分组锚点的折叠条目组）：三段注册（progress-node 两段同型 + 状态机一段）
+ * ——① `uiConversation.events.register` stream 状态机（常量 id 单 Context 折叠全会话
+ * user/message 流：人类插话开新组；revision 随消息递增驱动组节点重放）；② 同注册表
+ * 组节点定义（每条 forge 事件消息一个 Context——id 键控增量渲染；仅组末成员发射组块，
+ * anchorSeq = 组末 seq）；③ `conversation.chat.node` keyed 'forge-event-group' body
+ * （prototype 左栏形态组块——组件经发布面递达）。uiConversation 缺席/定义注册被拒 =
+ * 全跳 fail-soft 不炸（capability absence = 无节点）。事件径消息在官方 input-message
+ * 定义下本为不可见 context 行——本面纯增量渲染，人类气泡/既有流零回归。
+ */
+function registerEventEntriesNode(ctx: ForgeClientCtx, views: PublishedViews, diagnostics: { registered?: string[] }): void {
+  let uiConversation: ForgeUiConversationService | undefined
+  try {
+    uiConversation = ctx.get('uiConversation') as ForgeUiConversationService | undefined
+  } catch {
+    uiConversation = undefined
+  }
+  const registerEvents = uiConversation?.events?.register
+  if (uiConversation === undefined || typeof registerEvents !== 'function') return
+  try {
+    registerEvents.call(uiConversation.events, forgeEventStreamDefinition)
+    registerEvents.call(uiConversation.events, forgeEventGroupDefinition)
+  } catch {
+    return // Definition 注册被拒（重复 kind 等）——渲染段不落半座
+  }
+  registerSlotEntry(ctx, FORGE_EVENT_NODE_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // keyed node body：key = 节点 kind（buildViewNode.kind 字面量同源）；locale NS 声明
+      { name: FORGE_EVENT_NODE_SLOT, key: FORGE_EVENT_NODE_KIND, locale: FORGE_LOCALE_NS },
+      views.ForgeEventEntries,
     ),
   )
 }
@@ -2516,8 +2562,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
         // 知识模式右栏联动面 + 概览项目上下文锚定写回[4.1 经桥] + 任务详情弹窗宿主
-        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 派发任务悬浮面板
-        // [m3.1 D6——行点击开弹窗经桥，⟞ 开 worker 子会话经 openWorkerSession]；
+        // [m3.1 D21/D23——drawerTaskId 受控挂载，挂载独立于 dock] + 悬浮进度流面板
+        // [loop-event-delivery 1.8——行点击开 worker 子会话经 onOpenWorkerSession，数据 =
+        // 账本行 projectionValues['forge-dispatch-events'] 窄读 + subscribe 实时刷新]；
         // selectPanel/rightbar/bridge/onOpenSession/openSession/openDocResource 官方窄面经 inject 递达）。
         // 卸载期顺带撤销桥发布、locale 词典、dock tab 类型注册与 mermaid DOM 增强器观察
         // + 清 __DSH_FORGE_CLIENT__
@@ -2573,9 +2620,13 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 会话名解析器（task-ui-info-density-blitz S1 通道——账本快照 displayTitle
                 // 窄读；账本未命中 = undefined，调用方回退显示 sessionId fail-soft）
                 sessionTitleOf: makeSessionTitleResolver(sessions),
+                // 悬浮进度流面板数据源（loop-event-delivery 1.8——ctx.sessions.list 快照源
+                // 直递：面板经账本行 projectionValues['forge-dispatch-events'] 窄读 + store
+                // subscribe 实时刷新，零新增读取 API）
+                sessions: sessions.list as SnapshotSource<LedgerSessionsSnapshot>,
                 // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
                 // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
-                // 单源）——DispatchPanel 库侧解析 miss 时经 ShellHost 递达消费。
+                // 单源）——旧载荷（无 workerSessionId）消费面。
                 resolveWorkerSession: (parentSessionId: string, taskKey?: string): Promise<string | undefined> =>
                   resolveWorkerChildSession(sessions, parentSessionId, taskKey),
               }),

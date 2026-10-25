@@ -563,21 +563,27 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
     }
   }
 
-  it('sessionProjections 面在场：forge-dispatch-loop 投影注册（plain object 定义——key/stateVersion/init/apply/wire 五件齐备）+ 注销器并入插件 disposer', () => {
+  it('sessionProjections 面在场：两投影键注册（forge-dispatch-loop + forge-dispatch-events——plain object 定义齐备）+ 注销器并入插件 disposer', () => {
     const rt = new TempRuntime()
     const { registered, face } = projectionsFace(rt)
     const dispose = forgePlugin(rt.withReflect({ sessionProjections: face }))
-    expect(registered).toHaveLength(1)
+    expect(registered).toHaveLength(2)
     const definition = registered[0] as { key?: string; stateVersion?: number; init?: unknown; apply?: unknown; wire?: unknown }
     expect(definition.key).toBe('forge-dispatch-loop')
     expect(definition.stateVersion).toBe(1)
     expect(typeof definition.init).toBe('function')
     expect(typeof definition.apply).toBe('function')
     expect(definition.wire).toBeDefined()
+    const events = registered[1] as { key?: string; stateVersion?: number; init?: unknown; apply?: unknown; wire?: unknown }
+    expect(events.key).toBe('forge-dispatch-events')
+    expect(events.stateVersion).toBe(1)
+    expect(typeof events.init).toBe('function')
+    expect(typeof events.apply).toBe('function')
+    expect(events.wire).toBeDefined()
     // 六 tool 照常注册（投影面 additive——tool 面零波及）
     expect(rt.registeredTools).toHaveLength(14)
     dispose()
-    expect(rt.disposedProjection).toBe(1)
+    expect(rt.disposedProjection).toBe(2)
   })
 
   it('sessionProjections 面缺席（reflect 无该键）：键不注册、装配照常（fail-soft——capability absence = key absence）', () => {

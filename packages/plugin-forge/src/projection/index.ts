@@ -14,3 +14,16 @@ export type {
   ForgeProjectionEvent,
   ForgeProjectionSchema,
 } from './dispatch-loop.js'
+// loop-event-delivery 1.6——进度事件流投影键出口（unit 工厂 + 键/版本/窗口常量 + 类型面）。
+export {
+  createForgeDispatchEventsProjection,
+  FORGE_DISPATCH_EVENTS_PROJECTION_KEY,
+  FORGE_DISPATCH_EVENTS_STATE_VERSION,
+  FORGE_DISPATCH_EVENTS_WINDOW_SIZE,
+} from './dispatch-events.js'
+export type {
+  ForgeDispatchEventEntry,
+  ForgeDispatchEventsProjection,
+  ForgeDispatchEventsProjectionDefinition,
+  ForgeDispatchEventsUnitState,
+} from './dispatch-events.js'
