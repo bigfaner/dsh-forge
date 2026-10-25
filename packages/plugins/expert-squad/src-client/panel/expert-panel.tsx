@@ -8,7 +8,7 @@
 // [召唤] = 经官方缝打开/切换 HR 预设官方会话（summon-session——零面板内对话面；
 // 失败降级 = 头部引导条，不炸面板）。建档联动依赖既有 fs/observed + 5s 轮询通道
 //（1.4/1.22）——零新增旁路。
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   filterExperts,
   footerText,
@@ -181,19 +181,27 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   // 失败降级 = 引导条（不弹选择器、不空绑定、不炸面板）；成功 = 官方 chat-view 呈现，
   // 面板零对话面；建档联动靠既有 fs/observed + 5s 轮询（list-source 既有通道）。
   const summon = props.summon
+  // 卸载防护：召唤 promise 链在组件卸载后不得 setState（React 告警 + 泄漏面）。
+  const summonAlive = useRef(false)
+  useEffect(() => {
+    summonAlive.current = true
+    return () => {
+      summonAlive.current = false
+    }
+  }, [])
   const onSummon = useCallback(() => {
     if (summon === undefined || summonBusy) return
     setSummonNotice(undefined)
     setSummonBusy(true)
     summon(workspaceRow ?? {})
       .then((outcome) => {
-        if (!outcome.ok) setSummonNotice(outcome.message)
+        if (summonAlive.current && !outcome.ok) setSummonNotice(outcome.message)
       })
       .catch((error: unknown) => {
-        setSummonNotice(`召唤失败：${error instanceof Error ? error.message : String(error)}`)
+        if (summonAlive.current) setSummonNotice(`召唤失败：${error instanceof Error ? error.message : String(error)}`)
       })
       .finally(() => {
-        setSummonBusy(false)
+        if (summonAlive.current) setSummonBusy(false)
       })
   }, [summon, summonBusy, workspaceRow])
 
