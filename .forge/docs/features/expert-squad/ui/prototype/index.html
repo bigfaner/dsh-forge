@@ -21,12 +21,10 @@
   <div class="dswf-panel-header">
     <h1>专家团</h1>
     <input class="dswf-search" id="q" placeholder="搜索名称/技能标签">
-    <select class="dswf-status-select" id="f" onchange="setFilter(this.value)">
-      <option value="all">全部</option>
-      <option value="on">启用</option>
-      <option value="off">禁用</option>
-    </select>
-    <button class="btn btn-primary summon-btn" onclick="openHr()">召唤</button>
+    <button class="dswf-menu-btn on" data-f onclick="setFilter('all',this)">全部</button>
+    <button class="dswf-menu-btn" data-f onclick="setFilter('on',this)">启用</button>
+    <button class="dswf-menu-btn" data-f onclick="setFilter('off',this)">禁用</button>
+    <button class="btn btn-primary" onclick="openHr()">召唤</button>
     <span class="dswf-menu-btn plain" style="color:var(--text-caption);cursor:default">修改/委派 → 会话对话</span>  </div>
   <div class="dswf-card-grid" id="grid"></div>
   <div class="dswf-panel-footer" id="count"></div>
@@ -38,22 +36,22 @@
   <div class="dialog" style="pointer-events:auto" id="dlg">
     <header>
       <b id="dlgName"></b>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost" id="dlgToggle" onclick="toggleX(state.selected)">禁用</button>
       <button class="btn btn-ghost" id="dlgEdit" onclick="switchMode()">编辑</button>
       <button class="btn btn-info" id="dlgSave" onclick="saveDialog()" style="display:none">保存</button>
       <button class="iconbtn" onclick="closeDialog()">✕</button>
     </header>
     <div class="dlg-body" id="dlgBody"></div>
-    <div class="dlg-foot">
-      <span style="flex:1"></span>
-      <button class="btn btn-ghost" id="dlgToggle" onclick="toggleX(state.selected)">禁用</button>
-    </div>
   </div>
 </div>
 
+<!-- 原型 mock，不产品化；产品语义 = 预设会话切换（复用 chat-view 切 HR 预设） -->
 <div class="modal" id="hrHost" style="background:none;pointer-events:none">
   <div class="hrchat" style="pointer-events:auto" id="hr">
     <header>
       <b>HR · 专家招聘与管理</b>
+      <span style="font-size:12px;color:var(--text-caption)">原型 mock，不产品化；产品语义 = 预设会话切换</span>
       <button class="iconbtn" onclick="closeHr()">✕</button>
     </header>
     <div class="hr-msgs" id="hrMsgs"></div>

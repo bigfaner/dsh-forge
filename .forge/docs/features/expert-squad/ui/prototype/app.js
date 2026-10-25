@@ -50,7 +50,7 @@ function renderGrid() {
   $('#count').textContent = `${experts.length} 位专家 · 显示 ${items.length}`
 }
 function setMode(m) { state.mode = m; renderGrid() }
-function setFilter(f) { state.filter = f; renderGrid() }
+function setFilter(f, btn) { state.filter = f; document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b === btn)); renderGrid() }
 $('#q').addEventListener('input', e => { state.q = e.target.value.trim(); renderGrid() })
 function toggleX(key) { const x = experts.find(e => e.id === key); x.enabled = !x.enabled; renderGrid(); toast(`${x.name} 已${x.enabled ? '启用' : '禁用'}`); if (state.selected === key && $('#dlgHost').style.display === 'flex') openDialog(key, state.editing ? 'edit' : 'view') }
 
@@ -60,6 +60,7 @@ function openDialog(key, mode) {
   $('#dlgEdit').style.display = state.editing ? 'none' : 'inline-block'
   $('#dlgSave').style.display = state.editing ? 'inline-block' : 'none'
   $('#dlgToggle').textContent = x.enabled ? '禁用' : '启用'
+  $('#dlgToggle').style.display = state.editing ? 'none' : 'inline-block'
   if (!state.editing) {
     $('#dlgBody').innerHTML = `
       <div class="meta">${x.title} · ${x.enabled ? '启用中' : '已禁用'}</div>
@@ -70,8 +71,8 @@ function openDialog(key, mode) {
   } else {
     $('#dlgBody').innerHTML = `
       <div class="field" id="fTitle"><label>岗位</label><input type="text" value="${x.title}"><div class="err">岗位不能为空</div></div>
-      <div class="field" id="fDescription"><label>简介（模型选人依据：何时委派我 · 默认 1 行，最多 3 行 ≈ 120 字）</label><textarea rows="1" class="autosize" data-min="24" data-max="70" maxlength="120">${x.description}</textarea></div>
-      <div class="field" id="fBody"><label>人设（Markdown 自由输入 · 派发时作为 persona 注入子会话：做什么/不做什么 · 怎么做的原则 · 默认 6 行，最多 50 行）</label><textarea rows="6" class="autosize" data-min="132" data-max="1100">${x.desc}</textarea><div class="err">含裸 {{ ——不被允许</div></div>
+      <div class="field" id="fDescription"><label>简介（模型选人依据：何时委派我 · 默认 2 行，最多 6 行 ≈ 120 字）</label><textarea rows="2" class="autosize" data-min="46" data-max="134" maxlength="120">${x.description}</textarea></div>
+      <div class="field" id="fBody"><label>人设（Markdown 自由输入 · 派发时作为 persona 注入子会话：做什么/不做什么 · 怎么做的原则 · 默认 12 行，最多 100 行）</label><textarea rows="12" class="autosize" data-min="266" data-max="2202">${x.desc}</textarea><div class="err">含裸 {{ ——不被允许</div></div>
       <div class="field" id="fTools"><label>工具白名单（子会话强制生效 · 多选）</label></div>
       <div class="field" id="fSkills"><label>技能标签（多选，可新增）</label></div>`
     mountMsel('#fTools', x.tools, ['read', 'edit', 'bash', 'grep', 'web', 'skill'], false)
