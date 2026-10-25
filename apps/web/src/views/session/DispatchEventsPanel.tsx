@@ -194,7 +194,8 @@ export interface DispatchAggregatedRow {
 /**
  * 行聚合（1.16 用户裁决——任务键时间线口径）：每任务最新态一行（后写覆盖 = 最新态，
  * 组内时序排序），无任务键的循环级事件各占一行；池级 pending 快照（pool/pending）不进
- * 时间线——只承载统计条「待执行」计数。同任务键首事件时戳随行携带（启动时间面）。
+ * 时间线——只承载统计条「待执行」计数。排序 = 执行中行置顶（组内最新优先——打开面板
+ * 首屏即见在跑任务），其余行保持时序。同任务键首事件时戳随行携带（启动时间面）。
  */
 export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]): readonly DispatchAggregatedRow[] {
   const latest = new Map<string, { entry: DispatchEventEntry; startAt: number }>()
@@ -208,7 +209,11 @@ export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]
     const held = latest.get(entry.taskKey)
     latest.set(entry.taskKey, { entry, startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at) })
   }
-  return [...latest.values(), ...singles].sort((a, b) => a.entry.at - b.entry.at)
+  return [...latest.values(), ...singles].sort((a, b) => {
+    const rankA = a.entry.status === 'running' ? 0 : 1
+    const rankB = b.entry.status === 'running' ? 0 : 1
+    return rankA !== rankB ? rankA - rankB : a.entry.at - b.entry.at
+  })
 }
 
 /** 行聚合（条目视图——detail 渲染面走 aggregateDispatchRowItems 携启动时间） */
