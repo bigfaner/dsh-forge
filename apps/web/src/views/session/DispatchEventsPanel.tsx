@@ -502,6 +502,48 @@ function DispatchEventRowView({
   )
 }
 
+/** 跟随键（纯函数——当前执行中任务身份；无执行中行 = undefined 不触发滚动跟随） */
+export function dispatchFollowKeyOf(rows: readonly DispatchAggregatedRow[]): string | undefined {
+  const running = rows.find((row) => row.entry.status === 'running')
+  return running === undefined ? undefined : (running.entry.taskKey ?? running.entry.verb)
+}
+
+/**
+ * 任务轨滚动列表：执行中行置顶 + 跟随效应——执行中任务变化时回滚到顶（首屏即见在跑
+ * 任务；仅跟随键变化触发，不劫持用户手动滚动）。SSR 零 effect。
+ */
+function DispatchEventList({
+  rows,
+  followKey,
+  now,
+  resolvedWorker,
+  onOpenWorker,
+}: {
+  rows: readonly DispatchAggregatedRow[]
+  followKey: string | undefined
+  now: number
+  resolvedWorker?: ReadonlyMap<string, string>
+  onOpenWorker?: (childSessionId: string, taskKey?: string) => void
+}): ReactNode {
+  const listRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 })
+  }, [followKey])
+  return (
+    <div className="dswf-dep-list" data-dswf-dep-list="" ref={listRef}>
+      {rows.map((row, i) => (
+        <DispatchEventRowView
+          key={`${row.entry.at}-${row.entry.taskKey ?? row.entry.verb}-${i}`}
+          row={row}
+          now={now}
+          resolvedWorker={resolvedWorker}
+          onOpenWorker={onOpenWorker}
+        />
+      ))}
+    </div>
+  )
+}
+
 /** 悬浮进度流纯渲染（展开面板 ↔ 半透明悬浮球双形态） */
 export function DispatchEventsPanelBody({
   entries,
@@ -560,17 +602,7 @@ export function DispatchEventsPanelBody({
           </Button>
         </Tooltip>
       </div>
-      <div className="dswf-dep-list" data-dswf-dep-list="">
-        {rows.map((row, i) => (
-          <DispatchEventRowView
-            key={`${row.entry.at}-${row.entry.taskKey ?? row.entry.verb}-${i}`}
-            row={row}
-            now={now}
-            resolvedWorker={resolvedWorker}
-            onOpenWorker={onOpenWorker}
-          />
-        ))}
-      </div>
+      <DispatchEventList rows={rows} followKey={dispatchFollowKeyOf(rows)} resolvedWorker={resolvedWorker} now={now} onOpenWorker={onOpenWorker} />
       <div className="dswf-dep-stat" data-dswf-dep-stat="">
         <span>完成 <b>{stats.completed}</b></span>
         <span>执行中 <b>{stats.running}</b></span>

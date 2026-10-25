@@ -22,6 +22,7 @@ import {
   dispatchEventsAnchor,
   dispatchEventsDragPosition,
   dispatchEventsOf,
+  dispatchFollowKeyOf,
   dispatchPanelBadgeAnchor,
   dispatchPanelExpandGeometry,
   dispatchPanelBadgeGeometry,
@@ -207,6 +208,27 @@ describe('dispatchEventNoteOf（备注行「状态 · 摘要」——分组/章�
   })
   it('仅状态可辨（无场景无注记）= undefined 不渲染备注行', () => {
     expect(dispatchEventNoteOf(entry())).toBeUndefined()
+  })
+})
+
+describe('dispatchFollowKeyOf（滚动跟随键——当前执行中任务身份）', () => {
+  it('执行中行 = taskKey（循环级行兜底 verb）；无执行中行 = undefined', () => {
+    expect(dispatchFollowKeyOf(aggregateDispatchRowItems([entry({ taskKey: 'a', at: 100 })]))).toBe('a')
+    expect(
+      dispatchFollowKeyOf(
+        aggregateDispatchRowItems([
+          entry({ taskKey: 'b', verb: 'settle', status: 'completed', scenario: 'task/complete', at: 100 }),
+        ]),
+      ),
+    ).toBeUndefined()
+    expect(
+      dispatchFollowKeyOf(
+        aggregateDispatchRowItems([
+          entry({ taskKey: undefined, verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all', at: 100 }),
+          entry({ taskKey: 'c', at: 200 }),
+        ]),
+      ),
+    ).toBe('c')
   })
 })
 
