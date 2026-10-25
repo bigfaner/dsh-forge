@@ -235,6 +235,65 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
     expect(ctl.getSnapshot().mode).toBe("view");
     expect(ctl.getSnapshot().expert.title).toBe("资深评审");
   });
+
+  it("bug e234f626: A 在途保存 → close → open B → A 迟到回包不污染 B（代际失效）", async () => {
+    let release!: (expert: ExpertView) => void;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: () =>
+        new Promise<ExpertView>((resolve) => {
+          release = resolve;
+        }),
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    const saving = ctl.save();
+    ctl.close();
+    const expertB = entry({ name: "b-reviewer", title: "B 评审" });
+    ctl.open(expertB);
+    release(entry({ title: "迟到的 A" }));
+    await saving;
+    expect(ctl.getSnapshot().open).toBe(true);
+    expect(ctl.getSnapshot().expert.name).toBe("b-reviewer");
+    expect(ctl.getSnapshot().toast).toBeUndefined();
+  });
+
+  it("bug e234f626: 关闭态迟到回包不破坏 IDLE 快照单例契约", async () => {
+    let release!: (expert: ExpertView) => void;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: () =>
+        new Promise<ExpertView>((resolve) => {
+          release = resolve;
+        }),
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    const saving = ctl.save();
+    ctl.close();
+    release(entry());
+    await saving;
+    expect(ctl.getSnapshot().open).toBe(false);
+    expect(ctl.getSnapshot()).toBe(ctl.getSnapshot());
+  });
+
+  it("bug e234f626: A 在途启停 → close → A 迟到回包不落态（IDLE 单例保持）", async () => {
+    let release!: (expert: ExpertView) => void;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      setEnabled: () =>
+        new Promise<ExpertView>((resolve) => {
+          release = resolve;
+        }),
+    });
+    ctl.open(entry());
+    const toggling = ctl.toggleEnabled();
+    ctl.close();
+    release(entry({ enabled: false }));
+    await toggling;
+    expect(ctl.getSnapshot().open).toBe(false);
+    expect(ctl.getSnapshot()).toBe(ctl.getSnapshot());
+  });
 });
 
 // ---- SSR 静态渲染（F2 组件树逐位） -----------------------------------------

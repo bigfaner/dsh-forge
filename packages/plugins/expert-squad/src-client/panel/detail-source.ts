@@ -70,6 +70,10 @@ const IDLE_SNAPSHOT: DetailState = {
 export class ExpertDetailController {
   private state: DetailState | undefined;
   private readonly listeners = new Set<() => void>();
+  // 代际计数（list-source.ts 同法先例）：open/close 各换代一次，save/toggleEnabled
+  // 在途回包按发出时代号比对——过期回包不落态（bug e234f626：A 回包覆盖 B state、
+  // 关闭态回包破坏 IDLE 单例契约——busy 只防同代并发，不作废在途）。
+  private generation = 0;
 
   constructor(private readonly mutations: DetailMutations) {}
 
@@ -88,6 +92,7 @@ export class ExpertDetailController {
 
   /** 打开 Dialog（查看态；再次 open 重置回查看态——卡片点击语义）。 */
   open(expert: ExpertView): void {
+    this.generation += 1; // 换代：作废上一代在途回写
     this.state = {
       open: true,
       mode: "view",
@@ -102,6 +107,7 @@ export class ExpertDetailController {
 
   close(): void {
     if (this.state === undefined) return;
+    this.generation += 1; // 换代：关闭态在途回包不落态（IDLE 单例契约保持）
     this.state = undefined;
     this.emit();
   }
@@ -172,8 +178,10 @@ export class ExpertDetailController {
     }
     this.state = { ...current, busy: true, errors: IDLE };
     this.emit();
+    const generation = this.generation;
     try {
       const updated = await this.mutations.update(current.expert.name, current.draft);
+      if (generation !== this.generation) return; // 迟到回包：换代后不落态
       this.state = {
         ...this.getSnapshot(),
         expert: updated,
@@ -182,6 +190,7 @@ export class ExpertDetailController {
         toast: "档案已保存（热刷新生效）",
       };
     } catch (err) {
+      if (generation !== this.generation) return; // 迟到回包：换代后不落态
       this.state = {
         ...this.getSnapshot(),
         busy: false,
@@ -198,8 +207,10 @@ export class ExpertDetailController {
     const next = !current.expert.enabled;
     this.state = { ...current, busy: true };
     this.emit();
+    const generation = this.generation;
     try {
       const updated = await this.mutations.setEnabled(current.expert.name, next);
+      if (generation !== this.generation) return; // 迟到回包：换代后不落态
       this.state = {
         ...this.getSnapshot(),
         expert: updated,
@@ -207,6 +218,7 @@ export class ExpertDetailController {
         toast: `${updated.name} 已${updated.enabled ? "启用" : "禁用"}`,
       };
     } catch (err) {
+      if (generation !== this.generation) return; // 迟到回包：换代后不落态
       this.state = {
         ...this.getSnapshot(),
         busy: false,
