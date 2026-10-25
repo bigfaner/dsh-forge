@@ -211,7 +211,9 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       await page.locator('button[aria-label="打开侧边栏"], button[title="打开侧边栏"]').first().click()
       await expect(page.locator(`[data-dswf-project="${project.id}"]`).first()).toBeVisible({ timeout: 15_000 })
     })
-    await page.locator(`[data-dswf-project="${project.id}"] [data-dswf-project-action="new-session"]`).first().click()
+    const projectRow = page.locator(`[data-dswf-project="${project.id}"]`).first()
+    await projectRow.hover() // fix-42 行语言：行尾动作钮 hover 显现
+    await projectRow.locator('[data-dswf-project-action="new-session"]').first().click()
     const sessionRow = page.locator(`[data-dswf-project="${project.id}"] [data-dswf-session]`).first()
     await sessionRow.waitFor({ state: 'visible', timeout: 30_000 })
     const sessionId = await sessionRow.getAttribute('data-dswf-session')
