@@ -8,7 +8,8 @@
 // `forgeWorktreeIdentity`（集成层注入缝——boot/child.ts 装配方 provide；函数值扩展点
 // 不可经 YAML config 承载，cordis 服务面唯一跨插件缝；激活早于 provide 不受阻——
 // 惰性读取调用期先取先得）→ 默认实现 = 独立 worktree 模式（resolveProject 恒 null）。
-// 零 dsh-forge 依赖：不 import @dsh-forge/*，只碰 git CLI 与注入缝（注入服务经结构化
+// 依赖边界：不 import @dsh-forge/* 实现包（域类型单源 @dsh-forge/contracts 仅 type-only）；
+// 只碰 git CLI 与注入缝（注入服务经结构化
 // 最小面消费——reflect.get 防御读取，缺席/异常/非函数面 = 降级默认，plugin-forge 同配方）。
 import { checkGitPresence } from './git-presence.js'
 import {
@@ -74,6 +75,22 @@ export {
   type GitWorktreeExtensionPointOverrides,
   type ProjectResolution,
 } from './extension-points.js'
+// forge:worktree/* 域本体（worktree-domain-migration 1.1——自 host ipc/worktree-rpc 核迁）
+export {
+  createWorktreeRpcService,
+  defaultEnsureDirAcl,
+  invalidateResolveCaches,
+  WORKTREE_RPC_METHODS,
+  type AclRunner,
+  type GitWorktreeServiceFace,
+  type LiveSessionFace,
+  type SessionControllerFace,
+  type SessionPersistenceFace,
+  type WorkspaceEntityFace,
+  type WorkspaceRegistryFace,
+  type WorktreeRpcService,
+} from './rpc-service.js'
+export { interceptSessionSends } from './session-send-wrap.js'
 
 /** cordis ctx 的结构化最小面（真 Context 结构兼容；注入服务经 reflect 防御读取） */
 interface PluginCtxFace {
