@@ -21,17 +21,20 @@ const T = {
 export const PANEL_CSS = `
 .dswf-expert-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; color: var(--dsw-alias-label-primary); }
 .dswf-panel-header { display: flex; align-items: center; flex-wrap: wrap; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
-.dswf-panel-title { margin: 0 auto 0 0; font: var(--dsw-font-l-20); font-weight: 500; }
+.dswf-panel-title { margin: 0; font: var(--dsw-font-l-20); font-weight: 500; }
 .dswf-search { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; width: 170px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-search::placeholder { color: var(--dsw-alias-label-tertiary); }
 .dswf-search:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-.dswf-menu-btn { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); cursor: var(--dsh-cursor-pointer, pointer); }
-.dswf-menu-btn.on { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-border-l4); }
+/* 状态筛选 select（native select 基座 + dswf 令牌包装——官方 primitives 无同语义 Select） */
+.dswf-status-select { font: var(--dsw-font-xs-13); padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
+.dswf-status-select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .dswf-btn { font: var(--dsw-font-xs-13); font-weight: 500; padding: 0 ${T.pad20}; height: ${T.lh20}; border: none; border-radius: ${T.r8}; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-btn-primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); }
 .dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
 .dswf-btn-ghost { background: transparent; color: var(--dsw-alias-label-secondary); border: 0.5px solid var(--dsw-alias-border-l2); }
 .dswf-btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); }
+/* 召唤钮独占右侧（用户裁决 2026-10-25：与状态筛选空间分离） */
+.dswf-summon-btn { margin-left: auto; }
 .dswf-card-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: ${T.pad12}; padding: ${T.pad12}; align-content: start; overflow: auto; min-height: 0; }
 .dswf-xcard { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; cursor: var(--dsh-cursor-pointer, pointer); transition: box-shadow 0.2s var(--ds-ease-in-out); }
 .dswf-xcard:hover { box-shadow: var(--dsw-elevation-soft); }

@@ -4,7 +4,8 @@
 // 打开动线：launchHost 隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）
 // RPC 注册 → 左栏 panellist 行「专家团」→ main keyed 'expert-squad' 面板。
 // data 锚（panel/expert-panel.tsx 事实表）：面板 [data-dswf-expert-panel]、卡 .dswf-xcard
-// [data-expert-key]、过滤钮 button.dswf-menu-btn[data-status]、页脚 .dswf-panel-footer、
+// [data-expert-key]、状态筛选 select.dswf-status-select[data-status]（头部重排 2026-10-25：
+// 搜索+筛选左置、召唤独右）、页脚 .dswf-panel-footer、
 // 错误条 .dswf-errorbar[role=alert]、空态 .dswf-empty；panellist 行 = 官方 aria 锚
 // button[aria-label="专家团"]（KNOWLEDGE_ENTRY 同径）。
 // 故障/空态注入：dsh-forge:// 自定义 scheme 的页内 fetch 对 page.route 不生效（页面恒收
@@ -28,8 +29,7 @@ const PANEL_ROOT = '[data-dswf-expert-panel]'
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
 const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
-const statusBtn = (value: 'all' | 'enabled' | 'disabled'): string =>
-  `button.dswf-menu-btn[data-status="${value}"]`
+const statusSelect = 'select.dswf-status-select[aria-label="状态筛选"]'
 const FOOTER = '.dswf-panel-footer'
 const ERRORBAR = '.dswf-errorbar[role="alert"]'
 const EMPTY = '.dswf-empty'
@@ -180,12 +180,20 @@ test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 头部结构（F1）：标题 + 搜索 + 三态过滤
+    // 头部结构（F1，2026-10-25 重排）：标题 + 搜索 + 状态筛选 select 左置；召唤独右
     await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
     await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
-    await expect(page.locator(statusBtn('all')), '过滤钮·全部').toBeVisible()
-    await expect(page.locator(statusBtn('enabled')), '过滤钮·启用').toBeVisible()
-    await expect(page.locator(statusBtn('disabled')), '过滤钮·禁用').toBeVisible()
+    const headerOrder = await page.locator('.dswf-panel-header > *').evaluateAll((nodes) =>
+      nodes.map((node) => node.className),
+    )
+    expect(headerOrder.join(' '), '头部次序：标题 → 搜索 → select → 召唤独右').toBe(
+      'dswf-panel-title dswf-search dswf-status-select dswf-btn dswf-btn-primary dswf-summon-btn',
+    )
+    const select = page.locator(statusSelect)
+    await expect(select, '状态筛选 select 在场').toBeVisible()
+    await expect(select, '默认态·全部').toHaveAttribute('data-status', 'all')
+    const optionLabels = await select.locator('option').allInnerTexts()
+    expect(optionLabels, '三态选项语义不变').toEqual(['全部', '启用', '禁用'])
     // 召唤钮（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话，面板内零对话面）
     // 断言归 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证
     // 数据态：夹具卡呈现 + 页脚计数形态
@@ -375,16 +383,16 @@ test('@feature expert-squad step-4：禁用专家 → 降透明形态；启用/�
     await expect(disabledCard.locator('.dot.off'), '状态灯 off').toBeVisible()
     await expect(disabledCard.locator('.xc-title'), '岗位附「· 已禁用」').toContainText('· 已禁用')
     // 启用过滤：禁用卡移除
-    await page.locator(statusBtn('enabled')).click()
+    await page.locator(statusSelect).selectOption('enabled')
     await expect(disabledCard, '启用过滤剔除禁用卡').toHaveCount(0, { timeout: 10_000 })
     await expect(page.locator(cardOf('test-reviewer')), '启用卡保留').toBeVisible()
-    await expect(page.locator(statusBtn('enabled')), '选中钮 .on 态').toHaveClass(/on/)
+    await expect(page.locator(statusSelect), '选中值·enabled').toHaveAttribute('data-status', 'enabled')
     // 禁用过滤：恰禁用卡
-    await page.locator(statusBtn('disabled')).click()
+    await page.locator(statusSelect).selectOption('disabled')
     await expect(disabledCard, '禁用过滤呈现禁用卡').toBeVisible({ timeout: 10_000 })
     await expect(page.locator(cardOf('test-reviewer')), '启用卡剔除').toHaveCount(0)
     // 切回全部：禁用卡降透明在场（档案不消失）
-    await page.locator(statusBtn('all')).click()
+    await page.locator(statusSelect).selectOption('all')
     await expect(disabledCard, '全量视图禁用卡在场').toBeVisible({ timeout: 10_000 })
   } finally {
     await closeSession(session)
@@ -401,14 +409,14 @@ test('@feature expert-squad step-5 success：搜索×状态 AND 叠加；清除�
     const total = await page.locator(CARD_ANY).count()
     // 叠加：关键词（恰命中 test-reviewer）× 启用 → 恰一
     await page.locator(SEARCH).fill('tsc')
-    await page.locator(statusBtn('enabled')).click()
+    await page.locator(statusSelect).selectOption('enabled')
     await expect(page.locator(cardOf('test-reviewer')), 'AND 叠加命中卡').toBeVisible({ timeout: 10_000 })
     expect(await page.locator(CARD_ANY).count(), '叠加期恰一卡').toBe(1)
     // 清除：恢复全量与「全部」选中态
     await page.locator(SEARCH).fill('')
-    await page.locator(statusBtn('all')).click()
+    await page.locator(statusSelect).selectOption('all')
     await expect(page.locator(CARD_ANY), '清除恢复全量（无残留过滤态）').toHaveCount(total, { timeout: 10_000 })
-    await expect(page.locator(statusBtn('all')), '「全部」选中态').toHaveClass(/on/)
+    await expect(page.locator(statusSelect), '「全部」选中态').toHaveAttribute('data-status', 'all')
   } finally {
     await closeSession(session)
   }
@@ -428,12 +436,12 @@ test('@feature expert-squad 冒烟：激活 → 网格字段页脚 → 搜索 �
     await page.locator(SEARCH).fill('mining')
     await expect(page.locator(cardOf('data-miner'))).toBeVisible({ timeout: 10_000 })
     await expect(page.locator(cardOf('test-reviewer'))).toHaveCount(0)
-    // 步骤4：状态过滤（搜索命中者仍启用 → AND 叠加保留）
-    await page.locator(statusBtn('enabled')).click()
+    // 步骤4：状态筛选（搜索命中者仍启用 → AND 叠加保留）
+    await page.locator(statusSelect).selectOption('enabled')
     await expect(page.locator(cardOf('data-miner')), 'AND 叠加（搜索×启用）保留').toBeVisible({ timeout: 10_000 })
     // 步骤5：清除恢复
     await page.locator(SEARCH).fill('')
-    await page.locator(statusBtn('all')).click()
+    await page.locator(statusSelect).selectOption('all')
     await expect(page.locator(cardOf('test-reviewer')), '恢复全量').toBeVisible({ timeout: 10_000 })
     // 不变量：页脚显示数 = 网格行数；renderer 零未捕获异常
     const shown = (await page.locator(FOOTER).innerText()).match(/显示 (\d+)/)?.[1]

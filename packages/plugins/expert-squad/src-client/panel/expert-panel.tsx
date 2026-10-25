@@ -1,6 +1,7 @@
 // panel/expert-panel —— 专家卡片网格主视图（ui-design F1 已批原型的产品实现）：
 // 四态（骨架 loading / 空（零专家建档引导 & 无匹配）/ 错误 ErrorBar 重试 / 数据）、
-// 头部（标题 + 搜索即时过滤 + 状态过滤三态钮 + 召唤入口）、卡片字段集（状态灯/名称/
+// 头部（「专家团」标识 + 左置搜索即时过滤与状态筛选 select + 右置召唤入口——用户裁决
+// 2026-10-25：状态筛选与召唤钮空间分离，筛选改 select 三态）、卡片字段集（状态灯/名称/
 // 英文标识 chip/岗位/人设三行截断/技能与白名单 chips/更新时间页脚）、面板页脚计数。
 // ExpertPanelApp = 装配壳：官方 main keyed 槽占用者（root 标准props useWorkspaces 递达
 // ——workspace 参数来源 D4）+ ExpertListController 数据源订阅；/workspace 未就绪期 =
@@ -382,21 +383,23 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           value={query}
           onChange={(event) => props.onQueryChange(event.target.value)}
         />
-        {STATUS_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className={`dswf-menu-btn${status === option.value ? " on" : ""}`}
-            data-status={option.value}
-            onClick={() => props.onStatusChange(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
+        <select
+          className="dswf-status-select"
+          aria-label="状态筛选"
+          data-status={status}
+          value={status}
+          onChange={(event) => props.onStatusChange(event.target.value as StatusFilter)}
+        >
+          {STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         {props.onSummon === undefined ? null : (
           <button
             type="button"
-            className="dswf-btn dswf-btn-primary"
+            className="dswf-btn dswf-btn-primary dswf-summon-btn"
             aria-label="召唤 HR 预设会话"
             disabled={props.summonBusy === true}
             onClick={props.onSummon}

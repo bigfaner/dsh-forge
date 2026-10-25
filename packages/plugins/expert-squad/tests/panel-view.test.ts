@@ -102,13 +102,30 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
 });
 
 describe("ExpertPanel 头部交互面", () => {
-  it("搜索框回填 query；状态过滤钮三枚、激活态标 on", () => {
+  it("搜索框回填 query；状态筛选 select 三态选项、选中值随 status", () => {
     const html = renderPanel({ query: "rev", status: "enabled" });
     expect(html).toContain('value="rev"');
-    expect(html).toContain('data-status="all"');
+    expect(html).toContain("<select");
+    expect(html).toContain('aria-label="状态筛选"');
     expect(html).toContain('data-status="enabled"');
-    expect(html).toContain('data-status="disabled"');
-    expect(html.match(/dswf-menu-btn on/g)?.length).toBe(1);
+    expect(html).toContain('>全部</option>');
+    expect(html).toContain('>启用</option>');
+    expect(html).toContain('>禁用</option>');
+    expect(html.match(/ selected/g)?.length).toBe(1);
+    expect(html).toContain('value="enabled" selected');
+  });
+
+  it("头部布局：搜索与状态筛选左置（紧随标题）、召唤钮独右（margin-left auto 类）", () => {
+    const html = renderPanel({ onSummon: () => undefined });
+    const titleAt = html.indexOf("dswf-panel-title");
+    const searchAt = html.indexOf("dswf-search");
+    const selectAt = html.indexOf("dswf-status-select");
+    const summonAt = html.indexOf("dswf-summon-btn");
+    expect(titleAt).toBeGreaterThan(-1);
+    expect(searchAt).toBeGreaterThan(titleAt);
+    expect(selectAt).toBeGreaterThan(searchAt);
+    expect(summonAt).toBeGreaterThan(selectAt);
+    expect(html).toContain("dswf-summon-btn");
   });
 
   it("onSummon 在场 = 召唤钮呈现（HR 预设官方会话入口，在途禁用）；缺席不呈现", () => {
