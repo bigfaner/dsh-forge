@@ -30,16 +30,25 @@ const FORGE_DISPATCH_PROVIDER = 'forge-dispatch'
  *  升级上游 = 此处同步（精确 pin 0.2.0-rc.2，升级即契约面变更） */
 const SUBAGENT_CATALOG_VERSION = 0
 
+/** 子会话目录事实的合法 mode（官方 KnownCatalogMode：one-shot label 可选 / continuable label 必填） */
+type SubagentCatalogMode = 'one-shot' | 'continuable'
+
 /**
- * 向父会话持久日志追加子代理目录事实（官方同式——establishCatalogChild one-shot 分支的
- * 缝内等价：{version, childId, childCreatedAt, mode: 'one-shot', label?}）。官方 ctx.subagents
+ * 向父会话持久日志追加子代理目录事实（官方同式——establishCatalogChild 的缝内等价：
+ * {version, childId, childCreatedAt, mode, label?}）。官方 ctx.subagents
  * 运行时在子代理发布后承担此追加；forge 派发绕过 ctx.subagents 直驱共享驱动器，故由本缝
  * 承担——追加后父会话 subagentCatalog 投影即含本 worker（chat-view 子智能体 chip 可见）。
+ * mode 不在此写死：取自本缝构造并传给驱动器的 descriptor（子代理实际类型的单一事实源），
+ * 两处永远同值。官方不变式就地核销：continuable 无 label = 拒绝（该形状会拒还原）。
  * 单写者合规：追加发生在父会话自身工具调用上下文、写自身日志（与官方运行时同位）。
  * 追加失败 = 官方同语义处置：dispose 该 run、错误上抛（调用方收到 catalog 错误，
  * 即使 dispose 也失败——dispose 错误就地吞掉不遮蔽主因）。
  */
-function appendCatalogChild(parent: unknown, run: { readonly id: string; readonly localAgent?: unknown }, label: string | undefined): void {
+export function appendCatalogChild(
+  parent: unknown,
+  run: { readonly id: string; readonly localAgent?: unknown },
+  descriptor: { readonly mode: SubagentCatalogMode; readonly label?: string },
+): void {
   const session = (parent as { session?: unknown } | undefined)?.session
   if (typeof session !== 'object' || session === null) {
     throw new Error('[spawn-catalog] 父会话不可读——无法追加 subagent/catalog 目录事实')
@@ -49,12 +58,15 @@ function appendCatalogChild(parent: unknown, run: { readonly id: string; readonl
   if (typeof childCreatedAt !== 'number') {
     throw new Error(`[spawn-catalog] 子会话 header.createdAt 不可读——目录事实缺 childCreatedAt（还原拒绝面），拒绝追加`)
   }
+  if (descriptor.mode === 'continuable' && descriptor.label === undefined) {
+    throw new Error(`[spawn-catalog] continuable 目录事实缺 label（官方 KnownCatalogMode 不变式），拒绝追加`)
+  }
   ;(session as { append(type: string, data: unknown): void }).append('subagent/catalog', {
     version: SUBAGENT_CATALOG_VERSION,
     childId: run.id,
     childCreatedAt,
-    mode: 'one-shot',
-    ...(label !== undefined ? { label } : {}),
+    mode: descriptor.mode,
+    ...(descriptor.label !== undefined ? { label: descriptor.label } : {}),
   })
 }
 
@@ -139,6 +151,13 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
         }
       }
       if (!request.signal.aborted) request.signal.addEventListener('abort', forward, { once: true })
+      // 子代理类型单一事实源：descriptor 同时驱动上游请求与 catalog 目录事实（mode 不两处写死）
+      const descriptor = {
+        version: SUBAGENT_DESCRIPTOR_VERSION,
+        mode: 'one-shot' as SubagentCatalogMode,
+        provider: FORGE_DISPATCH_PROVIDER,
+        ...(request.label !== undefined ? { label: request.label } : {}),
+      }
       const run = await startInProcessRun(
         {
           prompt: textPrompt(request.prompt),
@@ -150,19 +169,14 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
           // persona 透传（S2 分层承载）：上游 applyChildComposition 落子会话 scoped
           // 'deployment:persona-prefix' 段；缺席 = 不携带键（直传 undefined 会被上游视为显式覆盖）
           ...(request.persona !== undefined ? { persona: request.persona } : {}),
-          descriptor: {
-            version: SUBAGENT_DESCRIPTOR_VERSION,
-            mode: 'one-shot',
-            provider: FORGE_DISPATCH_PROVIDER,
-            ...(request.label !== undefined ? { label: request.label } : {}),
-          },
+          descriptor,
         } as unknown as Parameters<typeof startInProcessRun>[0],
         {},
       )
       child = run.localAgent // 驱动器发布的子代理（abort 转发的 cancel 直调目标）
-      // 官方同式：发布后落父会话目录；追加失败 = dispose 该 run 后错误上抛（dispose 失败不遮蔽主因）
+      // 官方同式：发布后落父会话目录（mode 取 descriptor）；追加失败 = dispose 该 run 后错误上抛
       try {
-        appendCatalogChild(request.parent, run, request.label)
+        appendCatalogChild(request.parent, run, descriptor)
       } catch (error) {
         try {
           await run.dispose()

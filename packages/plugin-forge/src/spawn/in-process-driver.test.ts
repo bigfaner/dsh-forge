@@ -13,7 +13,7 @@ vi.mock('@deepseek-ai/dsh-subagent-in-process-driver', () => ({
   startInProcessRun: (...args: unknown[]) => startInProcessRun(...(args as [])),
 }))
 
-import { createInProcessDriverSpawn } from './in-process-driver.js'
+import { appendCatalogChild, createInProcessDriverSpawn } from './in-process-driver.js'
 import type { WorkerTreeGuard } from './job-tree.js'
 
 /** 守卫桩工厂（reclaim 调用计数——改进 4 终态可达断言） */
@@ -341,5 +341,25 @@ describe('subagent/catalog 目录事实（官方 establishCatalogChild 同式—
     await expect(spawn(requestOf(parent))).rejects.toThrow(/\[spawn-catalog\].*childCreatedAt/)
     expect(parent.session.append).not.toHaveBeenCalled()
     expect(run.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('mode 不写死：catalog mode 取自 descriptor（与上游请求同源）——continuable + label 照追加', async () => {
+    const parent = parentStub()
+    appendCatalogChild(parent, runStub({ id: 'worker-c' }), { mode: 'continuable', label: '可续聊任务' })
+    expect(parent.session.append).toHaveBeenCalledWith('subagent/catalog', {
+      version: 0,
+      childId: 'worker-c',
+      childCreatedAt: 1_760_000_000_000,
+      mode: 'continuable',
+      label: '可续聊任务',
+    })
+  })
+
+  it('continuable 缺 label = 拒绝追加（官方 KnownCatalogMode 不变式——该形状会拒还原）', () => {
+    const parent = parentStub()
+    expect(() => appendCatalogChild(parent, runStub(), { mode: 'continuable' })).toThrow(
+      /\[spawn-catalog\].*continuable.*label/,
+    )
+    expect(parent.session.append).not.toHaveBeenCalled()
   })
 })
