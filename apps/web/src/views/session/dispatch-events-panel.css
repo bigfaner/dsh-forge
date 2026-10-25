@@ -190,6 +190,13 @@
   background: var(--dsw-alias-state-business-tertiary);
 }
 
+/* 循环级事件徽标（独特标识——中性斜体档：无 tone 底色，与任务级胶囊一眼可辨） */
+.dswf-dep-status-loop {
+  color: var(--dsw-alias-label-tertiary);
+  border-color: var(--dsw-alias-border-l2);
+  font-style: italic;
+}
+
 .dswf-dep-status-done {
   color: var(--dsw-alias-state-success-primary);
   border-color: var(--dsw-alias-state-success-primary);

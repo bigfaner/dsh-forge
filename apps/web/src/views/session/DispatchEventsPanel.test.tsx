@@ -326,9 +326,10 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     const dur = markup.match(/dswf-dep-row-dur">([^<]+)</)
     expect(dur).not.toBeNull()
     expect(dur![1]).toBe('3分5秒')
-    // 仅任务行一枚耗时徽标（循环级瞬时行零徽标）；循环级行 key = title 兜底链
+    // 仅任务行一枚耗时徽标（循环级瞬时行零徽标）；循环级行 = 「循环」独特徽标（中性档）
     expect(markup.split('dswf-dep-row-dur').length - 1).toBe(1)
-    expect(markup).toContain('dswf-dep-status-done">完成')
+    expect(markup).toContain('dswf-dep-status-loop">循环')
+    expect(markup).not.toContain('dswf-dep-status-done')
   })
   it('无 taskTitle 行 = 仅 key 首行（title 兜底链不重复次行）', () => {
     const markup = body({ entries: [entry({ taskTitle: undefined })] })

@@ -476,7 +476,13 @@ function DispatchEventRowView({
         <span className="dswf-dep-row-t">
           <span className="dswf-dep-row-head">
             <span className="dswf-dep-row-key">{keyLabel}</span>
-            <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
+            {entry.taskKey === undefined ? (
+              // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
+              // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
+              <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
+            ) : (
+              <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
+            )}
           </span>
           {title !== undefined ? (
             <span className="dswf-dep-row-title">
