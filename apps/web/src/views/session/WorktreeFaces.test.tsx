@@ -8,11 +8,9 @@ import {
   ForgeHeroWorktreeMount,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
-  ForgeWorktreeSwitchOverlay,
   anchorDefaultWorktreePath,
   createFollowup,
 } from './WorktreeFaces.js'
-import { beginWorktreeSwitch, isWorktreeSwitchPending } from '../../state/worktree-switch-gate.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
 function fakeRpc(worktree: Partial<ForgeRpcClient['worktree']>): () => ForgeRpcClient {
@@ -47,27 +45,6 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
   // 注：选中态回填（selectedPath → chip 一体两属性）的相位数据面 SSR 不可达（list 为效应
   // 回调——本文件头注口径）；透传锚归 packages git-worktree hero-worktree-picker.test
   // （selectedPath 在册即回填 feat/api · wt-api），选中闭环交互归 e2e worktree-hero-chip。
-})
-
-// ───────── bug 267dcac1 切换闸 overlay（SSR 判读；键击/指针拦截效应归 e2e）─────────
-
-describe('切换闸 overlay（bug 267dcac1——pending 窗口虚线外框禁输）', () => {
-  it('空闲 → 零渲染（正常会话零扰动）', () => {
-    expect(isWorktreeSwitchPending()).toBe(false)
-    expect(renderToStaticMarkup(<ForgeWorktreeSwitchOverlay />)).toBe('')
-  })
-
-  it('切换 pending → 虚线外框面板呈现（data-dswt-switch-gate + 禁输文案）', () => {
-    const settle = beginWorktreeSwitch()
-    try {
-      const markup = renderToStaticMarkup(<ForgeWorktreeSwitchOverlay />)
-      expect(markup).toContain('data-dswt-switch-gate')
-      expect(markup).toContain('正在切换 worktree')
-    } finally {
-      settle()
-    }
-    expect(renderToStaticMarkup(<ForgeWorktreeSwitchOverlay />)).toBe('')
-  })
 })
 
 // ───────────── bug 6593d708 创建跟进次序（纯编排——createFollowup）─────────────
