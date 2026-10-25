@@ -246,7 +246,7 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     writeFileSync(join(WALKTHROUGH, '1-17-walkthrough.md'), [
       '# loop-event-delivery 1.17 —— web 进度流面板真机走查（e2e · RPC 驱动）',
       '',
-      '- 会话形态：RPC 驱动（forge:worktree/session-create 建会话 + 官方 commands HTTP transport POST /api/commands/execute 提交 /run-dag-tasks 真实派发循环），投影键 forge-dispatch-events fold forge/progress 事件驱动。',
+      '- 会话形态：官方 GUI 建会话（项目行尾新会话钮 startSession(workspaceId)——binding-derivation 官方直通）+ 官方 commands HTTP transport POST /api/commands/execute 提交 /run-dag-tasks 真实派发循环，投影键 forge-dispatch-events fold forge/progress 事件驱动。',
       '- 环境局限（非产品缺陷判定面）：composer/dock 官方 GUI 入口在无人值守探针环境不可判读——composer insertText 零效果（发送钮 disabled 形态）、dock 派发按钮缺席；走查驱动改 RPC 通路，产品面判定以面板行为证据本体。',
       '- 断言：悬浮球默认折叠零面板；展开态 head 条（live · 不经模型）+ 统计条（含待执行桶）+ 任务轨行（≥1 条真实事件行）；头拖移 dragged 锚；折叠往返。',
       '- 截图：dep-expanded-light.png / dep-expanded-dark.png（展开态双主题）、dep-badge-dark.png（悬浮球态暗）、dep-dragged-light.png（拖移态）。',
