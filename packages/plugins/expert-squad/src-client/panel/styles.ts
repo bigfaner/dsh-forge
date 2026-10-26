@@ -35,12 +35,15 @@ export const PANEL_CSS = `
 .dswf-btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* 召唤钮独占右侧（用户裁决 2026-10-25：与状态筛选空间分离） */
 .dswf-summon-btn { margin-left: auto; }
-.dswf-card-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: ${T.pad12}; padding: ${T.pad12}; align-content: start; overflow: auto; min-height: 0; }
+/* 筛选 select label（1.68 裁决④：「状态」「来源」左置，与搜索框同行排布） */
+.dswf-filter-label { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.dswf-card-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: ${T.pad12}; padding: ${T.pad12}; align-content: start; overflow: auto; min-height: 0; }
 .dswf-xcard { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.pad12} ${T.pad16}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; cursor: var(--dsh-cursor-pointer, pointer); transition: box-shadow 0.2s var(--ds-ease-in-out); }
 .dswf-xcard:hover { box-shadow: var(--dsw-elevation-soft); }
 .dswf-xcard.off { opacity: 0.55; } /* dsw-raw 原型禁用卡降透明刻度 */
 .xc-head { display: flex; align-items: center; gap: ${T.gap8}; }
-.xc-name { font-size: var(--dsw-font-s-14-font-size); line-height: var(--dsw-font-s-14-line-height); font-weight: 500; }
+.xc-name { font-size: var(--dsw-font-s-14-font-size); line-height: var(--dsw-font-s-14-line-height); font-weight: 500; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* 1.68 裁决：主标识单行——不换行 + 截断省略 */
+.xc-head .chip.tool { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: none; }
 .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; } /* dsw-raw 原型状态灯点径刻度 */
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
@@ -92,9 +95,9 @@ export const PANEL_CSS = `
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
 /* [召唤] 降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */
 .dswf-summon-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
-/* ── 同键全层聚组（1.60 用户裁决：组容器 + 生效标 + 来源角标 + 差异对比） ── */
-.dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r12}; padding: ${T.pad12}; }
-.dswf-xgroup.multi { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, transparent); }
+/* ── 同键全层聚组（1.60 用户裁决 + 1.68 裁决：去组外层边框——同名卡相邻排列，
+   组头信息不承载边框容器；保留组头行承载来源数与对比入口） ── */
+.dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .xg-head { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
 .xg-name { font: var(--dsw-font-xxs-12); font-weight: 500; color: var(--dsw-alias-label-secondary); font-family: var(--ds-font-family-code); }
 .xg-spread { margin-left: auto; border: none; background: transparent; color: var(--dsw-alias-state-business-primary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); padding: 0; }
@@ -104,7 +107,7 @@ export const PANEL_CSS = `
 .origin-badge.origin-project { color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
 .origin-badge.origin-user { color: var(--dsw-alias-state-warn-label); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent); }
 .origin-badge.origin-plugin { color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover); }
-/* 生效标（遮蔽胜出层——取用/编辑/启停语义附丽点） */
+/* 生效标（展开对比表生效列锚——1.68 裁决：卡片「生效」徽标已移除，对比表内保留） */
 .eff-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent); }
 /* 被遮蔽卡折叠摘要行（只读——点击展开对比） */
 .dswf-xshadow { display: flex; align-items: center; gap: ${T.gap8}; width: 100%; padding: ${T.gap8} ${T.pad12}; border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }

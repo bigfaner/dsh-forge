@@ -24,15 +24,16 @@
   .panel-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--layer2); border-bottom: 1px solid var(--border-l2); }
   .panel-title { font-weight: 600; }
   .search { width: 200px; padding: 5px 10px; border: 1px solid var(--border-l2); border-radius: var(--r8); background: var(--base); color: var(--label-3); font-size: 13px; }
+  .filter-label { font-size: 13px; color: var(--label-2); }
   select.status { padding: 5px 8px; border: 1px solid var(--border-l2); border-radius: var(--r8); background: var(--base); font-size: 13px; color: var(--label-2); }
   .summon { margin-left: auto; padding: 5px 16px; border: 0; border-radius: var(--r8); background: var(--accent); color: #fff; cursor: pointer; }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 14px; }
 
-  /* ── 聚组容器 ─────────────────────────── */
-  .group { border: 1px solid var(--border-l2); border-radius: var(--r12); background: var(--layer2); overflow: hidden; box-shadow: var(--shadow); }
-  .group.multi { border-color: var(--accent); border-width: 1px; }
-  .group-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, var(--accent-bg), transparent); border-bottom: 1px solid var(--border-l2); font-size: 13px; }
+  /* ── 聚组容器（1.68 裁决：去组外层边框——同名卡相邻排列，组头仅承载信息行） ─────────────────────────── */
+  .group { background: transparent; }
+  .group.multi { background: transparent; }
+  .group-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 6px; font-size: 13px; }
   .group-head b { font-size: 14px; }
   .group-head .cnt { color: var(--label-3); }
   .group-head .spread { margin-left: auto; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 13px; }
@@ -42,7 +43,7 @@
   .xc-head { display: flex; align-items: center; gap: 8px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
   .dot.off { background: var(--off); }
-  .name { font-weight: 600; }
+  .name { font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .chip { font-size: 12px; line-height: 18px; height: 20px; padding: 0 8px; border-radius: 999px; color: var(--label-2); background: var(--hover); white-space: nowrap; }
   .chip.tool { background: var(--hover); color: var(--label-3); font-family: ui-monospace, monospace; }
 
@@ -107,13 +108,13 @@
   <div class="panel-header">
     <span class="panel-title">专家团</span>
     <input class="search" placeholder="搜索名称 / 技能">
-    <select class="status"><option>全部</option><option>启用</option><option>禁用</option></select>
-    <select class="status"><option>全部来源</option><option>项目 · dsh-forge</option><option>用户</option><option>内置</option></select>
+    <span class="filter-label">状态</span><select class="status"><option>全部</option><option>启用</option><option>禁用</option></select>
+    <span class="filter-label">来源</span><select class="status"><option>全部来源</option><option>项目 · dsh-forge</option><option>用户</option><option>内置</option></select>
     <button class="summon">召唤</button>
   </div>
 
   <div class="hint">
-    <b>本稿要点</b>：①同键聚组（左边第一组 = code-reviewer 三层同名的完整形态；第二组 = 单来源普通卡组作对照）②生效卡带 <span class="effective">生效</span> + 来源角标 ③被遮蔽层折叠为摘要行，展开为<b>字段对齐对比表</b>，差异单元格高亮（<span class="sw"></span>橙色标记）④页脚计数按「专家（键）」计，组内来源数在组头标注。
+    <b>本稿要点</b>：①同键聚组（左边第一组 = code-reviewer 三层同名的完整形态；第二组 = 单来源普通卡组作对照）——同名卡相邻排列，组头仅承载来源数等 信息行（1.68 裁决：无组外层边框）②生效卡带来源角标（1.68 裁决：卡片无「生效」徽标——生效序判定依赖项目语境）③被遮蔽层折叠为摘要行，展开为<b>字段对齐对比表</b>，差异单元格高亮（<span class="sw"></span>橙色标记）④页脚计数按「专家（键）」计，组内来源数在组头标注。
   </div>
 
   <div class="grid">
@@ -134,7 +135,6 @@
           <span class="name">夹具评审</span>
           <span class="chip tool">code-reviewer</span>
           <span class="origin project">项目</span>
-          <span class="effective">生效</span>
         </div>
         <div class="title">夹具评审 · 专注测试夹具与契约面</div>
         <div class="creed">评审测试夹具的实现与契约一致性：RED 先行、断言语义强度、fixture 与真实装配面的距离。</div>
@@ -188,7 +188,6 @@
           <span class="name">数据库迁移</span>
           <span class="chip tool">db-migrator</span>
           <span class="origin user">用户</span>
-          <span class="effective">生效</span>
         </div>
         <div class="title">数据库迁移专家 · 大表变更</div>
         <div class="creed">负责数据库 schema 迁移方案的评审与实施：灰度、回滚、锁表风险评估。</div>

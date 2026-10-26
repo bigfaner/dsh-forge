@@ -320,7 +320,6 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
         <b className="xc-name">{expert.name}</b>
         <span className="chip tool">{expert.name}</span>
         <OriginBadge origin={expert.origin} projectName={projectName} />
-        <span className="eff-badge">生效</span>
       </div>
       <div className="xc-title">
         {expert.title}
@@ -328,7 +327,7 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
       </div>
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>
-        <div className="xc-seg">技能标签</div>
+        <div className="xc-seg">技能</div>
         <div className="xc-tags">
           {expert.skills.map((skill) => (
             <span key={skill} className="chip">
@@ -498,7 +497,10 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           value={query}
           onChange={(event) => props.onQueryChange(event.target.value)}
         />
+        {/* 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（htmlFor 绑定对应 select） */}
+        <label className="dswf-filter-label" htmlFor="dswf-status-select">状态</label>
         <select
+          id="dswf-status-select"
           className="dswf-status-select"
           aria-label="状态筛选"
           data-status={status}
@@ -511,7 +513,9 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
             </option>
           ))}
         </select>
+        <label className="dswf-filter-label" htmlFor="dswf-origin-select">来源</label>
         <select
+          id="dswf-origin-select"
           className="dswf-status-select dswf-origin-select"
           aria-label="来源筛选"
           data-origin={origin}

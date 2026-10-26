@@ -5,7 +5,7 @@
 // RPC 注册 → 左栏 panellist 行「专家团」→ main keyed 'expert-squad' 面板。
 // data 锚（panel/expert-panel.tsx 事实表）：面板 [data-dswf-expert-panel]、卡 .dswf-xcard
 // [data-expert-key][data-effective]、聚组容器 .dswf-xgroup[data-expert-key]（1.60 裁决：
-// 同键聚组——组头 xg-head + 生效卡「生效」标 .eff-badge + 来源角标 .origin-badge.origin-* +
+// 同键聚组——组头 xg-head + 生效卡 data-effective 锚 + 来源角标 .origin-badge.origin-* +
 // 被遮蔽折叠行 .dswf-xshadow[data-origin] + 展开对比 .dswf-xcompare）、状态筛选
 // select.dswf-status-select[data-status]（头部重排 2026-10-25：
 // 搜索+筛选左置、召唤独右）、页脚 .dswf-panel-footer、
@@ -184,15 +184,23 @@ test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 头部结构（F1，2026-10-25 重排）：标题 + 搜索 + 状态筛选 select 左置；召唤独右
+    // 头部结构（F1，2026-10-25 重排 + 1.68 裁决④ label）：标题 + 搜索 + 「状态」label + select + 「来源」label + select 左置；召唤独右
     await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
     await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
     const headerOrder = await page.locator('.dswf-panel-header > *').evaluateAll((nodes) =>
       nodes.map((node) => node.className),
     )
-    expect(headerOrder.join(' '), '头部次序：标题 → 搜索 → select → 召唤独右').toBe(
-      'dswf-panel-title dswf-search dswf-status-select dswf-btn dswf-btn-primary dswf-summon-btn',
+    expect(headerOrder.join(' '), '头部次序：标题 → 搜索 → 状态label → select → 来源label → select → 召唤独右').toBe(
+      'dswf-panel-title dswf-search dswf-filter-label dswf-status-select dswf-filter-label dswf-status-select dswf-origin-select dswf-btn dswf-btn-primary dswf-summon-btn',
     )
+    // 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（文本 + htmlFor 绑定）
+    const headerLabels = await page.locator('.dswf-panel-header .dswf-filter-label').evaluateAll((nodes) =>
+      nodes.map((node) => ({ text: node.textContent, htmlFor: (node as HTMLLabelElement).htmlFor })),
+    )
+    expect(headerLabels, '筛选 label 文本与绑定').toEqual([
+      { text: '状态', htmlFor: 'dswf-status-select' },
+      { text: '来源', htmlFor: 'dswf-origin-select' },
+    ])
     const select = page.locator(statusSelect)
     await expect(select, '状态筛选 select 在场').toBeVisible()
     await expect(select, '默认态·全部').toHaveAttribute('data-status', 'all')
@@ -255,7 +263,7 @@ test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/
     await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
     await expect(card.locator('.xc-creed'), '人设摘要（Markdown 剥离纯文本）').toContainText('夹具人设正文')
     expect((await card.locator('.xc-creed').innerText()).includes('##'), '摘要零 Markdown 记号外露').toBe(false)
-    await expect(card.locator('.xc-seg').nth(0), '段标·技能标签').toHaveText('技能标签')
+    await expect(card.locator('.xc-seg').nth(0), '段标·技能（1.68 裁决⑤）').toHaveText('技能')
     await expect(card.locator('.xc-seg').nth(1), '段标·工具白名单').toHaveText('工具白名单（子会话强制）')
     await expect(card.locator('.xc-tags .chip', { hasText: 'review' }).first(), '技能 chip').toBeVisible()
     await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip').toBeVisible()
@@ -426,24 +434,64 @@ test('@feature expert-squad step-5 success：搜索×状态 AND 叠加；清除�
   }
 })
 
-// ── step-6 同键聚组展示（1.60 用户裁决：组容器 + 生效标 + 来源角标） ──
+// ── step-6 同键聚组展示（1.60 聚组 + 1.68 裁决：去组外框 · 卡片不换行 · 无生效标） ──
 
-test('@feature expert-squad step-6 grouped：聚组容器 + 生效卡「生效」标 + 来源角标（单来源组与普通卡同形）', async () => {
+test('@feature expert-squad step-6 grouped：无组外框（相邻卡同层）+ 卡片主标识不换行 + 卡片无「生效」标 + 来源角标', async () => {
   test.setTimeout(180_000)
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 夹具为 project 层单来源：每键一组，组内生效卡带「生效」标与「项目」角标
+    // 夹具为 project 层单来源：每键一组，组内生效卡带「项目」角标
     for (const key of ['test-reviewer', 'data-miner']) {
       const group = page.locator(groupOf(key))
       await expect(group, `组容器·${key}`).toBeVisible()
       const card = group.locator(cardOf(key))
       await expect(card, `生效位锚·${key}`).toHaveAttribute('data-effective', 'true')
-      await expect(card.locator('.eff-badge'), `「生效」标·${key}`).toHaveText('生效')
-      await expect(card.locator('.origin-badge.origin-project'), `来源角标·项目·${key}`).toHaveText('项目')
+      // 1.68 裁决③：卡片无「生效」徽标
+      expect(await card.locator('.eff-badge').count(), `卡片无生效标·${key}`).toBe(0)
+      await expect(card.locator('.origin-badge.origin-project'), `来源角标·项目·${key}`).toContainText('项目')
       await expect(group.locator('.dswf-xshadow'), `单来源组无被遮蔽行·${key}`).toHaveCount(0)
       await expect(group.locator('.xg-spread'), `单来源组无对比钮·${key}`).toHaveCount(0)
     }
+    // 1.68 裁决②：无组外层边框容器——组与卡同层相邻（组背景透明、组自身无边框；
+    // 卡片为网格直接视觉单元，组间边界由卡片自身边框承担）
+    const groupBox = await page.locator(groupOf('test-reviewer')).evaluate((node) => {
+      const cs = getComputedStyle(node)
+      return { borderWidth: cs.borderTopWidth, radius: cs.borderTopLeftRadius, bg: cs.backgroundColor }
+    })
+    expect(groupBox.borderWidth, '组容器零边框').toBe('0px')
+    expect(groupBox.radius, '组容器零圆角').toBe('0px')
+    expect(groupBox.bg, '组容器透明底（不遮挡相邻卡边界）').toBe('rgba(0, 0, 0, 0)')
+    // 相邻排列：两组卡在同一网格流内（组容器不产生额外包裹偏移——卡左缘对齐组左缘）
+    const aligned = await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('.dswf-card-grid > .dswf-xgroup')]
+      return groups.every((g) => {
+        const card = g.querySelector('.dswf-xcard')
+        return card !== null && Math.abs(card.getBoundingClientRect().left - g.getBoundingClientRect().left) < 1
+      })
+    })
+    expect(aligned, '卡与组同层相邻（无组内边距包裹）').toBe(true)
+    // 1.68 裁决①：卡片主标识（名称/标识 chip）单行不换行（nowrap + 截断省略策略）
+    const cardBox = await page.locator(cardOf('test-reviewer')).evaluate((node) => {
+      const name = node.querySelector('.xc-name')
+      const chip = node.querySelector('.xc-head .chip.tool')
+      if (name === null || chip === null) return null
+      const ns = getComputedStyle(name)
+      const cs = getComputedStyle(chip)
+      return {
+        nameHeight: name.getBoundingClientRect().height,
+        chipHeight: chip.getBoundingClientRect().height,
+        nameWhite: ns.whiteSpace,
+        chipWhite: cs.whiteSpace,
+        nameOverflow: ns.textOverflow,
+      }
+    })
+    expect(cardBox, '主标识几何取样').not.toBeNull()
+    expect(cardBox!.nameWhite, '名称 nowrap').toBe('nowrap')
+    expect(cardBox!.chipWhite, '标识 chip nowrap').toBe('nowrap')
+    expect(cardBox!.nameOverflow, '截断省略策略').toBe('ellipsis')
+    expect(cardBox!.nameHeight, '名称单行高（无竖排折行）').toBeLessThanOrEqual(24)
+    expect(cardBox!.chipHeight, '标识 chip 单行高').toBeLessThanOrEqual(24)
     // 页脚计数按专家键数（夹具 2 键 + 内置键，均为单来源）
     await expect(page.locator(FOOTER), '计数按专家键数形态不变').toContainText('位专家 · 显示')
   } finally {

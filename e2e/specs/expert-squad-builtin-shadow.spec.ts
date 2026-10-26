@@ -181,7 +181,7 @@ test('@feature expert-squad shadow step-1：内置专家开箱即用——面板
 
 // ── step-2/3 success：project 层同名遮蔽——面板与取用双裁决一致 ──
 
-test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——聚组展示（生效标在 project 卡 + 被遮蔽内置卡组内可见）+ origin=project', async () => {
+test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——聚组展示（生效卡为 project 卡 + 被遮蔽内置卡组内可见）+ origin=project', async () => {
   test.setTimeout(180_000)
   const session = await openPanelWithFixture()
   try {
@@ -194,8 +194,8 @@ test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——�
     await expect(group.locator('.xg-cnt'), '组内来源数标注').toHaveText('2 个来源')
     const effectiveCard = group.locator(`${cardOf(BUILTIN_KEY)}[data-effective="true"]`)
     await expect(effectiveCard.locator('.xc-title'), '生效卡呈 project 层定制岗位').toContainText('夹具遮蔽评审·定制版')
-    await expect(effectiveCard.locator('.eff-badge'), '「生效」标在 project 卡').toHaveText('生效')
-    await expect(effectiveCard.locator('.origin-badge.origin-project'), '生效卡来源角标·项目').toHaveText('项目')
+    await expect(effectiveCard.locator('.eff-badge'), '卡片无「生效」标（1.68 裁决③）').toHaveCount(0)
+    await expect(effectiveCard.locator('.origin-badge.origin-project'), '生效卡来源角标·项目').toContainText('项目')
     await expect(effectiveCard.locator('.xc-creed'), '呈定制人设摘要').toContainText('遮蔽定制人设正文')
     // 被遮蔽内置卡：折叠摘要行（来源角标 + 只读），点击展开对比视图
     const shadowRow = group.locator(`.dswf-xshadow[data-origin="plugin"]`)

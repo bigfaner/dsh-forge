@@ -82,7 +82,7 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
     expect(html).toContain("code-reviewer"); // 名称与英文标识 chip 同源（键正本）
     expect(html).toContain("资深评审"); // 岗位 ← title
     expect(html).toContain("评审 diff 与正确性"); // 人设摘要（Markdown 剥离后）
-    expect(html).toContain("技能标签");
+    expect(html).toContain('<div class="xc-seg">技能</div>'); // 1.68 裁决⑤：段标「技能标签」→「技能」
     expect(html).toContain("工具白名单（子会话强制）");
     expect(html).toContain("更新于 2026-10-18"); // 页脚更新时间
     expect(html).toContain("1 位专家 · 显示 1");
@@ -108,6 +108,8 @@ describe("ExpertPanel 头部交互面", () => {
     expect(html).toContain('value="rev"');
     expect(html).toContain("<select");
     expect(html).toContain('aria-label="状态筛选"');
+    expect(html).toContain('>状态</label>'); // 1.68 裁决④：筛选 select 左侧 label
+    expect(html).toContain('>来源</label>');
     expect(html).toContain('data-status="enabled"');
     expect(html).toContain('>全部</option>');
     expect(html).toContain('>启用</option>');
@@ -168,14 +170,13 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
     );
   }
 
-  it("组头：键名 + 来源数 + 展开对比钮；生效卡带「生效」标与来源角标", () => {
+  it("组头：键名 + 来源数 + 展开对比钮；卡片无「生效」标（1.68 裁决③）、来源角标在场", () => {
     const html = renderGroup();
     expect(html).toContain("dswf-xgroup multi");
     expect(html).toContain('data-expert-key="code-reviewer"');
     expect(html).toContain("2 个来源");
     expect(html).toContain("展开对比");
-    expect(html).toContain("eff-badge");
-    expect(html).toContain(">生效</span>");
+    expect(html).not.toContain("eff-badge"); // 1.68 裁决③：卡片「生效」徽标移除
     expect(html).toContain("origin-project");
     expect(html).toContain(">项目</span>");
   });
