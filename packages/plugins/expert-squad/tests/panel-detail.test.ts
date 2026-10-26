@@ -333,7 +333,7 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("<code>pnpm lint</code>");
     expect(html).toContain("<li><span>评审 diff 与正确性</span></li>");
     expect(html).toContain("工具白名单（子会话强制生效）");
-    expect(html).toContain("技能标签");
+    expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');
   });
 
@@ -366,7 +366,7 @@ describe("ExpertDetailDialog 编辑态（F2 字段集）", () => {
     expect(html).toContain("Markdown 自由输入");
   });
 
-  it("multi-select：工具白名单在上、技能标签在下，box 显已选 chips", () => {
+  it("multi-select：工具白名单在上、技能在下，box 显已选 chips", () => {
     const html = renderDialog({ mode: "edit" });
     expect(html).toContain('data-msel="tools"');
     expect(html).toContain('data-msel="skills"');

@@ -506,7 +506,7 @@ export function ExpertDetailDialog(props: {
       />
       <MultiSelect
         field="skills"
-        label="技能标签（多选，可新增）"
+        label="技能（多选，可新增）"
         selected={state.draft.skills}
         candidates={props.allSkills}
         allowAdd={true}
@@ -534,7 +534,7 @@ export function ExpertDetailDialog(props: {
           </span>
         ))}
       </div>
-      <div className="dswf-dlg-seg">技能标签</div>
+      <div className="dswf-dlg-seg">技能</div>
       <div className="dswf-dlg-chips">
         {expert.skills.map((skill) => (
           <span key={skill} className="chip">

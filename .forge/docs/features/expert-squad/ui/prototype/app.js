@@ -118,14 +118,14 @@ function openDialog(key, mode) {
       <div class="seg-title">简介（何时委派我）</div><div class="meta">${x.description}</div>
       <div class="seg-title">人设（Persona · 派发时注入子会话）</div><div class="meta md">${renderMd(x.desc)}</div>
       <div class="seg-title">工具白名单（子会话强制生效）</div><div class="chips">${x.tools.map(s => `<span class="chip">${s}</span>`).join('')}</div>
-      <div class="seg-title">技能标签</div><div class="chips">${x.skills.map(s => `<span class="chip">${s}</span>`).join('')}</div>`
+      <div class="seg-title">技能</div><div class="chips">${x.skills.map(s => `<span class="chip">${s}</span>`).join('')}</div>`
   } else {
     $('#dlgBody').innerHTML = `
       <div class="field" id="fTitle"><label>岗位</label><input type="text" value="${x.title}"><div class="err">岗位不能为空</div></div>
       <div class="field" id="fDescription"><label>简介（模型选人依据：何时委派我 · 默认 2 行，最多 6 行 ≈ 120 字）</label><textarea rows="2" class="autosize" data-min="46" data-max="134" maxlength="120">${x.description}</textarea></div>
       <div class="field" id="fBody"><label>人设（Markdown 自由输入 · 派发时作为 persona 注入子会话：做什么/不做什么 · 怎么做的原则 · 默认 12 行，最多 100 行）</label><textarea rows="12" class="autosize" data-min="266" data-max="2202">${x.desc}</textarea><div class="err">含裸 {{ ——不被允许</div></div>
       <div class="field" id="fTools"><label>工具白名单（子会话强制生效 · 多选）</label></div>
-      <div class="field" id="fSkills"><label>技能标签（多选，可新增）</label></div>`
+      <div class="field" id="fSkills"><label>技能（多选，可新增）</label></div>`
     mountMsel('#fTools', x.tools, ['read', 'edit', 'bash', 'grep', 'web', 'skill'], false)
     mountMsel('#fSkills', x.skills, [...new Set(experts.flatMap(e => e.skills))], true)
     document.querySelectorAll('#dlg textarea.autosize').forEach(autosize)
