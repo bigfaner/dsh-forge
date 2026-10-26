@@ -60,7 +60,9 @@ export const PANEL_CSS = `
 /* 详情 Dialog（ui-design F2：radius-lg 16 / lv3 阴影 / 宽 680 / max-height 88%） */
 .dswf-dlg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-mask, rgba(0,0,0,0.4)); z-index: 100; }
 .dswf-dlg { position: relative; display: flex; flex-direction: column; width: 680px; max-width: calc(100vw - 32px); max-height: 88%; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
-.dswf-dlg-head { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+/* 头部（1.67 裁决：列布局——标识行 + 来源行；唯一分隔线在头部容器底，无双线） */
+.dswf-dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-dlg-head-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
 .dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
@@ -119,11 +121,12 @@ export const PANEL_CSS = `
 .cmp-table td .chip { margin-right: 4px; }
 .cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
 .cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
-/* ── 来源置顶条 + 两两对比（1.61 裁决①③⑤⑥）── */
+/* ── 来源行降位（1.61 ① + 1.67 裁决：去生效标、入头部弱化、? tooltip）── */
 .dswf-dlg.wide { width: 880px; } /* ⑥ 对比态宽体：宽于详情 Dialog 680px 刻度（视觉稿正本） */
-.dswf-dlg-origin-bar { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); font: var(--dsw-font-xxs-12); }
+.dswf-dlg-origin-bar { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); } /* 次级色弱化令牌 */
 .dswf-dlg-origin-bar .origin-badge { margin-left: 0; }
 .dswf-dlg-origin-lead { color: var(--dsw-alias-label-caption); }
+.dswf-dlg-origin-help { flex: none; width: 14px; height: 14px; line-height: 14px; text-align: center; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 50%; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); cursor: var(--dsh-cursor-help, help); }
 .dswf-dlg-origin-masked { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
 .dswf-cmp-pick { display: flex; align-items: center; gap: ${T.gap8}; flex-wrap: wrap; }
 .dswf-cmp-pick-lead, .dswf-cmp-pick-note { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }

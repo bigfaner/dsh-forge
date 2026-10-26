@@ -31,4 +31,11 @@ describe("panel styles 令牌正名（error-primary）", () => {
     expect(menuRule).toContain("position: fixed");
     expect(menuRule).not.toContain("position: absolute");
   });
+
+  it("1.67 裁决：头部唯一分隔线在头部容器底；来源行自身无边框（无双分隔线）且次级色弱化", () => {
+    expect(ruleOf(".dswf-dlg-head")).toContain("border-bottom");
+    const barRule = ruleOf(".dswf-dlg-origin-bar");
+    expect(barRule).not.toContain("border-bottom");
+    expect(barRule).toContain("var(--dsw-alias-label-secondary)");
+  });
 });

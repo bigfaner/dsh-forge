@@ -86,9 +86,11 @@
   .dlg-stage h3 { font-size: 13px; color: var(--label-3); font-weight: 500; margin-bottom: 10px; }
   .dlg { max-width: 520px; margin: 0 auto; background: var(--layer2); border: 1px solid var(--border-l4); border-radius: var(--r12); box-shadow: var(--shadow); }
   .dlg.wide { max-width: 880px; }  /* 对比态宽体（裁决⑤）：宽于详情 Dialog 680px 刻度 */
-  .dlg-origin-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border-l2); background: linear-gradient(180deg, var(--accent-bg), transparent); border-radius: var(--r12) var(--r12) 0 0; font-size: 12px; }
+  .dlg-origin-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--label-2); } /* 1.67 裁决：来源行降位入头部、次级色弱化、无边框（无双分隔线） */
   .dlg-origin-bar .lead { color: var(--label-3); }
-  .dlg-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-l2); }
+  .dlg-origin-help { flex: none; width: 14px; height: 14px; line-height: 14px; text-align: center; border: 1px solid var(--border-l2); border-radius: 50%; color: var(--label-3); font-size: 11px; cursor: help; }
+  .dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border-l2); } /* 1.67：唯一分隔线在头部容器底 */
+  .dlg-head-row { display: flex; align-items: center; gap: 8px; }
   .dlg-body { padding: 12px 16px; font-size: 13px; color: var(--label-2); }
   .dlg-body .row { padding: 4px 0; }
   .dlg-body .lbl { color: var(--caption); font-size: 12px; margin-right: 8px; }
@@ -202,23 +204,24 @@
   </div>
 
   <div class="dlg-stage">
-    <h3>详情 Dialog · 来源置顶示意（裁决②：来源放在上方显要位置）</h3>
+    <h3>详情 Dialog · 来源行降位示意（1.67 裁决：去生效标 · 来源行入头部标识行下弱化 · 内置/user ? tooltip）</h3>
     <div class="dlg wide">
-      <div class="dlg-origin-bar">
-        <span class="lead">来源</span>
-        <span class="origin project">项目 · dsh-forge</span>
-        <span class="effective">生效</span>
-        <span style="color:var(--caption);margin-left:auto;font-size:12px;">项目层 · dsh-forge/.dsh/experts（遮蔽同名：用户 / 内置）</span>
-      </div>
       <div class="dlg-head">
-        <span class="dot"></span>
-        <b>夹具评审</b>
-        <span class="chip tool">code-reviewer</span>
-        <span style="margin-left:auto;display:flex;gap:6px;">
-          <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">对比</button>
-          <button class="summon" style="padding:3px 12px;font-size:12px;">编辑</button>
-          <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">禁用</button>
-        </span>
+        <div class="dlg-head-row">
+          <span class="dot"></span>
+          <b>夹具评审</b>
+          <span class="chip tool">code-reviewer</span>
+          <span style="margin-left:auto;display:flex;gap:6px;">
+            <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">对比</button>
+            <button class="summon" style="padding:3px 12px;font-size:12px;">编辑</button>
+            <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">禁用</button>
+          </span>
+        </div>
+        <div class="dlg-origin-bar">
+          <span class="lead">来源</span>
+          <span class="origin project">项目 · dsh-forge</span>
+          <span style="color:var(--label-3);margin-left:auto;font-size:12px;">项目层 · dsh-forge/.dsh/experts（遮蔽同名：用户 / 内置）</span>
+        </div>
       </div>
       <div class="dlg-body">
         <div class="row"><span class="lbl">岗位</span>夹具评审 · 专注测试夹具与契约面</div>
@@ -238,6 +241,31 @@
         <tr><th>技能</th><td class="win diff"><span class="chip">vitest</span> <span class="chip">契约测试</span></td><td><span class="chip">评审</span> <span class="chip">重构</span></td></tr>
       </table>
       <div class="cmp-note" style="margin:0 16px 14px;"><span>同值字段（简介 / 人设摘要 / 更新时间）默认隐藏</span></div>
+    </div>
+  </div>
+
+  <div class="dlg-stage">
+    <h3>详情 Dialog · 内置来源 ? tooltip 示意（1.67 裁决：内置/user 来源尾缀 ? 图标，hover 解释来源语义）</h3>
+    <div class="dlg">
+      <div class="dlg-head">
+        <div class="dlg-head-row">
+          <span class="dot"></span>
+          <b>Code Reviewer</b>
+          <span class="chip tool">code-reviewer</span>
+          <span style="margin-left:auto;display:flex;gap:6px;">
+            <button class="summon" style="padding:3px 12px;font-size:12px;">编辑</button>
+            <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">禁用</button>
+          </span>
+        </div>
+        <div class="dlg-origin-bar">
+          <span class="lead">来源</span>
+          <span class="origin plugin">内置</span>
+          <span class="dlg-origin-help" title="随插件分发的兜底档案">?</span>
+        </div>
+      </div>
+      <div class="dlg-body">
+        <div class="row"><span class="lbl">来源</span>内置层（随插件分发，user 来源 tooltip =「当前用户全局档案（跨项目共享）」）</div>
+      </div>
     </div>
   </div>
 </div>

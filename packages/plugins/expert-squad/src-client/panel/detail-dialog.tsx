@@ -278,7 +278,17 @@ function MultiSelect(props: {
   );
 }
 
-/** 来源置顶徽标条（① 查看/编辑态均呈现：来源 lead + 具名角标 + 生效标 + 被遮蔽同名提示）。 */
+/**
+ * 来源行（1.67 裁决：降位弱化版——去「生效」徽标：生效序判定依赖当前项目语境，
+ * Dialog 无法判定用户在哪个项目；来源行移入头部标识行（名称+slug）下一行，次级色弱化；
+ * 内置/user 来源尾缀 ? 图标，hover tooltip 解释来源语义——原生 title 机械（与
+ * xg-cnt 计数提示同源的既有 tooltip 机械），project 来源无 ?。
+ */
+const ORIGIN_HELP: Readonly<Record<string, string>> = {
+  plugin: "随插件分发的兜底档案",
+  user: "当前用户全局档案（跨项目共享）",
+};
+
 function OriginBar({
   expert,
   shadows,
@@ -289,13 +299,23 @@ function OriginBar({
   readonly projectName?: string;
 }): ReactNode {
   const masked = maskedPeersLabel(shadows);
+  const help = ORIGIN_HELP[expert.origin];
   return (
     <div className="dswf-dlg-origin-bar" data-dswf-origin-bar="">
       <span className="dswf-dlg-origin-lead">来源</span>
       <span className={`origin-badge origin-${expert.origin}`}>
         {originLabel(expert.origin, projectName)}
       </span>
-      <span className="eff-badge">生效</span>
+      {help === undefined ? null : (
+        <span
+          className="dswf-dlg-origin-help"
+          data-dswf-origin-help={expert.origin}
+          title={help}
+          aria-label={help}
+        >
+          ?
+        </span>
+      )}
       {masked === undefined ? null : <span className="dswf-dlg-origin-masked">{masked}</span>}
     </div>
   );
@@ -496,14 +516,12 @@ export function ExpertDetailDialog(props: {
         aria-label={`专家详情 ${expert.name}`}
         onClick={(event) => event.stopPropagation()}
       >
-        {props.sameKeyEntries === undefined ? null : (
-          <OriginBar expert={expert} shadows={shadows} projectName={props.projectName} />
-        )}
         <div className="dswf-dlg-head">
-          <span className={`dot ${expert.enabled ? "on" : "off"}`} />
-          <b className="dswf-dlg-name">{expert.name}</b>
-          <span className="chip tool">{expert.name}</span>
-          <span className="dswf-dlg-head-actions">
+          <div className="dswf-dlg-head-row">
+            <span className={`dot ${expert.enabled ? "on" : "off"}`} />
+            <b className="dswf-dlg-name">{expert.name}</b>
+            <span className="chip tool">{expert.name}</span>
+            <span className="dswf-dlg-head-actions">
             {comparing ? (
               <button
                 type="button"
@@ -561,6 +579,10 @@ export function ExpertDetailDialog(props: {
               ✕
             </button>
           </span>
+          </div>
+          {props.sameKeyEntries === undefined ? null : (
+            <OriginBar expert={expert} shadows={shadows} projectName={props.projectName} />
+          )}
         </div>
         <div className="dswf-dlg-body">{body}</div>
         {state.toast === undefined ? null : (

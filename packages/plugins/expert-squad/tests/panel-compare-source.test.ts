@@ -187,30 +187,53 @@ function renderDialog(
   );
 }
 
-describe("ExpertDetailDialog 来源置顶徽标条（①）", () => {
+describe("ExpertDetailDialog 来源行（1.61 ① + 1.67 裁决）", () => {
   const shadow = entry({ origin: "user", effective: false, title: "用户评审" });
   const effective = entry({ origin: "project", effective: true });
 
-  it("查看态：来源条（来源 lead + 具名角标 + 生效标 + 被遮蔽同名提示）", () => {
+  function ctlFor(e: ExpertView): ExpertDetailController {
     const c = new ExpertDetailController({
-      update: async () => effective,
-      setEnabled: async () => effective,
+      update: async () => e,
+      setEnabled: async () => e,
     });
-    c.open(effective);
-    const html = renderDialog(c, { sameKeyEntries: [shadow, effective], projectName: "dsh-forge" });
+    c.open(e);
+    return c;
+  }
+
+  it("查看态：来源行（来源 lead + 具名角标 + 被遮蔽同名提示）；生效标已去（1.67：生效序判定依赖项目语境）", () => {
+    const html = renderDialog(ctlFor(effective), { sameKeyEntries: [shadow, effective], projectName: "dsh-forge" });
     expect(html).toContain("dswf-dlg-origin-bar");
     expect(html).toContain(">来源</span>");
     expect(html).toContain("项目 · dsh-forge");
-    expect(html).toContain("eff-badge");
+    expect(html).not.toContain("eff-badge");
     expect(html).toContain("遮蔽同名：用户");
   });
 
-  it("编辑态来源条同样呈现；唯一来源无遮蔽提示", () => {
-    const c = new ExpertDetailController({
-      update: async () => effective,
-      setEnabled: async () => effective,
-    });
-    c.open(effective);
+  it("来源行在头部标识行（名称+slug）之下、头部容器内——无双分隔线（1.67）", () => {
+    const html = renderDialog(ctlFor(effective), { sameKeyEntries: [shadow, effective], projectName: "dsh-forge" });
+    const headAt = html.indexOf('class="dswf-dlg-head"');
+    const rowAt = html.indexOf('class="dswf-dlg-head-row"');
+    const barAt = html.indexOf("dswf-dlg-origin-bar");
+    const bodyAt = html.indexOf('class="dswf-dlg-body"');
+    expect(headAt).toBeGreaterThan(-1);
+    expect(rowAt).toBeGreaterThan(headAt);
+    expect(barAt).toBeGreaterThan(rowAt); // 来源行在标识行之后
+    expect(barAt).toBeLessThan(bodyAt); // 且仍在头部容器内
+  });
+
+  it("user / plugin 来源尾缀 ? 图标，hover tooltip（原生 title）解释来源语义；project 无 ?", () => {
+    const userHtml = renderDialog(ctlFor(entry({ origin: "user", effective: true })), { sameKeyEntries: [entry({ origin: "user", effective: true })] });
+    expect(userHtml).toContain('data-dswf-origin-help="user"');
+    expect(userHtml).toContain('title="当前用户全局档案（跨项目共享）"');
+    const pluginHtml = renderDialog(ctlFor(entry({ origin: "plugin", effective: true })), { sameKeyEntries: [entry({ origin: "plugin", effective: true })] });
+    expect(pluginHtml).toContain('data-dswf-origin-help="plugin"');
+    expect(pluginHtml).toContain('title="随插件分发的兜底档案"');
+    const projectHtml = renderDialog(ctlFor(effective), { sameKeyEntries: [effective] });
+    expect(projectHtml).not.toContain("dswf-dlg-origin-help");
+  });
+
+  it("编辑态来源行同样呈现；唯一来源无遮蔽提示", () => {
+    const c = ctlFor(effective);
     const viewHtml = renderDialog(c, { sameKeyEntries: [effective] });
     expect(viewHtml).toContain("dswf-dlg-origin-bar");
     expect(viewHtml).not.toContain("遮蔽同名");
@@ -218,13 +241,8 @@ describe("ExpertDetailDialog 来源置顶徽标条（①）", () => {
     expect(renderDialog(c, { sameKeyEntries: [effective] })).toContain("dswf-dlg-origin-bar");
   });
 
-  it("无 sameKeyEntries 注入（旧装配）不炸：无来源条", () => {
-    const c = new ExpertDetailController({
-      update: async () => effective,
-      setEnabled: async () => effective,
-    });
-    c.open(effective);
-    expect(renderDialog(c)).not.toContain("dswf-dlg-origin-bar");
+  it("无 sameKeyEntries 注入（旧装配）不炸：无来源行", () => {
+    expect(renderDialog(ctlFor(effective))).not.toContain("dswf-dlg-origin-bar");
   });
 });
 
