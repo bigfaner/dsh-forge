@@ -1027,3 +1027,48 @@ describe('persona 两段组装：专家档案取用面注入（expert-squad-forg
     expect(r.task?.taskStatus).toBe('in_progress')
   })
 })
+
+// ─────────────────── 并发双领 TOCTOU（bug 21764a56）：事务体内重读当前态 ───────────────────
+describe('并发双领 TOCTOU：A 挂起（档案取用 await）期间 B 领走同任务 → A 恢复后拒绝', () => {
+  it('显式 taskRef 径：B 转移 pending → in_progress 后 A 恢复 → ERR_INVALID_TRANSITION，无双 claim 记录/无双链接', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'f', '2.1')
+    seedEdge(h!.db, 't-f-2.1', 't-f-1.1')
+    // 复现交错：A 目标解析读到 pending 后在档案取用 await 窗口挂起，B 同步完成同任务 claim
+    const err = await claimTask(
+      {
+        store: h!.store,
+        events: h!.events,
+        resolveExpertProfile: () => {
+          void claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's-b' })
+          return Promise.resolve(undefined)
+        },
+      },
+      { projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's-a' },
+    ).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(InvalidTransitionError)
+    expect((err as InvalidTransitionError).code).toBe('ERR_INVALID_TRANSITION')
+    expect((err as InvalidTransitionError).data.current).toBe('in_progress')
+    // 仅 B 一条 claim 记录 + 一条会话链接（无重复 claim / 双链接）
+    expect(
+      rows(`SELECT session_id FROM task_records WHERE task_id = 't-f-2.1' AND verb = 'claim'`),
+    ).toEqual([{ session_id: 's-b' }])
+    expect(rows(`SELECT session_id FROM task_session_links WHERE task_id = 't-f-2.1'`)).toEqual([
+      { session_id: 's-b' },
+    ])
+    // 事件仅 B 的领取单发（A 拒绝零写入零事件）
+    expect(h!.events.emitted).toEqual([{ projectId: P() }])
+  })
+
+  it('幂等重入不受波及：快照即 in_progress（无漂移）的显式 taskRef 重入照常 reclaimed=true', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1', { status: 'in_progress' })
+    seedLink(h!.db, 't-f-2.1', 's-a')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's-a' })
+    expect(r.reclaimed).toBe(true)
+    expect(r.task?.taskStatus).toBe('in_progress')
+  })
+})

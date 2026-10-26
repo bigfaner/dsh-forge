@@ -37,7 +37,7 @@ import type {
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
-import { DependenciesUnmetError } from './errors.js'
+import { DependenciesUnmetError, InvalidTransitionError, TaskNotFoundError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
 import { assertNoBareInterpolation, composePersona, composePersonaWithProfile } from './prompt/persona.js'
@@ -51,7 +51,11 @@ import {
   toTaskSnapshot,
   type TaskStorageRow,
 } from './query.js'
-import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
+import {
+  SATISFYING_TASK_STATUSES,
+  assertTransitionAllowed,
+  transitionTargets,
+} from './state-machine.js'
 
 export type { TasksVerbDeps }
 
@@ -304,14 +308,24 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
   //    better-sqlite3 单连接上同步执行不向并发暴露未闭合事务）。
   const result = withTransaction(db, (): ClaimTaskResult => {
     // ④ 转移（pending/blocked → in_progress）或幂等重入（in_progress 无状态转移，C1）
-    const reclaimed = row.task_status === 'in_progress'
+    // Root cause（bug 21764a56）：row 是事务外快照（档案取用 await 窗口内他会话可完成同任务
+    // claim）——判定与 UPDATE 必须基于事务体内重读的当前态；漂移入 in_progress（他会话并发
+    // 领走）即拒绝，不产生重复 claim 记录/双会话链接。adopt 径例外（S3 接管语义——忽略 links
+    // 定向恢复，状态漂移不改变接管意图）；无漂移的快照即 in_progress 重入（显式 taskRef /
+    // adopt / links 已含本会话——目标解析面已限定）不受波及。
+    const current = taskById(db, row.id)
+    if (current === undefined) {
+      throw new TaskNotFoundError({ projectId: input.projectId, taskId: row.id })
+    }
+    const drifted = current.task_status !== row.task_status
+    const reclaimed = current.task_status === 'in_progress'
     if (!reclaimed) {
-      // agent 面矩阵先验（pending/blocked → in_progress 合法；终态/挂起态拒绝）
-      assertTransitionAllowed(row.task_status, 'in_progress', 'agent')
+      // agent 面矩阵先验（pending/blocked → in_progress 合法；终态/挂起态拒绝——基于重读态）
+      assertTransitionAllowed(current.task_status, 'in_progress', 'agent')
 
       // 写前相位增量断言（受影响 feature——漂移即整体回滚，承重防护；律四：proposal 容器
       // 无相位域 → 守卫与重算整体跳过——resolvePhaseGuardFeature 单源判别）
-      const feature = resolvePhaseGuardFeature(db, row)
+      const feature = resolvePhaseGuardFeature(db, current)
       if (feature !== undefined) {
         const before = readPhaseInput(db, feature.id)
         assertPhaseInvariant({
@@ -322,7 +336,18 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
         })
       }
 
-      db.prepare(`UPDATE tasks SET task_status = 'in_progress', updated_at = ? WHERE id = ?`).run(now, row.id)
+      const changed = db
+        .prepare(`UPDATE tasks SET task_status = 'in_progress', updated_at = ? WHERE id = ? AND task_status = ?`)
+        .run(now, current.id, current.task_status)
+      if (changed.changes === 0) {
+        // 条件 UPDATE 防线：快照态被并发改写即拒（同事务同步窗口内理论不可达——纵深防御）
+        throw new InvalidTransitionError({
+          current: current.task_status,
+          to: 'in_progress',
+          face: 'agent',
+          allowed: transitionTargets(current.task_status, 'agent'),
+        })
+      }
 
       // 相位重算（§6-29 触发器清单含 claimTask——pending 池入活跃集 → in-progress）
       if (feature !== undefined) {
@@ -340,6 +365,15 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
           )
         }
       }
+    } else if (drifted && input.adopt === undefined) {
+      // 快照漂移入 in_progress：他会话并发领走（TOCTOU）——非 adopt 径拒绝（幂等重入授权
+      // 不足：本会话无 links、无显式接管语义）
+      throw new InvalidTransitionError({
+        current: 'in_progress',
+        to: 'in_progress',
+        face: 'agent',
+        allowed: transitionTargets('in_progress', 'agent'),
+      })
     }
 
     // ⑤ claim 记录（digest 落库——全文不入库 §6-11；重入 from/to 空——无状态效应，同 add 形制；
@@ -351,7 +385,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
        VALUES (?, 'claim', ?, ?, ?, ?, 'plugin-tool', ?, ?, ?)`,
     ).run(
       row.id,
-      reclaimed ? null : row.task_status,
+      reclaimed ? null : current.task_status,
       reclaimed ? null : 'in_progress',
       digest,
       input.loopSourced === true ? 1 : 0,
@@ -368,7 +402,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
     // ⑦ 快照（fresh claim 写后重读——taskStatus/updatedAt 新值；重入行原样）
     return {
-      task: toTaskSnapshot(reclaimed ? row : resolveTaskById(db, input.projectId, row.id)),
+      task: toTaskSnapshot(reclaimed ? current : resolveTaskById(db, input.projectId, row.id)),
       dispatchPrompt,
       persona: personaWithAnchors,
       digest,
