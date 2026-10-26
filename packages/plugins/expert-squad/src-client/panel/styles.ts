@@ -45,7 +45,7 @@ export const PANEL_CSS = `
 .dswf-xcard.off { opacity: 0.55; } /* dsw-raw 原型禁用卡降透明刻度 */
 .xc-head { display: flex; align-items: center; gap: ${T.gap8}; }
 .xc-name { font-size: var(--dsw-font-s-14-font-size); line-height: var(--dsw-font-s-14-line-height); font-weight: 500; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* 1.68 裁决：主标识单行——不换行 + 截断省略 */
-.xc-head .chip.tool { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.xc-head .chip.tool { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; } /* 可收缩：超长键截断不顶破卡面 */
 .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; } /* dsw-raw 原型状态灯点径刻度 */
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
@@ -66,7 +66,7 @@ export const PANEL_CSS = `
 .dswf-dlg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-mask, rgba(0,0,0,0.4)); z-index: 100; }
 .dswf-dlg { position: relative; display: flex; flex-direction: column; width: 680px; max-width: calc(100vw - 32px); max-height: 88%; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
 /* 头部（1.67 裁决：列布局——标识行 + 来源行；唯一分隔线在头部容器底，无双线） */
-.dswf-dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); }
+.dswf-dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); } /* dsw-raw 原型行距刻度（与 .xc-tags 6px 同值同形制） */
 .dswf-dlg-head-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }

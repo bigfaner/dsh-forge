@@ -415,6 +415,8 @@ export function ExpertGroupView(
   const multi = group.shadows.length > 0
   const selected = group.shadows.find((shadow) => shadow.origin === selectedOrigin) ?? group.shadows[0]
   return (
+    // 「multi」为测试锚（单测 panel-view / e2e expert-squad-compare-mode GROUP_MULTI 选择器），
+    // 无样式消费面（.multi 无 CSS 规则）——删类需同步两处选择器
     <section className={`dswf-xgroup${multi ? " multi" : ""}`} data-expert-key={group.key}>
       <header className="xg-head">
         <b className="xg-name">{group.key}</b>

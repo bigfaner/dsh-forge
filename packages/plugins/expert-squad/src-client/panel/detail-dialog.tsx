@@ -185,7 +185,8 @@ export function mselMenuPlacement(
   const base = {
     left: box.left,
     width: box.width,
-    maxHeight: Math.min(maxMenuPx, Math.max(below, above) - 4),
+    // 极小视口两侧均负 → Math.max(0,…) 兜底（maxHeight 负值非法，回退零高）
+    maxHeight: Math.min(maxMenuPx, Math.max(0, Math.max(below, above) - 4)),
   };
   if (below < maxMenuPx && above > below) {
     return { side: "above", style: { ...base, bottom: viewportHeight - box.top + 4 } };
@@ -365,11 +366,14 @@ function OriginBar({
 /** 两两对比态 body（③⑥：对象单选列表——Dialog 形态唯一选择控件，chips 为聚组展开语汇不在此；差异默认表 + 退出回查看）。 */
 function CompareBody({
   state,
+  effective,
   shadows,
   projectName,
   controller,
 }: {
   readonly state: DetailState;
+  /** 对比左列生效条（bug e1d74589：同自 sameKeyEntries 按 effective 位重解析——与右列同代际）。 */
+  readonly effective: ExpertView;
   readonly shadows: readonly ExpertView[];
   readonly projectName?: string;
   readonly controller: ExpertDetailController;
@@ -396,18 +400,23 @@ function CompareBody({
           </button>
         ))}
       </div>
-      <DiffOnlyToggle
-        showAll={showAll}
-        diffCount={target === undefined ? 0 : diffFields(state.expert, target).length}
-        onToggle={toggle}
-      />
-      {target === undefined ? null : (
-        <PairCompareTable
-          effective={state.expert}
-          shadow={target}
-          showAllFields={showAll}
-          projectName={projectName}
-        />
+      {target === undefined ? (
+        // 失靶空态：对比对象被删/刷新消失——引导重选，不渲染残缺对比表
+        <div className="dswf-cmp-empty">对比对象已不在，请重选</div>
+      ) : (
+        <>
+          <DiffOnlyToggle
+            showAll={showAll}
+            diffCount={diffFields(effective, target).length}
+            onToggle={toggle}
+          />
+          <PairCompareTable
+            effective={effective}
+            shadow={target}
+            showAllFields={showAll}
+            projectName={projectName}
+          />
+        </>
       )}
     </>
   );
@@ -436,6 +445,11 @@ export function ExpertDetailDialog(props: {
   const shadows = (props.sameKeyEntries ?? []).filter(
     (peer) => peer !== expert && peer.effective !== true,
   );
+  // bug e1d74589：对比左列生效条同自 sameKeyEntries 按 effective 位重解析——
+  // state.expert 是 open 期快照（仅 save/toggleEnabled 换新），外部改动后与右列
+  // （渲染时重解析）代际错位出幻影 diff；无显式生效位条目时回落快照（旧载荷容忍）。
+  const compareEffective =
+    (props.sameKeyEntries ?? []).find((entry) => entry.effective === true) ?? expert;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -454,6 +468,7 @@ export function ExpertDetailDialog(props: {
   const body = comparing ? (
     <CompareBody
       state={state}
+      effective={compareEffective}
       shadows={shadows}
       projectName={props.projectName}
       controller={props.controller}

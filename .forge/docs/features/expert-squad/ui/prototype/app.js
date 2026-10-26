@@ -41,7 +41,7 @@ function cardHtml(x) {
       <div class="xc-title">${x.title}${x.enabled ? '' : ' · 已禁用'}</div>
       <div class="xc-creed">${x.desc}</div>
       <div>
-        <div class="xc-seg">技能标签</div>
+        <div class="xc-seg">技能</div>
         <div class="xc-tags">${x.skills.map(s => `<span class="chip">${s}</span>`).join('')}</div>
       </div>
       <div>

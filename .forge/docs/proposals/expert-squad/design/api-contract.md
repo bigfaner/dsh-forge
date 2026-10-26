@@ -37,6 +37,7 @@ function apply(ctx: Context) {
 - 语义边界：**生效语义零改动**——遮蔽定序仍 project > user > plugin，`get`/`compose`/启停键控照旧；本载荷仅服务面板聚组对比展示。
 - 排序：键名字典序；同键内生效条目首张，其后 origin 高→低。
 - 可见性：生效条目沿用 `list` 启停可见性（禁用默认不可见，`includeDisabled: true` 才含）；被遮蔽条目恒在场（只读，无操作语义附丽）。
+- 知会：面板另有 `GET /api/expert-squad/run-state` 读口，应答含 `delegate: { status: 'registered' | 'degraded', reason? }`（委派工具装配状态；`degraded` 携原因码，载荷形状漂移/缺字段客户端容缺不呈现）。
 
 ## 3. `ExpertRecord` 字段表（与 §7 逐字段一致）
 

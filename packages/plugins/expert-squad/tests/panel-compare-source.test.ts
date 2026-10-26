@@ -299,6 +299,31 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
     expect(html).toContain(">评审v2</span>");
   });
 
+  it("bug e1d74589：对比左列同自 sameKeyEntries 按 effective 位重解析（外部改动后无幻影 diff）", () => {
+    // open 期快照 title=项目评审；轮询换新后生效层 title 变为 项目评审v2（同键新对象），
+    // shadow 字段与换新后生效层完全一致——左列若读陈旧快照即出幻影 diff
+    const reloaded = entry({ origin: "project", effective: true, title: "项目评审v2" });
+    const staleShadow = entry({
+      origin: "user",
+      effective: false,
+      title: "项目评审v2",
+      description: reloaded.description,
+      personaMd: reloaded.personaMd,
+    });
+    const html = renderDialog(compareCtl(staleShadow), { sameKeyEntries: [staleShadow, reloaded] });
+    expect(html).toContain("字段完全一致"); // 两列同代际 → 零差异空态
+    expect(html).not.toContain('class="diff"'); // 幻影 diff 不在场
+    expect(html).toContain(">项目评审v2</span>"); // 左列生效格读换新值
+  });
+
+  it("对比对象失靶（被删/刷新消失）：渲染「对比对象已不在，请重选」空态（.dswf-cmp-empty）", () => {
+    // startCompare 记录的 target origin 在渲染期 sameKeyEntries 中已不存在
+    const html = renderDialog(compareCtl(), { sameKeyEntries: [effective] });
+    expect(html).toContain("dswf-cmp-empty");
+    expect(html).toContain("对比对象已不在，请重选");
+    expect(html).not.toContain("dswf-xcompare");
+  });
+
   it("差异默认：默认仅差异行 + 高亮；「显示全部字段」切换标记在场；完全一致空态", () => {
     const diffHtml = renderDialog(compareCtl(), { sameKeyEntries: [shadowUser, effective] });
     expect(diffHtml).toContain("仅显示差异项");

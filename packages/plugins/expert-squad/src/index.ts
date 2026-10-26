@@ -383,13 +383,14 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     };
     console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
-    delegateAssembly = { status: "registered" };
+    // registered 落态在注册成功之后：register 抛错时不误报 registered（fail-loud 透传）
     registerDelegateExpertTool(toolsFace, {
       registry,
       subagents,
       panel,
       provider: "spawn",
     });
+    delegateAssembly = { status: "registered" };
   }
   registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
 }

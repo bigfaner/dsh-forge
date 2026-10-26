@@ -77,7 +77,8 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
 
   it("数据态：卡片字段集逐位在场（灯/名称/标识 chip/岗位/人设/chips/更新页脚）", () => {
     const html = renderPanel();
-    expect(html).toContain("dswf-xcard");    expect(html).toContain("dot on");
+    expect(html).toContain("dswf-xcard");
+    expect(html).toContain("dot on");
     expect(html).toContain("code-reviewer"); // 名称与英文标识 chip 同源（键正本）
     expect(html).toContain("资深评审"); // 岗位 ← title
     expect(html).toContain("评审 diff 与正确性"); // 人设摘要（Markdown 剥离后）
