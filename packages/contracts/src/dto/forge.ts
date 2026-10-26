@@ -464,6 +464,8 @@ export interface AddTaskResult {
   localId: string
   /** 两级去重命中 = 任务级 fix 复用（既有行复用，零新建） */
   reused: boolean
+  /** before 挂边命中的后继自然键清单（'slug/localId'——task-pause-primitive §2.1 插入序结果面；缺席 = 未携 before） */
+  beforeSuccessors?: string[]
 }
 
 /**

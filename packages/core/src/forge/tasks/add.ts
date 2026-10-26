@@ -28,10 +28,12 @@ import type {
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
+import { BEFORE_SUCCESSOR_ALLOWED_STATUSES } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import {
+  BeforeSuccessorInvalidError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -341,6 +343,43 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       depends.push(dep)
     }
 
+    // ④b before 后继解析 + 状态守卫（task-pause-primitive §2.1 插入序——单事务「建新任务 +
+    //    给各后继补 dependsOn 新边」，关掉两步走之间后继被循环抢先领取的竞态窗口）：同容器
+    //    查捞口径同 dependsOn（撞他容器同键 = 同容器边约束拒绝）；状态守卫单源
+    //    BEFORE_SUCCESSOR_ALLOWED_STATUSES——in_progress 指路 pauseTask / interrupted 指
+    //    human 通道 / 终态指改选（ERR_BEFORE_SUCCESSOR_INVALID，事务内先于写零副作用）
+    const successors: TaskKeyRow[] = []
+    for (const localId of input.before ?? []) {
+      const succ = db
+        .prepare<unknown[], TaskKeyRow>(
+          `SELECT id, slug, local_id, task_status, task_type, source_task_id, source_kind, source_id FROM tasks
+           WHERE slug = ? AND local_id = ?`,
+        )
+        .get(input.source.slug, localId)
+      if (succ === undefined || !sameContainer(succ, container.kind, container.sourceId)) {
+        throw new TaskNotFoundError({
+          projectId: input.projectId,
+          taskRef: { slug: input.source.slug, localId },
+          featureSlug: input.source.slug,
+        })
+      }
+      if (!(BEFORE_SUCCESSOR_ALLOWED_STATUSES as readonly string[]).includes(succ.task_status)) {
+        const action =
+          succ.task_status === 'in_progress'
+            ? ('pauseTask' as const)
+            : succ.task_status === 'interrupted'
+              ? ('human' as const)
+              : ('terminal' as const)
+        throw new BeforeSuccessorInvalidError({
+          projectId: input.projectId,
+          taskRef: { slug: succ.slug, localId: succ.local_id },
+          taskStatus: succ.task_status,
+          action,
+        })
+      }
+      successors.push(succ)
+    }
+
     // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延；
     //    计数作用域 = 容器 slug——UNIQUE(slug, local_id) 同 slug 键空间跨容器共享）
     const localId = allocateLocalId(
@@ -384,6 +423,22 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
             ...hopPath.map((id) => keys.get(id) ?? id),
           ]
           throw new CycleDetectedError({ cycle })
+        }
+      }
+    }
+
+    // ⑦b before 增量环校验扩展（task-pause-primitive §2.1——把 before 后继纳入检测）：新边
+    //    (S←T) 与 T 的 dependsOn 出边 (T←D) 成环 ⟺ D 经既有出边可达 S（含 D===S 两步环直报），
+    //    命中即 ERR_CYCLE_DETECTED 回报完整环路径，事务整体回滚零残留
+    for (const s of successors) {
+      for (const d of depends) {
+        const hopPath = d.id === s.id ? [d.id] : findPathThroughOutEdges(db, d.id, s.id)
+        if (hopPath !== null) {
+          const keys = naturalKeysByIds(db, [s.id, ...hopPath])
+          const tKey = naturalKey(container.slug, localId)
+          throw new CycleDetectedError({
+            cycle: [keys.get(s.id) ?? s.id, tKey, ...hopPath.map((id) => keys.get(id) ?? id)],
+          })
         }
       }
     }
@@ -459,6 +514,20 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       }
     }
 
+    // ⑩b before 后继挂边（task-pause-primitive §2.1）：manual 边 (后继 ← 新任务)——复用
+    //    insertEdge 同口径（重复报错——PK 冲突映射 ERR_TASK_EXISTS）；同事务原子，后继立即
+    //    失就绪（claim 就绪集判定前置未满足），无两步走抢领窗口
+    for (const succ of successors) {
+      try {
+        insertEdge.run(succ.id, taskId, 'manual', now, now)
+      } catch (cause) {
+        if (isUniqueViolation(cause, 'task_edges')) {
+          throw new TaskExistsError({ projectId: input.projectId, edge: { taskId: succ.id, prerequisiteId: taskId } })
+        }
+        throw cause
+      }
+    }
+
     // ⑪ records 行：add（新任务，actor='plugin-tool'——add 为 tool 专属动词，通道即 actor）
     db.prepare(
       `INSERT INTO task_records (task_id, verb, actor, created_at, updated_at)
@@ -493,7 +562,15 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       }
     }
 
-    return { taskId, slug: container.slug, localId, reused: false }
+    return {
+      taskId,
+      slug: container.slug,
+      localId,
+      reused: false,
+      ...(successors.length > 0
+        ? { beforeSuccessors: successors.map((s) => naturalKey(s.slug, s.local_id)) }
+        : {}),
+    }
   })
 
   // 复用命中（纯读零变更）不发射；写路径事务提交后 emitTasksChanged（四域写后事件裁决）

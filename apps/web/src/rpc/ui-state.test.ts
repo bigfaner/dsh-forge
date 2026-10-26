@@ -55,6 +55,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   // session-binding-guarantee W2 / bug 4a30b193——创建入口显式拒绝错误条
   ERR_WORKTREE_CAPABILITY_ABSENT: 'error-bar',
   ERR_WORKTREE_TARGET_ABSENT: 'error-bar',
+  // task-pause-primitive §2.1——before 后继不可挂边状态错误条
+  ERR_BEFORE_SUCCESSOR_INVALID: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {
