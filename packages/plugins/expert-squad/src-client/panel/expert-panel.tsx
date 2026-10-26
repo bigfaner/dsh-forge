@@ -11,10 +11,16 @@
 //（1.4/1.22）——零新增旁路。
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  COMPARE_FIELDS,
+  diffFields,
+  fieldDiffers,
   filterExperts,
   footerText,
+  groupExperts,
+  originLabel,
   personaSummary,
   updatedLabel,
+  type ExpertGroup,
   type ExpertView,
   type StatusFilter,
 } from "./filter.js";
@@ -271,12 +277,18 @@ const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: s
   { value: "disabled", label: "禁用" },
 ]
 
+/** 来源角标（三态文案：项目/用户/内置——DESIGN.md 令牌；未知原值透传）。 */
+function OriginBadge({ origin }: { readonly origin: string }): ReactNode {
+  return <span className={`origin-badge origin-${origin}`}>{originLabel(origin)}</span>
+}
+
 function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly onActivate?: (key: string) => void }): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
   return (
     <article
       className={`dswf-xcard${expert.enabled ? "" : " off"}`}
       data-expert-key={expert.name}
+      data-effective={expert.effective === false ? "false" : "true"}
       role="button"
       tabIndex={0}
       onClick={() => onActivate?.(expert.name)}
@@ -285,6 +297,8 @@ function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly on
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
         <span className="chip tool">{expert.name}</span>
+        <OriginBadge origin={expert.origin} />
+        <span className="eff-badge">生效</span>
       </div>
       <div className="xc-title">
         {expert.title}
@@ -313,6 +327,97 @@ function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly on
       </div>
       <div className="xc-foot">{updated === undefined ? "" : <span>更新于 {updated}</span>}</div>
     </article>
+  )
+}
+
+/** 字段值对比单元（数组 → chips；标量 → 文本）。 */
+function CompareCell({ value, diff }: { readonly value: unknown; readonly diff: boolean }): ReactNode {
+  return (
+    <td className={diff ? "diff" : undefined}>
+      {Array.isArray(value)
+        ? value.map((item) => (
+            <span key={item} className="chip">
+              {item}
+            </span>
+          ))
+        : String(value ?? "")}
+    </td>
+  )
+}
+
+/** 展开对比视图：被遮蔽卡 vs 生效卡字段对齐表（差异格 warn 高亮）。 */
+function CompareView({ group, shadow }: { readonly group: ExpertGroup; readonly shadow: ExpertView }): ReactNode {
+  const diffs = diffFields(group.effective, shadow)
+  return (
+    <div className="dswf-xcompare" data-compare-key={shadow.origin}>
+      <table className="cmp-table">
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>
+              <OriginBadge origin={group.effective.origin} />
+              <span className="eff-badge">生效</span>
+            </th>
+            <th>
+              <OriginBadge origin={shadow.origin} />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {COMPARE_FIELDS.map(({ field, label }) => (
+            <tr key={field}>
+              <th>{label}</th>
+              <CompareCell value={group.effective[field] as unknown} diff={fieldDiffers(field, group.effective, shadow)} />
+              <CompareCell value={shadow[field] as unknown} diff={fieldDiffers(field, group.effective, shadow)} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="cmp-note">与生效卡不同的字段已高亮（{diffs.length} 项）· 被遮蔽卡只读</div>
+    </div>
+  )
+}
+
+/**
+ * 聚组容器（1.60 用户裁决）：组头（键 + 来源数 + 展开对比钮）→ 生效卡 → 被遮蔽
+ * 摘要行 ×N（点击展开完整对比）。单来源组无摘要行、无对比钮（与普通卡同形）。
+ * 导出面：单测直接消费（defaultExpanded = SSR 展开态测试缝）。
+ */
+export function ExpertGroupView(
+  { group, onActivate, defaultExpanded }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly defaultExpanded?: boolean }): ReactNode {
+  const [expanded, setExpanded] = useState(defaultExpanded === true)
+  const multi = group.shadows.length > 0
+  return (
+    <section className={`dswf-xgroup${multi ? " multi" : ""}`} data-expert-key={group.key}>
+      <header className="xg-head">
+        <b className="xg-name">{group.key}</b>
+        <span className="xg-cnt">{group.shadows.length + 1} 个来源</span>
+        {multi ? (
+          <button type="button" className="xg-spread" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "收起对比" : "展开对比"}
+          </button>
+        ) : null}
+      </header>
+      <Card expert={group.effective} {...(onActivate !== undefined ? { onActivate } : {})} />
+      {group.shadows.map((shadow) => (
+        <div className="xg-shadow-block" key={shadow.origin}>
+          <button
+            type="button"
+            className="dswf-xshadow"
+            data-expert-key={group.key}
+            data-origin={shadow.origin}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <OriginBadge origin={shadow.origin} />
+            <span className="xs-title">{shadow.title}</span>
+            <span className="xs-updated">{updatedLabel(shadow.updatedAt) ?? ""}</span>
+            <span className="xs-mark">被遮蔽 · 只读</span>
+          </button>
+          {expanded ? <CompareView group={group} shadow={shadow} /> : null}
+        </div>
+      ))}
+    </section>
   )
 }
 
@@ -359,17 +464,21 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
       </div>
     )
   } else {
-    gridBody = filtered.map((expert) => (
-      <Card key={expert.name} expert={expert} {...(props.onCardActivate !== undefined ? { onActivate: props.onCardActivate } : {})} />
+    // 同键聚组（1.60 用户裁决）：网格按键分组渲染；页脚计数按专家键数
+    gridBody = groupExperts(filtered).map((group) => (
+      <ExpertGroupView key={group.key} group={group} {...(props.onCardActivate !== undefined ? { onActivate: props.onCardActivate } : {})} />
     ))
   }
 
+  const keyCount = new Set(entries.map((entry) => entry.name)).size
+  const shownCount =
+    phase === "ready" && entries.length > 0 ? groupExperts(filtered).length : filtered.length
   const countText =
     phase === "loading"
       ? "扫描专家目录…"
       : phase === "error"
         ? ""
-        : footerText(entries.length, filtered.length)
+        : footerText(keyCount, shownCount)
 
   return (
     <>

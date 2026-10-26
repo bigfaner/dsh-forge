@@ -5,8 +5,9 @@
 import { describe, expect, it } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ExpertPanel, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
+import { ExpertPanel, ExpertGroupView, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
+import { groupExperts } from "../src-client/panel/filter.js";
 
 function entry(overrides: Partial<ExpertView> = {}): ExpertView {
   return {
@@ -140,5 +141,82 @@ describe("ExpertPanel 头部交互面", () => {
       "HR 预设切换被拒",
     );
     expect(renderPanel({ onSummon: () => undefined })).not.toContain("dswf-summon-notice");
+  });
+});
+
+describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
+  const layered: readonly ExpertView[] = [
+    {
+      ...entry(),
+      origin: "plugin",
+      effective: false,
+      title: "内置评审",
+      tools: ["read"],
+      skills: ["review"],
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    },
+    entry({ origin: "project", effective: true }),
+  ];
+
+  function renderGroup(defaultExpanded?: boolean): string {
+    const group = groupExperts(layered)[0]!;
+    return renderToStaticMarkup(
+      React.createElement(ExpertGroupView, {
+        group,
+        ...(defaultExpanded !== undefined ? { defaultExpanded } : {}),
+      }),
+    );
+  }
+
+  it("组头：键名 + 来源数 + 展开对比钮；生效卡带「生效」标与来源角标", () => {
+    const html = renderGroup();
+    expect(html).toContain("dswf-xgroup multi");
+    expect(html).toContain('data-expert-key="code-reviewer"');
+    expect(html).toContain("2 个来源");
+    expect(html).toContain("展开对比");
+    expect(html).toContain("eff-badge");
+    expect(html).toContain(">生效</span>");
+    expect(html).toContain("origin-project");
+    expect(html).toContain(">项目</span>");
+  });
+
+  it("被遮蔽卡折叠为摘要行：来源角标 + 岗位 + 更新时间 + 只读标记；非卡片非按钮激活面", () => {
+    const html = renderGroup();
+    expect(html).toContain("dswf-xshadow");
+    expect(html).toContain('data-origin="plugin"');
+    expect(html).toContain("origin-plugin");
+    expect(html).toContain(">内置</span>");
+    expect(html).toContain("内置评审");
+    expect(html).toContain("2026-10-01");
+    expect(html).toContain("被遮蔽 · 只读");
+    // 折叠态：对比视图不渲染
+    expect(html).not.toContain("dswf-xcompare");
+  });
+
+  it("展开对比：字段对齐表 + 差异格 diff 高亮（岗位/人设/工具白名单/技能异、简介同）", () => {
+    const html = renderGroup(true);
+    expect(html).toContain("dswf-xcompare");
+    expect(html).toContain("岗位");
+    expect(html).toContain("简介");
+    expect(html).toContain("人设");
+    expect(html).toContain("工具白名单");
+    expect(html).toContain("技能");
+    // 差异格：两列同 diff 格对齐（title/personaMd/tools/skills 异、description 同 → 3 字段 × 2 列）
+    const diffCount = html.match(/class="diff"/g)?.length ?? 0;
+    expect(diffCount).toBe(6);
+    expect(html).toContain("3 项");
+  });
+
+  it("单来源组：无对比钮、无摘要行（与普通卡同形）；页脚计数按专家键数", () => {
+    const html = renderPanel({ entries: [entry()] });
+    expect(html).toContain("dswf-xgroup");
+    expect(html).not.toContain("展开对比");
+    expect(html).not.toContain("dswf-xshadow");
+    expect(html).toContain("1 位专家 · 显示 1");
+  });
+
+  it("计数按专家键数：同键三层 = 1 位专家 · 显示 1 组", () => {
+    const html = renderPanel({ entries: layered });
+    expect(html).toContain("1 位专家 · 显示 1");
   });
 });

@@ -88,6 +88,35 @@ export const PANEL_CSS = `
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
 /* [召唤] 降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */
 .dswf-summon-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
+/* ── 同键全层聚组（1.60 用户裁决：组容器 + 生效标 + 来源角标 + 差异对比） ── */
+.dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r12}; padding: ${T.pad12}; }
+.dswf-xgroup.multi { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 35%, transparent); }
+.xg-head { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
+.xg-name { font: var(--dsw-font-xxs-12); font-weight: 500; color: var(--dsw-alias-label-secondary); font-family: var(--ds-font-family-code); }
+.xg-spread { margin-left: auto; border: none; background: transparent; color: var(--dsw-alias-state-business-primary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); padding: 0; }
+.xg-spread:hover { text-decoration: underline; }
+/* 来源角标（三态文案 项目/用户/内置；语义 alias 点色，色底经 color-mix 降饱和） */
+.origin-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; margin-left: auto; white-space: nowrap; }
+.origin-badge.origin-project { color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
+.origin-badge.origin-user { color: var(--dsw-alias-state-warn-label); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent); }
+.origin-badge.origin-plugin { color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover); }
+/* 生效标（遮蔽胜出层——取用/编辑/启停语义附丽点） */
+.eff-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent); }
+/* 被遮蔽卡折叠摘要行（只读——点击展开对比） */
+.dswf-xshadow { display: flex; align-items: center; gap: ${T.gap8}; width: 100%; padding: ${T.gap8} ${T.pad12}; border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
+.dswf-xshadow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dswf-xshadow .origin-badge { margin-left: 0; }
+.dswf-xshadow .xs-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dswf-xshadow .xs-updated { color: var(--dsw-alias-label-caption); flex: none; }
+.dswf-xshadow .xs-mark { margin-left: auto; color: var(--dsw-alias-label-caption); flex: none; }
+/* 展开对比视图（字段对齐表——差异格 warn 高亮） */
+.dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); }
+.cmp-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }
+.cmp-table th, .cmp-table td { padding: 4px ${T.gap8}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; }
+.cmp-table th { font-weight: 400; color: var(--dsw-alias-label-caption); white-space: nowrap; }
+.cmp-table td .chip { margin-right: 4px; }
+.cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
+.cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
 `;
 
 /** 已注入标记（模块级单例——classic script 装载一次）。 */

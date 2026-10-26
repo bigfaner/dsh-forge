@@ -3,8 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  COMPARE_FIELDS,
+  diffFields,
+  fieldDiffers,
   filterExperts,
   footerText,
+  groupExperts,
+  originLabel,
   personaSummary,
   updatedLabel,
   type ExpertView,
@@ -97,5 +102,75 @@ describe("updatedLabel（页脚更新时间）", () => {
 
   it("缺席 = undefined（页脚时段不呈现）", () => {
     expect(updatedLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe("originLabel（来源角标三态文案，1.60）", () => {
+  it("project/user/plugin → 项目/用户/内置；未知原值透传（载荷漂移容忍）", () => {
+    expect(originLabel("project")).toBe("项目");
+    expect(originLabel("user")).toBe("用户");
+    expect(originLabel("plugin")).toBe("内置");
+    expect(originLabel("other")).toBe("other");
+  });
+});
+
+describe("groupExperts（同键全层聚组，1.60 用户裁决）", () => {
+  it("同键三层数据聚为一组：effective 位胜出者为生效卡，其余为被遮蔽卡", () => {
+    const groups = groupExperts([
+      entry({ origin: "plugin", effective: false, title: "内置版" }),
+      entry({ origin: "user", effective: false, title: "用户版" }),
+      entry({ origin: "project", effective: true, title: "项目版" }),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.key).toBe("code-reviewer");
+    expect(groups[0]!.effective.origin).toBe("project");
+    expect(groups[0]!.shadows.map((s) => s.origin)).toEqual(["plugin", "user"]);
+  });
+
+  it("单来源条目聚为单卡组（生效卡无被遮蔽行——与普通卡同形）", () => {
+    const groups = groupExperts([entry({ name: "a" }), entry({ name: "b" })]);
+    expect(groups.map((g) => [g.key, g.shadows.length])).toEqual([
+      ["a", 0],
+      ["b", 0],
+    ]);
+    expect(groups[0]!.effective.effective).not.toBe(false);
+  });
+
+  it("effective 位缺席 = 生效（旧宿主载荷漂移容忍）", () => {
+    const groups = groupExperts([entry()]);
+    expect(groups[0]!.effective.origin).toBe("project");
+    expect(groups[0]!.shadows).toHaveLength(0);
+  });
+
+  it("组序 = 首现序（载入排序由数据面承担）", () => {
+    const groups = groupExperts([
+      entry({ name: "b" }),
+      entry({ name: "a" }),
+      entry({ name: "a", origin: "user", effective: false }),
+    ]);
+    expect(groups.map((g) => g.key)).toEqual(["b", "a"]);
+  });
+});
+
+describe("diffFields（被遮蔽卡 × 生效卡字段差异，1.60）", () => {
+  const effective = entry({ origin: "project" });
+  it("同值字段不在差异清单；五字段全异 = 全键清单（序随 COMPARE_FIELDS）", () => {
+    expect(diffFields(effective, entry({ origin: "user" }))).toEqual([]);
+    const shadow = entry({
+      origin: "plugin",
+      title: "内置评审",
+      description: "Builtin review",
+      personaMd: "## 职责\n- 内置版",
+      tools: ["read"],
+      skills: ["review"],
+    });
+    expect(diffFields(effective, shadow)).toEqual(
+      COMPARE_FIELDS.map(({ field }) => field),
+    );
+  });
+
+  it("fieldDiffers：数组按序拼接比较（顺序敏感）", () => {
+    expect(fieldDiffers("tools", effective, entry({ origin: "user", tools: ["edit", "read"] }))).toBe(true);
+    expect(fieldDiffers("tools", effective, entry({ origin: "user", tools: ["read", "edit"] }))).toBe(false);
   });
 });
