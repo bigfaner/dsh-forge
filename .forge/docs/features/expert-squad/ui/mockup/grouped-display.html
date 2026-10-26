@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>同名专家聚组展示 · 视觉稿（裁决草案 2026-10-26）</title>
+<style>
+  :root {
+    --bg: #f7f7f8; --layer2: #ffffff; --base: #ffffff;
+    --border-l2: #e5e6eb; --border-l4: #c9cdd4;
+    --label-1: #1a1a1a; --label-2: #4e5969; --label-3: #86909c; --caption: #a9aeb8;
+    --hover: #f2f3f5; --accent: #165dff; --accent-bg: #e8f3ff;
+    --ok: #00b42a; --ok-bg: #e8ffea; --off: #86909c; --off-bg: #f2f3f5;
+    --diff-bg: #fff7e8; --diff-bd: #ff7d00;
+    --shadow: 0 4px 10px rgba(0,0,0,.06);
+    --r8: 8px; --r12: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 14px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--label-1); padding: 24px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: var(--label-3); font-size: 12px; margin-bottom: 20px; }
+
+  /* 面板头部（1.51 裁决后的布局，非本稿重点，仅示意） */
+  .panel-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--layer2); border-bottom: 1px solid var(--border-l2); }
+  .panel-title { font-weight: 600; }
+  .search { width: 200px; padding: 5px 10px; border: 1px solid var(--border-l2); border-radius: var(--r8); background: var(--base); color: var(--label-3); font-size: 13px; }
+  select.status { padding: 5px 8px; border: 1px solid var(--border-l2); border-radius: var(--r8); background: var(--base); font-size: 13px; color: var(--label-2); }
+  .summon { margin-left: auto; padding: 5px 16px; border: 0; border-radius: var(--r8); background: var(--accent); color: #fff; cursor: pointer; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 14px; }
+
+  /* ── 聚组容器 ─────────────────────────── */
+  .group { border: 1px solid var(--border-l2); border-radius: var(--r12); background: var(--layer2); overflow: hidden; box-shadow: var(--shadow); }
+  .group.multi { border-color: var(--accent); border-width: 1px; }
+  .group-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: linear-gradient(180deg, var(--accent-bg), transparent); border-bottom: 1px solid var(--border-l2); font-size: 13px; }
+  .group-head b { font-size: 14px; }
+  .group-head .cnt { color: var(--label-3); }
+  .group-head .spread { margin-left: auto; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 13px; }
+
+  .card { position: relative; padding: 12px 14px 10px; border-bottom: 1px dashed var(--border-l2); }
+  .card:last-child { border-bottom: 0; }
+  .xc-head { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.off { background: var(--off); }
+  .name { font-weight: 600; }
+  .chip { font-size: 12px; line-height: 18px; height: 20px; padding: 0 8px; border-radius: 999px; color: var(--label-2); background: var(--hover); white-space: nowrap; }
+  .chip.tool { background: var(--hover); color: var(--label-3); font-family: ui-monospace, monospace; }
+
+  /* 来源角标 + 生效标 */
+  .origin { font-size: 11px; line-height: 16px; padding: 0 7px; border-radius: 4px; white-space: nowrap; }
+  .origin.project { color: var(--accent); background: var(--accent-bg); }
+  .origin.user { color: #7e60ff; background: #f1ecff; }
+  .origin.plugin { color: var(--label-3); background: var(--off-bg); }
+  .effective { font-size: 11px; line-height: 16px; padding: 0 7px; border-radius: 4px; color: var(--ok); background: var(--ok-bg); border: 0.5px solid #b8f0c2; }
+
+  .title { margin-top: 6px; color: var(--label-2); font-size: 13px; }
+  .creed { margin-top: 4px; color: var(--label-3); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .xc-foot { display: flex; gap: 10px; padding-top: 8px; margin-top: 8px; border-top: 1px solid var(--border-l2); font-size: 11px; color: var(--caption); }
+
+  /* 被遮蔽摘要行（折叠态） */
+  .shadow-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,.015) 6px, rgba(0,0,0,.015) 12px); cursor: pointer; }
+  .shadow-row:hover { background: var(--hover); }
+  .shadow-row .meta { color: var(--label-3); font-size: 12px; }
+  .shadow-row .mark { margin-left: auto; font-size: 11px; color: var(--caption); }
+
+  /* ── 对比视图（展开态） ───────────────── */
+  .compare { padding: 10px 14px 14px; background: var(--bg); }
+  .cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+  .cmp-table th, .cmp-table td { padding: 7px 10px; border-bottom: 1px solid var(--border-l2); vertical-align: top; text-align: left; }
+  .cmp-table th { color: var(--caption); font-weight: 500; background: var(--layer2); white-space: nowrap; }
+  .cmp-table td { background: var(--layer2); color: var(--label-2); max-width: 300px; }
+  .cmp-table td.win { color: var(--label-1); }
+  td.diff { background: var(--diff-bg) !important; box-shadow: inset 3px 0 0 var(--diff-bd); }
+  .cmp-note { margin-top: 8px; font-size: 11px; color: var(--caption); display: flex; gap: 14px; align-items: center; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--diff-bg); box-shadow: inset 2px 0 0 var(--diff-bd); vertical-align: -2px; margin-right: 4px; }
+
+  .footer { display: flex; gap: 16px; padding: 10px 16px; border-top: 1px solid var(--border-l2); background: var(--layer2); font-size: 12px; color: var(--label-3); }
+
+  /* ── Dialog 两两对比示意 ─────── */
+  .cmp-pick { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border-l4); border-radius: var(--r8); background: var(--layer2); font-size: 12px; }
+  .cmp-pick .opt { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .cmp-pick .opt:hover { background: var(--hover); }
+  .dlg .cmp-table { margin: 0 16px 14px; width: calc(100% - 32px); }
+  .dlg-stage { margin: 20px 14px; border: 1px dashed var(--border-l4); border-radius: var(--r12); padding: 16px; background: var(--bg); }
+  .dlg-stage h3 { font-size: 13px; color: var(--label-3); font-weight: 500; margin-bottom: 10px; }
+  .dlg { max-width: 520px; margin: 0 auto; background: var(--layer2); border: 1px solid var(--border-l4); border-radius: var(--r12); box-shadow: var(--shadow); }
+  .dlg.wide { max-width: 880px; }  /* 对比态宽体（裁决⑤）：宽于详情 Dialog 680px 刻度 */
+  .dlg-origin-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border-l2); background: linear-gradient(180deg, var(--accent-bg), transparent); border-radius: var(--r12) var(--r12) 0 0; font-size: 12px; }
+  .dlg-origin-bar .lead { color: var(--label-3); }
+  .dlg-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-l2); }
+  .dlg-body { padding: 12px 16px; font-size: 13px; color: var(--label-2); }
+  .dlg-body .row { padding: 4px 0; }
+  .dlg-body .lbl { color: var(--caption); font-size: 12px; margin-right: 8px; }
+
+  .hint { margin: 0 14px 14px; padding: 10px 12px; border: 1px dashed var(--border-l4); border-radius: var(--r8); font-size: 12px; color: var(--label-3); background: var(--layer2); }
+  .hint b { color: var(--label-1); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>同名专家聚组展示 · 视觉稿</h1>
+  <div class="sub">裁决草案 2026-10-26：同名全展示 · 聚拢对比 · 来源明确 —— 交互：点击被遮蔽行或「展开对比」切换</div>
+
+  <div class="panel-header">
+    <span class="panel-title">专家团</span>
+    <input class="search" placeholder="搜索名称 / 技能">
+    <select class="status"><option>全部</option><option>启用</option><option>禁用</option></select>
+    <select class="status"><option>全部来源</option><option>项目 · dsh-forge</option><option>用户</option><option>内置</option></select>
+    <button class="summon">召唤</button>
+  </div>
+
+  <div class="hint">
+    <b>本稿要点</b>：①同键聚组（左边第一组 = code-reviewer 三层同名的完整形态；第二组 = 单来源普通卡组作对照）②生效卡带 <span class="effective">生效</span> + 来源角标 ③被遮蔽层折叠为摘要行，展开为<b>字段对齐对比表</b>，差异单元格高亮（<span class="sw"></span>橙色标记）④页脚计数按「专家（键）」计，组内来源数在组头标注。
+  </div>
+
+  <div class="grid">
+
+    <!-- 组 1：三层同名（重点形态） -->
+    <div class="group multi" id="g1">
+      <div class="group-head">
+        <b>code-reviewer</b>
+        <span class="chip tool">code-reviewer</span>
+        <span class="cnt">3 个来源</span>
+        <button class="spread" onclick="toggleCmp()">展开对比 ▾</button>
+      </div>
+
+      <!-- 生效卡（project 层） -->
+      <div class="card">
+        <div class="xc-head">
+          <span class="dot"></span>
+          <span class="name">夹具评审</span>
+          <span class="chip tool">code-reviewer</span>
+          <span class="origin project">项目</span>
+          <span class="effective">生效</span>
+        </div>
+        <div class="title">夹具评审 · 专注测试夹具与契约面</div>
+        <div class="creed">评审测试夹具的实现与契约一致性：RED 先行、断言语义强度、fixture 与真实装配面的距离。</div>
+        <div class="tags">
+          <span class="chip">vitest</span><span class="chip">契约测试</span>
+          <span class="chip tool">read</span><span class="chip tool">bash</span>
+        </div>
+        <div class="xc-foot"><span>来源：项目层（.dsh/experts）</span><span>更新 2026-10-26 09:12</span></div>
+      </div>
+
+      <!-- 被遮蔽摘要行 ×2（折叠态） -->
+      <div class="shadow-row" onclick="toggleCmp()">
+        <span class="origin user">用户</span>
+        <span class="meta">资深评审 · 通用代码评审 —— 已被项目层遮蔽</span>
+        <span class="mark">更新 2026-10-20</span>
+      </div>
+      <div class="shadow-row" onclick="toggleCmp()">
+        <span class="origin plugin">内置</span>
+        <span class="meta">Code Reviewer · 官方内置评审 —— 已被项目层遮蔽</span>
+        <span class="mark">随包分发</span>
+      </div>
+
+      <!-- 对比视图（默认展开本稿供预览；实现态默认折叠）——两两口径：生效卡 vs 点选来源 -->
+      <div class="compare" id="cmp">
+        <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+          <span style="font-size:12px;color:var(--caption)">对比对象：</span>
+          <span class="origin user" style="cursor:pointer">用户 · 资深评审 ✓</span>
+          <span class="origin plugin" style="cursor:pointer">内置 · Code Reviewer</span>
+          <span style="font-size:11px;color:var(--caption);margin-left:auto">两两对比 · 点选切换</span>
+        </div>
+        <table class="cmp-table">
+          <tr><th style="width:88px">字段</th><th><span class="origin project">项目</span> 夹具评审 <span class="effective">生效</span></th><th><span class="origin user">用户</span> 资深评审</th></tr>
+          <tr><th>岗位</th><td class="win diff">夹具评审 · 专注测试夹具与契约面</td><td>资深评审 · 通用代码评审</td></tr>
+          <tr><th>工具白名单</th><td class="win diff"><span class="chip tool">read</span> <span class="chip tool">bash</span></td><td><span class="chip tool">read</span></td></tr>
+          <tr><th>技能</th><td class="win diff"><span class="chip">vitest</span> <span class="chip">契约测试</span></td><td><span class="chip">评审</span> <span class="chip">重构</span></td></tr>
+        </table>
+        <div class="cmp-note"><span><span class="sw"></span>与生效卡不同的字段</span><span>切换对比对象即换右列，禁三列并排</span><span>编辑 / 启停仅作用于生效卡（写项目层）</span></div>
+      </div>
+    </div>
+
+    <!-- 组 2：单来源（对照形态，与现行卡片一致） -->
+    <div class="group">
+      <div class="group-head" style="background:transparent">
+        <b>db-migrator</b>
+        <span class="chip tool">db-migrator</span>
+        <span class="cnt">1 个来源</span>
+      </div>
+      <div class="card">
+        <div class="xc-head">
+          <span class="dot off"></span>
+          <span class="name">数据库迁移</span>
+          <span class="chip tool">db-migrator</span>
+          <span class="origin user">用户</span>
+          <span class="effective">生效</span>
+        </div>
+        <div class="title">数据库迁移专家 · 大表变更</div>
+        <div class="creed">负责数据库 schema 迁移方案的评审与实施：灰度、回滚、锁表风险评估。</div>
+        <div class="tags"><span class="chip">sql</span><span class="chip">迁移</span><span class="chip tool">read</span></div>
+        <div class="xc-foot"><span>来源：用户层（~/.dsh/experts）</span><span>更新 2026-10-18</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <span>专家 8（键）</span><span>来源 10（项目 3 · 用户 5 · 内置 2）</span><span>1 个同名组</span>
+  </div>
+
+  <div class="dlg-stage">
+    <h3>详情 Dialog · 来源置顶示意（裁决②：来源放在上方显要位置）</h3>
+    <div class="dlg wide">
+      <div class="dlg-origin-bar">
+        <span class="lead">来源</span>
+        <span class="origin project">项目 · dsh-forge</span>
+        <span class="effective">生效</span>
+        <span style="color:var(--caption);margin-left:auto;font-size:12px;">项目层 · dsh-forge/.dsh/experts（遮蔽同名：用户 / 内置）</span>
+      </div>
+      <div class="dlg-head">
+        <span class="dot"></span>
+        <b>夹具评审</b>
+        <span class="chip tool">code-reviewer</span>
+        <span style="margin-left:auto;display:flex;gap:6px;">
+          <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">对比</button>
+          <button class="summon" style="padding:3px 12px;font-size:12px;">编辑</button>
+          <button class="summon" style="padding:3px 12px;font-size:12px;background:var(--hover);color:var(--label-2);border:0.5px solid var(--border-l2);">禁用</button>
+        </span>
+      </div>
+      <div class="dlg-body">
+        <div class="row"><span class="lbl">岗位</span>夹具评审 · 专注测试夹具与契约面</div>
+        <div class="row"><span class="lbl">简介</span>评审测试夹具的实现与契约一致性…</div>
+        <div class="row"><span class="lbl">更新</span>2026-10-26 09:12</div>
+      </div>
+      <div class="cmp-pick">
+        <b>对比</b>（两两）——选择同键其它来源：
+        <div class="opt"><span class="origin user">用户</span> 资深评审 · 通用代码评审 <span style="margin-left:auto;color:var(--caption)">2026-10-20</span></div>
+        <div class="opt"><span class="origin plugin">内置</span> Code Reviewer · 官方内置 <span style="margin-left:auto;color:var(--caption)">随包分发</span></div>
+      </div>
+      <table class="cmp-table">
+        <tr><th colspan="3" style="text-align:right;font-weight:500;color:var(--accent);">仅显示差异项（3） · <u style="cursor:pointer">显示全部字段</u></th></tr>
+        <tr><th style="width:88px">字段</th><th><span class="origin project">项目 · dsh-forge</span> 夹具评审 <span class="effective">生效</span></th><th><span class="origin user">用户</span> 资深评审</th></tr>
+        <tr><th>岗位</th><td class="win diff">夹具评审 · 专注测试夹具与契约面</td><td>资深评审 · 通用代码评审</td></tr>
+        <tr><th>工具白名单</th><td class="win diff"><span class="chip tool">read</span> <span class="chip tool">bash</span></td><td><span class="chip tool">read</span></td></tr>
+        <tr><th>技能</th><td class="win diff"><span class="chip">vitest</span> <span class="chip">契约测试</span></td><td><span class="chip">评审</span> <span class="chip">重构</span></td></tr>
+      </table>
+      <div class="cmp-note" style="margin:0 16px 14px;"><span>同值字段（简介 / 人设摘要 / 更新时间）默认隐藏</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleCmp() {
+    const c = document.getElementById('cmp');
+    c.style.display = c.style.display === 'none' ? '' : 'none';
+  }
+</script>
+</body>
+</html>
