@@ -18,7 +18,17 @@ import {
 import type { TasksChangedEvent } from './forge.js'
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
-import { CONTAINER_KINDS, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
+import {
+  BEFORE_SUCCESSOR_ALLOWED_STATUSES,
+  CONTAINER_KINDS,
+  FEATURE_RECORD_VERBS,
+  FIX_CHAIN_DEPTH_LIMIT,
+  FORGE_PLUGIN_EVENT_TYPES,
+  MODES,
+  PAUSE_TASK_TRANSITION,
+  REASONING_LEVELS,
+} from './forge.js'
+import type { BeforeSuccessorAllowedStatus } from './forge.js'
 import type { ReasoningEffortLevel } from './forge.js'
 import type {
   AddTaskInput,
@@ -415,5 +425,27 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
 describe('M3 2.1 feature_records 审计面常量（TS 单源无 DB CHECK——1.1 对齐）', () => {
   it('FEATURE_RECORD_VERBS 三值 = register/transition/doc-upsert（三动词闭包伴随）', () => {
     expect(FEATURE_RECORD_VERBS).toEqual(['register', 'transition', 'doc-upsert'])
+  })
+})
+
+describe('task-pause-primitive contracts 单源面', () => {
+  it('FIX_CHAIN_DEPTH_LIMIT = 6（链深上限单一事实源——core addTask 与宿主 triage 镜像值收敛于此）', () => {
+    expect(FIX_CHAIN_DEPTH_LIMIT).toBe(6)
+  })
+
+  it('PAUSE_TASK_TRANSITION 锚 in_progress → suspended + verb: pause（单源标签面——词汇扩池随消费方任务落）', () => {
+    expect(PAUSE_TASK_TRANSITION).toEqual({ from: 'in_progress', to: 'suspended', verb: 'pause' })
+    expectTypeOf<ReturnType<typeof Object.values<typeof PAUSE_TASK_TRANSITION>>[number]>().toEqualTypeOf<
+      'in_progress' | 'suspended' | 'pause'
+    >()
+  })
+
+  it('BEFORE_SUCCESSOR_ALLOWED_STATUSES 恰 pending/blocked/suspended 三值（before 后继状态守卫单源）', () => {
+    expect(BEFORE_SUCCESSOR_ALLOWED_STATUSES).toEqual(['pending', 'blocked', 'suspended'])
+    expectTypeOf<BeforeSuccessorAllowedStatus>().toEqualTypeOf<'pending' | 'blocked' | 'suspended'>()
+  })
+
+  it('AddTaskInput.before 可选 string[]（后继 localId 数组——插入序单事务挂边入参）', () => {
+    expectTypeOf<AddTaskInput['before']>().toEqualTypeOf<string[] | undefined>()
   })
 })

@@ -58,7 +58,9 @@ export type TaskPriority = 'P0' | 'P1' | 'P2'
 /** tasks.complexity CHECK 三值 */
 export type TaskComplexity = 'low' | 'medium' | 'high'
 
-/** task_records.verb 七值（TS 单源无 CHECK——§6-32③；append-only 行的动词面） */
+/** task_records.verb 七值（TS 单源无 CHECK——§6-32③；append-only 行的动词面）。
+ *  注：pauseTask 审计动词（task-pause-primitive）的词汇扩池随消费方任务落（timeline 标签穷举
+ *  Record 同事务扩），本任务只落 PAUSE_TASK_TRANSITION 单源标签面。 */
 export const TASK_RECORD_VERBS = [
   'add',
   'claim',
@@ -71,6 +73,30 @@ export const TASK_RECORD_VERBS = [
 ] as const
 
 export type TaskRecordVerb = (typeof TASK_RECORD_VERBS)[number]
+
+/**
+ * pauseTask 转移边常量（task-pause-primitive §2——暂停原语的单一事实源标签面）：
+ * 唯一合法转移 in_progress → suspended（agent 矩阵新边，仅 pauseTask / 循环恢复序列触发）；
+ * reason 必带校验复用既有 ERR_REASON_REQUIRED（转移缘由空因拒绝——与 transitionTask 同语义），
+ * 恢复批量转移 suspended → pending 由循环 resume 序以 'core' actor 调用（不入本常量面）。
+ */
+export const PAUSE_TASK_TRANSITION = {
+  from: 'in_progress',
+  to: 'suspended',
+  verb: 'pause',
+} as const
+
+/** addTask before 参数后继状态守卫（task-pause-primitive §2.1——后继可挂边状态集）：
+ *  pending/blocked/suspended 可挂；in_progress 显式拒绝并指路 pauseTask；interrupted 走 human 通道。 */
+export const BEFORE_SUCCESSOR_ALLOWED_STATUSES = ['pending', 'blocked', 'suspended'] as const
+
+export type BeforeSuccessorAllowedStatus = (typeof BEFORE_SUCCESSOR_ALLOWED_STATUSES)[number]
+
+/**
+ * fix 链深上限（task-pause-primitive §2.2-3 单源收敛——原 core add.ts:70 与宿主
+ * driver.ts TRIAGE_FIX_CHAIN_DEPTH_LIMIT 双常量漂移面收敛于此）。C6 用户裁决：≤6。
+ */
+export const FIX_CHAIN_DEPTH_LIMIT = 6
 
 /**
  * task_records 循环来源标记列名（S3·R1——claim 记录持久痕迹的单点定义）：
@@ -400,7 +426,7 @@ export interface ValidateReport {
   checked: { featureSlug: string; tasks: number }
 }
 
-/** addTask 入参（fix 链走 sourceTask + blockSource：单事务同置源 blocked + auto-block 行 + 链深 ≤ 6 + 增量环校验）。
+/** addTask 入参（fix 链走 sourceTask + blockSource：单事务同置源 blocked + auto-block 行 + 链深 ≤ FIX_CHAIN_DEPTH_LIMIT + 增量环校验）。
  *  M3 容器化（Interface 1）：featureSlug → source: ContainerRef——容器必须在场（服务不变量·
  *  多态引用无 DB FK，写入校验 source_id 必命中 kind 对应表）；tasks.mode = 容器 mode 创建时
  *  快照（feature 容器恒 'expedition'；proposal 容器取 proposals.mode·可 NULL——键缺席）。
@@ -419,6 +445,9 @@ export interface AddTaskInput {
   vars?: Record<string, string>
   /** 依赖的自然键 localId 清单（同容器前置声明——同容器边约束：task_edges 两端 source_id 相等） */
   dependsOn?: string[]
+  /** 后继 localId 数组（task-pause-primitive §2.1 插入序：单事务建任务 + 给各后继置换补
+   *  dependsOn 新边；后继状态守卫 BEFORE_SUCCESSOR_ALLOWED_STATUSES，in_progress 拒并指路 pauseTask） */
+  before?: string[]
   /** fix 链源（--block-source 隐含谱系） */
   sourceTask?: TaskRef
   /** true = 源任务同事务置 blocked + 边（fix-N 分配） */
