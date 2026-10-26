@@ -902,3 +902,63 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
     expect(r2.persona).not.toContain('## 任务目录锚点')
   })
 })
+
+describe('gate 弹性领取（task-pause-primitive §2.2-2）：blocked gate 前置全满足进就绪池', () => {
+  it('盲选命中 blocked gate：core actor 补 auto-restore（blocked→pending）+ 正常 claim 转移 + 事件', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'f', '1.3', { type: 'gate', status: 'blocked' })
+    seedEdge(h!.db, 't-f-1.3', 't-f-1.1')
+    const r = await claim({ projectId: P(), sessionId: 's-disp' })
+    expect(r.task).toMatchObject({ taskId: 't-f-1.3', taskStatus: 'in_progress' })
+    expect(r.reclaimed).toBe(false)
+    // 审计时间线：auto-restore（actor='core'，blocked→pending）在前 + claim（actor='plugin-tool'，from=pending）
+    expect(
+      rows(`SELECT verb, from_status, to_status, actor, session_id FROM task_records WHERE task_id = 't-f-1.3' ORDER BY id`),
+    ).toEqual([
+      { verb: 'auto-restore', from_status: 'blocked', to_status: 'pending', actor: 'core', session_id: null },
+      { verb: 'claim', from_status: 'pending', to_status: 'in_progress', actor: 'plugin-tool', session_id: 's-disp' },
+    ])
+    expect(rows(`SELECT task_status FROM tasks WHERE id = 't-f-1.3'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(h!.events.emitted).toHaveLength(1)
+  })
+
+  it('非 gate 的 blocked 卡不进就绪池（语义不变）：盲选 Z1 出口 + 零写入 + 零事件', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'f', '1.2', { status: 'blocked' })
+    seedEdge(h!.db, 't-f-1.2', 't-f-1.1')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r).toEqual({ task: null, dispatchPrompt: '', persona: '', digest: '', reclaimed: false })
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+    expect(rows(`SELECT task_status FROM tasks WHERE id = 't-f-1.2'`)).toEqual([{ task_status: 'blocked' }])
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('blocked gate 前置未全满足 → 不进就绪池（READY_PREDICATE 同判定）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'f', '1.2', { status: 'blocked' })
+    seedTask(h!.db, 'f', '1.3', { type: 'gate', status: 'blocked' })
+    seedEdge(h!.db, 't-f-1.3', 't-f-1.1')
+    seedEdge(h!.db, 't-f-1.3', 't-f-1.2')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toBeNull()
+    expect(rows(`SELECT task_status FROM tasks WHERE id = 't-f-1.3'`)).toEqual([{ task_status: 'blocked' }])
+  })
+
+  it('pending 就绪任务优先于弹性 gate（gate 弹性为兜底）', async () => {
+    const claim = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'f', '2.1', { createdAt: '2026-01-01T00:00:00.000Z' })
+    seedTask(h!.db, 'f', '1.3', { type: 'gate', status: 'blocked', createdAt: '2026-01-02T00:00:00.000Z' })
+    seedEdge(h!.db, 't-f-1.3', 't-f-1.1')
+    const r = await claim({ projectId: P(), sessionId: 's' })
+    expect(r.task).toMatchObject({ localId: '2.1' })
+    expect(rows(`SELECT task_status FROM tasks WHERE id = 't-f-1.3'`)).toEqual([{ task_status: 'blocked' }])
+  })
+})
