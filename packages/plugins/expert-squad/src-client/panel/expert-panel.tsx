@@ -79,6 +79,34 @@ export function defaultListFetcher(workspace: string): ListFetcher {
   }
 }
 
+/** delegate 装配状态（run-state 读口 delegate 字段的结构切片——registered / degraded+原因）。 */
+export interface DelegateAssemblySnapshot {
+  readonly status: "registered" | "degraded"
+  readonly reason?: string
+}
+
+/** /api/expert-squad/run-state 请求 URL（delegate 装配状态随应答透出）。 */
+export function runStateUrl(): string {
+  return "/api/expert-squad/run-state"
+}
+
+/** 默认 delegate 装配探针（GET run-state 读口；载荷形状漂移/缺字段 = 容缺返回 undefined——旧宿主兼容）。 */
+export function defaultDelegateProbe(): Promise<DelegateAssemblySnapshot | undefined> {
+  return (async () => {
+    const response = await fetch(runStateUrl())
+    if (!response.ok) return undefined
+    const payload = (await response.json()) as { delegate?: unknown }
+    const delegate = payload?.delegate
+    if (typeof delegate !== "object" || delegate === null) return undefined
+    const { status, reason } = delegate as { status?: unknown; reason?: unknown }
+    if (status !== "registered" && status !== "degraded") return undefined
+    return {
+      status,
+      ...(typeof reason === "string" ? { reason } : {}),
+    }
+  })()
+}
+
 /** 详情变更 fetch 路由前缀（routes.ts 精确路由族；client 侧零服务端代码引入）。 */
 const DETAIL_UPDATE_URL = "/api/expert-squad/update";
 const DETAIL_ENABLE_URL = "/api/expert-squad/enable";
@@ -123,6 +151,8 @@ export interface ExpertPanelAppProps {
   readonly mutations?: DetailMutations
   /** [召唤] 官方会话缝（装配壳 inject face；缺席 = 召唤钮不呈现）。 */
   readonly summon?: SummonOpener
+  /** delegate 装配探针（测试注入；缺省 = GET run-state 读口 fetch）。 */
+  readonly delegateProbe?: () => Promise<DelegateAssemblySnapshot | undefined>
 }
 
 /**
@@ -138,6 +168,24 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   const workspacePath = workspaceRow?.path
   const [summonBusy, setSummonBusy] = useState(false)
   const [summonNotice, setSummonNotice] = useState<string | undefined>(undefined)
+  // delegate 装配状态（观测面加固）：run-state 读口一次性探针——降级时面板可见提示。
+  // 拉取失败/载荷漂移 = 容缺零提示（不干扰面板主态）。
+  const [delegateNotice, setDelegateNotice] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    let alive = true
+    const probe = props.delegateProbe ?? defaultDelegateProbe
+    probe()
+      .then((state) => {
+        if (!alive) return
+        if (state?.status === "degraded") {
+          setDelegateNotice(state.reason ?? "degraded")
+        }
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [props.delegateProbe])
 
   // 控制器随 workspace 建立与换代（旧实例随 effect 清理 stop——轮询零泄漏）
   const controller = useMemo(() => {
@@ -244,6 +292,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         {...(controller !== undefined ? { onRetry } : {})}
         {...(summon !== undefined ? { onSummon, summonBusy } : {})}
         {...(summonNotice !== undefined ? { summonNotice } : {})}
+        {...(delegateNotice !== undefined ? { delegateNotice } : {})}
         {...(detailController !== undefined ? { onCardActivate } : {})}
       />
       {detailState === undefined || detailController === undefined || !detailState.open ? null : (
@@ -279,6 +328,8 @@ export interface ExpertPanelProps {
   readonly summonBusy?: boolean
   /** 召唤降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席）。 */
   readonly summonNotice?: string
+  /** delegate 装配降级提示（run-state 读口 degraded——委派不可用的可见提示；registered/缺席 = 零提示）。 */
+  readonly delegateNotice?: string
 }
 
 const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: string }[] = [
@@ -543,6 +594,11 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
       {props.summonNotice === undefined ? null : (
         <div className="dswf-summon-notice" role="status" data-dswf-summon-notice="">
           {props.summonNotice}
+        </div>
+      )}
+      {props.delegateNotice === undefined ? null : (
+        <div className="dswf-delegate-notice" role="status" data-dswf-delegate-notice="">
+          委派工具未装配（{props.delegateNotice}）——delegate_expert 不可用，管理面照常
         </div>
       )}
       <div className="dswf-card-grid">{gridBody}</div>

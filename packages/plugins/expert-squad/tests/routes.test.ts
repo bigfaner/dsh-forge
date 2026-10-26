@@ -90,16 +90,34 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
     }
   });
 
-  it("GET run-state：面板运行状态读口（deps.runState JSON 应答）", async () => {
+  it("GET run-state：面板运行状态读口（deps.runState JSON 应答，entries 字段承载）", async () => {
     const deps = makeDeps();
     const routes = expertSquadRoutes(deps);
     const route = routes.find((r) => r.path === expertSquadRoute("run-state"))!;
     const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
     expect(res.status).toBe(200);
     expect(deps.runState).toHaveBeenCalledTimes(1);
-    const body = (await res.json()) as Array<{ childId?: string; stopReason?: string }>;
-    expect(body[0]?.childId).toBe("child-1");
-    expect(body[0]?.stopReason).toBe("completed");
+    const body = (await res.json()) as { entries: Array<{ childId?: string; stopReason?: string }> };
+    expect(body.entries[0]?.childId).toBe("child-1");
+    expect(body.entries[0]?.stopReason).toBe("completed");
+  });
+
+  it("GET run-state：delegate 装配状态字段（delegateState dep 透传；未供给 = 字段缺席）", async () => {
+    const withDelegate = {
+      ...makeDeps(),
+      delegateState: (): unknown => ({ status: "registered" }),
+    };
+    const routes = expertSquadRoutes(withDelegate);
+    const route = routes.find((r) => r.path === expertSquadRoute("run-state"))!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
+    const body = (await res.json()) as { delegate?: unknown };
+    expect(body.delegate).toEqual({ status: "registered" });
+
+    const bare = expertSquadRoutes(makeDeps());
+    const bareRoute = bare.find((r) => r.path === expertSquadRoute("run-state"))!;
+    const bareRes = await bareRoute.fetch(new Request("http://host/api/expert-squad/run-state"));
+    const bareBody = (await bareRes.json()) as { delegate?: unknown };
+    expect("delegate" in bareBody).toBe(false);
   });
 
   it("GET list：查询门解析 workspace/includeDisabled，JSON 应答", async () => {

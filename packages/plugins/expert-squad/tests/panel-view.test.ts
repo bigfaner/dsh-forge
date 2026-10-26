@@ -77,8 +77,7 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
 
   it("数据态：卡片字段集逐位在场（灯/名称/标识 chip/岗位/人设/chips/更新页脚）", () => {
     const html = renderPanel();
-    expect(html).toContain("dswf-xcard");
-    expect(html).toContain("dot on");
+    expect(html).toContain("dswf-xcard");    expect(html).toContain("dot on");
     expect(html).toContain("code-reviewer"); // 名称与英文标识 chip 同源（键正本）
     expect(html).toContain("资深评审"); // 岗位 ← title
     expect(html).toContain("评审 diff 与正确性"); // 人设摘要（Markdown 剥离后）
@@ -219,5 +218,20 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
   it("计数按专家键数：同键三层 = 1 位专家 · 显示 1 组", () => {
     const html = renderPanel({ entries: layered });
     expect(html).toContain("1 位专家 · 显示 1");
+  });
+});
+
+describe("delegate 装配降级提示（run-state 读口观测面）", () => {
+  it("degraded：可见提示条（role=status + data 标记），携降级原因与委派不可用文案", () => {
+    const html = renderPanel({ delegateNotice: "subagents-absent" });
+    expect(html).toContain('data-dswf-delegate-notice=""');
+    expect(html).toContain('role="status"');
+    expect(html).toContain("delegate_expert 不可用");
+    expect(html).toContain("subagents-absent");
+  });
+
+  it("registered / 缺省：零提示（不渲染提示条）", () => {
+    expect(renderPanel()).not.toContain("dswf-delegate-notice");
+    expect(renderPanel({ delegateNotice: undefined })).not.toContain("dswf-delegate-notice");
   });
 });

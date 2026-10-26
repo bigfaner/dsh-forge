@@ -232,7 +232,8 @@ describe("bug 767e7580: run-state 读口装配 + subagent/end 监听接线", () 
     const route = routes.find((r) => r.path === "/api/expert-squad/run-state")!;
     const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual([]);
+    const body = (await res.json()) as { entries: unknown[]; delegate: unknown };
+    expect(body.entries).toEqual([]);
   });
 
   it("end 载荷 → state 换代 → 路由读口（observeSubagentEnd + run-state dep 全链）", async () => {
@@ -261,8 +262,8 @@ describe("bug 767e7580: run-state 读口装配 + subagent/end 监听接线", () 
     });
     const route = routes.find((r) => r.path === "/api/expert-squad/run-state")!;
     const res = await route.fetch(new Request("http://host/api/expert-squad/run-state"));
-    const body = (await res.json()) as Array<{ childId: string; stopReason: string }>;
-    expect(body).toEqual([{ childId: "child-1", expert: KEY, messageId: "msg-1", stopReason: "completed" }]);
+    const body = (await res.json()) as { entries: Array<{ childId: string; stopReason: string }> };
+    expect(body.entries).toEqual([{ childId: "child-1", expert: KEY, messageId: "msg-1", stopReason: "completed" }]);
   });
 });
 

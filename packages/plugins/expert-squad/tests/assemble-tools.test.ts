@@ -165,3 +165,83 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
     }
   });
 });
+
+describe("delegate 装配状态 run-state 读口暴露（观测面-only，不判注册结果）", { timeout: 20_000 }, () => {
+  /** 装配并取回 run-state 路由应答的 delegate 字段。 */
+  async function bootDelegateState(
+    tools: unknown,
+    subagents: unknown = undefined,
+  ): Promise<unknown> {
+    const routes: Array<{ path: string; fetch(request: Request): Promise<Response> }> = [];
+    const effects: Array<() => unknown> = [];
+    const ctx = {
+      connection: {
+        fetch: {
+          register: (route: { path: string; fetch(request: Request): Promise<Response> }): unknown => {
+            routes.push(route);
+            return route;
+          },
+        },
+      },
+      ...(subagents !== undefined ? { subagents } : {}),
+      reflect: { get: (name: string) => (name === "tools" ? tools : undefined) },
+      effect: (dispose: () => unknown): unknown => {
+        effects.push(dispose as () => unknown);
+        return undefined;
+      },
+    };
+    try {
+      await expertSquadPlugin(ctx as never);
+    } finally {
+      for (const dispose of effects) await dispose();
+    }
+    const route = routes.find((r) => r.path === "/api/expert-squad/run-state");
+    expect(route, "run-state 读口必须在装配期注册").toBeDefined();
+    const res = await route!.fetch(new Request("http://host/api/expert-squad/run-state"));
+    const body = (await res.json()) as { delegate?: unknown };
+    return body.delegate;
+  }
+
+  it("registered：tools + subagents 双面在场 = delegate_state status registered", async () => {
+    const { face } = makeToolsFace();
+    expect(await bootDelegateState(face, SUBAGENTS)).toEqual({ status: "registered" });
+  });
+
+  it("degraded:subagents-absent：ctx.subagents 缺席 = 委派装配降级原因上读口", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { face } = makeToolsFace();
+      expect(await bootDelegateState(face, undefined)).toEqual({
+        status: "degraded",
+        reason: "subagents-absent",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("degraded:shape-mismatch：subagents.startContinuable 非函数 = 形状失配原因上读口", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { face } = makeToolsFace();
+      expect(await bootDelegateState(face, { startContinuable: "not-a-function" })).toEqual({
+        status: "degraded",
+        reason: "shape-mismatch",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("degraded:tools-absent：tool 面缺席（工具面整体跳过）= 委派不可用原因上读口", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(await bootDelegateState(undefined, SUBAGENTS)).toEqual({
+        status: "degraded",
+        reason: "tools-absent",
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

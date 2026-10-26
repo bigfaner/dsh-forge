@@ -89,6 +89,16 @@ export type ExpertUpdateInput = z.infer<typeof expertUpdateBodySchema>;
 /** GET run-state 查询门：无参（面板运行状态为进程级纯 UI 数据，不带 workspace 维度）。 */
 export const runStateQuerySchema = z.object({}).passthrough();
 
+// ---- delegate 装配状态（观测面-only）---------------------------------------
+
+/** delegate_expert 装配状态（apply 尾部装配结果——run-state 读口暴露，装配降级
+ *  不再依赖主进程 stdout 可观测）。status：registered = 委派工具已注册；
+ *  degraded = 未注册，reason 携降级原因（subagents-absent / shape-mismatch /
+ *  tools-absent）。 */
+export type DelegateAssemblyState =
+  | { readonly status: "registered" }
+  | { readonly status: "degraded"; readonly reason: string };
+
 // ---- 依赖面 -----------------------------------------------------------------
 
 /** 路由依赖面（装配层由 registry/state 组合供给；本层只消费该结构）。 */
@@ -106,6 +116,8 @@ export interface ExpertRoutesDeps {
   update(input: ExpertUpdateInput): Promise<ExpertEntry>;
   /** 面板运行状态读口（subagent/end 换代后的当前快照；纯 UI，不进会话流）。 */
   runState(): ExpertRunPanelEntry[];
+  /** delegate 装配状态读口（可选——供给即随 run-state 应答透出 delegate 字段）。 */
+  delegateState?(): DelegateAssemblyState;
 }
 
 /**
@@ -191,7 +203,11 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
           runStateQuerySchema.parse(
             Object.fromEntries(new URL(request.url).searchParams),
           );
-          return Response.json(deps.runState());
+          const delegate = deps.delegateState?.();
+          return Response.json({
+            entries: deps.runState(),
+            ...(delegate !== undefined ? { delegate } : {}),
+          });
         } catch (err) {
           return new Response(err instanceof Error ? err.message : String(err), {
             status: 400,

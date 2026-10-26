@@ -97,6 +97,8 @@ export const PANEL_CSS = `
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
 /* [召唤] 降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */
 .dswf-summon-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
+/* delegate 装配降级提示条（run-state 读口 degraded——委派不可用可见提示，同召唤引导条形制） */
+.dswf-delegate-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
 /* ── 同键全层聚组（1.60 用户裁决 + 1.68 裁决：去组外层边框——同名卡相邻排列，
    组头信息不承载边框容器；保留组头行承载来源数与对比入口） ── */
 .dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; }

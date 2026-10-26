@@ -21,7 +21,7 @@ import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { parseExpertFile } from "./store/frontmatter.js";
 import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY } from "./registry.js";
-import { registerExpertSquadRoutes, type ConnectionLike } from "./routes.js";
+import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
 import {
@@ -260,6 +260,11 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     console.warn("[expert-squad] ctx.on absent——subagent/end 面板监听未接线（run-state 恒空）");
   }
 
+  // delegate 装配状态（观测面加固）：apply 尾部委派工具注册/降级结果——经 run-state
+  // 读口透出（面板降级可见），装配降级不再依赖主进程 stdout 可观测。初始 = tools-absent
+  // （tool 面缺席即委派不可用的缺省降级形态），装配尾部按实况改写。
+  let delegateAssembly: DelegateAssemblyState = { status: "degraded", reason: "tools-absent" };
+
   const routes: Parameters<typeof registerExpertSquadRoutes>[1] = {
     // 面板 list（1.60 用户裁决）：展示层全层条目（origin + effective 位）——
     // 聚组数据源；取用/启停面（get/setEnabled/update）零改动。
@@ -315,6 +320,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     },
     // 面板读口（bug 767e7580）：subagent/end 换代后的当前快照（纯 UI 数据）。
     runState: () => panel.list(),
+    // delegate 装配状态读口：读口应答随 delegate 字段透出（观测面-only）。
+    delegateState: () => delegateAssembly,
   };
   registerExpertSquadRoutes(connection, routes);
 
@@ -370,8 +377,13 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   // 不注册。形状校验保留：startContinuable 非函数面同按缺席降级。
   const subagents = ctx.subagents;
   if (typeof subagents?.startContinuable !== "function") {
+    delegateAssembly = {
+      status: "degraded",
+      reason: subagents === undefined ? "subagents-absent" : "shape-mismatch",
+    };
     console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
+    delegateAssembly = { status: "registered" };
     registerDelegateExpertTool(toolsFace, {
       registry,
       subagents,
