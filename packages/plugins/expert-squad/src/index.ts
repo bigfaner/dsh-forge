@@ -59,6 +59,9 @@ interface ExpertSquadToolsFace extends ToolRegisterFace {
  *  scoped context」，preset 域实例 ctx 恒 scoped——守卫态由此只能落 preset 行）。 */
 interface ToolsRestrictFace {
   restrict(filter: { deny?: readonly string[] }): () => void;
+  /** 官方 tools.guard 同缝（agent.ctx 注册 = 仅该 agent scope 生效；执行期同步
+   *  检查、返回字符串即 deny）——restrict 时序兜底缝（bug e8440312）。 */
+  guard?(guard: (exec: { readonly name: string }) => string | undefined): () => void;
 }
 
 /** 插件配置（组合行 config 传入；缺省 = 全量注册——D1 语义不变）。 */
@@ -155,9 +158,22 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
       const dispose = tools.restrict({ deny: [...config.denyTools] });
       ctx.effect(() => dispose);
     } catch (error) {
-      // restrict 抛错（如 deny 命名未知 global 工具——全局行缺席形态）不得拖垮整预设
-      // mount（agent-preset-registry mountPreset audit.failed 拒绝先例），fail-soft warn。
+      // Root cause (bug e8440312): 官方 restrict 在调用时点校验 deny 名 ∈ 当前全局
+      // 已知工具面（dsh-tools lib/index.js:2906-2908）——preset mount 早于全局单实例
+      // 注册 delegate_expert，校验面对空集必抛，fail-soft 后排除完全未生效（静默
+      // 落空）。降级缝：同域官方 tools.guard 执行期按名 deny——不校验名字、序独立，
+      // agent.ctx 注册仅作用该 agent scope；排除语义由「不可执行」承载（restrict
+      // 可用时仍是「不可见」主缝，本分支仅兜底）。
       console.warn(`[expert-squad] restrict deny 失败（preset mount fail-soft 不拖垮）：${String((error as Error)?.message ?? error)}`);
+      if (typeof tools.guard === "function") {
+        const denied = new Set(config.denyTools);
+        const dispose = tools.guard((exec) =>
+          denied.has(exec.name) ? `tool "${exec.name}" is denied for this preset (denyTools guard)` : undefined,
+        );
+        ctx.effect(() => dispose);
+      } else {
+        console.warn("[expert-squad] ctx.tools.guard 缺席——denyTools 排除未生效（fail-soft）");
+      }
     }
     return;
   }
@@ -211,7 +227,9 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
       hit = registry.refresh().then(() => registry);
       // Root cause: 首刷 rejected promise 永久缓存 = 五路由恒 400（毒化缓存）——
       // 失败即逐出条目，下次请求重建 registry 重试（bug f9410209）。
-      hit.catch(() => {
+      hit.catch((error: unknown) => {
+        // 诊断面（bug 44e70a5f）：首刷失败此前静默逐出，host 日志零痕迹——失败原因必须留痕。
+        console.warn(`[expert-squad] registry 首刷失败（workspace=${workspace}，已逐出待重试）: ${String((error as Error)?.message ?? error)}`);
         if (registries.get(workspace) === hit) {
           registries.delete(workspace);
           // Root cause: 逐出只删 registries 条目时旧 manager 仅插件卸载才释放——

@@ -92,6 +92,42 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
     expect(fetchRegister).not.toHaveBeenCalled();
   });
 
+  // bug e8440312：官方 restrict 在 mount 时点校验 deny 名 ∈ 当前全局已知工具面
+  // （dsh-tools lib/index.js:2906-2908），preset mount 早于全局单实例注册
+  // delegate_expert → 抛 unknown global tool，fail-soft 后排除完全未生效。
+  // 修复要求：restrict 抛错时降级注册同域 tools.guard 兜底（执行期按名 deny，
+  // 官方正门、序独立），排除不得静默落空。
+  it("bug e8440312: restrict 抛 unknown global tool 时降级注册 tools.guard 兜底，guard 按名 deny", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const guards: Array<(exec: { name: string }) => string | undefined> = [];
+      const { ctx, effects } = makeCtx(
+        {
+          restrict: () => {
+            throw new Error(
+              'tools.restrict() names unknown global tool "delegate_expert"; known global tools: (none)',
+            );
+          },
+          register: () => () => undefined,
+          guard: (guard: (exec: { name: string }) => string | undefined) => {
+            guards.push(guard);
+            return () => undefined;
+          },
+        },
+        SUBAGENTS,
+      );
+      pendingEffects = effects as Array<() => unknown>;
+      await expect(expertSquadPlugin(ctx, { denyTools: [DELEGATE_EXPERT_TOOL_NAME] })).resolves.toBeUndefined();
+      expect(guards).toHaveLength(1);
+      // 守卫执行语义：点名工具 deny（返回 reason），非点名工具放行（返回 undefined）。
+      expect(guards[0]({ name: DELEGATE_EXPERT_TOOL_NAME })).toBeTruthy();
+      expect(guards[0]({ name: "read" })).toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("restrict deny 失败"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("denyTools 守卫态 restrict 抛错 fail-soft：warn 不拖垮 preset mount（ac2 清理后预设健壮性）", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
