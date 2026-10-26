@@ -16,6 +16,13 @@ import {
   TOOL_CANDIDATES,
   type MdInline,
 } from "./detail-logic.js";
+import { maskedPeersLabel, diffFields, originLabel, type ExpertView } from "./filter.js";
+import {
+  CompareChips,
+  DiffOnlyToggle,
+  PairCompareTable,
+  useDiffOnly,
+} from "./compare-table.js";
 import type { ExpertDetailController, DetailState } from "./detail-source.js";
 
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
@@ -225,12 +232,96 @@ function MultiSelect(props: {
   );
 }
 
+/** 来源置顶徽标条（① 查看/编辑态均呈现：来源 lead + 具名角标 + 生效标 + 被遮蔽同名提示）。 */
+function OriginBar({
+  expert,
+  shadows,
+  projectName,
+}: {
+  readonly expert: ExpertView;
+  readonly shadows: readonly ExpertView[];
+  readonly projectName?: string;
+}): ReactNode {
+  const masked = maskedPeersLabel(shadows);
+  return (
+    <div className="dswf-dlg-origin-bar" data-dswf-origin-bar="">
+      <span className="dswf-dlg-origin-lead">来源</span>
+      <span className={`origin-badge origin-${expert.origin}`}>
+        {originLabel(expert.origin, projectName)}
+      </span>
+      <span className="eff-badge">生效</span>
+      {masked === undefined ? null : <span className="dswf-dlg-origin-masked">{masked}</span>}
+    </div>
+  );
+}
+
+/** 两两对比态 body（③⑥：对象单选列表 + 差异默认表 + 退出回查看）。 */
+function CompareBody({
+  state,
+  shadows,
+  projectName,
+  controller,
+}: {
+  readonly state: DetailState;
+  readonly shadows: readonly ExpertView[];
+  readonly projectName?: string;
+  readonly controller: ExpertDetailController;
+}): ReactNode {
+  const { showAll, toggle } = useDiffOnly();
+  const target = state.compareTarget;
+  return (
+    <>
+      <div className="dswf-cmp-pick-list">
+        <b>对比</b>（两两）——选择同键其它来源：
+        {shadows.map((shadow) => (
+          <button
+            key={shadow.origin}
+            type="button"
+            className={`dswf-cmp-opt${target?.origin === shadow.origin ? " sel" : ""}`}
+            data-cmp-target={shadow.origin}
+            onClick={() => controller.selectCompareTarget(shadow)}
+          >
+            <span className={`origin-badge origin-${shadow.origin}`}>{originLabel(shadow.origin)}</span>
+            <span>{shadow.title}</span>
+            <span className="dswf-cmp-opt-updated">{shadow.updatedAt?.slice(0, 10) ?? "随包分发"}</span>
+          </button>
+        ))}
+      </div>
+      <CompareChips
+        shadows={shadows}
+        selectedOrigin={target?.origin ?? shadows[0]?.origin ?? ""}
+        onSelect={(origin) => {
+          const next = shadows.find((shadow) => shadow.origin === origin);
+          if (next !== undefined) controller.selectCompareTarget(next);
+        }}
+      />
+      <DiffOnlyToggle
+        showAll={showAll}
+        diffCount={target === undefined ? 0 : diffFields(state.expert, target).length}
+        onToggle={toggle}
+      />
+      {target === undefined ? null : (
+        <PairCompareTable
+          effective={state.expert}
+          shadow={target}
+          showAllFields={showAll}
+          projectName={projectName}
+        />
+      )}
+    </>
+  );
+}
+
 /** 详情 Dialog 呈递件（控制器驱动；F2 组件树逐位）。 */
 export function ExpertDetailDialog(props: {
   readonly controller: ExpertDetailController;
   readonly allSkills: AllSkills;
   /** multi-select 初始展开态（SSR 测试/调试面；默认收起 = 原型语义）。 */
   readonly mselDefaultOpen?: boolean;
+  /** 同键全层条目（1.61 裁决①③：来源置顶条 + 两两对比对象源；缺席 = 旧装配降级无来源条）。 */
+  readonly sameKeyEntries?: readonly ExpertView[];
+  /** 项目具名（④：workspace 路径 basename——来源角标/提示具名「项目 · <名>」）。 */
+  readonly projectName?: string;
 }): ReactNode {
   const state = useSyncExternalStore(
     props.controller.subscribe.bind(props.controller),
@@ -238,7 +329,12 @@ export function ExpertDetailDialog(props: {
     props.controller.getSnapshot.bind(props.controller),
   );
   const editing = state.mode === "edit";
+  const comparing = state.mode === "compare";
   const expert = state.expert;
+  // 被遮蔽同名卡（对比对象源）：同键条目中非当前呈现的只读层。
+  const shadows = (props.sameKeyEntries ?? []).filter(
+    (peer) => peer !== expert && peer.effective !== true,
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -248,7 +344,14 @@ export function ExpertDetailDialog(props: {
     return () => document.removeEventListener("keydown", onKey);
   }, [props.controller]);
 
-  const body = editing ? (
+  const body = comparing ? (
+    <CompareBody
+      state={state}
+      shadows={shadows}
+      projectName={props.projectName}
+      controller={props.controller}
+    />
+  ) : editing ? (
     <>
       <div className="dswf-dlg-field" data-field="title">
         <label>岗位</label>
@@ -342,17 +445,29 @@ export function ExpertDetailDialog(props: {
       onClick={() => props.controller.close()}
     >
       <div
-        className="dswf-dlg"
+        className={comparing ? "dswf-dlg wide" : "dswf-dlg"}
         role="dialog"
         aria-label={`专家详情 ${expert.name}`}
         onClick={(event) => event.stopPropagation()}
       >
+        {props.sameKeyEntries === undefined ? null : (
+          <OriginBar expert={expert} shadows={shadows} projectName={props.projectName} />
+        )}
         <div className="dswf-dlg-head">
           <span className={`dot ${expert.enabled ? "on" : "off"}`} />
           <b className="dswf-dlg-name">{expert.name}</b>
           <span className="chip tool">{expert.name}</span>
           <span className="dswf-dlg-head-actions">
-            {editing ? (
+            {comparing ? (
+              <button
+                type="button"
+                className="dswf-btn dswf-btn-ghost"
+                aria-label="退出对比"
+                onClick={() => props.controller.exitCompare()}
+              >
+                返回
+              </button>
+            ) : editing ? (
               <button
                 type="button"
                 className="dswf-btn dswf-btn-primary"
@@ -363,6 +478,16 @@ export function ExpertDetailDialog(props: {
               </button>
             ) : (
               <>
+                {shadows.length === 0 ? null : (
+                  <button
+                    type="button"
+                    className="dswf-btn dswf-btn-ghost"
+                    aria-label="对比"
+                    onClick={() => props.controller.startCompare(shadows[0]!)}
+                  >
+                    对比
+                  </button>
+                )}
                 <button
                   type="button"
                   className="dswf-btn dswf-btn-ghost"

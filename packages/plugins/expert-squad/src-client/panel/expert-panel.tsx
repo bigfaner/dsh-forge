@@ -11,19 +11,18 @@
 //（1.4/1.22）——零新增旁路。
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
-  COMPARE_FIELDS,
-  diffFields,
-  fieldDiffers,
-  filterExperts,
+  filterGroups,
   footerText,
-  groupExperts,
   originLabel,
   personaSummary,
+  projectNameOf,
   updatedLabel,
   type ExpertGroup,
   type ExpertView,
+  type OriginFilter,
   type StatusFilter,
 } from "./filter.js";
+import { CompareChips, PairCompareTable } from "./compare-table.js";
 import { unionSkills } from "./detail-logic.js";
 import { ExpertListController, type ListFetcher, type ListState } from "./list-source.js";
 import {
@@ -135,6 +134,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   const [workspaceRow, setWorkspaceRow] = useState<SummonWorkspaceRow | undefined>(undefined)
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState<StatusFilter>("all")
+  const [origin, setOrigin] = useState<OriginFilter>("all")
   const workspacePath = workspaceRow?.path
   const [summonBusy, setSummonBusy] = useState(false)
   const [summonNotice, setSummonNotice] = useState<string | undefined>(undefined)
@@ -236,8 +236,11 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         {...(state.phase.kind === "error" ? { errorMessage: state.phase.message } : {})}
         query={query}
         status={status}
+        origin={origin}
         onQueryChange={setQuery}
         onStatusChange={setStatus}
+        onOriginChange={setOrigin}
+        {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         {...(controller !== undefined ? { onRetry } : {})}
         {...(summon !== undefined ? { onSummon, summonBusy } : {})}
         {...(summonNotice !== undefined ? { summonNotice } : {})}
@@ -247,6 +250,8 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         <ExpertDetailDialog
           controller={detailController}
           allSkills={unionSkills(state.entries)}
+          sameKeyEntries={state.entries.filter((entry) => entry.name === detailState.expert.name)}
+          {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         />
       )}
     </div>
@@ -260,8 +265,13 @@ export interface ExpertPanelProps {
   readonly errorMessage?: string
   readonly query: string
   readonly status: StatusFilter
+  /** 来源筛选（1.61 裁决②：与搜索、状态 AND 叠加；缺省 all——1.60 调用面零改动）。 */
+  readonly origin?: OriginFilter
   readonly onQueryChange: (query: string) => void
   readonly onStatusChange: (status: StatusFilter) => void
+  readonly onOriginChange: (origin: OriginFilter) => void
+  /** 项目具名（④：workspace 路径 basename——来源选项/角标具名「项目 · <名>」）。 */
+  readonly projectName?: string
   readonly onRetry?: () => void
   readonly onCardActivate?: (key: string) => void
   readonly onSummon?: () => void
@@ -277,12 +287,22 @@ const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: s
   { value: "disabled", label: "禁用" },
 ]
 
-/** 来源角标（三态文案：项目/用户/内置——DESIGN.md 令牌；未知原值透传）。 */
-function OriginBadge({ origin }: { readonly origin: string }): ReactNode {
-  return <span className={`origin-badge origin-${origin}`}>{originLabel(origin)}</span>
+/** 来源筛选四态（②：全部来源/项目/用户/内置；project 选项具名）。 */
+function originOptions(projectName: string | undefined): readonly { readonly value: OriginFilter; readonly label: string }[] {
+  return [
+    { value: "all", label: "全部来源" },
+    { value: "project", label: originLabel("project", projectName) },
+    { value: "user", label: originLabel("user") },
+    { value: "plugin", label: originLabel("plugin") },
+  ]
 }
 
-function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly onActivate?: (key: string) => void }): ReactNode {
+/** 来源角标（三态文案：项目·具名/用户/内置——DESIGN.md 令牌；未知原值透传）。 */
+function OriginBadge({ origin, projectName }: { readonly origin: string; readonly projectName?: string }): ReactNode {
+  return <span className={`origin-badge origin-${origin}`}>{originLabel(origin, projectName)}</span>
+}
+
+function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView; readonly projectName?: string; readonly onActivate?: (key: string) => void }): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
   return (
     <article
@@ -297,7 +317,7 @@ function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly on
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
         <span className="chip tool">{expert.name}</span>
-        <OriginBadge origin={expert.origin} />
+        <OriginBadge origin={expert.origin} projectName={projectName} />
         <span className="eff-badge">生效</span>
       </div>
       <div className="xc-title">
@@ -330,75 +350,33 @@ function Card({ expert, onActivate }: { readonly expert: ExpertView; readonly on
   )
 }
 
-/** 字段值对比单元（数组 → chips；标量 → 文本）。 */
-function CompareCell({ value, diff }: { readonly value: unknown; readonly diff: boolean }): ReactNode {
-  return (
-    <td className={diff ? "diff" : undefined}>
-      {Array.isArray(value)
-        ? value.map((item) => (
-            <span key={item} className="chip">
-              {item}
-            </span>
-          ))
-        : String(value ?? "")}
-    </td>
-  )
-}
-
-/** 展开对比视图：被遮蔽卡 vs 生效卡字段对齐表（差异格 warn 高亮）。 */
-function CompareView({ group, shadow }: { readonly group: ExpertGroup; readonly shadow: ExpertView }): ReactNode {
-  const diffs = diffFields(group.effective, shadow)
-  return (
-    <div className="dswf-xcompare" data-compare-key={shadow.origin}>
-      <table className="cmp-table">
-        <thead>
-          <tr>
-            <th>字段</th>
-            <th>
-              <OriginBadge origin={group.effective.origin} />
-              <span className="eff-badge">生效</span>
-            </th>
-            <th>
-              <OriginBadge origin={shadow.origin} />
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {COMPARE_FIELDS.map(({ field, label }) => (
-            <tr key={field}>
-              <th>{label}</th>
-              <CompareCell value={group.effective[field] as unknown} diff={fieldDiffers(field, group.effective, shadow)} />
-              <CompareCell value={shadow[field] as unknown} diff={fieldDiffers(field, group.effective, shadow)} />
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="cmp-note">与生效卡不同的字段已高亮（{diffs.length} 项）· 被遮蔽卡只读</div>
-    </div>
-  )
-}
-
 /**
- * 聚组容器（1.60 用户裁决）：组头（键 + 来源数 + 展开对比钮）→ 生效卡 → 被遮蔽
- * 摘要行 ×N（点击展开完整对比）。单来源组无摘要行、无对比钮（与普通卡同形）。
- * 导出面：单测直接消费（defaultExpanded = SSR 展开态测试缝）。
+ * 聚组容器（1.60 用户裁决 + 1.61 裁决⑤ 两两口径）：组头（键 + 来源数 + 隐藏数 +
+ * 展开对比钮）→ 生效卡 → 被遮蔽摘要行 ×N（点选任一行 = 生效卡 vs 该行两列对比，
+ * 来源 chips 单选切换对比对象——禁三列并排）。单来源组无摘要行、无对比钮。
+ * 导出面：单测直接消费（defaultExpanded/defaultSelectedOrigin = SSR 测试缝）。
  */
 export function ExpertGroupView(
-  { group, onActivate, defaultExpanded }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly defaultExpanded?: boolean }): ReactNode {
+  { group, onActivate, defaultExpanded, defaultSelectedOrigin, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly defaultExpanded?: boolean; readonly defaultSelectedOrigin?: string; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
   const [expanded, setExpanded] = useState(defaultExpanded === true)
+  const [selectedOrigin, setSelectedOrigin] = useState(defaultSelectedOrigin ?? group.shadows[0]?.origin)
   const multi = group.shadows.length > 0
+  const selected = group.shadows.find((shadow) => shadow.origin === selectedOrigin) ?? group.shadows[0]
   return (
     <section className={`dswf-xgroup${multi ? " multi" : ""}`} data-expert-key={group.key}>
       <header className="xg-head">
         <b className="xg-name">{group.key}</b>
         <span className="xg-cnt">{group.shadows.length + 1} 个来源</span>
+        {hiddenShadows === undefined || hiddenShadows === 0 ? null : (
+          <span className="xg-hidden">隐藏 {hiddenShadows} 条未命中</span>
+        )}
         {multi ? (
           <button type="button" className="xg-spread" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
             {expanded ? "收起对比" : "展开对比"}
           </button>
         ) : null}
       </header>
-      <Card expert={group.effective} {...(onActivate !== undefined ? { onActivate } : {})} />
+      <Card expert={group.effective} projectName={projectName} {...(onActivate !== undefined ? { onActivate } : {})} />
       {group.shadows.map((shadow) => (
         <div className="xg-shadow-block" key={shadow.origin}>
           <button
@@ -407,16 +385,33 @@ export function ExpertGroupView(
             data-expert-key={group.key}
             data-origin={shadow.origin}
             aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => {
+              setSelectedOrigin(shadow.origin) // ⑤ 两两口径：点选行 = 生效卡 vs 该行
+              setExpanded(true)
+            }}
           >
             <OriginBadge origin={shadow.origin} />
             <span className="xs-title">{shadow.title}</span>
             <span className="xs-updated">{updatedLabel(shadow.updatedAt) ?? ""}</span>
             <span className="xs-mark">被遮蔽 · 只读</span>
           </button>
-          {expanded ? <CompareView group={group} shadow={shadow} /> : null}
         </div>
       ))}
+      {multi && expanded && selected !== undefined ? (
+        <>
+          <CompareChips
+            shadows={group.shadows}
+            selectedOrigin={selected.origin}
+            onSelect={setSelectedOrigin}
+          />
+          <PairCompareTable
+            effective={group.effective}
+            shadow={selected}
+            showAllFields={true}
+            projectName={projectName}
+          />
+        </>
+      ) : null}
     </section>
   )
 }
@@ -427,7 +422,8 @@ export function ExpertGroupView(
  */
 export function ExpertPanel(props: ExpertPanelProps): ReactNode {
   const { phase, entries, query, status } = props
-  const filtered = filterExperts(entries, query, status)
+  const origin = props.origin ?? "all"
+  const filteredGroups = filterGroups(entries, query, status, origin)
 
   let gridBody: ReactNode
   if (phase === "loading") {
@@ -456,7 +452,7 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
         在会话里对 HR 说「招募一个专家」即可建档
       </div>
     )
-  } else if (filtered.length === 0) {
+  } else if (filteredGroups.length === 0) {
     gridBody = (
       <div className="dswf-empty">
         <b>无匹配专家</b>
@@ -464,15 +460,21 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
       </div>
     )
   } else {
-    // 同键聚组（1.60 用户裁决）：网格按键分组渲染；页脚计数按专家键数
-    gridBody = groupExperts(filtered).map((group) => (
-      <ExpertGroupView key={group.key} group={group} {...(props.onCardActivate !== undefined ? { onActivate: props.onCardActivate } : {})} />
+    // 同键聚组（1.60）+ 组级来源筛选（1.61 裁决②）：网格按键分组渲染；页脚计数按专家键数
+    gridBody = filteredGroups.map(({ group, hiddenShadows }) => (
+      <ExpertGroupView
+        key={group.key}
+        group={group}
+        hiddenShadows={hiddenShadows}
+        {...(props.projectName !== undefined ? { projectName: props.projectName } : {})}
+        {...(props.onCardActivate !== undefined ? { onActivate: props.onCardActivate } : {})}
+      />
     ))
   }
 
   const keyCount = new Set(entries.map((entry) => entry.name)).size
   const shownCount =
-    phase === "ready" && entries.length > 0 ? groupExperts(filtered).length : filtered.length
+    phase === "ready" && entries.length > 0 ? filteredGroups.length : filteredGroups.length
   const countText =
     phase === "loading"
       ? "扫描专家目录…"
@@ -500,6 +502,19 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           onChange={(event) => props.onStatusChange(event.target.value as StatusFilter)}
         >
           {STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="dswf-status-select dswf-origin-select"
+          aria-label="来源筛选"
+          data-origin={origin}
+          value={origin}
+          onChange={(event) => props.onOriginChange(event.target.value as OriginFilter)}
+        >
+          {originOptions(props.projectName).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

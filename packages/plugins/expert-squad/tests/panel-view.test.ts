@@ -112,7 +112,7 @@ describe("ExpertPanel 头部交互面", () => {
     expect(html).toContain('>全部</option>');
     expect(html).toContain('>启用</option>');
     expect(html).toContain('>禁用</option>');
-    expect(html.match(/ selected/g)?.length).toBe(1);
+    expect(html.match(/ selected/g)?.length).toBe(2); // 状态 + 来源（1.61）两枚 select 各一
     expect(html).toContain('value="enabled" selected');
   });
 

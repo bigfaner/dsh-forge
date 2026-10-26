@@ -25,6 +25,24 @@ export interface ExpertView {
 /** 状态过滤枚举（F1：全部/启用/禁用）。 */
 export type StatusFilter = "all" | "enabled" | "disabled"
 
+/** 来源过滤枚举（1.61 裁决②：全部来源/项目/用户/内置——与搜索、状态 AND 叠加）。 */
+export type OriginFilter = "all" | "project" | "user" | "plugin"
+
+/** workspace 归属路径 → 项目具名（末段 basename，正反斜杠均容——①④ 徽标/筛选具名源）。 */
+export function projectNameOf(workspacePath: string | undefined): string | undefined {
+  if (workspacePath === undefined || workspacePath === "") return undefined
+  const base = workspacePath.split(/[\\/]/).filter((segment) => segment !== "").pop()
+  return base === undefined || base === "" ? undefined : base
+}
+
+/** 来源角标文案（origin → 角标文本；project 携项目名具名「项目 · <名>」——1.61 裁决④；未知原值透传）。 */
+export function originLabel(origin: string, projectName?: string): string {
+  if (origin === "project") return projectName === undefined ? "项目" : `项目 · ${projectName}`
+  if (origin === "user") return "用户"
+  if (origin === "plugin") return "内置"
+  return origin
+}
+
 /** 查询命中判定（名称/英文标识/技能包含，大小写不敏感——即时过滤语义）。 */
 export function matchesQuery(entry: ExpertView, query: string): boolean {
   const q = query.trim().toLowerCase()
@@ -39,13 +57,24 @@ function matchesStatus(entry: ExpertView, status: StatusFilter): boolean {
   return status === "enabled" ? entry.enabled : !entry.enabled
 }
 
-/** 搜索 × 状态叠加过滤（AND 语义；纯函数——输入不可变消费）。 */
+/** 来源过滤判定（all 恒真——1.61 裁决②）。 */
+export function matchesOrigin(entry: ExpertView, origin: OriginFilter): boolean {
+  return origin === "all" || entry.origin === origin
+}
+
+/**
+ * 搜索 × 状态 × 来源叠加过滤（AND 语义；纯函数——输入不可变消费）。
+ * origin 为可选参（缺省 all——1.61 前调用面零改动）。
+ */
 export function filterExperts(
   entries: readonly ExpertView[],
   query: string,
   status: StatusFilter,
+  origin: OriginFilter = "all",
 ): readonly ExpertView[] {
-  return entries.filter((entry) => matchesQuery(entry, query) && matchesStatus(entry, status))
+  return entries.filter(
+    (entry) => matchesQuery(entry, query) && matchesStatus(entry, status) && matchesOrigin(entry, origin),
+  )
 }
 
 /** 面板页脚计数文案（原型 F1 逐位：`N 位专家 · 显示 M`；零专家短文案）。 */
@@ -77,14 +106,6 @@ export function updatedLabel(updatedAt: string | undefined): string | undefined 
 }
 
 // ---- 同键全层聚组（1.60 用户裁决 2026-10-26）--------------------------------
-
-/** 来源角标三态文案（origin → 角标文本；未知原值透传——载荷漂移容忍）。 */
-export function originLabel(origin: string): string {
-  if (origin === "project") return "项目"
-  if (origin === "user") return "用户"
-  if (origin === "plugin") return "内置"
-  return origin
-}
 
 /** 聚组视图：同键一组——生效卡（首张）+ 被遮蔽卡列表（只读折叠行）。 */
 export interface ExpertGroup {
@@ -144,4 +165,44 @@ export function fieldDiffers(field: keyof ExpertView, effective: ExpertView, sha
 /** 被遮蔽卡与生效卡的字段差异清单（键序随 COMPARE_FIELDS——对比表行序）。 */
 export function diffFields(effective: ExpertView, shadow: ExpertView): readonly string[] {
   return COMPARE_FIELDS.filter(({ field }) => fieldDiffers(field, effective, shadow)).map(({ field }) => field)
+}
+
+// ---- 来源筛选 + 组级筛选（1.61 用户裁决②）----------------------------------
+
+/** 组级筛选产物：组（shadow 已按可见性裁剪）+ 被隐藏的未命中 shadow 数。 */
+export interface ExpertGroupShown {
+  readonly group: ExpertGroup
+  /** 被 来源/搜索/状态 筛选隐藏的 shadow 行数（组头「隐藏 N 条未命中」标注）。 */
+  readonly hiddenShadows: number
+}
+
+/**
+ * 组级筛选（1.61 裁决②）：搜索 × 状态 × 来源 AND 叠加。
+ * - 组呈现条件：生效卡命中 或 任一 shadow 命中（命中来源的组呈现）；
+ * - 组内未命中的 shadow 行隐藏，hiddenShadows 计数供组头标注；
+ * - 生效卡恒为组内对比基座，组呈现即在组内保留（用户裁决 2026-10-26 两两口径）。
+ */
+export function filterGroups(
+  entries: readonly ExpertView[],
+  query: string,
+  status: StatusFilter,
+  origin: OriginFilter,
+): readonly ExpertGroupShown[] {
+  const visible = (entry: ExpertView): boolean =>
+    matchesQuery(entry, query) && matchesStatus(entry, status) && matchesOrigin(entry, origin)
+  return groupExperts(entries)
+    .map((group) => {
+      const visibleShadows = group.shadows.filter(visible)
+      return {
+        group: { ...group, shadows: visibleShadows },
+        hiddenShadows: group.shadows.length - visibleShadows.length,
+      }
+    })
+    .filter(({ group }) => visible(group.effective) || group.shadows.length > 0)
+}
+
+/** 被遮蔽同名提示文案（① Dialog 来源条右段：`遮蔽同名：用户 / 内置`；空 shadows = undefined）。 */
+export function maskedPeersLabel(shadows: readonly ExpertView[]): string | undefined {
+  if (shadows.length === 0) return undefined
+  return `遮蔽同名：${shadows.map((shadow) => originLabel(shadow.origin)).join(" / ")}`
 }

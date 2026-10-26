@@ -12,8 +12,8 @@ import {
   type ExpertDraft,
 } from "./detail-logic.js";
 
-/** 双模式。 */
-export type DetailMode = "view" | "edit";
+/** 三模式（1.61 裁决③：查看/编辑/两两对比——对比只读，退出回查看态）。 */
+export type DetailMode = "view" | "edit" | "compare";
 
 /** 控制器快照（open = Dialog 是否在场）。 */
 export interface DetailState {
@@ -29,6 +29,8 @@ export interface DetailState {
   readonly busy: boolean;
   /** Toast 文案（热刷新生效 / 启停结果 / 错误透出）。 */
   readonly toast: string | undefined;
+  /** 两两对比对象（compare 态消费；单值 = 禁三列并排的数据面，1.61 裁决③⑤）。 */
+  readonly compareTarget?: ExpertView;
 }
 
 /** 详情变更缝（update / enable / disable fetch 路由装配面；测试注入替身）。 */
@@ -112,10 +114,37 @@ export class ExpertDetailController {
     this.emit();
   }
 
-  /** 进入编辑态（字段预填）。 */
+  /** 进入编辑态（字段预填；对比态先回查看——对比目标清空）。 */
   startEdit(): void {
     if (this.state === undefined) return;
-    this.state = { ...this.state, mode: "edit", draft: draftOf(this.state.expert), errors: IDLE };
+    this.state = {
+      ...this.state,
+      mode: "edit",
+      draft: draftOf(this.state.expert),
+      errors: IDLE,
+      compareTarget: undefined,
+    };
+    this.emit();
+  }
+
+  /** 进入两两对比态（1.61 裁决③：仅查看态可入；target = 被遮蔽同名卡）。 */
+  startCompare(target: ExpertView): void {
+    if (this.state === undefined || this.state.mode !== "view") return;
+    this.state = { ...this.state, mode: "compare", compareTarget: target };
+    this.emit();
+  }
+
+  /** 对比对象单选切换（compare 态内；单值换靶——禁三列并排）。 */
+  selectCompareTarget(target: ExpertView): void {
+    if (this.state === undefined || this.state.mode !== "compare") return;
+    this.state = { ...this.state, compareTarget: target };
+    this.emit();
+  }
+
+  /** 退出对比回查看态（compareTarget 清空）。 */
+  exitCompare(): void {
+    if (this.state === undefined || this.state.mode !== "compare") return;
+    this.state = { ...this.state, mode: "view", compareTarget: undefined };
     this.emit();
   }
 

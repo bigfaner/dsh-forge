@@ -117,6 +117,29 @@ export const PANEL_CSS = `
 .cmp-table td .chip { margin-right: 4px; }
 .cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
 .cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
+/* ── 来源置顶条 + 两两对比（1.61 裁决①③⑤⑥）── */
+.dswf-dlg.wide { width: 880px; } /* ⑥ 对比态宽体：宽于详情 Dialog 680px 刻度（视觉稿正本） */
+.dswf-dlg-origin-bar { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); font: var(--dsw-font-xxs-12); }
+.dswf-dlg-origin-bar .origin-badge { margin-left: 0; }
+.dswf-dlg-origin-lead { color: var(--dsw-alias-label-caption); }
+.dswf-dlg-origin-masked { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+.dswf-cmp-pick { display: flex; align-items: center; gap: ${T.gap8}; flex-wrap: wrap; }
+.dswf-cmp-pick-lead, .dswf-cmp-pick-note { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
+.dswf-cmp-pick-note { margin-left: auto; }
+.dswf-cmp-chip { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; padding: 0 ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.pill}; background: transparent; color: var(--dsw-alias-label-secondary); cursor: var(--dsh-cursor-pointer, pointer); }
+.dswf-cmp-chip[data-cmp-selected="true"] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
+.dswf-cmp-pick-list { display: flex; flex-direction: column; gap: ${T.gap8}; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.dswf-cmp-pick-list > b { color: var(--dsw-alias-label-primary); }
+.dswf-cmp-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xs-13); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
+.dswf-cmp-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dswf-cmp-opt.sel { border-color: var(--dsw-alias-state-business-primary); }
+.dswf-cmp-opt .origin-badge { margin-left: 0; }
+.dswf-cmp-opt-updated { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxs-12); }
+.dswf-cmp-toggle-row { display: flex; align-items: center; gap: ${T.pad12}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
+.dswf-cmp-toggle { border: none; background: transparent; color: var(--dsw-alias-state-business-primary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); padding: 0; }
+.dswf-cmp-toggle:hover { text-decoration: underline; }
+.dswf-cmp-empty { padding: ${T.pad20}; text-align: center; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-caption); }
+.xg-hidden { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
 `;
 
 /** 已注入标记（模块级单例——classic script 装载一次）。 */
