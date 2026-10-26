@@ -26,6 +26,7 @@ import type {
 import { createGetBugTool } from './get-bug.js'
 import { createListBugsTool } from './list-bugs.js'
 import { createListTasksTool } from './list-tasks.js'
+import { createPauseTaskTool } from './pause-task.js'
 import { createQueryTaskTool } from './query-task.js'
 import { createRecordBugTool } from './record-bug.js'
 import { createResolveBugTool } from './resolve-bug.js'
@@ -149,11 +150,13 @@ export interface ForgeTools {
   readonly recordImplCheckpoint: ReturnType<typeof createRecordImplCheckpointTool>
   readonly queryImplCheckpoint: ReturnType<typeof createQueryImplCheckpointTool>
   readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
+  readonly pauseTask: ReturnType<typeof createPauseTaskTool>
 }
 
-/** 注册面全集（十七 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
- *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）；面分治：
- *  listBugs 仅主 agent，getBug 主 + worker——WORKER_FORGE_TOOLS 五动词，其余 worker deny） */
+/** 注册面全集（十八 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+ *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
+ *  单任务暂停入口（task-pause-primitive）；面分治：listBugs 仅主 agent，getBug 主 + worker，
+ *  pauseTask 仅主 agent——WORKER_FORGE_TOOLS 五动词，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -172,6 +175,7 @@ export const FORGE_TOOL_NAMES = [
   'recordImplCheckpoint',
   'queryImplCheckpoint',
   'listImplCheckpoints',
+  'pauseTask',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -195,6 +199,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     listBugs: createListBugsTool(deps),
     getBug: createGetBugTool(deps),
     ...createImplCheckpointTools(deps),
+    pauseTask: createPauseTaskTool(deps),
   }
 }
 
@@ -288,6 +293,8 @@ export type {
 } from './dispatch-task.js'
 export { parseStopTaskLoopArgs } from './stop-task-loop.js'
 export type { StopTaskLoopResult, StopTaskLoopToolArgs, StopTaskLoopToolDeps } from './stop-task-loop.js'
+export { parsePauseTaskArgs } from './pause-task.js'
+export type { PauseTaskResult, PauseTaskToolArgs, PauseTaskToolDeps } from './pause-task.js'
 export {
   callToolFace,
   errorCodeOf,
