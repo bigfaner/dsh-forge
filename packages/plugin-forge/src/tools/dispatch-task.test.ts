@@ -9,7 +9,7 @@ import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from 
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import { deriveTriageToolFilter } from '../dispatch-core/assemble.js'
+import { deriveTriageToolFilter, WORKER_PIPELINE_ESSENTIAL_TOOLS } from '../dispatch-core/assemble.js'
 import { createLoopRegistry } from '../loop/index.js'
 import type { LoopDriver, LoopEscalation, LoopRecord, LoopRegistry } from '../loop/index.js'
 import { payloadOf, renderP1 } from '../loop/injection.js'
@@ -580,5 +580,33 @@ describe('事件归属（tool-error——attribution 槽）', () => {
     expect(out.code).toBe('ERR_WORKSPACE_NOT_REGISTERED')
     expect(h.events.map((e) => e.type)).toEqual(['tool-error'])
     expect(h.events[0]).toMatchObject({ slug: 'feat-x', payload: { verb: 'dispatchTask', code: 'ERR_WORKSPACE_NOT_REGISTERED' } })
+  })
+})
+
+// ─────────────────────────── expert-squad-forge 1.4：allow 并集公式 ───────────────────────────
+
+describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4——allow = 档案 tools ∪ 管线必备用具集）', () => {
+  it('必备用具集单源：forge 五动词（WORKER_FORGE_TOOLS 单源）+ todo_write', () => {
+    expect([...WORKER_PIPELINE_ESSENTIAL_TOOLS].sort()).toEqual([...WORKER_FORGE_TOOLS, 'todo_write'].sort())
+  })
+
+  it('穷举 20 任务类型：档案白名单不含管线工具时，必备用具恒在 allow 内且 allow∩deny 零交集', () => {
+    const profileTools = ['custom-lint', 'spec-writer'] // 刻意不含任何管线必备/已知名
+    expect(TASK_TYPES).toHaveLength(20)
+    for (const taskType of TASK_TYPES) {
+      const { allow, deny } = deriveWorkerToolFilter(taskType, undefined, profileTools)
+      expect(allow, `${taskType} allow 在场`).toBeDefined()
+      for (const name of WORKER_PIPELINE_ESSENTIAL_TOOLS) {
+        expect(allow!, `${taskType} allow 保底 ${name}`).toContain(name)
+      }
+      for (const name of profileTools) expect(allow!, `${taskType} allow 档案 ${name}`).toContain(name)
+      expect(allow!.filter((n) => deny.includes(n)), `${taskType} allow∩deny 空`).toEqual([])
+    }
+  })
+
+  it('档案 tools 缺席 = allow 不携带（keep-only 不启用，行为与 1.4 前逐字节等价）；含未知名原样携带（loud 校验归上游创建窗口）', () => {
+    expect('allow' in deriveWorkerToolFilter('coding-fix')).toBe(false)
+    const withGhost = deriveWorkerToolFilter('coding-fix', undefined, ['ghost-unknown-tool'])
+    expect(withGhost.allow).toContain('ghost-unknown-tool')
   })
 })

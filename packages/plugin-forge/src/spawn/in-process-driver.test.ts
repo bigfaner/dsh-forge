@@ -84,8 +84,24 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     })
   })
 
-  it('agentOptions 缺席 = 请求不携带键（回退父会话继承——直传 undefined 会被上游视为显式覆盖）', async () => {
+  it('toolFilter 完整 ToolRestriction 原样透传（expert-squad-forge 1.4）：allow+deny 双键展开复制；allow 含未知名原样携带（fail-closed loud 校验归上游创建窗口）；deny 缺席 = 键不携带', async () => {
     const spawn = createInProcessDriverSpawn()
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    await spawn({
+      prompt: 'P',
+      parent: parentStub(),
+      signal: new AbortController().signal,
+      toolFilter: { allow: ['read', 'grep', 'ghost-unknown-tool'], deny: ['queryTask'] },
+    })
+    const [request] = startInProcessRun.mock.calls[0] as [Record<string, unknown>]
+    expect(request.toolFilter).toEqual({ allow: ['read', 'grep', 'ghost-unknown-tool'], deny: ['queryTask'] })
+    startInProcessRun.mockResolvedValueOnce(runStub())
+    await spawn({ prompt: 'P', parent: parentStub(), signal: new AbortController().signal, toolFilter: {} })
+    const [bare] = startInProcessRun.mock.calls[1] as [Record<string, unknown>]
+    expect('toolFilter' in bare ? Object.keys(bare.toolFilter as object) : []).toEqual([])
+  })
+
+  it('agentOptions 缺席 = 请求不携带键（回退父会话继承——直传 undefined 会被上游视为显式覆盖）', async () => {    const spawn = createInProcessDriverSpawn()
     startInProcessRun.mockResolvedValueOnce(runStub())
     await spawn({
       prompt: 'P',

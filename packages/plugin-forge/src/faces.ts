@@ -558,6 +558,16 @@ export interface ForgeExpertProfile {
   readonly model?: string
 }
 
+/**
+ * spawn 组装消费的档案工具/模型投影（expert-squad-forge 1.4——ForgeExpertProfile 再收窄：
+ * tools → deriveWorkerToolFilter 的 allow 并集面、model → agentOptions.model 覆盖；
+ * 缺席键 = 对应组装面回落现状）。
+ */
+export interface WorkerDispatchProfile {
+  readonly tools?: readonly string[]
+  readonly model?: string
+}
+
 /** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
  *  键解析 = settings experts.mapping 覆盖 → DEFAULT_EXPERT_MAPPING 默认 → 原类型名；
  *  settings 读失败 = 回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛

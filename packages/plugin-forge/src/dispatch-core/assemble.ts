@@ -3,6 +3,7 @@
 // （含档位兼容收口）。纯函数——两消费者（工具壳/循环驱动器）同源。
 import type { ForgeSettings, ReasoningEffortLevel, TaskType, WorkerToolFamily } from '@dsh-forge/contracts'
 import {
+  WORKER_FORGE_TOOLS,
   WORKER_GLOBAL_DENY_TOOLS,
   WORKER_TASK_FAMILY_BY_TYPE,
   WORKER_TOOL_FAMILIES,
@@ -62,15 +63,32 @@ export function forgetWorkerSourceTask(workerSessionId: string): void {
 }
 
 /**
- * taskType → 收窄矩阵 → toolFilter（deny 面）。矩阵 = contracts WORKER_TOOL_MATRIX
- * （族 × 工具族 ✓ 表）：族内拒绝的工具族名下已知工具名入 deny + 全局拒绝集 + forge 闭环。
- * nameFamily 参数化（缺省 = WORKER_TOOL_NAME_FAMILY——5.1 OQ#2 兑现后 = 上游 standard
- * 组合实面全表 17 名，上游族收窄即激活；参数缝保留 = 名表核对 pin 独立可测）。
+ * 管线必备用具集（expert-squad-forge 1.4——allow=keep-only 语义下的并集保底单源）：
+ * allow=keep-only 会滤除白名单外的全部工具，故结算链/fix 链必备的 forge 五动词
+ * （contracts WORKER_FORGE_TOOLS 单源——submitTask/addTask/recordBug/resolveBug/getBug）
+ * 与 todo_write（执行骨架清单——全局拒绝集刻意不拒的同一裁决面，allow 语义下须显式在
+ * allow 内否则 keep-only 滤除）恒并入档案 tools 白名单。派发链组装公式见
+ * deriveWorkerToolFilter；穷举 20 任务类型的保底单测锚定本集。
+ */
+export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = [...WORKER_FORGE_TOOLS, 'todo_write']
+
+/**
+ * taskType → 收窄矩阵 → toolFilter（deny 面；expert-squad-forge 1.4 起 allow 面可选）。
+ * 矩阵 = contracts WORKER_TOOL_MATRIX（族 × 工具族 ✓ 表）：族内拒绝的工具族名下已知工具名
+ * 入 deny + 全局拒绝集 + forge 闭环。nameFamily 参数化（缺省 = WORKER_TOOL_NAME_FAMILY——
+ * 5.1 OQ#2 兑现后 = 上游 standard 组合实面全表 17 名，上游族收窄即激活；参数缝保留 =
+ * 名表核对 pin 独立可测）。
+ * profileTools 参数化（1.4 组装公式）：档案 tools 白名单在场 → allow = 档案 tools ∪
+ * 管线必备用具集（WORKER_PIPELINE_ESSENTIAL_TOOLS 并集保底——管线必备恒可见）；缺席
+ * （experts 未装配/档案无 tools 键）= 不携带 allow（keep-only 不启用，行为与 1.4 前逐
+ * 字节等价）。档案白名单含未知名不在本面过滤——上游 child 创建窗口 fail-closed loud
+ * 校验兜底（提案 §2.7 核销）。
  */
 export function deriveWorkerToolFilter(
   taskType: TaskType,
   nameFamily: Readonly<Record<string, WorkerToolFamily>> = WORKER_TOOL_NAME_FAMILY,
-): { deny: string[] } {
+  profileTools?: readonly string[],
+): { allow?: string[]; deny: string[] } {
   const family = WORKER_TASK_FAMILY_BY_TYPE[taskType]
   const deniedFamilies = new Set<WorkerToolFamily>(WORKER_TOOL_FAMILIES.filter((f) => !WORKER_TOOL_MATRIX[family][f]))
   const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)
@@ -78,7 +96,11 @@ export function deriveWorkerToolFilter(
     if (deniedFamilies.has(f)) deny.add(name)
   }
   for (const name of FORGE_DENY_IN_WORKER) deny.add(name)
-  return { deny: [...deny] }
+  const allow =
+    profileTools === undefined
+      ? undefined
+      : [...new Set<string>([...profileTools, ...WORKER_PIPELINE_ESSENTIAL_TOOLS])]
+  return { ...(allow !== undefined ? { allow } : {}), deny: [...deny] }
 }
 
 /**
@@ -100,15 +122,19 @@ export function deriveTriageToolFilter(): { deny: string[] } {
   return { deny: [...deny] }
 }
 
-/** 设置 → agentOptions（未配置/服务缺席 = undefined——不携带，回退父会话继承；
- * reasoning='default' = 不下发 effort——落 provider/模型默认档；其余 → reasoningEffort 直映射） */
+/** 设置 + 档案 model → agentOptions（expert-squad-forge 1.4 model 消费——triage 同径基座
+ * 上档案 model 在场覆盖 model，缺席回落 forgeSettings 默认；settings 未配置/服务缺席 =
+ * undefined 不携带（无 provider 基座，回落父会话继承）；reasoning='default' = 不下发
+ * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射） */
 export function workerAgentOptionsOf(
   settings: ForgeSettings | undefined,
+  profileModel?: string,
 ): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
   if (settings === undefined || settings.worker === undefined) return undefined
   const { provider, model, reasoning } = settings.worker
-  if (reasoning === 'default') return { provider, model }
-  return { provider, model, reasoningEffort: reasoning }
+  const base = { provider, model: profileModel ?? model }
+  if (reasoning === 'default') return base
+  return { ...base, reasoningEffort: reasoning }
 }
 
 /**

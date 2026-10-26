@@ -654,6 +654,8 @@ export interface LoopDriverDeps {
   /** forgeSettings 服务面（可选——worker agentOptions 组装同工具壳） */
   readonly settings?: Pick<ForgeSettingsService, 'get'>
   readonly resolveModelReasoning?: DispatchCoreDeps['resolveModelReasoning']
+  /** 专家档案工具/模型取用面（expert-squad-forge 1.4——透传 dispatch-core spawn 组装；缺席 = 形态兼容） */
+  readonly resolveWorkerProfile?: DispatchCoreDeps['resolveWorkerProfile']
   readonly registry?: LoopRegistry
   readonly triage?: LoopTriageHook
   readonly escalation?: LoopEscalationHook
@@ -1145,6 +1147,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           ...(deps.events !== undefined ? { events: deps.events } : {}),
           ...(deps.settings !== undefined ? { settings: deps.settings } : {}),
           ...(deps.resolveModelReasoning !== undefined ? { resolveModelReasoning: deps.resolveModelReasoning } : {}),
+          ...(deps.resolveWorkerProfile !== undefined ? { resolveWorkerProfile: deps.resolveWorkerProfile } : {}),
           // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints/HEAD 解析器随 loop.core 透传
           // 结算核——settleClaimed → settleWorkerRun → recordWaveCheckpoint 的 review-wave-N
           // 落行依赖此二依赖（缺席 = 机制惰性不判，行为零变化）

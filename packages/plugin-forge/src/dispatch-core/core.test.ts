@@ -96,6 +96,7 @@ function harness(
   options: {
     settings?: { get(): Promise<unknown> }
     resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
+    resolveWorkerProfile?: DispatchCoreDeps['resolveWorkerProfile']
     jobs?: DispatchJobsFace
   } = {},
 ): Harness {
@@ -162,6 +163,7 @@ function harness(
     events: sink,
     ...(options.settings !== undefined ? { settings: options.settings as DispatchCoreDeps['settings'] } : {}),
     ...(options.resolveModelReasoning !== undefined ? { resolveModelReasoning: options.resolveModelReasoning } : {}),
+    ...(options.resolveWorkerProfile !== undefined ? { resolveWorkerProfile: options.resolveWorkerProfile } : {}),
     ...(options.jobs !== undefined ? { jobs: options.jobs } : {}),
     spawn: (req) => spawnImpl(req),
   }
@@ -513,5 +515,55 @@ describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(
     const fresh = await dispatchCore(h.deps, execOf().exec, loopArgs({ runInBackground: true }))
     expect(fresh).toMatchObject({ kind: 'dispatched', jobId: 'forge-dispatch-2' })
     expect(fresh).not.toHaveProperty('reEntered')
+  })
+})
+
+// ─────────────────────────── expert-squad-forge 1.4：档案 tools/model spawn 组装消费 ───────────────────────────
+
+describe('档案 tools/model spawn 组装消费（expert-squad-forge 1.4——resolveWorkerProfile）', () => {
+  it('档案在场：toolFilter.allow = 档案 tools ∪ 管线必备用具集（白名单不含管线工具仍保底）+ agentOptions.model = 档案 model；事件 model 同步', async () => {
+    const profileCalls: string[] = []
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'settings-chat', reasoning: 'default' } }) },
+      resolveWorkerProfile: async (taskType) => {
+        profileCalls.push(taskType)
+        return { tools: ['read', 'custom-lint'], model: 'expert-model' }
+      },
+    })
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
+    // 取用恰一次、按任务类型（snapshot() 的 taskType = coding-fix）
+    expect(profileCalls).toEqual(['coding-fix'])
+    const req = h.spawnRequests[0]!
+    expect(req.toolFilter.allow).toBeDefined()
+    // 并集保底：档案白名单（read/custom-lint）+ 管线必备（结算链 forge 五动词 + todo_write）
+    for (const name of ['read', 'custom-lint', 'submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug', 'todo_write']) {
+      expect(req.toolFilter.allow, `allow 保底 ${name}`).toContain(name)
+    }
+    // deny 收窄面照旧（矩阵派生不回退）
+    expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'queryTask', 'dispatchTask']))
+    // model 消费：档案 model 在场覆盖 forgeSettings 默认
+    expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'expert-model' })
+    const spawned = h.events.find((e) => e.type === 'task-spawned') as unknown as { payload: { model: string } }
+    expect(spawned.payload.model).toBe('expert-model')
+  })
+
+  it('档案 model 缺席回落 forgeSettings 默认；档案无 tools 键 = allow 不携带（keep-only 不启用）', async () => {
+    const h = harness({
+      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'settings-chat', reasoning: 'high' } }) },
+      resolveWorkerProfile: async () => ({ model: undefined }),
+    })
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
+    const req = h.spawnRequests[0]!
+    expect('allow' in req.toolFilter).toBe(false)
+    expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'settings-chat', reasoningEffort: 'high' })
+  })
+
+  it('取用面缺席 = 形态兼容：toolFilter 纯 deny 面、agentOptions 纯 forgeSettings（行为回 1.4 前）', async () => {
+    const h = harness()
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
+    const req = h.spawnRequests[0]!
+    expect('allow' in req.toolFilter).toBe(false)
+    expect(req.toolFilter.deny).toContain('queryTask')
+    expect(req.agentOptions).toBeUndefined()
   })
 })

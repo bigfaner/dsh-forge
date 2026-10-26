@@ -34,9 +34,10 @@ import type {
   TaskSnapshot,
   TaskType,
 } from '@dsh-forge/contracts'
+import { WORKER_TOOL_NAME_FAMILY } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import type { DispatchJobOutcome, DispatchJobsFace } from '../faces.js'
+import type { DispatchJobOutcome, DispatchJobsFace, WorkerDispatchProfile } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
 import {
@@ -108,6 +109,13 @@ export interface DispatchCoreDeps {
   readonly checkpoints?: SettleCheckpointsFace
   /** 容器分支 HEAD 解析器（可选——机械④标记 base_commit_hash；缺席回落 gitHeadCommit 真解析） */
   readonly resolveHeadCommit?: HeadCommitResolver
+  /**
+   * 专家档案工具/模型取用面（expert-squad-forge 1.4——可选；按 taskType 取档案的 tools/model
+   * 投影供 spawn 组装消费：tools → allow 并集、model → agentOptions.model。缺席 = 形态
+   * 兼容（不取档案——toolFilter 纯 deny 面、模型纯 forgeSettings）；档案缺失/禁用 =
+   * 实现侧 fail-loud 抛错原样外抛（claim 期已同径 fail-loud，此处同语义兜底）。
+   */
+  readonly resolveWorkerProfile?: (taskType: string) => Promise<WorkerDispatchProfile | undefined>
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */
@@ -385,12 +393,16 @@ export async function spawnClaimed(
   // taskType+complexity → worker persona（S2 分层承载——经 SubagentStartRequest.persona
   // 落子会话 deployment:persona-prefix scoped 段；不进 dispatchPrompt，分层保持）
   // （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
-  const toolFilter = deriveWorkerToolFilter(task.taskType)
-  // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
+  // （expert-squad-forge 1.4：档案 tools/model 消费——tools → allow = 档案白名单 ∪ 管线
+  // 必备用具集；model → agentOptions.model 覆盖，缺席回落 forgeSettings 默认。解析失败 =
+  // 档案 fail-loud 同径，归 spawn 失败防线。）
   const settings: ForgeSettings | undefined =
     deps.settings !== undefined ? await deps.settings.get() : undefined
+  const profile = await deps.resolveWorkerProfile?.(task.taskType)
+  const toolFilter = deriveWorkerToolFilter(task.taskType, WORKER_TOOL_NAME_FAMILY, profile?.tools)
+  // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
   const agentOptions = await reconcileWorkerReasoning(
-    workerAgentOptionsOf(settings),
+    workerAgentOptionsOf(settings, profile?.model),
     deps.resolveModelReasoning,
   )
 

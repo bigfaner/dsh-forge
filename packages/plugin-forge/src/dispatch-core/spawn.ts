@@ -11,8 +11,14 @@ export interface SpawnWorkerRequest {
   readonly parent: unknown
   /** 取消信号（exec.signal 透传；缺省 = 新建——驱动面要求必填） */
   readonly signal: AbortSignal
-  /** 收窄面（矩阵派生 deny——childCtx.tools.restrict 同义） */
-  readonly toolFilter: { readonly deny: readonly string[] }
+  /**
+   * 工具收窄面（expert-squad-forge 1.4 放宽——官方完整 ToolRestriction 的结构镜像：
+   * @deepseek-ai/dsh-tools lib/types/index.d.ts:508 ToolRestriction {allow?, deny?}，
+   * 语义 = allow（keep-only，仅保留名单）→ deny（remove，再移除名单）同体叠加；
+   * 本包 boundaries 白名单禁新增 @deepseek-ai import，故结构化声明 + 锚注释对齐。
+   * allow = 档案 tools ∪ 管线必备用具集（assemble.ts 单源派生）；deny = 既有矩阵收窄面。
+   */
+  readonly toolFilter: { readonly allow?: readonly string[]; readonly deny?: readonly string[] }
   /** 默认 LLM（forgeSettings 已配置才携带；缺省 = 回退父会话继承；effort 缺席 = default 档/兼容剥离） */
   readonly agentOptions?: {
     readonly provider: string

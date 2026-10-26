@@ -129,6 +129,19 @@ const forgePlugin: ForgePlugin = Object.assign(
       const message = cause instanceof Error ? cause.message : String(cause)
       console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落 core 程序段合成）：${message}`)
     }
+    // expert-squad-forge 1.4：spawn 组装消费的档案 tools/model 投影（resolveWorkerProfile——
+    // 同一 expertResolver 按任务类型现取；档案缺失/禁用 fail-loud 与 claim 期同径。取用面
+    // 降级缺席 = 形态兼容——toolFilter 纯 deny 面、模型纯 forgeSettings，行为回 1.4 前）。
+    const workerProfileOf =
+      expertResolver === undefined
+        ? undefined
+        : async (taskType: string) => {
+            const profile = await expertResolver(taskType)
+            return {
+              ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
+              ...(profile.model !== undefined ? { model: profile.model } : {}),
+            }
+          }
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
     // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，
     // 杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩）；服务缺席/异常 = 不判。
@@ -338,6 +351,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+      ...(workerProfileOf !== undefined ? { resolveWorkerProfile: workerProfileOf } : {}),
       ...(knownContainers !== undefined ? { knownContainers } : {}),
       triage: createTriageHook({
         tasks: ctx.forgeTasks,

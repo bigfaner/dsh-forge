@@ -164,7 +164,12 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
           parent: request.parent, // 派发 agent 透传（真 Agent——lineage/工作目录/深度派生源）
           signal: relay.signal,
           ...(request.label !== undefined ? { label: request.label } : {}),
-          toolFilter: { deny: [...request.toolFilter.deny] },
+          // 官方完整 ToolRestriction 原样透传（expert-squad-forge 1.4——allow=keep-only /
+          // deny=remove 语义与未知名 loud 校验归上游 child 创建窗口，本缝零过滤零改写）
+          toolFilter: {
+            ...(request.toolFilter.allow !== undefined ? { allow: [...request.toolFilter.allow] } : {}),
+            ...(request.toolFilter.deny !== undefined ? { deny: [...request.toolFilter.deny] } : {}),
+          },
           ...(request.agentOptions !== undefined ? { agentOptions: { ...request.agentOptions } } : {}),
           // persona 透传（S2 分层承载）：上游 applyChildComposition 落子会话 scoped
           // 'deployment:persona-prefix' 段；缺席 = 不携带键（直传 undefined 会被上游视为显式覆盖）
