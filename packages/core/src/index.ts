@@ -238,7 +238,7 @@ const corePlugin: CorePlugin = Object.assign(
           // experts.mapping 覆盖 → 默认映射；IO 全在插件侧闭包）经 claim 时点 reflect.get
           // 防御读取——懒解析消解插件装配次序（core 先于 plugin-forge 加载）；服务缺席/异常 =
           // undefined（形态兼容，persona 仅程序段）；档案缺失/禁用 = 插件侧 fail-loud 抛错
-          // 原样外抛（claim 事务整体回滚，任务留 pending）。
+          // 原样外抛（claim 一切写入之前中断，任务留 pending）。
           resolveExpertProfile: async (taskType) => {
             let resolver: unknown
             try {

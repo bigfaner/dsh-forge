@@ -903,6 +903,49 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
   })
 })
 
+// ─────────────────── bug 46f106c5：claim 事务窗口跨 await 并发交错 ───────────────────
+
+describe('claim 事务窗口：档案取用挂起期间并发写动词不抛事务嵌套错误（bug 46f106c5）', () => {
+  it('第二笔 claim 在档案取用挂起窗口内进入 → 不抛 SqliteError，两动词均正常落账', async () => {
+    h ??= createTasksHarness()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let calls = 0
+    const resolveExpertProfile = async () => {
+      calls++
+      if (calls === 1) await gate // 第一笔 claim 挂在档案取用（模拟 settings 异步读窗口）
+      return undefined
+    }
+    const claim = (input: Parameters<typeof claimTask>[1]) =>
+      claimTask({ store: h!.store, events: h!.events, resolveExpertProfile }, input)
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1')
+    seedTask(h!.db, 'f', '2.2')
+
+    const p1 = claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's1' })
+    await new Promise((resolve) => setTimeout(resolve, 0)) // 让 claim1 进入档案取用挂起窗口
+    const r2 = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.2' }, sessionId: 's2' })
+    expect(r2.task?.taskStatus).toBe('in_progress')
+    release()
+    const r1 = await p1
+    expect(r1.task?.taskStatus).toBe('in_progress')
+
+    // 两动词均落账：各自一条 claim 记录 + 会话链接 + 状态转移
+    expect(
+      rows(`SELECT COUNT(*) AS n FROM task_records WHERE verb = 'claim' AND task_id IN ('t-f-2.1','t-f-2.2')`),
+    ).toEqual([{ n: 2 }])
+    expect(rows(`SELECT COUNT(*) AS n FROM task_session_links WHERE task_id IN ('t-f-2.1','t-f-2.2')`)).toEqual([
+      { n: 2 },
+    ])
+    expect(rows(`SELECT local_id FROM tasks WHERE task_status = 'in_progress' ORDER BY local_id`)).toEqual([
+      { local_id: '2.1' },
+      { local_id: '2.2' },
+    ])
+  })
+})
+
 // ─────────────────── expert-squad-forge 1.3：claim 两段组装（档案人格段 + 程序段） ───────────────────
 
 describe('persona 两段组装：专家档案取用面注入（expert-squad-forge 1.3）', () => {

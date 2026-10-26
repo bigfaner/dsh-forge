@@ -35,7 +35,7 @@ import type {
   TaskPriority,
   TaskPrerequisiteSummary,
 } from '@dsh-forge/contracts'
-import { withAsyncTransaction } from '../../db/transaction.js'
+import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
@@ -206,8 +206,11 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
   const db = deps.store.ensureOpen(input.projectId)
   const now = new Date().toISOString()
 
-  const result = await withAsyncTransaction(db, async (): Promise<ClaimTaskResult> => {
-    // ① 目标解析：adopt 定向领取（S3——循环恢复径：按 TaskRef 直查接管既有 in_progress/
+  // 事务外纯读段：目标解析 + 守卫 + 组装 + 档案取用（bug 46f106c5——档案取用是纯读、
+  // 不依赖事务内一致性；异步挂起不得落在 BEGIN IMMEDIATE 之后的窗口内，否则任何并发写
+  // 动词在此单连接上 BEGIN 即抛「cannot start a transaction within a transaction」）。
+  // Root cause: better-sqlite3 单连接无互斥面，事务窗口跨 await 即向并发暴露未闭合事务。
+  // ① 目标解析：adopt 定向领取（S3——循环恢复径：按 TaskRef 直查接管既有 in_progress/
     //    interrupted，忽略 session links——重启后主会话新 id 天然无 links，直查即接管）；
     //    显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
     //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常；
@@ -280,8 +283,8 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     // ③b worker persona 合成（expert-squad-forge 1.3 两段组装——档案人格段 + 程序段；
     //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
     //     档案取用经注入面（键解析 = settings experts.mapping 覆盖 → 默认映射——plugin-forge
-    //     1.2 装配）：缺失/禁用档案 fail-loud 抛错（消息含专家键名）→ 单事务整体回滚，任务
-    //     留 pending、无空 persona；取用面缺席（experts 服务未装配）= 形态兼容，persona 仅
+    //     1.2 装配）：缺失/禁用档案 fail-loud 抛错（消息含专家键名）→ 一切写入之前抛出，
+    //     任务留 pending、无空 persona；取用面缺席（experts 服务未装配）= 形态兼容，persona 仅
     //     程序段。
     //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
     //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
@@ -294,6 +297,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
     const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona
 
+  // ── 事务段（纯同步写窗口：转移 + claim 记录 + links + 快照。窗口内零 await——
+  //    better-sqlite3 单连接上同步执行不向并发暴露未闭合事务）。
+  const result = withTransaction(db, (): ClaimTaskResult => {
     // ④ 转移（pending/blocked → in_progress）或幂等重入（in_progress 无状态转移，C1）
     const reclaimed = row.task_status === 'in_progress'
     if (!reclaimed) {
