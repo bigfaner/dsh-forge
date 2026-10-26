@@ -188,7 +188,9 @@ export function mselMenuPlacement(
     // 极小视口两侧均负 → Math.max(0,…) 兜底（maxHeight 负值非法，回退零高）
     maxHeight: Math.min(maxMenuPx, Math.max(0, Math.max(below, above) - 4)),
   };
-  if (below < maxMenuPx && above > below) {
+  if (below < maxMenuPx && above > below && above - 4 > 0) {
+    // bug 207b7579：maxHeight 已按 Math.max(0,…) 兜底，判向不得再读原始负值——
+    // 上方无正可用空间（above-4 ≤ 0）时不翻 above（0 高菜单不落 above 展开态），兜底 below
     return { side: "above", style: { ...base, bottom: viewportHeight - box.top + 4 } };
   }
   return { side: "below", style: { ...base, top: box.bottom + 4 } };
@@ -373,7 +375,7 @@ function CompareBody({
 }: {
   readonly state: DetailState;
   /** 对比左列生效条（bug e1d74589：同自 sameKeyEntries 按 effective 位重解析——与右列同代际）。 */
-  readonly effective: ExpertView;
+  readonly effective?: ExpertView;
   readonly shadows: readonly ExpertView[];
   readonly projectName?: string;
   readonly controller: ExpertDetailController;
@@ -381,7 +383,9 @@ function CompareBody({
   const { showAll, toggle } = useDiffOnly();
   // Root cause（bug f4020406 ⑥）：state 只存 compareTargetOrigin，渲染时从同键最新
   // 条目重解析——轮询换新后对比表随 sameKeyEntries 自动换新，不读陈旧快照。
-  const target = shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
+  const target = state.compareTargetOrigin === undefined
+    ? undefined
+    : shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
   return (
     <>
       <div className="dswf-cmp-pick-list">
@@ -400,7 +404,13 @@ function CompareBody({
           </button>
         ))}
       </div>
-      {target === undefined ? (
+      {effective === undefined ? (
+        // bug 207b7579①：生效位缺失（sameKeyEntries 非空但无 effective 位）——左列失靶
+        // 空态，不回落 open 期陈旧快照（幻影 diff 根源地）
+        <div className="dswf-cmp-empty" data-dswf-cmp-stale="effective">
+          生效档案已不在，请重选
+        </div>
+      ) : target === undefined ? (
         // 失靶空态：对比对象被删/刷新消失——引导重选，不渲染残缺对比表
         <div className="dswf-cmp-empty">对比对象已不在，请重选</div>
       ) : (
@@ -448,8 +458,13 @@ export function ExpertDetailDialog(props: {
   // bug e1d74589：对比左列生效条同自 sameKeyEntries 按 effective 位重解析——
   // state.expert 是 open 期快照（仅 save/toggleEnabled 换新），外部改动后与右列
   // （渲染时重解析）代际错位出幻影 diff；无显式生效位条目时回落快照（旧载荷容忍）。
-  const compareEffective =
-    (props.sameKeyEntries ?? []).find((entry) => entry.effective === true) ?? expert;
+  // bug 207b7579①：生效位缺失不再回落 open 期快照——按失靶处理（对比入口禁用/对比态空态）。
+  // bug 207b7579②：主体失靶守卫——sameKeyEntries 在场且不含打开条目 = 专家已被删；
+  // 守卫为渲染期派生，轮询换新恢复条目后自动收敛。
+  const compareEffective = props.sameKeyEntries?.find((entry) => entry.effective === true);
+  const stale =
+    props.sameKeyEntries !== undefined &&
+    !props.sameKeyEntries.some((entry) => entry.origin === expert.origin);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -465,7 +480,12 @@ export function ExpertDetailDialog(props: {
     return () => document.removeEventListener("keydown", onKey);
   }, [props.controller]);
 
-  const body = comparing ? (
+  const body = stale ? (
+    // bug 207b7579②：打开条目已被删——查看态失靶提示，不渲染陈旧快照主体
+    <div className="dswf-cmp-empty" data-dswf-stale="">
+      该专家已不存在
+    </div>
+  ) : comparing ? (
     <CompareBody
       state={state}
       effective={compareEffective}
@@ -603,6 +623,7 @@ export function ExpertDetailDialog(props: {
                     type="button"
                     className="dswf-btn dswf-btn-ghost"
                     aria-label="对比"
+                    disabled={stale || compareEffective === undefined}
                     onClick={() => props.controller.startCompare(shadows[0]!)}
                   >
                     对比
@@ -611,6 +632,7 @@ export function ExpertDetailDialog(props: {
                 <button
                   type="button"
                   className="dswf-btn dswf-btn-ghost"
+                  disabled={stale}
                   onClick={() => props.controller.startEdit()}
                 >
                   编辑
@@ -619,7 +641,7 @@ export function ExpertDetailDialog(props: {
                   type="button"
                   className="dswf-btn dswf-btn-ghost"
                   data-dswf-toggle-enabled=""
-                  disabled={state.busy}
+                  disabled={state.busy || stale}
                   onClick={() => void props.controller.toggleEnabled()}
                 >
                   {expert.enabled ? "禁用" : "启用"}

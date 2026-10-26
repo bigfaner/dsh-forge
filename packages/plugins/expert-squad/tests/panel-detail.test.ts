@@ -482,6 +482,25 @@ describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + bo
     expect(belowClamped.style.top! + belowClamped.style.maxHeight).toBeLessThanOrEqual(800);
   });
 
+  it("bug 207b7579：极小视口判向兜底——双侧均负或上方无正可用空间时不翻 above（0 高菜单不落 above 展开态）", () => {
+    // above(-5) > below(-15) 且双侧均负：旧行为翻 above 渲染 0 高展开菜单；兜底 below
+    const bothNegative = mselMenuPlacement(
+      { top: -5, bottom: 115, left: 120, width: 600 },
+      100,
+    );
+    expect(bothNegative.side).toBe("below");
+    expect(bothNegative.style.top).toBe(119);
+    expect(bothNegative.style.bottom).toBeUndefined();
+    expect(bothNegative.style.maxHeight).toBe(0);
+    // above 为正但扣 4 后 ≤ 0：同样不翻 above
+    const aboveTiny = mselMenuPlacement(
+      { top: 2, bottom: 99, left: 120, width: 600 },
+      100,
+    );
+    expect(aboveTiny.side).toBe("below");
+    expect(aboveTiny.style.bottom).toBeUndefined();
+  });
+
   it("m3: mselMenuStyleEqual 等值短路判据——坐标全等才跳过 setState", () => {
     const a = { left: 10, width: 200, maxHeight: 220, top: 40 };
     expect(mselMenuStyleEqual(a, { ...a })).toBe(true);

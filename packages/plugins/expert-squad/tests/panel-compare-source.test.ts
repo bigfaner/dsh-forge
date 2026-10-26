@@ -300,20 +300,74 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   });
 
   it("bug e1d74589：对比左列同自 sameKeyEntries 按 effective 位重解析（外部改动后无幻影 diff）", () => {
-    // open 期快照 title=项目评审；轮询换新后生效层 title 变为 项目评审v2（同键新对象），
-    // shadow 字段与换新后生效层完全一致——左列若读陈旧快照即出幻影 diff
+    // open 期快照 title=资深评审；轮询换新后生效层 title 变为 项目评审v2（同键新对象），
+    // shadow 与换新后生效层差 title+skills 两字段——左列若读陈旧快照即出幻影 diff
     const reloaded = entry({ origin: "project", effective: true, title: "项目评审v2" });
-    const staleShadow = entry({
-      origin: "user",
-      effective: false,
-      title: "项目评审v2",
-      description: reloaded.description,
-      personaMd: reloaded.personaMd,
-    });
+    const staleShadow = entry({ origin: "user", effective: false, title: "旧评审", skills: ["tsc"] });
     const html = renderDialog(compareCtl(staleShadow), { sameKeyEntries: [staleShadow, reloaded] });
-    expect(html).toContain("字段完全一致"); // 两列同代际 → 零差异空态
-    expect(html).not.toContain('class="diff"'); // 幻影 diff 不在场
-    expect(html).toContain(">项目评审v2</span>"); // 左列生效格读换新值
+    // bug 207b7579③：断言钉 cmp-eff 列内容段（自表头格起截取）——旧断言可被 pick-list
+    // 行单独满足（幻影通过）；左列生效格必须读换新值「项目评审v2」
+    const effCol = html.slice(Math.max(0, html.indexOf('<th class="cmp-eff">')));
+    expect(effCol).toContain(">项目评审v2</td>"); // 左列 title 行读换新值
+    expect((html.match(/class="diff"/g) ?? []).length).toBe(4); // title+skills 两字段 ×2 列
+  });
+
+  it("bug 207b7579①：sameKeyEntries 非空但无 effective 位——对比态左列失靶空态，不回落 open 快照", () => {
+    // 打开条目在场但缺生效位（旧载荷）；effective 位缺失 ≠ 条目被删（不触发失靶守卫）
+    const opened = entry({ origin: "project", title: "项目评审" });
+    const shadow = entry({ origin: "user", effective: false, title: "用户评审", skills: ["tsc"] });
+    const reloaded = entry({ origin: "project", title: "项目评审v2" }); // 换新后仍无生效位
+    const c = new ExpertDetailController({
+      update: async () => opened,
+      setEnabled: async () => opened,
+    });
+    c.open(opened);
+    c.startCompare(shadow);
+    const html = renderDialog(c, { sameKeyEntries: [reloaded, shadow] });
+    expect(html).toContain("生效档案已不在");
+    expect(html).not.toContain('class="cmp-eff"'); // 不渲染对比表（不回落陈旧快照）
+  });
+
+  it("bug 207b7579①：无生效位条目时查看态对比入口禁用", () => {
+    const opened = entry({ origin: "project", title: "项目评审" });
+    const c = new ExpertDetailController({
+      update: async () => opened,
+      setEnabled: async () => opened,
+    });
+    c.open(opened);
+    const html = renderDialog(c, {
+      sameKeyEntries: [entry({ origin: "project", title: "项目评审v2" }), shadowUser],
+    });
+    expect(html).toMatch(/aria-label="对比"[^>]*disabled/);
+  });
+
+  it("bug 207b7579②：打开的专家被删除（轮询换新 sameKeyEntries 不含该条目）——查看态提示「该专家已不存在」+ 编辑/启停禁用", () => {
+    const c = new ExpertDetailController({
+      update: async () => effective,
+      setEnabled: async () => effective,
+    });
+    c.open(effective);
+    const html = renderDialog(c, {
+      sameKeyEntries: [entry({ origin: "user", effective: true, title: "其他专家" })],
+    });
+    expect(html).toContain("该专家已不存在");
+    expect(html).toContain('disabled="">编辑</button>'); // 编辑入口禁用（提示仍在场）
+    expect(html).toMatch(/data-dswf-toggle-enabled=""[^>]*disabled/);
+  });
+
+  it("bug 207b7579②：轮询换新恢复条目后失靶守卫自动收敛", () => {
+    const c = new ExpertDetailController({
+      update: async () => effective,
+      setEnabled: async () => effective,
+    });
+    c.open(effective);
+    const staleHtml = renderDialog(c, { sameKeyEntries: [] });
+    expect(staleHtml).toContain("该专家已不存在");
+    const restoredHtml = renderDialog(c, {
+      sameKeyEntries: [entry({ origin: "project", effective: true, title: "项目评审v2" })],
+    });
+    expect(restoredHtml).not.toContain("该专家已不存在");
+    expect(restoredHtml).toContain(">编辑</button>"); // 编辑入口恢复可用
   });
 
   it("对比对象失靶（被删/刷新消失）：渲染「对比对象已不在，请重选」空态（.dswf-cmp-empty）", () => {
