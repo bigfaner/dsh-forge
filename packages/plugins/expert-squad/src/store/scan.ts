@@ -28,6 +28,12 @@ export type ScannedExpert = ExpertRecord & {
 /** 一代完整索引快照：冻结对象，整体换代，无半代形态。 */
 export interface ExpertSnapshot {
   experts: ReadonlyMap<string, ScannedExpert>;
+  /**
+   * 同键全层条目（展示层聚组数据源，1.60 用户裁决：同名专家 UI 全层可见）：
+   * key → 该键在各层命中的 ScannedExpert 列表，低→高优先级序（plugin→user→project）。
+   * 仅透出扫描中间态；生效遮蔽语义仍由 experts 单点承担，本表零裁决权。
+   */
+  layers: ReadonlyMap<string, readonly ScannedExpert[]>;
   /** root 级/文件级降级 warning（含路径与原因），供面板 ErrorBar。 */
   warnings: readonly string[];
 }
@@ -167,12 +173,19 @@ function updatedIsoOf(filePath: string): string {
 export async function scanExpertRoots(roots: readonly ExpertRoot[]): Promise<ExpertSnapshot> {
   const warnings: string[] = [];
   const experts = new Map<string, ScannedExpert>();
+  const layers = new Map<string, ScannedExpert[]>();
   // 低优先级先扫、高优先级后覆盖：plugin → user → project
   for (const root of [...roots].sort(
     (a, b) => PRIORITY.indexOf(a.origin) - PRIORITY.indexOf(b.origin),
   )) {
     const layer = await scanRoot(root, warnings);
-    for (const [name, record] of layer) experts.set(name, record);
+    for (const [name, record] of layer) {
+      experts.set(name, record);
+      // 全层中间态：同键跨层逐层追加（低→高优先级序；同层撞名已在 scanRoot 拒绝）
+      const list = layers.get(name);
+      if (list === undefined) layers.set(name, [record]);
+      else list.push(record);
+    }
   }
   // 冻结即快照语义：取用方拿到的是不可变完整一代索引，换代后仍可安全持有上代。
   // Object.freeze 不拦截 Map 内部槽，先覆写三个 mutator 再冻结。
@@ -183,7 +196,15 @@ export async function scanExpertRoots(roots: readonly ExpertRoot[]): Promise<Exp
     };
   }
   Object.freeze(experts);
-  return Object.freeze({ experts, warnings: Object.freeze(warnings) });
+  for (const list of layers.values()) Object.freeze(list);
+  return Object.freeze({
+    experts,
+    layers,
+    warnings: Object.freeze(warnings),
+  });
 }
 
 const PRIORITY: readonly ExpertOrigin[] = ["plugin", "user", "project"];
+
+/** 遮蔽优先级定序（project > user > plugin——AD3；registry 展示层排序复用）。 */
+export const ORIGIN_PRIORITY = PRIORITY;

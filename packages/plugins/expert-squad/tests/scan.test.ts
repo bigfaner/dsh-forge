@@ -216,3 +216,27 @@ describe("root 不可读降级（§9：warn + 跳过该 root，其余正常）",
     expect(Number.isNaN(Date.parse(updatedAt))).toBe(false);
   });
 });
+
+describe("layers：同键全层中间态（1.60 用户裁决——展示层聚组数据源）", () => {
+  it("同键跨层逐层收集（低→高优先级序 plugin→user→project）；遮蔽语义零改动", async () => {
+    const l = await makeThreeLayers();
+    await writeFile(join(l.project, "shared.md"), expertMd("shared", "from-project"));
+    await writeFile(join(l.user, "shared.md"), expertMd("shared", "from-user"));
+    await writeFile(join(l.plugin, "shared.md"), expertMd("shared", "from-plugin"));
+    const snap = await scanExpertRoots(rootsOf(l));
+
+    const layers = snap.layers.get("shared")?.map((e) => e.origin) ?? [];
+    expect(layers).toEqual(["plugin", "user", "project"]);
+    // 生效面仍是 experts 单点：shared 只剩 project 胜出版
+    expect(snap.experts.get("shared")?.origin).toBe("project");
+  });
+
+  it("单来源键 layers 恰一条；层表冻结（快照语义）", async () => {
+    const l = await makeThreeLayers();
+    await writeFile(join(l.plugin, "only.md"), expertMd("only", "p"));
+    const snap = await scanExpertRoots(rootsOf(l));
+    expect(snap.layers.get("only")).toHaveLength(1);
+    expect(Object.isFrozen(snap.layers.get("only"))).toBe(true);
+    expect(Object.isFrozen(snap)).toBe(true);
+  });
+});

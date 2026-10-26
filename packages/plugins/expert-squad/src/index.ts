@@ -261,8 +261,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   }
 
   const routes: Parameters<typeof registerExpertSquadRoutes>[1] = {
+    // 面板 list（1.60 用户裁决）：展示层全层条目（origin + effective 位）——
+    // 聚组数据源；取用/启停面（get/setEnabled/update）零改动。
     list: async (workspace, includeDisabled) =>
-      (await registryFor(workspace)).list({ includeDisabled }),
+      (await registryFor(workspace)).listLayered({ includeDisabled }),
     get: async (workspace, key) => (await registryFor(workspace)).get(key),
     // 启停（bug 34a284e3）：await registry.setEnabled（键不存在 fail-loud → 400）；
     // 落盘失败仅降级告警（FMEA 内存态生效），回包 = 换新档案（含新 enabled）。

@@ -154,6 +154,59 @@ describe("registerRoot：追加内置层 root（plugin 层）", () => {
   });
 });
 
+describe("listLayered：展示层全层列表（1.60 用户裁决——同键全层可见）", () => {
+  it("同键返回全部层条目：effective 位标记胜出层；组内生效首张、其后 origin 高→低", async () => {
+    const user = join(dir, "user");
+    const plugin = join(dir, "plugin");
+    await mkdir(user);
+    await mkdir(plugin);
+    await writeFile(join(user, "code-reviewer.md"), expertMd({ title: "用户版评审" }));
+    await writeFile(join(plugin, "code-reviewer.md"), expertMd({ title: "内置版评审" }));
+    roots = [
+      { origin: "project", dir: join(dir, "project") },
+      { origin: "user", dir: user },
+      { origin: "plugin", dir: plugin },
+    ];
+    const reg = await makeRegistry();
+
+    const layered = reg.listLayered().filter((r) => r.name === "code-reviewer");
+    expect(layered.map((r) => [r.origin, r.effective, r.title])).toEqual([
+      ["project", true, "资深评审"],
+      ["user", false, "用户版评审"],
+      ["plugin", false, "内置版评审"],
+    ]);
+  });
+
+  it("生效条目沿用 list 启停可见性（禁用默认不可见）；被遮蔽条目恒在场", async () => {
+    const user = join(dir, "user");
+    await mkdir(user);
+    await writeFile(join(user, "code-reviewer.md"), expertMd({ title: "用户版评审" }));
+    roots = [
+      { origin: "project", dir: join(dir, "project") },
+      { origin: "user", dir: user },
+    ];
+    await state.setEnabled("C:\\ws\\a", "code-reviewer", false);
+    const reg = await makeRegistry();
+
+    // 生效条目沿用 list 启停可见性（禁用默认不可见——生效位恒标最高层，启用与否不改层位）；
+    // 被遮蔽条目恒在场（展示层全量）
+    expect(reg.listLayered().filter((r) => r.name === "code-reviewer").map((r) => [r.origin, r.effective])).toEqual([
+      ["user", false],
+    ]);
+    const all = reg.listLayered({ includeDisabled: true }).filter((r) => r.name === "code-reviewer");
+    expect(all.map((r) => [r.origin, r.effective, r.enabled])).toEqual([
+      ["project", true, false],
+      ["user", false, false],
+    ]);
+  });
+
+  it("取用面零改动：listLayered 不影响 get/list 语义", async () => {
+    const reg = await makeRegistry();
+    expect(reg.get("code-reviewer").origin).toBe("project");
+    expect(reg.list()).toHaveLength(2);
+  });
+});
+
 describe("setEnabled：启停切换（工作区隔离走 state face，AD2）", () => {
   it("禁用后 get 抛错、启用恢复", async () => {
     const reg = await makeRegistry();

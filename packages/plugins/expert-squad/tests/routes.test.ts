@@ -43,6 +43,8 @@ function makeDeps(): ExpertRoutesDeps & {
     skills: [],
     origin: "project",
     enabled: true,
+    updatedAt: "2026-10-18T08:30:00.000Z",
+    effective: true,
   } as const;
   const list = vi.fn(async () => [entry]);
   const get = vi.fn(async (_ws: string, key: string) => {
@@ -110,8 +112,11 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
     );
     expect(res.status).toBe(200);
     expect(deps.list).toHaveBeenCalledWith("C:\\ws\\a", true);
-    const body = (await res.json()) as { name: string }[];
+    const body = (await res.json()) as { name: string; origin: string; effective: boolean }[];
     expect(body[0]?.name).toBe("code-reviewer");
+    // 1.60 聚组载荷：origin + effective 位原样透出（分组形由 client 聚组消费）
+    expect(body[0]?.origin).toBe("project");
+    expect(body[0]?.effective).toBe(true);
   });
 
   it("GET list：缺 workspace → 400 文本，handler 不运行", async () => {

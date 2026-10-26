@@ -10,6 +10,7 @@
 
 import type { Context } from "@deepseek-ai/cordis";
 import {
+  ORIGIN_PRIORITY,
   scanExpertRoots,
   type ExpertOrigin,
   type ExpertRoot,
@@ -59,6 +60,15 @@ export type ExpertEntry = ExpertRecord & {
   enabled: boolean;
   /** 来源文件 mtime（ISO-8601——面板卡片更新时间页脚数据源）。 */
   updatedAt: string;
+};
+
+/**
+ * 展示层全层条目（1.60 用户裁决：同名专家 UI 全层聚组展示）：ExpertEntry +
+ * effective 位——true = 该键遮蔽胜出层（取用即它）；false = 被遮蔽层（只读展示）。
+ * 仅面板 list 路由消费；取用语义（get/compose/启停）零改动。
+ */
+export type LayeredExpertEntry = ExpertEntry & {
+  readonly effective: boolean;
 };
 
 /** 服务键 `experts` 契约面（§7）。 */
@@ -128,6 +138,42 @@ export class ExpertsRegistry implements ExpertsService {
       }
     }
     return entries.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /**
+   * 展示层全层列表（1.60 用户裁决）：同键返回全部层条目（effective 位标记遮蔽
+   * 胜出层），供面板聚组对比。语义：
+   * - 生效条目沿用 list 启停可见性（禁用默认不可见，includeDisabled 显式开启才含）；
+   * - 被遮蔽条目恒在场（展示层全量；只读——无任何取用/操作语义附丽）；
+   * - 排序：键名字典序；同键内生效条目首张，其后按 origin 高→低（project > user > plugin）。
+   */
+  listLayered(opts?: { includeDisabled?: boolean }): LayeredExpertEntry[] {
+    const snapshot = this.snapshot;
+    if (snapshot === null) return [];
+    const out: LayeredExpertEntry[] = [];
+    for (const [name, layerEntries] of snapshot.layers) {
+      const disabled = this.disabledKeys.has(name);
+      // 生效位 = 该键最高优先级层（project > user > plugin——与 experts 取用单点同源：
+      // 扫描覆盖序决定 experts.get 恒为最高层；启停只影响可见性，不改层位）
+      const ordered = [...layerEntries].sort(
+        (a, b) =>
+          ORIGIN_PRIORITY.indexOf(a.origin) - ORIGIN_PRIORITY.indexOf(b.origin),
+      );
+      const effectiveScanned = ordered[ordered.length - 1];
+      for (const scanned of [...ordered].reverse()) {
+        const effective = scanned === effectiveScanned;
+        if (effective && disabled && opts?.includeDisabled !== true) continue;
+        out.push({
+          ...buildEntry(scanned, !disabled),
+          effective,
+        });
+      }
+    }
+    return out.sort(
+      (a, b) =>
+        a.name.localeCompare(b.name) ||
+        Number(b.effective) - Number(a.effective),
+    );
   }
 
   /** registerRoot(ctx, dir)：ctx 为调用方上下文（§7 签名正本，本层不消费）。 */

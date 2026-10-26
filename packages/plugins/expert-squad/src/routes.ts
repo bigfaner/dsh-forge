@@ -8,7 +8,7 @@
 // 杜绝进程级 cwd 串域。
 
 import { workspaceParamSchema } from "./state.js";
-import type { ExpertEntry } from "./registry.js";
+import type { ExpertEntry, LayeredExpertEntry } from "./registry.js";
 import type { ExpertRunPanelEntry } from "./dispatch/dispatch.js";
 import { z } from "zod";
 
@@ -93,8 +93,11 @@ export const runStateQuerySchema = z.object({}).passthrough();
 
 /** 路由依赖面（装配层由 registry/state 组合供给；本层只消费该结构）。 */
 export interface ExpertRoutesDeps {
-  /** 面板列表（含各专家在该 workspace 的启用态；排序由 registry 承担）。 */
-  list(workspace: string, includeDisabled: boolean): Promise<ExpertEntry[]>;
+  /**
+   * 面板列表（1.60 用户裁决：同键全层条目——每条携 origin + effective 位，展示层
+   * 聚组数据源；排序由 registry 承担。取用面 get/setEnabled 零改动）。
+   */
+  list(workspace: string, includeDisabled: boolean): Promise<LayeredExpertEntry[]>;
   /** 单专家取用（不存在/禁用 → 抛业务错，404/400 文本应答）。 */
   get(workspace: string, key: string): Promise<ExpertEntry>;
   /** 启停切换（workspace 经 state 层 canonical 化后做禁用状态 key，D4）；成功返回换新档案。 */
