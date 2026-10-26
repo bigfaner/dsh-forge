@@ -9,7 +9,8 @@
 //   - 行聚合口径 = 任务键时间线（1.16 用户裁决：每任务最新态一行，组内时序；循环级事件
 //     各占一行；分组/章语义并入次行 title 补充文案）；行形态 = 双行任务轨（rail 竖线 +
 //     状态点：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断 caption + 首行
-//     taskKey/状态徽标 + 次行 taskTitle + 右侧绝对启动时间 + 耗时徽标）；
+//     taskKey/状态徽标 + 耗时徽标[状态徽标右侧] + 次行 taskTitle 长则省略 + 右侧绝对启动
+//     时间）；
 //     可跳转行带 jump 徽标（↗——「可点开子会话」可见 affordance）。
 //   - 行点击 = 打开 worker 执行子会话（1.16 用户裁决①：除未开始执行外全部任务行可交互
 //     ——载荷 workerSessionId 直跳；缺席行经 resolveWorkerSession 父反查兜底，落空记 ''
@@ -414,9 +415,9 @@ export function dispatchRowSessionOf(
 }
 
 /**
- * 单行：双行任务轨形态（rail 竖线 + 状态点 + 首行 key/状态徽标 + 次行 title + 右侧绝对
- * 启动时间/耗时徽标；可跳转行带 jump 徽标）。耗时徽标：执行中 = now 起算的实时耗时；
- * 终态行 = startAt→最新事件时戳（单事件行时长不可辨 = 不呈现）。
+ * 单行：双行任务轨形态（rail 竖线 + 状态点 + 首行 key/状态徽标 + 耗时徽标[状态徽标右侧] +
+ * 次行 title/说明长则省略 + 右侧绝对启动时间；可跳转行带 jump 徽标）。耗时徽标：执行中 =
+ * now 起算的实时耗时；终态行 = startAt→最新事件时戳（单事件行时长不可辨 = 不呈现）。
  */
 function DispatchEventRowView({
   row,
@@ -474,39 +475,30 @@ function DispatchEventRowView({
           <i />
         </span>
         <span className="dswf-dep-row-t">
-          {entry.status === 'running' && entry.taskKey !== undefined && title !== undefined ? (
-            // 执行中任务行 = 完整概要（{slug}/{localId}:{title}——不截断可换行；状态章随行首）
-            <span className="dswf-dep-row-full">
+          {/* 任务行统一双行形态（bug 7114a5a0）：首行 = {slug}/{localId} + 状态徽标 + 耗时
+              （徽标右侧）；次行 = 任务名称/说明（过长 ellipsis）。循环级行 = slug + 「循环」
+              徽标 + action 简要说明次行。 */}
+          <span className="dswf-dep-row-head">
+            <span className="dswf-dep-row-key">{keyLabel}</span>
+            {entry.taskKey === undefined ? (
+              // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
+              // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
+              <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
+            ) : (
               <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
-              <span className="dswf-dep-row-full-t">
-                {keyLabel}:{title}
-                {detail !== undefined ? ` · ${detail}` : ''}
-              </span>
+            )}
+            {duration !== undefined ? <span className="dswf-dep-row-dur">{duration}</span> : null}
+          </span>
+          {title !== undefined || detail !== undefined ? (
+            <span className="dswf-dep-row-title">
+              {title}
+              {title !== undefined && detail !== undefined ? ' · ' : ''}
+              {detail}
             </span>
-          ) : (
-            <>
-              <span className="dswf-dep-row-head">
-                <span className="dswf-dep-row-key">{keyLabel}</span>
-                {entry.taskKey === undefined ? (
-                  // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
-                  // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
-                  <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
-                ) : (
-                  <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
-                )}
-              </span>
-              {title !== undefined ? (
-                <span className="dswf-dep-row-title">
-                  {title}
-                  {detail !== undefined ? ` · ${detail}` : ''}
-                </span>
-              ) : null}
-            </>
-          )}
+          ) : null}
         </span>
         <span className="dswf-dep-row-side">
           <span className="dswf-dep-row-time">{dispatchEventClockLabel(row.startAt)}</span>
-          {duration !== undefined ? <span className="dswf-dep-row-dur">{duration}</span> : null}
           {open !== undefined ? (
             <span className="dswf-dep-row-jump" data-dswf-dep-jump="" aria-hidden="true">
               <IconRightUpOutlineRegular size={11} />

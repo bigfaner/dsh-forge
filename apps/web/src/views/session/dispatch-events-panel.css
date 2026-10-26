@@ -222,21 +222,6 @@
   white-space: nowrap;
 }
 
-/* 执行中任务行 = 完整概要（{slug}/{localId}:{title}——不截断可换行，状态章随行首） */
-.dswf-dep-row-full {
-  display: flex;
-  align-items: baseline;
-  gap: 6px; /* dsw-raw 状态章/文本间距刻度（row-head 同值） */
-  min-width: 0;
-}
-
-.dswf-dep-row-full-t {
-  min-width: 0;
-  font: var(--dsw-font-xxs-12);
-  color: var(--dsw-alias-label-primary);
-  overflow-wrap: anywhere; /* 长概要自由换行——完整可读不省略 */
-}
-
 .dswf-dep-row-side {
   align-self: center;
   display: inline-flex;
@@ -251,8 +236,9 @@
   white-space: nowrap;
 }
 
-/* 耗时徽标（启动时间右侧——caption 弱化胶囊；tabular 对齐不跳宽） */
+/* 耗时徽标（首行状态徽标右侧——caption 弱化胶囊；tabular 对齐不跳宽） */
 .dswf-dep-row-dur {
+  flex: none;
   padding: 0 6px;
   border-radius: 999px;
   background: var(--dsw-alias-interactive-bg-hover);
