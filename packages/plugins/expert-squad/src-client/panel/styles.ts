@@ -31,9 +31,20 @@ export const PANEL_CSS = `
 .dswf-search { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; width: 170px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-search::placeholder { color: var(--dsw-alias-label-tertiary); }
 .dswf-search:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-/* 状态筛选 select（native select 基座 + dswf 令牌包装——官方 primitives 无同语义 Select） */
-.dswf-status-select { font: var(--dsw-font-xs-13); padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
-.dswf-status-select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+/* 筛选单选下拉（native select 退役——面板内 msel 视觉词汇统一承载，风格统一裁决 2026-10-26；
+   交互四加固复用 msel 单点：先测量隐藏 / 视口封顶 / 等值短路 / 锚定跟随） */
+.dswf-select { position: relative; }
+.dswf-select-box { font: var(--dsw-font-xs-13); display: inline-flex; align-items: center; gap: 6px; padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
+.dswf-select-box:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dswf-select-caret { font-size: 10px; color: var(--dsw-alias-label-caption); }
+.dswf-select-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 100%; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); overflow: auto; }
+.dswf-select-option { font: var(--dsw-font-xs-13); text-align: left; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); white-space: nowrap; }
+.dswf-select-option:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dswf-select-option.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }
+/* dswf-tip 悬浮全文提示（DESIGN Tooltip 令牌——深色气泡；原生 title 退役，风格统一裁决 2026-10-26） */
+.dswf-tip { position: relative; }
+.dswf-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: none; padding: 4px ${T.gap8}; border-radius: 6px; background: var(--dsw-alias-tooltip-bg); color: #fff; font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; white-space: nowrap; pointer-events: none; z-index: 40; }
+.dswf-tip:hover::after { display: block; }
 .dswf-btn { font: var(--dsw-font-xs-13); font-weight: 500; padding: 0 ${T.pad20}; height: ${T.lh20}; border: none; border-radius: ${T.r8}; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-btn-primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); }
 .dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }

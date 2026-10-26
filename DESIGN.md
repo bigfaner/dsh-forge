@@ -187,7 +187,7 @@ Markdown 内容阶梯（随用户字号设置 `--dsh-content-font-size` 14–22p
 | 暗色适配写 `body[data-ds-dark-theme]` 锚 | 不用 media query 模拟暗色 |
 | 无间距令牌处取排版行高刻度 | 不引入平行间距体系 |
 
-**scoped 豁免（classic-script 缝 · 原生 title）**：经 classic script 装载、官方组件外置表仅含 react 的插件自绘面（如 expert-squad `.dswf-*`），官方 `Tooltip` 运行时不可达——此类面内悬浮全文暂由原生 `title` 承载（来源语义 ? 图标等既有 tooltip 机械同源）。git-worktree 先例为常规 bundle 消费，不适用本豁免；官方 Tooltip 迁移待外置表扩容评估后另行裁决。
+**scoped 豁免（classic-script 缝 · 官方浮面组件不可达）**：经 classic script 装载、官方组件外置表仅含 react 的插件自绘面（如 expert-squad `.dswf-*`），官方 `Tooltip`/`Menu` 运行时不可达——悬浮全文以 `.dswf-tip` 纯 CSS 气泡承载（`--dsw-alias-tooltip-bg` 令牌 + 白字，禁原生 `title`）；下拉以面板内已批准的 msel 视觉词汇自绘（box + fixed 菜单 + 选中高亮）。git-worktree 先例为常规 bundle 消费，不适用本豁免；官方组件迁移待外置表扩容评估后另行裁决。
 
 ## Responsive Behavior
 

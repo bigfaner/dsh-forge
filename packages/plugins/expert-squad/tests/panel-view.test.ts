@@ -103,19 +103,25 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
 });
 
 describe("ExpertPanel 头部交互面", () => {
-  it("搜索框回填 query；状态筛选 select 三态选项、选中值随 status", () => {
-    const html = renderPanel({ query: "rev", status: "enabled" });
+  it("搜索框回填 query；筛选下拉自绘面（dsh 菜单词汇——box 显当前值 + 展开菜单选项/选中态）", () => {
+    const html = renderPanel({ query: "rev", status: "enabled", filtersOpen: true });
     expect(html).toContain('value="rev"');
-    expect(html).toContain("<select");
+    // 自绘下拉（native select 退役——官方 select 组件不在插件 classic-script 外置表，
+    // 面板内已批准 msel 视觉词汇统一承载）
+    expect(html).not.toContain("<select");
     expect(html).toContain('aria-label="状态筛选"');
-    expect(html).toContain('>状态</label>'); // 1.68 裁决④：筛选 select 左侧 label
-    expect(html).toContain('>来源</label>');
-    expect(html).toContain('data-status="enabled"');
-    expect(html).toContain('>全部</option>');
-    expect(html).toContain('>启用</option>');
-    expect(html).toContain('>禁用</option>');
-    expect(html.match(/ selected/g)?.length).toBe(2); // 状态 + 来源（1.61）两枚 select 各一
-    expect(html).toContain('value="enabled" selected');
+    expect(html).toContain(">状态</label>"); // 1.68 裁决④：筛选下拉左侧 label
+    expect(html).toContain(">来源</label>");
+    expect(html).toContain('data-select="dswf-status-select"');
+    // box 显当前值 + 菜单三态选项、选中态 aria-selected
+    expect(html).toContain('data-select-option="enabled"');
+    expect(html.match(/aria-selected="true"[^>]*data-select-option="enabled"|data-select-option="enabled"[^>]*aria-selected="true"/)).not.toBeNull();
+    expect(html).toContain('data-select-option="all"');
+    expect(html).toContain('data-select-option="disabled"');
+    // 收起态（缺省）：零菜单、box 显当前值
+    const closed = renderPanel({ query: "rev", status: "enabled" });
+    expect(closed).not.toContain("dswf-select-menu");
+    expect(closed).toContain('data-select-value="enabled"');
   });
 
   it("头部布局：搜索与状态筛选左置（紧随标题）、召唤钮独右（margin-left auto 类）", () => {

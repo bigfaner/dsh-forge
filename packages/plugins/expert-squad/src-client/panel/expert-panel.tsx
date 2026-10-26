@@ -30,6 +30,7 @@ import {
   type DetailMutations,
 } from "./detail-source.js";
 import { ExpertDetailDialog } from "./detail-dialog.js";
+import { FilterSelect } from "./filter-select.js";
 import {
   summonWorkspaceOf,
   type SummonOutcome,
@@ -386,6 +387,8 @@ export interface ExpertPanelProps {
   readonly summonNotice?: string
   /** delegate 装配降级提示（run-state 读口 degraded——委派不可用的可见提示；registered/缺席 = 零提示）。 */
   readonly delegateNotice?: string
+  /** 筛选下拉初始展开态（SSR 测试/调试面；缺省收起——msel 语义同径）。 */
+  readonly filtersOpen?: boolean
 }
 
 const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: string }[] = [
@@ -477,7 +480,7 @@ export function ExpertGroupView(
       <header className="xg-head">
         <b className="xg-name">{group.key}</b>
         {/* bug f4020406 ⑦：计数注记——来源筛选/搜索命中不足 N 时差额行被隐藏，计数恒为全层条数 */}
-        <span className="xg-cnt" title="计数含被搜索/筛选隐藏的来源行">{group.shadows.length + 1} 个来源</span>
+        <span className="xg-cnt dswf-tip" data-tip="计数含被搜索/筛选隐藏的来源行">{group.shadows.length + 1} 个来源</span>
         {hiddenShadows === undefined || hiddenShadows === 0 ? null : (
           <span className="xg-hidden">隐藏 {hiddenShadows} 条未命中</span>
         )}
@@ -606,37 +609,27 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           value={query}
           onChange={(event) => props.onQueryChange(event.target.value)}
         />
-        {/* 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（htmlFor 绑定对应 select） */}
+        {/* 1.68 裁决④：筛选下拉左侧 label「状态」「来源」（id 绑定对应下拉 box）；
+            自绘 FilterSelect（官方 select 组件不在插件 classic-script 外置表——面板内
+            msel 视觉词汇统一承载，风格统一裁决 2026-10-26） */}
         <label className="dswf-filter-label" htmlFor="dswf-status-select">状态</label>
-        <select
+        <FilterSelect
           id="dswf-status-select"
-          className="dswf-status-select"
-          aria-label="状态筛选"
-          data-status={status}
+          ariaLabel="状态筛选"
           value={status}
-          onChange={(event) => props.onStatusChange(event.target.value as StatusFilter)}
-        >
-          {STATUS_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          options={STATUS_OPTIONS}
+          filtersOpen={props.filtersOpen}
+          onChange={(value) => props.onStatusChange(value as StatusFilter)}
+        />
         <label className="dswf-filter-label" htmlFor="dswf-origin-select">来源</label>
-        <select
+        <FilterSelect
           id="dswf-origin-select"
-          className="dswf-status-select dswf-origin-select"
-          aria-label="来源筛选"
-          data-origin={origin}
+          ariaLabel="来源筛选"
           value={origin}
-          onChange={(event) => props.onOriginChange(event.target.value as OriginFilter)}
-        >
-          {originOptions(props.projectName).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          options={originOptions(props.projectName)}
+          filtersOpen={props.filtersOpen}
+          onChange={(value) => props.onOriginChange(value as OriginFilter)}
+        />
         {props.onSummon === undefined ? null : (
           <button
             type="button"

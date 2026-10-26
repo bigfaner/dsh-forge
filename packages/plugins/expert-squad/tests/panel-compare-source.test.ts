@@ -221,13 +221,14 @@ describe("ExpertDetailDialog 来源行（1.61 ① + 1.67 裁决）", () => {
     expect(barAt).toBeLessThan(bodyAt); // 且仍在头部容器内
   });
 
-  it("user / plugin 来源尾缀 ? 图标，hover tooltip（原生 title）解释来源语义；project 无 ?", () => {
+  it("user / plugin 来源尾缀 ? 图标，hover tooltip（dswf-tip 深色气泡——原生 title 退役）解释来源语义；project 无 ?", () => {
     const userHtml = renderDialog(ctlFor(entry({ origin: "user", effective: true })), { sameKeyEntries: [entry({ origin: "user", effective: true })] });
     expect(userHtml).toContain('data-dswf-origin-help="user"');
-    expect(userHtml).toContain('title="当前用户全局档案（跨项目共享）"');
+    expect(userHtml).toContain('data-tip="当前用户全局档案（跨项目共享）"');
+    expect(userHtml).not.toContain('title="当前用户全局档案（跨项目共享）"');
     const pluginHtml = renderDialog(ctlFor(entry({ origin: "plugin", effective: true })), { sameKeyEntries: [entry({ origin: "plugin", effective: true })] });
     expect(pluginHtml).toContain('data-dswf-origin-help="plugin"');
-    expect(pluginHtml).toContain('title="随插件分发的兜底档案"');
+    expect(pluginHtml).toContain('data-tip="随插件分发的兜底档案"');
     const projectHtml = renderDialog(ctlFor(effective), { sameKeyEntries: [effective] });
     expect(projectHtml).not.toContain("dswf-dlg-origin-help");
   });
@@ -492,13 +493,14 @@ describe("ExpertPanel 来源筛选头部（②）", () => {
     return renderToStaticMarkup(React.createElement(ExpertPanel, props));
   }
 
-  it("来源 select（aria-label 来源筛选）四态：全部来源/项目/用户/内置；project 选项具名", () => {
-    const html = renderPanel({ projectName: "dsh-forge" });
+  it("来源下拉（aria-label 来源筛选）四态：全部来源/项目/用户/内置；project 选项具名", () => {
+    const html = renderPanel({ projectName: "dsh-forge", filtersOpen: true });
     expect(html).toContain('aria-label="来源筛选"');
-    expect(html).toContain(">全部来源</option>");
-    expect(html).toContain(">项目 · dsh-forge</option>");
-    expect(html).toContain(">用户</option>");
-    expect(html).toContain(">内置</option>");
+    expect(html).toContain('data-select-option="all"');
+    expect(html).toContain(">全部来源</button>");
+    expect(html).toContain(">项目 · dsh-forge</button>");
+    expect(html).toContain(">用户</button>");
+    expect(html).toContain(">内置</button>");
   });
 
   it("组头隐藏数标注：user 来源筛选下 group 头标注「隐藏 1 条未命中」", () => {
@@ -506,9 +508,10 @@ describe("ExpertPanel 来源筛选头部（②）", () => {
     expect(html).toContain("隐藏 1 条未命中");
   });
 
-  it("bug f4020406 ⑦：组头「N 个来源」计数带注记（title 提示含被搜索/筛选隐藏的来源行）", () => {
+  it("bug f4020406 ⑦ + 风格统一：组头「N 个来源」计数注记改 dswf-tip 悬浮（原生 title 退役）", () => {
     const html = renderPanel({ origin: "user" });
-    expect(html).toContain('title="计数含被搜索/筛选隐藏的来源行"');
+    expect(html).toContain('data-tip="计数含被搜索/筛选隐藏的来源行"');
+    expect(html).not.toContain('title="计数含被搜索/筛选隐藏的来源行"');
   });
 
   it("filterGroups 驱动网格（无匹配 → 无匹配空态）", () => {
