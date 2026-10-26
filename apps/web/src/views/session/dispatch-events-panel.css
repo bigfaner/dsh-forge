@@ -1,0 +1,308 @@
+/* 悬浮进度流面板样式（定位：业务——loop-event-delivery 1.8：对话列内 · 页签行之下 · 随
+ * dock 展开自动左移）。结构基准 = prototype.html .panel/.flow/.frow（信息结构）+ 令牌对齐
+ * DESIGN.md；落位 = shell overlay（DispatchPanel 判例缝承袭——fixed + pointer-events:auto +
+ * dockkit 浮层层级）；视觉一律官方令牌（色/字/距/圆角/阴影——lint-tokens 机械执行）。
+ * dsw-raw 豁免刻度（原型结构为准——TECH-styling-002）：宽 480[fix bug 570fa4e2 判例承袭] /
+ * 头高 34 / 列表滚动高 264 / 组头行 26 / 行 min-h 30 / 悬浮球高 26 × 定宽 52 / 右缘 16 /
+ * 顶距 8 / 拖移边距 4；组头微距 4/10、行内距 6/12 = 原型行内距刻度（官方字阶令牌无对应
+ * 微距档）。 */
+
+/* ── 面板壳：对话列内浮层（left/top 经 style 注入——锚定或拖移位）── */
+.dswf-dep {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 480px; /* DEP_WIDTH 同值单源——长 title/摘要不换行挤压的宽度保障 */
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  z-index: var(--dsh-dockkit-float-layer, 60); /* 官方 dockkit 浮层层级令牌（弹窗同径） */
+  pointer-events: auto; /* 壳宿主舞台零交互——面板本体恢复命中 */
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md); /* 原型 12px 圆角 */
+  box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* 拖移包装层（零视觉——pointer 捕获拖移的挂接面） */
+.dswf-dep-dragwrap {
+  display: contents;
+}
+
+/* ── 头：拖移手柄（cursor move；折叠钮/行命中不劫持——组件面守卫）── */
+.dswf-dep-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dsw-font-xxs-12-line-height);
+  height: 34px;
+  padding: 0 6px 0 12px; /* dsw-raw 原型头内距刻度 */
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: var(--dsh-cursor-move, move);
+  user-select: none;
+  touch-action: none;
+}
+
+/* 头部活点（原型 .panel-head .dot——运行中视觉锚） */
+.dswf-dep-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px; /* dsw-raw 原型活点圆点刻度 */
+  background: var(--dsw-alias-link);
+}
+
+.dswf-dep-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* live 标记（原型 .panel-head .live——不经模型的实时面提示） */
+.dswf-dep-live {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dep-btn {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── 任务轨列表（1.16 行聚合口径：每任务最新态一行——原型 .flow 滚动面）── */
+.dswf-dep-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 8px 0; /* dsw-raw 原型 .flow 内距刻度 */
+}
+
+/* ── 行：任务轨形态（grid 14px 1fr auto——rail 竖线 + 状态点 + 标题/备注 + 右侧时间）── */
+.dswf-dep-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto; /* dsw-raw 原型 .frow 轨道刻度 */
+  gap: 8px; /* dsw-raw 原型 .frow 列距刻度 */
+  align-items: baseline;
+  min-height: 30px;
+  padding: 6px 14px; /* dsw-raw 原型行内距刻度 */
+}
+
+.dswf-dep-row[role='button'] {
+  cursor: var(--dsh-cursor-pointer, pointer);
+}
+
+.dswf-dep-row[role='button']:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* rail：竖线贯通（首行上半 / 末行下半截断）+ 状态点 */
+.dswf-dep-rail {
+  position: relative;
+  align-self: stretch;
+}
+
+.dswf-dep-rail::before {
+  content: '';
+  position: absolute;
+  left: 6px; /* dsw-raw 原型轨线位刻度 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--dsw-alias-border-l2);
+}
+
+.dswf-dep-row:first-child .dswf-dep-rail::before {
+  top: 50%;
+}
+
+.dswf-dep-row:last-child .dswf-dep-rail::before {
+  bottom: 50%;
+}
+
+.dswf-dep-rail i {
+  position: absolute;
+  left: 2.5px; /* dsw-raw 原型状态点位刻度 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 999px; /* dsw-raw 原型状态点圆点刻度 */
+  background: var(--dsw-alias-label-caption); /* 待定/兜底档 */
+}
+
+.dswf-dep-done .dswf-dep-rail i {
+  background: var(--dsw-alias-state-success-primary); /* 完成 = success */
+}
+
+.dswf-dep-run .dswf-dep-rail i {
+  background: var(--dsw-alias-link); /* 执行中 = accent 带光晕 */
+  box-shadow: 0 0 0 3px var(--dsw-alias-state-business-tertiary); /* dsw-raw 原型 accent-soft 光晕刻度（官方 tertiary 最近语义） */
+}
+
+.dswf-dep-blk .dswf-dep-rail i {
+  background: var(--dsw-alias-state-warn-primary); /* 阻塞 = warn */
+}
+
+/* 中断与待定 = caption（默认档） */
+
+.dswf-dep-row-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* dsw-raw 双行微距刻度 */
+}
+
+/* 首行：任务键 + 状态徽标（key 纵向省略——长 slug/localId 不换行挤压） */
+.dswf-dep-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* dsw-raw key/徽标间距刻度 */
+  min-width: 0;
+}
+
+.dswf-dep-row-key {
+  overflow: hidden;
+  font: var(--dsw-font-xxs-strong-12);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态徽标（key 右侧——feature-tab 章同款 soft tone 胶囊：primary 字/border + tertiary 底） */
+.dswf-dep-status {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+}
+
+.dswf-dep-status-run {
+  color: var(--dsw-alias-state-business-primary);
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+/* 循环级事件徽标（独特标识——中性斜体档：无 tone 底色，与任务级胶囊一眼可辨） */
+.dswf-dep-status-loop {
+  color: var(--dsw-alias-label-tertiary);
+  border-color: var(--dsw-alias-border-l2);
+  font-style: italic;
+}
+
+.dswf-dep-status-done {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
+}
+
+.dswf-dep-status-blk {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+  background: var(--dsw-alias-state-warn-tertiary);
+}
+
+.dswf-dep-status-stop {
+  color: var(--dsw-alias-label-caption);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+.dswf-dep-row-title {
+  overflow: hidden;
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dswf-dep-row-side {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* dsw-raw 时间/耗时/jump 徽标间距刻度 */
+}
+
+.dswf-dep-row-time {
+  font: var(--dsw-font-xxxs-11);
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 耗时徽标（首行状态徽标右侧——caption 弱化胶囊；tabular 对齐不跳宽） */
+.dswf-dep-row-dur {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* jump 徽标（可跳转子会话行的可见 affordance——11px 级 tertiary，hover 提亮） */
+.dswf-dep-row-jump {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dswf-dep-row-jump svg {
+  width: 11px; /* dsw-raw 原型徽标 11px 级刻度 */
+  height: 11px;
+}
+
+.dswf-dep-row[role='button']:hover .dswf-dep-row-jump {
+  color: var(--dsw-alias-label-secondary); /* hover 提亮 */
+}
+
+/* ── 底部统计条（原型 .stat——完成/执行中/阻塞/待执行/已中断）── */
+.dswf-dep-stat {
+  display: flex;
+  gap: 12px; /* dsw-raw 原型统计条列距刻度 */
+  padding: 10px 14px; /* dsw-raw 原型统计条内距刻度 */
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  font: var(--dsw-font-xxs-12);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-dep-stat b {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ── 半透明折叠悬浮球（⟡N——悬浮态不遮挡对话内容；hover 实化）── */
+.dswf-dep-badge {
+  position: fixed;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--dsw-font-xxxs-11-line-height);
+  height: 26px;
+  width: 52px; /* DEP_BADGE_WIDTH 同值单源（右上锚右对齐不随计数漂移） */
+  padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-link);
+  font: var(--dsw-font-xxs-strong-12);
+  z-index: var(--dsh-dockkit-float-layer, 60);
+  pointer-events: auto;
+  cursor: var(--dsh-cursor-pointer, pointer);
+  opacity: 0.55; /* 半透明悬浮球态——对话内容透见不遮挡 */
+  transition: opacity 0.15s var(--ds-ease-in-out, ease-in-out);
+}
+
+.dswf-dep-badge:hover,
+.dswf-dep-badge:focus-visible {
+  opacity: 1; /* 悬停/聚焦实化（官方 fading 等价机制） */
+}

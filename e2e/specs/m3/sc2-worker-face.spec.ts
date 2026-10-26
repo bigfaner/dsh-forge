@@ -2,7 +2,7 @@
 // M3 5.2 SC2 L1 双层（PRD Goals SC2）——e2e 断言面 = 装配/数据面（Hard Rule 禁真实模型）：
 //   ① 预设层技能枚举边界：boot-overlay.yml 物化（真实 boot 产物）——远征组合 customSkillDirs
 //      含 [core, spec] 双目录、突击组合仅 core（spec 目录物理缺席 = L1 物理边界的数据直证）；
-//      registry default = 远征；物化输出零 !!js（绝对路径 only）；
+//      registry default = 突击（bug 2ba146d8 缺省=blitz）；物化输出零 !!js（绝对路径 only）；
 //   ② 核心包技能目录无 git-commit / git-checkout 条目（移除/未迁断言——PRD SC2 预设层）；
 //      spec 包 8 技能在盘（远征全量可见的物理前提）；
 //   ③ worker model 与 Forge设置 一致的数据面：forge:settings/set 落 {userData}/
@@ -40,7 +40,7 @@ test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化�
     const overlay = overlayTextOf(userData)
     expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
     expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
-    expect(/default:\s*expedition/.test(overlay), 'registry default = expedition').toBe(true)
+    expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
     expect(overlay.includes('!!js'), '物化输出零 !!js 残留（绝对路径 only）').toBe(false)
 
     // L1 物理边界（数据直证）：远征组合 = [core, spec] 双目录；突击组合 = [core, skills-blitz]
@@ -94,7 +94,7 @@ test('@web-e2e @m3 SC2·底稿同构面：三 patch 底稿在场 + 远征/突击
   const presetsDir = join(ROOT, 'apps', 'host', 'src', 'profile', 'presets')
   const read = (name: string): string => readFileSync(join(presetsDir, name), 'utf8')
   const cordis = read('cordis.patch.yml')
-  expect(/default:\s*expedition/.test(cordis), 'registry 底稿 default = expedition').toBe(true)
+  expect(/default:\s*blitz/.test(cordis), 'registry 底稿 default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
   const expedition = read('expedition.patch.yml')
   const blitz = read('blitz.patch.yml')
   expect(expedition.includes('"{{plugin-forge-skills}}"'), '远征底稿 core 目录占位符').toBe(true)

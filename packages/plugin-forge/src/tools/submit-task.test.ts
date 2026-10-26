@@ -7,6 +7,16 @@ import type { ToolExecFace } from '../faces.js'
 import { createSubmitTaskTool, gateOf, parseSubmitTaskArgs } from './submit-task.js'
 import type { ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'child-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 function toolWithCapture() {
@@ -21,6 +31,7 @@ function toolWithCapture() {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createSubmitTaskTool(deps), captured }
@@ -129,6 +140,7 @@ describe('submitTask execute（路由 + 映射）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
       bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     }
     const tool = createSubmitTaskTool(deps)
@@ -227,6 +239,7 @@ describe('submitTask execute（路由 + 映射）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     }
     const tool = createSubmitTaskTool(deps)
@@ -282,6 +295,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -304,6 +318,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -325,6 +340,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       ...eventsDeps,
     })
@@ -342,6 +358,7 @@ describe('submitTask 事件发射（3.4——worker 会话语境）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     })
     const out = await tool.execute({ slug: 'f1', local_id: '3.2', result: 'success', summary: 's' }, EXEC)

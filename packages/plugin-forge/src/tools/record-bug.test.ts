@@ -10,6 +10,16 @@ import type { ToolExecFace } from '../faces.js'
 import { createRecordBugTool, parseRecordBugArgs } from './record-bug.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 /** ForgeBugsToolFace 桩（getBug/listBugs 缺席用例——recordBug 用例不触） */
 function stubBugsFace(registerBug: ForgeBugsToolFace['registerBug']): ForgeBugsToolFace {
   return {
@@ -66,6 +76,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; capt
     tasks: {} as ForgeToolDeps['tasks'],
     proposals: {} as ForgeToolDeps['proposals'],
     bugs,
+    checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createRecordBugTool(deps), captured }
@@ -173,6 +184,7 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
         })
       }),
       resolveProjectId: () => 'p-1',
+      checkpoints,
     }
     const tool = createRecordBugTool(deps)
     const result = await tool.execute({ ...BASE, summary: 'x'.repeat(51) }, EXEC)

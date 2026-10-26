@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/git-worktree",
-  "version": "0.1.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "git-worktree cordis 插件（通用层）：worktree/branch 管理域骨架——git 在场性启动检测 + 扩展点契约（resolveProject / worktree 目录提供者，均有默认实现）。零 dsh-forge 依赖。",
@@ -31,6 +31,7 @@
     }
   },
   "devDependencies": {
+    "@dsh-forge/contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.4",
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
     "@deepseek-ai/dsh-session": "0.2.0-rc.2",

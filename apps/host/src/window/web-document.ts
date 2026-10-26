@@ -194,8 +194,16 @@ export interface HostRef {
 }
 
 /**
- * 组装壳 scheme 处理器：资产路径（/、/index.html、/assets/、/forge-client.js、
- * /input-history-client.js、/expert-squad-client.js、/brand/——vite public 物化位（fix-38 书海背景静态双资产））
+ * 根级插件 bundle 通用形态：dist 根一层的 *-client.js（vite clientBundle 种子表发射位——
+ * forge / input-history / quote-reference / super-composer …同型）。仅根一层：子目录与
+ * 陌生非 -client.js 不入资产面（路径逃逸守卫仍由 serveShellDocument 承担）。
+ * Root cause: 白名单逐包点名——第四个插件 bundle 落位即 404（转 Host）。
+ */
+const SHELL_ASSET_ROOT_CLIENT = /^\/[A-Za-z0-9][A-Za-z0-9._-]*-client\.js$/u
+
+/**
+ * 组装壳 scheme 处理器：资产路径（/、/index.html、/assets/、根级 *-client.js 插件 bundle、
+ * /brand/——vite public 物化位（fix-38 书海背景静态双资产））
  * 服务 dist；其余全量转发 Host。失败归 e2e/控制台面（母本 reportFatal 的薄化——宿主日志承接）。
  */
 export function createShellProtocolHandler(options: {
@@ -209,11 +217,10 @@ export function createShellProtocolHandler(options: {
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
     const isAsset = url.pathname === '/' || url.pathname === '/index.html'
-      || url.pathname.startsWith('/assets/') || url.pathname === '/forge-client.js'
-      // input-history / expert-squad 插件 bundle（壳掌舵行 url 落位名，vite 构建期发射入
-      // dist 根——classic script 装载面与 forge-client.js 同型；expert-squad 同装配面同径）
-      || url.pathname === '/input-history-client.js'
-      || url.pathname === '/expert-squad-client.js'
+      || url.pathname.startsWith('/assets/')
+      // 插件 bundle 通用形态（根级 *-client.js——forge/input-history/quote-reference/
+      // super-composer 同型，vite 构建期发射入 dist 根；classic script 装载面同 forge-client.js）
+      || SHELL_ASSET_ROOT_CLIENT.test(url.pathname)
       || url.pathname.startsWith('/brand/')
     if (isAsset) return serveShellDocument(request, options.distRoot)
     const host = options.host()

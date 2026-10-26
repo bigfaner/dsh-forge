@@ -71,7 +71,7 @@ test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚
     const overlay = overlayTextOf(userData)
     expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
     expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
-    expect(/default:\s*expedition/.test(overlay), 'registry default = expedition（远征对照起点）').toBe(true)
+    expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
 
     // ── Step1：突击组合技能目录——spec 物理缺席（枚举面即证）+ 核心包阳性对照 ──
     const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')

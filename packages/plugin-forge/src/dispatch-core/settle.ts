@@ -6,12 +6,151 @@
 // 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
 // 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import { execFile } from 'node:child_process'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchSpawnedResult } from './result.js'
+
+// ─────────────────────────── review-wave-N 修正波标记（机械④） ───────────────────────────
+// 提案 forge-verification-hardening M5「标记体系」：每轮 review/走查修正波结算落
+// review-wave-N 检查点（Blocker 返工批 / fix 链收口），附标记时刻四列累计计数快照
+// （tasks_total / commits_total / fixes_total / evidence_debts_total——提案统计口径）。
+// fail-soft：标记失败 console.warn 留痕，不回滚已定结算；依赖缺席（checkpoints 面 /
+// proposalId 映射）= 机制惰性不判，行为零变化。
+
+/** checkpoints 域服务的结算侧结构化消费面（结构兼容 core createCheckpointsService——插件禁 import core） */
+export interface SettleCheckpointsFace {
+  appendCheckpoint(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly mark: 'review-wave-N'
+    readonly baseCommitHash: string
+    readonly snapshots: {
+      readonly tasksTotal: number
+      readonly commitsTotal: number
+      readonly fixesTotal: number
+      readonly evidenceDebtsTotal: number
+    }
+  }): Promise<unknown>
+}
+
+/** 容器分支 HEAD 解析器（标记时点 base_commit_hash 来源——单测注入桩） */
+export type HeadCommitResolver = (worktreeDir: string) => Promise<string | undefined>
+
+/** git 真解析：容器检出当前 HEAD（rev-parse HEAD；故障 = undefined——fail-soft 跳过标记） */
+export const gitHeadCommit: HeadCommitResolver = async (worktreeDir) => {
+  try {
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const git = execFile('git', ['-C', worktreeDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }, (error, out) =>
+        error == null ? resolve(out) : reject(error),
+      )
+      noteHostOwnedChild(git) // 结算期 git 子进程 = 宿主自有（job-tree 防误收编——1.14 同口径）
+    })
+    const hash = stdout.trim()
+    return hash === '' ? undefined : hash
+  } catch {
+    return undefined
+  }
+}
+
+/** 四列计数快照（标记时刻累计值——提案「计数基准与起点」节口径） */
+export interface WaveSnapshot {
+  readonly tasksTotal: number
+  readonly commitsTotal: number
+  readonly fixesTotal: number
+  readonly evidenceDebtsTotal: number
+}
+
+/**
+ * 标记时刻计数快照（容器任务域全集 = source 限定）：
+ * - tasks_total：completed 任务数（taskStats 七态分布直读）
+ * - fixes_total：completed 且 fix 类（coding-fix 类型 ∨ fix 链派生 sourceTask）数
+ * - commits_total：completed 任务结算记录 commit_hash 去重集合大小
+ * - evidence_debts_total：结算记录 evidenceDebt 声明次数
+ * 数据面 = core taskSettlements 单批聚合读（1.16——替代逐 completed 任务 queryTask 的
+ * O(N) 域调用；查询次数 O(N·completed) → 常数）。口径单源：跨任务 commit 去重/fix 判别/
+ * evidenceDebt 计数全在本函数。
+ */
+export async function computeWaveSnapshot(
+  tasks: ForgeTasksService,
+  projectId: string,
+  source: ContainerRef,
+): Promise<WaveSnapshot> {
+  const [stats, settlements] = await Promise.all([
+    tasks.taskStats({ projectId, source }),
+    tasks.taskSettlements({ projectId, source }),
+  ])
+  let commitsTotal = 0
+  let evidenceDebtsTotal = 0
+  let fixesTotal = 0
+  const seenCommits = new Set<string>()
+  for (const s of settlements) {
+    for (const hash of s.commitHashes) {
+      if (!seenCommits.has(hash)) {
+        seenCommits.add(hash)
+        commitsTotal += 1
+      }
+    }
+    evidenceDebtsTotal += s.evidenceDebtCount
+    if (s.taskType === 'coding-fix' || s.fixDerived) fixesTotal += 1
+  }
+  return {
+    tasksTotal: stats.byStatus.completed,
+    commitsTotal,
+    fixesTotal,
+    evidenceDebtsTotal,
+  }
+}
+
+/** 修正波落点判定：blocked 结算 = Blocker 返工批；success 结算的 fix 类任务 = fix 链收口（用户裁决批不经结算核——循环/走查侧另记） */
+function isReviewWavePoint(task: TaskSnapshot, outcome: 'success' | 'blocked'): boolean {
+  if (outcome === 'blocked') return true
+  return task.taskType === 'coding-fix' || task.sourceTaskId !== undefined
+}
+
+/** review-wave-N 标记落行（fail-soft——任何失败 console.warn 留痕，不回滚已定结算） */
+async function recordWaveCheckpoint(
+  deps: {
+    readonly tasks: ForgeTasksService
+    readonly checkpoints?: SettleCheckpointsFace
+    readonly resolveHeadCommit?: HeadCommitResolver
+  },
+  ctx: {
+    readonly projectId: string
+    readonly task: TaskSnapshot
+    readonly proposalId?: string
+    readonly worktreeCwd?: string
+    readonly submitCommitHash?: string
+    readonly outcome: 'success' | 'blocked'
+  },
+): Promise<void> {
+  try {
+    if (deps.checkpoints === undefined || ctx.proposalId === undefined) return
+    if (!isReviewWavePoint(ctx.task, ctx.outcome)) return
+    const headCommit =
+      (ctx.worktreeCwd !== undefined ? await (deps.resolveHeadCommit ?? gitHeadCommit)(ctx.worktreeCwd) : undefined) ??
+      ctx.submitCommitHash
+    if (headCommit === undefined) {
+      console.warn(`forge settle: review-wave mark skipped (no base commit) for ${ctx.task.slug}/${ctx.task.localId}`)
+      return
+    }
+    const snapshots = await computeWaveSnapshot(deps.tasks, ctx.projectId, ctx.task.source)
+    await deps.checkpoints.appendCheckpoint({
+      projectId: ctx.projectId,
+      proposalId: ctx.proposalId,
+      mark: 'review-wave-N', // wave_seq 缺省自动递增（检查点域 max+1——多波标记免记序数）
+      baseCommitHash: headCommit,
+      snapshots,
+    })
+  } catch (cause) {
+    console.warn(
+      `forge settle: review-wave checkpoint failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
+}
 
 /** 末条 submit record（结算摘要/commit 来源） */
 function lastSubmitRecordOf(records: readonly TaskRecordEntry[] | undefined): TaskRecordEntry | undefined {
@@ -98,17 +237,17 @@ async function createE2eDebtTask(
     const added = await tasks.addTask({
       projectId: ctx.projectId,
       source: ctx.task.source,
-      title: `e2e 取证债：${ctx.task.title}`,
+      title: `e2e 补充验证：${ctx.task.title}`,
       type: 'test-run',
       taskDesc: [
-        `实现卡 ${ctx.task.slug}/${ctx.task.localId} 已按实现态结算（实现+单测绿），本卡承接其真机 e2e 断言取证欠账。`,
-        `取证套件：${debt.suite}；欠账 spec：${specsLine}。`,
-        ...(debt.note !== undefined ? [`欠账说明：${debt.note}`] : []),
+        `任务 ${ctx.task.slug}/${ctx.task.localId} 已完成实现与单元测试；本任务补做它还未完成的真机 e2e 验证。`,
+        `e2e 套件：${debt.suite}；待验证 spec：${specsLine}。`,
+        ...(debt.note !== undefined ? [`补充说明：${debt.note}`] : []),
         // 文案与简报行真实存在性一致（bug ca061ef6）：简报红灯清单在场才指示比对——
         // 无红灯/基线门未接线时兜底文案，不指示真机不存在的简报行
         e2eBaselineRedCases !== undefined && e2eBaselineRedCases.length > 0
-          ? '执行 e2e 并断言上述 spec；如遇失败先比对任务简报 E2E_BASELINE_RED 行——基线红灯 = 入场前既有失败，非本实现回归，按归因流程上报（不归因到实现卡）。'
-          : '执行 e2e 并断言上述 spec；本卡生成时简报无 E2E_BASELINE_RED 行（基线门未接线或入场基线零红灯）——遇失败不默认归因到本实现，按归因流程（环境/陈旧断言/真回归三分流）自行分流上报。',
+          ? '执行 e2e 并断言上述 spec；如遇失败，先比对任务说明中的 E2E_BASELINE_RED 行——其中列出的失败在本任务开始前就已存在，不是本任务造成的回归；上报结论时注明这一背景。'
+          : '执行 e2e 并断言上述 spec；本任务创建时说明中没有 E2E_BASELINE_RED 行（基线未启用，或当时没有已知的既有失败）——遇失败不要默认当作本任务的回归，先区分三类原因（环境问题 / 断言过时 / 真实回归）再上报。',
       ].join('\n'),
       dependsOn: [ctx.task.localId],
       priority: 'P1',
@@ -171,6 +310,10 @@ export async function settleWorkerRun(
     readonly tasks: ForgeTasksService
     /** 提交落点核验器（可选——缺席回落 gitCommitLanding 真核验；单测注入桩） */
     readonly commitLanding?: CommitLandingVerifier
+    /** checkpoints 域服务消费面（可选——机械④修正波标记；缺席 = 机制惰性不判，行为零变化） */
+    readonly checkpoints?: SettleCheckpointsFace
+    /** 容器分支 HEAD 解析器（可选——缺席回落 gitHeadCommit 真解析；单测注入桩） */
+    readonly resolveHeadCommit?: HeadCommitResolver
   },
   ctx: {
     readonly projectId: string
@@ -186,8 +329,19 @@ export async function settleWorkerRun(
      * 核验提交落点（commit 所属分支 = 容器检出分支）；缺席 = 不核验（工具壳行为零变化）。
      */
     readonly worktreeCwd?: string
+    /**
+     * 本项目文档根绝对路径（<工作区根>/.forge/docs——跨分支特例归属判据锚）：在场时纯文档
+     * 特例按绝对路径归属核验（resolve 后必须落在 docsRoot 内——他项目 .forge/docs 文档不命中）；
+     * 缺席 = 回落 '.forge/docs/' 前缀判据（fail-soft——装配未接线时零变化）。
+     */
+    readonly docsRoot?: string
     /** 本轮 claim 简报红灯清单（改进7——欠账卡文案一致性判据；缺席/空 = 兜底文案） */
     readonly e2eBaselineRedCases?: readonly string[]
+    /**
+     * 容器 → 提案 id 映射（机械④——review-wave-N 检查点 proposal_id 归属；由装配/循环侧
+     * 经提案谱系解析传入。缺席 = 不落修正波标记，行为零变化）。
+     */
+    readonly proposalId?: string
     readonly handle: SpawnWorkerHandle
     /** spawn 起点（durationMs 基准） */
     readonly spawnStartedAt: number
@@ -238,9 +392,31 @@ export async function settleWorkerRun(
     const verify = deps.commitLanding ?? gitCommitLanding
     try {
       const verdict = await verify(ctx.worktreeCwd, submitRecord.commitHash)
-      if (!verdict.ok) {
+      // 跨分支结算特例（用户裁决 2026-10-24）：纯本项目 .forge/docs/ 文档提交允许落容器分支
+      // 之外（文档属工作区留盘产物，不入容器分支交付面）。判据 = files 全量归属于文档根——
+      // docsRoot 在场时 resolve 到绝对路径核验包含关系（他项目 .forge/docs 不命中）；缺席
+      // 回落 '.forge/docs/' 前缀判据。fail-closed：files 缺席或含任一文档外路径仍拒绝。
+      const fileInsideDocsRoot = (f: string): boolean => {
+        if (ctx.docsRoot === undefined) return f.replaceAll('\\', '/').startsWith('.forge/docs/')
+        const abs = isAbsolute(f) ? f : resolve(resolve(ctx.docsRoot, '..', '..'), f)
+        const rel = relative(ctx.docsRoot, abs)
+        return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+      }
+      const docsOnly =
+        submitRecord.files !== undefined && submitRecord.files.length > 0 && submitRecord.files.every(fileInsideDocsRoot)
+      if (!verdict.ok && !docsOnly) {
+        // 特例未命中原因（申报缺漏 vs 范围越界，一一对应纠正路径①②的前提差异）
+        const docsBasis = ctx.docsRoot !== undefined ? `本项目文档根 ${ctx.docsRoot}` : "'.forge/docs/' 前缀"
+        const causeHint =
+          submitRecord.files === undefined || submitRecord.files.length === 0
+            ? `submitTask 未申报 files（特例判据 = files 全量归属于 ${docsBasis}）`
+            : `files 含文档外路径：${submitRecord.files.filter((f) => !fileInsideDocsRoot(f)).join('、')}`
         return await rejectLanding(deps, ctx, new Error(
-          `[settle-cwd-pin] 提交落点核验失败：容器检出分支 = ${verdict.branch}，提交 ${submitRecord.commitHash} 所在分支 = ${verdict.commitBranches.join(', ') || '（任一本地分支均不可达）'}——提交落错分支，结算拒绝`,
+          [
+            `[settle-cwd-pin] 提交分支核验未通过：提交 ${submitRecord.commitHash} 不在容器检出分支 ${verdict.branch} 上（所在分支：${verdict.commitBranches.join(', ') || '任一本地分支均不可达'}），结算拒绝`,
+            `原因：${causeHint}，不适用纯文档跨分支特例`,
+            `纠正（按改动性质二选一）：① 含代码/测试 → git checkout ${verdict.branch} 后按任务范围重新提交，重新 submitTask 附新 commitHash；② 纯文档 → 重新 submitTask，files 逐文件如实列出且全部归属于 .forge/docs/`,
+          ].join('\n'),
         ))
       }
     } catch (cause) {
@@ -249,6 +425,19 @@ export async function settleWorkerRun(
       ))
     }
   }
+  // 机械④：修正波结算点落 review-wave-N 检查点（blocked = Blocker 返工批；fix 类任务收口
+  // = fix 链收口）——fail-soft，落点核验拒绝径（landing-rejected 提前返回）不落标记
+  await recordWaveCheckpoint(
+    { tasks: deps.tasks, checkpoints: deps.checkpoints, resolveHeadCommit: deps.resolveHeadCommit },
+    {
+      projectId: ctx.projectId,
+      task: ctx.task,
+      proposalId: ctx.proposalId,
+      worktreeCwd: ctx.worktreeCwd,
+      submitCommitHash: submitRecord?.commitHash,
+      outcome,
+    },
+  )
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =

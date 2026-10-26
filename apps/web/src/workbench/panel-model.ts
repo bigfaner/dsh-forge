@@ -167,3 +167,12 @@ export function centerViewOf(activePanelId: string | null): 'session' | 'knowled
   if (activePanelId === HERO_PANEL_KEY) return 'hero'
   return 'session'
 }
+
+/**
+ * 官方面板态 → 会话面板在位判定（纯函数）：仅 activePanelId null（官方 ConversationRoot
+ * 缺省）= 会话视图本体；插件页等官方全局面板虽然视图镜像为 session，但会话内容已离位
+ * ——会话唯一绑定面（悬浮进度流面板）据此隐藏。
+ */
+export function sessionPanelActive(activePanelId: string | null): boolean {
+  return activePanelId === null
+}

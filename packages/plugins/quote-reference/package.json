@@ -1,0 +1,52 @@
+{
+  "name": "@dsh-forge/quote-reference",
+  "version": "0.1.4",
+  "private": true,
+  "type": "module",
+  "description": "quote-reference cordis 插件（选段引用：划选菜单 + 原生 quote chip + 发送期展开）——双面包装载范式（input-history 判例同构）：host 空载 + client bundle 自注册 CJS + dsh.client 清单 + dsh.bundle patch。",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client.js"
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "cordis.patch.yml"
+  ],
+  "scripts": {
+    "build": "tsc -b && node scripts/bundle-client.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-input-trigger": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.0-rc.2",
+    "@types/node": "24.19.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "~18.3.0",
+    "esbuild": "0.24.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

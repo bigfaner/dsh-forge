@@ -182,4 +182,29 @@ describe('isComposerEditableTarget / caretOffsetInEditor', () => {
     expect(caretOffsetInEditor(root, b, 2)).toBe(4)
     expect(caretOffsetInEditor(root, null, 0)).toBeUndefined()
   })
+
+  it('bug: 草稿首部空行后首个非空行行首 ≠ 文档起点（段落间隙计 \\n，偏移非 0 不触发翻阅）', () => {
+    // 草稿 "\n\nfoo"：root > [空p, 空p, p("foo")]，光标在 "foo" 文本节点开头
+    const foo = { nodeType: 3, textContent: 'foo' }
+    const root = { childNodes: [{ childNodes: [] }, { childNodes: [] }, { childNodes: [foo] }] }
+    expect(caretOffsetInEditor(root, foo, 0)).toBe(2) // 两处段落间隙各计 1
+  })
+
+  it('bug: 光标在首部之后的空行段内 ≠ 文档起点（首行行首仍 = 起点，翻阅门保留）', () => {
+    // 草稿 "\n\nb"：root > [空p, 空p, p("b")]，光标锚在第二个空段（元素锚，行首）
+    const secondEmpty = { childNodes: [] }
+    const root = { childNodes: [{ childNodes: [] }, secondEmpty, { childNodes: [{ nodeType: 3, textContent: 'b' }] }] }
+    expect(caretOffsetInEditor(root, secondEmpty, 0)).toBe(1)
+    // 对照：首个空段行首 = 文档起点 0（readline 语义：首行行首 ↑ 触发翻阅）
+    expect(caretOffsetInEditor(root, root.childNodes![0], 0)).toBe(0)
+  })
+
+  it('bug: 行内 <br>（Shift+Enter）后的行首偏移计入换行', () => {
+    // 段内 "ab<br>cd"，光标在 "cd" 开头：前缀 "ab" + <br> 换行 = 3
+    const ab = { nodeType: 3, textContent: 'ab' }
+    const br = { nodeType: 1, textContent: '', childNodes: [] }
+    const cd = { nodeType: 3, textContent: 'cd' }
+    const root = { childNodes: [{ childNodes: [ab, br, cd] }] }
+    expect(caretOffsetInEditor(root, cd, 0)).toBe(3)
+  })
 })

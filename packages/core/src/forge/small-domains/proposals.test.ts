@@ -667,3 +667,90 @@ describe('tool-row-lossless-json-fix：行映射 NULL 列 = 键缺席（显式 u
     expect(row.chained?.summary).toBeUndefined()
   })
 })
+
+// ─────────────────────────── 机械②：parent_proposal_id 承接链（飞轮改进链） ───────────────────────────
+// proposals 表自联结承接（nullable——飞轮改进链左列）；createProposal / transitionProposal
+// 透传 + FK 校验拒悬空 + listDerivedProposals 递归自联结读面。checkpoints 不承载承接。
+
+describe('机械② parent_proposal_id 承接链：透传 / FK 校验 / 自联结查询', () => {
+  it('createProposal parentProposalId 透传：行读回 parentProposalId；缺席 = 键缺席（NULL）', async () => {
+    const s = svc()
+    const parent = await s.createProposal({ projectId: h!.projectId, slug: 'fly-parent', title: '父提案' })
+    const child = await s.createProposal({
+      projectId: h!.projectId,
+      slug: 'fly-child',
+      title: '改进提案',
+      parentProposalId: parent.proposalId,
+    })
+    expect(child.parentProposalId).toBe(parent.proposalId)
+    const bare = await s.createProposal({ projectId: h!.projectId, slug: 'fly-bare', title: '无承接' })
+    expect(bare.parentProposalId).toBeUndefined() // NULL = 键缺席（lossless JSON 同口径）
+  })
+
+  it('createProposal FK 校验：悬空 parentProposalId → ERR_PROPOSAL_NOT_FOUND（typed）+ 库零变更', async () => {
+    const s = svc()
+    const err = await s
+      .createProposal({ projectId: h!.projectId, slug: 'fly-dangling', title: '悬空承接', parentProposalId: 'missing-parent' })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProposalNotFoundError)
+    expect((err as ProposalNotFoundError).code).toBe('ERR_PROPOSAL_NOT_FOUND')
+    expect(h!.wsDb.prepare(`SELECT COUNT(*) AS n FROM proposals`).get()).toEqual({ n: 0 })
+  })
+
+  it('transitionProposal parentProposalId 透传：转移带承接 → 写 parent_proposal_id；不带 → 保留既有', async () => {
+    const s = svc()
+    const parent = await s.createProposal({ projectId: h!.projectId, slug: 'tp-parent', title: '父' })
+    const child = await s.createProposal({ projectId: h!.projectId, slug: 'tp-child', title: '子' })
+    expect(child.parentProposalId).toBeUndefined()
+    const row = await s.transitionProposal({
+      projectId: h!.projectId,
+      proposalId: child.proposalId,
+      toStatus: 'under-review',
+      parentProposalId: parent.proposalId,
+    })
+    expect(row.parentProposalId).toBe(parent.proposalId)
+    // 库面直证
+    const dbRow = h!.wsDb.prepare(`SELECT parent_proposal_id FROM proposals WHERE id = ?`).get(child.proposalId) as {
+      parent_proposal_id: string | null
+    }
+    expect(dbRow.parent_proposal_id).toBe(parent.proposalId)
+    // 不带 parentProposalId 的转移不改写既有承接
+    const again = await s.transitionProposal({ projectId: h!.projectId, proposalId: child.proposalId, toStatus: 'draft' })
+    expect(again.parentProposalId).toBe(parent.proposalId)
+  })
+
+  it('transitionProposal FK 校验：悬空 parentProposalId → ERR_PROPOSAL_NOT_FOUND + 状态零变更', async () => {
+    const s = svc()
+    const created = await s.createProposal({ projectId: h!.projectId, slug: 'tp-dangling', title: 'x' })
+    const err = await s
+      .transitionProposal({
+        projectId: h!.projectId,
+        proposalId: created.proposalId,
+        toStatus: 'under-review',
+        parentProposalId: 'missing-parent',
+      })
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ProposalNotFoundError)
+    const after = h!.wsDb.prepare(`SELECT proposal_status FROM proposals WHERE id = ?`).get(created.proposalId) as {
+      proposal_status: string
+    }
+    expect(after.proposal_status).toBe('draft') // 单事务整体回滚
+  })
+
+  it('listDerivedProposals 自联结查询：给定提案 id 递归查出派生链全部改进提案', async () => {
+    const s = svc()
+    const p1 = await s.createProposal({ projectId: h!.projectId, slug: 'chain-1', title: '根提案' })
+    const p2 = await s.createProposal({ projectId: h!.projectId, slug: 'chain-2', title: '改进一', parentProposalId: p1.proposalId })
+    const p3 = await s.createProposal({ projectId: h!.projectId, slug: 'chain-3', title: '改进二', parentProposalId: p2.proposalId })
+    const other = await s.createProposal({ projectId: h!.projectId, slug: 'chain-x', title: '无关提案' })
+    // 传递闭包：p1 → p2 → p3（两跳）
+    const derived = await s.listDerivedProposals({ projectId: h!.projectId, proposalId: p1.proposalId })
+    expect(derived.map((r) => r.proposalId).sort()).toEqual([p2.proposalId, p3.proposalId].sort())
+    // 单跳
+    const mid = await s.listDerivedProposals({ projectId: h!.projectId, proposalId: p2.proposalId })
+    expect(mid.map((r) => r.proposalId)).toEqual([p3.proposalId])
+    // 叶子 → 空列表；无关提案互不串
+    expect(await s.listDerivedProposals({ projectId: h!.projectId, proposalId: p3.proposalId })).toEqual([])
+    expect(await s.listDerivedProposals({ projectId: h!.projectId, proposalId: other.proposalId })).toEqual([])
+  })
+})

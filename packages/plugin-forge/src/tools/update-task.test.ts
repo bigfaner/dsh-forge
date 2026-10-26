@@ -8,6 +8,16 @@ import type { ToolExecFace } from '../faces.js'
 import { UPDATE_TASK_OUTPUT_SCHEMA, createUpdateTaskTool, parseUpdateTaskArgs } from './update-task.js'
 import type { ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 const snapshot: TaskSnapshot = {
@@ -37,6 +47,7 @@ function toolWithCapture(events?: ForgePluginEvent[]) {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     ...(events !== undefined
       ? { events: { emit: (e: ForgePluginEvent) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} } }
@@ -107,7 +118,8 @@ describe('updateTask execute（projectId 路由 core updateTask）', () => {
         throw Object.assign(new Error('任务被锁定'), { code: 'ERR_TASK_LOCKED', data: {} })
       },
     } as unknown as ForgeTasksService
-    const tool = createUpdateTaskTool({ tasks, proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'], resolveProjectId: () => 'p-1' })
+    const tool = createUpdateTaskTool({ tasks, proposals: {} as ForgeToolDeps['proposals'], bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints, resolveProjectId: () => 'p-1' })
     const out = await tool.execute({ slug: 'f1', local_id: '1.3' }, EXEC)
     expect(out).toEqual({ ok: false, code: 'ERR_TASK_LOCKED', message: '任务被锁定', violations: [] })
     expect(tool.output.render({}, out)[0]?.text).toContain('✗ ERR_TASK_LOCKED')
@@ -168,6 +180,7 @@ describe('updateTask 事件发射（typed 错误 → tool-error；verb=updateTas
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })

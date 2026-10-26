@@ -138,8 +138,9 @@ export type RemoteChannel = (typeof REMOTE_CHANNELS)[keyof typeof REMOTE_CHANNEL
 /**
  * forge:worktree/*（worktree-branch-management fix-2：worktree/branch 管理域 + 会话绑定面）。
  * 域实现 = packages/plugins/git-worktree（通用层），host ipc/worktree-rpc 装配透传；
- * session-create = 预铸采纳单门（挂靠事件随预铸 seq0 落盘——绑定写面唯一时点，活会话
- * 补写被单写者铁律禁止，attach 通道已废）；seal = 封存判定快照（三通道提示数据源）。
+ * seal = 封存判定快照（三通道提示数据源）。会话创建不走本族——桌面端客户端直呼官方
+ * `session.create({ workspaceId })`，移动端经 `forge:proxy/session-create` 中继同一
+ * sessionController；绑定 = header.cwd 推导（binding-derivation §2.1/§2.3）。
  * 封闭写集仅 create/delete（提案「命令面」裁决）。
  */
 export const WORKTREE_CHANNELS = {
@@ -149,11 +150,11 @@ export const WORKTREE_CHANNELS = {
   aheadBehind: 'forge:worktree/ahead-behind',
   branches: 'forge:worktree/branches',
   checks: 'forge:worktree/checks',
-  sessionCreate: 'forge:worktree/session-create',
   seal: 'forge:worktree/seal',
   select: 'forge:worktree/select',
   selected: 'forge:worktree/selected',
   resolve: 'forge:worktree/resolve',
+  ensureWorkspace: 'forge:worktree/ensure-workspace',
 } as const
 
 export type WorktreeChannel = (typeof WORKTREE_CHANNELS)[keyof typeof WORKTREE_CHANNELS]
@@ -201,11 +202,11 @@ export const FORGE_CHANNELS = {
   worktreeAheadBehind: WORKTREE_CHANNELS.aheadBehind,
   worktreeBranches: WORKTREE_CHANNELS.branches,
   worktreeChecks: WORKTREE_CHANNELS.checks,
-  worktreeSessionCreate: WORKTREE_CHANNELS.sessionCreate,
   worktreeSeal: WORKTREE_CHANNELS.seal,
   worktreeSelect: WORKTREE_CHANNELS.select,
   worktreeSelected: WORKTREE_CHANNELS.selected,
   worktreeResolve: WORKTREE_CHANNELS.resolve,
+  worktreeEnsureWorkspace: WORKTREE_CHANNELS.ensureWorkspace,
 } as const
 
 export type ForgeChannel =
@@ -235,3 +236,13 @@ export const FORGE_EVENT_CHANNELS = {
 } as const
 
 export type ForgeEventChannel = (typeof FORGE_EVENT_CHANNELS)[keyof typeof FORGE_EVENT_CHANNELS]
+
+/**
+ * 会话投影键（loop-event-delivery 1.19 单源——sessionProjections 注册表 fold/client 键）。
+ * host 折叠（plugin-forge dispatch-events）与 web/mobile 消费面共享本常量，双份字面量镜像消除。
+ */
+export const SESSION_PROJECTION_KEYS = {
+  dispatchEvents: 'forge-dispatch-events',
+} as const
+
+export type SessionProjectionKey = (typeof SESSION_PROJECTION_KEYS)[keyof typeof SESSION_PROJECTION_KEYS]

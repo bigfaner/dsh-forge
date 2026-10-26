@@ -27,14 +27,17 @@ export {
   type WorktreeRiskConfirmationProps,
 } from './risk-confirmation.js'
 export {
+  BranchDriftNotice,
   SealNotice,
   SealedComposerPlaceholder,
   StaleSelectionNotice,
+  type BranchDriftNoticeProps,
   type SealNoticeProps,
   type StaleSelectionNoticeProps,
 } from './seal-notice.js'
 export { HeroWorktreePicker, heroWorktreeRows, pickerRowDisabled, type HeroWorktreePickerProps, type WorktreeMenuRow } from './hero-worktree-picker.js'
 export {
+  aheadBehindInline,
   aheadBehindSegments,
   collectSlugCandidates,
   createConflicts,

@@ -42,6 +42,7 @@ import {
 import { ForgeRecallView, type ForgeRecallViewProps } from './views/session/ConversationViews.js'
 import { ForgeDispatchToolRow, type ForgeDispatchToolRowProps } from './views/session/DispatchToolRow.js'
 import { ForgeProgressNode, type ForgeProgressNodeProps } from './views/session/ForgeProgressNode.js'
+import { ForgeEventEntries, type ForgeEventEntriesProps } from './views/session/ForgeEventEntries.js'
 import {
   ForgeHeroWorkspacePicker,
   type ForgeHeroWorkspacePickerProps,
@@ -49,6 +50,7 @@ import {
 import {
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeWorktreeSwitchMarker,
 } from './views/session/WorktreeFaces.js'
 import {
   ForgeSettingsSection,
@@ -90,6 +92,8 @@ export interface ForgePublishedViews {
   readonly ForgeDispatchToolRow: ComponentType<ForgeDispatchToolRowProps>
   /** conversation.chat.node keyed 'forge-progress' 占用者（1.17 'forge/progress' 折叠行节点） */
   readonly ForgeProgressNode: ComponentType<ForgeProgressNodeProps>
+  /** conversation.chat.node keyed 'forge-event-group' 占用者（1.9 消息面事件折叠条目组） */
+  readonly ForgeEventEntries: ComponentType<ForgeEventEntriesProps>
   /** sidebar.right.pane.tab keyed 'dswf-overview' 占用者（M2 UF-1 概览 dock tab body——4.1） */
   readonly ForgeOverviewTab: ComponentType<ForgeOverviewTabProps>
   /** sidebar.right.pane.tab keyed 'dswf-doc' 占用者（M2 UF-2 文档 dock tab body——4.1，multiple 按 address 去重） */
@@ -100,6 +104,8 @@ export interface ForgePublishedViews {
   readonly ForgeSessionWorktreeChip: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽封存提示（fix-2——SealNotice 一次性 + composer 占位文案） */
   readonly ForgeWorktreeSealOverlay: ComponentType<{ sessionId?: string | undefined }>
+  /** conversation.input.overlay 槽切换闸虚线标记（bug 267dcac1——blocked 卡视觉命中锚，禁输归官方 composer block 缝） */
+  readonly ForgeWorktreeSwitchMarker: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点，纯文本草稿 → chip 还原订阅） */
   readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
   /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
@@ -132,11 +138,13 @@ declare global {
   ForgeRecallView,
   ForgeDispatchToolRow,
   ForgeProgressNode,
+  ForgeEventEntries,
   ForgeOverviewTab,
   ForgeDocsTab,
   ForgeHeroWorkspacePicker,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeWorktreeSwitchMarker,
   ForgeBugChipRestoreOverlay,
   ForgeSettingsSection,
   ForgeRemoteEntry,

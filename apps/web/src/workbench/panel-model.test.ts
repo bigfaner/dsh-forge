@@ -12,6 +12,7 @@ import {
   pickedProjectAnchor,
   projectAnchorOf,
   rightbarViewPlan,
+  sessionPanelActive,
   sessionZonePhase,
 } from './panel-model.js'
 
@@ -237,5 +238,14 @@ describe('centerViewOf 官方面板态 → 产品视图镜像（fix-25 新面）
     expect(centerViewOf(KNOWLEDGE_PANEL_KEY)).toBe('knowledge')
     expect(centerViewOf(HERO_PANEL_KEY)).toBe('hero')
     expect(centerViewOf('plugins')).toBe('session')
+  })
+})
+
+describe('sessionPanelActive 会话面板在位判定（会话唯一绑定面——悬浮进度流球装载门）', () => {
+  it('仅 activePanelId null = 在位；插件页等官方全局面板 = 离位（视图镜像仍是 session）', () => {
+    expect(sessionPanelActive(null)).toBe(true)
+    expect(sessionPanelActive('plugins')).toBe(false)
+    expect(sessionPanelActive(KNOWLEDGE_PANEL_KEY)).toBe(false)
+    expect(sessionPanelActive(HERO_PANEL_KEY)).toBe(false)
   })
 })

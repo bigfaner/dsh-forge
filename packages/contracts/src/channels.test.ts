@@ -125,7 +125,7 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
     })
   })
 
-  it('forge:events/tasks-changed 推送面（主→渲染单向，preload 订阅面）', () => {
+  it('forge:events/* 推送面（主→渲染单向，preload 订阅面）：tasks-changed', () => {
     expect(FORGE_EVENT_CHANNELS).toEqual({
       tasksChanged: 'forge:events/tasks-changed',
     })
@@ -133,7 +133,7 @@ describe('AC2 通道常量五族（Interface 7 通道族清单）', () => {
 })
 
 describe('AC2 allowlist 数据单源（invoke 面全集）', () => {
-  it('allowlist = 十二 invoke 族 50 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道 + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像]；main 侧 allowlist 校验唯一源）', () => {
+  it('allowlist = 十二 invoke 族 50 通道全列、无重复（fix-bug bugs 三通道 + mobile-remote-approval remote 三通道 + worktree 十一通道[1.30 增 select、bug 9eb9d6cb 增 selected 读镜像、bug 82e92933 退役 session-create、bug 9d2b7e6a 增 ensure-workspace 懒物化]；main 侧 allowlist 校验唯一源）', () => {
     expect(FORGE_CHANNEL_ALLOWLIST).toHaveLength(50)
     expect(new Set(FORGE_CHANNEL_ALLOWLIST).size).toBe(50)
     expect([...FORGE_CHANNEL_ALLOWLIST].sort()).toEqual(

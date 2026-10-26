@@ -4,7 +4,7 @@
 
 ## 1. 建会话与发送（hero）
 
-hero 选分支/模式（突击=steer 抢占、远征=queue 排队；内置预设走 `selectAgentPreset`）→ 发送经 `forge:worktree/session-create` 预铸采纳单门（host 建会话守卫，拒绝时弹守卫确认框）→ 跳转 chat。模式经 `heroModeRef` 外推，chat composer 芯片跟随。chat 内发送：运行中 steer、空闲 queue。
+hero 选分支/模式（突击=steer 抢占、远征=queue 排队；内置预设走 `selectAgentPreset`）→ 发送经 `forge:proxy/session-create` 中继（host 进程内直调官方 `session.create({ workspaceId })`——chip 双发 `{workspaceId, worktreePath}`，绑定 = header.cwd 推导）→ 跳转 chat。模式经 `heroModeRef` 外推，chat composer 芯片跟随。chat 内发送：运行中 steer、空闲 queue。
 
 ## 2. chat 流式与渲染
 

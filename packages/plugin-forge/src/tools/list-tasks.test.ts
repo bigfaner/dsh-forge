@@ -5,6 +5,16 @@ import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, ListTasksQuery, TaskCard } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import type { ForgeToolDeps } from './index.js'
+
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
 import { createListTasksTool, parseListTasksArgs, projectCards } from './list-tasks.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
@@ -23,7 +33,7 @@ function card(localId: string, over: Partial<TaskCard> = {}): TaskCard {
   }
 }
 
-function toolWithCapture(overrides?: Partial<Parameters<typeof createListTasksTool>[0]>) {
+function toolWithCapture(overrides?: Partial<Omit<Parameters<typeof createListTasksTool>[0], 'checkpoints'>>) {
   const captured: ListTasksQuery[] = []
   const tasks = {
     listTasks: async (q: ListTasksQuery) => {
@@ -35,6 +45,7 @@ function toolWithCapture(overrides?: Partial<Parameters<typeof createListTasksTo
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
     ...overrides,
   }

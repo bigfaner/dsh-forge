@@ -62,7 +62,7 @@ export type {
   WorkerAbortedRetryPayload,
 } from './templates.js'
 export { failSoftNarrationChannel } from './channel.js'
-export type { NarrationChannel } from './channel.js'
+export type { NarrationChannel, NarrationForm, NarrationSendOptions } from './channel.js'
 export {
   createIncidentStore,
   INCIDENT_ERROR_FILE,

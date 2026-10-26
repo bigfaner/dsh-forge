@@ -7,6 +7,16 @@ import type { ToolExecFace } from '../faces.js'
 import { QUERY_TASK_OUTPUT_SCHEMA, createQueryTaskTool, parseQueryTaskArgs } from './query-task.js'
 import type { ForgeToolDeps } from './index.js'
 
+const checkpoints: ForgeToolDeps['checkpoints'] = {
+  appendCheckpoint: async () => {
+    throw new Error('not used')
+  },
+  listCheckpoints: async () => [],
+  ensureCheckpoint: async () => {
+    throw new Error('not used')
+  },
+}
+
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
 
 const snapshot: TaskSnapshot = {
@@ -37,6 +47,7 @@ function toolWithCapture() {
     tasks,
     proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
   return { tool: createQueryTaskTool(deps), captured }
@@ -89,6 +100,7 @@ describe('queryTask execute（include 门控映射）', () => {
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
     }
     const tool = createQueryTaskTool(deps)
@@ -215,6 +227,7 @@ describe('queryTask 事件发射（typed 错误 → tool-error；verb=queryTask�
       tasks,
       proposals: {} as ForgeToolDeps['proposals'],
   bugs: {} as ForgeToolDeps['bugs'],
+  checkpoints,
       resolveProjectId: () => 'p-1',
       events: { emit: (e) => events.push(e), prepare: async () => {}, dirOf: () => undefined, remember: () => {} },
     })

@@ -35,6 +35,8 @@ import {
   FilesUnionMismatchError,
   GateSummaryRequiredError,
   ReasonRequiredError,
+  RuntimeEvidenceConflictError,
+  RuntimeEvidenceRequiredError,
   SummaryRequiredError,
   TestEvidenceRequiredError,
 } from './errors.js'
@@ -44,6 +46,19 @@ import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machi
 import { runRestoreHook } from './transition.js'
 
 export type { TasksVerbDeps }
+
+/**
+ * 机械⑤强制域判定（forge-verification-hardening——AGENTS 1.4 承接，技能判据为正本门为兜底）：
+ * 判据 = 交付物含运行期装配面（进程/网络端点/真实调度时钟/外部系统副作用）——七类常见面
+ * （UI/API/CLI/TUI/Desktop/Web server/MQ）为示例非白名单，清单外命中判据同入强制域；
+ * 豁免面 = SDK/库边界（装配由消费方承担）与纯逻辑/纯文档声明。多类交叉就高不就低：
+ * 任一声外面非豁免 → 整单强制（library 自带 subprocess/network 副作用时回强制域的落点）。
+ */
+const RUNTIME_EXEMPT_FACES = new Set(['library', 'sdk', 'pure-logic', 'docs'])
+
+export function requiresRuntimeAssemblyEvidence(faces: readonly string[]): boolean {
+  return faces.some((face) => !RUNTIME_EXEMPT_FACES.has(face.trim().toLowerCase()))
+}
 
 /**
  * Interface 1 submitTask：executor 结算（转移 + record files/gate/commit + 恢复钩子 + 相位重算）。
@@ -106,6 +121,23 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       if (acceptanceCriteria.length > 0 && input.gate?.test !== true) {
         throw new TestEvidenceRequiredError({ acceptanceCriteria })
       }
+
+      // ②g 强制域取证声明门（机械⑤——AGENTS 1.4 承接，技能判据为正本门为兜底）：
+      //    runtimeSurface 声明命中运行期装配面判据 ∧ runtimeEvidence / evidenceDebt 二选一
+      //    均缺席 → 拒（引导带真机取证重提交或声明债务走欠账 test-run 路径）。豁免域不受影响；
+      //    blocked submit 不经此门（C4 同族——取证环境缺口如实走 blocked 结算）。
+      if (input.runtimeEvidence !== undefined && input.evidenceDebt !== undefined) {
+        throw new RuntimeEvidenceConflictError({ verb: 'submitTask' })
+      }
+      if (
+        input.runtimeSurface !== undefined &&
+        input.runtimeSurface.length > 0 &&
+        requiresRuntimeAssemblyEvidence(input.runtimeSurface) &&
+        input.runtimeEvidence === undefined &&
+        input.evidenceDebt === undefined
+      ) {
+        throw new RuntimeEvidenceRequiredError({ faces: input.runtimeSurface })
+      }
     }
 
     // ②f files 一致性校验（S3——消解双存储歧义）：顶层 files 与 {created, modified} 分组并存时
@@ -160,6 +192,9 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       ...(input.notes !== undefined ? { notes: input.notes } : {}),
       // 改进7（e2e 取证债）：实现态部分结算声明原样落账——欠账 test-run 任务由结算核生成
       ...(input.evidenceDebt !== undefined ? { evidenceDebt: input.evidenceDebt } : {}),
+      // 机械⑤：运行期装配面声明与真机取证证据声明原样落账（读面经 TaskRecordEntry 投影）
+      ...(input.runtimeSurface !== undefined ? { runtimeSurface: input.runtimeSurface } : {}),
+      ...(input.runtimeEvidence !== undefined ? { runtimeEvidence: input.runtimeEvidence } : {}),
     }
     const hasRecordFields = Object.keys(recordFields).length > 0
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(toStatus, now, row.id)

@@ -152,6 +152,8 @@ describe('scheme 注册与处理器路由', () => {
       'forge-client.js': '/*c*/',
       'input-history-client.js': '/*ih*/',
       'expert-squad-client.js': '/*xsq*/',
+      'quote-reference-client.js': '/*qr*/',
+      'super-composer-client.js': '/*sc*/',
       'brand/whale-sea-bg-ink.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>',
     })
     const handler = createShellProtocolHandler({ distRoot: root, host: () => undefined })
@@ -159,8 +161,14 @@ describe('scheme 注册与处理器路由', () => {
     expect((await handler(new Request('dsh-forge://app/forge-client.js'))).status).toBe(200)
     // input-history 插件 bundle 落位（composer-input-history-plugin/1.4）——与 forge-client.js 同型资产位
     expect((await handler(new Request('dsh-forge://app/input-history-client.js?rev=r1'))).status).toBe(200)
-    // expert-squad 插件 bundle 落位（expert-squad 装配面）——与 input-history-client.js 同型资产位
+    // expert-squad 插件 bundle 落位（expert-squad 装配面）——通用形覆盖实例
     expect((await handler(new Request('dsh-forge://app/expert-squad-client.js?rev=r1'))).status).toBe(200)
+    // 插件 bundle 通用形态（根级 *-client.js）：不逐包点名——新插件 bundle 落位即服务 dist
+    expect((await handler(new Request('dsh-forge://app/quote-reference-client.js?rev=r1'))).status).toBe(200)
+    expect((await handler(new Request('dsh-forge://app/super-composer-client.js'))).status).toBe(200)
+    // 越权/陌生路径不入资产面：根级陌生非 -client.js 与子目录 *-client.js 仍转发 Host（此处 Host 未就绪 → 503）
+    expect((await handler(new Request('dsh-forge://app/evil.js'))).status).toBe(503)
+    expect((await handler(new Request('dsh-forge://app/x/y-client.js'))).status).toBe(503)
     // vite public 物化位（fix-38 书海背景静态资产）——/brand/* 服务 dist 且按扩展名出 SVG MIME
     const brand = await handler(new Request('dsh-forge://app/brand/whale-sea-bg-ink.svg'))
     expect(brand.status).toBe(200)

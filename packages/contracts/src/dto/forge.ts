@@ -153,6 +153,19 @@ export interface TaskEvidenceDebt {
 }
 
 /**
+ * 真机取证证据声明（forge-verification-hardening 机械⑤——强制域结算证据路径）：success 结算
+ * 携带 = 真机端到端取证已做（AGENTS 1.4 正本口径），与 evidenceDebt 二选一（并存 = 口径歧义拒）。
+ */
+export interface TaskRuntimeEvidence {
+  /** 取证主交付面（最终消费者直接感知行为的运行面——多类交叉就高不就低选取） */
+  face: string
+  /** 取证工件清单（截图/日志/trace 路径——非空，留盘路径） */
+  artifacts: string[]
+  /** 取证方式与取证环境说明（可选） */
+  note?: string
+}
+
+/**
  * 提交记录结构化字段（worker-lean-execution S3——task_records.record_fields_json 解码形；
  * keyDecisions/testsPassed/testsFailed/coverage/notes——从 summary 自由文本拆出的结构化面）。
  */
@@ -166,6 +179,10 @@ export interface TaskRecordFields {
   notes?: string
   /** e2e 取证债（改进7——实现态部分结算声明；读面经 TaskRecordEntry 投影） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——强制域判定输入；缺省 = 未声明即豁免域） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一） */
+  runtimeEvidence?: TaskRuntimeEvidence
 }
 
 /**
@@ -277,6 +294,10 @@ export interface TaskRecordEntry {
   commitHash?: string
   /** e2e 取证债（改进7——record_fields_json 解码形；旧行键缺席） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——record_fields_json 解码形；旧行键缺席） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——record_fields_json 解码形；旧行键缺席） */
+  runtimeEvidence?: TaskRuntimeEvidence
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -536,6 +557,10 @@ export interface SubmitTaskInput {
   commitHash?: string
   /** e2e 取证债声明（改进7——success 专用：实现态部分结算，结算核自动生成欠账 test-run 任务） */
   evidenceDebt?: TaskEvidenceDebt
+  /** 运行期装配面声明（机械⑤——强制域判定输入：交付物声明触达的运行面；清单外命中判据同入强制域） */
+  runtimeSurface?: string[]
+  /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一；强制域无此二者即拒） */
+  runtimeEvidence?: TaskRuntimeEvidence
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */
   sessionId: string
 }
@@ -634,6 +659,25 @@ export interface TaskStats {
   unmetPending: number
 }
 
+/** taskSettlements 查询（容器作用域 completed 任务结算面批量读——wave 快照聚合单批数据源） */
+export interface TaskSettlementsQuery {
+  projectId: string
+  source: ContainerRef
+}
+
+/** taskSettlements 行（单 completed 任务的结算聚合——提交 hash 集 + fix 派生判别 + 取证债计数） */
+export interface TaskSettlementRow {
+  slug: string
+  localId: string
+  taskType: TaskType
+  /** fix 链派生（source_task_id 在场——fixes_total 判别第二支） */
+  fixDerived: boolean
+  /** 该任务全部记录的非空 commit_hash（记录序保留——跨任务去重归消费面单源） */
+  commitHashes: string[]
+  /** 记录中 evidenceDebt 声明次数 */
+  evidenceDebtCount: number
+}
+
 /** taskGraph 查询（M3 容器化：容器子图） */
 export interface TaskGraphQuery {
   projectId: string
@@ -707,6 +751,8 @@ export interface ForgeTasksService {
   listTasks(q: ListTasksQuery): Promise<TaskCard[]>
   /** 七态计数 */
   taskStats(q: TaskStatsQuery): Promise<TaskStats>
+  /** 容器 completed 任务结算面批量读（wave 快照单批数据源——单查询聚合，替代逐任务 queryTask） */
+  taskSettlements(q: TaskSettlementsQuery): Promise<TaskSettlementRow[]>
   /** feature 任务图（DAG/泳道） */
   taskGraph(q: TaskGraphQuery): Promise<TaskGraph>
   /** 任务详情（allowedTransitions/actualFiles/refs 水化） */
@@ -830,6 +876,8 @@ export interface CreateProposalInput {
   status?: ProposalStatus
   /** 模式溯源（远征/突击；缺省 = NULL 占位——成链门按 NULL 边界处理） */
   mode?: Mode
+  /** 承接链左列（飞轮改进链父提案 id；缺省 = 无承接。FK 校验指向存在提案） */
+  parentProposalId?: string
 }
 
 /** transitionProposal 入参（M3 双面：tool + RPC（UF-1 人工裁决）——M2「tool 专属」纪律 drift 修订；
@@ -840,6 +888,8 @@ export interface TransitionProposalInput {
   toStatus: ProposalStatus
   /** superseded 必带（目标提案 id 在场校验 → 写 proposals.superseded_by——UF-1 取代链数据面） */
   supersededBy?: string
+  /** 承接链左列（飞轮改进链父提案 id；提供即写，缺席 = 保留既有。FK 校验指向存在提案） */
+  parentProposalId?: string
 }
 
 /** transitionProposal 返回体（行 + 成链水化——toStatus=accepted ∧ mode='expedition' ∧ 无同链
@@ -879,6 +929,13 @@ export interface ListProposalsQuery {
   sort?: 'active' | 'created'
 }
 
+/** listDerivedProposals 查询（机械②承接链自联结读面——递归闭包） */
+export interface ListDerivedProposalsQuery {
+  projectId: string
+  /** 承接链根提案 id */
+  proposalId: string
+}
+
 /** proposals 行应用层形状（身份与名称分离——slug 可改名，关联走 id）。
  *  M3 增 mode（CHECK expedition|blitz|NULL——扫描吸收旧行 = NULL 缺省占位）与
  *  supersededBy（自引用 FK——取代链谱系）。 */
@@ -896,6 +953,8 @@ export interface ProposalRow {
   mode?: Mode
   /** 取代链目标提案 id（superseded 转移写入；UF-1 谱系右列数据面） */
   supersededBy?: string
+  /** 承接链左列（飞轮改进链父提案 id；NULL = 键缺席 = 无承接） */
+  parentProposalId?: string
   /** ISO-8601 */
   createdAt: string
   /** ISO-8601 */
@@ -923,6 +982,8 @@ export interface ForgeProposalsService {
   /** 模式改写唯一正门（单事务只写 proposals.mode——tasks.mode 快照永不触碰；UI 专属） */
   setProposalMode(input: SetProposalModeInput): Promise<ProposalRow>
   listProposals(q: ListProposalsQuery): Promise<ProposalCard[]>
+  /** 承接链自联结读面（机械②）：给定提案 id 递归查出其派生的全部改进提案（传递闭包，恒不含自身） */
+  listDerivedProposals(q: ListDerivedProposalsQuery): Promise<ProposalRow[]>
   /** 提案文档区只读扫描（评审缺口#1 处置——零状态零写径） */
   listProposalDocs(q: ListProposalDocsQuery): Promise<ProposalDocRow[]>
 }
@@ -986,12 +1047,22 @@ export interface WorktreeSettings {
   crossBranchRiskDismissed?: boolean
 }
 
+/** 飞轮修正波次阈值默认值（机械⑦：修正波次 ≥ 阈值视为流程级 Blocker 强制 M5 复盘；
+ *  settings 键缺席 = 默认值生效；无 UI，暂经文件/服务面配置） */
+export const FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT = 6
+
+/** flywheel 段——飞轮修正波次阈值（机械③复盘派生时指标越阈判定的注入配置源） */
+export interface FlywheelSettings {
+  reviewWaveThreshold?: number
+}
+
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
  *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
+  flywheel?: FlywheelSettings
 }
 
 /** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
@@ -1000,6 +1071,7 @@ export interface SetForgeSettingsInput {
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
+  flywheel?: FlywheelSettings
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，
@@ -1048,7 +1120,7 @@ export interface TasksChangedEvent {
  * 桥事件信封（子 → 主单向推送：core 写动词闭包尾部 process.send 防护发送——direct 形态
  * IPC 缺席静默降级；run.ts child.on('message') event 分支 → DshHostHandle.onEvent →
  * main webContents.send → renderer 订阅重取，延迟上限 500ms）。
- * channel/payload 只读——扩消息变体 = 契约面变更。
+ * channel/payload 只读——扩消息变体 = 契约面变更（随 FORGE_EVENT_CHANNELS 同步）。
  */
 export interface BridgeEventMessage {
   readonly type: 'event'

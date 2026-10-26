@@ -207,17 +207,22 @@ describe('views/session 会话页签族 pin（2.11 → fix-25 官方 roster 形�
       'apps/web/src/views/session/ConversationViews.tsx',
       'apps/web/src/views/session/RecallTab.tsx',
       'apps/web/src/views/session/recall-model.ts',
+      // loop-event-delivery 1.8：悬浮进度流面板（派发任务悬浮面板 UI 继任——残面 = worker 解析辅助）
+      'apps/web/src/views/session/DispatchEventsPanel.tsx',
+      'apps/web/src/views/session/dispatch-events-panel.css',
       'apps/web/src/views/session/DispatchPanel.tsx',
-      'apps/web/src/views/session/dispatch-panel.css',
       'apps/web/src/views/session/session.css',
       'apps/web/src/views/session/index.ts',
     ]) {
       expect(existsSync(join(ROOT, f)), `${f} 缺席`).toBe(true)
     }
     const barrel = read('apps/web/src/views/session/index.ts')
-    for (const name of ['ConversationViews', 'RecallTab', 'DispatchPanel']) {
+    for (const name of ['ConversationViews', 'RecallTab', 'DispatchEventsPanel', 'DispatchPanel']) {
       expect(barrel, `${name} 未出 barrel`).toContain(`export * from './${name}.js'`)
     }
+    // loop-event-delivery 1.8 替代 pin：旧任务面板样式/角标 UI 死代码缺席（替代不并存——
+    // DispatchPanel.tsx 仅存 worker 解析辅助面，dswf-dp-* 悬浮面板样式族整体退役）
+    expect(existsSync(join(ROOT, 'apps/web/src/views/session/dispatch-panel.css'))).toBe(false)
     // fix-29 退役 pin：产品轨迹台账/转录投影死代码缺席（轨迹 = 官方 ui-trajectory 直用）
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/TrajectoryLedger.tsx'))).toBe(false)
     expect(existsSync(join(ROOT, 'apps/web/src/views/session/transcript.ts'))).toBe(false)
@@ -571,7 +576,7 @@ describe('m3.1 D35 按钮风格对齐 pin（toolbar 深灰异类清零——官�
 
   it('九位对齐 pin：折叠/关闭/搜索清除/展开/行操作图标钮 = 官方 ghost（透明底 + hover interactive-bg-hover——数据锚与 aria 原样）', () => {
     const ghostSites: readonly (readonly [file: string, marker: string, note: string])[] = [
-      ['apps/web/src/views/session/DispatchPanel.tsx', 'data-dswf-dp-collapse', '悬浮面板折叠钮（用户点名面）'],
+      ['apps/web/src/views/session/DispatchEventsPanel.tsx', 'data-dswf-dep-collapse', '悬浮进度流面板折叠钮（用户点名面继任——loop-event-delivery 1.8）'],
       ['apps/web/src/views/knowledge/EntryDrawer.tsx', 'data-dswf-kn-drawer-close', '知识抽屉关闭'],
       ['apps/web/src/views/knowledge/KnowledgeToolbar.tsx', 'dswf-kn-searchclear', '知识搜索清除'],
       ['apps/web/src/views/overview/sticky-bar.tsx', 'data-dswf-ov-searchclear', '概览搜索清除'],

@@ -15,6 +15,9 @@ import { renderIndexInjections } from '@deepseek-ai/dsh-host-webserver'
 // mobile-remote-approval fix-2：ctx.approval 具名服务类型（disc-1 配方——type-only import
 // 官方包 + 运行期存在性检查承担 fail-soft；禁 ctx.reflect.get 丢类型取法）
 import type {} from '@deepseek-ai/dsh-user-approval'
+// loop-event-delivery 1.19：ctx.sessionProjections 具名服务类型（disc-1 同款配方——
+// type-only import 官方包拉入 cordis Context 增强 + 运行期存在性检查承担 fail-soft）
+import type {} from '@deepseek-ai/dsh-session-projection'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn as nodeSpawn } from 'node:child_process'
@@ -23,6 +26,7 @@ import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { networkInterfaces, tmpdir } from 'node:os'
 import { TunnelManager, type TunnelDeps, type TunnelState } from '../tunnel/index.js'
+import { assembleTunnel, type TunnelAssemblyHandle } from './tunnel-assembly.js'
 import { createChildProcessHandle } from '../tunnel/process-handle.js'
 import {
   approvalWaterfallAnswer,
@@ -71,7 +75,7 @@ import {
   saveWatermarks,
   type PskGateDeps,
 } from './psk-gate.js'
-import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents } from './forge-stream.js'
+import { createForgeStreamHandler, isForgeStreamRequest, subscribeOfficialEvents, subscribeProjectionMirror } from './forge-stream.js'
 import { subscribeAssistantStreamMirror } from './assistant-stream-mirror.js'
 import { createUserQuestionsBridge } from './user-questions-bridge.js'
 import type { ProxyCommandsFace, ProxySessionFace, ProxyUserQuestionsFace } from './proxy-channels.js'
@@ -80,10 +84,8 @@ import type { RemoteChannelService } from '../ipc/remote-rpc.js'
 import { refreshKnowledgeBindings } from '../ipc/bindings.js'
 import { createWorktreeIdentity, GIT_WORKTREE_IDENTITY_SERVICE } from '../ipc/worktree-identity.js'
 import {
-  createWorktreeRpcService,
-  interceptRequiredBinding,
-  interceptSessionSends,
-  verifySendGuardInstalled,
+  createHostWorktreeRpc,
+  type LiveSessionFace,
   type SessionControllerFace,
   type SessionPersistenceFace,
   type WorktreeRpcService,
@@ -91,7 +93,7 @@ import {
 // fix-4：ctx.gitWorktree 具名消费的类型面（@dsh-forge/git-worktree declare module 扩充
 // @deepseek-ai/cordis Context——本 import 拉入扩充；type-only 官方包裁决同径）
 import type {} from '@dsh-forge/git-worktree'
-import type { ProjectService } from '@dsh-forge/contracts'
+import { type ProjectService } from '@dsh-forge/contracts'
 import { MIME, resolveMobileDistDir } from '../window/web-document.js'
 import { isDevProfile } from '../profile/paths.js'
 import { loadPresetPatches } from '../profile/presets.js'
@@ -100,10 +102,8 @@ import {
   createDiagContextStore,
   emitDiag,
   relayDiagOverBridge,
-  runWithDiagContext,
 } from '../telemetry/index.js'
 import { attachGatewayFoldDiag, type GatewayFoldFace } from '../telemetry/gateway-fold.js'
-import type { PromptTraceSpan } from '../ipc/worktree-rpc.js'
 
 /** cordis ctx 的服务解析窄面（reflect.provide 的逆查询；真 Context.get 结构兼容） */
 interface ServiceGetFace {
@@ -156,14 +156,6 @@ const diag = (line: string): void => {
 
 // 消息处理器换芯位：ready 面世前静默丢弃（主侧约定不先发——ready 收到前无 rpc/shutdown），
 // boot 完成后置换为真处理器；listen 常驻不拆（消息零丢失窗）。
-/** trace_id 生成（child 侧——链 B prompt 入口；crypto.randomUUID 同 preload 口径） */
-const newTraceIdChild = (): string => {
-  try {
-    return globalThis.crypto.randomUUID()
-  } catch {
-    return `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  }
-}
 let handleMessage: (message: MainToChildMessage) => void = () => {}
 process.on('message', (message: unknown) => {
   handleMessage(message as MainToChildMessage)
@@ -416,6 +408,43 @@ async function main(): Promise<void> {
   }
   // 网关折叠点落栈（方案 3——官方缝 wrap，官方包零改制）：typertGateway 服务惰性解析
   // （cordis Service 激活晚于本装配段可达——250ms 轮询，60s 放弃；形状不符 = 零挂接 fail-soft）。
+  // binding-derivation 流程 A：service.create 官方 workspace 前移创建失败面 emit 缝
+  // （diag 双轨 + emitDiag('worktree-create', warn)）。
+  const worktreeCreateDiag = (line: string): void => {
+    diag(line)
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'worktree-create', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
+  // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级——seal 判定结果留痕）
+  const sessionBindDiag = (line: string): void => {
+    try {
+      emitDiag(ctx, { level: 'info', process: 'child', event: 'session-bind', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
+  // binding-derivation §2.6：session-bind 留痕 append 失败诊断 emit 缝（warn 级——AC
+  // 「append 失败 fail-soft + emitDiag('session-bind', warn)」）
+  const sessionBindWarnDiag = (line: string): void => {
+    diag(line)
+    try {
+      emitDiag(ctx, { level: 'warn', process: 'child', event: 'session-bind', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
+  // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除边沿，
+  // message 行内携带 sessionId/cwd/留痕 branch/实时 branch）
+  const bindDriftDiag = (line: string): void => {
+    try {
+      emitDiag(ctx, { level: 'info', process: 'child', event: 'bind-drift', message: line })
+    } catch {
+      // 诊断面异常不反压业务链（红线①同构）
+    }
+  }
   {
     let foldAttached = false
     const attachFold = (): void => {
@@ -508,9 +537,6 @@ async function main(): Promise<void> {
       diag(`[git-worktree] 扩展点注入失败（插件退独立模式，宿主不受影响）：${String(cause)}`)
     }
     try {
-      // W2 缺席拒绝面判定源：60s 能力轮询放弃路径盖 'absent'（注入 createWorktreeRpcService
-      // ——sessionCreate/prompt 两入口据此判定是否跑 core git 探针显式拒绝）。
-      let worktreeGuardState: 'absent' | undefined
       // fix-4 具名消费（AGENTS.md Cordis 具名服务取法裁决）：gitWorktree 能力服务经模块
       // 扩充的具名属性取（类型面 = @dsh-forge/git-worktree declare module 扩充——type-only
       // import 官方包裁决同径）；运行期存在性检查承担 fail-soft（provide 异步晚于本装配段
@@ -535,6 +561,9 @@ async function main(): Promise<void> {
           diag('[git-worktree] gitWorktree 能力服务未解析（插件未装载/git 缺席/provide 失败）——worktree RPC 恒独立模式')
         }
       }, 8_000).unref?.()
+      // worktree-domain-migration 1.2 注入点重构：宿主只做官方服务对象取法（惰性取法闭包
+      // 在插件工厂调用前成立）+ 注入缝传参；deps 组装与发送拦截装配门已核迁插件导出工厂
+      // createHostWorktreeRpc（packages/plugins/git-worktree host-assembly.ts）。
       const sessionController = servicesFace.get('sessionController') as SessionControllerFace | undefined
       const sessionPersistence = servicesFace.get('sessionPersistence') as SessionPersistenceFace | undefined
       // bug 925c96d5：官方 workspaceRegistry 惰性取法（具名 ctx 属性 + 运行期存在性检查
@@ -547,13 +576,12 @@ async function main(): Promise<void> {
           return undefined // 服务未装载（旧环境/插件行缺席）——零归属面
         }
       }
-      const worktreeRpc: WorktreeRpcService = createWorktreeRpcService({
-        gitWorktree: getGitWorktree as never,
-        guardState: () => worktreeGuardState,
+      const assembled = createHostWorktreeRpc({
+        getGitWorktree: getGitWorktree as never,
         sessionController,
         sessionPersistence,
-        workspaceRegistry: getWorkspaceRegistry as never,
-        // 绑定表失效锚（worktree 集合变化 + 树首次挂会话——含外部裸建树首次使用）：
+        getWorkspaceRegistry: getWorkspaceRegistry as never,
+        // 绑定表失效锚（worktree 集合变化——建/删树）：
         // 全量现算重写 knowledge-bindings.json（boot/registerProject 两锚之外的第三锚，
         // 消费端 knowledge 插件/forge 工具路由零改动）。服务缺席 = 零刷新 fail-soft。
         // bug 9eb9d6cb 后续性能收口：带 worktreePath 的调用（预铸挂会话——每次新会话点击）
@@ -585,117 +613,51 @@ async function main(): Promise<void> {
           }
           await refreshKnowledgeBindings(projects, options.bindingsFile, (line) => diag(line))
         },
-        // 权限补钉锚（bug e5059ee1——机制正本 docs/conventions/session-permission-presets.md）：
-        // adopt = resume 既有日志 → 官方恢复链补 end-seed → permission 钉档走「已种子化」
-        // 分支按组合缺省落档，绕过 defaultPreset（设置>通用>权限）。官方正缝修正：live
-        // session 上经 permissionPresets.set（UI 选择器同径公共 API）补钉解析后的用户缺省
-        // 档；服务/会话缺席、已同档或 custom = no-op fail-soft。
-        onSessionAdopted: async (sessionId: string) => {
-          let presets: unknown
-          let sessions: unknown
+        // binding-derivation §2.2：留痕 append 失败诊断 emit 缝（warn 级）
+        bindWarnDiag: sessionBindWarnDiag,
+        // binding-derivation §2.2：session/created 监听装配缝（提案裁决：ctx.on 监听装配留
+        // host——官方事件，fork 亦发布，同径覆盖；进程内 Session.append 直调 = ignorable
+        // 事件直写合法缝）。注册失败 fail-soft（留痕由 seal 漂移校验惰性补写兜底）。
+        onSessionCreated: (handler) => {
           try {
-            presets = servicesFace.get('permissionPresets')
-            sessions = servicesFace.get('sessions')
-          } catch {
-            return
-          }
-          const face = presets as
-            | {
-                readonly defaultPreset: string
-                current(session: unknown): string
-                set(session: unknown, name: string): void
-              }
-            | undefined
-          const store = sessions as { get(id: string): unknown } | undefined
-          if (face === undefined || store === undefined) return
-          const session = store.get(sessionId)
-          if (session === undefined) return
-          const target = face.defaultPreset
-          if (target === 'custom' || face.current(session) === target) return
-          face.set(session, target)
-        },
-        // bug eae18b5c：官方 agentPresets registry 惰性取法（可选具名服务同径）——
-        // resolve(undefined) = 当前默认 preset（composeAgent 同源）；缺席 = 头缺席零猜测。
-        resolveDefaultPreset: async () => {
-          let presets: unknown
-          try {
-            presets = (ctx as unknown as { agentPresets?: unknown }).agentPresets
+            return ctx.on('session/created', (session) => handler(session.id))
           } catch {
             return undefined
           }
-          const resolve = (presets as { resolve?: (id?: string) => Promise<{ id: string }> } | undefined)?.resolve
-          if (typeof resolve !== 'function') return undefined
-          return (await resolve.call(presets, undefined)).id
+        },
+        // binding-derivation §2.2：活会话解析缝（官方 sessions store——留痕 append 面解析）
+        liveSessions: () => {
+          try {
+            return servicesFace.get('sessions') as { get(id: string): LiveSessionFace | undefined } | undefined
+          } catch {
+            return undefined
+          }
         },
         warn: (line) => diag(line),
-        // app-observability fix-3：拦截链派生失败（judge 判读链 fail-open）诊断 emit 缝——
-        // failOpenDiag = diag 双轨 + emitDiag（ALS 上下文内被调 → 行带链 B trace_id）。
-        failOpenDiag,
+        // G7① 拦截层 fail-open 降级诊断缝（方案 9）
+        failOpenWarn: failOpenDiag,
+        // binding-derivation 流程 A：workspace 前移创建失败诊断 emit 缝（worktree-create 域）
+        createDiag: worktreeCreateDiag,
+        // binding-derivation §2.6：session-bind 推导判定诊断 emit 缝（info 级）
+        bindDiag: sessionBindDiag,
+        // binding-derivation §2.6：bind-drift 漂移埋点 emit 缝（info 级——触发与消除）
+        bindDriftDiag: bindDriftDiag,
+        // binding-derivation M6：forge/binding-mismatch 漂移推送（ctx.emit → /remote/forge-stream
+        // 镜像目录逐帧推送——mobile banner 消费面）
+        bindingMismatchEmit: (payload) => {
+          try {
+            ;(ctx as unknown as { emit?: (event: string, payload: unknown) => void }).emit?.(
+              'forge/binding-mismatch',
+              payload,
+            )
+          } catch {
+            // 推送失败不反压 seal 判定链（fail-soft）
+          }
+        },
       })
-      worktreeRpcService = worktreeRpc
-
-      // G7① wrap 装配门（1.30）：拦截 wrap 只在 gitWorktree 能力解析成功后装配——git 缺席
-      // 宿主零 wrap、零每消息开销（非介入面零固定税）。能力 provide 异步晚于本装配段可达：
-      // 轮询探测，60s 仍未解析 = 放弃（保持零 wrap，diag 留痕）。
-      let sendGuardInstalled = false
-      const installSendGuard = (): void => {
-        if (sendGuardInstalled) return
-        sendGuardInstalled = true
-        if (sessionController === undefined) {
-          diag('[git-worktree] sessionController 缺席——发送拦截未接线（封存硬保证降级）')
-          return
-        }
-        const disposers: Array<() => void> = []
-        // W4 装载自证留底：wrap 前的官方 prompt 引用（换芯判读基准）
-        const promptBefore = (sessionController as unknown as Record<string, unknown>)['prompt']
-        disposers.push(
-          interceptSessionSends(sessionController, (sessionId) => worktreeRpc.seal({ sessionId }), failOpenDiag),
-        )
-        // 1.30 第二层必绑拦截（A2/G2 拒绝 + 编排重路由；A5 cwd 漂移拒绝）——叠加封存层之上
-        const guard = worktreeRpc.requiredBindingGuard()
-        if (guard !== undefined) {
-          // app-observability 1.2 链 B：prompt dispatch 入口生成 trace_id + ALS 包裹整链
-          const traceSpan: PromptTraceSpan = {
-            next: () => newTraceIdChild(),
-            run: <T,>(traceId: string, sessionId: string | undefined, fn: () => Promise<T>): Promise<T> =>
-              runWithDiagContext(diagAls, { traceId, sessionId }, fn),
-          }
-          disposers.push(interceptRequiredBinding(sessionController, guard, failOpenDiag, traceSpan))
-        } else {
-          diag('[git-worktree] 必绑拦截 guard 缺席（sessionPersistence 缺席）——仅封存层接线')
-        }
-        revokeWorktreeSendGuard = () => {
-          for (const dispose of disposers) {
-            try {
-              dispose()
-            } catch {
-              // 拦截撤销失败不阻关停链
-            }
-          }
-        }
-        // W4 装载自证（session-binding-guarantee §W4）：wrap 换芯读回——controller.prompt 已换
-        // （≠ 装配前留底）+ 必绑 guard 非空；任一不满足 = 发送拦截静默残缺 → fail-loud 上抛
-        // （不静默降级为无拦截宿主）。
-        verifySendGuardInstalled(sessionController, { promptBefore, guardPresent: guard !== undefined })
-      }
-      const wrapGate = setInterval(() => {
-        if (getGitWorktree() !== undefined) {
-          clearInterval(wrapGate)
-          installSendGuard()
-        }
-      }, 250)
-      wrapGate.unref?.()
-      setTimeout(() => {
-        clearInterval(wrapGate)
-        if (!sendGuardInstalled) {
-          // W2 能力缺席 fail-closed 收口：盖缺席状态位 + 接线拒绝面（judge/sessionCreate
-          // 入口对 git 项目显式拒绝；非 git 探针 null 走官方原流零差异）。能力在场路径
-          // （wrapGate 命中先行安装）零改动。
-          worktreeGuardState = 'absent'
-          diag('[git-worktree] gitWorktree 能力未解析（60s 放弃）——guardState 盖 absent，缺席拒绝面接线')
-          installSendGuard()
-        }
-      }, 60_000).unref?.()
+      worktreeRpcService = assembled.service
+      // G7① 发送拦截撤销缝（装配门在工厂内——能力解析后 install，关停链 revoke）
+      revokeWorktreeSendGuard = assembled.revokeSendGuard
     } catch (cause) {
       diag(`[git-worktree] forgeWorktree 服务装配失败（RPC/拦截零装配，宿主不受影响）：${String(cause)}`)
     }
@@ -915,11 +877,11 @@ async function main(): Promise<void> {
                     ? undefined
                     : {
                         list: (request: { readonly projectRoot: string }) => worktreeRpcService!.list(request),
-                        // bug a1e087a6：hero 透传建会话正门（预铸采纳单门——host 守卫内建）
-                        sessionCreate: (request: unknown) => worktreeRpcService!.sessionCreate(request as never),
                       }
                 },
                 disconnect: () => send({ type: 'pair-disconnected' }),
+                // binding-derivation 1.12：diag 埋点缝——session-create workspaceId 硬门拒绝时 emitDiag warn
+                diagWarn: (event, message) => emitDiag(ctx, { level: 'warn', process: 'child', event, message }),
                 // bug 1dd4b437：已读游标 host 侧持久 store 接线
                 readCursors,
               },
@@ -984,9 +946,30 @@ async function main(): Promise<void> {
                   emit: push,
                   diag,
                 })
+                // loop-event-delivery 1.10：投影变更帧镜像（mobile 实时刷新腿）——官方投影
+                // 变更走 control 流帧、未镜像进 forge-stream；此把 sessionProjections
+                // onChanged 帧源接进同一订阅-扇出（subscribeOfficialEvents 同径，零新物理
+                // 通道）。载荷 {sessionId, key, seq}——mobile 据此重拉 session-projections
+                // RPC（值恒走 RPC 全量键读取，帧只当失效信号）。注册表缺席 fail-soft 零镜像。
+                // 1.19 取法收口（disc-1 同款配方）：ctx.sessionProjections 具名服务取法
+                // （type-only import 官方包拉入 Context 增强）+ 运行期存在性检查承担 fail-soft。
+                let projectionFace: Parameters<typeof subscribeProjectionMirror>[0]
+                try {
+                  const registry = ctx.sessionProjections as
+                    | { onChanged?: unknown }
+                    | undefined
+                  projectionFace =
+                    registry !== undefined && registry !== null && typeof registry.onChanged === 'function'
+                      ? (registry as Parameters<typeof subscribeProjectionMirror>[0])
+                      : undefined
+                } catch {
+                  projectionFace = undefined
+                }
+                const offProjection = subscribeProjectionMirror(projectionFace, push, diag)
                 return () => {
                   offOfficial()
                   offAssistant()
+                  offProjection()
                   streamPushes.delete(push)
                 }
               },
@@ -1098,103 +1081,50 @@ async function main(): Promise<void> {
         },
       })
       remotePairUrl = remotePairUrlOf(lanIpv4, pairPort, pairGrant.token)
-      // dsh-mobile-tunnel：隧道管理器装配（互联网连接模式——隧道 URL 与 LAN remotePairUrl
-      // 并存同一 /pair 缝）。TunnelManager 状态事件 → tunnel 消息推送（run.ts 原位重建
-      // manifest 隧道面：激活/换线即换新，关闭/失效即撤除——WiFi 面不受影响）；token 轮换
-      // → 隧道 URL 换签重推（Pinggy TTL 读数随 pair 旋转刷新——fix-7 pair 通道同形态）。
+      // dsh-mobile-tunnel：隧道段装配（互联网连接模式——隧道 URL 与 LAN remotePairUrl
+      // 并存同一 /pair 缝）。bug ebadf4ad（Root cause：boot 装配后无条件自启隧道——用户
+      // 从未打开远程控制界面也在后台拉起 cloudflared/Pinggy 并反复自愈重试）：装配零副
+      // 作用，隧道只在用户打开远程控制界面（互联网 tab ensure → tunnel-toggle）时按需
+      // 建立；token 轮换换签经 pairUrlOf 闭包读 currentPairToken（装配段不持 mutable 锚）。
       let tunnelManager: TunnelManager | undefined
-      const sendTunnelState = (state: TunnelState | undefined): void => {
-        if (state === undefined) {
-          send({ type: 'tunnel' }) // 零载荷 = 关闭/失效撤除面
-          return
-        }
-        if (state.remainingTtlMs === 0) {
-          // fix-19 ⑦（Root cause：remainingTtlMs===0 唯一来源 = TunnelManager 自动兜底双链路
-          // 皆败的死亡 emit——即官方 :1188 unexpectedlyClosed 语义）：意外死亡撤面事件携位，
-          // UI 一次性守卫（reopeningDeadPinggy 形态）据此自动重开隧道。
-          send({
-            type: 'tunnel',
-            tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
-            tunnelProvider: state.provider,
-            unexpectedlyClosed: true,
-          })
-          return
-        }
-        send({
-          type: 'tunnel',
-          tunnelUrl: tunnelPairUrlOf(state.url, currentPairToken),
-          tunnelProvider: state.provider,
-          ...(state.remainingTtlMs !== undefined
-            ? { tunnelExpiresAt: Date.now() + state.remainingTtlMs }
-            : {}),
-        })
-      }
+      let tunnelHandle: TunnelAssemblyHandle | undefined
+      let tunnelPushState: (state?: TunnelState) => void = () => {}
       try {
-        tunnelManager = new TunnelManager(createNodeTunnelDeps(), {
+        const tunnel = assembleTunnel({
+          deps: createNodeTunnelDeps(),
           localPort: pairPort,
           // bug be04ce95：dsh-desktop 已下载的 cloudflared 作种子（sha256 对 pin 清单校验
           // 一致才拷贝进产品自身缓存——非运行期引用，用户无 dsh 时纯下载链自洽）
           externalSeeds: officialCloudflaredSeedCandidates(),
-          // 韧性状态机诊断行（死亡原因/重试失败/双链皆败撤面）→ harness.log 既有链
           diag: (line) => diag(line),
+          send: (message) => send(message as ChildToMainMessage),
+          pairUrlOf: (tunnelUrl) => tunnelPairUrlOf(tunnelUrl, currentPairToken),
         })
-        tunnelManager.onEvent(sendTunnelState)
-        void tunnelManager
-          .start()
-          .then(() => diag(`[pair-diag] tunnel start ok（双链路任一建立成功）`))
-          .catch((cause) => {
-            diag(`[pair-diag] tunnel start 失败（双链路皆败 → 撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
-            sendTunnelState(undefined)
-          })
+        tunnelManager = tunnel.manager
+        tunnelHandle = tunnel
+        tunnelPushState = tunnel.refresh
       } catch (cause) {
         tunnelManager = undefined // 装配失败 → 隧道面缺席（boot 不受阻，UI 空态回退）
         diag(`[pair-diag] tunnel manager 装配失败：${cause instanceof Error ? cause.message : String(cause)}`)
       }
       tunnelStop = () => (tunnelManager?.stop() ?? Promise.resolve())
       // fix-17 ②：tab 切换重连缝——隧道离线（无活动句柄）即触发建立；在线 = 重推当前
-      // 状态（读数刷新面）。start/stop/fallback 语义全在 TunnelManager，此处只装配触发。
+      // 状态（读数刷新面）。start/stop/fallback 语义全在隧道段/TunnelManager，此处只装配触发。
       tunnelToggle = () => {
-        if (tunnelManager === undefined) {
+        if (tunnelHandle === undefined) {
           diag(`[pair-diag] tunnel toggle 落空：管理器未装配`)
           return
         }
-        if (tunnelManager.state === undefined) {
-          diag(`[pair-diag] tunnel toggle → start（当前无活动链路）`)
-          void tunnelManager.start()
-            .then((state) => {
-              diag(`[pair-diag] tunnel toggle start ok（${state.provider}）`)
-              sendTunnelState(state)
-            })
-            .catch((cause) => {
-              diag(`[pair-diag] tunnel toggle start 失败（撤面）：${cause instanceof Error ? cause.message : String(cause)}`)
-              sendTunnelState(undefined)
-            })
-          return
-        }
-        diag(`[pair-diag] tunnel toggle → 重推当前状态（读数刷新）`)
-        sendTunnelState(tunnelManager.state)
+        tunnelHandle.toggle()
       }
       // fix-18：显式换线缝——TunnelManager.fallback（停旧链起新链；状态事件/回推经
       // onEvent + then 双面送达，UI 遮罩随 switching 收敛）
       tunnelFallback = () => {
-        if (tunnelManager === undefined) {
+        if (tunnelHandle === undefined) {
           diag(`[pair-diag] tunnel fallback 落空：管理器未装配`)
           return
         }
-        diag(`[pair-diag] tunnel fallback 触发（停当前链路起另一条）`)
-        void tunnelManager.fallback()
-          .then((state) => {
-            diag(`[pair-diag] tunnel fallback 收敛（新链路建立）`)
-            sendTunnelState(state)
-          })
-          .catch((cause) => {
-            // bug cf0db7e5 CDP 回归实证竞态：fallback 的 startPinggy 捕获窗口内并发 ensure
-            // 已建新链——catch 无条件撤面会把活链路面抹掉（ABSENT 永挂）。仅当此刻确无
-            // 活动链路才撤面；有则回推活面。
-            const live = tunnelManager.state
-            diag(`[pair-diag] tunnel fallback 失败（${cause instanceof Error ? cause.message : String(cause)}）——${live !== undefined ? '并发链路在场，回推活面' : '无活动链路，撤面'}`)
-            sendTunnelState(live)
-          })
+        tunnelHandle.fallback()
       }
       // fix-26：pair 消息 PIN 面统一构造（durable = PIN + 长效位、零 TTL；临时 = PIN + TTL——
       // UI hint 双态单源：长效无倒计时、临时实时秒倒计时）
@@ -1219,8 +1149,8 @@ async function main(): Promise<void> {
           void tunnelManager
             .stop()
             .then(() => tunnelManager?.start())
-            .then(sendTunnelState)
-            .catch(() => sendTunnelState(undefined))
+            .then((state) => tunnelPushState(state))
+            .catch(() => tunnelPushState(undefined))
         }
         sendPairState(rotatedToken, rotated)
       }
@@ -1242,7 +1172,7 @@ async function main(): Promise<void> {
         // fix-26：长效态 pinIssuer.rotate 零换签——PIN 面保持 durable 位不携 TTL）
         const rotatedPin = pinIssuer.rotate()
         sendPairState(rotated, rotatedPin)
-        sendTunnelState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
+        tunnelPushState(tunnelManager?.state) // 隧道在场 → 换签 URL + TTL 读数重推（旋转更新）
       }, PAIRING_TTL_MS)
       rotationTimer.unref?.() // 轮换器不阻进程退出（shutdown 面归 ProcessShutdown 既有链）
     } catch {

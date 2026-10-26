@@ -164,8 +164,13 @@ export interface ForgeComposerDomNode {
 
 /**
  * 光标文档偏移（纯函数）：anchor 相对编辑面 root 的前缀文本长度 + 段内偏移（collapsed
- * selection 消费）。anchor 不在 root 内 = undefined（调用方退非零 = 不触发行首门——
- * 宁可历史失灵不可误触翻阅）。
+ * selection 消费）。换行计入偏移：root 级段落（块元素）间隙每处计 1（与 Lexical
+ * $composerLayout 的块间 \n gap 同语义），段内零宽元素（<br> 行内换行）每处计 1——
+ * 空段/空行对文本长度贡献为 0，不计数会把「空行后的行首」误读为文档起点（caret=0）
+ * 触发历史翻阅、吞掉原生逐行光标移动。anchor 不在 root 内 = undefined（调用方退非零
+ * = 不触发行首门——宁可历史失灵不可误触翻阅）。
+ * Root cause: 旧实现只累加文本节点长度，草稿首部空行（空 <p>，无文本子节点）后面的
+ * 行首偏移被算成 0，browseUp 的行首门误开——↑ 直接翻历史、跳过空行。
  */
 export function caretOffsetInEditor(
   root: ForgeComposerDomNode,
@@ -174,19 +179,33 @@ export function caretOffsetInEditor(
 ): number | undefined {
   if (anchor === null || anchor === undefined) return undefined
   let acc = 0
-  const walk = (node: ForgeComposerDomNode): number | undefined => {
+  // 零宽元素（<br> 行内换行；段内不出现空块元素）= 行内换行一处
+  const isInlineBreak = (node: ForgeComposerDomNode | undefined): boolean =>
+    node !== undefined && node.nodeType !== 3 && (node.childNodes ?? []).length === 0
+  const walk = (node: ForgeComposerDomNode, atRoot: boolean): number | undefined => {
     if (node === anchor) return acc + offset
     if (node.nodeType === 3) {
       acc += typeof node.textContent === 'string' ? node.textContent.length : 0
       return undefined
     }
-    for (const child of node.childNodes ?? []) {
-      const hit = walk(child)
+    const kids = node.childNodes ?? []
+    for (let i = 0; i < kids.length; i += 1) {
+      const kid = kids[i]
+      if (kid === undefined) continue
+      const prev = kids[i - 1]
+      if (i > 0 && prev !== undefined) {
+        if (atRoot && prev.nodeType !== 3 && kid.nodeType !== 3) {
+          acc += 1 // 块间隙：root 级段落间 \n（$composerLayout gap 同语义）
+        } else if (isInlineBreak(prev)) {
+          acc += 1 // 行内 <br> 换行（越过 <br> 时计一次，不重复计两侧边界）
+        }
+      }
+      const hit = walk(kid, false)
       if (hit !== undefined) return hit
     }
     return undefined
   }
-  return walk(root)
+  return walk(root, true)
 }
 
 /** 光标读面：当前 selection 在 composer 编辑面内 = 文档偏移（缺席/漂移/异常

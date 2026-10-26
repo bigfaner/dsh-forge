@@ -210,7 +210,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await expect(page.locator(CONVERSATION_CONTENT).first(), '第二会话预填入转录（独立输入面——该渠道上下文）').toContainText('名称：Joe 恒远征 feature', { timeout: 60_000 })
     await awaitNoLateModals(page)
 
-    // ── Step1b：无溯源提案 → 不切换（保持远征）+ chip 缺省占位 ──
+    // ── Step1b：无溯源提案 → 不切换（保持 registry 缺省突击——bug 2ba146d8）+ chip 缺省占位 ──
     // （执行序注：Step1e 回访块移测试末段——会话行回访触发右栏布局晚沉降回休眠，
     // 其后再开 dock 需 reveal 重拍（fix-3 实证）；先完成 dock 交互面再回访。）
     await openOverviewDock(page)
@@ -225,10 +225,10 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     let seat2 = ''
     while (Date.now() < deadline2) {
       seat2 = (await page.locator('[data-slot="conversation.hero.agentPreset"]').first().textContent().catch(() => '')) ?? ''
-      if (seat2.includes('远征') || seat2.includes('expedition')) break
+      if (seat2.includes('突击') || seat2.includes('blitz')) break
       await page.waitForTimeout(1_000)
     }
-    expect(seat2.includes('远征') || seat2.includes('expedition'), `无溯源不切换（保持默认远征——label=${seat2}）`).toBe(true)
+    expect(seat2.includes('突击') || seat2.includes('blitz'), `无溯源不切换（保持 registry 缺省突击——bug 2ba146d8 缺省=blitz；label=${seat2}）`).toBe(true)
 
     // ── Step2b：空意图直接发送（自由文本输入——无字段校验拦截，消息照常发出）──
     const composer = page.locator(COMPOSER_INPUT).last()
@@ -240,7 +240,9 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await expect(page.locator(CONVERSATION_CONTENT).first(), '消息体含「我的意图：」空位（空意图合法消息）').toContainText('我的意图：')
     await awaitNoLateModals(page)
     expect(await seatPresent(page, 1_000), '首回合后非 blank（座位退场）').toBe(false)
-    await awaitPresetHeaderLabel(page, '远征模式')
+    // 会话头投影 = 突击模式（该会话无显式 mode 溯源——缺省 blitz，bug 2ba146d8；
+    // 旧「远征模式」口径随 cordis.patch.yml:7 缺省翻正而退役）
+    await awaitPresetHeaderLabel(page, '突击模式')
 
     // ── Step1e：两会话常驻可回访（fix-3② 裁决后诚实观测面——末段执行）──
     // 侧栏行可见判据（官方浏览器口径，sidebar-model sessionVisible）：非 blank 常显、

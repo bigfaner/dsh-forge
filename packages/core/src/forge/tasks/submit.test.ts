@@ -13,6 +13,8 @@ import {
   GateSummaryRequiredError,
   InvalidTransitionError,
   ReasonRequiredError,
+  RuntimeEvidenceConflictError,
+  RuntimeEvidenceRequiredError,
   SummaryRequiredError,
   TestEvidenceRequiredError,
 } from './errors.js'
@@ -659,5 +661,123 @@ describe('改进7 e2e 取证债（实现态部分结算声明落账）', () => {
       specs: ['e2e/specs/race-window.spec.ts'],
       note: '竞速窗断言待真机取证',
     })
+  })
+})
+
+describe('机械⑤ submitTask 强制域取证声明校验兜底（forge-verification-hardening）', () => {
+  // base 用函数形——h 在 beforeEach 才就绪（模块顶层求值不可取 P()）
+  const base = () => ({
+    projectId: P(),
+    taskRef: { slug: 'f', localId: '1.1' } as const,
+    result: 'success' as const,
+    summary: '交付完成',
+    gate: { compile: true, fmt: true, lint: true, test: true },
+    sessionId: 's-exec',
+  })
+  const seed = () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+  }
+
+  it('强制域（声明运行期装配面 web-server）无取证证据 / 无 debt → ERR_RUNTIME_EVIDENCE_REQUIRED（零写入）', async () => {
+    seed()
+    const err = await submit({ ...base(), runtimeSurface: ['web-server'] }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RuntimeEvidenceRequiredError)
+    expect((err as RuntimeEvidenceRequiredError).code).toBe('ERR_RUNTIME_EVIDENCE_REQUIRED')
+    expect((err as RuntimeEvidenceRequiredError).data).toEqual({ faces: ['web-server'] })
+    // 零写入：转移未发生、无结算记录
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+  })
+
+  it('清单外命中判据同样入强制域：声明 browser-extension → 拒（七类为示例非白名单）', async () => {
+    seed()
+    const err = await submit({ ...base(), runtimeSurface: ['browser-extension'] }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RuntimeEvidenceRequiredError)
+  })
+
+  it('SDK/库边界 + 多类交叉就高不就低：library 单独豁免；library+network 交叉 → 强制', async () => {
+    seed()
+    // 纯库（装配由消费方承担）→ 豁免域放行
+    const ok = await submit({ ...base(), runtimeSurface: ['library'] })
+    expect(ok.status).toBe('completed')
+    // 库自带真实副作用（network）→ 就高入强制域，无证据即拒
+    seedTask(h!.db, 'f', '1.2', { status: 'in_progress' })
+    const err = await submit({
+      ...base(),
+      taskRef: { slug: 'f', localId: '1.2' },
+      runtimeSurface: ['library', 'network'],
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RuntimeEvidenceRequiredError)
+    expect((err as RuntimeEvidenceRequiredError).data).toEqual({ faces: ['library', 'network'] })
+  })
+
+  it('豁免域（无声明）不受影响：直通 success', async () => {
+    seed()
+    const r = await submit(base())
+    expect(r.status).toBe('completed')
+  })
+
+  it('evidence_debt 声明债务路径放行：completed + record_fields 携带声明', async () => {
+    seed()
+    const r = await submit({
+      ...base(),
+      runtimeSurface: ['ui'],
+      evidenceDebt: { suite: 'e2e', specs: ['e2e/specs/ui.spec.ts'], note: '真机走查待做' },
+    })
+    expect(r.status).toBe('completed')
+    const rec = rows(`SELECT record_fields_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      record_fields_json: string
+    }
+    expect(JSON.parse(rec.record_fields_json).runtimeSurface).toEqual(['ui'])
+    expect(JSON.parse(rec.record_fields_json).evidenceDebt.suite).toBe('e2e')
+  })
+
+  it('evidence 真机取证声明路径放行：completed + record_fields 携带 evidence 声明 + 读面投影', async () => {
+    seed()
+    const evidence = {
+      face: 'web-server',
+      artifacts: ['.forge/docs/proposals/x/walkthrough/server-e2e.png'],
+      note: '真实服务端到端取证（AGENTS 1.4）',
+    }
+    const r = await submit({ ...base(), runtimeSurface: ['api', 'web-server'], runtimeEvidence: evidence })
+    expect(r.status).toBe('completed')
+    const rec = rows(`SELECT record_fields_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      record_fields_json: string
+    }
+    expect(JSON.parse(rec.record_fields_json).runtimeEvidence).toEqual(evidence)
+    const detail = await queryTask(deps(), {
+      projectId: P(),
+      taskRef: { slug: 'f', localId: '1.1' },
+      include: { records: true },
+    })
+    expect(detail.records?.[0]?.runtimeEvidence).toEqual(evidence)
+    expect(detail.records?.[0]?.runtimeSurface).toEqual(['api', 'web-server'])
+  })
+
+  it('evidence 与 evidence_debt 二选一：并存 → ERR_RUNTIME_EVIDENCE_CONFLICT（口径歧义拒绝）', async () => {
+    seed()
+    const err = await submit({
+      ...base(),
+      runtimeSurface: ['ui'],
+      runtimeEvidence: { face: 'ui', artifacts: ['a.png'] },
+      evidenceDebt: { suite: 'e2e', specs: ['a.spec.ts'] },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(RuntimeEvidenceConflictError)
+    expect((err as RuntimeEvidenceConflictError).code).toBe('ERR_RUNTIME_EVIDENCE_CONFLICT')
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
+  })
+
+  it('blocked submit 不经强制域门（C4）：声明装配面无证据直通 blocked', async () => {
+    seed()
+    const r = await submit({
+      projectId: P(),
+      taskRef: { slug: 'f', localId: '1.1' },
+      result: 'blocked',
+      reason: '真机取证环境不可用——显式环境缺口（提案 M1 三级顺序）',
+      runtimeSurface: ['ui'],
+      sessionId: 's',
+    })
+    expect(r.status).toBe('blocked')
   })
 })

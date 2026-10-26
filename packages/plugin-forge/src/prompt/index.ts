@@ -4,7 +4,8 @@
 // 尾部单换行（forgeDir 缺省时整体省略，至多多一个空行）；渲染入口纯胶水。
 // 文本口径：总纲四规则（状态库+查询为准 / 自然键 / 提案裁决 / 环间确认）——执行协议与
 // 受限面零回渗（操作正本在派发核心文档 docs/business-rules/task-pipeline.md / submit-task 技能）；双 mermaid 含用户裁决节点、
-// 各步固定产物标于箭头、终节点=交付、无 worker 内部节点。
+// 各步固定产物标于箭头、终节点=交付、无 worker 内部节点；doc-style 五要点（mermaid 优先 /
+// 分点阐述 / 文字精简 / 用词规范 / 不留调整修复叙事）。
 // 注意：SystemPrompt 段文本默认 {{var}} 插值（未知引用会炸渲染）——文本禁用裸 {{。
 import { XML_TAGS } from '@dsh-forge/contracts'
 
@@ -183,7 +184,9 @@ export function renderDocStyleSection(): string {
 约束本工作区全部产出文档（含 PRD/走查记录/台账/README）：
 
 - 图示优先用 mermaid（\`\`\`mermaid 代码块）；能用一张图说清的不用大段文字。
+- 分点阐述：注意换行、逐点分行，不挤成一个大段落。
 - 文字精简：只写结论与必要上下文，不复述代码与流程细节。
+- 用词规范：不用怪词与生造词，用通用准确的技术表述。
 - 不留调整修复叙事：不记录「改了哪里、为什么改、排查过程」等过程性内容，文档只呈现当前事实。
 
 </${XML_TAGS.docStyle}>`

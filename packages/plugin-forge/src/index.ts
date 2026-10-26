@@ -31,10 +31,11 @@ import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
+import { gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
-import { createForgeDispatchLoopProjection } from './projection/index.js'
+import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
 import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
@@ -143,9 +144,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       jobsFace = undefined
     }
     // agents 注册表可选消费（S2——叙述通道/裁决问询的活根解析，同 reflect.get 防御读取
-    // 三先例）：适配为 NarrationChannel（notice=agent.inject 零模型回合 / followup=agent
-    // .followup 新回合，decisions #17/#28）。服务缺席/异常 = 通道降级为 no-op（R4——叙述
-    // 静默缺席，循环正确性只依赖宿主事件）。
+    // 三先例）：适配为 NarrationChannel（loop-event-delivery 接口收窄——send 单出口，
+    // 统一 agent.send(msg, nextStep, wakeup)；wakeup 路由见 narrator/SCENARIOS 场景表）。
+    // 服务缺席/异常 = 通道降级为 no-op（R4——叙述静默缺席，循环正确性只依赖宿主事件）。
     let agentsRegistry: AgentLookupFace | undefined
     try {
       const viaReflect = ctx.reflect?.get('agents') as AgentLookupFace | undefined
@@ -185,7 +186,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       askFace = undefined
     }
     const narrationChannel: NarrationChannel =
-      agentsRegistry !== undefined ? adaptAgentNarrationChannel(agentsRegistry) : { notice: async () => {}, followup: async () => {} }
+      agentsRegistry !== undefined
+        ? // bug 8d1a18bd：叙述径激活缝与指令径同源（enterAgent——sessionController.resolveAgent
+          // 活根前置）；激活恒先行，registry 把手仅兜底（陈旧把手不静默丢消息）。
+          adaptAgentNarrationChannel(agentsRegistry, enterAgent)
+        : { send: async () => {} }
     // 1.17 循环进度 append 面（'forge/progress' 会话事件——同 agents 注册表鸭子消费，
     // 链 = agent.session.append；注册表缺席 = 面不注入，驱动器零发射 fail-soft）。
     const progressAppend = adaptSessionProgressAppend(agentsRegistry)
@@ -287,6 +292,20 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
+      // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
+      // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
+      // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
+      // 死代码——此注入是生产路径落标记的装配前提。
+      checkpoints: ctx.forgeCheckpoints,
+      resolveProposalId: async (projectId, source) => {
+        try {
+          const rows = await ctx.forgeProposals.listProposals({ projectId })
+          return rows.find((p) => p.slug === source.slug)?.proposalId
+        } catch {
+          return undefined // fail-soft——机制惰性不判
+        }
+      },
+      resolveHeadCommit: gitHeadCommit,
       ...(progressAppend !== undefined ? { progress: progressAppend } : {}),
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
@@ -301,9 +320,10 @@ const forgePlugin: ForgePlugin = Object.assign(
         ? {
             escalation: createUserQuestionsEscalation({
               ask: askFace,
-              // 裁决回执经叙述通道注入主会话（agent.inject 零模型回合——闭环断环修复：
-              // 裁决绕主会话、回执不绕；通道缺席形态 notice 已为 no-op，fail-soft 同源）
-              notifyReceipt: (sessionId, text, headline) => narrationChannel.notice(sessionId, text, headline),
+              // 裁决回执经叙述通道唤醒径送达主会话（send(nextStep, true) 即时唤醒——闭环
+              // 断环修复的唤醒面升级：回执含答案文本；通道缺席形态 send 已为 no-op，
+              // fail-soft 同源）
+              notifyReceipt: (sessionId, text, options) => narrationChannel.send(sessionId, text, options),
               ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
             }),
           }
@@ -314,6 +334,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       start: async (input) => {
         // resolve 首调仅触发懒解析（记忆化桥接——同步读数恒 undefined）；有界轮询等解析
         // 收敛（≤2s——装配期 warm 未覆盖的运行期注册项目），未命中 = 不记忆（fail-soft 丢行）
+        let docsRoot: string | undefined
         if (input.projectId !== undefined) {
           const deadline = Date.now() + 2_000
           for (;;) {
@@ -325,8 +346,21 @@ const forgePlugin: ForgePlugin = Object.assign(
             if (Date.now() >= deadline) break
             await new Promise((r) => setTimeout(r, 50))
           }
+          // 本项目文档根（跨分支特例归属判据锚——getProject().wsPath 工作区根派生，
+          // 他项目 .forge/docs 不命中；解析失败 = 缺席回落前缀判据，fail-soft）
+          try {
+            const projects = ctx.forgeProjects as Partial<ProjectServiceM2>
+            if (typeof projects.getProject === 'function') {
+              const project = await projects.getProject(input.projectId)
+              if (project !== null && typeof project.wsPath === 'string' && project.wsPath.trim() !== '') {
+                docsRoot = join(project.wsPath, '.forge', 'docs')
+              }
+            }
+          } catch {
+            docsRoot = undefined
+          }
         }
-        return loopDriverBase.start(input)
+        return loopDriverBase.start({ ...input, ...(docsRoot !== undefined ? { docsRoot } : {}) })
       },
     }
     const resolveProjectId = createProjectResolver(config.projects ?? [], config.bindingsFile)
@@ -344,10 +378,14 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       disposePrestep = undefined
     }
+    // Root cause: quote mention 的 <quote> 块由客户端 serialize 径单源承载（快照唯一
+    // 产生点在客户端进程，官方无 client→宿主快照推送通道）——宿主侧 pre-step 展开
+    // 机械因 store 零供数恒 no-op，已按 proposal 台账改判移除（bug 99ce9088）。
     const tools = createForgeTools({
       tasks: ctx.forgeTasks,
       proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
+      checkpoints: ctx.forgeCheckpoints,
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -369,7 +407,14 @@ const forgePlugin: ForgePlugin = Object.assign(
         | { register?: (definition: unknown) => () => void }
         | undefined
       if (projections !== undefined && typeof projections.register === 'function') {
-        disposeProjection = projections.register(createForgeDispatchLoopProjection())
+        const disposeLoop = projections.register(createForgeDispatchLoopProjection())
+        // 1.6 进度事件流投影键（loop-event-delivery——fold 'forge/progress' 事件，
+        // registry 逐事件驱动 fold，面板实时刷新；同注册表、同 fail-soft 语义）。
+        const disposeEvents = projections.register(createForgeDispatchEventsProjection())
+        disposeProjection = () => {
+          disposeLoop()
+          disposeEvents()
+        }
       }
     } catch {
       disposeProjection = undefined
@@ -498,6 +543,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.resolveBug),
       ctx.tools.register(tools.listBugs),
       ctx.tools.register(tools.getBug),
+      ctx.tools.register(tools.recordImplCheckpoint),
+      ctx.tools.register(tools.queryImplCheckpoint),
+      ctx.tools.register(tools.listImplCheckpoints),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；
@@ -516,7 +564,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt'] as const,
+    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt'] as const,
   },
 )
 
@@ -639,6 +687,8 @@ export {
 export type { ForgeLoopMessageSource, ForgeLoopNarrationMeta } from './forge-loop-source.js'
 export type {
   NarrationChannel,
+  NarrationForm,
+  NarrationSendOptions,
   NarrationRoute,
   Narrator,
   NarratorDeps,

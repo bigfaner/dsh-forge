@@ -11,6 +11,8 @@
     { "path": "packages/plugins/md-mermaid" },
     { "path": "packages/plugins/input-history" },
     { "path": "packages/plugins/expert-squad" },
+    { "path": "packages/plugins/quote-reference" },
+    { "path": "packages/plugins/super-composer" },
     { "path": "apps/host" },
     { "path": "apps/web" }
   ]

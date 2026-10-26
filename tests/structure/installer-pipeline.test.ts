@@ -29,7 +29,7 @@ describe('AC1+AC2 electron-builder 配置形状（electron-builder.config.mjs）
 
   it('extraResources 自 release/staging 显式 filter 嵌入（root 级 node_modules 剔除规避 + 内容边界自证）', () => {
     expect(config.extraResources).toEqual([
-      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
+      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'mobile-dist/**', 'icon.png', 'staging-manifest.json'] },
     ])
   })
 
@@ -102,6 +102,23 @@ describe('fix-45 入仓图标资产自证（build/ 一次生成物）', () => {
     const lastOffset = ico.readUInt32LE(6 + 16 * (count - 1) + 12)
     const lastBytes = ico.readUInt32LE(6 + 16 * (count - 1) + 8)
     expect(lastOffset + lastBytes).toBe(ico.length)
+  })
+})
+
+describe('dev 启动器控制台编码归一（bug: electron 日志中文乱码）', () => {
+  const devSource = readFileSync(join(ROOT, 'scripts', 'dev.mjs'), 'utf8')
+
+  it('electron 拉起前将控制台代码页归一到 UTF-8（chcp 65001）——Chromium stderr 恒写 UTF-8，CP936 控制台直读即乱码（UTF-8 的「绑定失配」经 GBK 解码呈「缁戝畾澶遍厤」）', () => {
+    expect(devSource, 'dev.mjs 缺 chcp 65001 归一步（bug 在场——dev:debug 中文日志乱码）').toContain('chcp')
+    expect(devSource).toContain('65001')
+  })
+
+  it('归一步在 electron spawn 之前执行（时序 pin——后置则首屏日志仍乱码）', () => {
+    const chcpAt = devSource.indexOf('65001')
+    const spawnAt = devSource.indexOf('spawn(electronSpawnExe')
+    expect(chcpAt).toBeGreaterThan(-1)
+    expect(spawnAt).toBeGreaterThan(-1)
+    expect(chcpAt, 'chcp 归一须先于 electron spawn').toBeLessThan(spawnAt)
   })
 })
 
@@ -197,6 +214,10 @@ describe('AC2+AC3 物化脚本纯函数（assemble-installer-resources.mjs）', 
       'app/package.json',
     ]
     for (const rel of must) expect(KEY_FILES, `关键文件口径缺席 ${rel}`).toContain(rel)
+  })
+
+  it('bug: 打包产物必含 mobile-dist——/remote 移动视图打包形态 dist 根 = {resources}/mobile-dist（resolveMobileDistDir），物化/口径/filter 任一缺席即 mobile-dist-missing 提示页', () => {
+    expect(KEY_FILES, '关键文件口径缺席 mobile-dist/index.html（--check 不可达）').toContain('mobile-dist/index.html')
   })
 
   it('插件条目配置派生：stagedProductPackages(PRODUCT_PLUGINS) 成员 = KEY_FILES 插件面全集（配置单一源——翻转布尔即两口径同步）', () => {

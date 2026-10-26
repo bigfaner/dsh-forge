@@ -72,18 +72,21 @@ if (ensureHostDist.status !== 0) {
 	);
 }
 
-// input-history client bundle 打包步（Root cause: 根 tsc -b 只产 tsc 输出 dist/client/，
-// exports["./client"] 指向的 dist/client.js 由包内 bundle-client.mjs esbuild 产出——
-// 管线不跑它则 vite watch 初始构建 req.resolve 失败。run-once 增量，幂等便宜）。
-const ensurePluginClientBundle = spawnSync(
-	'pnpm',
-	['-C', 'packages/plugins/input-history', 'build'],
-	{ stdio: 'inherit', shell: true, cwd: ROOT }
-);
-if (ensurePluginClientBundle.status !== 0) {
-	console.error(
-		'[dev] input-history client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席'
+// 产品 client 插件 bundle 打包步（Root cause: 根 tsc -b 只产 tsc 输出 dist/client/，
+// exports["./client"] 指向的 dist/client.js 由各包 bundle-client.mjs esbuild 产出——
+// 管线不跑它则 vite watch 初始构建 req.resolve 失败；tsc 类重建亦会抹掉该产物，
+// 每次 dev 起跑 ensure。run-once 增量，幂等便宜）。
+for (const plugin of ['input-history', 'quote-reference', 'super-composer']) {
+	const ensurePluginClientBundle = spawnSync(
+		'pnpm',
+		['-C', `packages/plugins/${plugin}`, 'build'],
+		{ stdio: 'inherit', shell: true, cwd: ROOT }
 	);
+	if (ensurePluginClientBundle.status !== 0) {
+		console.error(
+			`[dev] ${plugin} client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席`
+		);
+	}
 }
 
 // vite 初始构建收口（Root cause: electron 旧序仅等 HOST_MAIN（tsc 产物）就绪即拉起，
@@ -274,6 +277,12 @@ setTimeout(() => {
 	// （仅本地开发面，非打包产物）；显式设 E2E_ELECTRON_SWITCHES=0 可禁用。
 	const devSwitchesOn = (process.env.E2E_ELECTRON_SWITCHES ?? '1') === '1';
 	const healSwitches = devSwitchesOn ? ['--no-sandbox', '--disable-gpu', '--no-proxy-server'] : [];
+	// 控制台代码页归一（Root cause: Windows 控制台默认 CP936，Chromium 日志（--enable-logging
+	// 的 INFO:CONSOLE 行）向 stderr 恒写 UTF-8 字节——GBK 控制台直读即乱码（「绑定失配」呈
+	// 「缁戝畾澶遍厤」）。electron 拉起前 chcp 65001 归一；管道形态（无控制台）下失败静默 fail-soft。
+	if (process.platform === 'win32') {
+		spawnSync('cmd.exe', ['/d', '/s', '/c', 'chcp 65001>nul'], { stdio: 'ignore' });
+	}
 	const p = spawn(electronSpawnExe, [HOST_DIR, ...healSwitches, ...extraArgs], {
 		stdio: 'inherit',
 		cwd: ROOT,

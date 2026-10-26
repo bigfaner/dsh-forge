@@ -2,6 +2,7 @@
 // ahead-behind 徽标拆分 / 删除拦截判定 / ahead-behind 懒加载待拉清单。
 import { describe, expect, it } from 'vitest'
 import {
+  aheadBehindInline,
   aheadBehindSegments,
   collectSlugCandidates,
   createConflicts,
@@ -58,6 +59,15 @@ describe('aheadBehindSegments（徽标拆分：零值段省略）', () => {
     expect(aheadBehindSegments({ ahead: 2, behind: 1 })).toEqual({ ahead: '↑2', behind: '↓1' })
     expect(aheadBehindSegments({ ahead: 0, behind: 4 })).toEqual({ ahead: null, behind: '↓4' })
     expect(aheadBehindSegments({ ahead: 0, behind: 0 })).toEqual({ ahead: null, behind: null })
+  })
+})
+
+describe('aheadBehindInline（chip §2.3.1 内联短串——落后在前，零值段省略）', () => {
+  it('2↓ 16↑ 形；仅 ahead；全零 = null 不占位', () => {
+    expect(aheadBehindInline({ ahead: 16, behind: 2 })).toBe('2↓ 16↑')
+    expect(aheadBehindInline({ ahead: 3, behind: 0 })).toBe('3↑')
+    expect(aheadBehindInline({ ahead: 0, behind: 1 })).toBe('1↓')
+    expect(aheadBehindInline({ ahead: 0, behind: 0 })).toBeNull()
   })
 })
 

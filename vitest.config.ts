@@ -50,6 +50,34 @@ export default defineConfig({
       { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
       // expert-squad 插件包（双面包装载范式——bundle 声明结构镜像守卫）
       { test: { name: 'expert-squad', include: ['packages/plugins/expert-squad/tests/**/*.test.ts'] } },
+      // quote-reference 插件包（纯 client 包——client bundle 装载契约守卫 + face 单测 +
+      // selection-menu 缝合：primitives Menu 消费——css 副产物走 vite 转换管道（inline，
+      // git-worktree 判例同构）；真实 DOM 链路测试以文件级 @vitest-environment 声明）
+      {
+        test: {
+          name: 'quote-reference',
+          include: ['packages/plugins/quote-reference/tests/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
+      // super-composer 插件包（纯 client 包——client bundle 装载契约守卫 + 全屏感知纯逻辑单测；
+      // fix-12 复制件消费官方 primitives——css 副产物走 vite 转换管道（inline，
+      // git-worktree 判例同构））
+      {
+        test: {
+          name: 'super-composer',
+          include: ['packages/plugins/super-composer/tests/**/*.test.{ts,tsx}'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
       { test: { name: 'host', include: ['apps/host/src/**/*.test.ts'] } },
       // mobile 工程（1.2）：纯 view 层单测（wire 投影/store/router 等纯逻辑面）
       { test: { name: 'mobile', include: ['apps/mobile/src/**/*.test.ts'] } },

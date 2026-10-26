@@ -165,7 +165,13 @@ function settlingSpawn(delayMs = 5): SpawnWorker {
   }
 }
 
-type Call = { readonly method: 'notice' | 'followup' | 'settle'; readonly sessionId: string; readonly text: string }
+type Call = {
+  readonly method: 'notice' | 'followup' | 'settle'
+  readonly sessionId: string
+  readonly text: string
+  /** probe-1 口径：唤醒径判别（true = 即时唤醒主 agent；false/缺席 = 写入不唤醒整批积压） */
+  readonly wakeup?: boolean
+}
 
 interface Built {
   driver: LoopDriver
@@ -180,16 +186,11 @@ function build(options: { claim?: ClaimTaskResult[]; stats?: TaskStats[]; query?
   if (options.stats !== undefined) h.setStats(options.stats)
   if (options.query !== undefined) h.setQuery(options.query)
   const calls: Call[] = []
-  // 结算通道真实现形态：settle = 独立录制（不回落 followup——settlement 形态可判别）
+  // 结算通道真实现形态：send(form settle, wakeup=true) 单点唤醒（settlement 形态可判别）
   const channel: NarrationChannel = {
-    notice: async (sessionId, text) => {
-      calls.push({ method: 'notice', sessionId, text })
-    },
-    followup: async (sessionId, text) => {
-      calls.push({ method: 'followup', sessionId, text })
-    },
-    settle: async (sessionId, text) => {
-      calls.push({ method: 'settle', sessionId, text })
+    send: async (sessionId, text, options) => {
+      const method = options?.form === 'settle' ? 'settle' : options?.wakeup === true ? 'followup' : 'notice'
+      calls.push({ method, sessionId, text, ...(options?.wakeup === true ? { wakeup: true } : {}) })
     },
   }
   const narrator: Narrator = createNarrator({ channel })
@@ -318,6 +319,14 @@ describe('e2e dogfood · 终局 settlement + 零残留（AC 8/11）', () => {
     const settle = built.calls.find((c) => c.method === 'settle')
     expect(settle).toBeDefined()
     expect(settle?.sessionId).toBe(OWNER)
+    // 结算单点唤醒（loop-event-delivery §结算径）：全循环仅此一次 wakeup=true；
+    // 其余事件径投递一律写入不唤醒（next-step 积压整批消费形态——probe-1 口径 B）
+    const wakeups = built.calls.filter((c) => c.wakeup === true)
+    expect(wakeups).toEqual([settle])
+    // 整批消费形态（probe-1 A/B）：中段事件（领取/完成）零唤醒静默积压，仅结算唤醒一次整批消费
+    const notices = built.calls.filter((c) => c.method === 'notice')
+    expect(notices.length).toBeGreaterThan(0)
+    for (const n of notices) expect(n.wakeup).toBeUndefined()
     expect(settle?.text).toContain('[forge·结束] 任务源: feat-x — 全部任务已完成')
     // P8 评审指示段追加（四重点逐字在文——机制断言）
     expect(settle?.text).toContain('【代码评审指示】')
@@ -395,26 +404,21 @@ describe('e2e dogfood · owner 会话失活：不投死信 + 必达告警（AC 9
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const agents = new Map<string, unknown>()
     const channel = adaptAgentNarrationChannel({ get: (id) => agents.get(id) })
-    await channel.settle!('sess-gone', '【任务循环结束】\n- feat-x 没有可领取的任务。全部任务已完成。')
+    await channel.send('sess-gone', '【任务循环结束】\n- feat-x 没有可领取的任务。全部任务已完成。', { form: 'settle', wakeup: true })
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toContain('必达告警')
     expect(warn.mock.calls[0]?.[0]).toContain('sess-gone')
     expect(warn.mock.calls[0]?.[0]).toContain('凭容器 slug 认领')
 
-    // 空闲会话：followup 径 + dispatch-loop-settled source（持久 user message）
-    const followuped: unknown[] = []
-    agents.set('sess-idle', { followup: (m: unknown) => followuped.push(m) })
-    await channel.settle!('sess-idle', 'settle-text')
-    expect(followuped).toHaveLength(1)
-    expect(followuped[0]).toMatchObject({ role: 'user', source: { kind: 'dispatch-loop-settled' } })
-
-    // 运行中会话：steer 径（同 settled source）
-    const steered: unknown[] = []
-    agents.set('sess-busy', { isBusy: () => true, steer: (m: unknown) => steered.push(m), followup: () => {} })
-    await channel.settle!('sess-busy', 'settle-text')
-    expect(steered).toHaveLength(1)
-    expect(steered[0]).toMatchObject({ source: { kind: 'dispatch-loop-settled' } })
-    expect(followuped).toHaveLength(1) // busy 会话零 followup——投递径分流成立
+    // 活根会话：send(msg, next-step, true) 单点唤醒 + dispatch-loop-settled source（持久 user message）
+    const sent: { message: unknown; target: string; wakeup?: boolean }[] = []
+    agents.set('sess-idle', {
+      send: (message: unknown, target: string, wakeup?: boolean) => sent.push({ message, target, wakeup }),
+    })
+    await channel.send('sess-idle', 'settle-text', { form: 'settle', wakeup: true })
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ target: 'next-step', wakeup: true })
+    expect(sent[0]?.message).toMatchObject({ role: 'user', source: { kind: 'dispatch-loop-settled' } })
   })
 })
 

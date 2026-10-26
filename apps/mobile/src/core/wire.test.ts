@@ -343,6 +343,23 @@ describe('未读可见计数', () => {
   })
 })
 
+describe('bug b6a5f2bc：forge/progress counts 缺席 fail-soft（Object.entries(undefined) 风暴根因）', () => {
+  it('data.counts 键缺席 → loop-progress counts = {}（不透传 undefined）', () => {
+    const projection = projectEvent(ev('forge/progress', 11, { sourceSlug: 's', verb: 'claim', status: 'running', taskKey: 's/1' }))
+    expect((projection as { counts?: unknown }).counts).toEqual({}) // 修复前 = undefined（Object.entries 抛 TypeError）
+  })
+
+  it('data.counts = null → counts = {}', () => {
+    const projection = projectEvent(ev('forge/progress', 12, { sourceSlug: 's', verb: 'claim', status: 'running', taskKey: 's/1', counts: null }))
+    expect((projection as { counts?: unknown }).counts).toEqual({})
+  })
+
+  it('counts 在场原样透传', () => {
+    const projection = projectEvent(ev('forge/progress', 13, { sourceSlug: 's', verb: 'claim', status: 'running', taskKey: 's/1', counts: { done: 2 } }))
+    expect(projection).toMatchObject({ kind: 'loop-progress', counts: { done: 2 } })
+  })
+})
+
 // 类型面 pin：Projection 判别集可穷举收窄（编译期守卫）
 describe('投影判别集形状', () => {
   it('command-chip 与 approval-card 的 phase 字面量收窄', () => {

@@ -13,8 +13,12 @@
 // + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
+import { openWorkspaceFace } from '../../state/open-workspace-face.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../../state/worktree-switch-gate.js'
 import {
+  BranchDriftNotice,
   CreateWorktreeDialog,
   DeleteWorktreeDialog,
   HeroWorktreePicker,
@@ -44,60 +48,6 @@ import {
 import './session.css'
 
 /**
- * 点选即换绑编排缝（方案 A——bug ff324cad 体验收口）：hero worktree chip 点选非主树且
- * 活跃会话为主树占位 blank 时，预铸选中树会话 + 官方 openSession 切换 + 占位归档清场
- * （官方切工作区同构语义：切换 = 让目标 workspace 诞生/复用它自己的会话，弃置空占位
- * 归档）。结构窄面——plugin.ts heroRebindFaceOf 同形镜像（bundle 自含零 import）；
- * 任一成员缺席 = 零编排（退回纯选中态，发送时必绑重路由兜底）。
- */
-export interface HeroRebindFace {
-  activeSessionId(): string | undefined
-  isBlank(sessionId: string): boolean
-  openSession(sessionId: string): void
-  archiveSession(sessionId: string): Promise<void>
-  /** 账本变更订阅（官方 sessions.list store subscribe——归档前置确认的事件推送源；缺席 = 确认面降级） */
-  subscribeSessionLedger(listener: () => void): () => void
-}
-
-/** 点选即换绑编排依赖（纯函数注入面——face×seal 判读合成在调用方，本面只管次序） */
-export interface RebindOrchestrationDeps {
-  /** 可换绑 blank 会话 id（活跃 × blank × 绑定 ≠ 新选树 合成）；undefined = 零编排 */
-  readonly rebindableBlankId: () => Promise<string | undefined>
-  /** 预铸新选树会话（forge:worktree/session-create——显式树请求不被选中记忆劫持） */
-  readonly sessionCreate: (path: string) => Promise<{ readonly sessionId: string }>
-  /**
-   * 切换到产物会话（方案 A2——优先官方 onPick(树 workspaceId)：官方 selectWorkspace 全链
-   * 含草稿/附件搬运 + openWorkspace 复用刚预铸的树 blank；树 workspaceId 不可得 = fallback
-   * openSession 现状径，草稿不搬）
-   */
-  readonly switchToProduct: (path: string, productSessionId: string) => void
-  /** 官方归档（后清场——弃置 blank 入 durable 归档集，可恢复、回收径复用） */
-  readonly archiveSession: (sessionId: string) => Promise<void>
-  /**
-   * 切换落定确认（方案 A3 事件驱动）：resolve(true) = 官方 mainView 已在留产物会话
-   * （账本事件推送通知，零轮询）；resolve(false) = 确认面上界超时/缺席（本轮跳过归档）
-   */
-  readonly awaitSwitchSettled: (productSessionId: string) => Promise<boolean>
-}
-
-/**
- * 点选即换绑编排（方案 A 纯函数单源，createFollowup 同先例）：活跃会话为可换绑 blank
- * （任意绑定——主树占位→树 / 树A→树B / 树A→主行同构）→ 预铸新选树会话 → switchToProduct
- * 切换 → **事件驱动等官方切换落定**（账本订阅推送 mainView 在留通知，零轮询）→ 旧 blank
- * 归档。归档前置确认（bug ff324cad 症状：归档仍居 main 的会话，官方投影对账释放 main →
- * 弹回 hero）：awaitSwitchSettled false = 本轮跳过归档（残留交由下次旅程 recycle/reroute
- * 清理）。无可换绑 blank = 零编排（纯选中态）；失败原样上抛（调用方 fail-soft 退现状）。
- */
-export async function rebindOnSelect(path: string, deps: RebindOrchestrationDeps): Promise<void> {
-  const staleBlankId = await deps.rebindableBlankId()
-  if (staleBlankId === undefined) return
-  const product = await deps.sessionCreate(path)
-  deps.switchToProduct(path, product.sessionId)
-  if (!(await deps.awaitSwitchSettled(product.sessionId))) return // 未落定跳过归档
-  await deps.archiveSession(staleBlankId)
-}
-
-/**
  * 分支组合框输入面样式（字体令牌 + mono——盒模型不在此处：宽度/内距/边框由
  * .dswt-field-control 共享规则承载在官方 Input 外层 .wrap 上，与基准分支触发器同源等宽）
  */
@@ -112,12 +62,12 @@ const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>)
     path: entry.path,
     branch: entry.branch,
     worktreeName: entry.worktreeName,
+    workspaceId: entry.workspaceId,
     isMain: entry.isMain,
     present: entry.present,
   }))
 
-/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */
-interface WorktreeListPhase {
+/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */interface WorktreeListPhase {
   readonly state: 'loading' | 'ready' | 'error'
   readonly isGit: boolean
   readonly rows: ReturnType<typeof rowsOf>
@@ -125,12 +75,6 @@ interface WorktreeListPhase {
 }
 
 const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
-
-/** worktree 路径归一键（1.21/1.24 口径——项目根选中记忆键归一；与 wrap/create-wrap 归一同式） */
-const cwdKey = (path: string): string => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
-
-/** 换绑归档前置确认上界（官方投影/导航延迟 1~3s 实测刻度 ×2 余量——超时跳过本轮归档） */
-const SWITCH_CONFIRM_TIMEOUT_MS = 6000
 
 /**
  * hero 默认回填锚定链（纯函数单源）：主行（isMain）当前检出分支
@@ -169,25 +113,17 @@ export async function createFollowup(createdPath: string, deps: CreateFollowupDe
  * 选中态在本面闭环（bug 907225f2）：点选 = 纯选中态（chip 回填 + 项目粒度记忆写入 +
  * pushSelection——host 首条消息必绑重路由单源），零会话副作用。跨分支风险确认在点选时点
  * （1.19 语义回归——1.31 确认闩锁 + 「不再提示」语义平移，见下）；确认前选中态不变。
- * 会话创建唯一时机 = 官方 create 调用点（wrap 改道预铸；host sessionCreate 消费选中记忆
- * ——选中树在场即创建时点直接预铸选中树会话【bug ff324cad 创建即绑选中树，零主树占位】，
- * 缺席回落项目根由首条消息必绑重路由兜底）——本面零编排。
+ * 会话创建唯一时机 = 官方 create 调用点（选树零 forge 建会话 RPC——官方 blank 复用
+ * 天然生效，binding-derivation §2.3；缺席回落项目根由首条消息必绑重路由兜底）。
+ * 点选即换绑编排已退役（bug 82e92933——消费已退役通道 forge:worktree/session-create，
+ * host 注册已删命中必 not-found）。
  */
 export function ForgeHeroWorktreeMount({
   projectRoot,
-  rebindFace,
-  pickWorkspace,
-  workspaceRows,
   makeRpc = preloadRpcClientFactory,
 }: {
   /** 项目根（ws_path——list/ops 执行 cwd；null = 零注入） */
   readonly projectRoot: string | null
-  /** 点选即换绑编排缝（方案 A——plugin.ts hero slot inject 递达；缺席 = 零编排） */
-  readonly rebindFace?: HeroRebindFace
-  /** 官方 onPick(workspaceId) 递达（方案 A2——树 workspace 切换走官方 selectWorkspace 全链含草稿搬运；缺席 = fallback openSession） */
-  readonly pickWorkspace?: (workspaceId: string) => void
-  /** 官方 workspace 行（{workspaceId, path}——树 workspaceId 解析源；缺席 = fallback） */
-  readonly workspaceRows?: readonly { readonly workspaceId?: unknown; readonly path?: unknown }[]
   readonly makeRpc?: () => ForgeRpcClient
 }): ReactNode {
   const [phase, setPhase] = useState<WorktreeListPhase>(emptyPhase)
@@ -199,9 +135,16 @@ export function ForgeHeroWorktreeMount({
   const [deleteTarget, setDeleteTarget] = useState<{ readonly path: string; readonly worktreeName: string; readonly branch: string | null } | null>(null)
   const [deleteChecks, setDeleteChecks] = useState<DeleteChecks | null>(null)
   // 选中态本地投影（bug 9eb9d6cb 后续收敛：host lastSelection 唯一事实源——本地态只是
-  // host 态的 UI 镜像，挂载回填经 forge:worktree/selected 读 host，sessionStorage 记忆退役）
+  // host 态的 UI 镜像，挂载回填经 forge:worktree/selected 读 host，sessionStorage 记忆退役；
+  // bug 05c712a4 起本地投影升格为创建路由的显示真源镜像——host 记忆仅余显示恢复职责）
   const [localSelectedPath, setLocalSelectedPath] = useState<string | undefined>(undefined)
-  // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：sessionCreate 创建时点
+  // 显示真源镜像（window 全局锚，KEY 契约 = state/selected-tree-window.ts）：本地投影
+  // 每次变化即同步——创建路由（start-session-wrap 无参径）读此态而非 host 选中记忆
+  // （内存态易分叉，bug 05c712a4）
+  useEffect(() => {
+    setSelectedTreeDisplay(localSelectedPath)
+  }, [localSelectedPath])
+  // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：建会话通道创建时点
   // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
   // 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
   const pushSelection = useCallback(
@@ -209,7 +152,10 @@ export function ForgeHeroWorktreeMount({
       if (projectRoot === null) return
       void makeRpc()
         .worktree.select({ projectRoot, ...(path !== undefined ? { path } : {}) })
-        .catch(() => {})
+        .catch((cause: unknown) => {
+          // 选中推送失败留痕（不静默）——host 记忆缺席会使创建显示源裁决回落解析树
+          console.warn(`[dswf-worktree] 选中推送失败（projectRoot=${projectRoot} path=${path}）：${String(cause)}`)
+        })
     },
     [projectRoot, makeRpc],
   )
@@ -225,7 +171,9 @@ export function ForgeHeroWorktreeMount({
       .then((settings) => {
         if (alive) setRiskDismissed(settings.worktree?.crossBranchRiskDismissed === true)
       })
-      .catch(() => {})
+      .catch((cause: unknown) => {
+        console.warn(`[dswf-worktree] 跨分支确认记忆读失败（默认重问）：${String(cause)}`)
+      })
     return () => {
       alive = false
     }
@@ -236,94 +184,71 @@ export function ForgeHeroWorktreeMount({
   const [riskConfirmedLatch, setRiskConfirmedLatch] = useState<RiskConfirmLatch>(null)
   // 点选时点跨分支确认待决（1.19 语义回归）：待决期间选中态不变（确认/取消前零改选）
   const [pendingRiskPath, setPendingRiskPath] = useState<string | null>(null)
-  // 换绑在途闸（快速连点零并发编排——两次 sessionCreate 双 blank 竞态防线）
-  const rebindInFlight = useRef(false)
 
-  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送
-  // （host 唯一事实源——sessionCreate 创建时点消费 + 必绑重路由兜底；本地态只是投影）。
+  // 选中态落定（确认直通 / 确认框确认后的唯一写入口）：chip 回填 + host 选中记忆推送。
+  // workspaceId 在场（行集 DTO 携带）时显式传参官方 openWorkspace——官方语义「选工作区 =
+  // 立即 connectWorkspace 建/复用该树 blank，主视图随之切换」（bug 05c712a4 composer 腿
+  // 收口：点选纯显示态会使主视图 retain 旧树 blank，composer 发送落旧树——显示 = 实际
+  // 生效状态，AGENTS 3.4）。face 缺席（旧 bundle/漂移）= 仅显示态（现状降级，warn 一行）。
+  // bug 267dcac1 竞速收口：openWorkspace 异步敛棋前（~1s）composer 仍系旧树 blank，窗口内
+  // 发送即错绑——切换闸 pending 窗口 composer 禁输（ForgeWorktreeSwitchOverlay），敛棋
+  // （promise settle）解除；官方 beforeOpen 同窗草稿迁移（face 安装器内建）。
+  // bug 9d2b7e6a 懒物化：行 workspaceId 缺席（树无 workspace 记录——git 手建/流程 A 前
+  // 老树，list resolveByPath 只读不物化）→ 点选时点 ensure-workspace 幂等 find-or-create
+  // 拿 id 再 openWorkspace（同闸盖住窗口）；失败/缺席 = 退显示态不阻断。
   const applySelection = useCallback(
     (path: string): void => {
       // 确认闩锁：换目标重选清退（同行重选保留——确认后点 chip 不重弹）
       setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
       pushSelection(path)
       setLocalSelectedPath(path)
+      const workspaceId = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path)?.workspaceId : undefined
+      const open = openWorkspaceFace()
+      if (open === undefined) {
+        if (workspaceId !== undefined) {
+          console.warn(`[dswf-worktree] openWorkspace 面缺席——点选仅显示态（旧 bundle/装配漂移）：${path}`)
+        }
+        return
+      }
+      if (workspaceId !== undefined && workspaceId !== '') {
+        const settleSwitch = beginWorktreeSwitch()
+        void Promise.resolve(open(workspaceId)).finally(settleSwitch)
+        return
+      }
+      if (projectRoot === null) return
+      const settleSwitch = beginWorktreeSwitch()
+      void makeRpc()
+        .worktree.ensureWorkspace({ projectRoot, path })
+        .then((result): Promise<void> => {
+          const ensured = result.workspaceId
+          if (ensured === undefined || ensured === '') {
+            console.warn(`[dswf-worktree] workspace 懒物化缺席——点选退显示态：${path}`)
+            return Promise.resolve()
+          }
+          return Promise.resolve(open(ensured))
+        })
+        .catch((cause: unknown) => {
+          console.warn(`[dswf-worktree] workspace 懒物化失败（fail-soft 退显示态）：${String(cause)}`)
+        })
+        .finally(settleSwitch)
     },
-    [projectRoot, pushSelection],
+    [phase, projectRoot, pushSelection, makeRpc],
+  )
+
+  // 建树自动选中（createFollowup）专用：纯显示态落定——零会话副作用（1.29 spec「建树零
+  // 新增会话」语义，bug 9d2b7e6a 懒物化只随用户点选显式意图走）。开户时点 = 用户后续
+  // 点选 chip / hero 发送（startSession wrap 显示真源路由）。
+  const applySelectionDisplayOnly = useCallback(
+    (path: string): void => {
+      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
+      pushSelection(path)
+      setLocalSelectedPath(path)
+    },
+    [pushSelection],
   )
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
   // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
-  // 点选即换绑（方案 A，applySelection 后 fire-and-forget）：face 在场 ∧ 非主行 ∧ 活跃
-  // 会话为主树占位 blank（seal 绑定 ≡ 项目根 × 账本 blank）→ 预铸选中树会话 + 官方
-  // openSession 切换 + 占位归档清场——抖动收敛到点选瞬间（用户尚未输入），输入/发送全程
-  // 在最终会话，侧栏全程只见一个会话，发送时零重路由。任一环节失败 fail-soft 静默退回
-  // 现状（发送时必绑重路由兜底）。
-  const maybeRebind = useCallback(
-    (path: string): void => {
-      if (rebindFace === undefined || projectRoot === null) return
-      if (rebindInFlight.current) return // 在途闸：快速连点零并发编排（记忆已更新，漏拍由发送时重路由兜底）
-      rebindInFlight.current = true
-      void rebindOnSelect(path, {
-        rebindableBlankId: async () => {
-          const activeId = rebindFace.activeSessionId()
-          if (activeId === undefined || !rebindFace.isBlank(activeId)) return undefined // 非 blank：真会话零编排
-          const seal = await makeRpc().worktree.seal({ sessionId: activeId })
-          if (!seal.isGit || seal.binding === null) return undefined // 无绑定（官方域）：零编排
-          if (cwdKey(seal.binding.worktreePath) === cwdKey(path)) return undefined // 已绑目标树：零编排
-          return activeId // 可换绑 blank（主树占位 / 他树 blank 同构——绑定 ≠ 新选树即换）
-        },
-        sessionCreate: async (target) => await makeRpc().worktree.sessionCreate({ worktreePath: target }),
-        // 方案 A3 归档前置确认（事件驱动）：订阅官方账本变更，mainView 在留产物即落定；
-        // 超时/订阅缝缺席 = false 本轮跳过归档（零轮询——等待由 store 写侧推送驱动）
-        awaitSwitchSettled: (productSessionId) =>
-          new Promise<boolean>((resolve) => {
-            if (rebindFace.activeSessionId() === productSessionId) {
-              resolve(true) // 已落定零订阅
-              return
-            }
-            let settled = false
-            const finish = (value: boolean): void => {
-              if (settled) return
-              settled = true
-              unsubscribe()
-              clearTimeout(timer)
-              resolve(value)
-            }
-            const unsubscribe = rebindFace.subscribeSessionLedger(() => {
-              if (rebindFace.activeSessionId() === productSessionId) finish(true)
-            })
-            const timer = setTimeout(() => finish(false), SWITCH_CONFIRM_TIMEOUT_MS)
-          }),
-        // 方案 A2：优先官方 onPick(树 workspaceId)——selectWorkspace 全链含草稿/附件搬运，
-        // openWorkspace 复用刚预铸的树 blank（官方 reuseOrCreateBlank 判据天然命中）；
-        // 树 workspaceId 不可得（未建/快照未刷新/形状漂移）→ fallback openSession 现状径
-        switchToProduct: (target, productSessionId) => {
-          const wsId = workspaceRows?.find(
-            (row) =>
-              typeof row.workspaceId === 'string' &&
-              row.workspaceId !== '' &&
-              typeof row.path === 'string' &&
-              cwdKey(row.path) === cwdKey(target),
-          )?.workspaceId
-          if (pickWorkspace !== undefined && typeof wsId === 'string') {
-            pickWorkspace(wsId)
-            return
-          }
-          rebindFace.openSession(productSessionId)
-        },
-        archiveSession: async (sessionId) => {
-          await rebindFace.archiveSession(sessionId)
-        },
-      })
-        .catch(() => {
-          // fail-soft：换绑失败 = 现状世界（旧 blank 仍在，发送时重路由兜底）
-        })
-        .finally(() => {
-          rebindInFlight.current = false
-        })
-    },
-    [rebindFace, projectRoot, phase, makeRpc, pickWorkspace, workspaceRows],
-  )
   const onSelectConfirmed = useCallback(
     (path: string): void => {
       const row = phase.state === 'ready' ? phase.rows.find((candidate) => candidate.path === path) : undefined
@@ -339,16 +264,15 @@ export function ForgeHeroWorktreeMount({
         return
       }
       applySelection(path)
-      maybeRebind(path)
     },
-    [phase, riskDismissed, riskConfirmedLatch, applySelection, maybeRebind],
+    [phase, riskDismissed, riskConfirmedLatch, applySelection],
   )
 
   // 1.17 默认回填（展示层回填，零会话副作用）：清单就绪且无用户记忆/显式回填时按
   // 「host 选中记忆（forge:worktree/selected 读镜像）→ 锚定链」回填。记忆经 RPC 响应式
   // 读（会话面整域重挂后 projectRoot 到位即补读，跨重挂恢复用户选中意图——host 唯一
   // 事实源，sessionStorage 记忆已退役）。回填零编排；会话创建在官方 create 调用点
-  // （host sessionCreate 消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
+  // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
     let alive = true
@@ -487,7 +411,7 @@ export function ForgeHeroWorktreeMount({
           // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
           // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
           // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
-          await createFollowup(createdPath, { refresh, onSelectConfirmed })
+          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelectionDisplayOnly })
         })
         .catch((error: unknown) => {
           // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
@@ -495,7 +419,7 @@ export function ForgeHeroWorktreeMount({
         })
         .finally(settle)
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh, onSelectConfirmed, creating],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelectionDisplayOnly, creating],
   )
   const openDelete = useCallback(
     (path: string): void => {
@@ -616,7 +540,6 @@ export function ForgeHeroWorktreeMount({
             if (path !== null) {
               setRiskConfirmedLatch((prev) => riskLatchConfirm(prev, path))
               applySelection(path)
-              maybeRebind(path)
             }
           }}
         />
@@ -632,9 +555,18 @@ export interface WorktreeSealPhase {
   readonly sealed: boolean
   readonly branch: string | null
   readonly worktreeName: string | null
+  /** branch 漂移（binding-derivation §2.2——实时 ≠ 留痕；null = 无漂移/不警示） */
+  readonly branchDrift: { readonly bindBranch: string; readonly branch: string } | null
 }
 
-const sealEmpty: WorktreeSealPhase = { state: 'loading', isGit: false, sealed: false, branch: null, worktreeName: null }
+const sealEmpty: WorktreeSealPhase = {
+  state: 'loading',
+  isGit: false,
+  sealed: false,
+  branch: null,
+  worktreeName: null,
+  branchDrift: null,
+}
 
 /** 封存快照拉取（seal 通道单源——chip 失效态与 notice/占位两提示通道共读） */
 function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => ForgeRpcClient): WorktreeSealPhase {
@@ -652,10 +584,11 @@ function useWorktreeSeal(sessionId: string | undefined, makeRpc: () => ForgeRpcC
           sealed: result.sealed,
           branch: result.binding?.branch ?? null,
           worktreeName: result.worktreeName ?? null,
+          branchDrift: result.branchDrift ?? null,
         })
       })
       .catch(() => {
-        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null })
+        if (alive) setPhase({ state: 'error', isGit: false, sealed: false, branch: null, worktreeName: null, branchDrift: null })
       })
     return () => {
       alive = false
@@ -725,20 +658,50 @@ export function ForgeWorktreeSealOverlay({
 }): ReactNode {
   const phase = useWorktreeSeal(sessionId, makeRpc)
   const [dismissed, setDismissed] = useState(false)
-  if (sessionId === undefined || !phase.isGit || !phase.sealed) return null
+  if (sessionId === undefined || !phase.isGit) return null
   const worktreeName = phase.worktreeName ?? ''
   return (
     <div style={{ display: 'flex', flexDirection: 'column', rowGap: 'var(--dsw-radius-sm)' }}>
-      {!dismissed && !dismissedSealSessions.has(sessionId) && (
-        <SealNotice
-          worktreeName={worktreeName}
-          onClose={() => {
-            dismissedSealSessions.add(sessionId)
-            setDismissed(true)
-          }}
-        />
+      {/* branch 漂移 warning banner（binding-derivation §2.2——非阻断，切回即消失：判定随
+          seal 渲染现算；与封存通道并列但语义独立） */}
+      {phase.branchDrift !== null && (
+        <BranchDriftNotice bindBranch={phase.branchDrift.bindBranch} branch={phase.branchDrift.branch} />
       )}
-      <SealedComposerPlaceholder />
+      {phase.sealed && (
+        <>
+          {!dismissed && !dismissedSealSessions.has(sessionId) && (
+            <SealNotice
+              worktreeName={worktreeName}
+              onClose={() => {
+                dismissedSealSessions.add(sessionId)
+                setDismissed(true)
+              }}
+            />
+          )}
+          <SealedComposerPlaceholder />
+        </>
+      )}
     </div>
+  )
+}
+
+/**
+ * 切换闸虚线标记（bug 267dcac1 评审返工②）：禁输行为全归官方 conversation.blocks 缝
+ * （安装器置位），本件只补**视觉命中锚**——官方 blocked 形态无 dashed 类（dashed 仅
+ * cardWorkspaceTrigger），pending 时在官方 overlay 缝（卡片内 overlayAnchor）落零尺寸
+ * 标记节点 + 官方 cardWorkspaceTrigger 同配方 dashed 规则（:has 上溯命中宿主卡）。
+ * 规则选择器含上游哈希类 uV2eYG_card——上游改版 = dashed 静默消失（fail-soft 视觉降级，
+ * 行为不受影响）。
+ */
+export function ForgeWorktreeSwitchMarker(): ReactNode {
+  const pending = useSyncExternalStore(subscribeWorktreeSwitch, isWorktreeSwitchPending, isWorktreeSwitchPending)
+  if (!pending) return null
+  return (
+    <>
+      <style data-dswt-switch-style="">
+        {'.uV2eYG_card:has([data-dswt-switch-blocked])::after{content:"";box-sizing:border-box;border-radius:var(--dsw-radius-panel);color:var(--dsw-alias-border-l4);pointer-events:none;border:1px dashed;transition:color .1s;position:absolute;inset:0}'}
+      </style>
+      <span data-dswt-switch-blocked="" style={{ display: 'none' }} />
+    </>
   )
 }

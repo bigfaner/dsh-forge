@@ -315,6 +315,7 @@ export const TASKS_SERVICE_METHODS = [
   'validateFeatureTasks',
   'listTasks',
   'taskStats',
+  'taskSettlements',
   'taskGraph',
   'taskDetail',
   'sessionLinks',
@@ -346,6 +347,8 @@ export const PROPOSALS_SERVICE_METHODS = [
   // RPC 通道接线 = 3.8，UI 消费 = 4.x——桥面白名单完备性恒编译期点名）
   'setProposalMode',
   'listProposalDocs',
+  // 机械②承接链自联结读面（纯读零写径——飞轮改进链闭包查询）
+  'listDerivedProposals',
 ] as const satisfies readonly (keyof ForgeProposalsService)[]
 
 /** 白名单覆盖完备性（= never：缺席的 ForgeProposalsService 方法在此编译期点名） */
@@ -701,8 +704,8 @@ export function asDiagMessage(message: unknown): BridgeDiagMessage | undefined {
 
 /**
  * 事件消息守卫（子 → 主单向推送分流——run.ts child.on('message') event 分支消费）。
- * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷形状 { projectId }
- * 只读校验（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
+ * channel 须 ∈ FORGE_EVENT_CHANNELS 值域（allowlist 唯一源）；载荷只读校验
+ * { projectId }（Hard Rule——畸形静默忽略返回 undefined，不猜测不转发）。
  */
 export function asEventMessage(message: unknown): BridgeEventMessage | undefined {
   if (typeof message !== 'object' || message === null) return undefined

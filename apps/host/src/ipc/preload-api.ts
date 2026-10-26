@@ -44,13 +44,13 @@ export function newTraceId(random: () => string = () => globalThis.crypto.random
 
 /**
  * forge:events/* 订阅（allowlist 守卫——FORGE_EVENT_CHANNELS 值域唯一源，未列通道
- * fail-loud 拒绝，与 invoke 面同形纪律）；载荷形状守卫（{ projectId } 只读——Hard Rule；
+ * fail-loud 拒绝，与 invoke 面同形纪律）；载荷只读校验 { projectId }（Hard Rule；
  * 畸形载荷静默跳过，不猜测不转发）；返回退订器（removeListener）。
  */
-export function subscribeForgeEvent(
+export function subscribeForgeEvent<T extends TasksChangedEvent>(
   events: PreloadEventFace,
   channel: ForgeEventChannel,
-  listener: (payload: TasksChangedEvent) => void,
+  listener: (payload: T) => void,
 ): () => void {
   if (!(Object.values(FORGE_EVENT_CHANNELS) as readonly string[]).includes(channel)) {
     throw new Error(
@@ -61,7 +61,7 @@ export function subscribeForgeEvent(
     if (typeof payload !== 'object' || payload === null) return
     const projectId = (payload as Record<string, unknown>).projectId
     if (typeof projectId !== 'string') return
-    listener({ projectId })
+    listener({ projectId } as T)
   }
   events.on(channel, onMessage)
   return () => events.removeListener(channel, onMessage)

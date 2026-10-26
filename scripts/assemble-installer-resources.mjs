@@ -19,7 +19,9 @@
  *       host-dist/            apps/host/dist 拷贝——boot child 真实文件入口（ELECTRON_RUN_AS_NODE
  *                             派生进程无法读 asar；且 ESM 解析沿目录上溯，host-dist 须与
  *                             node_modules 同容器相邻——run.ts resolveChildEntry 消费）
- *     web-dist/               apps/web/dist（壳静态资产）
+ *     web-dist/               apps/web/dist 拷贝（壳静态资产）
+ *     mobile-dist/            apps/mobile/dist 拷贝（/remote 移动视图静态资产——
+ *                             resolveMobileDistDir 打包形态默认 {resources}/mobile-dist）
  *     icon.png                窗口图标（fix-45——BrowserWindow icon 打包形态解析位）
  *     staging-manifest.json   物化清单（节文件数/字节 + 关键文件自证 + sqlite prebuild 证据）
  *   release/app/              electron-builder 应用目录（asar: false）：main.js 装载器
@@ -135,6 +137,7 @@ export function requiredKeyFiles(plugins) {
   const files = [
     'runtime/package.json',
     'web-dist/index.html',
+    'mobile-dist/index.html',
     'icon.png',
     'app/main.js',
     'app/package.json',
@@ -237,6 +240,7 @@ function assertPreconditions(plugins) {
     [join(ROOT, 'apps/host/dist/main.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/host/dist/boot/child.js'), 'pnpm build（tsc -b 全拓扑）'],
     [join(ROOT, 'apps/web/dist/index.html'), 'pnpm build（vite 壳 dist）'],
+    [join(ROOT, 'apps/mobile/dist/index.html'), 'pnpm build:mobile（/remote 移动视图 dist——打包形态物化到 {resources}/mobile-dist）'],
     [join(INSTALL_NM, '@deepseek-ai/dsh/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-base/package.json'), 'pnpm -C apps/host/profile.install install'],
     [join(INSTALL_NM, '@deepseek-ai/dsh-web-app/package.json'), 'pnpm -C apps/host/profile.install install'],
@@ -330,6 +334,11 @@ async function stage() {
   // 4) 壳 dist
   sections.webDist = copyTree(join(ROOT, 'apps/web/dist'), join(STAGING, 'web-dist'))
 
+  // 4a) /remote 移动视图 dist（bug：打包产物缺席 mobile-dist——resolveMobileDistDir 打包
+  //     形态默认 {resources}/mobile-dist，缺席即 host 落 mobile-dist-missing 提示页。
+  //     与 web-dist 同构物化；前置已 assert apps/mobile/dist/index.html）
+  sections.mobileDist = copyTree(join(ROOT, 'apps/mobile/dist'), join(STAGING, 'mobile-dist'))
+
   // 4b) 窗口图标（fix-45）：build/icon.png 归位 resources 根——BrowserWindow icon 打包
   //     形态解析位（resolveWindowIconPath {resources}/icon.png）。实测裁决注记：Windows
   //     exe 内嵌图标（electron-builder win.icon）已覆盖任务栏/Alt-Tab，此物化服务窗口
@@ -359,7 +368,7 @@ async function stage() {
   }
   const totalFiles =
     sections.runtimeNodeModules.files + sections.hostDist.files + sections.webDist.files
-    + sections.appLoader.files + sections.icon.files
+    + sections.mobileDist.files + sections.appLoader.files + sections.icon.files
   console.log(`STAGE_OK files=${totalFiles} manifest=release/staging/staging-manifest.json`)
 }
 

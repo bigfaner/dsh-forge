@@ -25,6 +25,8 @@ tech-design 生成后、breakdown-tasks 前。核心问题：**这份方案是�
 
 - **可行性事实核验**：引用的包、官方扩展点、服务、API 真实存在且语义如所述（读 lockfile/源码验证）；点名的改动文件在仓库存在；测试策略与实际测试流程吻合。
 - **流程闭环**：Coverage Map 双向核对（每条 AC 有设计元素、无孤儿）；关键流程的失败分支有明确处理；跨模块调用定义了失败时的行为。
+- **官方核销记录（M3）**：装配代码依赖官方同语义机械（ctx 服务键/事件/slot/loader/plugin-manager 等）时，设计文档必须携带**核销记录**——源码位置、声明方式、生命周期、并发/持久化语义；每个官方包 API 引用**无源码出处 = Blocker**。录制 fixtures 降级为回归锚点，不充当契约来源——以 fixtures/探针观测推断官方契约而无源码核销，同判 Blocker。依据正本：`docs/conventions/reuse-official-mechanisms.md`（AGENTS 1.2）。
+  - **判定正例**：设计写「经 `ctx.inject` 取宿主 `forgeStream` 服务镜像事件」但未给出该服务在官方包的声明位置与生命周期 → 判 Blocker；补上「声明于 `@deepseek-ai/dsh-server` src/xxx.ts，singleton 生命周期，随 host 关闭销毁，持久化由 host 单点保证」并附源码路径 → 通过。
 
 ## 输出与处置
 

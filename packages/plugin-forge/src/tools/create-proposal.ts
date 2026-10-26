@@ -25,12 +25,14 @@ export interface CreateProposalToolArgs {
   /** proposal.md 相对 forge_dir；缺省 = 未挂文档 */
   readonly rel_path?: string
   readonly status?: ProposalStatus
+  /** 承接链左列（机械②——飞轮改进链父提案 id；缺省 = 无承接。FK 校验经服务） */
+  readonly parent_proposal_id?: string
 }
 
 /** 参数防御性收窄 */
 export function parseCreateProposalArgs(args: unknown): CreateProposalToolArgs {
   const a = requireArgsObject(args, TOOL)
-  const out: { slug: string; title: string; rel_path?: string; status?: ProposalStatus } = {
+  const out: { slug: string; title: string; rel_path?: string; status?: ProposalStatus; parent_proposal_id?: string } = {
     slug: requiredString(a, 'slug', TOOL),
     title: requiredString(a, 'title', TOOL),
   }
@@ -38,6 +40,8 @@ export function parseCreateProposalArgs(args: unknown): CreateProposalToolArgs {
   if (relPath !== undefined) out.rel_path = relPath
   const status = optionalEnum(a, 'status', PROPOSAL_STATUSES, TOOL)
   if (status !== undefined) out.status = status
+  const parentProposalId = optionalString(a, 'parent_proposal_id', TOOL)
+  if (parentProposalId !== undefined) out.parent_proposal_id = parentProposalId
   return out
 }
 
@@ -67,6 +71,7 @@ export const PROPOSAL_ROW_OUTPUT_SCHEMA = withFailureVariant({
     decidedAt: { type: 'string' },
     mode: { type: 'string', description: 'expedition or blitz (absent = NULL placeholder).' },
     supersededBy: { type: 'string', description: 'Superseding proposal id (the proposal that replaces this one).' },
+    parentProposalId: { type: 'string', description: 'Parent proposal id this proposal derives from (flywheel improvement chain; absent = none).' },
     createdAt: { type: 'string' },
     updatedAt: { type: 'string' },
   },
@@ -82,6 +87,7 @@ export function proposalRowEntries(v: ProposalRow): string[] {
     ...(v.relPath !== undefined ? [`- doc: ${v.relPath}`] : []),
     ...(v.decidedAt !== undefined ? [`- decided: ${v.decidedAt}`] : []),
     ...(v.supersededBy !== undefined ? [`- supersededBy: ${v.supersededBy}`] : []),
+    ...(v.parentProposalId !== undefined ? [`- parentProposalId: ${v.parentProposalId}`] : []),
   ]
 }
 
@@ -103,6 +109,7 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
         title: { type: 'string', description: 'Proposal title.' },
         rel_path: { type: 'string', description: "Proposal document path relative to the workspace docs root, forward slashes (e.g. 'proposals/<slug>/proposal.md')." },
         status: { type: 'string', description: `Initial status, one of: ${PROPOSAL_STATUSES.join(', ')} (default draft).` },
+        parent_proposal_id: { type: 'string', description: 'Parent proposal id this proposal derives from (flywheel improvement chain; validated against existing proposals).' },
       },
       required: ['slug', 'title'],
     },
@@ -126,6 +133,7 @@ export function createCreateProposalTool(deps: ForgeToolDeps): ForgeToolDefiniti
           title: parsed.title,
           ...(parsed.rel_path !== undefined ? { relPath: parsed.rel_path } : {}),
           ...(parsed.status !== undefined ? { status: parsed.status } : {}),
+          ...(parsed.parent_proposal_id !== undefined ? { parentProposalId: parsed.parent_proposal_id } : {}),
           ...(mode !== undefined ? { mode } : {}),
         }
         return deps.proposals.createProposal(input)
