@@ -12,7 +12,9 @@ import {
   draftOf,
   hasBareMustache,
   personaBlocks,
+  skillCandidatesOf,
   toggleInList,
+  toolCandidatesOf,
   unionSkills,
   validateDraft,
   type ExpertDraft,
@@ -100,9 +102,30 @@ describe("detail-logic multi-select", () => {
     ]);
   });
 
-  it("工具候选为固定白名单清单", () => {
+  it("工具候选兜底清单在场（目录缺席回退用）", () => {
     expect(TOOL_CANDIDATES).toContain("read");
     expect(TOOL_CANDIDATES).toContain("bash");
+  });
+
+  it("toolCandidatesOf：目录在场 = 目录清单（去重保序，含插件追加工具）；缺席 = 兜底清单", () => {
+    expect(toolCandidatesOf(["read", "pwsh", "read", "delegate_expert"])).toEqual([
+      "read",
+      "pwsh",
+      "delegate_expert",
+    ]);
+    expect(toolCandidatesOf(undefined)).toBe(TOOL_CANDIDATES);
+  });
+
+  it("skillCandidatesOf：目录在场 = 目录为主源 ∪ 档案技能（历史值保持可选）；缺席 = 并集回退", () => {
+    const entries = [entry(), entry({ name: "b", skills: ["tsc", "vue"] })];
+    expect(skillCandidatesOf(["sql", "review"], entries)).toEqual([
+      "sql",
+      "review",
+      "tsc",
+      "vue",
+    ]);
+    expect(skillCandidatesOf([], entries)).toEqual(["review", "tsc", "vue"]);
+    expect(skillCandidatesOf(undefined, entries)).toEqual(["review", "tsc", "vue"]);
   });
 
   it("draftOf 深拷贝字段（编辑不污染原档案）", () => {

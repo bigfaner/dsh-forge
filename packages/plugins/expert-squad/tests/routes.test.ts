@@ -64,10 +64,10 @@ function text(res: Response): Promise<string> {
 }
 
 describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）", () => {
-  it("注册六条精确路由：path/methods/requestBody 镜像官方 ConnectionFetchRoute 面", () => {
+  it("注册七条精确路由：path/methods/requestBody 镜像官方 ConnectionFetchRoute 面", () => {
     const { connection, routes } = makeConnection();
     registerExpertSquadRoutes(connection, makeDeps());
-    expect(connection.fetch.register).toHaveBeenCalledTimes(6);
+    expect(connection.fetch.register).toHaveBeenCalledTimes(7);
     expect(routes.map((r) => r.path)).toEqual(
       EXPERT_SQUAD_ENDPOINTS.map((e) => expertSquadRoute(e)),
     );
@@ -78,16 +78,56 @@ describe("expert-squad fetch 路由族（官方 fetch.register 契约镜像）",
       "/api/expert-squad/enable",
       "/api/expert-squad/disable",
       "/api/expert-squad/run-state",
+      "/api/expert-squad/candidates",
     ]);
     for (const route of routes) {
       const isGet =
         route.path.endsWith("/list") ||
         route.path.endsWith("/get") ||
-        route.path.endsWith("/run-state");
+        route.path.endsWith("/run-state") ||
+        route.path.endsWith("/candidates");
       expect(route.methods).toEqual(isGet ? ["GET"] : ["POST"]);
       expect(route.requestBody).toBe("buffered");
       expect(typeof route.fetch).toBe("function");
     }
+  });
+
+  it("GET candidates：候选目录读口（deps.candidates 透传；未供给 = 零字段应答）", async () => {
+    const withCatalog = {
+      ...makeDeps(),
+      candidates: async () => ({
+        tools: ["read", "pwsh", "delegate_expert"],
+        skills: ["review-prd", "brainstorm"],
+      }),
+    };
+    const routes = expertSquadRoutes(withCatalog);
+    const route = routes.find((r) => r.path === expertSquadRoute("candidates"))!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/candidates"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      tools: ["read", "pwsh", "delegate_expert"],
+      skills: ["review-prd", "brainstorm"],
+    });
+
+    const bare = expertSquadRoutes(makeDeps());
+    const bareRoute = bare.find((r) => r.path === expertSquadRoute("candidates"))!;
+    const bareRes = await bareRoute.fetch(new Request("http://host/api/expert-squad/candidates"));
+    const bareBody = (await bareRes.json()) as Record<string, unknown>;
+    expect(bareRes.status).toBe(200);
+    expect(bareBody).toEqual({});
+  });
+
+  it("GET candidates：单侧目录缺席 = 对应字段缺席（client 回退兜底语义）", async () => {
+    const partial = {
+      ...makeDeps(),
+      candidates: async () => ({ tools: ["read", "edit"] }),
+    };
+    const routes = expertSquadRoutes(partial);
+    const route = routes.find((r) => r.path === expertSquadRoute("candidates"))!;
+    const res = await route.fetch(new Request("http://host/api/expert-squad/candidates"));
+    const body = (await res.json()) as { tools?: unknown; skills?: unknown };
+    expect(body.tools).toEqual(["read", "edit"]);
+    expect("skills" in body).toBe(false);
   });
 
   it("GET run-state：面板运行状态读口（deps.runState JSON 应答，entries 字段承载）", async () => {

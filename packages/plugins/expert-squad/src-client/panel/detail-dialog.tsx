@@ -435,6 +435,8 @@ function CompareBody({
 /** 详情 Dialog 呈递件（控制器驱动；F2 组件树逐位）。 */
 export function ExpertDetailDialog(props: {
   readonly controller: ExpertDetailController;
+  /** 工具白名单候选（1.78：宿主 ToolRuntime 目录透出；缺席 = 内置兜底清单）。 */
+  readonly toolCandidates?: readonly string[];
   readonly allSkills: AllSkills;
   /** multi-select 初始展开态（SSR 测试/调试面；默认收起 = 原型语义）。 */
   readonly mselDefaultOpen?: boolean;
@@ -545,7 +547,7 @@ export function ExpertDetailDialog(props: {
         field="tools"
         label="工具白名单（子会话强制生效 · 多选）"
         selected={state.draft.tools}
-        candidates={TOOL_CANDIDATES}
+        candidates={props.toolCandidates ?? TOOL_CANDIDATES}
         allowAdd={false}
         defaultOpen={props.mselDefaultOpen}
         onToggle={(value) => props.controller.toggleTool(value)}

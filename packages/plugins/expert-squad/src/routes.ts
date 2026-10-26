@@ -15,7 +15,7 @@ import { z } from "zod";
 /** API 基前缀（精确路由：一个 endpoint 一条路由）。 */
 export const EXPERT_SQUAD_API_BASE = "/api/expert-squad";
 
-/** endpoint 名（§6：GET list|get|run-state + POST update|enable|disable）。 */
+/** endpoint 名（§6：GET list|get|run-state|candidates + POST update|enable|disable）。 */
 export const EXPERT_SQUAD_ENDPOINTS = [
   "list",
   "get",
@@ -23,6 +23,7 @@ export const EXPERT_SQUAD_ENDPOINTS = [
   "enable",
   "disable",
   "run-state",
+  "candidates",
 ] as const;
 export type ExpertSquadEndpoint = (typeof EXPERT_SQUAD_ENDPOINTS)[number];
 
@@ -89,6 +90,19 @@ export type ExpertUpdateInput = z.infer<typeof expertUpdateBodySchema>;
 /** GET run-state 查询门：无参（面板运行状态为进程级纯 UI 数据，不带 workspace 维度）。 */
 export const runStateQuerySchema = z.object({}).passthrough();
 
+/** GET candidates 查询门：无参（候选目录为进程级宿主半读口，不带 workspace 维度）。 */
+export const candidatesQuerySchema = z.object({}).passthrough();
+
+// ---- 候选目录读口（Dialog 工具/技能下拉候选用——目录缺席 = 字段缺席，client 兜底） ----
+
+/** 候选目录应答（tools/skills 字段缺席 = 对应官方目录缺席——client 侧回退兜底语义）。 */
+export interface CandidateCatalog {
+  /** 宿主 ToolRuntime 目录工具名（schemas() 全视图——可见工具名，含插件追加工具）。 */
+  readonly tools?: readonly string[];
+  /** 官方 skill 目录技能名（ctx.skills 清单面）。 */
+  readonly skills?: readonly string[];
+}
+
 // ---- delegate 装配状态（观测面-only）---------------------------------------
 
 /** delegate_expert 装配状态（apply 尾部装配结果——run-state 读口暴露，装配降级
@@ -118,6 +132,8 @@ export interface ExpertRoutesDeps {
   runState(): ExpertRunPanelEntry[];
   /** delegate 装配状态读口（可选——供给即随 run-state 应答透出 delegate 字段）。 */
   delegateState?(): DelegateAssemblyState;
+  /** 候选目录读口（可选——缺席 = 应答零字段，client 回退内置兜底清单/并集语义）。 */
+  candidates?(): Promise<CandidateCatalog>;
 }
 
 /**
@@ -207,6 +223,27 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
           return Response.json({
             entries: deps.runState(),
             ...(delegate !== undefined ? { delegate } : {}),
+          });
+        } catch (err) {
+          return new Response(err instanceof Error ? err.message : String(err), {
+            status: 400,
+          });
+        }
+      },
+    },
+    {
+      path: expertSquadRoute("candidates"),
+      methods: ["GET"],
+      requestBody: "buffered",
+      fetch: async (request) => {
+        try {
+          candidatesQuerySchema.parse(
+            Object.fromEntries(new URL(request.url).searchParams),
+          );
+          const catalog = (await deps.candidates?.()) ?? {};
+          return Response.json({
+            ...(catalog.tools !== undefined ? { tools: catalog.tools } : {}),
+            ...(catalog.skills !== undefined ? { skills: catalog.skills } : {}),
           });
         } catch (err) {
           return new Response(err instanceof Error ? err.message : String(err), {

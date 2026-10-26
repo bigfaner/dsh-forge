@@ -307,6 +307,48 @@ test('@feature expert-squad dlg step-2 markdown-render：人设分块渲染—�
 // Outcomes: disabled-meta（step-2）已并入 step-1 disabled-expert 取证（同一呈现面：
 // 灯 off + meta「已禁用」+ 启用钮——避免同屏重复真机跑批）。
 
+// ── 1.78 候选目录读口（candidates）──
+
+test('@feature expert-squad catalog candidates：读口 200——tools 含内置+插件追加、skills 非空（官方目录透出）', async () => {
+  test.setTimeout(180_000)
+  const session = await openPanelWithFixture()
+  try {
+    const { page } = session
+    // 打开详情 Dialog → 触发 candidates 探针（懒取时机 = Dialog 打开——目录为注册期
+    // 渐增视图，Dialog 期快照即面板下拉消费面）
+    await openDetail(page, KEY)
+    await capturedCall(page, '/api/expert-squad/candidates')
+    const payload = await page.evaluate(async () => {
+      const response = await fetch('/api/expert-squad/candidates')
+      return { status: response.status, body: (await response.json()) as { tools?: string[]; skills?: string[] } }
+    })
+    expect(payload.status, 'candidates 读口 200').toBe(200)
+    // 目录语义断言（1.78：候选 = 宿主 ToolRuntime schemas() 全局视图，非硬编码六件）。
+    // 注记：核心模型工具（read 等）注册于会话 scope 层，不保证出现在全局视图——
+    // 真机断言锚 = 目录非空 + 插件追加工具（expert-squad 工具族，apply 期全局注册）
+    // + 技能候选非空（官方 skill 目录）。
+    let tools: unknown
+    await expect
+      .poll(
+        async () => {
+          const response = await page.evaluate(async () => {
+            const res = await fetch('/api/expert-squad/candidates')
+            return (await res.json()) as { tools?: string[]; skills?: string[] }
+          })
+          tools = response.tools
+          return Array.isArray(tools) && tools.length > 0
+        },
+        { timeout: 30_000, message: 'candidates 读口目录非空' },
+      )
+      .toBeTruthy()
+    expect(tools, 'tools 含插件追加工具 delegate_expert').toContain('delegate_expert')
+    expect(Array.isArray(payload.body.skills), 'skills 字段在场（官方 skill 目录）').toBe(true)
+    expect(payload.body.skills?.length ?? 0, 'skills 候选非空').toBeGreaterThanOrEqual(1)
+  } finally {
+    await closeSession(session)
+  }
+})
+
 // ── step-3-start-edit ──
 
 test('@feature expert-squad dlg step-3 success：编辑态字段集预填（工具上技能下；name 不可改）', async () => {
@@ -321,17 +363,24 @@ test('@feature expert-squad dlg step-3 success：编辑态字段集预填（工�
     await expect(page.locator(FIELD_DESC), '简介 textarea 预填（rows=1）').toHaveValue(/Fixture expert/)
     expect(await page.locator(FIELD_DESC).getAttribute('maxlength'), '简介 maxLength=120').toBe('120')
     await expect(page.locator(FIELD_PERSONA), '人设 textarea 预填（rows=6）').toHaveValue(/职责/)
-    // 工具白名单 multi-select：已选 chips + 固定候选清单
+    // 工具白名单 multi-select：已选 chips + 官方目录候选清单（1.78：主源 = 宿主
+    // ToolRuntime 目录透出，含插件追加工具；硬编码六件清单已降级为缺席兜底）
     await expect(page.locator(mselChip('tools', 'read')), '已选工具 chip·read').toBeVisible()
     await expect(page.locator(mselChip('tools', 'grep')), '已选工具 chip·grep').toBeVisible()
-    // 工具菜单展开（fix-6 默认收起——box 点击开合）→ 候选清单取证
+    // 工具菜单展开（fix-6 默认收起——box 点击开合）→ 候选清单取证：
+    // 目录语义（非硬编码六件）——含插件追加工具 delegate_expert（核心模型工具为
+    // 会话 scope 层注册，不保证入全局视图，不作锚）
     await page.locator(mselBox('tools')).click()
     const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
-    expect(await toolRows.count(), '工具候选=固定清单 6 项').toBe(6)
+    const toolNames = (await toolRows.allInnerTexts()).map((name) => name.trim())
+    expect(toolNames, '目录候选含插件追加工具 delegate_expert').toContain('delegate_expert')
     await collapseMsel(page)
-    // 技能 multi-select：已选 chips + 展开后新增输入框在场
+    // 技能 multi-select：已选 chips + 官方 skill 目录候选非空（1.78：不再恒空——
+    // 目录技能名 ∪ 档案技能；展开后新增输入框在场）
     await expect(page.locator(mselChip('skills', 'review')), '已选技能 chip·review').toBeVisible()
     await page.locator(mselBox('skills')).click()
+    const skillRows = page.locator(`${DIALOG} .dswf-msel[data-msel="skills"] .dswf-msel-row`)
+    await expect(skillRows.first(), '技能候选非空（官方 skill 目录透出）').toBeVisible()
     await expect(page.locator(FIELD_ADD_SKILL), '技能新增输入框在场').toBeVisible()
     await collapseMsel(page)
     // 统一排序：工具在上、技能在下
@@ -395,10 +444,19 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     const { page } = session
     await openDetail(page, KEY)
     await page.locator(dlgBtn('编辑')).click()
-    // 修改：岗位 + 勾选新工具 bash
+    // 修改：岗位 + 勾选一个未选工具（目录驱动——从当前候选清单取未勾选项，不再硬编码 bash）
     await page.locator(FIELD_TITLE).fill('夹具评审·复核')
     await page.locator(mselBox('tools')).click()
-    await page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: 'bash' }).locator('input').check()
+    const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
+    const selectedTools = ['read', 'grep']
+    const toggleTarget = (await toolRows.allInnerTexts())
+      .map((name) => name.trim())
+      .find((name) => !selectedTools.includes(name))
+    expect(toggleTarget, '候选清单存在未勾选工具可勾').toBeTruthy()
+    await page
+      .locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: toggleTarget! })
+      .locator('input')
+      .check()
     await collapseMsel(page) // 勾选完成后收起菜单——外点收起解除对底部钮的遮挡（fix-6 交互语义）
     await page.locator(dlgBtn('保存')).click()
     // update 载荷捕获（name 键定址 + 新值在 body）
@@ -407,14 +465,14 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     const body = JSON.parse(update.body) as { name?: string; title?: string; tools?: string[] }
     expect(body.name, '请求体 name = 键正本').toBe(KEY)
     expect(body.title, '请求体携带新岗位').toBe('夹具评审·复核')
-    expect(body.tools, '请求体携带勾选后的工具集').toContain('bash')
+    expect(body.tools, '请求体携带勾选后的工具集').toContain(toggleTarget)
     // 回查看态：新值呈现 + Toast 热刷新
     await expect(page.locator(dlgBtn('编辑')), '头部钮回 [编辑]（查看态）').toBeVisible()
     await expect(page.locator('.dswf-dlg-meta').first(), '查看态换新呈现新岗位').toContainText('夹具评审·复核')
     await expect(page.locator(TOAST), 'Toast 热刷新生效').toContainText('热刷新生效')
     // 背后列表卡片即时同步（patchEntry，不待轮询）
     await expect(page.locator(`${cardOf(KEY)} .xc-title`), '卡片岗位同步新值').toHaveText('夹具评审·复核', { timeout: 10_000 })
-    await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: 'bash' }).first(), '卡片工具 chip 同步').toBeVisible()
+    await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: toggleTarget! }).first(), '卡片工具 chip 同步').toBeVisible()
   } finally {
     await closeSession(session)
   }

@@ -16,7 +16,11 @@ export interface ExpertDraft {
 /** 简介字数上限（ui-design F2：≈ 3 行 × 46 全角字 = 120，与 update 路由 zod 门同值）。 */
 export const DESCRIPTION_MAX = 120;
 
-/** 工具白名单候选清单（multi-select 下拉勾选项；原型固定清单同源）。 */
+/**
+ * 工具白名单候选兜底清单（1.78：主源 = 宿主 ToolRuntime 目录透出（candidates 读口
+ * tools 字段，含插件追加工具）；本清单降级为目录缺席时的兜底——旧宿主/官方目录面
+ * 缺席场景维持可用）。
+ */
 export const TOOL_CANDIDATES: readonly string[] = ["read", "edit", "bash", "grep", "web", "skill"];
 
 /**
@@ -75,6 +79,39 @@ export function unionSkills(entries: readonly ExpertView[]): readonly string[] {
         seen.add(skill);
         out.push(skill);
       }
+    }
+  }
+  return out;
+}
+
+/**
+ * 工具候选裁定（1.78）：目录字段在场 = 官方 ToolRuntime 目录透出（含插件追加工具，
+ * 保序去重）；缺席 = 兜底清单（TOOL_CANDIDATES——旧宿主/目录缺席场景）。
+ */
+export function toolCandidatesOf(
+  catalogTools: readonly string[] | undefined,
+): readonly string[] {
+  if (catalogTools === undefined) return TOOL_CANDIDATES;
+  return Array.from(new Set(catalogTools));
+}
+
+/**
+ * 技能候选裁定（1.78）：目录字段在场 = 官方 skill 目录名为主源（并集既有档案技能
+ * ——已保存的历史技能值保持下拉可选，不为零的向后兼容加法）；缺席 = 并集语义回退
+ * （unionSkills——目录缺席注记）。
+ */
+export function skillCandidatesOf(
+  catalogSkills: readonly string[] | undefined,
+  entries: readonly ExpertView[],
+): readonly string[] {
+  const union = unionSkills(entries);
+  if (catalogSkills === undefined) return union;
+  const seen = new Set<string>(catalogSkills);
+  const out = [...catalogSkills];
+  for (const skill of union) {
+    if (!seen.has(skill)) {
+      seen.add(skill);
+      out.push(skill);
     }
   }
   return out;

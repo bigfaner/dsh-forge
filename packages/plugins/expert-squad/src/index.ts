@@ -48,7 +48,15 @@ interface StorageFace {
 }
 
 /** dsh tools 服务窄面（官方 ToolRuntime.register 正门——D1 注册面零改动）。 */
-interface ExpertSquadToolsFace extends ToolRegisterFace {}
+interface ExpertSquadToolsFace extends ToolRegisterFace {
+  /** 官方目录全视图（ToolRuntime.schemas()——无 scope 即全局视图；仅取 name 供候选）。 */
+  schemas?(): readonly { readonly name: string }[];
+}
+
+/** 官方 skill 目录窄面（SkillRegistry.list——清单面；仅取 name 供候选）。 */
+interface SkillsCatalogFace {
+  list(options?: { readonly cwd?: string }): Promise<readonly { readonly name: string }[]>;
+}
 
 /** 官方 tools 面守卫缝窄面（ToolRuntime.restrict——scoped apply 内 deny inherited
  *  global 工具；dsh-tools lib/index.js:2895-2897 纯 context 调用必 throw「requires a
@@ -322,6 +330,27 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     runState: () => panel.list(),
     // delegate 装配状态读口：读口应答随 delegate 字段透出（观测面-only）。
     delegateState: () => delegateAssembly,
+    // 候选目录读口（Dialog 工具/技能候选——AGENTS 1.2 复用官方目录机械）：
+    // tools = ToolRuntime.schemas() 全视图工具名（可见视图语义：被 restrict 摘除的
+    // 守卫态工具不出现——候选即「可选白名单建议」按可见面裁定）；skills = 官方
+    // SkillRegistry.list 清单名。对应官方服务缺席 = 字段缺席（client 回退兜底）。
+    candidates: async () => {
+      const tools =
+        typeof toolsFace?.schemas === "function"
+          ? Array.from(new Set(toolsFace.schemas().map((schema) => schema.name)))
+          : undefined;
+      const skillsFace = readOptionalService(ctx, "skills") as SkillsCatalogFace | undefined;
+      const skills =
+        typeof skillsFace?.list === "function"
+          ? Array.from(
+              new Set((await skillsFace.list({ cwd: process.cwd() })).map((skill) => skill.name)),
+            )
+          : undefined;
+      return {
+        ...(tools !== undefined ? { tools } : {}),
+        ...(skills !== undefined ? { skills } : {}),
+      };
+    },
   };
   registerExpertSquadRoutes(connection, routes);
 

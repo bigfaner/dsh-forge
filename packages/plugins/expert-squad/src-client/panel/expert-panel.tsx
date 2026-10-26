@@ -23,7 +23,7 @@ import {
   type StatusFilter,
 } from "./filter.js";
 import { CompareChips, PairCompareTable } from "./compare-table.js";
-import { unionSkills } from "./detail-logic.js";
+import { skillCandidatesOf, toolCandidatesOf } from "./detail-logic.js";
 import { ExpertListController, type ListFetcher, type ListState } from "./list-source.js";
 import {
   ExpertDetailController,
@@ -87,7 +87,35 @@ export interface DelegateAssemblySnapshot {
 
 /** /api/expert-squad/run-state 请求 URL（delegate 装配状态随应答透出）。 */
 export function runStateUrl(): string {
-  return "/api/expert-squad/run-state"
+  return "/api/expert-squad/run-state";
+}
+
+/** 候选目录快照（candidates 读口容缺切片——字段缺席 = 对应官方目录缺席）。 */
+export interface CandidateCatalogSnapshot {
+  readonly tools?: readonly string[]
+  readonly skills?: readonly string[]
+}
+
+/** /api/expert-squad/candidates 请求 URL（宿主 ToolRuntime/skill 目录候选读口）。 */
+export function candidatesUrl(): string {
+  return "/api/expert-squad/candidates"
+}
+
+/** 默认候选目录探针（GET candidates 读口；失败/载荷漂移 = 容缺 undefined——旧宿主兼容）。 */
+export function defaultCatalogProbe(): Promise<CandidateCatalogSnapshot | undefined> {
+  return (async () => {
+    const response = await fetch(candidatesUrl())
+    if (!response.ok) return undefined
+    const payload = (await response.json()) as { tools?: unknown; skills?: unknown }
+    const strArr = (value: unknown): readonly string[] | undefined =>
+      Array.isArray(value) && value.every((item) => typeof item === "string")
+        ? (value as readonly string[])
+        : undefined
+    const tools = strArr(payload?.tools)
+    const skills = strArr(payload?.skills)
+    if (tools === undefined && skills === undefined) return undefined
+    return { ...(tools !== undefined ? { tools } : {}), ...(skills !== undefined ? { skills } : {}) }
+  })()
 }
 
 /** 默认 delegate 装配探针（GET run-state 读口；载荷形状漂移/缺字段 = 容缺返回 undefined——旧宿主兼容）。 */
@@ -153,6 +181,8 @@ export interface ExpertPanelAppProps {
   readonly summon?: SummonOpener
   /** delegate 装配探针（测试注入；缺省 = GET run-state 读口 fetch）。 */
   readonly delegateProbe?: () => Promise<DelegateAssemblySnapshot | undefined>
+  /** 候选目录探针（测试注入；缺省 = GET candidates 读口 fetch）。 */
+  readonly catalogProbe?: () => Promise<CandidateCatalogSnapshot | undefined>
 }
 
 /**
@@ -223,6 +253,26 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     [detailController],
   )
   const detailState = useSyncExternalStore(detailSubscribe, detailGetSnapshot, detailGetSnapshot)
+
+  // 候选目录（1.78）：candidates 读口探针——Dialog 工具/技能下拉主候选源；失败/载荷
+  // 漂移 = 容缺（undefined → 兜底清单/并集语义）。取数时机 = 详情 Dialog 打开（懒取
+  // 快照）——宿主 ToolRuntime 目录为注册期渐增视图（核心工具晚于面板挂载注册），
+  // 面板挂载期一次性快照会缺新注册工具。
+  const [catalog, setCatalog] = useState<CandidateCatalogSnapshot | undefined>(undefined)
+  const dialogOpen = detailState?.open === true
+  useEffect(() => {
+    if (!dialogOpen) return
+    let alive = true
+    const probe = props.catalogProbe ?? defaultCatalogProbe
+    probe()
+      .then((snapshot) => {
+        if (alive) setCatalog(snapshot)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [dialogOpen, props.catalogProbe])
 
   const onCardActivate = useCallback(
     (key: string) => {
@@ -298,7 +348,8 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
       {detailState === undefined || detailController === undefined || !detailState.open ? null : (
         <ExpertDetailDialog
           controller={detailController}
-          allSkills={unionSkills(state.entries)}
+          toolCandidates={toolCandidatesOf(catalog?.tools)}
+          allSkills={skillCandidatesOf(catalog?.skills, state.entries)}
           sameKeyEntries={state.entries.filter((entry) => entry.name === detailState.expert.name)}
           {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         />
