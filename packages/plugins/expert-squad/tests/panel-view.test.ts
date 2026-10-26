@@ -166,55 +166,45 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
     entry({ origin: "project", effective: true }),
   ];
 
-  function renderGroup(defaultExpanded?: boolean): string {
+  function renderGroup(onCompare?: (key: string, origin: string) => void): string {
     const group = groupExperts(layered)[0]!;
     return renderToStaticMarkup(
       React.createElement(ExpertGroupView, {
         group,
-        ...(defaultExpanded !== undefined ? { defaultExpanded } : {}),
+        ...(onCompare !== undefined ? { onCompare } : {}),
       }),
     );
   }
 
-  it("组头：键名 + 来源数 + 展开对比钮；卡片无「生效」标（1.68 裁决③）、来源角标在场", () => {
+  // 差异承载面裁决（2026-10-26）：聚组内联对比退役——差异一律由详情 Dialog 对比态
+  // 呈现（点被遮蔽行 = 请求打开 Dialog 对比，onCompare(key, origin) 出面）。
+  it("组头：键名 + 来源数（内联对比钮退役）；卡片无「生效」标、来源角标在场", () => {
     const html = renderGroup();
     expect(html).toContain("dswf-xgroup multi");
     expect(html).toContain('data-expert-key="code-reviewer"');
     expect(html).toContain("2 个来源");
-    expect(html).toContain("展开对比");
+    expect(html).not.toContain("展开对比");
     expect(html).not.toContain("eff-badge"); // 1.68 裁决③：卡片「生效」徽标移除
     expect(html).toContain("origin-project");
     expect(html).toContain(">项目</span>");
   });
 
-  it("被遮蔽卡折叠为摘要行：来源角标 + 岗位 + 更新时间 + 只读标记；非卡片非按钮激活面", () => {
+  it("被遮蔽卡折叠为摘要行：来源角标 + 岗位 + 更新时间 + 只读标记；零内联对比面", () => {
     const html = renderGroup();
     expect(html).toContain("dswf-xshadow");
+    expect(html).toContain('data-expert-key="code-reviewer"');
     expect(html).toContain('data-origin="plugin"');
     expect(html).toContain("origin-plugin");
     expect(html).toContain(">内置</span>");
     expect(html).toContain("内置评审");
     expect(html).toContain("2026-10-01");
     expect(html).toContain("被遮蔽 · 只读");
-    // 折叠态：对比视图不渲染
+    // 内联对比退役：聚组零对比表/零来源切换 chips
     expect(html).not.toContain("dswf-xcompare");
+    expect(html).not.toContain("data-cmp-chip");
   });
 
-  it("展开对比：字段对齐表 + 差异格 diff 高亮（岗位/人设/工具白名单/技能异、简介同）", () => {
-    const html = renderGroup(true);
-    expect(html).toContain("dswf-xcompare");
-    expect(html).toContain("岗位");
-    expect(html).toContain("简介");
-    expect(html).toContain("人设");
-    expect(html).toContain("工具白名单");
-    expect(html).toContain("技能");
-    // 差异格：两列同 diff 格对齐（title/personaMd/tools/skills 异、description 同 → 3 字段 × 2 列）
-    const diffCount = html.match(/class="diff"/g)?.length ?? 0;
-    expect(diffCount).toBe(6);
-    expect(html).toContain("3 项");
-  });
-
-  it("单来源组：无对比钮、无摘要行（与普通卡同形）；页脚计数按专家键数", () => {
+  it("单来源组：无摘要行（与普通卡同形）；页脚计数按专家键数", () => {
     const html = renderPanel({ entries: [entry()] });
     expect(html).toContain("dswf-xgroup");
     expect(html).not.toContain("展开对比");

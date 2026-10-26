@@ -197,15 +197,17 @@ test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——�
     await expect(effectiveCard.locator('.eff-badge'), '卡片无「生效」标（1.68 裁决③）').toHaveCount(0)
     await expect(effectiveCard.locator('.origin-badge.origin-project'), '生效卡来源角标·项目').toContainText('项目')
     await expect(effectiveCard.locator('.xc-creed'), '呈定制人设摘要').toContainText('遮蔽定制人设正文')
-    // 被遮蔽内置卡：折叠摘要行（来源角标 + 只读），点击展开对比视图
+    // 被遮蔽内置卡：折叠摘要行（来源角标 + 只读），点击直开详情 Dialog 对比态
+    // （差异承载面裁决 2026-10-26——聚组内联对比退役，差异一律 Dialog 承载）
     const shadowRow = group.locator(`.dswf-xshadow[data-origin="plugin"]`)
     await expect(shadowRow, '被遮蔽内置卡组内可见').toBeVisible()
     await expect(shadowRow.locator('.origin-badge.origin-plugin'), '被遮蔽行来源角标·内置').toHaveText('内置')
     await expect(shadowRow, '被遮蔽行只读标记').toContainText('被遮蔽 · 只读')
     await shadowRow.click()
-    const compare = group.locator('.dswf-xcompare')
-    await expect(compare, '展开对比视图（字段对齐表）').toBeVisible()
-    await expect(compare.locator('td.diff').first(), '差异格 warn 高亮在场').toBeVisible()
+    const dialog = page.locator('[data-dswf-detail-dialog]')
+    await expect(dialog, '详情 Dialog 打开').toBeVisible()
+    await expect(dialog.locator('.dswf-xcompare'), 'Dialog 对比态（字段对齐表）').toBeVisible()
+    await expect(dialog.locator('td.diff').first(), '差异格高亮在场').toBeVisible()
     // 取用裁决：origin=project（与面板生效标一致——遮蔽裁决两处一致）
     await expect
       .poll(async () => {

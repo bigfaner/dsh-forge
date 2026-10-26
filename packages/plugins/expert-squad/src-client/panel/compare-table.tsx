@@ -1,6 +1,7 @@
-// panel/compare-table —— 两两对比共享组件（1.61 裁决③⑤⑥）：生效卡 vs 单一对比对象
-// 的字段对齐表（差异格 warn 高亮）、来源选择 chips 单选行。供聚组展开对比
-//（expert-panel）与 Dialog 两两对比（detail-dialog）同构消费——禁三列并排的唯一点。
+// panel/compare-table —— 两两对比表（1.61 裁决③⑥；差异承载面裁决 2026-10-26）：
+// 生效卡 vs 单一对比对象的字段对齐表（差异格 warn 高亮），唯一消费面 = 详情 Dialog
+// 对比态（聚组内联对比退役——点被遮蔽行直开 Dialog 对比）。
+// 去外边框（Dialog body 已有容器框架）；差异格高亮增强（warn 底 + 主标签色）。
 
 import { useState, type ReactNode } from "react";
 import {
@@ -23,41 +24,6 @@ function CompareCell({ value, diff }: { readonly value: unknown; readonly diff: 
           ))
         : String(value ?? "")}
     </td>
-  );
-}
-
-/**
- * 来源选择 chips 单选行（⑤ 两两口径：点选切换对比对象；data-cmp-selected 标注当前）。
- * bug f4020406 ④：role=radio 无键盘语义（radiogroup 需方向键/roving tabindex 配套）——
- * 降级为 aria-pressed 切换钮（按钮原生 Tab 可达，pressed 表达选中态）。
- */
-export function CompareChips({
-  shadows,
-  selectedOrigin,
-  onSelect,
-}: {
-  readonly shadows: readonly ExpertView[];
-  readonly selectedOrigin: string;
-  readonly onSelect: (origin: string) => void;
-}): ReactNode {
-  return (
-    <div className="dswf-cmp-pick" aria-label="对比对象">
-      <span className="dswf-cmp-pick-lead">对比对象：</span>
-      {shadows.map((shadow) => (
-        <button
-          key={shadow.origin}
-          type="button"
-          className={`dswf-cmp-chip origin-${shadow.origin}`}
-          data-cmp-chip={shadow.origin}
-          data-cmp-selected={shadow.origin === selectedOrigin ? "true" : "false"}
-          aria-pressed={shadow.origin === selectedOrigin}
-          onClick={() => onSelect(shadow.origin)}
-        >
-          {originLabel(shadow.origin)}
-        </button>
-      ))}
-      <span className="dswf-cmp-pick-note">两两对比 · 点选切换</span>
-    </div>
   );
 }
 

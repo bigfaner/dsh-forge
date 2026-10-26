@@ -22,7 +22,6 @@ import {
   type OriginFilter,
   type StatusFilter,
 } from "./filter.js";
-import { CompareChips, PairCompareTable } from "./compare-table.js";
 import { skillCandidatesOf, toolCandidatesOf } from "./detail-logic.js";
 import { ExpertListController, type ListFetcher, type ListState } from "./list-source.js";
 import {
@@ -288,6 +287,21 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     [controller, detailController],
   )
 
+  // 差异承载面（2026-10-26 裁决）：点被遮蔽行 → 打开详情 Dialog 并直入对比态
+  // （生效卡 vs 该行两列差异——聚组内联对比退役，差异一律 Dialog 承载）。
+  const onCompare = useCallback(
+    (key: string, origin: string) => {
+      if (detailController === undefined) return
+      const entries = controller?.getSnapshot().entries ?? []
+      const effective = entries.find((entry) => entry.name === key && entry.effective !== false)
+      const shadow = entries.find((entry) => entry.name === key && entry.origin === origin)
+      if (effective === undefined || shadow === undefined) return
+      detailController.open(effective)
+      detailController.startCompare(shadow)
+    },
+    [controller, detailController],
+  )
+
   // [召唤]：经官方缝打开 HR 预设会话（绑定当前工作区——workspace 锚同参同源 D4）。
   // 失败降级 = 引导条（不弹选择器、不空绑定、不炸面板）；成功 = 官方 chat-view 呈现，
   // 面板零对话面；建档联动靠既有 fs/observed + 5s 轮询（list-source 既有通道）。
@@ -350,6 +364,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         {...(summonNotice !== undefined ? { summonNotice } : {})}
         {...(delegateNotice !== undefined ? { delegateNotice } : {})}
         {...(detailController !== undefined ? { onCardActivate } : {})}
+        {...(detailController !== undefined && controller !== undefined ? { onCompare } : {})}
       />
       {detailState === undefined || detailController === undefined || !detailState.open ? null : (
         <ExpertDetailDialog
@@ -389,6 +404,8 @@ export interface ExpertPanelProps {
   readonly delegateNotice?: string
   /** 筛选下拉初始展开态（SSR 测试/调试面；缺省收起——msel 语义同径）。 */
   readonly filtersOpen?: boolean
+  /** 点被遮蔽行 = 请求打开详情 Dialog 对比态（生效卡 vs 该行两列差异——聚组内联对比退役）。 */
+  readonly onCompare?: (key: string, origin: string) => void
 }
 
 const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: string }[] = [
@@ -462,17 +479,13 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
 }
 
 /**
- * 聚组容器（1.60 用户裁决 + 1.61 裁决⑤ 两两口径）：组头（键 + 来源数 + 隐藏数 +
- * 展开对比钮）→ 生效卡 → 被遮蔽摘要行 ×N（点选任一行 = 生效卡 vs 该行两列对比，
- * 来源 chips 单选切换对比对象——禁三列并排）。单来源组无摘要行、无对比钮。
- * 导出面：单测直接消费（defaultExpanded/defaultSelectedOrigin = SSR 测试缝）。
+ * 聚组容器（1.60 用户裁决；差异承载面裁决 2026-10-26）：组头（键 + 来源数 + 隐藏数）→
+ * 生效卡 → 被遮蔽摘要行 ×N（点选行 = onCompare(key, origin) 出面——差异一律由详情
+ * Dialog 对比态呈现，聚组内联对比退役）。单来源组无摘要行。
  */
 export function ExpertGroupView(
-  { group, onActivate, defaultExpanded, defaultSelectedOrigin, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly defaultExpanded?: boolean; readonly defaultSelectedOrigin?: string; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
-  const [expanded, setExpanded] = useState(defaultExpanded === true)
-  const [selectedOrigin, setSelectedOrigin] = useState(defaultSelectedOrigin ?? group.shadows[0]?.origin)
+  { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly onCompare?: (key: string, origin: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
   const multi = group.shadows.length > 0
-  const selected = group.shadows.find((shadow) => shadow.origin === selectedOrigin) ?? group.shadows[0]
   return (
     // 「multi」为测试锚（单测 panel-view / e2e expert-squad-compare-mode GROUP_MULTI 选择器），
     // 无样式消费面（.multi 无 CSS 规则）——删类需同步两处选择器
@@ -484,11 +497,6 @@ export function ExpertGroupView(
         {hiddenShadows === undefined || hiddenShadows === 0 ? null : (
           <span className="xg-hidden">隐藏 {hiddenShadows} 条未命中</span>
         )}
-        {multi ? (
-          <button type="button" className="xg-spread" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "收起对比" : "展开对比"}
-          </button>
-        ) : null}
       </header>
       <Card expert={group.effective} projectName={projectName} {...(onActivate !== undefined ? { onActivate } : {})} />
       {group.shadows.map((shadow) => (
@@ -498,13 +506,9 @@ export function ExpertGroupView(
             className="dswf-xshadow"
             data-expert-key={group.key}
             data-origin={shadow.origin}
-            aria-expanded={expanded}
-            onClick={() => {
-              setSelectedOrigin(shadow.origin) // ⑤ 两两口径：点选行 = 生效卡 vs 该行
-              setExpanded(true)
-            }}
+            onClick={() => onCompare?.(group.key, shadow.origin)}
           >
-            {/* bug f4020406 ③：补传 projectName——project 被遮蔽行具名与生效卡/对比表一致 */}
+            {/* bug f4020406 ③：补传 projectName——project 被遮蔽行具名与生效卡一致 */}
             <OriginBadge origin={shadow.origin} projectName={projectName} />
             <span className="xs-title">{shadow.title}</span>
             <span className="xs-updated">{updatedLabel(shadow.updatedAt) ?? ""}</span>
@@ -512,21 +516,6 @@ export function ExpertGroupView(
           </button>
         </div>
       ))}
-      {multi && expanded && selected !== undefined ? (
-        <>
-          <CompareChips
-            shadows={group.shadows}
-            selectedOrigin={selected.origin}
-            onSelect={setSelectedOrigin}
-          />
-          <PairCompareTable
-            effective={group.effective}
-            shadow={selected}
-            showAllFields={true}
-            projectName={projectName}
-          />
-        </>
-      ) : null}
     </section>
   )
 }
@@ -583,6 +572,7 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
         hiddenShadows={hiddenShadows}
         {...(props.projectName !== undefined ? { projectName: props.projectName } : {})}
         {...(props.onCardActivate !== undefined ? { onActivate: props.onCardActivate } : {})}
+        {...(props.onCompare !== undefined ? { onCompare: props.onCompare } : {})}
       />
     ))
   }

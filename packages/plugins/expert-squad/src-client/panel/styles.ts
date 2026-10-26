@@ -123,8 +123,6 @@ export const PANEL_CSS = `
 .dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .xg-head { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
 .xg-name { font: var(--dsw-font-xxs-12); font-weight: 500; color: var(--dsw-alias-label-secondary); font-family: var(--ds-font-family-code); }
-.xg-spread { margin-left: auto; border: none; background: transparent; color: var(--dsw-alias-state-business-primary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); padding: 0; }
-.xg-spread:hover { text-decoration: underline; }
 /* 来源角标（三态文案 项目/用户/内置；语义 alias 点色，色底经 color-mix 降饱和） */
 .origin-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; margin-left: auto; white-space: nowrap; }
 .origin-badge.origin-project { color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
@@ -139,13 +137,14 @@ export const PANEL_CSS = `
 .dswf-xshadow .xs-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dswf-xshadow .xs-updated { color: var(--dsw-alias-label-caption); flex: none; }
 .dswf-xshadow .xs-mark { margin-left: auto; color: var(--dsw-alias-label-caption); flex: none; }
-/* 展开对比视图（字段对齐表——差异格 warn 高亮） */
-.dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); }
+/* 对比表（唯一消费面 = 详情 Dialog 对比态——外框退役，Dialog body 已有容器框架） */
+.dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .cmp-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }
 .cmp-table th, .cmp-table td { padding: 4px ${T.gap8}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; }
 .cmp-table th { font-weight: 400; color: var(--dsw-alias-label-caption); white-space: nowrap; }
 .cmp-table td .chip { margin-right: 4px; }
-.cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
+/* 差异格高亮增强（warn 底 + 左指示条 + 主标签色文字——差异点一眼可辨） */
+.cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-label-primary); }
 .cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
 /* ── 来源行降位（1.61 ① + 1.67 裁决：去生效标、入头部弱化、? tooltip）── */
 .dswf-dlg.wide { width: 880px; } /* ⑥ 对比态宽体：宽于详情 Dialog 680px 刻度（视觉稿正本） */
@@ -154,11 +153,6 @@ export const PANEL_CSS = `
 .dswf-dlg-origin-lead { color: var(--dsw-alias-label-caption); }
 .dswf-dlg-origin-help { flex: none; width: 14px; height: 14px; line-height: 14px; text-align: center; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 50%; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); cursor: var(--dsh-cursor-help, help); }
 .dswf-dlg-origin-masked { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
-.dswf-cmp-pick { display: flex; align-items: center; gap: ${T.gap8}; flex-wrap: wrap; }
-.dswf-cmp-pick-lead, .dswf-cmp-pick-note { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
-.dswf-cmp-pick-note { margin-left: auto; }
-.dswf-cmp-chip { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; padding: 0 ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.pill}; background: transparent; color: var(--dsw-alias-label-secondary); cursor: var(--dsh-cursor-pointer, pointer); }
-.dswf-cmp-chip[data-cmp-selected="true"] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
 .dswf-cmp-pick-list { display: flex; flex-direction: column; gap: ${T.gap8}; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .dswf-cmp-pick-list > b { color: var(--dsw-alias-label-primary); }
 .dswf-cmp-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xs-13); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }

@@ -393,87 +393,53 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   });
 });
 
-// ---- ⑤ 聚组展开对比两两口径 ---------------------------------------------------
+// ---- ⑤ 聚组差异入口（内联对比退役——Dialog 对比态承载） -------------------------
 
-describe("ExpertGroupView 展开对比两两口径（⑤）", () => {
-  function renderGroup(defaultExpanded?: boolean): string {
+describe("ExpertGroupView 差异入口（⑤——内联对比退役）", () => {
+  function renderGroup(onCompare?: (key: string, origin: string) => void): string {
     const groups = filterGroups(layered, "", "all", "all");
     return renderToStaticMarkup(
       React.createElement(ExpertGroupView, {
         group: groups[0]!.group,
-        ...(defaultExpanded !== undefined ? { defaultExpanded } : {}),
+        ...(onCompare !== undefined ? { onCompare } : {}),
       }),
     );
   }
 
-  it("展开对比 = 生效卡 vs 单一被遮蔽行（默认首个 shadow）：来源选择 chips 单选切换", () => {
-    const html = renderGroup(true);
-    expect(html).toContain("dswf-xcompare");
-    // chips 单选：两枚候选来源 chip，当前选中带 data-selected
-    expect(html).toContain('data-cmp-chip="user"');
-    expect(html).toContain('data-cmp-chip="plugin"');
-    expect(html.match(/data-cmp-selected="true"/g)?.length).toBe(1);
-    // 两列表：生效列 + 对比列各一（禁三列并排）
-    expect(html.match(/<th class="cmp-eff">/g)?.length).toBe(1);
-    expect(html.match(/<th class="cmp-tgt">/g)?.length).toBe(1);
-    // 仅渲染一个对比表（点选对象单值）
-    expect(html.match(/dswf-xcompare/g)?.length).toBe(1);
+  it("聚组零内联对比：对比表/来源切换 chips/展开钮全部退役（差异归 Dialog 对比态）", () => {
+    const html = renderGroup();
+    expect(html).not.toContain("dswf-xcompare");
+    expect(html).not.toContain("data-cmp-chip");
+    expect(html).not.toContain("展开对比");
+    // 被遮蔽行保留（点击面 = 请求打开 Dialog 对比）
+    expect(html).toContain("dswf-xshadow");
   });
 
-  it("对比视图随选中 shadow 换右列（defaultSelectedOrigin 切面）", () => {
-    const groups = filterGroups(layered, "", "all", "all");
-    const html = renderToStaticMarkup(
-      React.createElement(ExpertGroupView, {
-        group: groups[0]!.group,
-        defaultExpanded: true,
-        defaultSelectedOrigin: "plugin",
-      }),
-    );
-    expect(html.match(/data-cmp-selected="true"/g)?.length).toBe(1);
-    const userChip = html.indexOf('data-cmp-chip="user"');
-    const pluginChip = html.indexOf('data-cmp-chip="plugin"');
-    expect(html.indexOf('data-cmp-selected="true"')).toBeGreaterThan(Math.min(userChip, pluginChip));
-    // 右列表头为 plugin 来源角标
-    expect(html).toContain("origin-plugin");
-  });
-
-  it("折叠态不渲染对比表；「展开对比」钮语义保持", () => {
-    expect(renderGroup()).not.toContain("dswf-xcompare");
-    expect(renderGroup()).toContain("展开对比");
-  });
-
-  it("bug f4020406 ④：组内 shadow 行与 PairCompareTable 右列表头补传 projectName（project 来源全视图具名一致）", () => {
+  it("bug f4020406 ④：组内 shadow 行角标补传 projectName（project 来源具名一致）", () => {
     const group = {
       key: "code-reviewer",
       effective: entry({ origin: "user", effective: true, title: "用户评审" }),
       shadows: [entry({ origin: "project", effective: false, title: "项目评审" })],
     };
     const html = renderToStaticMarkup(
-      React.createElement(ExpertGroupView, { group, projectName: "acme", defaultExpanded: true }),
+      React.createElement(ExpertGroupView, { group, projectName: "acme" }),
     );
     // shadow 行角标具名（原仅「项目」）
     expect(html).toContain("项目 · acme");
-    // 对比表右列表头具名（与左列一致）
-    expect(html.match(/项目 · acme/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("PairCompareTable 右列表头具名（直渲染钉）", () => {
+  it("PairCompareTable 右列表头具名 + 差异格高亮（Dialog 对比态直渲染钉——去外边框）", () => {
     const html = renderToStaticMarkup(
       React.createElement(PairCompareTable, {
         effective: entry({ origin: "user", effective: true }),
-        shadow: entry({ origin: "project", effective: false }),
+        shadow: entry({ origin: "project", effective: false, title: "项目评审" }),
         showAllFields: true,
         projectName: "acme",
       }),
     );
     expect(html.match(/项目 · acme/g)?.length).toBe(1); // 仅右列表头一枚（左列为 user）
-  });
-
-  it("bug f4020406 ④：CompareChips 降级 aria-pressed（radio 语义不可键盘操作 → pressed 切换钮）", () => {
-    const html = renderGroup(true);
-    expect(html).not.toContain('role="radio"');
-    expect(html).not.toContain("aria-checked");
-    expect(html).toContain("aria-pressed");
+    // 差异承载面断言：差异格 diff 类两列对齐（title 异 → 1 字段 × 2 列）
+    expect(html.match(/class="diff"/g)?.length).toBe(2);
   });
 });
 
