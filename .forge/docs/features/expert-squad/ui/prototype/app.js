@@ -1,21 +1,27 @@
 /* expert-squad prototype v2 interactions: card grid + view/edit dialog */
 const experts = [
-  { id: 'code-reviewer', name: '代码评审员', title: '资深评审', enabled: true, updated: '2026-10-18',
+  { id: 'code-reviewer', name: '代码评审员', title: '资深评审', enabled: true, updated: '2026-10-18', origin: 'project',
     description: 'Runs code review on diffs/files: correctness, maintainability, token-compliance; severity-ranked findings.',
     desc: '## 职责\n- 承接代码评审任务：对指定 diff 或文件给出正确性、可维护性与令牌合规三方面意见\n- 输出按严重度分级的意见清单（文件:行 + 证据 + 建议）\n## 边界\n- 不代写完整实现；必要时给出最小修复示意\n## 信条\n以最小改动为美，先证后评；对每条意见给出文件:行级依据。',
     skills: ['review', 'tsc', 'oxlint'],
-    tools: ['read', 'edit', 'grep'] },
-  { id: 'arch-advisor', name: '架构顾问', title: '方案设计', enabled: true, updated: '2026-10-16',
+    tools: ['read', 'edit', 'grep'],
+    // 1.60 聚组形态：同键低层来源（被遮蔽卡——只读，点击展开对比）
+    layers: [
+      { origin: 'user', title: '资深评审·用户定制', updated: '2026-10-20', tools: ['read', 'grep'], skills: ['review'],
+        description: 'Runs code review on diffs/files.',
+        desc: '## 职责\n- 承接代码评审任务：给出正确性与可维护性意见\n## 信条\n先证后评。' },
+    ] },
+  { id: 'arch-advisor', name: '架构顾问', title: '方案设计', enabled: true, updated: '2026-10-16', origin: 'user',
     description: 'Reviews proposals: clarifies the real need, produces 2-3 options with explicit tradeoffs and seams.',
     desc: '## 职责\n- 承接方案与架构评审：辨析真实需求、给出 2–3 个带取舍的业务方案\n- 识别跨模块交互面；输出含备选空间与推荐项的裁决材料\n## 信条\n权衡显式化，先辨 XY 问题，再谈方案；每个取舍都给备选与代价。',
     skills: ['design', 'tradeoff'],
     tools: ['read', 'grep', 'web'] },
-  { id: 'test-gatekeeper', name: '测试工程师', title: '质量门', enabled: false, updated: '2026-10-10',
+  { id: 'test-gatekeeper', name: '测试工程师', title: '质量门', enabled: false, updated: '2026-10-10', origin: 'project',
     description: 'Executes quality gates run-once; reports real results only; failures settle as blocked with evidence.',
     desc: '## 职责\n- 针对性运行受影响测试，按 run-once 纪律执行门禁\n- 如实上报实测结果；失败以 blocked 结算并附证据\n## 信条\n证据先行，绝不伪造测试结果。',
     skills: ['vitest', 'e2e'],
     tools: ['read', 'edit', 'bash'] },
-  { id: 'doc-writer', name: '文档撰稿人', title: '技术写作', enabled: true, updated: '2026-10-08',
+  { id: 'doc-writer', name: '文档撰稿人', title: '技术写作', enabled: true, updated: '2026-10-08', origin: 'plugin',
     description: 'Writes specs/walkthroughs/ledgers: conclusions only, mermaid-first, no fix-narrative.',
     desc: '## 职责\n- 承接设计与验收文档：PRD/走查记录/台账，mermaid 优先\n- 术语随首现固化；不记录修复叙事\n## 信条\n只写结论与必要上下文，不留过程叙事。',
     skills: ['writing', 'mermaid'],
@@ -24,17 +30,14 @@ const experts = [
 const $ = s => document.querySelector(s)
 const state = { mode: 'data', filter: 'all', q: '', selected: null, editing: false }
 
-function renderGrid() {
-  const g = $('#grid')
-  if (state.mode === 'loading') { g.innerHTML = '<div class="skeleton-card"></div>'.repeat(6); $('#count').textContent = '扫描专家目录…'; return }
-  if (state.mode === 'error') { g.innerHTML = '<div class="errorbar">专家目录扫描失败（权限不足）<button class="btn btn-ghost" onclick="setMode(\'data\')">重试</button></div>'; $('#count').textContent = ''; return }
-  if (state.mode === 'empty2') { g.innerHTML = '<div class="empty"><b>还没有专家</b>在会话里对 HR 说「招募一个专家」即可建档</div>'; $('#count').textContent = '0 位专家'; return }
-  const items = experts.filter(x => (state.filter === 'all' || (state.filter === 'on') === x.enabled)
-    && (!state.q || x.name.includes(state.q) || x.id.includes(state.q) || x.skills.some(s => s.includes(state.q))))
-  if (!items.length) { g.innerHTML = '<div class="empty"><b>无匹配专家</b>换个关键词或过滤条件试试</div>'; $('#count').textContent = ''; return }
-  g.innerHTML = items.map(x => `
+const originLabel = o => ({ project: '项目', user: '用户', plugin: '内置' }[o] || o)
+const cmpFields = [['title', '岗位'], ['description', '简介'], ['desc', '人设'], ['tools', '工具白名单'], ['skills', '技能']]
+const fieldOf = (x, f) => Array.isArray(x[f]) ? x[f].join(',') : String(x[f] ?? '')
+
+function cardHtml(x) {
+  return `
     <div class="dswf-xcard ${x.enabled ? '' : 'off'}" onclick="openDialog('${x.id}','view')">
-      <div class="xc-head"><span class="dot ${x.enabled ? 'on' : 'off'}"></span><b>${x.name}</b><span class="chip tool">${x.id}</span></div>
+      <div class="xc-head"><span class="dot ${x.enabled ? 'on' : 'off'}"></span><b>${x.name}</b><span class="chip tool">${x.id}</span><span class="origin-badge origin-${x.origin}">${originLabel(x.origin)}</span><span class="eff-badge">生效</span></div>
       <div class="xc-title">${x.title}${x.enabled ? '' : ' · 已禁用'}</div>
       <div class="xc-creed">${x.desc}</div>
       <div>
@@ -46,8 +49,56 @@ function renderGrid() {
         <div class="xc-tags">${x.tools.map(s => `<span class="chip tool">${s}</span>`).join('')}</div>
       </div>
       <div class="xc-foot"><span>更新于 ${x.updated}</span></div>
-    </div>`).join('')
+    </div>`
+}
+
+function compareHtml(x, shadow) {
+  return `
+    <div class="dswf-xcompare">
+      <table class="cmp-table">
+        <tr><th>字段</th><th><span class="origin-badge origin-${x.origin}">${originLabel(x.origin)}</span> <span class="eff-badge">生效</span></th><th><span class="origin-badge origin-${shadow.origin}">${originLabel(shadow.origin)}</span></th></tr>
+        ${cmpFields.map(([f, label]) => {
+          const diff = fieldOf(x, f) !== fieldOf(shadow, f)
+          const cell = v => Array.isArray(v) ? v.map(s => `<span class="chip">${s}</span>`).join('') : String(v ?? '')
+          return `<tr><th>${label}</th><td class="${diff ? 'diff' : ''}">${cell(x[f])}</td><td class="${diff ? 'diff' : ''}">${cell(shadow[f])}</td></tr>`
+        }).join('')}
+      </table>
+      <div class="cmp-note">与生效卡不同的字段已高亮 · 被遮蔽卡只读</div>
+    </div>`
+}
+
+function renderGrid() {
+  const g = $('#grid')
+  if (state.mode === 'loading') { g.innerHTML = '<div class="skeleton-card"></div>'.repeat(6); $('#count').textContent = '扫描专家目录…'; return }
+  if (state.mode === 'error') { g.innerHTML = '<div class="errorbar">专家目录扫描失败（权限不足）<button class="btn btn-ghost" onclick="setMode(\'data\')">重试</button></div>'; $('#count').textContent = ''; return }
+  if (state.mode === 'empty2') { g.innerHTML = '<div class="empty"><b>还没有专家</b>在会话里对 HR 说「招募一个专家」即可建档</div>'; $('#count').textContent = '0 位专家'; return }
+  const items = experts.filter(x => (state.filter === 'all' || (state.filter === 'on') === x.enabled)
+    && (!state.q || x.name.includes(state.q) || x.id.includes(state.q) || x.skills.some(s => s.includes(state.q))))
+  if (!items.length) { g.innerHTML = '<div class="empty"><b>无匹配专家</b>换个关键词或过滤条件试试</div>'; $('#count').textContent = ''; return }
+  // 同键聚组（1.60 用户裁决）：生效卡首张 + 被遮蔽折叠摘要行 + 展开对比（差异格高亮）
+  g.innerHTML = items.map(x => {
+    const layers = x.layers ?? []
+    if (!layers.length) return cardHtml(x)
+    const shadowRows = layers.map((sh, i) => `
+      <button type="button" class="dswf-xshadow" onclick="toggleCmp('${x.id}',${i})" aria-expanded="false">
+        <span class="origin-badge origin-${sh.origin}">${originLabel(sh.origin)}</span>
+        <span class="xs-title">${sh.title}</span>
+        <span class="xs-updated">${sh.updated}</span>
+        <span class="xs-mark">被遮蔽 · 只读</span>
+      </button>
+      <div class="cmp-slot" id="cmp-${x.id}-${i}" style="display:none">${compareHtml(x, sh)}</div>`).join('')
+    return `
+      <section class="dswf-xgroup multi" data-expert-key="${x.id}">
+        <header class="xg-head"><b class="xg-name">${x.id}</b><span>${layers.length + 1} 个来源</span><button type="button" class="xg-spread" onclick="toggleCmp('${x.id}',0)">展开对比</button></header>
+        ${cardHtml(x)}
+        ${shadowRows}
+      </section>`
+  }).join('')
   $('#count').textContent = `${experts.length} 位专家 · 显示 ${items.length}`
+}
+function toggleCmp(key, i) {
+  const slot = document.getElementById(`cmp-${key}-${i}`)
+  if (slot) slot.style.display = slot.style.display === 'none' ? '' : 'none'
 }
 function setMode(m) { state.mode = m; renderGrid() }
 function setFilter(f) { state.filter = f; renderGrid() }

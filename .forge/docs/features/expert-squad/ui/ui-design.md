@@ -30,19 +30,25 @@ v2 范围修订（用户裁决）：卡片网格（大卡、内容丰富：人�
    │  ├─ dswf-search-input（即时过滤名称/技能标签，左置紧随标题）
    │  ├─ dswf-status-select（状态筛选 select：全部/启用/禁用 三态；native select 基座 + dswf 令牌包装——官方 primitives 无同语义 Select）
    │  └─ Button primary「召唤」（独占右侧）→ 打开 HR 预设官方会话（复用 chat-view）
-   ├─ dswf-card-grid（auto-fill minmax(280px,1fr)，大卡）
-   │  └─ dswf-xcard ×N
-   │     ├─ 状态灯（7px 圆点）+ 名称 + **英文标识 chip**（等宽字体，如 `code-reviewer`）
-   │     ├─ 岗位（Small caption；禁用附「· 已禁用」且整卡降透明度）
-   │     ├─ 人设摘要（三行截断）
-   │     ├─ 技能标签 chips（段标「技能标签」）
-   │     ├─ 工具白名单 chips（等宽字体，段标「工具白名单（子会话强制）」）
-   │     └─ 页脚：更新时间
-   └─ dswf-panel-footer（计数「N 位专家 · 显示 M」）
+   ├─ dswf-card-grid（auto-fill minmax(280px,1fr)；1.60 裁决：同键聚组——组为网格单元）
+   │  └─ dswf-xgroup ×N（组容器：data-expert-key）
+   │     ├─ xg-head：键名（等宽）+ 来源数 + [展开对比]（仅同键多来源组）
+   │     ├─ dswf-xcard（生效卡，首张）
+   │     │  ├─ 状态灯（7px 圆点）+ 名称 + **英文标识 chip**（等宽字体）+ **来源角标**（项目/用户/内置三态，`origin-badge origin-{project|user|plugin}`）+ **「生效」标**（遮蔽胜出层）
+   │     │  ├─ 岗位（Small caption；禁用附「· 已禁用」且整卡降透明度）
+   │     │  ├─ 人设摘要（三行截断）
+   │     │  ├─ 技能标签 chips（段标「技能标签」）
+   │     │  ├─ 工具白名单 chips（等宽字体，段标「工具白名单（子会话强制）」）
+   │     │  └─ 页脚：更新时间
+   │     └─ dswf-xshadow ×N（被遮蔽卡折叠摘要行，只读）：来源角标 + 岗位 + 更新时间 + 「被遮蔽 · 只读」；点击展开 dswf-xcompare
+   │        └─ dswf-xcompare（展开对比）：字段对齐表（字段｜生效卡｜被遮蔽卡）——岗位/简介/人设/工具白名单/技能五行，差异格 `diff` warn 高亮
+   └─ dswf-panel-footer（计数「N 位专家 · 显示 M」——N/M 按专家键数计；组内来源数在组头标注）
 ```
 
 状态：加载 = 骨架卡片；空 = EmptyState（「还没有专家——在会话里对 HR 说『招募一个专家』」）；错误 = ErrorBar（重试）；无匹配 = EmptyState。
-交互：点击卡片 → F2 Dialog。数据绑定：名称 ← name、**标识 chip ← name（英文键正本）**、岗位 ← title、人设摘要 ← 正文（截断）、chips ← skills、灯 ← enabled。
+交互：点击生效卡 → F2 Dialog；点击被遮蔽摘要行或组头「展开对比」⇄ 收起对比表（默认折叠）。
+数据绑定：名称 ← name、**标识 chip ← name（英文键正本）**、岗位 ← title、人设摘要 ← 正文（截断）、chips ← skills、灯 ← enabled、来源角标 ← origin（1.60 聚组载荷：同键全层条目 + effective 位）、生效标 ← effective=true。
+操作语义：编辑/启停仅生效卡持有（写 project 层既有链路）；被遮蔽卡只读（「提升为 project 定制」类动作不在本期，留待后续裁决）。
 
 **档案语义分层**：`name` 英文标识 = 键正本（派发字符串键，不注入内容）；`description` 简介 = 何时委派我（选人依据）；正文「**人设（Persona）**」= Markdown 自由输入，派发时由使用方组装为 `SubagentStartRequest.persona` 注入子会话（做什么/不做什么与执行原则合一，不拆分强加结构）。履历（工作记录：执行任务与委派主/子会话）**不在本期**——派发链产物，归独立提案。
 

@@ -25,6 +25,19 @@ function apply(ctx: Context) {
 | `registerRoot` | `(ctx: Context, dir: string) => void` | 上层插件声明随包内置专家目录（plugin 内置层，同型 customSkillDirs） |
 | `setEnabled` | `(key: string, enabled: boolean) => void` | 启停；状态按工作区隔离（AD2/D4），`get` 视调用工作区判定 |
 
+### 2.1 面板 list 载荷（1.60 用户裁决：同键全层聚组展示）
+
+面板路由 `GET /api/expert-squad/list` 返回**同键全层条目**（`LayeredExpertEntry[]`）——每条 = `ExpertEntry` 全字段 + 展示层附加位：
+
+| 字段 | 类型 | 语义 |
+|---|---|---|
+| `origin` | `'plugin' \| 'user' \| 'project'` | 该条目来源层（三层同名时同键多条并存） |
+| `effective` | `boolean` | `true` = 该键遮蔽胜出层（取用即它）；`false` = 被遮蔽层（展示只读） |
+
+- 语义边界：**生效语义零改动**——遮蔽定序仍 project > user > plugin，`get`/`compose`/启停键控照旧；本载荷仅服务面板聚组对比展示。
+- 排序：键名字典序；同键内生效条目首张，其后 origin 高→低。
+- 可见性：生效条目沿用 `list` 启停可见性（禁用默认不可见，`includeDisabled: true` 才含）；被遮蔽条目恒在场（只读，无操作语义附丽）。
+
 ## 3. `ExpertRecord` 字段表（与 §7 逐字段一致）
 
 | 字段 | 类型 | 组装映射 | 说明 |
