@@ -5,15 +5,17 @@
 
 import { MSEL_MENU_MAX_PX } from "./detail-logic.js";
 
-/** 令牌刻度别名（读性——原型值 → 官方最近令牌映射的唯一注记点）。 */
+/** 令牌刻度别名（读性——原型值 → 官方最近令牌映射的唯一注记点）。
+ *  间距语义（gap/pad 前缀）映射到圆角/行高令牌是 DESIGN.md 间距纪律的既定口径：
+ *  官方主题无间距标尺令牌，刻度取排版行高与圆角固有值（20/16/12/8px），不引入平行间距体系。 */
 const T = {
-  gap8: "var(--dsw-radius-sm)", // 8
-  pad12: "var(--dsw-radius-md)", // 12（原型 14 → 最近令牌）
-  pad16: "var(--dsw-radius-lg)", // 16
-  pad20: "var(--dsw-font-xs-13-line-height)", // 20
-  lh14: "var(--dsw-font-xxxs-11-line-height)", // 14
-  lh18: "var(--dsw-font-xxs-12-line-height)", // 18
-  lh20: "var(--dsw-font-xs-13-line-height)", // 20
+  gap8: "var(--dsw-radius-sm)", // 间距 8（圆角令牌承担标尺）
+  pad12: "var(--dsw-radius-md)", // 间距 12（原型 14 → 最近令牌）
+  pad16: "var(--dsw-radius-lg)", // 间距 16
+  pad20: "var(--dsw-font-xs-13-line-height)", // 间距 20（行高令牌承担标尺）
+  lh14: "var(--dsw-font-xxxs-11-line-height)", // 行高 14
+  lh18: "var(--dsw-font-xxs-12-line-height)", // 行高 18
+  lh20: "var(--dsw-font-xs-13-line-height)", // 行高 20（与 pad20 同令牌：一为行高一为间距/控件高度，语义分名）
   r8: "var(--dsw-radius-sm)",
   r12: "var(--dsw-radius-md)",
   pill: "999px", // dsw-raw 官方 Tag 胶囊刻度同值
