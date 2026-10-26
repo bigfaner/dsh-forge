@@ -16,7 +16,10 @@ export type { TransitionFace }
  *   interrupted（S3 reconcileInterrupted——启动对账/循环主动终态的状态真化）
  * - blocked → in_progress（claimTask 重派）/ pending（auto-restore——submit 钩子）
  * - interrupted → in_progress（S3 claimTask adopt——循环定向恢复领取）
- * - suspended / completed / skipped / rejected：无出边（agent 面不可达）
+ * - suspended → pending（task-pause-primitive 路线 A：dispatchTask re-entry 恢复序内、runRound 前
+ *   对容器内 suspended paused 卡批量恢复 pending——「仅 resume 时点触发」守卫由调用方承担；
+ *   已知代价并裁决接受：human 通道该转移随之显式合法）
+ * - completed / skipped / rejected：无出边（agent 面不可达）
  * 注：in_progress 幂等重入（C1）无状态转移，不出现在矩阵；auto-block（addTask --block-source
  * 单事务置源 blocked）是写路径内聚效果，同样不经转移校验面。
  */
@@ -24,7 +27,7 @@ export const AGENT_TRANSITION_MATRIX: Readonly<Record<TaskStatus, readonly TaskS
   pending: ['in_progress'],
   in_progress: ['completed', 'blocked', 'interrupted'],
   blocked: ['in_progress', 'pending'],
-  suspended: [],
+  suspended: ['pending'], // resume 序批量恢复（task-pause-primitive 路线 A——非开放边，调用方守卫 resume 时点）
   interrupted: ['in_progress'],
   completed: [],
   skipped: [],

@@ -10,8 +10,8 @@ import { addTask } from './add.js'
 import { InvalidTransitionError, ReasonRequiredError, TaskNotFoundError } from './errors.js'
 import { createTasksHarness, seedFeature, seedTask } from './harness.js'
 import { PhaseInvariantViolationError } from './phase-deriver.js'
-import { transitionTargets } from './state-machine.js'
-import { transitionTask } from './transition.js'
+import { transitionTargets, assertTransitionAllowed } from './state-machine.js'
+import { transitionTask, pauseTask } from './transition.js'
 
 /** 任务记录行直读（from/to/reason/actor 断言面——append-only 时间线） */
 interface RecordRow {
@@ -162,6 +162,71 @@ describe('transitionTask：提前校验 + reason 必带 + record', () => {
       const e = err as TaskNotFoundError
       expect(e.code).toBe('ERR_TASK_NOT_FOUND')
       expect(e.data.taskId).toBe('no-such-id')
+    } finally {
+      h.dispose()
+    }
+  })
+})
+
+// ── pauseTask 转移服务（task-pause-primitive §二-2：in_progress→suspended，复用 transitionTask
+// 事务闭包）──
+
+describe('pauseTask：in_progress→suspended 转移闭包', () => {
+  it('in_progress → suspended：复用 transitionTask 闭包（transition 记录 from/to/reason/actor=core + 相位重算 + 事件单发）', async () => {
+    const h = createTasksHarness()
+    try {
+      seedFeature(h.db, { slug: 'feat', status: 'in-progress' })
+      const id = seedTask(h.db, 'feat', '1.1', { status: 'in_progress' })
+
+      const snap = await pauseTask(
+        { store: h.store, events: h.events },
+        { projectId: h.projectId, taskId: id, reason: '规格被用户裁决取代，改写后重派' },
+      )
+
+      expect(snap).toMatchObject({ taskId: id, taskStatus: 'suspended' })
+      expect(
+        h.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(id)?.task_status,
+      ).toBe('suspended')
+      expect(recordsOf(h.db, id)).toEqual([
+        { verb: 'transition', from_status: 'in_progress', to_status: 'suspended', reason: '规格被用户裁决取代，改写后重派', actor: 'core' },
+      ])
+      expect(h.events.emitted).toEqual([{ projectId: h.projectId }])
+    } finally {
+      h.dispose()
+    }
+  })
+
+  it('reason 缺失拒绝：ERR_REASON_REQUIRED（空串与纯空白两形，零记录零事件）', async () => {
+    const h = createTasksHarness()
+    try {
+      seedFeature(h.db, { slug: 'feat', status: 'in-progress' })
+      const id = seedTask(h.db, 'feat', '1.1', { status: 'in_progress' })
+
+      for (const reason of ['', '   \t ']) {
+        const err: unknown = await pauseTask(
+          { store: h.store, events: h.events },
+          { projectId: h.projectId, taskId: id, reason },
+        ).catch((e: unknown) => e)
+        expect(err).toBeInstanceOf(ReasonRequiredError)
+        expect((err as ReasonRequiredError).code).toBe('ERR_REASON_REQUIRED')
+      }
+      expect(recordsOf(h.db, id)).toHaveLength(0)
+      expect(
+        h.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(id)?.task_status,
+      ).toBe('in_progress')
+      expect(h.events.emitted).toHaveLength(0)
+    } finally {
+      h.dispose()
+    }
+  })
+
+  it('suspended 后 updateTask 可改写、claim 不领取（suspended 语义收编）；suspended→pending agent 面合法（resume 恢复边）', async () => {
+    const h = createTasksHarness()
+    try {
+      seedFeature(h.db, { slug: 'feat', status: 'in-progress' })
+      const id = seedTask(h.db, 'feat', '1.1', { status: 'in_progress' })
+      await pauseTask({ store: h.store, events: h.events }, { projectId: h.projectId, taskId: id, reason: '暂停改写' })
+      expect(assertTransitionAllowed('suspended', 'pending', 'agent')).toBeUndefined()
     } finally {
       h.dispose()
     }

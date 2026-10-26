@@ -51,7 +51,7 @@ describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
       pending: ['in_progress'], // claimTask
       in_progress: ['completed', 'blocked', 'interrupted'], // 仅经 submitTask（gate ✓ / result=blocked）+ S3 reconcileInterrupted
       blocked: ['in_progress', 'pending'], // claimTask 重派 / auto-restore（submit 钩子）
-      suspended: [], // agent 面不可达
+      suspended: ['pending'], // task-pause-primitive 路线 A：resume 序批量恢复（仅循环恢复时点调用）
       interrupted: ['in_progress'], // S3 claimTask adopt（循环定向恢复领取）
       completed: [],
       skipped: [],
@@ -62,9 +62,9 @@ describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
     }
   })
 
-  it('S3 新边双径：in_progress→interrupted（对账真化）与 interrupted→in_progress（adopt 恢复）放行', () => {
-    expect(() => assertTransitionAllowed('in_progress', 'interrupted', 'agent')).not.toThrow()
-    expect(() => assertTransitionAllowed('interrupted', 'in_progress', 'agent')).not.toThrow()
+  it('pause 原语新边双径：in_progress→suspended（human 面闭包）与 suspended→pending（agent 面 resume 恢复）放行', () => {
+    expect(() => assertTransitionAllowed('suspended', 'pending', 'agent')).not.toThrow()
+    expect(() => assertTransitionAllowed('in_progress', 'suspended', 'human')).not.toThrow()
   })
 
   it('矩阵目标 ⊆ 八态词汇且无自环（from≠to）', () => {
@@ -76,8 +76,7 @@ describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
     }
   })
 
-  it('agent 面无 pending/suspended 出边语义抽样（§7-2 拆面关闭）', () => {
-    expect(AGENT_TRANSITION_MATRIX.suspended).toEqual([])
+  it('agent 面终态无出边语义抽样（completed/skipped/rejected 恒不可达）', () => {
     expect(AGENT_TRANSITION_MATRIX.completed).toEqual([])
     expect(AGENT_TRANSITION_MATRIX.skipped).toEqual([])
     expect(AGENT_TRANSITION_MATRIX.rejected).toEqual([])
@@ -117,7 +116,6 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
   it('agent 面矩阵非法格逐格拒绝（in_progress→pending / blocked→completed[TC-063] / 终态全部出边 / blocked→skipped / interrupted 越权出边 / pending→interrupted）', () => {
     const illegal: ReadonlyArray<readonly [TaskStatus, TaskStatus]> = [
       ['in_progress', 'pending'],
-      ['in_progress', 'suspended'],
       ['blocked', 'completed'],
       ['blocked', 'skipped'],
       ['pending', 'blocked'],
@@ -126,8 +124,7 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
       ['interrupted', 'completed'], // S3：interrupted 先恢复（adopt）后经 submit 结算
       ['interrupted', 'pending'],
       ['interrupted', 'blocked'],
-      ['suspended', 'in_progress'],
-      ['suspended', 'pending'],
+      ['suspended', 'in_progress'], // suspended 唯一 agent 出边 = pending（resume 恢复，路线 A）
       ['completed', 'in_progress'],
       ['completed', 'pending'],
       ['skipped', 'completed'],

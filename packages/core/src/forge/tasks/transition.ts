@@ -161,3 +161,26 @@ export async function transitionTask(deps: TasksVerbDeps, input: TransitionTaskI
   deps.events.emitTasksChanged(input.projectId)
   return snapshot
 }
+
+/** pauseTask 转移服务入参（task-pause-primitive §二-2——reason 必带） */
+export interface PauseTaskInput {
+  readonly projectId: string
+  readonly taskId: string
+  /** 暂停理由（审计落任务执行时间线——必带，空白拒绝） */
+  readonly reason: string
+}
+
+/**
+ * pauseTask 转移闭包（task-pause-primitive §二-2）：in_progress → suspended，复用 human 面
+ * transitionTask 单事务闭包全量语义（提前校验 + reason 必带 + transition 记录 + 恢复钩子 +
+ * 相位重算 + 写后事件单发），actor 恒 'core'——暂停由 agent 原语发起，审计归因与实际通道一致。
+ * in_progress→suspended 经 human 面目标集（from≠to 任意）放行，不占用 agent 面矩阵格。
+ *
+ * **调用方竞态收口契约（Hard Rule）**：本闭包只做状态落库——调用方（loop driver pause 动作）
+ * 必须**先摘 `record.inFlight` 再 abort** worker 执行（stop 面已实证的竞态收口序，
+ * `plugin-forge/src/loop/driver.ts:1061-1063`），abort 完成后才调用本闭包落 suspended；
+ * 循环同步进入 LoopRecord.suspended 挂起态堵死重领窗口。
+ */
+export async function pauseTask(deps: TasksVerbDeps, input: PauseTaskInput): Promise<TaskSnapshot> {
+  return transitionTask(deps, { projectId: input.projectId, taskId: input.taskId, toStatus: 'suspended', reason: input.reason, actor: 'core' })
+}
