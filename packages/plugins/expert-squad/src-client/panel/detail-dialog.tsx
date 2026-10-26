@@ -92,7 +92,7 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
     if (block.kind === "li") {
       list.push(
         <li key={index}>
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </li>,
       );
       return;
@@ -101,13 +101,27 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
     if (block.kind === "heading") {
       out.push(
         <strong key={index} className="dswf-dlg-md-h">
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </strong>,
+      );
+    } else if (block.kind === "code") {
+      // bug b29f77e7：官方 MarkdownDoc 代码块结构镜像（.md-code-block +
+      // data-code-block-content 锚 + pre>code）——md-mermaid 全局 DOM 增强器
+      // （壳 apply 期启动、观察 body 子树）按内容判据扫此结构出 mermaid 图
+      // （渲染成功旁插 figure 并隐藏原块；失败/非 mermaid 维持代码块现状）。
+      out.push(
+        <div key={index} className="md-code-block" data-code-wrap={block.lang || undefined}>
+          <div data-code-block-content>
+            <pre>
+              <code>{block.source}</code>
+            </pre>
+          </div>
+        </div>,
       );
     } else {
       out.push(
         <div key={index}>
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </div>,
       );
     }

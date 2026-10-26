@@ -1,4 +1,6 @@
 // 任务 1.2 测试 —— 专家档案 frontmatter 解析与注册期校验（tech-design §8 数据模型）。
+// bug b29f77e7（字面 \n 归一）：模型/脚本写入的档案可能把换行写成字面 `\n` 转义符——
+// 解析层归一为真实换行（视图/编辑/persona 注入三面同源生效），编辑保存后即固化。
 import { describe, expect, it } from "vitest";
 import {
   detectSameLayerDuplicate,
@@ -25,6 +27,26 @@ const GOOD = [
 ].join("\n");
 
 describe("正向：frontmatter + 正文人设 → ExpertRecord", () => {
+  // bug b29f77e7：字面 \n 转义序列归一为真实换行——description 与 personaMd 同源归一，
+  // 序列中的字面 \n（含 \n\n 段间形态）全部转真实换行；无字面 \n 的档案零变化。
+  it("bug b29f77e7: 字面 \\n 归一为真实换行（description + personaMd 同源）", () => {
+    const md = [
+      "---",
+      "name: qa",
+      'description: "Electron 测试专家\\n负责 E2E 与打包验证"',
+      "title: 测试工",
+      "tools: [read]",
+      "---",
+      "职责\\n- 负责 Electron 应用的测试设计与执行\\n\\n## 边界\\n- 只做测试与质量保证",
+    ].join("\n");
+    const r = parseExpertFile(PATH, md);
+    if (!r.ok) throw new Error(`应解析成功：${r.reason}`);
+    expect(r.record.description).toBe("Electron 测试专家\n负责 E2E 与打包验证");
+    expect(r.record.personaMd).toBe(
+      "职责\n- 负责 Electron 应用的测试设计与执行\n\n## 边界\n- 只做测试与质量保证",
+    );
+  });
+
   it("全字段解析（块标量 description / flow 数组 tools / 空 skills）+ 正文人设 Markdown 原文", () => {
     const r = parseExpertFile(PATH, GOOD);
     if (!r.ok) throw new Error(`应解析成功：${r.reason}`);

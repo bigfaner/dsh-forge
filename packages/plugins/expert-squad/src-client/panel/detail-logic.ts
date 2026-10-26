@@ -125,10 +125,13 @@ export interface MdInline {
   readonly v: string;
 }
 
-/** 块级行（标题 / 列表项 / 段落）。 */
+/** 块级行（标题 / 列表项 / 段落 / 围栏代码块）。 */
 export interface MdBlock {
-  readonly kind: "heading" | "li" | "para";
-  readonly inline: readonly MdInline[];
+  readonly kind: "heading" | "li" | "para" | "code";
+  readonly inline?: readonly MdInline[];
+  /** code 块专有：infostring 语言 + 围栏体原文（bug b29f77e7）。 */
+  readonly lang?: string;
+  readonly source?: string;
 }
 
 /** 行内解析：**加粗** 与 `行内代码` 切分（保序；未闭合定界符按纯文本）。 */
@@ -149,11 +152,29 @@ export function mdInline(text: string): readonly MdInline[] {
   return out;
 }
 
-/** 人设 Markdown → 块级行序列（标题/列表符剥离 + 行内解析；空行丢弃）。 */
+/** 人设 Markdown → 块级行序列（标题/列表符剥离 + 行内解析 + 围栏代码块；空行丢弃）。
+ *  围栏（```lang … ```）体原样成 code 块、不做行内解析；未闭合围栏兜底到文末
+ *  （bug b29f77e7——查看态围栏按官方 .md-code-block 结构渲染，mermaid fence 由
+ *  md-mermaid 全局 DOM 增强器出图）。 */
 export function personaBlocks(personaMd: string): readonly MdBlock[] {
   const blocks: MdBlock[] = [];
+  let fence: { lang: string; lines: string[] } | undefined;
   for (const rawLine of personaMd.split("\n")) {
     const line = rawLine.trimEnd();
+    if (fence !== undefined) {
+      if (/^```\s*$/.test(line)) {
+        blocks.push({ kind: "code", lang: fence.lang, source: fence.lines.join("\n") });
+        fence = undefined;
+      } else {
+        fence.lines.push(line);
+      }
+      continue;
+    }
+    const fenceOpen = /^```(\S*)\s*$/.exec(line);
+    if (fenceOpen !== null) {
+      fence = { lang: fenceOpen[1] ?? "", lines: [] };
+      continue;
+    }
     if (line.trim() === "") continue;
     if (/^#{1,6}\s+/.test(line)) {
       blocks.push({ kind: "heading", inline: mdInline(line.replace(/^#{1,6}\s+/, "")) });
@@ -162,6 +183,9 @@ export function personaBlocks(personaMd: string): readonly MdBlock[] {
     } else {
       blocks.push({ kind: "para", inline: mdInline(line) });
     }
+  }
+  if (fence !== undefined) {
+    blocks.push({ kind: "code", lang: fence.lang, source: fence.lines.join("\n") });
   }
   return blocks;
 }

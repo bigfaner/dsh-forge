@@ -75,13 +75,17 @@ export const PANEL_CSS = `
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
 .dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
-.dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); white-space: pre-wrap; } /* 简介/归一后可含真实换行（bug b29f77e7） */
 .dswf-dlg-seg { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); margin-top: ${T.gap8}; }
 .dswf-dlg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .dswf-dlg-md { font: var(--dsw-font-s-14); line-height: var(--dsw-font-s-14-line-height); color: var(--dsw-alias-label-primary); }
 .dswf-dlg-md ul { margin: 2px 0 2px 18px; padding: 0; }
 .dswf-dlg-md-h { display: block; margin-top: ${T.gap8}; font-weight: 500; }
 .dswf-dlg-md code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
+/* 围栏代码块（官方 .md-code-block 结构镜像——bug b29f77e7；mermaid fence 由全局增强器出图后隐藏原块，figure 样式随包 docs.css .dswf-doc-mermaid 族） */
+.dswf-dlg-md .md-code-block { margin: ${T.gap8} 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); overflow: hidden; }
+.dswf-dlg-md .md-code-block pre { margin: 0; padding: ${T.gap8} ${T.pad12}; overflow-x: auto; font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); line-height: ${T.lh18}; }
+.dswf-dlg-md .md-code-block pre code { background: none; padding: 0; border-radius: 0; font-size: inherit; }
 .dswf-dlg-field { display: flex; flex-direction: column; gap: 6px; }
 .dswf-dlg-field > label { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; color: var(--dsw-alias-label-caption); }
 .dswf-dlg-input { font: var(--dsw-font-s-14); padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
