@@ -3,7 +3,8 @@
 // 隐藏）、查看态分段（岗位·启停 meta
 // → 简介 → 人设 Markdown 渲染 → 工具白名单 chips → 技能 chips）、编辑态字段集（岗位
 // Input / 简介 textarea 2→6 行 120 字上限 / 人设 textarea 12→100 行自适应 / multi-select
-// ×2——工具上技能下、技能可新增；下拉菜单在 Dialog body 滚动边界内无底部遮挡）。
+// ×2——工具上技能下、技能可新增；下拉菜单 position:fixed 视口锚定（可溢出 Dialog
+// 视觉范围，不被 body overflow 裁切）。
 // Esc / 遮罩 / ✕ 关闭。
 // 官方 MarkdownDoc 组件不在插件 client bundle 外置表内（classic script 缝仅 react
 // 外置），按原型近似语义以 .dswf-* 自绘面分块渲染（标题/加粗/行内代码/列表）。
@@ -153,9 +154,34 @@ export function attachMselCollapse(
 }
 
 /**
+ * multi-select 菜单 placement 纯决策（fixed 视口锚定）：
+ * 下方空间足够 → below（top = box 底 + 4）；下方不足且上方更宽裕 → above
+ * （bottom = 视口高 - box 顶 + 4）。坐标一律视口系——菜单 position:fixed 挂
+ * viewport，不受 Dialog body overflow 裁切。
+ */
+export function mselMenuPlacement(
+  box: { top: number; bottom: number; left: number; width: number },
+  viewportHeight: number,
+  maxMenuPx = 240,
+): {
+  side: "below" | "above";
+  style: { left: number; width: number; top?: number; bottom?: number };
+} {
+  const below = viewportHeight - box.bottom;
+  const base = { left: box.left, width: box.width };
+  if (below < maxMenuPx && box.top > below) {
+    return { side: "above", style: { ...base, bottom: viewportHeight - box.top + 4 } };
+  }
+  return { side: "below", style: { ...base, top: box.bottom + 4 } };
+}
+
+/**
  * multi-select：box 显已选 chips + 下拉勾选菜单（allowAdd 技能可新增）。
  * 对齐已批原型：菜单默认收起（条件渲染），box 点击开合，document 外点收起。
  * Root cause: 产品实现曾恒渲染菜单（无 open 态），偏离原型 mountMsel 交互。
+ * 菜单 position:fixed 视口锚定（mselMenuPlacement 坐标 + scroll/resize 跟随）——
+ * absolute 菜单被 .dswf-dlg-body overflow:auto 裁切（真机回归），fixed 脱离该
+ * 滚动容器的裁切上下文、允许溢出 Dialog 视觉范围。
  */
 function MultiSelect(props: {
   readonly field: "tools" | "skills";
@@ -168,11 +194,31 @@ function MultiSelect(props: {
   readonly onAdd: (value: string) => void;
 }): ReactNode {
   const [open, setOpen] = useState(props.defaultOpen === true);
+  const [menuStyle, setMenuStyle] = useState<
+    { left: number; width: number; top?: number; bottom?: number } | undefined
+  >(undefined);
+  const boxRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!open) return;
     // 捕获阶段挂载（attachMselCollapse 注记——冒泡期监听被 Dialog 合成 stopPropagation 截停）
-    return attachMselCollapse(document, () => rootRef.current, setOpen);
+    const offCollapse = attachMselCollapse(document, () => rootRef.current, setOpen);
+    // fixed 定位：box 视口矩形 → 菜单坐标；Dialog body 滚动（capture）与窗口 resize 跟随
+    const place = (): void => {
+      const box = boxRef.current;
+      if (box === null) return;
+      setMenuStyle(
+        mselMenuPlacement(box.getBoundingClientRect(), window.innerHeight).style,
+      );
+    };
+    place();
+    document.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      offCollapse();
+      document.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
   }, [open]);
   const options = [...new Set([...props.candidates, ...props.selected])];
   return (
@@ -185,6 +231,7 @@ function MultiSelect(props: {
         data-msel-open={open ? "" : undefined}
       >
         <div
+          ref={boxRef}
           className="dswf-msel-box"
           onClick={() => setOpen((current) => mselNextOpen(current, "box"))}
         >
@@ -199,7 +246,7 @@ function MultiSelect(props: {
           <span className="dswf-msel-caret">▾</span>
         </div>
         {open ? (
-          <div className="dswf-msel-menu" data-msel-menu={props.field}>
+          <div className="dswf-msel-menu" style={menuStyle} data-msel-menu={props.field}>
             {options.map((option) => (
               <label key={option} className="dswf-msel-row">
                 <input

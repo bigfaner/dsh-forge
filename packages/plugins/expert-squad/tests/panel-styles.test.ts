@@ -25,4 +25,10 @@ describe("panel styles 令牌正名（error-primary）", () => {
   it("不消费不存在的 --dsw-alias-state-danger-primary", () => {
     expect(stylesSource).not.toContain("--dsw-alias-state-danger-primary");
   });
+
+  it("bug 25c91ebd 回归：msel 菜单为 position:fixed（脱离 .dswf-dlg-body overflow:auto 裁切——溢出 Dialog 展示），不再 absolute", () => {
+    const menuRule = ruleOf(".dswf-msel-menu");
+    expect(menuRule).toContain("position: fixed");
+    expect(menuRule).not.toContain("position: absolute");
+  });
 });

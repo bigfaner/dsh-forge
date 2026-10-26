@@ -24,6 +24,7 @@ import {
 import {
   ExpertDetailDialog,
   attachMselCollapse,
+  mselMenuPlacement,
   mselNextOpen,
 } from "../src-client/panel/detail-dialog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
@@ -428,6 +429,23 @@ describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + bo
     expect(html).toContain("dswf-msel-menu");
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('data-msel-open=""');
+  });
+
+  it("bug 25c91ebd 回归：菜单 placement 纯决策——fixed 视口锚定坐标；下方空间不足且上方更宽裕时翻转到上方", () => {
+    // 正常：box 在视口中部，下方空间充足 → below，菜单位 box 底 +4px
+    const below = mselMenuPlacement(
+      { top: 300, bottom: 340, left: 120, width: 600 },
+      800,
+    );
+    expect(below.side).toBe("below");
+    expect(below.style).toEqual({ left: 120, width: 600, top: 344 });
+    // box 贴近视口下缘（编辑态字段撑高 Dialog，box bottom ≈ 视口 - 60）→ 上方更宽裕 → above
+    const above = mselMenuPlacement(
+      { top: 660, bottom: 700, left: 120, width: 600 },
+      800,
+    );
+    expect(above.side).toBe("above");
+    expect(above.style).toEqual({ left: 120, width: 600, bottom: 144 });
   });
 
   it("bug 1e1e30b5: 外点收起监听以捕获阶段挂载（Dialog 内 React 合成 stopPropagation 截停冒泡——冒泡期监听收不到 Dialog 内点击）", () => {
