@@ -8,7 +8,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsc -b && pnpm -C packages/plugins/input-history build && pnpm -C packages/plugins/quote-reference build && pnpm -C packages/plugins/super-composer build && node scripts/copy-preset-assets.mjs && pnpm -C apps/web build:vite && pnpm build:mobile",
+    "build": "tsc -b && pnpm -C packages/plugins/input-history build && pnpm -C packages/plugins/quote-reference build && pnpm -C packages/plugins/super-composer build && pnpm -C packages/plugins/expert-squad build && node scripts/copy-preset-assets.mjs && pnpm -C apps/web build:vite && pnpm build:mobile",
     "build:mobile": "pnpm -C apps/mobile build",
     "dev": "node scripts/dev.mjs",
     "dev:debug": "node scripts/dev.mjs --remote-debugging-port=9222 --enable-logging",

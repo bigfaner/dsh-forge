@@ -76,7 +76,7 @@ if (ensureHostDist.status !== 0) {
 // exports["./client"] 指向的 dist/client.js 由各包 bundle-client.mjs esbuild 产出——
 // 管线不跑它则 vite watch 初始构建 req.resolve 失败；tsc 类重建亦会抹掉该产物，
 // 每次 dev 起跑 ensure。run-once 增量，幂等便宜）。
-for (const plugin of ['input-history', 'quote-reference', 'super-composer']) {
+for (const plugin of ['input-history', 'quote-reference', 'super-composer', 'expert-squad']) {
 	const ensurePluginClientBundle = spawnSync(
 		'pnpm',
 		['-C', `packages/plugins/${plugin}`, 'build'],
