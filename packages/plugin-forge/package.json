@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "@dsh-forge/plugin-forge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "dsh 插件：forge 管线 tool 半身（六动词透传）+ forge:pipeline 系统提示段（运行期经 Cordis inject forgeTasks/forgeProposals；persona 合成单源 = @dsh-forge/core）。",
