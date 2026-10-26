@@ -28,7 +28,7 @@
 //    收口 = merged 终态，不混用。
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
-import { FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
@@ -261,6 +261,15 @@ export type LoopEscalation =
         readonly source: LoopSourceRef
         readonly taskKey: string
         /** 流控原因全文（worker 输出/spawn 拒绝判词——问询 detail） */
+        readonly reason: string
+      }
+    | {
+        /** 单任务暂停挂起（task-pause-primitive——pauseTask 面写点①的挂起投影载荷） */
+        readonly kind: 'task-paused'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly taskKey: string
+        /** 暂停原因全文（pauseTask 必带——载荷全文承载） */
         readonly reason: string
       }
 
@@ -631,6 +640,20 @@ export type LoopStopLoopResult =
   | { readonly ok: true; readonly stopped: true; readonly hadInFlight: boolean }
   | { readonly ok: false; readonly code: 'no-active-loop' | 'forbidden'; readonly suspended: boolean; readonly ownerSessionId: string }
 
+/**
+ * 单任务暂停返回（task-pause-primitive pauseTask——typed 拒绝四径：no-active-loop 无活循环 /
+ * forbidden 运行中越权（挂起态接管放行）/ reason-required 暂停原因必带 / no-in-progress-task
+ * 无在途任务——挂起态接管径无在途对象也归此码）；suspended/ownerSessionId 随行供自解释文案。
+ */
+export type LoopPauseResult =
+  | { readonly ok: true; readonly paused: true; readonly taskKey: string }
+  | {
+      readonly ok: false
+      readonly code: 'no-active-loop' | 'forbidden' | 'reason-required' | 'no-in-progress-task'
+      readonly suspended: boolean
+      readonly ownerSessionId: string
+    }
+
 /** 驱动器依赖（装配方注入——registry 缺省自建，多驱动器共享时由装配传入单例） */
 export interface LoopDriverDeps {
   /**
@@ -723,6 +746,14 @@ export interface LoopDriver {
    * 叙述、终态注销）与 stop() 同径单源。作用域见 LoopStopLoopResult 注。
    */
   stopLoop(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string }): Promise<LoopStopLoopResult>
+  /**
+   * 单任务暂停（task-pause-primitive——pauseTask 工具消费面）：硬中断在飞 worker（先摘
+   * record.inFlight 再 abort——stop 面已实证的竞态收口序，kill 信号合成 stop ∪ pause、
+   * 结算按 killed 分类零 bump）→ 任务真化 suspended（reason 必带，1.4 转移服务审计）→
+   * 循环置 LoopRecord.suspended 挂起（登记保留，dispatchTask re-entry resume 续跑）。
+   * 归属守卫与 stopLoop 同权限面：运行中仅 owner 会话可 pause；挂起态任意会话可接管。
+   */
+  pause(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string; readonly reason: string }): Promise<LoopPauseResult>
   /** 本会话活循环（S2「跑动中再触发」的查询面；无 = undefined） */
   activeOf(ownerSessionId: string): LoopRecord | undefined
   /** 进程内全量活循环读数（2026-10-12 多会话并行——指令层同源占用判定/候选过滤观察面） */
@@ -754,6 +785,12 @@ interface ActiveLoop {
   readonly registry: LoopRegistry
   readonly live: Map<LoopInstanceId, ActiveLoop>
   readonly controller: AbortController
+  /**
+   * pause 控制器（task-pause-primitive——单任务暂停的独立 kill 信号：abort 只中断在飞
+   * worker、不杀循环本体；runRound 经 killSignalOf 合成 stop ∪ pause 作结算 killSignal。
+   * resume 时换新——上轮暂停信号不再影响续跑轮）
+   */
+  pause: AbortController
   /** 任务源（必形——DispatchChainScope.source 为壳侧可选形，循环侧恒在场） */
   readonly source: LoopSourceRef
   /** dispatch-core 三段阶段面的共享 deps 投影（identity/guardKey/source 每轮组装） */
@@ -819,10 +856,11 @@ function triageDecisionNote(decision: LoopTriageDecision): string {
 // ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
 
 /**
- * fix 链深上限（改进 6④——core addTask C6 `FIX_CHAIN_DEPTH_LIMIT` 的宿主镜像值）：
+ * fix 链深上限（改进 6④——常量单源消费别名：contracts `FIX_CHAIN_DEPTH_LIMIT` 是 core
+ * addTask C6 与宿主 triage 的唯一事实源，task-pause-primitive §2.2-3 消除双常量漂移面）：
  * 余量 = 上限 − 当前任务链深；余量 < 1 时 add-fix 结构性被拒（创建必 ERR_CHAIN_DEPTH_EXCEEDED）。
  */
-export const TRIAGE_FIX_CHAIN_DEPTH_LIMIT = 6
+export const TRIAGE_FIX_CHAIN_DEPTH_LIMIT = FIX_CHAIN_DEPTH_LIMIT
 
 /** 处置失败摘要（回灌/历史行用）：TriageDecisionInvalidError 携 rawSummary（模型原始输出摘要），
  *  其余取 error message——结构化识别不 import triage 面（依赖方向：triage → loop 单向） */
@@ -1137,6 +1175,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         registry,
         live,
         controller,
+        pause: new AbortController(), // 单任务暂停独立 kill 信号（task-pause-primitive）
         source,
         core: {
           tasks: deps.tasks,
@@ -1240,6 +1279,79 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       return { ok: true, stopped: true, hadInFlight }
     },
 
+    async pause(input: { readonly loopId: LoopInstanceId; readonly requesterSessionId: string; readonly reason: string }): Promise<LoopPauseResult> {
+      // 单任务暂停（task-pause-primitive）：归属守卫与 stopLoop 同权限面——运行中仅 owner
+      // 可 pause；挂起态任意会话可接管；无活循环/空 reason/无 in_progress 任务均 typed 拒绝。
+      const loop = live.get(input.loopId)
+      if (loop === undefined) {
+        return { ok: false, code: 'no-active-loop', suspended: false, ownerSessionId: '' }
+      }
+      const record = loop.record
+      const suspended = record.suspended !== undefined
+      if (!suspended && record.ownerSessionId !== input.requesterSessionId) {
+        return { ok: false, code: 'forbidden', suspended, ownerSessionId: record.ownerSessionId }
+      }
+      const reason = input.reason.trim()
+      if (reason === '') {
+        return { ok: false, code: 'reason-required', suspended, ownerSessionId: record.ownerSessionId }
+      }
+      const captured = record.inFlight
+      if (captured === undefined) {
+        return { ok: false, code: 'no-in-progress-task', suspended, ownerSessionId: record.ownerSessionId }
+      }
+      // 竞态收口序（stop 面 terminateRecord 同款实证序）：先摘 inFlight 再 abort——runRound
+      // 各 await 恢复点见 kill 信号 aborted 即按 unwindOutcome 让渡（pause 径返回 suspend
+      // 保留登记，不触终局注销）。挂起投影先行（写点①同源：suspendForVerdict「挂起即投影」
+      // ——unwind 判定据此分流，与 abort 效果落地时序解耦）。
+      record.inFlight = undefined
+      record.suspended = {
+        escalation: {
+          kind: 'task-paused',
+          ownerSessionId: record.ownerSessionId,
+          source: record.source,
+          taskKey: captured.taskKey,
+          reason,
+        },
+        since: Date.now(),
+      }
+      loop.pause.abort(`task paused by command: ${reason}`) // worker 硬中断（kill 信号合成——结算按 killed 分类零 bump）
+      // 任务真化 suspended（1.4 转移服务事务闭包——reason 必带落执行时间线；in_progress→suspended
+      // human 面闭包 + actor='core' 自动化归因，先例 = interruptedize）。fail-soft：转移故障
+      // 只告警（挂起投影已落，re-entry 恢复序会按容器实际状态收口）。
+      try {
+        await loop.deps.tasks.transitionTask({
+          projectId: record.projectId,
+          taskId: captured.taskId,
+          toStatus: 'suspended',
+          reason,
+          actor: 'core',
+        })
+      } catch (cause) {
+        console.warn(
+          `forge loop pause transition failed (${captured.taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        )
+      }
+      // 进度事件（1.17 同族——状态迁移点：暂停真化 in-flight → suspended；场景码缺席 =
+      // 旧载荷兼容形态，词值域零改动）
+      emitProgress(loop, {
+        verb: 'suspend',
+        status: 'blocked',
+        taskKey: captured.taskKey,
+        taskTitle: captured.title,
+        note: reason,
+      })
+      try {
+        await deps.narrator.notice(
+          record.ownerSessionId,
+          `[forge·暂停] 任务源: ${record.source.slug} — 任务 ${captured.taskKey} ${captured.title} 已挂起\n原因: ${summarizeReason(reason)}\n改写简报后执行 dispatchTask re-entry 恢复循环`,
+          '任务已暂停——循环挂起待恢复',
+        )
+      } catch {
+        // 叙述故障 fail-soft（挂起事实已落登记与任务时间线）
+      }
+      return { ok: true, paused: true, taskKey: captured.taskKey }
+    },
+
     activeOf(ownerSessionId: string): LoopRecord | undefined {
       return registry.byOwner(ownerSessionId)
     },
@@ -1256,7 +1368,17 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       // 此时清挂起续跑会与终局清理双写竞态且响应误导（ok:true 实际未续跑）
       if (loop.controller.signal.aborted) return { ok: false, code: 'aborted' }
       loop.record.suspended = undefined // 写点②：处置回流——清挂起回落 active
-      void runLoop(loop) // 从留存点续跑（ActiveLoop 运行时状态挂起期保留）
+      loop.pause = new AbortController() // pause 信号换新（上轮单任务暂停不再影响续跑轮）
+      // resume 序批量恢复（task-pause-primitive 唯一装配位——runRound 前）：容器内 suspended
+      // paused 卡以 'core' actor 批量恢复 pending（AGENT 矩阵新边 suspended→pending），随后
+      // 正常 claim。fail-soft：恢复面故障零阻塞续跑（卡留 suspended——claim 不领取，下轮
+      // re-entry 可再恢复）。
+      void restorePausedCards(loop).then(
+        () => {
+          void runLoop(loop) // 从留存点续跑（ActiveLoop 运行时状态挂起期保留）
+        },
+        () => {},
+      )
       return { ok: true, loopId: loop.record.id }
     },
 
@@ -1475,9 +1597,9 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
  * （阶段二，句柄直持）→ ⑤ 结算（阶段三）→ ⑥ 结果通知 + 三层阶梯判定 → 续派/终局。
  */
 async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
-  const { deps, record, controller, exec, scope, source } = loop
-  const signal = controller.signal
-  if (signal.aborted) return 'terminal'
+  const { deps, record, exec, scope, source } = loop
+  const signal = killSignalOf(loop) // stop ∪ pause 合成——单任务暂停只中断在飞 worker，不杀循环
+  if (signal.aborted) return unwindOutcome(loop)
   const owner = record.ownerSessionId
   const slug = record.source.slug
 
@@ -1514,6 +1636,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   })
   // 停止竞态收口（claim 已落而循环被叫停）：本实例未接管的孤儿 in_progress → 真化 interrupted
   if (await bailIfAborted(loop, claim.kind === 'claimed' ? claim : undefined)) return 'terminal'
+  // pause 竞态收口（task-pause-primitive）：挂起暂停已接管本任务（pause 面摘牌 + abort +
+  // 真化 suspended）——本轮让渡，返回 suspend 保留登记（resume 序恢复续跑）
+  if (loop.pause.signal.aborted) return 'suspend'
   if (claim.kind === 'halted') return haltLoop(loop) // spawn 连败 ×3 粘住（guard 入口检查兑现）
   if (claim.kind === 'no-task') return onNoTask(loop, claim.pool) // ③ no-task 三态判词
 
@@ -1575,6 +1700,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   })
   if (!spawned.ok) {
     record.inFlight = undefined // spawn 未成——任务留 in_progress 走幂等重入径（不走 submit-blocked）
+    // pause 竞态收口（task-pause-primitive）：暂停接管本任务（已真化 suspended）——让渡，
+    // 不入重试叙述/防线阶梯
+    if (loop.pause.signal.aborted) return 'suspend'
     if ('kind' in spawned.failure) return haltLoop(loop) // HaltedOutcome——唯一 kind 承载成员（guard 粘住）
     const failure = spawned.failure // ERR_SPAWN_FAILED DTO（防线计数已按 guardKey 落面）
     // 流控分流（bug 63112ab2）：限流窗口内退避重试必再撞限流——零重试直接挂起返回主会话
@@ -1616,8 +1744,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       taskTitle: task.title,
       note: failure.message,
     })
-    if (signal.aborted) return 'terminal'
-    return (await sleepOrAbort(signal, delayMs)) ? 'continue' : 'terminal'
+    if (signal.aborted) return unwindOutcome(loop) // 退避途中被叫停/暂停——让渡（pause 保留登记）
+    return (await sleepOrAbort(signal, delayMs)) ? 'continue' : unwindOutcome(loop)
   }
   inFlight.workerSessionId = spawned.handle.workerSessionId // 对账锚回填（登记表 worker 子会话位）
   const workerSessionId = spawned.handle.workerSessionId // 结算/挂起径进度事件 workerSessionId 段同源
@@ -1654,7 +1782,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     ...(loop.proposalId !== undefined ? { proposalId: loop.proposalId } : {}),
   })
   record.inFlight = undefined // 结算已定（success/blocked/killed/失败同径）——在飞清位
-  if (signal.aborted) return 'terminal'
+  if (signal.aborted) return unwindOutcome(loop) // stop 径终态注销 / pause 径挂起保留登记
 
   // 落点核验失败径（1.18 bug d8029b20——显式处置收口，不走 worker-abort 失败阶梯）：
   // 结算核已把任务 completed → interrupted 真化（可恢复态）；此处事件留痕 + 挂起升级
@@ -1738,9 +1866,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue'
   }
 
-  // kind 承载成员：killed = 停止径（收口叙述与真化归 stop 面）；halted = guard 粘住终局；
-  // dispatched/no-task 结构性不出自结算核——防御终局（不可达分支）
-  if (settled.kind === 'killed') return 'terminal'
+  // kind 承载成员：killed = 停止/暂停径（stop 收口归停止面；pause 收口归暂停面——挂起保留
+  // 登记）；halted = guard 粘住终局；dispatched/no-task 结构性不出自结算核——防御终局（不可达分支）
+  if (settled.kind === 'killed') return unwindOutcome(loop)
   if (settled.kind === 'halted') return haltLoop(loop)
   if (settled.kind !== 'spawned') return 'terminal'
 
@@ -2165,6 +2293,74 @@ async function interruptedize(loop: ActiveLoop | undefined, taskId: string): Pro
       `forge loop stop transition failed (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   }
+}
+
+/** 暂停挂起径的恢复恢复 reason（resume 序批量恢复的转移审计列） */
+export const LOOP_RESUME_RESTORE_REASON = '派发循环恢复——挂起任务批量恢复待执行'
+
+/**
+ * resume 序批量恢复（task-pause-primitive——唯一装配位，runRound 前调用）：容器内全部
+ * suspended paused 卡逐张以 'core' actor 转移 pending（AGENT 矩阵新边 suspended→pending，
+ * 「仅 resume 时点触发」守卫由本装配位承担），随后 runRound 正常 claim。
+ */
+async function restorePausedCards(loop: ActiveLoop): Promise<void> {
+  try {
+    const cards = await loop.deps.tasks.listTasks({
+      projectId: loop.scope.projectId,
+      source: { kind: loop.source.kind, slug: loop.source.slug },
+      statusFilter: ['suspended'],
+    })
+    for (const card of cards) {
+      try {
+        await loop.deps.tasks.transitionTask({
+          projectId: loop.scope.projectId,
+          taskId: card.taskId,
+          toStatus: 'pending',
+          reason: LOOP_RESUME_RESTORE_REASON,
+          actor: 'core',
+        })
+      } catch (cause) {
+        console.warn(
+          `forge loop resume restore failed (${card.slug}/${card.localId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        )
+      }
+    }
+  } catch (cause) {
+    console.warn(
+      `forge loop resume restore list failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
+}
+
+/**
+ * kill 信号合成（stop ∪ pause——task-pause-primitive）：任一 abort 即中断在飞 worker；
+ * 结算核见 aborted 按 killed 分类（零防线计数零 tool-error）。stop 信号已 abort 时原样
+ * 返回（stop 径语义零变化），否则合成即时信号（每轮一次，随轮生命周期）。
+ */
+function killSignalOf(loop: ActiveLoop): AbortSignal {
+  const stop = loop.controller.signal
+  const pause = loop.pause.signal
+  if (stop.aborted) return stop
+  if (pause.aborted) return pause
+  const combined = new AbortController()
+  const onAbort = (): void => {
+    combined.abort()
+    stop.removeEventListener('abort', onAbort)
+    pause.removeEventListener('abort', onAbort)
+  }
+  stop.addEventListener('abort', onAbort, { once: true })
+  pause.addEventListener('abort', onAbort, { once: true })
+  return combined.signal
+}
+
+/**
+ * runRound unwind 判定（stop/pause 双径分流）：stop 径（循环控制器 abort）维持现状终态
+ * 注销；pause 径（单任务暂停信号 abort、控制器存活）返回 suspend——runLoop 保留登记与
+ * 运行时状态退出，等 resume 序恢复续跑。
+ */
+function unwindOutcome(loop: ActiveLoop): RoundOutcome {
+  if (loop.controller.signal.aborted) return 'terminal'
+  return loop.pause.signal.aborted ? 'suspend' : 'terminal'
 }
 
 /** 池快照 fail-soft 现读（叙述行数据源——读面故障零拖垮叙述/收口，缺省零值；loop 缺席 =

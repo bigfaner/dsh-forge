@@ -23,11 +23,12 @@ import type {
   TaskStatus,
   TransitionTaskInput,
 } from '@dsh-forge/contracts'
+import { FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
-import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_TRIAGE_MAX_ATTEMPTS, triageFailureSummary } from './driver.js'
+import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
 import type { ForgeProgressEventData } from '../progress/index.js'
@@ -171,11 +172,12 @@ function tasksHarness() {
   let claimQueue: ClaimTaskResult[] = [claimed()]
   let statsQueue: TaskStats[] = [statsOf({ pending: 1 })]
   let queryQueue: QueryTaskResult[] = [queryOf('completed')]
-  const lists: Record<'interrupted' | 'in_progress' | 'blocked' | 'created', TaskCard[]> = {
+  const lists: Record<'interrupted' | 'in_progress' | 'blocked' | 'created' | 'suspended', TaskCard[]> = {
     interrupted: [],
     in_progress: [],
     blocked: [],
     created: [],
+    suspended: [], // task-pause-primitive：resume 批量恢复读面（suspended paused 卡桶）
   }
   const shift = <T,>(queue: T[]): T => (queue.length > 1 ? (queue.shift() as T) : (queue[0] as T))
   const tasks = {
@@ -199,6 +201,7 @@ function tasksHarness() {
       if (bucket === 'interrupted') return lists.interrupted
       if (bucket === 'in_progress') return lists.in_progress
       if (bucket === 'blocked') return lists.blocked
+      if (bucket === 'suspended') return lists.suspended
       return lists.created
     },
     queryTask: async () => shift(queryQueue),
@@ -3197,5 +3200,144 @@ describe('cwd 钉定（1.14 判例修复——worker 会话未钉定 worktree、
     await untilSettled(built.driver)
     expect(built.spawn.requests[0]).toMatchObject({ label: 'feat-x/2.5 · Implement the thing' })
     expect('workspaceCwd' in built.spawn.requests[0]!).toBe(false)
+  })
+})
+
+// ─────────────────────────── pauseTask 原语（task-pause-primitive 1.7） ───────────────────────────
+
+describe('pauseTask 原语（task-pause-primitive）：pause 全链 / 归属守卫三径 / resume 批量恢复', () => {
+  /** 等待在飞登记（pause 调用前置——串行循环 in-flight 恒 ≤1） */
+  async function untilInFlight(driver: LoopDriver): Promise<void> {
+    await vi.waitFor(
+      () => {
+        expect(driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+  }
+
+  /** 可中断 spawn 桩：kill 信号 abort 即 reject handle.result（模拟 worker 硬中断 → 结算 killed） */
+  function abortableSpawnBehavior(s: ReturnType<typeof trackedSpawn>): void {
+    s.setBehavior(async () => {
+      const req = s.requests[s.requests.length - 1]!
+      return {
+        workerSessionId: 'worker-pause',
+        result: new Promise<{ stopReason: string; output: string }>((_, reject) => {
+          req.signal.addEventListener('abort', () => reject(new Error('worker aborted by pause')), { once: true })
+        }),
+        dispose: async () => {},
+      }
+    })
+  }
+
+  const PAUSE_REASON = '规格被裁决取代，需改写简报重派'
+
+  it('TRIAGE_FIX_CHAIN_DEPTH_LIMIT 消费 contracts 单源（= FIX_CHAIN_DEPTH_LIMIT，对齐 core addTask）', () => {
+    expect(TRIAGE_FIX_CHAIN_DEPTH_LIMIT).toBe(FIX_CHAIN_DEPTH_LIMIT)
+    expect(FIX_CHAIN_DEPTH_LIMIT).toBe(6)
+  })
+
+  it('pause 全链：先摘 inFlight 再 abort、任务真化 suspended（reason 必带 + core actor）、循环挂起保留登记', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+
+    const paused = await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    expect(paused).toEqual({ ok: true, paused: true, taskKey: 'feat-x/2.5' })
+    // 任务真化 suspended（1.4 转移服务——reason 必带落时间线 + actor 'core' 自动化归因）
+    expect(built.h.transitions).toContainEqual({
+      projectId: PROJECT,
+      taskId: 't-1',
+      toStatus: 'suspended',
+      reason: PAUSE_REASON,
+      actor: 'core',
+    })
+    // 竞态收口序消费面：摘牌（inFlight 清位）+ 挂起投影（写点①）+ 登记保留（终局注销不触发）
+    const record = built.driver.activeOf(OWNER)
+    expect(record).toBeDefined()
+    expect(record?.inFlight).toBeUndefined()
+    expect(record?.suspended?.escalation).toMatchObject({
+      kind: 'task-paused',
+      taskKey: 'feat-x/2.5',
+      reason: PAUSE_REASON,
+    })
+    // 进度事件（suspend 动词 + 任务键 + 原因注记）
+    expect(built.progressCalls.some((e) => e.verb === 'suspend' && e.taskKey === 'feat-x/2.5' && e.note === PAUSE_REASON)).toBe(true)
+    // 叙述面（暂停通知——含原因与恢复指引）
+    expect(built.calls.at(-1)?.text).toContain('[forge·暂停]')
+    expect(built.calls.at(-1)?.text).toContain('dispatchTask')
+  })
+
+  it('resume 批量恢复：容器内 suspended paused 卡以 core actor 批量恢复 pending，随后正常续跑收口', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+
+    // resume 序（runRound 前）批量恢复：suspended 卡 → pending（矩阵新边，'core' actor）
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([NO_TASK])
+    built.h.setStats([statsOf({ suspended: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver)
+    expect(built.h.transitions).toContainEqual({
+      projectId: PROJECT,
+      taskId: 'card-feat-x-2.5',
+      toStatus: 'pending',
+      reason: LOOP_RESUME_RESTORE_REASON,
+      actor: 'core',
+    })
+    expect(built.driver.activeOf(OWNER)).toBeUndefined()
+  })
+
+  it('归属守卫三径：运行中非 owner = forbidden；挂起态任意会话可接管（无在途对象 = no-in-progress-task）；无活循环 = no-active-loop；空 reason = reason-required', async () => {
+    const built = build({
+      claim: [claimed()],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+
+    // ① 运行中非 owner 调用 → typed 拒绝（与 stopTaskLoop 同权限面）
+    expect(await built.driver.pause({ loopId, requesterSessionId: 'other-session', reason: '越权' })).toEqual({
+      ok: false,
+      code: 'forbidden',
+      suspended: false,
+      ownerSessionId: OWNER,
+    })
+    // ② owner 空 reason → reason-required（pauseTask 必带 reason）
+    expect(await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: '   ' })).toEqual({
+      ok: false,
+      code: 'reason-required',
+      suspended: false,
+      ownerSessionId: OWNER,
+    })
+    // owner pause → 挂起；③ 挂起态任意会话可接管（守卫放行）——无在途对象归 no-in-progress-task
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    expect(await built.driver.pause({ loopId, requesterSessionId: 'other-session', reason: '接管' })).toEqual({
+      ok: false,
+      code: 'no-in-progress-task',
+      suspended: true,
+      ownerSessionId: OWNER,
+    })
+    // ④ 无活循环
+    expect(await built.driver.pause({ loopId: 'no-such-loop', requesterSessionId: OWNER, reason: 'x' })).toEqual({
+      ok: false,
+      code: 'no-active-loop',
+      suspended: false,
+      ownerSessionId: '',
+    })
   })
 })

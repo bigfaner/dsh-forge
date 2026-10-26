@@ -252,6 +252,19 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
         ].join('\n'),
         options: ESCALATION_OPTIONS,
       }
+    case 'task-paused':
+      return {
+        header: '派发循环裁决',
+        question: `任务 ${escalation.taskKey} 已被暂停，需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          `任务: ${escalation.taskKey}`,
+          '',
+          '暂停原因（全文）：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
     case 'deadlock':
       return {
         header: '派发循环裁决',
