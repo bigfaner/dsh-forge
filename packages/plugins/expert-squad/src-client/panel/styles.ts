@@ -3,6 +3,8 @@
 // 单例注入（幂等）。纪律：色/字/距零裸值，一律 var(--dsw-*) 令牌；刻度取官方排版
 // 行高与圆角标尺（原型 10/14px → 最近令牌，先例 dispatch-panel.css 注记口径）。
 
+import { MSEL_MENU_MAX_PX } from "./detail-logic.js";
+
 /** 令牌刻度别名（读性——原型值 → 官方最近令牌映射的唯一注记点）。 */
 const T = {
   gap8: "var(--dsw-radius-sm)", // 8
@@ -89,7 +91,7 @@ export const PANEL_CSS = `
 .dswf-msel-caret { margin-left: auto; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-tertiary); }
 /* 菜单 position:fixed 视口锚定（坐标由 mselMenuPlacement 内联注入）——脱离 .dswf-dlg-body
    overflow:auto 裁切上下文，允许溢出 Dialog 视觉范围（真机回归修正） */
-.dswf-msel-menu { position: fixed; z-index: 10; max-height: 220px; overflow: auto; padding: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); }
+.dswf-msel-menu { position: fixed; z-index: 10; max-height: ${MSEL_MENU_MAX_PX}px; overflow: auto; padding: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); }
 .dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }

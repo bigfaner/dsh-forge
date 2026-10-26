@@ -9,10 +9,11 @@
 // 官方 MarkdownDoc 组件不在插件 client bundle 外置表内（classic script 缝仅 react
 // 外置），按原型近似语义以 .dswf-* 自绘面分块渲染（标题/加粗/行内代码/列表）。
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import {
   DESCRIPTION_MAX,
+  MSEL_MENU_MAX_PX,
   personaBlocks,
   TOOL_CANDIDATES,
   type MdInline,
@@ -38,6 +39,9 @@ const PERSONA_MAX_PX = TEXTAREA_LINE_PX * 100 + 2;
 
 /** 全目录技能候选面（multi-select 技能下拉 + 面板汇总注入）。 */
 export type AllSkills = readonly string[];
+
+/** msel 菜单未测量首帧兜底样式（隐藏先测量——不落 static 位置跳位）。 */
+const MSEL_MENU_HIDDEN = { visibility: "hidden" } as const;
 
 /** 自适应 textarea（默认 rows 起步；输入按 scrollHeight 增长至 max 上界，滚动兜底）。 */
 function AutoTextarea(props: {
@@ -153,25 +157,54 @@ export function attachMselCollapse(
 }
 
 /**
+ * 裁定留档（AGENTS §1.2 复用优先）：官方 @deepseek-ai/dsh-client-ui-primitives Menu
+ * portal 模式已读（Menu.module.css:37 fixed portal、index.js:3870 先测量、3971-4005
+ * 等值短路、4444-4455 锚定跟随）——与本项目 msel placement 同语义，git-worktree 插件
+ * 亦有直接消费先例。仍维持自绘 msel 面：①对齐已批原型 .dswf-msel-* 形态（官方 Menu
+ * 视觉/结构词汇不同，迁移即偏离已批原型）；②整体迁移官方 Menu 是组件级更大改动，
+ * 超出本缺陷修复范围，另行评估。故自绘实现按官方语义补齐四项加固（先测量隐藏、
+ * 视口封顶、等值短路、锚定跟随）。
+ */
+/**
  * multi-select 菜单 placement 纯决策（fixed 视口锚定）：
  * 下方空间足够 → below（top = box 底 + 4）；下方不足且上方更宽裕 → above
- * （bottom = 视口高 - box 顶 + 4）。坐标一律视口系——菜单 position:fixed 挂
- * viewport，不受 Dialog body overflow 裁切。
+ * （bottom = 视口高 - box 顶 + 4）。maxHeight 按上下两侧更宽裕侧 - 4 封顶
+ * （双侧均不足时不溢出视口）。坐标一律视口系——菜单 position:fixed 挂 viewport，
+ * 不受 Dialog body overflow 裁切。
  */
 export function mselMenuPlacement(
   box: { top: number; bottom: number; left: number; width: number },
   viewportHeight: number,
-  maxMenuPx = 240,
+  maxMenuPx = MSEL_MENU_MAX_PX,
 ): {
   side: "below" | "above";
-  style: { left: number; width: number; top?: number; bottom?: number };
+  style: { left: number; width: number; maxHeight: number; top?: number; bottom?: number };
 } {
   const below = viewportHeight - box.bottom;
-  const base = { left: box.left, width: box.width };
-  if (below < maxMenuPx && box.top > below) {
+  const above = box.top;
+  const base = {
+    left: box.left,
+    width: box.width,
+    maxHeight: Math.min(maxMenuPx, Math.max(below, above) - 4),
+  };
+  if (below < maxMenuPx && above > below) {
     return { side: "above", style: { ...base, bottom: viewportHeight - box.top + 4 } };
   }
   return { side: "below", style: { ...base, top: box.bottom + 4 } };
+}
+
+/** msel 菜单 style 等值判据（place() 短路——坐标不变不 setState，官方 Menu 同语义）。 */
+export function mselMenuStyleEqual(
+  a: { left: number; width: number; maxHeight: number; top?: number; bottom?: number },
+  b: { left: number; width: number; maxHeight: number; top?: number; bottom?: number },
+): boolean {
+  return (
+    a.left === b.left &&
+    a.width === b.width &&
+    a.maxHeight === b.maxHeight &&
+    a.top === b.top &&
+    a.bottom === b.bottom
+  );
 }
 
 /**
@@ -194,27 +227,31 @@ function MultiSelect(props: {
 }): ReactNode {
   const [open, setOpen] = useState(props.defaultOpen === true);
   const [menuStyle, setMenuStyle] = useState<
-    { left: number; width: number; top?: number; bottom?: number } | undefined
+    { left: number; width: number; maxHeight: number; top?: number; bottom?: number } | undefined
   >(undefined);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!open) return;
     // 捕获阶段挂载（attachMselCollapse 注记——冒泡期监听被 Dialog 合成 stopPropagation 截停）
-    const offCollapse = attachMselCollapse(document, () => rootRef.current, setOpen);
+    return attachMselCollapse(document, () => rootRef.current, setOpen);
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open) return;
     // fixed 定位：box 视口矩形 → 菜单坐标；Dialog body 滚动（capture）与窗口 resize 跟随
     const place = (): void => {
       const box = boxRef.current;
       if (box === null) return;
-      setMenuStyle(
-        mselMenuPlacement(box.getBoundingClientRect(), window.innerHeight).style,
-      );
+      const next = mselMenuPlacement(box.getBoundingClientRect(), window.innerHeight).style;
+      // 等值短路（官方 Menu 同语义）：坐标不变不 setState——滚动/resize 逐帧 re-render 消除
+      setMenuStyle((prev) => (prev !== undefined && mselMenuStyleEqual(prev, next) ? prev : next));
     };
+    // m1：useLayoutEffect——paint 前完成首次测量定位（首帧不落 static 位置跳位）；
+    // 渲染面以 visibility:hidden 兜底未测量首帧（官方 Menu MEASURE_STYLE 同语义）。
     place();
     document.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
-      offCollapse();
       document.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
@@ -245,7 +282,11 @@ function MultiSelect(props: {
           <span className="dswf-msel-caret">▾</span>
         </div>
         {open ? (
-          <div className="dswf-msel-menu" style={menuStyle} data-msel-menu={props.field}>
+          <div
+            className="dswf-msel-menu"
+            style={menuStyle ?? MSEL_MENU_HIDDEN}
+            data-msel-menu={props.field}
+          >
             {options.map((option) => (
               <label key={option} className="dswf-msel-row">
                 <input

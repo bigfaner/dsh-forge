@@ -19,6 +19,12 @@ export const DESCRIPTION_MAX = 120;
 /** 工具白名单候选清单（multi-select 下拉勾选项；原型固定清单同源）。 */
 export const TOOL_CANDIDATES: readonly string[] = ["read", "edit", "bash", "grep", "web", "skill"];
 
+/**
+ * multi-select 下拉菜单纵向封顶（px）——单点对齐正本：styles.ts .dswf-msel-menu
+ * max-height 与 placement 视口封顶（mselMenuPlacement maxHeight 扣减）同源此常量。
+ */
+export const MSEL_MENU_MAX_PX = 220;
+
 /** 草稿构造（数组深拷贝——编辑操作不污染原档案）。 */
 export function draftOf(expert: ExpertView): ExpertDraft {
   return {

@@ -25,6 +25,7 @@ import {
   ExpertDetailDialog,
   attachMselCollapse,
   mselMenuPlacement,
+  mselMenuStyleEqual,
   mselNextOpen,
 } from "../src-client/panel/detail-dialog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
@@ -432,20 +433,62 @@ describe("MultiSelect 开合交互（原型 mountMsel 语义：默认收起 + bo
   });
 
   it("bug 25c91ebd 回归：菜单 placement 纯决策——fixed 视口锚定坐标；下方空间不足且上方更宽裕时翻转到上方", () => {
-    // 正常：box 在视口中部，下方空间充足 → below，菜单位 box 底 +4px
+    // 正常：box 在视口中部，下方空间充足 → below，菜单位 box 底 +4px，封顶 maxMenuPx
     const below = mselMenuPlacement(
       { top: 300, bottom: 340, left: 120, width: 600 },
       800,
     );
     expect(below.side).toBe("below");
-    expect(below.style).toEqual({ left: 120, width: 600, top: 344 });
+    expect(below.style).toEqual({ left: 120, width: 600, maxHeight: 220, top: 344 });
     // box 贴近视口下缘（编辑态字段撑高 Dialog，box bottom ≈ 视口 - 60）→ 上方更宽裕 → above
     const above = mselMenuPlacement(
       { top: 660, bottom: 700, left: 120, width: 600 },
       800,
     );
     expect(above.side).toBe("above");
-    expect(above.style).toEqual({ left: 120, width: 600, bottom: 144 });
+    expect(above.style).toEqual({ left: 120, width: 600, maxHeight: 220, bottom: 144 });
+  });
+
+  it("m1: 菜单未测量首帧不落 static 位置——markup 以 visibility:hidden 先渲染（paint 前定位兜底）", () => {
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry());
+    ctl.startEdit();
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, {
+        controller: ctl,
+        allSkills: [],
+        mselDefaultOpen: true,
+      }),
+    );
+    expect(html).toMatch(/class="dswf-msel-menu" style="visibility:hidden"/);
+  });
+
+  it("m2: 双侧空间不足——取更宽裕侧且 maxHeight 封顶扣减，菜单完整落在视口内", () => {
+    // 双侧均 < maxMenuPx：above(500) > below(100) → above，maxHeight = above - 4
+    const aboveClamped = mselMenuPlacement(
+      { top: 300, bottom: 700, left: 120, width: 600 },
+      800,
+    );
+    expect(aboveClamped.side).toBe("above");
+    expect(aboveClamped.style.maxHeight).toBe(220); // min(maxMenuPx, above-4) = min(220, 296)
+    // 双侧均不足且 below 更宽裕 → 维持 below，maxHeight = below - 4（视口封顶）
+    const belowClamped = mselMenuPlacement(
+      { top: 20, bottom: 730, left: 120, width: 600 },
+      800,
+    );
+    expect(belowClamped.side).toBe("below");
+    expect(belowClamped.style.maxHeight).toBe(66);
+    // 1000 高菜单需求 > 视口：不溢出视口（top+maxHeight ≤ 视口底）
+    expect(belowClamped.style.top! + belowClamped.style.maxHeight).toBeLessThanOrEqual(800);
+  });
+
+  it("m3: mselMenuStyleEqual 等值短路判据——坐标全等才跳过 setState", () => {
+    const a = { left: 10, width: 200, maxHeight: 220, top: 40 };
+    expect(mselMenuStyleEqual(a, { ...a })).toBe(true);
+    expect(mselMenuStyleEqual(a, { ...a, top: 41 })).toBe(false);
+    expect(
+      mselMenuStyleEqual(a, { left: 10, width: 200, maxHeight: 220, bottom: 40 }),
+    ).toBe(false);
   });
 
   it("bug 1e1e30b5: 外点收起监听以捕获阶段挂载（Dialog 内 React 合成 stopPropagation 截停冒泡——冒泡期监听收不到 Dialog 内点击）", () => {

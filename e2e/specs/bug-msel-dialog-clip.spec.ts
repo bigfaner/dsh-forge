@@ -86,15 +86,19 @@ test('@web-e2e @expert-squad bug 25c91ebd 回归：详情 Dialog msel 展开菜�
     await expect
       .poll(() => menu.getAttribute('style') ?? '', 'fixed 定位坐标收敛（内联 style 在场）')
       .toContain('left')
-    // 真机取证截图（菜单展开 + fixed 定位收敛态；归档任务日志，不进 git）
-    await page
-      .screenshot({
-        path: 'D:\\software\\dsh-forge\\data\\forge-workspaces\\Z-project-dsh-dsh-forge@dadf6b04\\logs\\expert-squad\\1.62\\001-msel-dialog-clip\\e2e-msel-open-fixed.png',
-        timeout: 20_000,
-        animations: 'disabled',
-        caret: 'hide',
-      })
-      .catch(() => undefined) // 取证尽力而为（electron 截图偶发挂起不阻塞断言链）
+    // 真机取证截图（菜单展开 + fixed 定位收敛态；目录经 DSH_E2E_CAPTURE_DIR 环境注入，
+    // 未注入则跳过——不硬编码绝对路径，产物归档任务日志不进 git）
+    const captureDir = process.env.DSH_E2E_CAPTURE_DIR
+    if (captureDir) {
+      await page
+        .screenshot({
+          path: join(captureDir, 'e2e-msel-open-fixed.png'),
+          timeout: 20_000,
+          animations: 'disabled',
+          caret: 'hide',
+        })
+        .catch(() => undefined) // 取证尽力而为（electron 截图偶发挂起不阻塞断言链）
+    }
     // ① 裁切事实面：菜单纵向 hit-test 零逃逸（被 overflow 裁切则采样点命中别处）
     const hit = await menuHitTest(page, '[data-msel-menu="tools"]')
     expect(hit.samples, 'hit-test 采样非空').toBeGreaterThan(3)
