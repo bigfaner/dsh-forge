@@ -12,7 +12,7 @@ bug id: 无
 
 ## 翻车点
 
-设计时序图把「子会话成果」画成 `startContinuable` 的同步返回（`SUB-->>T: 子会话成果`），官方契约（`continuation.ts:104`、`types.ts:52-58`）是该调用在 inbox 接受点结算、"neither waits for nor collects a result"——continuable 子会话没有 run/result 通道，成果不可能经返回值到达委派方。
+设计时序图把「子会话成果」画成 `startContinuable` 的同步返回（`SUB-->>T: 子会话成果`），官方契约（`@deepseek-ai/dsh-subagent` 包 continuation.ts:104、types.ts:52-58）是该调用在 inbox 接受点结算、"neither waits for nor collects a result"——continuable 子会话没有 run/result 通道，成果不可能经返回值到达委派方。
 
 ## 正解
 

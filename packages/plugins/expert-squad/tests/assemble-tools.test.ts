@@ -166,6 +166,78 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
   });
 });
 
+describe("candidates skills 具名正门（AGENTS 1.5 / 同 bug 5a1e1132 先例）", { timeout: 20_000 }, () => {
+  /** 装配并取回 candidates 路由应答。 */
+  async function bootCandidates(
+    tools: unknown,
+    skills: unknown,
+    reflectSkills: unknown = undefined,
+  ): Promise<Record<string, unknown>> {
+    const routes: Array<{ path: string; fetch(request: Request): Promise<Response> }> = [];
+    const effects: Array<() => unknown> = [];
+    const ctx = {
+      connection: {
+        fetch: {
+          register: (route: { path: string; fetch(request: Request): Promise<Response> }): unknown => {
+            routes.push(route);
+            return route;
+          },
+        },
+      },
+      ...(skills !== undefined ? { skills } : {}),
+      reflect: {
+        get: (name: string) =>
+          name === "tools" ? tools : name === "skills" ? reflectSkills : undefined,
+      },
+      effect: (dispose: () => unknown): unknown => {
+        effects.push(dispose as () => unknown);
+        return undefined;
+      },
+    };
+    try {
+      await expertSquadPlugin(ctx as never);
+    } finally {
+      for (const dispose of effects) await dispose();
+    }
+    const route = routes.find((r) => r.path === "/api/expert-squad/candidates");
+    expect(route, "candidates 读口必须在装配期注册").toBeDefined();
+    const res = await route!.fetch(new Request("http://host/api/expert-squad/candidates"));
+    return (await res.json()) as Record<string, unknown>;
+  }
+
+  const TOOLS_FACE = {
+    register: () => () => undefined,
+    restrict: () => () => undefined,
+    schemas: () => [{ name: "read" }, { name: "edit" }],
+  };
+  const SKILLS_FACE = { list: async () => [{ name: "review-prd" }, { name: "brainstorm" }] };
+
+  it("inject 声明含 'skills'（官方具名正门边）", () => {
+    expect(expertSquadPlugin.inject).toContain("skills");
+  });
+
+  it("skills 经 ctx.skills 具名正门读取并透出 candidates.skills（reflect 不供服务也能取到——具名正门在场）", async () => {
+    const body = await bootCandidates(TOOLS_FACE, SKILLS_FACE, undefined);
+    expect(body.skills).toEqual(["review-prd", "brainstorm"]);
+    expect(body.tools).toEqual(["read", "edit"]);
+  });
+
+  it("skills 取法失配负向断言：仅 reflect 字符串键供给、具名正门缺席 = 字段缺席（不误认）", async () => {
+    const body = await bootCandidates(TOOLS_FACE, undefined, SKILLS_FACE);
+    expect("skills" in body).toBe(false);
+  });
+
+  it("skills 面缺席 = candidates.skills 字段缺席（fail-soft；client 回退档案技能并集语义）", async () => {
+    const body = await bootCandidates(TOOLS_FACE, undefined);
+    expect("skills" in body).toBe(false);
+  });
+
+  it("skills 形状失配（list 非函数）= 字段缺席（startContinuable 同款形状校验降级）", async () => {
+    const body = await bootCandidates(TOOLS_FACE, { list: "not-a-function" });
+    expect("skills" in body).toBe(false);
+  });
+});
+
 describe("delegate 装配状态 run-state 读口暴露（观测面-only，不判注册结果）", { timeout: 20_000 }, () => {
   /** 装配并取回 run-state 路由应答的 delegate 字段。 */
   async function bootDelegateState(

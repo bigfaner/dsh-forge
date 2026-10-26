@@ -125,7 +125,19 @@ await ctx.subagents.startContinuable({
 3. `model` 缺省不传，回落使用方默认派发模型；
 4. 追问/中断走官方 `dsh-tool-subagent-control`（`send_message`/`interrupt_agent`），不在本契约面内。
 
-## 7. 归档与引用
+## 7. 面板候选读口（GET /api/expert-squad/candidates）
+
+Dialog 工具/技能下拉候选的官方目录读口（1.78）——候选是「可选白名单建议」，非工具目录权威：
+
+| 应答字段 | 来源（宿主半官方目录） | 缺席语义 |
+|---|---|---|
+| `tools: string[]` | `ToolRuntime.schemas()` 全局注册视图（无 scope = 全局视图；**全局视图口径**：不含 preset 域 scoped deny 效果——守卫态 restrict 只作用于 preset 域 scoped apply，scope 视图不实现；含插件追加工具；保序去重） | 字段缺席 = 目录缺席 → client 回退内置兜底清单（read/edit/bash/grep/web/skill） |
+| `skills: string[]` | `ctx.skills`（SkillRegistry.list）清单名（**root 全局层技能目录视图**——无 scope 视图链，cwd = 注册工作区；保序去重） | 字段缺席 = 目录缺席 → client 回退档案技能并集语义 |
+
+- 请求：GET 无参（候选为进程级宿主半读口，不带 workspace 维度）；应答零字段 = 两侧目录均缺席。
+- 消费方（detail-dialog）裁定：`tools` 在场即目录清单；`skills` 在场为主源 ∪ 档案技能（已保存历史技能值保持下拉可选）。
+
+## 8. 归档与引用
 
 - 本契约随提案目录归档：`.forge/docs/proposals/expert-squad/design/api-contract.md`（同内容副本）；
 - tech-design §14 PRD Coverage Map 需求 7（persona scope 唯一 + 契约附前置约束）由本文承载。

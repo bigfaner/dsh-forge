@@ -18,6 +18,7 @@
 import { join, resolve } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { parseExpertFile } from "./store/frontmatter.js";
 import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY } from "./registry.js";
@@ -53,11 +54,6 @@ interface ExpertSquadToolsFace extends ToolRegisterFace {
   schemas?(): readonly { readonly name: string }[];
 }
 
-/** 官方 skill 目录窄面（SkillRegistry.list——清单面；仅取 name 供候选）。 */
-interface SkillsCatalogFace {
-  list(options?: { readonly cwd?: string }): Promise<readonly { readonly name: string }[]>;
-}
-
 /** 官方 tools 面守卫缝窄面（ToolRuntime.restrict——scoped apply 内 deny inherited
  *  global 工具；dsh-tools lib/index.js:2895-2897 纯 context 调用必 throw「requires a
  *  scoped context」，preset 域实例 ctx 恒 scoped——守卫态由此只能落 preset 行）。 */
@@ -85,6 +81,9 @@ interface ExpertSquadCtx {
   readonly tools?: ExpertSquadToolsFace;
   /** 官方 subagent 服务正门（inject: ["subagents"]——形状校验保留在取用点）。 */
   readonly subagents?: Pick<SubagentRuntime, "startContinuable">;
+  /** 官方 skill 目录正门（inject: ["skills"]——dsh-skill 声明 `skills: SkillRegistry`
+   *  非可选、宿主恒供；形状校验保留在取用点，同 subagents 先例）。 */
+  readonly skills?: Pick<SkillRegistry, "list">;
   /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
   on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
   effect(dispose: () => unknown): unknown;
@@ -126,7 +125,8 @@ function cwdExpertRoots(): ExpertRoot[] {
  *    环境永久 pending（plugin-forge faces.ts forgeSettings 先例同因）；
  *  · tools：官方 dsh-tools 声明 `tools: ToolRuntime` 正门，但本插件按可选消费
  *    （denyTools 守卫域 + 缺席 fail-soft 跳过注册），同 fiber-pending 成因。
- *  subagents 不在此列：官方声明非可选、宿主恒供，已改具名正门直取（inject 边）。 */
+ *  subagents / skills 不在此列：官方声明非可选、宿主恒供，均已改具名正门直取
+ *  （inject 边——subagents 见 bug 5a1e1132，skills 同先例）。 */
 function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
   try {
     return (ctx as { reflect?: { get(name: string): unknown } }).reflect?.get(name);
@@ -139,8 +139,9 @@ function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
  *  静态 inject：cordis 守卫要求声明注入边方可读 ctx.storage / ctx.connection
  *  （缺声明 = apply 期 `cannot get property ... without inject`——client 侧同因）。
  *  inject：connection（宿主组合恒在场）+ subagents（官方具名正门，bug 5a1e1132——
- *  非可选声明，宿主恒供）；storage 宿主组合不供（presence 探测降级
- *  ——registry FMEA：state 缺席 = 启停内存态、重启回全启用，§AD2 降级语义）。 */
+ *  非可选声明，宿主恒供）+ skills（同先例，candidates 读口）；storage 宿主组合不供
+ *  （presence 探测降级——registry FMEA：state 缺席 = 启停内存态、重启回全启用，
+ *  §AD2 降级语义）。 */
 async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginConfig = {}): Promise<void> {
   // Root cause: excludeTools 是插件 apply 期一次性实例 config，全局单实例挂载下无
   // 组合级落点——HR 组合级委派排除改走 preset 域守卫微件（方案 B，fix-20）。
@@ -331,15 +332,17 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     // delegate 装配状态读口：读口应答随 delegate 字段透出（观测面-only）。
     delegateState: () => delegateAssembly,
     // 候选目录读口（Dialog 工具/技能候选——AGENTS 1.2 复用官方目录机械）：
-    // tools = ToolRuntime.schemas() 全视图工具名（可见视图语义：被 restrict 摘除的
-    // 守卫态工具不出现——候选即「可选白名单建议」按可见面裁定）；skills = 官方
-    // SkillRegistry.list 清单名。对应官方服务缺席 = 字段缺席（client 回退兜底）。
+    // tools = ToolRuntime.schemas() 全局注册视图——无 scope 即全局视图，不含 preset
+    // 域 scoped deny 效果（守卫态 restrict 只作用于 preset 域 scoped apply，全局
+    // 视图永不含 deny；scope 视图不实现——候选是「可选白名单建议」，注记裁定）；
+    // skills = SkillRegistry.list root 全局层技能目录视图（无 scope 视图链，cwd 取
+    // 注册工作区）。对应官方服务缺席 = 字段缺席（client 回退兜底）。
     candidates: async () => {
       const tools =
         typeof toolsFace?.schemas === "function"
           ? Array.from(new Set(toolsFace.schemas().map((schema) => schema.name)))
           : undefined;
-      const skillsFace = readOptionalService(ctx, "skills") as SkillsCatalogFace | undefined;
+      const skillsFace = ctx.skills;
       const skills =
         typeof skillsFace?.list === "function"
           ? Array.from(
@@ -424,6 +427,6 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
 }
 
-expertSquadPlugin.inject = ['connection', 'subagents'];
+expertSquadPlugin.inject = ['connection', 'subagents', 'skills'];
 
 export default expertSquadPlugin;

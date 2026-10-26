@@ -547,6 +547,9 @@ export function ExpertDetailDialog(props: {
         field="tools"
         label="工具白名单（子会话强制生效 · 多选）"
         selected={state.draft.tools}
+        // 兜底双写注记：toolCandidates prop 已在装配侧经 toolCandidatesOf 兜底
+        // （目录缺席 → TOOL_CANDIDATES）；此处 `?? TOOL_CANDIDATES` 是 prop 缺席
+        // 形态（旧调用方/透传断链）的二次兜底——双写有意保留，非冗余。
         candidates={props.toolCandidates ?? TOOL_CANDIDATES}
         allowAdd={false}
         defaultOpen={props.mselDefaultOpen}

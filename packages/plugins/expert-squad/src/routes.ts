@@ -15,7 +15,7 @@ import { z } from "zod";
 /** API 基前缀（精确路由：一个 endpoint 一条路由）。 */
 export const EXPERT_SQUAD_API_BASE = "/api/expert-squad";
 
-/** endpoint 名（§6：GET list|get|run-state|candidates + POST update|enable|disable）。 */
+/** endpoint 名（api-contract §2.1 面板路由 + §7 候选读口：GET list|get|run-state|candidates + POST update|enable|disable）。 */
 export const EXPERT_SQUAD_ENDPOINTS = [
   "list",
   "get",
@@ -95,11 +95,14 @@ export const candidatesQuerySchema = z.object({}).passthrough();
 
 // ---- 候选目录读口（Dialog 工具/技能下拉候选用——目录缺席 = 字段缺席，client 兜底） ----
 
-/** 候选目录应答（tools/skills 字段缺席 = 对应官方目录缺席——client 侧回退兜底语义）。 */
+/** 候选目录应答（tools/skills 字段缺席 = 对应官方目录缺席——client 侧回退兜底语义）。
+ *  口径：全局注册视图——tools 不含 preset 域 scoped deny 效果（守卫态 restrict 只作用
+ *  于 preset 域 scoped apply）；skills = root 全局层技能目录视图。 */
 export interface CandidateCatalog {
-  /** 宿主 ToolRuntime 目录工具名（schemas() 全视图——可见工具名，含插件追加工具）。 */
+  /** 宿主 ToolRuntime 目录工具名（schemas() 全局注册视图——全局视图永不含 scoped deny，
+   *  含插件追加工具；scope 视图不实现，候选是「可选白名单建议」）。 */
   readonly tools?: readonly string[];
-  /** 官方 skill 目录技能名（ctx.skills 清单面）。 */
+  /** 官方 skill 目录技能名（ctx.skills 清单面——root 全局层视图）。 */
   readonly skills?: readonly string[];
 }
 
@@ -240,6 +243,8 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
           candidatesQuerySchema.parse(
             Object.fromEntries(new URL(request.url).searchParams),
           );
+          // 异常分类观测注记：目录读口 handler 抛错（目录面异常/序列化失败）与 zod 门
+          // 400 同型归一为 400 文本应答——候选是建议面，无 5xx 分级（client 回退兜底）。
           const catalog = (await deps.candidates?.()) ?? {};
           return Response.json({
             ...(catalog.tools !== undefined ? { tools: catalog.tools } : {}),
