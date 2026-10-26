@@ -133,7 +133,7 @@ export class ExpertsRegistry implements ExpertsService {
     const entries: ExpertEntry[] = [];
     for (const scanned of this.snapshot?.experts.values() ?? []) {
       const disabled = this.disabledKeys.has(scanned.name);
-      if (!disabled || opts?.includeDisabled === true) {
+      if (visible(disabled, opts?.includeDisabled)) {
         entries.push(buildEntry(scanned, !disabled));
       }
     }
@@ -154,15 +154,17 @@ export class ExpertsRegistry implements ExpertsService {
     for (const [name, layerEntries] of snapshot.layers) {
       const disabled = this.disabledKeys.has(name);
       // 生效位 = 该键最高优先级层（project > user > plugin——与 experts 取用单点同源：
-      // 扫描覆盖序决定 experts.get 恒为最高层；启停只影响可见性，不改层位）
+      // 扫描覆盖序决定 experts.get 恒为最高层；启停只影响可见性，不改层位）。
+      // 升序排好后倒序索引遍历：末位即生效层，免二次拷贝与恒等比较。
       const ordered = [...layerEntries].sort(
         (a, b) =>
           ORIGIN_PRIORITY.indexOf(a.origin) - ORIGIN_PRIORITY.indexOf(b.origin),
       );
-      const effectiveScanned = ordered[ordered.length - 1];
-      for (const scanned of [...ordered].reverse()) {
-        const effective = scanned === effectiveScanned;
-        if (effective && disabled && opts?.includeDisabled !== true) continue;
+      const last = ordered.length - 1;
+      for (let i = last; i >= 0; i--) {
+        const scanned = ordered[i]!;
+        const effective = i === last;
+        if (effective && !visible(disabled, opts?.includeDisabled)) continue;
         out.push({
           ...buildEntry(scanned, !disabled),
           effective,
@@ -190,6 +192,11 @@ export class ExpertsRegistry implements ExpertsService {
     if (enabled) this.disabledKeys.delete(key);
     else this.disabledKeys.add(key);
   }
+}
+
+/** 启停可见性单点谓词：禁用默认不可见，includeDisabled 显式开启才含。 */
+function visible(disabled: boolean, includeDisabled?: boolean): boolean {
+  return !disabled || includeDisabled === true;
 }
 
 /** ScannedExpert → ExpertEntry（剥离扫描层 filePath，附加 enabled）。 */

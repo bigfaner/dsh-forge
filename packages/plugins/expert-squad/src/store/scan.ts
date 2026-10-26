@@ -176,7 +176,7 @@ export async function scanExpertRoots(roots: readonly ExpertRoot[]): Promise<Exp
   const layers = new Map<string, ScannedExpert[]>();
   // 低优先级先扫、高优先级后覆盖：plugin → user → project
   for (const root of [...roots].sort(
-    (a, b) => PRIORITY.indexOf(a.origin) - PRIORITY.indexOf(b.origin),
+    (a, b) => ORIGIN_PRIORITY.indexOf(a.origin) - ORIGIN_PRIORITY.indexOf(b.origin),
   )) {
     const layer = await scanRoot(root, warnings);
     for (const [name, record] of layer) {
@@ -188,23 +188,30 @@ export async function scanExpertRoots(roots: readonly ExpertRoot[]): Promise<Exp
     }
   }
   // 冻结即快照语义：取用方拿到的是不可变完整一代索引，换代后仍可安全持有上代。
-  // Object.freeze 不拦截 Map 内部槽，先覆写三个 mutator 再冻结。
-  const mutators = ["set", "delete", "clear"] as const;
-  for (const m of mutators) {
-    (experts as unknown as Record<string, () => never>)[m] = () => {
-      throw new Error("专家索引快照不可变——换代请重新 scanExpertRoots");
-    };
-  }
-  Object.freeze(experts);
+  // Root cause: Object.freeze 不拦截 Map 内部槽——experts 与 layers 须同等先覆写
+  // mutator 再冻结，键集才真正不可变。
+  freezeMap(experts, "专家索引");
   for (const list of layers.values()) Object.freeze(list);
   return Object.freeze({
     experts,
-    layers,
+    layers: freezeMap(layers, "层索引"),
     warnings: Object.freeze(warnings),
   });
 }
 
-const PRIORITY: readonly ExpertOrigin[] = ["plugin", "user", "project"];
+/**
+ * 冻结快照 Map（experts/layers 同等冻结强度）：覆写三个 mutator 后冻结——
+ * Object.freeze 不拦截 Map 内部槽，仅冻结时键集仍可被 set/delete/clear 改写。
+ */
+function freezeMap<K, V>(map: Map<K, V>, what: string): ReadonlyMap<K, V> {
+  const mutators = ["set", "delete", "clear"] as const;
+  for (const m of mutators) {
+    (map as unknown as Record<string, () => never>)[m] = () => {
+      throw new Error(`${what}快照不可变——换代请重新 scanExpertRoots`);
+    };
+  }
+  return Object.freeze(map);
+}
 
 /** 遮蔽优先级定序（project > user > plugin——AD3；registry 展示层排序复用）。 */
-export const ORIGIN_PRIORITY = PRIORITY;
+export const ORIGIN_PRIORITY: readonly ExpertOrigin[] = ["plugin", "user", "project"];

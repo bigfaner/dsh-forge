@@ -159,6 +159,19 @@ describe("快照语义（§9：整体换代，无半代索引）", () => {
       (gen2.experts as Map<string, unknown>).delete("a");
     }).toThrow();
   });
+
+  it("bug 665186da：layers Map 与 experts 同等冻结强度——set/delete/clear 均无效", async () => {
+    const l = await makeThreeLayers();
+    await writeFile(join(l.plugin, "a.md"), expertMd("a", "1"));
+    await writeFile(join(l.user, "a.md"), expertMd("a", "2"));
+    const snap = await scanExpertRoots(rootsOf(l));
+    expect(Object.isFrozen(snap.layers)).toBe(true);
+    const layers = snap.layers as unknown as Map<string, unknown[]>;
+    expect(() => layers.set("x", [])).toThrow();
+    expect(() => layers.delete("a")).toThrow();
+    expect(() => layers.clear()).toThrow();
+    expect([...snap.layers.keys()].sort()).toEqual(["a"]);
+  });
 });
 
 describe("坏文件隔离（§9 FMEA：单文件跳过，其余不受影响）", () => {
