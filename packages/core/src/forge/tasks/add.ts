@@ -28,7 +28,10 @@ import type {
   TaskStatus,
   TaskType,
 } from '@dsh-forge/contracts'
-import { BEFORE_SUCCESSOR_ALLOWED_STATUSES } from '@dsh-forge/contracts'
+import {
+  BEFORE_SUCCESSOR_ALLOWED_STATUSES,
+  FIX_CHAIN_DEPTH_LIMIT,
+} from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
@@ -67,9 +70,6 @@ export interface TasksVerbDeps {
    */
   readonly resolveWorkerContext?: (projectId: string, source: ContainerRef, localId: string) => string
 }
-
-/** fix 链深上限（C6 用户裁决：≤6，较老 forge Max nesting 3 放宽） */
-export const FIX_CHAIN_DEPTH_LIMIT = 6
 
 /** 任务行最小定位形状（解析/去重/链计数消费；全列读面归 query/读动词）。
  *  M3（1.2）：feature_id → source_kind + source_id 通用源头双列。 */
@@ -253,23 +253,46 @@ export function readPhaseInput(db: Database.Database, featureId: string): {
   return { docKinds, taskStatuses }
 }
 
-/** 源链计数（沿 source_task_id 上溯——链深 = source 边数；根先序返回；漂移环防御 fail-loud） */
+/** 源链计数（沿 task_edges origin='fix-chain' 边上溯——task-pause-primitive §2.2-3：链深只计
+ *  fix-chain 边，split-remainder 的 disc 继任无 fix-chain 边不耗深。边方向 source→fix
+ *  （task_id=源 / prerequisite_id=fix，add ⑫），上溯 = 自源沿 prerequisite→task 方向取「该任务
+ *  曾阻断的前任」；分叉（同源多次 fix 链并存，B.5-6 边持久）取最长支链计深，链呈现随最长支；
+ *  漂移环防御 fail-loud。根先序返回。 */
 function sourceAncestry(db: Database.Database, sourceId: string): TaskKeyRow[] {
   const byId = db.prepare<unknown[], TaskKeyRow>(
     `SELECT id, slug, local_id, task_status, task_type, source_task_id, source_kind, source_id FROM tasks WHERE id = ?`,
   )
-  const collected: TaskKeyRow[] = []
-  const visited = new Set<string>([sourceId])
-  let cursor: TaskKeyRow | undefined = byId.get(sourceId)
-  while (cursor !== undefined && cursor.source_task_id !== null) {
-    if (visited.has(cursor.source_task_id)) {
-      throw new Error(`source_task_id 链成环（数据漂移）：${cursor.id} → ${cursor.source_task_id}`)
+  const fixSources = db.prepare<unknown[], { task_id: string }>(
+    `SELECT task_id FROM task_edges WHERE prerequisite_id = ? AND origin = 'fix-chain'`,
+  )
+  let best: string[] = []
+  const path: string[] = [sourceId]
+  const onPath = new Set<string>([sourceId])
+  const walk = (cur: string): void => {
+    const nexts = fixSources.all(cur).map((r) => r.task_id)
+    if (nexts.length === 0) {
+      if (path.length - 1 > best.length) best = [...path]
+      return
     }
-    visited.add(cursor.source_task_id)
-    cursor = byId.get(cursor.source_task_id)
-    if (cursor !== undefined) collected.push(cursor)
+    for (const n of nexts) {
+      if (onPath.has(n)) {
+        throw new Error(`fix-chain 边成环（数据漂移）：${cur} → ${n}`)
+      }
+      onPath.add(n)
+      path.push(n)
+      walk(n)
+      path.pop()
+      onPath.delete(n)
+    }
   }
-  return collected.reverse() // 根先序（诊断链呈现 root → … → 源）
+  walk(sourceId)
+  // best = [源, 前任, …, 根]——切片去源后反转即根先序（诊断链呈现 root → … → 源）
+  const ancestry: TaskKeyRow[] = []
+  for (let i = best.length - 1; i >= 1; i--) {
+    const row = byId.get(best[i] as string)
+    if (row !== undefined) ancestry.push(row)
+  }
+  return ancestry
 }
 
 /** Interface 1 addTask：tasks 行 → edges 行 → records 行单事务全成全败（详见文件头） */
@@ -388,8 +411,10 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
       input.sourceTask !== undefined ? (input.blockSource === true ? 'fix' : 'disc') : 'numeric',
     )
 
-    // ⑥ fix 链深 ≤6（C6：沿 source_task_id 链计数——新任务链深 = 源链长 + 1）
-    if (source !== undefined) {
+    // ⑥ fix 链深 ≤6（C6：沿 fix-chain 边链计数——链深 = fix-chain 边数 + 1；disc 继任不耗深）。
+    //    仅约束 blockSource 的 fix 任务（链深限的是 fix-chain 链延长）——split-remainder 的
+    //    disc 继任（谱系不断链、零 fix-chain 边）不受限，到顶后机械处置出口不消失
+    if (source !== undefined && input.blockSource === true) {
       const ancestry = sourceAncestry(db, source.id)
       const depth = ancestry.length + 1
       if (depth > FIX_CHAIN_DEPTH_LIMIT) {

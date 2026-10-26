@@ -558,6 +558,66 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     expect(rows(`SELECT COUNT(*) AS n FROM task_edges`)).toEqual([{ n: 0 }])
   })
 
+  it('fix 链深只计 fix-chain 边：split-remainder 的 disc 继任再开 fix 链从 1 起算（不耗深）', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'chain', status: 'tasks' })
+    seedTask(h!.db, 'chain', '1.1')
+    let prev = { slug: 'chain', localId: '1.1' }
+    for (let i = 1; i <= 6; i++) {
+      const r = await add({
+        projectId: P(),
+        source: { kind: 'feature', slug: 'chain' },
+        title: `fix-${i}`,
+        type: 'coding-fix',
+        sourceTask: prev,
+        blockSource: true,
+      })
+      prev = { slug: 'chain', localId: `fix-${i}` }
+      expect(r.localId).toBe(`fix-${i}`)
+    }
+    // split-remainder：fix-6 衍生 disc-1（谱系不断链、无 fix-chain 边）
+    const disc = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'chain' },
+      title: '衍生发现',
+      type: 'doc',
+      sourceTask: prev,
+    })
+    expect(disc.localId).toBe('disc-1')
+    // disc 继任再开 fix 链：fix-chain 深度 = 1（source_task_id 谱系不计深）→ 不被拒
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'chain' },
+      title: 'fix from disc',
+      type: 'coding-fix',
+      sourceTask: { slug: 'chain', localId: 'disc-1' },
+      blockSource: true,
+    })
+    expect(r.localId).toBe('fix-7')
+    expect(r.reused).toBe(false)
+  })
+
+  it('fix-chain 边成环（数据漂移）→ fail-loud 拒绝', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'cyc', status: 'tasks' })
+    seedTask(h!.db, 'cyc', '1.1')
+    seedTask(h!.db, 'cyc', 'fix-1', { type: 'coding-fix' })
+    seedTask(h!.db, 'cyc', 'fix-2', { type: 'coding-fix' })
+    seedEdge(h!.db, 't-cyc-fix-1', 't-cyc-fix-2', 'fix-chain')
+    seedEdge(h!.db, 't-cyc-fix-2', 't-cyc-fix-1', 'fix-chain')
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'cyc' },
+      title: 'fix on cycle',
+      type: 'coding-fix',
+      sourceTask: { slug: 'cyc', localId: 'fix-1' },
+      blockSource: true,
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain('成环')
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE local_id = 'fix-3'`).get()).toEqual({ n: 0 }) // 零残留
+  })
+
   it('sourceTask 未命中 / 跨 feature 源 → ERR_TASK_NOT_FOUND（同 feature 归属校验）', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
