@@ -76,7 +76,7 @@ import { bugIdOfRef, bugReferenceInsertOf, createBugReferenceSource, type BugCar
 // bug 4b34e5d8 chip 重建缝（纯文本草稿 → scoped 事件 span-CAS 还原）
 import { watchBugChipRestore } from './chip-restore.js'
 import { selectedTreeDisplay } from './selected-tree-display.js'
-import { installOpenWorkspaceFace, type DraftShellFace } from './open-workspace-face-install.js'
+import { installOpenWorkspaceFace, resolveDraftShellFace, type DraftShellFace } from './open-workspace-face-install.js'
 import { installWorktreeSwitchGate } from './worktree-switch-gate-install.js'
 import {
   installStartSessionWrap,
@@ -2358,39 +2358,8 @@ export function forgeClientPlugin(): ForgeClientPlugin {
           // bug 267dcac1 草稿迁移 shell 解析（官方 selectWorkspace 同语义）：sessions.binding
           // 借已 retain 绑定 → conversation.input.for 取 shell（queue dock 同径，
           // bugReferenceServicesOf 先例）；未 retain/面缺席 = undefined fail-soft 零迁移。
-          resolveShell: (sessionId: string): DraftShellFace | undefined => {
-            const binding = (
-              sessions as unknown as { binding?: (id: string) => unknown }
-            ).binding?.(sessionId)
-            const actx = asRecord(binding)?.['ctx']
-            if (actx === undefined) return undefined
-            const input = asRecord(reflectServiceGet(clientCtx, 'conversation'))?.['input'] as
-              | { for?: (actx: unknown) => unknown }
-              | undefined
-            const shell = input?.for?.(actx)
-            const record = asRecord(shell)
-            if (record === undefined) return undefined
-            const snapshot = asRecord(record['snapshot'])
-            const setDraft = record['setDraft']
-            const attachmentIds = snapshot?.['attachmentIds']
-            if (
-              snapshot === undefined ||
-              typeof snapshot['draft'] !== 'string' ||
-              typeof setDraft !== 'function' ||
-              (attachmentIds !== undefined && !Array.isArray(attachmentIds))
-            ) {
-              return undefined
-            }
-            return {
-              snapshot: {
-                draft: snapshot['draft'],
-                attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : undefined,
-              },
-              setDraft: (text: string): void => {
-                ;(setDraft as (text: string) => void)(text)
-              },
-            }
-          },
+          resolveShell: (sessionId: string): DraftShellFace | undefined =>
+            resolveDraftShellFace(clientCtx, sessions, sessionId),
           warn: (message) => console.warn(message),
         })
         const workspaces = clientCtx.get('workspaces') as ForgeWorkspacesService

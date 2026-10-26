@@ -27,6 +27,49 @@ export interface DraftShellFace {
   setDraft(text: string): void
 }
 
+/**
+ * 会话 shell 形状适配（plugin.ts resolveShell 委托——可测单源）：sessions.binding 借已
+ * retain 绑定 → conversation.input.for 取官方 shell → 收敛为 DraftShellFace。
+ * bug 4b89d984：setDraft 必须 .call(record, text) 保 receiver——官方实现
+ * `setDraft(text){ this.draftEditor.setDraft(text) }`，拆出裸调 this=undefined 即炸。
+ */
+export function resolveDraftShellFace(
+  clientCtx: unknown,
+  sessions: unknown,
+  sessionId: string,
+): DraftShellFace | undefined {
+  const binding = (sessions as { binding?: (id: string) => unknown }).binding?.(sessionId)
+  const actx = (binding as Record<string, unknown> | undefined)?.['ctx']
+  if (actx === undefined) return undefined
+  const input = ((clientCtx as { reflect?: { get(name: string, strict?: boolean): unknown } })
+    ?.reflect?.get('conversation', false) as { input?: unknown } | undefined)?.input as
+    | { for?: (actx: unknown) => unknown }
+    | undefined
+  const shell = input?.for?.(actx)
+  const record = shell as Record<string, unknown> | undefined
+  if (record === undefined || record === null) return undefined
+  const snapshot = record['snapshot'] as { draft?: unknown; attachmentIds?: unknown } | undefined
+  const setDraft = record['setDraft']
+  const attachmentIds = snapshot?.['attachmentIds']
+  if (
+    snapshot === undefined ||
+    typeof snapshot['draft'] !== 'string' ||
+    typeof setDraft !== 'function' ||
+    (attachmentIds !== undefined && !Array.isArray(attachmentIds))
+  ) {
+    return undefined
+  }
+  return {
+    snapshot: {
+      draft: snapshot['draft'],
+      attachmentIds: Array.isArray(attachmentIds) ? attachmentIds : undefined,
+    },
+    setDraft: (text: string): void => {
+      ;(setDraft as (this: unknown, text: string) => void).call(record, text)
+    },
+  }
+}
+
 export interface OpenWorkspaceInstallOptions {
   /** 官方 uiWorkspace（装配期 clientCtx.get('uiWorkspace')） */
   readonly uiWorkspace: unknown
