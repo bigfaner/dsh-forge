@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
+import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
+import type { ExpertProfileResolver } from './faces.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
 import type { ForgeCommandDefinition, ForgeEventRegisterFace } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
@@ -665,5 +667,94 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     expect(rt2.registeredCommands).toHaveLength(0)
     expect(rt2.registeredTools).toHaveLength(17)
     d2()
+  })
+})
+
+// ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
+
+describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读取 fail-soft）', () => {
+  /** experts 服务桩（registerRoot/refresh 调用记账 + 按键返回档案桩） */
+  function expertsFace() {
+    const calls: { root?: string; refresh: number } = { refresh: 0 }
+    return {
+      calls,
+      face: {
+        get: (key: string) => ({ name: key, title: `T:${key}`, personaMd: `md:${key}`, tools: ['read'] }),
+        registerRoot: (_ctx: unknown, dir: string) => {
+          calls.root = dir
+        },
+        refresh: async () => {
+          calls.refresh += 1
+        },
+      },
+    }
+  }
+
+  /** reflect 桩（get + provide 双面——provide 记账注入服务） */
+  function reflectWith(services: Record<string, unknown>) {
+    const provided = new Map<string, unknown>()
+    return {
+      provided,
+      face: {
+        get: (name: string) => services[name],
+        provide: (name: string, service: unknown) => {
+          provided.set(name, service)
+        },
+      },
+    }
+  }
+
+  it('experts 面在场：registerRoot(随包 experts 目录) + refresh 恰一次 + 档案取用面经 provide 注入（fail-soft 装配零波及）', async () => {
+    const rt = new TempRuntime()
+    const { face, calls } = expertsFace()
+    const { provided, face: reflect } = reflectWith({ experts: face, forgeSettings: { get: async () => ({}) } })
+    const dispose = forgePlugin({ ...rt.ctx(), reflect })
+    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR)
+    expect(calls.refresh).toBe(1) // registerRoot 只追加 root 不重扫——注册后须显式 refresh 一次
+    const resolver = provided.get('forgeExperts') as ExpertProfileResolver
+    expect(typeof resolver).toBe('function')
+    expect(rt.registeredTools).toHaveLength(17) // 装配面 additive——tool 面零波及
+    dispose()
+  })
+
+  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键；未列键回落 DEFAULT_EXPERT_MAPPING 恒等映射', async () => {
+    const { face } = expertsFace()
+    const resolver = createExpertProfileResolver({
+      experts: face,
+      settings: { get: async () => ({ experts: { mapping: { 'coding-fix': 'my-fix-expert' } } }) },
+    })
+    await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'my-fix-expert', personaMd: 'md:my-fix-expert' })
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate', personaMd: 'md:gate' }) // 缺键 = 默认映射
+  })
+
+  it('settings 读失败：回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛（claim 期 fail-loud 语义由实现侧承担）', async () => {
+    const { face } = expertsFace()
+    const resolver = createExpertProfileResolver({
+      experts: face,
+      settings: { get: async () => { throw new Error('settings file broken') } },
+    })
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'doc' })
+    const failing = createExpertProfileResolver({
+      experts: { get: () => { throw new Error('expert not found: ghost') } },
+    })
+    await expect(failing('ghost')).rejects.toThrow(/expert not found: ghost/)
+  })
+
+  it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
+    for (const reflect of [
+      reflectWith({}).face, // 无 experts 键
+      { get: () => { throw new Error('inactive fiber') } },
+      reflectWith({ experts: 'not-a-service' }).face,
+    ]) {
+      const rt = new TempRuntime()
+      const provided = new Map<string, unknown>()
+      const dispose = forgePlugin({
+        ...rt.ctx(),
+        reflect: { ...reflect, provide: (name: string, service: unknown) => provided.set(name, service) },
+      })
+      expect(rt.registeredTools).toHaveLength(17)
+      expect([...provided.keys()]).not.toContain('forgeExperts')
+      dispose()
+    }
   })
 })

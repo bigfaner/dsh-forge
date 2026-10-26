@@ -15,6 +15,7 @@ import type { ErrorCode } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
 import type { ProjectService } from './project.js'
+import { TASK_TYPES } from '../labels.js'
 
 // ─────────────────────────── 词汇与枚举（schema 单源对齐） ───────────────────────────
 
@@ -1056,6 +1057,21 @@ export interface FlywheelSettings {
   reviewWaveThreshold?: number
 }
 
+/**
+ * 任务类型 → 专家档案键默认映射（expert-squad-forge §3 纳入 6）：恒等映射——20 键与
+ * 随包预设专家档案（plugin-forge experts/ 目录 <type>.md）同名一一对应。用户可在
+ * settings 的 experts.mapping 分节改指向自己的专家键（缺键 = 默认映射生效）。
+ */
+export const DEFAULT_EXPERT_MAPPING: Readonly<Record<TaskType, string>> = Object.fromEntries(
+  TASK_TYPES.map((type) => [type, type]),
+) as Readonly<Record<TaskType, string>>
+
+/** experts 段——任务类型 → 专家档案键映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING） */
+export interface ExpertsSettings {
+  /** 覆盖映射（Partial——只列要改指的键；值 = ctx.experts 取用服务的专家键名） */
+  mapping?: Partial<Record<TaskType, string>>
+}
+
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
  *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
@@ -1063,6 +1079,7 @@ export interface ForgeSettings {
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
   flywheel?: FlywheelSettings
+  experts?: ExpertsSettings
 }
 
 /** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
@@ -1072,6 +1089,7 @@ export interface SetForgeSettingsInput {
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
   flywheel?: FlywheelSettings
+  experts?: ExpertsSettings
 }
 
 /** Interface 1（M3）：core · forge 设置域服务面（ctx.forgeSettings——单写者 = core，

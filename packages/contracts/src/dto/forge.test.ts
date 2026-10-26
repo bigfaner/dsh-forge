@@ -18,8 +18,9 @@ import {
 import type { TasksChangedEvent } from './forge.js'
 import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
-import { CONTAINER_KINDS, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
-import type { ReasoningEffortLevel } from './forge.js'
+import { CONTAINER_KINDS, DEFAULT_EXPERT_MAPPING, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
+import type { ExpertsSettings, ReasoningEffortLevel } from './forge.js'
+import { TASK_TYPES } from '../labels.js'
 import type {
   AddTaskInput,
   BridgeEventMessage,
@@ -279,6 +280,22 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     const worktreeSettings: ForgeSettings = { worktree: { crossBranchRiskDismissed: true } }
     expect(worktreeSettings.worktree?.crossBranchRiskDismissed).toBe(true)
     expectTypeOf<NonNullable<ForgeSettings['worktree']>['crossBranchRiskDismissed']>().toEqualTypeOf<boolean | undefined>()
+  })
+
+  it('experts 分节：DEFAULT_EXPERT_MAPPING = 20 键恒等映射（任务类型 ≡ 随包预设专家键）+ mapping 用户可改', () => {
+    // 20 键齐备且与 TASK_TYPES 同集——每类任务类型默认取同名预设专家档案
+    expect(Object.keys(DEFAULT_EXPERT_MAPPING).sort()).toEqual([...TASK_TYPES].sort())
+    for (const type of TASK_TYPES) {
+      expect(DEFAULT_EXPERT_MAPPING[type]).toBe(type)
+    }
+    // experts 段形状：mapping Partial（只列要改指的键；值 = ctx.experts 专家键名）
+    const expertsSettings: ExpertsSettings = { mapping: { 'coding-fix': 'my-fix-expert' } }
+    const settings: ForgeSettings = { experts: expertsSettings }
+    expect(settings.experts?.mapping?.['coding-fix']).toBe('my-fix-expert')
+    expect(settings.experts?.mapping?.['gate']).toBeUndefined() // 缺键 = 默认映射生效
+    expectTypeOf<NonNullable<ForgeSettings['experts']>['mapping']>().toEqualTypeOf<Partial<Record<(typeof TASK_TYPES)[number], string>> | undefined>()
+    // set 入参同面（分节覆写语义一致）
+    expectTypeOf<NonNullable<Parameters<ForgeSettingsService['set']>[0]['experts']>>().toEqualTypeOf<ExpertsSettings | undefined>()
   })
 })
 

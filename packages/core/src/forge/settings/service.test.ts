@@ -152,6 +152,34 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
     }
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ flywheel: { reviewWaveThreshold: 6 } })
   })
+
+  it('experts 分节覆写：set { mapping } → get 往返一致；分节合并不冲掉其它节；分节空缺不拒（mapping 键缺席 = 默认映射生效）', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ worker })
+    await svc.set({ experts: { mapping: { 'coding-fix': 'my-fix-expert' } } })
+    const settings = await svc.get()
+    expect(settings.experts).toEqual({ mapping: { 'coding-fix': 'my-fix-expert' } })
+    expect(settings.worker).toEqual(worker) // 读-改-写分节合并保留既有节
+    // 空节合法（{}——未列任何覆盖 = 全默认映射）；新实例读回文件事实源
+    await svc.set({ experts: {} })
+    await expect(createSettingsService({ settingsFile, userDataDir }).get()).resolves.toEqual({
+      worker,
+      experts: {},
+    })
+  })
+
+  it('experts 写校验：mapping 非对象 / 未知任务类型键 / 空白专家键值 → InvalidSettingsInputError，既有文件不被触碰', async () => {
+    const { userDataDir, settingsFile } = harness()
+    const svc = createSettingsService({ settingsFile, userDataDir })
+    await svc.set({ experts: { mapping: { gate: 'my-gate' } } })
+    await expect(svc.set({ experts: { mapping: 'nope' as never } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({ experts: { mapping: { 'doc.fix': 'x' } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({ experts: { mapping: { gate: '  ' } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({ experts: { mapping: { gate: 7 } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({} as never)).rejects.toBeInstanceOf(InvalidSettingsInputError) // 五节全缺
+    expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ experts: { mapping: { gate: 'my-gate' } } })
+  })
 })
 
 describe('2.7 forgeSettings：原子写 + 写校验', () => {

@@ -6,7 +6,17 @@
 // 零实现级 import（可独立发版前提）。参数 schema 面恒取官方 enforced subset 标量形
 // （string/integer/number/boolean + 数组）——嵌套负载（gate/include/vars）在 tool 面
 // 平铺为显式参数（Interface 8 snake_case + 任务定位两显式参口径的延伸）。
-import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import { join } from 'node:path'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  DEFAULT_EXPERT_MAPPING,
+  type ForgeSettingsService,
+  type ForgeProposalsService,
+  type ForgeTasksService,
+  type ProjectServiceM2,
+  type TaskType,
+} from '@dsh-forge/contracts'
 import type { NarrationChannel, NarrationSendOptions } from './notify/index.js'
 import { forgeLoopSource } from './forge-loop-source.js'
 import type { ForgeLoopNarrationMeta } from './forge-loop-source.js'
@@ -238,7 +248,11 @@ export interface ForgeContextFace {
   forgeCheckpoints: import('./tools/index.js').ForgeCheckpointsToolFace
   /** dsh 官方 reflect 服务子面（3.4——可选服务防御读取：cordis 4.0.4 无 '?' 可选 inject
    *  后缀，forgeSettings 缺席（settingsFile 未注入）经 reflect.get 降级读取而非 inject 阻载） */
-  readonly reflect?: { get(name: string, strict?: boolean): unknown }
+  readonly reflect?: {
+    get(name: string, strict?: boolean): unknown
+    /** 可选 provide 面（expert-squad-forge 1.2——档案取用面 'forgeExperts' 依赖注入；缺席 = 不提供） */
+    provide?(name: string, service: unknown): void
+  }
   /** dsh 官方 tool 注册面 */
   tools: ToolRegisterFace
   /** dsh 官方系统提示词面 */
@@ -507,5 +521,72 @@ export function createProjectContainerDirs(projects: ProjectDirServiceFace): Pro
     warm(projectIds) {
       for (const id of projectIds) warm(id)
     },
+  }
+}
+
+// ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
+
+/** 随包预设专家档案目录（packages/plugin-forge/experts——registerRoot 的 plugin 内置层 root；
+ *  以本模块编译产物 dist/faces.js 为基一句径派生，与包布局绑定） */
+export const FORGE_EXPERTS_ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'experts')
+
+/**
+ * experts 服务结构最小面（expert-squad registry 收窄——本插件不依赖该包，结构兼容消费；
+ * get 的 fail-loud 错误语义（expert not found / disabled: <key>）由实现侧承担，本面原样透传）。
+ */
+export interface ExpertsServiceFace {
+  /** 按键取档案（不存在/禁用 → 实现侧 fail-loud 抛错，消息含键名）。 */
+  get(key: string): {
+    readonly name: string
+    readonly title?: string
+    readonly personaMd: string
+    readonly tools?: readonly string[]
+    readonly model?: string
+  }
+  /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次）。 */
+  registerRoot(ctx: unknown, dir: string): void
+  /** 整体重扫（registerRoot 后的显式生效面；结构可选——缺席 = 实现无刷新语义）。 */
+  refresh?(): Promise<void>
+}
+
+/** claim 链消费的专家档案投影（ExpertEntry 收窄——persona 组装所需最小字段集） */
+export interface ForgeExpertProfile {
+  readonly name: string
+  readonly title?: string
+  readonly personaMd: string
+  readonly tools?: readonly string[]
+  readonly model?: string
+}
+
+/** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
+ *  键解析 = settings experts.mapping 覆盖 → DEFAULT_EXPERT_MAPPING 默认 → 原类型名；
+ *  settings 读失败 = 回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛
+ *  （claim 期 fail-loud——缺失/禁用档案阻断派发，不产空 persona）。 */
+export type ExpertProfileResolver = (taskType: string) => Promise<ForgeExpertProfile>
+
+/** 建档案取用面（装配单例——core claim 链经依赖注入消费；experts 缺席 = undefined 不注入） */
+export function createExpertProfileResolver(deps: {
+  readonly experts: ExpertsServiceFace
+  readonly settings?: Pick<ForgeSettingsService, 'get'>
+}): ExpertProfileResolver {
+  return async (taskType: string): Promise<ForgeExpertProfile> => {
+    let key: string = DEFAULT_EXPERT_MAPPING[taskType as TaskType] ?? taskType
+    if (deps.settings !== undefined) {
+      try {
+        const settings = await deps.settings.get()
+        key = settings.experts?.mapping?.[taskType as TaskType] ?? key
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        console.warn(`forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`)
+      }
+    }
+    const entry = deps.experts.get(key)
+    return {
+      name: entry.name,
+      ...(entry.title !== undefined ? { title: entry.title } : {}),
+      personaMd: entry.personaMd,
+      ...(entry.tools !== undefined ? { tools: entry.tools } : {}),
+      ...(entry.model !== undefined ? { model: entry.model } : {}),
+    }
   }
 }

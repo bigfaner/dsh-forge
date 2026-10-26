@@ -17,6 +17,8 @@ import { basename, dirname, join, resolve as resolvePath, sep } from 'node:path'
 import {
   FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT,
   REASONING_LEVELS,
+  TASK_TYPES,
+  type ExpertsSettings,
   type ForgeSettings,
   type ForgeSettingsService,
   type RemoteApprovalSettings,
@@ -109,8 +111,26 @@ function assertValidInput(input: SetForgeSettingsInput): void {
       throw new InvalidSettingsInputError('flywheel.reviewWaveThreshold 必须为 ≥1 的整数')
     }
   }
-  if (w === undefined && ra === undefined && wt === undefined && fw === undefined) {
-    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval / worktree / flywheel）')
+  const ex: unknown = input.experts
+  if (ex !== undefined) {
+    if (typeof ex !== 'object' || ex === null) throw new InvalidSettingsInputError('experts 段缺失')
+    const mapping = (ex as Record<string, unknown>)['mapping']
+    if (mapping !== undefined) {
+      if (typeof mapping !== 'object' || mapping === null || Array.isArray(mapping)) {
+        throw new InvalidSettingsInputError('experts.mapping 必须为对象')
+      }
+      for (const [key, value] of Object.entries(mapping as Record<string, unknown>)) {
+        if (!(TASK_TYPES as readonly string[]).includes(key)) {
+          throw new InvalidSettingsInputError(`experts.mapping 键必须 ∈ TASK_TYPES（未知任务类型：${key}）`)
+        }
+        if (typeof value !== 'string' || value.trim() === '') {
+          throw new InvalidSettingsInputError(`experts.mapping[${key}] 必须为非空白字符串（专家键名）`)
+        }
+      }
+    }
+  }
+  if (w === undefined && ra === undefined && wt === undefined && fw === undefined && ex === undefined) {
+    throw new InvalidSettingsInputError('set 至少携带一个设置节（worker / remoteApproval / worktree / flywheel / experts）')
   }
 }
 
@@ -140,6 +160,9 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
       if (parsed.flywheel !== undefined) {
         next.flywheel = parsed.flywheel as ForgeSettings['flywheel']
       }
+      if (parsed.experts !== undefined) {
+        next.experts = parsed.experts as ExpertsSettings
+      }
       return next
     },
     async set(input: SetForgeSettingsInput): Promise<void> {
@@ -153,6 +176,7 @@ export function createSettingsService(deps: SettingsServiceDeps): ForgeSettingsS
         ...(input.remoteApproval !== undefined ? { remoteApproval: input.remoteApproval } : {}),
         ...(input.worktree !== undefined ? { worktree: input.worktree } : {}),
         ...(input.flywheel !== undefined ? { flywheel: input.flywheel } : {}),
+        ...(input.experts !== undefined ? { experts: input.experts } : {}),
       }
       // 原子写：同目录 tmp + rename（Windows MoveFileEx REPLACE_EXISTING 语义——崩溃无半写）
       const tmp = `${deps.settingsFile}.${randomUUID()}.tmp`

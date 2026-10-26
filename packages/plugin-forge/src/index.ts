@@ -24,8 +24,8 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
-import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, SessionActivationFace } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
@@ -99,6 +99,35 @@ const forgePlugin: ForgePlugin = Object.assign(
       if (viaReflect !== undefined && typeof viaReflect.get === 'function') settingsService = viaReflect
     } catch {
       settingsService = undefined
+    }
+    // experts 服务可选消费（expert-squad-forge 1.2——同 forgeSettings reflect.get 防御读取
+    // 先例：cordis 4.0.4 无 '?' 可选 inject 后缀，expert-squad 插件缺席 = 装配面整体降级
+    // 不阻载，persona 合成回落 core 程序段矩阵）。在场 = ①registerRoot(随包预设专家目录)
+    // 注册 plugin 内置层（三层遮蔽 project > user > plugin）；②显式 refresh 一次
+    // （registerRoot 只追加 root 不重扫——expert-squad registry.ts:182-184，注册后须显式
+    // 触发才可见）；③档案取用面（按 settings 映射键 get 档案）经依赖注入供 claim 链消费
+    // （'forgeExperts' 具名服务——core 装配侧 reflect.get 防御读取，core 零 IO 纪律不变）。
+    let expertResolver: ExpertProfileResolver | undefined
+    try {
+      const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
+      if (experts !== undefined && typeof experts.get === 'function' && typeof experts.registerRoot === 'function') {
+        experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR)
+        if (typeof experts.refresh === 'function') {
+          void experts.refresh.call(experts).catch((cause: unknown) => {
+            const message = cause instanceof Error ? cause.message : String(cause)
+            console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
+          })
+        }
+        expertResolver = createExpertProfileResolver({
+          experts,
+          ...(settingsService !== undefined ? { settings: settingsService } : {}),
+        })
+        if (typeof ctx.reflect?.provide === 'function') ctx.reflect.provide('forgeExperts', expertResolver)
+      }
+    } catch (cause) {
+      expertResolver = undefined
+      const message = cause instanceof Error ? cause.message : String(cause)
+      console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落程序段矩阵）：${message}`)
     }
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
     // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，
@@ -761,15 +790,20 @@ export type { ForgeCommands, ForgeCommandsDeps, RunDagTasksDeps, SourceCandidate
 // + 项目容器目录解析缝）。
 export {
   adaptAgentNarrationChannel,
+  createExpertProfileResolver,
   createProjectContainerDirs,
+  FORGE_EXPERTS_ROOT_DIR,
   FORGE_NOTICE_SOURCE_KIND,
 } from './faces.js'
 export type {
   AgentLookupFace,
   CommandRegisterFace,
+  ExpertProfileResolver,
+  ExpertsServiceFace,
   ForgeCommandDefinition,
   ForgeCommandInvocation,
   ForgeCommandResult,
+  ForgeExpertProfile,
   ProjectContainerDirs,
   ProjectDirServiceFace,
   SessionActivationFace,
