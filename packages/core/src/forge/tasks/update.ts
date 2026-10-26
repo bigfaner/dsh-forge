@@ -19,7 +19,9 @@
 // 整体回滚（删除随事务回滚零残留）。
 //
 // 审计：task_records append verb='updateTask' 行（actor='plugin-tool'——tool 专属动词，
-// 通道即 actor，同 addTask 口径）。闭包尾部（提交后）emitTasksChanged。一律 prepared
+// 通道即 actor，同 addTask 口径）。blocked 卡 depends_on 改写后同事务补跑恢复判定
+// （restoreBlockedWaiter——提案 task-pause-primitive §2.2-1），前置全满足即恢复 pending。
+// 闭包尾部（提交后）emitTasksChanged。一律 prepared
 // statements（Hard Rule）。任务状态不改 → 相位域不变（相位推导机输入 = docKinds +
 // taskStatuses），守卫与重算整体跳过。
 import type { TaskSnapshot, TaskStatus, UpdateTaskInput } from '@dsh-forge/contracts'
@@ -28,6 +30,7 @@ import type { TasksVerbDeps } from './add.js'
 import { findPathThroughOutEdges, naturalKeysByIds } from './add.js'
 import { CycleDetectedError, EdgeOriginLockedError, TaskLockedError, TaskNotFoundError } from './errors.js'
 import { resolveTaskRef, toTaskSnapshot } from './query.js'
+import { restoreBlockedWaiter } from './transition.js'
 
 /** 可改状态门（提案裁决：pending/blocked/suspended——无 worker 持有 ∧ 未落结算审计） */
 const UPDATABLE_TASK_STATUSES: readonly TaskStatus[] = ['pending', 'blocked', 'suspended']
@@ -118,6 +121,14 @@ export async function updateTask(deps: TasksVerbDeps, input: UpdateTaskInput): P
       )
       for (const dep of depends) {
         insertEdge.run(row.id, dep.id, now, now)
+      }
+
+      // ③-f 恢复钩子补跑（提案 task-pause-primitive §2.2-1）：改写 blocked 卡依赖后同事务
+      //      判定——前置全满足则立即恢复 pending（auto-restore 记录 actor='core' 落时间线）；
+      //      前置仍有未满足项则原样保持 blocked（restoreBlockedWaiter 单源，不报错）。
+      //      非 blocked 卡不动（pending 本就可领取、suspended 归 resume 序管辖）。
+      if (row.task_status === 'blocked') {
+        restoreBlockedWaiter(db, row.id, now)
       }
     }
 
