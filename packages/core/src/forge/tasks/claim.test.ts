@@ -889,6 +889,15 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
     expect(r.digest).toBe(dispatchDigest(r.dispatchPrompt))
   })
 
+  it('workerContext 渲染产物注入裸 {{ → claim fail-loud 抛错（expert-squad-forge 1.10——拼接后最终全文防护）', async () => {
+    const claimInject = svcWithWorkerCtx('## 任务目录锚点\n\nWORKSPACE: Z:\\ws{{evil}}')
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '1.4')
+    await expect(
+      claimInject({ projectId: P(), taskRef: { slug: 'f', localId: '1.4' }, sessionId: 's4' }),
+    ).rejects.toThrow(/persona text must not contain bare '\{\{'/)
+  })
+
   it('锚点节空串/dep 缺席 = 形态兼容（零追加——persona 原样）', async () => {
     const claimEmpty = svcWithWorkerCtx('') // 先建 harness（h 惰性初始化）
     seedFeature(h!.db, { slug: 'f', status: 'tasks' })

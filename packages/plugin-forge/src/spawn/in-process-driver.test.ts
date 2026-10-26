@@ -101,7 +101,8 @@ describe('createInProcessDriverSpawn（适配契约——驱动器桩化）', ()
     expect('toolFilter' in bare ? Object.keys(bare.toolFilter as object) : []).toEqual([])
   })
 
-  it('agentOptions 缺席 = 请求不携带键（回退父会话继承——直传 undefined 会被上游视为显式覆盖）', async () => {    const spawn = createInProcessDriverSpawn()
+  it('agentOptions 缺席 = 请求不携带键（回退父会话继承——直传 undefined 会被上游视为显式覆盖）', async () => {
+    const spawn = createInProcessDriverSpawn()
     startInProcessRun.mockResolvedValueOnce(runStub())
     await spawn({
       prompt: 'P',

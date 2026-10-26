@@ -156,7 +156,7 @@ export function renderExpertProfileSection(profile: ExpertPersonaProfile): strin
 // ─────────────────────── persona 合成（纯函数零 IO） ───────────────────────
 
 /** 出口插值防护（上游严格插值——persona 文本禁裸 `{{`，违者抛错而非放行） */
-function assertNoBareInterpolation(persona: string, origin: string): void {
+export function assertNoBareInterpolation(persona: string, origin: string): void {
   if (persona.includes('{{')) {
     throw new Error(`${origin}: persona text must not contain bare '{{' (strict upstream interpolation)`)
   }

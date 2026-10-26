@@ -112,14 +112,22 @@ const forgePlugin: ForgePlugin = Object.assign(
       const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
       if (experts !== undefined && typeof experts.get === 'function' && typeof experts.registerRoot === 'function') {
         experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR)
+        // refresh 完成屏障（expert-squad-forge 1.10）：refresh 是 fire-and-forget 的重扫——
+        // 未结算前首笔档案取用会误触发 not-found fail-loud（自愈但语义误报）。promise 记账
+        // 供 resolver 首调 await；错误在此吞掉归一为 settled-safe（fail-soft 诊断不变）。
+        let refreshReady: Promise<void> = Promise.resolve()
         if (typeof experts.refresh === 'function') {
-          void experts.refresh.call(experts).catch((cause: unknown) => {
-            const message = cause instanceof Error ? cause.message : String(cause)
-            console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
-          })
+          refreshReady = experts.refresh
+            .call(experts)
+            .catch((cause: unknown) => {
+              const message = cause instanceof Error ? cause.message : String(cause)
+              console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
+            })
+            .then(() => undefined)
         }
         expertResolver = createExpertProfileResolver({
           experts,
+          ready: refreshReady,
           ...(settingsService !== undefined ? { settings: settingsService } : {}),
         })
         if (typeof ctx.reflect?.provide === 'function') ctx.reflect.provide('forgeExperts', expertResolver)

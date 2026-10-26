@@ -717,6 +717,35 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     dispose()
   })
 
+  it('refresh 完成屏障：resolver 首调等待 refresh 结算后才 get（未结算窗口不触发 not-found fail-loud）', async () => {
+    let releaseRefresh!: () => void
+    const gate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve
+    })
+    const order: string[] = []
+    const face = {
+      get: (key: string) => {
+        order.push(`get:${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      },
+      registerRoot: (_ctx: unknown, _dir: string) => {},
+      refresh: async () => {
+        order.push('refresh:start')
+        await gate
+        order.push('refresh:done')
+      },
+    }
+    // ready promise 按生产装配配方（index.ts）构造：refresh 调起 + 吞错归一 settled-safe
+    const ready = face.refresh().catch(() => undefined).then(() => undefined)
+    const resolver = createExpertProfileResolver({ experts: face, ready })
+    const pending = resolver('doc')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(order).toEqual(['refresh:start']) // refresh 未结算 → get 未发生
+    releaseRefresh()
+    await expect(pending).resolves.toMatchObject({ name: 'doc' })
+    expect(order).toEqual(['refresh:start', 'refresh:done', 'get:doc'])
+  })
+
   it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键；未列键回落 DEFAULT_EXPERT_MAPPING 恒等映射', async () => {
     const { face } = expertsFace()
     const resolver = createExpertProfileResolver({

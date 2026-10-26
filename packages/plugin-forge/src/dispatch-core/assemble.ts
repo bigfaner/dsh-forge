@@ -125,7 +125,10 @@ export function deriveTriageToolFilter(): { deny: string[] } {
 /** 设置 + 档案 model → agentOptions（expert-squad-forge 1.4 model 消费——triage 同径基座
  * 上档案 model 在场覆盖 model，缺席回落 forgeSettings 默认；settings 未配置/服务缺席 =
  * undefined 不携带（无 provider 基座，回落父会话继承）；reasoning='default' = 不下发
- * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射） */
+ * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射）
+ * 取舍标注（expert-squad-forge 1.10）：档案 model 生效以 forgeSettings 配置了 worker 段为
+ * 前提——worker 段缺席 = 无 provider/model 基座，档案 model 不被消费（回父会话继承）。
+ */
 export function workerAgentOptionsOf(
   settings: ForgeSettings | undefined,
   profileModel?: string,

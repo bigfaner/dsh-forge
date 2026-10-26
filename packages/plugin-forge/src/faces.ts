@@ -578,8 +578,13 @@ export type ExpertProfileResolver = (taskType: string) => Promise<ForgeExpertPro
 export function createExpertProfileResolver(deps: {
   readonly experts: ExpertsServiceFace
   readonly settings?: Pick<ForgeSettingsService, 'get'>
+  /** 装配期 refresh 完成屏障（expert-squad-forge 1.10——refresh 是 fire-and-forget 触发的
+   *  一次性重扫，未结算前首笔 get 会误触发 not-found fail-loud；resolver 首调先等待本
+   *  promise 结算——已由装配侧吞错归一为 settled-safe，此处零异常路径）。 */
+  readonly ready?: Promise<void>
 }): ExpertProfileResolver {
   return async (taskType: string): Promise<ForgeExpertProfile> => {
+    await deps.ready
     let key: string = DEFAULT_EXPERT_MAPPING[taskType as TaskType] ?? taskType
     if (deps.settings !== undefined) {
       try {

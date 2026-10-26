@@ -40,7 +40,7 @@ import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
-import { composePersona, composePersonaWithProfile } from './prompt/persona.js'
+import { assertNoBareInterpolation, composePersona, composePersonaWithProfile } from './prompt/persona.js'
 import type { TaskType } from '@dsh-forge/contracts'
 import { dispatchDigest } from './prompt/digest.js'
 import {
@@ -296,6 +296,9 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
         : composePersonaWithProfile(profile, row.task_type as TaskType, complexity)
     const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
     const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona
+    // 追加轮尾部拼接后的最终全文防护（expert-squad-forge 1.10——锚点节文本同为渲染产物，
+    // 同受上游严格插值约束；拼接后不再复核 = 防护缺口）
+    assertNoBareInterpolation(personaWithAnchors, 'claim:personaWithAnchors')
 
   // ── 事务段（纯同步写窗口：转移 + claim 记录 + links + 快照。窗口内零 await——
   //    better-sqlite3 单连接上同步执行不向并发暴露未闭合事务）。
