@@ -15,7 +15,7 @@
 //      无 preset 级 deny 配置缝——全量检索仅 ToolRestriction 类型声明无消费点，核销
 //      留档）。
 
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
@@ -31,6 +31,7 @@ import {
   type SubagentEventsFace,
 } from "./dispatch/dispatch.js";
 import {
+  resolveCwdProjectExpertsRoot,
   resolvePluginExpertsRoot,
   resolveUserExpertsRoot,
   type ExpertRoot,
@@ -87,6 +88,23 @@ interface ExpertSquadCtx {
 function expertRootsFor(workspace: string): ExpertRoot[] {
   return [
     { origin: "project", dir: join(workspace, ".dsh", "experts") },
+    { origin: "user", dir: resolveUserExpertsRoot() },
+    { origin: "plugin", dir: resolvePluginExpertsRoot() },
+  ];
+}
+
+/**
+ * cwd 兜底锚（bug a7bdf03f）：打包/无会话环境下 process.cwd() 可能解析到应用安装
+ * 目录（非项目根）——直挂 project 层会让 watcher 锚定应用目录并爬升监听 Chromium
+ * data（EBUSY 风暴）。cwd 形态走 resolveCwdProjectExpertsRoot 合理性校验（判据
+ * 留档：.git 项目根可解析 + 排除 node_modules 特征段），非法则不产生 project 层
+ * root（user/plugin 层照常）；注册工作区锚（fetch 路由显式 workspace 参数，D4
+ * 钉死为注册项目根）不经此校验，维持直挂语义。
+ */
+function cwdExpertRoots(): ExpertRoot[] {
+  const projectDir = resolveCwdProjectExpertsRoot(process.cwd());
+  return [
+    ...(projectDir !== null ? [{ origin: "project" as const, dir: projectDir }] : []),
     { origin: "user", dir: resolveUserExpertsRoot() },
     { origin: "plugin", dir: resolvePluginExpertsRoot() },
   ];
@@ -160,6 +178,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
   const registries = new Map<string, Promise<ExpertsRegistry>>();
   const watchManagers = new Map<string, ExpertWatchManager>();
   const refreshChains = new Map<string, Promise<void>>();
+  // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
+  // 校验；显式注册工作区锚照旧。registry 扫描与 watch manager 同源，roots 一致。
+  const rootsFor = (workspace: string): ExpertRoot[] =>
+    resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots() : expertRootsFor(workspace);
   const enqueueRefresh = (workspace: string, registry: ExpertsRegistry): void => {
     const prior = refreshChains.get(workspace) ?? Promise.resolve();
     const next = prior.then(
@@ -173,7 +195,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     let hit = registries.get(workspace);
     if (hit === undefined) {
       const registry = new ExpertsRegistry({
-        roots: () => expertRootsFor(workspace),
+        roots: () => rootsFor(workspace),
         state,
         workspace,
       });
@@ -196,7 +218,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
         }
       });
       registries.set(workspace, hit);
-      const manager = new ExpertWatchManager(expertRootsFor(workspace), {
+      const manager = new ExpertWatchManager(rootsFor(workspace), {
         onInvalidated: () => enqueueRefresh(workspace, registry),
         onError: (error) => console.warn(`[expert-squad] ${String(error)}`),
       });
@@ -319,7 +341,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config: ExpertSquadPluginC
     } catch (error) {
       console.warn(`[expert-squad] cwd registry 首刷失败（provide 降级为未刷新实例）: ${String(error)}`);
       toolRegistry = new ExpertsRegistry({
-        roots: () => expertRootsFor(process.cwd()),
+        roots: () => rootsFor(process.cwd()),
         state,
         workspace: process.cwd(),
       });

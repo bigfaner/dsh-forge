@@ -195,4 +195,35 @@ describe("生命周期与降级", () => {
     expect(h.onInvalidated).not.toHaveBeenCalled();
     await h.manager.dispose();
   });
+
+  // bug a7bdf03f：锚点爬升无上界——缺失 root 的锚爬至盘根/应用安装目录，监听
+  // Chromium data 恒锁文件（Preferences*.tmp / Network\Cookies）→ EBUSY 风暴。
+  describe("bug a7bdf03f：锚点爬升上界与排除集", () => {
+    async function startExpectAbandoned(dir: string) {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const h = makeManager([{ origin: "project", dir }]);
+      try {
+        await h.manager.start();
+        const watchers = (h.manager as unknown as { watchers: Map<string, unknown> }).watchers;
+        expect(watchers.size).toBe(0); // 零 watcher（或仅 user/plugin 层，此处单层断言零）
+        expect(warn).toHaveBeenCalledTimes(1); // 降级留痕恰好一次（禁循环重试刷屏）
+        expect(h.onInvalidated).not.toHaveBeenCalled();
+      } finally {
+        await h.manager.dispose();
+        warn.mockRestore();
+      }
+    }
+
+    it("爬升超过 MAX_ANCHOR_CLIMB 上界 → 放弃监听并 warn 一次", async () => {
+      const sandbox = await makeSandbox();
+      let dir = sandbox;
+      for (let i = 0; i < 24; i += 1) dir = join(dir, `lvl-${i}`);
+      await startExpectAbandoned(join(dir, "experts"));
+    });
+
+    it("爬升锚命中应用数据特征目录（node_modules）→ 放弃监听并 warn 一次", async () => {
+      const sandbox = await makeSandbox();
+      await startExpectAbandoned(join(sandbox, "node_modules", "pkg", ".dsh", "experts"));
+    });
+  });
 });

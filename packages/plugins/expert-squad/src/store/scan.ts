@@ -71,6 +71,23 @@ export function resolveProjectExpertsRoot(cwd: string): string | null {
 }
 
 /**
+ * cwd 兜底锚合理性（bug a7bdf03f）：打包/无会话环境下 process.cwd() 可能解析到
+ * 应用安装目录（如 D:\software\dsh-forge）——以它直挂 project 层会让 watcher 锚定
+ * 应用目录并爬升监听 Chromium data（EBUSY 风暴）。判据（留档）：
+ * 1. cwd 向上须能解析到含 `.git` 的项目根（非项目根形态 → null）；
+ * 2. 项目根路径不得命中应用安装/数据特征段（node_modules——vendor git 仓不是用户项目）。
+ * 非法 → null（不产生 project 层 root，user/plugin 层照常）。
+ */
+export function resolveCwdProjectExpertsRoot(cwd: string): string | null {
+  const root = findProjectRoot(cwd);
+  if (root === null) return null;
+  const isAppFeature = root
+    .split(/[\\/]+/)
+    .some((segment) => segment.toLowerCase() === "node_modules");
+  return isAppFeature ? null : join(root, EXPERTS_DIR);
+}
+
+/**
  * user 层 experts 目录：`$DSH_HOME/experts/`，缺省 `~/.dsh/experts/`（D3，同构
  * skill-filesystem 用户根）。env 参数注入以便测试。
  */

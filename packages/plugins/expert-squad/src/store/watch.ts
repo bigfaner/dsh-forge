@@ -32,6 +32,35 @@ export interface ExpertWatchOptions {
 const WATCH_EVENT = ["add", "change", "unlink"] as const;
 type WatchEvent = (typeof WATCH_EVENT)[number] | "addDir" | "unlinkDir";
 
+/** bug a7bdf03f：锚点爬升上界——缺失 root 向上找存在祖先最多爬的层数（防无界爬升）。 */
+export const MAX_ANCHOR_CLIMB = 16;
+
+/**
+ * bug a7bdf03f：锚点爬升排除集（路径段小写比对）——爬升锚命中应用安装/数据特征
+ * 目录即放弃监听：这些目录内的恒锁文件（如 Chromium data 的 Preferences*.tmp /
+ * Network\Cookies）会引发 EBUSY 风暴；且「用户项目 experts 目录」不可能以它们为
+ * 合法祖先。盘根由 dirname 自反判定单独排除。
+ */
+const UNSAFE_ANCHOR_SEGMENTS: ReadonlySet<string> = new Set([
+  "node_modules",
+  "user data",
+  "application data",
+]);
+
+function isUnsafeAnchor(path: string): boolean {
+  return path
+    .split(/[\\/]+/)
+    .some((segment) => UNSAFE_ANCHOR_SEGMENTS.has(segment.toLowerCase()));
+}
+
+/** 同一锚点降级只 warn 一次（禁循环重试刷屏——EBUSY 风暴教训，bug a7bdf03f）。 */
+const degradedAnchors = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (degradedAnchors.has(key)) return;
+  degradedAnchors.add(key);
+  console.warn(message);
+}
+
 /**
  * path 是否为 root 下深度 1 的 .md 档案（root 外 / 更深 / 非 .md → 无关）。
  * 语义同 skill-filesystem isPotentialSkillPath 的 flat .md 分支。
@@ -140,17 +169,38 @@ export class ExpertWatchManager {
     if (this.closing) return;
     // root 不存在是正常形态（静默空）：chokidar 对缺失路径不触发 ready，改挂最近
     // 存在祖先为 anchor，深度 = 层数差 + 1（skill-filesystem anchor 模式同型）。
-    let anchor = resolve(root.dir);
+    // bug a7bdf03f：爬升加常量上界 + 排除集——锚爬至盘根/应用安装数据特征目录
+    // （Chromium data 恒锁文件 → EBUSY 风暴）即放弃本层监听并降级留痕一次；
+    // project root 后建场景由 fs/observed 通道与下次取用重扫兜底（取舍留档）。
+    const rootDir = resolve(root.dir);
+    let anchor = rootDir;
     let depth = 1;
+    let climbs = 0;
     for (;;) {
       try {
         statSync(anchor);
         break;
       } catch {
         const parent = dirname(anchor);
+        if (climbs >= MAX_ANCHOR_CLIMB || parent === anchor || isUnsafeAnchor(parent)) {
+          warnOnce(
+            rootDir,
+            `expert-squad: watcher anchor runaway guard——missing root ${rootDir} 的存在祖先命中盘根/上界/应用数据特征（${parent}），放弃本层监听（fs/observed 通道与下次取用重扫兜底）`,
+          );
+          return;
+        }
         anchor = parent;
         depth += 1;
+        climbs += 1;
       }
+    }
+    // statSync 成功停下的锚同样校验（爬升终点即盘根/应用数据特征目录的形态）。
+    if (dirname(anchor) === anchor || isUnsafeAnchor(anchor)) {
+      warnOnce(
+        rootDir,
+        `expert-squad: watcher anchor runaway guard——missing root ${rootDir} 的锚落在盘根/应用数据特征目录（${anchor}），放弃本层监听（fs/observed 通道与下次取用重扫兜底）`,
+      );
+      return;
     }
     const watcher = chokidar.watch(anchor, {
       persistent: true,

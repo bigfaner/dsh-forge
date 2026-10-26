@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   findProjectRoot,
+  resolveCwdProjectExpertsRoot,
   resolvePluginExpertsRoot,
   resolveUserExpertsRoot,
   scanExpertRoots,
@@ -86,6 +87,27 @@ describe("root 解析（D3 三层物理位置）", () => {
     const dir = resolvePluginExpertsRoot();
     expect(existsSync(dir)).toBe(true);
     expect(existsSync(join(dir, "code-reviewer.md"))).toBe(true);
+  });
+
+  // bug a7bdf03f：打包/无会话环境 process.cwd() 兜底解析到应用安装目录（非项目根）。
+  describe("resolveCwdProjectExpertsRoot：cwd 兜底锚合理性（bug a7bdf03f）", () => {
+    it("cwd 为应用安装目录形态（无 .git 祖先）→ null（project 层缺席）", async () => {
+      const appDir = join(await makeSandbox(), "app-install");
+      await mkdir(appDir, { recursive: true });
+      expect(resolveCwdProjectExpertsRoot(appDir)).toBeNull();
+    });
+
+    it("cwd 为合法项目（.git 根可解析）→ <projectRoot>/.dsh/experts", async () => {
+      const l = await makeThreeLayers();
+      expect(resolveCwdProjectExpertsRoot(l.cwd)).toBe(l.project);
+    });
+
+    it("project root 命中 node_modules 特征（vendor git 仓）→ null", async () => {
+      const sandbox = await makeSandbox();
+      const vendorRoot = join(sandbox, "node_modules", "pkg");
+      await mkdir(join(vendorRoot, ".git"), { recursive: true });
+      expect(resolveCwdProjectExpertsRoot(vendorRoot)).toBeNull();
+    });
   });
 });
 
