@@ -15,6 +15,14 @@ import {
 /** 三模式（1.61 裁决③：查看/编辑/两两对比——对比只读，退出回查看态）。 */
 export type DetailMode = "view" | "edit" | "compare";
 
+/**
+ * Esc 键纯决策（bug f4020406 ⑤：对比态 Esc 先退对比回查看态，再按才关 Dialog；
+ * 查看/编辑态 Esc 关 Dialog）。
+ */
+export function escNext(mode: DetailMode): "exitCompare" | "close" {
+  return mode === "compare" ? "exitCompare" : "close";
+}
+
 /** 控制器快照（open = Dialog 是否在场）。 */
 export interface DetailState {
   readonly open: boolean;
@@ -29,8 +37,12 @@ export interface DetailState {
   readonly busy: boolean;
   /** Toast 文案（热刷新生效 / 启停结果 / 错误透出）。 */
   readonly toast: string | undefined;
-  /** 两两对比对象（compare 态消费；单值 = 禁三列并排的数据面，1.61 裁决③⑤）。 */
-  readonly compareTarget?: ExpertView;
+  /**
+   * 两两对比对象（compare 态消费）。Root cause（bug f4020406）：曾存整条 ExpertView
+   * 快照——轮询换新后快照陈旧、对比表读旧值。改存 origin（稳定判别键），渲染时由
+   * Dialog 从同键最新条目重解析（sameKeyEntries），对比表随轮询自动换新。
+   */
+  readonly compareTargetOrigin?: string;
 }
 
 /** 详情变更缝（update / enable / disable fetch 路由装配面；测试注入替身）。 */
@@ -122,29 +134,29 @@ export class ExpertDetailController {
       mode: "edit",
       draft: draftOf(this.state.expert),
       errors: IDLE,
-      compareTarget: undefined,
+      compareTargetOrigin: undefined,
     };
     this.emit();
   }
 
-  /** 进入两两对比态（1.61 裁决③：仅查看态可入；target = 被遮蔽同名卡）。 */
+  /** 进入两两对比态（1.61 裁决③：仅查看态可入；只存对象 origin——渲染时重解析最新条目）。 */
   startCompare(target: ExpertView): void {
     if (this.state === undefined || this.state.mode !== "view") return;
-    this.state = { ...this.state, mode: "compare", compareTarget: target };
+    this.state = { ...this.state, mode: "compare", compareTargetOrigin: target.origin };
     this.emit();
   }
 
-  /** 对比对象单选切换（compare 态内；单值换靶——禁三列并排）。 */
+  /** 对比对象单选切换（compare 态内；单值换靶——禁三列并排；只存 origin 渲染时重解析）。 */
   selectCompareTarget(target: ExpertView): void {
     if (this.state === undefined || this.state.mode !== "compare") return;
-    this.state = { ...this.state, compareTarget: target };
+    this.state = { ...this.state, compareTargetOrigin: target.origin };
     this.emit();
   }
 
-  /** 退出对比回查看态（compareTarget 清空）。 */
+  /** 退出对比回查看态（对比对象清空）。 */
   exitCompare(): void {
     if (this.state === undefined || this.state.mode !== "compare") return;
-    this.state = { ...this.state, mode: "view", compareTarget: undefined };
+    this.state = { ...this.state, mode: "view", compareTargetOrigin: undefined };
     this.emit();
   }
 

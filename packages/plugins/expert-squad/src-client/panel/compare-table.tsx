@@ -26,7 +26,11 @@ function CompareCell({ value, diff }: { readonly value: unknown; readonly diff: 
   );
 }
 
-/** 来源选择 chips 单选行（⑤ 两两口径：点选切换对比对象；data-cmp-selected 标注当前）。 */
+/**
+ * 来源选择 chips 单选行（⑤ 两两口径：点选切换对比对象；data-cmp-selected 标注当前）。
+ * bug f4020406 ④：role=radio 无键盘语义（radiogroup 需方向键/roving tabindex 配套）——
+ * 降级为 aria-pressed 切换钮（按钮原生 Tab 可达，pressed 表达选中态）。
+ */
 export function CompareChips({
   shadows,
   selectedOrigin,
@@ -37,17 +41,16 @@ export function CompareChips({
   readonly onSelect: (origin: string) => void;
 }): ReactNode {
   return (
-    <div className="dswf-cmp-pick" role="radiogroup" aria-label="对比对象">
+    <div className="dswf-cmp-pick" aria-label="对比对象">
       <span className="dswf-cmp-pick-lead">对比对象：</span>
       {shadows.map((shadow) => (
         <button
           key={shadow.origin}
           type="button"
-          role="radio"
           className={`dswf-cmp-chip origin-${shadow.origin}`}
           data-cmp-chip={shadow.origin}
           data-cmp-selected={shadow.origin === selectedOrigin ? "true" : "false"}
-          aria-checked={shadow.origin === selectedOrigin}
+          aria-pressed={shadow.origin === selectedOrigin}
           onClick={() => onSelect(shadow.origin)}
         >
           {originLabel(shadow.origin)}
@@ -93,8 +96,9 @@ export function PairCompareTable({
                 <span className="eff-badge">生效</span>
               </th>
               <th className="cmp-tgt">
+                {/* bug f4020406 ③：右列表头补传 projectName——project 被遮蔽时与左列具名一致 */}
                 <span className={`origin-badge origin-${shadow.origin}`}>
-                  {originLabel(shadow.origin)}
+                  {originLabel(shadow.origin, projectName)}
                 </span>
               </th>
             </tr>

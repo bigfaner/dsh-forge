@@ -14,9 +14,10 @@ import {
   type ExpertView,
   type OriginFilter,
 } from "../src-client/panel/filter.js";
-import { ExpertDetailController } from "../src-client/panel/detail-source.js";
+import { ExpertDetailController, escNext, type DetailMode } from "../src-client/panel/detail-source.js";
 import { ExpertDetailDialog } from "../src-client/panel/detail-dialog.js";
 import { ExpertGroupView, ExpertPanel, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
+import { PairCompareTable } from "../src-client/panel/compare-table.js";
 
 function entry(overrides: Partial<ExpertView> = {}): ExpertView {
   return {
@@ -136,24 +137,27 @@ describe("ExpertDetailController 两两对比模式（③）", () => {
     return c;
   }
 
-  it("startCompare(shadow) → mode=compare + compareTarget；selectCompareTarget 单选切换", () => {
+  it("startCompare(shadow) → mode=compare + compareTargetOrigin（改存 origin）；selectCompareTarget 单选切换", () => {
     const c = ctl();
     c.startCompare(shadow);
     expect(c.getSnapshot().mode).toBe("compare");
-    expect(c.getSnapshot().compareTarget).toEqual(shadow);
+    expect(c.getSnapshot().compareTargetOrigin).toBe("user");
     const other = entry({ origin: "plugin", effective: false, title: "内置评审" });
     c.selectCompareTarget(other);
-    expect(c.getSnapshot().compareTarget?.origin).toBe("plugin");
-    // 单选：compareTarget 单值无列表——禁三列并排的数据面
+    expect(c.getSnapshot().compareTargetOrigin).toBe("plugin");
+    // 单选：compareTargetOrigin 单值无列表——禁三列并排的数据面
     expect(c.getSnapshot().mode).toBe("compare");
   });
 
-  it("exitCompare 回查看态且 compareTarget 清空；Esc close 语义不变", () => {
+  it("exitCompare 回查看态且 compareTargetOrigin 清空；escNext 纯决策：compare 态先退对比，view/edit 态关 Dialog", () => {
     const c = ctl();
     c.startCompare(shadow);
     c.exitCompare();
     expect(c.getSnapshot().mode).toBe("view");
-    expect(c.getSnapshot().compareTarget).toBeUndefined();
+    expect(c.getSnapshot().compareTargetOrigin).toBeUndefined();
+    expect(escNext("compare" satisfies DetailMode)).toBe("exitCompare");
+    expect(escNext("view" satisfies DetailMode)).toBe("close");
+    expect(escNext("edit" satisfies DetailMode)).toBe("close");
   });
 
   it("编辑态不可进入对比；对比态 startEdit 先回查看语义（守卫）", () => {
@@ -161,12 +165,12 @@ describe("ExpertDetailController 两两对比模式（③）", () => {
     c.startEdit();
     c.startCompare(shadow);
     expect(c.getSnapshot().mode).toBe("edit");
-    expect(c.getSnapshot().compareTarget).toBeUndefined();
+    expect(c.getSnapshot().compareTargetOrigin).toBeUndefined();
     c.cancelEdit();
     c.startCompare(shadow);
     c.startEdit();
     expect(c.getSnapshot().mode).toBe("edit");
-    expect(c.getSnapshot().compareTarget).toBeUndefined();
+    expect(c.getSnapshot().compareTargetOrigin).toBeUndefined();
   });
 });
 
@@ -254,17 +258,27 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
     expect(solo).not.toContain('aria-label="对比"');
   });
 
-  it("对比态：宽体 Dialog + 对比对象单选列表（chips）+ 两列表（禁三列）", () => {
+  it("对比态：宽体 Dialog + 对比对象单选列表（pick-list 单一选择控件）+ 两列表（禁三列）", () => {
     const html = renderDialog(compareCtl(), { sameKeyEntries: [shadowUser, shadowPlugin, effective] });
     expect(html).toContain("dswf-dlg wide");
-    expect(html).toContain("dswf-cmp-pick");
-    // 单选候选 = 两枚被遮蔽来源 chips；无三列并排（仅 生效 vs target 两数据列）
+    expect(html).toContain("dswf-cmp-pick-list");
+    // bug f4020406 收敛：Dialog 只留 pick-list——chips（聚组展开语汇）不在 Dialog
+    expect(html).not.toContain("data-cmp-chip");
+    // 单选候选 = 两枚被遮蔽来源行；无三列并排（仅 生效 vs target 两数据列）
     expect(html).toContain('data-cmp-target="user"');
     expect(html).toContain('data-cmp-target="plugin"');
     expect(html.match(/<th class="cmp-eff">/g)?.length).toBe(1);
     expect(html.match(/<th class="cmp-tgt">/g)?.length).toBe(1);
     // 退出回查看态入口
     expect(html).toContain('aria-label="退出对比"');
+  });
+
+  it("bug f4020406：compareTargetOrigin 渲染时从同键最新条目重解析（轮询换新后对比表不陈旧）", () => {
+    // startCompare 时快照为旧 title；渲染注入的 sameKeyEntries 已是轮询换新后的新对象
+    const reloaded = entry({ origin: "user", effective: false, title: "评审v2", skills: ["tsc"] });
+    const html = renderDialog(compareCtl(), { sameKeyEntries: [reloaded, effective] });
+    expect(html).toContain("评审v2"); // pick-list 行与对比右列均来自最新条目
+    expect(html).toContain(">评审v2</span>");
   });
 
   it("差异默认：默认仅差异行 + 高亮；「显示全部字段」切换标记在场；完全一致空态", () => {
@@ -329,6 +343,40 @@ describe("ExpertGroupView 展开对比两两口径（⑤）", () => {
     expect(renderGroup()).not.toContain("dswf-xcompare");
     expect(renderGroup()).toContain("展开对比");
   });
+
+  it("bug f4020406 ④：组内 shadow 行与 PairCompareTable 右列表头补传 projectName（project 来源全视图具名一致）", () => {
+    const group = {
+      key: "code-reviewer",
+      effective: entry({ origin: "user", effective: true, title: "用户评审" }),
+      shadows: [entry({ origin: "project", effective: false, title: "项目评审" })],
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertGroupView, { group, projectName: "acme", defaultExpanded: true }),
+    );
+    // shadow 行角标具名（原仅「项目」）
+    expect(html).toContain("项目 · acme");
+    // 对比表右列表头具名（与左列一致）
+    expect(html.match(/项目 · acme/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("PairCompareTable 右列表头具名（直渲染钉）", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PairCompareTable, {
+        effective: entry({ origin: "user", effective: true }),
+        shadow: entry({ origin: "project", effective: false }),
+        showAllFields: true,
+        projectName: "acme",
+      }),
+    );
+    expect(html.match(/项目 · acme/g)?.length).toBe(1); // 仅右列表头一枚（左列为 user）
+  });
+
+  it("bug f4020406 ④：CompareChips 降级 aria-pressed（radio 语义不可键盘操作 → pressed 切换钮）", () => {
+    const html = renderGroup(true);
+    expect(html).not.toContain('role="radio"');
+    expect(html).not.toContain("aria-checked");
+    expect(html).toContain("aria-pressed");
+  });
 });
 
 // ---- ② 面板头部来源筛选 select -----------------------------------------------
@@ -359,6 +407,11 @@ describe("ExpertPanel 来源筛选头部（②）", () => {
   it("组头隐藏数标注：user 来源筛选下 group 头标注「隐藏 1 条未命中」", () => {
     const html = renderPanel({ origin: "user" });
     expect(html).toContain("隐藏 1 条未命中");
+  });
+
+  it("bug f4020406 ⑦：组头「N 个来源」计数带注记（title 提示含被搜索/筛选隐藏的来源行）", () => {
+    const html = renderPanel({ origin: "user" });
+    expect(html).toContain('title="计数含被搜索/筛选隐藏的来源行"');
   });
 
   it("filterGroups 驱动网格（无匹配 → 无匹配空态）", () => {

@@ -19,12 +19,11 @@ import {
 } from "./detail-logic.js";
 import { maskedPeersLabel, diffFields, originLabel, type ExpertView } from "./filter.js";
 import {
-  CompareChips,
   DiffOnlyToggle,
   PairCompareTable,
   useDiffOnly,
 } from "./compare-table.js";
-import type { ExpertDetailController, DetailState } from "./detail-source.js";
+import { escNext, type ExpertDetailController, type DetailState } from "./detail-source.js";
 
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
 const TEXTAREA_LINE_PX = 22;
@@ -302,7 +301,7 @@ function OriginBar({
   );
 }
 
-/** 两两对比态 body（③⑥：对象单选列表 + 差异默认表 + 退出回查看）。 */
+/** 两两对比态 body（③⑥：对象单选列表——Dialog 形态唯一选择控件，chips 为聚组展开语汇不在此；差异默认表 + 退出回查看）。 */
 function CompareBody({
   state,
   shadows,
@@ -315,7 +314,9 @@ function CompareBody({
   readonly controller: ExpertDetailController;
 }): ReactNode {
   const { showAll, toggle } = useDiffOnly();
-  const target = state.compareTarget;
+  // Root cause（bug f4020406 ⑥）：state 只存 compareTargetOrigin，渲染时从同键最新
+  // 条目重解析——轮询换新后对比表随 sameKeyEntries 自动换新，不读陈旧快照。
+  const target = shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
   return (
     <>
       <div className="dswf-cmp-pick-list">
@@ -328,20 +329,12 @@ function CompareBody({
             data-cmp-target={shadow.origin}
             onClick={() => controller.selectCompareTarget(shadow)}
           >
-            <span className={`origin-badge origin-${shadow.origin}`}>{originLabel(shadow.origin)}</span>
+            <span className={`origin-badge origin-${shadow.origin}`}>{originLabel(shadow.origin, projectName)}</span>
             <span>{shadow.title}</span>
             <span className="dswf-cmp-opt-updated">{shadow.updatedAt?.slice(0, 10) ?? "随包分发"}</span>
           </button>
         ))}
       </div>
-      <CompareChips
-        shadows={shadows}
-        selectedOrigin={target?.origin ?? shadows[0]?.origin ?? ""}
-        onSelect={(origin) => {
-          const next = shadows.find((shadow) => shadow.origin === origin);
-          if (next !== undefined) controller.selectCompareTarget(next);
-        }}
-      />
       <DiffOnlyToggle
         showAll={showAll}
         diffCount={target === undefined ? 0 : diffFields(state.expert, target).length}
@@ -385,7 +378,13 @@ export function ExpertDetailDialog(props: {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") props.controller.close();
+      if (event.key !== "Escape") return;
+      // bug f4020406 ⑤：Esc 决策走 escNext——对比态先 exitCompare 回查看态，再按才关 Dialog
+      if (escNext(props.controller.getSnapshot().mode) === "exitCompare") {
+        props.controller.exitCompare();
+        return;
+      }
+      props.controller.close();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

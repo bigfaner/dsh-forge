@@ -304,6 +304,8 @@ function OriginBadge({ origin, projectName }: { readonly origin: string; readonl
 
 function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView; readonly projectName?: string; readonly onActivate?: (key: string) => void }): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
+  // bug f4020406 ②：data-effective 在本组件恒 "true"——Card 仅渲染生效卡（聚组 shadow 行走
+  // dswf-xshadow 按钮），保留属性作生效形态的测试/样式选择器锚，不承载分支语义。
   return (
     <article
       className={`dswf-xcard${expert.enabled ? "" : " off"}`}
@@ -366,7 +368,8 @@ export function ExpertGroupView(
     <section className={`dswf-xgroup${multi ? " multi" : ""}`} data-expert-key={group.key}>
       <header className="xg-head">
         <b className="xg-name">{group.key}</b>
-        <span className="xg-cnt">{group.shadows.length + 1} 个来源</span>
+        {/* bug f4020406 ⑦：计数注记——来源筛选/搜索命中不足 N 时差额行被隐藏，计数恒为全层条数 */}
+        <span className="xg-cnt" title="计数含被搜索/筛选隐藏的来源行">{group.shadows.length + 1} 个来源</span>
         {hiddenShadows === undefined || hiddenShadows === 0 ? null : (
           <span className="xg-hidden">隐藏 {hiddenShadows} 条未命中</span>
         )}
@@ -390,7 +393,8 @@ export function ExpertGroupView(
               setExpanded(true)
             }}
           >
-            <OriginBadge origin={shadow.origin} />
+            {/* bug f4020406 ③：补传 projectName——project 被遮蔽行具名与生效卡/对比表一致 */}
+            <OriginBadge origin={shadow.origin} projectName={projectName} />
             <span className="xs-title">{shadow.title}</span>
             <span className="xs-updated">{updatedLabel(shadow.updatedAt) ?? ""}</span>
             <span className="xs-mark">被遮蔽 · 只读</span>
@@ -473,8 +477,8 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
   }
 
   const keyCount = new Set(entries.map((entry) => entry.name)).size
-  const shownCount =
-    phase === "ready" && entries.length > 0 ? filteredGroups.length : filteredGroups.length
+  // bug f4020406 ①：原「ready && 非空 ? A : A」死三元移除——两分支同值，恒 filteredGroups.length
+  const shownCount = filteredGroups.length
   const countText =
     phase === "loading"
       ? "扫描专家目录…"
