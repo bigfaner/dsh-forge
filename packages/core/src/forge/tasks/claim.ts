@@ -35,12 +35,12 @@ import type {
   TaskPriority,
   TaskPrerequisiteSummary,
 } from '@dsh-forge/contracts'
-import { withTransaction } from '../../db/transaction.js'
+import { withAsyncTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import { DependenciesUnmetError } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { composeDispatchPrompt } from './prompt/compose.js'
-import { composePersona } from './prompt/persona.js'
+import { composePersona, composePersonaWithProfile } from './prompt/persona.js'
 import type { TaskType } from '@dsh-forge/contracts'
 import { dispatchDigest } from './prompt/digest.js'
 import {
@@ -206,7 +206,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
   const db = deps.store.ensureOpen(input.projectId)
   const now = new Date().toISOString()
 
-  const result = withTransaction(db, (): ClaimTaskResult => {
+  const result = await withAsyncTransaction(db, async (): Promise<ClaimTaskResult> => {
     // ① 目标解析：adopt 定向领取（S3——循环恢复径：按 TaskRef 直查接管既有 in_progress/
     //    interrupted，忽略 session links——重启后主会话新 id 天然无 links，直查即接管）；
     //    显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
@@ -277,11 +277,20 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     })
     const digest = dispatchDigest(dispatchPrompt)
 
-    // ③b worker persona 合成（S2a 组成矩阵——agent 级人格面；与 dispatchPrompt 任务面分层，
+    // ③b worker persona 合成（expert-squad-forge 1.3 两段组装——档案人格段 + 程序段；
     //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
+    //     档案取用经注入面（键解析 = settings experts.mapping 覆盖 → 默认映射——plugin-forge
+    //     1.2 装配）：缺失/禁用档案 fail-loud 抛错（消息含专家键名）→ 单事务整体回滚，任务
+    //     留 pending、无空 persona；取用面缺席（experts 服务未装配）= 形态兼容，persona 仅
+    //     程序段。
     //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
     //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
-    const persona = composePersona(row.task_type as TaskType, (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1])
+    const complexity = (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1]
+    const profile = await deps.resolveExpertProfile?.(row.task_type)
+    const persona =
+      profile === undefined
+        ? composePersona(row.task_type as TaskType, complexity)
+        : composePersonaWithProfile(profile, row.task_type as TaskType, complexity)
     const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
     const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona
 

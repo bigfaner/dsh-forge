@@ -40,6 +40,7 @@ import {
   TasksProposalNotFoundError,
 } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
+import type { ExpertPersonaProfile } from './prompt/persona.js'
 
 /** 动词装配依赖（service.ts 装配面同形结构传入） */
 export interface TasksVerbDeps {
@@ -64,6 +65,13 @@ export interface TasksVerbDeps {
    * claim 领取瞬间渲染追加 persona 尾部；缺席/空串 = 零追加，形态兼容）。
    */
   readonly resolveWorkerContext?: (projectId: string, source: ContainerRef, localId: string) => string
+  /**
+   * 专家档案取用面（expert-squad-forge 1.3——claim 领取瞬间按任务类型取档案合成 persona；
+   * 键解析 = settings experts.mapping 覆盖 → 默认映射，IO 全在装配方闭包）。返回 undefined =
+   * 取用面缺席（experts 服务未装配——形态兼容，persona 仅程序段）；档案缺失/禁用 =
+   * 实现侧 fail-loud 抛错（消息含专家键名）——claim 整体拒绝，任务留 pending。
+   */
+  readonly resolveExpertProfile?: (taskType: string) => Promise<ExpertPersonaProfile | undefined>
 }
 
 /** fix 链深上限（C6 用户裁决：≤6，较老 forge Max nesting 3 放宽） */

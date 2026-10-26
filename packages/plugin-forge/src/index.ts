@@ -102,7 +102,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
     // experts 服务可选消费（expert-squad-forge 1.2——同 forgeSettings reflect.get 防御读取
     // 先例：cordis 4.0.4 无 '?' 可选 inject 后缀，expert-squad 插件缺席 = 装配面整体降级
-    // 不阻载，persona 合成回落 core 程序段矩阵）。在场 = ①registerRoot(随包预设专家目录)
+    // 不阻载，persona 合成回落 core 程序段）。在场 = ①registerRoot(随包预设专家目录)
     // 注册 plugin 内置层（三层遮蔽 project > user > plugin）；②显式 refresh 一次
     // （registerRoot 只追加 root 不重扫——expert-squad registry.ts:182-184，注册后须显式
     // 触发才可见）；③档案取用面（按 settings 映射键 get 档案）经依赖注入供 claim 链消费
@@ -127,7 +127,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch (cause) {
       expertResolver = undefined
       const message = cause instanceof Error ? cause.message : String(cause)
-      console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落程序段矩阵）：${message}`)
+      console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落 core 程序段合成）：${message}`)
     }
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
     // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，

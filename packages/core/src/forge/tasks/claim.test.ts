@@ -902,3 +902,76 @@ describe('persona 领取瞬间追加：任务目录锚点节（worker 独享，�
     expect(r2.persona).not.toContain('## 任务目录锚点')
   })
 })
+
+// ─────────────────── expert-squad-forge 1.3：claim 两段组装（档案人格段 + 程序段） ───────────────────
+
+describe('persona 两段组装：专家档案取用面注入（expert-squad-forge 1.3）', () => {
+  /** 带档案取用面注入的 claim（档案投影由夹具控制——键解析/档案解析归 plugin-forge faces.test） */
+  function svcWithExperts(deps: {
+    profile?: { name: string; title?: string; personaMd: string } | undefined
+    error?: Error
+  }) {
+    h ??= createTasksHarness()
+    let calls = 0
+    const resolveExpertProfile = async () => {
+      calls++
+      if (deps.error !== undefined) throw deps.error
+      return deps.profile
+    }
+    return {
+      calls: () => calls,
+      claim: (input: Parameters<typeof claimTask>[1]) =>
+        claimTask({ store: h!.store, events: h!.events, resolveExpertProfile }, input),
+    }
+  }
+
+  const PROFILE = {
+    name: 'coding-fix',
+    title: '缺陷修复专家',
+    personaMd: '## 职责\n\n先以失败复现测试钉住根因，再做最小化修复。\n\n## 信条\n\n先通过复现定位根因，再最小化修复。',
+  }
+
+  it('档案段 + 程序段组装：身份头/personaMd 在前、核心纪律/质量门禁在后；取用按 task_type 恰一次', async () => {
+    const { claim, calls } = svcWithExperts({ profile: PROFILE })
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' })
+    expect(r.persona.startsWith('你是缺陷修复专家。\n\n## 职责')).toBe(true)
+    expect(r.persona).toContain('先通过复现定位根因，再最小化修复') // 档案信条
+    expect(r.persona).toContain('## 核心纪律') // 程序段恒定
+    expect(r.persona).toContain('## 质量门禁')
+    expect(r.persona).not.toContain('{{')
+    expect(calls()).toBe(1)
+    // claim 其余语义零变化（转移 + 记录 + 链接照常）
+    expect(r.task?.taskStatus).toBe('in_progress')
+    expect(rows(`SELECT COUNT(*) AS n FROM task_records WHERE task_id = 't-f-2.1' AND verb = 'claim'`)).toEqual([
+      { n: 1 },
+    ])
+  })
+
+  it('档案缺失/禁用 fail-loud：取用面抛错（消息含专家键名）→ claim 拒绝、任务留 pending、零写入、无事件', async () => {
+    const { claim } = svcWithExperts({ error: new Error('expert not found: ghost-expert') })
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1')
+    const err = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' }).catch(
+      (e: unknown) => e,
+    )
+    expect((err as Error).message).toContain('expert not found: ghost-expert')
+    // 单事务整体回滚——任务留 pending，无转移/记录/链接残留
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.1'`)).toEqual([{ task_status: 'pending' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+    expect(rows(`SELECT * FROM task_session_links`)).toEqual([])
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('取用面缺席 = 形态兼容：persona 仅程序段（无档案身份行），claim 照常', async () => {
+    const { claim } = svcWithExperts({ profile: undefined })
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '2.1')
+    const r = await claim({ projectId: P(), taskRef: { slug: 'f', localId: '2.1' }, sessionId: 's' })
+    expect(r.persona).not.toContain('你是')
+    expect(r.persona).toContain('## 核心纪律')
+    expect(r.persona).toContain('## 质量门禁')
+    expect(r.task?.taskStatus).toBe('in_progress')
+  })
+})

@@ -38,18 +38,20 @@ import { recordWorkspaceKeyLog } from './forge/workspace/app-key-logs.js'
 import { createDiscoveryFirstCreateHook } from './forge/workspace/discovery.js'
 import { createForgeTaskEvents } from './forge/workspace/events.js'
 import { deriveTaskStoreDir } from './forge/workspace/derive-dir.js'
+import type { ExpertPersonaProfile } from './forge/tasks/prompt/persona.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
 import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
 import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
-// worker agent 级提示词（persona 组成矩阵——worker-lean-execution S2a）：
-// plugin-forge spawn 链的唯一 persona 源（dispatch-core 消费；此前为死代码双源，接线收口）
+// worker agent 级提示词（expert-squad-forge 1.3 合成点：composePersona 程序段渲染 +
+// composePersonaWithProfile 档案人格段两段组装——plugin-forge spawn 链的唯一 persona 源）
 export {
   composePersona,
+  composePersonaWithProfile,
+  renderExpertProfileSection,
   PERSONA_CORE_SECTION,
   ANTI_CHURN_ANCHORS,
-  PERSONA_VARIANTS,
   CODING_STRATEGY_TYPES,
 } from './forge/tasks/prompt/persona.js'
 
@@ -116,8 +118,8 @@ export interface CoreContextFace {
   workspaceRegistry: WorkspaceRegistryPort
   /** dsh workspaceController 窄面（官方 workspace/rename——fix-24 ② 注册时标题对齐项目名） */
   workspaceController: WorkspaceRenamePort
-  /** 服务注册官方面：provide(name, value) 返回注销器（Service 基类构造同径） */
-  reflect: { provide(name: string, value?: unknown): unknown }
+  /** 服务注册官方面：provide(name, value) 返回注销器（Service 基类构造同径）；get 防御读取具名服务 */
+  reflect: { provide(name: string, value?: unknown): unknown; get?(name: string): unknown }
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -231,6 +233,22 @@ const corePlugin: CorePlugin = Object.assign(
               localId,
               source,
             }),
+          // expert-squad-forge 1.3：专家档案取用面接线（claim 领取瞬间两段组装的档案侧）。
+          // plugin-forge 装配期 provide 的 'forgeExperts' 具名服务（键解析 = settings
+          // experts.mapping 覆盖 → 默认映射；IO 全在插件侧闭包）经 claim 时点 reflect.get
+          // 防御读取——懒解析消解插件装配次序（core 先于 plugin-forge 加载）；服务缺席/异常 =
+          // undefined（形态兼容，persona 仅程序段）；档案缺失/禁用 = 插件侧 fail-loud 抛错
+          // 原样外抛（claim 事务整体回滚，任务留 pending）。
+          resolveExpertProfile: async (taskType) => {
+            let resolver: unknown
+            try {
+              resolver = ctx.reflect.get?.('forgeExperts')
+            } catch {
+              resolver = undefined
+            }
+            if (typeof resolver !== 'function') return undefined
+            return (resolver as (taskType: string) => Promise<ExpertPersonaProfile | undefined>)(taskType)
+          },
         }),
       )
       ctx.reflect.provide(
