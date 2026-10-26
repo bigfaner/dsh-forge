@@ -228,6 +228,63 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
     expect(ctl.getSnapshot().toast).toContain("已启用");
   });
 
+  it("bug 13f807c4: 编辑态+条目被删（stale）——渲染期派生 stale 通知控制器后，save 短路不发 update", async () => {
+    let updates = 0;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: async () => {
+        updates += 1;
+        return entry();
+      },
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    // sameKeyEntries 不含打开条目 = 已删；Dialog 渲染期派生 stale 并通知控制器（装配缝）
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, {
+        controller: ctl,
+        allSkills: [],
+        sameKeyEntries: [],
+      }),
+    );
+    expect(html).toContain("该专家已不存在");
+    await ctl.save();
+    expect(updates).toBe(0); // 守卫在场前：update upsert 复活已删条目
+  });
+
+  it("bug 13f807c4: 编辑态+条目被删——保存钮 disabled（busy || stale）", () => {
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry());
+    ctl.startEdit();
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, {
+        controller: ctl,
+        allSkills: [],
+        sameKeyEntries: [],
+      }),
+    );
+    expect(html).toMatch(/disabled[^>]*>保存</);
+  });
+
+  it("bug 13f807c4: stale 下 toggleEnabled 亦短路不发路由；条目恢复后守卫解除", async () => {
+    let toggles = 0;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      setEnabled: async (_key, enabled) => {
+        toggles += 1;
+        return entry({ enabled });
+      },
+    });
+    ctl.open(entry());
+    // 直接经控制器装配缝置 stale（渲染派生面之外入口绕过防线）
+    ctl.setStale(true);
+    await ctl.toggleEnabled();
+    expect(toggles).toBe(0);
+    ctl.setStale(false);
+    await ctl.toggleEnabled();
+    expect(toggles).toBe(1);
+  });
+
   it("cancelEdit 丢弃草稿回查看态（原档案不污染）", () => {
     const ctl = new ExpertDetailController(noMutations());
     ctl.open(entry());

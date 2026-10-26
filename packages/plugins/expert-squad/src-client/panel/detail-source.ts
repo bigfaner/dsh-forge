@@ -88,6 +88,10 @@ export class ExpertDetailController {
   // 在途回包按发出时代号比对——过期回包不落态（bug e234f626：A 回包覆盖 B state、
   // 关闭态回包破坏 IDLE 单例契约——busy 只防同代并发，不作废在途）。
   private generation = 0;
+  // 失靶守卫旗（bug 13f807c4）：stale 由 Dialog 渲染期派生（sameKeyEntries 是否含打开
+  // 条目——控制器不持装配数据），经 setStale 通知回落；save/toggleEnabled 据此短路——
+  // UI disabled 只是渲染面，控制器层短路面防入口绕过（update 为 upsert，放行即复活已删条目）。
+  private stale = false;
 
   constructor(private readonly mutations: DetailMutations) {}
 
@@ -107,6 +111,7 @@ export class ExpertDetailController {
   /** 打开 Dialog（查看态；再次 open 重置回查看态——卡片点击语义）。 */
   open(expert: ExpertView): void {
     this.generation += 1; // 换代：作废上一代在途回写
+    this.stale = false; // 守卫旗随代重置（重开由渲染期重新派生）
     this.state = {
       open: true,
       mode: "view",
@@ -119,9 +124,20 @@ export class ExpertDetailController {
     this.emit();
   }
 
+  /**
+   * 失靶守卫旗回落（bug 13f807c4）：Dialog 渲染期派生 stale 后调用。不改快照对象
+   * （stale 不入 DetailState——快照由装配 props 派生，入快照即双写漂移），故不 emit；
+   * 等值短路保证渲染期重复调用无副作用。
+   */
+  setStale(stale: boolean): void {
+    if (this.stale === stale) return;
+    this.stale = stale;
+  }
+
   close(): void {
     if (this.state === undefined) return;
     this.generation += 1; // 换代：关闭态在途回包不落态（IDLE 单例契约保持）
+    this.stale = false; // 守卫旗随代重置（重开由渲染期重新派生）
     this.state = undefined;
     this.emit();
   }
@@ -210,7 +226,8 @@ export class ExpertDetailController {
   /** 保存：校验门 → update 路由 → 回查看态 + Toast 热刷新；失败不落盘。 */
   async save(): Promise<void> {
     const current = this.state;
-    if (current === undefined || current.busy || current.mode !== "edit") return;
+    // bug 13f807c4：stale（条目已被删）短路——update 为 upsert，放行即复活已删条目
+    if (current === undefined || current.busy || current.mode !== "edit" || this.stale) return;
     const errors = validateDraft(current.draft);
     if (errors.title !== undefined || errors.personaMd !== undefined) {
       this.state = { ...current, errors };
@@ -244,7 +261,7 @@ export class ExpertDetailController {
   /** 启停切换（enable/disable 路由；即时生效换新专家 + Toast）。 */
   async toggleEnabled(): Promise<void> {
     const current = this.state;
-    if (current === undefined || current.busy) return;
+    if (current === undefined || current.busy || this.stale) return; // stale 短路（bug 13f807c4，同 save）
     const next = !current.expert.enabled;
     this.state = { ...current, busy: true };
     this.emit();

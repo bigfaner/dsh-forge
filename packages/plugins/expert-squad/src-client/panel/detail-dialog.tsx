@@ -452,8 +452,13 @@ export function ExpertDetailDialog(props: {
   const comparing = state.mode === "compare";
   const expert = state.expert;
   // 被遮蔽同名卡（对比对象源）：同键条目中非当前呈现的只读层。
+  // bug 13f807c4 注记③：「当前条目」判别统一为 origin 口径（与下方 stale 派生同键）
+  // ——引用不等（peer !== expert）会把轮询换新后的同 origin 新代条目误判为遮蔽层，
+  // origin 稳定判别键与 compareTargetOrigin/stale 派生同口径。
+  // bug 13f807c4 注记①（容忍语义）：在场条目缺 effective 位（旧载荷）≠ 被删——
+  // 容忍渲染快照继续呈现，仅对比左列因生效位缺失禁用/空态（bug 207b7579①），非漏改。
   const shadows = (props.sameKeyEntries ?? []).filter(
-    (peer) => peer !== expert && peer.effective !== true,
+    (peer) => peer.origin !== expert.origin && peer.effective !== true,
   );
   // bug e1d74589：对比左列生效条同自 sameKeyEntries 按 effective 位重解析——
   // state.expert 是 open 期快照（仅 save/toggleEnabled 换新），外部改动后与右列
@@ -462,9 +467,16 @@ export function ExpertDetailDialog(props: {
   // bug 207b7579②：主体失靶守卫——sameKeyEntries 在场且不含打开条目 = 专家已被删；
   // 守卫为渲染期派生，轮询换新恢复条目后自动收敛。
   const compareEffective = props.sameKeyEntries?.find((entry) => entry.effective === true);
+  // bug 13f807c4 注记②（装配不变量）：空数组判已删依赖两条不变量——
+  // ① sameKeyEntries 由 expert-panel 渲染期从 list-source 快照派生（非缓存态）；
+  // ② list-source 拉取失败静默保持既有快照、不瞬态清空 entries——空数组只可能
+  // 来自服务端真返回空（条目已删），而非加载失败误伤。
   const stale =
     props.sameKeyEntries !== undefined &&
     !props.sameKeyEntries.some((entry) => entry.origin === expert.origin);
+  // bug 13f807c4：渲染期派生 stale 回落控制器（save/toggleEnabled 短路面）——
+  // setStale 不改快照、等值短路，渲染期调用幂等无副作用（见 detail-source 注记）。
+  props.controller.setStale(stale);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -611,7 +623,9 @@ export function ExpertDetailDialog(props: {
               <button
                 type="button"
                 className="dswf-btn dswf-btn-primary"
-                disabled={state.busy}
+                // bug 13f807c4：stale（条目已被删）禁用保存——update 为 upsert，
+                // 放行即复活已删条目；控制器层另有短路面防入口绕过
+                disabled={state.busy || stale}
                 onClick={() => void props.controller.save()}
               >
                 保存
