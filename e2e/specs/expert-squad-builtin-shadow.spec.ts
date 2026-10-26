@@ -181,18 +181,32 @@ test('@feature expert-squad shadow step-1：内置专家开箱即用——面板
 
 // ── step-2/3 success：project 层同名遮蔽——面板与取用双裁决一致 ──
 
-test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——单卡定制内容 + origin=project', async () => {
+test('@feature expert-squad shadow step-2/3：同名遮蔽命中定制版——聚组展示（生效标在 project 卡 + 被遮蔽内置卡组内可见）+ origin=project', async () => {
   test.setTimeout(180_000)
   const session = await openPanelWithFixture()
   try {
     const { page, wsDir } = session
     const wsParam = await captureWorkspaceParam(page)
     writeFileSync(join(wsDir, '.dsh', 'experts', `${BUILTIN_KEY}.md`), shadowMd())
-    // 面板呈现裁决：单卡 + 定制内容（不出现两份同名卡）
-    await expect(page.locator(cardOf(BUILTIN_KEY)), '键唯一单卡').toHaveCount(1, { timeout: 30_000 })
-    await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-title`), '呈 project 层定制岗位').toContainText('夹具遮蔽评审·定制版')
-    await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-creed`), '呈定制人设摘要').toContainText('遮蔽定制人设正文')
-    // 取用裁决：origin=project（与面板裁决一致——遮蔽三处一致性之二）
+    // 聚组呈现裁决（1.60 用户裁决）：同键全层可见——生效卡（project 定制）+ 被遮蔽内置折叠行
+    const group = page.locator(`.dswf-xgroup[data-expert-key="${BUILTIN_KEY}"]`)
+    await expect(group, '聚组容器在场').toBeVisible({ timeout: 30_000 })
+    await expect(group.locator('.xg-cnt'), '组内来源数标注').toHaveText('2 个来源')
+    const effectiveCard = group.locator(`${cardOf(BUILTIN_KEY)}[data-effective="true"]`)
+    await expect(effectiveCard.locator('.xc-title'), '生效卡呈 project 层定制岗位').toContainText('夹具遮蔽评审·定制版')
+    await expect(effectiveCard.locator('.eff-badge'), '「生效」标在 project 卡').toHaveText('生效')
+    await expect(effectiveCard.locator('.origin-badge.origin-project'), '生效卡来源角标·项目').toHaveText('项目')
+    await expect(effectiveCard.locator('.xc-creed'), '呈定制人设摘要').toContainText('遮蔽定制人设正文')
+    // 被遮蔽内置卡：折叠摘要行（来源角标 + 只读），点击展开对比视图
+    const shadowRow = group.locator(`.dswf-xshadow[data-origin="plugin"]`)
+    await expect(shadowRow, '被遮蔽内置卡组内可见').toBeVisible()
+    await expect(shadowRow.locator('.origin-badge.origin-plugin'), '被遮蔽行来源角标·内置').toHaveText('内置')
+    await expect(shadowRow, '被遮蔽行只读标记').toContainText('被遮蔽 · 只读')
+    await shadowRow.click()
+    const compare = group.locator('.dswf-xcompare')
+    await expect(compare, '展开对比视图（字段对齐表）').toBeVisible()
+    await expect(compare.locator('td.diff').first(), '差异格 warn 高亮在场').toBeVisible()
+    // 取用裁决：origin=project（与面板生效标一致——遮蔽裁决两处一致）
     await expect
       .poll(async () => {
         const got = await fetchExpert(page, wsParam, BUILTIN_KEY)
@@ -213,17 +227,18 @@ test('@feature expert-squad shadow step-4：删定制回落内置版；插件包
     const { page, wsDir } = session
     const wsParam = await captureWorkspaceParam(page)
     const expectedTitle = builtinTitle()
-    // 前置：遮蔽生效
+    // 前置：遮蔽生效（聚组：生效标在 project 卡 + 被遮蔽内置行在场）
     writeFileSync(join(wsDir, '.dsh', 'experts', `${BUILTIN_KEY}.md`), shadowMd())
-    await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-title`), '遮蔽生效前置').toContainText('夹具遮蔽评审·定制版', {
+    await expect(page.locator(`.dswf-xgroup[data-expert-key="${BUILTIN_KEY}"] ${cardOf(BUILTIN_KEY)}[data-effective="true"] .xc-title`), '遮蔽生效前置').toContainText('夹具遮蔽评审·定制版', {
       timeout: 30_000,
     })
-    // 删除定制档案（只动 project 层）→ 回落内置
+    // 删除定制档案（只动 project 层）→ 回落内置（组退化为单来源，被遮蔽行退场）
     const fingerprintBefore = packageFingerprint()
     rmSync(join(wsDir, '.dsh', 'experts', `${BUILTIN_KEY}.md`))
     await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-title`), '面板回落内置岗位').toContainText(expectedTitle, {
       timeout: 30_000,
     })
+    await expect(page.locator(`.dswf-xgroup[data-expert-key="${BUILTIN_KEY}"] .dswf-xshadow`), '被遮蔽行退场（单来源组）').toHaveCount(0)
     await expect
       .poll(async () => {
         const got = await fetchExpert(page, wsParam, BUILTIN_KEY)
@@ -246,17 +261,19 @@ test('@feature expert-squad shadow 冒烟：内置在场 → project 遮蔽单�
     const { page, wsDir } = session
     // 步骤1：内置在场（openPanelWithFixture 已收敛）；另备一枚对照卡
     await expect(page.locator(cardOf(BUILTIN_KEY))).toBeVisible()
-    // 步骤2-3：遮蔽定制
+    // 步骤2-3：遮蔽定制（聚组：生效标在 project 卡，被遮蔽内置卡组内可见）
     writeFileSync(join(wsDir, '.dsh', 'experts', `${BUILTIN_KEY}.md`), shadowMd())
-    await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-title`), '遮蔽定制卡').toContainText('夹具遮蔽评审·定制版', {
+    const group = page.locator(`.dswf-xgroup[data-expert-key="${BUILTIN_KEY}"]`)
+    await expect(group.locator(`${cardOf(BUILTIN_KEY)}[data-effective="true"] .xc-title`), '遮蔽定制卡（生效位）').toContainText('夹具遮蔽评审·定制版', {
       timeout: 30_000,
     })
-    expect(await page.locator(cardOf(BUILTIN_KEY)).count(), '零两份同名卡').toBe(1)
-    // 步骤4：删除回落
+    await expect(group.locator('.dswf-xshadow[data-origin="plugin"]'), '被遮蔽内置卡组内可见').toBeVisible()
+    // 步骤4：删除回落（单来源组，被遮蔽行退场）
     rmSync(join(wsDir, '.dsh', 'experts', `${BUILTIN_KEY}.md`))
     await expect(page.locator(`${cardOf(BUILTIN_KEY)} .xc-title`), '回落内置岗位').toContainText(builtinTitle(), {
       timeout: 30_000,
     })
+    await expect(group.locator('.dswf-xshadow'), '被遮蔽行退场').toHaveCount(0)
     // 不变量：renderer 零未捕获异常
     expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
   } finally {

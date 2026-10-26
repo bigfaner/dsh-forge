@@ -4,7 +4,10 @@
 // 打开动线：launchHost 隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）
 // RPC 注册 → 左栏 panellist 行「专家团」→ main keyed 'expert-squad' 面板。
 // data 锚（panel/expert-panel.tsx 事实表）：面板 [data-dswf-expert-panel]、卡 .dswf-xcard
-// [data-expert-key]、状态筛选 select.dswf-status-select[data-status]（头部重排 2026-10-25：
+// [data-expert-key][data-effective]、聚组容器 .dswf-xgroup[data-expert-key]（1.60 裁决：
+// 同键聚组——组头 xg-head + 生效卡「生效」标 .eff-badge + 来源角标 .origin-badge.origin-* +
+// 被遮蔽折叠行 .dswf-xshadow[data-origin] + 展开对比 .dswf-xcompare）、状态筛选
+// select.dswf-status-select[data-status]（头部重排 2026-10-25：
 // 搜索+筛选左置、召唤独右）、页脚 .dswf-panel-footer、
 // 错误条 .dswf-errorbar[role=alert]、空态 .dswf-empty；panellist 行 = 官方 aria 锚
 // button[aria-label="专家团"]（KNOWLEDGE_ENTRY 同径）。
@@ -29,6 +32,7 @@ const PANEL_ROOT = '[data-dswf-expert-panel]'
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
 const cardOf = (key: string): string => `.dswf-xcard[data-expert-key="${key}"]`
+const groupOf = (key: string): string => `.dswf-xgroup[data-expert-key="${key}"]`
 const statusSelect = 'select.dswf-status-select[aria-label="状态筛选"]'
 const FOOTER = '.dswf-panel-footer'
 const ERRORBAR = '.dswf-errorbar[role="alert"]'
@@ -417,6 +421,31 @@ test('@feature expert-squad step-5 success：搜索×状态 AND 叠加；清除�
     await page.locator(statusSelect).selectOption('all')
     await expect(page.locator(CARD_ANY), '清除恢复全量（无残留过滤态）').toHaveCount(total, { timeout: 10_000 })
     await expect(page.locator(statusSelect), '「全部」选中态').toHaveAttribute('data-status', 'all')
+  } finally {
+    await closeSession(session)
+  }
+})
+
+// ── step-6 同键聚组展示（1.60 用户裁决：组容器 + 生效标 + 来源角标） ──
+
+test('@feature expert-squad step-6 grouped：聚组容器 + 生效卡「生效」标 + 来源角标（单来源组与普通卡同形）', async () => {
+  test.setTimeout(180_000)
+  const session = await openPanelWithFixture()
+  try {
+    const { page } = session
+    // 夹具为 project 层单来源：每键一组，组内生效卡带「生效」标与「项目」角标
+    for (const key of ['test-reviewer', 'data-miner']) {
+      const group = page.locator(groupOf(key))
+      await expect(group, `组容器·${key}`).toBeVisible()
+      const card = group.locator(cardOf(key))
+      await expect(card, `生效位锚·${key}`).toHaveAttribute('data-effective', 'true')
+      await expect(card.locator('.eff-badge'), `「生效」标·${key}`).toHaveText('生效')
+      await expect(card.locator('.origin-badge.origin-project'), `来源角标·项目·${key}`).toHaveText('项目')
+      await expect(group.locator('.dswf-xshadow'), `单来源组无被遮蔽行·${key}`).toHaveCount(0)
+      await expect(group.locator('.xg-spread'), `单来源组无对比钮·${key}`).toHaveCount(0)
+    }
+    // 页脚计数按专家键数（夹具 2 键 + 内置键，均为单来源）
+    await expect(page.locator(FOOTER), '计数按专家键数形态不变').toContainText('位专家 · 显示')
   } finally {
     await closeSession(session)
   }
