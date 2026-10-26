@@ -156,16 +156,22 @@ function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike, turnI
   }
 }
 
+/** turn 序号规一（官方 SessionEventMap 'turn/start'/'turn/end' 载荷 = { turn: number }——
+ *  数值序号转字符串键；字符串兼容旧缓存形状。bug d44fbaec：只认字符串曾致 turn 追踪恒失效，
+ *  组卡锚不脱 turn 过程折叠） */
+function turnKeyOf(turn: unknown): string | undefined {
+  return typeof turn === 'number' && Number.isFinite(turn) ? String(turn) : typeof turn === 'string' && turn !== '' ? turn : undefined
+}
+
 /** fold 单元：一条事件 → 下一模型（纯函数——重放保真；他形事件原引用返回） */
 export function foldForgeEventMessage(state: ForgeEventStreamState, event: ForgeMessageEventLike): ForgeEventStreamState {
   if (event?.type === 'turn/start') {
-    const turnId = (event.data as { turn?: unknown } | undefined)?.turn
-    return typeof turnId === 'string' ? { ...state, currentTurn: turnId } : state
+    const turnId = turnKeyOf((event.data as { turn?: unknown } | undefined)?.turn)
+    return turnId !== undefined ? { ...state, currentTurn: turnId } : state
   }
   if (event?.type === 'turn/end') {
-    const data = event.data as { turn?: unknown } | undefined
-    const turnId = data?.turn
-    if (typeof turnId !== 'string') return state
+    const turnId = turnKeyOf((event.data as { turn?: unknown } | undefined)?.turn)
+    if (turnId === undefined) return state
     return {
       ...state,
       currentTurn: state.currentTurn === turnId ? undefined : state.currentTurn,

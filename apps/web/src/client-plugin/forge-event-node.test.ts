@@ -117,6 +117,24 @@ describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', 
     expect(state.currentTurn).toBeUndefined()
     expect(state.turnEndSeqs).toEqual({ 't-1': 3 })
   })
+  it('bug d44fbaec：官方 turn 序号 = 数值（SessionEventMap { turn: number }）——同字符串等价记录', () => {
+    let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, { type: 'turn/start', seq: 1, data: { turn: 5 } })
+    expect(state.currentTurn).toBe('5')
+    state = foldForgeEventMessage(state, forgeMsg(2, 'm1', '启动', 'x'))
+    expect(state.groups[0]?.entries[0]?.turnId).toBe('5')
+    state = foldForgeEventMessage(state, { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } })
+    expect(state.currentTurn).toBeUndefined()
+    expect(state.turnEndSeqs).toEqual({ '5': 9 })
+  })
+  it('bug d44fbaec：数值 turn 结束后组卡锚 = turn/end seq（脱离过程折叠）', () => {
+    const { nodes } = simulate([
+      { type: 'turn/start', seq: 1, data: { turn: 5 } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+      forgeMsg(3, 'm2', '完成', 'b'),
+      { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } },
+    ])
+    expect(nodes.get('m2')).toMatchObject({ anchorSeq: 9 })
+  })
   it('summary 回退首行剥徽记（source.summary 缺席——截图污面收口）', () => {
     const event: ForgeMessageEventLike = {
       type: 'user/message',
