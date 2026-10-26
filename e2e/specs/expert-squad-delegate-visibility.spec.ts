@@ -5,8 +5,8 @@
 //   · 主会话面健康：dev profile 全局 expert-squad 行装载 → 左栏「专家团」行在座 + 面板激活
 //     数据态（全局单实例注册链活体——delegate_expert 注册与面板同源同 apply）。
 //   · HR 预设部署面在场（GUI 观测）：hero 预设座位菜单含「HR · 专家管理」项（官方形制：
-//     healthy 预设显示显示名、broken 回退 id——m3 形制；denyTools 守卫行清洁生效 = HR 组合
-//     mount 健康的前置形态，restrict 抛错 fail-soft warn 会留痕 boot diag 由 boot 冒烟承载）。
+//     healthy 预设显示显示名、broken 回退 id——m3 形制；HR preset 无 expert-squad 组合专行，
+//     mount 健康由通用装配链承载）。
 // 拦截纪律（fix-3 判例）：本 spec 零 fetch 拦截需求。
 // @feature expert-squad @web-e2e
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'

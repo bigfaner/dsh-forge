@@ -1,8 +1,7 @@
 // fix-10 工具面接线结构断言（bug cac32a53：registerExpertTools / registerDelegateExpertTool
 // 未接入 apply 装配缝）：修复前必失败——apply 装配后 tools face 应恰收到 6 枚工具注册
-// （5 管理 + delegate_expert，D1 注册面零改动）；HR 组合委派排除走 denyTools 守卫微件态
-// （方案 B，fix-20——scoped apply 内官方 tools.restrict({deny})，excludeTools 已废）；
-// tools 面缺席 fail-soft 不崩。
+// （5 管理 + delegate_expert，D1 注册面零改动）；工具面全组合继承可见（HR preset 无
+// 组合专行——denyTools 守卫微件已撤销）；tools 面缺席 fail-soft 不崩。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import expertSquadPlugin from "../src/index.js";
@@ -80,76 +79,7 @@ describe("fix-10: 工具面接线（apply 装配缝）", { timeout: 20_000 }, ()
     expect([...registered].sort()).toEqual([...EXPERT_TOOLS, DELEGATE_EXPERT_TOOL_NAME].sort());
   });
 
-  it("denyTools 守卫态：scoped apply 内 restrict({deny}) 命名全局委派工具，零功能面注册（方案 B 守卫微件，fix-20）", async () => {
-    const { face, registered, restrictions } = makeToolsFace();
-    const { ctx, effects } = makeCtx(face, SUBAGENTS);
-    pendingEffects = effects as Array<() => unknown>;
-    const fetchRegister = vi.spyOn(ctx.connection.fetch, "register");
-    await expertSquadPlugin(ctx, { denyTools: [DELEGATE_EXPERT_TOOL_NAME] });
-    // 守卫态单缝：仅 restrict deny，零工具注册、零路由注册（单例面零冲突——AC1）。
-    expect(restrictions).toEqual([{ deny: [DELEGATE_EXPERT_TOOL_NAME] }]);
-    expect(registered).toEqual([]);
-    expect(fetchRegister).not.toHaveBeenCalled();
-  });
-
-  // bug e8440312：官方 restrict 在 mount 时点校验 deny 名 ∈ 当前全局已知工具面
-  // （dsh-tools lib/index.js:2906-2908），preset mount 早于全局单实例注册
-  // delegate_expert → 抛 unknown global tool，fail-soft 后排除完全未生效。
-  // 修复要求：restrict 抛错时降级注册同域 tools.guard 兜底（执行期按名 deny，
-  // 官方正门、序独立），排除不得静默落空。
-  it("bug e8440312: restrict 抛 unknown global tool 时降级注册 tools.guard 兜底，guard 按名 deny", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const guards: Array<(exec: { name: string }) => string | undefined> = [];
-      const { ctx, effects } = makeCtx(
-        {
-          restrict: () => {
-            throw new Error(
-              'tools.restrict() names unknown global tool "delegate_expert"; known global tools: (none)',
-            );
-          },
-          register: () => () => undefined,
-          guard: (guard: (exec: { name: string }) => string | undefined) => {
-            guards.push(guard);
-            return () => undefined;
-          },
-        },
-        SUBAGENTS,
-      );
-      pendingEffects = effects as Array<() => unknown>;
-      await expect(expertSquadPlugin(ctx, { denyTools: [DELEGATE_EXPERT_TOOL_NAME] })).resolves.toBeUndefined();
-      expect(guards).toHaveLength(1);
-      // 守卫执行语义：点名工具 deny（返回 reason），非点名工具放行（返回 undefined）。
-      expect(guards[0]({ name: DELEGATE_EXPERT_TOOL_NAME })).toBeTruthy();
-      expect(guards[0]({ name: "read" })).toBeUndefined();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("restrict deny 失败"));
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it("denyTools 守卫态 restrict 抛错 fail-soft：warn 不拖垮 preset mount（ac2 清理后预设健壮性）", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      makeToolsFace();
-      const { ctx, effects } = makeCtx(
-        {
-          restrict: () => {
-            throw new Error("names unknown global tool");
-          },
-          register: () => () => undefined,
-        },
-        SUBAGENTS,
-      );
-      pendingEffects = effects as Array<() => unknown>;
-      await expect(expertSquadPlugin(ctx, { denyTools: [DELEGATE_EXPERT_TOOL_NAME] })).resolves.toBeUndefined();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("restrict deny 失败"));
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it("未配置 denyTools = 全量注册零排除（D1 全局语义不变）", async () => {
+  it("全量注册零排除（D1 全局语义不变；工具面全组合继承可见）", async () => {
     const { face, registered } = makeToolsFace();
     const { ctx, effects } = makeCtx(face, SUBAGENTS);
     pendingEffects = effects as Array<() => unknown>;

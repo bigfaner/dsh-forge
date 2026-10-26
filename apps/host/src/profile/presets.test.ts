@@ -192,8 +192,9 @@ for (const preset of ['expedition', 'blitz'] as const) {
 describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件零感知）', () => {
   const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.hr), 'utf8')
   const rows = pluginRowBlocks(text)
-  /** HR 产品增量行（上游没有——机械 diff 豁免面） */
-  const HR_PRODUCT_ROWS = new Set([...PRODUCT_ROWS, 'expert-squad'])
+  /** HR 产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
+   *  全工具走全局单实例注册全组合继承） */
+  const HR_PRODUCT_ROWS = new Set(PRODUCT_ROWS)
 
   it('预设声明行：agent-preset 包名 + id hr / name（中文直出）/ description / order 3（远征·突击之后）', () => {
     expect(text).toContain('    - id: preset-hr')
@@ -227,17 +228,11 @@ describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件�
     expect(bodyLines).toHaveLength(6)
   })
 
-  it('工具绑定 = expert-squad 单增量行守卫态：denyTools 委派面 restrict deny（方案 B 守卫微件，fix-20）；excludeTools 残留清零', () => {
-    expect(rows.has('expert-squad')).toBe(true)
-    expect(rows.get('expert-squad')).toContain("            name: '@dsh-forge/expert-squad'")
-    // HR 组合零委派可见面走官方正门：全局单实例注册 delegate_expert（主会话可见可用），
-    // HR preset 域守卫微件 scoped apply 内 ctx.tools.restrict({deny}) 摘除（1.46 源码级
-    // 核销：restrict 只作用 inherited global 工具、要求 scoped ctx——dsh-agent-preset
-    // 无 preset 级 deny 配置缝，故守卫以插件 guard 态落 preset 行）。
-    expect(rows.get('expert-squad')).toContain('              denyTools:')
-    expect(rows.get('expert-squad')).toContain('                - delegate_expert')
-    // excludeTools 装配期排除残留清零（AC2 口径修正——组合级排除无实例级落点）。
+  it('工具面 = 无 expert-squad 组合专行（全局单实例注册全组合继承，无组合级排除面）；excludeTools/denyTools 残留清零', () => {
+    expect(rows.has('expert-squad')).toBe(false)
+    // 组合级工具排除残留清零（denyTools 守卫微件已撤销——全组合统一可见可用）。
     expect(text).not.toContain('excludeTools')
+    expect(text).not.toContain('denyTools')
     expect(text).not.toContain('dispatch:')
     expect(text).not.toContain('expert_dispatch')
   })
