@@ -71,7 +71,12 @@ export function defaultListFetcher(workspace: string): ListFetcher {
   return {
     fetchList: async () => {
       const response = await fetch(listUrl(workspace))
-      if (!response.ok) throw new Error(`专家目录拉取失败（HTTP ${response.status}）`)
+      if (!response.ok) {
+        // 诊断面（bug 44e70a5f）：400 响应体即路由侧真实错误文本，丢弃 = 面板只见
+        // 「HTTP 400」不知成因——原样并入错误消息。
+        const detail = await response.text().catch(() => "")
+        throw new Error(`专家目录拉取失败（HTTP ${response.status}${detail ? `：${detail}` : ""}）`)
+      }
       const payload: unknown = await response.json()
       if (!Array.isArray(payload)) throw new Error("专家目录载荷形状漂移")
       return payload as ExpertView[]

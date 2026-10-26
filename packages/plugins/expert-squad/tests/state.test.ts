@@ -111,11 +111,25 @@ describe("启停状态工作区隔离（AD2）", () => {
     const workspace = await mkdtemp(join(tmpdir(), "expert-squad-ws-e-"));
     tmpRoots.push(workspace);
     const late = join(workspace, "late-dir");
-    // 路径尚不存在：canon 解析 reject，缓存不得永久持有 rejected promise
-    await expect(state.isDisabled(late, "code-reviewer")).rejects.toThrow();
+    // 路径尚不存在：写路径（setEnabled）canonical 化 reject fail-loud，缓存不得永久持有 rejected promise
+    await expect(state.setEnabled(late, "code-reviewer", false)).rejects.toThrow();
     await mkdir(late, { recursive: true });
     // 路径就绪后：同 workspace 键再次请求必须重试（而非复用毒化 promise）
-    await expect(state.isDisabled(late, "code-reviewer")).resolves.toBe(false);
+    await state.setEnabled(late, "code-reviewer", false);
+    await expect(state.isDisabled(late, "code-reviewer")).resolves.toBe(true);
+    await state.close();
+  });
+
+  it("bug 44e70a5f: isDisabled 读路径容缺——workspace 路径不存在按启用降级（不毒化目录 list）", async () => {
+    const { state } = await makeState();
+    const missing = join(tmpdir(), "expert-squad-no-such-ws", "gone");
+    // 读路径（isDisabled）canonical 化失败 = 禁用记录不可能存在（写入侧同径 fail-loud）——
+    // 容缺返回 false，不得让整个专家目录 list 恒 400
+    await expect(state.isDisabled(missing, "code-reviewer")).resolves.toBe(false);
+    // 路径就绪后读路径照常生效
+    await mkdir(missing, { recursive: true });
+    await state.setEnabled(missing, "code-reviewer", false);
+    await expect(state.isDisabled(missing, "code-reviewer")).resolves.toBe(true);
     await state.close();
   });
 });

@@ -3,6 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExpertListController, type ListFetcher } from "../src-client/panel/list-source.js";
+import { defaultListFetcher } from "../src-client/panel/expert-panel.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
 
 function entry(name: string): ExpertView {
@@ -184,5 +185,18 @@ describe("ExpertListController（四态源）", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(controller.getSnapshot().entries.map((e) => e.name)).toEqual(["fresh"]);
     controller.stop();
+  });
+});
+
+describe("defaultListFetcher（bug 44e70a5f 诊断面）", () => {
+  it("非 2xx：抛错消息携带 400 响应体错误文本（不丢弃真实原因）", async () => {
+    const fetcher = defaultListFetcher("C:\\ws\\a");
+    globalThis.fetch = (async () =>
+      new Response("realpath ENOENT: C:\\ws\\a", {
+        status: 400,
+      })) as typeof fetch;
+    await expect(fetcher.fetchList()).rejects.toThrow(
+      "专家目录拉取失败（HTTP 400：realpath ENOENT: C:\\ws\\a）",
+    );
   });
 });

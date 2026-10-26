@@ -69,8 +69,16 @@ export class ExpertSquadState {
 
   /** 专家在该工作区是否禁用（无记录 = 启用）。 */
   async isDisabled(workspacePath: string, expertId: string): Promise<boolean> {
-    const key = disabledKey(await this.canon(workspacePath), expertId)
-    return this.table().get(key) !== undefined
+    // Root cause: 读路径容缺——workspace 路径无法 canonical 化（不存在/已删 worktree）
+    // 时禁用记录必然不存在（写入侧 setEnabled 同径 fail-loud），按启用降级返回；
+    // 否则 registry.refresh 整体拒绝，专家目录 list 恒 400（bug 44e70a5f）。
+    let canonical: string;
+    try {
+      canonical = await this.canon(workspacePath);
+    } catch {
+      return false;
+    }
+    return this.table().get(disabledKey(canonical, expertId)) !== undefined
   }
 
   /** 设置启用/禁用（按 canonical 工作区隔离写入/删除记录）。 */
