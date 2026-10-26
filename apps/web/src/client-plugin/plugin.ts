@@ -773,6 +773,8 @@ export interface ForgeViewsGlobal {
     ForgeWorktreeSealOverlay: unknown
     /** bug 4b34e5d8：conversation.input.overlay 槽 chip 重建（零视觉效应挂载点） */
     ForgeBugChipRestoreOverlay: unknown
+    /** bug 267dcac1：conversation.input.overlay 槽切换闸虚线标记（纯视觉命中锚） */
+    ForgeWorktreeSwitchMarker: unknown
     ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
@@ -1112,10 +1114,22 @@ function registerWorktreeFaces(
       views.ForgeBugChipRestoreOverlay,
     ),
   )
+  registerSlotEntry(ctx, CONVERSATION_INPUT_OVERLAY_SLOT, diagnostics, () =>
+    ctx.slots.register(
+      // bug 267dcac1 切换闸虚线标记：pending 窗口官方 overlay 缝落标记节点（官方
+      // cardWorkspaceTrigger 同配方 dashed 规则 :has 命中宿主卡）——禁输行为全归官方
+      // conversation.blocks 缝（installWorktreeSwitchGate），本行纯视觉。
+      { name: CONVERSATION_INPUT_OVERLAY_SLOT, id: WORKTREE_SWITCH_ENTRY_ID },
+      views.ForgeWorktreeSwitchMarker,
+    ),
+  )
 }
 
 /** Bug chip 重建缝 overlay 登记 id（conversation.input.overlay list 槽行键） */
 export const BUG_CHIP_RESTORE_ENTRY_ID = 'dswf-bug-chip-restore'
+
+/** worktree 切换闸虚线标记 overlay 登记 id（conversation.input.overlay list 槽行键——bug 267dcac1） */
+export const WORKTREE_SWITCH_ENTRY_ID = 'dswf-worktree-switch'
 
 /**
  * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册

@@ -13,10 +13,10 @@
 // + 失败/取消抑制集 + 账本/草稿订阅）退役——会话创建唯一时机 = 官方 create 调用点（wrap
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
 import { openWorkspaceFace } from '../../state/open-workspace-face.js'
-import { beginWorktreeSwitch } from '../../state/worktree-switch-gate.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../../state/worktree-switch-gate.js'
 import {
   BranchDriftNotice,
   CreateWorktreeDialog,
@@ -682,5 +682,26 @@ export function ForgeWorktreeSealOverlay({
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * 切换闸虚线标记（bug 267dcac1 评审返工②）：禁输行为全归官方 conversation.blocks 缝
+ * （安装器置位），本件只补**视觉命中锚**——官方 blocked 形态无 dashed 类（dashed 仅
+ * cardWorkspaceTrigger），pending 时在官方 overlay 缝（卡片内 overlayAnchor）落零尺寸
+ * 标记节点 + 官方 cardWorkspaceTrigger 同配方 dashed 规则（:has 上溯命中宿主卡）。
+ * 规则选择器含上游哈希类 uV2eYG_card——上游改版 = dashed 静默消失（fail-soft 视觉降级，
+ * 行为不受影响）。
+ */
+export function ForgeWorktreeSwitchMarker(): ReactNode {
+  const pending = useSyncExternalStore(subscribeWorktreeSwitch, isWorktreeSwitchPending, isWorktreeSwitchPending)
+  if (!pending) return null
+  return (
+    <>
+      <style data-dswt-switch-style="">
+        {'.uV2eYG_card:has([data-dswt-switch-blocked])::after{content:"";box-sizing:border-box;border-radius:var(--dsw-radius-panel);color:var(--dsw-alias-border-l4);pointer-events:none;border:1px dashed;transition:color .1s;position:absolute;inset:0}'}
+      </style>
+      <span data-dswt-switch-blocked="" style={{ display: 'none' }} />
+    </>
   )
 }

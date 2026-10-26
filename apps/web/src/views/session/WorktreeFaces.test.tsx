@@ -8,9 +8,11 @@ import {
   ForgeHeroWorktreeMount,
   ForgeSessionWorktreeChip,
   ForgeWorktreeSealOverlay,
+  ForgeWorktreeSwitchMarker,
   anchorDefaultWorktreePath,
   createFollowup,
 } from './WorktreeFaces.js'
+import { beginWorktreeSwitch, isWorktreeSwitchPending } from '../../state/worktree-switch-gate.js'
 
 /** rpc 替身（worktree 面按用例给值；其余族不被触达） */
 function fakeRpc(worktree: Partial<ForgeRpcClient['worktree']>): () => ForgeRpcClient {
@@ -45,6 +47,28 @@ describe('零注入路径（SSR 同步判读——能力位条件渲染）', () 
   // 注：选中态回填（selectedPath → chip 一体两属性）的相位数据面 SSR 不可达（list 为效应
   // 回调——本文件头注口径）；透传锚归 packages git-worktree hero-worktree-picker.test
   // （selectedPath 在册即回填 feat/api · wt-api），选中闭环交互归 e2e worktree-hero-chip。
+})
+
+// ───────── bug 267dcac1 切换闸标记（SSR 判读——官方 card:has 规则命中锚；禁输行为归
+// conversation.blocks 官方缝，安装器单测覆盖）─────────
+
+describe('切换闸标记（bug 267dcac1——blocked 卡虚线边框命中锚）', () => {
+  it('空闲 → 零渲染', () => {
+    expect(isWorktreeSwitchPending()).toBe(false)
+    expect(renderToStaticMarkup(<ForgeWorktreeSwitchMarker />)).toBe('')
+  })
+
+  it('切换 pending → 标记节点 + dashed 规则呈现（官方 cardWorkspaceTrigger 同配方令牌）', () => {
+    const settle = beginWorktreeSwitch()
+    try {
+      const markup = renderToStaticMarkup(<ForgeWorktreeSwitchMarker />)
+      expect(markup).toContain('data-dswt-switch-blocked')
+      expect(markup).toContain('dashed')
+    } finally {
+      settle()
+    }
+    expect(renderToStaticMarkup(<ForgeWorktreeSwitchMarker />)).toBe('')
+  })
 })
 
 // ───────────── bug 6593d708 创建跟进次序（纯编排——createFollowup）─────────────
