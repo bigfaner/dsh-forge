@@ -598,7 +598,14 @@ export function createExpertProfileResolver(deps: {
       }
     }
     if (key === undefined) return undefined // 预设缺键且无用户覆盖 = 排除预设，不取用（persona 仅程序段）
-    const entry = deps.experts.get(key)
+    let entry: ReturnType<ExpertsServiceFace['get']>
+    try {
+      entry = deps.experts.get(key)
+    } catch (cause) {
+      // fail-loud 原样外抛 + 附人格键提示一行（帮助用户把旧类型名误写为映射值的场景自查）
+      const message = cause instanceof Error ? cause.message : String(cause)
+      throw new Error(`${message}\n提示：映射值应为人格键（如 tech-writer）；可用专家经 list_experts 工具列出后自查`)
+    }
     return {
       name: entry.name,
       ...(entry.title !== undefined ? { title: entry.title } : {}),

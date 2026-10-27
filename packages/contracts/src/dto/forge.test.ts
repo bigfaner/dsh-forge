@@ -283,7 +283,7 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
   })
 
   it('experts 分节：DEFAULT_EXPERT_MAPPING = 13 键类型→人格键映射（随包预设 13 档案人格化）+ mapping 用户可改', () => {
-    // 13 键齐备（7 个未用类型不带预设档案——缺键回落原类型名），值 = 人格键非恒等
+    // 13 键齐备（7 个未用类型不带预设档案——两段缺键 → resolver 返回 undefined，persona 仅程序段），值 = 人格键非恒等
     expect(Object.keys(DEFAULT_EXPERT_MAPPING).sort()).toEqual([
       'code-quality-simplify', 'coding-cleanup', 'coding-enhancement', 'coding-feature', 'coding-fix', 'coding-refactor',
       'doc', 'doc-consolidate', 'doc-drift', 'doc-review', 'doc-summary', 'gate', 'test-run',
