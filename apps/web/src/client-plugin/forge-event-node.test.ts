@@ -52,13 +52,23 @@ function injectMsg(seq: number, id: string): ForgeMessageEventLike {
   }
 }
 
-/** 引擎同构最小面：全会话事件按序喂入 → stream 状态 + 各 forge 消息 Context 的节点 */
+/** 'forge/progress' 会话事件构造（plugin-forge emitProgress 载荷形状镜像） */
+function progressEvt(seq: number, data: Record<string, unknown>): ForgeMessageEventLike {
+  return {
+    type: 'forge/progress',
+    seq,
+    data: { sourceSlug: 'feat-x', verb: 'claim', status: 'running', at: 1_700_000_000_000 + seq, ...data },
+  }
+}
+
+/** 引擎同构最小面：全会话事件按序喂入 → stream 状态 + 各组块 Context 的节点 */
 function simulate(events: readonly ForgeMessageEventLike[]): {
   stream: ForgeEventStreamState
   nodes: Map<string, ReturnType<typeof forgeEventGroupDefinition.buildViewNode>>
 } {
   let streamState: ForgeEventStreamState | undefined
   const states = new Map<string, ReturnType<typeof forgeEventGroupDefinition.start>>()
+  const sources = new Map<string, ForgeMessageEventLike>()
   for (const event of events) {
     if (streamState === undefined) {
       streamState = forgeEventStreamDefinition.start(undefined, { event }, { previous: () => undefined })
@@ -67,23 +77,21 @@ function simulate(events: readonly ForgeMessageEventLike[]): {
     }
     // stream revision++ → 组 Context 全体重放（start 重跑 + 最新 stream 快照）
     const reader = { previous: (kind: string) => (kind === forgeEventStreamDefinition.kind ? { state: streamState } : undefined) }
-    for (const [msgId, _state] of states) {
-      const eventOf = events.find((candidate) => (candidate.data as { id?: string })?.id === msgId)
-      if (eventOf !== undefined) states.set(msgId, forgeEventGroupDefinition.start(undefined, { event: eventOf }, reader))
+    for (const [ctxId, source] of sources) {
+      states.set(ctxId, forgeEventGroupDefinition.start(undefined, { event: source }, reader))
     }
     const match = forgeEventGroupDefinition.match(event)
-    if (match !== null) states.set(match.id, forgeEventGroupDefinition.start(undefined, { event }, reader))
+    if (match !== null) {
+      states.set(match.id, forgeEventGroupDefinition.start(undefined, { event }, reader))
+      sources.set(match.id, event)
+    }
   }
-  const reader = { previous: (kind: string) => (kind === forgeEventStreamDefinition.kind && streamState !== undefined ? { state: streamState } : undefined) }
   const nodes = new Map<string, ReturnType<typeof forgeEventGroupDefinition.buildViewNode>>()
   let index = 0
-  for (const [msgId, state] of states) {
-    const eventOf = events.find((candidate) => (candidate.data as { id?: string })?.id === msgId)
-    void eventOf
-    nodes.set(msgId, forgeEventGroupDefinition.buildViewNode({ key: `k-${index}`, id: msgId, state, start: { location: { kind: 'unresolved' } } }))
+  for (const [ctxId, state] of states) {
+    nodes.set(ctxId, forgeEventGroupDefinition.buildViewNode({ key: `k-${index}`, id: ctxId, state, start: { location: { kind: 'unresolved' } } }))
     index += 1
   }
-  void reader
   return { stream: streamState ?? EMPTY_FORGE_EVENT_STREAM, nodes }
 }
 
@@ -104,9 +112,33 @@ describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', 
     expect(state.groups).toHaveLength(1)
     expect(state.groups[0]?.entries.map((entry) => entry.id)).toEqual(['m1', 'm2'])
   })
-  it('他事件类型（forge/progress 等）原引用返回——零污染', () => {
+  it('他事件类型原引用返回——零污染；畸形 progress 载荷（缺 sourceSlug/at）同样弃置', () => {
     const state = EMPTY_FORGE_EVENT_STREAM
+    expect(foldForgeEventMessage(state, { type: 'assistant/message', seq: 9 })).toBe(state)
     expect(foldForgeEventMessage(state, { type: 'forge/progress', seq: 9 })).toBe(state)
+    expect(foldForgeEventMessage(state, progressEvt(9, { sourceSlug: undefined }))).toBe(state)
+  })
+  it("1.2 progress 条目同组 fold：开组中追加（lastSeq 推进）；插话后开新组（'forge-progress-<seq>' 键）", () => {
+    let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, progressEvt(1, { taskKey: 'feat-x/1.2', taskTitle: '标题' }))
+    state = foldForgeEventMessage(state, progressEvt(2, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }))
+    expect(state.groups).toHaveLength(1)
+    expect(state.groups[0]?.key).toBe('forge-progress-1')
+    expect(state.groups[0]?.lastSeq).toBe(2)
+    expect(state.groups[0]?.progress).toHaveLength(2)
+    expect(state.groups[0]?.progress?.at(-1)?.status).toBe('completed')
+    state = foldForgeEventMessage(state, humanMsg(3, 'h1', '继续'))
+    state = foldForgeEventMessage(state, progressEvt(4, { taskKey: 'feat-x/1.3' }))
+    expect(state.groups).toHaveLength(2)
+    expect(state.groups[1]?.key).toBe('forge-progress-4')
+    expect(state.groups[1]?.progress).toHaveLength(1)
+  })
+  it("1.2 progress 与消息同组混叠：消息到达不丢 progress（entries/progress 双轨推进）", () => {
+    let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, progressEvt(1, { taskKey: 'feat-x/1.2' }))
+    state = foldForgeEventMessage(state, forgeMsg(2, 'm1', '结算', '任务源: feat-x'))
+    expect(state.groups).toHaveLength(1)
+    expect(state.groups[0]?.entries).toHaveLength(1)
+    expect(state.groups[0]?.progress).toHaveLength(1)
+    expect(state.groups[0]?.lastSeq).toBe(2)
   })
   it('turn 戳：turn/start 记当前 turn、条目带 turnId；turn/end 记结束 seq 并清当前', () => {
     let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, { type: 'turn/start', seq: 1, data: { turn: 't-1' } })
@@ -168,11 +200,11 @@ describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', 
 })
 
 describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）', () => {
-  it('match：仅 forge source user/message 命中（id = 消息 id）；人类/注入/他事件 → null', () => {
+  it('match：forge source user/message（id = 消息 id）+ forge/progress（id = 前缀+seq）命中；人类/注入 → null', () => {
     expect(forgeEventGroupDefinition.match(forgeMsg(1, 'm1', '启动', 'x'))).toEqual({ id: 'm1', role: 'start' })
     expect(forgeEventGroupDefinition.match(humanMsg(2, 'h1', 'y'))).toBeNull()
     expect(forgeEventGroupDefinition.match(injectMsg(3, 'i1'))).toBeNull()
-    expect(forgeEventGroupDefinition.match({ type: 'forge/progress', seq: 4 })).toBeNull()
+    expect(forgeEventGroupDefinition.match(progressEvt(4, {}))).toEqual({ id: 'forge-event-progress-4', role: 'start' })
   })
   it('两组三事件：组1末成员交棒 null、组2末成员独发（isLatest=true、anchorSeq=组末 seq）', () => {
     const { stream, nodes } = simulate([forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b'), humanMsg(3, 'h1', '继续'), forgeMsg(4, 'm3', '完成', 'c')])
@@ -217,6 +249,47 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     const second = simulate(events)
     expect(first.stream).toEqual(second.stream)
     expect([...first.nodes.entries()]).toEqual([...second.nodes.entries()])
+  })
+})
+
+describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——尾成员交棒）', () => {
+  it('消息组收到 progress：消息节点交棒 null，progress 节点独发携全量条目（零新卡）', () => {
+    const { nodes } = simulate([
+      forgeMsg(1, 'm1', '启动', 'a'),
+      progressEvt(2, { taskKey: 'feat-x/1.2', taskTitle: '标题', status: 'running' }),
+      progressEvt(3, { taskKey: 'feat-x/1.2', taskTitle: '标题', status: 'completed', verb: 'settle' }),
+    ])
+    expect(nodes.get('m1')).toBeNull()
+    const tail = nodes.get('forge-event-progress-3')
+    expect(tail).not.toBeNull()
+    expect(tail).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, anchorSeq: 3, visibility: 'visible' })
+    const data = (tail as { data: { progress: unknown[]; entries: unknown[]; isLatest: boolean } }).data
+    expect(data.progress).toHaveLength(2)
+    expect(data.entries).toHaveLength(1)
+    expect(data.isLatest).toBe(true)
+    expect(nodes.get('forge-event-progress-2')).toBeNull() // 前 progress 交棒
+  })
+  it('纯 progress 组（零消息——1.1 后正常路径）：恰一枚尾节点发射', () => {
+    const { stream, nodes } = simulate([
+      progressEvt(1, { taskKey: 'feat-x/1.2', status: 'running' }),
+      progressEvt(2, { taskKey: 'feat-x/1.3', status: 'running' }),
+    ])
+    expect(stream.groups).toHaveLength(1)
+    expect(nodes.get('forge-event-progress-1')).toBeNull()
+    expect(nodes.get('forge-event-progress-2')).toMatchObject({ anchorSeq: 2 })
+  })
+  it('turn 已结束后 progress 到达：锚 = progress seq（活跃进度轨随组尾）', () => {
+    const { nodes } = simulate([
+      { type: 'turn/start', seq: 1, data: { turn: 5 } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+      { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } },
+      progressEvt(10, { taskKey: 'feat-x/1.2', status: 'running' }),
+    ])
+    expect(nodes.get('forge-event-progress-10')).toMatchObject({ anchorSeq: 10 })
+    expect(nodes.get('m1')).toBeNull()
+  })
+  it('stream match：forge/progress 命中（revision++ 驱动组块重放）', () => {
+    expect(forgeEventStreamDefinition.match(progressEvt(4, {}))).toEqual({ id: 'stream', role: 'start' })
   })
 })
 

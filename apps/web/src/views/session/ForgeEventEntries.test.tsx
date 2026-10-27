@@ -66,3 +66,56 @@ describe('ForgeEventEntries（折叠条目组块）', () => {
     expect(renderToStaticMarkup(<ForgeEventEntries node={undefined as unknown as { kind: string; data: unknown }} />)).toBe('')
   })
 })
+
+// ─────────────────── 1.2 循环进度卡形态 ───────────────────
+
+const progAt = (n: number): number => new Date(2026, 9, 24, 14, n, 0).getTime()
+
+const PROGRESS = [
+  { seq: 3, sourceSlug: 'feat-x', verb: 'startup', status: 'running', at: progAt(1), note: '从头执行' },
+  { seq: 4, sourceSlug: 'feat-x', verb: 'claim', status: 'running', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', at: progAt(2) },
+  {
+    seq: 9,
+    sourceSlug: 'feat-x',
+    verb: 'settle',
+    status: 'completed',
+    taskKey: 'feat-x/2.3',
+    taskTitle: '折叠条目组',
+    at: progAt(30), // 28 分钟跨度
+  },
+]
+
+const PROGRESS_DATA: ForgeEventGroupData = { ...DATA, lastSeq: 9, progress: PROGRESS }
+
+describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语义的呈现面）', () => {
+  it('任务行 = 标题/状态/开始/结束/耗时（事件时戳口径）；同任务键后写覆盖单行', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(PROGRESS_DATA)} />)
+    expect(html).toContain('折叠条目组') // 任务标题（次写 taskTitle 保留）
+    expect(html).toContain('data-dswf-progress-status="completed"') // 最新态（后写覆盖）
+    expect(html).toContain('14:02:00') // 开始
+    expect(html).toContain('14:30:00') // 结束
+    expect(html).toContain('28分0秒') // 耗时 = 结束 − 开始
+    expect(html).toContain('1 任务 · 今日 14:01–14:30') // 头计数：任务数 + 进度起止范围
+  })
+  it('循环级事件收敛单行（最新覆盖——`循环`徽记 + 状态 + 备注），先于任务行', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(PROGRESS_DATA)} />)
+    expect(html).toContain('dswf-event-entries-loop')
+    expect(html).toContain('循环')
+    expect(html).toContain('14:01:00')
+    expect(html.indexOf('dswf-event-entries-loop')).toBeLessThan(html.indexOf('dswf-event-entries-progress'))
+  })
+  it('执行中行：结束时刻 = 「—」、零耗时徽标', () => {
+    const running: ForgeEventGroupData = { ...DATA, progress: [PROGRESS[1]!] }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(running)} />)
+    expect(html).toContain('data-dswf-progress-status="running"')
+    expect(html).toContain('执行中')
+    expect(html).toContain('—')
+    expect(html).not.toContain('dswf-event-entries-duration')
+  })
+  it('消息条目保留概要一行（结算/异常卡不重复展开明细）；progress 缺席 = 纯消息列表（旧形态兼容）', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
+    expect(html).toContain('领取 · 2.3 折叠条目组')
+    expect(html).not.toContain('dswf-event-entries-progress')
+    expect(html).toContain('3 条 · 今日 14:02–14:02')
+  })
+})

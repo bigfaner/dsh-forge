@@ -86,9 +86,9 @@
   width: 56px; /* dsw-raw 原型 evt-kind 定宽刻度 */
   box-sizing: border-box;
   text-align: center;
-  font-size: 11px;
+  font-size: 11px; /* dsw-raw 原型 evt-kind 11px 刻度 */
   line-height: 18px;
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 原型 evt-kind 胶囊刻度同值 */
   border: 0.5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-secondary);
 }
@@ -121,4 +121,34 @@
 
 .dswf-event-entries-text b {
   font-weight: 500;
+}
+
+/* 循环进度卡任务行（1.2——标题/状态/起止/耗时；右簇 margin-auto 贴右，面板行语言同族） */
+.dswf-event-entries-progress {
+  align-items: center;
+}
+
+/* 任务行右贴时间簇（开始/结束/耗时——tabular 对齐同组头计数） */
+.dswf-event-entries-side {
+  margin-left: auto;
+  flex: none;
+  display: inline-flex;
+  gap: 10px; /* dsw-raw 原型 evt-row 列距刻度同值 */
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 耗时徽标（caption 档——11px 刻度同 evt-time） */
+.dswf-event-entries-duration {
+  font-size: 11px; /* dsw-raw 原型 evt-time 11px 刻度同值 */
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 循环级单行徽记（中性胶囊——与任务级族色章同形，区分循环/任务两轨） */
+.dswf-event-entries-loop-badge {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dswf-event-entries-loop {
+  align-items: center;
 }

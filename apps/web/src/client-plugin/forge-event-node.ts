@@ -1,5 +1,9 @@
 // loop-event-delivery 1.9 · 消息面事件折叠条目组——Chat 节点定义对（纯模块零 import——
 // classic script bundle 自含纪律，progress-node.ts 同型）。
+// loop-message-consolidation 1.2：组模型扩收 'forge/progress' 事件（循环进度卡数据源）
+// ——progress 条目与消息条目同组 fold、尾成员发射/交棒（新 progress 到达即组块重放，
+// 任务行原地更新零新条目）；聚合面归壳树 forge-event-data.ts（数据守卫唯一 runtime
+// 消费者纪律——client 树只透传条目）。
 //
 // 事件径消息 = source.kind 铸造的 user message（faces.ts：forge-dispatch / forge-loop /
 // dispatch-loop-settled）。官方 ui-chat input-message 定义把它们归类为不可见 context 行
@@ -28,6 +32,11 @@ export const FORGE_EVENT_STREAM_KIND = 'forge-event-stream'
 /** 官方 Chat 节点 keyed 槽（progress-node 同名洞） */
 export const FORGE_EVENT_NODE_SLOT = 'conversation.chat.node'
 
+/** 'forge/progress' 会话事件类型键（plugin-forge FORGE_PROGRESS_EVENT_TYPE 字面量镜像——零跨包 import） */
+export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
+/** progress 组块节点 Context id 前缀（与消息 id 命名空间隔离——1.17 'forge-progress-<seq>' 避撞） */
+export const FORGE_EVENT_PROGRESS_ID_PREFIX = 'forge-event-progress-'
+
 /** 组内单条事件条目（消息文本解析产物——徽记/任务/摘要 + 原文整段） */
 export interface ForgeEventEntry {
   /** 消息 id（增量渲染行键） */
@@ -50,13 +59,30 @@ export interface ForgeEventEntry {
 
 /** 一个折叠条目组（组内 forge 事件连续无人类插话） */
 export interface ForgeEventGroup {
-  /** 组键 = 组首消息 id */
+  /** 组键 = 组首消息 id（纯 progress 组 = `forge-progress-<seq>`） */
   readonly key: string
-  /** 组首/组末 seq（组块位置锚 = lastSeq） */
+  /** 组首/组末 seq（组块位置锚 = lastSeq——消息与 progress 条目同轨推进） */
   readonly firstSeq: number
   readonly lastSeq: number
   /** 组内条目（时序） */
   readonly entries: readonly ForgeEventEntry[]
+  /** 组内 'forge/progress' 事件条目（1.2 循环进度卡数据源；旧缓存缺省） */
+  readonly progress?: readonly ForgeProgressEntry[]
+}
+
+/** 组内单条 'forge/progress' 事件条目（plugin-forge ForgeProgressEventData 窄收镜像 + 事件 seq） */
+export interface ForgeProgressEntry {
+  /** 事件 seq（时序/发射锚） */
+  readonly seq: number
+  readonly sourceSlug: string
+  readonly status: string
+  readonly verb: string
+  readonly taskKey?: string
+  readonly taskTitle?: string
+  readonly scenario?: string
+  readonly note?: string
+  /** 事件时间（Unix epoch ms——起止/耗时取此） */
+  readonly at: number
 }
 
 /** 消息流折叠模型（state-only 单 Context 累积态；closed = 末组已被人类插话收口） */
@@ -156,6 +182,30 @@ function entryOf(event: ForgeMessageEventLike, data: ForgeMessageDataLike, turnI
   }
 }
 
+/** 可选字符串位窄收（非空串才收——载荷缺位/畸形 = undefined 不猜） */
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/** 'forge/progress' 载荷 → 组内条目（窄收守卫——必填位缺失/畸形 = undefined 弃事件，fold 原态返回） */
+function progressEntryOf(event: ForgeMessageEventLike, data: unknown): ForgeProgressEntry | undefined {
+  if (typeof data !== 'object' || data === null) return undefined
+  const raw = data as Record<string, unknown>
+  if (typeof raw['sourceSlug'] !== 'string' || raw['sourceSlug'] === '') return undefined
+  if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return undefined
+  return {
+    seq: event.seq,
+    sourceSlug: raw['sourceSlug'],
+    status: optionalString(raw['status']) ?? '',
+    verb: optionalString(raw['verb']) ?? '',
+    taskKey: optionalString(raw['taskKey']),
+    taskTitle: optionalString(raw['taskTitle']),
+    scenario: optionalString(raw['scenario']),
+    note: optionalString(raw['note']),
+    at: raw['at'],
+  }
+}
+
 /** turn 序号规一（官方 SessionEventMap 'turn/start'/'turn/end' 载荷 = { turn: number }——
  *  数值序号转字符串键；字符串兼容旧缓存形状。bug d44fbaec：只认字符串曾致 turn 追踪恒失效，
  *  组卡锚不脱 turn 过程折叠） */
@@ -178,6 +228,39 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       turnEndSeqs: { ...state.turnEndSeqs, [turnId]: event.seq },
     }
   }
+  // 'forge/progress' 事件（1.2 循环进度卡数据源）：同组 fold 语义——开组中追加 progress
+  // 条目（lastSeq 推进 = 组尾轨）；插话后/首枚开新组。畸形载荷原引用返回零污染。
+  if (event?.type === FORGE_PROGRESS_EVENT_TYPE) {
+    const entry = progressEntryOf(event, event.data)
+    if (entry === undefined) return state
+    const last = state.groups.at(-1)
+    if (last !== undefined && !state.closed) {
+      return {
+        closed: false,
+        currentTurn: state.currentTurn,
+        turnEndSeqs: state.turnEndSeqs,
+        groups: [
+          ...state.groups.slice(0, -1),
+          {
+            key: last.key,
+            firstSeq: last.firstSeq,
+            lastSeq: entry.seq,
+            entries: last.entries,
+            progress: [...(last.progress ?? []), entry],
+          },
+        ],
+      }
+    }
+    return {
+      closed: false,
+      currentTurn: state.currentTurn,
+      turnEndSeqs: state.turnEndSeqs,
+      groups: [
+        ...state.groups,
+        { key: `forge-progress-${entry.seq}`, firstSeq: entry.seq, lastSeq: entry.seq, entries: [], progress: [entry] },
+      ],
+    }
+  }
   if (event?.type !== 'user/message') return state
   const data = event.data as ForgeMessageDataLike | undefined
   const id = data !== undefined && typeof data.id === 'string' && data.id !== '' ? data.id : undefined
@@ -194,7 +277,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
         turnEndSeqs: state.turnEndSeqs,
         groups: [
           ...state.groups.slice(0, -1),
-          { key: last.key, firstSeq: last.firstSeq, lastSeq: entry.seq, entries: [...last.entries, entry] },
+          { key: last.key, firstSeq: last.firstSeq, lastSeq: entry.seq, entries: [...last.entries, entry], progress: last.progress },
         ],
       }
     }
@@ -220,7 +303,8 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
 export const forgeEventStreamDefinition = {
   kind: FORGE_EVENT_STREAM_KIND,
   match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null =>
-    event !== undefined && (event.type === 'user/message' || event.type === 'turn/start' || event.type === 'turn/end')
+    event !== undefined &&
+    (event.type === 'user/message' || event.type === 'turn/start' || event.type === 'turn/end' || event.type === FORGE_PROGRESS_EVENT_TYPE)
       ? { id: 'stream', role: 'start' }
       : null,
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventStreamState => {
@@ -258,11 +342,17 @@ function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
   return value as ForgeEventStreamState
 }
 
-/** 组卡锚 seq（纯函数——所属 turn 的 turn/end seq 优先，缺席回落组末 seq） */
+/** 组卡锚 seq（纯函数）：末到达为消息条目且所属 turn 已结束 = 该 turn 的 turn/end seq
+ *  （≥ answerAnchorSeq——脱离 Turn 过程折叠，卡片落回复下方）；末到达为 progress 条目
+ *  （活跃进度轨）或 turn 缺席 = 组末 seq（lastSeq——消息与 progress 同轨推进）。 */
 export function forgeEventGroupAnchorSeq(group: ForgeEventGroup, turnEndSeqs: Readonly<Record<string, number>> | undefined): number {
   const last = group.entries.at(-1)
-  const end = last?.turnId !== undefined ? turnEndSeqs?.[last.turnId] : undefined
-  return end ?? last?.seq ?? group.lastSeq
+  const lastProgressSeq = group.progress?.at(-1)?.seq ?? -1
+  if (last !== undefined && lastProgressSeq < last.seq) {
+    const end = last.turnId !== undefined ? turnEndSeqs?.[last.turnId] : undefined
+    if (end !== undefined) return end
+  }
+  return group.lastSeq
 }
 
 /**
@@ -276,21 +366,30 @@ export const forgeEventGroupDefinition = {
   kind: 'forge-event-group-view',
   target: 'chat',
   match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null => {
-    if (event === undefined || event.type !== 'user/message') return null
+    if (event === undefined || event.type === undefined) return null
+    if (event.type === FORGE_PROGRESS_EVENT_TYPE) {
+      return { id: `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(event.seq)}`, role: 'start' }
+    }
+    if (event.type !== 'user/message') return null
     const data = event.data as ForgeMessageDataLike | undefined
     if (data === undefined || typeof data.id !== 'string' || data.id === '') return null
     return isForgeSource(data.source) ? { id: data.id, role: 'start' } : null
   },
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventGroupNodeState => {
-    const msgId = String((match.event.data as ForgeMessageDataLike).id)
     const seq = match.event.seq
+    const isProgress = match.event.type === FORGE_PROGRESS_EVENT_TYPE
+    const msgId = isProgress ? `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(seq)}` : String((match.event.data as ForgeMessageDataLike).id)
     const stream = streamStateOf(reader?.previous?.(FORGE_EVENT_STREAM_KIND)?.state)
-    const group = stream?.groups.find((candidate) => candidate.entries.some((entry) => entry.id === msgId))
+    const group = stream?.groups.find((candidate) =>
+      isProgress
+        ? (candidate.progress?.some((entry) => entry.seq === seq) ?? false)
+        : candidate.entries.some((entry) => entry.id === msgId),
+    )
     if (stream === undefined || group === undefined)
       return { emit: false, isLatest: false, group: { key: msgId, firstSeq: seq, lastSeq: seq, entries: [] }, seq, anchorSeq: seq }
     const last = stream.groups.at(-1)
     return {
-      emit: group.entries.at(-1)?.id === msgId,
+      emit: group.lastSeq === seq,
       isLatest: last !== undefined && last.key === group.key,
       group,
       seq,
@@ -301,7 +400,8 @@ export const forgeEventGroupDefinition = {
   publication: (): 'none' => 'none',
   buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown | null => {
     const state = context.state
-    if (state === undefined || !state.emit || state.group.entries.length === 0) return null
+    if (state === undefined || !state.emit) return null
+    if (state.group.entries.length === 0 && (state.group.progress?.length ?? 0) === 0) return null
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
     // 直读 location.kind）：start/matches 携带 location 则透传，否则 unresolved。
     const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
@@ -313,7 +413,14 @@ export const forgeEventGroupDefinition = {
       anchorSeq: state.anchorSeq,
       location,
       visibility: 'visible',
-      data: { key: state.group.key, firstSeq: state.group.firstSeq, lastSeq: state.group.lastSeq, isLatest: state.isLatest, entries: state.group.entries },
+      data: {
+        key: state.group.key,
+        firstSeq: state.group.firstSeq,
+        lastSeq: state.group.lastSeq,
+        isLatest: state.isLatest,
+        entries: state.group.entries,
+        progress: state.group.progress ?? [],
+      },
     }
   },
 }
