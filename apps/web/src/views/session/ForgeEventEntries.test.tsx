@@ -112,6 +112,27 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('—')
     expect(html).not.toContain('dswf-event-entries-duration')
   })
+  it('重试计数随进度事件持久（任务行渲染 note——组卡从投影/会话日志重建后仍可见，非仅活行瞬态）', () => {
+    const retried: ForgeEventGroupData = {
+      ...DATA,
+      progress: [
+        { seq: 4, sourceSlug: 'feat-x', verb: 'claim', status: 'running', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', at: progAt(2) },
+        {
+          seq: 5,
+          sourceSlug: 'feat-x',
+          verb: 'retry',
+          status: 'blocked',
+          taskKey: 'feat-x/2.3',
+          taskTitle: '折叠条目组',
+          note: '第 2/3 次 — worker crashed mid-run',
+          at: progAt(4),
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(retried)} />)
+    expect(html).toContain('data-dswf-progress-status="blocked"') // 最新态（后写覆盖）
+    expect(html).toContain('第 2/3 次 — worker crashed mid-run') // 重试计数（note）在行内
+  })
   it('消息条目保留概要一行（结算/异常卡不重复展开明细）；progress 缺席 = 纯消息列表（旧形态兼容）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
     expect(html).toContain('领取 · 2.3 折叠条目组')

@@ -52,6 +52,7 @@ const SAMPLES: readonly SampleCase[] = [
 阶段: 启动子代理
 错误: 子会话创建被拒（错误原文）
 系统: 已向你发起问询
+处置入口: 重开 /run-dag-tasks m2-pipeline 循环（终局不自动复活）
 下一步动作: 提示用户"环境排查后重新开始 /run-dag-tasks m2-pipeline"，并在问询中决定`,
   },
   {

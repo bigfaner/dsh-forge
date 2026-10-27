@@ -130,6 +130,8 @@ export function spawnFailedHalted(p: SpawnFailedHaltedPayload): string {
     line('阶段', '启动子代理'),
     ...(p.errorText !== undefined ? [line('错误', p.errorText)] : []),
     line('系统', '已向你发起问询'),
+    // 处置入口（异常信息集第五项——halted 终局不自动复活，恢复 = 重开循环）
+    line('处置入口', `重开 /run-dag-tasks ${p.sourceSlug} 循环（终局不自动复活）`),
     nextActionLine(nextActionPromptUser(p.instruction, { alsoInquiry: true })),
   ].join('\n')
 }

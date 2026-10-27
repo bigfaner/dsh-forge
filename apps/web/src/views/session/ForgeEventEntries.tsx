@@ -66,6 +66,8 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
       <span className="dswf-event-entries-text">
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
+        {/* 重试计数等 note 随进度事件持久（bug 33728995③——组卡从投影/会话日志重建后仍可见） */}
+        {row.entry.note !== undefined ? ` · ${row.entry.note}` : ''}
       </span>
       <span className="dswf-event-entries-badge" data-tone={forgeProgressStatusTone(row.entry.status)}>
         {statusWord}

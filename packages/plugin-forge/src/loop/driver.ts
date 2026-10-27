@@ -734,7 +734,22 @@ export interface LoopDriverDeps {
   }
   /** 机械上限注入（测试缝——缺省生产值；maxRounds = 3c 最大轮次封顶） */
   readonly limits?: { readonly maxRounds?: number }
+  /**
+   * 诊断埋点面（AGENTS §7——循环里程碑经 diag/log 事件域落盘；装配面注入 emitDiag 闭包，
+   * 缺席 = 零埋点 fail-soft。fire-and-forget：诊断零循环正确性依赖）
+   */
+  readonly diag?: LoopDiagSink
 }
+
+/** 诊断埋点载荷（diag-events DiagEventPayload 的驱动器窄投影——process/trace 由装配面补齐） */
+export interface LoopDiagPayload {
+  readonly level: 'info' | 'warn' | 'error'
+  readonly event: string
+  readonly message: string
+  readonly projectId?: string
+  readonly sessionId?: string
+}
+export type LoopDiagSink = (payload: LoopDiagPayload) => void
 
 /** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/全量活循环读数） */
 export interface LoopDriver {
@@ -841,6 +856,11 @@ interface ActiveLoop {
   }[]
   /** 最近一次启动子代理失败错误原文（⑬ halt 消息「错误」行数据源——终局即弃） */
   lastSpawnError?: string
+  /**
+   * 唤醒去重已发集（bug 33728995①——`minor:taskKey` 键：同 loop 实例同一异常事件挂起
+   * 续跑再挂起不重复发唤醒卡；实例域生命周期，投影/落盘不去重）
+   */
+  readonly wakeupKeys: Set<string>
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -1030,10 +1050,19 @@ async function suspendWithWakeup(
     ...(input.workerSessionId !== undefined ? { workerSessionId: input.workerSessionId } : {}),
   })
   const detail = incidentPath !== undefined ? `原因全文：${incidentPath}` : '原因全文落盘降级（事件子文件夹不可用）'
-  await loop.deps.narrator.followup(
-    loop.record.ownerSessionId,
-    `${input.headline}。\n原因摘要：${summarizeReason(input.reason)}\n${detail}`,
-  )
+  // 唤醒去重（bug 33728995①——同实例同事件恰一张卡：挂起回流续跑再挂起同一事件不再重复
+  // send；投影事件与 incident 落盘不去重——留痕单源仍每挂起一条）
+  const wakeupKey = `${input.minor}:${input.progressTaskKey}`
+  const firstWakeup = !loop.wakeupKeys.has(wakeupKey)
+  loop.wakeupKeys.add(wakeupKey)
+  if (firstWakeup) {
+    await loop.deps.narrator.followup(
+      loop.record.ownerSessionId,
+      // 处置入口行（bug 33728995②——挂起径恢复语义：任意会话凭任务源 slug dispatchTask 认领）
+      `${input.headline}。\n原因摘要：${summarizeReason(input.reason)}\n${detail}\n处置入口: 任意会话凭任务源 ${loop.record.source.slug} dispatchTask 认领挂起循环继续处置`,
+    )
+  }
+  emitLoopDiag(loop, 'warn', 'loop-suspend', `${input.minor} — ${input.progressTaskKey}: ${summarizeReason(input.reason)}`)
   return suspendForVerdict(loop, escalation)
 }
 
@@ -1133,6 +1162,24 @@ function emitProgress(
 /** 池计数快照（claim 时点——'forge/progress' counts 段单源） */
 function progressCountsOf(stats: TaskStats): ForgeProgressCounts {
   return { pending: stats.byStatus.pending, running: stats.byStatus.in_progress, done: stats.byStatus.completed }
+}
+
+/**
+ * 循环里程碑诊断埋点（bug 33728995④——AGENTS §7：启动/重试/挂起/结算经 diag 面 emit，
+ * diag/log 落盘可查 loop 行；面缺席/发射故障 = 零埋点 fail-soft，零循环正确性依赖）
+ */
+function emitLoopDiag(loop: ActiveLoop, level: LoopDiagPayload['level'], event: string, message: string): void {
+  try {
+    loop.deps.diag?.({
+      level,
+      event,
+      message,
+      projectId: loop.record.projectId,
+      sessionId: loop.record.ownerSessionId,
+    })
+  } catch {
+    // 诊断发射零循环正确性依赖——异常吞并
+  }
 }
 
 /** 可中断停顿（true = 时延到点 / false = 循环已叫停——停止立即打断退避与耐心等待） */
@@ -1280,6 +1327,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         dispositions: new Map<string, DispositionBook>(),
         taskSpans: new Map<string, { title: string; startedAt: number }>(),
         taskSummaries: [],
+        wakeupKeys: new Set<string>(),
       }
       registry.register(record) // ⑦ 登记表注册（活循环 → 任务源/主会话/in-flight/worker 子会话）
       // S1c 循环独占守卫：登记即独占（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选
@@ -1301,6 +1349,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         registry.remove(id)
         return { ok: true, loopId: id }
       }
+      emitLoopDiag(loop, 'info', 'loop-start', `任务源 ${source.slug} 派发循环启动`) // bug 33728995④ 启动里程碑
       // 机械③：容器 → 提案 id 解析（检查点归属锚——fail-soft，缺席 = 机制惰性不判）
       if (deps.resolveProposalId !== undefined) {
         try {
@@ -1774,6 +1823,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       taskTitle: task.title,
       note: `第 ${attempt}/${HALT_THRESHOLD} 次 — ${failure.message}`,
     })
+    emitLoopDiag(loop, 'warn', 'loop-retry', `spawn 失败第 ${attempt}/${HALT_THRESHOLD} 次 — ${taskKey}: ${failure.message}`)
     if (signal.aborted) return unwindOutcome(loop) // 退避途中被叫停/暂停——让渡（pause 保留登记）
     return (await sleepOrAbort(signal, delayMs)) ? 'continue' : unwindOutcome(loop)
   }
@@ -1887,6 +1937,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       workerSessionId,
       note: `第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${settled.message}`,
     })
+    emitLoopDiag(loop, 'warn', 'loop-retry', `worker 异常退出第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${taskKey}: ${settled.message}`)
     return 'continue'
   }
 
@@ -1908,6 +1959,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     recordTaskEnd(loop, taskKey, '完成')
     // 进度事件（1.17——结算成功点：⑥ task/complete；完成零消息，投影单源）
     emitProgress(loop, { verb: 'settle', status: 'completed', scenario: 'task/complete', taskKey, taskTitle: settlement.title, workerSessionId })
+    emitLoopDiag(loop, 'info', 'loop-settle', `${taskKey} 结算完成`)
     return 'continue' // 续领下一轮
   }
 

@@ -324,6 +324,8 @@ function build(options: {
   resolveProposalId?: () => Promise<string | undefined>
   /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
   resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
+  /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
+  diag?: (payload: { readonly level: 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
 } = {}): Built {
   const h = tasksHarness()
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -388,6 +390,7 @@ function build(options: {
     ...(checkpoints !== undefined ? { checkpoints } : {}),
     ...(options.resolveProposalId !== undefined ? { resolveProposalId: options.resolveProposalId } : {}),
     ...(options.resolveHeadCommit !== undefined ? { resolveHeadCommit: options.resolveHeadCommit } : {}),
+    ...(options.diag !== undefined ? { diag: options.diag } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -3337,5 +3340,79 @@ describe('pauseTask 原语（task-pause-primitive）：pause 全链 / 归属守�
       suspended: false,
       ownerSessionId: '',
     })
+  })
+})
+
+// ─────────────────────────── 异常挂起径唤醒去重 + 处置入口 + diag 埋点（bug 33728995） ───────────────────────────
+
+describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', () => {
+  /** worker 反复异常退出桩（每轮 spawn 成功、结算崩溃——bounded 重入 → 超限挂起径） */
+  function crashingSpawn(spawn: ReturnType<typeof trackedSpawn>): void {
+    spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      result: Promise.reject(new Error('worker crashed mid-run')),
+      dispose: async () => {},
+    }))
+  }
+
+  it('同实例同事件重复挂起恰一张唤醒卡（实例级去重）；唤醒消息含处置入口行（挂起径凭 slug dispatchTask 认领）', async () => {
+    const incidentInputs: unknown[] = []
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      incidents: {
+        record: (input) => {
+          incidentInputs.push(input)
+          return 'logs/feat-x/2.5/001-abort-over-limit/'
+        },
+      },
+    })
+    crashingSpawn(built.spawn)
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    // 首挂起（超限）→ 处置回流 resume → 再挂起同一事件 → 再 resume → 第三次挂起
+    await untilSuspended(built.driver)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSuspended(built.driver)
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSuspended(built.driver)
+    // ① 去重：三次挂起同一事件恰一张唤醒卡；投影/落盘不去重（留痕单源每挂起一条）
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(1)
+    expect(built.progressCalls.filter((e) => e.verb === 'suspend')).toHaveLength(3)
+    expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-abort-over-limit')).toHaveLength(3)
+    // ② 处置入口行：挂起径语义——任意会话凭任务源 slug dispatchTask 认领
+    expect(wakeups[0]!.text).toContain('处置入口: 任意会话凭任务源 feat-x dispatchTask 认领挂起循环继续处置')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+describe('循环里程碑 diag 埋点（bug 33728995 ④——diag/log 落盘可查 loop 行）', () => {
+  it('启动/重试/挂起/结算四类里程碑经 deps.diag 输出（event 前缀 loop-，载荷携 projectId/sessionId）', async () => {
+    const diag: Array<{ level: string; event: string; message: string; projectId?: string; sessionId?: string }> = []
+    const built = build({
+      claim: [claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      query: [queryOf('completed')],
+      diag: (p) => diag.push(p),
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      // 前 4 次（bounded 重入 ×3 + 超限第 4 次）结算崩溃挂起；resume 续跑第 5 次成功结算
+      result: n <= 4 ? Promise.reject(new Error('worker crashed mid-run')) : Promise.resolve({ stopReason: 'end_turn', output: 'done' }),
+      dispose: async () => {},
+    }))
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilSuspended(built.driver) // 第一次结算崩溃 → 重试 ×3 → 超限挂起
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilSettled(built.driver) // 续跑后同任务结算成功 → 结算里程碑
+    // 里程碑四类齐备
+    expect(diag.some((d) => d.event === 'loop-start' && d.message.includes('feat-x'))).toBe(true)
+    expect(diag.filter((d) => d.event === 'loop-retry')).toHaveLength(3)
+    expect(diag.some((d) => d.event === 'loop-suspend' && d.message.includes('feat-x/2.5'))).toBe(true)
+    expect(diag.some((d) => d.event === 'loop-settle' && d.message.includes('feat-x/2.5'))).toBe(true)
+    // 载荷就地携带可得字段（AGENTS §7 埋点规范）
+    expect(diag[0]).toMatchObject({ projectId: PROJECT, sessionId: OWNER })
   })
 })
