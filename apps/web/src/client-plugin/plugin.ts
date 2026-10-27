@@ -41,6 +41,9 @@ import type { PskTrioFace } from '../views/remote/ForgeRemoteEntry.js'
 import type { RemoteStatusSnapshot, TunnelProvider } from '../views/remote/remote-status.js'
 // 跨入口类型面豁免（web-shell pin——runtime import 互禁仅约束值面；ShellHost inject 契约类型）
 import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/sidebar-model.js'
+// loop-message-consolidation 1.3：会话日志进度回放快照契约类型（type-only——录取/守卫逻辑
+// 本文件结构同型镜像 DispatchEventsPanel.tsx，bundle 自含纪律不破）
+import type { DispatchEventEntry, DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
 // 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
 import {
   FORGE_PROGRESS_NODE_KIND,
@@ -1131,6 +1134,81 @@ export const BUG_CHIP_RESTORE_ENTRY_ID = 'dswf-bug-chip-restore'
 /** worktree 切换闸虚线标记 overlay 登记 id（conversation.input.overlay list 槽行键——bug 267dcac1） */
 export const WORKTREE_SWITCH_ENTRY_ID = 'dswf-worktree-switch'
 
+// ─────────────────── 会话日志进度回放录取（loop-message-consolidation 1.3） ───────────────────
+
+/**
+ * 会话日志进度回放录取面（消费侧兜底数据通道——评审 R-Q1/R-Q2）：'forge/progress' 事件
+ * 经既有 stream 状态机 Definition 的 match 缝旁路录取（官方 events.register 注册面原样
+ * 消费——fold 主链零改动，match 纯观察）；官方 reader 对打开会话的日志全量重放即天然
+ * 回放源。会话切换以 seq 回退判读重置（新会话日志 seq 从头）。
+ */
+const FORGE_PROGRESS_LOG_TAP: {
+  entries: DispatchEventEntry[]
+  lastSeq: number
+  snapshot: DispatchProgressLogSnapshot
+  listeners: Set<() => void>
+} = { entries: [], lastSeq: -1, snapshot: { entries: [] }, listeners: new Set() }
+
+/** 回放源快照（ShellHost inject 递达面板——SnapshotSource 窄面） */
+const forgeProgressLogSource: SnapshotSource<DispatchProgressLogSnapshot> = {
+  getSnapshot: () => FORGE_PROGRESS_LOG_TAP.snapshot,
+  subscribe: (fn: () => void): (() => void) => {
+    FORGE_PROGRESS_LOG_TAP.listeners.add(fn)
+    return () => {
+      FORGE_PROGRESS_LOG_TAP.listeners.delete(fn)
+    }
+  },
+}
+
+/** 状态四值守卫（DispatchEventEntry 必填面收紧——畸形弃事件不猜） */
+function progressLogStatusOf(value: unknown): DispatchEventEntry['status'] | undefined {
+  return value === 'running' || value === 'completed' || value === 'blocked' || value === 'interrupted' ? value : undefined
+}
+
+/** 可选字符串位窄收（非空串才收——载荷缺位/畸形 = undefined 不猜） */
+function progressLogOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/** 单枚进度事件录取（逐条守卫 → 追加快照 + 通知订阅面；畸形 = 静默跳过） */
+function tapForgeProgressEvent(event: { readonly type?: unknown; readonly seq?: unknown; readonly data?: unknown }): void {
+  if (event?.type !== 'forge/progress' || typeof event.seq !== 'number' || !Number.isFinite(event.seq)) return
+  const raw = event.data
+  if (typeof raw !== 'object' || raw === null) return
+  const shape = raw as Record<string, unknown>
+  const status = progressLogStatusOf(shape['status'])
+  if (
+    typeof shape['sourceSlug'] !== 'string' ||
+    shape['sourceSlug'] === '' ||
+    typeof shape['verb'] !== 'string' ||
+    shape['verb'] === '' ||
+    status === undefined ||
+    typeof shape['at'] !== 'number' ||
+    !Number.isFinite(shape['at'])
+  ) {
+    return
+  }
+  if (event.seq <= FORGE_PROGRESS_LOG_TAP.lastSeq) {
+    // 会话切换/日志重放判读（新会话 seq 从头）——录取面重置为当次会话日志
+    FORGE_PROGRESS_LOG_TAP.entries = []
+  }
+  FORGE_PROGRESS_LOG_TAP.lastSeq = event.seq
+  const entry: DispatchEventEntry = {
+    sourceSlug: shape['sourceSlug'],
+    verb: shape['verb'],
+    status,
+    taskKey: progressLogOptionalString(shape['taskKey']),
+    taskTitle: progressLogOptionalString(shape['taskTitle']),
+    workerSessionId: progressLogOptionalString(shape['workerSessionId']),
+    scenario: progressLogOptionalString(shape['scenario']),
+    note: progressLogOptionalString(shape['note']),
+    at: shape['at'],
+  }
+  FORGE_PROGRESS_LOG_TAP.entries = [...FORGE_PROGRESS_LOG_TAP.entries, entry]
+  FORGE_PROGRESS_LOG_TAP.snapshot = { entries: FORGE_PROGRESS_LOG_TAP.entries }
+  for (const listener of FORGE_PROGRESS_LOG_TAP.listeners) listener()
+}
+
 /**
  * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册
  * （workflow-run 同型）——① `uiConversation.events.register` 节点 Definition（每枚事件
@@ -1184,7 +1262,16 @@ function registerEventEntriesNode(ctx: ForgeClientCtx, views: PublishedViews, di
   const registerEvents = uiConversation?.events?.register
   if (uiConversation === undefined || typeof registerEvents !== 'function') return
   try {
-    registerEvents.call(uiConversation.events, forgeEventStreamDefinition)
+    // stream 状态机注册经回放录取薄包装（match 纯观察旁路——fold 语义零改动，
+    // loop-message-consolidation 1.3 消费侧回放数据通道）
+    const streamWithTap = {
+      ...forgeEventStreamDefinition,
+      match: (event: { readonly type?: unknown; readonly seq?: unknown; readonly data?: unknown }): { id: string; role: 'start' } | null => {
+        tapForgeProgressEvent(event)
+        return forgeEventStreamDefinition.match(event as never)
+      },
+    }
+    registerEvents.call(uiConversation.events, streamWithTap)
     registerEvents.call(uiConversation.events, forgeEventGroupDefinition)
   } catch {
     return // Definition 注册被拒（重复 kind 等）——渲染段不落半座
@@ -2652,6 +2739,9 @@ export function forgeClientPlugin(): ForgeClientPlugin {
                 // 直递：面板经账本行 projectionValues['forge-dispatch-events'] 窄读 + store
                 // subscribe 实时刷新，零新增读取 API）
                 sessions: sessions.list as SnapshotSource<LedgerSessionsSnapshot>,
+                // 会话日志进度回放源（loop-message-consolidation 1.3——投影窗口截断时面板
+                // 按本循环实例配对回放重建；R-Q1/R-Q2 消费侧兜底）
+                progressLog: forgeProgressLogSource,
                 // ⟞ worker 父反查兜底（fix：进行中任务无 record 审计行 → workerSessionOf
                 // 恒空）：账本子行 parentId 扫描 + refresh 一次兜底（resolveWorkerChildSession
                 // 单源）——旧载荷（无 workerSessionId）消费面。

@@ -193,24 +193,25 @@ export interface DispatchAggregatedRow {
 }
 
 /**
- * 行聚合（1.16 用户裁决——任务键时间线口径）：每任务最新态一行（后写覆盖 = 最新态，
- * 组内时序排序），无任务键的循环级事件各占一行；池级 pending 快照（pool/pending）不进
- * 时间线——只承载统计条「待执行」计数。排序 = 纯时序（执行中行不置顶——可见性由滚动
- * 跟随效应承担）。同任务键首事件时戳随行携带（启动时间面）。
+ * 行聚合（1.16 用户裁决——任务键时间线口径 + loop-message-consolidation 1.3 循环级收敛）：
+ * 每任务最新态一行（后写覆盖 = 最新态，组内时序排序）；无任务键的循环级事件收敛为
+ * 单行最新态（后写覆盖——消除「从头执行」类历史行累积）；池级 pending 快照
+ * （pool/pending）不进时间线——只承载统计条「待执行」计数。排序 = 纯时序（执行中行不
+ * 置顶——可见性由滚动跟随效应承担）。同任务键首事件时戳随行携带（启动时间面）。
  */
 export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]): readonly DispatchAggregatedRow[] {
   const latest = new Map<string, { entry: DispatchEventEntry; startAt: number }>()
-  const singles: DispatchAggregatedRow[] = []
+  let loop: DispatchAggregatedRow | undefined
   for (const entry of entries) {
     if (entry.scenario === DISPATCH_POOL_PENDING_SCENARIO) continue
     if (entry.taskKey === undefined) {
-      singles.push({ entry, startAt: entry.at })
+      loop = { entry, startAt: entry.at } // 循环级单行——后写覆盖 = 最新态
       continue
     }
     const held = latest.get(entry.taskKey)
     latest.set(entry.taskKey, { entry, startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at) })
   }
-  return [...latest.values(), ...singles].sort((a, b) => a.entry.at - b.entry.at)
+  return [...latest.values(), ...(loop !== undefined ? [loop] : [])].sort((a, b) => a.entry.at - b.entry.at)
 }
 
 /** 行聚合（条目视图——detail 渲染面走 aggregateDispatchRowItems 携启动时间） */
@@ -259,6 +260,86 @@ export function dispatchEventStats(entries: readonly DispatchEventEntry[]): Disp
   const stats = { completed: 0, running: 0, blocked: 0, interrupted: 0 }
   for (const status of latest.values()) stats[status] += 1
   return stats
+}
+
+// ─────────────────── 循环实例边界与会话日志回放兜底（loop-message-consolidation 1.3） ───────────────────
+
+/** 循环实例启动标记（循环级 startup 事件——回放配对圈定起点；用户裁决 2026-10-28） */
+export function isLoopInstanceStartEntry(entry: DispatchEventEntry): boolean {
+  return entry.taskKey === undefined && entry.verb === 'startup'
+}
+
+/** 循环实例终局标记（循环级结算/停止事件——settle/stop/halt/timeout 动词族） */
+export function isLoopInstanceEndEntry(entry: DispatchEventEntry): boolean {
+  return (
+    entry.taskKey === undefined &&
+    (entry.verb === 'settle' || entry.verb === 'stop' || entry.verb === 'halt' || entry.verb === 'timeout')
+  )
+}
+
+/** 窗口丢失判读（投影 total > 窗口条数 = fold 窗口已截断——更早历史本次不在窗口） */
+export function dispatchWindowLost(view: DispatchEventsView): boolean {
+  return view.total > view.entries.length
+}
+
+/**
+ * 会话日志回放筛选（评审 R-Q1/R-Q2 裁决——消费侧兜底，不改 fold 主链）：以「最近一枚
+ * 启动事件 ↔ 其后首枚结算/停止事件」配对圈定当前循环实例区间，并按启动事件的
+ * sourceSlug 容器筛选——跨多循环实例的会话各实例事件正确归属（前轮实例不混入）。
+ * 无启动标记（旧会话/无循环）= 空数组不回放。
+ */
+export function dispatchLoopInstanceEntries(logEntries: readonly DispatchEventEntry[]): readonly DispatchEventEntry[] {
+  let start = -1
+  for (let i = logEntries.length - 1; i >= 0; i -= 1) {
+    if (isLoopInstanceStartEntry(logEntries[i] as DispatchEventEntry)) {
+      start = i
+      break
+    }
+  }
+  if (start === -1) return []
+  const slug = (logEntries[start] as DispatchEventEntry).sourceSlug
+  let end = logEntries.length - 1
+  for (let i = start + 1; i < logEntries.length; i += 1) {
+    if (isLoopInstanceEndEntry(logEntries[i] as DispatchEventEntry)) {
+      end = i
+      break
+    }
+  }
+  return logEntries.slice(start, end + 1).filter((entry) => entry.sourceSlug === slug)
+}
+
+/**
+ * 面板条目合成（消费侧兜底装配点）：窗口未截断 = 投影窗口原样；窗口丢失且会话日志
+ * 回放源在场 = 本循环实例回放重建（总数与行不随截断漂移）；回放源缺席或容器不匹配
+ * （回放不含窗口容器的事件——跨会话串扰防御）= 退回窗口（fail-soft 降级现状）。
+ */
+export function dispatchPanelEntriesOf(
+  view: DispatchEventsView,
+  logEntries: readonly DispatchEventEntry[] | undefined,
+): readonly DispatchEventEntry[] {
+  if (!dispatchWindowLost(view)) return view.entries
+  if (logEntries === undefined || logEntries.length === 0) return view.entries
+  const windowSlugs = new Set(view.entries.map((entry) => entry.sourceSlug))
+  const replayed = dispatchLoopInstanceEntries(logEntries)
+  const covered = replayed.some((entry) => windowSlugs.has(entry.sourceSlug))
+  return covered && replayed.length >= view.entries.length ? replayed : view.entries
+}
+
+/** 会话日志回放快照窄形状（progressLog 注入快照——条目已由录取面守卫） */
+export interface DispatchProgressLogSnapshot {
+  readonly entries: readonly DispatchEventEntry[]
+}
+
+/** 空回放快照（progressLog 缺席的稳定参照——useSyncExternalStore 快照稳定性纪律） */
+export const EMPTY_PROGRESS_LOG: DispatchProgressLogSnapshot = { entries: [] }
+
+/**
+ * 面板小球口径（R-Q3 投影汇总——与展开面板统计同源）：任务行聚合数（每任务键最新态）
+ * + pending 池级快照计数（尚未领取成行的任务）。不再是事件条数 entries.length。
+ */
+export function dispatchPanelTaskCountOf(entries: readonly DispatchEventEntry[], pending: number | undefined): number {
+  const stats = dispatchEventStats(entries)
+  return stats.completed + stats.running + stats.blocked + stats.interrupted + (pending ?? 0)
 }
 
 // ─────────────────── 几何（锚定/拖移/两态——DispatchPanel 判例同径） ───────────────────
@@ -570,8 +651,10 @@ export function DispatchEventsPanelBody({
   onOpenWorker,
 }: DispatchEventsPanelBodyProps): ReactNode {
   if (collapsed) {
+    // 小球口径（R-Q3）：投影汇总任务数（任务行聚合 + pending 快照）——与展开面板同源
+    const count = dispatchPanelTaskCountOf(entries, pending)
     return (
-      <Tooltip label={`展开任务进度面板（${entries.length}）`} portal>
+      <Tooltip label={`展开任务进度面板（${count}）`} portal>
         <button
           type="button"
           className="dswf-dep-badge"
@@ -581,7 +664,7 @@ export function DispatchEventsPanelBody({
           onClick={onExpand}
         >
           <IconSparkleRegular size={11} />
-          <span data-dswf-dep-badge-count="">{entries.length}</span>
+          <span data-dswf-dep-badge-count="">{count}</span>
         </button>
       </Tooltip>
     )
@@ -643,6 +726,12 @@ export interface DispatchEventsPanelProps {
    * taskKey 反查定位子会话；resolve 落空 = 行保持非交互不空跳；缺席 = 仅直跳径）
    */
   readonly resolveWorkerSession?: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
+  /**
+   * 会话日志进度回放源（loop-message-consolidation 1.3——消费侧兜底数据通道；投影窗口
+   * 截断时按本循环实例配对回放重建，评审 R-Q1/R-Q2。快照条目已由录取面逐条守卫；缺席 =
+   * 窗口原样[现状降级，不炸不出错]）。
+   */
+  readonly progressLog?: SnapshotSource<DispatchProgressLogSnapshot>
 }
 
 /** 账本缺席快照（undefined 源的稳定 SSR 参照——useSyncExternalStore 快照稳定性纪律） */
@@ -739,7 +828,18 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
   const row: LedgerSessionRow | undefined = snap.byId[props.sessionId]
   // 窄读记忆化（projectionValues 引用恒定 = view/entries 身份稳定——反查效应依赖不抖动）
   const view = useMemo(() => dispatchEventsOf(row?.projectionValues), [row?.projectionValues])
-  const entries = useMemo(() => view?.entries ?? [], [view])
+  // 会话日志回放源窄读（progressLog 注入——快照条目已由录取面守卫；缺席 = 稳定空快照）
+  const logSubscribe = useCallback(
+    (onChange: () => void): (() => void) => props.progressLog?.subscribe(onChange) ?? (() => {}),
+    [props.progressLog],
+  )
+  const logRead = useCallback(
+    (): DispatchProgressLogSnapshot => props.progressLog?.getSnapshot() ?? EMPTY_PROGRESS_LOG,
+    [props.progressLog],
+  )
+  const logSnap = useSyncExternalStore(logSubscribe, logRead, logRead)
+  // 条目合成（消费侧兜底装配点——窗口丢失时本循环实例回放重建，AC 口径单源）
+  const entries = useMemo(() => (view === undefined ? [] : dispatchPanelEntriesOf(view, logSnap.entries)), [view, logSnap])
   const active = entries.length > 0
   const anchor = useDepAnchor(active)
   const [collapsed, setCollapsed] = useState(DEP_DEFAULT_COLLAPSED)

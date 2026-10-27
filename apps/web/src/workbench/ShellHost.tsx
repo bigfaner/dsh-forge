@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AddProjectFlow } from '../flows/add-project/AddProjectFlow.js'
 import type { KitSelectorHook } from '../views/session/ConversationViews.js'
-import { DispatchEventsPanel } from '../views/session/DispatchEventsPanel.js'
+import { DispatchEventsPanel, type DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
 import { TaskDrawer, useTaskDetail } from '../views/overview/drawer/index.js'
 import { TransitionDialog } from '../views/overview/drawer/transition-dialog.js'
 import { forgeDocAddress, nextTaskFocusApply, type TransitionTarget } from './dock-tabs.js'
@@ -95,6 +95,11 @@ export interface ForgeShellHostProps {
    * 面板不出场）。
    */
   readonly sessions?: SnapshotSource<LedgerSessionsSnapshot>
+  /**
+   * 会话日志进度回放源（loop-message-consolidation 1.3 插件 inject face——投影窗口截断时
+   * 面板按本循环实例配对回放重建；快照条目已由录取面逐条守卫；缺席 = 窗口原样降级）。
+   */
+  readonly progressLog?: SnapshotSource<DispatchProgressLogSnapshot>
   /** 打开新会话编排器（插件 inject face——openSessionWithPreset 组合子；缺席 = 诊断发送入口不呈现） */
   readonly openSession?: OpenSessionOrchestrator
   /**
@@ -356,6 +361,7 @@ export function ForgeShellHost(props: ForgeShellHostProps): ReactNode {
           key={mainSessionId}
           sessionId={mainSessionId}
           sessions={props.sessions}
+          {...(props.progressLog !== undefined ? { progressLog: props.progressLog } : {})}
           {...(props.onOpenWorkerSession !== undefined ? { onOpenWorkerSession: props.onOpenWorkerSession } : {})}
           {...(props.resolveWorkerSession !== undefined ? { resolveWorkerSession: props.resolveWorkerSession } : {})}
         />

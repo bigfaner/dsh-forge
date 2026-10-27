@@ -12,8 +12,9 @@
 // 折叠语义：
 //   - 仅 'forge/progress' 事件入折叠；他类型同引用返回（registry Object.is 零下游工作）；
 //   - 载荷经 isForgeProgressData 守卫——他形/畸形载荷同引用原样（不猜不弃行）；
-//   - state 规模上界：entries 只保留最近 N=200 条 + total 全量计数（更早历史本次不回看，
-//     proposal 边界 6——日志恒为权威）；
+//   - state 规模上界：entries 只保留最近 N=500 条 + total 全量计数（loop-message-
+//     consolidation 1.3 扩窗——更长循环的窗口余量；更早历史由消费侧会话日志回放兜底，
+//     proposal §2.3 R-Q1——日志恒为权威）；
 //   - view = { entries 窗口, total 总数 }（client 可见整值，plain JSON）。
 import { SESSION_PROJECTION_KEYS } from '@dsh-forge/contracts'
 import { FORGE_PROGRESS_EVENT_TYPE, isForgeProgressData } from '../progress/index.js'
@@ -26,15 +27,15 @@ export const FORGE_DISPATCH_EVENTS_PROJECTION_KEY = SESSION_PROJECTION_KEYS.disp
 /** 折叠语义版本（持久化投影缓存失配判据——首版 1） */
 export const FORGE_DISPATCH_EVENTS_STATE_VERSION = 1
 
-/** state/view 窗口上界（proposal 边界 6：最近 N=200 条） */
-export const FORGE_DISPATCH_EVENTS_WINDOW_SIZE = 200
+/** state/view 窗口上界（loop-message-consolidation 1.3——最近 N=500 条） */
+export const FORGE_DISPATCH_EVENTS_WINDOW_SIZE = 500
 
 /** 窗口内单条进度事件条目（载荷切片——plain JSON 透传，字段语义见 ForgeProgressEventData） */
 export type ForgeDispatchEventEntry = ForgeProgressEventData
 
 /** wire 值（client 可见整值——plain JSON，SessionProjectionValue = JsonValue 面内） */
 export interface ForgeDispatchEventsProjection {
-  /** 最近事件窗口（时序追加序——尾部最新，规模上界 N=200） */
+  /** 最近事件窗口（时序追加序——尾部最新，规模上界 N=500） */
   readonly entries: readonly ForgeDispatchEventEntry[]
   /** 本会话进度事件总数（窗口外历史仍计数——面板「窗口 + 总数」承载） */
   readonly total: number

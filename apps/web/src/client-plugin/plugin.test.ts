@@ -757,7 +757,8 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     // 第一段：uiConversation.events.register 节点 Definition 恰一（1.9 起三件：progress + 事件流状态机 + 组节点）
     expect(eventDefinitions).toHaveLength(3)
     expect(eventDefinitions[0]).toBe(forgeProgressDefinition)
-    expect(eventDefinitions[1]).toBe(forgeEventStreamDefinition)
+    // 1.3 回放录取薄包装：stream 定义经 match 旁路包装注册（fold 语义零改动——kind/start/update 同源）
+    expect(eventDefinitions[1]).toMatchObject({ kind: forgeEventStreamDefinition.kind })
     expect(eventDefinitions[2]).toBe(forgeEventGroupDefinition)
     // 第二段：keyed node body 恰一——key = 节点 kind（buildViewNode.kind 字面量同源；1.9 起同槽双 body，按 key 过滤）
     const bodies = registers.filter((r) => r.key === FORGE_PROGRESS_NODE_SLOT && r.options.key === FORGE_PROGRESS_NODE_KIND)
@@ -821,17 +822,20 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       sessionTitleOf: (sessionId: string) => string | undefined
       resolveWorkerSession: (parentSessionId: string, taskKey?: string) => Promise<string | undefined>
       sessions: { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }
+      progressLog: { getSnapshot: () => unknown; subscribe: (fn: () => void) => () => void }
     }
     // m3.1 D21/D23 弹窗宿主三窄面 + D6 悬浮面板 ⟞ 开面在场（ShellHost 消费）
     // + S1 会话名解析器（task-ui-info-density-blitz——账本快照 displayTitle 窄读闭包）
     // + ⟞ 父反查兜底（fix：进行中 worker 无 record 审计行 → 库侧解析恒空的修复面）
     // + 悬浮进度流面板账本源（loop-event-delivery 1.8——projectionValues 窄读 + 实时刷新）
+    // + 会话日志进度回放源（loop-message-consolidation 1.3——窗口截断消费侧回放兜底）
     expect(Object.keys(face).sort()).toEqual([
       'bridge',
       'onOpenSession',
       'onOpenWorkerSession',
       'openDocResource',
       'openSession',
+      'progressLog',
       'resolveWorkerSession',
       'rightbar',
       'selectPanel',
@@ -840,6 +844,7 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
     ])
     expect(typeof face.sessions.getSnapshot).toBe('function')
     expect(typeof face.sessions.subscribe).toBe('function')
+    expect(typeof face.progressLog.getSnapshot).toBe('function')
     expect(typeof face.onOpenSession).toBe('function')
     // D6 键名契约 pin：face 键 = onOpenWorkerSession（ShellHost props 契约——错配 = ⟞ 恒 disabled）
     expect(typeof face.onOpenWorkerSession).toBe('function')
