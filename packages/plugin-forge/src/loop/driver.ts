@@ -43,7 +43,7 @@ import type {
   SpawnWorker,
 } from '../dispatch-core/index.js'
 import { clearExclusiveLoopSource, ownerSingleActiveRejection, setExclusiveLoopSource } from '../dispatch-core/index.js'
-import { renderHeadline, renderNarrative, summarizeReason } from '../notify/index.js'
+import { renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
 import { renderEndOfLoop } from './injection.js'
 import type { InjectionPayload } from './injection.js'
@@ -820,6 +820,27 @@ interface ActiveLoop {
   proposalId?: string
   /** 机械③：最近一次 success 结算 commit hash（标记时点 HEAD 的回落锚——worktree 缺席径） */
   lastCommitHash?: string
+  /**
+   * 任务起止记录（loop-message-consolidation §2.1——与 forge/progress 事件同源：领取记
+   * 开始、结算记结束，耗时 = 结算 − 领取；内存态，跨重启缺失 = 概要行降级省略耗时——
+   * 评审 R-Q1 裁决）。幂等重入重领不覆盖首次起点。
+   */
+  readonly taskSpans: Map<string, { readonly title: string; readonly startedAt: number }>
+  /**
+   * 结算概要有序集（终局 settle 消息「任务概要」段数据源——按 slug 分组呈现，不跨 slug
+   * 混合汇总/结算：用户裁决 2026-10-28。每任务 taskKey = slug/localId，耗时在讫记时点
+   * 定型（结算 − 领取），跨重启缺失 = 省略耗时）
+   */
+  readonly taskSummaries: {
+    readonly slug: string
+    readonly taskKey: string
+    readonly title: string
+    readonly status: string
+    readonly duration?: string
+    readonly note?: string
+  }[]
+  /** 最近一次启动子代理失败错误原文（⑬ halt 消息「错误」行数据源——终局即弃） */
+  lastSpawnError?: string
 }
 
 /** 同任务处置簿（S1c——attempts 计数封顶 LOOP_TRIAGE_MAX_ATTEMPTS；history 行进裁决问询） */
@@ -1021,9 +1042,55 @@ export type LoopResumeResult =
   | { readonly ok: true; readonly loopId: LoopInstanceId }
   | { readonly ok: false; readonly code: 'no-active-loop' | 'not-suspended' | 'aborted' }
 
-/** 呈现任务行（「localId 任务名」——notification-samples ④「2.8 诊断弹窗装配（Apps web）」口径） */
-function taskLabelOf(task: TaskSnapshot): string {
-  return `${task.localId} ${task.title}`
+/** 耗时呈现（<1m 秒粒度，其余分钟粒度——概要行紧凑口径，提案 §2.1「18m」同族） */
+function durationTextOf(ms: number): string {
+  return ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`
+}
+
+/** 任务领取起记（幂等重入重领同一任务不覆盖首次起点——耗时从首次领取起算） */
+function recordTaskStart(loop: ActiveLoop, taskKey: string, title: string): void {
+  if (!loop.taskSpans.has(taskKey)) loop.taskSpans.set(taskKey, { title, startedAt: Date.now() })
+}
+
+/** 任务结算讫记（终态 + 耗时定型入结算概要——按 slug 分组；跨重启缺失 = 耗时段降级省略） */
+function recordTaskEnd(loop: ActiveLoop, taskKey: string, status: string, note?: string): void {
+  const span = loop.taskSpans.get(taskKey)
+  loop.taskSpans.delete(taskKey)
+  const slug = taskKey.slice(0, taskKey.indexOf('/'))
+  loop.taskSummaries.push({
+    slug,
+    taskKey,
+    title: span?.title ?? taskKey,
+    status,
+    ...(span !== undefined ? { duration: durationTextOf(Date.now() - span.startedAt) } : {}),
+    ...(note !== undefined && note !== '' ? { note } : {}),
+  })
+}
+
+/**
+ * 结算概要行集（模板 taskSummaries 段——按 slug 分组，不跨 slug 混合汇总/结算：用户裁决
+ * 2026-10-28）。组首行 = `slug（完成 n · 阻塞 m）` 状态计数；任务行 = `slug/local-id 标题 —
+ * 终态[ · 耗时][ · 注记]`；分组保持首次出现序。
+ */
+function taskSummaryLines(loop: ActiveLoop | undefined): readonly string[] {
+  if (loop === undefined) return []
+  const groups = new Map<string, typeof loop.taskSummaries>()
+  for (const s of loop.taskSummaries) {
+    const group = groups.get(s.slug)
+    if (group !== undefined) group.push(s)
+    else groups.set(s.slug, [s])
+  }
+  const lines: string[] = []
+  for (const [slug, items] of groups) {
+    const completed = items.filter((item) => item.status === '完成').length
+    lines.push(`${slug}（完成 ${completed} · 阻塞 ${items.length - completed}）`)
+    for (const s of items) {
+      const duration = s.duration !== undefined ? ` · ${s.duration}` : ''
+      const note = s.note !== undefined ? ` · ${s.note}` : ''
+      lines.push(`${s.taskKey} ${s.title} — ${s.status}${duration}${note}`)
+    }
+  }
+  return lines
 }
 
 /**
@@ -1114,6 +1181,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         sourceSlug: record.source.slug,
         completed: stats.byStatus.completed,
         inFlightTaskKey: captured?.taskKey ?? '无',
+        taskSummaries: taskSummaryLines(loop),
       }),
     )
     registry.remove(record.id) // 终态即登记表删除（新实例 = guard 计数复位）
@@ -1210,6 +1278,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         workerAborts: 0,
         waitRounds: 0,
         dispositions: new Map<string, DispositionBook>(),
+        taskSpans: new Map<string, { title: string; startedAt: number }>(),
+        taskSummaries: [],
       }
       registry.register(record) // ⑦ 登记表注册（活循环 → 任务源/主会话/in-flight/worker 子会话）
       // S1c 循环独占守卫：登记即独占（活循环任务源拒绝外部 dispatchTask——显式 slug 与盲选
@@ -1341,10 +1411,10 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         note: reason,
       })
       try {
-        await deps.narrator.notice(
+        // 挂起径唤醒（loop-message-consolidation——挂起保留 wakeup，恢复 = 改写简报后 re-entry）
+        await deps.narrator.followup(
           record.ownerSessionId,
           `[forge·暂停] 任务源: ${record.source.slug} — 任务 ${captured.taskKey} ${captured.title} 已挂起\n原因: ${summarizeReason(reason)}\n改写简报后执行 dispatchTask re-entry 恢复循环`,
-          '任务已暂停——循环挂起待恢复',
         )
       } catch {
         // 叙述故障 fail-soft（挂起事实已落登记与任务时间线）
@@ -1403,23 +1473,15 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
  * 在场——本轮 claim 无可领则走 wait 判词等待其结算/耐心收口））。
  */
 async function announceStartup(loop: ActiveLoop): Promise<void> {
-  const { deps, record, scope, source } = loop
+  const { deps, scope, source } = loop
   const [stale, stats] = await Promise.all([
     deps.tasks.listTasks({ projectId: scope.projectId, source, statusFilter: ['interrupted'], sort: 'interrupted' }),
     deps.tasks.taskStats({ projectId: scope.projectId, source }),
   ])
   if (loop.controller.signal.aborted) return
-  const slug = record.source.slug
-  const kind = record.source.kind
   const first = stale[0]
   if (first !== undefined) {
-    const payload = { sourceSlug: slug, sourceKind: kind, taskKey: first.localId }
-    await deps.narrator.notice(
-      record.ownerSessionId,
-      renderNarrative('startup-resume-stopped', payload),
-      renderHeadline('startup-resume-stopped', payload),
-    )
-    // ② 启动·接续（上次未完成）
+    // ② 启动·接续（上次未完成）——零消息（进度事件单源投影）
     emitProgress(loop, {
       verb: 'startup',
       status: 'running',
@@ -1433,13 +1495,7 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
     const cards = await deps.tasks.listTasks({ projectId: scope.projectId, source, statusFilter: ['in_progress'] })
     const inFlightCard = cards[0]
     if (inFlightCard !== undefined) {
-      const payload = { sourceSlug: slug, sourceKind: kind, taskKey: inFlightCard.localId }
-      await deps.narrator.notice(
-        record.ownerSessionId,
-        renderNarrative('startup-resume-inflight', payload),
-        renderHeadline('startup-resume-inflight', payload),
-      )
-      // ③ 启动·接续（在飞任务）
+      // ③ 启动·接续（在飞任务）——零消息（进度事件单源投影）
       emitProgress(loop, {
         verb: 'startup',
         status: 'running',
@@ -1450,13 +1506,7 @@ async function announceStartup(loop: ActiveLoop): Promise<void> {
       return
     }
   }
-  const scratchPayload = { sourceSlug: slug, sourceKind: kind, pending: stats.byStatus.pending }
-  await deps.narrator.notice(
-    record.ownerSessionId,
-    renderNarrative('startup-from-scratch', scratchPayload),
-    renderHeadline('startup-from-scratch', scratchPayload),
-  )
-  // ① 启动·从头执行
+  // ① 启动·从头执行——零消息（进度事件单源投影）
   emitProgress(loop, { verb: 'startup', status: 'running', scenario: 'startup/from-scratch' })
 }
 
@@ -1483,6 +1533,7 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
             blocked: stats.byStatus.blocked,
             pending: stats.byStatus.pending,
             instruction: loopInstructionOf('timeout', record.source.slug),
+            taskSummaries: taskSummaryLines(loop),
           }),
         )
         // ⑮ 结束（等待超时）——循环级进度事件（轮次封顶径与耐心耗尽径同码）
@@ -1653,24 +1704,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   }
   record.inFlight = inFlight
 
-  // 领取通知（S4——notice·零模型回合；恢复径 = ⑤ claim-interrupted，常规 = ④ claim；
-  // 剩余行 = claim 后池读——本任务已入执行中口径，与样例逐字一致）
+  // 任务起记（结算概要耗时源——幂等重入重领不覆盖首次起点）
+  recordTaskStart(loop, taskKey, task.title)
+
+  // 领取进度事件（1.17——常规 = ④ claim/new / 恢复 = ⑤ claim/interrupted；重入重领零新消息，
+  // 重试计数进 note——卡片就地更新）；池级 pending 快照（1.16 用户裁决②——统计条「待执行」
+  // 计数承载：池级事件 + counts，fold unit 提取为 pending 字段，web/mobile 统计条消费；
+  // 无任务键 = 不进任务时间线）
   const stats = await statsFailSoft(loop)
-  if (adoptRef !== undefined) {
-    // 2026-10-12「去掉状态计数」——剩余行移除，载荷只剩任务源/任务行
-    const payload = {
-      sourceSlug: slug,
-      taskLabel: `${taskLabelOf(task)}（恢复自中断 — 重新执行）`,
-    }
-    await deps.narrator.notice(owner, renderNarrative('claim-interrupted', payload), renderHeadline('claim-interrupted', payload))
-  } else {
-    const payload = {
-      sourceSlug: slug,
-      taskLabel: taskLabelOf(task),
-    }
-    await deps.narrator.notice(owner, renderNarrative('claim', payload), renderHeadline('claim', payload))
-  }
-  // 进度事件（1.17——领取点：常规 = ④ claim/new / 恢复 = ⑤ claim/interrupted；零模型面零回合唤醒）
+  const retryAttempt = loop.spawnFailures > 0 ? loop.spawnFailures : loop.workerAborts
   emitProgress(loop, {
     verb: adoptRef !== undefined ? 'claim-resume' : 'claim',
     status: 'running',
@@ -1678,16 +1720,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     taskKey,
     taskTitle: task.title,
     counts: progressCountsOf(stats),
+    ...(retryAttempt > 0 ? { note: `重试第 ${retryAttempt} 次` } : {}),
   })
-  // 池级 pending 快照（1.16 用户裁决②——统计条「待执行」计数承载：池级事件 + counts，
-  // fold unit 提取为 pending 字段，web/mobile 统计条消费；无任务键 = 不进任务时间线）
   emitProgress(loop, {
     verb: 'loop',
     status: 'running',
     scenario: 'pool/pending',
     counts: progressCountsOf(stats),
   })
-  // 通知 await 窗口的停止竞态收口（同上——stop 已接管则让渡）
+  // 进度发射后的停止竞态收口（同上——stop 已接管则让渡）
   if (await bailIfAborted(loop, claim)) return 'terminal'
 
   // ③ spawn（dispatch-core 阶段二）：SpawnWorkerHandle 直持不经 jobs（decisions #14）；
@@ -1723,26 +1764,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     loop.spawnFailures += 1
     const attempt = loop.spawnFailures
     const delayMs = backoffDelayMs(loop.delays.backoffBaseMs, attempt)
-    const retryPayload = {
-      sourceSlug: slug,
-      attempt,
-      errorSummary: summarizeReason(failure.message),
-      delaySeconds: Math.round(delayMs / 1000),
-      maxAttempts: HALT_THRESHOLD,
-    }
-    await deps.narrator.notice(
-      owner,
-      renderNarrative('spawn-failed-retry', retryPayload),
-      renderHeadline('spawn-failed-retry', retryPayload),
-    )
-    // ⑪ 启动子代理失败（自动重试）——任务留在源内等幂等重入
+    loop.lastSpawnError = failure.message // ⑬ halt 消息「错误」行数据源
+    // ⑪ 启动子代理失败（自动重试）——零消息，重试计数进进度事件；任务留在源内等幂等重入
     emitProgress(loop, {
       verb: 'retry',
       status: 'blocked',
       scenario: 'retry/spawn-failed',
       taskKey,
       taskTitle: task.title,
-      note: failure.message,
+      note: `第 ${attempt}/${HALT_THRESHOLD} 次 — ${failure.message}`,
     })
     if (signal.aborted) return unwindOutcome(loop) // 退避途中被叫停/暂停——让渡（pause 保留登记）
     return (await sleepOrAbort(signal, delayMs)) ? 'continue' : unwindOutcome(loop)
@@ -1847,13 +1877,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         headline: `子代理反复异常退出（第 ${attempt} 次，超过重试上限）——循环已挂起待处置`,
       })
     }
-    const abortedPayload = { sourceSlug: slug, taskKey: task.localId, attempt, maxAttempts: LOOP_WORKER_ABORT_MAX_RETRIES }
-    await loop.deps.narrator.notice(
-      owner,
-      renderNarrative('worker-aborted-retry', abortedPayload),
-      renderHeadline('worker-aborted-retry', abortedPayload),
-    )
-    // ⑫ 子代理异常退出（自动重试）——claim 面幂等重入同任务
+    // ⑫ 子代理异常退出（自动重试）——零消息，重试计数进进度事件；claim 面幂等重入同任务
     emitProgress(loop, {
       verb: 'retry',
       status: 'blocked',
@@ -1861,7 +1885,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
       taskKey,
       taskTitle: task.title,
       workerSessionId,
-      note: settled.message,
+      note: `第 ${attempt}/${LOOP_WORKER_ABORT_MAX_RETRIES} 次 — ${settled.message}`,
     })
     return 'continue'
   }
@@ -1881,9 +1905,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   if (settlement.outcome === 'success') {
     loop.dispositions.delete(taskKey) // S1c 处置簿清账（任务成功——同任务处置计数归零）
     loop.lastCommitHash = settlement.commitHash ?? loop.lastCommitHash // 机械③ 标记 HEAD 回落锚
-    const donePayload = { sourceSlug: slug, taskLabel: label, summary: settlement.summary ?? '已完成' }
-    await deps.narrator.notice(owner, renderNarrative('completed', donePayload), renderHeadline('completed', donePayload))
-    // 进度事件（1.17——结算成功点：⑥ task/complete）
+    recordTaskEnd(loop, taskKey, '完成')
+    // 进度事件（1.17——结算成功点：⑥ task/complete；完成零消息，投影单源）
     emitProgress(loop, { verb: 'settle', status: 'completed', scenario: 'task/complete', taskKey, taskTitle: settlement.title, workerSessionId })
     return 'continue' // 续领下一轮
   }
@@ -1898,8 +1921,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   const reason = settlement.reason ?? ''
   const liveSuccessor = await findLiveSuccessor(deps.tasks, scope.projectId, source, { slug: task.slug, localId: task.localId })
   if (liveSuccessor !== undefined) {
-    await deps.narrator.blocked(owner, 'blocked-with-fix', { sourceSlug: slug, taskLabel: label, fixId: liveSuccessor.localId }, meta)
-    // ⑦ 阻塞（已带修复任务——循环自续 fix 链）
+    // ⑦ 自愈阻塞——静默（R-Q4：循环能自行处理的阻塞零消息）；incident 落盘 + 进度事件投影
+    deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: 'blocked', error: reason })
+    recordTaskEnd(loop, taskKey, '阻塞', `修复任务 ${liveSuccessor.localId}`)
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/with-fix', taskKey, taskTitle: task.title, workerSessionId, note: reason })
     return 'continue'
   }
@@ -1910,6 +1934,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // 有打捞提交（commit hash 在场）或带 files = 有进展，照常入阶梯。
   if (settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0)) {
     await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+    recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
     // ⑩ 阻塞（循环无法自行处理——无进展硬停）
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
     // 3b 裁决②：无进展硬停 → 挂起待裁决（原因全文在挂起载荷——owner 对话面处置）
@@ -1996,8 +2021,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     }
   }
   if (decision === undefined) {
-    // 处置重试超限（同任务计数封顶）→ ⑩ 叙述 + 3b 裁决③：挂起待裁决（reason 全文与处置历史进挂起载荷）
+    // 处置重试超限（同任务计数封顶）→ ⑩ 异常径 + 3b 裁决③：挂起待裁决（reason 全文与处置历史进挂起载荷）
     await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+    recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
     // ⑩ 阻塞（处置重试超限）
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
     return suspendForVerdict(loop, {
@@ -2024,13 +2050,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         blockSource: true, // 单事务同置源 blocked + fix 完成自动恢复（addTask 机械面）
       })
       book.decision = undefined // 执行成功——缓存清账（防陈旧决策跨结算重放）
-      await deps.narrator.blocked(
-        owner,
-        'blocked-auto-fixed',
-        { sourceSlug: slug, taskLabel: label, fixId: added.localId, fixNote: decision.note ?? '待修复项' },
-        meta,
-      )
-      // ⑧ 阻塞（已自动分析建修复任务——循环自续 fix 链）
+      // ⑧ 自愈阻塞——静默（R-Q4）：incident 落盘 + 进度事件投影
+      deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: 'blocked', error: reason })
+      recordTaskEnd(loop, taskKey, '阻塞', `修复任务 ${added.localId}`)
       emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/auto-fixed', taskKey, taskTitle: task.title, workerSessionId, note: reason })
     } catch (cause) {
       if ((cause as { code?: unknown }).code === 'ERR_CHAIN_DEPTH_EXCEEDED') {
@@ -2039,6 +2061,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         const depthData = (cause as { data?: { depth?: number; limit?: number } }).data
         book.history.push(`第${book.attempts}次处置——修复任务创建被拒（修复链已达上限）`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
         // ⑩ 阻塞（fix 链深到顶——add-fix 结构性被拒）
         emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
         return suspendForVerdict(loop, {
@@ -2059,6 +2082,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         book.history.push('重放执行再次失败——缓存清账，交人工裁决')
         console.warn(`forge loop triage add-fix replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
         // ⑩ 阻塞（add-fix 重放再败——缓存清账交人工裁决）
         emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
         // 3b 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
@@ -2090,13 +2114,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         blockSource: false,
       })
       book.decision = undefined // 执行成功——缓存清账（防陈旧决策跨结算重放）
-      await deps.narrator.blocked(
-        owner,
-        'blocked-split',
-        { sourceSlug: slug, taskLabel: label, successorId: added.localId, ...(decision.note !== undefined ? { splitNote: decision.note } : {}) },
-        meta,
-      )
-      // ⑧b 阻塞（已分割剩余范围——继任任务承接）
+      // ⑧b 自愈阻塞——静默（R-Q4）：incident 落盘 + 进度事件投影
+      deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: 'blocked', error: reason })
+      recordTaskEnd(loop, taskKey, '阻塞', `继任 ${added.localId}`)
       emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/split', taskKey, taskTitle: task.title, workerSessionId, note: reason })
     } catch (cause) {
       // split 落库失败 fail-soft（改进 6③ 缓存语义同 add-fix：首次保缓存待重放、重放再败清账升级）
@@ -2105,6 +2125,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         book.history.push('重放执行再次失败——缓存清账，交人工裁决')
         console.warn(`forge loop triage split-remainder replay failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
         await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+        recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
         // ⑩ 阻塞（split 重放再败——缓存清账交人工裁决）
         emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
         // 3b 裁决⑤⑥（重放再败径 ×2）：挂起待裁决（缓存清账后交 owner 对话面）
@@ -2124,13 +2145,15 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   }
   if (decision.action === 'wait-external') {
     book.decision = undefined // 执行（记录等待）即清账——后续 blocked 再入阶梯重跑分析
-    await deps.narrator.blocked(owner, 'blocked-wait-external', { sourceSlug: slug, taskLabel: label, externalSlug: decision.externalSlug }, meta)
-    // ⑨ 阻塞（原因在其它任务源——记录等待续领其它）
+    // ⑨ 自愈阻塞——静默（R-Q4）：incident 落盘 + 进度事件投影
+    deps.narrator.recordIncident({ ...meta, sourceSlug: slug, eventType: 'blocked', error: reason })
+    recordTaskEnd(loop, taskKey, '阻塞', `等待 ${decision.externalSlug}`)
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/wait-external', taskKey, taskTitle: task.title, workerSessionId, note: `等待 ${decision.externalSlug} 先完成` })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
-  // ask-user → ⑩ 叙述 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行）
+  // ask-user → ⑩ 异常径 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+  recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
   // ⑩ 阻塞（循环无法自行处理——处置阶梯 ask-user）
   emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
   return suspendForVerdict(loop, {
@@ -2182,6 +2205,7 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
           completed: stats.byStatus.completed,
           blocked: stats.byStatus.blocked,
           instruction: LOOP_INSTRUCTION_ALL_DONE,
+          taskSummaries: taskSummaryLines(loop),
         }),
         renderEndOfLoop('finished-all', settledPayload),
       ].join('\n\n'),
@@ -2229,6 +2253,7 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
         blocked: stats.byStatus.blocked,
         pending: stats.byStatus.pending,
         instruction: loopInstructionOf('timeout', loop.record.source.slug),
+        taskSummaries: taskSummaryLines(loop),
       }),
     )
     // ⑮ 结束（等待超时）——循环级进度事件（耐心耗尽径）
@@ -2243,13 +2268,16 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
  *  第三层问询」；同实例不自动复活：登记表即删，复活 = 新实例新 guard 计数，decisions #18） */
 async function haltLoop(loop: ActiveLoop): Promise<RoundOutcome> {
   const { deps, record } = loop
-  // ⑬ 终局叙述先行（问询另行发起——与 ⑩ 同序：叙述在前、问询随后）；settlement 形态（3b④）
+  // ⑬ 终局异常径先行（问询另行发起——与 ⑩ 同序）；settlement 形态（3b④）。
+  // 异常最小充分信息集（AC）：任务标识（taskKey（标题））/错误原文/阶段（spawn）/重试计数/处置入口
   await deps.narrator.settle(
     record.ownerSessionId,
     renderNarrative('spawn-failed-halted', {
       sourceSlug: record.source.slug,
       attempts: HALT_THRESHOLD,
       instruction: loopInstructionOf('halted', record.source.slug),
+      ...(record.inFlight !== undefined ? { taskLabel: `${record.inFlight.taskKey}（${record.inFlight.title}）` } : {}),
+      ...(loop.lastSpawnError !== undefined ? { errorText: loop.lastSpawnError } : {}),
     }),
   )
   // ⑬ 循环终局（连续失败已停止）——循环级进度事件
