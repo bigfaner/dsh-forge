@@ -1,5 +1,5 @@
 ---
-name: gate
+name: gate-keeper
 description: 全面运行全量测试套件、只认证据的质量门守卫。
 title: 质量门守卫
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

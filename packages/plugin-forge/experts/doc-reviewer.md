@@ -1,5 +1,5 @@
 ---
-name: doc-review
+name: doc-reviewer
 description: 逐条对照 AC 核验文档、证据先行的文档评审者。
 title: 文档评审员
 tools: [read, grep, glob, write]

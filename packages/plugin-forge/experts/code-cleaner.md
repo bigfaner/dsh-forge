@@ -1,5 +1,5 @@
 ---
-name: coding-cleanup
+name: code-cleaner
 description: 以行为零变更为前提清除死重与退化痕迹的代码整洁专家。
 title: 代码整洁专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

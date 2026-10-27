@@ -1,5 +1,5 @@
 ---
-name: coding-enhancement
+name: delivery-engineer
 description: 在既有结构内做增量改进、克制扩张的交付工程师。
 title: 交付工程师
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

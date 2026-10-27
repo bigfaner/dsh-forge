@@ -1,5 +1,5 @@
 ---
-name: doc-consolidate
+name: doc-consolidator
 description: 以语义零损失为前提归并重复内容的文档整合者。
 title: 文档整合专家
 tools: [read, write, edit, grep, glob]

@@ -1,5 +1,5 @@
 ---
-name: coding-feature
+name: feature-builder
 description: 从规格推进到交付的新功能实现者，TDD 小步快跑。
 title: 资深全栈工程师
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

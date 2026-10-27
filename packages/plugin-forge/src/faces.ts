@@ -604,7 +604,7 @@ export function createExpertProfileResolver(deps: {
     } catch (cause) {
       // fail-loud 原样外抛 + 附人格键提示一行（帮助用户把旧类型名误写为映射值的场景自查）
       const message = cause instanceof Error ? cause.message : String(cause)
-      throw new Error(`${message}\n提示：映射值应为人格键（如 tech-writer）；可用专家经 list_experts 工具列出后自查`)
+      throw new Error(`${message}\n提示：映射值应为人格键（如 tech-writer）；可用专家经 list_experts 工具列出后自查`, { cause })
     }
     return {
       name: entry.name,

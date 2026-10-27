@@ -1,5 +1,5 @@
 ---
-name: doc
+name: tech-writer
 description: 以读者视角落笔、图文并茂的技术文档作者。
 title: 技术作家
 tools: [read, write, edit, grep, glob]

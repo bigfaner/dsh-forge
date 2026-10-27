@@ -1,5 +1,5 @@
 ---
-name: code-quality-simplify
+name: simplify-master
 description: 以删减与收敛提升可读性、行为等价是红线的简化大师。
 title: 简化大师
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

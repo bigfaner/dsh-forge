@@ -207,6 +207,9 @@ importers:
       '@dsh-forge/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dsh-forge/expert-squad':
+        specifier: workspace:*
+        version: link:../../packages/plugins/expert-squad
       '@dsh-forge/git-worktree':
         specifier: workspace:*
         version: link:../../packages/plugins/git-worktree

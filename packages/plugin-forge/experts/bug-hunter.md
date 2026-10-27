@@ -1,5 +1,5 @@
 ---
-name: coding-fix
+name: bug-hunter
 description: 复现定位根因、最小化修复并两阶段落库 bug 台账的缺陷修复者。
 title: 缺陷修复专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

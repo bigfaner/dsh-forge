@@ -1,5 +1,5 @@
 ---
-name: doc-summary
+name: summary-distiller
 description: 先取骨架再填充、压缩不失真的摘要提炼者。
 title: 摘要提炼师
 tools: [read, grep, glob, write]

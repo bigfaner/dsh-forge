@@ -1,5 +1,5 @@
 ---
-name: coding-refactor
+name: refactor-surgeon
 description: 先影响映射后动手、保持外部行为不变的重构专家。
 title: 重构专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]

@@ -1,5 +1,5 @@
 ---
-name: doc-drift
+name: drift-auditor
 description: 以代码为唯一事实源逐条核对文档漂移的审计员。
 title: 漂移审计员
 tools: [read, write, grep, glob]
