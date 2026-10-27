@@ -569,10 +569,12 @@ export interface WorkerDispatchProfile {
 }
 
 /** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
- *  键解析 = settings experts.mapping 覆盖 → DEFAULT_EXPERT_MAPPING 默认 → 原类型名；
- *  settings 读失败 = 回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛
- *  （claim 期 fail-loud——缺失/禁用档案阻断派发，不产空 persona）。 */
-export type ExpertProfileResolver = (taskType: string) => Promise<ForgeExpertProfile>
+ *  键解析 = settings experts.mapping 覆盖 → DEFAULT_EXPERT_MAPPING 预设；两段均缺键 =
+ *  返回 undefined（expert-squad-forge 1.13——未用类型排除预设，不取用不阻断 claim，
+ *  core 侧 persona 仅程序段形态兼容）。settings 读失败 = 回落预设映射（fail-soft 诊断）；
+ *  有键（用户覆盖或随包预设命中）而档案缺失/禁用 = experts.get 错误原样外抛
+ *  （claim 期 fail-loud——用户显式指向或随包预设缺席均阻断派发，不产空 persona）。 */
+export type ExpertProfileResolver = (taskType: string) => Promise<ForgeExpertProfile | undefined>
 
 /** 建档案取用面（装配单例——core claim 链经依赖注入消费；experts 缺席 = undefined 不注入） */
 export function createExpertProfileResolver(deps: {
@@ -583,9 +585,9 @@ export function createExpertProfileResolver(deps: {
    *  promise 结算——已由装配侧吞错归一为 settled-safe，此处零异常路径）。 */
   readonly ready?: Promise<void>
 }): ExpertProfileResolver {
-  return async (taskType: string): Promise<ForgeExpertProfile> => {
+  return async (taskType: string): Promise<ForgeExpertProfile | undefined> => {
     await deps.ready
-    let key: string = DEFAULT_EXPERT_MAPPING[taskType as TaskType] ?? taskType
+    let key: string | undefined = DEFAULT_EXPERT_MAPPING[taskType as TaskType]
     if (deps.settings !== undefined) {
       try {
         const settings = await deps.settings.get()
@@ -595,6 +597,7 @@ export function createExpertProfileResolver(deps: {
         console.warn(`forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`)
       }
     }
+    if (key === undefined) return undefined // 预设缺键且无用户覆盖 = 排除预设，不取用（persona 仅程序段）
     const entry = deps.experts.get(key)
     return {
       name: entry.name,

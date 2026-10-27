@@ -144,10 +144,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       expertResolver === undefined
         ? undefined
         : async (taskType: string) => {
+            // 1.13：预设缺键且无覆盖 = undefined（未用类型）——纯 deny 面 / 零模型覆盖（行为回 1.4 前）
             const profile = await expertResolver(taskType)
             return {
-              ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
-              ...(profile.model !== undefined ? { model: profile.model } : {}),
+              ...(profile?.tools !== undefined ? { tools: profile.tools } : {}),
+              ...(profile?.model !== undefined ? { model: profile.model } : {}),
             }
           }
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。

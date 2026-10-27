@@ -746,14 +746,34 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     expect(order).toEqual(['refresh:start', 'refresh:done', 'get:tech-writer'])
   })
 
-  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键；未列键回落 DEFAULT_EXPERT_MAPPING 类型→人格键映射', async () => {
+  it('档案取用面解析：预设映射命中取人格键；未用类型预设缺键且无覆盖 → undefined（persona 仅程序段形态兼容）', async () => {
+    const { face } = expertsFace()
+    const resolver = createExpertProfileResolver({ experts: face })
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' })
+    await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'bug-hunter' }) // 1.12 后 13 键联测
+    await expect(resolver('test-gen-journeys')).resolves.toBeUndefined() // 未用类型 = 排除预设，不取用不阻断
+  })
+
+  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键（含未用类型指到自定义档案）', async () => {
     const { face } = expertsFace()
     const resolver = createExpertProfileResolver({
       experts: face,
-      settings: { get: async () => ({ experts: { mapping: { 'coding-fix': 'my-fix-expert' } } }) },
+      settings: { get: async () => ({ experts: { mapping: { 'coding-fix': 'my-fix-expert', 'test-gen-journeys': 'my-journey-expert' } } }) },
     })
     await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'my-fix-expert', personaMd: 'md:my-fix-expert' })
-    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' }) // 缺键 = 默认映射（gate → gate-keeper）
+    await expect(resolver('test-gen-journeys')).resolves.toMatchObject({ name: 'my-journey-expert', personaMd: 'md:my-journey-expert' })
+  })
+
+  it('档案取用面 fail-loud 边界：用户覆盖指向缺失档案外抛；预设命中键档案缺失同样外抛', async () => {
+    const override = createExpertProfileResolver({
+      experts: { get: () => { throw new Error('expert not found: ghost-expert') } },
+      settings: { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) },
+    })
+    await expect(override('doc')).rejects.toThrow(/expert not found: ghost-expert/) // 用户显式指向 = fail-loud
+    const preset = createExpertProfileResolver({
+      experts: { get: () => { throw new Error('expert not found: gate-keeper') } },
+    })
+    await expect(preset('gate')).rejects.toThrow(/expert not found: gate-keeper/) // 随包预设缺席 = 同样外抛
   })
 
   it('settings 读失败：回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛（claim 期 fail-loud 语义由实现侧承担）', async () => {
@@ -764,9 +784,9 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     })
     await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
     const failing = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: ghost') } },
+      experts: { get: () => { throw new Error('expert not found: doc-reviewer') } },
     })
-    await expect(failing('ghost')).rejects.toThrow(/expert not found: ghost/)
+    await expect(failing('doc-review')).rejects.toThrow(/expert not found: doc-reviewer/)
   })
 
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {

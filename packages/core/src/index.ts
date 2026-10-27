@@ -235,10 +235,11 @@ const corePlugin: CorePlugin = Object.assign(
             }),
           // expert-squad-forge 1.3：专家档案取用面接线（claim 领取瞬间两段组装的档案侧）。
           // plugin-forge 装配期 provide 的 'forgeExperts' 具名服务（键解析 = settings
-          // experts.mapping 覆盖 → 默认映射；IO 全在插件侧闭包）经 claim 时点 reflect.get
-          // 防御读取——懒解析消解插件装配次序（core 先于 plugin-forge 加载）；服务缺席/异常 =
-          // undefined（形态兼容，persona 仅程序段）；档案缺失/禁用 = 插件侧 fail-loud 抛错
-          // 原样外抛（claim 一切写入之前中断，任务留 pending）。
+          // experts.mapping 覆盖 → 随包预设映射，缺键 = undefined——1.13 未用类型不阻断）；
+          // IO 全在插件侧闭包，claim 时点 reflect.get 防御读取——懒解析消解插件装配次序
+          // （core 先于 plugin-forge 加载）；服务缺席/异常 = undefined（形态兼容，persona
+          // 仅程序段）；有键而档案缺失/禁用 = 插件侧 fail-loud 抛错原样外抛（claim 一切
+          // 写入之前中断，任务留 pending）。
           resolveExpertProfile: async (taskType) => {
             let resolver: unknown
             try {

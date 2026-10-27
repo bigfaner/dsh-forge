@@ -286,10 +286,11 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
 
     // ③b worker persona 合成（expert-squad-forge 1.3 两段组装——档案人格段 + 程序段；
     //     经 SubagentStartRequest.persona 落子会话 system 面。合成同在领取瞬间，与简报同源）。
-    //     档案取用经注入面（键解析 = settings experts.mapping 覆盖 → 默认映射——plugin-forge
-    //     1.2 装配）：缺失/禁用档案 fail-loud 抛错（消息含专家键名）→ 一切写入之前抛出，
-    //     任务留 pending、无空 persona；取用面缺席（experts 服务未装配）= 形态兼容，persona 仅
-    //     程序段。
+    //     档案取用经注入面（键解析 = settings experts.mapping 覆盖 → 随包预设映射——
+    //     plugin-forge 1.2/1.13 装配；预设缺键且无覆盖 = undefined，未用类型不阻断）：缺失/
+    //     禁用档案 fail-loud 抛错（消息含专家键名）→ 一切写入之前抛出，任务留 pending、
+    //     无空 persona；取用面缺席或返回 undefined（experts 未装配 / 未用类型）= 形态兼容，
+    //     persona 仅程序段。
     //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
     //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
     const complexity = (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1]
