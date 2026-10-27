@@ -15,7 +15,6 @@ import type { ErrorCode } from '../errors.js'
 import type { FeatureStatus, ProposalStatus, TaskStatus, TaskType } from '../labels.js'
 import type { BugCard, BugCommitFile, BugCommitFilesQuery, BugFileDiffQuery, ListBugsQuery } from './bugs.js'
 import type { ProjectService } from './project.js'
-import { TASK_TYPES } from '../labels.js'
 
 // ─────────────────────────── 词汇与枚举（schema 单源对齐） ───────────────────────────
 
@@ -1058,15 +1057,30 @@ export interface FlywheelSettings {
 }
 
 /**
- * 任务类型 → 专家档案键默认映射（expert-squad-forge §3 纳入 6）：恒等映射——20 键与
- * 随包预设专家档案（plugin-forge experts/ 目录 <type>.md）同名一一对应。用户可在
- * settings 的 experts.mapping 分节改指向自己的专家键（缺键 = 默认映射生效）。
+ * 任务类型 → 专家档案键默认映射（expert-squad-forge §3 纳入 6 + 档案人格化改名）：13 键
+ * 非恒等映射——值 = 随包预设专家档案的人格键（plugin-forge experts/ 目录 <人格键>.md，
+ * 13 个；键 = 任务类型）。7 个从未使用的任务类型（test-gen-journeys/test-gen-contracts/
+ * test-gen-scripts/validation-code/validation-ux/eval-contract/eval-journey）不携带预设
+ * 档案——缺键回落原类型名（取用期 fail-loud）。用户可在 settings 的 experts.mapping
+ * 分节改指向自己的专家键（值同样指人格键；缺键 = 默认映射生效）。
  */
-export const DEFAULT_EXPERT_MAPPING: Readonly<Record<TaskType, string>> = Object.fromEntries(
-  TASK_TYPES.map((type) => [type, type]),
-) as Readonly<Record<TaskType, string>>
+export const DEFAULT_EXPERT_MAPPING: Readonly<Record<TaskType, string>> = Object.freeze({
+  'coding-feature': 'feature-builder',
+  'coding-enhancement': 'delivery-engineer',
+  'coding-fix': 'bug-hunter',
+  'coding-refactor': 'refactor-surgeon',
+  'coding-cleanup': 'code-cleaner',
+  'code-quality-simplify': 'simplify-master',
+  gate: 'gate-keeper',
+  doc: 'tech-writer',
+  'doc-consolidate': 'doc-consolidator',
+  'doc-drift': 'drift-auditor',
+  'doc-review': 'doc-reviewer',
+  'doc-summary': 'summary-distiller',
+  'test-run': 'test-conductor',
+}) as Readonly<Record<TaskType, string>>
 
-/** experts 段——任务类型 → 专家档案键映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING） */
+/** experts 段——任务类型 → 专家档案键（人格键）映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING） */
 export interface ExpertsSettings {
   /** 覆盖映射（Partial——只列要改指的键；值 = ctx.experts 取用服务的专家键名） */
   mapping?: Partial<Record<TaskType, string>>

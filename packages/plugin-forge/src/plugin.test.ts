@@ -742,18 +742,18 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(order).toEqual(['refresh:start']) // refresh 未结算 → get 未发生
     releaseRefresh()
-    await expect(pending).resolves.toMatchObject({ name: 'doc' })
-    expect(order).toEqual(['refresh:start', 'refresh:done', 'get:doc'])
+    await expect(pending).resolves.toMatchObject({ name: 'tech-writer' })
+    expect(order).toEqual(['refresh:start', 'refresh:done', 'get:tech-writer'])
   })
 
-  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键；未列键回落 DEFAULT_EXPERT_MAPPING 恒等映射', async () => {
+  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键；未列键回落 DEFAULT_EXPERT_MAPPING 类型→人格键映射', async () => {
     const { face } = expertsFace()
     const resolver = createExpertProfileResolver({
       experts: face,
       settings: { get: async () => ({ experts: { mapping: { 'coding-fix': 'my-fix-expert' } } }) },
     })
     await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'my-fix-expert', personaMd: 'md:my-fix-expert' })
-    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate', personaMd: 'md:gate' }) // 缺键 = 默认映射
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' }) // 缺键 = 默认映射（gate → gate-keeper）
   })
 
   it('settings 读失败：回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛（claim 期 fail-loud 语义由实现侧承担）', async () => {
@@ -762,7 +762,7 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
       experts: face,
       settings: { get: async () => { throw new Error('settings file broken') } },
     })
-    await expect(resolver('doc')).resolves.toMatchObject({ name: 'doc' })
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
     const failing = createExpertProfileResolver({
       experts: { get: () => { throw new Error('expert not found: ghost') } },
     })
