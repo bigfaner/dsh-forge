@@ -1,6 +1,7 @@
 // @dsh-forge/git-worktree client —— hero 选择控件（原型「新会话」卡逐位对照）：
 // 触发 chip（一体两属性 feat/a · wt-a）+ 官方 Menu 弹层——一行一 worktree（分支图标 +
-// 分支名 + worktree 名）、来源标记（所配目录内 = DSH）、失配行置灰、主 worktree 行无
+// 分支名 + worktree 名）、来源标记（所配目录内 = DSH）、盘上失配行隐藏不展示、detached
+// 行置灰、主 worktree 行无
 // 删除图标、footer 左对齐「新建 worktree…」；ahead/behind 行内徽标懒加载（展开才拉 +
 // 缓存）；非 git 项目零注入（返回 null 退回现状）。
 // 难点 A 落法 = 产品自增行（影子渲染面就地并列，取证见
@@ -27,8 +28,6 @@ export interface WorktreeMenuRow {
   readonly branch: string | null
   readonly worktreeName: string
   readonly isMain: boolean
-  /** 盘上失配 = false（置灰 + 「盘上失配」提示，不可选中） */
-  readonly present: boolean
   /** 来源标记（所配目录内 = 'dsh'，徽标文案 DSH；自定义路径 = null 无标记） */
   readonly source: WorktreeMenuRowSource
   /** ahead 徽标（↑N；零值/未加载/失配 = null） */
@@ -39,15 +38,16 @@ export interface WorktreeMenuRow {
 
 export type WorktreeMenuRowSource = 'dsh' | null
 
-/** 行面纯函数：行源 → 菜单行渲染模型（来源标记推断 + ahead/behind 徽标拆分同源） */
+/** 行面纯函数：行源 → 菜单行渲染模型（失配行隐藏 + 来源标记推断 + ahead/behind 徽标拆分同源） */
 export function heroWorktreeRows(
   rows: readonly WorktreeRow[],
   worktreeDir: string | undefined,
   aheadBehind: ReadonlyMap<string, AheadBehind>,
 ): readonly WorktreeMenuRow[] {
-  return rows.map((row) => {
+  // bug e62a448c：盘上失配（present=false）的 worktree 直接隐藏——菜单只留在场可用的树
+  return rows.filter((row) => row.present).map((row) => {
     const counts =
-      row.present && row.branch !== null
+      row.branch !== null
         ? aheadBehindSegments(aheadBehind.get(row.path) ?? { ahead: 0, behind: 0 })
         : { ahead: null, behind: null }
     return {
@@ -55,7 +55,6 @@ export function heroWorktreeRows(
       branch: row.branch,
       worktreeName: row.worktreeName,
       isMain: row.isMain,
-      present: row.present,
       source: inferSource(row.path, worktreeDir),
       ahead: counts.ahead,
       behind: counts.behind,
@@ -226,9 +225,10 @@ function rowLabel(
 }
 
 /** 行禁选判定（bug 488e860d 桌面同族：detached 检出行 branch=null——预铸挂靠契约
- *  「一 worktree 一分支」必被 session-create typed 拒绝；失配行既有语义并入单源）。 */
-export function pickerRowDisabled(row: WorktreeRow): boolean {
-  return !row.present || row.branch === null
+ *  「一 worktree 一分支」必被 session-create typed 拒绝。失配行已在行源头隐藏，
+ *  present 探测保留为 fail-safe）。 */
+export function pickerRowDisabled(row: Pick<WorktreeRow, 'branch'> & { readonly present?: boolean }): boolean {
+  return row.present === false || row.branch === null
 }
 
 /**
@@ -274,22 +274,9 @@ export function HeroWorktreePicker({
 
   const items = heroWorktreeRows(rows, worktreeDir, cache).map((row) => ({
     id: row.path,
-    label: row.present
-      ? rowLabel(row, () => onDelete(row.path))
-      : (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: '100%' }}>
-          <span style={{ ...mono, fontSize: 12 }}>{row.branch ?? ''}</span>
-          {worktreeLabelSegments(row.branch, row.worktreeName).worktreeName !== null && (
-            <span style={{ fontSize: 12 }}>{row.worktreeName}</span>
-          )}
-          <span style={{ flex: 1 }} />
-          <span data-dswt-dead-note="" style={{ fontSize: 11, color: 'var(--dsw-alias-state-error-primary)' }}>
-            盘上失配
-          </span>
-        </span>
-      ),
+    label: rowLabel(row, () => onDelete(row.path)),
     icon: <IconBranchOutlineRegular size={14} />,
-    disabled: pickerRowDisabled(row), // 失配/detached 行置灰（不可选中——删除钮保留，管理面不回归）
+    disabled: pickerRowDisabled(row), // detached 行置灰（不可选中——失配行已在行源头隐藏）
   }))
 
   return (

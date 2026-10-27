@@ -31,29 +31,27 @@ function renderPicker(props: Partial<Parameters<typeof HeroWorktreePicker>[0]> =
 }
 
 describe('heroWorktreeRows（菜单行面纯函数——一行一 worktree 逐位对照）', () => {
-  it('四行全量：分支名 + worktree 名 + 主行标记逐位透传', () => {
+  it('三行在场：分支名 + worktree 名 + 主行标记逐位透传（失配行已被源头过滤）', () => {
     const rows = heroWorktreeRows(ROWS, WORKTREE_DIR, new Map())
-    expect(rows).toHaveLength(4)
-    expect(rows.map((row) => row.branch)).toEqual(['main', 'feat/api', 'experiment/ui', 'spike/old'])
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.branch)).toEqual(['main', 'feat/api', 'experiment/ui'])
     expect(rows.map((row) => row.worktreeName)).toEqual([
       'dsh-forge（主 worktree）',
       'wt-api',
       'ui-lab',
-      'wt-old',
     ])
     expect(rows[0]!.isMain).toBe(true)
   })
 
   it('来源标记：所配目录内行 = dsh（徽标文案 DSH），自定义路径行 = null 无标记', () => {
     const rows = heroWorktreeRows(ROWS, WORKTREE_DIR, new Map())
-    expect(rows.map((row) => row.source)).toEqual([null, 'dsh', null, 'dsh']) // 主行不在所配目录内
+    expect(rows.map((row) => row.source)).toEqual([null, 'dsh', null]) // 主行不在所配目录内
   })
 
-  it('失配行：present=false（置灰不可选语义）且徽标区清空', () => {
+  it('bug e62a448c：盘上失配行（present=false）隐藏不展示——菜单只留在场可用的树', () => {
     const rows = heroWorktreeRows(ROWS, WORKTREE_DIR, new Map())
-    expect(rows[3]!.present).toBe(false)
-    expect(rows[3]!.ahead).toBeNull()
-    expect(rows[3]!.behind).toBeNull()
+    expect(rows.map((row) => row.path)).not.toContain('Z:/proj/.forge/worktrees/wt-old')
+    expect(rows).toHaveLength(3)
   })
 
   it('ahead/behind 徽标：缓存命中行 ↑2 ↓1；未加载/零值行为空（不闪空徽标）', () => {
