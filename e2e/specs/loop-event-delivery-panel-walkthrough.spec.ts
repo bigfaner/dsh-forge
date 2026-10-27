@@ -10,6 +10,7 @@
 // 双主题（明/暗）截图归档 .forge/docs/proposals/loop-event-delivery/walkthrough/1-17/（留盘不进 git）。
 // 形态参照 = 同目录 prototype.html（.panel 任务轨行 + head/live·不经模型 + 统计条）。
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -88,6 +89,15 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
   test.setTimeout(900_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-led-panel-'))
   const wsDir = join(fixtureRoot, WS_NAME)
+  mkdirSync(wsDir, { recursive: true })
+  // 真 git 仓库夹具（project-service worktree janitor 会修剪非 git 根——判例：夹具中途被剪致会话封存；
+  // 配方对齐 walk-112）
+  execFileSync('git', ['init', '-q'], { cwd: wsDir })
+  execFileSync('git', ['config', 'user.email', 'panel@e2e.local'], { cwd: wsDir })
+  execFileSync('git', ['config', 'user.name', 'panel'], { cwd: wsDir })
+  writeFileSync(join(wsDir, 'README.md'), 'led-panel fixture\n')
+  execFileSync('git', ['add', '.'], { cwd: wsDir })
+  execFileSync('git', ['commit', '-q', '-m', 'fixture'], { cwd: wsDir })
   const userData = mkdtempSync(join(tmpdir(), 'dsh-led-panel-ud-'))
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
