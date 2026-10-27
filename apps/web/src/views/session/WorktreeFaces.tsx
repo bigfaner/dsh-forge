@@ -236,17 +236,9 @@ export function ForgeHeroWorktreeMount({
     [phase, projectRoot, pushSelection, makeRpc],
   )
 
-  // 建树自动选中（createFollowup）专用：纯显示态落定——零会话副作用（1.29 spec「建树零
-  // 新增会话」语义，bug 9d2b7e6a 懒物化只随用户点选显式意图走）。开户时点 = 用户后续
-  // 点选 chip / hero 发送（startSession wrap 显示真源路由）。
-  const applySelectionDisplayOnly = useCallback(
-    (path: string): void => {
-      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
-      pushSelection(path)
-      setLocalSelectedPath(path)
-    },
-    [pushSelection],
-  )
+  // 建树自动选中（createFollowup）与手动点选共用 applySelection 完整链路（bug 97d3cd9e
+  // 收口——纯显示态捷径退役，1.29「建树零新增会话」随之退役：主视图切新树 blank 为官方
+  // openWorkspace 复用语义，显示 = 实际生效状态）。
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
   // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
@@ -412,7 +404,11 @@ export function ForgeHeroWorktreeMount({
           // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
           // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
           // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
-          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelectionDisplayOnly })
+          // bug 97d3cd9e Root cause: 建树自动选中曾走纯显示态（applySelectionDisplayOnly）
+          // ——主视图 retain 旧树 blank，直接发送消息会话绑到上一个 worktree（WYSIWYG 违例）。
+          // 收口 = 与手动点选同链路（applySelection：openWorkspace + 切换闸——composer 随
+          // 创建敛棋系新树）；1.29「建树零新增会话」随本裁决退役（用户裁决 2026-10-28）。
+          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelection })
         })
         .catch((error: unknown) => {
           // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
@@ -420,7 +416,7 @@ export function ForgeHeroWorktreeMount({
         })
         .finally(settle)
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelectionDisplayOnly, creating],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelection, creating],
   )
   const openDelete = useCallback(
     (path: string): void => {
