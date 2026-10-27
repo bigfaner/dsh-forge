@@ -475,9 +475,10 @@ function DispatchEventRowView({
           <i />
         </span>
         <span className="dswf-dep-row-t">
-          {/* 任务行统一双行形态（bug 7114a5a0）：首行 = {slug}/{localId} + 状态徽标 + 耗时
-              （徽标右侧）；次行 = 任务名称/说明（过长 ellipsis）。循环级行 = slug + 「循环」
-              徽标 + action 简要说明次行。 */}
+          {/* bug 3d05b2d7 行形态（用户裁决）：首行 = {slug}/{localId} + 状态徽标 + 时间 +
+              耗时 + 跳转图标同线（右侧簇 margin-auto 贴右）；次行 = 任务 title 独占
+              （ellipsis，零 detail 混入）。循环级行次行 = action 简要说明（bug 7114a5a0）。
+              执行中行与其它状态同构——零状态特例分支。 */}
           <span className="dswf-dep-row-head">
             <span className="dswf-dep-row-key">{keyLabel}</span>
             {entry.taskKey === undefined ? (
@@ -487,22 +488,18 @@ function DispatchEventRowView({
             ) : (
               <span className={`dswf-dep-status dswf-dep-status-${tone}`}>{DISPATCH_EVENT_STATUS_WORD[entry.status]}</span>
             )}
-            {duration !== undefined ? <span className="dswf-dep-row-dur">{duration}</span> : null}
+            <span className="dswf-dep-row-side">
+              <span className="dswf-dep-row-time">{dispatchEventClockLabel(row.startAt)}</span>
+              {duration !== undefined ? <span className="dswf-dep-row-dur">{duration}</span> : null}
+              {open !== undefined ? (
+                <span className="dswf-dep-row-jump" data-dswf-dep-jump="" aria-hidden="true">
+                  <IconRightUpOutlineRegular size={11} />
+                </span>
+              ) : null}
+            </span>
           </span>
-          {title !== undefined || detail !== undefined ? (
-            <span className="dswf-dep-row-title">
-              {title}
-              {title !== undefined && detail !== undefined ? ' · ' : ''}
-              {detail}
-            </span>
-          ) : null}
-        </span>
-        <span className="dswf-dep-row-side">
-          <span className="dswf-dep-row-time">{dispatchEventClockLabel(row.startAt)}</span>
-          {open !== undefined ? (
-            <span className="dswf-dep-row-jump" data-dswf-dep-jump="" aria-hidden="true">
-              <IconRightUpOutlineRegular size={11} />
-            </span>
+          {(entry.taskKey === undefined ? detail : title) !== undefined ? (
+            <span className="dswf-dep-row-title">{entry.taskKey === undefined ? detail : title}</span>
           ) : null}
         </span>
       </div>

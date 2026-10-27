@@ -138,7 +138,7 @@ describe('aggregateDispatchRows（1.16 任务键时间线——每任务最新�
     expect(markup).toContain('data-dswf-dep-row="w-1"')
     expect(markup).toContain('data-dswf-dep-jump')
     expect(markup).toContain('dswf-dep-status-run">执行中')
-    expect(markup).toContain('已启动执行')
+    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染') // 次行 title 独占（bug 3d05b2d7 口径）
   })
 })
 
@@ -291,18 +291,35 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('data-dswf-dep-running')
     expect(markup).not.toContain('data-dswf-dep-group')
   })
-  it('bug 7114a5a0：任务行统一双行形态——首行 key + 状态徽标 + 耗时（徽标右侧），次行任务名称（过长省略）', () => {
-    const e = entry({ scenario: 'claim/spawned' })
-    const markup = body({ entries: [e], now: e.at + 185_000 })
-    expect(markup).not.toContain('dswf-dep-row-full') // 执行中「完整概要」换行形态退役
-    expect(markup).toContain('dswf-dep-row-key">feat-x/2.4')
-    expect(markup).toContain('dswf-dep-status-run">执行中')
-    // 耗时徽标在首行、位于状态徽标右侧（非 side 列）
-    expect(markup.indexOf('dswf-dep-status-run')).toBeLessThan(markup.indexOf('dswf-dep-row-dur'))
-    // 任务名称走次行截断形态（dswf-dep-row-title ellipsis）
-    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染 · 已启动执行')
+  it('bug 3d05b2d7：任务行首行 = key + 状态徽标 + 时间 + 耗时 + 跳转同线；次行 = title 独占（过长省略，零 detail 混入）', () => {
+    const e = entry({ scenario: 'claim/spawned', workerSessionId: 'w-1' })
+    const markup = body({ entries: [e], now: e.at + 185_000, onOpenWorker: () => {} })
+    expect(markup).not.toContain('dswf-dep-row-full')
+    // 首行同线序：key → 状态徽标 → 时间 → 耗时 → 跳转
+    const keyAt = markup.indexOf('dswf-dep-row-key">feat-x/2.4')
+    const badgeAt = markup.indexOf('dswf-dep-status-run')
+    const timeAt = markup.indexOf('dswf-dep-row-time')
+    const durAt = markup.indexOf('dswf-dep-row-dur')
+    const jumpAt = markup.indexOf('data-dswf-dep-jump')
+    expect(Math.min(keyAt, badgeAt, timeAt, durAt, jumpAt)).toBe(keyAt)
+    expect(badgeAt).toBeLessThan(timeAt)
+    expect(timeAt).toBeLessThan(durAt)
+    expect(durAt).toBeLessThan(jumpAt)
     expect(markup).toContain(`dswf-dep-row-time">${dispatchEventClockLabel(e.at)}`)
     expect(markup).toContain('dswf-dep-row-dur">3分5秒')
+    // 次行 = title 独占（detail 不混入任务行）
+    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染')
+    expect(markup).not.toContain('已启动执行')
+  })
+  it('bug 3d05b2d7：执行中行与终态行同构（同一双行形态——无状态特例分支）', () => {
+    const running = body({ entries: [entry({ scenario: 'claim/spawned' })], now: Date.parse('2026-10-24T14:05:00Z') })
+    const done = body({ entries: [entry({ verb: 'settle', status: 'completed', scenario: 'task/complete' })] })
+    for (const markup of [running, done]) {
+      expect(markup).toContain('dswf-dep-row-head')
+      expect(markup).toContain('dswf-dep-row-title')
+    }
+    expect(running).toContain('dswf-dep-status-run">执行中')
+    expect(done).toContain('dswf-dep-status-done">完成')
   })
   it('bug 7114a5a0：循环级行 = slug + 循环徽标 + action 简要说明（次行）', () => {
     const markup = body({
