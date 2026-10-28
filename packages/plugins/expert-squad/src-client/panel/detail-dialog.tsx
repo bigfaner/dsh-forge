@@ -543,6 +543,33 @@ export function ExpertDetailDialog(props: {
           <div className="dswf-dlg-err">{state.errors.personaMd}</div>
         )}
       </div>
+      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截） */}
+      <div className="dswf-dlg-field" data-field="provider">
+        <label>Provider（派发路由 · 须与 Model 成对填写；两字段清空 = 回落继承）</label>
+        <input
+          type="text"
+          className="dswf-dlg-input"
+          aria-label="Provider"
+          value={state.draft.provider}
+          onChange={(event) => props.controller.setField("provider", event.target.value)}
+        />
+        {state.errors.provider === undefined ? null : (
+          <div className="dswf-dlg-err">{state.errors.provider}</div>
+        )}
+      </div>
+      <div className="dswf-dlg-field" data-field="model">
+        <label>Model（派发模型偏好 · 须与 Provider 成对填写）</label>
+        <input
+          type="text"
+          className="dswf-dlg-input"
+          aria-label="Model"
+          value={state.draft.model}
+          onChange={(event) => props.controller.setField("model", event.target.value)}
+        />
+        {state.errors.model === undefined ? null : (
+          <div className="dswf-dlg-err">{state.errors.model}</div>
+        )}
+      </div>
       <MultiSelect
         field="tools"
         label="工具白名单（子会话强制生效 · 多选）"

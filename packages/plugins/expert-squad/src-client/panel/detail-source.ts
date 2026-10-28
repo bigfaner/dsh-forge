@@ -9,7 +9,9 @@ import {
   draftOf,
   toggleInList,
   validateDraft,
+  wireDraft,
   type ExpertDraft,
+  type ExpertWireDraft,
 } from "./detail-logic.js";
 
 /** 三模式（1.61 裁决③：查看/编辑/两两对比——对比只读，退出回查看态）。 */
@@ -32,7 +34,12 @@ export interface DetailState {
   /** 编辑草稿（编辑态消费；查看态保持最近草稿）。 */
   readonly draft: ExpertDraft;
   /** 字段级校验错误（空对象 = 通过）。 */
-  readonly errors: { readonly title?: string; readonly personaMd?: string };
+  readonly errors: {
+    readonly title?: string;
+    readonly personaMd?: string;
+    readonly provider?: string;
+    readonly model?: string;
+  };
   /** 在途请求（保存/启停按钮防重）。 */
   readonly busy: boolean;
   /** Toast 文案（热刷新生效 / 启停结果 / 错误透出）。 */
@@ -47,8 +54,8 @@ export interface DetailState {
 
 /** 详情变更缝（update / enable / disable fetch 路由装配面；测试注入替身）。 */
 export interface DetailMutations {
-  /** 档案 upsert（POST /api/expert-squad/update）；成功返回换新后的档案。 */
-  update(name: string, draft: ExpertDraft): Promise<ExpertView>;
+  /** 档案 upsert（POST /api/expert-squad/update）；成功返回换新后的档案。载荷 = 路由归一形态（provider/model 空串归缺键）。 */
+  update(name: string, draft: ExpertWireDraft): Promise<ExpertView>;
   /** 启停切换（POST /api/expert-squad/enable|disable）；成功返回换新后的档案。 */
   setEnabled(name: string, enabled: boolean): Promise<ExpertView>;
 }
@@ -69,7 +76,7 @@ const IDLE_SNAPSHOT: DetailState = {
     origin: "",
     enabled: false,
   },
-  draft: { title: "", description: "", personaMd: "", tools: [], skills: [] },
+  draft: { title: "", description: "", personaMd: "", tools: [], skills: [], provider: "", model: "" },
   errors: IDLE,
   busy: false,
   toast: undefined,
@@ -184,7 +191,7 @@ export class ExpertDetailController {
   }
 
   /** 草稿字段更新（编辑态输入面）。 */
-  setField<K extends "title" | "description" | "personaMd">(
+  setField<K extends "title" | "description" | "personaMd" | "provider" | "model">(
     field: K,
     value: ExpertDraft[K],
   ): void {
@@ -229,7 +236,12 @@ export class ExpertDetailController {
     // bug 13f807c4：stale（条目已被删）短路——update 为 upsert，放行即复活已删条目
     if (current === undefined || current.busy || current.mode !== "edit" || this.stale) return;
     const errors = validateDraft(current.draft);
-    if (errors.title !== undefined || errors.personaMd !== undefined) {
+    if (
+      errors.title !== undefined ||
+      errors.personaMd !== undefined ||
+      errors.provider !== undefined ||
+      errors.model !== undefined
+    ) {
       this.state = { ...current, errors };
       this.emit();
       return;
@@ -238,7 +250,8 @@ export class ExpertDetailController {
     this.emit();
     const generation = this.generation;
     try {
-      const updated = await this.mutations.update(current.expert.name, current.draft);
+      // wireDraft：provider/model trim 后空串归缺键——不落半组、清空两字段即回落继承
+      const updated = await this.mutations.update(current.expert.name, wireDraft(current.draft));
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
       this.state = {
         ...this.getSnapshot(),

@@ -378,6 +378,95 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
   });
 });
 
+// ---- provider/model 成对编辑（expert-squad-forge-2 1.10）---------------------
+
+describe("provider/model 成对编辑（1.10）", () => {
+  it("校验：只填其一 → 成对错误落对应字段；都填/都空 → 通过", () => {
+    const base = draftOf(entry());
+    expect(validateDraft({ ...base, provider: "deepseek", model: "" })).toEqual({
+      provider: "provider 与 model 须成对填写（或同时清空回落继承）",
+    });
+    expect(validateDraft({ ...base, provider: "  ", model: "sonnet" })).toEqual({
+      model: "provider 与 model 须成对填写（或同时清空回落继承）",
+    });
+    expect(validateDraft({ ...base, provider: "deepseek", model: "sonnet" })).toEqual({});
+    expect(validateDraft({ ...base, provider: "", model: "" })).toEqual({});
+  });
+
+  it("draftOf 携带档案 provider/model（编辑预填）", () => {
+    const draft = draftOf(entry({ provider: "deepseek", model: "reasoner" }));
+    expect(draft.provider).toBe("deepseek");
+    expect(draft.model).toBe("reasoner");
+    expect(draftOf(entry()).provider).toBe("");
+  });
+
+  it("负向：只填 provider 保存 → 不落半组（update 不被调用）+ 字段级错误", async () => {
+    let called = 0;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: async () => {
+        called += 1;
+        return entry();
+      },
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    ctl.setField("provider", "deepseek");
+    await ctl.save();
+    expect(called).toBe(0);
+    expect(ctl.getSnapshot().errors.provider).toContain("成对");
+    expect(ctl.getSnapshot().mode).toBe("edit");
+  });
+
+  it("成对保存：整组进 update 载荷（热刷新 Toast 语义不变）", async () => {
+    let payload: ExpertDraft | undefined;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: async (_name, draft) => {
+        payload = draft;
+        return entry();
+      },
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    ctl.setField("provider", " deepseek ");
+    ctl.setField("model", "reasoner");
+    await ctl.save();
+    expect(payload?.provider).toBe("deepseek");
+    expect(payload?.model).toBe("reasoner");
+    expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+  });
+
+  it("清空两字段保存 → 载荷两键归缺（frontmatter 无键回落继承）", async () => {
+    let payload: ExpertDraft | undefined;
+    const ctl = new ExpertDetailController({
+      ...noMutations(),
+      update: async (_name, draft) => {
+        payload = draft;
+        return entry();
+      },
+    });
+    ctl.open(entry({ provider: "deepseek", model: "reasoner" }));
+    ctl.startEdit();
+    ctl.setField("provider", "");
+    ctl.setField("model", "  ");
+    await ctl.save();
+    expect(payload).toBeDefined();
+    expect("provider" in (payload as object)).toBe(false);
+    expect("model" in (payload as object)).toBe(false);
+    expect(JSON.stringify(payload)).not.toContain('"provider"');
+  });
+
+  it("编辑态 SSR：provider/model 输入字段在场（成对相邻）", () => {
+    const html = renderDialog({ mode: "edit" });
+    expect(html).toContain('data-field="provider"');
+    expect(html).toContain('data-field="model"');
+    expect(html).toContain('aria-label="Provider"');
+    expect(html).toContain('aria-label="Model"');
+    expect(html.indexOf('data-field="provider"')).toBeLessThan(html.indexOf('data-field="model"'));
+  });
+});
+
 // ---- SSR 静态渲染（F2 组件树逐位） -----------------------------------------
 
 function renderDialog(overrides: {

@@ -11,7 +11,17 @@ export interface ExpertDraft {
   readonly personaMd: string;
   readonly tools: readonly string[];
   readonly skills: readonly string[];
+  /** 派发路由 provider（草稿态恒字符串——空串 = 未填/已清空，成对语义见 validateDraft）。 */
+  readonly provider: string;
+  /** 派发路由 model（同 provider 成对语义）。 */
+  readonly model: string;
 }
+
+/** update 路由载荷（provider/model 归一后形态——空串归缺键，frontmatter 无键回落继承）。 */
+export type ExpertWireDraft = Omit<ExpertDraft, "provider" | "model"> & {
+  readonly provider?: string;
+  readonly model?: string;
+};
 
 /** 简介字数上限（ui-design F2：≈ 3 行 × 46 全角字 = 120，与 update 路由 zod 门同值）。 */
 export const DESCRIPTION_MAX = 120;
@@ -37,6 +47,8 @@ export function draftOf(expert: ExpertView): ExpertDraft {
     personaMd: expert.personaMd,
     tools: [...expert.tools],
     skills: [...expert.skills],
+    provider: expert.provider ?? "",
+    model: expert.model ?? "",
   };
 }
 
@@ -45,16 +57,40 @@ export function hasBareMustache(text: string): boolean {
   return text.includes("{{");
 }
 
+/** 成对校验提示文案（provider/model 官方语义：同给同缺，任一缺席整组省略回落继承）。 */
+export const PAIR_ERROR = "provider 与 model 须成对填写（或同时清空回落继承）";
+
 /** 保存校验门：返回字段级错误（空对象 = 通过）。 */
 export function validateDraft(draft: ExpertDraft): {
   title?: string;
   personaMd?: string;
+  provider?: string;
+  model?: string;
 } {
   if (draft.title.trim() === "") return { title: "岗位不能为空" };
   if (hasBareMustache(draft.personaMd)) {
     return { personaMd: "人设含裸 {{ ——不被允许" };
   }
+  // provider/model 成对校验：只填其一 → 错误落已填字段；同给同缺通过。
+  const hasProvider = draft.provider.trim() !== "";
+  const hasModel = draft.model.trim() !== "";
+  if (hasProvider !== hasModel) {
+    return hasProvider ? { provider: PAIR_ERROR } : { model: PAIR_ERROR };
+  }
   return {};
+}
+
+/** 草稿 → update 路由载荷：provider/model trim 后空串归缺键（不落半组、清空即回落继承）。 */
+export function wireDraft(draft: ExpertDraft): ExpertWireDraft {
+  return {
+    title: draft.title,
+    description: draft.description,
+    personaMd: draft.personaMd,
+    tools: draft.tools,
+    skills: draft.skills,
+    ...(draft.provider.trim() !== "" ? { provider: draft.provider.trim() } : {}),
+    ...(draft.model.trim() !== "" ? { model: draft.model.trim() } : {}),
+  };
 }
 
 /** multi-select 勾选/取消（保序）。 */
