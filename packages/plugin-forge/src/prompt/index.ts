@@ -171,6 +171,8 @@ export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}):
   return `<${XML_TAGS.forgePipeline}>\n\n${body}\n</${XML_TAGS.forgePipeline}>`
 }
 
+export { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, renderCommanderSection } from './commander.js'
+
 /**
  * doc-style 独立段全文（dual-mode-overhaul：文档风格公约从 forge-pipeline 段拆出——
  * XML_TAGS.docStyle 封闭集扩集；双模式共用注入，零入参，单模板字符串）。

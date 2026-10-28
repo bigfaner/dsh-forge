@@ -37,7 +37,7 @@ import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFF
 import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
-import { FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
+import { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderCommanderSection, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
 import { defaultWorkerTreeGuard } from './spawn/job-tree.js'
@@ -580,6 +580,25 @@ const forgePlugin: ForgePlugin = Object.assign(
       order: FORGE_DOC_STYLE_SECTION_ORDER + FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, // 512（doc-style 511 之后——forge 段族次序稳定）
       text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry)),
     })
+    // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
+    // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts
+    // 服务在场（expert-squad 插件 provide 的服务键 experts——调用期惰性 reflect.get
+    // 防御读取，同 sessionController「调用期惰性解析」先例：expert-squad 装配时序
+    // 可能晚于本插件）。缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
+    // 与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
+    const expertsServicePresent = (): boolean => {
+      try {
+        const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
+        return experts !== undefined && typeof experts.get === 'function'
+      } catch {
+        return false
+      }
+    }
+    const disposeCommander = ctx.systemPrompt.section({
+      name: FORGE_COMMANDER_SECTION_NAME,
+      order: FORGE_COMMANDER_SECTION_ORDER,
+      text: () => (expertsServicePresent() ? renderCommanderSection() : ''),
+    })
     const disposers = [
       ctx.tools.register(tools.addTask),
       ctx.tools.register(tools.submitTask),
@@ -605,6 +624,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 独立段双模式共用（disposeDocStyle 恰一份）。
       () => disposePipeline(),
       () => disposeDispatchLoop(), // forge:dispatch-loop 段——插件卸载级摘除（section() 返回 Cordis disposer）
+      () => disposeCommander(), // forge:commander 段——插件卸载级摘除（同上）
       () => disposeDocStyle(),
       ...(disposeCommands !== undefined ? [disposeCommands] : []), // S2 指令两枚（commands 面在场时）
       ...(disposeProjection !== undefined ? [disposeProjection] : []), // S7 会话投影键（sessionProjections 面在场时）
@@ -622,11 +642,14 @@ const forgePlugin: ForgePlugin = Object.assign(
 
 export default forgePlugin
 export {
+  FORGE_COMMANDER_SECTION_NAME,
+  FORGE_COMMANDER_SECTION_ORDER,
   FORGE_DOC_STYLE_SECTION_NAME,
   FORGE_DOC_STYLE_SECTION_ORDER,
   FORGE_SECTION_NAME,
   FORGE_SECTION_ORDER,
   modeOf,
+  renderCommanderSection,
   renderDocStyleSection,
   renderForgePipelineSection,
 } from './prompt/index.js'

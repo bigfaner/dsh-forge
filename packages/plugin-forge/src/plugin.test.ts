@@ -9,8 +9,6 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
-import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
-import type { ExpertProfileResolver } from './faces.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
 import type { ForgeCommandDefinition, ForgeEventRegisterFace } from './faces.js'
 import { createForgeTools, FORGE_TOOL_NAMES } from './tools/index.js'
@@ -125,6 +123,7 @@ describe('注册面集合 pin（十四 tool：M3 九员 + recordBug/resolveBug �
       'recordImplCheckpoint',
       'queryImplCheckpoint',
       'listImplCheckpoints',
+      'pauseTask',
     ])
     dispose()
   })
@@ -148,7 +147,7 @@ describe('注册面集合 pin（十四 tool：M3 九员 + recordBug/resolveBug �
   it('每 tool 形状齐备：description / object 根 parameters / output schema+render / execute', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     for (const tool of rt.registeredTools) {
       expect(tool.description.length, `${tool.name} description`).toBeGreaterThan(20)
       expect(tool.parameters.type).toBe('object')
@@ -305,11 +304,11 @@ function pipelineTextOf(rt: TempRuntime, agentId: string | undefined): string {
   return (text as (context: { agent?: { id?: string } }) => string)({ agent: { id: agentId } })
 }
 
-describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511 + forge:dispatch-loop / order 512）', () => {
-  it('默认装配：三段（pipeline + doc-style + dispatch-loop，name/order/text 三件在场）', () => {
+describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511 + forge:dispatch-loop / order 512 + forge:commander / order 513）', () => {
+  it('默认装配：四段（pipeline + doc-style + dispatch-loop + commander，name/order/text 三件在场）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.sections).toHaveLength(3)
+    expect(rt.sections).toHaveLength(4)
     const pipeline = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
     const docStyle = rt.sections.find((s) => s.name === 'forge:doc-style')
     expect(pipeline?.order).toBe(510)
@@ -326,6 +325,12 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     expect(typeof dispatchLoop?.text).toBe('function')
     const dispatchLoopText = dispatchLoop?.text as (context: { agent?: { id?: string } }) => string
     expect(dispatchLoopText({ agent: { id: 'sess-a1' } })).toBe('')
+    // expert-squad-forge-2 指挥者段（条件注入——experts 服务缺席 = 空串整体过滤）
+    const commander = rt.sections.find((s) => s.name === 'forge:commander')
+    expect(commander?.order).toBe(513)
+    expect(typeof commander?.text).toBe('function')
+    const commanderText = commander?.text as () => string
+    expect(commanderText()).toBe('')
     dispose()
   })
 
@@ -341,11 +346,45 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     d2()
   })
 
-  it('disposer 全注销（tool×14 + 段×3，各恰一次）', () => {
+  it('disposer 全注销（tool×14 + 段×4，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 17, sections: 3 })
+    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 4 })
+  })
+})
+
+describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——ctx.experts 服务在场性惰性检测）', () => {
+  const commanderTextOf = (rt: TempRuntime): string => {
+    const section = rt.sections.find((s) => s.name === 'forge:commander')
+    expect(typeof section?.text).toBe('function')
+    return (section!.text as () => string)()
+  }
+
+  it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const text = commanderTextOf(rt)
+    expect(text).toContain('指挥者模式')
+    expect(text).toContain('信息搜索与核实')
+    expect(text).toContain('技术调研')
+    expect(text).toContain('提案评审')
+    expect(text).toContain('PRD 评审')
+    expect(text).toContain('设计评审')
+    expect(text).toContain('用户访谈')
+    expect(text).toContain('任务拆解')
+    dispose()
+  })
+
+  it('experts 服务缺席/面畸形：零注入（空串 = 官方整体过滤）', () => {
+    const rtAbsent = new TempRuntime()
+    const d1 = forgePlugin(rtAbsent.ctx())
+    expect(commanderTextOf(rtAbsent)).toBe('')
+    d1()
+    const rtMalformed = new TempRuntime()
+    const d2 = forgePlugin(rtMalformed.withReflect({ experts: {} }) as never)
+    expect(commanderTextOf(rtMalformed)).toBe('')
+    d2()
   })
 })
 
@@ -425,7 +464,7 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(pipelineTextOf(rt, 'sess-x')).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 17, sections: 3 })
+    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 4 })
   })
 })
 
@@ -462,18 +501,18 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
       reflect: { get: (name: string) => (name === 'forgeSettings' ? { get: async () => ({}) } : undefined) },
     }
     const dispose = forgePlugin(ctx)
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
   })
 
   it('reflect.get 抛异常 / 返回非函数面：降级缺席不阻载（十三 tool 照常注册）', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
-    expect(rt1.registeredTools).toHaveLength(17)
+    expect(rt1.registeredTools).toHaveLength(18)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin({ ...rt2.ctx(), reflect: { get: () => 'not-a-service' } })
-    expect(rt2.registeredTools).toHaveLength(17)
+    expect(rt2.registeredTools).toHaveLength(18)
     d2()
   })
 })
@@ -511,7 +550,7 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
   it('无绑定（无 config.projects/bindingsFile）= 零触发；服务面同步缺席 = fail-soft 不阻载装配（十三 tool 照常注册）', async () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx()) // forgeTasks = {} 桩——reconcileInterrupted 缺席
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
 
     const h2 = reconcileCtx({})
@@ -599,7 +638,7 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
     expect(typeof events.apply).toBe('function')
     expect(events.wire).toBeDefined()
     // 六 tool 照常注册（投影面 additive——tool 面零波及）
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
     expect(rt.disposedProjection).toBe(2)
   })
@@ -610,7 +649,7 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
     const dispose = forgePlugin(rt.withReflect({})) // commands 亦缺席——仅验证投影面
     void face
     expect(registered).toHaveLength(0)
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
     expect(rt.disposedProjection).toBe(0)
   })
@@ -618,11 +657,11 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
   it('reflect.get 抛异常 / 非函数面：同降级（键不注册、六 tool 照常）', () => {
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
-    expect(rt1.registeredTools).toHaveLength(17)
+    expect(rt1.registeredTools).toHaveLength(18)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.withReflect({ sessionProjections: 'not-a-registry' }))
-    expect(rt2.registeredTools).toHaveLength(17)
+    expect(rt2.registeredTools).toHaveLength(18)
     d2()
   })
 })
@@ -642,7 +681,7 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     expect(typeof run?.handler).toBe('function')
     expect(typeof stop?.handler).toBe('function')
     // 六 tool 照常注册（指令面 additive——tool 面零波及）
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
     expect(rt.disposedCommands).toBe(2) // 注销器并入插件 disposer（两指令各恰一次）
   })
@@ -651,7 +690,7 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.withReflect({}))
     expect(rt.registeredCommands).toHaveLength(0)
-    expect(rt.registeredTools).toHaveLength(17)
+    expect(rt.registeredTools).toHaveLength(18)
     dispose()
     expect(rt.disposedCommands).toBe(0)
   })
@@ -660,150 +699,12 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
     const rt1 = new TempRuntime()
     const d1 = forgePlugin({ ...rt1.ctx(), reflect: { get: () => { throw new Error('inactive fiber') } } })
     expect(rt1.registeredCommands).toHaveLength(0)
-    expect(rt1.registeredTools).toHaveLength(17)
+    expect(rt1.registeredTools).toHaveLength(18)
     d1()
     const rt2 = new TempRuntime()
     const d2 = forgePlugin(rt2.withReflect({ commands: 'not-a-registry' }))
     expect(rt2.registeredCommands).toHaveLength(0)
-    expect(rt2.registeredTools).toHaveLength(17)
+    expect(rt2.registeredTools).toHaveLength(18)
     d2()
-  })
-})
-
-// ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
-
-describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读取 fail-soft）', () => {
-  /** experts 服务桩（registerRoot/refresh 调用记账 + 按键返回档案桩） */
-  function expertsFace() {
-    const calls: { root?: string; refresh: number } = { refresh: 0 }
-    return {
-      calls,
-      face: {
-        get: (key: string) => ({ name: key, title: `T:${key}`, personaMd: `md:${key}`, tools: ['read'] }),
-        registerRoot: (_ctx: unknown, dir: string) => {
-          calls.root = dir
-        },
-        refresh: async () => {
-          calls.refresh += 1
-        },
-      },
-    }
-  }
-
-  /** reflect 桩（get + provide 双面——provide 记账注入服务） */
-  function reflectWith(services: Record<string, unknown>) {
-    const provided = new Map<string, unknown>()
-    return {
-      provided,
-      face: {
-        get: (name: string) => services[name],
-        provide: (name: string, service: unknown) => {
-          provided.set(name, service)
-        },
-      },
-    }
-  }
-
-  it('experts 面在场：registerRoot(随包 experts 目录) + refresh 恰一次 + 档案取用面经 provide 注入（fail-soft 装配零波及）', async () => {
-    const rt = new TempRuntime()
-    const { face, calls } = expertsFace()
-    const { provided, face: reflect } = reflectWith({ experts: face, forgeSettings: { get: async () => ({}) } })
-    const dispose = forgePlugin({ ...rt.ctx(), reflect })
-    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR)
-    expect(calls.refresh).toBe(1) // registerRoot 只追加 root 不重扫——注册后须显式 refresh 一次
-    const resolver = provided.get('forgeExperts') as ExpertProfileResolver
-    expect(typeof resolver).toBe('function')
-    expect(rt.registeredTools).toHaveLength(17) // 装配面 additive——tool 面零波及
-    dispose()
-  })
-
-  it('refresh 完成屏障：resolver 首调等待 refresh 结算后才 get（未结算窗口不触发 not-found fail-loud）', async () => {
-    let releaseRefresh!: () => void
-    const gate = new Promise<void>((resolve) => {
-      releaseRefresh = resolve
-    })
-    const order: string[] = []
-    const face = {
-      get: (key: string) => {
-        order.push(`get:${key}`)
-        return { name: key, personaMd: `md:${key}` }
-      },
-      registerRoot: (_ctx: unknown, _dir: string) => {},
-      refresh: async () => {
-        order.push('refresh:start')
-        await gate
-        order.push('refresh:done')
-      },
-    }
-    // ready promise 按生产装配配方（index.ts）构造：refresh 调起 + 吞错归一 settled-safe
-    const ready = face.refresh().catch(() => undefined).then(() => undefined)
-    const resolver = createExpertProfileResolver({ experts: face, ready })
-    const pending = resolver('doc')
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(order).toEqual(['refresh:start']) // refresh 未结算 → get 未发生
-    releaseRefresh()
-    await expect(pending).resolves.toMatchObject({ name: 'tech-writer' })
-    expect(order).toEqual(['refresh:start', 'refresh:done', 'get:tech-writer'])
-  })
-
-  it('档案取用面解析：预设映射命中取人格键；未用类型预设缺键且无覆盖 → undefined（persona 仅程序段形态兼容）', async () => {
-    const { face } = expertsFace()
-    const resolver = createExpertProfileResolver({ experts: face })
-    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' })
-    await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'bug-hunter' }) // 1.12 后 13 键联测
-    await expect(resolver('test-gen-journeys')).resolves.toBeUndefined() // 未用类型 = 排除预设，不取用不阻断
-  })
-
-  it('档案取用面解析：settings.experts.mapping 覆盖命中取覆盖键（含未用类型指到自定义档案）', async () => {
-    const { face } = expertsFace()
-    const resolver = createExpertProfileResolver({
-      experts: face,
-      settings: { get: async () => ({ experts: { mapping: { 'coding-fix': 'my-fix-expert', 'test-gen-journeys': 'my-journey-expert' } } }) },
-    })
-    await expect(resolver('coding-fix')).resolves.toMatchObject({ name: 'my-fix-expert', personaMd: 'md:my-fix-expert' })
-    await expect(resolver('test-gen-journeys')).resolves.toMatchObject({ name: 'my-journey-expert', personaMd: 'md:my-journey-expert' })
-  })
-
-  it('档案取用面 fail-loud 边界：用户覆盖指向缺失档案外抛；预设命中键档案缺失同样外抛', async () => {
-    const override = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: ghost-expert') } },
-      settings: { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) },
-    })
-    await expect(override('doc')).rejects.toThrow(/expert not found: ghost-expert/) // 用户显式指向 = fail-loud
-    const preset = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: gate-keeper') } },
-    })
-    await expect(preset('gate')).rejects.toThrow(/expert not found: gate-keeper/) // 随包预设缺席 = 同样外抛
-  })
-
-  it('settings 读失败：回落默认映射（fail-soft 诊断）；experts.get 错误原样外抛（claim 期 fail-loud 语义由实现侧承担）', async () => {
-    const { face } = expertsFace()
-    const resolver = createExpertProfileResolver({
-      experts: face,
-      settings: { get: async () => { throw new Error('settings file broken') } },
-    })
-    await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
-    const failing = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: doc-reviewer') } },
-    })
-    await expect(failing('doc-review')).rejects.toThrow(/expert not found: doc-reviewer/)
-  })
-
-  it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
-    for (const reflect of [
-      reflectWith({}).face, // 无 experts 键
-      { get: () => { throw new Error('inactive fiber') } },
-      reflectWith({ experts: 'not-a-service' }).face,
-    ]) {
-      const rt = new TempRuntime()
-      const provided = new Map<string, unknown>()
-      const dispose = forgePlugin({
-        ...rt.ctx(),
-        reflect: { ...reflect, provide: (name: string, service: unknown) => provided.set(name, service) },
-      })
-      expect(rt.registeredTools).toHaveLength(17)
-      expect([...provided.keys()]).not.toContain('forgeExperts')
-      dispose()
-    }
   })
 })
