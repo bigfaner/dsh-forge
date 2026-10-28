@@ -294,6 +294,18 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
     expect(nodes.get('forge-event-progress-10')).toMatchObject({ anchorSeq: 10 })
     expectHidden(nodes.get('m1'))
   })
+  it('bug 6a3ccc4d：活跃工具 turn 期间 progress 到达——锚随组尾（活跃折叠恒开）；turn/end 到达后 re-anchor 脱离过程折叠体（不随折叠收起）', () => {
+    const events = [
+      { type: 'turn/start', seq: 1, data: { turn: 5 } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+      progressEvt(5, { taskKey: 'feat-x/1.2', status: 'running' }),
+      progressEvt(6, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
+    ]
+    const { nodes } = simulate(events)
+    expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 6 })
+    const after = simulate([...events, { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } }])
+    expect(after.nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 9 })
+  })
   it('stream match：forge/progress 命中（revision++ 驱动组块重放）', () => {
     expect(forgeEventStreamDefinition.match(progressEvt(4, {}))).toEqual({ id: 'stream', role: 'start' })
   })

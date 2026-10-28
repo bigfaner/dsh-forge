@@ -32,9 +32,10 @@ export interface ForgeEventEntriesProps {
   }
 }
 
-/** 组头单行摘要（`forge · 任务循环事件 · N 条 · HH:mm–HH:mm`——可测纯函数） */
+/** 组头单行摘要（`forge · 任务循环事件 · N 条 · HH:mm–HH:mm`——可测纯函数；计数与卡内
+ *  渲染行同口径：progress 行计入——bug 6a3ccc4d 前只计消息条目、纯 progress 组显示（0）） */
 export function forgeEventGroupSummary(data: ForgeEventGroupData): string {
-  const count = data.entries.length
+  const count = data.entries.length + forgeProgressRowItems(data.progress ?? []).length
   const first = data.entries[0]
   const last = data.entries.at(-1)
   const range =

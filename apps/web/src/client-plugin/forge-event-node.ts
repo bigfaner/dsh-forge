@@ -84,6 +84,8 @@ export interface ForgeProgressEntry {
   readonly note?: string
   /** 事件时间（Unix epoch ms——起止/耗时取此） */
   readonly at: number
+  /** 归属 turn id（fold 时点 currentTurn 戳——bug 6a3ccc4d progress 轨 re-anchor 基准；旧缓存缺省） */
+  readonly turnId?: string
 }
 
 /** 消息流折叠模型（state-only 单 Context 累积态；closed = 末组已被人类插话收口） */
@@ -190,7 +192,7 @@ function optionalString(value: unknown): string | undefined {
 }
 
 /** 'forge/progress' 载荷 → 组内条目（窄收守卫——必填位缺失/畸形 = undefined 弃事件，fold 原态返回） */
-function progressEntryOf(event: ForgeMessageEventLike, data: unknown): ForgeProgressEntry | undefined {
+function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: string | undefined): ForgeProgressEntry | undefined {
   if (typeof data !== 'object' || data === null) return undefined
   const raw = data as Record<string, unknown>
   if (typeof raw['sourceSlug'] !== 'string' || raw['sourceSlug'] === '') return undefined
@@ -205,6 +207,7 @@ function progressEntryOf(event: ForgeMessageEventLike, data: unknown): ForgeProg
     scenario: optionalString(raw['scenario']),
     note: optionalString(raw['note']),
     at: raw['at'],
+    ...(turnId !== undefined ? { turnId } : {}),
   }
 }
 
@@ -233,7 +236,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
   // 'forge/progress' 事件（1.2 循环进度卡数据源）：同组 fold 语义——开组中追加 progress
   // 条目（lastSeq 推进 = 组尾轨）；插话后/首枚开新组。畸形载荷原引用返回零污染。
   if (event?.type === FORGE_PROGRESS_EVENT_TYPE) {
-    const entry = progressEntryOf(event, event.data)
+    const entry = progressEntryOf(event, event.data, state.currentTurn)
     if (entry === undefined) return state
     const last = state.groups.at(-1)
     if (last !== undefined && !state.closed) {
@@ -344,17 +347,16 @@ function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
   return value as ForgeEventStreamState
 }
 
-/** 组卡锚 seq（纯函数）：末到达为消息条目且所属 turn 已结束 = 该 turn 的 turn/end seq
- *  （≥ answerAnchorSeq——脱离 Turn 过程折叠，卡片落回复下方）；末到达为 progress 条目
- *  （活跃进度轨）或 turn 缺席 = 组末 seq（lastSeq——消息与 progress 同轨推进）。 */
+/** 组卡锚 seq（纯函数）：组末到达条目（消息或 progress——bug 6a3ccc4d 前只认消息条目，
+ *  progress 轨活跃时锚滞留组末 seq 落入过程折叠体、turn 结束后不重锚）所属 turn 已结束
+ *  = 该 turn 的 turn/end seq（≥ answerAnchorSeq——脱离 Turn 过程折叠，卡片落会话流顶层
+ *  回复下方）；turn 未结束 = 组末 seq（lastSeq——活跃过程折叠恒开，卡可见随组尾）。 */
 export function forgeEventGroupAnchorSeq(group: ForgeEventGroup, turnEndSeqs: Readonly<Record<string, number>> | undefined): number {
-  const last = group.entries.at(-1)
-  const lastProgressSeq = group.progress?.at(-1)?.seq ?? -1
-  if (last !== undefined && lastProgressSeq < last.seq) {
-    const end = last.turnId !== undefined ? turnEndSeqs?.[last.turnId] : undefined
-    if (end !== undefined) return end
-  }
-  return group.lastSeq
+  const lastMsg = group.entries.at(-1)
+  const lastProgress = group.progress?.at(-1)
+  const tail = (lastProgress?.seq ?? -1) > (lastMsg?.seq ?? -1) ? lastProgress : lastMsg
+  const end = tail?.turnId !== undefined ? turnEndSeqs?.[tail.turnId] : undefined
+  return end ?? group.lastSeq
 }
 
 /**

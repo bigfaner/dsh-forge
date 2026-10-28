@@ -98,6 +98,11 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('28分0秒') // 耗时 = 结束 − 开始
     expect(html).toContain('1 任务 · 今日 14:01–14:30') // 头计数：任务数 + 进度起止范围
   })
+  it('bug 6a3ccc4d：纯 progress 组计数 = 卡内渲染行数（progress 行计入——（0）不再出现）', () => {
+    const pure: ForgeEventGroupData = { ...PROGRESS_DATA, entries: [] }
+    expect(forgeEventGroupSummary(pure)).toContain('（2）') // 循环行 1 + 任务行 1（同任务键后写覆盖单行）
+    expect(forgeEventGroupSummary(pure)).not.toContain('（0）')
+  })
   it('循环级事件收敛单行（最新覆盖——`循环`徽记 + 状态 + 备注），先于任务行', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(PROGRESS_DATA)} />)
     expect(html).toContain('dswf-event-entries-loop')
