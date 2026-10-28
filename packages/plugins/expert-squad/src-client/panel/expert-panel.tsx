@@ -23,6 +23,7 @@ import {
   type StatusFilter,
 } from "./filter.js";
 import { CompareChips, PairCompareTable } from "./compare-table.js";
+import { ExpertIcon } from "./expert-icon.js";
 import { skillCandidatesOf, toolCandidatesOf } from "./detail-logic.js";
 import { ExpertListController, type ListFetcher, type ListState } from "./list-source.js";
 import {
@@ -423,6 +424,7 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
       onClick={() => onActivate?.(expert.name)}
     >
       <div className="xc-head">
+        <ExpertIcon size={16} />
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
         <span className="chip tool">{expert.name}</span>

@@ -15,7 +15,13 @@ const PLUGIN_ID = "@dsh-forge/expert-squad";
 // 平台基线外置表（对齐官方冻结种子表口径；react 永不内联——内联第二副本会使
 // shell 渲染树 hooks 读到另一副本 dispatcher，Invalid hook call）。面板组件化后
 // jsx-runtime 消费出现，与 react 同列外置（官方 clientBundle 种子表同形）。
-const PLATFORM_MODULES = ["react", "react/jsx-runtime"];
+// `@deepseek-ai/dsh-client-ui-primitives` 同列外置（quote-plugins 判例：require 落
+// 壳层冻结种子表单例——内联第二副本会分裂官方单例语义与 bundle 体积税）。
+const PLATFORM_MODULES = [
+  "react",
+  "react/jsx-runtime",
+  "@deepseek-ai/dsh-client-ui-primitives",
+];
 
 await build({
   entryPoints: [resolve(pkgDir, "dist/client/index.js")],

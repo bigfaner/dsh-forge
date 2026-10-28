@@ -1,7 +1,10 @@
 // panel —— 专家卡片网格主视图出口（ui-design F1 产品实现）。
 // 视图 = ExpertPanelApp（官方 main keyed 槽占用者）；纯逻辑/数据源/样式分模块单测直测。
+import { IconUsersOutlineRegular } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ReactNode } from "react";
 import { ensurePanelStyles } from "./styles.js";
+
+export { ExpertIcon } from "./expert-icon.js";
 
 export {
   filterExperts,
@@ -73,19 +76,10 @@ export {
 
 /**
  * 面板行字形（官方 sidebar.panellist 占用者 owner props = { size, active }——
- * KnowledgeGlyph 同型镜像）。字形暂以「专」文本承载——官方 IconUsersOutlineRegular
- * 消费需 primitives barrel（内联 CSS-modules 打片面）接入，归装配走查任务收口。
+ * KnowledgeGlyph 同型镜像）。官方 IconUsersOutlineRegular（primitives barrel，
+ * 与个体 User 成对——提案 §2.2-9 收口，「专」文本占位退役）。
  */
 export function ExpertPanelGlyph({ size }: { readonly size?: number; readonly active?: boolean }): ReactNode {
   ensurePanelStyles();
-  return (
-    <span
-      style={{
-        fontSize: size ?? 16,
-        lineHeight: 1,
-      }}
-    >
-      专
-    </span>
-  );
+  return <IconUsersOutlineRegular size={size ?? 16} />;
 }

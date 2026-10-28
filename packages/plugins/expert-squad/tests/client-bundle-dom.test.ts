@@ -64,6 +64,8 @@ describe("client bundle 装载契约（官方 clientBundle 配方四断言）", 
       requested.push(spec);
       if (spec === "react") return React;
       if (spec === "react/jsx-runtime") return jsxRuntime;
+      // 官方 primitives 同列壳层种子表（quote-plugins 判例）——面板图标消费面。
+      if (spec === "@deepseek-ai/dsh-client-ui-primitives") return undefined;
       throw new Error(`种子表之外的 require: ${spec}`);
     };
     const exports = (

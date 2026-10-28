@@ -25,6 +25,7 @@ import {
   useDiffOnly,
 } from "./compare-table.js";
 import { escNext, type ExpertDetailController, type DetailState } from "./detail-source.js";
+import { ExpertIcon } from "./expert-icon.js";
 
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
 const TEXTAREA_LINE_PX = 22;
@@ -638,6 +639,7 @@ export function ExpertDetailDialog(props: {
       >
         <div className="dswf-dlg-head">
           <div className="dswf-dlg-head-row">
+            <ExpertIcon size={16} />
             <span className={`dot ${expert.enabled ? "on" : "off"}`} />
             <b className="dswf-dlg-name">{expert.name}</b>
             <span className="chip tool">{expert.name}</span>

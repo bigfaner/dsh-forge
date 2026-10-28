@@ -48,8 +48,20 @@ export default defineConfig({
       },
       // input-history 插件包（纯 client 包——client bundle 装载契约四断言守卫）
       { test: { name: 'input-history', include: ['packages/plugins/input-history/tests/**/*.test.ts'] } },
-      // expert-squad 插件包（双面包装载范式——bundle 声明结构镜像守卫）
-      { test: { name: 'expert-squad', include: ['packages/plugins/expert-squad/tests/**/*.test.ts'] } },
+      // expert-squad 插件包（双面包装载范式——bundle 声明结构镜像守卫）；
+      // panel 图标消费官方 primitives——css 副产物走 vite 转换管道（inline，
+      // git-worktree/quote-reference 判例同构）
+      {
+        test: {
+          name: 'expert-squad',
+          include: ['packages/plugins/expert-squad/tests/**/*.test.ts'],
+          server: {
+            deps: {
+              inline: ['@deepseek-ai/dsh-client-ui-primitives'],
+            },
+          },
+        },
+      },
       // quote-reference 插件包（纯 client 包——client bundle 装载契约守卫 + face 单测 +
       // selection-menu 缝合：primitives Menu 消费——css 副产物走 vite 转换管道（inline，
       // git-worktree 判例同构）；真实 DOM 链路测试以文件级 @vitest-environment 声明）
