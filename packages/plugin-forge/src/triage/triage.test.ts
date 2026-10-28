@@ -215,6 +215,67 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
   })
 })
 
+// ─────────────────────────── persona 档案合成（expert-squad-forge-2 纳入 2） ───────────────────────────
+
+describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worker 语义）', () => {
+  const PROFILE = { name: 'triage-analyst', title: '处置分析专家', personaMd: '失败分类与修复派生纪律。' }
+
+  it('spawn 请求携带档案人格段 persona；键 = settings experts.mapping.triage 覆盖优先', async () => {
+    const seenKeys: string[] = []
+    const built = build({
+      settings: {
+        get: async () => ({ experts: { mapping: { triage: 'my-triage' } } }),
+      } as unknown as Pick<ForgeSettingsService, 'get'>,
+      resolveExpertProfile: async (_taskType, key) => {
+        seenKeys.push(key)
+        return PROFILE
+      },
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"ask-user"}')
+    await done
+    expect(seenKeys).toEqual(['my-triage'])
+    const req = built.requests[0] as SpawnWorkerRequest
+    expect(req.persona).toContain('你是处置分析专家。')
+    expect(req.persona).toContain('失败分类与修复派生纪律。')
+    // 分层承载（S2 同径）：人格面不进任务提示词
+    expect(req.prompt).not.toContain(req.persona!)
+  })
+
+  it('settings 无覆盖 = 预设 triage-analyst 键取档；title 缺席回落 name 身份头', async () => {
+    const seenKeys: string[] = []
+    const built = build({
+      resolveExpertProfile: async (_taskType, key) => {
+        seenKeys.push(key)
+        return { name: 'triage-analyst', personaMd: '档案正文。' }
+      },
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"ask-user"}')
+    await done
+    expect(seenKeys).toEqual(['triage-analyst'])
+    expect((built.requests[0] as SpawnWorkerRequest).persona).toContain('你是 triage-analyst。')
+  })
+
+  it('缺档 fail-loud：resolver 错误原样上抛（消息含键名），spawn 零调用', async () => {
+    const built = build({
+      resolveExpertProfile: async () => {
+        throw new Error('expert not found: triage-analyst')
+      },
+    })
+    await expect(createTriageHook(built.hookDeps).run(triageInput())).rejects.toThrow('expert not found: triage-analyst')
+    expect(built.requests).toHaveLength(0)
+  })
+
+  it('取用缝缺席 = 形态兼容：spawn 请求不携带 persona 键（非显式 undefined 覆盖）', async () => {
+    const built = build()
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"ask-user"}')
+    await done
+    expect('persona' in (built.requests[0] as SpawnWorkerRequest)).toBe(false)
+  })
+})
+
 // ─────────────────────────── 结构化三动作决策 ───────────────────────────
 
 describe('结构化三动作决策（封闭枚举——宿主忠实执行的解析面）', () => {

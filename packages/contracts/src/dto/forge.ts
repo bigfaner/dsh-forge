@@ -1084,10 +1084,12 @@ export const DEFAULT_EXPERT_MAPPING: Readonly<Partial<Record<TaskType, string>>>
   'test-gen-scripts': 'test-script-author',
 })
 
-/** experts 段——任务类型 → 专家档案键（人格键）映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING） */
+/** experts 段——任务类型 → 专家档案键（人格键）映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING）
+ *  triage 键目（expert-squad-forge-2 纳入 2）：处置代理非任务类型，专键覆盖其档案取用
+ *  （缺键 = 预设 triage-analyst 生效）。 */
 export interface ExpertsSettings {
   /** 覆盖映射（Partial——只列要改指的键；值 = ctx.experts 取用服务的专家键名） */
-  mapping?: Partial<Record<TaskType, string>>
+  mapping?: Partial<Record<TaskType | 'triage', string>>
 }
 
 /** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，

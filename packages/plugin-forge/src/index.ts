@@ -370,6 +370,9 @@ const forgePlugin: ForgePlugin = Object.assign(
         spawn,
         ...(settingsService !== undefined ? { settings: settingsService } : {}),
         ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
+        // expert-squad-forge-2 纳入 2：triage persona 档案合成走同一专家取用缝
+        // （ready 屏障/settings 兜底/fail-loud 语义与 claim 链单源）；缺席 = 形态兼容。
+        ...(expertResolver !== undefined ? { resolveExpertProfile: expertResolver } : {}),
       }),
       ...(askFace !== undefined
         ? {

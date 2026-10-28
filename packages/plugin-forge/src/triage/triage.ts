@@ -18,8 +18,20 @@ import {
 } from '../dispatch-core/index.js'
 import type { PoolSnapshot, SpawnWorker } from '../dispatch-core/index.js'
 import type { LoopTriageDecision, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
+import type { ExpertProfileResolver, ForgeExpertProfile } from '../faces.js'
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
+
+/** triage 专家键预设（expert-squad-forge-2 纳入 2——settings experts.mapping.triage 可覆盖） */
+const TRIAGE_EXPERT_KEY_DEFAULT = 'triage-analyst'
+
+/** 档案人格段（与 core claim 链 renderExpertProfileSection 同构——身份头 + personaMd 正文；
+ *  本包不依赖 @dsh-forge/core，组装面就地同形承载，persona 单源纪律不变） */
+function personaSectionOf(profile: ForgeExpertProfile): string {
+  const title = profile.title ?? profile.name
+  const gap = /^[A-Za-z]/.test(title) ? ' ' : ''
+  return `你是${gap}${title}。\n\n${profile.personaMd}`
+}
 
 /** 处置代理依赖（装配注入——服务面一次性绑定；循环身份不经此，每循环载体走 LoopTriageInput） */
 export interface TriageHookDeps {
@@ -31,6 +43,9 @@ export interface TriageHookDeps {
   readonly settings?: Pick<ForgeSettingsService, 'get'>
   /** 模型推理档位目录解析（可选——组装面兼容收口同 worker） */
   readonly resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
+  /** 专家档案取用缝（可选——expert-squad-forge-2 纳入 2：triage persona 档案合成；
+   *  缺席 = 形态兼容不携带 persona，与 worker 取用面降级同径） */
+  readonly resolveExpertProfile?: ExpertProfileResolver
 }
 
 /**
@@ -66,6 +81,18 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致；parent/signal =
       //    每循环身份载体——输入面逐调用绑定，装配期烘焙无效）
       const settings = deps.settings !== undefined ? await deps.settings.get() : undefined
+      // persona 档案合成（expert-squad-forge-2 纳入 2）：键 = settings experts.mapping.triage
+      // 覆盖 > 预设 'triage-analyst'；resolver 在场即取（缺档/禁用 = experts.get 错误原样
+      // 上抛——fail-loud 同 worker 语义，消息含键名，宿主计处置失败入重试上限）；
+      // 取用缝缺席 = 形态兼容不携带 persona（spawn 请求零键——直传 undefined 会被上游
+      // 视为显式覆盖，与 worker 同纪律）。
+      let persona: string | undefined
+      if (deps.resolveExpertProfile !== undefined) {
+        const key = settings?.experts?.mapping?.triage ?? TRIAGE_EXPERT_KEY_DEFAULT
+        const profile = await deps.resolveExpertProfile('triage', key)
+        // 键恒在场（预设兜底）→ profile 恒定义；undefined 仅为类型面收窄，防御性跳过
+        persona = profile !== undefined ? personaSectionOf(profile) : undefined
+      }
       const agentOptions = await reconcileWorkerReasoning(workerAgentOptionsOf(settings), deps.resolveModelReasoning)
       const handle = await deps.spawn({
         prompt,
@@ -73,6 +100,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         signal: input.signal,
         toolFilter: deriveTriageToolFilter(),
         ...(agentOptions !== undefined ? { agentOptions } : {}),
+        ...(persona !== undefined ? { persona } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,
       })
       // ④ 终态 output → 结构化决策（dispose 幂等收尾——成功失败同径）
