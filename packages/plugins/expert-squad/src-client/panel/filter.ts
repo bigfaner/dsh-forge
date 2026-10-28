@@ -15,6 +15,10 @@ export interface ExpertView {
   readonly personaMd: string
   readonly tools: readonly string[]
   readonly skills: readonly string[]
+  /** 派发路由 provider（可选——成对语义，旧载荷/未配置档案缺席）。 */
+  readonly provider?: string
+  /** 派发路由 model（可选——成对语义，旧载荷/未配置档案缺席）。 */
+  readonly model?: string
   readonly origin: string
   readonly enabled: boolean
   readonly updatedAt?: string
