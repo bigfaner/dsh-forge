@@ -1,9 +1,9 @@
-﻿{
+{
   "name": "@dsh-forge/md-mermaid",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
-  "description": "md-mermaid cordis 鎻掍欢锛歮ermaid 娓叉煋涓庡浘婧愭牎楠岋紙鑳藉姏鍗曟簮鈥斺€攎ermaid 渚濊禆鍏ㄤ粨鍞竴寮曠敤鏂癸級銆?,
+  "description": "md-mermaid cordis 插件：mermaid 渲染与图源校验（能力单源——mermaid 依赖全仓唯一引用方）。",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
