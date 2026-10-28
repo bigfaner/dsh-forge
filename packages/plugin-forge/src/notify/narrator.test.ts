@@ -29,6 +29,7 @@ type RecordedCall = {
   text: string
   wakeup?: boolean
   loop?: unknown
+  headline?: string
 }
 
 /** send 录制通道（form settle → settle / wakeup → followup / 其余 notice） */
@@ -48,6 +49,7 @@ function recordingChannel(): NarrationChannel & { calls: RecordedCall[] } {
         text,
         ...(options?.wakeup === true ? { wakeup: true } : {}),
         ...(options?.loop !== undefined ? { loop: options.loop } : {}),
+        ...(options?.headline !== undefined ? { headline: options.headline } : {}),
       })
     }),
   }
@@ -71,6 +73,17 @@ describe('S4 · send 单出口委派（两径唤醒）', () => {
     expect(channel.calls[0]?.wakeup).toBe(true) // 唤醒径（send(nextStep, true)）
     expect(channel.calls[0]?.sessionId).toBe('session-1')
     expect(channel.calls[0]?.text).toMatch(/^\[forge·结束\] 任务源: m2-pipeline\n下一步动作: 无\n时间: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('bug a058eaee：followup 透传预构建折叠摘要 headline（缺席 = 不传，折叠位回退整段截断不变）', async () => {
+    const channel = recordingChannel()
+    const narrator = createNarrator({ channel })
+    // 缺席：send options 无 headline（现状兼容）
+    await narrator.followup('session-1', 'text-a')
+    expect(channel.calls[0]?.headline).toBeUndefined()
+    // 在场：headline 原样透传（faces.ts source.summary = headline——组卡条目按摘要渲染）
+    await narrator.followup('session-1', 'text-b', undefined, '循环已挂起待处置；处置入口: 认领')
+    expect(channel.calls[1]?.headline).toBe('循环已挂起待处置；处置入口: 认领')
   })
 
   it('结算单点 settle → send(form settle, wakeup=true)——真终局一次唤醒', async () => {

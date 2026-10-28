@@ -259,6 +259,8 @@ type NarrationCall = {
   /** loop-event-delivery 投递面：原始 send options 直录（form 铸造形态 + wakeup 路由） */
   readonly form: 'notice' | 'followup' | 'settle'
   readonly wakeup: boolean
+  /** 预构建折叠摘要（faces.ts source.summary 源——缺席 = 折叠位回退整段截断） */
+  readonly headline?: string
 }
 
 /** NarrationChannel send 桩（loop-event-delivery 接口收窄——form/wakeup 原样直录，
@@ -269,7 +271,7 @@ function sendRecordingChannel(calls: NarrationCall[], onSend?: (sessionId: strin
       const form = options?.form ?? 'notice'
       const wakeup = options?.wakeup === true
       const method = form === 'settle' ? 'settle' : wakeup ? 'followup' : 'notice'
-      calls.push({ method, sessionId, text, form, wakeup })
+      calls.push({ method, sessionId, text, form, wakeup, ...(options?.headline !== undefined ? { headline: options.headline } : {}) })
       onSend?.(sessionId, text)
     },
   }
@@ -3383,6 +3385,25 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
     expect(incidentInputs.filter((i) => (i as { eventType: string }).eventType === 'worker-abort-over-limit')).toHaveLength(3)
     // ② 处置入口行：挂起径语义——任意会话凭任务源 slug dispatchTask 认领
     expect(wakeups[0]!.text).toContain('处置入口: 任意会话凭任务源 feat-x dispatchTask 认领挂起循环继续处置')
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('bug a058eaee：唤醒 send 携预构建折叠摘要（headline）——重试短语/原因全文/处置入口三要素在摘要内（组卡条目只渲染摘要）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      incidents: { record: () => 'logs/feat-x/2.5/001-abort-over-limit/' },
+    })
+    crashingSpawn(built.spawn)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(1)
+    const fold = wakeups[0]!.headline ?? ''
+    // 折叠摘要三要素（e2e 径③ infoSet 断言面——组卡条目 textContent 只见摘要）
+    expect(fold).toContain('原因全文：logs/feat-x/2.5/001-abort-over-limit/')
+    expect(fold).toMatch(/第 \d+ 次，超过重试上限/)
+    expect(fold).toContain('处置入口: 任意会话凭任务源 feat-x dispatchTask 认领挂起循环继续处置')
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 })

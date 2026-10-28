@@ -59,6 +59,8 @@ describe('renderInjection · registry 纯投影（无影子状态）', () => {
     expect(owner).toContain('【任务循环已挂起·处理指引】')
     expect(owner).toContain('任务 dispatch-loop-hardening/2.3 以 blocked 结束')
     expect(owner).toContain('原因：验收标准要求「全部测试通过」')
+    // 处置入口行（bug a058eaee——多挂起 DTO 组装径与 suspendWithWakeup 信息集对齐）
+    expect(owner).toContain('处置入口：任意会话凭任务源 dispatch-loop-hardening dispatchTask 认领挂起循环继续处置')
     expect(owner).toContain('dispatch-loop-hardening 有一个挂起中的任务循环（任务 2.3')
     expect(owner).not.toMatch(/<[^<>\n]+>/)
     record.takeoverSessions.add('sess-take')

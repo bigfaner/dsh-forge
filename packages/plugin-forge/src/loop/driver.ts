@@ -1056,10 +1056,16 @@ async function suspendWithWakeup(
   const firstWakeup = !loop.wakeupKeys.has(wakeupKey)
   loop.wakeupKeys.add(wakeupKey)
   if (firstWakeup) {
+    // 折叠摘要（bug a058eaee——组卡条目只渲染 source.summary，缺省整段 120 字截断会吞掉
+    // 尾部处置入口/原因全文行）：预构建摘要前置三要素（重试短语/原因全文/处置入口），
+    // 与唤醒全文同一信息集。Root cause: suspend 径 send 未传 headline，折叠位整段截断。
+    const foldSummary = `${input.headline}；原因全文：${incidentPath !== undefined ? incidentPath : '落盘降级（事件子文件夹不可用）'}；处置入口: 任意会话凭任务源 ${loop.record.source.slug} dispatchTask 认领挂起循环继续处置`
     await loop.deps.narrator.followup(
       loop.record.ownerSessionId,
       // 处置入口行（bug 33728995②——挂起径恢复语义：任意会话凭任务源 slug dispatchTask 认领）
       `${input.headline}。\n原因摘要：${summarizeReason(input.reason)}\n${detail}\n处置入口: 任意会话凭任务源 ${loop.record.source.slug} dispatchTask 认领挂起循环继续处置`,
+      undefined,
+      foldSummary,
     )
   }
   emitLoopDiag(loop, 'warn', 'loop-suspend', `${input.minor} — ${input.progressTaskKey}: ${summarizeReason(input.reason)}`)

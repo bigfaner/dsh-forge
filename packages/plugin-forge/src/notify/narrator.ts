@@ -39,8 +39,9 @@ export interface NarratorDeps {
 /** 叙述面（循环驱动器消费的单出口） */
 export interface Narrator {
   /** 终局事件（异常径 followup 通道——完整消息 + 唤醒）；fail-soft。
-   * loop = 循环叙述上下文（faces 铸发 source.kind='forge-loop' 的结构化字段） */
-  followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void>
+   * loop = 循环叙述上下文（faces 铸发 source.kind='forge-loop' 的结构化字段）；
+   * headline = 预构建折叠摘要（缺席 = 折叠位回退整段 120 字截断——bug a058eaee） */
+  followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta, headline?: string): Promise<void>
   /**
    * 结算投递（3b④ settlement 形态——dispatch-loop-hardening 1.11）：循环终局（settled/
    * halted/timeout/stopped）经 settlement 通道投递——持久 user message（source
@@ -65,12 +66,14 @@ export function createNarrator(deps: NarratorDeps): Narrator {
   const safe = failSoftNarrationChannel(deps.channel)
   const incidents: IncidentStore = deps.incidents ?? createIncidentStore({ resolveContainerDir: () => undefined })
   return {
-    followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta): Promise<void> {
+    followup(sessionId: string, text: string, loop?: ForgeLoopNarrationMeta, headline?: string): Promise<void> {
       // 唤醒径 = send(nextStep, true) 即时唤醒主 agent（异常径场景族——调用方为表内场景才走本面）。
+      // headline = 预构建折叠摘要（bug a058eaee——组卡条目只渲染 source.summary，缺席回退整段 120 字截断）。
       return safe.send(sessionId, `${text}\n${localDateTimeLine()}`, {
         form: 'followup',
         wakeup: true,
         ...(loop !== undefined ? { loop } : {}),
+        ...(headline !== undefined && headline !== '' ? { headline } : {}),
       })
     },
     settle(sessionId: string, text: string): Promise<void> {
