@@ -27,4 +27,4 @@ walkthrough 1.4 首轮（HEAD 1561d7fe）AC3 FAIL：挂起唤醒出现 2 次（�
 
 ## 晋升
 
-提炼态；晋升 docs/conventions 正本走提案管线裁决（见改进提案 loop-consol-flywheel-improvement）。
+已晋升 `docs/conventions/wakeup-notification-minimal-info-set.md` 正本（提案 loop-consol-flywheel-improvement，用户裁决 D4，2026-10-28）——后续以正本为准，本提炼态原件仅留档。
