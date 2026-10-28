@@ -6,7 +6,7 @@
 // 结算/异常消息条目只保留概要一行（明细归其自身 wakeup 卡，不重复展开）。
 // 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组（isLatest），
 // 前组默认收起（人类插话 = 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   forgeEventBadgeTone,
@@ -109,7 +109,43 @@ function ForgeLoopRowView({ row }: { row: ForgeProgressRowData }) {
   )
 }
 
+/** 官方贴底容差（dsh-client-ui-chat useScrollFollow(state.followingTail, 25)——nearBottom 同源判据） */
+export const FORGE_TAIL_TOLERANCE_PX = 25
+
+/**
+ * 贴底跟随保持缝（§2.6 D3 单轨——组卡增高后补一发落底）。
+ * CDP 定谳（1.4/001，见 proposal walkthrough 归因档）：组卡增高阶跃（+36~+154px > 25px
+ * 容差）直接落在官方 scrollport 外层（活跃期不在 turn 过程体内——次假设排除）；官方追底
+ * 在贴底态走 instant jump 可吸收阶跃，但阶跃落进 smooth 追底动画在飞窗口时 settle 落点
+ * 超容差 → followingTail 释放（dsh-client-ui-chat client.js ScrollFollow.settle）→ 运行期
+ * 脱底。消费侧补缝：组卡增高后若增高前仍在官方容差内（贴底态）则补一发 instant 落底——
+ * 对齐官方 returnToBottom 同缝（纯呈现层体验优化，不涉会话写入）；用户已上滚阅读
+ * （增高前偏离 > 容差）不拉拽。
+ * @param root 组卡根元素（ResizeObserver 观察面；缺席/无 RO 环境 = 零操作）
+ * @returns 解绑器（组件卸载断开观察）
+ */
+export function forgeEventTailKeepEffect(root: Element | null): () => void {
+  if (root === null || typeof ResizeObserver === 'undefined') return () => {}
+  let lastHeight = root.getBoundingClientRect().height
+  const observer = new ResizeObserver(() => {
+    const height = root.getBoundingClientRect().height
+    const grew = height - lastHeight
+    lastHeight = height
+    if (grew <= 0) return
+    const scrollport = root.closest('[data-conversation-scroll]')
+    if (scrollport === null) return
+    const preGrowDistance = scrollport.scrollHeight - scrollport.scrollTop - scrollport.clientHeight - grew
+    if (preGrowDistance > FORGE_TAIL_TOLERANCE_PX) return
+    scrollport.scrollTop = scrollport.scrollHeight - scrollport.clientHeight
+  })
+  observer.observe(root)
+  return () => observer.disconnect()
+}
+
 function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
+  // §2.6 贴底保持缝挂载（组卡根观察——增高阶跃补落底；卸载断开）
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => forgeEventTailKeepEffect(rootRef.current), [])
   // 默认态 = 位置语义（最新组展开 / 前组收起）；用户切换后为本地微观态
   const [open, setOpen] = useState(data.isLatest)
   // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
@@ -126,7 +162,7 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
       ? `${taskRows.length} 任务 · 今日 ${forgeEventClock(Math.min(...rows.map((row) => row.startAt)))}–${forgeEventClock(Math.max(...rows.map((row) => row.endAt)))}`
       : `${data.entries.length} 条 · ${forgeEventGroupCount(data.entries)}`
   return (
-    <div className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
+    <div ref={rootRef} className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
       {source !== '' ? (
         <span className="dswf-event-entries-count" aria-hidden="true">
           {count}
