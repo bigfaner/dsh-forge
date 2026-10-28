@@ -325,7 +325,11 @@ describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底�
     expect(state.group.entries).toHaveLength(0)
     expectHidden(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state, start: { location: { kind: 'unresolved' } } }))
   })
-  it('state === undefined（从未物化）：保留 null（不触断言）', () => {
-    expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })).toBeNull()
+  it('bug f511c6a7：state === undefined（官方 replayContexts 淘汰 start match 置空）已物化 Context 回 hidden 保底而非 null——同 key 同 id 不触 withdrew 断言', () => {
+    const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })
+    expect(node).not.toBeNull()
+    expectHidden(node)
+    expect(node).toMatchObject({ key: 'k', id: 'm1', target: 'chat' })
+    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
   })
 })

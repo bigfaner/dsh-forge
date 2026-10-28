@@ -112,13 +112,14 @@ export interface ForgeStreamReader {
   previous(kind: string): { readonly state: unknown } | undefined
 }
 
-/** 官方节点座 context 消费切片（buildViewNode 入参——progress-node 同型） */
+/** 官方节点座 context 消费切片（buildViewNode 入参——progress-node 同型；match 携带
+ *  原始事件供 seq 兜底锚——official contextSnapshot 透传全量 match） */
 export interface ForgeEventNodeContext {
   readonly key: string
   readonly id: string
   readonly state?: unknown
-  readonly start?: { readonly location?: unknown }
-  readonly matches?: readonly { readonly location?: unknown }[]
+  readonly start?: { readonly location?: unknown; readonly event?: { readonly seq?: number } }
+  readonly matches?: readonly { readonly location?: unknown; readonly event?: { readonly seq?: number } }[]
 }
 
 /** user/message 数据消费切片（faces.ts forgeUserMessage 铸造形状镜像） */
@@ -399,33 +400,43 @@ export const forgeEventGroupDefinition = {
   },
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
   publication: (): 'none' => 'none',
-  buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown | null => {
-    const state = context.state
-    // state === undefined（从未物化）回 null 不触官方断言；已物化 Context（state 在场）
-    // 不再回 null——交棒/空组回同 key 同 id + visibility:'hidden'（官方钦定修法：
-    // dsh-client-ui-conversation client.js:2505 buildTargetUpserts 对已物化 target 回
-    // null 即抛 withdrew materialized target，增量 flush 中止渲染停滞）。
-    if (state === undefined) return null
+  buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown => {
+    // 永不回 null（官方钦定，dsh-client-ui-conversation client.js:2505 buildTargetUpserts
+    // 对已物化 target 回 null 即抛 withdrew materialized target）。Root cause: 官方
+    // replayContexts（client.js:2248-2257）在 Context 的 start match 被窗口/裁剪淘汰后
+    // 置 context.state = void 0——Context 仍留 contextsByTarget 且 context.current 保有
+    // 上次物化节点，state===undefined ≠ 从未物化；0c48a365 只保了 state 在场路径，漏此
+    // 分支致 withdrew 复发。undefined 亦回同 key 同 id（与首物化严格一致）visibility
+    // :'hidden' 保底节点——锚 seq 以 start/matches 携带的事件 seq 兜底，零数据可给空组。
+    const state = streamStateOk(context.state) ? context.state : undefined
+    const fallbackSeq = context.start?.event?.seq ?? context.matches?.[0]?.event?.seq ?? 0
+    const group = state?.group ?? { key: context.id, firstSeq: fallbackSeq, lastSeq: fallbackSeq, entries: [] }
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
     // 直读 location.kind）：start/matches 携带 location 则透传，否则 unresolved。
     const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
-    const visible = state.emit && (state.group.entries.length > 0 || (state.group.progress?.length ?? 0) > 0)
+    const visible = state !== undefined && state.emit && (group.entries.length > 0 || (group.progress?.length ?? 0) > 0)
     return {
       key: context.key,
       kind: FORGE_EVENT_NODE_KIND,
       id: context.id,
       target: 'chat',
-      anchorSeq: state.anchorSeq,
+      anchorSeq: state?.anchorSeq ?? fallbackSeq,
       location,
       visibility: visible ? 'visible' : 'hidden',
       data: {
-        key: state.group.key,
-        firstSeq: state.group.firstSeq,
-        lastSeq: state.group.lastSeq,
-        isLatest: state.isLatest,
-        entries: state.group.entries,
-        progress: state.group.progress ?? [],
+        key: group.key,
+        firstSeq: group.firstSeq,
+        lastSeq: group.lastSeq,
+        isLatest: state?.isLatest ?? false,
+        entries: group.entries,
+        progress: group.progress ?? [],
       },
     }
   },
+}
+
+/** 组节点状态形状守卫（官方快照透传面畸形不猜——回退 undefined 走 hidden 保底） */
+function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
+  if (typeof value !== 'object' || value === null) return false
+  return typeof (value as { emit?: unknown }).emit === 'boolean' && typeof (value as { group?: unknown }).group === 'object'
 }
