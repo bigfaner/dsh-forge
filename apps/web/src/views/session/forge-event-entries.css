@@ -119,6 +119,20 @@
   white-space: nowrap;
 }
 
+/* 消息条目行（§2.5 去重并换行——title 与 detail 分行，不并一行；detail 次文本档） */
+.dswf-event-entries-msg-text {
+  white-space: normal; /* 覆盖基类单行省略——分行形态允许换行 */
+}
+
+.dswf-event-entries-msg-text > b {
+  display: block;
+}
+
+.dswf-event-entries-msg-detail {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .dswf-event-entries-text b {
   font-weight: 500;
 }

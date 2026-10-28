@@ -3,7 +3,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { ForgeEventGroupData } from './forge-event-data.js'
-import { ForgeEventEntries, forgeEventGroupSummary } from './ForgeEventEntries.js'
+import { ForgeEventEntries, forgeEventEntryDetail, forgeEventGroupSummary } from './ForgeEventEntries.js'
 
 const entryBase = {
   seq: 7,
@@ -46,7 +46,8 @@ describe('ForgeEventEntries（折叠条目组块）', () => {
     expect(html).not.toContain('（feature）· </b>') // 来源修饰已剥
     expect(html).toContain('14:02:11') // 条目秒级时刻
     expect(html).toContain('2.3 折叠条目组') // 任务标题
-    expect(html).toContain('领取 · 2.3 折叠条目组') // 摘要
+    expect(html).toContain('领取') // 剥掉 title 前缀后的徽记词 detail
+    expect(html).not.toContain('领取 · 2.3 折叠条目组') // §2.5：summary 同文去重
     expect(html).toContain('data-tone="blk"') // 场景章族色（阻塞琥珀）
     expect(html).toContain('data-tone="run"') // 启动/领取 = 进行蓝
     expect(html).toContain('data-latest') // 最新组标记（默认展开语义锚）
@@ -135,8 +136,28 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
   })
   it('消息条目保留概要一行（结算/异常卡不重复展开明细）；progress 缺席 = 纯消息列表（旧形态兼容）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
-    expect(html).toContain('领取 · 2.3 折叠条目组')
+    expect(html).not.toContain('领取 · 2.3 折叠条目组') // 消息条目 title/detail 去重（§2.5）
     expect(html).not.toContain('dswf-event-entries-progress')
     expect(html).toContain('3 条 · 今日 14:02–14:02')
+  })
+})
+
+// ─────────────────── 2.5 条目行去重并换行 ───────────────────
+
+describe('forgeEventEntryDetail（§2.5——summary 段命中 title 字面剥前缀）', () => {
+  it('title 整段命中即剥（taskTitle/slug）；差异信息保留', () => {
+    expect(forgeEventEntryDetail({ title: '2.3 折叠条目组', summary: '领取 · 2.3 折叠条目组' })).toBe('领取')
+    expect(forgeEventEntryDetail({ title: '2.3', summary: '阻塞 · 2.3 · 已创建修复任务' })).toBe('阻塞 · 已创建修复任务')
+    expect(forgeEventEntryDetail({ title: 'feat-x', summary: 'feat-x' })).toBe('')
+  })
+  it('未命中 / title 缺席 = summary 原样（数据面不动）', () => {
+    expect(forgeEventEntryDetail({ title: 'a', summary: '启动 · 接续执行' })).toBe('启动 · 接续执行')
+    expect(forgeEventEntryDetail({ title: '', summary: '启动' })).toBe('启动')
+  })
+  it('条目行 title 与 detail 分行渲染（msg-text 块级两行，不并一行）', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
+    expect(html).toContain('dswf-event-entries-msg-text')
+    expect(html).toContain('dswf-event-entries-msg-detail')
+    expect(html).not.toContain(' — ') // 不再同行 em-dash 拼接
   })
 })

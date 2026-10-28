@@ -83,6 +83,15 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   )
 }
 
+/** 条目行 detail（§2.5 渲染层去重——summary 段命中 title 字面时剥掉该段，数据面不动） */
+export function forgeEventEntryDetail(entry: { readonly title: string; readonly summary: string }): string {
+  if (entry.title === '' || entry.summary === '') return entry.summary
+  return entry.summary
+    .split(' · ')
+    .filter((seg) => seg !== entry.title)
+    .join(' · ')
+}
+
 /** 循环级单行（无 taskKey 事件收敛最新态——状态词 + 备注，零耗时） */
 function ForgeLoopRowView({ row }: { row: ForgeProgressRowData }) {
   const statusWord = FORGE_PROGRESS_STATUS_WORD[row.entry.status] ?? row.entry.status
@@ -138,21 +147,25 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
           {taskRows.map((row) => (
             <ForgeProgressRowView key={row.entry.taskKey} row={row} />
           ))}
-          {data.entries.map((entry) => (
-            <li className="dswf-event-entries-item" key={entry.id}>
-              <span className="dswf-event-entries-time">{forgeEventClockSeconds(entry.time)}</span>
-              {entry.badge !== '' ? (
-                <span className="dswf-event-entries-badge" data-tone={forgeEventBadgeTone(entry.badge)}>
-                  {entry.badge}
+          {data.entries.map((entry) => {
+            // §2.5（D 裁决 去重并换行）：title 与 detail 分行展示；summary 命中 title
+            // 字面（taskTitle/taskKey/slug）时渲染层剥掉标题前缀，仅留徽记词+差异信息
+            const detail = forgeEventEntryDetail(entry)
+            return (
+              <li className="dswf-event-entries-item" key={entry.id}>
+                <span className="dswf-event-entries-time">{forgeEventClockSeconds(entry.time)}</span>
+                {entry.badge !== '' ? (
+                  <span className="dswf-event-entries-badge" data-tone={forgeEventBadgeTone(entry.badge)}>
+                    {entry.badge}
+                  </span>
+                ) : null}
+                <span className="dswf-event-entries-text dswf-event-entries-msg-text">
+                  {entry.title !== '' ? <b>{entry.title}</b> : null}
+                  {detail !== '' ? <span className="dswf-event-entries-msg-detail">{detail}</span> : null}
                 </span>
-              ) : null}
-              <span className="dswf-event-entries-text">
-                {entry.title !== '' ? <b>{entry.title}</b> : null}
-                {entry.title !== '' && entry.summary !== '' ? ' — ' : null}
-                {entry.summary}
-              </span>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       </DisclosureRow>
     </div>
