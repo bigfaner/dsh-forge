@@ -801,12 +801,12 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
 
   it('档案取用面 fail-loud 边界：用户覆盖指向缺失档案外抛；预设命中键档案缺失同样外抛', async () => {
     const override = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: ghost-expert') } },
+      experts: { get: () => { throw new Error('expert not found: ghost-expert') }, registerRoot: () => {} },
       settings: { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) },
     })
     await expect(override('doc')).rejects.toThrow(/expert not found: ghost-expert/) // 用户显式指向 = fail-loud
     const preset = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: gate-keeper') } },
+      experts: { get: () => { throw new Error('expert not found: gate-keeper') }, registerRoot: () => {} },
     })
     await expect(preset('gate')).rejects.toThrow(/expert not found: gate-keeper/) // 随包预设缺席 = 同样外抛
   })
@@ -819,7 +819,7 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     })
     await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
     const failing = createExpertProfileResolver({
-      experts: { get: () => { throw new Error('expert not found: doc-reviewer') } },
+      experts: { get: () => { throw new Error('expert not found: doc-reviewer') }, registerRoot: () => {} },
     })
     await expect(failing('doc-review')).rejects.toThrow(/expert not found: doc-reviewer/)
   })

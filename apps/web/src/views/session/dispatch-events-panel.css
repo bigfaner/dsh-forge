@@ -177,9 +177,9 @@
 /* 状态徽标（key 右侧——feature-tab 章同款 soft tone 胶囊：primary 字/border + tertiary 底） */
 .dswf-dep-status {
   flex: none;
-  padding: 0 6px;
+  padding: 0 6px; /* dsw-raw 官方 feature-tab 章内距刻度 */
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;
 }
@@ -239,8 +239,8 @@
 /* 耗时徽标（首行状态徽标右侧——caption 弱化胶囊；tabular 对齐不跳宽） */
 .dswf-dep-row-dur {
   flex: none;
-  padding: 0 6px;
-  border-radius: 999px;
+  padding: 0 6px; /* dsw-raw 官方 feature-tab 章内距刻度 */
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
   background: var(--dsw-alias-interactive-bg-hover);
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;

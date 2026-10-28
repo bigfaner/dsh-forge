@@ -174,9 +174,9 @@ describe('2.7 forgeSettings：未配置态 + get/set 往返', () => {
     const svc = createSettingsService({ settingsFile, userDataDir })
     await svc.set({ experts: { mapping: { gate: 'my-gate' } } })
     await expect(svc.set({ experts: { mapping: 'nope' as never } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
-    await expect(svc.set({ experts: { mapping: { 'doc.fix': 'x' } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({ experts: { mapping: { 'doc.fix': 'x' } } as never })).rejects.toBeInstanceOf(InvalidSettingsInputError)
     await expect(svc.set({ experts: { mapping: { gate: '  ' } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
-    await expect(svc.set({ experts: { mapping: { gate: 7 } } })).rejects.toBeInstanceOf(InvalidSettingsInputError)
+    await expect(svc.set({ experts: { mapping: { gate: 7 } } as never })).rejects.toBeInstanceOf(InvalidSettingsInputError)
     await expect(svc.set({} as never)).rejects.toBeInstanceOf(InvalidSettingsInputError) // 五节全缺
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({ experts: { mapping: { gate: 'my-gate' } } })
   })

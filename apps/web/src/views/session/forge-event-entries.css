@@ -86,9 +86,9 @@
   width: 56px; /* dsw-raw 原型 evt-kind 定宽刻度 */
   box-sizing: border-box;
   text-align: center;
-  font-size: 11px;
+  font: var(--dsw-font-xxxs-11); /* dsw-raw 官方 xxxs 字阶（11px 刻度） */
   line-height: 18px;
-  border-radius: 999px;
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
   border: 0.5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-secondary);
 }

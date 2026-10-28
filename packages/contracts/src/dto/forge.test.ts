@@ -305,7 +305,7 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expect(settings.experts?.mapping?.['gate']).toBeUndefined() // 缺键 = 默认映射生效
     expectTypeOf<NonNullable<ForgeSettings['experts']>['mapping']>().toEqualTypeOf<Partial<Record<(typeof TASK_TYPES)[number], string>> | undefined>()
     // set 入参同面（分节覆写语义一致）
-    expectTypeOf<NonNullable<Parameters<ForgeSettingsService['set']>[0]['experts']>>().toEqualTypeOf<ExpertsSettings | undefined>()
+    expectTypeOf<Parameters<ForgeSettingsService['set']>[0]['experts']>().toEqualTypeOf<ForgeSettings['experts']>()
   })
 })
 
