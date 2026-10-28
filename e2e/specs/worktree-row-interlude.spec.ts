@@ -154,7 +154,7 @@ test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → �
     await dismissOnboardingModals(page)
     await registerProject(page, wsDir)
     await expect(chip(page).first(), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-    const baseRoot = await attachedSessions(page, wsDir, wsDir)
+    const _baseRoot = await attachedSessions(page, wsDir, wsDir)
     await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
     await createWorktreeViaDialog(page, wsDir, 'feat-b', 'wt-b')
 
