@@ -209,6 +209,7 @@ function buildEntry(scanned: ExpertSnapshot["experts"] extends ReadonlyMap<strin
     tools: scanned.tools,
     skills: scanned.skills,
     model: scanned.model,
+    provider: scanned.provider,
     origin: scanned.origin,
     enabled,
     updatedAt: scanned.updatedAt,

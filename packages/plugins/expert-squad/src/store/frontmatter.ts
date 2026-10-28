@@ -20,6 +20,8 @@ export interface ExpertRecord {
   skills: string[];
   /** 可选，派发模型偏好 */
   model?: string;
+  /** 可选，派发 provider 偏好（同 model 口径；compose 面与 model 成对消费） */
+  provider?: string;
 }
 
 export type ExpertParseResult =
@@ -78,6 +80,9 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
   if (data.model !== undefined && typeof data.model !== "string") {
     return { ok: false, reason: `${filePath}: 字段 model 非字符串` };
   }
+  if (data.provider !== undefined && typeof data.provider !== "string") {
+    return { ok: false, reason: `${filePath}: 字段 provider 非字符串` };
+  }
   if (personaMd === "") {
     return { ok: false, reason: `${filePath}: 正文人设 Markdown 缺失` };
   }
@@ -92,6 +97,7 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
       tools,
       skills: data.skills ?? [],
       ...(data.model !== undefined ? { model: data.model } : {}),
+      ...(data.provider !== undefined ? { provider: data.provider } : {}),
     },
   };
 }

@@ -82,6 +82,7 @@ export const expertUpdateBodySchema = z.object({
   tools: z.array(z.string().min(1)).min(1),
   skills: z.array(z.string().min(1)).default([]),
   model: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
   personaMd: z.string().optional(),
 });
 

@@ -70,14 +70,25 @@ describe("compose 组装内核", () => {
     expect(request.toolFilter).toEqual({ allow: ["read", "grep"] });
   });
 
-  it("model → agentOptions.model；model 缺省不携带 agentOptions 键", () => {
-    const withModel = createExpertComposer(
-      makeService([{ ...baseEntry, name: "a", model: "sonnet" }]),
+  it("agentOptions 三态：provider+model 成对在场才携带；只填其一或缺省整组省略", () => {
+    // 成对在场 → agentOptions {provider, model}
+    const paired = createExpertComposer(
+      makeService([{ ...baseEntry, name: "p", model: "sonnet", provider: "anthropic" }]),
     );
-    expect(withModel("a", "t").agentOptions).toEqual({ model: "sonnet" });
+    expect(paired("p", "t").agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
+    // 只填 model（缺 provider）→ 整组省略
+    const modelOnly = createExpertComposer(
+      makeService([{ ...baseEntry, name: "m", model: "sonnet" }]),
+    );
+    expect("agentOptions" in modelOnly("m", "t")).toBe(false);
+    // 只填 provider（缺 model）→ 整组省略
+    const providerOnly = createExpertComposer(
+      makeService([{ ...baseEntry, name: "r", provider: "anthropic" }]),
+    );
+    expect("agentOptions" in providerOnly("r", "t")).toBe(false);
+    // 两字段均缺省 → 整组省略（回落继承）
     const compose = createExpertComposer(makeService([baseEntry]));
-    const request = compose("code-reviewer", "t");
-    expect("agentOptions" in request).toBe(false);
+    expect("agentOptions" in compose("code-reviewer", "t")).toBe(false);
   });
 
   it("task → prompt 单 text 块全文", () => {

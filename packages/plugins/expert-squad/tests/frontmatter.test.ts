@@ -57,6 +57,16 @@ describe("正向：frontmatter + 正文人设 → ExpertRecord", () => {
     expect(r.record.model).toBe("sonnet");
     expect(r.record.skills).toEqual([]);
   });
+
+  it("可选字段：provider 透传（字符串）", () => {
+    const md = GOOD.replace(
+      "tools: [read, grep]",
+      "tools: [read, grep]\nprovider: anthropic",
+    );
+    const r = parseExpertFile(PATH, md);
+    if (!r.ok) throw new Error(`应解析成功：${r.reason}`);
+    expect(r.record.provider).toBe("anthropic");
+  });
 });
 
 describe("负向：fail-loud，错误信息含文件路径与原因", () => {
@@ -130,6 +140,15 @@ describe("负向：fail-loud，错误信息含文件路径与原因", () => {
     const r = parseExpertFile(PATH, GOOD.replace("tools: [read, grep]", "tools: [read, 42]"));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toContain("tools");
+  });
+
+  it("provider 非字符串 → 拒绝", () => {
+    const r = parseExpertFile(
+      PATH,
+      GOOD.replace("tools: [read, grep]", "tools: [read, grep]\nprovider: [anthropic]"),
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("provider");
   });
 });
 

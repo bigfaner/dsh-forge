@@ -67,6 +67,7 @@ const recruitParams = z.object({
   tools: z.array(z.string()).min(1).describe("Tool whitelist keys mapped to toolFilter at dispatch"),
   skills: z.array(z.string()).optional().describe("Optional skill tags"),
   model: z.string().optional().describe("Optional dispatch model preference"),
+  provider: z.string().optional().describe("Optional dispatch provider preference (paired with model at dispatch)"),
   personaMd: z
     .string()
     .min(1)
@@ -197,6 +198,7 @@ export interface ArchiveFields {
   tools: string[];
   skills?: string[];
   model?: string;
+  provider?: string;
 }
 
 export function serializeExpertMd(fields: ArchiveFields, personaMd: string): string {
@@ -208,6 +210,7 @@ export function serializeExpertMd(fields: ArchiveFields, personaMd: string): str
   };
   if (fields.skills !== undefined) data.skills = fields.skills;
   if (fields.model !== undefined) data.model = fields.model;
+  if (fields.provider !== undefined) data.provider = fields.provider;
   return matter.stringify(personaMd, data);
 }
 

@@ -35,8 +35,8 @@ export interface ExpertSubagentRequest {
   readonly persona: string;
   /** 工具白名单（allow 形态）——创建窗口 fail-closed。 */
   readonly toolFilter: { readonly allow: readonly string[] };
-  /** 派发模型偏好（档案 model 在场才携带）。 */
-  readonly agentOptions?: { readonly model: string };
+  /** 派发 provider+model 偏好（档案两字段成对在场才携带——官方语义：同给同缺，任一缺席整组省略回落继承）。 */
+  readonly agentOptions?: { readonly provider: string; readonly model: string };
   /** 子会话首条用户消息 = 任务全文（单 text 块）。 */
   readonly prompt: readonly [TextContentBlock];
 }
@@ -63,7 +63,9 @@ export function createExpertComposer(
     return {
       persona,
       toolFilter: { allow: [...entry.tools] },
-      ...(entry.model !== undefined ? { agentOptions: { model: entry.model } } : {}),
+      ...(entry.provider !== undefined && entry.model !== undefined
+        ? { agentOptions: { provider: entry.provider, model: entry.model } }
+        : {}),
       prompt: [{ type: "text", text: task }],
     };
   };

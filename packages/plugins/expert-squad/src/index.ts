@@ -275,6 +275,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
           tools: input.tools,
           skills: input.skills,
           ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.provider !== undefined ? { provider: input.provider } : {}),
         },
         input.personaMd ?? "",
       );
