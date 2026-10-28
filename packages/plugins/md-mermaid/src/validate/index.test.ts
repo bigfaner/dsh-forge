@@ -140,6 +140,22 @@ describe('docRel 模式（真引擎）', () => {
   it('无 mermaid fence 文档返回空集', async () => {
     expect((await validateDocFences('# 空文档\n\n```ts\nconst x = 1\n```\n')).fences).toEqual([])
   })
+
+  it('未闭合 mermaid fence 显式 invalid（bug b3b92a1c：不静默假绿）', async () => {
+    const r = await validateDocFences('# t\n```mermaid\nflowchart TD\n A-->B\n')
+    expect(r.fences).toHaveLength(1)
+    expect(r.fences[0]).toMatchObject({ line: 2, format: 'mermaid', ok: false })
+    expect(r.fences[0].message).toContain('未闭合')
+  })
+
+  it('闭合 fence 与未闭合 fence 共存：各得裁决', async () => {
+    const doc = '```mermaid\nflowchart TD\n A-->B\n```\n\n后文\n\n```mermaid\nflowchart TD\n A-->B\n'
+    const r = await validateDocFences(doc)
+    expect(r.fences).toHaveLength(2)
+    expect(r.fences[0]).toMatchObject({ line: 1, ok: true })
+    expect(r.fences[1]).toMatchObject({ line: 8, ok: false })
+    expect(r.fences[1].message).toContain('未闭合')
+  })
 })
 
 describe('flowchart 第一公民专项矩阵（真引擎）', () => {

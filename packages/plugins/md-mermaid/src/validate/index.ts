@@ -168,5 +168,24 @@ export async function validateDocFences(doc: string): Promise<DocVerdict> {
       fences.push({ line, format: detected, ok: false, message: r.message })
     }
   }
+  // 未闭合 fence 探测：```mermaid 开标记未被任何成对命中消费 = 漏写闭合 ```（bug b3b92a1c——
+  // 成对正则零命中会静默返回空集假绿，此处补显式 invalid 裁决）。
+  const openRe = /```mermaid(?=\r?\n)/g
+  const pairStarts = new Set<number>()
+  const pairRe = new RegExp(MD_MERMAID_VALIDATE_FENCE_RE.source, MD_MERMAID_VALIDATE_FENCE_RE.flags)
+  let pm: RegExpExecArray | null
+  while ((pm = pairRe.exec(doc)) !== null) pairStarts.add(pm.index)
+  let om: RegExpExecArray | null
+  while ((om = openRe.exec(doc)) !== null) {
+    if (!pairStarts.has(om.index)) {
+      fences.push({
+        line: doc.slice(0, om.index).split('\n').length,
+        format: 'mermaid',
+        ok: false,
+        message: 'mermaid fence 未闭合（缺闭合 ```）',
+      })
+      break
+    }
+  }
   return { fences }
 }
