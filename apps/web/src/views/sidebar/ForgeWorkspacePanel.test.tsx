@@ -780,20 +780,20 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
     )
   })
 
-  it('starting/stopping 行 = 琥珀静态左缘（edge 锚随行 + 状态词入 aria）；无 slug = aria 回退派发循环词', () => {
+  it('suspended/terminal 行 = 静态左缘（edge 锚随行 + 状态词入 aria）；无 slug = aria 回退状态词', () => {
     const markup = panel({
       tree: [
         node({
           sessions: [
             {
               sessionId: 's-start',
-              title: '启动会话',
-              savedTitle: '启动会话',
+              title: '挂起会话',
+              savedTitle: '挂起会话',
               status: 'running',
               updatedAt: NOW - 30_000,
               pinned: false,
               archived: false,
-              loop: { status: 'starting', slug: null },
+              loop: { status: 'suspended', slug: null },
             },
             {
               sessionId: 's-stop',
@@ -803,18 +803,18 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
               updatedAt: NOW - 30_000,
               pinned: false,
               archived: false,
-              loop: { status: 'stopping', slug: 'feat-y' },
+              loop: { status: 'terminal', slug: 'feat-y' },
             },
           ],
         }),
       ],
     })
-    expect(markup).toContain('data-dswf-session-loop="starting"')
-    expect(markup).toContain('data-dswf-session-loop-edge="starting"')
-    expect(markup).toContain('data-dswf-session-loop="stopping"')
-    expect(markup).toContain('data-dswf-session-loop-edge="stopping"')
-    expect(markup).toContain('aria-label="派发循环启动中"')
-    expect(markup).toContain('aria-label="任务源 feat-y · 状态 停止中"')
+    expect(markup).toContain('data-dswf-session-loop="suspended"')
+    expect(markup).toContain('data-dswf-session-loop-edge="suspended"')
+    expect(markup).toContain('data-dswf-session-loop="terminal"')
+    expect(markup).toContain('data-dswf-session-loop-edge="terminal"')
+    expect(markup).toContain('aria-label="循环挂起"')
+    expect(markup).toContain('aria-label="任务源 feat-y · 状态 循环已结束"')
   })
 
   it('非活循环行零标记（基线面板零回归——普通会话行语言不变、无锚无边）', () => {

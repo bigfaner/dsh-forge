@@ -45,7 +45,7 @@ export interface LedgerSessionRow {
   readonly retainedBy?: { readonly mainView?: number }
   /**
    * 宿主投影整值（上游账本行 projectionValues 消费切片——session.list 逐行 hints 块
-   * 经 ProjectionValueStore 落值；S7 派发循环徽标窄读键 = 'forge-dispatch-loop'）。
+   * 经 ProjectionValueStore 落值；S7 派发循环徽标窄读键 = 'forge-dispatch-events'（§2.4 判据换源——旧 'forge-dispatch-loop' 指令折叠投影已退役）。
    * 键缺席 = 能力缺席（上游既定语义），形状漂移 = 徽标不渲染（sessionLoopBadge 防御读）。
    */
   readonly projectionValues?: Readonly<Record<string, unknown>>
@@ -104,54 +104,182 @@ export interface SidebarSessionRow {
 }
 
 /**
- * 派发循环徽标（S7·run-tasks-host-command——SC8 dispatcher 会话可识别）：
- * `forge-dispatch-loop` 投影键的活循环族视图（status ∈ starting/running/stopping）。
- * 徽标只标进行中循环——idle/stopped/failed 历史派发会话零噪声。
+ * 循环状态三态（提案 loop-consol-flywheel-improvement §2.4 派生词汇——
+ * running 蓝流光 / suspended 琥珀静态缘 / terminal 持续保留[D2 裁决：终态标识一直
+ * 不消失，供用户查找执行过任务循环的会话]）。
+ */
+export type ForgeLoopPhase = 'running' | 'suspended' | 'terminal'
+
+/**
+ * 派发循环徽标（S7 起源；§2.4 判据换源——`forge-dispatch-events` 投影窄读派生三态，
+ * 替代断供的 `forge-dispatch-loop` 指令折叠投影[3b 改造后循环正门改为 dispatchTask
+ * 工具，指令事件断供 → 旧投影恒 idle]）。slug = 判定事件载荷的 sourceSlug
+ * （多容器并行归属锚）。
  */
 export interface SessionLoopBadge {
-  readonly status: 'starting' | 'running' | 'stopping'
-  /** 任务源标识（无参问询路径 = null——日志不可知零猜测） */
+  readonly status: ForgeLoopPhase
+  /** 任务源标识（载荷守卫不容空串——null 仅防御兜底） */
   readonly slug: string | null
 }
 
-/** 投影键（plugin-forge FORGE_DISPATCH_LOOP_PROJECTION_KEY 字面量同源镜像——跨包字面量 pin） */
-const FORGE_DISPATCH_LOOP_KEY = 'forge-dispatch-loop'
-
-/** 徽标状态词表（活循环族——宿主 ForgeDispatchLoopStatus 折叠词汇的进行中子集） */
-const LOOP_BADGE_STATUSES: ReadonlySet<string> = new Set(['starting', 'running', 'stopping'])
+/**
+ * 投影键（plugin-forge SESSION_PROJECTION_KEYS.dispatchEvents 字面量同源镜像——
+ * 跨包字面量 pin，与旧 FORGE_DISPATCH_LOOP_KEY 镜像纪律同款）。
+ */
+const FORGE_DISPATCH_EVENTS_KEY = 'forge-dispatch-events'
 
 /**
- * 会话行派发循环徽标派生（纯函数——账本行 projectionValues 窄读）：
- * 键缺席/非活循环状态/形状漂移 = undefined（零徽标——capability absence 与防御读同口径）。
+ * 场景码单源镜像（plugin-forge FORGE_PROGRESS_SCENARIOS 24 值字面量 pin——
+ * apps/web 零 plugin-forge 运行期 import 纪律；值漂移由映射表全键覆盖类型兜住）。
+ */
+const FORGE_PROGRESS_SCENARIOS_MIRROR = [
+  'startup/from-scratch',
+  'startup/resume-stopped',
+  'startup/resume-inflight',
+  'claim/new',
+  'claim/spawned',
+  'claim/interrupted',
+  'task/complete',
+  'blocked/with-fix',
+  'blocked/auto-fixed',
+  'blocked/split',
+  'blocked/wait-external',
+  'blocked/ask-user',
+  'retry/spawn-failed',
+  'retry/worker-aborted',
+  'loop/halt',
+  'loop/blocked-pool',
+  'loop/timeout',
+  'loop/finish-all',
+  'loop/stopped',
+  'suspend/spawn-rate-limited',
+  'suspend/worker-rate-limited',
+  'suspend/abort-over-limit',
+  'suspend/landing-rejected',
+  'pool/pending',
+] as const
+
+/** 场景码值域类型（= 单源镜像成员并集） */
+type ProgressScenarioMirror = (typeof FORGE_PROGRESS_SCENARIOS_MIRROR)[number]
+
+/**
+ * 「场景码 → 三态」映射表（提案 §2.4——FORGE_PROGRESS_SCENARIOS 单源 24 值逐场景落档，
+ * 全键覆盖由 Record 类型强制；实现于侧栏状态判定 loopPhaseOfEntry）：
+ *   - 终态族（terminal）：loop/finish-all / loop/halt / loop/timeout / loop/stopped——
+ *     循环收口四径（无 "settled"）；标识持续保留（D2）。
+ *   - suspend 族（suspended）：suspend/spawn-rate-limited / suspend/worker-rate-limited /
+ *     suspend/abort-over-limit / suspend/landing-rejected——逐场景断言：四径载荷均携
+ *     taskKey（driver.ts suspendWithWakeup progressTaskKey）= 非 loop 级事件，但
+ *     emit 后驱动器即挂起退出待处置回流（suspendForVerdict），循环级效果 = 停摆待处置
+ *     → 映射挂起态。
+ *   - 其余 16 值（startup×3 / claim×3 / task/complete / blocked×5 / retry×2 /
+ *     loop/blocked-pool / pool/pending）→ running——循环活跃推进中的常规事件流。
+ */
+export const FORGE_LOOP_SCENARIO_PHASE: Readonly<Record<ProgressScenarioMirror, ForgeLoopPhase>> = {
+  'startup/from-scratch': 'running',
+  'startup/resume-stopped': 'running',
+  'startup/resume-inflight': 'running',
+  'claim/new': 'running',
+  'claim/spawned': 'running',
+  'claim/interrupted': 'running',
+  'task/complete': 'running',
+  'blocked/with-fix': 'running',
+  'blocked/auto-fixed': 'running',
+  'blocked/split': 'running',
+  'blocked/wait-external': 'running',
+  'blocked/ask-user': 'running',
+  'retry/spawn-failed': 'running',
+  'retry/worker-aborted': 'running',
+  'loop/halt': 'terminal',
+  'loop/blocked-pool': 'running',
+  'loop/timeout': 'terminal',
+  'loop/finish-all': 'terminal',
+  'loop/stopped': 'terminal',
+  'suspend/spawn-rate-limited': 'suspended',
+  'suspend/worker-rate-limited': 'suspended',
+  'suspend/abort-over-limit': 'suspended',
+  'suspend/landing-rejected': 'suspended',
+  'pool/pending': 'running',
+}
+
+/**
+ * forge/progress 载荷消费切片（plugin-forge ForgeProgressEventData 消费面结构同型镜像
+ * ——窄读字段；forge-dispatch-events entries 成员透传该载荷）。
+ */
+export interface LoopProgressEntry {
+  readonly sourceSlug: string
+  readonly verb: string
+  readonly status: string
+  /** 任务键（`slug/localId`——缺席 = loop 级事件；仅注释语义，判定走场景码映射） */
+  readonly taskKey?: string
+  readonly scenario?: string
+  readonly at: number
+}
+
+/** forge-dispatch-events wire 值消费切片（{entries 窗口, total 总数}——投影单源） */
+export interface LoopEventsProjection {
+  readonly entries: readonly LoopProgressEntry[]
+  readonly total: number
+}
+
+/** 条目守卫（载荷窄读防御——sourceSlug 非空串 + at 有限数；他形条目剔除不猜） */
+function isLoopProgressEntry(value: unknown): value is LoopProgressEntry {
+  if (typeof value !== 'object' || value === null) return false
+  const raw = value as Record<string, unknown>
+  return typeof raw['sourceSlug'] === 'string' && typeof raw['verb'] === 'string' && typeof raw['status'] === 'string' && typeof raw['at'] === 'number' && Number.isFinite(raw['at'])
+}
+
+/**
+ * 单条目 → 循环状态三态（映射表判定单点）：场景码在单源映射表 → 直取；场景码缺席
+ * （旧载荷兼容）或未知值 → verb 兜底（halt/timeout/finish-all = 终局动词 → terminal；
+ * suspend → suspended；其余 → running）。
+ */
+export function loopPhaseOfEntry(entry: Pick<LoopProgressEntry, 'scenario' | 'verb'>): ForgeLoopPhase {
+  if (entry.scenario !== undefined) {
+    const mapped = (FORGE_LOOP_SCENARIO_PHASE as Readonly<Record<string, ForgeLoopPhase>>)[entry.scenario]
+    if (mapped !== undefined) return mapped
+  }
+  if (entry.verb === 'halt' || entry.verb === 'timeout' || entry.verb === 'finish-all') return 'terminal'
+  if (entry.verb === 'suspend') return 'suspended'
+  return 'running'
+}
+
+/**
+ * 会话行派发循环徽标派生（纯函数——账本行 projectionValues['forge-dispatch-events']
+ * 窄读）：状态 = 最近一枚进度事件的场景码映射；多容器按 sourceSlug 归属（slug 随
+ * 判定事件）。窗口（500）空而 total > 0 = 最近 loop 级事件已被挤出——状态推导退化为
+ * 「未知」即零徽标，不误报 running（提案 §2.4 兜底口径，与 2.2 实例边界同款）；
+ * total = 0 = 从未循环（零徽标）。键缺席/形状漂移 = undefined（capability absence
+ * 与防御读同口径）。
  */
 export function sessionLoopBadge(row: LedgerSessionRow): SessionLoopBadge | undefined {
   const values = row.projectionValues
   if (typeof values !== 'object' || values === null) return undefined
-  const raw = values[FORGE_DISPATCH_LOOP_KEY]
+  const raw = values[FORGE_DISPATCH_EVENTS_KEY]
   if (typeof raw !== 'object' || raw === null) return undefined
-  const candidate = raw as { readonly status?: unknown; readonly sourceSlug?: unknown }
-  if (typeof candidate.status !== 'string' || !LOOP_BADGE_STATUSES.has(candidate.status)) return undefined
-  const slug =
-    typeof candidate.sourceSlug === 'string' && candidate.sourceSlug !== '' ? candidate.sourceSlug : null
-  return { status: candidate.status as SessionLoopBadge['status'], slug }
+  const candidate = raw as { readonly entries?: unknown; readonly total?: unknown }
+  if (!Array.isArray(candidate.entries) || typeof candidate.total !== 'number') return undefined
+  const entries = candidate.entries.filter(isLoopProgressEntry)
+  const latest = entries[entries.length - 1]
+  if (latest === undefined) return undefined
+  return { status: loopPhaseOfEntry(latest), slug: latest.sourceSlug !== '' ? latest.sourceSlug : null }
 }
 
 /**
- * 循环状态词（用户视角三态——1.8 文字徽标词表沿袭；R2 徽标退役后词不消失，
- * 退至 aria/hover 语义层）。
+ * 循环状态词（用户视角三态——扫视层归图形[左缘标记]，语义层退至 aria/hover 文字）。
  */
 export function sessionLoopStatusLabel(status: SessionLoopBadge['status']): string {
-  return status === 'starting' ? '启动中' : status === 'stopping' ? '停止中' : '派发循环中'
+  return status === 'running' ? '派发循环中' : status === 'suspended' ? '循环挂起' : '循环已结束'
 }
 
 /**
- * 循环行语义层 aria（R2·决策 #30——扫视层归图形[左缘流光]，语义层归文字）：
- * 「任务源 slug + 状态词」；无参问询路径（slug null）回退「派发循环 + 状态词」
- * （日志不可知零猜测）。D30 零原生 title 纪律延续——aria 承载、hover 同文本。
+ * 循环行语义层 aria（R2·决策 #30——扫视层归图形[左缘标记]，语义层归文字）：
+ * 「任务源 slug + 状态词」；无 slug 防御兜底回退状态词。D30 零原生 title 纪律延续——
+ * aria 承载、hover 同文本。
  */
 export function sessionLoopAriaLabel(loop: SessionLoopBadge): string {
   const word = sessionLoopStatusLabel(loop.status)
-  return loop.slug === null ? `派发循环${word}` : `任务源 ${loop.slug} · 状态 ${word}`
+  return loop.slug === null ? word : `任务源 ${loop.slug} · 状态 ${word}`
 }
 
 /** 面板项目节点（项目 = forge projects 行；会话 = 该项目 workspace 名下账本行） */

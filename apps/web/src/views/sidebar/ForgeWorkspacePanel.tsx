@@ -206,7 +206,8 @@ interface SessionRowActions {
 }
 
 /**
- * 派发循环行左缘标记（S7 改版·R2·决策 #30——run-tasks-host-command 1.8 文字徽标退役）。
+ * 派发循环行左缘标记（S7 改版·R2·决策 #30——run-tasks-host-command 1.8 文字徽标退役；
+ * 提案 loop-consol-flywheel-improvement §2.4 判据换源恢复）。
  * 兜底面记账（proposal S7「上游 sidebar 徽标缝任务内核实」）：上游缝存在但本产品
  * 不可挂接——① `sidebar.session.row.leading` 座契约明文只在行主状态 idle 时挂载
  * （dsh-client-ui-workspace slots.d.ts：「never renders beside a status dot」），循环
@@ -214,15 +215,17 @@ interface SessionRowActions {
  * 撤换的时刻；hover 座仅悬浮卡打开时挂载。② 决定性：本产品 sidebar.workspaces 洞位
  * 由 ForgeSidebarSlot 以 priority -100 影子占用（plugin.ts 2.7 槽位路线 A），官方
  * WorkspaceBrowser 及其两座在本产品不挂载。故循环状态落产品自有会话行（本组件），
- * 数据经账本行 projectionValues['forge-dispatch-loop'] 窄读（sidebar-model
- * sessionLoopBadge——零新增 RPC、零新增记录）。
- * R2 形态（预览工件 walkthrough/loop-visual-marker-preview-v2.html 变体 R2 为准绳）：
- * 行左缘 2-3px 标记即循环状态——running = 蓝色连续流光（CSS-only 渐变
- * background-position 动画，sidebar.css dswf-loop-flowdown）；starting/stopping =
- * 琥珀静态左缘；非活循环族 = 零标记（sessionLoopBadge 派生同 1.8 语义）。扫视层归
- * 图形，语义层退至 hover/aria——行 aria-label 承载「任务源 slug + 状态词」
- * （sessionLoopAriaLabel；D30 零原生 title 纪律延续）。离开 running 后左缘 2s 渐隐
- * （fading 态——CSS 动画 opacity 收敛后卸载；reduced-motion 降级全静态）。
+ * 数据经账本行 projectionValues['forge-dispatch-events'] 窄读（sidebar-model
+ * sessionLoopBadge——循环级 progress 事件场景码映射三态；零新增 RPC、零新增记录；
+ * 旧 'forge-dispatch-loop' 指令折叠投影因 3b 正门改造断供已退役）。
+ * R2 形态（视觉沿用既有词汇——D1 裁决）：行左缘 2-3px 标记即循环状态——running =
+ * 蓝色连续流光（CSS-only 渐变 background-position 动画，sidebar.css dswf-loop-flowdown）；
+ * suspended = 琥珀静态左缘；terminal = 灰质静态左缘且持续保留（D2 裁决：终态标识一直
+ * 不消失，供用户查找执行过循环的会话）。窗口挤出最近 loop 级事件时推导退化为未知 =
+ * 零标记（不误报 running）。扫视层归图形，语义层退至 hover/aria——行 aria-label 承载
+ * 「任务源 slug + 状态词」（sessionLoopAriaLabel；D30 零原生 title 纪律延续）。徽标
+ * 消失（状态退化）时左缘 2s 渐隐（fading 态——CSS 动画 opacity 收敛后卸载；
+ * reduced-motion 降级全静态）。
  */
 function SessionLoopEdgeFade({
   status,
@@ -287,15 +290,14 @@ function SessionRow({
   actions?: SessionRowActions
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
-  // S7 R2：循环离场渐隐态（running 离开活循环族 → 左缘 ≤2s 渐隐后归普通行；本地
-  // 微观态不持久化——上一次循环状态记翻转判据；stopping 直接退场零渐隐=琥珀静态缘
-  // 本就无动效语义）
+  // S7 R2：循环徽标消失渐隐态（§2.4 三态下仅窗口退化路径会消失——左缘 ≤2s 渐隐后归
+  // 普通行；本地微观态不持久化——上一次循环状态记翻转判据；terminal 持续保留不消失[D2]）
   const [fadeStatus, setFadeStatus] = useState<SessionLoopBadge['status'] | null>(null)
   const prevLoopRef = useRef(row.loop)
   useEffect(() => {
     const prev = prevLoopRef.current
     prevLoopRef.current = row.loop
-    if (prev !== undefined && row.loop === undefined && prev.status !== 'stopping') {
+    if (prev !== undefined && row.loop === undefined) {
       setFadeStatus(prev.status)
     }
   }, [row.loop])
