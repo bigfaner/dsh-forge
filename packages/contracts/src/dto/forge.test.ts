@@ -20,7 +20,7 @@ import type { ForgeEventChannel } from '../channels.js'
 import type { ErrorCode } from '../errors.js'
 import { CONTAINER_KINDS, DEFAULT_EXPERT_MAPPING, FEATURE_RECORD_VERBS, FORGE_PLUGIN_EVENT_TYPES, MODES, REASONING_LEVELS } from './forge.js'
 import type { ExpertsSettings, ReasoningEffortLevel } from './forge.js'
-import { TASK_TYPES } from '../labels.js'
+import type { TaskType } from '../labels.js'
 import type {
   AddTaskInput,
   BridgeEventMessage,
@@ -303,7 +303,7 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     const settings: ForgeSettings = { experts: expertsSettings }
     expect(settings.experts?.mapping?.['coding-fix']).toBe('my-fix-expert')
     expect(settings.experts?.mapping?.['gate']).toBeUndefined() // 缺键 = 默认映射生效
-    expectTypeOf<NonNullable<ForgeSettings['experts']>['mapping']>().toEqualTypeOf<Partial<Record<(typeof TASK_TYPES)[number], string>> | undefined>()
+    expectTypeOf<NonNullable<ForgeSettings['experts']>['mapping']>().toEqualTypeOf<Partial<Record<TaskType | 'triage', string>> | undefined>()
     // set 入参同面（分节覆写语义一致）
     expectTypeOf<Parameters<ForgeSettingsService['set']>[0]['experts']>().toEqualTypeOf<ForgeSettings['experts']>()
   })

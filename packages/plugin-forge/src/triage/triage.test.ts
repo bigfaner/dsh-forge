@@ -227,7 +227,7 @@ describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worke
         get: async () => ({ experts: { mapping: { triage: 'my-triage' } } }),
       } as unknown as Pick<ForgeSettingsService, 'get'>,
       resolveExpertProfile: async (_taskType, key) => {
-        seenKeys.push(key)
+        seenKeys.push(key ?? '<missing>')
         return PROFILE
       },
     })
@@ -246,7 +246,7 @@ describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worke
     const seenKeys: string[] = []
     const built = build({
       resolveExpertProfile: async (_taskType, key) => {
-        seenKeys.push(key)
+        seenKeys.push(key ?? '<missing>')
         return { name: 'triage-analyst', personaMd: '档案正文。' }
       },
     })
