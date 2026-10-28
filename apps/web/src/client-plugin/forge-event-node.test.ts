@@ -95,6 +95,12 @@ function simulate(events: readonly ForgeMessageEventLike[]): {
   return { stream: streamState ?? EMPTY_FORGE_EVENT_STREAM, nodes }
 }
 
+/** 交棒/空组保底断言：同 key 同 id、visibility 'hidden' 的组块节点（官方钦定形态） */
+function expectHidden(node: unknown): void {
+  expect(node).not.toBeNull()
+  expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, visibility: 'hidden' })
+}
+
 describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', () => {
   it('连续 forge 事件同组追加；人类插话后事件开新组（前组条目保留）', () => {
     let state = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, forgeMsg(1, 'm1', '启动', '接续执行'))
@@ -206,10 +212,10 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     expect(forgeEventGroupDefinition.match(injectMsg(3, 'i1'))).toBeNull()
     expect(forgeEventGroupDefinition.match(progressEvt(4, {}))).toEqual({ id: 'forge-event-progress-4', role: 'start' })
   })
-  it('两组三事件：组1末成员交棒 null、组2末成员独发（isLatest=true、anchorSeq=组末 seq）', () => {
+  it('两组三事件：组1末成员交棒 hidden、组2末成员独发（isLatest=true、anchorSeq=组末 seq）', () => {
     const { stream, nodes } = simulate([forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b'), humanMsg(3, 'h1', '继续'), forgeMsg(4, 'm3', '完成', 'c')])
     expect(stream.groups).toHaveLength(2)
-    expect(nodes.get('m1')).toBeNull()
+    expectHidden(nodes.get('m1'))
     const g1 = nodes.get('m2')
     expect(g1).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, anchorSeq: 2, visibility: 'visible' })
     expect((g1 as { data: { isLatest: boolean; entries: unknown[] } }).data.isLatest).toBe(false)
@@ -220,10 +226,10 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     expect((g2 as { data: { entries: unknown[] } }).data.entries).toHaveLength(1)
     expect(nodes.size).toBe(3)
   })
-  it('stream 缺席（reader 空）= 不发射（fail-soft 零残留）', () => {
+  it('stream 缺席（reader 空）= 不发射（fail-soft——hidden 保底不回 null）', () => {
     const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
     expect(state.emit).toBe(false)
-    expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state })).toBeNull()
+    expectHidden(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state }))
   })
   it('re-anchor：turn 结束后组卡锚 = turn/end seq（≥ answerAnchorSeq——卡片落回复下方）', () => {
     const { nodes } = simulate([
@@ -234,7 +240,7 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     ])
     // stream revision 随 turn/end 变更 → 组 Context 重放 → 锚移 turn/end seq
     expect(nodes.get('m2')).toMatchObject({ anchorSeq: 9 })
-    expect(nodes.get('m1')).toBeNull() // 交棒：末成员独发
+    expectHidden(nodes.get('m1')) // 交棒：末成员独发
   })
   it('turn 未结束 = 锚组末 seq（活跃 turn 过程折叠恒开——卡可见随组尾）', () => {
     const { nodes } = simulate([
@@ -253,13 +259,13 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
 })
 
 describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——尾成员交棒）', () => {
-  it('消息组收到 progress：消息节点交棒 null，progress 节点独发携全量条目（零新卡）', () => {
+  it('消息组收到 progress：消息节点交棒 hidden，progress 节点独发携全量条目（零新卡）', () => {
     const { nodes } = simulate([
       forgeMsg(1, 'm1', '启动', 'a'),
       progressEvt(2, { taskKey: 'feat-x/1.2', taskTitle: '标题', status: 'running' }),
       progressEvt(3, { taskKey: 'feat-x/1.2', taskTitle: '标题', status: 'completed', verb: 'settle' }),
     ])
-    expect(nodes.get('m1')).toBeNull()
+    expectHidden(nodes.get('m1'))
     const tail = nodes.get('forge-event-progress-3')
     expect(tail).not.toBeNull()
     expect(tail).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, anchorSeq: 3, visibility: 'visible' })
@@ -267,7 +273,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
     expect(data.progress).toHaveLength(2)
     expect(data.entries).toHaveLength(1)
     expect(data.isLatest).toBe(true)
-    expect(nodes.get('forge-event-progress-2')).toBeNull() // 前 progress 交棒
+    expectHidden(nodes.get('forge-event-progress-2')) // 前 progress 交棒
   })
   it('纯 progress 组（零消息——1.1 后正常路径）：恰一枚尾节点发射', () => {
     const { stream, nodes } = simulate([
@@ -275,7 +281,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
       progressEvt(2, { taskKey: 'feat-x/1.3', status: 'running' }),
     ])
     expect(stream.groups).toHaveLength(1)
-    expect(nodes.get('forge-event-progress-1')).toBeNull()
+    expectHidden(nodes.get('forge-event-progress-1'))
     expect(nodes.get('forge-event-progress-2')).toMatchObject({ anchorSeq: 2 })
   })
   it('turn 已结束后 progress 到达：锚 = progress seq（活跃进度轨随组尾）', () => {
@@ -286,7 +292,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
       progressEvt(10, { taskKey: 'feat-x/1.2', status: 'running' }),
     ])
     expect(nodes.get('forge-event-progress-10')).toMatchObject({ anchorSeq: 10 })
-    expect(nodes.get('m1')).toBeNull()
+    expectHidden(nodes.get('m1'))
   })
   it('stream match：forge/progress 命中（revision++ 驱动组块重放）', () => {
     expect(forgeEventStreamDefinition.match(progressEvt(4, {}))).toEqual({ id: 'stream', role: 'start' })
@@ -301,5 +307,25 @@ describe('forgeEventStreamDefinition（状态机注册形状）', () => {
   })
   it("publication 'none'——state-only Context 零渲染成本（inboxDefinition 同型）", () => {
     expect(forgeEventStreamDefinition.publication()).toBe('none')
+  })
+})
+
+describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底）', () => {
+  it('emit true→false 交棒：同 key 同 id + visibility hidden（官方钦定，client.js:2505），组快照保留', () => {
+    const { nodes } = simulate([forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b')])
+    const handoff = nodes.get('m1') as { key: string; id: string; visibility: string; data: { entries: unknown[] } } | null
+    expect(handoff).not.toBeNull()
+    expect(handoff?.key).toBe('k-0')
+    expect(handoff?.id).toBe('m1')
+    expect(handoff?.visibility).toBe('hidden')
+    expect(handoff?.data.entries).toHaveLength(2) // 组快照不丢
+  })
+  it('空组保底（entries+progress 全空）：hidden 而非 null', () => {
+    const state = forgeEventGroupDefinition.start(undefined, { event: forgeMsg(1, 'm1', '启动', 'x') }, { previous: () => undefined })
+    expect(state.group.entries).toHaveLength(0)
+    expectHidden(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1', state, start: { location: { kind: 'unresolved' } } }))
+  })
+  it('state === undefined（从未物化）：保留 null（不触断言）', () => {
+    expect(forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })).toBeNull()
   })
 })

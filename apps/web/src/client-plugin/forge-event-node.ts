@@ -16,7 +16,8 @@
 //   ② forgeEventGroupDefinition（target 'chat'）：每条 forge 事件消息一个 Context
 //      （id = 消息 id——id 键控增量渲染）；buildViewNode 仅组的末成员发射组块节点
 //      （anchorSeq = 末成员 seq——组块锚在组尾，后续人类气泡自然排后），其余成员
-//      null（零重复渲染）。
+//      回同 key + visibility:'hidden'（官方增量 flush 禁已物化 target 回 null——
+//      client.js:2505 withdrew 断言；hidden 保底零重复渲染）。
 //
 // 分组/成员判定全部为纯 fold（日志纯函数——事件重放/会话 fork 保真）。
 // 数据守卫归壳树 views/session/forge-event-data.ts（1.17 报障收口先例——守卫归唯一
@@ -400,11 +401,15 @@ export const forgeEventGroupDefinition = {
   publication: (): 'none' => 'none',
   buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown | null => {
     const state = context.state
-    if (state === undefined || !state.emit) return null
-    if (state.group.entries.length === 0 && (state.group.progress?.length ?? 0) === 0) return null
+    // state === undefined（从未物化）回 null 不触官方断言；已物化 Context（state 在场）
+    // 不再回 null——交棒/空组回同 key 同 id + visibility:'hidden'（官方钦定修法：
+    // dsh-client-ui-conversation client.js:2505 buildTargetUpserts 对已物化 target 回
+    // null 即抛 withdrew materialized target，增量 flush 中止渲染停滞）。
+    if (state === undefined) return null
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
     // 直读 location.kind）：start/matches 携带 location 则透传，否则 unresolved。
     const location = context.start?.location ?? context.matches?.[0]?.location ?? { kind: 'unresolved' }
+    const visible = state.emit && (state.group.entries.length > 0 || (state.group.progress?.length ?? 0) > 0)
     return {
       key: context.key,
       kind: FORGE_EVENT_NODE_KIND,
@@ -412,7 +417,7 @@ export const forgeEventGroupDefinition = {
       target: 'chat',
       anchorSeq: state.anchorSeq,
       location,
-      visibility: 'visible',
+      visibility: visible ? 'visible' : 'hidden',
       data: {
         key: state.group.key,
         firstSeq: state.group.firstSeq,
