@@ -304,11 +304,11 @@ function pipelineTextOf(rt: TempRuntime, agentId: string | undefined): string {
   return (text as (context: { agent?: { id?: string } }) => string)({ agent: { id: agentId } })
 }
 
-describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511 + forge:dispatch-loop / order 512）', () => {
-  it('默认装配：三段（pipeline + doc-style + dispatch-loop，name/order/text 三件在场）', () => {
+describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 511 + forge:dispatch-loop / order 512 + forge:commander / order 513）', () => {
+  it('默认装配：四段（pipeline + doc-style + dispatch-loop + commander，name/order/text 三件在场）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
-    expect(rt.sections).toHaveLength(3)
+    expect(rt.sections).toHaveLength(4)
     const pipeline = rt.sections.find((s) => s.name === FORGE_SECTION_NAME)
     const docStyle = rt.sections.find((s) => s.name === 'forge:doc-style')
     expect(pipeline?.order).toBe(510)
@@ -325,6 +325,12 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     expect(typeof dispatchLoop?.text).toBe('function')
     const dispatchLoopText = dispatchLoop?.text as (context: { agent?: { id?: string } }) => string
     expect(dispatchLoopText({ agent: { id: 'sess-a1' } })).toBe('')
+    // expert-squad-forge-2 指挥者段（条件注入——experts 服务缺席 = 空串整体过滤）
+    const commander = rt.sections.find((s) => s.name === 'forge:commander')
+    expect(commander?.order).toBe(513)
+    expect(typeof commander?.text).toBe('function')
+    const commanderText = commander?.text as () => string
+    expect(commanderText()).toBe('')
     dispose()
   })
 
@@ -340,11 +346,45 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
     d2()
   })
 
-  it('disposer 全注销（tool×14 + 段×3，各恰一次）', () => {
+  it('disposer 全注销（tool×14 + 段×4，各恰一次）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 3 })
+    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 4 })
+  })
+})
+
+describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——ctx.experts 服务在场性惰性检测）', () => {
+  const commanderTextOf = (rt: TempRuntime): string => {
+    const section = rt.sections.find((s) => s.name === 'forge:commander')
+    expect(typeof section?.text).toBe('function')
+    return (section!.text as () => string)()
+  }
+
+  it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    const text = commanderTextOf(rt)
+    expect(text).toContain('指挥者模式')
+    expect(text).toContain('信息搜索与核实')
+    expect(text).toContain('技术调研')
+    expect(text).toContain('提案评审')
+    expect(text).toContain('PRD 评审')
+    expect(text).toContain('设计评审')
+    expect(text).toContain('用户访谈')
+    expect(text).toContain('任务拆解')
+    dispose()
+  })
+
+  it('experts 服务缺席/面畸形：零注入（空串 = 官方整体过滤）', () => {
+    const rtAbsent = new TempRuntime()
+    const d1 = forgePlugin(rtAbsent.ctx())
+    expect(commanderTextOf(rtAbsent)).toBe('')
+    d1()
+    const rtMalformed = new TempRuntime()
+    const d2 = forgePlugin(rtMalformed.withReflect({ experts: {} }) as never)
+    expect(commanderTextOf(rtMalformed)).toBe('')
+    d2()
   })
 })
 
@@ -424,7 +464,7 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(pipelineTextOf(rt, 'sess-x')).not.toContain('文档位置')
     dispose()
-    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 3 })
+    expect(rt.disposedCounts()).toEqual({ tools: 18, sections: 4 })
   })
 })
 
