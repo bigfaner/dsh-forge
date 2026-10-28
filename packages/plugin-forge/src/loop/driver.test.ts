@@ -3388,6 +3388,34 @@ describe('异常挂起径唤醒去重与处置入口（bug 33728995 ①②）', 
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
+  it('bug 2055da00：同任务异因新发挂起必出新唤醒卡（同 minor 异 reason——键含成因不再实例域终身吞卡）', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: Array.from({ length: 8 }, () => statsOf({ in_progress: 1 })),
+      query: [queryOf('in_progress'), queryOf('in_progress')],
+      incidents: { record: () => 'logs/feat-x/2.5/001-worker-rate-limited/' },
+    })
+    built.spawn.setBehavior(async (n) => ({
+      workerSessionId: `worker-${n}`,
+      // 第一因：429 配额限流；resume 续跑后再挂起为异因（上游 throttle）——同 minor 同任务
+      result: Promise.resolve({
+        stopReason: 'error',
+        output: n === 1 ? 'provider error: 429 quota exceeded' : 'request throttled by upstream gateway',
+      }),
+      dispose: async () => {},
+    }))
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    const first = await untilSuspended(built.driver) // 第一因限流挂起（出第一张卡）
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    const second = await untilSuspended(built.driver) // 异因再挂起（必须出第二张卡）
+    // 异因实证：两次挂起 escalation.reason 全文不同（同 minor 同任务）
+    expect((second.escalation as { reason: string }).reason).not.toBe((first.escalation as { reason: string }).reason)
+    const wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup)
+    expect(wakeups).toHaveLength(2)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
   it('bug a058eaee：唤醒 send 携预构建折叠摘要（headline）——重试短语/原因全文/处置入口三要素在摘要内（组卡条目只渲染摘要）', async () => {
     const built = build({
       claim: [claimed(), claimed(), claimed(), claimed()],

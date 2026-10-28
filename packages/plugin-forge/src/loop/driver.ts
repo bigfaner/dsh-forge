@@ -1051,8 +1051,10 @@ async function suspendWithWakeup(
   })
   const detail = incidentPath !== undefined ? `原因全文：${incidentPath}` : '原因全文落盘降级（事件子文件夹不可用）'
   // 唤醒去重（bug 33728995①——同实例同事件恰一张卡：挂起回流续跑再挂起同一事件不再重复
-  // send；投影事件与 incident 落盘不去重——留痕单源仍每挂起一条）
-  const wakeupKey = `${input.minor}:${input.progressTaskKey}`
+  // send；投影事件与 incident 落盘不去重——留痕单源仍每挂起一条）。键含成因全文
+  // （bug 2055da00——minor:taskKey 实例域终身生效会吞同任务异因新发挂起：键收敛到同一次
+  // 成因事件——同因复发（reason 全文一致）仍去重，异因新发必出新卡）
+  const wakeupKey = `${input.minor}:${input.progressTaskKey}:${input.reason}`
   const firstWakeup = !loop.wakeupKeys.has(wakeupKey)
   loop.wakeupKeys.add(wakeupKey)
   if (firstWakeup) {

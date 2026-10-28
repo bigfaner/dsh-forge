@@ -321,8 +321,12 @@ export function dispatchPanelEntriesOf(
   if (logEntries === undefined || logEntries.length === 0) return view.entries
   const windowSlugs = new Set(view.entries.map((entry) => entry.sourceSlug))
   const replayed = dispatchLoopInstanceEntries(logEntries)
+  // 采用判据（bug 50a5b8dc——总长度比较多实例会话失真：新实例早期条目少于窗口即被误弃）：
+  // 回放含最新循环实例启动事件（首条即 startup）且完整覆盖其区间——会话日志只追加，
+  // 启动事件在场即区间完整；容器交集防御（跨会话串扰）保留。
+  const coversLatestInstance = replayed.length > 0 && isLoopInstanceStartEntry(replayed[0] as DispatchEventEntry)
   const covered = replayed.some((entry) => windowSlugs.has(entry.sourceSlug))
-  return covered && replayed.length >= view.entries.length ? replayed : view.entries
+  return covered && coversLatestInstance ? replayed : view.entries
 }
 
 /** 会话日志回放快照窄形状（progressLog 注入快照——条目已由录取面守卫） */

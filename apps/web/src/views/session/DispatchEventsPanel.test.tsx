@@ -558,6 +558,33 @@ describe('dispatchPanelEntriesOf（消费侧兜底装配——窗口丢失时回
     expect(merged.some((e) => e.taskKey === 'feat-x/1.1')).toBe(true)
   })
 
+  it('bug 50a5b8dc：多实例会话——回放条数少于窗口也采用（判据=含最新实例启动且覆盖区间，非总长度比较）', () => {
+    // 前轮实例长尾把投影窗口填满（窗口 5 条均属旧实例尾部 + 新实例早期条目），新实例
+    // 回放仅 3 条——总长度比较误弃回放，新实例早期任务行失。
+    const windowEntries = [
+      entry({ taskKey: 'feat-x/1.9', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 96 }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 97 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 101 }),
+      entry({ taskKey: 'feat-x/2.2', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 102 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 103 }),
+    ]
+    const view = { entries: windowEntries, total: 400 }
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      ...Array.from({ length: 10 }, (_, i) => entry({ taskKey: `feat-x/1.${i + 1}`, at: t + 1 + i })),
+      loopRow({ verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 97 }),
+      loopRow({ verb: 'startup', scenario: 'startup/resume-stopped', at: t + 100 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 101 }),
+      entry({ taskKey: 'feat-x/2.2', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 102 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 103 }),
+    ]
+    const merged = dispatchPanelEntriesOf(view, log)
+    expect(merged).toHaveLength(4) // 新实例完整区间（startup + 2.1 + 2.2 + 2.1 结算）
+    expect(isLoopInstanceStartEntry(merged[0] as DispatchEventEntry)).toBe(true)
+    expect(merged.some((e) => e.taskKey === 'feat-x/2.1')).toBe(true)
+    expect(merged.some((e) => e.taskKey === 'feat-x/1.9')).toBe(false) // 前轮实例不混入
+  })
+
   it('窗口丢失 + 回放源缺席/无启动标记 = 退回窗口（fail-soft 降级现状）', () => {
     const view = { entries: [entry()], total: 400 }
     expect(dispatchPanelEntriesOf(view, undefined)).toEqual(view.entries)
