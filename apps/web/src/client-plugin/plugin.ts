@@ -44,13 +44,15 @@ import type { LedgerSessionsSnapshot, SnapshotSource } from '../views/sidebar/si
 // loop-message-consolidation 1.3：会话日志进度回放快照契约类型（type-only——录取/守卫逻辑
 // 本文件结构同型镜像 DispatchEventsPanel.tsx，bundle 自含纪律不破）
 import type { DispatchEventEntry, DispatchProgressLogSnapshot } from '../views/session/DispatchEventsPanel.js'
-// 1.17 'forge/progress' Chat 节点定义（纯模块零 import——bundle 自含纪律不破）
-import {
-  FORGE_PROGRESS_NODE_KIND,
-  FORGE_PROGRESS_NODE_SLOT,
-  forgeProgressDefinition,
-  type ForgeUiConversationService,
-} from './progress-node.js'
+// bug 60461fc5 双轨归一：1.17 单行 progress 节点注册面（progress-node.ts forgeProgressDefinition
+// + keyed 'forge-progress' body）已退役——progress 事件仅经 1.9 组卡（forge-event-node）渲染。
+// 1.17 遗留 uiConversation 服务窄面就地保留（registerEventEntriesNode 消费切片——goal/workflow-run 同型）
+interface ForgeUiConversationService {
+  readonly events: {
+    /** 注册一个节点 Definition；重复 kind 抛错（官方注册表语义——单次注册不触） */
+    register(definition: unknown): void
+  }
+}
 // loop-event-delivery 1.9 消息面事件折叠条目组定义对（纯模块零 import——同上）
 import {
   FORGE_EVENT_NODE_KIND,
@@ -765,7 +767,6 @@ export interface ForgeViewsGlobal {
     ForgeKnowledgeGlyph: unknown
     ForgeRecallView: unknown
     ForgeDispatchToolRow: unknown
-    ForgeProgressNode: unknown
     ForgeEventEntries: unknown
     ForgeOverviewTab: unknown
     ForgeDocsTab: unknown
@@ -1074,7 +1075,6 @@ function registerConversationViews(
       views.ForgeDispatchToolRow,
     ),
   )
-  registerProgressNode(ctx, views, diagnostics)
   registerEventEntriesNode(ctx, views, diagnostics)
 }
 
@@ -1207,38 +1207,6 @@ function tapForgeProgressEvent(event: { readonly type?: unknown; readonly seq?: 
   FORGE_PROGRESS_LOG_TAP.entries = [...FORGE_PROGRESS_LOG_TAP.entries, entry]
   FORGE_PROGRESS_LOG_TAP.snapshot = { entries: FORGE_PROGRESS_LOG_TAP.entries }
   for (const listener of FORGE_PROGRESS_LOG_TAP.listeners) listener()
-}
-
-/**
- * 1.17 循环进度流内交错节点（'forge/progress' 会话事件——decisions #34）：两段注册
- * （workflow-run 同型）——① `uiConversation.events.register` 节点 Definition（每枚事件
- * 独立成节点，seq 时序天然交错；零折叠）；② `conversation.chat.node` keyed
- * 'forge-progress' body（DisclosureRow 同族折叠行——组件经发布面递达）。uiConversation
- * 缺席/异常 = 两段全跳 fail-soft 不炸（capability absence = 无节点——宿主未装配官方
- * 会话注册表的降级面）；notice 双通道零回归（本节点为非模型面事件渲染，零模型回合）。
- */
-function registerProgressNode(ctx: ForgeClientCtx, views: PublishedViews, diagnostics: { registered?: string[] }): void {
-  let uiConversation: ForgeUiConversationService | undefined
-  try {
-    uiConversation = ctx.get('uiConversation') as ForgeUiConversationService | undefined
-  } catch {
-    uiConversation = undefined
-  }
-  const registerEvents = uiConversation?.events?.register
-  if (uiConversation === undefined || typeof registerEvents !== 'function') return
-  try {
-    registerEvents.call(uiConversation.events, forgeProgressDefinition)
-  } catch {
-    return // Definition 注册被拒（重复 kind 等）——渲染段不落半座
-  }
-  registerSlotEntry(ctx, FORGE_PROGRESS_NODE_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      // keyed node body：key = 节点 kind（buildViewNode.kind 字面量同源）；locale NS
-      // 声明（行内 t 座——组件自足标签暂零词条，注册面留语言归属锚）
-      { name: FORGE_PROGRESS_NODE_SLOT, key: FORGE_PROGRESS_NODE_KIND, locale: FORGE_LOCALE_NS },
-      views.ForgeProgressNode,
-    ),
-  )
 }
 
 /**
@@ -1412,7 +1380,7 @@ export const FORGE_HEALTH_SLOT_KEYS = [
   CONVERSATION_VIEW_SLOT,
   HERO_WORKSPACE_SLOT,
   TOOL_CALL_TOOLVIEW_SLOT,
-  FORGE_PROGRESS_NODE_SLOT,
+  FORGE_EVENT_NODE_SLOT, // 1.17 单行 progress 节点洞已随退役摘除（bug 60461fc5）
   SESSION_HEADER_ACTIONS_SLOT,
   CONVERSATION_INPUT_OVERLAY_SLOT,
   SETTINGS_SECTION_SLOT,
