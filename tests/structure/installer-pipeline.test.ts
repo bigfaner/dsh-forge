@@ -128,8 +128,10 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     ...RUNTIME_PACKAGES,
     '@deepseek-ai/dsh-base': '0.2.0-rc.2', // profile 模板 bundles（tech-design「profile 组装与插件分发」）
     '@deepseek-ai/dsh-web-app': '0.2.0-rc.2',
+    '@deepseek-ai/dsh-session': '0.2.0-rc.2', // @dsh-forge/plugin-forge 原生依赖（bug 62211111 同类——progress/dist 静态 import 面）
     'better-sqlite3': '13.0.3', // @dsh-forge/core 原生依赖（prebuilds 随包分发）
     'gray-matter': '4.0.3',
+    'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
   }
   const expectedSorted = Object.keys(expected).sort()
 
@@ -272,6 +274,21 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     const stagedFullNames = new Set([...stagedPackages].map((name) => `@dsh-forge/${name}`))
     const missing = [...imported].filter((name) => !stagedFullNames.has(name)).sort()
     expect(missing, `host dist 静态 import 未入 staging 闭包（安装版启动即崩——staged:true 覆写或闭包补径）：${missing.join('; ')}`).toEqual([])
+  })
+
+  it('bug 62211111：staged 插件的外部（非 @dsh-forge/*）运行时依赖 ⊆ profile.install 依赖——staging 闭包 BFS 只追 @dsh-forge/*，外部依赖缺席安装树即插件运行期 ERR_MODULE_NOT_FOUND（md-mermaid → mermaid 实证）', () => {
+    const installDeps = (readJson('apps/host/profile.install/package.json') as { dependencies: Record<string, string> }).dependencies
+    const missing: string[] = []
+    for (const name of [...stagedPackages].sort()) {
+      const dir = PRODUCT_PLUGIN_PACKAGE_DIRS[`@dsh-forge/${name}`]
+      const manifest = readJson(`packages/${dir !== undefined ? `${dir}/` : ''}${name}/package.json`) as { dependencies?: Record<string, string> }
+      for (const [dep, version] of Object.entries(manifest.dependencies ?? {})) {
+        if (dep.startsWith('@dsh-forge/')) continue
+        if (installDeps[dep] === undefined) missing.push(`${name} → ${dep}@${version}`)
+        else expect(installDeps[dep], `${dep} 版本漂移（${name} 声明 ${version}）`).toBe(version)
+      }
+    }
+    expect(missing, `staged 插件外部依赖未入 profile.install（安装树缺席即 ERR_MODULE_NOT_FOUND）：${missing.join('; ')}`).toEqual([])
   })
 
   it('闭包自洽：已 staging 产品包的 @dsh-forge/* 运行时依赖均在场（kill-switch 误伤即红——boot child ESM 解析断裂→双服务灭→forge:* 通道全未注册）', () => {

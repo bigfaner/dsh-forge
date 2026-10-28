@@ -97,7 +97,15 @@ const EMPTY_MESSAGE = '空源（零内容/纯空白）'
 
 function verdictToVerdictShape(format: string, r: EngineParseResult, unsupported = false): SourceVerdict {
   if (r.ok) return { ok: true, format }
-  return { ok: false, format, line: r.line, message: r.message, unsupported: unsupported || undefined }
+  // 可选字段缺席 = 键缺席（lossless JSON——显式 undefined 属性会被 harness 输出边界整值拒绝，
+  // bug 62211111：引擎失败报错曾被「value is not lossless JSON」吞掉）。
+  return {
+    ok: false,
+    format,
+    ...(r.line !== undefined && { line: r.line }),
+    ...(r.message !== undefined && { message: r.message }),
+    ...(unsupported && { unsupported: true }),
+  }
 }
 
 /**
