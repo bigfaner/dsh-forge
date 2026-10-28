@@ -131,10 +131,12 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
       'data-dswf-session-loop-slug',
       PROP,
     )
-    await expect(row, '态① 左缘标记锚 data-dswf-session-loop-edge="running"（流光）').toHaveAttribute(
-      'data-dswf-session-loop-edge',
-      'running',
-    )
+    // data-dswf-session-loop-edge 挂在行内左缘标记后代 span（ForgeWorkspacePanel.tsx:360），非行元素——
+    // 断言锚到 row 内后代 [data-dswf-session-loop-edge]。
+    await expect(
+      row.locator('[data-dswf-session-loop-edge="running"]'),
+      '态① 左缘标记锚 data-dswf-session-loop-edge="running"（流光）',
+    ).toHaveCount(1)
     await expect(row, '态① aria「任务源 slug · 状态 派发循环中」').toHaveAttribute(
       'aria-label',
       `任务源 ${PROP} · 状态 派发循环中`,
@@ -149,10 +151,10 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
       'data-dswf-session-loop-slug',
       PROP,
     )
-    await expect(row, '态② 左缘标记锚 data-dswf-session-loop-edge="terminal"（灰质静态）').toHaveAttribute(
-      'data-dswf-session-loop-edge',
-      'terminal',
-    )
+    await expect(
+      row.locator('[data-dswf-session-loop-edge="terminal"]'),
+      '态② 左缘标记锚 data-dswf-session-loop-edge="terminal"（灰质静态）',
+    ).toHaveCount(1)
     await expect(row, '态② aria「任务源 slug · 状态 循环已结束」').toHaveAttribute(
       'aria-label',
       `任务源 ${PROP} · 状态 循环已结束`,
@@ -198,10 +200,10 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
       'data-dswf-session-loop-slug',
       PROP,
     )
-    await expect(row, '态③ 左缘标记锚 data-dswf-session-loop-edge="suspended"（琥珀静态）').toHaveAttribute(
-      'data-dswf-session-loop-edge',
-      'suspended',
-    )
+    await expect(
+      row.locator('[data-dswf-session-loop-edge="suspended"]'),
+      '态③ 左缘标记锚 data-dswf-session-loop-edge="suspended"（琥珀静态）',
+    ).toHaveCount(1)
     await expect(row, '态③ aria 含状态词「循环挂起」').toHaveAttribute(
       'aria-label',
       `任务源 ${PROP} · 状态 循环挂起`,
