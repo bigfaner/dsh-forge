@@ -282,17 +282,22 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expectTypeOf<NonNullable<ForgeSettings['worktree']>['crossBranchRiskDismissed']>().toEqualTypeOf<boolean | undefined>()
   })
 
-  it('experts 分节：DEFAULT_EXPERT_MAPPING = 13 键类型→人格键映射（随包预设 13 档案人格化）+ mapping 用户可改', () => {
-    // 13 键齐备（7 个未用类型不带预设档案——两段缺键 → resolver 返回 undefined，persona 仅程序段），值 = 人格键非恒等
+  it('experts 分节：DEFAULT_EXPERT_MAPPING = 17 键类型→人格键映射（随包预设 17 档案人格化）+ mapping 用户可改', () => {
+    // 17 键齐备（validation-code 与 eval 两类型不带预设档案——两段缺键 → resolver 返回 undefined，persona 仅程序段），值 = 人格键非恒等
     expect(Object.keys(DEFAULT_EXPERT_MAPPING).sort()).toEqual([
       'code-quality-simplify', 'coding-cleanup', 'coding-enhancement', 'coding-feature', 'coding-fix', 'coding-refactor',
       'doc', 'doc-consolidate', 'doc-drift', 'doc-review', 'doc-summary', 'gate', 'test-run',
+      'validation-ux', 'test-gen-journeys', 'test-gen-contracts', 'test-gen-scripts',
     ].sort())
     expect(DEFAULT_EXPERT_MAPPING['coding-fix']).toBe('bug-hunter')
     expect(DEFAULT_EXPERT_MAPPING['gate']).toBe('gate-keeper')
     expect(DEFAULT_EXPERT_MAPPING['doc']).toBe('tech-writer')
     expect(DEFAULT_EXPERT_MAPPING['test-run']).toBe('test-conductor')
-    expect(DEFAULT_EXPERT_MAPPING['test-gen-journeys']).toBeUndefined() // 未用类型 = 无预设档案
+    expect(DEFAULT_EXPERT_MAPPING['validation-ux']).toBe('ui-craftsman')
+    expect(DEFAULT_EXPERT_MAPPING['test-gen-journeys']).toBe('test-journey-author')
+    expect(DEFAULT_EXPERT_MAPPING['test-gen-contracts']).toBe('test-contract-author')
+    expect(DEFAULT_EXPERT_MAPPING['test-gen-scripts']).toBe('test-script-author')
+    expect(DEFAULT_EXPERT_MAPPING['validation-code']).toBeUndefined() // 未纳入类型 = 无预设档案
     // experts 段形状：mapping Partial（只列要改指的键；值 = ctx.experts 专家键名——人格键）
     const expertsSettings: ExpertsSettings = { mapping: { 'coding-fix': 'my-fix-expert' } }
     const settings: ForgeSettings = { experts: expertsSettings }

@@ -1058,9 +1058,9 @@ export interface FlywheelSettings {
 
 /**
  * 任务类型 → 专家档案键默认映射（expert-squad-forge §3 纳入 6 + 档案人格化改名 + 1.12/1.13
- * 裁决收窄）：13 键非恒等映射——值 = 随包预设专家档案的人格键（plugin-forge experts/ 目录
- * <人格键>.md，13 个；键 = 任务类型）。7 个从未使用的任务类型（test-gen-journeys/test-gen-contracts/
- * test-gen-scripts/validation-code/validation-ux/eval-contract/eval-journey）不携带预设档案——
+ * 裁决收窄 + 1.2 裁决 validation-ux 进默认映射）：17 键非恒等映射——值 = 随包预设专家
+ * 档案的人格键（plugin-forge experts/ 目录 <人格键>.md；键 = 任务类型）。3 个任务类型
+ * （validation-code/eval-contract/eval-journey）不携带预设档案——
  * 两段缺键 → resolver 返回 undefined（persona 仅程序段形态兼容）。用户可在 settings 的
  * experts.mapping 分节改指向自己的专家键（值同样指人格键；缺键 = 默认映射生效）。
  */
@@ -1078,6 +1078,10 @@ export const DEFAULT_EXPERT_MAPPING: Readonly<Partial<Record<TaskType, string>>>
   'doc-review': 'doc-reviewer',
   'doc-summary': 'summary-distiller',
   'test-run': 'test-conductor',
+  'validation-ux': 'ui-craftsman',
+  'test-gen-journeys': 'test-journey-author',
+  'test-gen-contracts': 'test-contract-author',
+  'test-gen-scripts': 'test-script-author',
 })
 
 /** experts 段——任务类型 → 专家档案键（人格键）映射表（用户可改；缺键回落 DEFAULT_EXPERT_MAPPING） */
