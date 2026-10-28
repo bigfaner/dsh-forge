@@ -542,6 +542,7 @@ export interface ExpertsServiceFace {
     readonly personaMd: string
     readonly tools?: readonly string[]
     readonly model?: string
+    readonly provider?: string
   }
   /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次）。 */
   registerRoot(ctx: unknown, dir: string): void
@@ -556,6 +557,7 @@ export interface ForgeExpertProfile {
   readonly personaMd: string
   readonly tools?: readonly string[]
   readonly model?: string
+  readonly provider?: string
 }
 
 /**
@@ -566,15 +568,18 @@ export interface ForgeExpertProfile {
 export interface WorkerDispatchProfile {
   readonly tools?: readonly string[]
   readonly model?: string
+  readonly provider?: string
 }
 
 /** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
- *  键解析 = settings experts.mapping 覆盖 → DEFAULT_EXPERT_MAPPING 预设；两段均缺键 =
- *  返回 undefined（expert-squad-forge 1.13——未用类型排除预设，不取用不阻断 claim，
- *  core 侧 persona 仅程序段形态兼容）。settings 读失败 = 回落预设映射（fail-soft 诊断）；
- *  有键（用户覆盖或随包预设命中）而档案缺失/禁用 = experts.get 错误原样外抛
- *  （claim 期 fail-loud——用户显式指向或随包预设缺席均阻断派发，不产空 persona）。 */
-export type ExpertProfileResolver = (taskType: string) => Promise<ForgeExpertProfile | undefined>
+ *  键解析优先级（expert-squad-forge-2 纳入 4·claim 变量路由）：expertKey（任务变量注入的
+ *  专家键——复盘/知识沉淀等程序单点派生径）> settings experts.mapping 覆盖 > DEFAULT
+ *  _EXPERT_MAPPING 预设；变量在场时零 settings 读取直取（变量单点注入面，优先级压倒一切
+ *  映射）。三段均缺键 = 返回 undefined（expert-squad-forge 1.13——未用类型排除预设，不取
+ *  用不阻断 claim，core 侧 persona 仅程序段形态兼容）。settings 读失败 = 回落预设映射
+ *  （fail-soft 诊断）；有键（变量/用户覆盖/随包预设命中）而档案缺失/禁用 = experts.get 错
+ *  误原样外抛（claim 期 fail-loud——变量键拼错同样阻断派发且消息含键名，任务留 pending）。 */
+export type ExpertProfileResolver = (taskType: string, expertKey?: string) => Promise<ForgeExpertProfile | undefined>
 
 /** 建档案取用面（装配单例——core claim 链经依赖注入消费；experts 缺席 = undefined 不注入） */
 export function createExpertProfileResolver(deps: {
@@ -585,16 +590,19 @@ export function createExpertProfileResolver(deps: {
    *  promise 结算——已由装配侧吞错归一为 settled-safe，此处零异常路径）。 */
   readonly ready?: Promise<void>
 }): ExpertProfileResolver {
-  return async (taskType: string): Promise<ForgeExpertProfile | undefined> => {
+  return async (taskType: string, expertKey?: string): Promise<ForgeExpertProfile | undefined> => {
     await deps.ready
-    let key: string | undefined = DEFAULT_EXPERT_MAPPING[taskType as TaskType]
-    if (deps.settings !== undefined) {
-      try {
-        const settings = await deps.settings.get()
-        key = settings.experts?.mapping?.[taskType as TaskType] ?? key
-      } catch (cause) {
-        const message = cause instanceof Error ? cause.message : String(cause)
-        console.warn(`forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`)
+    let key: string | undefined = expertKey // 变量路由（expert-squad-forge-2）：在场即压倒两段映射
+    if (key === undefined) {
+      key = DEFAULT_EXPERT_MAPPING[taskType as TaskType]
+      if (deps.settings !== undefined) {
+        try {
+          const settings = await deps.settings.get()
+          key = settings.experts?.mapping?.[taskType as TaskType] ?? key
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          console.warn(`forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`)
+        }
       }
     }
     if (key === undefined) return undefined // 预设缺键且无用户覆盖 = 排除预设，不取用（persona 仅程序段）
@@ -612,6 +620,7 @@ export function createExpertProfileResolver(deps: {
       personaMd: entry.personaMd,
       ...(entry.tools !== undefined ? { tools: entry.tools } : {}),
       ...(entry.model !== undefined ? { model: entry.model } : {}),
+      ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
     }
   }
 }

@@ -206,6 +206,36 @@ describe('AC1 claimTask 全链：转移 + claim 记录（digest）+ 相位重算
   })
 })
 
+// ─────────────────── expert-squad-forge-2：claim 变量路由（任务变量 expert 键透传档案取用面） ───────────────────
+
+describe('claim 变量路由（expert-squad-forge-2）：任务变量 expert 键透传档案取用面', () => {
+  /** 捕获型取用面（记录每笔 claim 的 (taskType, expertKey) 入参——投影返回 undefined 走程序段） */
+  function svcCapturing() {
+    h ??= createTasksHarness()
+    const calls: Array<[string, string | undefined]> = []
+    const resolveExpertProfile = async (taskType: string, expertKey?: string) => {
+      calls.push([taskType, expertKey])
+      return undefined
+    }
+    return {
+      calls,
+      claim: (input: Parameters<typeof claimTask>[1]) =>
+        claimTask({ store: h!.store, events: h!.events, resolveExpertProfile }, input),
+    }
+  }
+
+  it('变量在场：第二参收到变量专家键；变量缺席：第二参 undefined（两态）', async () => {
+    const s = svcCapturing()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '9.1', { type: 'doc' })
+    h!.db.prepare(`UPDATE tasks SET vars_json = ? WHERE id = 't-f-9.1'`).run(JSON.stringify({ expert: 'retro-reviewer' }))
+    await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.1' }, sessionId: 's1' })
+    seedTask(h!.db, 'f', '9.2', { type: 'doc' })
+    await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.2' }, sessionId: 's2' })
+    expect(s.calls).toEqual([['doc', 'retro-reviewer'], ['doc', undefined]])
+  })
+})
+
 describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 创建序', () => {
   it('分支延续优先：最近完成任务的就绪直接后继胜过全局 P0（沿一条分支执行）', async () => {
     const claim = svc()

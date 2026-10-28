@@ -824,6 +824,60 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     await expect(failing('doc-review')).rejects.toThrow(/expert not found: doc-reviewer/)
   })
 
+// ─────────────────────────── expert-squad-forge-2：claim 变量路由 + provider 投影 ───────────────────────────
+
+describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces resolver）', () => {
+  /** experts 服务桩（按键返回档案——entries 控制可选字段） */
+  function faceWith(entries: Record<string, { provider?: string; model?: string }>) {
+    return {
+      get: (key: string) => ({
+        name: key,
+        personaMd: `md:${key}`,
+        ...(entries[key] !== undefined ? entries[key] : {}),
+      }),
+      registerRoot: () => {},
+    }
+  }
+
+  it('变量路由两态：expertKey 在场压倒 settings 覆盖与预设映射；缺席 = 既有映射链不变（settings 覆盖生效）', async () => {
+    const resolver = createExpertProfileResolver({
+      experts: faceWith({ 'retro-reviewer': { provider: 'p1', model: 'm1' } }),
+      settings: { get: async () => ({ experts: { mapping: { doc: 'my-writer' } } }) },
+    })
+    // 变量在场：零 settings 依赖直取（单点注入面优先于一切映射）
+    await expect(resolver('doc', 'retro-reviewer')).resolves.toMatchObject({
+      name: 'retro-reviewer',
+      provider: 'p1',
+      model: 'm1',
+    })
+    // 变量缺席：settings 覆盖 → 预设映射既有链
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'my-writer' })
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper' })
+  })
+
+  it('变量键指向不存在专家 = fail-loud 错误含键名（任务留 pending 由 claim 期外抛语义承担）', async () => {
+    const resolver = createExpertProfileResolver({
+      experts: {
+        get: (key: string) => {
+          throw new Error(`expert not found: ${key}`)
+        },
+        registerRoot: () => {},
+      },
+    })
+    await expect(resolver('doc', 'ghost-expert')).rejects.toThrow(/ghost-expert/)
+  })
+
+  it('provider 投影：档案 provider 字段入 ForgeExpertProfile 投影（spawn agentOptions 成对消费归 workerAgentOptionsOf）', async () => {
+    const resolver = createExpertProfileResolver({
+      experts: faceWith({ 'code-reviewer': { provider: 'anthropic', model: 'claude-x' } }),
+    })
+    await expect(resolver('coding-fix', 'code-reviewer')).resolves.toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-x',
+    })
+  })
+})
+
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
     for (const reflect of [
       reflectWith({}).face, // 无 experts 键

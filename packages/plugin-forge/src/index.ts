@@ -149,6 +149,9 @@ const forgePlugin: ForgePlugin = Object.assign(
             return {
               ...(profile?.tools !== undefined ? { tools: profile.tools } : {}),
               ...(profile?.model !== undefined ? { model: profile.model } : {}),
+              // expert-squad-forge-2 纳入 6：档案 provider 投影透传（spawn agentOptions 成对
+              // 语义归 workerAgentOptionsOf 单点——同给同缺，任一缺席回落 settings 基座）
+              ...(profile?.provider !== undefined ? { provider: profile.provider } : {}),
             }
           }
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。

@@ -77,8 +77,8 @@ export interface TasksServiceDeps {
   ) => { pointer: string; stale: boolean } | undefined
   /** worker 任务目录锚点节渲染（worker-lean-execution 追加轮——可选，缺席/空串 = persona 零追加） */
   readonly resolveWorkerContext?: (projectId: string, source: ContainerRef, localId: string) => string
-  /** 专家档案取用面（expert-squad-forge 1.3——可选，缺席 = persona 仅程序段；缺失/禁用 fail-loud 语义归实现侧） */
-  readonly resolveExpertProfile?: (taskType: string) => Promise<ExpertPersonaProfile | undefined>
+  /** 专家档案取用面（expert-squad-forge 1.3——可选，缺席 = persona 仅程序段；缺失/禁用 fail-loud 语义归实现侧；expertKey = 任务变量注入的专家键（变量路由，优先于映射）） */
+  readonly resolveExpertProfile?: (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>
   /** 证据效度戳写侧（disc 跟进——结算落戳装配注入：容器目录派生 + 当前效度域取数单源在装配方；缺席 = 机制关闭） */
   readonly stampEvidenceValidity?: (input: { projectId: string; slug: string; localId: string; checkoutRoot: string }) => void
 }

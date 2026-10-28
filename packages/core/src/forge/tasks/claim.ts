@@ -294,7 +294,12 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     //     追加轮：任务目录锚点节（容器目录树/logs 锚点——绝对路径唯一承载处；检出根唯一权威
     //     = worker 会话 cwd；persona 纪律句只指称 `forge.project_logs_dir` 变量）非空追加尾部；缺席依赖 = 形态兼容。
     const complexity = (row.complexity ?? 'medium') as Parameters<typeof composePersona>[1]
-    const profile = await deps.resolveExpertProfile?.(row.task_type)
+    // expert-squad-forge-2 纳入 4：claim 变量路由——任务变量 expert 携带专家键时优先于
+    // 类型映射与 settings 覆盖取档（键 = 程序派生单点注入面，非用户手填）；键指向不存在/
+    // 禁用档案 = 取用面 fail-loud 抛错（消息含键名）→ 一切写入之前中断，任务留 pending。
+    const claimVars = row.vars_json !== null ? (JSON.parse(row.vars_json) as Record<string, string>) : undefined
+    const expertKey = typeof claimVars?.expert === 'string' && claimVars.expert !== '' ? claimVars.expert : undefined
+    const profile = await deps.resolveExpertProfile?.(row.task_type, expertKey)
     const persona =
       profile === undefined
         ? composePersona(row.task_type as TaskType, complexity)

@@ -402,7 +402,7 @@ export async function spawnClaimed(
   const toolFilter = deriveWorkerToolFilter(task.taskType, WORKER_TOOL_NAME_FAMILY, profile?.tools)
   // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
   const agentOptions = await reconcileWorkerReasoning(
-    workerAgentOptionsOf(settings, profile?.model),
+    workerAgentOptionsOf(settings, profile),
     deps.resolveModelReasoning,
   )
 

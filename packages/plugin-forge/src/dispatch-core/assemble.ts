@@ -128,14 +128,20 @@ export function deriveTriageToolFilter(): { deny: string[] } {
  * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射）
  * 取舍标注（expert-squad-forge 1.10）：档案 model 生效以 forgeSettings 配置了 worker 段为
  * 前提——worker 段缺席 = 无 provider/model 基座，档案 model 不被消费（回父会话继承）。
+ * provider 成对语义（expert-squad-forge-2 纳入 6）：档案 provider+model 两字段成对在场 =
+ * 整组覆盖 settings 基座（官方 AgentOptions 同给同缺——「A 家模型 X」路由）；任一缺席 =
+ * 回落 settings 基座（仅 model 在场仍按既有语义覆盖 model 位；仅 provider 在场不落位）。
  */
 export function workerAgentOptionsOf(
   settings: ForgeSettings | undefined,
-  profileModel?: string,
+  profile?: { readonly model?: string; readonly provider?: string },
 ): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
   if (settings === undefined || settings.worker === undefined) return undefined
   const { provider, model, reasoning } = settings.worker
-  const base = { provider, model: profileModel ?? model }
+  const base =
+    profile?.provider !== undefined && profile.model !== undefined
+      ? { provider: profile.provider, model: profile.model }
+      : { provider, model: profile?.model ?? model }
   if (reasoning === 'default') return base
   return { ...base, reasoningEffort: reasoning }
 }

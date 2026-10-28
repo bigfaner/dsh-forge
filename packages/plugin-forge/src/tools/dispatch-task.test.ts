@@ -337,6 +337,16 @@ describe('workerAgentOptionsOf + reconcileWorkerReasoning（forgeSettings → ag
     })
   })
 
+  it('档案路由投影（expert-squad-forge-2）：provider+model 成对在场 = 整组覆盖基座；任一缺席 = 回落基座（官方同给同缺）', () => {
+    const base = { worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'default' as const } }
+    expect(workerAgentOptionsOf(base, { provider: 'zai', model: 'glm' })).toEqual({ provider: 'zai', model: 'glm' })
+    expect(workerAgentOptionsOf(base, { model: 'glm' })).toEqual({ provider: 'deepseek', model: 'glm' }) // 仅 model：既有 1.4 语义
+    expect(workerAgentOptionsOf(base, { provider: 'zai' })).toEqual({ provider: 'deepseek', model: 'reasoner' }) // 仅 provider：不落位
+    expect(workerAgentOptionsOf(base, undefined)).toEqual({ provider: 'deepseek', model: 'reasoner' })
+    // settings 未配置 worker 段 = 档案路由不消费（无基座——回父会话继承）
+    expect(workerAgentOptionsOf({}, { provider: 'zai', model: 'glm' })).toBeUndefined()
+  })
+
   it('reconcile：目录已知且档位受支持 → 原样；不支持 → 剥离 effort（无法兼容就不设置）', async () => {
     const kept = { provider: 'p', model: 'm', reasoningEffort: 'high' as const }
     const dropped = { provider: 'p', model: 'm', reasoningEffort: 'medium' as const }

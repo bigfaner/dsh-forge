@@ -240,7 +240,7 @@ const corePlugin: CorePlugin = Object.assign(
           // （core 先于 plugin-forge 加载）；服务缺席/异常 = undefined（形态兼容，persona
           // 仅程序段）；有键而档案缺失/禁用 = 插件侧 fail-loud 抛错原样外抛（claim 一切
           // 写入之前中断，任务留 pending）。
-          resolveExpertProfile: async (taskType) => {
+          resolveExpertProfile: async (taskType, expertKey) => {
             let resolver: unknown
             try {
               resolver = ctx.reflect.get?.('forgeExperts')
@@ -248,7 +248,7 @@ const corePlugin: CorePlugin = Object.assign(
               resolver = undefined
             }
             if (typeof resolver !== 'function') return undefined
-            return (resolver as (taskType: string) => Promise<ExpertPersonaProfile | undefined>)(taskType)
+            return (resolver as (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>)(taskType, expertKey)
           },
         }),
       )
