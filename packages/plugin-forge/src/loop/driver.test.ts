@@ -162,7 +162,8 @@ function trackedSpawn(): { spawn: SpawnWorker; requests: SpawnWorkerRequest[]; m
 }
 
 /** tasks 服务桩（脚本队列 shift-末项重复；读写全记录） */
-function tasksHarness() {
+function tasksHarness(options?: { addTaskFailures?: number }) {
+  let addFails = options?.addTaskFailures ?? 0
   const claimInputs: ClaimTaskInput[] = []
   const statsInputs: unknown[] = []
   const listInputs: ListTasksQuery[] = []
@@ -215,7 +216,22 @@ function tasksHarness() {
           evidenceDebtCount: 0,
         })),
     addTask: async (input: AddTaskInput) => {
+      if (addFails > 0) {
+        addFails -= 1
+        throw new Error('add task failed')
+      }
       addTaskInputs.push(input)
+      // 真实语义镜像：派生任务入池（pending）——在场判定（hasOpen 同构）可观察，防重派误判
+      lists.created.push({
+        taskId: 'fix-uuid',
+        slug: input.source.slug,
+        localId: 'fix-2',
+        title: input.title,
+        taskType: input.type,
+        taskStatus: 'pending',
+        prerequisites: [],
+        sessionCount: 0,
+      })
       return { taskId: 'fix-uuid', slug: input.source.slug, localId: 'fix-2', reused: false }
     },
     transitionTask: async (input: TransitionTaskInput) => {
@@ -317,12 +333,14 @@ function build(options: {
   checkpointRows?: Array<{ mark: string; tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }>
   /** 机械③ 标记落库故障注入（前 N 次 ensureCheckpoint 抛错——append 失败窄窗口模拟） */
   ensureFailures?: number
+  /** 机械③ addTask 派生故障注入（前 N 次 addTask 抛错——知识补派失败不阻断标记模拟） */
+  addTaskFailures?: number
   /** 机械③ 容器 → 提案 id 解析桩 */
   resolveProposalId?: () => Promise<string | undefined>
   /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
   resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
 } = {}): Built {
-  const h = tasksHarness()
+  const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
   if (options.stats !== undefined) h.setStats(options.stats)
   if (options.query !== undefined) h.setQuery(options.query)
@@ -806,10 +824,18 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
       appended: true,
       snapshots: { tasksTotal: 1 },
     })
-    // 复盘任务派生：恰一次，type=doc + 指标/越阈规则/交叉核验/learn 全注入；未越阈零 AC 硬门
-    expect(built.h.addTaskInputs).toHaveLength(1)
+    // 复盘 + 知识沉淀双派生（expert-squad-forge-2）：恰各一次；retro type=doc + retro-reviewer
+    // 变量路由 + 指标/越阈规则/交叉核验/learn 全注入；未越阈零 AC 硬门
+    expect(built.h.addTaskInputs).toHaveLength(2)
     const retro = built.h.addTaskInputs[0]!
-    expect(retro).toMatchObject({ projectId: PROJECT, source: SOURCE, type: 'doc', priority: 'P1', title: 'first-pass 复盘：feat-x' })
+    expect(retro).toMatchObject({
+      projectId: PROJECT,
+      source: SOURCE,
+      type: 'doc',
+      priority: 'P1',
+      title: 'first-pass 复盘：feat-x',
+      vars: { expert: 'retro-reviewer' },
+    })
     expect(retro.taskDesc).toContain('一次通过率')
     expect(retro.taskDesc).toContain('返工增量比')
     expect(retro.taskDesc).toContain('修正波次')
@@ -820,11 +846,25 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     expect(retro.taskDesc).toContain('.knowledge/')
     expect(retro.taskDesc).toContain('< 6 → 未越阈')
     expect(retro.acceptanceCriteria).toBeUndefined()
+    // 知识沉淀任务（同轮独立派生）：knowledge-curator 变量路由 + 专属标题前缀 + 沉淀简报
+    const knowledge = built.h.addTaskInputs[1]!
+    expect(knowledge).toMatchObject({
+      projectId: PROJECT,
+      source: SOURCE,
+      type: 'doc',
+      priority: 'P2',
+      title: 'first-pass 知识沉淀：feat-x',
+      vars: { expert: 'knowledge-curator' },
+    })
+    expect(knowledge.taskDesc).toContain('知识沉淀')
+    expect(knowledge.taskDesc).toContain('.knowledge/')
+    expect(knowledge.taskDesc).toContain('独立结算')
+    expect(knowledge.acceptanceCriteria).toBeUndefined()
     // 复盘任务被循环续领后照常收口（⑯ 结束叙述在场）
     expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
-    // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、复盘不重派（addTask 仍 1）
+    // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、双任务不重派（addTask 仍 2）
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
-    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs).toHaveLength(2)
   })
 
   it('幂等防护（评审建议2）：addTask 成功后落标记失败——复盘任务已在场时二次进入不重复派生，仅补落标记', async () => {
@@ -863,11 +903,51 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    // 二次进入：在场 doc 复盘任务即不重派（addTask 零调用）——幂等窗口消除
-    expect(built.h.addTaskInputs).toHaveLength(0)
+    // 二次进入：在场 doc 复盘任务不重派（幂等窗口消除）；知识沉淀任务缺席 → 同构幂等窗口补派恰一枚
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs[0]).toMatchObject({
+      title: 'first-pass 知识沉淀：feat-x',
+      vars: { expert: 'knowledge-curator' },
+    })
     // 失败留待重试语义保持：标记下轮补落恰一次（首次 ensure 抛错、二次 appended）
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1' })
+  })
+
+  it('知识补派失败不阻断标记（expert-squad-forge-2）：复盘任务已在场 + 知识派生抛错 → first-pass-complete 照常落库，知识任务下轮幂等窗口补派', async () => {
+    const built = build({
+      claim: [NO_TASK, NO_TASK],
+      stats: [
+        statsOf({ completed: 1 }), // 轮1 claim 池读
+        statsOf({ completed: 1 }), // 轮1 派生时点池快照读
+        statsOf({ completed: 1 }), // 轮1 标记快照计数读
+        statsOf({ completed: 1 }), // 轮2 claim 池读
+        statsOf({ completed: 1 }), // 轮2 派生时点池快照读
+        statsOf({ completed: 1 }), // 轮2 标记快照计数读（no-op 幂等）
+      ],
+      checkpointRows: [],
+      addTaskFailures: 1,
+      resolveProposalId: async () => 'prop-1',
+      resolveHeadCommit: async () => 'head-k',
+    })
+    // 窄窗口现场：复盘任务已在池（pending）——派生锚跳过，仅走知识补派（首轮失败）
+    built.h.lists.created.push({
+      taskId: 'card-feat-x-9.1',
+      slug: 'feat-x',
+      localId: '9.1',
+      title: 'first-pass 复盘：feat-x',
+      taskType: 'doc',
+      taskStatus: 'pending',
+      prerequisites: [],
+      sessionCount: 0,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
+    await untilSettled(built.driver)
+    // 标记锚不受知识派生失败阻断：轮1 即落库成功（appended=true，baseCommitHash = 桩 HEAD）
+    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-k', appended: true })
+    // 知识任务轮1派生失败（addTask 抛错不入 recording）→ 轮2 no-task done 幂等窗口补派恰一枚
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'first-pass 知识沉淀：feat-x', vars: { expert: 'knowledge-curator' } })
   })
 
   it('复盘指标真值（bug 9c350e5f）：先派生后落标记窗口内以派生时点池快照合成 first 帧——fixDensity 不恒兜底', async () => {
@@ -891,7 +971,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
     // 真值：first 帧合成（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
     expect(built.h.addTaskInputs[0]!.taskDesc).toContain('fix 密度：100.0%')
   })
@@ -919,7 +999,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
     // 真值：first 基线 commits 1（合成帧）、current = merged 帧 commits 3 → (3-1)/3；兜底缺陷下恒 0.0%
     expect(built.h.addTaskInputs[0]!.taskDesc).toContain('返工增量比：66.7%')
   })
@@ -937,8 +1017,9 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
     const retro = built.h.addTaskInputs[0]!
+    expect(retro.vars).toEqual({ expert: 'retro-reviewer' })
     expect(retro.acceptanceCriteria).toEqual([expect.stringContaining('已注册改进提案')])
     expect(retro.acceptanceCriteria?.[0]).toContain('未注册不得 success')
     expect(retro.taskDesc).toContain('≥ 6 → 已越阈')
@@ -970,8 +1051,10 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
       appended: true,
       snapshots: { tasksTotal: 3 },
     })
-    // 首轮 done：first-pass 已在校 → 零重落零复盘派生（addTask 为空）
-    expect(built.h.addTaskInputs).toHaveLength(0)
+    // 首轮 done：first-pass 已在校 → 零重落零复盘派生；知识补派窗口不随锚定关闭——
+    // 池中无知识沉淀任务（含终态）→ 补派恰一枚（下轮 no-task done 幂等窗口触发径）
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'first-pass 知识沉淀：feat-x', vars: { expert: 'knowledge-curator' } })
   })
 
   it('merged lazy 兜底判据不满足：retro-done 缺席（收口前置=复盘已结算）→ 不补标记', async () => {
