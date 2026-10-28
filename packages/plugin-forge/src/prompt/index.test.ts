@@ -127,13 +127,14 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     expect(EXPEDITION).toContain('R -->|"Blocker 清零·放行"| F[breakdown-tasks]')
     expect(EXPEDITION).toContain('R -->|"Blocker 返工"| E')
     expect(EXPEDITION).toContain('F -->|"任务清单"| G["/run-dag-tasks 派发"]')
-    expect(EXPEDITION).toContain('G --> H["eval → 交付"]')
+    expect(EXPEDITION).toContain('G --> H[交付]')
+    expect(EXPEDITION).not.toContain('eval')
   })
 
-  it('突击流程图：brainstorm→review-proposal（Blocker 清零·提请裁决/返工环）→用户裁决→quick-tasks→派发→交付', () => {
-    expect(BLITZ).toContain('A[brainstorm] -->|"proposal.md"| R[review-proposal]')
-    expect(BLITZ).toContain('R -->|"Blocker 返工提案"| A')
-    expect(BLITZ).toContain('R -->|"Blocker 清零·提请裁决"| B{用户裁决}')
+  it('突击流程图：brainstorm→用户裁决（reject 返工环）→quick-tasks→派发→交付（零评审技能节点——评审走 proposal-reviewer 对话式委派）', () => {
+    expect(BLITZ).toContain('A[brainstorm] -->|"proposal.md"| B{用户裁决}')
+    expect(BLITZ).toContain('B -->|"reject 返工提案"| A')
+    expect(BLITZ).not.toContain('review-proposal')
     expect(BLITZ).toContain('B -->|"accept"| C[quick-tasks]')
     expect(BLITZ).toContain('C -->|"任务清单"| D["/run-dag-tasks 派发"]')
     expect(BLITZ).toContain('D --> E[交付]')

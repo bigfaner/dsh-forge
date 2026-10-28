@@ -59,7 +59,7 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 3. **推导阶段与依赖**——阶段顺序编号（1.x、2.x…）；优先采用 PRD 声明的阶段结构，否则按依赖深度分组。同阶段 = 可并行（冲突除外）；跨阶段 = 依赖前一阶段的 gate。拆分规则按优先序：(1) 可独立核验的产出 → 各自成任务；(2) 多动词标题 → 按功能边界拆；(3) >8 个同模式文件 → 按文件组拆。纯文档特性（全部产出不可编译）跳过语言解析，全程用 `doc` 类型。
 4. **逐阶段创建业务任务**（经 `addTask`，协议见上）。创建期复杂度：`low` = ≤3 条 AC 且无硬约束；`high` = ≥5 条 AC 或有硬约束；其余 `medium`。
 5. **创建逐阶段摘要 + gate**——每阶段业务任务之后：一条 `doc-summary` 任务（依赖 =该阶段业务任务 localId），再一条 `gate` 任务（依赖 = 摘要的 localId）。gate 即阶段边界；下一阶段的首个任务依赖前一 gate。
-6. **创建测试管线链**——最后一个阶段 gate 之后按序接线：review-doc（`doc-review`）→ gen-journeys（`test-gen-journeys`）→ eval-journey（`eval-journey`）→ gen-contracts（`test-gen-contracts`）→ eval-contract（`eval-contract`）→ gen-scripts（`test-gen-scripts`）→ run-tests（`test-run`）。逐任务依赖前驱；首个（review-doc）依赖最终阶段 gate。每条标题点名其技能/用途——执行 worker 依标题与任务类型装载对应技能。
+6. **创建测试管线链**——最后一个阶段 gate 之后按序接线：review-doc（`doc-review`）→ gen-journeys（`test-gen-journeys`）→ gen-contracts（`test-gen-contracts`）→ gen-scripts（`test-gen-scripts`）→ run-tests（`test-run`）。逐任务依赖前驱；首个（review-doc）依赖最终阶段 gate。每条标题点名其技能/用途——执行 worker 依标题与任务类型装载对应技能。
 7. **体量审计**——逐任务复查：多动词标题拆；AC 跨无关领域拆；守住操作上限；**每任务 ≤6 条验收标准**（更多 = 范围过大，继续拆）；任何 `task_desc` / AC 内零跨容器引用（确需外部排序就是合并或排序，不是等待任务）。
 8. **校验容器**——`validateFeatureTasks { feature_slug: "<slug>" }`：每条上报违规都点名违规任务键；修到子图健康为止（只经工具面允许的任务状态转移——绝不直写）。
 

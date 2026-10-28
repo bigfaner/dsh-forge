@@ -11,13 +11,13 @@ description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 
 
 ## State-Layer Discipline (boundary)
 
-Journey 文档是 feature 测试树下的磁盘工件——文档注册表词表（七种 phase kind）**没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由任务域承载：`test-gen-journeys` / `eval-journey` / `test-gen-contracts` 任务类型及其依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。存储布局（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
+Journey 文档是 feature 测试树下的磁盘工件——文档注册表词表（七种 phase kind）**没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由任务域承载：`test-gen-journeys` / `test-gen-contracts` 任务类型及其依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。存储布局（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
 
 ## 管线位置
 
 ```
-gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-test-scripts → run-tests
- (叙事)                        (技术)                       (代码生成)        (执行)
+gen-journeys → gen-contracts → gen-test-scripts → run-tests
+ (叙事)          (技术)                       (代码生成)        (执行)
 ```
 
 ## 输入模式
@@ -61,4 +61,4 @@ gen-journeys → eval (journey) → gen-contracts → eval (contract) → gen-te
        └── journey.md      # 叙事正本（本技能唯一产出；contracts/ 由 gen-contracts 产出）
    ```
 5. **逐 Journey 校验**：名称在位；风险级有效；monorepo 下 `module` 非空；≥1 条 happy path 步骤；≥1 条边界用例；High 风险密度达标；≥1 条不变式；每步有动作 + 预期结果；PRD 可回溯。失败先修复再收尾。
-6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。质量门：`eval` 技能以 `--type journey` 逐条评分；低于目标的 Journey 阻塞 `gen-contracts`（那是它的 gate，不是本技能的）。
+6. **呈报**——交互式呈现生成的 Journey；派发则在任务输出中汇总。

@@ -95,7 +95,7 @@ flowchart LR
     R -->|"Blocker 清零·放行"| F[breakdown-tasks]
     R -->|"Blocker 返工"| E
     F -->|"任务清单"| G["/run-dag-tasks 派发"]
-    G --> H["eval → 交付"]
+    G --> H[交付]
 \`\`\`
 `
 }
@@ -136,9 +136,8 @@ ${docs}
 
 \`\`\`mermaid
 flowchart LR
-    A[brainstorm] -->|"proposal.md"| R[review-proposal]
-    R -->|"Blocker 返工提案"| A
-    R -->|"Blocker 清零·提请裁决"| B{用户裁决}
+    A[brainstorm] -->|"proposal.md"| B{用户裁决}
+    B -->|"reject 返工提案"| A
     B -->|"accept"| C[quick-tasks]
     C -->|"任务清单"| D["/run-dag-tasks 派发"]
     D --> E[交付]

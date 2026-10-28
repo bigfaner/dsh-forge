@@ -312,7 +312,7 @@ export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFin
     }
   }
   if (refs.length === 0) {
-    findings.push({ anchor, detail: '产品文本零技能引用——扫描面异常（run-tests 等既有引用缺席即断言面失效）' })
+    findings.push({ anchor, detail: '产品文本零技能引用——扫描面异常（quick-tasks 等既有引用缺席即断言面失效）' })
   }
   for (const r of refs) {
     const resolved = mounted.has(r.name) || (r.prefixed && deferred.has(r.name))

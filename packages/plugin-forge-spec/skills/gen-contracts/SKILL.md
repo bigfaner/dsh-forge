@@ -14,11 +14,10 @@ description: 从 Journey 文档与代码侦察生成 Contract 规格——六维
 | 工件 | 缺失时 |
 |---|---|
 | `testing/` 下 ≥1 个含 `journey.md` 的 Journey 目录 | 先跑 `gen-journeys` |
-| Journey 评审报告 `testing/<journey>/.eval-journey-report.md` 全部达标 | 先跑 `eval --type journey` —— **阻塞项** |
 
 ## State-Layer Discipline (boundary)
 
-Contract 文件是 `testing/<journey>/contracts/` 下的磁盘工件——注册表词表**没有 contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任务域承载（`test-gen-contracts` / `eval-contract` / `test-gen-scripts`）。
+Contract 文件是 `testing/<journey>/contracts/` 下的磁盘工件——注册表词表**没有 contract kind**；**不得**经 `upsertFeatureDoc` 注册。管线位置由任务域承载（`test-gen-contracts` / `test-gen-scripts`）。
 
 ## 工作流
 

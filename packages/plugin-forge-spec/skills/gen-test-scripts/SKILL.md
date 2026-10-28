@@ -12,7 +12,6 @@ description: 从 Contract 规格生成可执行测试脚本——逐 Journey 测
 | 工件 | 缺失时 |
 |---|---|
 | `testing/<journey>/contracts/` 内 ≥1 份 Contract 文件 | 先跑 `gen-contracts` |
-| Contract 评审报告 `testing/<journey>/.eval-contract-report.md` 全部达标 | 先跑 `eval --type contract` —— **阻塞项** |
 
 ## State-Layer Discipline (boundary)
 
