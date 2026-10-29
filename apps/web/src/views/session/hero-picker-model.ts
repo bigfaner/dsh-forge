@@ -58,6 +58,21 @@ function normRootPath(value: string): string {
 }
 
 /**
+ * 官方快照行 path 解析（三态——bug 6fe1675f）：string = path；null = id 在场但 path
+ * 缺失/非 string（**归属事实不可证**——上游形状漂移/未到位行，不得并入「id 不在场」
+ * 回落首项目兜底）；undefined = id 不在快照（判据数据缺席，调用方走各自现状分支）。
+ */
+function workspaceRowPathOf(items: readonly unknown[], selectedId: string): string | null | undefined {
+  for (const row of items) {
+    if (typeof row !== 'object' || row === null) continue
+    if ((row as { workspaceId?: unknown }).workspaceId !== selectedId) continue
+    const path = (row as { path?: unknown }).path
+    return typeof path === 'string' && path !== '' ? path : null
+  }
+  return undefined
+}
+
+/**
  * hero 默认拾取（bug 2ba146d8——纯函数单源）：选中态缺席/未命中行集（归档会话回 hero、
  * 冷启、未绑定工作区、已归档项目——归档行不可锚定既有语义）→ 第一个活跃项目行 id；
  * 已命中或行集空 → undefined（用户显式选中零覆盖 / 零项目直达添加流现状）。消费面
@@ -73,15 +88,10 @@ export function heroDefaultPickId(
 ): string | undefined {
   if (selectedProjectOf(rows, selectedId) !== undefined) return undefined
   if (selectedId !== undefined && workspaceRows !== undefined) {
-    const path = workspaceRows.find(
-      (row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
-        typeof (row as { path?: unknown }).path === 'string',
-    ) as { path: string } | undefined
+    const path = workspaceRowPathOf(workspaceRows, selectedId)
+    if (path === null) return undefined // 行在场但归属不可证 → 不拾取（bug 6fe1675f）
     if (path !== undefined) {
-      const normalized = normRootPath(path.path)
+      const normalized = normRootPath(path)
       const underActiveProject = rows.some((row) => {
         const root = normRootPath(row.wsPath)
         return normalized === root || normalized.startsWith(`${root}/`)
@@ -148,15 +158,10 @@ export function selectedProjectRootOf(
   const strict = selectedProjectRootStrictOf(projects, selectedId)
   if (strict !== null) return strict
   if (selectedId !== undefined && workspaceRows !== undefined) {
-    const path = workspaceRows.find(
-      (row) =>
-        typeof row === 'object' &&
-        row !== null &&
-        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
-        typeof (row as { path?: unknown }).path === 'string',
-    ) as { path: string } | undefined
+    const path = workspaceRowPathOf(workspaceRows, selectedId)
+    if (path === null) return null // 行在场但归属不可证 → 数据根 null（bug 6fe1675f——不回落首项目）
     if (path !== undefined) {
-      const normalized = normRootPath(path.path)
+      const normalized = normRootPath(path)
       const owner = projects.find((p) => {
         if (p.archived === true) return false
         const root = normRootPath(p.wsPath ?? '')

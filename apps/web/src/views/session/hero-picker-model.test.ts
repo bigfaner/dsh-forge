@@ -125,6 +125,13 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
     expect(selectedProjectRootOf(PROJECTS, 'w-external', [WSR('w-external', 'D:/other-repo')])).toBe('C:\\ws\\p1')
   })
 
+  it('bug: 树 ws 行在场但 path 非法（漂移/未到位）→ 归属不可证：不拾取、数据根 null（不回落首活跃项目——6fe1675f）', () => {
+    const rows = heroPickerPlan(PROJECTS, true).rows
+    expect(heroDefaultPickId(rows, 'w-tree-b', [{ workspaceId: 'w-tree-b' }])).toBeUndefined()
+    expect(selectedProjectRootOf(PROJECTS, 'w-tree-b', [{ workspaceId: 'w-tree-b' }])).toBeNull()
+    expect(selectedProjectRootOf(PROJECTS, 'w-tree-b', [{ workspaceId: 'w-tree-b', path: 42 }])).toBeNull()
+  })
+
   it('全归档/空集 → null（chip 零注入退回现状）', () => {
     expect(selectedProjectRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })], undefined)).toBeNull()
     expect(selectedProjectRootOf([], 'w-1')).toBeNull()
