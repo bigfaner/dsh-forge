@@ -120,8 +120,9 @@ export function ForgeHeroWorkspacePicker({
   }, [open, silentRefresh])
 
   // worktree 第二 chip 数据锚：选中项目的 ws_path（纯函数 selectedProjectRootOf——bug 10833861
-  // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行）。
-  const selectedProjectRoot = selectedProjectRootOf(projects, selectedId)
+  // 修正在 model 层：workspaceId 回查 + fallback 只取活跃行；bug 8a316608：树 ws 选中态
+  // 按官方快照 path 归属活跃项目根——不回落首个活跃项目）。
+  const selectedProjectRoot = selectedProjectRootOf(projects, selectedId, workspacesSnap?.items as readonly unknown[] | undefined)
 
   // bug d353536f 同因面：官方基线未就位时点选同样盲打官方链（connectWorkspace 查空快照
   // 必抛 unknown workspace）——目标不在官方快照 = 挂起待基线，就位后由效应补拾取

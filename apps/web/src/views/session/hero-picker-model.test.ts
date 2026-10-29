@@ -112,6 +112,19 @@ describe('selectedProjectRootOf（worktree 第二 chip 数据根——bug 108338
     expect(selectedProjectRootOf(archivedFirst, 'w-unknown')).toBe('C:\\ws\\p-main')
   })
 
+  it('bug: selectedId 指向排序靠后项目的树 workspace（官方快照 path 落在该项目根下）→ 数据根 = 该树所属项目 ws_path（不回落首个活跃项目）', () => {
+    const WSR = (workspaceId: string, path: string) => ({ workspaceId, path })
+    // 活跃根 = C:/ws/p1（A）、C:/ws/p2（B，排序靠后）
+    const wsRows = [WSR('w-tree-b', 'C:/ws/p2/.forge/worktrees/wt-feat')]
+    expect(selectedProjectRootOf(PROJECTS, 'w-tree-b', wsRows)).toBe('C:\\ws\\p2')
+  })
+
+  it('bug: 树 ws 判据数据缺席（官方快照未到）或 path 不在任何活跃项目根下 → 维持首活跃项目兜底现状', () => {
+    const WSR = (workspaceId: string, path: string) => ({ workspaceId, path })
+    expect(selectedProjectRootOf(PROJECTS, 'w-tree-b')).toBe('C:\\ws\\p1')
+    expect(selectedProjectRootOf(PROJECTS, 'w-external', [WSR('w-external', 'D:/other-repo')])).toBe('C:\\ws\\p1')
+  })
+
   it('全归档/空集 → null（chip 零注入退回现状）', () => {
     expect(selectedProjectRootOf([project({ id: 'p3', workspaceId: 'w-3', name: 'gamma', archived: true })], undefined)).toBeNull()
     expect(selectedProjectRootOf([], 'w-1')).toBeNull()

@@ -134,13 +134,38 @@ export function selectedProjectRootStrictOf(
  * 成绑定语义即跨项目错绑）；全无 → null。
  * bug 10833861 Root cause: 原推导以 project.id 比对 workspaceId 恒 miss，fallback 又取
  * 全量首行（created_at 最早的归档项目，如非 git 的 learn）→ isGit=false 全零注入。
+ * bug 8a316608 Root cause: selectedId 可合法指向树 workspace（openWorkspace 切树后 owner
+ * selectedId = 树 ws id，永不命中项目行），fallback 却取「首个活跃项目」——排序靠后项目
+ * 的树选中态被锚到首个项目的清单，陈旧自愈随之跨项目错切。修复：官方快照在场时按树 ws
+ * path 归属活跃项目根取所属项目（与 heroDefaultPickId bug 9eb9d6cb 同守卫同判）；
+ * 快照缺席/不归属任何活跃项目 = 维持现状兜底。
  */
 export function selectedProjectRootOf(
   projects: readonly ProjectSummary[],
   selectedId: string | undefined,
+  workspaceRows?: readonly unknown[],
 ): string | null {
-  return selectedProjectRootStrictOf(projects, selectedId)
-  ?? projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath
+  const strict = selectedProjectRootStrictOf(projects, selectedId)
+  if (strict !== null) return strict
+  if (selectedId !== undefined && workspaceRows !== undefined) {
+    const path = workspaceRows.find(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        (row as { workspaceId?: unknown }).workspaceId === selectedId &&
+        typeof (row as { path?: unknown }).path === 'string',
+    ) as { path: string } | undefined
+    if (path !== undefined) {
+      const normalized = normRootPath(path.path)
+      const owner = projects.find((p) => {
+        if (p.archived === true) return false
+        const root = normRootPath(p.wsPath ?? '')
+        return root !== '' && (normalized === root || normalized.startsWith(`${root}/`))
+      })
+      if (owner !== undefined) return owner.wsPath
+    }
+  }
+  return projects.find((p) => p.archived !== true && p.wsPath !== undefined && p.wsPath !== '')?.wsPath
   ?? null
 }
 
