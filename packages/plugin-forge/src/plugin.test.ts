@@ -6,9 +6,9 @@
 // 全生命周期与 forge:pipeline 段。
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, beforeEach, expect, it, vi } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
-import forgePlugin from './index.js'
+import forgePlugin, { _resetExpertResolverSingletonForTests } from './index.js'
 import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
 import type { ExpertProfileResolver } from './faces.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
@@ -707,6 +707,11 @@ describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command p
 // ─────────────────────────── 专家团装配面（expert-squad-forge 1.2——experts 服务接入 + settings 映射表） ───────────────────────────
 
 describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读取 fail-soft）', () => {
+  beforeEach(() => {
+    // 模块级本地单例（bug dfa41a72/ad32e240）用例间隔离
+    _resetExpertResolverSingletonForTests()
+  })
+
   /** experts 服务桩（registerRoot/refresh 调用记账 + 按键返回档案桩） */
   function expertsFace() {
     const calls: { root?: string; refresh: number } = { refresh: 0 }
@@ -990,6 +995,33 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
       const degraded = warn.mock.calls.some((args) => String(args[0]).includes('forge experts 装配面降级'))
       expect(degraded).toBe(false)
       expect(parent.store.get('forgeExperts')).toBeDefined() // 父轮实例仍是唯一在位实现
+      dispose1()
+      dispose2()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('bug dfa41a72/ad32e240：父子两 scope（子 scope 服务面全不互见）双次 apply 复用同一本地单例且功能完整、零降级', async () => {
+    _resetExpertResolverSingletonForTests()
+    const experts = expertsFace().face
+    const parent = reflectStoreBacked({ experts, forgeSettings: { get: async () => ({}) } })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const dispose1 = forgePlugin({ ...new TempRuntime().ctx(), reflect: parent.face })
+      const parentResolver = parent.store.get('forgeExperts') as ExpertProfileResolver
+      expect(typeof parentResolver).toBe('function')
+
+      // 子 scope：experts 服务面跨 scope 不互见（get('experts') = undefined）——装配期
+      // 取不到任何 cordis 服务面，撞车/缺席路径一律复用模块级本地单例
+      const child = reflectStoreBacked({ forgeSettings: { get: async () => ({}) } })
+      const dispose2 = forgePlugin({ ...new TempRuntime().ctx(), reflect: child.face })
+      const degraded = warn.mock.calls.some((args) => String(args[0]).includes('forge experts 装配面降级'))
+      expect(degraded).toBe(false) // 撞车路径 = 复用路径：boot 日志零降级行
+      const childResolver = child.store.get('forgeExperts') as ExpertProfileResolver
+      expect(childResolver).toBe(parentResolver) // 双 scope resolve 到同一本地单例实例
+      // 功能完整：单例可实际取到专家档案（doc 经默认映射路由到预设档案）
+      await expect(childResolver('doc')).resolves.toMatchObject({ name: 'tech-writer', personaMd: 'md:tech-writer' })
       dispose1()
       dispose2()
     } finally {

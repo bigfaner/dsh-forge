@@ -46,7 +46,17 @@ import { bindingProjectIds, createForgeTools, createProjectResolver } from './to
 import type { ForgeContextFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 
-/** 插件配置（profile cordis.patch.yml 行 config；cwd 绑定数据经 boot overlay 注入） */
+/** 模块级本地 expertResolver 单例（bug dfa41a72/ad32e240——弃跨 scope 反射取回）：
+ *  首次成功装配即存模块变量，后续撞车/服务面缺席一律复用；同进程父子装配天然共享
+ *  模块实例，cordis scope 可见性退出因果链。 */
+let expertResolverSingleton: ExpertProfileResolver | undefined
+
+/** 测试缝：重置模块级单例（用例间隔离）。 */
+export function _resetExpertResolverSingletonForTests(): void {
+  expertResolverSingleton = undefined
+}
+
+/** 插件配置（profile cordis.patch.yml 行 config；cwd 绑定数据经 boot overlay 注入) */
 export interface ForgePluginConfig {
   /** 会话 cwd → projectId 绑定表（wsPath 与 projects.ws_path 同口径 canonical path） */
   projects?: readonly ProjectBinding[]
@@ -130,31 +140,37 @@ const forgePlugin: ForgePlugin = Object.assign(
           ready: refreshReady,
           ...(settingsService !== undefined ? { settings: settingsService } : {}),
         })
-        // bug 763de653/64f155fe：父/子会话双次装配共享同一 reflect scope 时，provide 撞
-        // 已注册名抛 "service forgeExperts has been registered"。provide 前的 reflect.get
-        // 探测只是快路径短路（同 scope 幂等）；Root cause: check-then-act 非原子——探测
-        // 与 provide 跨时点/scope 不互见（bug d327323b/b16dcdf6 实证守卫仍被击穿），探测
-        // 式守卫无法根治。修复 = 撞车即复用（注册失败即取回语义）：provide 抛错后经
-        // reflect 重新取回已注册实例继续装配（服务存在性 = 复用，真缺席才降级），原子性
-        // 由 cordis 注册面单点保证。
-        if (typeof ctx.reflect?.provide === 'function') {
-          try {
-            ctx.reflect.provide('forgeExperts', expertResolver)
-          } catch {
-            const existing = ctx.reflect.get('forgeExperts') as ExpertProfileResolver | undefined
-            if (existing === undefined || typeof existing !== 'function') throw new Error('forgeExperts 取回复用失败：撞车后服务仍缺席')
-            expertResolver = existing
-          }
-        } else if (ctx.reflect?.get('forgeExperts') !== undefined) {
-          // 无 provide 面但服务已在（异常宿主形态）：取回复用，装配不降级
-          const existing = ctx.reflect.get('forgeExperts') as ExpertProfileResolver | undefined
-          if (existing !== undefined && typeof existing === 'function') expertResolver = existing
-        }
       }
     } catch (cause) {
       expertResolver = undefined
-      const message = cause instanceof Error ? cause.message : String(cause)
-      console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落 core 程序段合成）：${message}`)
+      // 单例复用路径零降级告警（撞车/缺席 = 复用，非真失败）；仅首次无单例可复用时告警
+      if (expertResolverSingleton === undefined) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落 core 程序段合成）：${message}`)
+      }
+    }
+    // Root cause（bug 链 763de653→d327323b→dfa41a72/ad32e240）：cordis 父子 scope 下
+    // 探测/取回双向不互见，任何跨 scope 反射形态（探测守卫、撞车后 reflect 取回）恒败。
+    // 修复 = 放弃跨 scope 反射面，改模块级本地 resolver 单例（expertResolverSingleton）：
+    // 首次成功装配即存模块变量，后续撞车/服务面缺席一律复用——同进程父子装配天然共享
+    // 模块实例，scope 可见性退出因果链。单例自足（闭包内经 experts 面读专家目录 +
+    // settings），不依赖装配时点子 scope 的任何 cordis 服务面。publish 仅余对外发布职责
+    // （core 侧 reflect.get('forgeExperts') 消费），撞名/反射异常静默不阻断本进程装配。
+    if (expertResolver === undefined) expertResolver = expertResolverSingleton
+    if (expertResolver !== undefined && expertResolverSingleton === undefined) {
+      expertResolverSingleton = expertResolver
+    }
+    if (expertResolver !== undefined) {
+      try {
+        const existing = ctx.reflect?.get?.('forgeExperts') as ExpertProfileResolver | undefined
+        if (typeof existing === 'function') {
+          expertResolver = existing // 同 scope 已注册（双次装配幂等短路——bug 763de653）
+        } else if (typeof ctx.reflect?.provide === 'function') {
+          ctx.reflect.provide('forgeExperts', expertResolver)
+        }
+      } catch {
+        // 撞车/反射异常：子 scope 时序不可见属常态——本地单例装配不受影响，零降级
+      }
     }
     // expert-squad-forge 1.4：spawn 组装消费的档案 tools/model 投影（resolveWorkerProfile——
     // 同一 expertResolver 按任务类型现取；档案缺失/禁用 fail-loud 与 claim 期同径。取用面
