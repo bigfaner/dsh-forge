@@ -130,7 +130,14 @@ const forgePlugin: ForgePlugin = Object.assign(
           ready: refreshReady,
           ...(settingsService !== undefined ? { settings: settingsService } : {}),
         })
-        if (typeof ctx.reflect?.provide === 'function') ctx.reflect.provide('forgeExperts', expertResolver)
+        // bug 763de653/64f155fe：父/子会话双次装配共享同一 reflect scope 时，provide 撞
+        // 已注册名抛 "service forgeExperts has been registered" → catch 把已构建的
+        // expertResolver 整体清空降级（路由丢失）。官方 cordis 无 isRegistered 探测面，
+        // 同语义机械 = provide 前 reflect.get 读既有实现即短路（cordis ReflectService.get
+        // 契约：未提供返回 undefined）；已注册 = 首轮实现仍活跃，本轮回落消费既有值语义等价。
+        if (ctx.reflect?.get('forgeExperts') === undefined && typeof ctx.reflect?.provide === 'function') {
+          ctx.reflect.provide('forgeExperts', expertResolver)
+        }
       }
     } catch (cause) {
       expertResolver = undefined

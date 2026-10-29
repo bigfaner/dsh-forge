@@ -6,7 +6,7 @@
 // 全生命周期与 forge:pipeline 段。
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin from './index.js'
 import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
@@ -877,6 +877,46 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     })
   })
 })
+
+  /** cordis 忠实 reflect 桩（bug 763de653 复现面）：store 单源——get 读 store，
+   *  provide 撞已注册名抛 cordis 同文错误（"service X has been registered"）。 */
+  function reflectStoreBacked(initial: Record<string, unknown> = {}) {
+    const store = new Map<string, unknown>(Object.entries(initial))
+    const provideCalls: string[] = []
+    return {
+      store,
+      provideCalls,
+      face: {
+        get: (name: string) => store.get(name),
+        provide: (name: string, service: unknown) => {
+          if (store.has(name)) throw new Error(`service ${name} has been registered at <scope>`)
+          provideCalls.push(name)
+          store.set(name, service)
+        },
+      },
+    }
+  }
+
+  it('bug 763de653：父/子会话双次装配（同一 reflect scope）不降级——provide 撞车前幂等短路，expertResolver 两轮均在场', () => {
+    const experts = expertsFace().face
+    const { face, provideCalls } = reflectStoreBacked({ experts, forgeSettings: { get: async () => ({}) } })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const dispose1 = forgePlugin({ ...new TempRuntime().ctx(), reflect: face })
+      expect(provideCalls).toContain('forgeExperts') // 首次装配正常 provide
+      const dispose2 = forgePlugin({ ...new TempRuntime().ctx(), reflect: face }) // 子会话二次装配——同一 scope
+      // 修复前：第二次 provide 抛 "service forgeExperts has been registered" → catch 降级
+      // expertResolver=undefined（resolveWorkerProfile 缺席 → 路由回落 inherit）。修复后：
+      // provide 前 reflect.get 探测已注册即短路，第二轮零降级告警、装配照常。
+      const degraded = warn.mock.calls.some((args) => String(args[0]).includes('forge experts 装配面降级'))
+      expect(degraded).toBe(false)
+      expect(provideCalls.filter((n) => n === 'forgeExperts')).toHaveLength(1) // 幂等短路：恰一次 provide
+      dispose1()
+      dispose2()
+    } finally {
+      warn.mockRestore()
+    }
+  })
 
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
     for (const reflect of [
