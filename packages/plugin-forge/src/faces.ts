@@ -624,3 +624,22 @@ export function createExpertProfileResolver(deps: {
     }
   }
 }
+
+/**
+ * spawn 组装消费的档案投影缝（专家档案 → WorkerDispatchProfile）：按任务类型现取档案
+ * （resolver 在场即取；缺键 = undefined 形态兼容）后收窄为组装面字段。单源抽出供
+ * 装配方（index.ts）与生产装配路径单测同源消费——投影漂移即红。
+ */
+export function createWorkerProfileProjection(deps: {
+  readonly resolver: ExpertProfileResolver
+}): (taskType: string) => Promise<WorkerDispatchProfile | undefined> {
+  return async (taskType) => {
+    const profile = await deps.resolver(taskType)
+    if (profile === undefined) return undefined // 形态兼容：缺档 = 纯回落面（非空壳对象）
+    return {
+      ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
+      ...(profile.model !== undefined ? { model: profile.model } : {}),
+      ...(profile.provider !== undefined ? { provider: profile.provider } : {}),
+    }
+  }
+}

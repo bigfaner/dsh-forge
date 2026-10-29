@@ -213,6 +213,30 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     await done
     expect((built.requests[0] as SpawnWorkerRequest).agentOptions).toEqual({ provider: 'p', model: 'm', reasoningEffort: 'high' })
   })
+
+  it('bug 14984d4f 同族：档案 provider+model 成对在场 = 路由对进 agentOptions（settings.worker 缺席不拦截）', async () => {
+    const built = build({
+      settings: { get: async () => ({}) } as Pick<ForgeSettingsService, 'get'>,
+      resolveExpertProfile: async () => ({ name: 'triage-analyst', personaMd: '档案正文。', provider: 'deepseek-official', model: 'deepseek-flash' }),
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"ask-user"}')
+    await done
+    const req = built.requests[0] as SpawnWorkerRequest
+    expect(req.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    expect(req.persona).toBeDefined() // 人格面照常——路由修复不回退 1.6 persona
+  })
+
+  it('档案仅 model 单独在场：仍按 worker 同径以 settings.worker.provider 为基座（无基座 = 整组省略）', async () => {
+    const built = build({
+      settings: { get: async () => ({}) } as Pick<ForgeSettingsService, 'get'>,
+      resolveExpertProfile: async () => ({ name: 'triage-analyst', personaMd: '档案正文。', model: 'only-model' }),
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"ask-user"}')
+    await done
+    expect('agentOptions' in (built.requests[0] as SpawnWorkerRequest)).toBe(false)
+  })
 })
 
 // ─────────────────────────── persona 档案合成（expert-squad-forge-2 纳入 2） ───────────────────────────

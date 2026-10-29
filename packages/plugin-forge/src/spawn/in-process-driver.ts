@@ -178,6 +178,20 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
         } as unknown as Parameters<typeof startInProcessRun>[0],
         {},
       )
+      // 路由装配落日志（bug 14984d4f instrumentation——生产派发链最后一环逐次留痕：
+      // agentOptions 到达/缺席即在此可判，装配丢失位定罪不再依赖会话日志反推；
+      // inherit = 显式路由缺席（装配面 settings/档案双缺——回落父会话继承））
+      console.warn(
+        `[forge-spawn-routing] label=${request.label ?? '-'} route=${
+          request.agentOptions !== undefined
+            ? `${request.agentOptions.provider}/${request.agentOptions.model}${
+                request.agentOptions.reasoningEffort !== undefined ? `/${request.agentOptions.reasoningEffort}` : ''
+              }`
+            : 'inherit'
+        } persona=${request.persona !== undefined ? 'yes' : 'no'} toolFilter=allow:${
+          request.toolFilter.allow?.length ?? 0
+        }/deny:${request.toolFilter.deny?.length ?? 0}`,
+      )
       child = run.localAgent // 驱动器发布的子代理（abort 转发的 cancel 直调目标）
       // 官方同式：发布后落父会话目录（mode 取 descriptor）；追加失败 = dispose 该 run 后错误上抛
       try {

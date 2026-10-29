@@ -24,7 +24,7 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -143,17 +143,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     const workerProfileOf =
       expertResolver === undefined
         ? undefined
-        : async (taskType: string) => {
-            // 1.13：预设缺键且无覆盖 = undefined（未用类型）——纯 deny 面 / 零模型覆盖（行为回 1.4 前）
-            const profile = await expertResolver(taskType)
-            return {
-              ...(profile?.tools !== undefined ? { tools: profile.tools } : {}),
-              ...(profile?.model !== undefined ? { model: profile.model } : {}),
-              // expert-squad-forge-2 纳入 6：档案 provider 投影透传（spawn agentOptions 成对
-              // 语义归 workerAgentOptionsOf 单点——同给同缺，任一缺席回落 settings 基座）
-              ...(profile?.provider !== undefined ? { provider: profile.provider } : {}),
-            }
-          }
+        : createWorkerProfileProjection({ resolver: expertResolver })
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
     // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，
     // 杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩）；服务缺席/异常 = 不判。

@@ -88,13 +88,20 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       // 取用缝缺席 = 形态兼容不携带 persona（spawn 请求零键——直传 undefined 会被上游
       // 视为显式覆盖，与 worker 同纪律）。
       let persona: string | undefined
+      let profile: ForgeExpertProfile | undefined
       if (deps.resolveExpertProfile !== undefined) {
         const key = settings?.experts?.mapping?.triage ?? TRIAGE_EXPERT_KEY_DEFAULT
-        const profile = await deps.resolveExpertProfile('triage', key)
+        profile = await deps.resolveExpertProfile('triage', key)
         // 键恒在场（预设兜底）→ profile 恒定义；undefined 仅为类型面收窄，防御性跳过
         persona = profile !== undefined ? personaSectionOf(profile) : undefined
       }
-      const agentOptions = await reconcileWorkerReasoning(workerAgentOptionsOf(settings), deps.resolveModelReasoning)
+      // Root cause（bug 14984d4f 同族——处置代理与 worker 同一丢失面）：档案 provider+model
+      // 成对在场 = 自带完整路由对，必须与 worker 同径进入 agentOptions 组装；此前仅 persona
+      // 消费档案、路由对被丢弃回落父继承（task-spawned 审计 model='inherit' 同位证）。
+      const agentOptions = await reconcileWorkerReasoning(
+        workerAgentOptionsOf(settings, profile),
+        deps.resolveModelReasoning,
+      )
       const handle = await deps.spawn({
         prompt,
         parent: input.parent,
