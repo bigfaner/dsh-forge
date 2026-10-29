@@ -24,6 +24,9 @@ import type { WorkerTreeGuard } from './job-tree.js'
 /** 回放计划 env 键（e2e 启动 env——值 = 计划 JSON 绝对路径；缺席 = 缝不生效） */
 export const REPLAY_PLAN_ENV = 'DSH_FORGE_REPLAY_PLAN'
 
+/** triage 处置代理 spawn label 后缀（triage.ts 同源——回放面独立计划键识别锚，fix-13） */
+const TRIAGE_LABEL_SUFFIX = ' · 处置分析'
+
 // ─────────────────────────── 进程内一次性替换缝 ───────────────────────────
 
 let override: SpawnWorker | undefined
@@ -79,6 +82,11 @@ export interface PlanEntry {
   readonly message?: string
   /** script 专用：依序执行的动作 */
   readonly actions?: readonly PlanAction[]
+  /**
+   * script 专用：终态 output 覆写（缺席 = 动作文回合拼接）。triage 处置代理回放形态：
+   * 零动作 + output 承载结构化决策 JSON（parseTriageDecision 消费面）——fix-13。
+   */
+  readonly output?: string
 }
 
 /** 回放计划（e2e spec 启动前落盘的 JSON） */
@@ -102,7 +110,7 @@ export function loadReplayPlanFromEnv(env: { readonly DSH_FORGE_REPLAY_PLAN?: st
     if (typeof e.taskKey !== 'string' || typeof e.occurrence !== 'number' || (e.behavior !== 'abort' && e.behavior !== 'script')) {
       throw new Error(`[replay-plan] 条目形状违例：taskKey/occurrence/behavior 必填且 behavior ∈ abort|script（${JSON.stringify(e).slice(0, 80)}）`)
     }
-    if (e.behavior === 'script' && (!Array.isArray(e.actions) || e.actions.length === 0)) {
+    if (e.behavior === 'script' && (!Array.isArray(e.actions) || e.actions.length === 0) && !(typeof e.output === 'string' && e.output.length > 0)) {
       throw new Error(`[replay-plan] script 条目动作列不可为空（taskKey=${e.taskKey}#${e.occurrence}——录制源不可带伤）`)
     }
   }
@@ -152,9 +160,13 @@ export function createPlanReplaySpawn(
     if (taskKey === undefined) {
       throw new Error(`[replay-plan] spawn 请求无 label（taskKey 不可判——回放面拒绝）：${JSON.stringify(request.label)}`)
     }
-    const occurrence = (counts.get(taskKey) ?? 0) + 1
-    counts.set(taskKey, occurrence)
-    const entry = plan.entries.find((e) => e.taskKey === taskKey && e.occurrence === occurrence)
+    // triage 处置代理 spawn（fix-13——fix-7 起真实 spawn 经同一缝）：label 后缀「 · 处置分析」
+    // 即独立计划键 `${taskKey} · 处置分析`——与 worker 派发序列 occurrence 计数互不污染
+    // （否则 triage spawn 会吃掉同任务 worker 二轮条目，行为面错位）。
+    const planKey = request.label!.endsWith(TRIAGE_LABEL_SUFFIX) ? `${taskKey}${TRIAGE_LABEL_SUFFIX}` : taskKey
+    const occurrence = (counts.get(planKey) ?? 0) + 1
+    counts.set(planKey, occurrence)
+    const entry = plan.entries.find((e) => e.taskKey === planKey && e.occurrence === occurrence)
     if (entry === undefined) {
       throw new Error(
         `[replay-plan] 回放键漂移：taskKey=${taskKey} 第 ${occurrence} 次派发无计划条目（回放面只认计划过的 dispatch——绝不回落真实模型）`,
@@ -196,7 +208,7 @@ export function createPlanReplaySpawn(
           lastCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: plan.workspaceDir, encoding: 'utf8' }).trim()
         }
       }
-      return { stopReason: 'completed', output: texts.join('\n') }
+      return { stopReason: 'completed', output: entry.output ?? texts.join('\n') }
     })()
     void result.then(
       () => void guard.reclaim(), // 终态径整树回收

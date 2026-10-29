@@ -209,6 +209,57 @@ describe('回放计划驱动器（taskKey × occurrence 匹配）', () => {
   })
 })
 
+describe('回放计划 · triage 处置代理 spawn（expert-squad-forge-2/fix-13——fix-4 阶梯语义同步）', () => {
+  it('triage spawn（label 后缀 · 处置分析）按独立键回放：命中条目 → 决策 output 承载；worker 同 taskKey 计数不受污染', async () => {
+    const plan: ReplayPlan = {
+      version: 1,
+      workspaceDir: 'unused',
+      entries: [
+        { taskKey: 'f/1.3', occurrence: 1, behavior: 'script', actions: [{ kind: 'tool', name: 'submitTask', args: { result: 'blocked' } }] },
+        { taskKey: 'f/1.3', occurrence: 2, behavior: 'script', actions: [{ kind: 'tool', name: 'submitTask', args: { result: 'success' } }] },
+        { taskKey: 'f/1.3 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '分析略。\n{"action":"ask-user"}' },
+      ],
+    }
+    const spawn = createPlanReplaySpawn(plan, noopRunner)
+    const h1 = await spawn(requestOf('f/1.3 · 一轮结算'))
+    await expect(h1.result).resolves.toMatchObject({ stopReason: 'completed' })
+    const triage = await spawn(requestOf('f/1.3 · 处置分析'))
+    await expect(triage.result).resolves.toMatchObject({ stopReason: 'completed', output: '分析略。\n{"action":"ask-user"}' })
+    // worker 二轮不受 triage 键污染——occurrence 2 仍按 worker 序命中
+    const h2 = await spawn(requestOf('f/1.3 · 二轮'))
+    await expect(h2.result).resolves.toMatchObject({ stopReason: 'completed' })
+    await expect(spawn(requestOf('f/1.3 · x'))).rejects.toThrow('回放键漂移')
+  })
+
+  it('triage spawn 无计划条目 = 键漂移拒绝（fail-loud 不放宽——未规划的处置代理同样拒绝）', async () => {
+    const plan: ReplayPlan = { version: 1, workspaceDir: 'unused', entries: [] }
+    const spawn = createPlanReplaySpawn(plan, noopRunner)
+    await expect(spawn(requestOf('f/1.3 · 处置分析'))).rejects.toThrow('回放键漂移')
+  })
+
+  it('计划载入：script 条目零动作但携带 output = 合法（triage 决策回放形态）；两者皆缺仍 fail-loud', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'forge-seam-triage-'))
+    try {
+      const triageOnly = join(dir, 'triage.json')
+      writeFileSync(
+        triageOnly,
+        JSON.stringify({
+          version: 1,
+          workspaceDir: 'w',
+          entries: [{ taskKey: 'f/1 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '{"action":"ask-user"}' }],
+        }),
+        'utf8',
+      )
+      expect(loadReplayPlanFromEnv({ DSH_FORGE_REPLAY_PLAN: triageOnly })).toBeDefined()
+      const bare = join(dir, 'bare.json')
+      writeFileSync(bare, JSON.stringify({ version: 1, workspaceDir: 'w', entries: [{ taskKey: 'f/1', occurrence: 1, behavior: 'script', actions: [] }] }), 'utf8')
+      expect(() => loadReplayPlanFromEnv({ DSH_FORGE_REPLAY_PLAN: bare })).toThrow('动作列不可为空')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('回放计划载入（env 缝）', () => {
   it('env 缺席 = undefined（缝不生效——生产装配零影响）', () => {
     expect(loadReplayPlanFromEnv({})).toBeUndefined()
