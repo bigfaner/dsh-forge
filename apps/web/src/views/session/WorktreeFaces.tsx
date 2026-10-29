@@ -68,11 +68,15 @@ const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>)
     present: entry.present,
   }))
 
-/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */interface WorktreeListPhase {
+/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */
+interface WorktreeListPhase {
   readonly state: 'loading' | 'ready' | 'error'
   readonly isGit: boolean
   readonly rows: ReturnType<typeof rowsOf>
   readonly worktreeDir?: string
+  /** 行集归属根（bug 70188b91——projectRoot 变更与 list 往返异步竞态：效应以
+   *  phase.root === projectRoot 判「清单与项目配对」，错配帧不消费不回填） */
+  readonly root?: string
 }
 
 const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
@@ -145,6 +149,14 @@ export function ForgeHeroWorktreeMount({
   useEffect(() => {
     setSelectedTreeDisplay(localSelectedPath)
   }, [localSelectedPath])
+  // bug 70188b91：projectRoot 变更（hero 弹层切项目——不经 applySelection）即清本地选中
+  // 投影。残留路径在新项目行集必被陈旧自愈判「盘上失配」：伪失效 notice + 强切主行
+  // （绕过分支锚定链），且 list 异步窗口内 window 锚停留旧项目树路径——startSession
+  // 无参径跨项目错绑（bug 38d80c5b）的触发源。host lastSelection 按 projectRoot 分键
+  // 不受影响；回填效应按新项目 selected/锚定链重新落定（零编排）。
+  useEffect(() => {
+    setLocalSelectedPath(undefined)
+  }, [projectRoot])
   // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：建会话通道创建时点
   // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
   // 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
@@ -268,6 +280,7 @@ export function ForgeHeroWorktreeMount({
   // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧（旧项目清单 × 新项目根）不回填
     let alive = true
     makeRpc()
       .worktree.selected({ projectRoot })
@@ -288,6 +301,7 @@ export function ForgeHeroWorktreeMount({
   const [staleNoticeName, setStaleNoticeName] = useState<string | null>(null)
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧不判自愈（旧清单 × 新根必误判）
     const reset = staleSelectionResetOf(phase.rows, localSelectedPath)
     if (!reset.stale) return
     setStaleNoticeName(reset.worktreeName ?? null)
@@ -306,6 +320,7 @@ export function ForgeHeroWorktreeMount({
       .then((result) => {
         setPhase({
           state: 'ready',
+          root: projectRoot,
           isGit: result.isGit,
           rows: rowsOf(result),
           worktreeDir: result.worktreeDir,
