@@ -14,7 +14,6 @@ import {
   auditNoLegacyMigrationTool,
   auditSkillReferencesResolved,
   auditWebNoOrchestration,
-  M3_DEFERRED_SKILL_REFS,
   runAllSourceAuditAnchors,
 } from './anchors.js'
 import { stripSourceComments } from './source-scan.js'
@@ -35,10 +34,6 @@ describe('5.3 审计锚①：当前仓零残留（SC2/SC8/SC3/web 无编排/技�
 
   it('吸收白名单常量封闭集（DOC_KIND_FILES 七类 + FRONTMATTER_KEYS 四键）', () => {
     expect(auditAbsorptionWhitelist()).toEqual([])
-  })
-
-  it('M3 豁免清单封闭记载（六技能——扩池须附裁决出处）', () => {
-    expect(M3_DEFERRED_SKILL_REFS).toEqual(['eval', 'gen-contracts', 'gen-journeys', 'gen-test-scripts', 'consolidate-specs', 'clean-code'])
   })
 })
 
@@ -119,27 +114,36 @@ describe('5.3 审计锚②：规则自证（负样例种植 → 拦截断言—�
     expect(findings.every((f) => !f.detail.includes('submitTaskTransition'))).toBe(true)
   })
 
-  it('悬空技能引用 → 拦截；挂载名（裸名形·2.4 前缀缝消灭）与 M3 豁免名解析通过', () => {
+  it('档案域悬空技能引用 → 拦截；挂载名与仓内文档路径解析通过（1.16 断言面迁移——裸名「X 技能」+ skills 标签）', () => {
     const root = plantRepo()
     const write = (rel: string, content: string): void => {
       mkdirSync(join(root, rel, '..'), { recursive: true })
       writeFileSync(join(root, rel), content, 'utf8')
     }
-    mkdirSync(join(root, 'packages/plugin-forge/skills/run-tests'), { recursive: true })
-    writeFileSync(join(root, 'packages/plugin-forge/skills/run-tests/SKILL.md'), '# run-tests\n', 'utf8')
+    mkdirSync(join(root, 'packages/plugin-forge/skills/fix-bug'), { recursive: true })
+    writeFileSync(join(root, 'packages/plugin-forge/skills/fix-bug/SKILL.md'), '# fix-bug\n', 'utf8')
+    write('docs/conventions/testing/core.md', '# testing core\n')
     write(
-      'packages/core/src/forge/tasks/prompt/templates/fake.ts',
-      [
-        'export const a = \'Skill(skill="run-tests")\'', // 裸名 = dsh 挂载名（2.4 前缀缝消灭后形制）→ 挂载集命中
-        'export const b = \'Skill(skill="ghost-skill")\'', // 裸名悬空 → 拦截（executor 将调用不存在的技能）
-        'export const c = \'Skill(skill="forge:eval")\'', // forge: 前缀 + M3 豁免清单 → 通过
-        'export const d = \'Skill(skill="forge:execute-task")\'', // forge: 前缀悬空 → 拦截
-      ].join('\n'),
+      'packages/plugin-forge/experts/ok-ref.md',
+      ['---', 'name: ok-ref', 'title: 合格样例', 'description: x', 'tools: [read]', 'skills: [fix-bug, docs/conventions/testing/core.md]', '---', '', '正文委托 fix-bug 技能走 TDD 流程。'].join('\n'),
+    )
+    write(
+      'packages/plugin-forge/experts/ghost-tag.md',
+      ['---', 'name: ghost-tag', 'title: 标签悬空', 'description: x', 'tools: [read]', 'skills: [ghost-skill]', '---', '', '正文。'].join('\n'),
+    )
+    write(
+      'packages/plugin-forge/experts/ghost-body.md',
+      ['---', 'name: ghost-body', 'title: 正文悬空', 'description: x', 'tools: [read]', 'skills: []', '---', '', '委托 ghost-skill 技能执行。'].join('\n'),
+    )
+    write(
+      'packages/plugin-forge/experts/ghost-doc.md',
+      ['---', 'name: ghost-doc', 'title: 文档悬空', 'description: x', 'tools: [read]', 'skills: [docs/conventions/no-such-doc.md]', '---', '', '正文。'].join('\n'),
     )
     const findings = auditSkillReferencesResolved(root)
-    expect(findings).toHaveLength(2)
-    expect(findings.some((f) => f.detail.includes('ghost-skill') && f.detail.includes('悬空'))).toBe(true)
-    expect(findings.some((f) => f.detail.includes('forge:execute-task') && f.detail.includes('悬空'))).toBe(true)
+    expect(findings).toHaveLength(3)
+    expect(findings.some((f) => f.detail.includes('ghost-tag.md') && f.detail.includes('ghost-skill') && f.detail.includes('悬空'))).toBe(true)
+    expect(findings.some((f) => f.detail.includes('ghost-body.md') && f.detail.includes('ghost-skill') && f.detail.includes('悬空'))).toBe(true)
+    expect(findings.some((f) => f.detail.includes('ghost-doc.md') && f.detail.includes('docs/conventions/no-such-doc.md') && f.detail.includes('悬空'))).toBe(true)
   })
 
   it('audit-allow 行豁免（使用须在执行记录说明理由）+ 注释剥离保行号', () => {

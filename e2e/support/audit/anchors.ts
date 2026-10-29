@@ -9,8 +9,8 @@
 //   ③ SC3 发现面只读文件面（discovery.ts fs 读三件套封闭 + 零写调用 + 单向阀门标记在场
 //      + 吸收白名单常量封闭集——运行面树快照归 audit-anchors.spec.ts）；
 //   ④ web 无编排逻辑（写动词调用形/数据层 import/fs 写禁令——web 只经 RPC 薄 Controller）
-//      + 旧技能悬空引用零残留（双形制：裸名引用 ⊆ 挂载集；forge: 前缀引用 ⊆ 挂载集 ∪
-//      M3 显式豁免清单——2.4 drift #8 前缀缝消灭后裸名 = 正形态）。
+//      + 旧技能悬空引用零残留（1.16 断言面迁移：引用形制 = 裸名「X 技能」+ experts 档案域
+//      skills 标签——Skill(skill="X") 形制随 1.9 技能退役零残留，扫描域迁至档案域接线正门）。
 import { readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -251,77 +251,82 @@ export function auditWebNoOrchestration(root: string = REPO_ROOT): AuditFinding[
 }
 
 /**
- * M3 显式豁免清单（旧技能引用中「执行技能面 = M3」的已裁决先置引用——2.2 记录：
- * 「eval/gen 系技能引用先置（词汇+模板 M2 保留，执行技能 = M3）」+ doc.ts/coding.ts
- * 头注「技能类模板 M3 技能面承接，文本先置」）。新增豁免须附裁决出处——禁静默扩池。
+ * 技能引用扫描域（expert-squad-forge-2 档案域——技能接线正门：frontmatter skills 标签 +
+ * 正文技能指引）。1.9 技能退役后 `Skill(skill="X")` 形制在产品文本零残留（同型判例
+ * 72b20463 处置链），引用以裸名「X 技能」形态落在档案域——哨兵意图「产品文本技能引用
+ * 可解析」不变，扫描域随之迁移（旧 core prompt/plugin src 扫描域退役）。
  */
-export const M3_DEFERRED_SKILL_REFS: readonly string[] = [
-  'eval', // eval 系执行技能（eval.ts 头注——tech-design §Interface 9 / Open Questions：M3 随 eval-* 技能）
-  'gen-contracts', // gen 系执行技能（test.ts 头注：gen/eval 技能面 = M3，词汇+模板保留先置）
-  'gen-journeys',
-  'gen-test-scripts',
-  'consolidate-specs', // doc.ts 头注：技能类模板 M3 技能面承接（doc-consolidate）
-  'clean-code', // coding.ts code-quality-simplify：老模板技能引用平移（同 M3 承接口径）
-]
+const SKILL_REF_SCAN_DIRS = ['packages/plugin-forge/experts'] as const
 
-/** 技能引用扫描域（产品文本三处：core prompt 模板 + plugin src + plugin skills） */
-const SKILL_REF_SCAN_DIRS = [
-  'packages/core/src/forge/tasks/prompt',
-  'packages/plugin-forge/src',
-  'packages/plugin-forge/skills',
-] as const
+/** frontmatter skills 标签行提取（档案 .md 头部 `---` 块内 `skills: [a, b]` 形） */
+const SKILL_TAG_LINE_RE = /^skills:\s*\[([^\]]*)\]\s*$/
 
-/** Skill(skill="<name>") 引用提取形（双形制：裸名 = dsh 挂载名形制——2.4 前缀缝消灭后
- *  的正形态（drift #8）；forge: 前缀 = M2 残留形制（M3 豁免清单承载——豁免技能迁移前先置）） */
-const SKILL_REF_RE = /Skill\(\s*skill\s*=\s*"((?:forge:)?)([a-z0-9-]+)"/g
+/** 档案域技能条目两形态：kebab-case 技能名 → 挂载集解析；含 `/` 或 `.md` 结尾 → 仓内文档在场 */
+const isSkillName = (s: string): boolean => /^[a-z0-9][a-z0-9-]*$/.test(s)
 
 /**
- * 锚④b：旧技能悬空引用零残留——产品文本内一切 `Skill(skill="X")` 引用必须解析到
- * plugin-forge 挂载技能目录（customSkillDirs 物理挂载面，裸名对齐）。双形制解析规则：
- * 裸名引用（挂载名形制）→ 仅挂载集（物理在场才可用）；forge: 前缀引用 → 挂载集 ∪
- * M3 显式豁免清单。皆不命中 = 悬空残留（executor 将调用不存在的技能）。
+ * 锚④b：旧技能悬空引用零残留——档案域（experts/*.md）内一切技能引用必须可解析。
+ * 双引用面解析规则（1.16 断言面迁移）：
+ *   ① frontmatter skills 标签：kebab 技能名条目 → plugin-forge 挂载技能目录（customSkillDirs
+ *      物理挂载面，物理在场才可用）；文档路径条目（含 `/` 或 `.md` 结尾）→ 仓内文件在场；
+ *   ② 正文裸名「X 技能」指引 → 挂载技能目录。
+ * 皆不命中 = 悬空残留（executor/委托方将调用不存在的技能）。档案域零引用 = 断言面失效。
  */
 export function auditSkillReferencesResolved(root: string = REPO_ROOT): AuditFinding[] {
   const anchor = 'skill-refs-resolved'
   const findings: AuditFinding[] = []
   const skillsDir = join(root, 'packages/plugin-forge/skills')
   const mounted = new Set(
-    readdirSync(skillsDir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name),
+    pathExists(skillsDir)
+      ? readdirSync(skillsDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name)
+      : [],
   )
-  const deferred = new Set(M3_DEFERRED_SKILL_REFS)
-  const refs: Array<{ name: string; prefixed: boolean; file: string; line: number }> = []
+  const mountedList = [...mounted].sort().join('/') || '空'
+  let refCount = 0
+  const checkSkillName = (rel: string, line: number, kind: string, name: string): void => {
+    refCount++
+    if (mounted.has(name)) return
+    findings.push({
+      anchor,
+      detail: `${rel}:${line} ${kind}引用 ${name} 不在挂载技能目录（${mountedList}）——技能悬空引用残留`,
+    })
+  }
   for (const dir of SKILL_REF_SCAN_DIRS) {
     const absDir = join(root, dir)
     if (!pathExists(absDir)) continue
-    for (const abs of listSourceFiles(absDir, { extensions: ['.ts', '.tsx', '.mts', '.md'] })) {
+    for (const abs of listSourceFiles(absDir, { extensions: ['.md'] })) {
       const src = readSourceOrNull(abs)
       if (src === null) continue
-      const scanned = abs.endsWith('.md') ? src : src // 引用形态在模板字符串/SKILL.md 正文——原文扫描（.md 无注释；.ts 剥注释会误伤模板字符串内的引号闭合面）
-      for (const [idx, line] of scanned.split('\n').entries()) {
-        for (const m of line.matchAll(SKILL_REF_RE)) {
-          refs.push({
-            name: m[2]!,
-            prefixed: m[1] === 'forge:',
-            file: `${dir}/${relative(join(root, dir), abs).split('\\').join('/')}`,
-            line: idx + 1,
-          })
+      const rel = `${dir}/${relative(join(root, dir), abs).split('\\').join('/')}`
+      const lines = src.split('\n')
+      for (const [idx, line] of lines.entries()) {
+        // ① frontmatter skills 标签（`---` 块内 skills: [...] 行）
+        const tag = line.match(SKILL_TAG_LINE_RE)
+        if (tag !== null) {
+          for (const raw of tag[1]!.split(',')) {
+            const entry = raw.trim().replace(/^['"]|['"]$/g, '')
+            if (entry === '') continue
+            if (isSkillName(entry)) {
+              checkSkillName(rel, idx + 1, 'skills 标签', entry)
+            } else if (!pathExists(join(root, entry))) {
+              refCount++
+              findings.push({ anchor, detail: `${rel}:${idx + 1} skills 标签引用 ${entry} 不在仓内（文档路径悬空）——技能悬空引用残留` })
+            } else {
+              refCount++
+            }
+          }
+        }
+        // ② 正文裸名「X 技能」指引
+        for (const m of line.matchAll(/([a-z0-9][a-z0-9-]*) 技能/g)) {
+          checkSkillName(rel, idx + 1, '正文', m[1]!)
         }
       }
     }
   }
-  if (refs.length === 0) {
-    findings.push({ anchor, detail: '产品文本零技能引用——扫描面异常（quick-tasks 等既有引用缺席即断言面失效）' })
-  }
-  for (const r of refs) {
-    const resolved = mounted.has(r.name) || (r.prefixed && deferred.has(r.name))
-    if (!resolved) {
-      findings.push({
-        anchor,
-        detail: `${r.file}:${r.line} 引用 ${r.prefixed ? `forge:${r.name}` : r.name} 不在挂载技能目录（${[...mounted].sort().join('/') || '空'}）${r.prefixed ? ' 也不在 M3 豁免清单' : '（裸名 = dsh 挂载名形制，须物理在场）'}——技能悬空引用残留`,
-      })
-    }
+  if (refCount === 0) {
+    findings.push({ anchor, detail: '档案域零技能引用——扫描面异常（bug-hunter fix-bug 等既有接线缺席即断言面失效）' })
   }
   return findings
 }
