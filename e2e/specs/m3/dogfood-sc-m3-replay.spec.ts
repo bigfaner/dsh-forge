@@ -70,6 +70,33 @@ async function openOverviewDockWithRetry(page: import('@playwright/test').Page, 
   throw lastCause
 }
 
+/**
+ * 循环停止重试（fix-13 复跑实证——瞬态窗对策，非放宽断言）：blocked → triage 挂起投影 +
+ * ⑩ followup 唤醒轮在途窗内，composer 发送可能不生效（发送键在途禁用）；轮内回执门
+ * 原样保留，失败后重发 /stop-dag-tasks（幂等——重复停止零副作用）。
+ */
+async function stopLoopWithRetry(page: import('@playwright/test').Page, rounds: number): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < rounds; i++) {
+    try {
+      const composer = page.locator(COMPOSER_INPUT).last()
+      await expect(composer, 'owner 会话 composer 在场（挂起处置入口）').toBeVisible({ timeout: 30_000 })
+      await composer.click()
+      await composer.fill('/stop-dag-tasks')
+      await page.keyboard.press('Enter')
+      await expect(
+        page.locator(CONVERSATION_CONTENT).first(),
+        '循环停止回执（登记表删除——独占释放）',
+      ).toContainText('已停止任务源', { timeout: 20_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await new Promise((resolve) => setTimeout(resolve, 5_000))
+    }
+  }
+  throw lastCause
+}
+
 /** 夹具工作区：git 仓 + 无害四门 justfile（与录制轮同形） */
 function makeWalkthroughWorkspace(): string {
   const wsRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m35-ws-'))
@@ -143,7 +170,13 @@ function readLogLines(file: string): LogLine[] {
   return out
 }
 
-/** 回放计划装配（四分支行为面——与 dogfood-sc-m3.spec.ts 录制轮 worker 行为逐同构） */
+/** 回放计划装配（四分支行为面——与 dogfood-sc-m3.spec.ts 录制轮 worker 行为逐同构）
+ *
+ * 保持纪律（fix-13）：本计划与产品派发行为同步——fix-4 验收语义起 blocked 结算恒入
+ * triage 阶梯，fix-7 起处置代理经同一 spawn 缝真实 spawn（label 后缀「 · 处置分析」
+ * = 回放面独立计划键）。凡计划中含 blocked 结算条目，必须随附同 taskKey 的
+ * 「 · 处置分析」条目回放其决策（output = 结构化决策 JSON）；漏配 = 回放键漂移
+ * fail-loud（seam 拒绝面，见 seam.ts planKey 识别）。 */
 function makeReplayPlan(ws: string): ReplayPlan {
   const submitCommon = { gate_compile: true, gate_fmt: true, gate_lint: true, gate_test: true }
   return {
@@ -200,6 +233,15 @@ function makeReplayPlan(ws: string): ReplayPlan {
             },
           },
         ],
+      },
+      // ③ 1.3 blocked → triage 阶梯处置代理回放（fix-4 语义：blocked 恒入阶梯；fix-7：
+      //    真实 spawn 经同一缝——独立键「 · 处置分析」，零动作 + output 承载决策）。
+      //    决策 = ask-user：与原无进展硬停挂起同终态——挂起投影后处置仍走 harness 代理
+      //    addTask 建 fix-1 → /stop-dag-tasks 收口（走查中段流程零漂移）。
+      {
+        taskKey: `${FEATURE}/1.3 · 处置分析`, occurrence: 1, behavior: 'script',
+        actions: [],
+        output: '1.3 受阻成因明确（工件缺席、可机械修复），交由处置层按 fix 链协议派生修复任务。\n{"action":"ask-user"}',
       },
       // ③ fix-1 修复完成
       {
@@ -625,15 +667,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       blockSource: true,
       taskDesc: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
     })
-    const stopComposerB = page.locator(COMPOSER_INPUT).last()
-    await expect(stopComposerB, '会话 B composer 在场（挂起处置入口）').toBeVisible({ timeout: 30_000 })
-    await stopComposerB.click()
-    await stopComposerB.fill('/stop-dag-tasks')
-    await page.keyboard.press('Enter')
-    await expect(
-      page.locator(CONVERSATION_CONTENT).first(),
-      'B 轮循环停止回执（登记表删除——独占释放，会话 C 可新开）',
-    ).toContainText('已停止任务源', { timeout: 30_000 })
+    await stopLoopWithRetry(page, 4)
 
     // ── 派发会话 C（fix 链执行轮——fix-1 → auto-restore → 1.3 二轮）──
     // dock 挂载重试（002 复跑实证：B 轮 blocked 问询的 owner 模型轮 + 渲染层连接重试窗内
