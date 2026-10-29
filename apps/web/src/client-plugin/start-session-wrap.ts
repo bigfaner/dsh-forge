@@ -158,8 +158,15 @@ export function installStartSessionWrap(deps: StartSessionWrapDeps): () => void 
       const projectRoot = await deps.resolveRoot(targetPath).catch(() => null)
       if (projectRoot === null || projectRoot === '') return 'official'
       // ② 显示源路由（所见即所得）：显示真源 = 客户端本地态（与 chip 同源，同步读零
-      //    竞态）；缺席回落项目根（chip 缺省显示主行同判）
-      const displayed = deps.displayedTree() ?? projectRoot
+      //    竞态）；缺席回落项目根（chip 缺省显示主行同判）。
+      //    归属门（bug 38d80c5b）：全局锚跨项目残留时，外来路径会经下方官方全局
+      //    workspaces.list 回退径确定性命中他项目 workspace（fail-open 放大为跨项目错绑
+      //    路由）——不归属当前 projectRoot = 视同未选中，回落主行语义（与 chip 缺省主行
+      //    同判，同 hero-picker-model 归属判式）。
+      const rawDisplayed = deps.displayedTree() ?? projectRoot
+      const rootNorm = normPath(projectRoot)
+      const displayedNorm = normPath(rawDisplayed)
+      const displayed = displayedNorm === rootNorm || displayedNorm.startsWith(`${rootNorm}/`) ? rawDisplayed : projectRoot
       // ① workspaceId 直通：chip 双发数据源（WorktreeEntryDto.workspaceId）优先，
       //    官方 workspaces.list path 匹配回退——解析即直通官方 startSession(workspaceId)，
       //    官方 session.create({workspaceId}) 原生 blank 复用，零 forge 改道
