@@ -51,6 +51,100 @@ function startPlugin(home: string): { services: Map<string, unknown>; dispose: (
   return { services, dispose }
 }
 
+// ── bug 4e25858a：project-sort 埋点生产接线（corePlugin 装配闭包桥 ctx 官方 diag/log
+// 事件域结构缝 → createProjectService onDiag——core 不 import host）──
+
+/** 起插件（diag 缝捕获变体：ctx.diagEmit 记账 emit 行） */
+function startPluginWithDiag(home: string): {
+  services: Map<string, unknown>
+  dispose: () => void
+  diagEmits: Array<{ event: string; payload: Record<string, unknown> }>
+} {
+  const services = new Map<string, unknown>()
+  const diagEmits: Array<{ event: string; payload: Record<string, unknown> }> = []
+  const ctx: CoreContextFace = {
+    workspaceRegistry: stubRegistry(),
+    workspaceController: stubRename(),
+    diagEmit: (event, payload) => diagEmits.push({ event, payload: payload as Record<string, unknown> }),
+    reflect: {
+      provide(name: string, value?: unknown) {
+        services.set(name, value)
+        return () => services.delete(name)
+      },
+    },
+  }
+  const dispose = corePlugin(ctx, { dbFile: join(home, 'state.db') })
+  return { services, dispose, diagEmits }
+}
+
+/** projects 行种入（插件已建库——第二连接直插，冒烟测试同径） */
+function seedTwoProjects(home: string): [string, string] {
+  const conn = openDatabase(join(home, 'state.db'))
+  dbs.push(conn)
+  const p1 = randomUUID()
+  const p2 = randomUUID()
+  const now = new Date().toISOString()
+  for (const id of [p1, p2]) {
+    seedProjectRow(conn, { id, workspaceId: randomUUID(), wsPath: `C:\\ws-${id}`, createdAt: now })
+  }
+  return [p1, p2]
+}
+
+type ProjectsServiceFace = { updateProject(id: string, patch: { sortOrders: Record<string, number> }): Promise<unknown> }
+
+it('生产装配接线：patch.sortOrders 成功（info）经 ctx.diagEmit 落 diag/log 事件域（event=project-sort, process=child）', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home)
+  const { services, dispose, diagEmits } = startPluginWithDiag(home)
+  try {
+    const [p1, p2] = seedTwoProjects(home)
+    const projects = services.get('forgeProjects') as ProjectsServiceFace
+    await projects.updateProject(p1, { sortOrders: { [p1]: 1, [p2]: 2 } })
+    expect(diagEmits).toHaveLength(1)
+    expect(diagEmits[0]!.event).toBe('diag/log')
+    expect(diagEmits[0]!.payload).toMatchObject({
+      level: 'info',
+      process: 'child',
+      event: 'project-sort',
+      projectId: p1,
+      projectCount: 2,
+    })
+  } finally {
+    dispose()
+  }
+})
+
+it('生产装配接线：写失败（触发器 ABORT）warn 同面 emit；diag 缝缺席（ctx.diagEmit 未注入）零 emit 不抛', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home)
+  const { services, dispose, diagEmits } = startPluginWithDiag(home)
+  try {
+    const [p1, p2] = seedTwoProjects(home)
+    const triggerConn = openDatabase(join(home, 'state.db'))
+    dbs.push(triggerConn)
+    triggerConn.exec(
+      `CREATE TRIGGER fail_sort_update BEFORE UPDATE ON projects BEGIN SELECT RAISE(ABORT, 'inject sort failure'); END`,
+    )
+    const projects = services.get('forgeProjects') as ProjectsServiceFace
+    await expect(projects.updateProject(p1, { sortOrders: { [p1]: 1, [p2]: 9 } })).rejects.toThrowError(/inject sort failure/)
+    expect(diagEmits).toHaveLength(1)
+    expect(diagEmits[0]!.payload).toMatchObject({ level: 'warn', process: 'child', event: 'project-sort', projectCount: 2 })
+  } finally {
+    dispose()
+  }
+  // 缝缺席（ctx.diagEmit 未注入——bug 4e25858a 的生产形态）：排序写面照常、零 emit 不抛
+  const home2 = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home2)
+  const { services: services2, dispose: dispose2 } = startPlugin(home2)
+  try {
+    const [q1, q2] = seedTwoProjects(home2)
+    const plain = services2.get('forgeProjects') as ProjectsServiceFace
+    await expect(plain.updateProject(q1, { sortOrders: { [q1]: 1, [q2]: 2 } })).resolves.toBeDefined()
+  } finally {
+    dispose2()
+  }
+})
+
 it('ctx.forgeKnowledge 双服务面完整：Interface 2 七法 + 3.5 browse 聚合法（八法精确）', () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
   dirs.push(home)
