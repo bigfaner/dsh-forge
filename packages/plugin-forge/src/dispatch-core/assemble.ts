@@ -126,8 +126,10 @@ export function deriveTriageToolFilter(): { deny: string[] } {
  * 上档案 model 在场覆盖 model，缺席回落 forgeSettings 默认；settings 未配置/服务缺席 =
  * undefined 不携带（无 provider 基座，回落父会话继承）；reasoning='default' = 不下发
  * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射）
- * 取舍标注（expert-squad-forge 1.10）：档案 model 生效以 forgeSettings 配置了 worker 段为
- * 前提——worker 段缺席 = 无 provider/model 基座，档案 model 不被消费（回父会话继承）。
+ * 取舍标注（expert-squad-forge-2 bug a599db30 修订）：档案 provider+model 成对在场 = 自带
+ * 完整路由对，无需 forgeSettings 基座即生效（settings.worker 缺席不再拦截显式路由）；
+ * 仅 model 在场仍以 forgeSettings.worker.provider 为基座——worker 段缺席 = 无 provider 基座，
+ * 不成对回落父会话继承。
  * provider 成对语义（expert-squad-forge-2 纳入 6）：档案 provider+model 两字段成对在场 =
  * 整组覆盖 settings 基座（官方 AgentOptions 同给同缺——「A 家模型 X」路由）；任一缺席 =
  * 回落 settings 基座（仅 model 在场仍按既有语义覆盖 model 位；仅 provider 在场不落位）。
@@ -136,6 +138,15 @@ export function workerAgentOptionsOf(
   settings: ForgeSettings | undefined,
   profile?: { readonly model?: string; readonly provider?: string },
 ): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
+  // Root cause（bug a599db30）：档案 provider+model 成对在场 = 自带完整路由对（官方同给
+  // 同缺语义），不依赖 settings.worker 基座——基座前置会把用户显式路由整体丢弃回落父继承。
+  // settings.worker 在场时其 reasoning 仍作用于档案路由（effort 与路由对正交）。
+  if (profile?.provider !== undefined && profile.model !== undefined) {
+    const base = { provider: profile.provider, model: profile.model }
+    const reasoning = settings?.worker?.reasoning
+    if (reasoning === undefined || reasoning === 'default') return base
+    return { ...base, reasoningEffort: reasoning }
+  }
   if (settings === undefined || settings.worker === undefined) return undefined
   const { provider, model, reasoning } = settings.worker
   const base =

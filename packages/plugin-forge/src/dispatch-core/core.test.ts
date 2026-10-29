@@ -558,6 +558,12 @@ describe('档案 tools/model spawn 组装消费（expert-squad-forge 1.4——re
     expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'settings-chat', reasoningEffort: 'high' })
   })
 
+  it('bug a599db30：settings 服务缺席 + 档案 provider+model 成对在场 → agentOptions 携带显式路由（不回落父继承）', async () => {
+    const h = harness({ resolveWorkerProfile: async () => ({ provider: 'deepseek-official', model: 'deepseek-flash' }) })
+    await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
+    expect(h.spawnRequests[0]!.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
+  })
+
   it('取用面缺席 = 形态兼容：toolFilter 纯 deny 面、agentOptions 纯 forgeSettings（行为回 1.4 前）', async () => {
     const h = harness()
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
