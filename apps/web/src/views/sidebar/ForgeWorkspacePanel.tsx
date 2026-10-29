@@ -35,7 +35,7 @@
 // 分层（fix-6，WorkbenchZones→WorkbenchPanel 同型）：ForgeWorkspacePanel = 过滤/视图/改名
 // 态机持有者；SidebarProjectsZone = 受控展示件（过滤/视图应用/相位正交的静态可测面）；
 // SidebarRail = 收起态受控展示件（搜索/＋ 图标列——fix-42 抽出同型受控缝）。
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react'
 import {
   Button,
   DisclosureRow,
@@ -68,6 +68,7 @@ import {
 import { EmptyState, ErrorBar, SkeletonRows } from '../../components/index.js'
 import {
   SIDEBAR_VIEW_DEFAULT,
+  projectSortOrdersPatchOf,
   relativeTimeLabel,
   sessionDotState,
   sessionLoopAriaLabel,
@@ -76,6 +77,7 @@ import {
   sidebarFilterOf,
   sidebarFlatFilterOf,
   sidebarFlatRowsOf,
+  sidebarProjectReorderOf,
   sidebarSectionLabelOf,
   sidebarSessionVisibility,
   sidebarViewOfPick,
@@ -137,6 +139,13 @@ export interface ForgeWorkspacePanelProps {
   readonly onSessionRename?: (sessionId: string, title: string) => Promise<void>
   /** 分叉会话（官方 uiWorkspace.forkSession——D45；缺席 = 分叉菜单项不呈现） */
   readonly onSessionFork?: (sessionId: string) => void
+  /**
+   * 项目行拖拽排序写回（project-manual-order 1.2；缺席 = 行不可拖拽）：
+   * 入参 = 拖拽行 id + 拖拽后完整显示序 σ 的全量重编号负载（σ 由本面板经 model 纯函数
+   * 产出——含归档行的 forge:projects/list 全序）。写回面归 sidebar-actions 绑定
+   * （一条 update + 静默重拉 / 失败回弹），本面板零本地重排。
+   */
+  readonly onProjectsReorder?: (draggedProjectId: string, sortOrders: Record<string, number>) => void
   /** 相对时间基准（注入——纯渲染可测） */
   readonly now: number
 }
@@ -189,6 +198,21 @@ export function sessionMenuItemsOf(
     })
   }
   return items
+}
+
+/**
+ * 项目行拖拽缝（project-manual-order 1.2——缺席 = 行不可拖拽；拖拽态机归
+ * SidebarProjectsZone 持有，ProjectBlock 只承接 DOM 事件与标记锚）。
+ */
+interface ProjectDragProps {
+  /** 拖拽中的项目 id（本行 data-dswf-dragging 判据；null = 无进行中拖拽） */
+  readonly draggedId: string | null
+  /** 落点高亮项目 id（data-dswf-drop-target 判据；null = 无） */
+  readonly dropTargetId: string | null
+  onDragStart(projectId: string): void
+  onDragOver(projectId: string): void
+  onDrop(projectId: string): void
+  onDragEnd(): void
 }
 
 /** 会话行动作回调组（D45——逐位缺席 = 对应钮/菜单项不呈现，纯展示件零缺省动作） */
@@ -503,6 +527,7 @@ function ProjectBlock({
   onArchiveToggle,
   onRequestRename,
   sessionActions,
+  drag,
   emptyNote,
 }: {
   node: SidebarProjectNode
@@ -518,6 +543,8 @@ function ProjectBlock({
   onRequestRename?: (projectId: string, currentName: string) => void
   /** D45 会话行动作组（逐位缺席 = 对应钮/菜单项不呈现） */
   sessionActions?: SessionRowActions
+  /** 项目行拖拽缝（project-manual-order 1.2；缺席 = 行不可拖拽） */
+  drag?: ProjectDragProps
   readonly emptyNote: string
 }): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -544,6 +571,34 @@ function ProjectBlock({
         data-dswf-project={node.projectId}
         data-archived={node.archived || undefined}
         data-active={active || undefined}
+        {...(drag === undefined
+          ? {}
+          : {
+              // project-manual-order 1.2：项目行 HTML5 原生拖拽（整块 draggable——
+              // 行本体 = DisclosureRow 官方件不外露拖拽钩；事件面落块容器，归档行
+              // 无专属分支——同一交互词汇）。dataTransfer 承载 payload 供浏览器
+              // 原生拖拽启动；数据面归 onDrop → zone 态机（model 纯函数裁决）。
+              draggable: true,
+              'data-dswf-dragging': drag.draggedId === node.projectId || undefined,
+              'data-dswf-drop-target': drag.dropTargetId === node.projectId || undefined,
+              onDragStart: (event: ReactDragEvent<HTMLDivElement>) => {
+                event.dataTransfer.setData('text/plain', node.projectId)
+                event.dataTransfer.effectAllowed = 'move'
+                drag.onDragStart(node.projectId)
+              },
+              onDragOver: (event: ReactDragEvent<HTMLDivElement>) => {
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+                drag.onDragOver(node.projectId)
+              },
+              onDrop: (event: ReactDragEvent<HTMLDivElement>) => {
+                event.preventDefault()
+                drag.onDrop(node.projectId)
+              },
+              onDragEnd: (): void => {
+                drag.onDragEnd()
+              },
+            })}
       >
       <DisclosureRow
         icon={
@@ -807,6 +862,8 @@ export interface SidebarProjectsZoneProps {
   readonly onRequestSessionRename?: (sessionId: string, currentTitle: string) => void
   /** D45 分叉会话（菜单项直发；缺席 = 菜单项不呈现） */
   readonly onSessionFork?: (sessionId: string) => void
+  /** 项目行拖拽排序写回（project-manual-order 1.2；缺席 = 行不可拖拽——flat 态恒不消费） */
+  readonly onProjectsReorder?: (draggedProjectId: string, sortOrders: Record<string, number>) => void
 }
 
 /** 相位主体推导输入（phaseBody 消费——SidebarProjectsZone 的相位判据 + 树/平铺快照） */
@@ -847,6 +904,8 @@ export interface SidebarZonePhaseInput {
   readonly onArchiveToggle?: (projectId: string, archived: boolean) => void
   /** D45 会话行动作组（逐位缺席 = 对应钮/菜单项不呈现） */
   readonly sessionActions?: SessionRowActions
+  /** 项目行拖拽缝（project-manual-order 1.2——仅 tree 态消费；缺席 = 行不可拖拽） */
+  readonly projectDrag?: ProjectDragProps
 }
 
 /**
@@ -909,6 +968,7 @@ export function phaseBody(input: SidebarZonePhaseInput): ReactNode {
       onArchiveToggle={input.onArchiveToggle}
       onRequestRename={input.onRequestRename}
       sessionActions={input.sessionActions}
+      drag={input.projectDrag}
       emptyNote={input.filterActive ? '无匹配会话' : '暂无会话'}
     />
   ))
@@ -946,6 +1006,7 @@ export function SidebarProjectsZone({
   onSessionUnarchive,
   onRequestSessionRename,
   onSessionFork,
+  onProjectsReorder,
 }: SidebarProjectsZoneProps): ReactNode {
   // 展开态（折叠集合——缺省全展开，P1 最简；展开态是纯视图态，不属 SC2 副本纪律）
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -958,10 +1019,45 @@ export function SidebarProjectsZone({
       return next
     })
   }
+  // 项目行拖拽态机（project-manual-order 1.2）：dragged/dropTarget 纯视觉微观态（不持久化）
+  // ——零本地重排：drop 只经 model 纯函数把落点翻译成 σ 全量重编号负载上抛（写回面归
+  // sidebar-actions；渲染序 = forge:projects/list 返回序，成功刷新消费、失败原地回弹）。
+  // σ 取本件入参 tree = forge:projects/list 全序（含归档行；过滤视图 = 保序子列投影，
+  // 归档行无专属分支）。flat 态无项目行，drag 缝不接。
+  const [dragProjectId, setDragProjectId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const treeMode = view.groupBy === 'tree'
+  const projectDrag =
+    onProjectsReorder === undefined || !treeMode
+      ? undefined
+      : {
+          draggedId: dragProjectId,
+          dropTargetId,
+          onDragStart: setDragProjectId,
+          onDragOver: (projectId: string): void => {
+            setDropTargetId(projectId)
+          },
+          onDrop: (targetId: string): void => {
+            const draggedId = dragProjectId
+            setDragProjectId(null)
+            setDropTargetId(null)
+            if (draggedId === null) return
+            const next = sidebarProjectReorderOf(
+              tree.map((node) => node.projectId),
+              draggedId,
+              targetId,
+            )
+            if (next === null) return
+            onProjectsReorder(draggedId, projectSortOrdersPatchOf(next))
+          },
+          onDragEnd: (): void => {
+            setDragProjectId(null)
+            setDropTargetId(null)
+          },
+        }
   // 视图投影（纯函数链——数据源不变）：归档过滤 → 排列（tree 过滤 / flat 摊平）。
   // 选中锚 currentSessionId 与过滤/视图正交（PRD UF-1 Validation 同径）。
   const archivedTree = sidebarArchivedFilterOf(view.archivedFilter, tree)
-  const treeMode = view.groupBy === 'tree'
   const visibleTree = treeMode ? sidebarFilterOf(query, archivedTree) : archivedTree
   const flatRows = treeMode ? [] : sidebarFlatFilterOf(query, sidebarFlatRowsOf(archivedTree))
   const filterActive = query.trim() !== ''
@@ -1071,6 +1167,8 @@ export function SidebarProjectsZone({
                 onRequestRename: onRequestSessionRename,
                 onFork: onSessionFork,
               },
+        // 项目行拖拽缝（project-manual-order 1.2——tree 态消费）
+        projectDrag,
       })}
     </div>
   )
@@ -1178,6 +1276,7 @@ export function ForgeWorkspacePanel({
   onSessionUnarchive,
   onSessionRename,
   onSessionFork,
+  onProjectsReorder,
   now,
 }: ForgeWorkspacePanelProps): ReactNode {
   const [searchOpen, setSearchOpen] = useState(false)
@@ -1340,6 +1439,7 @@ export function ForgeWorkspacePanel({
         onSessionUnarchive={onSessionUnarchive}
         onRequestSessionRename={onSessionRename === undefined ? undefined : requestSessionRename}
         onSessionFork={onSessionFork}
+        onProjectsReorder={onProjectsReorder}
       />
       {renameTarget === null ? null : (
         <Modal

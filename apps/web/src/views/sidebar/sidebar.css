@@ -147,6 +147,19 @@
   font: var(--dsw-font-s-14);
 }
 
+/* ── 项目行拖拽态（project-manual-order 1.2——DESIGN.md 无拖拽专属令牌，取既有
+ * .dswf-sidebar-* 行语言令牌族：拖拽行弱化 opacity、落点行 business-primary 内描边 +
+ * 行悬浮 tint = focus-ring 同刻度，不新造视觉词汇） ── */
+.dswf-sidebar-project[data-dswf-dragging] .dswf-sidebar-project-row {
+  opacity: 0.5;
+}
+
+.dswf-sidebar-project[data-dswf-drop-target] .dswf-sidebar-project-row {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
 /* 标题区伸缩（官方 projectRow .projectText flex:1 刻度——DisclosureRow 文本面两枚
  * class 钩承载：TextShimmer 根占满行余宽 + 内容面摊平，行尾动作才有右对齐锚点） */
 .dswf-sidebar-project .dswf-sidebar-project-content {

@@ -7,6 +7,7 @@ import {
   buildSidebarTree,
   FORGE_LOOP_SCENARIO_PHASE,
   loopPhaseOfEntry,
+  projectSortOrdersPatchOf,
   relativeTimeLabel,
   sessionDotState,
   sessionLoopAriaLabel,
@@ -19,6 +20,7 @@ import {
   sidebarFilterOf,
   sidebarFlatFilterOf,
   sidebarFlatRowsOf,
+  sidebarProjectReorderOf,
   sidebarSectionLabelOf,
   sidebarSessionVisibility,
   sidebarViewOfPick,
@@ -835,5 +837,37 @@ describe('sessionLoopBadge（forge-dispatch-events 投影键账本行窄读—�
       '任务源 feat-y · 状态 循环已结束',
     )
     expect(sessionLoopAriaLabel({ status: 'suspended', slug: null })).toBe('循环挂起')
+  })
+})
+
+describe('project-manual-order 1.2（sidebarProjectReorderOf / projectSortOrdersPatchOf——拖拽写回纯函数面）', () => {
+  it('上下换位：拖拽行落入目标槽位（目标行及其后整体后移）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'a', 'c')).toEqual(['b', 'a', 'c', 'd'])
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('零效果面：同行自拖 / 任一 id 不在全序 → null（不产生 update 调用）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'ghost', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'ghost')).toBeNull()
+  })
+
+  it('P2 保序子列：归档混排全序中拖拽后，hide 过滤视图序 = 全序的子列投影（归档行序位不丢）', () => {
+    // 全序含归档行（arch）——σ 无归档专属分支
+    const full = sidebarProjectReorderOf(['a', 'arch', 'b', 'c'], 'c', 'a')!
+    expect(full).toEqual(['c', 'a', 'arch', 'b'])
+    // hide 视图（滤除归档）= 全序保序子列
+    const hidden = full.filter((id) => id !== 'arch')
+    expect(hidden).toEqual(['c', 'a', 'b'])
+    // 归档行相对位置未受拖拽扰动（hide 切回 default 后序位不丢）
+    expect(full.indexOf('arch')).toBe(2)
+  })
+
+  it('P3 全量重编号负载：值恰为 1..n 无重复；同 σ 重复产出逐位一致（幂等）', () => {
+    const order = ['p3', 'p1', 'p2']
+    const patch = projectSortOrdersPatchOf(order)
+    expect(patch).toEqual({ p3: 1, p1: 2, p2: 3 })
+    expect(Object.values(patch).sort((a, b) => a - b)).toEqual([1, 2, 3])
+    expect(projectSortOrdersPatchOf(order)).toEqual(patch)
   })
 })

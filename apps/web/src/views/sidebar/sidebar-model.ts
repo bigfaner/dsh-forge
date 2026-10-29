@@ -713,3 +713,34 @@ export function sidebarFlatFilterOf(
 export function sidebarSectionLabelOf(view: SidebarView): string {
   return view.groupBy === 'flat' ? '会话' : '项目'
 }
+
+// ── 项目行拖拽排序（project-manual-order 1.2——forge:projects/update patch.sortOrders
+//    全量重编号写回的前端纯函数面。数据纪律：不做本地乐观重排持久态——list 返回序是
+//    唯一渲染真源，本节只产出写回负载；失败回弹 = 渲染本就未动。归档无专属分支：
+//    σ 取 forge:projects/list 全序（含归档行），filtered 视图 = 保序子列投影的自然推论。） ──
+
+/**
+ * 拖拽落点 → 拖拽后完整显示序 σ（纯函数）：把 draggedId 从全序中摘出、落入 targetId
+ * 所在槽位（换位语义 = 拖拽行占据目标行槽位，目标行及其后整体后移一位；上下两向
+ * 对称成立）。入参序 = forge:projects/list 全序（含归档行）。
+ * 返回 null = 零效果（同行自拖 / 任一 id 不在全序——不产生 update 调用）。
+ */
+export function sidebarProjectReorderOf(
+  order: readonly string[],
+  draggedId: string,
+  targetId: string,
+): readonly string[] | null {
+  if (draggedId === targetId) return null
+  if (!order.includes(draggedId) || !order.includes(targetId)) return null
+  const next = order.filter((id) => id !== draggedId)
+  const at = next.indexOf(targetId)
+  return [...next.slice(0, at), draggedId, ...next.slice(at)]
+}
+
+/**
+ * σ → patch.sortOrders 负载（纯函数）：全量重编号 { pᵢ → i+1 }——值恰为 1..n 无重复，
+ * 同 σ 重复执行负载逐位一致（幂等）。写后全序（host 四键字典序）恰为 σ（所见即所得）。
+ */
+export function projectSortOrdersPatchOf(order: readonly string[]): Record<string, number> {
+  return Object.fromEntries(order.map((id, index) => [id, index + 1]))
+}

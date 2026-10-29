@@ -823,3 +823,38 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
     expect(markup).not.toContain('dswf-sidebar-session-loopedge')
   })
 })
+
+describe('project-manual-order 1.2（项目行拖拽——HTML5 draggable + 拖拽态锚）', () => {
+  it('onProjectsReorder 注入 = 项目行可拖拽（draggable + 拖拽态/落点锚随块）', () => {
+    const markup = panel({ onProjectsReorder: () => {} })
+    expect(markup).toContain('draggable="true"')
+    expect(markup).toContain('data-dswf-project="p1"')
+  })
+
+  it('回调缺席 = 行不可拖拽（纯展示件零缺省动作——基线面板零回归）', () => {
+    expect(panel()).not.toContain('draggable="true"')
+  })
+
+  it('flat 态 drag 缝不接（平铺无项目行——SidebarProjectsZone 受控缝直渲染）', () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProjectsZone
+        tree={[node()]}
+        loading={false}
+        currentSessionId={null}
+        projectsPending={false}
+        hasProjects
+        now={NOW}
+        searchOpen={false}
+        onSearchToggle={() => {}}
+        query=""
+        onQueryChange={() => {}}
+        viewMenuOpen={false}
+        onViewMenuOpenChange={() => {}}
+        view={{ groupBy: 'flat', archivedFilter: 'default' }}
+        onViewPick={() => {}}
+        onProjectsReorder={() => {}}
+      />,
+    )
+    expect(markup).not.toContain('draggable="true"')
+  })
+})

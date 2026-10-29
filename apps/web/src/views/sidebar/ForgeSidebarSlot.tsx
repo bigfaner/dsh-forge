@@ -146,6 +146,7 @@ export function ForgeSidebarSlot({
       onSessionUnarchive={actions.onSessionUnarchive}
       onSessionRename={actions.onSessionRename}
       onSessionFork={actions.onSessionFork}
+      onProjectsReorder={actions.onProjectsReorder}
       now={Date.now()}
     />
   )

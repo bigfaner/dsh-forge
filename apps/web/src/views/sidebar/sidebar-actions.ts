@@ -20,8 +20,11 @@ export interface SidebarActionDeps {
   readonly openSession: (sessionId: string) => void
   /** 项目行「新会话」→ 官方新会话流（uiWorkspace.startSession(workspaceId) 窄面） */
   readonly startSession: (workspaceId: string) => void
-  /** forge:projects/update RPC 窄面（patch 仅 name/archived） */
-  readonly updateProject: (id: string, patch: { name?: string; archived?: boolean }) => Promise<unknown>
+  /** forge:projects/update RPC 窄面（patch 仅 name/archived/sortOrders——project-manual-order） */
+  readonly updateProject: (
+    id: string,
+    patch: { name?: string; archived?: boolean; sortOrders?: Record<string, number> },
+  ) => Promise<unknown>
   /** 变更落地后重拉项目列表（静默——相位不闪，use-forge-projects silentRefresh 面） */
   readonly onProjectsMutated: () => void
   /** 置顶会话（官方 uiWorkspace.pinSession——D45；缺席 = 置顶钮/菜单项不呈现） */
@@ -62,6 +65,14 @@ export interface SidebarActions {
   onArchiveToggle(projectId: string, archived: boolean): void
   /** 置顶切换（D45——hover 钮/菜单项直发）：fail-soft 控制台告警（官方 pinFailed 通知位 P1 无面） */
   onSessionPinToggle(sessionId: string, pinned: boolean): void
+  /**
+   * 项目行拖拽排序写回（project-manual-order 1.2——一次拖拽恰一条 update）：
+   * patch.sortOrders = 拖拽后完整显示序的全量重编号负载（σ 由面板经 model 纯函数产出，
+   * 本绑定零仲裁）。成功后静默重拉（forge:projects/list 返回序 = 唯一渲染真源——
+   * WYSIWYG，前端零本地重排）；失败 fail-soft 控制台告警且不重拉——渲染序本就未动，
+   * 即拖拽前序回弹。
+   */
+  onProjectsReorder(draggedProjectId: string, sortOrders: Record<string, number>): void
   /**
    * 归档会话（D45）：Promise 原样返回——运行中会话拒绝（sessionArchiveActiveRefusal）
    * 由面板接住开「停止并归档」确认模态；其余失败面板 fail-soft 告警。
@@ -124,6 +135,16 @@ export function sidebarActions(deps: SidebarActionDeps): SidebarActions {
       face(sessionId).catch((cause: unknown) => {
         warnFace(pinned ? '置顶会话' : '取消置顶', sessionId, cause)
       })
+    },
+    onProjectsReorder: (draggedProjectId, sortOrders) => {
+      deps
+        .updateProject(draggedProjectId, { sortOrders })
+        .then(() => {
+          deps.onProjectsMutated()
+        })
+        .catch((cause: unknown) => {
+          warnFace('项目排序', draggedProjectId, cause)
+        })
     },
     onSessionArchive: (sessionId, options) => {
       if (deps.archiveSession === undefined) return Promise.resolve()
