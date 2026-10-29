@@ -49,7 +49,7 @@ import type {
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { errMessage } from '../util.js'
 import { ensureDirReadable } from '../fs-ensure.js'
-import { CompensationError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
+import { CompensationError, ProjectSortOrderInvalidError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
 import { classifyRegistrationCollision, deriveTaskStoreDir as deriveStoreDir, type RegistrationCollision } from './workspace/derive-dir.js'
@@ -98,6 +98,18 @@ export interface ProjectServiceDeps {
    * 路径）；含存量双行仲裁归档与主 worktree 缺失降级。任何失败 fail-soft 降级现行链。
    */
   gitIdentity?: GitIdentityPort
+  /**
+   * project-manual-order 1.1 诊断 emit 缝（可选注入——装配方注入 emitDiag 闭包，
+   * apps/host/src/telemetry/diag-events.ts 同域 diag/log 事件；缺席 = 零 emit）。
+   * 消费点 = patch.sortOrders 批量写面（event 前缀 project-sort：成功 info / 失败 warn）。
+   */
+  onDiag?: (payload: {
+    level: 'info' | 'warn'
+    event: string
+    message: string
+    projectId?: string
+    projectCount?: number
+  }) => void
 }
 
 /**
@@ -668,11 +680,12 @@ interface ProjectRow {
   knowledge_dir: string
   worktree_dir: string | null
   archived: number
+  sort_order: number | null
   created_at: string
   updated_at: string
 }
 
-const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, created_at, updated_at FROM projects`
+const SELECT_PROJECT = `SELECT id, workspace_id, ws_path, name, forge_dir, forge_dir_external, knowledge_dir, worktree_dir, archived, sort_order, created_at, updated_at FROM projects`
 
 function toProject(row: ProjectRow): Project {
   return {
@@ -695,13 +708,21 @@ function getRow(deps: ProjectServiceDeps, id: string): ProjectRow | undefined {
 }
 
 function listProjects(deps: ProjectServiceDeps): ProjectSummary[] {
-  const rows = deps.db.prepare<unknown[], ProjectRow>(`${SELECT_PROJECT} ORDER BY created_at, id`).all()
+  // 排序 = (sort_order IS NULL, sort_order, created_at, id) 四键字典序（project-manual-order）：
+  // IS NULL = SQLite 布尔键升序 0 在前——已排序行整体在前按 sort_order 从小到大；NULL（未排序）
+  // 垫底、组内该键不分辨由 created_at, id 注册序补位；末位主键 ⇒ 严格全序（两次查询序确定一致）。
+  const rows = deps.db
+    .prepare<unknown[], ProjectRow>(
+      `${SELECT_PROJECT} ORDER BY (sort_order IS NULL), sort_order, created_at, id`,
+    )
+    .all()
   return rows.map((row) => ({
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
     wsPath: row.ws_path,
     archived: row.archived === 1, // 过滤口径：archived 态随摘要行供 UI 过滤
+    sortOrder: row.sort_order ?? undefined,
   }))
 }
 
@@ -710,12 +731,67 @@ function getProject(deps: ProjectServiceDeps, id: string): Project | null {
   return row === undefined ? null : toProject(row)
 }
 
+/**
+ * patch.sortOrders 批量排序写面（project-manual-order 1.1）：全量预检（缺项目 id / 空 map /
+ * 非法值——非有限安全整数）于事务前 typed 拒绝（ERR_PROJECT_SORT_INVALID，零行写入无半写），
+ * 通过后单事务批量 UPDATE（全量重编号语义由前端给 1..n，host 不做 midpoint 插值）。
+ * 成功 info / 失败 warn 经 deps.onDiag emit（event 前缀 project-sort；缝缺席 = 零 emit）。
+ */
+function applySortOrders(deps: ProjectServiceDeps, id: string, sortOrders: Record<string, number>): void {
+  const entries = Object.entries(sortOrders)
+  const missingProjectIds: string[] = []
+  const invalidOrders: Array<{ projectId: string; order: unknown }> = []
+  if (entries.length === 0) {
+    throw new ProjectSortOrderInvalidError({})
+  }
+  const registered = new Set(
+    deps.db.prepare<unknown[], { id: string }>(`SELECT id FROM projects`).all().map((r) => r.id),
+  )
+  for (const [projectId, order] of entries) {
+    if (!registered.has(projectId)) missingProjectIds.push(projectId)
+    if (typeof order !== 'number' || !Number.isSafeInteger(order)) {
+      invalidOrders.push({ projectId, order })
+    }
+  }
+  if (missingProjectIds.length > 0 || invalidOrders.length > 0) {
+    throw new ProjectSortOrderInvalidError({ missingProjectIds, invalidOrders })
+  }
+  const now = new Date().toISOString()
+  try {
+    deps.db.transaction(() => {
+      const update = deps.db.prepare(`UPDATE projects SET sort_order = ?, updated_at = ? WHERE id = ?`)
+      for (const [projectId, order] of entries) update.run(order, now, projectId)
+    })()
+  } catch (cause) {
+    emitSortDiag(deps, 'warn', id, entries.length, `sortOrders 批量写失败（事务回滚，序不变）：${errMessage(cause)}`)
+    throw cause
+  }
+  emitSortDiag(deps, 'info', id, entries.length, `sortOrders 批量写成功（单事务 ${entries.length} 行重编号）`)
+}
+
+function emitSortDiag(
+  deps: ProjectServiceDeps,
+  level: 'info' | 'warn',
+  projectId: string,
+  projectCount: number,
+  message: string,
+): void {
+  try {
+    deps.onDiag?.({ level, event: 'project-sort', message, projectId, projectCount })
+  } catch {
+    // 埋点永不反压写面（fire-and-forget 语义——emit 侧零反压，防御式吞掉）
+  }
+}
+
 function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch): Project {
   const row = getRow(deps, id)
   if (row === undefined) {
     // 非六码 typed error（Error Handling 表无 project-not-found 行）：RPC 边界 fail-loud 原样上抛
     throw new Error(`项目不存在：updateProject(${id})——id 未命中 projects 行`)
   }
+  // patch.sortOrders 批量排序写（project-manual-order）：独立于逐字段 sets——预检零副作用，
+  // 单事务批量落库；与 name/archived/worktreeDir 同 patch 可组合（先批量序后逐字段）。
+  if (patch.sortOrders !== undefined) applySortOrders(deps, id, patch.sortOrders)
   // patch 仅 name/archived/worktreeDir（接口类型收窄 + 白名单建句双重执行；多余键忽略零写）
   const sets: string[] = []
   const params: unknown[] = []

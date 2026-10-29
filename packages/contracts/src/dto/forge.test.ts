@@ -53,7 +53,9 @@ import type {
   ListProposalDocsQuery,
   ListTasksQuery,
   Mode,
+  ProjectPatch,
   ProjectServiceM2,
+  ProjectSummary,
   ProposalCard,
   ProposalCreatedPayload,
   RemoteApprovalDecision,
@@ -169,6 +171,17 @@ describe('AC1 服务面方法签名锚（Interface 1–5 逐项在场）', () =>
     expectTypeOf<ProjectServiceM2>().toHaveProperty('deriveTaskStoreDir')
     expectTypeOf<ProjectServiceM2>().toHaveProperty('registerProject')
     expectTypeOf<ProjectServiceM2>().toHaveProperty('reconcileAtStartup')
+  })
+
+  it('project-manual-order 类型面：ProjectSummary 可选 sortOrder 随行 + update patch sortOrders 键编译期生效', () => {
+    expectTypeOf<ProjectSummary['sortOrder']>().toEqualTypeOf<number | undefined>()
+    expectTypeOf<ProjectPatch['sortOrders']>().toEqualTypeOf<Record<string, number> | undefined>()
+    expectTypeOf<ProjectPatch['name']>().toEqualTypeOf<string | undefined>()
+    // 编译期赋值面：拖拽全量重编号负载合法
+    const patch: ProjectPatch = { sortOrders: { 'p1': 1, 'p2': 2 } }
+    expect(patch.sortOrders).toBeDefined()
+    const summary: ProjectSummary = { id: 'p1', workspaceId: 'w1', name: 'n', wsPath: 'Z:\\p', archived: false }
+    expect(summary.sortOrder).toBeUndefined() // 可选——存量/未排序行缺席合法
   })
 
   it('读面返回体锚：listTasks → TaskCard[] / listFeatures → FeatureCard[] / listProposals → ProposalCard[]', () => {

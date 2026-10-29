@@ -82,8 +82,8 @@ describe('AC3 errors.ts 扩池 15 新码（M2 表逐条一致）', () => {
 })
 
 describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', () => {
-  it('ERROR_CODES = 40 码：P1 六码 + M2 十五码前缀不动 + M3 三码行序一致 + S3 三码续后 + 工具面两码收尾 + fix-bug 四码增补 + 复发链悬空引用码 + worker addTask 拒收码 + W2 能力缺席拒绝码 + 重路由目标缺席拒绝码 + 机械⑤取证声明两码收尾 + before 后继守卫码续后', () => {
-    expect([...ERROR_CODES]).toHaveLength(40)
+  it('ERROR_CODES = 41 码：… + before 后继守卫码 + 项目排序校验码续后（project-manual-order）', () => {
+    expect([...ERROR_CODES]).toHaveLength(41)
     expect([...ERROR_CODES].slice(21, 24)).toEqual(M3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(24, 27)).toEqual(S3_ERROR_TABLE.map(([code]) => code))
     expect([...ERROR_CODES].slice(27, 29)).toEqual(TASK_TOOLS_ERROR_TABLE.map(([code]) => code))
@@ -100,8 +100,8 @@ describe('AC5 errors.ts 扩池 3 新码（M3 Interface 6 表逐条一致）', ()
       'ERR_WORKTREE_TARGET_ABSENT',
     ])
     expect([...ERROR_CODES].slice(37, 39)).toEqual(['ERR_RUNTIME_EVIDENCE_REQUIRED', 'ERR_RUNTIME_EVIDENCE_CONFLICT'])
-    expect([...ERROR_CODES].slice(39)).toEqual(['ERR_BEFORE_SUCCESSOR_INVALID'])
-    expect(new Set(ERROR_CODES).size).toBe(40)
+    expect([...ERROR_CODES].slice(39)).toEqual(['ERR_BEFORE_SUCCESSOR_INVALID', 'ERR_PROJECT_SORT_INVALID'])
+    expect(new Set(ERROR_CODES).size).toBe(41)
   })
 
   it('M3/S3/工具面/fix-bug/复发链新码命名一律 ERR_ 前缀（与 P1/M2 面同构）', () => {

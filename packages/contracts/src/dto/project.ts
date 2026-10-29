@@ -38,6 +38,11 @@ export interface ProjectSummary {
   name: string
   wsPath: string
   archived: boolean
+  /**
+   * 手动排序值（project-manual-order；可选容忍存量/未排序行——NULL = 未手动排序）。
+   * 读面排序键 = (sort_order IS NULL, sort_order, created_at, id) 四键字典序——NULL 垫底。
+   */
+  sortOrder?: number
 }
 
 /** registerProject 入参（文件浏览器选定 + 表单确认；workspaceDir 为 canonical 化后路径） */
@@ -74,8 +79,15 @@ export interface RegisterResult {
   attachedToExisting: boolean
 }
 
-/** updateProject patch 面（仅 name / archived / worktreeDir） */
-export type ProjectPatch = Partial<Pick<Project, 'name' | 'archived' | 'worktreeDir'>>
+/**
+ * updateProject patch 面（name / archived / worktreeDir / sortOrders）。
+ * sortOrders（project-manual-order）= 拖拽写回批量重编号 { projectId → order }：前端给全量
+ * 1..n（不做 midpoint 插值），host 单事务批量 UPDATE；缺项目 id / 空 map / 非法值 = typed 拒绝
+ * （ERR_PROJECT_SORT_INVALID）。
+ */
+export type ProjectPatch = Partial<Pick<Project, 'name' | 'archived' | 'worktreeDir'>> & {
+  sortOrders?: Record<string, number>
+}
 
 /** getProject 入参 */
 export interface GetProjectRequest {

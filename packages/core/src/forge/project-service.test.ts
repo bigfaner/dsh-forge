@@ -1072,3 +1072,152 @@ describe('1.5 身份归并层（注册链 attachExistingRow 之前——同锚 w
     expect(logs[0]?.message).toContain('身份归并层失败')
   })
 })
+
+// ── project-manual-order 1.1：listProjects 四键排序 + patch.sortOrders 批量写面 ──
+
+/** setup 变体（onDiag 缝捕获——排序写面 emit 断言面） */
+function setupWithDiag() {
+  const db = openDatabase(dbPath())
+  dbs.push(db)
+  const registry = new StubRegistry()
+  const rename = new StubRename()
+  const diagCalls: Array<{ level: string; event: string; message: string; projectId?: string; projectCount?: number }> = []
+  const service = createProjectService({
+    db,
+    registry,
+    rename,
+    onDiag: (p) => diagCalls.push(p),
+  } satisfies ProjectServiceDeps)
+  return { db, service, diagCalls }
+}
+
+/** 种入行集（created_at 可控——四键排序夹具；ws_path 随机错开不撞 UNIQUE） */
+function seedN(db: Database.Database, rows: Array<{ id: string; createdAt?: string; sortOrder?: number }>): void {
+  for (const r of rows) {
+    seedProjectRow(db, { id: r.id, workspaceId: `ws-${r.id}`, wsPath: `Z:\\proj\\${r.id}`, createdAt: r.createdAt })
+    if (r.sortOrder !== undefined) {
+      db.prepare(`UPDATE projects SET sort_order = ? WHERE id = ?`).run(r.sortOrder, r.id)
+    }
+  }
+}
+
+const idsOf = (list: Array<{ id: string }>): string[] => list.map((p) => p.id)
+
+describe('project-manual-order：listProjects 四键字典序（严格全序）', () => {
+  it('混合 NULL/有值：已排序在前按 sort_order 升序，NULL 垫底组内按 created_at, id 注册序', async () => {
+    const { db, service } = setup()
+    seedN(db, [
+      { id: 'n1', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 's2', createdAt: '2026-01-02T00:00:00.000Z', sortOrder: 2 },
+      { id: 'n2', createdAt: '2025-12-01T00:00:00.000Z' },
+      { id: 's1', createdAt: '2026-01-03T00:00:00.000Z', sortOrder: 1 },
+    ])
+    const list = await service.listProjects()
+    expect(idsOf(list)).toEqual(['s1', 's2', 'n2', 'n1'])
+    expect(list.map((p) => p.sortOrder)).toEqual([1, 2, undefined, undefined])
+  })
+
+  it('病态夹具：created_at 并列 + 同 order 值——由 id 终结排序，两次查询序完全一致（确定性）', async () => {
+    const { db, service } = setup()
+    const same = '2026-01-01T00:00:00.000Z'
+    seedN(db, [
+      { id: 'b', createdAt: same, sortOrder: 7 },
+      { id: 'a', createdAt: same, sortOrder: 7 },
+      { id: 'c', createdAt: same, sortOrder: 3 },
+    ])
+    const first = idsOf(await service.listProjects())
+    const second = idsOf(await service.listProjects())
+    expect(first).toEqual(['c', 'a', 'b']) // 同 order 由 id 终结；两次不抖动
+    expect(second).toEqual(first)
+  })
+
+  it('零排序全 NULL：序 = created_at, id 注册序（存量布局零扰动）', async () => {
+    const { db, service } = setup()
+    seedN(db, [
+      { id: 'late', createdAt: '2026-06-01T00:00:00.000Z' },
+      { id: 'early', createdAt: '2026-01-01T00:00:00.000Z' },
+    ])
+    expect(idsOf(await service.listProjects())).toEqual(['early', 'late'])
+  })
+})
+
+describe('project-manual-order：updateProject patch.sortOrders 批量写面', () => {
+  it('单事务批量写全部行：写后 list 序 = 重编号序，sort_order 严格递增全部非 NULL', async () => {
+    const { db, service } = setup()
+    seedN(db, [
+      { id: 'p1', createdAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'p2', createdAt: '2026-01-02T00:00:00.000Z' },
+      { id: 'p3', createdAt: '2026-01-03T00:00:00.000Z' },
+    ])
+    const updated = await service.updateProject('p1', { sortOrders: { p3: 1, p1: 2, p2: 3 } })
+    expect(updated.id).toBe('p1')
+    const list = await service.listProjects()
+    expect(idsOf(list)).toEqual(['p3', 'p1', 'p2'])
+    expect(list.map((p) => p.sortOrder)).toEqual([1, 2, 3])
+    // 幂等：同 payload 重放结果一致
+    await service.updateProject('p1', { sortOrders: { p3: 1, p1: 2, p2: 3 } })
+    expect(idsOf(await service.listProjects())).toEqual(['p3', 'p1', 'p2'])
+  })
+
+  it('失败注入（UPDATE 触发器 ABORT）→ 事务回滚零写入 + warn 埋点', async () => {
+    const { db, service, diagCalls } = setupWithDiag()
+    seedN(db, [
+      { id: 'p1', sortOrder: 1 },
+      { id: 'p2', sortOrder: 2 },
+    ])
+    db.exec(
+      `CREATE TRIGGER fail_sort_update BEFORE UPDATE ON projects BEGIN SELECT RAISE(ABORT, 'inject sort failure'); END`,
+    )
+    await expect(service.updateProject('p1', { sortOrders: { p1: 1, p2: 9 } })).rejects.toThrowError(/inject sort failure/)
+    // p1 未被先行写坏（事务整体回滚）
+    expect(
+      db.prepare<unknown[], { sort_order: number }>(`SELECT sort_order FROM projects WHERE id = 'p2'`).get(),
+    ).toEqual({ sort_order: 2 })
+    expect(diagCalls).toHaveLength(1)
+    expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'project-sort', projectCount: 2 })
+  })
+
+  it('typed 拒绝面：缺项目 id / 空 map / 非法值——ERR_PROJECT_SORT_INVALID，零写入', async () => {
+    const { db, service, diagCalls } = setupWithDiag()
+    seedN(db, [{ id: 'p1', sortOrder: 1 }])
+    // 缺项目 id
+    await expect(service.updateProject('p1', { sortOrders: { p1: 1, ghost: 2 } })).rejects.toMatchObject({
+      code: 'ERR_PROJECT_SORT_INVALID',
+      name: 'ProjectSortOrderInvalidError',
+      data: { missingProjectIds: ['ghost'] },
+    })
+    // 空 map
+    await expect(service.updateProject('p1', { sortOrders: {} })).rejects.toMatchObject({
+      code: 'ERR_PROJECT_SORT_INVALID',
+    })
+    // 非法值（非整数 / 非安全数值）
+    await expect(service.updateProject('p1', { sortOrders: { p1: 1.5 } })).rejects.toMatchObject({
+      code: 'ERR_PROJECT_SORT_INVALID',
+      data: { invalidOrders: [{ projectId: 'p1', order: 1.5 }] },
+    })
+    await expect(service.updateProject('p1', { sortOrders: { p1: Number.NaN } })).rejects.toMatchObject({
+      code: 'ERR_PROJECT_SORT_INVALID',
+    })
+    // 零写入 + 零成功埋点
+    expect(
+      db.prepare<unknown[], { sort_order: number }>(`SELECT sort_order FROM projects WHERE id = 'p1'`).get(),
+    ).toEqual({ sort_order: 1 })
+    expect(diagCalls).toHaveLength(0)
+  })
+
+  it('成功路径 emitDiag（project-sort info，projectCount=批量行数）；缝缺席 = 零 emit 不抛', async () => {
+    const { db, service, diagCalls } = setupWithDiag()
+    seedN(db, [
+      { id: 'p1' },
+      { id: 'p2' },
+    ])
+    await service.updateProject('p1', { sortOrders: { p1: 1, p2: 2 } })
+    expect(diagCalls).toEqual([
+      { level: 'info', event: 'project-sort', projectId: 'p1', projectCount: 2, message: expect.stringContaining('批量写成功') },
+    ])
+    // 缝缺席（默认 setup 无 onDiag）——不抛、写面照常
+    const plain = setup()
+    seedN(plain.db, [{ id: 'p1' }, { id: 'p2' }])
+    await expect(plain.service.updateProject('p1', { sortOrders: { p1: 1, p2: 2 } })).resolves.toBeDefined()
+  })
+})

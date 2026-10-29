@@ -77,6 +77,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── task-pause-primitive §2.1（addTask before 后继状态守卫）──
   // before 后继处不可挂边状态 → 错误条（插入语境原地反馈——指路 pauseTask / human 通道 / 改选后继）
   ERR_BEFORE_SUCCESSOR_INVALID: 'error-bar',
+  // ── project-manual-order（patch.sortOrders 批量排序写面校验）──
+  // sortOrders 校验拒绝 → 错误条（拖拽写回语境原地反馈——序回弹拖拽前渲染，改序重试）
+  ERR_PROJECT_SORT_INVALID: 'error-bar',
 }
 
 /**
