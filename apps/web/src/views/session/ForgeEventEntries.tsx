@@ -187,18 +187,22 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
           {data.entries.map((entry) => {
             // §2.5（D 裁决 去重并换行）：title 与 detail 分行展示；summary 命中 title
             // 字面（taskTitle/taskKey/slug）时渲染层剥掉标题前缀，仅留徽记词+差异信息
+            // bug 35571877：条目行与任务行同构（文本在前→徽标右置→右侧时间簇），
+            // 归一类 dswf-event-entries-entry 承担对齐；徽记词保留（语义区分不靠双套样式）
             const detail = forgeEventEntryDetail(entry)
             return (
-              <li className="dswf-event-entries-item" key={entry.id}>
-                <span className="dswf-event-entries-time">{forgeEventClockSeconds(entry.time)}</span>
+              <li className="dswf-event-entries-item dswf-event-entries-entry" key={entry.id}>
+                <span className="dswf-event-entries-text dswf-event-entries-msg-text">
+                  {entry.title !== '' ? <b>{entry.title}</b> : null}
+                  {detail !== '' ? <span className="dswf-event-entries-msg-detail">{detail}</span> : null}
+                </span>
                 {entry.badge !== '' ? (
                   <span className="dswf-event-entries-badge" data-tone={forgeEventBadgeTone(entry.badge)}>
                     {entry.badge}
                   </span>
                 ) : null}
-                <span className="dswf-event-entries-text dswf-event-entries-msg-text">
-                  {entry.title !== '' ? <b>{entry.title}</b> : null}
-                  {detail !== '' ? <span className="dswf-event-entries-msg-detail">{detail}</span> : null}
+                <span className="dswf-event-entries-side">
+                  <span className="dswf-event-entries-time">{forgeEventClockSeconds(entry.time)}</span>
                 </span>
               </li>
             )

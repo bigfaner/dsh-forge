@@ -139,6 +139,16 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('data-dswf-progress-status="blocked"') // 最新态（后写覆盖）
     expect(html).toContain('第 2/3 次 — worker crashed mid-run') // 重试计数（note）在行内
   })
+  it('bug 35571877：条目行与任务行同构——文本在前、徽标右置、时间入右侧簇（归一类）', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
+    const textIdx = html.indexOf('dswf-event-entries-msg-text')
+    const badgeIdx = html.indexOf('data-tone="run"') // 首条目徽标（启动）
+    const timeIdx = html.indexOf('14:02:11')
+    expect(textIdx).toBeGreaterThan(-1)
+    expect(badgeIdx).toBeGreaterThan(textIdx) // 徽标在文本之后（右置，同任务行）
+    expect(timeIdx).toBeGreaterThan(badgeIdx) // 时间在徽标之后（右侧簇）
+    expect(html).toContain('dswf-event-entries-entry') // 行结构/对齐归一类（同任务行 center）
+  })
   it('消息条目保留概要一行（结算/异常卡不重复展开明细）；progress 缺席 = 纯消息列表（旧形态兼容）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
     expect(html).not.toContain('领取 · 2.3 折叠条目组') // 消息条目 title/detail 去重（§2.5）

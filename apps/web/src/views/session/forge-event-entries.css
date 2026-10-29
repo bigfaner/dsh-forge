@@ -137,6 +137,12 @@
   font-weight: 500;
 }
 
+/* 消息条目行（bug 35571877 与任务行同构：align-items:center 归一，结构复用
+ * text/badge/side 同类——徽标右置由行序与 side margin-left:auto 承担） */
+.dswf-event-entries-entry {
+  align-items: center;
+}
+
 /* 循环进度卡任务行（1.2——标题/状态/起止/耗时；右簇 margin-auto 贴右，面板行语言同族） */
 .dswf-event-entries-progress {
   align-items: center;
