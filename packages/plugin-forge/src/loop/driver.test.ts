@@ -188,6 +188,8 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
           (c) => !(c.slug === input.adopt?.slug && c.localId === input.adopt?.localId),
         )
       }
+      // FAIL-2 径②：claim 阶段 fail-loud（队列首项为 Error 时抛出——档案缺失等 claim 链异常）
+      if (claimQueue[0] instanceof Error) throw claimQueue.shift()
       return shift(claimQueue)
     },
     taskStats: async (input: unknown) => {
@@ -1157,7 +1159,8 @@ describe('blocked 结算分支（图 C）', () => {
     }
   }
 
-  it('无进展硬停门：blocked 零 commit hash 且零 files 增量 → 处置阶梯零调用 + ⑩ followup 问询升级 → 挂起待裁决（3b）', async () => {
+  it('FAIL-2 径①：blocked 无进展结算照常进处置阶梯（noProgress 信号随输入递达；ask-user 决策挂起载处置历史）', async () => {
+    const seen: LoopTriageInput[] = []
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
       stats: [
@@ -1166,35 +1169,144 @@ describe('blocked 结算分支（图 C）', () => {
         statsOf({ in_progress: 1, blocked: 1 }),
       ],
       query: [queryOfBlocked()],
-      triage: async () => {
-        throw new Error('triage ladder must not run on zero-progress blocked settlement')
+      triage: async (input) => {
+        seen.push(input)
+        return { action: 'ask-user' }
       },
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     const suspended = await untilSuspended(built.driver)
-    // 处置阶梯零调用：triage 钩子抛错即失败（用例绿 = 零调用）；宿主零 addTask（零 fix 链）
+    // 触发径①钉住：无进展不再跳过阶梯——triage 恰一次被调，noProgress/settlement 随输入递达
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.noProgress).toBe(true)
+    expect(seen[0]?.reason).toBe('tests hang on flaky selector')
+    expect(seen[0]?.settlement).toBeDefined()
+    // 宿主零 addTask（ask-user 决策不建 fix）
     expect(built.h.addTaskInputs).toEqual([])
     // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 挂起族通道）
     const ask = built.calls.find((c) => c.method === 'followup')
     expect(ask?.text).toContain('无法自动处理——已向你发起问询')
-    // ⑩ 即时唤醒（AC）：send(nextStep, true)——阻塞上下文随 claim 整批进入主 agent
     expect(ask?.form).toBe('followup')
     expect(ask?.wakeup).toBe(true)
-    // 直达挂起：blocked-ask-user + 无进展处置历史（跳过阶梯的机械证据）进挂起载荷
+    // 挂起载荷：blocked-ask-user + 无进展处置历史行（阶梯记录）
     expect(suspended.escalation).toEqual({
       kind: 'blocked-ask-user',
       ownerSessionId: OWNER,
       source: SOURCE,
       task: expect.objectContaining({ localId: '2.5' }),
       reason: 'tests hang on flaky selector',
-      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
+      history: [
+        '本次结算无进展信号（无提交、无文件改动）——已纳入处置输入',
+        '第1次处置——决定请求人工裁决',
+      ],
     })
     expect(suspended.since).toEqual(expect.any(Number))
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
-    // 1.5 场景码：⑩ 阻塞（循环无法自行处理——无进展硬停）
+    // 1.5 场景码：⑩ 阻塞（blocked/ask-user）
     expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/ask-user', taskKey: 'feat-x/2.5', note: 'tests hang on flaky selector' })
     await built.driver.stop({ ownerSessionId: OWNER }) // 断言后收口
+  })
+
+  it('FAIL-2 径①（决策执行）：blocked 无进展 + triage add-fix → 修复任务创建、循环自续 fix 链（不再硬停问询）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOfBlocked(), queryOf('completed')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 无进展 + add-fix：修复任务机械创建（阶梯执行面），循环续领 fix 后收口
+    expect(built.h.addTaskInputs).toHaveLength(1)
+    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'Fix: flaky selector', type: 'coding-fix', blockSource: true })
+    expect(built.h.claimInputs).toHaveLength(3)
+    expect(built.calls.some((c) => c.text.includes('创建修复任务 fix-2'))).toBe(true)
+    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+  })
+
+  it('FAIL-2 径①（装配降级）：无进展 blocked + 处置钩子缺席 → 保留问询硬停（挂起载降级历史行）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'tests hang on flaky selector' })
+    expect(suspended.escalation.history).toEqual(['本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问'])
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('FAIL-2 径②：claim 阶段 fail-loud（专家档案缺失）→ 错误转交处置阶梯（任务经 data.taskRef 解析），循环不异常终止', async () => {
+    const seen: LoopTriageInput[] = []
+    const claimError = Object.assign(new Error('expert not found: ghost-expert'), {
+      data: { phase: 'claim-persona', taskRef: { slug: 'feat-x', localId: '2.5' }, taskTitle: 'Implement the thing' },
+    })
+    const built = build({
+      claim: [claimError, claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读（重领 2.5）
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读（done 判词）
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+      query: [queryOf('completed')], // claim-error 快照解析 + 重领结算读（completed = success 归类）
+      triage: async (input) => {
+        seen.push(input)
+        return { action: 'wait-external', externalSlug: 'feature-b' }
+      },
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 触发径②钉住：fail-loud 不终止循环——triage 收到 claim 阶段错误全文 + 任务身份（快照解析）
+    expect(seen).toHaveLength(1)
+    expect(seen[0]?.task).toMatchObject({ slug: 'feat-x', localId: '2.5' })
+    expect(seen[0]?.reason).toContain('claim 阶段 fail-loud：expert not found: ghost-expert')
+    // wait-external 记录等待后循环续领（2.5 被重领并完成）→ 正常收口
+    expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成'))).toBe(true)
+    expect(built.h.claimInputs).toHaveLength(3) // fail-loud 领取 + 重领 2.5 + no-task
+    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+  })
+
+  it('FAIL-2 径②（兜底）：claim fail-loud 且任务身份不可得 → incident 落盘 + 挂起问询（不异常终局）', async () => {
+    const incidents: Array<{ eventType: string; error: string }> = []
+    const built = build({
+      claim: [new Error('claim exploded without task identity'), claimed('should-not-claim')],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+      ],
+      query: [queryOf('completed')],
+      incidents: {
+        record: (input: { eventType: string; error: string }) => {
+          incidents.push({ eventType: input.eventType, error: input.error })
+          return undefined
+        },
+      } as unknown as IncidentStore,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    expect(incidents.some((i) => i.eventType === 'claim-failed' && i.error.includes('claim exploded'))).toBe(true)
+    expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'claim exploded without task identity' })
+    expect(suspended.escalation.history).toEqual(['claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置'])
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 
   it('无进展门放行：带 commit hash（零 files）的 blocked 结算照常入处置阶梯', async () => {

@@ -1039,6 +1039,13 @@ describe('persona 两段组装：专家档案取用面注入（expert-squad-forg
       (e: unknown) => e,
     )
     expect((err as Error).message).toContain('expert not found: ghost-expert')
+    // FAIL-2 修正（expert-squad-forge-2 fix-4）：fail-loud 附任务身份锚——驱动器据此把错误
+    // 转交处置阶梯而非整循环异常终止
+    expect((err as { data?: unknown }).data).toMatchObject({
+      phase: 'claim-persona',
+      taskRef: { slug: 'f', localId: '2.1' },
+      taskTitle: expect.any(String),
+    })
     // 单事务整体回滚——任务留 pending，无转移/记录/链接残留
     expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.1'`)).toEqual([{ task_status: 'pending' }])
     expect(rows(`SELECT * FROM task_records`)).toEqual([])

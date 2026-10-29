@@ -297,18 +297,27 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     // expert-squad-forge-2 纳入 4：claim 变量路由——任务变量 expert 携带专家键时优先于
     // 类型映射与 settings 覆盖取档（键 = 程序派生单点注入面，非用户手填）；键指向不存在/
     // 禁用档案 = 取用面 fail-loud 抛错（消息含键名）→ 一切写入之前中断，任务留 pending。
-    const claimVars = row.vars_json !== null ? (JSON.parse(row.vars_json) as Record<string, string>) : undefined
-    const expertKey = typeof claimVars?.expert === 'string' && claimVars.expert !== '' ? claimVars.expert : undefined
-    const profile = await deps.resolveExpertProfile?.(row.task_type, expertKey)
-    const persona =
-      profile === undefined
-        ? composePersona(row.task_type as TaskType, complexity)
-        : composePersonaWithProfile(profile, row.task_type as TaskType, complexity)
-    const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
-    const personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona
-    // 追加轮尾部拼接后的最终全文防护（expert-squad-forge 1.10——锚点节文本同为渲染产物，
-    // 同受上游严格插值约束；拼接后不再复核 = 防护缺口）
-    assertNoBareInterpolation(personaWithAnchors, 'claim:personaWithAnchors')
+    // FAIL-2 修正（expert-squad-forge-2 fix-4）：本段抛错时附带任务身份锚（data.taskRef）——
+    // 循环驱动器据此把错误转交处置阶梯而非整循环异常终止。
+    let personaWithAnchors: string
+    try {
+      const claimVars = row.vars_json !== null ? (JSON.parse(row.vars_json) as Record<string, string>) : undefined
+      const expertKey = typeof claimVars?.expert === 'string' && claimVars.expert !== '' ? claimVars.expert : undefined
+      const profile = await deps.resolveExpertProfile?.(row.task_type, expertKey)
+      const persona =
+        profile === undefined
+          ? composePersona(row.task_type as TaskType, complexity)
+          : composePersonaWithProfile(profile, row.task_type as TaskType, complexity)
+      const workerContext = deps.resolveWorkerContext?.(input.projectId, { kind: row.source_kind, slug: row.slug }, row.local_id)
+      personaWithAnchors = workerContext !== undefined && workerContext !== '' ? `${persona}\n\n${workerContext}` : persona
+      // 追加轮尾部拼接后的最终全文防护（expert-squad-forge 1.10——锚点节文本同为渲染产物，
+      // 同受上游严格插值约束；拼接后不再复核 = 防护缺口）
+      assertNoBareInterpolation(personaWithAnchors, 'claim:personaWithAnchors')
+    } catch (cause) {
+      throw Object.assign(cause instanceof Error ? cause : new Error(String(cause)), {
+        data: { phase: 'claim-persona', taskRef: { slug: row.slug, localId: row.local_id }, taskTitle: row.title },
+      })
+    }
 
   // ── 事务段（纯同步写窗口：转移 + claim 记录 + links + 快照。窗口内零 await——
   //    better-sqlite3 单连接上同步执行不向并发暴露未闭合事务）。

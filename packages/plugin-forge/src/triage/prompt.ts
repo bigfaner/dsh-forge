@@ -23,6 +23,8 @@ export interface TriagePromptInput {
   readonly lastFailure?: string
   /** 改进 6④ fix 链深余量（缺席 = 不可得） */
   readonly fixChain?: TriageFixChain
+  /** 无进展信号（FAIL-2 修正——零 commit 零 files 的 blocked 结算；claim fail-loud 径恒缺席） */
+  readonly noProgress?: boolean
 }
 
 /** 记录行投影（时间线一行一条——verb → to/reason/summary 摘要，防长摘要刷屏） */
@@ -35,7 +37,7 @@ function recordLine(entry: TaskRecordEntry): string {
 
 /** 处置代理提示词全文（worker 首条用户消息同位——一次性决策代理的唯一输入面） */
 export function composeTriagePrompt(input: TriagePromptInput): string {
-  const { task, reason, pool, records, lastFailure, fixChain } = input
+  const { task, reason, pool, records, lastFailure, fixChain, noProgress } = input
   const ac = task.acceptanceCriteria ?? []
   const lines: string[] = [
     '你是派发循环的异常处置分析员。一个任务在执行后被阻塞，且没有携带修复任务（修复路径缺位）。',
@@ -52,6 +54,16 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
     reason,
     '</blocked-reason>',
     '',
+    // FAIL-2 修正：无进展形态不再跳过处置——信号入提示词供决策参考
+    ...(noProgress === true
+      ? [
+          '<no-progress>',
+          '本次结算没有任何进展信号（零提交、零文件改动）。请优先评估能否用 add-fix 修复阻塞根因，',
+          '或用 split-remainder 保留潜在已完成部分；仅在确实无法自动处置时选择 ask-user。',
+          '</no-progress>',
+          '',
+        ]
+      : []),
     '<pool>',
     `待执行 ${pool.pending} · 执行中 ${pool.inProgress} · 阻塞 ${pool.blocked} · 前置未满足 ${pool.unmetPending}`,
     '</pool>',

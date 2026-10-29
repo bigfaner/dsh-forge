@@ -376,6 +376,14 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     expect(composeTriagePrompt(base)).not.toContain('<fix-chain>')
   })
 
+  it('FAIL-2 修正：noProgress 在场 = 无进展信号节（零提交零文件改动）；缺席 = 零节', () => {
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const withNoProgress = composeTriagePrompt({ ...base, noProgress: true })
+    expect(withNoProgress).toContain('<no-progress>')
+    expect(withNoProgress).toContain('没有任何进展信号')
+    expect(composeTriagePrompt(base)).not.toContain('<no-progress>')
+  })
+
   it('改进 6①④ 钩子透传：triage 输入的 lastFailure/fixChain 进提示词（缺席零节）', async () => {
     const built = build()
     const done = createTriageHook(built.hookDeps).run(
@@ -386,5 +394,13 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
     expect(prompt).toContain('RAW')
     expect(prompt).toContain('剩余余量 1')
+  })
+
+  it('FAIL-2 修正 钩子透传：triage 输入的 noProgress 进提示词（缺席零节）', async () => {
+    const built = build()
+    const done = createTriageHook(built.hookDeps).run(triageInput({ noProgress: true }))
+    built.resolve('{"action":"ask-user"}')
+    await done
+    expect((built.requests[0] as SpawnWorkerRequest).prompt).toContain('<no-progress>')
   })
 })

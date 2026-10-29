@@ -77,6 +77,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         records,
         ...(input.lastFailure !== undefined ? { lastFailure: input.lastFailure } : {}),
         ...(input.fixChain !== undefined ? { fixChain: input.fixChain } : {}),
+        ...(input.noProgress === true ? { noProgress: true } : {}),
       })
       // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致；parent/signal =
       //    每循环身份载体——输入面逐调用绑定，装配期烘焙无效）

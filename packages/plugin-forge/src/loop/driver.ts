@@ -134,6 +134,12 @@ export interface LoopTriageInput {
   readonly lastFailure?: string
   /** 改进 6④ fix 链深余量（driver 沿 sourceTask 链现算；缺席 = 链数据不可得） */
   readonly fixChain?: LoopTriageFixChain
+  /**
+   * 无进展信号（FAIL-2 修正——expert-squad-forge-2 fix-4）：blocked 结算零 commit 且零 files
+   * 时置 true 随输入递达处置代理；不再跳过阶梯（旧「无进展硬停门」语义废止——blocked 恒进
+   * triage，无进展形态由提示词 no-progress 节与处置历史行承载）。
+   */
+  readonly noProgress?: boolean
 }
 
 /** fix 链深余量（改进 6④——remaining = limit - depth；remaining < 1 = add-fix 结构性被拒） */
@@ -1595,19 +1601,28 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   // R2-minor⑥：漂移重算的新增红灯同启动时点行为——补生成归因卡（已发不重发）。
   const baseline = await ensureE2eBaseline(loop)
   if (baseline !== undefined) await issueAttributionCards(loop, baseline.redCases)
-  const claim = await claimForDispatch(loop.core, exec, {
-    identity: { sessionId: owner, loopSourced: true },
-    guardKey: record.id,
-    projectId: scope.projectId,
-    source,
-    ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
-    ...(baseline !== undefined && baseline.redCases.length > 0
-      ? { e2eBaselineRedCases: baseline.redCases }
-      : {}),
-    // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
-    // 比对此效度域，漂移 = stale 强制重跑）
-    ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),
-  })
+  let claim: Awaited<ReturnType<typeof claimForDispatch>>
+  try {
+    claim = await claimForDispatch(loop.core, exec, {
+      identity: { sessionId: owner, loopSourced: true },
+      guardKey: record.id,
+      projectId: scope.projectId,
+      source,
+      ...(adoptRef !== undefined ? { adopt: adoptRef } : {}),
+      ...(baseline !== undefined && baseline.redCases.length > 0
+        ? { e2eBaselineRedCases: baseline.redCases }
+        : {}),
+      // disc 效度戳：效度比对检出根 = 发起循环的检出（1.14 cwd 钉定同源锚——重领证据机械
+      // 比对此效度域，漂移 = stale 强制重跑）
+      ...(record.worktree !== undefined ? { checkoutRoot: record.worktree } : {}),
+    })
+  } catch (cause) {
+    // FAIL-2 修正（expert-squad-forge-2 fix-4）：claim 期 fail-loud（专家档案缺失/禁用等——
+    // 消息含键名）不再沿 claim 链外抛终止整循环——错误转交处置阶梯（任务身份经 core 附带的
+    // data.taskRef 解析）或挂起问询兜底，由处置层决定修复路径。
+    if (await bailIfAborted(loop, undefined)) return 'terminal'
+    return await onClaimFailLoud(loop, cause)
+  }
   // 停止竞态收口（claim 已落而循环被叫停）：本实例未接管的孤儿 in_progress → 真化 interrupted
   if (await bailIfAborted(loop, claim.kind === 'claimed' ? claim : undefined)) return 'terminal'
   if (claim.kind === 'halted') return haltLoop(loop) // spawn 连败 ×3 粘住（guard 入口检查兑现）
@@ -1872,39 +1887,141 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     return 'continue'
   }
 
-  // 无进展硬停门（提案 blocked-salvage-split · C，用户裁决 2026-10-13「没有进展则直接停止问人」）：
-  // blocked 结算零 commit hash 且零 files 增量 = 无进展信号 → 跳过处置阶梯（triage 零调用、
-  // 零 fix 链），直达 ⑩ blocked-ask-user 升级（followup 唤醒主 agent + 问询 + 答案回执）。
-  // 有打捞提交（commit hash 在场）或带 files = 有进展，照常入阶梯。
-  if (settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0)) {
-    await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
-    // ⑩ 阻塞（循环无法自行处理——无进展硬停）
-    emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
-    // 3b 裁决②：无进展硬停 → 挂起待裁决（原因全文在挂起载荷——owner 对话面处置）
-    return suspendForVerdict(loop, {
-      kind: 'blocked-ask-user',
-      ownerSessionId: owner,
-      source: record.source,
-      task,
-      reason,
-      history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——按规则不再自动重试，直接向你询问'],
-    })
-  }
+  // 无进展信号（FAIL-2 修正）：blocked 结算零 commit 且零 files = 无进展信号——不再跳过
+  // 处置阶梯（旧「无进展硬停门」语义废止），无进展形态随 noProgress 输入进 triage（含
+  // 处置历史行）；blocked 恒入阶梯，与提案验收语义（blocked 应触发 triage-analyst）对齐。
+  const noProgress = settlement.commitHash === undefined && (settlement.files === undefined || settlement.files.length === 0)
+  return runTriageLadder(loop, {
+    task,
+    taskKey,
+    label,
+    reason,
+    settlement,
+    workerSessionId,
+    noProgress,
+  })
+}
 
-  // blocked 无 follow-up（修复路径缺位）→ 第二层处置代理（S1c 实装；钩子缺席 = 装配降级：
-  // 仅落盘事件子文件夹、循环续领，池态判词机械接管后续叙述）
+/**
+ * claim 阶段 fail-loud 处置（FAIL-2 修正——expert-squad-forge-2 fix-4 径②）：claim 链抛出的
+ * 错误（典型 = 专家档案缺失/禁用，消息含键名）作为处置输入而非循环终止——
+ * ① core 附带 data.taskRef 且钩子在场 → 快照解析后入处置阶梯（错误全文 = reason，阶梯决策
+ *   照常执行 add-fix/wait-external/split/ask-user）；
+ * ② 兜底（任务身份不可得或钩子缺席）→ incident 落盘 + 挂起问询（原因全文进挂起载荷）——
+ *   循环停驻等人工处置，不再异常终局。
+ */
+async function onClaimFailLoud(loop: ActiveLoop, cause: unknown): Promise<RoundOutcome> {
+  const { deps, record, scope } = loop
+  const message = cause instanceof Error ? cause.message : String(cause)
+  const claimErrorData = (cause as { data?: { taskRef?: { slug: string; localId: string }; taskTitle?: string } }).data
+  const ref = claimErrorData?.taskRef
+  const taskTitle = claimErrorData?.taskTitle
+  const taskKey = ref !== undefined ? `${ref.slug}/${ref.localId}` : ''
+  deps.narrator.recordIncident({
+    projectId: scope.projectId,
+    sourceSlug: record.source.slug,
+    taskKey: ref?.localId ?? '',
+    eventType: 'claim-failed',
+    error: message,
+    settlement: cause,
+  })
+  emitProgress(loop, { verb: 'retry', status: 'blocked', ...(taskKey !== '' ? { taskKey } : {}), ...(taskTitle !== undefined ? { taskTitle } : {}), note: message })
+  if (ref !== undefined && deps.triage !== undefined) {
+    try {
+      const detail = await deps.tasks.queryTask({ projectId: scope.projectId, taskRef: ref, include: {} })
+      return await runTriageLadder(loop, {
+        task: detail.task,
+        taskKey,
+        label: `${detail.task.localId} ${detail.task.title}`,
+        reason: `claim 阶段 fail-loud：${message}`,
+        settlement: cause,
+        noProgress: false,
+      })
+    } catch (ladderCause) {
+      // 快照读失败或阶梯内部异常——降级兜底径（阶梯异常不吞：升级载荷载阶梯失败摘要）
+      const ladderMessage = ladderCause instanceof Error ? ladderCause.message : String(ladderCause)
+      console.warn(`forge loop claim fail-loud triage failed (${taskKey}): ${ladderMessage}`)
+    }
+  }
+  await deps.narrator.blocked(
+    record.ownerSessionId,
+    'blocked-ask-user',
+    { sourceSlug: record.source.slug, taskLabel: ref !== undefined ? `${ref.localId}${taskTitle !== undefined ? ` ${taskTitle}` : ''}` : '未知任务' },
+    { projectId: scope.projectId, taskKey: ref?.localId ?? '', reason: message, settlement: cause },
+  )
+  return suspendForVerdict(loop, {
+    kind: 'blocked-ask-user',
+    ownerSessionId: record.ownerSessionId,
+    source: record.source,
+    task: {
+      taskId: '',
+      slug: ref?.slug ?? record.source.slug,
+      localId: ref?.localId ?? '',
+      source: record.source,
+      title: taskTitle ?? 'claim 阶段失败（任务身份不可得）',
+      taskType: 'coding-fix',
+      taskStatus: 'pending',
+      breaking: false,
+      complexity: 'medium',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    reason: message,
+    history: ['claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置'],
+  })
+}
+
+/** 处置阶梯入参（blocked 结算径与 claim fail-loud 径的共享面——FAIL-2 修正提取） */
+interface TriageLadderInput {
+  readonly task: TaskSnapshot
+  readonly taskKey: string
+  readonly label: string
+  readonly reason: string
+  /** 结算载荷（结算径 = DispatchSpawnedResult；claim fail-loud 径 = 错误对象） */
+  readonly settlement: unknown
+  readonly workerSessionId?: string
+  readonly noProgress: boolean
+}
+
+/**
+ * 处置阶梯（decisions #16/#22 + R2 + 改进 6，FAIL-2 修正后为 blocked 结算与 claim fail-loud
+ * 两触发径共享）：同任务处置计数封顶强制升级；无效/越权输出计处置失败入重试上限。钩子缺席
+ * （装配降级）= 无进展保留问询硬停、其余仅落盘续领。
+ */
+async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Promise<RoundOutcome> {
+  const { deps, record, scope, source, controller, exec } = loop
+  const signal = controller.signal
+  const owner = record.ownerSessionId
+  const slug = record.source.slug
+  const { task, taskKey, label, reason, workerSessionId } = input
+  const meta = { projectId: scope.projectId, taskKey: task.localId, reason, settlement: input.settlement }
+
+  // 钩子缺席（装配降级）：无进展形态保留问询硬停（原因全文进挂起载荷）；其余仅落盘续领，
+  // 池态判词机械接管后续叙述。
   if (deps.triage === undefined) {
-    deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+    if (input.noProgress) {
+      await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
+      emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, ...(workerSessionId !== undefined ? { workerSessionId } : {}), note: reason })
+      return suspendForVerdict(loop, {
+        kind: 'blocked-ask-user',
+        ownerSessionId: owner,
+        source: record.source,
+        task,
+        reason,
+        history: ['本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问'],
+      })
+    }
+    deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: reason, settlement: input.settlement })
     return 'continue'
   }
 
-  // 处置阶梯（decisions #16/#22 + R2 + 改进 6）：同任务处置计数封顶强制升级；无效/越权输出
-  // 计处置失败入重试上限（有界重试轮次——模型失误爆炸半径 = LOOP_TRIAGE_MAX_ATTEMPTS）。
-  // 改进 6①②④⑤：失败摘要回灌重试、无效输出立即重试 vs 基建故障 spawn 同款 backoff、
-  // fix 链深余量入参 + 余量不足拒 add-fix、externalSlug 存在性校验（无效计失败并回灌）。
-  // 改进 6③：缓存决策直接重放执行（落库失败后的再遇 blocked——不重跑分析）。
   const book = dispositionBookOf(loop, taskKey)
+  if (input.noProgress) {
+    // 无进展信号进处置历史（问询升级时随载荷上浮——裁决全文档口径）
+    book.history.push('本次结算无进展信号（无提交、无文件改动）——已纳入处置输入')
+  }
   const fixChain = await fixChainOf(deps.tasks, scope.projectId, source, task)
+  // 处置循环（改进 6①②③④⑤——失败回灌/无效输出立即重试/缓存决策重放/链深余量守卫/slug 校验）
   let decision: LoopTriageDecision | undefined
   let replayed = false
   if (book.decision !== undefined) {
@@ -1923,7 +2040,8 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
           signal,
           task,
           reason,
-          settlement,
+          settlement: input.settlement,
+          ...(input.noProgress ? { noProgress: true } : {}),
           ...(book.lastFailure !== undefined ? { lastFailure: book.lastFailure } : {}),
           ...(fixChain !== undefined ? { fixChain } : {}),
         })
@@ -2040,7 +2158,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         })
       }
       console.warn(`forge loop triage add-fix failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
-      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: reason, settlement: input.settlement })
     }
     return 'continue'
   }
@@ -2086,7 +2204,7 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
         })
       }
       console.warn(`forge loop triage split-remainder failed (${taskKey}): ${cause instanceof Error ? cause.message : String(cause)}`)
-      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: settlement.reason ?? '', settlement })
+      deps.narrator.recordIncident({ projectId: scope.projectId, sourceSlug: slug, taskKey: task.localId, eventType: 'blocked', error: reason, settlement: input.settlement })
     }
     return 'continue'
   }
