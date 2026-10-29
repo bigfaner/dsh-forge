@@ -112,14 +112,17 @@ const TRIAGE_FORGE_DENY: readonly string[] = [...FORGE_DENY_IN_WORKER]
  * 处置代理 toolFilter（S1c 第二层——「收窄工具面」的全收窄形）：一次性处置代理只做决策
  * 不执行——已知工具名全数 deny（决策权与执行权分离，越权动作结构性不可达；输出契约 =
  * 终态 output 文本内的 JSON 决策，由宿主解析忠实执行）。deny 全集 = worker 名表 17 名
- * （fs/shell/jobs/read-image/web/forge 六族）+ forge 动词八员（含 validateMermaid）+ 全局拒绝集——全部已知名
- * （driver tools.restrict loud 校验安全，与 worker 同理）。
+ * （fs/shell/jobs/read-image/web/forge 六族）+ forge 动词八员（含 validateMermaid）+ 全局拒绝集。
+ * registeredTools 参数（bug 989997bd）：真机已注册全局工具名在场 = deny 与其求交——官方
+ * restrict 未知名 fail-closed loud 校验语义正确，错在滤器产出真机不存在的名（win 域
+ * dsh-tool-bash 平台 disabled，名表照收 'bash' 拆 spawn）；缺席（取数缝失败/极简 profile）
+ * = 全表（修复前形态，与既有 loud 行为逐字节等价）。
  */
-export function deriveTriageToolFilter(): { deny: string[] } {
+export function deriveTriageToolFilter(registeredTools?: readonly string[]): { deny: string[] } {
   const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)
   for (const name of Object.keys(WORKER_TOOL_NAME_FAMILY)) deny.add(name)
   for (const name of TRIAGE_FORGE_DENY) deny.add(name)
-  return { deny: [...deny] }
+  return { deny: [...deny].filter((name) => registeredTools === undefined || registeredTools.includes(name)) }
 }
 
 /** 设置 + 档案 model → agentOptions（expert-squad-forge 1.4 model 消费——triage 同径基座

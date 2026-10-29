@@ -33,6 +33,37 @@ function personaSectionOf(profile: ForgeExpertProfile): string {
   return `你是${gap}${title}。\n\n${profile.personaMd}`
 }
 
+/**
+ * 父会话真机已注册全局工具名读取位（bug 989997bd——triage deny 表与真机工具面求交的
+ * 取数缝）：结构化读 parent.ctx.tools.schemas()（官方 dsh-tools 公开投影面，逐 schema
+ * 取 name——child restrictableNames 的父域投影）。任一环缺席/形状不符/调用抛错 =
+ * undefined（取数失败回落全表 deny——与修复前 loud 行为一致，不静默收窄成空表）。
+ */
+function registeredToolNamesOf(parent: unknown): readonly string[] | undefined {
+  if (typeof parent !== 'object' || parent === null) return undefined
+  const ctx = (parent as { ctx?: unknown }).ctx
+  if (typeof ctx !== 'object' || ctx === null) return undefined
+  const tools = (ctx as { tools?: unknown }).tools
+  if (typeof tools !== 'object' || tools === null) return undefined
+  const schemas = (tools as { schemas?: unknown }).schemas
+  if (typeof schemas !== 'function') return undefined
+  let projected: unknown
+  try {
+    projected = (schemas as (this: unknown) => unknown).call(tools)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(projected)) return undefined
+  const names: string[] = []
+  for (const schema of projected) {
+    if (typeof schema !== 'object' || schema === null) return undefined
+    const name = (schema as { name?: unknown }).name
+    if (typeof name !== 'string') return undefined
+    names.push(name)
+  }
+  return names
+}
+
 /** 处置代理依赖（装配注入——服务面一次性绑定；循环身份不经此，每循环载体走 LoopTriageInput） */
 export interface TriageHookDeps {
   /** core 任务域服务读面（池快照 taskStats + 最近记录 queryTask——输入四件套之③④） */
@@ -106,7 +137,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         prompt,
         parent: input.parent,
         signal: input.signal,
-        toolFilter: deriveTriageToolFilter(),
+        toolFilter: deriveTriageToolFilter(registeredToolNamesOf(input.parent)),
         ...(agentOptions !== undefined ? { agentOptions } : {}),
         ...(persona !== undefined ? { persona } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,

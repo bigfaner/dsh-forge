@@ -157,6 +157,30 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     expect(req.label).toBe('feat-x/3.2 · 处置分析')
   })
 
+  it('bug 989997bd：parent 真机工具面在场 = deny 与注册面求交（未注册名 bash 剔除）；缺席 = 全表兼容', async () => {
+    // 真机形态：parent.ctx.tools.schemas() 投影已注册全局工具名（win 域无 bash）
+    const parentWithFace = {
+      ctx: { tools: { schemas: () => [{ name: 'pwsh' }, { name: 'read' }, { name: 'submitTask' }] } },
+    }
+    const builtFace = build()
+    const doneFace = createTriageHook(builtFace.hookDeps).run(triageInput({ parent: parentWithFace }))
+    builtFace.resolve('{"action":"ask-user"}')
+    await doneFace
+    const denyFace = (builtFace.requests[0] as SpawnWorkerRequest).toolFilter.deny
+    expect(denyFace).not.toContain('bash')
+    expect(denyFace).toContain('pwsh')
+    expect(denyFace).toContain('submitTask')
+    for (const name of denyFace) {
+      expect(['pwsh', 'read', 'submitTask'], `${name} 应在注册面内`).toContain(name)
+    }
+    // 兼容形态：parent 无工具面（测试桩/极简 profile）= 全表 deny（既有 loud 语义不变）
+    const builtPlain = build()
+    const donePlain = createTriageHook(builtPlain.hookDeps).run(triageInput())
+    builtPlain.resolve('{"action":"ask-user"}')
+    await donePlain
+    expect((builtPlain.requests[0] as SpawnWorkerRequest).toolFilter.deny).toContain('bash')
+  })
+
   it('身份载体每调用绑定（1.11 装配接线收口）：parent/signal 取自输入面，装配期烘焙无效', async () => {
     // 同一钩子面两次 run（不同 build 实例各自收请求）——spawn 请求身份各随各的输入
     const first = new AbortController()
