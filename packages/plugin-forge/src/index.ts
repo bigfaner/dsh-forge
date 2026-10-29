@@ -131,12 +131,24 @@ const forgePlugin: ForgePlugin = Object.assign(
           ...(settingsService !== undefined ? { settings: settingsService } : {}),
         })
         // bug 763de653/64f155fe：父/子会话双次装配共享同一 reflect scope 时，provide 撞
-        // 已注册名抛 "service forgeExperts has been registered" → catch 把已构建的
-        // expertResolver 整体清空降级（路由丢失）。官方 cordis 无 isRegistered 探测面，
-        // 同语义机械 = provide 前 reflect.get 读既有实现即短路（cordis ReflectService.get
-        // 契约：未提供返回 undefined）；已注册 = 首轮实现仍活跃，本轮回落消费既有值语义等价。
-        if (ctx.reflect?.get('forgeExperts') === undefined && typeof ctx.reflect?.provide === 'function') {
-          ctx.reflect.provide('forgeExperts', expertResolver)
+        // 已注册名抛 "service forgeExperts has been registered"。provide 前的 reflect.get
+        // 探测只是快路径短路（同 scope 幂等）；Root cause: check-then-act 非原子——探测
+        // 与 provide 跨时点/scope 不互见（bug d327323b/b16dcdf6 实证守卫仍被击穿），探测
+        // 式守卫无法根治。修复 = 撞车即复用（注册失败即取回语义）：provide 抛错后经
+        // reflect 重新取回已注册实例继续装配（服务存在性 = 复用，真缺席才降级），原子性
+        // 由 cordis 注册面单点保证。
+        if (typeof ctx.reflect?.provide === 'function') {
+          try {
+            ctx.reflect.provide('forgeExperts', expertResolver)
+          } catch {
+            const existing = ctx.reflect.get('forgeExperts') as ExpertProfileResolver | undefined
+            if (existing === undefined || typeof existing !== 'function') throw new Error('forgeExperts 取回复用失败：撞车后服务仍缺席')
+            expertResolver = existing
+          }
+        } else if (ctx.reflect?.get('forgeExperts') !== undefined) {
+          // 无 provide 面但服务已在（异常宿主形态）：取回复用，装配不降级
+          const existing = ctx.reflect.get('forgeExperts') as ExpertProfileResolver | undefined
+          if (existing !== undefined && typeof existing === 'function') expertResolver = existing
         }
       }
     } catch (cause) {

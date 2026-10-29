@@ -918,6 +918,85 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     }
   })
 
+  /** cordis 忠实 reflect 桩（bug d327323b 复现面）：探测与 provide 跨时点不互见——
+   *  探测时点 get 读不到既有注册（父子 scope 时序），provide 撞已注册名抛 cordis 同文
+   *  错误（"service X has been registered"），撞车后取回可读到已注册实例。 */
+  function reflectRaceBacked(initial: Record<string, unknown> = {}) {
+    const store = new Map<string, unknown>(Object.entries(initial))
+    let probed = false
+    const getCalls: string[] = []
+    return {
+      store,
+      getCalls,
+      face: {
+        get: (name: string) => {
+          getCalls.push(name)
+          // check-then-act 竞态：探测时点（首轮 get）既注册不可见，撞车后取回可见
+          if (name === 'forgeExperts' && !probed) return undefined
+          return store.get(name)
+        },
+        provide: (name: string, service: unknown) => {
+          probed = true
+          if (store.has(name)) throw new Error(`service ${name} has been registered at <scope>`)
+          store.set(name, service)
+        },
+      },
+    }
+  }
+
+  it('bug d327323b：同进程双次 apply 探测击穿（provide 撞车）不降级——取回已注册实例继续装配', () => {
+    const experts = expertsFace().face
+    const { face, store, getCalls } = reflectRaceBacked({
+      experts,
+      forgeSettings: { get: async () => ({}) },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const registered = Object.assign(() => undefined, { marker: 'round-1' })
+      store.set('forgeExperts', registered) // 首轮已注册（探测时点不可见）
+      const dispose1 = forgePlugin({ ...new TempRuntime().ctx(), reflect: face })
+      // 修复前：探测 undefined → provide 抛 "has been registered" → 外层 catch 降级
+      // 修复后：撞车即复用——取回已注册实例继续装配，零降级告警
+      const degraded = warn.mock.calls.some((args) => String(args[0]).includes('forge experts 装配面降级'))
+      expect(degraded).toBe(false)
+      expect(getCalls.filter((n) => n === 'forgeExperts')).toHaveLength(1) // 撞车后取回（provide 抛错 → 反射取回恰一次）
+      expect(store.get('forgeExperts')).toBe(registered) // 已注册实例未被覆盖
+      dispose1()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('bug d327323b：父子两 scope 撞车即复用——provide 抛错后 reflect 取回在位服务，装配零降级', () => {
+    const experts = expertsFace().face
+    const parent = reflectStoreBacked({ experts, forgeSettings: { get: async () => ({}) } })
+    const dispose1 = forgePlugin({ ...new TempRuntime().ctx(), reflect: parent.face })
+    expect(parent.provideCalls).toContain('forgeExperts') // 父 scope 正常 provide
+
+    // 子 scope：探测时点父注册不可见（跨 scope 时序），provide 撞名抛错
+    const childStore = new Map<string, unknown>()
+    let probed = false
+    const childFace = {
+      get: (name: string) => (name === 'forgeExperts' && !probed ? undefined : parent.store.get(name)),
+      provide: (name: string, service: unknown) => {
+        probed = true
+        if (parent.store.has(name)) throw new Error(`service ${name} has been registered at <scope>`)
+        childStore.set(name, service)
+      },
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const dispose2 = forgePlugin({ ...new TempRuntime().ctx(), reflect: childFace })
+      const degraded = warn.mock.calls.some((args) => String(args[0]).includes('forge experts 装配面降级'))
+      expect(degraded).toBe(false)
+      expect(parent.store.get('forgeExperts')).toBeDefined() // 父轮实例仍是唯一在位实现
+      dispose1()
+      dispose2()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
     for (const reflect of [
       reflectWith({}).face, // 无 experts 键
