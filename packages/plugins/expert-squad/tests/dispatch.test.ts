@@ -140,7 +140,7 @@ describe("delegate_expert 结构镜像", () => {
 
 describe("delegate_expert 派发", () => {
   it("组装内核 → startContinuable：persona/toolFilter/model 逐字承载，parent/signal 透传，接受点结算返回 childId", async () => {
-    const entry: ExpertEntry = { ...baseEntry, model: "sonnet" };
+    const entry: ExpertEntry = { ...baseEntry, provider: "anthropic", model: "sonnet" };
     const { tool, subagents, panel } = makeTool([entry]);
     const result = (await tool.execute(
       { expert: "code-reviewer", task: "评审 dispatch.ts" },
@@ -162,7 +162,7 @@ describe("delegate_expert 派发", () => {
     expect(spec.request.persona).toContain("code-reviewer");
     expect(spec.request.persona).toContain("## 职责");
     expect(spec.request.toolFilter).toEqual({ allow: ["read", "grep"] });
-    expect(spec.request.agentOptions).toEqual({ model: "sonnet" });
+    expect(spec.request.agentOptions).toEqual({ provider: "anthropic", model: "sonnet" });
     expect(spec.request.prompt).toEqual([{ type: "text", text: "评审 dispatch.ts" }]);
     // 派发点写入面板 dispatched 行
     expect(panel.list()).toEqual([
