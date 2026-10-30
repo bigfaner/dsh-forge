@@ -119,10 +119,12 @@ export interface CoreContextFace {
   /** 服务注册官方面：provide(name, value) 返回注销器（Service 基类构造同径） */
   reflect: { provide(name: string, value?: unknown): unknown }
   /**
-   * 官方 diag/log 事件域 emit 窄面（真实 cordis Context.emit 结构兼容——(event, payload)
-   * 双参形态）；缺席 = 诊断缝降级缺席（onDiag 不桥出，排序写面零 emit 零行为差异）。
+   * 官方 cordis 事件混入原型方法（Context.emit 结构缝——(event, payload) 双参形态）。
+   * 原型方法经 cordis Proxy 陷阱放行（Reflect.has 沿原型链命中）；自定义虚构属性
+   * （如 diagEmit）会触发 inject 陷阱装载崩（bug 590b8eff）。缺席 = 诊断缝降级缺席
+   * （onDiag 不桥出，排序写面零 emit 零行为差异）。
    */
-  diagEmit?: (event: string, payload: unknown) => void
+  emit?: (event: string, payload: unknown) => void
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -141,13 +143,13 @@ const corePlugin: CorePlugin = Object.assign(
         ? createSettingsService({ settingsFile: config.settingsFile, userDataDir: dirname(config.dbFile) })
         : undefined
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
-    // bug 4e25858a：project-sort 埋点生产接线——core 不 import host，桥出责任在装配层：
-    // 经 ctx 官方 diag/log 事件域结构缝（diagEmit ≈ 真 cordis Context.emit，child.ts 已挂
-    // relayDiagOverBridge 订阅直落 main appender）把 onDiag 桥出；process 域 'child' 与
-    // apps/host/src/telemetry/diag-events.ts 现行口径一致（core 插件行仅装载于 child
-    // profile 进程）。Root cause: createProjectService 已有 onDiag 缝但 corePlugin 装配
-    // 未传——生产排序写面零 diag，P3 失败路径与 AGENTS §7 未满足。
-    const diagEmit = ctx.diagEmit
+    // bug 4e25858a / 590b8eff：project-sort 埋点生产接线——core 不 import host，桥出责任在
+    // 装配层：经 ctx 官方事件混入原型方法 emit（真 Context 的合法结构缝——自定义属性会触发
+    // cordis inject 陷阱，见 CoreContextFace.emit 注），child.ts relayDiagOverBridge 已订阅
+    // 'diag/log' 直落 main appender；process 域 'child' 与 diag-events.ts 现行口径一致
+    // （core 插件行仅装载于 child profile 进程）。Root cause: 上一修以虚构属性 diagEmit
+    // 当缝——真 cordis Context Proxy 对未声明属性即抛，插件装载崩（590b8eff）。
+    const diagEmit = ctx.emit
     ctx.reflect.provide(
       'forgeProjects',
       createProjectService({

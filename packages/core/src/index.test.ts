@@ -54,7 +54,7 @@ function startPlugin(home: string): { services: Map<string, unknown>; dispose: (
 // ── bug 4e25858a：project-sort 埋点生产接线（corePlugin 装配闭包桥 ctx 官方 diag/log
 // 事件域结构缝 → createProjectService onDiag——core 不 import host）──
 
-/** 起插件（diag 缝捕获变体：ctx.diagEmit 记账 emit 行） */
+/** 起插件（diag 缝捕获变体：ctx.emit 记账 emit 行——官方 cordis 事件混入原型方法同名缝） */
 function startPluginWithDiag(home: string): {
   services: Map<string, unknown>
   dispose: () => void
@@ -65,7 +65,7 @@ function startPluginWithDiag(home: string): {
   const ctx: CoreContextFace = {
     workspaceRegistry: stubRegistry(),
     workspaceController: stubRename(),
-    diagEmit: (event, payload) => diagEmits.push({ event, payload: payload as Record<string, unknown> }),
+    emit: (event, payload) => diagEmits.push({ event, payload: payload as Record<string, unknown> }),
     reflect: {
       provide(name: string, value?: unknown) {
         services.set(name, value)
@@ -92,7 +92,7 @@ function seedTwoProjects(home: string): [string, string] {
 
 type ProjectsServiceFace = { updateProject(id: string, patch: { sortOrders: Record<string, number> }): Promise<unknown> }
 
-it('生产装配接线：patch.sortOrders 成功（info）经 ctx.diagEmit 落 diag/log 事件域（event=project-sort, process=child）', async () => {
+it('生产装配接线：patch.sortOrders 成功（info）经 ctx.emit 落 diag/log 事件域（event=project-sort, process=child）', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
   dirs.push(home)
   const { services, dispose, diagEmits } = startPluginWithDiag(home)
@@ -114,7 +114,7 @@ it('生产装配接线：patch.sortOrders 成功（info）经 ctx.diagEmit 落 d
   }
 })
 
-it('生产装配接线：写失败（触发器 ABORT）warn 同面 emit；diag 缝缺席（ctx.diagEmit 未注入）零 emit 不抛', async () => {
+it('生产装配接线：写失败（触发器 ABORT）warn 同面 emit；diag 缝缺席（ctx.emit 未注入）零 emit 不抛', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
   dirs.push(home)
   const { services, dispose, diagEmits } = startPluginWithDiag(home)
@@ -132,7 +132,7 @@ it('生产装配接线：写失败（触发器 ABORT）warn 同面 emit；diag �
   } finally {
     dispose()
   }
-  // 缝缺席（ctx.diagEmit 未注入——bug 4e25858a 的生产形态）：排序写面照常、零 emit 不抛
+  // 缝缺席（ctx.emit 未注入——bug 4e25858a 的生产形态）：排序写面照常、零 emit 不抛
   const home2 = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
   dirs.push(home2)
   const { services: services2, dispose: dispose2 } = startPlugin(home2)
@@ -142,6 +142,54 @@ it('生产装配接线：写失败（触发器 ABORT）warn 同面 emit；diag �
     await expect(plain.updateProject(q1, { sortOrders: { [q1]: 1, [q2]: 2 } })).resolves.toBeDefined()
   } finally {
     dispose2()
+  }
+})
+
+// ── bug 590b8eff：真 cordis Context 形态复现（同成因——Proxy get 陷阱对未声明属性即抛，
+// 与 cordis lib ReflectService.handler.get 同型；diagEmit 虚构属性在此形态下装载即崩）──
+
+/** 真 cordis 形态桩：已知键放行（含原型语义的 emit），未知属性访问按 cordis 陷阱抛错 */
+function startPluginCordisLike(home: string): {
+  services: Map<string, unknown>
+  dispose: () => void
+  diagEmits: Array<{ event: string; payload: Record<string, unknown> }>
+} {
+  const services = new Map<string, unknown>()
+  const diagEmits: Array<{ event: string; payload: Record<string, unknown> }> = []
+  const target: Record<string, unknown> = {
+    workspaceRegistry: stubRegistry(),
+    workspaceController: stubRename(),
+    emit: (event: string, payload: unknown) => diagEmits.push({ event, payload: payload as Record<string, unknown> }),
+    reflect: {
+      provide(name: string, value?: unknown) {
+        services.set(name, value)
+        return () => services.delete(name)
+      },
+    },
+  }
+  const ctx = new Proxy(target, {
+    get(t, prop) {
+      if (prop in t) return t[prop as string]
+      throw new Error(`cannot get property "${String(prop)}" without inject`)
+    },
+  }) as CoreContextFace
+  const dispose = corePlugin(ctx, { dbFile: join(home, 'state.db') })
+  return { services, dispose, diagEmits }
+}
+
+it('bug 590b8eff：真 cordis Proxy 形态（未知属性即抛）下 corePlugin 装配不抛，project-sort 经 ctx.emit 桥出', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-'))
+  dirs.push(home)
+  const { services, dispose, diagEmits } = startPluginCordisLike(home)
+  try {
+    const [p1, p2] = seedTwoProjects(home)
+    const projects = services.get('forgeProjects') as ProjectsServiceFace
+    await projects.updateProject(p1, { sortOrders: { [p1]: 1, [p2]: 2 } })
+    expect(diagEmits).toHaveLength(1)
+    expect(diagEmits[0]!.event).toBe('diag/log')
+    expect(diagEmits[0]!.payload).toMatchObject({ level: 'info', process: 'child', event: 'project-sort' })
+  } finally {
+    dispose()
   }
 })
 
