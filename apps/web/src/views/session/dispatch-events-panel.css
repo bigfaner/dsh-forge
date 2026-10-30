@@ -289,7 +289,7 @@
   justify-content: center;
   gap: var(--dsw-font-xxxs-11-line-height);
   height: 26px;
-  width: 52px; /* DEP_BADGE_WIDTH 同值单源（右上锚右对齐不随计数漂移） */
+  width: 68px; /* DEP_BADGE_WIDTH 同值单源（{completed}/{total} 双数字加宽；右上锚右对齐不随计数漂移） */
   padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */

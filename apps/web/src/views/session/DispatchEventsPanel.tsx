@@ -350,8 +350,8 @@ export function dispatchPanelTaskCountOf(entries: readonly DispatchEventEntry[],
 
 /** 面板宽（fix bug 570fa4e2 刻度 480 承袭——长 title/摘要不换行挤压的宽度保障） */
 export const DEP_WIDTH = 480
-/** 折叠悬浮球定宽（CSS 同值单源——右上锚右对齐不随计数漂移） */
-export const DEP_BADGE_WIDTH = 52
+/** 折叠悬浮球定宽（CSS 同值单源——{completed}/{total} 双数字加宽刻度；右上锚右对齐不随计数漂移） */
+export const DEP_BADGE_WIDTH = 68
 /** 默认折叠（悬浮球态不遮挡对话内容——fix bug 570fa4e2 判例承袭） */
 export const DEP_DEFAULT_COLLAPSED = true
 /** 对话列右缘间距 */
@@ -655,10 +655,13 @@ export function DispatchEventsPanelBody({
   onOpenWorker,
 }: DispatchEventsPanelBodyProps): ReactNode {
   if (collapsed) {
-    // 小球口径（R-Q3）：投影汇总任务数（任务行聚合 + pending 快照）——与展开面板同源
+    // 小球口径（R-Q3 + 用户裁决 2026-10-30）：{completed}/{total} 双数字——completed = 终态行
+    // 计数；total = 投影汇总任务数（任务行聚合 + pending 快照，口径不变）——与展开面板同源
+    const stats = dispatchEventStats(entries)
+    const completed = stats.completed
     const count = dispatchPanelTaskCountOf(entries, pending)
     return (
-      <Tooltip label={`展开任务进度面板（${count}）`} portal>
+      <Tooltip label={`展开任务进度面板（${completed}/${count}）`} portal>
         <button
           type="button"
           className="dswf-dep-badge"
@@ -668,7 +671,7 @@ export function DispatchEventsPanelBody({
           onClick={onExpand}
         >
           <IconSparkleRegular size={11} />
-          <span data-dswf-dep-badge-count="">{count}</span>
+          <span data-dswf-dep-badge-count="">{`${completed}/${count}`}</span>
         </button>
       </Tooltip>
     )

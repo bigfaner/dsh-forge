@@ -414,6 +414,30 @@ describe('DispatchEventsPanelBody 纯渲染（折叠悬浮球）', () => {
     expect(markup).toContain('data-dswf-dep-badge-count')
     expect(markup).toContain('aria-label="展开任务进度面板"')
   })
+  it('小球 {completed}/{total} 双数字（用户裁决 2026-10-30）：completed = 终态行计数、total = 现行总数口径；Tooltip 同口径', () => {
+    const entries = [
+      ...Array.from({ length: 3 }, (_, i) => entry({ status: 'completed' as const, taskKey: `feat-x/${i}` })),
+      entry(),
+    ]
+    const markup = body({ collapsed: true, entries, pending: 10 })
+    // completed = 3（终态行）；total = 3 + 1（执行中）+ 10（pending）= 14——R-Q3 口径不变
+    expect(markup).toContain('data-dswf-dep-badge-count="">3/14')
+    // Tooltip label 由同一组 completed/count 变量构造（SSR 静态标记不出场——portal 交互渲染），
+    // 双数字口径一致性由下方同源聚合对照断言覆盖
+  })
+  it('双数字口径与展开面板同源聚合一致（对照断言）', () => {
+    const entries = [
+      entry({ status: 'completed' as const, taskKey: 'feat-x/1' }),
+      entry({ status: 'interrupted' as const, taskKey: 'feat-x/2' }),
+    ]
+    const pending = 5
+    const total = dispatchPanelTaskCountOf(entries, pending)
+    const completed = dispatchEventStats(entries).completed
+    expect(total).toBe(7)
+    expect(completed).toBe(1)
+    const markup = body({ collapsed: true, entries, pending })
+    expect(markup).toContain(`data-dswf-dep-badge-count="">${completed}/${total}`)
+  })
 })
 
 // ─────────────────── 几何纯函数（锚定/拖移/两态承接） ───────────────────
@@ -439,7 +463,7 @@ describe('几何纯函数（对话列右上锚 + 视口钳制拖移 + 展开/折
     expect(next.top).toBe(4)
   })
   it('悬浮球锚 = 面板右上角；拖移位优先；展开承接角标位', () => {
-    expect(DEP_BADGE_WIDTH).toBe(52)
+    expect(DEP_BADGE_WIDTH).toBe(68)
     const anchor = dispatchEventsAnchor(rects)
     const badge = dispatchPanelBadgeAnchor(anchor)
     expect(badge).toEqual({ left: anchor.left + DEP_WIDTH - DEP_BADGE_WIDTH, top: anchor.top })
@@ -622,7 +646,7 @@ describe('小球口径（投影汇总任务数 = 任务行聚合 + pending 快�
     ]
     const markup = body({ collapsed: true, entries, pending: 4 })
     expect(markup).toContain('data-dswf-dep-badge-count')
-    expect(markup).toContain('>6</span>') // 2 任务行 + 4 pending（循环级两行不计）
+    expect(markup).toContain('>1/6</span>') // {completed}/{total}：1 终态行 / 2 任务行 + 4 pending（循环级两行不计）
   })
 })
 
