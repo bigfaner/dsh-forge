@@ -169,7 +169,7 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
   const listInputs: ListTasksQuery[] = []
   const addTaskInputs: AddTaskInput[] = []
   const transitions: TransitionTaskInput[] = []
-  let claimQueue: ClaimTaskResult[] = [claimed()]
+  let claimQueue: Array<ClaimTaskResult | Error> = [claimed()]
   let statsQueue: TaskStats[] = [statsOf({ pending: 1 })]
   let queryQueue: QueryTaskResult[] = [queryOf('completed')]
   const lists: Record<'interrupted' | 'in_progress' | 'blocked' | 'created', TaskCard[]> = {
@@ -255,7 +255,7 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
     addTaskInputs,
     transitions,
     lists,
-    setClaim: (q: ClaimTaskResult[]) => {
+    setClaim: (q: Array<ClaimTaskResult | Error>) => {
       claimQueue = q
     },
     setStats: (q: TaskStats[]) => {
@@ -304,7 +304,7 @@ interface Built {
 }
 
 function build(options: {
-  claim?: ClaimTaskResult[]
+  claim?: Array<ClaimTaskResult | Error>
   stats?: TaskStats[]
   query?: QueryTaskResult[]
   triage?: (input: LoopTriageInput) => Promise<LoopTriageDecision>
@@ -1248,7 +1248,7 @@ describe('blocked 结算分支（图 C）', () => {
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'tests hang on flaky selector' })
-    expect(suspended.escalation.history).toEqual(['本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问'])
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.history : undefined).toEqual(['本次阻塞没有任何进展信号（无提交、无文件改动）——处置钩子未装配，按规则直接向你询问'])
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
@@ -1305,7 +1305,7 @@ describe('blocked 结算分支（图 C）', () => {
     const suspended = await untilSuspended(built.driver)
     expect(incidents.some((i) => i.eventType === 'claim-failed' && i.error.includes('claim exploded'))).toBe(true)
     expect(suspended.escalation).toMatchObject({ kind: 'blocked-ask-user', reason: 'claim exploded without task identity' })
-    expect(suspended.escalation.history).toEqual(['claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置'])
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.history : undefined).toEqual(['claim 阶段 fail-loud（任务派发前置失败，典型为专家档案缺失/禁用）——错误全文随载荷，待人工处置'])
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 

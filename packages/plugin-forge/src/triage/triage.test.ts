@@ -166,7 +166,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     const doneFace = createTriageHook(builtFace.hookDeps).run(triageInput({ parent: parentWithFace }))
     builtFace.resolve('{"action":"ask-user"}')
     await doneFace
-    const denyFace = (builtFace.requests[0] as SpawnWorkerRequest).toolFilter.deny
+    const denyFace = (builtFace.requests[0] as SpawnWorkerRequest).toolFilter.deny!
     expect(denyFace).not.toContain('bash')
     expect(denyFace).toContain('pwsh')
     expect(denyFace).toContain('submitTask')
