@@ -18,6 +18,9 @@
 ### 1.5 依赖与上游
 - **官方上游包允许直接 import，禁止 vendor**：「不 vendor」只约束不拷贝官方源码进仓；依赖官方 npm 公开包 + 版本精确 pin 是既定正道（host 依赖三十余个 `@deepseek-ai/*` 包为证）。
 - **不存在「零上游 import」全局口径**：该纪律仅是个别产品自建模块的局部决策（事件总线裁决⑧、notify 通道等），不得放大为项目级约束，也不得据此用 `ctx.reflect.get(name)` 丢类型取法规避类型化 import。
+
+### 1.6 跨插件服务在场性检测
+- **检测永不缓存，每个消费点现查**：dsh 一切皆插件、可中途装卸——凡消费其它插件提供的服务（如 expert-squad 的 `experts`），在场性须在每次消费点调用期求值（惰性 reflect.get + try/catch），检测结果禁止 memoize；已发出的消息文本允许携带求值时快照（消息即事实）。正本见 `docs/conventions/plugin-service-presence-detection.md`（规则表、正反判据、快照边界）。
 - **Cordis 可选具名服务取法**：优先 type-only import 官方包（保留 `ctx.<service>` 具名服务全量类型安全）+ 运行期存在性检查承担 fail-soft；`ctx.reflect.get` 仅限有其局部成因的既有先例，不作为新代码默认配方。
 - 先例：`mobile-remote-approval/disc-1`（审批桥接面配方修正）。
 
