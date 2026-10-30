@@ -11,7 +11,7 @@ import {
   renderEndOfLoop,
   renderInjection,
   renderP1,
-  renderP2,
+  renderP3,
   renderP9,
   payloadOf,
 } from './injection.js'
@@ -137,10 +137,9 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(text).not.toMatch(/<[^<>\n]+>/)
   })
 
-  it('P2 守卫：slug 与 ownerSessionId 已替换', () => {
-    const text = renderP2(payload)
-    expect(text).toContain('【派发被拒】')
-    expect(text).toContain('- dispatch-loop-hardening 已有正在运行的任务循环（发起会话 sess-a1）。')
+  it('P3 挂起：slug/taskKey/reason 已替换（P2 守卫模板已删——生产拒绝径在 dispatch-task.ts 自建单分支文案）', () => {
+    const text = renderP3(payload)
+    expect(text).toContain('【任务循环挂起】')
     expect(text).not.toMatch(/<[^<>\n]+>/)
   })
 
@@ -184,7 +183,7 @@ describe('模板正本（P1–P9 + 结束族）', () => {
   it('全部模板渲染产物零残留占位符（替换纪律——绝不把占位原文发给模型）', () => {
     const texts = [
       renderP1(payload),
-      renderP2(payload),
+      renderP3(payload),
       renderP9(payload),
       renderEndOfLoop('finished-all', { ...payload, completed: 1, blocked: 0 }),
       renderEndOfLoop('blocked-residue', { ...payload, completed: 0, blocked: 1 }),

@@ -13,7 +13,6 @@ import {
   payloadOf,
   renderEndOfLoop,
   renderP1,
-  renderP2,
   renderP3,
   renderP5,
   renderP6,
@@ -127,10 +126,9 @@ describe('pin-dispatch-injection · 同源使用面', () => {
 describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
   const description = descriptionOf()
 
-  it('停止单入口：stopTaskLoop 双载体同现（description / P1·P2·P9）', () => {
+  it('停止单入口：stopTaskLoop 双载体同现（description / P1·P9；P2 模板已删——守卫指引走 guidance 常量）', () => {
     expect(description).toContain('stopTaskLoop')
     expect(renderP1(PAYLOAD)).toContain('stopTaskLoop')
-    expect(renderP2(PAYLOAD)).toContain('stopTaskLoop')
     expect(renderP9(PAYLOAD)).toContain('stopTaskLoop')
     // 守卫指引（工具失败 DTO violations 行）同锚
     expect(LOOP_EXCLUSIVE_GUIDANCE.join('\n')).toContain('stopTaskLoop')
@@ -155,9 +153,9 @@ describe('pin-dispatch-injection · description ↔ 模板语义锚对', () => {
     expect(OWNER_ACTIVE_GUIDANCE[0]).toContain('at most one dispatch loop')
   })
 
-  it('守卫归属与入口：P2 含发起会话与 slug；工具拒绝响应同键（owner session id + slug）', () => {
-    const p2 = renderP2(PAYLOAD)
-    expect(p2).toContain(`${PAYLOAD.slug} 已有正在运行的任务循环（发起会话 ${PAYLOAD.ownerSessionId}）`)
+  it('守卫归属与入口：拒绝响应点名 owner session id + slug（P2 模板已删——生产径自建单分支文案，零静态双分支）', () => {
+    expect(DISPATCH_TASK_SOURCE).toContain('is owned by an active dispatch loop')
+    expect(DISPATCH_TASK_SOURCE).toContain('owner session ${record.ownerSessionId}')
     expect(description).toContain('the response names the loop owner and the correct entries')
   })
 
@@ -188,7 +186,8 @@ describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指�
     expect(renderP5(PAYLOAD)).toContain('已完成 4，blocked 1')
     expect(renderP6(PAYLOAD)).toContain(`${PAYLOAD.slug} 连续派发失败`)
     expect(renderP7(PAYLOAD)).toContain(`dispatchTask(source_kind='feature', source_slug='${PAYLOAD.slug}')`)
-    // 双参形态 pin：全部模板 dispatchTask 指引 schema 合法（source_kind+source_slug 成对，无单参残形）
+    // 双参形态 pin：全部模板 dispatchTask 指引 schema 合法（source_kind+source_slug 成对，
+    // 可选 resume: true 形参——fix-17 挂起冻结守卫；无单参残形）
     for (const text of [
       renderP3(PAYLOAD),
       renderP9(PAYLOAD),
@@ -197,7 +196,7 @@ describe('pin-dispatch-injection · 结束族 settlement 形态（P8 评审指�
       renderP7(PAYLOAD),
       renderP8(PAYLOAD),
     ]) {
-      expect(text).toMatch(/dispatchTask\(source_kind='[a-z]+', source_slug='[^']+'\)/)
+      expect(text).toMatch(/dispatchTask\(source_kind='[a-z]+', source_slug='[^']+'(, resume: true)?\)/)
       expect(text).not.toMatch(/dispatchTask\((?!source_kind)[^\s')]/)
     }
   })
@@ -219,7 +218,6 @@ describe('pin-dispatch-injection · 占位符完整性', () => {
   it('全量渲染零残留 <...>（注入前必须全部替换）', () => {
     const renders = [
       renderP1(PAYLOAD),
-      renderP2(PAYLOAD),
       renderP3(PAYLOAD),
       renderP9(PAYLOAD),
       renderP5(PAYLOAD),

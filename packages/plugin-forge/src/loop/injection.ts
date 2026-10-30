@@ -126,11 +126,6 @@ const P1_TEMPLATE = `【任务循环协作规则】
 - 启动后可继续其它工作：结束、挂起、阻塞通知会发送到你的会话。
 - 停止循环：使用 stopTaskLoop 工具。`
 
-const P2_TEMPLATE = `【派发被拒】
-- <slug> 已有正在运行的任务循环（发起会话 <ownerSessionId>）。
-- 不要重复发起。可等待其结束；若你是发起会话，可先用 stopTaskLoop 停止该循环，再重新发起。
-- 若该循环处于挂起状态，任何会话都可停止它或接管处理，处理方法见挂起消息。`
-
 const P3_TEMPLATE = `【任务循环挂起】
 **挂起信息**
 - 任务 <taskKey> 以 blocked 结束，循环已暂停，等待处理。
@@ -224,12 +219,9 @@ export function renderP1(payload: InjectionPayload): string {
   return interpolate(P1_TEMPLATE, placeholderValues(payload))
 }
 
-/** P2 · 守卫（dispatchTask 被拒时，拼入工具响应） */
-export function renderP2(payload: InjectionPayload): string {
-  return interpolate(P2_TEMPLATE, placeholderValues(payload))
-}
-
-/** P3 · 挂起（升级点挂起时；工具响应或 user message，双径同文） */
+/** P3 · 挂起（升级点挂起时；工具响应或 user message，双径同文）
+ *  （P2 守卫模板已删——生产拒绝径在 dispatch-task.ts 自建单分支文案：点名 owner、
+ *  非 owner 专属措辞，运行态/挂起态分流；模板孤儿且 owner 分支在被拒场景恒假。） */
 export function renderP3(payload: InjectionPayload): string {
   return interpolate(P3_TEMPLATE, placeholderValues(payload))
 }
