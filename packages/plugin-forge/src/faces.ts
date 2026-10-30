@@ -80,6 +80,17 @@ export interface ToolSessionFace {
 /** dsh agent（官方 Agent 子面：id === session id；session 为其驱动的活会话） */
 export interface ToolAgentFace {
   readonly session: ToolSessionFace
+  /**
+   * 官方 Agent.status 消费子面（官方 AgentStatus 子集——'idle' | 'running'；bug a098e20c
+   * 在途轮打断判定读位）。缺席（结构漂移/测试窄面）= 视为不在途，零打断。
+   */
+  readonly status?: 'idle' | 'running'
+  /**
+   * 官方 Agent.cancel 消费子面（cause 取 {kind:'user'} 用户径；options.keepInbox 保留
+   * queued/steering 输入——官方 CancelOptions 同名语义）。官方对空闲 agent 为 no-op；
+   * 缺席 = 零打断（fail-soft）。
+   */
+  cancel?(cause: { readonly kind: 'user' }, options?: { readonly keepInbox?: boolean }): void
 }
 
 /** tool 执行上下文（官方 ToolRunContext 子面——会话身份 + 取消信号（3.4 dispatchTask

@@ -78,6 +78,41 @@ describe('stop-dag-tasks handler（decisions #20 作用域）', () => {
     expect(out).toEqual({ kind: 'success', text: '本会话没有派发任务' })
   })
 
+  it('在途模型轮存在时 stop 仍在窗口内出回执（bug a098e20c）：handler 先以官方 cancel 打断在途轮（keepInbox 保留 queued/steering）再收口 stop', async () => {
+    const loopsRecord: LoopRecord = { ...OWN, inFlight: { taskRef: { slug: 'blitz-y', localId: '1.1' }, taskKey: 'blitz-y/1.1', taskId: 't-2', title: 'T' } }
+    const stub = driverStub(loopsRecord)
+    const cancels: { cause: unknown; options: unknown }[] = []
+    const agent = {
+      ...agentOf(),
+      status: 'running',
+      cancel: vi.fn((cause: unknown, options: unknown) => {
+        cancels.push({ cause, options })
+      }),
+    }
+    const handler = createStopDagTasksHandler({
+      driver: {
+        ...stub.driver,
+        stop: async (input) => {
+          expect(cancels).toHaveLength(1) // 打断先于 stop 收口
+          return stub.driver.stop(input)
+        },
+      },
+    })
+    const out = await handler({ agent: agent as never, rawInput: '' })
+    expect(cancels).toEqual([{ cause: { kind: 'user' }, options: { keepInbox: true } }])
+    expect(out.kind).toBe('success')
+    expect((out as { text: string }).text).toContain('已停止')
+  })
+
+  it('agent 空闲时零 cancel（官方 cancel 空闲 no-op 语义不在 handler 侧触发）', async () => {
+    const stub = driverStub(OWN)
+    const cancel = vi.fn()
+    const agent = { ...agentOf(), status: 'idle', cancel }
+    const handler = createStopDagTasksHandler({ driver: stub.driver })
+    await handler({ agent: agent as never, rawInput: '' })
+    expect(cancel).not.toHaveBeenCalled()
+  })
+
   it('in-flight 在飞：回执说明在飞任务去向（停止径由驱动器真化与叙述）', async () => {
     const loopsRecord: LoopRecord = { ...OWN, inFlight: { taskRef: { slug: 'blitz-y', localId: '1.1' }, taskKey: 'blitz-y/1.1', taskId: 't-2', title: 'T' } }
     const stub = driverStub(loopsRecord)

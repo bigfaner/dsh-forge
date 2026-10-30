@@ -22,6 +22,18 @@ export function createStopDagTasksHandler(
   deps: StopDagTasksDeps,
 ): (invocation: ForgeCommandInvocation) => Promise<ForgeCommandResult> {
   return async ({ agent }: ForgeCommandInvocation): Promise<ForgeCommandResult> => {
+    // 停止即打断（bug a098e20c——回执被在途 owner 模型轮压住）：owner 会话模型轮在途时
+    // 先以官方 Agent.cancel 打断（keepInbox: true——queued/steering 输入按 CancelOptions
+    // 语义保留），在途轮让渡后 stop 收口与回执才落在重试窗口内；官方 cancel 对空闲 agent
+    // 是 no-op，故仅在 status==='running' 且 cancel 面在场时触发（结构化子面 fail-soft）。
+    // Root cause: stop 受理与回执时序排在在途模型轮之后——在途轮不先让渡，回执出不了窗口。
+    if (agent.cancel !== undefined && agent.status === 'running') {
+      try {
+        agent.cancel({ kind: 'user' }, { keepInbox: true })
+      } catch (cause) {
+        console.warn(`forge stop-dag-tasks: interrupt in-flight turn failed (fail-soft, stop continues): ${cause instanceof Error ? cause.message : String(cause)}`)
+      }
+    }
     // 停止作用域键 = 敲指令会话（decisions #20）——驱动器按归属拒绝他会话循环
     const record = deps.driver.activeOf(agent.session.id)
     const result = await deps.driver.stop({ ownerSessionId: agent.session.id })
