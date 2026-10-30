@@ -161,6 +161,14 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(renderEndOfLoop('wait-timeout', payload)).toContain('【任务循环终止·等待超时】')
   })
 
+  it('P8 双路交叉评审措辞（loop-review-experts）：experts 在场 architect/code-reviewer 双路 + 缺席回落 subagent 分域', () => {
+    const all = renderEndOfLoop('finished-all', payload)
+    expect(all).toContain('architect（结构面')
+    expect(all).toContain('code-reviewer（范围面')
+    expect(all).toContain('主会话交叉比对后决断')
+    expect(all).toContain('回落（experts 缺席）：派多个 subagent 分域交叉评审')
+  })
+
   it('结束族 blocked-residue：完成/阻塞计数已替换（counts 载荷驱动）', () => {
     const text = renderEndOfLoop('blocked-residue', { ...payload, completed: 3, blocked: 2 })
     expect(text).toContain('已完成 3，blocked 2。')
