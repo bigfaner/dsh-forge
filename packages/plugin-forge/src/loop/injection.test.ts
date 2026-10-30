@@ -160,9 +160,10 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(renderEndOfLoop('wait-timeout', payload)).toContain('【任务循环终止·等待超时】')
   })
 
-  it('P8 组装期单选（loop-review-experts）：expertsAvailable=true 双路措辞 / 缺席回落 subagent 分域，两态互斥零冗余', () => {
+  it('P8 组装期单选（loop-review-experts）：expertsAvailable=true 三路措辞 / 缺席回落 subagent 分域，两态互斥零冗余', () => {
     const withExperts = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: true })
-    expect(withExperts).toContain('双路交叉评审：architect（结构面')
+    expect(withExperts).toContain('三路交叉评审：spec-reviewer（目标面')
+    expect(withExperts).toContain('architect（结构面')
     expect(withExperts).toContain('code-reviewer（范围面')
     expect(withExperts).toContain('主会话交叉比对后决断')
     expect(withExperts).not.toContain('subagent')

@@ -180,13 +180,13 @@ const P8_REVIEW_COMMON = `**评审重点**
 - 添加任务（修复任务或跟进任务）后，重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>') 启动新的循环，由循环执行新添加的任务。
 - 无问题：本次任务循环的工作全部完成，无需进一步操作。`
 
-/** P8 专家团在场版——双路交叉（architect 结构面 / code-reviewer 范围面） */
+/** P8 专家团在场版——三路交叉（spec-reviewer 目标面 / architect 结构面 / code-reviewer 范围面） */
 const P8_EXPERTS_TEMPLATE = `【代码评审指示】
 **评审对象**
 - <slug> 的全部任务已完成。
 - 评审范围：本次循环产生的代码变更（变更清单取各任务完成记录中的文件与提交）。
 **评审方式**
-- 双路交叉评审：architect（结构面——分层/依赖方向/模块边界/业务混入）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏）各派一实例独立评审，主会话交叉比对后决断。
+- 三路交叉评审：spec-reviewer（目标面——核对源提案/PRD 目标是否正确实现、逐条 AC 对账交付物）、architect（结构面——分层/依赖方向/模块边界/业务混入）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏）各派一实例独立评审，主会话交叉比对后决断。
 ${P8_REVIEW_COMMON}`
 
 /** P8 回落版（experts 服务缺席——零专家环境） */
