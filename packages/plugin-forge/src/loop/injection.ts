@@ -30,6 +30,11 @@ export interface InjectionPayload {
   /** 结束族计数（P5 专用——驻留段不含） */
   readonly completed: number
   readonly blocked: number
+  /**
+   * 专家团服务在场性（P8 评审指示组装期单选——true = architect/code-reviewer 双路措辞，
+   * 缺席 = subagent 分域回落措辞；由循环装配面检测注入，模板内零双分支冗余文案）
+   */
+  readonly expertsAvailable?: boolean
 }
 
 /** 结束族分支（renderEndOfLoop kind——互斥单选，不做段内条件拼接） */
@@ -169,14 +174,7 @@ const P7_TEMPLATE = `【任务循环终止·等待超时】
 **后续**
 - 确认阻塞原因解除后，重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>') 开始新的循环。`
 
-const P8_TEMPLATE = `【代码评审指示】
-**评审对象**
-- <slug> 的全部任务已完成。
-- 评审范围：本次循环产生的代码变更（变更清单取各任务完成记录中的文件与提交）。
-**评审方式**
-- 双路交叉评审（experts 服务在场）：architect（结构面——分层/依赖方向/模块边界/业务混入）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏）各派一实例独立评审，主会话交叉比对后决断。
-- 回落（experts 缺席）：派多个 subagent 分域交叉评审，各 agent 独立评审后汇总结论。
-**评审重点**
+const P8_REVIEW_COMMON = `**评审重点**
 - 架构是否被破坏——分层、依赖方向、模块边界是否仍然成立。
 - 实际改动是否超出各任务声明的范围。
 - 各模块与包的职责边界是否清晰（core 保持纯状态层，plugin-forge 保持装配与编排）。
@@ -186,6 +184,24 @@ const P8_TEMPLATE = `【代码评审指示】
 - 发现问题：用 recordBug 登记 bug，再用 addTask 添加修复任务——taskDesc 写明复核结论、复现步骤与验收标准；修复由循环 worker 执行，你不要自行修复。
 - 添加任务（修复任务或跟进任务）后，重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>') 启动新的循环，由循环执行新添加的任务。
 - 无问题：本次任务循环的工作全部完成，无需进一步操作。`
+
+/** P8 专家团在场版——双路交叉（architect 结构面 / code-reviewer 范围面） */
+const P8_EXPERTS_TEMPLATE = `【代码评审指示】
+**评审对象**
+- <slug> 的全部任务已完成。
+- 评审范围：本次循环产生的代码变更（变更清单取各任务完成记录中的文件与提交）。
+**评审方式**
+- 双路交叉评审：architect（结构面——分层/依赖方向/模块边界/业务混入）与 code-reviewer（范围面——超范围/测试匹配/清理遗漏）各派一实例独立评审，主会话交叉比对后决断。
+${P8_REVIEW_COMMON}`
+
+/** P8 回落版（experts 服务缺席——零专家环境） */
+const P8_FALLBACK_TEMPLATE = `【代码评审指示】
+**评审对象**
+- <slug> 的全部任务已完成。
+- 评审范围：本次循环产生的代码变更（变更清单取各任务完成记录中的文件与提交）。
+**评审方式**
+- 派多个 subagent 分域交叉评审，各 agent 独立评审后汇总结论。
+${P8_REVIEW_COMMON}`
 
 /** 占位符键值表（插值单源——各模板共用同一载荷视图） */
 function placeholderValues(payload: InjectionPayload): Record<string, string> {
@@ -243,9 +259,9 @@ export function renderP7(payload: InjectionPayload): string {
   return interpolate(P7_TEMPLATE, placeholderValues(payload))
 }
 
-/** P8 · 评审指示（仅全部完成分支追加） */
+/** P8 · 评审指示（仅全部完成分支追加——expertsAvailable 单选模板，零双分支冗余） */
 export function renderP8(payload: InjectionPayload): string {
-  return interpolate(P8_TEMPLATE, placeholderValues(payload))
+  return interpolate(payload.expertsAvailable === true ? P8_EXPERTS_TEMPLATE : P8_FALLBACK_TEMPLATE, placeholderValues(payload))
 }
 
 /** 结束族渲染（kind 互斥单选；finished-all 即 P8 评审指示段——无重复结束块） */

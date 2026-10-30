@@ -364,8 +364,20 @@ const forgePlugin: ForgePlugin = Object.assign(
                 : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
           }
         : undefined
+    // 专家团服务在场探测（expert-squad 装配时序可能晚于本插件——调用期惰性 reflect.get
+    // 防御读取，同 sessionController「调用期惰性解析」先例）。缺席/异常/非函数面 = false。
+    // 双消费面：forge:commander 段条件注入 + P8 评审指示组装期单选（专家双路/回落文案）。
+    function expertsServicePresent(): boolean {
+      try {
+        const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
+        return experts !== undefined && typeof experts.get === 'function'
+      } catch {
+        return false
+      }
+    }
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
+      expertsPresent: expertsServicePresent,
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,
@@ -613,18 +625,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     })
     // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
     // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts
-    // 服务在场（expert-squad 插件 provide 的服务键 experts——调用期惰性 reflect.get
-    // 防御读取，同 sessionController「调用期惰性解析」先例：expert-squad 装配时序
-    // 可能晚于本插件）。缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
+    // 服务在场（探测函数见 loopDriverBase 装配处上方定义，双消费面共用）。
+    // 缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
     // 与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
-    const expertsServicePresent = (): boolean => {
-      try {
-        const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
-        return experts !== undefined && typeof experts.get === 'function'
-      } catch {
-        return false
-      }
-    }
     const disposeCommander = ctx.systemPrompt.section({
       name: FORGE_COMMANDER_SECTION_NAME,
       order: FORGE_COMMANDER_SECTION_ORDER,

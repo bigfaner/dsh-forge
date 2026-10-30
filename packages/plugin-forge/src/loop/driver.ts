@@ -756,6 +756,11 @@ export interface LoopDriverDeps {
   readonly resolveModelReasoning?: DispatchCoreDeps['resolveModelReasoning']
   /** 专家档案工具/模型取用面（expert-squad-forge 1.4——透传 dispatch-core spawn 组装；缺席 = 形态兼容） */
   readonly resolveWorkerProfile?: DispatchCoreDeps['resolveWorkerProfile']
+  /**
+   * 专家团服务在场探测（P8 评审指示组装期单选——true = architect/code-reviewer 双路措辞；
+   * 缺席 = subagent 分域回落。装配面注入惰性探测，循环收口时求值）
+   */
+  readonly expertsPresent?: () => boolean
   readonly registry?: LoopRegistry
   readonly triage?: LoopTriageHook
   readonly escalation?: LoopEscalationHook
@@ -2262,6 +2267,7 @@ async function onNoTask(loop: ActiveLoop, pool: PoolSnapshot): Promise<RoundOutc
       history: '',
       completed: stats.byStatus.completed,
       blocked: stats.byStatus.blocked,
+      expertsAvailable: loop.deps.expertsPresent?.() ?? false,
     }
     await loop.deps.narrator.settle(
       loop.record.ownerSessionId,

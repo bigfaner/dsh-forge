@@ -161,12 +161,18 @@ describe('模板正本（P1–P9 + 结束族）', () => {
     expect(renderEndOfLoop('wait-timeout', payload)).toContain('【任务循环终止·等待超时】')
   })
 
-  it('P8 双路交叉评审措辞（loop-review-experts）：experts 在场 architect/code-reviewer 双路 + 缺席回落 subagent 分域', () => {
-    const all = renderEndOfLoop('finished-all', payload)
-    expect(all).toContain('architect（结构面')
-    expect(all).toContain('code-reviewer（范围面')
-    expect(all).toContain('主会话交叉比对后决断')
-    expect(all).toContain('回落（experts 缺席）：派多个 subagent 分域交叉评审')
+  it('P8 组装期单选（loop-review-experts）：expertsAvailable=true 双路措辞 / 缺席回落 subagent 分域，两态互斥零冗余', () => {
+    const withExperts = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: true })
+    expect(withExperts).toContain('双路交叉评审：architect（结构面')
+    expect(withExperts).toContain('code-reviewer（范围面')
+    expect(withExperts).toContain('主会话交叉比对后决断')
+    expect(withExperts).not.toContain('subagent')
+    const fallback = renderEndOfLoop('finished-all', { ...payload, expertsAvailable: false })
+    expect(fallback).toContain('派多个 subagent 分域交叉评审，各 agent 独立评审后汇总结论')
+    expect(fallback).not.toContain('architect')
+    expect(fallback).not.toContain('code-reviewer')
+    // 缺省（字段缺席）= 回落口径——装配面注入前保守
+    expect(renderEndOfLoop('finished-all', payload)).toContain('subagent 分域交叉评审')
   })
 
   it('结束族 blocked-residue：完成/阻塞计数已替换（counts 载荷驱动）', () => {
