@@ -1467,14 +1467,21 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         taskTitle: captured.title,
         note: reason,
       })
-      try {
-        // 挂起径唤醒（loop-message-consolidation——挂起保留 wakeup，恢复 = 改写简报后 re-entry）
-        await deps.narrator.followup(
-          record.ownerSessionId,
-          `[forge·暂停] 任务源: ${record.source.slug} — 任务 ${captured.taskKey} ${captured.title} 已挂起\n原因: ${summarizeReason(reason)}\n改写简报后执行 dispatchTask re-entry 恢复循环`,
-        )
-      } catch {
-        // 叙述故障 fail-soft（挂起事实已落登记与任务时间线）
+      // 唤醒去重（bug 5a245dd1——pause 径同键判重接入 wakeupKeys，与 suspendWithWakeup 径同一
+      // 机械：键形态 minor/taskKey/reason 成因三元组（2055da00 语义——同因复发去重、异因新发
+      // 必出卡）；键入 loop.wakeupKeys 实例域，生命周期与 loop 实例一致）
+      const wakeupKey = `task-paused:${captured.taskKey}:${reason}`
+      if (!loop.wakeupKeys.has(wakeupKey)) {
+        loop.wakeupKeys.add(wakeupKey)
+        try {
+          // 挂起径唤醒（loop-message-consolidation——挂起保留 wakeup，恢复 = 改写简报后 re-entry）
+          await deps.narrator.followup(
+            record.ownerSessionId,
+            `[forge·暂停] 任务源: ${record.source.slug} — 任务 ${captured.taskKey} ${captured.title} 已挂起\n原因: ${summarizeReason(reason)}\n改写简报后执行 dispatchTask re-entry 恢复循环`,
+          )
+        } catch {
+          // 叙述故障 fail-soft（挂起事实已落登记与任务时间线）
+        }
       }
       return { ok: true, paused: true, taskKey: captured.taskKey }
     },

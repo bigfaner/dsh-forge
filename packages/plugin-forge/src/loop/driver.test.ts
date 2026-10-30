@@ -3303,6 +3303,41 @@ describe('pauseTask 原语（task-pause-primitive）：pause 全链 / 归属守�
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
   })
 
+  it('pause 径唤醒去重（bug 5a245dd1）：pause→resume→pause 同任务同 reason 恰一张唤醒卡；异因新发出新卡', async () => {
+    const built = build({
+      claim: [claimed(), claimed(), claimed()],
+      stats: [statsOf({ pending: 1 })],
+      spawnBehavior: abortableSpawnBehavior,
+    })
+    const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const loopId = started.ok ? started.loopId : ''
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    // 等 pause 中断的在飞 unwind 落定（killed 结算静默径——避免与 resume 换信号竞态）
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // resume 续跑重领同一任务 → 再次同因 pause
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([claimed()])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: PAUSE_REASON })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // 同因去重：两次 pause 恰一张唤醒卡
+    let wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup && c.text.includes('[forge·暂停]'))
+    expect(wakeups).toHaveLength(1)
+
+    // 异因新发：不同 reason 的 pause 必出新卡（同任务）
+    built.h.lists.suspended = [card('feat-x', '2.5', { taskStatus: 'suspended' })]
+    built.h.setClaim([claimed()])
+    expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
+    await untilInFlight(built.driver)
+    await built.driver.pause({ loopId, requesterSessionId: OWNER, reason: '异因换向' })
+    wakeups = built.calls.filter((c) => c.form === 'followup' && c.wakeup && c.text.includes('[forge·暂停]'))
+    expect(wakeups).toHaveLength(2)
+  })
+
   it('归属守卫三径：运行中非 owner = forbidden；挂起态任意会话可接管（无在途对象 = no-in-progress-task）；无活循环 = no-active-loop；空 reason = reason-required', async () => {
     const built = build({
       claim: [claimed()],
