@@ -10,6 +10,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensurePackages } from './dev-ensure-packages.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const procs = [];
@@ -76,15 +77,17 @@ if (ensureHostDist.status !== 0) {
 // exports["./client"] 指向的 dist/client.js 由各包 bundle-client.mjs esbuild 产出——
 // 管线不跑它则 vite watch 初始构建 req.resolve 失败；tsc 类重建亦会抹掉该产物，
 // 每次 dev 起跑 ensure。run-once 增量，幂等便宜）。
-for (const plugin of ['input-history', 'quote-reference', 'super-composer', 'expert-squad']) {
+// 通用化（bug 021d2655 防再漏）：清单由扫描派生（packages/plugins/* 含 build 的插件包
+// + plugin-forge 本体，详见 dev-ensure-packages.mjs）——新增插件包自动纳入，不再手工记名。
+for (const pkg of ensurePackages(ROOT)) {
 	const ensurePluginClientBundle = spawnSync(
 		'pnpm',
-		['-C', `packages/plugins/${plugin}`, 'build'],
+		['-C', pkg, 'build'],
 		{ stdio: 'inherit', shell: true, cwd: ROOT }
 	);
 	if (ensurePluginClientBundle.status !== 0) {
 		console.error(
-			`[dev] ${plugin} client bundle 打包失败——vite 构建将在 emit 阶段报 bundle 缺席`
+			`[dev] ${pkg} client bundle/构建失败——vite 构建将在 emit 阶段报 bundle 缺席`
 		);
 	}
 }
