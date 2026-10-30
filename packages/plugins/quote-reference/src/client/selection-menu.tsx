@@ -362,6 +362,11 @@ export function mountSelectionMenu(deps: SelectionMenuDeps): SelectionMenuHandle
   }
   const container = doc.createElement('div')
   container.setAttribute('data-quote-selection-menu-root', '')
+  // Root cause: 容器只承载官方 Menu 的内联 anchor span（portal 模式列表走
+  // createPortal 直挂 body）——静态流内空 span 生成行盒（~21.6px）把文档顶出
+  // 视口，全窗竖直滚动条（bug cf64ea39）。fixed 脱流 = 零滚动贡献；列表在
+  // body 下不受影响，锚矩形由 getAnchorRect 供给不经此容器。
+  container.style.position = 'fixed'
   doc.body.appendChild(container)
   let root: Root | null = null
   try {

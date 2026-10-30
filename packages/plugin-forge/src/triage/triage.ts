@@ -26,7 +26,7 @@ import { composeTriagePrompt } from './prompt.js'
 const TRIAGE_EXPERT_KEY_DEFAULT = 'triage-analyst'
 
 /** 档案人格段（与 core claim 链 renderExpertProfileSection 同构——身份头 + personaMd 正文；
- *  本包不依赖 @dsh-forge/core，组装面就地同形承载，persona 单源纪律不变） */
+ *  本包不依赖 core 包（类型出自 contracts），组装面就地同形承载，persona 单源纪律不变） */
 function personaSectionOf(profile: ForgeExpertProfile): string {
   const title = profile.title ?? profile.name
   const gap = /^[A-Za-z]/.test(title) ? ' ' : ''

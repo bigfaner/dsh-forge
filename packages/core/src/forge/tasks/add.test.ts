@@ -4,6 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { addTask, isUniqueViolation } from './add.js'
 import {
+  BeforeSuccessorInvalidError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -557,6 +558,66 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     expect(rows(`SELECT COUNT(*) AS n FROM task_edges`)).toEqual([{ n: 0 }])
   })
 
+  it('fix 链深只计 fix-chain 边：split-remainder 的 disc 继任再开 fix 链从 1 起算（不耗深）', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'chain', status: 'tasks' })
+    seedTask(h!.db, 'chain', '1.1')
+    let prev = { slug: 'chain', localId: '1.1' }
+    for (let i = 1; i <= 6; i++) {
+      const r = await add({
+        projectId: P(),
+        source: { kind: 'feature', slug: 'chain' },
+        title: `fix-${i}`,
+        type: 'coding-fix',
+        sourceTask: prev,
+        blockSource: true,
+      })
+      prev = { slug: 'chain', localId: `fix-${i}` }
+      expect(r.localId).toBe(`fix-${i}`)
+    }
+    // split-remainder：fix-6 衍生 disc-1（谱系不断链、无 fix-chain 边）
+    const disc = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'chain' },
+      title: '衍生发现',
+      type: 'doc',
+      sourceTask: prev,
+    })
+    expect(disc.localId).toBe('disc-1')
+    // disc 继任再开 fix 链：fix-chain 深度 = 1（source_task_id 谱系不计深）→ 不被拒
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'chain' },
+      title: 'fix from disc',
+      type: 'coding-fix',
+      sourceTask: { slug: 'chain', localId: 'disc-1' },
+      blockSource: true,
+    })
+    expect(r.localId).toBe('fix-7')
+    expect(r.reused).toBe(false)
+  })
+
+  it('fix-chain 边成环（数据漂移）→ fail-loud 拒绝', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'cyc', status: 'tasks' })
+    seedTask(h!.db, 'cyc', '1.1')
+    seedTask(h!.db, 'cyc', 'fix-1', { type: 'coding-fix' })
+    seedTask(h!.db, 'cyc', 'fix-2', { type: 'coding-fix' })
+    seedEdge(h!.db, 't-cyc-fix-1', 't-cyc-fix-2', 'fix-chain')
+    seedEdge(h!.db, 't-cyc-fix-2', 't-cyc-fix-1', 'fix-chain')
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'cyc' },
+      title: 'fix on cycle',
+      type: 'coding-fix',
+      sourceTask: { slug: 'cyc', localId: 'fix-1' },
+      blockSource: true,
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toContain('成环')
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks WHERE local_id = 'fix-3'`).get()).toEqual({ n: 0 }) // 零残留
+  })
+
   it('sourceTask 未命中 / 跨 feature 源 → ERR_TASK_NOT_FOUND（同 feature 归属校验）', async () => {
     const add = svc()
     seedFeature(h!.db, { slug: 'f1', status: 'tasks' })
@@ -678,5 +739,168 @@ describe('AC（2.4）同容器边约束：task_edges 两端 source_id 相等（�
     ).toEqual([{ task_id: 't-bp-1.1', prerequisite_id: r.taskId, origin: 'fix-chain' }])
     // 律四：proposal 容器无相位域——features 表恒空
     expect(rows(`SELECT * FROM features`)).toEqual([])
+  })
+})
+
+// ───────────── task-pause-primitive §2.1：addTask before 插入序（单事务建任务 + 后继挂边） ─────────────
+
+describe('AC（task-pause-primitive §2.1）addTask before：单事务插入序', () => {
+  it('正常挂边：pending/blocked/suspended 后继置换补 manual 边 + beforeSuccessors 回带 + 单事件', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'ins', status: 'in-progress' }) // blocked/suspended 任务在场 → 相位一致（写前增量断言）
+    seedTask(h!.db, 'ins', '1.2')
+    seedTask(h!.db, 'ins', '1.3', { status: 'blocked' })
+    seedTask(h!.db, 'ins', '1.4', { status: 'suspended' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'ins' },
+      title: '前置插入',
+      type: 'doc',
+      before: ['1.2', '1.3', '1.4'],
+    })
+    expect(r.reused).toBe(false)
+    expect(r.beforeSuccessors).toEqual(['ins/1.2', 'ins/1.3', 'ins/1.4'])
+    // 挂边 origin=manual、方向 = 后继等待新任务（后继立即失就绪——前置未满足）
+    const edges = rows(
+      `SELECT task_id, prerequisite_id, origin FROM task_edges WHERE prerequisite_id = ?`,
+      r.taskId,
+    ) as { task_id: string; prerequisite_id: string; origin: string }[]
+    expect(edges.map((e) => e.task_id).sort()).toEqual(['t-ins-1.2', 't-ins-1.3', 't-ins-1.4'])
+    expect(edges.every((e) => e.origin === 'manual')).toBe(true)
+    expect(h!.events.emitted).toEqual([{ projectId: P() }]) // 单事务单发
+  })
+
+  it('环拒绝（两步环）：before 后继同时进 dependsOn → ERR_CYCLE_DETECTED [S, T, S] + 整体回滚零残留', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'cy', status: 'tasks' })
+    seedTask(h!.db, 'cy', '1.2')
+    const before = rows(`SELECT task_id FROM task_edges`).length
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'cy' },
+      title: '环',
+      type: 'doc',
+      dependsOn: ['1.2'],
+      before: ['1.2'],
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(CycleDetectedError)
+    expect((err as CycleDetectedError).data.cycle).toEqual(['cy/1.2', 'cy/1.3', 'cy/1.2'])
+    expect(rows(`SELECT COUNT(*) AS n FROM tasks`)).toEqual([{ n: 1 }]) // 新任务行零残留
+    expect(rows(`SELECT task_id FROM task_edges`).length).toBe(before)
+    expect(h!.events.emitted).toEqual([])
+  })
+
+  it('环拒绝（多跳）：before 后继经既有链等待 dependsOn 前置 → 完整环路径回报', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'cy2', status: 'tasks' })
+    seedTask(h!.db, 'cy2', '1.2') // 后继 S
+    seedTask(h!.db, 'cy2', '1.3')
+    seedTask(h!.db, 'cy2', '1.4') // 前置 D
+    seedEdge(h!.db, 't-cy2-1.3', 't-cy2-1.2') // 1.3 等待 1.2
+    seedEdge(h!.db, 't-cy2-1.4', 't-cy2-1.3') // 1.4 等待 1.3（D 经两跳可达 S）
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'cy2' },
+      title: '环',
+      type: 'doc',
+      dependsOn: ['1.4'],
+      before: ['1.2'],
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(CycleDetectedError)
+    expect((err as CycleDetectedError).data.cycle).toEqual([
+      'cy2/1.2',
+      'cy2/1.5',
+      'cy2/1.4',
+      'cy2/1.3',
+      'cy2/1.2',
+    ])
+  })
+
+  it('in_progress 后继拒绝：ERR_BEFORE_SUCCESSOR_INVALID（action=pauseTask 指路先暂停）+ 零残留', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'run', status: 'tasks' })
+    seedTask(h!.db, 'run', '1.2', { status: 'in_progress' })
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'run' },
+      title: 't',
+      type: 'doc',
+      before: ['1.2'],
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BeforeSuccessorInvalidError)
+    expect((err as BeforeSuccessorInvalidError).code).toBe('ERR_BEFORE_SUCCESSOR_INVALID')
+    expect((err as BeforeSuccessorInvalidError).data).toEqual({
+      projectId: P(),
+      taskRef: { slug: 'run', localId: '1.2' },
+      taskStatus: 'in_progress',
+      action: 'pauseTask',
+    })
+    expect((err as BeforeSuccessorInvalidError).message).toContain('pauseTask')
+    expect(rows(`SELECT COUNT(*) AS n FROM tasks`)).toEqual([{ n: 1 }])
+    expect(rows(`SELECT COUNT(*) AS n FROM task_edges`)).toEqual([{ n: 0 }])
+  })
+
+  it('interrupted 后继拒绝（action=human 指 human 通道）；终态后继拒绝（action=terminal）；未命中 → ERR_TASK_NOT_FOUND', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'st', status: 'tasks' })
+    seedTask(h!.db, 'st', '1.2', { status: 'interrupted' })
+    seedTask(h!.db, 'st', '1.3', { status: 'completed' })
+    const interrupted = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'st' },
+      title: 't',
+      type: 'doc',
+      before: ['1.2'],
+    }).catch((e: unknown) => e)
+    expect(interrupted).toBeInstanceOf(BeforeSuccessorInvalidError)
+    expect((interrupted as BeforeSuccessorInvalidError).data.action).toBe('human')
+    expect((interrupted as BeforeSuccessorInvalidError).message).toContain('human')
+    const terminal = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'st' },
+      title: 't',
+      type: 'doc',
+      before: ['1.3'],
+    }).catch((e: unknown) => e)
+    expect(terminal).toBeInstanceOf(BeforeSuccessorInvalidError)
+    expect((terminal as BeforeSuccessorInvalidError).data.action).toBe('terminal')
+    const miss = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'st' },
+      title: 't',
+      type: 'doc',
+      before: ['9.9'],
+    }).catch((e: unknown) => e)
+    expect(miss).toBeInstanceOf(TaskNotFoundError)
+    expect((miss as TaskNotFoundError).data.taskRef).toEqual({ slug: 'st', localId: '9.9' })
+  })
+
+  it('插入序组合：before 挂边与 dependsOn 前置共存无环照常建；重复 before 项 → ERR_TASK_EXISTS 回滚', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'mix', status: 'tasks' })
+    seedTask(h!.db, 'mix', '1.1')
+    seedTask(h!.db, 'mix', '1.2')
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'mix' },
+      title: 't',
+      type: 'doc',
+      dependsOn: ['1.1'],
+      before: ['1.2'],
+    })
+    expect(r.beforeSuccessors).toEqual(['mix/1.2'])
+    expect(
+      rows(`SELECT prerequisite_id FROM task_edges WHERE task_id = ?`, r.taskId),
+    ).toEqual([{ prerequisite_id: 't-mix-1.1' }]) // 新任务自己的出边仅 dependsOn
+    const dup = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'mix' },
+      title: 't2',
+      type: 'doc',
+      before: ['1.2', '1.2'],
+    }).catch((e: unknown) => e)
+    expect(dup).toBeInstanceOf(TaskExistsError)
+    expect((dup as TaskExistsError).data.edge).toMatchObject({ taskId: 't-mix-1.2' })
+    expect(rows(`SELECT COUNT(*) AS n FROM tasks WHERE local_id = '1.4'`)).toEqual([{ n: 0 }]) // 回滚零残留
   })
 })

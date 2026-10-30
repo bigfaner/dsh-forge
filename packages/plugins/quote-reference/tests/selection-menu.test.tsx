@@ -402,6 +402,17 @@ describe('selection-menu 全链路（mouseup → 菜单 → 落 chip → 聚焦�
     handle.dispose()
   })
 
+  it('bug: portal 容器零足迹——body 直挂容器脱流（position:fixed），不撑高文档（全窗竖直滚动条根因）', () => {
+    const handle = mount()
+    const portalRoot = document.body.querySelector<HTMLElement>('[data-quote-selection-menu-root]')
+    expect(portalRoot, 'portal 容器未挂到 body').not.toBeNull()
+    // 容器承载官方 Menu 内联 anchor span（列表走 createPortal 直挂 body）——
+    // 静态流内空 span 生成行盒（~21.6px）把 document.scrollHeight 顶出视口。
+    // 判据 = 容器 position:fixed（脱离文档流，零滚动贡献；菜单列表在 body 下不受影响）。
+    expect(getComputedStyle(portalRoot!).position).toBe('fixed')
+    handle.dispose()
+  })
+
   it('dispose：监听摘除 + portal 卸载（mouseup 后不再物化）', () => {
     const handle = mount()
     handle.dispose()

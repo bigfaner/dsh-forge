@@ -71,6 +71,32 @@ describe('sidebarActions（变更绑定——forge:projects/update patch 面）'
       warn.mockRestore()
     }
   })
+
+  it('project-manual-order 拖拽排序写回：一条 update（patch.sortOrders）成功后静默重拉', async () => {
+    const d = deps()
+    sidebarActions(d).onProjectsReorder('p2', { p3: 1, p2: 2, p1: 3 })
+    await vi.waitFor(() => {
+      expect(d.onProjectsMutated).toHaveBeenCalledTimes(1)
+    })
+    expect(d.updateProject).toHaveBeenCalledWith('p2', { sortOrders: { p3: 1, p2: 2, p1: 3 } })
+    expect(d.updateProject).toHaveBeenCalledTimes(1) // 一次拖拽恰一次 update
+  })
+
+  it('project-manual-order 拖拽排序写回：RPC 失败 fail-soft 告警且不重拉（渲染回弹拖拽前序）', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const d = deps({ updateProject: vi.fn().mockRejectedValue(new Error('sortOrders 校验拒绝')) })
+      expect(() => {
+        sidebarActions(d).onProjectsReorder('p1', { p1: 1, p2: 2 })
+      }).not.toThrow()
+      await vi.waitFor(() => {
+        expect(warn).toHaveBeenCalledTimes(1)
+      })
+      expect(d.onProjectsMutated).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })
 
 describe('sidebarActions D45（会话行动作——官方 uiWorkspace/sessions 窄面绑定）', () => {

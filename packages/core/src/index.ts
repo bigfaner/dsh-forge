@@ -120,6 +120,13 @@ export interface CoreContextFace {
   workspaceController: WorkspaceRenamePort
   /** 服务注册官方面：provide(name, value) 返回注销器（Service 基类构造同径）；get 防御读取具名服务 */
   reflect: { provide(name: string, value?: unknown): unknown; get?(name: string): unknown }
+  /**
+   * 官方 cordis 事件混入原型方法（Context.emit 结构缝——(event, payload) 双参形态）。
+   * 原型方法经 cordis Proxy 陷阱放行（Reflect.has 沿原型链命中）；自定义虚构属性
+   * （如 diagEmit）会触发 inject 陷阱装载崩（bug 590b8eff）。缺席 = 诊断缝降级缺席
+   * （onDiag 不桥出，排序写面零 emit 零行为差异）。
+   */
+  emit?: (event: string, payload: unknown) => void
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -138,6 +145,13 @@ const corePlugin: CorePlugin = Object.assign(
         ? createSettingsService({ settingsFile: config.settingsFile, userDataDir: dirname(config.dbFile) })
         : undefined
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
+    // bug 4e25858a / 590b8eff：project-sort 埋点生产接线——core 不 import host，桥出责任在
+    // 装配层：经 ctx 官方事件混入原型方法 emit（真 Context 的合法结构缝——自定义属性会触发
+    // cordis inject 陷阱，见 CoreContextFace.emit 注），child.ts relayDiagOverBridge 已订阅
+    // 'diag/log' 直落 main appender；process 域 'child' 与 diag-events.ts 现行口径一致
+    // （core 插件行仅装载于 child profile 进程）。Root cause: 上一修以虚构属性 diagEmit
+    // 当缝——真 cordis Context Proxy 对未声明属性即抛，插件装载崩（590b8eff）。
+    const diagEmit = ctx.emit
     ctx.reflect.provide(
       'forgeProjects',
       createProjectService({
@@ -145,6 +159,10 @@ const corePlugin: CorePlugin = Object.assign(
         registry: ctx.workspaceRegistry,
         rename: ctx.workspaceController,
         tasksHome: config.tasksHome, // 1.4 缝（可选）——3.4 装配 onRegistered 建库+扫描闭包
+        onDiag:
+          diagEmit === undefined
+            ? undefined
+            : (payload) => diagEmit('diag/log', { ...payload, process: 'child' }),
       }),
     )
     ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）

@@ -55,6 +55,7 @@ export function parseDiagRelayLine(line: string): DiagEventPayload | undefined {
       message: p.message,
       ...(typeof p.stack === 'string' ? { stack: p.stack } : {}),
       ...(typeof p.projectId === 'string' ? { projectId: p.projectId } : {}),
+      ...(typeof p.projectCount === 'number' ? { projectCount: p.projectCount } : {}),
       ...(typeof p.sessionId === 'string' ? { sessionId: p.sessionId } : {}),
       ...(typeof p.cwd === 'string' ? { cwd: p.cwd } : {}),
       ...(typeof p.traceId === 'string' ? { traceId: p.traceId } : {}),

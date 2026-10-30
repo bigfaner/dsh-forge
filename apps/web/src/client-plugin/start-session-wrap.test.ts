@@ -240,4 +240,18 @@ describe('installStartSessionWrap（绑定推导制：入口锚定 workspaceId �
     // 记忆陈旧/清空/多窗覆写与创建归属彻底无关
     expect('selectedTree' in f.deps).toBe(false)
   })
+
+  it('⑪ bug 38d80c5b：显示锚残留他项目树路径 → 归属门视同未选回落主行（回退径不得命中他项目 workspace）', async () => {
+    const FOREIGN_TREE = 'C:/other/.forge/worktrees/wt-x'
+    const f = fixture({
+      currentSessionId: 'S1',
+      items: WS_ROWS([{ workspaceId: 'ws-foreign-tree', path: FOREIGN_TREE, sessionIds: ['S1'] }]),
+      displayed: FOREIGN_TREE, // 全局锚残留：他项目树路径，官方全局行集可命中
+      // DTO 径按 projectRoot 过滤——外来路径天然 miss（对位发现 1 的洞在回退径）
+    })
+    await f.deps.uiWorkspace.startSession!()
+    // 归属门：displayed 不归属 projectRoot → 视同未选回落主行 → 直通根 workspace（非他项目树）
+    expect(f.original).toHaveBeenCalledWith(ROOT_WS_ID)
+    expect(f.worktreeWorkspaceId).toHaveBeenCalledWith(ROOT, ROOT)
+  })
 })

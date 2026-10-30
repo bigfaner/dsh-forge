@@ -93,7 +93,7 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
     if (block.kind === "li") {
       list.push(
         <li key={index}>
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </li>,
       );
       return;
@@ -102,13 +102,27 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
     if (block.kind === "heading") {
       out.push(
         <strong key={index} className="dswf-dlg-md-h">
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </strong>,
+      );
+    } else if (block.kind === "code") {
+      // bug b29f77e7：官方 MarkdownDoc 代码块结构镜像（.md-code-block +
+      // data-code-block-content 锚 + pre>code）——md-mermaid 全局 DOM 增强器
+      // （壳 apply 期启动、观察 body 子树）按内容判据扫此结构出 mermaid 图
+      // （渲染成功旁插 figure 并隐藏原块；失败/非 mermaid 维持代码块现状）。
+      out.push(
+        <div key={index} className="md-code-block" data-code-wrap={block.lang || undefined}>
+          <div data-code-block-content>
+            <pre>
+              <code>{block.source}</code>
+            </pre>
+          </div>
+        </div>,
       );
     } else {
       out.push(
         <div key={index}>
-          <Inline parts={block.inline} />
+          <Inline parts={block.inline ?? []} />
         </div>,
       );
     }
@@ -326,8 +340,8 @@ function MultiSelect(props: {
 /**
  * 来源行（1.67 裁决：降位弱化版——去「生效」徽标：生效序判定依赖当前项目语境，
  * Dialog 无法判定用户在哪个项目；来源行移入头部标识行（名称+slug）下一行，次级色弱化；
- * 内置/user 来源尾缀 ? 图标，hover tooltip 解释来源语义——原生 title 机械（与
- * xg-cnt 计数提示同源的既有 tooltip 机械），project 来源无 ?。
+ * 内置/user 来源尾缀 ? 图标，hover tooltip 解释来源语义——dswf-tip 深色气泡
+ * （DESIGN Tooltip 令牌——原生 title 退役，风格统一裁决 2026-10-26），project 来源无 ?。
  */
 const ORIGIN_HELP: Readonly<Record<string, string>> = {
   plugin: "随插件分发的兜底档案",
@@ -353,9 +367,9 @@ function OriginBar({
       </span>
       {help === undefined ? null : (
         <span
-          className="dswf-dlg-origin-help"
+          className="dswf-dlg-origin-help dswf-tip"
           data-dswf-origin-help={expert.origin}
-          title={help}
+          data-tip={help}
           aria-label={help}
         >
           ?

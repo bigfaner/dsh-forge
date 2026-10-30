@@ -9,6 +9,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { scanExpertRoots, type ExpertOrigin } from "../src/store/scan.js";
 import {
   ExpertWatchManager,
+  isOffChainDirectory,
   makeFsObservedInvalidator,
   waitForInvalidation,
 } from "../src/store/watch.js";
@@ -224,6 +225,35 @@ describe("生命周期与降级", () => {
     it("爬升锚命中应用数据特征目录（node_modules）→ 放弃监听并 warn 一次", async () => {
       const sandbox = await makeSandbox();
       await startExpectAbandoned(join(sandbox, "node_modules", "pkg", ".dsh", "experts"));
+    });
+  });
+
+  // 锚点爬升后 chokidar 触达链外子树（apps/host/userdata.dev 的 Chromium profile
+  // 恒锁文件 Preferences*.tmp）→ fs.watch EBUSY 风暴——链外兄弟子树须整体剪除。
+  describe("bug 4d539d97：锚点爬升链外子树剪枝", () => {
+    it("链外兄弟子树目录 → 剪除（含多级链）", () => {
+      const anchor = join("w", "repo");
+      const rootDir = join(anchor, ".dsh", "experts");
+      expect(isOffChainDirectory(anchor, rootDir, join(anchor, "apps"))).toBe(true);
+      expect(isOffChainDirectory(anchor, rootDir, join(anchor, "apps", "host", "userdata.dev"))).toBe(true);
+      expect(isOffChainDirectory(anchor, rootDir, join(anchor, ".dsh", "other"))).toBe(true);
+      // 锚自身不算链外（watch 根必须放行）
+      expect(isOffChainDirectory(anchor, rootDir, anchor)).toBe(false);
+    });
+
+    it("链上目录前缀与 root 子树 → 放行", () => {
+      const anchor = join("w", "repo");
+      const rootDir = join(anchor, ".dsh", "experts");
+      expect(isOffChainDirectory(anchor, rootDir, join(anchor, ".dsh"))).toBe(false);
+      expect(isOffChainDirectory(anchor, rootDir, rootDir)).toBe(false);
+      // root 后建后的子目录（档案层内）
+      expect(isOffChainDirectory(anchor, rootDir, join(rootDir, "sub"))).toBe(false);
+    });
+
+    it("锚即 root（无爬升）→ 全部放行（保持既有行为）", () => {
+      const anchor = join("w", "repo", "experts");
+      expect(isOffChainDirectory(anchor, anchor, join("w", "repo", "other"))).toBe(false);
+      expect(isOffChainDirectory(anchor, anchor, join("w", "repo", "experts", "sub"))).toBe(false);
     });
   });
 });

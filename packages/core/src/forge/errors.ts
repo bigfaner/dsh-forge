@@ -56,3 +56,30 @@ export class CompensationError extends Error {
     this.data = { ...data, writeError: errMessage(writeCause), deleteError: errMessage(deleteCause) }
   }
 }
+
+/** ERR_PROJECT_SORT_INVALID data 载荷（project-manual-order：sortOrders 全量预检拒绝清单——写前零副作用） */
+export interface ProjectSortInvalidData extends ForgeErrorData {
+  /** sortOrders 中未命中 projects 行的项目 id 清单 */
+  missingProjectIds?: string[]
+  /** 非法值清单（projectId → 原值——非有限安全整数） */
+  invalidOrders?: Array<{ projectId: string; order: unknown }>
+}
+
+/**
+ * patch.sortOrders 批量排序写面校验拒绝（project-manual-order 1.1）：空 map / 含未注册
+ * 项目 id / 非法值（非安全整数）——全量预检于事务前抛出，零行写入（无半写）。
+ */
+export class ProjectSortOrderInvalidError extends Error {
+  readonly code = 'ERR_PROJECT_SORT_INVALID' as const
+  readonly data: ProjectSortInvalidData
+
+  constructor(data: ProjectSortInvalidData) {
+    const parts: string[] = []
+    if (data.missingProjectIds?.length) parts.push(`未注册项目 id：${data.missingProjectIds.join(', ')}`)
+    if (data.invalidOrders?.length)
+      parts.push(`非法 order 值：${data.invalidOrders.map((v) => `${v.projectId}=${String(v.order)}`).join(', ')}`)
+    super(`sortOrders 校验拒绝（全量预检，零写入）：${parts.join('；') || '空 map'}`)
+    this.name = 'ProjectSortOrderInvalidError'
+    this.data = data
+  }
+}

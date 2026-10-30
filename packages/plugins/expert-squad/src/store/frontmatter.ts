@@ -37,6 +37,13 @@ function containsBareMustache(s: string): boolean {
   return s.includes("{{");
 }
 
+// Root cause (bug b29f77e7): 模型/脚本写入档案时常把换行写成字面 `\n` 转义序列——
+// 解析层归一为真实换行，视图渲染/编辑 textarea/persona 注入三面同源生效（编辑保存
+// 后归一结果固化落盘）。无字面 \n 的档案零变化。
+function normalizeEscapedNewlines(s: string): string {
+  return s.includes("\\n") ? s.replaceAll("\\n", "\n") : s;
+}
+
 /** 解析 + 校验一份专家档案全文。失败 reason 恒含 filePath 与具体原因。 */
 export function parseExpertFile(filePath: string, content: string): ExpertParseResult {
   let data: Record<string, unknown>;
@@ -92,8 +99,8 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
     record: {
       name,
       title,
-      description,
-      personaMd,
+      description: normalizeEscapedNewlines(description),
+      personaMd: normalizeEscapedNewlines(personaMd),
       tools,
       skills: data.skills ?? [],
       ...(data.model !== undefined ? { model: data.model } : {}),

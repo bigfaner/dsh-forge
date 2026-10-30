@@ -83,10 +83,11 @@
   padding: 8px 0; /* dsw-raw 原型 .flow 内距刻度 */
 }
 
-/* ── 行：任务轨形态（grid 14px 1fr auto——rail 竖线 + 状态点 + 标题/备注 + 右侧时间）── */
+/* ── 行：任务轨形态（grid 14px 1fr——rail 竖线 + 状态点 + 单列行体；bug 3d05b2d7：
+ *    首行全要素同线[右侧簇 margin-auto 贴右]、次行 title 独占）── */
 .dswf-dep-row {
   display: grid;
-  grid-template-columns: 14px 1fr auto; /* dsw-raw 原型 .frow 轨道刻度 */
+  grid-template-columns: 14px 1fr; /* dsw-raw 原型 .frow 轨道刻度 */
   gap: 8px; /* dsw-raw 原型 .frow 列距刻度 */
   align-items: baseline;
   min-height: 30px;
@@ -223,7 +224,7 @@
 }
 
 .dswf-dep-row-side {
-  align-self: center;
+  margin-left: auto; /* 首行右侧簇贴右（bug 3d05b2d7——与 key/状态徽标同线） */
   display: inline-flex;
   align-items: center;
   gap: 4px; /* dsw-raw 时间/耗时/jump 徽标间距刻度 */
@@ -288,7 +289,7 @@
   justify-content: center;
   gap: var(--dsw-font-xxxs-11-line-height);
   height: 26px;
-  width: 52px; /* DEP_BADGE_WIDTH 同值单源（右上锚右对齐不随计数漂移） */
+  width: 68px; /* DEP_BADGE_WIDTH 同值单源（{completed}/{total} 双数字加宽；右上锚右对齐不随计数漂移） */
   padding: 0 10px; /* dsw-raw 原型角标内距刻度 */
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 999px; /* dsw-raw 官方 Tag 胶囊刻度同值 */

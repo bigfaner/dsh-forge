@@ -235,10 +235,16 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       }),
     })
     expect(apiRes.status, 'commands/execute HTTP 200').toBe(200)
+    // 启动着陆断言（loop-message-consolidation 新口径）：循环级启动 notice 已停铸（1.1），
+    // 转录着陆锚 = 「收到执行请求」turn-trigger 唤醒卡 + forge 事件组卡（循环进度卡）。
     await expect(
       page.locator(CONVERSATION_CONTENT).first(),
-      'RPC 派发指令着陆（转录含启动回执）',
-    ).toContainText('派发循环已启动', { timeout: 60_000 })
+      '循环启动着陆（转录含「收到执行请求」唤醒卡）',
+    ).toContainText('收到执行请求', { timeout: 60_000 })
+    await expect(
+      page.locator('[data-dswf-event-entries]').first(),
+      '循环进度组卡着陆（forge · 任务循环事件）',
+    ).toContainText('任务循环事件', { timeout: 60_000 })
 
     // ── mobile 相（连接前置到循环运行窗——实时刷新必须采样自运行期；chromium iPhone 上下文）──
     const { networkInterfaces } = await import('node:os')
@@ -368,6 +374,8 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     expect(distinctRows > 1 || settledDuringSampling, '运行期行数递增（面板实时更新；结算先行时以满行样本 + mobile 实时面为证）').toBe(true)
     const turnsDuring = new Set(samples.slice(0, -1).map((s) => s.turns))
     console.log(`[walk112] turn-fold values during run = ${[...turnsDuring].join(',')}`)
+    // 消息面新口径（1.1 注入面裁剪）：运行期零模型回合——逐事件不唤醒、不产 turn。
+    expect(Math.max(...samples.map((s) => s.turns)), '循环运行期零模型回合（turns=0）').toBe(0)
     await clipShot(page, panel, join(WALKTHROUGH, 'web-expanded-light.png'))
     // 剪裁空区兜底（悬浮面板 fixed 定位可离视口——1.17 实证）：产物过小则全窗重拍
     if (existsSync(join(WALKTHROUGH, 'web-expanded-light.png')) && readFileSync(join(WALKTHROUGH, 'web-expanded-light.png')).length < 4096) {
@@ -417,6 +425,8 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
     writeFileSync(join(WALKTHROUGH, 'diag-message-face.html'), `<!-- entriesCount=${String(diag.entriesCount)} -->\n${diag.groups.join('\n')}\n${diag.transcriptHtmlSample}`)
     meta.messageFaceEntries = { entriesCount: diag.entriesCount, groups: diag.groups }
     console.log(`[walk112] message-face entries count = ${String(diag.entriesCount)}`)
+    // 消息面新口径：循环全程恰一张 forge 事件组卡（1.5 真机实测 entries=1——零逐事件追加）。
+    expect(diag.entriesCount, '消息面恰一张组卡（循环进度卡单卡口径）').toBe(1)
     const foldCount = await page.locator('.turn-fold').count()
     console.log(`[walk112] turn-fold count = ${String(foldCount)}`)
     meta.turnFoldCount = foldCount
@@ -472,6 +482,23 @@ test('@web-e2e @loop-event-delivery 1.12 真机走查：web 五项交互 + 消�
       `结算收敛（执行中/阻塞/待执行/已中断 全 0 + 任务行全终态；末次读数 = ${JSON.stringify(settledStats)}）`,
     ).toBe(true)
     await page.waitForTimeout(3_000)
+    // 结算卡新口径（1.1 结算径定型）：结算消息为 turn-trigger 折叠卡（官方 TurnTriggerNodeView
+    // 收起态不挂载正文）——自末张向前逐张展开，取含「任务概要」的结算卡断言按 slug 分组：
+    // 组首状态计数 + 每任务行 `slug/local-id 标题 — 终态 · 耗时`（容忍结算后继 wakeup 卡
+    // ——如评审 subagent 消息——排在末位；状态计数容忍派生 fix 任务，不钉具体数）。
+    const triggerCards = page.locator('[data-turn-trigger]')
+    const triggerCount = await triggerCards.count()
+    let settleBody = ''
+    for (let i = triggerCount - 1; i >= 0 && settleBody === ''; i--) {
+      const card = triggerCards.nth(i)
+      await card.locator('button').first().click()
+      const txt = (await card.textContent()) ?? ''
+      if (txt.includes('任务概要')) settleBody = txt
+    }
+    expect(settleBody, '结算 turn-trigger 卡展开含「任务概要」段（turn-trigger cards = ' + String(triggerCount) + '）').not.toBe('')
+    writeFileSync(join(WALKTHROUGH, 'diag-settlement-text.txt'), settleBody)
+    expect(settleBody, '结算按 slug 分组（组首状态计数）').toMatch(/（完成 \d+ · 阻塞 \d+）/)
+    expect(settleBody, '结算任务行（slug/local-id 标题 — 终态 · 耗时）').toMatch(/led-walk112-prop\/[\d.]+\s+.+ — 完成 · \S+/)
     await fullShot(page, join(WALKTHROUGH, 'web-settled-light.png'))
     meta.screenshots = screenshotResults
     writeFileSync(join(WALKTHROUGH, 'meta.json'), JSON.stringify(meta, null, 2))

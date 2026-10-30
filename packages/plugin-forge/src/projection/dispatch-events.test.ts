@@ -3,7 +3,7 @@
 //   - 六字段齐备（dispatch-loop 同构）+ declare-module 键身份锚；
 //   - apply 只认 'forge/progress'：他类型/畸形载荷恒同引用返回（registry Object.is 契约）；
 //   - 载荷累积：taskTitle/scenario/at/workerSessionId 等字段透传；
-//   - 规模上界：entries 封顶 N=200、total 全量计数；
+//   - 规模上界：entries 封顶 N=500、total 全量计数；
 //   - 恢复：stateSchema 种子重放（checkpoint 冷读链）+ viewSchema 校验全绿。
 import { describe, expect, it } from 'vitest'
 import {
@@ -39,7 +39,7 @@ describe('键面 pin（dispatch-loop 同构——六字段 + declare-module 合�
     expect(unit.key).toBe('forge-dispatch-events')
     expect(FORGE_DISPATCH_EVENTS_STATE_VERSION).toBe(1)
     expect(unit.stateVersion).toBe(1)
-    expect(FORGE_DISPATCH_EVENTS_WINDOW_SIZE).toBe(200)
+    expect(FORGE_DISPATCH_EVENTS_WINDOW_SIZE).toBe(500)
     expect(unit.stateSchema).toBeDefined()
     expect(typeof unit.init).toBe('function')
     expect(typeof unit.apply).toBe('function')
@@ -142,14 +142,14 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
   })
 })
 
-describe('规模上界：entries 封顶 N=200、total 全量计数', () => {
-  it('折叠 250 条：entries 恒 200（尾部最新窗口）、total = 250', () => {
-    const events = Array.from({ length: 250 }, (_, i) => progress({ at: i + 1 }))
+describe('规模上界：entries 封顶 N=500、total 全量计数', () => {
+  it('折叠 600 条：entries 恒 500（尾部最新窗口）、total = 600', () => {
+    const events = Array.from({ length: 600 }, (_, i) => progress({ at: i + 1 }))
     const state = fold(events)
     expect(state.entries).toHaveLength(FORGE_DISPATCH_EVENTS_WINDOW_SIZE)
-    expect(state.total).toBe(250)
-    expect(state.entries[0]?.at).toBe(51) // 头部最旧被裁剪
-    expect(state.entries[199]?.at).toBe(250) // 尾部最新
+    expect(state.total).toBe(600)
+    expect(state.entries[0]?.at).toBe(101) // 头部最旧被裁剪
+    expect(state.entries[499]?.at).toBe(600) // 尾部最新
     expect(unit.stateSchema.parse(state)).toEqual(state)
   })
 })

@@ -244,3 +244,63 @@ describe('AC5 records 表追加 verb=updateTask 审计行（actor=plugin-tool）
     ])
   })
 })
+
+describe('AC6 blocked 卡 depends_on 改写后同事务补跑恢复判定（提案 §2.2-1）', () => {
+  it('删光未满足前置 → blocked 同事务恢复 pending + auto-restore 记录（actor=core）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'tasks' })
+    const t = seedTask(h!.db, 'fx', '1.1', { status: 'completed' })
+    const done = seedTask(h!.db, 'fx', '1.2', { status: 'completed' })
+    const stuck = seedTask(h!.db, 'fx', '1.3', { status: 'pending' })
+    seedTask(h!.db, 'fx', '2.1', { status: 'blocked' })
+    seedEdge(h!.db, 't-fx-2.1', t)
+    seedEdge(h!.db, 't-fx-2.1', done)
+    seedEdge(h!.db, 't-fx-2.1', stuck)
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fx', localId: '2.1' }, dependsOn: ['1.1'] })
+    // 同事务恢复 pending + 快照所见即所得
+    expect(snap.taskStatus).toBe('pending')
+    expect(h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`)
+      .get('t-fx-2.1')).toEqual({ task_status: 'pending' })
+    // auto-restore 记录落时间线（actor='core'，blocked→pending）
+    expect(
+      rows(`SELECT verb, from_status, to_status, actor FROM task_records WHERE task_id = 't-fx-2.1'`),
+    ).toEqual([
+      { verb: 'auto-restore', from_status: 'blocked', to_status: 'pending', actor: 'core' },
+      { verb: 'updateTask', from_status: null, to_status: null, actor: 'plugin-tool' },
+    ])
+    // 边不删（满足 = 读时派生）
+    expect(rows(`SELECT prerequisite_id FROM task_edges WHERE task_id = 't-fx-2.1'`)).toEqual([
+      { prerequisite_id: t },
+    ])
+  })
+
+  it('保留未满足前置 → 保持 blocked、零 auto-restore 记录（不报错）', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'tasks' })
+    seedTask(h!.db, 'fx', '1.1', { status: 'completed' })
+    seedTask(h!.db, 'fx', '1.2', { status: 'pending' }) // 未满足前置
+    seedTask(h!.db, 'fx', '2.1', { status: 'blocked' })
+    seedEdge(h!.db, 't-fx-2.1', 't-fx-1.1')
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fx', localId: '2.1' }, dependsOn: ['1.1', '1.2'] })
+    expect(snap.taskStatus).toBe('blocked')
+    expect(h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`)
+      .get('t-fx-2.1')).toEqual({ task_status: 'blocked' })
+    expect(rows(`SELECT verb FROM task_records WHERE task_id = 't-fx-2.1' AND verb = 'auto-restore'`)).toEqual([])
+  })
+
+  it('非 depends_on 改写（仅字段）不触发恢复判定；pending 卡改依赖不恢复不记录', async () => {
+    const update = svc()
+    seedFeature(h!.db, { slug: 'fx', status: 'tasks' })
+    seedTask(h!.db, 'fx', '1.1', { status: 'completed' })
+    const blocked = seedTask(h!.db, 'fx', '2.1', { status: 'blocked' })
+    seedEdge(h!.db, blocked, 't-fx-1.1')
+    // 前置全满足但只改 title（未动 depends_on）→ 不补跑，保持 blocked
+    const snap = await update({ projectId: P(), taskRef: { slug: 'fx', localId: '2.1' }, title: '只改题' })
+    expect(snap.taskStatus).toBe('blocked')
+    seedTask(h!.db, 'fx', '3.1', { status: 'pending' })
+    await update({ projectId: P(), taskRef: { slug: 'fx', localId: '3.1' }, dependsOn: ['1.1'] })
+    expect(rows(`SELECT verb, actor, from_status, to_status FROM task_records WHERE task_id = 't-fx-3.1'`)).toEqual([
+      { verb: 'updateTask', actor: 'plugin-tool', from_status: null, to_status: null },
+    ])
+  })
+})

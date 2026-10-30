@@ -37,11 +37,42 @@ interface WaiterTaskRow {
 }
 
 /**
+ * 单 waiter 恢复判定（提案 task-pause-primitive §2.2-1——runRestoreHook 与 updateTask 补跑
+ * 共用的单一实现）：waiter 存在且 blocked 且前置**全** ∈ 满足集 {completed, skipped} →
+ * blocked→pending + auto-restore 记录（actor='core'）并返回其 TaskRef；否则原样返回 null。
+ * **边不删**（满足 = 读时派生）。调用方保证：事务内执行（满足集终态已落库）。
+ */
+export function restoreBlockedWaiter(
+  db: Database.Database,
+  waiterId: string,
+  now: string,
+): TaskRef | null {
+  const waiter = db
+    .prepare<unknown[], WaiterTaskRow>(`SELECT id, slug, local_id, task_status FROM tasks WHERE id = ?`)
+    .get(waiterId)
+  if (waiter === undefined || waiter.task_status !== 'blocked') return null // 只动 blocked（pending/in_progress 不需恢复）
+  const statusById = db.prepare<unknown[], { task_status: TaskStatus }>(`SELECT task_status FROM tasks WHERE id = ?`)
+  const prereqs = db
+    .prepare<unknown[], { prerequisite_id: string }>(`SELECT prerequisite_id FROM task_edges WHERE task_id = ?`)
+    .all(waiterId)
+  const allSatisfied = prereqs.every((p) => {
+    const status = statusById.get(p.prerequisite_id)?.task_status
+    return status !== undefined && (SATISFYING_TASK_STATUSES as readonly string[]).includes(status)
+  })
+  if (!allSatisfied) return null // 前置全满足才恢复（§6-4 满足集——rejected 不满足）
+  db.prepare(`UPDATE tasks SET task_status = 'pending', updated_at = ? WHERE id = ?`).run(now, waiterId)
+  db.prepare(
+    `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
+     VALUES (?, 'auto-restore', 'blocked', 'pending', 'core', ?, ?)`,
+  ).run(waiterId, now, now)
+  return { slug: waiter.slug, localId: waiter.local_id }
+}
+
+/**
  * 恢复钩子（C3：与 submitTask 钩子同族——2.4 submit.ts 复用本导出，单一实现）。
  * 语义（db-schema §4「(submit 钩子)」行 + §6-5/§6-19）：反查 idx_edges_prerequisite 取
- * 后继 → 后继 blocked 且前置**全** ∈ 满足集 {completed, skipped} → blocked→pending +
- * auto-restore 记录（actor='core'）；**边不删**（满足 = 读时派生）；非 blocked 后继不动。
- * 调用方保证：事务内执行 + 满足集终态已落库（本钩子只反查不改判定集）。
+ * 后继 → 逐个走 restoreBlockedWaiter 判定（blocked ∧ 前置全满足 → pending + auto-restore
+ * 记录 actor='core'）。调用方保证：事务内执行 + 满足集终态已落库（本钩子只反查不改判定集）。
  */
 export function runRestoreHook(
   db: Database.Database,
@@ -50,34 +81,10 @@ export function runRestoreHook(
   const waiterIds = db
     .prepare<unknown[], WaiterEdgeRow>(`SELECT task_id FROM task_edges WHERE prerequisite_id = ? ORDER BY task_id`)
     .all(input.satisfiedTaskId)
-  if (waiterIds.length === 0) return []
-
-  const waiterById = db.prepare<unknown[], WaiterTaskRow>(
-    `SELECT id, slug, local_id, task_status FROM tasks WHERE id = ?`,
-  )
-  const statusById = db.prepare<unknown[], { task_status: TaskStatus }>(`SELECT task_status FROM tasks WHERE id = ?`)
-  const prereqIdsOf = db.prepare<unknown[], { prerequisite_id: string }>(
-    `SELECT prerequisite_id FROM task_edges WHERE task_id = ?`,
-  )
-  const restoreWaiter = db.prepare(`UPDATE tasks SET task_status = 'pending', updated_at = ? WHERE id = ?`)
-  const insertAutoRestore = db.prepare(
-    `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
-     VALUES (?, 'auto-restore', 'blocked', 'pending', 'core', ?, ?)`,
-  )
-
   const restored: TaskRef[] = []
   for (const { task_id: waiterId } of waiterIds) {
-    const waiter = waiterById.get(waiterId)
-    if (waiter === undefined || waiter.task_status !== 'blocked') continue // 只动 blocked（pending/in_progress 不需恢复）
-    const prereqs = prereqIdsOf.all(waiterId)
-    const allSatisfied = prereqs.every((p) => {
-      const status = statusById.get(p.prerequisite_id)?.task_status
-      return status !== undefined && (SATISFYING_TASK_STATUSES as readonly string[]).includes(status)
-    })
-    if (!allSatisfied) continue // 前置全满足才恢复（§6-4 满足集——rejected 不满足）
-    restoreWaiter.run(input.now, waiterId)
-    insertAutoRestore.run(waiterId, input.now, input.now)
-    restored.push({ slug: waiter.slug, localId: waiter.local_id })
+    const ref = restoreBlockedWaiter(db, waiterId, input.now)
+    if (ref !== null) restored.push(ref)
   }
   return restored
 }
@@ -153,4 +160,27 @@ export async function transitionTask(deps: TasksVerbDeps, input: TransitionTaskI
   // 事务提交后 emitTasksChanged（四域写后事件——单写闭包单事件，恢复钩子内聚不另发）
   deps.events.emitTasksChanged(input.projectId)
   return snapshot
+}
+
+/** pauseTask 转移服务入参（task-pause-primitive §二-2——reason 必带） */
+export interface PauseTaskInput {
+  readonly projectId: string
+  readonly taskId: string
+  /** 暂停理由（审计落任务执行时间线——必带，空白拒绝） */
+  readonly reason: string
+}
+
+/**
+ * pauseTask 转移闭包（task-pause-primitive §二-2）：in_progress → suspended，复用 human 面
+ * transitionTask 单事务闭包全量语义（提前校验 + reason 必带 + transition 记录 + 恢复钩子 +
+ * 相位重算 + 写后事件单发），actor 恒 'core'——暂停由 agent 原语发起，审计归因与实际通道一致。
+ * in_progress→suspended 经 human 面目标集（from≠to 任意）放行，不占用 agent 面矩阵格。
+ *
+ * **调用方竞态收口契约（Hard Rule）**：本闭包只做状态落库——调用方（loop driver pause 动作）
+ * 必须**先摘 `record.inFlight` 再 abort** worker 执行（stop 面已实证的竞态收口序，
+ * `plugin-forge/src/loop/driver.ts:1061-1063`），abort 完成后才调用本闭包落 suspended；
+ * 循环同步进入 LoopRecord.suspended 挂起态堵死重领窗口。
+ */
+export async function pauseTask(deps: TasksVerbDeps, input: PauseTaskInput): Promise<TaskSnapshot> {
+  return transitionTask(deps, { projectId: input.projectId, taskId: input.taskId, toStatus: 'suspended', reason: input.reason, actor: 'core' })
 }

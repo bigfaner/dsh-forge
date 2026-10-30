@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
 import { isMigrationTamperedError, MigrationTamperedError, UnsupportedSchemaVersionError, isUnsupportedSchemaVersionError } from './errors.js'
 import { openDatabase } from './open.js'
-import { MIGRATIONS } from './schema.js'
+import { MIGRATIONS, SCHEMA_VERSION } from './schema.js'
 
 import { withTransaction } from './transaction.js'
 import { isParseableDateStyle } from '../testutil/date-assertions.js'
@@ -183,19 +183,20 @@ describe('AC3 schema_meta 前向门', () => {
     const rows = db.prepare<unknown[], { version: number; applied_at: string }>(
       `SELECT version, applied_at FROM schema_meta`,
     ).all()
-    expect(rows.map((r) => r.version)).toEqual([1, 2])
+    expect(rows.map((r) => r.version)).toEqual([1, 2, SCHEMA_VERSION])
     for (const r of rows) expect(isParseableDateStyle(r.applied_at)).toBe(true)
     db.close()
 
     const db2 = openDatabase(path)
-    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 2 })
+    expect(db2.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 3 })
     db2.close()
   })
 
   it('version 超支持上限 → 明确拒绝打开（含两端版本号的 typed error）', () => {
     const path = dbPath()
     const db = openDatabase(path)
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (3, '2099-01-01T00:00:00.000Z')`).run()
+    const beyond = SCHEMA_VERSION + 1
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, '2099-01-01T00:00:00.000Z')`).run(beyond)
     db.close()
 
     expect(() => openDatabase(path)).toThrowError(UnsupportedSchemaVersionError)
@@ -204,10 +205,10 @@ describe('AC3 schema_meta 前向门', () => {
     } catch (e) {
       expect(isUnsupportedSchemaVersionError(e)).toBe(true)
       const err = e as UnsupportedSchemaVersionError
-      expect(err.currentVersion).toBe(3)
-      expect(err.supportedVersion).toBe(2)
-      expect(err.message).toContain('3')
-      expect(err.message).toContain('2')
+      expect(err.currentVersion).toBe(beyond)
+      expect(err.supportedVersion).toBe(SCHEMA_VERSION)
+      expect(err.message).toContain(String(beyond))
+      expect(err.message).toContain(String(SCHEMA_VERSION))
     }
   })
 
@@ -219,7 +220,7 @@ describe('AC3 schema_meta 前向门', () => {
     raw.close()
 
     const db = openDatabase(path)
-    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 2 })
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM schema_meta`).get()).toEqual({ n: 3 })
     const tables = db
       .prepare<unknown[], { name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
       .all()
@@ -270,7 +271,8 @@ describe('openDatabase 参数化迁移序列（M2 1.2：工作区库独立版本
   it('参数序列的版本门独立于中央版本：库内 version 超出参数上限即拒绝', () => {
     const path = dbPath()
     const db = openDatabase(path, { migrations: altMigrations, schemaVersion: 1 })
-    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (3, '2099-01-01T00:00:00.000Z')`).run()
+    const beyond = SCHEMA_VERSION + 1
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, '2099-01-01T00:00:00.000Z')`).run(beyond)
     db.close()
 
     // 同一库：中央默认与参数序列各自按自身上限拒绝（typed error 版本门独立）
@@ -434,7 +436,7 @@ describe('迁移指纹守卫：记录 / 校验 / 篡改拒开 / 回填幂等', (
     const rows = db.prepare<unknown[], { version: number; digest: string }>(
       `SELECT version, digest FROM migration_digests`,
     ).all()
-    expect(rows.map((r) => r.version)).toEqual([1, 2])
+    expect(rows.map((r) => r.version)).toEqual([1, 2, SCHEMA_VERSION])
     for (const r of rows) expect(r.digest).toMatch(/^[0-9a-f]{64}$/)
     db.close()
   })

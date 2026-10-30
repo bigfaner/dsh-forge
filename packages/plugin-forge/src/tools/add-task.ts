@@ -70,6 +70,8 @@ export interface AddTaskToolArgs {
   readonly vars?: readonly string[]
   /** 依赖的自然键 localId 清单（同容器前置声明——同容器边约束） */
   readonly depends_on?: readonly string[]
+  /** 后继 localId 清单（task-pause-primitive §2.1 插入序——单事务建任务 + 各后继补 dependsOn 新边） */
+  readonly before?: readonly string[]
   /** fix/disc 链源（TaskRef 两显式参 = sourceTask 平铺——与 source_slug 同 slug；成对给） */
   readonly source_task_slug?: string
   readonly source_task_local_id?: string
@@ -113,6 +115,7 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
     estimated_time?: string
     vars?: string[]
     depends_on?: string[]
+    before?: string[]
     source_task_slug?: string
     source_task_local_id?: string
     block_source?: boolean
@@ -144,6 +147,8 @@ export function parseAddTaskArgs(args: unknown): AddTaskToolArgs {
   }
   const dependsOn = optionalStringArray(a, 'depends_on', TOOL)
   if (dependsOn !== undefined) out.depends_on = dependsOn
+  const before = optionalStringArray(a, 'before', TOOL)
+  if (before !== undefined) out.before = before
   const acceptanceCriteria = optionalStringArray(a, 'acceptance_criteria', TOOL)
   if (acceptanceCriteria !== undefined) out.acceptance_criteria = acceptanceCriteria
   if (source !== undefined) {
@@ -167,6 +172,11 @@ const ADD_TASK_OUTPUT_SCHEMA = withFailureVariant({
     slug: { type: 'string', description: 'container slug of the task (natural key part 1)' },
     localId: { type: 'string', description: 'per-container local key (natural key part 2; fix-N/disc-N for chained tasks)' },
     reused: { type: 'boolean', description: 'true = dedup hit on an existing fix task (no new row)' },
+    beforeSuccessors: {
+      type: 'array',
+      items: { type: 'string' },
+      description: "Natural keys ('slug/localId') of successors the new task was inserted before (present when before was given).",
+    },
   },
   required: ['taskId', 'slug', 'localId', 'reused'],
 })
@@ -175,9 +185,15 @@ const ADD_TASK_OUTPUT_SCHEMA = withFailureVariant({
 function renderAddTaskResult(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
   if (isForgeToolFailure(value)) return formatFailure(value)
   const v = value as AddTaskResult
+  const lines = [`- taskId: ${v.taskId}`]
+  if (v.beforeSuccessors !== undefined && v.beforeSuccessors.length > 0) {
+    lines.push(
+      `- inserted before: ${v.beforeSuccessors.join(', ')} — each now waits on the new task (out of the ready set until it completes)`,
+    )
+  }
   return formatOk(
     v.reused ? `Task ${v.slug}/${v.localId} already exists (fix dedup) — reused, no new row` : `Task ${v.slug}/${v.localId} added`,
-    [`- taskId: ${v.taskId}`],
+    lines,
   )
 }
 
@@ -238,6 +254,12 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           items: { type: 'string' },
           description: 'Local ids of prerequisite tasks in the same container.',
         },
+        before: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Local ids of successor tasks in the same container: the new task is created and each successor gains a depends_on edge on it in one transaction (insertion ordering). Successors must be pending/blocked/suspended; in_progress successors are rejected (pauseTask first), interrupted go through the human channel.',
+        },
         source_task_slug: {
           type: 'string',
           description: 'Slug of the chain source task (pair with source_task_local_id; same value as source_slug).',
@@ -271,6 +293,7 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           ...(parsed.estimated_time !== undefined ? { estimatedTime: parsed.estimated_time } : {}),
           ...(parsed.vars !== undefined ? { vars: varsEntriesToRecord(parsed.vars) } : {}),
           ...(parsed.depends_on !== undefined ? { dependsOn: [...parsed.depends_on] } : {}),
+          ...(parsed.before !== undefined ? { before: [...parsed.before] } : {}),
           ...(parsed.source_task_slug !== undefined && parsed.source_task_local_id !== undefined
             ? { sourceTask: { slug: parsed.source_task_slug, localId: parsed.source_task_local_id } }
             : {}),

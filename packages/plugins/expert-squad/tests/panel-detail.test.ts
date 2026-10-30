@@ -153,6 +153,21 @@ describe("personaBlocks（查看态 Markdown 分块）", () => {
       },
     ]);
   });
+
+  // bug b29f77e7：``` 围栏 → code 块（lang + 原文 source）；围栏体不做行内解析。
+  it("bug b29f77e7: 围栏代码块分块（lang 透传 + 源原样；未闭合围栏兜底到末尾）", () => {
+    const blocks = personaBlocks("前文\n```mermaid\nflowchart LR\n  A-->B\n```\n后文");
+    expect(blocks).toEqual([
+      { kind: "para", inline: [{ t: "text", v: "前文" }] },
+      { kind: "code", lang: "mermaid", source: "flowchart LR\n  A-->B" },
+      { kind: "para", inline: [{ t: "text", v: "后文" }] },
+    ]);
+    // 未闭合围栏：余下行为 code 块（不吞前后文语义）
+    const unclosed = personaBlocks("```mermaid\nflowchart TD\n  A-->B");
+    expect(unclosed).toEqual([
+      { kind: "code", lang: "mermaid", source: "flowchart TD\n  A-->B" },
+    ]);
+  });
 });
 
 // ---- 控制器状态机 -----------------------------------------------------------
@@ -472,10 +487,11 @@ describe("provider/model 成对编辑（1.10）", () => {
 function renderDialog(overrides: {
   mode?: "view" | "edit";
   enabled?: boolean;
+  personaMd?: string;
   errors?: Partial<ExpertDraft extends never ? never : Record<string, string | undefined>>;
 } = {}): string {
   const ctl = new ExpertDetailController(noMutations());
-  ctl.open(entry({ enabled: overrides.enabled ?? true }));
+  ctl.open(entry({ enabled: overrides.enabled ?? true, ...(overrides.personaMd !== undefined ? { personaMd: overrides.personaMd } : {}) }));
   if ((overrides.mode ?? "view") === "edit") ctl.startEdit();
   return renderToStaticMarkup(
     React.createElement(ExpertDetailDialog, {
@@ -504,6 +520,22 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("工具白名单（子会话强制生效）");
     expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');
+  });
+
+  // bug b29f77e7：人设围栏 → 官方 .md-code-block 结构（data-code-block-content 锚 +
+  // pre>code 源）——md-mermaid 全局 DOM 增强器（壳 apply 期启动、观察 body 子树）
+  // 按此结构出图（mermaid fence → 旁插 figure + 隐藏原块）；非 mermaid 围栏 = 普通代码块。
+  it("bug b29f77e7: 人设围栏渲染为官方 .md-code-block 结构（增强器出图契约面）", () => {
+    const html = renderDialog({
+      personaMd: "## 信条\n```mermaid\nflowchart LR\n  A-->B\n```\n```bash\npnpm lint\n```",
+    });
+    // 增强器结构契约：块选择器 + 内容锚 + pre（源 = textContent）
+    expect(html).toContain('class="md-code-block"');
+    expect(html).toContain("data-code-block-content");
+    expect(html).toContain("<pre><code>flowchart LR\n  A--&gt;B</code></pre>");
+    expect(html).toContain("<pre><code>pnpm lint</code></pre>");
+    // mermaid 块带 infostring 标记（非 mermaid 同构——判据纯内容在增强器侧）
+    expect(html.match(/md-code-block/g)?.length).toBe(2);
   });
 
   it("头部启停钮：查看态在场（启用中 → 禁用；已禁 → 启用 + meta 同步）；编辑态隐藏；foot 区移除", () => {

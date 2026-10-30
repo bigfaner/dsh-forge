@@ -147,6 +147,19 @@
   font: var(--dsw-font-s-14);
 }
 
+/* ── 项目行拖拽态（project-manual-order 1.2——DESIGN.md 无拖拽专属令牌，取既有
+ * .dswf-sidebar-* 行语言令牌族：拖拽行弱化 opacity、落点行 business-primary 内描边 +
+ * 行悬浮 tint = focus-ring 同刻度，不新造视觉词汇） ── */
+.dswf-sidebar-project[data-dswf-dragging] .dswf-sidebar-project-row {
+  opacity: 0.5;
+}
+
+.dswf-sidebar-project[data-dswf-drop-target] .dswf-sidebar-project-row {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
 /* 标题区伸缩（官方 projectRow .projectText flex:1 刻度——DisclosureRow 文本面两枚
  * class 钩承载：TextShimmer 根占满行余宽 + 内容面摊平，行尾动作才有右对齐锚点） */
 .dswf-sidebar-project .dswf-sidebar-project-content {
@@ -374,10 +387,12 @@
 /* ── S7 改版·R2 派发循环会话行左缘标记（run-tasks-host-command 决策 #30——1.8 文字徽标
  * 退役，行左缘 2-3px 即循环状态；规格准绳 = 预览工件 walkthrough/
  * loop-visual-marker-preview-v2.html 变体 R2[十六进制为占位，此处全映射 design tokens]。
- * 数据 = 账本行 projectionValues['forge-dispatch-loop'] 窄读（sessionLoopBadge），
+ * 数据 = 账本行 projectionValues['forge-dispatch-events'] 窄读（sessionLoopBadge，
+ * §2.4 判据换源——旧 forge-dispatch-loop 投影退役），
  * 记账见 ForgeWorkspacePanel.tsx SessionLoopEdgeFade 文档块。形态：running = 蓝色连续
- * 流光（渐变 background-position 动画——CSS-only 合成器友好，仅活循环行有动画）；
- * starting/stopping = 琥珀静态左缘；非活循环族 = 零渲染。语义层退至 hover/aria
+ * 流光（渐变 background-position 动画——CSS-only 合成器友好，仅 running 行有动画）；
+ * suspended = 琥珀静态左缘；terminal = 灰质静态左缘且持续保留（D2：终态标识一直
+ * 不消失）；窗口退化未知 = 零渲染。语义层退至 hover/aria
  * （行 aria-label = 任务源 slug + 状态词；D30 零原生 title 纪律延续） ── */
 .dswf-sidebar-session[data-dswf-session-loop] {
   overflow: hidden; /* 左缘标记随行圆角收敛（radius-md 内切——流光不戳出圆角） */
@@ -390,7 +405,11 @@
   left: 0;
   width: 3px; /* dsw-raw 预览页 R2 左缘刻度（2-3px 档——取 3px 扫视可见性） */
   pointer-events: none;
-  background: var(--dsw-alias-state-warn-primary); /* starting/stopping = 突击琥珀静态左缘 */
+  background: var(--dsw-alias-state-warn-primary); /* suspended = 突击琥珀静态左缘 */
+}
+
+.dswf-sidebar-session-loopedge[data-dswf-session-loop-edge='terminal'] {
+  background: var(--dsw-alias-label-tertiary); /* 终态 = 灰质静态左缘（持续保留——D2） */
 }
 
 .dswf-sidebar-session-loopedge[data-dswf-session-loop-edge='running'] {

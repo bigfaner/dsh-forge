@@ -36,6 +36,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'recordImplCheckpoint', // 机械⑥实现检查点三工具——仅主 agent 面（记录/查询/跨容器清单）
   'queryImplCheckpoint',
   'listImplCheckpoints',
+  'pauseTask', // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
   'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
 ]
 

@@ -31,9 +31,20 @@ export const PANEL_CSS = `
 .dswf-search { font: var(--dsw-font-xs-13); padding: 0 ${T.pad20}; height: ${T.lh20}; width: 170px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-search::placeholder { color: var(--dsw-alias-label-tertiary); }
 .dswf-search:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
-/* 状态筛选 select（native select 基座 + dswf 令牌包装——官方 primitives 无同语义 Select） */
-.dswf-status-select { font: var(--dsw-font-xs-13); padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
-.dswf-status-select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+/* 筛选单选下拉（native select 退役——面板内 msel 视觉词汇统一承载，风格统一裁决 2026-10-26；
+   交互四加固复用 msel 单点：先测量隐藏 / 视口封顶 / 等值短路 / 锚定跟随） */
+.dswf-select { position: relative; }
+.dswf-select-box { font: var(--dsw-font-xs-13); display: inline-flex; align-items: center; gap: 6px; padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
+.dswf-select-box:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+.dswf-select-caret { font-size: 10px; color: var(--dsw-alias-label-caption); }
+.dswf-select-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 100%; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); overflow: auto; }
+.dswf-select-option { font: var(--dsw-font-xs-13); text-align: left; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); white-space: nowrap; }
+.dswf-select-option:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.dswf-select-option.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }
+/* dswf-tip 悬浮全文提示（DESIGN Tooltip 令牌——深色气泡；原生 title 退役，风格统一裁决 2026-10-26） */
+.dswf-tip { position: relative; }
+.dswf-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: none; padding: 4px ${T.gap8}; border-radius: 6px; background: var(--dsw-alias-tooltip-bg); color: #fff; font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; white-space: nowrap; pointer-events: none; z-index: 40; }
+.dswf-tip:hover::after { display: block; }
 .dswf-btn { font: var(--dsw-font-xs-13); font-weight: 500; padding: 0 ${T.pad20}; height: ${T.lh20}; border: none; border-radius: ${T.r8}; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-btn-primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); }
 .dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
@@ -75,13 +86,17 @@ export const PANEL_CSS = `
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
 .dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
-.dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
+.dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); white-space: pre-wrap; } /* 简介/归一后可含真实换行（bug b29f77e7） */
 .dswf-dlg-seg { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); margin-top: ${T.gap8}; }
 .dswf-dlg-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .dswf-dlg-md { font: var(--dsw-font-s-14); line-height: var(--dsw-font-s-14-line-height); color: var(--dsw-alias-label-primary); }
 .dswf-dlg-md ul { margin: 2px 0 2px 18px; padding: 0; }
 .dswf-dlg-md-h { display: block; margin-top: ${T.gap8}; font-weight: 500; }
 .dswf-dlg-md code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
+/* 围栏代码块（官方 .md-code-block 结构镜像——bug b29f77e7；mermaid fence 由全局增强器出图后隐藏原块，figure 样式随包 docs.css .dswf-doc-mermaid 族） */
+.dswf-dlg-md .md-code-block { margin: ${T.gap8} 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); overflow: hidden; }
+.dswf-dlg-md .md-code-block pre { margin: 0; padding: ${T.gap8} ${T.pad12}; overflow-x: auto; font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); line-height: ${T.lh18}; }
+.dswf-dlg-md .md-code-block pre code { background: none; padding: 0; border-radius: 0; font-size: inherit; }
 .dswf-dlg-field { display: flex; flex-direction: column; gap: 6px; }
 .dswf-dlg-field > label { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; color: var(--dsw-alias-label-caption); }
 .dswf-dlg-input { font: var(--dsw-font-s-14); padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
@@ -108,8 +123,6 @@ export const PANEL_CSS = `
 .dswf-xgroup { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .xg-head { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
 .xg-name { font: var(--dsw-font-xxs-12); font-weight: 500; color: var(--dsw-alias-label-secondary); font-family: var(--ds-font-family-code); }
-.xg-spread { margin-left: auto; border: none; background: transparent; color: var(--dsw-alias-state-business-primary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); padding: 0; }
-.xg-spread:hover { text-decoration: underline; }
 /* 来源角标（三态文案 项目/用户/内置；语义 alias 点色，色底经 color-mix 降饱和） */
 .origin-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; margin-left: auto; white-space: nowrap; }
 .origin-badge.origin-project { color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
@@ -124,13 +137,14 @@ export const PANEL_CSS = `
 .dswf-xshadow .xs-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dswf-xshadow .xs-updated { color: var(--dsw-alias-label-caption); flex: none; }
 .dswf-xshadow .xs-mark { margin-left: auto; color: var(--dsw-alias-label-caption); flex: none; }
-/* 展开对比视图（字段对齐表——差异格 warn 高亮） */
-.dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); }
+/* 对比表（唯一消费面 = 详情 Dialog 对比态——外框退役，Dialog body 已有容器框架） */
+.dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .cmp-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }
 .cmp-table th, .cmp-table td { padding: 4px ${T.gap8}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; }
 .cmp-table th { font-weight: 400; color: var(--dsw-alias-label-caption); white-space: nowrap; }
 .cmp-table td .chip { margin-right: 4px; }
-.cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); }
+/* 差异格高亮增强（warn 底 + 左指示条 + 主标签色文字——差异点一眼可辨） */
+.cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-label-primary); }
 .cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
 /* ── 来源行降位（1.61 ① + 1.67 裁决：去生效标、入头部弱化、? tooltip）── */
 .dswf-dlg.wide { width: 880px; } /* ⑥ 对比态宽体：宽于详情 Dialog 680px 刻度（视觉稿正本） */
@@ -139,11 +153,6 @@ export const PANEL_CSS = `
 .dswf-dlg-origin-lead { color: var(--dsw-alias-label-caption); }
 .dswf-dlg-origin-help { flex: none; width: 14px; height: 14px; line-height: 14px; text-align: center; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 50%; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); cursor: var(--dsh-cursor-help, help); }
 .dswf-dlg-origin-masked { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
-.dswf-cmp-pick { display: flex; align-items: center; gap: ${T.gap8}; flex-wrap: wrap; }
-.dswf-cmp-pick-lead, .dswf-cmp-pick-note { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); }
-.dswf-cmp-pick-note { margin-left: auto; }
-.dswf-cmp-chip { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; padding: 0 ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.pill}; background: transparent; color: var(--dsw-alias-label-secondary); cursor: var(--dsh-cursor-pointer, pointer); }
-.dswf-cmp-chip[data-cmp-selected="true"] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
 .dswf-cmp-pick-list { display: flex; flex-direction: column; gap: ${T.gap8}; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .dswf-cmp-pick-list > b { color: var(--dsw-alias-label-primary); }
 .dswf-cmp-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xs-13); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }

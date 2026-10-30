@@ -84,6 +84,26 @@ function containedSegments(rootDir: string, path: string): string[] | undefined 
   return child.split(sep);
 }
 
+/**
+ * 锚点爬升下的链外子树剪枝（bug 4d539d97）：root 缺失使锚爬至更上层目录时，
+ * chokidar 会以深度预算监听锚下全部子树——链外兄弟子树（如仓内
+ * apps/host/userdata.dev 的 Chromium profile，含恒锁的 Preferences*.tmp）
+ * 被 fs.watch 触达即 EBUSY。只放行「root 链上的目录前缀」与 root 自身子树，
+ * 链外同级目录整体剪除（递归遍历与事件面都不触达）。锚即 root（无爬升）
+ * 时空链 → 全放行，保持既有行为。
+ */
+export function isOffChainDirectory(anchorDir: string, rootDir: string, path: string): boolean {
+  const chain = containedSegments(anchorDir, rootDir);
+  if (chain === undefined || chain.length === 0) return false;
+  const segments = containedSegments(anchorDir, path);
+  if (segments === undefined || segments.length === 0) return false;
+  const depth = Math.min(segments.length, chain.length);
+  for (let i = 0; i < depth; i += 1) {
+    if (segments[i] !== chain[i]) return true;
+  }
+  return false;
+}
+
 /** fs/observed actor 是否为首方变更工具（edit/write，语义同 skill-filesystem）。 */
 function mutationToolName(actor: unknown): "edit" | "write" | undefined {
   if (actor === undefined || actor === null || typeof actor !== "object" || !("name" in actor)) {
@@ -207,12 +227,14 @@ export class ExpertWatchManager {
       ignoreInitial: true,
       depth,
       atomic: true,
-      // 锚点爬升可能落在超大目录（如仓根）——剪枝对 flat .md 语义永不相干的依赖
-      // 目录（node_modules/.git），初始遍历与事件面不受影响（这些目录内不可能出现
-      // root 链上的路径）。
+      // 锚点爬升可能落在超大目录（如仓根）——剪枝对 flat .md 语义永不相干的路径：
+      // 常驻依赖目录（node_modules/.git）与 root 链以外的子树（bug 4d539d97：链外
+      // 恒锁文件如 Chromium profile 的 Preferences*.tmp 会引发 EBUSY watch 风暴）。
       ignored: (path: string, stats?: { isDirectory(): boolean }) =>
         stats?.isDirectory() === true &&
-        (basename(path) === "node_modules" || basename(path) === ".git"),
+        (basename(path) === "node_modules" ||
+          basename(path) === ".git" ||
+          isOffChainDirectory(anchor, rootDir, path)),
       awaitWriteFinish: {
         stabilityThreshold: this.options.stabilityThresholdMs ?? 100,
         pollInterval: this.options.pollIntervalMs ?? 20,

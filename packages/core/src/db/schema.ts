@@ -23,7 +23,7 @@ export interface Migration {
 }
 
 /** 本应用支持的 schema 版本上限（版本门：库内 version 超出即拒绝打开）。 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 /**
  * worktree_dir 存量行回填语句（纯 SQL——默认绝对路径相对各行 ws_path 解析 `.forge/worktrees/`：
@@ -128,6 +128,20 @@ export const MIGRATIONS: readonly Migration[] = [
         columnGuard: { table: 'projects', column: 'worktree_dir' },
       },
       WORKTREE_DIR_BACKFILL_SQL,
+    ],
+  },
+  {
+    // v3（project-manual-order 1.1）：projects 新增 sort_order 整数列（默认 NULL——手动
+    // 排序值；NULL = 未手动排序，读面排序垫底、组内按 created_at, id 注册序补位）。
+    // 无回填：存量行保持 NULL（零扰动——存量布局语义即「未手动排序」）。守卫式 ALTER
+    // （列已在场谱系跳过——v2 先例同构）；写面 = updateProject patch.sortOrders 全量重编号
+    // （1..n），读面 = listProjects 四键字典序（sort_order IS NULL, sort_order, created_at, id）。
+    version: 3,
+    statements: [
+      {
+        sql: `ALTER TABLE projects ADD COLUMN sort_order INTEGER DEFAULT NULL`,
+        columnGuard: { table: 'projects', column: 'sort_order' },
+      },
     ],
   },
 ]

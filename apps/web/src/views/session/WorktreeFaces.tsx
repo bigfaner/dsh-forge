@@ -14,6 +14,7 @@
 // 改道预铸，create 失败走官方 createFailed toast）；点选 = 纯选中态 + 点选时点跨分支确认
 // （1.19 语义回归），1.34 闩锁与「不再提示」语义平移。
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { setSelectedTreeDisplay } from '../../state/selected-tree-window.js'
 import { openWorkspaceFace } from '../../state/open-workspace-face.js'
 import { beginWorktreeSwitch, isWorktreeSwitchPending, subscribeWorktreeSwitch } from '../../state/worktree-switch-gate.js'
@@ -67,11 +68,15 @@ const rowsOf = (result: Awaited<ReturnType<ForgeRpcClient['worktree']['list']>>)
     present: entry.present,
   }))
 
-/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */interface WorktreeListPhase {
+/** forge:worktree/list 拉取相位（isGit 能力位 + 行集 + 所配目录——能力位条件渲染单源） */
+interface WorktreeListPhase {
   readonly state: 'loading' | 'ready' | 'error'
   readonly isGit: boolean
   readonly rows: ReturnType<typeof rowsOf>
   readonly worktreeDir?: string
+  /** 行集归属根（bug 70188b91——projectRoot 变更与 list 往返异步竞态：效应以
+   *  phase.root === projectRoot 判「清单与项目配对」，错配帧不消费不回填） */
+  readonly root?: string
 }
 
 const emptyPhase: WorktreeListPhase = { state: 'loading', isGit: false, rows: [] }
@@ -144,6 +149,14 @@ export function ForgeHeroWorktreeMount({
   useEffect(() => {
     setSelectedTreeDisplay(localSelectedPath)
   }, [localSelectedPath])
+  // bug 70188b91：projectRoot 变更（hero 弹层切项目——不经 applySelection）即清本地选中
+  // 投影。残留路径在新项目行集必被陈旧自愈判「盘上失配」：伪失效 notice + 强切主行
+  // （绕过分支锚定链），且 list 异步窗口内 window 锚停留旧项目树路径——startSession
+  // 无参径跨项目错绑（bug 38d80c5b）的触发源。host lastSelection 按 projectRoot 分键
+  // 不受影响；回填效应按新项目 selected/锚定链重新落定（零编排）。
+  useEffect(() => {
+    setLocalSelectedPath(undefined)
+  }, [projectRoot])
   // 1.30 选中树推送（forge:worktree/select——host 选中记忆单源：建会话通道创建时点
   // 消费【bug ff324cad 创建即绑选中树】+ 首条消息必绑重路由兜底。fire-and-forget，path
   // 缺席 = 清除 host 侧该项目选中记忆）。缺席通道（旧 host）fail-soft。
@@ -235,17 +248,9 @@ export function ForgeHeroWorktreeMount({
     [phase, projectRoot, pushSelection, makeRpc],
   )
 
-  // 建树自动选中（createFollowup）专用：纯显示态落定——零会话副作用（1.29 spec「建树零
-  // 新增会话」语义，bug 9d2b7e6a 懒物化只随用户点选显式意图走）。开户时点 = 用户后续
-  // 点选 chip / hero 发送（startSession wrap 显示真源路由）。
-  const applySelectionDisplayOnly = useCallback(
-    (path: string): void => {
-      setRiskConfirmedLatch((prev) => riskLatchReselect(prev, path))
-      pushSelection(path)
-      setLocalSelectedPath(path)
-    },
-    [pushSelection],
-  )
+  // 建树自动选中（createFollowup）与手动点选共用 applySelection 完整链路（bug 97d3cd9e
+  // 收口——纯显示态捷径退役，1.29「建树零新增会话」随之退役：主视图切新树 blank 为官方
+  // openWorkspace 复用语义，显示 = 实际生效状态）。
 
   // 点选 = 纯选中态：跨分支风险（选中行 branch ≠ 主行 branch）在点选时点确认（1.19）；
   // 同分支零风险直通。判定源 = 清单行 branch；闩锁/「不再提示」旁路弹框分支。
@@ -275,6 +280,7 @@ export function ForgeHeroWorktreeMount({
   // （host 建会话通道消费选中记忆——创建时点即绑选中树，缺席重路由兜底）。
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧（旧项目清单 × 新项目根）不回填
     let alive = true
     makeRpc()
       .worktree.selected({ projectRoot })
@@ -295,6 +301,7 @@ export function ForgeHeroWorktreeMount({
   const [staleNoticeName, setStaleNoticeName] = useState<string | null>(null)
   useEffect(() => {
     if (phase.state !== 'ready' || !phase.isGit || projectRoot === null) return
+    if (phase.root !== projectRoot) return // bug 70188b91：错配帧不判自愈（旧清单 × 新根必误判）
     const reset = staleSelectionResetOf(phase.rows, localSelectedPath)
     if (!reset.stale) return
     setStaleNoticeName(reset.worktreeName ?? null)
@@ -313,6 +320,7 @@ export function ForgeHeroWorktreeMount({
       .then((result) => {
         setPhase({
           state: 'ready',
+          root: projectRoot,
           isGit: result.isGit,
           rows: rowsOf(result),
           worktreeDir: result.worktreeDir,
@@ -411,7 +419,11 @@ export function ForgeHeroWorktreeMount({
           // 判定新树「盘上失配」，误弹失效 toast 并把三层选中态（含 host 选中记忆）清回主树，
           // 首条消息必绑重路由随之回落项目根（会话落 main）。跟进次序收口：清单刷新先于
           // 选中态落定（createFollowup 单源），自愈判定永远面对含新树的行集。
-          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelectionDisplayOnly })
+          // bug 97d3cd9e Root cause: 建树自动选中曾走纯显示态（applySelectionDisplayOnly）
+          // ——主视图 retain 旧树 blank，直接发送消息会话绑到上一个 worktree（WYSIWYG 违例）。
+          // 收口 = 与手动点选同链路（applySelection：openWorkspace + 切换闸——composer 随
+          // 创建敛棋系新树）；1.29「建树零新增会话」随本裁决退役（用户裁决 2026-10-28）。
+          await createFollowup(createdPath, { refresh, onSelectConfirmed: applySelection })
         })
         .catch((error: unknown) => {
           // 失败不静默：表单保持打开（createOpen 不动）+ 错误呈现进弹窗错误行
@@ -419,7 +431,7 @@ export function ForgeHeroWorktreeMount({
         })
         .finally(settle)
     },
-    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelectionDisplayOnly, creating],
+    [projectRoot, phase.worktreeDir, makeRpc, refresh, applySelection, creating],
   )
   const openDelete = useCallback(
     (path: string): void => {
@@ -644,10 +656,42 @@ export function ForgeSessionWorktreeChip({
 /** 一次性关闭记忆（会话粒度模块级集合——刷新即重置，官方一次性 notice 同刻度） */
 const dismissedSealSessions = new Set<string>()
 
+/** 官方 chat 列顶部锚（dsh-client-ui-chat 消息列容器——banner 置顶判定锚） */
+const CHAT_FLOW_ANCHOR = '[data-chat-flow]'
+
+/**
+ * chat 列顶部 portal（bug ed28400a——官方缝核销：conversation/chat 两官方包全 renderSlot
+ * 面无「会话头之下、chat-view 之上」槽位，取官方列容器 `data-chat-flow`（flex column）
+ * 锚 + order:-1 置顶）。锚在场 = portal 呈现于消息列表之上（worktree chip 之下）；
+ * 锚缺席（官方改版/非 chat 相位）= 回落调用方原位渲染（fail-soft 不丢失）。
+ */
+function ChatFlowTop({ children }: { readonly children: ReactNode }): ReactNode {
+  const [target, setTarget] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    const find = (): void => setTarget(document.querySelector<HTMLElement>(CHAT_FLOW_ANCHOR))
+    find()
+    const observer = new MutationObserver(find)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+  if (target === null) return <>{children}</>
+  return createPortal(
+    <div data-dswt-chat-flow-top="" style={{ order: -1, width: '100%' }}>
+      {children}
+    </div>,
+    target,
+    'dswf-chat-flow-top',
+  )
+}
+
 /**
  * 封存提示 overlay（conversation.input.overlay 槽——composer 区官方缝，双通道并列）：
  * ① SealNotice（一次性——关闭后本会话不再呈现）；② SealedComposerPlaceholder（占位文案）。
  * 均提示性视觉；「不可发送」硬保证 = host 发送拦截面（interceptSessionSends）。
+ * branch 漂移 warning banner 语义属会话绑定态——经 ChatFlowTop 呈现在 chat-view 顶部
+ * （bug ed28400a），不再落 composer 区。
  */
 export function ForgeWorktreeSealOverlay({
   sessionId,
@@ -663,9 +707,11 @@ export function ForgeWorktreeSealOverlay({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', rowGap: 'var(--dsw-radius-sm)' }}>
       {/* branch 漂移 warning banner（binding-derivation §2.2——非阻断，切回即消失：判定随
-          seal 渲染现算；与封存通道并列但语义独立） */}
+          seal 渲染现算；与封存通道并列但语义独立；挂载位 = chat-view 顶部 portal） */}
       {phase.branchDrift !== null && (
-        <BranchDriftNotice bindBranch={phase.branchDrift.bindBranch} branch={phase.branchDrift.branch} />
+        <ChatFlowTop>
+          <BranchDriftNotice bindBranch={phase.branchDrift.bindBranch} branch={phase.branchDrift.branch} />
+        </ChatFlowTop>
       )}
       {phase.sealed && (
         <>

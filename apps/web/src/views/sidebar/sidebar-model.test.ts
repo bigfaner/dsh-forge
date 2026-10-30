@@ -5,6 +5,9 @@ import { normalizeFsPath } from '@dsh-forge/path-key'
 import type { ProjectSummary } from '@dsh-forge/contracts'
 import {
   buildSidebarTree,
+  FORGE_LOOP_SCENARIO_PHASE,
+  loopPhaseOfEntry,
+  projectSortOrdersPatchOf,
   relativeTimeLabel,
   sessionDotState,
   sessionLoopAriaLabel,
@@ -17,6 +20,7 @@ import {
   sidebarFilterOf,
   sidebarFlatFilterOf,
   sidebarFlatRowsOf,
+  sidebarProjectReorderOf,
   sidebarSectionLabelOf,
   sidebarSessionVisibility,
   sidebarViewOfPick,
@@ -636,9 +640,9 @@ describe('sidebarSectionLabelOf（段头标签——官方 groupBy 切换同型�
   })
 })
 
-// ─────────────────────────── S7 派发循环会话徽标（run-tasks-host-command 1.8——SC8 兜底面数据面） ───────────────────────────
+// ─────────────────────────── S7 派发循环会话徽标（§2.4 判据换源：forge-dispatch-events 投影窄读派生三态） ───────────────────────────
 
-describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——活循环族徽标派生）', () => {
+describe('sessionLoopBadge（forge-dispatch-events 投影键账本行窄读——三态徽标派生）', () => {
   /** 账本行构造（projectionValues = 上行宿主投影整值注入位） */
   function ledgerRow(projectionValues: unknown): LedgerSessionRow {
     return {
@@ -649,37 +653,129 @@ describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——�
     }
   }
 
-  it('活循环族（starting/running/stopping）→ 徽标随行（status + slug 原样透传）', () => {
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'feat-x', status: 'running' } }))).toEqual({
+  /** 进度条目构造（载荷消费切片——scenario/verb 驱动映射判定） */
+  function entry(overrides: { sourceSlug?: string; verb?: string; status?: string; scenario?: string; at?: number } = {}): unknown {
+    return {
+      sourceSlug: 'feat-x',
+      verb: 'claim',
+      status: 'running',
+      at: 1_700_000_000_000,
+      ...overrides,
+    }
+  }
+
+  it('场景码 → 三态映射表：FORGE_PROGRESS_SCENARIOS 单源 24 值全键覆盖（终态族 4 + suspend 族 4 + 其余 running）', () => {
+    const phases = Object.values(FORGE_LOOP_SCENARIO_PHASE)
+    expect(Object.keys(FORGE_LOOP_SCENARIO_PHASE)).toHaveLength(24)
+    expect(phases.filter((p) => p === 'terminal')).toEqual(['terminal', 'terminal', 'terminal', 'terminal'])
+    expect(phases.filter((p) => p === 'suspended')).toHaveLength(4)
+    // 终态族逐值断言（无 "settled"——提案 §2.4 明示）
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/finish-all']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/halt']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/timeout']).toBe('terminal')
+    expect(FORGE_LOOP_SCENARIO_PHASE['loop/stopped']).toBe('terminal')
+    // suspend 族逐场景断言：四径载荷均携 taskKey（driver suspendWithWakeup）= 非 loop 级，
+    // 但驱动器挂起退出待处置 → 循环级效果映射挂起态
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/spawn-rate-limited']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/worker-rate-limited']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/abort-over-limit']).toBe('suspended')
+    expect(FORGE_LOOP_SCENARIO_PHASE['suspend/landing-rejected']).toBe('suspended')
+  })
+
+  /** 投影整值注入（entries/total 包进 forge-dispatch-events 键——账本行 projectionValues 形状） */
+  function view(entries: unknown[]): Record<string, unknown> {
+    return { 'forge-dispatch-events': { entries, total: entries.length } }
+  }
+
+  it('最近事件场景码判定：startup/claim/task/blocked/retry/pool → running；终态族 → terminal', () => {
+    expect(sessionLoopBadge(ledgerRow(view([entry({ scenario: 'startup/from-scratch', verb: 'startup' })])))).toEqual({
       status: 'running',
       slug: 'feat-x',
     })
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: null, status: 'starting' } }))).toEqual({
-      status: 'starting',
-      slug: null,
-    })
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'stopping' } }))).toEqual({
-      status: 'stopping',
-      slug: 'f',
-    })
+    expect(
+      sessionLoopBadge(
+        ledgerRow(view([
+          entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+          entry({ scenario: 'claim/new', verb: 'claim', at: 2 }),
+        ])),
+      ),
+    ).toEqual({ status: 'running', slug: 'feat-x' })
+    // 终态持续保留（D2）：终态事件即最后一枚 → terminal 徽标在列不消失
+    expect(
+      sessionLoopBadge(
+        ledgerRow(view([
+          entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+          entry({ scenario: 'loop/finish-all', verb: 'finish-all', status: 'completed', at: 3 }),
+        ])),
+      ),
+    ).toEqual({ status: 'terminal', slug: 'feat-x' })
   })
 
-  it('非活循环族（idle/stopped/failed）= 零徽标（徽标只标进行中循环——历史派发会话零噪声）', () => {
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'idle' } }))).toBeUndefined()
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'stopped' } }))).toBeUndefined()
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'failed' } }))).toBeUndefined()
+  it('suspend 族 → suspended 琥珀静态缘判定（携 taskKey 的挂起径事件）', () => {
+    expect(
+      sessionLoopBadge(
+        ledgerRow({
+          'forge-dispatch-events': {
+            entries: [
+              entry({ scenario: 'startup/from-scratch', verb: 'startup' }),
+              {
+                sourceSlug: 'feat-x',
+                verb: 'suspend',
+                status: 'blocked',
+                scenario: 'suspend/worker-rate-limited',
+                taskKey: 'feat-x/1.2',
+                at: 2,
+              },
+            ],
+            total: 2,
+          },
+        }),
+      ),
+    ).toEqual({ status: 'suspended', slug: 'feat-x' })
   })
 
-  it('键缺席/值形状漂移/它键投影 = 零徽标（防御读——形状漂移不炸面板）', () => {
+  it('多容器并行按 sourceSlug 归属（slug = 判定事件载荷值）', () => {
+    expect(
+      sessionLoopBadge(
+        ledgerRow({
+          'forge-dispatch-events': {
+            entries: [
+              entry({ sourceSlug: 'feat-a', scenario: 'startup/from-scratch', verb: 'startup' }),
+              entry({ sourceSlug: 'feat-b', scenario: 'loop/halt', verb: 'halt', status: 'blocked', at: 2 }),
+            ],
+            total: 2,
+          },
+        }),
+      ),
+    ).toEqual({ status: 'terminal', slug: 'feat-b' })
+  })
+
+  it('场景码缺席（旧载荷兼容）→ verb 兜底判定', () => {
+    expect(loopPhaseOfEntry({ verb: 'halt' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'timeout' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'finish-all' })).toBe('terminal')
+    expect(loopPhaseOfEntry({ verb: 'suspend' })).toBe('suspended')
+    expect(loopPhaseOfEntry({ verb: 'claim' })).toBe('running')
+    expect(loopPhaseOfEntry({ verb: 'unknown-legacy', scenario: 'not-in-table' })).toBe('running')
+  })
+
+  it('窗口挤出退化：entries 空 + total > 0 → 零徽标（未知，不误报 running）；total = 0 → 零徽标（从未循环）', () => {
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 37 } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 0 } }))).toBeUndefined()
+  })
+
+  it('键缺席/值形状漂移/它键投影/畸形条目 = 零徽标（防御读——形状漂移不炸面板）', () => {
     expect(sessionLoopBadge(ledgerRow(undefined))).toBeUndefined()
     expect(sessionLoopBadge(ledgerRow({}))).toBeUndefined()
     expect(sessionLoopBadge(ledgerRow({ plan: { active: true, pending: false } }))).toBeUndefined()
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': 'garbage' }))).toBeUndefined()
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { status: 42 } }))).toBeUndefined()
-    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-loop': { sourceSlug: 'f', status: 'bogus' } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow('garbage'))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': 'garbage' }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: 'x', total: 1 } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [], total: 'x' } }))).toBeUndefined()
+    expect(sessionLoopBadge(ledgerRow({ 'forge-dispatch-events': { entries: [42, { verb: 'claim' }], total: 2 } }))).toBeUndefined()
   })
 
-  it('buildSidebarTree：活循环徽标随树行携带（账本 projectionValues → 视图行 loop）', () => {
+  it('buildSidebarTree：循环徽标随树行携带（账本 projectionValues → 视图行 loop）', () => {
     const tree = buildSidebarTree({
       projects: [{ id: 'p1', workspaceId: 'w1', name: '支付网关', wsPath: 'Z:/w/p1', archived: false } as never],
       sessions: {
@@ -689,7 +785,12 @@ describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——�
             id: 's-loop',
             displayTitle: '派发会话',
             updatedAt: 1_700_000_000_000,
-            projectionValues: { 'forge-dispatch-loop': { sourceSlug: 'feat-x', status: 'running' } },
+            projectionValues: {
+              'forge-dispatch-events': {
+                entries: [entry({ scenario: 'startup/from-scratch', verb: 'startup' })],
+                total: 1,
+              },
+            },
           },
         },
         phase: 'ready',
@@ -716,25 +817,57 @@ describe('sessionLoopBadge（forge-dispatch-loop 投影键账本行窄读——�
           updatedAt: 300,
           pinned: false,
           archived: false,
-          loop: { status: 'running', slug: 'feat-x' },
+          loop: { status: 'suspended', slug: 'feat-x' },
         },
       ],
     }
     const rows = sidebarFlatRowsOf([node])
-    expect(rows.find((r) => r.sessionId === 's2')?.loop).toEqual({ status: 'running', slug: 'feat-x' })
+    expect(rows.find((r) => r.sessionId === 's2')?.loop).toEqual({ status: 'suspended', slug: 'feat-x' })
     expect(rows.find((r) => r.sessionId === 's1')?.loop).toBeUndefined()
   })
 
-  it('R2 语义层：状态词三态 + aria-label =「任务源 slug + 状态词」（无 slug 回退派发循环词——徽标退役词不消失）', () => {
-    expect(sessionLoopStatusLabel('starting')).toBe('启动中')
+  it('R2 语义层：状态词三态 + aria-label =「任务源 slug + 状态词」（无 slug 回退状态词——徽标退役词不消失）', () => {
     expect(sessionLoopStatusLabel('running')).toBe('派发循环中')
-    expect(sessionLoopStatusLabel('stopping')).toBe('停止中')
+    expect(sessionLoopStatusLabel('suspended')).toBe('循环挂起')
+    expect(sessionLoopStatusLabel('terminal')).toBe('循环已结束')
     expect(sessionLoopAriaLabel({ status: 'running', slug: 'feat-x' })).toBe(
       '任务源 feat-x · 状态 派发循环中',
     )
-    expect(sessionLoopAriaLabel({ status: 'stopping', slug: 'feat-y' })).toBe(
-      '任务源 feat-y · 状态 停止中',
+    expect(sessionLoopAriaLabel({ status: 'terminal', slug: 'feat-y' })).toBe(
+      '任务源 feat-y · 状态 循环已结束',
     )
-    expect(sessionLoopAriaLabel({ status: 'starting', slug: null })).toBe('派发循环启动中')
+    expect(sessionLoopAriaLabel({ status: 'suspended', slug: null })).toBe('循环挂起')
+  })
+})
+
+describe('project-manual-order 1.2（sidebarProjectReorderOf / projectSortOrdersPatchOf——拖拽写回纯函数面）', () => {
+  it('上下换位：拖拽行落入目标槽位（目标行及其后整体后移）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'a', 'c')).toEqual(['b', 'a', 'c', 'd'])
+    expect(sidebarProjectReorderOf(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('零效果面：同行自拖 / 任一 id 不在全序 → null（不产生 update 调用）', () => {
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'ghost', 'a')).toBeNull()
+    expect(sidebarProjectReorderOf(['a', 'b'], 'a', 'ghost')).toBeNull()
+  })
+
+  it('P2 保序子列：归档混排全序中拖拽后，hide 过滤视图序 = 全序的子列投影（归档行序位不丢）', () => {
+    // 全序含归档行（arch）——σ 无归档专属分支
+    const full = sidebarProjectReorderOf(['a', 'arch', 'b', 'c'], 'c', 'a')!
+    expect(full).toEqual(['c', 'a', 'arch', 'b'])
+    // hide 视图（滤除归档）= 全序保序子列
+    const hidden = full.filter((id) => id !== 'arch')
+    expect(hidden).toEqual(['c', 'a', 'b'])
+    // 归档行相对位置未受拖拽扰动（hide 切回 default 后序位不丢）
+    expect(full.indexOf('arch')).toBe(2)
+  })
+
+  it('P3 全量重编号负载：值恰为 1..n 无重复；同 σ 重复产出逐位一致（幂等）', () => {
+    const order = ['p3', 'p1', 'p2']
+    const patch = projectSortOrdersPatchOf(order)
+    expect(patch).toEqual({ p3: 1, p1: 2, p2: 3 })
+    expect(Object.values(patch).sort((a, b) => a - b)).toEqual([1, 2, 3])
+    expect(projectSortOrdersPatchOf(order)).toEqual(patch)
   })
 })

@@ -140,7 +140,8 @@ const P3_TEMPLATE = `【任务循环挂起】
 - 转交用户决定，得到结论后执行上述任一步。
 **续跑**
 - 处理完成后重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>', resume: true)：从暂停处继续，已完成任务不会重跑（未携 resume: true 的触碰不会续接挂起循环）。
-- 处理完成前循环不会推进。`
+- 处理完成前循环不会推进。
+- 处置入口：任意会话凭任务源 <slug> dispatchTask 认领挂起循环继续处置。`
 
 const P9_TEMPLATE = `【任务循环已挂起·处理指引】
 - <slug> 有一个挂起中的任务循环（任务 <taskKey>，原因见上）。

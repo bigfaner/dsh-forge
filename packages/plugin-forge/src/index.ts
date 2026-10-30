@@ -383,6 +383,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
+      // 诊断埋点面（bug 33728995④——AGENTS §7：循环里程碑经官方 diag/log 事件域 emit，
+      // child-relay 转发 main 落盘；process 标签在此补齐——驱动器窄投影不含该位）
+      diag: (payload) => {
+        ;(ctx as unknown as { emit(event: string, payload: unknown): void }).emit('diag/log', { ...payload, process: 'child' })
+      },
       // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
       // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
       // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
@@ -651,6 +656,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.recordImplCheckpoint),
       ctx.tools.register(tools.queryImplCheckpoint),
       ctx.tools.register(tools.listImplCheckpoints),
+      ctx.tools.register(tools.pauseTask),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；

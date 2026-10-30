@@ -3,6 +3,13 @@
 // declare-module 合并 + ProjectionDefinition 纯折叠面）。折叠既有 command/run +
 // command/done 会话日志事件派生 {sourceSlug, status}——零新增记录（fold 只读，零 append）。
 //
+// ⚠ 退役标注（loop-consol-flywheel-improvement §2.4——2026-10-28）：本投影折叠的判据源
+// （/run-dag-tasks 斜杠指令事件）已断供——3b 改造后循环正门改为 dispatchTask/stopTaskLoop
+// 工具，指令事件不再入日志 → 本投影对正门启动的循环恒 idle，侧栏徽标消费面已改读
+// `forge-dispatch-events` 投影（sidebar-model sessionLoopBadge，场景码映射三态）。
+// 本折叠面保留不删——仅供历史兼容读（存量会话日志的指令事件仍可折叠出历史态），不作为
+// 任何活状态判据。
+//
 // 边界纪律（boundaries 白名单单点收口）：本模块对 @deepseek-ai/dsh-session-projection
 // 仅类型面消费（declare-module 合并目标 + 定义形状 authority + 增广解析锚 import type
 // ——编译擦除，运行期零 import）；devDependency 精确 pin。registry 只鸭子消费 plain

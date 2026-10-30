@@ -19,6 +19,7 @@
 import type {
   AcCriteriaMismatchData,
   AcNotMetData,
+  BeforeSuccessorInvalidData,
   DependenciesUnmetData,
   FilesUnionMismatchData,
   RuntimeEvidenceRequiredData,
@@ -365,6 +366,33 @@ export class FilesUnionMismatchError extends Error {
         `files=${JSON.stringify(data.files)} created=${JSON.stringify(data.created)} modified=${JSON.stringify(data.modified)}`,
     )
     this.name = 'FilesUnionMismatchError'
+    this.data = data
+  }
+}
+
+// ───────────── task-pause-primitive §2.1：addTask before 后继状态守卫 ─────────────
+
+/**
+ * before 后继处不可挂边状态（409）：仅 pending/blocked/suspended 可挂（BEFORE_SUCCESSOR_ALLOWED_
+ * STATUSES）；in_progress 指路「先 pauseTask」、interrupted 指 human 通道、终态指改选——
+ * 失败消息双友好（人类可读 + agent 可据以推进）。
+ */
+export class BeforeSuccessorInvalidError extends Error {
+  readonly code = 'ERR_BEFORE_SUCCESSOR_INVALID' as const
+  readonly data: BeforeSuccessorInvalidData
+
+  constructor(data: BeforeSuccessorInvalidData) {
+    const advice =
+      data.action === 'pauseTask'
+        ? '先对该任务调用 pauseTask（落 suspended）后再重试 before 挂边'
+        : data.action === 'human'
+          ? 'interrupted 任务不在 before 工具面——请走 human 通道（transitionTask）处置'
+          : '后继已终态，插入无意义——请改选未终态后继'
+    super(
+      `before 后继不可挂边：${data.taskRef.slug}/${data.taskRef.localId} 当前 ${data.taskStatus}——${advice}` +
+        `（project ${data.projectId}）`,
+    )
+    this.name = 'BeforeSuccessorInvalidError'
     this.data = data
   }
 }

@@ -22,13 +22,14 @@ function toolDefinitionFiles(dir: string): string[] {
   return readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
 }
 
-/** 机械抽取 tool 名面：`const TOOL = '<name>'` 行（两包 tool 定义件同型单源） */
+/** 机械抽取 tool 名面：`const TOOL = '<name>'` 行 + impl-checkpoint 三员 `const *_TOOL = '<name>'` 形（两包 tool 定义件同型单源） */
 function toolNameLiterals(dir: string): Map<string, string> {
   const names = new Map<string, string>()
   for (const file of toolDefinitionFiles(dir)) {
     const text = readFileSync(join(dir, file), 'utf8')
-    const match = /^const TOOL = '([A-Za-z_][\w]*)'$/m.exec(text)
-    if (match !== null) names.set(file, match[1]!)
+    for (const m of text.matchAll(/^const (?:[A-Z_]+_)?TOOL = '([A-Za-z_][\w]*)'$/gm)) {
+      names.set(`${file}:${m[1]}`, m[1]!)
+    }
   }
   return names
 }
@@ -36,7 +37,7 @@ function toolNameLiterals(dir: string): Map<string, string> {
 describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写落定——drift #1）', () => {
   const coreLiterals = toolNameLiterals(CORE_TOOLS_DIR)
 
-  it('核心包常量面 = 十四员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + 3b stopTaskLoop 停止入口）', () => {
+  it('核心包常量面 = 十五员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + 3b stopTaskLoop + main pauseTask 暂停入口）', () => {
     expect([...FORGE_TOOL_NAMES]).toEqual([
       'addTask',
       'submitTask',
@@ -52,6 +53,10 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
       'resolveBug',
       'listBugs',
       'getBug',
+      'recordImplCheckpoint',
+      'queryImplCheckpoint',
+      'listImplCheckpoints',
+      'pauseTask',
     ])
     expect(FORGE_TOOL_NAMES).toContain('dispatchTask')
   })

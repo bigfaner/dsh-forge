@@ -780,20 +780,20 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
     )
   })
 
-  it('starting/stopping 行 = 琥珀静态左缘（edge 锚随行 + 状态词入 aria）；无 slug = aria 回退派发循环词', () => {
+  it('suspended/terminal 行 = 静态左缘（edge 锚随行 + 状态词入 aria）；无 slug = aria 回退状态词', () => {
     const markup = panel({
       tree: [
         node({
           sessions: [
             {
               sessionId: 's-start',
-              title: '启动会话',
-              savedTitle: '启动会话',
+              title: '挂起会话',
+              savedTitle: '挂起会话',
               status: 'running',
               updatedAt: NOW - 30_000,
               pinned: false,
               archived: false,
-              loop: { status: 'starting', slug: null },
+              loop: { status: 'suspended', slug: null },
             },
             {
               sessionId: 's-stop',
@@ -803,23 +803,58 @@ describe('S7 循环行左缘标记（R2——扫视层归图形，语义层退�
               updatedAt: NOW - 30_000,
               pinned: false,
               archived: false,
-              loop: { status: 'stopping', slug: 'feat-y' },
+              loop: { status: 'terminal', slug: 'feat-y' },
             },
           ],
         }),
       ],
     })
-    expect(markup).toContain('data-dswf-session-loop="starting"')
-    expect(markup).toContain('data-dswf-session-loop-edge="starting"')
-    expect(markup).toContain('data-dswf-session-loop="stopping"')
-    expect(markup).toContain('data-dswf-session-loop-edge="stopping"')
-    expect(markup).toContain('aria-label="派发循环启动中"')
-    expect(markup).toContain('aria-label="任务源 feat-y · 状态 停止中"')
+    expect(markup).toContain('data-dswf-session-loop="suspended"')
+    expect(markup).toContain('data-dswf-session-loop-edge="suspended"')
+    expect(markup).toContain('data-dswf-session-loop="terminal"')
+    expect(markup).toContain('data-dswf-session-loop-edge="terminal"')
+    expect(markup).toContain('aria-label="循环挂起"')
+    expect(markup).toContain('aria-label="任务源 feat-y · 状态 循环已结束"')
   })
 
   it('非活循环行零标记（基线面板零回归——普通会话行语言不变、无锚无边）', () => {
     const markup = panel()
     expect(markup).not.toContain('data-dswf-session-loop')
     expect(markup).not.toContain('dswf-sidebar-session-loopedge')
+  })
+})
+
+describe('project-manual-order 1.2（项目行拖拽——HTML5 draggable + 拖拽态锚）', () => {
+  it('onProjectsReorder 注入 = 项目行可拖拽（draggable + 拖拽态/落点锚随块）', () => {
+    const markup = panel({ onProjectsReorder: () => {} })
+    expect(markup).toContain('draggable="true"')
+    expect(markup).toContain('data-dswf-project="p1"')
+  })
+
+  it('回调缺席 = 行不可拖拽（纯展示件零缺省动作——基线面板零回归）', () => {
+    expect(panel()).not.toContain('draggable="true"')
+  })
+
+  it('flat 态 drag 缝不接（平铺无项目行——SidebarProjectsZone 受控缝直渲染）', () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProjectsZone
+        tree={[node()]}
+        loading={false}
+        currentSessionId={null}
+        projectsPending={false}
+        hasProjects
+        now={NOW}
+        searchOpen={false}
+        onSearchToggle={() => {}}
+        query=""
+        onQueryChange={() => {}}
+        viewMenuOpen={false}
+        onViewMenuOpenChange={() => {}}
+        view={{ groupBy: 'flat', archivedFilter: 'default' }}
+        onViewPick={() => {}}
+        onProjectsReorder={() => {}}
+      />,
+    )
+    expect(markup).not.toContain('draggable="true"')
   })
 })

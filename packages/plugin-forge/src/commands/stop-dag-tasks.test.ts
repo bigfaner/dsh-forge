@@ -31,6 +31,7 @@ function driverStub(activeRecord?: LoopRecord) {
     activeAll: vi.fn(() => [...loops.values()]),
     resume: vi.fn(() => ({ ok: false, code: 'no-active-loop' }) as const),
     stopLoop: vi.fn(async () => ({ ok: false, code: 'no-active-loop', suspended: false, ownerSessionId: '' }) as const),
+    pause: vi.fn(async (_input: { readonly loopId: string; readonly requesterSessionId: string; readonly reason: string }) => ({ ok: false, code: 'no-active-loop', suspended: false, ownerSessionId: '' }) as const),
     dispose: vi.fn(() => {}),
   }
   return { driver, stopInputs, loops }

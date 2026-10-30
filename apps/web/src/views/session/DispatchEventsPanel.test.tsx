@@ -23,6 +23,12 @@ import {
   dispatchEventsDragPosition,
   dispatchEventsOf,
   dispatchFollowKeyOf,
+  dispatchLoopInstanceEntries,
+  dispatchPanelEntriesOf,
+  dispatchPanelTaskCountOf,
+  dispatchWindowLost,
+  isLoopInstanceEndEntry,
+  isLoopInstanceStartEntry,
   dispatchPanelBadgeAnchor,
   dispatchPanelExpandGeometry,
   dispatchPanelBadgeGeometry,
@@ -138,7 +144,7 @@ describe('aggregateDispatchRows（1.16 任务键时间线——每任务最新�
     expect(markup).toContain('data-dswf-dep-row="w-1"')
     expect(markup).toContain('data-dswf-dep-jump')
     expect(markup).toContain('dswf-dep-status-run">执行中')
-    expect(markup).toContain('已启动执行')
+    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染') // 次行 title 独占（bug 3d05b2d7 口径）
   })
 })
 
@@ -291,18 +297,35 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     expect(markup).toContain('data-dswf-dep-running')
     expect(markup).not.toContain('data-dswf-dep-group')
   })
-  it('bug 7114a5a0：任务行统一双行形态——首行 key + 状态徽标 + 耗时（徽标右侧），次行任务名称（过长省略）', () => {
-    const e = entry({ scenario: 'claim/spawned' })
-    const markup = body({ entries: [e], now: e.at + 185_000 })
-    expect(markup).not.toContain('dswf-dep-row-full') // 执行中「完整概要」换行形态退役
-    expect(markup).toContain('dswf-dep-row-key">feat-x/2.4')
-    expect(markup).toContain('dswf-dep-status-run">执行中')
-    // 耗时徽标在首行、位于状态徽标右侧（非 side 列）
-    expect(markup.indexOf('dswf-dep-status-run')).toBeLessThan(markup.indexOf('dswf-dep-row-dur'))
-    // 任务名称走次行截断形态（dswf-dep-row-title ellipsis）
-    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染 · 已启动执行')
+  it('bug 3d05b2d7：任务行首行 = key + 状态徽标 + 时间 + 耗时 + 跳转同线；次行 = title 独占（过长省略，零 detail 混入）', () => {
+    const e = entry({ scenario: 'claim/spawned', workerSessionId: 'w-1' })
+    const markup = body({ entries: [e], now: e.at + 185_000, onOpenWorker: () => {} })
+    expect(markup).not.toContain('dswf-dep-row-full')
+    // 首行同线序：key → 状态徽标 → 时间 → 耗时 → 跳转
+    const keyAt = markup.indexOf('dswf-dep-row-key">feat-x/2.4')
+    const badgeAt = markup.indexOf('dswf-dep-status-run')
+    const timeAt = markup.indexOf('dswf-dep-row-time')
+    const durAt = markup.indexOf('dswf-dep-row-dur')
+    const jumpAt = markup.indexOf('data-dswf-dep-jump')
+    expect(Math.min(keyAt, badgeAt, timeAt, durAt, jumpAt)).toBe(keyAt)
+    expect(badgeAt).toBeLessThan(timeAt)
+    expect(timeAt).toBeLessThan(durAt)
+    expect(durAt).toBeLessThan(jumpAt)
     expect(markup).toContain(`dswf-dep-row-time">${dispatchEventClockLabel(e.at)}`)
     expect(markup).toContain('dswf-dep-row-dur">3分5秒')
+    // 次行 = title 独占（detail 不混入任务行）
+    expect(markup).toContain('dswf-dep-row-title">web 进度流渲染')
+    expect(markup).not.toContain('已启动执行')
+  })
+  it('bug 3d05b2d7：执行中行与终态行同构（同一双行形态——无状态特例分支）', () => {
+    const running = body({ entries: [entry({ scenario: 'claim/spawned' })], now: Date.parse('2026-10-24T14:05:00Z') })
+    const done = body({ entries: [entry({ verb: 'settle', status: 'completed', scenario: 'task/complete' })] })
+    for (const markup of [running, done]) {
+      expect(markup).toContain('dswf-dep-row-head')
+      expect(markup).toContain('dswf-dep-row-title')
+    }
+    expect(running).toContain('dswf-dep-status-run">执行中')
+    expect(done).toContain('dswf-dep-status-done">完成')
   })
   it('bug 7114a5a0：循环级行 = slug + 循环徽标 + action 简要说明（次行）', () => {
     const markup = body({
@@ -391,6 +414,30 @@ describe('DispatchEventsPanelBody 纯渲染（折叠悬浮球）', () => {
     expect(markup).toContain('data-dswf-dep-badge-count')
     expect(markup).toContain('aria-label="展开任务进度面板"')
   })
+  it('小球 {completed}/{total} 双数字（用户裁决 2026-10-30）：completed = 终态行计数、total = 现行总数口径；Tooltip 同口径', () => {
+    const entries = [
+      ...Array.from({ length: 3 }, (_, i) => entry({ status: 'completed' as const, taskKey: `feat-x/${i}` })),
+      entry(),
+    ]
+    const markup = body({ collapsed: true, entries, pending: 10 })
+    // completed = 3（终态行）；total = 3 + 1（执行中）+ 10（pending）= 14——R-Q3 口径不变
+    expect(markup).toContain('data-dswf-dep-badge-count="">3/14')
+    // Tooltip label 由同一组 completed/count 变量构造（SSR 静态标记不出场——portal 交互渲染），
+    // 双数字口径一致性由下方同源聚合对照断言覆盖
+  })
+  it('双数字口径与展开面板同源聚合一致（对照断言）', () => {
+    const entries = [
+      entry({ status: 'completed' as const, taskKey: 'feat-x/1' }),
+      entry({ status: 'interrupted' as const, taskKey: 'feat-x/2' }),
+    ]
+    const pending = 5
+    const total = dispatchPanelTaskCountOf(entries, pending)
+    const completed = dispatchEventStats(entries).completed
+    expect(total).toBe(7)
+    expect(completed).toBe(1)
+    const markup = body({ collapsed: true, entries, pending })
+    expect(markup).toContain(`data-dswf-dep-badge-count="">${completed}/${total}`)
+  })
 })
 
 // ─────────────────── 几何纯函数（锚定/拖移/两态承接） ───────────────────
@@ -416,7 +463,7 @@ describe('几何纯函数（对话列右上锚 + 视口钳制拖移 + 展开/折
     expect(next.top).toBe(4)
   })
   it('悬浮球锚 = 面板右上角；拖移位优先；展开承接角标位', () => {
-    expect(DEP_BADGE_WIDTH).toBe(52)
+    expect(DEP_BADGE_WIDTH).toBe(68)
     const anchor = dispatchEventsAnchor(rects)
     const badge = dispatchPanelBadgeAnchor(anchor)
     expect(badge).toEqual({ left: anchor.left + DEP_WIDTH - DEP_BADGE_WIDTH, top: anchor.top })
@@ -449,5 +496,172 @@ describe('DispatchEventsPanel 装载壳（SSR 首帧——effect 零执行）', 
         <DispatchEventsPanel sessionId="s-1" sessions={sourceOf(ledgerWith({ entries: [entry()], total: 1 }))} />,
       ),
     ).toBe('')
+  })
+})
+
+// ─────────────────── 循环实例边界 + 回放兜底 + 小球口径（loop-message-consolidation 1.3） ───────────────────
+
+describe('循环实例边界标记（启动 ↔ 结算/停止配对）', () => {
+  it('启动标记 = 循环级 startup；终局标记 = 循环级 settle/stop/halt/timeout', () => {
+    expect(isLoopInstanceStartEntry(entry({ taskKey: undefined, taskTitle: undefined, verb: 'startup', scenario: 'startup/from-scratch' }))).toBe(true)
+    expect(isLoopInstanceStartEntry(entry({ verb: 'startup' }))).toBe(false) // 任务级不算
+    expect(isLoopInstanceStartEntry(entry({ taskKey: undefined, taskTitle: undefined, verb: 'claim' }))).toBe(false)
+    for (const verb of ['settle', 'stop', 'halt', 'timeout'] as const) {
+      expect(isLoopInstanceEndEntry(entry({ taskKey: undefined, taskTitle: undefined, verb, status: 'completed' }))).toBe(true)
+      expect(isLoopInstanceEndEntry(entry({ verb, status: 'completed' }))).toBe(false) // 任务级结算不算
+    }
+    expect(isLoopInstanceEndEntry(entry({ taskKey: undefined, taskTitle: undefined, verb: 'loop' }))).toBe(false)
+  })
+})
+
+describe('dispatchLoopInstanceEntries（会话日志回放筛选——按容器圈定本循环实例）', () => {
+  const loopRow = (overrides: Partial<DispatchEventEntry>): DispatchEventEntry => entry({ taskKey: undefined, taskTitle: undefined, ...overrides })
+  const t = Date.parse('2026-10-28T10:00:00Z')
+
+  it('多实例会话：以最近一枚启动为界配对结算——各实例任务正确归属（前轮不混入）', () => {
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      entry({ taskKey: 'feat-x/1.1', at: t + 1 }),
+      entry({ taskKey: 'feat-x/1.1', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 2 }),
+      loopRow({ verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 3 }),
+      loopRow({ verb: 'startup', scenario: 'startup/resume-stopped', at: t + 4 }),
+      entry({ taskKey: 'feat-x/1.2', at: t + 5 }),
+      loopRow({ verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 6 }),
+    ]
+    const replayed = dispatchLoopInstanceEntries(log)
+    expect(replayed.map((e) => e.at)).toEqual([t + 4, t + 5, t + 6])
+    expect(replayed.some((e) => e.taskKey === 'feat-x/1.1')).toBe(false)
+  })
+
+  it('运行中实例（未结算）：区间延伸到日志尾', () => {
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      entry({ taskKey: 'feat-x/1.1', at: t + 1 }),
+      loopRow({ verb: 'loop', scenario: 'pool/pending', at: t + 2 }),
+    ]
+    expect(dispatchLoopInstanceEntries(log)).toHaveLength(3)
+  })
+
+  it('容器筛选：他容器事件不混入本实例区间', () => {
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      entry({ sourceSlug: 'other-slug', taskKey: 'other-slug/9.9', at: t + 1 }),
+      entry({ taskKey: 'feat-x/1.1', at: t + 2 }),
+    ]
+    const replayed = dispatchLoopInstanceEntries(log)
+    expect(replayed.map((e) => e.at)).toEqual([t, t + 2])
+  })
+
+  it('无启动标记（旧会话）= 空数组不回放', () => {
+    expect(dispatchLoopInstanceEntries([entry({ taskKey: 'feat-x/1.1' })])).toEqual([])
+    expect(dispatchLoopInstanceEntries([])).toEqual([])
+  })
+})
+
+describe('dispatchPanelEntriesOf（消费侧兜底装配——窗口丢失时回放重建）', () => {
+  const loopRow = (overrides: Partial<DispatchEventEntry>): DispatchEventEntry => entry({ taskKey: undefined, taskTitle: undefined, ...overrides })
+  const t = Date.parse('2026-10-28T10:00:00Z')
+
+  it('窗口未截断 = 投影窗口原样（total ≤ entries.length）', () => {
+    const view = { entries: [entry()], total: 1 }
+    expect(dispatchWindowLost(view)).toBe(false)
+    expect(dispatchPanelEntriesOf(view, undefined)).toBe(view.entries)
+    expect(dispatchWindowLost({ entries: [entry()], total: 3 })).toBe(true)
+  })
+
+  it('窗口丢失 + 回放源在场 = 本循环实例回放重建（早于窗口的任务行不失）', () => {
+    const windowEntries = [entry({ taskKey: 'feat-x/1.9', at: t + 500 })]
+    const view = { entries: windowEntries, total: 400 }
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      entry({ taskKey: 'feat-x/1.1', at: t + 1 }),
+      entry({ taskKey: 'feat-x/1.9', at: t + 500 }),
+    ]
+    const merged = dispatchPanelEntriesOf(view, log)
+    expect(merged).toHaveLength(3)
+    expect(merged.some((e) => e.taskKey === 'feat-x/1.1')).toBe(true)
+  })
+
+  it('bug 50a5b8dc：多实例会话——回放条数少于窗口也采用（判据=含最新实例启动且覆盖区间，非总长度比较）', () => {
+    // 前轮实例长尾把投影窗口填满（窗口 5 条均属旧实例尾部 + 新实例早期条目），新实例
+    // 回放仅 3 条——总长度比较误弃回放，新实例早期任务行失。
+    const windowEntries = [
+      entry({ taskKey: 'feat-x/1.9', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 96 }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 97 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 101 }),
+      entry({ taskKey: 'feat-x/2.2', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 102 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 103 }),
+    ]
+    const view = { entries: windowEntries, total: 400 }
+    const log = [
+      loopRow({ verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      ...Array.from({ length: 10 }, (_, i) => entry({ taskKey: `feat-x/1.${i + 1}`, at: t + 1 + i })),
+      loopRow({ verb: 'settle', status: 'completed', scenario: 'loop/finish-all', at: t + 97 }),
+      loopRow({ verb: 'startup', scenario: 'startup/resume-stopped', at: t + 100 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 101 }),
+      entry({ taskKey: 'feat-x/2.2', verb: 'claim', status: 'running', scenario: 'task/claim', at: t + 102 }),
+      entry({ taskKey: 'feat-x/2.1', verb: 'settle', status: 'completed', scenario: 'task/complete', at: t + 103 }),
+    ]
+    const merged = dispatchPanelEntriesOf(view, log)
+    expect(merged).toHaveLength(4) // 新实例完整区间（startup + 2.1 + 2.2 + 2.1 结算）
+    expect(isLoopInstanceStartEntry(merged[0] as DispatchEventEntry)).toBe(true)
+    expect(merged.some((e) => e.taskKey === 'feat-x/2.1')).toBe(true)
+    expect(merged.some((e) => e.taskKey === 'feat-x/1.9')).toBe(false) // 前轮实例不混入
+  })
+
+  it('窗口丢失 + 回放源缺席/无启动标记 = 退回窗口（fail-soft 降级现状）', () => {
+    const view = { entries: [entry()], total: 400 }
+    expect(dispatchPanelEntriesOf(view, undefined)).toEqual(view.entries)
+    expect(dispatchPanelEntriesOf(view, [entry({ taskKey: 'feat-x/1.9' })])).toEqual(view.entries)
+  })
+
+  it('跨会话串扰防御：回放不含窗口容器的事件 = 退回窗口', () => {
+    const view = { entries: [entry({ sourceSlug: 'feat-x' })], total: 400 }
+    const log = [
+      loopRow({ sourceSlug: 'other', verb: 'startup', scenario: 'startup/from-scratch', at: t }),
+      entry({ sourceSlug: 'other', taskKey: 'other/9.9', at: t + 1 }),
+    ]
+    expect(dispatchPanelEntriesOf(view, log)).toEqual(view.entries)
+  })
+})
+
+describe('小球口径（投影汇总任务数 = 任务行聚合 + pending 快照）', () => {
+  it('任务键后写覆盖计数 + pending 池级计数；循环级行不计入', () => {
+    const entries = [
+      entry({ taskKey: 'feat-x/1.1', status: 'completed', verb: 'settle' }),
+      entry({ taskKey: 'feat-x/1.1', status: 'completed' }),
+      entry({ taskKey: 'feat-x/1.2', status: 'running' }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'startup', scenario: 'startup/from-scratch' }),
+    ]
+    expect(dispatchPanelTaskCountOf(entries, undefined)).toBe(2)
+    expect(dispatchPanelTaskCountOf(entries, 3)).toBe(5)
+  })
+
+  it('折叠悬浮球数字 = 汇总任务数（非事件条数）', () => {
+    const entries = [
+      entry({ taskKey: 'feat-x/1.1', status: 'completed', verb: 'settle' }),
+      entry({ taskKey: 'feat-x/1.2', status: 'running' }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'startup', scenario: 'startup/from-scratch' }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'loop', scenario: 'pool/pending' }),
+    ]
+    const markup = body({ collapsed: true, entries, pending: 4 })
+    expect(markup).toContain('data-dswf-dep-badge-count')
+    expect(markup).toContain('>1/6</span>') // {completed}/{total}：1 终态行 / 2 任务行 + 4 pending（循环级两行不计）
+  })
+})
+
+describe('循环级行收敛（aggregateDispatchRowItems——后写覆盖单行）', () => {
+  it('多条无 taskKey 事件收敛为最新一行；任务行不受影响', () => {
+    const t = Date.parse('2026-10-28T10:00:00Z')
+    const rows = aggregateDispatchRowItems([
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'startup', scenario: 'startup/from-scratch', note: '从头执行', at: t }),
+      entry({ taskKey: 'feat-x/1.1', at: t + 1 }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'loop', scenario: 'pool/pending', at: t + 2 }),
+      entry({ taskKey: undefined, taskTitle: undefined, verb: 'startup', scenario: 'startup/resume-stopped', note: '接续执行', at: t + 3 }),
+    ])
+    const loopRows = rows.filter((row) => row.entry.taskKey === undefined)
+    expect(loopRows).toHaveLength(1)
+    expect(loopRows[0]?.entry.note).toBe('接续执行')
+    expect(rows.some((row) => row.entry.taskKey === 'feat-x/1.1')).toBe(true)
   })
 })

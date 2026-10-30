@@ -30,6 +30,8 @@ export interface DiagEventPayload {
   cwd?: string
   /** trace_id 显式携带（1.2 跨进程链——child relay/bridge 显式传递；缺省由订阅侧 ALS 读） */
   traceId?: string
+  /** 计数类上下文（就地可得即携带——如 project-sort 批量写面覆盖的项目数） */
+  projectCount?: number
   /** 同文重复折叠计数（12③ 噪音治理——被折叠掉的重复行数；首次行/未折叠缺席） */
   repeat?: number
 }

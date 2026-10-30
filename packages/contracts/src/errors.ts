@@ -5,6 +5,7 @@
 // fix-34 删死常量 ERROR_NAMES 后注释如实），RPC 边界序列化为 RpcErrorPayload，UI 按 code
 // 映射状态（空态/错误条/横幅；未映射码 → 通用错误条兜底——永无裸 code 泄漏）。
 // 定位铁律：纯常量与类型，零逻辑零依赖。
+import type { TaskRef } from './dto/forge.js'
 import type { TaskStatus } from './labels.js'
 
 /** 错误码全集（1–6 行 = P1 面；7–21 行 = M2 面；行序 = Error Handling 表行序；
@@ -61,6 +62,10 @@ export const ERROR_CODES = [
   // ── forge-verification-hardening 机械⑤（submitTask 强制域取证声明校验兜底） ──
   'ERR_RUNTIME_EVIDENCE_REQUIRED', // → RuntimeEvidenceRequiredError：强制域任务（声明运行期装配面）success 结算无真机取证证据亦无债务声明（400；data 带装配面清单）
   'ERR_RUNTIME_EVIDENCE_CONFLICT', // → RuntimeEvidenceConflictError：runtimeEvidence 与 evidenceDebt 并存——取证声明二选一口径歧义（400）
+  // ── task-pause-primitive §2.1（addTask before 后继状态守卫） ──
+  'ERR_BEFORE_SUCCESSOR_INVALID', // → BeforeSuccessorInvalidError：before 后继处不可挂边状态（409；in_progress 指路 pauseTask / interrupted 指 human 通道 / 终态指改选）
+  // ── project-manual-order 1.1（patch.sortOrders 批量排序写面 typed 校验） ──
+  'ERR_PROJECT_SORT_INVALID', // → ProjectSortOrderInvalidError：sortOrders 空 map / 含未注册项目 id / 非法值（非安全整数）——全量预检拒写零副作用（400；data 带缺失与非法清单）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -142,6 +147,16 @@ export interface BugRecurrenceDanglingData {
 }
 
 // ── forge-verification-hardening 机械⑤：submitTask 强制域取证声明校验兜底 data 载荷 ──
+
+/** ERR_BEFORE_SUCCESSOR_INVALID data 载荷：before 后继不可挂边（task-pause-primitive §2.1——
+ *  哪个后继什么态 + 结构化下一步处置：in_progress → pauseTask 先暂停；interrupted → human
+ *  通道；completed/skipped/rejected → terminal 改选未终态后继） */
+export interface BeforeSuccessorInvalidData {
+  readonly projectId: string
+  readonly taskRef: TaskRef
+  readonly taskStatus: TaskStatus
+  readonly action: 'pauseTask' | 'human' | 'terminal'
+}
 
 /** ERR_RUNTIME_EVIDENCE_REQUIRED data 载荷：强制域判定的运行期装配面声明清单（原样带回） */
 export interface RuntimeEvidenceRequiredData {

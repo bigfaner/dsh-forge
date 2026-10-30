@@ -146,7 +146,18 @@ function selectReadyTask(db: Database.Database, source: ContainerRef | undefined
        ORDER BY ${FIX_FIRST}, ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
     )
     .get(...scopeArgs)
-  return ready === undefined ? undefined : taskById(db, ready.id)
+  if (ready !== undefined) return taskById(db, ready.id)
+
+  // ③ gate 弹性兜底（task-pause-primitive §2.2-2）：blocked 的 gate 卡且前置全 ∈ 满足集
+  //    （READY_PREDICATE 同判定）→ 进就绪池；领取时以 'core' actor 补 blocked→pending 转移。
+  //    普通（非 gate）blocked 卡不进——就绪池语义单一（用户裁决永久特判）。
+  const gate = db
+    .prepare<unknown[], { id: string }>(
+      `SELECT t.id FROM tasks t WHERE t.task_status = 'blocked' AND t.task_type = 'gate'${scope} AND ${READY_PREDICATE}
+       ORDER BY ${FIX_FIRST}, ${PRIORITY_RANK}, t.created_at, t.id LIMIT 1`,
+    )
+    .get(...scopeArgs)
+  return gate === undefined ? undefined : taskById(db, gate.id)
 }
 
 /** 前置快照（守卫判定 + BLOCKERS 注入同源——领取瞬间取数） */
@@ -219,6 +230,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     //    显式 taskRef（agent 自然键 UNIQUE 查捞）；盲选 = 本会话 in_progress 重入 → 就绪选择
     //    （M3 2.4：容器限定盲选双轨落地——source_kind + slug 判别，proposal 容器限定照常；
     //    重入同承 scope——他容器挂接行跳过，scoped 派发不劫持全池时代的跨容器活）
+    let gateElastic = false
     let row: TaskStorageRow | undefined
     if (input.adopt !== undefined) {
       row = resolveTaskRef(db, input.projectId, input.adopt)
@@ -226,6 +238,8 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       row = resolveTaskRef(db, input.projectId, input.taskRef)
     } else {
       row = latestInProgressBySession(db, input.sessionId, input.source) ?? selectReadyTask(db, input.source)
+      // 盲选仅 gate 弹性池可达 blocked（pending 池全为 pending）——命中即弹性领取
+      gateElastic = row?.task_status === 'blocked'
     }
     if (row === undefined) return noReadyExit() // Z1 出口（纯读零变更，不发射事件）
 
@@ -238,6 +252,17 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       localId: row.local_id,
       taskStatus: row.task_status,
     })
+
+    // ①¾ gate 弹性补转移（task-pause-primitive §2.2-2）：以 'core' actor 补 blocked→pending
+    //    转移（auto-restore 审计落时间线——复用恢复钩子既有词汇），随后按 pending 正常 claim。
+    if (gateElastic) {
+      db.prepare(
+        `INSERT INTO task_records (task_id, verb, from_status, to_status, actor, created_at, updated_at)
+         VALUES (?, 'auto-restore', 'blocked', 'pending', 'core', ?, ?)`,
+      ).run(row!.id, now, now)
+      db.prepare(`UPDATE tasks SET task_status = 'pending', updated_at = ? WHERE id = ?`).run(now, row!.id)
+      row = { ...row!, task_status: 'pending', updated_at: now }
+    }
 
     // ② 守卫（一切路径——含重入：前置回归即拒）
     const prereqs = readPrerequisiteSnapshot(db, row.id)

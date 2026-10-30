@@ -10,6 +10,7 @@
 // 双主题（明/暗）截图归档 .forge/docs/proposals/loop-event-delivery/walkthrough/1-17/（留盘不进 git）。
 // 形态参照 = 同目录 prototype.html（.panel 任务轨行 + head/live·不经模型 + 统计条）。
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -88,6 +89,15 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
   test.setTimeout(900_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-led-panel-'))
   const wsDir = join(fixtureRoot, WS_NAME)
+  mkdirSync(wsDir, { recursive: true })
+  // 真 git 仓库夹具（project-service worktree janitor 会修剪非 git 根——判例：夹具中途被剪致会话封存；
+  // 配方对齐 walk-112）
+  execFileSync('git', ['init', '-q'], { cwd: wsDir })
+  execFileSync('git', ['config', 'user.email', 'panel@e2e.local'], { cwd: wsDir })
+  execFileSync('git', ['config', 'user.name', 'panel'], { cwd: wsDir })
+  writeFileSync(join(wsDir, 'README.md'), 'led-panel fixture\n')
+  execFileSync('git', ['add', '.'], { cwd: wsDir })
+  execFileSync('git', ['commit', '-q', '-m', 'fixture'], { cwd: wsDir })
   const userData = mkdtempSync(join(tmpdir(), 'dsh-led-panel-ud-'))
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
@@ -150,10 +160,16 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     }
     expect(apiRes.status, 'commands/execute HTTP 200').toBe(200)
     expect(apiBody.result?.value?.result?.text ?? '', 'RPC 循环启动回执（派发循环已启动）').toContain('派发循环已启动')
+    // 启动着陆断言（loop-message-consolidation 新口径）：循环级启动 notice 已停铸（1.1），
+    // 转录着陆锚 = 「收到执行请求」turn-trigger 唤醒卡 + forge 事件组卡（循环进度卡）。
     await expect(
       page.locator(CONVERSATION_CONTENT).first(),
-      'RPC 派发指令着陆（转录含启动回执）',
-    ).toContainText('派发循环已启动', { timeout: 60_000 })
+      '循环启动着陆（转录含「收到执行请求」唤醒卡）',
+    ).toContainText('收到执行请求', { timeout: 60_000 })
+    await expect(
+      page.locator('[data-dswf-event-entries]').first(),
+      '循环进度组卡着陆（forge · 任务循环事件）',
+    ).toContainText('任务循环事件', { timeout: 60_000 })
 
     // ── 面板取证：悬浮球两态 + 展开 head/统计条/任务轨行 ──
     const badge = page.locator(DEP_BADGE).first()
@@ -167,6 +183,20 @@ test('@web-e2e @loop-event-delivery 进度流面板真机走查（RPC 驱动）�
     await expect(page.locator(DEP_STAT), '统计条在场（含待执行桶）').toBeVisible()
     await expect(page.locator(DEP_STAT)).toContainText('待执行')
     await expect(page.locator(DEP_ROW).first(), '任务轨行 ≥ 1（真实 forge/progress 事件）').toBeVisible({ timeout: 120_000 })
+    // 循环进度卡新口径：任务行按 taskKey 后写覆盖原地更新（同一任务零追加行），行含
+    // 启动时间 + 耗时徽标（执行中 = now 起算实时耗时；终态 = startAt→事件时戳定格）。
+    const rowsAtStart = await page.locator(DEP_ROW).count()
+    const firstRow = page.locator(DEP_ROW).first()
+    await expect(firstRow.locator('.dswf-dep-row-time'), '任务行含启动时间').toHaveText(/\d{2}:\d{2}/)
+    const rowStatus0 = await firstRow.getAttribute('data-dswf-dep-status')
+    let rowStatusNow = rowStatus0
+    for (let i = 0; i < 24 && rowStatusNow === 'running'; i++) {
+      await page.waitForTimeout(5_000)
+      rowStatusNow = await firstRow.getAttribute('data-dswf-dep-status')
+    }
+    console.log(`[walkthrough] task row status ${String(rowStatus0)} → ${String(rowStatusNow)}`)
+    await expect(page.locator(DEP_ROW), '任务行原地更新（行数不增——后写覆盖不追加）').toHaveCount(rowsAtStart)
+    await expect(firstRow.locator('.dswf-dep-row-dur'), '任务行含耗时徽标').toBeVisible()
     const rowCount = await page.locator(DEP_ROW).count()
     const jumpCount = await page.locator(DEP_JUMP).count()
     console.log(`[walkthrough] dep rows = ${String(rowCount)} jumps = ${String(jumpCount)}`)
