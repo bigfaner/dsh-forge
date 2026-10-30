@@ -16,6 +16,11 @@
 // 断言结构对齐 dogfood-sc-m3.spec.ts（成链三行 / 任务三件 / audit 100% / logs 串联 /
 // 零 manifest / SC3 只读纪律 / UI 全景一致逐条保留；模型面杂项——provider 注入/凭据
 // 播种——不在回放面）。
+// 停止回执断言豁免（DOM 断言面）：循环停止回执走 host 单点证据（会话记录 command/done，
+// 见 stopLoopWithRetry 注释）——官方 pinned chat-view 在「停止打断活跃流式轮」场景 DOM
+// 事件泵自唤醒模型轮起冻结且跨重试窗不恢复（上游 bug 347531a8，fix-24 取证 2026-10-30：
+// 事件落盘完整仅 DOM 缺席）；渲染层属官方包，AGENTS 1.1 改制红线禁改，正确性 host 单点
+// 已保证（AGENTS 1.1）。
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -31,7 +36,7 @@ import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { readDogfoodAudit, seedDogfoodTaskRow, type DogfoodAuditRecord } from '../../support/replay/dogfood-record.js'
-import { findFixtureSession } from '../../support/session-files.js'
+import { findFixtureSession, waitForSessionEvents } from '../../support/session-files.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel } from '../../support/m3.js'
 import { COMPOSER_INPUT, CONVERSATION_CONTENT, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { writeReplayPlan, type ReplayPlan } from '../../../packages/plugin-forge/src/spawn/seam.js'
@@ -74,8 +79,17 @@ async function openOverviewDockWithRetry(page: import('@playwright/test').Page, 
  * 循环停止重试（fix-13 复跑实证——瞬态窗对策，非放宽断言）：blocked → triage 挂起投影 +
  * ⑩ followup 唤醒轮在途窗内，composer 发送可能不生效（发送键在途禁用）；轮内回执门
  * 原样保留，失败后重发 /stop-dag-tasks（幂等——重复停止零副作用）。
+ * 回执断言面 = 会话记录 command/done（host 单点证据——原 DOM toContainText 豁免：官方
+ * pinned chat-view 在「停止打断活跃流式轮」场景 DOM 事件泵自唤醒模型轮起冻结且跨重试窗
+ * 不恢复，上游 bug 347531a8；fix-24 取证 2026-10-30——command/run → command/done「已停止
+ * 任务源 …」4ms 落盘完整、仅 DOM 缺席；渲染层属官方包，AGENTS 1.1 改制红线禁改）。
  */
-async function stopLoopWithRetry(page: import('@playwright/test').Page, rounds: number): Promise<void> {
+async function stopLoopWithRetry(
+  page: import('@playwright/test').Page,
+  dshHome: string,
+  sessionId: string,
+  rounds: number,
+): Promise<void> {
   let lastCause: unknown
   for (let i = 0; i < rounds; i++) {
     try {
@@ -84,10 +98,15 @@ async function stopLoopWithRetry(page: import('@playwright/test').Page, rounds: 
       await composer.click()
       await composer.fill('/stop-dag-tasks')
       await page.keyboard.press('Enter')
-      await expect(
-        page.locator(CONVERSATION_CONTENT).first(),
-        '循环停止回执（登记表删除——独占释放）',
-      ).toContainText('已停止任务源', { timeout: 20_000 })
+      await waitForSessionEvents(
+        dshHome,
+        sessionId,
+        (events) =>
+          events.some(
+            (e) => e.type === 'command/done' && (e.data?.text ?? '').includes('已停止任务源'),
+          ),
+        20_000,
+      )
       return
     } catch (cause) {
       lastCause = cause
@@ -490,7 +509,8 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     ).toContainText(`/run-dag-tasks ${FEATURE}`, { timeout: 30_000 })
     await awaitPresetHeaderLabel(page, '远征模式')
     const sessionA = findFixtureSession(dshHome, WS_NAME)
-    expect(sessionA, '派发会话 A 落盘开户').toBeDefined()
+    const sessionAId = sessionA?.sessionId
+    expect(sessionAId, '派发会话 A 落盘开户').toBeDefined()
 
     // ── halted 收敛轮询：1.1 claim 计 ≥3 + 全库零 submit + 宿主存活 ──
     const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -570,7 +590,7 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     }
     // 挂起处置走 stopLoopWithRetry（fix-17 复跑实证——挂起唤醒轮在途窗内模型回合持锁，
     // composer 发送键在途禁用；轮内回执门原样保留，失败重发 /stop-dag-tasks 幂等）
-    await stopLoopWithRetry(page, 4)
+    await stopLoopWithRetry(page, dshHome, sessionAId as string, 4)
 
     // ── halted 阶日志面：worker 异常终止阶梯证据 ──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)
@@ -661,7 +681,16 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       blockSource: true,
       taskDesc: 'freshness-checklist.md 缺席（SC-M3 回放 1.3 一轮受阻）——创建之并含一行 marker。',
     })
-    await stopLoopWithRetry(page, 4)
+    // 会话 B 定位（新会话径——排除会话 A 同 id 碰撞的 mtime 抖动窗；B 创建即新开户，
+    // findFixtureSession 取最新且 ≠ A 才认）
+    let sessionBId: string | undefined
+    for (let i = 0; i < 15 && sessionBId === undefined; i++) {
+      const s = findFixtureSession(dshHome, WS_NAME)
+      if (s !== undefined && s.sessionId !== sessionAId) sessionBId = s.sessionId
+      else await sleep(2_000)
+    }
+    expect(sessionBId, '派发会话 B 落盘开户（新会话）').toBeDefined()
+    await stopLoopWithRetry(page, dshHome, sessionBId as string, 4)
 
     // ── 派发会话 C（fix 链执行轮——fix-1 → auto-restore → 1.3 二轮）──
     // dock 挂载重试（002 复跑实证：B 轮 blocked 问询的 owner 模型轮 + 渲染层连接重试窗内

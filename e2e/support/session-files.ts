@@ -14,6 +14,8 @@ export interface SessionEvent {
   readonly data?: {
     readonly name?: string
     readonly arguments?: string
+    readonly kind?: string
+    readonly text?: string
     readonly message?: { readonly content?: readonly { readonly type?: string; readonly text?: string }[] }
   }
 }
