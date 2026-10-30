@@ -292,7 +292,7 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expect(DEFAULT_EXPERT_MAPPING['coding-fix']).toBe('bug-hunter')
     expect(DEFAULT_EXPERT_MAPPING['gate']).toBe('gate-keeper')
     expect(DEFAULT_EXPERT_MAPPING['doc']).toBe('tech-writer')
-    expect(DEFAULT_EXPERT_MAPPING['test-run']).toBe('test-conductor')
+    expect(DEFAULT_EXPERT_MAPPING['test-run']).toBe('test-runner') // expert-squad-forge-2 验收 6：run-tests 纪律正本随 test-runner；test-conductor 保留随包但默认映射不再指向
     expect(DEFAULT_EXPERT_MAPPING['validation-ux']).toBe('ui-craftsman')
     expect(DEFAULT_EXPERT_MAPPING['test-gen-journeys']).toBe('test-journey-author')
     expect(DEFAULT_EXPERT_MAPPING['test-gen-contracts']).toBe('test-contract-author')

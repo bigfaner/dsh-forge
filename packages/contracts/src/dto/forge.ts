@@ -1077,7 +1077,7 @@ export const DEFAULT_EXPERT_MAPPING: Readonly<Partial<Record<TaskType, string>>>
   'doc-drift': 'drift-auditor',
   'doc-review': 'doc-reviewer',
   'doc-summary': 'summary-distiller',
-  'test-run': 'test-conductor',
+  'test-run': 'test-runner',
   'validation-ux': 'ui-craftsman',
   'test-gen-journeys': 'test-journey-author',
   'test-gen-contracts': 'test-contract-author',
