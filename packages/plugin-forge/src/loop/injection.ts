@@ -139,7 +139,7 @@ const P3_TEMPLATE = `【任务循环挂起】
 - 修改任务：updateTask 调整范围或验收标准（适用范围同协作规则）。
 - 转交用户决定，得到结论后执行上述任一步。
 **续跑**
-- 处理完成后重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>')：从暂停处继续，已完成任务不会重跑。
+- 处理完成后重新调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>', resume: true)：从暂停处继续，已完成任务不会重跑（未携 resume: true 的触碰不会续接挂起循环）。
 - 处理完成前循环不会推进。`
 
 const P9_TEMPLATE = `【任务循环已挂起·处理指引】
@@ -147,7 +147,7 @@ const P9_TEMPLATE = `【任务循环已挂起·处理指引】
 **处理标准**
 - 修复任务已创建且指向被阻塞的任务；或任务范围、验收标准已修改。
 **续跑**
-- 处理后调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>')：从暂停处继续，不重开，不重跑已完成任务。
+- 处理后调用 dispatchTask(source_kind='<source_kind>', source_slug='<slug>', resume: true)：从暂停处继续，不重开，不重跑已完成任务（未携 resume: true 的触碰不会续接挂起循环）。
 **放弃**
 - 用 stopTaskLoop 工具停止该循环（运行中的任务会标记为 interrupted）。`
 

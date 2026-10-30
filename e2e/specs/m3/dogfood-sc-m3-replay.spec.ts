@@ -568,15 +568,9 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
       expect(s.statuses.get('1.1'), '挂起保持：1.1 留 in_progress').toBe('in_progress')
       console.log(`[m35-replay] 挂起投影 +${Math.round((Date.now() - startedAt) / 1000)}s（claims11=${s.claims11}）`)
     }
-    const stopComposer = page.locator(COMPOSER_INPUT).last()
-    await expect(stopComposer, 'owner 会话 composer 在场（挂起处置入口）').toBeVisible({ timeout: 30_000 })
-    await stopComposer.click()
-    await stopComposer.fill('/stop-dag-tasks')
-    await page.keyboard.press('Enter')
-    await expect(
-      page.locator(CONVERSATION_CONTENT).first(),
-      '循环停止回执（登记表删除——独占释放，会话 B 可新开）',
-    ).toContainText('已停止任务源', { timeout: 30_000 })
+    // 挂起处置走 stopLoopWithRetry（fix-17 复跑实证——挂起唤醒轮在途窗内模型回合持锁，
+    // composer 发送键在途禁用；轮内回执门原样保留，失败重发 /stop-dag-tasks 幂等）
+    await stopLoopWithRetry(page, 4)
 
     // ── halted 阶日志面：worker 异常终止阶梯证据 ──
     const logFile = join(dir, 'logs', `${FEATURE}.jsonl`)

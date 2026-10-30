@@ -181,6 +181,8 @@ function h_render(h: Harness, value: unknown): string {
 }
 
 const ARGS = { source_kind: 'feature', source_slug: 'feat-x' } as const
+/** 显式 re-entry（挂起冻结守卫——resume=true 才续接） */
+const ARGS_RESUME = { source_kind: 'feature', source_slug: 'feat-x', resume: true } as const
 
 // ─────────────────────────── 参数契约（成对必填——无池级盲选） ───────────────────────────
 
@@ -508,49 +510,74 @@ describe('execute · owner 运行中重调（状态摘要——非拒绝）', ()
   })
 })
 
-describe('execute · 挂起态（P3 摘要兜底 + re-entry 幂等续接 + 接管集写点）', () => {
-  it('owner 重调：resume 调用（loopId 锚）+ 响应必带挂起摘要（P3 全文）+ resumed=true + 续接说明', async () => {
+describe('execute · 挂起态（挂起冻结守卫：触碰零副作用 + 显式 resume:true 才 re-entry + 接管集写点）', () => {
+  // 挂起冻结守卫（fix-17 · bug 8fb77b41）：挂起待裁决期间，被唤醒模型回合对 dispatchTask 的
+  // 触碰（无 resume:true）不得自动续接循环——否则 worker-abort-over-limit 挂起的冻结窗内
+  // 即出现第 5 次 claim 重入（挂起投影「零第 5 次重入」被模型自主 re-entry 击穿）。
+  it('owner 触碰（无 resume）：零续接（driver.resume 零调用）+ resumed=false + resume-not-requested + 挂起摘要（P3 全文）+ 续跑指引', async () => {
     const h = harness()
     h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
-    const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; summary: string; resumed: boolean; takenOver: boolean }
+    const out = (await h.tool.execute(ARGS, h.exec)) as {
+      kind: string
+      summary: string
+      resumed: boolean
+      resumeRejectedCode?: string
+      takenOver: boolean
+    }
+    expect(h.driver.resume).not.toHaveBeenCalled()
+    expect(out.kind).toBe('suspended')
+    expect(out.resumed).toBe(false)
+    expect(out.resumeRejectedCode).toBe('resume-not-requested')
+    expect(out.takenOver).toBe(false)
+    // 挂起摘要 = P3 模板同源（payloadOf(record) 渲染——丢失兜底读径）
+    expect(out.summary).toContain('任务循环挂起')
+    expect(out.summary).toContain('tests hang on flaky selector')
+    expect(out.summary).toContain(`dispatchTask(source_kind='feature', source_slug='feat-x', resume: true)`)
+    const text = h_render(h, out)
+    expect(text).toContain('任务循环挂起')
+    expect(text).toContain('re-entry NOT requested')
+    expect(text).toContain('resume: true')
+    expect(text).not.toContain('re-entry accepted')
+  })
+
+  it('owner 显式 re-entry（resume:true）：resume 调用（loopId 锚）+ resumed=true + 续接说明', async () => {
+    const h = harness()
+    h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
+    const out = (await h.tool.execute(ARGS_RESUME, h.exec)) as { kind: string; resumed: boolean; takenOver: boolean }
     expect(out.kind).toBe('suspended')
     expect(out.resumed).toBe(true)
     expect(out.takenOver).toBe(false)
     expect(h.driver.resume).toHaveBeenCalledWith({ loopId: 'loop-1' })
-    // 挂起摘要 = P3 模板同源（payloadOf(record) 渲染——丢失兜底读径）
-    expect(out.summary).toContain('任务循环挂起')
-    expect(out.summary).toContain('tests hang on flaky selector')
-    expect(out.summary).toContain(`dispatchTask(source_kind='feature', source_slug='feat-x')`)
     const text = h_render(h, out)
-    expect(text).toContain('任务循环挂起')
     expect(text).toContain('resumes from where it suspended (completed tasks are not re-run)')
   })
 
-  it('非 owner 首触：接管集写入（唯一工具侧写点）+ takenOver=true + 同摘要；resume 照常续接', async () => {
+  it('非 owner 首触（无 resume）：接管集写入（唯一工具侧写点）+ takenOver=true + 零续接（守卫同守）', async () => {
     const h = harness()
     const record = recordOf('owner-x', { suspended: suspensionOf() })
     h.addRecord(record)
     const out = (await h.tool.execute(ARGS, h.exec)) as { kind: string; takenOver: boolean; resumed: boolean }
     expect(out.takenOver).toBe(true)
-    expect(out.resumed).toBe(true)
+    expect(out.resumed).toBe(false)
+    expect(h.driver.resume).not.toHaveBeenCalled()
     expect(record.takeoverSessions.has(h.sessionId)).toBe(true)
     expect(h_render(h, out)).toContain('joined the takeover set')
   })
 
-  it('并发竞态（resume not-suspended）：resumed=false + 渲染 already resumed（零动作不误报）', async () => {
+  it('显式 re-entry 并发竞态（resume not-suspended）：resumed=false + 渲染 already resumed（零动作不误报）', async () => {
     const h = harness()
     h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
     h.driver.resume.mockReturnValue({ ok: false, code: 'not-suspended' })
-    const out = await h.tool.execute(ARGS, h.exec)
+    const out = await h.tool.execute(ARGS_RESUME, h.exec)
     expect(out).toMatchObject({ resumed: false, resumeRejectedCode: 'not-suspended' })
     expect(h_render(h, out)).toContain('already resumed')
   })
 
-  it('挂起期循环已被叫停（resume aborted）：resumeRejectedCode=aborted + 渲染与 not-suspended 可分辨（terminated while suspended，非并发竞态）', async () => {
+  it('显式 re-entry 挂起期循环已被叫停（resume aborted）：resumeRejectedCode=aborted + 渲染与 not-suspended 可分辨（terminated while suspended，非并发竞态）', async () => {
     const h = harness()
     h.addRecord(recordOf(h.sessionId, { suspended: suspensionOf() }))
     h.driver.resume.mockReturnValue({ ok: false, code: 'aborted' })
-    const out = await h.tool.execute(ARGS, h.exec)
+    const out = await h.tool.execute(ARGS_RESUME, h.exec)
     expect(out).toMatchObject({ resumed: false, resumeRejectedCode: 'aborted' })
     const text = h_render(h, out)
     expect(text).toContain("code 'aborted'")
@@ -584,6 +611,7 @@ describe('协议 pin（description 完整承载调用协议 ↔ 注入模板同�
     expect(d).toContain('stopTaskLoop')
     expect(d).toContain('at most one loop at a time')
     expect(d).toContain('suspension summary')
+    expect(d).toContain('resume: true') // 挂起冻结守卫——re-entry 需显式确认（fix-17 · bug 8fb77b41）
     expect(d).toContain('idempotent re-entry')
   })
 

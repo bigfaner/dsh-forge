@@ -51,6 +51,12 @@ const TOOL = 'dispatchTask'
 export interface DispatchTaskToolArgs {
   /** 容器引用（source_kind+source_slug 成对解析产物——循环绑定的唯一容器） */
   readonly source: ContainerRef
+  /**
+   * 显式 re-entry 确认（挂起冻结守卫——fix-17 · bug 8fb77b41）：挂起待裁决期间对 dispatchTask
+   * 的触碰零副作用（只回挂起摘要），携 resume=true 才续接循环——被唤醒模型回合的即时触碰
+   * 不得绕过裁决冻结窗（worker-abort-over-limit 挂起后第 5 次 claim 重入的根因封口）。
+   */
+  readonly resume?: boolean
 }
 
 /** 参数防御性收窄（成对必填——缺失/半对即拒；退役键 run_in_background/context_slug 落未知键零效应） */
@@ -63,7 +69,8 @@ export function parseDispatchTaskArgs(args: unknown): DispatchTaskToolArgs {
       `${TOOL}: source_kind and source_slug are both required ('feature' | 'proposal' + container slug) — dispatchTask has no pool-wide mode; it starts/re-enters the dispatch loop of exactly one container`,
     )
   }
-  return { source: { kind, slug } }
+  const resume = typeof a.resume === 'boolean' ? a.resume : undefined
+  return { source: { kind, slug }, ...(resume !== undefined ? { resume } : {}) }
 }
 
 // ─────────────────────────── 结果与渲染（三态自解释——started/running/suspended + 失败 DTO） ───────────────────────────
@@ -90,8 +97,9 @@ export type DispatchLoopResult =
       /** 本次调用是否完成 re-entry（幂等续接；并发竞态 = false，零动作） */
       readonly resumed: boolean
       /** resumed=false 时的拒绝码（驱动器 resume 原码透传——'aborted' = 挂起期循环已被叫停，
-       * 与 'not-suspended' 并发续接竞态在工具面可分辨） */
-      readonly resumeRejectedCode?: 'no-active-loop' | 'not-suspended' | 'aborted'
+       * 与 'not-suspended' 并发续接竞态在工具面可分辨；'resume-not-requested' = 触碰未携
+       * resume:true——挂起冻结守卫生效，循环保持挂起） */
+      readonly resumeRejectedCode?: 'no-active-loop' | 'not-suspended' | 'aborted' | 'resume-not-requested'
       /** 非 owner 首触 = 已加入接管集 */
       readonly takenOver: boolean
       readonly pool: ToolPoolSnapshot
@@ -165,7 +173,7 @@ const DISPATCH_LOOP_OUTPUT_SCHEMA = withFailureVariant({
         source: SOURCE_SCHEMA,
         summary: { type: 'string' },
         resumed: { type: 'boolean' },
-        resumeRejectedCode: { type: 'string', enum: ['no-active-loop', 'not-suspended', 'aborted'] },
+        resumeRejectedCode: { type: 'string', enum: ['no-active-loop', 'not-suspended', 'aborted', 'resume-not-requested'] },
         takenOver: { type: 'boolean' },
         pool: POOL_SCHEMA,
       },
@@ -194,15 +202,17 @@ function renderDispatchLoopResult(_args: unknown, value: unknown): readonly Text
     ]
     return [{ type: 'text', text: lines.join('\n') }]
   }
-  // suspended——响应必带挂起摘要（P3 兜底）+ re-entry 续接说明
+  // suspended——响应必带挂起摘要（P3 兜底）；re-entry 需显式 resume:true（挂起冻结守卫——fix-17）
   const lines = [
     v.summary,
     v.resumed
       ? `- re-entry accepted — the loop resumes from where it suspended (completed tasks are not re-run); pool: ${poolLine(v.pool)}`
       : v.resumeRejectedCode === 'aborted'
         ? `- resume rejected (code 'aborted') — the loop was terminated while suspended and is gone (this is NOT a concurrent re-entry race); start a fresh loop with dispatchTask if needed; pool: ${poolLine(v.pool)}`
-        : `- the loop already resumed (concurrent re-entry) — no action taken; pool: ${poolLine(v.pool)}`,
-    ...(v.takenOver ? ['- you have joined the takeover set for this suspended loop — handle the task (addTask/updateTask/user verdict), then re-enter with dispatchTask, or stop it with stopTaskLoop'] : []),
+        : v.resumeRejectedCode === 'resume-not-requested'
+          ? `- re-entry NOT requested — the loop stays suspended (frozen, awaiting verdict); handle the task first, then re-enter with dispatchTask(source_kind, source_slug, resume: true), or stop it with stopTaskLoop; pool: ${poolLine(v.pool)}`
+          : `- the loop already resumed (concurrent re-entry) — no action taken; pool: ${poolLine(v.pool)}`,
+    ...(v.takenOver ? ['- you have joined the takeover set for this suspended loop — handle the task (addTask/updateTask/user verdict), then re-enter with dispatchTask(resume: true), or stop it with stopTaskLoop'] : []),
   ]
   return [{ type: 'text', text: lines.join('\n') }]
 }
@@ -242,7 +252,7 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
   return {
     name: TOOL,
     description:
-      'Start or re-enter the dispatch loop for exactly ONE container — source_kind and source_slug are BOTH required (there is no pool-wide mode). This tool is the same loop core as the /run-dag-tasks instruction: the loop claims ready tasks of that container, spawns in-process workers, settles them, and keeps going automatically until no-task; claim/completion/end/suspension notices arrive as session messages — there is no job channel (no run_in_background/job_output/job_kill). Outcomes: (1) no active loop for the container → a new loop starts (inline started receipt; the collaboration-protocol section is injected into your system prompt next turn). (2) the container has an active loop owned by ANOTHER session → rejected: the response names the loop owner and the correct entries (stopTaskLoop to stop it, queryTask to observe). (3) the container loop is running and owned by you → a running status summary (not a rejection). (4) the container loop is SUSPENDED (awaiting verdict on a blocked task) → the response always carries the suspension summary and the loop resumes from where it suspended (idempotent re-entry — completed tasks are not re-run; a non-owner first touch joins the takeover set and gets the same summary). (5) session single-active gate: a session runs at most one loop at a time — starting while you already own a loop (running or suspended) is rejected with guidance to finish/stop/dispose it first. A no-task verdict ends the loop (end notice follows). Stop the loop with the stopTaskLoop tool.',
+      'Start or re-enter the dispatch loop for exactly ONE container — source_kind and source_slug are BOTH required (there is no pool-wide mode). This tool is the same loop core as the /run-dag-tasks instruction: the loop claims ready tasks of that container, spawns in-process workers, settles them, and keeps going automatically until no-task; claim/completion/end/suspension notices arrive as session messages — there is no job channel (no run_in_background/job_output/job_kill). Outcomes: (1) no active loop for the container → a new loop starts (inline started receipt; the collaboration-protocol section is injected into your system prompt next turn). (2) the container has an active loop owned by ANOTHER session → rejected: the response names the loop owner and the correct entries (stopTaskLoop to stop it, queryTask to observe). (3) the container loop is running and owned by you → a running status summary (not a rejection). (4) the container loop is SUSPENDED (awaiting verdict on a blocked task) → the response always carries the suspension summary; a plain touch does NOT resume anything (suspension freeze guard — the loop stays frozen until an explicit dispatchTask(..., resume: true)); resume: true re-enters the loop from where it suspended (idempotent re-entry — completed tasks are not re-run; a non-owner first touch joins the takeover set and gets the same summary). (5) session single-active gate: a session runs at most one loop at a time — starting while you already own a loop (running or suspended) is rejected with guidance to finish/stop/dispose it first. A no-task verdict ends the loop (end notice follows). Stop the loop with the stopTaskLoop tool.',
     parameters: {
       type: 'object',
       properties: {
@@ -253,6 +263,10 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
         source_slug: {
           type: 'string',
           description: 'Container slug — REQUIRED together with source_kind: the feature directory name or proposal slug whose ready tasks the loop claims, dispatches and settles.',
+        },
+        resume: {
+          type: 'boolean',
+          description: 'Set true ONLY to explicitly re-enter a SUSPENDED loop after handling its blocked task (suspension freeze guard — a plain touch never resumes; running/new loops ignore this flag).',
         },
       },
       required: ['source_kind', 'source_slug'],
@@ -278,12 +292,27 @@ export function createDispatchTaskTool(deps: DispatchTaskToolDeps): ForgeToolDef
           if (record !== undefined) {
             if (record.suspended !== undefined) {
               // 挂起态：响应必带挂起摘要（P3 模板同源——丢失兜底读径）；非 owner 首触 = 接管集
-              // 唯一工具侧写点；本调用即 re-entry（幂等续接——未处置的挂起续接后在同任务再挂起，
-              // 响应再次携带摘要，零死锁零重开）
+              // 唯一工具侧写点。挂起冻结守卫（fix-17 · bug 8fb77b41）：触碰零副作用——仅携
+              // resume:true 的显式 re-entry 才续接（幂等续接不重开；未处置的挂起续接后在同任务
+              // 再挂起，响应再次携带摘要，零死锁零重开）。被唤醒模型回合的即时触碰不得绕过
+              // 裁决冻结窗——否则挂起投影「零第 5 次重入」被模型自主 re-entry 击穿。
               const isOwner = record.ownerSessionId === sessionId
               if (!isOwner) record.takeoverSessions.add(sessionId)
               // 摘要先取（P3 同源挂起摘要）——resume 清 record.suspended 后载荷投影即失真
               const payload = payloadOf(record)
+              if (parsed.resume !== true) {
+                // 冻结守卫生效：循环保持挂起，仅回摘要 + 续跑指引
+                return {
+                  kind: 'suspended',
+                  loopId: record.id,
+                  source,
+                  summary: renderP3(payload),
+                  resumed: false,
+                  resumeRejectedCode: 'resume-not-requested',
+                  takenOver: !isOwner,
+                  pool,
+                }
+              }
               const resumed = driver.resume({ loopId: record.id })
               return {
                 kind: 'suspended',
