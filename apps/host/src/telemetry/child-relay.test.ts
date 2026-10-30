@@ -63,4 +63,12 @@ describe('parseDiagRelayLine（main 侧转译）', () => {
       level: 'error', process: 'child', event: 'gateway-fold', message: 'm', stack: 's', projectId: 'p', cwd: 'c', traceId: 't', repeat: 3,
     })
   })
+  it('projectCount 计数字段贯通（project-sort 批量写面——诊断负载类型单源 DiagEventPayload）', () => {
+    const line = JSON.stringify({
+      __diag: { level: 'info', process: 'child', event: 'project-sort', message: 'm', projectId: 'p', projectCount: 2 },
+    })
+    expect(parseDiagRelayLine(line)).toEqual({
+      level: 'info', process: 'child', event: 'project-sort', message: 'm', projectId: 'p', projectCount: 2,
+    })
+  })
 })
