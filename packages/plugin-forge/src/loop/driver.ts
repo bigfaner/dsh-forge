@@ -29,7 +29,7 @@
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
 import { FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
-import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
+import type { ContainerRef, ForgeSettingsService, ForgeTasksService, TaskRef, TaskSnapshot, TaskStats, TaskType } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
 import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
@@ -327,8 +327,9 @@ export interface LoopCheckpointsFace {
 export const RETRO_PROPOSAL_AC =
   '已注册改进提案（parent_proposal_id 指向本提案）并在结算记录 ac_evidence 登记派生提案 id 清单——未注册不得 success'
 
-/** 复盘任务终态集（幂等在场判定口径——终态复盘任务不再拦派生，非终态 = 窄窗口现场） */
-const RETRO_TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'skipped', 'rejected'])
+/** 任务终态集（core 相位推导机 TERMINAL_TASK_STATUSES 口径镜像——completed/skipped/rejected；
+ *  消费面：复盘任务幂等在场判定 + 停止径 transition 扫描的终态过滤） */
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['completed', 'skipped', 'rejected'])
 
 /** 复盘任务标题模板（单一常量，派生与在场判定两处消费——字面分叉会静默失配使幂等防护失效） */
 const RETRO_TASK_TITLE_PREFIX = 'first-pass 复盘：'
@@ -514,7 +515,7 @@ async function hasOpenSourceDocTask(loop: ActiveLoop, titlePrefix: string, inclu
       (c) =>
         c.taskType === 'doc' &&
         c.title === title &&
-        (includeTerminal || !RETRO_TERMINAL_TASK_STATUSES.has(c.taskStatus)),
+        (includeTerminal || !TERMINAL_TASK_STATUSES.has(c.taskStatus)),
     )
   } catch {
     return false
@@ -1164,9 +1165,11 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
     record.inFlight = undefined
     loop?.controller.abort('loop stopped by command')
     if (captured !== undefined) {
-      await interruptedize(loop, captured.taskId) // in-flight 真化 interrupted（S3 transitionTask 面）
+      // 停止扫描终态过滤（bug a8fbe860）：terminal 任务零转移——completed 不被扫成 interrupted
+      const transitioned = await interruptedize(loop, captured.taskId, captured.taskRef)
       // ⑰ 进度事件（1.17——状态迁移点：停止真化 in-flight → interrupted；载 inFlightTaskKey）
-      if (loop !== undefined) emitProgress(loop, { verb: 'stop', status: 'interrupted', scenario: 'loop/stopped', taskKey: captured.taskKey, taskTitle: captured.title })
+      if (loop !== undefined && transitioned)
+        emitProgress(loop, { verb: 'stop', status: 'interrupted', scenario: 'loop/stopped', taskKey: captured.taskKey, taskTitle: captured.title })
     }
     const stats = await statsFailSoft(loop)
     // ⑰ 停止收口 = settlement 形态（3b④——结算单点 send(nextStep, true) 唤醒；与 in-flight
@@ -2358,14 +2361,26 @@ async function bailIfAborted(loop: ActiveLoop, claim: ClaimedDispatch | undefine
   const orphan = loop.record.inFlight
   if (claim !== undefined && orphan !== undefined && orphan.taskKey === `${claim.task.slug}/${claim.task.localId}`) {
     loop.record.inFlight = undefined
-    await interruptedize(loop, claim.task.taskId)
+    await interruptedize(loop, claim.task.taskId, { slug: claim.task.slug, localId: claim.task.localId })
   }
   return true
 }
 
-/** in-flight 真化 interrupted（S3 面——人类转移通道；fail-soft：终止路径的转移故障只告警） */
-async function interruptedize(loop: ActiveLoop | undefined, taskId: string): Promise<void> {
-  if (loop === undefined) return
+/** in-flight 真化 interrupted（S3 面——人类转移通道；fail-soft：终止路径的转移故障只告警）。
+ *  停止扫描终态过滤（bug a8fbe860）：转移前现读任务状态——terminal（completed/skipped/rejected，
+ *  TERMINAL_TASK_STATUSES 同源口径）零转移，completed 结算与证据不受停止影响；现读失败同样
+ *  不转移（留 in_progress 走下轮 adopt 恢复径，不冒扫掉终态的风险）。返回是否发生了转移。 */
+async function interruptedize(loop: ActiveLoop | undefined, taskId: string, taskRef: TaskRef): Promise<boolean> {
+  if (loop === undefined) return false
+  try {
+    const detail = await loop.deps.tasks.queryTask({ projectId: loop.record.projectId, taskRef, include: {} })
+    if (TERMINAL_TASK_STATUSES.has(detail.task.taskStatus)) return false
+  } catch (cause) {
+    console.warn(
+      `forge loop stop status read failed, skip transition (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+    return false
+  }
   try {
     await loop.deps.tasks.transitionTask({
       projectId: loop.record.projectId,
@@ -2374,10 +2389,12 @@ async function interruptedize(loop: ActiveLoop | undefined, taskId: string): Pro
       reason: LOOP_STOP_TRANSITION_REASON,
       actor: 'core', // 循环自动化纠偏——审计归因不再误记人类通道 'ui'
     })
+    return true
   } catch (cause) {
     console.warn(
       `forge loop stop transition failed (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
+    return false
   }
 }
 

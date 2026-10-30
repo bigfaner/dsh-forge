@@ -2134,7 +2134,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
   })
 
   it('stop：取消 in-flight + 真化 interrupted（S3 transitionTask 面）+ ⑰ 收口叙述 + 登记注销；他会话/无循环 = no-active-loop', async () => {
-    const built = build({ claim: [claimed()] })
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
     built.spawn.setBehavior(parkedSpawn) // 永不结算
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await vi.waitFor(
@@ -2168,6 +2168,24 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
     // 停止径 = 主动终态：worker abort 经 killed 分类——零 tool-error（不进防线不发射）
     expect(built.events.some((e) => e.type === 'tool-error')).toBe(false)
+  })
+
+  it('bug a8fbe860：停止扫描对 terminal（completed）任务零转移——submit 已落账的任务不被扫成 interrupted', async () => {
+    const built = build({ claim: [claimed()], query: [queryOf('completed')] })
+    built.spawn.setBehavior(parkedSpawn) // 永不结算——worker 侧已自行 submitTask completed 的形态
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(
+      () => {
+        expect(built.driver.activeOf(OWNER)?.inFlight).toBeDefined()
+      },
+      { timeout: 2000, interval: 5 },
+    )
+    const stopped = await built.driver.stop({ ownerSessionId: OWNER })
+    expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
+    // 零转移：completed 终态任务不被停止径扫成 interrupted（结算与证据不受停止影响）
+    expect(built.h.transitions).toEqual([])
+    // 零 stop/interrupted 进度事件（状态迁移点只随真实转移发射）
+    expect(built.progressCalls.find((e) => e.verb === 'stop' && e.status === 'interrupted')).toBeUndefined()
   })
 
   it('dispose（fiber 卸载收口）：在飞循环同步终态注销 + 独占摘除 + 零真化零叙述（对账归下次装配 reconcile）+ 零异常 warn', async () => {
@@ -2212,6 +2230,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     })
     const h = tasksHarness()
     h.setClaim([claimed()])
+    h.setQuery([queryOf('in_progress')])
     const deps: LoopDriverDeps = {
       projectId: PROJECT,
       tasks: h.tasks,
@@ -2693,7 +2712,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
   })
 
   it('停止真化：stop 面 in-flight → interrupted（状态迁移点——动词 stop + 中断任务键）', async () => {
-    const built = build({ claim: [claimed()] })
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await vi.waitFor(
       () => {
@@ -3165,7 +3184,7 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
   })
 
   it('运行中：owner 可停（统一结束处理同径——真化 interrupted + ⑰ 收口叙述 + 终态注销）；非 owner 被拒', async () => {
-    const built = build({ claim: [claimed()] })
+    const built = build({ claim: [claimed()], query: [queryOf('in_progress')] })
     built.spawn.setBehavior(parkedSpawn)
     const started = await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     const loopId = started.ok ? started.loopId : ''
