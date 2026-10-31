@@ -441,7 +441,7 @@ function MultiSelect(props: {
  * （DESIGN Tooltip 令牌——原生 title 退役，风格统一裁决 2026-10-26），project 来源无 ?。
  */
 const ORIGIN_HELP: Readonly<Record<string, string>> = {
-  plugin: "随插件分发的兜底档案",
+  plugin: "来源插件贡献的专家档案（随插件分发）",
   user: "当前用户全局档案（跨项目共享）",
 };
 

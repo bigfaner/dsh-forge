@@ -229,7 +229,7 @@ describe("ExpertDetailDialog 来源行（1.61 ① + 1.67 裁决）", () => {
     expect(userHtml).not.toContain('title="当前用户全局档案（跨项目共享）"');
     const pluginHtml = renderDialog(ctlFor(entry({ origin: "plugin", effective: true })), { sameKeyEntries: [entry({ origin: "plugin", effective: true })] });
     expect(pluginHtml).toContain('data-dswf-origin-help="plugin"');
-    expect(pluginHtml).toContain('data-tip="随插件分发的兜底档案"');
+    expect(pluginHtml).toContain('data-tip="来源插件贡献的专家档案（随插件分发）"');
     const projectHtml = renderDialog(ctlFor(effective), { sameKeyEntries: [effective] });
     expect(projectHtml).not.toContain("dswf-dlg-origin-help");
   });
