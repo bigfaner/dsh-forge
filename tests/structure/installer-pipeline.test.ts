@@ -4,12 +4,13 @@
 //   2. profile.install 安装树清单 = 官方栈并集（RUNTIME_PACKAGES ∪ 模板 bundles ∪ core 原生依赖）
 //      ——与 runtime-packages.ts 同源的漂移守卫（apps/host/package.json 已另有 pin）
 //   3. 物化脚本纯函数（合成 anchor 清单 / deps-free app 清单 / 关键文件口径）
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
@@ -255,6 +256,25 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     )
   })
 
+  it('closure：预设携带插件 ⊆ staging 集合（发版新增产品插件 → 老用户升级自动补行闭环的 assemble 侧半——预设引用越界即红并报出插件名与来源预设文件）', () => {
+    // staged 集合 = stagedProductPackages 推导（userLayerRow/预设种子/staged:true ∪ 闭包 −
+    // kill-switch）；预设携带面真源 = 底稿文件逐文件扫描（与 presetCarriedPlugins 同口径，
+    // 自扫为取「来源预设文件」用于 fail 报文）。
+    const presetsDir = join(ROOT, 'apps', 'host', 'src', 'profile', 'presets')
+    const stagedShorts = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
+    const orphans: string[] = []
+    for (const file of readdirSync(presetsDir)) {
+      if (!file.endsWith('.yml')) continue
+      const text = readFileSync(join(presetsDir, file), 'utf8')
+      for (const hit of text.matchAll(/'@dsh-forge\/([a-z0-9-]+)'/g)) {
+        const short = hit[1]!
+        if (!stagedShorts.has(short)) orphans.push(`${short}（来源 presets/${file}）`)
+      }
+    }
+    expect(presetCarriedPlugins().length, '预设扫描面失效即假绿（扫描到 0 个携带插件）').toBeGreaterThan(0)
+    expect(orphans, `预设携带插件未入 staging 集合（预设/配置面漂移）：${orphans.join('; ')}`).toEqual([])
+  })
+
   it('bug a1f13abf：声明 dsh.bundle.patch 的插件，组合 patch 文件必随包物化并入 --check 口径（loader 按声明读包内该文件——缺席即 overlay ENOENT）', () => {
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
@@ -369,5 +389,204 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为关（userLayerRow:false + staged:false kill-switch）').toEqual({ userLayerRow: false, staged: false })
     expect(stagedPackages.has('knowledge'), 'knowledge 应暂缺席 staging（推导制下无种子 + kill-switch 双保险）').toBe(false)
     expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径不应含 knowledge 行（暂不开放）').toBe(false)
+  })
+})
+
+/**
+ * extraResources filter ↔ staging sections 一致性守护（packaging-guard-hardening 1.2）。
+ *
+ * 病理先例（mobile-dist）：assemble 侧新增 staging section（物化新目录到 release/staging/）
+ * 而 electron-builder.config.mjs extraResources filter 漏列 → 整段静默缺席安装包，
+ * 打包产物内该面缺失（mobile-dist 缺席即 /remote 落提示页）。既有 AC1 测试只 pin
+ * filter 字面量（两侧同改即假绿），本守护独立断言「filter 覆盖 staging sections 宇宙」：
+ *   - sections 宇宙 = assemble 脚本物化到 staging 的顶层段（runtime/web-dist/mobile-dist/
+ *     icon.png/staging-manifest.json）+ release/app 段（electron-builder files 口径）；
+ *   - 正例：现值 filter 下每段可达；
+ *   - fail-loud 反例：新增 section 而 filter 未覆盖（以剔除 mobile-dist/** 的突变 filter
+ *     验证匹配器判不可达）——防再演「忘改 filter」类缺陷。
+ */
+describe('extraResources filter ⊇ staging sections 一致性守护（忘改 filter 即 fail-loud）', () => {
+  /** assemble 脚本物化到 release/staging/ 的顶层段宇宙（+ release/app 装载器段） */
+  const STAGING_SECTIONS = [
+    'runtime/**', // 运行时容器（node_modules + host-dist + anchor package.json）
+    'web-dist/**', // 壳静态资产
+    'mobile-dist/**', // /remote 移动视图静态资产（resolveMobileDistDir 打包形态默认位）
+    'icon.png', // fix-45 窗口图标（{resources}/icon.png 解析位）
+    'staging-manifest.json', // 物化清单（4.3 冒烟自证挂点）
+    'app/**', // electron-builder 应用目录（release/app：main.js 装载器 + 清单）
+  ]
+
+  /** electron-builder minimatch 风格 filter 规则 → 路径匹配（`**` 跨段 / `*` 单段） */
+  const filterMatches = (filters: readonly string[], relPath: string): boolean =>
+    filters.some((filter) => {
+      const GLOB_STAR = '@@glob-star@@' // 占位 token：`**` 先换出，防 `*` 单段语义误替换
+      const pattern = filter
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, GLOB_STAR)
+        .replace(/\*/g, '[^/]*')
+        .split(GLOB_STAR)
+        .join('.*')
+      return new RegExp(`^${pattern}$`).test(relPath)
+    })
+
+  /** extraResources 配置 → 相对 staging 根的可达性判定（段 → 布尔） */
+  const coverageOf = (builderConfig: Record<string, unknown>, extraResources: unknown): Record<string, boolean> => {
+    const entry = (extraResources as Array<{ from: string; to: string; filter: string[] }>)[0]!
+    const toPrefix = entry.to === '.' ? '' : `${entry.to}/`
+    return Object.fromEntries(
+      STAGING_SECTIONS.map((section) => {
+        // app 段物理居 release/app（electron-builder files 口径收 main.js/package.json）
+        if (section === 'app/**') {
+          const files = (builderConfig.files as string[]) ?? []
+          return [section, ['main.js', 'package.json'].every((f) => files.includes(f))]
+        }
+        const sample = `${toPrefix}${section.replace('/**', '/index.html')}`
+        const exact = section === 'icon.png' || section === 'staging-manifest.json' ? `${toPrefix}${section}` : undefined
+        return [
+          section,
+          filterMatches(entry.filter, sample) || (exact !== undefined && filterMatches(entry.filter, exact)),
+        ]
+      }),
+    )
+  }
+
+  it('正例：现值 filter 覆盖 staging 全部 section（runtime/web-dist/mobile-dist/icon/staging-manifest/app 段均可达）', () => {
+    const builder = createElectronBuilderConfig('9.9.9') as Record<string, unknown>
+    const covered = coverageOf(builder, builder.extraResources)
+    const gaps = STAGING_SECTIONS.filter((section) => covered[section] !== true)
+    expect(gaps, `extraResources filter 未覆盖的 staging section（整段漏进安装包）：${gaps.join('; ')}`).toEqual([])
+  })
+
+  it('filter 规则自证：匹配器对 `**`/精确名语义正确（正反样本各半——假绿防线）', () => {
+    expect(filterMatches(['runtime/**'], 'runtime/node_modules/a/b.js')).toBe(true)
+    expect(filterMatches(['icon.png'], 'icon.png')).toBe(true)
+    expect(filterMatches(['icon.png'], 'web-dist/icon.png')).toBe(false)
+    expect(filterMatches(['runtime/**'], 'web-dist/index.html')).toBe(false)
+    expect(filterMatches(['web-dist/**'], 'web-dist/sub/x.js')).toBe(true)
+    expect(filterMatches(['runtime/*'], 'runtime/a/b.js')).toBe(false) // 单 `*` 不跨段
+  })
+
+  it('fail-loud 反例：新增 staging section（模拟 mobile-dist 病理——filter 剔除该段）→ 覆盖判定判不可达', () => {
+    const mutated = [
+      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
+    ]
+    const covered = coverageOf(createElectronBuilderConfig('9.9.9') as Record<string, unknown>, mutated)
+    expect(covered['mobile-dist/**'], 'filter 漏列 mobile-dist/** 时守护必须红（病理回归锚）').toBe(false)
+    expect(covered['web-dist/**']).toBe(true) // 其余段不受影响（守卫精度）
+  })
+})
+
+describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——stage()/--check 双接线 fail-loud）', () => {
+  /** fixture 根：临时目录 + 空 presets 目录（presetCarriedPlugins 扫描域） */
+  const makeFixtureRoot = () => {
+    const root = mkdtempSync(join(tmpdir(), 'staging-extras-guard-'))
+    mkdirSync(join(root, 'apps/host/src/profile/presets'), { recursive: true })
+    return root
+  }
+  /** fixture 插件包（userLayerRow 种子——绕开预设底稿扫描） */
+  const makePlugin = (root: string, opts: { skills?: boolean; patchDeclared?: boolean; patchFile?: boolean }) => {
+    const dir = join(root, 'packages/plugins/fake-plugin')
+    mkdirSync(dir, { recursive: true })
+    if (opts.skills === true) {
+      mkdirSync(join(dir, 'skills', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'skills', 'demo', 'SKILL.md'), 'demo\n', 'utf8')
+    }
+    if (opts.patchDeclared === true) {
+      if (opts.patchFile !== false) writeFileSync(join(dir, 'cordis.patch.yml'), 'services:\n', 'utf8')
+    }
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@dsh-forge/fake-plugin',
+        version: '0.1.0',
+        ...(opts.patchDeclared === true ? { dsh: { bundle: { patch: './cordis.patch.yml' } } } : {}),
+      }),
+      'utf8',
+    )
+  }
+  const FIXTURE_PLUGINS = { 'fake-plugin': { userLayerRow: true } }
+
+  it('正例：已声明插件（skills/ + dsh.bundle.patch 文件均在 STAGING_EXTRAS 登记）→ 零漂移', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { skills: true, patchDeclared: true })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {
+        'fake-plugin': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/demo/SKILL.md'] },
+      })
+      expect(drift).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（漏声明）：未声明插件带 skills/ 面 → 漂移报出包名与遗漏路径（bug c85c157c/dd76f14c 病理面）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { skills: true, patchDeclared: true })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {})
+      expect(drift.some((p) => p.includes('fake-plugin') && p.includes('skills')), `实际存在 skills/ 未声明：${drift.join('; ')}`).toBe(true)
+      expect(drift.some((p) => p.includes('fake-plugin') && p.includes('cordis.patch.yml')), `dsh.bundle.patch 未声明：${drift.join('; ')}`).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（声明失真）：STAGING_EXTRAS 声明指向不存在的目录/文件 → 漂移报出缺失路径', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, {})
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {
+        'fake-plugin': { files: ['experts'], keyFiles: ['experts/ghost.md'] },
+      })
+      expect(drift.some((p) => p.includes('files 声明 experts') && p.includes('不存在')), drift.join('; ')).toBe(true)
+      expect(drift.some((p) => p.includes('keyFiles 声明 experts/ghost.md') && p.includes('不存在')), drift.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（patch 失真）：dsh.bundle.patch 声明指向的文件盘上缺席 → 漂移（且 patch 未声明入 files 时漏随包条目同时在案）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { patchDeclared: true, patchFile: false })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, { 'fake-plugin': { files: ['cordis.patch.yml'], keyFiles: [] } })
+      expect(drift.some((p) => p.includes('cordis.patch.yml') && p.includes('不存在')), drift.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('现值绿锚：真实仓 staged 集零漂移（stagedProductPackages × STAGING_EXTRAS 现值自洽）', () => {
+    expect(stagingExtrasDrift(PRODUCT_PLUGINS)).toEqual([])
+  })
+
+  it('接线 fail-loud：stage()（assertPreconditions）与 --check（check()）均消费守卫', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'assemble-installer-resources.mjs'), 'utf8')
+    const callAt = (from: number) => source.indexOf('  assertExtrasDrift(plugins)', from) // 两空格缩进——排除 stagingExtrasDrift 子串误配
+    const first = callAt(0)
+    const second = callAt(first + 1)
+    expect(first, '守卫接线缺席').toBeGreaterThan(-1)
+    expect(second, 'stage 与 --check 须双接线（只接一处即另一路径漏守）').toBeGreaterThan(-1)
+    const stageCallSite = source.slice(source.indexOf('function assertPreconditions'), first)
+    const checkCallSite = source.slice(source.indexOf('async function check('), second)
+    expect(stageCallSite).toContain('function assertPreconditions')
+    expect(checkCallSite).toContain('async function check(')
+  })
+
+  // 【源码内窥锚点】以下 pin 直接断言 scripts/dist-win.mjs 的字面接线（内窥耦合）：
+  // pin 找的是 electron-builder 成功之后的末端 --check 段。若 dist-win.mjs 内
+  // spawnSync 调用换缩进/换变量名/重排结构导致 pin 失配，请按本注释回到该脚本
+  // 的「electron-builder 成功 → 末端 --check 复核」段（现为 47-63 行附近）同步 pin。
+  it('接线 pin：dist:win 末端 electron-builder 成功路径调用 --check，失败路径透传退出码 exit 1（bug b9c85cd5）', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'dist-win.mjs'), 'utf8')
+    // 成功路径：electron-builder status 为 0 之后才发起末端复核（--check 接线在成功段之后）
+    const builderIdx = source.indexOf("spawnSync('pnpm exec electron-builder")
+    const checkIdx = source.indexOf('node scripts/assemble-installer-resources.mjs --check')
+    expect(builderIdx, 'electron-builder spawn 接线缺席').toBeGreaterThan(-1)
+    expect(checkIdx, '末端 --check 接线缺席（封包成功后必须自动关键文件复核，bug b9c85cd5）').toBeGreaterThan(builderIdx)
+    // 失败路径：check 非 0 → PACKAGING_CHECK_FAILED + process.exit 透传退出码（exit 1 接线在位）
+    const failBranch = source.slice(checkIdx)
+    expect(failBranch).toContain('PACKAGING_CHECK_FAILED')
+    expect(failBranch).toContain('process.exit(check.status ?? 1)')
   })
 })

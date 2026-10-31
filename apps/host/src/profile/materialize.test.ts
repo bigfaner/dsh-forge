@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ensureProfileMaterialized } from './materialize.js'
-import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, UI_SETTINGS_PRESET_ROW } from './template.js'
+import { DSH_STACK_VERSION, PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, productUserLayerInsertEntry, UI_SETTINGS_PRESET_ROW } from './template.js'
 import { PRODUCT_PLUGINS } from '../../../../packages/contracts/src/product-plugins.js'
 
 let dir: string
@@ -211,6 +211,36 @@ describe('M3 3.7 ui-settings 开关行首启预置（行所有权用户侧径）
     const result = ensureProfileMaterialized(tricky)
     expect(result.patched).toEqual(['cordis.patch.yml']) // 前缀行/缩进行 ≠ ui-settings 行 → 补写
     expect(readFileSync(join(tricky, 'cordis.patch.yml'), 'utf8')).toMatch(/^- id: ui-settings$/m)
+  })
+})
+
+describe('closure：PRODUCT_PLUGINS userLayerRow ↔ materialize 增量补行闭环（发版新增产品插件 → 老用户升级自动补行）', () => {
+  const userLayerShorts = Object.entries(PRODUCT_PLUGINS)
+    .filter(([, toggle]) => toggle.userLayerRow)
+    .map(([key]) => key.split('/').pop()!)
+
+  it('每个 userLayerRow 插件的 productUserLayerInsertEntry 补行均可被 materialize id 键控识别且幂等（逐插件缺席现场 → 补行恰一次 → 重复跑零动作不重复写）', () => {
+    expect(userLayerShorts.length, '配置应至少含一个 userLayerRow 行（全关 = 闭环扫描面失效）').toBeGreaterThan(0)
+    for (const short of userLayerShorts) {
+      const oldDir = join(dir, `closure-${short}`)
+      mkdirSync(oldDir, { recursive: true })
+      // 老用户现场：其余产品行在场、唯独缺本插件行（该插件发版前建档的升级前快照）
+      const others = userLayerShorts
+        .filter((s) => s !== short)
+        .map((s) => productUserLayerInsertEntry(s))
+      writeFileSync(join(oldDir, 'cordis.patch.yml'), `${others.join('\n')}${others.length > 0 ? '\n' : ''}`, 'utf8')
+      const first = ensureProfileMaterialized(oldDir)
+      expect(first.patched, `${short} 缺行应触发补行`).toContain('cordis.patch.yml')
+      const after = readFileSync(join(oldDir, 'cordis.patch.yml'), 'utf8')
+      // 补行形制 = productUserLayerInsertEntry 产物（id 键控识别 + name 行同源）
+      expect(after).toContain(productUserLayerInsertEntry(short))
+      // 幂等：id 键控行恰一次（重复跑不重复写）
+      const rowHits = after.match(new RegExp(`^\\s*- id:\\s*dsh-forge-${short}\\s*$`, 'gm'))
+      expect(rowHits, `${short} 补行应恰一次`).toHaveLength(1)
+      const second = ensureProfileMaterialized(oldDir)
+      expect(second.patched, `${short} 行在场后重复跑应零动作`).toEqual([])
+      expect(readFileSync(join(oldDir, 'cordis.patch.yml'), 'utf8')).toBe(after)
+    }
   })
 })
 

@@ -42,4 +42,22 @@ const result = spawnSync('pnpm exec electron-builder --win --config electron-bui
   cwd: ROOT,
   env: process.env,
 })
-process.exit(result.status ?? 1)
+if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1)
+
+// 封包成功 ≠ 内容正确：末端强制 assemble-installer-resources.mjs 同口径 --check
+// 复核 release/staging + release/app 关键文件（装配守卫漏跑的最后一道兜底）。
+// 校验失败：assemble 脚本 CHECK FAILED 报出缺失清单并 exit 1（本脚本透传退出码）；
+// 校验通过：输出 PACKAGING_CHECK_OK 可辨识行。
+console.log('[dist:win] electron-builder 成功，末端自动关键文件复核（--check）...')
+const check = spawnSync('node scripts/assemble-installer-resources.mjs --check', {
+  shell: true,
+  stdio: 'inherit',
+  cwd: ROOT,
+  env: process.env,
+})
+if ((check.status ?? 1) !== 0) {
+  console.error('[dist:win] PACKAGING_CHECK_FAILED —— 安装包关键文件复核未通过（缺失清单见上），拒绝声明封包成功')
+  process.exit(check.status ?? 1)
+}
+console.log('[dist:win] PACKAGING_CHECK_OK —— staging + app 关键文件复核通过')
+process.exit(0)
