@@ -42,6 +42,10 @@ export function createElectronBuilderConfig(rootVersion = ROOT_VERSION) {
     // 见文件头注记：child 派生 + native prebuilds + tsc 多文件产物 = 全真实文件。
     // app 目录 = 装载器 + 清单（真实 main 在 extraResources runtime/host-dist）
     asar: false,
+    // 压缩档位：NSIS 载荷的实际 7z 档位由 scripts/dist-win.mjs 注入的
+    // ELECTRON_BUILDER_COMPRESSION_LEVEL 决定（默认 1，优先级高于本字段——
+    // compute7zCompressArgs env 分支）；此字段仅在移除该 env 时生效
+    // （store=仅存储，体积膨胀 4 倍+已实证不可用；normal=26.x 映射 -mx=9）
     files: ['main.js', 'package.json'],
     // 显式 filter（M1 同款）：electron-builder 拷贝 filter 硬编码剔除「拷贝源根级
     // node_modules」——运行时树须嵌 runtime/ 一层；filter 同时自证物化内容边界

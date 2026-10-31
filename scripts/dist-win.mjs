@@ -1,14 +1,12 @@
 #!/usr/bin/env node
-// `pnpm dist:win` 末端 —— electron-builder NSIS 封包（含 7za 内存坑默认值）。
+// `pnpm dist:win` 末端 —— electron-builder NSIS 封包。
 //
-// 内存坑（本机实证）：electron-builder 26.17 对 7z 载荷硬编码 -mx=9
-// （app-builder-lib archive.js compute7zCompressArgs：非 zip 一律 "9"，config
-// compression:"normal" 不降级），而其自带 7za.exe 为 32 位（7-Zip 24.09 (x86)，
-// ~2GB 地址空间）。~870MiB staging + 64MB LZMA 字典 × 多线程 match finder
-// → "Can't allocate required memory!"（退出码 8）。
-// 官方逃生门 = ELECTRON_BUILDER_COMPRESSION_LEVEL（compute7zCompressArgs 显式
-// 读取并校验 0-9）：本脚本默认压到 5（16MB 字典，内存约 1/4；体积差异 <1%），
-// 需要极限体积时显式设 9 可覆盖。
+// 压缩档位：7z 载荷实际档位 = ELECTRON_BUILDER_COMPRESSION_LEVEL（compute7zCompressArgs
+// env 分支，优先级高于 config compression 字段）。默认 1 = 速度优先（实测：mx=1 总耗时
+// 1.5min/296MB，mx=5 3.2min/233MB）。覆盖方式二选一：
+//   pnpm run dist:win 5              （位置参数，1-9 单数字）
+//   ELECTRON_BUILDER_COMPRESSION_LEVEL=9 pnpm dist:win（环境变量）
+// 本机实证（Defender 排除开发链路后）：mx=1 94s/296MB，mx=5 192s/233MB，其余段 67s 恒定。
 //
 // 下载镜像（本机实证）：electron-builder 默认从 GitHub Releases 拉 Electron
 // 运行时 zip（electron-v44.0.0-win32-x64.zip ~130MB）及自身 binaries（nsis/
@@ -20,9 +18,19 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-const level = process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL ?? '5'
-process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL = level
-console.log(`[dist:win] ELECTRON_BUILDER_COMPRESSION_LEVEL=${level}${level === '5' ? '（默认，防 32 位 7za -mx=9 内存耗尽）' : '（用户覆盖）'}`)
+// 位置参数（单数字 1-9）> ELECTRON_BUILDER_COMPRESSION_LEVEL env > 默认 1
+// 用法：pnpm run dist:win 5
+const posArg = process.argv.slice(2).find(a => /^[1-9]$/.test(a))
+
+if (posArg != null) {
+  process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL = posArg
+  console.log(`[dist:win] ELECTRON_BUILDER_COMPRESSION_LEVEL=${posArg}（位置参数覆盖）`)
+} else if (process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL == null) {
+  process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL = '1'
+  console.log('[dist:win] ELECTRON_BUILDER_COMPRESSION_LEVEL=1（默认，速度优先）')
+} else {
+  console.log(`[dist:win] ELECTRON_BUILDER_COMPRESSION_LEVEL=${process.env.ELECTRON_BUILDER_COMPRESSION_LEVEL}（env 覆盖）`)
+}
 
 process.env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/'
 process.env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron-builder-binaries/'
