@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { describe, beforeEach, expect, it, vi } from 'vitest'
 import type { ForgeProposalsService, ForgeTasksService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import forgePlugin, { _resetExpertResolverSingletonForTests } from './index.js'
-import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
+import { createExpertProfileResolver, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
 import type { ExpertProfileResolver } from './faces.js'
 import { FORGE_COMMAND_NAMES } from './commands/index.js'
 import type { ForgeCommandDefinition, ForgeEventRegisterFace } from './faces.js'
@@ -737,13 +737,14 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
 
   /** experts 服务桩（registerRoot/refresh 调用记账 + 按键返回档案桩） */
   function expertsFace() {
-    const calls: { root?: string; refresh: number } = { refresh: 0 }
+    const calls: { root?: string; rootPluginName?: string; refresh: number } = { refresh: 0 }
     return {
       calls,
       face: {
         get: (key: string) => ({ name: key, title: `T:${key}`, personaMd: `md:${key}`, tools: ['read'] }),
-        registerRoot: (_ctx: unknown, dir: string) => {
+        registerRoot: (_ctx: unknown, dir: string, pluginName?: string) => {
           calls.root = dir
+          calls.rootPluginName = pluginName
         },
         refresh: async () => {
           calls.refresh += 1
@@ -1067,6 +1068,7 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     const dispose = forgePlugin(ctxWithoutReflectExperts as never)
     expect(rt.registeredTools).toHaveLength(19)
     expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR) // registerRoot 装配副作用在场
+    expect(calls.rootPluginName).toBe(FORGE_PACKAGE_NAME) // 实例 ID 前缀 = 包名（experts.<实例ID> 配置键寻址契约——D6）
     expect(calls.refresh).toBe(1)
     const resolver = provided.get('forgeExperts') as ExpertProfileResolver
     expect(typeof resolver).toBe('function')

@@ -545,6 +545,11 @@ export function createProjectContainerDirs(projects: ProjectDirServiceFace): Pro
  *  以本模块编译产物 dist/faces.js 为基一句径派生，与包布局绑定） */
 export const FORGE_EXPERTS_ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'experts')
 
+/** 本包包名（registerRoot 的 pluginName 实参——专家实例 ID 前缀 `插件名#键`，proposal
+ *  expert-squad-default-routing D6 寻址契约；缺席 = expert-squad 侧回落 `plugin` 前缀，
+ *  experts.<实例ID> 配置键（如 `@dsh-forge/plugin-forge#tech-writer`）结构性不命中）。 */
+export const FORGE_PACKAGE_NAME = '@dsh-forge/plugin-forge' as const
+
 /**
  * experts 服务结构最小面（expert-squad registry 收窄——本插件不依赖该包，结构兼容消费；
  * get 的 fail-loud 错误语义（expert not found / disabled: <key>）由实现侧承担，本面原样透传）。
@@ -562,8 +567,9 @@ export interface ExpertsServiceFace {
     readonly provider?: string
     readonly reasoning?: 'low' | 'medium' | 'high'
   }
-  /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次）。 */
-  registerRoot(ctx: unknown, dir: string): void
+  /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次；pluginName = 实例
+   *  ID 前缀，FORGE_PACKAGE_NAME 单源）。 */
+  registerRoot(ctx: unknown, dir: string, pluginName?: string): void
   /** 整体重扫（registerRoot 后的显式生效面；结构可选——缺席 = 实现无刷新语义）。 */
   refresh?(): Promise<void>
 }

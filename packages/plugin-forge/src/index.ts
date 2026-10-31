@@ -27,7 +27,7 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -150,7 +150,9 @@ const forgePlugin: ForgePlugin = Object.assign(
     try {
       const experts = readExpertsFace()
       if (experts !== undefined) {
-        experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR)
+        // pluginName = 实例 ID 前缀（bug 0b83e3aa 链——缺席时 expert-squad 回落 `plugin`
+        // 前缀，experts.`@dsh-forge/plugin-forge#键` 配置键结构性不命中，D6 寻址契约破）。
+        experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME)
         // refresh 完成屏障（expert-squad-forge 1.10）：refresh 是 fire-and-forget 的重扫——
         // 未结算前首笔档案取用会误触发 not-found fail-loud（自愈但语义误报）。promise 记账
         // 供 resolver 首调 await；错误在此吞掉归一为 settled-safe（fail-soft 诊断不变）。
