@@ -26,7 +26,7 @@ import type {
 import { FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
 import { createLoopRegistry } from './registry.js'
-import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageHook, LoopTriageInput } from './driver.js'
+import type { LoopDriver, LoopDriverDeps, LoopEscalation, LoopTriageDecision, LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from './driver.js'
 import type { LoopRecord } from './registry.js'
 import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
@@ -312,7 +312,8 @@ function build(options: {
   claim?: Array<ClaimTaskResult | Error>
   stats?: TaskStats[]
   query?: QueryTaskResult[]
-  triage?: (input: LoopTriageInput) => Promise<LoopTriageDecision>
+  /** 处置钩子桩（决策返回形状双容：裸决策自动包 `{ decision }`；triage-progress-row 结果形直传） */
+  triage?: (input: LoopTriageInput) => Promise<LoopTriageDecision | LoopTriageDecisionResult>
   /** 真钩子注册径（1.11 装配接线收口——SC4 端到端）：工厂收到 tasks 桩，装配期建钩子 */
   triageHook?: (h: ReturnType<typeof tasksHarness>) => LoopTriageHook
   /** 事件仓桩（blocked 族落盘委派观察——projectId 解析缝载体断言） */
@@ -404,7 +405,16 @@ function build(options: {
         progressCalls.push(data)
       },
     },
-    ...(options.triage !== undefined ? { triage: { run: options.triage } } : {}),
+    ...(options.triage !== undefined
+      ? {
+          triage: {
+            run: async (input: LoopTriageInput): Promise<LoopTriageDecisionResult> => {
+              const out = await options.triage!(input)
+              return typeof out === 'object' && out !== null && 'decision' in out ? (out as LoopTriageDecisionResult) : { decision: out as LoopTriageDecision }
+            },
+          },
+        }
+      : {}),
     ...(options.triageHook !== undefined ? { triage: options.triageHook(h) } : {}),
     ...(options.knownContainers !== undefined ? { knownContainers: options.knownContainers } : {}),
     ...(options.commitLanding !== undefined ? { commitLanding: options.commitLanding } : {}),
@@ -3738,5 +3748,169 @@ describe('循环里程碑 diag 埋点（bug 33728995 ④——diag/log 落盘可
     expect(diag.some((d) => d.event === 'loop-settle' && d.message.includes('feat-x/2.5'))).toBe(true)
     // 载荷就地携带可得字段（AGENTS §7 埋点规范）
     expect(diag[0]).toMatchObject({ projectId: PROJECT, sessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── triage-progress-row · 两发事件与台账发射缝 ───────────────────────────
+
+describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-progress-row）', () => {
+  function blockedScript(built: Built): void {
+    built.h.lists.created = [] // blocked 无 follow-up——处置阶梯径
+  }
+
+  function queryOfBlocked(): QueryTaskResult {
+    return {
+      task: snapshot({ taskStatus: 'blocked' }),
+      container: { kind: 'feature', slug: 'feat-x', title: 'feat-x' },
+      records: [
+        { verb: 'submit', toStatus: 'blocked', reason: 'tests hang on flaky selector', files: ['packages/x/src/changed.ts'], actor: 'plugin-tool', createdAt: '2026-10-11T01:00:00.000Z' },
+      ],
+    }
+  }
+
+  const BASE_STATS = [
+    statsOf({ pending: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+    statsOf({ in_progress: 1, blocked: 1 }),
+  ]
+
+  it('两发时序 + 台账序：running（无 workerSessionId）→ 终态（携 workerSessionId/决策动作）；decided → outcome（add-fix 径携 fixTaskKey）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('fix-1'), NO_TASK],
+      stats: [
+        statsOf({ pending: 2 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 2 }),
+        statsOf({ completed: 2 }),
+      ],
+      query: [queryOfBlocked(), queryOf('completed')],
+      // 契约定形返回形：决策 + 处置子会话 id（spawn 产物 handle 上浮）
+      triage: async () => ({ decision: { action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }, workerSessionId: 'triage-1' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 两发时序：running 在前（无 workerSessionId）→ 终态在后（携 workerSessionId + 决策动作 note）
+    const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
+    expect(triageProgress).toHaveLength(2)
+    const [running, terminal] = triageProgress as [ForgeProgressEventData, ForgeProgressEventData]
+    expect(running).toMatchObject({ status: 'running', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst' })
+    expect(running.note).toContain('第 1 次')
+    expect(running.workerSessionId).toBeUndefined()
+    expect(terminal).toMatchObject({ status: 'completed', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1' })
+    expect(terminal.note).toContain('决定创建修复任务')
+    // 台账时序因果：decided（执行前）→ outcome（执行尝试后）；scenario 事件 running 先于 decided
+    const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
+    expect(types).toEqual(['triage-decided', 'triage-outcome'])
+    const decided = built.events.find((e) => e.type === 'triage-decided')!.payload as Record<string, unknown>
+    expect(decided).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'add-fix', note: '修复选择器', workerSessionId: 'triage-1', expertKey: 'triage-analyst' })
+    expect(String(decided.inputDigest)).toContain('tests hang on flaky selector')
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as Record<string, unknown>
+    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', workerSessionId: 'triage-1', expertKey: 'triage-analyst', fixTaskKey: 'feat-x/fix-2' })
+    expect(outcome.replayed).toBeUndefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('spawn 失败径：终态事件仍发射且无 workerSessionId；重试失败径必发 outcome（失败原因）；失败散点走 diag（event 前缀 triage）', async () => {
+    const diag: Array<{ level: string; event: string; message: string }> = []
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => {
+        throw new Error('subagent factory rejected')
+      },
+      diag: (p) => diag.push(p),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver) // 三次重试到顶 → disposition-over-limit 挂起
+    // 终态事件逐次发射（×3）且 payload 均无 workerSessionId
+    const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
+    expect(triageProgress).toHaveLength(6) // running ×3 + 终态 ×3
+    const terminals = triageProgress.filter((e) => e.status !== 'running')
+    expect(terminals).toHaveLength(3)
+    for (const t of terminals) {
+      expect(t).toMatchObject({ status: 'blocked', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst' })
+      expect(t.workerSessionId).toBeUndefined()
+      expect(t.note).toContain('处置分析失败')
+    }
+    // 重试失败径必发 outcome（失败原因——不只进 escalation history）
+    const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
+    expect(outcomes).toHaveLength(3)
+    for (const o of outcomes) {
+      expect(o.payload).toMatchObject({ taskKey: 'feat-x/2.5', outcome: 'failed', failureReason: 'subagent factory rejected' })
+    }
+    expect(built.events.some((e) => e.type === 'triage-decided')).toBe(false)
+    // 失败散点走 diag 埋点（AGENTS §7——event 前缀 triage）
+    const triageDiag = diag.filter((d) => d.event.startsWith('triage-'))
+    expect(triageDiag).toHaveLength(3)
+    expect(triageDiag[0]).toMatchObject({ level: 'warn', event: 'triage-failed' })
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('replayed 径：决策缓存重放不发 decided、每次执行尝试发 outcome（replayed 标记 + 处置会话 id 随缓存回放）', async () => {
+    let triageCalls = 0
+    let addTaskCalls = 0
+    const built = build({
+      claim: [claimed('2.5'), claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOfBlocked()],
+      triage: async () => {
+        triageCalls += 1
+        return { decision: { action: 'add-fix', title: 'Fix: flaky selector', note: '修选择器等待' }, workerSessionId: 'triage-9' }
+      },
+    })
+    blockedScript(built)
+    built.h.tasks.addTask = async (input: AddTaskInput) => {
+      addTaskCalls += 1
+      if (addTaskCalls === 1) throw new Error('db busy') // 首次落库失败——缓存保留
+      return { taskId: 'fix-uuid', slug: input.source.slug, localId: 'fix-2', reused: false }
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(triageCalls).toBe(1)
+    // 重放径：decided 恰一次（首跑产出点）；outcome 每次执行尝试一枚（首败 + 重放成功）
+    const decideds = built.events.filter((e) => e.type === 'triage-decided')
+    expect(decideds).toHaveLength(1)
+    const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
+    expect(outcomes).toHaveLength(2)
+    const [first, second] = outcomes.map((e) => e.payload as Record<string, unknown>)
+    expect(first).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'failed', failureReason: 'db busy' })
+    expect(first.replayed).toBeUndefined()
+    expect(second).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', fixTaskKey: 'feat-x/fix-2', workerSessionId: 'triage-9' })
+    expect(second.replayed).toBe(true)
+    await built.driver.stop({ ownerSessionId: OWNER })
+  })
+
+  it('ask-user 挂起动作：outcome = 挂起动作本身（ask-user），decided 在执行前照发', async () => {
+    const built = build({
+      claim: [claimed('2.5'), claimed('should-not-claim')],
+      stats: BASE_STATS,
+      query: [queryOfBlocked()],
+      triage: async () => ({ decision: { action: 'ask-user' }, workerSessionId: 'triage-3' }),
+    })
+    blockedScript(built)
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
+    expect(types).toEqual(['triage-decided', 'triage-outcome'])
+    expect(built.events.find((e) => e.type === 'triage-decided')!.payload).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'ask-user', workerSessionId: 'triage-3' })
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as Record<string, unknown>
+    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'ask-user', workerSessionId: 'triage-3' })
+    expect(outcome.fixTaskKey).toBeUndefined()
+    expect(outcome.splitTaskKey).toBeUndefined()
+    await built.driver.stop({ ownerSessionId: OWNER })
   })
 })

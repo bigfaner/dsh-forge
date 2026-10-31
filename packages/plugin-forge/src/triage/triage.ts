@@ -17,7 +17,7 @@ import {
   workerAgentOptionsOf,
 } from '../dispatch-core/index.js'
 import type { PoolSnapshot, SpawnWorker } from '../dispatch-core/index.js'
-import type { LoopTriageDecision, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
+import type { LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
 import type { ExpertProfileResolver, ForgeExpertProfile } from '../faces.js'
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
@@ -87,7 +87,7 @@ export interface TriageHookDeps {
  */
 export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
   return {
-    async run(input: LoopTriageInput): Promise<LoopTriageDecision> {
+    async run(input: LoopTriageInput): Promise<LoopTriageDecisionResult> {
       // ① 输入四件套之③④：池快照 + 最近记录（现读——处置瞬间取数）
       const [stats, detail] = await Promise.all([
         deps.tasks.taskStats({ projectId: input.projectId, source: input.source }),
@@ -144,14 +144,15 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         ...(persona !== undefined ? { persona } : {}),
         label: `${input.task.slug}/${input.task.localId} · 处置分析`,
       })
-      // ④ 终态 output → 结构化决策（dispose 幂等收尾——成功失败同径）
+      // ④ 终态 output → 结构化决策 + 处置子会话 id 上浮（triage-progress-row 契约定形——
+      //    spawn 产物 handle 直取 workerSessionId；dispose 幂等收尾——成功失败同径）
       let output: string
       try {
         ;({ output } = await handle.result)
       } finally {
         await handle.dispose()
       }
-      return parseTriageDecision(output)
+      return { decision: parseTriageDecision(output), workerSessionId: handle.workerSessionId }
     },
   }
 }

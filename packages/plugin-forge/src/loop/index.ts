@@ -27,6 +27,7 @@ export type {
   LoopStopLoopResult,
   LoopStopResult,
   LoopTriageDecision,
+  LoopTriageDecisionResult,
   LoopTriageHook,
   LoopTriageInput,
 } from './driver.js'

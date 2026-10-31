@@ -354,3 +354,66 @@ describe('resolveContainerDir 未解析（undefined/空串/非绝对）——fai
     expect(existsSync(join(process.cwd(), 'logs', 'c61.jsonl'))).toBe(false)
   })
 })
+
+// ─────────────────────────── triage-progress-row · triage 台账行 append-only 追加形态 ───────────────────────────
+
+describe('triage 台账行（triage-decided / triage-outcome——logs/{slug}.jsonl 同流追加）', () => {
+  let home: string
+  let container: string
+
+  beforeAll(() => {
+    home = mkdtempSync(join(tmpdir(), 'forge-log-triage-'))
+    container = join(home, 'Z-ws-demo@a1b2c3d4')
+  })
+
+  afterAll(() => {
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  /** triage 台账事件构造（taskKey 载荷——归属判定落任务容器 slug，与任务事件同时间线） */
+  function triageEvent(type: 'triage-decided' | 'triage-outcome', payload: Record<string, unknown>): ForgePluginEvent {
+    return { ts: 1_760_000_000_000, sessionId: 'owner-1', slug: 'feat-acc', type, payload } as ForgePluginEvent
+  }
+
+  it('append-only 追加形态：连续 emit 后行数只增、行序 = 发射序、行 JSON 符合 contracts 契约（信封键序 + 判别 type/payload）', () => {
+    const file = forgeLogFileOf(container, 'feat-acc')
+    const listener = createForgeLogListener({ resolveContainerDir: () => container })
+    const decided = triageEvent('triage-decided', {
+      taskKey: 'feat-acc/1.2',
+      attempt: 1,
+      action: 'add-fix',
+      note: '修复选择器',
+      inputDigest: 'tests hang on flaky selector｜处置历史：第1次处置——决定创建修复任务（修复选择器）',
+      workerSessionId: 'triage-1',
+      expertKey: 'triage-analyst',
+    })
+    const outcome = triageEvent('triage-outcome', {
+      taskKey: 'feat-acc/1.2',
+      attempt: 1,
+      outcome: 'add-fix',
+      workerSessionId: 'triage-1',
+      expertKey: 'triage-analyst',
+      fixTaskKey: 'feat-acc/fix-1',
+    })
+    listener.handle(decided)
+    expect(readForgeEventLog(file)).toHaveLength(1)
+    listener.handle(outcome)
+    expect(readForgeEventLog(file)).toHaveLength(2) // 追加只增——前一行不被覆写
+    listener.handle(triageEvent('triage-outcome', { taskKey: 'feat-acc/1.2', attempt: 2, outcome: 'failed', failureReason: 'spawn boom', replayed: true }))
+    const lines = readFileSync(file, 'utf8').split('\n').filter((l) => l !== '')
+    expect(lines).toHaveLength(3)
+    // 行序 = 发射序（append-only——decided 在执行前、outcome 在执行尝试后，同一单写者串行追加）
+    const events = lines.map((l) => JSON.parse(l) as ForgePluginEvent)
+    expect(events.map((e) => e.type)).toEqual(['triage-decided', 'triage-outcome', 'triage-outcome'])
+    // 行 JSON 符合 contracts 契约：信封键序恒 ts/sessionId/slug/type/payload；slug = 归属判定产物（taskKey 前缀）
+    for (const line of lines) {
+      const parsed = JSON.parse(line) as Record<string, unknown>
+      expect(Object.keys(parsed)).toEqual(['ts', 'sessionId', 'slug', 'type', 'payload'])
+      expect(parsed.slug).toBe('feat-acc')
+    }
+    // 归属判定经 payload.taskKey 前缀——triage 行与任务事件串联读法同容器同文件
+    expect((events[0]!.payload as { taskKey: string }).taskKey).toBe('feat-acc/1.2')
+    expect((events[1]!.payload as { fixTaskKey?: string }).fixTaskKey).toBe('feat-acc/fix-1')
+    expect((events[2]!.payload as { failureReason?: string }).failureReason).toBe('spawn boom')
+  })
+})
