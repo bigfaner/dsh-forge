@@ -39,6 +39,11 @@ export interface ForgePipelineSectionVars {
    * blitz = 突击。双模式各自模板（目录树与 mermaid 流程图）。
    */
   readonly mode?: ForgePipelineMode
+  /**
+   * 本项目是否为 git 仓库（调用点按项目根 `.git` 在场探测注入）。true = 总纲追加
+   * git 纪律规则；缺省/false = 不追加（非 git 项目零提示词差异）。渲染纯函数不做探测。
+   */
+  readonly isGitRepo?: boolean
 }
 
 /** 模式归一（缺省/未知值回退远征——渲染纯函数永不炸） */
@@ -50,7 +55,8 @@ export function modeOf(mode: string | undefined): ForgePipelineMode {
  * 远征模式段模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
  * 四条核心规则与突击版逐字相同——允许重复，人类可读性优先，禁止抽公共。
  */
-function expeditionSection(docsRoot: string): string {
+function expeditionSection(docsRoot: string, isGitRepo: boolean): string {
+  const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
   const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
 
 文档根：
@@ -77,7 +83,7 @@ function expeditionSection(docsRoot: string): string {
 - 状态存于 forge 管线的状态库（任务/提案/特性/文档四域，按工作区注册）；一切状态判断以管线工具的查询结果为准，不以盘上文件或记忆推断。
 - 任务身份 = slug/local-id；blocked 任务派生修复任务携带 fix-N；偏差跟进携带 disc-N；slug 与 feature 目录名一致。
 - 提案 accept/reject 仅在用户明示决定后记录。
-- 进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。
+- 进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。${git}
 
 ${docs}
 ### 流程
@@ -104,7 +110,8 @@ flowchart LR
  * 突击模式段模板（自包含；docsRoot 为空 = 省略文档位置与存储约束段）。
  * 四条核心规则与远征版逐字相同——允许重复，人类可读性优先，禁止抽公共。
  */
-function blitzSection(docsRoot: string): string {
+function blitzSection(docsRoot: string, isGitRepo: boolean): string {
+  const git = isGitRepo ? '\n- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。' : ''
   const docs = docsRoot === '' ? '' : `### 文档位置与存储约束
 
 文档根：
@@ -129,7 +136,7 @@ function blitzSection(docsRoot: string): string {
 - 状态存于 forge 管线的状态库（任务/提案/特性/文档四域，按工作区注册）；一切状态判断以管线工具的查询结果为准，不以盘上文件或记忆推断。
 - 任务身份 = slug/local-id；blocked 任务派生修复任务携带 fix-N；偏差跟进携带 disc-N；slug 与 feature 目录名一致。
 - 提案 accept/reject 仅在用户明示决定后记录。
-- 进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。
+- 进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。${git}
 
 ${docs}
 ### 流程
@@ -164,7 +171,10 @@ export function renderForgePipelineSection(vars: ForgePipelineSectionVars = {}):
   const mode = modeOf(typeof vars.mode === 'string' ? vars.mode : undefined)
   const dir = typeof vars.forgeDir === 'string' ? vars.forgeDir.trim().replace(/[\\/]+$/, '') : ''
   const docsRoot = dir === '' ? '' : docsRootOfForgeDir(dir)
-  const body = mode === 'blitz' ? blitzSection(docsRoot) : expeditionSection(docsRoot)
+  const body =
+    mode === 'blitz'
+      ? blitzSection(docsRoot, vars.isGitRepo === true)
+      : expeditionSection(docsRoot, vars.isGitRepo === true)
   // 标签行独立成 HTML 块：开标签后/闭标签前各留空行，段内 markdown（标题/列表/围栏）
   // 才不被 HTML 块吞掉内联化（GUI 按 markdown 渲染系统提示词）。
   return `<${XML_TAGS.forgePipeline}>\n\n${body}\n</${XML_TAGS.forgePipeline}>`

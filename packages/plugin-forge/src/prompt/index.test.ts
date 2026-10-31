@@ -77,6 +77,28 @@ describe('总纲四条核心规则（双模式逐字在场——允许重复、�
   })
 })
 
+describe('git 纪律条件注入（isGitRepo 键）', () => {
+  const GIT_RULE = '- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。'
+
+  it('isGitRepo=true：总纲追加 git 纪律规则（双模式逐字在场，位于规则 4 之后）', () => {
+    for (const mode of ['expedition', 'blitz'] as const) {
+      const v = renderForgePipelineSection({ mode, forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true })
+      expect(v).toContain(GIT_RULE)
+      expect(v.indexOf('未确认不得推进。')).toBeLessThan(v.indexOf(GIT_RULE))
+      expect(v.indexOf(GIT_RULE)).toBeLessThan(v.indexOf('### 流程'))
+    }
+  })
+
+  it('isGitRepo 缺省/false：规则零出现（非 git 项目零提示词差异）', () => {
+    for (const vars of [undefined, { isGitRepo: false }, { isGitRepo: undefined }]) {
+      for (const mode of ['expedition', 'blitz'] as const) {
+        expect(renderForgePipelineSection({ ...vars, mode })).not.toContain(GIT_RULE)
+      }
+    }
+    expect(text).not.toContain('git 纪律')
+  })
+})
+
 describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
   const EXPEDITION = renderForgePipelineSection({ mode: 'expedition', forgeDir: 'Z:/ws/demo/.forge' })
   const BLITZ = renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge' })

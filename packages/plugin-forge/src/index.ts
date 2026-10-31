@@ -18,7 +18,8 @@
 // 交出合并 disposer（fiber 卸载即全注销）。
 // projectId 解析缝 = bindingsFile 机制（Interface 8 cwd 数据缝——host 维护
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { existsSync } from 'node:fs'
 import type { ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
@@ -570,6 +571,17 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 独立段常量文本双模式共用（一次注册不重注册）。
     // Root cause: 段是进程级单文本，forgeDir 却是每会话事实——首个绑定项目被当成了全宿主默认。
     const pipelineMode = modeOf(config.mode)
+    // git 纪律条件注入（探测，不缓存）：项目根 = forgeDir 上一级，`.git` 在场（目录或
+    // worktree 文件）= git 仓库 → pipeline 段总纲追加 git 纪律规则。探测缺席/异常 =
+    // 不追加（fail-soft，非 git 项目零提示词差异）。
+    const isGitRepoOfForgeDir = (forgeDir: string | undefined): boolean => {
+      if (forgeDir === undefined) return false
+      try {
+        return existsSync(join(dirname(forgeDir), '.git'))
+      } catch {
+        return false
+      }
+    }
     const sessionForgeDirs = new Map<string, string>()
     const warmSessionForgeDir = (session: { id?: unknown; header?: { cwd?: unknown } }): void => {
       try {
@@ -614,11 +626,14 @@ const forgePlugin: ForgePlugin = Object.assign(
     const disposePipeline = ctx.systemPrompt.section({
       name: FORGE_SECTION_NAME,
       order: FORGE_SECTION_ORDER,
-      text: (context) =>
-        renderForgePipelineSection({
-          forgeDir: context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id),
+      text: (context) => {
+        const forgeDir = context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id)
+        return renderForgePipelineSection({
+          forgeDir,
+          isGitRepo: isGitRepoOfForgeDir(forgeDir),
           mode: pipelineMode,
-        }),
+        })
+      },
     })
     // 3b 协作面驻留段（P1 驻留 / 挂起 P3+P9——injection-spec 载体分配：P1/P9 永走系统提示词）。
     // 段 text 每回合现调：agent.id 缺席 = 空串；registry 投影无命中 = 空串（零固定税——
