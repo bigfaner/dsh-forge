@@ -68,13 +68,23 @@ const recruitParams = z.object({
   skills: z.array(z.string()).optional().describe("Optional skill tags"),
   model: z.string().optional().describe("Optional dispatch model preference"),
   provider: z.string().optional().describe("Optional dispatch provider preference (paired with model at dispatch)"),
+  // 归属层必填（用户裁决：召唤建档须先询问用户放哪层）——缺席即参数错误，
+  // 逼迫调用方（HR 会话）先经 ask-user 确认再建档。
+  target: z
+    .enum(["user", "project"])
+    .describe(
+      "Archive layer. ASK THE USER which layer before calling: " +
+        '"user" = 跨项目共享（$DSH_HOME/experts，角标「用户」）；' +
+        '"project" = 本项目共享（项目根 .dsh/experts，角标「项目」）',
+    ),
   personaMd: z
     .string()
     .min(1)
     .describe("Persona markdown body (sections like 职责/边界/信条); bare {{ is not allowed"),
 });
 
-const updateParams = recruitParams; // 同形：name 即建档键（改键即找不到档案——不可改）
+// update_expert 同形但无 target——编辑恒写回原层（来源保持），不换层
+const updateParams = recruitParams.omit({ target: true });
 
 const enableParams = z.object({
   name: z.string().min(1).describe("Existing expert key to enable"),
@@ -233,6 +243,9 @@ export interface ExpertToolsDeps {
   readonly registry: ExpertsRegistry;
   /** 可写 user 层专家目录（recruit/update 落盘点；返回绝对路径）。 */
   readonly userRoot: () => string;
+  /** 可写 project 层 experts 目录（recruit target="project" 落盘点；
+   *  返回 null = 宿主 cwd 非项目根（打包形态）——project 目标不可用。 */
+  readonly projectRoot?: () => string | null;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -252,6 +265,18 @@ function parseArgs<T extends z.ZodType>(tool: string, schema: T, args: unknown):
 export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[] {
   const { registry, userRoot } = deps;
 
+  /** 建档落点解析（target 必填——调用方须先询问用户归属层）。 */
+  const recruitRootOf = (target: "user" | "project"): string => {
+    if (target === "user") return userRoot();
+    const projectDir = deps.projectRoot?.() ?? null;
+    if (projectDir === null) {
+      throw new ExpertToolError(
+        'recruit_expert: project layer unavailable (host cwd is not a project root) — ask the user and use target "user"',
+      );
+    }
+    return projectDir;
+  };
+
   const recruitTool: ExpertToolDefinition = {
     name: "recruit_expert",
     description:
@@ -265,7 +290,8 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
     async execute(args) {
       const p = parseArgs("recruit_expert", recruitParams, args);
-      const file = join(userRoot(), `${p.name}.md`);
+      const rootDir = recruitRootOf(p.target);
+      const file = join(rootDir, `${p.name}.md`);
       if (existsSync(file)) {
         throw new ExpertToolError(
           `recruit_expert: expert already exists: ${p.name} (${file}) — use update_expert to modify`,

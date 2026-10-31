@@ -446,7 +446,13 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
     });
     delegateAssembly = { status: "registered" };
   }
-  registerExpertTools(toolsFace, { registry, userRoot: resolveUserExpertsRoot });
+  registerExpertTools(toolsFace, {
+    registry,
+    userRoot: resolveUserExpertsRoot,
+    // 召唤 target="project" 落点：cwd 项目根（合理性校验同径——应用目录形态返 null，
+    // tool 侧报错引导回落 user 层）
+    projectRoot: () => resolveCwdProjectExpertsRoot(process.cwd()),
+  });
 }
 
 expertSquadPlugin.inject = ['connection', 'subagents', 'skills'];

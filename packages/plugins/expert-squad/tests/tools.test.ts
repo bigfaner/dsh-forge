@@ -160,6 +160,7 @@ const RECRUIT_ARGS = {
   description: "Runs code review on diffs and files.",
   tools: ["read", "grep"],
   skills: ["review"],
+  target: "user",
   personaMd: "## 职责\nreview code\n",
 };
 
@@ -235,6 +236,49 @@ describe("recruit_expert — 写路径经 frontmatter 校验", () => {
     await refresh();
     const tools = makeTools();
     await expect(tools.recruit_expert!.execute({ ...RECRUIT_ARGS, name: "bad name!" })).rejects.toThrow(ExpertToolError);
+  });
+
+  // 归属层询问裁决（用户 2026-10-31）：target 必填——缺席 = 参数错误（逼迫调用方先问用户）
+  it("target 缺席 → 参数错误（HR 须先询问用户归属层再建档）", async () => {
+    await refresh();
+    const tools = makeTools();
+    const { target: _omit, ...noTarget } = RECRUIT_ARGS;
+    await expect(tools.recruit_expert!.execute(noTarget)).rejects.toThrow(/recruit_expert/);
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
+  });
+
+  it("target=project：写入 projectRoot 目录（非 user 根）", async () => {
+    await refresh();
+    const projectDir = join(dir, "experts-project");
+    mkdirSync(projectDir, { recursive: true });
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        projectRoot: () => projectDir,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, target: "project" })) as {
+      path: string;
+    };
+    expect(result.path.startsWith(projectDir)).toBe(true);
+    expect(existsSync(join(projectDir, "code-reviewer.md"))).toBe(true);
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
+  });
+
+  it("target=project 但宿主 cwd 非项目根（projectRoot=null）→ fail-loud 引导回落 user", async () => {
+    await refresh();
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        projectRoot: () => null,
+      }).map((t) => [t.name, t]),
+    );
+    await expect(tools.recruit_expert!.execute({ ...RECRUIT_ARGS, target: "project" })).rejects.toThrow(
+      /project layer unavailable/,
+    );
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
   });
 });
 
