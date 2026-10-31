@@ -515,11 +515,15 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
             data-xc-origin-switch={multi ? "" : undefined}
             aria-label={`来源 ${originLabel(expert.origin, projectName)}`}
             aria-expanded={multi ? menuOpen === true : undefined}
-            onClick={(event) => {
+            // 切换挂 mousedown（先于 click 捕获相位——外点收起 capture 监听在同一 click
+            // 事件派发中抢先注册的时序竞态下，mousedown 阶段监听必不在位，天然免疫）；
+            // click 仅 stopPropagation 防卡片详情误开
+            onMouseDown={(event) => {
               if (!multi) return; // 单来源 chip 纯展示
               event.stopPropagation();
               onToggleMenu?.();
             }}
+            onClick={(event) => event.stopPropagation()}
           >
             {originLabel(expert.origin, projectName)}
             {multi ? <span className="xc-origin-caret" aria-hidden="true">▾</span> : null}
