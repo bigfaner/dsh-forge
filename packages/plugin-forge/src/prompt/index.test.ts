@@ -50,7 +50,7 @@ describe('renderForgePipelineSection——三段结构 MD 段体', () => {
   })
 })
 
-describe('总纲四条核心规则（双模式逐字在场——允许重复、禁止占位）', () => {
+describe('总纲六条核心规则（双模式逐字在场——允许重复、禁止占位）', () => {
   const RULES = [
     '状态存于 forge 管线的状态库（任务/提案/特性/文档四域，按工作区注册）；一切状态判断以管线工具的查询结果为准，不以盘上文件或记忆推断。',
     '任务身份 = slug/local-id；blocked 任务派生修复任务携带 fix-N；偏差跟进携带 disc-N；slug 与 feature 目录名一致。',

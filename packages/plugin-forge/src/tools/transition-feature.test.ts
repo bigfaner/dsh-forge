@@ -14,7 +14,12 @@ import {
   type TransitionFeatureInput,
 } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
-import { createTransitionFeatureTool, deriveGuardVerdict, parseTransitionFeatureArgs } from './transition-feature.js'
+import {
+  createTransitionFeatureTool,
+  deriveGuardVerdict,
+  DOC_KIND_PHASE,
+  parseTransitionFeatureArgs,
+} from './transition-feature.js'
 import type { ForgeFeaturesToolFace, ForgeToolDeps } from './index.js'
 
 const EXEC: ToolExecFace = { agent: { session: { id: 'sess-1', header: { cwd: 'C:\\ws\\demo' } } } }
@@ -164,6 +169,21 @@ describe('deriveGuardVerdict（tool 层相位守卫两支）', () => {
   })
 })
 
+describe('DOC_KIND_PHASE 镜像漂移锚（core phase-deriver DOC_KIND_PHASE 全键 pin）', () => {
+  it('键集 = 七 DocKind 全表（加 DocKind 时类型不闭合先红 + 此处键集断言即红）', () => {
+    expect(Object.keys(DOC_KIND_PHASE).sort()).toEqual([
+      'er-diagram',
+      'page-map',
+      'prd-spec',
+      'sql-schema',
+      'tech-design',
+      'ui-functions',
+      'user-stories',
+    ])
+    expect(Object.values(DOC_KIND_PHASE).every((v) => v === 'prd' || v === 'design')).toBe(true)
+  })
+})
+
 describe('transitionFeature execute', () => {
   it('成功：slug→featureId 服务内解析 + reason 透传（转移落 feature_records 由 core 伴随）', async () => {
     const h = harness({ featureStatus: 'prd' })
@@ -198,6 +218,13 @@ describe('transitionFeature execute', () => {
     const tool = createTransitionFeatureTool(h.deps)
     await tool.execute(ARGS, EXEC)
     expect(h.transitioned).toHaveLength(1) // 哨兵未触发 = 全程无宏任务穿插
+  })
+  it('TOCTOU 哨兵负向对照：手动 setMacrotaskFlag 置位后 execute → 宏任务穿插即拒（证明哨兵能红）', async () => {
+    const h = harness({ featureStatus: 'prd' })
+    h.setMacrotaskFlag()
+    const tool = createTransitionFeatureTool(h.deps)
+    await expect(tool.execute(ARGS, EXEC)).rejects.toThrow(/TOCTOU window open/)
+    expect(h.transitioned).toEqual([])
   })
   it('features 服务缺席 → fail-loud 拒绝（降级不静默代转）', async () => {
     const h = harness({ withFeaturesFace: false })

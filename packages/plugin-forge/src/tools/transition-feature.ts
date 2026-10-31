@@ -11,7 +11,7 @@
 //   不落后于已登记文档相位，防「先回拨后补文档」等价复活反例（复检 V-1c）。
 // TOCTOU 关闭条件（复检 V-1b）：execute 内快照读取（listFeatures/listFeatureDocs 服务体
 // 同步读库）→ 守卫判定 → core transitionFeature 调用全程不插 await——.then 微任务链
-// 不让位宏任务，better-sqlite3 单连接同步写事务不可穿插，读+检+写机械同 span。
+// 不让位宏任务，better-sqlite3 单连接同步写事务不可穿插，微任务链闭合、宏任务不可穿插。
 // slug→featureId 服务内解析（upsertFeatureDoc 先例同法——uuid 锚不进 agent 面）；
 // 转移落 feature_records（verb=transition，reason 载前缀标记）经 core 服务闭包伴随。
 // 返回面 = contracts FeatureRow 透传 + formatOk 双友好渲染；typed 错误 → 失败 DTO。
@@ -49,7 +49,7 @@ const REASON_PREFIX = /^(隐式赞同|显式指令)：/
  * 插件禁 import core，四域互禁 import 彼此的既定装配边界；值漂移由本文件 pin 注释 +
  * transition-feature.test.ts 守卫用例锚定。加 DocKind 即此处需同步裁决）。
  */
-const DOC_KIND_PHASE: Readonly<Record<DocKind, 'prd' | 'design'>> = {
+export const DOC_KIND_PHASE: Readonly<Record<DocKind, 'prd' | 'design'>> = {
   'prd-spec': 'prd',
   'user-stories': 'prd',
   'ui-functions': 'prd',
@@ -235,8 +235,8 @@ export function createTransitionFeatureTool(deps: ForgeToolDeps): ForgeToolDefin
         const projectId = requireProjectId(deps.resolveProjectId, session)
         // TOCTOU 关闭条件（proposal §2.3 / verification report-round2 V-1b）：以下快照读取
         // （两 list* 服务体同步读库）→ 守卫判定 → core transitionFeature 调用全程无 await
-        // ——.then 微任务链不让位宏任务，better-sqlite3 单连接同步写事务不可穿插，读+检+
-        // 写同一同步 span（测试锚定：transition-feature.test.ts 宏任务哨兵用例）。
+        // ——.then 微任务链不让位宏任务，better-sqlite3 单连接同步写事务不可穿插，微任务
+        // 链闭合、宏任务不可穿插（测试锚定：transition-feature.test.ts 宏任务哨兵用例）。
         return features.listFeatures({ projectId }).then((cards) =>
           features.listFeatureDocs({ projectId }).then((docs) => {
             // slug→featureId 服务内解析（upsertFeatureDoc 先例同法——调用方不持 id）

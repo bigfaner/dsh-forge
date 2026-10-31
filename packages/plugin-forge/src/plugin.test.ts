@@ -102,8 +102,8 @@ describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals + fo
   })
 })
 
-describe('注册面集合 pin（十四 tool：M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug 两 bug 读径 + 3b stopTaskLoop 停止入口）', () => {
-  it('十四 tool 注册且名 = FORGE_TOOL_NAMES 列序（单源——3b stopTaskLoop 补位成十四）', () => {
+describe('注册面集合 pin（十九 tool：M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug 两 bug 读径 + 3b stopTaskLoop 停止入口）', () => {
+  it('十九 tool 注册且名 = FORGE_TOOL_NAMES 列序（单源——3b stopTaskLoop 补位成十九）', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.ctx())
     expect(rt.registeredTools.map((t) => t.name)).toEqual([...FORGE_TOOL_NAMES])
@@ -486,7 +486,7 @@ describe('1.16 段 forgeDir 注入（按会话工作区解析——bug 5adb5960�
 })
 
 describe('createForgeTools 直装配（工厂面——注册器之外的单源消费）', () => {
-  it('deps 注入即得十四 tool 定义组（键 = FORGE_TOOL_NAMES 列序；loop 驱动器/登记表必给）', () => {
+  it('deps 注入即得十九 tool 定义组（键 = FORGE_TOOL_NAMES 列序；loop 驱动器/登记表必给）', () => {
     const tools = createForgeTools({
       tasks: {} as ForgeTasksService,
       proposals: {} as ForgeProposalsService,
@@ -611,7 +611,7 @@ describe('3b dispatchTask 装配契约（run-tasks-host-command 1.2 jobs 降级�
     h.dispose()
   })
 
-  it('stopTaskLoop 注册在环（十四 tool——3b 停止入口与 dispatchTask 同装配面）', () => {
+  it('stopTaskLoop 注册在环（十九 tool——3b 停止入口与 dispatchTask 同装配面）', () => {
     const h = dispatchCtx()
     expect(h.stop).toBeDefined()
     expect(typeof h.stop.execute).toBe('function')
