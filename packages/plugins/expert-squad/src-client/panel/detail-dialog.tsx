@@ -695,13 +695,6 @@ export function ExpertDetailDialog(props: {
           </span>
         ))}
       </div>
-      {/* 派发路由（成对语义：同给同缺——缺省整组显「继承父Agent」） */}
-      <div className="dswf-dlg-seg">派发路由（Provider · Model）</div>
-      <div className="dswf-dlg-meta" data-dswf-dlg-route="">
-        {expert.provider !== undefined && expert.model !== undefined
-          ? `${expert.provider} · ${expert.model}`
-          : "（继承父Agent）"}
-      </div>
       <div className="dswf-dlg-seg">技能</div>
       <div className="dswf-dlg-chips">
         {expert.skills.map((skill) => (
@@ -800,6 +793,20 @@ export function ExpertDetailDialog(props: {
               ✕
             </button>
           </span>
+            {/* 派发路由 chips（右上角——详情态专属；成对在场 = provider·model 双 chip，
+                缺省 = 「继承父Agent」弱化 chip；不再于 body 工具/技能间插段） */}
+            {!comparing && !editing ? (
+              <span className="dswf-dlg-head-route" data-dswf-dlg-route="">
+                {expert.provider !== undefined && expert.model !== undefined ? (
+                  <>
+                    <span className="chip tool">{expert.provider}</span>
+                    <span className="chip">{expert.model}</span>
+                  </>
+                ) : (
+                  <span className="chip dswf-chip-muted">继承父Agent</span>
+                )}
+              </span>
+            ) : null}
           </div>
           {props.sameKeyEntries === undefined ? null : (
             <OriginBar expert={expert} shadows={shadows} projectName={props.projectName} />

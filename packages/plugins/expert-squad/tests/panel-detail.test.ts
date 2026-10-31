@@ -1,4 +1,4 @@
-﻿// panel 详情 Dialog 单测（ui-design F2 查看/编辑双模式）：纯逻辑面（校验/multi-select/
+// panel 详情 Dialog 单测（ui-design F2 查看/编辑双模式）：纯逻辑面（校验/multi-select/
 // Markdown 分块）+ ExpertDetailController 状态机（保存/启停/取消流）+ SSR 静态标记
 // 逐位断言（查看态分段/编辑态字段/双模式切换件）+ 列表 patchEntry 卡片即时同步。
 
@@ -607,7 +607,7 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("资深评审 · 启用中");
   });
 
-  it("查看态分段：简介/人设（Markdown 渲染）/工具 chips/派发路由/技能 chips", () => {
+  it("查看态分段：简介/人设（Markdown 渲染）/工具 chips/技能 chips；派发路由 = 头部右上角 chips", () => {
     const html = renderDialog();
     expect(html).toContain("简介（何时委派我）");
     expect(html).toContain("人设（Persona · 派发时注入子会话）");
@@ -617,15 +617,18 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("工具（子会话强制生效）");
     expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');
-    // 派发路由（成对在场 = 值对；缺省 = 回落继承）
-    expect(html).toContain("派发路由（Provider · Model）");
-    expect(html).toContain("（继承父Agent）");
+    // 派发路由：头部右上角 chip 组（缺省 = 「继承父Agent」弱化 chip；body 无段）
+    expect(html).toContain('data-dswf-dlg-route=""');
+    expect(html).toContain(">继承父Agent</span>");
+    expect(html).not.toContain("派发路由（Provider · Model）");
     const pairedCtl = new ExpertDetailController(noMutations());
     pairedCtl.open(entry({ provider: "deepseek", model: "reasoner" }));
     const paired = renderToStaticMarkup(
       React.createElement(ExpertDetailDialog, { controller: pairedCtl, allSkills: [] }),
     );
-    expect(paired).toContain("deepseek · reasoner");
+    // 成对在场 = provider·model 双 chip（右上角，头部区内）
+    expect(paired).toContain('<span class="chip tool">deepseek</span>');
+    expect(paired).toContain('<span class="chip">reasoner</span>');
   });
 
   // bug b29f77e7：人设围栏 → 官方 .md-code-block 结构（data-code-block-content 锚 +
