@@ -82,8 +82,8 @@ export const PANEL_CSS = `
 .xc-origin-opt-date { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); flex: none; }
 .xc-title-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .xc-title-row > .xc-title { flex: 1; }
-/* 路由 chip 动态宽度：width fit-content 包紧文字，两侧只留小 padding（退役 .chip 固定高 + 大 pad 的宽空白形态） */
-.xc-title-row > .chip { flex: none; width: fit-content; height: auto; line-height: ${T.lh18}; padding: 1px 8px; }
+/* 路由 chip 动态宽度：width fit-content 包紧文字，两侧只留小 padding（退役 .chip 固定高 + 大 pad 的宽空白形态）；超长省略（上限 220px，全文 hover title） */
+.xc-title-row > .chip { flex: none; width: fit-content; height: auto; line-height: ${T.lh18}; padding: 1px 8px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xc-creed { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .xc-seg { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
 .xc-tags { display: flex; gap: 6px; flex-wrap: wrap; } /* dsw-raw 原型 chips 间距刻度 */

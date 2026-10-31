@@ -497,9 +497,9 @@ function OriginMenu({ entries, expert, projectName, onSelectOrigin, onToggleMenu
             onToggleMenu?.();
           }}
         >
-          <span className={`origin-badge origin-${entry.origin}`}>{originBadgeLabel(entry, projectName)}</span>
-          <span className="xc-origin-opt-title">{entry.title}</span>
-          <span className="xc-origin-opt-date">{updatedLabel(entry.updatedAt) ?? ""}</span>
+          <span className="xc-origin-opt-title">
+            {originBadgeLabel(entry, projectName).replace(/^内置 · /, "")} · {entry.title}
+          </span>
         </button>
       ))}
     </div>
@@ -593,6 +593,9 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
         <span
           className={`chip${expert.provider !== undefined && expert.model !== undefined ? " tool" : " dswf-chip-muted"}`}
           data-xc-route=""
+          title={expert.provider !== undefined && expert.model !== undefined
+            ? `${expert.provider} · ${expert.model}`
+            : "model : 继承父Agent"}
         >
           {expert.provider !== undefined && expert.model !== undefined
             ? `${expert.provider} · ${expert.model}`
@@ -601,21 +604,21 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
       </div>
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>
-        <div className="xc-seg">技能</div>
+        <div className="xc-seg">工具</div>
         <div className="xc-tags">
-          {expert.skills.map((skill) => (
-            <span key={skill} className="chip">
-              {skill}
+          {expert.tools.map((tool) => (
+            <span key={tool} className="chip tool">
+              {tool}
             </span>
           ))}
         </div>
       </div>
       <div>
-        <div className="xc-seg">工具白名单（子会话强制）</div>
+        <div className="xc-seg">技能</div>
         <div className="xc-tags">
-          {expert.tools.map((tool) => (
-            <span key={tool} className="chip tool">
-              {tool}
+          {expert.skills.map((skill) => (
+            <span key={skill} className="chip">
+              {skill}
             </span>
           ))}
         </div>
