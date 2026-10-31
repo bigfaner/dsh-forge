@@ -1052,6 +1052,38 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     }
   })
 
+  it('bug 62d173ed：forgeSettings 装配期缺席（core 晚装配）→ 调用期在场——experts.mapping 坏键被 resolver 消费（fail-loud 含键名）', async () => {
+    _resetExpertResolverSingletonForTests()
+    const experts = {
+      ...expertsFace().face,
+      // 坏键 fail-loud 语义（experts 服务实现侧承担——expert not found 含键名）
+      get: (key: string) => {
+        if (key === 'ghost-expert') throw new Error(`expert not found: ${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      },
+    }
+    const store = new Map<string, unknown>([['experts', experts]]) // 装配时点 forgeSettings 未注册
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const dispose = forgePlugin({
+        ...new TempRuntime().ctx(),
+        reflect: {
+          get: (name: string) => store.get(name),
+          provide: (name: string, service: unknown) => {
+            store.set(name, service)
+          },
+        },
+      })
+      const resolver = store.get('forgeExperts') as ExpertProfileResolver
+      // 调用时点：core 晚到注册 forgeSettings——mapping.doc 指向不存在档案，须 fail-loud
+      store.set('forgeSettings', { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) })
+      await expect(resolver('doc')).rejects.toThrow(/ghost-expert/)
+      dispose()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
     for (const reflect of [
       reflectWith({}).face, // 无 experts 键

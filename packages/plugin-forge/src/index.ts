@@ -103,14 +103,27 @@ const forgePlugin: ForgePlugin = Object.assign(
         ctx.forgeProjects.deriveTaskStoreDir({ workspaceDir }).then((r) => r.dir).catch(() => undefined),
     })
     // forgeSettings 可选消费（cordis 4.0.4 无 '?' 可选 inject 后缀——settingsFile 缺席 =
-    // core 不注册该服务，注入声明会阻载整个插件；经官方 reflect.get 防御读取：
-    // 缺席/异常 = undefined → dispatchTask 不携带 agentOptions 回退父会话继承）
+    // core 不注册该服务，注入声明会阻载整个插件；经官方 reflect.get 防御读取）。
+    // bug 62d173ed：装配期一次性读数受 core 装配时序支配——本插件先于 core 装配（或跨
+    // scope 不可见）时读数 undefined，settings 闭包缺席被烘焙进 resolver/triage/dispatch
+    // 消费面，experts.mapping 覆盖（含坏键 fail-loud）全链静默失效。修复 = 调用期现查
+    // （AGENTS 1.6 检测永不缓存）：装配期缺席时注入惰性代理 get——每调经 reflect 现取，
+    // 晚到服务即时生效；恒缺席/异常 = {} 未配置态（降级语义与装配期缺席一致）。
+    const lazyForgeSettings = (): Pick<ForgeSettingsService, 'get'> | undefined => {
+      try {
+        const viaReflect = ctx.reflect?.get('forgeSettings') as Pick<ForgeSettingsService, 'get'> | undefined
+        return viaReflect !== undefined && typeof viaReflect.get === 'function' ? viaReflect : undefined
+      } catch {
+        return undefined
+      }
+    }
     let settingsService: Pick<ForgeSettingsService, 'get'> | undefined
     try {
       const viaReflect = ctx.reflect?.get('forgeSettings') as Pick<ForgeSettingsService, 'get'> | undefined
       if (viaReflect !== undefined && typeof viaReflect.get === 'function') settingsService = viaReflect
+      else settingsService = { get: async () => (await lazyForgeSettings()?.get()) ?? {} }
     } catch {
-      settingsService = undefined
+      settingsService = { get: async () => (await lazyForgeSettings()?.get()) ?? {} }
     }
     // experts 服务可选消费（expert-squad-forge 1.2——同 forgeSettings reflect.get 防御读取
     // 先例：cordis 4.0.4 无 '?' 可选 inject 后缀，expert-squad 插件缺席 = 装配面整体降级

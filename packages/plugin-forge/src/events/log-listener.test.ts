@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { ForgePluginEvent, TaskProgressPhase } from '@dsh-forge/contracts'
+import type { ForgePluginEvent, TaskProgressPhase, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
 import { createForgeEventBus } from './bus.js'
 import {
   attachForgeLogListener,
@@ -371,8 +371,8 @@ describe('triage 台账行（triage-decided / triage-outcome——logs/{slug}.js
   })
 
   /** triage 台账事件构造（taskKey 载荷——归属判定落任务容器 slug，与任务事件同时间线） */
-  function triageEvent(type: 'triage-decided' | 'triage-outcome', payload: Record<string, unknown>): ForgePluginEvent {
-    return { ts: 1_760_000_000_000, sessionId: 'owner-1', slug: 'feat-acc', type, payload } as ForgePluginEvent
+  function triageEvent<T extends 'triage-decided' | 'triage-outcome'>(type: T, payload: T extends 'triage-decided' ? TriageDecidedPayload : TriageOutcomePayload): Extract<ForgePluginEvent, { type: T }> {
+    return { ts: 1_760_000_000_000, sessionId: 'owner-1', slug: 'feat-acc', type, payload } as Extract<ForgePluginEvent, { type: T }>
   }
 
   it('append-only 追加形态：连续 emit 后行数只增、行序 = 发射序、行 JSON 符合 contracts 契约（信封键序 + 判别 type/payload）', () => {

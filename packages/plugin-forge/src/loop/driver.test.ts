@@ -22,6 +22,8 @@ import type {
   TaskStats,
   TaskStatus,
   TransitionTaskInput,
+  TriageDecidedPayload,
+  TriageOutcomePayload,
 } from '@dsh-forge/contracts'
 import { FIX_CHAIN_DEPTH_LIMIT } from '@dsh-forge/contracts'
 import { createLoopDriver } from './driver.js'
@@ -3805,10 +3807,10 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     // 台账时序因果：decided（执行前）→ outcome（执行尝试后）；scenario 事件 running 先于 decided
     const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
     expect(types).toEqual(['triage-decided', 'triage-outcome'])
-    const decided = built.events.find((e) => e.type === 'triage-decided')!.payload as Record<string, unknown>
+    const decided = built.events.find((e) => e.type === 'triage-decided')!.payload as TriageDecidedPayload
     expect(decided).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'add-fix', note: '修复选择器', workerSessionId: 'triage-1', expertKey: 'triage-analyst' })
     expect(String(decided.inputDigest)).toContain('tests hang on flaky selector')
-    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as Record<string, unknown>
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as TriageOutcomePayload
     expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', workerSessionId: 'triage-1', expertKey: 'triage-analyst', fixTaskKey: 'feat-x/fix-2' })
     expect(outcome.replayed).toBeUndefined()
     await built.driver.stop({ ownerSessionId: OWNER })
@@ -3886,9 +3888,10 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     expect(decideds).toHaveLength(1)
     const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
     expect(outcomes).toHaveLength(2)
-    const [first, second] = outcomes.map((e) => e.payload as Record<string, unknown>)
+    const first = outcomes[0]!.payload as TriageOutcomePayload
     expect(first).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'failed', failureReason: 'db busy' })
     expect(first.replayed).toBeUndefined()
+    const second = outcomes[1]!.payload as TriageOutcomePayload
     expect(second).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'add-fix', fixTaskKey: 'feat-x/fix-2', workerSessionId: 'triage-9' })
     expect(second.replayed).toBe(true)
     await built.driver.stop({ ownerSessionId: OWNER })
@@ -3907,7 +3910,7 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
     expect(types).toEqual(['triage-decided', 'triage-outcome'])
     expect(built.events.find((e) => e.type === 'triage-decided')!.payload).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'ask-user', workerSessionId: 'triage-3' })
-    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as Record<string, unknown>
+    const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as TriageOutcomePayload
     expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'ask-user', workerSessionId: 'triage-3' })
     expect(outcome.fixTaskKey).toBeUndefined()
     expect(outcome.splitTaskKey).toBeUndefined()
