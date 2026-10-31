@@ -949,6 +949,11 @@ interface ActiveLoop {
    */
   readonly taskSpans: Map<string, { readonly title: string; readonly startedAt: number }>
   /**
+   * 任务 → 执行专家键（loop-card-task-context——claim 结果带回的 expertKey 随携带任务键的
+   * forge/progress 发射点填充；循环级事件无任务键不填充。实例域生命周期，终局随实例消亡）
+   */
+  readonly expertByTaskKey: Map<string, string>
+  /**
    * 结算概要有序集（终局 settle 消息「任务概要」段数据源——按 slug 分组呈现，不跨 slug
    * 混合汇总/结算：用户裁决 2026-10-28。每任务 taskKey = slug/localId，耗时在讫记时点
    * 定型（结算 − 领取），跨重启缺失 = 省略耗时）
@@ -1257,11 +1262,15 @@ function emitProgress(
   },
 ): void {
   try {
+    // 专家键填充（loop-card-task-context）：携带任务键的事件按登记表回填 expertKey；
+    // 循环级事件（无任务键）与未登记任务不填充——字段缺省零发射
+    const expertKey = event.taskKey !== undefined ? loop.expertByTaskKey.get(event.taskKey) : undefined
     loop.deps.progress?.append(loop.record.ownerSessionId, {
       sourceSlug: loop.record.source.slug,
       verb: event.verb,
       status: event.status,
       ...(event.taskKey !== undefined ? { taskKey: event.taskKey } : {}),
+      ...(expertKey !== undefined ? { expertKey } : {}),
       ...(event.taskTitle !== undefined ? { taskTitle: event.taskTitle } : {}),
       ...(event.workerSessionId !== undefined ? { workerSessionId: event.workerSessionId } : {}),
       ...(event.scenario !== undefined ? { scenario: event.scenario } : {}),
@@ -1444,6 +1453,7 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         waitRounds: 0,
         dispositions: new Map<string, DispositionBook>(),
         taskSpans: new Map<string, { title: string; startedAt: number }>(),
+        expertByTaskKey: new Map<string, string>(),
         taskSummaries: [],
         wakeupKeys: new Set<string>(),
       }
@@ -1886,6 +1896,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
     title: task.title,
   }
   record.inFlight = inFlight
+  // 专家键登记（loop-card-task-context）：claim 结果带回的执行专家键——后续携带任务键的
+  // 发射点（claim/spawned/retry/settle/stop/suspend）经 emitProgress 统一回填
+  if (claim.expertKey !== undefined) loop.expertByTaskKey.set(taskKey, claim.expertKey)
 
   // 任务起记（结算概要耗时源——幂等重入重领不覆盖首次起点）
   recordTaskStart(loop, taskKey, task.title)

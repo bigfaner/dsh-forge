@@ -293,6 +293,8 @@ export interface ClaimedDispatch {
   readonly dispatchPrompt: string
   /** worker agent 级 persona（claim 合成——S2a 组成矩阵；spawn 链透传落子会话 system 面） */
   readonly persona: string
+  /** claim 链解析出的执行专家键（loop-card-task-context——驱动器 forge/progress 发射点填充；缺席 = 未用类型） */
+  readonly expertKey?: string
 }
 
 /** claim 阶段返回（claimed / no-task 附池快照 / halted 入口粘住） */
@@ -363,7 +365,15 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     ...(task.mode !== undefined ? { mode: task.mode } : {}),
     dispatchDigest: claimed.digest, // 双记：task_records.claim 行同值
   })
-  return { kind: 'claimed', task, digest: claimed.digest, reclaimed: claimed.reclaimed, dispatchPrompt: claimed.dispatchPrompt, persona: claimed.persona }
+  return {
+    kind: 'claimed',
+    task,
+    digest: claimed.digest,
+    reclaimed: claimed.reclaimed,
+    dispatchPrompt: claimed.dispatchPrompt,
+    persona: claimed.persona,
+    ...(claimed.expertKey !== undefined ? { expertKey: claimed.expertKey } : {}),
+  }
 }
 
 // ─────────────────────────── 阶段二：spawn（组装 + spawn + 事件） ───────────────────────────

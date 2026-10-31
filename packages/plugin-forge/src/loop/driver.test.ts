@@ -2666,6 +2666,31 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all' })
     // 纯 JSON（Session.append 契约——序列化往返无损）
     expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
+    // claim 未解析出专家键（程序段 persona 形态兼容）→ 全部事件零 expertKey 字段（旧形状零回归）
+    expect(built.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
+  })
+
+  it('expertKey 填充（loop-card-task-context）：claim 结果带回的专家键随携带任务键的事件发射（claim/claim-spawned/settle 在列）——循环级事件不携带', async () => {
+    const built = build({
+      claim: [{ ...claimed(), expertKey: 'retro-reviewer' }, NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }), // 启动读
+        statsOf({ in_progress: 1 }), // 领取通知读
+        statsOf({ in_progress: 1 }), // 结算读
+        statsOf({ completed: 1 }), // no-task 池读
+        statsOf({ completed: 1 }), // ⑯ 收口读
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    for (const scenario of ['claim/new', 'claim/spawned', 'task/complete']) {
+      const evt = built.progressCalls.find((e) => e.scenario === scenario)
+      expect(evt?.expertKey, scenario).toBe('retro-reviewer')
+    }
+    // 循环级事件（无 taskKey）不填充
+    for (const scenario of ['startup/from-scratch', 'pool/pending', 'loop/finish-all']) {
+      expect(built.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
+    }
   })
 
   it('bug 3bd8b829：spawn 成功后补发领取确认事件（claim/spawned——载荷含 taskKey/taskTitle/workerSessionId；claim 原事件时序语义不变）', async () => {

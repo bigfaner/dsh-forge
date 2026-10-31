@@ -325,9 +325,11 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     // FAIL-2 修正（expert-squad-forge-2 fix-4）：本段抛错时附带任务身份锚（data.taskRef）——
     // 循环驱动器据此把错误转交处置阶梯而非整循环异常终止。
     let personaWithAnchors: string
+    let resolvedExpertKey: string | undefined // loop-card-task-context：随 ClaimTaskResult 带回驱动器
     try {
       const claimVars = row.vars_json !== null ? (JSON.parse(row.vars_json) as Record<string, string>) : undefined
       const expertKey = typeof claimVars?.expert === 'string' && claimVars.expert !== '' ? claimVars.expert : undefined
+      resolvedExpertKey = expertKey
       const profile = await deps.resolveExpertProfile?.(row.task_type, expertKey)
       const persona =
         profile === undefined
@@ -447,6 +449,7 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
       persona: personaWithAnchors,
       digest,
       reclaimed,
+      ...(resolvedExpertKey !== undefined ? { expertKey: resolvedExpertKey } : {}),
     }
   })
 

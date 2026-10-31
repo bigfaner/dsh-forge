@@ -34,6 +34,11 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
     expect(isForgeProgressData({ ...DATA, at: Number.NaN })).toBe(false)
     expect(isForgeProgressData({ ...DATA, taskKey: 42 })).toBe(false)
   })
+  it('expertKey（loop-card-task-context）：string 可选容忍、缺省容忍（旧载荷）、非 string 拒绝', () => {
+    expect(isForgeProgressData({ ...DATA, expertKey: 'retro-reviewer' })).toBe(true)
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷（无 expertKey）兼容
+    expect(isForgeProgressData({ ...DATA, expertKey: 42 })).toBe(false)
+  })
   it('新字段校验（1.5）：taskTitle/workerSessionId/scenario 类型错 = false；缺省容忍 = true；旧载荷（无新字段）兼容', () => {
     expect(isForgeProgressData({ ...DATA, taskTitle: 7 })).toBe(false)
     expect(isForgeProgressData({ ...DATA, workerSessionId: 9 })).toBe(false)

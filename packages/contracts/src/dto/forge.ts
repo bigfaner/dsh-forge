@@ -558,6 +558,11 @@ export interface ClaimTaskResult {
   reclaimed: boolean
   /** worker agent 级 persona（S2a 组成矩阵合成——spawn 链经 SubagentStartRequest.persona 落子会话 system 面；Z1 出口 = 空串） */
   persona: string
+  /**
+   * claim 链解析出的执行专家键（loop-card-task-context——任务变量 expert 路由单源，与
+   * resolveExpertProfile 第二参同值；变量缺席/未用类型 = 缺省，程序段 persona 形态兼容）
+   */
+  expertKey?: string
 }
 
 /** submitTask 入参（S3 结构化提交——老 forge record.json 形制回归） */

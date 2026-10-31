@@ -113,6 +113,11 @@ export interface ForgeProgressEventData {
   readonly taskKey?: string
   /** 任务标题（人类视角行展示——领取/结算/停止等携带任务的事件在列） */
   readonly taskTitle?: string
+  /**
+   * 执行专家键（loop-card-task-context——claim 链解析带回，携带任务键的事件在列；
+   * 缺席 = 未用类型/程序段 persona 形态兼容，旧事件流零回归）
+   */
+  readonly expertKey?: string
   /** worker 子会话 id（行点击跳转锚——spawn 成功后的事件在列） */
   readonly workerSessionId?: string
   /** 场景码（{major}/{minor}——值域 = FORGE_PROGRESS_SCENARIOS 单源 24 值；缺席 = 旧载荷兼容） */
@@ -149,6 +154,7 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
   if (raw['status'] !== 'running' && raw['status'] !== 'completed' && raw['status'] !== 'blocked' && raw['status'] !== 'interrupted') return false
   if (raw['taskKey'] !== undefined && typeof raw['taskKey'] !== 'string') return false
   if (raw['taskTitle'] !== undefined && typeof raw['taskTitle'] !== 'string') return false
+  if (raw['expertKey'] !== undefined && typeof raw['expertKey'] !== 'string') return false
   if (raw['workerSessionId'] !== undefined && typeof raw['workerSessionId'] !== 'string') return false
   if (raw['scenario'] !== undefined && (typeof raw['scenario'] !== 'string' || !SCENARIO_SET.has(raw['scenario']))) return false
   if (raw['note'] !== undefined && typeof raw['note'] !== 'string') return false

@@ -234,6 +234,18 @@ describe('claim 变量路由（expert-squad-forge-2）：任务变量 expert 键
     await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.2' }, sessionId: 's2' })
     expect(s.calls).toEqual([['doc', 'retro-reviewer'], ['doc', undefined]])
   })
+
+  it('专家键随结果带回（loop-card-task-context）：解析出的 expertKey 进 ClaimTaskResult；变量缺席 = 字段缺省（程序段 persona 形态兼容不阻断）', async () => {
+    const s = svcCapturing()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '9.3', { type: 'doc' })
+    h!.db.prepare(`UPDATE tasks SET vars_json = ? WHERE id = 't-f-9.3'`).run(JSON.stringify({ expert: 'retro-reviewer' }))
+    const withKey = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.3' }, sessionId: 's1' })
+    expect(withKey.expertKey).toBe('retro-reviewer')
+    seedTask(h!.db, 'f', '9.4', { type: 'doc' })
+    const noKey = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.4' }, sessionId: 's2' })
+    expect('expertKey' in noKey).toBe(false)
+  })
 })
 
 describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 创建序', () => {
