@@ -645,13 +645,17 @@ const forgePlugin: ForgePlugin = Object.assign(
     })
     // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
     // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts
-    // 服务在场（探测函数见 loopDriverBase 装配处上方定义，双消费面共用）。
-    // 缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
+    // 服务在场（探测函数见 loopDriverBase 装配处上方定义，双消费面共用）且装配会话非
+    // subagent 子会话（header.origin 判定——指挥者话术只属于主会话，worker/subagent
+    // 提示词零污染）。缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
     // 与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
     const disposeCommander = ctx.systemPrompt.section({
       name: FORGE_COMMANDER_SECTION_NAME,
       order: FORGE_COMMANDER_SECTION_ORDER,
-      text: () => (expertsServicePresent() ? renderCommanderSection() : ''),
+      text: (context) =>
+        expertsServicePresent() && context?.agent?.session?.header?.origin !== 'subagent'
+          ? renderCommanderSection()
+          : '',
     })
     const disposers = [
       ctx.tools.register(tools.addTask),

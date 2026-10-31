@@ -140,7 +140,11 @@ export interface SystemPromptSectionFace {
  */
 export interface ForgeAssembleContext {
   readonly scope?: unknown
-  readonly agent?: { readonly id?: string }
+  readonly agent?: {
+    readonly id?: string
+    /** 运行期 live Agent 附带 session（parentCwdOf 同式读取位）——header.origin === 'subagent' 识别子会话装配 */
+    readonly session?: { readonly header?: { readonly origin?: string } }
+  }
 }
 
 /** forge:pipeline 段形状（Interface 8：name/order/text；text 官方函数形态 = 按装配求值） */

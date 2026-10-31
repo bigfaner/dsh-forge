@@ -356,10 +356,10 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
 })
 
 describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——ctx.experts 服务在场性惰性检测）', () => {
-  const commanderTextOf = (rt: TempRuntime): string => {
+  const commanderTextOf = (rt: TempRuntime, context?: { agent?: { id?: string; session?: { header?: { origin?: string } } } }): string => {
     const section = rt.sections.find((s) => s.name === 'forge:commander')
     expect(typeof section?.text).toBe('function')
-    return (section!.text as () => string)()
+    return (section!.text as (context: typeof context) => string)(context)
   }
 
   it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
@@ -386,6 +386,20 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     const d2 = forgePlugin(rtMalformed.withReflect({ experts: {} }) as never)
     expect(commanderTextOf(rtMalformed)).toBe('')
     d2()
+  })
+
+  it('subagent 子会话装配：零注入（header.origin === subagent——指挥者话术只属于主会话，判例 2026-11）', () => {
+    const rt = new TempRuntime()
+    const dispose = forgePlugin(rt.withReflect({ experts: { get: () => undefined } }) as never)
+    // 主会话形态（agent.id 在场、无 origin 标记）：照常注入
+    expect(commanderTextOf(rt, { agent: { id: 'main-s' } })).toContain('指挥者模式')
+    // subagent 子会话（live Agent 附带 session.header.origin）：零注入
+    expect(
+      commanderTextOf(rt, { agent: { id: 'child-s', session: { header: { origin: 'subagent' } } } }),
+    ).toBe('')
+    // context 缺席（旧调用面兼容）：视为主会话照常注入
+    expect(commanderTextOf(rt)).toContain('指挥者模式')
+    dispose()
   })
 })
 
