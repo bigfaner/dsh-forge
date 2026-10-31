@@ -174,9 +174,11 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
         </strong>,
       );
     } else if (block.kind === "table") {
-      // GFM 管道表格（test-runner 等内置人设含生命周期映射表——md-table 官方语义自绘）
+      // GFM 管道表格（test-runner 等内置人设含生命周期映射表）——wrap 承担超宽横滚，
+      // table 本体 margin auto 居中（display:table 收敛内容宽）
       out.push(
-        <table key={index} className="md-table">
+        <div key={index} className="md-table-wrap">
+          <table className="md-table">
           <thead>
             <tr>
               {(block.header ?? []).map((cell, ci) => (
@@ -197,7 +199,8 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
               </tr>
             ))}
           </tbody>
-        </table>,
+          </table>
+        </div>,
       );
     } else if (block.kind === "code") {
       // bug b29f77e7：官方 MarkdownDoc 代码块结构镜像（.md-code-block +
