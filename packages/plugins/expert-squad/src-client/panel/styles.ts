@@ -65,12 +65,13 @@ export const PANEL_CSS = `
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
 .xc-title { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* dsw-raw 灯后文本对齐缩进 */
-/* 卡头右侧组（对比钮 + 来源 chip 贴紧、统一靠右）；来源下拉（chip 向下扩展列全来源） */
-.xc-head-right { margin-left: auto; display: flex; align-items: center; gap: 0; flex: none; position: relative; }
+/* 卡头右侧组（对比钮 + 来源 chip，间距 10px、统一靠右）；来源下拉（chip 向下扩展列全来源） */
+.xc-head-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; position: relative; }
 .xc-head-right > .origin-badge { margin-left: 0; }
-.xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.xc-origin-switch { cursor: var(--dsh-cursor-pointer, pointer); border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.xc-origin-caret { font-size: 10px; }
+.xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
+/* 来源 chip 可点形态：样式与静态 origin-badge 完全一致（按钮元素默认边框/底色复位）+ caret */
+.xc-origin-switch { border: none; padding: 0 6px; line-height: ${T.lh14}; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
+.xc-origin-caret { font-size: 10px; margin-left: 2px; }
 .xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; }
 .xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
 .xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
