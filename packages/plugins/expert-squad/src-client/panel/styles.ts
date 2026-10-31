@@ -72,7 +72,7 @@ export const PANEL_CSS = `
 .xc-head-right > button.origin-badge { border: none; padding: 0 6px; line-height: ${T.lh14}; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
 .xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 .xc-origin-caret { font-size: 10px; margin-left: 2px; }
-.xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; }
+.xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; } /* chip 原地向下展开（锚 = xc-head-right）；溢出视口下缘时组件侧 scrollIntoView nearest 最小滚动带入 */
 .xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
 .xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .xc-origin-opt.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }

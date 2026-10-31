@@ -9,7 +9,7 @@
 // [召唤] = 经官方缝打开/切换 HR 预设官方会话（summon-session——零面板内对话面；
 // 失败降级 = 头部引导条，不炸面板）。建档联动依赖既有 fs/observed + 5s 轮询通道
 //（1.4/1.22）——零新增旁路。
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   entryIdOf,
   filterGroups,
@@ -461,6 +461,51 @@ function originOptions(projectName: string | undefined): readonly { readonly val
 
 /** 来源条目身份键（sourcePath——同键同 origin 可有多份内置注册，origin 不足以区分）。 */
 // （entryIdOf 移居 filter.ts——Dialog 对比态同用 sourcePath 身份）
+/**
+ * 来源下拉菜单（chip 原地向下展开）：不做上下翻转——chip 靠近视口底部时菜单可能
+ * 溢出视口下缘（判例 2026-10-31：不可见伪「无反应」），以 scrollIntoView nearest
+ * 最小滚动把菜单带进视口（完全可见时零滚动，不打扰布局）。
+ */
+function OriginMenu({ entries, expert, projectName, onSelectOrigin, onToggleMenu }: {
+  readonly entries: readonly ExpertView[];
+  readonly expert: ExpertView;
+  readonly projectName?: string;
+  readonly onSelectOrigin?: (sourceId: string | undefined) => void;
+  readonly onToggleMenu?: () => void;
+}): ReactNode {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    // 展开后最小滚动入视口（block:nearest——已可见时零滚动；溢出时仅滚必要的量）
+    menuRef.current?.scrollIntoView({ block: "nearest" });
+  });
+  return (
+    <div
+      ref={menuRef}
+      className="xc-origin-menu"
+      data-xc-origin-menu=""
+      onClick={(event) => event.stopPropagation()}
+    >
+      {entries.map((entry) => (
+        <button
+          key={entryIdOf(entry)}
+          type="button"
+          className={`xc-origin-opt${entryIdOf(entry) === entryIdOf(expert) ? " sel" : ""}`}
+          data-xc-origin-option={entryIdOf(entry)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectOrigin?.(entry.effective === false ? entryIdOf(entry) : undefined);
+            onToggleMenu?.();
+          }}
+        >
+          <span className={`origin-badge origin-${entry.origin}`}>{originBadgeLabel(entry, projectName)}</span>
+          <span className="xc-origin-opt-title">{entry.title}</span>
+          <span className="xc-origin-opt-date">{updatedLabel(entry.updatedAt) ?? ""}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, menuOpen, onToggleMenu, onSelectOrigin }: {
   /** 当前展示条目（selectedId 对应层；缺省 = 生效层）。 */
   readonly expert: ExpertView;
@@ -524,29 +569,19 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
             {originBadgeLabel(expert, projectName)}
             {multi ? <span className="xc-origin-caret" aria-hidden="true">▾</span> : null}
           </button>
+          {/* 来源下拉（多来源：chip 原地向下展开，列全部来源，选中即卡内切换展示该来源
+              专家）。chip 靠近视口底部时菜单可能溢出视口下缘（不可见伪「无反应」，
+              判例 2026-10-31）——展开即 scrollIntoView nearest 最小滚动带入视口 */}
+          {multi && menuOpen ? (
+            <OriginMenu
+              entries={allEntries}
+              expert={expert}
+              projectName={projectName}
+              onSelectOrigin={onSelectOrigin}
+              onToggleMenu={onToggleMenu}
+            />
+          ) : null}
         </span>
-        {/* 来源下拉（多来源：向下扩展列全部来源，选中即卡内切换展示该来源专家） */}
-        {multi && menuOpen ? (
-          <div className="xc-origin-menu" data-xc-origin-menu="" onClick={(event) => event.stopPropagation()}>
-            {allEntries.map((entry) => (
-              <button
-                key={entryIdOf(entry)}
-                type="button"
-                className={`xc-origin-opt${entryIdOf(entry) === entryIdOf(expert) ? " sel" : ""}`}
-                data-xc-origin-option={entryIdOf(entry)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelectOrigin?.(entry.effective === false ? entryIdOf(entry) : undefined);
-                  onToggleMenu?.();
-                }}
-              >
-                <span className={`origin-badge origin-${entry.origin}`}>{originBadgeLabel(entry, projectName)}</span>
-                <span className="xc-origin-opt-title">{entry.title}</span>
-                <span className="xc-origin-opt-date">{updatedLabel(entry.updatedAt) ?? ""}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
       {/* 第二行：中文名称（岗位）居左 + 派发路由合并 chip 靠右（provider·model 单 chip；
           缺省 = 「model : 继承父Agent」弱化 chip——与详情 Dialog 同语义） */}
