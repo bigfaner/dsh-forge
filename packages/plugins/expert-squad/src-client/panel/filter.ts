@@ -19,6 +19,8 @@ export interface ExpertView {
   readonly provider?: string
   /** 派发路由 model（可选——成对语义，旧载荷/未配置档案缺席）。 */
   readonly model?: string
+  /** 推理档位（low|medium|high——三级链折叠后的生效值；缺席 = 不下发 effort）。 */
+  readonly reasoning?: string
   readonly origin: string
   readonly enabled: boolean
   readonly updatedAt?: string

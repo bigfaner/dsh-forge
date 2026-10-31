@@ -52,6 +52,8 @@ export const PANEL_CSS = `
 .dswf-btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); }
 /* 召唤钮独占右侧（用户裁决 2026-10-25：与状态筛选空间分离） */
 .dswf-summon-btn { margin-left: auto; }
+/* 「配置」跳转钮（D2：召唤钮右侧——margin-left 0 不夺 auto 位；原型 cfg-jump-btn 刻度） */
+.dswf-cfg-jump-btn { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; flex: none; white-space: nowrap; }
 /* 筛选 select label（1.68 裁决④：「状态」「来源」左置，与搜索框同行排布） */
 .dswf-filter-label { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
 .dswf-card-grid { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: ${T.pad12}; padding: ${T.pad12}; align-content: start; overflow: auto; min-height: 0; }

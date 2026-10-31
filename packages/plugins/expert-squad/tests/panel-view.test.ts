@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ExpertPanel, ExpertGroupView, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
+import { ExpertPanel, ExpertGroupView, routeChipOf, openPluginConfigTab, type ExpertPanelProps } from "../src-client/panel/expert-panel.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
 import { groupExperts } from "../src-client/panel/filter.js";
 
@@ -75,24 +75,36 @@ describe("ExpertPanel 四态（ui-design F1）", () => {
     expect(html).not.toContain("dswf-xcard ");
   });
 
-  it("数据态：卡片字段集逐位在场（灯/名称/标识 chip/岗位/人设/chips/更新页脚）", () => {
+  it("数据态：卡片字段集逐位在场（灯/名称/岗位/人设/工具→技能 chips/更新页脚）", () => {
     const html = renderPanel();
     expect(html).toContain("dswf-xcard");
     expect(html).toContain("dot on");
-    expect(html).toContain("code-reviewer"); // 名称与英文标识 chip 同源（键正本）
+    expect(html).toContain("code-reviewer"); // 名称与英文标识同源（键正本）
     expect(html).toContain("资深评审"); // 岗位 ← title
     expect(html).toContain("评审 diff 与正确性"); // 人设摘要（Markdown 剥离后）
-    expect(html).toContain('<div class="xc-seg">技能</div>'); // 1.68 裁决⑤：段标「技能标签」→「技能」
-    expect(html).toContain("工具白名单（子会话强制）");
+    // 分段顺序（2026-10-31 裁决）：工具在上、技能在下；「工具白名单（子会话强制）」→「工具」
+    const segs = [
+      html.indexOf('<div class="xc-seg">工具</div>'),
+      html.indexOf('<div class="xc-seg">技能</div>'),
+    ];
+    expect(segs[0]).toBeGreaterThan(-1);
+    expect(segs[1]).toBeGreaterThan(segs[0]!);
+    expect(html).not.toContain("工具白名单");
     expect(html).toContain("更新于 2026-10-18"); // 页脚更新时间
     expect(html).toContain("1 位专家 · 显示 1");
   });
 
-  it("禁用卡：状态灯 off、岗位附「· 已禁用」、整卡降透明类", () => {
+  it("禁用卡：状态灯 off、整卡降透明类、无「已禁用」徽标（置灰即禁用语义——启停唯一入口 = Dialog）", () => {
     const html = renderPanel({ entries: [entry({ enabled: false })] });
     expect(html).toContain("dot off");
-    expect(html).toContain("已禁用");
     expect(html).toContain("dswf-xcard off");
+    expect(html).not.toContain("已禁用");
+  });
+
+  it("禁用卡无启停按钮：卡片头部零「禁用/启用」动作钮（启停唯一入口 = 详情 Dialog）", () => {
+    const html = renderPanel({ entries: [entry({ enabled: false })] });
+    expect(html).not.toContain(">禁用<");
+    expect(html).not.toContain(">启用<");
   });
 
   it("计数页脚：总数 × 过滤后显示数", () => {
@@ -216,6 +228,116 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
   it("计数按专家键数：同键三层 = 1 位专家 · 显示 1 组", () => {
     const html = renderPanel({ entries: layered });
     expect(html).toContain("1 位专家 · 显示 1");
+  });
+});
+
+// ── 卡片路由 chip 二态（expert-squad-default-routing AC3）────────────────────
+describe("卡片路由 chip 二态（routeChipOf 纯逻辑）", () => {
+  it("生效路由（provider+model 成对）→ 模型名 chip：tooltip 展开 provider 与 reasoning 档位，不标来源与层级", () => {
+    expect(routeChipOf({ provider: "deepseek-official", model: "deepseek-reasoner", reasoning: "high" })).toEqual({
+      kind: "model",
+      model: "deepseek-reasoner",
+      tip: "deepseek-official · reasoning 高",
+    });
+    expect(routeChipOf({ provider: "p1", model: "m1", reasoning: "low" })!.tip).toBe("p1 · reasoning 低");
+    expect(routeChipOf({ provider: "p1", model: "m1", reasoning: "medium" })!.tip).toBe("p1 · reasoning 中");
+  });
+
+  it("生效路由无 reasoning → tooltip 只展 provider（不下发 effort 位不呈现）", () => {
+    expect(routeChipOf({ provider: "p1", model: "m1" })).toEqual({
+      kind: "model",
+      model: "m1",
+      tip: "p1",
+    });
+  });
+
+  it("皆缺（含不成对半缺）→「继承父Agent」弱化 chip，tooltip 未配置路由文案，零来源/层级标注", () => {
+    const inherit = { kind: "inherit", tip: "未配置路由，派发时继承父 Agent 会话模型" };
+    expect(routeChipOf({})).toEqual(inherit);
+    expect(routeChipOf({ model: "m1" })).toEqual(inherit); // 仅 model 不成对 = 不整组命中
+    expect(routeChipOf({ provider: "p1" })).toEqual(inherit);
+    expect(JSON.stringify(inherit)).not.toContain("project");
+  });
+});
+
+describe("卡片路由 chip 渲染（SSR 静态锚）", () => {
+  it("模型名 chip：chip.tool + dswf-tip（data-tip 展开 provider/档位），呈模型名不呈 provider", () => {
+    const html = renderPanel({ entries: [entry({ provider: "deepseek-official", model: "deepseek-reasoner", reasoning: "high" })] });
+    expect(html).toContain('data-xc-route="model"');
+    expect(html).toContain("chip tool dswf-tip");
+    expect(html).toContain("deepseek-reasoner");
+    expect(html).toContain("deepseek-official · reasoning 高");
+    expect(html).not.toContain("deepseek-official · deepseek-reasoner"); // 旧「provider · model」双段形态退役
+  });
+
+  it("继承态 chip：dswf-chip-muted 弱化 + tooltip 文案，呈「继承父Agent」", () => {
+    const html = renderPanel({ entries: [entry()] });
+    expect(html).toContain('data-xc-route="inherit"');
+    expect(html).toContain("dswf-chip-muted");
+    expect(html).toContain("继承父Agent");
+    expect(html).toContain("未配置路由，派发时继承父 Agent 会话模型");
+  });
+});
+
+// ── 面板工具行「配置」跳转按钮（D2：召唤按钮右侧 → 本插件配置 tab）──────────
+describe("面板工具行配置跳转按钮", () => {
+  it("onOpenConfig 在场 = ghost「⚙ 配置」钮呈现（aria-label + tooltip 微文案），落召唤钮之后", () => {
+    const html = renderPanel({ onSummon: () => undefined, onOpenConfig: () => undefined });
+    const summonAt = html.indexOf("dswf-summon-btn");
+    const cfgAt = html.indexOf("dswf-cfg-jump-btn");
+    expect(cfgAt).toBeGreaterThan(-1);
+    expect(cfgAt).toBeGreaterThan(summonAt);
+    expect(html).toContain('aria-label="打开插件配置"');
+    expect(html).toContain("⚙ 配置");
+    expect(html).toContain("默认 Agent 选项（本插件配置）");
+    expect(html).toContain("dswf-btn-ghost");
+  });
+
+  it("onOpenConfig 缺席 = 零配置钮（不悬空）", () => {
+    expect(renderPanel({ onSummon: () => undefined })).not.toContain("dswf-cfg-jump-btn");
+  });
+});
+
+// ── 配置跳转导航（官方设置壳 DOM 缝：设置触发钮 → 「内置插件」分区 → 本插件 tab）──
+describe("openPluginConfigTab 导航序列", () => {
+  function fakeDoc(nodes: Record<string, Array<Record<string, unknown>>>) {
+    const clicks: string[] = [];
+    const make = (node: Record<string, unknown>) => ({
+      textContent: node.text as string,
+      click: () => {
+        clicks.push(node.name as string);
+        node.on?.click?.();
+      },
+    });
+    const doc = {
+      querySelector: (sel: string) => (nodes[sel]?.[0] !== undefined ? make(nodes[sel]![0]!) : null),
+      querySelectorAll: (sel: string) => (nodes[sel] ?? []).map(make),
+    };
+    return { doc, clicks };
+  }
+
+  it("设置触发钮 → 分区导航钮 → 本插件 tab 三连点（tab 缺席 = 单贡献直呈，止于分区）", () => {
+    const immediate = (fn: () => void): void => fn();
+    const a = fakeDoc({
+      '[aria-label="设置"]': [{ name: "trigger", text: "设置" }],
+      button: [{ name: "nav", text: "内置插件" }],
+      '[role="tab"]': [{ name: "tab", text: "默认 Agent 选项" }],
+    });
+    openPluginConfigTab(a.doc as unknown as Document, immediate);
+    expect(a.clicks).toEqual(["trigger", "nav", "tab"]);
+
+    const b = fakeDoc({
+      '[aria-label="设置"]': [{ name: "trigger", text: "设置" }],
+      button: [{ name: "nav", text: "内置插件" }],
+    });
+    openPluginConfigTab(b.doc as unknown as Document, immediate);
+    expect(b.clicks).toEqual(["trigger", "nav"]);
+  });
+
+  it("设置触发钮缺席（宿主未组 settings 域）= 静默不动作", () => {
+    const a = fakeDoc({});
+    openPluginConfigTab(a.doc as unknown as Document, () => undefined);
+    expect(a.clicks).toEqual([]);
   });
 });
 

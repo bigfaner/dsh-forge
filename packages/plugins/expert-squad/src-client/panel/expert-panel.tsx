@@ -173,6 +173,76 @@ export function defaultDetailMutations(workspace: string): DetailMutations {
   };
 }
 
+/** reasoning 档位中文标签（chip tooltip 档位展开面——D5 微文案同源：低/中/高）。 */
+const REASONING_LEVEL_LABEL: Readonly<Record<string, string>> = { low: "低", medium: "中", high: "高" };
+
+/** 卡片路由 chip 二态（expert-squad-default-routing AC3）：生效模型名 / 继承父Agent。 */
+export type RouteChip =
+  | { readonly kind: "model"; readonly model: string; readonly tip: string }
+  | { readonly kind: "inherit"; readonly tip: string };
+
+/**
+ * 路由 chip 二态判定（纯函数——单测直测面）：provider+model 成对（experts / 档案 /
+ * defaultAgentOptions 任一解析出，list 应答已折叠）= 生效路由 → 只呈模型名，tooltip
+ * 展开 provider 与 reasoning 档位（不标来源与层级——D1 裁决）；皆缺（含不成对半缺）
+ * = 「继承父Agent」弱化 chip。
+ */
+export function routeChipOf(entry: Pick<ExpertView, "provider" | "model" | "reasoning">): RouteChip {
+  if (entry.provider !== undefined && entry.model !== undefined) {
+    const level = entry.reasoning !== undefined ? REASONING_LEVEL_LABEL[entry.reasoning] : undefined
+    return {
+      kind: "model",
+      model: entry.model,
+      tip: level === undefined ? entry.provider : `${entry.provider} · reasoning ${level}`,
+    }
+  }
+  return { kind: "inherit", tip: "未配置路由，派发时继承父 Agent 会话模型" }
+}
+
+/** 配置跳转导航的 DOM 窄面（真实 Document/Element 结构满足——单测以最小假体直测）。 */
+export interface SettingsNavDoc {
+  querySelector(selectors: string): { textContent: string | null; click(): void } | null
+  querySelectorAll(selectors: string): Iterable<{ textContent: string | null; click(): void }>
+}
+
+const SETTINGS_TRIGGER_SEL = '[aria-label="设置"]';
+/** 官方设置壳「内置插件」分区导航行文案（plugin-inventory section label——本部署 zh 字面量）。 */
+const PLUGINS_SECTION_LABEL = "内置插件";
+/** 本插件配置 tab 名（settings/index.tsx SETTINGS_TAB_LABEL 同词）。 */
+const PLUGIN_TAB_LABEL = "默认 Agent 选项";
+
+/**
+ * 「配置」跳转导航（官方设置壳 DOM 缝——设置壳打开态与分区导航归官方 chrome，插件
+ * 无 programmatic 正门，slot 契约仅暴露 openSettings 于 launcher 槽位；此处以官方
+ * 触发钮 aria-label + 分区/tab 文案锚三连点导航，标签漂移 = 静默停在已开面板，不炸）。
+ * schedule 注入 = 单测同步驱动；真机缺省 setTimeout 轮询等设置面板挂载（20×100ms 上限）。
+ */
+export function openPluginConfigTab(
+  doc: SettingsNavDoc | undefined = globalThis.document,
+  schedule: (fn: () => void, ms: number) => void = (fn, ms) => setTimeout(fn, ms),
+): void {
+  const trigger = doc?.querySelector(SETTINGS_TRIGGER_SEL) ?? null;
+  if (trigger === null) return;
+  trigger.click();
+  let tries = 0;
+  const navigate = (): void => {
+    const nav = Array.from(doc!.querySelectorAll("button")).find((el) => el.textContent?.trim() === PLUGINS_SECTION_LABEL);
+    if (nav === undefined) {
+      if (tries < 20) {
+        tries += 1;
+        schedule(navigate, 100);
+      }
+      return;
+    }
+    nav.click();
+    // tab 步可选（单贡献直呈形态无 role=tab——分区直达即到位）
+    Array.from(doc!.querySelectorAll('[role="tab"]'))
+      .find((el) => el.textContent?.trim() === PLUGIN_TAB_LABEL)
+      ?.click();
+  };
+  schedule(navigate, 100);
+}
+
 const LOADING_SNAPSHOT: ListState = { phase: { kind: "loading" }, entries: [] }
 
 /** [召唤] 官方会话缝（装配壳 inject face 递达；测试/装配注入）。 */
@@ -375,6 +445,8 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
 
   const phase = state.phase.kind === "error" ? "error" : state.phase.kind
   const onRetry = useCallback(() => controller?.retry(), [controller])
+  // 「配置」跳转（D2）：官方设置壳三连点导航——宿主未组 settings 域 = 触发钮缺席静默
+  const onOpenConfig = useCallback(() => openPluginConfigTab(), [])
 
   return (
     <div className="dswf-expert-panel" data-dswf-expert-panel="">
@@ -394,6 +466,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         {...(controller !== undefined ? { onRetry } : {})}
         {...(summon !== undefined ? { onSummon, summonBusy } : {})}
+        onOpenConfig={onOpenConfig}
         {...(summonNotice !== undefined ? { summonNotice } : {})}
         {...(delegateNotice !== undefined ? { delegateNotice } : {})}
         {...(detailController !== undefined ? { onCardActivate } : {})}
@@ -431,6 +504,8 @@ export interface ExpertPanelProps {
   /** 点卡片 = 请求打开详情 Dialog（key + 当前展示来源——shadow 展示态开其所在层档案）。 */
   readonly onCardActivate?: (key: string, origin?: string) => void
   readonly onSummon?: () => void
+  /** 点「配置」钮 = 跳转本插件配置 tab（官方设置壳导航缝——装配壳恒递达）。 */
+  readonly onOpenConfig?: () => void
   /** 召唤在途（防重——钮禁用态）。 */
   readonly summonBusy?: boolean
   /** 召唤降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席）。 */
@@ -589,24 +664,23 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
           ) : null}
         </span>
       </div>
-      {/* 第二行：中文名称（岗位）居左 + 派发路由合并 chip 靠右（provider·model 单 chip；
-          缺省 = 「model : 继承父Agent」弱化 chip——与详情 Dialog 同语义） */}
+      {/* 第二行：中文名称（岗位）居左 + 路由 chip 二态靠右（expert-squad-default-routing
+          AC3：生效 = 模型名 chip（tooltip 展开 provider/档位）；皆缺 = 「继承父Agent」
+          弱化 chip——不标来源与层级，D1 裁决） */}
       <div className="xc-title-row">
-        <div className="xc-title">
-          {expert.title}
-          {expert.enabled ? "" : " · 已禁用"}
-        </div>
-        <span
-          className={`chip${expert.provider !== undefined && expert.model !== undefined ? " tool" : " dswf-chip-muted"}`}
-          data-xc-route=""
-          title={expert.provider !== undefined && expert.model !== undefined
-            ? `${expert.provider} · ${expert.model}`
-            : "model : 继承父Agent"}
-        >
-          {expert.provider !== undefined && expert.model !== undefined
-            ? `${expert.provider} · ${expert.model}`
-            : "model : 继承父Agent"}
-        </span>
+        <div className="xc-title">{expert.title}</div>
+        {(() => {
+          const route = routeChipOf(expert);
+          return (
+            <span
+              className={`chip${route.kind === "model" ? " tool dswf-tip" : " dswf-chip-muted dswf-tip"}`}
+              data-xc-route={route.kind}
+              data-tip={route.tip}
+            >
+              {route.kind === "model" ? route.model : "继承父Agent"}
+            </span>
+          );
+        })()}
       </div>
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>
@@ -818,6 +892,18 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
             onClick={props.onSummon}
           >
             召唤
+          </button>
+        )}
+        {/* 「配置」跳转（D2）：召唤钮右侧 → 官方设置壳本插件配置 tab「默认 Agent 选项」 */}
+        {props.onOpenConfig === undefined ? null : (
+          <button
+            type="button"
+            className="dswf-btn dswf-btn-ghost dswf-cfg-jump-btn dswf-tip"
+            data-tip="默认 Agent 选项（本插件配置）"
+            aria-label="打开插件配置"
+            onClick={props.onOpenConfig}
+          >
+            ⚙ 配置
           </button>
         )}
       </header>
