@@ -227,9 +227,13 @@ describe("ExpertDetailDialog 来源行（1.61 ① + 1.67 裁决）", () => {
     expect(userHtml).toContain('data-dswf-origin-help="user"');
     expect(userHtml).toContain('data-tip="当前用户全局档案（跨项目共享）"');
     expect(userHtml).not.toContain('title="当前用户全局档案（跨项目共享）"');
-    const pluginHtml = renderDialog(ctlFor(entry({ origin: "plugin", effective: true })), { sameKeyEntries: [entry({ origin: "plugin", effective: true })] });
+    const pluginHtml = renderDialog(ctlFor(entry({ origin: "plugin", effective: true, sourcePath: "Z:/app/packages/plugin-forge/experts/code-reviewer.md" })), { sameKeyEntries: [entry({ origin: "plugin", effective: true, sourcePath: "Z:/app/packages/plugin-forge/experts/code-reviewer.md" })] });
     expect(pluginHtml).toContain('data-dswf-origin-help="plugin"');
-    expect(pluginHtml).toContain('data-tip="来源插件贡献的专家档案（随插件分发）"');
+    // plugin 层 tooltip 携带来源插件名（sourcePath 反推）；不可解析回落 base 文案
+    expect(pluginHtml).toContain('data-tip="插件 plugin-forge 贡献的专家"');
+    const noSource = renderDialog(ctlFor(entry({ origin: "plugin", effective: true })), { sameKeyEntries: [entry({ origin: "plugin", effective: true })] });
+    // sourcePath 不可解析回落 base 文案（? 图标仍在——来源语义说明不缺席）
+    expect(noSource).toContain('data-tip="来源插件贡献的专家档案（随插件分发）"');
     const projectHtml = renderDialog(ctlFor(effective), { sameKeyEntries: [effective] });
     expect(projectHtml).not.toContain("dswf-dlg-origin-help");
   });

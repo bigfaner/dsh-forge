@@ -21,7 +21,7 @@ import {
   TOOL_CANDIDATES,
   type MdInline,
 } from "./detail-logic.js";
-import { maskedPeersLabel, diffFields, entryIdOf, originBadgeLabel, type ExpertView } from "./filter.js";
+import { maskedPeersLabel, diffFields, entryIdOf, originBadgeLabel, pluginNameOfSource, type ExpertView } from "./filter.js";
 import {
   DiffOnlyToggle,
   PairCompareTable,
@@ -445,6 +445,15 @@ const ORIGIN_HELP: Readonly<Record<string, string>> = {
   user: "当前用户全局档案（跨项目共享）",
 };
 
+/** 来源 tooltip：plugin 层携带来源插件名插值；未知来源（project）→ undefined（不渲染 ?）。 */
+function originHelpText(entry: Pick<ExpertView, "origin" | "sourcePath">): string | undefined {
+  const base = ORIGIN_HELP[entry.origin];
+  if (base === undefined) return undefined;
+  if (entry.origin !== "plugin") return base;
+  const plugin = pluginNameOfSource(entry.sourcePath);
+  return plugin === undefined ? base : `插件 ${plugin} 贡献的专家`;
+}
+
 function OriginBar({
   expert,
   shadows,
@@ -455,7 +464,7 @@ function OriginBar({
   readonly projectName?: string;
 }): ReactNode {
   const masked = maskedPeersLabel(shadows);
-  const help = ORIGIN_HELP[expert.origin];
+  const help = originHelpText(expert);
   return (
     <div className="dswf-dlg-origin-bar" data-dswf-origin-bar="">
       <span className="dswf-dlg-origin-lead">来源</span>
