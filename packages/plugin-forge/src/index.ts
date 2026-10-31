@@ -1,9 +1,11 @@
 // @dsh-forge/plugin-forge 插件定义（定位：装配；knowledge index.ts 同型——3.4 物理挂载）。
 // 形态：Cordis Plugin.Function（loader 取 default 导出，与 core/index.ts 同型）：
-//   inject = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt']
+//   inject = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt', 'experts']
 //   —— 对 core 的依赖 = 任务/提案/bug/项目四域服务（Interface 1/3 类型 +
 //   ProjectServiceM2.deriveTaskStoreDir——事件日志落位目录单源派生，插件不复制；
 //   forgeBugs = fix-bug bug 域服务——recordBug/resolveBug 两写径）；
+//   experts = expert-squad 顶层服务（bug 0b83e3aa——preset 组内实例跨隔离 realm 消费
+//   正门 = cordis inject 服务键声明；缺席 = 插件不装载）；
 //   forgeSettings = 可选服务（经官方 reflect.get 防御读取——cordis 4.0.4 无 '?'
 //   可选 inject 后缀；缺席 = dispatchTask 不携带 agentOptions 回退父会话继承）；
 //   tools / systemPrompt 为 dsh 官方面（非 core）。
@@ -85,7 +87,9 @@ function warnReconcileDegraded(projectId: string, cause: unknown): void {
 export interface ForgePlugin {
   (ctx: ForgeContextFace, config?: ForgePluginConfig): () => void
   /** 依赖声明：声明服务齐备才加载（core 面 = forgeTasks + forgeProposals + forgeBugs +
-   *  forgeProjects 四服务；forgeSettings 可选消费不走 inject 声明——缺席不阻载） */
+   *  forgeProjects 四服务 + experts（bug 0b83e3aa——expert-squad 顶层服务跨 realm 正门，
+   *  cordis inject 服务键；缺席 = 插件不装载——产品组合两者恒同装，无 experts 即无路由
+   *  消费面）；forgeSettings 等可选消费不走 inject 声明——缺席不阻载） */
   readonly inject: readonly string[]
 }
 
@@ -112,17 +116,40 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       settingsService = undefined
     }
-    // experts 服务可选消费（expert-squad-forge 1.2——同 forgeSettings reflect.get 防御读取
-    // 先例：cordis 4.0.4 无 '?' 可选 inject 后缀，expert-squad 插件缺席 = 装配面整体降级
-    // 不阻载，persona 合成回落 core 程序段）。在场 = ①registerRoot(随包预设专家目录)
+    // experts 服务可选消费（expert-squad-forge 1.2；bug 0b83e3aa 修正——preset 组内
+    // 实例与顶层 expert-squad 分属隔离 realm，装配期 reflect.get('experts') 跨 scope
+    // 读不到顶层实现（763de653 链判例），正门 = inject: ['experts'] 服务键声明 +
+    // ctx.experts 具名属性读取（cordis proxy 经 fiber.store 解析注入实现——fix-2
+    // bug 9577a867 同款修正）；reflect.get 通道保留为同 scope 先例面。双通道皆
+    // try/catch 防御：缺席/异常/非函数面 = 装配面整体降级不阻载，persona 合成回落
+    // core 程序段）。在场 = ①registerRoot(随包预设专家目录)
     // 注册 plugin 内置层（三层遮蔽 project > user > plugin）；②显式 refresh 一次
     // （registerRoot 只追加 root 不重扫——expert-squad registry.ts:182-184，注册后须显式
     // 触发才可见）；③档案取用面（按 settings 映射键 get 档案）经依赖注入供 claim 链消费
     // （'forgeExperts' 具名服务——core 装配侧 reflect.get 防御读取，core 零 IO 纪律不变）。
+    const readExpertsFace = (): ExpertsServiceFace | undefined => {
+      try {
+        const viaInject = (ctx as ForgeContextFace & { readonly experts?: ExpertsServiceFace }).experts
+        if (viaInject !== undefined && typeof viaInject.get === 'function' && typeof viaInject.registerRoot === 'function') {
+          return viaInject
+        }
+      } catch {
+        // 注入服务未就绪（proxy 抛 cannot get property）= 降级到 reflect 通道
+      }
+      try {
+        const viaReflect = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
+        if (viaReflect !== undefined && typeof viaReflect.get === 'function' && typeof viaReflect.registerRoot === 'function') {
+          return viaReflect
+        }
+      } catch {
+        // 同降级（缺席/异常 = undefined）
+      }
+      return undefined
+    }
     let expertResolver: ExpertProfileResolver | undefined
     try {
-      const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
-      if (experts !== undefined && typeof experts.get === 'function' && typeof experts.registerRoot === 'function') {
+      const experts = readExpertsFace()
+      if (experts !== undefined) {
         experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR)
         // refresh 完成屏障（expert-squad-forge 1.10）：refresh 是 fire-and-forget 的重扫——
         // 未结算前首笔档案取用会误触发 not-found fail-loud（自愈但语义误报）。promise 记账
@@ -383,10 +410,17 @@ const forgePlugin: ForgePlugin = Object.assign(
                 : join(input.worktree, '.forge', 'caches', input.slug, 'e2e-baseline', 'cache.json'),
           }
         : undefined
-    // 专家团服务在场探测（expert-squad 装配时序可能晚于本插件——调用期惰性 reflect.get
-    // 防御读取，同 sessionController「调用期惰性解析」先例）。缺席/异常/非函数面 = false。
-    // 双消费面：forge:commander 段条件注入 + P8 评审指示组装期单选（专家双路/回落文案）。
+    // 专家团服务在场探测（AGENTS 1.6——检测永不缓存，每次消费点调用期现查；bug 0b83e3aa
+    // 同款双通道：ctx.experts 注入属性面（跨 realm 可达）+ reflect.get（同 scope 先例面）。
+    // 缺席/异常/非函数面 = false。双消费面：forge:commander 段条件注入 + P8 评审指示
+    // 组装期单选（专家双路/回落文案）。
     function expertsServicePresent(): boolean {
+      try {
+        const viaInject = (ctx as ForgeContextFace & { readonly experts?: { get?: unknown } }).experts
+        if (viaInject !== undefined && typeof viaInject.get === 'function') return true
+      } catch {
+        // 注入服务未就绪 = 降级到 reflect 通道
+      }
       try {
         const experts = ctx.reflect?.get('experts') as { get?: unknown } | undefined
         return experts !== undefined && typeof experts.get === 'function'
@@ -715,7 +749,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
   },
   {
-    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt'] as const,
+    inject: ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts'] as const,
   },
 )
 

@@ -86,13 +86,13 @@ function injectSatisfied(plugin: { inject: readonly string[] }, ctx: object): bo
 }
 
 describe('AC1 inject 面（对 core 的依赖 = forgeTasks + forgeProposals + forgeProjects 三服务）', () => {
-  it("inject 声明 = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeProjects', 'tools', 'systemPrompt']——core 面四域服务（fix-bug 增 forgeBugs），其余为 dsh 官方面", () => {
-    expect([...forgePlugin.inject].sort()).toEqual(['forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'forgeProposals', 'forgeTasks', 'systemPrompt', 'tools'])
+  it("inject 声明 = ['forgeTasks', 'forgeProposals', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'tools', 'systemPrompt', 'experts']——core 面四域服务（fix-bug 增 forgeBugs）+ experts（bug 0b83e3aa 跨 realm 正门），其余为 dsh 官方面", () => {
+    expect([...forgePlugin.inject].sort()).toEqual(['experts', 'forgeBugs', 'forgeCheckpoints', 'forgeProjects', 'forgeProposals', 'forgeTasks', 'systemPrompt', 'tools'])
   })
 
-  it('缺任一声明服务即不加载（Cordis service-availability 语义）；五服务齐备才装配', () => {
+  it('缺任一声明服务即不加载（Cordis service-availability 语义）；六服务齐备才装配', () => {
     const rt = new TempRuntime()
-    const full = rt.ctx()
+    const full = { ...rt.ctx(), experts: { get: () => undefined, registerRoot: () => {} } }
     expect(injectSatisfied(forgePlugin, full)).toBe(true)
     for (const name of forgePlugin.inject) {
       const hole: Record<string, unknown> = { ...full }
@@ -1050,6 +1050,28 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     } finally {
       warn.mockRestore()
     }
+  })
+
+  it('bug 0b83e3aa：跨 scope 拓扑（组内子 scope reflect 无 experts 键，inject 服务键经 ctx.experts 具名属性面在场）——装配成功、forgeExperts provide、resolver 可取档（worker 路由不再恒 inherit）', async () => {
+    _resetExpertResolverSingletonForTests()
+    const { face, calls } = expertsFace()
+    const provided = new Map<string, unknown>()
+    const rt = new TempRuntime()
+    // 组内子 scope 拓扑：reflect 面无 experts 键（跨 realm 不可见——真机定罪面），
+    // 注入实现仅经 cordis proxy 的 ctx.experts 具名属性面可达（inject: ['experts'] 声明）。
+    const ctxWithoutReflectExperts = {
+      ...rt.ctx(),
+      experts: face,
+      reflect: { get: () => undefined, provide: (n: string, s: unknown) => provided.set(n, s) },
+    }
+    const dispose = forgePlugin(ctxWithoutReflectExperts as never)
+    expect(rt.registeredTools).toHaveLength(19)
+    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR) // registerRoot 装配副作用在场
+    expect(calls.refresh).toBe(1)
+    const resolver = provided.get('forgeExperts') as ExpertProfileResolver
+    expect(typeof resolver).toBe('function')
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' }) // 取用面可达（doc→默认映射路由——worker 路由消费前提）
+    dispose()
   })
 
   it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
