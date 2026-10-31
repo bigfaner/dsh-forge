@@ -45,6 +45,7 @@ import { defaultWorkerTreeGuard } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
+import type { ForgeFeaturesToolFace } from './tools/index.js'
 import type { ProjectBinding } from './tools/index.js'
 
 /** 模块级本地 expertResolver 单例（bug dfa41a72/ad32e240——弃跨 scope 反射取回）：
@@ -344,6 +345,23 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       knownContainers = undefined
     }
+    // transitionFeature tool 服务面（implicit-stage-approval §2.3）：forgeFeatures 经 reflect
+    // 防御读取（同 forgeSettings/knownContainers 配方——core 装配同块恒提供）；三方法面齐备
+    // 才注入，缺席 = tool 执行期 fail-loud 拒绝（可选降级模式——其余 tool 零影响）。
+    let featuresFace: ForgeFeaturesToolFace | undefined
+    try {
+      const raw = ctx.reflect?.get('forgeFeatures') as Partial<ForgeFeaturesToolFace> | undefined
+      if (
+        raw !== undefined &&
+        typeof raw.transitionFeature === 'function' &&
+        typeof raw.listFeatures === 'function' &&
+        typeof raw.listFeatureDocs === 'function'
+      ) {
+        featuresFace = raw as ForgeFeaturesToolFace
+      }
+    } catch {
+      featuresFace = undefined
+    }
     // 3b 注入面 registry 单例（装配方持有——驱动器 deps 注入共享同一登记表；section 回调
     // 闭包直读同一单例。注入为 registry 纯投影、零影子状态：登记状态变即输出变、登记删除
     // 即零注入——官方 dsh-system-prompt 对空串 section 整体过滤，与「从未注册」逐字节一致）。
@@ -487,6 +505,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       proposals: ctx.forgeProposals,
       bugs: ctx.forgeBugs,
       checkpoints: ctx.forgeCheckpoints,
+      ...(featuresFace !== undefined ? { features: featuresFace } : {}),
       resolveProjectId,
       events: sink,
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
@@ -663,6 +682,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       ctx.tools.register(tools.queryTask),
       ctx.tools.register(tools.createProposal),
       ctx.tools.register(tools.transitionProposal),
+      ctx.tools.register(tools.transitionFeature),
       ctx.tools.register(tools.dispatchTask),
       ctx.tools.register(tools.stopTaskLoop),
       ctx.tools.register(tools.updateTask),

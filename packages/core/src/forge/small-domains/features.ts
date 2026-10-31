@@ -7,7 +7,8 @@
 //   （schema DEFAULT 同值——无文档无任务的推导机不动点）。
 // - transitionFeature：人类纠偏面——reason 必带（ERR_REASON_REQUIRED）+ from≠to 同源校验
 //   （ERR_INVALID_TRANSITION，assertDomainTransition 单源）；不做相位推导重算（人类即相位
-//   权威——phase-deriver 消费侧清单不含 transitionFeature）。
+//   权威——phase-deriver 消费侧清单不含 transitionFeature；agent tool 面的溯源前缀与相位
+//   守卫在 plugin-forge tool 层承载——implicit-stage-approval §2.3，本服务零语义改动）。
 // - upsertFeatureDoc：登记即推进（§6-28）——单事务内聚：slug→id 服务内解析（未命中
 //   ERR_FEATURE_NOT_FOUND）→ 写时增量断言（受影响 feature 漂移防护——事务内先于写）→
 //   doc 行 upsert（PK (feature_id, doc_kind)：加缺/覆写 rel_path；summary 非破坏——
@@ -22,7 +23,9 @@
 // 重算（upsertFeatureDoc 相位推进载于 doc-upsert 行 from/to，不另记 transition 行）。
 // actor 通道推断（TECH-rpc-008「输入面不收」——动词级规范 actor，服务面无通道信息）：
 // registerFeature/upsertFeatureDoc = plugin-forge-spec tool 写径 → 'plugin-tool'；
-// transitionFeature = RPC 人类纠偏面（收窄不进 tool 面——裁决②）→ 'ui'；成链内聚
+// transitionFeature = 人类纠偏/代理转移写径（裁决②——implicit-stage-approval §2.3 局部
+// 修订：进 tool 面，tool parse 层 reason 双前缀 ^(隐式赞同|显式指令)： 机械强制承担溯源，
+// tool 层另设相位守卫两支；UI/RPC 面不动，本服务零语义改动，actor 沿用 'ui'）；成链内聚
 // （2.2 经 registerFeatureInTx）→ 'core'。
 //
 // 写动词闭包尾部 emitTasksChanged(projectId)（Interface 1 写后事件四域覆盖面裁决——

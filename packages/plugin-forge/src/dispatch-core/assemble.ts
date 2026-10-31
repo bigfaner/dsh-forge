@@ -17,7 +17,9 @@ import {
  * （bug-recurrence-chain——fix-bug coding-fix worker 放行）。名单 = 本包
  * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十六员全集中
  * worker 可见 = 五动词，其余八员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
- * agent 面——listBugs 台账查询面分治主 agent）。validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
+ * agent 面——listBugs 台账查询面分治主 agent；transitionFeature 相位转移入口
+ * （implicit-stage-approval §2.3——仅主 agent，worker 面无代转相位动词））。
+ * validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
  * tools/validate-mermaid.ts 导出 MERMAID_TOOL_NAME = 'validateMermaid'——工具面仅主 agent，
  * 附录 F deny 约束；本包不反依赖插件包，字面量 + 锚注释对齐）。plugin-forge-spec 三动词不入本 deny：其注册面
  * 预设相依（突击组合物理缺席），driver 的 toolFilter 对未知名 loud 校验会拆 spawn——
@@ -27,6 +29,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'queryTask',
   'createProposal',
   'transitionProposal',
+  'transitionFeature', // implicit-stage-approval §2.3——相位转移仅主 agent（worker 拒）
   'dispatchTask',
   'stopTaskLoop',
   'updateTask',
