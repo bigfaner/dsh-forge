@@ -68,10 +68,11 @@ export const PANEL_CSS = `
 /* 卡头右侧组（对比钮 + 来源 chip，间距 10px、统一靠右）；来源下拉（chip 向下扩展列全来源） */
 .xc-head-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; position: relative; }
 .xc-head-right > .origin-badge { margin-left: 0; }
-/* 单/多来源同款：按钮元素默认 chrome 复位，样式 = 静态 origin-badge（差异仅 multi 的 caret） */
-.xc-head-right > button.origin-badge { border: none; padding: 0 6px; line-height: ${T.lh14}; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
+/* 单/多来源同款：按钮元素默认 chrome 复位，样式 = 静态 origin-badge 放大一号
+   （xxs-12 + padding 加大——来源 chip 突出层级，差异仅 multi 的 caret） */
+.xc-head-right > button.origin-badge { border: none; font: var(--dsw-font-xxs-12); line-height: var(--dsw-font-xxs-12-line-height, ${T.lh18}); padding: 2px 8px; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
 .xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
-.xc-origin-caret { font-size: 10px; margin-left: 2px; }
+.xc-origin-caret { font-size: 10px; margin-left: 3px; }
 .xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; } /* chip 原地向下展开（锚 = xc-head-right）；溢出视口下缘时组件侧 scrollIntoView nearest 最小滚动带入 */
 .xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
 .xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
@@ -81,7 +82,8 @@ export const PANEL_CSS = `
 .xc-origin-opt-date { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); flex: none; }
 .xc-title-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .xc-title-row > .xc-title { flex: 1; }
-.xc-title-row > .chip { flex: none; }
+/* 路由 chip 动态宽度：width fit-content 包紧文字，两侧只留小 padding（退役 .chip 固定高 + 大 pad 的宽空白形态） */
+.xc-title-row > .chip { flex: none; width: fit-content; height: auto; line-height: ${T.lh18}; padding: 1px 8px; }
 .xc-creed { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .xc-seg { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
 .xc-tags { display: flex; gap: 6px; flex-wrap: wrap; } /* dsw-raw 原型 chips 间距刻度 */
