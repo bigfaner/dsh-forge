@@ -334,6 +334,36 @@ describe("expertsConfigWriteOf（experts 条目写缝生产装配）", () => {
     expect(sets).toEqual([["experts", { "k#1": { disabled: true, skills: ["s"], tools: ["read"] } }]]);
   });
 
+  it("disabled 三态·false = 位摘除（启用 = 键归缺，prior 禁用位不残留）", async () => {
+    const sets: [string, unknown][] = [];
+    const forms = {
+      get: (ns: string) =>
+        ns === "expert-squad"
+          ? mirrorOf({ "k#1": { disabled: true, skills: ["s"] } }, async (field, value) => {
+              sets.push([field, value]);
+              return true;
+            })
+          : undefined,
+    };
+    await expertsConfigWriteOf({ configForms: forms })!("k#1", { disabled: false });
+    expect(sets).toEqual([["experts", { "k#1": { skills: ["s"] } }]]);
+  });
+
+  it("disabled 三态·undefined = 补丁未触碰，保留 prior 位", async () => {
+    const sets: [string, unknown][] = [];
+    const forms = {
+      get: (ns: string) =>
+        ns === "expert-squad"
+          ? mirrorOf({ "k#1": { disabled: true } }, async (field, value) => {
+              sets.push([field, value]);
+              return true;
+            })
+          : undefined,
+    };
+    await expertsConfigWriteOf({ configForms: forms })!("k#1", { tools: ["read"] });
+    expect(sets).toEqual([["experts", { "k#1": { disabled: true, tools: ["read"] } }]]);
+  });
+
   it("namespace 候选序回退（dsh-forge-expert-squad）；整字段 set 写 experts 映射", async () => {
     const sets: [string, unknown][] = [];
     const forms = {
@@ -351,12 +381,52 @@ describe("expertsConfigWriteOf（experts 条目写缝生产装配）", () => {
     expect(sets).toEqual([["experts", { k: { agentOptions: { provider: "p", model: "m" } } }]]);
   });
 
-  it("写未被接受（set false）或快照不可达 = fail-loud 抛错（不静默丢路由覆写）", async () => {
-    const rejected = expertsConfigWriteOf({
-      configForms: { get: () => mirrorOf({}, async () => false) },
-    })!;
-    await expect(rejected("k", {})).rejects.toThrow("未被接受");
+  it("写未被接受（set false）或快照不可达 = 背压重试后 fail-loud 抛错（不静默丢路由覆写）", async () => {
+    // 拒写重试窗口（2s × 5）走 fake timers 压缩——恒拒夹具重试耗尽后抛同一错
+    vi.useFakeTimers();
+    try {
+      const rejected = expertsConfigWriteOf({
+        configForms: { get: () => mirrorOf({}, async () => false) },
+      })!;
+      const pending = rejected("k", {});
+      const settle = vi.advanceTimersByTimeAsync(20_000);
+      await expect(pending).rejects.toThrow("未被接受");
+      await settle;
+    } finally {
+      vi.useRealTimers();
+    }
     const unreachable = expertsConfigWriteOf({ configForms: { get: () => undefined } })!;
     await expect(unreachable("k", {})).rejects.toThrow();
+  });
+
+  it("拒写背压重试：fresh revision 快照重合成条目再写（重试窗口内写被接受即收写）", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const sets: [string, unknown][] = [];
+      let experts: Record<string, unknown> = { "k#1": { disabled: true } };
+      const forms = {
+        get: () => ({
+          getSnapshot: () => ({ status: "ready" as const, value: { experts }, revision: 1, writable: true }),
+          subscribe: () => () => undefined,
+          set: async (field: string, value: unknown) => {
+            calls += 1;
+            if (calls === 1) return false; // 首写命中热重载窗口被拒
+            sets.push([field, value]);
+            experts = value as Record<string, unknown>;
+            return true;
+          },
+          unset: async () => true,
+        }),
+      };
+      const pending = expertsConfigWriteOf({ configForms: forms })!("k#1", { disabled: false });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await pending;
+      expect(calls).toBe(2);
+      // 重试携 fresh 快照重合成：prior（disable 后落位）重读，false = 位摘除
+      expect(sets).toEqual([["experts", { "k#1": {} }]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

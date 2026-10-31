@@ -13,9 +13,12 @@
 // button[aria-label="专家团"]（KNOWLEDGE_ENTRY 同径）。
 // 故障/空态注入：dsh-forge:// 自定义 scheme 的页内 fetch 对 page.route 不生效（页面恒收
 // 真实响应）——改为页面上下文内包装 window.fetch 的注入式拦截（scheme 无关），注入/还原
-// 对称（用例 finally 还原，幂等）；禁用态经面板同款通道 POST /api/expert-squad/disable
-// （workspace 参数取自面板真实 list 请求——页面上下文内 fetch 捕获缓冲 + expect.poll，
+// 对称（用例 finally 还原，幂等）；禁用态注入 = 页面上下文内直连 POST /api/expert-squad/
+// disable（workspace 参数取自面板真实 list 请求——页面上下文内 fetch 捕获缓冲 + expect.poll，
 // D4 同参；dsh-forge:// scheme 下该 fetch 不进 performance resource entry）。
+// 注记（bug 950b845c）：Dialog UI 启停已改写 experts.<实例ID>.disabled 配置位（settings
+// revisioned 缝，panel-detail spec step-5 取证）——HTTP enable/disable 面 UI 消费已零，
+// 此处直连为 e2e 演练径（routes.ts EXPERT_SQUAD_ENDPOINTS 演练定位注记同源）。
 // Hard Rules：零产品源码改动（断言失败 → 归因上报）；夹具 = 仓外 tmp；断言对齐
 // ui-design.md F1 与 tech-design §10.4 真机结算门，不编造断言。
 // @feature expert-squad @web-e2e
@@ -263,8 +266,8 @@ test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/
     await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
     await expect(card.locator('.xc-creed'), '人设摘要（Markdown 剥离纯文本）').toContainText('夹具人设正文')
     expect((await card.locator('.xc-creed').innerText()).includes('##'), '摘要零 Markdown 记号外露').toBe(false)
-    await expect(card.locator('.xc-seg').nth(0), '段标·技能（1.68 裁决⑤）').toHaveText('技能')
-    await expect(card.locator('.xc-seg').nth(1), '段标·工具白名单').toHaveText('工具白名单（子会话强制）')
+    await expect(card.locator('.xc-seg').nth(0), '段标·工具').toHaveText('工具')
+    await expect(card.locator('.xc-seg').nth(1), '段标·技能（1.68 裁决⑤）').toHaveText('技能')
     await expect(card.locator('.xc-tags .chip', { hasText: 'review' }).first(), '技能 chip').toBeVisible()
     await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip').toBeVisible()
     await expect(card.locator('.xc-foot'), '页脚更新时间（YYYY-MM-DD 形态）').toContainText(/更新于 \d{4}-\d{2}-\d{2}/)

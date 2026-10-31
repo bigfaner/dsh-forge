@@ -9,15 +9,17 @@
 // input[aria-label=岗位] / textarea[aria-label=简介|人设] / .dswf-msel[data-msel=tools|skills]；
 // 错误 .dswf-dlg-err；Toast .dswf-toast[role=status]；卡 .dswf-xcard[data-expert-key]。
 // 拦截纪律（fix-3 判例）：一律 addInitScript / 页面上下文内包装 window.fetch（禁 page.route
-// ——dsh-forge:// scheme 下 route 不生效）；update/enable/disable 失败注入经包装器
-// __xsqStubMode 运行期开关；请求捕获（update 载荷）走同包装器缓冲 + expect.poll。
+// ——dsh-forge:// scheme 下 route 不生效）；update 失败注入经包装器 __xsqStubMode 运行期
+// 开关（启停新写径 = experts.<实例ID>.disabled 配置位写——settings mutate 走 IPC 桥，
+// bug 950b845c 收口后 Dialog 零 /enable|/disable 消费）；
+// 请求捕获（update 载荷）走同包装器缓冲 + expect.poll。
 // Hard Rules：零产品源码改动（断言失败 → 归因上报）；夹具 = 仓外 tmp；断言对齐
 // ui-design.md F2 与 tech-design §10.4 真机结算门，不编造断言。
 // @feature expert-squad @web-e2e
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
+import { closeApp, launchHost, ROOT } from '../support/launch.js'
 import { registerProject } from '../support/rpc.js'
 import { dismissOnboardingModals } from '../support/modals.js'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
@@ -44,6 +46,24 @@ const mselBox = (field: string): string =>
 const KEY = 'test-reviewer'
 const OTHER_KEY = 'data-miner'
 
+// dev profile patch（experts 配置位写径落盘面——官方 settings 写径落 dev 形态 tracked 文件；
+// default-agent-options-panel.spec 同口径：写前备份、finally 逐字还原零残留）
+const DEV_PATCH = join(ROOT, 'apps', 'host', 'profile.dev', 'cordis.patch.yml')
+
+/** patch 文件文本（Node 侧直读——experts 配置位落盘实况断言源）。 */
+function patchText(): string {
+  return readFileSync(DEV_PATCH, 'utf8')
+}
+
+/** patch 还原（写前备份在案才写——零残留纪律）。 */
+function restorePatch(backup: string | null): void {
+  if (backup === null) {
+    if (existsSync(DEV_PATCH)) writeFileSync(DEV_PATCH, '', 'utf8')
+  } else if (patchText() !== backup) {
+    writeFileSync(DEV_PATCH, backup, 'utf8')
+  }
+}
+
 // ── fetch 包装器（addInitScript 注入——页面加载前后幂等；scheme 无关拦截单源） ──
 const HARNESS_SOURCE = `(() => {
   const w = window
@@ -61,9 +81,8 @@ const HARNESS_SOURCE = `(() => {
         w.__xsqStubMode = null // 一次性注入：仅首个 update 失败，随后移除——修正后保存走真实通道
         return new Response('xsq e2e stub: update rejected', { status: 500 })
       }
-      if (mode === 'toggle-fail' && (url.includes('/enable') || url.includes('/disable'))) {
-        return new Response('xsq e2e stub: toggle rejected', { status: 500 })
-      }
+      // 注记：启停新写径注错通道不存在——settings mutate 走 Electron IPC 桥（非页面
+      // fetch），见 step-5 toggle-failure 诚实映射注记
     }
     return original(input, init)
   }
@@ -87,8 +106,8 @@ async function installFetchHarness(page: Page): Promise<void> {
   await page.evaluate(HARNESS_SOURCE)
 }
 
-/** 注入开关：'update-fail' | 'toggle-fail' | null（null = 全部放行）。 */
-async function setStubMode(page: Page, mode: 'update-fail' | 'toggle-fail' | null): Promise<void> {
+/** 注入开关：'update-fail' | null（null = 全部放行；启停新写径无 fetch 注错通道——见 step-5 注记）。 */
+async function setStubMode(page: Page, mode: 'update-fail' | null): Promise<void> {
   await page.evaluate((m) => {
     ;(window as unknown as XsqWin).__xsqStubMode = m
   }, mode)
@@ -215,7 +234,8 @@ test('@feature expert-squad dlg step-1 success：点卡开 Dialog——查看态
     const head = page.locator('.dswf-dlg-head')
     await expect(head.locator('.dot.on'), '启用状态灯 on').toBeVisible()
     await expect(head.locator('.dswf-dlg-name'), '名称 ← name').toHaveText(KEY)
-    await expect(head.locator('.chip.tool'), '英文标识 chip ← name（等宽正本）').toHaveText(KEY)
+    // head 形态收敛（default-routing Dialog 改造）：head-row = icon + 灯 + 名称（英文标识
+    // chip 已退役出 head——路由 chips 归 body 首行 data-dswf-dlg-route）
     await expect(page.locator(dlgBtn('编辑')), '编辑钮（查看态）').toBeVisible()
     await expect(page.locator(`${DIALOG} button[aria-label="关闭"]`), '✕ 关闭钮').toBeVisible()
     await expect(page.locator(cardOf(KEY)), '背后卡片网格仍在场').toBeVisible()
@@ -441,6 +461,7 @@ test('@feature expert-squad dlg step-3 cancel-discard：编辑修改后关闭重
 
 test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/换新回查看态/Toast/卡片即时同步', async () => {
   test.setTimeout(180_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
   const session = await openPanelWithFixture()
   try {
     const { page } = session
@@ -461,15 +482,20 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
       .check()
     await collapseMsel(page) // 勾选完成后收起菜单——外点收起解除对底部钮的遮挡（fix-6 交互语义）
     await page.locator(dlgBtn('保存')).click()
-    // update 载荷捕获（name 键定址 + 新值在 body）
+    // update 载荷捕获（内容半——name 键定址 + 新岗位在 body；写径分流后工具不混写，
+    // update 只透传档案现值工具集，勾选增量走 experts 条目配置半）
     const update = await capturedCall(page, '/api/expert-squad/update')
     expect(update.method, 'update 为 POST').toBe('POST')
     const body = JSON.parse(update.body) as { name?: string; title?: string; tools?: string[] }
     expect(body.name, '请求体 name = 键正本').toBe(KEY)
     expect(body.title, '请求体携带新岗位').toBe('夹具评审·复核')
-    expect(body.tools, '请求体携带勾选后的工具集').toContain(toggleTarget)
+    expect(body.tools, '请求体 tools 透传档案现值（工具增量归 experts 条目）').toEqual(selectedTools)
+    // 配置半落盘实况：勾选工具写 experts.<实例ID>.tools（dev profile patch poll 收敛）
+    await expect
+      .poll(() => patchText(), { timeout: 30_000, message: 'cordis.patch.yml 落 experts.tools 勾选增量' })
+      .toMatch(new RegExp(`#test-reviewer[\\s\\S]{0,240}tools:[\\s\\S]{0,120}- ${toggleTarget}`))
     // 回查看态：新值呈现 + Toast 热刷新
-    await expect(page.locator(dlgBtn('编辑')), '头部钮回 [编辑]（查看态）').toBeVisible()
+    await expect(page.locator(dlgBtn('编辑')), '头部钮回 [编辑]（查看态）').toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.dswf-dlg-meta').first(), '查看态换新呈现新岗位').toContainText('夹具评审·复核')
     await expect(page.locator(TOAST), 'Toast 热刷新生效').toContainText('热刷新生效')
     // 背后列表卡片即时同步（patchEntry，不待轮询）
@@ -477,6 +503,7 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: toggleTarget! }).first(), '卡片工具 chip 同步').toBeVisible()
   } finally {
     await closeSession(session)
+    restorePatch(backup)
   }
 })
 
@@ -519,6 +546,7 @@ test('@feature expert-squad dlg step-4 validation-bare-mustache：人设裸 {{ �
 
 test('@feature expert-squad dlg step-4 update-failure：通道拒绝——停留编辑态/Toast保存失败/两侧不变', async () => {
   test.setTimeout(180_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
   const session = await openPanelWithFixture()
   try {
     const { page } = session
@@ -538,6 +566,7 @@ test('@feature expert-squad dlg step-4 update-failure：通道拒绝——停留
     await expect(page.locator(`${cardOf(KEY)} .xc-title`), '卡片同步新值').toHaveText('将失败的新岗位', { timeout: 10_000 })
   } finally {
     await closeSession(session)
+    restorePatch(backup)
   }
 })
 
@@ -555,21 +584,30 @@ test('@feature expert-squad dlg step-4 description-limit：简介 120 字硬限�
   }
 })
 
-// ── step-5-toggle-enabled ──
+// ── step-5-toggle-enabled（bug 950b845c 新写径：experts.<实例ID>.disabled 配置位——
+//    settings revisioned 缝；POST /enable|/disable 已不被 Dialog 消费）──
 
-test('@feature expert-squad dlg step-5 disable-success：底部禁用即时生效——灯/meta/按钮/卡片四位同步', async () => {
+test('@feature expert-squad dlg step-5 disable-success：禁用写 experts 配置位——灯/meta/按钮/卡片四位同步 + patch 落盘', async () => {
   test.setTimeout(180_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
   const session = await openPanelWithFixture()
   try {
     const { page } = session
     await openDetail(page, KEY)
-    const wsParam = await captureWorkspaceParam(page)
     await page.locator(dlgBtn('禁用')).click()
-    const disable = await capturedCall(page, '/api/expert-squad/disable')
-    expect(
-      JSON.parse(disable.body) as { workspace?: string; key?: string },
-      'disable 载荷 = {workspace, key}（workspace 与真实 list 请求同参——D4 一致性契约）',
-    ).toEqual({ workspace: wsParam, key: KEY })
+    // 新写径落盘实况：experts.<实例ID> 条目 disabled: true 写入 dev profile patch
+    //（configForms revisioned 异步写——落盘时刻非即时，poll 收敛；实例键含 ':' 必被
+    // YAML 引述，邻接锚取键尾段 + 位值）
+    await expect
+      .poll(() => patchText(), { timeout: 30_000, message: 'cordis.patch.yml 落 experts.disabled: true 条目' })
+      .toMatch(/#test-reviewer['"]?[\s\S]{0,120}disabled: true/)
+    // 退役通道零消费：捕获缓冲零 POST /enable|/disable（Dialog 启停不走启停路由）
+    const toggleCalls = await page.evaluate(() =>
+      [...((window as unknown as XsqWin).__xsqCalls ?? [])].filter(
+        (call) => call.method === 'POST' && (call.url.includes('/enable') || call.url.includes('/disable')),
+      ),
+    )
+    expect(toggleCalls, '零启停路由请求（新写径 = settings 缝）').toHaveLength(0)
     await expect(page.locator('.dswf-dlg-head .dot.off'), '头部灯变 off').toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.dswf-dlg-meta').first(), 'meta 变已禁用').toContainText('已禁用')
     await expect(page.locator(dlgBtn('启用')), '底部钮变 [启用]').toBeVisible()
@@ -577,22 +615,30 @@ test('@feature expert-squad dlg step-5 disable-success：底部禁用即时生�
     await expect(page.locator(cardOf(KEY)), '背后卡片即时降透明').toHaveClass(/off/, { timeout: 10_000 })
   } finally {
     await closeSession(session)
+    restorePatch(backup)
   }
 })
 
-test('@feature expert-squad dlg step-5 enable-success：再启用对称恢复——四位归位', async () => {
+test('@feature expert-squad dlg step-5 enable-success：再启用位摘除——四位归位 + patch 位摘除', async () => {
   test.setTimeout(180_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 前置：先经 Dialog 禁用
+    // 前置：先经 Dialog 禁用（位落盘收敛后再启——避免摘除断言空转）
     await openDetail(page, KEY)
     await page.locator(dlgBtn('禁用')).click()
     await expect(page.locator(dlgBtn('启用')), '禁用生效').toBeVisible({ timeout: 10_000 })
+    await expect
+      .poll(() => patchText(), { timeout: 30_000, message: '禁用位落盘收敛（启用前置）' })
+      .toMatch(/#test-reviewer['"]?[\s\S]{0,120}disabled: true/)
     await collapseMsel(page) // 收起菜单（外点收起）——解除遮挡后再点 [启用]
-    // 再启用
+    // 再启用：disabled: false = 位摘除（键归缺）——absence 断言邻接锚定本条目
+    //（patch 基线他段可能携带 disabled: true，全局 absence 恒假——run3 判例）
     await page.locator(dlgBtn('启用')).click()
-    await capturedCall(page, '/api/expert-squad/enable')
+    await expect
+      .poll(() => !/#test-reviewer['"]?:[\s\S]{0,40}disabled: true/.test(patchText()), { timeout: 30_000, message: '启用 = disabled 位摘除落盘' })
+      .toBe(true)
     await expect(page.locator('.dswf-dlg-head .dot.on'), '头部灯回 on').toBeVisible({ timeout: 10_000 })
     await expect(page.locator('.dswf-dlg-meta').first(), 'meta 回启用中').toContainText('启用中')
     await expect(page.locator(dlgBtn('禁用')), '底部钮回 [禁用]').toBeVisible()
@@ -600,27 +646,19 @@ test('@feature expert-squad dlg step-5 enable-success：再启用对称恢复—
     await expect(page.locator(cardOf(KEY)), '背后卡片恢复常态').not.toHaveClass(/off/, { timeout: 10_000 })
   } finally {
     await closeSession(session)
+    restorePatch(backup)
   }
 })
 
-test('@feature expert-squad dlg step-5 toggle-failure：通道拒绝——四位均不变 + Toast 启停失败', async () => {
-  test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    await openDetail(page, KEY)
-    await setStubMode(page, 'toggle-fail')
-    await page.locator(dlgBtn('禁用')).click()
-    await expect(page.locator(TOAST), 'Toast 启停失败透出').toContainText('启停失败')
-    await expect(page.locator('.dswf-dlg-head .dot.on'), '灯不变（on）').toBeVisible()
-    await expect(page.locator('.dswf-dlg-meta').first(), 'meta 不变（启用中）').toContainText('启用中')
-    await expect(page.locator(dlgBtn('禁用')), '按钮不变（busy 退出）').toBeEnabled()
-    await expect(page.locator(cardOf(KEY)), '背后卡片不变').not.toHaveClass(/off/)
-    await setStubMode(page, null)
-  } finally {
-    await closeSession(session)
-  }
-})
+// Outcomes: toggle-failure（step-5 推断项）——真机取证不可达，契约层保留不落脚本：
+//   · 新写径失败注错通道 = 官方 settings mutate RPC——Electron 形态走 IPC 桥（非页面
+//     fetch），fetch 包装器拦截纪律（fix-3 判例）对此面结构性不可达；实测注错不命中、
+//     写径照常收写（run2/run3 双轮实证）。
+//   · 「启停写径不可用（experts 配置缝缺席）」缺席分支由宿主装配保证在场（client inject
+//     声明 configForms），真机无法使缝缺席。
+//   → 文案/分支承载 = panel-detail.test.ts（配置缝缺席 Toast + 实例 ID 缺席 fail-loud +
+//     write 拒抛「启停失败」分支）与 settings-default-options.test.ts（拒写背压重试）——
+//     run-tests 台账注记同「no-dialog-for-missed-key」先例。
 
 // ── step-6-close-restore ──
 
@@ -636,8 +674,8 @@ test('@feature expert-squad dlg step-6 close-x：✕ 关闭——退场且列表
     await expect(page.locator(CARD_ANY), '列表原状恢复').toHaveCount(total)
     const calls = await page.evaluate(() => [...((window as unknown as XsqWin).__xsqCalls ?? [])])
     expect(
-      calls.filter((call) => call.url.includes('/update') || call.url.includes('/enable') || call.url.includes('/disable')),
-      '关闭零变更请求',
+      calls.filter((call) => call.url.includes('/update')),
+      '关闭零变更请求（启停已归 settings 缝——零路由写面）',
     ).toHaveLength(0)
   } finally {
     await closeSession(session)
@@ -682,6 +720,7 @@ test('@feature expert-squad dlg step-6 close-overlay：遮罩点击关闭；Dial
 
 test('@feature expert-squad dlg 冒烟：开Dialog→查看分段→编辑保存→Toast+卡片同步→禁用→关闭恢复', async () => {
   test.setTimeout(240_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
   const session = await openPanelWithFixture()
   try {
     const { page } = session
@@ -710,5 +749,6 @@ test('@feature expert-squad dlg 冒烟：开Dialog→查看分段→编辑保存
     expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
   } finally {
     await closeSession(session)
+    restorePatch(backup)
   }
 })

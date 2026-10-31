@@ -15,7 +15,15 @@ import { z } from "zod";
 /** API 基前缀（精确路由：一个 endpoint 一条路由）。 */
 export const EXPERT_SQUAD_API_BASE = "/api/expert-squad";
 
-/** endpoint 名（api-contract §2.1 面板路由 + §7 候选读口：GET list|get|run-state|candidates + POST update|enable|disable）。 */
+/**
+ * endpoint 名（api-contract §2.1 面板路由 + §7 候选读口：GET list|get|run-state|candidates + POST update|enable|disable）。
+ *
+ * [演练定位注记（bug 950b845c，sc2-worker-face.spec ③ 废弃注记先例）]：enable/disable
+ * HTTP 启停面的 UI 消费已零——Dialog 启停改写 experts.<实例ID>.disabled 配置位（settings
+ * revisioned 缝，src-client settings/index.tsx expertsConfigWriteOf）。本对面保留为 e2e
+ * 演练径的现役消费通道（panel-detail spec step-1 前置 / panel-grid spec step-4 注入）；
+ * enable/disable_expert 工具径 = registry.setEnabled 直连，不经本 HTTP 面。
+ */
 export const EXPERT_SQUAD_ENDPOINTS = [
   "list",
   "get",
@@ -205,6 +213,8 @@ export function expertSquadRoutes(deps: ExpertRoutesDeps): FetchRouteLike[] {
     post("update", async (payload) =>
       deps.update(expertUpdateBodySchema.parse(payload)),
     ),
+    // [演练定位注记（bug 950b845c）]：UI 启停写径已退役（experts.<实例ID>.disabled 配置位
+    // ——settings 缝，见 EXPERT_SQUAD_ENDPOINTS 注记）；本对面保留为 e2e 演练消费通道。
     // 启停回包 = 换新档案（bug 34a284e3 契约收敛：client defaultDetailMutations 消费
     // updated.enabled 切状态灯——{ok:true} 即渲染断链；与 update 路由同型）。
     post("enable", async (payload) => {

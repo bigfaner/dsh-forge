@@ -183,20 +183,28 @@ export function expertsConfigWriteOf(
       if (form === undefined || snapshot === undefined || snapshot.status !== "ready" || !snapshot.writable) {
         continue;
       }
-      const experts = asRecord(asRecord(snapshot.value)?.experts) ?? {};
-      const prior = asRecord(experts[instanceId]) ?? {};
-      // 条目合成：补丁位整组替换（缺键 = 摘除）；disabled 位——补丁 true = 禁用落位，
-      // 补丁 false = 启用且位摘除（键归缺）；补丁未触碰（undefined）= 保留 prior
-      const merged: Record<string, unknown> = {};
-      if (entry.disabled === true) merged.disabled = true;
-      else if (entry.disabled === false) { /* 启用 = 位摘除 */ }
-      else if (typeof prior.disabled === "boolean") merged.disabled = prior.disabled;
-      if (Array.isArray(prior.skills)) merged.skills = prior.skills;
-      if (entry.agentOptions !== undefined) merged.agentOptions = entry.agentOptions;
-      if (entry.tools !== undefined) merged.tools = [...entry.tools];
-      const accepted = await form.set("experts", { ...experts, [instanceId]: merged });
-      if (!accepted) throw new Error(`experts 配置写未被接受（namespace=${ns}）`);
-      return;
+      // 官方拒写背压重试（bug 908dc82e 同族——DefaultAgentOptionsTab writeDraft 先例）：
+      // 连续写经 Host configEditor reconcile/entry fiber 热重载窗口会被拒（"no longer
+      // active" 族——启停连点/保存连写即命中），固定 2s 间隔 × 5 次重试，每次携 fresh
+      // revision 快照重合成条目再写（重试只是收写完成的体验面，正确性仍归 Host 单点）；
+      // 窗口耗尽仍拒 = fail-loud 抛错（保存/启停面 Toast 透出，不静默丢路由覆写）。
+      for (let left = 5; ; left -= 1) {
+        const experts = asRecord(asRecord(form.getSnapshot().value)?.experts) ?? {};
+        const prior = asRecord(experts[instanceId]) ?? {};
+        // 条目合成：补丁位整组替换（缺键 = 摘除）；disabled 位——补丁 true = 禁用落位，
+        // 补丁 false = 启用且位摘除（键归缺）；补丁未触碰（undefined）= 保留 prior
+        const merged: Record<string, unknown> = {};
+        if (entry.disabled === true) merged.disabled = true;
+        else if (entry.disabled === false) { /* 启用 = 位摘除 */ }
+        else if (typeof prior.disabled === "boolean") merged.disabled = prior.disabled;
+        if (Array.isArray(prior.skills)) merged.skills = prior.skills;
+        if (entry.agentOptions !== undefined) merged.agentOptions = entry.agentOptions;
+        if (entry.tools !== undefined) merged.tools = [...entry.tools];
+        const accepted = await form.set("experts", { ...experts, [instanceId]: merged });
+        if (accepted) return;
+        if (left <= 1) throw new Error(`experts 配置写未被接受（namespace=${ns}）`);
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
     }
     throw new Error("experts 配置写缝不可用（configForms 快照不可写）——无法保存 Agent 选项/工具覆写");
   };
