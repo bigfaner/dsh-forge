@@ -17,7 +17,7 @@ import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import { parseExpertFile } from "./store/frontmatter.js";
-import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY } from "./registry.js";
+import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY, type ExpertsService } from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
@@ -145,12 +145,22 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
   // （官方 skill-filesystem 同缝）。失效回调经串行链 refresh 整体换代——同代内竞速
   // 事件合并（watch 层 microtask）+ 重扫互斥（promise 链）。
   const registries = new Map<string, Promise<ExpertsRegistry>>();
+  /** 共享插件内置层 root（registerRoot 记录面——跨 registry 实例族传播，见 rootsFor 注记）。 */
+  const sharedExtraRoots: ExpertRoot[] = [];
   const watchManagers = new Map<string, ExpertWatchManager>();
   const refreshChains = new Map<string, Promise<void>>();
   // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
   // 校验；显式注册工作区锚照旧。registry 扫描与 watch manager 同源，roots 一致。
-  const rootsFor = (workspace: string): ExpertRoot[] =>
-    resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots() : expertRootsFor(workspace);
+  const rootsFor = (workspace: string): ExpertRoot[] => {
+    const base =
+      resolve(workspace) === resolve(process.cwd()) ? cwdExpertRoots() : expertRootsFor(workspace);
+    // 共享插件内置层 root（registerRoot 传播面）：服务键实例族（cwd registry）与面板
+    // 路由实例族（workspace registry）是两族实例——外部插件（plugin-forge 等）经
+    // experts.registerRoot 注册的内置目录若只落服务实例，面板永不可见（forge 55 档案
+    // 缺席缺陷）。共享清单随 roots() 每次刷新求值——新 registry 出生即含、既有 registry
+    // 下一次 refresh 生效（registerRoot 侧同时主动触发换代）。
+    return [...base, ...sharedExtraRoots];
+  };
   const enqueueRefresh = (workspace: string, registry: ExpertsRegistry): void => {
     const prior = refreshChains.get(workspace) ?? Promise.resolve();
     const next = prior.then(
@@ -354,7 +364,25 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
   if (reflectLayer?.provide === undefined) {
     console.warn("[expert-squad] ctx.reflect/provide absent——experts 服务键未 provide（ctx.experts 正门不可用）");
   } else {
-    reflectLayer.provide(EXPERTS_SERVICE_KEY, toolRegistry);
+    // 服务门面（非裸 cwd registry 实例）：get/list/setEnabled 委派 cwd 实例；registerRoot
+    // 除 cwd 实例外还记入共享清单（新 registry 出生即含）并主动换代全部已建 registry
+    // （外部插件注册的内置目录即时对面板/工具/取用三面同可见——断层修复，见 rootsFor 注记）。
+    const expertsService: ExpertsService = {
+      get: (key) => toolRegistry!.get(key),
+      list: (opts) => toolRegistry!.list(opts),
+      setEnabled: (key, enabled) => toolRegistry!.setEnabled(key, enabled),
+      registerRoot: (_ctx: unknown, dir: string): void => {
+        const normalized = resolve(dir);
+        if (sharedExtraRoots.some((root) => resolve(root.dir) === normalized)) return; // 幂等短路
+        sharedExtraRoots.push({ origin: "plugin", dir: normalized });
+        for (const [workspace, pending] of registries) {
+          void pending
+            .then((registry) => enqueueRefresh(workspace, registry))
+            .catch(() => {});
+        }
+      },
+    };
+    reflectLayer.provide(EXPERTS_SERVICE_KEY, expertsService);
   }
   if (toolsFace === undefined) {
     console.warn("[expert-squad] ctx.tools absent——tool 面未注册（管理/委派工具不可用）");

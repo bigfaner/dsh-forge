@@ -300,6 +300,64 @@ describe("bug 7b1c9ed4: experts 服务键 provide（ctx.experts 正门）", () =
     expect(typeof service.registerRoot).toBe("function");
     expect(typeof service.setEnabled).toBe("function");
   });
+
+  it("registerRoot 跨实例族传播：外部插件注册的内置目录对面板 list 同可见（forge 55 档案缺席缺陷回归）", async () => {
+    const ws = makeWorkspace();
+    const provided: Array<{ name: string; value: unknown }> = [];
+    const routes: FetchRouteLike[] = [];
+    // 外部插件内置层目录（模拟 packages/plugin-forge/experts）
+    const externalDir = join(ws, "..", `dsh-forge-xsq-external-${Date.now()}-experts`);
+    mkdirSync(externalDir, { recursive: true });
+    writeFileSync(join(externalDir, "forge-expert.md"), expertMd("forge-expert", "外部内置专家"));
+    try {
+      await expertSquadPlugin({
+        connection: {
+          fetch: {
+            register: (route: FetchRouteLike): unknown => {
+              routes.push(route);
+              return route;
+            },
+          },
+        },
+        reflect: {
+          provide: (name: string, value: unknown): unknown => {
+            provided.push({ name, value });
+            return () => undefined;
+          },
+        },
+        effect: (dispose: () => unknown): unknown => {
+          disposers.push(dispose);
+          return undefined;
+        },
+      } as never);
+      const service = provided.find((p) => p.name === "experts")!.value as {
+        registerRoot(ctx: unknown, dir: string): void;
+      };
+      // 面板 list 先行建 registry（面板先开、外部插件后注册的时序）
+      const list = routeOf(routes, "list");
+      const url = `/api/expert-squad/list?workspace=${encodeURIComponent(ws)}&includeDisabled=true`;
+      const before = JSON.parse(await (await list.fetch(new Request(`http://host${url}`))).text()) as unknown[];
+      expect(before.some((e) => (e as { name: string }).name === "forge-expert")).toBe(false);
+      // 外部插件注册内置目录 → 面板 list 即可见（跨实例族传播 + 主动换代）
+      service.registerRoot({}, externalDir);
+      await new Promise((resolve) => setTimeout(resolve, 150)); // 主动换代异步链落地
+      const after = JSON.parse(await (await list.fetch(new Request(`http://host${url}`))).text()) as Array<{
+        name: string;
+        origin: string;
+        effective: boolean;
+      }>;
+      const row = after.find((e) => e.name === "forge-expert");
+      expect(row, "注册后面板 list 应含外部内置专家").toBeDefined();
+      expect(row!.origin).toBe("plugin");
+      expect(row!.effective).toBe(true);
+      // 幂等：同目录重复注册不产生重复条目
+      service.registerRoot({}, externalDir);
+      const again = JSON.parse(await (await list.fetch(new Request(`http://host${url}`))).text()) as Array<{ name: string }>;
+      expect(again.filter((e) => e.name === "forge-expert").length).toBe(1);
+    } finally {
+      rmSync(externalDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("bug f9410209: registry 首刷 rejected promise 逐出（下次请求重试而非恒 400）", () => {
