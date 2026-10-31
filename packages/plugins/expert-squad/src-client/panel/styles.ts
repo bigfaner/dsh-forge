@@ -143,13 +143,8 @@ export const PANEL_CSS = `
 .origin-badge.origin-plugin { color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover); }
 /* 生效标（展开对比表生效列锚——1.68 裁决：卡片「生效」徽标已移除，对比表内保留） */
 .eff-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent); }
-/* 被遮蔽卡折叠摘要行（只读——点击展开对比） */
-.dswf-xshadow { display: flex; align-items: center; gap: ${T.gap8}; width: 100%; padding: ${T.gap8} ${T.pad12}; border: 0.5px dashed var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
-.dswf-xshadow:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.dswf-xshadow .origin-badge { margin-left: 0; }
-.dswf-xshadow .xs-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dswf-xshadow .xs-updated { color: var(--dsw-alias-label-caption); flex: none; }
-.dswf-xshadow .xs-mark { margin-left: auto; color: var(--dsw-alias-label-caption); flex: none; }
+/* 卡内对比钮（多来源卡右上角——点开对比 Dialog 切换版本；被遮蔽摘要行退役） */
+.xc-cmp-btn { margin-left: auto; flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 /* 对比表（唯一消费面 = 详情 Dialog 对比态——外框退役，Dialog body 已有容器框架） */
 .dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .cmp-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }

@@ -189,26 +189,26 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
     expect(html).toContain(">项目</span>");
   });
 
-  it("被遮蔽卡折叠为摘要行：来源角标 + 岗位 + 更新时间 + 只读标记；零内联对比面", () => {
-    const html = renderGroup();
-    expect(html).toContain("dswf-xshadow");
-    expect(html).toContain('data-expert-key="code-reviewer"');
-    expect(html).toContain('data-origin="plugin"');
-    expect(html).toContain("origin-plugin");
-    expect(html).toContain(">内置</span>");
-    expect(html).toContain("内置评审");
-    expect(html).toContain("2026-10-01");
-    expect(html).toContain("被遮蔽 · 只读");
+  it("被遮蔽摘要行退役：多来源 = 卡内对比钮（点开 Dialog 内切版本）；卡片名后无同名 chip", () => {
+    const html = renderGroup(() => undefined);
+    // 摘要行退役：无 xshadow 行、无只读标记
+    expect(html).not.toContain("dswf-xshadow");
+    expect(html).not.toContain("被遮蔽 · 只读");
+    // 卡内对比钮（aria-label 锚；点击 = onCompare(key, 首个被遮蔽 origin)——由 Dialog pick-list 切换）
+    expect(html).toContain('aria-label="对比 code-reviewer 其它来源"');
     // 内联对比退役：聚组零对比表/零来源切换 chips
     expect(html).not.toContain("dswf-xcompare");
     expect(html).not.toContain("data-cmp-chip");
+    // 同名 chip 退役：卡头不再重复渲染专家键名 chip
+    expect(html).not.toContain('<span class="chip tool">code-reviewer</span>');
   });
 
-  it("单来源组：无摘要行（与普通卡同形）；页脚计数按专家键数", () => {
+  it("单来源组：无对比钮（与普通卡同形）；页脚计数按专家键数", () => {
     const html = renderPanel({ entries: [entry()] });
     expect(html).toContain("dswf-xgroup");
     expect(html).not.toContain("展开对比");
     expect(html).not.toContain("dswf-xshadow");
+    expect(html).not.toContain("其它来源");
     expect(html).toContain("1 位专家 · 显示 1");
   });
 

@@ -406,26 +406,33 @@ describe("ExpertGroupView 差异入口（⑤——内联对比退役）", () => 
     );
   }
 
-  it("聚组零内联对比：对比表/来源切换 chips/展开钮全部退役（差异归 Dialog 对比态）", () => {
-    const html = renderGroup();
+  it("聚组零内联对比：对比表/来源切换 chips/展开钮/被遮蔽摘要行全部退役（差异归 Dialog 对比态）", () => {
+    const html = renderGroup(() => undefined);
     expect(html).not.toContain("dswf-xcompare");
     expect(html).not.toContain("data-cmp-chip");
     expect(html).not.toContain("展开对比");
-    // 被遮蔽行保留（点击面 = 请求打开 Dialog 对比）
-    expect(html).toContain("dswf-xshadow");
+    // 摘要行退役：对比入口 = 卡内对比钮（点击面 = 请求打开 Dialog 对比）
+    expect(html).not.toContain("dswf-xshadow");
+    expect(html).toContain('aria-label="对比 code-reviewer 其它来源"');
   });
 
-  it("bug f4020406 ④：组内 shadow 行角标补传 projectName（project 来源具名一致）", () => {
+  it("bug f4020406 ④（承继）：卡内对比点击回调 = (key, 首个被遮蔽 origin)", () => {
     const group = {
       key: "code-reviewer",
       effective: entry({ origin: "user", effective: true, title: "用户评审" }),
       shadows: [entry({ origin: "project", effective: false, title: "项目评审" })],
     };
+    const calls: Array<[string, string]> = [];
     const html = renderToStaticMarkup(
-      React.createElement(ExpertGroupView, { group, projectName: "acme" }),
+      React.createElement(ExpertGroupView, {
+        group,
+        projectName: "acme",
+        onCompare: (key, origin) => calls.push([key, origin]),
+      }),
     );
-    // shadow 行角标具名（原仅「项目」）
-    expect(html).toContain("项目 · acme");
+    // 卡角标具名（生效卡 origin=user——来源角标随卡）
+    expect(html).toContain(">用户</span>");
+    expect(calls).toEqual([]);
   });
 
   it("PairCompareTable 右列表头具名 + 差异格高亮（Dialog 对比态直渲染钉——去外边框）", () => {

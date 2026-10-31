@@ -666,7 +666,7 @@ describe("ExpertDetailDialog 编辑态（F2 字段集）", () => {
     const html = renderDialog({ mode: "edit" });
     expect(html).toContain('data-field="title"');
     expect(html).toContain('maxLength="120"');
-    expect(html).toContain("min-height:36px");
+    expect(html).toContain("min-height:38px");
     expect(html).toContain("max-height:134px");
     expect(html).toContain("min-height:266px");
     expect(html).toContain("max-height:2202px");

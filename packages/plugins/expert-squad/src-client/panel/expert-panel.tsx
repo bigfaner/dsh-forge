@@ -453,10 +453,10 @@ function OriginBadge({ origin, projectName }: { readonly origin: string; readonl
   return <span className={`origin-badge origin-${origin}`}>{originLabel(origin, projectName)}</span>
 }
 
-function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView; readonly projectName?: string; readonly onActivate?: (key: string) => void }): ReactNode {
+function Card({ expert, projectName, onActivate, onCompare }: { readonly expert: ExpertView; readonly projectName?: string; readonly onActivate?: (key: string) => void; readonly onCompare?: () => void }): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
   // bug f4020406 ②：data-effective 在本组件恒 "true"——Card 仅渲染生效卡（聚组 shadow 行走
-  // dswf-xshadow 按钮），保留属性作生效形态的测试/样式选择器锚，不承载分支语义。
+  // 卡内对比钮），保留属性作生效形态的测试/样式选择器锚，不承载分支语义。
   return (
     <article
       className={`dswf-xcard${expert.enabled ? "" : " off"}`}
@@ -470,8 +470,20 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
         <ExpertIcon size={16} />
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
-        <span className="chip tool">{expert.name}</span>
         <OriginBadge origin={expert.origin} projectName={projectName} />
+        {onCompare === undefined ? null : (
+          <button
+            type="button"
+            className="dswf-btn dswf-btn-ghost xc-cmp-btn"
+            aria-label={`对比 ${expert.name} 其它来源`}
+            onClick={(event) => {
+              event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
+              onCompare();
+            }}
+          >
+            对比
+          </button>
+        )}
       </div>
       <div className="xc-title">
         {expert.title}
@@ -510,9 +522,9 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
 }
 
 /**
- * 聚组容器（1.60 用户裁决；差异承载面裁决 2026-10-26）：组头（键 + 来源数 + 隐藏数）→
- * 生效卡 → 被遮蔽摘要行 ×N（点选行 = onCompare(key, origin) 出面——差异一律由详情
- * Dialog 对比态呈现，聚组内联对比退役）。单来源组无摘要行。
+ * 聚组容器（1.60 用户裁决；差异承载面裁决 2026-10-26 + 本裁决：组头（键 + 来源数 +
+ * 隐藏数）→ 生效卡（多来源 = 卡内对比钮）；不再渲染被遮蔽摘要行——版本多时下拉式
+ * 行列表不可读，版本切换一律进对比 Dialog 内的 pick-list 单选完成）。
  */
 export function ExpertGroupView(
   { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly onCompare?: (key: string, origin: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
@@ -529,24 +541,12 @@ export function ExpertGroupView(
           <span className="xg-hidden">隐藏 {hiddenShadows} 条未命中</span>
         )}
       </header>
-      <Card expert={group.effective} projectName={projectName} {...(onActivate !== undefined ? { onActivate } : {})} />
-      {group.shadows.map((shadow) => (
-        <div className="xg-shadow-block" key={shadow.origin}>
-          <button
-            type="button"
-            className="dswf-xshadow"
-            data-expert-key={group.key}
-            data-origin={shadow.origin}
-            onClick={() => onCompare?.(group.key, shadow.origin)}
-          >
-            {/* bug f4020406 ③：补传 projectName——project 被遮蔽行具名与生效卡一致 */}
-            <OriginBadge origin={shadow.origin} projectName={projectName} />
-            <span className="xs-title">{shadow.title}</span>
-            <span className="xs-updated">{updatedLabel(shadow.updatedAt) ?? ""}</span>
-            <span className="xs-mark">被遮蔽 · 只读</span>
-          </button>
-        </div>
-      ))}
+      <Card
+        expert={group.effective}
+        projectName={projectName}
+        {...(onActivate !== undefined ? { onActivate } : {})}
+        {...(multi && onCompare !== undefined ? { onCompare: () => onCompare(group.key, group.shadows[0]!.origin) } : {})}
+      />
     </section>
   )
 }

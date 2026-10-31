@@ -741,7 +741,6 @@ export function ExpertDetailDialog(props: {
             <ExpertIcon size={16} />
             <span className={`dot ${expert.enabled ? "on" : "off"}`} />
             <b className="dswf-dlg-name">{expert.name}</b>
-            <span className="chip tool">{expert.name}</span>
             <span className="dswf-dlg-head-actions">
             {comparing ? (
               <button
