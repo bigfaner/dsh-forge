@@ -6,6 +6,7 @@
 //   ② sidebar.panellist 行（id = main key 同源）= 左栏面板入口（字形 + label）。
 // 返回值铁律：apply 必须返回 undefined（cordis 组合把返回值当 effect 消费）。
 import { ExpertPanelApp, ExpertPanelGlyph, type SummonOpener } from "./panel/index.js";
+import { modelCatalogLoaderOf } from "./panel/model-catalog.js";
 import {
   openSummonSession,
   type SummonOutcome,
@@ -135,7 +136,7 @@ function registerExpertPanel(ctx: LazyCtx, slots: SlotsFace): void {
     return;
   }
   slots.inject(MAIN_SLOT, () =>
-    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY, inject: () => ({ summon: summonOpenerOf(ctx) }) }, ExpertPanelApp));
+    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY, inject: () => ({ summon: summonOpenerOf(ctx), modelCatalogLoader: modelCatalogLoaderOf(ctx) }) }, ExpertPanelApp));
   // 行注册挂 panellist 槽自身的声明缝——ui-sidebar 插件声明该槽后才合法（先注册 = 
   // `slot "sidebar.panellist" is not declared`；web-client registerSlotEntry 同径）。
   slots.inject(PANEL_LIST_SLOT, () =>

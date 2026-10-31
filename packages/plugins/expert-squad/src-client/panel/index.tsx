@@ -73,6 +73,15 @@ export {
   type SummonPresetSelectResult,
   type SummonWorkspaceRow,
 } from "./summon-session.js";
+export {
+  modelCatalogLoaderOf,
+  modelCatalogOfEnvelope,
+  providerOptionsOf,
+  modelOptionsOf,
+  INHERIT_OPTION,
+  type ModelCatalogEntry,
+  type ModelCatalogLoader,
+} from "./model-catalog.js";
 
 /**
  * 面板行字形（官方 sidebar.panellist 占用者 owner props = { size, active }——

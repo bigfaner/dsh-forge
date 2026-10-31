@@ -3,13 +3,16 @@
 // 隐藏）、查看态分段（岗位·启停 meta
 // → 简介 → 人设 Markdown 渲染 → 工具白名单 chips → 技能 chips）、编辑态字段集（岗位
 // Input / 简介 textarea 2→6 行 120 字上限 / 人设 textarea 12→100 行自适应 / multi-select
-// ×2——工具上技能下、技能可新增；下拉菜单 position:fixed 视口锚定（可溢出 Dialog
-// 视觉范围，不被 body overflow 裁切）。
+// ×2——工具上技能下、技能可新增；provider/model = FilterSelect 单选（选项值 =「设置>模型」
+// 目录，model-catalog 惰性装载；model 选项随所选 provider 联动）；下拉菜单 position:fixed
+// 视口锚定（可溢出 Dialog 视觉范围，不被 body overflow 裁切）。
+// Dialog 可拖动（头部 pointer 拖拽——位移落 absolute left/top，不用 transform：transformed
+// 祖先会成为 fixed 菜单的包含块致错位）+ 可拉伸（CSS resize both，右下角手柄）。
 // Esc / 遮罩 / ✕ 关闭。
 // 官方 MarkdownDoc 组件不在插件 client bundle 外置表内（classic script 缝仅 react
 // 外置），按原型近似语义以 .dswf-* 自绘面分块渲染（标题/加粗/行内代码/列表）。
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import {
   DESCRIPTION_MAX,
@@ -26,6 +29,60 @@ import {
 } from "./compare-table.js";
 import { escNext, type ExpertDetailController, type DetailState } from "./detail-source.js";
 import { ExpertIcon } from "./expert-icon.js";
+import { FilterSelect } from "./filter-select.js";
+import {
+  modelOptionsOf,
+  providerOptionsOf,
+  type ModelCatalogEntry,
+} from "./model-catalog.js";
+
+/**
+ * Dialog 拖拽纯决策（头部 pointer 拖拽）：起点锚 + 起始位置 + 当前指针位 → 新位置。
+ * 位移承载 = absolute left/top（overlay 视口系）——不用 transform：transformed 祖先会成为
+ * fixed 后代的包含块，msel/FilterSelect 菜单（position:fixed 视口锚定）坐标会被重解释错位。
+ */
+export function dialogDragPos(
+  start: { readonly px: number; readonly py: number; readonly left: number; readonly top: number },
+  px: number,
+  py: number,
+): { left: number; top: number } {
+  return { left: start.left + (px - start.px), top: start.top + (py - start.py) };
+}
+
+/** 头部拖拽 hooks 绑定面（位置态 + pointer 事件组；按钮点击不启动拖拽）。 */
+export interface DialogDrag {
+  /** undefined = 未拖拽（维持 flex 居中）；拖拽起 = 钉在当前视口位（absolute）随动。 */
+  readonly pos: { left: number; top: number } | undefined;
+  onPointerDown(event: ReactPointerEvent<HTMLElement>): void;
+  onPointerMove(event: ReactPointerEvent<HTMLElement>): void;
+  onPointerUp(): void;
+}
+
+/** 头部拖拽 state 机（详情 Dialog 可拖动——setPointerCapture 跟手，位移落 left/top）。 */
+export function useDialogDrag(): DialogDrag {
+  const [pos, setPos] = useState<{ left: number; top: number } | undefined>(undefined);
+  const dragRef = useRef<{ px: number; py: number; left: number; top: number } | null>(null);
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>): void => {
+    if ((event.target as HTMLElement | null)?.closest("button") !== null) return;
+    // 起拖即钉位：以 Dialog 当前视口矩形为锚（overlay 通栏，absolute 视口系同值零跳位）
+    const dlg = event.currentTarget.closest(".dswf-dlg");
+    const rect = dlg?.getBoundingClientRect();
+    if (rect === undefined) return;
+    const start = { px: event.clientX, py: event.clientY, left: rect.left, top: rect.top };
+    dragRef.current = start;
+    setPos({ left: start.left, top: start.top });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLElement>): void => {
+    const start = dragRef.current;
+    if (start === null) return;
+    setPos(dialogDragPos(start, event.clientX, event.clientY));
+  };
+  const onPointerUp = (): void => {
+    dragRef.current = null;
+  };
+  return { pos, onPointerDown, onPointerMove, onPointerUp };
+}
 
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
 const TEXTAREA_LINE_PX = 22;
@@ -459,7 +516,10 @@ export function ExpertDetailDialog(props: {
   readonly sameKeyEntries?: readonly ExpertView[];
   /** 项目具名（④：workspace 路径 basename——来源角标/提示具名「项目 · <名>」）。 */
   readonly projectName?: string;
+  /** 「设置>模型」目录（provider/model 下拉选项源；缺席 = 仅回落继承空选项）。 */
+  readonly modelCatalog?: readonly ModelCatalogEntry[];
 }): ReactNode {
+  const drag = useDialogDrag();
   const state = useSyncExternalStore(
     props.controller.subscribe.bind(props.controller),
     props.controller.getSnapshot.bind(props.controller),
@@ -558,15 +618,17 @@ export function ExpertDetailDialog(props: {
           <div className="dswf-dlg-err">{state.errors.personaMd}</div>
         )}
       </div>
-      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截） */}
+      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）。
+          选项值 =「设置>模型」目录（remote.session.modelCatalog——m3.1 D25 同源口径；
+          目录缺席/值不在目录 = box 显当前值，回落继承空选项恒在场）。 */}
       <div className="dswf-dlg-field" data-field="provider">
         <label>Provider（派发路由 · 须与 Model 成对填写；两字段清空 = 回落继承）</label>
-        <input
-          type="text"
-          className="dswf-dlg-input"
-          aria-label="Provider"
+        <FilterSelect
+          id="dswf-dlg-provider"
+          ariaLabel="Provider"
           value={state.draft.provider}
-          onChange={(event) => props.controller.setField("provider", event.target.value)}
+          options={providerOptionsOf(props.modelCatalog)}
+          onChange={(value) => props.controller.setField("provider", value)}
         />
         {state.errors.provider === undefined ? null : (
           <div className="dswf-dlg-err">{state.errors.provider}</div>
@@ -574,12 +636,12 @@ export function ExpertDetailDialog(props: {
       </div>
       <div className="dswf-dlg-field" data-field="model">
         <label>Model（派发模型偏好 · 须与 Provider 成对填写）</label>
-        <input
-          type="text"
-          className="dswf-dlg-input"
-          aria-label="Model"
+        <FilterSelect
+          id="dswf-dlg-model"
+          ariaLabel="Model"
           value={state.draft.model}
-          onChange={(event) => props.controller.setField("model", event.target.value)}
+          options={modelOptionsOf(props.modelCatalog, state.draft.provider)}
+          onChange={(value) => props.controller.setField("model", value)}
         />
         {state.errors.model === undefined ? null : (
           <div className="dswf-dlg-err">{state.errors.model}</div>
@@ -649,9 +711,16 @@ export function ExpertDetailDialog(props: {
         className={comparing ? "dswf-dlg wide" : "dswf-dlg"}
         role="dialog"
         aria-label={`专家详情 ${expert.name}`}
+        style={drag.pos === undefined ? undefined : { position: "absolute", margin: 0, left: drag.pos.left, top: drag.pos.top }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="dswf-dlg-head">
+        <div
+          className="dswf-dlg-head"
+          data-dswf-dlg-drag-handle=""
+          onPointerDown={drag.onPointerDown}
+          onPointerMove={drag.onPointerMove}
+          onPointerUp={drag.onPointerUp}
+        >
           <div className="dswf-dlg-head-row">
             <ExpertIcon size={16} />
             <span className={`dot ${expert.enabled ? "on" : "off"}`} />

@@ -26,10 +26,18 @@ import {
 import {
   ExpertDetailDialog,
   attachMselCollapse,
+  dialogDragPos,
   mselMenuPlacement,
   mselMenuStyleEqual,
   mselNextOpen,
 } from "../src-client/panel/detail-dialog.js";
+import {
+  INHERIT_OPTION,
+  modelCatalogLoaderOf,
+  modelCatalogOfEnvelope,
+  modelOptionsOf,
+  providerOptionsOf,
+} from "../src-client/panel/model-catalog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
 import { ExpertListController } from "../src-client/panel/list-source.js";
 
@@ -472,13 +480,77 @@ describe("provider/model 成对编辑（1.10）", () => {
     expect(JSON.stringify(payload)).not.toContain('"provider"');
   });
 
-  it("编辑态 SSR：provider/model 输入字段在场（成对相邻）", () => {
-    const html = renderDialog({ mode: "edit" });
+  it("编辑态 SSR：provider/model 单选下拉在场（成对相邻；box 显当前值）", () => {
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry({ provider: "deepseek", model: "reasoner" }));
+    ctl.startEdit();
+    const html = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, { controller: ctl, allSkills: [] }),
+    );
     expect(html).toContain('data-field="provider"');
     expect(html).toContain('data-field="model"');
     expect(html).toContain('aria-label="Provider"');
     expect(html).toContain('aria-label="Model"');
     expect(html.indexOf('data-field="provider"')).toBeLessThan(html.indexOf('data-field="model"'));
+    // box 显当前档案值（菜单收起 = 选项不在 SSR 标记——FilterSelect 条件渲染语义）
+    expect(html).toContain('data-select="dswf-dlg-provider"');
+    expect(html).toContain('data-select="dswf-dlg-model"');
+    expect(html).toContain('data-select-value="deepseek"');
+    expect(html).toContain('data-select-value="reasoner"');
+  });
+
+  it("model 选项随所选 provider 联动（仅该 provider 的模型）", () => {
+    const catalog = [
+      { provider: "deepseek", models: ["deepseek-chat", "deepseek-reasoner"] },
+      { provider: "zai-coding-cn", models: ["glm-4.6"] },
+    ];
+    expect(modelOptionsOf(catalog, "zai-coding-cn")).toEqual([
+      { value: "", label: "（回落继承）" },
+      { value: "glm-4.6", label: "glm-4.6" },
+    ]);
+    // provider 未选/不在目录 = 仅继承项
+    expect(modelOptionsOf(catalog, "")).toEqual([{ value: "", label: "（回落继承）" }]);
+    expect(modelOptionsOf(undefined, "deepseek")).toEqual([{ value: "", label: "（回落继承）" }]);
+    expect(providerOptionsOf(catalog).map((o) => o.value)).toEqual(["", "deepseek", "zai-coding-cn"]);
+    expect(providerOptionsOf(undefined)).toEqual([{ value: "", label: "（回落继承）" }]);
+  });
+
+  it("modelCatalogOfEnvelope：官方 ModelCatalog 信封解包（!ok/缺 groups/畸形 = undefined）", () => {
+    const envelope = {
+      ok: true,
+      value: { groups: [{ id: "deepseek", models: [{ id: "deepseek-chat" }] }, { id: "", models: [] }, "junk"] },
+    };
+    expect(modelCatalogOfEnvelope(envelope)).toEqual([
+      { provider: "deepseek", models: ["deepseek-chat"] },
+    ]);
+    expect(modelCatalogOfEnvelope({ ok: false })).toBeUndefined();
+    expect(modelCatalogOfEnvelope({ ok: true, value: {} })).toBeUndefined();
+    expect(modelCatalogOfEnvelope(null)).toBeUndefined();
+  });
+
+  it("modelCatalogLoaderOf：remote.session 惰性反射双径 + 解信封；缺席/拒绝 = undefined", async () => {
+    const envelope = { ok: true, value: { groups: [{ id: "p", models: [{ id: "m" }] }] } };
+    const direct = modelCatalogLoaderOf({
+      reflect: { get: (name) => (name === "remote.session" ? { modelCatalog: () => Promise.resolve(envelope) } : undefined) },
+    });
+    await expect(direct()).resolves.toEqual([{ provider: "p", models: ["m"] }]);
+    const nested = modelCatalogLoaderOf({
+      reflect: { get: (name) => (name === "remote" ? { session: { modelCatalog: () => Promise.resolve(envelope) } } : undefined) },
+    });
+    await expect(nested()).resolves.toEqual([{ provider: "p", models: ["m"] }]);
+    const absent = modelCatalogLoaderOf({ reflect: { get: () => undefined } });
+    await expect(absent()).resolves.toBeUndefined();
+    const rejected = modelCatalogLoaderOf({
+      reflect: { get: () => ({ modelCatalog: () => Promise.reject(new Error("boom")) }) },
+    });
+    await expect(rejected()).resolves.toBeUndefined();
+  });
+
+  it("dialogDragPos：头部拖拽位移纯决策（起点锚 + 指针增量）；INHERIT_OPTION 语义", () => {
+    const start = { px: 100, py: 80, left: 300, top: 120 };
+    expect(dialogDragPos(start, 140, 60)).toEqual({ left: 340, top: 100 });
+    expect(dialogDragPos(start, 100, 80)).toEqual({ left: 300, top: 120 });
+    expect(INHERIT_OPTION).toEqual({ value: "", label: "（回落继承）" });
   });
 });
 

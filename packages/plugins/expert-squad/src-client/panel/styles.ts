@@ -77,11 +77,14 @@ export const PANEL_CSS = `
 .dswf-empty { grid-column: 1 / -1; text-align: center; padding: 56px 20px; color: var(--dsw-alias-label-secondary); }
 .dswf-empty b { display: block; color: var(--dsw-alias-label-primary); font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; margin-bottom: 6px; }
 .dswf-errorbar { grid-column: 1 / -1; display: flex; align-items: center; gap: ${T.pad20}; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-state-error-primary); font: var(--dsw-font-xs-13); }
-/* 详情 Dialog（ui-design F2：radius-lg 16 / lv3 阴影 / 宽 680 / max-height 88%） */
+/* 详情 Dialog（ui-design F2：radius-lg 16 / lv3 阴影 / 宽 860 / max-height 92%）；
+   可拖动（头部 pointer 拖拽，位移落 transform）+ 可拉伸（CSS resize both——右下角手柄，
+   宽高上下限钳制；overflow 非 visible 为 resize 生效前提，内部滚动由 body 承担） */
 .dswf-dlg-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-mask, rgba(0,0,0,0.4)); z-index: 100; }
-.dswf-dlg { position: relative; display: flex; flex-direction: column; width: 680px; max-width: calc(100vw - 32px); max-height: 88%; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
-/* 头部（1.67 裁决：列布局——标识行 + 来源行；唯一分隔线在头部容器底，无双线） */
-.dswf-dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); } /* dsw-raw 原型行距刻度（与 .xc-tags 6px 同值同形制） */
+.dswf-dlg { position: relative; display: flex; flex-direction: column; width: 860px; min-width: 480px; max-width: calc(100vw - 32px); height: auto; min-height: 320px; max-height: 92%; resize: both; overflow: auto; background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; box-shadow: var(--dsw-elevation-strong, var(--dsw-elevation-soft)); color: var(--dsw-alias-label-primary); }
+/* 头部（1.67 裁决：列布局——标识行 + 来源行；唯一分隔线在头部容器底，无双线）；
+   拖拽把手（pointer 事件在组件侧——按钮区命中不启动拖拽，光标 move 提示可拖） */
+.dswf-dlg-head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: ${T.pad16}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); cursor: move; touch-action: none; user-select: none; } /* dsw-raw 原型行距刻度（与 .xc-tags 6px 同值同形制） */
 .dswf-dlg-head-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
@@ -147,7 +150,7 @@ export const PANEL_CSS = `
 .cmp-table td.diff { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent); box-shadow: inset 2px 0 0 var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-label-primary); }
 .cmp-note { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
 /* ── 来源行降位（1.61 ① + 1.67 裁决：去生效标、入头部弱化、? tooltip）── */
-.dswf-dlg.wide { width: 880px; } /* ⑥ 对比态宽体：宽于详情 Dialog 680px 刻度（视觉稿正本） */
+.dswf-dlg.wide { width: 1080px; } /* ⑥ 对比态宽体：宽于详情 Dialog 860px 刻度（视觉稿正本） */
 .dswf-dlg-origin-bar { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); } /* 次级色弱化令牌 */
 .dswf-dlg-origin-bar .origin-badge { margin-left: 0; }
 .dswf-dlg-origin-lead { color: var(--dsw-alias-label-caption); }

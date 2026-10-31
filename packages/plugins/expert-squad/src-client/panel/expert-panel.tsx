@@ -36,6 +36,7 @@ import {
   type SummonOutcome,
   type SummonWorkspaceRow,
 } from "./summon-session.js";
+import type { ModelCatalogEntry, ModelCatalogLoader } from "./model-catalog.js";
 import { ensurePanelStyles } from "./styles.js";
 
 /** 官方 workspace 归属快照选择钩子（root 标准props——结构窄面，缺席 = 降级）。 */
@@ -189,6 +190,9 @@ export interface ExpertPanelAppProps {
   readonly delegateProbe?: () => Promise<DelegateAssemblySnapshot | undefined>
   /** 候选目录探针（测试注入；缺省 = GET candidates 读口 fetch）。 */
   readonly catalogProbe?: () => Promise<CandidateCatalogSnapshot | undefined>
+  /** 「设置>模型」目录装载器（provider/model 下拉选项源——remote.session.modelCatalog 惰性
+   *  反射；缺席 = Dialog 两字段仅回落继承空选项）。 */
+  readonly modelCatalogLoader?: ModelCatalogLoader
 }
 
 /**
@@ -279,6 +283,24 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
       alive = false
     }
   }, [dialogOpen, props.catalogProbe])
+
+  // 「设置>模型」目录（provider/model 下拉选项源）：Dialog 打开期一次性装载（目录缺席/
+  // 调用拒绝 = undefined 容缺——Dialog 两字段仅回落继承空选项，不炸 Dialog）。
+  const [modelCatalog, setModelCatalog] = useState<readonly ModelCatalogEntry[] | undefined>(undefined)
+  useEffect(() => {
+    if (!dialogOpen) return
+    let alive = true
+    const loader = props.modelCatalogLoader
+    if (loader === undefined) return
+    loader()
+      .then((entries) => {
+        if (alive) setModelCatalog(entries)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [dialogOpen, props.modelCatalogLoader])
 
   const onCardActivate = useCallback(
     (key: string) => {
@@ -372,6 +394,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
           controller={detailController}
           toolCandidates={toolCandidatesOf(catalog?.tools)}
           allSkills={skillCandidatesOf(catalog?.skills, state.entries)}
+          modelCatalog={modelCatalog}
           sameKeyEntries={state.entries.filter((entry) => entry.name === detailState.expert.name)}
           {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         />
