@@ -601,6 +601,15 @@ export function ExpertGroupView(
   // 来源切换展示态（undefined = 生效层；身份键 = sourcePath）；被遮蔽条目只读展示
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [menuOpen, setMenuOpen] = useState(false)
+  // 切换去抖（250ms）：用户环境存在点击事件双发（判例 2026-10-31——单事件翻转被第二组
+  // mousedown 立即抵消，菜单「展开即收」表现为无反应）；窗口期内重复切换忽略
+  const lastToggleRef = useRef(0)
+  const toggleMenu = (): void => {
+    const now = Date.now()
+    if (now - lastToggleRef.current < 250) return
+    lastToggleRef.current = now
+    setMenuOpen((open) => !open)
+  }
   // 外点收起（capture 阶段——msel 同径）；菜单/开关内部点击不收起（capture 先于
   // React root 委托，若不豁免会在 option onClick 前重渲染摘除节点、点击丢失）
   useEffect(() => {
@@ -647,7 +656,7 @@ export function ExpertGroupView(
           ? {
               multi,
               menuOpen,
-              onToggleMenu: () => setMenuOpen((open) => !open),
+              onToggleMenu: toggleMenu,
               onSelectOrigin: setSelectedId,
             }
           : {})}
