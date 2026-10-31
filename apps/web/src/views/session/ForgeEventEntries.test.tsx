@@ -1,9 +1,9 @@
 // loop-event-delivery 1.9 · ForgeEventEntries 组件单测（renderToStaticMarkup 静态面——
 // ForgeProgressNode.test 同型）：组头摘要 + 逐条行族色 + 他形零残留 + 默认展开语义。
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ForgeEventGroupData } from './forge-event-data.js'
-import { ForgeEventEntries, forgeEventEntryDetail, forgeEventGroupSummary } from './ForgeEventEntries.js'
+import { ForgeEventEntries, forgeEventEntryDetail, forgeEventGroupSummary, forgeProgressDurationLabel } from './ForgeEventEntries.js'
 
 const entryBase = {
   seq: 7,
@@ -146,13 +146,30 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('14:01:00')
     expect(html.indexOf('dswf-event-entries-loop')).toBeLessThan(html.indexOf('dswf-event-entries-progress'))
   })
-  it('执行中行：结束时刻 = 「—」、零耗时徽标', () => {
-    const running: ForgeEventGroupData = { ...DATA, progress: [PROGRESS[1]!] }
-    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(running)} />)
-    expect(html).toContain('data-dswf-progress-status="running"')
-    expect(html).toContain('执行中')
-    expect(html).toContain('—')
-    expect(html).not.toContain('dswf-event-entries-duration')
+  it('loop-card-task-context 1.4：running 行耗时位 = 实时计时器（自 startAt 起算，同口径格式）；终态行维持静态耗时', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(progAt(2) + 65_000) // running 行 startAt（14:02）+ 65s
+      const running: ForgeEventGroupData = { ...DATA, progress: [PROGRESS[1]!] }
+      const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(running)} />)
+      expect(html).toContain('data-dswf-progress-status="running"')
+      expect(html).toContain('—') // 结束时刻仍为「—」
+      expect(html).toContain('dswf-event-entries-duration') // 耗时槽位有内容
+      expect(html).toContain('1分5秒') // 同 dispatchEventDurationLabel 口径
+      vi.setSystemTime(progAt(2) + 125_000)
+      const html2 = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(running)} />)
+      expect(html2).toContain('2分5秒') // 逐秒推进随 now 变化
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('forgeProgressDurationLabel 既有语义不回归：running = undefined；终态 <1s = undefined；终态 ≥1s = 静态耗时', () => {
+    const running = { entry: PROGRESS[1]!, startAt: progAt(2), endAt: progAt(2) }
+    expect(forgeProgressDurationLabel(running)).toBeUndefined()
+    const brief = { entry: PROGRESS[2]!, startAt: progAt(2), endAt: progAt(2) + 500 }
+    expect(forgeProgressDurationLabel(brief)).toBeUndefined()
+    const settled = { entry: PROGRESS[2]!, startAt: progAt(2), endAt: progAt(30) }
+    expect(forgeProgressDurationLabel(settled)).toBe('28分0秒')
   })
   it('重试计数随进度事件持久（任务行渲染 note——组卡从投影/会话日志重建后仍可见，非仅活行瞬态）', () => {
     const retried: ForgeEventGroupData = {

@@ -47,10 +47,23 @@ export function forgeEventGroupSummary(data: ForgeEventGroupData): string {
   return `forge · 任务循环事件（${count}）${range}`
 }
 
-/** 进度行耗时标签（终态 = 结束−开始；执行中 = 过程未定不呈现——面板同口径） */
+/** 进度行耗时标签（终态 = 结束−开始；执行中 = 过程未定不呈现——实时计时器面接管，面板同口径） */
 export function forgeProgressDurationLabel(row: ForgeProgressRowData): string | undefined {
   if (row.entry.status === 'running') return undefined
   return row.endAt - row.startAt >= 1000 ? dispatchEventDurationLabel(row.startAt, row.endAt) : undefined
+}
+
+/** running 行实时计时器（loop-card-task-context 1.4：自 startAt 起算已耗时，同
+ *  dispatchEventDurationLabel 口径格式；组件内 interval 逐秒刷新——纯呈现层零 RPC，
+ *  卸载/重渲染终态切换即清理。仅 running 行挂载，多行各自独立计时） */
+function ForgeRunningDuration({ startAt }: { startAt: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  return <span className="dswf-event-entries-duration">{dispatchEventDurationLabel(startAt, now)}</span>
 }
 
 /** 'forge-event-group' 折叠条目组节点（形状漂移/他形 = null——官方流零残留） */
@@ -85,7 +98,11 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
         <span className="dswf-event-entries-time">
           {row.entry.status === 'running' ? '—' : forgeEventClockSeconds(row.endAt)}
         </span>
-        {duration !== undefined ? <span className="dswf-event-entries-duration">{duration}</span> : null}
+        {row.entry.status === 'running' ? (
+          <ForgeRunningDuration startAt={row.startAt} />
+        ) : duration !== undefined ? (
+          <span className="dswf-event-entries-duration">{duration}</span>
+        ) : null}
       </span>
     </li>
   )
