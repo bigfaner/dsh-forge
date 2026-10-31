@@ -33,6 +33,9 @@ import {
   dispatchPanelExpandGeometry,
   dispatchPanelBadgeGeometry,
   dispatchRowSessionOf,
+  dispatchTriageAttemptOf,
+  dispatchTriageTooltipOf,
+  isDispatchTriageEntry,
   type DispatchAnchorRects,
   type DispatchEventEntry,
   type DispatchPanelGeometry,
@@ -663,5 +666,107 @@ describe('循环级行收敛（aggregateDispatchRowItems——后写覆盖单行
     expect(loopRows).toHaveLength(1)
     expect(loopRows[0]?.entry.note).toBe('接续执行')
     expect(rows.some((row) => row.entry.taskKey === 'feat-x/1.1')).toBe(true)
+  })
+})
+
+// ─────────────────── triage 处置行（triage-progress-row §2.2——面板行展示面） ───────────────────
+
+/** triage 事件条目（driver emitProgress 载荷形状——verb triage + scenario loop/triage） */
+function triageEntry(overrides: Partial<DispatchEventEntry> = {}): DispatchEventEntry {
+  return entry({ verb: 'triage', scenario: 'loop/triage', expertKey: 'triage-analyst', taskKey: 'feat-x/2.5', taskTitle: 'web 进度流渲染', ...overrides })
+}
+
+describe('isDispatchTriageEntry / dispatchTriageAttemptOf / dispatchTriageTooltipOf（triage 行纯函数）', () => {
+  it('triage 判读 = verb 单源；attempt 从 note「第 n 次」解析；tooltip 两态文案', () => {
+    expect(isDispatchTriageEntry(triageEntry())).toBe(true)
+    expect(isDispatchTriageEntry(entry())).toBe(false)
+    expect(dispatchTriageAttemptOf('处置分析（第 2 次）')).toBe(2)
+    expect(dispatchTriageAttemptOf('决策：add-fix')).toBeUndefined()
+    expect(dispatchTriageAttemptOf(undefined)).toBeUndefined()
+    expect(dispatchTriageTooltipOf(true)).toBe('打开处置子会话')
+    expect(dispatchTriageTooltipOf(false)).toBe('处置会话启动失败')
+  })
+})
+
+describe('aggregateDispatchRowItems（triage 独立聚合键 triage:{taskKey}——多 attempt 折叠单行）', () => {
+  it('同 taskKey attempts 1→3 折叠单行：显示最新 n、终态折入 note、workerSessionId 最近一枚上浮', () => {
+    const rows = aggregateDispatchRowItems([
+      triageEntry({ status: 'running', note: '处置分析（第 1 次）', at: 100 }),
+      triageEntry({ status: 'blocked', note: '处置分析失败：输出无效', at: 200 }),
+      triageEntry({ status: 'running', note: '处置分析（第 2 次）', at: 300 }),
+      triageEntry({ status: 'running', note: '处置分析（第 3 次）', at: 400 }),
+      triageEntry({ status: 'completed', note: '决策：add-fix', workerSessionId: 'ts-1', at: 500 }),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.attempt).toBe(3) // 最新 n
+    expect(rows[0]?.entry.status).toBe('running') // status 固定 running 语义
+    expect(rows[0]?.entry.note).toBe('决策：add-fix') // 终态折入 note
+    expect(rows[0]?.entry.workerSessionId).toBe('ts-1')
+    expect(rows[0]?.startAt).toBe(100) // 首事件时戳
+  })
+
+  it('聚合键独立于任务键空间：同 taskKey 的任务行与 triage 行各行其位（零劫持最新态模型）', () => {
+    const rows = aggregateDispatchRowItems([
+      entry({ taskKey: 'feat-x/2.5', at: 100 }),
+      triageEntry({ taskKey: 'feat-x/2.5', status: 'running', note: '处置分析（第 1 次）', at: 200 }),
+    ])
+    expect(rows).toHaveLength(2)
+    expect(rows.filter((r) => r.entry.taskKey === 'feat-x/2.5')).toHaveLength(2)
+    expect(rows.find((r) => isDispatchTriageEntry(r.entry))?.attempt).toBe(1)
+  })
+
+  it('aggregateDispatchRows 条目视图与 items 同序同集（triage 行在列）', () => {
+    const entries = [triageEntry({ note: '处置分析（第 1 次）' })]
+    expect(aggregateDispatchRows(entries)).toEqual(aggregateDispatchRowItems(entries).map((r) => r.entry))
+  })
+})
+
+describe('triage 统计与轨点隔离（dispatchEventStats / dispatchPanelTaskCountOf 跳过）', () => {
+  const taskEntries = [entry({ taskKey: 'feat-x/2.5', status: 'running' })]
+  const withTriage = [
+    ...taskEntries,
+    triageEntry({ status: 'running', note: '处置分析（第 1 次）' }),
+    triageEntry({ status: 'completed', note: '决策：add-fix', workerSessionId: 'ts-1' }),
+  ]
+  it('triage 条目不入统计条计数（两处跳过口径一致）', () => {
+    expect(dispatchEventStats(withTriage)).toEqual(dispatchEventStats(taskEntries))
+    expect(dispatchPanelTaskCountOf(withTriage, 2)).toBe(dispatchPanelTaskCountOf(taskEntries, 2))
+  })
+  it('渲染面：triage 行不出现在统计条语义（底部条计数不变）；行 status = running 轨点', () => {
+    const markup = body({ entries: withTriage, onOpenWorker: () => {} })
+    expect(markup).toContain('执行中 <b>1</b>')
+    expect(markup).toContain('data-dswf-dep-running')
+  })
+})
+
+describe('triage 行渲染（SSR——行形态 / 点击锚 / spawn 失败非交互）', () => {
+  it('行形态：{taskKey} · 处置分析（第 n 次）徽标 + 次行 note；running 轨点同构', () => {
+    const markup = body({ entries: [triageEntry({ status: 'completed', note: '决策：add-fix', workerSessionId: 'ts-1', at: 200 })], onOpenWorker: () => {} })
+    expect(markup).toContain('dswf-dep-row-key">feat-x/2.5')
+    expect(markup).toContain('dswf-dep-status-triage">处置分析（第 1 次）')
+    expect(markup).toContain('dswf-dep-row-title">决策：add-fix') // 次行 = 终态 note（title 让位）
+    expect(markup).toContain('dswf-dep-run') // 轨点沿用既有行结构
+  })
+  it('点击锚：行携 workerSessionId 走 onOpenWorker（role button + jump 徽标）', () => {
+    const markup = body({ entries: [triageEntry({ status: 'completed', workerSessionId: 'ts-1' })], onOpenWorker: () => {} })
+    expect(markup).toContain('role="button"')
+    expect(markup).toContain('data-dswf-dep-row="ts-1"')
+    expect(markup).toContain('data-dswf-dep-jump')
+  })
+  it('spawn 失败（workerSessionId 缺席）：行照渲、去交互化；父反查兜底不劫持 triage 行', () => {
+    const markup = body({
+      entries: [triageEntry({ status: 'blocked', note: '处置分析失败：spawn 失败' })],
+      onOpenWorker: () => {},
+      resolvedWorker: new Map([['feat-x/2.5', 'w-2']]),
+    })
+    expect(markup).toContain('dswf-dep-status-triage')
+    expect(markup).not.toContain('role="button"')
+    expect(markup).not.toContain('data-dswf-dep-jump')
+    expect(markup).not.toContain('data-dswf-dep-row="w-2"')
+  })
+  it('dispatchRowSessionOf：triage 行只认载荷 workerSessionId（零反查兜底）', () => {
+    const e = triageEntry({ workerSessionId: 'ts-1' })
+    expect(dispatchRowSessionOf(e, new Map([['feat-x/2.5', 'w-2']]))).toBe('ts-1')
+    expect(dispatchRowSessionOf(triageEntry(), new Map([['feat-x/2.5', 'w-2']]))).toBeUndefined()
   })
 })
