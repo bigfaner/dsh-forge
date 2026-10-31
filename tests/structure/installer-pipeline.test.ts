@@ -572,4 +572,21 @@ describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——s
     expect(stageCallSite).toContain('function assertPreconditions')
     expect(checkCallSite).toContain('async function check(')
   })
+
+  // 【源码内窥锚点】以下 pin 直接断言 scripts/dist-win.mjs 的字面接线（内窥耦合）：
+  // pin 找的是 electron-builder 成功之后的末端 --check 段。若 dist-win.mjs 内
+  // spawnSync 调用换缩进/换变量名/重排结构导致 pin 失配，请按本注释回到该脚本
+  // 的「electron-builder 成功 → 末端 --check 复核」段（现为 47-63 行附近）同步 pin。
+  it('接线 pin：dist:win 末端 electron-builder 成功路径调用 --check，失败路径透传退出码 exit 1（bug b9c85cd5）', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'dist-win.mjs'), 'utf8')
+    // 成功路径：electron-builder status 为 0 之后才发起末端复核（--check 接线在成功段之后）
+    const builderIdx = source.indexOf("spawnSync('pnpm exec electron-builder")
+    const checkIdx = source.indexOf('node scripts/assemble-installer-resources.mjs --check')
+    expect(builderIdx, 'electron-builder spawn 接线缺席').toBeGreaterThan(-1)
+    expect(checkIdx, '末端 --check 接线缺席（封包成功后必须自动关键文件复核，bug b9c85cd5）').toBeGreaterThan(builderIdx)
+    // 失败路径：check 非 0 → PACKAGING_CHECK_FAILED + process.exit 透传退出码（exit 1 接线在位）
+    const failBranch = source.slice(checkIdx)
+    expect(failBranch).toContain('PACKAGING_CHECK_FAILED')
+    expect(failBranch).toContain('process.exit(check.status ?? 1)')
+  })
 })
