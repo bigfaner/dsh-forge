@@ -460,8 +460,11 @@ function CompareBody({
     : shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
   return (
     <>
+      <div className="dswf-cmp-pick-head">
+        <b>对比</b>
+        <span>点选同键其它来源，逐字段两两比对</span>
+      </div>
       <div className="dswf-cmp-pick-list">
-        <b>对比</b>（两两）——选择同键其它来源：
         {shadows.map((shadow) => (
           <button
             key={shadow.origin}
@@ -621,35 +624,40 @@ export function ExpertDetailDialog(props: {
       {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）。
           选项值 =「设置>模型」目录（remote.session.modelCatalog——m3.1 D25 同源口径；
           目录缺席/值不在目录 = box 显当前值，回落继承空选项恒在场）。 */}
-      <div className="dswf-dlg-field" data-field="provider">
-        <label>Provider（派发路由 · 须与 Model 成对填写；两字段清空 = 回落继承）</label>
-        <FilterSelect
-          id="dswf-dlg-provider"
-          ariaLabel="Provider"
-          value={state.draft.provider}
-          options={providerOptionsOf(props.modelCatalog)}
-          onChange={(value) => props.controller.setField("provider", value)}
-        />
-        {state.errors.provider === undefined ? null : (
-          <div className="dswf-dlg-err">{state.errors.provider}</div>
-        )}
-      </div>
-      <div className="dswf-dlg-field" data-field="model">
-        <label>Model（派发模型偏好 · 须与 Provider 成对填写）</label>
-        <FilterSelect
-          id="dswf-dlg-model"
-          ariaLabel="Model"
-          value={state.draft.model}
-          options={modelOptionsOf(props.modelCatalog, state.draft.provider)}
-          onChange={(value) => props.controller.setField("model", value)}
-        />
-        {state.errors.model === undefined ? null : (
-          <div className="dswf-dlg-err">{state.errors.model}</div>
-        )}
+      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）——
+          同行双列（dswf-dlg-row）；选项值 =「设置>模型」目录（remote.session.modelCatalog——
+          m3.1 D25 同源口径；目录缺席/值不在目录 = box 显当前值，回落继承空选项恒在场）。 */}
+      <div className="dswf-dlg-row" data-field="provider-model">
+        <div className="dswf-dlg-field" data-field="provider">
+          <label>Provider（派发路由 · 清空 = 回落继承）</label>
+          <FilterSelect
+            id="dswf-dlg-provider"
+            ariaLabel="Provider"
+            value={state.draft.provider}
+            options={providerOptionsOf(props.modelCatalog)}
+            onChange={(value) => props.controller.setField("provider", value)}
+          />
+          {state.errors.provider === undefined ? null : (
+            <div className="dswf-dlg-err">{state.errors.provider}</div>
+          )}
+        </div>
+        <div className="dswf-dlg-field" data-field="model">
+          <label>Model（派发模型偏好）</label>
+          <FilterSelect
+            id="dswf-dlg-model"
+            ariaLabel="Model"
+            value={state.draft.model}
+            options={modelOptionsOf(props.modelCatalog, state.draft.provider)}
+            onChange={(value) => props.controller.setField("model", value)}
+          />
+          {state.errors.model === undefined ? null : (
+            <div className="dswf-dlg-err">{state.errors.model}</div>
+          )}
+        </div>
       </div>
       <MultiSelect
         field="tools"
-        label="工具白名单（子会话强制生效 · 多选）"
+        label="工具（子会话强制生效 · 多选）"
         selected={state.draft.tools}
         // 兜底双写注记：toolCandidates prop 已在装配侧经 toolCandidatesOf 兜底
         // （目录缺席 → TOOL_CANDIDATES）；此处 `?? TOOL_CANDIDATES` 是 prop 缺席
@@ -682,13 +690,20 @@ export function ExpertDetailDialog(props: {
       <div className="dswf-dlg-md">
         <PersonaMd source={expert.personaMd} />
       </div>
-      <div className="dswf-dlg-seg">工具白名单（子会话强制生效）</div>
+      <div className="dswf-dlg-seg">工具（子会话强制生效）</div>
       <div className="dswf-dlg-chips">
         {expert.tools.map((tool) => (
           <span key={tool} className="chip tool">
             {tool}
           </span>
         ))}
+      </div>
+      {/* 派发路由（成对语义：同给同缺——缺省整组显「回落继承」） */}
+      <div className="dswf-dlg-seg">派发路由（Provider · Model）</div>
+      <div className="dswf-dlg-meta" data-dswf-dlg-route="">
+        {expert.provider !== undefined && expert.model !== undefined
+          ? `${expert.provider} · ${expert.model}`
+          : "（回落继承）"}
       </div>
       <div className="dswf-dlg-seg">技能</div>
       <div className="dswf-dlg-chips">

@@ -62,6 +62,9 @@ export interface DetailMutations {
 
 const IDLE: DetailState["errors"] = {};
 
+/** Toast 自动消失时长（3s——一次性提示不自留；错误 toast 同径，重操作会再出新 toast）。 */
+export const TOAST_AUTO_DISMISS_MS = 3000;
+
 /** 关闭态缺省快照（引用稳定单例——useSyncExternalStore 快照契约，见 getSnapshot 注记）。 */
 const IDLE_SNAPSHOT: DetailState = {
   open: false,
@@ -99,6 +102,8 @@ export class ExpertDetailController {
   // 条目——控制器不持装配数据），经 setStale 通知回落；save/toggleEnabled 据此短路——
   // UI disabled 只是渲染面，控制器层短路面防入口绕过（update 为 upsert，放行即复活已删条目）。
   private stale = false;
+  // Toast 自动消失定时器（单飞——新 toast 出场即重置；关闭态到点为无害 no-op）
+  private toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly mutations: DetailMutations) {}
 
@@ -145,6 +150,10 @@ export class ExpertDetailController {
     if (this.state === undefined) return;
     this.generation += 1; // 换代：关闭态在途回包不落态（IDLE 单例契约保持）
     this.stale = false; // 守卫旗随代重置（重开由渲染期重新派生）
+    if (this.toastTimer !== undefined) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = undefined;
+    }
     this.state = undefined;
     this.emit();
   }
@@ -230,6 +239,17 @@ export class ExpertDetailController {
     this.emit();
   }
 
+  /** Toast 3s 自动消失（同文案到点才清——新 toast 重置计时；关闭态到点 no-op）。 */
+  private scheduleToastDismiss(text: string): void {
+    if (this.toastTimer !== undefined) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      if (this.state !== undefined && this.state.toast === text) {
+        this.state = { ...this.state, toast: undefined };
+        this.emit();
+      }
+    }, TOAST_AUTO_DISMISS_MS);
+  }
+
   /** 保存：校验门 → update 路由 → 回查看态 + Toast 热刷新；失败不落盘。 */
   async save(): Promise<void> {
     const current = this.state;
@@ -253,20 +273,14 @@ export class ExpertDetailController {
       // wireDraft：provider/model trim 后空串归缺键——不落半组、清空两字段即回落继承
       const updated = await this.mutations.update(current.expert.name, wireDraft(current.draft));
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
-      this.state = {
-        ...this.getSnapshot(),
-        expert: updated,
-        mode: "view",
-        busy: false,
-        toast: "档案已保存（热刷新生效）",
-      };
+      const toast = "档案已保存（热刷新生效）";
+      this.state = { ...this.getSnapshot(), expert: updated, mode: "view", busy: false, toast };
+      this.scheduleToastDismiss(toast);
     } catch (err) {
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
-      this.state = {
-        ...this.getSnapshot(),
-        busy: false,
-        toast: `保存失败：${err instanceof Error ? err.message : String(err)}`,
-      };
+      const toast = `保存失败：${err instanceof Error ? err.message : String(err)}`;
+      this.state = { ...this.getSnapshot(), busy: false, toast };
+      this.scheduleToastDismiss(toast);
     }
     this.emit();
   }
@@ -282,19 +296,14 @@ export class ExpertDetailController {
     try {
       const updated = await this.mutations.setEnabled(current.expert.name, next);
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
-      this.state = {
-        ...this.getSnapshot(),
-        expert: updated,
-        busy: false,
-        toast: `${updated.name} 已${updated.enabled ? "启用" : "禁用"}`,
-      };
+      const toast = `${updated.name} 已${updated.enabled ? "启用" : "禁用"}`;
+      this.state = { ...this.getSnapshot(), expert: updated, busy: false, toast };
+      this.scheduleToastDismiss(toast);
     } catch (err) {
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
-      this.state = {
-        ...this.getSnapshot(),
-        busy: false,
-        toast: `启停失败：${err instanceof Error ? err.message : String(err)}`,
-      };
+      const toast = `启停失败：${err instanceof Error ? err.message : String(err)}`;
+      this.state = { ...this.getSnapshot(), busy: false, toast };
+      this.scheduleToastDismiss(toast);
     }
     this.emit();
   }

@@ -273,9 +273,10 @@ test('@feature expert-squad dlg step-2 success：查看态五段渲染（meta→
     await expect(segs.nth(0), '段标·简介').toHaveText('简介（何时委派我）')
     await expect(page.locator('.dswf-dlg-meta').nth(1), '简介文本 ← description').toContainText('Fixture expert for panel-detail')
     await expect(segs.nth(1), '段标·人设').toHaveText('人设（Persona · 派发时注入子会话）')
-    await expect(segs.nth(2), '段标·工具白名单').toHaveText('工具白名单（子会话强制生效）')
+    await expect(segs.nth(2), '段标·工具').toHaveText('工具（子会话强制生效）')
     await expect(page.locator(`${DIALOG} .dswf-dlg-chips .chip.tool`), '工具 chips').toContainText(['read', 'grep'])
-    await expect(segs.nth(3), '段标·技能').toHaveText('技能') // 1.69 裁决：「技能标签」→「技能」
+    await expect(segs.nth(3), '段标·派发路由').toHaveText('派发路由（Provider · Model）')
+    await expect(segs.nth(4), '段标·技能').toHaveText('技能') // 1.69 裁决：「技能标签」→「技能」
     // frontmatter 技术细节不外露
     const bodyText = await page.locator(`${DIALOG} .dswf-dlg-body`).innerText()
     expect(bodyText.includes('frontmatter'), '零 frontmatter 字样外露').toBe(false)

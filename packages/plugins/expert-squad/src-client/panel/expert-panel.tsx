@@ -477,6 +477,12 @@ function Card({ expert, projectName, onActivate }: { readonly expert: ExpertView
         {expert.title}
         {expert.enabled ? "" : " · 已禁用"}
       </div>
+      {/* 派发路由（成对语义：同给同缺——缺省整组不显行） */}
+      {expert.provider !== undefined && expert.model !== undefined ? (
+        <div className="xc-route" data-xc-route="">
+          {expert.provider} · {expert.model}
+        </div>
+      ) : null}
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>
         <div className="xc-seg">技能</div>

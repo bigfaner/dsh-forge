@@ -2,7 +2,7 @@
 // Markdown 分块）+ ExpertDetailController 状态机（保存/启停/取消流）+ SSR 静态标记
 // 逐位断言（查看态分段/编辑态字段/双模式切换件）+ 列表 patchEntry 卡片即时同步。
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -21,6 +21,7 @@ import {
 } from "../src-client/panel/detail-logic.js";
 import {
   ExpertDetailController,
+  TOAST_AUTO_DISMISS_MS,
   type DetailMutations,
 } from "../src-client/panel/detail-source.js";
 import {
@@ -274,6 +275,28 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
     expect(ctl.getSnapshot().toast).toContain("已启用");
   });
 
+  it("Toast 3s 自动消失（同文案到点才清；关闭后到点 no-op）", async () => {
+    vi.useFakeTimers();
+    try {
+      const ctl = new ExpertDetailController(noMutations());
+      ctl.open(entry());
+      ctl.startEdit();
+      await ctl.save();
+      expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+      vi.advanceTimersByTime(TOAST_AUTO_DISMISS_MS);
+      expect(ctl.getSnapshot().toast).toBeUndefined();
+      // 关闭后定时器不再落态（IDLE 单例契约不被破坏）
+      ctl.open(entry());
+      ctl.startEdit();
+      await ctl.save();
+      ctl.close();
+      vi.advanceTimersByTime(TOAST_AUTO_DISMISS_MS);
+      expect(ctl.getSnapshot().open).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("bug 13f807c4: 编辑态+条目被删（stale）——渲染期派生 stale 通知控制器后，save 短路不发 update", async () => {
     let updates = 0;
     const ctl = new ExpertDetailController({
@@ -492,6 +515,8 @@ describe("provider/model 成对编辑（1.10）", () => {
     expect(html).toContain('aria-label="Provider"');
     expect(html).toContain('aria-label="Model"');
     expect(html.indexOf('data-field="provider"')).toBeLessThan(html.indexOf('data-field="model"'));
+    // 同行双列（dswf-dlg-row 包裹——provider/model 成对并排）
+    expect(html).toContain('data-field="provider-model"');
     // box 显当前档案值（菜单收起 = 选项不在 SSR 标记——FilterSelect 条件渲染语义）
     expect(html).toContain('data-select="dswf-dlg-provider"');
     expect(html).toContain('data-select="dswf-dlg-model"');
@@ -582,16 +607,25 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("资深评审 · 启用中");
   });
 
-  it("查看态分段：简介/人设（Markdown 渲染）/工具白名单 chips/技能 chips", () => {
+  it("查看态分段：简介/人设（Markdown 渲染）/工具 chips/派发路由/技能 chips", () => {
     const html = renderDialog();
     expect(html).toContain("简介（何时委派我）");
     expect(html).toContain("人设（Persona · 派发时注入子会话）");
     expect(html).toContain('<strong class="dswf-dlg-md-h"><span>职责</span></strong>');
     expect(html).toContain("<code>pnpm lint</code>");
     expect(html).toContain("<li><span>评审 diff 与正确性</span></li>");
-    expect(html).toContain("工具白名单（子会话强制生效）");
+    expect(html).toContain("工具（子会话强制生效）");
     expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');
+    // 派发路由（成对在场 = 值对；缺省 = 回落继承）
+    expect(html).toContain("派发路由（Provider · Model）");
+    expect(html).toContain("（回落继承）");
+    const pairedCtl = new ExpertDetailController(noMutations());
+    pairedCtl.open(entry({ provider: "deepseek", model: "reasoner" }));
+    const paired = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, { controller: pairedCtl, allSkills: [] }),
+    );
+    expect(paired).toContain("deepseek · reasoner");
   });
 
   // bug b29f77e7：人设围栏 → 官方 .md-code-block 结构（data-code-block-content 锚 +

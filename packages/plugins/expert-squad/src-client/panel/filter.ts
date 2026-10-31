@@ -148,12 +148,12 @@ export function groupExperts(entries: readonly ExpertView[]): readonly ExpertGro
   }))
 }
 
-/** 对比字段清单（键 → 中文段标；AC 钉死五字段：岗位/简介/人设/工具白名单/技能）。 */
+/** 对比字段清单（键 → 中文段标；五字段：岗位/简介/人设/工具/技能）。 */
 export const COMPARE_FIELDS: readonly { readonly field: keyof ExpertView; readonly label: string }[] = [
   { field: "title", label: "岗位" },
   { field: "description", label: "简介" },
   { field: "personaMd", label: "人设" },
-  { field: "tools", label: "工具白名单" },
+  { field: "tools", label: "工具" },
   { field: "skills", label: "技能" },
 ]
 
