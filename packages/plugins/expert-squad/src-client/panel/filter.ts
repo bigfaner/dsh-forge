@@ -33,6 +33,40 @@ export function entryIdOf(entry: ExpertView): string {
   return entry.sourcePath ?? `${entry.origin}:${entry.name}`
 }
 
+/**
+ * 来源路径反推插件名（内置多来源区分用）：
+ * · 仓内形态 `…/packages/plugins/<pkg>/experts/…` → `<pkg>`；
+ * · 仓内形态 `…/packages/<pkg>/experts/…`（plugin-forge 直挂）→ `<pkg>`；
+ * · 安装形态 `…/node_modules/@dsh-forge/<pkg>/experts/…` → `@dsh-forge/<pkg>`；
+ * 不可解析（user 手放等）→ undefined。
+ */
+export function pluginNameOfSource(sourcePath: string | undefined): string | undefined {
+  if (sourcePath === undefined || sourcePath === "") return undefined;
+  const segments = sourcePath.split(/[\\/]+/);
+  const packagesAt = segments.indexOf("packages");
+  if (packagesAt !== -1 && packagesAt + 1 < segments.length) {
+    const next = segments[packagesAt + 1]!;
+    return next === "plugins" ? segments[packagesAt + 2] : next;
+  }
+  const scopeAt = segments.indexOf("@dsh-forge");
+  if (scopeAt !== -1 && scopeAt + 1 < segments.length) {
+    return `@dsh-forge/${segments[scopeAt + 1]!}`;
+  }
+  return undefined;
+}
+
+/** 来源角标文案：plugin 层可反推插件名时具名「内置 · <插件名>」（多内置来源区分面）。 */
+export function originBadgeLabel(
+  entry: Pick<ExpertView, "origin" | "sourcePath">,
+  projectName?: string,
+): string {
+  if (entry.origin === "plugin") {
+    const plugin = pluginNameOfSource(entry.sourcePath);
+    if (plugin !== undefined) return `内置 · ${plugin}`;
+  }
+  return originLabel(entry.origin, projectName);
+}
+
 /** 状态过滤枚举（F1：全部/启用/禁用）。 */
 export type StatusFilter = "all" | "enabled" | "disabled"
 

@@ -14,6 +14,7 @@ import {
   entryIdOf,
   filterGroups,
   footerText,
+  originBadgeLabel,
   originLabel,
   personaSummary,
   projectNameOf,
@@ -458,11 +459,6 @@ function originOptions(projectName: string | undefined): readonly { readonly val
   ]
 }
 
-/** 来源角标（三态文案：项目·具名/用户/内置——DESIGN.md 令牌；未知原值透传）。 */
-function OriginBadge({ origin, projectName }: { readonly origin: string; readonly projectName?: string }): ReactNode {
-  return <span className={`origin-badge origin-${origin}`}>{originLabel(origin, projectName)}</span>
-}
-
 /** 来源条目身份键（sourcePath——同键同 origin 可有多份内置注册，origin 不足以区分）。 */
 // （entryIdOf 移居 filter.ts——Dialog 对比态同用 sourcePath 身份）
 function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, menuOpen, onToggleMenu, onSelectOrigin }: {
@@ -513,7 +509,7 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
             type="button"
             className={`origin-badge origin-${expert.origin}${multi ? " xc-origin-switch" : ""}`}
             data-xc-origin-switch={multi ? "" : undefined}
-            aria-label={`来源 ${originLabel(expert.origin, projectName)}`}
+            aria-label={`来源 ${originBadgeLabel(expert, projectName)}`}
             aria-expanded={multi ? menuOpen === true : undefined}
             // 切换挂 mousedown（先于 click 捕获相位——外点收起 capture 监听在同一 click
             // 事件派发中抢先注册的时序竞态下，mousedown 阶段监听必不在位，天然免疫）；
@@ -525,7 +521,7 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            {originLabel(expert.origin, projectName)}
+            {originBadgeLabel(expert, projectName)}
             {multi ? <span className="xc-origin-caret" aria-hidden="true">▾</span> : null}
           </button>
         </span>
@@ -544,7 +540,7 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
                   onToggleMenu?.();
                 }}
               >
-                <OriginBadge origin={entry.origin} projectName={projectName} />
+                <span className={`origin-badge origin-${entry.origin}`}>{originBadgeLabel(entry, projectName)}</span>
                 <span className="xc-origin-opt-title">{entry.title}</span>
                 <span className="xc-origin-opt-date">{updatedLabel(entry.updatedAt) ?? ""}</span>
               </button>
