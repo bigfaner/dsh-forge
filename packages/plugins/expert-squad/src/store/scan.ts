@@ -7,10 +7,10 @@
 // 降级：root 不可读（存在但读失败）→ warn + 跳过该 root；坏档案 → 单文件跳过，
 // 其余不受影响；root 不存在属正常形态 → 静默视为空。
 
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseExpertFile, type ExpertRecord } from "./frontmatter.js";
 
@@ -74,6 +74,33 @@ function existsAnyKind(p: string): boolean {
 export function resolveProjectExpertsRoot(cwd: string): string | null {
   const root = findProjectRoot(cwd);
   return root === null ? null : join(root, EXPERTS_DIR);
+}
+
+/**
+ * worktree 感知项目根解析（本裁决：专家分层无 worktree 层——project 层锚项目根）：
+ * · `<ws>/.git` 为目录 → ws 本身即项目根（主检出/普通目录）；
+ * · 为文件（链接 worktree——内容 `gitdir: <main>/.git/worktrees/<name>`）→ 解析回
+ *   主检出根（专家档案落主检出，不随 worktree 生灭）；
+ * · 无 `.git` → ws 本身（非 git 目录形态容忍——临时目录等照常直挂）。
+ */
+export function resolveProjectRootFor(workspace: string): string {
+  const dotGit = join(workspace, ".git");
+  let st;
+  try {
+    st = statSync(dotGit);
+  } catch {
+    return workspace;
+  }
+  if (st.isDirectory()) return workspace;
+  try {
+    const m = /^gitdir:\s*(.+)$/.exec(readFileSync(dotGit, "utf8").trim());
+    if (m === null) return workspace;
+    // gitdir = <mainRoot>/.git/worktrees/<name> → 上两级 = <mainRoot>/.git
+    const mainGit = dirname(dirname(resolve(dirname(workspace), m[1]!.trim())));
+    return basename(mainGit) === ".git" ? dirname(mainGit) : workspace;
+  } catch {
+    return workspace;
+  }
 }
 
 /**

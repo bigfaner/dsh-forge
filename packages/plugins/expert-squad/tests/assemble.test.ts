@@ -4,7 +4,7 @@
 //    写盘 + 回包换新档案）；② bug 34a284e3：enable/disable 回包 = 换新档案
 //    （client defaultDetailMutations 契约消费 updated.enabled，{ok:true} 即渲染断链）。
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -356,6 +356,105 @@ describe("bug 7b1c9ed4: experts 服务键 provide（ctx.experts 正门）", () =
       expect(again.filter((e) => e.name === "forge-expert").length).toBe(1);
     } finally {
       rmSync(externalDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("来源保持（用户裁决 2026-10-31）：编辑不换层、不新建；召唤才是新建面", () => {
+  /** 隔离 DSH_HOME（user 层写点锚到沙箱；boot 前设置——roots 每刷求值）。 */
+  function stubDshHome(): string {
+    const home = mkdtempSync(join(tmpdir(), "dsh-forge-xsq-home-"));
+    const prior = process.env.DSH_HOME;
+    process.env.DSH_HOME = home;
+    return prior as unknown as string;
+  }
+
+  it("user 层档案：面板编辑原地写回 user 根（project 层不落新文件）", { timeout: 20_000 }, async () => {
+    const prior = stubDshHome();
+    try {
+      const ws = makeWorkspace();
+      const userRoot = join(process.env.DSH_HOME!, "experts");
+      mkdirSync(userRoot, { recursive: true });
+      const USER_KEY = "solo-user-expert";
+      writeFileSync(join(userRoot, `${USER_KEY}.md`), expertMd(USER_KEY, "用户层评审"));
+      const routes = await boot();
+      const result = await post(routeOf(routes, "update"), {
+        workspace: ws,
+        name: USER_KEY,
+        title: "用户层复核岗",
+        description: "d",
+        tools: ["read"],
+        skills: ["review"],
+        personaMd: "## 职责\n\nok",
+      });
+      expect(result.status, `update 应成功：${result.text}`).toBe(200);
+      const entry = result.json as { origin?: string; title?: string };
+      expect(entry.origin, "回包档案 origin 仍 = user（来源保持）").toBe("user");
+      expect(entry.title).toBe("用户层复核岗");
+      // 原地写回：user 根文件换新；project 层零新增落盘（不换层不新建）
+      expect(readFileSync(join(userRoot, `${USER_KEY}.md`), "utf8")).toContain("用户层复核岗");
+      const projectFiles = readdirSync(join(ws, ".dsh", "experts"));
+      expect(projectFiles).toEqual([`${KEY}.md`]); // 仅既有夹具，无新文件
+    } finally {
+      if (prior === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = prior;
+    }
+  });
+
+  it("plugin 层内置（随包只读）：面板编辑回落 user 层覆写（键不变，不新建专家）", { timeout: 20_000 }, async () => {
+    const prior = stubDshHome();
+    const externalDir = mkdtempSync(join(tmpdir(), "dsh-forge-xsq-plugin-"));
+    try {
+      const ws = makeWorkspace(); // project 层无此键 → 生效层 = plugin
+      writeFileSync(join(externalDir, "builtin-one.md"), expertMd("builtin-one", "内置一号"));
+      const provided: Array<{ name: string; value: unknown }> = [];
+      const routes: FetchRouteLike[] = [];
+      await expertSquadPlugin({
+        connection: {
+          fetch: {
+            register: (route: FetchRouteLike): unknown => {
+              routes.push(route);
+              return route;
+            },
+          },
+        },
+        reflect: {
+          provide: (name: string, value: unknown): unknown => {
+            provided.push({ name, value });
+            return () => undefined;
+          },
+        },
+        effect: (dispose: () => unknown): unknown => {
+          disposers.push(dispose);
+          return undefined;
+        },
+      } as never);
+      const service = provided.find((p) => p.name === "experts")!.value as {
+        registerRoot(ctx: unknown, dir: string): void;
+      };
+      service.registerRoot({}, externalDir);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const result = await post(routeOf(routes, "update"), {
+        workspace: ws,
+        name: "builtin-one",
+        title: "内置一号（覆写）",
+        description: "d",
+        tools: ["read"],
+        skills: [],
+        personaMd: "## 职责\n\nok",
+      });
+      expect(result.status, `update 应成功：${result.text}`).toBe(200);
+      const entry = result.json as { origin?: string; title?: string };
+      // user 层覆写生效（遮蔽 plugin）——键不变，非新建专家
+      expect(entry.title).toBe("内置一号（覆写）");
+      const userRoot = join(process.env.DSH_HOME!, "experts");
+      expect(readFileSync(join(userRoot, "builtin-one.md"), "utf8")).toContain("内置一号（覆写）");
+      // project 层零落盘
+      expect(readdirSync(join(ws, ".dsh", "experts"))).toEqual([`${KEY}.md`]);
+    } finally {
+      rmSync(externalDir, { recursive: true, force: true });
+      if (prior === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = prior;
     }
   });
 });

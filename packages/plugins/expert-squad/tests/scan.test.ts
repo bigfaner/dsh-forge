@@ -10,6 +10,7 @@ import {
   findProjectRoot,
   resolveCwdProjectExpertsRoot,
   resolvePluginExpertsRoot,
+  resolveProjectRootFor,
   resolveUserExpertsRoot,
   scanExpertRoots,
   type ExpertOrigin,
@@ -74,6 +75,21 @@ describe("root 解析（D3 三层物理位置）", () => {
   it("findProjectRoot：无 .git 祖先 → null", async () => {
     const dir = await makeSandbox();
     expect(findProjectRoot(dir)).toBeNull();
+  });
+
+  // 本裁决：专家分层无 worktree 层——链接 worktree（.git 为文件）解析回主检出根。
+  it("resolveProjectRootFor：worktree → 主检出根；主检出/普通目录 → 自身", async () => {
+    const sandbox = await makeSandbox();
+    const main = join(sandbox, "main");
+    const wt = join(sandbox, "wt");
+    const plain = join(sandbox, "plain");
+    await mkdir(join(main, ".git"), { recursive: true });
+    await mkdir(wt);
+    await mkdir(plain);
+    await writeFile(join(wt, ".git"), `gitdir: ${join(main, ".git", "worktrees", "abc")}\n`);
+    expect(resolveProjectRootFor(wt)).toBe(main);
+    expect(resolveProjectRootFor(main)).toBe(main);
+    expect(resolveProjectRootFor(plain)).toBe(plain);
   });
 
   it("resolveUserExpertsRoot：$DSH_HOME/experts；缺省回落 ~/.dsh/experts", () => {

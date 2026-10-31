@@ -30,6 +30,7 @@ import {
 import {
   resolveCwdProjectExpertsRoot,
   resolvePluginExpertsRoot,
+  resolveProjectRootFor,
   resolveUserExpertsRoot,
   type ExpertRoot,
 } from "./store/scan.js";
@@ -68,12 +69,14 @@ interface ExpertSquadCtx {
   effect(dispose: () => unknown): unknown;
 }
 
-/** 三层 root（D3/D4）：fetch 路由的 workspace 参数 = 注册项目根（D4 钉死取值点），
- *  project 层 = `<workspace>/.dsh/experts/` 直挂——不做 .git 向上解析（参数已是项目根；
- *  向上走会在嵌套场景爬出真实项目，tech-design §5 project 层语义以注册根为锚）。 */
+/** 三层 root（D3/D4 + 本裁决：无 worktree 层——project 层锚项目根）：fetch 路由的
+ *  workspace 参数 = 面板当前选中工作区（可为链接 worktree）；project 层经
+ *  resolveProjectRootFor 解析回项目根（worktree 的 `.git` 文件 → 主检出），档案
+ *  落主检出不随 worktree 生灭；user/plugin 层按 scan 模块正门解析。 */
 function expertRootsFor(workspace: string): ExpertRoot[] {
+  const projectRoot = resolveProjectRootFor(workspace);
   return [
-    { origin: "project", dir: join(workspace, ".dsh", "experts") },
+    { origin: "project", dir: join(projectRoot, ".dsh", "experts") },
     { origin: "user", dir: resolveUserExpertsRoot() },
     { origin: "plugin", dir: resolvePluginExpertsRoot() },
   ];
@@ -268,14 +271,25 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
       if (fresh === undefined) throw new Error(`expert not found: ${key}`);
       return fresh;
     },
-    // 档案 upsert 写面（bug 4ed8549f 装配）：落点 = project 层 <workspace>/.dsh/experts/
-    // <key>.md（面板 workspace 域内；对 user/plugin 层同键档案构成遮蔽——scan 层
-    // 既有语义）。写路径与 recruit/update_expert tool 同源：serializeExpertMd →
-    // parseExpertFile 全量门（必填/裸 {{/name 不可改——文件名即建档键），不过不落盘；
+    // 档案编辑写面（bug 4ed8549f 装配；来源保持裁决 2026-10-31 见 update 内注记）：
+    // 写路径与 recruit/update_expert tool 同源：serializeExpertMd → parseExpertFile
+    // 全量门（必填/裸 {{/name 不可改——文件名即建档键），不过不落盘；
     // 写后 refresh 一代换新，回包 = 换新 ExpertEntry。
     update: async (input) => {
       const registry = await registryFor(input.workspace);
-      const expertsDir = join(input.workspace, ".dsh", "experts");
+      // 来源保持（用户裁决 2026-10-31）：面板编辑只写回生效档案所在层——
+      // · project/user 层 → 原地写（不换层、不新建档案文件）；
+      // · plugin 层（随包只读）→ 回落 user 层覆写内置（键不变，遮蔽语义——仍非新建专家）。
+      // 新专家的唯一创建面 = 召唤链 recruit_expert（恒写 user 层）。
+      const effectiveOrigin = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === input.name)?.origin;
+      // project → 项目根（worktree 感知——档案落主检出，无 worktree 层）；user → 原地；
+      // plugin（随包只读）→ user 层覆写内置（键不变）
+      const expertsDir =
+        effectiveOrigin === "project"
+          ? join(resolveProjectRootFor(input.workspace), ".dsh", "experts")
+          : resolveUserExpertsRoot();
       const file = join(expertsDir, `${input.name}.md`);
       const content = serializeExpertMd(
         {
