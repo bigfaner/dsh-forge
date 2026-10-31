@@ -1,5 +1,5 @@
 // 单测 —— forge:pipeline / forge:doc-style 段渲染（dual-mode-overhaul 模板化终版）：
-// 两份自包含模板（四条核心规则双份逐字在场——允许重复、禁止占位抽公共）/ 三段结构
+// 两份自包含模板（六条核心规则双份逐字在场——允许重复、禁止占位抽公共）/ 三段结构
 // MD 段体（总纲与核心规则·文档位置与存储约束·流程）/ 四规则口径（状态库+查询为准，
 // 执行协议与受限面零回渗）/ 双模式独立渲染（mode 键——目录树与流程图各自版本，缺省
 // 回退远征）/ 双 mermaid 含用户裁决节点与箭头固定产物、无 worker 内部节点 / doc-style
@@ -55,12 +55,24 @@ describe('总纲四条核心规则（双模式逐字在场——允许重复、�
     '状态存于 forge 管线的状态库（任务/提案/特性/文档四域，按工作区注册）；一切状态判断以管线工具的查询结果为准，不以盘上文件或记忆推断。',
     '任务身份 = slug/local-id；blocked 任务派生修复任务携带 fix-N；偏差跟进携带 disc-N；slug 与 feature 目录名一致。',
     '提案 accept/reject 仅在用户明示决定后记录。',
-    '进入流程下一环节前，使用 ask_user_question 工具显式向用户确认；确认后推进，并同步调用管线工具流转提案或 feature 的状态；未确认不得推进。',
+    '阶段流转确认两分——用户动作即赞同、模糊才反问：用户消息明确指向下一阶段（拆任务、开始评审/成文、开跑、进下一段等）即视为赞同，直接调用管线工具流转提案或 feature 的状态并推进，不再反问；语义模糊（未明确指向阶段推进、存在多个候选下一阶段、无阶段指向词的短指令如「继续」「好」）一律归模糊，维持 ask_user_question 显式确认。',
+    '不可判定边界兜底：复合消息（多动作混杂）、疑问句、否定作用域（如「先不要 X」）、多目标指代、引用转述五类情形一律归模糊走反问；以「阶段指向词 + 目标对象 + 动作词 + 状态前提」四条件锚定判定，任一缺席即兜底反问。',
+    '隐式流转约定：隐式赞同流转后，在对话纪要与流转后回复中注明「隐式赞同：<用户动作>」；显式 rejected 提案不触发隐式翻转（superseded 同为不翻转例外，其翻转伴随 decided_at 覆写与 expedition 复活成链，为失效面最重路径）——该例外为提示词层软约束。',
   ]
 
   it.each(RULES.map((rule, i) => [`规则${i + 1}`, rule]))('%s 逐字在场于双模式渲染', (_label, rule) => {
     expect(text).toContain(rule)
     expect(renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge' })).toContain(rule)
+  })
+
+  it('流转规则两分要点（提案 implicit-stage-approval §2.1/§2.2）逐字在场：旧「进入流程下一环节前必须显式确认」退役', () => {
+    for (const v of [text, renderForgePipelineSection({ mode: 'blitz' })]) {
+      expect(v).toContain('用户动作即赞同、模糊才反问')
+      expect(v).toContain('隐式赞同：<用户动作>')
+      expect(v).toContain('superseded')
+      expect(v).toContain('软约束')
+      expect(v).not.toContain('未确认不得推进')
+    }
   })
 
   it('执行协议与受限面零回渗（领取/结算/fix 链细节不出现——正本在派发核心文档 / submit-task 技能）', () => {
@@ -84,7 +96,7 @@ describe('git 纪律条件注入（isGitRepo 键）', () => {
     for (const mode of ['expedition', 'blitz'] as const) {
       const v = renderForgePipelineSection({ mode, forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true })
       expect(v).toContain(GIT_RULE)
-      expect(v.indexOf('未确认不得推进。')).toBeLessThan(v.indexOf(GIT_RULE))
+      expect(v.indexOf('兜底反问。')).toBeLessThan(v.indexOf(GIT_RULE))
       expect(v.indexOf(GIT_RULE)).toBeLessThan(v.indexOf('### 流程'))
     }
   })
