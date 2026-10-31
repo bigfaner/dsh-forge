@@ -144,12 +144,17 @@ test('AC2·golden path：打开 tab → 写配置落 id 定向 patch → volatil
     await page.locator(PROVIDER_INPUT).click() // model blur 提交
     await pickReasoning(page, 'high')
 
-    // patch 落盘实况：id 定向条目 + 逐字值
+    // patch 落盘实况：id 定向条目 + 逐字值（写径 = 官方 configForms revisioned 异步写——
+    // 三连写逐写过 Host configEditor reconcile/热重载窗口，落盘时刻非即时；逐字段 poll 收敛）
     await expect
       .poll(patchText, { timeout: 30_000, message: 'cordis.patch.yml 落 id 定向 defaultAgentOptions 条目' })
       .toContain(`provider: ${provider}`)
-    expect(patchText()).toContain(`model: ${model}`)
-    expect(patchText()).toContain('reasoning: high')
+    await expect
+      .poll(patchText, { timeout: 30_000, message: 'model 落盘（同条目整组重述）' })
+      .toContain(`model: ${model}`)
+    await expect
+      .poll(patchText, { timeout: 30_000, message: 'reasoning: high 落盘' })
+      .toContain('reasoning: high')
     expect(patchText()).toMatch(/- id: expert-squad/)
 
     // ── Step 3：volatile 无重启生效（同一实例内）──
@@ -170,8 +175,12 @@ test('AC2·golden path：打开 tab → 写配置落 id 定向 patch → volatil
     await expect
       .poll(() => !patchText().includes(`provider: ${provider}`), { timeout: 30_000, message: '全空 = unset 整字段' })
       .toBe(true)
-    expect(patchText(), '无空壳条目残留').not.toContain(`model: ${model}`)
-    expect(patchText()).not.toContain('reasoning: high')
+    await expect
+      .poll(() => !patchText().includes(`model: ${model}`), { timeout: 30_000, message: 'model 清除落盘（无空壳残留）' })
+      .toBe(true)
+    await expect
+      .poll(() => !patchText().includes('reasoning: high'), { timeout: 30_000, message: 'reasoning 清除落盘' })
+      .toBe(true)
     await expect(page.locator(PROVIDER_INPUT), '面板回占位态').toHaveValue('')
     await expect
       .poll(async () => routeBits(await fetchGet(page, wsDir)), { timeout: 15_000, message: '清空后消费面即时回落缺省' })

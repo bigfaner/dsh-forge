@@ -256,6 +256,11 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     for (const [name, version] of Object.entries(packaged.dependencies)) {
       expect(dev.dependencies[name], `dev profile 缺官方行 ${name}`).toBe(version)
     }
+    // bundles 恒等模板（bug 908dc82e 类别守卫）：产品插件不得进 dev bundles——其
+    // dsh.bundle.patch 的 insert 行会与用户层 insert 行重复插同 id 行，官方
+    // configEditor.edit 合成检查（flatten().find(id) first-hit）命中无 config 影子行
+    // → settings 写径恒被拒（settings/rejected: overridden by a home patch or
+    // command-line overlay）。产品插件 dev 装载通道 = 用户层 insert 行（core 同径）。
     expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')

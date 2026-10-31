@@ -1,9 +1,9 @@
-{
+﻿{
   "name": "@dsh-forge/expert-squad",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "private": true,
   "type": "module",
-  "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用、通道一委派（delegate_expert）与双通道热刷新（chokidar + fs/observed）。",
+  "description": "expert-squad cordis 鎻掍欢锛堝弻闈㈠寘瑁呰浇鑼冨紡锛夛細涓撳妗ｆ涓夊眰鎵弿/娉ㄥ唽鍙栫敤銆侀€氶亾涓€濮旀淳锛坉elegate_expert锛変笌鍙岄€氶亾鐑埛鏂帮紙chokidar + fs/observed锛夈€?,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

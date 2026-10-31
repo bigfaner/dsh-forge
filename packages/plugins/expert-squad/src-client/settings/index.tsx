@@ -216,7 +216,11 @@ export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror
 
   // 写径（bug 9577a867 伴生面）：blur 即时提交整组草稿（写 commit 传入的 next 本体——
   // draftRef 经 setState 异步更新，读它会滞后一次提交）+ 拒绝重试（官方 set 返回 false
-  // = Host 拒绝且已做一次 recover 读——延迟重试携 fresh revision 再写最新草稿）。
+  // = Host 拒绝且已做一次 recover 读）。重试窗口放宽（bug 908dc82e 链伴生）：连续三连写
+  // 时 Host configEditor.edit 逐写 reconcile + entry fiber 热重载，重载窗口内的写被拒
+  //（"Configuration plugin is no longer active" 族）——固定 2s 间隔 × 8 次（~16s）背压
+  // 重试携 fresh revision 再写最新草稿；官方语义 = 客户端 re-read + re-apply（正确性
+  // 仍归 Host 单点，重试只是收写完成的体验面）。
   const writeDraft = (patch: Record<string, string> | undefined, left: number): void => {
     const write = patch === undefined ? form.unset(FIELD) : form.set(FIELD, patch);
     write
@@ -226,7 +230,7 @@ export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror
           console.warn("[dsh-forge/expert-squad] defaultAgentOptions write not accepted——放弃本轮（等待下一次编辑重写）");
           return;
         }
-        setTimeout(() => writeDraft(defaultOptionsPatchOf(draftRef.current), left - 1), 1500);
+        setTimeout(() => writeDraft(defaultOptionsPatchOf(draftRef.current), left - 1), 2_000);
       })
       .catch((error: unknown) => {
         console.error("[dsh-forge/expert-squad] defaultAgentOptions write rejected——等待下一次修订", error);
@@ -234,7 +238,7 @@ export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror
   };
   const commit = (next: DefaultOptionsDraft): void => {
     edit(next);
-    writeDraft(defaultOptionsPatchOf(next), 2);
+    writeDraft(defaultOptionsPatchOf(next), 8);
   };
 
   const reasoningOptions: readonly { value: string; label: string }[] = REASONING_OPTIONS;
