@@ -703,7 +703,8 @@ export function ExpertDetailDialog(props: {
                 <span className="chip">{expert.model}</span>
               </>
             ) : (
-              <span className="chip dswf-chip-muted">继承父Agent</span>
+              // 未显式指定 = 固定前缀标明语义位（model）；显式选中 model 时双 chip 自明，不带前缀
+              <span className="chip dswf-chip-muted">model : 继承父Agent</span>
             )}
           </span>
         ) : null}
