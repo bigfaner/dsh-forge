@@ -161,13 +161,16 @@ export interface MdInline {
   readonly v: string;
 }
 
-/** 块级行（标题 / 列表项 / 段落 / 围栏代码块）。 */
+/** 块级行（标题 / 列表项 / 段落 / 围栏代码块 / GFM 管道表格）。 */
 export interface MdBlock {
-  readonly kind: "heading" | "li" | "para" | "code";
+  readonly kind: "heading" | "li" | "para" | "code" | "table";
   readonly inline?: readonly MdInline[];
   /** code 块专有：infostring 语言 + 围栏体原文（bug b29f77e7）。 */
   readonly lang?: string;
   readonly source?: string;
+  /** table 块专有：表头单元格与数据行（单元格均经行内解析）。 */
+  readonly header?: readonly (readonly MdInline[])[];
+  readonly rows?: readonly (readonly (readonly MdInline[])[])[];
 }
 
 /** 行内解析：**加粗** 与 `行内代码` 切分（保序；未闭合定界符按纯文本）。 */
@@ -188,15 +191,30 @@ export function mdInline(text: string): readonly MdInline[] {
   return out;
 }
 
-/** 人设 Markdown → 块级行序列（标题/列表符剥离 + 行内解析 + 围栏代码块；空行丢弃）。
- *  围栏（```lang … ```）体原样成 code 块、不做行内解析；未闭合围栏兜底到文末
- *  （bug b29f77e7——查看态围栏按官方 .md-code-block 结构渲染，mermaid fence 由
- *  md-mermaid 全局 DOM 增强器出图）。 */
+/** 表格行拆列（trim 首尾管道与单元格空白；单元格内不做管道转义——人设表格简单形态）。 */
+function splitTableRow(line: string): readonly string[] {
+  let t = line.trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map((cell) => cell.trim());
+}
+
+/** 分隔行判据（GFM：| --- | :---: | 形态）。 */
+function isTableSeparator(line: string): boolean {
+  return /^\|[\s:|-]+\|\s*$/.test(line.trim());
+}
+
+/** 人设 Markdown → 块级行序列（标题/列表符剥离 + 行内解析 + 围栏代码块 + GFM 管道
+ *  表格；空行丢弃）。围栏（```lang … ```）体原样成 code 块、不做行内解析；未闭合
+ *  围栏兜底到文末（bug b29f77e7——查看态围栏按官方 .md-code-block 结构渲染，mermaid
+ *  fence 由 md-mermaid 全局 DOM 增强器出图）。表格 = 首行 `|…|` + 次行分隔行，表体
+ *  吞并后续连续管道行。 */
 export function personaBlocks(personaMd: string): readonly MdBlock[] {
   const blocks: MdBlock[] = [];
   let fence: { lang: string; lines: string[] } | undefined;
-  for (const rawLine of personaMd.split("\n")) {
-    const line = rawLine.trimEnd();
+  const lines = personaMd.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trimEnd();
     if (fence !== undefined) {
       if (/^```\s*$/.test(line)) {
         blocks.push({ kind: "code", lang: fence.lang, source: fence.lines.join("\n") });
@@ -216,6 +234,19 @@ export function personaBlocks(personaMd: string): readonly MdBlock[] {
       blocks.push({ kind: "heading", inline: mdInline(line.replace(/^#{1,6}\s+/, "")) });
     } else if (/^[-*]\s+/.test(line)) {
       blocks.push({ kind: "li", inline: mdInline(line.replace(/^[-*]\s+/, "")) });
+    } else if (
+      /^\|.*\|\s*$/.test(line) &&
+      i + 1 < lines.length &&
+      isTableSeparator(lines[i + 1]!)
+    ) {
+      const header = splitTableRow(line).map(mdInline);
+      i += 2; // 跳过表头 + 分隔行
+      const rows: (readonly (readonly MdInline[])[])[] = [];
+      for (; i < lines.length && /^\|.*\|\s*$/.test(lines[i]!.trim()); i++) {
+        rows.push(splitTableRow(lines[i]!).map(mdInline));
+      }
+      i -= 1; // 外层 for 会再 +1
+      blocks.push({ kind: "table", header, rows });
     } else {
       blocks.push({ kind: "para", inline: mdInline(line) });
     }

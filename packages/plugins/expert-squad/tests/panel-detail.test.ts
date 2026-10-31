@@ -18,8 +18,7 @@ import {
   unionSkills,
   validateDraft,
   type ExpertDraft,
-} from "../src-client/panel/detail-logic.js";
-import {
+} from "../src-client/panel/detail-logic.js";import {
   ExpertDetailController,
   TOAST_AUTO_DISMISS_MS,
   type DetailMutations,
@@ -614,6 +613,20 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain('<strong class="dswf-dlg-md-h"><span>职责</span></strong>');
     expect(html).toContain("<code>pnpm lint</code>");
     expect(html).toContain("<li><span>评审 diff 与正确性</span></li>");
+    // GFM 管道表格：personaBlocks 分块 + md-table 官方语义渲染（th 弱化 + 单元格行内解析）
+    const tableMd = "| run-tests 语义 | 本项目等价面 |\n| --- | --- |\n| dev | `pnpm build:vite` 前置 |\n| test | **全量** `pnpm test:e2e` |";
+    const blocks = personaBlocks(`前置\n\n${tableMd}\n\n后置`);
+    expect(blocks.some((b) => b.kind === "table" && b.header?.length === 2 && b.rows?.length === 2)).toBe(true);
+    const tableCtl = new ExpertDetailController(noMutations());
+    tableCtl.open(entry({ personaMd: `## 映射\n\n${tableMd}` }));
+    const tableHtml = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, { controller: tableCtl, allSkills: [] }),
+    );
+    expect(tableHtml).toContain('class="md-table"');
+    expect(tableHtml).toContain("<th><span>run-tests 语义</span></th>");
+    expect(tableHtml).toContain("<code>pnpm build:vite</code>");
+    expect(tableHtml).toContain("<strong>全量</strong>");
+    expect(tableHtml).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain("工具（子会话强制生效）");
     expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');

@@ -173,6 +173,32 @@ function PersonaMd({ source }: { readonly source: string }): ReactNode {
           <Inline parts={block.inline ?? []} />
         </strong>,
       );
+    } else if (block.kind === "table") {
+      // GFM 管道表格（test-runner 等内置人设含生命周期映射表——md-table 官方语义自绘）
+      out.push(
+        <table key={index} className="md-table">
+          <thead>
+            <tr>
+              {(block.header ?? []).map((cell, ci) => (
+                <th key={ci}>
+                  <Inline parts={cell} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(block.rows ?? []).map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td key={ci}>
+                    <Inline parts={cell} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>,
+      );
     } else if (block.kind === "code") {
       // bug b29f77e7：官方 MarkdownDoc 代码块结构镜像（.md-code-block +
       // data-code-block-content 锚 + pre>code）——md-mermaid 全局 DOM 增强器

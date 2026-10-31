@@ -65,8 +65,19 @@ export const PANEL_CSS = `
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
 .xc-title { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* dsw-raw 灯后文本对齐缩进 */
-/* 卡头对比钮（多来源卡——点开对比 Dialog 切换版本）；第二行 = 岗位居左 + 路由合并 chip 靠右 */
-.xc-cmp-btn { margin-left: auto; flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
+/* 卡头右侧组（对比钮 + 来源 chip 贴紧、统一靠右）；来源下拉（chip 向下扩展列全来源） */
+.xc-head-right { margin-left: auto; display: flex; align-items: center; gap: 0; flex: none; position: relative; }
+.xc-head-right > .origin-badge { margin-left: 0; }
+.xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.xc-origin-switch { cursor: var(--dsh-cursor-pointer, pointer); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.xc-origin-caret { font-size: 10px; }
+.xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; }
+.xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
+.xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.xc-origin-opt.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }
+.xc-origin-opt .origin-badge { margin-left: 0; flex: none; }
+.xc-origin-opt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xc-origin-opt-date { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); flex: none; }
 .xc-title-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .xc-title-row > .xc-title { flex: 1; }
 .xc-title-row > .chip { flex: none; }
@@ -106,6 +117,11 @@ export const PANEL_CSS = `
 .dswf-dlg-md { font: var(--dsw-font-s-14); line-height: var(--dsw-font-s-14-line-height); color: var(--dsw-alias-label-primary); }
 .dswf-dlg-md ul { margin: 2px 0 2px 18px; padding: 0; }
 .dswf-dlg-md-h { display: block; margin-top: ${T.gap8}; font-weight: 500; }
+/* 人设 GFM 管道表格（官方语义：th 弱化色 + 单元格行分隔线 + 行内代码底） */
+.dswf-dlg-md .md-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); margin: ${T.gap8} 0; }
+.dswf-dlg-md .md-table th, .dswf-dlg-md .md-table td { padding: 4px ${T.gap8}; border-bottom: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; }
+.dswf-dlg-md .md-table th { font-weight: 400; color: var(--dsw-alias-label-caption); white-space: nowrap; }
+.dswf-dlg-md .md-table code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
 .dswf-dlg-md code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
 /* 围栏代码块（官方 .md-code-block 结构镜像——bug b29f77e7；mermaid fence 由全局增强器出图后隐藏原块，figure 样式随包 docs.css .dswf-doc-mermaid 族） */
 .dswf-dlg-md .md-code-block { margin: ${T.gap8} 0; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); overflow: hidden; }
