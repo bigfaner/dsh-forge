@@ -256,6 +256,25 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     )
   })
 
+  it('closure：预设携带插件 ⊆ staging 集合（发版新增产品插件 → 老用户升级自动补行闭环的 assemble 侧半——预设引用越界即红并报出插件名与来源预设文件）', () => {
+    // staged 集合 = stagedProductPackages 推导（userLayerRow/预设种子/staged:true ∪ 闭包 −
+    // kill-switch）；预设携带面真源 = 底稿文件逐文件扫描（与 presetCarriedPlugins 同口径，
+    // 自扫为取「来源预设文件」用于 fail 报文）。
+    const presetsDir = join(ROOT, 'apps', 'host', 'src', 'profile', 'presets')
+    const stagedShorts = new Set(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).map((k) => k.split('/').pop()))
+    const orphans: string[] = []
+    for (const file of readdirSync(presetsDir)) {
+      if (!file.endsWith('.yml')) continue
+      const text = readFileSync(join(presetsDir, file), 'utf8')
+      for (const hit of text.matchAll(/'@dsh-forge\/([a-z0-9-]+)'/g)) {
+        const short = hit[1]!
+        if (!stagedShorts.has(short)) orphans.push(`${short}（来源 presets/${file}）`)
+      }
+    }
+    expect(presetCarriedPlugins().length, '预设扫描面失效即假绿（扫描到 0 个携带插件）').toBeGreaterThan(0)
+    expect(orphans, `预设携带插件未入 staging 集合（预设/配置面漂移）：${orphans.join('; ')}`).toEqual([])
+  })
+
   it('bug a1f13abf：声明 dsh.bundle.patch 的插件，组合 patch 文件必随包物化并入 --check 口径（loader 按声明读包内该文件——缺席即 overlay ENOENT）', () => {
     const staged = stagedProductPackages(PRODUCT_PLUGINS)
     // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
