@@ -32,6 +32,8 @@ import type {
   TaskRef,
   TaskSnapshot,
   TaskType,
+  TriageDecidedPayload,
+  TriageOutcomePayload,
 } from '@dsh-forge/contracts'
 import { WORKER_TOOL_NAME_FAMILY } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
@@ -133,13 +135,16 @@ export interface DispatchCoreExec {
   readonly verb: string
 }
 
-/** dispatchTask 事件载荷面（emit 局部闭包的类型索引——contracts ForgePluginEvent 判别联合的本动词子集） */
+/** dispatchTask 事件载荷面（emit 局部闭包的类型索引——contracts ForgePluginEvent 判别联合的本动词子集；
+ *  triage-progress-row：triage 两台账事件入映射——循环驱动器发射点 typed 复用同一 emit 面） */
 interface DispatchEventPayloads {
   'task-claimed': { taskKey: string; taskType: TaskType; mode?: Mode; dispatchDigest: string }
   'task-spawned': { taskKey: string; workerSessionId: string; toolFilter: readonly string[]; model: string }
   'task-progress': { taskKey: string; phase: TaskProgressPhase; ts: number }
   'task-worker-done': { taskKey: string; workerSessionId: string; outcome: 'success' | 'blocked'; durationMs: number }
   'no-ready-task': { contextSlug?: string }
+  'triage-decided': TriageDecidedPayload
+  'triage-outcome': TriageOutcomePayload
 }
 
 // ─────────────────────────── 阶段面共享（作用域 + 闭包——三段与主链单一实现） ───────────────────────────

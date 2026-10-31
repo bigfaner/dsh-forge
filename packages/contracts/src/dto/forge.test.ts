@@ -84,6 +84,9 @@ import type {
   TaskStatsQuery,
   TaskSubmittedPayload,
   TaskWorkerDonePayload,
+  TriageDecisionAction,
+  TriageDecidedPayload,
+  TriageOutcomePayload,
   TasksChannelRequests,
   TaskSnapshot,
   ToolErrorPayload,
@@ -393,7 +396,7 @@ describe('AC6 forgeTasks/forgeProposals 服务签名容器化改写（Interface 
 })
 
 describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八事件判别 + exhaustiveness）', () => {
-  it('事件类型全集 = 八事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
+  it('事件类型全集 = 初集八事件 + triage 两台账事件（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
     expect(FORGE_PLUGIN_EVENT_TYPES).toEqual([
       'task-claimed',
       'task-spawned',
@@ -403,6 +406,8 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
       'no-ready-task',
       'tool-error',
       'proposal-created',
+      'triage-decided',
+      'triage-outcome',
     ])
   })
 
@@ -420,7 +425,7 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
     expect(event.type).toBe('no-ready-task')
   })
 
-  it('type 判别 exhaustiveness：八 type 穷举 switch 无 default 即编译期封闭（Record 键 = 全集）', () => {
+  it('type 判别 exhaustiveness：十 type 穷举 switch 无 default 即编译期封闭（Record 键 = 全集）——新 type 漏处理即红', () => {
     const typeByEvent: Record<ForgePluginEvent['type'], ForgePluginEventType> = {
       'task-claimed': 'task-claimed',
       'task-spawned': 'task-spawned',
@@ -430,6 +435,8 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
       'no-ready-task': 'no-ready-task',
       'tool-error': 'tool-error',
       'proposal-created': 'proposal-created',
+      'triage-decided': 'triage-decided',
+      'triage-outcome': 'triage-outcome',
     }
     expect(Object.keys(typeByEvent).sort()).toEqual([...FORGE_PLUGIN_EVENT_TYPES].sort())
   })
@@ -458,6 +465,45 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
     expectTypeOf<ToolErrorPayload['code']>().toEqualTypeOf<ErrorCode>()
     const proposalCreated: ProposalCreatedPayload = { proposalId: 'pr-1', mode: 'blitz' }
     expect(proposalCreated.mode).toBe('blitz')
+  })
+
+  it('triage 两台账事件载荷形状（triage-progress-row）：decided（决策） / outcome（执行回执）', () => {
+    const decided: TriageDecidedPayload = {
+      taskKey: 'm3/1.1',
+      attempt: 1,
+      action: 'add-fix',
+      note: '依赖不满足，补修复任务',
+      inputDigest: 'blocked: 依赖不满足 | history: 无',
+      workerSessionId: 'triage-1',
+      expertKey: 'triage-analyst',
+    }
+    expect(decided.action).toBe('add-fix')
+    expectTypeOf<TriageDecidedPayload['action']>().toEqualTypeOf<TriageDecisionAction>()
+    expectTypeOf<TriageDecidedPayload['workerSessionId']>().toEqualTypeOf<string | undefined>()
+    expectTypeOf<TriageDecidedPayload['expertKey']>().toEqualTypeOf<string | undefined>()
+    const outcome: TriageOutcomePayload = {
+      taskKey: 'm3/1.1',
+      attempt: 1,
+      outcome: 'add-fix',
+      fixTaskKey: 'm3/2.1',
+      workerSessionId: 'triage-1',
+      expertKey: 'triage-analyst',
+    }
+    expect(outcome.fixTaskKey).toBe('m3/2.1')
+    expectTypeOf<TriageOutcomePayload['outcome']>().toEqualTypeOf<TriageDecisionAction | 'failed'>()
+    expectTypeOf<TriageOutcomePayload['replayed']>().toEqualTypeOf<boolean | undefined>()
+    expectTypeOf<TriageOutcomePayload['splitTaskKey']>().toEqualTypeOf<string | undefined>()
+    expectTypeOf<TriageOutcomePayload['failureReason']>().toEqualTypeOf<string | undefined>()
+  })
+
+  it('workerSessionId 缺席语义契约化：spawn 失败径 = 两事件载荷缺席该字段仍合法（台账行照记，失败原因走 outcome.failureReason）', () => {
+    const decided: TriageDecidedPayload = { taskKey: 'm3/1.1', attempt: 2, action: 'ask-user' }
+    expect(decided.workerSessionId).toBeUndefined()
+    const failed: TriageOutcomePayload = { taskKey: 'm3/1.1', attempt: 2, outcome: 'failed', failureReason: '处置子会话 spawn 失败' }
+    expect(failed.workerSessionId).toBeUndefined()
+    expect(failed.failureReason).toContain('spawn 失败')
+    const replayed: TriageOutcomePayload = { taskKey: 'm3/1.1', attempt: 1, outcome: 'wait-external' }
+    expect(replayed.replayed).toBeUndefined() // 重放径不发 decided——replayed 缺席 = 非重放（本次执行有 decided 行在先）
   })
 })
 
