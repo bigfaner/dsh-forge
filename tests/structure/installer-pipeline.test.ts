@@ -4,12 +4,13 @@
 //   2. profile.install 安装树清单 = 官方栈并集（RUNTIME_PACKAGES ∪ 模板 bundles ∪ core 原生依赖）
 //      ——与 runtime-packages.ts 同源的漂移守卫（apps/host/package.json 已另有 pin）
 //   3. 物化脚本纯函数（合成 anchor 清单 / deps-free app 清单 / 关键文件口径）
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { RUNTIME_PACKAGES, PRODUCT_PLUGIN_PACKAGE_DIRS } from '../../apps/host/src/profile/runtime-packages.js'
-import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages } from '../../scripts/assemble-installer-resources.mjs'
+import { buildAppManifest, buildRuntimeAnchorManifest, presetCarriedPlugins, requiredKeyFiles, stagedProductPackages, stagingExtrasDrift } from '../../scripts/assemble-installer-resources.mjs'
 import { PRODUCT_PLUGINS } from '../../packages/contracts/src/product-plugins.js'
 import { createElectronBuilderConfig } from '../../electron-builder.config.mjs'
 
@@ -369,5 +370,103 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(PRODUCT_PLUGINS['knowledge'], 'knowledge 配置应为关（userLayerRow:false + staged:false kill-switch）').toEqual({ userLayerRow: false, staged: false })
     expect(stagedPackages.has('knowledge'), 'knowledge 应暂缺席 staging（推导制下无种子 + kill-switch 双保险）').toBe(false)
     expect(KEY_FILES.some((rel) => rel.includes('@dsh-forge/knowledge')), '关键文件口径不应含 knowledge 行（暂不开放）').toBe(false)
+  })
+})
+
+describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——stage()/--check 双接线 fail-loud）', () => {
+  /** fixture 根：临时目录 + 空 presets 目录（presetCarriedPlugins 扫描域） */
+  const makeFixtureRoot = () => {
+    const root = mkdtempSync(join(tmpdir(), 'staging-extras-guard-'))
+    mkdirSync(join(root, 'apps/host/src/profile/presets'), { recursive: true })
+    return root
+  }
+  /** fixture 插件包（userLayerRow 种子——绕开预设底稿扫描） */
+  const makePlugin = (root: string, opts: { skills?: boolean; patchDeclared?: boolean; patchFile?: boolean }) => {
+    const dir = join(root, 'packages/plugins/fake-plugin')
+    mkdirSync(dir, { recursive: true })
+    if (opts.skills === true) {
+      mkdirSync(join(dir, 'skills', 'demo'), { recursive: true })
+      writeFileSync(join(dir, 'skills', 'demo', 'SKILL.md'), 'demo\n', 'utf8')
+    }
+    if (opts.patchDeclared === true) {
+      if (opts.patchFile !== false) writeFileSync(join(dir, 'cordis.patch.yml'), 'services:\n', 'utf8')
+    }
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({
+        name: '@dsh-forge/fake-plugin',
+        version: '0.1.0',
+        ...(opts.patchDeclared === true ? { dsh: { bundle: { patch: './cordis.patch.yml' } } } : {}),
+      }),
+      'utf8',
+    )
+  }
+  const FIXTURE_PLUGINS = { 'fake-plugin': { userLayerRow: true } }
+
+  it('正例：已声明插件（skills/ + dsh.bundle.patch 文件均在 STAGING_EXTRAS 登记）→ 零漂移', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { skills: true, patchDeclared: true })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {
+        'fake-plugin': { files: ['skills', 'cordis.patch.yml'], keyFiles: ['skills/demo/SKILL.md'] },
+      })
+      expect(drift).toEqual([])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（漏声明）：未声明插件带 skills/ 面 → 漂移报出包名与遗漏路径（bug c85c157c/dd76f14c 病理面）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { skills: true, patchDeclared: true })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {})
+      expect(drift.some((p) => p.includes('fake-plugin') && p.includes('skills')), `实际存在 skills/ 未声明：${drift.join('; ')}`).toBe(true)
+      expect(drift.some((p) => p.includes('fake-plugin') && p.includes('cordis.patch.yml')), `dsh.bundle.patch 未声明：${drift.join('; ')}`).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（声明失真）：STAGING_EXTRAS 声明指向不存在的目录/文件 → 漂移报出缺失路径', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, {})
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, {
+        'fake-plugin': { files: ['experts'], keyFiles: ['experts/ghost.md'] },
+      })
+      expect(drift.some((p) => p.includes('files 声明 experts') && p.includes('不存在')), drift.join('; ')).toBe(true)
+      expect(drift.some((p) => p.includes('keyFiles 声明 experts/ghost.md') && p.includes('不存在')), drift.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('反例（patch 失真）：dsh.bundle.patch 声明指向的文件盘上缺席 → 漂移（且 patch 未声明入 files 时漏随包条目同时在案）', () => {
+    const root = makeFixtureRoot()
+    try {
+      makePlugin(root, { patchDeclared: true, patchFile: false })
+      const drift = stagingExtrasDrift(FIXTURE_PLUGINS, root, { 'fake-plugin': { files: ['cordis.patch.yml'], keyFiles: [] } })
+      expect(drift.some((p) => p.includes('cordis.patch.yml') && p.includes('不存在')), drift.join('; ')).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('现值绿锚：真实仓 staged 集零漂移（stagedProductPackages × STAGING_EXTRAS 现值自洽）', () => {
+    expect(stagingExtrasDrift(PRODUCT_PLUGINS)).toEqual([])
+  })
+
+  it('接线 fail-loud：stage()（assertPreconditions）与 --check（check()）均消费守卫', () => {
+    const source = readFileSync(join(ROOT, 'scripts', 'assemble-installer-resources.mjs'), 'utf8')
+    const callAt = (from: number) => source.indexOf('  assertExtrasDrift(plugins)', from) // 两空格缩进——排除 stagingExtrasDrift 子串误配
+    const first = callAt(0)
+    const second = callAt(first + 1)
+    expect(first, '守卫接线缺席').toBeGreaterThan(-1)
+    expect(second, 'stage 与 --check 须双接线（只接一处即另一路径漏守）').toBeGreaterThan(-1)
+    const stageCallSite = source.slice(source.indexOf('function assertPreconditions'), first)
+    const checkCallSite = source.slice(source.indexOf('async function check('), second)
+    expect(stageCallSite).toContain('function assertPreconditions')
+    expect(checkCallSite).toContain('async function check(')
   })
 })

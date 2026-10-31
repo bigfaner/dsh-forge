@@ -78,6 +78,8 @@ const STAGING_EXTRAS = {
   'expert-squad': { files: ['experts', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
+/** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
+const CONVENTION_DIRS = ['skills', 'skills-blitz', 'experts']
 
 /** 包短名 → packages/ 子路径（平铺优先；plugins/ 子居所探测——md-mermaid 先例；缺席 undefined） */
 function packageDirOf(root, short) {
@@ -133,6 +135,63 @@ export function stagedProductPackages(plugins, root = ROOT) {
     out[dir] = ['package.json', 'dist', ...(STAGING_EXTRAS[short]?.files ?? [])]
   }
   return out
+}
+
+/**
+ * STAGING_EXTRAS 白名单自动比对守卫（漂移双向 fail-loud，返回问题清单——空 = 无漂移）：
+ * 对 stagedProductPackages 推导出的每个 staged 包，扫描 packages/<dir> 内实际存在的
+ * 「额外物化面」（约定资源目录 skills/skills-blitz/experts + package.json
+ * dsh.bundle.patch 指向的补丁文件），与 STAGING_EXTRAS 声明集双向比对：
+ *   ① 实际存在而未声明 → 漏随包（bug c85c157c/dd76f14c 类别：新插件带 extras 面
+ *      未登记即安装版静默缺失）——报出包名与遗漏路径；
+ *   ② 声明指向不存在（files/keyFiles 条目、patch 文件盘上缺席）→ 声明失真——报出路径。
+ * stage() 与 --check 均消费本守卫（assertExtrasDrift fail-loud）。
+ * 守护测试：tests/structure/installer-pipeline.test.ts STAGING_EXTRAS 漂移守卫段。
+ */
+export function stagingExtrasDrift(plugins, root = ROOT, extras = STAGING_EXTRAS) {
+  const problems = []
+  for (const dir of Object.keys(stagedProductPackages(plugins, root))) {
+    const short = dir.split('/').pop()
+    const pkgRoot = join(root, 'packages', dir)
+    const entry = extras[short]
+    const declared = new Set(entry?.files ?? [])
+    const manifest = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
+    const patch = manifest.dsh?.bundle?.patch
+    for (const convention of CONVENTION_DIRS) {
+      const dirPath = join(pkgRoot, convention)
+      if (existsSync(dirPath) && readdirSync(dirPath).length > 0 && !declared.has(convention)) {
+        problems.push(`packages/${dir}：实际存在 ${convention}/ 但 STAGING_EXTRAS['${short}'].files 未声明（漏随包）`)
+      }
+    }
+    if (patch !== undefined) {
+      const rel = patch.replace(/^\.\//, '')
+      if (!declared.has(rel)) {
+        problems.push(`packages/${dir}：package.json dsh.bundle.patch=${patch} 但 STAGING_EXTRAS['${short}'].files 未声明（漏随包）`)
+      }
+      if (!existsSync(join(pkgRoot, rel))) {
+        problems.push(`packages/${dir}：dsh.bundle.patch=${patch} 指向的文件不存在`)
+      }
+    }
+    for (const file of entry?.files ?? []) {
+      if (!existsSync(join(pkgRoot, file))) {
+        problems.push(`STAGING_EXTRAS['${short}'].files 声明 ${file} 但 packages/${dir}/${file} 不存在`)
+      }
+    }
+    for (const file of entry?.keyFiles ?? []) {
+      if (!existsSync(join(pkgRoot, file))) {
+        problems.push(`STAGING_EXTRAS['${short}'].keyFiles 声明 ${file} 但 packages/${dir}/${file} 不存在`)
+      }
+    }
+  }
+  return problems.sort()
+}
+
+/** 守卫接线（stage/--check 共用）：漂移非空即 fail-loud 报出全部问题路径 */
+function assertExtrasDrift(plugins) {
+  const problems = stagingExtrasDrift(plugins)
+  if (problems.length > 0) {
+    fail(`STAGING_EXTRAS 白名单漂移（实际物化面 ≠ 声明集）：\n  ${problems.join('\n  ')}`)
+  }
 }
 
 /**
@@ -261,6 +320,7 @@ function assertPreconditions(plugins) {
     }
   }
   for (const [path, remedy] of wants) if (!existsSync(path)) fail(`${path} 未就位 —— 先执行：${remedy}`)
+  assertExtrasDrift(plugins) // STAGING_EXTRAS 漂移守卫——漏声明/失真声明在物化前 fail-loud
 }
 
 /** 拷贝一棵子树并返回文件数/字节（供 manifest 记账）。 */
@@ -397,7 +457,9 @@ function checkKeyFiles(root, appDistRoot, keyFiles) {
 }
 
 async function check(root = STAGING, appDistRoot = join(ROOT, 'release', 'app')) {
-  const problems = checkKeyFiles(root, appDistRoot, requiredKeyFiles(await loadProductPlugins()))
+  const plugins = await loadProductPlugins()
+  assertExtrasDrift(plugins) // --check 同口径：源树声明漂移即红（与 stage() 共用守卫）
+  const problems = checkKeyFiles(root, appDistRoot, requiredKeyFiles(plugins))
   if (problems.length > 0) {
     console.error(`CHECK FAILED: ${problems.join('; ')}`)
     process.exit(1)
