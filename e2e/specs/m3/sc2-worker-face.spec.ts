@@ -70,6 +70,10 @@ test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化�
     expect(specEntries, 'spec 包无 git-commit（拆包后移除断言）').not.toContain('git-commit')
 
     // ── ③ Forge设置 单写者数据面：set → {userData}/forge-settings.json 落盘 + get 回读一致 ──
+    // [废弃注记：worker 段 UI 写径与机械读取径已随 expert-squad-default-routing AC4 退役
+    // ——agentOptions 组装改经 expert-squad experts 服务折叠承载，不再消费 forge-settings
+    // worker 段。本段仅作通用 forge:settings/set 通道落盘/回读数据面演练保留；worker 段
+    // 写入后旧值残留文件但失效。]
     const WORKER = { provider: 'deepseek', model: 'e2e-sc2-worker-model', reasoning: 'high' as const }
     await forgeInvoke(page, SETTINGS_CHANNELS.set, { worker: WORKER })
     const settingsFile = join(userData, 'forge-settings.json')

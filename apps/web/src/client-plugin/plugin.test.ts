@@ -161,8 +161,8 @@ function fakeSidebarRightTabs(): ForgeSidebarRightTabsService & {
   }
 }
 
-/** 假 ctx：slots 收集 inject/register，八服务经 get 递达（reflect 可注入——m3.1 D25
- *  loadModelCatalog 惰性反射面测试）。D45 sessionFaces：uiWorkspace 会话行动作面 +
+/** 假 ctx：slots 收集 inject/register，八服务经 get 递达（reflect 可注入——bug 组
+ *  inputTriggers 惰性反射面测试）。D45 sessionFaces：uiWorkspace 会话行动作面 +
  * sessions.using 可注入（缺省缺席 = 注入面键缺席——面板对应项不呈现的测试面）。 */
 function fakeClientCtx(
   reflect?: { readonly get: (name: string) => unknown },

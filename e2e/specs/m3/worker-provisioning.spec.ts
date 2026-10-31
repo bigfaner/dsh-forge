@@ -30,8 +30,10 @@
 // 诚实映射 / 交叉引用（无 e2e 通道或已有承载面——不伪造断言）：
 //   - Step1 表单三态（unconfigured ⚠ 占位 + 保存禁用 / 填齐激活 / 保存失败留场重试）：
 //     官方设置对话框开启通道在 e2e 无先例锚（本仓零 spec 曾开官方设置面——ui-settings
-//     属上游设置域）→ ForgeSettingsSection.test.tsx（AC3/AC4 全相位表单承载）；
-//     持久化数据面 → sc2-worker-face.spec.ts ③（set → forge-settings.json 落盘 + get 回读）；
+//     属上游设置域）→ expert-squad settings-default-options.test.ts（配置 tab 表单相位
+//     承载——Forge设置 worker 小节已随 expert-squad-default-routing AC4 退役）；
+//     持久化数据面 → sc2-worker-face.spec.ts ③（worker 写径已退役——见该 spec ③
+//     废弃注记）；
 //     config-timing-boundary（在途 worker 保持旧档/新 worker 用新档——agentOptions 在
 //     spawn 时点合成）→ dogfood-sc-m3.spec.ts（真实 spawn 面）；
 //   - Step2（spawn 携带 agentOptions、优先于父会话继承、worker 会话 model = 配置档）：

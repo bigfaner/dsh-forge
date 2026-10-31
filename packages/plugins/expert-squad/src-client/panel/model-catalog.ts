@@ -1,8 +1,8 @@
 // panel/model-catalog —— 「设置>模型」目录读缝（provider/model 选项值源）：
 // 惰性 ctx.reflect.get('remote.session')（'remote' 嵌套双径）→ modelCatalog() 解信封
-// → [{provider, models}]。apps/web client-plugin m3.1 D25 同径先例（ForgeSettingsSection
-// Provider/Model 下拉同源）——缺席/调用拒绝/信封失败 = undefined，组件面回退纯文本输入
-// 语义（FilterSelect box 显当前值），不炸 Dialog。
+// → [{provider, models}]。apps/web client-plugin reflectServiceGet 同径先例（惰性
+// fail-soft 取法——inputTriggers 注册面同径）；缺席/调用拒绝/信封失败 = undefined，
+// 组件面回退纯文本输入语义（FilterSelect box 显当前值），不炸 Dialog。
 
 /** 目录条目（官方 ModelCatalog groups 切片——bundle 自持禁跨包 import）。 */
 export interface ModelCatalogEntry {

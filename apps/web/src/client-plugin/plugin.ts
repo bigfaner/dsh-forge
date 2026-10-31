@@ -19,9 +19,9 @@
 //     相位锚 + hero 面板驱动 + 知识模式右栏联动面 + 派发任务悬浮面板宿主[m3.1 D5/D6：
 //     会话头挂接 pill 自 conversation.session.header.actions 槽位卸载退役——监视面迁
 //     对话列内浮层，经 ShellHost 常驻树直挂]）。
-//   - `settings.section` 'dswf-forge-settings'（官方 ui-settings SettingsRoot 分区 roster
-//     ——list 槽：4.7 Integration #4，UF-2 Forge设置 分区[通用设置正下方 order 5]；分区
-//     本体 = 4.5 组件经壳 bundle 发布面递达，打开/关闭/Esc 生命周期恒归官方对话框）。
+//   - `settings.section`：产品占用 'dswf-forge-settings'（UF-2 Forge设置 分区）已随
+//     expert-squad-default-routing AC4 退役——配置主权归 expert-squad 配置 tab；本洞位
+//     仅保留于看门计数洞位清单（SETTINGS_SECTION_SLOT——官方行计入基线）。
 //   - `tool.call.toolview` keyed 'dispatchTask'（官方 ui-tool 原子工具行 keyed 槽——业务
 //     工具视图正径[上游 README「注册业务工具视图」，ui-skill 同型先例]：对话工具行摘要段
 //     = source_slug 容器标识 + 结算后任务键后缀——2026-10-09 用户实机报障收口，官方通用
