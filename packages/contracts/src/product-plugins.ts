@@ -40,6 +40,13 @@ export interface ProductPluginSwitch {
  */
 export const PRODUCT_PLUGINS: Readonly<Record<string, ProductPluginSwitch>> = {
   core: { userLayerRow: true },
+  // expert-squad（2026-10-31 打包 404 fix，bug 3afa0723）：专家管理面板 client 半随 web
+  // 壳无条件构建（vite emitPluginBundle），host 半却三条 staging 种子全不可达（无预设
+  // 组合专行——hr.patch 钉死「全局单实例注册、各组合统一继承」；无 userLayerRow；零
+  // @dsh-forge 依赖无闭包径）→ 安装版 runtime 缺包，/api/expert-squad/* 全 404。
+  // userLayerRow: true = 全局装载（管理工具面非 forge 管线面，不违标准模式零 forge 裁决），
+  // 同时作为 staging 种子随包；experts/ 内置层目录随包由 STAGING_EXTRAS 承担。
+  'expert-squad': { userLayerRow: true },
   // 打包形态发货覆写（2026-10-18 安装版启动崩 fix）：host dist ipc/worktree-rpc 静态
   // import 本包——缺席即安装版主进程 ERR_MODULE_NOT_FOUND 启动即崩。三径种子
   // （userLayerRow/预设/依赖闭包）均不可达（本包零 @dsh-forge 依赖），故 staged:true

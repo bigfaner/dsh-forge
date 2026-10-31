@@ -69,6 +69,9 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 const STAGING_EXTRAS = {
   'plugin-forge': { files: ['skills', 'skills-blitz'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
+  // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
+  // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
+  'expert-squad': { files: ['experts'], keyFiles: ['experts/code-reviewer.md'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 

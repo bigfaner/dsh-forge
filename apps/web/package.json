@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "前端：自有 vite 入口 + dsh-client-web 壳内核；三区工作台 + 产品 client 插件（只调 RPC 不含写逻辑，禁 import core/knowledge）。",

@@ -130,6 +130,7 @@ describe('AC2 profile.install 安装树清单 = 运行时并集（漂移守卫�
     '@deepseek-ai/dsh-web-app': '0.2.0-rc.2',
     '@deepseek-ai/dsh-session': '0.2.0-rc.2', // @dsh-forge/plugin-forge 原生依赖（bug 62211111 同类——progress/dist 静态 import 面）
     'better-sqlite3': '13.0.3', // @dsh-forge/core 原生依赖（prebuilds 随包分发）
+    'chokidar': '5.0.0', // @dsh-forge/expert-squad 原生依赖（bug 62211111 同类——档案热刷新 watch 面）
     'gray-matter': '4.0.3',
     'mermaid': '12.1.0', // @dsh-forge/md-mermaid 原生依赖（bug 62211111——staging 闭包只追 @dsh-forge/*，外部依赖经本清单随包物化）
   }
@@ -244,8 +245,9 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   )
 
   it('staging 集合自动推导：种子（行插件 + 预设携带 + staged:true）∪ @dsh-forge/* 依赖闭包——contracts/path-key 闭包成员自动入场，新增产品包零配置', () => {
-    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid/expert-squad——远征/突击/HR 组合行）
-    expect(presetCarriedPlugins()).toEqual(['expert-squad', 'md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
+    // 预设携带面真源 = 底稿文件扫描（plugin-forge/-spec/md-mermaid——远征/突击组合行；
+    // expert-squad 不在预设底稿——用户层全局行装载，见 PRODUCT_PLUGINS expert-squad 行）
+    expect(presetCarriedPlugins()).toEqual(['md-mermaid', 'plugin-forge', 'plugin-forge-spec'])
     // 闭包成员自动入场（e791a46 病理：path-key 漏列致打包形态 ESM 解析断裂——推导制下结构性消除）
     // git-worktree = staged:true 覆写种子（2026-10-18 安装版启动崩 fix：host dist 静态 import 面）
     expect(Object.keys(stagedProductPackages(PRODUCT_PLUGINS)).sort()).toEqual(
