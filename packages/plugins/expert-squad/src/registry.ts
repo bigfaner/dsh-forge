@@ -60,6 +60,8 @@ export type ExpertEntry = ExpertRecord & {
   enabled: boolean;
   /** 来源文件 mtime（ISO-8601——面板卡片更新时间页脚数据源）。 */
   updatedAt: string;
+  /** 来源文件绝对路径——同键同 origin 可有多份（多插件注册同键内置），条目身份键。 */
+  sourcePath: string;
 };
 
 /**
@@ -199,7 +201,7 @@ function visible(disabled: boolean, includeDisabled?: boolean): boolean {
   return !disabled || includeDisabled === true;
 }
 
-/** ScannedExpert → ExpertEntry（剥离扫描层 filePath，附加 enabled）。 */
+/** ScannedExpert → ExpertEntry（附加 enabled；sourcePath 透传为条目身份键）。 */
 function buildEntry(scanned: ExpertSnapshot["experts"] extends ReadonlyMap<string, infer V> ? V : never, enabled: boolean): ExpertEntry {
   return {
     name: scanned.name,
@@ -213,6 +215,7 @@ function buildEntry(scanned: ExpertSnapshot["experts"] extends ReadonlyMap<strin
     origin: scanned.origin,
     enabled,
     updatedAt: scanned.updatedAt,
+    sourcePath: scanned.filePath,
   };
 }
 

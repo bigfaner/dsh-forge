@@ -24,6 +24,8 @@ export interface ExpertView {
   readonly updatedAt?: string
   /** 生效位（1.60）：true/缺席 = 遮蔽胜出层；false = 被遮蔽层（只读展示）。 */
   readonly effective?: boolean
+  /** 来源文件绝对路径（条目身份键——同键同 origin 可有多份内置注册）。 */
+  readonly sourcePath?: string
 }
 
 /** 状态过滤枚举（F1：全部/启用/禁用）。 */

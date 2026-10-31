@@ -416,7 +416,7 @@ describe("ExpertGroupView 差异入口（⑤——内联对比退役）", () => 
     expect(html).toContain('aria-label="对比 code-reviewer 其它来源"');
   });
 
-  it("bug f4020406 ④（承继）：卡内对比点击回调 = (key, 首个被遮蔽 origin)", () => {
+  it("bug f4020406 ④（承继）：卡内对比回调以展示层被遮蔽 origin 为靶；来源 chip 为可点按钮", () => {
     const group = {
       key: "code-reviewer",
       effective: entry({ origin: "user", effective: true, title: "用户评审" }),
@@ -430,8 +430,9 @@ describe("ExpertGroupView 差异入口（⑤——内联对比退役）", () => 
         onCompare: (key, origin) => calls.push([key, origin]),
       }),
     );
-    // 卡角标具名（生效卡 origin=user——来源角标随卡）
-    expect(html).toContain(">用户</span>");
+    // 来源 chip = 可点按钮（multi caret 在场——文本节点不再以 </span> 收口）
+    expect(html).toContain("xc-origin-switch");
+    expect(html).toContain("xc-origin-caret");
     expect(calls).toEqual([]);
   });
 

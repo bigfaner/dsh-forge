@@ -617,9 +617,9 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain("工具（子会话强制生效）");
     expect(html).toContain("技能"); // 1.69 裁决：详情 Dialog「技能标签」→「技能」
     expect(html).toContain('class="chip tool"');
-    // 派发路由：头部右上角 chip 组（缺省 = 「继承父Agent」弱化 chip；body 无段）
+    // 派发路由：头部右上角 chip 组（缺省 = 「model : 继承父Agent」弱化 chip；body 无段）
     expect(html).toContain('data-dswf-dlg-route=""');
-    expect(html).toContain(">继承父Agent</span>");
+    expect(html).toContain(">model : 继承父Agent</span>");
     expect(html).not.toContain("派发路由（Provider · Model）");
     const pairedCtl = new ExpertDetailController(noMutations());
     pairedCtl.open(entry({ provider: "deepseek", model: "reasoner" }));

@@ -303,8 +303,13 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   }, [dialogOpen, props.modelCatalogLoader])
 
   const onCardActivate = useCallback(
-    (key: string) => {
-      const expert = controller?.getSnapshot().entries.find((entry) => entry.name === key)
+    (key: string, origin?: string) => {
+      const entries = controller?.getSnapshot().entries ?? []
+      // 来源保持展示：shadow 展示态点卡 = 开其所在层档案（缺席回落生效层）
+      const expert =
+        (origin !== undefined
+          ? entries.find((entry) => entry.name === key && entry.origin === origin)
+          : undefined) ?? entries.find((entry) => entry.name === key)
       if (expert !== undefined) detailController?.open(expert)
     },
     [controller, detailController],
@@ -418,7 +423,8 @@ export interface ExpertPanelProps {
   /** 项目具名（④：workspace 路径 basename——来源选项/角标具名「项目 · <名>」）。 */
   readonly projectName?: string
   readonly onRetry?: () => void
-  readonly onCardActivate?: (key: string) => void
+  /** 点卡片 = 请求打开详情 Dialog（key + 当前展示来源——shadow 展示态开其所在层档案）。 */
+  readonly onCardActivate?: (key: string, origin?: string) => void
   readonly onSummon?: () => void
   /** 召唤在途（防重——钮禁用态）。 */
   readonly summonBusy?: boolean
@@ -453,37 +459,91 @@ function OriginBadge({ origin, projectName }: { readonly origin: string; readonl
   return <span className={`origin-badge origin-${origin}`}>{originLabel(origin, projectName)}</span>
 }
 
-function Card({ expert, projectName, onActivate, onCompare }: { readonly expert: ExpertView; readonly projectName?: string; readonly onActivate?: (key: string) => void; readonly onCompare?: () => void }): ReactNode {
+/** 来源条目身份键（sourcePath——同键同 origin 可有多份内置注册，origin 不足以区分）。 */
+const entryIdOf = (entry: ExpertView): string => entry.sourcePath ?? `${entry.origin}:${entry.name}`
+
+function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, menuOpen, onToggleMenu, onSelectOrigin }: {
+  /** 当前展示条目（selectedId 对应层；缺省 = 生效层）。 */
+  readonly expert: ExpertView;
+  /** 同键全来源条目（生效 + 被遮蔽——来源下拉选项）。 */
+  readonly allEntries: readonly ExpertView[];
+  readonly projectName?: string;
+  readonly onActivate?: (key: string, origin?: string) => void;
+  readonly onCompare?: () => void;
+  /** 多来源（对比钮 + 来源 chip 可点击下拉的呈现开关）。 */
+  readonly multi?: boolean;
+  readonly menuOpen?: boolean;
+  readonly onToggleMenu?: () => void;
+  readonly onSelectOrigin?: (origin: string | undefined) => void;
+}): ReactNode {
   const updated = updatedLabel(expert.updatedAt)
-  // bug f4020406 ②：data-effective 在本组件恒 "true"——Card 仅渲染生效卡（聚组 shadow 行走
-  // 卡内对比钮），保留属性作生效形态的测试/样式选择器锚，不承载分支语义。
   return (
     <article
       className={`dswf-xcard${expert.enabled ? "" : " off"}`}
       data-expert-key={expert.name}
+      data-xc-origin={expert.origin}
       data-effective={expert.effective === false ? "false" : "true"}
       role="button"
       tabIndex={0}
-      onClick={() => onActivate?.(expert.name)}
+      onClick={() => onActivate?.(expert.name, expert.origin)}
     >
       <div className="xc-head">
         <ExpertIcon size={16} />
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
-        <OriginBadge origin={expert.origin} projectName={projectName} />
-        {onCompare === undefined ? null : (
+        {/* 右侧组贴紧统一靠右：对比钮（多来源）紧挨来源 chip（多来源 = 可点击下拉切来源展示） */}
+        <span className="xc-head-right" data-xc-origin-root={multi ? "" : undefined}>
+          {multi && onCompare !== undefined ? (
+            <button
+              type="button"
+              className="dswf-btn dswf-btn-ghost xc-cmp-btn"
+              aria-label={`对比 ${expert.name} 其它来源`}
+              onClick={(event) => {
+                event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
+                onCompare();
+              }}
+            >
+              对比
+            </button>
+          ) : null}
           <button
             type="button"
-            className="dswf-btn dswf-btn-ghost xc-cmp-btn"
-            aria-label={`对比 ${expert.name} 其它来源`}
+            className={`origin-badge origin-${expert.origin}${multi ? " xc-origin-switch" : ""}`}
+            data-xc-origin-switch={multi ? "" : undefined}
+            aria-label={`来源 ${originLabel(expert.origin, projectName)}`}
+            aria-expanded={multi ? menuOpen === true : undefined}
             onClick={(event) => {
-              event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
-              onCompare();
+              if (!multi) return; // 单来源 chip 纯展示
+              event.stopPropagation();
+              onToggleMenu?.();
             }}
           >
-            对比
+            {originLabel(expert.origin, projectName)}
+            {multi ? <span className="xc-origin-caret" aria-hidden="true">▾</span> : null}
           </button>
-        )}
+        </span>
+        {/* 来源下拉（多来源：向下扩展列全部来源，选中即卡内切换展示该来源专家） */}
+        {multi && menuOpen ? (
+          <div className="xc-origin-menu" data-xc-origin-menu="" onClick={(event) => event.stopPropagation()}>
+            {allEntries.map((entry) => (
+              <button
+                key={entryIdOf(entry)}
+                type="button"
+                className={`xc-origin-opt${entryIdOf(entry) === entryIdOf(expert) ? " sel" : ""}`}
+                data-xc-origin-option={entryIdOf(entry)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelectOrigin?.(entry.effective === false ? entryIdOf(entry) : undefined);
+                  onToggleMenu?.();
+                }}
+              >
+                <OriginBadge origin={entry.origin} projectName={projectName} />
+                <span className="xc-origin-opt-title">{entry.title}</span>
+                <span className="xc-origin-opt-date">{updatedLabel(entry.updatedAt) ?? ""}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       {/* 第二行：中文名称（岗位）居左 + 派发路由合并 chip 靠右（provider·model 单 chip；
           缺省 = 「model : 继承父Agent」弱化 chip——与详情 Dialog 同语义） */}
@@ -528,13 +588,36 @@ function Card({ expert, projectName, onActivate, onCompare }: { readonly expert:
 }
 
 /**
- * 聚组容器（1.60 用户裁决；差异承载面裁决 2026-10-26 + 本裁决：组头（键 + 来源数 +
- * 隐藏数）→ 生效卡（多来源 = 卡内对比钮）；不再渲染被遮蔽摘要行——版本多时下拉式
- * 行列表不可读，版本切换一律进对比 Dialog 内的 pick-list 单选完成）。
+ * 聚组容器（1.60 用户裁决；差异承载面 2026-10-26 + 来源切换裁决 2026-10-31）：组头
+ * （键 + 来源数 + 隐藏数）→ 单卡承载（多来源 = 卡头「对比」钮紧挨来源 chip，来源 chip
+ * 点击向下扩展全来源菜单，选中即卡内切换展示该来源专家——不再渲染被遮蔽摘要行）。
  */
 export function ExpertGroupView(
-  { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string) => void; readonly onCompare?: (key: string, origin: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
+  { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string, origin?: string) => void; readonly onCompare?: (key: string, origin: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
   const multi = group.shadows.length > 0
+  // 来源切换展示态（undefined = 生效层；身份键 = sourcePath）；被遮蔽条目只读展示
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
+  const [menuOpen, setMenuOpen] = useState(false)
+  // 外点收起（capture 阶段——msel 同径）；菜单/开关内部点击不收起（capture 先于
+  // React root 委托，若不豁免会在 option onClick 前重渲染摘除节点、点击丢失）
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDocClick = (event: Event): void => {
+      const target = event.target as Element | null
+      if (target?.closest?.("[data-xc-origin-root], [data-xc-origin-menu]")) return
+      setMenuOpen(false)
+    }
+    document.addEventListener("click", onDocClick, true)
+    return () => document.removeEventListener("click", onDocClick, true)
+  }, [menuOpen])
+  const shown =
+    selectedId === undefined
+      ? group.effective
+      : ([group.effective, ...group.shadows].find((entry) => entryIdOf(entry) === selectedId) ??
+        group.effective)
+  const allEntries = useMemo(() => [group.effective, ...group.shadows], [group])
+  // 对比 = 生效卡 vs 当前展示的被遮蔽层（展示生效层时取首个被遮蔽层）
+  const compareOrigin = shown.effective === false ? shown.origin : group.shadows[0]?.origin
   return (
     // 「multi」为测试锚（单测 panel-view / e2e expert-squad-compare-mode GROUP_MULTI 选择器），
     // 无样式消费面（.multi 无 CSS 规则）——删类需同步两处选择器
@@ -548,10 +631,21 @@ export function ExpertGroupView(
         )}
       </header>
       <Card
-        expert={group.effective}
+        expert={shown}
+        allEntries={allEntries}
         projectName={projectName}
         {...(onActivate !== undefined ? { onActivate } : {})}
-        {...(multi && onCompare !== undefined ? { onCompare: () => onCompare(group.key, group.shadows[0]!.origin) } : {})}
+        {...(multi && onCompare !== undefined && compareOrigin !== undefined
+          ? { onCompare: () => onCompare(group.key, compareOrigin) }
+          : {})}
+        {...(multi
+          ? {
+              multi,
+              menuOpen,
+              onToggleMenu: () => setMenuOpen((open) => !open),
+              onSelectOrigin: setSelectedId,
+            }
+          : {})}
       />
     </section>
   )

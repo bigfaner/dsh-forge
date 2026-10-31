@@ -469,6 +469,12 @@ function CompareBody({
   const target = state.compareTargetOrigin === undefined
     ? undefined
     : shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
+  // 对比对象消失自动退场：同键已无其它来源（shadows 空）→ 自动回查看态——不留
+  // 「对比对象已不在」死页，对比入口（卡头对比钮）本就随 multi 消失，此处兜底
+  // 打开/展示间隙来源消失的窗口期。
+  useEffect(() => {
+    if (shadows.length === 0) controller.exitCompare();
+  });
   return (
     <>
       <div className="dswf-cmp-pick-head">

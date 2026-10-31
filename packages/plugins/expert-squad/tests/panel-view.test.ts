@@ -186,7 +186,8 @@ describe("ExpertPanel 同键聚组展示（1.60 用户裁决）", () => {
     expect(html).not.toContain("展开对比");
     expect(html).not.toContain("eff-badge"); // 1.68 裁决③：卡片「生效」徽标移除
     expect(html).toContain("origin-project");
-    expect(html).toContain(">项目</span>");
+    // 来源 chip 为可点按钮（multi），不再是被遮蔽摘要行的静态 span
+    expect(html).toContain("xc-origin-switch");
   });
 
   it("被遮蔽摘要行退役：多来源 = 卡内对比钮（点开 Dialog 内切版本）；卡片名后无同名 chip", () => {
