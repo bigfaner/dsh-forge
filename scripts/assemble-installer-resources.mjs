@@ -71,7 +71,9 @@ const STAGING_EXTRAS = {
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
   // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
-  'expert-squad': { files: ['experts'], keyFiles: ['experts/code-reviewer.md'] },
+  // + 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader
+  // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf）
+  'expert-squad': { files: ['experts', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 

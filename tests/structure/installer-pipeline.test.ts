@@ -255,6 +255,26 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     )
   })
 
+  it('bug a1f13abf：声明 dsh.bundle.patch 的插件，组合 patch 文件必随包物化并入 --check 口径（loader 按声明读包内该文件——缺席即 overlay ENOENT）', () => {
+    const staged = stagedProductPackages(PRODUCT_PLUGINS)
+    // 声明面扫描：packages/*/package.json dsh.bundle.patch 指向的文件 ⊆ staging files
+    for (const [dir, files] of Object.entries(staged)) {
+      const manifest = JSON.parse(readFileSync(join(ROOT, 'packages', dir, 'package.json'), 'utf8')) as {
+        dsh?: { bundle?: { patch?: string } }
+      }
+      const declared = manifest.dsh?.bundle?.patch
+      if (declared === undefined) continue
+      const rel = declared.replace(/^\.\//, '')
+      expect(files, `${dir} 声明 dsh.bundle.patch=${declared} 但未随包物化`).toContain(rel)
+      expect(
+        KEY_FILES,
+        `关键文件口径缺席 runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}（--check 不可达）`,
+      ).toContain(`runtime/node_modules/@dsh-forge/${dir.split('/').pop()}/${rel}`)
+    }
+    // 现值锚：expert-squad 是当前唯一声明者（回归锚——声明面丢失即本断言红）
+    expect(staged['plugins/expert-squad']).toContain('cordis.patch.yml')
+  })
+
   it('bug: host dist 静态 @dsh-forge/* import 面 ⊆ staging 闭包（打包形态主进程 ESM 上溯 runtime/node_modules——漏包即 ERR_MODULE_NOT_FOUND 启动崩，2026-10-18 安装版实证 git-worktree）', () => {
     // Root cause 病理：host 主进程新增静态 import（worktree-rpc → @dsh-forge/git-worktree）
     // 而包未入 staging 种子（userLayerRow/预设/依赖闭包三径均不可达——零依赖叶子）。
