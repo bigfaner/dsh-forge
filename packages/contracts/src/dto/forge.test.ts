@@ -314,7 +314,7 @@ describe('AC1 mode 词汇 + ContainerRef + settings DTO 判别（Interface 1 M3 
     expect(DEFAULT_EXPERT_MAPPING['coding-fix']).toBe('bug-hunter')
     expect(DEFAULT_EXPERT_MAPPING['gate']).toBe('gate-keeper')
     expect(DEFAULT_EXPERT_MAPPING['doc']).toBe('tech-writer')
-    expect(DEFAULT_EXPERT_MAPPING['test-run']).toBe('test-runner') // expert-squad-forge-2 验收 6：run-tests 纪律正本随 test-runner（skills 含 run-tests）；test-conductor 影子档案已随专家团去冗删除
+    expect(DEFAULT_EXPERT_MAPPING['test-run']).toBe('test-runner') // expert-squad-forge-2 验收 6：run-tests 技能退役，编排纪律正本随 test-runner 档案；test-conductor 影子档案已随专家团去冗删除
     expect(DEFAULT_EXPERT_MAPPING['validation-ux']).toBe('ui-craftsman')
     expect(DEFAULT_EXPERT_MAPPING['test-gen-journeys']).toBe('test-journey-author')
     expect(DEFAULT_EXPERT_MAPPING['test-gen-contracts']).toBe('test-contract-author')
