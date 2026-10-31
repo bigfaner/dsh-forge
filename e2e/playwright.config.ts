@@ -30,11 +30,14 @@ export default defineConfig({
   outputDir: './test-results',
   use: { trace: 'retain-on-failure' },
   globalSetup: './global-setup.ts',
-  // 双 project（mobile-ui 1.1）：desktop = 既有 electron 走查池（specs/，形态不变）；
+  // 三 project：desktop = 既有 electron 走查池（specs/，形态不变；mobile-ui 1.1 起）；
   // mobile = Chrome 设备模拟池（mobile/，录制回放冒烟——AC 设备描述符：视口 390×844/
-  // 触摸/移动 UA）。互斥 testMatch——零既有 spec 漂移。
+  // 触摸/移动 UA）；desktop-journeys（expert-squad-default-routing fix-1）= 新约定树
+  // tests/<moduleName>/<journey>/ 首个旅程入跑批的 testDir 扩展（testing/core.md 旅程
+  // 树纪律——存量 specs/ 不迁移）。互斥 testMatch——零既有 spec 漂移。
   projects: [
     { name: 'desktop', testMatch: /specs[\\/].+\.spec\.ts$/ },
+    { name: 'desktop-journeys', testDir: '../tests', testMatch: /tests[\\/].+\.spec\.ts$/ },
     {
       name: 'mobile',
       testMatch: /mobile[\\/].+\.spec\.ts$/,
