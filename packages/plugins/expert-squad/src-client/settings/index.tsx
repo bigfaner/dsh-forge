@@ -19,6 +19,8 @@ import {
   draftFoldOnRevision,
   type DefaultOptionsDraft,
 } from "./default-options-logic.js";
+import type { ExpertsEntryPatch } from "../panel/detail-logic.js";
+import type { DetailMutations } from "../panel/detail-source.js";
 
 export {
   EMPTY_DRAFT,
@@ -158,6 +160,43 @@ export function registerDefaultOptionsTab(
     return typeof ctx.effect === "function" ? ctx.effect(watch, "expert-squad: settings tab watch") : watch();
   }
   return mount();
+}
+
+/**
+ * experts.<实例ID> 条目写缝装配（bug 5cf9768e——detail-source DetailMutations.writeExpertsConfig
+ * 的生产注入面，settings 服务 revisioned 正门）：现读快照 experts 映射 → 浅合并本条目
+ * （disabled/skills 位保留；agentOptions/tools 整组替换——条目补丁缺键 = 位摘除，
+ * 「逐项清空 = 键归缺 = 回退档案值」）→ 整字段 set（写落活动 profile cordis.patch.yml
+ * id 定向条目）。namespace 候选序与 tab 注册同源（bug 9577a867）；写未被接受/快照
+ * 不可达 = fail-loud 抛错（保存面 Toast 透出，不静默丢路由覆写）。
+ * 返回 undefined = configForms 缺席（宿主未组 settings 域——旧装配降级，保存走档案径）。
+ */
+export function expertsConfigWriteOf(
+  ctx: { configForms?: unknown },
+): DetailMutations["writeExpertsConfig"] | undefined {
+  const forms = configFormsFaceOf(ctx);
+  if (forms === undefined) return undefined;
+  return async (instanceId: string, entry: ExpertsEntryPatch): Promise<void> => {
+    for (const ns of NAMESPACE_CANDIDATES) {
+      const form = forms.get(ns);
+      const snapshot = form?.getSnapshot();
+      if (form === undefined || snapshot === undefined || snapshot.status !== "ready" || !snapshot.writable) {
+        continue;
+      }
+      const experts = asRecord(asRecord(snapshot.value)?.experts) ?? {};
+      const prior = asRecord(experts[instanceId]) ?? {};
+      // 条目合成：官方配置位（disabled/skills）保留；补丁位整组替换（缺键 = 摘除）
+      const merged: Record<string, unknown> = {};
+      if (typeof prior.disabled === "boolean") merged.disabled = prior.disabled;
+      if (Array.isArray(prior.skills)) merged.skills = prior.skills;
+      if (entry.agentOptions !== undefined) merged.agentOptions = entry.agentOptions;
+      if (entry.tools !== undefined) merged.tools = [...entry.tools];
+      const accepted = await form.set("experts", { ...experts, [instanceId]: merged });
+      if (!accepted) throw new Error(`experts 配置写未被接受（namespace=${ns}）`);
+      return;
+    }
+    throw new Error("experts 配置写缝不可用（configForms 快照不可写）——无法保存 Agent 选项/工具覆写");
+  };
 }
 
 /**

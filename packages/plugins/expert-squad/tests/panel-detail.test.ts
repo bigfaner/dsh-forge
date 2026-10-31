@@ -43,6 +43,7 @@ import {
 } from "../src-client/panel/model-catalog.js";
 import type { ExpertView } from "../src-client/panel/filter.js";
 import { ExpertListController } from "../src-client/panel/list-source.js";
+import { defaultDetailMutations } from "../src-client/panel/expert-panel.js";
 
 function entry(overrides: Partial<ExpertView> = {}): ExpertView {
   return {
@@ -729,6 +730,57 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     await ctl.save();
     expect(payload?.provider).toBe("deepseek");
     expect(payload?.model).toBe("reasoner");
+  });
+});
+
+// ---- writeExpertsConfig 生产装配缝（bug 5cf9768e）----------------------------
+
+describe("writeExpertsConfig 生产装配缝（bug 5cf9768e）", () => {
+  it("defaultDetailMutations：写缝注入后在位并转发；缺席 = 降级形态（缝键不出现）", () => {
+    const writer = async () => {};
+    const withSeam = defaultDetailMutations("/w", writer);
+    expect(withSeam.writeExpertsConfig).toBe(writer);
+    expect(typeof withSeam.update).toBe("function");
+    expect(typeof withSeam.setEnabled).toBe("function");
+    expect(defaultDetailMutations("/w").writeExpertsConfig).toBeUndefined();
+  });
+
+  it("保存分流（缝注入后不再走降级支）：update 载荷不带路由 + 写 experts.<实例ID>", async () => {
+    const writes: [string, unknown][] = [];
+    const fetchMock = vi.fn(async (input: unknown, _init?: { body?: unknown }) => {
+      if (String(input) === "/api/expert-squad/update") {
+        return new Response(JSON.stringify(entry()), { status: 200 });
+      }
+      throw new Error("unexpected fetch: " + String(input));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const mutations = defaultDetailMutations("/w", async (id, patch) => {
+        writes.push([id, patch]);
+      });
+      const ctl = new ExpertDetailController(mutations);
+      ctl.open(entry({ instanceId: "@dsh-forge/expert-squad#code-reviewer" } as Partial<ExpertView> as ExpertView));
+      ctl.startEdit();
+      ctl.setField("provider", "deepseek");
+      ctl.setField("model", "reasoner");
+      await ctl.save();
+      // 配置半：实例 ID 寻址写 experts 条目（保存分流走配置缝径）
+      expect(writes).toEqual([
+        [
+          "@dsh-forge/expert-squad#code-reviewer",
+          { agentOptions: { provider: "deepseek", model: "reasoner" }, tools: ["read", "edit"] },
+        ],
+      ]);
+      // 内容半：update 载荷不带路由字段（路由不混写进档案）
+      const updateBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as { body?: string })?.body));
+      expect("provider" in updateBody).toBe(false);
+      expect("model" in updateBody).toBe(false);
+      expect("reasoning" in updateBody).toBe(false);
+      expect(ctl.getSnapshot().mode).toBe("view");
+      expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

@@ -7,7 +7,7 @@
 // 返回值铁律：apply 必须返回 undefined（cordis 组合把返回值当 effect 消费）。
 import { ExpertPanelApp, ExpertPanelGlyph, type SummonOpener } from "./panel/index.js";
 import { modelCatalogLoaderOf } from "./panel/model-catalog.js";
-import { registerDefaultOptionsTab } from "./settings/index.js";
+import { registerDefaultOptionsTab, expertsConfigWriteOf } from "./settings/index.js";
 import {
   openSummonSession,
   type SummonOutcome,
@@ -136,8 +136,12 @@ function registerExpertPanel(ctx: LazyCtx, slots: SlotsFace): void {
     console.warn("[dsh-forge/expert-squad] ctx.slots.inject absent; panel not mounted");
     return;
   }
+  // experts 条目写缝（bug 5cf9768e）：Dialog 保存的配置半写径——官方 configForms
+  // revisioned 正门（settings/index expertsConfigWriteOf）；缺席 = undefined（props
+  // 缺席 → 旧装配降级，保存走档案径）。
+  const writeExpertsConfig = expertsConfigWriteOf(ctx as { configForms?: unknown })
   slots.inject(MAIN_SLOT, () =>
-    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY, inject: () => ({ summon: summonOpenerOf(ctx), modelCatalogLoader: modelCatalogLoaderOf(ctx) }) }, ExpertPanelApp));
+    safeRegister(slots, { name: MAIN_SLOT, key: PANEL_KEY, inject: () => ({ summon: summonOpenerOf(ctx), modelCatalogLoader: modelCatalogLoaderOf(ctx), ...(writeExpertsConfig !== undefined ? { writeExpertsConfig } : {}) }) }, ExpertPanelApp));
   // 行注册挂 panellist 槽自身的声明缝——ui-sidebar 插件声明该槽后才合法（先注册 = 
   // `slot "sidebar.panellist" is not declared`；web-client registerSlotEntry 同径）。
   slots.inject(PANEL_LIST_SLOT, () =>

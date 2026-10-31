@@ -160,8 +160,16 @@ async function postJson(url: string, body: unknown): Promise<unknown> {
   return response.json();
 }
 
-/** 默认详情变更缝（POST update / enable / disable；返回换新后的档案）。 */
-export function defaultDetailMutations(workspace: string): DetailMutations {
+/**
+ * 默认详情变更缝（POST update / enable / disable；返回换新后的档案）。
+ * writeExpertsConfig（可选，bug 5cf9768e 生产注入面）：experts.<实例ID> 条目写——
+ * 装配侧经官方 configForms revisioned 写径（settings/index expertsConfigWriteOf），
+ * 缺席 = 旧装配降级（保存走既有档案径，detail-source save 分流）。
+ */
+export function defaultDetailMutations(
+  workspace: string,
+  writeExpertsConfig?: DetailMutations["writeExpertsConfig"],
+): DetailMutations {
   return {
     update: async (name, draft) =>
       (await postJson(DETAIL_UPDATE_URL, { workspace, name, ...draft })) as ExpertView,
@@ -170,6 +178,7 @@ export function defaultDetailMutations(workspace: string): DetailMutations {
         workspace,
         key: name,
       })) as ExpertView,
+    ...(writeExpertsConfig !== undefined ? { writeExpertsConfig } : {}),
   };
 }
 
@@ -256,6 +265,11 @@ export interface ExpertPanelAppProps {
   readonly fetchList?: ListFetcher
   /** 详情变更缝（测试/装配注入；缺省 = update/enable/disable POST fetch）。 */
   readonly mutations?: DetailMutations
+  /**
+   * experts.<实例ID> 条目写缝（bug 5cf9768e 生产注入面——装配壳经官方 configForms
+   * revisioned 写径递达；缺席 = 旧装配降级，保存走既有档案径）。
+   */
+  readonly writeExpertsConfig?: DetailMutations["writeExpertsConfig"]
   /** [召唤] 官方会话缝（装配壳 inject face；缺席 = 召唤钮不呈现）。 */
   readonly summon?: SummonOpener
   /** delegate 装配探针（测试注入；缺省 = GET run-state 读口 fetch）。 */
@@ -310,7 +324,10 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
 
   // 详情 Dialog 控制器：变更成功回写列表控制器（卡片即时同步，不待轮询）
   const detailController = useMemo(() => {
-    const base = props.mutations ?? (workspacePath === undefined ? undefined : defaultDetailMutations(workspacePath))
+    const base = props.mutations ??
+      (workspacePath === undefined
+        ? undefined
+        : defaultDetailMutations(workspacePath, props.writeExpertsConfig))
     if (base === undefined) return undefined
     return new ExpertDetailController({
       update: async (name, draft) => {
@@ -323,6 +340,11 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         controller?.patchEntry(updated)
         return updated
       },
+      // 写缝转发（bug 5cf9768e）：控制器包装此前只转发 update/setEnabled——生产缝
+      // 被静默丢弃，Dialog 保存恒走降级支。配置半无回包档案（Promise<void>），直转发。
+      ...(base.writeExpertsConfig !== undefined
+        ? { writeExpertsConfig: (...args: Parameters<NonNullable<DetailMutations["writeExpertsConfig"]>>) => base.writeExpertsConfig!(...args) }
+        : {}),
     })
   }, [props.mutations, workspacePath, controller])
   const detailSubscribe = useCallback(

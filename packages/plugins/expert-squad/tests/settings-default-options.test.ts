@@ -19,6 +19,7 @@ import {
   registerDefaultOptionsTab,
   REASONING_OPTIONS,
   draftFoldOnRevision,
+  expertsConfigWriteOf,
   type ConfigFormMirror,
 } from "../src-client/settings/index.js";
 
@@ -292,5 +293,70 @@ describe("draftFoldOnRevision（快照换代 × 在输编辑）", () => {
 
   it("脏但快照投影已与草稿一致：采纳并归零脏标", () => {
     expect(draftFoldOnRevision(dirtyDraft, dirtyDraft, true)).toEqual({ draft: dirtyDraft, dirty: false });
+  });
+});
+
+// ── experts.<实例ID> 条目写缝装配（bug 5cf9768e：Dialog 保存写径生产注入） ──
+
+describe("expertsConfigWriteOf（experts 条目写缝生产装配）", () => {
+  const mirrorOf = (
+    experts: unknown,
+    setImpl: (field: string, value: unknown) => Promise<boolean> = async () => true,
+  ): ConfigFormMirror => ({
+    getSnapshot: () => ({ status: "ready", value: { experts }, revision: 1, writable: true }),
+    subscribe: () => () => undefined,
+    set: setImpl,
+    unset: async () => true,
+  });
+
+  it("configForms 缺席/形状漂移 = undefined（旧装配降级——保存走档案径）", () => {
+    expect(expertsConfigWriteOf({})).toBeUndefined();
+    expect(expertsConfigWriteOf({ configForms: {} })).toBeUndefined();
+  });
+
+  it("现读 experts 映射浅合并本条目：disabled/skills 位保留，agentOptions/tools 整组替换（补丁缺键 = 位摘除）", async () => {
+    const sets: [string, unknown][] = [];
+    const forms = {
+      get: (ns: string) =>
+        ns === "expert-squad"
+          ? mirrorOf(
+              { "k#1": { disabled: true, skills: ["s"], agentOptions: { provider: "old", model: "old" } } },
+              async (field, value) => {
+                sets.push([field, value]);
+                return true;
+              },
+            )
+          : undefined,
+    };
+    const write = expertsConfigWriteOf({ configForms: forms });
+    expect(write).toBeTypeOf("function");
+    await write!("k#1", { tools: ["read"] });
+    expect(sets).toEqual([["experts", { "k#1": { disabled: true, skills: ["s"], tools: ["read"] } }]]);
+  });
+
+  it("namespace 候选序回退（dsh-forge-expert-squad）；整字段 set 写 experts 映射", async () => {
+    const sets: [string, unknown][] = [];
+    const forms = {
+      get: (ns: string) =>
+        ns === "dsh-forge-expert-squad"
+          ? mirrorOf({}, async (field, value) => {
+              sets.push([field, value]);
+              return true;
+            })
+          : undefined,
+    };
+    await expertsConfigWriteOf({ configForms: forms })!("k", {
+      agentOptions: { provider: "p", model: "m" },
+    });
+    expect(sets).toEqual([["experts", { k: { agentOptions: { provider: "p", model: "m" } } }]]);
+  });
+
+  it("写未被接受（set false）或快照不可达 = fail-loud 抛错（不静默丢路由覆写）", async () => {
+    const rejected = expertsConfigWriteOf({
+      configForms: { get: () => mirrorOf({}, async () => false) },
+    })!;
+    await expect(rejected("k", {})).rejects.toThrow("未被接受");
+    const unreachable = expertsConfigWriteOf({ configForms: { get: () => undefined } })!;
+    await expect(unreachable("k", {})).rejects.toThrow();
   });
 });
