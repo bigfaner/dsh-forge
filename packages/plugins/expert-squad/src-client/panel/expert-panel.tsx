@@ -471,35 +471,35 @@ function Card({ expert, projectName, onActivate, onCompare }: { readonly expert:
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
         <OriginBadge origin={expert.origin} projectName={projectName} />
-        {/* 右侧组：派发路由 chips（成对在场 = provider·model 双 chip；缺省 = 「model :
-            继承父Agent」弱化 chip——与详情 Dialog 同语义）+ 多来源对比钮 */}
-        <span className="xc-head-right">
-          {expert.provider !== undefined && expert.model !== undefined ? (
-            <>
-              <span className="chip tool">{expert.provider}</span>
-              <span className="chip">{expert.model}</span>
-            </>
-          ) : (
-            <span className="chip dswf-chip-muted">model : 继承父Agent</span>
-          )}
-          {onCompare === undefined ? null : (
-            <button
-              type="button"
-              className="dswf-btn dswf-btn-ghost xc-cmp-btn"
-              aria-label={`对比 ${expert.name} 其它来源`}
-              onClick={(event) => {
-                event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
-                onCompare();
-              }}
-            >
-              对比
-            </button>
-          )}
-        </span>
+        {onCompare === undefined ? null : (
+          <button
+            type="button"
+            className="dswf-btn dswf-btn-ghost xc-cmp-btn"
+            aria-label={`对比 ${expert.name} 其它来源`}
+            onClick={(event) => {
+              event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
+              onCompare();
+            }}
+          >
+            对比
+          </button>
+        )}
       </div>
-      <div className="xc-title">
-        {expert.title}
-        {expert.enabled ? "" : " · 已禁用"}
+      {/* 第二行：中文名称（岗位）居左 + 派发路由合并 chip 靠右（provider·model 单 chip；
+          缺省 = 「model : 继承父Agent」弱化 chip——与详情 Dialog 同语义） */}
+      <div className="xc-title-row">
+        <div className="xc-title">
+          {expert.title}
+          {expert.enabled ? "" : " · 已禁用"}
+        </div>
+        <span
+          className={`chip${expert.provider !== undefined && expert.model !== undefined ? " tool" : " dswf-chip-muted"}`}
+          data-xc-route=""
+        >
+          {expert.provider !== undefined && expert.model !== undefined
+            ? `${expert.provider} · ${expert.model}`
+            : "model : 继承父Agent"}
+        </span>
       </div>
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>

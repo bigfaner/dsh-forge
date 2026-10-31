@@ -65,9 +65,11 @@ export const PANEL_CSS = `
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
 .xc-title { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* dsw-raw 灯后文本对齐缩进 */
-/* 卡头右侧组（派发路由 chips + 对比钮）；派发路由行（xc-route 行式）退役——路由信息 chip 化 */
-.xc-head-right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
-.xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
+/* 卡头对比钮（多来源卡——点开对比 Dialog 切换版本）；第二行 = 岗位居左 + 路由合并 chip 靠右 */
+.xc-cmp-btn { margin-left: auto; flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
+.xc-title-row { display: flex; align-items: center; gap: ${T.gap8}; }
+.xc-title-row > .xc-title { flex: 1; }
+.xc-title-row > .chip { flex: none; }
 .xc-creed { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .xc-seg { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
 .xc-tags { display: flex; gap: 6px; flex-wrap: wrap; } /* dsw-raw 原型 chips 间距刻度 */
