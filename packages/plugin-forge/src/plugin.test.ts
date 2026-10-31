@@ -359,10 +359,11 @@ describe('AC5 段注册（forge:pipeline / order 510 + forge:doc-style / order 5
 })
 
 describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——ctx.experts 服务在场性惰性检测）', () => {
-  const commanderTextOf = (rt: TempRuntime, context?: { agent?: { id?: string; session?: { header?: { origin?: string } } } }): string => {
+  type CommanderContext = { agent?: { id?: string; session?: { header?: { origin?: string } } } }
+  const commanderTextOf = (rt: TempRuntime, context?: CommanderContext): string => {
     const section = rt.sections.find((s) => s.name === 'forge:commander')
     expect(typeof section?.text).toBe('function')
-    return (section!.text as (context: typeof context) => string)(context)
+    return (section!.text as (context: CommanderContext | undefined) => string)(context)
   }
 
   it('experts 服务在场：注入指挥者段（委派边界话术在场）', () => {
