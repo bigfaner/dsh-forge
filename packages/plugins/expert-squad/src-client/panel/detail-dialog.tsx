@@ -21,7 +21,7 @@ import {
   TOOL_CANDIDATES,
   type MdInline,
 } from "./detail-logic.js";
-import { maskedPeersLabel, diffFields, entryIdOf, originLabel, type ExpertView } from "./filter.js";
+import { maskedPeersLabel, diffFields, entryIdOf, originBadgeLabel, type ExpertView } from "./filter.js";
 import {
   DiffOnlyToggle,
   PairCompareTable,
@@ -460,7 +460,7 @@ function OriginBar({
     <div className="dswf-dlg-origin-bar" data-dswf-origin-bar="">
       <span className="dswf-dlg-origin-lead">来源</span>
       <span className={`origin-badge origin-${expert.origin}`}>
-        {originLabel(expert.origin, projectName)}
+        {originBadgeLabel(expert, projectName)}
       </span>
       {help === undefined ? null : (
         <span
@@ -520,7 +520,7 @@ function CompareBody({
             data-cmp-target={entryIdOf(shadow)}
             onClick={() => controller.selectCompareTarget(shadow)}
           >
-            <span className={`origin-badge origin-${shadow.origin}`}>{originLabel(shadow.origin, projectName)}</span>
+            <span className={`origin-badge origin-${shadow.origin}`}>{originBadgeLabel(shadow, projectName)}</span>
             <span>{shadow.title}</span>
             <span className="dswf-cmp-opt-updated">{shadow.updatedAt?.slice(0, 10) ?? "随包分发"}</span>
           </button>
