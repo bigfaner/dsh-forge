@@ -191,18 +191,11 @@ export const TOOL_CALL_TOOLVIEW_SLOT = 'tool.call.toolview'
 export const DISPATCH_TASK_TOOL_KEY = 'dispatchTask'
 /**
  * 洞名：官方设置对话框分区 roster（ui-settings SettingsRoot nav 列 + 内容列 only 消费
- * ——list 槽 scope root；4.7 Integration #4）。分区本体自带容器/标题（4.5 组件注入即整节）
- * ——注册零平台 fork（打开/关闭/Esc 生命周期恒归官方对话框）。
+ * ——list 槽 scope root；4.7 Integration #4）。产品占用 Forge设置 分区（worker 小节）已随
+ * expert-squad-default-routing AC4 退役（配置主权归 expert-squad 配置 tab）——产品零占用，
+ * 本键保留 = W4 看门计数洞位清单（官方行计入基线）。
  */
 export const SETTINGS_SECTION_SLOT = 'settings.section'
-/** Forge设置 分区登记 id（nav 行键 = 官方 only 过滤键——「通用设置」= 官方 'general'） */
-export const FORGE_SETTINGS_SECTION_ID = 'dswf-forge-settings'
-/**
- * 分区登记序（list 槽 order 升序）：官方分区 general=0 / models=10 / plugins=15（上游
- * ui-settings-{general,models,plugins} client.js 源码核实）→ 5 = 通用设置正下方、
- * 模型之上（ui-design UF-2 Placement「通用设置分区下方」；DOM 序 = nav 行升序直出）。
- */
-export const FORGE_SETTINGS_SECTION_ORDER = 5
 
 /**
  * 洞名：官方侧栏底行扩展槽（dsh-client-ui-sidebar SlotMap——kind list / scope root，声明
@@ -779,7 +772,6 @@ export interface ForgeViewsGlobal {
     ForgeBugChipRestoreOverlay: unknown
     /** bug 267dcac1：conversation.input.overlay 槽切换闸虚线标记（纯视觉命中锚） */
     ForgeWorktreeSwitchMarker: unknown
-    ForgeSettingsSection: unknown
     ForgeRemoteEntry: unknown
     /** Bug 组行图标件（composer-bug-reference 1.2——自带 IconProps 组件居壳 bundle；缺席 = 行零 icon 键） */
     ForgeBugGlyph?: unknown
@@ -856,8 +848,6 @@ export interface ForgeClientActiveMarker {
   readonly shell?: SlotRegistrationDiagnostics
   /** 右栏 dock tab 族（4.1：两段注册——类型定义[概览/文档两 kind] + keyed body 两键） */
   readonly dock?: SlotRegistrationDiagnostics
-  /** 官方设置对话框分区族（4.7：settings.section——UF-2 Forge设置 分区） */
-  readonly settings?: SlotRegistrationDiagnostics
   /** W4 激活自证（RPC 轻探 + wrap 换芯证据——失败 fail-loud：console.error + 本面呈现） */
   readonly selfCheck?: ClientSelfCheckDiagnostics
 }
@@ -1254,42 +1244,6 @@ function registerEventEntriesNode(ctx: ForgeClientCtx, views: PublishedViews, di
 }
 
 /**
- * 设置分区登记（4.7 Integration #4——M3 UF-2）：官方 ui-settings `settings.section`
- * list 槽新增产品分区行（官方 general=0/models=10/plugins=15 → order 5 = 通用设置正
- * 下方）。占用者 ForgeSettingsSection（壳 bundle 发布件——分区容器/标题/worker 小节
- * 自带，注入即整节；owner share close 由官方壳递达、组件零消费）。组件数据面自足
- * （preload RPC client——forge:settings/get·set 单门读写 core forgeSettings）；
- * m3.1 D25（blitz 1.2 结果性承接）：inject face 递达 loadModelCatalog（Provider/Model
- * 选项值 =「设置>模型」目录）；label 经 locale NS thunk（fix-33 ⑧）。
- * Hard Rule 非 fork 纪律不变：打开/关闭/Esc 生命周期恒归官方设置对话框（仅 slot 注册，
- * 无平台对话框代码复制）。
- */
-function registerSettingsSection(
-  ctx: ForgeClientCtx,
-  views: PublishedViews,
-  t: (key: string) => string,
-  diagnostics: { registered?: string[] },
-): void {
-  registerSlotEntry(ctx, SETTINGS_SECTION_SLOT, diagnostics, () =>
-    ctx.slots.register(
-      {
-        name: SETTINGS_SECTION_SLOT,
-        id: FORGE_SETTINGS_SECTION_ID,
-        order: FORGE_SETTINGS_SECTION_ORDER,
-        locale: FORGE_LOCALE_NS,
-        label: (): string => t('settings.forge'),
-        inject: () => ({
-          // m3.1 D25：模型目录装载器（remote.session.modelCatalog 惰性反射——缺席/失败 =
-          // undefined，组件面静态目录回退）；settings get/set 仍 preload RPC 单门自足
-          loadModelCatalog: buildModelCatalogLoader(ctx),
-        }),
-      },
-      views.ForgeSettingsSection,
-    ),
-  )
-}
-
-/**
  * 底行手机远程入口登记（mobile-remote-approval 1.2/fix-3）：官方 `sidebar.footer.action`
  * 扩展槽（探针点①结论——现成槽位，设置按钮同排）list 行 'dswf-remote'。注入面 = 状态
  * 快照源（产品自有配置 × boot manifest 双源——buildRemoteStatusSource 单源，fix-3 重启
@@ -1633,14 +1587,6 @@ export function registerBugReferenceSource(
   return source
 }
 
-/** 目录条目形状（组件面 WorkerProviderEntry 结构同型——bundle 自持纪律禁跨 chunk import） */
-interface ModelCatalogEntry {
-  readonly provider: string
-  readonly models: readonly string[]
-  /** 模型 → 支持的推理档位 id 集（models[].reasoning.efforts[].id——档位兼容过滤能力面） */
-  readonly modelEfforts?: Readonly<Record<string, readonly string[]>>
-}
-
 /** unknown → 对象窄化（缺席/非对象 = undefined） */
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -1654,71 +1600,6 @@ function reflectServiceGet(ctx: ForgeClientCtx, name: string, strict = true): un
     return reflect?.get(name, strict)
   } catch {
     return undefined
-  }
-}
-
-/**
- * RemoteResult 信封解包（m3.1 D25）：`{ok:true, value:{groups:[{id, models:[{id}]}]}}`
- * → `[{provider, models}]`（provider = 路由 id，官方模型选择器同源口径）；他形（!ok /
- * 缺 groups）= undefined——组件面静态目录回退。
- * m3.1 逻辑修复：models[].reasoning.efforts[].id 透传为 modelEfforts（档位兼容过滤
- * 能力面——信封未携带该模型能力 = 不记该键，组件面不过滤不判）。
- */
-function mapModelCatalogEnvelope(envelope: unknown): readonly ModelCatalogEntry[] | undefined {
-  const result = asRecord(envelope)
-  if (result === undefined || result['ok'] !== true) return undefined
-  const groups = asRecord(result['value'])?.['groups']
-  if (!Array.isArray(groups)) return undefined
-  const entries: ModelCatalogEntry[] = []
-  for (const group of groups) {
-    const record = asRecord(group)
-    const provider = typeof record?.['id'] === 'string' ? record['id'] : undefined
-    if (provider === undefined || provider === '') continue
-    const models: string[] = []
-    const modelEfforts: Record<string, readonly string[]> = {}
-    let hasEfforts = false
-    if (Array.isArray(record?.['models'])) {
-      for (const model of record['models']) {
-        const modelRecord = asRecord(model)
-        const id = modelRecord?.['id']
-        if (typeof id !== 'string' || id === '') continue
-        models.push(id)
-        const effortsRecord = asRecord(modelRecord?.['reasoning'])
-        if (Array.isArray(effortsRecord?.['efforts'])) {
-          const efforts = effortsRecord['efforts'].flatMap((effort) => {
-            const effortId = asRecord(effort)?.['id']
-            return typeof effortId === 'string' && effortId !== '' ? [effortId] : []
-          })
-          if (efforts.length > 0) {
-            modelEfforts[id] = efforts
-            hasEfforts = true
-          }
-        }
-      }
-    }
-    entries.push(hasEfforts ? { provider, models, modelEfforts } : { provider, models })
-  }
-  return entries
-}
-
-/**
- * 模型目录装载器（m3.1 D25 = blitz 1.2 结果性承接）：惰性 ctx.reflect.get('remote.session')
- * （'remote' 嵌套双径）→ modelCatalog() 解信封 → [{provider, models}]。服务缺席 / 调用
- * 拒绝 / 信封失败 = resolve(undefined)——组件面静默回退静态目录，不炸设置分区装载。
- */function buildModelCatalogLoader(
-  ctx: ForgeClientCtx,
-): () => Promise<readonly ModelCatalogEntry[] | undefined> {
-  return () => {
-    const sessionSvc =
-      asRecord(reflectServiceGet(ctx, 'remote.session')) ??
-      asRecord(asRecord(reflectServiceGet(ctx, 'remote'))?.['session'])
-    const modelCatalog = sessionSvc?.['modelCatalog'] as (() => Promise<unknown>) | undefined
-    if (typeof modelCatalog !== 'function') return Promise.resolve(undefined)
-    try {
-      return Promise.resolve(modelCatalog.call(sessionSvc)).then(mapModelCatalogEnvelope, () => undefined)
-    } catch {
-      return Promise.resolve(undefined)
-    }
   }
 }
 
@@ -2392,7 +2273,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
       const viewsDiagnostics: { registered?: string[]; error?: string } = {}
       const shellDiagnostics: { registered?: string[]; error?: string } = {}
       const dockDiagnostics: { registered?: string[]; error?: string } = {}
-      const settingsDiagnostics: { registered?: string[]; error?: string } = {}
       const selfCheck: ClientSelfCheckDiagnostics = {}
       const marker: ForgeClientActiveMarker = {
         plugin: FORGE_CLIENT_PLUGIN_ID,
@@ -2402,7 +2282,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         views: viewsDiagnostics,
         shell: shellDiagnostics,
         dock: dockDiagnostics,
-        settings: settingsDiagnostics,
         selfCheck,
       }
       ;(globalThis as { __DSH_FORGE_CLIENT__?: ForgeClientActiveMarker }).__DSH_FORGE_CLIENT__ = marker
@@ -2528,7 +2407,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': '项目概览',
             'tab.bug': 'Bug 台账',
             'guide.overview.desc': 'feature · 任务 · 提案与文档——管线接管工作台',
-            'settings.forge': 'Forge设置',
             'remote.entry': '手机远程',
             // dispatchTask 对话工具行（toolview 行内 t 座——文案对齐官方通用行用词）
             'tool.dispatchTask.title': '工具调用',
@@ -2545,7 +2423,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
             'tab.overview': 'Overview',
             'tab.bug': 'Bug ledger',
             'guide.overview.desc': 'Features, tasks, proposals and docs',
-            'settings.forge': 'Forge Settings',
             'remote.entry': 'Mobile Remote',
             'tool.dispatchTask.title': 'Tool call',
             'tool.dispatchTask.preparing': 'Preparing call',
@@ -2640,7 +2517,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         registerCenterPanels(clientCtx, views, bridge, t, centerDiagnostics, knowledgeEnabled)
         registerConversationViews(clientCtx, views, bridge, t, viewsDiagnostics, knowledgeEnabled)
         registerWorktreeFaces(clientCtx, views, viewsDiagnostics)
-        registerSettingsSection(clientCtx, views, t, settingsDiagnostics)
         // Bug 引用 source 登记已前移至 dock 注册之前（bug 27ab222b 穿线——见上方 bugSource）
 
         // 常驻壳宿主（shell.overlay——UF-3 流程宿主 + 相位/视图镜像锚 + hero 面板驱动 +
@@ -2746,7 +2622,6 @@ export function forgeClientPlugin(): ForgeClientPlugin {
         viewsDiagnostics.error = message
         shellDiagnostics.error = message
         dockDiagnostics.error = message
-        settingsDiagnostics.error = message
       }
     },
   }

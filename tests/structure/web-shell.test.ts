@@ -529,7 +529,7 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(hero).toContain('IconProjectAddOutlineRegular')
   })
 
-  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；m3.1 D5 会话头 pill 发布退役；4.7 设置分区；2026-10-09 dispatchTask 工具行）', () => {
+  it('装配发布 pin：product-views 发布官方缝占用者族 + 桥工厂（client-plugin 登记面同键集；fix-29 轨迹视图退役；4.1 dock tab 两 body；m3.1 D5 会话头 pill 发布退役；4.7 设置分区退役；2026-10-09 dispatchTask 工具行）', () => {
     const views = read('apps/web/src/product-views.ts')
     for (const name of [
       'ForgeSidebarSlot',
@@ -541,7 +541,6 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
       'ForgeDispatchToolRow',
       'ForgeOverviewTab',
       'ForgeDocsTab',
-      'ForgeSettingsSection',
       'createWorkbenchBridge',
     ]) {
       expect(views, `${name} 未发布`).toContain(name)
@@ -550,6 +549,8 @@ describe('workbench 工作台装配 pin（2.12 + 3.8 → fix-25 官方基座降�
     expect(views).not.toContain('ForgeTrajectoryView')
     // m3.1 D5 退役 pin：会话头挂接 pill 不再发布（槽位卸载——面板经 ShellHost 直挂）
     expect(views).not.toContain('ForgeSessionTaskPills')
+    // 4.7 退役 pin：Forge设置 分区（worker 小节）不再发布——配置主权归 expert-squad 配置 tab
+    expect(views).not.toContain('ForgeSettingsSection')
   })
 
   it('工作台桥键面一致：workbench-bridge（发布侧 + 读取侧同模块）键 __DSH_FORGE_WORKBENCH__；e2e bridgeDispatch 面保持', () => {

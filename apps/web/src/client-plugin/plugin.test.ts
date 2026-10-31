@@ -27,9 +27,6 @@ import {
   RECALL_VIEW_ID,
   SESSION_HEADER_ACTIONS_SLOT,
   CONVERSATION_INPUT_OVERLAY_SLOT,
-  SETTINGS_SECTION_SLOT,
-  FORGE_SETTINGS_SECTION_ID,
-  FORGE_SETTINGS_SECTION_ORDER,
   FORGE_REMOTE_ENTRY_ID,
   FORGE_REMOTE_ENTRY_ORDER,
   SIDEBAR_FOOTER_ACTION_SLOT,
@@ -334,7 +331,6 @@ function publishFakeViews() {
     ForgeHeroWorkspacePicker: 'COMP:hero-picker',
     ForgeSessionWorktreeChip: 'COMP:session-worktree-chip',
     ForgeWorktreeSealOverlay: 'COMP:worktree-seal-overlay',
-    ForgeSettingsSection: 'COMP:settings-section',
     ForgeRemoteEntry: 'COMP:remote-entry',
     ForgeBugGlyph: 'COMP:bug-glyph',
     ForgeBugPreview: 'COMP:bug-preview',
@@ -461,7 +457,6 @@ describe('槽位路线 A 注册（AC1：sidebar.workspaces 替换 + 品牌行内
       CONVERSATION_INPUT_OVERLAY_SLOT, // fix-2 封存提示 overlay（composer 区官方缝）
       CONVERSATION_INPUT_OVERLAY_SLOT, // bug 4b34e5d8 chip 重建缝（零视觉效应行）
       CONVERSATION_INPUT_OVERLAY_SLOT, // bug 267dcac1 切换闸虚线标记（纯视觉命中锚）
-      SETTINGS_SECTION_SLOT,
       SHELL_OVERLAY_SLOT,
     ])
     const workspaces = registers.find((r) => r.key === SIDEBAR_WORKSPACES_SLOT)
@@ -1382,168 +1377,6 @@ describe('会话头挂接槽卸载 + 悬浮面板 ⟞ 开面（m3.1 D5/D6）', (
     const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { views?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
     expect(marker?.views?.registered).toEqual([CONVERSATION_VIEW_SLOT, HERO_WORKSPACE_SLOT, TOOL_CALL_TOOLVIEW_SLOT, FORGE_EVENT_NODE_SLOT, SESSION_HEADER_ACTIONS_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT, CONVERSATION_INPUT_OVERLAY_SLOT])
     expect(marker?.views?.error).toBeUndefined()
-    unpublishViews()
-  })
-})
-
-/**
- * 官方设置分区序 pin（上游 0.2.0-rc.2 dsh-client-ui-settings-{general,models,plugins}
- * client.js 源码核实：SettingsRoot nav 行按 order 升序映射直出——DOM 序 = 排序结果；
- * 上游升带漂移时本 pin 先红）。分区面 = list 槽 scope root（ui-settings contract/slots
- * 的 settings.section——owner share close 由壳递达）。
- */
-const OFFICIAL_SETTINGS_SECTION_ORDERS: Readonly<Record<string, number>> = {
-  general: 0,
-  models: 10,
-  plugins: 15,
-}
-
-describe('设置分区登记（4.7 AC1/AC3/AC4 + Integration #4：settings.section list 槽）', () => {
-  it('list 槽登记：id dswf-forge-settings + order 5 + locale NS label thunk（zh 值 Forge设置）+ 发布组件；零 children/priority/key——生命周期归官方设置对话框（Hard Rule 非 fork）；inject = 模型目录装载器（m3.1 D25）', () => {
-    const views = publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const sections = registers.filter((r) => r.key === SETTINGS_SECTION_SLOT)
-    expect(sections, 'settings.section 恰一登记（官方 general/models/plugins 行保持在场）').toHaveLength(1)
-    const forge = sections[0]!
-    expect(forge.options.id).toBe(FORGE_SETTINGS_SECTION_ID)
-    expect(forge.options.id).toBe('dswf-forge-settings')
-    expect(forge.options.order).toBe(FORGE_SETTINGS_SECTION_ORDER)
-    expect(forge.options.order).toBe(5)
-    expect(forge.options.locale).toBe(FORGE_LOCALE_NS)
-    expect(typeof forge.options.label).toBe('function') // fix-33 ⑧ locale thunk（官方分区 nav 行同径）
-    expect((forge.options.label as () => string)()).toBe('Forge设置')
-    expect(forge.component).toBe(views.ForgeSettingsSection)
-    // Hard Rule 非 fork 纪律：list 槽行语言最小面——无 children 声明（无子洞）、无 priority
-    // （single 槽语义）、无 key；打开/关闭/Esc 全部官方设置对话框自持。
-    // m3.1 D25（blitz 1.2 结果性承接）：inject face = loadModelCatalog（remote.session
-    // .modelCatalog 惰性反射装载器——Provider/Model 选项值 =「设置>模型」目录）；
-    // settings get/set 数据面主体仍 preload RPC 单门自足
-    expect(forge.options.children).toBeUndefined()
-    expect(forge.options.priority).toBeUndefined()
-    expect(forge.options.key).toBeUndefined()
-    const face = forge.options.inject?.() as { loadModelCatalog: () => Promise<unknown> }
-    expect(typeof face?.loadModelCatalog).toBe('function')
-    unpublishViews()
-  })
-
-  it('loadModelCatalog inject face：modelCatalog 信封 groups → [{provider, models}]；remote 嵌套双径；缺席/!ok/拒绝 = undefined（组件面静态目录回退）', async () => {
-    const envelopeOk = {
-      ok: true,
-      value: {
-        groups: [
-          {
-            id: 'zai-coding-cn',
-            models: [
-              { id: 'glm-5.3', reasoning: { efforts: [{ id: 'low' }, { id: 'high' }, { id: 'max' }] } },
-              { id: 'glm-5.3-flash' },
-            ],
-          },
-          { id: 'dsh-openai', models: [{ id: 'glm-5.3' }] },
-        ],
-      },
-    }
-    const expected = [
-      {
-        provider: 'zai-coding-cn',
-        models: ['glm-5.3', 'glm-5.3-flash'],
-        modelEfforts: { 'glm-5.3': ['low', 'high', 'max'] },
-      },
-      { provider: 'dsh-openai', models: ['glm-5.3'] },
-    ]
-    const faceOf = (reflectGet: (name: string) => unknown): { loadModelCatalog: () => Promise<unknown> } => {
-      publishFakeViews()
-      const run = fakeClientCtx({ get: reflectGet })
-      forgeClientPlugin().apply(run.ctx)
-      const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)
-      if (forge === undefined) throw new Error('settings.section 登记缺席（发布面/装载面断裂）')
-      return forge.options.inject!() as { loadModelCatalog: () => Promise<unknown> }
-    }
-    // 成功：remote.session 直达 → groups 解包（reasoning.efforts[].id 透传 modelEfforts——档位兼容能力面）
-    await expect(
-      faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.resolve(envelopeOk) } : undefined)).loadModelCatalog(),
-    ).resolves.toEqual(expected)
-    // 成功：'remote' 嵌套 session 双径（反射配方同 buildOpenSessionOrchestrator agentPresets）
-    await expect(
-      faceOf((name) => (name === 'remote' ? { session: { modelCatalog: () => Promise.resolve(envelopeOk) } } : undefined)).loadModelCatalog(),
-    ).resolves.toEqual(expected)
-    // 服务缺席（reflect 全 undefined）→ undefined
-    await expect(faceOf(() => undefined).loadModelCatalog()).resolves.toBeUndefined()
-    // 信封 !ok（RemoteError 面）→ undefined
-    await expect(
-      faceOf((name) =>
-        name === 'remote.session'
-          ? { modelCatalog: () => Promise.resolve({ ok: false, error: { code: 'session/x', message: 'y' } }) }
-          : undefined,
-      ).loadModelCatalog(),
-    ).resolves.toBeUndefined()
-    // 调用拒绝 → undefined（静默回退，不炸设置分区装载）
-    await expect(
-      faceOf((name) => (name === 'remote.session' ? { modelCatalog: () => Promise.reject(new Error('boom')) } : undefined)).loadModelCatalog(),
-    ).resolves.toBeUndefined()
-    unpublishViews()
-  })
-
-  it('loadModelCatalog 档位兼容能力面：efforts 缺席/畸形/空集 = 不记该模型能力（组件面不过滤不判）', async () => {
-    const envelope = {
-      ok: true,
-      value: {
-        groups: [
-          {
-            id: 'p1',
-            models: [
-              { id: 'm-no-reasoning' },
-              { id: 'm-bad-efforts', reasoning: { efforts: 'not-array' } },
-              { id: 'm-empty-efforts', reasoning: { efforts: [] } },
-              { id: 'm-bad-ids', reasoning: { efforts: [{ id: 42 }, { name: 'x' }] } },
-              { id: 'm-ok', reasoning: { efforts: [{ id: 'high' }] } },
-            ],
-          },
-        ],
-      },
-    }
-    publishFakeViews()
-    const run = fakeClientCtx({ get: (name) => (name === 'remote.session' ? { modelCatalog: () => Promise.resolve(envelope) } : undefined) })
-    forgeClientPlugin().apply(run.ctx)
-    const forge = run.registers.find((r) => r.key === SETTINGS_SECTION_SLOT)!
-    const face = forge.options.inject!() as { loadModelCatalog: () => Promise<unknown> }
-    await expect(face.loadModelCatalog()).resolves.toEqual([
-      {
-        provider: 'p1',
-        models: ['m-no-reasoning', 'm-bad-efforts', 'm-empty-efforts', 'm-bad-ids', 'm-ok'],
-        modelEfforts: { 'm-ok': ['high'] },
-      },
-    ])
-    unpublishViews()
-  })
-
-  it('位置断言（DOM 序）：官方分区序 pin 下 Forge设置 行在 通用设置(general) 之下、模型(models) 之上（nav 行升序直出）', () => {
-    publishFakeViews()
-    const { ctx, registers } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const forge = registers.find((r) => r.key === SETTINGS_SECTION_SLOT)!
-    // 官方 SettingsRoot sections store 同式：entries → {id, order, label} → order 升序排序 →
-    // navList DOM 行序（ui-settings-general client.js sections.getSnapshot 镜像）
-    const rows = [
-      ...Object.entries(OFFICIAL_SETTINGS_SECTION_ORDERS).map(([id, order]) => ({ id, order })),
-      { id: forge.options.id!, order: forge.options.order! },
-    ].sort((a, b) => a.order - b.order)
-    const indexOf = (id: string): number => rows.findIndex((row) => row.id === id)
-    expect(rows.map((row) => row.id)).toEqual(['general', FORGE_SETTINGS_SECTION_ID, 'models', 'plugins'])
-    expect(indexOf('general'), '通用设置分区下方（AC1 DOM 序）').toBeLessThan(indexOf(FORGE_SETTINGS_SECTION_ID))
-    expect(indexOf(FORGE_SETTINGS_SECTION_ID), '通用设置正下方——模型之上（ui-design UF-2 Placement）').toBeLessThan(indexOf('models'))
-    unpublishViews()
-  })
-
-  it('诊断面 + locale 词典：settings 族登记数组含 settings.section 洞位；词典含 settings.forge zh/en 双语', () => {
-    publishFakeViews()
-    const { ctx, locale } = fakeClientCtx()
-    forgeClientPlugin().apply(ctx)
-    const marker = (globalThis as { __DSH_FORGE_CLIENT__?: { settings?: { registered?: string[]; error?: string } } }).__DSH_FORGE_CLIENT__
-    expect(marker?.settings?.registered).toEqual([SETTINGS_SECTION_SLOT])
-    expect(marker?.settings?.error).toBeUndefined()
-    expect(locale.registered[0]![1].zh).toMatchObject({ 'settings.forge': 'Forge设置' })
-    expect(locale.registered[0]![1].en).toMatchObject({ 'settings.forge': 'Forge Settings' })
     unpublishViews()
   })
 })

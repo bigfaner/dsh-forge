@@ -13,8 +13,8 @@
 // ForgeOverviewTab/ForgeDocsTab（sidebar.right.pane.tab 两 keyed body——M2 UF-1/UF-2）。
 // m3.1 D5：会话头挂接 pill 发布退役（conversation.session.header.actions 槽位卸载——
 // 派发任务监视面 = DispatchPanel，经 ShellHost 常驻树直挂不经槽位发布）。
-// 4.7 扩设置分区：ForgeSettingsSection（官方 ui-settings settings.section list 槽占用者
-// ——M3 UF-2 Forge设置 分区；slot 注册归 client 插件，生命周期 = 官方设置对话框）。
+// 4.7 设置分区退役：分区不再发布（expert-squad-default-routing AC4——
+// worker 小节随分区整体退役，配置主权归 expert-squad 配置 tab）。
 // 1.8 渲染链退役：官方预览径 md mermaid 扩展渲染器随分段链整体退役，sidebar md
 // 预览回归官方 builtin；mermaid 出图改经 DOM 增强器——1.9 经本发布面递达
 // createMermaidEnhancer（@dsh-forge/md-mermaid ./web 出口单源；client 插件 apply 期
@@ -51,10 +51,6 @@ import {
   ForgeWorktreeSealOverlay,
   ForgeWorktreeSwitchMarker,
 } from './views/session/WorktreeFaces.js'
-import {
-  ForgeSettingsSection,
-  type ForgeSettingsSectionProps,
-} from './views/settings/ForgeSettingsSection.js'
 import {
   ForgeRemoteEntry,
   type ForgeRemoteEntryProps,
@@ -105,8 +101,6 @@ export interface ForgePublishedViews {
   readonly ForgeWorktreeSwitchMarker: ComponentType<{ sessionId?: string | undefined }>
   /** conversation.input.overlay 槽 chip 重建（bug 4b34e5d8——零视觉效应挂载点，纯文本草稿 → chip 还原订阅） */
   readonly ForgeBugChipRestoreOverlay: ComponentType<{ sessionId?: string | undefined }>
-  /** settings.section 占用者（M3 UF-2 Forge设置 分区——4.7 Integration #4；owner share close 由官方设置对话框递达，props 类型已含） */
-  readonly ForgeSettingsSection: ComponentType<ForgeSettingsSectionProps>
   /** sidebar.footer.action 'dswf-remote' 占用者（1.2 手机远程入口——三态图标 + 远程面板） */
   readonly ForgeRemoteEntry: ComponentType<ForgeRemoteEntryProps>
   /** Bug 组行图标件（composer-bug-reference 1.2——@ 菜单 Bug 组候选行 icon；官方 icon set 无 bug 几何，自带 IconProps 组件） */
@@ -142,7 +136,6 @@ declare global {
   ForgeWorktreeSealOverlay,
   ForgeWorktreeSwitchMarker,
   ForgeBugChipRestoreOverlay,
-  ForgeSettingsSection,
   ForgeRemoteEntry,
   ForgeBugGlyph,
   ForgeBugPreview,
