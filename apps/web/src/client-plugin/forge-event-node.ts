@@ -218,6 +218,22 @@ function turnKeyOf(turn: unknown): string | undefined {
   return typeof turn === 'number' && Number.isFinite(turn) ? String(turn) : typeof turn === 'string' && turn !== '' ? turn : undefined
 }
 
+/** 条目 turnId 兜底归属（bug c75df032）：currentTurn 缺席时到达的 forge 条目——取
+ *  turn/end seq ≥ 条目 seq 的最近一个 turn（条目落其过程区间内的已记录 turn）；
+ *  无任何覆盖 turn = undefined 不猜。 */
+function fallbackTurnIdOf(seq: number, turnEndSeqs: Readonly<Record<string, number>> | undefined): string | undefined {
+  if (turnEndSeqs === undefined) return undefined
+  let best: string | undefined
+  let bestSeq = Number.POSITIVE_INFINITY
+  for (const [turnId, endSeq] of Object.entries(turnEndSeqs)) {
+    if (endSeq >= seq && endSeq < bestSeq) {
+      bestSeq = endSeq
+      best = turnId
+    }
+  }
+  return best
+}
+
 /** fold 单元：一条事件 → 下一模型（纯函数——重放保真；他形事件原引用返回） */
 export function foldForgeEventMessage(state: ForgeEventStreamState, event: ForgeMessageEventLike): ForgeEventStreamState {
   if (event?.type === 'turn/start') {
@@ -236,7 +252,9 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
   // 'forge/progress' 事件（1.2 循环进度卡数据源）：同组 fold 语义——开组中追加 progress
   // 条目（lastSeq 推进 = 组尾轨）；插话后/首枚开新组。畸形载荷原引用返回零污染。
   if (event?.type === FORGE_PROGRESS_EVENT_TYPE) {
-    const entry = progressEntryOf(event, event.data, state.currentTurn)
+    // bug c75df032：currentTurn 缺席（如终局 settle 先于 wake turn/start 到达）时
+    // 兜底归属覆盖条目 seq 的已记录 turn——锚可脱其过程折叠体。
+    const entry = progressEntryOf(event, event.data, state.currentTurn ?? fallbackTurnIdOf(event.seq, state.turnEndSeqs))
     if (entry === undefined) return state
     const last = state.groups.at(-1)
     if (last !== undefined && !state.closed) {
@@ -272,7 +290,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
   if (data === undefined || id === undefined) return state
   const source = data.source
   if (isForgeSource(source)) {
-    const entry = entryOf(event, data, state.currentTurn)
+    const entry = entryOf(event, data, state.currentTurn ?? fallbackTurnIdOf(event.seq, state.turnEndSeqs))
     const last = state.groups.at(-1)
     // 末组在场且未被插话收口 → 追加行（增量）；否则（首组 / 插话后）开新组
     if (last !== undefined && !state.closed) {
@@ -356,7 +374,16 @@ export function forgeEventGroupAnchorSeq(group: ForgeEventGroup, turnEndSeqs: Re
   const lastProgress = group.progress?.at(-1)
   const tail = (lastProgress?.seq ?? -1) > (lastMsg?.seq ?? -1) ? lastProgress : lastMsg
   const end = tail?.turnId !== undefined ? turnEndSeqs?.[tail.turnId] : undefined
-  return end ?? group.lastSeq
+  if (end !== undefined) return end
+  // bug c75df032 回落分支：尾条目 turnId 缺省/未记录（如终局 settle 先于 turn/start 到达、
+  // 旧缓存无 turn 戳）时不再原样回 group.lastSeq——那可落已收起 turn 的过程折叠体（折叠
+  // 收起后卡被吞）。改取 ≥ group.lastSeq 的最小已记录 turn/end seq（≥ answerAnchorSeq，
+  // 组卡落回复下方）；无任何 ≥ 记录才回组末 seq。
+  let candidate: number | undefined
+  for (const endSeq of Object.values(turnEndSeqs ?? {})) {
+    if (endSeq >= group.lastSeq && (candidate === undefined || endSeq < candidate)) candidate = endSeq
+  }
+  return candidate ?? group.lastSeq
 }
 
 /**

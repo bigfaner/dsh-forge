@@ -10,6 +10,7 @@ import {
   EMPTY_FORGE_EVENT_STREAM,
   FORGE_EVENT_NODE_KIND,
   forgeEventBadge,
+  forgeEventGroupAnchorSeq,
   forgeEventGroupDefinition,
   forgeEventStreamDefinition,
   forgeEventTitle,
@@ -305,6 +306,32 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
     expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 6 })
     const after = simulate([...events, { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } }])
     expect(after.nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 9 })
+  })
+  it('bug c75df032：终局 settle 条目 turnId 缺省（先于 wake turn/start 到达）——turn/end 后组卡锚 ≠ group.lastSeq 且 ≥ answerAnchorSeq（脱离已收起过程折叠体）', () => {
+    const { stream, nodes } = simulate([
+      progressEvt(2, { taskKey: 'feat-x/1.16', status: 'completed', verb: 'settle' }),
+      { type: 'turn/start', seq: 5, data: { turn: 6 } },
+      { type: 'turn/end', seq: 9, data: { turn: 6, reason: { kind: 'completed' } } },
+    ])
+    // RED（修复前）：settle 到达时 currentTurn 缺席 → turnId 缺省（fold 时点 turn/end 尚未
+    // 到达，兜底归属不可预见未来 turn）→ 锚回落 group.lastSeq=2，落进 wake turn 6 过程折叠
+    // 区间 [5..9]，折叠收起后卡被吞。修复后 anchor 回落分支取 ≥ lastSeq 的最小 turn/end seq。
+    expect(stream.groups[0]?.entries).toHaveLength(0)
+    expect(stream.groups[0]?.progress?.at(-1)?.turnId).toBeUndefined()
+    expect(nodes.get('forge-event-progress-2')).toMatchObject({ anchorSeq: 9, visibility: 'visible' })
+    expect(nodes.get('forge-event-progress-2')).not.toMatchObject({ anchorSeq: 2 })
+  })
+  it('bug c75df032：turnId 缺省条目组的 anchor 回落 = ≥ lastSeq 的最小已记录 turn/end seq（forgeEventGroupAnchorSeq 直测——旧缓存无 turn 戳同脱过程折叠）', () => {
+    const group = {
+      key: 'forge-progress-2',
+      firstSeq: 2,
+      lastSeq: 6,
+      entries: [],
+      progress: [{ seq: 6, sourceSlug: 'feat-x', status: 'completed', verb: 'settle', at: 0 }],
+    }
+    expect(forgeEventGroupAnchorSeq(group, { '3': 4, '5': 9, '9': 20 })).toBe(9)
+    expect(forgeEventGroupAnchorSeq(group, { '1': 1 })).toBe(6)
+    expect(forgeEventGroupAnchorSeq(group, undefined)).toBe(6)
   })
   it('stream match：forge/progress 命中（revision++ 驱动组块重放）', () => {
     expect(forgeEventStreamDefinition.match(progressEvt(4, {}))).toEqual({ id: 'stream', role: 'start' })
