@@ -67,7 +67,9 @@ const INSTALL_NM = join(ROOT, 'apps', 'host', 'profile.install', 'node_modules')
 /** 带技能面插件的附加物化/口径（键 = 包短名；skills = 技能面物化 + 关键文件；
  *  skills-blitz = plugin-forge 包内突击专属技能旁目录——blitz 预设 customSkillDirs 挂载源） */
 const STAGING_EXTRAS = {
-  'plugin-forge': { files: ['skills', 'skills-blitz'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md'] },
+  // plugin-forge experts/ = 内置专家档案层（FORGE_EXPERTS_ROOT_DIR 相对 dist 解析——
+  // 缺席即安装版专家团零 forge 档案，bug a2a54922；随包覆盖由 a2a54922 约定目录扫描守卫）
+  'plugin-forge': { files: ['skills', 'skills-blitz', 'experts'], keyFiles: ['skills/submit-task/SKILL.md', 'skills-blitz/grilling/SKILL.md', 'experts/feature-builder.md'] },
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
   // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）

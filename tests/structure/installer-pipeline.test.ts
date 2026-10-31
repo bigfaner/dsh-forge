@@ -275,6 +275,23 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
     expect(staged['plugins/expert-squad']).toContain('cordis.patch.yml')
   })
 
+  it('bug a2a54922（G5 约定目录结构扫描）：staged 包源目录含约定资源目录（experts/skills/skills-blitz）→ 必在物化 files 集（漏配从人记变机械）', () => {
+    const CONVENTION_DIRS = ['experts', 'skills', 'skills-blitz']
+    const staged = stagedProductPackages(PRODUCT_PLUGINS)
+    const problems: string[] = []
+    for (const [dir, files] of Object.entries(staged)) {
+      for (const convention of CONVENTION_DIRS) {
+        const sourceDir = join(ROOT, 'packages', dir, convention)
+        if (existsSync(sourceDir) && readdirSync(sourceDir).length > 0 && !files.includes(convention)) {
+          problems.push(`packages/${dir}/${convention} 在场但未随包物化（STAGING_EXTRAS 漏列）`)
+        }
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([])
+    // 现值锚：plugin-forge experts/（34 份内置专家档案——bug a2a54922 病理面）
+    expect(staged['plugin-forge']).toContain('experts')
+  })
+
   it('bug: host dist 静态 @dsh-forge/* import 面 ⊆ staging 闭包（打包形态主进程 ESM 上溯 runtime/node_modules——漏包即 ERR_MODULE_NOT_FOUND 启动崩，2026-10-18 安装版实证 git-worktree）', () => {
     // Root cause 病理：host 主进程新增静态 import（worktree-rpc → @dsh-forge/git-worktree）
     // 而包未入 staging 种子（userLayerRow/预设/依赖闭包三径均不可达——零依赖叶子）。
