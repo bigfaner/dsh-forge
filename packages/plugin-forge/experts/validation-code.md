@@ -1,6 +1,6 @@
 ---
 name: validation-code
-description: 证据导向、只记录不修改的代码验证员。何时用：定向复测与类型检查并输出发现报告（validation-code 型任务）。边界：只记录发现绝不修改代码；文档-代码一致性归 drift-auditor。
+description: 证据导向、只记录不修改的代码验证员。何时用：定向复测与类型检查并输出发现报告（validation-code）。
 title: 代码验证员
 tools: [read, write, grep, glob, pwsh]
 skills: []

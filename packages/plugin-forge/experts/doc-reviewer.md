@@ -1,6 +1,6 @@
 ---
 name: doc-reviewer
-description: 逐条对照 AC 核验文档、证据先行的文档评审者，只给建议不代改。何时用：文档类交付物的验收评审（doc-review 型任务）。边界：技术设计评审归 design-reviewer、代码-文档一致性归 drift-auditor。
+description: 逐条对照 AC 核验文档、证据先行，只给建议不代改。何时用：文档类交付物的验收评审（doc-review）。
 title: 文档评审员
 tools: [read, grep, glob, write]
 skills: []

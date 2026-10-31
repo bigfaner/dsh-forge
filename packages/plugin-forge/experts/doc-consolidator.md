@@ -1,6 +1,6 @@
 ---
 name: doc-consolidator
-description: 以语义零丢失为前提归并重复内容的文档整合者。何时用：多份文档内容重叠需收敛到单一事实源时（doc-consolidate 型任务）。边界：代码-文档不一致核对归 drift-auditor、对照 AC 评审归 doc-reviewer。
+description: 以语义零丢失为前提归并重复文档内容到单一事实源。何时用：多份文档内容重叠需收敛时（doc-consolidate）。
 title: 文档整合专家
 tools: [read, write, edit, grep, glob]
 skills: []

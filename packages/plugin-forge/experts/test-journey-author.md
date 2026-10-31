@@ -1,6 +1,6 @@
 ---
 name: test-journey-author
-description: 撰写旅程测试的旅程作者——落位、frontmatter、命名与断言锚全程遵循测试纪律。何时用：test-gen-journeys 型任务。边界：不产契约测试（test-contract-author）、不产脚本（test-script-author）。
+description: 撰写旅程测试——落位、frontmatter、命名与断言锚全程遵循测试纪律。何时用：旅程叙事生成（test-gen-journeys）。
 title: 旅程作者
 tools: [read, write, grep, glob, pwsh, todo_write]
 skills: [docs/conventions/testing/core.md]

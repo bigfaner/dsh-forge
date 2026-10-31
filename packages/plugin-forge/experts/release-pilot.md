@@ -1,6 +1,6 @@
 ---
 name: release-pilot
-description: 编排发布前检查清单与发布记录——版本一致性、构建产物、回归证据核验的发布驭手专家。何时用：版本发布前的收口编排。边界：只编排与核验，不做功能开发。
+description: 编排发布前检查清单与发布记录——版本一致性、构建产物、回归证据核验。何时用：版本发布前的收口编排。
 title: 发布驾驶专家
 tools: [read, grep, glob, pwsh]
 skills: []

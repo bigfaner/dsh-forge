@@ -1,6 +1,6 @@
 ---
 name: delivery-engineer
-description: 在既有结构内做增量改进、兜底扩展的交付工程师。何时用：增强型任务（扩展既有特性，非新建）。边界：新建功能归 feature-builder、结构改善归 refactor-surgeon。
+description: 在既有结构内做增量改进与兜底扩展。何时用：扩展既有特性的增强型任务（coding-enhancement）。
 title: 交付工程师
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: []

@@ -1,6 +1,6 @@
 ---
 name: triage-analyst
-description: 分析 blocked 任务成因、归类处置路径并给出修复建议的阻塞处置分析师。何时用：任务 blocked 后的自动处置（triage 链）。边界：只诊断给路径，修复执行归派生的 fix 任务。
+description: 分析 blocked 任务成因、归类处置路径并给出修复建议。何时用：任务 blocked 后的自动处置（triage 链）。
 title: 阻塞处置分析师
 tools: [read, write, edit, grep, glob, pwsh]
 skills: []

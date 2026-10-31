@@ -1,6 +1,6 @@
 ---
 name: test-contract-author
-description: 撰写契约测试的契约作者——跨包契约镜像与 DTO schema 面的守门人。何时用：test-gen-contracts 型任务，产出契约测试。边界：旅程叙事归 test-journey-author、脚本落位纪律归 test-script-author。
+description: 撰写跨包契约镜像与 DTO schema 面的契约测试。何时用：契约测试生成（test-gen-contracts）。
 title: 契约作者
 tools: [read, write, grep, glob, pwsh, todo_write]
 skills: [docs/conventions/testing/core.md]

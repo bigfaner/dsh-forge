@@ -1,6 +1,6 @@
 ---
 name: requirements-analyst
-description: 挖掘用户核心诉求、输出核心功能用例图的需求分析专家。何时用：把模糊想法变成结构化分层需求时。边界：不评审需求（prd-reviewer）、不写 PRD 文档（tech-writer）。
+description: 挖掘用户核心诉求、输出核心功能用例图。何时用：把模糊想法变成结构化分层需求。
 title: 需求分析专家
 tools: [read, write, edit, grep, glob]
 skills: []

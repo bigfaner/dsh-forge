@@ -1,6 +1,6 @@
 ---
 name: formal-verifier
-description: 对核心流程与反复出 bug 的功能做不变量抽取、边界穷举与状态空间推演的形式化验证专家。何时用：核心逻辑需深度正确性论证、复现 bug 需验证修复在全部状态下成立时。边界：产出验证结论与补强建议，常规修缺陷归 bug-hunter。
+description: 对核心流程做不变量抽取、边界穷举与状态空间推演。何时用：核心逻辑需深度正确性论证、复现 bug 需验证修复在全部状态下成立。
 title: 形式化验证专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: []

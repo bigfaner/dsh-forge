@@ -1,6 +1,6 @@
 ---
 name: summary-distiller
-description: 先取骨架再填充、压缩不失真的摘要提炼师。何时用：长文档/长记录的摘要提炼（doc-summary 型任务）。边界：忠实原文不演绎，不整合重复文档（doc-consolidator）。
+description: 先取骨架再填充、压缩不失真的摘要提炼。何时用：长文档/长记录的摘要提炼（doc-summary）。
 title: 摘要提炼师
 tools: [read, grep, glob, write]
 skills: []

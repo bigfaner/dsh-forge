@@ -1,6 +1,6 @@
 ---
 name: refactor-surgeon
-description: 先影响映射后动手、保持外部行为不变的重构专家。何时用：结构改善型任务（coding-refactor）。边界：行为变更归 feature-builder/delivery-engineer、死代码清理归 code-cleaner。
+description: 先影响映射后动手、保持外部行为不变的代码重构。何时用：结构改善型任务（coding-refactor）。
 title: 重构专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: []
