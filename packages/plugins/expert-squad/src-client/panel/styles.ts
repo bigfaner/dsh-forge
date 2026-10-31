@@ -65,7 +65,9 @@ export const PANEL_CSS = `
 .dot.on { background: var(--dsw-alias-state-success-primary); }
 .dot.off { background: var(--dsw-alias-label-caption); }
 .xc-title { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* dsw-raw 灯后文本对齐缩进 */
-.xc-route { font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-caption); padding-left: 15px; } /* 派发路由行（provider · model 成对在场才显） */
+/* 卡头右侧组（派发路由 chips + 对比钮）；派发路由行（xc-route 行式）退役——路由信息 chip 化 */
+.xc-head-right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
+.xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 .xc-creed { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .xc-seg { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
 .xc-tags { display: flex; gap: 6px; flex-wrap: wrap; } /* dsw-raw 原型 chips 间距刻度 */
@@ -146,8 +148,6 @@ export const PANEL_CSS = `
 .origin-badge.origin-plugin { color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-interactive-bg-hover); }
 /* 生效标（展开对比表生效列锚——1.68 裁决：卡片「生效」徽标已移除，对比表内保留） */
 .eff-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: var(--dsw-alias-state-success-primary); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent); }
-/* 卡内对比钮（多来源卡右上角——点开对比 Dialog 切换版本；被遮蔽摘要行退役） */
-.xc-cmp-btn { margin-left: auto; flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 /* 对比表（唯一消费面 = 详情 Dialog 对比态——外框退役，Dialog body 已有容器框架） */
 .dswf-xcompare { display: flex; flex-direction: column; gap: ${T.gap8}; }
 .cmp-table { width: 100%; border-collapse: collapse; font: var(--dsw-font-xxs-12); color: var(--dsw-alias-label-secondary); }

@@ -471,30 +471,36 @@ function Card({ expert, projectName, onActivate, onCompare }: { readonly expert:
         <span className={`dot ${expert.enabled ? "on" : "off"}`} />
         <b className="xc-name">{expert.name}</b>
         <OriginBadge origin={expert.origin} projectName={projectName} />
-        {onCompare === undefined ? null : (
-          <button
-            type="button"
-            className="dswf-btn dswf-btn-ghost xc-cmp-btn"
-            aria-label={`对比 ${expert.name} 其它来源`}
-            onClick={(event) => {
-              event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
-              onCompare();
-            }}
-          >
-            对比
-          </button>
-        )}
+        {/* 右侧组：派发路由 chips（成对在场 = provider·model 双 chip；缺省 = 「model :
+            继承父Agent」弱化 chip——与详情 Dialog 同语义）+ 多来源对比钮 */}
+        <span className="xc-head-right">
+          {expert.provider !== undefined && expert.model !== undefined ? (
+            <>
+              <span className="chip tool">{expert.provider}</span>
+              <span className="chip">{expert.model}</span>
+            </>
+          ) : (
+            <span className="chip dswf-chip-muted">model : 继承父Agent</span>
+          )}
+          {onCompare === undefined ? null : (
+            <button
+              type="button"
+              className="dswf-btn dswf-btn-ghost xc-cmp-btn"
+              aria-label={`对比 ${expert.name} 其它来源`}
+              onClick={(event) => {
+                event.stopPropagation(); // 卡片点击 = 开详情——对比钮不冒泡
+                onCompare();
+              }}
+            >
+              对比
+            </button>
+          )}
+        </span>
       </div>
       <div className="xc-title">
         {expert.title}
         {expert.enabled ? "" : " · 已禁用"}
       </div>
-      {/* 派发路由（成对语义：同给同缺——缺省整组不显行） */}
-      {expert.provider !== undefined && expert.model !== undefined ? (
-        <div className="xc-route" data-xc-route="">
-          {expert.provider} · {expert.model}
-        </div>
-      ) : null}
       <div className="xc-creed">{personaSummary(expert.personaMd)}</div>
       <div>
         <div className="xc-seg">技能</div>
