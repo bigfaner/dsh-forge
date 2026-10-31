@@ -373,6 +373,90 @@ describe('产品插件 staging 闭包（@dsh-forge/* 运行时依赖随包物化
   })
 })
 
+/**
+ * extraResources filter ↔ staging sections 一致性守护（packaging-guard-hardening 1.2）。
+ *
+ * 病理先例（mobile-dist）：assemble 侧新增 staging section（物化新目录到 release/staging/）
+ * 而 electron-builder.config.mjs extraResources filter 漏列 → 整段静默缺席安装包，
+ * 打包产物内该面缺失（mobile-dist 缺席即 /remote 落提示页）。既有 AC1 测试只 pin
+ * filter 字面量（两侧同改即假绿），本守护独立断言「filter 覆盖 staging sections 宇宙」：
+ *   - sections 宇宙 = assemble 脚本物化到 staging 的顶层段（runtime/web-dist/mobile-dist/
+ *     icon.png/staging-manifest.json）+ release/app 段（electron-builder files 口径）；
+ *   - 正例：现值 filter 下每段可达；
+ *   - fail-loud 反例：新增 section 而 filter 未覆盖（以剔除 mobile-dist/** 的突变 filter
+ *     验证匹配器判不可达）——防再演「忘改 filter」类缺陷。
+ */
+describe('extraResources filter ⊇ staging sections 一致性守护（忘改 filter 即 fail-loud）', () => {
+  /** assemble 脚本物化到 release/staging/ 的顶层段宇宙（+ release/app 装载器段） */
+  const STAGING_SECTIONS = [
+    'runtime/**', // 运行时容器（node_modules + host-dist + anchor package.json）
+    'web-dist/**', // 壳静态资产
+    'mobile-dist/**', // /remote 移动视图静态资产（resolveMobileDistDir 打包形态默认位）
+    'icon.png', // fix-45 窗口图标（{resources}/icon.png 解析位）
+    'staging-manifest.json', // 物化清单（4.3 冒烟自证挂点）
+    'app/**', // electron-builder 应用目录（release/app：main.js 装载器 + 清单）
+  ]
+
+  /** electron-builder minimatch 风格 filter 规则 → 路径匹配（`**` 跨段 / `*` 单段） */
+  const filterMatches = (filters: readonly string[], relPath: string): boolean =>
+    filters.some((filter) => {
+      const GLOB_STAR = '@@glob-star@@' // 占位 token：`**` 先换出，防 `*` 单段语义误替换
+      const pattern = filter
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, GLOB_STAR)
+        .replace(/\*/g, '[^/]*')
+        .split(GLOB_STAR)
+        .join('.*')
+      return new RegExp(`^${pattern}$`).test(relPath)
+    })
+
+  /** extraResources 配置 → 相对 staging 根的可达性判定（段 → 布尔） */
+  const coverageOf = (builderConfig: Record<string, unknown>, extraResources: unknown): Record<string, boolean> => {
+    const entry = (extraResources as Array<{ from: string; to: string; filter: string[] }>)[0]!
+    const toPrefix = entry.to === '.' ? '' : `${entry.to}/`
+    return Object.fromEntries(
+      STAGING_SECTIONS.map((section) => {
+        // app 段物理居 release/app（electron-builder files 口径收 main.js/package.json）
+        if (section === 'app/**') {
+          const files = (builderConfig.files as string[]) ?? []
+          return [section, ['main.js', 'package.json'].every((f) => files.includes(f))]
+        }
+        const sample = `${toPrefix}${section.replace('/**', '/index.html')}`
+        const exact = section === 'icon.png' || section === 'staging-manifest.json' ? `${toPrefix}${section}` : undefined
+        return [
+          section,
+          filterMatches(entry.filter, sample) || (exact !== undefined && filterMatches(entry.filter, exact)),
+        ]
+      }),
+    )
+  }
+
+  it('正例：现值 filter 覆盖 staging 全部 section（runtime/web-dist/mobile-dist/icon/staging-manifest/app 段均可达）', () => {
+    const builder = createElectronBuilderConfig('9.9.9') as Record<string, unknown>
+    const covered = coverageOf(builder, builder.extraResources)
+    const gaps = STAGING_SECTIONS.filter((section) => covered[section] !== true)
+    expect(gaps, `extraResources filter 未覆盖的 staging section（整段漏进安装包）：${gaps.join('; ')}`).toEqual([])
+  })
+
+  it('filter 规则自证：匹配器对 `**`/精确名语义正确（正反样本各半——假绿防线）', () => {
+    expect(filterMatches(['runtime/**'], 'runtime/node_modules/a/b.js')).toBe(true)
+    expect(filterMatches(['icon.png'], 'icon.png')).toBe(true)
+    expect(filterMatches(['icon.png'], 'web-dist/icon.png')).toBe(false)
+    expect(filterMatches(['runtime/**'], 'web-dist/index.html')).toBe(false)
+    expect(filterMatches(['web-dist/**'], 'web-dist/sub/x.js')).toBe(true)
+    expect(filterMatches(['runtime/*'], 'runtime/a/b.js')).toBe(false) // 单 `*` 不跨段
+  })
+
+  it('fail-loud 反例：新增 staging section（模拟 mobile-dist 病理——filter 剔除该段）→ 覆盖判定判不可达', () => {
+    const mutated = [
+      { from: join(ROOT, 'release', 'staging'), to: '.', filter: ['runtime/**', 'web-dist/**', 'icon.png', 'staging-manifest.json'] },
+    ]
+    const covered = coverageOf(createElectronBuilderConfig('9.9.9') as Record<string, unknown>, mutated)
+    expect(covered['mobile-dist/**'], 'filter 漏列 mobile-dist/** 时守护必须红（病理回归锚）').toBe(false)
+    expect(covered['web-dist/**']).toBe(true) // 其余段不受影响（守卫精度）
+  })
+})
+
 describe('STAGING_EXTRAS 白名单自动比对守卫（stagingExtrasDrift——stage()/--check 双接线 fail-loud）', () => {
   /** fixture 根：临时目录 + 空 presets 目录（presetCarriedPlugins 扫描域） */
   const makeFixtureRoot = () => {
