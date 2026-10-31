@@ -56,3 +56,25 @@ export function defaultOptionsPatchOf(draft: DefaultOptionsDraft): Record<string
   if (draft.reasoning !== "") patch["reasoning"] = draft.reasoning;
   return Object.keys(patch).length === 0 ? undefined : patch;
 }
+
+/** 草稿逐字段等值（三字段皆字符串标量——浅比较即全等）。 */
+export function defaultOptionsDraftEquals(a: DefaultOptionsDraft, b: DefaultOptionsDraft): boolean {
+  return a.provider === b.provider && a.model === b.model && a.reasoning === b.reasoning;
+}
+
+/**
+ * 快照换代时的草稿收敛裁决（bug 9577a867 伴生面——连击编辑竞态）：快照换代可能只是
+ * 本面板自己上一次写折叠回读（revision bump 早于下一次 blur 提交）——无脑采纳会把用户
+ * 在输字段抹掉（实测：provider blur 提交折叠 → 重同步抹掉已输入的 model → model blur
+ * 提交旧草稿 → patch 缺 model）。裁决：未脏（无在输编辑）→ 采纳快照；脏且快照投影与
+ * 草稿不同 → 保留本地草稿（在输值优先，下一次提交如实整组写入）；脏但已一致 → 归零脏标。
+ */
+export function draftFoldOnRevision(
+  current: DefaultOptionsDraft,
+  incoming: DefaultOptionsDraft,
+  dirty: boolean,
+): { draft: DefaultOptionsDraft; dirty: boolean } {
+  if (!dirty) return { draft: incoming, dirty: false };
+  if (defaultOptionsDraftEquals(current, incoming)) return { draft: incoming, dirty: false };
+  return { draft: current, dirty: true };
+}

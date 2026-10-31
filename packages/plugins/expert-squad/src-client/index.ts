@@ -149,7 +149,7 @@ export const expertSquadClient = {
   // cordis 装载契约：取 ctx.slots 前必须声明注入边（缺声明 = apply 期
   // `cannot get property "slots" without inject`，fiber FAILED——web-client
   // FORGE_CLIENT_INJECT 同径先例，slots 为唯一消费服务）。
-  inject: ["slots"],
+  inject: ["slots", "configForms"],
   apply(ctx: unknown): void {
     const slots = (ctx as { slots?: SlotsFace } | undefined)?.slots
     if (typeof slots?.inject !== "function") {
@@ -161,7 +161,7 @@ export const expertSquadClient = {
     registerExpertPanel(ctx as LazyCtx, slots)
     // 配置 tab「默认 Agent 选项」（settings.plugins.tab render slot；configForms 缺席 =
     // 降级不注册——登记面异常只降本行，不炸面板装配）。
-    registerDefaultOptionsTab(ctx as LazyCtx, slots)
+    registerDefaultOptionsTab(ctx as { configForms?: unknown }, slots)
   },
 }
 
