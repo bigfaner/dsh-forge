@@ -188,7 +188,19 @@ const forgePlugin: ForgePlugin = Object.assign(
     } else {
       expertResolver = async (taskType: string, expertKey?: string): Promise<ForgeExpertProfile | undefined> => {
         const experts = expertsFaceNow()
-        if (experts === undefined) return undefined // 服务缺席 = 形态兼容降级（现查——晚到即时生效）
+        if (experts === undefined) {
+          // AGENTS §7：experts 面缺席 = 形态兼容降级，但 experts.mapping 坏键 fail-loud
+          // 随之不可达（012/1.8 真机径「单测绿真机红」的不可见根因面）——warn 留痕不静默
+          // （诊断不构成取用正确性依赖，emitResolverDiag 内部 fail-soft）。
+          emitResolverDiag({
+            event: 'expert-resolve',
+            level: 'warn',
+            message: `experts 服务缺席（experts.mapping 坏键 fail-loud 不可达，persona 回落程序段降级）: taskType=${taskType}${expertKey !== undefined ? ` key=${expertKey}` : ''}`,
+            taskType,
+            ...(expertKey !== undefined ? { expertKey } : {}),
+          })
+          return undefined
+        }
         wireExperts(experts)
         try {
           return await createExpertProfileResolver({

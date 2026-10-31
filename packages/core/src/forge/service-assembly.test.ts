@@ -13,6 +13,8 @@ import { ProjectWriteError } from './errors.js'
 import type { WorkspaceLike } from './registry.js'
 import { SettingsPathInvalidError } from './settings/errors.js'
 import { seedProjectRow } from '../testutil/db-seeds.js'
+import { StubRegistry } from '../testutil/registry-stub.js'
+import { seedFeature, seedTask } from './tasks/harness.js'
 import corePlugin, { type CoreContextFace } from '../index.js'
 import { deriveTaskStoreDir } from './workspace/derive-dir.js'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './workspace/migrations.js'
@@ -368,6 +370,128 @@ describe('2.7(M3) provide ×1 装配：ctx.forgeSettings（六服务 → 七）'
     } finally {
       rmSync(rootA, { recursive: true, force: true })
       rmSync(rootB, { recursive: true, force: true })
+    }
+  })
+})
+
+/** 尽力清理（Windows 句柄释放时序——EPERM 不掩测试判定） */
+function rmBestEffort(dir: string): void {
+  try {
+    rmSync(dir, { recursive: true, force: true })
+  } catch {
+    // 句柄晚释：留盘待进程退出回收，不影响断言
+  }
+}
+
+// ───────── 真机消费点等价（triage-progress-row fix-3 · bug 61733ec6）：claim 链经 reflect
+// 'forgeExperts' 消费 expertResolver——单测直注 resolveExpertProfile 绕过了装配缝（1.8「单测
+// 绿真机红」教训）；本组走 corePlugin 装配全链（ctx.reflect 现取 + emit diag 缝），与真机
+// 消费点等形。 ─────────
+
+describe('claim 链真机消费点等价：reflect forgeExperts 缺席/坏键（corePlugin 装配全链）', () => {
+  /** 装配桩：ctx.emit 捕获 + reflect store 后备（get/provide 同 Map——缺席/在场两态现切） */
+  function bootWith(tasksHome: string, dbFile: string) {
+    const provided = new Map<string, unknown>()
+    const diagEmits: Array<{ event: string; payload: Record<string, unknown> }> = []
+    const ctx: CoreContextFace = {
+      workspaceRegistry: new StubRegistry(),
+      workspaceController: stubRename,
+      emit: (event, payload) => diagEmits.push({ event, payload: payload as Record<string, unknown> }),
+      reflect: {
+        get: (name: string) => provided.get(name),
+        provide(name: string, value?: unknown) {
+          provided.set(name, value)
+          return () => provided.delete(name)
+        },
+      },
+    }
+    const dispose = corePlugin(ctx, { dbFile, tasksHome })
+    return { provided, diagEmits, dispose }
+  }
+
+  it('resolver 缺席：claim 放行（persona 程序段）+ warn diag 留痕——降级径可观测不静默', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-exp-'))
+    const wsDir = join(root, 'ws')
+    const central = join(root, 'state.db')
+    const cdb = openDatabase(central)
+    seedProjectRow(cdb, { id: 'p-exp', workspaceId: 'w-exp', wsPath: wsDir, forgeDir: join(wsDir, '.forge') })
+    cdb.close()
+    try {
+      const { provided, diagEmits, dispose } = bootWith(join(root, 'tasks-home'), central)
+      const tasks = provided.get('forgeTasks') as {
+        listTasks: (q: { projectId: string }) => Promise<unknown[]>
+        claimTask: (i: {
+          projectId: string
+          taskRef: { slug: string; localId: string }
+          sessionId: string
+        }) => Promise<{ persona: string }>
+      }
+      await tasks.listTasks({ projectId: 'p-exp' }) // 惰性首开（建工作区库）
+      const wsDb = openDatabase(join(deriveTaskStoreDir(join(root, 'tasks-home'), wsDir), 'forge.db'), {
+        migrations: WORKSPACE_MIGRATIONS,
+        schemaVersion: FORGE_DB_SCHEMA_VERSION,
+      })
+      try {
+        seedFeature(wsDb, { slug: 'fx', status: 'tasks' })
+        seedTask(wsDb, 'fx', '1.1', { type: 'doc' })
+        const claimed = await tasks.claimTask({ projectId: 'p-exp', taskRef: { slug: 'fx', localId: '1.1' }, sessionId: 's1' })
+        expect(claimed.persona).not.toContain('md:') // 程序段 persona（档案面缺席形态兼容）
+        // 降级 warn 留痕（AGENTS §7——1.8 真机径静默根因面的可观测性收口）
+        const warn = diagEmits.find((e) => e.event === 'diag/log' && e.payload.event === 'forge-expert-resolver')
+        expect(warn).toBeDefined()
+        expect(warn?.payload.level).toBe('warn')
+        expect(String(warn?.payload.message)).toContain('forgeExperts')
+      } finally {
+        wsDb.close()
+      }
+      dispose()
+    } finally {
+      rmBestEffort(root)
+    }
+  })
+
+  it('resolver 在场 + 坏映射键（vars.expert 旁路设计内）：claim fail-loud 拒绝（消息含键名）、任务留 pending、零 claim 记录', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-svc-exp2-'))
+    const wsDir = join(root, 'ws')
+    const central = join(root, 'state.db')
+    const cdb = openDatabase(central)
+    seedProjectRow(cdb, { id: 'p-exp2', workspaceId: 'w-exp2', wsPath: wsDir, forgeDir: join(wsDir, '.forge') })
+    cdb.close()
+    try {
+      const { provided, dispose } = bootWith(join(root, 'tasks-home'), central)
+      // 装配缝在位 resolver（坏键 fail-loud 语义同 plugin-forge 侧 experts 实现）
+      provided.set('forgeExperts', async (_taskType: string, expertKey?: string) => {
+        const key = expertKey ?? 'doc-reviewer'
+        if (key === 'no-such-profile-key') throw new Error(`expert not found: ${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      })
+      const tasks = provided.get('forgeTasks') as {
+        listTasks: (q: { projectId: string }) => Promise<unknown[]>
+        claimTask: (i: { projectId: string; taskRef: { slug: string; localId: string }; sessionId: string }) => Promise<unknown>
+      }
+      await tasks.listTasks({ projectId: 'p-exp2' })
+      const wsDb = openDatabase(join(deriveTaskStoreDir(join(root, 'tasks-home'), wsDir), 'forge.db'), {
+        migrations: WORKSPACE_MIGRATIONS,
+        schemaVersion: FORGE_DB_SCHEMA_VERSION,
+      })
+      try {
+        seedFeature(wsDb, { slug: 'fy', status: 'tasks' })
+        seedTask(wsDb, 'fy', '2.1', { type: 'doc' })
+        wsDb
+          .prepare(`UPDATE tasks SET vars_json = ? WHERE id = 't-fy-2.1'`)
+          .run(JSON.stringify({ expert: 'no-such-profile-key' })) // 变量路由坏键（设计内旁路 mapping，仍须 fail-loud）
+        await expect(
+          tasks.claimTask({ projectId: 'p-exp2', taskRef: { slug: 'fy', localId: '2.1' }, sessionId: 's2' }),
+        ).rejects.toThrow(/expert not found: no-such-profile-key/)
+        // 一切写入之前中断：任务留 pending、零 claim 记录/链接
+        expect(wsDb.prepare(`SELECT task_status FROM tasks WHERE id = 't-fy-2.1'`).get()).toEqual({ task_status: 'pending' })
+        expect(wsDb.prepare(`SELECT COUNT(*) AS n FROM task_records`).get()).toEqual({ n: 0 })
+      } finally {
+        wsDb.close()
+      }
+      dispose()
+    } finally {
+      rmBestEffort(root)
     }
   })
 })
