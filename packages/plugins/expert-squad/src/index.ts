@@ -16,8 +16,19 @@ import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
+import type { Volatile } from "@deepseek-ai/cordis";
+import Schema from "@deepseek-ai/schemastery";
 import { parseExpertFile } from "./store/frontmatter.js";
-import { ExpertsRegistry, ExpertNotFoundError, EXPERTS_SERVICE_KEY, type ExpertsService } from "./registry.js";
+import {
+  ExpertsRegistry,
+  ExpertNotFoundError,
+  EXPERTS_SERVICE_KEY,
+  type DiagEmit,
+  type ExpertAgentOptionsConfig,
+  type ExpertConfigEntry,
+  type ExpertsConfigFace,
+  type ExpertsService,
+} from "./registry.js";
 import { registerExpertSquadRoutes, type ConnectionLike, type DelegateAssemblyState } from "./routes.js";
 import { ExpertSquadState, expertSquadStateDomainSpec } from "./state.js";
 import { registerExpertTools, serializeExpertMd, type ToolRegisterFace } from "./tools.js";
@@ -37,6 +48,56 @@ import {
 import { ExpertWatchManager, makeFsObservedInvalidator, type FsObservedTarget } from "./store/watch.js";
 
 export const EXPERT_SQUAD_PLUGIN_NAME = 'expert-squad' as const
+
+/** 包名（实例 ID 前缀——本包 experts/ 随包档案的实例 ID = `@dsh-forge/expert-squad#键`）。 */
+export const EXPERT_SQUAD_PACKAGE_NAME = '@dsh-forge/expert-squad' as const
+
+// ---------------------------------------------------------------------------
+// cordis Config 二字段（proposal expert-squad-default-routing 承载裁决）：
+// defaultAgentOptions / experts（实例 ID 键控，条目 agentOptions/tools/skills/disabled）。
+// 均 `.volatile()`——存储与持久化归官方（活动 profile 的 Cordis patch，经 dsh-settings
+// 写径）；插件收到 volatile 引用，取用时 `.get()` 现读快照（热刷新零接线生效）。
+// ---------------------------------------------------------------------------
+
+const reasoningSchema = Schema.union([
+  Schema.const('low'),
+  Schema.const('medium'),
+  Schema.const('high'),
+])
+
+// 显式注解（TS2883）：Schema.dict 推断类型引用 cosmokit Dict，声明发射不可移植——
+// 以全局 Schemastery 宽型注解收口（Config 静态位消费，运行期校验不受影响）。
+const expertSquadConfig: Schemastery<any, any, any> = Schema.object({
+  /** 全局默认 Agent 选项（优先级链 ③ 基座；各字段可缺省 = 该层不生效） */
+  defaultAgentOptions: Schema
+    .object({
+      provider: Schema.string(),
+      model: Schema.string(),
+      reasoning: reasoningSchema,
+    })
+    .volatile(),
+  /** 单专家配置映射（键 = 专家实例 ID；各字段可缺省，空壳条目等价无配置） */
+  experts: Schema
+    .dict(
+      Schema.object({
+        agentOptions: Schema.object({
+          provider: Schema.string(),
+          model: Schema.string(),
+          reasoning: reasoningSchema,
+        }),
+        tools: Schema.array(Schema.string()),
+        skills: Schema.array(Schema.string()),
+        disabled: Schema.boolean(),
+      }),
+    )
+    .volatile(),
+})
+
+/** 插件收到的 volatile 配置引用形状（与 expertSquadConfig 输出对齐；官方 Volatile 协议）。 */
+export interface ExpertSquadPluginConfig {
+  defaultAgentOptions?: Volatile<ExpertAgentOptionsConfig>
+  experts?: Volatile<Readonly<Record<string, ExpertConfigEntry>>>
+}
 
 /** storage 服务窄面（官方 ctx.storage.domain.open 正门——state.test 同径）。 */
 interface StorageFace {
@@ -66,6 +127,8 @@ interface ExpertSquadCtx {
   readonly skills?: Pick<SkillRegistry, "list">;
   /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
   on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
+  /** 宿主事件总线 emit 面（diag/log 诊断事件域发射；缺席 → console 兜底）。 */
+  emit?(event: string, ...args: unknown[]): unknown;
   effect(dispose: () => unknown): unknown;
 }
 
@@ -78,7 +141,7 @@ function expertRootsFor(workspace: string): ExpertRoot[] {
   return [
     { origin: "project", dir: join(projectRoot, ".dsh", "experts") },
     { origin: "user", dir: resolveUserExpertsRoot() },
-    { origin: "plugin", dir: resolvePluginExpertsRoot() },
+    { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
   ];
 }
 
@@ -95,7 +158,7 @@ function cwdExpertRoots(): ExpertRoot[] {
   return [
     ...(projectDir !== null ? [{ origin: "project" as const, dir: projectDir }] : []),
     { origin: "user", dir: resolveUserExpertsRoot() },
-    { origin: "plugin", dir: resolvePluginExpertsRoot() },
+    { origin: "plugin", dir: resolvePluginExpertsRoot(), pluginName: EXPERT_SQUAD_PACKAGE_NAME },
   ];
 }
 
@@ -124,9 +187,29 @@ function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
  *  非可选声明，宿主恒供）+ skills（同先例，candidates 读口）；storage 宿主组合不供
  *  （presence 探测降级——registry FMEA：state 缺席 = 启停内存态、重启回全启用，
  *  §AD2 降级语义）。 */
-async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
+async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPluginConfig): Promise<void> {
   const connection = ctx.connection;
   if (connection === undefined) throw new Error("expert-squad: ctx.connection absent（宿主形状漂移——路由面无法装配）");
+
+  // 插件 Config 二字段现读面（volatile 引用 .get() 现读快照——registry 每次取用现取，
+  // volatile 变更零接线即热生效；settings 服务/配置缺席 = 字段缺席，取用照常）。
+  const expertsConfigFace: ExpertsConfigFace = {
+    defaultAgentOptions: () => config?.defaultAgentOptions?.get(),
+    // volatile 快照（深 readonly）→ 结构等值面（readonly 数组位拷贝在 registry 叠加点承担）
+    experts: () =>
+      config?.experts?.get() as Readonly<Record<string, ExpertConfigEntry>> | undefined,
+  };
+  // 诊断发射面（AGENTS §7）：悬空键 error 日志走官方 diag/log 事件域（订阅侧零改动）；
+  // 事件总线缺席 → console 兜底（诊断不静默吞掉）。
+  const diag: DiagEmit = (level, event, message) => {
+    if (typeof ctx.emit === "function") {
+      ctx.emit("diag/log", { level, process: "main", event, message });
+    } else if (level === "error") {
+      console.error(`[expert-squad][${event}] ${message}`);
+    } else {
+      console.warn(`[expert-squad][${event}] ${message}`);
+    }
+  };
 
   let state: ExpertSquadState | undefined;
   // storage = 可选服务（宿主组合不供）：ctx.storage 属性读被 cordis 守卫拦截
@@ -194,6 +277,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
         roots: () => rootsFor(workspace),
         state,
         workspace,
+        config: expertsConfigFace,
+        diag,
       });
       hit = registry.refresh().then(() => registry);
       // Root cause: 首刷 rejected promise 永久缓存 = 五路由恒 400（毒化缓存）——
@@ -317,6 +402,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
           skills: input.skills,
           ...(input.model !== undefined ? { model: input.model } : {}),
           ...(input.provider !== undefined ? { provider: input.provider } : {}),
+          ...(input.reasoning !== undefined ? { reasoning: input.reasoning } : {}),
         },
         input.personaMd ?? "",
       );
@@ -389,6 +475,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
         roots: () => rootsFor(process.cwd()),
         state,
         workspace: process.cwd(),
+        config: expertsConfigFace,
+        diag,
       });
     }
   }
@@ -402,10 +490,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
       get: (key) => toolRegistry!.get(key),
       list: (opts) => toolRegistry!.list(opts),
       setEnabled: (key, enabled) => toolRegistry!.setEnabled(key, enabled),
-      registerRoot: (_ctx: unknown, dir: string): void => {
+      registerRoot: (_ctx: unknown, dir: string, pluginName?: string): void => {
         const normalized = resolve(dir);
         if (sharedExtraRoots.some((root) => resolve(root.dir) === normalized)) return; // 幂等短路
-        sharedExtraRoots.push({ origin: "plugin", dir: normalized });
+        sharedExtraRoots.push({ origin: "plugin", dir: normalized, pluginName });
         for (const [workspace, pending] of registries) {
           void pending
             .then((registry) => enqueueRefresh(workspace, registry))
@@ -456,5 +544,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
 }
 
 expertSquadPlugin.inject = ['connection', 'subagents', 'skills'];
+// cordis Config schema（StandardSchemaV1 正门——loader 按此校验并解析 volatile 引用）。
+expertSquadPlugin.Config = expertSquadConfig;
 
 export default expertSquadPlugin;

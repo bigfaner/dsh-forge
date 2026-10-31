@@ -11,7 +11,7 @@ import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
 import type { ExpertsRegistry } from "./registry.js";
-import { parseExpertFile, validateExpertUpdate } from "./store/frontmatter.js";
+import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
 
 // ---------------------------------------------------------------------------
 // faces（官方 dsh-tools ToolDefinition 消费字段子面——md-mermaid faces.ts 同法）
@@ -209,6 +209,7 @@ export interface ArchiveFields {
   skills?: string[];
   model?: string;
   provider?: string;
+  reasoning?: ExpertReasoning;
 }
 
 export function serializeExpertMd(fields: ArchiveFields, personaMd: string): string {
@@ -221,6 +222,7 @@ export function serializeExpertMd(fields: ArchiveFields, personaMd: string): str
   if (fields.skills !== undefined) data.skills = fields.skills;
   if (fields.model !== undefined) data.model = fields.model;
   if (fields.provider !== undefined) data.provider = fields.provider;
+  if (fields.reasoning !== undefined) data.reasoning = fields.reasoning;
   return matter.stringify(personaMd, data);
 }
 

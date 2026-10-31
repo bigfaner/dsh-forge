@@ -23,6 +23,13 @@ export type ScannedExpert = ExpertRecord & {
   filePath: string;
   /** 来源文件 mtime（ISO-8601；面板卡片更新时间页脚数据源）。 */
   updatedAt: string;
+  /**
+   * 专家实例 ID（proposal expert-squad-default-routing D6/D7，装载时一次性生成）：
+   * plugin 层 = `插件名#键`（无插件名 root 回退 `plugin` 前缀）；user/project 层 =
+   * `layer:user#键` / `layer:project#键` 保留命名空间前缀（npm 包名不含 `:`，结构性
+   * 杜绝与插件名碰撞——verification V2-EX1 收口）。
+   */
+  instanceId: string;
 };
 
 /** 一代完整索引快照：冻结对象，整体换代，无半代形态。 */
@@ -38,10 +45,29 @@ export interface ExpertSnapshot {
   warnings: readonly string[];
 }
 
-/** 一个待扫描 root：来源层 + 目录。 */
+/** 一个待扫描 root：来源层 + 目录；plugin 层可携插件名（实例 ID 前缀）。 */
 export interface ExpertRoot {
   origin: ExpertOrigin;
   dir: string;
+  /** plugin 层来源插件包名（实例 ID = `插件名#键`）；缺省回退 `plugin` 前缀。 */
+  pluginName?: string;
+}
+
+/** user/project 层实例 ID 保留命名空间前缀（verification V2-EX1 收口：layer: 前缀结构性无碰撞）。 */
+export const INSTANCE_ID_LAYER_USER = "layer:user" as const;
+export const INSTANCE_ID_LAYER_PROJECT = "layer:project" as const;
+/** plugin 层无插件名 root 的回退前缀。 */
+export const INSTANCE_ID_PLUGIN_FALLBACK = "plugin" as const;
+
+/** 实例 ID 拼接单源（registry/测试同径；拼接恒为 `前缀#专家键`）。 */
+export function instanceIdOf(
+  origin: ExpertOrigin,
+  pluginName: string | undefined,
+  key: string,
+): string {
+  if (origin === "user") return `${INSTANCE_ID_LAYER_USER}#${key}`;
+  if (origin === "project") return `${INSTANCE_ID_LAYER_PROJECT}#${key}`;
+  return `${pluginName ?? INSTANCE_ID_PLUGIN_FALLBACK}#${key}`;
 }
 
 const EXPERTS_DIR = join(".dsh", "experts");
@@ -175,6 +201,7 @@ async function scanRoot(
       origin: root.origin,
       filePath,
       updatedAt: updatedIsoOf(filePath),
+      instanceId: instanceIdOf(root.origin, root.pluginName, parsed.record.name),
     });
   }
   return found;
@@ -207,6 +234,15 @@ export async function scanExpertRoots(roots: readonly ExpertRoot[]): Promise<Exp
   )) {
     const layer = await scanRoot(root, warnings);
     for (const [name, record] of layer) {
+      // 同层同键多份（两个插件 root 注册同键内置）：生效份 = root 注册序先者优先
+      // （verification V1-EX2 稳定契约收口——先注册者胜出，后者跳过并 warning）。
+      const existing = experts.get(name);
+      if (existing !== undefined && existing.origin === root.origin) {
+        warnings.push(
+          `同层同键多份，root 注册序先者优先：键 ${name} 由 ${existing.filePath} 胜出（后者跳过）：${record.filePath}`,
+        );
+        continue;
+      }
       experts.set(name, record);
       // 全层中间态：同键跨层逐层追加（低→高优先级序；同层撞名已在 scanRoot 拒绝）
       const list = layers.get(name);

@@ -1,6 +1,6 @@
 {
   "name": "@dsh-forge/expert-squad",
-  "version": "0.12.9",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "expert-squad cordis 插件（双面包装载范式）：专家档案三层扫描/注册取用、通道一委派（delegate_expert）与双通道热刷新（chokidar + fs/observed）。",
@@ -33,6 +33,7 @@
     "build": "tsc -b && node scripts/bundle-client.mjs"
   },
   "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.4",
     "chokidar": "5.0.0",
     "gray-matter": "4.0.3"
   },

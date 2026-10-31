@@ -6,6 +6,15 @@
 
 import matter from "gray-matter";
 
+/** 推理档位（proposal expert-squad-default-routing：固定三值，缺省 = 不下发 effort） */
+export type ExpertReasoning = "low" | "medium" | "high";
+
+export const EXPERT_REASONING_LEVELS: readonly ExpertReasoning[] = ["low", "medium", "high"];
+
+function isExpertReasoning(v: unknown): v is ExpertReasoning {
+  return typeof v === "string" && (EXPERT_REASONING_LEVELS as readonly string[]).includes(v);
+}
+
 /** 专家档案解析产物（§7 ExpertRecord 的档案半——origin/enabled 由 registry 层附加）。 */
 export interface ExpertRecord {
   /** 英文键正本，唯一，建档后不可改 */
@@ -22,6 +31,8 @@ export interface ExpertRecord {
   model?: string;
   /** 可选，派发 provider 偏好（同 model 口径；compose 面与 model 成对消费） */
   provider?: string;
+  /** 可选，推理档位出厂值（随包档案可选；生效链 experts > 档案 > defaultAgentOptions > 不下发） */
+  reasoning?: ExpertReasoning;
 }
 
 export type ExpertParseResult =
@@ -90,6 +101,12 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
   if (data.provider !== undefined && typeof data.provider !== "string") {
     return { ok: false, reason: `${filePath}: 字段 provider 非字符串` };
   }
+  if (data.reasoning !== undefined && !isExpertReasoning(data.reasoning)) {
+    return {
+      ok: false,
+      reason: `${filePath}: 字段 reasoning 非法（须为 ${EXPERT_REASONING_LEVELS.join("|")}）`,
+    };
+  }
   if (personaMd === "") {
     return { ok: false, reason: `${filePath}: 正文人设 Markdown 缺失` };
   }
@@ -105,6 +122,7 @@ export function parseExpertFile(filePath: string, content: string): ExpertParseR
       skills: data.skills ?? [],
       ...(data.model !== undefined ? { model: data.model } : {}),
       ...(data.provider !== undefined ? { provider: data.provider } : {}),
+      ...(data.reasoning !== undefined ? { reasoning: data.reasoning } : {}),
     },
   };
 }
