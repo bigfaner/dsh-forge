@@ -21,7 +21,7 @@ import {
   TOOL_CANDIDATES,
   type MdInline,
 } from "./detail-logic.js";
-import { maskedPeersLabel, diffFields, originLabel, type ExpertView } from "./filter.js";
+import { maskedPeersLabel, diffFields, entryIdOf, originLabel, type ExpertView } from "./filter.js";
 import {
   DiffOnlyToggle,
   PairCompareTable,
@@ -493,11 +493,12 @@ function CompareBody({
   readonly controller: ExpertDetailController;
 }): ReactNode {
   const { showAll, toggle } = useDiffOnly();
-  // Root cause（bug f4020406 ⑥）：state 只存 compareTargetOrigin，渲染时从同键最新
-  // 条目重解析——轮询换新后对比表随 sameKeyEntries 自动换新，不读陈旧快照。
+  // Root cause（bug f4020406 ⑥）：state 只存对比靶身份（compareTargetOrigin = 
+  // entryIdOf——sourcePath），渲染时从同键最新条目重解析——轮询换新后对比表随
+  // sameKeyEntries 自动换新，不读陈旧快照。
   const target = state.compareTargetOrigin === undefined
     ? undefined
-    : shadows.find((shadow) => shadow.origin === state.compareTargetOrigin);
+    : shadows.find((shadow) => entryIdOf(shadow) === state.compareTargetOrigin);
   // 对比对象消失自动退场：同键已无其它来源（shadows 空）→ 自动回查看态——不留
   // 「对比对象已不在」死页，对比入口（卡头对比钮）本就随 multi 消失，此处兜底
   // 打开/展示间隙来源消失的窗口期。
@@ -513,10 +514,10 @@ function CompareBody({
       <div className="dswf-cmp-pick-list">
         {shadows.map((shadow) => (
           <button
-            key={shadow.origin}
+            key={entryIdOf(shadow)}
             type="button"
-            className={`dswf-cmp-opt${target?.origin === shadow.origin ? " sel" : ""}`}
-            data-cmp-target={shadow.origin}
+            className={`dswf-cmp-opt${target !== undefined && entryIdOf(target) === entryIdOf(shadow) ? " sel" : ""}`}
+            data-cmp-target={entryIdOf(shadow)}
             onClick={() => controller.selectCompareTarget(shadow)}
           >
             <span className={`origin-badge origin-${shadow.origin}`}>{originLabel(shadow.origin, projectName)}</span>
@@ -577,14 +578,12 @@ export function ExpertDetailDialog(props: {
   const editing = state.mode === "edit";
   const comparing = state.mode === "compare";
   const expert = state.expert;
-  // 被遮蔽同名卡（对比对象源）：同键条目中非当前呈现的只读层。
-  // bug 13f807c4 注记③：「当前条目」判别统一为 origin 口径（与下方 stale 派生同键）
-  // ——引用不等（peer !== expert）会把轮询换新后的同 origin 新代条目误判为遮蔽层，
-  // origin 稳定判别键与 compareTargetOrigin/stale 派生同口径。
+  // 被遮蔽同名卡（对比对象源）：同键条目中非当前呈现的只读层。身份判别 = entryIdOf
+  // （sourcePath——同 origin 多份内置注册下 origin 比较会误伤同源条目，缺陷根源）。
   // bug 13f807c4 注记①（容忍语义）：在场条目缺 effective 位（旧载荷）≠ 被删——
   // 容忍渲染快照继续呈现，仅对比左列因生效位缺失禁用/空态（bug 207b7579①），非漏改。
   const shadows = (props.sameKeyEntries ?? []).filter(
-    (peer) => peer.origin !== expert.origin && peer.effective !== true,
+    (peer) => entryIdOf(peer) !== entryIdOf(expert) && peer.effective !== true,
   );
   // bug e1d74589：对比左列生效条同自 sameKeyEntries 按 effective 位重解析——
   // state.expert 是 open 期快照（仅 save/toggleEnabled 换新），外部改动后与右列

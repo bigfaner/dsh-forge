@@ -28,6 +28,11 @@ export interface ExpertView {
   readonly sourcePath?: string
 }
 
+/** 条目身份键（sourcePath 优先；同键同 origin 可有多份内置注册，origin 不足以区分）。 */
+export function entryIdOf(entry: ExpertView): string {
+  return entry.sourcePath ?? `${entry.origin}:${entry.name}`
+}
+
 /** 状态过滤枚举（F1：全部/启用/禁用）。 */
 export type StatusFilter = "all" | "enabled" | "disabled"
 

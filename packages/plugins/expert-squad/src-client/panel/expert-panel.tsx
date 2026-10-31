@@ -11,6 +11,7 @@
 //（1.4/1.22）——零新增旁路。
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  entryIdOf,
   filterGroups,
   footerText,
   originLabel,
@@ -315,14 +316,17 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     [controller, detailController],
   )
 
-  // 差异承载面（2026-10-26 裁决）：点被遮蔽行 → 打开详情 Dialog 并直入对比态
-  // （生效卡 vs 该行两列差异——聚组内联对比退役，差异一律 Dialog 承载）。
+  // 差异承载面（2026-10-26 裁决 + sourcePath 身份修正）：点对比钮 → 打开详情 Dialog
+  // 并直入对比态。靶解析按 sourcePath（同 origin 多份内置注册下 origin find 会命中
+  // 生效层自身 → startCompare 后 shadows 滤空 → 自动退场成详情——缺陷根源）。
   const onCompare = useCallback(
-    (key: string, origin: string) => {
+    (key: string, sourceId: string) => {
       if (detailController === undefined) return
       const entries = controller?.getSnapshot().entries ?? []
       const effective = entries.find((entry) => entry.name === key && entry.effective !== false)
-      const shadow = entries.find((entry) => entry.name === key && entry.origin === origin)
+      const shadow = entries.find(
+        (entry) => entry.name === key && (entry.sourcePath ?? `${entry.origin}:${entry.name}`) === sourceId,
+      )
       if (effective === undefined || shadow === undefined) return
       detailController.open(effective)
       detailController.startCompare(shadow)
@@ -434,8 +438,8 @@ export interface ExpertPanelProps {
   readonly delegateNotice?: string
   /** 筛选下拉初始展开态（SSR 测试/调试面；缺省收起——msel 语义同径）。 */
   readonly filtersOpen?: boolean
-  /** 点被遮蔽行 = 请求打开详情 Dialog 对比态（生效卡 vs 该行两列差异——聚组内联对比退役）。 */
-  readonly onCompare?: (key: string, origin: string) => void
+  /** 点对比钮 = 请求打开详情 Dialog 对比态（key + 靶条目 sourceId——sourcePath 身份）。 */
+  readonly onCompare?: (key: string, sourceId: string) => void
 }
 
 const STATUS_OPTIONS: readonly { readonly value: StatusFilter; readonly label: string }[] = [
@@ -460,8 +464,7 @@ function OriginBadge({ origin, projectName }: { readonly origin: string; readonl
 }
 
 /** 来源条目身份键（sourcePath——同键同 origin 可有多份内置注册，origin 不足以区分）。 */
-const entryIdOf = (entry: ExpertView): string => entry.sourcePath ?? `${entry.origin}:${entry.name}`
-
+// （entryIdOf 移居 filter.ts——Dialog 对比态同用 sourcePath 身份）
 function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, menuOpen, onToggleMenu, onSelectOrigin }: {
   /** 当前展示条目（selectedId 对应层；缺省 = 生效层）。 */
   readonly expert: ExpertView;
@@ -593,7 +596,7 @@ function Card({ expert, allEntries, projectName, onActivate, onCompare, multi, m
  * 点击向下扩展全来源菜单，选中即卡内切换展示该来源专家——不再渲染被遮蔽摘要行）。
  */
 export function ExpertGroupView(
-  { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string, origin?: string) => void; readonly onCompare?: (key: string, origin: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
+  { group, onActivate, onCompare, hiddenShadows, projectName }: { readonly group: ExpertGroup; readonly onActivate?: (key: string, origin?: string) => void; readonly onCompare?: (key: string, sourceId: string) => void; readonly hiddenShadows?: number; readonly projectName?: string }): ReactNode {
   const multi = group.shadows.length > 0
   // 来源切换展示态（undefined = 生效层；身份键 = sourcePath）；被遮蔽条目只读展示
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
@@ -616,8 +619,10 @@ export function ExpertGroupView(
       : ([group.effective, ...group.shadows].find((entry) => entryIdOf(entry) === selectedId) ??
         group.effective)
   const allEntries = useMemo(() => [group.effective, ...group.shadows], [group])
-  // 对比 = 生效卡 vs 当前展示的被遮蔽层（展示生效层时取首个被遮蔽层）
-  const compareOrigin = shown.effective === false ? shown.origin : group.shadows[0]?.origin
+  // 对比 = 生效卡 vs 当前展示的被遮蔽层（展示生效层时取首个被遮蔽层）；靶以
+  // sourcePath 身份传递（同 origin 多份内置注册下 origin 不足以定位）
+  const compareSourceId =
+    shown.effective === false ? entryIdOf(shown) : group.shadows[0] !== undefined ? entryIdOf(group.shadows[0]) : undefined
   return (
     // 「multi」为测试锚（单测 panel-view / e2e expert-squad-compare-mode GROUP_MULTI 选择器），
     // 无样式消费面（.multi 无 CSS 规则）——删类需同步两处选择器
@@ -635,8 +640,8 @@ export function ExpertGroupView(
         allEntries={allEntries}
         projectName={projectName}
         {...(onActivate !== undefined ? { onActivate } : {})}
-        {...(multi && onCompare !== undefined && compareOrigin !== undefined
-          ? { onCompare: () => onCompare(group.key, compareOrigin) }
+        {...(multi && onCompare !== undefined && compareSourceId !== undefined
+          ? { onCompare: () => onCompare(group.key, compareSourceId) }
           : {})}
         {...(multi
           ? {

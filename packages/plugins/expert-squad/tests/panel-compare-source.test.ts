@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  entryIdOf,
   filterExperts,
   filterGroups,
   matchesOrigin,
@@ -137,14 +138,14 @@ describe("ExpertDetailController 两两对比模式（③）", () => {
     return c;
   }
 
-  it("startCompare(shadow) → mode=compare + compareTargetOrigin（改存 origin）；selectCompareTarget 单选切换", () => {
+  it("startCompare(shadow) → mode=compare + compareTargetOrigin（存 entryIdOf 身份）；selectCompareTarget 单选切换", () => {
     const c = ctl();
     c.startCompare(shadow);
     expect(c.getSnapshot().mode).toBe("compare");
-    expect(c.getSnapshot().compareTargetOrigin).toBe("user");
+    expect(c.getSnapshot().compareTargetOrigin).toBe(entryIdOf(shadow));
     const other = entry({ origin: "plugin", effective: false, title: "内置评审" });
     c.selectCompareTarget(other);
-    expect(c.getSnapshot().compareTargetOrigin).toBe("plugin");
+    expect(c.getSnapshot().compareTargetOrigin).toBe(entryIdOf(other));
     // 单选：compareTargetOrigin 单值无列表——禁三列并排的数据面
     expect(c.getSnapshot().mode).toBe("compare");
   });
@@ -283,9 +284,9 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
     expect(html).toContain("dswf-cmp-pick-list");
     // bug f4020406 收敛：Dialog 只留 pick-list——chips（聚组展开语汇）不在 Dialog
     expect(html).not.toContain("data-cmp-chip");
-    // 单选候选 = 两枚被遮蔽来源行；无三列并排（仅 生效 vs target 两数据列）
-    expect(html).toContain('data-cmp-target="user"');
-    expect(html).toContain('data-cmp-target="plugin"');
+    // 单选候选 = 两枚被遮蔽来源行（身份 = entryIdOf）；无三列并排（仅 生效 vs target 两数据列）
+    expect(html).toContain('data-cmp-target="user:code-reviewer"');
+    expect(html).toContain('data-cmp-target="plugin:code-reviewer"');
     expect(html.match(/<th class="cmp-eff">/g)?.length).toBe(1);
     expect(html.match(/<th class="cmp-tgt">/g)?.length).toBe(1);
     // 退出回查看态入口

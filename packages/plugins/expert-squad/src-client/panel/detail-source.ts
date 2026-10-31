@@ -3,7 +3,7 @@
 // 同范式）。保存 = 校验门 → update 路由 → 专家换新回查看态 + Toast 热刷新；启停 =
 // enable/disable 路由即时生效；校验失败字段级报错不落盘。
 
-import type { ExpertView } from "./filter.js";
+import { entryIdOf, type ExpertView } from "./filter.js";
 import {
   addSkill,
   draftOf,
@@ -171,17 +171,18 @@ export class ExpertDetailController {
     this.emit();
   }
 
-  /** 进入两两对比态（1.61 裁决③：仅查看态可入；只存对象 origin——渲染时重解析最新条目）。 */
+  /** 进入两两对比态（1.61 裁决③：仅查看态可入；只存靶条目身份 entryIdOf（sourcePath）
+   *  ——同 origin 多份内置注册下 origin 不足以定位；渲染时重解析最新条目）。 */
   startCompare(target: ExpertView): void {
     if (this.state === undefined || this.state.mode !== "view") return;
-    this.state = { ...this.state, mode: "compare", compareTargetOrigin: target.origin };
+    this.state = { ...this.state, mode: "compare", compareTargetOrigin: entryIdOf(target) };
     this.emit();
   }
 
-  /** 对比对象单选切换（compare 态内；单值换靶——禁三列并排；只存 origin 渲染时重解析）。 */
+  /** 对比对象单选切换（compare 态内；单值换靶——禁三列并排；只存身份渲染时重解析）。 */
   selectCompareTarget(target: ExpertView): void {
     if (this.state === undefined || this.state.mode !== "compare") return;
-    this.state = { ...this.state, compareTargetOrigin: target.origin };
+    this.state = { ...this.state, compareTargetOrigin: entryIdOf(target) };
     this.emit();
   }
 
