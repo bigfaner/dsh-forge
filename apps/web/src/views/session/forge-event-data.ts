@@ -35,6 +35,8 @@ export interface ForgeProgressEntryData {
   readonly verb: string
   readonly taskKey?: string
   readonly taskTitle?: string
+  /** 执行专家键（claim 时点解析；旧缓存/未解析 = 缺省） */
+  readonly expertKey?: string
   readonly scenario?: string
   readonly note?: string
   readonly at: number
@@ -70,6 +72,7 @@ export function isForgeProgressEntryData(value: unknown): value is ForgeProgress
     typeof raw['verb'] === 'string' &&
     (raw['taskKey'] === undefined || typeof raw['taskKey'] === 'string') &&
     (raw['taskTitle'] === undefined || typeof raw['taskTitle'] === 'string') &&
+    (raw['expertKey'] === undefined || typeof raw['expertKey'] === 'string') &&
     (raw['scenario'] === undefined || typeof raw['scenario'] === 'string') &&
     (raw['note'] === undefined || typeof raw['note'] === 'string') &&
     typeof raw['at'] === 'number' &&
@@ -142,8 +145,12 @@ export function forgeEventClockSeconds(time: number): string {
   }
 }
 
-/** 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀与 `（…）` 修饰——原型 `[forge·调度] {slug}` 同语；全组缺席 = ''） */
-export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[]): string {
+/**
+ * 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀与 `（…）` 修饰——原型 `[forge·调度] {slug}` 同语；
+ * 消息任务源行缺席 = 回落取 progress 内条目 sourceSlug（首个非空——纯进度组同显任务源）；
+ * 全组缺席 = ''）
+ */
+export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[], progress?: readonly ForgeProgressEntryData[]): string {
   for (const entry of entries) {
     // 徽记与 `任务源:` 可同行（`[forge·X] 任务源: feat-x`）——先剥徽记前缀再取值
     const match = /(?:^|\n)\s*(?:\[forge·[^\]]+\]\s*)?任务源:\s*(.+)/.exec(entry.text)
@@ -152,6 +159,9 @@ export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[]): 
         .replace(/（[^）]*）/g, '')
         .trim()
     }
+  }
+  for (const entry of progress ?? []) {
+    if (entry.sourceSlug !== '') return entry.sourceSlug
   }
   return ''
 }

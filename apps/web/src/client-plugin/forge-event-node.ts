@@ -80,6 +80,8 @@ export interface ForgeProgressEntry {
   readonly verb: string
   readonly taskKey?: string
   readonly taskTitle?: string
+  /** 执行专家键（claim 时点解析；旧缓存/未解析 = 缺省——窄收镜像 optionalString） */
+  readonly expertKey?: string
   readonly scenario?: string
   readonly note?: string
   /** 事件时间（Unix epoch ms——起止/耗时取此） */
@@ -204,6 +206,7 @@ function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: st
     verb: optionalString(raw['verb']) ?? '',
     taskKey: optionalString(raw['taskKey']),
     taskTitle: optionalString(raw['taskTitle']),
+    expertKey: optionalString(raw['expertKey']),
     scenario: optionalString(raw['scenario']),
     note: optionalString(raw['note']),
     at: raw['at'],

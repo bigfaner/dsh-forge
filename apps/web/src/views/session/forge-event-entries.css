@@ -172,3 +172,10 @@
 .dswf-event-entries-loop {
   align-items: center;
 }
+
+/* 任务行 #N 弱化前缀（loop-card-task-context——localId 弱化档，caption 同刻度） */
+.dswf-event-entries-num {
+  margin-right: 4px; /* dsw-raw 原型 evt-row 列距的收敛刻度 */
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}

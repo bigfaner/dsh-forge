@@ -372,3 +372,16 @@ describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底�
     expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
   })
 })
+
+describe('loop-card-task-context：ForgeProgressEntry expertKey 可选镜像（同语义窄收——畸形弃字段不抛）', () => {
+  it('载荷携带 expertKey = 条目镜像；载荷畸形 expertKey（非 string）= 字段缺省不弃行', () => {
+    const { stream } = simulate([
+      progressEvt(4, { taskKey: 'feat-x/2.3', expertKey: 'squad/dev' }),
+      progressEvt(5, { taskKey: 'feat-x/2.3', expertKey: 42 }),
+    ])
+    const group = stream.groups.at(-1)
+    expect(group?.progress).toHaveLength(2)
+    expect(group?.progress?.[0]).toMatchObject({ taskKey: 'feat-x/2.3', expertKey: 'squad/dev' })
+    expect(group?.progress?.[1]?.expertKey).toBeUndefined()
+  })
+})

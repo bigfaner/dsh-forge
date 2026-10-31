@@ -63,13 +63,20 @@ export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
 function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   const statusWord = FORGE_PROGRESS_STATUS_WORD[row.entry.status] ?? row.entry.status
   const duration = forgeProgressDurationLabel(row)
+  // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
+  const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
   return (
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
       <span className="dswf-event-entries-text">
+        {localId !== undefined && localId !== '' ? <span className="dswf-event-entries-num">#{localId}</span> : null}
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
         {/* 重试计数等 note 随进度事件持久（bug 33728995③——组卡从投影/会话日志重建后仍可见） */}
         {row.entry.note !== undefined ? ` · ${row.entry.note}` : ''}
       </span>
+      {/* 执行专家键（标题与状态徽标之间；旧事件无字段 = 不显示） */}
+      {row.entry.expertKey !== undefined && row.entry.expertKey !== '' ? (
+        <span className="dswf-event-entries-time">{row.entry.expertKey}</span>
+      ) : null}
       <span className="dswf-event-entries-badge" data-tone={forgeProgressStatusTone(row.entry.status)}>
         {statusWord}
       </span>
@@ -152,7 +159,7 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
   // `N 条 · 今日 HH:mm–HH:mm`（计数经自包裹层绝对定位——官方 DisclosureRow 无尾部
   // 插槽，零 fork）；来源缺席回落旧摘要串（计数并入标题，不叠贴）
-  const source = forgeEventGroupSource(data.entries)
+  const source = forgeEventGroupSource(data.entries, data.progress)
   const title = source !== '' ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
   const rows = forgeProgressRowItems(data.progress ?? [])
   const loopRow = rows.find((row) => row.entry.taskKey === undefined)

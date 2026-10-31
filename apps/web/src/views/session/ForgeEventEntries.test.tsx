@@ -61,6 +61,17 @@ describe('ForgeEventEntries（折叠条目组块）', () => {
     expect(html).toContain('forge · 任务循环事件（1）· 14:02')
     expect(html).not.toContain('dswf-event-entries-count')
   })
+  it('loop-card-task-context 1：纯进度组 = 组头回落 `[forge·调度] {progress.sourceSlug}`；全组无来源回落旧摘要', () => {
+    const noSource: ForgeEventGroupData = {
+      ...DATA,
+      entries: [{ ...DATA.entries[0]!, text: '[forge·启动] 无任务源行' }],
+      progress: PROGRESS,
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(noSource)} />)
+    expect(html).toContain('[forge·调度] feat-x')
+    const none: ForgeEventGroupData = { ...noSource, progress: undefined }
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(none)} />)).toContain('forge · 任务循环事件（1）· 14:02')
+  })
   it('他形数据 / kind 漂移 = null（官方流零残留）', () => {
     expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf({ key: 'x' })} />)).toBe('')
     expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA, 'other')} />)).toBe('')
@@ -97,6 +108,31 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('14:30:00') // 结束
     expect(html).toContain('28分0秒') // 耗时 = 结束 − 开始
     expect(html).toContain('1 任务 · 今日 14:01–14:30') // 头计数：任务数 + 进度起止范围
+  })
+  it('loop-card-task-context 2：任务行标题前 `#N` 弱化前缀（N = taskKey 尾段）；循环级行无前缀', () => {
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(PROGRESS_DATA)} />)
+    expect(html).toContain('dswf-event-entries-num') // 弱化前缀样式类
+    expect(html).toContain('#2.3') // N = taskKey 尾段（feat-x/2.3）
+    expect(html).toContain('dswf-event-entries-loop')
+    const loopIdx = html.indexOf('dswf-event-entries-loop')
+    const loopEnd = html.indexOf('dswf-event-entries-progress')
+    expect(html.slice(loopIdx, loopEnd)).not.toContain('dswf-event-entries-num') // 循环级不渲染前缀
+  })
+  it('loop-card-task-context 3：专家键显示于标题与状态徽标之间；旧事件（无 expertKey）不显示零报错', () => {
+    const withExpert: ForgeEventGroupData = {
+      ...DATA,
+      progress: [{ ...PROGRESS[1]!, expertKey: 'squad/dev' }],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(withExpert)} />)
+    expect(html).toContain('squad/dev')
+    const textIdx = html.indexOf('折叠条目组')
+    const expertIdx = html.indexOf('squad/dev')
+    const badgeIdx = html.indexOf('data-tone="run"')
+    expect(expertIdx).toBeGreaterThan(textIdx)
+    expect(badgeIdx).toBeGreaterThan(expertIdx)
+    const legacy: ForgeEventGroupData = { ...DATA, progress: [PROGRESS[1]!] }
+    expect(() => renderToStaticMarkup(<ForgeEventEntries node={nodeOf(legacy)} />)).not.toThrow()
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(legacy)} />)).not.toContain('squad/dev')
   })
   it('bug 6a3ccc4d：纯 progress 组计数 = 卡内渲染行数（progress 行计入——（0）不再出现）', () => {
     const pure: ForgeEventGroupData = { ...PROGRESS_DATA, entries: [] }

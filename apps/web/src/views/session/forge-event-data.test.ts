@@ -4,11 +4,13 @@ import {
   forgeEventBadgeTone,
   forgeEventClock,
   forgeEventClockSeconds,
+  forgeEventGroupSource,
   forgeProgressRowItems,
   forgeProgressStatusTone,
   FORGE_PROGRESS_STATUS_WORD,
   isForgeEventGroupData,
   isForgeProgressEntryData,
+  type ForgeEventEntryData,
   type ForgeEventGroupData,
   type ForgeProgressEntryData,
 } from './forge-event-data.js'
@@ -68,14 +70,34 @@ describe('isForgeProgressEntryData（progress 条目守卫）', () => {
   it('整形状 = true；必填位缺失/类型漂移 = false；可选位宽容', () => {
     expect(isForgeProgressEntryData(progress(1, {}))).toBe(true)
     expect(isForgeProgressEntryData(progress(1, { taskKey: 'feat-x/1.2', note: 'x' }))).toBe(true)
+    expect(isForgeProgressEntryData(progress(1, { expertKey: 'squad/dev' }))).toBe(true)
     expect(isForgeProgressEntryData({ ...progress(1, {}), sourceSlug: '' })).toBe(false)
     expect(isForgeProgressEntryData({ ...progress(1, {}), at: Number.NaN })).toBe(false)
     expect(isForgeProgressEntryData({ ...progress(1, {}), taskKey: 42 })).toBe(false)
+    expect(isForgeProgressEntryData({ ...progress(1, {}), expertKey: 42 })).toBe(false)
     expect(isForgeProgressEntryData(null)).toBe(false)
   })
   it('组守卫：progress 可选位在 = 整组通过；progress 内畸形条目 = 整组拒绝', () => {
     expect(isForgeEventGroupData({ ...data, progress: [progress(1, {})] })).toBe(true)
     expect(isForgeEventGroupData({ ...data, progress: [{ seq: 'x' }] })).toBe(false)
+  })
+})
+
+describe('forgeEventGroupSource（组头来源提取——消息任务源行 + progress sourceSlug 回落）', () => {
+  it('消息条目「任务源: 」行在场 = 行值（剥徽记前缀与修饰）；progress 缺席不回落', () => {
+    expect(forgeEventGroupSource([entry])).toBe('feat-x')
+    const noSource: ForgeEventEntryData[] = [{ ...entry, text: '[forge·启动] 无任务源行' }]
+    expect(forgeEventGroupSource(noSource)).toBe('')
+    expect(forgeEventGroupSource(noSource, [progress(1, { sourceSlug: 'feat-y' })])).toBe('feat-y')
+  })
+  it('loop-card-task-context 1：消息任务源行缺席 = 回落取 progress 首个非空 sourceSlug', () => {
+    const noSource: ForgeEventEntryData[] = [{ ...entry, text: '[forge·启动] 无任务源行' }]
+    expect(forgeEventGroupSource(noSource, [progress(1, { sourceSlug: 'feat-y' }), progress(2, { sourceSlug: 'feat-z' })])).toBe('feat-y')
+    expect(forgeEventGroupSource(noSource, [])).toBe('')
+    expect(forgeEventGroupSource(noSource, undefined)).toBe('')
+  })
+  it('消息任务源行优先于 progress sourceSlug', () => {
+    expect(forgeEventGroupSource([entry], [progress(1, { sourceSlug: 'feat-y' })])).toBe('feat-x')
   })
 })
 
