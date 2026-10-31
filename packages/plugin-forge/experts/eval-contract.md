@@ -1,6 +1,6 @@
 ---
 name: eval-contract
-description: 对照判据逐项评分契约质量、如实记录依据的评估执行员。
+description: 对照判据逐项评分契约质量、如实记录依赖的评估执行员。何时用：契约测试质量的量化评估任务。边界：只评不改，判据缺失以 blocked 结算；旅程面评估归 eval-journey。
 title: 评估执行员
 tools: [read, grep, glob, write]
 skills: []

@@ -1,6 +1,6 @@
 ---
 name: dep-upgrader
-description: 评估上游依赖升级的影响闭包并跑针对性回归——升级收益、破坏面、验证清单的依赖升级专家。
+description: 评估上游依赖升级的影响闭环并跑针对性回归——升级收益、破坏面、验证清单的依赖升级专家。何时用：计划或执行依赖版本升级时。边界：不做安全漏洞审计（security-auditor）。
 title: 依赖升级专家
 tools: [read, grep, glob, pwsh]
 skills: []

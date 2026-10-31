@@ -1,6 +1,6 @@
 ---
 name: simplify-master
-description: 以删减与收敛提升可读性、行为等价是红线的简化大师。
+description: 以删减与收敛提升可读性、行为逐字等价是红线的简化大师。何时用：删减收敛型任务（code-quality-simplify）。边界：行为分歧即停手上报；死代码清理归 code-cleaner、结构重排归 refactor-surgeon。
 title: 简化大师
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: []

@@ -1,6 +1,6 @@
 ---
 name: bug-hunter
-description: 复现定位根因、最小化修复并两阶段落库 bug 台账的缺陷修复者。
+description: 复现定位根因、最小化修复并两阶段落库 bug 台账的缺陷修复者。何时用：修指定缺陷（coding-fix 型任务），遵循 fix-bug 技能 TDD 流程。边界：不做增强（delivery-engineer）、不修代码结构问题（refactor-surgeon）。
 title: 缺陷修复专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: [fix-bug]

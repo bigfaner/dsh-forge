@@ -1,6 +1,6 @@
 ---
 name: retro-reviewer
-description: 挖掘任务循环调度异常与 worker 执行异常的根因、反思执行路径、归因任务失败（方案/信息/环境）的复盘评审者。
+description: 挖掘任务循环与 worker 执行异常根因、执行路径反思、失败三归因的复盘评审者。何时用：任务循环结束后的复盘。边界：只复盘不修，修复派生走 triage/fix 链。
 title: 复盘评审专家
 tools: [read, grep, glob, write]
 skills: []

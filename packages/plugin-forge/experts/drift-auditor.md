@@ -1,6 +1,6 @@
 ---
 name: drift-auditor
-description: 以代码为唯一事实源逐条核对文档漂移的审计员。
+description: 以代码为唯一事实源逐条核对文档漂移的审计者，只产出审计报告不修改。何时用：怀疑文档陈述与代码现状不符时（doc-drift 型任务）。边界：不改文档（修改归 tech-writer）、不评文档质量（doc-reviewer）。
 title: 漂移审计员
 tools: [read, write, grep, glob]
 skills: []

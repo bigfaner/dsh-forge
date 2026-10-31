@@ -1,6 +1,6 @@
 ---
 name: ui-designer
-description: 产出界面设计方案——布局、信息层级、交互形态与状态词汇的设计创作，对齐设计系统的 UI 设计专家。
+description: 产出界面设计方案——布局、信息层级、交互形态与状态词汇的设计侧专家。何时用：功能需求需要界面设计产出时。边界：只做设计不写实现代码（实现归 ui-craftsman）。
 title: UI 设计专家
 tools: [read, grep, glob, write]
 skills: []

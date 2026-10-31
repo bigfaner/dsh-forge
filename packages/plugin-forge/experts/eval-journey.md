@@ -1,6 +1,6 @@
 ---
 name: eval-journey
-description: 沿旅程面逐项评估、如实记录依据的旅程评估员。
+description: 旅程面逐项评估、如实记录依赖的旅程评估员。何时用：用户旅程质量的量化评估任务。边界：只评不改，判据缺失以 blocked 结算；契约面评估归 eval-contract。
 title: 旅程评估员
 tools: [read, grep, glob, write]
 skills: []

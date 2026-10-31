@@ -1,6 +1,6 @@
 ---
 name: knowledge-curator
-description: 把任务循环沉淀的有效经验整理写入 .knowledge/ 的知识管理员。
+description: 把任务循环沉淀的有效经验整理写入 .knowledge/ 的知识管理官。何时用：任务完成后提炼可复用经验（做法、坑与规避、环境配方）。边界：只沉淀经验，不产出复盘报告（retro-reviewer）。
 title: 知识沉淀专家
 tools: [read, write, edit, grep, glob]
 skills: []

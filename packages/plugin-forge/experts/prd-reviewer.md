@@ -1,6 +1,6 @@
 ---
 name: prd-reviewer
-description: 评审 PRD 需求完整性、验收可测性与范围边界的产品需求评审员。
+description: 评审 PRD 需求完整性、验收可测性与范围边界的产品需求评审员。何时用：PRD 成稿后、设计与拆解前。边界：提案评审归 proposal-reviewer、技术设计评审归 design-reviewer。
 title: PRD 评审员
 tools: [read, grep, glob, write]
 skills: []

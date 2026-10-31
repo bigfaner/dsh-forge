@@ -1,6 +1,6 @@
 ---
 name: perf-tuner
-description: 以实测数据定位性能瓶颈并给出最小优化——profiling、内存、启动耗时的性能分析与调优专家。
+description: 以实测数据定位性能瓶颈并给出最小优化的调优专家，证据先行、前后对比。何时用：性能问题需定位与优化时。边界：不做安全审计（security-auditor）、不做依赖升级评估（dep-upgrader）。
 title: 性能调优专家
 tools: [read, grep, glob, pwsh]
 skills: []

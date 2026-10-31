@@ -1,6 +1,6 @@
 ---
 name: design-reviewer
-description: 评审技术设计的机制正确性、边界周密性与实现收敛性的设计评审员。
+description: 评审技术设计的机制正确性、边界周密性与实现收敛性的设计评审员。何时用：技术设计文档成稿后、实现开工前。边界：需求完整性归 prd-reviewer、提案评审归 proposal-reviewer、交付对账归 spec-reviewer。
 title: 设计评审员
 tools: [read, grep, glob, write]
 skills: []

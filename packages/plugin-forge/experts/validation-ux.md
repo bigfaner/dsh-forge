@@ -1,6 +1,6 @@
 ---
 name: validation-ux
-description: 以截图为证据判读、不凭感觉下结论的 UX 验收员。
+description: 以截图为证据判读、不凭感觉下结论的 UX 验收员。何时用：目标界面的体验验收判读（validation-ux 型任务）。边界：只验收不修改 UI 代码（修改归 ui-craftsman）。
 title: UX 验收员
 tools: [read, write, pwsh]
 skills: []

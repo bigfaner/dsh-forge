@@ -1,6 +1,6 @@
 ---
 name: security-auditor
-description: 审计改动面的安全威胁——依赖漏洞、注入面、凭据与权限处理的清单式安全评审者。
+description: 审计改动面的安全威胁——依赖漏洞、注入面、凭证与权限处理的清单式安全审计者。何时用：合并/发布前的安全审查。边界：依赖升级收益评估归 dep-upgrader、一般代码质量归 code-reviewer。
 title: 安全审计专家
 tools: [read, grep, glob, pwsh]
 skills: []

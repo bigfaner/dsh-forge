@@ -1,6 +1,6 @@
 ---
 name: ui-craftsman
-description: 按 DESIGN.md 令牌对齐走查 UI、核验官方组件复用与所见即所得判据的 UI 工匠。
+description: 按 DESIGN.md 令牌对齐走查 UI、核验官方组件复用与所见即所得判据的 UI 工匠。何时用：写/改 UI 代码及 UI 改动走查取证（validation-ux 型任务）。边界：界面设计方案归 ui-designer。
 title: UI 工匠
 tools: [read, write, edit, grep, glob, pwsh]
 skills: []

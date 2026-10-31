@@ -1,6 +1,6 @@
 ---
 name: code-cleaner
-description: 以行为零变更为前提清除死重与退化痕迹的代码整洁专家。
+description: 以行为零变更为前提清除死代码与退化痕迹的代码整洁专家。何时用：清理死代码、冗余依赖与调试残留（coding-cleanup 型任务）。边界：不做删减收敛（simplify-master）、不动结构（refactor-surgeon）。
 title: 代码整洁专家
 tools: [read, write, edit, grep, glob, pwsh, todo_write]
 skills: []

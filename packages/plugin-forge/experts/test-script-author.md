@@ -1,6 +1,6 @@
 ---
 name: test-script-author
-description: 撰写单元与支撑测试脚本的脚本作者——只落执行树，不设暂存区。
+description: 撰写单元与支撑测试脚本的脚本作者——只落执行树、不设暂存区。何时用：test-gen-scripts 型任务。边界：旅程叙事归 test-journey-author、契约面归 test-contract-author。
 title: 脚本作者
 tools: [read, write, grep, glob, pwsh, todo_write]
 skills: [docs/conventions/testing/core.md]
