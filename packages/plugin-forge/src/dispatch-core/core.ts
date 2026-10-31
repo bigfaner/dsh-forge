@@ -24,7 +24,6 @@
 import type {
   ContainerRef,
   ForgePluginEvent,
-  ForgeSettings,
   ForgeSettingsService,
   ForgeTasksService,
   Mode,
@@ -92,7 +91,10 @@ export interface DispatchCoreDeps {
   readonly tasks: ForgeTasksService
   /** 事件发射面（可选——缺席 = 零事件降级；单测桩免配） */
   readonly events?: ForgeEventSink
-  /** forgeSettings 服务面（可选——缺席/worker 未配置 = 不携带 agentOptions 回退父继承） */
+  /**
+   * forgeSettings 服务面（可选——expert-squad-default-routing 起 worker 组装面零读取：
+   * 路由源 = experts 服务折叠应答；保留注入面仅服务装配层 resolver 映射键消费）。
+   */
   readonly settings?: Pick<ForgeSettingsService, 'get'>
   /** 模型推理档位目录解析（可选——目录不可知 = 不判；组装面兼容收口消费） */
   readonly resolveModelReasoning?: (provider: string, model: string) => Promise<readonly string[] | undefined>
@@ -389,20 +391,19 @@ export async function spawnClaimed(
   const taskKey = `${task.slug}/${task.localId}`
   const { emit, spawnFailed } = chainClosuresOf(deps, exec, options.scope)
 
-  // 组装：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions；
+  // 组装：taskType → 收窄矩阵 → toolFilter；experts 服务折叠路由 → agentOptions；
   // taskType+complexity → worker persona（S2 分层承载——经 SubagentStartRequest.persona
   // 落子会话 deployment:persona-prefix scoped 段；不进 dispatchPrompt，分层保持）
   // （档位兼容收口：目录已知且配置档位不支持 → 剥离 effort 回落默认档）
-  // （expert-squad-forge 1.4：档案 tools/model 消费——tools → allow = 档案白名单 ∪ 管线
-  // 必备用具集；model → agentOptions.model 覆盖，缺席回落 forgeSettings 默认。解析失败 =
-  // 档案 fail-loud 同径，归 spawn 失败防线。）
-  const settings: ForgeSettings | undefined =
-    deps.settings !== undefined ? await deps.settings.get() : undefined
+  // （expert-squad-default-routing：路由源 = experts 服务折叠应答（①条目叠加 + ②档案 +
+  // ③defaultAgentOptions 已由 expert-squad 侧折叠）——resolveWorkerProfile 每次派发现查
+  // experts.get（AGENTS 1.6 永不缓存）；expert-squad 缺席 = profile undefined → 父继承。
+  // forgeSettings.worker 机械读取径退役——settings 注入面保留仅服务 resolver 映射键。）
   const profile = await deps.resolveWorkerProfile?.(task.taskType)
   const toolFilter = deriveWorkerToolFilter(task.taskType, WORKER_TOOL_NAME_FAMILY, profile?.tools)
   // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
   const agentOptions = await reconcileWorkerReasoning(
-    workerAgentOptionsOf(settings, profile),
+    workerAgentOptionsOf({ entry: profile }),
     deps.resolveModelReasoning,
   )
 

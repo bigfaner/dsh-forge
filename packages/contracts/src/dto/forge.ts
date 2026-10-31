@@ -1058,7 +1058,12 @@ export type ReasoningLevel = (typeof REASONING_LEVELS)[number]
 /** 可显式下发的推理档位（'default' 之外——workerAgentOptionsOf 输出面词汇） */
 export type ReasoningEffortLevel = Exclude<ReasoningLevel, 'default'>
 
-/** worker 默认 LLM 三项（dispatchTask 组装 agentOptions 的唯一配置源） */
+/**
+ * worker 默认 LLM 三项。
+ * @deprecated expert-squad-default-routing 起 forgeSettings.worker 硬切退役——机械读取径
+ * 已删除（路由主权归 expert-squad 插件 Config：defaultAgentOptions / experts 条目）；类型
+ * 面保留仅为旧 patch 残值反序列化兼容，存量配置静默失效（用户已裁硬切，不迁移）。
+ */
 export interface WorkerSettings {
   provider: string
   model: string
@@ -1123,9 +1128,10 @@ export interface ExpertsSettings {
   mapping?: Partial<Record<TaskType | 'triage', string>>
 }
 
-/** forgeSettings.get 返回体（worker 未配置 = 键缺席——dispatchTask 不携带 agentOptions，
- *  回退父会话继承；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
+/** forgeSettings.get 返回体（worker 段已退役：路由组装改经 experts 服务——见 WorkerSettings
+ *  deprecated 注记；存储 = {userData}/forge-settings.json，路径经 boot overlay 注 core 行 config） */
 export interface ForgeSettings {
+  /** @deprecated 硬切退役（expert-squad-default-routing）——机械不再读取，残值静默失效 */
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings
@@ -1136,6 +1142,7 @@ export interface ForgeSettings {
 /** forgeSettings.set 入参（分节覆写——只覆写携带的节、保留其余（core 读-改-写）；
  *  至少携带一节） */
 export interface SetForgeSettingsInput {
+  /** @deprecated 硬切退役（expert-squad-default-routing）——机械不再读取，勿写入新值 */
   worker?: WorkerSettings
   remoteApproval?: RemoteApprovalSettings
   worktree?: WorktreeSettings

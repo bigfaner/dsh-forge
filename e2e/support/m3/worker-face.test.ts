@@ -49,24 +49,23 @@ describe('M3 5.2 SC2 worker toolFilter（deriveWorkerToolFilter 实函数——�
   })
 })
 
-describe('M3 5.2 SC2 worker model 与 Forge设置 一致（组装面——workerAgentOptionsOf）', () => {
-  it('已配置：显式携带（provider/model/reasoning 直映射——优先于父会话继承）', () => {
-    expect(workerAgentOptionsOf({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } })).toEqual({
+describe('M3 5.2 SC2 worker 路由组装（experts 折叠路由——workerAgentOptionsOf）', () => {
+  it('折叠应答在场：显式携带（provider/model/reasoning 直映射——优先于父会话继承）', () => {
+    expect(workerAgentOptionsOf({ entry: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } })).toEqual({
       provider: 'deepseek',
       model: 'reasoner',
       reasoningEffort: 'high',
     })
   })
 
-  it("已配置 reasoning='default'（默认值档）：携带 provider/model、不下发 effort", () => {
-    expect(workerAgentOptionsOf({ worker: { provider: 'zai', model: 'glm-5.3-flash', reasoning: 'default' } })).toEqual({
+  it('reasoning 三级缺省：携带 provider/model、不下发 effort', () => {
+    expect(workerAgentOptionsOf({ entry: { provider: 'zai', model: 'glm-5.3-flash' } })).toEqual({
       provider: 'zai',
       model: 'glm-5.3-flash',
     })
   })
 
-  it('未配置/服务缺席：undefined——不携带，回退父会话继承', () => {
-    expect(workerAgentOptionsOf(undefined)).toBeUndefined()
+  it('全级缺席（expert-squad 缺席/settings.worker 退役）：undefined——不携带，回退父会话继承', () => {
     expect(workerAgentOptionsOf({})).toBeUndefined()
   })
 })

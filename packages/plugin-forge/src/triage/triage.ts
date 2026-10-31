@@ -129,8 +129,10 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       // Root cause（bug 14984d4f 同族——处置代理与 worker 同一丢失面）：档案 provider+model
       // 成对在场 = 自带完整路由对，必须与 worker 同径进入 agentOptions 组装；此前仅 persona
       // 消费档案、路由对被丢弃回落父继承（task-spawned 审计 model='inherit' 同位证）。
+      // expert-squad-default-routing：路由源 = experts 服务折叠应答（profile）——与 worker
+      // 同一取用面，forgeSettings.worker 机械读取径退役（settings 仅存 experts.mapping 键）。
       const agentOptions = await reconcileWorkerReasoning(
-        workerAgentOptionsOf(settings, profile),
+        workerAgentOptionsOf({ entry: profile }),
         deps.resolveModelReasoning,
       )
       const handle = await deps.spawn({

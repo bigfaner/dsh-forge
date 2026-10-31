@@ -310,10 +310,10 @@ describe('dispatchCore 主链（claim→组装→spawn→事件发射）', () =>
     expect(attribution.slug).toBe('feat-x')
   })
 
-  it('组装落面：forgeSettings → agentOptions 显式携带；档位不受支持 → 剥离 effort（组装面兼容收口）', async () => {
+  it('组装落面：experts 折叠路由 → agentOptions 显式携带；档位不受支持 → 剥离 effort（组装面兼容收口）', async () => {
     const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'medium' } }) },
       resolveModelReasoning: async () => ['low', 'high', 'max'],
+      resolveWorkerProfile: async () => ({ provider: 'deepseek', model: 'reasoner', reasoning: 'medium' }),
     })
     const { exec } = execOf()
     await dispatchCore(h.deps, exec, loopArgs())
@@ -521,13 +521,12 @@ describe('scoped 池快照口径 + 重入标识（1.10：快照分流 taskStats(
 // ─────────────────────────── expert-squad-forge 1.4：档案 tools/model spawn 组装消费 ───────────────────────────
 
 describe('档案 tools/model spawn 组装消费（expert-squad-forge 1.4——resolveWorkerProfile）', () => {
-  it('档案在场：toolFilter.allow = 档案 tools ∪ 管线必备用具集（白名单不含管线工具仍保底）+ agentOptions.model = 档案 model；事件 model 同步', async () => {
+  it('档案在场：toolFilter.allow = 档案 tools ∪ 管线必备用具集（白名单不含管线工具仍保底）+ agentOptions = 档案成对路由；事件 model 同步', async () => {
     const profileCalls: string[] = []
     const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'settings-chat', reasoning: 'default' } }) },
       resolveWorkerProfile: async (taskType) => {
         profileCalls.push(taskType)
-        return { tools: ['read', 'custom-lint'], model: 'expert-model' }
+        return { tools: ['read', 'custom-lint'], provider: 'deepseek-official', model: 'expert-model' }
       },
     })
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
@@ -541,21 +540,20 @@ describe('档案 tools/model spawn 组装消费（expert-squad-forge 1.4——re
     }
     // deny 收窄面照旧（矩阵派生不回退）
     expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'queryTask', 'dispatchTask']))
-    // model 消费：档案 model 在场覆盖 forgeSettings 默认
-    expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'expert-model' })
+    // 路由消费：experts 折叠应答成对在场 → 整组进 agentOptions
+    expect(req.agentOptions).toEqual({ provider: 'deepseek-official', model: 'expert-model' })
     const spawned = h.events.find((e) => e.type === 'task-spawned') as unknown as { payload: { model: string } }
     expect(spawned.payload.model).toBe('expert-model')
   })
 
-  it('档案 model 缺席回落 forgeSettings 默认；档案无 tools 键 = allow 不携带（keep-only 不启用）', async () => {
+  it('档案 reasoning 在场 = effort 直映射；档案无 tools 键 = allow 不携带（keep-only 不启用）', async () => {
     const h = harness({
-      settings: { get: async () => ({ worker: { provider: 'deepseek', model: 'settings-chat', reasoning: 'high' } }) },
-      resolveWorkerProfile: async () => ({ model: undefined }),
+      resolveWorkerProfile: async () => ({ provider: 'deepseek', model: 'expert-chat', reasoning: 'high' }),
     })
     await dispatchCore(h.deps, execOf().exec, loopArgs({ source: { kind: 'feature', slug: 'feat-x' } }))
     const req = h.spawnRequests[0]!
     expect('allow' in req.toolFilter).toBe(false)
-    expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'settings-chat', reasoningEffort: 'high' })
+    expect(req.agentOptions).toEqual({ provider: 'deepseek', model: 'expert-chat', reasoningEffort: 'high' })
   })
 
   it('bug a599db30：settings 服务缺席 + 档案 provider+model 成对在场 → agentOptions 携带显式路由（不回落父继承）', async () => {

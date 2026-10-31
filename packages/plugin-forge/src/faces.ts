@@ -550,7 +550,9 @@ export const FORGE_EXPERTS_ROOT_DIR = join(dirname(fileURLToPath(import.meta.url
  * get 的 fail-loud 错误语义（expert not found / disabled: <key>）由实现侧承担，本面原样透传）。
  */
 export interface ExpertsServiceFace {
-  /** 按键取档案（不存在/禁用 → 实现侧 fail-loud 抛错，消息含键名）。 */
+  /** 按键取档案（不存在/禁用 → 实现侧 fail-loud 抛错，消息含键名）。reasoning = experts
+   *  服务折叠应答档位（①条目 > ②档案 frontmatter > ③defaultAgentOptions——expert-squad
+   *  buildEntry 单源；'low'|'medium'|'high'，缺省 = 不下发 effort）。 */
   get(key: string): {
     readonly name: string
     readonly title?: string
@@ -558,6 +560,7 @@ export interface ExpertsServiceFace {
     readonly tools?: readonly string[]
     readonly model?: string
     readonly provider?: string
+    readonly reasoning?: 'low' | 'medium' | 'high'
   }
   /** 追加 plugin 内置层 root（只登记不重扫——生效须显式 refresh 一次）。 */
   registerRoot(ctx: unknown, dir: string): void
@@ -573,6 +576,8 @@ export interface ForgeExpertProfile {
   readonly tools?: readonly string[]
   readonly model?: string
   readonly provider?: string
+  /** experts 服务折叠应答档位（①条目 > ②frontmatter > ③defaultAgentOptions；缺省不下发） */
+  readonly reasoning?: 'low' | 'medium' | 'high'
 }
 
 /**
@@ -584,6 +589,8 @@ export interface WorkerDispatchProfile {
   readonly tools?: readonly string[]
   readonly model?: string
   readonly provider?: string
+  /** experts 服务折叠应答档位（spawn 组装 reasoning 三级合成的取数面——缺省不下发） */
+  readonly reasoning?: 'low' | 'medium' | 'high'
 }
 
 /** 档案取用面：按任务类型解析映射键并取档案（core 零 IO 纪律——IO 全在本面闭包内）。
@@ -636,6 +643,7 @@ export function createExpertProfileResolver(deps: {
       ...(entry.tools !== undefined ? { tools: entry.tools } : {}),
       ...(entry.model !== undefined ? { model: entry.model } : {}),
       ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
+      ...(entry.reasoning !== undefined ? { reasoning: entry.reasoning } : {}),
     }
   }
 }
@@ -655,6 +663,7 @@ export function createWorkerProfileProjection(deps: {
       ...(profile.tools !== undefined ? { tools: profile.tools } : {}),
       ...(profile.model !== undefined ? { model: profile.model } : {}),
       ...(profile.provider !== undefined ? { provider: profile.provider } : {}),
+      ...(profile.reasoning !== undefined ? { reasoning: profile.reasoning } : {}),
     }
   }
 }

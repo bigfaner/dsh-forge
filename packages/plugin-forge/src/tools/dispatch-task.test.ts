@@ -32,7 +32,6 @@ import {
   parseDispatchTaskArgs,
   poolOf,
   reconcileWorkerReasoning,
-  workerAgentOptionsOf,
 } from './dispatch-task.js'
 
 // ─────────────────────────── 夹具 ───────────────────────────
@@ -349,36 +348,10 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
   })
 })
 
-describe('workerAgentOptionsOf + reconcileWorkerReasoning（forgeSettings → agentOptions）', () => {
-  it('未配置/服务缺席 = undefined（不携带——回退父会话继承）；配置 = reasoning→effort 直映射', () => {
-    expect(workerAgentOptionsOf(undefined)).toBeUndefined()
-    expect(workerAgentOptionsOf({})).toBeUndefined()
-    expect(
-      workerAgentOptionsOf({ worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'high' } }),
-    ).toEqual({ provider: 'deepseek', model: 'reasoner', reasoningEffort: 'high' })
-  })
-
-  it("reasoning='default'（默认值档）：携带 provider/model 但不下发 effort", () => {
-    expect(workerAgentOptionsOf({ worker: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoning: 'default' } })).toEqual({
-      provider: 'zai-coding-cn',
-      model: 'glm-5.3-flash',
-    })
-  })
-
-  it('档案路由投影（expert-squad-forge-2）：provider+model 成对在场 = 整组覆盖基座；任一缺席 = 回落基座（官方同给同缺）', () => {
-    const base = { worker: { provider: 'deepseek', model: 'reasoner', reasoning: 'default' as const } }
-    expect(workerAgentOptionsOf(base, { provider: 'zai', model: 'glm' })).toEqual({ provider: 'zai', model: 'glm' })
-    expect(workerAgentOptionsOf(base, { model: 'glm' })).toEqual({ provider: 'deepseek', model: 'glm' }) // 仅 model：既有 1.4 语义
-    expect(workerAgentOptionsOf(base, { provider: 'zai' })).toEqual({ provider: 'deepseek', model: 'reasoner' }) // 仅 provider：不落位
-    expect(workerAgentOptionsOf(base, undefined)).toEqual({ provider: 'deepseek', model: 'reasoner' })
-    // bug a599db30：档案 provider+model 成对在场 = 自带完整路由对，不依赖 settings.worker 基座
-    expect(workerAgentOptionsOf({}, { provider: 'zai', model: 'glm' })).toEqual({ provider: 'zai', model: 'glm' })
-    expect(workerAgentOptionsOf(undefined, { provider: 'zai', model: 'glm' })).toEqual({ provider: 'zai', model: 'glm' })
-    // 无基座时 reasoning 无来源 → 不携带 effort；settings.worker 在场（无档案对）→ effort 照旧
-    expect(workerAgentOptionsOf({}, undefined)).toBeUndefined()
-    // 部分在场（仅 model 无 provider）仍须基座——无 provider 基座则不成对，回落父继承
-    expect(workerAgentOptionsOf(undefined, { model: 'glm' })).toBeUndefined()
-  })
+describe('workerAgentOptionsOf + reconcileWorkerReasoning（experts 服务折叠路由 → agentOptions）', () => {
+  // workerAgentOptionsOf 四级链 16 组合与 reasoning 三级合成的穷举面收口在
+  // dispatch-core/assemble.test.ts（expert-squad-default-routing 1.2）；本文件保留
+  // 档位兼容收口（reconcileWorkerReasoning）回归面。
 
   it('reconcile：目录已知且档位受支持 → 原样；不支持 → 剥离 effort（无法兼容就不设置）', async () => {
     const kept = { provider: 'p', model: 'm', reasoningEffort: 'high' as const }

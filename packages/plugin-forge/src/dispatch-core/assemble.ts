@@ -1,7 +1,7 @@
 // dispatch-core · 组装面（S1a 可拆卸壳分层——implementation-blueprint §3 claim→组装→spawn
 // 链的「组装」段）：taskType → 收窄矩阵 → toolFilter；forgeSettings → agentOptions
 // （含档位兼容收口）。纯函数——两消费者（工具壳/循环驱动器）同源。
-import type { ForgeSettings, ReasoningEffortLevel, TaskType, WorkerToolFamily } from '@dsh-forge/contracts'
+import type { ReasoningEffortLevel, TaskType, WorkerToolFamily } from '@dsh-forge/contracts'
 import {
   WORKER_FORGE_TOOLS,
   WORKER_GLOBAL_DENY_TOOLS,
@@ -126,39 +126,58 @@ export function deriveTriageToolFilter(registeredTools?: readonly string[]): { d
   return { deny: [...deny].filter((name) => registeredTools === undefined || registeredTools.includes(name)) }
 }
 
-/** 设置 + 档案 model → agentOptions（expert-squad-forge 1.4 model 消费——triage 同径基座
- * 上档案 model 在场覆盖 model，缺席回落 forgeSettings 默认；settings 未配置/服务缺席 =
- * undefined 不携带（无 provider 基座，回落父会话继承）；reasoning='default' = 不下发
- * effort——落 provider/模型默认档；其余 → reasoningEffort 直映射）
- * 取舍标注（expert-squad-forge-2 bug a599db30 修订）：档案 provider+model 成对在场 = 自带
- * 完整路由对，无需 forgeSettings 基座即生效（settings.worker 缺席不再拦截显式路由）；
- * 仅 model 在场仍以 forgeSettings.worker.provider 为基座——worker 段缺席 = 无 provider 基座，
- * 不成对回落父会话继承。
- * provider 成对语义（expert-squad-forge-2 纳入 6）：档案 provider+model 两字段成对在场 =
- * 整组覆盖 settings 基座（官方 AgentOptions 同给同缺——「A 家模型 X」路由）；任一缺席 =
- * 回落 settings 基座（仅 model 在场仍按既有语义覆盖 model 位；仅 provider 在场不落位）。
+/**
+ * 路由级形状（expert-squad-default-routing——四级链各级同形）：provider/model 整组同给
+ * 同缺（官方 AgentOptions 成对语义）；reasoning 缺省 = 该级不下发档位。
  */
-export function workerAgentOptionsOf(
-  settings: ForgeSettings | undefined,
-  profile?: { readonly model?: string; readonly provider?: string },
-): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
-  // Root cause（bug a599db30）：档案 provider+model 成对在场 = 自带完整路由对（官方同给
-  // 同缺语义），不依赖 settings.worker 基座——基座前置会把用户显式路由整体丢弃回落父继承。
-  // settings.worker 在场时其 reasoning 仍作用于档案路由（effort 与路由对正交）。
-  if (profile?.provider !== undefined && profile.model !== undefined) {
-    const base = { provider: profile.provider, model: profile.model }
-    const reasoning = settings?.worker?.reasoning
-    if (reasoning === undefined || reasoning === 'default') return base
-    return { ...base, reasoningEffort: reasoning }
+export interface WorkerRouteLevel {
+  readonly provider?: string
+  readonly model?: string
+  readonly reasoning?: ReasoningEffortLevel
+}
+
+/**
+ * worker agentOptions 组装（expert-squad-default-routing——配置主权归 expert-squad，
+ * forgeSettings.worker 机械读取径退役）：
+ *
+ * 优先级链（proposal「优先级链」/verification.md §0.3 first-def fold）：
+ *   ① experts 条目 agentOptions（experts 服务 get 应答——条目叠加 + 档案 + defaults 已由
+ *     expert-squad 侧折叠；本面按整组语义消费）
+ *   > ② 档案 provider+model 成对（a599db30 语义：成对即自带完整路由对）
+ *   > ③ defaultAgentOptions（全局默认基座；② 单边位与③基座逐位合成——V1-EX1 收口）
+ *   > ④ 父会话继承（返回 undefined——spawn 请求零 agentOptions 键）。
+ *
+ * reasoning 三级合成（同构 first-def）：① entry.reasoning > ② profile.reasoning
+ * （档案 frontmatter 出厂值）> ③ defaults.reasoning > 不下发 effort；档位兼容收口
+ * 由 reconcileWorkerReasoning 在组装后统一承担（本面零目录知识）。
+ *
+ * 生产径取数：①②③ 的现值经既有 experts 服务取用面（resolver → experts.get）每次派发
+ * 现查（AGENTS 1.6 检测永不缓存——消费点惰性求值，volatile 配置变更即派发即生效）；
+ * expert-squad 缺席 = 三级全空 → undefined 回落父继承（语义完整，可移植性）。
+ */
+export function workerAgentOptionsOf(levels: {
+  /** ① experts 条目 agentOptions（含 expert-squad 侧折叠应答时即最终路由级） */
+  readonly entry?: WorkerRouteLevel
+  /** ② 档案级（provider+model 成对整组；reasoning = frontmatter 出厂值） */
+  readonly profile?: WorkerRouteLevel
+  /** ③ defaultAgentOptions 全局默认基座 */
+  readonly defaults?: WorkerRouteLevel
+}): { provider: string; model: string; reasoningEffort?: ReasoningEffortLevel } | undefined {
+  // 基座 = ② 成对整组（自带完整路由对，a599db30），不成对回落 ③；② 单边位与 ③ 逐位
+  // 合成（仅 model 并入③基座——V1-EX1；仅 provider 不落位回落基座——既有语义）。
+  const profilePaired = levels.profile?.provider !== undefined && levels.profile?.model !== undefined
+  const base = {
+    provider: profilePaired ? levels.profile?.provider : (levels.defaults?.provider ?? levels.profile?.provider),
+    model: profilePaired ? levels.profile?.model : (levels.defaults?.model ?? levels.profile?.model),
   }
-  if (settings === undefined || settings.worker === undefined) return undefined
-  const { provider, model, reasoning } = settings.worker
-  const base =
-    profile?.provider !== undefined && profile.model !== undefined
-      ? { provider: profile.provider, model: profile.model }
-      : { provider, model: profile?.model ?? model }
-  if (reasoning === 'default') return base
-  return { ...base, reasoningEffort: reasoning }
+  const provider = levels.entry?.provider ?? base.provider
+  const model = levels.entry?.model ?? base.model
+  // 成对判据：provider+model 皆在场才有路由——任一缺席 = ④ 父会话继承（undefined）。
+  if (provider === undefined || model === undefined) return undefined
+  const route = { provider, model }
+  const reasoning = levels.entry?.reasoning ?? levels.profile?.reasoning ?? levels.defaults?.reasoning
+  if (reasoning === undefined) return route
+  return { ...route, reasoningEffort: reasoning }
 }
 
 /**
