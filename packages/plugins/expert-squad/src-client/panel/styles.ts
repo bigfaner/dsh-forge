@@ -37,7 +37,7 @@ export const PANEL_CSS = `
 .dswf-select-box { font: var(--dsw-font-xs-13); display: inline-flex; align-items: center; gap: 6px; padding: 0 ${T.gap8}; height: ${T.lh20}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); outline: none; }
 .dswf-select-box:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
 .dswf-select-caret { font-size: 10px; color: var(--dsw-alias-label-caption); }
-.dswf-select-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 100%; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); overflow: auto; }
+.dswf-select-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); overflow: auto; } /* 宽度由 placement 内联注入（= 触发框宽）——fixed 下 min-width:100% 相对视口解析会把菜单撑满整窗（缺陷退役） */
 .dswf-select-option { font: var(--dsw-font-xs-13); text-align: left; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-primary); cursor: var(--dsh-cursor-pointer, pointer); white-space: nowrap; }
 .dswf-select-option:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .dswf-select-option.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }
