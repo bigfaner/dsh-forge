@@ -689,8 +689,24 @@ export function ExpertDetailDialog(props: {
     </>
   ) : (
     <>
-      <div className="dswf-dlg-meta">
-        {expert.title} · {expert.enabled ? "启用中" : "已禁用"}
+      {/* body 首行：岗位 meta 居左 + 派发路由 chips 靠右（详情态专属；成对在场 =
+          provider·model 双 chip，缺省 = 「继承父Agent」弱化 chip） */}
+      <div className="dswf-dlg-lead">
+        <div className="dswf-dlg-meta">
+          {expert.title} · {expert.enabled ? "启用中" : "已禁用"}
+        </div>
+        {!comparing && !editing ? (
+          <span className="dswf-dlg-route-chips" data-dswf-dlg-route="">
+            {expert.provider !== undefined && expert.model !== undefined ? (
+              <>
+                <span className="chip tool">{expert.provider}</span>
+                <span className="chip">{expert.model}</span>
+              </>
+            ) : (
+              <span className="chip dswf-chip-muted">继承父Agent</span>
+            )}
+          </span>
+        ) : null}
       </div>
       <div className="dswf-dlg-seg">简介（何时委派我）</div>
       <div className="dswf-dlg-meta">{expert.description}</div>
@@ -803,20 +819,6 @@ export function ExpertDetailDialog(props: {
               ✕
             </button>
           </span>
-            {/* 派发路由 chips（右上角——详情态专属；成对在场 = provider·model 双 chip，
-                缺省 = 「继承父Agent」弱化 chip；不再于 body 工具/技能间插段） */}
-            {!comparing && !editing ? (
-              <span className="dswf-dlg-head-route" data-dswf-dlg-route="">
-                {expert.provider !== undefined && expert.model !== undefined ? (
-                  <>
-                    <span className="chip tool">{expert.provider}</span>
-                    <span className="chip">{expert.model}</span>
-                  </>
-                ) : (
-                  <span className="chip dswf-chip-muted">继承父Agent</span>
-                )}
-              </span>
-            ) : null}
           </div>
           {props.sameKeyEntries === undefined ? null : (
             <OriginBar expert={expert} shadows={shadows} projectName={props.projectName} />

@@ -90,7 +90,10 @@ export const PANEL_CSS = `
 .dswf-dlg-name { font-size: var(--dsw-font-m-18-font-size); line-height: var(--dsw-font-m-18-line-height); font-weight: 500; }
 .dswf-dlg-head-actions { margin-left: auto; display: flex; gap: ${T.gap8}; }
 /* 派发路由 chips（详情态右上角——provider·model 双 chip / 继承父Agent 弱化 chip） */
-.dswf-dlg-head-route { display: flex; gap: 6px; align-items: center; margin-left: ${T.gap8}; }
+/* body 首行（岗位 meta 居左 + 派发路由 chips 靠右） */
+.dswf-dlg-lead { display: flex; align-items: center; gap: ${T.gap8}; }
+.dswf-dlg-lead > .dswf-dlg-meta { flex: 1; }
+.dswf-dlg-route-chips { display: flex; gap: 6px; align-items: center; flex: none; }
 .dswf-chip-muted { color: var(--dsw-alias-label-caption); }
 .dswf-dlg-body { flex: 1; overflow: auto; padding: ${T.pad16}; display: flex; flex-direction: column; gap: ${T.gap8}; min-height: 0; }
 .dswf-dlg-meta { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); white-space: pre-wrap; } /* 简介/归一后可含真实换行（bug b29f77e7） */
