@@ -73,13 +73,17 @@ export const PANEL_CSS = `
 .xc-head-right > button.origin-badge { border: none; font: var(--dsw-font-xxs-12); line-height: var(--dsw-font-xxs-12-line-height, ${T.lh18}); padding: 2px 8px; white-space: nowrap; cursor: var(--dsh-cursor-pointer, pointer); }
 .xc-cmp-btn { flex: none; font: var(--dsw-font-xxs-12); padding: 2px ${T.gap8}; }
 .xc-origin-caret { font-size: 10px; margin-left: 3px; }
-.xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 240px; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; } /* chip 原地向下展开（锚 = xc-head-right）；溢出视口下缘时组件侧 scrollIntoView nearest 最小滚动带入 */
-.xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; }
+/* 宽度动态收敛：min-width = max-content（包紧最长选项文字）；max-width = 卡片宽
+   （超长才省略折行，永不溢出卡片）。position:absolute 百分比相对最近 positioned
+   祖先（xc-head-right），min-width:240px 固定值退役 */
+/* 宽度动态收敛：width max-content 包紧最长选项文字（尽量不换行）；上限由组件侧按
+   卡片宽注入（超长省略，永不溢出卡片） */
+.xc-origin-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: max-content; padding: 4px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); display: flex; flex-direction: column; gap: 2px; }
+.xc-origin-opt { display: flex; align-items: center; gap: ${T.gap8}; padding: 4px ${T.gap8}; border: none; border-radius: 4px; background: transparent; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); cursor: var(--dsh-cursor-pointer, pointer); text-align: left; white-space: nowrap; }
 .xc-origin-opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .xc-origin-opt.sel { color: var(--dsw-alias-state-business-primary); font-weight: 500; }
 .xc-origin-opt .origin-badge { margin-left: 0; flex: none; }
-.xc-origin-opt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.xc-origin-opt-date { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); flex: none; }
+.xc-origin-opt-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xc-title-row { display: flex; align-items: center; gap: ${T.gap8}; }
 .xc-title-row > .xc-title { flex: 1; }
 /* 路由 chip 动态宽度：width fit-content 包紧文字，两侧只留小 padding（退役 .chip 固定高 + 大 pad 的宽空白形态）；超长省略（上限 220px，全文 hover title） */

@@ -475,8 +475,14 @@ function OriginMenu({ entries, expert, projectName, onSelectOrigin, onToggleMenu
 }): ReactNode {
   const menuRef = useRef<HTMLDivElement | null>(null);
   useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (menu === null) return;
+    // 上限 = 卡片宽 - 24（body 左右 padding）；width max-content 已包紧最长选项文字，
+    // 超上限才在选项内省略（尽量不换行语义）
+    const card = menu.closest(".dswf-xcard");
+    if (card !== null) menu.style.maxWidth = `${Math.max(card.getBoundingClientRect().width - 24, 200)}px`;
     // 展开后最小滚动入视口（block:nearest——已可见时零滚动；溢出时仅滚必要的量）
-    menuRef.current?.scrollIntoView({ block: "nearest" });
+    menu.scrollIntoView({ block: "nearest" });
   });
   return (
     <div
