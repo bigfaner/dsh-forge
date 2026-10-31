@@ -87,8 +87,8 @@ export function useDialogDrag(): DialogDrag {
 /** textarea 行高刻度（Body 14/22——官方排版令牌行高，autosize 上下界按行数换算）。 */
 const TEXTAREA_LINE_PX = 22;
 
-/** 简介 textarea：默认 2 行、最多 6 行自适应（内容上限 120 字不变）。 */
-const DESCRIPTION_MIN_PX = TEXTAREA_LINE_PX * 2 + 2;
+/** 简介 textarea：默认 1 行起步（行高 + 上下 padding——scrollHeight 含 padding，min 须同口径）、最多 6 行自适应（内容上限 120 字不变）。 */
+const DESCRIPTION_MIN_PX = TEXTAREA_LINE_PX * 1 + 16;
 const DESCRIPTION_MAX_PX = TEXTAREA_LINE_PX * 6 + 2;
 
 /** 人设 textarea：默认 12 行、最多 100 行自适应，滚动上界兜底。 */
@@ -101,7 +101,10 @@ export type AllSkills = readonly string[];
 /** msel 菜单未测量首帧兜底样式（隐藏先测量——不落 static 位置跳位）。 */
 const MSEL_MENU_HIDDEN = { visibility: "hidden" } as const;
 
-/** 自适应 textarea（默认 rows 起步；输入按 scrollHeight 增长至 max 上界，滚动兜底）。 */
+/**
+ * 自适应 textarea（min 行起步；值变化即按 scrollHeight 增高至 max 上界，超出滚动兜底）——
+ * 高度 = clamp(scrollHeight, minPx, maxPx)：不固定行数，内容一行显完整时域框即一行。
+ */
 function AutoTextarea(props: {
   readonly value: string;
   readonly minPx: number;
@@ -109,13 +112,21 @@ function AutoTextarea(props: {
   readonly onChange: (value: string) => void;
   readonly ariaLabel: string;
 }): ReactNode {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    el.style.height = "auto"; // 先归零再测量——收缩与增长双向跟随
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, props.minPx), props.maxPx)}px`;
+  }, [props.value, props.minPx, props.maxPx]);
   return (
     <textarea
+      ref={ref}
       className="dswf-dlg-textarea"
       aria-label={props.ariaLabel}
-      rows={Math.round((props.minPx - 2) / TEXTAREA_LINE_PX)}
+      rows={1}
       maxLength={props.maxPx === DESCRIPTION_MAX_PX ? DESCRIPTION_MAX : undefined}
-      style={{ minHeight: props.minPx, maxHeight: props.maxPx }}
+      style={{ minHeight: props.minPx, maxHeight: props.maxPx, overflowY: "auto" }}
       value={props.value}
       onChange={(event) => props.onChange(event.target.value)}
     />
@@ -599,7 +610,7 @@ export function ExpertDetailDialog(props: {
         {state.errors.title === undefined ? null : <div className="dswf-dlg-err">{state.errors.title}</div>}
       </div>
       <div className="dswf-dlg-field" data-field="description">
-        <label>简介（模型选人依据：何时委派我 · 默认 2 行，最多 6 行 ≈ 120 字）</label>
+        <label>简介（模型选人依据：何时委派我 · 默认 1 行自适应，最多 6 行 ≈ 120 字）</label>
         <AutoTextarea
           value={state.draft.description}
           minPx={DESCRIPTION_MIN_PX}
