@@ -26,7 +26,7 @@ import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR } from './faces.js'
-import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, SessionActivationFace } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeExpertProfile, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
@@ -125,44 +125,55 @@ const forgePlugin: ForgePlugin = Object.assign(
     } catch {
       settingsService = { get: async () => (await lazyForgeSettings()?.get()) ?? {} }
     }
-    // experts 服务可选消费（expert-squad-forge 1.2——同 forgeSettings reflect.get 防御读取
-    // 先例：cordis 4.0.4 无 '?' 可选 inject 后缀，expert-squad 插件缺席 = 装配面整体降级
-    // 不阻载，persona 合成回落 core 程序段）。在场 = ①registerRoot(随包预设专家目录)
-    // 注册 plugin 内置层（三层遮蔽 project > user > plugin）；②显式 refresh 一次
-    // （registerRoot 只追加 root 不重扫——expert-squad registry.ts:182-184，注册后须显式
-    // 触发才可见）；③档案取用面（按 settings 映射键 get 档案）经依赖注入供 claim 链消费
-    // （'forgeExperts' 具名服务——core 装配侧 reflect.get 防御读取，core 零 IO 纪律不变）。
-    let expertResolver: ExpertProfileResolver | undefined
-    try {
-      const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
-      if (experts !== undefined && typeof experts.get === 'function' && typeof experts.registerRoot === 'function') {
+    // experts 服务可选消费（expert-squad-forge 1.2）。bug（012 真机复测定罪）：装配期
+    // eager reflect.get('experts') 在 expert-squad 晚于本插件装配（或服务面缺席/异常）时
+    // 得 undefined → expertResolver 恒 undefined 且零告警——experts.mapping 消费全链静默
+    // 失效，坏键 fail-loud 从未在真机兑现（claim/spawn 照常）。修复 = 调用期现查（AGENTS
+    // 1.6 检测永不缓存）：expertResolver 恒装配并 provide，每次调用经 reflect 现取 experts
+    // 面——晚到/热换代即时生效；缺席 = undefined 形态兼容降级（persona 回落 core 程序段，
+    // 语义与旧装配期缺席一致）；在场 = createExpertProfileResolver 现建现调（settings 亦
+    // 经调用期现查的 settingsService——mapping 现读零缓存），坏键 = experts.get fail-loud
+    // 原样外抛（拒绝 claim/spawn）+ diag/log error 诊断留痕（AGENTS §7——失败路径必埋点）。
+    const expertsFaceNow = (): ExpertsServiceFace | undefined => {
+      try {
+        const experts = ctx.reflect?.get('experts') as ExpertsServiceFace | undefined
+        return experts !== undefined && typeof experts.get === 'function' && typeof experts.registerRoot === 'function'
+          ? experts
+          : undefined
+      } catch {
+        return undefined
+      }
+    }
+    const emitResolverDiag = (payload: { event: string; level: 'info' | 'warn' | 'error'; message: string } & Record<string, unknown>): void => {
+      try {
+        ;(ctx as unknown as { emit(event: string, payload: unknown): void }).emit('diag/log', { ...payload, process: 'child' })
+      } catch {
+        // diag 通道缺席/发射故障 = 零埋点 fail-soft（诊断不构成取用正确性依赖）
+      }
+    }
+    // registerRoot/refresh 是幂等副作用面（只登记不重扫/整树重扫）——按 experts face 实例
+    // 身份做一次性接线记忆（服务对象本身零缓存：热换代即新实例新接线；presence 判定每调现查）。
+    let wiredExperts: ExpertsServiceFace | undefined
+    let expertsReady: Promise<void> = Promise.resolve()
+    const wireExperts = (experts: ExpertsServiceFace): void => {
+      if (wiredExperts === experts) return
+      try {
         experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR)
-        // refresh 完成屏障（expert-squad-forge 1.10）：refresh 是 fire-and-forget 的重扫——
-        // 未结算前首笔档案取用会误触发 not-found fail-loud（自愈但语义误报）。promise 记账
-        // 供 resolver 首调 await；错误在此吞掉归一为 settled-safe（fail-soft 诊断不变）。
-        let refreshReady: Promise<void> = Promise.resolve()
-        if (typeof experts.refresh === 'function') {
-          refreshReady = experts.refresh
-            .call(experts)
-            .catch((cause: unknown) => {
-              const message = cause instanceof Error ? cause.message : String(cause)
-              console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
-            })
-            .then(() => undefined)
-        }
-        expertResolver = createExpertProfileResolver({
-          experts,
-          ready: refreshReady,
-          ...(settingsService !== undefined ? { settings: settingsService } : {}),
-        })
-      }
-    } catch (cause) {
-      expertResolver = undefined
-      // 单例复用路径零降级告警（撞车/缺席 = 复用，非真失败）；仅首次无单例可复用时告警
-      if (expertResolverSingleton === undefined) {
+      } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
-        console.warn(`forge experts 装配面降级（fail-soft 不阻载，persona 回落 core 程序段合成）：${message}`)
+        console.warn(`forge 预设专家目录 registerRoot 失败（fail-soft，随包预设层缺席）：${message}`)
       }
+      expertsReady =
+        typeof experts.refresh === 'function'
+          ? experts.refresh
+              .call(experts)
+              .catch((cause: unknown) => {
+                const message = cause instanceof Error ? cause.message : String(cause)
+                console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
+              })
+              .then(() => undefined)
+          : Promise.resolve()
+      wiredExperts = experts
     }
     // Root cause（bug 链 763de653→d327323b→dfa41a72/ad32e240）：cordis 父子 scope 下
     // 探测/取回双向不互见，任何跨 scope 反射形态（探测守卫、撞车后 reflect 取回）恒败。
@@ -171,29 +182,59 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 模块实例，scope 可见性退出因果链。单例自足（闭包内经 experts 面读专家目录 +
     // settings），不依赖装配时点子 scope 的任何 cordis 服务面。publish 仅余对外发布职责
     // （core 侧 reflect.get('forgeExperts') 消费），撞名/反射异常静默不阻断本进程装配。
-    if (expertResolver === undefined) expertResolver = expertResolverSingleton
-    if (expertResolver !== undefined && expertResolverSingleton === undefined) {
+    let expertResolver: ExpertProfileResolver
+    if (expertResolverSingleton !== undefined) {
+      expertResolver = expertResolverSingleton
+    } else {
+      expertResolver = async (taskType: string, expertKey?: string): Promise<ForgeExpertProfile | undefined> => {
+        const experts = expertsFaceNow()
+        if (experts === undefined) return undefined // 服务缺席 = 形态兼容降级（现查——晚到即时生效）
+        wireExperts(experts)
+        try {
+          return await createExpertProfileResolver({
+            experts,
+            ready: expertsReady,
+            ...(settingsService !== undefined ? { settings: settingsService } : {}),
+          })(taskType, expertKey)
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause)
+          emitResolverDiag({
+            event: 'expert-resolve',
+            level: 'error',
+            message: `expert resolver fail-loud（拒绝取用，阻断 claim/spawn）: taskType=${taskType}${expertKey !== undefined ? ` key=${expertKey}` : ''}——${message}`,
+            taskType,
+            ...(expertKey !== undefined ? { expertKey } : {}),
+            ...(cause instanceof Error && cause.stack !== undefined ? { stack: cause.stack } : {}),
+          })
+          throw cause
+        }
+      }
       expertResolverSingleton = expertResolver
     }
     if (expertResolver !== undefined) {
+      // 探测单独隔离（reflect.get 抛异常 = 非函数面降级，不阻断 provide——lazy resolver
+      // 恒在位语义：消费侧 probe 失败只影响复用判定，不影响本进程发布）
+      let existing: ExpertProfileResolver | undefined
       try {
-        const existing = ctx.reflect?.get?.('forgeExperts') as ExpertProfileResolver | undefined
-        if (typeof existing === 'function') {
-          expertResolver = existing // 同 scope 已注册（双次装配幂等短路——bug 763de653）
-        } else if (typeof ctx.reflect?.provide === 'function') {
-          ctx.reflect.provide('forgeExperts', expertResolver)
-        }
+        existing = ctx.reflect?.get?.('forgeExperts') as ExpertProfileResolver | undefined
       } catch {
-        // 撞车/反射异常：子 scope 时序不可见属常态——本地单例装配不受影响，零降级
+        existing = undefined
+      }
+      if (typeof existing === 'function') {
+        expertResolver = existing // 同 scope 已注册（双次装配幂等短路——bug 763de653）
+      } else if (typeof ctx.reflect?.provide === 'function') {
+        try {
+          ctx.reflect.provide('forgeExperts', expertResolver)
+        } catch {
+          // 撞车/反射异常：子 scope 时序不可见属常态——本地单例装配不受影响，零降级
+        }
       }
     }
     // expert-squad-forge 1.4：spawn 组装消费的档案 tools/model 投影（resolveWorkerProfile——
-    // 同一 expertResolver 按任务类型现取；档案缺失/禁用 fail-loud 与 claim 期同径。取用面
-    // 降级缺席 = 形态兼容——toolFilter 纯 deny 面、模型纯 forgeSettings，行为回 1.4 前）。
-    const workerProfileOf =
-      expertResolver === undefined
-        ? undefined
-        : createWorkerProfileProjection({ resolver: expertResolver })
+    // 同一 expertResolver 按任务类型每次派发现取；experts 缺席 = resolver 返回 undefined
+    // 形态兼容——toolFilter 纯 deny 面、模型纯 forgeSettings；坏键 = resolver fail-loud
+    // 外抛（spawnClaimed 阻断——不落 spawn）+ diag/log 诊断（resolver 内单点埋点）。
+    const workerProfileOf = createWorkerProfileProjection({ resolver: expertResolver })
     // llm 服务可选消费（同 reflect.get 懒读配方）：resolveModelInfo → 模型推理档位支持集。
     // dispatchTask 组装面消费——配置档位不被模型支持时剥离 effort（无法兼容就不设置，
     // 杜绝 UNSUPPORTED_REASONING_EFFORT 级 worker 启动即崩）；服务缺席/异常 = 不判。
