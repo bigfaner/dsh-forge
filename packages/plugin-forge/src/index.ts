@@ -146,7 +146,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     }
     const emitResolverDiag = (payload: { event: string; level: 'info' | 'warn' | 'error'; message: string } & Record<string, unknown>): void => {
       try {
-        ;(ctx as unknown as { emit(event: string, payload: unknown): void }).emit('diag/log', { ...payload, process: 'child' })
+        ctx.emit?.('diag/log', { ...payload, process: 'child' })
       } catch {
         // diag 通道缺席/发射故障 = 零埋点 fail-soft（诊断不构成取用正确性依赖）
       }
@@ -471,7 +471,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 诊断埋点面（bug 33728995④——AGENTS §7：循环里程碑经官方 diag/log 事件域 emit，
       // child-relay 转发 main 落盘；process 标签在此补齐——驱动器窄投影不含该位）
       diag: (payload) => {
-        ;(ctx as unknown as { emit(event: string, payload: unknown): void }).emit('diag/log', { ...payload, process: 'child' })
+        ctx.emit?.('diag/log', { ...payload, process: 'child' })
       },
       // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
       // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId

@@ -206,7 +206,8 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
         <ul className="dswf-event-entries-list">
           {loopRow !== undefined ? <ForgeLoopRowView row={loopRow} /> : null}
           {taskRows.map((row) => (
-            <ForgeProgressRowView key={row.entry.taskKey} row={row} />
+            // 键 = verb 限定（triage:{taskKey} 独立聚合行与任务行同 taskKey 不撞键）
+            <ForgeProgressRowView key={`${row.entry.verb}:${row.entry.taskKey}`} row={row} />
           ))}
           {data.entries.map((entry) => {
             // §2.5（D 裁决 去重并换行）：title 与 detail 分行展示；summary 命中 title

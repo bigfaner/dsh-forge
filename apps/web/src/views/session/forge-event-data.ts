@@ -211,13 +211,26 @@ export interface ForgeProgressRowData {
  * 进度行聚合（面板 aggregateDispatchRowItems 同口径镜像——纯函数零 RPC）：
  * 每任务键最新态一行（后写覆盖），开始 = 首事件时戳、结束 = 最新时戳；
  * 无任务键的循环级事件收敛为单行最新态；池级 pending 快照（pool/pending）不进行轨。
- * 排序 = 循环级单行居首，任务行按开始时序。
+ * triage 处置条目（triage-progress-row §2.2）走独立聚合键 `triage:{taskKey}`——不劫持
+ * 任务行「每任务键最新态」模型，任务终态后写覆盖不吞处置行（同任务键多 attempt 折叠
+ * 一行，终态折入 note）。排序 = 循环级单行居首，任务行与处置行按开始时序。
  */
 export function forgeProgressRowItems(entries: readonly ForgeProgressEntryData[]): readonly ForgeProgressRowData[] {
   const latest = new Map<string, ForgeProgressRowData>()
+  const triage = new Map<string, ForgeProgressRowData>()
   let loop: ForgeProgressRowData | undefined
   for (const entry of entries) {
     if (entry.scenario === 'pool/pending') continue
+    if (entry.verb === 'triage' && entry.taskKey !== undefined) {
+      const key = `triage:${entry.taskKey}`
+      const held = triage.get(key)
+      triage.set(key, {
+        entry, // 后写覆盖 = 最新 attempt（终态折入 note）
+        startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at),
+        endAt: entry.at,
+      })
+      continue
+    }
     if (entry.taskKey === undefined) {
       loop = { entry, startAt: entry.at, endAt: entry.at } // 后写覆盖 = 循环级单行最新态
       continue
@@ -229,6 +242,6 @@ export function forgeProgressRowItems(entries: readonly ForgeProgressEntryData[]
       endAt: entry.at,
     })
   }
-  const rows = [...latest.values()].sort((a, b) => a.startAt - b.startAt)
+  const rows = [...latest.values(), ...triage.values()].sort((a, b) => a.startAt - b.startAt)
   return loop === undefined ? rows : [loop, ...rows]
 }

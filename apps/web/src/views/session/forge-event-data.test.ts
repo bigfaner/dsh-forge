@@ -126,6 +126,24 @@ describe('forgeProgressRowItems（进度行聚合——后写覆盖 + 起止/耗
   it('零条目 = 空数组', () => {
     expect(forgeProgressRowItems([])).toEqual([])
   })
+  it('triage 条目独立聚合键（triage:{taskKey}——任务终态后写覆盖不吞处置行）', () => {
+    const rows = forgeProgressRowItems([
+      progress(1, { taskKey: 'feat-x/2.5', taskTitle: 'web 进度流渲染', status: 'running', expertKey: 'squad/doc' }),
+      progress(2, { verb: 'triage', taskKey: 'feat-x/2.5', status: 'running', note: '处置分析（第 1 次）', expertKey: 'triage-analyst', scenario: 'loop/triage' }),
+      progress(3, { verb: 'triage', taskKey: 'feat-x/2.5', status: 'completed', note: '决策：add-fix', expertKey: 'triage-analyst', scenario: 'loop/triage' }),
+      progress(4, { taskKey: 'feat-x/2.5', taskTitle: 'web 进度流渲染', status: 'blocked', verb: 'claim', note: '启动失败' }),
+    ])
+    const triageRows = rows.filter((row) => row.entry.verb === 'triage')
+    expect(triageRows).toHaveLength(1) // 多 attempt 折叠一行
+    expect(triageRows[0]).toMatchObject({ startAt: at(2), endAt: at(3), entry: { status: 'completed', note: '决策：add-fix' } })
+    const taskRow = rows.find((row) => row.entry.verb !== 'triage' && row.entry.taskKey === 'feat-x/2.5')
+    expect(taskRow).toMatchObject({ startAt: at(1), endAt: at(4), entry: { status: 'blocked' } }) // 任务行终态独立保留
+  })
+  it('triage 条目无 taskKey（畸形载荷）= 走循环级单行不进独立键', () => {
+    const rows = forgeProgressRowItems([progress(1, { verb: 'triage', status: 'running', note: '处置分析（第 1 次）' })])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.entry.verb).toBe('triage')
+  })
 })
 
 describe('进度状态词与族色（面板同语镜像）', () => {
