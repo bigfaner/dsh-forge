@@ -35,6 +35,7 @@ import {
   providerOptionsOf,
   type ModelCatalogEntry,
 } from "./model-catalog.js";
+import { REASONING_OPTIONS } from "../settings/default-options-logic.js";
 
 /**
  * Dialog 拖拽纯决策（头部 pointer 拖拽）：起点锚 + 起始位置 + 当前指针位 → 新位置。
@@ -675,11 +676,15 @@ export function ExpertDetailDialog(props: {
           <div className="dswf-dlg-err">{state.errors.personaMd}</div>
         )}
       </div>
-      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）——
-          同行双列（dswf-dlg-row）；选项值 =「设置>模型」目录（remote.session.modelCatalog——
-          m3.1 D25 同源口径；目录缺席/值不在目录 = box 显当前值，继承父Agent 空选项恒在场）。 */}
+      {/* Agent选项（Provider/Model/Reasoning 同行 4:4:1——D5 表单行布局，配置 tab 同构）：
+          provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）；
+          reasoning 四选（默认/低/中/高——「默认」= 不下发 effort）；写径 = experts.<实例ID>
+          条目（settings 服务 revisioned，detail-source save 分流），内容字段不混写。
+          选项值 =「设置>模型」目录（remote.session.modelCatalog——m3.1 D25 同源口径；
+          目录缺席/值不在目录 = box 显当前值，继承父Agent 空选项恒在场）。分区插在人设与
+          工具之间（proposal UI 面 D 区）。 */}
       <div className="dswf-dlg-row" data-field="provider-model">
-        <div className="dswf-dlg-field" data-field="provider">
+        <div className="dswf-dlg-field dlg-f4" data-field="provider">
           <label>Provider（派发路由 · 清空 = 继承父Agent）</label>
           <FilterSelect
             id="dswf-dlg-provider"
@@ -692,7 +697,7 @@ export function ExpertDetailDialog(props: {
             <div className="dswf-dlg-err">{state.errors.provider}</div>
           )}
         </div>
-        <div className="dswf-dlg-field" data-field="model">
+        <div className="dswf-dlg-field dlg-f4" data-field="model">
           <label>Model（派发模型偏好）</label>
           <FilterSelect
             id="dswf-dlg-model"
@@ -704,6 +709,16 @@ export function ExpertDetailDialog(props: {
           {state.errors.model === undefined ? null : (
             <div className="dswf-dlg-err">{state.errors.model}</div>
           )}
+        </div>
+        <div className="dswf-dlg-field dlg-f1" data-field="reasoning">
+          <label>Reasoning</label>
+          <FilterSelect
+            id="dswf-dlg-reasoning"
+            ariaLabel="Reasoning 档位"
+            value={state.draft.reasoning}
+            options={REASONING_OPTIONS}
+            onChange={(value) => props.controller.setField("reasoning", value)}
+          />
         </div>
       </div>
       <MultiSelect
@@ -801,6 +816,12 @@ export function ExpertDetailDialog(props: {
             <ExpertIcon size={16} />
             <span className={`dot ${expert.enabled ? "on" : "off"}`} />
             <b className="dswf-dlg-name">{expert.name}</b>
+            {/* 禁用徽标（D3/D5：仅 Dialog 标题栏专家名右侧；卡片只置灰不加徽标） */}
+            {expert.enabled ? null : (
+              <span className="dswf-dlg-disabled-badge" data-dswf-disabled-badge="">
+                已禁用
+              </span>
+            )}
             <span className="dswf-dlg-head-actions">
             {comparing ? (
               <button

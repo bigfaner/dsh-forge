@@ -1,16 +1,21 @@
 // panel/detail-source —— 详情 Dialog 状态机（ui-design F2 查看/编辑双模式）：框架
 // 无关控制器（subscribe/getSnapshot 形状与 useSyncExternalStore 对接，list-source
-// 同范式）。保存 = 校验门 → update 路由 → 专家换新回查看态 + Toast 热刷新；启停 =
+// 同范式）。保存 = 校验门 → 双写分流（experts 配置缝在场：内容字段走 update 档案径 +
+// Agent选项/工具写 experts.<实例ID> 条目——settings 服务 revisioned 正门，不混写；
+// 缺席 = 旧装配降级走既有档案径）→ 专家换新回查看态 + Toast 热刷新；启停 =
 // enable/disable 路由即时生效；校验失败字段级报错不落盘。
 
 import { entryIdOf, type ExpertView } from "./filter.js";
 import {
   addSkill,
+  archiveContentWireOf,
   draftOf,
+  expertsEntryOf,
   toggleInList,
   validateDraft,
   wireDraft,
   type ExpertDraft,
+  type ExpertsEntryPatch,
   type ExpertWireDraft,
 } from "./detail-logic.js";
 
@@ -52,12 +57,28 @@ export interface DetailState {
   readonly compareTargetOrigin?: string;
 }
 
-/** 详情变更缝（update / enable / disable fetch 路由装配面；测试注入替身）。 */
+/** 详情变更缝（update / enable / disable / experts 配置写 fetch 路由装配面；测试注入替身）。 */
 export interface DetailMutations {
   /** 档案 upsert（POST /api/expert-squad/update）；成功返回换新后的档案。载荷 = 路由归一形态（provider/model 空串归缺键）。 */
   update(name: string, draft: ExpertWireDraft): Promise<ExpertView>;
   /** 启停切换（POST /api/expert-squad/enable|disable）；成功返回换新后的档案。 */
   setEnabled(name: string, enabled: boolean): Promise<ExpertView>;
+  /**
+   * experts.<实例ID> 条目写（settings 服务 revisioned 正门——装配侧经官方 configForms
+   * 现读 experts 映射、浅合并本条目后整字段 set；disabled/skills 位保留，agentOptions
+   * 与 tools 整组替换）。可选缝：缺席 = 旧装配降级，保存走既有档案径（wireDraft）。
+   */
+  writeExpertsConfig?(instanceId: string, entry: ExpertsEntryPatch): Promise<void>;
+}
+
+/**
+ * 专家实例 ID 取法（experts 配置映射寻址键——list 应答逐条透出 instanceId
+ * （registry ExpertEntry），ExpertView 类型面未声明故经记录窄化；缺席 = undefined
+ * （旧宿主载荷漂移——保存时 fail-loud，不静默丢路由覆写））。
+ */
+export function configKeyOf(entry: ExpertView): string | undefined {
+  const id = (entry as { instanceId?: unknown }).instanceId;
+  return typeof id === "string" && id !== "" ? id : undefined;
 }
 
 const IDLE: DetailState["errors"] = {};
@@ -79,7 +100,7 @@ const IDLE_SNAPSHOT: DetailState = {
     origin: "",
     enabled: false,
   },
-  draft: { title: "", description: "", personaMd: "", tools: [], skills: [], provider: "", model: "" },
+  draft: { title: "", description: "", personaMd: "", tools: [], skills: [], provider: "", model: "", reasoning: "" },
   errors: IDLE,
   busy: false,
   toast: undefined,
@@ -201,7 +222,7 @@ export class ExpertDetailController {
   }
 
   /** 草稿字段更新（编辑态输入面）。 */
-  setField<K extends "title" | "description" | "personaMd" | "provider" | "model">(
+  setField<K extends "title" | "description" | "personaMd" | "provider" | "model" | "reasoning">(
     field: K,
     value: ExpertDraft[K],
   ): void {
@@ -271,8 +292,33 @@ export class ExpertDetailController {
     this.emit();
     const generation = this.generation;
     try {
-      // wireDraft：provider/model trim 后空串归缺键——不落半组、清空两字段即回落继承
-      const updated = await this.mutations.update(current.expert.name, wireDraft(current.draft));
+      // 写径分流（experts 配置缝在场 = 双写不混写；缺席 = 旧装配降级走既有档案径）：
+      // · 内容半：岗位/简介/人设/技能经 update 路由（档案编辑径；路由与工具不混写——
+      //   tools 透传档案现值）；
+      // · 配置半：Agent选项（provider/model 成对 + reasoning）与工具写 experts.<实例ID>
+      //   条目（settings 服务 revisioned；逐项清空 = 键归缺 = 回退档案值）。
+      const writeConfig = this.mutations.writeExpertsConfig;
+      let updated: ExpertView;
+      if (writeConfig === undefined) {
+        // wireDraft：provider/model trim 后空串归缺键——不落半组、清空两字段即回落继承
+        updated = await this.mutations.update(current.expert.name, wireDraft(current.draft));
+      } else {
+        updated = await this.mutations.update(
+          current.expert.name,
+          archiveContentWireOf(current.draft, current.expert),
+        );
+        await this.writeConfigOrThrow(current.expert, current.draft);
+        // 所见即所得补折（list 轮询前的即时呈现）：update 回包档案半未含 experts 折叠——
+        // 条目有值的位就地覆盖（清空位保留 update 回包的档案值 = 回退语义同构）。
+        const patch = expertsEntryOf(current.draft);
+        updated = {
+          ...updated,
+          provider: patch.agentOptions?.provider ?? updated.provider,
+          model: patch.agentOptions?.model ?? updated.model,
+          reasoning: patch.agentOptions?.reasoning ?? updated.reasoning,
+          tools: patch.tools ?? updated.tools,
+        };
+      }
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
       const toast = "档案已保存（热刷新生效）";
       this.state = { ...this.getSnapshot(), expert: updated, mode: "view", busy: false, toast };
@@ -284,6 +330,24 @@ export class ExpertDetailController {
       this.scheduleToastDismiss(toast);
     }
     this.emit();
+  }
+
+  /**
+   * experts 条目写（配置缝径；实例 ID 缺席 = fail-loud——路由覆写丢写即显示失真，
+   * 静默跳过违反所见即所得）。返回档案换新条目（update 回包透传）。
+   */
+  private async writeConfigOrThrow(
+    expert: ExpertView,
+    draft: ExpertDraft,
+  ): Promise<ExpertView> {
+    const write = this.mutations.writeExpertsConfig;
+    if (write === undefined) return expert; // 不可达（save 分流保证）——类型收窄面
+    const key = configKeyOf(expert);
+    if (key === undefined) {
+      throw new Error(`缺少专家实例 ID（instanceId），无法写路由覆写：${expert.name}`);
+    }
+    await write(key, expertsEntryOf(draft));
+    return expert;
   }
 
   /** 启停切换（enable/disable 路由；即时生效换新专家 + Toast）。 */

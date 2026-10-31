@@ -15,10 +15,26 @@ export interface ExpertDraft {
   readonly provider: string;
   /** 派发路由 model（同 provider 成对语义）。 */
   readonly model: string;
+  /** 推理档位（""= 默认不下发 effort；low|medium|high——reasoning 四选下拉，D5 微文案）。 */
+  readonly reasoning: string;
 }
 
-/** update 路由载荷（provider/model 归一后形态——空串归缺键，frontmatter 无键回落继承）。 */
-export type ExpertWireDraft = Omit<ExpertDraft, "provider" | "model"> & {
+/**
+ * experts.<实例ID> 条目写径补丁（experts 配置映射单条目的覆写面——保存 = Agent 选项
+ * 与工具写条目，内容字段不混写）。agentOptions.provider/model 整组同给同缺（消费链
+ * 成对语义）；reasoning 独立位；tools 整组替换（清空 = 键归缺 = 回退档案值）。
+ */
+export interface ExpertsEntryPatch {
+  readonly agentOptions?: {
+    readonly provider?: string;
+    readonly model?: string;
+    readonly reasoning?: string;
+  };
+  readonly tools?: readonly string[];
+}
+
+/** update 路由载荷（provider/model 归一后形态——空串归缺键，frontmatter 无键回落继承；reasoning 不入档案载荷——写 experts 条目）。 */
+export type ExpertWireDraft = Omit<ExpertDraft, "provider" | "model" | "reasoning"> & {
   readonly provider?: string;
   readonly model?: string;
 };
@@ -49,6 +65,7 @@ export function draftOf(expert: ExpertView): ExpertDraft {
     skills: [...expert.skills],
     provider: expert.provider ?? "",
     model: expert.model ?? "",
+    reasoning: expert.reasoning ?? "",
   };
 }
 
@@ -90,6 +107,42 @@ export function wireDraft(draft: ExpertDraft): ExpertWireDraft {
     skills: draft.skills,
     ...(draft.provider.trim() !== "" ? { provider: draft.provider.trim() } : {}),
     ...(draft.model.trim() !== "" ? { model: draft.model.trim() } : {}),
+  };
+}
+
+/**
+ * 草稿 → 档案内容载荷（experts 写缝在场时的 update 路由载荷——内容字段走既有档案
+ * 编辑径，路由不混写）：provider/model 不进档案载荷（路由归 experts 条目）；tools
+ * 透传档案现值（zod 门 min(1) 满足 + 档案工具不被覆写——工具覆写语义归 experts 条目）；
+ * skills 随档案径（低风险假设：本任务 AC 只点名 Agent选项+工具写 experts）。
+ */
+export function archiveContentWireOf(draft: ExpertDraft, expert: ExpertView): ExpertWireDraft {
+  return {
+    title: draft.title,
+    description: draft.description,
+    personaMd: draft.personaMd,
+    tools: expert.tools,
+    skills: draft.skills,
+  };
+}
+
+/**
+ * 草稿 → experts.<实例ID> 条目补丁（保存写径的配置半）：provider/model 成对在场才落
+ * 组（成对语义同 validateDraft 门）；reasoning 非「默认」才落位；tools 非空才落键——
+ * 逐项清空 = 键归缺 = 回退档案值/不下发（无「清除覆盖」按钮的回退语义承载）。
+ */
+export function expertsEntryOf(draft: ExpertDraft): ExpertsEntryPatch {
+  const provider = draft.provider.trim();
+  const model = draft.model.trim();
+  const paired = provider !== "" && model !== "";
+  const agentOptions = {
+    ...(paired ? { provider, model } : {}),
+    ...(draft.reasoning !== "" ? { reasoning: draft.reasoning } : {}),
+  };
+  const hasAgentOptions = Object.keys(agentOptions).length > 0;
+  return {
+    ...(hasAgentOptions ? { agentOptions } : {}),
+    ...(draft.tools.length > 0 ? { tools: [...draft.tools] } : {}),
   };
 }
 

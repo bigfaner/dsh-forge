@@ -143,9 +143,13 @@ export const PANEL_CSS = `
 .dswf-dlg-md .md-code-block pre { margin: 0; padding: ${T.gap8} ${T.pad12}; overflow-x: auto; font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); line-height: ${T.lh18}; }
 .dswf-dlg-md .md-code-block pre code { background: none; padding: 0; border-radius: 0; font-size: inherit; }
 .dswf-dlg-field { display: flex; flex-direction: column; gap: 6px; }
-/* 同行双列（provider/model 成对编辑——各占一半） */
+/* 同行多列（provider/model/reasoning 4:4:1——D5 表单行布局，配置 tab 同构） */
 .dswf-dlg-row { display: flex; gap: ${T.gap8}; }
 .dswf-dlg-row > .dswf-dlg-field { flex: 1; min-width: 0; }
+.dswf-dlg-row > .dswf-dlg-field.dlg-f4 { flex: 4; }
+.dswf-dlg-row > .dswf-dlg-field.dlg-f1 { flex: 1; }
+/* 禁用徽标（Dialog 标题栏专家名右侧——warn 琥珀语义点色，origin-badge 同形制） */
+.dswf-dlg-disabled-badge { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; padding: 0 6px; border-radius: 4px; white-space: nowrap; color: var(--dsw-alias-state-warn-primary); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent); }
 /* Dialog 内单选下拉（FilterSelect 复用——box 对齐 .dswf-dlg-input 刻度：通宽 + 同字号/内距/描边） */
 .dswf-dlg-field .dswf-select-box { width: 100%; justify-content: space-between; font: var(--dsw-font-s-14); height: auto; padding: ${T.gap8} ${T.pad12}; }
 .dswf-dlg-field .dswf-select-value { font: var(--dsw-font-s-14); }

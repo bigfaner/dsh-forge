@@ -9,7 +9,9 @@ import {
   DESCRIPTION_MAX,
   TOOL_CANDIDATES,
   addSkill,
+  archiveContentWireOf,
   draftOf,
+  expertsEntryOf,
   hasBareMustache,
   personaBlocks,
   skillCandidatesOf,
@@ -21,6 +23,7 @@ import {
 } from "../src-client/panel/detail-logic.js";import {
   ExpertDetailController,
   TOAST_AUTO_DISMISS_MS,
+  configKeyOf,
   type DetailMutations,
 } from "../src-client/panel/detail-source.js";
 import {
@@ -578,6 +581,157 @@ describe("provider/model 成对编辑（1.10）", () => {
   });
 });
 
+// ---- 详情 Dialog 双写写径（expert-squad-default-routing 1.5）------------------
+
+describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不混写）", () => {
+  it("expertsEntryOf：provider/model 成对才落组；reasoning 非「默认」才落位；tools 非空才落键", () => {
+    const base = draftOf(entry());
+    expect(
+      expertsEntryOf({ ...base, provider: " deepseek ", model: "reasoner", reasoning: "high" }),
+    ).toEqual({
+      agentOptions: { provider: "deepseek", model: "reasoner", reasoning: "high" },
+      tools: ["read", "edit"],
+    });
+    // 只填其一（校验门拦下，但纯函数如实不落半组）
+    expect(expertsEntryOf({ ...base, provider: "deepseek", model: "" }).agentOptions).toBeUndefined();
+    // reasoning「默认」（空串）不落位；逐项清空 = 键归缺 = 回退档案值
+    expect(expertsEntryOf({ ...base, reasoning: "" })).toEqual({ tools: ["read", "edit"] });
+    expect(expertsEntryOf({ ...base, tools: [] })).toEqual({});
+  });
+
+  it("archiveContentWireOf：内容字段走档案径，provider/model 不进档案载荷；tools 透传档案现值", () => {
+    const draft = { ...draftOf(entry()), provider: "deepseek", model: "reasoner", reasoning: "low" };
+    const wire = archiveContentWireOf(draft, entry({ tools: ["read"] }));
+    expect(wire.title).toBe("资深评审");
+    expect(wire.description).toBe("Runs code review");
+    expect(wire.personaMd).toContain("职责");
+    expect(wire.skills).toEqual(["review", "tsc"]);
+    expect(wire.tools).toEqual(["read"]); // 档案工具不被覆写（工具覆写语义归 experts 条目）
+    expect("provider" in wire).toBe(false);
+    expect("model" in wire).toBe(false);
+    expect("reasoning" in wire).toBe(false);
+  });
+
+  it("draftOf 预填 reasoning（生效值）；configKeyOf 取实例 ID（缺席 = undefined）", () => {
+    expect(draftOf(entry({ reasoning: "medium" })).reasoning).toBe("medium");
+    expect(draftOf(entry()).reasoning).toBe("");
+    expect(configKeyOf(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView))).toBe(
+      "@dsh-forge/plugin-forge#code-reviewer",
+    );
+    expect(configKeyOf(entry())).toBeUndefined();
+  });
+
+  it("保存（配置缝在场）：内容半 update 不带路由 + 配置半写 experts.<实例ID>；专家态补折", async () => {
+    const updates: unknown[] = [];
+    const writes: [string, unknown][] = [];
+    const ctl = new ExpertDetailController({
+      update: async (_name, draft) => {
+        updates.push(draft);
+        return entry();
+      },
+      setEnabled: async () => entry(),
+      writeExpertsConfig: async (instanceId, patch) => {
+        writes.push([instanceId, patch]);
+      },
+    });
+    ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
+    ctl.startEdit();
+    ctl.setField("provider", "deepseek");
+    ctl.setField("model", "reasoner");
+    ctl.setField("reasoning", "high");
+    await ctl.save();
+    // 内容半：update 载荷无路由字段（路由不混写）
+    expect(updates).toHaveLength(1);
+    expect(JSON.stringify(updates[0])).not.toContain('"provider"');
+    expect(JSON.stringify(updates[0])).not.toContain('"reasoning"');
+    // 配置半：实例 ID 寻址 + Agent选项/工具条目
+    expect(writes).toEqual([
+      [
+        "@dsh-forge/plugin-forge#code-reviewer",
+        {
+          agentOptions: { provider: "deepseek", model: "reasoner", reasoning: "high" },
+          tools: ["read", "edit"],
+        },
+      ],
+    ]);
+    expect(ctl.getSnapshot().mode).toBe("view");
+    expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+  });
+
+  it("保存（配置缝在场）：清空路由 → experts 条目键归缺（回退档案值），档案载荷不带路由", async () => {
+    const writes: unknown[] = [];
+    const ctl = new ExpertDetailController({
+      update: async () => entry({ provider: "deepseek", model: "reasoner" }),
+      setEnabled: async () => entry(),
+      writeExpertsConfig: async (_id, patch) => {
+        writes.push(patch);
+      },
+    });
+    ctl.open(
+      entry({
+        instanceId: "layer:project#code-reviewer",
+        provider: "deepseek",
+        model: "reasoner",
+      } as Partial<ExpertView> as ExpertView),
+    );
+    ctl.startEdit();
+    ctl.setField("provider", "");
+    ctl.setField("model", "");
+    await ctl.save();
+    expect(writes).toEqual([{ tools: ["read", "edit"] }]);
+  });
+
+  it("保存（配置缝在场）：实例 ID 缺席 = fail-loud 不写配置（路由覆写丢写即显示失真）", async () => {
+    let writes = 0;
+    const ctl = new ExpertDetailController({
+      update: async () => entry(),
+      setEnabled: async () => entry(),
+      writeExpertsConfig: async () => {
+        writes += 1;
+      },
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    await ctl.save();
+    expect(writes).toBe(0);
+    expect(ctl.getSnapshot().mode).toBe("edit");
+    expect(ctl.getSnapshot().toast).toContain("实例 ID");
+  });
+
+  it("保存（配置缝在场）：配置半写失败 = 停留编辑态 + Toast 透出错误", async () => {
+    const ctl = new ExpertDetailController({
+      update: async () => entry(),
+      setEnabled: async () => entry(),
+      writeExpertsConfig: async () => {
+        throw new Error("config rejected");
+      },
+    });
+    ctl.open(entry({ instanceId: "layer:user#x" } as Partial<ExpertView> as ExpertView));
+    ctl.startEdit();
+    await ctl.save();
+    expect(ctl.getSnapshot().mode).toBe("edit");
+    expect(ctl.getSnapshot().toast).toContain("config rejected");
+  });
+
+  it("保存（配置缝缺席 = 旧装配降级）：既有档案径不变（provider/model 随 update）", async () => {
+    let payload: ExpertDraft | undefined;
+    const ctl = new ExpertDetailController({
+      update: async (_name, draft) => {
+        payload = draft;
+        return entry();
+      },
+      setEnabled: async () => entry(),
+    });
+    ctl.open(entry());
+    ctl.startEdit();
+    ctl.setField("provider", "deepseek");
+    ctl.setField("model", "reasoner");
+    await ctl.save();
+    expect(payload?.provider).toBe("deepseek");
+    expect(payload?.model).toBe("reasoner");
+  });
+});
+
 // ---- SSR 静态渲染（F2 组件树逐位） -----------------------------------------
 
 function renderDialog(overrides: {
@@ -687,6 +841,33 @@ describe("ExpertDetailDialog 编辑态（F2 字段集）", () => {
     expect(html).toContain(">保存<");
     expect(html).toContain("简介（模型选人依据：何时委派我");
     expect(html).toContain("Markdown 自由输入");
+  });
+
+  it("Agent选项 4:4:1 行（1.5）：Reasoning 四选下拉插在人设与工具之间；Provider/Model 同行", () => {
+    const html = renderDialog({ mode: "edit" });
+    expect(html).toContain('data-field="reasoning"');
+    expect(html).toContain('data-select="dswf-dlg-reasoning"');
+    expect(html).toContain('data-select-value=""'); // 默认档（不下发 effort）
+    expect(html).toContain('aria-label="Reasoning 档位"');
+    // 分区位：人设 < Agent选项行 < 工具 msel（插在人设与工具之间）
+    expect(html.indexOf('data-field="personaMd"')).toBeLessThan(html.indexOf('data-field="provider-model"'));
+    expect(html.indexOf('data-field="provider-model"')).toBeLessThan(html.indexOf('data-msel="tools"'));
+    // reasoning 值预填（生效档位）
+    const ctl = new ExpertDetailController(noMutations());
+    ctl.open(entry({ reasoning: "high" }));
+    ctl.startEdit();
+    const highHtml = renderToStaticMarkup(
+      React.createElement(ExpertDetailDialog, { controller: ctl, allSkills: [] }),
+    );
+    expect(highHtml).toContain('data-select-value="high"');
+  });
+
+  it("禁用徽标（1.5 D3）：标题栏专家名右侧「已禁用」琥珀徽标，仅禁用时在场", () => {
+    const off = renderDialog({ enabled: false });
+    expect(off).toContain('data-dswf-disabled-badge=""');
+    expect(off).toMatch(/code-reviewer<\/b><span class="dswf-dlg-disabled-badge"/);
+    const on = renderDialog({ enabled: true });
+    expect(on).not.toContain("dswf-dlg-disabled-badge");
   });
 
   it("multi-select：工具白名单在上、技能在下，box 显已选 chips", () => {
