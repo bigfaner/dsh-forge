@@ -11,7 +11,7 @@
 //      经官方 ctx.tools.register 正门接线（D1 注册面零改动）。工具面全组合可见可用
 //      （全局单实例注册即全局继承——HR preset 无专行，守卫微件态已撤销）。
 
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
@@ -150,6 +150,20 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
   const registries = new Map<string, Promise<ExpertsRegistry>>();
   /** 共享插件内置层 root（registerRoot 记录面——跨 registry 实例族传播，见 rootsFor 注记）。 */
   const sharedExtraRoots: ExpertRoot[] = [];
+  /** 注册内置层清单（本包随包 + 第三方 registerRoot——只读硬闸判定面）。 */
+  const builtinRoots = (): string[] => [resolvePluginExpertsRoot(), ...sharedExtraRoots.map((r) => r.dir)];
+  /** 只读硬闸：目标目录落进任一内置层 → fail-loud 拒写（内置层只读由结构保证）。 */
+  const assertNotBuiltinRoot = (dir: string): void => {
+    const target = resolve(dir);
+    for (const root of builtinRoots()) {
+      const base = resolve(root);
+      if (target === base || target.startsWith(base + sep)) {
+        throw new Error(
+          `内置专家层只读，拒绝写入：${target}（编辑内置档案会回落 user 层覆写，键不变）`,
+        );
+      }
+    }
+  };
   const watchManagers = new Map<string, ExpertWatchManager>();
   const refreshChains = new Map<string, Promise<void>>();
   // bug a7bdf03f：workspace 锚 = 进程 cwd（兜底形态）时走 cwdExpertRoots 合理性
@@ -290,7 +304,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx): Promise<void> {
         effectiveOrigin === "project"
           ? join(resolveProjectRootFor(input.workspace), ".dsh", "experts")
           : resolveUserExpertsRoot();
-      const file = join(expertsDir, `${input.name}.md`);
+      // 只读硬闸（AGENTS 1.2 语义收口）：目标目录解析后落进任一注册内置层（本包随包
+      // experts/ 或第三方 registerRoot 目录）→ fail-loud 拒写。origin 判定即便漂移，
+      // 内置层也不可被写——只读由结构保证而非约定。
+      assertNotBuiltinRoot(expertsDir);      const file = join(expertsDir, `${input.name}.md`);
       const content = serializeExpertMd(
         {
           name: input.name,
