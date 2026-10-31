@@ -57,8 +57,8 @@ export function hasBareMustache(text: string): boolean {
   return text.includes("{{");
 }
 
-/** 成对校验提示文案（provider/model 官方语义：同给同缺，任一缺席整组省略回落继承）。 */
-export const PAIR_ERROR = "provider 与 model 须成对填写（或同时清空回落继承）";
+/** 成对校验提示文案（provider/model 官方语义：同给同缺，任一缺席整组省略回落父 Agent）。 */
+export const PAIR_ERROR = "provider 与 model 须成对填写（或同时清空继承父Agent）";
 
 /** 保存校验门：返回字段级错误（空对象 = 通过）。 */
 export function validateDraft(draft: ExpertDraft): {

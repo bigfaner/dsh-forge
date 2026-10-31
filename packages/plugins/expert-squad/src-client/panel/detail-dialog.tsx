@@ -621,15 +621,12 @@ export function ExpertDetailDialog(props: {
           <div className="dswf-dlg-err">{state.errors.personaMd}</div>
         )}
       </div>
-      {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）。
-          选项值 =「设置>模型」目录（remote.session.modelCatalog——m3.1 D25 同源口径；
-          目录缺席/值不在目录 = box 显当前值，回落继承空选项恒在场）。 */}
       {/* provider/model 成对编辑（官方 AgentOptions 同给同缺；只填其一保存时成对校验拦截）——
           同行双列（dswf-dlg-row）；选项值 =「设置>模型」目录（remote.session.modelCatalog——
-          m3.1 D25 同源口径；目录缺席/值不在目录 = box 显当前值，回落继承空选项恒在场）。 */}
+          m3.1 D25 同源口径；目录缺席/值不在目录 = box 显当前值，继承父Agent 空选项恒在场）。 */}
       <div className="dswf-dlg-row" data-field="provider-model">
         <div className="dswf-dlg-field" data-field="provider">
-          <label>Provider（派发路由 · 清空 = 回落继承）</label>
+          <label>Provider（派发路由 · 清空 = 继承父Agent）</label>
           <FilterSelect
             id="dswf-dlg-provider"
             ariaLabel="Provider"
@@ -698,12 +695,12 @@ export function ExpertDetailDialog(props: {
           </span>
         ))}
       </div>
-      {/* 派发路由（成对语义：同给同缺——缺省整组显「回落继承」） */}
+      {/* 派发路由（成对语义：同给同缺——缺省整组显「继承父Agent」） */}
       <div className="dswf-dlg-seg">派发路由（Provider · Model）</div>
       <div className="dswf-dlg-meta" data-dswf-dlg-route="">
         {expert.provider !== undefined && expert.model !== undefined
           ? `${expert.provider} · ${expert.model}`
-          : "（回落继承）"}
+          : "（继承父Agent）"}
       </div>
       <div className="dswf-dlg-seg">技能</div>
       <div className="dswf-dlg-chips">

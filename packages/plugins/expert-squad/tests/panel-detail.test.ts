@@ -1,4 +1,4 @@
-// panel 详情 Dialog 单测（ui-design F2 查看/编辑双模式）：纯逻辑面（校验/multi-select/
+﻿// panel 详情 Dialog 单测（ui-design F2 查看/编辑双模式）：纯逻辑面（校验/multi-select/
 // Markdown 分块）+ ExpertDetailController 状态机（保存/启停/取消流）+ SSR 静态标记
 // 逐位断言（查看态分段/编辑态字段/双模式切换件）+ 列表 patchEntry 卡片即时同步。
 
@@ -430,10 +430,10 @@ describe("provider/model 成对编辑（1.10）", () => {
   it("校验：只填其一 → 成对错误落对应字段；都填/都空 → 通过", () => {
     const base = draftOf(entry());
     expect(validateDraft({ ...base, provider: "deepseek", model: "" })).toEqual({
-      provider: "provider 与 model 须成对填写（或同时清空回落继承）",
+      provider: "provider 与 model 须成对填写（或同时清空继承父Agent）",
     });
     expect(validateDraft({ ...base, provider: "  ", model: "sonnet" })).toEqual({
-      model: "provider 与 model 须成对填写（或同时清空回落继承）",
+      model: "provider 与 model 须成对填写（或同时清空继承父Agent）",
     });
     expect(validateDraft({ ...base, provider: "deepseek", model: "sonnet" })).toEqual({});
     expect(validateDraft({ ...base, provider: "", model: "" })).toEqual({});
@@ -530,14 +530,14 @@ describe("provider/model 成对编辑（1.10）", () => {
       { provider: "zai-coding-cn", models: ["glm-4.6"] },
     ];
     expect(modelOptionsOf(catalog, "zai-coding-cn")).toEqual([
-      { value: "", label: "（回落继承）" },
+      { value: "", label: "（继承父Agent）" },
       { value: "glm-4.6", label: "glm-4.6" },
     ]);
     // provider 未选/不在目录 = 仅继承项
-    expect(modelOptionsOf(catalog, "")).toEqual([{ value: "", label: "（回落继承）" }]);
-    expect(modelOptionsOf(undefined, "deepseek")).toEqual([{ value: "", label: "（回落继承）" }]);
+    expect(modelOptionsOf(catalog, "")).toEqual([{ value: "", label: "（继承父Agent）" }]);
+    expect(modelOptionsOf(undefined, "deepseek")).toEqual([{ value: "", label: "（继承父Agent）" }]);
     expect(providerOptionsOf(catalog).map((o) => o.value)).toEqual(["", "deepseek", "zai-coding-cn"]);
-    expect(providerOptionsOf(undefined)).toEqual([{ value: "", label: "（回落继承）" }]);
+    expect(providerOptionsOf(undefined)).toEqual([{ value: "", label: "（继承父Agent）" }]);
   });
 
   it("modelCatalogOfEnvelope：官方 ModelCatalog 信封解包（!ok/缺 groups/畸形 = undefined）", () => {
@@ -575,7 +575,7 @@ describe("provider/model 成对编辑（1.10）", () => {
     const start = { px: 100, py: 80, left: 300, top: 120 };
     expect(dialogDragPos(start, 140, 60)).toEqual({ left: 340, top: 100 });
     expect(dialogDragPos(start, 100, 80)).toEqual({ left: 300, top: 120 });
-    expect(INHERIT_OPTION).toEqual({ value: "", label: "（回落继承）" });
+    expect(INHERIT_OPTION).toEqual({ value: "", label: "（继承父Agent）" });
   });
 });
 
@@ -619,7 +619,7 @@ describe("ExpertDetailDialog 查看态（F2 分段）", () => {
     expect(html).toContain('class="chip tool"');
     // 派发路由（成对在场 = 值对；缺省 = 回落继承）
     expect(html).toContain("派发路由（Provider · Model）");
-    expect(html).toContain("（回落继承）");
+    expect(html).toContain("（继承父Agent）");
     const pairedCtl = new ExpertDetailController(noMutations());
     pairedCtl.open(entry({ provider: "deepseek", model: "reasoner" }));
     const paired = renderToStaticMarkup(

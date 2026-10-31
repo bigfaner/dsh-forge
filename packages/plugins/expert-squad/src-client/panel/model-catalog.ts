@@ -81,8 +81,8 @@ export function modelCatalogLoaderOf(ctx: {
   };
 }
 
-/** 回落继承空选项（两字段清空 = 回落继承——档案 frontmatter 无键）。 */
-export const INHERIT_OPTION = { value: "", label: "（回落继承）" } as const;
+/** 继承父 Agent 空选项（两字段清空 = 不指定，派发回落父 Agent——档案 frontmatter 无键）。 */
+export const INHERIT_OPTION = { value: "", label: "（继承父Agent）" } as const;
 
 /** 目录 → provider 下拉选项（继承空选项 + 目录 provider id 保序；目录缺席 = 仅继承项）。 */
 export function providerOptionsOf(
