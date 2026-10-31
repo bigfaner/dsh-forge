@@ -121,10 +121,12 @@ export const PANEL_CSS = `
 /* 人设 GFM 管道表格（官方语义：th 弱化色 + 单元格行分隔线 + 行内代码底） */
 /* 人设 GFM 管道表格——经典 md 表格风格（GitHub 同款）：全文浅格线、表头加粗同文色、
    无底色填充——与正文一体，不做 UI 数据表形态 */
-.dswf-dlg-md .md-table-wrap { overflow-x: auto; margin: ${T.gap8} 0; }
+.dswf-dlg-md .md-table-wrap { margin: ${T.gap8} 0; }
+/* 尽量不换行 = 表格收敛内容宽（短内容零折行、居中）；超出容器宽（max-width 封顶）
+   才自然折行——永不出现横向滚动条 */
 .dswf-dlg-md .md-table { width: auto; max-width: 100%; border-collapse: collapse; font: var(--dsw-font-s-14); line-height: ${T.lh20}; color: var(--dsw-alias-label-primary); margin: 0 auto; display: table; }
-.dswf-dlg-md .md-table th, .dswf-dlg-md .md-table td { padding: 6px 13px; border: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; white-space: nowrap; }
-.dswf-dlg-md .md-table th { font-weight: 500; }
+.dswf-dlg-md .md-table th, .dswf-dlg-md .md-table td { padding: 6px 13px; border: 0.5px solid var(--dsw-alias-border-l2); text-align: left; vertical-align: top; }
+.dswf-dlg-md .md-table th { font-weight: 500; white-space: nowrap; } /* 表头短语不折行（长度有限，无横滚风险） */
 .dswf-dlg-md .md-table thead tr { background: var(--dsw-alias-interactive-bg-hover); }
 .dswf-dlg-md .md-table code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
 .dswf-dlg-md code { font-family: var(--ds-font-family-code); font-size: var(--dsw-font-xxs-12-font-size); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; padding: 0 4px; }
