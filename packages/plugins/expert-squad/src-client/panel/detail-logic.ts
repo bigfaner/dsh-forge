@@ -25,6 +25,11 @@ export interface ExpertDraft {
  * 成对语义）；reasoning 独立位；tools 整组替换（清空 = 键归缺 = 回退档案值）。
  */
 export interface ExpertsEntryPatch {
+  /**
+   * 来源级禁用位（bug 950b845c：Dialog 启停写径——true = 禁用，false = 启用且位摘除
+   * 「键归缺」；undefined = 本补丁不触碰该位，装配侧保留 prior）。对所有工作区生效。
+   */
+  readonly disabled?: boolean;
   readonly agentOptions?: {
     readonly provider?: string;
     readonly model?: string;

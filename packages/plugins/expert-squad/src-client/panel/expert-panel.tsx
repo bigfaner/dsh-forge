@@ -144,10 +144,10 @@ export function defaultDelegateProbe(): Promise<DelegateAssemblySnapshot | undef
   })()
 }
 
-/** 详情变更 fetch 路由前缀（routes.ts 精确路由族；client 侧零服务端代码引入）。 */
+/** 详情变更 fetch 路由前缀（routes.ts 精确路由族；client 侧零服务端代码引入）。
+ *  bug 950b845c：enable/disable 路由不再被 Dialog 消费（启停写 experts.<实例ID>.disabled
+ *  位——settings revisioned 缝），旧 per-workspace 启停径从 Dialog 面退役。 */
 const DETAIL_UPDATE_URL = "/api/expert-squad/update";
-const DETAIL_ENABLE_URL = "/api/expert-squad/enable";
-const DETAIL_DISABLE_URL = "/api/expert-squad/disable";
 
 /** POST 路由公共请求面（非 2xx → 抛业务错消息）。 */
 async function postJson(url: string, body: unknown): Promise<unknown> {
@@ -161,10 +161,11 @@ async function postJson(url: string, body: unknown): Promise<unknown> {
 }
 
 /**
- * 默认详情变更缝（POST update / enable / disable；返回换新后的档案）。
+ * 默认详情变更缝（POST update；返回换新后的档案）。
  * writeExpertsConfig（可选，bug 5cf9768e 生产注入面）：experts.<实例ID> 条目写——
  * 装配侧经官方 configForms revisioned 写径（settings/index expertsConfigWriteOf），
- * 缺席 = 旧装配降级（保存走既有档案径，detail-source save 分流）。
+ * 缺席 = 旧装配降级（保存走既有档案径，detail-source save 分流；启停 = Toast 透出
+ * 写径不可用，bug 950b845c——旧 per-workspace 启停径不复活）。
  */
 export function defaultDetailMutations(
   workspace: string,
@@ -173,11 +174,6 @@ export function defaultDetailMutations(
   return {
     update: async (name, draft) =>
       (await postJson(DETAIL_UPDATE_URL, { workspace, name, ...draft })) as ExpertView,
-    setEnabled: async (name, enabled) =>
-      (await postJson(enabled ? DETAIL_ENABLE_URL : DETAIL_DISABLE_URL, {
-        workspace,
-        key: name,
-      })) as ExpertView,
     ...(writeExpertsConfig !== undefined ? { writeExpertsConfig } : {}),
   };
 }
@@ -263,7 +259,7 @@ export interface ExpertPanelAppProps {
   readonly useWorkspaces?: WorkspacesHook
   /** 取数缝（测试/装配注入；缺省 = /api 桥 fetch）。 */
   readonly fetchList?: ListFetcher
-  /** 详情变更缝（测试/装配注入；缺省 = update/enable/disable POST fetch）。 */
+  /** 详情变更缝（测试/装配注入；缺省 = update POST fetch）。 */
   readonly mutations?: DetailMutations
   /**
    * experts.<实例ID> 条目写缝（bug 5cf9768e 生产注入面——装配壳经官方 configForms
@@ -335,12 +331,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         controller?.patchEntry(updated)
         return updated
       },
-      setEnabled: async (name, enabled) => {
-        const updated = await base.setEnabled(name, enabled)
-        controller?.patchEntry(updated)
-        return updated
-      },
-      // 写缝转发（bug 5cf9768e）：控制器包装此前只转发 update/setEnabled——生产缝
+      // 写缝转发（bug 5cf9768e）：控制器包装转发 update/writeExpertsConfig——生产缝
       // 被静默丢弃，Dialog 保存恒走降级支。配置半无回包档案（Promise<void>），直转发。
       ...(base.writeExpertsConfig !== undefined
         ? { writeExpertsConfig: (...args: Parameters<NonNullable<DetailMutations["writeExpertsConfig"]>>) => base.writeExpertsConfig!(...args) }

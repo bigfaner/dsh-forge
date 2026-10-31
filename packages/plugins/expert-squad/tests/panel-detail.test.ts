@@ -63,8 +63,12 @@ function entry(overrides: Partial<ExpertView> = {}): ExpertView {
 function noMutations(): DetailMutations {
   return {
     update: async () => entry(),
-    setEnabled: async (_key: string, _enabled: boolean) => entry(),
   };
+}
+
+/** 带 instanceId 的条目（experts 配置写径寻址键）。 */
+function idEntry(overrides: Partial<ExpertView> = {}): ExpertView {
+  return entry({ instanceId: "layer:project#code-reviewer", ...overrides } as Partial<ExpertView> as ExpertView);
 }
 
 // ---- 纯逻辑面 ---------------------------------------------------------------
@@ -259,23 +263,49 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
     expect(ctl.getSnapshot().toast).toContain("写失败");
   });
 
-  it("启停：setEnabled(!enabled) → 专家换新 + Toast 已禁用/已启用", async () => {
-    const calls: boolean[] = [];
+  it("启停（bug 950b845c）：写 experts.<实例ID>.disabled 位（来源级）→ 专家换新 + Toast", async () => {
+    const writes: [string, unknown][] = [];
     const ctl = new ExpertDetailController({
-      ...noMutations(),
-      setEnabled: async (_key, enabled) => {
-        calls.push(enabled);
-        return entry({ enabled });
+      update: async () => entry(),
+      writeExpertsConfig: async (instanceId, patch) => {
+        writes.push([instanceId, patch]);
+      },
+    });
+    ctl.open(idEntry());
+    await ctl.toggleEnabled();
+    expect(writes).toEqual([["layer:project#code-reviewer", { disabled: true }]]);
+    expect(ctl.getSnapshot().expert.enabled).toBe(false);
+    expect(ctl.getSnapshot().toast).toContain("已禁用");
+    await ctl.toggleEnabled();
+    expect(writes).toEqual([
+      ["layer:project#code-reviewer", { disabled: true }],
+      ["layer:project#code-reviewer", { disabled: false }],
+    ]);
+    expect(ctl.getSnapshot().expert.enabled).toBe(true);
+    expect(ctl.getSnapshot().toast).toContain("已启用");
+  });
+
+  it("启停（bug 950b845c）：配置缝缺席 = Toast 透出错误（旧 per-workspace 启停径不复活）", async () => {
+    const ctl = new ExpertDetailController({ update: async () => entry() });
+    ctl.open(idEntry());
+    await ctl.toggleEnabled();
+    expect(ctl.getSnapshot().busy).toBe(false);
+    expect(ctl.getSnapshot().toast).toContain("启停");
+    expect(ctl.getSnapshot().expert.enabled).toBe(true); // 状态未翻
+  });
+
+  it("启停（bug 950b845c）：实例 ID 缺席 = fail-loud Toast，不落禁用位", async () => {
+    let writes = 0;
+    const ctl = new ExpertDetailController({
+      update: async () => entry(),
+      writeExpertsConfig: async () => {
+        writes += 1;
       },
     });
     ctl.open(entry());
     await ctl.toggleEnabled();
-    expect(calls).toEqual([false]);
-    expect(ctl.getSnapshot().expert.enabled).toBe(false);
-    expect(ctl.getSnapshot().toast).toContain("已禁用");
-    await ctl.toggleEnabled();
-    expect(calls).toEqual([false, true]);
-    expect(ctl.getSnapshot().toast).toContain("已启用");
+    expect(writes).toBe(0);
+    expect(ctl.getSnapshot().toast).toContain("实例 ID");
   });
 
   it("Toast 3s 自动消失（同文案到点才清；关闭后到点 no-op）", async () => {
@@ -338,16 +368,15 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
     expect(html).toMatch(/disabled[^>]*>保存</);
   });
 
-  it("bug 13f807c4: stale 下 toggleEnabled 亦短路不发路由；条目恢复后守卫解除", async () => {
+  it("bug 13f807c4: stale 下 toggleEnabled 亦短路不写配置；条目恢复后守卫解除", async () => {
     let toggles = 0;
     const ctl = new ExpertDetailController({
-      ...noMutations(),
-      setEnabled: async (_key, enabled) => {
+      update: async () => entry(),
+      writeExpertsConfig: async () => {
         toggles += 1;
-        return entry({ enabled });
       },
     });
-    ctl.open(entry());
+    ctl.open(idEntry());
     // 直接经控制器装配缝置 stale（渲染派生面之外入口绕过防线）
     ctl.setStale(true);
     await ctl.toggleEnabled();
@@ -409,18 +438,18 @@ describe("ExpertDetailController（F2 双模式状态机）", () => {
   });
 
   it("bug e234f626: A 在途启停 → close → A 迟到回包不落态（IDLE 单例保持）", async () => {
-    let release!: (expert: ExpertView) => void;
+    let release!: () => void;
     const ctl = new ExpertDetailController({
-      ...noMutations(),
-      setEnabled: () =>
-        new Promise<ExpertView>((resolve) => {
+      update: async () => entry(),
+      writeExpertsConfig: () =>
+        new Promise<void>((resolve) => {
           release = resolve;
         }),
     });
-    ctl.open(entry());
+    ctl.open(idEntry());
     const toggling = ctl.toggleEnabled();
     ctl.close();
-    release(entry({ enabled: false }));
+    release();
     await toggling;
     expect(ctl.getSnapshot().open).toBe(false);
     expect(ctl.getSnapshot()).toBe(ctl.getSnapshot());
@@ -630,7 +659,6 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
         updates.push(draft);
         return entry();
       },
-      setEnabled: async () => entry(),
       writeExpertsConfig: async (instanceId, patch) => {
         writes.push([instanceId, patch]);
       },
@@ -663,7 +691,6 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     const writes: unknown[] = [];
     const ctl = new ExpertDetailController({
       update: async () => entry({ provider: "deepseek", model: "reasoner" }),
-      setEnabled: async () => entry(),
       writeExpertsConfig: async (_id, patch) => {
         writes.push(patch);
       },
@@ -686,7 +713,6 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     let writes = 0;
     const ctl = new ExpertDetailController({
       update: async () => entry(),
-      setEnabled: async () => entry(),
       writeExpertsConfig: async () => {
         writes += 1;
       },
@@ -702,7 +728,6 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
   it("保存（配置缝在场）：配置半写失败 = 停留编辑态 + Toast 透出错误", async () => {
     const ctl = new ExpertDetailController({
       update: async () => entry(),
-      setEnabled: async () => entry(),
       writeExpertsConfig: async () => {
         throw new Error("config rejected");
       },
@@ -721,7 +746,6 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
         payload = draft;
         return entry();
       },
-      setEnabled: async () => entry(),
     });
     ctl.open(entry());
     ctl.startEdit();
@@ -741,7 +765,6 @@ describe("writeExpertsConfig 生产装配缝（bug 5cf9768e）", () => {
     const withSeam = defaultDetailMutations("/w", writer);
     expect(withSeam.writeExpertsConfig).toBe(writer);
     expect(typeof withSeam.update).toBe("function");
-    expect(typeof withSeam.setEnabled).toBe("function");
     expect(defaultDetailMutations("/w").writeExpertsConfig).toBeUndefined();
   });
 

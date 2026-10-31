@@ -132,7 +132,6 @@ describe("ExpertDetailController 两两对比模式（③）", () => {
   function ctl(): ExpertDetailController {
     const c = new ExpertDetailController({
       update: async () => effective,
-      setEnabled: async () => effective,
     });
     c.open(effective);
     return c;
@@ -195,7 +194,6 @@ describe("ExpertDetailDialog 来源行（1.61 ① + 1.67 裁决）", () => {
   function ctlFor(e: ExpertView): ExpertDetailController {
     const c = new ExpertDetailController({
       update: async () => e,
-      setEnabled: async () => e,
     });
     c.open(e);
     return c;
@@ -260,7 +258,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   function compareCtl(shadow = shadowUser): ExpertDetailController {
     const c = new ExpertDetailController({
       update: async () => effective,
-      setEnabled: async () => effective,
     });
     c.open(effective);
     c.startCompare(shadow);
@@ -270,7 +267,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   it("查看态「对比」钮在「编辑」旁；无被遮蔽同名时不呈现", () => {
     const c = new ExpertDetailController({
       update: async () => effective,
-      setEnabled: async () => effective,
     });
     c.open(effective);
     const withPeers = renderDialog(c, { sameKeyEntries: [shadowUser, effective] });
@@ -325,7 +321,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
     const reloaded = entry({ origin: "project", title: "项目评审v2" }); // 换新后仍无生效位
     const c = new ExpertDetailController({
       update: async () => opened,
-      setEnabled: async () => opened,
     });
     c.open(opened);
     c.startCompare(shadow);
@@ -338,7 +333,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
     const opened = entry({ origin: "project", title: "项目评审" });
     const c = new ExpertDetailController({
       update: async () => opened,
-      setEnabled: async () => opened,
     });
     c.open(opened);
     const html = renderDialog(c, {
@@ -350,7 +344,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   it("bug 207b7579②：打开的专家被删除（轮询换新 sameKeyEntries 不含该条目）——查看态提示「该专家已不存在」+ 编辑/启停禁用", () => {
     const c = new ExpertDetailController({
       update: async () => effective,
-      setEnabled: async () => effective,
     });
     c.open(effective);
     const html = renderDialog(c, {
@@ -364,7 +357,6 @@ describe("ExpertDetailDialog 两两对比视图（③⑥）", () => {
   it("bug 207b7579②：轮询换新恢复条目后失靶守卫自动收敛", () => {
     const c = new ExpertDetailController({
       update: async () => effective,
-      setEnabled: async () => effective,
     });
     c.open(effective);
     const staleHtml = renderDialog(c, { sameKeyEntries: [] });

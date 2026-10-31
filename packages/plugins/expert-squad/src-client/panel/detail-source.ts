@@ -3,7 +3,8 @@
 // 同范式）。保存 = 校验门 → 双写分流（experts 配置缝在场：内容字段走 update 档案径 +
 // Agent选项/工具写 experts.<实例ID> 条目——settings 服务 revisioned 正门，不混写；
 // 缺席 = 旧装配降级走既有档案径）→ 专家换新回查看态 + Toast 热刷新；启停 =
-// enable/disable 路由即时生效；校验失败字段级报错不落盘。
+// experts.<实例ID>.disabled 位写（bug 950b845c：来源级，settings revisioned 缝——旧
+// per-workspace 启停径退役）；校验失败字段级报错不落盘。
 
 import { entryIdOf, type ExpertView } from "./filter.js";
 import {
@@ -57,16 +58,16 @@ export interface DetailState {
   readonly compareTargetOrigin?: string;
 }
 
-/** 详情变更缝（update / enable / disable / experts 配置写 fetch 路由装配面；测试注入替身）。 */
+/** 详情变更缝（update 档案径 / experts 配置写 fetch 路由装配面；测试注入替身）。 */
 export interface DetailMutations {
   /** 档案 upsert（POST /api/expert-squad/update）；成功返回换新后的档案。载荷 = 路由归一形态（provider/model 空串归缺键）。 */
   update(name: string, draft: ExpertWireDraft): Promise<ExpertView>;
-  /** 启停切换（POST /api/expert-squad/enable|disable）；成功返回换新后的档案。 */
-  setEnabled(name: string, enabled: boolean): Promise<ExpertView>;
   /**
    * experts.<实例ID> 条目写（settings 服务 revisioned 正门——装配侧经官方 configForms
    * 现读 experts 映射、浅合并本条目后整字段 set；disabled/skills 位保留，agentOptions
    * 与 tools 整组替换）。可选缝：缺席 = 旧装配降级，保存走既有档案径（wireDraft）。
+   * bug 950b845c：启停亦归此缝（experts.<实例ID>.disabled 位）——旧 per-workspace
+   * enable/disable 启停径从 Dialog 面退役（setEnabled 工作区径不再被 Dialog 消费）。
    */
   writeExpertsConfig?(instanceId: string, entry: ExpertsEntryPatch): Promise<void>;
 }
@@ -350,19 +351,40 @@ export class ExpertDetailController {
     return expert;
   }
 
-  /** 启停切换（enable/disable 路由；即时生效换新专家 + Toast）。 */
+  /**
+   * 启停切换（bug 950b845c：写 experts.<实例ID>.disabled 位——settings 服务 revisioned
+   * 缝，来源级对所有工作区生效；旧 per-workspace enable/disable 径不再被 Dialog 消费）。
+   * 即时生效换新专家 + Toast；配置缝缺席/实例 ID 缺席 = fail-loud Toast 不落位。
+   */
   async toggleEnabled(): Promise<void> {
     const current = this.state;
     if (current === undefined || current.busy || this.stale) return; // stale 短路（bug 13f807c4，同 save）
+    const write = this.mutations.writeExpertsConfig;
+    const key = configKeyOf(current.expert);
+    if (write === undefined || key === undefined) {
+      const toast =
+        write === undefined
+          ? "启停写径不可用（experts 配置缝缺席）——无法写来源级禁用位"
+          : `缺少专家实例 ID（instanceId），无法写禁用位：${current.expert.name}`;
+      this.state = { ...current, busy: false, toast };
+      this.scheduleToastDismiss(toast);
+      this.emit();
+      return;
+    }
     const next = !current.expert.enabled;
     this.state = { ...current, busy: true };
     this.emit();
     const generation = this.generation;
     try {
-      const updated = await this.mutations.setEnabled(current.expert.name, next);
+      await write(key, { disabled: !next });
       if (generation !== this.generation) return; // 迟到回包：换代后不落态
-      const toast = `${updated.name} 已${updated.enabled ? "启用" : "禁用"}`;
-      this.state = { ...this.getSnapshot(), expert: updated, busy: false, toast };
+      const toast = `${current.expert.name} 已${next ? "启用" : "禁用"}`;
+      this.state = {
+        ...this.getSnapshot(),
+        expert: { ...current.expert, enabled: next },
+        busy: false,
+        toast,
+      };
       this.scheduleToastDismiss(toast);
     } catch (err) {
       if (generation !== this.generation) return; // 迟到回包：换代后不落态

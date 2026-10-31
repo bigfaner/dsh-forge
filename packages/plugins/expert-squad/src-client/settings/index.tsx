@@ -165,7 +165,7 @@ export function registerDefaultOptionsTab(
 /**
  * experts.<实例ID> 条目写缝装配（bug 5cf9768e——detail-source DetailMutations.writeExpertsConfig
  * 的生产注入面，settings 服务 revisioned 正门）：现读快照 experts 映射 → 浅合并本条目
- * （disabled/skills 位保留；agentOptions/tools 整组替换——条目补丁缺键 = 位摘除，
+ * （disabled 位按补丁三态落位/摘除/保留；agentOptions/tools 整组替换——条目补丁缺键 = 位摘除，
  * 「逐项清空 = 键归缺 = 回退档案值」）→ 整字段 set（写落活动 profile cordis.patch.yml
  * id 定向条目）。namespace 候选序与 tab 注册同源（bug 9577a867）；写未被接受/快照
  * 不可达 = fail-loud 抛错（保存面 Toast 透出，不静默丢路由覆写）。
@@ -185,9 +185,12 @@ export function expertsConfigWriteOf(
       }
       const experts = asRecord(asRecord(snapshot.value)?.experts) ?? {};
       const prior = asRecord(experts[instanceId]) ?? {};
-      // 条目合成：官方配置位（disabled/skills）保留；补丁位整组替换（缺键 = 摘除）
+      // 条目合成：补丁位整组替换（缺键 = 摘除）；disabled 位——补丁 true = 禁用落位，
+      // 补丁 false = 启用且位摘除（键归缺）；补丁未触碰（undefined）= 保留 prior
       const merged: Record<string, unknown> = {};
-      if (typeof prior.disabled === "boolean") merged.disabled = prior.disabled;
+      if (entry.disabled === true) merged.disabled = true;
+      else if (entry.disabled === false) { /* 启用 = 位摘除 */ }
+      else if (typeof prior.disabled === "boolean") merged.disabled = prior.disabled;
       if (Array.isArray(prior.skills)) merged.skills = prior.skills;
       if (entry.agentOptions !== undefined) merged.agentOptions = entry.agentOptions;
       if (entry.tools !== undefined) merged.tools = [...entry.tools];

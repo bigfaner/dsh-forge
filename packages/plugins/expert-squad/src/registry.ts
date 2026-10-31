@@ -116,7 +116,11 @@ export interface ExpertsService {
   list(opts?: { includeDisabled?: boolean }): ExpertEntry[];
   /** 追加上层内置专家目录（plugin 内置层），下次 refresh 生效；pluginName = 实例 ID 前缀。 */
   registerRoot(ctx: Context, dir: string, pluginName?: string): void;
-  /** 启停切换（工作区隔离由 state 层承担，AD2）；对不存在键 fail-loud。 */
+  /**
+   * 启停切换（工作区隔离由 state 层承担，AD2）；对不存在键 fail-loud。
+   * bug 950b845c：Dialog 面已退役此径（启停写 experts.<实例ID>.disabled 位——来源级，
+   * settings revisioned 缝）；现役消费方 = enable_expert/disable_expert 工具。
+   */
   setEnabled(key: string, enabled: boolean): Promise<void>;
 }
 
