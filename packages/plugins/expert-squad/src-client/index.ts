@@ -7,6 +7,7 @@
 // 返回值铁律：apply 必须返回 undefined（cordis 组合把返回值当 effect 消费）。
 import { ExpertPanelApp, ExpertPanelGlyph, type SummonOpener } from "./panel/index.js";
 import { modelCatalogLoaderOf } from "./panel/model-catalog.js";
+import { registerDefaultOptionsTab } from "./settings/index.js";
 import {
   openSummonSession,
   type SummonOutcome,
@@ -158,6 +159,9 @@ export const expertSquadClient = {
     }
     // 官方装配序缝（plugin.ts registerSlotEntry 同径）：登记动作面异常只降本面板。
     registerExpertPanel(ctx as LazyCtx, slots)
+    // 配置 tab「默认 Agent 选项」（settings.plugins.tab render slot；configForms 缺席 =
+    // 降级不注册——登记面异常只降本行，不炸面板装配）。
+    registerDefaultOptionsTab(ctx as LazyCtx, slots)
   },
 }
 
