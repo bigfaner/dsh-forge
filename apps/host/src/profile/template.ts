@@ -20,6 +20,15 @@ export const DSH_STACK_VERSION = '0.2.0-rc.2'
 const USER_LAYER_ROW_PLUGINS = Object.entries(PRODUCT_PLUGINS).filter(([, toggle]) => toggle.userLayerRow)
 
 /**
+ * 单插件用户层 insert 条目（bug 6de958b6 增量补行同源面）：materialize 老用户升级径
+ * 对缺失的产品插件行逐条补独立 `- insert:` 条目（顶层 patch 数组允许多条 insert——
+ * 与模板首启的合并块形态等价，id 键控幂等）。
+ */
+export function productUserLayerInsertEntry(short: string): string {
+  return ['- insert:', `    - id: dsh-forge-${short}`, `      name: '@dsh-forge/${short}'`].join('\n')
+}
+
+/**
  * ui-settings 开关行首启预置（M3 3.7）：hero 预设座位显示开关（上游 ui-settings 单字段
  * 命名空间行 config {enabled: volatile boolean}——developerTools 门控）。行所有权分叉的
  * 用户侧径：首启替用户写成开 + materialize 增量补行（id 键控——老用户升级补写、已存在

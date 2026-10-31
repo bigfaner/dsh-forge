@@ -3,9 +3,10 @@
 // M3 3.7 增量补行：ui-settings 开关行（hero 预设座位显示开关）id 键控补写——老用户
 // 升级补写、已存在不覆盖（此后归用户运行时，设置 UI 保存不被拒）；与文件级幂等分层
 //（文件不重写 ≠ 行不补——补行只在行缺席时发生，写后行在场即稳态）。
+import { PRODUCT_PLUGINS } from '@dsh-forge/contracts'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, UI_SETTINGS_PRESET_ROW } from './template.js'
+import { PROFILE_ROOT_BOOTSTRAP, PROFILE_TEMPLATE_FILES, productUserLayerInsertEntry, UI_SETTINGS_PRESET_ROW } from './template.js'
 
 export interface MaterializeResult {
   dir: string
@@ -51,10 +52,23 @@ export function ensureProfileMaterialized(profileDir: string): MaterializeResult
   const patchPath = join(profileDir, 'cordis.patch.yml')
   if (!created.includes('cordis.patch.yml') && existsSync(patchPath)) {
     const text = readFileSync(patchPath, 'utf8')
-    if (!hasUiSettingsRow(text)) {
-      writeFileSync(patchPath, `${text.endsWith('\n') || text === '' ? text : `${text}\n`}${UI_SETTINGS_PRESET_ROW}\n`, 'utf8')
-      patched.push('cordis.patch.yml')
+    let next = text
+    const touch = (entry: string) => {
+      next = `${next.endsWith('\n') || next === '' ? next : `${next}\n`}${entry}\n`
+      if (!patched.includes('cordis.patch.yml')) patched.push('cordis.patch.yml')
     }
+    if (!hasUiSettingsRow(next)) touch(UI_SETTINGS_PRESET_ROW)
+    // 增量补行（bug 6de958b6）：PRODUCT_PLUGINS userLayerRow 行缺席 → 逐插件补独立
+    // insert 条目。Root cause: 模板只在首启物化且从不重写——发版新增产品插件行只覆盖
+    // 新装用户，老用户升级后插件随包在 resources 却无 loader 行（expert-squad 404 实证）。
+    // 行存在性按 id 键控全锚匹配（含 insert 块内缩进行——用户已置行一律不动）。
+    for (const [key, toggle] of Object.entries(PRODUCT_PLUGINS)) {
+      if (!toggle.userLayerRow) continue
+      const short = key.split('/').pop()!
+      if (new RegExp(`^\\s*- id:\\s*dsh-forge-${short}\\s*$`, 'm').test(next)) continue
+      touch(productUserLayerInsertEntry(short))
+    }
+    if (next !== text) writeFileSync(patchPath, next, 'utf8')
   }
   return { dir: profileDir, created, kept, patched }
 }

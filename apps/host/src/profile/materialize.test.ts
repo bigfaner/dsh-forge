@@ -111,6 +111,35 @@ describe('AC2 幂等：重复启动不重写', () => {
     expect(after.startsWith(custom)).toBe(true)
     expect(after).toContain('- id: ui-settings\n  config:\n    enabled: true')
   })
+
+  it('bug 6de958b6：老用户 cordis.patch.yml 缺新增产品插件行 → 增量补 insert 行（老用户升级径）；已补行二次稳态零动作；用户自有内容逐字保留', () => {
+    const oldDir = join(dir, 'missing-product-row')
+    mkdirSync(oldDir, { recursive: true })
+    // 老用户现场：修复前建档（无 expert-squad 行——PRODUCT_PLUGINS 该行后加）
+    const oldPatch = '# dsh-forge product profile user layer\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n'
+    writeFileSync(join(oldDir, 'cordis.patch.yml'), oldPatch, 'utf8')
+    const result = ensureProfileMaterialized(oldDir)
+    expect(result.patched).toContain('cordis.patch.yml')
+    const after = readFileSync(join(oldDir, 'cordis.patch.yml'), 'utf8')
+    // 用户自有内容逐字保留 + 缺失的产品插件行补齐（userLayerRow 全集）
+    expect(after.startsWith(oldPatch)).toBe(true)
+    expect(after).toContain('- id: dsh-forge-expert-squad')
+    expect(after).toContain("name: '@dsh-forge/expert-squad'")
+    // 二次稳态：行在场不再补写
+    const stable = ensureProfileMaterialized(oldDir)
+    expect(stable.patched).toEqual([])
+  })
+
+  it('bug 6de958b6：行已存在（含用户自写变体）不重复补写', () => {
+    const hasRowDir = join(dir, 'has-product-row')
+    mkdirSync(hasRowDir, { recursive: true })
+    const withRow =
+      '# user layer\n- id: ui-settings\n  config:\n    enabled: true\n- insert:\n    - id: dsh-forge-core\n      name: \'@dsh-forge/core\'\n    - id: dsh-forge-expert-squad\n      name: \'@dsh-forge/expert-squad\'\n'
+    writeFileSync(join(hasRowDir, 'cordis.patch.yml'), withRow, 'utf8')
+    const result = ensureProfileMaterialized(hasRowDir)
+    expect(result.patched).toEqual([])
+    expect(readFileSync(join(hasRowDir, 'cordis.patch.yml'), 'utf8')).toBe(withRow)
+  })
 })
 
 describe('落地机制边界', () => {
@@ -156,14 +185,19 @@ describe('M3 3.7 ui-settings 开关行首启预置（行所有权用户侧径）
     expect(statSync(join(oldDir, 'cordis.patch.yml')).mtimeMs).toBe(mtime)
   })
 
-  it('行在场不覆盖：用户已改值（enabled: false）原样保留——此后归用户运行时', () => {
+  it('行在场不覆盖：用户已改值（enabled: false）原样保留——此后归用户运行时；缺失产品行仍补齐（bug 6de958b6）', () => {
     const userDir = join(dir, 'user-owned')
     mkdirSync(userDir, { recursive: true })
     const userChoice = '- id: ui-settings\n  config:\n    enabled: false\n'
     writeFileSync(join(userDir, 'cordis.patch.yml'), `# user layer\n${userChoice}`, 'utf8')
     const result = ensureProfileMaterialized(userDir)
-    expect(result.patched).toEqual([])
-    expect(readFileSync(join(userDir, 'cordis.patch.yml'), 'utf8')).toBe(`# user layer\n${userChoice}`)
+    // 用户自有 ui-settings 行（enabled: false）逐字保留不覆盖；缺失的产品插件行补齐
+    const after = readFileSync(join(userDir, 'cordis.patch.yml'), 'utf8')
+    expect(after.startsWith(`# user layer\n${userChoice}`)).toBe(true)
+    expect(after).toContain('enabled: false')
+    expect(after).toContain('- id: dsh-forge-core')
+    expect(after).toContain('- id: dsh-forge-expert-squad')
+    expect(result.patched).toEqual(['cordis.patch.yml'])
   })
 
   it('行锚精确：ui-settings-general 等前缀行不误判（insert 块内缩进行不匹配顶层行锚）', () => {
