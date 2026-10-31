@@ -243,12 +243,42 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     expect(nodes.get('m2')).toMatchObject({ anchorSeq: 9 })
     expectHidden(nodes.get('m1')) // 交棒：末成员独发
   })
-  it('turn 未结束 = 锚组末 seq（活跃 turn 过程折叠恒开——卡可见随组尾）', () => {
-    const { nodes } = simulate([
+  it('组卡运行期脱折叠：活跃 turn（无 turn/end）锚 = turn/start seq - 1——< processStartSeq 脱离过程折叠区间（顶层常驻）', () => {
+    // 官方 processMember 判据（dsh-client-ui-chat client.js:1689/10050）：
+    // processStartSeq = turn.start?.seq，anchorSeq < processStartSeq 即非过程成员。
+    // 旧行为（RED）：锚 = 组尾 lastSeq=2，落 [processStartSeq=1, answerAnchorSeq) 区间内
+    // ——过程段完成后随折叠收纳。新行为：锚 = turnStartSeq - 1 = 0。
+    const { stream, nodes } = simulate([
       { type: 'turn/start', seq: 1, data: { turn: 't-1' } },
       forgeMsg(2, 'm1', '启动', 'a'),
+      forgeMsg(3, 'm2', '运行中', 'b'),
     ])
-    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 2 })
+    expect(stream.turnStartSeqs).toEqual({ 't-1': 1 })
+    expect(nodes.get('m2')).toMatchObject({ anchorSeq: 0 })
+    expect((nodes.get('m2') as { anchorSeq: number }).anchorSeq).toBeLessThan(stream.turnStartSeqs!['t-1']!)  })
+  it('组卡运行期脱折叠：活跃工具 turn 期间 progress 轨同理脱折叠（锚 < turn/start seq）；turn/end 后 re-anchor turn/end seq', () => {
+    const events = [
+      { type: 'turn/start', seq: 1, data: { turn: 5 } },
+      forgeMsg(2, 'm1', '启动', 'a'),
+      progressEvt(5, { taskKey: 'feat-x/1.2', status: 'running' }),
+      progressEvt(6, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
+    ]
+    const { nodes } = simulate(events)
+    expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 0 })
+    const after = simulate([...events, { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } }])
+    expect(after.nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 9 })
+  })
+  it('无 turn/start 记录（旧缓存无 turnStartSeqs）活跃组保持组尾锚（不猜）', () => {
+    expect(forgeEventGroupAnchorSeq({ key: 'k', firstSeq: 2, lastSeq: 6, entries: [] }, undefined, undefined)).toBe(6)
+    expect(forgeEventGroupAnchorSeq({ key: 'k', firstSeq: 2, lastSeq: 6, entries: [] }, { '9': 20 }, { '7': 5 })).toBe(20)    // 尾条目归属活跃 turn（有 start 无 end）→ 锚 startSeq - 1
+    const group = {
+      key: 'k',
+      firstSeq: 6,
+      lastSeq: 6,
+      entries: [],
+      progress: [{ seq: 6, sourceSlug: 's', status: 'running', verb: 'claim', at: 0, turnId: '7' }],
+    }
+    expect(forgeEventGroupAnchorSeq(group, { '9': 20 }, { '7': 5, '9': 18 })).toBe(4)
   })
   it('重放保真：同日志重放节点恒等（fold 纯函数——事件重放/会话 fork 保留渲染）', () => {
     const events = [forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b'), humanMsg(3, 'h1', '继续'), forgeMsg(4, 'm3', '完成', 'c')]
@@ -295,7 +325,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
     expect(nodes.get('forge-event-progress-10')).toMatchObject({ anchorSeq: 10 })
     expectHidden(nodes.get('m1'))
   })
-  it('bug 6a3ccc4d：活跃工具 turn 期间 progress 到达——锚随组尾（活跃折叠恒开）；turn/end 到达后 re-anchor 脱离过程折叠体（不随折叠收起）', () => {
+  it('bug 6a3ccc4d：活跃工具 turn 期间 progress 到达——锚 < turn/start seq（运行期脱折叠，顶层常驻）；turn/end 到达后 re-anchor 脱离过程折叠体（不随折叠收起）', () => {
     const events = [
       { type: 'turn/start', seq: 1, data: { turn: 5 } },
       forgeMsg(2, 'm1', '启动', 'a'),
@@ -303,7 +333,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
       progressEvt(6, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
     ]
     const { nodes } = simulate(events)
-    expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 6 })
+    expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 0 })
     const after = simulate([...events, { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } }])
     expect(after.nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 9 })
   })
@@ -329,9 +359,9 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
       entries: [],
       progress: [{ seq: 6, sourceSlug: 'feat-x', status: 'completed', verb: 'settle', at: 0 }],
     }
-    expect(forgeEventGroupAnchorSeq(group, { '3': 4, '5': 9, '9': 20 })).toBe(9)
-    expect(forgeEventGroupAnchorSeq(group, { '1': 1 })).toBe(6)
-    expect(forgeEventGroupAnchorSeq(group, undefined)).toBe(6)
+    expect(forgeEventGroupAnchorSeq(group, { '3': 4, '5': 9, '9': 20 }, undefined)).toBe(9)
+    expect(forgeEventGroupAnchorSeq(group, { '1': 1 }, undefined)).toBe(6)
+    expect(forgeEventGroupAnchorSeq(group, undefined, undefined)).toBe(6)
   })
   it('stream match：forge/progress 命中（revision++ 驱动组块重放）', () => {
     expect(forgeEventStreamDefinition.match(progressEvt(4, {}))).toEqual({ id: 'stream', role: 'start' })

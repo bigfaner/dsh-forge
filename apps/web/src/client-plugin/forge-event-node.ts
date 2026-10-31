@@ -98,6 +98,8 @@ export interface ForgeEventStreamState {
   readonly currentTurn?: string
   /** 各 turn 的 turn/end seq（组卡 re-anchor 基准——anchorSeq ≥ answerAnchorSeq 脱离过程折叠） */
   readonly turnEndSeqs?: Readonly<Record<string, number>>
+  /** 各 turn 的 turn/start seq（组卡运行期锚基准——活跃期 anchorSeq = startSeq - 1 < processStartSeq 脱折叠；旧缓存缺省） */
+  readonly turnStartSeqs?: Readonly<Record<string, number>>
 }
 
 /** 空模型（fold 单元恒等值） */
@@ -241,7 +243,12 @@ function fallbackTurnIdOf(seq: number, turnEndSeqs: Readonly<Record<string, numb
 export function foldForgeEventMessage(state: ForgeEventStreamState, event: ForgeMessageEventLike): ForgeEventStreamState {
   if (event?.type === 'turn/start') {
     const turnId = turnKeyOf((event.data as { turn?: unknown } | undefined)?.turn)
-    return turnId !== undefined ? { ...state, currentTurn: turnId } : state
+    if (turnId === undefined) return state
+    return {
+      ...state,
+      currentTurn: turnId,
+      turnStartSeqs: { ...state.turnStartSeqs, [turnId]: event.seq },
+    }
   }
   if (event?.type === 'turn/end') {
     const turnId = turnKeyOf((event.data as { turn?: unknown } | undefined)?.turn)
@@ -265,6 +272,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
         closed: false,
         currentTurn: state.currentTurn,
         turnEndSeqs: state.turnEndSeqs,
+        turnStartSeqs: state.turnStartSeqs,
         groups: [
           ...state.groups.slice(0, -1),
           {
@@ -281,6 +289,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       closed: false,
       currentTurn: state.currentTurn,
       turnEndSeqs: state.turnEndSeqs,
+      turnStartSeqs: state.turnStartSeqs,
       groups: [
         ...state.groups,
         { key: `forge-progress-${entry.seq}`, firstSeq: entry.seq, lastSeq: entry.seq, entries: [], progress: [entry] },
@@ -301,6 +310,7 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
         closed: false,
         currentTurn: state.currentTurn,
         turnEndSeqs: state.turnEndSeqs,
+        turnStartSeqs: state.turnStartSeqs,
         groups: [
           ...state.groups.slice(0, -1),
           { key: last.key, firstSeq: last.firstSeq, lastSeq: entry.seq, entries: [...last.entries, entry], progress: last.progress },
@@ -311,12 +321,13 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       closed: false,
       currentTurn: state.currentTurn,
       turnEndSeqs: state.turnEndSeqs,
+      turnStartSeqs: state.turnStartSeqs,
       groups: [...state.groups, { key: id, firstSeq: entry.seq, lastSeq: entry.seq, entries: [entry] }],
     }
   }
   if ((source as { kind?: unknown } | undefined)?.kind === 'user') {
     // 人类插话 = 分组锚点：下一枚 forge 事件开新组（前组保留——条目不删）
-    return { groups: state.groups, closed: true, currentTurn: state.currentTurn, turnEndSeqs: state.turnEndSeqs }
+    return { groups: state.groups, closed: true, currentTurn: state.currentTurn, turnEndSeqs: state.turnEndSeqs, turnStartSeqs: state.turnStartSeqs }
   }
   return state
 }
@@ -354,8 +365,9 @@ export interface ForgeEventGroupNodeState {
   readonly seq: number
   /**
    * 组卡锚 seq：所属 turn 已结束 = 该 turn 的 turn/end seq（≥ answerAnchorSeq——脱离
-   * Turn 过程折叠，卡片落回复下方，文档卡片同位）；turn 未结束 = 组末 seq（活跃 turn
-   * 过程折叠恒开——卡可见随组尾）。
+   * Turn 过程折叠，卡片落回复下方，文档卡片同位）；所属 turn 活跃（有 turn/start 记录、
+   * 无 turn/end）= turnStartSeq - 1——< processStartSeq 脱离过程折叠区间，运行期顶层
+   * 常驻展开（用户裁决 2026-10-31）；无 turn 记录 = 组末 seq 不猜。
    */
   readonly anchorSeq: number
 }
@@ -369,15 +381,28 @@ function streamStateOf(value: unknown): ForgeEventStreamState | undefined {
 }
 
 /** 组卡锚 seq（纯函数）：组末到达条目（消息或 progress——bug 6a3ccc4d 前只认消息条目，
- *  progress 轨活跃时锚滞留组末 seq 落入过程折叠体、turn 结束后不重锚）所属 turn 已结束
- *  = 该 turn 的 turn/end seq（≥ answerAnchorSeq——脱离 Turn 过程折叠，卡片落会话流顶层
- *  回复下方）；turn 未结束 = 组末 seq（lastSeq——活跃过程折叠恒开，卡可见随组尾）。 */
-export function forgeEventGroupAnchorSeq(group: ForgeEventGroup, turnEndSeqs: Readonly<Record<string, number>> | undefined): number {
+ *  progress 轨活跃时锚滞留组末 seq 落入过程折叠体、turn 结束后不重锚）。
+ *  - 所属 turn 已结束（turnEndSeqs 有记录）= 该 turn 的 turn/end seq（≥ answerAnchorSeq
+ *    ——脱离 Turn 过程折叠，卡片落会话流顶层回复下方，文档卡片同位）。
+ *  - 所属 turn 活跃（turnStartSeqs 有记录、无 turn/end）= turnStartSeq - 1——官方
+ *    processMember 判据（dsh-client-ui-chat client.js:1689；processStartSeq =
+ *    turn.start?.seq client.js:10050）下 anchorSeq < processStartSeq 即非过程成员：
+ *    循环活跃期间卡片不随「已完成分析/已调用工具」过程段折叠收纳，顶层常驻展开。
+ *  - 无 turn 记录（旧缓存）= 走下方回落分支，不猜。 */
+export function forgeEventGroupAnchorSeq(
+  group: ForgeEventGroup,
+  turnEndSeqs: Readonly<Record<string, number>> | undefined,
+  turnStartSeqs: Readonly<Record<string, number>> | undefined,
+): number {
   const lastMsg = group.entries.at(-1)
   const lastProgress = group.progress?.at(-1)
   const tail = (lastProgress?.seq ?? -1) > (lastMsg?.seq ?? -1) ? lastProgress : lastMsg
-  const end = tail?.turnId !== undefined ? turnEndSeqs?.[tail.turnId] : undefined
-  if (end !== undefined) return end
+  if (tail?.turnId !== undefined) {
+    const end = turnEndSeqs?.[tail.turnId]
+    if (end !== undefined) return end
+    const start = turnStartSeqs?.[tail.turnId]
+    if (start !== undefined) return start - 1
+  }
   // bug c75df032 回落分支：尾条目 turnId 缺省/未记录（如终局 settle 先于 turn/start 到达、
   // 旧缓存无 turn 戳）时不再原样回 group.lastSeq——那可落已收起 turn 的过程折叠体（折叠
   // 收起后卡被吞）。改取 ≥ group.lastSeq 的最小已记录 turn/end seq（≥ answerAnchorSeq，
@@ -427,7 +452,7 @@ export const forgeEventGroupDefinition = {
       isLatest: last !== undefined && last.key === group.key,
       group,
       seq,
-      anchorSeq: forgeEventGroupAnchorSeq(group, stream.turnEndSeqs),
+      anchorSeq: forgeEventGroupAnchorSeq(group, stream.turnEndSeqs, stream.turnStartSeqs),
     }
   },
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
