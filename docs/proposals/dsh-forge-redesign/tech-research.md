@@ -218,7 +218,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 - **提取为独立最小技能工件 `plugin-brainstorm`**（从 plugin-forge 管线核心移出）。依据：《架构基线》§4 沉淀判据两条同时命中——第三类真实消费者出现（标准模式 = 非 forge 组合）、零耦合全契约（brainstorm 纯文档读写 + 提问，不依赖 core / knowledge）。这是版图中第一个按判据（而非预设计）沉淀出的共享技能工件。
 - **远征/突击**：组合内 skill-filesystem 行的 `customSkillDirs` 指向其包内 `skills/`（§5.2，cordis 预设先例）。
-- **标准模式零 patch**：standard 组合的 skill-filesystem 行用默认根（无 customSkillDirs）——**用户根 / bundled 根是全局通道**（§1.4 ①）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
+- **标准模式零 patch**：standard 组合的 skill-filesystem 行 `customSkillDirs` 仅挂 expert-squad 技能目录（squad 缺席 = 整行剔除，技能面降级 fail-soft），forge 技能仍零——**用户根 / bundled 根是全局通道**（§1.4 ①）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
 - 已知取舍：跨根同名技能按 rank 决胜（custom 300 优先于 user 400）——远征/突击下 customSkillDirs 版本胜出，标准模式下走全局根版本，内容同源无分叉；目录呈现与去重语义入 S6 验证。
 
 ### 5.6 出厂双预设完整示例（profile patch YAML，2026-10-02 增补）
