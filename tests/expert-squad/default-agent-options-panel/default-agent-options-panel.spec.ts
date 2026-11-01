@@ -1,8 +1,8 @@
 // 「默认 Agent 选项」单面板 e2e 旅程（expert-squad-default-routing AC2 可机检半；单入口
-// 迁移后承载面 = 官方插件详情页 keyed slot plugins.bundle.config——`data-plugin-config`
-// section）：
+// 迁移后承载面 = 官方插件详情页 list slot plugins.detail.section——「包含的组件」区下方）：
 //   ① 左栏「插件」面板（官方 plugin-manager main keyed）→ expert-squad 卡片 → 详情页
-//      「包含的组件」区 data-plugin-config section 渲染面板
+//      「包含的组件」RowsSection 之后 detail.section 消费点渲染面板（subject 门控 =
+//      本包 bundle 详情页）
 //   ② 写 Provider/Model/Reasoning → 活动 profile cordis.patch.yml id 定向条目（- id: expert-squad）
 //   ③ volatile 无重启生效：同一实例内面板快照回填 + experts 服务 get 应答折叠 defaultAgentOptions
 // journey = .forge/docs/proposals/expert-squad-default-routing/testing/default-agent-options-panel/journey.md
@@ -13,8 +13,9 @@
 // .documentPath = 活动 profile patch），形态差异只在路径。
 // 导航口径（单入口迁移后）：左栏「插件」面板（官方 plugin-manager，行 aria-label =
 // locale zh.panel「插件」，expert-squad 左栏行同径）→ 已安装组 expert-squad 卡片
-// （data-plugin-package = 包名）→ 详情页（data-plugin-detail）「包含的组件」区
-// data-plugin-config section（configured 门 = plugins.bundle.config keyed ledger）。
+// （data-plugin-package = 包名）→ 详情页（data-plugin-detail）面板区（data-cfg-* 锚 =
+// detail.section 登记 id expert-squad-default-agent-options 渲染面；旧 data-plugin-config
+// section 随 bundle.config 注册退役——configured ledger 键集随之清空）。
 // 消费面取用读口 = GET /api/expert-squad/get（registry get 折叠 defaultAgentOptions——
 // 优先级链③基座；①②组合由 registry-overlay 单测穷举）。
 // 控件形态（对齐 detail-dialog 编辑模式）：Provider/Model/Reasoning 均为 FilterSelect
@@ -123,7 +124,8 @@ function daoText(): string {
 
 /**
  * 导航到「默认 Agent 选项」面板（插件详情页单入口）：左栏「插件」面板 → expert-squad
- * 卡片「查看」钮 → 详情页 data-plugin-config section（keyed slot 渲染面）。
+ * 卡片「查看」钮 → 详情页 detail.section 消费点（「包含的组件」RowsSection 下方；
+ * data-cfg-* 锚）。
  */
 async function openDefaultAgentOptionsPanel(page: Page): Promise<void> {
   await page.locator('button[aria-label="插件"]').first().click()
@@ -131,9 +133,11 @@ async function openDefaultAgentOptionsPanel(page: Page): Promise<void> {
   await expect(card, '插件页 expert-squad 卡片在场').toBeVisible()
   await card.getByRole('button', { name: /查看/ }).click()
   await expect(page.locator('[data-plugin-detail="@dsh-forge/expert-squad"]'), '详情页挂载').toBeVisible()
-  const section = page.locator('[data-plugin-config]')
-  await expect(section, '「包含的组件」data-plugin-config section 在场（keyed ledger 入账）').toBeVisible()
-  await expect(section.locator(PROVIDER_BOX), '「默认 Agent 选项」面板挂载（Provider select 形态）').toBeVisible()
+  await expect(
+    page.locator('[data-plugin-config]'),
+    '旧 bundle.config keyed section 已随注册迁移退役（configured ledger 键集清空）',
+  ).toHaveCount(0)
+  await expect(page.locator(PROVIDER_BOX), '「默认 Agent 选项」面板挂载（detail.section 消费点，Provider select 形态）').toBeVisible()
   await expect(page.locator(PANEL_CARD), '面板 ready（configForms 写径就绪）').toBeVisible()
 }
 

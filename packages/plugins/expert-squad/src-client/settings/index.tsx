@@ -1,12 +1,13 @@
-// settings —— 配置页「默认 Agent 选项」（官方 keyed slot `plugins.bundle.config` 注册面，
-// 插件详情页单入口）。核销：dsh-client-ui-plugin-manager lib/client.js——声明
-// client.js:3733（main keyed 'plugins' children `plugins.bundle.config` keyed/root），
-// 消费 client.js:2519-2524（PackageDetail「包含的组件」区 `data-plugin-config` section，
-// renderSlot(..., { view: "page" }, { entryKey: pkg.name })；configured 门 =
-// configLedgerSource bundles = keysOf("plugins.bundle.config")，client.js:44-76——
-// slot 登记账本本身即 ledger，client 半注册即入账）；注册形态 = settings-* 族同族先例
-// （slots.inject(slot, () => slots.register({name, key, inject}, Component))，key =
-// 包名 @dsh-forge/expert-squad）。读写正门 = 官方 configForms 服务（dsh-client-ui-settings
+// settings —— 配置页「默认 Agent 选项」（官方 list slot `plugins.detail.section` 注册面，
+// 插件详情页单入口）。核销：dsh-client-ui-plugin-manager lib/client.js——槽声明
+// client.js:3749-3752（`plugins.detail.section` kind: list/scope: root），消费
+// client.js:2534（PackageDetail「包含的组件」RowsSection 之后 renderSlot(
+// "plugins.detail.section", { subject })——面板落在「包含的组件」下方）；组件按
+// subject 门控（subject.kind === "bundle" && subject.pkg.name === 本包名），非本包
+// 详情页 render null；官方声明形态 = settings-* 族同族先例
+// （slots.inject(slot, () => slots.register({name, id}, Component))，id =
+// expert-squad-default-agent-options，README「Detail page extension points」同型）。
+// 读写正门 = 官方 configForms 服务（dsh-client-ui-settings
 // ConfigForms 镜像面，super-composer submission-settings 同判例：结构同型承载、不做跨包值
 // import）——describe/revision/stale 拒写/schema 校验归官方，写落活动 profile 的
 // cordis.patch.yml（id 定向条目），volatile 通知 → 快照换代 → 面板热刷新（无重启生效）。
@@ -43,10 +44,13 @@ export {
   type DefaultOptionsDraft,
 } from "./default-options-logic.js";
 
-/** 官方插件详情页 keyed 配置槽键（dsh-client-ui-plugin-manager main 'plugins' children 声明）。 */
-export const BUNDLE_CONFIG_SLOT = "plugins.bundle.config";
-/** 本插件 keyed 登记键（= 包名——renderSlot entryKey 过滤与 configured ledger 同源判等）。 */
-export const BUNDLE_CONFIG_KEY = "@dsh-forge/expert-squad";
+/** 官方插件详情页 section list 槽键（dsh-client-ui-plugin-manager client.js:3749 声明；
+ * 消费点 client.js:2534 = 「包含的组件」RowsSection 之后——面板落位正解）。 */
+export const DETAIL_SECTION_SLOT = "plugins.detail.section";
+/** 本插件 section 登记 id（list slot 判同键；e2e/排障锚）。 */
+export const DETAIL_SECTION_ID = "expert-squad-default-agent-options";
+/** 本插件包名（subject.pkg.name 门控判等键——detail.section 消费面 subject 契约）。 */
+export const EXPERT_SQUAD_PKG = "@dsh-forge/expert-squad";
 /** 本插件 settings namespace 短名（候选一——行 id 恰为短名的部署直配）。 */
 export const SETTINGS_NAMESPACE = "expert-squad";
 /**
@@ -110,18 +114,19 @@ function safeRegister(
   try {
     return slots.register?.(options, component);
   } catch (error) {
-    console.error("[dsh-forge/expert-squad] bundle config panel registration failed——降级不注册", error);
+    console.error("[dsh-forge/expert-squad] default agent options section registration failed——降级不注册", error);
     return undefined;
   }
 }
 
 /**
- * 注册「默认 Agent 选项」面板（plugins.bundle.config keyed slot；返回联合释放器）。
- * key = 包名（renderSlot entryKey 过滤 + configured ledger 判等同源）；configForms
+ * 注册「默认 Agent 选项」面板（plugins.detail.section list slot；返回联合释放器）。
+ * id = DETAIL_SECTION_ID（list slot 判同键）；渲染组件 DefaultAgentOptionsSection 按
+ * subject 门控（本包 bundle 详情页才出面板，他页 render null）；configForms
  * 缺席 = 降级不注册（宿主未组 settings 域——配置写径不存在，UI 不悬空）；
  * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸），否则直注册。
  */
-export function registerBundleConfigPanel(
+export function registerDefaultAgentOptionsSection(
   ctx: {
     configForms?: unknown;
     reflect?: { get(name: string): unknown };
@@ -143,12 +148,12 @@ export function registerBundleConfigPanel(
   // bug 9577a867 伴生面：slots 面是 cordis 代理原型方法（this.ctx 绑调用接收者）——
   // 禁解构裸调，必须 slots.inject(...) 方法调用（解构 = this.ctx undefined 实测崩溃）。
   const mount = (): (() => void) | undefined =>
-    slots.inject!(BUNDLE_CONFIG_SLOT, () =>
+    slots.inject!(DETAIL_SECTION_SLOT, () =>
       safeRegister(
         slots,
         {
-          name: BUNDLE_CONFIG_SLOT,
-          key: BUNDLE_CONFIG_KEY,
+          name: DETAIL_SECTION_SLOT,
+          id: DETAIL_SECTION_ID,
           inject: () => ({
             form: forms.get(namespace),
             // 「设置>模型」目录装载器（provider/model 下拉候选源——detail-dialog 同径；
@@ -156,7 +161,7 @@ export function registerBundleConfigPanel(
             modelCatalogLoader: modelCatalogLoaderOf(ctx),
           }),
         },
-        DefaultAgentOptionsTab,
+        DefaultAgentOptionsSection,
       ),
     );
   if (typeof forms.whileServed === "function") {
@@ -228,6 +233,28 @@ export function expertsConfigWriteOf(
     }
     throw lastError ?? new Error("experts 配置写缝不可用（configForms 快照不可写）——无法保存 Agent 选项/工具覆写");
   };
+}
+
+/**
+ * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——仅本包 bundle 详情页
+ * 渲染面板（subject.kind === "bundle" && subject.pkg.name === 本包名），其余 subject
+ *（row/item/他包/缺席）render null；inject 面（form/modelCatalogLoader）由官方 slot
+ * runtime 与 ownerProps（subject）并合透传，读写径原样复用 DefaultAgentOptionsTab。
+ */
+export function DefaultAgentOptionsSection(props: {
+  readonly subject?: { kind?: unknown; pkg?: { name?: unknown } };
+  readonly form?: ConfigFormMirror;
+  readonly modelCatalogLoader?: ModelCatalogLoader;
+}): ReactNode {
+  const subject = props.subject;
+  if (
+    subject === undefined ||
+    subject.kind !== "bundle" ||
+    (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG
+  ) {
+    return null;
+  }
+  return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;
 }
 
 /**

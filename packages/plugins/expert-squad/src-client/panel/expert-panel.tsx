@@ -464,7 +464,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   const phase = state.phase.kind === "error" ? "error" : state.phase.kind
   const onRetry = useCallback(() => controller?.retry(), [controller])
   // 「配置」跳转（D2）：官方缝优先——plugin-manager pluginNavigation.openBundle 定位本插件
-  // 详情页（plugins.bundle.config「默认 Agent 选项」在屏）；缝缺席 = 降级既有设置壳 DOM
+  // 详情页（plugins.detail.section「默认 Agent 选项」在屏）；缝缺席 = 降级既有设置壳 DOM
   // 导航先例（旧装配容缺）。宿主未组任一缝 = 静默不动作。
   const onOpenConfig = useCallback(() => {
     const jump = props.configJump?.();

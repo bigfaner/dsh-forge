@@ -7,14 +7,15 @@ import { describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  DefaultAgentOptionsSection,
   DefaultAgentOptionsTab,
-  BUNDLE_CONFIG_KEY,
-  BUNDLE_CONFIG_SLOT,
+  DETAIL_SECTION_ID,
+  DETAIL_SECTION_SLOT,
   EMPTY_DRAFT,
   SETTINGS_NAMESPACE,
   defaultOptionsDraftOf,
   defaultOptionsPatchOf,
-  registerBundleConfigPanel,
+  registerDefaultAgentOptionsSection,
   REASONING_OPTIONS,
   draftFoldOnRevision,
   expertsConfigWriteOf,
@@ -118,22 +119,23 @@ function ctxFake(services: Record<string, unknown>) {
   return { ...services };
 }
 
-// ── 注册装配（plugins.bundle.config 缝） ──────────────────
+// ── 注册装配（plugins.detail.section 缝） ──────────────────
 
-describe("registerBundleConfigPanel（注册装配）", () => {
-  it("configForms 在场：挂 plugins.bundle.config 槽并 keyed 注册面板（key/inject 面）", () => {
+describe("registerDefaultAgentOptionsSection（注册装配）", () => {
+  it("configForms 在场：挂 plugins.detail.section 槽并以 id 注册面板（id/inject 面）", () => {
     const slots = slotsFake();
     const form = formMirrorOf(undefined);
-    const disposer = registerBundleConfigPanel(
+    const disposer = registerDefaultAgentOptionsSection(
       ctxFake({ configForms: configFormsFake(form) }) as never,
       slots as never,
     );
-    expect(slots.injects).toEqual([BUNDLE_CONFIG_SLOT]);
+    expect(slots.injects).toEqual([DETAIL_SECTION_SLOT]);
     expect(slots.registered).toHaveLength(1);
     const { options, component } = slots.registered[0]!;
-    expect(options.name).toBe(BUNDLE_CONFIG_SLOT);
-    expect(options.key).toBe(BUNDLE_CONFIG_KEY);
-    expect(typeof component).toBe("function");
+    expect(options.name).toBe(DETAIL_SECTION_SLOT);
+    expect(options.id).toBe(DETAIL_SECTION_ID);
+    expect(options.key).toBeUndefined();
+    expect(component).toBe(DefaultAgentOptionsSection);
     // inject 面递达本插件 namespace 的 ConfigForm
     expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
     // modelCatalogLoader 在场锚（目录候选源——settings>模型目录 detail-dialog 同径）
@@ -148,7 +150,7 @@ describe("registerBundleConfigPanel（注册装配）", () => {
     const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) =>
       register(new Set([SETTINGS_NAMESPACE])),
     );
-    registerBundleConfigPanel(
+    registerDefaultAgentOptionsSection(
       ctxFake({ configForms: configFormsFake(form, whileServed) }) as never,
       slots as never,
     );
@@ -166,7 +168,7 @@ describe("registerBundleConfigPanel（注册装配）", () => {
     const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) => {
       register(new Set(["dsh-forge-expert-squad"]));
     });
-    const disposer = registerBundleConfigPanel(
+    const disposer = registerDefaultAgentOptionsSection(
       ctxFake({ configForms: { whileServed, get: getByNamespace } }) as never,
       slots as never,
     );
@@ -189,7 +191,7 @@ describe("registerBundleConfigPanel（注册装配）", () => {
       registerRef = register;
       return () => undefined;
     });
-    registerBundleConfigPanel(
+    registerDefaultAgentOptionsSection(
       ctxFake({ configForms: { whileServed, get: (ns: string) => (ns === "expert-squad" ? form : undefined) } }) as never,
       slots as never,
     );
@@ -202,7 +204,7 @@ describe("registerBundleConfigPanel（注册装配）", () => {
   it("configForms 缺席 = 降级不注册（console.warn 留痕，不炸组合）", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const slots = slotsFake();
-    const disposer = registerBundleConfigPanel(ctxFake({}) as never, slots as never);
+    const disposer = registerDefaultAgentOptionsSection(ctxFake({}) as never, slots as never);
     expect(slots.injects).toEqual([]);
     expect(slots.registered).toHaveLength(0);
     expect(disposer).toBeUndefined();
@@ -231,9 +233,34 @@ describe("registerBundleConfigPanel（注册装配）", () => {
         return () => undefined;
       },
     };
-    registerBundleConfigPanel(ctxFake({ configForms: configFormsFake(formMirrorOf(undefined)) }) as never, slots as never);
+    registerDefaultAgentOptionsSection(ctxFake({ configForms: configFormsFake(formMirrorOf(undefined)) }) as never, slots as never);
     expect(receivers).toEqual([slots]);
     warn.mockRestore();
+  });
+});
+
+// ── subject 门控（detail.section list slot 消费契约） ──────
+
+describe("DefaultAgentOptionsSection（subject 门控）", () => {
+  const renderSection = (subject: unknown, form: ConfigFormMirror | undefined = formMirrorOf(undefined)): string =>
+    renderToStaticMarkup(
+      createElement(DefaultAgentOptionsSection, {
+        subject: subject as { kind: string; pkg: { name: string } },
+        form,
+      }),
+    );
+
+  it("本包 bundle subject：渲染面板（ready 形态）", () => {
+    const html = renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/expert-squad" } });
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
+  });
+
+  it("他包 bundle / row / item / subject 缺席：render null（非本包详情页零输出）", () => {
+    expect(renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/other" } })).toBe("");
+    expect(renderSection({ kind: "row", pkg: { name: "@dsh-forge/expert-squad" }, row: {} })).toBe("");
+    expect(renderSection({ kind: "item", id: "x" })).toBe("");
+    expect(renderSection(undefined)).toBe("");
   });
 });
 

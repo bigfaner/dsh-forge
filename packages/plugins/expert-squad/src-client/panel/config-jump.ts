@@ -1,10 +1,11 @@
 // config-jump —— 「⚙ 配置」跳转官方导航缝解析器（纯逻辑面，零 UI import——单测直测）。
 // 官方正门：dsh-client-ui-plugin-manager 经 ctx.reflect.provide("pluginNavigation",
 // { openBundle(pkg) }) 提供「切换「插件」面板 + 打开包详情页」导航；详情页渲染
-// plugins.bundle.config keyed 槽（键 = 包名，即本插件「默认 Agent 选项」面板）。
+// plugins.detail.section list 槽（id = expert-squad-default-agent-options，即本插件
+// 「默认 Agent 选项」面板）。
 // 调用期惰性解析（插件管理器面板可能后于本面板就绪——消费点现查，不缓存）。
 
-/** 本插件包名（插件详情页定位键——plugins.bundle.config keyed 登记键同源）。 */
+/** 本插件包名（插件详情页定位键——detail.section subject.pkg.name 门控同源）。 */
 export const EXPERT_SQUAD_PKG = "@dsh-forge/expert-squad";
 
 /** cordis ctx 窄面（src-client/index.ts LazyCtx 同型——reflect.get 缺席返 undefined）。 */
