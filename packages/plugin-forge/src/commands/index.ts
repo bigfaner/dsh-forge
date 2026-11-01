@@ -1,7 +1,8 @@
-// commands barrel（S2——run-tasks-host-command 指令两枚单一出口：定义工厂 + handler + 名集
-// 常量）。消费面 = 插件装配方（ctx.reflect.get('commands') 防御读取后 register——服务缺席 =
-// 指令不注册 fail-soft，R3）与 handler 单测。依赖方向：commands → loop / contracts / faces /
-// tools(session 解析器类型) 单向；零上游 import。
+// commands barrel（S2——run-tasks-host-command 指令两枚 + workspace-artifact-governance
+// /forge-dir-init 单一出口：定义工厂 + handler + 名集常量）。消费面 = 插件装配方
+// （ctx.reflect.get('commands') 防御读取后 register——服务缺席 = 指令不注册 fail-soft，R3）
+// 与 handler 单测。依赖方向：commands → loop / contracts / faces / tools(session 解析器类型)
+// 单向；零上游 import。
 import type { ForgeTasksService } from '@dsh-forge/contracts'
 import type { EscalationAskFace, LoopDriver } from '../loop/index.js'
 import type { ForgeCommandDefinition } from '../faces.js'
@@ -9,14 +10,22 @@ import type { ForgeDiagEmitFace } from '../faces.js'
 import type { ProjectIdResolver } from '../tools/index.js'
 import { createRunDagTasksHandler, RUN_DAG_TASKS_NAME } from './run-dag-tasks.js'
 import { createStopDagTasksHandler, STOP_DAG_TASKS_NAME } from './stop-dag-tasks.js'
+import { createForgeDirInitHandler, FORGE_DIR_INIT_NAME } from './forge-dir-init.js'
 
 export { RUN_DAG_TASKS_NAME, nonTerminalSourcesOf } from './run-dag-tasks.js'
 export type { RunDagTasksDeps, SourceCandidate } from './run-dag-tasks.js'
 export { createStopDagTasksHandler, NO_ACTIVE_LOOP_TEXT, STOP_DAG_TASKS_NAME } from './stop-dag-tasks.js'
 export type { StopDagTasksDeps } from './stop-dag-tasks.js'
+export {
+  createForgeDirInitHandler,
+  FORGE_DIR_INIT_NAME,
+  GITIGNORE_ENTRIES,
+  STORAGE_MAP_DIRS,
+  missingGitignoreEntries,
+} from './forge-dir-init.js'
 
 /** 注册名集（序 = 注册序——plugin.test pin 锚；S5 GUI DISPATCH_COMMAND_PREFIX 同名锚） */
-export const FORGE_COMMAND_NAMES = [RUN_DAG_TASKS_NAME, STOP_DAG_TASKS_NAME] as const
+export const FORGE_COMMAND_NAMES = [RUN_DAG_TASKS_NAME, STOP_DAG_TASKS_NAME, FORGE_DIR_INIT_NAME] as const
 
 /** 指令定义工厂依赖（driver 单例 + core 读面 + 工作区解析 + 问询面可缺席 + 活根解析可缺席） */
 export interface ForgeCommandsDeps {
@@ -32,10 +41,11 @@ export interface ForgeCommandsDeps {
   readonly diag?: ForgeDiagEmitFace
 }
 
-/** 指令定义组（S2 两枚——描述 = 发现 UI 用户可读文案） */
+/** 指令定义组（S2 两枚 + dir-init 一枚——描述 = 发现 UI 用户可读文案） */
 export interface ForgeCommands {
   readonly runDagTasks: ForgeCommandDefinition
   readonly stopDagTasks: ForgeCommandDefinition
+  readonly forgeDirInit: ForgeCommandDefinition
 }
 
 export function createForgeCommands(deps: ForgeCommandsDeps): ForgeCommands {
@@ -50,6 +60,11 @@ export function createForgeCommands(deps: ForgeCommandsDeps): ForgeCommands {
       name: STOP_DAG_TASKS_NAME,
       description: '停止本会话启动的派发循环',
       handler: createStopDagTasksHandler({ driver: deps.driver, ...(deps.diag !== undefined ? { diag: deps.diag } : {}) }),
+    },
+    forgeDirInit: {
+      name: FORGE_DIR_INIT_NAME,
+      description: '按产物存储地图初始化工作区分区目录，git 仓库去重追加 .gitignore 忽略条目',
+      handler: createForgeDirInitHandler(),
     },
   }
 }
