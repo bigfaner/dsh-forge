@@ -1249,7 +1249,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'Fix: flaky selector', type: 'coding-fix', blockSource: true })
     expect(built.h.claimInputs).toHaveLength(3)
     // ⑧ 自愈静默（main R-Q4 重构语义）：无用户通知——进度事件 scenario 投影 + incident 落盘承载
-    expect(built.progressCalls.some((e) => e.scenario === 'blocked/auto-fixed')).toBe(true)
+    expect(built.progressCalls.some((e) => e.scenario === S.blockedAutoFixed)).toBe(true)
     expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
   })
 
@@ -1298,7 +1298,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(seen[0]?.task).toMatchObject({ slug: 'feat-x', localId: '2.5' })
     expect(seen[0]?.reason).toContain('claim 阶段 fail-loud：expert not found: ghost-expert')
     // wait-external 记录等待后循环续领（2.5 被重领并完成）→ 正常收口（⑨ 静默化——进度事件投影）
-    expect(built.progressCalls.some((e) => e.scenario === 'blocked/wait-external' && e.note === '等待 feature-b 先完成')).toBe(true)
+    expect(built.progressCalls.some((e) => e.scenario === S.blockedWaitExternal && e.note === '等待 feature-b 先完成')).toBe(true)
     expect(built.h.claimInputs).toHaveLength(3) // fail-loud 领取 + 重领 2.5 + no-task
     expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
   })
@@ -1917,7 +1917,7 @@ describe('流控失败分流（限流零重试——挂起返回主会话择时�
     // 三次尝试 + ⑪ ×2 零消息——原阶梯行为不变（bug 63112ab2 只分流限流径）；重试计数进进度事件
     expect(built.spawn.requests).toHaveLength(3)
     expect(built.calls.filter((c) => c.text.includes('启动子代理失败'))).toHaveLength(0)
-    expect(built.progressCalls.filter((e) => e.verb === 'retry' && e.scenario === 'retry/spawn-failed')).toHaveLength(2)
+    expect(built.progressCalls.filter((e) => e.verb === 'retry' && e.scenario === S.retrySpawnFailed)).toHaveLength(2)
   })
 })
 
@@ -2696,12 +2696,12 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    for (const scenario of ['claim/new', 'claim/spawned', 'task/complete']) {
+    for (const scenario of [S.claimNew, S.claimSpawned, S.taskComplete]) {
       const evt = built.progressCalls.find((e) => e.scenario === scenario)
       expect(evt?.expertKey, scenario).toBe('retro-reviewer')
     }
     // 循环级事件（无 taskKey）不填充
-    for (const scenario of ['startup/from-scratch', 'pool/pending', 'loop/finish-all']) {
+    for (const scenario of [S.startupFromScratch, S.poolPending, S.loopFinishAll]) {
       expect(built.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
     }
   })
@@ -2720,7 +2720,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    for (const scenario of ['claim/new', 'claim/spawned', 'task/complete']) {
+    for (const scenario of [S.claimNew, S.claimSpawned, S.taskComplete]) {
       const evt = built.progressCalls.find((e) => e.scenario === scenario)
       expect(evt?.expertKey, scenario).toBe('tech-writer')
     }
@@ -2739,7 +2739,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     await untilSettled(bare.driver)
     // 防恒真：先钉事件量非空，再对已知 scenario 逐一断言零 expertKey（与 mapped 侧同构）
     expect(bare.progressCalls.length).toBeGreaterThan(0)
-    for (const scenario of ['startup/from-scratch', 'claim/new', 'claim/spawned', 'task/complete', 'pool/pending', 'loop/finish-all']) {
+    for (const scenario of [S.startupFromScratch, S.claimNew, S.claimSpawned, S.taskComplete, S.poolPending, S.loopFinishAll]) {
       expect(bare.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
     }
     expect(bare.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
@@ -2759,8 +2759,8 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
     // 确认事件在 claim 原事件之后、结算事件之前（执行中窗口内面板即可取到跳转锚）
-    const claimIdx = built.progressCalls.findIndex((e) => e.scenario === 'claim/new')
-    const spawnedIdx = built.progressCalls.findIndex((e) => e.scenario === 'claim/spawned')
+    const claimIdx = built.progressCalls.findIndex((e) => e.scenario === S.claimNew)
+    const spawnedIdx = built.progressCalls.findIndex((e) => e.scenario === S.claimSpawned)
     const settleIdx = built.progressCalls.findIndex((e) => e.verb === 'settle')
     expect(claimIdx).toBeGreaterThanOrEqual(0)
     expect(spawnedIdx).toBeGreaterThan(claimIdx)
