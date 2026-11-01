@@ -19,6 +19,8 @@ export type Invalidate = () => void;
 export interface ExpertWatchOptions {
   /** 失效回调（每次调用 = 触发一次整体换代；chokidar 通道已合并竞速事件）。 */
   onInvalidated: Invalidate;
+  /** 降级 warn 发射面（装配层接 diag 面；诊断发射纪律——本模块不直落 console）。 */
+  onWarn: (message: string) => void;
   /** watcher 错误 / 重挂失败上报（缺省吞掉）。 */
   onError?: (error: unknown) => void;
   /** awaitWriteFinish 写稳定窗口（ms）；测试可调小。 */
@@ -55,10 +57,10 @@ function isUnsafeAnchor(path: string): boolean {
 
 /** 同一锚点降级只 warn 一次（禁循环重试刷屏——EBUSY 风暴教训，bug a7bdf03f）。 */
 const degradedAnchors = new Set<string>();
-function warnOnce(key: string, message: string): void {
+function warnOnce(key: string, message: string, onWarn: (message: string) => void): void {
   if (degradedAnchors.has(key)) return;
   degradedAnchors.add(key);
-  console.warn(message);
+  onWarn(message);
 }
 
 /**
@@ -206,6 +208,7 @@ export class ExpertWatchManager {
           warnOnce(
             rootDir,
             `expert-squad: watcher anchor runaway guard——missing root ${rootDir} 的存在祖先命中盘根/上界/应用数据特征（${parent}），放弃本层监听（fs/observed 通道与下次取用重扫兜底）`,
+            this.options.onWarn,
           );
           return;
         }
@@ -219,6 +222,7 @@ export class ExpertWatchManager {
       warnOnce(
         rootDir,
         `expert-squad: watcher anchor runaway guard——missing root ${rootDir} 的锚落在盘根/应用数据特征目录（${anchor}），放弃本层监听（fs/observed 通道与下次取用重扫兜底）`,
+        this.options.onWarn,
       );
       return;
     }

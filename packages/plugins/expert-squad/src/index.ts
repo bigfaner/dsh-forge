@@ -222,7 +222,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     // effect 回调返回值即 disposer（cordis 语义，web-client webServer.register 同款）。
     ctx.effect(() => () => state?.close());
   } else {
-    console.warn("[expert-squad] ctx.storage absent——启停状态降级内存态（重启回全启用，FMEA）");
+    diag("warn", "expert-squad-storage-absent", "ctx.storage absent——启停状态降级内存态（重启回全启用，FMEA）");
   }
 
   // 每工作区一 registry（首用刷新一代快照；启停态经 state 落盘——registry 内存缓存同步读）。
@@ -285,7 +285,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       // 失败即逐出条目，下次请求重建 registry 重试（bug f9410209）。
       hit.catch((error: unknown) => {
         // 诊断面（bug 44e70a5f）：首刷失败此前静默逐出，host 日志零痕迹——失败原因必须留痕。
-        console.warn(`[expert-squad] registry 首刷失败（workspace=${workspace}，已逐出待重试）: ${String((error as Error)?.message ?? error)}`);
+        diag("warn", "expert-squad-registry-refresh-fail", `registry 首刷失败（workspace=${workspace}，已逐出待重试）: ${String((error as Error)?.message ?? error)}`);
         if (registries.get(workspace) === hit) {
           registries.delete(workspace);
           // Root cause: 逐出只删 registries 条目时旧 manager 仅插件卸载才释放——
@@ -303,7 +303,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       registries.set(workspace, hit);
       const manager = new ExpertWatchManager(rootsFor(workspace), {
         onInvalidated: () => enqueueRefresh(workspace, registry),
-        onError: (error) => console.warn(`[expert-squad] ${String(error)}`),
+        onWarn: (message) => diag("warn", "expert-squad-watch-degraded", message),
+        onError: (error) => diag("warn", "expert-squad-watch-error", String(error)),
       });
       watchManagers.set(workspace, manager);
       ctx.effect(() => () => void manager.dispose());
@@ -325,7 +326,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     // 通道二监听器 disposer 消费（cordis effect 契约：cb 返回值即 disposer——卸载摘除）。
     if (typeof disposeOn === "function") ctx.effect(() => () => disposeOn());
   } else {
-    console.warn("[expert-squad] ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
+    diag("warn", "expert-squad-fs-observed-absent", "ctx.on absent——fs/observed 通道未接线（仅 chokidar 通道承载热刷新）");
   }
 
   // 面板运行状态（bug 767e7580 接线）：subagent/end 监听唯一落点（纯 UI，不进会话
@@ -340,7 +341,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     const disposeEnd = observeSubagentEnd(eventsFace, panel);
     if (typeof disposeEnd === "function") ctx.effect(() => () => disposeEnd());
   } else {
-    console.warn("[expert-squad] ctx.on absent——subagent/end 面板监听未接线（run-state 恒空）");
+    diag("warn", "expert-squad-subagent-end-absent", "ctx.on absent——subagent/end 面板监听未接线（run-state 恒空）");
   }
 
   // delegate 装配状态（观测面加固）：apply 尾部委派工具注册/降级结果——经 run-state
@@ -362,7 +363,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
         await registry.setEnabled(key, enabled);
       } catch (error) {
         if (error instanceof ExpertNotFoundError) throw error;
-        console.warn(`[expert-squad] setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
+        diag("warn", "expert-squad-setenabled-persist-fail", `setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);
       }
       const fresh = registry
         .list({ includeDisabled: true })
@@ -470,7 +471,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     try {
       toolRegistry = await registryFor(process.cwd());
     } catch (error) {
-      console.warn(`[expert-squad] cwd registry 首刷失败（provide 降级为未刷新实例）: ${String(error)}`);
+      diag("warn", "expert-squad-cwd-registry-refresh-fail", `cwd registry 首刷失败（provide 降级为未刷新实例）: ${String(error)}`);
       toolRegistry = new ExpertsRegistry({
         roots: () => rootsFor(process.cwd()),
         state,
@@ -481,7 +482,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     }
   }
   if (reflectLayer?.provide === undefined) {
-    console.warn("[expert-squad] ctx.reflect/provide absent——experts 服务键未 provide（ctx.experts 正门不可用）");
+    diag("warn", "expert-squad-experts-provide-absent", "ctx.reflect/provide absent——experts 服务键未 provide（ctx.experts 正门不可用）");
   } else {
     // 服务门面（非裸 cwd registry 实例）：get/list/setEnabled 委派 cwd 实例；registerRoot
     // 除 cwd 实例外还记入共享清单（新 registry 出生即含）并主动换代全部已建 registry
@@ -504,7 +505,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     reflectLayer.provide(EXPERTS_SERVICE_KEY, expertsService);
   }
   if (toolsFace === undefined) {
-    console.warn("[expert-squad] ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
+    diag("warn", "expert-squad-tools-absent", "ctx.tools absent——tool 面未注册（管理/委派工具不可用）");
     return;
   }
   // tool 面共享 registry：apply 期无会话工作区锚（preset mount 一次、多 agent 共享），
@@ -523,7 +524,7 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       status: "degraded",
       reason: subagents === undefined ? "subagents-absent" : "shape-mismatch",
     };
-    console.warn("[expert-squad] ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
+    diag("warn", "expert-squad-subagents-absent", "ctx.subagents absent——delegate_expert 未注册（委派不可用；管理面照常）");
   } else {
     // registered 落态在注册成功之后：register 抛错时不误报 registered（fail-loud 透传）
     registerDelegateExpertTool(toolsFace, {
