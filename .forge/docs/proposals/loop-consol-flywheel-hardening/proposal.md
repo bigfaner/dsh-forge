@@ -31,7 +31,7 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 
 #### 2.4.1 官方 view Definition 增量契约前置核销（withdrew 三连翻车的根治）
 
-- 翻车点：组卡接管 progress 渲染后连续三个 bug（b4861a60 → 79589cd8 复发 → 才彻底收敛）——根因是接线的 definition 违反官方契约「已物化 Context 的 buildViewNode 回 null = withdrew materialized target」（dsh-client-ui-conversation client.js:2505），该契约在首次接线时未被核销，症状先被误判为面板问题，两轮修复才定罪。
+- 翻车点：组卡接管 progress 渲染后连续三个 bug（b4861a60 → 79589cd8 复发 → 才彻底收敛；台账核销：两主记录在册，修复落在复发记录 bffcbe63/80b3f129 @ 0c48a365 与 f511c6a7 @ 0520e5ab，两主记录终态未回填属台账欠账）——根因是接线的 definition 违反官方契约「已物化 Context 的 buildViewNode 回 null = withdrew materialized target」（dsh-client-ui-conversation client.js:2505），该契约在首次接线时未被核销，症状先被误判为面板问题，两轮修复才定罪。
 - 改进：①契约沉淀 lesson（「物化后不得回 null，hidden 同 key 同 id 保底」+ 先例 client.js:17082）入 `.knowledge/`；②review-proposal 检查项 +1——凡提案含「新增/改造 conversation view definition」类任务，AC 必含该契约核销项与 withdrew=0 断言。
 - 落点：`.knowledge/lessons/`（新 lesson）、`packages/plugin-forge/experts/proposal-reviewer.md` 档案正文（review-proposal 技能已随 expert-squad-forge-2 退役，提案评审职责由该档案承接；原 D3 决策点就此定案，不再单列裁决）。
 
@@ -44,7 +44,7 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 #### 2.4.3 结算声称与台账核验闭环
 
 - 翻车点：1.12 worker 摘要声称「已 resolveBug(fixed)」，台账实际仍 open（主会话核验后补回填）——结算摘要声称的动作与实际执行脱钩。
-- 改进：submit-task 纪律 +1——结算摘要声称的台账动词（recordBug/resolveBug/checkpoint）必须实际生效，结算前以台账查询抽查，不符即退回重结算。
+- 改进：submit-task 纪律 +1——结算摘要声称的台账动词（recordBug/resolveBug/checkpoint）必须实际生效；落法走工具行为层（submitTask 结算时对摘要中出现的台账动词做生效性回查，不符即退回），技能文本只承载判断面，不落「请模型自觉」式抽查。
 - 落点：`packages/plugin-forge/skills/submit-task/SKILL.md`。
 
 #### 2.4.4 blocked 裁决-恢复的空转链（机械层欠账，转机械提案）
@@ -64,6 +64,7 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 - 翻车点：结算/唤醒消息文本形态经历三轮补裁（按 slug → 分组 → 不过简 + 示例定稿），核心任务 1.1 两次暂停重派改简报——微文案类决策未在访谈期出样稿定稿。
 - 改进：grilling/quick-tasks 访谈清单 +1——凡交付物含「用户可见文本」（消息模板/徽标文案/状态词），访谈期必须出样稿并请用户过目定稿，派发后微调走 fix 链不再暂停重派。
 - 落点：`resources/runtime/.../skills-blitz/grilling`（突击包访谈清单）与 quick-tasks SKILL.md 各 +1。
+  - 落点实核修订（评审 Q1）：grilling 实际在 `packages/plugin-forge/skills-blitz/grilling/SKILL.md`（:32-39 事实查证清单为挂点）；quick-tasks 侧挂第 0 步澄清（同文件 :12 起），不设独立「访谈清单」节。
 
 #### 2.4.7 产品侧 polish backlog（随本提案裁决去留）
 
@@ -73,20 +74,20 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 - 组卡「ForgeProgressNode 同型」悬空注释清理（参照文件已删）
 - loop/blocked-pool 三态归属（running vs suspended）映射复核
 - **形式化验证发现（2026-10-29，模型与逐条论证见 `verification/model.md` + `findings.md`）**：
-  - CE-6（minor，bug 5a245dd1）：pause 径唤醒绕过 wakeupKeys 去重——**已收敛**（fixed @ cf543388；其后去重语义又两轮演进：2055da00 去重键过粗 @ 296ab20、40e3201b pause 径复发 @ cf543388，均 fixed）。不再是待办，仅留档。
-  - DEV-3（bug e4b2d921）：dispose/异常终局遗留 loopSourced in_progress 任务有界滞留（adopt 只领 interrupted），以装配重启为界自愈——恢复径扩展或 reconcile 对账覆盖，随裁决定轨。
+  - CE-6（minor，bug 5a245dd1）：pause 径唤醒绕过 wakeupKeys 去重——**已收敛**（fixed @ cf543388；其后去重语义又两轮演进：2055da00 去重键过粗 @ 296ab202、40e3201b pause 径复发 @ cf543388，均 fixed）。不再是待办，仅留档（findings.md §6 已加收敛后记）。
+  - DEV-3（bug e4b2d921）：dispose/异常终局遗留 loopSourced in_progress 任务有界滞留（adopt 只领 interrupted），以装配重启为界自愈——**定轨已裁决：reconcile 对账扩展**（判据从装配期扩展到可按需触发时点，不触碰已验证的摘牌/真化配对不变量；两案对比见 findings.md §3），属管线状态机机械小改，从产品 polish backlog 摘出单独定轨交付。
   - 其余 6 条不变量（会话单活/源独占/幂等重入/防线粘住/渲染契约/恢复活性）验证通过，未发现正确性级反例。
 - 上述各项互相独立、均为小改，随本提案裁决整体纳入或转出（不另立提案）。
 
 ### 2.5 待用户裁决清单
 
-| # | 决策点 | 备选 | 倾向 |
+| # | 决策点 | 备选 | 裁决（2026-10-31，联合评审后用户裁决） |
 |---|---|---|---|
-| D1 | 2.2 落点形态 | AGENTS.md 内扩一句（轻）；或独立 cdp 探针规范正本（重，但可承载更多判例） | AGENTS.md 扩句，判例留 knowledge |
-| D2 | 2.3 双 convention 晋升 | 两件均晋升 / 仅晋升 equivalent-evidence（已有终裁事实）/ 均留 .knowledge | 两件均晋升 |
-| D3 | ~~2.4.1 检查项落点~~ | — | 已定案：随技能退役事实落 `experts/proposal-reviewer.md` 档案正文（见 2.4.1 落点） |
-| D4 | 2.4.4 恢复原语转出 | 立独立机械提案（远征量级）/ 暂缓 | 立独立提案 |
-| D5 | 2.4.7 产品 polish backlog | 随本提案整体纳入 / 转出为独立走查批次 | 整体纳入 |
+| D1 | 2.2 落点形态 | AGENTS.md 内扩一句（轻）；或独立 cdp 探针规范正本（重） | **AGENTS.md 扩句**，判例留 knowledge |
+| D2 | 2.3 双 convention 晋升 | 两件均晋升 / 仅一件 / 均留 .knowledge | **两件均晋升**（走查工件路径泛化为判据） |
+| D3 | 2.4.1 检查项落点 | — | **已定案**：随技能退役事实落 `experts/proposal-reviewer.md` 档案正文 |
+| D4 | 2.4.4 恢复原语转出 | 立独立机械提案 / 暂缓 | **立独立机械提案** |
+| D5 | 2.4.7 产品 polish backlog | 随本提案整体纳入 / 转出 | **整体纳入，唯 DEV-3 摘出单独定轨**（管线状态机机械，随裁决采 reconcile 对账扩展） |
 
 ## 3. 改动范围（file 粒度）
 
@@ -107,15 +108,19 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 1. 状态窗口稳定约束落 `experts/test-runner.md` 档案正文（归属模型约束方式声明为前置；落点随 run-tests 技能退役修订）。
 2. CDP 探针零仪表化对照纪律落在裁决确定的正本位置。
 3. 2.3 裁决结果（晋升/不晋升，逐件）落档。
-4. 2.4.1-2.4.3/2.4.5-2.4.6 各检查项/模板落档于裁决确定的落点文件（2.4.1 落 `experts/proposal-reviewer.md`）。
-5. 2.4.4 转出登记落档（独立机械提案 slug 或暂缓决定）。
-6. 2.4.7 backlog 逐项裁决（纳入/转出）落档；纳入项各有小改交付与真机取证（CE-6 已收敛，仅留档，不在交付面）。
+4. 2.4.2/2.4.3/2.4.5 检查项/模板落档于既定落点文件；2.4.6 落档于实核落点（`skills-blitz/grilling/SKILL.md` + quick-tasks 第 0 步澄清）；2.4.1 落 `experts/proposal-reviewer.md`。
+5. 2.4.4 转出登记落档（独立机械提案 slug）。
+6. 2.4.7 backlog 逐项落档：CE-6 留档不交付；DEV-3 按 reconcile 对账扩展单独定轨交付（含真机取证）；其余纳入项各有小改交付与真机取证。
 
 ## 5. 裁决台账
 
 | # | 决策点 | 裁决 | 日期 |
 |---|---|---|---|
-| 提案裁决 | accept/reject | 待裁决 | — |
+| 提案裁决 | accept | **accepted**（联合评审 Blocker 0 后修订收口，用户裁决采纳全部 D 项倾向） | 2026-10-31 |
+| D1 | CDP 纪律落点 | AGENTS.md §2 cdp 条目扩句 | 2026-10-31 |
+| D2 | 双 convention 晋升 | 两件均晋升 `docs/conventions/` | 2026-10-31 |
+| D4 | 恢复原语 | 立独立机械提案 | 2026-10-31 |
+| D5 + DEV-3 定轨 | backlog 去留 | 整体纳入；DEV-3 摘出，采 reconcile 对账扩展 | 2026-10-31 |
 
 ## 指标对比附录（飞轮派生提案必带）
 
