@@ -9,8 +9,8 @@
 /** 诊断事件通道名（诊断事件域唯一事件——类别经 payload.event 区分） */
 export const DIAG_EVENT = 'diag/log' as const
 
-/** 日志级别（proposal 定版：warn/error/info 三级） */
-export type DiagLevel = 'info' | 'warn' | 'error'
+/** 日志级别（定版：debug/info/warn/error 四级——debug 为吞没点豁免补点级，默认过滤） */
+export type DiagLevel = 'debug' | 'info' | 'warn' | 'error'
 
 /** 进程标签（JSONL 行 process 字段——main/child/renderer 三进程单源） */
 export type DiagProcess = 'main' | 'child' | 'renderer'

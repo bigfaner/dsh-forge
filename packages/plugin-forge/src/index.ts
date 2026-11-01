@@ -22,7 +22,7 @@
 // {wsPath,projectId} JSON 经插件 config 进入，生产端 3.4）。
 import { join, dirname } from 'node:path'
 import { existsSync } from 'node:fs'
-import type { ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
+import type { DiagLevel, ForgeSettingsService, ProjectServiceM2 } from '@dsh-forge/contracts'
 import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
@@ -164,7 +164,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       }
       return undefined
     }
-    const emitResolverDiag = (payload: { event: string; level: 'info' | 'warn' | 'error'; message: string } & Record<string, unknown>): void => {
+    const emitResolverDiag = (payload: { event: string; level: DiagLevel; message: string } & Record<string, unknown>): void => {
       emitForgeDiag(diag, payload)
     }
     // registerRoot/refresh 是幂等副作用面（只登记不重扫/整树重扫）——按 experts face 实例

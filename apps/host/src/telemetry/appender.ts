@@ -10,7 +10,7 @@
 import { appendFileSync } from 'node:fs'
 import { appendFile, readdir, stat, truncate, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import { DIAG_EVENT, type DiagEventPayload } from './diag-events.js'
+import { DIAG_EVENT, type DiagEventPayload, type DiagLevel } from './diag-events.js'
 import type { DiagContextStore } from './diag-context.js'
 
 /** JSONL 行（proposal 字段全集——固定字段恒在、可选字段缺席省略） */
@@ -40,6 +40,9 @@ export interface AppenderCounters {
   /** 句柄占用致截断/清理跳过轮次计数 */
   maintenanceSkipped: number
 }
+
+/** 级别序（debug 最细 → error 最重；级别门按 minLevel 截断） */
+const LEVEL_RANK: Record<DiagLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
 
 /** 单行字节上限保护（畸形超长行仍受 50MB 截断约束，防单行吃满文件） */
 const MAX_LINE_BYTES = 8 * 1024 * 1024
@@ -82,6 +85,8 @@ export interface AppenderOptions {
   maxQueue?: number
   /** fs 驱动注入（缺省 node:fs/promises） */
   driver?: AppenderDriver
+  /** 落盘最低级别（diag-milestone-coverage 方案 3——缺省 'info'，debug 行默认不落盘） */
+  minLevel?: DiagLevel
   /** 时钟注入（测试可控——缺省系统时钟） */
   now?: () => Date
 }
@@ -124,6 +129,7 @@ export class DiagAppender {
   #drainChain: Promise<void> = Promise.resolve()
   #maintenanceDay: number | undefined // 已做过本轮留存的 UTC 日序（每日一轮）
   #skipMaintenance = false // 句柄占用跳过位（下一轮重试）
+  #minLevel: DiagLevel = 'info' // 级别门（默认 info 起——debug 按需开启）
 
   constructor(options: AppenderOptions) {
     this.#dir = options.dir
@@ -132,6 +138,7 @@ export class DiagAppender {
     this.#retentionDays = options.retentionDays ?? 7
     this.#maxQueue = options.maxQueue ?? 1000
     this.#driver = options.driver ?? nodeDriver
+    this.#minLevel = options.minLevel ?? 'info'
     this.#now = options.now ?? (() => new Date())
   }
 
@@ -145,6 +152,16 @@ export class DiagAppender {
     return this.#queue.length
   }
 
+  /** 运行期级别开关（诊断时打开 debug——此后 debug 行落盘可回放） */
+  setMinLevel(level: DiagLevel): void {
+    this.#minLevel = level
+  }
+
+  /** 级别门：低于 minLevel 的行不落盘（默认 info 起，debug 被过滤） */
+  #passesLevel(level: DiagLevel): boolean {
+    return LEVEL_RANK[level] >= LEVEL_RANK[this.#minLevel]
+  }
+
   /**
    * 订阅回调（ctx.on(DIAG_EVENT) 消费面）：同步完成 ALS 读取 + 序列化 + 入队，
    * 磁盘写 fire-and-forget。整体 try/catch——订阅回调绝不抛（emit 同步把 listener
@@ -152,6 +169,7 @@ export class DiagAppender {
    */
   handleEvent(payload: DiagEventPayload): void {
     try {
+      if (!this.#passesLevel(payload.level)) return
       this.#enqueue(this.buildLine(payload), false)
     } catch {
       this.#counters.queueDropped += 1
@@ -303,6 +321,7 @@ export class DiagAppender {
    */
   appendCrashLine(payload: DiagEventPayload): void {
     try {
+      if (!this.#passesLevel(payload.level)) return
       this.#enqueue(this.buildLine(payload), true)
     } catch {
       /* 兜底路径不允许可达异常 */

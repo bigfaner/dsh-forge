@@ -2,7 +2,10 @@
 // 按级分流 error→console.error、其余→console.warn（expert-squad index.ts 配方），
 // 三站点（index.ts config.diag 兜底 / rpc-service.ts deps.warn 兜底 / session-send-wrap.ts
 // warn 参数兜底）共源，禁新增直落 console 诊断站点。
-export type DiagLevel = 'warn' | 'error'
+// DiagLevel 单源在 @dsh-forge/contracts（diag-milestone-coverage——本地重复定义收编）。
+import type { DiagLevel } from '@dsh-forge/contracts'
+
+export type { DiagLevel }
 
 /** console 兜底（按级分流）：缝缺席时诊断不静默，error 级走 console.error、其余 console.warn */
 export function consoleDiagFallback(line: string, level: DiagLevel = 'warn'): void {

@@ -41,7 +41,7 @@ export function parseDiagRelayLine(line: string): DiagEventPayload | undefined {
     if (typeof inner !== 'object' || inner === null) return undefined
     const p = inner as Record<string, unknown>
     if (
-      (p.level !== 'info' && p.level !== 'warn' && p.level !== 'error') ||
+      (p.level !== 'debug' && p.level !== 'info' && p.level !== 'warn' && p.level !== 'error') ||
       (p.process !== 'main' && p.process !== 'child' && p.process !== 'renderer') ||
       typeof p.event !== 'string' ||
       typeof p.message !== 'string'

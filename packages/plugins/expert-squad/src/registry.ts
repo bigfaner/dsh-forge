@@ -45,8 +45,9 @@ export interface ExpertsConfigFace {
   experts?: () => Readonly<Record<string, ExpertConfigEntry>> | undefined;
 }
 
-/** 诊断发射面（host 侧接线 = `diag/log` 事件域 emitDiag；缺席 = 装配层 console 兜底）。 */
-export type DiagEmit = (level: "info" | "warn" | "error", event: string, message: string) => void;
+/** 诊断发射面（host 侧接线 = `diag/log` 事件域 emitDiag；缺席 = 装配层 console 兜底）。
+ * 级别类型单源 @dsh-forge/contracts DiagLevel（diag-milestone-coverage——本地重复定义收编）。 */
+export type DiagEmit = (level: import("@dsh-forge/contracts").DiagLevel, event: string, message: string) => void;
 
 /** 服务键名（cordis 具名服务——ctx.experts 正门）。 */
 export const EXPERTS_SERVICE_KEY = "experts" as const;

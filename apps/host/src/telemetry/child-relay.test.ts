@@ -51,6 +51,9 @@ describe('parseDiagRelayLine（main 侧转译）', () => {
   it('畸形 JSON → undefined', () => {
     expect(parseDiagRelayLine('{"__diag":')).toBeUndefined()
   })
+  it('debug 级（DiagLevel 扩展——diag-milestone-coverage 方案 3）接受转译', () => {
+    expect(parseDiagRelayLine(JSON.stringify({ __diag: { level: 'debug', process: 'child', event: 'swallow-exempt', message: 'm' } }))).toMatchObject({ level: 'debug' })
+  })
   it('缺字段（level/process/event/message 任一非法）→ undefined', () => {
     expect(parseDiagRelayLine(JSON.stringify({ __diag: { level: 'nope', process: 'child', event: 'e', message: 'm' } }))).toBeUndefined()
     expect(parseDiagRelayLine(JSON.stringify({ __diag: { level: 'warn', process: 'child', event: 'e' } }))).toBeUndefined()

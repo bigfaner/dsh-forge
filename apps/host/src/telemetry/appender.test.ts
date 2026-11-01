@@ -138,6 +138,70 @@ describe('留存策略（AC3）', () => {
   })
 })
 
+describe('级别过滤开关（diag-milestone-coverage 方案 3——默认 info 起，debug 按需开）', () => {
+  const DEBUG = { level: 'debug', process: 'child', event: 'swallow-exempt', message: 'd' } as const
+
+  it('默认 minLevel=info：debug 行不落盘，info/warn/error 行照常', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.handleEvent(DEBUG)
+    appender.handleEvent({ ...BASE, level: 'info' })
+    appender.handleEvent(BASE)
+    await appender.idle()
+    expect(captured).toHaveLength(2)
+    expect(captured.map((row) => (JSON.parse(row) as { level: string }).level)).toEqual(['info', 'warn'])
+  })
+
+  it('minLevel 选项：构造即开 debug 后 debug 行落盘可回放', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      minLevel: 'debug',
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.handleEvent(DEBUG)
+    await appender.idle()
+    expect(JSON.parse(captured[0]!)).toMatchObject({ level: 'debug', event: 'swallow-exempt' })
+  })
+
+  it('setMinLevel 运行期开关：默认关 → 打开后 debug 行落盘，info 恒放行', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.handleEvent(DEBUG)
+    await appender.idle()
+    expect(captured).toHaveLength(0) // 默认关：debug 不落盘
+    appender.setMinLevel('debug')
+    appender.handleEvent(DEBUG)
+    appender.handleEvent({ ...BASE, level: 'info' })
+    await appender.idle()
+    expect(captured.map((row) => (JSON.parse(row) as { level: string }).level)).toEqual(['debug', 'info'])
+  })
+
+  it('崩溃路径同受级别门（debug 行经 appendCrashLine 亦不落盘）', () => {
+    let syncWrites = 0
+    const appender = new DiagAppender({
+      dir: '.',
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ appendSync: () => { syncWrites += 1 } }),
+    })
+    appender.appendCrashLine(DEBUG)
+    expect(syncWrites).toBe(0)
+    expect(appender.pendingCount).toBe(0)
+  })
+})
+
 describe('性能红线（AC4）', () => {
   it('红线①：写挂死时 append 立即返回（业务不受阻）', async () => {
     const dir = await tempLogsDir()

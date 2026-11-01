@@ -29,7 +29,7 @@
 //
 // 依赖方向：loop → dispatch-core / notify / contracts 单向；零工具壳 import（可拆卸壳纪律）。
 import { FIX_CHAIN_DEPTH_LIMIT, FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT } from '@dsh-forge/contracts'
-import type { ContainerRef, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
+import type { ContainerRef, DiagLevel, ForgePluginEvent, ForgeSettingsService, ForgeTasksService, TaskRef, TaskSnapshot, TaskStats, TaskType, TriageDecidedPayload, TriageOutcomePayload } from '@dsh-forge/contracts'
 import { HALT_THRESHOLD, HALTED_REASON } from '../dispatch-core/index.js'
 // S1c 循环独占守卫面（登记/注销——守卫消费在 dispatch-core claim 面）
 import { claimForDispatch, classifyPool, computeWaveSnapshot, findLiveSuccessor, gitHeadCommit, poolOf, settleClaimed, spawnClaimed } from '../dispatch-core/index.js'
@@ -881,7 +881,7 @@ export interface LoopDriverDeps {
 
 /** 诊断埋点载荷（diag-events DiagEventPayload 的驱动器窄投影——process/trace 由装配面补齐） */
 export interface LoopDiagPayload {
-  readonly level: 'info' | 'warn' | 'error'
+  readonly level: DiagLevel
   readonly event: string
   readonly message: string
   readonly projectId?: string
