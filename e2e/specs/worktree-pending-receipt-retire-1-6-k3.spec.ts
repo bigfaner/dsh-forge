@@ -8,58 +8,36 @@
 //   · 会话出生即绑定由 1.27 spec 承载；本 spec 只判回执退役与零卡挂。
 // data 锚：chip = [data-dswt-hero-trigger]；composer = [data-composer-input]；
 // 发送钮 = role button「发送消息」；落盘证据 = 会话日志 mtime（zstd 不可文本扫，1.29 同口径）。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；发送落盘判读改扫共享 userData 根
+//（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions，以夹具工作区全路径段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.7/001-pending-receipt-retire'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main） */
-function makeGitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-7-k3-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t17k3@test', '-c', 'user.name=t17k3', ...args], { cwd, stdio: 'pipe' })
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t17k3@test', '-c', 'user.name=t17k3', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.7 k3 pending-receipt fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  return dir
 }
 
-/** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
-async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise<unknown> {
-  return page.evaluate(
-    ([ch, payload]) =>
-      (window as unknown as { dshForge: { invoke(c: string, p?: unknown): Promise<unknown> } }).dshForge.invoke(ch, payload),
-    [channel, payload] as const,
-  )
-}
-
-/** 注册项目（轮询至就绪——1.17 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'k3-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'k3-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 
@@ -91,7 +69,6 @@ async function typeDraft(page: Page, text: string): Promise<void> {
  */
 async function sendUntilLanded(
   page: Page,
-  userData: string,
   dirFragment: string,
   since: number,
 ): Promise<string> {
@@ -104,48 +81,67 @@ async function sendUntilLanded(
     else await page.keyboard.press('Enter')
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
-      const hit = findSessionDir(userData, dirFragment, since)
+      const hit = findSessionDir(dirFragment, since)
       if (hit !== undefined) return hit
       await page.waitForTimeout(1_000)
     }
   }
-  throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席`)
+  throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席；实际分组目录：${listSessionGroups().join(' | ') || '<无>'}`)
 }
 
-/** 会话日志落盘定位：{dshHome}/sessions 下 dirFragment 段 cwd 分组目录内 mtime ≥ since 的日志 */
-function findSessionDir(userData: string, dirFragment: string, since: number): string | undefined {
-  const root = join(userData, 'dsh-home', 'sessions')
-  if (!existsSync(root)) return undefined
-  let hit: string | undefined
-  const visit = (dir: string, depth: number): void => {
-    if (hit !== undefined || depth > 6) return
-    let rows: string[] = []
+/** 诊断：枚举共享 userData 根下全部会话 cwd 分组目录名（落盘判读 miss 时对账） */
+function listSessionGroups(): string[] {
+  const groups: string[] = []
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
+    if (!existsSync(root)) continue
     try {
-      rows = readdirSync(dir)
-    } catch {
-      return
-    }
-    for (const row of rows) {
-      const full = join(dir, row)
-      let stat
+      for (const row of readdirSync(root, { withFileTypes: true })) if (row.isDirectory()) groups.push(row.name)
+    } catch { /* 尽力而为 */ }
+  }
+  return groups
+}
+
+/** 会话日志落盘定位：扫描共享 launch userData 根（dsh-forge-shared-launch-ud-*——本 worker
+ *  独立持有）下各 dsh-home/sessions，取 cwd 分组目录含 dirFragment 段、mtime ≥ since 的日志。 */
+function findSessionDir(dirFragment: string, since: number): string | undefined {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
+    if (!existsSync(root)) continue
+    let hit: string | undefined
+    const visit = (dir: string, depth: number): void => {
+      if (hit !== undefined || depth > 6) return
+      let rows: string[] = []
       try {
-        stat = statSync(full)
+        rows = readdirSync(dir)
       } catch {
-        continue
-      }
-      if (stat.isDirectory()) {
-        visit(full, depth + 1)
-        if (hit !== undefined) return
-        continue
-      }
-      if (row.endsWith('.jsonl.zstd') && stat.mtimeMs >= since && dir.replaceAll('\\', '/').toLowerCase().includes(dirFragment)) {
-        hit = dir
         return
       }
+      for (const row of rows) {
+        const full = join(dir, row)
+        let stat
+        try {
+          stat = statSync(full)
+        } catch {
+          continue
+        }
+        if (stat.isDirectory()) {
+          visit(full, depth + 1)
+          if (hit !== undefined) return
+          continue
+        }
+        if (row.endsWith('.jsonl.zstd') && stat.mtimeMs >= since && dir.replaceAll('\\', '/').toLowerCase().includes(dirFragment)) {
+          hit = dir
+          return
+        }
+      }
     }
+    visit(root, 0)
+    if (hit !== undefined) return hit
   }
-  visit(root, 0)
-  return hit
+  return undefined
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -157,17 +153,15 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer 清空）+ 零 pending 卡挂（第二条照常发送落盘）', async () => {
+test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer 清空）+ 零 pending 卡挂（第二条照常发送落盘）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-7-k3-ud-'))
-  const wsDir = makeGitRepo()
-  const app = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
+  // cwd 分组目录名 = cwd 路径扁平化（分隔符被替换，非原样斜杠路径）——片段用 wsDir 末段
+  //（小写归一——mkdtemp 后缀随机大小写，比对两侧同口径）
+  const dirFragment = (wsDir.split(/[\\/]/).pop() ?? '').toLowerCase()
   const consoleLog: string[] = []
+  page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
   try {
-    const { page } = app
-    page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
     await page.locator('button[aria-label="选择工作区"]').first().click()
     await page.locator('.dswf-hero-picker-list').getByText('k3-repo', { exact: false }).first().click()
@@ -180,7 +174,7 @@ test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer
     await typeDraft(page, MARKER1)
     await snap(page, 'first-draft-typed.png')
     const sendStart1 = Date.now() - 5_000
-    const dir1 = await sendUntilLanded(page, userData, 'k3-repo', sendStart1)
+    const dir1 = await sendUntilLanded(page, dirFragment, sendStart1)
     console.log('[k3] first message landed at', dir1)
 
     // ── 提交回执退役判读①：消息文本呈现且计数 5s 窗口稳定（退役后不重复不残留）──
@@ -211,7 +205,7 @@ test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer
     const MARKER2 = '1-7-k3-second-message'
     await typeDraft(page, MARKER2)
     const sendStart2 = Date.now() - 5_000
-    await sendUntilLanded(page, userData, 'k3-repo', sendStart2)
+    await sendUntilLanded(page, dirFragment, sendStart2)
     console.log('[k3] second message landed (zero pending stuck)')
     await snap(page, 'second-message-sent.png')
     // 第二条同样退役稳定（终态复检）
@@ -224,12 +218,9 @@ test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer
     // eslint-disable-next-line no-console -- 判读留痕：runner stdout（Tee 日志）+ 证据目录双落
     console.log('[renderer-console]\n' + consoleLog.join('\n'))
     try {
-      writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
+      writeFileSync(join(EVIDENCE_DIR, `renderer-console-${Date.now()}.log`), consoleLog.join('\n'), 'utf8')
     } catch {
-      // 留痕失败不影响清理
+      // 留痕失败不影响收尾
     }
-    await closeApp(app.app)
-    rmSync(userData, { recursive: true, force: true })
-    rmSync(wsDir, { recursive: true, force: true })
   }
 })

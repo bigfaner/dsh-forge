@@ -7,22 +7,24 @@
 //     推送投影）出现「树路径工作区节点」，其 sessionIds 名单非空；
 //   · 首条消息落 wt-a cwd 分组目录（cwd 即绑定）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；composer = [data-composer-input]。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；首条消息落盘取证改扫共享 userData 根
+//（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions，以夹具段（wt-a）唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeApp, launchElectron } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/004-workspace-membership'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
-function makeGitRepo(): { dir: string; wtDir: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-28-wsmembership-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t128@test', '-c', 'user.name=t128', ...args], { cwd, stdio: 'pipe' })
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t128@test', '-c', 'user.name=t128', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.28 workspace-membership fixture\n')
@@ -30,37 +32,13 @@ function makeGitRepo(): { dir: string; wtDir: string } {
   git(['commit', '-m', 'init'])
   const wtDir = join(dir, 'wt-a').replaceAll('\\', '/')
   git(['worktree', 'add', '-b', 'feat-a', wtDir, 'main'])
-  return { dir, wtDir }
 }
 
-/** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
-async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise<unknown> {
-  return page.evaluate(
-    ([ch, payload]) =>
-      (window as unknown as { dshForge: { invoke(c: string, p?: unknown): Promise<unknown> } }).dshForge.invoke(ch, payload),
-    [channel, payload] as const,
-  )
-}
-
-/** 注册项目（轮询至就绪——1.17 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'orch-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'orch-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -147,44 +125,53 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-/** 首条消息落盘取证：官方会话存储按 cwd 分组（目录名 = cwd 路径编码，日志 zstd 压缩——
- *  内容不可文本扫）——找「含 wt-a 的 cwd 分组目录」下新产会话日志即为落树内证据。 */
-function findWorktreeSessionDir(userData: string): string | undefined {
-  const root = join(userData, 'dsh-home', 'sessions')
-  if (!existsSync(root)) return undefined
-  let hit: string | undefined
-  const visit = (dir: string, depth: number): void => {
-    if (hit !== undefined || depth > 6) return
-    for (const row of readdirSync(dir)) {
-      const full = join(dir, row)
-      let stat
-      try { stat = statSync(full) } catch { continue }
-      if (stat.isDirectory()) visit(full, depth + 1)
-      else if (row.endsWith('.jsonl.zstd') && dir.replaceAll('\\', '/').toLowerCase().includes('wt-a')) {
-        hit = dir
+/** 首条消息落盘取证（共享 launch 形态）：官方会话存储按 cwd 分组（目录名 = cwd 路径编码，
+ *  日志 zstd 压缩——内容不可文本扫）——扫共享 launch userData 根（tmp 下
+ *  dsh-forge-shared-launch-ud-*——本 worker 独立持有）内各 dsh-home/sessions，
+ *  找「含 wt-a 的 cwd 分组目录」下新产会话日志即为落树内证据。 */
+function findWorktreeSessionDir(): string | undefined {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
+    if (!existsSync(root)) continue
+    let hit: string | undefined
+    const visit = (dir: string, depth: number): void => {
+      if (hit !== undefined || depth > 6) return
+      let rows: string[] = []
+      try {
+        rows = readdirSync(dir)
+      } catch {
         return
       }
+      for (const row of rows) {
+        const full = join(dir, row)
+        let stat
+        try { stat = statSync(full) } catch { continue }
+        if (stat.isDirectory()) {
+          visit(full, depth + 1)
+          if (hit !== undefined) return
+          continue
+        }
+        if (row.endsWith('.jsonl.zstd') && dir.replaceAll('\\', '/').toLowerCase().includes('wt-a')) {
+          hit = dir
+          return
+        }
+      }
     }
+    visit(root, 0)
+    if (hit !== undefined) return hit
   }
-  visit(root, 0)
-  return hit
+  return undefined
 }
 
-test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名单可见）+ 首条消息落树内', async () => {
+test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名单可见）+ 首条消息落树内', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-28-wsmembership-'))
-  const { dir: wsDir, wtDir } = makeGitRepo()
-  const app = await launchElectron({
-    env: { DSH_FORGE_DEV_PROFILE: 'dev', DSH_FORGE_USER_DATA: userData },
-  })
+  const { page, wsDir } = sharedLaunch
+  const wtDir = join(wsDir, 'wt-a').replaceAll('\\', '/')
   const consoleLog: string[] = []
+  page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
+  page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
   try {
-    const page: Page = await app.firstWindow()
-    await page.waitForLoadState('domcontentloaded')
-    await dismissOnboardingModals(page)
-    page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
-    page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
-    await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
     // 前置：选中项目工作区（hero chip 挂载前置）
     await page.locator('button[aria-label="选择工作区"]').first().click()
@@ -221,7 +208,7 @@ test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名�
       const deadline = Date.now() + 20_000
       let landed = false
       while (Date.now() < deadline) {
-        if (findWorktreeSessionDir(userData) !== undefined) {
+        if (findWorktreeSessionDir() !== undefined) {
           landed = true
           break
         }
@@ -229,7 +216,7 @@ test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名�
       }
       if (landed) break
     }
-    const sessionDir = findWorktreeSessionDir(userData)
+    const sessionDir = findWorktreeSessionDir()
     if (sessionDir === undefined) {
       await snap(page, 'send-failed-state.png')
       const leftover = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '').catch(() => '<gone>')
@@ -259,18 +246,9 @@ test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名�
   } finally {
     console.log('[renderer-console]\n' + consoleLog.join('\n'))
     try {
-      writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
+      writeFileSync(join(EVIDENCE_DIR, `renderer-console-${Date.now()}.log`), consoleLog.join('\n'), 'utf8')
     } catch {
-      // 留痕失败不影响清理
+      // 留痕失败不影响收尾
     }
-    await closeApp(app)
-    // userData 留盘取证（MISSING_CREDENTIAL 隔离环境无 LLM 键——用户消息落盘面离线核查；
-    // 路径回写证据目录供审计）
-    try {
-      writeFileSync(join(EVIDENCE_DIR, 'user-data-path.txt'), userData, 'utf8')
-    } catch {
-      // 留痕失败不影响清理
-    }
-    rmSync(wsDir, { recursive: true, force: true })
   }
 })

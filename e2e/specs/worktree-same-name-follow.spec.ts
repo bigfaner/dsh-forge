@@ -5,28 +5,27 @@
 //   · 同名默认下创建：路径 = 所配 worktree 目录/worktree 名（真 git worktree add 落位）。
 // data 锚：分支输入 placeholder = feat/my-branch；worktree 输入 = [data-dswt-worktree-input]；
 // 提交 = [data-dswt-create-submit]；chip/menu 锚同 1.19。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态，单用例 spec = 每跑批一次冷启）。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.20/001-same-name-follow'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main） */
-function makeGitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-20-follow-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t120@test', '-c', 'user.name=t120', ...args], { cwd, stdio: 'pipe' })
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t120@test', '-c', 'user.name=t120', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.20 same-name follow fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  return dir
 }
 
 /** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
@@ -38,25 +37,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-/** 注册项目（轮询至就绪——1.19 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'follow-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'follow-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -89,53 +74,44 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.20 UI：worktree 名同名默认跟随（三输入保留，可覆盖）', async () => {
+test('1.20 UI：worktree 名同名默认跟随（三输入保留，可覆盖）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-20-follow-'))
-  const wsDir = makeGitRepo()
-  const app = await launchHost({ userData })
-  try {
-    const { page } = app
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
-    await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+  const { page, wsDir } = sharedLaunch
+  await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
 
-    await pickMenuRow(page, '新建 worktree…')
-    await expect(createDialog(page)).toBeVisible()
+  await pickMenuRow(page, '新建 worktree…')
+  await expect(createDialog(page)).toBeVisible()
 
-    // ── AC1：未手改 → worktree 名 = 分支名同名跟随；分支变化即同步 ──
-    await branchInput(page).fill('topic-a')
-    await expect(worktreeInput(page)).toHaveValue('topic-a')
-    await branchInput(page).fill('topic-b')
-    await expect(worktreeInput(page)).toHaveValue('topic-b')
-    await snap(page, 'follow-default.png')
+  // ── AC1：未手改 → worktree 名 = 分支名同名跟随；分支变化即同步 ──
+  await branchInput(page).fill('topic-a')
+  await expect(worktreeInput(page)).toHaveValue('topic-a')
+  await branchInput(page).fill('topic-b')
+  await expect(worktreeInput(page)).toHaveValue('topic-b')
+  await snap(page, 'follow-default.png')
 
-    // ── AC2：手改 worktree 名 → 脱离跟随（分支变化不覆盖用户值） ──
-    await worktreeInput(page).fill('my-lab')
-    await branchInput(page).fill('topic-c')
-    await expect(worktreeInput(page)).toHaveValue('my-lab')
-    await snap(page, 'detached-after-manual-edit.png')
+  // ── AC2：手改 worktree 名 → 脱离跟随（分支变化不覆盖用户值） ──
+  await worktreeInput(page).fill('my-lab')
+  await branchInput(page).fill('topic-c')
+  await expect(worktreeInput(page)).toHaveValue('my-lab')
+  await snap(page, 'detached-after-manual-edit.png')
 
-    // ── AC2 恢复跟随：手改值清回分支同名 → 分支变化恢复跟随 ──
-    await worktreeInput(page).fill('topic-c')
-    await branchInput(page).fill('topic-d')
-    await expect(worktreeInput(page)).toHaveValue('topic-d')
-    await snap(page, 'resume-follow-on-same-name.png')
+  // ── AC2 恢复跟随：手改值清回分支同名 → 分支变化恢复跟随 ──
+  await worktreeInput(page).fill('topic-c')
+  await branchInput(page).fill('topic-d')
+  await expect(worktreeInput(page)).toHaveValue('topic-d')
+  await snap(page, 'resume-follow-on-same-name.png')
 
-    // ── AC3：同名默认下创建 → 路径 = 所配目录/worktree 名（基准 main = 检出分支，无风险框） ──
-    await branchInput(page).fill('topic-create')
-    await expect(worktreeInput(page)).toHaveValue('topic-create')
-    await createDialog(page).locator('[data-dswt-create-submit]').click()
-    await expect
-      .poll(async () => (await listEntries(page, wsDir)).some((entry) => entry.name === 'topic-create'), {
-        timeout: 30_000,
-        message: '创建后清单应含同名 worktree topic-create',
-      })
-      .toBe(true)
-    const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'topic-create')
-    expect(created?.path, '创建路径 = 所配目录/worktree 名（尾段同名）').toContain('/topic-create')
-    await snap(page, 'created-same-name.png')
-  } finally {
-    await closeApp(app.app)
-  }
+  // ── AC3：同名默认下创建 → 路径 = 所配目录/worktree 名（基准 main = 检出分支，无风险框） ──
+  await branchInput(page).fill('topic-create')
+  await expect(worktreeInput(page)).toHaveValue('topic-create')
+  await createDialog(page).locator('[data-dswt-create-submit]').click()
+  await expect
+    .poll(async () => (await listEntries(page, wsDir)).some((entry) => entry.name === 'topic-create'), {
+      timeout: 30_000,
+      message: '创建后清单应含同名 worktree topic-create',
+    })
+    .toBe(true)
+  const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'topic-create')
+  expect(created?.path, '创建路径 = 所配目录/worktree 名（尾段同名）').toContain('/topic-create')
+  await snap(page, 'created-same-name.png')
 })

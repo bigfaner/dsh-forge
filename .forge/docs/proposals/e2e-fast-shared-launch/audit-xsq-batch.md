@@ -66,6 +66,28 @@
 
 
 
+## 批次三b：worktree 族余 7 份（本批次）
+
+全部迁移共享 launch 形态，**零退役**（逐用例复核：全部为行为/写径/守卫断言，无 unit 等价覆盖的纯文案面）。7 份均单用例形态，冷启点 7 → 7（无削减收益；价值 = 形态收敛 + 重播种/crash 自动重启机械统一）。
+
+| spec | 用例数 | 冷启点 | 裁定 |
+|---|---|---|---|
+| worktree-p1-guards-1-31 | 1 | 1 → 1 | 保留（点选时点确认三场景 + 零会话副作用） |
+| worktree-pending-receipt-retire-1-6-k3 | 1 | 1 → 1 | 保留（回执退役 + 零 pending 卡挂——发送落盘判读） |
+| worktree-pure-selection-1-29 | 1 | 1 → 1 | 保留（快速切换 + 发送落所选树） |
+| worktree-risk-confirmation | 1 | 1 → 1 | 保留（点选时点风险确认 + 新建基准确认） |
+| worktree-row-interlude | 1 | 1 → 1 | 保留（切项目折返序列 + 发送落 Y） |
+| worktree-same-name-follow | 1 | 1 → 1 | 保留（同名跟随三态 + 创建落位） |
+| worktree-workspace-membership-1-28 | 1 | 1 → 1 | 保留（树内会话挂工作区投影） |
+
+适配点（同批次三a）：夹具工作区即 git 仓本体；k3 落盘判读扫共享 userData 根（片段 = wsDir 末段小写归一——cwd 分组目录名为扁平化路径，且 mkdtemp 后缀随机大小写须两侧同归一）；pure-selection/row-interlude 会话开户判读同末段口径；membership 落盘取证扫 wt-a 段；row-interlude 非 git 折返项目为用例内临时 tmp 目录独立注册/清理。
+
+### 真机对账（workers=2）
+
+- 基线（原始形态，临时副本，`003-batch3b/baseline-run1.log`，4.0m）：4 passed / 3 failed——pure-selection「建树零新增 wt-a 会话」、membership「首条消息应落会话日志」与迁移形态同断言同红（**存量红**）；p1-guards 红在 launch.ts:349 TypeError（launch 层基建抖动，5.9s 快速失败，隔离重跑 `baseline-p1guards-retry.log` 绿）。
+- 迁移后全批（`003-batch3b/migrated-run2-final.log`，4.3m）：**5 passed / 2 failed**，失败 = pure-selection / membership，与基线逐例同断言——存量红，零迁移回归。
+- 迁移过程顺带修复迁移判读适配缺陷（非存量）：k3 落盘判读初版用全路径片段（扁平化目录名不含斜杠，miss）+ 二版末段未小写归一（mkdtemp 随机大小写 miss）——两处修正后 k3 独立与全批均绿（`migrated-k3-fixed2-run.log` 40.0s）。
+
 ## 批次范围
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。

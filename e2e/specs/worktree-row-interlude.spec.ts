@@ -3,21 +3,25 @@
 // → 选树 Y → composer 发送 → 会话必须落 Y（显示 = 实际生效，AGENTS 3.4）。
 // 闸证据：点选后 pending 翻转 true→false（window.__dshForgeWorktreeSwitchGate）。
 // 夹具/助手与 1.29 同构（隔离仓库 + 产品弹窗建树——流程 A 闭环前置；非 git 项目 = 无 .git 纯目录）。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；非 git 折返项目为用例内临时 tmp 目录
+//（独立于夹具工作区，用例内注册/清理）；会话开户判读改扫共享 userData 根
+//（dsh-forge-shared-launch-ud-*）内 dsh-home，以夹具段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
 import { findFixtureSession } from '../support/session-files.js'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/binding-derivation/1.9/003-project-row-interlude'
 mkdirSync(EVIDENCE_DIR, { recursive: true })
 
-function makeGitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-row-interlude-repo-'))
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；worktree 经产品弹窗创建，见流程 A）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
   const git = (args: string[]): void => {
     execFileSync('git', ['-c', 'user.email=t133@test', '-c', 'user.name=t133', ...args], { cwd: dir, stdio: 'pipe' })
   }
@@ -25,7 +29,6 @@ function makeGitRepo(): string {
   writeFileSync(join(dir, 'README.md'), 'row interlude fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  return dir
 }
 
 async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise<unknown> {
@@ -36,24 +39,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'orch-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'orch-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -135,24 +125,30 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
   return raw?.data?.binding ?? raw?.binding ?? undefined
 }
 
+/** 共享 launch 形态会话开户判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
+ *  ——本 worker 独立持有）内各 dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
+function sharedFindSession(fixtureSegment: string): { readonly sessionId: string } | undefined {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const dshHome = join(tmpdir(), name, 'dsh-home')
+    const found = findFixtureSession(dshHome, fixtureSegment)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
-test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → 发送落 Y（composer 闸 pending 翻转在场）', async () => {
+test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → 发送落 Y（composer 闸 pending 翻转在场）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-row-interlude-'))
-  const dshHome = join(userData, 'dsh-home')
-  const wsDir = makeGitRepo()
+  const { page, wsDir } = sharedLaunch
   const plainDir = mkdtempSync(join(tmpdir(), 'dsh-forge-row-interlude-plain-'))
   const wtA = join(wsDir, '.forge', 'worktrees', 'wt-a')
   const wtB = join(wsDir, '.forge', 'worktrees', 'wt-b')
-  const app = await launchHost({ userData })
   const consoleLog: string[] = []
+  page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
+  page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
   try {
-    const { page } = app
-    page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
-    page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
     await expect(chip(page).first(), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
     const _baseRoot = await attachedSessions(page, wsDir, wsDir)
     await createWorktreeViaDialog(page, wsDir, 'feat-a', 'wt-a')
@@ -238,7 +234,7 @@ test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → �
     let wtBSessionId = ''
     await expect
       .poll(async () => {
-        const found = findFixtureSession(dshHome, 'wt-b')
+        const found = sharedFindSession('wt-b')
         if (found !== undefined) wtBSessionId = found.sessionId
         return wtBSessionId
       }, { timeout: 60_000, message: 'wt-b 会话应开户（盘侧 cwd 分组）' })
@@ -250,11 +246,10 @@ test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → �
   } finally {
     console.log('[renderer-console]\n' + consoleLog.join('\n'))
     try {
-      writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
+      writeFileSync(join(EVIDENCE_DIR, `renderer-console-${Date.now()}.log`), consoleLog.join('\n'), 'utf8')
     } catch {
-      // 留痕失败不影响清理
+      // 留痕失败不影响收尾
     }
-    await closeApp(app.app)
-    rmSync(userData, { recursive: true, force: true })
+    rmSync(plainDir, { recursive: true, force: true })
   }
 })
