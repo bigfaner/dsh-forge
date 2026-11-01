@@ -23,7 +23,7 @@ export const PRESET_PATCH_FILE_NAMES: Readonly<Record<PresetPatchKind, string>> 
   cordis: 'cordis.patch.yml',
   expedition: 'expedition.patch.yml',
   blitz: 'blitz.patch.yml',
-  hr: 'hr.patch.yml',
+  hr: 'headhunter.patch.yml',
 }
 
 /** 四底稿全文（未物化——customSkillDirs 占位符/平台门 !!js 原样，物化在 overlay.ts） */

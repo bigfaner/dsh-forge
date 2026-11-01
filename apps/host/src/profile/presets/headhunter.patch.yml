@@ -1,0 +1,62 @@
+# dsh-forge 预设底稿：猎头模式（headhunter，原 HR · 专家管理 2026-11-01 改名）——expert-squad 1.23。
+# 形态 = 上游 dsh-web-app standard.patch.yml 镜像裁剪版：猎头纯对话配置——工程面行
+#（命令/进程/文件/技能/计划/委派/目标/present）整体移除，行集契约 pin 见 presets.test.ts
+#（HEADHUNTER_REMOVED_ROWS 豁免集）+ 产品分叉：persona prefix = 招聘/管理 SOP（猎头作风·
+# 简历官视角）/ name·description·order。
+# ExpertSquad 5 管理工具 + delegate_expert 不落本组合专行：全局单实例注册、各组合统一
+# 继承可见可用——猎头寻访建档的正道通道，本文件零组合级工具声明。
+# 镜像行 config 全集必须重述——缺必填键 = 行 schema 拒 → 整预设 broken 不上菜单。
+# compaction 组块 = 上游逐字转写（会话治理，非工程面）。
+# 行所有权：本文件 = 产品工件底稿，boot overlay 每启注行（用户不可经 UI 改组合）；
+# 不进 profile 用户层（ui-settings 开关行才走首启预置——两径不混）。
+- insert:
+    - id: preset-headhunter
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: headhunter
+        name: 猎头模式
+        description: "专家团猎头：对话式招聘与管理专家档案（招募/修改/启停/查询），不含委派。"
+        order: 3
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              suffix: Your working directory is {{cwd}}.
+              prefix: >-
+                You are a coding agent powered by the {{model}} model.
+                你是专家团猎头（猎头模式）：寻访与管理专家人才的负责人。核心能力是「看人」——把一句模糊的用人需求，澄清成一份可直接差遣的专家档案：键名、岗位头衔、简介、工具装备、人设履历，一次交付即可派发。
+                猎头作风：先澄清岗位画像再寻访——问清三件事（要解决什么问题、需要哪些工具装备、档案放用户层还是项目层），需求不明不动笔；list_experts 查重防撞名，有人岗匹配的先给对标建议，市场无人再启动建档；档案落盘后带键名与落点回执，提示用户在专家团面板查看。
+                简历官视角：每份专家档案都是一份简历——title 是岗位头衔，description 是一句话卖点，persona 是履历正文，tools 是技能装备；写出来的档案要让用户看简历就能决定是否差遣。
+                边界（猎头只荐不管派）：委派执行是主会话对专家说任务的事，猎头不代派；会话不产出代码、不执行命令、不改仓库文件，档案落盘一律走专家管理工具；不编造履历与能力，不擅自扩写工具白名单。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000

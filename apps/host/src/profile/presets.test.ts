@@ -62,6 +62,22 @@ const blitzPersona = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.blit
 /** 产品分叉行（镜像 diff 豁免——差集断言另立）与产品增量行（上游没有） */
 const FORKED_ROWS = new Set(['persona', 'skill-filesystem'])
 const PRODUCT_ROWS = new Set(['plugin-forge', 'plugin-forge-spec', 'md-mermaid'])
+/** 猎头工程面移除集（纯对话配置——命令/进程/文件/技能/计划/委派/目标/present 整体移除） */
+const HEADHUNTER_REMOVED_ROWS = new Set([
+  'tool-bash',
+  'tool-pwsh',
+  'tool-fs',
+  'tool-fs-search',
+  'tool-jobs',
+  'skill-filesystem',
+  'tool-skill',
+  'command-goal',
+  'tool-goal',
+  'planning',
+  'delegation',
+  'present',
+  'tool-plugin-manager',
+])
 
 describe('底稿前置（环境门）', () => {
   it('上游 standard.patch.yml 在场（profile.dev 物化树——缺席 = 环境缺口，先 pnpm -C apps/host/profile.dev install）', () => {
@@ -190,43 +206,46 @@ for (const preset of ['expedition', 'blitz'] as const) {
   })
 }
 
-describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件零感知）', () => {
+describe('headhunter.patch.yml 底稿（expert-squad 1.23：猎头模式预设装配——原 HR · 专家管理 2026-11-01 改名，插件零感知）', () => {
   const text = readFileSync(join(PRESETS_DIR, PRESET_PATCH_FILE_NAMES.hr), 'utf8')
   const rows = pluginRowBlocks(text)
-  /** HR 产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
+  /** 猎头产品增量行（上游没有——机械 diff 豁免面；expert-squad 不落组合专行，
    *  全工具走全局单实例注册全组合继承） */
   const HR_PRODUCT_ROWS = new Set(PRODUCT_ROWS)
 
-  it('预设声明行：agent-preset 包名 + id hr / name（中文直出）/ description / order 3（远征·突击之后）', () => {
-    expect(text).toContain('    - id: preset-hr')
+  it('预设声明行：agent-preset 包名 + id headhunter / name 猎头模式 / description / order 3（远征·突击之后）', () => {
+    expect(text).toContain('    - id: preset-headhunter')
     expect(text).toContain("      name: '@deepseek-ai/dsh-agent-preset'")
-    expect(text).toContain('        id: hr')
-    expect(text).toContain('        name: HR · 专家管理')
+    expect(text).toContain('        id: headhunter')
+    expect(text).toContain('        name: 猎头模式')
     expect(text).toContain('        description: "')
     expect(text).toContain('        order: 3')
   })
 
-  it('standard 基础行 ↔ 上游机械 diff 一致（分叉行外逐字节——行集不缺不增）', () => {
-    expect([...rows.keys()].filter((id) => !HR_PRODUCT_ROWS.has(id))).toEqual([...upstreamRows.keys()])
+  it('行集 = 上游全量镜像 − 猎头工程面移除集（纯对话配置：命令/进程/文件/技能/计划/委派/目标/present 整体移除）', () => {
+    expect([...rows.keys()].filter((id) => HR_PRODUCT_ROWS.has(id))).toEqual([])
+    const expected = [...upstreamRows.keys()].filter((id) => !HEADHUNTER_REMOVED_ROWS.has(id)).sort()
+    expect([...rows.keys()].sort()).toEqual(expected)
     for (const [id, block] of upstreamRows) {
-      if (FORKED_ROWS.has(id)) continue
-      expect(rows.get(id), `hr 行 ${id} ↔ 上游漂移`).toBe(block)
+      if (FORKED_ROWS.has(id) || HEADHUNTER_REMOVED_ROWS.has(id)) continue
+      expect(rows.get(id), `headhunter 行 ${id} ↔ 上游漂移`).toBe(block)
     }
   })
 
-  it('persona 分叉：HR 招聘/管理 SOP 四层结构（角色锚词 + HR 作风 + 纪律句全 preset 同句 + ≤12 行）', () => {
+  it('persona 分叉：猎头招聘/管理 SOP（角色锚 + 猎头作风 + 简历官视角 + 只荐不管派边界；零编码纪律句）', () => {
     const persona = rows.get('persona')!
     expect(persona).toContain('              suffix: Your working directory is {{cwd}}.')
     expect(persona).toContain('              prefix: >-')
     expect(persona).toContain('                You are a coding agent powered by the {{model}} model.')
-    expect(persona).toContain('专家团 HR')
-    expect(persona).toMatch(/HR 作风：/)
-    expect(persona).toContain('行为纪律：')
-    expect(persona).toContain('反模式禁令：')
-    // 纪律句逐字一致（dual-mode-overhaul 同径：全 preset 互补不冲突）
-    expect(lineOf(persona, '行为纪律：')).toBe(lineOf(expeditionPersona, '行为纪律：'))
+    expect(persona).toContain('专家团猎头')
+    expect(persona).toMatch(/猎头作风：/)
+    expect(persona).toContain('简历官视角')
+    expect(persona).toContain('猎头只荐不管派')
+    // 猎头纯对话配置：编码纪律句（全 preset 共享的行为/思维纪律）不随猎头 persona
+    expect(persona).not.toContain('行为纪律：')
+    expect(persona).not.toContain('反模式禁令：')
     const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
-    expect(bodyLines).toHaveLength(6)
+    expect(bodyLines).toHaveLength(4)
   })
 
   it('工具面 = 无 expert-squad 组合专行（全局单实例注册全组合继承，无组合级排除面）；excludeTools/denyTools 残留清零', () => {
@@ -245,8 +264,8 @@ describe('hr.patch.yml 底稿（expert-squad 1.23：HR 预设装配——插件�
     expect(text).not.toContain('@dsh-forge/plugin-forge')
     expect(text).not.toContain('{{plugin-forge')
     expect(text).not.toContain('bindingsFile')
-    // skill-filesystem 回归上游裸形态（HR 组合物理不含 forge 技能目录）
-    expect(rows.get('skill-filesystem')).toBe("          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'")
+    // skill-filesystem 随工程面移除集整体退役（猎头纯对话配置——档案读写走管理工具）
+    expect(rows.has('skill-filesystem')).toBe(false)
   })
 
   it('底稿零 dogfood 专用行（llm-pi-ai/agent-default-model 不入产品底稿——同远征/突击）', () => {
@@ -262,7 +281,7 @@ describe('底稿装载（presets.ts）', () => {
     expect(patches!.cordis).toContain('- id: agent-preset-registry')
     expect(patches!.expedition).toContain('    - id: preset-expedition')
     expect(patches!.blitz).toContain('    - id: preset-blitz')
-    expect(patches!.hr).toContain('    - id: preset-hr')
+    expect(patches!.hr).toContain('    - id: preset-headhunter')
   })
 
   it('模块同邻锚：sibling presets/ 命中即取（不落 repo 回退）', () => {

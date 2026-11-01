@@ -259,12 +259,12 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(text).toContain("    - id: preset-blitz\n      name: '@deepseek-ai/dsh-agent-preset'")
     expect(text).toContain('        id: blitz\n        name: 突击模式')
     expect(text).toContain('        order: 2')
-    expect(text).toContain("    - id: preset-hr\n      name: '@deepseek-ai/dsh-agent-preset'")
-    expect(text).toContain('        id: hr\n        name: HR · 专家管理')
+    expect(text).toContain("    - id: preset-headhunter\n      name: '@deepseek-ai/dsh-agent-preset'")
+    expect(text).toContain('        id: headhunter\n        name: 猎头模式')
     expect(text).toContain('        order: 3')
     // 预设顺序 = 声明序（registry 菜单 order 排序数据面）
     expect(text.indexOf('preset-expedition')).toBeLessThan(text.indexOf('preset-blitz'))
-    expect(text.indexOf('preset-blitz')).toBeLessThan(text.indexOf('preset-hr'))
+    expect(text.indexOf('preset-blitz')).toBeLessThan(text.indexOf('preset-headhunter'))
   })
 
   it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core,blitz]', () => {
