@@ -194,6 +194,85 @@ describe('AC4 submitTask success：转移 + record files/gate/commit + 相位重
   })
 })
 
+// ───────── blocked verdict restore（blocked-verdict-restore-primitive）：blocked 卡 success 直达结算 ─────────
+// 转移矩阵已放行 blocked→completed（agent 面）；submit 层：blocked 卡 result=success 提交成功
+// （summary 必带——无因结算拒绝），恢复钩子/相位重算照常挂；blocked→blocked 再阻塞仍拒。
+describe('blocked verdict restore：blocked 卡 success 直达结算', () => {
+  it('blocked 卡 result=success → completed 直达：submit 记录含 summary 与 from/to 审计 + 恢复钩子 + 相位重算', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'blocked' }) // 源卡 blocked（fix 已解决，主会话判完成）
+    seedTask(h!.db, 'f', '2.1', { status: 'blocked' }) // 后继 blocked（前置 = 1.1）——恢复钩子对象
+    seedEdge(h!.db, 't-f-2.1', 't-f-1.1')
+    const r = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: '阻塞已解决：fix-1 修复落地，主会话裁决直达结算',
+      gate: { compile: true, fmt: true, lint: true, test: true },
+      sessionId: 's-main',
+    })
+    expect(r).toEqual({ taskId: 't-f-1.1', status: 'completed', restored: [{ slug: 'f', localId: '2.1' }] })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'completed' }])
+    expect(
+      rows(`SELECT verb, from_status, to_status, reason, summary, actor, session_id FROM task_records WHERE task_id = 't-f-1.1'`),
+    ).toEqual([
+      {
+        verb: 'submit',
+        from_status: 'blocked',
+        to_status: 'completed',
+        reason: null,
+        summary: '阻塞已解决：fix-1 修复落地，主会话裁决直达结算',
+        actor: 'plugin-tool',
+        session_id: 's-main',
+      },
+    ])
+    // 相位重算：[1.1 completed, 2.1 auto-restore → pending] → tasks
+    expect(
+      h!.db.prepare<unknown[], { feature_status: string }>(`SELECT feature_status FROM features WHERE slug = 'f'`).get(),
+    ).toEqual({ feature_status: 'tasks' })
+    expect(h!.events.emitted).toEqual([{ projectId: P() }])
+  })
+
+  it('blocked 卡 success 无 summary → ERR_SUMMARY_REQUIRED（无因结算拒绝，先于转移校验）+ 零写入', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'blocked' })
+    for (const summary of [undefined, '', '  ']) {
+      const err = await submit({
+        projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+        result: 'success', summary, sessionId: 's',
+      }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(SummaryRequiredError)
+      expect((err as SummaryRequiredError).code).toBe('ERR_SUMMARY_REQUIRED')
+    }
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'blocked' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([]) // 零写入
+  })
+
+  it('既有径回归：in_progress success/blocked 语义不变；blocked→blocked 再阻塞仍拒（范围边界 pin）', async () => {
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '1.1', { status: 'in_progress' })
+    const ok = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
+      result: 'success', summary: '常规结算', sessionId: 's',
+    })
+    expect(ok.status).toBe('completed')
+    seedTask(h!.db, 'f', '1.2', { status: 'in_progress' })
+    // 直写种行后同步回置相位（存储快照 ≡ 推导值——相位守卫前置，直写不触发派生）
+    h!.db.prepare(`UPDATE features SET feature_status = 'in-progress' WHERE slug = 'f'`).run()
+    const blk = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.2' },
+      result: 'blocked', reason: '受阻——fix 链承接', sessionId: 's',
+    })
+    expect(blk.status).toBe('blocked')
+    seedTask(h!.db, 'f', '1.3', { status: 'blocked' })
+    const errBB = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.3' },
+      result: 'blocked', reason: '再阻塞', sessionId: 's',
+    }).catch((e: unknown) => e)
+    expect(errBB).toBeInstanceOf(InvalidTransitionError)
+    expect((errBB as InvalidTransitionError).data).toMatchObject({ current: 'blocked', to: 'blocked', face: 'agent' })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.3'`)).toEqual([{ task_status: 'blocked' }])
+  })
+})
+
 describe('AC5 恢复钩子：反查 idx_edges_prerequisite + 前置全满足才 auto-restore + 边不删', () => {
   it('fix 链全流程（真实动词链）：submitTask blocked → addTask block-source → fix 完成 → 源自动恢复', async () => {
     seedFeature(h!.db, { slug: 'fix', status: 'in-progress' })
