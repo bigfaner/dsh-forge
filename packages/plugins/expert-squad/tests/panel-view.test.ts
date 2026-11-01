@@ -341,6 +341,34 @@ describe("openPluginConfigTab 导航序列", () => {
   });
 });
 
+// ── 「⚙ 配置」跳转官方导航缝（pluginNavigation.openBundle——插件管理器详情页正门）──
+describe("pluginConfigJumpOf 官方导航缝", () => {
+  it("缝在场：解析器返回跳转闭包，调用即 openBundle(@dsh-forge/expert-squad)", async () => {
+    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
+    const calls: string[] = [];
+    const resolve = pluginConfigJumpOf({
+      reflect: {
+        get: (name: string) =>
+          name === "pluginNavigation"
+            ? { openBundle: (pkg: string) => { calls.push(pkg); } }
+            : undefined,
+      },
+    });
+    const jump = resolve();
+    expect(typeof jump).toBe("function");
+    jump!();
+    expect(calls).toEqual(["@dsh-forge/expert-squad"]);
+  });
+
+  it("缝缺席/形状漂移：解析返回 undefined（降级 DOM 导航先例，不炸）", async () => {
+    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
+    expect(pluginConfigJumpOf({ reflect: { get: () => undefined } })()).toBeUndefined();
+    expect(pluginConfigJumpOf({ reflect: { get: () => { throw new Error("absent"); } } })()).toBeUndefined();
+    expect(pluginConfigJumpOf({ reflect: { get: () => ({ openBundle: 42 }) } })()).toBeUndefined();
+    expect(pluginConfigJumpOf({})()).toBeUndefined();
+  });
+});
+
 describe("delegate 装配降级提示（run-state 读口观测面）", () => {
   it("degraded：可见提示条（role=status + data 标记），携降级原因与委派不可用文案", () => {
     const html = renderPanel({ delegateNotice: "subagents-absent" });

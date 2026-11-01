@@ -270,6 +270,11 @@ export interface ExpertPanelAppProps {
   readonly summon?: SummonOpener
   /** delegate 装配探针（测试注入；缺省 = GET run-state 读口 fetch）。 */
   readonly delegateProbe?: () => Promise<DelegateAssemblySnapshot | undefined>
+  /**
+   * 「配置」跳转官方导航缝解析器（pluginNavigation.openBundle——点击时点惰性解析，
+   * 不缓存；返回 undefined = 缝缺席，降级 openPluginConfigTab DOM 导航先例）。
+   */
+  readonly configJump?: () => (() => void) | undefined
   /** 候选目录探针（测试注入；缺省 = GET candidates 读口 fetch）。 */
   readonly catalogProbe?: () => Promise<CandidateCatalogSnapshot | undefined>
   /** 「设置>模型」目录装载器（provider/model 下拉选项源——remote.session.modelCatalog 惰性
@@ -458,8 +463,17 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
 
   const phase = state.phase.kind === "error" ? "error" : state.phase.kind
   const onRetry = useCallback(() => controller?.retry(), [controller])
-  // 「配置」跳转（D2）：官方设置壳三连点导航——宿主未组 settings 域 = 触发钮缺席静默
-  const onOpenConfig = useCallback(() => openPluginConfigTab(), [])
+  // 「配置」跳转（D2）：官方缝优先——plugin-manager pluginNavigation.openBundle 定位本插件
+  // 详情页（plugins.bundle.config「默认 Agent 选项」在屏）；缝缺席 = 降级既有设置壳 DOM
+  // 导航先例（旧装配容缺）。宿主未组任一缝 = 静默不动作。
+  const onOpenConfig = useCallback(() => {
+    const jump = props.configJump?.();
+    if (jump !== undefined) {
+      jump();
+      return;
+    }
+    openPluginConfigTab();
+  }, [props.configJump])
 
   return (
     <div className="dswf-expert-panel" data-dswf-expert-panel="">
@@ -907,7 +921,7 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
             召唤
           </button>
         )}
-        {/* 「配置」跳转（D2）：召唤钮右侧 → 官方设置壳本插件配置 tab「默认 Agent 选项」 */}
+        {/* 「配置」跳转（D2）：召唤钮右侧 → 插件管理器 @dsh-forge/expert-squad 详情页（默认 Agent 选项） */}
         {props.onOpenConfig === undefined ? null : (
           <button
             type="button"
