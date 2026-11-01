@@ -240,12 +240,13 @@ describe('headhunter.patch.yml 底稿（expert-squad 1.23：猎头模式预设�
     expect(persona).toContain('专家团猎头')
     expect(persona).toMatch(/猎头作风：/)
     expect(persona).toContain('简历官视角')
+    expect(persona).toContain('用人部门对齐')
     expect(persona).toContain('猎头只荐不管派')
     // 猎头纯对话配置：编码纪律句（全 preset 共享的行为/思维纪律）不随猎头 persona
     expect(persona).not.toContain('行为纪律：')
     expect(persona).not.toContain('反模式禁令：')
     const bodyLines = persona.match(/^ {16}\S.*$/gm)!.filter((l) => !l.includes('You are a coding agent'))
-    expect(bodyLines).toHaveLength(4)
+    expect(bodyLines).toHaveLength(5)
   })
 
   it('工具面 = 无 expert-squad 组合专行（全局单实例注册全组合继承，无组合级排除面）；excludeTools/denyTools 残留清零', () => {
