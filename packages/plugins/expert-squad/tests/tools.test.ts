@@ -3,7 +3,7 @@
 // 子集白名单），加行为面（recruit/update 写路径经 frontmatter 校验 fail-loud、
 // 启停工作区隔离语义经真 ExpertsRegistry + 临时目录）。
 
-import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -372,6 +372,63 @@ describe("rename_expert — 同层原子迁移", () => {
     const tools = makeTools();
     await expect(tools.rename_expert!.execute({ from: "ghost", to: "phantom" })).rejects.toThrow(/not found/);
     expect(existsSync(join(userRoot, "phantom.md"))).toBe(false);
+  });
+
+  // bug 0a295590：plugin 层走真遮蔽迁移——plugin 原档案为内容源、新键写 user 层、
+  // 内置只读文件零触碰（对齐面板 update 来源保持裁决：plugin 层回落 user 层覆写）。
+  it("plugin 层：新键落 user 层、plugin 原文件未动、刷新后新键遮蔽生效", async () => {
+    const pluginDir = join(dir, "experts-plugin");
+    mkdirSync(pluginDir, { recursive: true });
+    // 清除 beforeEach 铺的 user 层同名档案——保证该键唯一定位 plugin 层
+    rmSync(join(userRoot, "code-reviewer.md"));
+    const pluginFile = join(pluginDir, "code-reviewer.md");
+    writeFileSync(
+      pluginFile,
+      [
+        "---",
+        "name: code-reviewer",
+        'title: "内置评审"',
+        'description: "Built-in reviewer."',
+        "tools:",
+        "  - read",
+        "---",
+        "## 职责\nbuilt-in review\n",
+      ].join("\n"),
+      "utf8",
+    );
+    const layeredRegistry = new ExpertsRegistry({
+      roots: () => [
+        { origin: "plugin", dir: pluginDir },
+        { origin: "user", dir: userRoot },
+      ],
+      workspace: dir,
+    });
+    await layeredRegistry.refresh();
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry: layeredRegistry,
+        userRoot: () => userRoot,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      name: string;
+      path: string;
+    };
+    // 新键落 user 层
+    expect(result.path).toBe(join(userRoot, "diff-keeper.md"));
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(true);
+    // plugin 层只读原文件零触碰
+    expect(existsSync(pluginFile)).toBe(true);
+    expect(readFileSync(pluginFile, "utf8")).toContain("name: code-reviewer");
+    // 字段继承 + name 同步新键
+    expect(readFileSync(join(userRoot, "diff-keeper.md"), "utf8")).toContain("name: diff-keeper");
+    expect(readFileSync(join(userRoot, "diff-keeper.md"), "utf8")).toContain("built-in review");
+    // 刷新后新键在场（user 层遮蔽落点生效）；plugin 旧键文件未删、仍在其层在场（遮蔽语义零删除）
+    await layeredRegistry.refresh();
+    const listed = layeredRegistry.list({ includeDisabled: true });
+    expect(listed.find((e) => e.name === "diff-keeper")?.origin).toBe("user");
+    expect(listed.find((e) => e.name === "code-reviewer")?.origin).toBe("plugin");
+    rmSync(pluginDir, { recursive: true, force: true });
   });
 
   it("迁移恒在原归属层内：project 层档案迁入 projectRoot 落点（不落 user 层）", async () => {

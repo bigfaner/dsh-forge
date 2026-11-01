@@ -478,7 +478,7 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
   const renameTool: ExpertToolDefinition = {
     name: "rename_expert",
     description:
-      "Rename an expert key by an atomic same-layer migration (old key file is removed, a new key file is born; the immutable-after-creation rule is NOT relaxed — this is a separate migration path). The archive stays in its original layer (project → project root, user/plugin → user root); all fields and the persona body are carried over unchanged except name.",
+      "Rename an expert key by atomic migration within its layer (project/user layers: the old key file is removed and a new key file is born; plugin layer: shadowing migration — the new key file is written to the user layer while the read-only built-in file is left untouched). The immutable-after-creation rule is NOT relaxed — this is a separate migration path. All fields and the persona body are carried over unchanged except name.",
     parameters: zToJSONSchema(renameParams, "input"),
     output: {
       schema: zToJSONSchema(renameResult, "output"),
@@ -488,25 +488,23 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
     async execute(args) {
       const p = parseArgs("rename_expert", renameParams, args);
-      // 迁移恒在原归属层内（与面板 update 来源保持裁决同则）：project → projectRoot
-      // 落点（缺席报错引导 user 层），user/plugin → userRoot（遮蔽语义——plugin 层
-      // 随包只读，迁移回落 user 层覆写）。
-      const origin = registry
-        .list({ includeDisabled: true })
-        .find((entry) => entry.name === p.from)?.origin;
-      const rootDir =
-        origin === "project"
-          ? (() => {
-              const projectDir = deps.projectRoot?.() ?? null;
-              if (projectDir === null) {
-                throw new ExpertToolError(
-                  `rename_expert: expert ${p.from} lives in the project layer but the project root is unavailable (host cwd is not a project root) — cannot migrate; consider recreating via recruit_expert`,
-                );
-              }
-              return projectDir;
-            })()
-          : userRoot();
-      const oldFile = join(rootDir, `${p.from}.md`);
+      // 迁移语义按 origin 分层（与面板 update 来源保持裁决同则）：
+      // - project → projectRoot 落点（缺席报错），user → userRoot：删旧迁新（同层原子迁移）；
+      // - plugin → 真遮蔽迁移：以 plugin 层原档案（registry 定位的 sourcePath，非 userRoot
+      //   拼接）为内容源，新键写 user 层——内置只读文件零触碰、无删除动作，刷新后新键
+      //   遮蔽 plugin 旧键（bug 0a295590）。
+      const entry = registry.list({ includeDisabled: true }).find((e) => e.name === p.from);
+      const projectDirOf = (): string => {
+        const projectDir = deps.projectRoot?.() ?? null;
+        if (projectDir === null) {
+          throw new ExpertToolError(
+            `rename_expert: expert ${p.from} lives in the project layer but the project root is unavailable (host cwd is not a project root) — cannot migrate; consider recreating via recruit_expert`,
+          );
+        }
+        return projectDir;
+      };
+      const rootDir = entry === undefined ? userRoot() : entry.origin === "project" ? projectDirOf() : userRoot();
+      const oldFile = entry?.origin === "plugin" ? entry.sourcePath : join(rootDir, `${p.from}.md`);
       const newFile = join(rootDir, `${p.to}.md`);
       if (!existsSync(oldFile)) {
         throw new ExpertToolError(
@@ -540,8 +538,8 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       const verdict = parseExpertFile(newFile, content);
       if (!verdict.ok) throw new ExpertToolError(`rename_expert: ${verdict.reason}`);
       writeFileSync(newFile, content, "utf8");
-      rmSync(oldFile);
-      await registry.refresh(); // 所见即所得：list 面新键可见、旧键消失
+      if (entry?.origin !== "plugin") rmSync(oldFile); // plugin 层只读不动（遮蔽迁移无删除）
+      await registry.refresh(); // 所见即所得：list 面新键可见、旧键被遮蔽或消失
       return renameResult.parse({ name: p.to, path: newFile });
     },
   };
