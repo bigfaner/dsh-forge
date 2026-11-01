@@ -11,13 +11,15 @@
 // hero chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；创建弹窗 =
 // data-dswt-worktree-input / data-dswt-branch-input / data-dswt-create-submit；
 // 会话行 = [data-dswf-session]。
+// e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态，单用例 spec = 每跑批一次冷启）。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost, stablePhase, waitShellReady } from '../support/launch.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { stablePhase, waitShellReady } from '../support/launch.js'
 import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/binding-derivation/1.9/003-hero-chip'
@@ -27,12 +29,12 @@ mkdirSync(EVIDENCE_DIR, { recursive: true })
  * 隔离 git 仓库夹具（真 git CLI——含 upstream 使 ahead/behind 非零）：
  * 主树 main = ahead 1 / behind 1（本地独有提交 + upstream 独有提交）；
  * wt-a 经产品创建弹窗建立（流程 A），检出 feat-a。
+ * 共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。
  */
-function makeGitRepo(): string {
+function makeGitRepo(dir: string): void {
   const git = (args: string[], cwd: string): void => {
     execFileSync('git', ['-c', 'user.email=chip@test', '-c', 'user.name=chip', ...args], { cwd, stdio: 'pipe' })
   }
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-chip-repo-'))
   writeFileSync(join(dir, 'README.md'), 'chip fixture\n')
   git(['init', '-b', 'main'], dir)
   git(['add', '.'], dir)
@@ -54,7 +56,6 @@ function makeGitRepo(): string {
   writeFileSync(join(dir, 'AHEAD.md'), 'local only\n')
   git(['add', '.'], dir)
   git(['commit', '-m', 'ahead'], dir)
-  return dir
 }
 
 /** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
@@ -66,25 +67,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-/** 注册项目（轮询至就绪——1.17 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'chip-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'chip-repo',
+})
 
 const heroChip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -195,21 +182,16 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §2.3.1 形态 + 漂移 banner', async () => {
+test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §2.3.1 形态 + 漂移 banner', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-chip-'))
-  const wsDir = makeGitRepo()
+  const { page, wsDir } = sharedLaunch
   const git = (args: string[]): void => {
     execFileSync('git', args, { cwd: wsDir, stdio: 'pipe' })
   }
-  const app = await launchHost({ userData })
   const consoleLog: string[] = []
   try {
-    const { page } = app
     page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
     page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
     await expect(heroChip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
     await expect.poll(async () => (await heroChip(page).count()) > 0 ? await heroChip(page).first().textContent() : '', {
       timeout: 30_000,
@@ -313,15 +295,12 @@ test('hero-chip UI（推导制）：chip 实时分支 + 内联 ahead/behind + §
     await expect(driftBanner(page), '切回后漂移 banner 应消失（判定随渲染现算）').toBeHidden({ timeout: 30_000 })
     await snap(page, 'drift-banner-gone.png')
   } finally {
-    // 判读留痕：runner stdout（Tee 日志）+ 证据目录双落
+    // 判读留痕：runner stdout（Tee 日志）+ 证据目录双落（app/夹具清理归 fixture 层收尾）
     console.log('[renderer-console]\n' + consoleLog.join('\n'))
     try {
       writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
     } catch {
       // 留痕失败不影响清理
     }
-    await closeApp(app.app)
-    rmSync(userData, { recursive: true, force: true })
-    rmSync(wsDir, { recursive: true, force: true })
   }
 })

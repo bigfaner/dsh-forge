@@ -5,28 +5,27 @@
 //   · 创建失败：表单保持打开 + 错误行呈现（不静默吞错）。
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；提交 = [data-dswt-create-submit]；
 // 错误行 = [data-dswt-create-error]（1.24 新增）。
+// e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态，单用例 spec = 每跑批一次冷启）。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/worktree-branch-management/1.24/001-create-follow-error'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main） */
-function makeGitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-24-follow-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t124@test', '-c', 'user.name=t124', ...args], { cwd, stdio: 'pipe' })
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t124@test', '-c', 'user.name=t124', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.24 create follow fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  return dir
 }
 
 /** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
@@ -38,25 +37,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-/** 注册项目（轮询至就绪——1.19 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'follow-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'follow-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -111,85 +96,76 @@ async function snap(page: Page, name: string): Promise<void> {
   }
 }
 
-test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', async () => {
+test('1.24 UI：同名去重 + 创建成功自动跟进 + 失败错误呈现', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-24-follow-'))
-  const wsDir = makeGitRepo()
-  const app = await launchHost({ userData })
-  try {
-    const { page } = app
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
-    await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+  const { page, wsDir } = sharedLaunch
+  await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
 
-    // ── 场景 A：同名创建（分支 = worktree 名）→ chip/菜单行单一名称（不再「x · x」） ──
-    await pickMenuRow(page, '新建 worktree…')
-    await expect(createDialog(page)).toBeVisible()
-    await branchInput(page).fill('dup-row')
-    await expect(worktreeInput(page)).toHaveValue('dup-row') // 同名默认跟随
-    await createDialog(page).locator('[data-dswt-create-submit]').click()
+  // ── 场景 A：同名创建（分支 = worktree 名）→ chip/菜单行单一名称（不再「x · x」） ──
+  await pickMenuRow(page, '新建 worktree…')
+  await expect(createDialog(page)).toBeVisible()
+  await branchInput(page).fill('dup-row')
+  await expect(worktreeInput(page)).toHaveValue('dup-row') // 同名默认跟随
+  await createDialog(page).locator('[data-dswt-create-submit]').click()
 
-    await expect
-      .poll(async () => (await listEntries(page, wsDir)).some((entry) => entry.name === 'dup-row'), {
-        timeout: 30_000,
-        message: '创建后清单应含 dup-row',
-      })
-      .toBe(true)
+  await expect
+    .poll(async () => (await listEntries(page, wsDir)).some((entry) => entry.name === 'dup-row'), {
+      timeout: 30_000,
+      message: '创建后清单应含 dup-row',
+    })
+    .toBe(true)
 
-    // ── 场景 B：创建成功自动跟进——表单关闭 + chip 选中态切到新 worktree（同名 → 单段） ──
-    await expect(createDialog(page), '创建成功后表单关闭').not.toBeVisible()
-    await expect(chip(page).first(), 'chip 切至新 worktree（同名去重：单段「dup-row」，无「dup-row · dup-row」）')
-      .toHaveText(/dup-row/)
-    const chipText = await chip(page).first().textContent()
-    expect(chipText, '同名去重（chip）').not.toContain('dup-row · dup-row')
-    await snap(page, 'chip-dedup-follow.png')
+  // ── 场景 B：创建成功自动跟进——表单关闭 + chip 选中态切到新 worktree（同名 → 单段） ──
+  await expect(createDialog(page), '创建成功后表单关闭').not.toBeVisible()
+  await expect(chip(page).first(), 'chip 切至新 worktree（同名去重：单段「dup-row」，无「dup-row · dup-row」）')
+    .toHaveText(/dup-row/)
+  const chipText = await chip(page).first().textContent()
+  expect(chipText, '同名去重（chip）').not.toContain('dup-row · dup-row')
+  await snap(page, 'chip-dedup-follow.png')
 
-    // 菜单行同名去重
-    await chip(page).first().click()
-    const dupRow = heroMenu(page).getByText('dup-row', { exact: false }).first()
-    await expect(dupRow, '菜单行呈现新 worktree').toBeVisible()
-    const rowText = (await dupRow.textContent()) ?? ''
-    expect(rowText, '同名去重（菜单行）').not.toContain('dup-row · dup-row')
-    await snap(page, 'menu-row-dedup.png')
-    await page.keyboard.press('Escape')
+  // 菜单行同名去重
+  await chip(page).first().click()
+  const dupRow = heroMenu(page).getByText('dup-row', { exact: false }).first()
+  await expect(dupRow, '菜单行呈现新 worktree').toBeVisible()
+  const rowText = (await dupRow.textContent()) ?? ''
+  expect(rowText, '同名去重（菜单行）').not.toContain('dup-row · dup-row')
+  await snap(page, 'menu-row-dedup.png')
+  await page.keyboard.press('Escape')
 
-    // 创建跟进选中（bug 05c712a4 后语义：选中确认即 openWorkspace 开户该树 blank；
-    // 跨分支确认待决期间选中态不变——自动跟进无人工确认，不开户）
-    const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'dup-row')
-    expect(created, '新 worktree 路径在场').toBeTruthy()
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, created!.path), {
-        timeout: 30_000,
-        message: '创建跟进不自动开户（跨分支确认待决——确认前选中态不变）',
-      })
-      .toBe(0)
+  // 创建跟进选中（bug 05c712a4 后语义：选中确认即 openWorkspace 开户该树 blank；
+  // 跨分支确认待决期间选中态不变——自动跟进无人工确认，不开户）
+  const created = (await listEntries(page, wsDir)).find((entry) => entry.name === 'dup-row')
+  expect(created, '新 worktree 路径在场').toBeTruthy()
+  await expect
+    .poll(async () => attachedSessions(page, wsDir, created!.path), {
+      timeout: 30_000,
+      message: '创建跟进不自动开户（跨分支确认待决——确认前选中态不变）',
+    })
+    .toBe(0)
 
-    // 零 checkout 语义不回归：主树 HEAD 恒 = main
-    expect(headBranch(wsDir), '主树 HEAD 不动').toBe('main')
+  // 零 checkout 语义不回归：主树 HEAD 恒 = main
+  expect(headBranch(wsDir), '主树 HEAD 不动').toBe('main')
 
-    // ── 场景 C：创建失败——表单保持打开 + 错误行呈现（不静默） ──
-    await pickMenuRow(page, '新建 worktree…')
-    await expect(createDialog(page)).toBeVisible()
-    await branchInput(page).fill('fail-row')
-    // 自定义路径指向不存在的外部卷 → git worktree add 失败（git 会自建中间目录，
-    // 同仓内不存在父目录路径不构成失败——须卷级缺失才确定性失败）
-    await createDialog(page).locator('[data-dswt-custom-path]').click()
-    await customPathInput(page).fill('Q:\\dsh-e2e-no-such-volume\\fail-row')
-    await createDialog(page).locator('[data-dswt-create-submit]').click()
-    await expect(createError(page), '失败错误行呈现（不静默吞错）').toBeVisible()
-    await expect(createError(page)).toContainText('创建失败')
-    await expect(createDialog(page), '失败后表单保持打开').toBeVisible()
-    // 场景 C 取证：实机截帧在错误呈现相位恒超时（run6-8 三轮实证，渲染忙）——
-    // 退 DOM 级证据（错误行/弹窗全文本 + 表单字段值，落跑批日志可考）
-    console.log('[1.24-scene-c] error-row =', await createError(page).textContent())
-    console.log('[1.24-scene-c] dialog-text =', (await createDialog(page).innerText()).replaceAll('\n', ' | '))
-    console.log('[1.24-scene-c] branch =', await branchInput(page).inputValue())
-    await page.waitForTimeout(1500) // 渲染稳定退避
-    await snap(page, 'create-failure-error.png')
+  // ── 场景 C：创建失败——表单保持打开 + 错误行呈现（不静默） ──
+  await pickMenuRow(page, '新建 worktree…')
+  await expect(createDialog(page)).toBeVisible()
+  await branchInput(page).fill('fail-row')
+  // 自定义路径指向不存在的外部卷 → git worktree add 失败（git 会自建中间目录，
+  // 同仓内不存在父目录路径不构成失败——须卷级缺失才确定性失败）
+  await createDialog(page).locator('[data-dswt-custom-path]').click()
+  await customPathInput(page).fill('Q:\\dsh-e2e-no-such-volume\\fail-row')
+  await createDialog(page).locator('[data-dswt-create-submit]').click()
+  await expect(createError(page), '失败错误行呈现（不静默吞错）').toBeVisible()
+  await expect(createError(page)).toContainText('创建失败')
+  await expect(createDialog(page), '失败后表单保持打开').toBeVisible()
+  // 场景 C 取证：实机截帧在错误呈现相位恒超时（run6-8 三轮实证，渲染忙）——
+  // 退 DOM 级证据（错误行/弹窗全文本 + 表单字段值，落跑批日志可考）
+  console.log('[1.24-scene-c] error-row =', await createError(page).textContent())
+  console.log('[1.24-scene-c] dialog-text =', (await createDialog(page).innerText()).replaceAll('\n', ' | '))
+  console.log('[1.24-scene-c] branch =', await branchInput(page).inputValue())
+  await page.waitForTimeout(1500) // 渲染稳定退避
+  await snap(page, 'create-failure-error.png')
 
-    // 清理失败残留（无——git 未落树）；主树 HEAD 复核
-    expect(headBranch(wsDir), '失败路径主树 HEAD 仍不动').toBe('main')
-  } finally {
-    await closeApp(app.app)
-  }
+  // 清理失败残留（无——git 未落树）；主树 HEAD 复核
+  expect(headBranch(wsDir), '失败路径主树 HEAD 仍不动').toBe('main')
 })

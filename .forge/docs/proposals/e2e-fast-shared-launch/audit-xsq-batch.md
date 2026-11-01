@@ -38,6 +38,34 @@
 
 真机 electron run（workers=2，--project=desktop，4 spec 35 用例）：见 `logs/e2e-fast-shared-launch/1.5/003-batch2a/run1.log + elapsed.txt`（批末回填对比值）。
 
+## 批次三a：worktree 族前 8 份（commit 见 git 历史）
+
+全部迁移共享 launch 形态，**零退役**（逐用例复核：全部为行为/写径/编排断言，无 unit 等价覆盖的纯文案面）。8 份 spec 均单用例形态，冷启点 8 → 8（每 spec 1，无削减收益；本批次价值 = 形态收敛 + 重播种/crash 自动重启机械统一）。
+
+| spec | 用例数 | 冷启点 | 裁定 |
+|---|---|---|---|
+| worktree-base-branch-order | 1 | 1 → 1 | 保留（排序/去重/默认选中语义——UI 选项面行为断言） |
+| worktree-capability-absent-matrix-1-6-k5 | 1 | 1 → 1 | 保留（非 git 域官方原流零拒绝 + 发送落盘判读；迁移顺带修复存量测试代码 ReferenceError——existsSync 未导入，见下） |
+| worktree-confirm-latch-1-34 | 1 | 1 → 1 | 保留（点选时点确认 + 闩锁静默切换 + 持久化） |
+| worktree-create-follow-error | 1 | 1 → 1 | 保留（同名去重 + 自动跟进 + 错误呈现写径） |
+| worktree-create-stale-toast | 1 | 1 → 1 | 保留（bug dbbef6a8 回归守卫） |
+| worktree-hero-chip | 1 | 1 → 1 | 保留（chip 激活/belonging 断言） |
+| worktree-hero-default-anchor | 1 | 1 → 1 | 保留（默认回填纯展示零编排守卫） |
+| worktree-mandatory-bind-1-27 | 1 | 1 → 1 | 保留（1.27 推导制绑定闭环——会话 cwd = 所选树） |
+
+适配点：夹具工作区即 git 仓本体（seedWorkspace 同参播种，首启/重播种/crash 重启统一）；capability-absent 的发送落盘判读改扫共享 userData 根（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions 按夹具路径段锚定；其余 spec 直接消费 sharedLaunch 句柄，零额外适配。
+
+### 真机对账（workers=2）
+
+- 基线（原始形态，8 spec 8 用例）：3 passed / 5 failed（`logs/e2e-fast-shared-launch/1.6/001-baseline/run1.log`，228.3s）。
+- 迁移后：3 passed / 5 failed，**失败 spec 集与基线逐例一致**（run1.log 在 `004-migrated-run2/`，315.2s——红例的发送重试/超时路径拉长批时）。
+- 逐例归因：
+  - create-follow-error / hero-chip / hero-default-anchor：迁移形态与基线**同断言同红**——存量红（产品侧），零迁移回归。
+  - capability-absent：基线红在存量测试代码 ReferenceError（existsSync 未导入，原始形态同红）；迁移补导入后暴露其下真实红「发送未落盘」。原始形态（仅补同一导入的临时基线副本）同样红在「发送未落盘」（`006-baseline-attribution/run1.log`）——**存量红，零迁移回归**；本迁移顺带修复存量测试代码缺陷。
+  - mandatory-bind：基线（原始形态）红（click 超时）；临时原始形态副本复跑绿（`006-baseline-attribution`）；迁移形态 3/3 红（`004` / `005-isolated-retry` / `007-mb-third-sample`，后两次隔离 run 断点稳定在「wt-a 应入清单且携带 workspaceId」）。两形态均出现红 = 产品 1.27 流程 A 不稳定红（存量），但迁移形态红率显著高于原始形态样本（3/3 vs 1/2）——**迁移耦合不排除，上报待跟进**（单用例 spec 共享形态与原始形态环境近同，疑点偏向产品侧流程 A 时序，需产品侧归因）。
+
+
+
 ## 批次范围
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
