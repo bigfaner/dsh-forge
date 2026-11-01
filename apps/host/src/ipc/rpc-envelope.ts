@@ -20,16 +20,19 @@ export type RpcEnvelopeDiagSink = (payload: DiagEventPayload) => void
 
 /** 信封诊断装配缝（ALS 读 trace_id + emit 出口 + causeStack 生境门——main.ts 装配一次；
  *  测试可重置）。causeStack = dev 生境（DSH_FORGE_DEV_PROFILE）回包附原始栈（app-observability
- *  方案 6）——生产 false 恒缺席（零税）。 */
+ *  方案 6）——生产 false 恒缺席（零税）。slowMs = 慢 RPC 诊断阈值（bug 2a284e9d——
+ *  hop+handler 时长超阈落 ipc-rpc-slow 诊断；缺省 1000ms）。 */
 let diagAls: DiagContextStore | undefined
 let diagSink: RpcEnvelopeDiagSink | undefined
 let causeStackEnabled = false
+let slowRpcMs = 1000
 
 /** 装配信封诊断缝（main.ts 单点调用；undefined 出口 = 卸载面，测试重置用） */
-export function configureRpcEnvelopeDiag(config: { als?: DiagContextStore; sink?: RpcEnvelopeDiagSink; causeStack?: boolean } | undefined): void {
+export function configureRpcEnvelopeDiag(config: { als?: DiagContextStore; sink?: RpcEnvelopeDiagSink; causeStack?: boolean; slowMs?: number } | undefined): void {
   diagAls = config?.als
   diagSink = config?.sink
   causeStackEnabled = config?.causeStack === true
+  slowRpcMs = config?.slowMs ?? 1000
 }
 
 /** 埋点构造（信封内单点——两路错误同构；emit 异常吞掉，埋点永不破信封语义） */
@@ -67,15 +70,25 @@ export function serializeRpcError(error: unknown): RpcErrorPayload | undefined {
  * 非 typed 错误原样上抛（Electron 拒绝面，renderer 侧 fail-loud 可见）。
  * 两路错误均先落诊断事件（含栈）——单点埋点覆盖全部自有 RPC 面（1.2）。
  * trace_id（preload invoke 第三参，string）在场 → handler 执行包进诊断 ALS。
+ * 慢 RPC 诊断（bug 2a284e9d）：sentAt（preload invoke 第四参，发出时刻 Date.now）
+ * 在场 → hop = handler 开始 - sentAt（main 事件循环排队时延）；durationMs = handler
+ * 执行时长；hop+duration 超阈值落 warn 诊断（ipc-rpc-slow）——排队拥塞 vs 服务慢
+ * 一眼可判。channel = 注册通道名（命名面 diagnostics 更可判；缺席占位 'forge:rpc'）。
  */
 export function rpcEnvelope<Req, Res>(
   handler: RpcDomainHandler<Req, Res>,
+  channel?: string,
 ): (event: unknown, ...args: unknown[]) => Promise<RpcResult<Res>> {
   return async (_event, ...args) => {
     const traceId = args[1]
+    const channelName = channel ?? 'forge:rpc'
+    const sentAt = typeof args[2] === 'number' && Number.isFinite(args[2]) ? args[2] : undefined
+    const startMs = Date.now()
     const invoke = async (): Promise<RpcResult<Res>> => {
       try {
-        return { ok: true, data: await handler(args[0] as Req) }
+        const result = { ok: true, data: await handler(args[0] as Req) } as RpcResult<Res>
+        emitSlowRpc(startMs, sentAt, channelName)
+        return result
       } catch (error) {
         emitHandlerError(error)
         const payload = serializeRpcError(error)
@@ -92,5 +105,30 @@ export function rpcEnvelope<Req, Res>(
       return runWithDiagContext(store, { traceId }, invoke)
     }
     return invoke()
+  }
+}
+
+/** 慢 RPC 诊断 emit（bug 2a284e9d——hop + handler 时长双段；阈值下面零噪音；emit 永不破 RPC） */
+function emitSlowRpc(startMs: number, sentAt: number | undefined, channelName: string): void {
+  if (diagSink === undefined) return
+  const durationMs = Date.now() - startMs
+  const hopMs = sentAt !== undefined ? Math.max(0, startMs - sentAt) : undefined
+  if (hopMs === undefined) {
+    if (durationMs < slowRpcMs) return
+  } else if (hopMs + durationMs < slowRpcMs) {
+    return
+  }
+  try {
+    diagSink({
+      level: 'warn',
+      process: 'main',
+      event: 'ipc-rpc-slow',
+      message: `${channelName} slow rpc: hop=${hopMs === undefined ? 'unknown' : `${hopMs}ms`} handler=${durationMs}ms`,
+      channel: channelName,
+      durationMs,
+      ...(hopMs !== undefined ? { hopMs } : {}),
+    })
+  } catch {
+    // 埋点失败不破 RPC 信封（红线①——诊断面零反压业务）
   }
 }

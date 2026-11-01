@@ -1510,6 +1510,14 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
       }
       return unwrapRpcEnvelope(invoke(BUGS_LIST_CHANNEL, query))
     },
+    // 慢取数诊断（bug 2a284e9d）：console warn——client bundle 诊断豁免面（serialize 回退先例同径）
+    onDiag: (payload) => {
+      try {
+        console.warn(`[dswf-bug] ${payload.event}`, { message: payload.message, durationMs: payload.durationMs })
+      } catch {
+        // 诊断面零风险
+      }
+    },
   })
 
   /** 1.3 chip 点击 → Bug 台账 pane（官方 openReference 路由缝——见 BugSourceWithOpenReference） */
@@ -1542,6 +1550,8 @@ export function buildBugReferenceSource(deps: BugSourceWiringDeps): BugSourceWit
           return unwrapRpcEnvelope<readonly BugCardSource[]>(invoke(BUGS_LIST_CHANNEL, { projectId }))
             .then((rows) => {
               source.seedSnapshots(Array.isArray(rows) ? rows : [])
+              // bug 2a284e9d：同一次预取种项目台账——candidates 首键即本地优先零等待
+              if (Array.isArray(rows)) source.seedLedger(projectId, rows)
             })
             .catch(() => undefined)
         })

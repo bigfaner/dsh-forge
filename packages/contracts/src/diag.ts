@@ -36,4 +36,10 @@ export interface DiagEventPayload {
   projectCount?: number
   /** 同文重复折叠计数（12③ 噪音治理——被折叠掉的重复行数；首次行/未折叠缺席） */
   repeat?: number
+  /** 通道名（ipc-rpc-slow 慢 RPC 诊断——bug 2a284e9d） */
+  channel?: string
+  /** handler 执行时长 ms（ipc-rpc-slow 慢 RPC 诊断） */
+  durationMs?: number
+  /** renderer→main 排队时延 ms（ipc-rpc-slow——sentAt 缺席时缺席） */
+  hopMs?: number
 }

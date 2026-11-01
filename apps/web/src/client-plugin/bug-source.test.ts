@@ -335,7 +335,8 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     const outcome = source.onPick({ candidate: { name: 'scope:open', value: 'scope:open' }, session: SESSION, position: 'inline', via: 'menu', action: 'drill' })
     expect(outcome).toBe('handled')
     await source.candidates(SESSION, request())
-    expect(listBugs).toHaveBeenLastCalledWith({ projectId: 'proj-1', status: ['open'] })
+    // bug 2a284e9d 起零缓存现查后另发一次后台全量刷新（无 status 入参）——断言口径调用在列而非末次
+    expect(listBugs).toHaveBeenCalledWith({ projectId: 'proj-1', status: ['open'] })
   })
 
   it('header：状态面包屑四 crumb，当前口径标 current', () => {
@@ -343,6 +344,90 @@ describe('createBugReferenceSource（source 契约面——注入取数，零直
     const crumbs = source.header?.(SESSION, { query: '', drilled: false })
     expect(crumbs?.map((c) => c.value)).toEqual(['scope:all', 'scope:open', 'scope:fixed', 'scope:unresolved'])
     expect(crumbs?.find((c) => c.current)?.value).toBe('scope:all')
+  })
+})
+
+describe('candidates 本地优先（bug 2a284e9d——台账缓存即时过滤，RPC 只做后台刷新）', () => {
+  /** 永不决取数（模拟主进程拥塞——RPC 挂起候选也不得等待） */
+  const pendingListBugs = vi.fn(() => new Promise<readonly BugCardSource[]>(() => undefined)) as unknown as (q: unknown) => Promise<readonly BugCardSource[]>
+
+  function localDeps(overrides: { listBugs?: unknown; extra?: Partial<Parameters<typeof createBugReferenceSource>[0]> } = {}) {
+    const listBugs = overrides.listBugs ?? pendingListBugs
+    const source = createBugReferenceSource({
+      projectId: () => 'proj-1',
+      listBugs: listBugs as (q: unknown) => Promise<readonly BugCardSource[]>,
+      now: () => NOW,
+      ...overrides.extra,
+    })
+    return { listBugs: listBugs as ReturnType<typeof vi.fn>, source }
+  }
+
+  it('seedLedger 种底后 candidates 即时返回本地候选（listBugs 在途也出结果）', async () => {
+    const { listBugs, source } = localDeps()
+    source.seedLedger('proj-1', [card(), card({ bugId: 'b-7', summary: '旧 bug', bugStatus: 'fixed', createdAt: '2026-09-01T00:00:00.000Z' })])
+    const rows = await source.candidates(SESSION, request())
+    expect(rows.map((r) => r.name)).toEqual(['b-42', 'b-7'])
+    expect(listBugs).toHaveBeenCalledWith({ projectId: 'proj-1' }) // 后台刷新 = 全量口径（无 search/status）
+  })
+
+  it('本地关键词过滤：summary/bugDesc 大小写不敏感子串（六文本字段面）', async () => {
+    const { source } = localDeps()
+    source.seedLedger('proj-1', [card(), card({ bugId: 'b-9', summary: 'unrelated', bugDesc: 'Race condition in picker', bugStatus: 'open' })])
+    const hit = await source.candidates(SESSION, request({ query: '双开' }))
+    expect(hit.map((r) => r.name)).toEqual(['b-42'])
+    const hitEn = await source.candidates(SESSION, request({ query: 'race' }))
+    expect(hitEn.map((r) => r.name)).toEqual(['b-9'])
+    const miss = await source.candidates(SESSION, request({ query: '不存在的关键词' }))
+    expect(miss).toEqual([])
+  })
+
+  it('状态口径本地过滤：fixed 口径只出 fixed 子集（缓存面不过 RPC）', async () => {
+    const { source } = localDeps()
+    source.seedLedger('proj-1', [card(), card({ bugId: 'b-7', summary: '旧 bug', bugStatus: 'fixed', createdAt: '2026-09-01T00:00:00.000Z' })])
+    source.setBugStatusScope('fixed')
+    const rows = await source.candidates(SESSION, request())
+    expect(rows.map((r) => r.name)).toEqual(['b-7'])
+  })
+
+  it('后台刷新入缓存：刷新 resolve 后下一次 candidates 用上新台账（含新增行）', async () => {
+    let rows: readonly BugCardSource[] = [card()]
+    const { source } = localDeps({ listBugs: vi.fn(() => Promise.resolve(rows)) })
+    source.seedLedger('proj-1', [card()])
+    await source.candidates(SESSION, request()) // 触发后台刷新（取到旧表）
+    rows = [card(), card({ bugId: 'b-new', summary: '新增 bug', bugStatus: 'open' })]
+    await source.candidates(SESSION, request()) // 触发第二轮刷新（取到新表并入缓存）
+    await Promise.resolve()
+    const next = await source.candidates(SESSION, request())
+    expect(next.map((r) => r.name)).toContain('b-new')
+  })
+
+  it('零缓存回退现查：无 seedLedger 时仍等待 RPC（原语义）', async () => {
+    const { source } = localDeps({ listBugs: vi.fn(() => Promise.resolve([card()])) })
+    const rows = await source.candidates(SESSION, request({ query: '双开' }))
+    expect(rows.map((r) => r.name)).toEqual(['b-42'])
+  })
+
+  it('慢取数诊断：超阈值的候选取数落 onDiag（事件/时长在场）', async () => {
+    const diags: { event: string; durationMs: number }[] = []
+    const slow = vi.fn(() => new Promise<readonly BugCardSource[]>((r) => setTimeout(() => r([card()]), 30)))
+    const { source } = localDeps({
+      listBugs: slow,
+      extra: { now: () => Date.now(), slowRpcMs: 1, onDiag: (d) => diags.push({ event: d.event, durationMs: d.durationMs }) },
+    })
+    await source.candidates(SESSION, request())
+    expect(diags.length).toBeGreaterThanOrEqual(1)
+    expect(diags[0]?.event).toBe('bug-candidates-rpc')
+    expect(diags[0]?.durationMs).toBeGreaterThanOrEqual(1)
+  })
+
+  it('快取数不落诊断（阈值下面零噪音）', async () => {
+    const diags: unknown[] = []
+    const { source } = localDeps({
+      listBugs: vi.fn(() => Promise.resolve([card()])),
+      extra: { now: () => Date.now(), slowRpcMs: 60_000, onDiag: (d) => diags.push(d) },
+    })
+    await source.candidates(SESSION, request())
+    expect(diags).toEqual([])
   })
 })
 

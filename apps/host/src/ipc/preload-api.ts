@@ -116,14 +116,15 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     pskRotate: (): Promise<unknown> => invokeFace.invoke(PSK_ROTATE_CHANNEL) as Promise<unknown>,
     /** forge:* 域 RPC 调用（通道 ∈ allowlist 才转发；未列通道 fail-loud 拒绝）。
      *  trace_id 单点生成（1.2 链 A——renderer 侧唯一生成点，三镜像消费面零改动）：
-     *  以第三参随 invoke 入 main，rpcEnvelope 信封单点读入诊断 ALS。 */
+     *  以第三参随 invoke 入 main，rpcEnvelope 信封单点读入诊断 ALS。
+     *  sentAt 单点盖戳（bug 2a284e9d——第四参发出时刻 Date.now，信封算 hop 排队时延）。 */
     invoke: (channel: ForgeChannel, payload?: unknown): Promise<unknown> => {
       if (!(FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(channel)) {
         throw new Error(
           `[preload] forge RPC 通道不在 allowlist，拒绝调用：${channel}（唯一源 = @dsh-forge/contracts channels；新通道须三处一体：contracts → web/rpc → core 域）`,
         )
       }
-      return invokeFace.invoke(channel, payload, newTraceId())
+      return invokeFace.invoke(channel, payload, newTraceId(), Date.now())
     },
     /**
      * forge:events/tasks-changed 订阅（3.1——Interface 7 推送面 preload 半边；
