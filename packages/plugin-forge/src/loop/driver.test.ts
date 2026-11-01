@@ -2724,6 +2724,11 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     })
     await bare.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(bare.driver)
+    // 防恒真：先钉事件量非空，再对已知 scenario 逐一断言零 expertKey（与 mapped 侧同构）
+    expect(bare.progressCalls.length).toBeGreaterThan(0)
+    for (const scenario of ['startup/from-scratch', 'claim/new', 'claim/spawned', 'task/complete', 'pool/pending', 'loop/finish-all']) {
+      expect(bare.progressCalls.find((e) => e.scenario === scenario)?.expertKey, scenario).toBeUndefined()
+    }
     expect(bare.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
   })
 
