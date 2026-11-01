@@ -7,8 +7,8 @@
 //      无 .git 祖先时以 workspace 本身为 project root——临时工作区等非 git 目录同径
 //      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
 //      （ctx.experts 正门，bug 7b1c9ed4）；
-//   ④ tool 面（fix-10）：registerExpertTools（5 管理 + list_tools/list_skills）+
-//      registerDelegateExpertTool
+//   ④ tool 面（fix-10）：registerExpertTools（recruit/update/rename + enable/disable
+//      + list_experts/list_tools/list_skills）+ registerDelegateExpertTool
 //      经官方 ctx.tools.register 正门接线（D1 注册面零改动）。工具面全组合可见可用
 //      （全局单实例注册即全局继承——HR preset 无专行，守卫微件态已撤销）。
 

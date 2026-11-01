@@ -1,4 +1,4 @@
-// 管理 tool 面（tech-design §7 tool 面 / D1 全局注册）：4 管理 + list 取用，
+// 管理 tool 面（tech-design §7 tool 面 / D1 全局注册）：5 管理 + list 取用，
 // 动词+名词命名。每工具声明 output { schema, render }（官方 dsh-tools register
 // 门强制，annotutor tools.ts 先例）；参数/结果 zod schema 经受支持子集净化——
 // 裸 zod 产物带 $schema/minLength/anyOf/type 数组等子集外关键字会被官方 register
@@ -6,7 +6,7 @@
 // 写路径（recruit/update）经 store/frontmatter 校验（parseExpertFile /
 // validateExpertUpdate）：必填字段、禁裸 {{、name 建档后不可改、撞名 fail-loud。
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
@@ -86,6 +86,13 @@ const recruitParams = z.object({
 // update_expert 同形但无 target——编辑恒写回原层（来源保持），不换层
 const updateParams = recruitParams.omit({ target: true });
 
+// rename_expert（同层原子迁移）：from/to 均走 EXPERT_KEY 正则——新键即新档键，
+// 合法性在参数闸前置校验；撞名/旧键缺席在处理器内 fail-loud。
+const renameParams = z.object({
+  from: EXPERT_KEY.describe("Existing expert key to rename"),
+  to: EXPERT_KEY.describe("New expert key (lowercase english, must not collide with an existing key)"),
+});
+
 const enableParams = z.object({
   name: z.string().min(1).describe("Existing expert key to enable"),
 });
@@ -103,6 +110,11 @@ const recruitResult = z.object({
 });
 
 const updateResult = z.object({
+  name: z.string(),
+  path: z.string(),
+});
+
+const renameResult = z.object({
   name: z.string(),
   path: z.string(),
 });
@@ -263,6 +275,7 @@ export function serializeExpertMd(fields: ArchiveFields, personaMd: string): str
 export const EXPERT_TOOLS = [
   "recruit_expert",
   "update_expert",
+  "rename_expert",
   "enable_expert",
   "disable_expert",
   "list_experts",
@@ -299,7 +312,7 @@ function parseArgs<T extends z.ZodType>(tool: string, schema: T, args: unknown):
   return r.data;
 }
 
-/** 工厂：7 枚管理/取数 tool 定义（不注册——注册走 registerExpertTools）。 */
+/** 工厂：8 枚管理/取数 tool 定义（不注册——注册走 registerExpertTools）。 */
 export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[] {
   const { registry, userRoot } = deps;
 
@@ -375,6 +388,77 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       writeFileSync(file, content, "utf8");
       await registry.refresh(); // 所见即所得：返回时点快照已含新内容（不等 watch 异步失效）
       return updateResult.parse({ name: p.name, path: file });
+    },
+  };
+
+  const renameTool: ExpertToolDefinition = {
+    name: "rename_expert",
+    description:
+      "Rename an expert key by an atomic same-layer migration (old key file is removed, a new key file is born; the immutable-after-creation rule is NOT relaxed — this is a separate migration path). The archive stays in its original layer (project → project root, user/plugin → user root); all fields and the persona body are carried over unchanged except name.",
+    parameters: zToJSONSchema(renameParams, "input"),
+    output: {
+      schema: zToJSONSchema(renameResult, "output"),
+      render: (_args, value) => [
+        text(`expert renamed: ${(value as { name: string }).name} (${(value as { path: string }).path})`),
+      ],
+    },
+    async execute(args) {
+      const p = parseArgs("rename_expert", renameParams, args);
+      // 迁移恒在原归属层内（与面板 update 来源保持裁决同则）：project → projectRoot
+      // 落点（缺席报错引导 user 层），user/plugin → userRoot（遮蔽语义——plugin 层
+      // 随包只读，迁移回落 user 层覆写）。
+      const origin = registry
+        .list({ includeDisabled: true })
+        .find((entry) => entry.name === p.from)?.origin;
+      const rootDir =
+        origin === "project"
+          ? (() => {
+              const projectDir = deps.projectRoot?.() ?? null;
+              if (projectDir === null) {
+                throw new ExpertToolError(
+                  `rename_expert: expert ${p.from} lives in the project layer but the project root is unavailable (host cwd is not a project root) — cannot migrate; consider recreating via recruit_expert`,
+                );
+              }
+              return projectDir;
+            })()
+          : userRoot();
+      const oldFile = join(rootDir, `${p.from}.md`);
+      const newFile = join(rootDir, `${p.to}.md`);
+      if (!existsSync(oldFile)) {
+        throw new ExpertToolError(
+          `rename_expert: expert not found: ${p.from} (${oldFile}) — use list_experts to inspect available keys`,
+        );
+      }
+      if (existsSync(newFile)) {
+        throw new ExpertToolError(
+          `rename_expert: target key already exists: ${p.to} (${newFile}) — pick another key`,
+        );
+      }
+      // 读旧文件原内容 → 仅 name 换新键，其余字段与 personaMd 原样。
+      const oldContent = readExisting(oldFile);
+      const parsed = parseExpertFile(oldFile, oldContent);
+      if (!parsed.ok) throw new ExpertToolError(`rename_expert: ${parsed.reason}`);
+      const rec = parsed.record;
+      const content = serializeExpertMd(
+        {
+          name: p.to,
+          title: rec.title,
+          description: rec.description,
+          tools: rec.tools,
+          skills: rec.skills,
+          model: rec.model,
+          provider: rec.provider,
+          reasoning: rec.reasoning,
+        },
+        rec.personaMd,
+      );
+      // 写新文件前经 parseExpertFile 全量校验门（必填/裸 {{），不过不落盘。
+      const verdict = parseExpertFile(newFile, content);
+      if (!verdict.ok) throw new ExpertToolError(`rename_expert: ${verdict.reason}`);
+      writeFileSync(newFile, content, "utf8");
+      rmSync(oldFile);
+      await registry.refresh(); // 所见即所得：list 面新键可见、旧键消失
+      return renameResult.parse({ name: p.to, path: newFile });
     },
   };
 
@@ -494,10 +578,10 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
   };
 
-  return [recruitTool, updateTool, enableTool, disableTool, listTool, listToolsTool, listSkillsTool];
+  return [recruitTool, updateTool, renameTool, enableTool, disableTool, listTool, listToolsTool, listSkillsTool];
 }
 
-/** 读既有档案键（update 的旧键锚点——解析失败如实上抛原始原因）。 */
+/** 读既有档案键（update/rename 的旧键锚点——解析失败如实上抛原始原因）。 */
 function readExistingName(file: string): string {
   const content = readExisting(file);
   const parsed = parseExpertFile(file, content);
@@ -510,12 +594,12 @@ function readExisting(file: string): string {
     return readFileSync(file, "utf8");
   } catch (cause) {
     throw new ExpertToolError(
-      `update_expert: expert not readable: ${file} — ${cause instanceof Error ? cause.message : String(cause)}`,
+      `expert archive not readable: ${file} — ${cause instanceof Error ? cause.message : String(cause)}`,
     );
   }
 }
 
-/** 注册 7 枚管理/取数 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
+/** 注册 8 枚管理/取数 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
 export function registerExpertTools(registryFace: ToolRegisterFace, deps: ExpertToolsDeps): void {
   for (const tool of createExpertTools(deps)) {
     registryFace.register(tool);

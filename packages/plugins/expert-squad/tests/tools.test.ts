@@ -167,7 +167,7 @@ const RECRUIT_ARGS = {
 // ---------------------------------------------------------------------------
 
 describe("official dsh-tools register gate mirror", () => {
-  it("7 工具带 output { schema, render } 通过官方 register 门镜像", () => {
+  it("8 工具带 output { schema, render } 通过官方 register 门镜像", () => {
     const official = officialRegistry();
     expect(() => registerExpertTools(official, { registry, userRoot: () => userRoot })).not.toThrow();
     expect(official.registered.map((d) => d.name).sort()).toEqual([...EXPERT_TOOLS].sort());
@@ -178,6 +178,7 @@ describe("official dsh-tools register gate mirror", () => {
       "list_skills",
       "list_tools",
       "recruit_expert",
+      "rename_expert",
       "update_expert",
     ]);
   });
@@ -202,7 +203,9 @@ describe("official dsh-tools register gate mirror", () => {
             ? { tools: [] }
             : def.name === "list_skills"
               ? { skills: [] }
-              : { name: "x", path: "p", enabled: true };
+              : def.name === "rename_expert"
+                ? { name: "x", path: "p" }
+                : { name: "x", path: "p", enabled: true };
       const blocks = def.output.render({}, sample);
       expect(Array.isArray(blocks)).toBe(true);
       expect(blocks.length).toBeGreaterThan(0);
@@ -316,6 +319,91 @@ describe("update_expert — name 建档后不可改 + 不存在键 fail-loud", (
     await expect(
       tools.update_expert!.execute({ ...RECRUIT_ARGS, name: "ghost", title: "x", description: "y", tools: ["read"], personaMd: "p" }),
     ).rejects.toThrow(/not found/);
+  });
+});
+
+describe("rename_expert — 同层原子迁移", () => {
+  beforeEach(async () => {
+    await refresh();
+    await makeTools().recruit_expert!.execute(RECRUIT_ARGS);
+    await refresh();
+  });
+
+  it("成功迁移：旧键文件消失、新键文件在场，frontmatter 字段原样继承且 name 同步新键", async () => {
+    const tools = makeTools();
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      name: string;
+      path: string;
+    };
+    expect(result.name).toBe("diff-keeper");
+    expect(result.path).toBe(join(userRoot, "diff-keeper.md"));
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(true);
+    // registry 已 refresh：list 面新键可见、旧键消失（所见即所得）
+    expect(registry.list({ includeDisabled: true }).map((e) => e.name)).toContain("diff-keeper");
+    expect(registry.list({ includeDisabled: true }).map((e) => e.name)).not.toContain("code-reviewer");
+    // 字段原样继承 + name 同步
+    const fresh = registry.get("diff-keeper");
+    expect(fresh.title).toBe("资深评审");
+    expect(fresh.description).toBe("Runs code review on diffs and files.");
+    expect(fresh.tools).toEqual(["read", "grep"]);
+    expect(fresh.skills).toEqual(["review"]);
+    expect(fresh.personaMd).toContain("review code");
+  });
+
+  it("撞名（新键已有档案）→ fail-loud 且不留半迁移产物", async () => {
+    const tools = makeTools();
+    await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, name: "diff-keeper", title: "占位" });
+    await expect(tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })).rejects.toThrow(
+      /already exists/,
+    );
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(true);
+  });
+
+  it("新键非法（EXPERT_KEY 正则）→ 参数闸 fail-loud", async () => {
+    const tools = makeTools();
+    await expect(tools.rename_expert!.execute({ from: "code-reviewer", to: "Bad Key!" })).rejects.toThrow(
+      ExpertToolError,
+    );
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(true);
+  });
+
+  it("旧键不存在 → fail-loud 且无新文件", async () => {
+    const tools = makeTools();
+    await expect(tools.rename_expert!.execute({ from: "ghost", to: "phantom" })).rejects.toThrow(/not found/);
+    expect(existsSync(join(userRoot, "phantom.md"))).toBe(false);
+  });
+
+  it("迁移恒在原归属层内：project 层档案迁入 projectRoot 落点（不落 user 层）", async () => {
+    const projectDir = join(dir, "experts-project");
+    mkdirSync(projectDir, { recursive: true });
+    const layeredRegistry = new ExpertsRegistry({
+      roots: () => [
+        { origin: "project", dir: projectDir },
+        { origin: "user", dir: userRoot },
+      ],
+      workspace: dir,
+    });
+    await layeredRegistry.refresh();
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry: layeredRegistry,
+        userRoot: () => userRoot,
+        projectRoot: () => projectDir,
+      }).map((t) => [t.name, t]),
+    );
+    await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, target: "project" });
+    await layeredRegistry.refresh();
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      path: string;
+    };
+    expect(result.path.startsWith(projectDir)).toBe(true);
+    expect(existsSync(join(projectDir, "code-reviewer.md"))).toBe(false);
+    expect(existsSync(join(projectDir, "diff-keeper.md"))).toBe(true);
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(false);
+    await layeredRegistry.refresh();
+    const listed = layeredRegistry.list({ includeDisabled: true });
+    expect(listed.find((e) => e.name === "diff-keeper")?.origin).toBe("project");
   });
 });
 
