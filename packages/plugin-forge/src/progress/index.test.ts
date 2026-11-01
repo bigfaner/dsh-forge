@@ -53,6 +53,14 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
     expect(isForgeProgressData({ ...DATA, scenario: 42 })).toBe(false)
     expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷可解析
   })
+  it('attempt（triage 处置序号——bug df44fcfa 结构化载荷）：正整数合法；0/非整数/非 number 拒绝；缺省容忍（旧载荷）', () => {
+    expect(isForgeProgressData({ ...DATA, attempt: 1 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, attempt: 3 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, attempt: 0 })).toBe(false)
+    expect(isForgeProgressData({ ...DATA, attempt: 1.5 })).toBe(false)
+    expect(isForgeProgressData({ ...DATA, attempt: '2' })).toBe(false)
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷（无 attempt）兼容
+  })
 })
 
 describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——25 值）', () => {

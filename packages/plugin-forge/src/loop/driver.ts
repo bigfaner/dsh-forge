@@ -1272,6 +1272,8 @@ function emitProgress(
     /** 显式专家键（triage-progress-row——处置事件直携 'triage-analyst'，优先于登记表回填） */
     readonly expertKey?: string
     readonly workerSessionId?: string
+    /** 处置 attempt 序号（triage 处置族——结构化载荷透传，权威源 = book.attempts） */
+    readonly attempt?: number
     readonly scenario?: ForgeProgressScenario
     readonly note?: string
     readonly counts?: ForgeProgressCounts
@@ -1289,6 +1291,7 @@ function emitProgress(
       ...(expertKey !== undefined ? { expertKey } : {}),
       ...(event.taskTitle !== undefined ? { taskTitle: event.taskTitle } : {}),
       ...(event.workerSessionId !== undefined ? { workerSessionId: event.workerSessionId } : {}),
+      ...(event.attempt !== undefined ? { attempt: event.attempt } : {}),
       ...(event.scenario !== undefined ? { scenario: event.scenario } : {}),
       ...(event.note !== undefined ? { note: event.note } : {}),
       ...(event.counts !== undefined ? { counts: event.counts } : {}),
@@ -2321,6 +2324,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
         taskKey,
         taskTitle: task.title,
         expertKey: TRIAGE_EXPERT_KEY,
+        attempt: book.attempts,
         note: `处置分析（第 ${book.attempts} 次）`,
       })
       try {
@@ -2367,6 +2371,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
           taskTitle: task.title,
           expertKey: TRIAGE_EXPERT_KEY,
           ...(triageSessionId !== undefined ? { workerSessionId: triageSessionId } : {}),
+          attempt: book.attempts,
           note: triageDecisionNote(decision),
         })
       } catch (cause) {
@@ -2388,6 +2393,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
           taskKey,
           taskTitle: task.title,
           expertKey: TRIAGE_EXPERT_KEY,
+          attempt: book.attempts,
           note: `处置分析失败：${summary}`,
         })
         if (!invalid) {

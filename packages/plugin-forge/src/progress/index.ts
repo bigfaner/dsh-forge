@@ -124,6 +124,11 @@ export interface ForgeProgressEventData {
   readonly expertKey?: string
   /** worker 子会话 id（行点击跳转锚——spawn 成功后的事件在列） */
   readonly workerSessionId?: string
+  /**
+   * 处置 attempt 序号（triage 处置族专用——权威源 = 驱动器处置簿 book.attempts；
+   * 消费端读本字段渲染「第 n 次」，禁止从 note 人类文案反解。缺席 = 非 triage 族/旧载荷）
+   */
+  readonly attempt?: number
   /** 场景码（{major}/{minor}——值域 = FORGE_PROGRESS_SCENARIOS 单源 24 值；缺席 = 旧载荷兼容） */
   readonly scenario?: ForgeProgressScenario
   /** 叙述注记（阻塞/挂起原因摘要等——用户/agent 双端可见） */
@@ -161,6 +166,7 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
   if (raw['taskTitle'] !== undefined && typeof raw['taskTitle'] !== 'string') return false
   if (raw['expertKey'] !== undefined && typeof raw['expertKey'] !== 'string') return false
   if (raw['workerSessionId'] !== undefined && typeof raw['workerSessionId'] !== 'string') return false
+  if (raw['attempt'] !== undefined && (typeof raw['attempt'] !== 'number' || !Number.isInteger(raw['attempt']) || raw['attempt'] < 1)) return false
   if (raw['scenario'] !== undefined && (typeof raw['scenario'] !== 'string' || !SCENARIO_SET.has(raw['scenario']))) return false
   if (raw['note'] !== undefined && typeof raw['note'] !== 'string') return false
   if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false

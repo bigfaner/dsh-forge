@@ -57,6 +57,8 @@ export interface DispatchEventEntry {
   /** 执行专家键（loop-card-task-context 字段口径——triage 处置事件携 triage-analyst；缺席 = 未用类型） */
   readonly expertKey?: string
   readonly workerSessionId?: string
+  /** 处置 attempt 序号（triage 处置族专用——结构化载荷字段，缺席 = 非 triage/旧载荷） */
+  readonly attempt?: number
   readonly scenario?: string
   readonly note?: string
   readonly at: number
@@ -80,6 +82,7 @@ export function isDispatchEventEntry(value: unknown): value is DispatchEventEntr
     return false
   }
   if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false
+  if (raw['attempt'] !== undefined && (typeof raw['attempt'] !== 'number' || !Number.isInteger(raw['attempt']) || raw['attempt'] < 1)) return false
   for (const key of ['taskKey', 'taskTitle', 'expertKey', 'workerSessionId', 'scenario', 'note'] as const) {
     if (raw[key] !== undefined && typeof raw[key] !== 'string') return false
   }
@@ -122,11 +125,9 @@ export function dispatchTriageTooltipOf(hasSession: boolean): string {
   return hasSession ? '打开处置子会话' : '处置会话启动失败'
 }
 
-/** triage attempt 解析（running 事件 note「处置分析（第 n 次）」单源——缺席 = undefined 聚合面兜底 1） */
-export function dispatchTriageAttemptOf(note: string | undefined): number | undefined {
-  if (note === undefined) return undefined
-  const matched = /第 (\d+) 次/.exec(note)
-  return matched === null ? undefined : Number(matched[1])
+/** triage attempt 取值（bug df44fcfa：结构化载荷字段单源——禁从 note 人类文案反解；缺席/畸形 = undefined 聚合面兜底 1） */
+export function dispatchTriageAttemptOf(entry: DispatchEventEntry): number | undefined {
+  return entry.attempt !== undefined && Number.isInteger(entry.attempt) && entry.attempt >= 1 ? entry.attempt : undefined
 }
 
 /** 场景 minor 中文章（分组/章语义并入备注行文案——1.16 行聚合口径；键 = minor 段） */
@@ -237,7 +238,7 @@ export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]
       triage.set(`triage:${entry.taskKey}`, {
         entry, // 后写覆盖 = 最新事件（终态折入 note）
         startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at),
-        attempt: Math.max(held?.attempt ?? 1, dispatchTriageAttemptOf(entry.note) ?? 1),
+        attempt: Math.max(held?.attempt ?? 1, dispatchTriageAttemptOf(entry) ?? 1),
         ...(entry.workerSessionId !== undefined || held?.workerSessionId !== undefined
           ? { workerSessionId: entry.workerSessionId ?? held?.workerSessionId }
           : {}),

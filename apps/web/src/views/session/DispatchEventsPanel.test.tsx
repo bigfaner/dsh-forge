@@ -27,13 +27,13 @@ import {
   dispatchPanelEntriesOf,
   dispatchPanelTaskCountOf,
   dispatchWindowLost,
+  isDispatchEventEntry,
   isLoopInstanceEndEntry,
   isLoopInstanceStartEntry,
   dispatchPanelBadgeAnchor,
   dispatchPanelExpandGeometry,
   dispatchPanelBadgeGeometry,
   dispatchRowSessionOf,
-  dispatchTriageAttemptOf,
   dispatchTriageTooltipOf,
   isDispatchTriageEntry,
   type DispatchAnchorRects,
@@ -676,26 +676,29 @@ function triageEntry(overrides: Partial<DispatchEventEntry> = {}): DispatchEvent
   return entry({ verb: 'triage', scenario: 'loop/triage', expertKey: 'triage-analyst', taskKey: 'feat-x/2.5', taskTitle: 'web 进度流渲染', ...overrides })
 }
 
-describe('isDispatchTriageEntry / dispatchTriageAttemptOf / dispatchTriageTooltipOf（triage 行纯函数）', () => {
-  it('triage 判读 = verb 单源；attempt 从 note「第 n 次」解析；tooltip 两态文案', () => {
+describe('isDispatchTriageEntry / dispatchTriageTooltipOf（triage 行纯函数）', () => {
+  it('triage 判读 = verb 单源；attempt 读载荷字段（非正整数弃用——bug df44fcfa 去文案正则反解）；tooltip 两态文案', () => {
     expect(isDispatchTriageEntry(triageEntry())).toBe(true)
     expect(isDispatchTriageEntry(entry())).toBe(false)
-    expect(dispatchTriageAttemptOf('处置分析（第 2 次）')).toBe(2)
-    expect(dispatchTriageAttemptOf('决策：add-fix')).toBeUndefined()
-    expect(dispatchTriageAttemptOf(undefined)).toBeUndefined()
+    expect(dispatchEventsOf({})).toBeUndefined() // 守卫面在场占位（attempt 校验见条目守卫组）
     expect(dispatchTriageTooltipOf(true)).toBe('打开处置子会话')
     expect(dispatchTriageTooltipOf(false)).toBe('处置会话启动失败')
+  })
+  it('条目守卫：attempt 合法正整数通过；0/非整数值拒行（isDispatchEventEntry）', () => {
+    expect(isDispatchEventEntry(triageEntry({ attempt: 2 }))).toBe(true)
+    expect(isDispatchEventEntry(triageEntry({ attempt: 0 }))).toBe(false)
+    expect(isDispatchEventEntry(triageEntry({ attempt: 1.5 }))).toBe(false)
   })
 })
 
 describe('aggregateDispatchRowItems（triage 独立聚合键 triage:{taskKey}——多 attempt 折叠单行）', () => {
-  it('同 taskKey attempts 1→3 折叠单行：显示最新 n、终态折入 note、workerSessionId 最近一枚上浮', () => {
+  it('同 taskKey attempts 1→3 折叠单行：显示最新 n（载荷 attempt 字段）、终态折入 note、workerSessionId 最近一枚上浮', () => {
     const rows = aggregateDispatchRowItems([
-      triageEntry({ status: 'running', note: '处置分析（第 1 次）', at: 100 }),
-      triageEntry({ status: 'blocked', note: '处置分析失败：输出无效', at: 200 }),
-      triageEntry({ status: 'running', note: '处置分析（第 2 次）', at: 300 }),
-      triageEntry({ status: 'running', note: '处置分析（第 3 次）', at: 400 }),
-      triageEntry({ status: 'completed', note: '决策：add-fix', workerSessionId: 'ts-1', at: 500 }),
+      triageEntry({ status: 'running', attempt: 1, note: '处置分析（第 1 次）', at: 100 }),
+      triageEntry({ status: 'blocked', attempt: 1, note: '处置分析失败：输出无效', at: 200 }),
+      triageEntry({ status: 'running', attempt: 2, note: '处置分析（第 2 次）', at: 300 }),
+      triageEntry({ status: 'running', attempt: 3, note: '处置分析（第 3 次）', at: 400 }),
+      triageEntry({ status: 'completed', attempt: 3, note: '决策：add-fix', workerSessionId: 'ts-1', at: 500 }),
     ])
     expect(rows).toHaveLength(1)
     expect(rows[0]?.attempt).toBe(3) // 最新 n
@@ -708,7 +711,7 @@ describe('aggregateDispatchRowItems（triage 独立聚合键 triage:{taskKey}—
   it('聚合键独立于任务键空间：同 taskKey 的任务行与 triage 行各行其位（零劫持最新态模型）', () => {
     const rows = aggregateDispatchRowItems([
       entry({ taskKey: 'feat-x/2.5', at: 100 }),
-      triageEntry({ taskKey: 'feat-x/2.5', status: 'running', note: '处置分析（第 1 次）', at: 200 }),
+      triageEntry({ taskKey: 'feat-x/2.5', status: 'running', attempt: 1, note: '处置分析（第 1 次）', at: 200 }),
     ])
     expect(rows).toHaveLength(2)
     expect(rows.filter((r) => r.entry.taskKey === 'feat-x/2.5')).toHaveLength(2)
@@ -741,7 +744,7 @@ describe('triage 统计与轨点隔离（dispatchEventStats / dispatchPanelTaskC
 
 describe('triage 行渲染（SSR——行形态 / 点击锚 / spawn 失败非交互）', () => {
   it('行形态：{taskKey} · 处置分析（第 n 次）徽标 + 次行 note；running 轨点同构', () => {
-    const markup = body({ entries: [triageEntry({ status: 'completed', note: '决策：add-fix', workerSessionId: 'ts-1', at: 200 })], onOpenWorker: () => {} })
+    const markup = body({ entries: [triageEntry({ status: 'completed', attempt: 1, note: '决策：add-fix', workerSessionId: 'ts-1', at: 200 })], onOpenWorker: () => {} })
     expect(markup).toContain('dswf-dep-row-key">feat-x/2.5')
     expect(markup).toContain('dswf-dep-status-triage">处置分析（第 1 次）')
     expect(markup).toContain('dswf-dep-row-title">决策：add-fix') // 次行 = 终态 note（title 让位）

@@ -3799,10 +3799,10 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
     expect(triageProgress).toHaveLength(2)
     const [running, terminal] = triageProgress as [ForgeProgressEventData, ForgeProgressEventData]
-    expect(running).toMatchObject({ status: 'running', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst' })
+    expect(running).toMatchObject({ status: 'running', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: 1 })
     expect(running.note).toContain('第 1 次')
     expect(running.workerSessionId).toBeUndefined()
-    expect(terminal).toMatchObject({ status: 'completed', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1' })
+    expect(terminal).toMatchObject({ status: 'completed', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1', attempt: 1 })
     expect(terminal.note).toContain('决定创建修复任务')
     // 台账时序因果：decided（执行前）→ outcome（执行尝试后）；scenario 事件 running 先于 decided
     const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
@@ -3835,11 +3835,11 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     expect(triageProgress).toHaveLength(6) // running ×3 + 终态 ×3
     const terminals = triageProgress.filter((e) => e.status !== 'running')
     expect(terminals).toHaveLength(3)
-    for (const t of terminals) {
-      expect(t).toMatchObject({ status: 'blocked', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst' })
+    terminals.forEach((t, i) => {
+      expect(t).toMatchObject({ status: 'blocked', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: i + 1 })
       expect(t.workerSessionId).toBeUndefined()
       expect(t.note).toContain('处置分析失败')
-    }
+    })
     // 重试失败径必发 outcome（失败原因——不只进 escalation history）
     const outcomes = built.events.filter((e) => e.type === 'triage-outcome')
     expect(outcomes).toHaveLength(3)

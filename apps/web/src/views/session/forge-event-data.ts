@@ -39,6 +39,8 @@ export interface ForgeProgressEntryData {
   readonly expertKey?: string
   readonly scenario?: string
   readonly note?: string
+  /** 处置 attempt 序号（triage 处置族专用——载荷字段镜像，缺席/畸形 = 缺省） */
+  readonly attempt?: number
   readonly at: number
 }
 
@@ -75,6 +77,7 @@ export function isForgeProgressEntryData(value: unknown): value is ForgeProgress
     (raw['expertKey'] === undefined || typeof raw['expertKey'] === 'string') &&
     (raw['scenario'] === undefined || typeof raw['scenario'] === 'string') &&
     (raw['note'] === undefined || typeof raw['note'] === 'string') &&
+    (raw['attempt'] === undefined || (typeof raw['attempt'] === 'number' && Number.isInteger(raw['attempt']) && raw['attempt'] >= 1)) &&
     typeof raw['at'] === 'number' &&
     Number.isFinite(raw['at'])
   )
