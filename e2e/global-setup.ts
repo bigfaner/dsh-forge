@@ -71,10 +71,10 @@ export default async function globalSetup(): Promise<void> {
 function newestMtimeUnder(dir: string): Date | undefined {
   let newest: Date | undefined
   const walk = (cur: string): void => {
-    for (const entry of fs.readdirSync(cur, { withFileTypes: true })) {
+    for (const entry of readdirSync(cur, { withFileTypes: true })) {
       if (entry.name === 'node_modules' || entry.name === 'dist') continue
       const full = join(cur, entry.name)
-      const st = fs.statSync(full)
+      const st = statSync(full)
       if (st.isDirectory()) walk(full)
       else if (newest === undefined || st.mtime > newest) newest = st.mtime
     }
@@ -95,15 +95,15 @@ function webDistStale(): boolean {
   const distDir = join(WEB_DIR, 'dist')
   if (!existsSync(distDir)) return true
   let distNewest: Date | undefined
-  for (const entry of fs.readdirSync(distDir, { withFileTypes: true })) {
-    const st = fs.statSync(join(distDir, entry.name))
+  for (const entry of readdirSync(distDir, { withFileTypes: true })) {
+    const st = statSync(join(distDir, entry.name))
     if (distNewest === undefined || st.mtime > distNewest) distNewest = st.mtime
   }
   if (distNewest === undefined) return true
   for (const probe of ['src', 'index.html', 'vite.config.ts', 'package.json']) {
     const full = join(WEB_DIR, probe)
     if (!existsSync(full)) continue
-    const srcNewest = probe === 'src' ? newestMtimeUnder(full) : fs.statSync(full).mtime
+    const srcNewest = probe === 'src' ? newestMtimeUnder(full) : statSync(full).mtime
     if (srcNewest !== undefined && srcNewest > distNewest) return true
   }
   return false
