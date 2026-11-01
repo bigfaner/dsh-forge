@@ -37,15 +37,15 @@
 // 命中经 __xsqRpcLog 显式断言（不静默空转）。
 // 原始错误 console.error 留痕 = fix-14 设计内（降级条不直出原文——本 spec 断言条内文本）。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；data 锚单源 = expert-panel.tsx（事实表）。
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
+// 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
+// RPC 注入开关用例 try/finally 复位（stub 模式零跨用例残留）；fixme 用例不消费共享会话。
 // @feature expert-squad @web-e2e
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { registerProject } from '../support/rpc.js'
-import { dismissOnboardingModals } from '../support/modals.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
 import { SEAT_ROOT } from '../support/m3.js'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 // ── 面板/召唤锚（expert-panel.tsx data 锚——本 spec 字面量单源） ──
 const PANEL_ROW = 'button[aria-label="专家团"]'
@@ -77,49 +77,27 @@ function expertMd(name: string, title: string): string {
   ].join('\n')
 }
 
-/** 夹具工作区（两份启用 project 层档案） */
-function makeWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-summon-ws-'))
+// ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
+
+function seedWorkspace(dir: string): void {
   const expertsDir = join(dir, '.dsh', 'experts')
   mkdirSync(expertsDir, { recursive: true })
   writeFileSync(join(expertsDir, 'test-reviewer.md'), expertMd('test-reviewer', '夹具评审'))
   writeFileSync(join(expertsDir, 'data-miner.md'), expertMd('data-miner', '夹具挖掘'))
-  return dir
 }
 
-interface PanelSession {
-  readonly page: Page
-  readonly app: ElectronApplication
-  readonly pageErrors: string[]
-  readonly wsDir: string
-  readonly userData: string
-}
+const { test } = createSharedLaunchFixture({
+  seedWorkspace,
+  workspaceName: 'xsq-summon-fixture',
+})
 
-/** 启动 → 注册夹具工作区 → 激活面板（数据态收敛）。 */
-async function openPanelWithFixture(): Promise<PanelSession> {
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-summon-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const page = launched.page
-  await registerProject(page, wsDir, 'xsq-summon-fixture')
-  await dismissOnboardingModals(page)
+/** 用例内导航收敛（共享会话每用例执行——面板数据态）。 */
+async function openPanel(page: Page): Promise<void> {
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场（panellist 注册缝——召唤入口归属面）').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(CARD_ANY).first(), '卡片网格数据态（骨架收敛）').toBeVisible({ timeout: 30_000 })
-  return { page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-}
-
-/** 例终收口：closeApp + tmp 夹具清理（尽力而为）。 */
-async function closeSession(session: PanelSession): Promise<void> {
-  try {
-    await closeApp(session.app)
-  } catch {
-    /* closeApp 尽力而为——进程残留由 Job Object 整树回收兜底 */
-  }
-  rmSync(session.userData, { recursive: true, force: true })
-  rmSync(session.wsDir, { recursive: true, force: true })
 }
 
 // ── 官方 RPC 注入包装器（addInitScript 注入——页面加载前后幂等；fix-3 判例形制） ──
@@ -211,44 +189,36 @@ async function expectSummonNotice(page: Page, stagePattern: RegExp): Promise<str
 
 // ── step-1（panel-card-grid 迁出断言）：召唤钮可见可触发 ──
 
-test('@feature expert-squad summon step-1：召唤钮在面板头部可见可触发（1.21 装配 onSummon）', async () => {
+test('@feature expert-squad summon step-1：召唤钮在面板头部可见可触发（1.21 装配 onSummon）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    await expect(page.locator(PANEL_ROW), 'panellist「专家团」行在场').toBeVisible()
-    const summon = page.locator(SUMMON_BTN)
-    await expect(summon, '召唤钮在面板头部呈现（onSummon 已装配）').toBeVisible()
-    await expect(summon, '召唤钮启用态（非 busy）').toBeEnabled()
-    await expect(summon, '召唤钮文案').toHaveText('寻访')
-  } finally {
-    await closeSession(session)
-  }
+  const { page } = sharedLaunch
+  await openPanel(page)
+  await expect(page.locator(PANEL_ROW), 'panellist「专家团」行在场').toBeVisible()
+  const summon = page.locator(SUMMON_BTN)
+  await expect(summon, '召唤钮在面板头部呈现（onSummon 已装配）').toBeVisible()
+  await expect(summon, '召唤钮启用态（非 busy）').toBeEnabled()
+  await expect(summon, '召唤钮文案').toHaveText('寻访')
 })
 
 // ── 主路径（收紧判据：必须官方切换分支——降级条在场即 fail） ──
 
-test('@feature expert-squad summon 主路径：HR 预设官方会话切换（座位标签实证；降级条在场即 fail）', async () => {
+test('@feature expert-squad summon 主路径：HR 预设官方会话切换（座位标签实证；降级条在场即 fail）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    await page.locator(SUMMON_BTN).click()
-    // 官方分支证据（9d9d1bd3 收紧——本断言对任何召唤失败必红）：
-    // ① 猎头预设座位标签在场（conversation.hero.agentPreset 槽座位显显示名——官方
-    //    agentPresets/select('headhunter') 成功投影；回退形态显 id 'headhunter' 即失败）
-    await expect(
-      page.locator(HEADHUNTER_SEAT_LABEL).first(),
-      `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}——官方 select('headhunter') 成功投影）`,
-    ).toBeVisible({ timeout: 60_000 })
-    // ② 降级条恒缺席（官方分支成功形态——旧双分支判据在此废弃）
-    await expect(page.locator(SUMMON_NOTICE), '官方分支零降级引导条').toHaveCount(0)
-    // ③ 官方会话视图取代面板（openWorkspace reuse-or-create 主视图切换——面板卸载）
-    await expect(page.locator(PANEL_ROOT), '专家面板被官方会话视图取代（主视图切换）').toHaveCount(0)
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, pageErrors } = sharedLaunch
+  await openPanel(page)
+  await page.locator(SUMMON_BTN).click()
+  // 官方分支证据（9d9d1bd3 收紧——本断言对任何召唤失败必红）：
+  // ① 猎头预设座位标签在场（conversation.hero.agentPreset 槽座位显显示名——官方
+  //    agentPresets/select('headhunter') 成功投影；回退形态显 id 'headhunter' 即失败）
+  await expect(
+    page.locator(HEADHUNTER_SEAT_LABEL).first(),
+    `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}——官方 select('headhunter') 成功投影）`,
+  ).toBeVisible({ timeout: 60_000 })
+  // ② 降级条恒缺席（官方分支成功形态——旧双分支判据在此废弃）
+  await expect(page.locator(SUMMON_NOTICE), '官方分支零降级引导条').toHaveCount(0)
+  // ③ 官方会话视图取代面板（openWorkspace reuse-or-create 主视图切换——面板卸载）
+  await expect(page.locator(PANEL_ROOT), '专家面板被官方会话视图取代（主视图切换）').toHaveCount(0)
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })
 
 // ── 三路设计内降级（独立用例·显式前置——不再作为主路径通过形态） ──
@@ -270,12 +240,12 @@ test.fixme('@feature expert-squad summon 降级② preset 被拒：selectPreset 
   test.setTimeout(180_000)
 })
 
-test('@feature expert-squad summon 降级③ open 失败：session/create 注入拒绝 → 阶段化引导条', async () => {
+test('@feature expert-squad summon 降级③ open 失败：session/create 注入拒绝 → 阶段化引导条', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
+  const { page, pageErrors } = sharedLaunch
+  await openPanel(page)
+  await installRpcHarness(page)
   try {
-    const { page } = session
-    await installRpcHarness(page)
     await setRpcStub(page, 'open-refuse')
     await page.locator(SUMMON_BTN).click()
     // 注入命中证据（session/create 开路 RPC 拒绝信封确已发出）
@@ -284,32 +254,29 @@ test('@feature expert-squad summon 降级③ open 失败：session/create 注入
     await expect(page.locator(PANEL_ROOT), '面板根仍挂载').toBeVisible()
     await expect(page.locator(CARD_ANY).first(), '卡片网格仍在场').toBeVisible()
     await expect(page.locator(SUMMON_BTN), '召唤钮退出 busy 回可用').toBeEnabled({ timeout: 10_000 })
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
+    expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
   } finally {
-    await closeSession(session)
+    // 共享会话归零：注入开关复位（stub 模式零跨用例残留）
+    await setRpcStub(page, null).catch(() => undefined)
   }
 })
 
 // ── Journey 冒烟（恰一条——激活 → 网格 → 官方召唤全依序） ──
 
-test('@feature expert-squad summon 冒烟：激活面板 → 网格数据态 → 官方召唤切换 → 零降级零异常', async () => {
+test('@feature expert-squad summon 冒烟：激活面板 → 网格数据态 → 官方召唤切换 → 零降级零异常', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    // 步骤1：激活已在 openPanelWithFixture 依序完成；数据态在场
-    await expect(page.locator('.dswf-panel-title'), '面板标题').toHaveText('专家团')
-    await expect(page.locator(SUMMON_BTN), '召唤钮在场（头部三段 + 召唤入口）').toBeVisible()
-    // 召唤触发（官方分支——冒烟即主路径判据）
-    await page.locator(SUMMON_BTN).click()
-    await expect(
-      page.locator(HEADHUNTER_SEAT_LABEL).first(),
-      `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}）`,
-    ).toBeVisible({ timeout: 60_000 })
-    await expect(page.locator(SUMMON_NOTICE), '零降级引导条').toHaveCount(0)
-    // 不变量：renderer 零未捕获异常
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, pageErrors } = sharedLaunch
+  // 步骤1：激活面板；数据态在场
+  await openPanel(page)
+  await expect(page.locator('.dswf-panel-title'), '面板标题').toHaveText('专家团')
+  await expect(page.locator(SUMMON_BTN), '召唤钮在场（头部三段 + 召唤入口）').toBeVisible()
+  // 召唤触发（官方分支——冒烟即主路径判据）
+  await page.locator(SUMMON_BTN).click()
+  await expect(
+    page.locator(HEADHUNTER_SEAT_LABEL).first(),
+    `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}）`,
+  ).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator(SUMMON_NOTICE), '零降级引导条').toHaveCount(0)
+  // 不变量：renderer 零未捕获异常
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })
