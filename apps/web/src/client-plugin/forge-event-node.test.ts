@@ -504,7 +504,8 @@ describe('loop-card-task-context：ForgeProgressEntry expertKey 可选镜像（�
 })
 
 describe('triage attempt 序号镜像（bug df44fcfa——结构化载荷窄收，畸形弃字段不弃行）', () => {
-  it('载荷携带 attempt = 条目镜像；畸形 attempt（非正整数）= 字段缺省不弃行；缺省容忍（旧载荷）', () => {    const { stream } = simulate([
+  it('载荷携带 attempt = 条目镜像；畸形 attempt（非正整数）= 字段缺省不弃行；缺省容忍（旧载荷）', () => {
+    const { stream } = simulate([
       progressEvt(4, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: 1 }),
       progressEvt(5, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: 0 }),
       progressEvt(6, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: '2' }),

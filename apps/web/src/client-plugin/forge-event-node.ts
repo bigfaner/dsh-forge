@@ -242,6 +242,11 @@ function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: st
  * assistant message 是否构成正文 answer（bug 0e5eba85——官方 latestAnswer 选择口径
  * 窄镜像：含非空 text 块（tool-call/reasoning 不计正文）且不含 tool-call 块——后者
  * 官方 latestAnswer 直接判 null）。
+ *
+ * 已知窄镜像不覆盖面（均为保守向取舍，零行为改动诉求——可见性不受损）：
+ * ① 未镜像 isFinalAssistant(finalNode)——中止 turn 的收尾 assistant 仍可逃逸为顶层 answer；
+ * ② image/other 块官方 latestAnswer 计入正文，镜像忽略——多逃逸方向（不漏答，只可能多显）；
+ * ③ turn 归属用 currentTurn 快照——插话间隙到达的 append 条目可能错覆写上一 turn 的判定。
  */
 function isAnswerMessage(content: unknown): boolean {
   if (!Array.isArray(content)) return false
