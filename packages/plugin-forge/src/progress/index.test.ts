@@ -39,6 +39,11 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
     expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷（无 expertKey）兼容
     expect(isForgeProgressData({ ...DATA, expertKey: 42 })).toBe(false)
   })
+  it('triage 词（triage-progress-row）：running/终态两用合法；scenario loop/triage 合法（值域联动）', () => {
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'triage', status: 'running', taskKey: 'feat-x/1.1', at: 1 })).toBe(true)
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'triage', status: 'running', taskKey: 'feat-x/1.1', expertKey: 'triage-analyst', scenario: 'loop/triage', note: '决策：add-fix', at: 1 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, scenario: 'loop/triage' })).toBe(true)
+  })
   it('新字段校验（1.5）：taskTitle/workerSessionId/scenario 类型错 = false；缺省容忍 = true；旧载荷（无新字段）兼容', () => {
     expect(isForgeProgressData({ ...DATA, taskTitle: 7 })).toBe(false)
     expect(isForgeProgressData({ ...DATA, workerSessionId: 9 })).toBe(false)
@@ -48,12 +53,20 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
     expect(isForgeProgressData({ ...DATA, scenario: 42 })).toBe(false)
     expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷可解析
   })
+  it('attempt（triage 处置序号——bug df44fcfa 结构化载荷）：正整数合法；0/非整数/非 number 拒绝；缺省容忍（旧载荷）', () => {
+    expect(isForgeProgressData({ ...DATA, attempt: 1 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, attempt: 3 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, attempt: 0 })).toBe(false)
+    expect(isForgeProgressData({ ...DATA, attempt: 1.5 })).toBe(false)
+    expect(isForgeProgressData({ ...DATA, attempt: '2' })).toBe(false)
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷（无 attempt）兼容
+  })
 })
 
-describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——24 值）', () => {
-  it('恰 24 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认', () => {
-    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(24)
-    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(24)
+describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——25 值）', () => {
+  it('恰 25 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族', () => {
+    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(25)
+    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(25)
     expect([...FORGE_PROGRESS_SCENARIOS]).toEqual([
       'startup/from-scratch',
       'startup/resume-stopped',
@@ -74,6 +87,7 @@ describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——24 值）', (
       'loop/timeout',
       'loop/finish-all',
       'loop/stopped',
+      'loop/triage',
       'suspend/spawn-rate-limited',
       'suspend/worker-rate-limited',
       'suspend/abort-over-limit',

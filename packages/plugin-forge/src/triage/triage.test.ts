@@ -452,3 +452,18 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     expect((built.requests[0] as SpawnWorkerRequest).prompt).toContain('<no-progress>')
   })
 })
+
+// ─────────────────────────── hook 返回形状（triage-progress-row 契约定形） ───────────────────────────
+
+describe('hook 返回形状 { decision, workerSessionId? }（triage-progress-row——spawn 产物 handle 取数上浮）', () => {
+  it('决策 + spawn 产物 handle.workerSessionId 一起返回', async () => {
+    const built = build()
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('分析过程略。\n{"action":"add-fix","note":"修依赖版本"}')
+    await expect(done).resolves.toEqual({
+      decision: { action: 'add-fix', note: '修依赖版本' },
+      workerSessionId: 'triage-1',
+    })
+    expect(built.disposeCount()).toBe(1)
+  })
+})

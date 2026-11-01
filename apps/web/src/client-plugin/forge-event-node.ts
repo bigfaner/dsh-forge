@@ -84,6 +84,8 @@ export interface ForgeProgressEntry {
   readonly expertKey?: string
   readonly scenario?: string
   readonly note?: string
+  /** 处置 attempt 序号（triage 处置族专用——载荷字段镜像，缺席/畸形 = 缺省） */
+  readonly attempt?: number
   /** 事件时间（Unix epoch ms——起止/耗时取此） */
   readonly at: number
   /** 归属 turn id（fold 时点 currentTurn 戳——bug 6a3ccc4d progress 轨 re-anchor 基准；旧缓存缺省） */
@@ -195,6 +197,11 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
+/** 可选正整数位窄收（attempt 处置序号——载荷缺位/畸形 = undefined 不猜） */
+function optionalAttempt(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : undefined
+}
+
 /** 'forge/progress' 载荷 → 组内条目（窄收守卫——必填位缺失/畸形 = undefined 弃事件，fold 原态返回） */
 function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: string | undefined): ForgeProgressEntry | undefined {
   if (typeof data !== 'object' || data === null) return undefined
@@ -211,6 +218,7 @@ function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: st
     expertKey: optionalString(raw['expertKey']),
     scenario: optionalString(raw['scenario']),
     note: optionalString(raw['note']),
+    ...(optionalAttempt(raw['attempt']) !== undefined ? { attempt: optionalAttempt(raw['attempt']) } : {}),
     at: raw['at'],
     ...(turnId !== undefined ? { turnId } : {}),
   }

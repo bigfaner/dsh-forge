@@ -1277,6 +1277,52 @@ export interface NoReadyTaskPayload {
   contextSlug?: string
 }
 
+/** triage 决策封闭四动作（triage/decision.ts 解析器值域同源——越权动作在解析期拒） */
+export type TriageDecisionAction = 'add-fix' | 'wait-external' | 'ask-user' | 'split-remainder'
+
+/** triage-decided 载荷（triage-progress-row 处置台账——新决策产出点，执行前） */
+export interface TriageDecidedPayload {
+  taskKey: string
+  /** 处置尝试序号（1 起——上限 3 次/任务） */
+  attempt: number
+  /** 决策动作（封闭四动作） */
+  action: TriageDecisionAction
+  /** 决策理由（模型 note——复盘事实源） */
+  note?: string
+  /** 输入摘要（阻塞原因 + 处置历史） */
+  inputDigest?: string
+  /**
+   * 处置子会话 id（回溯直达处置会话；缺席 = spawn 失败——台账行照记，失败径由
+   * triage-outcome 的 failureReason 承载）
+   */
+  workerSessionId?: string
+  /** 处置专家键（缺省 = 'triage-analyst'；缺席 = 程序段 persona 形态兼容） */
+  expertKey?: string
+}
+
+/** triage-outcome 载荷（triage-progress-row 处置台账——执行回执，挂每次执行尝试点） */
+export interface TriageOutcomePayload {
+  taskKey: string
+  attempt: number
+  /** 执行结果（封闭四动作落地 + 失败径——ask-user/wait-external 的 outcome = 挂起/记录等待动作本身） */
+  outcome: TriageDecisionAction | 'failed'
+  /**
+   * 决策缓存重放标记（重放径不发 triage-decided、仅发 outcome——缺席 = 非重放，本次执行有
+   * 同 attempt 的 decided 行在先）
+   */
+  replayed?: boolean
+  /** 处置子会话 id（缺席 = spawn 失败） */
+  workerSessionId?: string
+  /** 处置专家键（缺席 = 程序段 persona 形态兼容） */
+  expertKey?: string
+  /** add-fix 径——「决策 → fix 任务 id」边（fix 任务最终结算由其自身任务事件同流可溯） */
+  fixTaskKey?: string
+  /** split-remainder 径——拆分后继任务键 */
+  splitTaskKey?: string
+  /** 失败原因（outcome='failed' 必带——重试失败径必发，复盘事实源关键组成） */
+  failureReason?: string
+}
+
 /** tool-error 载荷（forge tool 面 typed error） */
 export interface ToolErrorPayload {
   verb: string
@@ -1302,7 +1348,7 @@ export interface ForgePluginEventEnvelope {
   slug: string
 }
 
-/** 八事件判别联合内型（type 判别 + 载荷——exhaustive；verb 级按需扩零迁移） */
+/** 事件判别联合内型（type 判别 + 载荷——exhaustive；verb 级按需扩零迁移；triage-progress-row 顺延两台账事件） */
 export type ForgePluginEventVariant =
   | { type: 'task-claimed'; payload: TaskClaimedPayload }
   | { type: 'task-spawned'; payload: TaskSpawnedPayload }
@@ -1312,11 +1358,13 @@ export type ForgePluginEventVariant =
   | { type: 'no-ready-task'; payload: NoReadyTaskPayload }
   | { type: 'tool-error'; payload: ToolErrorPayload }
   | { type: 'proposal-created'; payload: ProposalCreatedPayload }
+  | { type: 'triage-decided'; payload: TriageDecidedPayload }
+  | { type: 'triage-outcome'; payload: TriageOutcomePayload }
 
 /** ForgePluginEvent = 信封 × 事件内型（两层抽象；判别字段 = type——exhaustive switch 锚） */
 export type ForgePluginEvent = ForgePluginEventEnvelope & ForgePluginEventVariant
 
-/** 事件类型全集（八事件初集——监听器落盘 logs/{slug}.jsonl 的行 type 值域） */
+/** 事件类型全集（初集八事件 + triage-progress-row 两台账事件——监听器落盘 logs/{slug}.jsonl 的行 type 值域） */
 export const FORGE_PLUGIN_EVENT_TYPES = [
   'task-claimed',
   'task-spawned',
@@ -1326,6 +1374,8 @@ export const FORGE_PLUGIN_EVENT_TYPES = [
   'no-ready-task',
   'tool-error',
   'proposal-created',
+  'triage-decided',
+  'triage-outcome',
 ] as const
 
 export type ForgePluginEventType = (typeof FORGE_PLUGIN_EVENT_TYPES)[number]

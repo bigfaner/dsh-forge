@@ -40,7 +40,7 @@ export interface ForgeProgressCounts {
 
 /**
  * 场景码单源常量表（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 +
- * bug 3bd8b829 领取确认 1 = 24 值）：编码 = `{major}/{minor}`
+ * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 = 25 值）：编码 = `{major}/{minor}`
  * 纯英文 + 中划线，major = 场景族分组 / minor = 组内细分。载荷 scenario 字段值域、
  * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量）。
  */
@@ -70,6 +70,8 @@ export const FORGE_PROGRESS_SCENARIOS = [
   'loop/timeout',
   'loop/finish-all',
   'loop/stopped',
+  // 处置族（triage-progress-row——blocked 任务的处置分析：running/终态两用）
+  'loop/triage',
   // 静默挂起族（⑱-㉑）
   'suspend/spawn-rate-limited',
   'suspend/worker-rate-limited',
@@ -93,7 +95,8 @@ export interface ForgeProgressEventData {
   /**
    * 循环动词：claim=领取 / claim-resume=恢复领取 / settle=结算 / stop=停止 /
    * suspend=挂起待处置 / startup=启动 / retry=自动重试 / halt=受阻终局 /
-   * timeout=超时终局 / finish-all=全部完成终局 / loop=循环级状态（无专属动词族）
+   * timeout=超时终局 / finish-all=全部完成终局 / loop=循环级状态（无专属动词族） /
+   * triage=处置分析（triage-progress-row——running/终态两用，终态折入 note）
    */
   readonly verb:
     | 'claim'
@@ -107,6 +110,7 @@ export interface ForgeProgressEventData {
     | 'timeout'
     | 'finish-all'
     | 'loop'
+    | 'triage'
   /** 结果状态（running=进行中 / completed=已完成 / blocked=阻塞 / interrupted=已中断） */
   readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
   /** 任务键（`slug/localId`——领取/结算/停止的归属任务；缺席 = 循环级事件） */
@@ -120,6 +124,11 @@ export interface ForgeProgressEventData {
   readonly expertKey?: string
   /** worker 子会话 id（行点击跳转锚——spawn 成功后的事件在列） */
   readonly workerSessionId?: string
+  /**
+   * 处置 attempt 序号（triage 处置族专用——权威源 = 驱动器处置簿 book.attempts；
+   * 消费端读本字段渲染「第 n 次」，禁止从 note 人类文案反解。缺席 = 非 triage 族/旧载荷）
+   */
+  readonly attempt?: number
   /** 场景码（{major}/{minor}——值域 = FORGE_PROGRESS_SCENARIOS 单源 24 值；缺席 = 旧载荷兼容） */
   readonly scenario?: ForgeProgressScenario
   /** 叙述注记（阻塞/挂起原因摘要等——用户/agent 双端可见） */
@@ -148,7 +157,8 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
     raw['verb'] !== 'halt' &&
     raw['verb'] !== 'timeout' &&
     raw['verb'] !== 'finish-all' &&
-    raw['verb'] !== 'loop'
+    raw['verb'] !== 'loop' &&
+    raw['verb'] !== 'triage'
   )
     return false
   if (raw['status'] !== 'running' && raw['status'] !== 'completed' && raw['status'] !== 'blocked' && raw['status'] !== 'interrupted') return false
@@ -156,6 +166,7 @@ export function isForgeProgressData(value: unknown): value is ForgeProgressEvent
   if (raw['taskTitle'] !== undefined && typeof raw['taskTitle'] !== 'string') return false
   if (raw['expertKey'] !== undefined && typeof raw['expertKey'] !== 'string') return false
   if (raw['workerSessionId'] !== undefined && typeof raw['workerSessionId'] !== 'string') return false
+  if (raw['attempt'] !== undefined && (typeof raw['attempt'] !== 'number' || !Number.isInteger(raw['attempt']) || raw['attempt'] < 1)) return false
   if (raw['scenario'] !== undefined && (typeof raw['scenario'] !== 'string' || !SCENARIO_SET.has(raw['scenario']))) return false
   if (raw['note'] !== undefined && typeof raw['note'] !== 'string') return false
   if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false

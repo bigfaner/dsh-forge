@@ -265,7 +265,18 @@ const corePlugin: CorePlugin = Object.assign(
             } catch {
               resolver = undefined
             }
-            if (typeof resolver !== 'function') return undefined
+            if (typeof resolver !== 'function') {
+              // AGENTS §7 可观测性（triage-progress-row fix-3）：resolver 缺席 = experts.mapping
+              // 消费链整体降级（坏键 fail-loud 不可达，persona 回落程序段）——1.8 真机径
+              // 「单测绿真机红」的不可见根因面，warn 留痕不静默；diag 缝缺席 = 零 emit 不抛。
+              diagEmit?.('diag/log', {
+                level: 'warn',
+                process: 'child',
+                event: 'forge-expert-resolver',
+                message: `forgeTasks claim 链未取得 expertResolver（reflect 'forgeExperts' 缺席/非函数面）——experts.mapping 坏键 fail-loud 不可达，persona 回落程序段（taskType=${taskType}${expertKey !== undefined ? ` key=${expertKey}` : ''}；核销 forge/expert-squad 插件装配面）`,
+              })
+              return undefined
+            }
             return (resolver as (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>)(taskType, expertKey)
           },
         }),

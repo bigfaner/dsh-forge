@@ -54,7 +54,11 @@ export interface DispatchEventEntry {
   readonly status: 'running' | 'completed' | 'blocked' | 'interrupted'
   readonly taskKey?: string
   readonly taskTitle?: string
+  /** 执行专家键（loop-card-task-context 字段口径——triage 处置事件携 triage-analyst；缺席 = 未用类型） */
+  readonly expertKey?: string
   readonly workerSessionId?: string
+  /** 处置 attempt 序号（triage 处置族专用——结构化载荷字段，缺席 = 非 triage/旧载荷） */
+  readonly attempt?: number
   readonly scenario?: string
   readonly note?: string
   readonly at: number
@@ -78,7 +82,8 @@ export function isDispatchEventEntry(value: unknown): value is DispatchEventEntr
     return false
   }
   if (typeof raw['at'] !== 'number' || !Number.isFinite(raw['at'])) return false
-  for (const key of ['taskKey', 'taskTitle', 'workerSessionId', 'scenario', 'note'] as const) {
+  if (raw['attempt'] !== undefined && (typeof raw['attempt'] !== 'number' || !Number.isInteger(raw['attempt']) || raw['attempt'] < 1)) return false
+  for (const key of ['taskKey', 'taskTitle', 'expertKey', 'workerSessionId', 'scenario', 'note'] as const) {
     if (raw[key] !== undefined && typeof raw[key] !== 'string') return false
   }
   return true
@@ -106,6 +111,24 @@ export function dispatchEventsOf(values: unknown): DispatchEventsView | undefine
 
 /** 池级快照场景码（pool/pending 事件只承载统计条 pending 计数——不进任务时间线） */
 export const DISPATCH_POOL_PENDING_SCENARIO = 'pool/pending'
+
+/** 处置分析场景码（triage-progress-row §2.1——两发事件在列；独立聚合键空间的前缀） */
+export const DISPATCH_TRIAGE_SCENARIO = 'loop/triage'
+
+/** triage 条目判读（verb 单源——'triage' 词仅处置族事件使用；scenario 缺席旧载荷同判） */
+export function isDispatchTriageEntry(entry: DispatchEventEntry): boolean {
+  return entry.verb === 'triage'
+}
+
+/** triage 行 tooltip 两态文案（可跳/失败——spawn 失败行照渲去交互，提案 §2.2） */
+export function dispatchTriageTooltipOf(hasSession: boolean): string {
+  return hasSession ? '打开处置子会话' : '处置会话启动失败'
+}
+
+/** triage attempt 取值（bug df44fcfa：结构化载荷字段单源——禁从 note 人类文案反解；缺席/畸形 = undefined 聚合面兜底 1） */
+export function dispatchTriageAttemptOf(entry: DispatchEventEntry): number | undefined {
+  return entry.attempt !== undefined && Number.isInteger(entry.attempt) && entry.attempt >= 1 ? entry.attempt : undefined
+}
 
 /** 场景 minor 中文章（分组/章语义并入备注行文案——1.16 行聚合口径；键 = minor 段） */
 export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
@@ -186,10 +209,12 @@ export function dispatchEventDurationLabel(startMs: number, endMs: number): stri
   return `${seconds}秒`
 }
 
-/** 聚合行（条目 + 启动时间——该任务键窗口内首事件时戳；循环级单行 = 自身时戳） */
+/** 聚合行（条目 + 启动时间——该任务键窗口内首事件时戳；循环级单行 = 自身时戳；triage 行携最新 attempt） */
 export interface DispatchAggregatedRow {
   readonly entry: DispatchEventEntry
   readonly startAt: number
+  /** triage 行最新 attempt 次数（非 triage 行缺省——行头「处置分析（第 n 次）」承载） */
+  readonly attempt?: number
 }
 
 /**
@@ -198,12 +223,28 @@ export interface DispatchAggregatedRow {
  * 单行最新态（后写覆盖——消除「从头执行」类历史行累积）；池级 pending 快照
  * （pool/pending）不进时间线——只承载统计条「待执行」计数。排序 = 纯时序（执行中行不
  * 置顶——可见性由滚动跟随效应承担）。同任务键首事件时戳随行携带（启动时间面）。
+ * triage 处置条目（triage-progress-row §2.2）走独立聚合键 `triage:{taskKey}`——不劫持
+ * 任务行「每任务键最新态」模型；同任务键多 attempt 折叠一行（最新 attempt 次数、终态
+ * 折入 note、最近一枚 workerSessionId 上浮）；历史 attempt 不做行内展开（回溯走台账）。
  */
 export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]): readonly DispatchAggregatedRow[] {
   const latest = new Map<string, { entry: DispatchEventEntry; startAt: number }>()
+  const triage = new Map<string, { entry: DispatchEventEntry; startAt: number; attempt: number; workerSessionId?: string }>()
   let loop: DispatchAggregatedRow | undefined
   for (const entry of entries) {
     if (entry.scenario === DISPATCH_POOL_PENDING_SCENARIO) continue
+    if (isDispatchTriageEntry(entry) && entry.taskKey !== undefined) {
+      const held = triage.get(`triage:${entry.taskKey}`)
+      triage.set(`triage:${entry.taskKey}`, {
+        entry, // 后写覆盖 = 最新事件（终态折入 note）
+        startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at),
+        attempt: Math.max(held?.attempt ?? 1, dispatchTriageAttemptOf(entry) ?? 1),
+        ...(entry.workerSessionId !== undefined || held?.workerSessionId !== undefined
+          ? { workerSessionId: entry.workerSessionId ?? held?.workerSessionId }
+          : {}),
+      })
+      continue
+    }
     if (entry.taskKey === undefined) {
       loop = { entry, startAt: entry.at } // 循环级单行——后写覆盖 = 最新态
       continue
@@ -211,7 +252,19 @@ export function aggregateDispatchRowItems(entries: readonly DispatchEventEntry[]
     const held = latest.get(entry.taskKey)
     latest.set(entry.taskKey, { entry, startAt: held === undefined ? entry.at : Math.min(held.startAt, entry.at) })
   }
-  return [...latest.values(), ...(loop !== undefined ? [loop] : [])].sort((a, b) => a.entry.at - b.entry.at)
+  // triage 行规格化：status 固定 running 语义（轨点/耗时沿用执行中行结构）；taskTitle
+  // 让位——次行呈现终态 note（detail 面）。
+  const triageRows: DispatchAggregatedRow[] = [...triage.values()].map((held) => ({
+    entry: {
+      ...held.entry,
+      status: 'running',
+      taskTitle: undefined,
+      ...(held.workerSessionId !== undefined ? { workerSessionId: held.workerSessionId } : { workerSessionId: undefined }),
+    },
+    startAt: held.startAt,
+    attempt: held.attempt,
+  }))
+  return [...latest.values(), ...triageRows, ...(loop !== undefined ? [loop] : [])].sort((a, b) => a.entry.at - b.entry.at)
 }
 
 /** 行聚合（条目视图——detail 渲染面走 aggregateDispatchRowItems 携启动时间） */
@@ -270,6 +323,7 @@ export function dispatchEventStats(entries: readonly DispatchEventEntry[]): Disp
   const latest = new Map<string, DispatchEventEntry['status']>()
   for (const entry of entries) {
     if (entry.taskKey === undefined) continue
+    if (isDispatchTriageEntry(entry)) continue // triage 条目不入统计（triage-progress-row §2.2）
     latest.set(entry.taskKey, entry.status) // 时序追加——后写覆盖 = 最新态
   }
   const stats = { completed: 0, running: 0, blocked: 0, interrupted: 0 }
@@ -503,11 +557,13 @@ export interface DispatchEventsPanelBodyProps {
   readonly onOpenWorker?: (childSessionId: string, taskKey?: string) => void
 }
 
-/** 行跳转锚解析（纯函数）：载荷 workerSessionId 直跳 → 父反查已解析表命中 → 落空 = undefined（非交互不空跳） */
+/** 行跳转锚解析（纯函数）：载荷 workerSessionId 直跳 → 父反查已解析表命中 → 落空 = undefined（非交互不空跳）；
+ *  triage 行（triage-progress-row §2.2）只认载荷 workerSessionId——父反查表属任务执行会话，不劫持处置行 */
 export function dispatchRowSessionOf(
   entry: DispatchEventEntry,
   resolvedWorker: ReadonlyMap<string, string> | undefined,
 ): string | undefined {
+  if (isDispatchTriageEntry(entry)) return entry.workerSessionId
   if (entry.workerSessionId !== undefined) return entry.workerSessionId
   if (entry.taskKey === undefined) return undefined
   const resolved = resolvedWorker?.get(entry.taskKey)
@@ -531,10 +587,12 @@ function DispatchEventRowView({
   onOpenWorker?: (childSessionId: string, taskKey?: string) => void
 }): ReactNode {
   const { entry } = row
+  const triage = isDispatchTriageEntry(entry)
   const tone = dispatchEventDotToneOf(entry.status)
   const keyLabel = entry.taskKey ?? dispatchEventTitleOf(entry)
   const title = entry.taskTitle
   const detail = dispatchEventDetailOf(entry)
+  // 次行语义（triage-progress-row §2.2）：triage 行 taskTitle 让位——终态折入 note 走 detail 面
   // 耗时徽标只属任务行（循环级事件 = 瞬时进度无过程——一律不呈现）：执行中 = now 起算
   // 的实时耗时；终态行 = startAt→最新事件时戳（单事件行时长不可辨 = 不呈现）。
   const duration =
@@ -553,7 +611,16 @@ function DispatchEventRowView({
           onOpenWorker(session, entry.taskKey)
         }
   return (
-    <Tooltip label={open !== undefined ? `打开 worker 子会话：${dispatchEventTitleOf(entry)}` : dispatchEventTitleOf(entry)} portal>
+    <Tooltip
+      label={
+        triage
+          ? dispatchTriageTooltipOf(session !== undefined)
+          : open !== undefined
+            ? `打开 worker 子会话：${dispatchEventTitleOf(entry)}`
+            : dispatchEventTitleOf(entry)
+      }
+      portal
+    >
       <div
         className={`dswf-dep-row dswf-dep-${tone}`}
         data-dswf-dep-row={session}
@@ -581,7 +648,10 @@ function DispatchEventRowView({
               执行中行与其它状态同构——零状态特例分支。 */}
           <span className="dswf-dep-row-head">
             <span className="dswf-dep-row-key">{keyLabel}</span>
-            {entry.taskKey === undefined ? (
+            {triage ? (
+              // 处置分析徽标（triage-progress-row §2.2——state-business 语义色胶囊；最新 attempt 次数）
+              <span className="dswf-dep-status dswf-dep-status-triage">{`处置分析（第 ${row.attempt ?? 1} 次）`}</span>
+            ) : entry.taskKey === undefined ? (
               // 循环级事件徽标（独特标识——中性斜体档，与任务级 tone 胶囊一眼可辨；
               // 状态语义由轨点色承担，不再呈现「执行中」等任务态词避免误读）
               <span className="dswf-dep-status dswf-dep-status-loop">循环</span>
@@ -598,8 +668,8 @@ function DispatchEventRowView({
               ) : null}
             </span>
           </span>
-          {(entry.taskKey === undefined ? detail : title) !== undefined ? (
-            <span className="dswf-dep-row-title">{entry.taskKey === undefined ? detail : title}</span>
+          {(triage ? detail : entry.taskKey === undefined ? detail : title) !== undefined ? (
+            <span className="dswf-dep-row-title">{triage ? detail : entry.taskKey === undefined ? detail : title}</span>
           ) : null}
         </span>
       </div>
@@ -880,6 +950,7 @@ export function DispatchEventsPanel(props: DispatchEventsPanelProps): ReactNode 
     let cancelled = false
     for (const entry of entries) {
       if (entry.workerSessionId !== undefined || entry.taskKey === undefined) continue
+      if (isDispatchTriageEntry(entry)) continue // 处置行只认载荷 workerSessionId——零反查兜底
       if (resolvedWorker.has(entry.taskKey)) continue
       void resolver(props.sessionId, entry.taskKey)
         .then((childId) => {

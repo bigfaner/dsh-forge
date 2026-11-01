@@ -280,6 +280,11 @@ export interface ForgeContextFace {
    * 缺席 = 两挂接面各自 fail-soft。
    */
   readonly on?: ForgeEventRegisterFace
+  /**
+   * dsh 官方事件发射收窄面（Context.emit——diag/log 事件域诊断埋点，expert-resolve 径
+   * 消费）。可选：缺席/发射故障 = 诊断 fail-soft 零埋点（诊断不构成取用正确性依赖）。
+   */
+  readonly emit?: (event: string, payload: Record<string, unknown>) => void
 }
 
 /** 官方 dsh-session Session 公告事件消费子面（header.cwd = 会话工作区根读位） */

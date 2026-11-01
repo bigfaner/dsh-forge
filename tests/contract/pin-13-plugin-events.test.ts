@@ -1,6 +1,6 @@
 // G1 pin ㉑（M3 pin 池扩池 #21，任务 5.1）：ForgePluginEvent 判别联合完备性（exhaustiveness）。
 // 权威：tech-design Appendix「契约面 pin 扩池」第 21 项（事件两层联合类型——判别联合完备性）
-// + §Interface 3（两层抽象：信封 × 八事件内型）。
+// + §Interface 3（两层抽象：信封 × 十事件内型（triage-progress-row 1.1 增 triage-decided/triage-outcome））。
 // 审计面（机械断言，非行为测试）：
 //   1. 联合 type 判别集 ↔ FORGE_PLUGIN_EVENT_TYPES 常量全等（编译期 Record 键封闭 + 运行期枚举）；
 //   2. 发射面代码审计——plugin-forge 源内一切事件 type 字面量（`type: '...'` 记号 +
@@ -41,10 +41,10 @@ function sourceTexts(dir: string): Array<{ file: string; text: string }> {
 }
 
 /** 事件名形状：kebab 且 ∈ 事件前缀族（task-/no-/tool-/proposal-）——排除 schema 的 type: 'object' 等 */
-const isEventNameShape = (token: string): boolean => /^(task|no|tool|proposal)-[a-z-]+$/.test(token)
+const isEventNameShape = (token: string): boolean => /^(task|no|tool|proposal|triage)-[a-z-]+$/.test(token)
 
 describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', () => {
-  it('事件类型全集 = 八事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
+  it('事件类型全集 = 十事件初集（FORGE_PLUGIN_EVENT_TYPES 常量本尊）', () => {
     expect([...FORGE_PLUGIN_EVENT_TYPES]).toEqual([
       'task-claimed',
       'task-spawned',
@@ -54,6 +54,8 @@ describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', (
       'no-ready-task',
       'tool-error',
       'proposal-created',
+      'triage-decided',
+      'triage-outcome',
     ])
   })
 
@@ -67,6 +69,8 @@ describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', (
       'no-ready-task': 'no-ready-task',
       'tool-error': 'tool-error',
       'proposal-created': 'proposal-created',
+      'triage-decided': 'triage-decided',
+      'triage-outcome': 'triage-outcome',
     }
     expectTypeOf<keyof typeof exhaustive>().toEqualTypeOf<ForgePluginEventType>()
     expect(Object.keys(exhaustive).sort()).toEqual([...FORGE_PLUGIN_EVENT_TYPES].sort())
@@ -83,7 +87,7 @@ describe('pin ㉑-1 判别联合 ↔ 运行期枚举全等（两层抽象）', (
 describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）', () => {
   const sources = sourceTexts(PLUGIN_SRC)
 
-  it('type 记号事件名字面量（kebab 事件形状）⊆ 联合八事件', () => {
+  it('type 记号事件名字面量（kebab 事件形状）⊆ 联合十事件', () => {
     const literals = new Set<string>()
     for (const { text } of sources) {
       for (const m of text.matchAll(/type: '([a-z][a-z-]+)'/g)) {
@@ -91,19 +95,19 @@ describe('pin ㉑-2 发射面代码审计（emit 字面量 ⊆ 联合全集）',
       }
     }
     // 现发射面：task-submitted + tool-error（dispatch 流四事件经 DispatchEventPayloads 键面——㉑-3 审计）
-    expect([...literals].sort()).toEqual(['task-submitted', 'tool-error'])
+    expect([...literals].sort()).toEqual(['task-submitted', 'tool-error', 'triage-decided'])
     for (const name of literals) {
       expect(FORGE_PLUGIN_EVENT_TYPES, `发射字面量 ${name} 不在联合`).toContain(name)
     }
   })
 
-  it('dispatchTask 流事件键面（DispatchEventPayloads 接口键）⊆ 联合八事件', () => {
+  it('dispatchTask 流事件键面（DispatchEventPayloads 接口键）⊆ 联合十事件', () => {
     // 1.1 壳分层后接口随主链迁居核心面（audit 面同步改指——键集与判据零变化）
     const dispatch = sources.find((s) => s.file === 'dispatch-core/core.ts')!
     const block = /interface DispatchEventPayloads \{([\s\S]*?)\n\}/.exec(dispatch.text)
     expect(block, 'DispatchEventPayloads 接口在场').toBeTruthy()
     const keys = [...block![1]!.matchAll(/^ {2}'([a-z-]+)': /gm)].map((m) => m[1]!)
-    expect(keys.sort()).toEqual(['no-ready-task', 'task-claimed', 'task-progress', 'task-spawned', 'task-worker-done'])
+    expect(keys.sort()).toEqual(['no-ready-task', 'task-claimed', 'task-progress', 'task-spawned', 'task-worker-done', 'triage-decided', 'triage-outcome'])
     for (const key of keys) {
       expect(FORGE_PLUGIN_EVENT_TYPES, `dispatch 流事件 ${key} 不在联合`).toContain(key)
     }

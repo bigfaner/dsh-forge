@@ -781,11 +781,15 @@ describe('experts 装配面（expert-squad-forge 1.2——reflect.get 防御读�
     const { face, calls } = expertsFace()
     const { provided, face: reflect } = reflectWith({ experts: face, forgeSettings: { get: async () => ({}) } })
     const dispose = forgePlugin({ ...rt.ctx(), reflect })
-    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR)
-    expect(calls.refresh).toBe(1) // registerRoot 只追加 root 不重扫——注册后须显式 refresh 一次
     const resolver = provided.get('forgeExperts') as ExpertProfileResolver
     expect(typeof resolver).toBe('function')
     expect(rt.registeredTools).toHaveLength(19) // 装配面 additive——tool 面零波及（implicit-stage-approval §2.3 纳入 transitionFeature 后 19）
+    // 接线（registerRoot + refresh 恰一次）发生在首调时点（调用期现查——装配期不触服务面）
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper', personaMd: 'md:gate-keeper' })
+    expect(calls.root).toBe(FORGE_EXPERTS_ROOT_DIR)
+    expect(calls.refresh).toBe(1) // registerRoot 只追加 root 不重扫——注册后须显式 refresh 一次
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'tech-writer' })
+    expect(calls.refresh).toBe(1) // 后续调用零重接线（每面实例一次性接线）
     dispose()
   })
 
@@ -1085,12 +1089,147 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
     dispose()
   })
 
-  it('experts 面缺席 / reflect.get 抛异常 / 非函数面：装配面整体降级不阻载（十七 tool 照常、零 provide）', () => {
+  it('bug 62d173ed：forgeSettings 装配期缺席（core 晚装配）→ 调用期在场——experts.mapping 坏键被 resolver 消费（fail-loud 含键名）', async () => {
+    _resetExpertResolverSingletonForTests()
+    const experts = {
+      ...expertsFace().face,
+      // 坏键 fail-loud 语义（experts 服务实现侧承担——expert not found 含键名）
+      get: (key: string) => {
+        if (key === 'ghost-expert') throw new Error(`expert not found: ${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      },
+    }
+    const store = new Map<string, unknown>([['experts', experts]]) // 装配时点 forgeSettings 未注册
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const dispose = forgePlugin({
+        ...new TempRuntime().ctx(),
+        reflect: {
+          get: (name: string) => store.get(name),
+          provide: (name: string, service: unknown) => {
+            store.set(name, service)
+          },
+        },
+      })
+      const resolver = store.get('forgeExperts') as ExpertProfileResolver
+      // 调用时点：core 晚到注册 forgeSettings——mapping.doc 指向不存在档案，须 fail-loud
+      store.set('forgeSettings', { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) })
+      await expect(resolver('doc')).rejects.toThrow(/ghost-expert/)
+      dispose()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('experts 服务晚到（装配期缺席）：调用期现查即时生效——坏键 fail-loud 拒绝取用（012 真机复测定罪）', async () => {
+    _resetExpertResolverSingletonForTests()
+    const badKeyFace = {
+      get: (key: string) => {
+        if (key === 'no-such-profile-key') throw new Error(`expert not found: ${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      },
+      registerRoot: (_ctx: unknown, _dir: string) => {},
+      refresh: async () => {},
+    }
+    const store = new Map<string, unknown>() // 装配时点 experts/forgeSettings 均未注册
+    const dispose = forgePlugin({
+      ...new TempRuntime().ctx(),
+      reflect: {
+        get: (name: string) => store.get(name),
+        provide: (name: string, service: unknown) => {
+          store.set(name, service)
+        },
+      },
+    })
+    const resolver = store.get('forgeExperts') as ExpertProfileResolver
+    expect(typeof resolver).toBe('function')
+    // 服务晚到前：零 experts 面 = 形态兼容降级（undefined，不抛）
+    await expect(resolver('doc')).resolves.toBeUndefined()
+    // 服务晚到注册：调用期现查即时生效——坏映射键 fail-loud（拒绝 claim/spawn）
+    store.set('experts', badKeyFace)
+    store.set('forgeSettings', { get: async () => ({ experts: { mapping: { doc: 'no-such-profile-key' } } }) })
+    await expect(resolver('doc')).rejects.toThrow(/expert not found: no-such-profile-key/)
+    dispose()
+  })
+
+  it('坏键 fail-loud 同步 emitDiag 诊断（diag/log · error · event=expert-resolve，含键名与任务类型）；成功取用零诊断', async () => {
+    _resetExpertResolverSingletonForTests()
+    const emits: Array<{ event: string; payload: Record<string, unknown> }> = []
+    const badKeyFace = {
+      get: (key: string) => {
+        if (key === 'ghost-expert') throw new Error(`expert not found: ${key}`)
+        return { name: key, personaMd: `md:${key}` }
+      },
+      registerRoot: () => {},
+    }
+    const store = new Map<string, unknown>([
+      ['experts', badKeyFace],
+      ['forgeSettings', { get: async () => ({ experts: { mapping: { doc: 'ghost-expert' } } }) }],
+    ])
+    const dispose = forgePlugin({
+      ...new TempRuntime().ctx(),
+      emit: (event: string, payload: Record<string, unknown>) => {
+        emits.push({ event, payload })
+      },
+      reflect: {
+        get: (name: string) => store.get(name),
+        provide: (name: string, service: unknown) => {
+          store.set(name, service)
+        },
+      },
+    })
+    const resolver = store.get('forgeExperts') as ExpertProfileResolver
+    expect(emits).toHaveLength(0) // 装配期零消费零诊断
+    await expect(resolver('doc')).rejects.toThrow(/ghost-expert/)
+    expect(emits).toHaveLength(1) // 坏键拒绝 = 恰一次诊断
+    expect(emits[0]!.event).toBe('diag/log')
+    expect(emits[0]!.payload.event).toBe('expert-resolve')
+    expect(emits[0]!.payload.level).toBe('error')
+    expect(emits[0]!.payload.process).toBe('child')
+    expect(String(emits[0]!.payload.message)).toContain('ghost-expert')
+    expect(emits[0]!.payload.taskType).toBe('doc')
+    emits.length = 0
+    await expect(resolver('gate')).resolves.toMatchObject({ name: 'gate-keeper' }) // 预设键正常取用
+    expect(emits).toHaveLength(0) // 成功路径零诊断
+    dispose()
+  })
+
+  it('presence 不 memoize：服务面热换代（face A → face B）后次调即用新面（get 服务对象 B）', async () => {
+    _resetExpertResolverSingletonForTests()
+    const faceA = {
+      ...expertsFace().face,
+      get: (key: string) => ({ name: `A:${key}`, personaMd: `md:A:${key}` }),
+    }
+    const faceB = {
+      get: (key: string) => ({ name: `B:${key}`, personaMd: `md:B:${key}` }),
+      registerRoot: () => {},
+    }
+    let current: unknown = faceA
+    const store = new Map<string, unknown>([['experts', current]])
+    const dispose = forgePlugin({
+      ...new TempRuntime().ctx(),
+      reflect: {
+        get: (name: string) => store.get(name),
+        provide: (name: string, service: unknown) => {
+          store.set(name, service)
+        },
+      },
+    })
+    const resolver = store.get('forgeExperts') as ExpertProfileResolver
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'A:tech-writer' })
+    current = faceB // 热换代（registry refresh 换 face 实例同型）
+    store.set('experts', faceB)
+    await expect(resolver('doc')).resolves.toMatchObject({ name: 'B:tech-writer' })
+    dispose()
+  })
+
+  it('experts 面缺席 / reflect.get 抛异常 / 非函数面：lazy resolver 照常 provide，调用期降级 undefined（persona 回落程序段）', async () => {
     for (const reflect of [
       reflectWith({}).face, // 无 experts 键
       { get: () => { throw new Error('inactive fiber') } },
       reflectWith({ experts: 'not-a-service' }).face,
     ]) {
+      _resetExpertResolverSingletonForTests()
       const rt = new TempRuntime()
       const provided = new Map<string, unknown>()
       const dispose = forgePlugin({
@@ -1098,7 +1237,9 @@ describe('expert-squad-forge-2：claim 变量路由 + provider 投影（faces re
         reflect: { ...reflect, provide: (name: string, service: unknown) => provided.set(name, service) },
       })
       expect(rt.registeredTools).toHaveLength(19)
-      expect([...provided.keys()]).not.toContain('forgeExperts')
+      const resolver = provided.get('forgeExperts') as ExpertProfileResolver
+      expect(typeof resolver).toBe('function') // lazy resolver 恒在位（自降级面）
+      await expect(resolver('doc')).resolves.toBeUndefined() // experts 缺席 = 形态兼容
       dispose()
     }
   })

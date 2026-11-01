@@ -415,3 +415,20 @@ describe('loop-card-task-context：ForgeProgressEntry expertKey 可选镜像（�
     expect(group?.progress?.[1]?.expertKey).toBeUndefined()
   })
 })
+
+describe('triage attempt 序号镜像（bug df44fcfa——结构化载荷窄收，畸形弃字段不弃行）', () => {
+  it('载荷携带 attempt = 条目镜像；畸形 attempt（非正整数）= 字段缺省不弃行；缺省容忍（旧载荷）', () => {
+    const { stream } = simulate([
+      progressEvt(4, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: 1 }),
+      progressEvt(5, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: 0 }),
+      progressEvt(6, { verb: 'triage', taskKey: 'feat-x/2.5', attempt: '2' }),
+      progressEvt(7, { verb: 'triage', taskKey: 'feat-x/2.5' }),
+    ])
+    const group = stream.groups.at(-1)
+    expect(group?.progress).toHaveLength(4)
+    expect(group?.progress?.[0]?.attempt).toBe(1)
+    expect(group?.progress?.[1]?.attempt).toBeUndefined()
+    expect(group?.progress?.[2]?.attempt).toBeUndefined()
+    expect(group?.progress?.[3]?.attempt).toBeUndefined()
+  })
+})
