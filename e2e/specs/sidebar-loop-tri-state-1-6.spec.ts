@@ -30,6 +30,11 @@ async function bootFixture(options: {
   proposalTitle: string
   taskTitles: readonly string[]
   forgeSettings?: Record<string, unknown>
+  /** 专家档案（用户层 experts root——launch 净化删 DSH_HOME 后宿主 main.ts
+   *  `DSH_HOME ??= paths.dshHome`（= {userData}/dsh-home）→ 插件 resolveUserExpertsRoot
+   *  扫 {userData}/dsh-home/experts；cwd registry 单工作区进程恒扫该层。
+   *  故障注入经档案 provider/model 路由对进派发链） */
+  extraExperts?: ReadonlyArray<{ readonly file: string; readonly md: string }>
 }): Promise<{
   page: Page
   app: Parameters<typeof closeApp>[0]
@@ -37,7 +42,7 @@ async function bootFixture(options: {
   runLoop: (slug: string, rpcId: string) => Promise<void>
   fixtureRoot: string
 }> {
-  const { wsName, slug, proposalTitle, taskTitles, forgeSettings } = options
+  const { wsName, slug, proposalTitle, taskTitles, forgeSettings, extraExperts } = options
   const fixtureRoot = mkdtempSync(join(tmpdir(), `dsh-loopedge-${slug}-ws-`))
   const wsDir = join(fixtureRoot, wsName)
   mkdirSync(wsDir, { recursive: true })
@@ -50,6 +55,11 @@ async function bootFixture(options: {
   const userData = mkdtempSync(join(tmpdir(), `dsh-loopedge-${slug}-ud-`))
   mkdirSync(join(userData, 'dsh-home'), { recursive: true })
   copyFileSync(CRED_SRC, join(userData, 'dsh-home', '.credentials.yaml'))
+  if (extraExperts !== undefined) {
+    const expertsDir = join(userData, 'dsh-home', 'experts')
+    mkdirSync(expertsDir, { recursive: true })
+    for (const e of extraExperts) writeFileSync(join(expertsDir, e.file), e.md, 'utf8')
+  }
   writeFileSync(join(userData, 'forge-settings.json'), JSON.stringify(forgeSettings ?? {}), 'utf8')
   const launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
   const { app, page } = launched
@@ -178,9 +188,36 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
     slug: PROP,
     proposalTitle: 'sidebar 循环标识三态容器乙（suspended）',
     taskTitles: ['loopedge-任务丁：在 ws 根写 loopedge-d.md 一行内容'],
-    // 真机环境故障注入（walk14 径②③配方）：worker 模型档位失效 → spawn 后 worker 异常
-    // 退出 → worker-abort 退避梯次 → 超限 suspend 挂起（suspend/abort-over-limit）。
-    forgeSettings: { remoteApproval: { enabled: true }, worker: { provider: 'no-such-provider', model: 'no-such-model', reasoning: 'default' } },
+    // 真机环境故障注入（expert-squad-default-routing 后配方）：worker 路由对现走 experts
+    // 服务折叠（forgeSettings.worker 机械读取径已退役——triage.ts/core.ts 装配注记）——
+    // 夹具坏路由档案（provider/model 均不存在）经 experts.mapping.doc 映射进 doc 任务派发链
+    // → worker 首请求 NO_ADAPTER 异常退出 → worker-abort 退避梯次 → 超限 suspend 挂起
+    // （suspend/abort-over-limit）。
+    forgeSettings: {
+      remoteApproval: { enabled: true },
+      experts: { mapping: { doc: 'loopedge-broken-worker' } },
+    },
+    extraExperts: [
+      {
+        file: 'loopedge-broken-worker.md',
+        md: [
+          '---',
+          'name: loopedge-broken-worker',
+          'description: >-',
+          '  Fixture expert with a deliberately nonexistent dispatch route for e2e fault injection.',
+          'title: 夹具坏路由',
+          'tools: [read, write]',
+          'provider: no-such-provider',
+          'model: no-such-model',
+          '---',
+          '',
+          '## 职责',
+          '',
+          '夹具人设正文：坏路由故障注入载体。',
+          '',
+        ].join('\n'),
+      },
+    ],
   })
   const { page, app, sessionId, runLoop } = fx
   try {
