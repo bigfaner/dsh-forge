@@ -10,6 +10,8 @@
 //                     时先触ensure 落一行托管头，保证 showItemInFolder 有真实文件可达）
 //   showDiagLogs    = shell.openPath({userData}/logs)（diag-milestone-coverage 1.4——
 //                     diag JSONL 打开面：app-*.jsonl 所在目录，与 showLog 同缝同位、零新机制）
+//   toggleDiagDebug = diag 级别门运行期开关（1.14——appender.setMinLevel debug/info 翻转，
+//                     默认 info；开启后豁免点 debug 行落盘 app-*.jsonl 可回放）
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { IpcMainLike } from './forge-channels.js'
@@ -19,6 +21,7 @@ export const HARNESS_RELAUNCH_CHANNEL = 'dsh-forge:harness/relaunch'
 export const HARNESS_SAFE_MODE_CHANNEL = 'dsh-forge:harness/safe-mode'
 export const HARNESS_SHOW_LOG_CHANNEL = 'dsh-forge:harness/show-log'
 export const HARNESS_SHOW_DIAG_LOGS_CHANNEL = 'dsh-forge:harness/show-diag-logs'
+export const HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL = 'dsh-forge:harness/toggle-diag-debug'
 
 /** 安全模式启动标志（main 启动期消费——置位 = 以安全模式 profile 三件套启动本进程） */
 export const HARNESS_SAFE_MODE_ENV = 'DSH_FORGE_SAFE_MODE'
@@ -33,19 +36,22 @@ export interface HarnessActions {
   showLog(): boolean
   /** 查看诊断日志目录（openPath {userData}/logs——app-*.jsonl 所在处；true = 已触发） */
   showDiagLogs(): boolean
+  /** diag debug 运行期开关（翻转 appender 级别门；返回翻转后的开启态；false = 缝缺席不可用） */
+  toggleDiagDebug(): boolean
 }
 
-/** 通道注册（负载零载荷三动作——renderer 侧只触发，无返回语义面） */
+/** 通道注册（负载零载荷四动作——renderer 侧只触发，无返回语义面） */
 export function registerHarnessChannels(ipcMain: IpcMainLike, actions: HarnessActions): void {
   ipcMain.handle(HARNESS_RELAUNCH_CHANNEL, () => actions.relaunch())
   ipcMain.handle(HARNESS_SAFE_MODE_CHANNEL, () => actions.relaunchSafeMode())
   ipcMain.handle(HARNESS_SHOW_LOG_CHANNEL, () => actions.showLog())
   ipcMain.handle(HARNESS_SHOW_DIAG_LOGS_CHANNEL, () => actions.showDiagLogs())
+  ipcMain.handle(HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL, () => actions.toggleDiagDebug())
 }
 
 /** 三通道注销集中面（before-quit 消费——与 DIRECTORY_PICKER 同制） */
 export function removeHarnessChannels(ipcMain: Pick<IpcMainLike, 'removeHandler'>): void {
-  for (const channel of [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL, HARNESS_SHOW_DIAG_LOGS_CHANNEL]) {
+  for (const channel of [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL, HARNESS_SHOW_DIAG_LOGS_CHANNEL, HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL]) {
     ipcMain.removeHandler(channel)
   }
 }

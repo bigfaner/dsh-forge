@@ -53,8 +53,18 @@ export function diagLogsDirOf(app: ElectronAppSlice): string {
   return join(app.getPath('userData'), 'logs')
 }
 
+/**
+ * diag debug 运行期开关缝（1.14——main 注入 tele.appender 级别门 + tele.emit 诊断面；
+ * 缺席 = 动作不可用返回 false，不炸宿主流程）。
+ */
+export interface DiagDebugToggleFace {
+  setMinLevel(level: 'debug' | 'info'): void
+  emit(enabled: boolean, message: string): void
+}
+
 /** Harness 菜单三动作实装（安全模式标志经环境变量跨进程存活——relaunch 环境承载） */
-export function electronHarnessActions(app: ElectronAppSlice, logPath: string): HarnessActions {
+export function electronHarnessActions(app: ElectronAppSlice, logPath: string, diagDebug?: DiagDebugToggleFace): HarnessActions {
+  let diagDebugEnabled = false // 开关态单源（唯一写点 = 本动作；appender 级别门由 setMinLevel 承载）
   return {
     relaunch: () => {
       noteHarnessLog(logPath, '[host] 重启 Harness（菜单触发）')
@@ -82,6 +92,15 @@ export function electronHarnessActions(app: ElectronAppSlice, logPath: string): 
       } catch {
         return false // fail-soft：目录不可建时静默（打开面永不炸宿主流程）
       }
+    },
+    toggleDiagDebug: () => {
+      if (diagDebug === undefined) return false // 缝缺席（测试/非装配形态）——动作不可用
+      diagDebugEnabled = !diagDebugEnabled
+      diagDebug.setMinLevel(diagDebugEnabled ? 'debug' : 'info') // 级别门翻转（默认 info 起）
+      const message = `[host] diag debug ${diagDebugEnabled ? '开启' : '关闭'}（菜单触发——级别门 ${diagDebugEnabled ? 'debug' : 'info'}）`
+      noteHarnessLog(logPath, message) // harness.log 双轨留痕（开关动作可观测）
+      diagDebug.emit(diagDebugEnabled, message) // diag info 行恒落盘（info 过级别门）——开关事件本身可回放
+      return diagDebugEnabled
     },
   }
 }

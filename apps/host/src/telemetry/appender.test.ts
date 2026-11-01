@@ -189,6 +189,28 @@ describe('级别过滤开关（diag-milestone-coverage 方案 3——默认 info
     expect(captured.map((row) => (JSON.parse(row) as { level: string }).level)).toEqual(['debug', 'info'])
   })
 
+  it('setMinLevel 三态：默认关 → 打开 → 关闭后恢复默认（debug 再不落盘）', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.handleEvent(DEBUG)
+    await appender.idle()
+    expect(captured).toHaveLength(0) // 态① 默认关
+    appender.setMinLevel('debug')
+    appender.handleEvent(DEBUG)
+    await appender.idle()
+    expect(captured).toHaveLength(1) // 态② 开：debug 落盘
+    appender.setMinLevel('info')
+    appender.handleEvent(DEBUG)
+    appender.handleEvent({ ...BASE, level: 'warn' })
+    await appender.idle()
+    expect(captured.map((row) => (JSON.parse(row) as { level: string }).level)).toEqual(['debug', 'warn']) // 态③ 关：恢复默认门
+  })
+
   it('崩溃路径同受级别门（debug 行经 appendCrashLine 亦不落盘）', () => {
     let syncWrites = 0
     const appender = new DiagAppender({

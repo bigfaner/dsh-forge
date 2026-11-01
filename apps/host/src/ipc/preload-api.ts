@@ -18,6 +18,7 @@ import {
   HARNESS_SAFE_MODE_CHANNEL,
   HARNESS_SHOW_DIAG_LOGS_CHANNEL,
   HARNESS_SHOW_LOG_CHANNEL,
+  HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL,
 } from './harness-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
 import type { BootManifest } from '../boot/index.js'
@@ -85,6 +86,12 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     relaunchSafeMode: (): Promise<void> => invokeFace.invoke(HARNESS_SAFE_MODE_CHANNEL) as Promise<void>,
     showHarnessLog: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_LOG_CHANNEL) as Promise<boolean>,
     showDiagLogs: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_DIAG_LOGS_CHANNEL) as Promise<boolean>,
+    /**
+     * 1.14：diag debug 运行期开关缝（dshForge 域外直转面同制——不进 forge invoke allowlist）：
+     * 翻转 host 侧 appender 级别门（默认 info；开启后豁免点 debug 行落盘 app-*.jsonl 可回放），
+     * 返回翻转后的开启态。
+     */
+    toggleDiagDebug: (): Promise<boolean> => invokeFace.invoke(HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL) as Promise<boolean>,
     /**
      * fix-17 ②：tab 切换重连缝（dshForge 域外直转面先例同制——不进 forge invoke allowlist）：
      * 触发 host 侧隧道建立/读数刷新（child 侧 tunnel-toggle 分支消费），结果经 boot

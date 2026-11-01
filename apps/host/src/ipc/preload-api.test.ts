@@ -13,6 +13,7 @@ import {
   HARNESS_SAFE_MODE_CHANNEL,
   HARNESS_SHOW_DIAG_LOGS_CHANNEL,
   HARNESS_SHOW_LOG_CHANNEL,
+  HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL,
 } from './harness-channel.js'
 import {
   createDirectoryPickerBridge,
@@ -77,6 +78,14 @@ describe('preload 暴露面（window.dshForge）', () => {
     await api.showDiagLogs()
     expect(face.invoke).toHaveBeenCalledWith(HARNESS_SHOW_DIAG_LOGS_CHANNEL)
     expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(HARNESS_SHOW_DIAG_LOGS_CHANNEL)).toBe(false)
+  })
+
+  it('diag-milestone-coverage 1.14：toggleDiagDebug → dsh-forge:harness/toggle-diag-debug 直转（零负载；不进 forge invoke allowlist）', async () => {
+    const face = fakeFace()
+    const api = createDshForgePreloadApi(face)
+    await api.toggleDiagDebug()
+    expect(face.invoke).toHaveBeenCalledWith(HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL)
+    expect((FORGE_CHANNEL_ALLOWLIST as readonly string[]).includes(HARNESS_TOGGLE_DIAG_DEBUG_CHANNEL)).toBe(false)
   })
 
   it('fix-17 ②：tunnelToggle → dsh-forge:remote/tunnel-toggle 直转（tab 重连缝——域外直转面先例同制，不进 forge invoke allowlist）', async () => {
