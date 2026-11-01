@@ -36,6 +36,31 @@ export interface ExpertsEntryPatch {
     readonly reasoning?: string;
   };
   readonly tools?: readonly string[];
+  readonly skills?: readonly string[];
+}
+
+/**
+ * 字段归属矩阵（bug 7ca12bc8 规格正本）：
+ * - 配置半 = {provider, model, reasoning, tools, skills}（+disabled 位）——写
+ *   experts.<实例ID> 条目，永不触碰档案，不影响来源；
+ * - 内容半 = {title, description, personaMd}——写档案（内置专家 update 升级 user
+ *   层副本、来源翻「用户」）；
+ * - 不可写：name（身份键）/ instanceId / origin / enabled（enabled 走配置半 disabled 位）。
+ */
+export const CONFIG_HALF_FIELDS = ["provider", "model", "reasoning", "tools", "skills"] as const;
+export const CONTENT_HALF_FIELDS = ["title", "description", "personaMd"] as const;
+
+/**
+ * 内容差异检测（bug 7ca12bc8 save 分流前置门）：内容半字段 draft vs 档案现值逐字段
+ * 比对（字符串 trim 归一）。全等 = false → 纯路由保存跳过 update（来源保持内置）；
+ * 任一不等 = true → update 档案径照常。
+ */
+export function isContentDirty(draft: ExpertDraft, expert: ExpertView): boolean {
+  return (
+    draft.title.trim() !== expert.title.trim() ||
+    draft.description.trim() !== expert.description.trim() ||
+    draft.personaMd.trim() !== expert.personaMd.trim()
+  );
 }
 
 /** update 路由载荷（provider/model 归一后形态——空串归缺键，frontmatter 无键回落继承；reasoning 不入档案载荷——写 experts 条目）。 */
@@ -116,10 +141,10 @@ export function wireDraft(draft: ExpertDraft): ExpertWireDraft {
 }
 
 /**
- * 草稿 → 档案内容载荷（experts 写缝在场时的 update 路由载荷——内容字段走既有档案
- * 编辑径，路由不混写）：provider/model 不进档案载荷（路由归 experts 条目）；tools
- * 透传档案现值（zod 门 min(1) 满足 + 档案工具不被覆写——工具覆写语义归 experts 条目）；
- * skills 随档案径（低风险假设：本任务 AC 只点名 Agent选项+工具写 experts）。
+ * 草稿 → 档案内容载荷（experts 写缝在场时的 update 路由载荷）：内容半 = {title,
+ * description, personaMd}；tools/skills 属配置半（字段归属矩阵，bug 7ca12bc8）——
+ * 永不触碰档案，透传档案现值（zod 门 min(1) 满足 + 档案不被覆写——覆写语义归
+ * experts 条目）；provider/model/reasoning 不进档案载荷（路由归 experts 条目）。
  */
 export function archiveContentWireOf(draft: ExpertDraft, expert: ExpertView): ExpertWireDraft {
   return {
@@ -127,14 +152,15 @@ export function archiveContentWireOf(draft: ExpertDraft, expert: ExpertView): Ex
     description: draft.description,
     personaMd: draft.personaMd,
     tools: expert.tools,
-    skills: draft.skills,
+    skills: expert.skills,
   };
 }
 
 /**
- * 草稿 → experts.<实例ID> 条目补丁（保存写径的配置半）：provider/model 成对在场才落
- * 组（成对语义同 validateDraft 门）；reasoning 非「默认」才落位；tools 非空才落键——
- * 逐项清空 = 键归缺 = 回退档案值/不下发（无「清除覆盖」按钮的回退语义承载）。
+ * 草稿 → experts.<实例ID> 条目补丁（保存写径的配置半 = 字段归属矩阵：provider/model/
+ * reasoning/tools/skills）：provider/model 成对在场才落组（成对语义同 validateDraft 门）；
+ * reasoning 非「默认」才落位；tools/skills 非空才落键——逐项清空 = 键归缺 = 回退档案值/
+ * 不下发（无「清除覆盖」按钮的回退语义承载）。
  */
 export function expertsEntryOf(draft: ExpertDraft): ExpertsEntryPatch {
   const provider = draft.provider.trim();
@@ -148,6 +174,7 @@ export function expertsEntryOf(draft: ExpertDraft): ExpertsEntryPatch {
   return {
     ...(hasAgentOptions ? { agentOptions } : {}),
     ...(draft.tools.length > 0 ? { tools: [...draft.tools] } : {}),
+    ...(draft.skills.length > 0 ? { skills: [...draft.skills] } : {}),
   };
 }
 

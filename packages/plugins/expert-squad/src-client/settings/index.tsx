@@ -214,7 +214,9 @@ export function expertsConfigWriteOf(
         const experts = asRecord(asRecord(form.getSnapshot().value)?.experts) ?? {};
         const prior = asRecord(experts[instanceId]) ?? {};
         // 条目合成：补丁位整组替换（缺键 = 摘除）；disabled 位——补丁 true = 禁用落位，
-        // 补丁 false = 启用且位摘除（键归缺）；补丁未触碰（undefined）= 保留 prior
+        // 补丁 false = 启用且位摘除（键归缺）；补丁未触碰（undefined）= 保留 prior。
+        // skills：save 补丁缺键 = prior 保留（补丁未触碰位，如启停 {disabled} 补丁）；
+        // 补丁在场（字段归属矩阵配置半）= 整组替换，清空 = 键归缺 = 回退档案值。
         const merged: Record<string, unknown> = {};
         if (entry.disabled === true) merged.disabled = true;
         else if (entry.disabled === false) { /* 启用 = 位摘除 */ }
@@ -222,6 +224,7 @@ export function expertsConfigWriteOf(
         if (Array.isArray(prior.skills)) merged.skills = prior.skills;
         if (entry.agentOptions !== undefined) merged.agentOptions = entry.agentOptions;
         if (entry.tools !== undefined) merged.tools = [...entry.tools];
+        if (entry.skills !== undefined) merged.skills = [...entry.skills];
         const accepted = await form.set("experts", { ...experts, [instanceId]: merged });
         if (accepted) return;
         if (left <= 1) {

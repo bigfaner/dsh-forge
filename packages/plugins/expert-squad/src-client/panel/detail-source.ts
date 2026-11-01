@@ -12,6 +12,7 @@ import {
   archiveContentWireOf,
   draftOf,
   expertsEntryOf,
+  isContentDirty,
   toggleInList,
   validateDraft,
   wireDraft,
@@ -294,33 +295,39 @@ export class ExpertDetailController {
     const generation = this.generation;
     try {
       // 写径分流（experts 配置缝在场 = 双写不混写；缺席 = 旧装配降级走既有档案径）：
-      // · 内容半：岗位/简介/人设/技能经 update 路由（档案编辑径；路由与工具不混写——
-      //   tools 透传档案现值）；
-      // · 配置半：Agent选项（provider/model 成对 + reasoning）与工具写 experts.<实例ID>
-      //   条目（settings 服务 revisioned；逐项清空 = 键归缺 = 回退档案值）。
+      // 内容差异检测前置（bug 7ca12bc8，字段归属矩阵见 detail-logic CONTENT_HALF_FIELDS）：
+      // · 内容半全等 → 跳过 update，仅写配置半——档案零改动，内置专家来源保持「内置」；
+      // · 内容半任一不等 → update（内置升级 user 层副本、来源翻「用户」）+ 配置半照常
+      //   双写同锚（e9eb4ac5 语义不变）；
+      // · 配置半（provider/model/reasoning/tools/skills）：写 experts.<实例ID> 条目
+      //   （settings 服务 revisioned；逐项清空 = 键归缺 = 回退档案值）。
       const writeConfig = this.mutations.writeExpertsConfig;
       let updated: ExpertView;
       if (writeConfig === undefined) {
         // wireDraft：provider/model trim 后空串归缺键——不落半组、清空两字段即回落继承
         updated = await this.mutations.update(current.expert.name, wireDraft(current.draft));
       } else {
-        updated = await this.mutations.update(
-          current.expert.name,
-          archiveContentWireOf(current.draft, current.expert),
-        );
-        // 配置键取 update 回包的换新视图（bug 66908627 根因级：内置专家被 user 层
-        // 副本遮蔽时生效实例 ID 已漂移——按保存时点旧键写条目会挂在被遮蔽实例上，
-        // list 折叠取不到 → chip 显「继承父Agent」显示失真）。双写两侧同锚。
-        await this.writeConfigOrThrow(updated, current.draft);
-        // 所见即所得补折（list 轮询前的即时呈现）：update 回包档案半未含 experts 折叠——
-        // 条目有值的位就地覆盖（清空位保留 update 回包的档案值 = 回退语义同构）。
+        const contentDirty = isContentDirty(current.draft, current.expert);
+        // 档案锚：内容半脏才走 update 档案径；纯路由 = 保持现视图（零档案写）
+        const anchor = contentDirty
+          ? await this.mutations.update(
+              current.expert.name,
+              archiveContentWireOf(current.draft, current.expert),
+            )
+          : current.expert;
+        // 配置写锚（bug 66908627 双写同锚）：内容半写径发生时随 update 回包换新视图
+        // （内置被 user 层副本遮蔽后生效实例 ID 已漂移）；纯路由 = 现视图（无漂移）。
+        await this.writeConfigOrThrow(anchor, current.draft);
+        // 所见即所得补折（list 轮询前的即时呈现）：锚视图档案半未含 experts 折叠——
+        // 条目有值的位就地覆盖（清空位保留锚视图的档案值 = 回退语义同构）。
         const patch = expertsEntryOf(current.draft);
         updated = {
-          ...updated,
-          provider: patch.agentOptions?.provider ?? updated.provider,
-          model: patch.agentOptions?.model ?? updated.model,
-          reasoning: patch.agentOptions?.reasoning ?? updated.reasoning,
-          tools: patch.tools ?? updated.tools,
+          ...anchor,
+          provider: patch.agentOptions?.provider ?? anchor.provider,
+          model: patch.agentOptions?.model ?? anchor.model,
+          reasoning: patch.agentOptions?.reasoning ?? anchor.reasoning,
+          tools: patch.tools ?? anchor.tools,
+          skills: patch.skills ?? anchor.skills,
         };
       }
       if (generation !== this.generation) return; // 迟到回包：换代后不落态

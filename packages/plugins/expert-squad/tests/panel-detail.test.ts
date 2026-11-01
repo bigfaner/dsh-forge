@@ -614,19 +614,24 @@ describe("provider/model 成对编辑（1.10）", () => {
 // ---- 详情 Dialog 双写写径（expert-squad-default-routing 1.5）------------------
 
 describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不混写）", () => {
-  it("expertsEntryOf：provider/model 成对才落组；reasoning 非「默认」才落位；tools 非空才落键", () => {
+  it("expertsEntryOf：provider/model 成对才落组；reasoning 非「默认」才落位；tools/skills 非空才落键（字段归属矩阵配置半）", () => {
     const base = draftOf(entry());
     expect(
       expertsEntryOf({ ...base, provider: " deepseek ", model: "reasoner", reasoning: "high" }),
     ).toEqual({
       agentOptions: { provider: "deepseek", model: "reasoner", reasoning: "high" },
       tools: ["read", "edit"],
+      skills: ["review", "tsc"],
     });
     // 只填其一（校验门拦下，但纯函数如实不落半组）
     expect(expertsEntryOf({ ...base, provider: "deepseek", model: "" }).agentOptions).toBeUndefined();
     // reasoning「默认」（空串）不落位；逐项清空 = 键归缺 = 回退档案值
-    expect(expertsEntryOf({ ...base, reasoning: "" })).toEqual({ tools: ["read", "edit"] });
-    expect(expertsEntryOf({ ...base, tools: [] })).toEqual({});
+    expect(expertsEntryOf({ ...base, reasoning: "" })).toEqual({
+      tools: ["read", "edit"],
+      skills: ["review", "tsc"],
+    });
+    expect(expertsEntryOf({ ...base, tools: [] })).toEqual({ skills: ["review", "tsc"] });
+    expect(expertsEntryOf({ ...base, tools: [], skills: [] })).toEqual({});
   });
 
   it("archiveContentWireOf：内容字段走档案径，provider/model 不进档案载荷；tools 透传档案现值", () => {
@@ -666,6 +671,8 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     });
     ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
     ctl.startEdit();
+    // 内容半脏（岗位改动）→ update 档案径照常；路由半照写配置条目
+    ctl.setField("title", "首席评审");
     ctl.setField("provider", "deepseek");
     ctl.setField("model", "reasoner");
     ctl.setField("reasoning", "high");
@@ -674,18 +681,53 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     expect(updates).toHaveLength(1);
     expect(JSON.stringify(updates[0])).not.toContain('"provider"');
     expect(JSON.stringify(updates[0])).not.toContain('"reasoning"');
-    // 配置半：实例 ID 寻址 + Agent选项/工具条目
+    // 配置半：实例 ID 寻址 + Agent选项/工具/技能条目
     expect(writes).toEqual([
       [
         "@dsh-forge/plugin-forge#code-reviewer",
         {
           agentOptions: { provider: "deepseek", model: "reasoner", reasoning: "high" },
           tools: ["read", "edit"],
+          skills: ["review", "tsc"],
         },
       ],
     ]);
     expect(ctl.getSnapshot().mode).toBe("view");
     expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+  });
+
+  it("bug 7ca12bc8：纯路由保存（内置 plugin）→ update 不被调用、来源保持内置、仅配置写", async () => {
+    let updates = 0;
+    const writes: [string, unknown][] = [];
+    const ctl = new ExpertDetailController({
+      update: async () => {
+        updates += 1;
+        return idEntry({ origin: "user", instanceId: "@dsh-forge/plugin-forge#code-reviewer" });
+      },
+      writeExpertsConfig: async (instanceId, patch) => {
+        writes.push([instanceId, patch]);
+      },
+    });
+    ctl.open(idEntry({ origin: "plugin", instanceId: "@dsh-forge/plugin-forge#code-reviewer" }));
+    ctl.startEdit();
+    ctl.setField("provider", "deepseek");
+    ctl.setField("model", "reasoner");
+    await ctl.save();
+    // 内容半全等 → 档案零改动：update 不被调用（内置不被升级为 user 层副本）
+    expect(updates).toBe(0);
+    // 仅配置写：experts.<实例ID> 条目，锚 = 保存时点内置实例（无漂移）
+    expect(writes).toEqual([
+      [
+        "@dsh-forge/plugin-forge#code-reviewer",
+        {
+          agentOptions: { provider: "deepseek", model: "reasoner" },
+          tools: ["read", "edit"],
+          skills: ["review", "tsc"],
+        },
+      ],
+    ]);
+    // 来源保持内置
+    expect(ctl.getSnapshot().expert.origin).toBe("plugin");
   });
 
   it("保存（配置缝在场，bug 66908627）：update 回包实例 ID 漂移（内置被 user 层副本遮蔽）→ 配置写键随换新视图", async () => {
@@ -700,6 +742,8 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     });
     ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
     ctl.startEdit();
+    // 内容半脏（岗位改动）→ update 发生，回包实例 ID 漂移；配置写键随换新视图
+    ctl.setField("title", "首席评审");
     ctl.setField("provider", "deepseek");
     ctl.setField("model", "reasoner");
     await ctl.save();
@@ -711,6 +755,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
         {
           agentOptions: { provider: "deepseek", model: "reasoner" },
           tools: ["read", "edit"],
+          skills: ["review", "tsc"],
         },
       ],
     ]);
@@ -736,7 +781,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     ctl.setField("provider", "");
     ctl.setField("model", "");
     await ctl.save();
-    expect(writes).toEqual([{ tools: ["read", "edit"] }]);
+    expect(writes).toEqual([{ tools: ["read", "edit"], skills: ["review", "tsc"] }]);
   });
 
   it("保存（配置缝在场）：实例 ID 缺席 = fail-loud 不写配置（路由覆写丢写即显示失真）", async () => {
@@ -787,6 +832,157 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
   });
 });
 
+// ---- 字段归属矩阵（bug 7ca12bc8）：9 字段 × origin 全组合 --------------------
+//
+// 配置半 = {provider, model, reasoning, tools, skills}（+disabled 位）→ experts.<实例ID>
+// 条目，永不触碰档案、不影响来源；内容半 = {title, description, personaMd} → 档案
+// update（内置专家升级 user 层副本、来源翻「用户」）；name 不可写（身份键）。
+
+describe("字段归属矩阵（bug 7ca12bc8）：逐字段单独改动 × origin∈{plugin,user}", () => {
+  const CONFIG_BASE_PATCH = { tools: ["read", "edit"], skills: ["review", "tsc"] };
+
+  /** 逐字段草稿改动（provider/model 单独改动 = 成对校验拦下——矩阵如实断言拦下面）。 */
+  const CASES: {
+    field: string;
+    mutate: (ctl: ExpertDetailController) => void;
+    half: "content" | "routing" | "pair-invalid";
+  }[] = [
+    { field: "title", mutate: (c) => c.setField("title", "首席评审"), half: "content" },
+    { field: "description", mutate: (c) => c.setField("description", "新的简介"), half: "content" },
+    { field: "personaMd", mutate: (c) => c.setField("personaMd", "## 新人设"), half: "content" },
+    { field: "provider", mutate: (c) => c.setField("provider", "deepseek"), half: "pair-invalid" },
+    { field: "model", mutate: (c) => c.setField("model", "reasoner"), half: "pair-invalid" },
+    { field: "reasoning", mutate: (c) => c.setField("reasoning", "high"), half: "routing" },
+    {
+      field: "tools",
+      mutate: (c) => c.toggleTool("grep"),
+      half: "routing",
+    },
+    {
+      field: "skills",
+      mutate: (c) => c.toggleSkill("vue"),
+      half: "routing",
+    },
+  ];
+
+  for (const origin of ["plugin", "user"] as const) {
+    const instanceId = origin === "plugin" ? "@pkg#code-reviewer" : "layer:user#code-reviewer";
+
+    for (const { field, mutate, half } of CASES) {
+      it(`[${field} × ${origin}] ${half}`, async () => {
+        const updates: unknown[] = [];
+        const writes: [string, unknown][] = [];
+        // 内容半脏时 update 回包 = 内置升级 user 层副本（origin 翻用户）；user 层原地写
+        const ctl = new ExpertDetailController({
+          update: async (name, draft) => {
+            updates.push({ name, draft });
+            return idEntry({
+              origin: origin === "plugin" ? "user" : origin,
+              instanceId: origin === "plugin" ? "layer:user#code-reviewer" : instanceId,
+              ...(field === "title" ? { title: "首席评审" } : {}),
+              ...(field === "description" ? { description: "新的简介" } : {}),
+              ...(field === "personaMd" ? { personaMd: "## 新人设" } : {}),
+            });
+          },
+          writeExpertsConfig: async (key, patch) => {
+            writes.push([key, patch]);
+          },
+        });
+        ctl.open(idEntry({ origin, instanceId }));
+        ctl.startEdit();
+        mutate(ctl);
+        await ctl.save();
+
+        if (half === "pair-invalid") {
+          // provider/model 单独改动 = 成对校验拦下：零写径、停留编辑态、来源不变
+          expect(updates).toHaveLength(0);
+          expect(writes).toHaveLength(0);
+          expect(ctl.getSnapshot().mode).toBe("edit");
+          expect(ctl.getSnapshot().errors[field === "provider" ? "provider" : "model"]).toBe(
+            "provider 与 model 须成对填写（或同时清空继承父Agent）",
+          );
+          expect(ctl.getSnapshot().expert.origin).toBe(origin);
+          return;
+        }
+        // ① update 是否被调用：仅内容半改动调用；纯路由改动跳过（档案零改动）
+        expect(updates).toHaveLength(half === "content" ? 1 : 0);
+        if (half === "content") {
+          const payload = (updates[0] as { draft: Record<string, unknown> }).draft;
+          // ② update 载荷 = 内容半 + 档案现值透传；配置半不入档案载荷
+          expect(payload[field]).toBeDefined();
+          expect("provider" in payload).toBe(false);
+          expect("model" in payload).toBe(false);
+          expect("reasoning" in payload).toBe(false);
+          expect(payload.tools).toEqual(["read", "edit"]);
+          expect(payload.skills).toEqual(["review", "tsc"]);
+        }
+        // ② experts 写键与载荷：恒写（纯路由 = 仅配置写）；内容半 × 内置 = 锚随 update
+        // 回包换新视图（实例 ID 漂移到 user 层副本）
+        const expectedKey =
+          half === "content" && origin === "plugin" ? "layer:user#code-reviewer" : instanceId;
+        const expectedPatch =
+          half === "routing" && field === "reasoning"
+            ? { agentOptions: { reasoning: "high" }, ...CONFIG_BASE_PATCH }
+            : half === "routing" && field === "tools"
+              ? { tools: ["read", "edit", "grep"], skills: ["review", "tsc"] }
+              : half === "routing" && field === "skills"
+                ? { tools: ["read", "edit"], skills: ["review", "tsc", "vue"] }
+                : CONFIG_BASE_PATCH;
+        expect(writes).toEqual([[expectedKey, expectedPatch]]);
+        // ③ 来源：纯路由保存保持原 origin（bug 7ca12bc8 收口）；内容半 × 内置 = 翻「用户」
+        expect(ctl.getSnapshot().expert.origin).toBe(
+          half === "content" && origin === "plugin" ? "user" : origin,
+        );
+        expect(ctl.getSnapshot().mode).toBe("view");
+        expect(ctl.getSnapshot().toast).toContain("热刷新生效");
+      });
+    }
+  }
+
+  it("[name × *] 不可写（身份键）：寻址键恒档案名，不入任何写径载荷", async () => {
+    const updates: unknown[] = [];
+    const writes: [string, unknown][] = [];
+    const ctl = new ExpertDetailController({
+      update: async (name, draft) => {
+        updates.push({ name, draft });
+        return idEntry({ origin: "user", instanceId: "layer:user#code-reviewer" });
+      },
+      writeExpertsConfig: async (key, patch) => {
+        writes.push([key, patch]);
+      },
+    });
+    ctl.open(idEntry({ origin: "plugin", instanceId: "@pkg#code-reviewer" }));
+    ctl.startEdit();
+    // 草稿无 name 字段（身份键不入草稿）——内容改动保存，寻址键恒原名
+    ctl.setField("title", "首席评审");
+    await ctl.save();
+    expect((updates[0] as { name: string }).name).toBe("code-reviewer");
+    expect(JSON.stringify(updates[0])).toContain('"name":"code-reviewer"');
+    expect(writes).toEqual([["layer:user#code-reviewer", CONFIG_BASE_PATCH]]);
+    expect(JSON.stringify(writes[0]?.[1])).not.toContain('"name"');
+  });
+
+  it("[全零差异 × *] 内容半与路由半均零改动 = 零 update + 仅配置写（原值回写）", async () => {
+    let updates = 0;
+    const writes: [string, unknown][] = [];
+    const ctl = new ExpertDetailController({
+      update: async () => {
+        updates += 1;
+        return idEntry({ origin: "user", instanceId: "layer:user#code-reviewer" });
+      },
+      writeExpertsConfig: async (key, patch) => {
+        writes.push([key, patch]);
+      },
+    });
+    ctl.open(idEntry({ origin: "plugin", instanceId: "@pkg#code-reviewer" }));
+    ctl.startEdit();
+    await ctl.save();
+    expect(updates).toBe(0);
+    expect(writes).toEqual([["@pkg#code-reviewer", CONFIG_BASE_PATCH]]);
+    expect(ctl.getSnapshot().expert.origin).toBe("plugin");
+  });
+});
+
 // ---- writeExpertsConfig 生产装配缝（bug 5cf9768e）----------------------------
 
 describe("writeExpertsConfig 生产装配缝（bug 5cf9768e）", () => {
@@ -820,18 +1016,19 @@ describe("writeExpertsConfig 生产装配缝（bug 5cf9768e）", () => {
       ctl.setField("provider", "deepseek");
       ctl.setField("model", "reasoner");
       await ctl.save();
-      // 配置半：实例 ID 寻址写 experts 条目（保存分流走配置缝径）
+      // 配置半：实例 ID 寻址写 experts 条目（保存分流走配置缝径；内容半全等零 update——
+      // fetchMock 只放 update 路由，纯路由保存不应命中 fetch）
+      expect(fetchMock).not.toHaveBeenCalled();
       expect(writes).toEqual([
         [
           "@dsh-forge/expert-squad#code-reviewer",
-          { agentOptions: { provider: "deepseek", model: "reasoner" }, tools: ["read", "edit"] },
+          {
+            agentOptions: { provider: "deepseek", model: "reasoner" },
+            tools: ["read", "edit"],
+            skills: ["review", "tsc"],
+          },
         ],
       ]);
-      // 内容半：update 载荷不带路由字段（路由不混写进档案）
-      const updateBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as { body?: string })?.body));
-      expect("provider" in updateBody).toBe(false);
-      expect("model" in updateBody).toBe(false);
-      expect("reasoning" in updateBody).toBe(false);
       expect(ctl.getSnapshot().mode).toBe("view");
       expect(ctl.getSnapshot().toast).toContain("热刷新生效");
     } finally {
