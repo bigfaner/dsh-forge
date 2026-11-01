@@ -14,8 +14,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type { ChildProcess } from 'node:child_process'
 import type { Readable } from 'node:stream'
-import { createWorkerTreeGuard, ensureKeeperAssembly, hostOwnedPidsSnapshot, noopWorkerTreeGuard, noteHostOwnedChild } from './job-tree.js'
+import { createWorkerTreeGuard, ensureKeeperAssembly, hostOwnedPidsSnapshot, noopWorkerTreeGuard, noteHostOwnedChild, setJobTreeDiagSink } from './job-tree.js'
 import type { KeeperProcess, WorkerTreeGuardDeps } from './job-tree.js'
+import type { ForgeDiagEmitFace, ForgeDiagPayload } from '../faces.js'
 
 /** 测试装配桩（真 PowerShell 编译不触——assembly 注入假路径） */
 const ASSEMBLY_STUB = Promise.resolve({ assemblyPath: 'C:\\stub\\jobtree.dll', scriptPath: 'C:\\stub\\keeper.ps1' })
@@ -486,5 +487,43 @@ describe('队列目录锚（queueBaseDir）', () => {
     expect(readdirSync(base)).toContain('queue-fresh') // 新鲜目录保留
     expect(readdirSync(base)).toContain('unrelated') // 非 queue-* 不碰
     rmSync(base, { recursive: true, force: true })
+  })
+})
+
+// ───────────── sink 接线时序（diag-milestone-coverage 1.5——引导期 typed diag 可达性锁面）─────────────
+// 生产装配序：setJobTreeDiagSink(diag) 在插件装配体顶部（index.ts:109）同步执行，
+// 守卫只经 treeGuard() 惰性创建（index.ts:391——首个 worker spawn 时点），恒晚于接线；
+// 本锁面证明：sink 已接线形态下，引导期失败（queueDir 创建失败）发 typed
+// event=job-tree-queue 行（不经 console 兜底）——console 兜底仅剩缝未接线的单测形态。
+
+describe('sink 接线时序（引导期 typed diag 可达）', () => {
+  const neverLauncher: NonNullable<WorkerTreeGuardDeps['keeperLauncher']> = () => {
+    throw new Error('must not launch（queueDir 创建失败应在 launcher 前短路禁用）')
+  }
+
+  it('sink 已接线：引导期 queueDir 创建失败 → typed job-tree-queue error 行达缝（零 console 兜底）', async () => {
+    const received: ForgeDiagPayload[] = []
+    const sink: ForgeDiagEmitFace = (payload) => received.push(payload)
+    setJobTreeDiagSink(sink)
+    // queueBaseDir 落在既有文件上——queueDir（文件/queue-uuid）mkdirSync 必败 = 引导期失败形态
+    const base = join(mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-sink-')), 'not-a-dir')
+    writeFileSync(base, 'x', 'utf8')
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => { errors.push(args.map(String).join(' ')) }
+    try {
+      const guard = createWorkerTreeGuard({ ...deps('win32', neverLauncher), queueBaseDir: base })
+      await guard.whenReady // 引导期失败 fail-soft 禁用态——不挂调用方
+      expect(guard.keeperPid).toBeUndefined()
+      const queueRows = received.filter((p) => p.event === 'job-tree-queue')
+      expect(queueRows.length).toBeGreaterThanOrEqual(1) // typed 行可达（修复前判「不可达」的场景）
+      expect(queueRows[0]!.level).toBe('error')
+      expect(queueRows[0]!.message).toContain('指令队列目录创建失败')
+      expect(errors).toEqual([]) // 缝在场——零 console 兜底分流
+    } finally {
+      console.error = origError
+      setJobTreeDiagSink(undefined) // 撤回——不污染后续用例
+      rmSync(base, { force: true })
+    }
   })
 })
