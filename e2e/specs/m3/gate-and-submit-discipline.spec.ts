@@ -48,34 +48,38 @@
 //
 // Assertion depth: 38/41 behavioral（93%），其中 deep 15/38（39%）——两阈均过。
 
-import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect } from '@playwright/test'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 
 const WS_NAME = 'ws-jgsd'
+
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区播种 AGENTS.md（Step1 配置态前置——首启/重播种/crash 重启统一播种同参基准态；
+// Step2 未配置态 = 用例内 unlinkSync 即时移除断言，重播种自动还原）。
+function seedGateWorkspace(dir: string): void {
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'AGENTS.md'), '# 提交约定\n\n- 提交信息遵循 Conventional Commits（type(scope): subject）\n', 'utf8')
+}
+
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: seedGateWorkspace,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
 
 /** 写动词拒绝面捕获（bridge 直调错误 message = core typed error 文案） */
 async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
 }
 
-test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（commit_hash 恒含）+ gate_json 数字摘要（Step1-3 success）', async () => {
+test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（commit_hash 恒含）+ gate_json 数字摘要（Step1-3 success）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  // Step1 前置：工作区已配置 AGENTS.md（含 commit 约定——配置态）。wsDir 预建
-  // （mkdtempSync 只建 fixtureRoot——registerProject 前的手工写盘无目录可落）
-  mkdirSync(wsDir, { recursive: true })
-  writeFileSync(join(wsDir, 'AGENTS.md'), '# 提交约定\n\n- 提交信息遵循 Conventional Commits（type(scope): subject）\n', 'utf8')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -140,19 +144,13 @@ test('@web-e2e @m3 gate 提交定式·冒烟：AGENTS.md 两态结算账本（co
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 空摘要 / 空因 / gate 摘要 / 错键（Step1b-3 边界）', async () => {
+test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 空摘要 / 空因 / gate 摘要 / 错键（Step1b-3 边界）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -241,19 +239,13 @@ test('@web-e2e @m3 gate 提交定式·拒绝面族：AC 清单 / 非法转移 / 
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（reason 落账）+ gate 失败受阻承接', async () => {
+test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（reason 落账）+ gate 失败受阻承接', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jgsd3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -302,8 +294,6 @@ test('@web-e2e @m3 gate 提交定式·受阻径：blocked submit 不经双门（
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

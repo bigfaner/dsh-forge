@@ -64,14 +64,13 @@
 //
 // Assertion depth: 44/48 behavioral（92%），其中 deep 18/44（41%）——两阈均过。
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -80,6 +79,41 @@ import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ovSub
 import { awaitNoLateModals, awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
 const WS_NAME = 'ws-joes'
+
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空目录（提案/feature slug 隔离：joe-* 各自作用域）；会话开户判读改扫共享
+// userData 根（dsh-forge-shared-launch-ud-*）内 dsh-home，按夹具段（WS_NAME——本 spec 独有）
+// 锚定；T1 会话预设收口 = 突击（无溯源渠道落点），T2 远征 / T3 突击各自用例内显式导航。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => mkdirSync(dir, { recursive: true }),
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
+ *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
+ *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
+async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'features' | 'tasks'): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf(subtab))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
+}
 
 /** 提案文档夹具（forge_dir/docs/proposals/<slug>/——listDocs fs 扫描源） */
 function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[]): void {
@@ -91,37 +125,31 @@ function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[])
 }
 
 /**
- * 夹具工作区全部会话 id（会话目录创建时间升序 = 发送先后序——fix-3② Step1e 回访锚，
- * 目录名 = 账本 sessionId，findFixtureSession 同口径扩展多会话枚举）。
- * fix-7 排序口径修正：旧「现行日志 mtime 升序」在有真实模型链的形态下失效（dogfood 播种
- * 或凭据在场——发送触发的 agent 链会把早会话日志持续写新（分钟级往返），mtime 序漂移成
- * 「最近活动序」，Step1e 位置解构取错行 → 回访断言读到别的会话转录（cycle-3 实证：首会话
- * 断言收到第三会话内容）。目录 birthtime = 会话开户时刻，与后续写入无关（ctime 兜底跨
- * 平台）；发送先后序语义由此稳定承载——断言面零弱化。
+ * 共享 launch 形态夹具会话枚举（共享 userData 根 tmp 下 dsh-forge-shared-launch-ud-* 内各
+ * dsh-home——夹具段 = WS_NAME 本 spec 独有零跨 spec 串扰；目录创建时间升序 = 发送先后序
+ * ——fix-3② Step1e 回访锚，birthtime 口径与原形态逐字保持）。
  */
-function fixtureSessionIds(dshHome: string, fixtureSegment: string): string[] {
-  const sessionsDir = join(dshHome, 'sessions')
-  if (!existsSync(sessionsDir)) return []
+function fixtureSessionIds(fixtureSegment: string): string[] {
   const found: { id: string; born: number }[] = []
-  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
-    if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
-    for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
-      if (!sDir.isDirectory()) continue
-      const st = statSync(join(sessionsDir, wsDir.name, sDir.name))
-      found.push({ id: sDir.name, born: st.birthtimeMs !== 0 ? st.birthtimeMs : st.ctimeMs })
+  for (const udName of readdirSync(tmpdir())) {
+    if (!udName.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const sessionsDir = join(tmpdir(), udName, 'dsh-home', 'sessions')
+    if (!existsSync(sessionsDir)) continue
+    for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
+      if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
+      for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
+        if (!sDir.isDirectory()) continue
+        const st = statSync(join(sessionsDir, wsDir.name, sDir.name))
+        found.push({ id: sDir.name, born: st.birthtimeMs !== 0 ? st.birthtimeMs : st.ctimeMs })
+      }
     }
   }
   return found.sort((a, b) => a.born - b.born).map((entry) => entry.id)
 }
 
-test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突击/多文档/远征/无溯源）+ feature 恒远征 + 草稿独立 + 空意图发送', async () => {
+test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突击/多文档/远征/无溯源）+ feature 恒远征 + 草稿独立 + 空意图发送', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes-ud-'))
-  const dshHome = join(userData, 'dsh-home')
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -140,9 +168,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await forgeInvoke(page, FEATURES_CHANNELS.upsertDoc, { projectId, featureSlug: 'joe-feat', docKind: 'prd-spec', relPath: 'docs/features/joe-feat/prd/prd-spec.md', summary: 'Joe feature PRD' })
 
     // ── Step1：blitz 提案行头 → 突击起步 + 预填（不自动发送）──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'proposals')
     // 展开行先行（真实用户审阅文档后开会的同径）：文档区断言验 docsMap 按需装载
     // （useProposalDocs——展开行才拉 listDocs）；预填文档清单则 = 点击时实时扫描
     // （proposalSessionRequest → listDocs 直扫——收起行打开会话 ≠ 空清单），两数据面独立。
@@ -181,10 +207,8 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     await awaitNoLateModals(page)
 
     // ── Step3 + 3b：feature 行头 → 固定远征（当前语境 = 突击——不漂移）──
-    await openOverviewDock(page)
+    await openOverviewSubtab(page, 'features')
     await ensureNoBlockingDialog(page) // 晚到模态防拦截（首会话失败面漂移窗）
-    await page.locator(ovSubtabOf('features')).click()
-    await expect(page.locator(ovSubtabOf('features'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const featOpen = page.locator('[data-dswf-ov-opensession="joe-feat"]').first()
     await expect(featOpen, 'feature 行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
     await featOpen.click()
@@ -213,8 +237,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     // ── Step1b：无溯源提案 → 不切换（保持 registry 缺省突击——bug 2ba146d8）+ chip 缺省占位 ──
     // （执行序注：Step1e 回访块移测试末段——会话行回访触发右栏布局晚沉降回休眠，
     // 其后再开 dock 需 reveal 重拍（fix-3 实证）；先完成 dock 交互面再回访。）
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
+    await openOverviewSubtab(page, 'proposals')
     const oldRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Joe 无溯源提案' }).first()
     await expect(oldRow).toBeVisible({ timeout: 30_000 })
     await expect(oldRow.locator('[data-dswf-mode-chip]'), 'mode chip 缺省占位').toHaveAttribute('data-dswf-mode-chip', 'unmarked')
@@ -249,7 +272,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     // blank 仅当前选中者可见——回访断言取非 blank 行（sc6「用户事件落地」同径）。
     // 行点回 → 转录恢复 = 中区会话面常驻（Page Composition）+ 既有会话内容不受新开影响。
     const projBlock = page.locator(projectRowOf(projectId))
-    const [firstId, secondId] = fixtureSessionIds(dshHome, WS_NAME)
+    const [firstId, secondId] = fixtureSessionIds(WS_NAME)
     expect(firstId, '首会话目录在盘（发送落地开户）').toBeDefined()
     expect(secondId, '第二会话目录在盘（两会话各自开户）').toBeDefined()
     const rowFirst = projBlock.locator(sessionRowOf(firstId as string)).first()
@@ -267,19 +290,13 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
 
     if (pageErrors.length > 0) console.log(`[joes-t1-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（远征 + 自动发送诊断体）+ 成功 toast 1s 自消 + 突击容器无诊断钮', async () => {
+test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（远征 + 自动发送诊断体）+ 成功 toast 1s 自消 + 突击容器无诊断钮', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -310,9 +327,7 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
     })) as { taskId: string }
 
     // ── Step4 success：违规容器诊断 → 失败 toast（五类检查行）→ 发送 ──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'tasks')
     await page.locator('[data-dswf-tt-contpill]').first().click()
     const menu = page.locator('[role="menu"]').first()
     await expect(menu).toBeVisible({ timeout: 15_000 })
@@ -337,8 +352,7 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
     await awaitPresetHeaderLabel(page, '远征模式')
 
     // ── Step4d：健康容器诊断 → 成功 toast「子图健康 ✓」1s 自消 + 无发送钮 ──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
+    await openOverviewSubtab(page, 'tasks')
     await page.locator('[data-dswf-tt-contpill]').first().click()
     await expect(menu).toBeVisible({ timeout: 15_000 })
     await menu.locator(`[data-dswf-tt-mcont="feature:joe-ok"]`).first().click()
@@ -363,19 +377,13 @@ test('@web-e2e @m3 概览入口·T2：子图诊断失败 → 发送给 agent（�
 
     if (pageErrors.length > 0) console.log(`[joes-t2-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送（突击容器模式 + 失败记录体）+ 非失败任务无入口', async () => {
+test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送（突击容器模式 + 失败记录体）+ 非失败任务无入口', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-joes3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -395,9 +403,7 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
     })
 
     // 任务子 tab → 突击容器 → blocked 行抽屉
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'tasks')
     await page.locator('[data-dswf-tt-contpill]').first().click()
     const menu = page.locator('[role="menu"]').first()
     await expect(menu).toBeVisible({ timeout: 15_000 })
@@ -448,8 +454,6 @@ test('@web-e2e @m3 概览入口·T3：blocked 任务「诊断失败」→ 发送
 
     if (pageErrors.length > 0) console.log(`[joes-t3-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

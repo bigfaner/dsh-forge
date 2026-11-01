@@ -41,15 +41,18 @@
 //     面 → dogfood-sc-m3.spec.ts（真实远征会话 brainstorm 行使）；枚举对照半段在本件。
 //
 // Assertion depth: 18/19 behavioral（95%），其中 deep 7/18（39%）——两阈均过。
-
-import { mkdtempSync, readdirSync } from 'node:fs'
+//
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec
+// 一次；boot-overlay 判读改扫共享 userData 根（dsh-forge-shared-launch-ud-*）内
+// boot-overlay.yml（内容由三底稿每启重写，与 userData 路径无关——语义等价）。
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
+import { expect } from '@playwright/test'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { ROOT } from '../../support/launch.js'
 import { registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
-import { overlayTextOf, presetSkillDirs } from '../../support/m3.js'
+import { presetSkillDirs } from '../../support/m3.js'
 
 const WS_NAME = 'ws-jppi'
 
@@ -57,56 +60,64 @@ const WS_NAME = 'ws-jppi'
 const isAbsoluteMaterialized = (dir: string): boolean =>
   /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') || dir.startsWith('/')
 
-test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚举面即证）+ 远征对照 + customSkillDirs 恒物化绝对路径', async () => {
-  test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jppi-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jppi-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    const project = await registerProject(page, wsDir, WS_NAME)
-
-    // ── 物化产物在场（boot 每启重写——产品工件）──
-    const overlay = overlayTextOf(userData)
-    expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
-    expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
-    expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
-
-    // ── Step1：突击组合技能目录——spec 物理缺席（枚举面即证）+ 核心包阳性对照 ──
-    const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
-    const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
-    const blitzDirs = presetSkillDirs(overlay, 'blitz')
-    expect(blitzDirs.length, `突击组合双目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
-    expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（七规格技能零在场——物理调不到，非被叮嘱不要）').toBe(true)
-    expect(blitzDirs.filter(isCoreDir).length, '核心包技能目录在场（core+skills-blitz 双条——阳性对照枚举通道有效性）').toBe(2)
-
-    // ── Step1b：远征对照——双目录全量挂载 ──
-    const expDirs = presetSkillDirs(overlay, 'expedition')
-    expect(expDirs.length, `远征组合双目录（dirs=${JSON.stringify(expDirs)}）`).toBe(2)
-    expect(expDirs.filter(isSpecDir).length, '远征含 spec 技能目录（规格全集物理前提）').toBe(1)
-    expect(expDirs.filter(isCoreDir).length, '远征含 core 技能目录').toBe(1)
-
-    // ── 核心包技能行 fs 阳性对照（枚举通道有效性证明——缺席断言不空洞通过）──
-    const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')
-    for (const skill of ['fix-bug', 'brainstorm', 'submit-task']) {
-      expect(coreEntries, `核心包技能行可见（${skill}——阳性对照）`).toContain(skill)
-    }
-    expect(coreEntries, '核心包无 run-tasks 条目（dispatch-loop-hardening 3a 退役断言）').not.toContain('run-tasks')
-
-    // ── Step3：customSkillDirs 恒物化绝对路径（!!js 表达式形态零在场）──
-    expect(overlay.includes('!!js'), '物化输出零 !!js 残留（全形态死刑）').toBe(false)
-    for (const dir of [...expDirs, ...blitzDirs]) {
-      expect(isAbsoluteMaterialized(dir), `物化绝对路径（${dir}）`).toBe(true)
-    }
-    // 必填 config 全集物化直证（镜像行义务的运行期半面——sampleOverCapGlobResults 键在场）
-    expect(overlay.includes('sampleOverCapGlobResults'), '镜像行必填 config 物化在场（tool-fs-search 全集义务）').toBe(true)
-
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-    expect(project.id, '注册收敛（世界在场）').toBeTruthy()
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+/** 共享 launch 形态 boot-overlay 判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
+ *  ——本 worker 独立持有）内 boot-overlay.yml（三底稿每启重写，内容与 userData 路径无关）。 */
+function sharedOverlayText(): string {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const file = join(tmpdir(), name, 'boot-overlay.yml')
+    if (existsSync(file)) return readFileSync(file, 'utf8')
   }
+  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+}
+
+// ── 共享 launch fixture（空白工作区；预设座位断言面零夹具档案依赖）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero' },
+})
+
+test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚举面即证）+ 远征对照 + customSkillDirs 恒物化绝对路径', async ({ sharedLaunch }) => {
+  test.setTimeout(300_000)
+  const { page, pageErrors, wsDir } = sharedLaunch
+  const project = await registerProject(page, wsDir, WS_NAME)
+
+  // ── 物化产物在场（boot 每启重写——产品工件）──
+  const overlay = sharedOverlayText()
+  expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
+  expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
+  expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
+
+  // ── Step1：突击组合技能目录——spec 物理缺席（枚举面即证）+ 核心包阳性对照 ──
+  const isSpecDir = (d: string): boolean => d.toLowerCase().includes('plugin-forge-spec')
+  const isCoreDir = (d: string): boolean => !isSpecDir(d) && d.toLowerCase().includes('plugin-forge')
+  const blitzDirs = presetSkillDirs(overlay, 'blitz')
+  expect(blitzDirs.length, `突击组合双目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
+  expect(blitzDirs.every((d) => !isSpecDir(d)), '突击组合 spec 目录物理缺席（七规格技能零在场——物理调不到，非被叮嘱不要）').toBe(true)
+  expect(blitzDirs.filter(isCoreDir).length, '核心包技能目录在场（core+skills-blitz 双条——阳性对照枚举通道有效性）').toBe(2)
+
+  // ── Step1b：远征对照——双目录全量挂载 ──
+  const expDirs = presetSkillDirs(overlay, 'expedition')
+  expect(expDirs.length, `远征组合双目录（dirs=${JSON.stringify(expDirs)}）`).toBe(2)
+  expect(expDirs.filter(isSpecDir).length, '远征含 spec 技能目录（规格全集物理前提）').toBe(1)
+  expect(expDirs.filter(isCoreDir).length, '远征含 core 技能目录').toBe(1)
+
+  // ── 核心包技能行 fs 阳性对照（枚举通道有效性证明——缺席断言不空洞通过）──
+  const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')
+  for (const skill of ['fix-bug', 'brainstorm', 'submit-task']) {
+    expect(coreEntries, `核心包技能行可见（${skill}——阳性对照）`).toContain(skill)
+  }
+  expect(coreEntries, '核心包无 run-tasks 条目（dispatch-loop-hardening 3a 退役断言）').not.toContain('run-tasks')
+
+  // ── Step3：customSkillDirs 恒物化绝对路径（!!js 表达式形态零在场）──
+  expect(overlay.includes('!!js'), '物化输出零 !!js 残留（全形态死刑）').toBe(false)
+  for (const dir of [...expDirs, ...blitzDirs]) {
+    expect(isAbsoluteMaterialized(dir), `物化绝对路径（${dir}）`).toBe(true)
+  }
+  // 必填 config 全集物化直证（镜像行义务的运行期半面——sampleOverCapGlobResults 键在场）
+  expect(overlay.includes('sampleOverCapGlobResults'), '镜像行必填 config 物化在场（tool-fs-search 全集义务）').toBe(true)
+
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+  expect(project.id, '注册收敛（世界在场）').toBeTruthy()
 })

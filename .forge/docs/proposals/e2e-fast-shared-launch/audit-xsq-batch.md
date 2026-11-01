@@ -88,6 +88,42 @@
 - 迁移后全批（`003-batch3b/migrated-run2-final.log`，4.3m）：**5 passed / 2 failed**，失败 = pure-selection / membership，与基线逐例同断言——存量红，零迁移回归。
 - 迁移过程顺带修复迁移判读适配缺陷（非存量）：k3 落盘判读初版用全路径片段（扁平化目录名不含斜杠，miss）+ 二版末段未小写归一（mkdtemp 随机大小写 miss）——两处修正后 k3 独立与全批均绿（`migrated-k3-fixed2-run.log` 40.0s）。
 
+## 批次四a：m3 族前 11 份（按名称序，commit 见 git 历史）
+
+8 份迁移共享 launch 形态 + 3 份特殊面保留原形态（理由见下表）。**零退役**（逐用例复核：全部为行为/写径/守卫断言，无 unit 等价覆盖的纯文案面）。
+
+### 迁移 8 份
+
+| spec | 用例数 | 冷启点 | 裁定与适配点 |
+|---|---|---|---|
+| blitz-direct-chain | 3 | 3 → 1 | 全保留（quick-tasks 产出 + 五态评审 + 容器琥珀点 + blocked/证据门）。账本 slug 隔离（jbdc-*）；boot-overlay 判读改扫共享 userData 根（内容三底稿每启重写与路径无关）；「零纠正写」全表计数为本 spec 首用例承载（声明序串行） |
+| bootstrap-walkthrough | 2 | 2 → 1 | 全保留（成链三件 + 记录 100% 入自身库 + 全景一致）。manifest 扫描根 = sharedLaunch.wsDir（fixtureRoot 与 wsDir 合一）；全表 GROUP BY 断言同上由首用例承载 |
+| bug-quick-add-single-effect | 1 | 1 → 1 | 保留（bug 2d5434d1 单效守卫——chip 落当前会话 + 零新会话）；会话行计数为 UI 差集断言零适配 |
+| expedition-full-sdd-chain | 3 | 3 → 1 | 全保留（全链 + 打回/superseded + 幂等/守卫/append-only）；boot-overlay 同上；slug 隔离（jefc-*） |
+| gate-and-submit-discipline | 3 | 3 → 1 | 全保留（两态账本 + 拒绝面族 + 受阻径）；AGENTS.md 播种进 seedWorkspace（首启/重播种/crash 重启统一，Step2 未配置态用例内 unlink 即时断言） |
+| mode-selection-alignment | 3 | 3 → 1 | 全保留（座位/菜单/幂等点选 + 自动对齐/无溯源不切换 + 错配守卫）；预设选择跨用例不漂移（T1 幂等点选收口 = 突击 = registry 缺省 = T2/T3 期望基准） |
+| overview-entry-new-session | 3 | 3 → 1 | 全保留（四渠道入口/预填/诊断发送）；会话开户判读改扫共享 userData 根内 dsh-home 按 WS_NAME 段锚定（本 spec 独有段零串扰），birthtime 升序口径逐字保持 |
+| preset-physical-isolation | 1 | 1 → 1 | 保留（预设物理隔离枚举面）；boot-overlay 判读同上；共享形态下夹具根与 wsDir 合一（fs 枚举通道不变） |
+
+序列态收口（本批次新增，spec 内局部 helper——`openOverviewSubtab` 概览 dock 重开重试 ×3 + mode-selection `selectWorkspaceWithRetry` 芯片菜单重试）：共享会话下上用例会话面沉降窗内中心列拦截子 tab 点击 / hero picker 菜单重挂载行 detached——收口后 run1 的 3 例序列红（bootstrap Step1b / expedition Step2b/2c / overview T3）全数转绿（`migrated-run3-retrywrappers.log`）。同径先例 = dogfood-sc-m3-replay `openOverviewDockWithRetry`（keyed body 重挂载触发布局重解析；瞬态窗对策非放宽断言——轮内 30s/15s 门原样保留）。
+
+### 保留原形态裁定（批次四a）
+
+| spec | 冷启点 | 裁定理由 |
+|---|---|---|
+| m3/ac4-routing-probe | 2（2 用例） | 壳级取证件：dev profile cordis.patch.yml 用户层播种/还原（跨 worker 共享仓文件——共享会话下播种窗污染并行 worker 装载面）+ 自管 userData + 真实凭据门/去模型化门 + 用例中段 closeApp + keepEvidence 不清理——与共享 fixture 生命周期语义不相容 |
+| m3/dogfood-sc-m3 | 1 | dogfood 真实模型面：seedDshHome 凭据播种写自管 userData（fixture 层 userData 自管不外露、无播种缝）+ dogfood overlay + 双 test.skip 门控 + 用例中段 closeApp——唯一真实模型依赖面（Hard Rule 沿 M2 裁决），迁移无收益（单用例 1→1） |
+| m3/dogfood-sc-m3-replay | 1 | spawn 缝回放件：回放计划经 env `DSH_FORGE_REPLAY_PLAN` 注入（路径 = 自管 userData 内 plan 文件——fixture 创建时点 userData 未定）+ dshHome 会话定位（会话 A/B/C id 作 /stop-dag-tasks 回执对账锚）——共享 ud 根扫描在 workers=2 下有跨 worker 同段会话串扰风险（回执锚错绑即红）；单用例 1→1 零冷启收益 |
+
+### 真机对账（workers=2，8 份迁移 spec 18 用例）
+
+- 基线（原始形态，`001-batch4a/baseline-run1.log`，4.6m）：**4 failed / 15 passed**——blitz 冒烟 + preset T1（同断言同红：boot-overlay 突击组合 dirs=3，expert-squad skills 目录入列——产品/装配漂移存量红）+ overview T1（feature 渠道座位 label 空——存量红）+ expedition 冒烟（launch.ts:268 firstWindow closed——launch 层基建抖动，一次性）。
+- 迁移形态（`migrated-run1.log` 4.7m / `run2` 4.7m / `run3-retrywrappers` 7.0m）：最终 **5 failed / 14 passed**，逐例归因：
+  - blitz 冒烟 / preset T1 / overview T1：与基线**同断言同红**——存量红，零迁移回归。
+  - blitz Step2b（run3 出现）：launch.ts:268 firstWindow closed——launch 层基建抖动（与基线 expedition 冒烟同签名，crash-restart 再启径触发）；隔离 rerun 绿（`isolated-blitz-2b-run3.log` 25.0s）。非迁移回归（基线同窗亦有一例同签名一次性红）。
+  - mode-selection T3（run1/run2/run3 批内恒红）：共享序列耦合——上用例回退浏览器 overlay 残留拦截 hero chip 菜单点击（run3 实证：拦截体 = `.dswf-fb-item` picker 行）；隔离 run 恒绿（`isolated-mode-t3.log` / `isolated-mode-t3-run3.log`）。修法落支撑层（resetRendererView 补 picker overlay 收口或 registerProject overlay 显式清理），超本任务「改动仅限 e2e/specs/**」边界——**上报待跟进**。
+- 冷启点：18 → 8（每迁移 spec 1 + crash 重启）；批时与基线持平（4.6m → 4.7m）——本批单用例 spec 占比高（4/8 无削减收益），削减收益集中在 3 用例 spec（blitz/expedition/overview 各 3→1、bootstrap/gate/mode 各 3→1）。
+
 ## 批次范围
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。

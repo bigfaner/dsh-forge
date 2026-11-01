@@ -5,14 +5,12 @@
 //     ① chip 落当前会话 composer（插入生效 + 还焦）；
 //     ② 不开新会话：转录仍为当前会话内容、侧栏会话行数不变、无预填新会话。
 //   截图取证：.forge/docs/proposals/composer-bug-reference/walkthrough/（留盘不进 git）。
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect } from '@playwright/test'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -22,13 +20,17 @@ import { awaitNoLateModals } from '../../support/m3.js'
 
 const WS_NAME = 'ws-bugwalk'
 
-test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加到会话中」→ chip 落当前会话、零新会话', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空目录（提案/bug 行 slug 隔离，单用例 spec 零跨用例账本耦合）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => mkdirSync(dir, { recursive: true }),
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加到会话中」→ chip 落当前会话、零新会话', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-bugwalk-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-bugwalk-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     // ── 夹具：项目 + 提案 + 台账 bug 行 ──
     const project = await registerProject(page, wsDir, WS_NAME)
@@ -109,8 +111,6 @@ test('@web-e2e @fix-bug Bug 快速路径单效走查（2d5434d1）：「添加�
 
     if (pageErrors.length > 0) console.log(`[bugwalk-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
