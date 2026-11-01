@@ -668,6 +668,7 @@ const forgePlugin: ForgePlugin = Object.assign(
           commands.register(forgeCommands.runDagTasks),
           commands.register(forgeCommands.stopDagTasks),
           commands.register(forgeCommands.forgeDirInit),
+          commands.register(forgeCommands.forgeDirAudit),
         ]
         disposeCommands = () => {
           for (const dispose of registered) dispose()
@@ -1021,19 +1022,34 @@ export {
 } from './dispatch-core/index.js'
 // S2（run-tasks-host-command）指令两枚——/run-dag-tasks 与 /stop-dag-tasks（UI command
 // plane 执行零模型消息；注册面 = 装配方 reflect.get('commands') 防御读取 fail-soft）。
-// workspace-artifact-governance §2.5 增员第三枚 /forge-dir-init（同注册面与语义）。
+// workspace-artifact-governance §2.5 增员 /forge-dir-init 与 /forge-dir-audit（同注册面）。
 export {
   createForgeCommands,
   createForgeDirInitHandler,
+  createForgeDirAuditHandler,
   FORGE_COMMAND_NAMES,
   FORGE_DIR_INIT_NAME,
+  FORGE_DIR_AUDIT_NAME,
   GITIGNORE_ENTRIES,
   NO_ACTIVE_LOOP_TEXT,
   nonTerminalSourcesOf,
   STORAGE_MAP_DIRS,
   missingGitignoreEntries,
+  auditDirTree,
+  scanDirTree,
+  auditFromScan,
+  formatAuditPayload,
 } from './commands/index.js'
-export type { ForgeCommands, ForgeCommandsDeps, RunDagTasksDeps, SourceCandidate, StopDagTasksDeps } from './commands/index.js'
+export type {
+  ForgeCommands,
+  ForgeCommandsDeps,
+  RunDagTasksDeps,
+  SourceCandidate,
+  StopDagTasksDeps,
+  DirAuditDiff,
+  ScanEntry,
+  ForgeDirAuditDeps,
+} from './commands/index.js'
 // S2 宿主服务收窄面与适配层（faces.ts 增员——commands 注册表/agents 注册表 + 叙述通道适配
 // + 项目容器目录解析缝）。
 export {
