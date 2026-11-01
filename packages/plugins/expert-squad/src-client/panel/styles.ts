@@ -214,7 +214,7 @@ export const PANEL_CSS = `
 .dswf-cmp-toggle:hover { text-decoration: underline; }
 .dswf-cmp-empty { padding: ${T.pad20}; text-align: center; font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-caption); }
 .xg-hidden { font: var(--dsw-font-xxxs-11); color: var(--dsw-alias-label-caption); }
-/* ── 配置 tab「默认 Agent 选项」（settings.plugins.tab 面板 · 原型 A 区 · DESIGN.md 令牌）── */
+/* ── 配置详情页缝「默认 Agent 选项」面板（plugins.bundle.config keyed 槽 · 原型 A 区 · DESIGN.md 令牌）── */
 .dswf-cfg-card { display: flex; flex-direction: column; gap: ${T.pad16}; max-width: 1080px; padding: ${T.pad16}; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: ${T.r12}; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-soft); color: var(--dsw-alias-label-primary); }
 .dswf-cfg-panel-title { margin: 0; font: var(--dsw-font-m-18); font-weight: 500; }
 .dswf-cfg-seg { font: var(--dsw-font-xxs-12); font-weight: 500; color: var(--dsw-alias-label-secondary); }

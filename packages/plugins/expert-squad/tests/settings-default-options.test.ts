@@ -136,6 +136,9 @@ describe("registerBundleConfigPanel（注册装配）", () => {
     expect(typeof component).toBe("function");
     // inject 面递达本插件 namespace 的 ConfigForm
     expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    // modelCatalogLoader 在场锚（目录候选源——settings>模型目录 detail-dialog 同径）
+    const injected = (options.inject as () => { modelCatalogLoader?: unknown })();
+    expect(typeof injected.modelCatalogLoader).toBe("function");
     expect(typeof disposer).toBe("function");
   });
 
