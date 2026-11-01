@@ -41,7 +41,7 @@ export interface ForgeProgressCounts {
 
 /**
  * 场景码键单源常量对象（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 +
- * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 = 25 值）：编码 = `{major}/{minor}`
+ * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 + T3 同缝拦截挂起 1 = 26 值）：编码 = `{major}/{minor}`
  * 纯英文 + 中划线，major = 场景族分组 / minor = 组内细分。载荷 scenario 字段值域、
  * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量；
  * FORGE_PROGRESS_SCENARIOS 数组与 ForgeProgressScenario 类型均由本对象派生）。
@@ -74,11 +74,12 @@ export const FORGE_PROGRESS_SCENARIO = {
   loopStopped: 'loop/stopped',
   // 处置族（triage-progress-row——blocked 任务的处置分析：running/终态两用）
   loopTriage: 'loop/triage',
-  // 静默挂起族（⑱-㉑）
+  // 静默挂起族（⑱-㉑ + T3 同缝拦截挂起）
   suspendSpawnRateLimited: 'suspend/spawn-rate-limited',
   suspendWorkerRateLimited: 'suspend/worker-rate-limited',
   suspendAbortOverLimit: 'suspend/abort-over-limit',
   suspendLandingRejected: 'suspend/landing-rejected',
+  suspendRecurrenceEscalation: 'suspend/recurrence-escalation',
   // 池级族（1.16 用户裁决②——统计条「待执行」计数承载：池级事件 + counts，无任务键）
   poolPending: 'pool/pending',
 } as const

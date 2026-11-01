@@ -41,6 +41,8 @@ import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace, ForgeDiagEmitFace, WorkerDispatchProfile } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
+import { recurrenceEscalationGuard } from './claim.js'
+import type { ModelingReportPresentFace, SameSeamRecurrenceFace } from './claim.js'
 import {
   exclusiveScopedRejection,
   externalExclusivityGuard,
@@ -122,6 +124,16 @@ export interface DispatchCoreDeps {
   readonly resolveWorkerProfile?: (taskType: string) => Promise<WorkerDispatchProfile | undefined>
   /** 诊断发射缝（diag-face-consolidation——结算核 fail-soft 告警走 diag 面；透传 settleWorkerRun） */
   readonly diag?: ForgeDiagEmitFace
+  /**
+   * 台账 recurrence 候选只读检索面（loop-recurrence-hardening T3 同缝拦截——可选，跨容器
+   * 口径归域层；缺席/异常 = 守卫降级放行，行为零变化）。结构兼容 core add.ts T2 注入形。
+   */
+  readonly findRecurrenceCandidates?: SameSeamRecurrenceFace
+  /**
+   * 卷宗建模报告在场探测面（T3「待建模」解除判据——注入可替换，缺席 = 报告不在场；
+   * T4 旁挂回收落卷后守卫现算即放行）
+   */
+  readonly modelingReportPresent?: ModelingReportPresentFace
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */
@@ -304,11 +316,20 @@ export interface ClaimedDispatch {
   readonly expertKey?: string
 }
 
-/** claim 阶段返回（claimed / no-task 附池快照 / halted 入口粘住） */
+/** claim 阶段返回（claimed / no-task 附池快照 / halted 入口粘住 / escalation-required 同缝拦截） */
 export type ClaimStageResult =
   | ClaimedDispatch
   | { readonly kind: 'no-task'; readonly pool: PoolSnapshot }
   | HaltedOutcome
+  | {
+      /** T3 同缝拦截软拒绝（任务已领置 in_progress——消费方转 escalation 处置不留孤儿） */
+      readonly kind: 'escalation-required'
+      readonly task: TaskSnapshot
+      readonly failure: DispatchCoreFailure
+      /** 命中家族链（bug_id 时间序）与同缝计数（escalation 载荷证据指针） */
+      readonly chain: readonly string[]
+      readonly count: number
+    }
 
 /**
  * 阶段一·claim（主链第 1 步的共享面）：归属槽初始化 → halted 入口粘住检查（粘住键不再
@@ -363,6 +384,18 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
       scope.source !== undefined ? { contextSlug: scope.source.slug } : {},
     )
     return { kind: 'no-task', pool }
+  }
+  // T3 同缝拦截守卫（loop-recurrence-hardening——claim/dispatch 守卫软拒绝：claim 后 spawn
+  // 前的派发前置现算。拒绝 = 派发不发生，claim 事件不发射；任务留 in_progress 交消费方
+  // 处置——循环驱动器转 escalation 挂起，工具壳走幂等重入径）
+  const escalation = await recurrenceEscalationGuard({
+    projectId: scope.projectId,
+    task,
+    findRecurrenceCandidates: deps.findRecurrenceCandidates,
+    modelingReportPresent: deps.modelingReportPresent,
+  })
+  if (escalation !== undefined) {
+    return { kind: 'escalation-required', task, failure: escalation.failure, chain: escalation.chain, count: escalation.count }
   }
   const taskKey = `${task.slug}/${task.localId}`
   exec.attribution.slug = task.slug
@@ -608,6 +641,12 @@ export async function dispatchCore(deps: DispatchCoreDeps, exec: DispatchCoreExe
   // 1. 阶段一：claimTask（API）——守卫 + 就绪选择 + 幂等重入 + dispatchPrompt 合成
   //    （S3 落地：identity.loopSourced → claim 记录循环来源标记；adopt → 定向领取）
   const claim = await claimForDispatch(deps, exec, args)
+  if (claim.kind === 'escalation-required') {
+    // T3 同缝拦截（工具壳径——失败 DTO 留档 + tool-error 归属；任务留 in_progress 幂等
+    // 重入：报告落卷后重派即放行，与 spawnFailed 同形零防线计数）
+    emitToolError(deps.events, sessionId, claim.task.slug, exec.verb, claim.failure)
+    return claim.failure
+  }
   if (claim.kind !== 'claimed') {
     return claim // no-task（池快照附载）| halted（入口粘住）
   }

@@ -256,6 +256,20 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
         ].join('\n'),
         options: ESCALATION_OPTIONS,
       }
+    case 'recurrence-escalation':
+      return {
+        header: '派发循环裁决',
+        question: `任务 ${escalation.taskKey} 的缺陷已同缝复发 ${escalation.count} 次，盲试修复派发被软拒绝——建议先升级排查建模（如委派具备形式化建模能力的专家；缺席可降级主会话自查），需要你决定下一步`,
+        detail: [
+          `任务源: ${escalation.source.slug}（${escalation.source.kind}）`,
+          `任务: ${escalation.taskKey}`,
+          `复发链: ${escalation.chain.join(' → ')}（同缝计数 ${escalation.count} ≥ 阈值）`,
+          '',
+          '拒绝原因（全文）：',
+          escalation.reason,
+        ].join('\n'),
+        options: ESCALATION_OPTIONS,
+      }
     case 'task-paused':
       return {
         header: '派发循环裁决',

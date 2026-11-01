@@ -47,4 +47,20 @@ export { settleWorkerRun } from './settle.js'
 // 机械③（forge-verification-hardening）——循环侧标记消费：HEAD 真解析 + 计数快照现算
 export { gitHeadCommit, computeWaveSnapshot } from './settle.js'
 export type { CommitLandingVerifier, WorkerSettlement } from './settle.js'
+// T3 同缝拦截守卫（loop-recurrence-hardening——claim 面软拒绝消费 + 驱动器 add-fix vars 现查）
+export {
+  ERR_RECURRENCE_ESCALATION_REQUIRED,
+  RECURRENCE_ESCALATION_THRESHOLD,
+  isBlindFixDispatch,
+  isModelingPending,
+  recurrenceCountOf,
+  recurrenceEscalationGuard,
+  rejectionFailureOf,
+  sameSeamCountOf,
+} from './claim.js'
+export type {
+  ModelingReportPresentFace,
+  RecurrenceEscalationRejection,
+  SameSeamRecurrenceFace,
+} from './claim.js'
 export type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './spawn.js'

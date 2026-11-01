@@ -70,6 +70,8 @@ export const ERROR_CODES = [
   'ERR_BLOCK_SOURCE_REQUIRED', // → BlockSourceRequiredError：源任务已 blocked 而未带 block_source（disc 径不写等待边 = blocked 无解锁路径）——拒收并指路补 block_source=true 建 fix 链（409）
   // ── loop-recurrence-hardening T2（submitTask blocked 归类闸门） ──
   'ERR_BLOCK_CLASSIFICATION_REQUIRED', // → BlockClassificationRequiredError：blocked 结算缺根因归类 blockClassification（新问题/同族复发二选一必带；400；指引文案含字段形状）
+  // ── loop-recurrence-hardening T3（同缝拦截 + 待建模软拒绝） ──
+  'ERR_RECURRENCE_ESCALATION_REQUIRED', // → dispatch-core claim 守卫软拒绝：recurrence 链同缝计数 ≥2 的盲试 fix 派发拒绝并提示升级排查（「待建模」派生态现算，报告落卷后重派放行；与 ERR_BLOCK_SOURCE_REQUIRED 文案互指）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

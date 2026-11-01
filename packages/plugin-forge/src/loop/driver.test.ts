@@ -352,6 +352,10 @@ function build(options: {
   resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
   /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
   diag?: (payload: { readonly level: 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
+  /** T3 同缝拦截（loop-recurrence-hardening）：台账 recurrence 候选 face 桩 */
+  findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] }) => Promise<unknown[]> | unknown[]
+  /** T3「待建模」解除判据：卷宗建模报告在场桩 */
+  modelingReportPresent?: (input: { readonly projectId: string; readonly slug: string; readonly localId: string }) => boolean
 } = {}): Built {
   const h = tasksHarness({ addTaskFailures: options.addTaskFailures })
   if (options.claim !== undefined) h.setClaim(options.claim)
@@ -426,6 +430,8 @@ function build(options: {
     ...(options.resolveProposalId !== undefined ? { resolveProposalId: options.resolveProposalId } : {}),
     ...(options.resolveHeadCommit !== undefined ? { resolveHeadCommit: options.resolveHeadCommit } : {}),
     ...(options.diag !== undefined ? { diag: options.diag } : {}),
+    ...(options.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: options.findRecurrenceCandidates as LoopDriverDeps['findRecurrenceCandidates'] } : {}),
+    ...(options.modelingReportPresent !== undefined ? { modelingReportPresent: options.modelingReportPresent as LoopDriverDeps['modelingReportPresent'] } : {}),
     escalation: {
       escalate: async (e) => {
         escalations.push(e)
@@ -3955,5 +3961,135 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     expect(outcome.fixTaskKey).toBeUndefined()
     expect(outcome.splitTaskKey).toBeUndefined()
     await built.driver.stop({ ownerSessionId: OWNER })
+  })
+})
+
+// ─────────────────────────── T3 同缝拦截 + 待建模软拒绝（loop-recurrence-hardening） ───────────────────────────
+
+describe('T3 同缝拦截（claim 被拒 → 转 escalation 分支）', () => {
+  const CHAIN3 = [{ bugId: 'b-r2', summary: '写径拒写复发', chain: ['b-root', 'b-r1', 'b-r2'] }]
+  const CHAIN2 = [{ bugId: 'b-r1', summary: '首轮复发', chain: ['b-root', 'b-r1'] }]
+
+  /** fix 链派生任务（coding-fix ∧ sourceTaskId——盲试 fix 派发判别对象） */
+  function fixClaimed(localId = 'fix-2'): ClaimTaskResult {
+    return {
+      task: snapshot({ localId, sourceTaskId: 't-0' }),
+      dispatchPrompt: 'PERSONA + <task-context>',
+      persona: 'PERSONA-MATRIX',
+      digest: 'digest-fix01',
+      reclaimed: false,
+    }
+  }
+
+  it('同缝计数 ≥ 2 ∧ 报告不在场 → claim 守卫软拒绝：被拒 fix 行转挂起（零孤儿）+ escalation 载荷 + 唤醒卡；零 spawn', async () => {
+    const built = build({
+      claim: [fixClaimed()],
+      findRecurrenceCandidates: () => CHAIN3,
+      modelingReportPresent: () => false,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    const suspended = await untilSuspended(built.driver)
+    // 被拒 fix 行不滞留孤儿：任务真化 suspended（'core' actor——resume 序批量恢复 pending 的可恢复态）
+    expect(built.h.transitions).toEqual([
+      expect.objectContaining({ projectId: PROJECT, taskId: 't-1', toStatus: 'suspended', actor: 'core', reason: expect.stringContaining('同缝拦截') }),
+    ])
+    // 派发未发生：零 spawn、claim 恰一次（挂起停驻零续领）
+    expect(built.spawn.requests).toHaveLength(0)
+    expect(built.h.claimInputs).toHaveLength(1)
+    // escalation 载荷：结构化事实（拒绝全文 + 家族链 + 同缝计数）
+    expect(suspended.escalation).toEqual({
+      kind: 'recurrence-escalation',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      taskKey: 'feat-x/fix-2',
+      reason: expect.stringContaining('同缝拦截'),
+      chain: ['b-root', 'b-r1', 'b-r2'],
+      count: 2,
+    })
+    // 静默挂起径三面补录：唤醒卡 + suspend 进度事件（新场景码）
+    const wakeup = built.calls.find((c) => c.method === 'followup')
+    expect(wakeup?.wakeup).toBe(true)
+    expect(wakeup?.text).toContain('升级排查建模')
+    expect(built.progressCalls.find((e) => e.verb === 'suspend')).toMatchObject({ scenario: 'suspend/recurrence-escalation', taskKey: 'feat-x/fix-2' })
+  })
+
+  it('拒绝 → 报告回收（桩：卷宗报告在场翻转）→ resume 恢复 pending → 守卫放行 → spawn 派发（e2e 链路桩形）', async () => {
+    const model = { reportPresent: false }
+    const built = build({
+      claim: [fixClaimed(), fixClaimed(), NO_TASK],
+      findRecurrenceCandidates: () => CHAIN3,
+      modelingReportPresent: () => model.reportPresent,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSuspended(built.driver)
+    expect(built.spawn.requests).toHaveLength(0)
+    // 「报告回收」桩：建模报告落卷 → 派生态现算翻转 → resume
+    model.reportPresent = true
+    const resumed = built.driver.resume({ loopId: built.driver.activeOf(OWNER)!.id })
+    expect(resumed).toMatchObject({ ok: true })
+    // 守卫放行：claim 二次领取同一 fix 任务，spawn 派发发生
+    await vi.waitFor(() => { expect(built.spawn.requests).toHaveLength(1) }, { timeout: 2000, interval: 5 })
+    // 零二次升级：报告落卷后 resume 续跑不再出第二张唤醒卡
+    expect(built.calls.filter((c) => c.method === 'followup')).toHaveLength(1)
+    await untilSettled(built.driver)
+  })
+
+  it('同缝计数 < 2（首轮复发）→ 不受影响照常派发', async () => {
+    const built = build({
+      claim: [fixClaimed(), NO_TASK],
+      findRecurrenceCandidates: () => CHAIN2,
+      modelingReportPresent: () => false,
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await vi.waitFor(() => { expect(built.spawn.requests).toHaveLength(1) }, { timeout: 2000, interval: 5 })
+    expect(built.h.transitions).toEqual([]) // 零挂起转移
+    expect(built.escalations).toHaveLength(0)
+    await untilSettled(built.driver)
+  })
+
+  it('add-fix 派生判例事实现查（T0 派生径）：recurrence 链结构化写入任务 vars（不落 task_desc）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector', note: '修复选择器' }),
+      findRecurrenceCandidates: () => CHAIN3,
+    })
+    built.h.lists.created = [] // 无 worker 派生 fix（followUp 缺席——阶梯进 add-fix 执行径）
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.h.addTaskInputs[0]).toMatchObject({
+      title: 'Fix: flaky selector',
+      sourceTask: { slug: 'feat-x', localId: '2.5' },
+      blockSource: true,
+      vars: { RECURRENCE_CHAIN: 'b-root → b-r1 → b-r2', RECURRENCE_COUNT: '2' },
+    })
+    expect(built.h.addTaskInputs[0]?.taskDesc).toBeUndefined() // 链事实零语义注入——不落 task_desc
+  })
+
+  it('face 缺席 → 两机制降级关闭：无守卫拒绝、add-fix vars 零注入（行为零变化）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ in_progress: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+        statsOf({ pending: 1, blocked: 1 }),
+      ],
+      query: [queryOf('blocked')],
+      triage: async () => ({ action: 'add-fix', title: 'Fix: flaky selector' }),
+    })
+    built.h.lists.created = [] // 无 worker 派生 fix（followUp 缺席——阶梯进 add-fix 执行径）
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    expect(built.escalations).toHaveLength(0)
+    expect(built.h.addTaskInputs[0]?.vars).toBeUndefined()
   })
 })
