@@ -12,8 +12,15 @@
 // cordis.patch.yml（id 定向条目），volatile 通知 → 快照换代 → 面板热刷新（无重启生效）。
 // 降级：configForms 缺席（宿主未组 settings 域）= 不注册本面板（console.warn 留痕）；
 // namespace 未被服务 = whileServed 在场门不注册；快照 unavailable = 面板降级提示。
-import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FilterSelect } from "../panel/filter-select.js";
+import {
+  modelCatalogLoaderOf,
+  modelOptionsOf,
+  providerOptionsOf,
+  type ModelCatalogEntry,
+  type ModelCatalogLoader,
+} from "../panel/model-catalog.js";
 import { ensurePanelStyles } from "../panel/styles.js";
 import {
   EMPTY_DRAFT,
@@ -117,6 +124,7 @@ function safeRegister(
 export function registerBundleConfigPanel(
   ctx: {
     configForms?: unknown;
+    reflect?: { get(name: string): unknown };
     effect?(factory: () => (() => void) | undefined, name?: string): (() => void) | undefined;
   },
   slots: {
@@ -141,7 +149,12 @@ export function registerBundleConfigPanel(
         {
           name: BUNDLE_CONFIG_SLOT,
           key: BUNDLE_CONFIG_KEY,
-          inject: () => ({ form: forms.get(namespace) }),
+          inject: () => ({
+            form: forms.get(namespace),
+            // 「设置>模型」目录装载器（provider/model 下拉候选源——detail-dialog 同径；
+            // 惰性现查 remote.session，目录缺席 = 仅继承空选项，fail-soft 不炸面板）
+            modelCatalogLoader: modelCatalogLoaderOf(ctx),
+          }),
         },
         DefaultAgentOptionsTab,
       ),
@@ -222,7 +235,10 @@ export function expertsConfigWriteOf(
  * 默认路由三分区行 4:4:1（Provider/Model/Reasoning）；未配置 = 占位即空态；reasoning
  * 四选下拉（FilterSelect 复用——面板 msel 视觉词汇单点）。快照换代即热刷新。
  */
-export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror }): ReactNode {
+export function DefaultAgentOptionsTab(props: {
+  readonly form?: ConfigFormMirror;
+  readonly modelCatalogLoader?: ModelCatalogLoader;
+}): ReactNode {
   ensurePanelStyles();
   const form = props.form;
   const getSnapshot = useRef(form?.getSnapshot.bind(form)).current;
@@ -236,6 +252,22 @@ export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror
     getSnapshot ?? (() => undefined),
     getSnapshot,
   );
+  // 「设置>模型」目录（provider/model 下拉候选源——detail-dialog 编辑模式同径：挂载期
+  // 一次性装载，目录缺席/调用拒绝 = undefined 容缺，仅回落继承空选项）
+  const [modelCatalog, setModelCatalog] = useState<readonly ModelCatalogEntry[] | undefined>(undefined);
+  useEffect(() => {
+    const loader = props.modelCatalogLoader;
+    if (loader === undefined) return;
+    let alive = true;
+    loader()
+      .then((entries) => {
+        if (alive) setModelCatalog(entries);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [props.modelCatalogLoader]);
 
   const [draft, setDraft] = useState<DefaultOptionsDraft>(() =>
     snapshot === undefined ? EMPTY_DRAFT : defaultOptionsDraftOf(snapshot.value),
@@ -304,35 +336,30 @@ export function DefaultAgentOptionsTab(props: { readonly form?: ConfigFormMirror
     <div className="dswf-cfg-card" data-cfg-state="ready">
       <h2 className="dswf-cfg-panel-title">默认 Agent 选项</h2>
       <div className="dswf-cfg-seg">默认路由</div>
+      {/* 默认路由三字段行 4:4:1（D5，detail-dialog 编辑模式同构）：Provider/Model =
+          Dialog 同款 FilterSelect（候选 = model-catalog 目录，Provider→Model 联动候选
+          modelOptionsOf 同径；空态 = 继承父Agent 空选项，box 显当前值容缺不在目录的
+          既有配置值），选值即提交——无自由文本输入；样式作用域（bug 7ea71703②）：
+          cfg 行 select-box 通宽 + border-box，bundle 详情页容器下不溢出重叠。 */}
       <div className="dswf-cfg-row">
         <div className="dswf-cfg-field dswf-cfg-f4" data-cfg-field="provider">
           <label htmlFor="dswf-cfg-provider">Provider</label>
-          <input
+          <FilterSelect
             id="dswf-cfg-provider"
-            className="dswf-dlg-input"
-            type="text"
+            ariaLabel="Provider"
             value={draft.provider}
-            placeholder="继承父Agent"
-            onChange={(event) => edit({ ...draft, provider: event.target.value })}
-            onBlur={() => commit(draft)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") commit(draft);
-            }}
+            options={providerOptionsOf(modelCatalog)}
+            onChange={(value) => commit({ ...draft, provider: value })}
           />
         </div>
         <div className="dswf-cfg-field dswf-cfg-f4" data-cfg-field="model">
           <label htmlFor="dswf-cfg-model">Model</label>
-          <input
+          <FilterSelect
             id="dswf-cfg-model"
-            className="dswf-dlg-input"
-            type="text"
+            ariaLabel="Model"
             value={draft.model}
-            placeholder="继承父Agent"
-            onChange={(event) => edit({ ...draft, model: event.target.value })}
-            onBlur={() => commit(draft)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") commit(draft);
-            }}
+            options={modelOptionsOf(modelCatalog, draft.provider)}
+            onChange={(value) => commit({ ...draft, model: value })}
           />
         </div>
         <div className="dswf-cfg-field dswf-cfg-f1" data-cfg-field="reasoning">

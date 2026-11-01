@@ -223,10 +223,12 @@ export const PANEL_CSS = `
 .dswf-cfg-f4 { flex: 4; }
 .dswf-cfg-f1 { flex: 1; max-width: 220px; }
 .dswf-cfg-row > .dswf-cfg-field > label { font: var(--dsw-font-xxs-12); line-height: ${T.lh18}; color: var(--dsw-alias-label-caption); }
-.dswf-cfg-row .dswf-dlg-input { width: 100%; }
+.dswf-cfg-row .dswf-dlg-input { width: 100%; box-sizing: border-box; min-width: 0; }
 .dswf-cfg-row .dswf-dlg-input::placeholder { color: var(--dsw-alias-label-tertiary); }
-/* Reasoning 下拉（FilterSelect 复用）通宽对齐输入刻度 */
-.dswf-cfg-row .dswf-select-box { width: 100%; justify-content: space-between; font: var(--dsw-font-s-14); height: auto; padding: ${T.gap8} ${T.pad12}; }
+/* 三字段下拉（FilterSelect 复用——Provider/Model/Reasoning 同刻度）通宽 + border-box +
+   min-width:0（bug 7ea71703②：content-box 叠加 padding/border 溢出字段容器，bundle 详情页
+   容器下压到相邻字段——收窄作用域收口） */
+.dswf-cfg-row .dswf-select-box { width: 100%; box-sizing: border-box; min-width: 0; justify-content: space-between; font: var(--dsw-font-s-14); height: auto; padding: ${T.gap8} ${T.pad12}; }
 .dswf-cfg-row .dswf-select-value { font: var(--dsw-font-s-14); }
 .dswf-cfg-hint { font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; color: var(--dsw-alias-label-caption); }
 `;

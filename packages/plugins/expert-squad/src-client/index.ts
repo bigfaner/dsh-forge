@@ -165,7 +165,7 @@ export const expertSquadClient = {
     registerExpertPanel(ctx as LazyCtx, slots)
     // 配置页「默认 Agent 选项」（插件详情页单入口——官方 keyed slot plugins.bundle.config；
     // configForms 缺席 = 降级不注册——登记面异常只降本行，不炸面板装配）。
-    registerBundleConfigPanel(ctx as { configForms?: unknown }, slots)
+    registerBundleConfigPanel(ctx as { configForms?: unknown; reflect?: { get(name: string): unknown } }, slots)
   },
 }
 

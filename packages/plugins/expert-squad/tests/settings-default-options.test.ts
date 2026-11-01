@@ -251,14 +251,22 @@ describe("DefaultAgentOptionsTab（SSR 渲染）", () => {
     expect(html).toContain('data-cfg-field="reasoning"');
   });
 
-  it("ready：已配置值回显（输入值 + reasoning 档位）", () => {
+  it("ready：Provider/Model = Dialog 同款 FilterSelect（无自由文本 input——select 形态锚）", () => {
+    const html = renderToStaticMarkup(createElement(DefaultAgentOptionsTab, { form: formMirrorOf(undefined) }));
+    expect(html).toContain('data-select="dswf-cfg-provider"');
+    expect(html).toContain('data-select="dswf-cfg-model"');
+    expect(html).toContain('data-select="dswf-cfg-reasoning"');
+    expect(html).not.toContain("<input");
+  });
+
+  it("ready：已配置值回显（select box 显当前值 + reasoning 档位）", () => {
     const html = renderToStaticMarkup(
       createElement(DefaultAgentOptionsTab, {
         form: formMirrorOf({ defaultAgentOptions: { provider: "p1", model: "m1", reasoning: "high" } }),
       }),
     );
-    expect(html).toContain('value="p1"');
-    expect(html).toContain('value="m1"');
+    expect(html).toContain('data-select-value="p1"');
+    expect(html).toContain('data-select-value="m1"');
     expect(html).toContain("高");
   });
 
