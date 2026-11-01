@@ -10,6 +10,7 @@
 import type {
   AddTaskInput,
   AddTaskResult,
+  BugRecurrenceCandidate,
   ClaimTaskInput,
   ClaimTaskResult,
   ContainerRef,
@@ -84,6 +85,14 @@ export interface TasksServiceDeps {
   readonly resolveExpertProfile?: (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>
   /** 证据效度戳写侧（disc 跟进——结算落戳装配注入：容器目录派生 + 当前效度域取数单源在装配方；缺席 = 机制关闭） */
   readonly stampEvidenceValidity?: (input: { projectId: string; slug: string; localId: string; checkoutRoot: string }) => void
+  /**
+   * bug 台账 recurrence 候选只读检索（loop-recurrence-hardening T2 交叉校验——可选，透传
+   * TasksVerbDeps；缺席 = 交叉校验降级跳过不阻载）。
+   */
+  readonly findRecurrenceCandidates?: (
+    projectId: string,
+    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+  ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */

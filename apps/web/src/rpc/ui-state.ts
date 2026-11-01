@@ -83,6 +83,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── bug 0a25720c 方案 A（addTask 建链守卫）──
   // blocked 源缺省 block_source → 错误条（建链语境原地反馈——文案带指引补 block_source=true）
   ERR_BLOCK_SOURCE_REQUIRED: 'error-bar',
+  // ── loop-recurrence-hardening T2（blocked 归类闸门）──
+  // blocked 结算缺根因归类 → 错误条（结算语境原地反馈——文案带归类字段形状指引重提交）
+  ERR_BLOCK_CLASSIFICATION_REQUIRED: 'error-bar',
 }
 
 /**

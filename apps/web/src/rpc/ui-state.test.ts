@@ -61,6 +61,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_PROJECT_SORT_INVALID: 'error-bar',
   // bug 0a25720c 方案 A——blocked 源缺省 block_source 建链守卫错误条（指引补 block_source=true）
   ERR_BLOCK_SOURCE_REQUIRED: 'error-bar',
+  // loop-recurrence-hardening T2——blocked 结算缺根因归类错误条（指引归类字段形状重提交）
+  ERR_BLOCK_CLASSIFICATION_REQUIRED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

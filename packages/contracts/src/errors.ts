@@ -68,6 +68,8 @@ export const ERROR_CODES = [
   'ERR_PROJECT_SORT_INVALID', // → ProjectSortOrderInvalidError：sortOrders 空 map / 含未注册项目 id / 非法值（非安全整数）——全量预检拒写零副作用（400；data 带缺失与非法清单）
   // ── bug 0a25720c 方案 A（addTask 建链守卫——blocked 源缺省 block_source 即拒） ──
   'ERR_BLOCK_SOURCE_REQUIRED', // → BlockSourceRequiredError：源任务已 blocked 而未带 block_source（disc 径不写等待边 = blocked 无解锁路径）——拒收并指路补 block_source=true 建 fix 链（409）
+  // ── loop-recurrence-hardening T2（submitTask blocked 归类闸门） ──
+  'ERR_BLOCK_CLASSIFICATION_REQUIRED', // → BlockClassificationRequiredError：blocked 结算缺根因归类 blockClassification（新问题/同族复发二选一必带；400；指引文案含字段形状）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

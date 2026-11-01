@@ -523,3 +523,31 @@ export class BlockSourceRequiredError extends Error {
     this.data = data
   }
 }
+
+// ───────── loop-recurrence-hardening T2：submitTask blocked 归类闸门 ─────────
+
+/** ERR_BLOCK_CLASSIFICATION_REQUIRED 附载 */
+export interface BlockClassificationRequiredData {
+  readonly verb: 'submitTask'
+}
+
+/**
+ * blocked 结算缺根因归类（400）：result=blocked 而 blockClassification 缺席或 kind 非法
+ * （新问题 new-problem / 同族复发 same-family-recurrence 二选一必带——T2 归类闸门 presence
+ * 校验，程序零语义判断，归类真伪归主会话/T3 交叉校验）。指引文案带字段形状。
+ */
+export class BlockClassificationRequiredError extends Error {
+  readonly code = 'ERR_BLOCK_CLASSIFICATION_REQUIRED' as const
+  readonly data: BlockClassificationRequiredData
+
+  constructor(data: BlockClassificationRequiredData) {
+    super(
+      `${data.verb} result=blocked 必带根因归类 blockClassification：` +
+        `{ kind: 'new-problem' | 'same-family-recurrence'[, recurrenceOf: '<前驱 bug_id>'] }——` +
+        `新问题/同族复发二选一；同族复发请携带台账 recurrence 链前驱 bug_id（归类自报，` +
+        `闸门按任务 scope 交叉校验台账候选并携「疑似同族」警示）`,
+    )
+    this.name = 'BlockClassificationRequiredError'
+    this.data = data
+  }
+}

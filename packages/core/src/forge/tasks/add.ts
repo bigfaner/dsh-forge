@@ -21,6 +21,7 @@ import type Database from 'better-sqlite3'
 import type {
   AddTaskInput,
   AddTaskResult,
+  BugRecurrenceCandidate,
   ContainerRef,
   DocKind,
   FeatureStatus,
@@ -79,6 +80,16 @@ export interface TasksVerbDeps {
    * 实现侧 fail-loud 抛错（消息含专家键名）——claim 整体拒绝，任务留 pending。
    */
   readonly resolveExpertProfile?: (taskType: string, expertKey?: string) => Promise<ExpertPersonaProfile | undefined>
+  /**
+   * bug 台账 recurrence 候选只读检索（loop-recurrence-hardening T2 交叉校验——可选依赖注入，
+   * 先例 stampEvidenceValidity）：按任务 scope 检索台账 recurrence 候选。四域互禁不破——
+   * tasks 域不 import bugs 域，台账检索经装配方注入只读闭包（生产装配 = bugs 域服务聚合）。
+   * 缺席 = 交叉校验降级跳过不阻载；实现侧异常由消费点 fail-soft 同路降级。
+   */
+  readonly findRecurrenceCandidates?: (
+    projectId: string,
+    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+  ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
 }
 
 /** 任务行最小定位形状（解析/去重/链计数消费；全列读面归 query/读动词）。

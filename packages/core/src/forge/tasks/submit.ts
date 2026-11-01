@@ -26,13 +26,18 @@
 // 边界注记：gate 载荷原样落账不服务内判红（gate 执行归 executor 技能纪律——失败分诊 = blocked
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
 // 与 transitionTask 2.5 同裁决）；files/gate 缺省 = 列 NULL（files 回填归读面 git 查找）。
-import type { SubmitTaskInput, SubmitTaskResult } from '@dsh-forge/contracts'
+import type {
+  SubmitTaskInput,
+  SubmitTaskResult,
+  TaskRecurrenceAdvisory,
+} from '@dsh-forge/contracts'
 import { taskFilesUnion } from './files.js'
 import { withTransaction } from '../../db/transaction.js'
 import { readPhaseInput, type TasksVerbDeps } from './add.js'
 import {
   AcCriteriaMismatchError,
   AcNotMetError,
+  BlockClassificationRequiredError,
   FilesUnionMismatchError,
   GateSummaryRequiredError,
   ReasonRequiredError,
@@ -45,6 +50,55 @@ import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { resolvePhaseGuardFeature, resolveTaskRef } from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
 import { runRestoreHook } from './transition.js'
+
+/** 归类 kind 合法集（T2 presence 校验——kind 非法同形拒绝；程序零语义判断） */
+const BLOCK_CLASSIFICATION_KINDS = new Set(['new-problem', 'same-family-recurrence'])
+
+/**
+ * T2 归类闸门应答增补推导（事务提交后——只读 face 消费点，fail-soft 降级不阻载）：
+ * 同族复发 → upgrade-hint 升级提示（face 无关恒挂）；新问题 ∧ face 在场 → 候选检索，
+ * 命中即 suspected-family「疑似同族」警示（不硬拒——主会话裁决）。face 缺席/检索异常 =
+ * 交叉校验降级跳过（先例 stampEvidenceValidity）。
+ */
+async function deriveRecurrenceAdvisories(
+  deps: TasksVerbDeps,
+  input: SubmitTaskInput,
+): Promise<TaskRecurrenceAdvisory[]> {
+  const classification = input.blockClassification
+  if (input.result !== 'blocked' || classification === undefined) return []
+  const advisories: TaskRecurrenceAdvisory[] = []
+  if (classification.kind === 'same-family-recurrence') {
+    advisories.push({
+      kind: 'upgrade-hint',
+      message:
+        `归类=同族复发${classification.recurrenceOf !== undefined ? `（前驱 ${classification.recurrenceOf}）` : ''}` +
+        `——不建议盲试 fix：建议先升级排查（家族共因判别实验清单）再开修；同缝 ≥2 时派发守卫将软拒绝`,
+    })
+  }
+  const findCandidates = deps.findRecurrenceCandidates
+  if (classification.kind === 'new-problem' && findCandidates !== undefined) {
+    try {
+      const candidates = await findCandidates(input.projectId, {
+        slug: input.taskRef.slug,
+        localId: input.taskRef.localId,
+        files: input.files ?? [],
+      })
+      if (candidates.length > 0) {
+        advisories.push({
+          kind: 'suspected-family',
+          message:
+            `疑似同族：台账按 scope 命中 ${candidates.length} 条 recurrence 候选` +
+            `（${candidates.map((c) => c.chain.join(' → ')).join('；')}）——` +
+            `归类自报「新问题」，请主会话复核家族归属`,
+          candidates,
+        })
+      }
+    } catch {
+      // fail-soft：候选检索失败降级跳过——交叉校验不阻载结算（不吞结算语义）
+    }
+  }
+  return advisories
+}
 
 export type { TasksVerbDeps }
 
@@ -77,6 +131,15 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     // ② 输入面校验（先于转移校验——transitionTask reason 同序）：blocked 空因 / success 空摘要
     if (input.result === 'blocked' && (input.reason ?? '').trim() === '') {
       throw new ReasonRequiredError({ verb: 'submitTask' })
+    }
+    // ②-T2 归类闸门（loop-recurrence-hardening）：blocked 必带根因归类（新问题/同族复发
+    //    presence 校验——kind 非法同形拒；归类真伪零机判，交叉校验走应答警示不硬拒）。
+    //    blocked→completed 直达结算不经此门（result!=='blocked'）。
+    if (input.result === 'blocked') {
+      const kind = input.blockClassification?.kind
+      if (kind === undefined || !BLOCK_CLASSIFICATION_KINDS.has(kind)) {
+        throw new BlockClassificationRequiredError({ verb: 'submitTask' })
+      }
     }
     if (input.result === 'success' && (input.summary ?? '').trim() === '') {
       throw new SummaryRequiredError({ verb: 'submitTask' })
@@ -197,6 +260,9 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       // 机械⑤：运行期装配面声明与真机取证证据声明原样落账（读面经 TaskRecordEntry 投影）
       ...(input.runtimeSurface !== undefined ? { runtimeSurface: input.runtimeSurface } : {}),
       ...(input.runtimeEvidence !== undefined ? { runtimeEvidence: input.runtimeEvidence } : {}),
+      // T2 归类闸门：blocked 根因归类原样落账（records payload 结构化键——tasks 表零列改动，
+      // triage 注入与 T3 交叉校验经服务读 records 取值）
+      ...(input.blockClassification !== undefined ? { blockClassification: input.blockClassification } : {}),
     }
     const hasRecordFields = Object.keys(recordFields).length > 0
     db.prepare(`UPDATE tasks SET task_status = ?, updated_at = ? WHERE id = ?`).run(toStatus, now, row.id)
@@ -248,7 +314,8 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
     return { taskId: row.id, status: toStatus, restored }
   })
 
-  // 事务提交后 emitTasksChanged（四域写后事件——单写闭包单事件，恢复钩子内聚不另发）
+  // 事务提交后：T2 归类闸门应答增补（只读 face 消费——fail-soft 降级不阻载）+ emitTasksChanged
+  const advisories = await deriveRecurrenceAdvisories(deps, input)
   deps.events.emitTasksChanged(input.projectId)
-  return result
+  return advisories.length > 0 ? { ...result, recurrenceAdvisories: advisories } : result
 }
