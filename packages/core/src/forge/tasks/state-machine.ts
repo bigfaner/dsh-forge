@@ -14,7 +14,8 @@ export type { TransitionFace }
  * - pending → in_progress（claimTask）
  * - in_progress → completed（仅经 submitTask，gate ✓）/ blocked（submitTask result=blocked）/
  *   interrupted（S3 reconcileInterrupted——启动对账/循环主动终态的状态真化）
- * - blocked → in_progress（claimTask 重派）/ pending（auto-restore——submit 钩子）
+ * - blocked → completed（blocked verdict restore——裁决改判结算）/ in_progress（claimTask 重派）/
+ *   pending（auto-restore——submit 钩子）
  * - interrupted → in_progress（S3 claimTask adopt——循环定向恢复领取）
  * - suspended → pending（task-pause-primitive 路线 A：dispatchTask re-entry 恢复序内、runRound 前
  *   对容器内 suspended paused 卡批量恢复 pending——「仅 resume 时点触发」守卫由调用方承担；
@@ -26,7 +27,7 @@ export type { TransitionFace }
 export const AGENT_TRANSITION_MATRIX: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
   pending: ['in_progress'],
   in_progress: ['completed', 'blocked', 'interrupted'],
-  blocked: ['in_progress', 'pending'],
+  blocked: ['completed', 'in_progress', 'pending'],
   suspended: ['pending'], // resume 序批量恢复（task-pause-primitive 路线 A——非开放边，调用方守卫 resume 时点）
   interrupted: ['in_progress'],
   completed: [],
@@ -57,7 +58,7 @@ export function transitionTargets(current: TaskStatus, face: TransitionFace): Ta
  * - 「目标 ∉ transitionTargets」human/agent 通形（含 to === current——两 face 目标集均不含自身）；
  * - 「from 不匹配」：动词期望的 from 态不符（如对 pending 任务 submitTask success）经 agent 面
  *   目标集不命中自然覆盖（pending 的 agent 目标仅 in_progress，completed 不在集）；
- * - 「agent 面矩阵非法格」：矩阵空行/非格（in_progress→pending、blocked→completed 等）同路拒绝。
+ * - 「agent 面矩阵非法格」：矩阵空行/非格（in_progress→pending、blocked→blocked/skipped/rejected 等）同路拒绝。
  * 消费侧：transitionTask 先验（2.5，human）/ submitTask·claimTask 转移边（2.4，agent）。
  */
 export function assertTransitionAllowed(current: TaskStatus, to: TaskStatus, face: TransitionFace): void {
