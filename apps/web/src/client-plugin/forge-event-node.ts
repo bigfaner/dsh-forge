@@ -104,6 +104,13 @@ export interface ForgeEventStreamState {
   readonly turnEndSeqs?: Readonly<Record<string, number>>
   /** 各 turn 的 turn/start seq（组卡运行期锚基准——活跃期 anchorSeq = startSeq - 1 < processStartSeq 脱折叠；旧缓存缺省） */
   readonly turnStartSeqs?: Readonly<Record<string, number>>
+  /**
+   * 各 turn 是否产出过正文 answer（bug 0e5eba85——官方 latestAnswer 选择口径窄镜像：
+   * turn/start 初始化 false，此后 assistant/message（surfaceOp 'append'）按官方判定
+   * 逐消息覆写——末步 assistant 决定该 turn 有无 answer；缺席 = 旧缓存不参与逃逸
+   * 判定，维持 turn/end 现口径）。closed turn 显式 false 时组卡锚顶层逃逸。
+   */
+  readonly turnHasAnswer?: Readonly<Record<string, boolean>>
 }
 
 /** 空模型（fold 单元恒等值） */
@@ -114,6 +121,8 @@ export interface ForgeMessageEventLike {
   readonly type: string
   readonly seq: number
   readonly time?: number
+  /** 官方 SessionEvent surfaceOp（assistant/message 窄读用——bug 0e5eba85 answer 感知） */
+  readonly surfaceOp?: unknown
   readonly data?: unknown
 }
 
@@ -229,6 +238,26 @@ function progressEntryOf(event: ForgeMessageEventLike, data: unknown, turnId: st
   }
 }
 
+/**
+ * assistant message 是否构成正文 answer（bug 0e5eba85——官方 latestAnswer 选择口径
+ * 窄镜像：含非空 text 块（tool-call/reasoning 不计正文）且不含 tool-call 块——后者
+ * 官方 latestAnswer 直接判 null）。
+ */
+function isAnswerMessage(content: unknown): boolean {
+  if (!Array.isArray(content)) return false
+  let hasText = false
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const type = (block as { type?: unknown }).type
+    if (type === 'tool-call') return false
+    if (type === 'text') {
+      const text = (block as { text?: unknown }).text
+      if (typeof text === 'string' && text.trim() !== '') hasText = true
+    }
+  }
+  return hasText
+}
+
 /** turn 序号规一（官方 SessionEventMap 'turn/start'/'turn/end' 载荷 = { turn: number }——
  *  数值序号转字符串键；字符串兼容旧缓存形状。bug d44fbaec：只认字符串曾致 turn 追踪恒失效，
  *  组卡锚不脱 turn 过程折叠） */
@@ -261,6 +290,9 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       ...state,
       currentTurn: turnId,
       turnStartSeqs: { ...state.turnStartSeqs, [turnId]: event.seq },
+      // bug 0e5eba85：新 turn 初始化无 answer（缺席 = 旧缓存不参与逃逸判定——
+      // 形状防御同 turnStartSeqs 风格）；此后由 assistant/message 逐消息覆写。
+      turnHasAnswer: { ...state.turnHasAnswer, [turnId]: state.turnHasAnswer?.[turnId] === true },
     }
   }
   if (event?.type === 'turn/end') {
@@ -272,6 +304,17 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       turnEndSeqs: { ...state.turnEndSeqs, [turnId]: event.seq },
     }
   }
+  // bug 0e5eba85：assistant/message fold——per-turn 正文 answer 感知（官方 latestAnswer
+  // 选择口径窄镜像：surfaceOp 'append' + data.message.content 判定，逐消息覆写——末步
+  // assistant 决定该 turn 有无 answer）。畸形载荷 / turn 归属缺席原引用返回零污染。
+  // 消费面见 forgeEventGroupAnchorSeq（closed turn 无 answer → 锚顶层逃逸）。
+  if (event?.type === 'assistant/message') {
+    const message = (event.data as { message?: unknown } | undefined)?.message
+    if (event.surfaceOp !== 'append' || typeof message !== 'object' || message === null) return state
+    const turnId = state.currentTurn
+    if (turnId === undefined) return state
+    return { ...state, turnHasAnswer: { ...state.turnHasAnswer, [turnId]: isAnswerMessage((message as { content?: unknown }).content) } }
+  }
   // 'forge/progress' 事件（1.2 循环进度卡数据源）：同组 fold 语义——开组中追加 progress
   // 条目（lastSeq 推进 = 组尾轨）；插话后/首枚开新组。畸形载荷原引用返回零污染。
   if (event?.type === FORGE_PROGRESS_EVENT_TYPE) {
@@ -282,10 +325,8 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
     const last = state.groups.at(-1)
     if (last !== undefined && !state.closed) {
       return {
+        ...state,
         closed: false,
-        currentTurn: state.currentTurn,
-        turnEndSeqs: state.turnEndSeqs,
-        turnStartSeqs: state.turnStartSeqs,
         groups: [
           ...state.groups.slice(0, -1),
           {
@@ -299,10 +340,8 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       }
     }
     return {
+      ...state,
       closed: false,
-      currentTurn: state.currentTurn,
-      turnEndSeqs: state.turnEndSeqs,
-      turnStartSeqs: state.turnStartSeqs,
       groups: [
         ...state.groups,
         { key: `forge-progress-${entry.seq}`, firstSeq: entry.seq, lastSeq: entry.seq, entries: [], progress: [entry] },
@@ -320,10 +359,8 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
     // 末组在场且未被插话收口 → 追加行（增量）；否则（首组 / 插话后）开新组
     if (last !== undefined && !state.closed) {
       return {
+        ...state,
         closed: false,
-        currentTurn: state.currentTurn,
-        turnEndSeqs: state.turnEndSeqs,
-        turnStartSeqs: state.turnStartSeqs,
         groups: [
           ...state.groups.slice(0, -1),
           { key: last.key, firstSeq: last.firstSeq, lastSeq: entry.seq, entries: [...last.entries, entry], progress: last.progress },
@@ -331,16 +368,14 @@ export function foldForgeEventMessage(state: ForgeEventStreamState, event: Forge
       }
     }
     return {
+      ...state,
       closed: false,
-      currentTurn: state.currentTurn,
-      turnEndSeqs: state.turnEndSeqs,
-      turnStartSeqs: state.turnStartSeqs,
       groups: [...state.groups, { key: id, firstSeq: entry.seq, lastSeq: entry.seq, entries: [entry] }],
     }
   }
   if ((source as { kind?: unknown } | undefined)?.kind === 'user') {
     // 人类插话 = 分组锚点：下一枚 forge 事件开新组（前组保留——条目不删）
-    return { groups: state.groups, closed: true, currentTurn: state.currentTurn, turnEndSeqs: state.turnEndSeqs, turnStartSeqs: state.turnStartSeqs }
+    return { ...state, closed: true }
   }
   return state
 }
@@ -354,7 +389,11 @@ export const forgeEventStreamDefinition = {
   kind: FORGE_EVENT_STREAM_KIND,
   match: (event: ForgeMessageEventLike): { id: string; role: 'start' } | null =>
     event !== undefined &&
-    (event.type === 'user/message' || event.type === 'turn/start' || event.type === 'turn/end' || event.type === FORGE_PROGRESS_EVENT_TYPE)
+    (event.type === 'user/message' ||
+      event.type === 'turn/start' ||
+      event.type === 'turn/end' ||
+      event.type === 'assistant/message' ||
+      event.type === FORGE_PROGRESS_EVENT_TYPE)
       ? { id: 'stream', role: 'start' }
       : null,
   start: (_context: unknown, match: { event: ForgeMessageEventLike }, reader: ForgeStreamReader): ForgeEventStreamState => {
@@ -381,6 +420,8 @@ export interface ForgeEventGroupNodeState {
    * Turn 过程折叠，卡片落回复下方，文档卡片同位）；所属 turn 活跃（有 turn/start 记录、
    * 无 turn/end）= turnStartSeq - 1——< processStartSeq 脱离过程折叠区间，运行期顶层
    * 常驻展开（用户裁决 2026-10-31）；无 turn 记录 = 组末 seq 不猜。
+   * bug 0e5eba85：closed turn 无正文 answer（turnHasAnswer 缺席）同取
+   * turnStartSeq - 1 顶层逃逸——answerAnchorSeq=null 时 turn/end 锚仍落过程折叠体。
    */
   readonly anchorSeq: number
 }
@@ -406,13 +447,25 @@ export function forgeEventGroupAnchorSeq(
   group: ForgeEventGroup,
   turnEndSeqs: Readonly<Record<string, number>> | undefined,
   turnStartSeqs: Readonly<Record<string, number>> | undefined,
+  turnHasAnswer?: Readonly<Record<string, boolean>>,
 ): number {
   const lastMsg = group.entries.at(-1)
   const lastProgress = group.progress?.at(-1)
   const tail = (lastProgress?.seq ?? -1) > (lastMsg?.seq ?? -1) ? lastProgress : lastMsg
   if (tail?.turnId !== undefined) {
     const end = turnEndSeqs?.[tail.turnId]
-    if (end !== undefined) return end
+    if (end !== undefined) {
+      // bug 0e5eba85：closed turn 无正文 answer（官方 latestAnswer 返 null →
+      // answerAnchorSeq=null → 折叠谓词恒 true，锚=turn/end 仍落过程折叠体被吞）→
+      // 锚取 turn.start - 1 顶层逃逸。落位从「回复下方」退为「回复上方」是可接受
+      // 代价——可见性优先（panel 有记录而 chat 无卡的活体反例 session-7a3d2530）。
+      // 仅显式 false（本会话 turn/start 起追踪过）才逃逸；缺席 = 旧缓存维持现口径。
+      if (turnHasAnswer?.[tail.turnId] === false) {
+        const escaped = turnStartSeqs?.[tail.turnId]
+        if (escaped !== undefined) return escaped - 1
+      }
+      return end
+    }
     const start = turnStartSeqs?.[tail.turnId]
     if (start !== undefined) return start - 1
   }
@@ -465,7 +518,7 @@ export const forgeEventGroupDefinition = {
       isLatest: last !== undefined && last.key === group.key,
       group,
       seq,
-      anchorSeq: forgeEventGroupAnchorSeq(group, stream.turnEndSeqs, stream.turnStartSeqs),
+      anchorSeq: forgeEventGroupAnchorSeq(group, stream.turnEndSeqs, stream.turnStartSeqs, stream.turnHasAnswer),
     }
   },
   update: (context: { state: ForgeEventGroupNodeState }): ForgeEventGroupNodeState => context.state,
