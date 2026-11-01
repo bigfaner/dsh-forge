@@ -96,4 +96,5 @@
 ## 7. 可观测性
 
 - **各功能必须确保可观测性**：关键流程（成功里程碑与失败路径）必须经现有事件式日志系统输出诊断日志——host 侧统一走 `emitDiag(ctx, payload)`（`apps/host/src/telemetry/diag-events.ts`，官方 cordis `diag/log` 事件域，info/warn/error 三级），新增错误源 = 新增 emit 点、订阅侧零改动；不得以「异常被 fail-soft 吞掉」为由静默失败。
+- **禁直落 console（插件/包侧正本）**：宿主侧包禁止新增直落 `console.warn`/`console.error` 的诊断站点——一律经装配期注入的诊断发射面 + `DIAG_EVENT` 类型化 emit（client 束与 host main 早窗豁免）。规则表、process 进程位、兜底按级分流、正反判据与交付审计要求正本见 `docs/conventions/diagnostic-emit-discipline.md`。
 - 埋点规范：payload 就地携带可得字段（`event` 类别、`message`、`projectId`/`sessionId`/`cwd`/`traceId`），`event` 命名用功能域前缀（如 `worktree-create`、`session-bind`）；提案/设计文档中随流程写明埋点面。
