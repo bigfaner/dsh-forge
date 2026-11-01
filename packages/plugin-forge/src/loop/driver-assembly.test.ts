@@ -385,9 +385,8 @@ describe('机械③/④ · createLoopDriver 生产装配落库级落标记（bug
       marks: ['first-pass-complete'],
     })
     expect(listed.map((r) => r.mark)).toEqual(['first-pass-complete'])
-    // 复盘任务随标记派生（机械③承接面同轮真实发生——合并态：retro + 知识沉淀双派生，
-    // e2e 归因卡随基线红灯派生时同轮入池，故以成员断言替代计数）
-    expect(built.h.addTaskInputs.some((t) => t.type === 'doc' && t.title === 'first-pass 复盘：feat-x')).toBe(true)
+    // 收口零任务派生（bug 4186a70c——复盘/沉淀改为收口消息直接指示，不再落任务卡）
+    expect(built.h.addTaskInputs.some((t) => t.type === 'doc' && t.title === 'first-pass 复盘：feat-x')).toBe(false)
   })
 
   it('review-wave：coding-fix 任务结算生产路径透传真实落库 review-wave-N（wave_seq 自动递增 = 1）', async () => {
@@ -479,10 +478,9 @@ describe('落库级唯一约束兜底（DDL partial unique index + append-only �
     await untilSettled(built.driver)
     // 拒写被 fail-soft 吞（warn 留痕），循环收口零受阻
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/first-pass mark failed/))
-    // 下轮自愈：标记在场判定短路——库内 first-pass-complete 恰一行（唯一约束无重复）、
-    // 复盘任务不重派（窄窗口幂等防护：首轮派生成功后标记拒写，次轮在场即不重派）
+    // 下轮自愈：标记在场判定短路——库内 first-pass-complete 恰一行（唯一约束无重复）
     expect(built.seam.rows().filter((r) => r.mark === 'first-pass-complete')).toHaveLength(1)
-    // 复盘不重派（窄窗口幂等防护；同轮知识沉淀/归因卡以成员断言，见 first-pass 用例注）
-    expect(built.h.addTaskInputs.filter((t) => t.title === 'first-pass 复盘：feat-x')).toHaveLength(1)
+    // 收口零任务派生（bug 4186a70c——复盘/沉淀走收口指示，不落任务卡）
+    expect(built.h.addTaskInputs).toHaveLength(0)
   })
 })

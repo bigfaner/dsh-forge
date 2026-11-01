@@ -9,31 +9,31 @@
 //      信息面归 5.3 dogfood 运行期断言，本件断账本两态）。
 // 载体：写动词经测试钩子直调（回放主径——与 tool 面同一服务路径）；错误面捕获 =
 // bridge 直调 typed error 文案（formatErr 渲染前同源）。
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect } from '@playwright/test'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 
 const WS_NAME = 'ws-sc7'
 const FEATURE = 'sc7-feat'
 
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（单用例 spec——账本 slug 隔离即天然成立）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
 /** 写动词拒绝面捕获（bridge 直调错误 message = core typed error 文案） */
 async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
 }
 
-test('@web-e2e @m3 SC7·gate 与提交定式：AC 拒含清单 + gate_json 落账 + commit 两态', async () => {
+test('@web-e2e @m3 SC7·gate 与提交定式：AC 拒含清单 + gate_json 落账 + commit 两态', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc7-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc7-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -107,8 +107,6 @@ test('@web-e2e @m3 SC7·gate 与提交定式：AC 拒含清单 + gate_json 落�
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

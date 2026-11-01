@@ -9,13 +9,12 @@
 //      "off"）；D37 控件自释零 Tooltip——置灰说明气泡随裁决退役（悬停零气泡断言）；
 //   ④ 任务行详情无单任务执行入口（Hard Rule v22 ㊳——抽屉面零「执行」动作）。
 // 载体：写动词经测试钩子直调（回放主径）；会话夹具 = 零凭据 composer 消息（M2 SC6③ 同径）。
-import { mkdtempSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect } from '@playwright/test'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -28,14 +27,31 @@ const WS_NAME = 'ws-uf3'
 const FEATURE = 'uf3-feat'
 const MARKER = 'UF3-JUMP-MARKER 跳转目标会话夹具消息'
 
-test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置灰 + 无单任务执行入口', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 跳转目标会话判读改扫共享 userData 根内 dsh-home：段锚 = wsDir 末段（mkdtemp 随机后缀
+// 跨 worker 唯一——共享形态会话 cwd = 共享 wsDir 本体，原始形态的 ws-uf3 命名段不复存在；
+// 根选择经段目录在场锚定，workers=2 下他 worker 无此后缀段零串扰）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+function sharedUf3DshHome(wsDir: string): string {
+  const segment = wsDir.split(/[\\/]/).pop() ?? ''
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const sessions = join(tmpdir(), name, 'dsh-home', 'sessions')
+    if (existsSync(sessions) && readdirSync(sessions).some((d) => d.includes(segment))) {
+      return join(tmpdir(), name, 'dsh-home')
+    }
+  }
+  throw new Error(`shared-launch: 段 ${segment} 会话目录未找到（共享 userData 根缺失）`)
+}
+
+test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置灰 + 无单任务执行入口', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-uf3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-uf3-ud-'))
-  const dshHome = join(userData, 'dsh-home')
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -59,7 +75,11 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     // 「会话行入树」同判据族），再做后续跳转编排。
     await expect(page.locator(CONVERSATION_CONTENT).first(), '夹具消息入转录（用户事件落地 = 非 blank）').toContainText(MARKER, { timeout: 60_000 })
     await ensureNoBlockingDialog(page)
-    const sessionA = findFixtureSession(dshHome, WS_NAME)
+    // dsh-home 根惰性求值（会话 A 此刻已开户——段目录在盘可锚定；过早求值会 miss）；
+    // fixtureSegment 同取 wsDir 末段（findFixtureSession 按段过滤 flattened cwd——
+    // 共享形态 cwd = 共享 wsDir 本体，原始形态 ws-uf3 段不复存在）
+    const wsSegment = wsDir.split(/[\\/]/).pop() ?? ''
+    const sessionA = findFixtureSession(sharedUf3DshHome(wsDir), wsSegment)
     expect(sessionA, '跳转目标会话在盘').toBeDefined()
     const jumpSessionId = (sessionA as { sessionId: string }).sessionId
     await newBlankSession(page)
@@ -115,19 +135,13 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
 
     if (pageErrors.length > 0) console.log(`[uf3-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模式新会话 + /run-dag-tasks 指令单行自动发送', async () => {
+test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模式新会话 + /run-dag-tasks 指令单行自动发送', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-uf3b-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-uf3b-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   const PROP = 'uf3-blitz-prop'
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
@@ -158,8 +172,6 @@ test('@web-e2e @m3 UF-3·新开路由：突击提案容器派发 → 突击模�
 
     if (pageErrors.length > 0) console.log(`[uf3b-diagnostic] pageerror（零凭据模型失败面）：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

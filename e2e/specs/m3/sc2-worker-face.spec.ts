@@ -12,32 +12,58 @@
 // worker 运行期面（toolFilter deny 探针/技能目录到达/run-tests 按需加载正反例/AGENTS.md
 // relay）经 3.9 W 用例（真实 dispatchTask——spike 形态例外）；矩阵 deny 期望集 = 5.1
 // pin-12 + e2e/support/m3/worker-face.test.ts（deriveWorkerToolFilter 实函数断言）。
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { SETTINGS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
+import { ROOT } from '../../support/launch.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
-import { overlayTextOf, presetSkillDirs } from '../../support/m3.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { presetSkillDirs } from '../../support/m3.js'
 
 /** 仓库核心/spec 技能目录（dev 形态物化锚——junction 绝对路径解析目标） */
 const CORE_SKILLS = join(ROOT, 'packages', 'plugin-forge', 'skills')
 const SPEC_SKILLS = join(ROOT, 'packages', 'plugin-forge-spec', 'skills')
 
-test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化零 !!js + 核心包无退役技能 + 设置单写者', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次，
+// userData 由 fixture 自管。boot-overlay / forge-settings 判读改扫共享 userData 根：
+// overlay 三底稿每启重写与路径无关（批次四a 同径）；forge-settings.json 仅本 spec 写入——
+// 存在性即本 worker 锚（workers=2 下他 worker 不落此文件）。
+// 静态面用例（底稿同构，无 app）不消费共享会话——沿用 @playwright/test 原生 test
+//（expert-squad-service-key step-5 audit 同径先例）。
+const { test: m3Test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: 'ws-sc2',
+  launch: { expectPhase: 'hero' },
+})
+
+function sharedOverlayText(): string {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const file = join(tmpdir(), name, 'boot-overlay.yml')
+    if (existsSync(file)) return readFileSync(file, 'utf8')
+  }
+  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+}
+
+function sharedSettingsFile(): string {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const file = join(tmpdir(), name, 'forge-settings.json')
+    if (existsSync(file)) return file
+  }
+  throw new Error('shared-launch: forge-settings.json 未找到（共享 userData 根缺失——set 未落盘）')
+}
+
+m3Test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化零 !!js + 核心包无退役技能 + 设置单写者', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc2-'))
-  const wsDir = join(fixtureRoot, 'ws-sc2')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
+  const { page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, 'ws-sc2')
 
     // ── ① boot-overlay.yml 物化断言（真实 boot 产物）──
-    const overlay = overlayTextOf(userData)
+    const overlay = sharedOverlayText()
     expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
     expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
     expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)
@@ -76,7 +102,7 @@ test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化�
     // 写入后旧值残留文件但失效。]
     const WORKER = { provider: 'deepseek', model: 'e2e-sc2-worker-model', reasoning: 'high' as const }
     await forgeInvoke(page, SETTINGS_CHANNELS.set, { worker: WORKER })
-    const settingsFile = join(userData, 'forge-settings.json')
+    const settingsFile = sharedSettingsFile()
     expect(existsSync(settingsFile), 'forge-settings.json 落 {userData}（core 单写者·路径守卫域）').toBe(true)
     const persisted = JSON.parse(readFileSync(settingsFile, 'utf8')) as { worker?: { model?: string; provider?: string } }
     expect(persisted.worker?.model, '设置落盘 = 写入值（worker model 数据面）').toBe(WORKER.model)
@@ -86,9 +112,7 @@ test('@web-e2e @m3 SC2·L1 双层装配面：预设技能枚举边界 + 物化�
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
     expect(project.id, '注册收敛（世界在场）').toBeTruthy()
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 

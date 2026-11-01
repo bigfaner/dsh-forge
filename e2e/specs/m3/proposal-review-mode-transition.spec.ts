@@ -45,13 +45,11 @@
 //
 // Assertion depth: 47/51 behavioral（92%），其中 deep 19/47（40%）——两阈均过。
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect, type Page } from '@playwright/test'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -59,11 +57,39 @@ import { ovSubtabOf, docPanelOf } from '../../support/anchors.js'
 
 const WS_NAME = 'ws-jprm'
 
-/** 打开提案子 tab（概览幂等重开 + 子 tab 激活收敛） */
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（提案账本 slug 隔离 jprm-*；T1 全表行数计数由首用例承载——声明序串行；
+// T3 文档写入 wsDir/.forge 子树——重播种只清 .dsh，本用例内即时消费）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+/** 打开提案子 tab（概览幂等重开 + 子 tab 激活收敛）——概览 dock 挂载重试（共享 launch
+ *  序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab 点击；失败后关掉概览 tab 重开，
+ *  keyed body 重挂载触发布局重解析——批次四a expedition-full-sdd-chain 同径 helper。
+ *  瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留） */
 async function openProposalsTab(page: Page): Promise<void> {
-  await openOverviewDock(page)
-  await page.locator(ovSubtabOf('proposals')).click()
-  await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf('proposals'))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
 }
 
 /** ⋯ 菜单 → 评审流转（开对话框——不提交） */
@@ -77,13 +103,9 @@ async function openVerdictDialog(page: Page, title: string): Promise<void> {
   await expect(page.locator('[data-dswf-ov-vd]')).toBeVisible({ timeout: 15_000 })
 }
 
-test('@web-e2e @m3 提案评审流转·T1：五态 chips 过滤（0 计数禁用 + 多选并集 + 切子 tab 清空）+ mode chip 三态与库一致', async () => {
+test('@web-e2e @m3 提案评审流转·T1：五态 chips 过滤（0 计数禁用 + 多选并集 + 切子 tab 清空）+ mode chip 三态与库一致', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -145,19 +167,13 @@ test('@web-e2e @m3 提案评审流转·T1：五态 chips 过滤（0 计数禁用
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 提案评审流转·T2：人工裁决流转（允许集 + 空因拒绝留场零写库 + 补因落库行即时更新）', async () => {
+test('@web-e2e @m3 提案评审流转·T2：人工裁决流转（允许集 + 空因拒绝留场零写库 + 补因落库行即时更新）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -207,19 +223,13 @@ test('@web-e2e @m3 提案评审流转·T2：人工裁决流转（允许集 + 空
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 提案评审流转·T3：agent 经 transitionProposal 写库同门一致 + 提案文档跳转（计数真实 + dock 文档 tab）', async () => {
+test('@web-e2e @m3 提案评审流转·T3：agent 经 transitionProposal 写库同门一致 + 提案文档跳转（计数真实 + dock 文档 tab）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -269,19 +279,13 @@ test('@web-e2e @m3 提案评审流转·T3：agent 经 transitionProposal 写库�
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二选 + 说明必填 + 快照不回溯）+ 联动对齐 + chip 即时一致 + 成链对照', async () => {
+test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二选 + 说明必填 + 快照不回溯）+ 联动对齐 + chip 即时一致 + 成链对照', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm4-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jprm4-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -360,8 +364,6 @@ test('@web-e2e @m3 提案评审流转·T4：在途模式更改唯一正门（二
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
