@@ -7,14 +7,14 @@
 //   弹出的降级条都被双分支判据当 fail-soft 通过形态吞掉，主路径用例对「召唤必败」零判别力。
 //   （附：前轮 5 红假象另含环境根因——插件 client bundle 陈旧未含 aedd69cb，重建后官方
 //   分支真通；bundle 重建已入 pnpm -C packages/plugins/expert-squad build 既有配方。）
-// - 主路径（成功前置：dev profile 已装配 HR 预设 preset-hr + 夹具工作区 + 面板数据态）
-//   必须断言官方分支。官方切换证据 = HR 预设座位标签（官方 conversation.hero.agentPreset
-//   槽座位按钮显预设显示名「HR · 专家管理」——m3 座位形制：healthy 显显示名/缺席回退 id；
+// - 主路径（成功前置：dev profile 已装配猎头预设 preset-headhunter + 夹具工作区 + 面板数据态）
+//   必须断言官方分支。官方切换证据 = 猎头预设座位标签（官方 conversation.hero.agentPreset
+//   槽座位按钮显预设显示名「猎头模式」——m3 座位形制：healthy 显显示名/缺席回退 id；
 //   probe7b 容器链实证 BUTTON[*=seat] > SPAN[*=seatLabel] < heroWorkspaceRow）+ 官方会话
 //   视图取代面板（主视图切换卸载）；降级条在场即 fail。注意：会话头 headerActions 投影
 //   标签是「非 blank 会话转录面」锚（m3 SC1④），blank 召唤会话（零消息）不出该面——
 //   本 spec 锚 = hero 座位标签（probe5 实证 headerActions 空 + agentPresets/select 返回
-//   ok:true value:"hr"）。
+//   ok:true value:"headhunter"）。
 // - 三路设计内降级各自独立用例、显式构造前置：
 //   ① workspace 锚缺席 = test.fixme（前置在 e2e 环境不可构造——官方 dsh home bootstrap
 //      恒物化默认工作区行（probe7a：全新空 DSH_FORGE_DSH_HOME 召唤仍过 workspace 守卫），
@@ -51,12 +51,12 @@ import { expect, test, type ElectronApplication, type Page } from '@playwright/t
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
-const SUMMON_BTN = 'button[aria-label="召唤 HR 预设会话"]'
+const SUMMON_BTN = 'button[aria-label="寻访（打开猎头模式会话）"]'
 const SUMMON_NOTICE = '[data-dswf-summon-notice]'
-/** HR 预设显示名（apps/host/src/profile/presets/hr.patch.yml config.name——座位标签文本） */
-const HR_PRESET_LABEL = 'HR · 专家管理'
-/** HR 预设座位标签（官方 conversation.hero.agentPreset 槽座位——healthy 显显示名） */
-const HR_SEAT_LABEL = `${SEAT_ROOT} button:has-text("${HR_PRESET_LABEL}")`
+/** 猎头预设显示名（apps/host/src/profile/presets/headhunter.patch.yml config.name——座位标签文本） */
+const HEADHUNTER_PRESET_LABEL = '猎头模式'
+/** 猎头预设座位标签（官方 conversation.hero.agentPreset 槽座位——healthy 显显示名） */
+const HEADHUNTER_SEAT_LABEL = `${SEAT_ROOT} button:has-text("${HEADHUNTER_PRESET_LABEL}")`
 
 /** project 层夹具专家档案（面板数据态收敛用——召唤前置 = 面板已激活在数据态）。 */
 function expertMd(name: string, title: string): string {
@@ -220,7 +220,7 @@ test('@feature expert-squad summon step-1：召唤钮在面板头部可见可触
     const summon = page.locator(SUMMON_BTN)
     await expect(summon, '召唤钮在面板头部呈现（onSummon 已装配）').toBeVisible()
     await expect(summon, '召唤钮启用态（非 busy）').toBeEnabled()
-    await expect(summon, '召唤钮文案').toHaveText('召唤')
+    await expect(summon, '召唤钮文案').toHaveText('寻访')
   } finally {
     await closeSession(session)
   }
@@ -235,11 +235,11 @@ test('@feature expert-squad summon 主路径：HR 预设官方会话切换（座
     const { page } = session
     await page.locator(SUMMON_BTN).click()
     // 官方分支证据（9d9d1bd3 收紧——本断言对任何召唤失败必红）：
-    // ① HR 预设座位标签在场（conversation.hero.agentPreset 槽座位显显示名——官方
-    //    agentPresets/select('hr') 成功投影；回退形态显 id 'hr' 即失败）
+    // ① 猎头预设座位标签在场（conversation.hero.agentPreset 槽座位显显示名——官方
+    //    agentPresets/select('headhunter') 成功投影；回退形态显 id 'headhunter' 即失败）
     await expect(
-      page.locator(HR_SEAT_LABEL).first(),
-      `HR 预设座位标签显显示名（${HR_PRESET_LABEL}——官方 select('hr') 成功投影）`,
+      page.locator(HEADHUNTER_SEAT_LABEL).first(),
+      `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}——官方 select('headhunter') 成功投影）`,
     ).toBeVisible({ timeout: 60_000 })
     // ② 降级条恒缺席（官方分支成功形态——旧双分支判据在此废弃）
     await expect(page.locator(SUMMON_NOTICE), '官方分支零降级引导条').toHaveCount(0)
@@ -280,7 +280,7 @@ test('@feature expert-squad summon 降级③ open 失败：session/create 注入
     await page.locator(SUMMON_BTN).click()
     // 注入命中证据（session/create 开路 RPC 拒绝信封确已发出）
     await expectRpcIntercepted(page, /^session\/create/)
-    await expectSummonNotice(page, /召唤会话打开失败/)
+    await expectSummonNotice(page, /寻访会话打开失败/)
     await expect(page.locator(PANEL_ROOT), '面板根仍挂载').toBeVisible()
     await expect(page.locator(CARD_ANY).first(), '卡片网格仍在场').toBeVisible()
     await expect(page.locator(SUMMON_BTN), '召唤钮退出 busy 回可用').toBeEnabled({ timeout: 10_000 })
@@ -303,8 +303,8 @@ test('@feature expert-squad summon 冒烟：激活面板 → 网格数据态 →
     // 召唤触发（官方分支——冒烟即主路径判据）
     await page.locator(SUMMON_BTN).click()
     await expect(
-      page.locator(HR_SEAT_LABEL).first(),
-      `HR 预设座位标签显显示名（${HR_PRESET_LABEL}）`,
+      page.locator(HEADHUNTER_SEAT_LABEL).first(),
+      `猎头预设座位标签显显示名（${HEADHUNTER_PRESET_LABEL}）`,
     ).toBeVisible({ timeout: 60_000 })
     await expect(page.locator(SUMMON_NOTICE), '零降级引导条').toHaveCount(0)
     // 不变量：renderer 零未捕获异常

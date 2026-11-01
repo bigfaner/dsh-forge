@@ -1,6 +1,6 @@
-// summon-opener-binding 单测（bug 9d9d1bd3——召唤必败：官方服务方法被剥成裸函数引用，
+// summon-opener-binding 单测（bug 9d9d1bd3——寻访必败：官方服务方法被剥成裸函数引用，
 // platform.openWorkspace(...) 调用时 this 绑定到平台字面量，官方实现首行 this.ctx.layout
-// 抛 TypeError → 降级条「召唤会话打开失败」恒现）。同成因复现：官方服务方法以 this 依赖
+// 抛 TypeError → 降级条「寻访会话打开失败」恒现）。同成因复现：官方服务方法以 this 依赖
 // 形态在场（镜像官方 client.js openWorkspace 首行 AbortSignal.any([this.ctx.layout...])），
 // 经 summonOpenerOf 真实装配路径调用——修复前必败（this 脱绑），修复后（保 receiver）
 // 必过。语境注记：open-session.ts:377 先例 = face 内经成员访问调用保 receiver；
@@ -50,8 +50,8 @@ function fakeCtx(uiWorkspace: unknown, remoteNamespace: unknown) {
   };
 }
 
-describe("summonOpenerOf 装配保 receiver（bug 9d9d1bd3——this 脱绑召唤必败）", () => {
-  it("官方服务方法以 this 依赖形态在场时，召唤成功而非降级条", async () => {
+describe("summonOpenerOf 装配保 receiver（bug 9d9d1bd3——this 脱绑寻访必败）", () => {
+  it("官方服务方法以 this 依赖形态在场时，寻访成功而非降级条", async () => {
     const uiWorkspace = officialUiWorkspaceLike();
     const remote = officialAgentPresetsLike();
     const outcome = await summonOpenerOf(fakeCtx(uiWorkspace, remote))(ROW);

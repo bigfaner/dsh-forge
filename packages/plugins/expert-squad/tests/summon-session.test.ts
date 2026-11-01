@@ -1,12 +1,12 @@
-// summon-session 单测（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话）：
+// summon-session 单测（fix-9 返工：[唤唤] = 经官方缝打开/切换猎头模式预设官方会话）：
 // workspace 锚取值径（同参同源 D4）+ openSummonSession 编排逐阶段（锚缺席降级引导 /
-// openWorkspace 失败 / beforeOpen 被取代 / HR 预设被拒引导 / 成功），mock 平台窄面。
+// openWorkspace 失败 / beforeOpen 被取代 / 猎头预设被拒引导 / 成功），mock 平台窄面。
 // 降级条阶段化文案口径（fix-14）：create/preset 阶段呈现用户可读人话文案，原始错误
 // 细节降级到 console.error 留痕，不直出 error.message 原文。
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  HR_PRESET_ID,
+  HEADHUNTER_PRESET_ID,
   openSummonSession,
   summonWorkspaceOf,
   type SummonPresetSelectResult,
@@ -55,12 +55,12 @@ describe("summonWorkspaceOf（workspace 锚——与面板 list workspace 参数
 });
 
 describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", () => {
-  it("成功：openWorkspace → selectPreset('hr')，返回会话 id 与 presetApplied", async () => {
+  it("成功：openWorkspace → selectPreset('headhunter')，返回会话 id 与 presetApplied", async () => {
     const p = platform({});
     const outcome = await openSummonSession(p, ROW);
     expect(outcome).toEqual({ ok: true, sessionId: "sess-1", presetApplied: true });
-    expect(p.calls).toEqual(["openWorkspace", `selectPreset:sess-1:${HR_PRESET_ID}`]);
-    expect(HR_PRESET_ID).toBe("hr");
+    expect(p.calls).toEqual(["openWorkspace", `selectPreset:sess-1:${HEADHUNTER_PRESET_ID}`]);
+    expect(HEADHUNTER_PRESET_ID).toBe("headhunter");
   });
 
   it("workspace 锚无 workspaceId = 阶段化降级引导（不弹选择器不空绑定）", async () => {
@@ -85,7 +85,7 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
       const outcome = await openSummonSession(p, ROW);
       expect(outcome).toMatchObject({ ok: false, stage: "create" });
       if (!outcome.ok) {
-        expect(outcome.message).toContain("召唤会话打开失败");
+        expect(outcome.message).toContain("寻访会话打开失败");
         expect(outcome.message).not.toContain("Cannot read properties");
       }
       expect(errSpy).toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
     expect(outcome).toMatchObject({ ok: false, stage: "create" });
   });
 
-  it("HR 预设被拒 = preset 阶段人话引导（装配提示，拒绝细节 console 留痕不直出）", async () => {
+  it("猎头预设被拒 = preset 阶段人话引导（装配提示，拒绝细节 console 留痕不直出）", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const p = platform({
@@ -114,7 +114,7 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
       const outcome = await openSummonSession(p, ROW);
       expect(outcome).toMatchObject({ ok: false, stage: "preset" });
       if (!outcome.ok) {
-        expect(outcome.message).toContain("preset-hr");
+        expect(outcome.message).toContain("preset-headhunter");
         expect(outcome.message).toContain("已装配");
         expect(outcome.message).not.toContain("not installed");
         expect(outcome.message).not.toContain("preset not found");
@@ -137,7 +137,7 @@ describe("openSummonSession 编排（openSessionWithPreset 同构最小面）", 
       const outcome = await openSummonSession(p, ROW);
       expect(outcome).toMatchObject({ ok: false, stage: "preset" });
       if (!outcome.ok) {
-        expect(outcome.message).toContain("HR 预设切换失败");
+        expect(outcome.message).toContain("猎头模式预设切换失败");
         expect(outcome.message).not.toContain("is not a function");
       }
       expect(errSpy).toHaveBeenCalled();

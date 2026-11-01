@@ -1,10 +1,11 @@
 // panel/summon-session —— [召唤] 官方会话缝（返工 fix-9 裁决：复用既有官方 chat-view，
-// 移除面板内自建消息 Modal）。[召唤] = 经官方缝打开/切换到 HR 预设会话（PRD US14：
-// 对 HR 预设会话说需求 → HR 调管理工具建档 → 面板经既有 fs/observed + 5s 轮询通道热
+// 移除面板内自建消息 Modal）。[召唤] = 经官方缝打开/切换到猎头模式预设会话（PRD US14：
+// 对猎头会话说需求 → 猎头调管理工具建档 → 面板经既有 fs/observed + 5s 轮询通道热
 // 刷新联动——零新增旁路）。缝先例 = ShellHost.tsx openSessionWithPreset 编排
 //（apps/web/src/client-plugin/open-session.ts 同构）：uiWorkspace.openWorkspace
 //（reuse-or-create blank，beforeOpen 同步回传会话 id）→ remote.agentPresets.select
-//（blank 会话首回合前重绑；HR 预设 id 对齐 1.23 装配的部署侧 preset-hr config.id = 'hr'）。
+//（blank 会话首回合前重绑；猎头预设 id 对齐部署侧 preset-headhunter config.id = 'headhunter'
+//——原 HR · 专家管理 2026-11-01 改名）。
 //
 // 绑定语义（裁决③）：召唤会话默认绑定用户当前打开的工作区——workspace 锚 = 官方
 // workspace-controller client store 快照中当前选中 WorkspaceView 行（与面板 list 请求的
@@ -19,8 +20,8 @@
 // bundle 自含纪律：零运行时 import——上游服务面以结构同型窄接口承载（open-session.ts
 // 同法）；服务解析（ctx.reflect 惰性取法）归装配壳（src-client/index.ts，调用期解析）。
 
-/** HR 预设 id（对齐 1.23 部署侧 preset-hr 底稿 config.id——apps/host presets/hr.patch.yml）。 */
-export const HR_PRESET_ID = "hr";
+/** 猎头模式预设 id（对齐部署侧 preset-headhunter 底稿 config.id——apps/host presets/headhunter.patch.yml）。 */
+export const HEADHUNTER_PRESET_ID = "headhunter";
 
 /** 官方 WorkspaceView 消费切片（workspace-controller client store 快照行窄面）。 */
 export interface SummonWorkspaceRow {
@@ -58,21 +59,21 @@ export type SummonOutcome =
   | { readonly ok: true; readonly sessionId: string; readonly presetApplied: boolean }
   | { readonly ok: false; readonly stage: "workspace" | "create" | "preset"; readonly message: string };
 
-/** HR 预设缺席/被拒的阶段化降级引导（人话文案——裁决④；拒绝细节 console 留痕不直出）。 */
+/** 猎头预设缺席/被拒的阶段化降级引导（人话文案——裁决④；拒绝细节 console 留痕不直出）。 */
 function presetRefusalMessage(result: SummonPresetSelectResult & { ok: false }): string {
   const reason = result.error.details?.reason ?? result.error.message;
   console.error(
-    "[dsh-forge/expert-squad] HR preset select refused:",
+    "[dsh-forge/expert-squad] headhunter preset select refused:",
     reason,
   );
-  return "HR 预设切换被拒——请确认 HR · 专家管理预设（preset-hr）已装配后再试";
+  return "猎头模式预设切换被拒——请确认猎头模式预设（preset-headhunter）已装配后再试";
 }
 
 /**
  * [召唤] 编排（openSessionWithPreset 同构最小面——预填/自动发送不随本缝：US14 由用户
- * 在官方会话内对 HR 说需求，零面板内对话面）。步序：workspace 锚守卫 → openWorkspace
+ * 在官方会话内对猎头说需求，零面板内对话面）。步序：workspace 锚守卫 → openWorkspace
  * （beforeOpen 回传会话 id；被后续导航取代 = 官方语义，按创建失败口径上报）→
- * agentPresets.select('hr')（被拒 = 降级引导文案）。会话打开失败 fail-soft：返回阶段化
+ * agentPresets.select('headhunter')（被拒 = 降级引导文案）。会话打开失败 fail-soft：返回阶段化
  * 失败，调用面引导呈现，面板不炸。
  */
 export async function openSummonSession(
@@ -84,7 +85,7 @@ export async function openSummonSession(
     return {
       ok: false,
       stage: "workspace",
-      message: "未找到当前打开的工作区——请先在官方工作台打开目标工作区后再召唤",
+      message: "未找到当前打开的工作区——请先在官方工作台打开目标工作区后再寻访",
     };
   }
   let sessionId: string | undefined;
@@ -99,19 +100,19 @@ export async function openSummonSession(
     return {
       ok: false,
       stage: "create",
-      message: "召唤会话打开失败，请稍后重试或检查工作区连接状态",
+      message: "寻访会话打开失败，请稍后重试或检查工作区连接状态",
     };
   }
   if (sessionId === undefined) {
     return {
       ok: false,
       stage: "create",
-      message: "召唤会话编排被后续导航取代（beforeOpen 未回传）",
+      message: "寻访会话编排被后续导航取代（beforeOpen 未回传）",
     };
   }
   const id: string = sessionId;
   try {
-    const result = await platform.selectPreset(id, HR_PRESET_ID);
+    const result = await platform.selectPreset(id, HEADHUNTER_PRESET_ID);
     if (!result.ok) {
       return { ok: false, stage: "preset", message: presetRefusalMessage(result) };
     }
@@ -121,7 +122,7 @@ export async function openSummonSession(
     return {
       ok: false,
       stage: "preset",
-      message: "HR 预设切换失败，请稍后重试",
+      message: "猎头模式预设切换失败，请稍后重试",
     };
   }
 }

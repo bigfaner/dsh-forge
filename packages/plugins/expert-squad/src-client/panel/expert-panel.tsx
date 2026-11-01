@@ -1,12 +1,12 @@
 // panel/expert-panel —— 专家卡片网格主视图（ui-design F1 已批原型的产品实现）：
 // 四态（骨架 loading / 空（零专家建档引导 & 无匹配）/ 错误 ErrorBar 重试 / 数据）、
-// 头部（「专家团」标识 + 左置搜索即时过滤与状态筛选 select + 右置召唤入口——用户裁决
-// 2026-10-25：状态筛选与召唤钮空间分离，筛选改 select 三态）、卡片字段集（状态灯/名称/
+// 头部（「专家团」标识 + 左置搜索即时过滤与状态筛选 select + 右置寻访入口——用户裁决
+// 2026-10-25：状态筛选与寻访钮空间分离，筛选改 select 三态）、卡片字段集（状态灯/名称/
 // 英文标识 chip/岗位/人设三行截断/技能与白名单 chips/更新时间页脚）、面板页脚计数。
 // ExpertPanelApp = 装配壳：官方 main keyed 槽占用者（root 标准props useWorkspaces 递达
 // ——workspace 参数来源 D4）+ ExpertListController 数据源订阅；/workspace 未就绪期 =
 // 骨架态（中间态不落空态分支——DESIGN.md 稳定性裁决）。
-// [召唤] = 经官方缝打开/切换 HR 预设官方会话（summon-session——零面板内对话面；
+// [召唤] = 经官方缝打开/切换猎头模式预设官方会话（summon-session——零面板内对话面；
 // 失败降级 = 头部引导条，不炸面板）。建档联动依赖既有 fs/observed + 5s 轮询通道
 //（1.4/1.22）——零新增旁路。
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -423,7 +423,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
     [controller, detailController],
   )
 
-  // [召唤]：经官方缝打开 HR 预设会话（绑定当前工作区——workspace 锚同参同源 D4）。
+  // [召唤]：经官方缝打开猎头模式预设会话（绑定当前工作区——workspace 锚同参同源 D4）。
   // 失败降级 = 引导条（不弹选择器、不空绑定、不炸面板）；成功 = 官方 chat-view 呈现，
   // 面板零对话面；建档联动靠既有 fs/observed + 5s 轮询（list-source 既有通道）。
   const summon = props.summon
@@ -444,7 +444,7 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         if (summonAlive.current && !outcome.ok) setSummonNotice(outcome.message)
       })
       .catch((error: unknown) => {
-        if (summonAlive.current) setSummonNotice(`召唤失败：${error instanceof Error ? error.message : String(error)}`)
+        if (summonAlive.current) setSummonNotice(`寻访失败：${error instanceof Error ? error.message : String(error)}`)
       })
       .finally(() => {
         if (summonAlive.current) setSummonBusy(false)
@@ -535,7 +535,7 @@ export interface ExpertPanelProps {
   readonly onOpenConfig?: () => void
   /** 召唤在途（防重——钮禁用态）。 */
   readonly summonBusy?: boolean
-  /** 召唤降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席）。 */
+  /** 召唤降级引导条（猎头预设被拒/会话打开失败/工作区锚缺席）。 */
   readonly summonNotice?: string
   /** delegate 装配降级提示（run-state 读口 degraded——委派不可用的可见提示；registered/缺席 = 零提示）。 */
   readonly delegateNotice?: string
@@ -843,7 +843,7 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
     gridBody = (
       <div className="dswf-empty">
         <b>还没有专家</b>
-        在会话里对 HR 说「招募一个专家」即可建档
+        在会话里对猎头说「招募一个专家」即可建档——点「寻访」打开猎头会话
       </div>
     )
   } else if (filteredGroups.length === 0) {
@@ -914,14 +914,14 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
           <button
             type="button"
             className="dswf-btn dswf-btn-primary dswf-summon-btn"
-            aria-label="召唤 HR 预设会话"
+            aria-label="寻访（打开猎头模式会话）"
             disabled={props.summonBusy === true}
             onClick={props.onSummon}
           >
-            召唤
+            寻访
           </button>
         )}
-        {/* 「配置」跳转（D2）：召唤钮右侧 → 插件管理器 @dsh-forge/expert-squad 详情页（默认 Agent 选项） */}
+        {/* 「配置」跳转（D2）：寻访钮右侧 → 插件管理器 @dsh-forge/expert-squad 详情页（默认 Agent 选项） */}
         {props.onOpenConfig === undefined ? null : (
           <button
             type="button"

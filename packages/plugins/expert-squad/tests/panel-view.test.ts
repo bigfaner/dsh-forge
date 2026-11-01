@@ -136,7 +136,7 @@ describe("ExpertPanel 头部交互面", () => {
     expect(closed).toContain('data-select-value="enabled"');
   });
 
-  it("头部布局：搜索与状态筛选左置（紧随标题）、召唤钮独右（margin-left auto 类）", () => {
+  it("头部布局：搜索与状态筛选左置（紧随标题）、寻访钮独右（margin-left auto 类）", () => {
     const html = renderPanel({ onSummon: () => undefined });
     const titleAt = html.indexOf("dswf-panel-title");
     const searchAt = html.indexOf("dswf-search");
@@ -149,16 +149,16 @@ describe("ExpertPanel 头部交互面", () => {
     expect(html).toContain("dswf-summon-btn");
   });
 
-  it("onSummon 在场 = 召唤钮呈现（HR 预设官方会话入口，在途禁用）；缺席不呈现", () => {
-    expect(renderPanel({ onSummon: () => undefined })).toContain("召唤");
-    expect(renderPanel({ onSummon: () => undefined })).toContain('aria-label="召唤 HR 预设会话"');
+  it("onSummon 在场 = 寻访钮呈现（猎头模式官方会话入口，在途禁用）；缺席不呈现", () => {
+    expect(renderPanel({ onSummon: () => undefined })).toContain("寻访");
+    expect(renderPanel({ onSummon: () => undefined })).toContain('aria-label="寻访（打开猎头模式会话）"');
     expect(renderPanel({ onSummon: () => undefined, summonBusy: true })).toContain("disabled");
-    expect(renderPanel({})).not.toContain(">召唤<");
+    expect(renderPanel({})).not.toContain(">寻访<");
   });
 
-  it("召唤降级引导条：summonNotice 在场呈现（role=status）；缺席不呈现", () => {
-    expect(renderPanel({ onSummon: () => undefined, summonNotice: "HR 预设切换被拒" })).toContain(
-      "HR 预设切换被拒",
+  it("寻访降级引导条：summonNotice 在场呈现（role=status）；缺席不呈现", () => {
+    expect(renderPanel({ onSummon: () => undefined, summonNotice: "猎头模式预设切换被拒" })).toContain(
+      "猎头模式预设切换被拒",
     );
     expect(renderPanel({ onSummon: () => undefined })).not.toContain("dswf-summon-notice");
   });

@@ -52,9 +52,9 @@ export const PANEL_CSS = `
 .dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
 .dswf-btn-ghost { background: transparent; color: var(--dsw-alias-label-secondary); border: 0.5px solid var(--dsw-alias-border-l2); }
 .dswf-btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); }
-/* 召唤钮独占右侧（用户裁决 2026-10-25：与状态筛选空间分离） */
+/* 寻访钮独占右侧（用户裁决 2026-10-25：与状态筛选空间分离） */
 .dswf-summon-btn { margin-left: auto; }
-/* 「配置」跳转钮（D2：召唤钮右侧——margin-left 0 不夺 auto 位；原型 cfg-jump-btn 刻度） */
+/* 「配置」跳转钮（D2：寻访钮右侧——margin-left 0 不夺 auto 位；原型 cfg-jump-btn 刻度） */
 .dswf-cfg-jump-btn { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; flex: none; white-space: nowrap; }
 /* 筛选 select label（1.68 裁决④：「状态」「来源」左置，与搜索框同行排布） */
 .dswf-filter-label { font: var(--dsw-font-xs-13); color: var(--dsw-alias-label-secondary); }
@@ -171,7 +171,7 @@ export const PANEL_CSS = `
 .dswf-msel-row { display: flex; align-items: center; gap: ${T.gap8}; font: var(--dsw-font-xs-13); padding: 4px 0; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-msel-add input { width: 100%; font: var(--dsw-font-xs-13); padding: ${T.gap8}; margin-top: ${T.gap8}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); outline: none; }
 .dswf-toast { position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); padding: ${T.gap8} ${T.pad16}; border-radius: ${T.r8}; background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-2); font: var(--dsw-font-xs-13); white-space: nowrap; }
-/* [召唤] 降级引导条（HR 预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */
+/* [召唤] 降级引导条（猎头预设被拒/会话打开失败/工作区锚缺席——明确引导，不炸面板） */
 .dswf-summon-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }
 /* delegate 装配降级提示条（run-state 读口 degraded——委派不可用可见提示，同召唤引导条形制） */
 .dswf-delegate-notice { margin: ${T.gap8} 0 0; padding: ${T.gap8} ${T.pad12}; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: ${T.r8}; background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary, var(--dsw-alias-label-primary)); font: var(--dsw-font-xs-13); line-height: ${T.lh20}; }

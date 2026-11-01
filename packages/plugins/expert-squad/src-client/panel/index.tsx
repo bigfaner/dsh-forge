@@ -65,7 +65,7 @@ export {
   type AllSkills,
 } from "./detail-dialog.js";
 export {
-  HR_PRESET_ID,
+  HEADHUNTER_PRESET_ID,
   openSummonSession,
   summonWorkspaceOf,
   type SummonOutcome,
