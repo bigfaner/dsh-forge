@@ -30,7 +30,7 @@ export {
   ExpertPanel,
   ExpertPanelApp,
   listUrl,
-  workspaceRowOf,
+  summonRowOf,
   type CandidateCatalogSnapshot,
   type ExpertPanelAppProps,
   type ExpertPanelProps,
@@ -66,11 +66,14 @@ export {
 } from "./detail-dialog.js";
 export {
   HEADHUNTER_PRESET_ID,
+  mainViewSessionIdOf,
   openSummonSession,
   summonWorkspaceOf,
+  summonWorkspaceRowOf,
   type SummonOutcome,
   type SummonPlatform,
   type SummonPresetSelectResult,
+  type SummonSessionsSnapshot,
   type SummonWorkspaceRow,
 } from "./summon-session.js";
 export {

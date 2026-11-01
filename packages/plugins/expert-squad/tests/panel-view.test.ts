@@ -151,9 +151,18 @@ describe("ExpertPanel 头部交互面", () => {
 
   it("onSummon 在场 = 寻访钮呈现（猎头模式官方会话入口，在途禁用）；缺席不呈现", () => {
     expect(renderPanel({ onSummon: () => undefined })).toContain("寻访");
-    expect(renderPanel({ onSummon: () => undefined })).toContain('aria-label="寻访（打开猎头模式会话）"');
+    expect(renderPanel({ onSummon: () => undefined })).toContain('aria-label="寻访（锚定当前打开的工作区');
     expect(renderPanel({ onSummon: () => undefined, summonBusy: true })).toContain("disabled");
     expect(renderPanel({})).not.toContain(">寻访<");
+  });
+
+  it("绑定面 = 显示面（§3.4）：summonTarget 在场 = 锚定目标进 aria-label 与 tooltip；缺席 = title 引导态", () => {
+    const anchored = renderPanel({ onSummon: () => undefined, summonTarget: "demo" });
+    expect(anchored).toContain('aria-label="寻访（打开 demo 工作区的猎头模式会话）"');
+    expect(anchored).toContain("寻访：demo");
+    const bare = renderPanel({ onSummon: () => undefined });
+    expect(bare).toContain("请先在官方工作台打开目标工作区");
+    expect(bare).not.toContain('aria-label="寻访（打开 ');
   });
 
   it("寻访降级引导条：summonNotice 在场呈现（role=status）；缺席不呈现", () => {

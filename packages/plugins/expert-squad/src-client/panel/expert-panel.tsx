@@ -34,7 +34,7 @@ import {
 import { ExpertDetailDialog } from "./detail-dialog.js";
 import { FilterSelect } from "./filter-select.js";
 import {
-  summonWorkspaceOf,
+  summonWorkspaceRowOf,
   type SummonOutcome,
   type SummonWorkspaceRow,
 } from "./summon-session.js";
@@ -44,21 +44,31 @@ import { ensurePanelStyles } from "./styles.js";
 /** 官方 workspace 归属快照选择钩子（root 标准props——结构窄面，缺席 = 降级）。 */
 export type WorkspacesHook = (selector: (snapshot: unknown) => unknown) => unknown
 
-/** workspace 归属快照 → 当前选中 WorkspaceView 行（D4 取值来源 = WorkspaceView.path；
- *  单库兜底取首行；workspaceId 随行递达——召唤绑定官方 openWorkspace 寻址面）。 */
-export function workspaceRowOf(snapshot: unknown): SummonWorkspaceRow | undefined {
-  return summonWorkspaceOf(snapshot)
+/**
+ * workspace 归属行推导（formal-verifier 评审 2026-11-01 取值径改写）：主视图会话锚
+ * （sessions 快照 retainedBy.mainView）→ 归属 workspace 行；锚缺席 = 单库兜底（清单
+ * 唯一带 path 行）；锚在场而归属不明 = undefined（引导，不落兜底——判例 2026-10-24
+ * 引导 > 猜测）。与 apps/web panel-model projectAnchorOf 同径（跨包不可 import，
+ * 语义漂移由双侧单测各自锚定）。
+ */
+export function summonRowOf(sessions: unknown, workspaces: unknown): SummonWorkspaceRow | undefined {
+  return summonWorkspaceRowOf(sessions, workspaces)
 }
 
-/** workspace 路径锚子件（钩子形制：kit hook 缺席不挂载、在场则子件内无条件调用）。 */
-function WorkspaceRowAnchor({
-  hook,
+/** 渲染期锚子件入参（双钩子形制：kit hook 缺席不挂载、在场则子件内无条件调用）。 */
+function SummonAnchor({
+  useSessions,
+  useWorkspaces,
   onRow,
 }: {
-  readonly hook: WorkspacesHook
+  readonly useSessions?: WorkspacesHook
+  readonly useWorkspaces?: WorkspacesHook
   readonly onRow: (row: SummonWorkspaceRow | undefined) => void
 }): ReactNode {
-  const row = workspaceRowOf(hook((snapshot) => snapshot))
+  // root 标准props 在场性随装配静态（props 常量）——两钩子无条件调用不违 rules-of-hooks
+  const sessions = useSessions?.((snapshot) => snapshot)
+  const workspaces = useWorkspaces?.((snapshot) => snapshot)
+  const row = summonRowOf(sessions, workspaces)
   useEffect(() => {
     onRow(row)
   }, [row, onRow])
@@ -257,6 +267,8 @@ export type SummonOpener = (workspace: SummonWorkspaceRow) => Promise<SummonOutc
 export interface ExpertPanelAppProps {
   /** workspace 归属观察钩子（root 标准props 自动递达；缺席 = 骨架降级）。 */
   readonly useWorkspaces?: WorkspacesHook
+  /** 会话账本观察钩子（root 标准props 自动递达——主视图锚 `retainedBy.mainView` 源；缺席 = 单库兜底径）。 */
+  readonly useSessions?: WorkspacesHook
   /** 取数缝（测试/装配注入；缺省 = /api 桥 fetch）。 */
   readonly fetchList?: ListFetcher
   /** 详情变更缝（测试/装配注入；缺省 = update POST fetch）。 */
@@ -478,7 +490,11 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
   return (
     <div className="dswf-expert-panel" data-dswf-expert-panel="">
       {props.useWorkspaces === undefined ? null : (
-        <WorkspaceRowAnchor hook={props.useWorkspaces} onRow={setWorkspaceRow} />
+        <SummonAnchor
+          useWorkspaces={props.useWorkspaces}
+          {...(props.useSessions !== undefined ? { useSessions: props.useSessions } : {})}
+          onRow={setWorkspaceRow}
+        />
       )}
       <ExpertPanel
         phase={phase}
@@ -493,6 +509,9 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
         {...(workspacePath !== undefined ? { projectName: projectNameOf(workspacePath) } : {})}
         {...(controller !== undefined ? { onRetry } : {})}
         {...(summon !== undefined ? { onSummon, summonBusy } : {})}
+        {...(workspaceRow?.path !== undefined
+          ? { summonTarget: projectNameOf(workspaceRow.path) } /* §3.4 绑定面 = 显示面：寻访钮 tooltip/aria 呈现锚定目标（缺席态 title 引导——不猜） */
+          : {})}
         onOpenConfig={onOpenConfig}
         {...(summonNotice !== undefined ? { summonNotice } : {})}
         {...(delegateNotice !== undefined ? { delegateNotice } : {})}
@@ -531,6 +550,8 @@ export interface ExpertPanelProps {
   /** 点卡片 = 请求打开详情 Dialog（key + 当前展示来源——shadow 展示态开其所在层档案）。 */
   readonly onCardActivate?: (key: string, origin?: string) => void
   readonly onSummon?: () => void
+  /** 寻访锚定目标具名（workspace path basename——绑定面即显示面；缺席 = title 引导态）。 */
+  readonly summonTarget?: string
   /** 点「配置」钮 = 跳转本插件配置 tab（官方设置壳导航缝——装配壳恒递达）。 */
   readonly onOpenConfig?: () => void
   /** 召唤在途（防重——钮禁用态）。 */
@@ -913,8 +934,15 @@ export function ExpertPanel(props: ExpertPanelProps): ReactNode {
         {props.onSummon === undefined ? null : (
           <button
             type="button"
-            className="dswf-btn dswf-btn-primary dswf-summon-btn"
-            aria-label="寻访（打开猎头模式会话）"
+            className="dswf-btn dswf-btn-primary dswf-summon-btn dswf-tip"
+            {...(props.summonTarget !== undefined
+              ? { "data-tip": `寻访：${props.summonTarget}（打开该工作区的猎头会话）` }
+              : { "data-tip": "锚定当前打开的工作区——请先在官方工作台打开目标工作区" })}
+            aria-label={
+              props.summonTarget !== undefined
+                ? `寻访（打开 ${props.summonTarget} 工作区的猎头模式会话）`
+                : "寻访（锚定当前打开的工作区；未打开工作区时将提示）"
+            }
             disabled={props.summonBusy === true}
             onClick={props.onSummon}
           >

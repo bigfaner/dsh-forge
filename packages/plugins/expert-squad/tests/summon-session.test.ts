@@ -7,8 +7,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   HEADHUNTER_PRESET_ID,
+  mainViewSessionIdOf,
   openSummonSession,
   summonWorkspaceOf,
+  summonWorkspaceRowOf,
   type SummonPresetSelectResult,
   type SummonPlatform,
 } from "../src-client/panel/summon-session.js";
@@ -39,18 +41,74 @@ function platform(overrides: {
 
 const ROW = { workspaceId: "ws-1", path: "Z:/proj/demo" };
 
-describe("summonWorkspaceOf（workspace 锚——与面板 list workspace 参数同参同源）", () => {
-  it("取首个带 path 的行（workspaceId 随行递达）；无 path 行跳过", () => {
+describe("summonWorkspaceOf（单库兜底取值径——仅无锚时消费）", () => {
+  it("唯一带 path 的行 = 兜底返回（workspaceId 随行递达）；无 path 行跳过", () => {
     const row = summonWorkspaceOf({
       items: [{ workspaceId: "ws-0" }, { workspaceId: "ws-1", path: "Z:/a" }],
     });
     expect(row).toEqual({ workspaceId: "ws-1", path: "Z:/a" });
   });
 
-  it("快照缺席/形状漂移/零带 path 行 = undefined", () => {
+  it("多带 path 行 = undefined（不猜）；快照缺席/形状漂移/零带 path 行 = undefined", () => {
+    expect(
+      summonWorkspaceOf({ items: [{ workspaceId: "ws-1", path: "Z:/a" }, { workspaceId: "ws-2", path: "Z:/b" }] }),
+    ).toBeUndefined();
     expect(summonWorkspaceOf(undefined)).toBeUndefined();
     expect(summonWorkspaceOf({})).toBeUndefined();
     expect(summonWorkspaceOf({ items: [{ workspaceId: "ws-1" }] })).toBeUndefined();
+  });
+});
+
+describe("summonWorkspaceRowOf（主视图会话锚取值径——formal-verifier 评审 2026-11-01 判据）", () => {
+  // 多行快照：行序刻意「首行非锚」——固化现 bug（旧实现取 items 首行）不再复发
+  const WORKSPACES = {
+    items: [
+      { workspaceId: "ws-b", path: "Z:/proj/b", sessionIds: ["s-b"] },
+      { workspaceId: "ws-a", path: "Z:/proj/a", sessionIds: ["s-a1", "s-a2"] },
+      { workspaceId: "ws-nopath", sessionIds: ["s-np"] },
+    ],
+  };
+
+  it("锚归属行命中：mainView 会话 ∈ 行 2.sessionIds → 返回行 2（不再取首行）", () => {
+    const sessions = { byId: { "s-a1": { retainedBy: { mainView: 1 } } } };
+    expect(summonWorkspaceRowOf(sessions, WORKSPACES)).toEqual(WORKSPACES.items[1]);
+  });
+
+  it("锚在场但无归属行（workspace 已删）= undefined（引导，不落单库兜底）", () => {
+    const sessions = { byId: { "s-gone": { retainedBy: { mainView: 1 } } } };
+    expect(summonWorkspaceRowOf(sessions, WORKSPACES)).toBeUndefined();
+  });
+
+  it("mainView 计数 0 = 非锚", () => {
+    const sessions = { byId: { "s-b": { retainedBy: { mainView: 0 } } } };
+    expect(summonWorkspaceRowOf(sessions, WORKSPACES)).toBeUndefined();
+  });
+
+  it("锚缺席 + 清单唯一带 path 行 = 单库兜底（该行）", () => {
+    const workspaces = { items: [{ workspaceId: "ws-1", path: "Z:/only", sessionIds: [] }] };
+    expect(summonWorkspaceRowOf({ byId: {} }, workspaces)).toEqual(workspaces.items[0]);
+  });
+
+  it("锚缺席 + 多带 path 行 = undefined（不猜，降级引导）", () => {
+    expect(summonWorkspaceRowOf(undefined, WORKSPACES)).toBeUndefined();
+    expect(summonWorkspaceRowOf({ byId: undefined }, WORKSPACES)).toBeUndefined();
+  });
+
+  it("会话快照形状漂移 = 视同无锚（走兜底径，不抛）", () => {
+    expect(summonWorkspaceRowOf("garbage", WORKSPACES)).toBeUndefined();
+    expect(mainViewSessionIdOf(undefined)).toBeUndefined();
+    expect(mainViewSessionIdOf({ byId: { s: undefined } })).toBeUndefined();
+  });
+
+  it("mainViewSessionIdOf：多会话取 mainView 计数 > 0 的首个命中", () => {
+    expect(
+      mainViewSessionIdOf({
+        byId: {
+          "s-x": { retainedBy: { mainView: 0 } },
+          "s-y": { retainedBy: { mainView: 2 } },
+        },
+      }),
+    ).toBe("s-y");
   });
 });
 

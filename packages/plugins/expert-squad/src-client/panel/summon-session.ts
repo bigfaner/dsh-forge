@@ -7,15 +7,12 @@
 //（blank 会话首回合前重绑；猎头预设 id 对齐部署侧 preset-headhunter config.id = 'headhunter'
 //——原 HR · 专家管理 2026-11-01 改名）。
 //
-// 绑定语义（裁决③）：召唤会话默认绑定用户当前打开的工作区——workspace 锚 = 官方
-// workspace-controller client store 快照中当前选中 WorkspaceView 行（与面板 list 请求的
-// workspace 参数同参同源，D4 一致性，summonWorkspaceOf = 面板 workspaceRowOf 取值径同源）；
-// 绑定动作 = openWorkspace(workspaceId) 官方一体面（连接工作区并开会话）。
-// dsh-forge（worktree 形态工作区）的 workspace → 项目归属解析由 host 单点保证
-//（AGENTS 1.1 正确性 host 单点；bug 52fc94db worktree 锚定判例 + ShellHost
-// useWorkspaceProjectMap 同源管线）——客户端不复制归属裁决，只递达 workspaceId。
-// 归属解析不明（锚行无 workspaceId）= 降级引导（stage:'workspace'），不弹选择器、
-// 不空绑定、不炸面板。
+// 绑定语义（裁决③ + formal-verifier 评审 2026-11-01）：召唤会话绑定「主视图会话锚及其
+// 归属 workspace 行」——官方选中态真源 = 会话账本 `retainedBy.mainView`（UiWorkspaceService
+// selection 的公开投影，官方 DocumentTitle / startSession currentWorkspaceId 同径），
+// workspace 由会话归属派生（`items.find(ws => ws.sessionIds.includes(sessionId))`）。
+// 主视图锚缺席（hero clearMain 语境）= 降级引导，不落任何派生启发式（判例 2026-10-24：
+// 引导文案 > 猜测）；无锚且清单仅一个带 path 行 = 单库兜底。
 //
 // bundle 自含纪律：零运行时 import——上游服务面以结构同型窄接口承载（open-session.ts
 // 同法）；服务解析（ctx.reflect 惰性取法）归装配壳（src-client/index.ts，调用期解析）。
@@ -32,13 +29,54 @@ export interface SummonWorkspaceRow {
 }
 
 /** 官方 workspace 归属快照窄形状（items 数组；形状漂移 = undefined）。 */
+export interface SummonWorkspaceListSnapshot {
+  readonly items?: readonly unknown[];
+}
+
+/** 官方会话账本快照窄形状（byId 表——retainedBy.mainView 为主视图锚公开投影）。 */
+export interface SummonSessionsSnapshot {
+  readonly byId?: Readonly<Record<string, { retainedBy?: { mainView?: number } } | undefined>>;
+}
+
+/** 从 list 快照取单库兜底行（仅唯一带 path 行时；多行/零行/形状漂移 = undefined——不猜）。 */
 export function summonWorkspaceOf(snapshot: unknown): SummonWorkspaceRow | undefined {
-  const items = (snapshot as { items?: readonly unknown[] } | undefined)?.items;
+  const items = (snapshot as SummonWorkspaceListSnapshot | undefined)?.items;
   if (!Array.isArray(items)) return undefined;
-  for (const row of items as readonly SummonWorkspaceRow[]) {
-    if (typeof row?.path === "string" && row.path !== "") return row;
+  const pathRows = (items as readonly SummonWorkspaceRow[]).filter(
+    (row) => typeof row?.path === "string" && row.path !== "",
+  );
+  return pathRows.length === 1 ? pathRows[0] : undefined;
+}
+
+/** 主视图会话锚（retainedBy.mainView > 0 的会话 id；缺席/形状漂移 = undefined）。 */
+export function mainViewSessionIdOf(snapshot: unknown): string | undefined {
+  const byId = (snapshot as SummonSessionsSnapshot | undefined)?.byId;
+  if (byId === undefined || typeof byId !== "object") return undefined;
+  for (const [sessionId, summary] of Object.entries(byId)) {
+    if ((summary?.retainedBy?.mainView ?? 0) > 0) return sessionId;
   }
   return undefined;
+}
+
+/**
+ * 召唤绑定行推导（取值径单源）：主视图会话锚在场 → 归属 workspace 行（`sessionIds`
+ * 包含锚的行；无匹配 = undefined——锚在场而归属不明时**不落兜底**，直接引导）；锚缺席
+ * → 单库兜底（清单仅一个带 path 行——此时无更强锚，官方单库语境同形）。
+ */
+export function summonWorkspaceRowOf(
+  sessions: unknown,
+  workspaces: unknown,
+): SummonWorkspaceRow | undefined {
+  const anchor = mainViewSessionIdOf(sessions);
+  if (anchor !== undefined) {
+    const items = (workspaces as SummonWorkspaceListSnapshot | undefined)?.items;
+    if (!Array.isArray(items)) return undefined;
+    for (const row of items as readonly (SummonWorkspaceRow & { sessionIds?: readonly string[] })[]) {
+      if (Array.isArray(row?.sessionIds) && row.sessionIds.includes(anchor)) return row;
+    }
+    return undefined;
+  }
+  return summonWorkspaceOf(workspaces);
 }
 
 /** agentPresets/select 远端结果（镜像上游 RemoteResult 判别联合消费面）。 */
@@ -82,6 +120,9 @@ export async function openSummonSession(
 ): Promise<SummonOutcome> {
   const { workspaceId } = workspace;
   if (typeof workspaceId !== "string" || workspaceId === "") {
+    // 诊断面（summon-anchor）：主视图锚缺席或归属不明——引导文案面 + console 留痕
+    // （client 束 console 豁免先例，summon-session.ts:65 同径）。
+    console.warn("[dsh-forge/expert-squad] summon anchor absent/unresolved——降级引导（stage:workspace）");
     return {
       ok: false,
       stage: "workspace",
