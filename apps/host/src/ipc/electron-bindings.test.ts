@@ -1,0 +1,64 @@
+// Electron 实面绑定单测（Electron 依赖隔离出的装配层——shell 动作以注入 fake 断言语义；
+// 真机取证归 walkthrough）。核心面：showDiagLogs 单窗口语义（bug a8d147e7——一次触发
+// 仅消费一次，快速重复触发（双击/事件双发）不得双开 Explorer 窗口）。
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { electronHarnessActions } from './electron-bindings.js'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+let cleanupRoots: Array<() => void> = []
+afterEach(() => {
+  for (const fn of cleanupRoots) fn()
+  cleanupRoots = []
+})
+
+function makeActions() {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-forge-harness-actions-'))
+  cleanupRoots.push(() => rmSync(root, { recursive: true, force: true }))
+  const logPath = join(root, 'logs', 'harness.log')
+  const openPath = vi.fn(async () => '')
+  const actions = electronHarnessActions(
+    { relaunch: () => {}, exit: () => {}, getPath: () => root },
+    logPath,
+    undefined,
+    { openPath: openPath as (path: string) => Promise<string> },
+  )
+  return { actions, openPath }
+}
+
+describe('electronHarnessActions.showDiagLogs（单窗口语义——bug a8d147e7）', () => {
+  it('一次触发 = 一次 openPath（目录缺席即建；返回 true）', () => {
+    vi.useFakeTimers()
+    const { actions, openPath } = makeActions()
+    vi.setSystemTime(0)
+    expect(actions.showDiagLogs()).toBe(true)
+    expect(openPath).toHaveBeenCalledTimes(1)
+  })
+
+  it('快速重复触发（去重窗内）只消费一次——双击/事件双发不双开', () => {
+    vi.useFakeTimers()
+    const { actions, openPath } = makeActions()
+    vi.setSystemTime(0)
+    actions.showDiagLogs()
+    vi.setSystemTime(50)
+    expect(actions.showDiagLogs()).toBe(true)
+    vi.setSystemTime(120)
+    expect(actions.showDiagLogs()).toBe(true)
+    expect(openPath).toHaveBeenCalledTimes(1) // 消费一次 = 单窗口
+  })
+
+  it('去重窗外再次触发照常打开（用户稍后主动点仍可用）', () => {
+    vi.useFakeTimers()
+    const { actions, openPath } = makeActions()
+    vi.setSystemTime(0)
+    actions.showDiagLogs()
+    vi.setSystemTime(2_000)
+    expect(actions.showDiagLogs()).toBe(true)
+    expect(openPath).toHaveBeenCalledTimes(2)
+  })
+})

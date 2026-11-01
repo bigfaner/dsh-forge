@@ -62,9 +62,20 @@ export interface DiagDebugToggleFace {
   emit(enabled: boolean, message: string): void
 }
 
-/** Harness 菜单三动作实装（安全模式标志经环境变量跨进程存活——relaunch 环境承载） */
-export function electronHarnessActions(app: ElectronAppSlice, logPath: string, diagDebug?: DiagDebugToggleFace): HarnessActions {
+/** Harness 菜单三动作实装（安全模式标志经环境变量跨进程存活——relaunch 环境承载）。
+ *  第 4 参 = 测试注入缝（openPath 可替身；缺省 = 真 shell.openPath）。 */
+export function electronHarnessActions(
+  app: ElectronAppSlice,
+  logPath: string,
+  diagDebug?: DiagDebugToggleFace,
+  inject?: { openPath?(path: string): Promise<string> },
+): HarnessActions {
   let diagDebugEnabled = false // 开关态单源（唯一写点 = 本动作；appender 级别门由 setMinLevel 承载）
+  const openDir = inject?.openPath ?? ((path: string) => shell.openPath(path))
+  // bug a8d147e7 单窗口语义：触发面消费一次——去重窗（500ms）内的重复触发（真实双击/
+  // 事件双发）不再次 openPath，杜绝 Explorer 同目录双开竞态；窗外触发照常打开。
+  const DIAG_OPEN_DEDUPE_MS = 500
+  let lastDiagOpenAt = -DIAG_OPEN_DEDUPE_MS - 1
   return {
     relaunch: () => {
       noteHarnessLog(logPath, '[host] 重启 Harness（菜单触发）')
@@ -84,10 +95,14 @@ export function electronHarnessActions(app: ElectronAppSlice, logPath: string, d
       return true
     },
     showDiagLogs: () => {
+      const now = Date.now()
+      if (now - lastDiagOpenAt < DIAG_OPEN_DEDUPE_MS) return true // 去重窗内重复触发 = 已触发语义（不双开）
       const diagDir = diagLogsDirOf(app)
       try {
+        noteHarnessLog(logPath, '[host] 查看诊断日志目录（菜单触发）') // 菜单动作留痕（与其余四动作同制；真机调用计数面）
+        lastDiagOpenAt = now
         mkdirSync(diagDir, { recursive: true }) // 目录缺席即建（对位 showLog 的 ensure 头——openPath 恒有真实目录可达）
-        void shell.openPath(diagDir)
+        void openDir(diagDir)
         return true
       } catch {
         return false // fail-soft：目录不可建时静默（打开面永不炸宿主流程）
