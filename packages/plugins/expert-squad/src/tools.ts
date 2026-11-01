@@ -94,9 +94,8 @@ const disableParams = z.object({
   name: z.string().min(1).describe("Existing expert key to disable"),
 });
 
-const listParams = z.object({
-  includeDisabled: z.boolean().optional().describe("Include disabled experts (default: enabled only)"),
-});
+// list_experts 无参数——返回体恒不含禁用专家（用户裁决：禁用项对取用面不可见）。
+const listParams = z.object({});
 
 const recruitResult = z.object({
   name: z.string(),
@@ -127,7 +126,6 @@ const listResult = z.object({
       tools: z.array(z.string()),
       skills: z.array(z.string()),
       origin: z.string(),
-      enabled: z.boolean(),
     }),
   ),
 });
@@ -287,7 +285,9 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     output: {
       schema: zToJSONSchema(recruitResult, "output"),
       render: (_args, value) => [
-        text(`expert recruited: ${(value as { name: string }).name} (${(value as { path: string }).path})`),
+        text(
+          `expert recruited: ${(value as { name: string }).name} (${(value as { path: string }).path}) — usable now via list_experts / delegate_expert`,
+        ),
       ],
     },
     async execute(args) {
@@ -305,6 +305,7 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       const verdict = parseExpertFile(file, content);
       if (!verdict.ok) throw new ExpertToolError(`recruit_expert: ${verdict.reason}`);
       writeFileSync(file, content, "utf8");
+      await registry.refresh(); // 所见即所得：返回时点快照已含新档案（不等 watch 异步失效）
       return recruitResult.parse({ name: p.name, path: file });
     },
   };
@@ -334,6 +335,7 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       const verdict = validateExpertUpdate(existing, file, content);
       if (!verdict.ok) throw new ExpertToolError(`update_expert: ${verdict.reason}`);
       writeFileSync(file, content, "utf8");
+      await registry.refresh(); // 所见即所得：返回时点快照已含新内容（不等 watch 异步失效）
       return updateResult.parse({ name: p.name, path: file });
     },
   };
@@ -373,29 +375,26 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
   const listTool: ExpertToolDefinition = {
     name: "list_experts",
     description:
-      "List available experts with selection fields (title/description/tools) and enabled state; disabled experts are hidden unless includeDisabled is set.",
+      "List available experts with selection fields (title/description/tools) and origin; disabled experts are not included.",
     parameters: zToJSONSchema(listParams, "input"),
     output: {
       schema: zToJSONSchema(listResult, "output"),
       render: (_args, value) => {
-        const experts = (value as { experts: { name: string; enabled: boolean }[] }).experts;
-        return [
-          text(
-            `experts: ${experts.map((e) => `${e.name}${e.enabled ? "" : " (disabled)"}`).join(", ") || "(none)"}`,
-          ),
-        ];
+        const experts = (value as { experts: { name: string; title: string; description: string }[] }).experts;
+        if (experts.length === 0) return [text("experts: (none)")];
+        const lines = experts.map((e) => `- ${e.name} — ${e.title}：${e.description}`);
+        return [text(`experts (${experts.length}):\n${lines.join("\n")}`)];
       },
     },
     async execute(args) {
-      const p = parseArgs("list_experts", listParams, args);
-      const experts = registry.list({ includeDisabled: p.includeDisabled }).map((e) => ({
+      parseArgs("list_experts", listParams, args);
+      const experts = registry.list().map((e) => ({
         name: e.name,
         title: e.title,
         description: e.description,
         tools: e.tools,
         skills: e.skills,
         origin: e.origin,
-        enabled: e.enabled,
       }));
       return listResult.parse({ experts });
     },

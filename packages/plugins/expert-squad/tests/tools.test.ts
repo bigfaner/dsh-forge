@@ -317,16 +317,22 @@ describe("enable_expert / disable_expert / list_experts", () => {
     await refresh();
   });
 
-  it("disable → 默认列表隐藏、includeDisabled 可见 enabled=false；enable 恢复", async () => {
+  it("disable → list_experts 不含该项；enable 恢复可见（render 带 title+description）", async () => {
     const tools = makeTools();
+    const listed0 = (await tools.list_experts!.execute({})) as {
+      experts: { name: string; title: string; description: string }[];
+    };
+    expect(listed0.experts.find((e) => e.name === "code-reviewer")).toBeTruthy();
     await tools.disable_expert!.execute({ name: "code-reviewer" });
     expect(registry.list().map((e) => e.name)).not.toContain("code-reviewer");
-    const listed = (await tools.list_experts!.execute({ includeDisabled: true })) as {
-      experts: { name: string; enabled: boolean }[];
-    };
-    expect(listed.experts.find((e) => e.name === "code-reviewer")?.enabled).toBe(false);
+    const listed = (await tools.list_experts!.execute({})) as { experts: { name: string }[] };
+    expect(listed.experts.map((e) => e.name)).not.toContain("code-reviewer");
     await tools.enable_expert!.execute({ name: "code-reviewer" });
     expect(registry.list().map((e) => e.name)).toContain("code-reviewer");
+    // render 投影：一行一专家，name — title：description（人岗匹配零二次查询）
+    const blocks = tools.list_experts!.output.render({}, listed0);
+    const rendered = (blocks[0] as { text: string }).text;
+    expect(rendered).toContain("- code-reviewer — 资深评审：");
   });
 
   it("不存在键 disable/enable → fail-loud", async () => {
