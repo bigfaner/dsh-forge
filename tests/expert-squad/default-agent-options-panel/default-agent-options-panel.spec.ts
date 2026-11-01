@@ -1,5 +1,8 @@
-// 「默认 Agent 选项」单面板 e2e 旅程（expert-squad-default-routing AC2 可机检半）：
-//   ① 设置页打开 tab（官方设置壳 → 「内置插件」section → settings.plugins.tab feature-owned tab）
+// 「默认 Agent 选项」单面板 e2e 旅程（expert-squad-default-routing AC2 可机检半；单入口
+// 迁移后承载面 = 官方插件详情页 keyed slot plugins.bundle.config——`data-plugin-config`
+// section）：
+//   ① 左栏「插件」面板（官方 plugin-manager main keyed）→ expert-squad 卡片 → 详情页
+//      「包含的组件」区 data-plugin-config section 渲染面板
 //   ② 写 Provider/Model/Reasoning → 活动 profile cordis.patch.yml id 定向条目（- id: expert-squad）
 //   ③ volatile 无重启生效：同一实例内面板快照回填 + experts 服务 get 应答折叠 defaultAgentOptions
 // journey = .forge/docs/proposals/expert-squad-default-routing/testing/default-agent-options-panel/journey.md
@@ -8,8 +11,10 @@
 // 落 dev profile 的 cordis.patch.yml（tracked 文件，spec 备份/还原零残留；fix-20 探针同口径）。
 // 真实用户形态落 ~/.dsh/profiles/<profile>/cordis.patch.yml，写径机械同源（configEditor
 // .documentPath = 活动 profile patch），形态差异只在路径。
-// 导航口径（探针实测）：官方设置壳 = 居中 overlay 面板（VOzbGW_panel），section 导航行在
-// 面板内（locale 字面量「内置插件」）；产品侧栏同名行（aria-label 插件）在 mask 之下非点击面。
+// 导航口径（单入口迁移后）：左栏「插件」面板（官方 plugin-manager，行 aria-label =
+// locale zh.panel「插件」，expert-squad 左栏行同径）→ 已安装组 expert-squad 卡片
+// （data-plugin-package = 包名）→ 详情页（data-plugin-detail）「包含的组件」区
+// data-plugin-config section（configured 门 = plugins.bundle.config keyed ledger）。
 // 消费面取用读口 = GET /api/expert-squad/get（registry get 折叠 defaultAgentOptions——
 // 优先级链③基座；①②组合由 registry-overlay 单测穷举）。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp；patch 文件测试后逐字还原。
@@ -88,17 +93,18 @@ function patchText(): string {
 }
 
 /**
- * 设置壳导航到「默认 Agent 选项」tab：官方设置入口 → 面板内 section 导航「内置插件」→
- * tab（两态兼容：多贡献 = role=tab 点选；单贡献 = 面板直呈，tab 缺席即跳过）。
+ * 导航到「默认 Agent 选项」面板（插件详情页单入口）：左栏「插件」面板 → expert-squad
+ * 卡片「查看」钮 → 详情页 data-plugin-config section（keyed slot 渲染面）。
  */
-async function openDefaultAgentOptionsTab(page: Page): Promise<void> {
-  await page.locator('[aria-label="设置"]').first().click()
-  const pluginsNav = page.getByRole('button', { name: '内置插件', exact: true })
-  await expect(pluginsNav, '设置壳「内置插件」section 导航行在场').toBeVisible()
-  await pluginsNav.click()
-  const tab = page.getByRole('tab', { name: '默认 Agent 选项' })
-  if ((await tab.isVisible().catch(() => false)) === true) await tab.click()
-  await expect(page.locator(PROVIDER_INPUT), '「默认 Agent 选项」面板挂载').toBeVisible()
+async function openDefaultAgentOptionsPanel(page: Page): Promise<void> {
+  await page.locator('button[aria-label="插件"]').first().click()
+  const card = page.locator('[data-plugin-package="@dsh-forge/expert-squad"]')
+  await expect(card, '插件页 expert-squad 卡片在场').toBeVisible()
+  await card.getByRole('button', { name: /查看/ }).click()
+  await expect(page.locator('[data-plugin-detail="@dsh-forge/expert-squad"]'), '详情页挂载').toBeVisible()
+  const section = page.locator('[data-plugin-config]')
+  await expect(section, '「包含的组件」data-plugin-config section 在场（keyed ledger 入账）').toBeVisible()
+  await expect(section.locator(PROVIDER_INPUT), '「默认 Agent 选项」面板挂载').toBeVisible()
   await expect(page.locator(PANEL_CARD), '面板 ready（configForms 写径就绪）').toBeVisible()
 }
 
@@ -108,7 +114,7 @@ async function pickReasoning(page: Page, value: string): Promise<void> {
   await page.locator(`${REASONING_ROOT} [data-select-option="${value}"]`).click()
 }
 
-test('AC2·golden path：打开 tab → 写配置落 id 定向 patch → volatile 同实例生效', async () => {
+test('AC2·golden path：打开插件详情页配置面板 → 写配置落 id 定向 patch → volatile 同实例生效', async () => {
   test.setTimeout(120_000)
   const suffix = String(Date.now() % 1_000_000)
   const provider = `dao-prov-${suffix}`
@@ -124,7 +130,7 @@ test('AC2·golden path：打开 tab → 写配置落 id 定向 patch → volatil
     // 前置基线：夹具专家无路由（get 应答三路由位缺省——应答含档案全文，只比路由位）
     expect(routeBits(await fetchGet(page, wsDir)), '写前夹具专家无路由').toEqual({})
 
-    await openDefaultAgentOptionsTab(page)
+    await openDefaultAgentOptionsPanel(page)
     // 占位空态（D5 微文案）
     await expect(page.locator(PROVIDER_INPUT)).toHaveAttribute('placeholder', '继承父Agent')
     await expect(page.locator(MODEL_INPUT)).toHaveAttribute('placeholder', '继承父Agent')
@@ -200,8 +206,8 @@ test('AC2·golden path：打开 tab → 写配置落 id 定向 patch → volatil
   }
 })
 
-test('AC2·面板形态锚：标题/分区/占位微文案（settings 域在场的最小回归半）', async () => {
-  // 单贡献 tab 直呈形态的最小回归：面板打开即 ready、D5 微文案锚逐字（降级不注册形态
+test('AC2·面板形态锚：标题/分区/占位微文案（详情页单入口的最小回归半）', async () => {
+  // 插件详情页单入口直呈形态的最小回归：面板打开即 ready、D5 微文案锚逐字（降级不注册形态
   // configForms 缺席 = 宿主装配差异，settings-default-options.test 单测承载——e2e 不注错）。
   test.setTimeout(120_000)
   const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
@@ -210,7 +216,7 @@ test('AC2·面板形态锚：标题/分区/占位微文案（settings 域在场�
   const launched = await launchHost({ userData })
   const { app, page } = launched
   try {
-    await openDefaultAgentOptionsTab(page)
+    await openDefaultAgentOptionsPanel(page)
     await expect(page.locator('.dswf-cfg-panel-title')).toHaveText('默认 Agent 选项')
     await expect(page.locator('.dswf-cfg-seg')).toHaveText('默认路由')
   } finally {

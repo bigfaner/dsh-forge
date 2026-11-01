@@ -12,7 +12,7 @@ const pkg = JSON.parse(readFileSync(resolve(pkgDir, "package.json"), "utf8")) as
   name: string;
   dsh?: {
     bundle?: { patch?: string };
-    client?: { platform?: string };
+    client?: { platform?: string; inject?: readonly string[] };
   };
   exports?: Record<string, unknown>;
   peerDependencies?: Record<string, string>;
@@ -26,6 +26,10 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
 
   it("dsh.client 声明 platform:web（缺 web = UI 静默缺失）", () => {
     expect(pkg.dsh?.client?.platform).toBe("web");
+  });
+
+  it("dsh.client.inject 声明 settings 域装配期注入边（configForms 服务提供者先载——apply 期在场）", () => {
+    expect(pkg.dsh?.client?.inject).toContain("@deepseek-ai/dsh-client-ui-settings");
   });
 
   it('exports["./client"] 声明浏览器半入口', () => {

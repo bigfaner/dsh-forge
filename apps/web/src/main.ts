@@ -46,11 +46,13 @@ const inputHistoryClient: ProductClientEntry = {
 // 独立插件包缺省装载行（expert-squad 装配面）：bundle = vite 构建期原样发射的
 // @dsh-forge/expert-squad dist/client.js（官方 clientBundle 配方自注册 classic script，
 // vite.config emit 插件）；id 字面量与本包 bundle-client.mjs PLUGIN_ID 同源（自注册头）
-// ——不 import（资产零代码耦合）；rev 同用构建戳；无注入边（dsh.client 清单不声明 inject）。
+// ——不 import（资产零代码耦合）；rev 同用构建戳；inject 与本包 dsh.client 清单同源
+// （settings 域插件先载——configForms 服务 apply 期在场，官方 settings-* 族同族先例）。
 const expertSquadClient: ProductClientEntry = {
   id: '@dsh-forge/expert-squad',
   url: `expert-squad-client.js?rev=${__DSH_FORGE_BUILD_REV__}`,
   rev: __DSH_FORGE_BUILD_REV__,
+  inject: ['@deepseek-ai/dsh-client-ui-settings'],
 }
 
 // quote-reference 插件缺省装载行（super-composer/1.9，input-history 判例同构）：

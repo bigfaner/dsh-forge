@@ -8,15 +8,13 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   DefaultAgentOptionsTab,
+  BUNDLE_CONFIG_KEY,
+  BUNDLE_CONFIG_SLOT,
   EMPTY_DRAFT,
-  PLUGINS_TAB_SLOT,
-  SETTINGS_TAB_ID,
-  SETTINGS_TAB_LABEL,
-  SETTINGS_TAB_ORDER,
   SETTINGS_NAMESPACE,
   defaultOptionsDraftOf,
   defaultOptionsPatchOf,
-  registerDefaultOptionsTab,
+  registerBundleConfigPanel,
   REASONING_OPTIONS,
   draftFoldOnRevision,
   expertsConfigWriteOf,
@@ -120,23 +118,21 @@ function ctxFake(services: Record<string, unknown>) {
   return { ...services };
 }
 
-// ── 注册装配（settings.plugins.tab 缝） ────────────────────
+// ── 注册装配（plugins.bundle.config 缝） ──────────────────
 
-describe("registerDefaultOptionsTab（注册装配）", () => {
-  it("configForms 在场：挂 settings.plugins.tab 槽并注册 tab（id/order/label/inject 面）", () => {
+describe("registerBundleConfigPanel（注册装配）", () => {
+  it("configForms 在场：挂 plugins.bundle.config 槽并 keyed 注册面板（key/inject 面）", () => {
     const slots = slotsFake();
     const form = formMirrorOf(undefined);
-    const disposer = registerDefaultOptionsTab(
+    const disposer = registerBundleConfigPanel(
       ctxFake({ configForms: configFormsFake(form) }) as never,
       slots as never,
     );
-    expect(slots.injects).toEqual([PLUGINS_TAB_SLOT]);
+    expect(slots.injects).toEqual([BUNDLE_CONFIG_SLOT]);
     expect(slots.registered).toHaveLength(1);
     const { options, component } = slots.registered[0]!;
-    expect(options.name).toBe(PLUGINS_TAB_SLOT);
-    expect(options.id).toBe(SETTINGS_TAB_ID);
-    expect(options.order).toBe(SETTINGS_TAB_ORDER);
-    expect(options.label).toBe(SETTINGS_TAB_LABEL);
+    expect(options.name).toBe(BUNDLE_CONFIG_SLOT);
+    expect(options.key).toBe(BUNDLE_CONFIG_KEY);
     expect(typeof component).toBe("function");
     // inject 面递达本插件 namespace 的 ConfigForm
     expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
@@ -149,7 +145,7 @@ describe("registerDefaultOptionsTab（注册装配）", () => {
     const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) =>
       register(new Set([SETTINGS_NAMESPACE])),
     );
-    registerDefaultOptionsTab(
+    registerBundleConfigPanel(
       ctxFake({ configForms: configFormsFake(form, whileServed) }) as never,
       slots as never,
     );
@@ -167,7 +163,7 @@ describe("registerDefaultOptionsTab（注册装配）", () => {
     const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) => {
       register(new Set(["dsh-forge-expert-squad"]));
     });
-    const disposer = registerDefaultOptionsTab(
+    const disposer = registerBundleConfigPanel(
       ctxFake({ configForms: { whileServed, get: getByNamespace } }) as never,
       slots as never,
     );
@@ -190,7 +186,7 @@ describe("registerDefaultOptionsTab（注册装配）", () => {
       registerRef = register;
       return () => undefined;
     });
-    registerDefaultOptionsTab(
+    registerBundleConfigPanel(
       ctxFake({ configForms: { whileServed, get: (ns: string) => (ns === "expert-squad" ? form : undefined) } }) as never,
       slots as never,
     );
@@ -203,7 +199,7 @@ describe("registerDefaultOptionsTab（注册装配）", () => {
   it("configForms 缺席 = 降级不注册（console.warn 留痕，不炸组合）", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const slots = slotsFake();
-    const disposer = registerDefaultOptionsTab(ctxFake({}) as never, slots as never);
+    const disposer = registerBundleConfigPanel(ctxFake({}) as never, slots as never);
     expect(slots.injects).toEqual([]);
     expect(slots.registered).toHaveLength(0);
     expect(disposer).toBeUndefined();
@@ -232,7 +228,7 @@ describe("registerDefaultOptionsTab（注册装配）", () => {
         return () => undefined;
       },
     };
-    registerDefaultOptionsTab(ctxFake({ configForms: configFormsFake(formMirrorOf(undefined)) }) as never, slots as never);
+    registerBundleConfigPanel(ctxFake({ configForms: configFormsFake(formMirrorOf(undefined)) }) as never, slots as never);
     expect(receivers).toEqual([slots]);
     warn.mockRestore();
   });

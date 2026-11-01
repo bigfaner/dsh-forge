@@ -1,12 +1,16 @@
-// settings —— 配置 tab「默认 Agent 选项」（settings.plugins.tab render slot 注册面）。
-// 核销：dsh-client-ui-settings-plugins PluginsSettingsSection.d.ts（section 只拥有导航
-// 与 tab chrome，页面内容 = feature-owned tab；官方 plugin-inventory client.js 同径先例
-// ——slots.inject(slot, () => slots.register({name, id, order, label, inject}, Component))）。
-// 读写正门 = 官方 configForms 服务（dsh-client-ui-settings ConfigForms/ConfigForm 镜像面，
-// super-composer submission-settings 同判例：结构同型承载、不做跨包值 import）——
-// describe/revision/stale 拒写/schema 校验归官方，写落活动 profile 的 cordis.patch.yml
-// （id 定向条目），volatile 通知 → 快照换代 → 面板热刷新（无重启生效）。
-// 降级：configForms 缺席（宿主未组 settings 域）= 不注册本 tab（console.warn 留痕）；
+// settings —— 配置页「默认 Agent 选项」（官方 keyed slot `plugins.bundle.config` 注册面，
+// 插件详情页单入口）。核销：dsh-client-ui-plugin-manager lib/client.js——声明
+// client.js:3733（main keyed 'plugins' children `plugins.bundle.config` keyed/root），
+// 消费 client.js:2519-2524（PackageDetail「包含的组件」区 `data-plugin-config` section，
+// renderSlot(..., { view: "page" }, { entryKey: pkg.name })；configured 门 =
+// configLedgerSource bundles = keysOf("plugins.bundle.config")，client.js:44-76——
+// slot 登记账本本身即 ledger，client 半注册即入账）；注册形态 = settings-* 族同族先例
+// （slots.inject(slot, () => slots.register({name, key, inject}, Component))，key =
+// 包名 @dsh-forge/expert-squad）。读写正门 = 官方 configForms 服务（dsh-client-ui-settings
+// ConfigForms 镜像面，super-composer submission-settings 同判例：结构同型承载、不做跨包值
+// import）——describe/revision/stale 拒写/schema 校验归官方，写落活动 profile 的
+// cordis.patch.yml（id 定向条目），volatile 通知 → 快照换代 → 面板热刷新（无重启生效）。
+// 降级：configForms 缺席（宿主未组 settings 域）= 不注册本面板（console.warn 留痕）；
 // namespace 未被服务 = whileServed 在场门不注册；快照 unavailable = 面板降级提示。
 import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { FilterSelect } from "../panel/filter-select.js";
@@ -32,14 +36,10 @@ export {
   type DefaultOptionsDraft,
 } from "./default-options-logic.js";
 
-/** 官方 Plugins settings section 的 feature-owned tab 槽键（PluginsSettingsSection 契约）。 */
-export const PLUGINS_TAB_SLOT = "settings.plugins.tab";
-/** 本插件 tab 登记键（槽内唯一即可）。 */
-export const SETTINGS_TAB_ID = "default-agent-options";
-/** tab 排位（官方 inventory「Plugin list」order 10 之后留序；孤贡献时渲染为页面本身）。 */
-export const SETTINGS_TAB_ORDER = 20;
-/** tab 名（D5 微文案定稿：DefaultAgentOptions 直译）。 */
-export const SETTINGS_TAB_LABEL = "默认 Agent 选项";
+/** 官方插件详情页 keyed 配置槽键（dsh-client-ui-plugin-manager main 'plugins' children 声明）。 */
+export const BUNDLE_CONFIG_SLOT = "plugins.bundle.config";
+/** 本插件 keyed 登记键（= 包名——renderSlot entryKey 过滤与 configured ledger 同源判等）。 */
+export const BUNDLE_CONFIG_KEY = "@dsh-forge/expert-squad";
 /** 本插件 settings namespace 短名（候选一——行 id 恰为短名的部署直配）。 */
 export const SETTINGS_NAMESPACE = "expert-squad";
 /**
@@ -103,17 +103,18 @@ function safeRegister(
   try {
     return slots.register?.(options, component);
   } catch (error) {
-    console.error("[dsh-forge/expert-squad] settings tab registration failed——降级不注册", error);
+    console.error("[dsh-forge/expert-squad] bundle config panel registration failed——降级不注册", error);
     return undefined;
   }
 }
 
 /**
- * 注册「默认 Agent 选项」tab（settings.plugins.tab render slot；返回联合释放器）。
- * configForms 缺席 = 降级不注册（宿主未组 settings 域——配置写径不存在，UI 不悬空）；
+ * 注册「默认 Agent 选项」面板（plugins.bundle.config keyed slot；返回联合释放器）。
+ * key = 包名（renderSlot entryKey 过滤 + configured ledger 判等同源）；configForms
+ * 缺席 = 降级不注册（宿主未组 settings 域——配置写径不存在，UI 不悬空）；
  * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸），否则直注册。
  */
-export function registerDefaultOptionsTab(
+export function registerBundleConfigPanel(
   ctx: {
     configForms?: unknown;
     effect?(factory: () => (() => void) | undefined, name?: string): (() => void) | undefined;
@@ -126,7 +127,7 @@ export function registerDefaultOptionsTab(
   const forms = configFormsFaceOf(ctx);
   const inject = slots.inject;
   if (forms === undefined || typeof inject !== "function") {
-    console.warn("[dsh-forge/expert-squad] ctx.configForms/slots absent; settings tab not mounted");
+    console.warn("[dsh-forge/expert-squad] ctx.configForms/slots absent; bundle config panel not mounted");
     return undefined;
   }
   // 实际 namespace（注册时点从 served 集解析——候选命中序即优先序；读写同源单点）
@@ -134,14 +135,12 @@ export function registerDefaultOptionsTab(
   // bug 9577a867 伴生面：slots 面是 cordis 代理原型方法（this.ctx 绑调用接收者）——
   // 禁解构裸调，必须 slots.inject(...) 方法调用（解构 = this.ctx undefined 实测崩溃）。
   const mount = (): (() => void) | undefined =>
-    slots.inject!(PLUGINS_TAB_SLOT, () =>
+    slots.inject!(BUNDLE_CONFIG_SLOT, () =>
       safeRegister(
         slots,
         {
-          name: PLUGINS_TAB_SLOT,
-          id: SETTINGS_TAB_ID,
-          order: SETTINGS_TAB_ORDER,
-          label: SETTINGS_TAB_LABEL,
+          name: BUNDLE_CONFIG_SLOT,
+          key: BUNDLE_CONFIG_KEY,
           inject: () => ({ form: forms.get(namespace) }),
         },
         DefaultAgentOptionsTab,

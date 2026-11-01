@@ -213,7 +213,7 @@ export interface SettingsNavDoc {
 const SETTINGS_TRIGGER_SEL = '[aria-label="设置"]';
 /** 官方设置壳「内置插件」分区导航行文案（plugin-inventory section label——本部署 zh 字面量）。 */
 const PLUGINS_SECTION_LABEL = "内置插件";
-/** 本插件配置 tab 名（settings/index.tsx SETTINGS_TAB_LABEL 同词）。 */
+/** 本插件配置页名（settings/index.tsx DefaultAgentOptionsTab 标题同词）。 */
 const PLUGIN_TAB_LABEL = "默认 Agent 选项";
 
 /**

@@ -180,3 +180,15 @@ md的FRONTMATTER渲染成表格，跟github一样
 ## 76. 任务localId:采用x.y格式，x表示阶段，y表示阶段内的序号
 
 ## 77. 任务循环结束后，要复盘 repro，参考matt
+
+## 78. learn 技能归属 knowledge 插件（forge-verification-hardening 裁决）
+- learn 技能落 `packages/knowledge/skills/learn/SKILL.md`，不放 plugin-forge。
+- 依据：知识的查询与沉淀是同一功能的一体两面，沉淀入口必须与查询/条目格式同域（knowledge 插件单源），forge 只消费不承载。
+- 连带：提案 forge-verification-hardening 任务 1.10 的 scope 与 M5「直写 .knowledge」口径按此对齐。
+
+## 79. quick-tasks 语言专属专家自动路由（多语言 monorepo；2026-10-30 会话裁决：先观察后落）
+- 拆解任务时按 scope 文件扩展名推断任务主语言；该语言 ≠ 仓库主语言（TS）且 experts/ 存在该语言专属档案 → 自动在任务 `vars.expert` 填语言专属键（claim 期变量路由优先于类型映射）。
+- 无对应档案则不填 → 走 DEFAULT_EXPERT_MAPPING 类型映射（现状行为，零变化——增强是纯增量）。
+- 前置：语言维度默认由三条现成通道承载（AGENTS.md 目录链按 cwd 装载、三层档案同名遮蔽、对话式委派），本增强只在「工具链之外还需要语言人格」实证出现时才有意义——**建第一个语言专属档案（如 rust-*）时顺手带上**，避免为想象的需求加机械。
+
+## 80. 专家绑定技能

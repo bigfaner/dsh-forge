@@ -20,6 +20,13 @@ bug id: 无
 - 语义改承载方式时（如启动语义并入卡头区间），同步更新探针口径。
 - 假阴性结果先做「文案对齐」归因，再判「功能缺位」。
 
+## 判例二（断言工具陈旧：字面匹配器跟不上预期渲染演进）
+
+triage-progress-row 1.5 走查：probe AC5③ 检查 FAIL，因其字面匹配器找「处置分析」串，而 fix-4 后终态组卡预期渲染为「决策文本 + 完成态」（终态语义折入决策文本）——功能在（DOM 审计：任务行与 triage 行独立聚合键并存，card-audit.json 全档），工具断言陈旧。处置：AC 判定以 DOM 审计证据为准，probe FAIL 如实上报为「工具断言陈旧」而非返工产品或静默放行。
+
+- 探针字面匹配器对「预期渲染形态变化」脆弱：终态/摘要类语义折入其它承载（note、决策文本）时，字面串匹配即失效。
+- 探针 FAIL ≠ 功能缺位 ≠ 自动放行——三态要显式区分，判定权交给结构性 DOM 审计证据，工具债如实留痕。
+
 ## 出处
 
-walkthrough/1-4/rerun-20261028.md 埋点核对行；diag-14-progress-card-a.txt。
+walkthrough/1-4/rerun-20261028.md 埋点核对行；diag-14-progress-card-a.txt；proposals/triage-progress-row/walkthrough/record.md §二（消息面循环事件卡行，card-audit.json）。

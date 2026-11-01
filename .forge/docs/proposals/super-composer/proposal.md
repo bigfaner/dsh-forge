@@ -65,7 +65,7 @@ flowchart LR
      ```
 
      模型侧拿到可追溯的原文全文语境 + 引用锚点，而非转述。选段快照由插件内存缓存（零业务耦合、不落库）；快照缺失（会话重启后回放）时回退最小 quote 块（摘要垫体）——永不抛错阻断发送（bug-source 快照末级回退同则）。quote source 与 bug source 同则：**不实现 lexicon 装饰**（引用只以原子 chip / 明文投影两种形态存在）。曾评估借用 @ 形状语法（`@"选段"`）换取发送后视觉 chip——file 语义错位、点击落空、会话日志落畸形路径，裁决不采用。
-4. **全屏简易 chat view 替身**：感知 rightbar fullscreen（正门 `SidebarRightTabInfo.sidebar.fullscreen` tabInfo hook 订阅；DOM 标记 `[data-sidebar-right-panel=fullscreen]` / `[data-dockkit-*]` 兜底）——**全屏语义 = 文档展开占据中间+右侧区域，左侧栏保持不变**；替身居中于文档区域内、视口底部固定**一体卡**（构成与状态机见 UI/UX 交互规格）：
+4. **全屏简易 chat view 替身**：感知 rightbar fullscreen（正门 `SidebarRightTabInfo.sidebar.fullscreen` tabInfo hook 订阅；DOM 标记 `[data-sidebar-right-panel=fullscreen]` 兜底）——**全屏语义 = 文档展开占据中间+右侧区域，左侧栏保持不变**；**可见性门控 = 全屏呈现 ∧ dockkit 文档活动两信号合取**（1.39 用户裁决，见「可见性门控」节）；替身居中于文档区域内、视口底部固定**一体卡**（构成与状态机见 UI/UX 交互规格）：
    - **composer 简易态**：chip 行（输入区上方，读草稿 occurrences 投影）+ 单行输入；无控件行——Enter 发送、Shift+Enter 换行；**mention 菜单在场**（`/` 指令、`@` 引用，官方 inputTriggers 源同壳菜单）；
    - **chat view 态（消息流）**：发送后消息流在横线上方长出，投影当前会话消息流（同一 binding eventSource 数据渠道），流式增量实时上屏——不退全屏即可查看回复；消息流在场时 composer 升为**完整形态**（官方控件行回归）；
    - **开合交互**：显式优先、可预期可拦截，完整状态机与转换表见 UI/UX 交互规格。
@@ -105,9 +105,22 @@ flowchart LR
 | 点球 C | 有未读 → 直达 S2；否则回 S1/S0 |
 
 **未读状态机（1.35）**：未读 = 球态期间消息流增长（**流式增量 ∨ 非流式补账合并记账**——同一未读面，不分支）。圆点显示条件 = 未读 ∧ 非流式（流式期间球面由 spinner 动效承担，停止后未读转圆点提示）；**查看（点球恢复 / 展开消息流）即清账**，圆点消失；卡体在场期间消息增长不记未读。
+
+**可见性门控（1.39 用户裁决）**：替身可见性 = **全屏呈现 ∧ dockkit 文档活动** 两信号合取，任一为假即 `render(null)` 整卡卸载。
+
+- 文档活动判据（官方/产品源码核销，禁裸路径猜测）：dockkit 布局面 `[data-dockkit-surface]` 在场时，可见 tab content（`[data-dockkit-content]:not([aria-hidden="true"])`，官方 TabHost 以 aria-hidden 标非可见 tab）内存在文档体锚：官方 documentpreview `[data-textpreview-url]` / `[data-document-preview]`（tab body 身份锚，text/unsupported 两态同落），或产品 dockkit 文档 tab body `[data-dswf-doc-panel]`（apps/web views/docs，骨架/悬空/正文三态同落）；布局面缺席（宿主无 dockkit 布局）= 判据未知，降级不收窄。
+
+| 全屏呈现 | 文档活动 | 终态 |
+|---|---|---|
+| ✓ | ✓（文档 tab） | **显示** |
+| ✓ | ✗（切走/关闭文档 tab、dockkit 非文档 tab、插件等非 dockkit 页面） | **隐藏** |
+| ✗ | ✓ | 隐藏（AC5 全屏门控） |
+| ✗ | ✗ | 隐藏 |
+
+- 隐藏/恢复与既有机械的叠加语义：隐藏期 = 整卡卸载——30s 空闲收球 / 3s 预告 / Esc 状态机 / 未读圆点计时随组件卸载冻结（定时器 effect 清理），恢复显示即全新挂载重算，隐藏期间不误触发；互斥语义（全屏态替身唯一输入面）不变，非全屏恒隐藏优先于一切。
 | 鼠标离开 | **不收起**（鼠标位置 ≠ 注意力归属——UX 重设计裁决） |
 
-**标题栏**：左「—」（收成球）、中会话 title、右「⧉」（退出全屏恢复常规视图）；无 ✕。非按钮区域为开合热区：光标 = **应用风格 chevron 自定义光标**（可展开 = 主题色向上箭头，可折叠 = 向下），tooltip = **应用风格浮层**（跟随光标、非原生 title）；「—」「⧉」为普通按钮。
+**标题栏**：左「—」（收成球）+ **会话 title**（1.41 UX 裁决：header 左侧展示**当前会话标题**——官方 sessions.list 活跃行 title/displayTitle 口径（未命名回落与官方侧栏同源），会话切换/重命名经既有订阅实时更新；单行溢出截断按 DESIGN.md；真机取证 walkthrough/113-41-*）、中开合热区、右「⧉」（退出全屏恢复常规视图）；无 ✕。非按钮区域为开合热区：光标 = **应用风格 chevron 自定义光标**（可展开 = 主题色向上箭头，可折叠 = 向下），tooltip = **应用风格浮层**（跟随光标、非原生 title）；「—」「⧉」为普通按钮。
 
 **消息流**：官方 ChatView 的消息渲染语义投影（同 eventSource 快照），滚动吸底、流式增量上屏；用户消息内 quote 引用只落 `<quote id source>` 结构化块（1.32 格式改判，见 chip 发出后双重形态）；**替身内消息正文同样可划选引用**（可引用域含替身消息，排除其输入/控件区）。
 
