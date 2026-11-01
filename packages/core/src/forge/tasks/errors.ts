@@ -210,9 +210,10 @@ export function isTaskNotFoundError(e: unknown): e is TaskNotFoundError {
 // ───────────────────────── 2.5 扩池：transitionTask 拒绝面 ─────────────────────────
 
 /** ERR_REASON_REQUIRED 附载（transitionTask 空因——与 small-domains/transitionFeature 同语义同 code 异类；
- *  2.4 扩 verb 'submitTask'：blocked submit 空因同码拒绝） */
+ *  2.4 扩 verb 'submitTask'：blocked submit 空因同码拒绝；blocked-verdict-restore-primitive 1.3
+ *  扩 verb 'unblockTask'：unblockTask 空因同码拒绝） */
 export interface TasksReasonRequiredData {
-  readonly verb: 'transitionTask' | 'submitTask'
+  readonly verb: 'transitionTask' | 'submitTask' | 'unblockTask'
 }
 
 /** 转移动词空因（400）：reason trim 后为空（转移缘由必带——审计行 reason 列的服务内校验面） */
