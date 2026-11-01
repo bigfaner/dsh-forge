@@ -126,23 +126,25 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     expect(renderForgePipelineSection()).toBe(renderForgePipelineSection({ mode: 'expedition' }))
   })
 
-  it('远征目录树：提案/特性/探针三类（根=docs 层，树内无 docs/ 前缀）', () => {
+  it('远征目录树：提案/特性/探针/圆桌纪要四类（根=docs 层，树内无 docs/ 前缀）', () => {
     expect(EXPEDITION).toContain('├─ proposals/{slug}/')
     expect(EXPEDITION).toContain('├─ features/{slug}/')
-    expect(EXPEDITION).toContain('└─ probes/')
+    expect(EXPEDITION).toContain('├─ probes/')
+    expect(EXPEDITION).toContain('└─ roundtables/{slug}/')
     expect(EXPEDITION).not.toContain('docs/features/')
   })
 
-  it('突击目录树：提案/探针两类（无特性目录行）', () => {
+  it('突击目录树：提案/探针/圆桌纪要三类（无特性目录行）', () => {
     expect(BLITZ).toContain('├─ proposals/{slug}/')
-    expect(BLITZ).toContain('└─ probes/')
+    expect(BLITZ).toContain('├─ probes/')
+    expect(BLITZ).toContain('└─ roundtables/{slug}/')
     expect(BLITZ).not.toContain('features/{slug}/')
   })
 
-  it('存储约束显式清单：远征三类 / 突击两类', () => {
-    expect(EXPEDITION).toContain('入文档根仅三类：提案文档、特性阶段文档、探针产物。')
+  it('存储约束显式清单：远征四类 / 突击三类', () => {
+    expect(EXPEDITION).toContain('入文档根仅四类：提案文档、特性阶段文档、探针产物、圆桌纪要。')
     expect(EXPEDITION).toContain('特性阶段文档产出后经管线工具登记')
-    expect(BLITZ).toContain('入文档根仅两类：提案文档、探针产物；突击不产特性阶段文档。')
+    expect(BLITZ).toContain('入文档根仅三类：提案文档、探针产物、圆桌纪要；突击不产特性阶段文档。')
     for (const v of [EXPEDITION, BLITZ]) {
       expect(v).toContain('代码与测试不入文档根——进仓库源码树')
       expect(v).toContain('过程产物只归档到对应 {slug} 子目录，不另设他处')

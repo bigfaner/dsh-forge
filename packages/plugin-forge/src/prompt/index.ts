@@ -65,12 +65,13 @@ function expeditionSection(docsRoot: string, isGitRepo: boolean): string {
 \`\`\`text
 ├─ proposals/{slug}/   提案文档（proposal.md 及配套）
 ├─ features/{slug}/    特性阶段文档（prd/ design/ test/）
-└─ probes/             探针（一次性验证脚本与取证产物）
+├─ probes/             探针（一次性验证脚本与取证产物）
+└─ roundtables/{slug}/ 圆桌纪要（与提案/特性无关的会议纪要）
 \`\`\`
 
 存储约束：
 
-- 入文档根仅三类：提案文档、特性阶段文档、探针产物。
+- 入文档根仅四类：提案文档、特性阶段文档、探针产物、圆桌纪要。
 - 代码与测试不入文档根——进仓库源码树。
 - 过程产物只归档到对应 {slug} 子目录，不另设他处。
 - 特性阶段文档产出后经管线工具登记，文件与登记一致。
@@ -121,12 +122,13 @@ function blitzSection(docsRoot: string, isGitRepo: boolean): string {
 
 \`\`\`text
 ├─ proposals/{slug}/   提案 + 直挂任务（无 feature 阶段文档）
-└─ probes/             探针
+├─ probes/             探针
+└─ roundtables/{slug}/ 圆桌纪要（与提案无关的会议纪要）
 \`\`\`
 
 存储约束：
 
-- 入文档根仅两类：提案文档、探针产物；突击不产特性阶段文档。
+- 入文档根仅三类：提案文档、探针产物、圆桌纪要；突击不产特性阶段文档。
 - 代码与测试不入文档根——进仓库源码树。
 - 过程产物只归档到对应 {slug} 子目录，不另设他处。
 `
