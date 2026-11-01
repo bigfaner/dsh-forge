@@ -176,8 +176,16 @@ describe('validateFeatureTasks：单 feature 子图五类检查', () => {
       expect(liveness).toHaveLength(3)
       expect(liveness.map((v) => v.taskRef?.localId).sort()).toEqual(['1.1', '1.3', '1.5'])
       expect(liveness.find((v) => v.taskRef?.localId === '1.1')?.message).toContain('orphaned')
-      expect(liveness.find((v) => v.taskRef?.localId === '1.3')?.message).toContain('stale')
-      expect(liveness.find((v) => v.taskRef?.localId === '1.5')?.message).toContain('deadlock')
+      // 判词口径与新直达径一致（blocked-verdict-restore-primitive 1.5）：stale/deadlock 均
+      // 提及合法出口（submitTask 直达结算 / unblockTask 解除）——不再暗示恢复钩子是唯一恢复面
+      const stale = liveness.find((v) => v.taskRef?.localId === '1.3')?.message ?? ''
+      expect(stale).toContain('stale')
+      expect(stale).toContain('unblockTask')
+      expect(stale).toContain('submitTask')
+      const deadlock = liveness.find((v) => v.taskRef?.localId === '1.5')?.message ?? ''
+      expect(deadlock).toContain('deadlock')
+      expect(deadlock).toContain('unblockTask')
+      expect(deadlock).toContain('submitTask')
     } finally {
       h.dispose()
     }
