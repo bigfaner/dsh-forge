@@ -584,6 +584,54 @@ test('@feature expert-squad dlg step-4 description-limit：简介 120 字硬限�
   }
 })
 
+// ── fix-8 纯路由保存（bug dea323c9/7ca12bc8 e2e 取证）──
+
+test('@feature expert-squad dlg step-4 route-only-save：内置专家纯路由保存——来源chip保持「内置」+ 零 update 请求', async () => {
+  test.setTimeout(180_000)
+  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const session = await openPanelWithFixture()
+  try {
+    const { page } = session
+    // 内置专家卡（origin=plugin——originBadgeLabel「内置 · <插件名>」角标）
+    const builtinCard = page.locator('.dswf-xcard[data-xc-origin="plugin"]').first()
+    await expect(builtinCard, '面板网格含内置专家卡（插件注册层档案）').toBeVisible({ timeout: 30_000 })
+    const key = await builtinCard.getAttribute('data-expert-key')
+    expect(key, '内置卡 data-expert-key 在场').toBeTruthy()
+    await expect(builtinCard.locator('.origin-badge'), '保存前卡来源 chip「内置」').toContainText('内置')
+    await openDetail(page, key!)
+    await expect(page.locator(`${DIALOG} .dswf-dlg-origin-bar .origin-badge`), 'Dialog 来源条「内置」').toContainText('内置')
+    // 纯路由编辑：只动工具勾选（配置半）——内容半字段（岗位/简介/人设）零触碰
+    await page.locator(dlgBtn('编辑')).click()
+    await page.locator(mselBox('tools')).click()
+    const toolRows = page.locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`)
+    const checked = await toolRows
+      .locator('input:checked')
+      .evaluateAll((nodes) => nodes.map((n) => ((n.closest('.dswf-msel-row') as HTMLElement) ?? (n.parentElement as HTMLElement)).innerText.trim()))
+    const toggleTarget = (await toolRows.allInnerTexts())
+      .map((name) => name.trim())
+      .find((name) => !checked.includes(name))
+    expect(toggleTarget, '候选清单存在未勾选工具可勾（纯路由增量）').toBeTruthy()
+    await page
+      .locator(`${DIALOG} .dswf-msel[data-msel="tools"] .dswf-msel-row`, { hasText: toggleTarget! })
+      .locator('input')
+      .check()
+    await collapseMsel(page)
+    await page.locator(dlgBtn('保存')).click()
+    // 保存成功收敛（回查看态 + Toast）——零 update 断言的前提（非空转）
+    await expect(page.locator(dlgBtn('编辑')), '保存成功回查看态').toBeVisible({ timeout: 10_000 })
+    await expect(page.locator(TOAST), 'Toast 热刷新生效').toContainText('热刷新生效')
+    // 断言②：纯路由保存零 update 请求（isContentDirty 全等分流跳过档案半——无内容半 update）
+    const calls = await page.evaluate(() => [...((window as unknown as XsqWin).__xsqCalls ?? [])])
+    expect(calls.filter((call) => call.url.includes('/update')), '纯路由保存零 update 请求').toHaveLength(0)
+    // 断言①：来源 chip 保持「内置」（档案零改动——未升级 user 层副本、来源不翻「用户」）
+    await expect(page.locator(`${DIALOG} .dswf-dlg-origin-bar .origin-badge`), '保存后 Dialog 来源 chip 保持「内置」').toContainText('内置')
+    await expect(page.locator(cardOf(key!)).locator('.origin-badge'), '背后卡来源 chip 保持「内置」').toContainText('内置')
+    await expect(page.locator(cardOf(key!)), '背后卡在场（档案未迁移 user 层）').toBeVisible()
+  } finally {
+    await closeSession(session)
+    restorePatch(backup)
+  }
+})
 // ── step-5-toggle-enabled（bug 950b845c 新写径：experts.<实例ID>.disabled 配置位——
 //    settings revisioned 缝；POST /enable|/disable 已不被 Dialog 消费）──
 
