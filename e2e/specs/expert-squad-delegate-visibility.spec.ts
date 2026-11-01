@@ -22,7 +22,6 @@ import { expect, test, type ElectronApplication, type Page } from '@playwright/t
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
-const HEADHUNTER_PRESET_LABEL = '猎头模式'
 
 /** project 层夹具专家档案（面板数据态收敛用）。 */
 function expertMd(name: string, title: string): string {
