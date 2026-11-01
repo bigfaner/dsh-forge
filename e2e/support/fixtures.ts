@@ -18,8 +18,10 @@ import { mkdtempSync, readdirSync, rmSync, type Dirent } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test as base, type ElectronApplication, type Page } from '@playwright/test'
-import { closeApp, launchHost, type LaunchHostOptions } from './launch.js'
-import { registerProject } from './rpc.js'
+import { bridgeDispatch, closeApp, launchHost, stablePhase, type LaunchHostOptions } from './launch.js'
+import { forgeInvoke, registerProject } from './rpc.js'
+import { COLLAPSE_RIGHTBAR_BUTTON, OV_PANEL, RIGHTBAR_COLLAPSED } from './anchors.js'
+import { PROJECTS_CHANNELS } from '../../packages/contracts/src/channels.js'
 
 /** 摘除 dir 子树内全部文件、保留全部目录（目录 inode 不变——watcher 句柄存续；dir
  *  缺席静默零操作）。夹具重播种专用：seedWorkspace recursive mkdir 容忍既有目录。 */
@@ -136,10 +138,66 @@ export class SharedLaunchSession {
       await registerProject(this.launched!.page, this.wsDirValue!, this.config.workspaceName)
       return
     }
-    // app 在场：仅重播种（状态复位——无冷启）+ 用例间 UI 残留收口（上用例可能遗留打开的
-    // Dialog/弹层——重播种只复位 tmp 档案态，renderer 态由本兜底关断，防下用例点击被遮罩拦截）
-    await this.launched.page.keyboard.press('Escape').catch(() => undefined)
+    // app 在场：仅重播种（状态复位——无冷启）+ 用例间 renderer 视图态复位 + 概览锚定隔离
+    await this.resetRendererView()
+    await this.archiveLegacyProjects()
     this.reseed()
+  }
+
+  /**
+   * 用例间 renderer 视图态复位（fix-2 共享 launch 序列态轮转红）：重播种只复位 tmp
+   * 档案态，renderer 视图态在此复位到 fresh-launch 基准——三段：
+   *   ①Escape 关断上用例遗留弹层/菜单（批次一既有兜底）；
+   *   ②概览面板隔离（基准归一）：上用例遗留展开的右栏概览 dock 收起归基准（fresh-launch
+   *     右栏恒收起）——每个用例经 openOverviewDock → revealRightbar 收敛门在自己窗口内
+   *     全新开面板，不继承跨用例 dockkit 打开态（防御纵深；锚定主径见 archiveLegacyProjects）；
+   *   ③桥导航回官方会话面板（批次一「bridgeDispatch 还原前置」同语义上提到 fixture 层）
+   *     + 相位稳定门等待收敛——概览项目锚（anchoredOverviewContext 主视图会话锚）先于
+   *     用例 setup 收敛。各步 fail-soft（页面瞬态不阻塞用例）。
+   */
+  private async resetRendererView(): Promise<void> {
+    const page = this.launched?.page
+    if (page === undefined) return
+    await page.keyboard.press('Escape').catch(() => undefined)
+    // ② 概览面板隔离：继承的展开右栏 + 概览 dock → 收起基准（幂等：已收起零操作）
+    if ((await page.locator(OV_PANEL).first().isVisible().catch(() => false)) === true) {
+      const collapse = page.locator(COLLAPSE_RIGHTBAR_BUTTON).first()
+      if ((await collapse.isVisible().catch(() => false)) === true) {
+        await collapse.click().catch(() => undefined)
+        await page
+          .waitForSelector(RIGHTBAR_COLLAPSED, { state: 'attached', timeout: 15_000 })
+          .catch(() => undefined)
+      }
+    }
+    await bridgeDispatch(page, 'show-session').catch(() => undefined)
+    await stablePhase(page).catch(() => undefined)
+  }
+
+  /**
+   * 遗留项目归档（fix-2 概览锚定隔离——本修复主径）：重播种时把账本面遗留注册项目全量
+   * 归档。语义依据：概览项目锚 = anchoredOverviewContext（主视图会话锚优先 / 唯一活跃
+   * 项目兜底）——共享序列下芯片流新会话入口间歇不切换主视图（快照实证：主视图停留上
+   * 用例会话，概览锚残留上用例项目 → tasks 行缺席轮转红）。归档遗留行后，锚定两路
+   * 都收敛到当前用例唯一活跃项目（会话锚只在活跃行内解析 + 兜底计活跃行——bug 1e761ada
+   * 机制面），不再依赖芯片流会话是否成功创建。各步 fail-soft（list 失败静默跳过——
+   * 非概览用例零影响，用例自持 setupWorld 注册不受影响）。
+   */
+  private async archiveLegacyProjects(): Promise<void> {
+    const page = this.launched?.page
+    if (page === undefined) return
+    try {
+      const projects = await forgeInvoke<readonly { id: string; archived: boolean }[]>(
+        page, PROJECTS_CHANNELS.list,
+      )
+      for (const row of projects) {
+        if (row.archived === true) continue
+        await forgeInvoke(page, PROJECTS_CHANNELS.update, { id: row.id, patch: { archived: true } })
+          .catch(() => undefined)
+      }
+      console.log(`[shared-launch] 遗留项目归档（${String(projects.length)} 行对账）`)
+    } catch {
+      /* fail-soft：非概览用例/瞬态零影响 */
+    }
   }
 
   handle(): SharedLaunchHandle {
