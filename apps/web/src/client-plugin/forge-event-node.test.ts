@@ -403,6 +403,51 @@ describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底�
   })
 })
 
+describe('bug ede8af10：窗口裁剪 void state——保底现算（hidden 保底家族收口）', () => {
+  it('窗口裁剪（state=undefined + start/matches 携带组末事件）：现算 visible 发射，anchor = 携带事件 seq', () => {
+    const tail = forgeMsg(12, 'm9', '完成', 'c')
+    const node = forgeEventGroupDefinition.buildViewNode({
+      key: 'k',
+      id: 'm9',
+      start: { location: { kind: 'unresolved' }, event: tail },
+      matches: [{ event: tail }],
+    })
+    expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, id: 'm9', visibility: 'visible', anchorSeq: 12 })
+    expect((node as { data: { entries: unknown[] } }).data.entries).toHaveLength(1)
+  })
+  it('初始分页（start match 被裁，matches 仍携带组末事件）：同判 visible（progress 组同型）', () => {
+    const tail = progressEvt(20, { taskKey: 'feat-x/1.9', status: 'running' })
+    const node = forgeEventGroupDefinition.buildViewNode({
+      key: 'k',
+      id: 'forge-event-progress-20',
+      matches: [{ event: tail }],
+    })
+    expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, visibility: 'visible', anchorSeq: 20 })
+    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(1)
+  })
+  it('context.current 上次物化快照优先：visible 保 visible 且组快照/锚全量保真；hidden 交棒保 hidden', () => {
+    const group = { key: 'g1', firstSeq: 2, lastSeq: 6, isLatest: false, entries: [{ id: 'm1' }, { id: 'm2' }], progress: [] }
+    const visible = forgeEventGroupDefinition.buildViewNode({
+      key: 'k',
+      id: 'm2',
+      current: new Map([['chat', { visibility: 'visible', anchorSeq: 9, data: group }]]),
+    })
+    expect(visible).toMatchObject({ visibility: 'visible', anchorSeq: 9 })
+    expect((visible as { data: { entries: unknown[] } }).data.entries).toHaveLength(2)
+    const handoff = forgeEventGroupDefinition.buildViewNode({
+      key: 'k',
+      id: 'm1',
+      current: new Map([['chat', { visibility: 'hidden', anchorSeq: 6, data: group }]]),
+    })
+    expectHidden(handoff)
+  })
+  it('零数据（无 state/start/matches/current）：hidden 空组保底不变（不回 null——withdrew 红线）', () => {
+    const node = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'm1' })
+    expectHidden(node)
+    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
+  })
+})
+
 describe('loop-card-task-context：ForgeProgressEntry expertKey 可选镜像（同语义窄收——畸形弃字段不抛）', () => {
   it('载荷携带 expertKey = 条目镜像；载荷畸形 expertKey（非 string）= 字段缺省不弃行', () => {
     const { stream } = simulate([

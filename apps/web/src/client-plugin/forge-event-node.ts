@@ -121,13 +121,16 @@ export interface ForgeStreamReader {
 }
 
 /** 官方节点座 context 消费切片（buildViewNode 入参——progress-node 同型；match 携带
- *  原始事件供 seq 兜底锚——official contextSnapshot 透传全量 match） */
+ *  原始事件供保底现算——official contextSnapshot 透传全量 match 与 current） */
 export interface ForgeEventNodeContext {
   readonly key: string
   readonly id: string
   readonly state?: unknown
-  readonly start?: { readonly location?: unknown; readonly event?: { readonly seq?: number } }
-  readonly matches?: readonly { readonly location?: unknown; readonly event?: { readonly seq?: number } }[]
+  readonly start?: { readonly location?: unknown; readonly event?: ForgeMessageEventLike }
+  readonly matches?: readonly { readonly location?: unknown; readonly event?: ForgeMessageEventLike }[]
+  /** 官方 contextSnapshot.current 窄读（target → 上次物化节点——state 被窗口裁剪 void
+   *  后的保真现算源：全量组快照 + 物化锚 + 可见性） */
+  readonly current?: { readonly get: (target: string) => unknown }
 }
 
 /** user/message 数据消费切片（faces.ts forgeUserMessage 铸造形状镜像） */
@@ -467,13 +470,14 @@ export const forgeEventGroupDefinition = {
   publication: (): 'none' => 'none',
   buildViewNode: (context: ForgeEventNodeContext & { state?: ForgeEventGroupNodeState }): unknown => {
     // 永不回 null（官方钦定，dsh-client-ui-conversation client.js:2505 buildTargetUpserts
-    // 对已物化 target 回 null 即抛 withdrew materialized target）。Root cause: 官方
-    // replayContexts（client.js:2248-2257）在 Context 的 start match 被窗口/裁剪淘汰后
-    // 置 context.state = void 0——Context 仍留 contextsByTarget 且 context.current 保有
-    // 上次物化节点，state===undefined ≠ 从未物化；0c48a365 只保了 state 在场路径，漏此
-    // 分支致 withdrew 复发。undefined 亦回同 key 同 id（与首物化严格一致）visibility
-    // :'hidden' 保底节点——锚 seq 以 start/matches 携带的事件 seq 兜底，零数据可给空组。
-    const state = streamStateOk(context.state) ? context.state : undefined
+    // 对已物化 target 回 null 即抛 withdrew materialized target）。bug ede8af10：官方
+    // replayContexts/refreshStarts 对窗口外 start match 置 context.state = void 0——
+    // Context 仍留 contextsByTarget，state===undefined ≠ 从未物化；0c48a365 的 hidden
+    // 保底使卡消失永不自愈。现改为「保底现算」：state 缺席时依次取 ① context.current
+    // 上次物化快照（组模型/锚/可见性全量保真）→ ② start/matches 携带组末事件现算
+    // 单条目组——发射判定不再依赖可裁剪的 per-member state；两源皆零数据才落 hidden
+    // 空组（与首物化严格同 key 同 id，零重复渲染零 withdrew）。
+    const state = streamStateOk(context.state) ? context.state : (previousStateOf(context.current, context.id) ?? fallbackStateOf(context))
     const fallbackSeq = context.start?.event?.seq ?? context.matches?.[0]?.event?.seq ?? 0
     const group = state?.group ?? { key: context.id, firstSeq: fallbackSeq, lastSeq: fallbackSeq, entries: [] }
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
@@ -500,8 +504,83 @@ export const forgeEventGroupDefinition = {
   },
 }
 
-/** 组节点状态形状守卫（官方快照透传面畸形不猜——回退 undefined 走 hidden 保底） */
+/** 组节点状态形状守卫（官方快照透传面畸形不猜——回退 undefined 走保底现算） */
 function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
   if (typeof value !== 'object' || value === null) return false
   return typeof (value as { emit?: unknown }).emit === 'boolean' && typeof (value as { group?: unknown }).group === 'object'
+}
+
+/**
+ * 保底现算源①（bug ede8af10）：context.current 上次物化节点窄读——state 被官方窗口
+ * 裁剪/replay 置 void 后，Context 仍留 contextsByTarget 且 current 保有上次物化节点
+ * （全量组快照 + 物化锚 + 可见性）。visible 保 visible（卡自愈）、hidden 交棒保
+ * hidden（发射语义保真）；空内容/畸形 = undefined 让位现算源②。
+ */
+function previousStateOf(current: unknown, id: string): ForgeEventGroupNodeState | undefined {
+  if (typeof current !== 'object' || current === null) return undefined
+  const get = (current as { get?: unknown }).get
+  if (typeof get !== 'function') return undefined
+  const node = (get as (target: string) => unknown).call(current, 'chat')
+  if (typeof node !== 'object' || node === null) return undefined
+  const raw = node as { visibility?: unknown; anchorSeq?: unknown; data?: unknown }
+  const data = raw.data as { key?: unknown; firstSeq?: unknown; lastSeq?: unknown; isLatest?: unknown; entries?: unknown; progress?: unknown } | undefined
+  if (data === undefined || !Array.isArray(data.entries)) return undefined
+  const entries = data.entries
+  const progress = Array.isArray(data.progress) ? data.progress : []
+  if (entries.length === 0 && progress.length === 0) return undefined
+  const lastSeq = typeof data.lastSeq === 'number' && Number.isFinite(data.lastSeq) ? data.lastSeq : 0
+  const key = typeof data.key === 'string' && data.key !== '' ? data.key : id
+  return {
+    emit: raw.visibility === 'visible',
+    isLatest: data.isLatest === true,
+    group: {
+      key,
+      firstSeq: typeof data.firstSeq === 'number' && Number.isFinite(data.firstSeq) ? data.firstSeq : lastSeq,
+      lastSeq,
+      entries,
+      ...(progress.length > 0 ? { progress } : {}),
+    },
+    seq: lastSeq,
+    anchorSeq: typeof raw.anchorSeq === 'number' && Number.isFinite(raw.anchorSeq) ? raw.anchorSeq : lastSeq,
+  }
+}
+
+/**
+ * 保底现算源②（bug ede8af10）：start/matches 携带的组末事件现算单条目组状态——
+ * 「保底 hidden」改「保底现算」：卡不再因 per-member state 被裁剪而消失。发射/组模型
+ * 由携带事件即时解析（progress 载荷窄收同 fold 语义）；isLatest 取 true（可见即最新
+ * 已知面）；anchorSeq = 携带事件 seq——零 stream 数据（turn 区间不可知）时的安全值，
+ * stream 在场后经依赖重放被真实状态替换。畸形/零数据 = undefined（回 hidden 空组，
+ * 永不回 null——withdrew 红线）。
+ */
+function fallbackStateOf(context: ForgeEventNodeContext): ForgeEventGroupNodeState | undefined {
+  let best: ForgeMessageEventLike | undefined
+  for (const event of [context.start?.event, ...(context.matches ?? []).map((match) => match.event)]) {
+    if (event === undefined || typeof event.seq !== 'number' || !Number.isFinite(event.seq)) continue
+    if (best === undefined || event.seq > best.seq) best = event
+  }
+  if (best === undefined) return undefined
+  const seq = best.seq
+  if (best.type === FORGE_PROGRESS_EVENT_TYPE) {
+    const entry = progressEntryOf(best, best.data, undefined)
+    if (entry === undefined) return undefined
+    return {
+      emit: true,
+      isLatest: true,
+      group: { key: `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(seq)}`, firstSeq: seq, lastSeq: seq, entries: [], progress: [entry] },
+      seq,
+      anchorSeq: seq,
+    }
+  }
+  if (best.type !== 'user/message') return undefined
+  const data = best.data as ForgeMessageDataLike | undefined
+  const id = data !== undefined && typeof data.id === 'string' && data.id !== '' ? data.id : undefined
+  if (data === undefined || id === undefined || !isForgeSource(data.source)) return undefined
+  return {
+    emit: true,
+    isLatest: true,
+    group: { key: id, firstSeq: seq, lastSeq: seq, entries: [entryOf(best, data, undefined)] },
+    seq,
+    anchorSeq: seq,
+  }
 }
