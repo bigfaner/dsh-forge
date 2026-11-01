@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import type { Project } from '@dsh-forge/contracts'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createProjectContainerDirs } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createProjectContainerDirs } from './faces.js'
+import { DIAG_EVENT } from '@dsh-forge/contracts'
 import type { DispatchJobsRegistryFace } from './faces.js'
 import type { NarrationChannel } from './notify/index.js'
 
@@ -328,5 +329,27 @@ describe('createProjectContainerDirs（1.11 装配接线收口——反向解析
     expect(dirs.resolve('p-1')).toBeUndefined() // 失败未记忆——不拖垮调用方
     await flush()
     expect(spy.getCalls).toEqual(['p-1', 'p-1']) // 占位已清除——再次触发懒解析（可自愈重试）
+  })
+})
+
+// ── bug 5f7d7ebd：DIAG_EVENT 单源下沉 @dsh-forge/contracts（faces.ts 镜像常量删除）──
+// 复现钉根因：faces 侧 DIAG_EVENT 必须来自 contracts 单源——发射通道与 core telemetry
+// 消费同一事件域，漂移只会在运行期静默丢事件（双份字面量无护栏）。
+describe('createDiagEmitter（bug 5f7d7ebd——DIAG_EVENT 单源 contracts）', () => {
+  it('发射经 contracts 单源 DIAG_EVENT 通道（diag/log 事件域）+ process=child 补齐', () => {
+    const seen: Array<{ event: string; payload: Record<string, unknown> }> = []
+    const emit = createDiagEmitter((event, payload) => {
+      seen.push({ event, payload })
+    })
+    expect(emit).toBeDefined()
+    emit!({ level: 'info', event: 'loop-start', message: 'hi' })
+    expect(seen).toHaveLength(1)
+    expect(seen[0]!.event).toBe(DIAG_EVENT)
+    expect(seen[0]!.event).toBe('diag/log')
+    expect(seen[0]!.payload).toMatchObject({ level: 'info', event: 'loop-start', message: 'hi', process: 'child' })
+  })
+
+  it('emit 面缺席 → undefined（消费侧 emitForgeDiag 兜底径承担）', () => {
+    expect(createDiagEmitter(undefined)).toBeUndefined()
   })
 })

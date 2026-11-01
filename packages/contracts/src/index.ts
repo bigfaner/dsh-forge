@@ -8,6 +8,7 @@
 // worker 收窄矩阵（worker-matrix.ts）+ 错误码 ×3 + 通道扩池（settings/proposals 三键）。
 // fix-bug：bugs 通道族（forge:bugs/list）+ BugStatus 三态标签 + Bug 域 DTO（dto/bugs.ts）。
 export * from './channels.js'
+export * from './diag.js'
 export * from './errors.js'
 export * from './frontmatter.js'
 export * from './labels.js'

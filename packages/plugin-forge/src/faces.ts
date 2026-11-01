@@ -11,6 +11,8 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_EXPERT_MAPPING,
+  DIAG_EVENT,
+  type DiagLevel,
   type ForgeSettingsService,
   type ForgeProposalsService,
   type ForgeTasksService,
@@ -506,19 +508,12 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
 
 // ─────────────────────────── 诊断发射面（AGENTS §7——diag/log 事件域类型化 emit 单面） ───────────────────────────
 
-/**
- * 诊断事件通道名（官方 diag/log 事件域——core/telemetry DIAG_EVENT 单源同值镜像：
- * boundaries 纪律禁插件 import core 包，本包以常量镜像 + 结构化 payload 面
- * 消费同一事件域；全包零裸字符串站点——发射面只认本常量）。
- */
-export const DIAG_EVENT = 'diag/log' as const
+// DIAG_EVENT 单源在 @dsh-forge/contracts（bug 5f7d7ebd——faces.ts 镜像常量已删，
+// 与 core telemetry 消费同一事件域，杜绝双份字面量漂移）。
 
-/** 诊断级别（core DiagLevel 同值域：info/warn/error 三级——失败路径 warn、成功里程碑 info） */
-export type ForgeDiagLevel = 'info' | 'warn' | 'error'
-
-/** 诊断发射基础载荷（core DiagEventPayload 结构子面——process 进程位由发射缝统一补齐） */
+/** 诊断发射基础载荷（contracts DiagEventPayload 结构子面——process 进程位由发射缝统一补齐） */
 export interface ForgeDiagBase {
-  readonly level: ForgeDiagLevel
+  readonly level: DiagLevel
   /** 诊断事件类别（功能域前缀命名——forge-narration / job-tree / loop-start 等） */
   readonly event: string
   readonly message: string
