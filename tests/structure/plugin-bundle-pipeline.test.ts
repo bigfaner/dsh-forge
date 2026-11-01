@@ -119,7 +119,7 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
     const overlayRows = new Set(pluginLoadRowShorts(read('apps/host/src/boot/overlay.ts')))
 
     // 模拟「contracts 新增 userLayerRow 插件、profile.dev 忘加行」的未来漂移态
-    const drifted = { ...PRODUCT_PLUGINS, 'future-plugin': { userLayerRow: true } as const }
+    const drifted: typeof PRODUCT_PLUGINS = { ...PRODUCT_PLUGINS, 'future-plugin': { userLayerRow: true } }
     const stagedNames = new Set(Object.entries(drifted).filter(([, sw]) => sw.staged !== false).map(([name]) => name))
     const { missing } = devLoadDrift(stagedNames, new Set([...devRows, ...overlayRows]))
 

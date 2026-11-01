@@ -153,6 +153,7 @@ for (const preset of ['expedition', 'blitz'] as const) {
     it('skill-filesystem 分叉：customSkillDirs 占位符（物化锚——!!js 全形态死刑，物化只出绝对路径）', () => {
       const skill = rows.get('skill-filesystem')!
       expect(skill).toContain('                - "{{plugin-forge-skills}}"')
+      expect(skill).toContain('                - "{{expert-squad-skills}}"') // expert-squad 专家域技能（roundtable）——双预设同挂
       if (isExpedition) {
         expect(skill).toContain('                - "{{plugin-forge-spec-skills}}"')
         expect(skill).not.toContain('{{plugin-forge-blitz-skills}}')

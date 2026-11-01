@@ -66,6 +66,10 @@ export interface HostPaths {
    *  突击携带；同包 skills 旁子目录，dev junction 随包透传。解析失败 = undefined 不注入
    *  （blitz 技能面降级 fail-soft；远征本就物理不含） */
   blitzSkillsDir?: string
+  /** expert-squad skills 物理挂载目录（预设装配 customSkillDirs[squad]——专家域技能
+   *  （roundtable）挂载锚；dev = workspace 链接、packaged = runtime/node_modules 邻接。
+   *  解析失败 = undefined 不注入（squad 技能面降级 fail-soft，不抛断启动） */
+  squadSkillsDir?: string
   /** 安装包 resources 根（仅 DSH_FORGE_RESOURCES_DIR 置位时存在；e2e/4.3 冒烟消费） */
   resourcesDir?: string
 }
@@ -140,6 +144,7 @@ export function resolveHostPaths(env: PathEnv, userData: string): HostPaths {
     skillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge'),
     specSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge-spec'),
     blitzSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/plugin-forge', 'skills-blitz'),
+    squadSkillsDir: resolvePackageSkillsDir(installAnchor, '@dsh-forge/expert-squad'),
     resourcesDir,
   }
 }

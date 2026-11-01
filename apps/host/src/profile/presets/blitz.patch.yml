@@ -51,6 +51,7 @@
               customSkillDirs:
                 - "{{plugin-forge-skills}}"
                 - "{{plugin-forge-blitz-skills}}"
+                - "{{expert-squad-skills}}"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: command-goal

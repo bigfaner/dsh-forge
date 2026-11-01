@@ -378,6 +378,15 @@ describe('expert-squad-forge-2 指挥者段条件注入（forge:commander——c
     expect(text).toContain('设计评审')
     expect(text).toContain('用户访谈')
     expect(text).toContain('任务拆解')
+    // 先查后派硬规则：职责面请求先 list_experts，命中 delegate_expert，不命中亲做并说明原因
+    expect(text).toContain('先查后派')
+    expect(text).toContain('list_experts')
+    expect(text).toContain('delegate_expert')
+    expect(text).toContain('说明不委派的原因')
+    // roundtable 指路
+    expect(text).toContain('roundtable 技能')
+    // 硬约束：禁裸 {{（SystemPrompt 插值会炸渲染）
+    expect(text).not.toContain('{{')
     dispose()
   })
 

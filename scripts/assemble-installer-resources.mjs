@@ -73,9 +73,10 @@ const STAGING_EXTRAS = {
   'plugin-forge-spec': { files: ['skills'], keyFiles: ['skills/write-prd/SKILL.md'] },
   // expert-squad 内置专家层目录（scan.ts resolvePluginExpertsRoot 相对 dist 的
   // ../../experts 解析；bundle-structure 测试钉「随包 ≥1 档案」——缺席即内置层静默缺失）
+  // + 技能面 skills/roundtable（customSkillDirs[squad] 挂载源——fix-1 迁入）
   // + 组合装配行本体 cordis.patch.yml（package.json dsh.bundle.patch 声明指向——loader
   // 按声明读包内该文件触发 apply 注册，缺席即 ENOENT，bug a1f13abf）
-  'expert-squad': { files: ['experts', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'cordis.patch.yml'] },
+  'expert-squad': { files: ['experts', 'skills', 'cordis.patch.yml'], keyFiles: ['experts/code-reviewer.md', 'skills/roundtable/SKILL.md', 'cordis.patch.yml'] },
 }
 const PRODUCT_OPTIONAL_FILES = ['README.md']
 /** 约定资源目录枚举（STAGING_EXTRAS 自动比对守卫的「额外物化面」目录宇宙） */
@@ -103,6 +104,10 @@ export function presetCarriedPlugins(root = ROOT) {
  * staging 插件物化清单（自动推导，key = packages/ 子路径 → 必物化文件集）：
  * 种子 = userLayerRow 插件 ∪ 预设携带插件 ∪ staged:true 覆写 → @dsh-forge/* 依赖
  * 闭包 BFS → 剔除 staged:false。插件缺席 packages/ 树（配置误写/包未建）= fail-loud。
+ *
+ * @param {Record<string, { userLayerRow: boolean, staged?: boolean }>} plugins
+ * @param {string} [root]
+ * @returns {Record<string, string[]>}
  */
 export function stagedProductPackages(plugins, root = ROOT) {
   const seeds = new Set(
@@ -129,7 +134,7 @@ export function stagedProductPackages(plugins, root = ROOT) {
       if (dep.startsWith('@dsh-forge/')) queue.push(dep.slice('@dsh-forge/'.length))
     }
   }
-  const out = {}
+  const out = /** @type {Record<string, string[]>} */ ({})
   for (const [dir, short] of [...stagedDirs].sort(([a], [b]) => (a < b ? -1 : 1))) {
     if (Object.hasOwn(plugins, short) && plugins[short].staged === false) continue // kill-switch
     out[dir] = ['package.json', 'dist', ...(STAGING_EXTRAS[short]?.files ?? [])]
@@ -147,6 +152,10 @@ export function stagedProductPackages(plugins, root = ROOT) {
  *   ② 声明指向不存在（files/keyFiles 条目、patch 文件盘上缺席）→ 声明失真——报出路径。
  * stage() 与 --check 均消费本守卫（assertExtrasDrift fail-loud）。
  * 守护测试：tests/structure/installer-pipeline.test.ts STAGING_EXTRAS 漂移守卫段。
+ *
+ * @param {Record<string, { userLayerRow: boolean, staged?: boolean }>} plugins
+ * @param {string} [root]
+ * @param {Record<string, { files?: string[], keyFiles?: string[] }>} [extras]
  */
 export function stagingExtrasDrift(plugins, root = ROOT, extras = STAGING_EXTRAS) {
   const problems = []

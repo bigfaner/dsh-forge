@@ -314,7 +314,8 @@ async function main(): Promise<void> {
   // M3 3.7 预设装配：四底稿（presets/）+ 双技能目录物化锚入同一 overlay——预设行每启
   // 注行产品工件（customSkillDirs 物化当形态绝对路径）；底稿缺席 fail-soft 不注行。
   // 产品裁决（2026-10-09）：skillsDir 仅作预设 customSkillDirs[core] 物化锚——无全局
-  // skill-filesystem 行（forge 技能/工具仅预设组合，标准模式零 forge 面）。
+  // forge 技能行（forge 技能/工具仅预设组合）；用户裁决（2026-11-01）：标准模式放开
+  // expert-squad 技能面——基础渲染 skill-filesystem 行仅挂 squadSkillsDir（overlay.ts）。
   const presetPatches = loadPresetPatches()
   // mobile-remote-approval fix-3（重启生效形态）：手机远程暴露开关 = 产品自有配置
   // forge-settings.json 的 remoteApproval.enabled（官方 remote.settings 无 webserver 可写
@@ -360,6 +361,7 @@ async function main(): Promise<void> {
             coreSkillsDir: options.skillsDir, // customSkillDirs[core]（plugin-forge skills 同源）
             specSkillsDir: options.specSkillsDir, // customSkillDirs[spec]（缺席 = spec 技能面降级）
             blitzSkillsDir: options.blitzSkillsDir, // customSkillDirs[blitz]（缺席 = blitz 技能面降级）
+            squadSkillsDir: options.squadSkillsDir, // customSkillDirs[squad]（expert-squad——缺席 = squad 技能面降级）
             bindingsFile: options.bindingsFile, // fix-1/drift #9：预设行内产品行 config 物化（与全局行同值单源）
           },
         }
