@@ -14,8 +14,8 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 ### 2.1 真机走查预案的状态窗口保障（压修正波次）
 
 - 翻车点：1.5 三轮走查均无法稳定捕获 suspended/终态徽标——归属模型对 followup 消息自作处置（`taskStats` 误判、`stopTaskLoop` 停循环、自行 `dispatchTask` 重启），002 轮 8 分钟 103 次回翻；已尝试的压制（模型切换、owner 轮掐断）均不彻底。
-- 改进：run-tests 技能走查预案新增一条——凡断言依赖**状态窗口稳定**的真机走查（三态徽标、进度态等），预案必须声明归属模型约束方式（强指令遵循模型档，或人工值守会话 + 暂停 ask 应答路径），未声明 = 走查前整改。
-- 落点：`packages/plugin-forge/experts/test-runner.md` 档案正文（run-tests 技能已随 expert-squad-forge-2 退役，走查编排纪律由该档案承接；约束落法与其「禁『请模型自觉』」口径对齐，优先走机械可校验断言）。
+- 改进：走查编排纪律新增一条——凡断言依赖**状态窗口稳定**的真机走查（三态徽标、进度态等），预案必须声明归属模型约束方式（强指令遵循模型档，或人工值守会话 + 暂停 ask 应答路径），未声明 = 走查前整改。
+- 落点：`packages/plugin-forge/experts/test-runner.md`「执行约束」段 +1（走查编排纪律的现役承载面——run-tests 技能已退役，本项不再引用技能面，直接落档案正文）。
 
 ### 2.2 CDP 探针先零仪表化对照（压探针方法返工）
 
@@ -91,7 +91,7 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 
 ## 3. 改动范围（file 粒度）
 
-- `packages/plugin-forge/experts/test-runner.md`（走查预案状态窗口约束 +1；run-tests 技能已退役，落点随退役事实修订）
+- `packages/plugin-forge/experts/test-runner.md`（「执行约束」段状态窗口约束 +1）
 - `AGENTS.md`（CDP 探针零仪表化对照纪律 +1 句）
 - `docs/conventions/`（晋升后的正本，若 2.3 获裁）
 - `.knowledge/lessons/`（withdrew 增量契约 lesson 新增，2.4.1）
@@ -105,7 +105,7 @@ first-pass 快照：一次通过率 1、返工增量比 0.0%、**修正波次 19
 
 ## 4. 验收标准
 
-1. 状态窗口稳定约束落 `experts/test-runner.md` 档案正文（归属模型约束方式声明为前置；落点随 run-tests 技能退役修订）。
+1. 状态窗口稳定约束落 `experts/test-runner.md`「执行约束」段（归属模型约束方式声明为前置）。
 2. CDP 探针零仪表化对照纪律落在裁决确定的正本位置。
 3. 2.3 裁决结果（晋升/不晋升，逐件）落档。
 4. 2.4.2/2.4.3/2.4.5 检查项/模板落档于既定落点文件；2.4.6 落档于实核落点（`skills-blitz/grilling/SKILL.md` + quick-tasks 第 0 步澄清）；2.4.1 落 `experts/proposal-reviewer.md`。
