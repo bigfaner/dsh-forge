@@ -10,7 +10,7 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { emitForgeDiag } from '../faces.js'
-import type { ForgeDiagEmitFace } from '../faces.js'
+import type { ForgeDiagEmitFace, ForgeDiagPayload } from '../faces.js'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
@@ -466,6 +466,20 @@ export async function settleWorkerRun(
       ...(ctx.poolSource !== undefined ? { source: ctx.poolSource } : {}),
     }),
   )
+  // 成功里程碑 info 埋点（AGENTS §7——settle 成功侧此前仅失败 warn，成功径不可见）：
+  // payload 就地携带可得字段（slug/localId/durationMs/commitHash）
+  if (outcome === 'success') {
+    const info: ForgeDiagPayload = {
+      level: 'info',
+      event: 'forge-settle',
+      message: `forge settle: task settled (${ctx.task.slug}/${ctx.task.localId}) in ${durationMs}ms`,
+      projectId: ctx.projectId,
+      slug: ctx.task.slug,
+      localId: ctx.task.localId,
+      ...(submitRecord?.commitHash !== undefined ? { commitHash: submitRecord.commitHash } : {}),
+    }
+    emitForgeDiag(deps.diag, info)
+  }
   return {
     case: 'settled',
     durationMs,

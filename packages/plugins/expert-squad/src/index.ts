@@ -361,6 +361,8 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       const registry = await registryFor(workspace);
       try {
         await registry.setEnabled(key, enabled);
+        // 成功里程碑 info 埋点（AGENTS §7——落盘成功此前仅失败 warn，成功径不可见）
+        diag("info", "expert-squad-setenabled", `setEnabled(${key}, ${enabled}) 落盘成功`);
       } catch (error) {
         if (error instanceof ExpertNotFoundError) throw error;
         diag("warn", "expert-squad-setenabled-persist-fail", `setEnabled(${key}, ${enabled}) 落盘失败（内存态生效）: ${String(error)}`);

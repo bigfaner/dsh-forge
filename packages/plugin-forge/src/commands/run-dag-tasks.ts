@@ -18,7 +18,7 @@ import { TASK_STATUS_LABELS } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeTasksService, TaskCard, TaskStatus } from '@dsh-forge/contracts'
 import { forgeCommandLineMessage } from '../faces.js'
 import { emitForgeDiag } from '../faces.js'
-import type { ForgeDiagEmitFace } from '../faces.js'
+import type { ForgeDiagEmitFace, ForgeDiagPayload } from '../faces.js'
 import { askOption } from '../loop/index.js'
 import type { EscalationAskFace, LoopDriver, LoopRecord } from '../loop/index.js'
 import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
@@ -556,6 +556,15 @@ function commitDispatchLine(
       // 1.18 AD-4 循环哨兵：指令单行 source.kind='forge-loop'（task=任务源 slug、state='dispatch'）
       forgeCommandLineMessage(`/${RUN_DAG_TASKS_NAME} ${source.slug}`, { task: source.slug, state: 'dispatch' }),
     )
+    // 成功里程碑 info 埋点（AGENTS §7——派发成功此前仅失败 warn，成功径不可见）
+    const info: ForgeDiagPayload = {
+      level: 'info',
+      event: 'forge-dispatch-line',
+      message: `forge dispatch line committed (${source.slug}) -> ${sessionId}`,
+      sessionId,
+      slug: source.slug,
+    }
+    emitForgeDiag(diag, info)
     return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)
