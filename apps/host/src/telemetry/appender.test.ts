@@ -5,7 +5,7 @@ import { appendFileSync } from 'node:fs'
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DiagAppender, logFileNameFor, type AppenderDriver } from './appender.js'
 
 const dirs: string[] = []
@@ -199,6 +199,109 @@ describe('级别过滤开关（diag-milestone-coverage 方案 3——默认 info
     appender.appendCrashLine(DEBUG)
     expect(syncWrites).toBe(0)
     expect(appender.pendingCount).toBe(0)
+  })
+})
+
+describe('counters 周期自证（diag-milestone-coverage 方案 6——非零即报，零值控噪）', () => {
+  it('counters 全零：selfReport 不产生任何行（控噪）', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.selfReport()
+    await appender.idle()
+    expect(captured).toHaveLength(0)
+  })
+
+  it('counters 非零：selfReport 以 info 落一行（event=appender-counters，携带三项计数）', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    let fail = true
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({
+        append: async (_file, data) => {
+          if (fail) throw new Error('disk gone')
+          captured.push(data)
+        },
+      }),
+    })
+    appender.handleEvent({ ...BASE }) // 写失败 → writeFailures=1
+    await appender.idle()
+    fail = false
+    appender.selfReport()
+    await appender.idle()
+    expect(captured).toHaveLength(1)
+    const row = JSON.parse(captured[0]!) as { level: string; process: string; event: string; message: string }
+    expect(row.level).toBe('info')
+    expect(row.process).toBe('main')
+    expect(row.event).toBe('appender-counters')
+    expect(row.message).toContain('writeFailures=1')
+  })
+
+  it('自证后计数归零：下轮全零不再发', async () => {
+    const dir = await tempLogsDir()
+    let syncWrites = 0
+    const rows: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({
+        append: async () => { throw new Error('disk gone') },
+        appendSync: (_file, data) => { syncWrites += 1; rows.push(data) }, // 写全挂：自证行走红线③同步缝
+      }),
+    })
+    appender.handleEvent({ ...BASE }) // writeFailures=1
+    await appender.idle()
+    appender.selfReport() // 第 1 轮：writeFailures=1 → 报
+    appender.flushSync() // 排队写入同步缝捕获
+    appender.selfReport() // 第 2 轮：已归零 → 不发
+    appender.flushSync()
+    expect(syncWrites).toBe(1)
+    const row = JSON.parse(rows[0]!) as { event: string; message: string }
+    expect(row.event).toBe('appender-counters')
+    expect(row.message).toContain('writeFailures=1')
+    expect(appender.counters.writeFailures).toBe(0)
+  })
+
+  it('周期定时器：countersIntervalMs 到点自动 selfReport，dispose 清定时器并做收尾自证', async () => {
+    vi.useFakeTimers()
+    try {
+      const dir = await tempLogsDir()
+      const captured: string[] = []
+      const appender = new DiagAppender({
+        dir,
+        now: () => dayDate('2026-10-19'),
+        driver: driverWith({
+          append: async () => { throw new Error('disk gone') }, // 异步写恒失败 → writeFailures 增
+          appendSync: (_file, data) => { captured.push(data) }, // 自证行经 flushSync 同步缝捕获
+        }),
+      })
+      const dispose = appender.startSelfReportInterval(5 * 60_000)
+      appender.handleEvent({ ...BASE })
+      await appender.idle() // 写失败 → writeFailures=1
+      expect(appender.counters.writeFailures).toBe(1)
+      vi.advanceTimersByTime(5 * 60_000) // 到点自动报
+      appender.flushSync()
+      expect(captured).toHaveLength(1)
+      vi.advanceTimersByTime(5 * 60_000) // 已归零：不发
+      appender.flushSync()
+      expect(captured).toHaveLength(1)
+      appender.handleEvent({ ...BASE })
+      await appender.idle() // writeFailures=1
+      dispose() // 收尾自证：非零即报一次
+      appender.flushSync()
+      expect(captured).toHaveLength(2)
+      vi.advanceTimersByTime(5 * 60_000) // dispose 后定时器已清：不再报
+      appender.flushSync()
+      expect(captured).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

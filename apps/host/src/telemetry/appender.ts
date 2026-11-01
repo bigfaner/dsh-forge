@@ -87,6 +87,8 @@ export interface AppenderOptions {
   driver?: AppenderDriver
   /** 落盘最低级别（diag-milestone-coverage 方案 3——缺省 'info'，debug 行默认不落盘） */
   minLevel?: DiagLevel
+  /** counters 周期自证间隔（毫秒——diag-milestone-coverage 方案 6，缺省 5 分钟；0 = 关闭） */
+  countersIntervalMs?: number
   /** 时钟注入（测试可控——缺省系统时钟） */
   now?: () => Date
 }
@@ -336,6 +338,40 @@ export class DiagAppender {
       this.#writeSync(item.line, item.serialized)
     }
   }
+
+  /**
+   * counters 周期自证（diag-milestone-coverage 方案 6）：非零计数以 info 落 diag 域
+   * （event=appender-counters），全零不发（控噪）；报后归零——每轮只报自上轮以来的增量。
+   * 走常规入队缝（受级别门约束——info 默认放行；写失败再入计数、下轮自证兜住）。
+   */
+  selfReport(): void {
+    try {
+      const c = this.#counters
+      if (c.writeFailures === 0 && c.queueDropped === 0 && c.maintenanceSkipped === 0) return
+      const message =
+        `diag appender counters: writeFailures=${c.writeFailures} queueDropped=${c.queueDropped} maintenanceSkipped=${c.maintenanceSkipped}`
+      c.writeFailures = 0
+      c.queueDropped = 0
+      c.maintenanceSkipped = 0
+      if (!this.#passesLevel('info')) return
+      this.#enqueue(this.buildLine({ level: 'info', process: 'main', event: 'appender-counters', message }), false)
+    } catch {
+      /* 自证面不反压（红线①同构——失败静默，计数已在报前归零不回滚） */
+    }
+  }
+
+  /** counters 周期自证定时器（返回退订器：清定时器 + 收尾自证一次——退出时非零即报） */
+  startSelfReportInterval(intervalMs: number): () => void {
+    const timer = setInterval(() => this.selfReport(), intervalMs)
+    timer.unref?.()
+    let disposed = false
+    return () => {
+      if (disposed) return
+      disposed = true
+      clearInterval(timer)
+      this.selfReport()
+    }
+  }
 }
 
 /**
@@ -348,6 +384,17 @@ export function attachDiagAppender(
 ): { appender: DiagAppender; dispose: () => boolean } {
   const appender = new DiagAppender(options)
   const dispose = ctx.on(DIAG_EVENT, (payload) => appender.handleEvent(payload))
+  const intervalMs = options.countersIntervalMs ?? 5 * 60_000
+  if (intervalMs > 0) {
+    const stopInterval = appender.startSelfReportInterval(intervalMs)
+    return {
+      appender,
+      dispose: () => {
+        stopInterval() // 收尾自证 + 清定时器
+        return dispose()
+      },
+    }
+  }
   return { appender, dispose }
 }
 
