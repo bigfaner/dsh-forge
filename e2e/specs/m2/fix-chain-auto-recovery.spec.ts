@@ -33,20 +33,26 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
+import { mkdirSync } from 'node:fs'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { AddTaskResult, ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, ovSubtabOf, ttCardOf, ttColOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
+
+// ── 共享 launch fixture（各用例独立 feature slug 隔离账本面；.forge 任务账本跨用例存续
+//    ——重播种只清 .dsh；原全表计数断言按 slug 收敛作用域，语义等价）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => { mkdirSync(dir, { recursive: true }) },
+  workspaceName: 'fxr-fix-chain',
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
 
 const DISP = 'e2e-fxr-dispatch'
 const EXEC = 'e2e-fxr-executor'
@@ -75,14 +81,10 @@ function fixArgs(projectId: string, feature: string, source: AddResult, title: s
   }
 }
 
-test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视图即时反映（Step1-5 全链）', async () => {
+test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视图即时反映（Step1-5 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-feat'
     const { projectId, dir } = await setupWorld(page, wsDir, 'fix 链冒烟', FEATURE)
     const driver = createBridgeDriver(app)
@@ -173,21 +175,12 @@ test('@web-e2e @m2 fix链·冒烟：受阻→建链→修复→恢复→三视�
     await expect(page.locator(OV_PANEL).first()).toBeVisible()
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 fix链·Step1 受阻结算缺 reason：输入面拒绝（不进 fix 链）', async () => {
+test('@web-e2e @m2 fix链·Step1 受阻结算缺 reason：输入面拒绝（不进 fix 链）', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-rr-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-rr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-rr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-rr'
     const { projectId, dir } = await setupWorld(page, wsDir, '缺因拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -214,21 +207,12 @@ test('@web-e2e @m2 fix链·Step1 受阻结算缺 reason：输入面拒绝（不�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵拒绝（处置不被覆盖）', async () => {
+test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵拒绝（处置不被覆盖）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-fm-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-fm')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-fm-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-fm'
     const { projectId, dir } = await setupWorld(page, wsDir, '人工处置拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -267,21 +251,12 @@ test('@web-e2e @m2 fix链·Step1 源已被人工处置：blocked 结算被矩阵
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step2 环构造双 flag：拒绝 + 完整环路径 + 零残留', async () => {
+test('@web-e2e @m2 fix链·Step2 环构造双 flag：拒绝 + 完整环路径 + 零残留', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-cy-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-cy')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-cy-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-cy'
     const { projectId, dir } = await setupWorld(page, wsDir, '环守卫演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -309,27 +284,18 @@ test('@web-e2e @m2 fix链·Step2 环构造双 flag：拒绝 + 完整环路径 + 
     const db2 = openForgeDbAt(dir)
     try {
       expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n, '环拒绝零残留（任务数不变）').toBe(countBefore)
-      expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges`).get()?.n, '边表仅既有一条（无半成品边）').toBe(1)
+      expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_edges WHERE task_id IN (SELECT id FROM tasks WHERE slug = ?)`).get(FEATURE)?.n, '边表仅既有一条（无半成品边——本 feature 作用域）').toBe(1)
     } finally {
       db2.close()
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人工介入', async () => {
+test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人工介入', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-cd-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-cd')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-cd-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-cd'
     const { projectId, dir } = await setupWorld(page, wsDir, '链深上限演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -361,29 +327,20 @@ test('@web-e2e @m2 fix链·Step2 链深 6 上限：第 7 层拒绝 + 提示人�
     const db = openForgeDbAt(dir)
     try {
       const chainRows = db.prepare<unknown[], { n: number }>(
-        `SELECT COUNT(*) AS n FROM tasks WHERE source_task_id IS NOT NULL`,
-      ).get()?.n ?? 0
+        `SELECT COUNT(*) AS n FROM tasks WHERE source_task_id IS NOT NULL AND slug = ?`,
+      ).get(FEATURE)?.n ?? 0
       expect(chainRows, 'fix 谱系行 = 6（≤6 守卫保持，第 7 层 fix 未建）').toBe(6)
     } finally {
       db.close()
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（零新建零事件）', async () => {
+test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（零新建零事件）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-dup-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-dup')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-dup-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-dup'
     const { projectId, dir } = await setupWorld(page, wsDir, '去重复用演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -399,7 +356,7 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
     expect(fix.reused, '首建非复用').toBe(false)
 
     const db = openForgeDbAt(dir)
-    const countWithFix = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks`).get()?.n ?? 0
+    const countWithFix = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n ?? 0
     db.close()
     const eventsBefore = (await driver.events()).length
 
@@ -410,7 +367,7 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
 
     const db2 = openForgeDbAt(dir)
     try {
-      expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks`).get()?.n, '复用零新建（行数不变）').toBe(countWithFix)
+      expect(db2.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n, '复用零新建（行数不变）').toBe(countWithFix)
       expect(db2.prepare<unknown[], { n: number }>(
         `SELECT COUNT(*) AS n FROM task_edges WHERE task_id = ? AND prerequisite_id = ? AND origin = 'fix-chain'`,
       ).get(src.taskId, fix.taskId)?.n, '边级幂等：fix-chain 边恰一条（持久边已承载等待事实）').toBe(1)
@@ -424,21 +381,12 @@ test('@web-e2e @m2 fix链·Step2 重复受阻重试：任务级去重复用（�
     expect((await driver.events()).length, '纯读命中零事件发射').toBe(eventsBefore)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单点失败不断链）', async () => {
+test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单点失败不断链）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-ff-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-ff')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-ff-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-ff'
     const { projectId, dir } = await setupWorld(page, wsDir, '嵌套 fix 演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -479,21 +427,12 @@ test('@web-e2e @m2 fix链·Step3 fix 自身受阻：fix-of-fix 链深 +1（单�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → 源恢复（边保留）', async () => {
+test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → 源恢复（边保留）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-sk-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-sk')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-sk-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-sk'
     const { projectId, dir } = await setupWorld(page, wsDir, '跳过恢复演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -531,21 +470,12 @@ test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → �
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fix 径建链 → 源恢复 → 二轮 claim（bug 0a25720c）', async () => {
+test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fix 径建链 → 源恢复 → 二轮 claim（bug 0a25720c）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-bg-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-bg')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-bg-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-bg'
     const { projectId, dir } = await setupWorld(page, wsDir, 'blocked 源守卫演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -595,21 +525,12 @@ test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fi
     expect(reentry.task?.taskStatus, 'claim 落账 in_progress').toBe('in_progress')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后恢复（全满足判定）', async () => {
+test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后恢复（全满足判定）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-pt-'))
-  const wsDir = join(fixtureRoot, 'ws-fxr-pt')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-pt-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir } = sharedLaunch
     const FEATURE = 'fxr-pt'
     const { projectId, dir } = await setupWorld(page, wsDir, '部分前置演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -682,9 +603,4 @@ test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });

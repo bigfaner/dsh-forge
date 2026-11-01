@@ -46,21 +46,29 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { TaskStatus } from '../../../packages/contracts/src/labels.js'
 import type { TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { switchTaskView } from '../../support/m3.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, TD_DRAWER, docPanelOf, ovSubtabOf, ttColOf, ttContpillOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
+
+// ── 共享 launch fixture（spec 级单次冷启）。多工作区形态适配：共享根目录 + 各用例独立
+//    子目录 wsDir——注册链 canonical 幂等按目录键，独立子目录保每用例独立项目名/任务库
+//    （原 per-test fixtureRoot 语义等价），不被 fixture 重播种（只清根 .dsh）波及。──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => { mkdirSync(dir, { recursive: true }) },
+  workspaceName: 'ovr-overview-root',
+  launch: { expectPhase: 'hero' },
+})
 
 /** UI 首屏预算（Step1 stress Outcome 机械判据——毫秒）。真实终端/CI 严格 2s 零变化。 */
 const FIRST_SCREEN_BUDGET_MS = 2_000
@@ -148,14 +156,10 @@ async function openTasksTab(page: Page): Promise<void> {
   await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
 }
 
-test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→三视图→详情抽屉（Step1-6 全链）', async () => {
+test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→三视图→详情抽屉（Step1-6 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-feat'
     const WS_NAME = '概览走查演示'
     const { projectId, dir } = await setupWorld(page, wsDir, WS_NAME, FEATURE)
@@ -363,21 +367,12 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
     await expect(page.locator(TD_DRAWER)).toHaveCount(0)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面计时归 sc2-perf）', async () => {
+test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面计时归 sc2-perf）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-500-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr500')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-500-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr500')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-big'
     const { projectId, dir } = await setupWorld(page, wsDir, '概览压力演示', FEATURE)
     // @500 造数（七态轮转 + 创建时间递增——直插通道，sc2 同构）
@@ -405,21 +400,12 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
     expect(cards, '全量 500 行直读（无截断）').toHaveLength(500)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切换（直读无第二来源）', async () => {
+test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切换（直读无第二来源）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-fb-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-fb')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-fb-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-fb')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const project = await registerProject(page, wsDir, '绑定切换演示')
     const projectId = project.id
     // 注册序 = 列表 created_at 降序的反面：后注册者最新、居列表头——activeFeatureSlug 缺省
@@ -447,21 +433,12 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
     expect(cards.map((c) => c.taskId), '直读每工作区库（无第二来源）').toEqual(bIds)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子树）', async () => {
+test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子树）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-srch-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-srch')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-srch-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-srch')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-srch'
     const { projectId, dir } = await setupWorld(page, wsDir, '双语搜索演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
@@ -500,21 +477,12 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
     expect(filtered.map((c) => c.taskId).sort(), '服务端过滤 = fix 系两行').toEqual([idOf(ids, 0), idOf(ids, 2)].sort())
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过滤）', async () => {
+test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过滤）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-chip-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-chip')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-chip-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-chip')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-chip'
     const { projectId, dir } = await setupWorld(page, wsDir, '零计数演示', FEATURE)
     // 仅两态在场（in_progress 计数 0——chips 断言基准）
@@ -538,21 +506,12 @@ test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过�
     await expect(page.locator(ttItemOf(idOf(ids, 1))).first(), 'completed 行被过滤').toHaveCount(0)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃优先 ↔ 最新创建）', async () => {
+test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃优先 ↔ 最新创建）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-sort-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-sort')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-sort-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-sort')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-sort'
     const { projectId, dir } = await setupWorld(page, wsDir, '排序演示', FEATURE)
     // 三态三时（活跃优先序 ≠ 创建序——重排可判）
@@ -590,21 +549,12 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
     expect(byActive.map((c) => c.taskId), '读面活跃优先').toEqual([idOf(ids, 1), idOf(ids, 0), idOf(ids, 2)])
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason 入审计 + 即时反映', async () => {
+test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason 入审计 + 即时反映', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-tr-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-tr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-tr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-tr')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-tr'
     const { projectId, dir } = await setupWorld(page, wsDir, '人工转移演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '人工转移目标任务', status: 'pending' }])
@@ -643,21 +593,12 @@ test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason �
     await expect(page.locator(ttItemOf(taskId)).first(), '概览行即时反映新状态（已挂起）').toContainText('已挂起', { timeout: 30_000 })
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 + 零写入', async () => {
+test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 + 零写入', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-rr-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-rr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-rr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-rr')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-rr'
     const { projectId, dir } = await setupWorld(page, wsDir, '空因拒绝演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '空因拒绝目标任务', status: 'pending' }])
@@ -696,21 +637,12 @@ test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 +
     expect(detail2.taskStatus, '修正后转移落库').toBe('suspended')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见即所得）+ 服务端先验兜底', async () => {
+test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见即所得）+ 服务端先验兜底', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-it-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-it')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-it-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-it')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-it'
     const { projectId, dir } = await setupWorld(page, wsDir, '非法目标演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '非法目标目标任务', status: 'pending' }])
@@ -737,21 +669,12 @@ test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见�
     expect(detail2.taskStatus, '状态零变更').toBe('pending')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继 auto-restore（边保留）', async () => {
+test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继 auto-restore（边保留）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-rs-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-rs')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-rs-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-rs')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-rs'
     const { projectId, dir } = await setupWorld(page, wsDir, '终态恢复演示', FEATURE)
     // 受控初态：W（blocked 后继）依赖 T（pending 待转移源）
@@ -801,21 +724,12 @@ test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继
     await expect(page.locator(ttItemOf(wId)).first()).toContainText('待处理', { timeout: 30_000 })
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造评估数据）', async () => {
+test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造评估数据）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-ev-'))
-  const wsDir = join(fixtureRoot, 'ws-ovr-ev')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-ovr-ev-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
+  const wsDir = join(wsRoot, 'ws-ovr-ev')
+  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
     const FEATURE = 'ovr-ev'
     const { projectId, dir } = await setupWorld(page, wsDir, 'eval 空态演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
@@ -834,9 +748,4 @@ test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造
     expect(detail.taskType, '任务类型 = eval-contract（条件区路由基准）').toBe('eval-contract')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
