@@ -16,6 +16,7 @@ import { PIN_CONSENT_CHANNEL, PIN_RESET_CHANNEL, PSK_READ_CHANNEL, PSK_ROTATE_CH
 import {
   HARNESS_RELAUNCH_CHANNEL,
   HARNESS_SAFE_MODE_CHANNEL,
+  HARNESS_SHOW_DIAG_LOGS_CHANNEL,
   HARNESS_SHOW_LOG_CHANNEL,
 } from './harness-channel.js'
 import { DIRECTORY_PICKER_CHANNEL } from './directory-picker-channel.js'
@@ -76,11 +77,14 @@ export function createDshForgePreloadApi(invokeFace: PreloadInvokeFace, events?:
     /**
      * fix-12 B：Harness 菜单三缝（域外直转面先例同制——不进 forge RPC allowlist）：
      * relaunchHarness = app.relaunch + exit（重启 Harness）；relaunchSafeMode = 安全模式
-     * 标志置位 + relaunch；showHarnessLog = shell.showItemInFolder(harness.log)。
+     * 标志置位 + relaunch；showHarnessLog = shell.showItemInFolder(harness.log)；
+     * showDiagLogs = shell.openPath({userData}/logs)（diag-milestone-coverage 1.4——
+     * diag JSONL 打开面，与 showHarnessLog 同缝同位、零新机制）。
      */
     relaunchHarness: (): Promise<void> => invokeFace.invoke(HARNESS_RELAUNCH_CHANNEL) as Promise<void>,
     relaunchSafeMode: (): Promise<void> => invokeFace.invoke(HARNESS_SAFE_MODE_CHANNEL) as Promise<void>,
     showHarnessLog: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_LOG_CHANNEL) as Promise<boolean>,
+    showDiagLogs: (): Promise<boolean> => invokeFace.invoke(HARNESS_SHOW_DIAG_LOGS_CHANNEL) as Promise<boolean>,
     /**
      * fix-17 ②：tab 切换重连缝（dshForge 域外直转面先例同制——不进 forge invoke allowlist）：
      * 触发 host 侧隧道建立/读数刷新（child 侧 tunnel-toggle 分支消费），结果经 boot

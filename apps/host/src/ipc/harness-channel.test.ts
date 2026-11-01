@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HARNESS_RELAUNCH_CHANNEL,
   HARNESS_SAFE_MODE_CHANNEL,
+  HARNESS_SHOW_DIAG_LOGS_CHANNEL,
   HARNESS_SHOW_LOG_CHANNEL,
   noteHarnessLog,
   registerHarnessChannels,
@@ -37,44 +38,48 @@ const actions = {
   relaunch: vi.fn(),
   relaunchSafeMode: vi.fn(),
   showLog: vi.fn(() => true),
+  showDiagLogs: vi.fn(() => true),
 }
 
 afterEach(() => {
-  for (const mock of [actions.relaunch, actions.relaunchSafeMode, actions.showLog]) mock.mockClear()
+  for (const mock of [actions.relaunch, actions.relaunchSafeMode, actions.showLog, actions.showDiagLogs]) mock.mockClear()
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
 const tempDirs: string[] = []
 
 describe('registerHarnessChannels 三通道（fix-12 B——域外直转面，不进 forge allowlist）', () => {
-  it('三通道名 pin = dsh-forge:harness/{relaunch,safe-mode,show-log}', () => {
+  it('四通道名 pin = dsh-forge:harness/{relaunch,safe-mode,show-log,show-diag-logs}', () => {
     const ipcMain = fakeIpcMain()
     registerHarnessChannels(ipcMain as never, actions)
     expect([...ipcMain.handles.keys()].sort()).toEqual(
-      [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL].sort(),
+      [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL, HARNESS_SHOW_DIAG_LOGS_CHANNEL].sort(),
     )
     expect(HARNESS_RELAUNCH_CHANNEL).toBe('dsh-forge:harness/relaunch')
     expect(HARNESS_SAFE_MODE_CHANNEL).toBe('dsh-forge:harness/safe-mode')
     expect(HARNESS_SHOW_LOG_CHANNEL).toBe('dsh-forge:harness/show-log')
+    expect(HARNESS_SHOW_DIAG_LOGS_CHANNEL).toBe('dsh-forge:harness/show-diag-logs')
   })
 
-  it('三通道触发 → 对应动作各一次（零载荷直转）', () => {
+  it('四通道触发 → 对应动作各一次（零载荷直转）', () => {
     const ipcMain = fakeIpcMain()
     registerHarnessChannels(ipcMain as never, actions)
     ipcMain.handles.get(HARNESS_RELAUNCH_CHANNEL)?.()
     ipcMain.handles.get(HARNESS_SAFE_MODE_CHANNEL)?.()
     expect(ipcMain.handles.get(HARNESS_SHOW_LOG_CHANNEL)?.()).toBe(true)
+    expect(ipcMain.handles.get(HARNESS_SHOW_DIAG_LOGS_CHANNEL)?.()).toBe(true)
     expect(actions.relaunch).toHaveBeenCalledTimes(1)
     expect(actions.relaunchSafeMode).toHaveBeenCalledTimes(1)
     expect(actions.showLog).toHaveBeenCalledTimes(1)
+    expect(actions.showDiagLogs).toHaveBeenCalledTimes(1)
   })
 
-  it('removeHarnessChannels：三通道全注销', () => {
+  it('removeHarnessChannels：四通道全注销', () => {
     const ipcMain = fakeIpcMain()
     registerHarnessChannels(ipcMain as never, actions)
     removeHarnessChannels(ipcMain)
     expect([...ipcMain.removed].sort()).toEqual(
-      [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL].sort(),
+      [HARNESS_RELAUNCH_CHANNEL, HARNESS_SAFE_MODE_CHANNEL, HARNESS_SHOW_LOG_CHANNEL, HARNESS_SHOW_DIAG_LOGS_CHANNEL].sort(),
     )
     expect(ipcMain.handles.size).toBe(0)
   })

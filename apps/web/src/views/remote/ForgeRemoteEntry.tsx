@@ -217,13 +217,15 @@ export const HARNESS_MENU_ITEMS = {
   relaunch: '重启 Harness',
   safeMode: '以安全模式重启…',
   showLog: '查看 Harness 日志',
+  diagLogs: '查看诊断日志目录',
 } as const
 
-/** host dshForge 桥 Harness 缝窄面（preload-api 同名三成员结构同型镜像） */
+/** host dshForge 桥 Harness 缝窄面（preload-api 同名成员结构同型镜像；diag 缝 = 1.4 打开面） */
 export interface DshForgeHarnessBridge {
   relaunchHarness(): Promise<unknown>
   relaunchSafeMode(): Promise<unknown>
   showHarnessLog(): Promise<unknown>
+  showDiagLogs(): Promise<unknown>
 }
 
 /** dshForge 桥 Harness 缝读取（缺席/形状不符 = undefined——菜单项禁用态 fail-soft） */
@@ -231,13 +233,14 @@ export function harnessBridgeOf(
   globalObject: { dshForge?: unknown } = globalThis as { dshForge?: unknown },
 ): DshForgeHarnessBridge | undefined {
   const bridge = globalObject.dshForge as
-    | { relaunchHarness?: unknown; relaunchSafeMode?: unknown; showHarnessLog?: unknown }
+    | { relaunchHarness?: unknown; relaunchSafeMode?: unknown; showHarnessLog?: unknown; showDiagLogs?: unknown }
     | undefined
   if (
     bridge !== undefined &&
     typeof bridge.relaunchHarness === 'function' &&
     typeof bridge.relaunchSafeMode === 'function' &&
-    typeof bridge.showHarnessLog === 'function'
+    typeof bridge.showHarnessLog === 'function' &&
+    typeof bridge.showDiagLogs === 'function'
   ) {
     return bridge as DshForgeHarnessBridge
   }
@@ -343,6 +346,18 @@ export function HarnessMenu(props: { readonly harness?: DshForgeHarnessBridge })
           }}
         >
           {HARNESS_MENU_ITEMS.showLog}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          data-testid="dswf-remote-harness-show-diag-logs"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(false)
+            void harness?.showDiagLogs()
+          }}
+        >
+          {HARNESS_MENU_ITEMS.diagLogs}
         </button>
       </div>
     </div>

@@ -5,6 +5,7 @@
 //     族 web 同位搬运；薄宿主进程即 runtime，重启 = relaunch + exit）；
 //   · harness.log 路径单源（app.getPath('logs')/harness.log——官方 :22336 对位）。
 import { createRequire } from 'node:module'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserWindow, OpenDialogOptions } from 'electron'
 import type { HarnessActions } from './harness-channel.js'
@@ -17,14 +18,14 @@ import { DIRECTORY_PICKER_DIALOG_TITLE } from './directory-picker-channel.js'
 const { BrowserWindow: BrowserWindowCtor, dialog, shell } = createRequire(import.meta.url)('electron') as {
   BrowserWindow: typeof BrowserWindow
   dialog: { showOpenDialog(options: OpenDialogOptions): Promise<{ canceled: boolean; filePaths: string[] }>; showOpenDialog(win: BrowserWindow, options: OpenDialogOptions): Promise<{ canceled: boolean; filePaths: string[] }> }
-  shell: { showItemInFolder(path: string): void }
+  shell: { showItemInFolder(path: string): void; openPath(path: string): Promise<string> }
 }
 
 /** 本模块消费的 Electron app 切片（结构同型——测试可注入 fake） */
 export interface ElectronAppSlice {
   relaunch(): void
   exit(code: number): void
-  getPath(name: 'logs'): string
+  getPath(name: 'logs' | 'userData'): string
 }
 
 /**
@@ -47,6 +48,11 @@ export function harnessLogPathOf(app: ElectronAppSlice): string {
   return join(app.getPath('logs'), 'harness.log')
 }
 
+/** diag JSONL 日志目录（{userData}/logs——app-*.jsonl 落点，telemetry host-wiring 单源对位） */
+export function diagLogsDirOf(app: ElectronAppSlice): string {
+  return join(app.getPath('userData'), 'logs')
+}
+
 /** Harness 菜单三动作实装（安全模式标志经环境变量跨进程存活——relaunch 环境承载） */
 export function electronHarnessActions(app: ElectronAppSlice, logPath: string): HarnessActions {
   return {
@@ -66,6 +72,16 @@ export function electronHarnessActions(app: ElectronAppSlice, logPath: string): 
       noteHarnessLog(logPath, '[host] 查看 Harness 日志（菜单触发）') // 保底落一行：文件恒可达
       shell.showItemInFolder(logPath)
       return true
+    },
+    showDiagLogs: () => {
+      const diagDir = diagLogsDirOf(app)
+      try {
+        mkdirSync(diagDir, { recursive: true }) // 目录缺席即建（对位 showLog 的 ensure 头——openPath 恒有真实目录可达）
+        void shell.openPath(diagDir)
+        return true
+      } catch {
+        return false // fail-soft：目录不可建时静默（打开面永不炸宿主流程）
+      }
     },
   }
 }

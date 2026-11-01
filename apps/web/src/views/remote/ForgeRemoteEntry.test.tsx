@@ -642,9 +642,10 @@ describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐
     relaunchHarness: async () => undefined,
     relaunchSafeMode: async () => undefined,
     showHarnessLog: async () => undefined,
+    showDiagLogs: async () => undefined,
   }
 
-  it('菜单触发钮在场（aria-label Harness 菜单）+ 三项文案逐字（官方 main.js:22317-22336 zh 形态）', () => {
+  it('菜单触发钮在场（aria-label Harness 菜单）+ 四项文案逐字（官方 main.js:22317-22336 zh 形态 + diag 打开面）', () => {
     const html = renderToStaticMarkup(
       <RemoteDialogHead onClose={() => undefined} harness={harness} />,
     )
@@ -654,6 +655,7 @@ describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐
     expect(html).toContain('重启 Harness')
     expect(html).toContain('以安全模式重启…')
     expect(html).toContain('查看 Harness 日志')
+    expect(html).toContain('查看诊断日志目录')
   })
 
   it('HARNESS_MENU_ITEMS 常量逐字 pin（文案单源）', () => {
@@ -661,21 +663,37 @@ describe('fix-12 Harness 菜单（dialog 左上角下拉——文案逐字对齐
       relaunch: '重启 Harness',
       safeMode: '以安全模式重启…',
       showLog: '查看 Harness 日志',
+      diagLogs: '查看诊断日志目录',
     })
   })
 
-  it('桥缺席（harness undefined）= 三项禁用态 fail-soft（触发钮禁用、菜单不炸装配）', () => {
+  it('diag-milestone-coverage 1.4：diag 打开项与 show-log 同位（show-diag-logs testid + 桥 showDiagLogs 直转）', () => {
+    const html = renderToStaticMarkup(
+      <RemoteDialogHead onClose={() => undefined} harness={harness} />,
+    )
+    expect(html).toMatch(/dswf-remote-harness-show-diag-logs/)
+    expect(html).toMatch(/dswf-remote-harness-show-log/)
+  })
+
+  it('桥缺席（harness undefined）= 四项禁用态 fail-soft（触发钮禁用、菜单不炸装配）', () => {
     const html = renderToStaticMarkup(<RemoteDialogHead onClose={() => undefined} />)
     expect(html).toMatch(/aria-label="Harness 菜单"[^>]*disabled/)
     expect(html).toMatch(/dswf-remote-harness-relaunch[^>]*disabled/)
     expect(html).toMatch(/dswf-remote-harness-safe-mode[^>]*disabled/)
     expect(html).toMatch(/dswf-remote-harness-show-log[^>]*disabled/)
+    expect(html).toMatch(/dswf-remote-harness-show-diag-logs[^>]*disabled/)
   })
 
-  it('harnessBridgeOf：dshForge 三成员齐备才可用；缺席/形状不符 = undefined', () => {
+  it('harnessBridgeOf：dshForge 四成员齐备才可用；缺席/形状不符 = undefined', () => {
     expect(harnessBridgeOf({})).toBeUndefined()
     expect(harnessBridgeOf({ dshForge: { invoke: () => undefined } })).toBeUndefined()
     expect(harnessBridgeOf({ dshForge: harness })).toBe(harness)
+    // diag 缺席（旧三成员形态）= 不可用（零新机制——桥面与 preload api 同形演进）
+    expect(
+      harnessBridgeOf({
+        dshForge: { relaunchHarness: async () => undefined, relaunchSafeMode: async () => undefined, showHarnessLog: async () => undefined },
+      }),
+    ).toBeUndefined()
   })
 })
 
