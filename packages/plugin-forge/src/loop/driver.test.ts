@@ -33,6 +33,7 @@ import type { LoopRecord } from './registry.js'
 import { backoffDelayMs, isRateLimitFailure, isTriageInvalidOutput, LOOP_RESUME_RESTORE_REASON, LOOP_TRIAGE_MAX_ATTEMPTS, TRIAGE_FIX_CHAIN_DEPTH_LIMIT, triageFailureSummary } from './driver.js'
 import { createNarrator } from '../notify/index.js'
 import type { IncidentStore, NarrationChannel, Narrator } from '../notify/index.js'
+import { FORGE_PROGRESS_SCENARIO as S } from '../progress/index.js'
 import type { ForgeProgressEventData } from '../progress/index.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import { createTriageHook, TriageDecisionInvalidError } from '../triage/index.js'
@@ -1116,8 +1117,8 @@ describe('adopt 重入与启动分类（①②③）', () => {
     expect(built.h.claimInputs[2]?.adopt).toBeUndefined()
     // ② 启动接续 + ⑤ 领取（恢复中断）——零消息（loop-message-consolidation），进度事件单源投影
     expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
-    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: 'startup/resume-stopped', taskKey: 'feat-x/2.5' })
-    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ scenario: 'claim/interrupted', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupResumeStopped, taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ scenario: S.claimInterrupted, taskKey: 'feat-x/2.5' })
   })
 
   it('in_progress 遗留（skill 路线）而无 interrupted：③ 启动接续在飞——claim 无可领 → wait 判词 → patience 耗尽 ⑮ 收口', async () => {
@@ -1133,8 +1134,8 @@ describe('adopt 重入与启动分类（①②③）', () => {
     expect(built.calls.at(-1)?.text).toContain('结束（等待超时）')
     expect(built.calls.at(-1)?.text).toContain('提示用户"稍后重新执行 /run-dag-tasks feat-x"')
     // 1.5 场景码：③ 启动接续在飞 + ⑮ 等待超时（循环级）
-    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: 'startup/resume-inflight', taskKey: 'feat-x/2.7', taskTitle: 'Task 2.7' })
-    expect(built.progressCalls.find((e) => e.verb === 'timeout')).toMatchObject({ verb: 'timeout', status: 'blocked', scenario: 'loop/timeout', note: '等待超时' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupResumeInflight, taskKey: 'feat-x/2.7', taskTitle: 'Task 2.7' })
+    expect(built.progressCalls.find((e) => e.verb === 'timeout')).toMatchObject({ verb: 'timeout', status: 'blocked', scenario: S.loopTimeout, note: '等待超时' })
   })
 
   it('干净任务源：① 启动从头执行（pending 计数）', async () => {
@@ -1146,7 +1147,7 @@ describe('adopt 重入与启动分类（①②③）', () => {
     await untilSettled(built.driver)
     // ① 启动从头执行——零消息（进度事件投影；no-task done 收口 settle 恰一次）
     expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
-    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: 'startup/from-scratch' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupFromScratch })
   })
 })
 
@@ -1221,7 +1222,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(suspended.since).toEqual(expect.any(Number))
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
     // 1.5 场景码：⑩ 阻塞（blocked/ask-user）
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/ask-user', taskKey: 'feat-x/2.5', note: 'tests hang on flaky selector' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedAskUser, taskKey: 'feat-x/2.5', note: 'tests hang on flaky selector' })
     await built.driver.stop({ ownerSessionId: OWNER }) // 断言后收口
   })
 
@@ -1351,7 +1352,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(triageCalls).toBe(1)
     // ⑨ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
     expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(false)
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/wait-external', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal, taskKey: 'feat-x/2.5' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
@@ -1375,7 +1376,7 @@ describe('blocked 结算分支（图 C）', () => {
     // ⑦ 自愈阻塞静默（R-Q4）——零消息，进度事件投影（reason 在 note、fix 键在概要注记）
     expect(built.calls.some((c) => c.text.includes('[forge·阻塞]'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('已自动创建修复任务 fix-1'))).toBe(false)
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/with-fix', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5' })
     // 续领次序：2.5 → fix-1（fix ready 自然被领——零智能介入）
     expect(built.h.claimInputs[1]?.source).toEqual(SOURCE)
     expect(built.spawn.requests[1]?.label).toContain('feat-x/fix-1')
@@ -1449,7 +1450,7 @@ describe('blocked 结算分支（图 C）', () => {
     // 活后继在场（interrupted 待 adopt 恢复）→ ⑦ 静默（R-Q4 零消息），零问询硬停
     expect(built.calls.some((c) => c.text.includes('已自动创建修复任务 fix-1'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('无法自动处理——已向你发起问询'))).toBe(false)
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/with-fix', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5' })
   })
 
   it('静默边界（改进 1）：后继任务被 rejected → 问询恢复上浮', async () => {
@@ -1497,7 +1498,7 @@ describe('blocked 结算分支（图 C）', () => {
     // 零 blocked-ask-user 挂起（静默径——挂起为 deadlock 族）
     expect(built.driver.activeOf(OWNER)?.suspended?.escalation.kind).toBe('deadlock')
     // 1.5 场景码：⑦ 阻塞（已带修复任务——静默 notify 同点）
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/with-fix', taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', workerSessionId: 'worker-1' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWithFix, taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', workerSessionId: 'worker-1' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
@@ -1535,7 +1536,7 @@ describe('blocked 结算分支（图 C）', () => {
     // ⑧ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
     expect(built.calls.some((c) => c.text.includes('已自动分析原因并创建修复任务'))).toBe(false)
     // 1.5 场景码：⑧ blocked/auto-fixed
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/auto-fixed', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedAutoFixed, taskKey: 'feat-x/2.5' })
   })
 
   it('blocked 无 follow-up + 处置钩子 split-remainder：addTask(blockSource:false) 继任落账 + 源任务保持 blocked + ⑧b 叙述 → 续领', async () => {
@@ -1571,7 +1572,7 @@ describe('blocked 结算分支（图 C）', () => {
     // 循环续领：分割后继续 claim（pending 继任路径在场——池态判词不误报）
     expect(built.h.claimInputs.length).toBeGreaterThanOrEqual(2)
     // 1.5 场景码：⑧b blocked/split
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/split', taskKey: 'feat-x/2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedSplit, taskKey: 'feat-x/2.5' })
   })
 
   it('blocked 无 follow-up + 处置钩子 wait-external → ⑨ 叙述 → 续领（后池 blocked → deadlock 挂起，3b）', async () => {
@@ -1592,7 +1593,7 @@ describe('blocked 结算分支（图 C）', () => {
     await untilSuspended(built.driver)
     // ⑨ 自愈阻塞静默（R-Q4）——零消息，进度事件投影
     expect(built.calls.some((c) => c.text.includes('等待 feature-b 先完成，先执行其它任务'))).toBe(false)
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/wait-external' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal })
     expect(built.h.claimInputs).toHaveLength(2) // 续领发生过（wait-external → 下一轮）
     await built.driver.stop({ ownerSessionId: OWNER })
   })
@@ -1983,7 +1984,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
-      scenario: 'suspend/spawn-rate-limited',
+      scenario: S.suspendSpawnRateLimited,
       path: 'logs/feat-x/2.5/001-spawn-rate-limited/',
       reasonPart: '429',
       headlinePart: '启动被限流',
@@ -2009,7 +2010,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'rate-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
-      scenario: 'suspend/worker-rate-limited',
+      scenario: S.suspendWorkerRateLimited,
       path: 'logs/feat-x/2.5/001-worker-rate-limited/',
       reasonPart: 'rate limit exceeded',
       headlinePart: '执行被限流',
@@ -2034,7 +2035,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'worker-abort-over-limit', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
-      scenario: 'suspend/abort-over-limit',
+      scenario: S.suspendAbortOverLimit,
       path: 'logs/feat-x/2.5/001-abort-over-limit/',
       reasonPart: 'worker crashed mid-run',
       headlinePart: '反复异常退出',
@@ -2059,7 +2060,7 @@ describe('静默挂起径补录（⑱-㉑——send(nextStep, true) 唤醒 + for
     const suspended = await untilSuspended(built.driver)
     expect(suspended.escalation).toMatchObject({ kind: 'settle-landing-rejected', taskKey: 'feat-x/2.5' })
     expectWakeupAndProgress(built, {
-      scenario: 'suspend/landing-rejected',
+      scenario: S.suspendLandingRejected,
       path: 'logs/feat-x/2.5/001-landing-rejected/',
       reasonPart: '[settle-cwd-pin]',
       headlinePart: '落点核验',
@@ -2178,7 +2179,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(stoppedNotice?.wakeup).toBe(true)
     // ⑰ 双面落会话日志（AC）：forge/progress stopped 事件载 inFlightTaskKey（与结算消息同事实两面）
     const stopProgress = built.progressCalls.find((e) => e.verb === 'stop')
-    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', scenario: 'loop/stopped' })
+    expect(stopProgress).toMatchObject({ verb: 'stop', status: 'interrupted', taskKey: 'feat-x/2.5', scenario: S.loopStopped })
     // 登记注销 + 再停 = no-op
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: false, code: 'no-active-loop' })
@@ -2489,7 +2490,7 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
     expect(halted?.text).toContain('启动子代理连续失败 3 次——循环已停止')
     expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
     // 1.5 场景码：⑬ loop/halt（循环级进度事件）
-    expect(built.progressCalls.find((e) => e.verb === 'halt')).toMatchObject({ verb: 'halt', status: 'blocked', scenario: 'loop/halt', note: HALTED_REASON })
+    expect(built.progressCalls.find((e) => e.verb === 'halt')).toMatchObject({ verb: 'halt', status: 'blocked', scenario: S.loopHalt, note: HALTED_REASON })
   })
 })
 
@@ -2519,7 +2520,7 @@ describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径
     expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
       verb: 'retry',
       status: 'blocked',
-      scenario: 'retry/spawn-failed',
+      scenario: S.retrySpawnFailed,
       taskKey: 'feat-x/2.5',
       taskTitle: 'Implement the thing',
     })
@@ -2550,7 +2551,7 @@ describe('1.5 发射点扩展：retry 族场景码（⑪⑫——自动重试径
     expect(built.progressCalls.find((e) => e.verb === 'retry')).toMatchObject({
       verb: 'retry',
       status: 'blocked',
-      scenario: 'retry/worker-aborted',
+      scenario: S.retryWorkerAborted,
       taskKey: 'feat-x/2.5',
       workerSessionId: 'worker-1',
     })
@@ -2628,7 +2629,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       sourceSlug: 'feat-x',
       verb: 'startup',
       status: 'running',
-      scenario: 'startup/from-scratch',
+      scenario: S.startupFromScratch,
       at: expect.any(Number),
     })
     // 领取点：动词 claim + running + 任务键 + 任务标题 + 计数快照 + 场景码 + 时间戳界内
@@ -2636,7 +2637,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       sourceSlug: 'feat-x',
       verb: 'claim',
       status: 'running',
-      scenario: 'claim/new',
+      scenario: S.claimNew,
       taskKey: 'feat-x/2.5',
       taskTitle: 'Implement the thing',
       counts: { pending: 0, running: 1, done: 0 },
@@ -2648,7 +2649,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       sourceSlug: 'feat-x',
       verb: 'loop',
       status: 'running',
-      scenario: 'pool/pending',
+      scenario: S.poolPending,
       counts: { pending: 0, running: 1, done: 0 },
       at: expect.any(Number),
     })
@@ -2657,7 +2658,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       sourceSlug: 'feat-x',
       verb: 'claim',
       status: 'running',
-      scenario: 'claim/spawned',
+      scenario: S.claimSpawned,
       taskKey: 'feat-x/2.5',
       taskTitle: 'Implement the thing',
       workerSessionId: 'worker-1',
@@ -2668,14 +2669,14 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
       sourceSlug: 'feat-x',
       verb: 'settle',
       status: 'completed',
-      scenario: 'task/complete',
+      scenario: S.taskComplete,
       taskKey: 'feat-x/2.5',
       taskTitle: 'Implement the thing',
       workerSessionId: 'worker-1',
       at: expect.any(Number),
     })
     // ⑯ 结束（全部完成）——循环级进度事件（1.5）
-    expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: 'loop/finish-all' })
+    expect(built.progressCalls.find((e) => e.verb === 'finish-all')).toMatchObject({ verb: 'finish-all', status: 'completed', scenario: S.loopFinishAll })
     // 纯 JSON（Session.append 契约——序列化往返无损）
     expect(JSON.parse(JSON.stringify(built.progressCalls))).toEqual(built.progressCalls)
     // claim 未解析出专家键（程序段 persona 形态兼容）→ 全部事件零 expertKey 字段（旧形状零回归）
@@ -2767,7 +2768,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     expect(built.progressCalls[spawnedIdx]).toMatchObject({
       verb: 'claim',
       status: 'running',
-      scenario: 'claim/spawned',
+      scenario: S.claimSpawned,
       taskKey: 'feat-x/2.5',
       taskTitle: 'Implement the thing',
       workerSessionId: 'worker-1',
@@ -2788,8 +2789,8 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5', scenario: 'claim/interrupted', taskTitle: 'Implement the thing' })
-    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ verb: 'startup', status: 'running', scenario: 'startup/resume-stopped', taskKey: 'feat-x/2.5', taskTitle: 'Task 2.5' })
+    expect(built.progressCalls.find((e) => e.verb === 'claim-resume')).toMatchObject({ verb: 'claim-resume', status: 'running', taskKey: 'feat-x/2.5', scenario: S.claimInterrupted, taskTitle: 'Implement the thing' })
+    expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ verb: 'startup', status: 'running', scenario: S.startupResumeStopped, taskKey: 'feat-x/2.5', taskTitle: 'Task 2.5' })
   })
 
   it('停止真化：stop 面 in-flight → interrupted（状态迁移点——动词 stop + 中断任务键）', async () => {
@@ -2803,7 +2804,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     )
     await built.driver.stop({ ownerSessionId: OWNER })
     expect(built.progressCalls.filter((e) => e.verb === 'stop')).toEqual([
-      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', scenario: 'loop/stopped', taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', at: expect.any(Number) },
+      { sourceSlug: 'feat-x', verb: 'stop', status: 'interrupted', scenario: S.loopStopped, taskKey: 'feat-x/2.5', taskTitle: 'Implement the thing', at: expect.any(Number) },
     ])
   })
 
@@ -2822,7 +2823,7 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSuspended(built.driver) // 3b：wait-external 续领后池 blocked → deadlock 挂起
-    expect(built.progressCalls.find((e) => e.verb === 'settle')).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5', scenario: 'blocked/wait-external', note: '等待 feat-y 先完成' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle')).toMatchObject({ verb: 'settle', status: 'blocked', taskKey: 'feat-x/2.5', scenario: S.blockedWaitExternal, note: '等待 feat-y 先完成' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
@@ -3077,7 +3078,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     // 编造 slug 零执行；有效 slug 照常执行——两径均静默（R-Q4），进度事件投影
     expect(built.calls.some((c) => c.text.includes('等待 ghost-slug 先完成'))).toBe(false)
     expect(built.calls.some((c) => c.text.includes('等待 feat-real 先完成'))).toBe(false)
-    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: 'blocked/wait-external', note: '等待 feat-real 先完成' })
+    expect(built.progressCalls.find((e) => e.verb === 'settle' && e.status === 'blocked')).toMatchObject({ scenario: S.blockedWaitExternal, note: '等待 feat-real 先完成' })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 })
@@ -3838,10 +3839,10 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     const triageProgress = built.progressCalls.filter((e) => e.verb === 'triage')
     expect(triageProgress).toHaveLength(2)
     const [running, terminal] = triageProgress as [ForgeProgressEventData, ForgeProgressEventData]
-    expect(running).toMatchObject({ status: 'running', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: 1 })
+    expect(running).toMatchObject({ status: 'running', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: 1 })
     expect(running.note).toContain('第 1 次')
     expect(running.workerSessionId).toBeUndefined()
-    expect(terminal).toMatchObject({ status: 'completed', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1', attempt: 1 })
+    expect(terminal).toMatchObject({ status: 'completed', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', workerSessionId: 'triage-1', attempt: 1 })
     expect(terminal.note).toContain('决定创建修复任务')
     // 台账时序因果：decided（执行前）→ outcome（执行尝试后）；scenario 事件 running 先于 decided
     const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
@@ -3875,7 +3876,7 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     const terminals = triageProgress.filter((e) => e.status !== 'running')
     expect(terminals).toHaveLength(3)
     terminals.forEach((t, i) => {
-      expect(t).toMatchObject({ status: 'blocked', scenario: 'loop/triage', taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: i + 1 })
+      expect(t).toMatchObject({ status: 'blocked', scenario: S.loopTriage, taskKey: 'feat-x/2.5', expertKey: 'triage-analyst', attempt: i + 1 })
       expect(t.workerSessionId).toBeUndefined()
       expect(t.note).toContain('处置分析失败')
     })

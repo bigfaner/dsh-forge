@@ -2,7 +2,7 @@
 // 鸭子消费）+ 链断/抛错 fail-soft。declare-module 合并不可运行期断言——键身份锚由
 // ForgeProgressEventKeyAssertion 编译期承担（dispatch-loop 同款）。
 import { describe, expect, it, vi } from 'vitest'
-import { adaptSessionProgressAppend, FORGE_PROGRESS_EVENT_TYPE, FORGE_PROGRESS_SCENARIOS, isForgeProgressData, registerProgressEventVocabulary } from './index.js'
+import { adaptSessionProgressAppend, FORGE_PROGRESS_SCENARIO as S, FORGE_PROGRESS_EVENT_TYPE, FORGE_PROGRESS_SCENARIOS, isForgeProgressData, registerProgressEventVocabulary } from './index.js'
 import type { AgentLookupFace } from '../faces.js'
 
 const DATA = {
@@ -41,14 +41,14 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
   })
   it('triage 词（triage-progress-row）：running/终态两用合法；scenario loop/triage 合法（值域联动）', () => {
     expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'triage', status: 'running', taskKey: 'feat-x/1.1', at: 1 })).toBe(true)
-    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'triage', status: 'running', taskKey: 'feat-x/1.1', expertKey: 'triage-analyst', scenario: 'loop/triage', note: '决策：add-fix', at: 1 })).toBe(true)
-    expect(isForgeProgressData({ ...DATA, scenario: 'loop/triage' })).toBe(true)
+    expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'triage', status: 'running', taskKey: 'feat-x/1.1', expertKey: 'triage-analyst', scenario: S.loopTriage, note: '决策：add-fix', at: 1 })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, scenario: S.loopTriage })).toBe(true)
   })
   it('新字段校验（1.5）：taskTitle/workerSessionId/scenario 类型错 = false；缺省容忍 = true；旧载荷（无新字段）兼容', () => {
     expect(isForgeProgressData({ ...DATA, taskTitle: 7 })).toBe(false)
     expect(isForgeProgressData({ ...DATA, workerSessionId: 9 })).toBe(false)
-    expect(isForgeProgressData({ ...DATA, scenario: 'task/complete' })).toBe(true)
-    expect(isForgeProgressData({ ...DATA, scenario: 'suspend/spawn-rate-limited' })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, scenario: S.taskComplete })).toBe(true)
+    expect(isForgeProgressData({ ...DATA, scenario: S.suspendSpawnRateLimited })).toBe(true)
     expect(isForgeProgressData({ ...DATA, scenario: 'task/oops' })).toBe(false)
     expect(isForgeProgressData({ ...DATA, scenario: 42 })).toBe(false)
     expect(isForgeProgressData({ sourceSlug: 'feat-x', verb: 'settle', status: 'completed', at: 1 })).toBe(true) // 旧载荷可解析
@@ -67,33 +67,7 @@ describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——25 值）', (
   it('恰 25 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族', () => {
     expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(25)
     expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(25)
-    expect([...FORGE_PROGRESS_SCENARIOS]).toEqual([
-      'startup/from-scratch',
-      'startup/resume-stopped',
-      'startup/resume-inflight',
-      'claim/new',
-      'claim/spawned',
-      'claim/interrupted',
-      'task/complete',
-      'blocked/with-fix',
-      'blocked/auto-fixed',
-      'blocked/split',
-      'blocked/wait-external',
-      'blocked/ask-user',
-      'retry/spawn-failed',
-      'retry/worker-aborted',
-      'loop/halt',
-      'loop/blocked-pool',
-      'loop/timeout',
-      'loop/finish-all',
-      'loop/stopped',
-      'loop/triage',
-      'suspend/spawn-rate-limited',
-      'suspend/worker-rate-limited',
-      'suspend/abort-over-limit',
-      'suspend/landing-rejected',
-      'pool/pending',
-    ])
+    expect([...FORGE_PROGRESS_SCENARIOS]).toEqual(Object.values(S))
   })
   it('编码格式：纯英文 + 中划线，{major}/{minor} 两段', () => {
     for (const code of FORGE_PROGRESS_SCENARIOS) {

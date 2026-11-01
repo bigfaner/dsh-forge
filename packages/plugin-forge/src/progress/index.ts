@@ -26,7 +26,8 @@
 // 「MUST be JSON-serializable」）。纪律：既有 notice 双通道零回归（notice = 模型面
 // user/message 照旧）；渲染端无机制词（#24 同源）。
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
-import type { AgentLookupFace } from '../faces.js'
+import { emitForgeDiag } from '../faces.js'
+import type { AgentLookupFace, ForgeDiagEmitFace } from '../faces.js'
 
 /** 会话事件类型键（SessionEventMap 合并键 = 客户端 match 判别字面量，双侧同源） */
 export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
@@ -39,50 +40,56 @@ export interface ForgeProgressCounts {
 }
 
 /**
- * 场景码单源常量表（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 +
+ * 场景码键单源常量对象（loop-event-delivery 事件清单——22 常规 + 1.16 池级族 1 +
  * bug 3bd8b829 领取确认 1 + triage-progress-row 处置族 1 = 25 值）：编码 = `{major}/{minor}`
  * 纯英文 + 中划线，major = 场景族分组 / minor = 组内细分。载荷 scenario 字段值域、
- * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量）。
+ * 路由消费与 GUI 场景章映射的单一来源（驱动器发射点全部经本表取值，零散落字面量；
+ * FORGE_PROGRESS_SCENARIOS 数组与 ForgeProgressScenario 类型均由本对象派生）。
  */
-export const FORGE_PROGRESS_SCENARIOS = [
+export const FORGE_PROGRESS_SCENARIO = {
   // 启动族（①-③）
-  'startup/from-scratch',
-  'startup/resume-stopped',
-  'startup/resume-inflight',
+  startupFromScratch: 'startup/from-scratch',
+  startupResumeStopped: 'startup/resume-stopped',
+  startupResumeInflight: 'startup/resume-inflight',
   // 领取族（④⑤ + spawn 确认——bug 3bd8b829：spawn 成功回填后补发，载荷带 workerSessionId）
-  'claim/new',
-  'claim/spawned',
-  'claim/interrupted',
+  claimNew: 'claim/new',
+  claimSpawned: 'claim/spawned',
+  claimInterrupted: 'claim/interrupted',
   // 任务族（⑥）
-  'task/complete',
+  taskComplete: 'task/complete',
   // 阻塞族（⑦⑧⑧b⑨⑩）
-  'blocked/with-fix',
-  'blocked/auto-fixed',
-  'blocked/split',
-  'blocked/wait-external',
-  'blocked/ask-user',
+  blockedWithFix: 'blocked/with-fix',
+  blockedAutoFixed: 'blocked/auto-fixed',
+  blockedSplit: 'blocked/split',
+  blockedWaitExternal: 'blocked/wait-external',
+  blockedAskUser: 'blocked/ask-user',
   // 重试族（⑪⑫）
-  'retry/spawn-failed',
-  'retry/worker-aborted',
+  retrySpawnFailed: 'retry/spawn-failed',
+  retryWorkerAborted: 'retry/worker-aborted',
   // 循环族（⑬⑭⑮⑯⑰）
-  'loop/halt',
-  'loop/blocked-pool',
-  'loop/timeout',
-  'loop/finish-all',
-  'loop/stopped',
+  loopHalt: 'loop/halt',
+  loopBlockedPool: 'loop/blocked-pool',
+  loopTimeout: 'loop/timeout',
+  loopFinishAll: 'loop/finish-all',
+  loopStopped: 'loop/stopped',
   // 处置族（triage-progress-row——blocked 任务的处置分析：running/终态两用）
-  'loop/triage',
+  loopTriage: 'loop/triage',
   // 静默挂起族（⑱-㉑）
-  'suspend/spawn-rate-limited',
-  'suspend/worker-rate-limited',
-  'suspend/abort-over-limit',
-  'suspend/landing-rejected',
+  suspendSpawnRateLimited: 'suspend/spawn-rate-limited',
+  suspendWorkerRateLimited: 'suspend/worker-rate-limited',
+  suspendAbortOverLimit: 'suspend/abort-over-limit',
+  suspendLandingRejected: 'suspend/landing-rejected',
   // 池级族（1.16 用户裁决②——统计条「待执行」计数承载：池级事件 + counts，无任务键）
-  'pool/pending',
-] as const
+  poolPending: 'pool/pending',
+} as const
 
-/** 场景码值域类型（= FORGE_PROGRESS_SCENARIOS 成员并集） */
-export type ForgeProgressScenario = (typeof FORGE_PROGRESS_SCENARIOS)[number]
+/** 场景码值域单源常量表（键 = 语义名、值 = scenario 字符串——字面量仅在本对象定义处） */
+export const FORGE_PROGRESS_SCENARIOS: readonly ForgeProgressScenario[] = Object.values(
+  FORGE_PROGRESS_SCENARIO,
+)
+
+/** 场景码值域类型（= FORGE_PROGRESS_SCENARIO 值并集） */
+export type ForgeProgressScenario = (typeof FORGE_PROGRESS_SCENARIO)[keyof typeof FORGE_PROGRESS_SCENARIO]
 
 /**
  * 'forge/progress' 事件数据（SessionEventMap 合并值——纯 JSON）。
@@ -184,7 +191,7 @@ export interface ProgressAppendFace {
  * agent.session.append('forge/progress', data)；链上任一环缺席（会话无活根/面漂移/
  * get 抛错）或 append 抛错 = 静默跳过告警——进度事件零循环正确性依赖（fail-soft）。
  */
-export function adaptSessionProgressAppend(agents: AgentLookupFace | undefined): ProgressAppendFace | undefined {
+export function adaptSessionProgressAppend(agents: AgentLookupFace | undefined, diag?: ForgeDiagEmitFace): ProgressAppendFace | undefined {
   if (agents === undefined || typeof agents.get !== 'function') return undefined
   return {
     append(ownerSessionId: string, data: ForgeProgressEventData): void {
@@ -201,9 +208,12 @@ export function adaptSessionProgressAppend(agents: AgentLookupFace | undefined):
       try {
         append.call(session, FORGE_PROGRESS_EVENT_TYPE, data)
       } catch (cause) {
-        console.warn(
-          `forge progress append failed (${ownerSessionId}): ${cause instanceof Error ? cause.message : String(cause)}`,
-        )
+        emitForgeDiag(diag, {
+          level: 'warn',
+          event: 'forge-progress',
+          message: `forge progress append failed (${ownerSessionId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          sessionId: ownerSessionId,
+        })
       }
     },
   }

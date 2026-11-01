@@ -6,6 +6,7 @@
 //   - 规模上界：entries 封顶 N=500、total 全量计数；
 //   - 恢复：stateSchema 种子重放（checkpoint 冷读链）+ viewSchema 校验全绿。
 import { describe, expect, it } from 'vitest'
+import { FORGE_PROGRESS_SCENARIO as S } from '../progress/index.js'
 import {
   createForgeDispatchEventsProjection,
   FORGE_DISPATCH_EVENTS_PROJECTION_KEY,
@@ -87,17 +88,17 @@ describe('apply：只认 forge/progress（Object.is 同引用契约）', () => {
 describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
   it('扩展字段逐条保留（事件清单 22 场景的 scenario 值域透传）', () => {
     const state = fold([
-      progress({ verb: 'startup', scenario: 'startup/from-scratch', at: 100, taskTitle: 'Root task' }),
+      progress({ verb: 'startup', scenario: S.startupFromScratch, at: 100, taskTitle: 'Root task' }),
       progress({
         verb: 'claim',
-        scenario: 'claim/new',
+        scenario: S.claimNew,
         at: 200,
         taskKey: 'feat-x/1.2',
         taskTitle: 'Impl fold unit',
         workerSessionId: 'ws-1',
         counts: { pending: 2, running: 1, done: 0 },
       }),
-      progress({ verb: 'settle', status: 'completed', scenario: 'task/complete', at: 300, note: 'done well' }),
+      progress({ verb: 'settle', status: 'completed', scenario: S.taskComplete, at: 300, note: 'done well' }),
     ])
     expect(state.total).toBe(3)
     expect(state.entries[1]).toEqual({
@@ -105,13 +106,13 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
       verb: 'claim',
       status: 'running',
       at: 200,
-      scenario: 'claim/new',
+      scenario: S.claimNew,
       taskKey: 'feat-x/1.2',
       taskTitle: 'Impl fold unit',
       workerSessionId: 'ws-1',
       counts: { pending: 2, running: 1, done: 0 },
     })
-    expect(state.entries[2]).toMatchObject({ verb: 'settle', scenario: 'task/complete', at: 300, note: 'done well' })
+    expect(state.entries[2]).toMatchObject({ verb: 'settle', scenario: S.taskComplete, at: 300, note: 'done well' })
     const view = unit.wire!.view(state)
     expect(view.entries).toEqual(state.entries)
     expect(view.total).toBe(3)
@@ -121,9 +122,9 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
   })
 
   it('bug 3bd8b829：claim/spawned 确认事件整载荷透传（workerSessionId 随条目到达面板）', () => {
-    const state = fold([progress({ scenario: 'claim/spawned', at: 200, taskKey: 'feat-x/2.5', taskTitle: 'Impl', workerSessionId: 'ws-9' })])
+    const state = fold([progress({ scenario: S.claimSpawned, at: 200, taskKey: 'feat-x/2.5', taskTitle: 'Impl', workerSessionId: 'ws-9' })])
     expect(state.total).toBe(1)
-    expect(state.entries[0]).toMatchObject({ verb: 'claim', scenario: 'claim/spawned', taskKey: 'feat-x/2.5', workerSessionId: 'ws-9' })
+    expect(state.entries[0]).toMatchObject({ verb: 'claim', scenario: S.claimSpawned, taskKey: 'feat-x/2.5', workerSessionId: 'ws-9' })
     expect(unit.wire!.viewSchema.parse(unit.wire!.view(state))).toMatchObject({ total: 1 })
   })
 
@@ -133,7 +134,7 @@ describe('载荷累积：taskTitle/scenario/at/workerSessionId 透传', () => {
     expect(unit.wire!.view(bare).pending).toBeUndefined()
     const withPool = unit.apply(bare, progress({
       verb: 'loop',
-      scenario: 'pool/pending',
+      scenario: S.poolPending,
       counts: { pending: 4, running: 1, done: 2 },
       at: 3,
     }) as never)
