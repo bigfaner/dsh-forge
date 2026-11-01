@@ -8,7 +8,7 @@
 // 同键聚组——组头 xg-head + 生效卡 data-effective 锚 + 来源角标 .origin-badge.origin-* +
 // 被遮蔽折叠行 .dswf-xshadow[data-origin] + 展开对比 .dswf-xcompare）、状态筛选
 // select.dswf-status-select[data-status]（头部重排 2026-10-25：
-// 搜索+筛选左置、召唤独右）、页脚 .dswf-panel-footer、
+// 搜索+筛选左置、寻访独右）、页脚 .dswf-panel-footer、
 // 错误条 .dswf-errorbar[role=alert]、空态 .dswf-empty；panellist 行 = 官方 aria 锚
 // button[aria-label="专家团"]（KNOWLEDGE_ENTRY 同径）。
 // 故障/空态注入：dsh-forge:// 自定义 scheme 的页内 fetch 对 page.route 不生效（页面恒收
@@ -187,13 +187,13 @@ test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数
   const session = await openPanelWithFixture()
   try {
     const { page } = session
-    // 头部结构（F1，2026-10-25 重排 + 1.68 裁决④ label）：标题 + 搜索 + 「状态」label + select + 「来源」label + select 左置；召唤独右
+    // 头部结构（F1，2026-10-25 重排 + 1.68 裁决④ label）：标题 + 搜索 + 「状态」label + select + 「来源」label + select 左置；寻访独右
     await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
     await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
     const headerOrder = await page.locator('.dswf-panel-header > *').evaluateAll((nodes) =>
       nodes.map((node) => node.className),
     )
-    expect(headerOrder.join(' '), '头部次序：标题 → 搜索 → 状态label → select → 来源label → select → 召唤独右').toBe(
+    expect(headerOrder.join(' '), '头部次序：标题 → 搜索 → 状态label → select → 来源label → select → 寻访独右').toBe(
       'dswf-panel-title dswf-search dswf-filter-label dswf-status-select dswf-filter-label dswf-status-select dswf-origin-select dswf-btn dswf-btn-primary dswf-summon-btn',
     )
     // 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（文本 + htmlFor 绑定）
