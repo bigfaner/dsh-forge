@@ -124,6 +124,47 @@
   - mode-selection T3（run1/run2/run3 批内恒红）：共享序列耦合——上用例回退浏览器 overlay 残留拦截 hero chip 菜单点击（run3 实证：拦截体 = `.dswf-fb-item` picker 行）；隔离 run 恒绿（`isolated-mode-t3.log` / `isolated-mode-t3-run3.log`）。修法落支撑层（resetRendererView 补 picker overlay 收口或 registerProject overlay 显式清理），超本任务「改动仅限 e2e/specs/**」边界——**上报待跟进**。
 - 冷启点：18 → 8（每迁移 spec 1 + crash 重启）；批时与基线持平（4.6m → 4.7m）——本批单用例 spec 占比高（4/8 无削减收益），削减收益集中在 3 用例 spec（blitz/expedition/overview 各 3→1、bootstrap/gate/mode 各 3→1）。
 
+## 批次四b：m3 族后半 10 份（本批次）
+
+9 份迁移共享 launch 形态 + 1 份特殊面保留原形态（理由见下表）。**零退役**（逐用例复核：全部为行为/写径/守卫断言，无 unit 等价覆盖的纯文案面；sc2 底稿同构静态面无 app、不消费会话——svc-key step-5 同径先例保留）。
+
+### 迁移 9 份
+
+| spec | 用例数 | 冷启点 | 裁定与适配点 |
+|---|---|---|---|
+| proposal-review-mode-transition | 4 | 4 → 1 | 全保留（五态 chips 过滤 + 人工/agent 双面同门 + 文档跳转 + 模式正门/联动对齐/成链对照）。全表行数计数（T1 六行/draft 三行）由首用例承载（声明序串行）；T3 文档写 wsDir/.forge 子树（重播种只清 .dsh，用例内即时消费）；T2 序列态收口 = `openProposalsTab` 概览 dock 重开重试 ×3（批次四a expedition 同径 helper——run2 实证上用例会话面沉降窗中心列拦截） |
+| sc2-worker-face | 2 | 2 → 1 | 全保留（L1 装配/数据面 + 底稿同构静态面）。overlay / forge-settings 判读改扫共享 ud 根——overlay 三底稿每启重写与路径无关（四a 同径）；forge-settings.json 仅本 spec 写入，存在性即本 worker 锚（workers=2 下他 worker 不落此文件） |
+| sc3-mode-traceability | 1 | 1 → 1 | 保留（chip↔库一致/缺省占位/快照不回溯/feature 恒远征）。全表查询均按 slug 收敛作用域，零适配 |
+| sc4-blitz-chain | 1 | 1 → 1 | 保留（accepted 无 feature 行 + 三视图即时刷新）。单用例零适配 |
+| sc5-expedition-chain | 1 | 1 → 1 | 保留（成链原子三行 → 规格文档 → 派发入口 → 四域全景）。单用例零适配 |
+| sc6-five-states | 1 | 1 → 1 | 保留（五态 chips + 双面同门 + 审计伴随 + 模式正门守卫）。五态全表行数由本用例自建世界承载，零适配 |
+| sc7-gate-submit | 1 | 1 → 1 | 保留（AC 拒含清单 + gate_json 落账 + commit 两态账本）。单用例零适配 |
+| uf3-dispatch-entry | 2 | 2 → 1 | 全保留（跳转不重发/全终态置灰 + 新开路由）。跳转目标会话判读改扫共享 ud 根内 dsh-home：根选择与 fixtureSegment 均以 **wsDir 末段（mkdtemp 随机后缀跨 worker 唯一）**锚定——共享形态会话 cwd = 共享 wsDir 本体，原始 ws-uf3 命名段不复存在（详见下「适配缺陷顺带修复」） |
+| worker-provisioning | 1 | 1 → 1 | 保留（fix-N/disc-N 前缀二分 + 链深 ≤6 + 状态分化上屏）。fix 链全表计数按 slug=PROP 收敛，零适配 |
+
+### 保留原形态裁定（批次四b）
+
+| spec | 冷启点 | 裁定理由 |
+|---|---|---|
+| m3/sc1-hero-projection | 2（2 用例） | T1 中段 closeApp + 同 userData 复启依赖自管 userData 的 dsh-home 会话定位与投影重建锚——共享 fixture 层 userData 自管不外露、无播种缝（dogfood-sc-m3-replay 同裁定族）；T2 单用例 1→1 零冷启收益 |
+
+### 真机对账（workers=2，9 份迁移 spec 14 用例）
+
+- 基线（原始形态，10 spec 16 用例，`001-batch4b/baseline-run1.log`，12.5m）：**4 failed / 12 passed**——sc1 T1（会话事件落盘 60s 超时——零凭据模型往返面抖动）、sc2 T1（远征组合 dirs=3，expert-squad skills 目录入列——批次四a 同源存量装配漂移）、uf3 T1（「新 blank 会话转录空」——newBlank 落封存会话横幅携 MARKER，产品侧）、uf3 T2（测试工件 ENOENT zip——基建抖动一次性）。
+- 迁移形态（`002-batch4b-migrated/run2+run3` / `003-batch4b-final/migrated-final.log`，3.7m）：最终 **2 failed / 12 passed**，逐例归因：
+  - sc2 T1 / uf3 T1：与基线**同断言同红**——存量红，零迁移回归。
+  - uf3 T2：基线红为基建抖动（ENOENT），迁移形态 run2/run3/final 三次全绿。
+  - sc1：保留原形态不在迁移批内，基线红维持原样（存量抖动面）。
+- 冷启点：15 → 10（9 迁移 spec 各 1 + crash 重启；sc1 保留 2）；批时 220s（基线 750s，红例快速失败差异大，形态收益以冷启点计）。
+
+### 迁移适配缺陷顺带修复（非存量，spec 内两处）
+
+uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点会话未开户）→ 改惰性求值（findFixtureSession 调用时点 = 会话 A 已入转录后）；②根选择与 fixtureSegment 沿用原始 `ws-uf3` 命名段（共享形态会话 cwd 扁平化段 = 共享 wsDir 末段随机后缀，原始段永不匹配）→ 两处统一改锚 wsDir 末段。修正后跳转链路走通，终态红收敛到与基线同断言的存量面。
+
+### 范围外上报
+
+- `e2e/specs/m3/mode-selection-alignment.spec.ts:114` oxlint no-unused-vars（`app`）在 HEAD 即存在（1.8 收口遗留）——非本批改动，只记录上报。
+
 ## 批次范围
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。

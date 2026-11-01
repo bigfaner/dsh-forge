@@ -7,14 +7,10 @@
 //   tech-design 产出的 RPC 双门承载）→ 任务（addTask source=feature·mode=expedition 快照）
 //   → 派发入口（UF-3 新开路由联动断言：远征模式 + /run-dag-tasks 指令单行自动发送）→
 //   提案/文档/任务/记录四域全景一致。
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -26,13 +22,17 @@ const PROP = 'sc5-expedition'
 /** 派发指令单行（S5 缓切 `/run-dag-tasks <slug>`——command plane 执行宿主派发循环） */
 const DISPATCH_CMD = `/run-dag-tasks ${PROP}`
 
-test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → 任务 → 派发入口 → 四域全景一致', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（单用例 spec——账本 slug 隔离即天然成立）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → 任务 → 派发入口 → 四域全景一致', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc5-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc5-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -145,8 +145,6 @@ test('@web-e2e @m3 SC5·远征全链：成链原子三行 → 规格文档 → �
     // 零凭据模型失败面不计入产品断言（指令已落地 = 派发入口交付面）
     if (pageErrors.length > 0) console.log(`[sc5-diagnostic] pageerror：${pageErrors.slice(-3).join(' | ')}`)
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
