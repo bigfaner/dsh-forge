@@ -146,7 +146,7 @@ describe('renderBootOverlay（纯函数形状）', () => {
     expect(text).not.toContain('settingsFile')
   })
 
-  it('全局技能面行废除（产品裁决 2026-10-09：标准模式零 forge 技能）：基础渲染零 skill-filesystem / customSkillDirs / includeDefaultRoots——技能挂载仅预设行内（预设物化分叉另 pin；3.4/5.4 全局行形态终结，BootOverlayInput.skillsDir 输入位随之移除）', () => {
+  it('标准模式技能面口径（2026-10-09 裁决 + 2026-11-01 裁决精确化）：无 squad 锚时基础渲染零 skill-filesystem / customSkillDirs / includeDefaultRoots——forge 技能恒零，expert-squad 技能挂载见专测（squad 锚在场分支）', () => {
     const text = renderBootOverlay({ stateDb: '/x/s.db', bindingsFile: '/x/b.json' })
     expect(text).not.toContain('skill-filesystem')
     expect(text).not.toContain('customSkillDirs')
@@ -289,6 +289,26 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(blitzSection).not.toContain(spec)
     expect(text).not.toContain('{{plugin-forge') // 占位符零残留
     expect(text).not.toContain('{{expert-squad')
+  })
+
+  it('标准模式 expert-squad 技能面（用户裁决 2026-11-01）：基础渲染 skill-filesystem 行 customSkillDirs 仅挂 squad 技能目录（占位符经预设物化链既有 squad 分支 → 当形态绝对路径；patch 按 row id 补 config——上游 standard 预设自带 skill-filesystem 裸行，零插件行注册）；squadSkillsDir 缺席 → 整行剔除零占位符残留。forge 技能仍零（2026-10-09 裁决对 forge 部分不变），预设行为零变化', () => {
+    const text = renderBootOverlay(withPresets())
+    // 基础渲染行（2 空缩进——patch 按 row id 定位上游 standard 预设 skill-filesystem 裸行补 config）
+    expect(text).toContain(
+      "- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  config:\n    customSkillDirs:\n      - \"/c/squad-skills\"",
+    )
+    expect(text).not.toContain('{{expert-squad') // 物化链复用：占位符零残留
+    // forge 技能仍零：基础渲染段零 plugin-forge 系技能目录（core/spec/blitz 仅预设行内）
+    const baseSection = text.slice(0, text.indexOf('preset-expedition'))
+    expect(baseSection).not.toContain('/c/skills')
+    expect(baseSection).not.toContain('/c/spec-skills')
+    expect(baseSection).not.toContain('/c/blitz-skills')
+    // 预设行为零变化：远征行内 core 目录仍物化（既有 10 空缩进预设行形态）
+    expect(text).toContain('customSkillDirs:\n                - "/c/skills"')
+    // 缺席 fail-soft：squadSkillsDir undefined → 基础渲染行整行剔除、无占位符残留
+    const absent = renderBootOverlay(withPresets({ squadSkillsDir: undefined }))
+    expect(absent).not.toContain('- id: skill-filesystem\n  name:')
+    expect(absent).not.toContain('{{expert-squad')
   })
 
   it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = knowledge 全局行同值单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面）', () => {

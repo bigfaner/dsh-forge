@@ -20,7 +20,9 @@
 // skills 物理挂载目录（customSkillDirs——形态化绝对路径：dev = workspace 链接、
 // packaged = runtime/node_modules 邻接）均在预设底稿行内增量行承载（官方 cordis 预设的
 // !!js 表达式形制在打包形态不可解析——baseUrl 只见 {userData} profile 链，无
-// installAnchor BFS，故物化锚仍经本缝注入）。
+// installAnchor BFS，故物化锚仍经本缝注入）。用户裁决（2026-11-01）：标准模式放开
+// expert-squad 技能面——基础渲染 skill-filesystem 行 customSkillDirs 仅挂 squad 目录
+// （下方 STANDARD_SQUAD_SKILL_ROWS；forge 部分口径不变）。
 // M3 3.8：core 行增 settingsFile（设置域存储——{userData}/forge-settings.json，守卫基准
 // = dirname(dbFile) 同域；缺席 = forgeSettings 服务降级缺席，六服务形制不动）。
 // M3 3.7 预设装配：cordis/expedition/blitz/hr 四底稿（apps/host/src/profile/presets/）每启
@@ -113,6 +115,23 @@ const PRESET_SKILL_DIR_TOKENS = {
  * 与全局 plugin-forge 行同值的绑定表路径双引号标量（renderBootOverlay input.bindingsFile 单源）。
  */
 const PRESET_BINDINGS_LINE_TOKEN = 'bindingsFile: "{{plugin-forge-bindings}}"'
+
+/**
+ * 标准模式 skill-filesystem 基础渲染行（用户裁决 2026-11-01：expert-squad 技能面挂载）
+ * ——customSkillDirs 仅 squad 占位符（经预设物化链既有 squad 分支解析为当形态绝对路径；
+ * forge 技能仍零——2026-10-09 裁决对 forge 部分不变）。行形态 = patch 按 row id 补 config
+ * （上游 standard 预设自带 skill-filesystem 裸行——presets.test.ts 镜像 pin，零插件行
+ * 注册/insert）。expert-squad 工具面为全局单实例注册（hr.patch.yml 注记 +
+ * delegate-visibility-smoke pin——各组合统一继承），本缝只挂技能目录。
+ * squadSkillsDir 缺席 = 整行剔除 fail-soft（无占位符残留）。
+ */
+const STANDARD_SQUAD_SKILL_ROWS = [
+  '- id: skill-filesystem',
+  "  name: '@deepseek-ai/dsh-skill-filesystem'",
+  '  config:',
+  '    customSkillDirs:',
+  `      - "${PRESET_SKILL_DIR_TOKENS.squad}"`,
+].join('\n')
 
 /**
  * 平台门行就地求值表（上游 standard 镜像逐字转写的 `disabled: !!js` 行——物化时替换为
@@ -217,6 +236,11 @@ export function renderBootOverlay(input: BootOverlayInput): string {
     // skill-filesystem 行——forge 工具/技能仅预设组合携带（预设底稿行内增量行，下方）。
     ...(input.credentialsPath !== undefined
       ? ['- id: credentials', '  config:', `    path: ${yamlQuote(input.credentialsPath)}`]
+      : []),
+    // 用户裁决（2026-11-01：标准模式 expert-squad 技能面）：基础渲染 skill-filesystem 行
+    // customSkillDirs 仅挂 squad 技能目录（物化链复用预设 squad 分支——缺席整行剔除）。
+    ...(input.presets?.squadSkillsDir !== undefined
+      ? materializePresetPatch(STANDARD_SQUAD_SKILL_ROWS, input.presets).split('\n')
       : []),
     // worktree-branch-management 1.7：git-worktree 插件行（门控注行——插件独立/集成双态，
     // 扩展点注入走 ctx 服务缝非 config；git 缺席 fail-soft 不生效语义归插件启动检测）
