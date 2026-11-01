@@ -3,6 +3,7 @@
 // 依赖方向红线：零 apps/host/* import，官方控制器一律经 SessionControllerFace 注入。
 import type { WorktreeSealResult } from '@dsh-forge/contracts'
 import { assertSendable } from './seal-guard.js'
+import { consoleDiagFallback } from './diag-fallback.js'
 import type { SessionControllerFace } from './rpc-service.js'
 
 /**
@@ -15,7 +16,7 @@ import type { SessionControllerFace } from './rpc-service.js'
 export function interceptSessionSends(
   controller: SessionControllerFace,
   sealOf: (sessionId: string) => Promise<WorktreeSealResult>,
-  warn: (message: string) => void = console.warn,
+  warn: (message: string) => void = consoleDiagFallback,
 ): () => void {
   const originals: Array<[string, unknown]> = []
   const wrap = (methodName: 'prompt' | 'updateQueue'): void => {

@@ -12,6 +12,7 @@
 // 只碰 git CLI 与注入缝（注入服务经结构化
 // 最小面消费——reflect.get 防御读取，缺席/异常/非函数面 = 降级默认，plugin-forge 同配方）。
 import { checkGitPresence } from './git-presence.js'
+import { consoleDiagFallback, type DiagLevel } from './diag-fallback.js'
 import {
   createDefaultExtensionPoints,
   type GitWorktreeExtensionPointOverrides,
@@ -128,8 +129,9 @@ declare module '@deepseek-ai/cordis' {
 export interface GitWorktreePluginConfig extends GitWorktreeExtensionPointOverrides {
   /** git 在场性检测注入缝（默认真机 `git --version`；单测/嵌入方可覆写） */
   checkGit?: () => Promise<boolean>
-  /** 诊断缝（fix-4：provide 失败不再静默——host 可注 diag 落 harness.log；缺省 console.warn） */
-  diag?: (line: string) => void
+  /** 诊断缝（fix-4：provide 失败不再静默——host 可注 diag 落 harness.log；缺省 console
+   *  兜底按级分流——bug 7ba48c55：error→console.error、其余→console.warn，统一配方） */
+  diag?: (line: string, level?: DiagLevel) => void
 }
 
 /**
@@ -172,7 +174,7 @@ export interface GitWorktreePlugin {
 const gitWorktreePlugin: GitWorktreePlugin = Object.assign(
   (ctx: unknown, config: GitWorktreePluginConfig = {}): (() => void) => {
     const face = ctx as PluginCtxFace
-    const diag = config.diag ?? ((line: string) => console.warn(line))
+    const diag = config.diag ?? consoleDiagFallback
     const getExtensionPoints = (): GitWorktreeExtensionPoints => resolveExtensionPoints(face, config)
     const presence: Promise<boolean> = (config.checkGit ?? (() => checkGitPresence()))()
     let provided: unknown
@@ -187,10 +189,10 @@ const gitWorktreePlugin: GitWorktreePlugin = Object.assign(
           } satisfies GitWorktreeCapability)
           return
         }
-        diag('[git-worktree] ctx.provide 官方面缺席——gitWorktree 能力服务未 provide（宿主侧取法恒独立模式）')
+        diag('[git-worktree] ctx.provide 官方面缺席——gitWorktree 能力服务未 provide（宿主侧取法恒独立模式）', 'error')
       } catch (cause) {
         provided = undefined // provide 失败 → 能力面降级（宿主不受影响）
-        diag(`[git-worktree] gitWorktree 能力服务 provide 失败（能力面降级）：${String(cause)}`)
+        diag(`[git-worktree] gitWorktree 能力服务 provide 失败（能力面降级）：${String(cause)}`, 'error')
       }
     }, () => {})
     return () => {

@@ -13,6 +13,7 @@ import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
+import { consoleDiagFallback } from './diag-fallback.js'
 import {
   type WorktreeAheadBehindRequest,
   type WorktreeAheadBehindResult,
@@ -276,7 +277,9 @@ export function createWorktreeRpcService(deps: {
   /** 重路由目标活性探测缝（bug 4a30b193——缺省 = existsSync 盘上事实；测试注入桩） */
   readonly pathPresent?: ((path: string) => boolean) | undefined
 }): WorktreeRpcService {
-  const warn = deps.warn ?? console.warn
+  // 兜底按级分流（bug 7ba48c55——diag-face-consolidation 统一口径）：本面 emit 恒 warn
+  // 级（fail-soft 降级告警），缺省走 consoleDiagFallback 单出口。
+  const warn = deps.warn ?? consoleDiagFallback
   // 绑定表失效锚薄封装（恒不抛——刷新失败 = 表停在旧快照，下次 boot/注册自愈）。
   // worktreePath 缺席（建/删树）= 集合真变必刷新；带路径由装配方判定跳过。
   const notifyWorktreeSetChanged = async (worktreePath?: string): Promise<void> => {
