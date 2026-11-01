@@ -177,6 +177,12 @@ export function expertsConfigWriteOf(
   const forms = configFormsFaceOf(ctx);
   if (forms === undefined) return undefined;
   return async (instanceId: string, entry: ExpertsEntryPatch): Promise<void> => {
+    // bug 3711d0e3：候选 ns 耗尽重试 = fall-through 下一候选（不即抛）——候选序
+    // 指向的 ns 可能「describe 在场但写恒不可落盘」（真机 preset 组合残留：ns 行仅存
+    // 于 preset 组合块、不落 top-level 组成行，官方组合机械对无 target 的 patch 行
+    // 直接丢弃 → configEditor.edit 核销恒拒，dsh-config-editor index.js:122）。只有
+    // 全部候选耗尽才 fail-loud（保存面 Toast 透出，不静默丢路由覆写）。
+    let lastError: Error | undefined;
     for (const ns of NAMESPACE_CANDIDATES) {
       const form = forms.get(ns);
       const snapshot = form?.getSnapshot();
@@ -186,8 +192,7 @@ export function expertsConfigWriteOf(
       // 官方拒写背压重试（bug 908dc82e 同族——DefaultAgentOptionsTab writeDraft 先例）：
       // 连续写经 Host configEditor reconcile/entry fiber 热重载窗口会被拒（"no longer
       // active" 族——启停连点/保存连写即命中），固定 2s 间隔 × 5 次重试，每次携 fresh
-      // revision 快照重合成条目再写（重试只是收写完成的体验面，正确性仍归 Host 单点）；
-      // 窗口耗尽仍拒 = fail-loud 抛错（保存/启停面 Toast 透出，不静默丢路由覆写）。
+      // revision 快照重合成条目再写（重试只是收写完成的体验面，正确性仍归 Host 单点）。
       for (let left = 5; ; left -= 1) {
         const experts = asRecord(asRecord(form.getSnapshot().value)?.experts) ?? {};
         const prior = asRecord(experts[instanceId]) ?? {};
@@ -202,11 +207,14 @@ export function expertsConfigWriteOf(
         if (entry.tools !== undefined) merged.tools = [...entry.tools];
         const accepted = await form.set("experts", { ...experts, [instanceId]: merged });
         if (accepted) return;
-        if (left <= 1) throw new Error(`experts 配置写未被接受（namespace=${ns}）`);
+        if (left <= 1) {
+          lastError = new Error(`experts 配置写未被接受（namespace=${ns}）`);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
     }
-    throw new Error("experts 配置写缝不可用（configForms 快照不可写）——无法保存 Agent 选项/工具覆写");
+    throw lastError ?? new Error("experts 配置写缝不可用（configForms 快照不可写）——无法保存 Agent 选项/工具覆写");
   };
 }
 

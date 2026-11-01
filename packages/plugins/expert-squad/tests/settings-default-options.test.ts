@@ -399,6 +399,46 @@ describe("expertsConfigWriteOf（experts 条目写缝生产装配）", () => {
     await expect(unreachable("k", {})).rejects.toThrow();
   });
 
+  it("bug 3711d0e3：候选 ns 恒拒 = fall-through 下一候选写成功（真机 preset 组合残留影子 ns——重试耗尽不即抛）", async () => {
+    vi.useFakeTimers();
+    try {
+      const sets: [string, unknown][] = [];
+      const forms = {
+        get: (ns: string) =>
+          ns === "expert-squad"
+            ? mirrorOf({}, async () => false) // 候选序首位：describe 在场但写恒不可落盘
+            : ns === "dsh-forge-expert-squad"
+              ? mirrorOf({ "k#1": { skills: ["s"] } }, async (field, value) => {
+                  sets.push([field, value]);
+                  return true;
+                })
+              : undefined,
+      };
+      const pending = expertsConfigWriteOf({ configForms: forms })!("k#1", { tools: ["read"] });
+      // 首候选 2s×5 重试窗耗尽 → fall-through 次候选当轮写成功
+      await vi.advanceTimersByTimeAsync(20_000);
+      await pending;
+      expect(sets).toEqual([["experts", { "k#1": { skills: ["s"], tools: ["read"] } }]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("bug 3711d0e3：全部候选耗尽 = fail-loud 抛末候选错误（不静默丢路由覆写）", async () => {
+    vi.useFakeTimers();
+    try {
+      const rejected = expertsConfigWriteOf({
+        configForms: { get: () => mirrorOf({}, async () => false) },
+      })!;
+      const pending = rejected("k", {});
+      const settle = vi.advanceTimersByTimeAsync(40_000);
+      await expect(pending).rejects.toThrow("namespace=dsh-forge-expert-squad");
+      await settle;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("拒写背压重试：fresh revision 快照重合成条目再写（重试窗口内写被接受即收写）", async () => {
     vi.useFakeTimers();
     try {
