@@ -97,8 +97,8 @@ export const LOOP_WORKER_ABORT_MAX_RETRIES = 3
  */
 export const LOOP_TRIAGE_MAX_ATTEMPTS = 3
 
-/** 处置专家键（triage-progress-row——进度/台账载荷 expertKey 预设值，triage.ts 预设同源） */
-const TRIAGE_EXPERT_KEY = 'triage-analyst'
+/** 处置专家键（triage 预设单源——triage.ts 与本面 import 消费，settings experts.mapping.triage 可覆盖） */
+export const TRIAGE_EXPERT_KEY = 'triage-analyst'
 
 /** 停止/启动竞态收口的 in-flight 真化 reason（S3 transitionTask 面审计列） */
 export const LOOP_STOP_TRANSITION_REASON = '派发循环停止'

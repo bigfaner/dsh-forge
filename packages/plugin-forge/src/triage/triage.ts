@@ -18,12 +18,10 @@ import {
 } from '../dispatch-core/index.js'
 import type { PoolSnapshot, SpawnWorker } from '../dispatch-core/index.js'
 import type { LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
+import { TRIAGE_EXPERT_KEY } from '../loop/index.js'
 import type { ExpertProfileResolver, ForgeExpertProfile } from '../faces.js'
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
-
-/** triage 专家键预设（expert-squad-forge-2 纳入 2——settings experts.mapping.triage 可覆盖） */
-const TRIAGE_EXPERT_KEY_DEFAULT = 'triage-analyst'
 
 /** 档案人格段（与 core claim 链 renderExpertProfileSection 同构——身份头 + personaMd 正文；
  *  本包不依赖 core 包（类型出自 contracts），组装面就地同形承载，persona 单源纪律不变） */
@@ -121,7 +119,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       let persona: string | undefined
       let profile: ForgeExpertProfile | undefined
       if (deps.resolveExpertProfile !== undefined) {
-        const key = settings?.experts?.mapping?.triage ?? TRIAGE_EXPERT_KEY_DEFAULT
+        const key = settings?.experts?.mapping?.triage ?? TRIAGE_EXPERT_KEY
         profile = await deps.resolveExpertProfile('triage', key)
         // 键恒在场（预设兜底）→ profile 恒定义；undefined 仅为类型面收窄，防御性跳过
         persona = profile !== undefined ? personaSectionOf(profile) : undefined
