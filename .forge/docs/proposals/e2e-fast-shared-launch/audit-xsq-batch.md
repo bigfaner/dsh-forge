@@ -1,7 +1,42 @@
-# 用例价值审计对账表 — expert-squad 族存量迁移（1.5 批次一）
+# 用例价值审计对账表 — 存量迁移（1.5）
 
-提案：e2e-fast-shared-launch（1.5 存量全量迁移·批次一）；样本：1.3 试点 expert-squad-panel-detail.spec（16 例保留 / 4 例退役，见 audit-panel-detail.md）。
+提案：e2e-fast-shared-launch（1.5 存量全量迁移）；样本：1.3 试点 expert-squad-panel-detail.spec（16 例保留 / 4 例退役，见 audit-panel-detail.md）。
 裁定准则（同试点）：退役 = 纯文案/label/静态渲染断言（unit 等价覆盖在案）；保留 = 行为/语义/写径断言（真机才有增量）。
+
+## 批次一：expert-squad 族 9 份（commit bea57b02）
+
+全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑），零退役，冷启点 40 → 9。逐 spec 裁定与适配点见 git 历史版本文档；计时对账：迁移形态 398.3s（workers=2），19 例红中 18 例存量红（原始形态逐例同红）+ 1 例 hot-reload whitelist watch 衰减耦合（fix-1 已修，commit ca5b52cc）。
+
+## 批次二a：m2 大户 4 份（commit 672445e5 + 续）
+
+| spec | 用例数 | 冷启点 | 裁定 |
+|---|---|---|---|
+| m2/fix-chain-auto-recovery | 10 | 11 → 1 | 全保留。各用例独立 feature slug 隔离账本面；.forge 任务账本跨用例存续（重播种只清 .dsh）——4 处全表计数断言（task_edges 全表 / fix 谱系全表 / 去重行数×2）按 slug 收敛作用域，语义等价 |
+| m2/task-dispatch-pipeline | 8 | 9 → 1 | 全保留。同款 slug 隔离；Step2b「空库盲选零写入」与 Step2d「会话零挂接」两处全表断言按 feature slug 收敛作用域；共享账本下盲选就绪池无跨用例污染（存量残留任务均非就绪 pending，逐用例核verified） |
+| m2/task-overview-review | 11 | 12 → 1 | 全保留。多工作区形态适配：共享根目录 + 各用例独立子目录 wsDir——注册链 canonical 幂等按目录键，独立子目录保每用例独立项目名/任务库（ov-head 项目名断言语义保持），不被重播种波及 |
+| m2/interrupted-dispatch-recovery | 6 | 7 → 1 | 全保留。独立 feature slug 隔离；库断言本就按 task_id 作用域，零适配 |
+
+本批次 **零退役**：逐用例复核未发现「unit 已持有等价覆盖」的纯文案断言用例；全部为行为/写径/守卫断言。
+
+### 保留原形态裁定（批次二a）
+
+| spec | 冷启点 | 裁定理由 |
+|---|---|---|
+| m2/task-session-linkage | 10（9 用例） | 会话开户/盘侧差集定位（findFixtureSession + fixtureSessionIds 前后差集）强依赖每用例全新 userData 会话账本；共享 userData 下会话累积使定位语义漂移，无法等价保持 |
+
+## 批次二a 补充（run 证据与归因，commit 672445e5 + 批次二a 收口提交）
+
+- 迁移对象修正：m2/interrupted-dispatch-recovery 迁移（7 → 1，idr 6/6 真机全绿）；m2/task-session-linkage 与 m2/workspace-registration-derived-path 裁定保留原形态（理由见上表）。
+- tdp/ovr 采用「共享根 + 每用例子目录」隔离（注册链 canonical 幂等按目录键——独立项目名/任务库/盲选池，语义等价原始全新世界）；tdp 2d 盲选断言迁移后反而转绿（基线原形态同红）。
+- 真机对账（workers=2）：
+  - 基线（原始形态，3 spec 25 用例）：13 failed / 12 passed（`003-batch2a/baseline.log`）；
+  - 迁移后：idr 6/6 绿；ovr 11 红与基线逐例一致（**全 spec 存量红**——产品 UI 漂移，零迁移回归，Hard Rules 归因上报）；tdp 8 例中 7 绿，1 例概览 UI 序列态轮转红（见下）。
+- **共享 launch 序列态轮转红（上报待跟进，越界）**：tdp 三个概览 UI 用例（smoke/5b/6b）在共享会话序列下轮转单发红（run5=6b、run6=5b、run7=5b、run8=6b），`--grep` 隔离 run 恒绿（`run4-6b-isolated.log` 23.7s passed）；病征 = 概览 tasks subtab 间歇缺席/detach 竞速。已试收口（芯片流显式选定、Esc 菜单收口、条件点击、桥导航视图还原）均未根除——修法判定落 `e2e/support/fixtures.ts` 支撑层（重播种级 renderer 态复位或概览面板隔离），超出本任务「改动仅限 e2e/specs/**」边界。
+- 批次二a 计时：迁移形态 4 spec 35 用例 157s（run1，含 11 例 TDZ 误红）；修正后 3 spec 25 用例约 1.1-1.3m/spec 批（run7/run8）。原始形态基线 3.2m（13 红快速失败情形下）——全量批计时对账于全量迁移后统一收口。
+
+## 计时对账（批次二a）
+
+真机 electron run（workers=2，--project=desktop，4 spec 35 用例）：见 `logs/e2e-fast-shared-launch/1.5/003-batch2a/run1.log + elapsed.txt`（批末回填对比值）。
 
 ## 批次范围
 

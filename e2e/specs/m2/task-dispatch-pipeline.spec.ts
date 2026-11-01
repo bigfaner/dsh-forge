@@ -43,12 +43,14 @@
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
 import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
 import { createSharedLaunchFixture } from '../../support/fixtures.js'
-import { forgeInvoke, registerProject } from '../../support/rpc.js'
+import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
+import { bridgeDispatch } from '../../support/launch.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
@@ -86,9 +88,12 @@ async function setupWorld(page: Page, wsDir: string, wsName: string, feature: st
 test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算→概览即时（Step1-6 success 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp')
     const FEATURE = 'tdp-feat'
     const { projectId, dir } = await setupWorld(page, wsDir, '派发链冒烟', FEATURE)
+    // 共享 launch 适配（用例内显式收口）：fixture 首注册根项目 → 概览默认绑定偏移，芯片流显式选定本项目
+    await selectWorkspaceViaChip(page, '派发链冒烟')
     const driver = createBridgeDriver(app)
     const eventsBefore = (await driver.events()).length
 
@@ -167,9 +172,13 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     expect(eventsAfter.at(-1)?.payload.projectId, '事件载荷携带 projectId').toBe(projectId)
 
     // ── Step 6（概览即时）：dock 开概览 → 任务子 tab → 行呈新状态（completed）──
+    // 共享 launch 序列态收口（批次一同款）：上一用例可能遗留概览 dock/其它项目视图——桥导航回会话面板还原前置
+    await bridgeDispatch(page, 'show-session')
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
+    await expect(tasksSubtab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场（写入后浏览即见）').toBeVisible({ timeout: 30_000 })
     await expect(row, '任务行主行中文状态 tag = 已完成').toContainText(ZH_DONE)
@@ -184,7 +193,8 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
 test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写入零事件', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2b')
     const { projectId, dir } = await setupWorld(page, wsDir, '无就绪演示', 'tdp2b')
     const driver = createBridgeDriver(app)
     const eventsBefore = (await driver.events()).length
@@ -214,7 +224,8 @@ test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写�
 test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足清单 + 零残留', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2c')
     const FEATURE = 'tdp2c'
     const { projectId, dir } = await setupWorld(page, wsDir, '守卫拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -255,7 +266,8 @@ test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足�
 test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派发防线）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2d')
     const FEATURE = 'tdp2d'
     const { projectId, dir } = await setupWorld(page, wsDir, '盲选防线演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -303,7 +315,8 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
 test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被破坏', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp3b')
     const FEATURE = 'tdp3b'
     const { projectId, dir } = await setupWorld(page, wsDir, 'from 不匹配演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -350,9 +363,11 @@ test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被�
 test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入审计 + 概览即时见', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp5b')
     const FEATURE = 'tdp5b'
     const { projectId, dir } = await setupWorld(page, wsDir, '受阻结算演示', FEATURE)
+    await selectWorkspaceViaChip(page, '受阻结算演示')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
       projectId, source: { kind: 'feature', slug: FEATURE }, title: '受阻结算任务', type: 'doc',
@@ -379,8 +394,13 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     expect(submit.restored, '无恢复（restored 空）').toEqual([])
 
     // 概览即时见 blocked（UI 面 + 读面单发）
+    // 共享 launch 序列态收口（批次一同款）：上一用例可能遗留概览 dock/其它项目视图——桥导航回会话面板还原前置
+    await bridgeDispatch(page, 'show-session')
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
+    await expect(tasksSubtab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场').toBeVisible({ timeout: 30_000 })
     await expect(row, '行状态 tag = 已阻塞').toContainText(ZH_BLOCKED)
@@ -393,7 +413,8 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
 test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝（先于转移校验）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp5cd')
     const FEATURE = 'tdp5cd'
     const { projectId, dir } = await setupWorld(page, wsDir, '输入面校验演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -432,9 +453,13 @@ test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝�
 test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期写入，单发重取即见新值', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
 
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp6b')
     const FEATURE = 'tdp6b'
     const { projectId } = await setupWorld(page, wsDir, '并发浏览演示', FEATURE)
+    await selectWorkspaceViaChip(page, '并发浏览演示')
+    // 芯片流菜单残留收口（防遮罩拦截概览 subtab 点击——用例内显式收口）
+    await page.keyboard.press('Escape')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
       projectId, source: { kind: 'feature', slug: FEATURE }, title: '并发浏览任务', type: 'doc',
@@ -442,8 +467,11 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
 
     // 前置：概览页签打开且读路径活跃（用户正在浏览）
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    // 共享 launch 序列态收口：accumulated 项目事件链下概览面板间歇重挂（subtab detach 重试竞速）
+    // ——tasks subtab 已选中即免点击（断言语义不变：selected = true）
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
     await expect(page.locator(ttItemOf(added.taskId)).first(), '浏览态：pending 行在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttItemOf(added.taskId)).first()).toContainText('待处理')
 

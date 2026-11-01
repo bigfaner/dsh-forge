@@ -30,17 +30,23 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { ClaimTaskResult, SubmitTaskResult, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
+
+// ── 共享 launch fixture（各用例独立 feature slug 隔离账本面；库断言按 task_id 作用域）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => { mkdirSync(dir, { recursive: true }) },
+  workspaceName: 'idr-interrupt-recovery',
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
 
 const DISP_SESSION = 'e2e-idr-dispatch-r1'
 const EXEC_SESSION = 'e2e-idr-executor-e1'
@@ -117,14 +123,11 @@ function seedInterruptedWorld(
   return taskId
 }
 
-test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算（零人工清理全链）', async () => {
+test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算（零人工清理全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-'))
-  const wsDir = join(fixtureRoot, 'ws-idr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr')
     const FEATURE = 'idr-feat'
     const { projectId, dir } = await setupWorld(page, wsDir, '中断恢复冒烟', FEATURE)
     const driver = createBridgeDriver(app)
@@ -196,21 +199,13 @@ test('@web-e2e @m2 中断恢复·冒烟：中断→重入→重简报→结算�
     expect(detail.taskStatus, '读面单发即见 completed').toBe('completed')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 中断恢复·Step1 执行记录在场：盲选幂等重入同任务（不重复派发）', async () => {
+test('@web-e2e @m2 中断恢复·Step1 执行记录在场：盲选幂等重入同任务（不重复派发）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-rec-'))
-  const wsDir = join(fixtureRoot, 'ws-idr-rec')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-rec-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr-rec')
     const FEATURE = 'idr-rec'
     const { projectId, dir } = await setupWorld(page, wsDir, '记录在场演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -238,21 +233,13 @@ test('@web-e2e @m2 中断恢复·Step1 执行记录在场：盲选幂等重入�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 中断恢复·Step1 前置回归非终态：重入被守卫拒绝（dispatcher 须重规划）', async () => {
+test('@web-e2e @m2 中断恢复·Step1 前置回归非终态：重入被守卫拒绝（dispatcher 须重规划）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-pr-'))
-  const wsDir = join(fixtureRoot, 'ws-idr-pr')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-pr-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr-pr')
     const FEATURE = 'idr-pr'
     const { projectId, dir } = await setupWorld(page, wsDir, '前置回归演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -283,21 +270,13 @@ test('@web-e2e @m2 中断恢复·Step1 前置回归非终态：重入被守卫�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 中断恢复·Step1 他会话 in_progress：盲选不领（双外环并存防线）', async () => {
+test('@web-e2e @m2 中断恢复·Step1 他会话 in_progress：盲选不领（双外环并存防线）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-fo-'))
-  const wsDir = join(fixtureRoot, 'ws-idr-fo')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-fo-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr-fo')
     const FEATURE = 'idr-fo'
     const { projectId, dir } = await setupWorld(page, wsDir, '双外环演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -322,21 +301,13 @@ test('@web-e2e @m2 中断恢复·Step1 他会话 in_progress：盲选不领（�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + digest 逐次新值 + 审计 append-only', async () => {
+test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + digest 逐次新值 + 审计 append-only', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-multi-'))
-  const wsDir = join(fixtureRoot, 'ws-idr-multi')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-multi-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr-multi')
     const FEATURE = 'idr-multi'
     const { projectId, dir } = await setupWorld(page, wsDir, '多次中断演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -376,21 +347,13 @@ test('@web-e2e @m2 中断恢复·Step2 多次中断：逐次幂等重入 + diges
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });
 
-test('@web-e2e @m2 中断恢复·Step3 人工处置态：重入领取被矩阵拒绝（处置不被覆盖）', async () => {
+test('@web-e2e @m2 中断恢复·Step3 人工处置态：重入领取被矩阵拒绝（处置不被覆盖）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-md-'))
-  const wsDir = join(fixtureRoot, 'ws-idr-md')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-idr-md-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-idr-md')
     const FEATURE = 'idr-md'
     const { projectId, dir } = await setupWorld(page, wsDir, '人工处置演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -418,9 +381,4 @@ test('@web-e2e @m2 中断恢复·Step3 人工处置态：重入领取被矩阵�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 });

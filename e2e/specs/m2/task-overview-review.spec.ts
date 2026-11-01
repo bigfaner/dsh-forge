@@ -158,8 +158,8 @@ async function openTasksTab(page: Page): Promise<void> {
 
 test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→三视图→详情抽屉（Step1-6 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const wsDir = join(wsRoot, 'ws-ovr')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-feat'
     const WS_NAME = '概览走查演示'
     const { projectId, dir } = await setupWorld(page, wsDir, WS_NAME, FEATURE)
@@ -371,8 +371,8 @@ test('@web-e2e @m2 概览走查·冒烟：开页签→绑定→chips 过滤→�
 
 test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面计时归 sc2-perf）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const wsDir = join(wsRoot, 'ws-ovr500')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr500')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-big'
     const { projectId, dir } = await setupWorld(page, wsDir, '概览压力演示', FEATURE)
     // @500 造数（七态轮转 + 创建时间递增——直插通道，sc2 同构）
@@ -404,8 +404,8 @@ test('@web-e2e @m2 概览走查·Step1 @500 首屏 ≤2s（UI 面——数据面
 
 test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切换（直读无第二来源）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const wsDir = join(wsRoot, 'ws-ovr-fb')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-fb')
+  const { page, pageErrors } = sharedLaunch
     const project = await registerProject(page, wsDir, '绑定切换演示')
     const projectId = project.id
     // 注册序 = 列表 created_at 降序的反面：后注册者最新、居列表头——activeFeatureSlug 缺省
@@ -437,8 +437,8 @@ test('@web-e2e @m2 概览走查·Step2 feature 绑定切换：列表随绑定切
 
 test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子树）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const wsDir = join(wsRoot, 'ws-ovr-srch')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-srch')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-srch'
     const { projectId, dir } = await setupWorld(page, wsDir, '双语搜索演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
@@ -481,8 +481,8 @@ test('@web-e2e @m2 概览走查·Step2 中英双语搜索过滤（IME 稳定子�
 
 test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过滤）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const wsDir = join(wsRoot, 'ws-ovr-chip')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-chip')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-chip'
     const { projectId, dir } = await setupWorld(page, wsDir, '零计数演示', FEATURE)
     // 仅两态在场（in_progress 计数 0——chips 断言基准）
@@ -510,8 +510,8 @@ test('@web-e2e @m2 概览走查·Step3 零计数 chip 禁用（不可触发过�
 
 test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃优先 ↔ 最新创建）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const wsDir = join(wsRoot, 'ws-ovr-sort')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-sort')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-sort'
     const { projectId, dir } = await setupWorld(page, wsDir, '排序演示', FEATURE)
     // 三态三时（活跃优先序 ≠ 创建序——重排可判）
@@ -553,8 +553,8 @@ test('@web-e2e @m2 概览走查·Step4 排序切换：全列表重排（活跃�
 
 test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason 入审计 + 即时反映', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const wsDir = join(wsRoot, 'ws-ovr-tr')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-tr')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-tr'
     const { projectId, dir } = await setupWorld(page, wsDir, '人工转移演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '人工转移目标任务', status: 'pending' }])
@@ -597,8 +597,8 @@ test('@web-e2e @m2 概览走查·Step5 人工转移：对话框落库 + reason �
 
 test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 + 零写入', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const wsDir = join(wsRoot, 'ws-ovr-rr')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-rr')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-rr'
     const { projectId, dir } = await setupWorld(page, wsDir, '空因拒绝演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '空因拒绝目标任务', status: 'pending' }])
@@ -641,8 +641,8 @@ test('@web-e2e @m2 概览走查·Step5 空因拒绝：错误条留场可修正 +
 
 test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见即所得）+ 服务端先验兜底', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const wsDir = join(wsRoot, 'ws-ovr-it')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-it')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-it'
     const { projectId, dir } = await setupWorld(page, wsDir, '非法目标演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [{ localId: '1.1', title: '非法目标目标任务', status: 'pending' }])
@@ -673,8 +673,8 @@ test('@web-e2e @m2 概览走查·Step5 非法目标：选项集排除（所见�
 
 test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继 auto-restore（边保留）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const wsDir = join(wsRoot, 'ws-ovr-rs')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-rs')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-rs'
     const { projectId, dir } = await setupWorld(page, wsDir, '终态恢复演示', FEATURE)
     // 受控初态：W（blocked 后继）依赖 T（pending 待转移源）
@@ -728,8 +728,8 @@ test('@web-e2e @m2 概览走查·Step5 终态转移触发恢复：blocked 后继
 
 test('@web-e2e @m2 概览走查·Step6 eval 族条件区空态注记（不伪造评估数据）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const wsDir = join(wsRoot, 'ws-ovr-ev')
-  const { page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(sharedLaunch.wsDir, 'ws-ovr-ev')
+  const { page, pageErrors } = sharedLaunch
     const FEATURE = 'ovr-ev'
     const { projectId, dir } = await setupWorld(page, wsDir, 'eval 空态演示', FEATURE)
     const ids = seedTasks(dir, FEATURE, [
