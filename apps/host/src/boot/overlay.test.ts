@@ -236,7 +236,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   const base = { stateDb: '/x/s.db', bindingsFile: '/x/b.json' }
   // 真实四底稿（src 同邻装载——presets.test.ts 另 pin 底稿契约面）
   const patches = loadPresetPatches()!
-  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string } = {}) => ({
+  const withPresets = (over: { coreSkillsDir?: string; specSkillsDir?: string; blitzSkillsDir?: string; squadSkillsDir?: string } = {}) => ({
     ...base,
     knowledgeRow: true, // dev 形态口径（profile.dev 树在场——knowledge 行注行）
     presets: {
@@ -244,6 +244,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
       coreSkillsDir: '/c/skills',
       specSkillsDir: '/c/spec-skills',
       blitzSkillsDir: '/c/blitz-skills',
+      squadSkillsDir: '/c/squad-skills',
       bindingsFile: base.bindingsFile, // fix-1：预设行内产品行 config 物化锚（同值单源）
       ...over,
     },
@@ -268,14 +269,16 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
 
   it('物化绝对路径（AC2）：customSkillDirs 占位符 → 当形态绝对路径双引号标量——远征 [core,spec] / 突击 [core,blitz]', () => {
     const text = renderBootOverlay(
-      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge-spec\\skills', blitzSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills-blitz' }),
+      withPresets({ coreSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills', specSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge-spec\\skills', blitzSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\plugin-forge\\skills-blitz', squadSkillsDir: 'C:\\app\\node_modules\\@dsh-forge\\expert-squad\\skills' }),
     )
     const core = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills"'
     const spec = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge-spec\\\\skills"'
     const blitz = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\plugin-forge\\\\skills-blitz"'
+    const squad = '- "C:\\\\app\\\\node_modules\\\\@dsh-forge\\\\expert-squad\\\\skills"'
     expect(text).toContain(core)
     expect(text).toContain(spec)
     expect(text).toContain(blitz)
+    expect(text).toContain(squad)
     // 段级物理隔离（L1）：远征段物理不含 blitz 路径；突击段物理不含 spec 路径
     const expeditionSection = text.slice(text.indexOf('preset-expedition'), text.indexOf('preset-blitz'))
     const blitzSection = text.slice(text.indexOf('preset-blitz'))
@@ -285,6 +288,7 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
     expect(blitzSection).toContain(blitz)
     expect(blitzSection).not.toContain(spec)
     expect(text).not.toContain('{{plugin-forge') // 占位符零残留
+    expect(text).not.toContain('{{expert-squad')
   })
 
   it('预设行内产品行携同 config（fix-1/drift #9）：plugin-forge[+spec] 行 bindingsFile 物化 = knowledge 全局行同值单源（产品裁决 2026-10-09：全局 plugin-forge 行已废除——预设行内实例是唯一 forge 工具面）', () => {
@@ -324,11 +328,19 @@ describe('M3 预设装配（3.7）——renderBootOverlay 物化分叉', () => {
   it('blitz 目录缺席 fail-soft：突击 customSkillDirs 仅 [core]（blitz 行剔除·无空列表残留）', () => {
     const text = renderBootOverlay(withPresets({ blitzSkillsDir: undefined }))
     expect(text).not.toContain('/c/blitz-skills')
+    expect(text).toContain('/c/squad-skills') // squad 锚独立（不受 blitz 缺席牵连）
     expect(text).not.toContain('{{plugin-forge')
   })
 
+  it('squad 目录缺席 fail-soft：双预设 customSkillDirs 剔除 expert-squad 行（squad 技能面降级·无占位符残留）', () => {
+    const text = renderBootOverlay(withPresets({ squadSkillsDir: undefined }))
+    expect(text).not.toContain('/c/squad-skills')
+    expect(text).not.toContain('{{expert-squad')
+    expect(text).toContain('/c/skills') // core 锚不受牵连
+  })
+
   it('全目录皆缺席：预设内 skill-filesystem 行回归上游裸形态（config 空块整除——schema 面零残留）', () => {
-    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined, blitzSkillsDir: undefined }))
+    const text = renderBootOverlay(withPresets({ coreSkillsDir: undefined, specSkillsDir: undefined, blitzSkillsDir: undefined, squadSkillsDir: undefined }))
     expect(text).toContain(
       "          - id: skill-filesystem\n            name: '@deepseek-ai/dsh-skill-filesystem'\n          - id: tool-skill",
     )

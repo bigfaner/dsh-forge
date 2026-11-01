@@ -88,6 +88,22 @@ describe('resolveHostPaths M2 派生根（DSH_FORGE_TASKS_HOME）', () => {
     // 独立根（无 node_modules 树）显式 anchor → 上溯至文件系统根不中
     const isolated = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: 'X:\\nowhere\\anchor\\package.json' }, 'C:/ud')
     expect(isolated.skillsDir).toBeUndefined()
+    expect(isolated.squadSkillsDir).toBeUndefined() // squad 技能面降级（同法 fail-soft）
+  })
+
+  it('expert-squad skills 挂载目录（预设装配 customSkillDirs[squad]——专家域技能）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-forge-paths-squad-'))
+    try {
+      const anchor = join(root, 'anchor', 'package.json')
+      const squadSkills = join(root, 'node_modules', '@dsh-forge', 'expert-squad', 'skills')
+      const absent = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(absent.squadSkillsDir).toBeUndefined() // squad 技能面降级（fail-soft 不抛断启动）
+      mkdirSync(squadSkills, { recursive: true }) // squad 树落地 → 解析同法
+      const present = resolveHostPaths({ DSH_FORGE_INSTALL_ANCHOR: anchor }, 'C:/ud')
+      expect(present.squadSkillsDir).toBe(squadSkills)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('plugin-forge-spec skills 挂载目录（M3 3.7 预设装配 customSkillDirs[spec]）：锚树在场 → 解析；缺席 → undefined fail-soft（同法 fixture 驱动——不依赖当期包内容）', () => {

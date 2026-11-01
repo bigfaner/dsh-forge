@@ -91,6 +91,9 @@ export interface PresetOverlayInput extends PresetPatches {
   /** plugin-forge skills-blitz 突击专属技能当形态绝对路径（customSkillDirs[blitz]；缺席 =
    *  剔除——blitz 技能面降级 fail-soft，远征本就物理不含） */
   readonly blitzSkillsDir?: string
+  /** expert-squad skills 当形态绝对路径（customSkillDirs[squad]；缺席 = 剔除——squad
+   *  技能面降级 fail-soft） */
+  readonly squadSkillsDir?: string
   /** cwd 绑定表文件（fix-1/drift #9：预设行内 plugin-forge[+spec] 增量行 config 物化锚——
    *  与 knowledge 全局行同值单源；必填：BootOverlayInput.bindingsFile 本就必填，无缺席分支） */
   readonly bindingsFile: string
@@ -101,6 +104,7 @@ const PRESET_SKILL_DIR_TOKENS = {
   core: '{{plugin-forge-skills}}',
   spec: '{{plugin-forge-spec-skills}}',
   blitz: '{{plugin-forge-blitz-skills}}',
+  squad: '{{expert-squad-skills}}',
 } as const
 
 /**
@@ -139,6 +143,11 @@ function materializePresetLines(patch: string, input: PresetOverlayInput): strin
     }
     if (trimmed === blitzToken) {
       if (input.blitzSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.blitzSkillsDir)}`)
+      continue
+    }
+    const squadToken = `- "${PRESET_SKILL_DIR_TOKENS.squad}"`
+    if (trimmed === squadToken) {
+      if (input.squadSkillsDir !== undefined) out.push(`${line.slice(0, line.length - trimmed.length)}- ${yamlQuote(input.squadSkillsDir)}`)
       continue
     }
     if (trimmed === PRESET_BINDINGS_LINE_TOKEN) {
