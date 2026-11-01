@@ -533,3 +533,163 @@ describe("list_tools / list_skills — 白名单键名取数面", () => {
     expect(result.note).toContain("unavailable");
   });
 });
+
+// ---------------------------------------------------------------------------
+// list_tools / list_skills 全模式并集（bug 6337a936）：全局视图 + 逐 preset scope
+// 视图并集去重；agentPresets 租约 try/finally dispose；缺席/形状不符降级注明。
+// ---------------------------------------------------------------------------
+
+/** agentPresets face 伪造（缺陷修复测试面——记录租约 key 与 dispose 次数）。 */
+const keyOf = (id: string): object => ({ preset: id });
+function makePresetFace(ids: string[]) {
+  const events: { acquired: object[]; disposed: object[] } = { acquired: [], disposed: [] };
+  const keys = Object.fromEntries(ids.map((id) => [id, keyOf(id)]));
+  return {
+    events,
+    keys,
+    face: {
+      list: async () => ids.map((id) => ({ id })),
+      acquireScope: async (id?: string) => {
+        const key = (id !== undefined && keys[id]) || keyOf(id ?? "default");
+        events.acquired.push(key);
+        return {
+          key,
+          dispose: () => {
+            events.disposed.push(key);
+          },
+        };
+      },
+    },
+  };
+}
+
+describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）", () => {
+  it("list_tools 并集 = 全局视图 + 逐 preset scope 视图，按 name 去重（description 取先见者），租约用后 dispose", async () => {
+    const presets = makePresetFace(["hr", "dev"]);
+    const calls: (string | undefined)[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          calls.push(scope);
+          if (scope === undefined) return [{ name: "read", description: "global read" }];
+          if (scope === presets.keys.hr)
+            return [{ name: "read", description: "hr read" }, { name: "summon", description: "hr summon" }];
+          return [{ name: "shell", description: "dev shell" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+      note?: string;
+    };
+    // 并集去重：read 取全局（先见者）；hr 独有 summon、dev 独有 shell 均并入
+    expect(result.tools).toEqual([
+      { name: "read", description: "global read" },
+      { name: "summon", description: "hr summon" },
+      { name: "shell", description: "dev shell" },
+    ]);
+    expect(result.note).toBeUndefined();
+    // 每 preset 各取一次 scope 租约（schemas 携 scope key 现查）
+    expect(calls).toEqual([undefined, presets.keys.hr, presets.keys.dev]);
+    // 租约用后 dispose（try/finally）
+    expect(presets.events.disposed).toEqual([presets.keys.hr, presets.keys.dev]);
+  });
+
+  it("list_tools：scope 视图读取抛错不外溢，租约仍 dispose，结果降级为已得并集 + note", async () => {
+    const presets = makePresetFace(["broken"]);
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          if (scope !== undefined) throw new Error("boom");
+          return [{ name: "read", description: "global read" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string }[];
+      note?: string;
+    };
+    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.note).toContain("broken");
+    expect(presets.events.disposed).toEqual([presets.keys.broken]);
+  });
+
+  it("list_skills 并集 = 全局层 + 逐 preset scope 层（skills.list 携 cwd+scope），租约用后 dispose", async () => {
+    const presets = makePresetFace(["hr"]);
+    const calls: { cwd: string; scope?: string }[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => ({
+          list: async (opts: { cwd: string; scope?: object }) => {
+            calls.push(opts);
+            if (opts.scope === undefined) return [{ name: "review", description: "global review" }];
+            return [{ name: "review", description: "hr review" }, { name: "roundtable", description: "hr roundtable" }];
+          },
+        }),
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as {
+      skills: { name: string; description: string }[];
+      note?: string;
+    };
+    expect(result.skills).toEqual([
+      { name: "review", description: "global review" },
+      { name: "roundtable", description: "hr roundtable" },
+    ]);
+    expect(result.note).toBeUndefined();
+    expect(calls).toEqual([
+      { cwd: process.cwd() },
+      { cwd: process.cwd(), scope: presets.keys.hr },
+    ]);
+    expect(presets.events.disposed).toEqual([presets.keys.hr]);
+  });
+
+  it("agentPresets 缺席 → 降级仅全局视图 + note 注明（list_tools 与 list_skills 同径），不抛错", async () => {
+    const skillCalls: unknown[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => [{ name: "read", description: "global read" }],
+        skills: () => ({
+          list: async (opts: unknown) => {
+            skillCalls.push(opts);
+            return [{ name: "review", description: "global review" }];
+          },
+        }),
+      }).map((t) => [t.name, t]),
+    );
+    const toolsResult = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
+    expect(toolsResult.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(toolsResult.note).toContain("agentPresets");
+    const skillsResult = (await tools.list_skills!.execute({})) as { skills: { name: string }[]; note?: string };
+    expect(skillsResult.skills).toEqual([{ name: "review", description: "global review" }]);
+    expect(skillsResult.note).toContain("agentPresets");
+    expect(skillCalls).toEqual([{ cwd: process.cwd() }]);
+    const rendered = (tools.list_tools!.output.render({}, toolsResult)[0] as { text: string }).text;
+    expect(rendered).toContain("agentPresets");
+  });
+
+  it("agentPresets 形状不符（list/acquireScope 非函数）→ 同缺席降级", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => [{ name: "read", description: "global read" }],
+        agentPresets: () => ({ list: "not-a-function", acquireScope: () => {} }) as never,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
+    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.note).toContain("agentPresets");
+  });
+});

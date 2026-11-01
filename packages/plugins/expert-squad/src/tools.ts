@@ -164,14 +164,96 @@ const listSkillsResult = z.object({
   note: z.string().optional(),
 });
 
-/** 工具目录读取函数子面（ToolRuntime.schemas() 无 scope 全局视图）。 */
-export type ToolsSchemasReader = () =>
-  | readonly { readonly name: string; readonly description?: string }[]
-  | undefined;
+/** 工具目录读取函数子面（ToolRuntime.schemas(scope?)——缺 scope 全局视图，携
+ *  preset scope key = 该 preset 装配面视图；bug 6337a936 全模式并集取数面）。 */
+export type ToolsSchemasReader = (
+  scope?: object,
+) => readonly { readonly name: string; readonly description?: string }[] | undefined;
 
-/** 技能目录读取函数子面（ctx.skills.list({cwd})——AGENTS 1.6 调用点现查不 memoize）。 */
+/** 技能目录读取函数子面（ctx.skills.list({cwd, scope?})——AGENTS 1.6 调用点现查不 memoize）。 */
 export interface SkillsListFace {
-  list(opts: { cwd: string }): Promise<readonly { name: string; description?: string }[]>;
+  list(opts: { cwd: string; scope?: object }): Promise<readonly { name: string; description?: string }[]>;
+}
+
+/** preset scope 租约子面（官方 acquireScope 返回 `{key: ScopeKey} & AsyncDisposable`
+ *  的窄面——ScopeKey 为 opaque object（@deepseek-ai/dsh-scope），用后 dispose）。 */
+export interface PresetScopeLease {
+  readonly key: object;
+  dispose(): unknown;
+}
+
+/** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
+ *  AgentPresetRegistry.list()/acquireScope() 正门；全模式并集枚举缝）。 */
+export interface AgentPresetsFace {
+  list(): Promise<readonly { readonly id: string }[]>;
+  acquireScope(id?: string): Promise<PresetScopeLease>;
+}
+
+/** 目录条目（name+description 投影——并集去重单元）。 */
+interface CatalogEntry {
+  name: string;
+  description: string;
+}
+
+/** 并集去重合并（按 name 去重，description 取先见者——全局视图先入即全局优先）。 */
+function mergeCatalog(merged: Map<string, CatalogEntry>, rows: readonly { name: string; description?: string }[] | undefined): void {
+  for (const row of rows ?? []) {
+    if (!merged.has(row.name)) merged.set(row.name, { name: row.name, description: row.description ?? "" });
+  }
+}
+
+/** agentPresets face 形状校验（缺席/list-acquireScope 非函数 = 不可用，取用点现查）。 */
+function readAgentPresetsFace(face: AgentPresetsFace | undefined): AgentPresetsFace | undefined {
+  return face !== undefined &&
+    typeof face.list === "function" &&
+    typeof face.acquireScope === "function"
+    ? face
+    : undefined;
+}
+
+const PRESETS_ABSENT_NOTE =
+  "preset scope views unavailable (agentPresets absent or malformed) — global view only";
+
+/** 全模式并集取数（bug 6337a936）：全局视图先入，逐 preset acquireScope 租约内取
+ *  scope 视图合并；单 preset 失败不外溢（记 note 部分并集），租约 try/finally dispose。 */
+async function unionAcrossPresets(
+  readGlobal: () => readonly { name: string; description?: string }[] | undefined,
+  readScoped: (scope: object) => readonly { name: string; description?: string }[] | undefined | Promise<readonly { name: string; description?: string }[] | undefined>,
+  agentPresets: AgentPresetsFace | undefined,
+): Promise<{ entries: CatalogEntry[]; note?: string }> {
+  const merged = new Map<string, CatalogEntry>();
+  mergeCatalog(merged, readGlobal());
+  const presets = readAgentPresetsFace(agentPresets);
+  if (presets === undefined) {
+    return { entries: [...merged.values()], note: PRESETS_ABSENT_NOTE };
+  }
+  let ids: string[];
+  let note: string | undefined;
+  try {
+    ids = (await presets.list())
+      .map((preset) => preset.id)
+      .filter((id): id is string => typeof id === "string");
+  } catch {
+    return { entries: [...merged.values()], note: "agentPresets unavailable — global view only" };
+  }
+  const failed: string[] = [];
+  for (const id of ids) {
+    let lease: PresetScopeLease | undefined;
+    try {
+      lease = await presets.acquireScope(id);
+      mergeCatalog(merged, await readScoped(lease.key));
+    } catch {
+      failed.push(id);
+    } finally {
+      try {
+        lease?.dispose();
+      } catch {
+        // dispose 失败不掩盖取数结果（租约释放属官方回收面，非本工具职责）
+      }
+    }
+  }
+  if (failed.length > 0) note = `preset scope views failed: ${failed.join(", ")} — partial union`;
+  return { entries: [...merged.values()], note };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +379,8 @@ export interface ExpertToolsDeps {
   readonly toolsSchemas?: ToolsSchemasReader;
   /** 技能目录读取函数（每次 execute 现查返回 skills face——跨插件服务不 memoize）。 */
   readonly skills?: () => SkillsListFace | undefined;
+  /** 官方 agentPresets 服务取数面（每次 execute 现查——全模式并集枚举缝；缺席降级仅全局视图）。 */
+  readonly agentPresets?: () => AgentPresetsFace | undefined;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -533,17 +617,27 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
         const v = value as { tools: { name: string; description: string }[]; note?: string };
         const lines = v.tools.map((t) => `- ${t.name}${t.description ? ` — ${t.description}` : ""}`);
         const head = v.note ? `tools: ${v.note}` : `tools (${v.tools.length}):`;
-        return [text(v.note ? head : `${head}\n${lines.join("\n")}`)];
+        return [text(v.tools.length === 0 ? head : `${head}\n${lines.join("\n")}`)];
       },
     },
     async execute(args) {
       parseArgs("list_tools", listParams, args);
-      const schemas = deps.toolsSchemas?.();
-      if (schemas === undefined) {
+      const read = deps.toolsSchemas;
+      if (read === undefined) {
         return listToolsResult.parse({ tools: [], note: "tools catalog absent" });
       }
-      const tools = schemas.map((s) => ({ name: s.name, description: s.description ?? "" }));
-      return listToolsResult.parse({ tools });
+      // 全模式并集（bug 6337a936）：全局视图 + 逐 preset scope 视图（租约内取数，
+      // 用后 dispose）；agentPresets 缺席/形状不符降级仅全局视图 + note 注明。
+      const global = read();
+      if (global === undefined) {
+        return listToolsResult.parse({ tools: [], note: "tools catalog absent" });
+      }
+      const { entries, note } = await unionAcrossPresets(
+        () => global,
+        (scope) => read(scope),
+        deps.agentPresets?.(),
+      );
+      return listToolsResult.parse({ tools: entries, ...(note !== undefined ? { note } : {}) });
     },
   };
 
@@ -558,7 +652,7 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
         const v = value as { skills: { name: string; description: string }[]; note?: string };
         const lines = v.skills.map((s) => `- ${s.name}${s.description ? ` — ${s.description}` : ""}`);
         const head = v.note ? `skills: ${v.note}` : `skills (${v.skills.length}):`;
-        return [text(v.note ? head : `${head}\n${lines.join("\n")}`)];
+        return [text(v.skills.length === 0 ? head : `${head}\n${lines.join("\n")}`)];
       },
     },
     async execute(args) {
@@ -567,14 +661,18 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
       if (face === undefined || typeof face.list !== "function") {
         return listSkillsResult.parse({ skills: [], note: "skills service absent" });
       }
-      try {
-        const skills = await face.list({ cwd: process.cwd() });
-        return listSkillsResult.parse({
-          skills: skills.map((s) => ({ name: s.name, description: s.description ?? "" })),
-        });
-      } catch {
+      // 全模式并集（bug 6337a936，与 list_tools 同径）：全局层先入 + 逐 preset
+      // scope 层（skills.list 携 cwd+scope，租约内取数用后 dispose）；缺席降级注明。
+      const globalRows = await face.list({ cwd: process.cwd() }).catch(() => undefined);
+      if (globalRows === undefined) {
         return listSkillsResult.parse({ skills: [], note: "skills service unavailable" });
       }
+      const { entries, note } = await unionAcrossPresets(
+        () => globalRows,
+        async (scope) => await face.list({ cwd: process.cwd(), scope }),
+        deps.agentPresets?.(),
+      );
+      return listSkillsResult.parse({ skills: entries, ...(note !== undefined ? { note } : {}) });
     },
   };
 
