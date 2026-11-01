@@ -27,11 +27,12 @@
 #    apps/host/src/boot/overlay.ts）。
 #    dev 形态链 workspace 构建产物（package.json link: 四件——plugin-forge[-spec] 行
 #    保留链接：预设底稿行内增量行的 loader 解析锚）。──
+#    expert-squad 不在本块 insert——经自身 bundle 装载（package.json dsh.profile.bundles
+#    声明，dsh.client.inject 装配边承载；bundle 行 id=expert-squad，此处重复 insert
+#    即组合双行，settings 写核销 first-hit 恒拒不落盘）。──
 - insert:
     - id: dsh-forge-core
       name: '@dsh-forge/core'
-    - id: expert-squad
-      name: '@dsh-forge/expert-squad'
     - id: dsh-forge-knowledge
       name: '@dsh-forge/knowledge'
 - id: llm-pi-ai

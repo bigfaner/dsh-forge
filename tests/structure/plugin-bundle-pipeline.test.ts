@@ -52,8 +52,10 @@ describe('dev 启动 ensure 清单通用覆盖（bug 021d2655 回归守卫）', 
 
 // ── dev 形态装载面守卫：profile.dev 装载行 ↔ PRODUCT_PLUGINS / 预设携带集 漂移对账 ──
 // 事故类别 bc89637c：新增产品插件（userLayerRow）忘在 profile.dev/cordis.patch.yml 加
-// 装载行 → dev 实例该插件 404。本组断言对账三处装载通道：
+// 装载行 → dev 实例该插件 404。本组断言对账四条装载通道：
 //   · profile.dev 用户层 insert 行（手维文件，dev 直读）；
+//   · profile.dev bundle 声明（package.json dsh.profile.bundles——插件自带
+//     cordis.patch.yml insert 行装载，dsh.client.inject 装配边随 bundle 生效）；
 //   · boot overlay 在场门注行（apps/host/src/boot/overlay.ts——git-worktree 等门控行）；
 //   · 预设底稿携带行（presets/*.patch.yml——boot overlay 每启注行，dev 同径）。
 // 期望集 = PRODUCT_PLUGINS 全部 staged（非 staged:false kill-switch）插件 ∪ 预设携带插件。
@@ -69,6 +71,16 @@ function pluginLoadRowShorts(text: string): string[] {
   return [...shorts].sort()
 }
 
+/** profile.dev bundle 声明通道（package.json dsh.profile.bundles 的 @dsh-forge/<短名>）。 */
+function devBundleShorts(): string[] {
+  const pkg = JSON.parse(read('apps/host/profile.dev/package.json')) as {
+    dsh?: { profile?: { bundles?: string[] } }
+  }
+  return (pkg.dsh?.profile?.bundles ?? [])
+    .map((b) => /@dsh-forge\/([\w-]+)/.exec(b)?.[1])
+    .filter((s): s is string => s !== undefined)
+}
+
 /** 期望集（staged 非 kill-switch ∪ 预设携带）与实际集（profile.dev 行 ∪ overlay 注行）的对账差异。 */
 function devLoadDrift(expected: ReadonlySet<string>, actual: ReadonlySet<string>): { missing: string[]; ghost: string[] } {
   const missing = [...expected].filter((s) => !actual.has(s)).sort()
@@ -80,7 +92,10 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
   it('bug: 新增产品插件忘在 profile.dev 加装载行——staged ∪ 预设携带插件必须被 dev 三装载通道之一覆盖，缺行/幽灵行 fail-loud 报差异清单', () => {
     const devText = read('apps/host/profile.dev/cordis.patch.yml')
     const devRows = new Set(pluginLoadRowShorts(devText))
-    expect(devRows.size, 'profile.dev 应有 @dsh-forge/* 装载行（扫描失效即假绿）').toBeGreaterThan(0)
+    // bundle 声明通道并入实际集（expert-squad 判例：经自身 bundle 装载，用户层零行）
+    const bundleRows = new Set(devBundleShorts())
+    const devAll = new Set([...devRows, ...bundleRows])
+    expect(devAll.size, 'profile.dev 应有 @dsh-forge/* 装载行/声明（扫描失效即假绿）').toBeGreaterThan(0)
 
     // overlay 在场门注行（源码字面量扫描——与 overlay.ts 同源，行改名即红）
     const overlayRows = new Set(pluginLoadRowShorts(read('apps/host/src/boot/overlay.ts')))
@@ -101,7 +116,7 @@ describe('dev profile 装载行漂移守护（bug bc89637c 类别回归守卫）
     )
 
     const expected = new Set([...stagedNames, ...presetNames])
-    const actual = new Set([...devRows, ...overlayRows, ...presetRows])
+    const actual = new Set([...devAll, ...overlayRows, ...presetRows])
     const { missing } = devLoadDrift(expected, actual)
     expect(missing, `staged/预设携带插件在 dev 无任何装载通道（dev 实例 404——补 profile.dev 行或 overlay/预设行）：${missing.join(', ')}`).toEqual([])
 
