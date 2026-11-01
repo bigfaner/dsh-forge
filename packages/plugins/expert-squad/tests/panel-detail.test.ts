@@ -657,7 +657,8 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     const ctl = new ExpertDetailController({
       update: async (_name, draft) => {
         updates.push(draft);
-        return entry();
+        // 回包 = 换新视图（registry.refresh 后 list 透出，恒携 instanceId）
+        return entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView);
       },
       writeExpertsConfig: async (instanceId, patch) => {
         writes.push([instanceId, patch]);
@@ -687,10 +688,39 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
     expect(ctl.getSnapshot().toast).toContain("热刷新生效");
   });
 
+  it("保存（配置缝在场，bug 66908627）：update 回包实例 ID 漂移（内置被 user 层副本遮蔽）→ 配置写键随换新视图", async () => {
+    const writes: [string, unknown][] = [];
+    const ctl = new ExpertDetailController({
+      // 内置专家编辑：内容半 update 生成 user 层档案副本 + refresh → 回包实例 ID 已漂移
+      update: async () =>
+        entry({ instanceId: "layer:user#code-reviewer" } as Partial<ExpertView> as ExpertView),
+      writeExpertsConfig: async (instanceId, patch) => {
+        writes.push([instanceId, patch]);
+      },
+    });
+    ctl.open(entry({ instanceId: "@dsh-forge/plugin-forge#code-reviewer" } as Partial<ExpertView> as ExpertView));
+    ctl.startEdit();
+    ctl.setField("provider", "deepseek");
+    ctl.setField("model", "reasoner");
+    await ctl.save();
+    // 配置键 = 档案落地后的生效实例（layer:user#…），非保存时点被遮蔽的内置实例——
+    // 否则条目挂在被遮蔽实例上，list 折叠取不到 → chip 显「继承父Agent」显示失真。
+    expect(writes).toEqual([
+      [
+        "layer:user#code-reviewer",
+        {
+          agentOptions: { provider: "deepseek", model: "reasoner" },
+          tools: ["read", "edit"],
+        },
+      ],
+    ]);
+  });
+
   it("保存（配置缝在场）：清空路由 → experts 条目键归缺（回退档案值），档案载荷不带路由", async () => {
     const writes: unknown[] = [];
     const ctl = new ExpertDetailController({
-      update: async () => entry({ provider: "deepseek", model: "reasoner" }),
+      update: async () =>
+        entry({ instanceId: "layer:project#code-reviewer", provider: "deepseek", model: "reasoner" }),
       writeExpertsConfig: async (_id, patch) => {
         writes.push(patch);
       },
@@ -727,7 +757,7 @@ describe("experts 条目写径（1.5：Agent选项+工具写 experts，内容不
 
   it("保存（配置缝在场）：配置半写失败 = 停留编辑态 + Toast 透出错误", async () => {
     const ctl = new ExpertDetailController({
-      update: async () => entry(),
+      update: async () => entry({ instanceId: "layer:user#x" } as Partial<ExpertView> as ExpertView),
       writeExpertsConfig: async () => {
         throw new Error("config rejected");
       },
@@ -772,7 +802,10 @@ describe("writeExpertsConfig 生产装配缝（bug 5cf9768e）", () => {
     const writes: [string, unknown][] = [];
     const fetchMock = vi.fn(async (input: unknown, _init?: { body?: unknown }) => {
       if (String(input) === "/api/expert-squad/update") {
-        return new Response(JSON.stringify(entry()), { status: 200 });
+        return new Response(
+          JSON.stringify(entry({ instanceId: "@dsh-forge/expert-squad#code-reviewer" })),
+          { status: 200 },
+        );
       }
       throw new Error("unexpected fetch: " + String(input));
     });

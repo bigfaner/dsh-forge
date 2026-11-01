@@ -308,7 +308,10 @@ export class ExpertDetailController {
           current.expert.name,
           archiveContentWireOf(current.draft, current.expert),
         );
-        await this.writeConfigOrThrow(current.expert, current.draft);
+        // 配置键取 update 回包的换新视图（bug 66908627 根因级：内置专家被 user 层
+        // 副本遮蔽时生效实例 ID 已漂移——按保存时点旧键写条目会挂在被遮蔽实例上，
+        // list 折叠取不到 → chip 显「继承父Agent」显示失真）。双写两侧同锚。
+        await this.writeConfigOrThrow(updated, current.draft);
         // 所见即所得补折（list 轮询前的即时呈现）：update 回包档案半未含 experts 折叠——
         // 条目有值的位就地覆盖（清空位保留 update 回包的档案值 = 回退语义同构）。
         const patch = expertsEntryOf(current.draft);
