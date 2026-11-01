@@ -329,8 +329,10 @@ export async function claimTask(deps: TasksVerbDeps, input: ClaimTaskInput): Pro
     try {
       const claimVars = row.vars_json !== null ? (JSON.parse(row.vars_json) as Record<string, string>) : undefined
       const expertKey = typeof claimVars?.expert === 'string' && claimVars.expert !== '' ? claimVars.expert : undefined
-      resolvedExpertKey = expertKey
       const profile = await deps.resolveExpertProfile?.(row.task_type, expertKey)
+      // 两径合一（bug 17734753）：变量路由键优先，缺席回落档案解析注解的最终生效键（类型映射径）；
+      // 两者皆无（无档案程序段 persona 形态兼容）= 缺省不阻断。
+      resolvedExpertKey = expertKey ?? profile?.expertKey
       const persona =
         profile === undefined
           ? composePersona(row.task_type as TaskType, complexity)

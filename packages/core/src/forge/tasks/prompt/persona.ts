@@ -144,6 +144,9 @@ export interface ExpertPersonaProfile {
   readonly name: string
   readonly title?: string
   readonly personaMd: string
+  /** 取用面注解（bug 17734753）：本次解析最终生效的专家键——变量路由或类型映射命中；
+   *  无档案/无映射命中（程序段 persona 形态兼容）= 缺省。仅 claim 结果带回消费。 */
+  readonly expertKey?: string
 }
 
 /** 档案人格段（身份头 + personaMd 正文——职责/边界/信条三段，type 级人格内容承载面） */

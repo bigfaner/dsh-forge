@@ -584,6 +584,9 @@ export interface ForgeExpertProfile {
   readonly provider?: string
   /** experts 服务折叠应答档位（①条目 > ②frontmatter > ③defaultAgentOptions；缺省不下发） */
   readonly reasoning?: 'low' | 'medium' | 'high'
+  /** 取用面注解（bug 17734753）：本次解析最终生效的专家键（变量路由 > settings 覆盖 >
+   *  随包预设映射）；仅 claim 结果带回消费，persona/spawn 组装面不读。 */
+  readonly expertKey?: string
 }
 
 /**
@@ -606,7 +609,8 @@ export interface WorkerDispatchProfile {
  *  映射）。三段均缺键 = 返回 undefined（expert-squad-forge 1.13——未用类型排除预设，不取
  *  用不阻断 claim，core 侧 persona 仅程序段形态兼容）。settings 读失败 = 回落预设映射
  *  （fail-soft 诊断）；有键（变量/用户覆盖/随包预设命中）而档案缺失/禁用 = experts.get 错
- *  误原样外抛（claim 期 fail-loud——变量键拼错同样阻断派发且消息含键名，任务留 pending）。 */
+ *  误原样外抛（claim 期 fail-loud——变量键拼错同样阻断派发且消息含键名，任务留 pending）。
+ *  命中档案时生效键以 expertKey 注解随档案带回（bug 17734753——claim 两径合一取回）。 */
 export type ExpertProfileResolver = (taskType: string, expertKey?: string) => Promise<ForgeExpertProfile | undefined>
 
 /** 建档案取用面（装配单例——core claim 链经依赖注入消费；experts 缺席 = undefined 不注入） */
@@ -650,6 +654,8 @@ export function createExpertProfileResolver(deps: {
       ...(entry.model !== undefined ? { model: entry.model } : {}),
       ...(entry.provider !== undefined ? { provider: entry.provider } : {}),
       ...(entry.reasoning !== undefined ? { reasoning: entry.reasoning } : {}),
+      // 生效键随档案带回（bug 17734753——类型映射径 expertKey 进 ClaimTaskResult 的解析点）
+      ...(key !== undefined ? { expertKey: key } : {}),
     }
   }
 }

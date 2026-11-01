@@ -246,6 +246,43 @@ describe('claim 变量路由（expert-squad-forge-2）：任务变量 expert 键
     const noKey = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.4' }, sessionId: 's2' })
     expect('expertKey' in noKey).toBe(false)
   })
+  /** 档案注解型取用面（类型映射径——返回档案携带生效键注解 expertKey；首笔注解、次笔裸档案） */
+  function svcProfileAnnotated() {
+    h ??= createTasksHarness()
+    let calls = 0
+    const resolveExpertProfile = async (_taskType: string, _expertKey?: string) => {
+      calls += 1
+      return {
+        name: 'doc-writer',
+        personaMd: '档案正文。',
+        ...(calls === 1 ? { expertKey: 'tech-writer' } : {}),
+      }
+    }
+    return {
+      claim: (input: Parameters<typeof claimTask>[1]) =>
+        claimTask({ store: h!.store, events: h!.events, resolveExpertProfile }, input),
+    }
+  }
+
+  it('类型映射径专家键随结果带回（bug 17734753）：变量缺席时档案解析生效键（expertKey 注解）进 ClaimTaskResult；档案无注解 = 字段缺省（程序段 persona 形态兼容不阻断）', async () => {
+    const s = svcProfileAnnotated()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '9.5', { type: 'doc' }) // 变量缺席 → 类型映射径命中档案
+    const mapped = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.5' }, sessionId: 's1' })
+    expect(mapped.expertKey).toBe('tech-writer')
+    seedTask(h!.db, 'f', '9.6', { type: 'doc' }) // 档案无注解（无档案程序段兼容同形）
+    const bare = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.6' }, sessionId: 's2' })
+    expect('expertKey' in bare).toBe(false)
+  })
+
+  it('变量在场优先（键随变量带回不读注解）', async () => {
+    const s = svcProfileAnnotated()
+    seedFeature(h!.db, { slug: 'f', status: 'tasks' })
+    seedTask(h!.db, 'f', '9.7', { type: 'doc' })
+    h!.db.prepare(`UPDATE tasks SET vars_json = ? WHERE id = 't-f-9.7'`).run(JSON.stringify({ expert: 'retro-reviewer' }))
+    const viaVar = await s.claim({ projectId: P(), taskRef: { slug: 'f', localId: '9.7' }, sessionId: 's1' })
+    expect(viaVar.expertKey).toBe('retro-reviewer')
+  })
 })
 
 describe('AC1 就绪选择（§6-35⑧）：分支延续优先 → priority → 创建序', () => {

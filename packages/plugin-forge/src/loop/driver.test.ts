@@ -2693,6 +2693,40 @@ describe('1.17 进度事件发射（领取/结算/状态迁移点——非模型
     }
   })
 
+  it('expertKey 填充·类型映射径（bug 17734753）：claim 经类型映射解析带回的专家键同样随携带任务键的事件回填；未解析（程序段 persona 形态兼容）= 零字段旧兼容', async () => {
+    // 类型映射径：claim 结果携带解析生效键（变量缺席、映射命中）——事件行回填同径
+    const built = build({
+      claim: [{ ...claimed(), expertKey: 'tech-writer' }, NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    for (const scenario of ['claim/new', 'claim/spawned', 'task/complete']) {
+      const evt = built.progressCalls.find((e) => e.scenario === scenario)
+      expect(evt?.expertKey, scenario).toBe('tech-writer')
+    }
+    // 旧兼容：claim 未解析出专家键（无档案程序段 persona 形态）→ 全部事件零 expertKey 字段
+    const bare = build({
+      claim: [claimed(), NO_TASK],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
+    })
+    await bare.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(bare.driver)
+    expect(bare.progressCalls.every((e) => e.expertKey === undefined)).toBe(true)
+  })
+
   it('bug 3bd8b829：spawn 成功后补发领取确认事件（claim/spawned——载荷含 taskKey/taskTitle/workerSessionId；claim 原事件时序语义不变）', async () => {
     const built = build({
       claim: [claimed(), NO_TASK],

@@ -1,10 +1,10 @@
 // 消息面事件折叠条目组节点数据面（定位：业务——loop-event-delivery 1.9；壳树自持纯模块）。
 // 边界纪律（1.17 forge-progress-data 先例）：守卫归唯一 runtime 消费者（壳树视图），
 // client 树零引用（定义面数据透传 unknown 不窄读）。
-// 数据纪律：形状防御（client-plugin forgeEventGroupDefinition.buildViewNode data 形状
-// 同语义镜像——他形不猜不抛，组件 null 收口零残留）。
+// 数据纪律：形状防御（client-plugin forgeEventGroupDefinition.buildViewNode data 窄收投影
+// 镜像——仅投影视图所需字段，实态缺 turnId 等未投影位；他形不猜不抛，组件 null 收口零残留）。
 
-/** 组内单条事件条目（client-plugin ForgeEventEntry 形状镜像） */
+/** 组内单条事件条目（client-plugin ForgeEventEntry 窄收投影镜像） */
 export interface ForgeEventEntryData {
   readonly id: string
   readonly seq: number
@@ -15,7 +15,7 @@ export interface ForgeEventEntryData {
   readonly text: string
 }
 
-/** 组块节点 data（buildViewNode data 形状镜像） */
+/** 组块节点 data（buildViewNode data 窄收投影镜像） */
 export interface ForgeEventGroupData {
   readonly key: string
   readonly firstSeq: number
@@ -27,7 +27,7 @@ export interface ForgeEventGroupData {
   readonly progress?: readonly ForgeProgressEntryData[]
 }
 
-/** 组内单条 'forge/progress' 事件条目（client-plugin ForgeProgressEntry 形状镜像） */
+/** 组内单条 'forge/progress' 事件条目（client-plugin ForgeProgressEntry 窄收投影镜像——实态含 turnId，此处不投影） */
 export interface ForgeProgressEntryData {
   readonly seq: number
   readonly sourceSlug: string
