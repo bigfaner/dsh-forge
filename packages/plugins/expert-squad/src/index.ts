@@ -304,7 +304,9 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       const manager = new ExpertWatchManager(rootsFor(workspace), {
         onInvalidated: () => enqueueRefresh(workspace, registry),
         onWarn: (message) => diag("warn", "expert-squad-watch-degraded", message),
-        onError: (error) => diag("warn", "expert-squad-watch-error", String(error)),
+        // onError = openWatcher 抛异常（watch 通道对 workspace 实际失败，非降级形态）
+        // ——定级 error（diag-milestone-coverage 方案 8：错误径不降 warn）。
+        onError: (error) => diag("error", "expert-squad-watch-error", String(error)),
       });
       watchManagers.set(workspace, manager);
       ctx.effect(() => () => void manager.dispose());
