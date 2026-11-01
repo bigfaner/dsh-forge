@@ -161,14 +161,17 @@ export function invalidateResolveCaches(projectRoot?: string): void {
 const worktreeNameOf = (path: string): string => path.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? path
 
 /** unborn HEAD 分支名缺省探测（git symbolic-ref --short HEAD——真机 git execFile；失败 null） */
-const defaultSymbolicRefOf = async (worktreePath: string): Promise<string | null> => {
+const defaultSymbolicRefOf = async (worktreePath: string, onDebug?: (message: string) => void): Promise<string | null> => {
   try {
     const { stdout } = await promisify(execFile)('git', ['-C', worktreePath, 'symbolic-ref', '--short', 'HEAD'], {
       windowsHide: true,
     })
     const branch = stdout.trim()
     return branch === '' ? null : branch
-  } catch {
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：探测失败 = null 落空显式拒原语义（调用方归 ''
+    // 显式拒），行为零影响——debug 级留痕不静默（缝缺席零 emit 不兜底）。
+    onDebug?.(`[git-worktree] symbolic-ref 探测失败（null 落空显式拒原语义）：${worktreePath}：${String(cause)}`)
     return null
   }
 }
@@ -192,7 +195,11 @@ export type AclRunner = (file: string, args: string[], opts?: { timeout?: number
 const defaultAclRunner: AclRunner = async (file, args, opts) =>
   (await promisify(execFile)(file, args, { windowsHide: true, ...opts })).stdout
 
-const defaultEnsureDirAcl = async (path: string, run: AclRunner = defaultAclRunner): Promise<void> => {
+const defaultEnsureDirAcl = async (
+  path: string,
+  run: AclRunner = defaultAclRunner,
+  onDebug?: (message: string) => void,
+): Promise<void> => {
   if (process.platform !== 'win32') return
   const user = `${process.env.USERDOMAIN ?? ''}\\${process.env.USERNAME ?? ''}`
   if (user === '\\') return
@@ -208,8 +215,10 @@ const defaultEnsureDirAcl = async (path: string, run: AclRunner = defaultAclRunn
       return !l.includes('(DENY)') && l.startsWith(prefix) && l.includes('(OI)(CI)') && l.includes('(F)')
     })
     if (granted) return
-  } catch {
-    // 只读失败走 grant 兜底（超时上界保护）——现行 fail-soft 语义不变
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：只读失败走 grant 兜底（超时上界保护）——现行
+    // fail-soft 语义不变，行为零影响——debug 级留痕不静默（缝缺席零 emit 不兜底）。
+    onDebug?.(`[git-worktree] DACL 只读探测失败（走 grant 兜底，fail-soft 语义不变）：${path}：${String(cause)}`)
   }
   await run('icacls', [path, '/grant', `${user}:(OI)(CI)F`], { timeout: ACL_GRANT_TIMEOUT_MS })
 }
@@ -261,6 +270,9 @@ export function createWorktreeRpcService(deps: {
   /** 留痕 append 失败诊断 emit 缝（binding-derivation §2.6 session-bind 域，warn 级——AC：
    *  append 失败 fail-soft + emitDiag('session-bind', warn)）；缺席 = 零 emit。 */
   readonly bindWarnDiag?: (message: string) => void
+  /** 豁免补点 debug emit 缝（diag-milestone-coverage——吞没豁免点 debug 级留痕，event 前缀
+   *  worktree-git；级别门默认关、诊断时开；缺席 = 零 emit 不 console 兜底）。 */
+  readonly debugDiag?: (message: string) => void
   /** bind-drift 漂移埋点 emit 缝（binding-derivation §2.6，info 级——触发与消除边沿各一条，
    *  携带 sessionId/cwd/两侧分支名）；缺席 = 零 emit。 */
   readonly bindDriftDiag?: (message: string) => void
@@ -314,7 +326,10 @@ export function createWorktreeRpcService(deps: {
   const liveOf = (): { get(id: string): LiveSessionFace | undefined } | undefined => {
     try {
       return typeof deps.liveSessions === 'function' ? deps.liveSessions() : deps.liveSessions
-    } catch {
+    } catch (cause) {
+      // 豁免补点（diag-milestone-coverage）：活根解析缺席 = 留痕降级跳过（fail-soft，主链
+      // 零影响）——debug 级留痕不静默（缝缺席零 emit 不兜底）。
+      deps.debugDiag?.(`[git-worktree] 活会话解析失败（留痕降级跳过，fail-soft）：${String(cause)}`)
       return undefined
     }
   }
@@ -396,7 +411,10 @@ export function createWorktreeRpcService(deps: {
         ...(typeof parentSession === 'string' && parentSession !== '' ? { parentSession } : {}),
       }
       await handle?.close?.()
-    } catch {
+    } catch (cause) {
+      // 补点（diag-milestone-coverage）：头切片读失败 = cwd/parentSession 零注入——留痕前台
+      // 触发与 seal 判定对该会话降级，非零影响 → warn 不静默（缓存空切片，单会话单条）。
+      warn(`[git-worktree] 会话头切片读取失败（cwd/parentSession 零注入，绑定面降级）：sessionId=${sessionId}：${String(cause)}`)
       header = {}
     }
     headerMemo.set(sessionId, header)
@@ -493,7 +511,10 @@ export function createWorktreeRpcService(deps: {
         let found: string | null = null
         try {
           found = (await readLatestWorktreeBind(request.sessionId, readFactory))?.branch ?? null
-        } catch {
+        } catch (cause) {
+          // 补点（diag-milestone-coverage）：留痕读失败按「有留痕=当前」降级——漂移校验本次
+          // 跳过（路由不受影响但漂移不警示），非零影响 → warn 不静默（memo 钉单会话单条）。
+          warn(`[git-worktree] 留痕读失败（按有留痕=当前降级，漂移校验本次跳过）：sessionId=${request.sessionId} cwd=${cwd}：${String(cause)}`)
           found = branch // 读失败降级（不补写——漂移校验按无漂移走，路由不受影响）
         }
         if (found === null) {
@@ -513,8 +534,10 @@ export function createWorktreeRpcService(deps: {
         deps.bindDriftDiag?.(line)
         try {
           deps.bindingMismatchEmit?.({ sessionId: request.sessionId, cwd, bindBranch, branch, drifted })
-        } catch {
-          // 推送失败不反压 seal 判定链（fail-soft）
+        } catch (cause) {
+          // 豁免补点（diag-milestone-coverage）：推送失败不反压 seal 判定链（fail-soft），
+          // 判定结果仍随响应返回、bindDriftDiag 已留痕——行为零影响 → debug 级留痕。
+          deps.debugDiag?.(`[git-worktree] binding-mismatch 推送失败（不反压判定链，fail-soft）：sessionId=${request.sessionId}：${String(cause)}`)
         }
       }
       driftMemo.set(request.sessionId, drifted)
@@ -550,7 +573,7 @@ export function createWorktreeRpcService(deps: {
     const listed = entries.find((row) => norm(row.path) === norm(worktreePath))?.branch
     if (listed !== undefined && listed !== null && listed !== '') return listed
     // unborn HEAD 兜底：symbolic-ref 取 HEAD 指向的分支短名（null/探测失败一律归 '' 落空显式拒）
-    const probe = deps.symbolicRefOf ?? defaultSymbolicRefOf
+    const probe = deps.symbolicRefOf ?? ((p: string) => defaultSymbolicRefOf(p, deps.debugDiag))
     return (await probe(worktreePath).catch(() => '')) ?? ''
   }
 
@@ -579,7 +602,11 @@ export function createWorktreeRpcService(deps: {
         if (registry === undefined) return undefined
         try {
           return (await registry.resolveByPath?.(path))?.id
-        } catch {
+        } catch (cause) {
+          // 豁免补点（diag-milestone-coverage）：resolveByPath 失败 = undefined 零注入（盘上
+          // 缺席陈旧行跳过——bug 63180253 同径零 ENOENT 空转），行为零影响 → debug 级留痕
+          // （高频 ENOENT 面，warn 会成噪音）。
+          deps.debugDiag?.(`[git-worktree] workspaceId 解析失败（undefined 零注入，fail-soft）：${path}：${String(cause)}`)
           return undefined
         }
       }
@@ -622,7 +649,7 @@ export function createWorktreeRpcService(deps: {
       try {
         if (!existsSync(request.path)) mkdirSync(request.path, { recursive: true })
         if (readdirSync(request.path).length === 0) {
-          await (deps.ensureDirAcl ?? defaultEnsureDirAcl)(request.path).catch((cause: unknown) => {
+          await (deps.ensureDirAcl ?? ((p: string) => defaultEnsureDirAcl(p, defaultAclRunner, deps.debugDiag)))(request.path).catch((cause: unknown) => {
             warn(`[git-worktree] 预铸目录 ACL 补权失败（fail-soft——沙箱拒绝时走 diagnose 技能）：${String(cause)}`)
           })
         }

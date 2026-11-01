@@ -198,7 +198,10 @@ async function deriveTaskStoreDirVerb(
     // 配置缺口非用户态错误——fail-loud 普通错误（3.4 前装配面缺席；不扩六码 typed 面）
     throw new Error('deriveTaskStoreDir 不可用：tasksHome 未注入（core config tasksHome 字段——3.4 装配）')
   }
-  const workspaceDir = await canonicalizeDir(q.workspaceDir)
+  const workspaceDir = await canonicalizeDir(
+    q.workspaceDir,
+    (m) => debugDiagEmit(deps.onDiag, 'project-register', m),
+  )
   const collision = classifyRegistrationCollision(deps.tasksHome, workspaceDir)
   // fix：present（推导目录在场且 hash 一致——推导==既有逐字同）= 幂等复用候选 → 放行返回 dir。
   // 中央 ws_path 精确确认归注册闭包（§6-33）——预检纯读位不再误抛 ERR_SUSPECTED_MOVE
@@ -237,16 +240,30 @@ function isForgeDirExternal(wsPath: string, forgeDir: string): boolean {
   return rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)
 }
 
+/** 豁免补点 debug 发射缝（diag-milestone-coverage——onDiag 在场才 emit debug，缺席零 emit 不 console 兜底） */
+function debugDiagEmit(
+  onDiag: ProjectServiceDeps['onDiag'],
+  event: string,
+  message: string,
+  projectId?: string,
+): void {
+  if (onDiag === undefined) return
+  emitDiagOrFallback(onDiag, { level: 'debug', event, message, ...(projectId !== undefined ? { projectId } : {}) })
+}
+
 /**
  * fix-30 入口归一：可达则 realpath（磁盘真值拼写——盘符大小写/8.3 短名/symlink 全展开，
  * 与 dsh registry.create 的 canonical 化同基准），失败回退原拼写（fail-soft：网络盘等
  * 不可达场景零变化）。归一只统一比对与输入基准，不产生落库形态——ws_path 落库恒以
  * ② registry 返回的 canonical 为准。
  */
-async function canonicalizeDir(p: string): Promise<string> {
+async function canonicalizeDir(p: string, debug?: (message: string) => void): Promise<string> {
   try {
     return await realpath(p)
-  } catch {
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：不可达回退原拼写 = fail-soft 零变化（dsh 侧
+    // canonical 化同基准承接），行为零影响——debug 级留痕不静默。
+    debug?.(`project-register 目录 realpath 失败（fail-soft 回退原拼写）：${p}：${errMessage(cause)}`)
     return p
   }
 }
@@ -365,14 +382,16 @@ async function registerProject(deps: ProjectServiceDeps, input: RegisterProjectI
 
   // fix-30 入口归一：注册输入（workspaceDir/forgeDir/knowledgeDir）可达则 realpath——拼写
   // 变体在进 ① 预检/自愈查询前收敛到磁盘真值拼写；比对口径 = normalizeFsPath 同源键
+  const canonicalize = (p: string): Promise<string> =>
+    canonicalizeDir(p, (m) => debugDiagEmit(deps.onDiag, 'project-register', m))
   const canonicalInput: RegisterProjectInput = {
     ...input,
-    workspaceDir: await canonicalizeDir(input.workspaceDir),
-    forgeDir: await canonicalizeDir(input.forgeDir),
-    knowledgeDir: await canonicalizeDir(input.knowledgeDir),
+    workspaceDir: await canonicalize(input.workspaceDir),
+    forgeDir: await canonicalize(input.forgeDir),
+    knowledgeDir: await canonicalize(input.knowledgeDir),
     // 1.6：worktree 目录配置透传（可达则 realpath 同归一口径）；未输入 = undefined——
     // 默认值落库归 ③（以 ② registry canonical ws_path 派生，杜绝默认值演进漂移）。
-    worktreeDir: input.worktreeDir === undefined ? undefined : await canonicalizeDir(input.worktreeDir),
+    worktreeDir: input.worktreeDir === undefined ? undefined : await canonicalize(input.worktreeDir),
   }
 
   // 1.5 身份归并层（attachExistingRow 之前——其按 ws_path 比对不会命中 worktree 路径）：
@@ -578,8 +597,14 @@ async function mergeSameAnchorProject(
           disposition: '降级现行链——归并放弃，注册由既有链承接',
         },
       })
-    } catch {
-      // 库不可用时记账亦不可行：吞掉——降级语义零变化
+    } catch (logCause) {
+      // 补点（diag-milestone-coverage）：记账失败 = 归并失败留痕全失（库不可用）——warn emit
+      // 不静默（降级语义零变化，diag 域补一条可查行）。
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'warn',
+        event: 'project-reconcile',
+        message: `身份归并层失败记账降级（库不可用）：${input.workspaceDir}——归并失败：${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+      })
     }
     return undefined
   }
@@ -633,8 +658,14 @@ async function attachExistingRow(
           disposition: '降级现行链——自愈放弃，错误面由 ③ 写入失败径承接',
         },
       })
-    } catch {
-      // 库不可用时记账亦不可行：吞掉（与对账整体降级面同口径）
+    } catch (logCause) {
+      // 补点（diag-milestone-coverage）：记账失败 = 自愈失败留痕全失（库不可用）——warn emit
+      // 不静默（降级语义零变化，错误面仍由 ③ 承接，diag 域补一条可查行）。
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'warn',
+        event: 'project-reconcile',
+        message: `重注册自愈面失败记账降级（库不可用）：${input.workspaceDir}——自愈失败：${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+      })
     }
     return undefined
   }
@@ -855,8 +886,14 @@ async function reconcileAtStartup(deps: ProjectServiceDeps): Promise<ReconcileRe
         message: `启动对账整体失败（已降级，不阻断启动）：${errMessage(cause)}`,
         data: { error: errMessage(cause), disposition: '整体降级——本次对账中止，启动流程继续' },
       })
-    } catch {
-      // 库不可用时记账亦不可行：吞掉——启动优先于记账（AC5）
+    } catch (logCause) {
+      // 补点（diag-milestone-coverage）：记账失败 = 启动对账整体失败留痕全失——warn emit
+      // 不静默（启动优先于记账的 AC5 口径零变化，diag 域补一条可查行）。
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'warn',
+        event: 'project-reconcile',
+        message: `启动对账整体失败记账降级（库不可用）——对账失败：${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+      })
     }
   }
   return Promise.resolve(report)
@@ -886,8 +923,14 @@ async function reconcileRowDegrade(
           disposition: '单项降级跳过——引用未修，启动继续（下次启动重试对账）',
         },
       })
-    } catch {
-      // 记账亦失败——吞掉（对账优先于记账：剩余行继续，AC5 口径）
+    } catch (logCause) {
+      // 补点（diag-milestone-coverage）：记账失败 = 单项失败留痕全失——warn emit 不静默
+      // （对账优先于记账的 AC5 口径零变化——剩余行继续，diag 域补一条可查行）。
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'warn',
+        event: 'project-reconcile',
+        message: `对账单项失败记账降级（库不可用）：项目 ${row.id}（${row.ws_path}）——单项失败：${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+      })
     }
   }
 }

@@ -102,23 +102,32 @@ export interface DiscoveryDeps {
 
 // ───────────────────────── 只读文件面助手（SC3：零写入） ─────────────────────────
 
+/** 豁免补点 debug 发射缝（diag-milestone-coverage——可选注入；缺席 = 零 emit 不兜底） */
+type DiscoveryDebug = ((message: string) => void) | undefined
+
 /** 列子目录名（字母序确定性；符号链接不跟随——目录形态才算约定条目；缺席/不可读 → 空集静默） */
-function listDirs(absDir: string): string[] {
+function listDirs(absDir: string, debug?: DiscoveryDebug): string[] {
   try {
     return readdirSync(absDir, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
       .sort()
-  } catch {
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：目录缺席 = 约定形态未采用（零目录），不可读 =
+    // fail-soft 空集——行为零影响，debug 级留痕不静默。
+    debug?.(`discovery 目录列举未命中（fail-soft 空集）：${absDir}：${errMessage(cause)}`)
     return []
   }
 }
 
 /** 常规文件在场判定 */
-function fileExists(absPath: string): boolean {
+function fileExists(absPath: string, debug?: DiscoveryDebug): boolean {
   try {
     return statSync(absPath).isFile()
-  } catch {
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：在场探测 false = 常态缺席语义（无锚点文件不计），
+    // 行为零影响——debug 级留痕不静默。
+    debug?.(`discovery 文件探测未命中（fail-soft false）：${absPath}：${errMessage(cause)}`)
     return false
   }
 }
@@ -126,11 +135,15 @@ function fileExists(absPath: string): boolean {
 /** 严格 UTF-8 解码器（非 UTF-8 → fatal 抛错） */
 const utf8Fatal = new TextDecoder('utf-8', { fatal: true })
 
-function readUtf8(absPath: string): { ok: true; text: string } | { ok: false; reason: string } {
+function readUtf8(absPath: string, debug?: DiscoveryDebug): { ok: true; text: string } | { ok: false; reason: string } {
   try {
     return { ok: true, text: utf8Fatal.decode(readFileSync(absPath)) }
-  } catch {
-    return { ok: false, reason: '非 UTF-8 编码（解码失败）' }
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：ok:false + reason 已向调用方显式回传（跳过该文件
+    // 记 warn），非静默——debug 级留痕补充原始错误细节（reason 为归一文案，不带 cause）。
+    const reason = '非 UTF-8 编码（解码失败）'
+    debug?.(`discovery 文件读取失败（ok:false 已回传调用方）：${absPath}：${reason}：${errMessage(cause)}`)
+    return { ok: false, reason }
   }
 }
 
@@ -217,17 +230,17 @@ interface ScannedFeature {
 }
 
 /** docs/proposals/<slug>/proposal.md 扫描：畸形/非 UTF-8 → 跳过该文件（提案不建档）+ warn */
-function scanProposals(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void): ScannedProposal[] {
+function scanProposals(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void, debug?: DiscoveryDebug): ScannedProposal[] {
   const out: ScannedProposal[] = []
   const proposalsRoot = join(forgeDir, 'docs', 'proposals')
-  for (const name of listDirs(proposalsRoot)) {
+  for (const name of listDirs(proposalsRoot, debug)) {
     if (!isLegalSlugDirName(name)) {
       warn({ target: `docs/proposals/${name}/`, reason: '非法目录名', disposition: '跳过该目录（不阻断其余吸收）' })
       continue
     }
     const rel = `docs/proposals/${name}/proposal.md`
-    if (!fileExists(join(proposalsRoot, name, 'proposal.md'))) continue // 无约定锚点文件 = 非约定形态，静默不计
-    const text = readUtf8(join(proposalsRoot, name, 'proposal.md'))
+    if (!fileExists(join(proposalsRoot, name, 'proposal.md'), debug)) continue // 无约定锚点文件 = 非约定形态，静默不计
+    const text = readUtf8(join(proposalsRoot, name, 'proposal.md'), debug)
     if (!text.ok) {
       warn({ target: rel, reason: text.reason, disposition: '跳过该文件（提案未建档）' })
       continue
@@ -251,18 +264,18 @@ function scanProposals(forgeDir: string, warn: (e: DiscoverySkippedEntry) => voi
  * docs/features/<slug>/ 目录扫描：目录在场 = 特性行建档依据（manifest 只供初值，best-effort——
  * 畸形/非 UTF-8 → 跳过该文件记 warn，特性行按缺省建档）；七类文档按精确路径在场判定（不解析内容）。
  */
-function scanFeatures(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void): ScannedFeature[] {
+function scanFeatures(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void, debug?: DiscoveryDebug): ScannedFeature[] {
   const out: ScannedFeature[] = []
   const featuresRoot = join(forgeDir, 'docs', 'features')
-  for (const name of listDirs(featuresRoot)) {
+  for (const name of listDirs(featuresRoot, debug)) {
     if (!isLegalSlugDirName(name)) {
       warn({ target: `docs/features/${name}/`, reason: '非法目录名', disposition: '跳过该目录（不阻断其余吸收）' })
       continue
     }
     const rel = `docs/features/${name}/manifest.md`
     let fm: ThinFrontmatter = {}
-    if (fileExists(join(featuresRoot, name, 'manifest.md'))) {
-      const text = readUtf8(join(featuresRoot, name, 'manifest.md'))
+    if (fileExists(join(featuresRoot, name, 'manifest.md'), debug)) {
+      const text = readUtf8(join(featuresRoot, name, 'manifest.md'), debug)
       const parsed = text.ok ? parseThinFrontmatter(text.text) : { ok: false as const, reason: text.reason }
       if (parsed.ok) {
         fm = parsed.data
@@ -270,7 +283,7 @@ function scanFeatures(forgeDir: string, warn: (e: DiscoverySkippedEntry) => void
         warn({ target: rel, reason: parsed.reason, disposition: '跳过该文件（特性行按缺省值建档）' })
       }
     }
-    const docs = DOC_KINDS.filter((kind) => fileExists(join(featuresRoot, name, ...DOC_KIND_FILES[kind].split('/'))))
+    const docs = DOC_KINDS.filter((kind) => fileExists(join(featuresRoot, name, ...DOC_KIND_FILES[kind].split('/')), debug))
     out.push({
       slug: name,
       title: fm.title ?? name, // title 缺省 = slug（manifest 无 title 为常态）
@@ -361,9 +374,16 @@ export function runDiscoveryScan(input: DiscoveryScanInput, deps: DiscoveryDeps 
     skipped.push(e)
   }
 
-  // 阶段一：只读扫描（SC3——本段对 forge_dir 零写入）
-  const proposals = scanProposals(input.forgeDir, warn)
-  const features = scanFeatures(input.forgeDir, warn)
+  // 阶段一：只读扫描（SC3——本段对 forge_dir 零写入）。豁免补点 debug 缝（diag-milestone-
+  // coverage）：onDiag 在场才 emit debug（级别门默认关；缝缺席零 emit 不 console 兜底）。
+  const debug: DiscoveryDebug =
+    deps.onDiag === undefined
+      ? undefined
+      : (message: string): void => {
+          emitDiagOrFallback(deps.onDiag, { level: 'debug', event: 'discovery', message, projectId: input.projectId })
+        }
+  const proposals = scanProposals(input.forgeDir, warn, debug)
+  const features = scanFeatures(input.forgeDir, warn, debug)
 
   // 阶段二：单事务吸收（store 产出句柄；行 + 容错记账全成全败）
   const stmts = prepareIngest(input.db)

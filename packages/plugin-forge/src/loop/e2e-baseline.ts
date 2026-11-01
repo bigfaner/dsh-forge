@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { AddTaskInput, ContainerRef, TaskPriority } from '@dsh-forge/contracts'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
+import { emitForgeDiag, type ForgeDiagEmitFace } from '../faces.js'
 
 /** 基线跑批产物（ranAt = 跑批起点 ISO；error 在场 = 套件执行失败——fail-soft 空清单，不阻循环） */
 export interface E2eBaselineRedList {
@@ -132,13 +133,23 @@ export async function baselineForHead(
  * ——fail-soft 缺席语义，调用方回落全量跑批）。error 形态永不落盘（637fcb9e：不可得 ≠ 全绿），
  * 故命中结果恒无 error 字段。
  */
-export function loadPersistedBaseline(path: string, head: string): E2eBaselineCache | undefined {
+export function loadPersistedBaseline(path: string, head: string, onDiag?: ForgeDiagEmitFace): E2eBaselineCache | undefined {
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as { head?: unknown; redCases?: unknown }
     if (parsed.head !== head || !Array.isArray(parsed.redCases)) return undefined
     const redCases = parsed.redCases.filter((s): s is string => typeof s === 'string')
     return { commit: head, redCases }
-  } catch {
+  } catch (cause) {
+    // 豁免补点（diag-milestone-coverage）：文件缺席/损坏/形状漂移 = fail-soft 缺席语义
+    // （调用方回落全量跑批，行为零影响）——debug 级留痕不静默（级别门默认关，诊断时开）；
+    // 缝缺席 = 零 emit（debug 免 console 兜底，未接线时零噪音）。
+    if (onDiag !== undefined) {
+      emitForgeDiag(onDiag, {
+        level: 'debug',
+        event: 'e2e-baseline',
+        message: `e2e 基线缓存读取未命中（fail-soft 缺席语义，回落全量跑批）：${path}：${cause instanceof Error ? cause.message : String(cause)}`,
+      })
+    }
     return undefined
   }
 }
@@ -188,6 +199,8 @@ export interface E2eBaselineFaceDeps {
   readonly timeoutMs?: number
   /** shell 解析（缺省 win32 = true——pnpm 需 shell 解析 pnpm.cmd；直连 exe 可显式关） */
   readonly shell?: boolean
+  /** 诊断发射缝（diag-milestone-coverage 豁免补点——装配期 emitForgeDiag 闭包注入；缺席 = 零 emit） */
+  readonly onDiag?: ForgeDiagEmitFace
 }
 
 /** 套件输出体量上限（256MB——reporter 疯狂输出防内存打爆；超限截断，解析以在场内容为准） */
@@ -198,7 +211,7 @@ const E2E_BASELINE_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
  * 成孤儿（与 windows commit 纪律相悖）。win32 = taskkill /T /F 整树；posix = spawn 直启
  * detached（独立进程组），负 pid 组杀。回收工具自身经 noteHostOwnedChild 登记（不被 keeper 收编）。
  */
-function killTree(pid: number | undefined): void {
+function killTree(pid: number | undefined, onDiag?: ForgeDiagEmitFace): void {
   if (pid === undefined) return
   if (process.platform === 'win32') {
     const taskkill = execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => {})
@@ -208,10 +221,25 @@ function killTree(pid: number | undefined): void {
     try {
       process.kill(-pid, 'SIGKILL')
     } catch {
+      // 豁免补点（diag-milestone-coverage）：组杀失败回落单杀——回收尽力而为，行为零影响
+      if (onDiag !== undefined) {
+        emitForgeDiag(onDiag, {
+          level: 'debug',
+          event: 'e2e-baseline',
+          message: `timeout 组杀失败（回落单杀）：pid=${pid}`,
+        })
+      }
       try {
         process.kill(pid, 'SIGKILL')
       } catch {
-        // 进程已退——零动作
+        // 豁免补点（diag-milestone-coverage）：进程已退——回收目标已达成，零动作
+        if (onDiag !== undefined) {
+          emitForgeDiag(onDiag, {
+            level: 'debug',
+            event: 'e2e-baseline',
+            message: `timeout 单杀未命中（进程已退——回收目标已达成）：pid=${pid}`,
+          })
+        }
       }
     }
   }
@@ -258,7 +286,7 @@ export function createE2eBaselineFace(deps: E2eBaselineFaceDeps): {
       child.stderr?.on('data', onChunk)
       const timer = setTimeout(() => {
         timedOut = true
-        killTree(child.pid)
+        killTree(child.pid, deps.onDiag)
       }, timeoutMs)
       timer.unref?.()
       const finish = (err: Error | null, combined: string): void => {

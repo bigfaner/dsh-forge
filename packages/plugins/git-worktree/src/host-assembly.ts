@@ -51,6 +51,9 @@ export interface WorktreeRpcHostInjection {
   readonly bindDiag?: ((message: string) => void) | undefined
   /** bind-drift 漂移埋点 emit 缝（host emitDiag('bind-drift', info)） */
   readonly bindDriftDiag?: ((message: string) => void) | undefined
+  /** 豁免补点 debug emit 缝（diag-milestone-coverage——host emitDiag('worktree-git', debug)；
+   *  级别门默认关；缺席 = 零 emit） */
+  readonly debugDiag?: ((message: string) => void) | undefined
   /** forge/binding-mismatch 漂移推送缝（host ctx.emit → forge-stream 镜像） */
   readonly bindingMismatchEmit?: ((payload: ForgeBindingMismatchEvent) => void) | undefined
 }
@@ -83,6 +86,7 @@ export function createHostWorktreeRpc(injection: WorktreeRpcHostInjection): Work
     bindDiag,
     bindDriftDiag,
     bindingMismatchEmit,
+    debugDiag,
   } = injection
   const service: WorktreeRpcService = createWorktreeRpcService({
     gitWorktree: getGitWorktree,
@@ -97,6 +101,7 @@ export function createHostWorktreeRpc(injection: WorktreeRpcHostInjection): Work
     bindDiag,
     bindDriftDiag,
     bindingMismatchEmit,
+    debugDiag,
   })
   let revoke: (() => void) | undefined
   let sendGuardInstalled = false

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { hostOwnedPidsSnapshot } from '../spawn/job-tree.js'
-import { attributionTaskInput, baselineForHead, createE2eBaselineFace, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
+import { attributionTaskInput, baselineForHead, createE2eBaselineFace, loadPersistedBaseline, parseE2eRedCases, runE2eBaseline } from './e2e-baseline.js'
 
 describe('parseE2eRedCases（套件输出 → 红灯用例清单）', () => {
   it('FAIL 行用例级提取（路径 + 用例链）+ 去重 + 字母序', () => {
@@ -263,5 +263,33 @@ describe('attributionTaskInput（三分流归因卡载荷）', () => {
     expect(input.taskDesc).toContain('陈旧断言')
     expect(input.taskDesc).toContain('真回归')
     expect(input.taskDesc).toContain('recordBug')
+  })
+})
+
+describe('loadPersistedBaseline 豁免补点 debug emit（diag-milestone-coverage）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'forge-e2e-baseline-diag-'))
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('缓存文件损坏 → undefined + debug 级 emit（event e2e-baseline，级别门由订阅侧过滤）', () => {
+    const cachePath = join(dir, 'corrupt.json')
+    writeFileSync(cachePath, '{not-json')
+    const diags: Array<{ level: string; event: string; message: string }> = []
+    const result = loadPersistedBaseline(cachePath, 'head-1', (p) => diags.push(p))
+    expect(result).toBeUndefined()
+    expect(diags).toHaveLength(1)
+    expect(diags[0]).toMatchObject({ level: 'debug', event: 'e2e-baseline' })
+    expect(diags[0].message).toContain(cachePath)
+  })
+
+  it('缝缺席（onDiag 未传）→ undefined 零 emit 零抛（debug 免 console 兜底）', () => {
+    expect(loadPersistedBaseline(join(dir, 'absent.json'), 'head-1')).toBeUndefined()
+  })
+
+  it('head 键不匹配（正常 miss 径，非异常）→ undefined 零 emit', () => {
+    const cachePath = join(dir, 'ok.json')
+    writeFileSync(cachePath, JSON.stringify({ head: 'head-9', redCases: [] }))
+    const diags: unknown[] = []
+    expect(loadPersistedBaseline(cachePath, 'head-1', (p) => diags.push(p))).toBeUndefined()
+    expect(diags).toHaveLength(0)
   })
 })

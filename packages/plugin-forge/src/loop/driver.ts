@@ -1883,7 +1883,9 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   // 基线取数点与 readHead 缓存键同源（多 worktree 并行不错位）。
   const cachePath = cfg.cacheFile?.({ slug, worktree: loop.record.worktree })
   if (head !== undefined && cachePath !== undefined) {
-    const persisted = loadPersistedBaseline(cachePath, head)
+    const persisted = loadPersistedBaseline(cachePath, head, (payload) =>
+      emitLoopDiag(loop, 'debug', 'loop-e2e-baseline', payload.message),
+    )
     if (persisted !== undefined) return persisted
   }
   const entry = await baselineForHead(head, undefined, () => cfg.runSuite(loop.record.worktree))

@@ -474,7 +474,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     const e2eBaseline =
       config.e2eBaselineGate === true
         ? {
-            ...createE2eBaselineFace({ cwd: process.cwd() }),
+            ...createE2eBaselineFace({ cwd: process.cwd(), onDiag: (payload) => emitForgeDiag(diag, payload) }),
             cacheFile: (input: { readonly slug: string; readonly worktree?: string }): string | undefined =>
               input.worktree === undefined
                 ? undefined

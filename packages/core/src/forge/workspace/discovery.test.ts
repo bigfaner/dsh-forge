@@ -503,3 +503,43 @@ describe('AC5 S9① 口径夹具 + post-ingestion 挂点', () => {
     db.close()
   })
 })
+
+describe('吞没豁免点 debug emit（diag-milestone-coverage）', () => {
+  it('docs 目录缺席 → listDirs fail-soft 空集 + debug 级 emit（event discovery，projectId 随行）', () => {
+    const forgeDir = fixtureForgeDir()
+    const { db } = openWorkspaceDb()
+    const diags: Array<{ level: string; event: string; projectId?: string; message: string }> = []
+    const report = runDiscoveryScan({ projectId: 'p-diag', forgeDir, db }, {
+      onDiag: (p) => diags.push(p as never),
+    })
+    expect(report.featuresIngested).toEqual([])
+    const debugs = diags.filter((d) => d.level === 'debug')
+    expect(debugs.length).toBeGreaterThanOrEqual(2) // proposals + features 两根目录缺席各一条
+    for (const d of debugs) {
+      expect(d.event).toBe('discovery')
+      expect(d.projectId).toBe('p-diag')
+      expect(d.message).toContain(forgeDir)
+    }
+    db.close()
+  })
+
+  it('非 UTF-8 manifest → ok:false warn 记账（既有径）+ debug 留原始错误（豁免补点）', () => {
+    const forgeDir = fixtureForgeDir()
+    writeFeatureManifest(forgeDir, 'feat-bad', Buffer.from([0xff, 0xfe, 0x62, 0x61, 0x64]))
+    const { db } = openWorkspaceDb()
+    const diags: Array<{ level: string; event: string; message: string }> = []
+    const report = runDiscoveryScan({ projectId: 'p-diag', forgeDir, db }, {
+      onDiag: (p) => diags.push(p as never),
+    })
+    expect(report.skipped.length).toBeGreaterThanOrEqual(1) // 既有 warn 记账径不回归
+    expect(diags.some((d) => d.level === 'debug' && d.message.includes('feat-bad'))).toBe(true)
+    db.close()
+  })
+
+  it('onDiag 缺席 → 零 emit 零抛（debug 免 console 兜底，扫描行为不变）', () => {
+    const forgeDir = fixtureForgeDir()
+    const { db } = openWorkspaceDb()
+    expect(() => runDiscoveryScan({ projectId: 'p-diag', forgeDir, db })).not.toThrow()
+    db.close()
+  })
+})

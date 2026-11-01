@@ -841,3 +841,58 @@ describe('worktree ensureWorkspace 点选懒物化（bug 9d2b7e6a）', () => {
     })
   })
 })
+
+describe('吞没点分级补点（diag-milestone-coverage）', () => {
+  it('list：resolveByPath 失败 → workspaceId undefined（fail-soft 不回归）+ debugDiag 留痕（豁免补点）', async () => {
+    invalidateResolveCaches()
+    const debugs: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [{ path: WT_A, branch: 'feat/a', detached: false, bare: false }],
+      pathPresent: () => true,
+      workspaceRegistry: {
+        resolveByPath: async () => {
+          throw new Error('resolve boom')
+        },
+      },
+      debugDiag: (m) => debugs.push(m),
+    })
+    const result = await service.list({ projectRoot: 'C:/repo' } satisfies WorktreeListRequest)
+    expect(result.isGit).toBe(true)
+    expect(result.entries[0]?.workspaceId).toBeUndefined()
+    expect(debugs.join('\n')).toContain('resolve boom')
+  })
+
+  it('debugDiag 缺席 → 同径零 emit 零抛（debug 免 console 兜底）', async () => {
+    invalidateResolveCaches()
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      listWorktreeRows: async () => [{ path: WT_A, branch: 'feat/a', detached: false, bare: false }],
+      pathPresent: () => true,
+      workspaceRegistry: {
+        resolveByPath: async () => {
+          throw new Error('resolve boom')
+        },
+      },
+    })
+    const result = await service.list({ projectRoot: 'C:/repo' } satisfies WorktreeListRequest)
+    expect(result.entries[0]?.workspaceId).toBeUndefined()
+  })
+
+  it('留痕读失败 → warn 补点（按有留痕=当前降级，漂移校验本次跳过）', async () => {
+    invalidateResolveCaches()
+    const warns: string[] = []
+    const service = createWorktreeRpcService({
+      gitWorktree: fakeExt,
+      sessionPersistence: {
+        open: (async () => {
+          throw new Error('bind read boom')
+        }) as never,
+      },
+      warn: (m) => warns.push(m),
+    })
+    // seal 判定走 headerOf/留痕反查——persistence.open 抛错按降级走（fail-soft 不回归）
+    await expect(service.seal({ sessionId: 's-read-fail' } satisfies WorktreeSealRequest)).resolves.toBeDefined()
+    expect(warns.join('\n')).toContain('bind read boom')
+  })
+})
