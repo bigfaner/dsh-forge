@@ -32,6 +32,8 @@ export const FORGE_EVENT_NODE_KIND = 'forge-event-group'
 export const FORGE_EVENT_STREAM_KIND = 'forge-event-stream'
 /** 官方 Chat 节点 keyed 槽（progress-node 同名洞） */
 export const FORGE_EVENT_NODE_SLOT = 'conversation.chat.node'
+/** 官方 Chat 目标键（forgeEventGroupDefinition.target 与 previousStateOf 窄读同源） */
+const CHAT_TARGET = 'chat'
 
 /** 'forge/progress' 会话事件类型键（plugin-forge FORGE_PROGRESS_EVENT_TYPE 字面量镜像——零跨包 import） */
 export const FORGE_PROGRESS_EVENT_TYPE = 'forge/progress'
@@ -473,11 +475,14 @@ export const forgeEventGroupDefinition = {
     // 对已物化 target 回 null 即抛 withdrew materialized target）。bug ede8af10：官方
     // replayContexts/refreshStarts 对窗口外 start match 置 context.state = void 0——
     // Context 仍留 contextsByTarget，state===undefined ≠ 从未物化；0c48a365 的 hidden
-    // 保底使卡消失永不自愈。现改为「保底现算」：state 缺席时依次取 ① context.current
-    // 上次物化快照（组模型/锚/可见性全量保真）→ ② start/matches 携带组末事件现算
-    // 单条目组——发射判定不再依赖可裁剪的 per-member state；两源皆零数据才落 hidden
-    // 空组（与首物化严格同 key 同 id，零重复渲染零 withdrew）。
-    const state = streamStateOk(context.state) ? context.state : (previousStateOf(context.current, context.id) ?? fallbackStateOf(context))
+    // 保底使卡消失永不自愈。保底现算取 ① context.current 上次物化快照（组模型/锚/
+    // 可见性全量保真：visible 保 visible 卡自愈、hidden 交棒保 hidden）。bug 141624ed：
+    // 不再有「携带事件现算源②」——buildNode 以单参 contextSnapshot 调 buildViewNode
+    // （client.js:2438），座上无 reader，携带成员是否组末不可判定；现算单条目组会在
+    // 非末成员被裁时产出 key=自身 id 的可见碎片卡（破坏末成员唯一发射者），故让位
+    // hidden 空组（同 key 同 id，零 withdrew；已物化卡的自愈由 ① 承担）。① 也零数据
+    // 才落 hidden 空组（与首物化严格同 key 同 id，零重复渲染零 withdrew）。
+    const state = streamStateOk(context.state) ? context.state : previousStateOf(context.current, context.id)
     const fallbackSeq = context.start?.event?.seq ?? context.matches?.[0]?.event?.seq ?? 0
     const group = state?.group ?? { key: context.id, firstSeq: fallbackSeq, lastSeq: fallbackSeq, entries: [] }
     // location 契约必填（ChatConversationViewNode.location——官方 store updateTurnKind
@@ -488,7 +493,7 @@ export const forgeEventGroupDefinition = {
       key: context.key,
       kind: FORGE_EVENT_NODE_KIND,
       id: context.id,
-      target: 'chat',
+      target: CHAT_TARGET,
       anchorSeq: state?.anchorSeq ?? fallbackSeq,
       location,
       visibility: visible ? 'visible' : 'hidden',
@@ -514,13 +519,14 @@ function streamStateOk(value: unknown): value is ForgeEventGroupNodeState {
  * 保底现算源①（bug ede8af10）：context.current 上次物化节点窄读——state 被官方窗口
  * 裁剪/replay 置 void 后，Context 仍留 contextsByTarget 且 current 保有上次物化节点
  * （全量组快照 + 物化锚 + 可见性）。visible 保 visible（卡自愈）、hidden 交棒保
- * hidden（发射语义保真）；空内容/畸形 = undefined 让位现算源②。
+ * hidden（发射语义保真）；空内容/畸形 = undefined 让位 hidden 空组（bug 141624ed：
+ * 携带成员组归属在 contextSnapshot 内不可判定——无现算源②）。
  */
 function previousStateOf(current: unknown, id: string): ForgeEventGroupNodeState | undefined {
   if (typeof current !== 'object' || current === null) return undefined
   const get = (current as { get?: unknown }).get
   if (typeof get !== 'function') return undefined
-  const node = (get as (target: string) => unknown).call(current, 'chat')
+  const node = (get as (target: string) => unknown).call(current, CHAT_TARGET)
   if (typeof node !== 'object' || node === null) return undefined
   const raw = node as { visibility?: unknown; anchorSeq?: unknown; data?: unknown }
   const data = raw.data as { key?: unknown; firstSeq?: unknown; lastSeq?: unknown; isLatest?: unknown; entries?: unknown; progress?: unknown } | undefined
@@ -545,42 +551,3 @@ function previousStateOf(current: unknown, id: string): ForgeEventGroupNodeState
   }
 }
 
-/**
- * 保底现算源②（bug ede8af10）：start/matches 携带的组末事件现算单条目组状态——
- * 「保底 hidden」改「保底现算」：卡不再因 per-member state 被裁剪而消失。发射/组模型
- * 由携带事件即时解析（progress 载荷窄收同 fold 语义）；isLatest 取 true（可见即最新
- * 已知面）；anchorSeq = 携带事件 seq——零 stream 数据（turn 区间不可知）时的安全值，
- * stream 在场后经依赖重放被真实状态替换。畸形/零数据 = undefined（回 hidden 空组，
- * 永不回 null——withdrew 红线）。
- */
-function fallbackStateOf(context: ForgeEventNodeContext): ForgeEventGroupNodeState | undefined {
-  let best: ForgeMessageEventLike | undefined
-  for (const event of [context.start?.event, ...(context.matches ?? []).map((match) => match.event)]) {
-    if (event === undefined || typeof event.seq !== 'number' || !Number.isFinite(event.seq)) continue
-    if (best === undefined || event.seq > best.seq) best = event
-  }
-  if (best === undefined) return undefined
-  const seq = best.seq
-  if (best.type === FORGE_PROGRESS_EVENT_TYPE) {
-    const entry = progressEntryOf(best, best.data, undefined)
-    if (entry === undefined) return undefined
-    return {
-      emit: true,
-      isLatest: true,
-      group: { key: `${FORGE_EVENT_PROGRESS_ID_PREFIX}${String(seq)}`, firstSeq: seq, lastSeq: seq, entries: [], progress: [entry] },
-      seq,
-      anchorSeq: seq,
-    }
-  }
-  if (best.type !== 'user/message') return undefined
-  const data = best.data as ForgeMessageDataLike | undefined
-  const id = data !== undefined && typeof data.id === 'string' && data.id !== '' ? data.id : undefined
-  if (data === undefined || id === undefined || !isForgeSource(data.source)) return undefined
-  return {
-    emit: true,
-    isLatest: true,
-    group: { key: id, firstSeq: seq, lastSeq: seq, entries: [entryOf(best, data, undefined)] },
-    seq,
-    anchorSeq: seq,
-  }
-}

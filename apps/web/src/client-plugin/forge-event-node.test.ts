@@ -15,6 +15,7 @@ import {
   forgeEventStreamDefinition,
   forgeEventTitle,
   foldForgeEventMessage,
+  FORGE_PROGRESS_EVENT_TYPE,
   type ForgeEventStreamState,
   type ForgeMessageEventLike,
 } from './forge-event-node.js'
@@ -403,27 +404,49 @@ describe('bug：交棒/空组回 null 撞官方 withdrew 断言（hidden 保底�
   })
 })
 
-describe('bug ede8af10：窗口裁剪 void state——保底现算（hidden 保底家族收口）', () => {
-  it('窗口裁剪（state=undefined + start/matches 携带组末事件）：现算 visible 发射，anchor = 携带事件 seq', () => {
-    const tail = forgeMsg(12, 'm9', '完成', 'c')
+describe('bug 141624ed：现算源②碎片卡防护（组归属不可判定 = 让位 hidden）', () => {
+  /** 官方 buildNode 以单参 contextSnapshot 调 buildViewNode——座上无 reader，携带成员
+   *  是否组末不可判定；现算源②一律让位 hidden（source ① current 承担已物化卡自愈）。 */
+  it('窗口裁剪（state=undefined + current 缺失，携带组内事件）：让位 hidden 空组——不产 key=自身 id 的可见碎片卡', () => {
+    const carried = forgeMsg(12, 'm9', '完成', 'c')
     const node = forgeEventGroupDefinition.buildViewNode({
       key: 'k',
       id: 'm9',
-      start: { location: { kind: 'unresolved' }, event: tail },
-      matches: [{ event: tail }],
+      start: { location: { kind: 'unresolved' }, event: carried },
+      matches: [{ event: carried }],
     })
-    expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, id: 'm9', visibility: 'visible', anchorSeq: 12 })
-    expect((node as { data: { entries: unknown[] } }).data.entries).toHaveLength(1)
+    expectHidden(node)
+    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.entries).toHaveLength(0)
+    expect((node as { data: { entries: unknown[]; progress: unknown[] } }).data.progress).toHaveLength(0)
   })
-  it('初始分页（start match 被裁，matches 仍携带组末事件）：同判 visible（progress 组同型）', () => {
-    const tail = progressEvt(20, { taskKey: 'feat-x/1.9', status: 'running' })
+  it('初始分页（start 被裁，matches 仍携带事件）：同判 hidden（progress 组同型）', () => {
+    const carried = progressEvt(20, { taskKey: 'feat-x/1.9', status: 'running' })
     const node = forgeEventGroupDefinition.buildViewNode({
       key: 'k',
       id: 'forge-event-progress-20',
-      matches: [{ event: tail }],
+      matches: [{ event: carried }],
     })
-    expect(node).toMatchObject({ kind: FORGE_EVENT_NODE_KIND, visibility: 'visible', anchorSeq: 20 })
-    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(1)
+    expectHidden(node)
+    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(0)
+  })
+  it('progress 载荷畸形（progressEntryOf 回 undefined）：组空仍 hidden（不回 null——withdrew 红线）', () => {
+    const malformed = { type: FORGE_PROGRESS_EVENT_TYPE, seq: 7, data: { sourceSlug: '', verb: 'claim' } }
+    const node = forgeEventGroupDefinition.buildViewNode({
+      key: 'k',
+      id: 'forge-event-progress-7',
+      matches: [{ event: malformed }],
+    })
+    expect(node).not.toBeNull()
+    expectHidden(node)
+    expect((node as { data: { progress: unknown[] } }).data.progress).toHaveLength(0)
+  })
+  it('非 forge source 消息（人类插话 / 注入）：组空仍 hidden（不产可见碎片卡）', () => {
+    const human = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'h9', matches: [{ event: humanMsg(9, 'h9', '继续') }] })
+    expectHidden(human)
+    expect((human as { data: { entries: unknown[] } }).data.entries).toHaveLength(0)
+    const inject = forgeEventGroupDefinition.buildViewNode({ key: 'k', id: 'i9', matches: [{ event: injectMsg(10, 'i9') }] })
+    expectHidden(inject)
+    expect((inject as { data: { entries: unknown[] } }).data.entries).toHaveLength(0)
   })
   it('context.current 上次物化快照优先：visible 保 visible 且组快照/锚全量保真；hidden 交棒保 hidden', () => {
     const group = { key: 'g1', firstSeq: 2, lastSeq: 6, isLatest: false, entries: [{ id: 'm1' }, { id: 'm2' }], progress: [] }
