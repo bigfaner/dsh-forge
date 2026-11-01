@@ -51,3 +51,39 @@ export interface DiagEmitFace {
 export function emitDiag(ctx: DiagEmitFace, payload: DiagEventPayload): void {
   ctx.emit(DIAG_EVENT, payload)
 }
+
+/** console 兜底行格式（装配期诊断缝注释文案单源——前缀事件类别，后接原消息） */
+function diagConsoleLine(payload: Pick<DiagEventPayload, 'event' | 'message'>): string {
+  return `[${payload.event}] ${payload.message}`
+}
+
+/**
+ * console 兜底（按级分流——diag-face-consolidation 统一口径，expert-squad index.ts:207-211
+ * 同径）：error → console.error、其余 → console.warn。取代 core 旧「缝缺席 = 零 emit」
+ * 语义——诊断不静默吞掉。
+ */
+export function diagConsoleFallback(payload: Omit<DiagEventPayload, 'process'>): void {
+  const line = diagConsoleLine(payload)
+  if (payload.level === 'error') console.error(line)
+  else console.warn(line)
+}
+
+/**
+ * 注入式诊断缝发射（装配期闭包缝——core 业务侧统一消费口）：缝在场 → 透传（process 进程位
+ * 由装配桥接层补齐）；缝缺席或发射失败 → 按级分流 console 兜底。fire-and-forget——兜底自身
+ * 永不抛（诊断面零反压业务）。
+ */
+export function emitDiagOrFallback(
+  onDiag: ((payload: Omit<DiagEventPayload, 'process'>) => void) | undefined,
+  payload: Omit<DiagEventPayload, 'process'>,
+): void {
+  if (onDiag !== undefined) {
+    try {
+      onDiag(payload)
+      return
+    } catch {
+      // 发射失败 → 兜底（诊断不静默）
+    }
+  }
+  diagConsoleFallback(payload)
+}

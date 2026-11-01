@@ -42,6 +42,7 @@ import type { ExpertPersonaProfile } from './forge/tasks/prompt/persona.js'
 import { createProjectRouting } from './forge/workspace/routing.js'
 import { renderWorkerContext } from './forge/workspace/worker-context.js'
 import { createWorkspaceStore, type ForgeWorkspaceStore } from './forge/workspace/store.js'
+import { DIAG_EVENT, type DiagEventPayload } from './telemetry/diag-events.js'
 import { createKnowledgeService } from './knowledge/knowledge-service.js'
 
 // worker agent 级提示词（expert-squad-forge 1.3 合成点：composePersona 程序段渲染 +
@@ -133,8 +134,8 @@ export interface CoreContextFace {
   /**
    * 官方 cordis 事件混入原型方法（Context.emit 结构缝——(event, payload) 双参形态）。
    * 原型方法经 cordis Proxy 陷阱放行（Reflect.has 沿原型链命中）；自定义虚构属性
-   * （如 diagEmit）会触发 inject 陷阱装载崩（bug 590b8eff）。缺席 = 诊断缝降级缺席
-   * （onDiag 不桥出，排序写面零 emit 零行为差异）。
+   * （如 diagEmit）会触发 inject 陷阱装载崩（bug 590b8eff）。缺席 = 诊断缝降级 console
+   * 兜底（按级分流——error→console.error、其余→console.warn，diag-face-consolidation 口径）。
    */
   emit?: (event: string, payload: unknown) => void
 }
@@ -155,13 +156,17 @@ const corePlugin: CorePlugin = Object.assign(
         ? createSettingsService({ settingsFile: config.settingsFile, userDataDir: dirname(config.dbFile) })
         : undefined
     const db = openDatabase(config.dbFile) // 单 SQLite 句柄唯一创建口（db/ 前向门 + 迁移）
-    // bug 4e25858a / 590b8eff：project-sort 埋点生产接线——core 不 import host，桥出责任在
-    // 装配层：经 ctx 官方事件混入原型方法 emit（真 Context 的合法结构缝——自定义属性会触发
-    // cordis inject 陷阱，见 CoreContextFace.emit 注），child.ts relayDiagOverBridge 已订阅
-    // 'diag/log' 直落 main appender；process 域 'child' 与 diag-events.ts 现行口径一致
-    // （core 插件行仅装载于 child profile 进程）。Root cause: 上一修以虚构属性 diagEmit
-    // 当缝——真 cordis Context Proxy 对未声明属性即抛，插件装载崩（590b8eff）。
+    // bug 4e25858a / 590b8eff：诊断缝生产接线（diag-face-consolidation 统一口径）——core 不
+    // import host，桥出责任在装配层：经 ctx 官方事件混入原型方法 emit（真 Context 的合法结构缝
+    // ——自定义属性会触发 cordis inject 陷阱，见 CoreContextFace.emit 注），child.ts
+    // relayDiagOverBridge 已订阅 'diag/log' 直落 main appender；process 域 'child' 与
+    // diag-events.ts 现行口径一致（core 插件行仅装载于 child profile 进程）。缝统一供
+    // project-service / workspace store / discovery 三面消费；缝缺席 → console 兜底按级分流。
     const diagEmit = ctx.emit
+    const onDiag =
+      diagEmit === undefined
+        ? undefined
+        : (payload: Omit<DiagEventPayload, 'process'>) => diagEmit(DIAG_EVENT, { ...payload, process: 'child' })
     ctx.reflect.provide(
       'forgeProjects',
       createProjectService({
@@ -169,10 +174,7 @@ const corePlugin: CorePlugin = Object.assign(
         registry: ctx.workspaceRegistry,
         rename: ctx.workspaceController,
         tasksHome: config.tasksHome, // 1.4 缝（可选）——3.4 装配 onRegistered 建库+扫描闭包
-        onDiag:
-          diagEmit === undefined
-            ? undefined
-            : (payload) => diagEmit('diag/log', { ...payload, process: 'child' }),
+        onDiag,
       }),
     )
     ctx.reflect.provide('forgeKnowledge', createKnowledgeService({ db })) // Interface 2 全七法（3.3 收口）
@@ -196,8 +198,10 @@ const corePlugin: CorePlugin = Object.assign(
       const events = createForgeTaskEvents()
       const store = createWorkspaceStore({
         resolveDir: (projectId: string) => deriveTaskStoreDir(tasksHome, routing.wsPath(projectId)),
+        onDiag,
         onFirstCreate: createDiscoveryFirstCreateHook({
           resolveForgeDir: routing.forgeDir,
+          onDiag,
           onFeatureIngested: ({ projectId, featureSlug }) => {
             const wsDb = store.ensureOpen(projectId) // 首建挂点内重入——句柄已入表（store.ts 先 set 后跑协作者）
             const report = validateFeatureTasks({ store }, { projectId, featureSlug })
@@ -279,7 +283,7 @@ const corePlugin: CorePlugin = Object.assign(
               // AGENTS §7 可观测性（triage-progress-row fix-3）：resolver 缺席 = experts.mapping
               // 消费链整体降级（坏键 fail-loud 不可达，persona 回落程序段）——1.8 真机径
               // 「单测绿真机红」的不可见根因面，warn 留痕不静默；diag 缝缺席 = 零 emit 不抛。
-              diagEmit?.('diag/log', {
+              diagEmit?.(DIAG_EVENT, {
                 level: 'warn',
                 process: 'child',
                 event: 'forge-expert-resolver',

@@ -10,8 +10,9 @@
 // app_key_logs 记账（scope: tasks——中央 ck_akl_scope 四值不含，写中央必炸 CHECK）+
 // 该工作区带重试窗隔离（窗内 fail-fast 同一 error 实例、单事件单条不重复记账；窗外触达
 // 重试开库——迁移修复后免重启恢复），其余库照常。
-// 记账降级口径：句柄已关（openDatabase 内部失败类：损坏/版本门拒绝）库不可写 → child 控制台
-// （stdio 继承回流宿主——alignWorkspaceTitle 同径）；句柄在手（健全性检查失败类）写后关闭。
+// 记账降级口径：句柄已关（openDatabase 内部失败类：损坏/版本门拒绝）库不可写 → 注入诊断缝
+// （diag/log 域，缝缺席 console 兜底按级分流——stdio 继承回流宿主——alignWorkspaceTitle 同径）；
+// 句柄在手（健全性检查失败类）写后关闭。
 //
 // 库文件缺席 → 新建 v1（P1 存量工作区升级 M2 首次触达补建；与注册新建径同构——交互二/三）；
 // onFirstCreate 协作者挂点 = 发现面只读扫描（1.3 实现接线），失败 fail-soft 不隔离不抛。
@@ -21,6 +22,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { openDatabase } from '../../db/index.js'
+import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'
 import { recordWorkspaceKeyLog } from './app-key-logs.js'
 import { type WorkspaceDbUnavailableData, WorkspaceDbUnavailableError } from './errors.js'
@@ -45,6 +47,12 @@ export interface WorkspaceStoreDeps {
   readonly onFirstCreate?: WorkspaceFirstCreateHook
   /** 时钟（可选；隔离重试窗测试注入——默认 Date.now） */
   readonly now?: () => number
+  /**
+   * 诊断发射缝（diag-face-consolidation 统一配方——可选注入，装配方桥接 ctx.emit('diag/log')
+   * 并补 process 进程位；event 前缀 workspace-store）。缝缺席/发射失败 → console 兜底按级
+   * 分流（error→console.error、其余→console.warn——取代旧「缺席 = 零 emit」语义）。
+   */
+  readonly onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void
 }
 
 export interface ForgeWorkspaceStore {
@@ -155,9 +163,12 @@ function runFirstCreate(deps: WorkspaceStoreDeps, projectId: string, db: Databas
         },
       })
     } catch (logCause) {
-      console.warn(
-        `首建协作者失败记账降级（库不可写）：${projectId}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
-      )
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'warn',
+        event: 'workspace-store',
+        message: `首建协作者失败记账降级（库不可写）：${projectId}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+        projectId,
+      })
     }
   }
 }
@@ -189,7 +200,7 @@ export function createWorkspaceStore(deps: WorkspaceStoreDeps): ForgeWorkspaceSt
         db = openDatabase(file, { migrations: WORKSPACE_MIGRATIONS, schemaVersion: FORGE_DB_SCHEMA_VERSION })
         assertStructureSound(db)
       } catch (cause) {
-        throwIsolated(isolated, now, projectId, dir, db, cause)
+        throwIsolated(isolated, now, projectId, dir, db, cause, deps.onDiag)
       }
       // 句柄先入表再跑首建协作者：协作者失败 fail-soft，健全句柄不弃（AC3/AC4 分层）
       handles.set(projectId, db)
@@ -217,6 +228,7 @@ function throwIsolated(
   dir: string,
   db: Database.Database | undefined,
   cause: unknown,
+  onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void,
 ): never {
   const data: WorkspaceDbUnavailableData = { projectId, dir, error: errMessage(cause), disposition: ISOLATED_DISPOSITION }
   const error = new WorkspaceDbUnavailableError(data, cause)
@@ -227,14 +239,22 @@ function throwIsolated(
     try {
       recordWorkspaceKeyLog(db, { level: 'error', scope: 'tasks', data })
     } catch (logCause) {
-      console.warn(
-        `工作区库隔离记账降级（库不可写）：${projectId} @ ${dir}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
-      )
+      emitDiagOrFallback(onDiag, {
+        level: 'warn',
+        event: 'workspace-store',
+        message: `工作区库隔离记账降级（库不可写）：${projectId} @ ${dir}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+        projectId,
+      })
     }
     db.close()
   } else {
-    // 句柄已关（openDatabase 内部失败类）→ 库不可写，降级 child 控制台（stdio 继承回流宿主）
-    console.warn(`工作区库隔离（记账降级 child 控制台——库不可写）：${projectId} @ ${dir}——${errMessage(cause)}`)
+    // 句柄已关（openDatabase 内部失败类）→ 库不可写，降级诊断面/console 兜底（stdio 继承回流宿主）
+    emitDiagOrFallback(onDiag, {
+      level: 'warn',
+      event: 'workspace-store',
+      message: `工作区库隔离（记账降级 child 控制台——库不可写）：${projectId} @ ${dir}——${errMessage(cause)}`,
+      projectId,
+    })
   }
   throw error
 }

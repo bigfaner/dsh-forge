@@ -49,6 +49,7 @@ import type {
 import { normalizeFsPath } from '@dsh-forge/path-key'
 import { errMessage } from '../util.js'
 import { ensureDirReadable } from '../fs-ensure.js'
+import { emitDiagOrFallback, type DiagEventPayload } from '../telemetry/diag-events.js'
 import { CompensationError, ProjectSortOrderInvalidError, ProjectWriteError, WorkspaceCreateError } from './errors.js'
 import { recordKeyLog } from './key-logs.js'
 import type { WorkspaceLike, WorkspaceRegistryPort, WorkspaceRenamePort } from './registry.js'
@@ -100,16 +101,11 @@ export interface ProjectServiceDeps {
   gitIdentity?: GitIdentityPort
   /**
    * project-manual-order 1.1 诊断 emit 缝（可选注入——装配方注入 emitDiag 闭包，
-   * apps/host/src/telemetry/diag-events.ts 同域 diag/log 事件；缺席 = 零 emit）。
-   * 消费点 = patch.sortOrders 批量写面（event 前缀 project-sort：成功 info / 失败 warn）。
+   * apps/host/src/telemetry/diag-events.ts 同域 diag/log 事件；diag-face-consolidation
+   * 起为全服务诊断缝：缝缺席/发射失败 → console 兜底按级分流，error→console.error、
+   * 其余→console.warn）。process 进程位由装配桥接层补齐。
    */
-  onDiag?: (payload: {
-    level: 'info' | 'warn'
-    event: string
-    message: string
-    projectId?: string
-    projectCount?: number
-  }) => void
+  onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void
 }
 
 /**
@@ -219,16 +215,19 @@ async function deriveTaskStoreDirVerb(
 /**
  * M2 注册协作者执行（fail-soft：建库/扫描失败与开库失败同语义——记账隔离态归闭包自身
  * （store throwIsolated/发现面逐项容错），不阻断注册整体；中央 app_key_logs scope CHECK
- * 四值不含注册域 → child 控制台降级（alignWorkspaceTitle 同径，stdio 继承回流宿主））。
+ * 四值不含注册域 → 注入诊断缝/console 兜底降级（alignWorkspaceTitle 同径，stdio 继承回流宿主））。
  */
 function runRegistered(deps: ProjectServiceDeps, project: RegisteredProject): void {
   if (deps.onRegistered === undefined) return
   try {
     deps.onRegistered(project)
   } catch (cause) {
-    console.warn(
-      `注册协作者失败（fail-soft——注册已成功，任务库惰性首开兜底）：${project.wsPath}（${project.projectId}）：${errMessage(cause)}`,
-    )
+    emitDiagOrFallback(deps.onDiag, {
+      level: 'warn',
+      event: 'project-register',
+      message: `注册协作者失败（fail-soft——注册已成功，任务库惰性首开兜底）：${project.wsPath}（${project.projectId}）：${errMessage(cause)}`,
+      projectId: project.projectId,
+    })
   }
 }
 
@@ -660,10 +659,12 @@ async function alignWorkspaceTitle(
   try {
     await deps.rename.rename({ workspaceId, title: projectName })
   } catch (cause) {
-    // app_key_logs scope CHECK 四值不含注册域——对齐降级走 child 控制台（stdio 继承回流宿主）
-    console.warn(
-      `workspace 标题对齐项目名失败（无害残留：chip/账本退回目录名，注册不受影响）——${projectName}（${workspaceId}）：${errMessage(cause)}`,
-    )
+    // app_key_logs scope CHECK 四值不含注册域——对齐降级走注入诊断缝/console 兜底（stdio 继承回流宿主）
+    emitDiagOrFallback(deps.onDiag, {
+      level: 'warn',
+      event: 'workspace-title-align',
+      message: `workspace 标题对齐项目名失败（无害残留：chip/账本退回目录名，注册不受影响）——${projectName}（${workspaceId}）：${errMessage(cause)}`,
+    })
   }
 }
 
@@ -735,7 +736,8 @@ function getProject(deps: ProjectServiceDeps, id: string): Project | null {
  * patch.sortOrders 批量排序写面（project-manual-order 1.1）：全量预检（缺项目 id / 空 map /
  * 非法值——非有限安全整数）于事务前 typed 拒绝（ERR_PROJECT_SORT_INVALID，零行写入无半写），
  * 通过后单事务批量 UPDATE（全量重编号语义由前端给 1..n，host 不做 midpoint 插值）。
- * 成功 info / 失败 warn 经 deps.onDiag emit（event 前缀 project-sort；缝缺席 = 零 emit）。
+ * 成功 info / 失败 warn 经 deps.onDiag emit（event 前缀 project-sort；缝缺席/发射失败 →
+ * console 兜底按级分流——diag-face-consolidation 统一口径）。
  */
 function applySortOrders(deps: ProjectServiceDeps, id: string, sortOrders: Record<string, number>): void {
   const entries = Object.entries(sortOrders)
@@ -776,11 +778,7 @@ function emitSortDiag(
   projectCount: number,
   message: string,
 ): void {
-  try {
-    deps.onDiag?.({ level, event: 'project-sort', message, projectId, projectCount })
-  } catch {
-    // 埋点永不反压写面（fire-and-forget 语义——emit 侧零反压，防御式吞掉）
-  }
+  emitDiagOrFallback(deps.onDiag, { level, event: 'project-sort', message, projectId, projectCount })
 }
 
 function updateProject(deps: ProjectServiceDeps, id: string, patch: ProjectPatch): Project {

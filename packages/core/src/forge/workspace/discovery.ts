@@ -31,6 +31,7 @@ import {
   type ProposalStatus,
 } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
+import { emitDiagOrFallback, type DiagEventPayload } from '../../telemetry/diag-events.js'
 import { errMessage } from '../../util.js'
 import { recordWorkspaceKeyLog } from './app-key-logs.js'
 import type { WorkspaceFirstCreateHook } from './store.js'
@@ -92,6 +93,11 @@ export interface FeatureIngestedInput {
 export interface DiscoveryDeps {
   /** 对新入库 feature 逐个送校（事务提交后回调；失败 fail-soft 记账不抛不断链） */
   readonly onFeatureIngested?: (input: FeatureIngestedInput) => void
+  /**
+   * 诊断发射缝（diag-face-consolidation 统一配方——可选注入，装配方桥接 ctx.emit('diag/log')
+   * 并补 process 进程位；event 前缀 discovery）。缝缺席/发射失败 → console 兜底按级分流。
+   */
+  readonly onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void
 }
 
 // ───────────────────────── 只读文件面助手（SC3：零写入） ─────────────────────────
@@ -382,9 +388,12 @@ export function runDiscoveryScan(input: DiscoveryScanInput, deps: DiscoveryDeps 
           },
         })
       } catch (logCause) {
-        console.warn(
-          `post-ingestion 送校失败记账降级（库不可写）：${input.projectId} / ${featureSlug}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
-        )
+        emitDiagOrFallback(deps.onDiag, {
+          level: 'warn',
+          event: 'discovery',
+          message: `post-ingestion 送校失败记账降级（库不可写）：${input.projectId} / ${featureSlug}——${errMessage(cause)}；记账失败：${errMessage(logCause)}`,
+          projectId: input.projectId,
+        })
       }
     }
   }

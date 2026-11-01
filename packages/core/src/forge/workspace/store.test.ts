@@ -254,6 +254,29 @@ describe('AC2 ensureOpen 惰性链（openDatabase 参数化 → 版本门 → �
     }
   })
 
+  it('诊断缝（diag-face-consolidation）：库不可写降级径 onDiag 在场 → 类型化 emit（event 前缀 workspace-store）；缺席 → console.warn 兜底', () => {
+    const ws = wsDir()
+    const db = openWorkspaceDb(join(ws, 'forge.db'))
+    db.prepare(`INSERT INTO schema_meta (version, applied_at) VALUES (?, '2099-01-01T00:00:00.000Z')`).run(
+      FORGE_DB_SCHEMA_VERSION + 1,
+    )
+    db.close()
+
+    const diagCalls: Array<{ level: string; event: string; message: string; projectId?: string }> = []
+    const store = createWorkspaceStore({
+      resolveDir: () => ws,
+      onDiag: (p) => diagCalls.push(p),
+    })
+    try {
+      expect(() => store.ensureOpen('p1')).toThrowError(WorkspaceDbUnavailableError)
+      expect(diagCalls).toHaveLength(1)
+      expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'workspace-store', projectId: 'p1' })
+      expect(diagCalls[0]?.message).toContain(ws)
+    } finally {
+      store.dispose()
+    }
+  })
+
   it('结构健全性检查·表在场：同版本但缺域表（DROP tasks）→ 隔离 + 工作区 app_key_logs 记账（scope tasks）', () => {
     const ws = wsDir()
     const db = openWorkspaceDb(join(ws, 'forge.db'))
