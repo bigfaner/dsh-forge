@@ -95,11 +95,11 @@ export type NarrationRoute = 'notice' | 'followup'
 
 export const SCENARIOS: Readonly<Record<ScenarioId, { readonly no: string; readonly channel: NarrationRoute; readonly title: string }>> = {
   'blocked-ask-user': { no: '⑩', channel: 'followup', title: '阻塞（无法自动处理）' },
-  'spawn-failed-halted': { no: '⑬', channel: 'followup', title: '连续失败——已停止' },
-  'blocked-pool': { no: '⑭', channel: 'followup', title: '无可执行任务且有任务阻塞' },
-  'finished-timeout': { no: '⑮', channel: 'followup', title: '结束（等待超时）' },
-  'finished-all': { no: '⑯', channel: 'followup', title: '结束（全部完成）' },
-  'stopped-by-command': { no: '⑰', channel: 'followup', title: '停止' },
+  'spawn-failed-halted': { no: '⑬', channel: 'followup', title: '连续失败——循环停止' },
+  'blocked-pool': { no: '⑭', channel: 'followup', title: '循环受阻——无可执行任务且有任务阻塞' },
+  'finished-timeout': { no: '⑮', channel: 'followup', title: '循环结束（等待超时）' },
+  'finished-all': { no: '⑯', channel: 'followup', title: '循环结束（全部完成）' },
+  'stopped-by-command': { no: '⑰', channel: 'followup', title: '循环停止' },
 }
 
 // ─────────────────────────── 六场景模板函数 ───────────────────────────
@@ -121,12 +121,12 @@ export function blockedAskUser(p: BlockedAskUserPayload): string {
   ].join('\n')
 }
 
-/** ⑬ 连续失败——已停止（followup·异常径） */
+/** ⑬ 连续失败——循环停止（followup·异常径；循环级章词带「循环」标记，与任务级「阻塞」分层） */
 export function spawnFailedHalted(p: SpawnFailedHaltedPayload): string {
   return [
-    typeLine('自动重试', '任务源', p.sourceSlug),
+    typeLine('循环停止', '任务源', p.sourceSlug),
     ...(p.taskLabel !== undefined ? [line('任务', p.taskLabel)] : []),
-    line('事件', `启动子代理连续失败 ${p.attempts} 次——已停止`),
+    line('事件', `启动子代理连续失败 ${p.attempts} 次——循环已停止`),
     line('阶段', '启动子代理'),
     ...(p.errorText !== undefined ? [line('错误', p.errorText)] : []),
     line('系统', '已向你发起问询'),
@@ -139,7 +139,7 @@ export function spawnFailedHalted(p: SpawnFailedHaltedPayload): string {
 /** ⑭ 无可执行任务且有任务阻塞（followup·异常径） */
 export function blockedPool(p: BlockedPoolPayload): string {
   return [
-    typeLine('受阻', '任务源', p.sourceSlug),
+    typeLine('循环受阻', '任务源', p.sourceSlug),
     line('事件', '没有可执行的任务，且有任务阻塞中'),
     // 清单项接缝 = 「· 」——项恒以全角括注收尾（）· 项间无前置空格
     line('阻塞中', p.blockedItems.map((item) => `${item.taskKey}（${item.note}）`).join('· ')),
@@ -151,7 +151,7 @@ export function blockedPool(p: BlockedPoolPayload): string {
 /** ⑮ 结束（等待超时）（followup·结算径） */
 export function finishedTimeout(p: FinishedTimeoutPayload): string {
   return [
-    typeLine('结束', '任务源', `${p.sourceSlug} — 结束（${p.reason}）`),
+    typeLine('循环结束', '任务源', `${p.sourceSlug} — 循环结束（${p.reason}）`),
     line('状态', `完成 ${p.completed} · 阻塞 ${p.blocked} · 待处理 ${p.pending}`),
     ...taskSummarySection(p.taskSummaries),
     nextActionLine(nextActionPromptUser(p.instruction)),
@@ -161,7 +161,7 @@ export function finishedTimeout(p: FinishedTimeoutPayload): string {
 /** ⑯ 结束（全部完成）（followup·结算径） */
 export function finishedAll(p: FinishedAllPayload): string {
   return [
-    typeLine('结束', '任务源', `${p.sourceSlug} — 全部任务已完成`),
+    typeLine('循环结束', '任务源', `${p.sourceSlug} — 循环结束（全部任务已完成）`),
     line('状态', `完成 ${p.completed} · 阻塞 ${p.blocked}`),
     ...taskSummarySection(p.taskSummaries),
     nextActionLine(nextActionPromptUser(p.instruction)),
@@ -171,7 +171,7 @@ export function finishedAll(p: FinishedAllPayload): string {
 /** ⑰ 停止（/stop-dag-tasks）（followup·结算径） */
 export function stoppedByCommand(p: StoppedByCommandPayload): string {
   return [
-    typeLine('停止', '任务源', `${p.sourceSlug} — 已按你的指令停止`),
+    typeLine('循环停止', '任务源', `${p.sourceSlug} — 已按你的指令停止`),
     line('状态', `完成 ${p.completed} · 执行中任务 ${p.inFlightTaskKey} 已标记为中断`),
     ...taskSummarySection(p.taskSummaries),
     nextActionLine(NEXT_ACTION_NONE),
@@ -192,22 +192,22 @@ function headlineOf(badge: string, parts: readonly string[]): string {
 const HEADLINERS: { readonly [S in ScenarioId]: (payload: NarrativePayloadMap[S]) => string } = {
   'blocked-ask-user': (p) => headlineOf('阻塞', [`${p.taskLabel} — 阻塞`, '已发起问询']),
   'spawn-failed-halted': (p) =>
-    headlineOf('自动重试', [`${p.sourceSlug} 启动子代理连续失败 ${p.attempts} 次 — 已停止`, '已发起问询']),
+    headlineOf('循环停止', [`${p.sourceSlug} 启动子代理连续失败 ${p.attempts} 次 — 循环已停止`, '已发起问询']),
   'blocked-pool': (p) =>
-    headlineOf('受阻', [
+    headlineOf('循环受阻', [
       `${p.sourceSlug} 无可执行任务`,
       `阻塞 ${p.blockedItems.length} 项（${p.blockedItems.map((item) => item.taskKey).join('、')}）`,
     ]),
   'finished-timeout': (p) =>
-    headlineOf('结束', [
-      `${p.sourceSlug} — 结束（${p.reason}）`,
+    headlineOf('循环结束', [
+      `${p.sourceSlug} — 循环结束（${p.reason}）`,
       `完成 ${p.completed}`,
       `阻塞 ${p.blocked}`,
       `待处理 ${p.pending}`,
     ]),
-  'finished-all': (p) => headlineOf('结束', [`${p.sourceSlug} — 全部任务已完成`, `完成 ${p.completed}`]),
+  'finished-all': (p) => headlineOf('循环结束', [`${p.sourceSlug} — 循环结束（全部任务已完成）`, `完成 ${p.completed}`]),
   'stopped-by-command': (p) =>
-    headlineOf('停止', [`${p.sourceSlug} — 已按你的指令停止`, `完成 ${p.completed}`, `执行中任务 ${p.inFlightTaskKey} 已标记为中断`]),
+    headlineOf('循环停止', [`${p.sourceSlug} — 已按你的指令停止`, `完成 ${p.completed}`, `执行中任务 ${p.inFlightTaskKey} 已标记为中断`]),
 }
 
 /** 场景分发单行摘要（与 renderNarrative 同参口径；超界省略号截断保底——折叠位永不越界） */

@@ -124,10 +124,10 @@ export const DISPATCH_EVENT_MINOR_LABELS: Readonly<Record<string, string>> = {
   'spawn-failed': '启动失败',
   'worker-aborted': '执行中断',
   halt: '连续失败',
-  'blocked-pool': '池阻塞',
+  'blocked-pool': '循环受阻',
   timeout: '超时',
   'finish-all': '全部完成',
-  stopped: '已停止',
+  stopped: '循环已停止',
   'spawn-rate-limited': '启动限流',
   'worker-rate-limited': '执行限流',
   'abort-over-limit': '中止超限',
@@ -139,9 +139,9 @@ export function dispatchEventTitleOf(entry: DispatchEventEntry): string {
   return entry.taskTitle ?? entry.taskKey ?? entry.sourceSlug
 }
 
-/** 备注行文案（「状态 · 摘要」——状态词 + 场景章语义 + 叙述注记；全缺 = undefined 不渲染） */
+/** 备注行文案（「状态 · 摘要」——状态词（循环级行带「循环」标记）+ 场景章语义 + 叙述注记；全缺 = undefined 不渲染） */
 export function dispatchEventNoteOf(entry: DispatchEventEntry): string | undefined {
-  const parts: string[] = [DISPATCH_EVENT_STATUS_WORD[entry.status]]
+  const parts: string[] = [dispatchEventStatusWordOf(entry)]
   if (entry.scenario !== undefined && entry.scenario.includes('/')) {
     const minor = entry.scenario.slice(entry.scenario.indexOf('/') + 1)
     const label = DISPATCH_EVENT_MINOR_LABELS[minor]
@@ -219,12 +219,27 @@ export function aggregateDispatchRows(entries: readonly DispatchEventEntry[]): r
   return aggregateDispatchRowItems(entries).map((row) => row.entry)
 }
 
-/** 状态词（备注行首段 + 统计条口径——prototype「状态 · 摘要」同语） */
+/** 状态词（备注行首段 + 统计条口径——prototype「状态 · 摘要」同语；仅任务级行消费） */
 export const DISPATCH_EVENT_STATUS_WORD: Readonly<Record<DispatchEventEntry['status'], string>> = {
   running: '执行中',
   completed: '完成',
   blocked: '阻塞',
   interrupted: '已中断',
+}
+
+/** 循环级状态词（taskKey 缺席的循环级行——与任务级词表分层，一律带「循环」标记） */
+export const DISPATCH_LOOP_STATUS_WORD: Readonly<Record<DispatchEventEntry['status'], string>> = {
+  running: '循环进行中',
+  completed: '循环已结束',
+  blocked: '循环受阻',
+  interrupted: '循环已结束',
+}
+
+/** 行状态词（任务级 = 裸状态词；循环级（taskKey 缺席）= 带「循环」标记词） */
+export function dispatchEventStatusWordOf(entry: DispatchEventEntry): string {
+  return entry.taskKey === undefined
+    ? (DISPATCH_LOOP_STATUS_WORD[entry.status] ?? entry.status)
+    : (DISPATCH_EVENT_STATUS_WORD[entry.status] ?? entry.status)
 }
 
 /** 轨状态点色档（prototype .frow 同款：执行中 accent 带光晕 / 完成 success / 阻塞 warn / 中断与待定 caption） */

@@ -484,7 +484,7 @@ describe('runRound 全链（领取→领取通知→spawn→结算→结果通�
     expect(built.calls.map((c) => c.method)).toEqual(['settle'])
     expect(built.calls.map((c) => c.form)).toEqual(['settle'])
     expect(built.calls.map((c) => c.wakeup)).toEqual([true])
-    expect(built.calls[0]?.text).toContain('[forge·结束] 任务源: feat-x — 全部任务已完成')
+    expect(built.calls[0]?.text).toContain('[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）')
     expect(built.calls[0]?.text).toContain('完成 1 · 阻塞 0')
     // 结算概要（驱动侧与 progress 事件同源的起止记录——按 slug 分组：组首行状态计数 +
     // 任务行 `slug/local-id 标题 — 终态 · 耗时`；用户裁决 2026-10-28）
@@ -867,7 +867,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     expect(knowledge.taskDesc).toContain('独立结算')
     expect(knowledge.acceptanceCriteria).toBeUndefined()
     // 复盘任务被循环续领后照常收口（⑯ 结束叙述在场）
-    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
     // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、双任务不重派（addTask 仍 2）
     expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.h.addTaskInputs).toHaveLength(2)
@@ -1237,7 +1237,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(built.h.claimInputs).toHaveLength(3)
     // ⑧ 自愈静默（main R-Q4 重构语义）：无用户通知——进度事件 scenario 投影 + incident 落盘承载
     expect(built.progressCalls.some((e) => e.scenario === 'blocked/auto-fixed')).toBe(true)
-    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
   })
 
   it('FAIL-2 径①（装配降级）：无进展 blocked + 处置钩子缺席 → 保留问询硬停（挂起载降级历史行）', async () => {
@@ -1287,7 +1287,7 @@ describe('blocked 结算分支（图 C）', () => {
     // wait-external 记录等待后循环续领（2.5 被重领并完成）→ 正常收口（⑨ 静默化——进度事件投影）
     expect(built.progressCalls.some((e) => e.scenario === 'blocked/wait-external' && e.note === '等待 feature-b 先完成')).toBe(true)
     expect(built.h.claimInputs).toHaveLength(3) // fail-loud 领取 + 重领 2.5 + no-task
-    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
   })
 
   it('FAIL-2 径②（兜底）：claim fail-loud 且任务身份不可得 → incident 落盘 + 挂起问询（不异常终局）', async () => {
@@ -1797,7 +1797,7 @@ describe('第一层机械守卫（decisions #11/#16）', () => {
     expect(retryEvents[1]?.note).toContain('第 2/3 次')
     expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
     const halted = built.calls.find((c) => c.method === 'settle')
-    expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
+    expect(halted?.text).toContain('启动子代理连续失败 3 次——循环已停止')
     expect(halted?.text).toContain('阶段: 启动子代理')
     expect(halted?.text).toMatch(/错误: .+subagent factory rejected/)
     expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
@@ -2157,7 +2157,7 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     ])
     // ⑰ 停止终局叙述（用户主动停止 = 不引导续跑，下一步动作 = 无）
     const stoppedNotice = built.calls.find((c) => c.method === 'settle')
-    expect(stoppedNotice?.text).toContain('[forge·停止] 任务源: feat-x — 已按你的指令停止')
+    expect(stoppedNotice?.text).toContain('[forge·循环停止] 任务源: feat-x — 已按你的指令停止')
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
     expect(stoppedNotice?.text).toContain('下一步动作: 无')
     expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
@@ -2474,7 +2474,7 @@ describe('S1c 第三层问询（halted/裁决升级事件的问询投递）', ()
       { kind: 'halted', ownerSessionId: OWNER, source: SOURCE, attempts: 3, reason: HALTED_REASON },
     ])
     const halted = built.calls.find((c) => c.method === 'settle')
-    expect(halted?.text).toContain('启动子代理连续失败 3 次——已停止')
+    expect(halted?.text).toContain('启动子代理连续失败 3 次——循环已停止')
     expect(halted?.wakeup).toBe(true) // ⑬ 结算单点唤醒（AC）
     // 1.5 场景码：⑬ loop/halt（循环级进度事件）
     expect(built.progressCalls.find((e) => e.verb === 'halt')).toMatchObject({ verb: 'halt', status: 'blocked', scenario: 'loop/halt', note: HALTED_REASON })
@@ -3096,7 +3096,7 @@ describe('3b 挂起改造（suspendForVerdict 写 record.suspended + resume 清�
     expect(built.h.claimInputs).toHaveLength(3) // 2.5（挂起前）→ 2.6 → no-task
     // 完成零消息（⑥ 退出消息面）——进度事件投影 + 结算单点收口（2.5 无进展 blocked 挂起，仅 2.6 完成）
     expect(built.progressCalls.filter((e) => e.verb === 'settle' && e.status === 'completed')).toHaveLength(1)
-    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
   })
 
   it('resume 错误径：无活登记 = no-active-loop；未挂起（在飞运行中）= not-suspended；挂起态 stop 走终局径收口，resume 随后 no-active-loop', async () => {
@@ -3273,7 +3273,7 @@ describe('stopLoop 定向停止（3b stopTaskLoop 消费面——双入口同 re
     expect(stopped).toEqual({ ok: true, stopped: true, hadInFlight: true })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     expect(built.h.transitions.some((t) => t.toStatus === 'interrupted')).toBe(true)
-    expect(built.calls.some((c) => c.method === 'settle' && c.text.includes('[forge·停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
+    expect(built.calls.some((c) => c.method === 'settle' && c.text.includes('[forge·循环停止] 任务源: feat-x — 已按你的指令停止'))).toBe(true)
     expect(exclusiveLoopSourceOf(SOURCE)).toBeUndefined()
   })
 
@@ -3329,9 +3329,9 @@ describe('3c wait-for-quiescence 宽限窗（done 判词收口前——编排层
     // 新任务被自动续派领取并完成（完成零消息——进度事件投影）
     expect(built.progressCalls.filter((e) => e.verb === 'settle' && e.status === 'completed')).toHaveLength(2)
     // 收口叙述恰好一次，且发生在新任务完成之后（settle 在 calls 尾部）
-    const ends = built.calls.filter((c) => c.text.includes('[forge·结束]'))
+    const ends = built.calls.filter((c) => c.text.includes('[forge·循环结束]'))
     expect(ends).toHaveLength(1)
-    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
   })
 
   it('宽限窗内无新任务 → 窗满照常 ⑯ 收口（现状保持——claim 不多领）', async () => {
@@ -3349,7 +3349,7 @@ describe('3c wait-for-quiescence 宽限窗（done 判词收口前——编排层
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
     expect(built.h.claimInputs).toHaveLength(2) // 2.5 + no-task（窗内零新领）
-    expect(built.calls.filter((c) => c.text.includes('[forge·结束]'))).toHaveLength(1)
+    expect(built.calls.filter((c) => c.text.includes('[forge·循环结束]'))).toHaveLength(1)
   })
 
   it('宽限窗内循环被叫停（用户终止窗径）→ 终局收口、零结束叙述（叙述归停止径）', async () => {
@@ -3375,8 +3375,8 @@ describe('3c wait-for-quiescence 宽限窗（done 判词收口前——编排层
     expect(await built.driver.stop({ ownerSessionId: OWNER })).toEqual({ ok: true, stopped: true, hadInFlight: false })
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
     // 窗内叫停：零 ⑯ 结束叙述（收口叙述归停止径 ⑰）
-    expect(built.calls.some((c) => c.text.includes('[forge·结束]'))).toBe(false)
-    expect(built.calls.some((c) => c.text.includes('[forge·停止]'))).toBe(true)
+    expect(built.calls.some((c) => c.text.includes('[forge·循环结束]'))).toBe(false)
+    expect(built.calls.some((c) => c.text.includes('[forge·循环停止]'))).toBe(true)
   })
 })
 
@@ -3392,7 +3392,7 @@ describe('3c 终止条件全集（no-task/用户终止/死锁/超时/最大轮�
     await untilSettled(built.driver)
     expect(built.h.claimInputs).toHaveLength(3) // 恰好 maxRounds 轮——不多领
     const end = built.calls.at(-1)
-    expect(end?.text).toContain('[forge·结束]')
+    expect(end?.text).toContain('[forge·循环结束]')
     expect(end?.text).toContain('达到最大轮次上限')
   })
 
@@ -3444,7 +3444,7 @@ describe('3c 回归：循环生命周期归属会话无关（host registry 独�
     expect(built.driver.resume({ loopId })).toEqual({ ok: true, loopId })
     await untilSettled(built.driver)
     expect(built.driver.activeOf(OWNER)).toBeUndefined()
-    expect(built.calls.at(-1)?.text).toContain('[forge·结束]')
+    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
   })
 })
 

@@ -7,6 +7,7 @@ import {
   forgeEventGroupSource,
   forgeProgressRowItems,
   forgeProgressStatusTone,
+  forgeProgressStatusWord,
   FORGE_PROGRESS_STATUS_WORD,
   isForgeEventGroupData,
   isForgeProgressEntryData,
@@ -141,5 +142,19 @@ describe('进度状态词与族色（面板同语镜像）', () => {
     expect(forgeProgressStatusTone('blocked')).toBe('blk')
     expect(forgeProgressStatusTone('interrupted')).toBe('blk')
     expect(forgeProgressStatusTone('other')).toBe('run')
+  })
+  it('循环级/任务级词表分层（文案裁决 2026-10-31——循环级行一律带「循环」标记）', () => {
+    expect(forgeProgressStatusWord({ status: 'running', taskKey: 's/1.1' })).toBe('执行中')
+    expect(forgeProgressStatusWord({ status: 'blocked', taskKey: 's/1.1' })).toBe('阻塞')
+    expect(forgeProgressStatusWord({ status: 'running' })).toBe('循环进行中')
+    expect(forgeProgressStatusWord({ status: 'blocked' })).toBe('循环受阻')
+    expect(forgeProgressStatusWord({ status: 'completed' })).toBe('循环已结束')
+    expect(forgeProgressStatusWord({ status: 'interrupted' })).toBe('循环已结束')
+  })
+  it('循环级章词族色：循环受阻=blk / 循环结束·循环停止=done（旧事件词向后兼容保留）', () => {
+    expect(forgeEventBadgeTone('循环受阻')).toBe('blk')
+    expect(forgeEventBadgeTone('循环结束')).toBe('done')
+    expect(forgeEventBadgeTone('循环停止')).toBe('done')
+    expect(forgeEventBadgeTone('受阻')).toBe('blk')
   })
 })

@@ -111,9 +111,12 @@ const TONE_BY_BADGE: Readonly<Record<string, ForgeEventBadgeTone>> = {
   完成: 'done',
   结束: 'done',
   停止: 'done',
+  循环结束: 'done',
+  循环停止: 'done',
   阻塞: 'blk',
   受阻: 'blk',
   挂起: 'blk',
+  循环受阻: 'blk',
 }
 
 /** 徽记族色映射（未知徽记 = 中性 run 兜底） */
@@ -186,6 +189,20 @@ export const FORGE_PROGRESS_STATUS_WORD: Readonly<Record<string, string>> = {
   completed: '完成',
   blocked: '阻塞',
   interrupted: '已中断',
+}
+
+/** 循环级状态词（taskKey 缺席的循环级进度行——与任务级词表分层，一律带「循环」标记） */
+export const FORGE_LOOP_STATUS_WORD: Readonly<Record<string, string>> = {
+  running: '循环进行中',
+  completed: '循环已结束',
+  blocked: '循环受阻',
+  interrupted: '循环已结束',
+}
+
+/** 进度行状态词（任务级 = 裸状态词；循环级（taskKey 缺席）= 带「循环」标记词） */
+export function forgeProgressStatusWord(entry: { readonly status: string; readonly taskKey?: string }): string {
+  if (entry.taskKey === undefined) return FORGE_LOOP_STATUS_WORD[entry.status] ?? entry.status
+  return FORGE_PROGRESS_STATUS_WORD[entry.status] ?? entry.status
 }
 
 /** 进度状态族色（执行中=进行蓝 / 完成=完成绿 / 阻塞·中断=琥珀——徽记 tone 族同语义） */

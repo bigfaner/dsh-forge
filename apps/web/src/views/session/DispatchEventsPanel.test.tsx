@@ -333,7 +333,7 @@ describe('DispatchEventsPanelBody 纯渲染（展开态）', () => {
     })
     expect(markup).toContain('dswf-dep-row-key">feat-x')
     expect(markup).toContain('dswf-dep-status-loop">循环')
-    expect(markup).toContain('dswf-dep-row-title">已停止 · 按你的指令停止')
+    expect(markup).toContain('dswf-dep-row-title">循环已停止 · 按你的指令停止')
   })
   it('耗时徽标口径：执行中 = now 起算实时耗时；终态单事件行（时长不可辨）不呈现', () => {
     const start = Date.parse('2026-10-24T14:00:00Z')

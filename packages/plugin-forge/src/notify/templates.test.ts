@@ -46,9 +46,9 @@ const SAMPLES: readonly SampleCase[] = [
         taskLabel: 'm2-pipeline/2.9（诊断弹窗装配）',
         errorText: '子会话创建被拒（错误原文）',
       }),
-    expected: `[forge·自动重试] 任务源: m2-pipeline
+    expected: `[forge·循环停止] 任务源: m2-pipeline
 任务: m2-pipeline/2.9（诊断弹窗装配）
-事件: 启动子代理连续失败 3 次——已停止
+事件: 启动子代理连续失败 3 次——循环已停止
 阶段: 启动子代理
 错误: 子会话创建被拒（错误原文）
 系统: 已向你发起问询
@@ -66,7 +66,7 @@ const SAMPLES: readonly SampleCase[] = [
           { taskKey: '4.1', note: '等待 feature-b' },
         ],
       }),
-    expected: `[forge·受阻] 任务源: m2-pipeline
+    expected: `[forge·循环受阻] 任务源: m2-pipeline
 事件: 没有可执行的任务，且有任务阻塞中
 阻塞中: 3.1（修复任务也阻塞）· 4.1（等待 feature-b）
 系统: 已向你发起问询（附阻塞清单与完整原因）
@@ -85,7 +85,7 @@ const SAMPLES: readonly SampleCase[] = [
         instruction: '稍后重新执行 /run-dag-tasks m2-pipeline',
         taskSummaries: ['1.11 P1 修复 — 完成 · 18m', '4.2 导出功能 — 阻塞 · 等待 feature-b'],
       }),
-    expected: `[forge·结束] 任务源: m2-pipeline — 结束（等待超时）
+    expected: `[forge·循环结束] 任务源: m2-pipeline — 循环结束（等待超时）
 状态: 完成 4 · 阻塞 2 · 待处理 1
 任务概要: 1.11 P1 修复 — 完成 · 18m
 任务概要: 4.2 导出功能 — 阻塞 · 等待 feature-b
@@ -102,7 +102,7 @@ const SAMPLES: readonly SampleCase[] = [
         instruction: '若想派发其它提案或feature的任务，执行 /run-dag-tasks',
         taskSummaries: ['2.8 诊断弹窗装配 — 完成 · 32m'],
       }),
-    expected: `[forge·结束] 任务源: m2-pipeline — 全部任务已完成
+    expected: `[forge·循环结束] 任务源: m2-pipeline — 循环结束（全部任务已完成）
 状态: 完成 8 · 阻塞 0
 任务概要: 2.8 诊断弹窗装配 — 完成 · 32m
 下一步动作: 提示用户"若想派发其它提案或feature的任务，执行 /run-dag-tasks"`,
@@ -117,7 +117,7 @@ const SAMPLES: readonly SampleCase[] = [
         inFlightTaskKey: '2.9',
         taskSummaries: ['2.7 会话装配 — 完成 · 5m'],
       }),
-    expected: `[forge·停止] 任务源: m2-pipeline — 已按你的指令停止
+    expected: `[forge·循环停止] 任务源: m2-pipeline — 已按你的指令停止
 状态: 完成 5 · 执行中任务 2.9 已标记为中断
 任务概要: 2.7 会话装配 — 完成 · 5m
 下一步动作: 无`,
@@ -258,11 +258,11 @@ describe('S4 · 阻塞族详情行随落盘降级', () => {
 /** 摘要样例表（载荷与全文样例同源——断言事实短语 + 界界 + 零机制词） */
 const HEADLINE_SAMPLES: readonly { readonly no: string; readonly id: ScenarioId; readonly payload: NarrativePayloadMap[ScenarioId]; readonly mustContain: readonly string[] }[] = [
   { no: '⑩', id: 'blocked-ask-user', payload: { sourceSlug: 'm2-pipeline', taskLabel: '4.2 导出功能', reasonSummary: '验收标准冲突' }, mustContain: ['[forge·阻塞]', '4.2 导出功能 — 阻塞', '已发起问询'] },
-  { no: '⑬', id: 'spawn-failed-halted', payload: { sourceSlug: 'm2-pipeline', attempts: 3, instruction: '环境排查后重新开始' }, mustContain: ['[forge·自动重试]', '连续失败 3 次 — 已停止', '已发起问询'] },
-  { no: '⑭', id: 'blocked-pool', payload: { sourceSlug: 'm2-pipeline', blockedItems: [{ taskKey: '3.1', note: 'a' }, { taskKey: '4.1', note: 'b' }] }, mustContain: ['[forge·受阻]', '阻塞 2 项（3.1、4.1）'] },
-  { no: '⑮', id: 'finished-timeout', payload: { sourceSlug: 'm2-pipeline', reason: '等待超时', completed: 4, blocked: 2, pending: 1, instruction: '稍后重试' }, mustContain: ['[forge·结束] m2-pipeline — 结束（等待超时）', '完成 4', '阻塞 2', '待处理 1'] },
-  { no: '⑯', id: 'finished-all', payload: { sourceSlug: 'm2-pipeline', completed: 8, blocked: 0, instruction: '若想派发其它任务，执行 /run-dag-tasks' }, mustContain: ['[forge·结束] m2-pipeline — 全部任务已完成', '完成 8'] },
-  { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9' }, mustContain: ['[forge·停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
+  { no: '⑬', id: 'spawn-failed-halted', payload: { sourceSlug: 'm2-pipeline', attempts: 3, instruction: '环境排查后重新开始' }, mustContain: ['[forge·循环停止]', '连续失败 3 次 — 循环已停止', '已发起问询'] },
+  { no: '⑭', id: 'blocked-pool', payload: { sourceSlug: 'm2-pipeline', blockedItems: [{ taskKey: '3.1', note: 'a' }, { taskKey: '4.1', note: 'b' }] }, mustContain: ['[forge·循环受阻]', '阻塞 2 项（3.1、4.1）'] },
+  { no: '⑮', id: 'finished-timeout', payload: { sourceSlug: 'm2-pipeline', reason: '等待超时', completed: 4, blocked: 2, pending: 1, instruction: '稍后重试' }, mustContain: ['[forge·循环结束] m2-pipeline — 循环结束（等待超时）', '完成 4', '阻塞 2', '待处理 1'] },
+  { no: '⑯', id: 'finished-all', payload: { sourceSlug: 'm2-pipeline', completed: 8, blocked: 0, instruction: '若想派发其它任务，执行 /run-dag-tasks' }, mustContain: ['[forge·循环结束] m2-pipeline — 循环结束（全部任务已完成）', '完成 8'] },
+  { no: '⑰', id: 'stopped-by-command', payload: { sourceSlug: 'm2-pipeline', completed: 5, inFlightTaskKey: '2.9' }, mustContain: ['[forge·循环停止] m2-pipeline — 已按你的指令停止', '完成 5'] },
 ]
 
 describe('场景专用单行摘要（折叠位丰富——替代整段前 120 字符截断）', () => {

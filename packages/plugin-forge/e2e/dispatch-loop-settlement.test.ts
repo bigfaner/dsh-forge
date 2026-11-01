@@ -327,7 +327,7 @@ describe('e2e dogfood · 终局 settlement + 零残留（AC 8/11）', () => {
     const notices = built.calls.filter((c) => c.method === 'notice')
     expect(notices.length).toBeGreaterThan(0)
     for (const n of notices) expect(n.wakeup).toBeUndefined()
-    expect(settle?.text).toContain('[forge·结束] 任务源: feat-x — 全部任务已完成')
+    expect(settle?.text).toContain('[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）')
     // P8 评审指示段追加（四重点逐字在文——机制断言）
     expect(settle?.text).toContain('【代码评审指示】')
     for (const focus of P8_FOCUS_LINES) expect(settle?.text).toContain(focus)

@@ -16,7 +16,7 @@ import {
   forgeEventGroupSource,
   forgeProgressRowItems,
   forgeProgressStatusTone,
-  FORGE_PROGRESS_STATUS_WORD,
+  forgeProgressStatusWord,
   isForgeEventGroupData,
   type ForgeEventGroupData,
   type ForgeProgressRowData,
@@ -74,7 +74,7 @@ export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
 
 /** 进度行（任务轨单行——标题/状态/开始/结束/耗时） */
 function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
-  const statusWord = FORGE_PROGRESS_STATUS_WORD[row.entry.status] ?? row.entry.status
+  const statusWord = forgeProgressStatusWord(row.entry)
   const duration = forgeProgressDurationLabel(row)
   // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
   const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
@@ -117,9 +117,9 @@ export function forgeEventEntryDetail(entry: { readonly title: string; readonly 
     .join(' · ')
 }
 
-/** 循环级单行（无 taskKey 事件收敛最新态——状态词 + 备注，零耗时） */
+/** 循环级单行（无 taskKey 事件收敛最新态——循环级状态词 + 备注，零耗时） */
 function ForgeLoopRowView({ row }: { row: ForgeProgressRowData }) {
-  const statusWord = FORGE_PROGRESS_STATUS_WORD[row.entry.status] ?? row.entry.status
+  const statusWord = forgeProgressStatusWord(row.entry)
   return (
     <li className="dswf-event-entries-item dswf-event-entries-loop">
       <span className="dswf-event-entries-badge dswf-event-entries-loop-badge">循环</span>
