@@ -420,10 +420,12 @@ function forgeSettleMessage(text: string): unknown {
 }
 
 /** 结算必达告警（会话失活/投递面缺席时落盘——不投死信，降级为任意会话凭 slug 认领处置） */
-function warnSettleUndelivered(sessionId: string, text: string, reason: string): void {
-  console.warn(
-    `[forge·必达告警] 结算通知未送达（会话 ${sessionId} ${reason}）——挂起/结束处置已降级为任意会话凭容器 slug 认领（dispatchTask）。原文：${text.split('\n')[0] ?? ''}`,
-  )
+function warnSettleUndelivered(diag: ForgeDiagEmitFace | undefined, sessionId: string, text: string, reason: string): void {
+  emitForgeDiag(diag, {
+    level: 'warn',
+    event: 'forge-narration',
+    message: `结算通知未送达（会话 ${sessionId} ${reason}）——挂起/结束处置已降级为任意会话凭容器 slug 认领（dispatchTask）。原文：${text.split('\n')[0] ?? ''}`,
+  })
 }
 
 /** 上游 agent send 把手收窄（官方 Agent.send(message, target, wakeup) 鸭子——结构化最小面，零上游 import） */
@@ -455,7 +457,7 @@ export type NarrationActivationFace = (ownerSessionId: string) => Promise<unknow
  * send 面缺席 = 静默跳过（settle 形态加必达告警——降级为任意会话凭 slug 认领处置）；
  * narrator fail-soft 包装之外的第二道防线。
  */
-export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: NarrationActivationFace): NarrationChannel {
+export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: NarrationActivationFace, diag?: ForgeDiagEmitFace): NarrationChannel {
   return {
     async send(sessionId: string, text: string, options: NarrationSendOptions = {}): Promise<void> {
       const form = options.form ?? 'notice'
@@ -468,7 +470,12 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
           else activationFailed = true
         } catch (cause) {
           activationFailed = true
-          console.warn(`forge narration activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
+          emitForgeDiag(diag, {
+            level: 'warn',
+            event: 'forge-narration',
+            message: `forge narration activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+            sessionId,
+          })
         }
       }
       if (target === undefined) {
@@ -476,13 +483,16 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
         // 激活失败走 registry 兜底：注册表可持陈旧把手（send 面在场而运行时内件已死，
         // 调用静默无效即零落库——bug 8d1a18bd 同源）——必达告警留痕（激活成功径零日志）。
         if (activationFailed && typeof target?.send === 'function') {
-          console.warn(
-            `[forge·必达告警] 激活失败走 registry 兜底（会话 ${sessionId}）——注册表把手可能陈旧，send 静默无效即零落库。`,
-          )
+          emitForgeDiag(diag, {
+            level: 'warn',
+            event: 'forge-narration',
+            message: `激活失败走 registry 兜底（会话 ${sessionId}）——注册表把手可能陈旧，send 静默无效即零落库。`,
+            sessionId,
+          })
         }
       }
       if (typeof target?.send !== 'function') {
-        if (form === 'settle') warnSettleUndelivered(sessionId, text, '已失活/无活根或 send 面缺席')
+        if (form === 'settle') warnSettleUndelivered(diag, sessionId, text, '已失活/无活根或 send 面缺席')
         return
       }
       const message =
@@ -491,6 +501,68 @@ export function adaptAgentNarrationChannel(agents: AgentLookupFace, activate?: N
           : forgeUserMessage(text, form, options.headline, options.loop)
       target.send(message, INBOX_TARGET_NEXT_STEP, options.wakeup === true)
     },
+  }
+}
+
+// ─────────────────────────── 诊断发射面（AGENTS §7——diag/log 事件域类型化 emit 单面） ───────────────────────────
+
+/**
+ * 诊断事件通道名（官方 diag/log 事件域——core/telemetry DIAG_EVENT 单源同值镜像：
+ * boundaries 纪律禁插件 import core 包，本包以常量镜像 + 结构化 payload 面
+ * 消费同一事件域；全包零裸字符串站点——发射面只认本常量）。
+ */
+export const DIAG_EVENT = 'diag/log' as const
+
+/** 诊断级别（core DiagLevel 同值域：info/warn/error 三级——失败路径 warn、成功里程碑 info） */
+export type ForgeDiagLevel = 'info' | 'warn' | 'error'
+
+/** 诊断发射基础载荷（core DiagEventPayload 结构子面——process 进程位由发射缝统一补齐） */
+export interface ForgeDiagBase {
+  readonly level: ForgeDiagLevel
+  /** 诊断事件类别（功能域前缀命名——forge-narration / job-tree / loop-start 等） */
+  readonly event: string
+  readonly message: string
+  readonly stack?: string
+  readonly projectId?: string
+  readonly sessionId?: string
+}
+
+/** 诊断发射载荷（基础面 + 就地可得扩展字段——index signature 透传） */
+export interface ForgeDiagPayload extends ForgeDiagBase {
+  readonly [key: string]: unknown
+}
+
+/** 注入式诊断发射缝（装配期 createDiagEmitter 产物——ctx.emit 类型化闭包） */
+export type ForgeDiagEmitFace = (payload: ForgeDiagBase) => void
+
+/**
+ * 注入式诊断缝发射（diag-face-consolidation 统一配方——宿主侧全部诊断站点单出口）：
+ * 缝在场 → 透传（process='child' 由缝闭包补齐）；缝缺席或发射失败 → 按级分流 console
+ * 兜底（error→console.error、其余→console.warn——core emitDiagOrFallback 同径，
+ * 诊断不静默）。fire-and-forget：兜底自身永不抛（诊断面零反压业务）。
+ */
+export function emitForgeDiag(diag: ForgeDiagEmitFace | undefined, payload: ForgeDiagBase): void {
+  if (diag !== undefined) {
+    try {
+      diag(payload)
+      return
+    } catch {
+      // 发射失败 → 兜底（诊断不静默）
+    }
+  }
+  const line = `[${payload.event}] ${payload.message}`
+  if (payload.level === 'error') console.error(line)
+  else console.warn(line)
+}
+
+/**
+ * 建装配期诊断发射缝（ctx.emit 可选面收窄；缺席 = undefined——消费侧 emitForgeDiag
+ * 兜底径承担，诊断不静默）。
+ */
+export function createDiagEmitter(emit?: (event: string, payload: Record<string, unknown>) => void): ForgeDiagEmitFace | undefined {
+  if (emit === undefined) return undefined
+  return (payload) => {
+    emit(DIAG_EVENT, { ...payload, process: 'child' })
   }
 }
 
@@ -626,6 +698,8 @@ export function createExpertProfileResolver(deps: {
    *  一次性重扫，未结算前首笔 get 会误触发 not-found fail-loud；resolver 首调先等待本
    *  promise 结算——已由装配侧吞错归一为 settled-safe，此处零异常路径）。 */
   readonly ready?: Promise<void>
+  /** 诊断发射缝（diag-face-consolidation——settings 读降级告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }): ExpertProfileResolver {
   return async (taskType: string, expertKey?: string): Promise<ForgeExpertProfile | undefined> => {
     await deps.ready
@@ -638,7 +712,11 @@ export function createExpertProfileResolver(deps: {
           key = settings.experts?.mapping?.[taskType as TaskType] ?? key
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause)
-          console.warn(`forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`)
+          emitForgeDiag(deps.diag, {
+            level: 'warn',
+            event: 'expert-resolve',
+            message: `forge 专家映射读取降级（fail-soft，回落默认映射）：${taskType}——${message}`,
+          })
         }
       }
     }

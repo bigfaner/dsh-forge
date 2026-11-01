@@ -7,6 +7,8 @@
 // renderEndOfLoop 四分支 + P8 评审指示追加段）；占位符沿用「模板 + 类型化载荷」渲染机制
 // （notify/templates.ts renderNarrative 先例，不新造语法），注入前完整性校验：残留 <...> =
 // 渲染失败 → fail-soft 空串 + 落盘告警，绝不把占位原文发给模型。
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { LoopRegistry, LoopRecord } from './registry.js'
 import type { LoopEscalation } from './driver.js'
 
@@ -280,7 +282,7 @@ export function renderEndOfLoop(kind: EndOfLoopKind, payload: InjectionPayload):
 export function renderInjection(
   agentId: string,
   registry: Pick<LoopRegistry, 'all'>,
-  warn: (message: string) => void = (message) => console.warn(message),
+  diag?: ForgeDiagEmitFace,
 ): string {
   for (const record of registry.all()) {
     const payload = payloadOf(record)
@@ -295,7 +297,9 @@ export function renderInjection(
       continue
     }
     // 段级完整性校验（P3+P9 组合段整段校验——残留即整段跳过）
-    return checkPlaceholders(FORGE_DISPATCH_LOOP_SECTION_NAME, text, warn)
+    return checkPlaceholders(FORGE_DISPATCH_LOOP_SECTION_NAME, text, (message) =>
+      emitForgeDiag(diag, { level: 'warn', event: 'forge-injection', message }),
+    )
   }
   return ''
 }

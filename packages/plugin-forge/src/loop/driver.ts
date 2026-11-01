@@ -43,6 +43,8 @@ import type {
   SpawnWorker,
 } from '../dispatch-core/index.js'
 import { clearExclusiveLoopSource, ownerSingleActiveRejection, setExclusiveLoopSource } from '../dispatch-core/index.js'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import { renderNarrative, summarizeReason } from '../notify/index.js'
 import type { Narrator } from '../notify/index.js'
 import { renderEndOfLoop } from './injection.js'
@@ -503,7 +505,10 @@ async function ensureFirstPassClosure(loop: ActiveLoop): Promise<boolean> {
     await deriveKnowledgeTask(loop)
     return await ensureFirstPassMark(loop)
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-first-pass',
       `forge loop first-pass closure failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -575,7 +580,10 @@ async function deriveKnowledgeTask(loop: ActiveLoop): Promise<boolean> {
     })
     return true
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-knowledge',
       `forge loop knowledge task derivation failed (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -593,7 +601,7 @@ async function ensureFirstPassMark(loop: ActiveLoop): Promise<boolean> {
   try {
     const head = await headHashOf(loop)
     if (head === undefined) {
-      console.warn(`forge loop first-pass mark skipped (no base commit) for ${loop.record.source.slug}`)
+      emitLoopDiag(loop, 'warn', 'loop-mark', `forge loop first-pass mark skipped (no base commit) for ${loop.record.source.slug}`)
       return false
     }
     const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
@@ -606,7 +614,10 @@ async function ensureFirstPassMark(loop: ActiveLoop): Promise<boolean> {
     })
     return result.appended
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-mark',
       `forge loop first-pass mark failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -645,7 +656,10 @@ async function deriveRetroTask(loop: ActiveLoop, pendingFirstPass?: LoopCheckpoi
     })
     return true
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-retro',
       `forge loop retro task derivation failed (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -676,7 +690,7 @@ async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
       return // 容器未收口——不补
     const head = await headHashOf(loop)
     if (head === undefined) {
-      console.warn(`forge loop merged backfill skipped (no base commit) for ${loop.record.source.slug}`)
+      emitLoopDiag(loop, 'warn', 'loop-merged', `forge loop merged backfill skipped (no base commit) for ${loop.record.source.slug}`)
       return
     }
     const snapshots = await computeWaveSnapshot(loop.deps.tasks, loop.scope.projectId, loop.record.source)
@@ -688,7 +702,10 @@ async function ensureMergedBackfill(loop: ActiveLoop): Promise<void> {
       snapshots,
     })
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-merged',
       `forge loop merged backfill failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   }
@@ -855,8 +872,9 @@ export interface LoopDriverDeps {
   /** 机械上限注入（测试缝——缺省生产值；maxRounds = 3c 最大轮次封顶） */
   readonly limits?: { readonly maxRounds?: number }
   /**
-   * 诊断埋点面（AGENTS §7——循环里程碑经 diag/log 事件域落盘；装配面注入 emitDiag 闭包，
-   * 缺席 = 零埋点 fail-soft。fire-and-forget：诊断零循环正确性依赖）
+   * 诊断埋点面（AGENTS §7——循环里程碑与失败散点经 diag/log 事件域落盘；装配面注入诊断缝
+   * （faces.createDiagEmitter 产物），缺席/发射故障 = emitForgeDiag 按级 console 兜底。
+   * fire-and-forget：诊断零循环正确性依赖）
    */
   readonly diag?: LoopDiagSink
 }
@@ -869,7 +887,8 @@ export interface LoopDiagPayload {
   readonly projectId?: string
   readonly sessionId?: string
 }
-export type LoopDiagSink = (payload: LoopDiagPayload) => void
+/** 诊断埋点缝（faces ForgeDiagEmitFace 同一类型化发射面——驱动器别名沿用） */
+export type LoopDiagSink = ForgeDiagEmitFace
 
 /** 驱动器公开面（S2 消费：启动/停止/本会话活循环查询/全量活循环读数） */
 export interface LoopDriver {
@@ -1309,20 +1328,17 @@ function progressCountsOf(stats: TaskStats): ForgeProgressCounts {
 
 /**
  * 循环里程碑诊断埋点（bug 33728995④——AGENTS §7：启动/重试/挂起/结算经 diag 面 emit，
- * diag/log 落盘可查 loop 行；面缺席/发射故障 = 零埋点 fail-soft，零循环正确性依赖）
+ * diag/log 落盘可查 loop 行；diag-face-consolidation 起全站点统一经本面——面缺席/发射故障
+ * = emitForgeDiag 按级 console 兜底，零循环正确性依赖）
  */
 function emitLoopDiag(loop: ActiveLoop, level: LoopDiagPayload['level'], event: string, message: string): void {
-  try {
-    loop.deps.diag?.({
-      level,
-      event,
-      message,
-      projectId: loop.record.projectId,
-      sessionId: loop.record.ownerSessionId,
-    })
-  } catch {
-    // 诊断发射零循环正确性依赖——异常吞并
-  }
+  emitForgeDiag(loop.deps.diag, {
+    level,
+    event,
+    message,
+    projectId: loop.record.projectId,
+    sessionId: loop.record.ownerSessionId,
+  })
 }
 
 /**
@@ -1474,6 +1490,9 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           // 落行依赖此二依赖（缺席 = 机制惰性不判，行为零变化）
           ...(deps.checkpoints !== undefined ? { checkpoints: deps.checkpoints } : {}),
           ...(deps.resolveHeadCommit !== undefined ? { resolveHeadCommit: deps.resolveHeadCommit } : {}),
+          // 诊断缝透传结算核（diag-face-consolidation——review-wave/e2e 欠账 fail-soft 告警
+          // 走 diag 面；缺席 = emitForgeDiag console 兜底）
+          ...(deps.diag !== undefined ? { diag: deps.diag } : {}),
         },
         exec: {
           attribution: {},
@@ -1526,7 +1545,10 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         try {
           loop.proposalId = await deps.resolveProposalId(projectId, source)
         } catch (cause) {
-          console.warn(
+          emitLoopDiag(
+            loop,
+            'warn',
+            'loop-proposal-id',
             `forge loop proposal id resolve failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
           )
         }
@@ -1617,7 +1639,10 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           actor: 'core',
         })
       } catch (cause) {
-        console.warn(
+        emitLoopDiag(
+          loop,
+          'warn',
+          'loop-pause',
           `forge loop pause transition failed (${captured.taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
         )
       }
@@ -1776,7 +1801,10 @@ async function runLoop(loop: ActiveLoop): Promise<void> {
       if (outcome !== 'continue') break
     }
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-run',
       `forge dispatch loop terminated abnormally (${record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   } finally {
@@ -1803,7 +1831,10 @@ async function issueAttributionCards(loop: ActiveLoop, specs: readonly string[])
     try {
       await loop.deps.tasks.addTask(attributionTaskInput(loop.source, spec, { projectId: loop.scope.projectId }))
     } catch (cause) {
-      console.warn(
+      emitLoopDiag(
+        loop,
+        'warn',
+        'loop-e2e-baseline',
         `forge loop e2e baseline attribution card failed (${spec}): ${cause instanceof Error ? cause.message : String(cause)}`,
       )
     }
@@ -1838,7 +1869,10 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
       head = await cfg.readHead(loop.record.worktree)
     } catch (cause) {
       // HEAD 读失败（git 故障）——键不可得：基线跳过（简报零红灯行），循环不阻。
-      console.warn(
+      emitLoopDiag(
+        loop,
+        'warn',
+        'loop-e2e-baseline',
         `forge loop e2e baseline head read failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
       )
       return undefined
@@ -1854,14 +1888,17 @@ async function ensureE2eBaselineUncached(loop: ActiveLoop): Promise<E2eBaselineC
   }
   const entry = await baselineForHead(head, undefined, () => cfg.runSuite(loop.record.worktree))
   if (entry.error !== undefined) {
-    console.warn(`forge loop e2e baseline failed (${slug}): ${entry.error}`)
+    emitLoopDiag(loop, 'warn', 'loop-e2e-baseline', `forge loop e2e baseline failed (${slug}): ${entry.error}`)
   }
   // 成功解析结果落持久化缓存（error 形态不落——不可得 ≠ 全绿，下轮重算）；IO 故障 fail-soft
   if (head !== undefined && cachePath !== undefined && entry.error === undefined) {
     try {
       persistBaseline(cachePath, head, entry.redCases)
     } catch (cause) {
-      console.warn(
+      emitLoopDiag(
+        loop,
+        'warn',
+        'loop-e2e-baseline',
         `forge loop e2e baseline cache persist failed (${slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
       )
     }
@@ -2735,7 +2772,10 @@ async function interruptedize(loop: ActiveLoop | undefined, taskId: string, task
     const detail = await loop.deps.tasks.queryTask({ projectId: loop.record.projectId, taskRef, include: {} })
     if (TERMINAL_TASK_STATUSES.has(detail.task.taskStatus)) return false
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-stop',
       `forge loop stop status read failed, skip transition (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -2750,7 +2790,10 @@ async function interruptedize(loop: ActiveLoop | undefined, taskId: string, task
     })
     return true
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-stop',
       `forge loop stop transition failed (${taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
     return false
@@ -2782,13 +2825,19 @@ async function restorePausedCards(loop: ActiveLoop): Promise<void> {
           actor: 'core',
         })
       } catch (cause) {
-        console.warn(
+        emitLoopDiag(
+          loop,
+          'warn',
+          'loop-resume',
           `forge loop resume restore failed (${card.slug}/${card.localId}): ${cause instanceof Error ? cause.message : String(cause)}`,
         )
       }
     }
   } catch (cause) {
-    console.warn(
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-resume',
       `forge loop resume restore list failed (${loop.record.source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
     )
   }

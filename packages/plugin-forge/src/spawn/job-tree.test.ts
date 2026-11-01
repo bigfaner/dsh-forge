@@ -327,7 +327,7 @@ describe('R2-major②③（bug 458fa355）：互认竞态 / 宿主子进程收�
     rmSync(queueDir!, { recursive: true, force: true })
   })
 
-  it('失能可观测：launcher 装配失败 → console.error 无条件告警（非 DEBUG 门控）', async () => {
+  it('失能可观测：launcher 装配失败 → diag 兜底 console.error 无条件告警（非 DEBUG 门控）', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const guard = createWorkerTreeGuard(
@@ -337,7 +337,7 @@ describe('R2-major②③（bug 458fa355）：互认竞态 / 宿主子进程收�
       )
       await guard.whenReady
       expect(guard.keeperPid).toBeUndefined()
-      expect(errSpy.mock.calls.some((c) => String(c[0]).includes('[job-tree]'))).toBe(true)
+      expect(errSpy.mock.calls.some((c) => String(c[0]).startsWith('[job-tree'))).toBe(true)
     } finally {
       errSpy.mockRestore()
     }

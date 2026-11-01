@@ -27,8 +27,8 @@ import { createForgeCommands } from './commands/index.js'
 import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
-import { adaptAgentNarrationChannel, adaptDispatchJobs, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, SessionActivationFace } from './faces.js'
+import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
@@ -43,7 +43,7 @@ import { createTriageHook } from './triage/index.js'
 import { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderCommanderSection, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
-import { defaultWorkerTreeGuard } from './spawn/job-tree.js'
+import { defaultWorkerTreeGuard, setJobTreeDiagSink } from './spawn/job-tree.js'
 import type { SpawnWorker } from './dispatch-core/index.js'
 import { bindingProjectIds, createForgeTools, createProjectResolver } from './tools/index.js'
 import type { ForgeContextFace } from './tools/index.js'
@@ -77,10 +77,15 @@ export interface ForgePluginConfig {
   e2eBaselineGate?: boolean
 }
 
-/** 启动对账降级告警（fail-soft 单行——console.warn；降级 = 遗留 in_progress 原样，下次重启重试） */
-function warnReconcileDegraded(projectId: string, cause: unknown): void {
+/** 启动对账降级告警（fail-soft 单行——diag 告警留痕；降级 = 遗留 in_progress 原样，下次重启重试） */
+function warnReconcileDegraded(diag: ForgeDiagEmitFace | undefined, projectId: string, cause: unknown): void {
   const message = cause instanceof Error ? cause.message : String(cause)
-  console.warn(`forge 启动对账降级（fail-soft，下次重启重试）：${projectId}——${message}`)
+  emitForgeDiag(diag, {
+    level: 'warn',
+    event: 'forge-reconcile',
+    message: `forge 启动对账降级（fail-soft，下次重启重试）：${projectId}——${message}`,
+    projectId,
+  })
 }
 
 /** 函数插件形状（Plugin.Function + inject 元数据） */
@@ -98,6 +103,10 @@ const forgePlugin: ForgePlugin = Object.assign(
     // 词汇注册先行（#35——'forge/progress' 进已知事件集：未注册时持久化读路径拒绝
     // 解读含该事件的日志=历史加载失败；fire-and-forget 毫秒级，先于任何会话观测）。
     registerProgressEventVocabulary()
+    // 诊断发射缝（diag-face-consolidation——宿主侧诊断站点统一经 emitForgeDiag 走官方
+    // diag/log 事件域，process='child' 缝闭包补齐；face 缺席/发射失败 = 按级 console 兜底）
+    const diag = createDiagEmitter(ctx.emit)
+    setJobTreeDiagSink(diag) // job-tree keeper 失能告警（level=error，event 前缀 job-tree）同缝落盘
     // 事件链装配（3.3/3.4）：总线 → sink（emit + 会话目录记忆——core deriveTaskStoreDir
     // 单源）→ 监听器（唯一写者——容器维度 logs/{slug}.jsonl；dirOf 未命中 = fail-soft 丢行·绝不落相对路径）
     const bus = createForgeEventBus()
@@ -156,11 +165,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       return undefined
     }
     const emitResolverDiag = (payload: { event: string; level: 'info' | 'warn' | 'error'; message: string } & Record<string, unknown>): void => {
-      try {
-        ctx.emit?.('diag/log', { ...payload, process: 'child' })
-      } catch {
-        // diag 通道缺席/发射故障 = 零埋点 fail-soft（诊断不构成取用正确性依赖）
-      }
+      emitForgeDiag(diag, payload)
     }
     // registerRoot/refresh 是幂等副作用面（只登记不重扫/整树重扫）——按 experts face 实例
     // 身份做一次性接线记忆（服务对象本身零缓存：热换代即新实例新接线；presence 判定每调
@@ -177,7 +182,11 @@ const forgePlugin: ForgePlugin = Object.assign(
         experts.registerRoot(ctx, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME)
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause)
-        console.warn(`forge 预设专家目录 registerRoot 失败（fail-soft，随包预设层缺席）：${message}`)
+        emitForgeDiag(diag, {
+          level: 'warn',
+          event: 'forge-experts',
+          message: `forge 预设专家目录 registerRoot 失败（fail-soft，随包预设层缺席）：${message}`,
+        })
       }
       expertsReady =
         typeof experts.refresh === 'function'
@@ -185,7 +194,11 @@ const forgePlugin: ForgePlugin = Object.assign(
               .call(experts)
               .catch((cause: unknown) => {
                 const message = cause instanceof Error ? cause.message : String(cause)
-                console.warn(`forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`)
+                emitForgeDiag(diag, {
+                  level: 'warn',
+                  event: 'forge-experts',
+                  message: `forge 预设专家目录 refresh 失败（fail-soft，watch 失效回调后续重扫）：${message}`,
+                })
               })
               .then(() => undefined)
           : Promise.resolve()
@@ -227,6 +240,7 @@ const forgePlugin: ForgePlugin = Object.assign(
             experts,
             ready: expertsReady,
             ...(settingsService !== undefined ? { settings: settingsService } : {}),
+            ...(diag !== undefined ? { diag } : {}),
           })(taskType, expertKey)
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause)
@@ -354,11 +368,11 @@ const forgePlugin: ForgePlugin = Object.assign(
       agentsRegistry !== undefined
         ? // bug 8d1a18bd：叙述径激活缝与指令径同源（enterAgent——sessionController.resolveAgent
           // 活根前置）；激活恒先行，registry 把手仅兜底（陈旧把手不静默丢消息）。
-          adaptAgentNarrationChannel(agentsRegistry, enterAgent)
+          adaptAgentNarrationChannel(agentsRegistry, enterAgent, diag)
         : { send: async () => {} }
     // 1.17 循环进度 append 面（'forge/progress' 会话事件——同 agents 注册表鸭子消费，
     // 链 = agent.session.append；注册表缺席 = 面不注入，驱动器零发射 fail-soft）。
-    const progressAppend = adaptSessionProgressAppend(agentsRegistry)
+    const progressAppend = adaptSessionProgressAppend(agentsRegistry, diag)
     // S2 宿主派发循环装配单例（run-tasks-host-command S1b/S1c/S4 接线）：驱动器 + 叙述面 +
     // 第三层裁决挂钩 + 第二层处置钩子真绑定（1.11 装配接线收口——LoopTriageInput 每循环
     // 身份载体 ownerSessionId/parent/signal 逐调用绑定，钩子服务面 tasks/spawn 与驱动器
@@ -390,7 +404,7 @@ const forgePlugin: ForgePlugin = Object.assign(
             })
           }, { treeGuard })
         : undefined
-    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn({ treeGuard }) // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
+    const spawn = takeForgeSpawnOverride() ?? planSpawn ?? createInProcessDriverSpawn({ treeGuard, ...(diag !== undefined ? { diag } : {}) }) // 装配单例（工具壳与循环驱动器同一 spawn 真绑定）
     // 容器目录解析缝（projectId→workspaceDir 反向解析——incident-log 落盘面，1.11 收口）：
     // 装配期逐绑定项目预热 + 未命中懒解析记忆化（faces.createProjectContainerDirs——解析链
     // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
@@ -493,11 +507,9 @@ const forgePlugin: ForgePlugin = Object.assign(
       spawn,
       narrator,
       events: sink,
-      // 诊断埋点面（bug 33728995④——AGENTS §7：循环里程碑经官方 diag/log 事件域 emit，
-      // child-relay 转发 main 落盘；process 标签在此补齐——驱动器窄投影不含该位）
-      diag: (payload) => {
-        ;(ctx as unknown as { emit(event: string, payload: unknown): void }).emit('diag/log', { ...payload, process: 'child' })
-      },
+      // 诊断埋点面（diag-face-consolidation——AGENTS §7：循环里程碑经官方 diag/log 事件域 emit；
+      // 面缺席/发射故障 = emitForgeDiag 按级 console 兜底——process 标签由 diag 缝闭包补齐）
+      ...(diag !== undefined ? { diag } : {}),
       // 机械③/④（bug 548ea94b 装配断链修复）：checkpoints 消费面 = ctx.forgeCheckpoints 直传
       // 域侧（ensureCheckpoint 幂等语义单点落域——事务内唯一索引背书，不经包装）；proposalId
       // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
@@ -530,6 +542,8 @@ const forgePlugin: ForgePlugin = Object.assign(
         ? {
             escalation: createUserQuestionsEscalation({
               ask: askFace,
+              // 诊断缝随载（diag-face-consolidation——问询/回执 fail-soft 告警走 diag 面）
+              ...(diag !== undefined ? { diag } : {}),
               // 裁决回执经叙述通道唤醒径送达主会话（send(nextStep, true) 即时唤醒——闭环
               // 断环修复的唤醒面升级：回执含答案文本；通道缺席形态 send 已为 no-op，
               // fail-soft 同源）
@@ -647,6 +661,8 @@ const forgePlugin: ForgePlugin = Object.assign(
           ...(agentsRegistry !== undefined ? { resolveAgent: (ownerSessionId: string) => agentsRegistry?.get(ownerSessionId) } : {}),
           // 1.19 未进入会话激活随载（先进入再提交再启动——undefined.send 深层根因修复）
           ...(enterAgent !== undefined ? { enterAgent } : {}),
+          // 诊断缝随载（diag-face-consolidation——指令面激活/提交/打断 fail-soft 告警走 diag 面）
+          ...(diag !== undefined ? { diag } : {}),
         })
         const registered = [commands.register(forgeCommands.runDagTasks), commands.register(forgeCommands.stopDagTasks)]
         disposeCommands = () => {
@@ -666,10 +682,10 @@ const forgePlugin: ForgePlugin = Object.assign(
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
           .catch((cause: unknown) => {
-            warnReconcileDegraded(projectId, cause)
+            warnReconcileDegraded(diag, projectId, cause)
           })
       } catch (cause) {
-        warnReconcileDegraded(projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
+        warnReconcileDegraded(diag, projectId, cause) // 同步抛（服务面缺席等）——fail-soft 同径
       }
     }
     // 1.16 文档位置按会话工作区注入（bug 5adb5960 根治：段此前取 boundProjectIds[0]
@@ -751,7 +767,7 @@ const forgePlugin: ForgePlugin = Object.assign(
     const disposeDispatchLoop = ctx.systemPrompt.section({
       name: FORGE_DISPATCH_LOOP_SECTION_NAME,
       order: FORGE_DOC_STYLE_SECTION_ORDER + FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, // 512（doc-style 511 之后——forge 段族次序稳定）
-      text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry)),
+      text: (context) => (context?.agent?.id === undefined ? '' : renderInjection(context.agent.id, loopRegistry, diag)),
     })
     // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
     // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts

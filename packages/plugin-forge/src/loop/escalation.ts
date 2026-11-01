@@ -5,13 +5,15 @@
 // 2026-10-13：用户定罪「人已答、主会话无回复」——裁决绕主会话，回执不绕）。
 //
 // 问询载荷纪律（AC）：reason 原文 + 处置历史全文进问询 detail（叙述面仅摘要——decisions #24
-// 分级呈现第三档 = 裁决问询全文）。问询 fail-soft：ask 面缺席/拒绝 = console.warn 降级，
+// 分级呈现第三档 = 裁决问询全文）。问询 fail-soft：ask 面缺席/拒绝 = diag warn 降级，
 // 绝不拖垮循环终态收口（SC7「注入失败循环照常结束」同源纪律）。
 //
 // 上游缝（结构化最小面）：@deepseek-ai/dsh-user-questions UserQuestionService.ask(request) —
 // questions: AskUserQuestionItem[]（id/question/detail/header/options），agent 可选（活根
 // 校验）。本面零 @deepseek-ai import（boundaries 白名单单点在 spawn driver）——ask 面由装配
 // 方以结构化最小面注入（reflect.get('userQuestions') 防御读取配方，R3）。
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { LoopEscalation, LoopEscalationHook } from './driver.js'
 
 /** 问询选项（AskUserQuestionOption 结构化最小面） */
@@ -99,6 +101,8 @@ export interface UserQuestionsEscalationDeps {
    *  loop-event-delivery 回执唤醒径：options.wakeup=true——回执改走 send(nextStep, true)
    *  即时唤醒主 agent（含答案文本，闭环断环修复的唤醒面升级；headline 为折叠摘要） */
   readonly notifyReceipt?: (sessionId: string, text: string, options?: { readonly wakeup?: boolean; readonly headline?: string }) => Promise<void>
+  /** 诊断发射缝（diag-face-consolidation——问询/回执 fail-soft 告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 /** 问询材料（renderEscalationAsk 产物——纯文本面，单测锚） */
@@ -309,7 +313,12 @@ export function createUserQuestionsEscalation(deps: UserQuestionsEscalationDeps)
         agent,
       )
       if (outcome.kind === 'failed') {
-        console.warn(`forge loop adjudication ask failed (${escalation.kind}): ${outcome.reason}`)
+        emitForgeDiag(deps.diag, {
+          level: 'warn',
+          event: 'forge-adjudication',
+          message: `forge loop adjudication ask failed (${escalation.kind}): ${outcome.reason}`,
+          sessionId: escalation.ownerSessionId,
+        })
       }
       if (deps.notifyReceipt === undefined) return
       const receipt = renderEscalationReceipt(escalation, outcome)
@@ -318,9 +327,12 @@ export function createUserQuestionsEscalation(deps: UserQuestionsEscalationDeps)
         // 含答案文本（裁决 label 全文在 receipt.text），人已答必有回响且有唤醒。
         await deps.notifyReceipt(escalation.ownerSessionId, receipt.text, { wakeup: true, headline: receipt.headline })
       } catch (cause) {
-        console.warn(
-          `forge loop adjudication receipt failed (${escalation.kind}): ${cause instanceof Error ? cause.message : String(cause)}`,
-        )
+        emitForgeDiag(deps.diag, {
+          level: 'warn',
+          event: 'forge-adjudication',
+          message: `forge loop adjudication receipt failed (${escalation.kind}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          sessionId: escalation.ownerSessionId,
+        })
       }
     },
   }

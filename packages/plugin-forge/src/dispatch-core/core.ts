@@ -38,7 +38,7 @@ import type {
 import { WORKER_TOOL_NAME_FAMILY } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import type { DispatchJobOutcome, DispatchJobsFace, WorkerDispatchProfile } from '../faces.js'
+import type { DispatchJobOutcome, DispatchJobsFace, ForgeDiagEmitFace, WorkerDispatchProfile } from '../faces.js'
 import { deriveWorkerToolFilter, reconcileWorkerReasoning, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
 import {
@@ -120,6 +120,8 @@ export interface DispatchCoreDeps {
    * 实现侧 fail-loud 抛错原样外抛（claim 期已同径 fail-loud，此处同语义兜底）。
    */
   readonly resolveWorkerProfile?: (taskType: string) => Promise<WorkerDispatchProfile | undefined>
+  /** 诊断发射缝（diag-face-consolidation——结算核 fail-soft 告警走 diag 面；透传 settleWorkerRun） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */

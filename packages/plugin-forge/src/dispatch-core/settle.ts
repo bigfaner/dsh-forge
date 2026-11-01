@@ -9,6 +9,8 @@ import { execFile } from 'node:child_process'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
@@ -18,7 +20,7 @@ import type { DispatchSpawnedResult } from './result.js'
 // 提案 forge-verification-hardening M5「标记体系」：每轮 review/走查修正波结算落
 // review-wave-N 检查点（Blocker 返工批 / fix 链收口），附标记时刻四列累计计数快照
 // （tasks_total / commits_total / fixes_total / evidence_debts_total——提案统计口径）。
-// fail-soft：标记失败 console.warn 留痕，不回滚已定结算；依赖缺席（checkpoints 面 /
+// fail-soft：标记失败 diag 告警留痕，不回滚已定结算；依赖缺席（checkpoints 面 /
 // proposalId 映射）= 机制惰性不判，行为零变化。
 
 /** checkpoints 域服务的结算侧结构化消费面（结构兼容 core createCheckpointsService——插件禁 import core） */
@@ -111,12 +113,13 @@ function isReviewWavePoint(task: TaskSnapshot, outcome: 'success' | 'blocked'): 
   return task.taskType === 'coding-fix' || task.sourceTaskId !== undefined
 }
 
-/** review-wave-N 标记落行（fail-soft——任何失败 console.warn 留痕，不回滚已定结算） */
+/** review-wave-N 标记落行（fail-soft——任何失败 diag 告警留痕，不回滚已定结算） */
 async function recordWaveCheckpoint(
   deps: {
     readonly tasks: ForgeTasksService
     readonly checkpoints?: SettleCheckpointsFace
     readonly resolveHeadCommit?: HeadCommitResolver
+    readonly diag?: ForgeDiagEmitFace
   },
   ctx: {
     readonly projectId: string
@@ -134,7 +137,12 @@ async function recordWaveCheckpoint(
       (ctx.worktreeCwd !== undefined ? await (deps.resolveHeadCommit ?? gitHeadCommit)(ctx.worktreeCwd) : undefined) ??
       ctx.submitCommitHash
     if (headCommit === undefined) {
-      console.warn(`forge settle: review-wave mark skipped (no base commit) for ${ctx.task.slug}/${ctx.task.localId}`)
+      emitForgeDiag(deps.diag, {
+        level: 'warn',
+        event: 'forge-settle',
+        message: `forge settle: review-wave mark skipped (no base commit) for ${ctx.task.slug}/${ctx.task.localId}`,
+        projectId: ctx.projectId,
+      })
       return
     }
     const snapshots = await computeWaveSnapshot(deps.tasks, ctx.projectId, ctx.task.source)
@@ -146,9 +154,12 @@ async function recordWaveCheckpoint(
       snapshots,
     })
   } catch (cause) {
-    console.warn(
-      `forge settle: review-wave checkpoint failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
-    )
+    emitForgeDiag(deps.diag, {
+      level: 'warn',
+      event: 'forge-settle',
+      message: `forge settle: review-wave checkpoint failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: ctx.projectId,
+    })
   }
 }
 
@@ -223,18 +234,18 @@ export const gitCommitLanding: CommitLandingVerifier = async (worktreeDir, commi
 /**
  * e2e 取证债欠账任务（改进7）：success 结算 submit record 携带 evidenceDebt = 实现态
  * 部分结算——同容器自动生成独立 test-run 欠账任务（dependsOn 实现卡 localId，不阻塞
- * 源卡——实现卡已 completed）。落库失败 fail-soft（console.warn——取证欠账丢失留痕，
+ * 源卡——实现卡已 completed）。落库失败 fail-soft（diag 告警留痕，
  * 不回滚已定结算）。
  */
 async function createE2eDebtTask(
-  tasks: ForgeTasksService,
+  deps: { readonly tasks: ForgeTasksService; readonly diag?: ForgeDiagEmitFace },
   ctx: { readonly projectId: string; readonly task: TaskSnapshot },
   debt: NonNullable<TaskRecordEntry['evidenceDebt']>,
   e2eBaselineRedCases?: readonly string[],
 ): Promise<DispatchSpawnedResult['evidenceDebt']> {
   try {
     const specsLine = debt.specs.join(', ')
-    const added = await tasks.addTask({
+    const added = await deps.tasks.addTask({
       projectId: ctx.projectId,
       source: ctx.task.source,
       title: `e2e 补充验证：${ctx.task.title}`,
@@ -255,9 +266,12 @@ async function createE2eDebtTask(
     })
     return { taskRef: { slug: added.slug, localId: added.localId }, suite: debt.suite, specs: debt.specs }
   } catch (cause) {
-    console.warn(
-      `forge settle: e2e debt test-run task failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
-    )
+    emitForgeDiag(deps.diag, {
+      level: 'warn',
+      event: 'forge-settle',
+      message: `forge settle: e2e debt test-run task failed for ${ctx.task.slug}/${ctx.task.localId}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: ctx.projectId,
+    })
     return undefined
   }
 }
@@ -314,6 +328,8 @@ export async function settleWorkerRun(
     readonly checkpoints?: SettleCheckpointsFace
     /** 容器分支 HEAD 解析器（可选——缺席回落 gitHeadCommit 真解析；单测注入桩） */
     readonly resolveHeadCommit?: HeadCommitResolver
+    /** 诊断发射缝（diag-face-consolidation——fail-soft 告警走 diag 面；缺席 = console 兜底） */
+    readonly diag?: ForgeDiagEmitFace
   },
   ctx: {
     readonly projectId: string
@@ -428,7 +444,7 @@ export async function settleWorkerRun(
   // 机械④：修正波结算点落 review-wave-N 检查点（blocked = Blocker 返工批；fix 类任务收口
   // = fix 链收口）——fail-soft，落点核验拒绝径（landing-rejected 提前返回）不落标记
   await recordWaveCheckpoint(
-    { tasks: deps.tasks, checkpoints: deps.checkpoints, resolveHeadCommit: deps.resolveHeadCommit },
+    { tasks: deps.tasks, checkpoints: deps.checkpoints, resolveHeadCommit: deps.resolveHeadCommit, diag: deps.diag },
     {
       projectId: ctx.projectId,
       task: ctx.task,
@@ -442,7 +458,7 @@ export async function settleWorkerRun(
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =
     outcome === 'success' && submitRecord?.evidenceDebt !== undefined
-      ? await createE2eDebtTask(deps.tasks, ctx, submitRecord.evidenceDebt, ctx.e2eBaselineRedCases)
+      ? await createE2eDebtTask({ tasks: deps.tasks, diag: deps.diag }, ctx, submitRecord.evidenceDebt, ctx.e2eBaselineRedCases)
       : undefined
   const pool: PoolSnapshot = poolOf(
     await deps.tasks.taskStats({

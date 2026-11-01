@@ -5,7 +5,8 @@
 // 文本「本会话没有派发任务」，不附归属、不误停其它会话循环（跨会话隔离判定在驱动器
 // registry.byOwner——driver 层另有 pin）。
 import type { LoopDriver } from '../loop/index.js'
-import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace, ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
 
 /** 指令名（无 input 描述符——无参指令，composer 不展示占位） */
 export const STOP_DAG_TASKS_NAME = 'stop-dag-tasks'
@@ -15,6 +16,8 @@ export const NO_ACTIVE_LOOP_TEXT = '本会话没有派发任务'
 
 export interface StopDagTasksDeps {
   readonly driver: LoopDriver
+  /** 诊断发射缝（diag-face-consolidation——打断失败 fail-soft 告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 /** handler（ForgeCommandDefinition.handler 形状——UI command plane 直执行，零模型消息） */
@@ -31,7 +34,12 @@ export function createStopDagTasksHandler(
       try {
         agent.cancel({ kind: 'user' }, { keepInbox: true })
       } catch (cause) {
-        console.warn(`forge stop-dag-tasks: interrupt in-flight turn failed (fail-soft, stop continues): ${cause instanceof Error ? cause.message : String(cause)}`)
+        emitForgeDiag(deps.diag, {
+          level: 'warn',
+          event: 'forge-stop-dag-tasks',
+          message: `forge stop-dag-tasks: interrupt in-flight turn failed (fail-soft, stop continues): ${cause instanceof Error ? cause.message : String(cause)}`,
+          sessionId: agent.session.id,
+        })
       }
     }
     // 停止作用域键 = 敲指令会话（decisions #20）——驱动器按归属拒绝他会话循环

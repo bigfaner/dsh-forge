@@ -18,6 +18,27 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import type { Readable } from 'node:stream'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
+
+// ─────────────────────────── 诊断发射缝（diag-face-consolidation——keeper 失能告警属关键诊断） ───────────────────────────
+
+/**
+ * job-tree 诊断缝（模块级单点——装配方经 setJobTreeDiagSink 注入 createDiagEmitter 产物；
+ * keeper 失能/队列故障告警属关键诊断，全部经 diag 面 level=error 落盘。缝缺席/发射失败 =
+ * emitForgeDiag 按级 console 兜底（未接线形态行为不变——单测 console.error 断言兼容））。
+ */
+let jobTreeDiagSink: ForgeDiagEmitFace | undefined
+
+/** 注入 job-tree 诊断缝（装配期一次——重复注入以最后一次为准；undefined = 撤回走兜底） */
+export function setJobTreeDiagSink(sink: ForgeDiagEmitFace | undefined): void {
+  jobTreeDiagSink = sink
+}
+
+/** job-tree 诊断发射（event 前缀 job-tree 单点——九站点统一出口） */
+function jobTreeDiag(event: string, message: string, stack?: string): void {
+  emitForgeDiag(jobTreeDiagSink, { level: 'error', event, message, ...(stack !== undefined ? { stack } : {}) })
+}
 
 /** keeper 轮询周期（candidate 上报时延上界——毫秒） */
 const KEEPER_POLL_MS = 300
@@ -347,7 +368,7 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       this.queueDirReady = true
       return true
     } catch (err) {
-      console.error('[job-tree] 指令队列目录创建失败——守卫禁用', err)
+      jobTreeDiag('job-tree-queue', `指令队列目录创建失败——守卫禁用：${String(err)}`, err instanceof Error ? err.stack : undefined)
       this.enabled = false
       return false
     }
@@ -379,31 +400,31 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       }
       // keeper 未就绪先亡（PowerShell 缺席/脚本异常）——守卫转禁用态（fail-soft，不再等 ready）
       void raw.exited.then(() => {
-        if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') console.error(`[job-tree] keeper exited before reclaim`)
+        if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') jobTreeDiag('job-tree-debug', 'keeper exited before reclaim')
         // Root cause: reclaim() 为 guard 复位先清 keeperPid——以 keeperPid===undefined 判
         // 「未就绪先亡」会把正常回收后的 keeper 退出误诊为禁用；就绪与否独立记账。
         if (!this.keeperReady) {
           this.keeperDead = true
           this.enabled = false
           this.done = true
-          console.error('[job-tree] keeper 未就绪先亡——守卫禁用')
+          jobTreeDiag('job-tree-keeper', 'keeper 未就绪先亡——守卫禁用')
         }
       })
       const onLine = (line: string): void => this.onKeeperLine(line)
       raw.stdout.on('data', (chunk: Buffer | string) => {
-        if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') console.error(`[job-tree][keeper-out] ${String(chunk).trim()}`)
+        if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') jobTreeDiag('job-tree-debug', `[keeper-out] ${String(chunk).trim()}`)
         for (const line of String(chunk).split('\n')) {
           const clean = line.replace(/\r$/, '').trim() // CRLF 剥离——[Console]::Out 行尾 \r 破坏锚定匹配
           if (clean !== '') onLine(clean)
         }
       })
       if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') {
-        console.error(`[job-tree] keeper spawned pid=${raw.pid} queue=${this.queueDir}`)
+        jobTreeDiag('job-tree-debug', `keeper spawned pid=${raw.pid} queue=${this.queueDir}`)
         const err = (raw as unknown as { stderr?: { on(ev: string, cb: (c: unknown) => void): void } }).stderr
-        err?.on('data', (c) => console.error(`[job-tree][keeper-err] ${String(c).trim()}`))
+        err?.on('data', (c) => jobTreeDiag('job-tree-debug', `[keeper-err] ${String(c).trim()}`))
       }
     } catch (err) {
-      console.error('[job-tree] keeper 装配失败——守卫禁用', err)
+      jobTreeDiag('job-tree-keeper', `keeper 装配失败——守卫禁用：${String(err)}`, err instanceof Error ? err.stack : undefined)
       this.enabled = false // fail-soft 禁用态——worker 正常路径不受守卫装配故障牵连
       this.done = true
     }
@@ -465,7 +486,7 @@ class WorkerTreeGuardImpl implements WorkerTreeGuard {
       // 队列写失败 = 指令不可达（禁用态化）——worker 正常路径不受牵连。
       // queueDirReady 同步失效：目录可能被外部清理（Temp 清理器），后续 terminate 兜底径
       // 经 ensureQueueDir 重建目录自愈；非 terminate 指令已被入口 enabled 门拦截。
-      console.error('[job-tree] 指令队列写失败——指令不可达，守卫禁用', err)
+      jobTreeDiag('job-tree-queue', `指令队列写失败——指令不可达，守卫禁用：${String(err)}`, err instanceof Error ? err.stack : undefined)
       this.queueDirReady = false
       this.enabled = false
     }
@@ -535,7 +556,7 @@ const pwshKeeperLauncher: KeeperLauncher = ({ hostPid, pollMs, exclusions, assem
   )
   const exited = new Promise<void>((resolve) => {
     child.once('exit', (code) => {
-      if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') console.error(`[job-tree][keeper-exit] pid=${child.pid} code=${code}`)
+      if (process.env.DSH_FORGE_TREE_GUARD_DEBUG === 'on') jobTreeDiag('job-tree-debug', `[keeper-exit] pid=${child.pid} code=${code}`)
       resolve()
     })
     child.once('error', () => resolve())

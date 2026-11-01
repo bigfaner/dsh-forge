@@ -17,6 +17,8 @@
 import { TASK_STATUS_LABELS } from '@dsh-forge/contracts'
 import type { ContainerRef, ForgeTasksService, TaskCard, TaskStatus } from '@dsh-forge/contracts'
 import { forgeCommandLineMessage } from '../faces.js'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import { askOption } from '../loop/index.js'
 import type { EscalationAskFace, LoopDriver, LoopRecord } from '../loop/index.js'
 import type { ForgeCommandInvocation, ForgeCommandResult } from '../faces.js'
@@ -53,6 +55,8 @@ export interface RunDagTasksDeps {
    *  激活不可达，保持 1.18 回执指引语义）。返回活根 agent（registry 可 get 命中）或
    *  undefined（激活失败/面故障——调用方落入既有 registryMissed 回执路）。 */
   readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>
+  /** 诊断发射缝（diag-face-consolidation——激活/提交 fail-soft 告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 // ─────────────────────────── 单查询枚举（「尚有非终态任务的任务源」） ───────────────────────────
@@ -383,7 +387,7 @@ async function startSource(deps: RunDagTasksDeps, ctx: InvokeContext, source: Co
   // 活根为次选（1.18），ctx.parent 仅双缺时的 fallback（向后兼容）
   const commit = materialized
     ? { committed: true, registryMissed: false }
-    : commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source, activated)
+    : commitDispatchLine(deps.resolveAgent, ctx.sessionId, ctx.parent, source, activated, deps.diag)
   if (!commit.committed) {
     return commitFailedReceipt(source, commit) // 1.20：会话未创建成功 → 循环不启动
   }
@@ -468,7 +472,7 @@ function commitFailedReceipt(source: ContainerRef, commit: CommitOutcome): Forge
  * 在场而运行时内件 undefined，投递即 `undefined.send` 抛错；「registry 已命中 = 已进入」
  * 的短路判据会把激活步整个跳过）。激活面（host sessionController.resolveAgent——上游
  * prompt 径同款进入机制）在场即恒激活：成功返回活根（提交目标首选）；失败/抛错 = fail-soft
- * undefined（不外抛、console.warn 留痕），调用方落入 registry/fallback 兜底与 1.18
+ * undefined（不外抛、diag 告警留痕），调用方落入 registry/fallback 兜底与 1.18
  * registryMissed 回执路（指引激活，不静默）。激活面缺席（旧装配形态）= undefined——
  * 向后兼容语义原样（registry/ctx.parent fallback 承接）。
  */
@@ -477,10 +481,20 @@ async function enterLiveRoot(deps: RunDagTasksDeps, sessionId: string): Promise<
   try {
     const entered = await deps.enterAgent(sessionId)
     if (entered !== undefined) return entered
-    console.warn(`forge dispatch line activation failed (${sessionId}): sessionController 返回非活根（error 路或会话不存在）`)
+    emitForgeDiag(deps.diag, {
+      level: 'warn',
+      event: 'forge-dispatch-line',
+      message: `forge dispatch line activation failed (${sessionId}): sessionController 返回非活根（error 路或会话不存在）`,
+      sessionId,
+    })
     return undefined
   } catch (cause) {
-    console.warn(`forge dispatch line activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`)
+    emitForgeDiag(deps.diag, {
+      level: 'warn',
+      event: 'forge-dispatch-line',
+      message: `forge dispatch line activation failed (${sessionId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+      sessionId,
+    })
     return undefined
   }
 }
@@ -493,7 +507,7 @@ async function enterLiveRoot(deps: RunDagTasksDeps, sessionId: string): Promise<
  * 三旅程断言面）。agent.followup 收件 = 完整消息开新回合（与 S4 终局叙述同面同径——真机
  * 实证 registry 活根收件正常），转录承载与转录面切换同径兑现。
  *
- * fail-soft 纪律（R3 防御读取同源 + console.warn 告警日志——SC7「注入失败循环照常结束」
+ * fail-soft 纪律（R3 防御读取同源 + diag 告警日志——SC7「注入失败循环照常结束」
  * 同源）：followup 面缺席/非函数/投递抛错 = 不外抛，返回失败态；1.20 起调用方以此判据
  * 门控循环启动（提交失败 = 会话未创建成功 → 循环不启动 + 可见 error 回执）。
  *
@@ -517,6 +531,7 @@ function commitDispatchLine(
   fallback: unknown,
   source: ContainerRef,
   activated?: unknown,
+  diag?: ForgeDiagEmitFace,
 ): CommitOutcome {
   const registryAgent = resolveAgent?.(sessionId)
   const viaRegistry = registryAgent !== undefined
@@ -524,7 +539,12 @@ function commitDispatchLine(
   const followup = (target as { followup?: (message: unknown) => void } | undefined)?.followup
   if (typeof followup !== 'function') {
     const reason = viaRegistry ? 'registry 活根 followup 面缺席' : 'followup 面缺席'
-    console.warn(`forge dispatch line commit failed (${source.slug}): ${reason}`)
+    emitForgeDiag(diag, {
+      level: 'warn',
+      event: 'forge-dispatch-line',
+      message: `forge dispatch line commit failed (${source.slug}): ${reason}`,
+      sessionId,
+    })
     return { committed: false, registryMissed: !viaRegistry && resolveAgent !== undefined, reason }
   }
   try {
@@ -539,7 +559,12 @@ function commitDispatchLine(
     return { committed: true, registryMissed: !viaRegistry && resolveAgent !== undefined }
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause)
-    console.warn(`forge dispatch line commit failed (${source.slug}): ${reason}`)
+    emitForgeDiag(diag, {
+      level: 'warn',
+      event: 'forge-dispatch-line',
+      message: `forge dispatch line commit failed (${source.slug}): ${reason}`,
+      sessionId,
+    })
     return { committed: false, registryMissed: !viaRegistry && resolveAgent !== undefined, reason }
   }
 }

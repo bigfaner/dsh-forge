@@ -5,6 +5,7 @@
 import type { ForgeTasksService } from '@dsh-forge/contracts'
 import type { EscalationAskFace, LoopDriver } from '../loop/index.js'
 import type { ForgeCommandDefinition } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { ProjectIdResolver } from '../tools/index.js'
 import { createRunDagTasksHandler, RUN_DAG_TASKS_NAME } from './run-dag-tasks.js'
 import { createStopDagTasksHandler, STOP_DAG_TASKS_NAME } from './stop-dag-tasks.js'
@@ -27,6 +28,8 @@ export interface ForgeCommandsDeps {
   readonly resolveAgent?: (ownerSessionId: string) => unknown
   /** 未进入会话激活面（1.19——host sessionController.resolveAgent 进入；缺席 = 1.18 回执指引语义） */
   readonly enterAgent?: (ownerSessionId: string) => Promise<unknown>
+  /** 诊断发射缝（diag-face-consolidation——指令面 fail-soft 告警走 diag 面；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 /** 指令定义组（S2 两枚——描述 = 发现 UI 用户可读文案） */
@@ -46,7 +49,7 @@ export function createForgeCommands(deps: ForgeCommandsDeps): ForgeCommands {
     stopDagTasks: {
       name: STOP_DAG_TASKS_NAME,
       description: '停止本会话启动的派发循环',
-      handler: createStopDagTasksHandler({ driver: deps.driver }),
+      handler: createStopDagTasksHandler({ driver: deps.driver, ...(deps.diag !== undefined ? { diag: deps.diag } : {}) }),
     },
   }
 }

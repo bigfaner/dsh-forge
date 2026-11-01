@@ -15,6 +15,8 @@
 // worker 的孙进程（pwsh/node/git）在有限时间内整树退出；真机装配由 index.ts 注入
 // defaultWorkerTreeGuard，缺省 no-op（单测面零 pwsh 依赖）。
 import { normalizeFsPath } from '@dsh-forge/path-key'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { SpawnWorker, SpawnWorkerHandle } from '../dispatch-core/index.js'
 import { noopWorkerTreeGuard } from './job-tree.js'
 import type { WorkerTreeGuard } from './job-tree.js'
@@ -124,7 +126,7 @@ function assertPinnedWorkspaceCwd(request: { readonly workspaceCwd?: string; rea
  * 契约：start 发布后返回句柄（task-spawned 事件先行）；result 阻塞至 worker 终态
  * （拒绝 = 基建故障→dispatchTask 失败防线）；dispose 幂等收尾由调用方在结算后执行。
  */
-export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => WorkerTreeGuard } = {}): SpawnWorker {
+export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => WorkerTreeGuard; readonly diag?: ForgeDiagEmitFace } = {}): SpawnWorker {
   const treeGuard = deps.treeGuard ?? noopWorkerTreeGuard
   return async (request) => {
     assertPinnedWorkspaceCwd(request) // cwd 钉定核销（1.14——拒绝在守卫前，零资源留下）
@@ -180,9 +182,12 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
       )
       // 路由装配落日志（bug 14984d4f instrumentation——生产派发链最后一环逐次留痕：
       // agentOptions 到达/缺席即在此可判，装配丢失位定罪不再依赖会话日志反推；
-      // inherit = 显式路由缺席（装配面 settings/档案双缺——回落父会话继承））
-      console.warn(
-        `[forge-spawn-routing] label=${request.label ?? '-'} route=${
+      // inherit = 显式路由缺席（装配面 settings/档案双缺——回落父会话继承）。
+      // diag-face-consolidation：成功里程碑 info 分级经 diag 面（缺席 = console 兜底）。
+      emitForgeDiag(deps.diag, {
+        level: 'info',
+        event: 'forge-spawn-routing',
+        message: `label=${request.label ?? '-'} route=${
           request.agentOptions !== undefined
             ? `${request.agentOptions.provider}/${request.agentOptions.model}${
                 request.agentOptions.reasoningEffort !== undefined ? `/${request.agentOptions.reasoningEffort}` : ''
@@ -191,7 +196,7 @@ export function createInProcessDriverSpawn(deps: { readonly treeGuard?: () => Wo
         } persona=${request.persona !== undefined ? 'yes' : 'no'} toolFilter=allow:${
           request.toolFilter.allow?.length ?? 0
         }/deny:${request.toolFilter.deny?.length ?? 0}`,
-      )
+      })
       child = run.localAgent // 驱动器发布的子代理（abort 转发的 cancel 直调目标）
       // 官方同式：发布后落父会话目录（mode 取 descriptor）；追加失败 = dispose 该 run 后错误上抛
       try {
