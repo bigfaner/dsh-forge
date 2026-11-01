@@ -45,6 +45,8 @@ export const PANEL_CSS = `
 .dswf-tip { position: relative; }
 .dswf-tip::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: none; padding: 4px ${T.gap8}; border-radius: 6px; background: var(--dsw-alias-tooltip-bg); color: #fff; font: var(--dsw-font-xxxs-11); line-height: ${T.lh14}; white-space: nowrap; pointer-events: none; z-index: 40; }
 .dswf-tip:hover::after { display: block; }
+/* 角落按钮变体（bug bfb67153）：右上角按钮气泡改下方展开 + 右缘对齐——通用上方居中形态在窗口角落双向溢出裁切。 */
+.dswf-cfg-jump-btn::after { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); transform: none; }
 .dswf-btn { font: var(--dsw-font-xs-13); font-weight: 500; padding: 0 ${T.pad20}; height: ${T.lh20}; border: none; border-radius: ${T.r8}; cursor: var(--dsh-cursor-pointer, pointer); }
 .dswf-btn-primary { background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-bg-base); }
 .dswf-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
