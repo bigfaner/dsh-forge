@@ -14,12 +14,28 @@
 //  - 用例退出不做 closeApp（这是提速的本体：整 spec 只冷启一次/崩溃一次）；worker 收尾
 //    统一 closeApp + tmp 清理。
 // 复用核销：launchHost/closeApp/registerProject 全部取自既有单源（launch.js / rpc.js），零复制。
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, type Dirent } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { closeApp, launchHost, type LaunchHostOptions } from './launch.js'
 import { registerProject } from './rpc.js'
+
+/** 摘除 dir 子树内全部文件、保留全部目录（目录 inode 不变——watcher 句柄存续；dir
+ *  缺席静默零操作）。夹具重播种专用：seedWorkspace recursive mkdir 容忍既有目录。 */
+function removeFilesKeepDirs(dir: string): void {
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) removeFilesKeepDirs(path)
+    else rmSync(path, { recursive: true, force: true })
+  }
+}
 
 /** 共享 launch 配置（spec 侧经 createSharedLaunchFixture 传入） */
 export interface SharedLaunchConfig {
@@ -66,13 +82,18 @@ export class SharedLaunchSession {
   }
 
   /** 重播种：夹具档案子树重建（只清 .dsh——注册期宿主落盘的 .forge/.knowledge 台账产物
-   *  不动）；首调时建目录 + userData */
+   *  不动）；首调时建目录 + userData。
+   *  watch 衰减修复（fix-1，共享 launch 耦合判例）：重播种不删目录——只摘 .dsh 子树内的
+   *  文件、保留全部目录 inode。宿主侧 expert-squad watcher（chokidar 深度 1）锚定
+   *  wsDir/.dsh/experts；rm -rf 整目录 → root 缺失触发重挂，重挂竞速窗口内锚爬升祖先时
+   *  runaway guard 弃监听（watch.ts anchor runaway guard），此后直编不再失效索引——
+   *  whitelist 等后置用例读旧快照即红。保目录 inode = watcher 句柄跨重播种持续有效。 */
   reseed(): void {
     if (this.wsDirValue === undefined) {
       this.wsDirValue = mkdtempSync(join(tmpdir(), 'dsh-forge-shared-launch-ws-'))
       this.userData = mkdtempSync(join(tmpdir(), 'dsh-forge-shared-launch-ud-'))
     } else {
-      rmSync(join(this.wsDirValue, '.dsh'), { recursive: true, force: true })
+      removeFilesKeepDirs(join(this.wsDirValue, '.dsh'))
     }
     this.config.seedWorkspace(this.wsDirValue)
     this.reseedCountValue++
