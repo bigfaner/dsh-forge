@@ -350,13 +350,13 @@ export class DiagAppender {
       if (c.writeFailures === 0 && c.queueDropped === 0 && c.maintenanceSkipped === 0) return
       const message =
         `diag appender counters: writeFailures=${c.writeFailures} queueDropped=${c.queueDropped} maintenanceSkipped=${c.maintenanceSkipped}`
+      if (!this.#passesLevel('info')) return // 级别判定先行——未发出则计数保留至下次窗口（bug 1c2fbe6c）
       c.writeFailures = 0
       c.queueDropped = 0
       c.maintenanceSkipped = 0
-      if (!this.#passesLevel('info')) return
       this.#enqueue(this.buildLine({ level: 'info', process: 'main', event: 'appender-counters', message }), false)
     } catch {
-      /* 自证面不反压（红线①同构——失败静默，计数已在报前归零不回滚） */
+      /* 自证面不反压（红线①同构——失败静默） */
     }
   }
 

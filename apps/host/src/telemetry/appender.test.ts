@@ -290,6 +290,33 @@ describe('counters 周期自证（diag-milestone-coverage 方案 6——非零�
     expect(appender.counters.writeFailures).toBe(0)
   })
 
+  it('minLevel≥warn：selfReport 被级别门吞时计数保留，恢复 info 后下窗口补发', async () => {
+    const dir = await tempLogsDir()
+    const captured: string[] = []
+    const appender = new DiagAppender({
+      dir,
+      minLevel: 'warn',
+      now: () => dayDate('2026-10-19'),
+      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+    })
+    appender.counters.writeFailures = 2
+    appender.counters.queueDropped = 1
+    appender.selfReport() // 级别门吞掉 info 自证行——计数不得丢失
+    await appender.idle()
+    expect(captured).toHaveLength(0)
+    expect(appender.counters.writeFailures).toBe(2) // 计数保留至下次窗口
+    expect(appender.counters.queueDropped).toBe(1)
+    appender.setMinLevel('info')
+    appender.selfReport() // 下窗口补发
+    await appender.idle()
+    expect(captured).toHaveLength(1)
+    const row = JSON.parse(captured[0]!) as { event: string; message: string }
+    expect(row.event).toBe('appender-counters')
+    expect(row.message).toContain('writeFailures=2')
+    expect(row.message).toContain('queueDropped=1')
+    expect(appender.counters.writeFailures).toBe(0) // 实际发出后才归零
+  })
+
   it('周期定时器：countersIntervalMs 到点自动 selfReport，dispose 清定时器并做收尾自证', async () => {
     vi.useFakeTimers()
     try {
