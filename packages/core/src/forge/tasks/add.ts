@@ -37,6 +37,7 @@ import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import {
   BeforeSuccessorInvalidError,
+  BlockSourceRequiredError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -410,6 +411,19 @@ export async function addTask(deps: TasksVerbDeps, input: AddTaskInput): Promise
         })
       }
       successors.push(succ)
+    }
+
+    // ④c blocked 源建链守卫（bug 0a25720c 方案 A）：源已 blocked ∧ block_source 缺省 →
+    //    ERR_BLOCK_SOURCE_REQUIRED——disc 径不写等待边，fix 完成时恢复钩子反查空集，源成
+    //    「blocked 无解锁路径」孤儿态。守卫收窄 disc 径为「源未 blocked」专属（源 pending/
+    //    in_progress 携源对不阻仍走 disc 径）；文案并入协议指引（补 block_source=true 建
+    //    fix 链，完成即恢复源）。事务内先于写零副作用。
+    if (source !== undefined && source.task_status === 'blocked' && input.blockSource !== true) {
+      throw new BlockSourceRequiredError({
+        projectId: input.projectId,
+        taskRef: { slug: source.slug, localId: source.local_id },
+        taskStatus: 'blocked',
+      })
     }
 
     // ⑤ localId 分配（§6-35⑦：blockSource → fix-N / 携源未阻 → disc-N / 常规 → 数值顺延；

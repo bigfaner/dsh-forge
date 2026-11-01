@@ -492,3 +492,33 @@ export class EdgeOriginLockedError extends Error {
     this.data = data
   }
 }
+
+// ───────────────────────── bug 0a25720c 方案 A：addTask 建链守卫 ─────────────────────────
+
+/** ERR_BLOCK_SOURCE_REQUIRED 附载（addTask 建链守卫——blocked 源 + block_source 缺省） */
+export interface BlockSourceRequiredData {
+  readonly projectId: string
+  /** 已 blocked 的源任务自然键 */
+  readonly taskRef: TaskRef
+  readonly taskStatus: 'blocked'
+}
+
+/**
+ * 源任务已 blocked 而未带 block_source（409）：disc 径不写等待边 = 源 blocked 无解锁路径
+ * （bug 0a25720c 根因——孤儿 blocked）。拒收零残留，错误文案并入协议指引：补
+ * block_source=true 建 fix 链等待边，fix 完成同事务恢复源。
+ */
+export class BlockSourceRequiredError extends Error {
+  readonly code = 'ERR_BLOCK_SOURCE_REQUIRED' as const
+  readonly data: BlockSourceRequiredData
+
+  constructor(data: BlockSourceRequiredData) {
+    super(
+      `源任务已 blocked：${data.taskRef.slug}/${data.taskRef.localId}——不带 block_source 的派生（disc 径）` +
+        `不会建等待边，fix 完成无法恢复源。请补 block_source=true 建 fix 链（等待边 + auto-block；` +
+        `fix 完成即恢复源）`,
+    )
+    this.name = 'BlockSourceRequiredError'
+    this.data = data
+  }
+}

@@ -80,6 +80,9 @@ export const RPC_UI_STATE_BY_CODE: Readonly<Record<ErrorCode, RpcUiStateKind>> =
   // ── project-manual-order（patch.sortOrders 批量排序写面校验）──
   // sortOrders 校验拒绝 → 错误条（拖拽写回语境原地反馈——序回弹拖拽前渲染，改序重试）
   ERR_PROJECT_SORT_INVALID: 'error-bar',
+  // ── bug 0a25720c 方案 A（addTask 建链守卫）──
+  // blocked 源缺省 block_source → 错误条（建链语境原地反馈——文案带指引补 block_source=true）
+  ERR_BLOCK_SOURCE_REQUIRED: 'error-bar',
 }
 
 /**

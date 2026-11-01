@@ -267,7 +267,8 @@ export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         source_task_local_id: { type: 'string', description: 'Local id of the chain source task (pair with source_task_slug).' },
         block_source: {
           type: 'boolean',
-          description: 'true = block the source task in the same transaction until this fix completes (fix chain).',
+          description:
+            'true = block the source task in the same transaction until this fix completes (fix chain). Required when the source task is already blocked — omitting it (undefined) is rejected with ERR_BLOCK_SOURCE_REQUIRED; pass false explicitly only for a deliberate disc successor (source keeps waiting on something else).',
         },
         breaking: { type: 'boolean', description: 'Breaking-change flag (default false).' },
         coverage: { type: 'number', description: 'Coverage threshold as a 0-1 fraction (omit for global default).' },

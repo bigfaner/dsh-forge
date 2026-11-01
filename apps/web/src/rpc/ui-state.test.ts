@@ -59,6 +59,8 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BEFORE_SUCCESSOR_INVALID: 'error-bar',
   // project-manual-order——sortOrders 批量排序写面校验拒绝错误条（序回弹，改序重试）
   ERR_PROJECT_SORT_INVALID: 'error-bar',
+  // bug 0a25720c 方案 A——blocked 源缺省 block_source 建链守卫错误条（指引补 block_source=true）
+  ERR_BLOCK_SOURCE_REQUIRED: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

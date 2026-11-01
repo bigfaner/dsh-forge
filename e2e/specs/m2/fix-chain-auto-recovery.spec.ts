@@ -538,6 +538,70 @@ test('@web-e2e @m2 fix链·Step4 人工跳过 fix：skipped ∈ 满足集 → �
   }
 });
 
+test('@web-e2e @m2 fix链·blocked 源建链守卫：disc 径缺省被拒 → fix 径建链 → 源恢复 → 二轮 claim（bug 0a25720c）', async () => {
+  test.setTimeout(360_000)
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-bg-'))
+  const wsDir = join(fixtureRoot, 'ws-fxr-bg')
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-bg-ud-'))
+  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
+  const { app, page, pageErrors } = launched
+  try {
+    const FEATURE = 'fxr-bg'
+    const { projectId, dir } = await setupWorld(page, wsDir, 'blocked 源守卫演示', FEATURE)
+    const driver = createBridgeDriver(app)
+
+    // 源任务受阻（worker submit result=blocked 落账——与真实事故链同态）
+    const src = (await driver.call('forgeTasks', 'addTask', {
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: '源任务（将受阻）', type: 'doc',
+    })) as AddResult
+    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP })
+    await driver.call('forgeTasks', 'submitTask', {
+      projectId, taskRef: { slug: FEATURE, localId: src.localId }, result: 'blocked', reason: 'bg 演示：源受阻', sessionId: EXEC,
+    })
+
+    // 被拒径：携源对 + block_source 缺省（disc 径）→ ERR_BLOCK_SOURCE_REQUIRED（文案带指引）
+    const db = openForgeDbAt(dir)
+    const countBlocked = db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n ?? 0
+    db.close()
+    const rejection = await rejectMessage(driver.call('forgeTasks', 'addTask', {
+      projectId, source: { kind: 'feature', slug: FEATURE }, title: 'disc 逃生径（应被拒）', type: 'doc',
+      sourceTask: { slug: FEATURE, localId: src.localId },
+    }))
+    expect(rejection, 'blocked 源 + 缺省 → ERR_BLOCK_SOURCE_REQUIRED（typed 守卫拒绝）').toContain('源任务已 blocked')
+    expect(rejection, '错误文案并入协议指引（补 block_source=true）').toContain('block_source=true')
+    // 零残留：拒收未建行
+    const db1 = openForgeDbAt(dir)
+    try {
+      expect(db1.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks WHERE slug = ?`).get(FEATURE)?.n, '拒收零残留').toBe(countBlocked)
+    } finally {
+      db1.close()
+    }
+
+    // 放行径：按指引改带 block_source=true → fix 链正常建（等待边 + auto-block）
+    const fix = (await driver.call('forgeTasks', 'addTask', fixArgs(projectId, FEATURE, src, '修复任务 G'))) as AddResult
+    expect(fix.localId, 'fix-N 前缀分配').toMatch(/^fix-\d+$/)
+
+    // fix 完成 → 恢复钩子同事务恢复源 → 二轮 claim 可认领
+    await driver.call('forgeTasks', 'claimTask', { projectId, taskRef: { slug: FEATURE, localId: fix.localId }, sessionId: DISP })
+    const fixSubmit = (await driver.call('forgeTasks', 'submitTask', {
+      projectId, taskRef: { slug: FEATURE, localId: fix.localId }, result: 'success',
+      summary: 'bg 演示：修复完成', gate: { compile: true, fmt: true, lint: true, test: true }, sessionId: EXEC,
+    })) as SubmitResult
+    expect(fixSubmit.restored.map((r) => r.localId), '源 auto-restore（restored 面）').toContain(src.localId)
+    const reentry = (await driver.call('forgeTasks', 'claimTask', {
+      projectId, taskRef: { slug: FEATURE, localId: src.localId }, sessionId: DISP,
+    })) as ClaimResult
+    expect(reentry.task?.localId, '源恢复后二轮 claim 可认领（pending 源重新进就绪池）').toBe(src.localId)
+    expect(reentry.task?.taskStatus, 'claim 落账 in_progress').toBe('in_progress')
+
+    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+  } finally {
+    await closeApp(app)
+    rmDirBestEffort(fixtureRoot)
+    rmDirBestEffort(userData)
+  }
+});
+
 test('@web-e2e @m2 fix链·Step4 部分前置未终态：不恢复；补齐后恢复（全满足判定）', async () => {
   test.setTimeout(420_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-fxr-pt-'))

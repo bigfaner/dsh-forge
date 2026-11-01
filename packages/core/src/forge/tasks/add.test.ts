@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { addTask, isUniqueViolation } from './add.js'
 import {
   BeforeSuccessorInvalidError,
+  BlockSourceRequiredError,
   ChainDepthExceededError,
   CycleDetectedError,
   TaskExistsError,
@@ -414,6 +415,7 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
     const add = svc()
     seedFeature(h!.db, { slug: 'fx', status: 'in-progress' }) // in_progress 任务在场 → 相位一致（写前增量断言）
     seedTask(h!.db, 'fx', '2.2', { status: 'in_progress' })
+    seedTask(h!.db, 'fx', '2.3', { status: 'in_progress' })
     await add({
       projectId: P(),
       source: { kind: 'feature', slug: 'fx' },
@@ -422,12 +424,13 @@ describe('AC3 两级去重（B.5-3 锚）+ 边级 PK 幂等 + ERR_TASK_EXISTS', 
       sourceTask: { slug: 'fx', localId: '2.2' },
       blockSource: true,
     })
+    // disc 径源取另一未 blocked 任务（bug 0a25720c 守卫：blocked 源 + 缺省 block_source 已被拒）
     const other = await add({
       projectId: P(),
       source: { kind: 'feature', slug: 'fx' },
       title: 'cleanup',
       type: 'coding-cleanup',
-      sourceTask: { slug: 'fx', localId: '2.2' },
+      sourceTask: { slug: 'fx', localId: '2.3' },
     })
     expect(other).toMatchObject({ localId: 'disc-1', reused: false })
   })
@@ -655,6 +658,77 @@ describe('AC4 block-source 单事务建链 + fix 链深 ≤6', () => {
     expect(err).toBeInstanceOf(Error)
     expect((err as Error).message).toContain('blockSource 需要 sourceTask')
     expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual({ n: 0 })
+  })
+})
+
+describe('AC（bug 0a25720c 方案 A）blocked 源建链守卫：block_source 缺省即拒', () => {
+  it('被拒径：源已 blocked + 携源对 + block_source 缺省 → ERR_BLOCK_SOURCE_REQUIRED（文案带指引）+ 零残留', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'bs', status: 'in-progress' })
+    seedTask(h!.db, 'bs', '1.1', { status: 'blocked' })
+    const before = {
+      tasks: h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get(),
+      edges: h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get(),
+    }
+    const err = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'bs' },
+      title: 'disc 逃生径（应被拒）',
+      type: 'doc',
+      sourceTask: { slug: 'bs', localId: '1.1' },
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(BlockSourceRequiredError)
+    expect((err as BlockSourceRequiredError).code).toBe('ERR_BLOCK_SOURCE_REQUIRED')
+    expect((err as Error).message).toContain('block_source=true')
+    expect((err as BlockSourceRequiredError).data).toMatchObject({
+      projectId: P(),
+      taskRef: { slug: 'bs', localId: '1.1' },
+      taskStatus: 'blocked',
+    })
+    // 零残留（事务内先于写零副作用）
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM tasks`).get()).toEqual(before.tasks)
+    expect(h!.db.prepare(`SELECT COUNT(*) AS n FROM task_edges`).get()).toEqual(before.edges)
+  })
+
+  it('放行径：源已 blocked + block_source=true → 正常建 fix + fix-chain 边 + auto-block（守卫不误伤 fix 径）', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'bp', status: 'in-progress' })
+    seedTask(h!.db, 'bp', '1.1', { status: 'blocked' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'bp' },
+      title: '修复任务',
+      type: 'coding-fix',
+      sourceTask: { slug: 'bp', localId: '1.1' },
+      blockSource: true,
+    })
+    expect(r.localId).toBe('fix-1')
+    expect(
+      rows(`SELECT task_id, prerequisite_id, origin FROM task_edges WHERE task_id = 't-bp-1.1'`),
+    ).toEqual([{ task_id: 't-bp-1.1', prerequisite_id: r.taskId, origin: 'fix-chain' }])
+    expect(
+      h!.db.prepare<unknown[], { verb: string; actor: string; to_status: string }>(
+        `SELECT verb, actor, to_status FROM task_records WHERE task_id = 't-bp-1.1' AND verb = 'auto-block'`,
+      ).get(),
+    ).toEqual({ verb: 'auto-block', actor: 'core', to_status: 'blocked' })
+  })
+
+  it('非 blocked 源回归（AC5 语义不变）：pending 源携源对不阻仍走 disc 径（守卫不误伤）', async () => {
+    const add = svc()
+    seedFeature(h!.db, { slug: 'nb', status: 'tasks' })
+    seedTask(h!.db, 'nb', '1.1', { status: 'pending' })
+    const r = await add({
+      projectId: P(),
+      source: { kind: 'feature', slug: 'nb' },
+      title: '衍生发现',
+      type: 'doc',
+      sourceTask: { slug: 'nb', localId: '1.1' },
+    })
+    expect(r.localId).toBe('disc-1')
+    expect(
+      h!.db.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = 't-nb-1.1'`).get(),
+    ).toEqual({ task_status: 'pending' })
+    expect(rows(`SELECT COUNT(*) AS n FROM task_edges`)).toEqual([{ n: 0 }])
   })
 })
 
