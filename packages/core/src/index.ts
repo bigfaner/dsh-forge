@@ -59,6 +59,16 @@ export {
 // `git worktree list` 现算派生数据源；git 缺席/非 git 目录全 null fail-soft）。
 export { createGitIdentityPort } from './forge/workspace/identity-anchor.js'
 
+// 诊断事件域单源（app-observability 方案 C 下沉——host 侧 diag-events.ts 为 re-export 面）
+export {
+  DIAG_EVENT,
+  emitDiag,
+  type DiagEmitFace,
+  type DiagEventPayload,
+  type DiagLevel,
+  type DiagProcess,
+} from './telemetry/diag-events.js'
+
 // —— 证据效度域生产取数（装配面 IO 收口——R1-major① f913fc49：同步 git/fs 出 core/
 // evidence-pointer.ts，落本装配闭包；core 侧只剩比对纯函数 + io 注入编排）——
 
