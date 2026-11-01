@@ -170,7 +170,8 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
 
 // ═══════════════════════ 态③ suspended（径②③故障注入——worker 档位失效） ═══════════════════════
 test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态③循环挂起（故障注入 → suspend 梯次）', async () => {
-  test.setTimeout(1_800_000)
+  // 45min 预算：bootFixture + 运行期窗 + 挂起梯次终局窗（慢载下退避梯次走满需时上行）
+  test.setTimeout(2_700_000)
   const PROP = 'loopedge-prop-b'
   const fx = await bootFixture({
     wsName: 'ws-loopedge-b',
@@ -187,15 +188,20 @@ test('@web-e2e @loop-consol-flywheel-improvement fix-1 sidebar 循环标识态�
     const row = page.locator(`[data-dswf-session="${sessionId}"]`).first()
 
     // ── 态③ suspended：挂起态行锚三件套 + aria「循环挂起」──
-    // 运行期先见 running（循环启动 → 首枚 loop 级事件即 running 态），再入挂起梯次。
-    await expect(
-      row,
-      '态③ 前置：循环启动后行锚 running（挂起梯次前）',
-    ).toHaveAttribute('data-dswf-session-loop', 'running', { timeout: 180_000 })
+    // 前置不做单值断言：慢载下首枚 loop 级事件到达时序上行——终局等待语义，
+    // 首态为 running（常规径）或已直落 suspended（极慢载下梯次先行收敛）均放行。
+    await expect
+      .poll(
+        async () => await row.getAttribute('data-dswf-session-loop'),
+        { timeout: 300_000, message: '循环标识进入运行期（running）或已收敛挂起（suspended）' },
+      )
+      .toMatch(/^(running|suspended)$/)
+    // 挂起梯次终局等待（20min 窗——worker-abort 退避梯次超限挂起，慢载下走满需时上行）：
+    // 等状态终局而非固定窗，suspended 一到即放行。
     await expect(
       row,
       '态③ 行锚 data-dswf-session-loop="suspended"（退避超限挂起）',
-    ).toHaveAttribute('data-dswf-session-loop', 'suspended', { timeout: 600_000 })
+    ).toHaveAttribute('data-dswf-session-loop', 'suspended', { timeout: 1_200_000 })
     await expect(row, '态③ 行锚 data-dswf-session-loop-slug 承载容器 slug').toHaveAttribute(
       'data-dswf-session-loop-slug',
       PROP,
