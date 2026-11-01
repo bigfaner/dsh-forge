@@ -130,6 +130,38 @@ const listResult = z.object({
   ),
 });
 
+// list_tools / list_skills（猎头核销 recruit/update 白名单键名的取数面）：
+// name+description 投影；note = 数据面缺席/异常时的 fail-soft 说明位（缺席不抛错）。
+const listToolsResult = z.object({
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  note: z.string().optional(),
+});
+
+const listSkillsResult = z.object({
+  skills: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  note: z.string().optional(),
+});
+
+/** 工具目录读取函数子面（ToolRuntime.schemas() 无 scope 全局视图）。 */
+export type ToolsSchemasReader = () =>
+  | readonly { readonly name: string; readonly description?: string }[]
+  | undefined;
+
+/** 技能目录读取函数子面（ctx.skills.list({cwd})——AGENTS 1.6 调用点现查不 memoize）。 */
+export interface SkillsListFace {
+  list(opts: { cwd: string }): Promise<readonly { name: string; description?: string }[]>;
+}
+
 // ---------------------------------------------------------------------------
 // zod → 受支持 JSON Schema 子集净化（annotutor tools.ts 先例）
 // ---------------------------------------------------------------------------
@@ -234,6 +266,8 @@ export const EXPERT_TOOLS = [
   "enable_expert",
   "disable_expert",
   "list_experts",
+  "list_tools",
+  "list_skills",
 ] as const;
 
 export type ExpertToolName = (typeof EXPERT_TOOLS)[number];
@@ -246,6 +280,10 @@ export interface ExpertToolsDeps {
   /** 可写 project 层 experts 目录（recruit target="project" 落盘点；
    *  返回 null = 宿主 cwd 非项目根（打包形态）——project 目标不可用。 */
   readonly projectRoot?: () => string | null;
+  /** 工具目录读取函数（ToolRuntime.schemas() 全局视图；缺席 fail-soft）。 */
+  readonly toolsSchemas?: ToolsSchemasReader;
+  /** 技能目录读取函数（每次 execute 现查返回 skills face——跨插件服务不 memoize）。 */
+  readonly skills?: () => SkillsListFace | undefined;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -261,7 +299,7 @@ function parseArgs<T extends z.ZodType>(tool: string, schema: T, args: unknown):
   return r.data;
 }
 
-/** 工厂：5 枚管理 tool 定义（不注册——注册走 registerExpertTools）。 */
+/** 工厂：7 枚管理/取数 tool 定义（不注册——注册走 registerExpertTools）。 */
 export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[] {
   const { registry, userRoot } = deps;
 
@@ -400,7 +438,63 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
   };
 
-  return [recruitTool, updateTool, enableTool, disableTool, listTool];
+  const listToolsTool: ExpertToolDefinition = {
+    name: "list_tools",
+    description:
+      "List globally registered tools (name + description) usable as recruit/update tool whitelist keys.",
+    parameters: zToJSONSchema(listParams, "input"),
+    output: {
+      schema: zToJSONSchema(listToolsResult, "output"),
+      render: (_args, value) => {
+        const v = value as { tools: { name: string; description: string }[]; note?: string };
+        const lines = v.tools.map((t) => `- ${t.name}${t.description ? ` — ${t.description}` : ""}`);
+        const head = v.note ? `tools: ${v.note}` : `tools (${v.tools.length}):`;
+        return [text(v.note ? head : `${head}\n${lines.join("\n")}`)];
+      },
+    },
+    async execute(args) {
+      parseArgs("list_tools", listParams, args);
+      const schemas = deps.toolsSchemas?.();
+      if (schemas === undefined) {
+        return listToolsResult.parse({ tools: [], note: "tools catalog absent" });
+      }
+      const tools = schemas.map((s) => ({ name: s.name, description: s.description ?? "" }));
+      return listToolsResult.parse({ tools });
+    },
+  };
+
+  const listSkillsTool: ExpertToolDefinition = {
+    name: "list_skills",
+    description:
+      "List available skills (name + description) usable as recruit/update skill tags. Returns skills:[] with a note when the skills service is absent.",
+    parameters: zToJSONSchema(listParams, "input"),
+    output: {
+      schema: zToJSONSchema(listSkillsResult, "output"),
+      render: (_args, value) => {
+        const v = value as { skills: { name: string; description: string }[]; note?: string };
+        const lines = v.skills.map((s) => `- ${s.name}${s.description ? ` — ${s.description}` : ""}`);
+        const head = v.note ? `skills: ${v.note}` : `skills (${v.skills.length}):`;
+        return [text(v.note ? head : `${head}\n${lines.join("\n")}`)];
+      },
+    },
+    async execute(args) {
+      parseArgs("list_skills", listParams, args);
+      const face = deps.skills?.(); // 调用点现查（AGENTS 1.6——检测结果不 memoize）
+      if (face === undefined || typeof face.list !== "function") {
+        return listSkillsResult.parse({ skills: [], note: "skills service absent" });
+      }
+      try {
+        const skills = await face.list({ cwd: process.cwd() });
+        return listSkillsResult.parse({
+          skills: skills.map((s) => ({ name: s.name, description: s.description ?? "" })),
+        });
+      } catch {
+        return listSkillsResult.parse({ skills: [], note: "skills service unavailable" });
+      }
+    },
+  };
+
+  return [recruitTool, updateTool, enableTool, disableTool, listTool, listToolsTool, listSkillsTool];
 }
 
 /** 读既有档案键（update 的旧键锚点——解析失败如实上抛原始原因）。 */
@@ -421,7 +515,7 @@ function readExisting(file: string): string {
   }
 }
 
-/** 注册 5 枚管理 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
+/** 注册 7 枚管理/取数 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
 export function registerExpertTools(registryFace: ToolRegisterFace, deps: ExpertToolsDeps): void {
   for (const tool of createExpertTools(deps)) {
     registryFace.register(tool);

@@ -7,7 +7,8 @@
 //      无 .git 祖先时以 workspace 本身为 project root——临时工作区等非 git 目录同径
 //      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
 //      （ctx.experts 正门，bug 7b1c9ed4）；
-//   ④ tool 面（fix-10）：registerExpertTools（5 管理工具）+ registerDelegateExpertTool
+//   ④ tool 面（fix-10）：registerExpertTools（5 管理 + list_tools/list_skills）+
+//      registerDelegateExpertTool
 //      经官方 ctx.tools.register 正门接线（D1 注册面零改动）。工具面全组合可见可用
 //      （全局单实例注册即全局继承——HR preset 无专行，守卫微件态已撤销）。
 
@@ -108,8 +109,8 @@ interface StorageFace {
 
 /** dsh tools 服务窄面（官方 ToolRuntime.register 正门——D1 注册面零改动）。 */
 interface ExpertSquadToolsFace extends ToolRegisterFace {
-  /** 官方目录全视图（ToolRuntime.schemas()——无 scope 即全局视图；仅取 name 供候选）。 */
-  schemas?(): readonly { readonly name: string }[];
+  /** 官方目录全视图（ToolRuntime.schemas()——无 scope 即全局视图；list_tools 取数面）。 */
+  schemas?(): readonly { readonly name: string; readonly description?: string }[];
 }
 
 /** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
@@ -541,6 +542,10 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     // 召唤 target="project" 落点：cwd 项目根（合理性校验同径——应用目录形态返 null，
     // tool 侧报错引导回落 user 层）
     projectRoot: () => resolveCwdProjectExpertsRoot(process.cwd()),
+    // list_tools / list_skills 取数面（调用点现查，不 memoize）：tools = ToolRuntime
+    // .schemas() 全局视图；skills = ctx.skills face 每次 execute 现取（缺席 fail-soft）。
+    toolsSchemas: () => toolsFace.schemas?.(),
+    skills: () => ctx.skills,
   });
 }
 

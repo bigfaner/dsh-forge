@@ -167,7 +167,7 @@ const RECRUIT_ARGS = {
 // ---------------------------------------------------------------------------
 
 describe("official dsh-tools register gate mirror", () => {
-  it("5 工具带 output { schema, render } 通过官方 register 门镜像", () => {
+  it("7 工具带 output { schema, render } 通过官方 register 门镜像", () => {
     const official = officialRegistry();
     expect(() => registerExpertTools(official, { registry, userRoot: () => userRoot })).not.toThrow();
     expect(official.registered.map((d) => d.name).sort()).toEqual([...EXPERT_TOOLS].sort());
@@ -175,6 +175,8 @@ describe("official dsh-tools register gate mirror", () => {
       "disable_expert",
       "enable_expert",
       "list_experts",
+      "list_skills",
+      "list_tools",
       "recruit_expert",
       "update_expert",
     ]);
@@ -193,7 +195,14 @@ describe("official dsh-tools register gate mirror", () => {
     const tools = makeTools();
     for (const def of Object.values(tools)) {
       expect(typeof def.output.render).toBe("function");
-      const sample = def.name === "list_experts" ? { experts: [] } : { name: "x", path: "p", enabled: true };
+      const sample =
+        def.name === "list_experts"
+          ? { experts: [] }
+          : def.name === "list_tools"
+            ? { tools: [] }
+            : def.name === "list_skills"
+              ? { skills: [] }
+              : { name: "x", path: "p", enabled: true };
       const blocks = def.output.render({}, sample);
       expect(Array.isArray(blocks)).toBe(true);
       expect(blocks.length).toBeGreaterThan(0);
@@ -339,5 +348,100 @@ describe("enable_expert / disable_expert / list_experts", () => {
     const tools = makeTools();
     await expect(tools.disable_expert!.execute({ name: "ghost" })).rejects.toThrow(/not found/);
     await expect(tools.enable_expert!.execute({ name: "ghost" })).rejects.toThrow(/not found/);
+  });
+});
+
+describe("list_tools / list_skills — 白名单键名取数面", () => {
+  const SCHEMAS = [
+    { name: "recruit_expert", description: "Recruit a new expert." },
+    { name: "read", description: "Read a file." },
+  ];
+
+  it("list_tools 经注入 schemas face 现查返回 name+description（含 expert 管理工具自身）", async () => {
+    let calls = 0;
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => {
+          calls++;
+          return SCHEMAS;
+        },
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+    };
+    expect(result.tools).toEqual(SCHEMAS.map((s) => ({ name: s.name, description: s.description })));
+    // 每次调用现查（不 memoize）
+    await tools.list_tools!.execute({});
+    expect(calls).toBe(2);
+    const rendered = (tools.list_tools!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("- recruit_expert — Recruit a new expert.");
+  });
+
+  it("list_tools 取数面缺席 → fail-soft {tools:[]} 且 render 注记", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({ registry, userRoot: () => userRoot, toolsSchemas: () => undefined }).map((t) => [
+        t.name,
+        t,
+      ]),
+    );
+    const result = (await tools.list_tools!.execute({})) as { tools: unknown[]; note?: string };
+    expect(result.tools).toEqual([]);
+    const rendered = (tools.list_tools!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("absent");
+  });
+
+  it("list_skills 在场：经 skills face list({cwd}) 求值（调用点现查）", async () => {
+    const listed: { cwd: string }[] = [];
+    const face = {
+      list: async (opts: { cwd: string }) => {
+        listed.push(opts);
+        return [{ name: "review", description: "Review skill." }];
+      },
+    };
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as {
+      skills: { name: string; description: string }[];
+    };
+    expect(result.skills).toEqual([{ name: "review", description: "Review skill." }]);
+    expect(listed).toEqual([{ cwd: process.cwd() }]);
+  });
+
+  it("list_skills 缺席 → fail-soft {skills:[]} 且返回文本注明服务缺席，不抛错", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({ registry, userRoot: () => userRoot, skills: () => undefined }).map((t) => [
+        t.name,
+        t,
+      ]),
+    );
+    const result = (await tools.list_skills!.execute({})) as { skills: unknown[]; note?: string };
+    expect(result.skills).toEqual([]);
+    const rendered = (tools.list_skills!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("absent");
+  });
+
+  it("list_skills 调用异常 → fail-soft {skills:[]} 注记 unavailable", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => ({
+          list: async () => {
+            throw new Error("boom");
+          },
+        }),
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as { skills: unknown[]; note?: string };
+    expect(result.skills).toEqual([]);
+    expect(result.note).toContain("unavailable");
   });
 });
