@@ -42,7 +42,7 @@ intent: "tech-research"
 - 默认根（`includeDefaultRoots: true` 默认开）：项目根（git 根定位）`.dsh/skills`（100）/ `.agents/skills`（200）+ 用户根 `$DSH_HOME/skills`（默认 `~/.dsh`，400）/ `$DSH_AGENTS_HOME/skills`（默认 `~/.agents`，500）+ **bundled 根 `$DSH_BUNDLED_SKILL_DIR`（app 级技能通道）**——用户根与 bundled 根均可经宿主环境变量重定向，**对所有挂默认根的组合全局生效**；
 - rank 决胜同名（数值小者优先）；frontmatter 携带 invocation 策略（`disable-model-invocation` / `user-invocable`）；chokidar watch 目录热更新。
 
-**预设绑定 tool 与 skill 均为组合级**：tool = 插件行进出 `plugins` 列表（standard vs cordis 实证：cordis 多 `tool-cordis` 行）；skill = `skill-filesystem` 行的目录集差异（cordis 接 creator 技能、standard 只用默认根）。另有 per-spawn `toolFilter`（继承组合内的运行时工具收窄，§1.1）。
+**预设绑定 tool 与 skill 均为组合级**：tool = 插件行进出 `plugins` 列表（standard vs cordis 实证：cordis 多 `tool-cordis` 行）；skill = `skill-filesystem` 行的目录集差异（cordis 接 creator 技能；standard 经 `customSkillDirs` 仅挂 expert-squad 技能目录，forge 技能仍零，§5.5）。另有 per-spawn `toolFilter`（继承组合内的运行时工具收窄，§1.1）。
 
 **persona 行**（`packages/preset/persona`）：预设组合内注册 persona prefix/suffix 提示词段（shadow 全局默认）；`complete: true` 可使其成为唯一系统提示词；支持 `{{…}}` 模板变量。README 原话："Without this row, a preset could change an agent's tools but never its identity." 必须挂 agent scope（组合内）——全局挂载与 prompt registry 的 persona 注册冲突，fail loud。
 
@@ -147,7 +147,7 @@ run-tasks skill（forge 预设会话内）
 | # | 项 | 方法 | 判定 |
 |---|---|---|---|
 | S1 | 薄宿主 runProfile 直跑 | 全 npm 依赖写 ~100 行宿主入口（`loadProfileDirectory` + `runProfile` + `{url, injections}` IPC） | 失败 → fallback vendor desktop-host（总纲既定） |
-| S2 | boot manifest 注入实跑 | 自有 vite 入口 + `dsh-client-web` 壳 + injections 掌舵 | ui-\* 运行期加载成功 |
+| S2 | boot manifest 注入实跑 | 自有 vite 入口 + `dsh-client-web` 壳 + injections 掌舵 | ui-* 运行期加载成功 |
 | S3 | slot 洞位替换（路线 A） | 自有插件替换 `sidebar.workspaces` 占用者 | 原型左栏三件套可挂载 |
 | S4 | workspace registry create 幂等 | 同 canonical path 两次 `create()` | 返回同一实体（上游文档语义） |
 | S5 | 预设 patch 安装 | profile `insert` 双 agent-preset 行（远征/突击，各含 persona 行与差异化 plugins 列表）+ registry `default` 覆写 | hero chip 双模式出现，默认选中远征 |
@@ -218,7 +218,7 @@ v3 裁决「executor 不采用预设身份」针对**角色身份**，维持不�
 
 - **提取为独立最小技能工件 `plugin-brainstorm`**（从 plugin-forge 管线核心移出）。依据：《架构基线》§4 沉淀判据两条同时命中——第三类真实消费者出现（标准模式 = 非 forge 组合）、零耦合全契约（brainstorm 纯文档读写 + 提问，不依赖 core / knowledge）。这是版图中第一个按判据（而非预设计）沉淀出的共享技能工件。
 - **远征/突击**：组合内 skill-filesystem 行的 `customSkillDirs` 指向其包内 `skills/`（§5.2，cordis 预设先例）。
-- **标准模式零 patch**：standard 组合的 skill-filesystem 行 `customSkillDirs` 仅挂 expert-squad 技能目录（squad 缺席 = 整行剔除，技能面降级 fail-soft），forge 技能仍零——**用户根 / bundled 根是全局通道**（§1.4 ①）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不 patch preset-standard、不背「覆写替换整表 + 上游漂移」代价。
+- **标准模式技能面**：standard 组合的 skill-filesystem 行 `customSkillDirs` 仅挂 expert-squad 技能目录（squad 缺席 = 整行剔除，技能面降级 fail-soft），forge 技能仍零——行形态 = profile patch 按 row id 对上游 standard 自带的 skill-filesystem 裸行补 config，整表不覆写替换。**用户根 / bundled 根是全局通道**（§1.4 ①）：宿主经环境变量（`DSH_BUNDLED_SKILL_DIR` 或 `DSH_HOME` 重定向）把 brainstorm 所在目录设为产品技能根，所有挂默认根的组合自动获得。宿主拥有进程环境（host-profile 目录隔离为先例），不触碰用户字面 home、不背「覆写替换整表 + 上游漂移」代价。
 - 已知取舍：跨根同名技能按 rank 决胜（custom 300 优先于 user 400）——远征/突击下 customSkillDirs 版本胜出，标准模式下走全局根版本，内容同源无分叉；目录呈现与去重语义入 S6 验证。
 
 ### 5.6 出厂双预设完整示例（profile patch YAML，2026-10-02 增补）
