@@ -10,6 +10,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
+import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
 import type { ExpertsRegistry } from "./registry.js";
 import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
 
@@ -177,17 +178,12 @@ export interface SkillsListFace {
 
 /** preset scope 租约子面（官方 acquireScope 返回 `{key: ScopeKey} & AsyncDisposable`
  *  的窄面——ScopeKey 为 opaque object（@deepseek-ai/dsh-scope），用后 dispose）。 */
-export interface PresetScopeLease {
-  readonly key: object;
-  dispose(): unknown;
-}
+export type PresetScopeLease = Awaited<ReturnType<AgentPresetsFace["acquireScope"]>>;
 
 /** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
- *  AgentPresetRegistry.list()/acquireScope() 正门；全模式并集枚举缝）。 */
-export interface AgentPresetsFace {
-  list(): Promise<readonly { readonly id: string }[]>;
-  acquireScope(id?: string): Promise<PresetScopeLease>;
-}
+ *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5——官方签名漂移由 tsc
+ *  兜底）；list()/acquireScope() 正门，全模式并集枚举缝）。 */
+export type AgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
 
 /** 目录条目（name+description 投影——并集去重单元）。 */
 interface CatalogEntry {
@@ -215,7 +211,9 @@ const PRESETS_ABSENT_NOTE =
   "preset scope views unavailable (agentPresets absent or malformed) — global view only";
 
 /** 全模式并集取数（bug 6337a936）：全局视图先入，逐 preset acquireScope 租约内取
- *  scope 视图合并；单 preset 失败不外溢（记 note 部分并集），租约 try/finally dispose。 */
+ *  scope 视图合并；单 preset 失败不外溢（记 note 部分并集），租约 try/finally 经官方
+ *  asyncDispose 机械释放（bug 66e1bd5d——租约形 `{key} & AsyncDisposable`，无 dispose()），
+ *  单租约释放失败记 note 不外溢。 */
 async function unionAcrossPresets(
   readGlobal: () => readonly { name: string; description?: string }[] | undefined,
   readScoped: (scope: object) => readonly { name: string; description?: string }[] | undefined | Promise<readonly { name: string; description?: string }[] | undefined>,
@@ -237,6 +235,7 @@ async function unionAcrossPresets(
     return { entries: [...merged.values()], note: "agentPresets unavailable — global view only" };
   }
   const failed: string[] = [];
+  const releaseFailed: string[] = [];
   for (const id of ids) {
     let lease: PresetScopeLease | undefined;
     try {
@@ -245,14 +244,22 @@ async function unionAcrossPresets(
     } catch {
       failed.push(id);
     } finally {
-      try {
-        lease?.dispose();
-      } catch {
-        // dispose 失败不掩盖取数结果（租约释放属官方回收面，非本工具职责）
+      if (lease !== undefined) {
+        try {
+          await lease[Symbol.asyncDispose]();
+        } catch (error) {
+          // 单租约释放失败不掩盖取数结果——记 note（点名 preset），不外溢
+          releaseFailed.push(`${id} (${error instanceof Error ? error.message : String(error)})`);
+        }
       }
     }
   }
   if (failed.length > 0) note = `preset scope views failed: ${failed.join(", ")} — partial union`;
+  if (releaseFailed.length > 0) {
+    note = [note, `preset scope lease release failed: ${releaseFailed.join(", ")}`]
+      .filter((part) => part !== undefined)
+      .join("; ");
+  }
   return { entries: [...merged.values()], note };
 }
 

@@ -15,6 +15,7 @@
 import { join, resolve, sep } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import type { Volatile } from "@deepseek-ai/cordis";
@@ -115,12 +116,10 @@ interface ExpertSquadToolsFace extends ToolRegisterFace {
 }
 
 /** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
- *  cordis Context 模块扩充具名服务：list() 枚举全部 preset + acquireScope() 取每模式
+ *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5，同 subagents/skills
+ *  先例——官方签名漂移由 tsc 兜底）：list() 枚举全部 preset + acquireScope() 取每模式
  *  scope 租约（`{key: ScopeKey} & AsyncDisposable`，用后 dispose）；全模式并集枚举缝）。 */
-interface ExpertSquadAgentPresetsFace {
-  list(): Promise<readonly { readonly id: string }[]>;
-  acquireScope(id?: string): Promise<{ readonly key: object; dispose(): unknown }>;
-}
+type ExpertSquadAgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
 
 /** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
  *  subagents = 官方具名正门（bug 5a1e1132：@deepseek-ai/dsh-subagent 经 cordis Context

@@ -596,9 +596,10 @@ describe("list_tools / list_skills — 白名单键名取数面", () => {
 // 视图并集去重；agentPresets 租约 try/finally dispose；缺席/形状不符降级注明。
 // ---------------------------------------------------------------------------
 
-/** agentPresets face 伪造（缺陷修复测试面——记录租约 key 与 dispose 次数）。 */
+/** agentPresets face 伪造（bug 66e1bd5d 同步官方租约形状：`{key} & AsyncDisposable`，
+ *  仅 Symbol.asyncDispose、无 dispose()——记录租约 key 与 asyncDispose 释放次数）。 */
 const keyOf = (id: string): object => ({ preset: id });
-function makePresetFace(ids: string[]) {
+function makePresetFace(ids: string[], opts?: { releaseThrows?: (id: string) => boolean }) {
   const events: { acquired: object[]; disposed: object[] } = { acquired: [], disposed: [] };
   const keys = Object.fromEntries(ids.map((id) => [id, keyOf(id)]));
   return {
@@ -607,11 +608,13 @@ function makePresetFace(ids: string[]) {
     face: {
       list: async () => ids.map((id) => ({ id })),
       acquireScope: async (id?: string) => {
-        const key = (id !== undefined && keys[id]) || keyOf(id ?? "default");
+        const presetId = id ?? "default";
+        const key = keys[presetId] ?? keyOf(presetId);
         events.acquired.push(key);
         return {
           key,
-          dispose: () => {
+          [Symbol.asyncDispose]: async () => {
+            if (opts?.releaseThrows?.(presetId) === true) throw new Error("release boom");
             events.disposed.push(key);
           },
         };
@@ -748,5 +751,35 @@ describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）",
     const result = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
     expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
     expect(result.note).toContain("agentPresets");
+  });
+
+  it("bug 66e1bd5d: asyncDispose 抛错不影响并集——释放失败记 note，不外溢不掩盖取数结果", async () => {
+    const presets = makePresetFace(["hr", "dev"], { releaseThrows: (id) => id === "hr" });
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          if (scope === undefined) return [{ name: "read", description: "global read" }];
+          if (scope === presets.keys.hr) return [{ name: "summon", description: "hr summon" }];
+          return [{ name: "shell", description: "dev shell" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+      note?: string;
+    };
+    // hr 释放抛错不影响其取数结果——并集完整
+    expect(result.tools).toEqual([
+      { name: "read", description: "global read" },
+      { name: "summon", description: "hr summon" },
+      { name: "shell", description: "dev shell" },
+    ]);
+    // 释放失败记 note（点名 hr），dev 正常释放不记
+    expect(result.note).toContain("release failed");
+    expect(result.note).toContain("hr");
+    expect(presets.events.disposed).toEqual([presets.keys.dev]);
   });
 });
