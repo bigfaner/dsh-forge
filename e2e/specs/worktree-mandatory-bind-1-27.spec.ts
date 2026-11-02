@@ -37,6 +37,8 @@ function makeGitRepo(dir: string): void {
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.27 binding-derivation fixture\n')
+  git(['add', '.'])
+  git(['commit', '-m', 'init'])
 }
 
 /** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
