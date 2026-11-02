@@ -2,6 +2,7 @@
 // 流控分类的载体；缺输出 = 判词只有 stopReason，循环侧无法识别限流）。
 // 机械④（forge-verification-hardening）：review-wave-N 修正波标记——多波递增、快照口径、
 // 触发面（fix 链收口 / Blocker 返工批）与 fail-soft 缺席零变化。
+// 成功里程碑 info 埋点（diag-milestone-coverage）：settle 成功径 emit forge-settle info。
 import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, QueryTaskResult, TaskCard, TaskEvidenceDebt, TaskSnapshot } from '@dsh-forge/contracts'
 import { settleWorkerRun } from './settle.js'
@@ -263,5 +264,47 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     )
     expect(calls[0]?.['snapshots']).toEqual({ tasksTotal: 2, commitsTotal: 1, fixesTotal: 1, evidenceDebtsTotal: 0 })
     expect(ZERO_SNAPSHOT.tasksTotal).toBe(0)
+  })
+})
+
+// ─────────────────────────── 成功里程碑 info 埋点（diag-milestone-coverage） ───────────────────────────
+
+/** diag 发射捕获缝（info 埋点断言面——payload 结构窄读） */
+function recordingDiag(): { emitted: Array<{ level: string; event: string; message: string; [key: string]: unknown }> } {
+  const emitted: Array<{ level: string; event: string; message: string; [key: string]: unknown }> = []
+  return { emitted }
+}
+
+describe('成功里程碑 info 埋点：forge-settle（diag-milestone-coverage——成功径此前仅失败 warn，不可见）', () => {
+  it('success 结算 emit level=info event=forge-settle：payload 携带 slug/localId/commitHash 关键字段', async () => {
+    const { emitted } = recordingDiag()
+    const tasks = waveHarness({
+      settledStatus: 'completed',
+      cards: [{ localId: '0' }],
+      recordsByTask: { '2.5': [{ commitHash: 'c-ok' }] },
+    })
+    const settlement = await settleWorkerRun({ tasks, diag: (p) => emitted.push(p as never) }, RUN)
+    expect(settlement.case).toBe('settled')
+    const info = emitted.find((p) => p.event === 'forge-settle' && p.level === 'info')
+    expect(info, '成功结算必须可见（AGENTS §7——成功里程碑 info 埋点）').toBeDefined()
+    expect(info).toMatchObject({
+      level: 'info',
+      event: 'forge-settle',
+      projectId: 'p-1',
+      slug: 'feat-x',
+      localId: '2.5',
+      commitHash: 'c-ok',
+    })
+    expect(info?.message).toContain('feat-x/2.5')
+  })
+
+  it('blocked 结算不 emit 成功里程碑 info（info 径 success 专属——blocked 失败语义不被洗白）', async () => {
+    const { emitted } = recordingDiag()
+    const tasks = waveHarness({ settledStatus: 'blocked', cards: [{ localId: '0' }] })
+    const settlement = await settleWorkerRun({ tasks, diag: (p) => emitted.push(p as never) }, RUN)
+    expect(settlement.case).toBe('settled')
+    if (settlement.case !== 'settled') return
+    expect(settlement.result.outcome).toBe('blocked')
+    expect(emitted.filter((p) => p.level === 'info')).toEqual([])
   })
 })

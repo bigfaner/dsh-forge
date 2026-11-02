@@ -1024,3 +1024,53 @@ describe('防线下探', () => {
     expect((out as { text: string }).text).toContain('已在运行')
   })
 })
+
+// ─────────────────────────── 成功里程碑 info 埋点：forge-dispatch-line（diag-milestone-coverage） ───────────────────────────
+
+describe('成功里程碑 info 埋点：forge-dispatch-line（diag-milestone-coverage——派发成功此前仅失败 warn，成功径不可见）', () => {
+  const cards = [card({ kind: 'feature', slug: 'feat-x' }, '2.5', 'pending')]
+
+  /** diag 发射捕获缝 */
+  function diagRecorder(): { emitted: Array<{ level: string; event: string; message: string; [key: string]: unknown }> } {
+    const emitted: Array<{ level: string; event: string; message: string; [key: string]: unknown }> = []
+    return { emitted }
+  }
+
+  it('指令单行提交成功 → emit level=info event=forge-dispatch-line，携带 sessionId + slug', async () => {
+    const rec = followupRecorder()
+    const { emitted } = diagRecorder()
+    const stub = driverStub()
+    const handler = createRunDagTasksHandler({
+      driver: stub.driver,
+      tasks: tasksStub(cards).tasks,
+      resolveProjectId: (c: string) => (c === CWD ? PROJECT : undefined),
+      diag: (p) => emitted.push(p as never),
+    })
+    const out = await handler({ agent: agentOf(SESSION, CWD, rec.fn) as never, rawInput: 'feat-x' })
+    expect(out.kind).toBe('success')
+    expect(rec.followuped).toHaveLength(1)
+    const info = emitted.find((p) => p.event === 'forge-dispatch-line' && p.level === 'info')
+    expect(info, '派发成功必须可见（AGENTS §7——成功里程碑 info 埋点）').toBeDefined()
+    expect(info).toMatchObject({ level: 'info', event: 'forge-dispatch-line', sessionId: SESSION, slug: 'feat-x' })
+    expect(info?.message).toContain('feat-x')
+    expect(info?.message).toContain(SESSION)
+  })
+
+  it('提交失败（followup 抛错）→ 零 info emit（info 径成功专属，失败仍走既有 warn）', async () => {
+    const { emitted } = diagRecorder()
+    const stub = driverStub()
+    const handler = createRunDagTasksHandler({
+      driver: stub.driver,
+      tasks: tasksStub(cards).tasks,
+      resolveProjectId: (c: string) => (c === CWD ? PROJECT : undefined),
+      diag: (p) => emitted.push(p as never),
+    })
+    const boom = () => {
+      throw new Error('transport gone')
+    }
+    await handler({ agent: agentOf(SESSION, CWD, boom) as never, rawInput: 'feat-x' })
+    expect(stub.startInputs).toHaveLength(0) // 提交失败 = 循环不启动（1.14 序不变）
+    expect(emitted.filter((p) => p.level === 'info')).toEqual([])
+    expect(emitted.some((p) => p.event === 'forge-dispatch-line' && p.level === 'warn')).toBe(true) // 失败 warn 径原样
+  })
+})

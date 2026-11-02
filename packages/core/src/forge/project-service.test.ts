@@ -1221,3 +1221,78 @@ describe('project-manual-order：updateProject patch.sortOrders 批量写面', (
     await expect(plain.service.updateProject('p1', { sortOrders: { p1: 1, p2: 2 } })).resolves.toBeDefined()
   })
 })
+
+// ── diag-milestone-coverage：双失败径「记账失败」warn emit（嵌套 catch 补点——失败留痕全失时 diag 域不静默） ──
+
+/** setup 变体（onDiag 缝捕获——双失败径 emit 断言面；可选 gitIdentity 注入归并层失败） */
+function setupDiag(gitIdentity?: GitIdentityPort) {
+  const db = openDatabase(dbPath())
+  dbs.push(db)
+  const registry = new StubRegistry()
+  const rename = new StubRename()
+  const diagCalls: Array<{ level: string; event: string; message: string }> = []
+  const service = createProjectService({
+    db,
+    registry,
+    rename,
+    ...(gitIdentity !== undefined ? { gitIdentity } : {}),
+    onDiag: (p) => diagCalls.push(p as { level: string; event: string; message: string }),
+  } satisfies ProjectServiceDeps)
+  return { db, registry, service, diagCalls }
+}
+
+describe('diag-milestone-coverage 双失败径：归并/自愈/对账失败且记账亦失败 → project-reconcile warn emit 不静默', () => {
+  it('身份归并层失败 + 记账失败（app_key_logs 损坏）→ warn emit 双因俱载，降级现行链语义零变化', async () => {
+    const git = new StubGitIdentity()
+    git.fail = new Error('git probe exploded')
+    const { db, service, diagCalls } = setupDiag(git)
+    db.exec('DROP TABLE app_key_logs') // 记账面损坏 → 嵌套 catch 命中
+    const result = await service.registerProject(input())
+    expect(result.attachedToExisting).toBe(false) // 降级现行链（归并放弃）
+    expect(diagCalls).toHaveLength(1)
+    expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'project-reconcile' })
+    expect(diagCalls[0]?.message).toContain('身份归并层失败记账降级')
+    expect(diagCalls[0]?.message).toContain('git probe exploded') // 归并失败原因
+    expect(diagCalls[0]?.message).toContain('记账失败') // 记账失败原因段
+  })
+
+  it('重注册自愈面失败 + 记账失败 → warn emit 后仍走现行链（错误面由 WorkspaceCreateError 承接，语义零变化）', async () => {
+    const { db, registry, service, diagCalls } = setupDiag()
+    const canonical = join(WS, 'learn')
+    seedProjectRow(db, { id: 'row-x', workspaceId: 'ws-gone', wsPath: canonical }) // 悬空引用 → 自愈径
+    registry.failCreate = new Error('dsh create down') // 找不回 → recreate 失败 → 自愈链抛
+    db.exec('DROP TABLE app_key_logs')
+    const err: unknown = await service.registerProject(input({ workspaceDir: canonical })).catch((e) => e)
+    expect(err).toBeInstanceOf(WorkspaceCreateError) // 降级现行链承接不变
+    expect(diagCalls).toHaveLength(1)
+    expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'project-reconcile' })
+    expect(diagCalls[0]?.message).toContain('重注册自愈面失败记账降级')
+    expect(diagCalls[0]?.message).toContain('dsh create down')
+  })
+
+  it('启动对账整体失败 + 记账失败 → warn emit（启动优先于记账的 AC5 口径零变化，report 照常返回）', async () => {
+    const { db, service, diagCalls } = setupDiag()
+    db.exec('DROP TABLE projects') // 行读面失效 → 整体 try 抛
+    db.exec('DROP TABLE app_key_logs')
+    const report = await service.reconcileAtStartup()
+    expect(report).toEqual({ repaired: [], orphans: [] }) // 不抛断启动
+    expect(diagCalls).toHaveLength(1)
+    expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'project-reconcile' })
+    expect(diagCalls[0]?.message).toContain('启动对账整体失败记账降级')
+  })
+
+  it('对账单项失败 + 记账失败 → warn emit，剩余行继续对账（逐项循环不被记账失败截断）', async () => {
+    const { db, registry, service, diagCalls } = setupDiag()
+    const ok = registry.seed(join(WS, 'repair-ok'))
+    seedProjectRow(db, { id: 'a-bad', workspaceId: 'ws-x', wsPath: join(WS, 'missing') })
+    seedProjectRow(db, { id: 'b-ok', workspaceId: ok.id, wsPath: ok.path })
+    registry.failCreate = new Error('dsh create down') // a-bad 修复链失败 → 逐项 catch 走记账
+    db.exec('DROP TABLE app_key_logs')
+    const report = await service.reconcileAtStartup()
+    expect(report.repaired).toEqual([])
+    expect(readRows(db).find((r) => r.id === 'b-ok')?.workspace_id).toBe(ok.id) // 剩余行照常对账
+    expect(diagCalls).toHaveLength(1)
+    expect(diagCalls[0]).toMatchObject({ level: 'warn', event: 'project-reconcile' })
+    expect(diagCalls[0]?.message).toContain('对账单项失败记账降级')
+  })
+})
