@@ -50,6 +50,7 @@ function toolWithCapture(): {
       captured.push(q as { projectId: string } & Record<string, unknown>)
       return [bugCard('b-1', '游标漂移')]
     },
+    findRecurrenceCandidates: async () => [],
     getBug: async () => {
       throw new Error('not used')
     },

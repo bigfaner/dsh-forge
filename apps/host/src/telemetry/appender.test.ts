@@ -293,14 +293,26 @@ describe('counters 周期自证（diag-milestone-coverage 方案 6——非零�
   it('minLevel≥warn：selfReport 被级别门吞时计数保留，恢复 info 后下窗口补发', async () => {
     const dir = await tempLogsDir()
     const captured: string[] = []
+    let fails = 2
     const appender = new DiagAppender({
       dir,
       minLevel: 'warn',
+      maxQueue: 2,
       now: () => dayDate('2026-10-19'),
-      driver: driverWith({ append: async (_file, data) => { captured.push(data) } }),
+      driver: driverWith({
+        append: async (_file, data) => {
+          if (fails > 0) {
+            fails -= 1
+            throw new Error('disk gone')
+          }
+          captured.push(data)
+        },
+      }),
     })
-    appender.counters.writeFailures = 2
-    appender.counters.queueDropped = 1
+    appender.handleEvent({ ...BASE }) // 入队（drain 未及消费）
+    appender.handleEvent({ ...BASE }) // 入队至 maxQueue=2
+    appender.handleEvent({ ...BASE }) // 超界丢弃 → queueDropped=1
+    await appender.idle() // drain：两次写失败 → writeFailures=2
     appender.selfReport() // 级别门吞掉 info 自证行——计数不得丢失
     await appender.idle()
     expect(captured).toHaveLength(0)

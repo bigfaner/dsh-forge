@@ -55,7 +55,7 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     const calls: unknown[] = []
     const faces = createRecurrenceFaces({
       bugs: {
-        findRecurrenceCandidates: (projectId, scope) => {
+        findRecurrenceCandidates: async (projectId, scope) => {
           calls.push({ projectId, scope })
           return CHAIN3
         },

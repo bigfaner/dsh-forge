@@ -49,6 +49,7 @@ function toolWithCapture(): {
       throw new Error('not used')
     },
     listBugs: async () => [],
+    findRecurrenceCandidates: async () => [],
     getBug: async (q) => {
       captured.push(q)
       return response

@@ -503,7 +503,7 @@ describe('sink 接线时序（引导期 typed diag 可达）', () => {
 
   it('sink 已接线：引导期 queueDir 创建失败 → typed job-tree-queue error 行达缝（零 console 兜底）', async () => {
     const received: ForgeDiagPayload[] = []
-    const sink: ForgeDiagEmitFace = (payload) => received.push(payload)
+    const sink: ForgeDiagEmitFace = (payload) => received.push(payload as ForgeDiagPayload)
     setJobTreeDiagSink(sink)
     // queueBaseDir 落在既有文件上——queueDir（文件/queue-uuid）mkdirSync 必败 = 引导期失败形态
     const base = join(mkdtempSync(join(tmpdir(), 'dsh-forge-jobtree-sink-')), 'not-a-dir')

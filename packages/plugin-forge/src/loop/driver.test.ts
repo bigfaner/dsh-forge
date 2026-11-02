@@ -351,7 +351,7 @@ function build(options: {
   /** 机械③ 容器分支 HEAD 解析桩（worktree 在场时标记 base_commit_hash 来源） */
   resolveHeadCommit?: (worktree: string) => Promise<string | undefined>
   /** 诊断埋点桩（AGENTS §7——循环里程碑 diag 录制） */
-  diag?: (payload: { readonly level: 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
+  diag?: (payload: { readonly level: 'debug' | 'info' | 'warn' | 'error'; readonly event: string; readonly message: string }) => void
   /** T3 同缝拦截（loop-recurrence-hardening）：台账 recurrence 候选 face 桩 */
   findRecurrenceCandidates?: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] }) => Promise<unknown[]> | unknown[]
   /** T3「待建模」解除判据：卷宗建模报告在场桩 */

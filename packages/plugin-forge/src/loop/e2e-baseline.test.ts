@@ -278,7 +278,7 @@ describe('loadPersistedBaseline 豁免补点 debug emit（diag-milestone-coverag
     expect(result).toBeUndefined()
     expect(diags).toHaveLength(1)
     expect(diags[0]).toMatchObject({ level: 'debug', event: 'e2e-baseline' })
-    expect(diags[0].message).toContain(cachePath)
+    expect(diags[0]!.message).toContain(cachePath)
   })
 
   it('缝缺席（onDiag 未传）→ undefined 零 emit 零抛（debug 免 console 兜底）', () => {
