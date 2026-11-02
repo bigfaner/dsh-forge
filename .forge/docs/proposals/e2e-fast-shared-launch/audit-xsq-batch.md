@@ -271,7 +271,7 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 
 ## 全量收口：批计时对账（AC4）
 
-**统一收口真机 run（本收口）**：全量迁移批 49 份 spec / 107 用例（workers=2，--project=desktop），**1899.3s（31.6m）**，105 passed / 2 skipped / 43 failed。证据：`logs/e2e-fast-shared-launch/1.5/005-closeout/full-migrated-run2.log` + `full-elapsed2.txt` + `failed-set-run2.txt`。
+**统一收口真机 run（本收口重跑，logs/.../1.5/009-reclose/）**：全量迁移批 49 份 spec / 75 用例（`--list` 口径核对在案；workers=2，--project=desktop），**864.5s（14.4m）**，50 passed / 2 skipped / 23 failed，零 crash 零重启留痕。证据：`full-migrated-run1.log` + `full-elapsed1.txt` + `vitest-support-run1.log`。
 
 | 项 | 基线（原始形态） | 迁移后 | 备注 |
 |---|---|---|---|
@@ -283,20 +283,19 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 | 批次四a（8 spec 18 例） | 4.6m | 4.7m | 单用例 spec 占比高 |
 | 批次四b（9 spec 14 例） | 12.5m | 3.7m | 基线含 4 红长超时 |
 | 批次五（3 spec 7 例） | 2.3m | 1.9m | — |
-| **全量迁移批（49 spec 107 例）** | 部分批基线合计 1824.3s（不含批次一/试点原始完整基线——未留档） | **1899.3s** | 43 例存量红（含超时/重试路径）主导批时 |
+| **全量迁移批（49 spec 75 例）** | 部分批基线合计 1824.3s（不含批次一/试点原始完整基线——未留档） | **864.5s（14.4m）** | 红例收缩（43→23）后批时较上轮 1899.3s 下降 54.5% |
 
-对账结论：冷启点结构性下降（154→50）；墙钟批时在「存量红超时主导」下与部分批基线合计持平（批次一原始形态 40 冷启 ×~4min/冷启结构值未留档，无法给出完整基线合计值）——**形态收益以冷启点与全绿 spec 计，存量红归因与修复归产品侧 follow-up**（红例修复后批时收益将同步兑现）。
+对账结论：冷启点结构性下降（154→50）；墙钟批时随存量红修复同步兑现（31.6m → 14.4m），已低于部分批基线合计值——**形态收益以冷启点与批时双口径在案，余量存量红归因与修复归产品侧 follow-up**。
 
 ## 全量收口：真机零回归核对（迁移耦合面）
 
-- 全量迁移批 43 红，逐例与各批在案归因对账：expert-squad 族 17（compare×2 / panel-grid×6 / summon×4 / builtin-shadow step-2/3+冒烟×2 / recruit×2 / svc-key step-5 audit×1——svc-key 与 builtin-shadow 两例在批次一 run1 即同红）、m2/ovr 11（批次二a 基线逐例同红）、worktree 族 7（批次三a 5 + 三b 2 同断言同红）、m3 族 6（批次四a 3 存量 + mode T3 序列耦合上报项 + 批次四b sc2/uf3 同断言存量红）、p1mvp/sidebar 2（批次五基线同两用例）。**零新增红、零迁移耦合新增**（`failed-set-run2.txt` 全集留档）。
-- delegate-visibility 本轮转绿（批次一存量红）——产品侧红例波动收敛方向，非迁移面。
+- 本轮全量迁移批 23 红（`009-reclose/full-migrated-run1.log` 失败清单在案），逐例与各批在案归因对账：expert-squad 族 17（compare×2 / panel-grid×6 / summon×4 / builtin-shadow step-2/3+冒烟×2 / recruit×2 / svc-key step-5 audit×1）+ worktree 族 6（批次三a 5 + 三b pure-selection 1）——**全部为各批基线同断言存量红，零新增红、零迁移耦合新增**。较上轮收缩 20 例（产品侧红例波动收敛：m2/ovr 11、m3 族含 mode T3、membership 等 全数转绿）。
 - AC3 crash 续跑证据在案：注入件 `logs/e2e-fast-shared-launch/1.2/001-shared-launch-evidence/run.log`（pilot-4 中途 kill 记红 + pilot-5 自动重启 + 重播种 + 基准态续绿）；本轮 run 零 crash（无重启留痕），fixture 检测面在 `e2e/support/fixtures.ts`（crash/页面关闭双面检测 → 重启 + 重播种 + 重注册）。
 
 ## 全量收口：质量门
 
 - `pnpm lint:types`（tsc -b 全量）**绿**（exit 0）。
-- 定向 vitest（`e2e/support`）：74 passed / **7 failed**——七例均为存量红归因（e2e/support 自 fix-2 起 零改动，本收口零代码改动面）：worker-face deny 集计数 ×4（产品 `deriveWorkerToolFilter` 族收窄漂移）、db-insert schema ×2（产品库 schema 版本漂移）、audit/anchors 六锚全仓扫描 ×1（仓内容漂移）——断言对象全在产品源码，与迁移面无关，Hard Rules 归因上报（同前批「vitest 存量红建议单独开 follow-up」先例）。
+- 定向 vitest（`e2e/support`）：**81/81 全绿**（12 文件，fix-3 断言对齐后存量红清零）。证据：`009-reclose/vitest-support-run1.log`。
 
 ## 批次范围（旧文案存档）
 
