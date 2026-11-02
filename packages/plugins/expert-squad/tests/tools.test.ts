@@ -294,6 +294,24 @@ describe("recruit_expert — 写路径经 frontmatter 校验", () => {
   });
 });
 
+// 工具级 description 双层口径（T4：描述须与 target 参数 user/project 双层语义一致，
+// 包内断言防 plugin-forge 跨包测试依赖——圆桌 m5）
+describe("recruit_expert — 工具级 description 双层口径", () => {
+  it("描述为 target 双层口径（layer chosen by target），不再声称恒写 user root", () => {
+    const desc = makeTools().recruit_expert!.description;
+    expect(desc).toContain(
+      "writes a validated expert .md archive into the layer chosen by target (user or project)",
+    );
+    expect(desc).not.toContain("into the user experts root");
+  });
+
+  it("描述含 rename_expert 迁移出路提示（key immutable + separate migration path）", () => {
+    const desc = makeTools().recruit_expert!.description;
+    expect(desc).toContain("immutable after creation");
+    expect(desc).toContain("rename_expert offers a separate migration path");
+  });
+});
+
 describe("update_expert — name 建档后不可改 + 不存在键 fail-loud", () => {
   beforeEach(async () => {
     await refresh();

@@ -422,7 +422,7 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
   const recruitTool: ExpertToolDefinition = {
     name: "recruit_expert",
     description:
-      "Recruit (create) a new expert profile: writes a validated expert .md archive into the user experts root. The key must be a lowercase english key and is immutable after creation; the persona body must not contain bare {{.",
+      "Recruit (create) a new expert profile: writes a validated expert .md archive into the layer chosen by target (user or project). The key must be a lowercase english key and is immutable after creation; rename_expert offers a separate migration path. The persona body must not contain bare {{.",
     parameters: zToJSONSchema(recruitParams, "input"),
     output: {
       schema: zToJSONSchema(recruitResult, "output"),
