@@ -128,7 +128,15 @@ Fixes: #<issue 编号>（如适用）
 
 **立即捕获 commit_hash**：提交后马上 `git rev-parse HEAD`——并发安全锚，晚一步并发提交就取错。随即 `resolveBug`（outcome=fixed，bug_id + commit_hash + **fix_approach**）；worktree/branch、修复者与修复会话由工具以 hash 为锚反查，不要手填。回填不得拖延：提交→hash→resolveBug 一气呵成，零并发窗口。
 
-**fix_approach（fixed 必答）**：一段话写清采用了什么修法、**落点层级（根因级/症状级）**、为何选此法而非替代方案（关键取舍、遗留兜底）——bug 台账的审查面，与 Root cause 注记互补（后者讲为什么发生，前者讲怎么修）。
+**fix_approach（fixed 必答）**：一段话写清采用了什么修法、**落点层级（根因级/症状级）**、为何选此法而非替代方案（关键取舍、遗留兜底）——bug 台账的审查面，与 Root cause 注记互补（后者讲为什么发生，前者讲怎么修）。复发家族（recurrenceOf 挂链的缺陷）还须在 fix_approach 写**家族覆盖声明**：为何本修复覆盖整条复发链的共同根因，而非又堵了一个表象；声明附**报告锚**（排查报告的卷宗文件路径），缺失或锚失效会被拒绝标 fixed，退回补证。
+
+**沉淀评估（三选一，强制）**：resolveBug 回填完成后，对该缺陷做一次沉淀评估，三选一必选其一，不允许「评估了但什么都不做」：
+
+1. **可机械锁死** → 守卫或单测：把根因固化为一条会失败的守卫断言/单测（同一提交落），此后同类错误在回归门即被拦截。优先级最高——能机械化的不靠文字。
+2. **行为规则** → 项目 conventions 增条：根因是「该做什么/不该做什么」的行为约定（如写径纪律、命名约束），写入对应规范文档，一处在正本、他处指针引用。
+3. **不值得** → 不沉淀 + 理由：一次性环境噪音或修复本身已含完整守卫，在输出摘要写明不沉淀的理由。
+
+评估产物（守卫/单测/规范条目/不沉淀理由）在输出摘要追加一行 `沉淀: <选项 + 落点>`；这条记录是后续同类任务简报「历史判例」节的知识来源。
 
 **生效路径注记（交付必答）**：用户验证 ≠ 提交即生效。摘要必须写明：哪些面需重建（前端 bundle——刷新页面不重建）、哪些需重启宿主进程、哪些只对新产生的数据生效（旧数据走旧路径/兜底）。
 
@@ -144,6 +152,7 @@ Tests:   <N 个单元测试> + <M 个 E2E 测试>
 Result:  全部通过 ✓
 Commit:  <hash>
 生效:    <重建/重启/仅对新数据生效——用户验证前置动作>
+沉淀:    <守卫单测 / conventions 增条 / 不沉淀+理由——落点>
 ```
 
 ---
@@ -153,3 +162,4 @@ Commit:  <hash>
 - 琐碎修复（错字/配置，无行为面）可裁断跳过 Step 1-3 的完整分析，但台账两阶段与原子提交（硬规则 4）不豁免。
 - 全量跑 exit code 非零不径直判失败：先看测试汇总行，环境噪音与结果分离判读。
 - **不自派 fix/后继任务**：bug 台账（recordBug/resolveBug）在 worker 会话可用，任务派生权限归主会话与循环处置层——blocked/unresolved 只如实结算（submitTask result=blocked / resolveBug unresolved），需要派后续任务时交处置方；worker 会话调用 `addTask` 会被拒（`ERR_WORKER_ADDTASK_DENIED`）。
+- **blocked 结算必带归类**：`submitTask result=blocked` 须携带 `block_classification_kind`（`'new-problem' | 'same-family-recurrence'`——T2 归类闸门，缺席即拒；同族复发另带 `block_classification_recurrence_of` 填台账复发链前驱 bug_id；归类为自报语义字段，程序零机判）。
