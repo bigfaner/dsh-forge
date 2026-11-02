@@ -100,8 +100,8 @@ export function electronHarnessActions(
       const diagDir = diagLogsDirOf(app)
       try {
         noteHarnessLog(logPath, '[host] 查看诊断日志目录（菜单触发）') // 菜单动作留痕（与其余四动作同制；真机调用计数面）
-        lastDiagOpenAt = now
         mkdirSync(diagDir, { recursive: true }) // 目录缺席即建（对位 showLog 的 ensure 头——openPath 恒有真实目录可达）
+        lastDiagOpenAt = now // 去重窗仅在成功后置位（bug 087c85db——失败径不吞窗内重试）
         void openDir(diagDir)
         return true
       } catch {
