@@ -382,8 +382,10 @@ export function sessionRowInLedger(list: unknown, sessionId: string): boolean {
  * 账本父反查子会话（纯函数——⟞ 进行中 worker 兜底面）：byId 扫描 row.parentId ===
  * parentSessionId 的子行。taskKey 在场时优先按 displayTitle 前缀 `${taskKey} · ` 命中
  * 目标任务的子行（spawn 标签 = `${taskKey} · ${任务名}` 落账本 displayTitle——同父多
- * worker 判别单源）；无键命中（标签漂移/旧数据/缺省）回退 updatedAt 择新（字符串 ISO
- * 字典序防御窄读；全体缺席/非串回退枚举末位）。零命中/形状漂移/快照异常 = undefined
+ * worker 判别单源）。带键无命中（标签漂移/旧数据/执行中 worker 账本行未落持久化）=
+ * undefined——不回退兄弟子行（bug b87a6869：把最近兄弟冒充目标任务，点击开了错会话；
+ * 宁可行非交互不空跳）。无键（循环级近似）回退 updatedAt 择新（字符串 ISO 字典序防御
+ * 窄读；全体缺席/非串回退枚举末位）。零命中/形状漂移/快照异常 = undefined
  * （调用面 no-op fail-soft）。
  * Root cause（bug 661bce2b）：原实现任务键无关、恒取同父最新子行——一父多 worker 时
  * 进行中任务的 ⟞ 打开的是别的任务的子会话。
@@ -419,7 +421,7 @@ export function workerChildSessionOf(list: unknown, parentSessionId: string, tas
       if (typeof title === 'string' && title.startsWith(keyPrefix)) keyedId = sessionId
     }
   }
-  return keyedId ?? bestId
+  return taskKey === undefined ? bestId : keyedId // 带键无命中 = undefined（不冒充兄弟——bug b87a6869）
 }
 
 /**

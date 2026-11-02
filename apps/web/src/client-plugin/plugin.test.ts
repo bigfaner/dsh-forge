@@ -883,13 +883,19 @@ describe('官方基座降位登记族（fix-25：main 面板 roster + panellist 
       expect(workerChildSessionOf(list, 'dispatch-1', 'feat-x/1.1')).toBe('worker-1-1')
       expect(workerChildSessionOf(list, 'dispatch-1', 'feat-x/1.2')).toBe('worker-1-2')
     })
-    it('任务键无命中（标签漂移/旧数据）或缺省 → 回退 updatedAt 择新', () => {
+    it('任务键无命中（标签漂移/旧数据）→ 不回退兄弟子行 = undefined（bug b87a6869：开错兄弟会话不如不开）；缺省键 → updatedAt 择新', () => {
       const list = ledger({
         'worker-1-1': { parentId: 'p', updatedAt: '2026-10-13T10:00:00Z', displayTitle: 'feat-x/1.1 · A' },
         'worker-1-2': { parentId: 'p', updatedAt: '2026-10-13T11:00:00Z', displayTitle: 'feat-x/1.2 · B' },
       })
-      expect(workerChildSessionOf(list, 'p', 'feat-x/9.9')).toBe('worker-1-2')
+      expect(workerChildSessionOf(list, 'p', 'feat-x/9.9')).toBeUndefined()
       expect(workerChildSessionOf(list, 'p')).toBe('worker-1-2')
+    })
+    it('bug b87a6869：执行中 worker 账本行未落（仅兄弟已完成任务行在账）→ undefined，不冒充目标', () => {
+      const list = ledger({
+        'worker-1-1': { parentId: 'p', updatedAt: '2026-10-13T10:00:00Z', displayTitle: 'feat-x/1.1 · A' },
+      })
+      expect(workerChildSessionOf(list, 'p', 'feat-x/1.2')).toBeUndefined()
     })
     it('updatedAt 缺席回退枚举末位；无命中/形状漂移/快照异常 = undefined', () => {
       expect(workerChildSessionOf(ledger({ 'w-1': { parentId: 'p' } }), 'p')).toBe('w-1')
