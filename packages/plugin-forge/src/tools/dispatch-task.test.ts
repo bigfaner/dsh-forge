@@ -298,19 +298,24 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
       expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族五动词之外不可见）`).toBe(true)
-      expect(triageDeny.has(name), `${name} 应入 triage deny（仅主 agent 面）`).toBe(true)
+      // 只读台账两面（§2.2.1）放行：getBug/listBugs 不入 triage deny
+      if (name !== 'getBug' && name !== 'listBugs') {
+        expect(triageDeny.has(name), `${name} 应入 triage deny（写面/任务域动词仅主 agent）`).toBe(true)
+      }
     }
     expect(workerDeny.has('submitTask')).toBe(false)
     expect(workerDeny.has('addTask')).toBe(false)
-    // fix-bug 两 bug 写径 + 链上下文读径：worker 面（forge 族五动词）+ triage 面（仅决策不执行——deny）分治
+    // fix-bug 两 bug 写径 + 链上下文读径：worker 面（forge 族五动词）+ triage 面（仅决策不执行）分治
     expect(workerDeny.has('recordBug')).toBe(false)
     expect(workerDeny.has('resolveBug')).toBe(false)
     expect(workerDeny.has('getBug')).toBe(false)
-    // listBugs 台账查询面分治：仅主 agent——worker/triage 两面均 deny
+    // listBugs 台账查询面分治：worker deny（仅主 agent）；triage 只读放开（§2.2.1）
     expect(workerDeny.has('listBugs')).toBe(true)
     expect(triageDeny.has('recordBug')).toBe(true)
     expect(triageDeny.has('resolveBug')).toBe(true)
-    expect(triageDeny.has('getBug')).toBe(true)
+    // triage 只读深挖两工具放行（§2.2.1）
+    expect(triageDeny.has('getBug')).toBe(false)
+    expect(triageDeny.has('listBugs')).toBe(false)
   })
 
   it('validateMermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {

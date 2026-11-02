@@ -111,7 +111,7 @@ async function selectWorkspaceWithRetry(page: Page, name: string): Promise<void>
 
 test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口中文直出 + blank 点选远征 + 幂等点选零漂移', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { page, pageErrors, wsDir } = sharedLaunch
   try {
     await registerProject(page, wsDir, WS_NAME)
     await selectWorkspaceWithRetry(page, WS_NAME)
