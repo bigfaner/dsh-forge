@@ -27,7 +27,7 @@ skills: []
 
 ## 执行约束
 
-- **run-once**：一律 run-once，禁 `--watch` 形态（孤儿进程耗尽 commit 判例见 AGENTS.md §2）。
+- **run-once**：一律 run-once，禁 `--watch` 形态（孤儿进程耗尽 commit 判例见工作区 AGENTS.md 的工程环境节）。
 - **针对性执行**：按改动定位受影响项目/文件（`npx vitest run <路径>` 或 `--project <名>`）；全局跑仅跨包重构或收口验收。
 - **快照**：行为变更随改动 `-u` 重录（如简报 compose 快照）；重录必须伴随对应行为断言更新，禁单独重录「凑绿」。
 - **环境约束**：全量套件 `VITEST_MAX_WORKERS=4`；TEMP 紧张时重定向；任何原生内存崩溃先查 commit charge 再归因。

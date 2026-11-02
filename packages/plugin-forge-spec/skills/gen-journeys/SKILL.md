@@ -20,6 +20,8 @@ gen-journeys → gen-contracts → gen-test-scripts → run-tests
  (叙事)          (技术)                       (代码生成)        (执行)
 ```
 
+> 注：上链为供料顺序示意（技能名词表）；建卡编排以任务类型词表为准——`test-gen-*` → `test-run`。
+
 ## 输入模式
 
 **PRD 模式**（`prd/prd-user-stories.md` + `prd/prd-spec.md` 存在）：一条用户故事 =一条 Journey 候选；朝同一目标递进的连续故事合并；每条 Journey 可回溯到具体故事 ID。`prd/prd-ui-functions.md`（若存在）把 UI 交互映射为步骤。

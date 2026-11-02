@@ -39,7 +39,7 @@ flowchart LR
     C1 --> R
 ```
 
-- **默认两任务**：旅程叙事（type `test-gen-journeys`）→ 契约文档（type `test-gen-contracts`，depends_on 旅程）；产物落 `proposals/<slug>/testing/<旅程名>/`（journey.md + contracts/）。与 coding 任务同建同就绪，不设 coding 对旅程/契约的依赖边。小体量（单旅程 ≤3 步且契约 ≤5 个 Outcome）可合并为 1 个 `test-gen-journeys` 任务；多旅程提案一旅程一任务，不做跨旅程杂烩。
+- **默认两任务**：旅程叙事（type `test-gen-journeys`）→ 契约文档（type `test-gen-contracts`，depends_on 旅程）；产物落所属容器目录的 `testing/`（远征 feature 树 / 突击 `proposals/<slug>/testing/`——journey.md + contracts/）。与 coding 任务同建同就绪，不设 coding 对旅程/契约的依赖边。小体量（单旅程 ≤3 步且契约 ≤5 个 Outcome）可合并为 1 个 `test-gen-journeys` 任务；多旅程提案一旅程一任务，不做跨旅程杂烩。
 - **领取顺序**：串行派发循环的领取序 = fix 链 → 优先级 → 创建序——为保证旅程/契约先于实现落盘，**旅程/契约任务一律 P0 且建卡先于全部 coding 卡，coding 卡默认 P1 起**，首个被领任务即旅程/契约，coding 链分支延续不会抢先。
 - **脚本任务后置**：`depends_on` 该提案全部 coding 任务与旅程/契约任务——脚本在实现落盘后撰写：
   - 核实契约锚值：把待实现锚（意向锚）回填为实锚，盖 `last_anchor_sync`（见「契约双态锚」）；
