@@ -306,10 +306,13 @@ function renderSubmitResult(args: unknown, value: unknown): readonly { type: 'te
 export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
+    // 工具级瘦身（prompt-scoping-and-desc-trim §2.2 终版，基线 2016 → ~740）：
+    // 必留五项 = 双径约束 / ac 平行数组 / 直收卡句（3f2b7b71）/ evidence_debt
+    // 欠账路径存在性（blocked-vs-debt 决策时点语义）/ coverage fraction；
+    // 归类门（block_classification）与 files 并集、fix 自动恢复 source 下沉
+    // 参数级唯一承载（参数级为工具级严格超集，T2 门 fail-closed 兜底）。
     description:
-      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. ' +
-      "result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source, plus block_classification_kind ('new-problem' | 'same-family-recurrence'[, block_classification_recurrence_of: predecessor bug_id]) — the T2 classification gate rejects a blocked submit without it (self-reported semantic classification). Completing a fix auto-restores its blocked source. Alternatively, a blocked card may settle directly via result=success (one-line summary required — it serves as the verdict audit trail) when no fix task is warranted. " +
-      'evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence. Mandatory-evidence-domain fallback (AGENTS 1.4): declaring runtime_surface with a runtime assembly face (ui/api/cli/tui/desktop/web-server/mq are examples, not a whitelist; SDK/library is exempt unless it carries its own subprocess/network side effects — mixed faces take the strictest) requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared) on result=success; without either, ERR_RUNTIME_EVIDENCE_REQUIRED rejects and guides you to one of the two paths.',
+      'Submit the outcome of a claimed task (slug + local_id). result=success requires a one-line summary and four gate booleans (compile/fmt/lint/test; optional coverage fraction); tasks with acceptance_criteria also need gate.test passing, and ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count/order; any met=false rejects). result=blocked requires the reason; a blocked card may settle directly via result=success when no fix task is warranted. evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e evidence when implementation + unit tests are green: the card settles now and a dependent test-run debt task is auto-created — never stay blocked on missing e2e evidence.',
     parameters: {
       type: 'object',
       properties: {
@@ -386,7 +389,9 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         runtime_surface: {
           type: 'array',
           items: { type: 'string' },
-          description: "Runtime assembly surface declaration (mandatory-evidence-domain input): faces the deliverable touches at runtime — common examples ui/api/cli/tui/desktop/web-server/mq (non-exhaustive; anything with a runtime assembly face qualifies, e.g. browser-extension, mobile-app, cron, db-migration); 'library'/'sdk'/'pure-logic'/'docs' declare the exempt domain; multiple faces take the strictest ('highest') interpretation.",
+          // 机械⑤裁决语义参数级承载（§2.2 下沉）：豁免前提从句 + either-or-else-rejected 句
+          description:
+            "Runtime assembly surface declaration (mandatory-evidence-domain input): faces the deliverable touches at runtime — common examples ui/api/cli/tui/desktop/web-server/mq (non-exhaustive; anything with a runtime assembly face qualifies, e.g. browser-extension, mobile-app, cron, db-migration); 'library'/'sdk'/'pure-logic'/'docs' declare the exempt domain — the exemption presupposes no subprocess/network side effects of its own; multiple faces take the strictest ('highest') interpretation. On result=success, a declared runtime_surface requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared); without either, the submit is rejected.",
         },
         runtime_evidence_face: {
           type: 'string',

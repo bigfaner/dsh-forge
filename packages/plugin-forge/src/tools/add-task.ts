@@ -218,8 +218,10 @@ function workerAddTaskDenied(): ForgeToolFailure {
 export function createAddTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
+    // 工具级瘦身（prompt-scoping-and-desc-trim §2.2，基线 484 → ~430）：双模式
+    // （feature=远征链 / proposal=突击直挂）解释下沉 source_kind 参数级唯一承载。
     description:
-      'Add a task to a container in the forge pipeline state layer (source_kind: feature for expedition breakdowns, proposal for blitz direct-attached tasks). Use source_task_slug + source_task_local_id (with block_source) to spawn a fix task that pauses its blocked source until the fix completes; depends_on lists local ids of prerequisites within the same container; acceptance_criteria become the submit-time evidence gate. Prefer dispatching existing ready tasks before adding new ones.',
+      'Add a task to a container in the forge pipeline state layer (source_kind: feature or proposal). Use source_task_slug + source_task_local_id (with block_source) to spawn a fix task that pauses its blocked source until the fix completes; depends_on lists local ids of prerequisites within the same container; acceptance_criteria become the submit-time evidence gate. Prefer dispatching existing ready tasks before adding new ones.',
     parameters: {
       type: 'object',
       properties: {
