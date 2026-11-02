@@ -50,36 +50,50 @@
 //
 // Assertion depth: 41/44 behavioral（93%），其中 deep 17/41（41%）——两阈均过。
 
-import { mkdtempSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovSubtabOf, ttCardOf, ttColOf, ttItemOf, OV_PARENT_ANY } from '../../support/anchors.js'
-import { switchTaskView, overlayTextOf, presetSkillDirs } from '../../support/m3.js'
+import { switchTaskView, presetSkillDirs } from '../../support/m3.js'
 
 const WS_NAME = 'ws-jbdc'
+
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（本 spec 无夹具档案，任务账本 slug 隔离）；boot-overlay 判读改扫
+// 共享 userData 根（dsh-forge-shared-launch-ud-*，内容三底稿每启重写与路径无关）。
+function sharedOverlayText(): string {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const file = join(tmpdir(), name, 'boot-overlay.yml')
+    if (existsSync(file)) return readFileSync(file, 'utf8')
+  }
+  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+}
+
+// ── 共享 launch fixture ──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
 
 /** 写动词拒绝面捕获（bridge 直调错误 message = core typed error 文案——sc7 同径） */
 async function rejectMessage(promise: Promise<unknown>): Promise<string> {
   return promise.then(() => 'unexpectedly-resolved', (cause: unknown) => String((cause as Error)?.message ?? cause))
 }
 
-test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无 feature 行 → 直挂容器 → 全绿三视图（Step1-4 success 全链）', async () => {
+test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无 feature 行 → 直挂容器 → 全绿三视图（Step1-4 success 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const project = await registerProject(page, wsDir, WS_NAME)
   try {
-    const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
     const dir = (await forgeInvoke<{ dir: string }>(page, 'forge:projects/deriveTaskStoreDir', { workspaceDir: wsDir })).dir
     const driver = createBridgeDriver(app)
@@ -195,7 +209,7 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
     }
 
     // ── Step5：全程技能清单核查（L1 数据直证——SC2① 同源）──
-    const overlay = overlayTextOf(userData)
+    const overlay = sharedOverlayText()
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
     expect(blitzDirs.length, `突击组合技能目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
     expect(blitzDirs.every((d) => !d.toLowerCase().includes('plugin-forge-spec')), '规格技能目录物理缺席（七者零在场——枚举面即证）').toBe(true)
@@ -203,19 +217,13 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 突击直达链·Step2b：打回修订（under-review → draft）+ 空因拒绝留场零写库', async () => {
+test('@web-e2e @m3 突击直达链·Step2b：打回修订（under-review → draft）+ 空因拒绝留场零写库', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -272,19 +280,13 @@ test('@web-e2e @m3 突击直达链·Step2b：打回修订（under-review → dra
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证据拒绝（清单逐行 + 状态不变零记录）', async () => {
+test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证据拒绝（清单逐行 + 状态不变零记录）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbdc3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -350,8 +352,6 @@ test('@web-e2e @m3 突击直达链·Step3b/4b：受阻结算落账 + AC 缺证�
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

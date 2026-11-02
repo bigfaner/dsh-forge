@@ -12,14 +12,16 @@
 // 需模型通道）、step-4 recruit-over-disabled（工具面 recruit 语义）。
 // 拦截纪律（fix-3 判例）：页面上下文 fetch，禁 page.route。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp。
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
+// 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
+// 建档写径（RECRUIT_KEY 落盘）靠重播种复位；closed-panel 用例先经 workbench 桥导航回
+// 官方会话面板还原「面板未开」前置（共享会话 UI 残留收口）。
 // @feature expert-squad @web-e2e
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { registerProject } from '../support/rpc.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { bridgeDispatch } from '../support/launch.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
@@ -59,21 +61,18 @@ const recruitPayload = {
   personaMd: '## 职责\n\n招募建档人设正文：严格评审每一处变更。\n',
 }
 
-function makeWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-recruit-ws-'))
+// ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
+
+function seedWorkspace(dir: string): void {
   const expertsDir = join(dir, '.dsh', 'experts')
   mkdirSync(expertsDir, { recursive: true })
   writeFileSync(join(expertsDir, `${EXISTING_KEY}.md`), expertMd(EXISTING_KEY, '夹具评审'))
-  return dir
 }
 
-interface PanelSession {
-  readonly page: Page
-  readonly app: ElectronApplication
-  readonly pageErrors: string[]
-  readonly wsDir: string
-  readonly userData: string
-}
+const { test } = createSharedLaunchFixture({
+  seedWorkspace,
+  workspaceName: 'xsq-recruit-fixture',
+})
 
 async function installListCapture(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -137,162 +136,123 @@ async function fetchExpert(page: Page, workspace: string, key: string): Promise<
   }, { ep: '/api/expert-squad/get', payload: { workspace, key } })
 }
 
-async function openPanelWithFixture(): Promise<PanelSession> {
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-recruit-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const page = launched.page
-  await registerProject(page, wsDir, 'xsq-recruit-fixture')
-  await dismissOnboardingModals(page)
+/** 用例内导航收敛（共享会话每用例执行——捕获器安装 + 面板数据态）。 */
+async function openPanel(page: Page): Promise<void> {
   await installListCapture(page)
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(cardOf(EXISTING_KEY)), '既有专家卡数据态').toBeVisible({ timeout: 30_000 })
-  return { page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-}
-
-async function closeSession(session: PanelSession): Promise<void> {
-  try {
-    await closeApp(session.app)
-  } catch {
-    /* closeApp 尽力而为 */
-  }
-  rmSync(session.userData, { recursive: true, force: true })
-  rmSync(session.wsDir, { recursive: true, force: true })
 }
 
 // ── step-3 success：建档 → 面板即时可见，字段与指令一致 ──
 
-test('@feature expert-squad recruit step-3：建档通道落盘 → 面板卡片即时呈现，字段与载荷一致', async () => {
+test('@feature expert-squad recruit step-3：建档通道落盘 → 面板卡片即时呈现，字段与载荷一致', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    const wrote = await postUpdate(page, wsParam, recruitPayload)
-    expect(wrote.ok, `建档通道成功（HTTP ${wrote.status} ${wrote.text}）`).toBe(true)
-    // 面板联动刷新（即时拉 + 5s 轮询）→ 新卡呈现，字段与载荷一致
-    const card = page.locator(cardOf(RECRUIT_KEY))
-    await expect(card, '新专家卡呈现').toBeVisible({ timeout: 30_000 })
-    await expect(card.locator('.xc-name'), '名称 ← name').toHaveText(RECRUIT_KEY)
-    await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('招募夹具·代码评审')
-    await expect(card.locator('.xc-creed'), '人设摘要 ← personaMd').toContainText('招募建档人设正文')
-    await expect(card.locator('.xc-tags .chip', { hasText: 'tsc' }).first(), '技能 chip ← skills').toBeVisible()
-    await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip ← tools').toBeVisible()
-    expect(await page.locator(cardOf(RECRUIT_KEY)).count(), '零重复卡').toBe(1)
-    // 落盘正本存在（档案正本是唯一事实源）
-    expect(existsSync(join(wsDir, '.dsh', 'experts', `${RECRUIT_KEY}.md`)), '档案正本落盘').toBe(true)
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  const wrote = await postUpdate(page, wsParam, recruitPayload)
+  expect(wrote.ok, `建档通道成功（HTTP ${wrote.status} ${wrote.text}）`).toBe(true)
+  // 面板联动刷新（即时拉 + 5s 轮询）→ 新卡呈现，字段与载荷一致
+  const card = page.locator(cardOf(RECRUIT_KEY))
+  await expect(card, '新专家卡呈现').toBeVisible({ timeout: 30_000 })
+  await expect(card.locator('.xc-name'), '名称 ← name').toHaveText(RECRUIT_KEY)
+  await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('招募夹具·代码评审')
+  await expect(card.locator('.xc-creed'), '人设摘要 ← personaMd').toContainText('招募建档人设正文')
+  await expect(card.locator('.xc-tags .chip', { hasText: 'tsc' }).first(), '技能 chip ← skills').toBeVisible()
+  await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip ← tools').toBeVisible()
+  expect(await page.locator(cardOf(RECRUIT_KEY)).count(), '零重复卡').toBe(1)
+  // 落盘正本存在（档案正本是唯一事实源）
+  expect(existsSync(join(wsDir, '.dsh', 'experts', `${RECRUIT_KEY}.md`)), '档案正本落盘').toBe(true)
 })
 
 // ── step-3 panel-closed-no-loss-window：建档时面板未开——打开即见，无丢失窗口 ──
 
-test('@feature expert-squad recruit step-3 closed-panel：建档在面板打开前 → 打开即见（无丢失窗口）', async () => {
+test('@feature expert-squad recruit step-3 closed-panel：建档在面板打开前 → 打开即见（无丢失窗口）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-recruit-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const session: PanelSession = { page: launched.page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-  try {
-    const { page } = session
-    await registerProject(page, wsDir, 'xsq-recruit-fixture')
-    await dismissOnboardingModals(page)
-    await installListCapture(page)
-    // 面板未开时建档（页面级 /api 桥在位即可走建档通道）。装置注记：面板未开即无
-    // list 请求，captureWorkspaceParam 判例在此无缓冲可用——workspace 参数按 D4
-    // 取值点直取注册项目根（registerProject 的 wsDir），D4 一致性由其余用例捕获面承载。
-    const wsParam = wsDir
-    const wrote = await postUpdate(page, wsParam, recruitPayload)
-    expect(wrote.ok, `建档通道成功（HTTP ${wrote.status}）`).toBe(true)
-    // 随后打开面板 → 列表即时含新专家（数据来自即时全量拉取）
-    await page.locator(PANEL_ROW).click()
-    await expect(page.locator(PANEL_ROOT), '面板挂载').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator(cardOf(RECRUIT_KEY)), '打开即见新专家（无丢失窗口）').toBeVisible({ timeout: 30_000 })
-    await expect(page.locator(FOOTER), '页脚计数含新专家').toContainText('位专家 · 显示')
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await installListCapture(page)
+  // 共享会话 UI 残留收口：上一用例可能停在企业面板视图——桥导航回官方会话面板
+  //（=「面板未开」前置还原；blank hero 无项目会话行期的载体适配，台账口径保持）
+  await bridgeDispatch(page, 'show-session')
+  // 面板未开时建档（页面级 /api 桥在位即可走建档通道）。装置注记：面板未开即无
+  // list 请求，captureWorkspaceParam 判例在此无缓冲可用——workspace 参数按 D4
+  // 取值点直取注册项目根（registerProject 的 wsDir），D4 一致性由其余用例捕获面承载。
+  const wsParam = wsDir
+  const wrote = await postUpdate(page, wsParam, recruitPayload)
+  expect(wrote.ok, `建档通道成功（HTTP ${wrote.status}）`).toBe(true)
+  // 随后打开面板 → 列表即时含新专家（数据来自即时全量拉取）
+  await page.locator(PANEL_ROW).click()
+  await expect(page.locator(PANEL_ROOT), '面板挂载').toBeVisible({ timeout: 30_000 })
+  await expect(page.locator(cardOf(RECRUIT_KEY)), '打开即见新专家（无丢失窗口）').toBeVisible({ timeout: 30_000 })
+  await expect(page.locator(FOOTER), '页脚计数含新专家').toContainText('位专家 · 显示')
 })
 
 // ── step-2 invalid-archive-rejected / invalid-key-format：坏载荷零落盘（fail-loud） ──
 
-test('@feature expert-squad recruit step-2 invalid：裸 {{ 与非法键形状 → 通道拒绝零落盘，其余专家不受影响', async () => {
+test('@feature expert-squad recruit step-2 invalid：裸 {{ 与非法键形状 → 通道拒绝零落盘，其余专家不受影响', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    const expertsDir = join(wsDir, '.dsh', 'experts')
-    // 裸 {{ 拒绝（写路径 parseExpertFile 全量门）
-    const mustache = await postUpdate(page, wsParam, { ...recruitPayload, name: 'bad-mustache', personaMd: '正文含裸 {{ 拒绝\n' })
-    expect(mustache.ok, `裸 {{ 建档被拒（HTTP ${mustache.status}）`).toBe(false)
-    expect(mustache.text, '报因可归因（裸 {{）').toContain('{{')
-    // 非法键形状拒绝（zod 参数门）
-    const badKey = await postUpdate(page, wsParam, { ...recruitPayload, name: 'Bad_Key' })
-    expect(badKey.ok, `非法键被拒（HTTP ${badKey.status}）`).toBe(false)
-    // 零半成品残留 + 其余专家不受影响
-    expect(existsSync(join(expertsDir, 'bad-mustache.md')), '裸 {{ 零落盘').toBe(false)
-    expect(existsSync(join(expertsDir, 'Bad_Key.md')), '非法键零落盘').toBe(false)
-    await expect(page.locator(cardOf(EXISTING_KEY)), '既有专家照常').toBeVisible()
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  const expertsDir = join(wsDir, '.dsh', 'experts')
+  // 裸 {{ 拒绝（写路径 parseExpertFile 全量门）
+  const mustache = await postUpdate(page, wsParam, { ...recruitPayload, name: 'bad-mustache', personaMd: '正文含裸 {{ 拒绝\n' })
+  expect(mustache.ok, `裸 {{ 建档被拒（HTTP ${mustache.status}）`).toBe(false)
+  expect(mustache.text, '报因可归因（裸 {{）').toContain('{{')
+  // 非法键形状拒绝（zod 参数门）
+  const badKey = await postUpdate(page, wsParam, { ...recruitPayload, name: 'Bad_Key' })
+  expect(badKey.ok, `非法键被拒（HTTP ${badKey.status}）`).toBe(false)
+  // 零半成品残留 + 其余专家不受影响
+  expect(existsSync(join(expertsDir, 'bad-mustache.md')), '裸 {{ 零落盘').toBe(false)
+  expect(existsSync(join(expertsDir, 'Bad_Key.md')), '非法键零落盘').toBe(false)
+  await expect(page.locator(cardOf(EXISTING_KEY)), '既有专家照常').toBeVisible()
 })
 
 // ── step-4 success（可机检半）：建档 ⇔ 立即可取用（原子成立） ──
 
-test('@feature expert-squad recruit step-4：建档完成立即可取用——get 返回完整档案（origin=project）', async () => {
+test('@feature expert-squad recruit step-4：建档完成立即可取用——get 返回完整档案（origin=project）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    const wsParam = await captureWorkspaceParam(page)
-    const wrote = await postUpdate(page, wsParam, recruitPayload)
-    expect(wrote.ok, `建档通道成功（HTTP ${wrote.status}）`).toBe(true)
-    // 立即（同请求序后）取用：无「已招募但不可用」中间窗口
-    const got = await fetchExpert(page, wsParam, RECRUIT_KEY)
-    expect(got.ok, `立即可取用（${got.text}）`).toBe(true)
-    const entry = got.body as {
-      name?: string; title?: string; description?: string; personaMd?: string
-      tools?: string[]; skills?: string[]; origin?: string; enabled?: boolean
-    }
-    expect(entry.name, 'name 字段').toBe(RECRUIT_KEY)
-    expect(entry.title, 'title 字段').toBe('招募夹具·代码评审')
-    expect(entry.description, 'description 字段').toContain('何时委派我')
-    expect(entry.personaMd, 'personaMd 字段（人设原文）').toContain('招募建档人设正文')
-    expect(entry.tools, 'tools 字段').toEqual(['read', 'grep'])
-    expect(entry.skills, 'skills 字段').toEqual(['tsc'])
-    expect(entry.origin, 'origin=project（建档层）').toBe('project')
-    expect(entry.enabled, 'enabled 启用态').toBe(true)
-  } finally {
-    await closeSession(session)
+  const { page } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  const wrote = await postUpdate(page, wsParam, recruitPayload)
+  expect(wrote.ok, `建档通道成功（HTTP ${wrote.status}）`).toBe(true)
+  // 立即（同请求序后）取用：无「已招募但不可用」中间窗口
+  const got = await fetchExpert(page, wsParam, RECRUIT_KEY)
+  expect(got.ok, `立即可取用（${got.text}）`).toBe(true)
+  const entry = got.body as {
+    name?: string; title?: string; description?: string; personaMd?: string
+    tools?: string[]; skills?: string[]; origin?: string; enabled?: boolean
   }
+  expect(entry.name, 'name 字段').toBe(RECRUIT_KEY)
+  expect(entry.title, 'title 字段').toBe('招募夹具·代码评审')
+  expect(entry.description, 'description 字段').toContain('何时委派我')
+  expect(entry.personaMd, 'personaMd 字段（人设原文）').toContain('招募建档人设正文')
+  expect(entry.tools, 'tools 字段').toEqual(['read', 'grep'])
+  expect(entry.skills, 'skills 字段').toEqual(['tsc'])
+  expect(entry.origin, 'origin=project（建档层）').toBe('project')
+  expect(entry.enabled, 'enabled 启用态').toBe(true)
 })
 
 // ── Journey 冒烟（恰一条——建档 → 面板可见 → 立即可取用全依序） ──
 
-test('@feature expert-squad recruit 冒烟：建档 → 面板卡呈现 → 立即取用 → 零异常', async () => {
+test('@feature expert-squad recruit 冒烟：建档 → 面板卡呈现 → 立即取用 → 零异常', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    const wsParam = await captureWorkspaceParam(page)
-    // 建档
-    const wrote = await postUpdate(page, wsParam, recruitPayload)
-    expect(wrote.ok, `建档成功（HTTP ${wrote.status}）`).toBe(true)
-    // 面板可见
-    await expect(page.locator(cardOf(RECRUIT_KEY)), '面板卡呈现').toBeVisible({ timeout: 30_000 })
-    expect(await page.locator(CARD_ANY).count(), '网格含既有 + 新招（≥2）').toBeGreaterThanOrEqual(2)
-    // 立即取用
-    const got = await fetchExpert(page, wsParam, RECRUIT_KEY)
-    expect(got.ok, '立即取用成功').toBe(true)
-    // 不变量：renderer 零未捕获异常
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, pageErrors } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  // 建档
+  const wrote = await postUpdate(page, wsParam, recruitPayload)
+  expect(wrote.ok, `建档成功（HTTP ${wrote.status}）`).toBe(true)
+  // 面板可见
+  await expect(page.locator(cardOf(RECRUIT_KEY)), '面板卡呈现').toBeVisible({ timeout: 30_000 })
+  expect(await page.locator(CARD_ANY).count(), '网格含既有 + 新招（≥2）').toBeGreaterThanOrEqual(2)
+  // 立即取用
+  const got = await fetchExpert(page, wsParam, RECRUIT_KEY)
+  expect(got.ok, '立即取用成功').toBe(true)
+  // 不变量：renderer 零未捕获异常
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })

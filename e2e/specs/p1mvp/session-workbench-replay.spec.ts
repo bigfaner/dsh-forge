@@ -1,4 +1,8 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：双
+// launchHost 形态（首启官方开户 → closeApp → 转录种子在两次 launch 之间的盘面播种 →
+// 二次 launchHost 复用同 userData 走查）——共享 fixture 用例间不 closeApp、userData 自管
+// 不外露，无「两次 launch 之间盘面播种」的缝；与 m3/dogfood-sc-m3-replay.spec.ts 同裁定族。
 // session-workbench 回放版（worker-exec-evidence-replay/1.5——提案附录 D 层：会话 UI 走
 // 转录播种）。「模型」变量由转录种子承载（e2e/support/replay/transcript-seed.ts——官方
 // startSession 开户 + 确定性手写回合追加重写，session format v4 版本锚），零真实模型调用；

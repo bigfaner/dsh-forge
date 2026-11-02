@@ -1,4 +1,11 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】迁移共享 launch fixture：launchHost 整 spec 一次，
+// userData 由 fixture 自管；用例退出不 closeApp。适配点：① 夹具播种（brand-demo 目录 +
+// sentinel 文件）统一进 seedWorkspace（首启/重播种/crash 重启三路同参）；② 独立 userData/
+// tmp 夹具自管清理删除——归 fixture 层收尾；③ 本 spec 无 userData 盘面判读、无 state.db
+// 预置，迁移零裁剪。退役复核：非纯文案/静态渲染 spec（覆盖层 CSS 契约 + 主题跟随 + 指针
+// 穿透运行期行为，unit 无等价覆盖）——零退役。
+//
 // fix-38 ②：「鲸游书海」对话面板书海背景——双主题在场 + 指针穿透断言。断言源 = fix-38
 // 任务②验收 + docs/brand/README.md「鲸游书海」节。
 //
@@ -17,13 +24,11 @@
 // active 相位下的在场断言由 session-workbench 冒烟（dogfood）承载。
 // 双主题口径 = body[data-ds-dark-theme]（官方 ui-theme 布尔标记——应用内主题；官方
 // 缺省 preference=system 随 OS，故断言前显式控制标记而非假设浅色）。
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
-import { closeApp, launchHost } from '../../support/launch.js'
+import { expect, type Page } from '@playwright/test'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import {
   COMPOSER_INPUT,
   COMPOSER_SEAT,
@@ -31,6 +36,16 @@ import {
   CONVERSATION_SCROLL,
   WORKBENCH,
 } from '../../support/anchors.js'
+
+// e2e-fast-shared-launch 批次五：共享 launch fixture——launchHost 整 spec 一次（冷启点 =
+// 首用例 beginTest），userData/夹具 tmp 生命周期归 fixture 层。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => {
+    mkdirSync(join(dir, 'brand-demo'), { recursive: true })
+    writeFileSync(join(dir, 'brand-demo', 'fixture-file.txt'), 'sentinel', 'utf8')
+  },
+  workspaceName: 'ws-brand',
+})
 
 /** 覆层计算样式读取（content 锚 [data-conversation-content]::after——统一插画 CSS 锚面） */
 function readOverlay(page: Page): Promise<{
@@ -58,15 +73,11 @@ function readOverlay(page: Page): Promise<{
   })
 }
 
-test('@web-e2e @p1mvp brand·书海背景：双主题在场 + hero/召回轨迹红线 + 指针穿透', async () => {
+test('@web-e2e @p1mvp brand·书海背景：双主题在场 + hero/召回轨迹红线 + 指针穿透', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-brand-'))
-  mkdirSync(join(fixtureRoot, 'brand-demo'), { recursive: true })
-  writeFileSync(join(fixtureRoot, 'brand-demo', 'fixture-file.txt'), 'sentinel', 'utf8')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-brand-ud-'))
-  const { app, page } = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
   try {
-    await registerProject(page, join(fixtureRoot, 'brand-demo'), 'brand-demo')
+    await registerProject(page, join(wsDir, 'brand-demo'), 'brand-demo')
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
     await page.waitForTimeout(3_000)
     // blank 会话（芯片流）→ 官方会话面在场（hero 相位）
@@ -188,8 +199,6 @@ test('@web-e2e @p1mvp brand·书海背景：双主题在场 + hero/召回轨迹�
     // composer 座锚在场性（层序对照面）终检——官方 DOM 契约不因属性模拟而漂移
     await expect(page.locator(COMPOSER_SEAT).first()).toBeAttached()
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(fixtureRoot)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

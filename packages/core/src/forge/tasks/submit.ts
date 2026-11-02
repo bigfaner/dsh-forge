@@ -7,8 +7,9 @@
 //
 // 单事务全成全败（Hard Rule）：行解析 → 输入面校验（blocked reason 必带 / success summary 必带
 // ——先于转移校验，与 transitionTask 同序）→ 双门（M3 2.6 图 8·SC7：gate 摘要门 → AC 证据门
-// ——均仅挂 success 结算）→ agent 面矩阵先验（in_progress → completed|blocked
-// 唯一入口；pending/blocked/终态提交即 ERR_INVALID_TRANSITION）→ 写前相位增量断言 → 转移
+// ——均仅挂 success 结算）→ agent 面矩阵先验（in_progress → completed|blocked + blocked→completed
+// 直达（blocked-verdict-restore-primitive——主会话裁决直达结算）；pending/blocked→blocked/终态
+// 提交即 ERR_INVALID_TRANSITION）→ 写前相位增量断言 → 转移
 // UPDATE → submit 记录（files/gate/commit 结构化负载）→ 恢复钩子（completed 挂——反查
 // idx_edges_prerequisite，前置**全**满足才 auto-restore，边不删）→ 相位重算；闭包尾部（提交后）
 // emitTasksChanged。一律 prepared statements（Hard Rule）。
@@ -62,8 +63,8 @@ export function requiresRuntimeAssemblyEvidence(faces: readonly string[]): boole
 
 /**
  * Interface 1 submitTask：executor 结算（转移 + record files/gate/commit + 恢复钩子 + 相位重算）。
- * result=success → in_progress→completed（summary 必带）；result=blocked → in_progress→blocked
- * （reason 必带——fix 链承接）。
+ * result=success → in_progress→completed | blocked→completed（blocked verdict restore 直达——
+ * summary 必带，无因结算拒绝）；result=blocked → in_progress→blocked（reason 必带——fix 链承接）。
  */
 export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): Promise<SubmitTaskResult> {
   const db = deps.store.ensureOpen(input.projectId)
@@ -155,7 +156,8 @@ export async function submitTask(deps: TasksVerbDeps, input: SubmitTaskInput): P
       }
     }
 
-    // ③ agent 面矩阵先验（in_progress 唯一合法 from——pending/blocked/终态提交即拒绝）
+    // ③ agent 面矩阵先验（in_progress → completed|blocked；blocked→completed 直达——
+    //    blocked verdict restore；pending/blocked→blocked/终态提交即拒绝）
     const toStatus = input.result === 'success' ? 'completed' : 'blocked'
     assertTransitionAllowed(row.task_status, toStatus, 'agent')
 

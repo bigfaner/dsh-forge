@@ -63,6 +63,11 @@ function progressEvt(seq: number, data: Record<string, unknown>): ForgeMessageEv
   }
 }
 
+/** assistant/message 事件构造（官方 SessionEventMap 形状镜像：surfaceOp 'append' + data.message.content blocks） */
+function assistantMsg(seq: number, content: unknown[], surfaceOp = 'append'): ForgeMessageEventLike {
+  return { type: 'assistant/message', seq, surfaceOp, data: { message: { role: 'assistant', content } } }
+}
+
 /** 引擎同构最小面：全会话事件按序喂入 → stream 状态 + 各组块 Context 的节点 */
 function simulate(events: readonly ForgeMessageEventLike[]): {
   stream: ForgeEventStreamState
@@ -171,6 +176,7 @@ describe('foldForgeEventMessage 分组语义（人类插话 = 分组锚点）', 
       { type: 'turn/start', seq: 1, data: { turn: 5 } },
       forgeMsg(2, 'm1', '启动', 'a'),
       forgeMsg(3, 'm2', '完成', 'b'),
+      assistantMsg(6, [{ type: 'text', text: '正文回复' }]),
       { type: 'turn/end', seq: 9, data: { turn: 5, reason: { kind: 'completed' } } },
     ])
     expect(nodes.get('m2')).toMatchObject({ anchorSeq: 9 })
@@ -238,6 +244,7 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
       { type: 'turn/start', seq: 1, data: { turn: 't-1' } },
       forgeMsg(2, 'm1', '启动', 'a'),
       forgeMsg(3, 'm2', '完成', 'b'),
+      assistantMsg(6, [{ type: 'text', text: '正文回复' }]),
       { type: 'turn/end', seq: 9, data: { turn: 't-1', reason: { kind: 'completed' } } },
     ])
     // stream revision 随 turn/end 变更 → 组 Context 重放 → 锚移 turn/end seq
@@ -263,6 +270,7 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
       forgeMsg(2, 'm1', '启动', 'a'),
       progressEvt(5, { taskKey: 'feat-x/1.2', status: 'running' }),
       progressEvt(6, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
+      assistantMsg(7, [{ type: 'text', text: '正文回复' }]),
     ]
     const { nodes } = simulate(events)
     expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 0 })
@@ -282,7 +290,13 @@ describe('forgeEventGroupDefinition 发射判定（末成员独发 + 交棒）',
     expect(forgeEventGroupAnchorSeq(group, { '9': 20 }, { '7': 5, '9': 18 })).toBe(4)
   })
   it('重放保真：同日志重放节点恒等（fold 纯函数——事件重放/会话 fork 保留渲染）', () => {
-    const events = [forgeMsg(1, 'm1', '启动', 'a'), forgeMsg(2, 'm2', '领取', 'b'), humanMsg(3, 'h1', '继续'), forgeMsg(4, 'm3', '完成', 'c')]
+    const events = [
+      forgeMsg(1, 'm1', '启动', 'a'),
+      forgeMsg(2, 'm2', '领取', 'b'),
+      humanMsg(3, 'h1', '继续'),
+      forgeMsg(4, 'm3', '完成', 'c'),
+      { type: 'assistant/message', seq: 5, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: 'done' }] } } },
+    ]
     const first = simulate(events)
     const second = simulate(events)
     expect(first.stream).toEqual(second.stream)
@@ -332,6 +346,7 @@ describe('1.2 循环进度卡发射（progress 到达 = 组块原地更新——
       forgeMsg(2, 'm1', '启动', 'a'),
       progressEvt(5, { taskKey: 'feat-x/1.2', status: 'running' }),
       progressEvt(6, { taskKey: 'feat-x/1.2', status: 'completed', verb: 'settle' }),
+      assistantMsg(7, [{ type: 'text', text: '正文回复' }]),
     ]
     const { nodes } = simulate(events)
     expect(nodes.get('forge-event-progress-6')).toMatchObject({ anchorSeq: 0 })
@@ -373,7 +388,11 @@ describe('forgeEventStreamDefinition（状态机注册形状）', () => {
   it('match：user/message 一律命中（id 常量单 Context）；他事件 → null', () => {
     expect(forgeEventStreamDefinition.match(forgeMsg(1, 'm1', '启动', 'x'))).toEqual({ id: 'stream', role: 'start' })
     expect(forgeEventStreamDefinition.match(humanMsg(2, 'h1', 'y'))).toEqual({ id: 'stream', role: 'start' })
-    expect(forgeEventStreamDefinition.match({ type: 'assistant/message', seq: 3 })).toBeNull()
+    // bug 0e5eba85：assistant/message 命中（per-turn answer 感知 fold 数据源）
+    expect(forgeEventStreamDefinition.match({ type: 'assistant/message', seq: 3, surfaceOp: 'append', data: { message: { content: [] } } })).toEqual({
+      id: 'stream',
+      role: 'start',
+    })
   })
   it("publication 'none'——state-only Context 零渲染成本（inboxDefinition 同型）", () => {
     expect(forgeEventStreamDefinition.publication()).toBe('none')
@@ -498,5 +517,77 @@ describe('triage attempt 序号镜像（bug df44fcfa——结构化载荷窄收�
     expect(group?.progress?.[1]?.attempt).toBeUndefined()
     expect(group?.progress?.[2]?.attempt).toBeUndefined()
     expect(group?.progress?.[3]?.attempt).toBeUndefined()
+  })
+})
+
+describe('bug 0e5eba85：answer-null 折叠缺口——per-turn 正文 answer 感知 + closed turn 无正文顶层逃逸', () => {
+  it('RED：工具调用收尾 turn（末步空 content assistant + tool/call）——closed turn 无正文 answer，锚 = turn.start - 1（顶层逃逸，不落过程折叠体）', () => {
+    const { stream, nodes } = simulate([
+      { type: 'turn/start', seq: 10, data: { turn: 7 } },
+      forgeMsg(12, 'm1', '领取', 'a'),
+      progressEvt(14, { taskKey: 'feat-x/1.11', status: 'completed', verb: 'settle' }),
+      // 循环派发 turn 末步：空 content assistant message + tool/call（session-7a3d2530 seq156-162 实证形状）
+      assistantMsg(16, []),
+      { type: 'tool/call', seq: 17, data: {} },
+      { type: 'turn/end', seq: 20, data: { turn: 7, reason: { kind: 'completed' } } },
+    ])
+    expect(stream.turnHasAnswer).toEqual({ '7': false })
+    expect(nodes.get('forge-event-progress-14')).toMatchObject({ anchorSeq: 9, visibility: 'visible' }) // = turn.start(10) - 1
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 9 })
+  })
+
+  it('回归：正文收尾 turn（assistant message 携非空 text 块）——锚维持 turn/end seq（回复下方口径不变）', () => {
+    const { stream, nodes } = simulate([
+      { type: 'turn/start', seq: 10, data: { turn: 7 } },
+      forgeMsg(12, 'm1', '完成', 'a'),
+      assistantMsg(16, [{ type: 'text', text: '任务完成总结' }]),
+      { type: 'turn/end', seq: 20, data: { turn: 7, reason: { kind: 'completed' } } },
+    ])
+    expect(stream.turnHasAnswer).toEqual({ '7': true })
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 20 })
+  })
+
+  it('空 content assistant 后又有正文 assistant → 按有正文判（末步覆写语义）', () => {
+    const { stream, nodes } = simulate([
+      { type: 'turn/start', seq: 10, data: { turn: 7 } },
+      forgeMsg(12, 'm1', '启动', 'a'),
+      assistantMsg(14, [{ type: 'text', text: '   ' }]), // 空白 text 不算正文（官方 trim 口径）
+      assistantMsg(16, []),
+      assistantMsg(18, [{ type: 'text', text: '正文回复' }]),
+      { type: 'turn/end', seq: 20, data: { turn: 7, reason: { kind: 'completed' } } },
+    ])
+    expect(stream.turnHasAnswer).toEqual({ '7': true })
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 20 })
+  })
+
+  it('正文 assistant 后又有 tool-call 收尾 assistant → 末步覆写为无 answer（官方 latestAnswer 判 null 同口径）——锚顶层逃逸', () => {
+    const { stream, nodes } = simulate([
+      { type: 'turn/start', seq: 10, data: { turn: 7 } },
+      forgeMsg(12, 'm1', '启动', 'a'),
+      assistantMsg(14, [{ type: 'text', text: '中间正文' }]),
+      assistantMsg(16, [{ type: 'text', text: '正文' }, { type: 'tool-call', name: 'dispatchTask' }]), // 官方：含 tool-call 块 → null
+      { type: 'turn/end', seq: 20, data: { turn: 7, reason: { kind: 'completed' } } },
+    ])
+    expect(stream.turnHasAnswer).toEqual({ '7': false })
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 9 }) // = turn.start - 1
+  })
+
+  it('fold 畸形防御：非 append surfaceOp / 无 message / 无 currentTurn——原引用返回零污染', () => {
+    const state = EMPTY_FORGE_EVENT_STREAM
+    expect(foldForgeEventMessage(state, { type: 'assistant/message', seq: 9, data: { message: { content: [{ type: 'text', text: 'x' }] } } })).toBe(state)
+    expect(foldForgeEventMessage(state, { type: 'assistant/message', seq: 9, surfaceOp: 'append' })).toBe(state)
+    expect(foldForgeEventMessage(state, { type: 'assistant/message', seq: 9, surfaceOp: 'append', data: { message: 'bad' } })).toBe(state)
+    const inTurn = foldForgeEventMessage(EMPTY_FORGE_EVENT_STREAM, { type: 'turn/start', seq: 1, data: { turn: 3 } })
+    // tool-call 块消息：官方 latestAnswer 判 null → 覆写该 turn 为无 answer（非原引用——覆写合法）
+    expect(foldForgeEventMessage(inTurn, assistantMsg(2, [{ type: 'tool-call' }])).turnHasAnswer).toEqual({ '3': false })
+  })
+
+  it('活跃 turn 判据回归不变：有 start 无 end → 锚 = start - 1（含无正文场景同判）', () => {
+    const { nodes } = simulate([
+      { type: 'turn/start', seq: 10, data: { turn: 7 } },
+      forgeMsg(12, 'm1', '运行中', 'a'),
+      assistantMsg(14, []),
+    ])
+    expect(nodes.get('m1')).toMatchObject({ anchorSeq: 9 })
   })
 })

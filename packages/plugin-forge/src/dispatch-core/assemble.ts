@@ -40,6 +40,7 @@ const FORGE_DENY_IN_WORKER: readonly string[] = [
   'queryImplCheckpoint',
   'listImplCheckpoints',
   'pauseTask', // task-pause-primitive——单任务暂停入口仅主 agent 面（worker 拒）
+  'unblockTask', // blocked-verdict-restore-primitive——blocked→pending 出口仅主 agent 面（worker 拒）
   'validateMermaid', // md-mermaid 插件工具（MERMAID_TOOL_NAME 单源锚，见上注）
 ]
 

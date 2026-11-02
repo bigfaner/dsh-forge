@@ -4,22 +4,22 @@
 //   · A3：显式重选 → 确认框重弹（取消非永久否决）；确认后选中态切行 + 零会话副作用
 //     （点选零编排——确认/待决全程 attachedSessions 恒零，结构性无并发第二路）。
 // data 锚与夹具配方 = worktree-risk-confirmation.spec.ts（1.19）同款。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态，单用例 spec = 每跑批一次冷启）。
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchElectron } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'C:/Users/panda/AppData/Roaming/dsh-forge/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/session-binding-guarantee/1.8/003-p1-guards'
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a） */
-function makeGitRepo(): { dir: string; wtDir: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-31-guards-repo-'))
-  const git = (args: string[], cwd = dir): void => {
-    execFileSync('git', ['-c', 'user.email=t131@test', '-c', 'user.name=t131', ...args], { cwd, stdio: 'pipe' })
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；wt-a 检出 feat-a）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
+  const git = (args: string[]): void => {
+    execFileSync('git', ['-c', 'user.email=t131@test', '-c', 'user.name=t131', ...args], { cwd: dir, stdio: 'pipe' })
   }
   git(['init', '-b', 'main'])
   writeFileSync(join(dir, 'README.md'), '1.31 guards fixture\n')
@@ -27,7 +27,6 @@ function makeGitRepo(): { dir: string; wtDir: string } {
   git(['commit', '-m', 'init'])
   const wtDir = join(dir, 'wt-a').replaceAll('\\', '/')
   git(['worktree', 'add', '-b', 'feat-a', wtDir, 'main'])
-  return { dir, wtDir }
 }
 
 async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise<unknown> {
@@ -38,24 +37,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'guards-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'guards-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -120,66 +106,53 @@ async function typeIntoComposer(page: Page, text: string): Promise<void> {
   throw new Error(`composer 键入失败（回显不含目标文本）：${text}`)
 }
 
-test('1.31 UI：A1 点选时点确认立现 + A2 mask 退场干净 + A3 确认切行零会话副作用', async () => {
+test('1.31 UI：A1 点选时点确认立现 + A2 mask 退场干净 + A3 确认切行零会话副作用', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-31-guards-'))
-  const { dir: wsDir, wtDir } = makeGitRepo()
-  const app = await launchElectron({
-    env: { DSH_FORGE_DEV_PROFILE: 'dev', DSH_FORGE_USER_DATA: userData },
-  })
-  try {
-    const page: Page = await app.firstWindow()
-    await page.waitForLoadState('domcontentloaded')
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
-    // 前置：选中项目工作区（hero chip 挂载前置）
-    await page.locator('button[aria-label="选择工作区"]').first().click()
-    await page.locator('.dswf-hero-picker-list').getByText('guards-repo', { exact: false }).first().click()
-    await expect(page.locator('[data-composer-input]').last()).toBeVisible({ timeout: 30_000 })
-    await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
-    await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('main')
-    // 项目根挂靠基线（工作区拾取触发的官方 create 预铸为异步落点——轮询至计数稳定后
-    // 定格；A3 断言 = 点选/确认全程零「新增」第二路，而非绝对零）
-    let rootBaseline = -1
-    for (let round = 0; round < 5; round += 1) {
-      await page.waitForTimeout(3_000)
-      const current = await attachedSessions(page, wsDir, wsDir)
-      if (current === rootBaseline) break
-      rootBaseline = current
-    }
-
-    // ── A1：点选跨分支行 → 确认框立现（点选时点——零 draft 依赖，设计 A 主断言）──
-    await pickMenuRow(page, 'feat-a')
-    await expect(heroRiskDialog(page), 'A1：点选时点确认框应立现（零 draft/冷却窗依赖）').toBeVisible({ timeout: 8_000 })
-    await snap(page, 'a1-pick-time-dialog.png')
-
-    // ── A2：取消 → mask 退场干净——composer 可点可键入（零遮挡残留）──
-    await heroRiskDialog(page).getByRole('button', { name: '取消', exact: true }).click()
-    await expect(heroRiskDialog(page)).toBeHidden()
-    await expect.poll(async () => chipText(page), { timeout: 30_000 }).not.toContain('feat-a')
-    await typeIntoComposer(page, '1-31 A2 mask-clean typing')
-    await snap(page, 'a2-mask-clean-composer.png')
-
-    // ── A3：显式重选 → 确认框重弹（取消非永久否决）→ 确认 → 选中态切行 + openWorkspace
-    // 建/复用该树 blank（bug 05c712a4：显示 = 实际生效状态）──
-    await pickMenuRow(page, 'feat-a')
-    await expect(heroRiskDialog(page), 'A3：显式重选应重弹确认框').toBeVisible({ timeout: 8_000 })
-    await snap(page, 'a3-dialog-reopens-after-reselect.png')
-    await acknowledgeAndConfirm(page)
-    await expect(heroRiskDialog(page)).toBeHidden()
-    await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('feat-a')
-    // 点选即建/复用：wt-a blank 恰 1（复用零重复）；项目根复用既有 blank（基线不变）
-    await expect
-      .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: 'A3：点选确认应开户 wt-a blank（恰 1 零重复）' })
-      .toBe(1)
-    expect(
-      await attachedSessions(page, wsDir, wsDir),
-      'A3：项目根复用既有 blank——零新增（基线对照）',
-    ).toBe(rootBaseline)
-    await snap(page, 'a3-confirmed-switched-zero-sessions.png')
-  } finally {
-    await closeApp(app)
-    rmSync(userData, { recursive: true, force: true })
-    rmSync(wsDir, { recursive: true, force: true })
+  const { page, wsDir } = sharedLaunch
+  const wtDir = join(wsDir, 'wt-a').replaceAll('\\', '/')
+  // 前置：选中项目工作区（hero chip 挂载前置）
+  await page.locator('button[aria-label="选择工作区"]').first().click()
+  await page.locator('.dswf-hero-picker-list').getByText('guards-repo', { exact: false }).first().click()
+  await expect(page.locator('[data-composer-input]').last()).toBeVisible({ timeout: 30_000 })
+  await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
+  await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('main')
+  // 项目根挂靠基线（工作区拾取触发的官方 create 预铸为异步落点——轮询至计数稳定后
+  // 定格；A3 断言 = 点选/确认全程零「新增」第二路，而非绝对零）
+  let rootBaseline = -1
+  for (let round = 0; round < 5; round += 1) {
+    await page.waitForTimeout(3_000)
+    const current = await attachedSessions(page, wsDir, wsDir)
+    if (current === rootBaseline) break
+    rootBaseline = current
   }
+
+  // ── A1：点选跨分支行 → 确认框立现（点选时点——零 draft 依赖，设计 A 主断言）──
+  await pickMenuRow(page, 'feat-a')
+  await expect(heroRiskDialog(page), 'A1：点选时点确认框应立现（零 draft/冷却窗依赖）').toBeVisible({ timeout: 8_000 })
+  await snap(page, 'a1-pick-time-dialog.png')
+
+  // ── A2：取消 → mask 退场干净——composer 可点可键入（零遮挡残留）──
+  await heroRiskDialog(page).getByRole('button', { name: '取消', exact: true }).click()
+  await expect(heroRiskDialog(page)).toBeHidden()
+  await expect.poll(async () => chipText(page), { timeout: 30_000 }).not.toContain('feat-a')
+  await typeIntoComposer(page, '1-31 A2 mask-clean typing')
+  await snap(page, 'a2-mask-clean-composer.png')
+
+  // ── A3：显式重选 → 确认框重弹（取消非永久否决）→ 确认 → 选中态切行 + openWorkspace
+  // 建/复用该树 blank（bug 05c712a4：显示 = 实际生效状态）──
+  await pickMenuRow(page, 'feat-a')
+  await expect(heroRiskDialog(page), 'A3：显式重选应重弹确认框').toBeVisible({ timeout: 8_000 })
+  await snap(page, 'a3-dialog-reopens-after-reselect.png')
+  await acknowledgeAndConfirm(page)
+  await expect(heroRiskDialog(page)).toBeHidden()
+  await expect.poll(async () => chipText(page), { timeout: 30_000 }).toContain('feat-a')
+  // 点选即建/复用：wt-a blank 恰 1（复用零重复）；项目根复用既有 blank（基线不变）
+  await expect
+    .poll(async () => attachedSessions(page, wsDir, wtDir), { timeout: 30_000, message: 'A3：点选确认应开户 wt-a blank（恰 1 零重复）' })
+    .toBe(1)
+  expect(
+    await attachedSessions(page, wsDir, wsDir),
+    'A3：项目根复用既有 blank——零新增（基线对照）',
+  ).toBe(rootBaseline)
+  await snap(page, 'a3-confirmed-switched-zero-sessions.png')
 })

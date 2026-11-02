@@ -5,6 +5,7 @@ import {
   forgeEventClock,
   forgeEventClockSeconds,
   forgeEventGroupSource,
+  forgeEventVisibleEntries,
   forgeProgressRowItems,
   forgeProgressStatusTone,
   forgeProgressStatusWord,
@@ -102,6 +103,24 @@ describe('forgeEventGroupSource（组头来源提取——消息任务源行 + p
   })
   it('消息任务源行优先于 progress sourceSlug', () => {
     expect(forgeEventGroupSource([entry], [progress(1, { sourceSlug: 'feat-y' })])).toBe('feat-x')
+  })
+  it('循环终态尾饰剥除（` — 循环结束（…）`/` — 已按你的指令停止`——组头不带终态词）', () => {
+    const ended: ForgeEventEntryData[] = [{ ...entry, text: '[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）' }]
+    expect(forgeEventGroupSource(ended)).toBe('feat-x')
+    const stopped: ForgeEventEntryData[] = [{ ...entry, text: '[forge·循环停止] 任务源: feat-x — 已按你的指令停止' }]
+    expect(forgeEventGroupSource(stopped)).toBe('feat-x')
+  })
+})
+
+describe('forgeEventVisibleEntries（循环重开防误导——running 循环行在场时陈旧终态消息不呈现）', () => {
+  const ended = { ...entry, id: 'm2', badge: '循环结束', text: '[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）' }
+  const stopped = { ...entry, id: 'm3', badge: '循环停止', text: '[forge·循环停止] 任务源: feat-x — 已按你的指令停止' }
+  const blocked = { ...entry, id: 'm4', badge: '循环受阻', text: '[forge·循环受阻] 任务源: feat-x' }
+  it('loopRunning = true：终态/受阻徽记条目滤除，其余保留', () => {
+    expect(forgeEventVisibleEntries([entry, ended, stopped, blocked], true)).toEqual([entry])
+  })
+  it('loopRunning = false（终态组/旧缓存）：原样全量保留', () => {
+    expect(forgeEventVisibleEntries([entry, ended, stopped, blocked], false)).toHaveLength(4)
   })
 })
 

@@ -609,6 +609,22 @@ export interface SubmitTaskResult {
   restored: TaskRef[]
 }
 
+/** unblockTask 入参（blocked→pending 薄壳出口——仅 reason 一个裁决负载；零 gate/AC 结算面） */
+export interface UnblockTaskInput {
+  projectId: string
+  taskRef: TaskRef
+  /** 解除阻塞缘由（审计落 reason 列——必带，缺席/空白拒绝） */
+  reason?: string
+  /** 发起会话（审计归因——可缺省落 NULL） */
+  sessionId?: string
+}
+
+/** unblockTask 返回体（submit 瘦身出参同形——零 restored：pending 不挂恢复钩子） */
+export interface UnblockTaskResult {
+  taskId: string
+  status: 'pending'
+}
+
 /**
  * reconcileInterrupted 入参（S3——启动对账动词，implementation-blueprint §2/图 D）。
  * registryEmpty = 进程内循环登记表空判据（三重判据之③）：插件装配时点恒真（重启即空——
@@ -769,6 +785,8 @@ export interface ForgeTasksService {
   recordSpawn(input: RecordSpawnInput): Promise<void>
   /** 转移 + record(files/gate/commit) + 恢复钩子反查 + 相位重算 */
   submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult>
+  /** blocked→pending 出口（blocked-verdict-restore-primitive：转移 + 'unblock' 审计行 + 相位重算；不挂恢复钩子） */
+  unblockTask(input: UnblockTaskInput): Promise<UnblockTaskResult>
   /**
    * 启动对账（S3 新动词——三重收敛判据：in_progress ∧ 最新 claim 记录带循环来源标记
    * ∧ 登记表空 → interrupted + transition 记录（reason=进程重启，actor='core'）；

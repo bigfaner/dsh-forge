@@ -1,5 +1,21 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
 // gen-test-scripts 产物 —— Journey: project-registration-compensation（T-test-gen-scripts）。
+//
+// 【共享 launch fixture 裁定（e2e-fast-shared-launch 批次五）：保留原形态，不迁移】
+// 特殊面与共享 fixture 生命周期语义不相容（同族先例：m2/task-session-linkage、
+// m3/dogfood-sc-m3-replay、m3/sc1-hero-projection）：
+//   1. {userData}/state.db 预置/篡改是注入本体（INSERT ABORT 触发器、workspace_id 占位行、
+//      WAL 活删、悬空引用 UPDATE、对账记账探针）——共享 fixture userData 自管不外露且
+//      workers=2 下多实例 ud 根并存无法唯一定位；
+//   2. fix-27 双 boot 专项（受控 closeApp → 同 userData 二次 boot 断言启动对账）与
+//      fixture「用例退出不 closeApp、仅 crash 自动重启」语义直接相悖；
+//   3. registry 探针直读 {userData}/dsh-home/storages/workspace.json——同 userData 路径依赖；
+//   4. launch 形态差异：providerOverlay + stablePhase:'probe' + collectConsole + dismiss:false
+//      链路（模态毒化面控制，仅链路末段允许 dismiss）——fixture beginTest 的自动模态收
+//      兜底与该时序约束冲突。
+// 裁定口径：四条特殊面贯穿全部非 skip 用例，整份裁定一致，不拆半迁移。
+// 退役复核：对账重复面已于 fix-37 ⑥ 回迁 core 集测；3 条留痕 skip 为通道缺失记账
+// （非退役候选）；其余用例均为行为走查，无 unit 等价覆盖在案——零退役候选。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/project-registration-compensation/contracts/step-{1..5}-*.md
 // （eval-contract 1015/1150 通过）。每条 test 对应一个（或一组同链）Contract Outcome。
 //

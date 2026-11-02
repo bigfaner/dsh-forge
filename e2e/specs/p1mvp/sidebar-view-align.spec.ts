@@ -1,4 +1,16 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】迁移共享 launch fixture：launchHost 整 spec 一次，
+// userData 由 fixture 自管；用例退出不 closeApp。适配点：① 五组夹具目录（甲/乙/丙一二/丁）
+// 统一进 seedWorkspace（首启/重播种/crash 重启三路同参播种——目录跨用例不漂移）；② 行尾
+// 新会话钮的盘面判读（原扫独立 userData 的 dsh-home/sessions）改扫共享 userData 根：段锚 =
+// wsDir 末段 mkdtemp 随机后缀（共享形态会话 cwd = 共享 wsDir 本体——m3/uf3-dispatch-entry
+// 同径；大小写归一比较；根未锚定 = 尚无会话落盘，返回空集作 before 基线）；③ 前置还原
+// 依赖（面板未开/宽态侧栏）由 fixture 层复位链承载（bridgeDispatch show-session + Escape +
+// 概览收起），用例内无需额外收口；④ 归档写径用例（AC 归档动作）断言后经「仅归档」视图
+// 只读收口——项目归档残留由 fixture 层遗留项目归档（archiveLegacyProjects）逐用例复位。
+// 退役复核：四用例均含运行期行为面（rail 几何/官方 startSession 链/ellipsis 菜单真实链/
+// Modal 改名链，unit 仅钉纯函数与静态渲染）——零退役。
+//
 // fix-42：侧栏项目列表/树对齐原生 dsh 工作区（WorkspaceBrowser 母本）——e2e 行为面。
 // 单测已钉：视图投影纯函数（sidebar-model.test）、行语言静态面（ForgeWorkspacePanel.test）、
 // 菜单项数据面（SIDEBAR_VIEW_MENU_ITEMS/projectMenuItemsOf）。本 spec 承载开弹层/壳回调
@@ -16,15 +28,14 @@
 //      （归档切换走真实 ellipsis 菜单动作——RPC + 静默重拉链一并覆盖；D41-① 后缺省 = hide，
 //      归档行落地即离场——弱化标记改经「仅归档」视图在场面断言）；
 //   4. 项目改名：ellipsis 改名 → 官方 Modal → RPC → 行标题更新。
-// 载体面（launch/close/RPC/清理）经 e2e/support（fix-37 ①）；每测试独立 boot（dismiss
-// 毒化纪律——单 boot 单测试）。
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+// 载体面（launch/close/RPC/清理）经 e2e/support（fix-37 ①）；共享 launch 后 boot 纪律由
+// fixture 层承载（crash 检测自动重启 + 用例间重播种）。
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
-import { closeApp, launchHost } from '../../support/launch.js'
+import { expect, type Page } from '@playwright/test'
 import { registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import {
   NAV_ADD_PROJECT,
   RAIL_PROJECT_ANY,
@@ -37,26 +48,41 @@ import {
   sidebarOf,
 } from '../../support/anchors.js'
 
-/** 工作区夹具目录（{root}/<name>——注册链承接 canonical 化） */
-function makeWorkspaceFixture(name: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-'))
-  mkdirSync(join(root, name, '.knowledge'), { recursive: true })
-  writeFileSync(join(root, name, 'fixture-file.txt'), 'sentinel', 'utf8')
-  return root
-}
+// e2e-fast-shared-launch 批次五：共享 launch fixture——launchHost 整 spec 一次（冷启点 =
+// 首用例 beginTest），userData/夹具 tmp 生命周期归 fixture 层。夹具目录全组统一播种。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => {
+    for (const sub of ['甲', '乙', join('丙', '一'), join('丙', '二'), '丁']) {
+      mkdirSync(join(dir, sub, '.knowledge'), { recursive: true })
+      writeFileSync(join(dir, sub, 'fixture-file.txt'), 'sentinel', 'utf8')
+    }
+  },
+  workspaceName: 'ws-sva',
+})
 
-/** dsh-home 会话目录台账（盘侧——官方 startSession 增生断言面） */
-function sessionDirIds(userData: string): readonly string[] {
-  const base = join(userData, 'dsh-home', 'sessions')
-  try {
+/** 共享 userData 根内 dsh-home 会话目录台账（盘侧——官方 startSession 增生断言面）：
+ *  根选择经段目录在场锚定（段 = wsDir 末段 mkdtemp 随机后缀，跨 worker 唯一零串扰；
+ *  共享形态会话 cwd = 共享 wsDir 本体——原始形态 ws-甲 等命名段不复存在；大小写归一
+ *  比较）；根未锚定（本用例尚无会话落盘）返回空集——作 before 基线，after 轮询时锚必在。 */
+function sharedSessionDirIds(wsDir: string): readonly string[] {
+  const segment = (wsDir.split(/[\\/]/).pop() ?? '').toLowerCase()
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const base = join(tmpdir(), name, 'dsh-home', 'sessions')
+    let sanitized: string[]
+    try {
+      sanitized = readdirSync(base)
+    } catch {
+      continue
+    }
+    if (!sanitized.some((d) => d.toLowerCase().includes(segment))) continue
     const out: string[] = []
-    for (const sanitized of readdirSync(base)) {
-      for (const entry of readdirSync(join(base, sanitized))) out.push(entry)
+    for (const dir of sanitized) {
+      for (const entry of readdirSync(join(base, dir))) out.push(entry)
     }
     return out
-  } catch {
-    return []
   }
+  return []
 }
 
 /** 视图菜单项点击厂（portal 菜单 [role=menu] 内按文案过滤——selectWorkspaceViaChip 同径） */
@@ -73,13 +99,11 @@ async function pickViewMenuItem(page: Page, text: string): Promise<void> {
   await expect(menu, '选择后菜单收').toBeHidden({ timeout: 10_000 })
 }
 
-test('@web-e2e @p1mvp sidebar-view-align·rail 图标列：搜索/＋在轨（项目 folder 图标列退役）', async () => {
+test('@web-e2e @p1mvp sidebar-view-align·rail 图标列：搜索/＋在轨（项目 folder 图标列退役）', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const root = makeWorkspaceFixture('甲')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-ud-'))
-  const { app, page } = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
   try {
-    const project = await registerProject(page, join(root, '甲'), '甲项目')
+    const project = await registerProject(page, join(wsDir, '甲'), '甲项目')
     await expect(page.locator(projectRowOf(project.id)), '宽态项目行在场').toBeVisible({ timeout: 30_000 })
 
     // 收起 → rail：搜索钮 + 「＋」在轨；项目 folder 图标列退役（2026-10-11 用户裁决
@@ -104,45 +128,37 @@ test('@web-e2e @p1mvp sidebar-view-align·rail 图标列：搜索/＋在轨（�
     await expect(page.locator(sidebarOf('wide'))).toBeVisible({ timeout: 15_000 })
     await expect(page.locator(projectRowOf(project.id)), '展开恢复项目行').toBeVisible({ timeout: 15_000 })
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(root)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @p1mvp sidebar-view-align·行尾新会话钮：官方 startSession(workspaceId) 链（盘侧会话增生）', async () => {
+test('@web-e2e @p1mvp sidebar-view-align·行尾新会话钮：官方 startSession(workspaceId) 链（盘侧会话增生）', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const root = makeWorkspaceFixture('乙')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-ud-'))
-  const { app, page } = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
   try {
-    const project = await registerProject(page, join(root, '乙'), '乙项目')
+    const project = await registerProject(page, join(wsDir, '乙'), '乙项目')
     await expect(page.locator(projectRowOf(project.id))).toBeVisible({ timeout: 30_000 })
-    const before = sessionDirIds(userData)
+    const before = sharedSessionDirIds(wsDir)
 
     // 行尾动作 = hover 呈现（官方 rowActions 同型），先悬停行再点钮
     await page.locator(projectRowOf(project.id)).hover()
     await page.locator(`${projectRowOf(project.id)} ${projectActionOf('new-session')}`).click()
     await expect
-      .poll(async () => sessionDirIds(userData).length, { timeout: 30_000 })
+      .poll(async () => sharedSessionDirIds(wsDir).length, { timeout: 30_000 })
       .toBeGreaterThan(before.length)
     // blank 行入树需 workspace 成员传播 + 选中态（官方「仅选中 blank 可见」口径）——
     // 行显示面归 dogfood 台账（任务文件记边界），零凭据面以盘侧增生收口
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(root)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @p1mvp sidebar-view-align·视图菜单实装：平铺切换 + 归档过滤三态（ellipsis 归档动作真实链）', async () => {
+test('@web-e2e @p1mvp sidebar-view-align·视图菜单实装：平铺切换 + 归档过滤三态（ellipsis 归档动作真实链）', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const root = makeWorkspaceFixture('丙')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-ud-'))
-  const { app, page } = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
   try {
-    const active = await registerProject(page, join(root, '丙', '一'), '丙项目')
-    const old = await registerProject(page, join(root, '丙', '二'), '丙旧档')
+    const active = await registerProject(page, join(wsDir, '丙', '一'), '丙项目')
+    const old = await registerProject(page, join(wsDir, '丙', '二'), '丙旧档')
     await expect(page.locator(projectRowOf(active.id))).toBeVisible({ timeout: 30_000 })
     await expect(page.locator(projectRowOf(old.id))).toBeVisible({ timeout: 30_000 })
 
@@ -182,19 +198,15 @@ test('@web-e2e @p1mvp sidebar-view-align·视图菜单实装：平铺切换 + �
     ).toBeVisible()
     await expect(page.locator(projectRowOf(active.id)), '仅归档：活跃项目离场').toHaveCount(0)
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(root)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @p1mvp sidebar-view-align·项目改名：ellipsis 改名 → Modal → RPC → 行标题更新', async () => {
+test('@web-e2e @p1mvp sidebar-view-align·项目改名：ellipsis 改名 → Modal → RPC → 行标题更新', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const root = makeWorkspaceFixture('丁')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-sva-ud-'))
-  const { app, page } = await launchHost({ userData })
+  const { page, wsDir } = sharedLaunch
   try {
-    const project = await registerProject(page, join(root, '丁'), '丁项目')
+    const project = await registerProject(page, join(wsDir, '丁'), '丁项目')
     await expect(page.locator(projectRowOf(project.id))).toBeVisible({ timeout: 30_000 })
 
     await page.locator(projectRowOf(project.id)).hover()
@@ -216,8 +228,6 @@ test('@web-e2e @p1mvp sidebar-view-align·项目改名：ellipsis 改名 → Mod
       '行标题更新（RPC update + 静默重拉）',
     ).toHaveText('丁项目新名', { timeout: 15_000 })
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(root)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

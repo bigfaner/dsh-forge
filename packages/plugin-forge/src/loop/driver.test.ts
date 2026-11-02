@@ -389,7 +389,7 @@ function build(options: {
         return { appended: false as const }
       }
       cpEnsures.push({ ...input, appended: true })
-      cpRows.push({ mark: input.mark, tasksTotal: 0, commitsTotal: 0, fixesTotal: 0, evidenceDebtsTotal: 0 })
+      cpRows.push({ mark: input.mark, ...(input.snapshots as { tasksTotal: number; commitsTotal: number; fixesTotal: number; evidenceDebtsTotal: number }) })
       return { appended: true as const }
     },
     appendCheckpoint: async (_input: { projectId: string; proposalId: string; mark: string; baseCommitHash: string; snapshots: unknown }) => ({}),
@@ -809,32 +809,27 @@ describe('e2e 红灯基线门（dispatch-loop-hardening 改进7）', () => {
 // 生产路径测试覆盖）。
 
 
-describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记', () => {
-  it('first-pass 幂等 + 复盘派生（未越阈）：首次 done 落标记一枚（HEAD 回落结算 commit）+ doc 复盘任务注入指标/交叉核验/learn；次 done 不重落不重派', async () => {
+describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged lazy 补标记', () => {
+  it('first-pass done：落标记一枚（HEAD 回落结算 commit）+ settle 文本含复盘/沉淀直接指示（指标/越阈/learn/retro-done）——零任务派生（bug 4186a70c）', async () => {
     const built = build({
-      claim: [claimed(), NO_TASK, claimed('9.1'), NO_TASK],
+      claim: [claimed(), NO_TASK],
       stats: [
         statsOf({ pending: 1 }), // 启动读
         statsOf({ in_progress: 1 }), // claim1 领取通知读
         statsOf({ in_progress: 1 }), // claim1 结算核池读
         statsOf({ completed: 1 }), // claim1 review-wave 快照计数读（机械④结算点真实触发——装配修复后）
-        statsOf({ completed: 1 }), // 次轮 no-task 池读（first-pass done）
-        statsOf({ completed: 1 }), // 派生时点池快照计数读（bug 9c350e5f——先派生后落标记序）
+        statsOf({ completed: 1 }), // 首轮 no-task 池读（first-pass done）
         statsOf({ completed: 1 }), // 标记快照计数读（completed 1 = first-pass 基线）
-        statsOf({ in_progress: 1 }), // 复盘任务领取通知读
-        statsOf({ in_progress: 1 }), // 复盘任务结算核池读
-        statsOf({ completed: 2 }), // 末轮 no-task 池读（标记已在校）
-        statsOf({ completed: 2 }), // quiescence/收口读
+        statsOf({ completed: 1 }), // 静默窗池读
+        statsOf({ completed: 1 }), // 收口 stats 读
       ],
       checkpointRows: [],
       resolveProposalId: async () => 'prop-1',
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    // first-pass-complete 标记：已锚定后（ensureFirstPassClosure list 前置判读）不再重复 ensure——
-    // 恰一次调用、一次 appended；HEAD = 结算 commit 回落锚
+    // first-pass-complete 标记：恰一次调用、一次 appended；HEAD = 结算 commit 回落锚
     expect(built.cpEnsures).toHaveLength(1)
-    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
     expect(built.cpEnsures[0]).toMatchObject({
       projectId: PROJECT,
       proposalId: 'prop-1',
@@ -843,141 +838,69 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
       appended: true,
       snapshots: { tasksTotal: 1 },
     })
-    // 复盘 + 知识沉淀双派生（expert-squad-forge-2）：恰各一次；retro type=doc + retro-reviewer
-    // 变量路由 + 指标/越阈规则/交叉核验/learn 全注入；未越阈零 AC 硬门
-    expect(built.h.addTaskInputs).toHaveLength(2)
-    const retro = built.h.addTaskInputs[0]!
-    expect(retro).toMatchObject({
-      projectId: PROJECT,
-      source: SOURCE,
-      type: 'doc',
-      priority: 'P1',
-      title: 'first-pass 复盘：feat-x',
-      vars: { expert: 'retro-reviewer' },
-    })
-    expect(retro.taskDesc).toContain('一次通过率')
-    expect(retro.taskDesc).toContain('返工增量比')
-    expect(retro.taskDesc).toContain('修正波次')
-    expect(retro.taskDesc).toContain('reviewWaveThreshold')
-    expect(retro.taskDesc).toContain('默认值 6')
-    expect(retro.taskDesc).toContain('交叉核验')
-    expect(retro.taskDesc).toContain('learn')
-    expect(retro.taskDesc).toContain('.knowledge/')
-    expect(retro.taskDesc).toContain('< 6 → 未越阈')
-    expect(retro.acceptanceCriteria).toBeUndefined()
-    // 知识沉淀任务（同轮独立派生）：knowledge-curator 变量路由 + 专属标题前缀 + 沉淀简报
-    const knowledge = built.h.addTaskInputs[1]!
-    expect(knowledge).toMatchObject({
-      projectId: PROJECT,
-      source: SOURCE,
-      type: 'doc',
-      priority: 'P2',
-      title: 'first-pass 知识沉淀：feat-x',
-      vars: { expert: 'knowledge-curator' },
-    })
-    expect(knowledge.taskDesc).toContain('知识沉淀')
-    expect(knowledge.taskDesc).toContain('.knowledge/')
-    expect(knowledge.taskDesc).toContain('独立结算')
-    expect(knowledge.acceptanceCriteria).toBeUndefined()
-    // 复盘任务被循环续领后照常收口（⑯ 结束叙述在场）
-    expect(built.calls.at(-1)?.text).toContain('[forge·循环结束]')
-    // 复盘任务成功结算后再次 done：标记不重落（appended 仍 1）、双任务不重派（addTask 仍 2）
-    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
-    expect(built.h.addTaskInputs).toHaveLength(2)
+    // 复盘/知识沉淀不再派生任务卡——收口消息直接指示主 agent（时序倒挂修复：评审 → 复盘 → 沉淀）
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    const settle = built.calls.at(-1)!
+    expect(settle.method).toBe('settle')
+    expect(settle.text).toContain('[forge·循环结束]')
+    expect(settle.text).toContain('【代码评审指示】')
+    expect(settle.text).toContain('【复盘与知识沉淀指示】')
+    expect(settle.text).toContain('交叉评审与结论处理完成后执行')
+    expect(settle.text).toContain('执行顺序硬门')
+    expect(settle.text).toContain('不得跳步、不得并行')
+    expect(settle.text).toContain('复盘三项全部完成后执行')
+    expect(settle.text).not.toContain('代码 review 已收口')
+    expect(settle.text).toContain('一次通过率')
+    expect(settle.text).toContain('返工增量比')
+    expect(settle.text).toContain('修正波次')
+    expect(settle.text).toContain('reviewWaveThreshold')
+    expect(settle.text).toContain('缺席默认值 6')
+    expect(settle.text).toContain('交叉核验')
+    expect(settle.text).toContain('learn')
+    expect(settle.text).toContain('.knowledge/')
+    expect(settle.text).toContain('< 6 → 未越阈')
+    expect(settle.text).toContain('retro-done')
+    expect(settle.text).toContain('recordImplCheckpoint')
   })
 
-  it('幂等防护（评审建议2）：addTask 成功后落标记失败——复盘任务已在场时二次进入不重复派生，仅补落标记', async () => {
+  it('标记落库失败不收口：本轮 continue 留幂等窗口，次轮补落标记后才 settle（零任务派生）', async () => {
     const built = build({
-      claim: [NO_TASK, NO_TASK, claimed('9.1'), NO_TASK],
+      claim: [NO_TASK, NO_TASK],
       stats: [
-        statsOf({ pending: 1 }), // 启动读
-        statsOf({ completed: 1 }), // 轮1 claim 池读
-        statsOf({ completed: 1 }), // 轮1 派生时点池快照读（在场判定前置 computeWaveSnapshot）
-        statsOf({ completed: 1 }), // 轮1 静默窗池读①（终态 → 窗内再询）
-        statsOf({ pending: 1 }), // 轮1 静默窗池读②（复盘任务 pending → 续派）
-        statsOf({ completed: 1 }), // 轮2 claim 池读
-        statsOf({ completed: 1 }), // 轮2 标记快照计数读（补落标记）
-        statsOf({ in_progress: 1 }), // 复盘任务领取通知读
-        statsOf({ in_progress: 1 }), // 复盘任务结算核池读
-        statsOf({ completed: 1 }), // review-wave 快照计数读
-        statsOf({ completed: 2 }), // 轮3 no-task 池读（标记已在校）
-        statsOf({ completed: 2 }), // 静默窗池读
+        statsOf({ completed: 1 }), // 启动读
+        statsOf({ completed: 1 }), // 轮1 no-task 池读（done → 标记 ensure 抛错）
+        statsOf({ completed: 1 }), // 轮1 标记快照计数读
+        statsOf({ completed: 1 }), // 轮2 no-task 池读
+        statsOf({ completed: 1 }), // 轮2 标记快照计数读（补落）
+        statsOf({ completed: 1 }), // 轮2 静默窗池读
+        statsOf({ completed: 1 }), // 收口 stats 读
       ],
       checkpointRows: [],
       ensureFailures: 1,
       resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-1',
-      commitLanding: async () => ({ ok: true, branch: 'feat-x' }),
-    })
-    // 窄窗口现场：上一轮派生成功（addTask 已入池）、落标记失败——池中留有 pending 复盘任务
-    built.h.lists.created.push({
-      taskId: 'card-feat-x-9.1',
-      slug: 'feat-x',
-      localId: '9.1',
-      title: 'first-pass 复盘：feat-x',
-      taskType: 'doc',
-      taskStatus: 'pending',
-      prerequisites: [],
-      sessionCount: 0,
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    // 二次进入：在场 doc 复盘任务不重派（幂等窗口消除）；知识沉淀任务缺席 → 同构幂等窗口补派恰一枚
-    expect(built.h.addTaskInputs).toHaveLength(1)
-    expect(built.h.addTaskInputs[0]).toMatchObject({
-      title: 'first-pass 知识沉淀：feat-x',
-      vars: { expert: 'knowledge-curator' },
-    })
-    // 失败留待重试语义保持：标记下轮补落恰一次（首次 ensure 抛错、二次 appended）
-    expect(built.cpEnsures.filter((c) => c.appended)).toHaveLength(1)
-    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1' })
+    // 失败留待重试语义：首轮 ensure 抛错不入 recording，次轮补落恰一次
+    expect(built.cpEnsures).toHaveLength(1)
+    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-1', appended: true })
+    // 零任务派生；收口恰一次且带复盘/沉淀指示
+    expect(built.h.addTaskInputs).toHaveLength(0)
+    const settles = built.calls.filter((c) => c.method === 'settle')
+    expect(settles).toHaveLength(1)
+    expect(settles[0]!.text).toContain('【复盘与知识沉淀指示】')
   })
 
-  it('知识补派失败不阻断标记（expert-squad-forge-2）：复盘任务已在场 + 知识派生抛错 → first-pass-complete 照常落库，知识任务下轮幂等窗口补派', async () => {
-    const built = build({
-      claim: [NO_TASK, NO_TASK],
-      stats: [
-        statsOf({ completed: 1 }), // 轮1 claim 池读
-        statsOf({ completed: 1 }), // 轮1 派生时点池快照读
-        statsOf({ completed: 1 }), // 轮1 标记快照计数读
-        statsOf({ completed: 1 }), // 轮2 claim 池读
-        statsOf({ completed: 1 }), // 轮2 派生时点池快照读
-        statsOf({ completed: 1 }), // 轮2 标记快照计数读（no-op 幂等）
-      ],
-      checkpointRows: [],
-      addTaskFailures: 1,
-      resolveProposalId: async () => 'prop-1',
-      resolveHeadCommit: async () => 'head-k',
-    })
-    // 窄窗口现场：复盘任务已在池（pending）——派生锚跳过，仅走知识补派（首轮失败）
-    built.h.lists.created.push({
-      taskId: 'card-feat-x-9.1',
-      slug: 'feat-x',
-      localId: '9.1',
-      title: 'first-pass 复盘：feat-x',
-      taskType: 'doc',
-      taskStatus: 'pending',
-      prerequisites: [],
-      sessionCount: 0,
-    })
-    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
-    await untilSettled(built.driver)
-    // 标记锚不受知识派生失败阻断：轮1 即落库成功（appended=true，baseCommitHash = 桩 HEAD）
-    expect(built.cpEnsures[0]).toMatchObject({ mark: 'first-pass-complete', baseCommitHash: 'head-k', appended: true })
-    // 知识任务轮1派生失败（addTask 抛错不入 recording）→ 轮2 no-task done 幂等窗口补派恰一枚
-    expect(built.h.addTaskInputs).toHaveLength(1)
-    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'first-pass 知识沉淀：feat-x', vars: { expert: 'knowledge-curator' } })
-  })
-
-  it('复盘指标真值（bug 9c350e5f）：先派生后落标记窗口内以派生时点池快照合成 first 帧——fixDensity 不恒兜底', async () => {
+  it('收口指标真值（bug 9c350e5f 口径保持）：首帧以标记快照在场——settle 文本 fix 密度取真值', async () => {
     const built = build({
       claim: [NO_TASK],
-      stats: [statsOf({ completed: 1 })], // shift-末项重复——派生/落标记快照计数读同值
+      stats: [statsOf({ completed: 1 })], // shift-末项重复——池读/标记快照/收口读同值
       checkpointRows: [{ mark: 'review-wave-N', tasksTotal: 2, commitsTotal: 3, fixesTotal: 1, evidenceDebtsTotal: 0 }],
       resolveProposalId: async () => 'prop-1',
       resolveHeadCommit: async () => 'head-9',
     })
-    // 池中一枚 completed fix 类任务（带 commit 记录）——派生时点快照 = tasks 1 / commits 1 / fixes 1
+    // 池中一枚 completed fix 类任务（带 commit 记录）——标记快照 = tasks 1 / commits 1 / fixes 1
     built.h.lists.created.push({
       taskId: 'card-feat-x-2.5',
       slug: 'feat-x',
@@ -990,12 +913,13 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
-    // 真值：first 帧合成（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
-    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('fix 密度：100.0%')
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
+    // 真值：first 帧（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('fix 密度 100.0%')
   })
 
-  it('复盘指标真值（bug 9c350e5f）：merged 帧在场 + first 帧合成——reworkRatio 取 (current-baseline)/current 真值', async () => {
+  it('收口指标真值：merged 帧在场——settle 文本返工增量比取 (current-baseline)/current 真值', async () => {
     const built = build({
       claim: [NO_TASK],
       stats: [statsOf({ completed: 1 })],
@@ -1018,16 +942,25 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
-    // 真值：first 基线 commits 1（合成帧）、current = merged 帧 commits 3 → (3-1)/3；兜底缺陷下恒 0.0%
-    expect(built.h.addTaskInputs[0]!.taskDesc).toContain('返工增量比：66.7%')
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
+    // 真值：first 基线 commits 1（标记快照）、current = merged 帧 commits 3 → (3-1)/3
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('返工增量比 66.7%')
   })
 
-  it('复盘派生（越阈）：修正波次 ≥ 阈值（默认 6）→ AC 硬门「已注册改进提案」入验收清单', async () => {
+  it('收口越阈硬门：修正波次 ≥ 阈值（默认 6）→ settle 文本含改进提案注册硬门（不落任务卡 AC）', async () => {
     const wave = { mark: 'review-wave-N', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 }
     const built = build({
       claim: [claimed(), NO_TASK],
-      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+      stats: [
+        statsOf({ pending: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ in_progress: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+        statsOf({ completed: 1 }),
+      ],
       checkpointRows: [
         { mark: 'merged', tasksTotal: 8, commitsTotal: 12, fixesTotal: 3, evidenceDebtsTotal: 1 },
         wave, wave, wave, wave, wave, wave,
@@ -1036,13 +969,12 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     })
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
     await untilSettled(built.driver)
-    expect(built.h.addTaskInputs).toHaveLength(2) // 复盘 + 知识沉淀双派生
-    const retro = built.h.addTaskInputs[0]!
-    expect(retro.vars).toEqual({ expert: 'retro-reviewer' })
-    expect(retro.acceptanceCriteria).toEqual([expect.stringContaining('已注册改进提案')])
-    expect(retro.acceptanceCriteria?.[0]).toContain('未注册不得 success')
-    expect(retro.taskDesc).toContain('≥ 6 → 已越阈')
-    expect(retro.taskDesc).toContain('修正波次：6')
+    expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生——硬门走收口指示文本
+    const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
+    expect(settle.text).toContain('波次 6 ≥ 6 → 已越阈')
+    expect(settle.text).toContain('已注册改进提案')
+    expect(settle.text).toContain('parent_proposal_id')
+    expect(settle.text).toContain('修正波次 6')
   })
 
   it('merged 漏标记 lazy 兜底：循环启动时 first-pass + retro-done 在场、merged 缺席、池全终态 → 补 merged 标记', async () => {
@@ -1059,7 +991,7 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {}, worktree: 'Z:\\wt\\feat-x' })
     await untilSettled(built.driver)
     // 补标记：mark=merged + baseCommitHash = 循环检出 HEAD（解析缝桩）+ 收口时刻计数快照；
-    // 首轮 done：first-pass 已在校 = 已锚定（ensureFirstPassClosure list 前置判读）→ 零 ensure 零复盘派生
+    // 首轮 done：first-pass 已在校 = 域侧幂等 no-op → 零重落
     expect(built.cpEnsures).toHaveLength(1)
     const mergedCall = built.cpEnsures.find((c) => c.mark === 'merged')
     expect(mergedCall).toMatchObject({
@@ -1070,10 +1002,8 @@ describe('机械③ · first-pass 标记 + 复盘派生 + merged lazy 补标记'
       appended: true,
       snapshots: { tasksTotal: 3 },
     })
-    // 首轮 done：first-pass 已在校 → 零重落零复盘派生；知识补派窗口不随锚定关闭——
-    // 池中无知识沉淀任务（含终态）→ 补派恰一枚（下轮 no-task done 幂等窗口触发径）
-    expect(built.h.addTaskInputs).toHaveLength(1)
-    expect(built.h.addTaskInputs[0]).toMatchObject({ title: 'first-pass 知识沉淀：feat-x', vars: { expert: 'knowledge-curator' } })
+    // 首轮 done：first-pass 已在校 → 零重落；零任务派生（复盘/沉淀走收口指示文本）
+    expect(built.h.addTaskInputs).toHaveLength(0)
   })
 
   it('merged lazy 兜底判据不满足：retro-done 缺席（收口前置=复盘已结算）→ 不补标记', async () => {

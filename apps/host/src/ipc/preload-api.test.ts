@@ -111,7 +111,7 @@ describe('preload 暴露面（window.dshForge）', () => {
     const face = fakeFace()
     const api = createDshForgePreloadApi(face)
     await api.invoke('forge:projects/register', { name: 'demo' })
-    expect(face.invoke).toHaveBeenCalledWith('forge:projects/register', { name: 'demo' }, expect.any(String))
+    expect(face.invoke).toHaveBeenCalledWith('forge:projects/register', { name: 'demo' }, expect.any(String), expect.any(Number))
   })
 
   it('invoke：trace_id 单点生成（1.2 链 A——第三参随 invoke 入 main；每次调用独立）', async () => {
@@ -122,6 +122,17 @@ describe('preload 暴露面（window.dshForge）', () => {
     const calls = face.invoke.mock.calls as unknown as Array<[string, unknown, string]>
     expect(calls[0]![2]).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/)
     expect(calls[1]![2]).not.toBe(calls[0]![2])
+  })
+
+  it('invoke：sentAt 发出时刻单点盖戳（bug 2a284e9d——第四参入 main，信封算 hop 时延）', async () => {
+    const face = fakeFace()
+    const api = createDshForgePreloadApi(face)
+    const before = Date.now()
+    await api.invoke('forge:projects/list', undefined)
+    const after = Date.now()
+    const call = (face.invoke.mock.calls as unknown as Array<[string, unknown, string, number]>)[0]!
+    expect(call[3]).toBeGreaterThanOrEqual(before)
+    expect(call[3]).toBeLessThanOrEqual(after)
   })
 
   it('负样例：未列通道拒绝（forge 前缀伪通道 / 邪恶前缀 / boot 通道混用）——不触 ipcRenderer', () => {

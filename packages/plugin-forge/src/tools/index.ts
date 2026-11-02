@@ -48,6 +48,7 @@ import { createTaskStatsTool } from './task-stats.js'
 import type { LoopToolDeps } from './dispatch-task.js'
 import { createTransitionProposalTool } from './transition-proposal.js'
 import { createTransitionFeatureTool } from './transition-feature.js'
+import { createUnblockTaskTool } from './unblock-task.js'
 import { createUpdateTaskTool } from './update-task.js'
 import {
   createListImplCheckpointsTool,
@@ -183,14 +184,16 @@ export interface ForgeTools {
   readonly queryImplCheckpoint: ReturnType<typeof createQueryImplCheckpointTool>
   readonly listImplCheckpoints: ReturnType<typeof createListImplCheckpointsTool>
   readonly pauseTask: ReturnType<typeof createPauseTaskTool>
+  readonly unblockTask: ReturnType<typeof createUnblockTaskTool>
 }
 
-/** 注册面全集（十九 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
+/** 注册面全集（二十 tool——M3 九员 + recordBug/resolveBug 两 bug 写径 + listBugs/getBug
  *  两 bug 读径 + stopTaskLoop 停止入口（3b——dispatch-loop-hardening 改进 3b③）+ pauseTask
  *  单任务暂停入口（task-pause-primitive）+ transitionFeature 相位转移入口
- *  （implicit-stage-approval §2.3——裁决②局部修订）；面分治：listBugs/transitionFeature
- *  仅主 agent，getBug 主 + worker，pauseTask 仅主 agent——WORKER_FORGE_TOOLS 五动词，
- *  其余 worker deny） */
+ *  （implicit-stage-approval §2.3——裁决②局部修订）+ unblockTask blocked→pending 出口
+ *  （blocked-verdict-restore-primitive）；面分治：listBugs/transitionFeature
+ *  仅主 agent，getBug 主 + worker，pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
+ *  五动词，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',
@@ -211,6 +214,7 @@ export const FORGE_TOOL_NAMES = [
   'queryImplCheckpoint',
   'listImplCheckpoints',
   'pauseTask',
+  'unblockTask',
 ] as const
 
 export type ForgeToolName = (typeof FORGE_TOOL_NAMES)[number]
@@ -236,6 +240,7 @@ export function createForgeTools(deps: DispatchForgeToolDeps): ForgeTools {
     getBug: createGetBugTool(deps),
     ...createImplCheckpointTools(deps),
     pauseTask: createPauseTaskTool(deps),
+    unblockTask: createUnblockTaskTool(deps),
   }
 }
 
@@ -333,6 +338,8 @@ export { parseStopTaskLoopArgs } from './stop-task-loop.js'
 export type { StopTaskLoopResult, StopTaskLoopToolArgs, StopTaskLoopToolDeps } from './stop-task-loop.js'
 export { parsePauseTaskArgs } from './pause-task.js'
 export type { PauseTaskResult, PauseTaskToolArgs, PauseTaskToolDeps } from './pause-task.js'
+export { parseUnblockTaskArgs } from './unblock-task.js'
+export type { UnblockTaskToolArgs } from './unblock-task.js'
 export {
   callToolFace,
   errorCodeOf,

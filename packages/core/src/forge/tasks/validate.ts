@@ -13,7 +13,9 @@
 //   的批量对照面，多态引用无 DB FK）；写时增量断言的批量对照——连容器表漂移亦可抓；
 // ② cycle：边集无环复核（写时增量校验 §6-14 的批量对照——历史漂移环由此抓，完整路径首尾相接）；
 // ③ liveness：orphaned（blocked 无前置）/ stale（blocked 前置全满足——钩子漏恢复）/
-//   deadlock（未满足前置均非 pending/in_progress——无解锁路径；rejected 为死锁信号 §6-4）；
+//   deadlock（未满足前置均非 pending/in_progress——前置侧无解锁路径；rejected 为死锁信号
+//   §6-4；判词口径与 blocked 双直达出口一致——submitTask 直达结算 / unblockTask 解除均合法，
+//   liveness 三判据为诊断面不否决直达径）；
 // ④ record-chain：in_progress 必有 claim 记录 / completed 必有 submit 记录（append-only 审计链）；
 // ⑤ topology：拓扑可分层性（老 forge validatePhaseOrder「claimed too early」新形态——数值
 //   localId 主段 N≥2 的任务须存在更早阶段的直接前置；fix-N/disc-N 非数值 localId 豁免，
@@ -288,7 +290,7 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     if (allSatisfied) {
       violations.push({
         kind: 'liveness',
-        message: `blocked 但前置全满足（stale——应恢复为 pending，恢复钩子漏接面）：${natural(t)}`,
+        message: `blocked 但前置全满足（stale——可经 unblockTask 解除或 submitTask 直达结算收口；恢复钩子漏接为常见成因）：${natural(t)}`,
         taskRef: ref(t),
       })
       continue
@@ -299,7 +301,7 @@ export function validateFeatureTasks(deps: ValidateDeps, input: ValidateFeatureT
     if (!hasResolvable) {
       violations.push({
         kind: 'liveness',
-        message: `blocked 无解锁路径（deadlock——未满足前置均非 pending/in_progress/interrupted）：${natural(t)}`,
+        message: `blocked 无解锁路径（deadlock——未满足前置均非 pending/in_progress/interrupted；前置侧死结，卡本身仍可经 submitTask 直达结算或 unblockTask 解除收口）：${natural(t)}`,
         taskRef: ref(t),
       })
     }

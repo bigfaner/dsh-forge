@@ -1,7 +1,7 @@
 // expert-squad 1.31 旅程 e2e：文件直编热刷新（profile-hot-reload journey）真机取证——
 // journey = .forge/docs/features/expert-squad/testing/profile-hot-reload/journey.md
 // contracts = 同目录 contracts/step-1..5（每 Outcome 一测试 + 一条 happy-path 冒烟）。
-// 打开动线：launchHost 隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）RPC 注册
+// 打开动线：隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）RPC 注册
 // → 左栏 panellist 行「专家团」→ main keyed 'expert-squad' 面板。档案直编 = Node 测试
 // 进程直写夹具 .md（外部编辑器同语义——chokidar 深度 1 watch 通路，tech-design §5）。
 // 生效观测点：面板 5s 轻轮询 + 取用 API GET /api/expert-squad/get（watch 失效 ≤5s 预算
@@ -12,14 +12,14 @@
 // rapid-saves-coalesced / dispatch-within-window-consistent（fs/observed 通道与竞速合并
 // 为 host 半单测面——watch.test.ts / registry 既有覆盖，浏览器无观测缝）。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp。
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
+// 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
+// 直编写径（改/增/删/换名）保留在用例内、落 wsDir/.dsh 子树——重播种自然复位回基准。
 // @feature expert-squad @web-e2e
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { registerProject } from '../support/rpc.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
@@ -47,22 +47,19 @@ function expertMd(name: string, title: string, persona: string, tools: string[])
   ].join('\n')
 }
 
-function makeWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-reload-ws-'))
+// ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
+
+function seedWorkspace(dir: string): void {
   const expertsDir = join(dir, '.dsh', 'experts')
   mkdirSync(expertsDir, { recursive: true })
   writeFileSync(join(expertsDir, `${KEY}.md`), expertMd(KEY, '夹具评审', '旧人设基线：严格评审变更。', ['read', 'grep']))
   writeFileSync(join(expertsDir, `${OTHER_KEY}.md`), expertMd(OTHER_KEY, '夹具挖掘', '挖掘数据洞察。', ['read']))
-  return dir
 }
 
-interface PanelSession {
-  readonly page: Page
-  readonly app: ElectronApplication
-  readonly pageErrors: string[]
-  readonly wsDir: string
-  readonly userData: string
-}
+const { test } = createSharedLaunchFixture({
+  seedWorkspace,
+  workspaceName: 'xsq-reload-fixture',
+})
 
 /** 面板 list 请求捕获（页面上下文包装 window.fetch——scheme 无关，激活前安装）。 */
 async function installListCapture(page: Page): Promise<void> {
@@ -116,177 +113,133 @@ async function fetchExpert(page: Page, workspace: string, key: string): Promise<
   }, { ep: '/api/expert-squad/get', payload: { workspace, key } })
 }
 
-async function openPanelWithFixture(): Promise<PanelSession> {
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-reload-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const page = launched.page
-  await registerProject(page, wsDir, 'xsq-reload-fixture')
-  await dismissOnboardingModals(page)
+/** 用例内导航收敛（共享会话每用例执行——捕获器安装 + 面板数据态）。 */
+async function openPanel(page: Page): Promise<void> {
   await installListCapture(page)
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(cardOf(KEY)), '夹具卡数据态').toBeVisible({ timeout: 30_000 })
-  return { page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-}
-
-async function closeSession(session: PanelSession): Promise<void> {
-  try {
-    await closeApp(session.app)
-  } catch {
-    /* closeApp 尽力而为 */
-  }
-  rmSync(session.userData, { recursive: true, force: true })
-  rmSync(session.wsDir, { recursive: true, force: true })
 }
 
 // ── step-1/2/3 success：直编保存 → 热刷新生效 → 取用读回新内容 ──
 
-test('@feature expert-squad reload step-1..3：直改人设保存 → 面板与取用读回新内容（≤5s 预算+轮询窗口）', async () => {
+test('@feature expert-squad reload step-1..3：直改人设保存 → 面板与取用读回新内容（≤5s 预算+轮询窗口）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    expect(await page.locator(cardOf(KEY)).locator('.xc-creed').innerText(), '旧人设基线在场').toContain('旧人设基线')
-    // 直编保存（外部编辑器同语义：整文件重写）
-    writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '新热刷人设：深度回归优先。', ['read', 'grep']))
-    // 生效观测：面板卡片人设摘要换代（watch ≤5s + list 轮询 → 30s 轮询窗口）
-    await expect(page.locator(cardOf(KEY)).locator('.xc-creed'), '面板卡片读回新人设').toContainText('新热刷人设', {
-      timeout: 30_000,
-    })
-    // 取用 API 读回新内容（刷新后 get 逐字新版）
-    await expect
-      .poll(async () => {
-        const got = await fetchExpert(page, wsParam, KEY)
-        return got.ok ? JSON.stringify(got.body) : ''
-      }, { timeout: 30_000, message: '取用 API 读回新人设' })
-      .toContain('新热刷人设')
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  expect(await page.locator(cardOf(KEY)).locator('.xc-creed').innerText(), '旧人设基线在场').toContain('旧人设基线')
+  // 直编保存（外部编辑器同语义：整文件重写）
+  writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '新热刷人设：深度回归优先。', ['read', 'grep']))
+  // 生效观测：面板卡片人设摘要换代（watch ≤5s + list 轮询 → 30s 轮询窗口）
+  await expect(page.locator(cardOf(KEY)).locator('.xc-creed'), '面板卡片读回新人设').toContainText('新热刷人设', {
+    timeout: 30_000,
+  })
+  // 取用 API 读回新内容（刷新后 get 逐字新版）
+  await expect
+    .poll(async () => {
+      const got = await fetchExpert(page, wsParam, KEY)
+      return got.ok ? JSON.stringify(got.body) : ''
+    }, { timeout: 30_000, message: '取用 API 读回新人设' })
+    .toContain('新热刷人设')
 })
 
 // ── step-1 bad-archive-fail-loud：保存进坏档案 → 该键退场，其余照常 ──
 
-test('@feature expert-squad reload step-1 bad-archive：裸 {{ 坏档 → 该键 fail-loud 退场，其余专家照常', async () => {
+test('@feature expert-squad reload step-1 bad-archive：裸 {{ 坏档 → 该键 fail-loud 退场，其余专家照常', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), '---\nname: test-reviewer\ntitle: 坏档\n---\n\n正文含裸 {{ 非法占位\n')
-    await expect(page.locator(cardOf(KEY)), '坏档键 fail-loud 退场（不静默回落旧内容）').toHaveCount(0, { timeout: 30_000 })
-    await expect(page.locator(cardOf(OTHER_KEY)), '其余专家照常（单点故障隔离）').toBeVisible()
-    // 修正保存 → 恢复可用（同一通路收编）
-    writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '修正后恢复人设。', ['read', 'grep']))
-    await expect(page.locator(cardOf(KEY)), '修正后热刷新收编恢复').toBeVisible({ timeout: 30_000 })
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), '---\nname: test-reviewer\ntitle: 坏档\n---\n\n正文含裸 {{ 非法占位\n')
+  await expect(page.locator(cardOf(KEY)), '坏档键 fail-loud 退场（不静默回落旧内容）').toHaveCount(0, { timeout: 30_000 })
+  await expect(page.locator(cardOf(OTHER_KEY)), '其余专家照常（单点故障隔离）').toBeVisible()
+  // 修正保存 → 恢复可用（同一通路收编）
+  writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '修正后恢复人设。', ['read', 'grep']))
+  await expect(page.locator(cardOf(KEY)), '修正后热刷新收编恢复').toBeVisible({ timeout: 30_000 })
 })
 
 // ── step-1 new-file-collected-symmetric：新增对称收编 / 删除对称移除 ──
 
-test('@feature expert-squad reload step-1 add-remove：新增 .md 收编为新卡；删除对称移除', async () => {
+test('@feature expert-squad reload step-1 add-remove：新增 .md 收编为新卡；删除对称移除', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    writeFileSync(join(wsDir, '.dsh', 'experts', 'fresh-agent.md'), expertMd('fresh-agent', '新增夹具', '新增档案人设。', ['read']))
-    await expect(page.locator(cardOf('fresh-agent')), '新增经热刷新通路收编').toBeVisible({ timeout: 30_000 })
-    rmSync(join(wsDir, '.dsh', 'experts', 'fresh-agent.md'))
-    await expect(page.locator(cardOf('fresh-agent')), '删除对称移除（无残留键）').toHaveCount(0, { timeout: 30_000 })
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', 'fresh-agent.md'), expertMd('fresh-agent', '新增夹具', '新增档案人设。', ['read']))
+  await expect(page.locator(cardOf('fresh-agent')), '新增经热刷新通路收编').toBeVisible({ timeout: 30_000 })
+  rmSync(join(wsDir, '.dsh', 'experts', 'fresh-agent.md'))
+  await expect(page.locator(cardOf('fresh-agent')), '删除对称移除（无残留键）').toHaveCount(0, { timeout: 30_000 })
 })
 
 // ── step-1 name-change-new-identity：改 name 即换身份 ──
 
-test('@feature expert-squad reload step-1 rename：改 frontmatter name → 旧键消失、新键收编（改键即换身份）', async () => {
+test('@feature expert-squad reload step-1 rename：改 frontmatter name → 旧键消失、新键收编（改键即换身份）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    writeFileSync(join(wsDir, '.dsh', 'experts', 'renamed-agent.md'), expertMd('renamed-agent', '换名夹具', '换名后同一份人设。', ['read']))
-    rmSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`))
-    await expect(page.locator(cardOf(KEY)), '旧键随旧文件消失').toHaveCount(0, { timeout: 30_000 })
-    await expect(page.locator(cardOf('renamed-agent')), '新键经刷新收编').toBeVisible({ timeout: 30_000 })
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', 'renamed-agent.md'), expertMd('renamed-agent', '换名夹具', '换名后同一份人设。', ['read']))
+  rmSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`))
+  await expect(page.locator(cardOf(KEY)), '旧键随旧文件消失').toHaveCount(0, { timeout: 30_000 })
+  await expect(page.locator(cardOf('renamed-agent')), '新键经刷新收编').toBeVisible({ timeout: 30_000 })
 })
 
 // ── step-1 temp-file-ignored：临时文件/swap 不收编 ──
 
-test('@feature expert-squad reload step-1 temp-file：非 .md 正本（swap/临时文件）不收编', async () => {
+test('@feature expert-squad reload step-1 temp-file：非 .md 正本（swap/临时文件）不收编', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const expertsDir = join(wsDir, '.dsh', 'experts')
-    writeFileSync(join(expertsDir, 'scratch.tmp'), expertMd('scratch', '临时态', '临时文件人设。', ['read']))
-    writeFileSync(join(expertsDir, 'swapfile.md~'), expertMd('swapfile', '交换态', '交换文件人设。', ['read']))
-    // 跨两个轮询周期后仍不收编：临时形态零逃逸进索引
-    await expect
-      .poll(async () => (await page.locator(cardOf('scratch')).count()) + (await page.locator(cardOf('swapfile')).count()), {
-        timeout: 15_000,
-        message: '临时文件两周期内零收编',
-      })
-      .toBe(0)
-    await expect(page.locator(cardOf(KEY)), '合法正本不受影响').toBeVisible()
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const expertsDir = join(wsDir, '.dsh', 'experts')
+  writeFileSync(join(expertsDir, 'scratch.tmp'), expertMd('scratch', '临时态', '临时文件人设。', ['read']))
+  writeFileSync(join(expertsDir, 'swapfile.md~'), expertMd('swapfile', '交换态', '交换文件人设。', ['read']))
+  // 跨两个轮询周期后仍不收编：临时形态零逃逸进索引
+  await expect
+    .poll(async () => (await page.locator(cardOf('scratch')).count()) + (await page.locator(cardOf('swapfile')).count()), {
+      timeout: 15_000,
+      message: '临时文件两周期内零收编',
+    })
+    .toBe(0)
+  await expect(page.locator(cardOf(KEY)), '合法正本不受影响').toBeVisible()
 })
 
 // ── step-5 success：白名单收窄 → 读回新值且面板 chips 同步 ──
 
-test('@feature expert-squad reload step-5 whitelist：直编收窄 tools → 读回收窄值，面板 chips 同步', async () => {
+test('@feature expert-squad reload step-5 whitelist：直编收窄 tools → 读回收窄值，面板 chips 同步', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '收窄后仅读人设。', ['read']))
-    await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: 'grep' }), '面板 grep chip 移除').toHaveCount(0, {
-      timeout: 30_000,
-    })
-    await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: 'read' }).first(), 'read chip 保留').toBeVisible()
-    await expect
-      .poll(async () => {
-        const got = await fetchExpert(page, wsParam, KEY)
-        const tools = (got.body as { tools?: string[] } | null)?.tools
-        return JSON.stringify(tools ?? [])
-      }, { timeout: 30_000, message: '取用读回收窄白名单 [read]' })
-      .toBe(JSON.stringify(['read']))
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审', '收窄后仅读人设。', ['read']))
+  await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: 'grep' }), '面板 grep chip 移除').toHaveCount(0, {
+    timeout: 30_000,
+  })
+  await expect(page.locator(`${cardOf(KEY)} .xc-tags .chip.tool`, { hasText: 'read' }).first(), 'read chip 保留').toBeVisible()
+  await expect
+    .poll(async () => {
+      const got = await fetchExpert(page, wsParam, KEY)
+      const tools = (got.body as { tools?: string[] } | null)?.tools
+      return JSON.stringify(tools ?? [])
+    }, { timeout: 30_000, message: '取用读回收窄白名单 [read]' })
+    .toBe(JSON.stringify(['read']))
 })
 
 // ── Journey 冒烟（恰一条——直编 → 生效 → 取用读回全依序） ──
 
-test('@feature expert-squad reload 冒烟：直编改档 → 面板换代 → 取用 API 读回新内容 → 零异常', async () => {
+test('@feature expert-squad reload 冒烟：直编改档 → 面板换代 → 取用 API 读回新内容 → 零异常', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审·热刷', '冒烟热刷人设正文。', ['read', 'bash']))
-    await expect(page.locator(`${cardOf(KEY)} .xc-title`), '面板岗位换代').toContainText('夹具评审·热刷', { timeout: 30_000 })
-    await expect
-      .poll(async () => {
-        const got = await fetchExpert(page, wsParam, KEY)
-        return got.ok ? JSON.stringify(got.body) : ''
-      }, { timeout: 30_000, message: '取用读回冒烟新内容' })
-      .toContain('冒烟热刷人设正文')
-    // 不变量：其余专家原样；renderer 零未捕获异常
-    await expect(page.locator(cardOf(OTHER_KEY)), '其余专家原样').toBeVisible()
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir, pageErrors } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', `${KEY}.md`), expertMd(KEY, '夹具评审·热刷', '冒烟热刷人设正文。', ['read', 'bash']))
+  await expect(page.locator(`${cardOf(KEY)} .xc-title`), '面板岗位换代').toContainText('夹具评审·热刷', { timeout: 30_000 })
+  await expect
+    .poll(async () => {
+      const got = await fetchExpert(page, wsParam, KEY)
+      return got.ok ? JSON.stringify(got.body) : ''
+    }, { timeout: 30_000, message: '取用读回冒烟新内容' })
+    .toContain('冒烟热刷人设正文')
+  // 不变量：其余专家原样；renderer 零未捕获异常
+  await expect(page.locator(cardOf(OTHER_KEY)), '其余专家原样').toBeVisible()
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })

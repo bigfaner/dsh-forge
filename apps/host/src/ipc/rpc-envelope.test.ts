@@ -75,6 +75,49 @@ describe('rpcEnvelope（IPC handler 包装）', () => {
     await expect(handler(undefined, 21)).resolves.toEqual({ ok: true, data: { doubled: 42 } })
   })
 
+  it('慢 RPC 诊断（bug 2a284e9d）：hop+handler 时长超阈值落 diagSink（通道名/两段时长在场），快取数零 emit', async () => {
+    const diags: DiagEventPayload[] = []
+    configureRpcEnvelopeDiag({ sink: (p) => diags.push(p), slowMs: 5 })
+    try {
+      const named = rpcEnvelope(async () => {
+        await new Promise((r) => setTimeout(r, 12))
+        return 'ok'
+      }, 'forge:bugs/list')
+      const sentAt = Date.now() - 10 // 模拟 renderer 发出后 10ms 才被 main 取到
+      await named(undefined, {}, 'trace-1', sentAt)
+      const slow = diags.find((d) => d.event === 'ipc-rpc-slow')
+      expect(slow).toBeDefined()
+      expect(slow?.level).toBe('warn')
+      expect(slow?.process).toBe('main')
+      expect(slow?.message).toContain('forge:bugs/list')
+      expect(slow?.message).toContain('hop=10ms')
+      expect(slow).toMatchObject({ channel: 'forge:bugs/list', durationMs: expect.any(Number), hopMs: expect.any(Number) })
+
+      diags.length = 0
+      const fast = rpcEnvelope(async () => 'ok', 'forge:bugs/list')
+      await fast(undefined, {}, 'trace-2', Date.now())
+      expect(diags).toEqual([])
+    } finally {
+      configureRpcEnvelopeDiag(undefined)
+    }
+  })
+
+  it('慢 RPC 诊断：无通道名/无 sentAt 退化面不抛、消息带占位', async () => {
+    const diags: DiagEventPayload[] = []
+    configureRpcEnvelopeDiag({ sink: (p) => diags.push(p), slowMs: 1 })
+    try {
+      const handler = rpcEnvelope(async () => {
+        await new Promise((r) => setTimeout(r, 8))
+        return 'ok'
+      })
+      await handler(undefined, undefined)
+      expect(diags.length).toBe(1)
+      expect(diags[0]?.message).toContain('hop=unknown')
+    } finally {
+      configureRpcEnvelopeDiag(undefined)
+    }
+  })
+
   it('Req=void 通道：负载 undefined 正常流转', async () => {
     const handler = rpcEnvelope(() => ['a', 'b'])
     await expect(handler(undefined, undefined)).resolves.toEqual({ ok: true, data: ['a', 'b'] })

@@ -1,4 +1,10 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：state.db
+// 预置面（冒烟 seedUsageEvents / Step1c clearKnowledgeIndex）经 openStateDb(userData) 在
+// launch 前对 userData 根预置——共享 fixture userData 自管不外露（SharedLaunchHandle 无
+// userData 缝），无法定位/预置；且本文件全文件单 boot 纪律（同 userData 复启工作台挂载
+// 竞态，文件头注）与 fixture 用例间不 closeApp 语义冲突，per-test providerOverlay/dismiss
+// 变体亦在共享 launch 选项面之外。从严裁定（拿不准即保留）。
 // gen-test-scripts 产物 —— Journey: knowledge-browsing（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/knowledge-browsing/contracts/step-{1..5}-*.md
 // （eval-contract 1116/1150 通过）。

@@ -18,22 +18,24 @@
 // [data-dswf-project-action="new-session"]；创建弹窗 = data-dswt-worktree-input /
 // data-dswt-branch-input / data-dswt-create-submit；风险框 = role dialog「跨分支风险确认」；
 // 会话行 = [data-dswf-session]；composer = [data-composer-input]。
+// e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；会话开户判读改扫共享 userData 根
+//（dsh-forge-shared-launch-ud-*）内 dsh-home，以夹具工作区目录末段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { dismissOnboardingModals } from '../support/modals.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
 import { findFixtureSession } from '../support/session-files.js'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
   'D:/software/dsh-forge/data/forge-workspaces/Z-project-dsh-dsh-forge@dadf6b04/logs/binding-derivation/1.9/002-pure-selection'
 mkdirSync(EVIDENCE_DIR, { recursive: true })
 
-/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；worktree 经产品弹窗创建，见流程 A） */
-function makeGitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-1-29-pure-repo-'))
+/** 隔离 git 仓库夹具（真 git CLI——主树检出 main；worktree 经产品弹窗创建，见流程 A）。
+ *  共享 launch 形态：仓库落夹具工作区本体（首启/重播种/crash 重启统一播种同参基准态）。 */
+function makeGitRepo(dir: string): void {
   const git = (args: string[]): void => {
     execFileSync('git', ['-c', 'user.email=t129@test', '-c', 'user.name=t129', ...args], { cwd: dir, stdio: 'pipe' })
   }
@@ -41,10 +43,8 @@ function makeGitRepo(): string {
   writeFileSync(join(dir, 'README.md'), '1.29 pure-selection fixture\n')
   git(['add', '.'])
   git(['commit', '-m', 'init'])
-  return dir
 }
 
-/** renderer 侧 forge RPC（preload 面真身——window.dshForge.invoke） */
 async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise<unknown> {
   return page.evaluate(
     ([ch, payload]) =>
@@ -53,25 +53,11 @@ async function forgeRpc(page: Page, channel: string, payload?: unknown): Promise
   )
 }
 
-/** 注册项目（轮询至就绪——1.17 同配方） */
-async function registerProject(page: Page, wsDir: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      try {
-        const raw = (await forgeRpc(page, 'forge:projects/register', {
-          workspaceDir: wsDir,
-          name: 'orch-repo',
-          forgeDir: join(wsDir, '.forge'),
-          knowledgeDir: join(wsDir, '.knowledge'),
-        })) as { ok?: boolean; data?: { projectId?: string }; projectId?: string } | null
-        const projectId = raw?.data?.projectId ?? raw?.projectId
-        return typeof projectId === 'string'
-      } catch {
-        return false
-      }
-    }, { timeout: 60_000, message: '项目注册未就绪' })
-    .toBe(true)
-}
+// ── 共享 launch fixture（夹具工作区 = git 仓本体；项目注册由 fixture 层首注册承载）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: makeGitRepo,
+  workspaceName: 'orch-repo',
+})
 
 const chip = (page: Page) => page.locator('[data-dswt-hero-trigger]')
 const heroMenu = (page: Page) => page.locator('.dswt-hero-menu')
@@ -167,6 +153,18 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
   return seal?.binding === null || seal?.binding === undefined ? undefined : { ...seal.binding, sealed: seal?.sealed }
 }
 
+/** 共享 launch 形态会话开户判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
+ *  ——本 worker 独立持有）内各 dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
+function sharedFindSession(fixtureSegment: string): { readonly sessionId: string } | undefined {
+  for (const name of readdirSync(tmpdir())) {
+    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
+    const dshHome = join(tmpdir(), name, 'dsh-home')
+    const found = findFixtureSession(dshHome, fixtureSegment)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
 /** 走查截图（非关键路径——失败不阻塞断言链） */
 async function snap(page: Page, name: string): Promise<void> {
   try {
@@ -178,20 +176,15 @@ async function snap(page: Page, name: string): Promise<void> {
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
-test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显式传参）——发送落所选树（官方复用天然命中）', async () => {
+test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显式传参）——发送落所选树（官方复用天然命中）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-1-29-pure-'))
-  const dshHome = join(userData, 'dsh-home')
-  const wsDir = makeGitRepo()
+  const { page, wsDir } = sharedLaunch
+  const wsSegment = wsDir.split(/[\\/]/).pop() ?? ''
   const wtDir = join(wsDir, '.forge', 'worktrees', 'wt-a')
-  const app = await launchHost({ userData })
   const consoleLog: string[] = []
+  page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
+  page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
   try {
-    const { page } = app
-    page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
-    page.on('pageerror', (e) => consoleLog.push(`[pageerror] ${e.message}`))
-    await dismissOnboardingModals(page)
-    await registerProject(page, wsDir)
     await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
     await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
       timeout: 30_000,
@@ -212,7 +205,7 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     let rootSessionId = ''
     await expect
       .poll(async () => {
-        const found = findFixtureSession(dshHome, 'pure-repo')
+        const found = sharedFindSession(wsSegment)
         if (found !== undefined) rootSessionId = found.sessionId
         return rootSessionId
       }, { timeout: 60_000, message: '主树会话应开户（盘侧 cwd 分组）' })
@@ -256,7 +249,7 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     let wtSessionId = ''
     await expect
       .poll(async () => {
-        const found = findFixtureSession(dshHome, 'wt-a')
+        const found = sharedFindSession('wt-a')
         if (found !== undefined) wtSessionId = found.sessionId
         return wtSessionId
       }, { timeout: 60_000, message: 'wt-a 会话应开户（盘侧 cwd 分组 = 所选树）' })
@@ -326,15 +319,12 @@ test('1.29 UI（推导制）：快速切换点选即切换（openWorkspace 显�
     expect(await attachedSessions(page, wsDir, wsDir), '主树零新增（无哨兵改投）').toBe(baseRoot)
     await snap(page, 'first-message-in-selected-tree.png')
   } finally {
-    // 判读留痕：runner stdout（Tee 日志）+ 证据目录双落
+    // 判读留痕：runner stdout（Tee 日志）+ 证据目录双落（app/夹具清理归 fixture 层收尾）
     console.log('[renderer-console]\n' + consoleLog.join('\n'))
     try {
-      writeFileSync(join(EVIDENCE_DIR, 'renderer-console.log'), consoleLog.join('\n'), 'utf8')
+      writeFileSync(join(EVIDENCE_DIR, `renderer-console-${Date.now()}.log`), consoleLog.join('\n'), 'utf8')
     } catch {
-      // 留痕失败不影响清理
+      // 留痕失败不影响收尾
     }
-    await closeApp(app.app)
-    rmSync(userData, { recursive: true, force: true })
-    rmSync(wsDir, { recursive: true, force: true })
   }
 })

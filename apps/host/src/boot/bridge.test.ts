@@ -744,6 +744,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       // 78b9227e spawn 审计行：执行会话事实诞生即入库（桥白名单全集锚）
       'recordSpawn',
       'submitTask',
+      // blocked-verdict-restore-primitive：blocked→pending 出口动词（桥白名单全集锚——锚定服务面而非 RPC 面）
+      'unblockTask',
       // S3（run-tasks-host-command）：启动对账动词（桥白名单全集锚——锚定服务面而非 RPC 面）
       'reconcileInterrupted',
       'transitionTask',
@@ -936,7 +938,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     assertType<never>(undefined as ServiceNamesCoverage)
     expect(PROJECT_SERVICE_METHODS).toHaveLength(5)
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
-    expect(TASKS_SERVICE_METHODS).toHaveLength(15) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn
+    expect(TASKS_SERVICE_METHODS).toHaveLength(16) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn；blocked-verdict-restore-primitive +unblockTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
     expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)

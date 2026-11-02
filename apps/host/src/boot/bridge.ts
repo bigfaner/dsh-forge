@@ -308,6 +308,7 @@ export const TASKS_SERVICE_METHODS = [
   'claimTask',
   'recordSpawn',
   'submitTask',
+  'unblockTask',
   'reconcileInterrupted',
   'transitionTask',
   'updateTask',

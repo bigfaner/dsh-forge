@@ -46,13 +46,9 @@
 //
 // Assertion depth: 26/28 behavioral（93%），其中 deep 10/26（38%）——两阈均过。
 
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { expect, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -62,16 +58,63 @@ import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '
 
 const WS_NAME = 'ws-jmsa'
 
-test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口中文直出 + blank 点选远征 + 幂等点选零漂移', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录；预设选择回归基准：T1 幂等点选收口 = 突击（registry 缺省），
+// T2/T3 期望同基准——跨用例 settings 态不漂移。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
+ *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
+ *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
+async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'tasks'): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf(subtab))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
+}
+
+/** 芯片流工作区选定重试（共享 launch 序列态瞬态窗——hero picker 菜单重挂载致行 detached；
+ *  整段重开菜单重选幂等。瞬态窗对策，非放宽断言：轮内门原样保留）。 */
+async function selectWorkspaceWithRetry(page: Page, name: string): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await selectWorkspaceViaChip(page, name)
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page.keyboard.press('Escape').catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
+}
+
+test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口中文直出 + blank 点选远征 + 幂等点选零漂移', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     await registerProject(page, wsDir, WS_NAME)
-    await selectWorkspaceViaChip(page, WS_NAME)
+    await selectWorkspaceWithRetry(page, WS_NAME)
 
     // ── Step1：预设座位在场 + 折叠标签 = 突击（registry 缺省——bug 2ba146d8 缺省=blitz）──
     expect(await seatPresent(page), '预设座位在场（hero 面——ui-settings 首启预置开启）').toBe(true)
@@ -107,19 +150,13 @@ test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）+ 无溯源提案不切换（沿 registry 当前选择不重绑 + chip 占位）', async () => {
+test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）+ 无溯源提案不切换（沿 registry 当前选择不重绑 + chip 占位）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -135,9 +172,7 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
     })
 
     // ── Step4：经提案绑定入口创建新会话 → 自动对齐突击（blank 期 select）──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'proposals')
     const blitzOpen = page.locator(`[data-dswf-ov-opensession="${blitzProp.slug}"]`).first()
     await expect(blitzOpen, '突击提案行头「打开新会话」在场').toBeVisible({ timeout: 30_000 })
     await blitzOpen.click()
@@ -155,8 +190,7 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
     // mode 缺席 = agentPreset.select 不调用，座位沿 registry 当前选择（Step4 已立 = 突击；
     // registry 缺省 = blitz 的净默认世界由 T1 Step1 承载——bug 2ba146d8）。不切换的可观测 =
     // 座位横跨本动作保持既有选择不变（若误按缺省重绑远征，此处即红）──
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
+    await openOverviewSubtab(page, 'proposals')
     const unmarkedRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 无溯源提案（扫描吸收形态）' }).first()
     await expect(unmarkedRow, '无溯源提案行在场').toBeVisible({ timeout: 30_000 })
     await expect(unmarkedRow.locator('[data-dswf-mode-chip]'), 'mode chip 缺省占位（不伪装成任一模式）').toHaveAttribute('data-dswf-mode-chip', 'unmarked')
@@ -183,19 +217,13 @@ test('@web-e2e @m3 模式选择·T2：提案绑定入口自动对齐（突击）
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组合 vs 内容模式对照 + 下游读溯源字段）', async () => {
+test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组合 vs 内容模式对照 + 下游读溯源字段）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jmsa3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -208,7 +236,7 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
     const task = (await driver.call('forgeTasks', 'addTask', {
       projectId, source: { kind: 'proposal', slug: blitzProp.slug }, title: '错配守卫直挂任务', type: 'doc',
     })) as { taskId: string; slug: string; localId: string }
-    await selectWorkspaceViaChip(page, WS_NAME)
+    await selectWorkspaceWithRetry(page, WS_NAME)
 
     // 会话组合 = 突击（hero 自由——座位标签对照面；registry 缺省 = blitz，bug 2ba146d8——
     // 会话无显式 mode 溯源时缺省已非远征，旧「远征」口径随 cordis.patch.yml:7 翻正）
@@ -216,8 +244,7 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
     expect(seat.includes('突击') || seat.includes('blitz'), `会话组合 = 突击（label=${seat}——registry 缺省 blitz，bug 2ba146d8）`).toBe(true)
 
     // 所打开内容模式 = blitz（提案行 mode chip + 任务容器琥珀点——mode chip 对照面）
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
+    await openOverviewSubtab(page, 'proposals')
     const propRow = page.locator('[data-dswf-ov-parent]', { hasText: 'Jmsa 错配守卫演示提案' }).first()
     await expect(propRow, '提案行在场').toBeVisible({ timeout: 30_000 })
     await expect(propRow.locator('[data-dswf-mode-chip]'), 'mode chip 对照 = 突击（内容模式投影）').toHaveAttribute('data-dswf-mode-chip', 'blitz')
@@ -247,8 +274,6 @@ test('@web-e2e @m3 模式选择·T3：错配守卫可读面零阻断（会话组
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

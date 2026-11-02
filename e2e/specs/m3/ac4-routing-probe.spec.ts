@@ -167,7 +167,7 @@ async function runCase(o: { readonly tag: string; readonly withOverride: boolean
     appProc.stdout?.on('data', (d: Buffer) => procOut.push(String(d)))
     appProc.stderr?.on('data', (d: Buffer) => procOut.push(String(d)))
 
-    const project = await registerProject(page, ws, 'probe-ws')
+    await registerProject(page, ws, 'probe-ws')
     // 播种在场面（产品呈现）：专家面板卡片 chip——config 折叠应答（defaults/entry）生效即显模型名
     const panelRow = page.locator('button[aria-label="专家团"]')
     await expect(panelRow, '左栏「专家团」行在场').toBeVisible({ timeout: 30_000 })

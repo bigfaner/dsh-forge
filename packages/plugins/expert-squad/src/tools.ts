@@ -1,4 +1,4 @@
-// 管理 tool 面（tech-design §7 tool 面 / D1 全局注册）：4 管理 + list 取用，
+// 管理 tool 面（tech-design §7 tool 面 / D1 全局注册）：5 管理 + list 取用，
 // 动词+名词命名。每工具声明 output { schema, render }（官方 dsh-tools register
 // 门强制，annotutor tools.ts 先例）；参数/结果 zod schema 经受支持子集净化——
 // 裸 zod 产物带 $schema/minLength/anyOf/type 数组等子集外关键字会被官方 register
@@ -6,10 +6,11 @@
 // 写路径（recruit/update）经 store/frontmatter 校验（parseExpertFile /
 // validateExpertUpdate）：必填字段、禁裸 {{、name 建档后不可改、撞名 fail-loud。
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import matter from "gray-matter";
 import { z } from "zod";
+import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
 import type { ExpertsRegistry } from "./registry.js";
 import { parseExpertFile, validateExpertUpdate, type ExpertReasoning } from "./store/frontmatter.js";
 
@@ -86,6 +87,13 @@ const recruitParams = z.object({
 // update_expert 同形但无 target——编辑恒写回原层（来源保持），不换层
 const updateParams = recruitParams.omit({ target: true });
 
+// rename_expert（同层原子迁移）：from/to 均走 EXPERT_KEY 正则——新键即新档键，
+// 合法性在参数闸前置校验；撞名/旧键缺席在处理器内 fail-loud。
+const renameParams = z.object({
+  from: EXPERT_KEY.describe("Existing expert key to rename"),
+  to: EXPERT_KEY.describe("New expert key (lowercase english, must not collide with an existing key)"),
+});
+
 const enableParams = z.object({
   name: z.string().min(1).describe("Existing expert key to enable"),
 });
@@ -103,6 +111,11 @@ const recruitResult = z.object({
 });
 
 const updateResult = z.object({
+  name: z.string(),
+  path: z.string(),
+});
+
+const renameResult = z.object({
   name: z.string(),
   path: z.string(),
 });
@@ -129,6 +142,126 @@ const listResult = z.object({
     }),
   ),
 });
+
+// list_tools / list_skills（猎头核销 recruit/update 白名单键名的取数面）：
+// name+description 投影；note = 数据面缺席/异常时的 fail-soft 说明位（缺席不抛错）。
+const listToolsResult = z.object({
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  note: z.string().optional(),
+});
+
+const listSkillsResult = z.object({
+  skills: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  note: z.string().optional(),
+});
+
+/** 工具目录读取函数子面（ToolRuntime.schemas(scope?)——缺 scope 全局视图，携
+ *  preset scope key = 该 preset 装配面视图；bug 6337a936 全模式并集取数面）。 */
+export type ToolsSchemasReader = (
+  scope?: object,
+) => readonly { readonly name: string; readonly description?: string }[] | undefined;
+
+/** 技能目录读取函数子面（ctx.skills.list({cwd, scope?})——AGENTS 1.6 调用点现查不 memoize）。 */
+export interface SkillsListFace {
+  list(opts: { cwd: string; scope?: object }): Promise<readonly { name: string; description?: string }[]>;
+}
+
+/** preset scope 租约子面（官方 acquireScope 返回 `{key: ScopeKey} & AsyncDisposable`
+ *  的窄面——ScopeKey 为 opaque object（@deepseek-ai/dsh-scope），用后 dispose）。 */
+export type PresetScopeLease = Awaited<ReturnType<AgentPresetsFace["acquireScope"]>>;
+
+/** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
+ *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5——官方签名漂移由 tsc
+ *  兜底）；list()/acquireScope() 正门，全模式并集枚举缝）。 */
+export type AgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
+
+/** 目录条目（name+description 投影——并集去重单元）。 */
+interface CatalogEntry {
+  name: string;
+  description: string;
+}
+
+/** 并集去重合并（按 name 去重，description 取先见者——全局视图先入即全局优先）。 */
+function mergeCatalog(merged: Map<string, CatalogEntry>, rows: readonly { name: string; description?: string }[] | undefined): void {
+  for (const row of rows ?? []) {
+    if (!merged.has(row.name)) merged.set(row.name, { name: row.name, description: row.description ?? "" });
+  }
+}
+
+/** agentPresets face 形状校验（缺席/list-acquireScope 非函数 = 不可用，取用点现查）。 */
+function readAgentPresetsFace(face: AgentPresetsFace | undefined): AgentPresetsFace | undefined {
+  return face !== undefined &&
+    typeof face.list === "function" &&
+    typeof face.acquireScope === "function"
+    ? face
+    : undefined;
+}
+
+const PRESETS_ABSENT_NOTE =
+  "preset scope views unavailable (agentPresets absent or malformed) — global view only";
+
+/** 全模式并集取数（bug 6337a936）：全局视图先入，逐 preset acquireScope 租约内取
+ *  scope 视图合并；单 preset 失败不外溢（记 note 部分并集），租约 try/finally 经官方
+ *  asyncDispose 机械释放（bug 66e1bd5d——租约形 `{key} & AsyncDisposable`，无 dispose()），
+ *  单租约释放失败记 note 不外溢。 */
+async function unionAcrossPresets(
+  readGlobal: () => readonly { name: string; description?: string }[] | undefined,
+  readScoped: (scope: object) => readonly { name: string; description?: string }[] | undefined | Promise<readonly { name: string; description?: string }[] | undefined>,
+  agentPresets: AgentPresetsFace | undefined,
+): Promise<{ entries: CatalogEntry[]; note?: string }> {
+  const merged = new Map<string, CatalogEntry>();
+  mergeCatalog(merged, readGlobal());
+  const presets = readAgentPresetsFace(agentPresets);
+  if (presets === undefined) {
+    return { entries: [...merged.values()], note: PRESETS_ABSENT_NOTE };
+  }
+  let ids: string[];
+  let note: string | undefined;
+  try {
+    ids = (await presets.list())
+      .map((preset) => preset.id)
+      .filter((id): id is string => typeof id === "string");
+  } catch {
+    return { entries: [...merged.values()], note: "agentPresets unavailable — global view only" };
+  }
+  const failed: string[] = [];
+  const releaseFailed: string[] = [];
+  for (const id of ids) {
+    let lease: PresetScopeLease | undefined;
+    try {
+      lease = await presets.acquireScope(id);
+      mergeCatalog(merged, await readScoped(lease.key));
+    } catch {
+      failed.push(id);
+    } finally {
+      if (lease !== undefined) {
+        try {
+          await lease[Symbol.asyncDispose]();
+        } catch (error) {
+          // 单租约释放失败不掩盖取数结果——记 note（点名 preset），不外溢
+          releaseFailed.push(`${id} (${error instanceof Error ? error.message : String(error)})`);
+        }
+      }
+    }
+  }
+  if (failed.length > 0) note = `preset scope views failed: ${failed.join(", ")} — partial union`;
+  if (releaseFailed.length > 0) {
+    note = [note, `preset scope lease release failed: ${releaseFailed.join(", ")}`]
+      .filter((part) => part !== undefined)
+      .join("; ");
+  }
+  return { entries: [...merged.values()], note };
+}
 
 // ---------------------------------------------------------------------------
 // zod → 受支持 JSON Schema 子集净化（annotutor tools.ts 先例）
@@ -231,9 +364,12 @@ export function serializeExpertMd(fields: ArchiveFields, personaMd: string): str
 export const EXPERT_TOOLS = [
   "recruit_expert",
   "update_expert",
+  "rename_expert",
   "enable_expert",
   "disable_expert",
   "list_experts",
+  "list_tools",
+  "list_skills",
 ] as const;
 
 export type ExpertToolName = (typeof EXPERT_TOOLS)[number];
@@ -246,6 +382,12 @@ export interface ExpertToolsDeps {
   /** 可写 project 层 experts 目录（recruit target="project" 落盘点；
    *  返回 null = 宿主 cwd 非项目根（打包形态）——project 目标不可用。 */
   readonly projectRoot?: () => string | null;
+  /** 工具目录读取函数（ToolRuntime.schemas() 全局视图；缺席 fail-soft）。 */
+  readonly toolsSchemas?: ToolsSchemasReader;
+  /** 技能目录读取函数（每次 execute 现查返回 skills face——跨插件服务不 memoize）。 */
+  readonly skills?: () => SkillsListFace | undefined;
+  /** 官方 agentPresets 服务取数面（每次 execute 现查——全模式并集枚举缝；缺席降级仅全局视图）。 */
+  readonly agentPresets?: () => AgentPresetsFace | undefined;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -261,7 +403,7 @@ function parseArgs<T extends z.ZodType>(tool: string, schema: T, args: unknown):
   return r.data;
 }
 
-/** 工厂：5 枚管理 tool 定义（不注册——注册走 registerExpertTools）。 */
+/** 工厂：8 枚管理/取数 tool 定义（不注册——注册走 registerExpertTools）。 */
 export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[] {
   const { registry, userRoot } = deps;
 
@@ -340,6 +482,75 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
   };
 
+  const renameTool: ExpertToolDefinition = {
+    name: "rename_expert",
+    description:
+      "Rename an expert key by atomic migration within its layer (project/user layers: the old key file is removed and a new key file is born; plugin layer: shadowing migration — the new key file is written to the user layer while the read-only built-in file is left untouched). The immutable-after-creation rule is NOT relaxed — this is a separate migration path. All fields and the persona body are carried over unchanged except name.",
+    parameters: zToJSONSchema(renameParams, "input"),
+    output: {
+      schema: zToJSONSchema(renameResult, "output"),
+      render: (_args, value) => [
+        text(`expert renamed: ${(value as { name: string }).name} (${(value as { path: string }).path})`),
+      ],
+    },
+    async execute(args) {
+      const p = parseArgs("rename_expert", renameParams, args);
+      // 迁移语义按 origin 分层（与面板 update 来源保持裁决同则）：
+      // - project → projectRoot 落点（缺席报错），user → userRoot：删旧迁新（同层原子迁移）；
+      // - plugin → 真遮蔽迁移：以 plugin 层原档案（registry 定位的 sourcePath，非 userRoot
+      //   拼接）为内容源，新键写 user 层——内置只读文件零触碰、无删除动作，刷新后新键
+      //   遮蔽 plugin 旧键（bug 0a295590）。
+      const entry = registry.list({ includeDisabled: true }).find((e) => e.name === p.from);
+      const projectDirOf = (): string => {
+        const projectDir = deps.projectRoot?.() ?? null;
+        if (projectDir === null) {
+          throw new ExpertToolError(
+            `rename_expert: expert ${p.from} lives in the project layer but the project root is unavailable (host cwd is not a project root) — cannot migrate; consider recreating via recruit_expert`,
+          );
+        }
+        return projectDir;
+      };
+      const rootDir = entry === undefined ? userRoot() : entry.origin === "project" ? projectDirOf() : userRoot();
+      const oldFile = entry?.origin === "plugin" ? entry.sourcePath : join(rootDir, `${p.from}.md`);
+      const newFile = join(rootDir, `${p.to}.md`);
+      if (!existsSync(oldFile)) {
+        throw new ExpertToolError(
+          `rename_expert: expert not found: ${p.from} (${oldFile}) — use list_experts to inspect available keys`,
+        );
+      }
+      if (existsSync(newFile)) {
+        throw new ExpertToolError(
+          `rename_expert: target key already exists: ${p.to} (${newFile}) — pick another key`,
+        );
+      }
+      // 读旧文件原内容 → 仅 name 换新键，其余字段与 personaMd 原样。
+      const oldContent = readExisting(oldFile);
+      const parsed = parseExpertFile(oldFile, oldContent);
+      if (!parsed.ok) throw new ExpertToolError(`rename_expert: ${parsed.reason}`);
+      const rec = parsed.record;
+      const content = serializeExpertMd(
+        {
+          name: p.to,
+          title: rec.title,
+          description: rec.description,
+          tools: rec.tools,
+          skills: rec.skills,
+          model: rec.model,
+          provider: rec.provider,
+          reasoning: rec.reasoning,
+        },
+        rec.personaMd,
+      );
+      // 写新文件前经 parseExpertFile 全量校验门（必填/裸 {{），不过不落盘。
+      const verdict = parseExpertFile(newFile, content);
+      if (!verdict.ok) throw new ExpertToolError(`rename_expert: ${verdict.reason}`);
+      writeFileSync(newFile, content, "utf8");
+      if (entry?.origin !== "plugin") rmSync(oldFile); // plugin 层只读不动（遮蔽迁移无删除）
+      await registry.refresh(); // 所见即所得：list 面新键可见、旧键被遮蔽或消失
+      return renameResult.parse({ name: p.to, path: newFile });
+    },
+  };
+
   const enableTool: ExpertToolDefinition = {
     name: "enable_expert",
     description:
@@ -400,10 +611,80 @@ export function createExpertTools(deps: ExpertToolsDeps): ExpertToolDefinition[]
     },
   };
 
-  return [recruitTool, updateTool, enableTool, disableTool, listTool];
+  const listToolsTool: ExpertToolDefinition = {
+    name: "list_tools",
+    description:
+      "List globally registered tools (name + description) usable as recruit/update tool whitelist keys.",
+    parameters: zToJSONSchema(listParams, "input"),
+    output: {
+      schema: zToJSONSchema(listToolsResult, "output"),
+      render: (_args, value) => {
+        const v = value as { tools: { name: string; description: string }[]; note?: string };
+        const lines = v.tools.map((t) => `- ${t.name}${t.description ? ` — ${t.description}` : ""}`);
+        const head = v.note ? `tools: ${v.note}` : `tools (${v.tools.length}):`;
+        return [text(v.tools.length === 0 ? head : `${head}\n${lines.join("\n")}`)];
+      },
+    },
+    async execute(args) {
+      parseArgs("list_tools", listParams, args);
+      const read = deps.toolsSchemas;
+      if (read === undefined) {
+        return listToolsResult.parse({ tools: [], note: "tools catalog absent" });
+      }
+      // 全模式并集（bug 6337a936）：全局视图 + 逐 preset scope 视图（租约内取数，
+      // 用后 dispose）；agentPresets 缺席/形状不符降级仅全局视图 + note 注明。
+      const global = read();
+      if (global === undefined) {
+        return listToolsResult.parse({ tools: [], note: "tools catalog absent" });
+      }
+      const { entries, note } = await unionAcrossPresets(
+        () => global,
+        (scope) => read(scope),
+        deps.agentPresets?.(),
+      );
+      return listToolsResult.parse({ tools: entries, ...(note !== undefined ? { note } : {}) });
+    },
+  };
+
+  const listSkillsTool: ExpertToolDefinition = {
+    name: "list_skills",
+    description:
+      "List available skills (name + description) usable as recruit/update skill tags. Returns skills:[] with a note when the skills service is absent.",
+    parameters: zToJSONSchema(listParams, "input"),
+    output: {
+      schema: zToJSONSchema(listSkillsResult, "output"),
+      render: (_args, value) => {
+        const v = value as { skills: { name: string; description: string }[]; note?: string };
+        const lines = v.skills.map((s) => `- ${s.name}${s.description ? ` — ${s.description}` : ""}`);
+        const head = v.note ? `skills: ${v.note}` : `skills (${v.skills.length}):`;
+        return [text(v.skills.length === 0 ? head : `${head}\n${lines.join("\n")}`)];
+      },
+    },
+    async execute(args) {
+      parseArgs("list_skills", listParams, args);
+      const face = deps.skills?.(); // 调用点现查（AGENTS 1.6——检测结果不 memoize）
+      if (face === undefined || typeof face.list !== "function") {
+        return listSkillsResult.parse({ skills: [], note: "skills service absent" });
+      }
+      // 全模式并集（bug 6337a936，与 list_tools 同径）：全局层先入 + 逐 preset
+      // scope 层（skills.list 携 cwd+scope，租约内取数用后 dispose）；缺席降级注明。
+      const globalRows = await face.list({ cwd: process.cwd() }).catch(() => undefined);
+      if (globalRows === undefined) {
+        return listSkillsResult.parse({ skills: [], note: "skills service unavailable" });
+      }
+      const { entries, note } = await unionAcrossPresets(
+        () => globalRows,
+        async (scope) => await face.list({ cwd: process.cwd(), scope }),
+        deps.agentPresets?.(),
+      );
+      return listSkillsResult.parse({ skills: entries, ...(note !== undefined ? { note } : {}) });
+    },
+  };
+
+  return [recruitTool, updateTool, renameTool, enableTool, disableTool, listTool, listToolsTool, listSkillsTool];
 }
 
-/** 读既有档案键（update 的旧键锚点——解析失败如实上抛原始原因）。 */
+/** 读既有档案键（update/rename 的旧键锚点——解析失败如实上抛原始原因）。 */
 function readExistingName(file: string): string {
   const content = readExisting(file);
   const parsed = parseExpertFile(file, content);
@@ -416,12 +697,12 @@ function readExisting(file: string): string {
     return readFileSync(file, "utf8");
   } catch (cause) {
     throw new ExpertToolError(
-      `update_expert: expert not readable: ${file} — ${cause instanceof Error ? cause.message : String(cause)}`,
+      `expert archive not readable: ${file} — ${cause instanceof Error ? cause.message : String(cause)}`,
     );
   }
 }
 
-/** 注册 5 枚管理 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
+/** 注册 8 枚管理/取数 tool（官方 register 正门——插件宿主半 apply 内全局调用，D1）。 */
 export function registerExpertTools(registryFace: ToolRegisterFace, deps: ExpertToolsDeps): void {
   for (const tool of createExpertTools(deps)) {
     registryFace.register(tool);

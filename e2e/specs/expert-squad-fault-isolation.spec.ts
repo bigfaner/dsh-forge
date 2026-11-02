@@ -11,14 +11,14 @@
 // 契约层保留不落脚本并如实上报。
 // 拦截纪律（fix-3 判例）：页面上下文 fetch，禁 page.route。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp。
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
+// 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
+// 坏档写径保留在用例内、落 wsDir/.dsh 子树——重播种自然复位回基准（两好档）。
 // @feature expert-squad @web-e2e
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { registerProject } from '../support/rpc.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
@@ -63,22 +63,19 @@ const BAD_ARCHIVES: readonly { key: string; kind: string; content: string }[] = 
   },
 ]
 
-function makeWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-fault-ws-'))
+// ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
+
+function seedWorkspace(dir: string): void {
   const expertsDir = join(dir, '.dsh', 'experts')
   mkdirSync(expertsDir, { recursive: true })
   writeFileSync(join(expertsDir, 'test-reviewer.md'), expertMd('test-reviewer', '夹具评审'))
   writeFileSync(join(expertsDir, 'data-miner.md'), expertMd('data-miner', '夹具挖掘'))
-  return dir
 }
 
-interface PanelSession {
-  readonly page: Page
-  readonly app: ElectronApplication
-  readonly pageErrors: string[]
-  readonly wsDir: string
-  readonly userData: string
-}
+const { test } = createSharedLaunchFixture({
+  seedWorkspace,
+  workspaceName: 'xsq-fault-fixture',
+})
 
 async function installListCapture(page: Page): Promise<void> {
   await page.evaluate(() => {
@@ -122,129 +119,97 @@ async function fetchExpert(page: Page, workspace: string, key: string): Promise<
   }, { ep: '/api/expert-squad/get', payload: { workspace, key } })
 }
 
-async function openPanelWithFixture(): Promise<PanelSession> {
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-fault-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const page = launched.page
-  await registerProject(page, wsDir, 'xsq-fault-fixture')
-  await dismissOnboardingModals(page)
+/** 用例内导航收敛（共享会话每用例执行——捕获器安装 + 面板数据态）。 */
+async function openPanel(page: Page): Promise<void> {
   await installListCapture(page)
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(cardOf('test-reviewer')), '既有专家卡数据态').toBeVisible({ timeout: 30_000 })
-  return { page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-}
-
-async function closeSession(session: PanelSession): Promise<void> {
-  try {
-    await closeApp(session.app)
-  } catch {
-    /* closeApp 尽力而为 */
-  }
-  rmSync(session.userData, { recursive: true, force: true })
-  rmSync(session.wsDir, { recursive: true, force: true })
 }
 
 // ── step-1 success + three-bad-variants：三类坏法逐一零逃逸 ──
 
-test('@feature expert-squad fault step-1：三类坏档逐一写入——零逃逸进索引（列表零坏键）', async () => {
+test('@feature expert-squad fault step-1：三类坏档逐一写入——零逃逸进索引（列表零坏键）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const expertsDir = join(wsDir, '.dsh', 'experts')
-    for (const bad of BAD_ARCHIVES) {
-      writeFileSync(join(expertsDir, `${bad.key}.md`), bad.content)
-    }
-    // 三类坏键均零索引痕迹（扫描期单文件跳过）
-    await expect
-      .poll(
-        async () => {
-          let sum = 0
-          for (const bad of BAD_ARCHIVES) sum += await page.locator(cardOf(bad.key)).count()
-          return sum
-        },
-        { timeout: 30_000, message: '三类坏键零逃逸进面板列表' },
-      )
-      .toBe(0)
-    // 正常专家不受影响（列表照常呈现）
-    for (const key of GOOD_KEYS) {
-      await expect(page.locator(cardOf(key)), `正常卡·${key} 照常`).toBeVisible()
-    }
-  } finally {
-    await closeSession(session)
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const expertsDir = join(wsDir, '.dsh', 'experts')
+  for (const bad of BAD_ARCHIVES) {
+    writeFileSync(join(expertsDir, `${bad.key}.md`), bad.content)
+  }
+  // 三类坏键均零索引痕迹（扫描期单文件跳过）
+  await expect
+    .poll(
+      async () => {
+        let sum = 0
+        for (const bad of BAD_ARCHIVES) sum += await page.locator(cardOf(bad.key)).count()
+        return sum
+      },
+      { timeout: 30_000, message: '三类坏键零逃逸进面板列表' },
+    )
+    .toBe(0)
+  // 正常专家不受影响（列表照常呈现）
+  for (const key of GOOD_KEYS) {
+    await expect(page.locator(cardOf(key)), `正常卡·${key} 照常`).toBeVisible()
   }
 })
 
 // ── step-2 success + dispatch-others：坏档在目录时其余专家可取用 ──
 
-test('@feature expert-squad fault step-2：坏档在目录——其余专家取用照常（单点故障隔离）', async () => {
+test('@feature expert-squad fault step-2：坏档在目录——其余专家取用照常（单点故障隔离）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    writeFileSync(join(wsDir, '.dsh', 'experts', 'bad-nofm.md'), BAD_ARCHIVES[0].content)
-    await expect(page.locator(cardOf('bad-nofm')), '坏档零索引痕迹').toHaveCount(0, { timeout: 30_000 })
-    // 其余专家取用 API 照常（坏文件不进入任何取用结果）
-    for (const key of GOOD_KEYS) {
-      const got = await fetchExpert(page, wsParam, key)
-      expect(got.ok, `取用照常·${key}（${got.text}）`).toBe(true)
-    }
-    // 坏键取用 = 标准 not-found 语义（不半途崩溃、不残缺档案）
-    const bad = await fetchExpert(page, wsParam, 'bad-nofm')
-    expect(bad.ok, '坏档键取用不可用').toBe(false)
-    expect(bad.text, '标准 not-found 语义含键名').toContain('expert not found: bad-nofm')
-  } finally {
-    await closeSession(session)
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  writeFileSync(join(wsDir, '.dsh', 'experts', 'bad-nofm.md'), BAD_ARCHIVES[0].content)
+  await expect(page.locator(cardOf('bad-nofm')), '坏档零索引痕迹').toHaveCount(0, { timeout: 30_000 })
+  // 其余专家取用 API 照常（坏文件不进入任何取用结果）
+  for (const key of GOOD_KEYS) {
+    const got = await fetchExpert(page, wsParam, key)
+    expect(got.ok, `取用照常·${key}（${got.text}）`).toBe(true)
   }
+  // 坏键取用 = 标准 not-found 语义（不半途崩溃、不残缺档案）
+  const bad = await fetchExpert(page, wsParam, 'bad-nofm')
+  expect(bad.ok, '坏档键取用不可用').toBe(false)
+  expect(bad.text, '标准 not-found 语义含键名').toContain('expert not found: bad-nofm')
 })
 
 // ── step-3 success：修正坏档案 → 校验通过转正常（热刷新收编）──
 
-test('@feature expert-squad fault step-3：坏档修正保存 → 转正常可取用（修正即恢复，无残留坏态）', async () => {
+test('@feature expert-squad fault step-3：坏档修正保存 → 转正常可取用（修正即恢复，无残留坏态）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    const expertsDir = join(wsDir, '.dsh', 'experts')
-    // 前置：裸 {{ 坏档在目录
-    writeFileSync(join(expertsDir, 'bad-mustache.md'), BAD_ARCHIVES[2].content)
-    await expect(page.locator(cardOf('bad-mustache')), '坏档前置零索引').toHaveCount(0, { timeout: 30_000 })
-    // 修正为合法内容 → 热刷新收编
-    writeFileSync(join(expertsDir, 'bad-mustache.md'), expertMd('bad-mustache', '修正后夹具'))
-    await expect(page.locator(cardOf('bad-mustache')), '修正后转正常（热刷新收编）').toBeVisible({ timeout: 30_000 })
-    const got = await fetchExpert(page, wsParam, 'bad-mustache')
-    expect(got.ok, `修正后立即可取用（${got.text}）`).toBe(true)
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  const expertsDir = join(wsDir, '.dsh', 'experts')
+  // 前置：裸 {{ 坏档在目录
+  writeFileSync(join(expertsDir, 'bad-mustache.md'), BAD_ARCHIVES[2].content)
+  await expect(page.locator(cardOf('bad-mustache')), '坏档前置零索引').toHaveCount(0, { timeout: 30_000 })
+  // 修正为合法内容 → 热刷新收编
+  writeFileSync(join(expertsDir, 'bad-mustache.md'), expertMd('bad-mustache', '修正后夹具'))
+  await expect(page.locator(cardOf('bad-mustache')), '修正后转正常（热刷新收编）').toBeVisible({ timeout: 30_000 })
+  const got = await fetchExpert(page, wsParam, 'bad-mustache')
+  expect(got.ok, `修正后立即可取用（${got.text}）`).toBe(true)
 })
 
 // ── Journey 冒烟（恰一条——坏档隔离 → 修正恢复全依序） ──
 
-test('@feature expert-squad fault 冒烟：写坏档 → 其余照常 → 修正恢复 → 零异常', async () => {
+test('@feature expert-squad fault 冒烟：写坏档 → 其余照常 → 修正恢复 → 零异常', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page, wsDir } = session
-    const wsParam = await captureWorkspaceParam(page)
-    const expertsDir = join(wsDir, '.dsh', 'experts')
-    // 步骤1-2：坏档零逃逸、其余照常
-    writeFileSync(join(expertsDir, 'bad-yaml.md'), BAD_ARCHIVES[1].content)
-    await expect(page.locator(cardOf('bad-yaml')), '坏档零索引').toHaveCount(0, { timeout: 30_000 })
-    await expect(page.locator(cardOf('test-reviewer')), '其余照常').toBeVisible()
-    // 步骤3：修正恢复
-    writeFileSync(join(expertsDir, 'bad-yaml.md'), expertMd('bad-yaml', '修正后挖掘'))
-    await expect(page.locator(cardOf('bad-yaml')), '修正后收编').toBeVisible({ timeout: 30_000 })
-    expect((await fetchExpert(page, wsParam, 'bad-yaml')).ok, '修正后可取用').toBe(true)
-    // 不变量：renderer 零未捕获异常
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, wsDir, pageErrors } = sharedLaunch
+  await openPanel(page)
+  const wsParam = await captureWorkspaceParam(page)
+  const expertsDir = join(wsDir, '.dsh', 'experts')
+  // 步骤1-2：坏档零逃逸、其余照常
+  writeFileSync(join(expertsDir, 'bad-yaml.md'), BAD_ARCHIVES[1].content)
+  await expect(page.locator(cardOf('bad-yaml')), '坏档零索引').toHaveCount(0, { timeout: 30_000 })
+  await expect(page.locator(cardOf('test-reviewer')), '其余照常').toBeVisible()
+  // 步骤3：修正恢复
+  writeFileSync(join(expertsDir, 'bad-yaml.md'), expertMd('bad-yaml', '修正后挖掘'))
+  await expect(page.locator(cardOf('bad-yaml')), '修正后收编').toBeVisible({ timeout: 30_000 })
+  expect((await fetchExpert(page, wsParam, 'bad-yaml')).ok, '修正后可取用').toBe(true)
+  // 不变量：renderer 零未捕获异常
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })

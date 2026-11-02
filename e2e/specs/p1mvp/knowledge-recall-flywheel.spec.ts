@@ -1,4 +1,8 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：dogfood
+// 真实凭据经 seedDshHome 写自管 userData/dsh-home + 去模型化留痕 skip 门
+// （DSH_FORGE_DOGFOOD_RECORD）——与 m3/dogfood-sc-m3.spec.ts 同裁定族（凭据播种缝在
+// launchHost userData 选项，共享 fixture userData 自管不外露、无播种缝）。
 // gen-test-scripts 产物 —— Journey: knowledge-recall-flywheel（Golden Path，T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/knowledge-recall-flywheel/contracts/step-{1..8}-*.md
 // （eval-contract 1114/1150 通过）。

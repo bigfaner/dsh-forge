@@ -52,6 +52,16 @@ export interface BugListQuerySource {
 /** RPC 取数缝（注入函数递达——不直连 client.ts） */
 export type BugListFn = (query: BugListQuerySource) => Promise<readonly BugCardSource[]>
 
+/** 慢取数诊断载荷（bug 2a284e9d——候选取数超阈值落诊断面，时长/查询在场） */
+export interface BugSlowRpcDiag {
+  readonly event: 'bug-candidates-rpc'
+  readonly message: string
+  readonly durationMs: number
+}
+
+/** 慢取数阈值缺省（超此值落诊断——正常取数零噪音） */
+export const BUG_SLOW_RPC_MS = 1000
+
 /** 状态面包屑口径（all = 全部三态） */
 export type BugStatusScope = 'all' | BugStatusMirror
 
@@ -134,6 +144,11 @@ export interface BugReferenceSource {
    * 只补缺席、不覆盖既有快照（pick/按钮径的卡优先）；仅种全卡（bugDesc 真值）。
    */
   seedSnapshots(cards: readonly BugCardSource[]): void
+  /**
+   * 项目台账种底（bug 2a284e9d——本地优先筛选）：warm 全量预取种项目级台账缓存，
+   * candidates 据此本地过滤即时出候选（RPC 降级为后台刷新）；后种覆盖同项目整表。
+   */
+  seedLedger(projectId: string, cards: readonly BugCardSource[]): void
   /** 引用 codec（clipboardText + serialize——官方 ReferenceCodec 同签名） */
   readonly codec: {
     clipboardText(ref: string): string
@@ -252,6 +267,24 @@ export function bugCandidates(
   return [...open, ...rest].map((bug) => bugCandidateFrom(bug, options.nowMs))
 }
 
+/** 本地搜索文本面（服务端 search 六文本字段同口径——漏字段即漏候选） */
+const BUG_SEARCH_FIELDS: readonly (keyof BugCardSource)[] = ['summary', 'bugDesc', 'triggerDesc', 'expected', 'actual', 'errorType']
+
+/**
+ * 本地关键词过滤（bug 2a284e9d——缓存面筛选）：六文本字段大小写不敏感子串，
+ * 与服务端 listBugs search 判定同面（结果差仅时延窗口内的数据新鲜度）。
+ */
+export function searchBugs(bugs: readonly BugCardSource[], query: string): readonly BugCardSource[] {
+  if (query === '') return bugs
+  const q = query.toLowerCase()
+  return bugs.filter((bug) =>
+    BUG_SEARCH_FIELDS.some((field) => {
+      const value = bug[field]
+      return typeof value === 'string' && value !== '' && value.toLowerCase().includes(q)
+    }),
+  )
+}
+
 /** 快照缓存（pick 时落 Map——serialize/clipboardText 快照优先） */
 export type BugSnapshotCache = Map<string, BugCardSource>
 
@@ -271,6 +304,10 @@ export interface BugSourceDeps {
   readonly now?: () => number
   /** 菜单组名（注册唯一性由官方 duplicate throw 守卫；缺省 'bug'） */
   readonly name?: string
+  /** 慢取数阈值 ms（缺省 BUG_SLOW_RPC_MS；超阈取数落 onDiag） */
+  readonly slowRpcMs?: number
+  /** 慢取数诊断缝（缺省 console.warn——client bundle 诊断豁免面，serialize 回退先例同径） */
+  readonly onDiag?: (payload: BugSlowRpcDiag) => void
 }
 
 /**
@@ -281,15 +318,63 @@ export interface BugSourceDeps {
 export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSource {
   const now = deps.now ?? (() => Date.now())
   const name = deps.name ?? 'bug'
+  const slowMs = deps.slowRpcMs ?? BUG_SLOW_RPC_MS
+  const onDiag = deps.onDiag ?? ((payload: BugSlowRpcDiag): void => {
+    try {
+      console.warn(`[dswf-bug] ${payload.event}`, { message: payload.message, durationMs: payload.durationMs })
+    } catch {
+      // 诊断面零风险
+    }
+  })
   const snapshots: BugSnapshotCache = new Map()
   let scope: BugStatusScope = 'all'
   /** 最近一次 candidates 取数全卡（pick 时据此落全量快照） */
   let lastFetched: readonly BugCardSource[] = []
   /** 取数代次（bug 27ab222b 竞态守卫——旧查询慢返回不得覆盖新结果/pick 快照底） */
   let fetchSeq = 0
+  /** 项目台账缓存（bug 2a284e9d——本地优先筛选底；warm/candidates 刷新填充） */
+  const ledger = new Map<string, readonly BugCardSource[]>()
+  /** 每项目在途刷新（按键风暴合流——一次全量取数服务整串按键） */
+  const refreshInflight = new Map<string, Promise<void>>()
 
   function scopeQuery(): { status?: BugStatusMirror[] } {
     return scope === 'all' ? {} : { status: [scope] }
+  }
+
+  /** 慢取数诊断（超阈值落 onDiag——正常取数零噪音） */
+  function diagSlow(startMs: number, query: BugListQuerySource, projectId: string): void {
+    const durationMs = now() - startMs
+    if (durationMs < slowMs) return
+    onDiag({
+      event: 'bug-candidates-rpc',
+      message: `slow candidates rpc: project=${projectId} search=${query.search ?? ''} status=${query.status?.join('|') ?? 'all'}`,
+      durationMs,
+    })
+  }
+
+  /**
+   * 后台全量刷新（bug 2a284e9d）：缓存面即时出候选后异步拉全量台账（无 search/status——
+   * 结果可整表替换缓存）；按键风暴按项目合流。台账整表更新恒安全（项目级完备数据）；
+   * lastFetched（pick 快照底）仍守竞态——仅当前代且官方 signal 未弃置时更新。
+   */
+  function refreshLedger(projectId: string, seq: number, signal: AbortSignal): Promise<void> {
+    const inflight = refreshInflight.get(projectId)
+    if (inflight !== undefined) return inflight
+    const run = (async (): Promise<void> => {
+      const startMs = now()
+      try {
+        const bugs = await deps.listBugs({ projectId })
+        ledger.set(projectId, bugs)
+        if (seq === fetchSeq && !signal.aborted) lastFetched = bugs
+        diagSlow(startMs, { projectId }, projectId)
+      } catch {
+        // fail-soft——缓存保旧值，菜单不受累
+      } finally {
+        refreshInflight.delete(projectId)
+      }
+    })()
+    refreshInflight.set(projectId, run)
+    return run
   }
 
   return {
@@ -301,11 +386,22 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
       const projectId = deps.projectId(session.sessionId)
       if (projectId === undefined) return []
       const seq = ++fetchSeq
+      const cached = ledger.get(projectId)
+      if (cached !== undefined) {
+        // 本地优先（bug 2a284e9d）：缓存底即时过滤返回，RPC 降级后台刷新——主进程拥塞时筛选零等待
+        lastFetched = cached
+        void refreshLedger(projectId, seq, req.signal)
+        return bugCandidates(searchBugs(cached, req.query), { statusScope: scope, nowMs: now() })
+      }
+      // 零缓存回退（原语义）：现查等待 + 竞态守卫；带查询口径取数不整表入缓存（防漏行），
+      // 触发一次后台全量刷新把缓存填上——此后按键全部走本地优先
       let bugs: readonly BugCardSource[]
+      const startMs = now()
       try {
         const query: BugListQuerySource = { projectId, ...scopeQuery() }
         if (req.query !== '') query.search = req.query
         bugs = await deps.listBugs(query)
+        diagSlow(startMs, query, projectId)
       } catch {
         return []
       }
@@ -313,6 +409,7 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
       // 也不污染 lastFetched 快照底（bug 27ab222b：旧慢返回覆盖新结果致 pick 落最小卡）
       if (seq !== fetchSeq || req.signal.aborted) return []
       lastFetched = bugs
+      void refreshLedger(projectId, seq, req.signal)
       return bugCandidates(bugs, { statusScope: 'all', nowMs: now() })
     },
     header(_session, _req) {
@@ -365,6 +462,10 @@ export function createBugReferenceSource(deps: BugSourceDeps): BugReferenceSourc
       for (const card of cards) {
         if (card.bugDesc && !snapshots.has(card.bugId)) snapshots.set(card.bugId, card)
       }
+    },
+    seedLedger(projectId, cards) {
+      // bug 2a284e9d：项目台账整表种底（warm 径）——candidates 首键即本地优先。
+      ledger.set(projectId, cards)
     },
     codec: {
       clipboardText(ref) {

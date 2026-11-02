@@ -192,6 +192,21 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('data-dswf-progress-status="blocked"') // 最新态（后写覆盖）
     expect(html).toContain('第 2/3 次 — worker crashed mid-run') // 重试计数（note）在行内
   })
+  it('triage 处置行加「处置」徽记胶囊（triage-progress-row——语义归徽记不进文本流，任务行无徽记）', () => {
+    const triaged: ForgeEventGroupData = {
+      ...DATA,
+      progress: [
+        { seq: 4, sourceSlug: 'feat-x', verb: 'claim', status: 'running', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', at: progAt(2) },
+        { seq: 5, sourceSlug: 'feat-x', verb: 'triage', status: 'completed', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', attempt: 1, note: '自动处理 · 修复任务已派发', at: progAt(4) },
+      ],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(triaged)} />)
+    expect(html).toContain('>处置</span>') // 处置徽记胶囊（中性——「循环」徽记同构）
+    expect(html).toContain('#2.3') // 任务归属前缀保留
+    // 任务行（verb=claim）无处置徽记：徽记只落处置轨
+    const taskOnly: ForgeEventGroupData = { ...DATA, progress: [triaged.progress![0]!] }
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(taskOnly)} />)).not.toContain('>处置</span>')
+  })
   it('bug 35571877：条目行与任务行同构——文本在前、徽标右置、时间入右侧簇（归一类）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
     const textIdx = html.indexOf('dswf-event-entries-msg-text')
@@ -207,6 +222,40 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).not.toContain('领取 · 2.3 折叠条目组') // 消息条目 title/detail 去重（§2.5）
     expect(html).not.toContain('dswf-event-entries-progress')
     expect(html).toContain('3 条 · 今日 14:02–14:02')
+  })
+  it('循环重开防误导：循环级 running 在场时，上一轮「循环结束」消息条目与组头终态尾饰不呈现', () => {
+    const restarted: ForgeEventGroupData = {
+      ...DATA,
+      entries: [
+        { ...entryBase, id: 'm0', seq: 6, badge: '循环结束', title: 'feat-x', summary: 'feat-x — 循环结束 · 完成 3', text: '[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）' },
+        DATA.entries[0]!,
+      ],
+      progress: [
+        { seq: 7, sourceSlug: 'feat-x', verb: 'startup', status: 'running', at: progAt(1), note: '新一轮循环' },
+      ],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(restarted)} />)
+    expect(html).toContain('循环进行中') // 循环行最新态（重开事实）
+    expect(html).not.toContain('循环结束') // 陈旧终态行 + 组头尾饰均不呈现
+    expect(html).not.toContain('已按你的指令停止')
+    expect(html).toContain('[forge·调度] loop-event-delivery') // 组头回落重开轮启动消息任务源行（终态行已滤除）
+    // 循环终态组（无 running 循环行）= 上一轮终态消息照常呈现
+    const finished: ForgeEventGroupData = { ...restarted, progress: [{ ...restarted.progress![0]!, status: 'completed' }] }
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(finished)} />)).toContain('循环结束')
+  })
+  it('进度卡默认展开：progress 在场（非最新组）= 挂载即展开（打开会话即见任务轨）；纯消息组前组维持收起', () => {
+    const running: ForgeEventGroupData = {
+      ...DATA,
+      entries: [{ ...DATA.entries[0]! }],
+      progress: [{ seq: 7, sourceSlug: 'feat-x', verb: 'startup', status: 'running', at: progAt(1) }],
+    }
+    // 进度组（非最新）→ 默认展开，运行胶囊不出现（展开态循环行已示）
+    const progressOpen = renderToStaticMarkup(<ForgeEventEntries node={nodeOf({ ...running, isLatest: false })} />)
+    expect(progressOpen).toContain('aria-expanded="true"')
+    expect(progressOpen).not.toContain('dswf-event-entries-running-flag')
+    // 纯消息组（非最新）→ 默认收起
+    const msgCollapsed = renderToStaticMarkup(<ForgeEventEntries node={nodeOf({ ...DATA, isLatest: false })} />)
+    expect(msgCollapsed).toContain('aria-expanded="false"')
   })
 })
 

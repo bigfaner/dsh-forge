@@ -1,4 +1,10 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：AC1 前置
+// 经 openStateDb(userData) + deleteProjectRowById 对共享 state.db 做写径篡改（删 gamma
+// 应用侧行构造假未绑定账本行）——共享 fixture userData 自管不外露（SharedLaunchHandle 无
+// userData 缝），且共享形态下 userData 库为整 spec 共享面，DB 预置/篡改无法按用例等价
+// 隔离（重播种只清 wsDir/.dsh，账本行跨用例残留）。同批次先例：m2/task-session-linkage、
+// m3/dogfood-sc-m3（拿不准即保留，从严裁定）。
 // fix-24 验收面：新会话输入框上方工作区控件 → 项目选择/切换控件（① 影子弹层列项目 +
 // ② 注册时 workspace 标题对齐项目名——chip 文案免费显示项目名）。
 //

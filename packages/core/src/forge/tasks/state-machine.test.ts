@@ -50,7 +50,7 @@ describe('AC1 transitionTargets · agent 面（§3.1 矩阵逐格）', () => {
     expect({ ...AGENT_TRANSITION_MATRIX }).toEqual({
       pending: ['in_progress'], // claimTask
       in_progress: ['completed', 'blocked', 'interrupted'], // 仅经 submitTask（gate ✓ / result=blocked）+ S3 reconcileInterrupted
-      blocked: ['in_progress', 'pending'], // claimTask 重派 / auto-restore（submit 钩子）
+      blocked: ['completed', 'in_progress', 'pending'], // blocked verdict restore / claimTask 重派 / auto-restore（submit 钩子）
       suspended: ['pending'], // task-pause-primitive 路线 A：resume 序批量恢复（仅循环恢复时点调用）
       interrupted: ['in_progress'], // S3 claimTask adopt（循环定向恢复领取）
       completed: [],
@@ -113,11 +113,16 @@ describe('AC2 SC7 锚 · assertTransitionAllowed → ERR_INVALID_TRANSITION 形�
     expect(() => assertTransitionAllowed('suspended', 'suspended', 'human')).toThrowError(/ERR_INVALID_TRANSITION|suspended/)
   })
 
-  it('agent 面矩阵非法格逐格拒绝（in_progress→pending / blocked→completed[TC-063] / 终态全部出边 / blocked→skipped / interrupted 越权出边 / pending→interrupted）', () => {
+  it('blocked verdict restore：blocked→completed（agent 面裁决改判结算）由拒绝格改判合法[TC-063]', () => {
+    expect(() => assertTransitionAllowed('blocked', 'completed', 'agent')).not.toThrow()
+  })
+
+  it('agent 面矩阵非法格逐格拒绝（in_progress→pending / 终态全部出边 / blocked→blocked/skipped/rejected / interrupted 越权出边 / pending→interrupted）', () => {
     const illegal: ReadonlyArray<readonly [TaskStatus, TaskStatus]> = [
       ['in_progress', 'pending'],
-      ['blocked', 'completed'],
+      ['blocked', 'blocked'],
       ['blocked', 'skipped'],
+      ['blocked', 'rejected'],
       ['pending', 'blocked'],
       ['pending', 'pending'],
       ['pending', 'interrupted'], // S3：pending 无需真化——claim 直达 in_progress

@@ -42,19 +42,27 @@
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
 
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS, PROJECTS_M2_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import type { ClaimTaskResult, SubmitTaskResult, TaskCard, TaskDetail } from '../../../packages/contracts/src/dto/forge.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
-import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（spec 级单次冷启 + 用例间重播种）
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { forgeInvoke, registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
+import { bridgeDispatch } from '../../support/launch.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { OV_PANEL, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { openOverviewDock } from '../../support/navigation.js'
+
+// ── 共享 launch fixture（各用例独立 feature slug 隔离账本面；.forge 任务账本跨用例存续
+//    ——重播种只清 .dsh；原全表计数断言按 slug/会话作用域收敛，语义等价）──
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => { mkdirSync(dir, { recursive: true }) },
+  workspaceName: 'tdp-dispatch',
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
 
 /** 派发/执行会话 id（审计双源相异可判——S8：混存两形态，断言用等值非前缀判型） */
 const DISP_SESSION = 'e2e-tdp-dispatch-s1'
@@ -77,16 +85,15 @@ async function setupWorld(page: Page, wsDir: string, wsName: string, feature: st
   return { projectId, dir }
 }
 
-test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算→概览即时（Step1-6 success 全链）', async () => {
+test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算→概览即时（Step1-6 success 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp')
     const FEATURE = 'tdp-feat'
     const { projectId, dir } = await setupWorld(page, wsDir, '派发链冒烟', FEATURE)
+    // 共享 launch 适配（用例内显式收口）：fixture 首注册根项目 → 概览默认绑定偏移，芯片流显式选定本项目
+    await selectWorkspaceViaChip(page, '派发链冒烟')
     const driver = createBridgeDriver(app)
     const eventsBefore = (await driver.events()).length
 
@@ -165,9 +172,13 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     expect(eventsAfter.at(-1)?.payload.projectId, '事件载荷携带 projectId').toBe(projectId)
 
     // ── Step 6（概览即时）：dock 开概览 → 任务子 tab → 行呈新状态（completed）──
+    // 共享 launch 序列态收口（批次一同款）：上一用例可能遗留概览 dock/其它项目视图——桥导航回会话面板还原前置
+    await bridgeDispatch(page, 'show-session')
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
+    await expect(tasksSubtab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场（写入后浏览即见）').toBeVisible({ timeout: 30_000 })
     await expect(row, '任务行主行中文状态 tag = 已完成').toContainText(ZH_DONE)
@@ -177,21 +188,13 @@ test('@web-e2e @m2 派发链·冒烟：意图发起→领取→简报→结算�
     await expect(page.locator(OV_PANEL).first(), '概览面板持续在场（读路径活跃无阻塞）').toBeVisible()
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写入零事件', async () => {
+test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写入零事件', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2b-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp2b')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2b-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2b')
     const { projectId, dir } = await setupWorld(page, wsDir, '无就绪演示', 'tdp2b')
     const driver = createBridgeDriver(app)
     const eventsBefore = (await driver.events()).length
@@ -208,29 +211,21 @@ test('@web-e2e @m2 派发链·Step2b 无就绪任务：空出口信号 + 零写�
     // 零写入（纯读出口）：task_records 零行 + 零事件发射
     const db = openForgeDbAt(dir)
     try {
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records`).get()?.n, '零审计行（纯读出口零写入）').toBe(0)
-      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_session_links`).get()?.n, '零挂接行').toBe(0)
+      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_records WHERE task_id IN (SELECT id FROM tasks WHERE slug = ?)`).get('tdp2b')?.n, '零审计行（纯读出口零写入——本 feature 作用域）').toBe(0)
+      expect(db.prepare<unknown[], { n: number }>(`SELECT COUNT(*) AS n FROM task_session_links WHERE task_id IN (SELECT id FROM tasks WHERE slug = ?)`).get('tdp2b')?.n, '零挂接行').toBe(0)
     } finally {
       db.close()
     }
     expect((await driver.events()).length, '空出口不发射事件').toBe(eventsBefore)
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足清单 + 零残留', async () => {
+test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足清单 + 零残留', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2c-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp2c')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2c-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2c')
     const FEATURE = 'tdp2c'
     const { projectId, dir } = await setupWorld(page, wsDir, '守卫拒绝演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -266,21 +261,13 @@ test('@web-e2e @m2 派发链·Step2c 前置未终态：守卫拒绝 + 未满足�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派发防线）', async () => {
+test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派发防线）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2d-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp2d')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-2d-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp2d')
     const FEATURE = 'tdp2d'
     const { projectId, dir } = await setupWorld(page, wsDir, '盲选防线演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -314,8 +301,8 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
     try {
       // 零变更：该任务不进入重入路径（当前会话零挂接行）
       expect(db2.prepare<unknown[], { n: number }>(
-        `SELECT COUNT(*) AS n FROM task_session_links WHERE session_id = ?`,
-      ).get(DISP_SESSION)?.n, '当前会话零挂接（零变更）').toBe(0)
+        `SELECT COUNT(*) AS n FROM task_session_links WHERE session_id = ? AND task_id IN (SELECT id FROM tasks WHERE slug = ?)`,
+      ).get(DISP_SESSION, FEATURE)?.n, '当前会话零挂接（零变更——本 feature 作用域）').toBe(0)
       const status = db2.prepare<unknown[], { task_status: string }>(`SELECT task_status FROM tasks WHERE id = ?`).get(foreignTaskId)?.task_status
       expect(status, '他会话任务保持 in_progress（不双派发）').toBe('in_progress')
     } finally {
@@ -323,21 +310,13 @@ test('@web-e2e @m2 派发链·Step2d 盲选不领他会话 in_progress（双派�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被破坏', async () => {
+test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被破坏', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-3b-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp3b')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-3b-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp3b')
     const FEATURE = 'tdp3b'
     const { projectId, dir } = await setupWorld(page, wsDir, 'from 不匹配演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -379,23 +358,16 @@ test('@web-e2e @m2 派发链·Step3b from 不匹配：结算拒绝 + 库不被�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入审计 + 概览即时见', async () => {
+test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入审计 + 概览即时见', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-5b-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp5b')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-5b-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp5b')
     const FEATURE = 'tdp5b'
     const { projectId, dir } = await setupWorld(page, wsDir, '受阻结算演示', FEATURE)
+    await selectWorkspaceViaChip(page, '受阻结算演示')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
       projectId, source: { kind: 'feature', slug: FEATURE }, title: '受阻结算任务', type: 'doc',
@@ -422,8 +394,13 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     expect(submit.restored, '无恢复（restored 空）').toEqual([])
 
     // 概览即时见 blocked（UI 面 + 读面单发）
+    // 共享 launch 序列态收口（批次一同款）：上一用例可能遗留概览 dock/其它项目视图——桥导航回会话面板还原前置
+    await bridgeDispatch(page, 'show-session')
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
+    await expect(tasksSubtab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     const row = page.locator(ttItemOf(added.taskId)).first()
     await expect(row, '概览任务行在场').toBeVisible({ timeout: 30_000 })
     await expect(row, '行状态 tag = 已阻塞').toContainText(ZH_BLOCKED)
@@ -431,21 +408,13 @@ test('@web-e2e @m2 派发链·Step5b 受阻结算：blocked 落账 + reason 入�
     expect(cards.find((c) => c.taskId === added.taskId)?.taskStatus, '读面单发即见 blocked').toBe('blocked')
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝（先于转移校验）', async () => {
+test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝（先于转移校验）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-5cd-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp5cd')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-5cd-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp5cd')
     const FEATURE = 'tdp5cd'
     const { projectId, dir } = await setupWorld(page, wsDir, '输入面校验演示', FEATURE)
     const driver = createBridgeDriver(app)
@@ -479,23 +448,18 @@ test('@web-e2e @m2 派发链·Step5c/5d reason/summary 缺席：输入面拒绝�
     }
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })
 
-test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期写入，单发重取即见新值', async () => {
+test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期写入，单发重取即见新值', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-6b-'))
-  const wsDir = join(fixtureRoot, 'ws-tdp6b')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-tdp-6b-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
-  try {
+
+  const { app, page, pageErrors, wsDir: wsRoot } = sharedLaunch
+  const wsDir = join(wsRoot, 'ws-tdp6b')
     const FEATURE = 'tdp6b'
     const { projectId } = await setupWorld(page, wsDir, '并发浏览演示', FEATURE)
+    await selectWorkspaceViaChip(page, '并发浏览演示')
+    // 芯片流菜单残留收口（防遮罩拦截概览 subtab 点击——用例内显式收口）
+    await page.keyboard.press('Escape')
     const driver = createBridgeDriver(app)
     const added = (await driver.call('forgeTasks', 'addTask', {
       projectId, source: { kind: 'feature', slug: FEATURE }, title: '并发浏览任务', type: 'doc',
@@ -503,8 +467,11 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
 
     // 前置：概览页签打开且读路径活跃（用户正在浏览）
     await openOverviewDock(page)
-    await page.locator(ovSubtabOf('tasks')).click()
-    await expect(page.locator(ovSubtabOf('tasks'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    // 共享 launch 序列态收口：accumulated 项目事件链下概览面板间歇重挂（subtab detach 重试竞速）
+    // ——tasks subtab 已选中即免点击（断言语义不变：selected = true）
+    const tasksSubtab = page.locator(ovSubtabOf('tasks'))
+    await expect(tasksSubtab).toBeVisible({ timeout: 30_000 })
+    if ((await tasksSubtab.getAttribute('aria-selected')) !== 'true') await tasksSubtab.click()
     await expect(page.locator(ttItemOf(added.taskId)).first(), '浏览态：pending 行在场').toBeVisible({ timeout: 30_000 })
     await expect(page.locator(ttItemOf(added.taskId)).first()).toContainText('待处理')
 
@@ -524,9 +491,4 @@ test('@web-e2e @m2 派发链·Step6b 并发浏览无锁竞争：页签活跃期�
     await expect(page.locator(ttItemOf(added.taskId)).first(), '行状态收敛为新值').toContainText(ZH_DONE, { timeout: 30_000 })
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
 })

@@ -11,14 +11,10 @@
 //      chip 可点开模式更改对话框；
 //   ⑤ agent tool 面无模式改写动词 = 契约断言（G1 pin-10 五在场/四缺席——本 spec 头注
 //      交叉引用，运行期 tool 目录面归 5.3 dogfood）。
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -26,13 +22,17 @@ import { ovSubtabOf } from '../../support/anchors.js'
 
 const WS_NAME = 'ws-sc6'
 
-test('@web-e2e @m3 SC6·五态流转：chips 过滤 + UI 双面同门 + 成链原子三行 + 审计伴随 + 模式正门守卫', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（单用例 spec——五态全表行数计数由本用例自建世界承载）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+test('@web-e2e @m3 SC6·五态流转：chips 过滤 + UI 双面同门 + 成链原子三行 + 审计伴随 + 模式正门守卫', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc6-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc6-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -126,8 +126,6 @@ test('@web-e2e @m3 SC6·五态流转：chips 过滤 + UI 双面同门 + 成链�
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

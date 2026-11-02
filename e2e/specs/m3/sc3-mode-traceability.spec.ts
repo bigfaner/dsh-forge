@@ -8,14 +8,10 @@
 //      mode 恒 'expedition' 快照）+ 突击提案直挂任务快照 = blitz（整数 ID 语义面）。
 // 载体：写动词经测试钩子直调（回放主径——Hard Rule 禁真实模型）；读面/UI 面 = RPC 单发
 // + 概览提案子 tab。库级断言 = openForgeDbAt（产品面 RPC deriveTaskStoreDir 单源目录）。
-import { mkdtempSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { PROPOSALS_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -23,13 +19,17 @@ import { ovSubtabOf } from '../../support/anchors.js'
 
 const WS_NAME = 'ws-sc3'
 
-test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照不回溯/feature 恒远征', async () => {
+// e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（账本 slug 隔离 sc3-*——全表查询均按 slug 收敛作用域）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照不回溯/feature 恒远征', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc3-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-sc3-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -123,8 +123,6 @@ test('@web-e2e @m3 SC3·mode 溯源解耦：chip↔库一致/缺省占位/快照
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

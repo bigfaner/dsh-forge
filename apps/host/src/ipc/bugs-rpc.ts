@@ -10,9 +10,10 @@ import { rpcEnvelope } from './rpc-envelope.js'
 /** 注入服务面 = RPC 三读法。recordBug/resolveBug 不入面——agent tool 专属写动词。 */
 export type BugsChannelService = Pick<ForgeBugsService, 'listBugs' | 'commitFiles' | 'fileDiff'>
 
-/** 通道注册（负载映射 = contracts BugsChannelRequests/Responses，键键对应） */
+/** 通道注册（负载映射 = contracts BugsChannelRequests/Responses，键键对应；
+ *  通道名随 rpcEnvelope 递达（bug 2a284e9d——慢 RPC 诊断消息可判通道） */
 export function registerBugsChannels(ipc: ForgeIpc, service: BugsChannelService): void {
-  ipc.register(BUGS_CHANNELS.list, rpcEnvelope((q: ListBugsQuery) => service.listBugs(q)))
-  ipc.register(BUGS_CHANNELS.commitFiles, rpcEnvelope((q: BugCommitFilesQuery) => service.commitFiles(q)))
-  ipc.register(BUGS_CHANNELS.fileDiff, rpcEnvelope((q: BugFileDiffQuery) => service.fileDiff(q)))
+  ipc.register(BUGS_CHANNELS.list, rpcEnvelope((q: ListBugsQuery) => service.listBugs(q), BUGS_CHANNELS.list))
+  ipc.register(BUGS_CHANNELS.commitFiles, rpcEnvelope((q: BugCommitFilesQuery) => service.commitFiles(q), BUGS_CHANNELS.commitFiles))
+  ipc.register(BUGS_CHANNELS.fileDiff, rpcEnvelope((q: BugFileDiffQuery) => service.fileDiff(q), BUGS_CHANNELS.fileDiff))
 }

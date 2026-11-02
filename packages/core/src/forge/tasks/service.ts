@@ -36,6 +36,8 @@ import type {
   TaskStatsQuery,
   TransitionTaskInput,
   UpdateTaskInput,
+  UnblockTaskInput,
+  UnblockTaskResult,
   ValidateFeatureTasksInput,
   ValidateReport,
 } from '@dsh-forge/contracts'
@@ -53,6 +55,7 @@ import { sessionLinks } from './session-links.js'
 import { recordSpawn } from './spawn.js'
 import { submitTask } from './submit.js'
 import { transitionTask } from './transition.js'
+import { unblockTask } from './unblock.js'
 import { updateTask } from './update.js'
 import { validateFeatureTasks } from './validate.js'
 
@@ -94,6 +97,9 @@ export function createTasksService(deps: TasksServiceDeps): ForgeTasksService {
     },
     async submitTask(input: SubmitTaskInput): Promise<SubmitTaskResult> {
       return submitTask(deps, input)
+    },
+    async unblockTask(input: UnblockTaskInput): Promise<UnblockTaskResult> {
+      return unblockTask(deps, input)
     },
     async recordSpawn(input: RecordSpawnInput): Promise<void> {
       return recordSpawn(deps, input)

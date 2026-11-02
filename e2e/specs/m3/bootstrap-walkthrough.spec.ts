@@ -45,20 +45,52 @@
 //
 // Assertion depth: 34/37 behavioral（92%），其中 deep 14/34（41%）——两阈均过。
 
-import { mkdtempSync, readdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { ovDocRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 
 const WS_NAME = 'ws-jbw'
+
+// e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
+// 夹具工作区 = 空白目录（manifest 扫描根 = sharedLaunch.wsDir——共享形态下 fixtureRoot 与
+// wsDir 合一，扫描语义等价）；任务账本 slug 隔离（jbw-m35 / jbw-gate 各自作用域）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: () => undefined,
+  workspaceName: WS_NAME,
+  launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
+})
+
+/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
+ *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
+ *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
+async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'features' | 'tasks' | 'bugs'): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf(subtab))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
+}
 
 /** 递归找 manifest.md（走查树零 manifest 纪律——库记账唯一通道的文件系统对账） */
 function findManifestMd(root: string): string[] {
@@ -74,13 +106,9 @@ function findManifestMd(root: string): string[] {
   return hits
 }
 
-test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合 + 记录 100% 入自身库 + 全景一致 + 零 manifest）', async () => {
+test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合 + 记录 100% 入自身库 + 全景一致 + 零 manifest）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbw-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbw-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -101,9 +129,7 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
 
     // ── Step1：评审 accepted（走查启动 = 立项时序耦合）→ registerFeature 成链三件 ──
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'under-review' })
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'proposals')
     const row = page.locator('[data-dswf-ov-parent]', { hasText: 'M3.5（知识沉淀）走查演示' }).first()
     await expect(row).toBeVisible({ timeout: 30_000 })
     await row.locator('[data-dswf-ov-more]').click()
@@ -190,7 +216,7 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
     }
 
     // ── Step2b：零 manifest.md（文件系统对账——库记账是唯一记账通道）──
-    expect(findManifestMd(fixtureRoot), '走查树零 manifest.md（断言红形态的正向承载）').toEqual([])
+    expect(findManifestMd(wsDir), '走查树零 manifest.md（断言红形态的正向承载）').toEqual([])
 
     // ── Step4：全景一致（提案/文档/任务/记录跨面相互印证）──
     const propToggle = row.locator('[data-dswf-ov-parent-toggle]')
@@ -210,19 +236,13 @@ test('@web-e2e @m3 自举走查·冒烟：M3.5 同构走查（成链时序耦合
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
-test('@web-e2e @m3 自举走查·Step1b：空因拒绝留场——走查不启动（无成链 + 库不变）', async () => {
+test('@web-e2e @m3 自举走查·Step1b：空因拒绝留场——走查不启动（无成链 + 库不变）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbw2-'))
-  const wsDir = join(fixtureRoot, WS_NAME)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m3-jbw2-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } })
-  const { app, page, pageErrors } = launched
+  const { app, page, pageErrors, wsDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -233,9 +253,7 @@ test('@web-e2e @m3 自举走查·Step1b：空因拒绝留场——走查不启�
     })) as { proposalId: string }
     await driver.call('forgeProposals', 'transitionProposal', { projectId, proposalId: proposal.proposalId, toStatus: 'under-review' })
 
-    await openOverviewDock(page)
-    await page.locator(ovSubtabOf('proposals')).click()
-    await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await openOverviewSubtab(page, 'proposals')
     const row = page.locator('[data-dswf-ov-parent]', { hasText: 'Jbw 空因门演示' }).first()
     await expect(row).toBeVisible({ timeout: 30_000 })
     await row.locator('[data-dswf-ov-more]').click()
@@ -270,8 +288,6 @@ test('@web-e2e @m3 自举走查·Step1b：空因拒绝留场——走查不启�
 
     expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
   } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

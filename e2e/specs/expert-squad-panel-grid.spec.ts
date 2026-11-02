@@ -1,7 +1,7 @@
 // expert-squad fix-1 旅程 e2e：专家卡片网格主视图（ui-design F1）真机取证——
 // journey = .forge/docs/features/expert-squad/testing/panel-card-grid/journey.md
 // contracts = 同目录 contracts/step-1..5（每 Outcome 一测试 + 一条 happy-path 冒烟）。
-// 打开动线：launchHost 隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）
+// 打开动线：隔离 profile → 夹具工作区（.dsh/experts/ 两份合法档案）
 // RPC 注册 → 左栏 panellist 行「专家团」→ main keyed 'expert-squad' 面板。
 // data 锚（panel/expert-panel.tsx 事实表）：面板 [data-dswf-expert-panel]、卡 .dswf-xcard
 // [data-expert-key][data-effective]、聚组容器 .dswf-xgroup[data-expert-key]（1.60 裁决：
@@ -21,14 +21,17 @@
 // 此处直连为 e2e 演练径（routes.ts EXPERT_SQUAD_ENDPOINTS 演练定位注记同源）。
 // Hard Rules：零产品源码改动（断言失败 → 归因上报）；夹具 = 仓外 tmp；断言对齐
 // ui-design.md F1 与 tech-design §10.4 真机结算门，不编造断言。
+// e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
+// 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
+// 适配点：list 注入用例先经 workbench 桥导航回官方会话面板还原「面板未开」前置（共享
+// 会话 UI 残留收口），注入/还原对称（try/finally）；step-4 启停写径用例断言后 enable 复位
+// （会话内归零——disabled 残留会污染下游过滤用例）。
 // @feature expert-squad @web-e2e
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeApp, launchHost } from '../support/launch.js'
-import { registerProject } from '../support/rpc.js'
-import { dismissOnboardingModals } from '../support/modals.js'
-import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { bridgeDispatch } from '../support/launch.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { expect, type Page } from '@playwright/test'
 
 // ── 面板锚（expert-panel.tsx data 锚——本 spec 字面量单源） ──
 const PANEL_ROOT = '[data-dswf-expert-panel]'
@@ -69,19 +72,23 @@ function expertMd(name: string, title: string, skills: string[]): string {
   ].join('\n')
 }
 
-/** 夹具工作区（两份 project 层档案：test-reviewer / data-miner） */
-function makeWorkspace(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-panel-ws-'))
+// ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
+
+function seedWorkspace(dir: string): void {
   const expertsDir = join(dir, '.dsh', 'experts')
   mkdirSync(expertsDir, { recursive: true })
   writeFileSync(join(expertsDir, 'test-reviewer.md'), expertMd('test-reviewer', '夹具评审', ['review', 'tsc']))
   writeFileSync(join(expertsDir, 'data-miner.md'), expertMd('data-miner', '夹具挖掘', ['sql', 'mining']))
-  return dir
 }
+
+const { test } = createSharedLaunchFixture({
+  seedWorkspace,
+  workspaceName: 'xsq-panel-fixture',
+})
 
 /** 面板真实 list 请求捕获：dsh-forge:// scheme 下 fetch 不进 performance resource
  *  entry（run1 实证 entry 恒缺）——改为页面上下文内包装 fetch 记录请求 URL 到缓冲。
- *  面板激活前安装（openPanelWithFixture），与 scheme 无关。 */
+ *  面板激活前安装（openPanel），与 scheme 无关。 */
 async function installListCapture(page: Page): Promise<void> {
   await page.evaluate(() => {
     const w = window as typeof window & { __xsqListUrls?: string[]; __xsqCaptureInstalled?: boolean }
@@ -152,114 +159,85 @@ async function restoreListStub(page: Page): Promise<void> {
   })
 }
 
-interface PanelSession {
-  readonly page: Page
-  readonly app: ElectronApplication
-  readonly pageErrors: string[]
-  readonly wsDir: string
-  readonly userData: string
+/** 共享会话「面板未开」前置还原：桥导航回官方会话面板（主视图切换卸载专家面板）。 */
+async function navigateAway(page: Page): Promise<void> {
+  await bridgeDispatch(page, 'show-session')
+  await expect(page.locator(PANEL_ROOT), '专家面板已卸载（回到官方会话视图）').toHaveCount(0, { timeout: 30_000 })
 }
 
-/** 启动 → 注册夹具工作区 → 激活面板（数据态收敛）。每例自持世界，cleanup finally 承担。 */
-async function openPanelWithFixture(): Promise<PanelSession> {
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-panel-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const page = launched.page
-  await registerProject(page, wsDir, 'xsq-panel-fixture')
-  await dismissOnboardingModals(page)
+/** 用例内导航收敛（共享会话每用例执行——捕获器安装 + 面板数据态）。 */
+async function openPanel(page: Page): Promise<void> {
   await installListCapture(page) // 面板激活前安装 list 请求捕获（scheme 无关）
   const row = page.locator(PANEL_ROW)
   await expect(row, '左栏「专家团」行在场（panellist 注册缝）').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(CARD_ANY).first(), '卡片网格数据态（骨架收敛）').toBeVisible({ timeout: 30_000 })
-  return { page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
-}
-
-/** 例终收口：closeApp + tmp 夹具清理（尽力而为） */
-async function closeSession(session: PanelSession): Promise<void> {
-  try {
-    await closeApp(session.app)
-  } catch {
-    /* closeApp 尽力而为——进程残留由 Job Object 整树回收兜底 */
-  }
-  rmSync(session.userData, { recursive: true, force: true })
-  rmSync(session.wsDir, { recursive: true, force: true })
 }
 
 // ── step-1-activate-panel ──
 
-test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数据网格 + 页脚计数', async () => {
+test('@feature expert-squad step-1 success：激活面板 → 头部三段 + 数据网格 + 页脚计数', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    // 头部结构（F1，2026-10-25 重排 + 1.68 裁决④ label + 筛选下拉换代）：标题 + 搜索 + 「状态」label + 下拉 + 「来源」label + 下拉 左置；
-    // 右侧动作钮（寻访 dswf-tip / 「配置」跳转 dswf-cfg-jump-btn dswf-tip）追加其后
-    await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
-    await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
-    const headerOrder = await page.locator('.dswf-panel-header > *').evaluateAll((nodes) =>
-      nodes.map((node) => node.className),
-    )
-    expect(headerOrder.slice(0, 6).join(' '), '头部左段次序：标题 → 搜索 → 状态label → select → 来源label → select').toBe(
-      'dswf-panel-title dswf-search dswf-filter-label dswf-select dswf-filter-label dswf-select',
-    )
-    const summonBtn = page.locator('.dswf-summon-btn')
-    if ((await summonBtn.count()) > 0) {
-      await expect(summonBtn, '寻访钮在场且携带悬停说明锚').toHaveClass(/dswf-summon-btn dswf-tip/)
-    }
-    const cfgBtn = page.locator('.dswf-cfg-jump-btn')
-    await expect(cfgBtn, '「配置」跳转钮在场（D2）').toBeVisible()
-    await expect(cfgBtn, '配置钮 aria 语义').toHaveAttribute('aria-label', '打开插件配置')
-    await expect(cfgBtn, '配置钮悬停说明').toHaveAttribute('data-tip', '默认 Agent 选项（本插件配置）')
-    await expect(cfgBtn, '配置钮携带 dswf-tip').toHaveClass(/dswf-cfg-jump-btn dswf-tip/)
-    // 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（文本 + htmlFor 绑定）
-    const headerLabels = await page.locator('.dswf-panel-header .dswf-filter-label').evaluateAll((nodes) =>
-      nodes.map((node) => ({ text: node.textContent, htmlFor: (node as HTMLLabelElement).htmlFor })),
-    )
-    expect(headerLabels, '筛选 label 文本与绑定').toEqual([
-      { text: '状态', htmlFor: 'dswf-status-select' },
-      { text: '来源', htmlFor: 'dswf-origin-select' },
-    ])
-    const select = page.locator(statusSelect)
-    await expect(select, '状态筛选下拉在场').toBeVisible()
-    await expect(select.locator('.dswf-select-box'), 'box aria 绑定「状态筛选」').toHaveAttribute('aria-label', '状态筛选')
-    await expect(select.locator('.dswf-select-value'), '默认态·全部').toHaveAttribute('data-select-value', 'all')
-    await select.locator('.dswf-select-box').click()
-    const optionLabels = await select.locator('[data-select-option]').allInnerTexts()
-    expect(optionLabels, '三态选项语义不变').toEqual(['全部', '启用', '禁用'])
-    await select.locator('[data-select-option="all"]').click()
-    // 召唤钮（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话，面板内零对话面）
-    // 断言归 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证
-    // 数据态：夹具卡呈现 + 页脚计数形态
-    await expect(page.locator(cardOf('test-reviewer')), '夹具卡·test-reviewer').toBeVisible()
-    await expect(page.locator(cardOf('data-miner')), '夹具卡·data-miner').toBeVisible()
-    await expect(page.locator(FOOTER), '页脚计数形态「N 位专家 · 显示 M」').toContainText('位专家 · 显示')
-    // list 请求形态：includeDisabled=true（全量视图含禁用）——捕获缓冲读取
-    //（dsh-forge:// scheme 下 fetch 不进 performance resource entry，run1 实证）
-    const listUrl = await page.evaluate(() => {
-      const w = window as typeof window & { __xsqListUrls?: string[] }
-      return [...(w.__xsqListUrls ?? [])].reverse().find((url) => url.includes('workspace=')) ?? ''
-    })
-    expect(listUrl, 'list 请求带 includeDisabled=true').toContain('includeDisabled=true')
-  } finally {
-    await closeSession(session)
+  const { page } = sharedLaunch
+  await openPanel(page)
+  // 头部结构（F1，2026-10-25 重排 + 1.68 裁决④ label + 筛选下拉换代）：标题 + 搜索 + 「状态」label + 下拉 + 「来源」label + 下拉 左置；
+  // 右侧动作钮（寻访 dswf-tip / 「配置」跳转 dswf-cfg-jump-btn dswf-tip）追加其后
+  await expect(page.locator('.dswf-panel-title'), '面板标题「专家团」').toHaveText('专家团')
+  await expect(page.locator(SEARCH), '搜索框在场').toBeVisible()
+  const headerOrder = await page.locator('.dswf-panel-header > *').evaluateAll((nodes) =>
+    nodes.map((node) => node.className),
+  )
+  expect(headerOrder.slice(0, 6).join(' '), '头部左段次序：标题 → 搜索 → 状态label → select → 来源label → select').toBe(
+    'dswf-panel-title dswf-search dswf-filter-label dswf-select dswf-filter-label dswf-select',
+  )
+  const summonBtn = page.locator('.dswf-summon-btn')
+  if ((await summonBtn.count()) > 0) {
+    await expect(summonBtn, '寻访钮在场且携带悬停说明锚').toHaveClass(/dswf-summon-btn dswf-tip/)
   }
+  const cfgBtn = page.locator('.dswf-cfg-jump-btn')
+  await expect(cfgBtn, '「配置」跳转钮在场（D2）').toBeVisible()
+  await expect(cfgBtn, '配置钮 aria 语义').toHaveAttribute('aria-label', '打开插件配置')
+  await expect(cfgBtn, '配置钮悬停说明').toHaveAttribute('data-tip', '默认 Agent 选项（本插件配置）')
+  await expect(cfgBtn, '配置钮携带 dswf-tip').toHaveClass(/dswf-cfg-jump-btn dswf-tip/)
+  // 1.68 裁决④：筛选 select 左侧 label「状态」「来源」（文本 + htmlFor 绑定）
+  const headerLabels = await page.locator('.dswf-panel-header .dswf-filter-label').evaluateAll((nodes) =>
+    nodes.map((node) => ({ text: node.textContent, htmlFor: (node as HTMLLabelElement).htmlFor })),
+  )
+  expect(headerLabels, '筛选 label 文本与绑定').toEqual([
+    { text: '状态', htmlFor: 'dswf-status-select' },
+    { text: '来源', htmlFor: 'dswf-origin-select' },
+  ])
+  const select = page.locator(statusSelect)
+  await expect(select, '状态筛选下拉在场').toBeVisible()
+  await expect(select.locator('.dswf-select-box'), 'box aria 绑定「状态筛选」').toHaveAttribute('aria-label', '状态筛选')
+  await expect(select.locator('.dswf-select-value'), '默认态·全部').toHaveAttribute('data-select-value', 'all')
+  await select.locator('.dswf-select-box').click()
+  const optionLabels = await select.locator('[data-select-option]').allInnerTexts()
+  expect(optionLabels, '三态选项语义不变').toEqual(['全部', '启用', '禁用'])
+  await select.locator('[data-select-option="all"]').click()
+  // 召唤钮（fix-9 返工：[召唤] = 经官方缝打开/切换 HR 预设官方会话，面板内零对话面）
+  // 断言归 1.31 gen-scripts 重新生成、1.32 run-tests 真机取证
+  // 数据态：夹具卡呈现 + 页脚计数形态
+  await expect(page.locator(cardOf('test-reviewer')), '夹具卡·test-reviewer').toBeVisible()
+  await expect(page.locator(cardOf('data-miner')), '夹具卡·data-miner').toBeVisible()
+  await expect(page.locator(FOOTER), '页脚计数形态「N 位专家 · 显示 M」').toContainText('位专家 · 显示')
+  // list 请求形态：includeDisabled=true（全量视图含禁用）——捕获缓冲读取
+  //（dsh-forge:// scheme 下 fetch 不进 performance resource entry，run1 实证）
+  const listUrl = await page.evaluate(() => {
+    const w = window as typeof window & { __xsqListUrls?: string[] }
+    return [...(w.__xsqListUrls ?? [])].reverse().find((url) => url.includes('workspace=')) ?? ''
+  })
+  expect(listUrl, 'list 请求带 includeDisabled=true').toContain('includeDisabled=true')
 })
 
-test('@feature expert-squad step-1 loading-first：取数未决 → 骨架卡（零空态零错误）', async () => {
+test('@feature expert-squad step-1 loading-first：取数未决 → 骨架卡（零空态零错误）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-panel-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const session: PanelSession = { page: launched.page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
+  const { page } = sharedLaunch
+  await navigateAway(page) // 「面板未开」前置还原（共享会话 UI 残留收口）
+  // 取数未决注入：list 永久挂起（页面上下文内 fetch 包装——page.route 对
+  // dsh-forge:// scheme 不生效，fix-3 判例；1.46 装置修正同径）——激活后即骨架期
   try {
-    const { page } = session
-    await registerProject(page, wsDir, 'xsq-panel-fixture')
-    await dismissOnboardingModals(page)
-    // 取数未决注入：list 永久挂起（页面上下文内 fetch 包装——page.route 对
-    // dsh-forge:// scheme 不生效，fix-3 判例；1.46 装置修正同径）——激活后即骨架期
     await injectListStub(page, 'hang')
     await page.locator(PANEL_ROW).click()
     await expect(page.locator(PANEL_ROOT), '面板挂载').toBeVisible({ timeout: 30_000 })
@@ -268,51 +246,42 @@ test('@feature expert-squad step-1 loading-first：取数未决 → 骨架卡（
     await expect(page.locator(ERRORBAR), '中间态禁落错误分支').toHaveCount(0)
     await expect(page.locator(FOOTER), '页脚扫描文案').toContainText('扫描专家目录')
   } finally {
-    await closeSession(session)
+    await restoreListStub(page)
   }
 })
 
 // ── step-2-grid-render-fields-footer ──
 
-test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/标识chip/岗位/摘要/双chips/页脚时间）', async () => {
+test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/标识chip/岗位/摘要/双chips/页脚时间）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    const card = page.locator(cardOf('test-reviewer'))
-    // 字段集逐位（ui-design F1 数据绑定）
-    await expect(card.locator('.dot.on'), '启用状态灯 on').toBeVisible()
-    await expect(card.locator('.xc-name'), '名称 ← name').toHaveText('test-reviewer')
-    // 路由 chip（xc-title-row 右侧二态标识——fixture 未配置路由 = 继承父Agent 弱化 chip）
-    const routeChip = card.locator('.xc-title-row .chip[data-xc-route]')
-    await expect(routeChip, '路由 chip·未配置 = 继承父Agent').toHaveText('继承父Agent')
-    await expect(routeChip, '路由 chip·kind 锚 inherit').toHaveAttribute('data-xc-route', 'inherit')
-    await expect(card.locator('.xc-tags .chip.tool').first(), '工具 chip ← tools').toHaveText('read')
-    await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
-    await expect(card.locator('.xc-creed'), '人设摘要（Markdown 剥离纯文本）').toContainText('夹具人设正文')
-    expect((await card.locator('.xc-creed').innerText()).includes('##'), '摘要零 Markdown 记号外露').toBe(false)
-    await expect(card.locator('.xc-seg').nth(0), '段标·工具').toHaveText('工具')
-    await expect(card.locator('.xc-seg').nth(1), '段标·技能（1.68 裁决⑤）').toHaveText('技能')
-    await expect(card.locator('.xc-tags .chip', { hasText: 'review' }).first(), '技能 chip').toBeVisible()
-    await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip').toBeVisible()
-    await expect(card.locator('.xc-foot'), '页脚更新时间（YYYY-MM-DD 形态）').toContainText(/更新于 \d{4}-\d{2}-\d{2}/)
-    await expect(page.locator(FOOTER), '面板页脚计数形态').toContainText('位专家 · 显示')
-  } finally {
-    await closeSession(session)
-  }
+  const { page } = sharedLaunch
+  await openPanel(page)
+  const card = page.locator(cardOf('test-reviewer'))
+  // 字段集逐位（ui-design F1 数据绑定）
+  await expect(card.locator('.dot.on'), '启用状态灯 on').toBeVisible()
+  await expect(card.locator('.xc-name'), '名称 ← name').toHaveText('test-reviewer')
+  // 路由 chip（xc-title-row 右侧二态标识——fixture 未配置路由 = 继承父Agent 弱化 chip）
+  const routeChip = card.locator('.xc-title-row .chip[data-xc-route]')
+  await expect(routeChip, '路由 chip·未配置 = 继承父Agent').toHaveText('继承父Agent')
+  await expect(routeChip, '路由 chip·kind 锚 inherit').toHaveAttribute('data-xc-route', 'inherit')
+  await expect(card.locator('.xc-tags .chip.tool').first(), '工具 chip ← tools').toHaveText('read')
+  await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
+  await expect(card.locator('.xc-creed'), '人设摘要（Markdown 剥离纯文本）').toContainText('夹具人设正文')
+  expect((await card.locator('.xc-creed').innerText()).includes('##'), '摘要零 Markdown 记号外露').toBe(false)
+  await expect(card.locator('.xc-seg').nth(0), '段标·工具').toHaveText('工具')
+  await expect(card.locator('.xc-seg').nth(1), '段标·技能（1.68 裁决⑤）').toHaveText('技能')
+  await expect(card.locator('.xc-tags .chip', { hasText: 'review' }).first(), '技能 chip').toBeVisible()
+  await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip').toBeVisible()
+  await expect(card.locator('.xc-foot'), '页脚更新时间（YYYY-MM-DD 形态）').toContainText(/更新于 \d{4}-\d{2}-\d{2}/)
+  await expect(page.locator(FOOTER), '面板页脚计数形态').toContainText('位专家 · 显示')
 })
 
-test('@feature expert-squad step-2 error-state：list 故障 → ErrorBar+重试；恢复后网格回归', async () => {
+test('@feature expert-squad step-2 error-state：list 故障 → ErrorBar+重试；恢复后网格回归', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-panel-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const session: PanelSession = { page: launched.page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
+  const { page } = sharedLaunch
+  await navigateAway(page) // 「面板未开」前置还原
+  // 取数故障注入：list 拒绝（页面上下文内 fetch 包装——scheme 兼容）
   try {
-    const { page } = session
-    await registerProject(page, wsDir, 'xsq-panel-fixture')
-    await dismissOnboardingModals(page)
-    // 取数故障注入：list 拒绝（页面上下文内 fetch 包装——scheme 兼容）
     await injectListStub(page, 'error')
     await page.locator(PANEL_ROW).click()
     const errorbar = page.locator(ERRORBAR)
@@ -327,21 +296,16 @@ test('@feature expert-squad step-2 error-state：list 故障 → ErrorBar+重试
     await expect(page.locator(cardOf('test-reviewer')), '重试后网格恢复').toBeVisible({ timeout: 30_000 })
     await expect(errorbar, '错误条退场').toHaveCount(0)
   } finally {
-    await closeSession(session)
+    await restoreListStub(page)
   }
 })
 
-test('@feature expert-squad step-2 empty-state：list 空 → 建档引导空态 + 页脚 0 位专家', async () => {
+test('@feature expert-squad step-2 empty-state：list 空 → 建档引导空态 + 页脚 0 位专家', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-xsq-panel-ud-'))
-  const wsDir = makeWorkspace()
-  const launched = await launchHost({ userData })
-  const session: PanelSession = { page: launched.page, app: launched.app, pageErrors: launched.pageErrors, wsDir, userData }
+  const { page } = sharedLaunch
+  await navigateAway(page) // 「面板未开」前置还原
+  // 零专家注入：list 返回空数组（真机零目录形态的等价通道——页面上下文内 fetch 包装）
   try {
-    const { page } = session
-    await registerProject(page, wsDir, 'xsq-panel-fixture')
-    await dismissOnboardingModals(page)
-    // 零专家注入：list 返回空数组（真机零目录形态的等价通道——页面上下文内 fetch 包装）
     await injectListStub(page, 'empty')
     await page.locator(PANEL_ROW).click()
     const empty = page.locator(EMPTY)
@@ -349,60 +313,52 @@ test('@feature expert-squad step-2 empty-state：list 空 → 建档引导空态
     await expect(empty, '零专家引导文案').toContainText('还没有专家')
     await expect(empty, 'HR 招募引导').toContainText('招募一个专家')
     await expect(page.locator(FOOTER), '页脚 0 位专家').toContainText('0 位专家')
-    await restoreListStub(page)
   } finally {
-    await closeSession(session)
+    await restoreListStub(page)
   }
 })
 
 // ── step-3-search-filter ──
 
-test('@feature expert-squad step-3 success：搜索即时过滤（技能命中恰一）+ 页脚同步 + 清词恢复', async () => {
+test('@feature expert-squad step-3 success：搜索即时过滤（技能命中恰一）+ 页脚同步 + 清词恢复', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    const before = await page.locator(CARD_ANY).count()
-    expect(before, '过滤前多卡在场（夹具 ≥2 + 内置）').toBeGreaterThanOrEqual(2)
-    await page.locator(SEARCH).fill('tsc') // 恰命中 test-reviewer（skills 含 tsc）
-    await expect(page.locator(cardOf('test-reviewer')), '命中卡保留').toBeVisible({ timeout: 10_000 })
-    await expect(page.locator(cardOf('data-miner')), '非命中卡移除').toHaveCount(0)
-    expect(await page.locator(CARD_ANY).count(), '过滤后恰一卡').toBe(1)
-    await expect(page.locator(FOOTER), '页脚「显示」数同步').toContainText('显示 1')
-    // 投影语义：清词恢复全量
-    await page.locator(SEARCH).fill('')
-    await expect(page.locator(CARD_ANY), '清词恢复全量').toHaveCount(before, { timeout: 10_000 })
-  } finally {
-    await closeSession(session)
-  }
+  const { page } = sharedLaunch
+  await openPanel(page)
+  const before = await page.locator(CARD_ANY).count()
+  expect(before, '过滤前多卡在场（夹具 ≥2 + 内置）').toBeGreaterThanOrEqual(2)
+  await page.locator(SEARCH).fill('tsc') // 恰命中 test-reviewer（skills 含 tsc）
+  await expect(page.locator(cardOf('test-reviewer')), '命中卡保留').toBeVisible({ timeout: 10_000 })
+  await expect(page.locator(cardOf('data-miner')), '非命中卡移除').toHaveCount(0)
+  expect(await page.locator(CARD_ANY).count(), '过滤后恰一卡').toBe(1)
+  await expect(page.locator(FOOTER), '页脚「显示」数同步').toContainText('显示 1')
+  // 投影语义：清词恢复全量
+  await page.locator(SEARCH).fill('')
+  await expect(page.locator(CARD_ANY), '清词恢复全量').toHaveCount(before, { timeout: 10_000 })
 })
 
-test('@feature expert-squad step-3 no-match：无命中 → 「无匹配专家」空态；清词恢复', async () => {
+test('@feature expert-squad step-3 no-match：无命中 → 「无匹配专家」空态；清词恢复', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    await page.locator(SEARCH).fill('zzz-no-such-expert')
-    const empty = page.locator(EMPTY)
-    await expect(empty, '无匹配空态呈现').toBeVisible({ timeout: 10_000 })
-    await expect(empty, '无匹配文案（非零专家引导）').toContainText('无匹配专家')
-    await expect(page.locator(FOOTER), '页脚显示 0').toContainText('显示 0')
-    await page.locator(SEARCH).fill('')
-    await expect(page.locator(cardOf('test-reviewer')), '清词恢复').toBeVisible({ timeout: 10_000 })
-  } finally {
-    await closeSession(session)
-  }
+  const { page } = sharedLaunch
+  await openPanel(page)
+  await page.locator(SEARCH).fill('zzz-no-such-expert')
+  const empty = page.locator(EMPTY)
+  await expect(empty, '无匹配空态呈现').toBeVisible({ timeout: 10_000 })
+  await expect(empty, '无匹配文案（非零专家引导）').toContainText('无匹配专家')
+  await expect(page.locator(FOOTER), '页脚显示 0').toContainText('显示 0')
+  await page.locator(SEARCH).fill('')
+  await expect(page.locator(cardOf('test-reviewer')), '清词恢复').toBeVisible({ timeout: 10_000 })
 })
 
 // ── step-4-status-filter ──
 
-test('@feature expert-squad step-4：禁用专家 → 降透明形态；启用/禁用过滤各自恰其集', async () => {
+test('@feature expert-squad step-4：禁用专家 → 降透明形态；启用/禁用过滤各自恰其集', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
+  const { page } = sharedLaunch
+  await openPanel(page)
+  // 启停通道（面板同款 fetch 桥）：workspace 参数取自面板真实 list 请求（D4 同参）
+  const wsParam = await captureWorkspaceParam(page)
+  const disabledCard = page.locator(cardOf('data-miner'))
   try {
-    const { page } = session
-    // 启停通道（面板同款 fetch 桥）：workspace 参数取自面板真实 list 请求（D4 同参）
-    const wsParam = await captureWorkspaceParam(page)
     const disable = await page.evaluate(async ({ ep, payload }) => {
       const response = await fetch(`/api/expert-squad/${ep}`, {
         method: 'POST',
@@ -413,7 +369,6 @@ test('@feature expert-squad step-4：禁用专家 → 降透明形态；启用/�
     }, { ep: 'disable', payload: { workspace: wsParam, key: 'data-miner' } })
     expect(disable.ok, `disable 通道成功（HTTP ${disable.status}）`).toBe(true)
     // 轮询收敛（5s 轻轮询兜底）：全量视图禁用卡降透明形态三位一体
-    const disabledCard = page.locator(cardOf('data-miner'))
     await expect
       .poll(async () => (await disabledCard.getAttribute('class'))?.includes('off') === true, {
         timeout: 30_000,
@@ -434,124 +389,127 @@ test('@feature expert-squad step-4：禁用专家 → 降透明形态；启用/�
     await selectFilter(page, statusSelect, 'all')
     await expect(disabledCard, '全量视图禁用卡在场').toBeVisible({ timeout: 10_000 })
   } finally {
-    await closeSession(session)
+    // 共享会话归零：enable 复位（disabled 残留会污染下游过滤用例——过滤语义按启停态分流）
+    const enable = await page.evaluate(async ({ ep, payload }) => {
+      const response = await fetch(`/api/expert-squad/${ep}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      return { ok: response.ok, status: response.status }
+    }, { ep: 'enable', payload: { workspace: wsParam, key: 'data-miner' } })
+    expect(enable.ok, `enable 复位成功（HTTP ${enable.status}）`).toBe(true)
+    await expect
+      .poll(async () => (await disabledCard.getAttribute('class'))?.includes('off') !== true, {
+        timeout: 30_000,
+        message: '复位后 data-miner 卡恢复常态',
+      })
+      .toBe(true)
   }
 })
 
 // ── step-5-filter-compose-recover ──
 
-test('@feature expert-squad step-5 success：搜索×状态 AND 叠加；清除恢复全量', async () => {
+test('@feature expert-squad step-5 success：搜索×状态 AND 叠加；清除恢复全量', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    const total = await page.locator(CARD_ANY).count()
-    // 叠加：关键词（恰命中 test-reviewer）× 启用 → 恰一
-    await page.locator(SEARCH).fill('tsc')
-    await selectFilter(page, statusSelect, 'enabled')
-    await expect(page.locator(cardOf('test-reviewer')), 'AND 叠加命中卡').toBeVisible({ timeout: 10_000 })
-    expect(await page.locator(CARD_ANY).count(), '叠加期恰一卡').toBe(1)
-    // 清除：恢复全量与「全部」选中态
-    await page.locator(SEARCH).fill('')
-    await selectFilter(page, statusSelect, 'all')
-    await expect(page.locator(CARD_ANY), '清除恢复全量（无残留过滤态）').toHaveCount(total, { timeout: 10_000 })
-    await expect(page.locator(`${statusSelect} .dswf-select-value`), '「全部」选中态').toHaveAttribute('data-select-value', 'all')
-  } finally {
-    await closeSession(session)
-  }
+  const { page } = sharedLaunch
+  await openPanel(page)
+  const total = await page.locator(CARD_ANY).count()
+  // 叠加：关键词（恰命中 test-reviewer）× 启用 → 恰一
+  await page.locator(SEARCH).fill('tsc')
+  await selectFilter(page, statusSelect, 'enabled')
+  await expect(page.locator(cardOf('test-reviewer')), 'AND 叠加命中卡').toBeVisible({ timeout: 10_000 })
+  expect(await page.locator(CARD_ANY).count(), '叠加期恰一卡').toBe(1)
+  // 清除：恢复全量与「全部」选中态
+  await page.locator(SEARCH).fill('')
+  await selectFilter(page, statusSelect, 'all')
+  await expect(page.locator(CARD_ANY), '清除恢复全量（无残留过滤态）').toHaveCount(total, { timeout: 10_000 })
+  await expect(page.locator(`${statusSelect} .dswf-select-value`), '「全部」选中态').toHaveAttribute('data-select-value', 'all')
 })
 
 // ── step-6 同键聚组展示（1.60 聚组 + 1.68 裁决：去组外框 · 卡片不换行 · 无生效标） ──
 
-test('@feature expert-squad step-6 grouped：无组外框（相邻卡同层）+ 卡片主标识不换行 + 卡片无「生效」标 + 来源角标', async () => {
+test('@feature expert-squad step-6 grouped：无组外框（相邻卡同层）+ 卡片主标识不换行 + 卡片无「生效」标 + 来源角标', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    // 夹具为 project 层单来源：每键一组，组内生效卡带「项目」角标
-    for (const key of ['test-reviewer', 'data-miner']) {
-      const group = page.locator(groupOf(key))
-      await expect(group, `组容器·${key}`).toBeVisible()
-      const card = group.locator(cardOf(key))
-      await expect(card, `生效位锚·${key}`).toHaveAttribute('data-effective', 'true')
-      // 1.68 裁决③：卡片无「生效」徽标
-      expect(await card.locator('.eff-badge').count(), `卡片无生效标·${key}`).toBe(0)
-      await expect(card.locator('.origin-badge.origin-project'), `来源角标·项目·${key}`).toContainText('项目')
-      await expect(group.locator('.dswf-xshadow'), `单来源组无被遮蔽行·${key}`).toHaveCount(0)
-      await expect(group.locator('.xg-spread'), `单来源组无对比钮·${key}`).toHaveCount(0)
-    }
-    // 1.68 裁决②：无组外层边框容器——组与卡同层相邻（组背景透明、组自身无边框；
-    // 卡片为网格直接视觉单元，组间边界由卡片自身边框承担）
-    const groupBox = await page.locator(groupOf('test-reviewer')).evaluate((node) => {
-      const cs = getComputedStyle(node)
-      return { borderWidth: cs.borderTopWidth, radius: cs.borderTopLeftRadius, bg: cs.backgroundColor }
-    })
-    expect(groupBox.borderWidth, '组容器零边框').toBe('0px')
-    expect(groupBox.radius, '组容器零圆角').toBe('0px')
-    expect(groupBox.bg, '组容器透明底（不遮挡相邻卡边界）').toBe('rgba(0, 0, 0, 0)')
-    // 相邻排列：两组卡在同一网格流内（组容器不产生额外包裹偏移——卡左缘对齐组左缘）
-    const aligned = await page.evaluate(() => {
-      const groups = [...document.querySelectorAll('.dswf-card-grid > .dswf-xgroup')]
-      return groups.every((g) => {
-        const card = g.querySelector('.dswf-xcard')
-        return card !== null && Math.abs(card.getBoundingClientRect().left - g.getBoundingClientRect().left) < 1
-      })
-    })
-    expect(aligned, '卡与组同层相邻（无组内边距包裹）').toBe(true)
-    // 1.68 裁决①：卡片主标识（名称/标识 chip）单行不换行（nowrap + 截断省略策略）
-    const cardBox = await page.locator(cardOf('test-reviewer')).evaluate((node) => {
-      const name = node.querySelector('.xc-name')
-      const chip = node.querySelector('.xc-title-row .chip[data-xc-route]')
-      if (name === null || chip === null) return null
-      const ns = getComputedStyle(name)
-      const cs = getComputedStyle(chip)
-      return {
-        nameHeight: name.getBoundingClientRect().height,
-        chipHeight: chip.getBoundingClientRect().height,
-        nameWhite: ns.whiteSpace,
-        chipWhite: cs.whiteSpace,
-        nameOverflow: ns.textOverflow,
-      }
-    })
-    expect(cardBox, '主标识几何取样').not.toBeNull()
-    expect(cardBox!.nameWhite, '名称 nowrap').toBe('nowrap')
-    expect(cardBox!.chipWhite, '标识 chip nowrap').toBe('nowrap')
-    expect(cardBox!.nameOverflow, '截断省略策略').toBe('ellipsis')
-    expect(cardBox!.nameHeight, '名称单行高（无竖排折行）').toBeLessThanOrEqual(24)
-    expect(cardBox!.chipHeight, '标识 chip 单行高').toBeLessThanOrEqual(24)
-    // 页脚计数按专家键数（夹具 2 键 + 内置键，均为单来源）
-    await expect(page.locator(FOOTER), '计数按专家键数形态不变').toContainText('位专家 · 显示')
-  } finally {
-    await closeSession(session)
+  const { page } = sharedLaunch
+  await openPanel(page)
+  // 夹具为 project 层单来源：每键一组，组内生效卡带「项目」角标
+  for (const key of ['test-reviewer', 'data-miner']) {
+    const group = page.locator(groupOf(key))
+    await expect(group, `组容器·${key}`).toBeVisible()
+    const card = group.locator(cardOf(key))
+    await expect(card, `生效位锚·${key}`).toHaveAttribute('data-effective', 'true')
+    // 1.68 裁决③：卡片无「生效」徽标
+    expect(await card.locator('.eff-badge').count(), `卡片无生效标·${key}`).toBe(0)
+    await expect(card.locator('.origin-badge.origin-project'), `来源角标·项目·${key}`).toContainText('项目')
+    await expect(group.locator('.dswf-xshadow'), `单来源组无被遮蔽行·${key}`).toHaveCount(0)
+    await expect(group.locator('.xg-spread'), `单来源组无对比钮·${key}`).toHaveCount(0)
   }
+  // 1.68 裁决②：无组外层边框容器——组与卡同层相邻（组背景透明、组自身无边框；
+  // 卡片为网格直接视觉单元，组间边界由卡片自身边框承担）
+  const groupBox = await page.locator(groupOf('test-reviewer')).evaluate((node) => {
+    const cs = getComputedStyle(node)
+    return { borderWidth: cs.borderTopWidth, radius: cs.borderTopLeftRadius, bg: cs.backgroundColor }
+  })
+  expect(groupBox.borderWidth, '组容器零边框').toBe('0px')
+  expect(groupBox.radius, '组容器零圆角').toBe('0px')
+  expect(groupBox.bg, '组容器透明底（不遮挡相邻卡边界）').toBe('rgba(0, 0, 0, 0)')
+  // 相邻排列：两组卡在同一网格流内（组容器不产生额外包裹偏移——卡左缘对齐组左缘）
+  const aligned = await page.evaluate(() => {
+    const groups = [...document.querySelectorAll('.dswf-card-grid > .dswf-xgroup')]
+    return groups.every((g) => {
+      const card = g.querySelector('.dswf-xcard')
+      return card !== null && Math.abs(card.getBoundingClientRect().left - g.getBoundingClientRect().left) < 1
+    })
+  })
+  expect(aligned, '卡与组同层相邻（无组内边距包裹）').toBe(true)
+  // 1.68 裁决①：卡片主标识（名称/标识 chip）单行不换行（nowrap + 截断省略策略）
+  const cardBox = await page.locator(cardOf('test-reviewer')).evaluate((node) => {
+    const name = node.querySelector('.xc-name')
+    const chip = node.querySelector('.xc-title-row .chip[data-xc-route]')
+    if (name === null || chip === null) return null
+    const ns = getComputedStyle(name)
+    const cs = getComputedStyle(chip)
+    return {
+      nameHeight: name.getBoundingClientRect().height,
+      chipHeight: chip.getBoundingClientRect().height,
+      nameWhite: ns.whiteSpace,
+      chipWhite: cs.whiteSpace,
+      nameOverflow: ns.textOverflow,
+    }
+  })
+  expect(cardBox, '主标识几何取样').not.toBeNull()
+  expect(cardBox!.nameWhite, '名称 nowrap').toBe('nowrap')
+  expect(cardBox!.chipWhite, '标识 chip nowrap').toBe('nowrap')
+  expect(cardBox!.nameOverflow, '截断省略策略').toBe('ellipsis')
+  expect(cardBox!.nameHeight, '名称单行高（无竖排折行）').toBeLessThanOrEqual(24)
+  expect(cardBox!.chipHeight, '标识 chip 单行高').toBeLessThanOrEqual(24)
+  // 页脚计数按专家键数（夹具 2 键 + 内置键，均为单来源）
+  await expect(page.locator(FOOTER), '计数按专家键数形态不变').toContainText('位专家 · 显示')
 })
 
 // ── Journey 冒烟（恰一条——happy path 全程依序） ──
 
-test('@feature expert-squad 冒烟：激活 → 网格字段页脚 → 搜索 → 状态过滤 → 清除恢复', async () => {
+test('@feature expert-squad 冒烟：激活 → 网格字段页脚 → 搜索 → 状态过滤 → 清除恢复', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const session = await openPanelWithFixture()
-  try {
-    const { page } = session
-    // 步骤2：字段与页脚（步骤1 激活已在 openPanelWithFixture 依序完成）
-    await expect(page.locator(cardOf('data-miner')).locator('.xc-name')).toHaveText('data-miner')
-    await expect(page.locator(FOOTER)).toContainText('位专家 · 显示')
-    // 步骤3：搜索
-    await page.locator(SEARCH).fill('mining')
-    await expect(page.locator(cardOf('data-miner'))).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator(cardOf('test-reviewer'))).toHaveCount(0)
-    // 步骤4：状态筛选（搜索命中者仍启用 → AND 叠加保留）
-    await selectFilter(page, statusSelect, 'enabled')
-    await expect(page.locator(cardOf('data-miner')), 'AND 叠加（搜索×启用）保留').toBeVisible({ timeout: 10_000 })
-    // 步骤5：清除恢复
-    await page.locator(SEARCH).fill('')
-    await selectFilter(page, statusSelect, 'all')
-    await expect(page.locator(cardOf('test-reviewer')), '恢复全量').toBeVisible({ timeout: 10_000 })
-    // 不变量：页脚显示数 = 网格行数；renderer 零未捕获异常
-    const shown = (await page.locator(FOOTER).innerText()).match(/显示 (\d+)/)?.[1]
-    expect(Number(shown), '页脚显示数 = 网格行数').toBe(await page.locator(CARD_ANY).count())
-    expect(session.pageErrors, 'renderer 零未捕获异常').toEqual([])
-  } finally {
-    await closeSession(session)
-  }
+  const { page, pageErrors } = sharedLaunch
+  // 步骤1-2：激活面板；字段与页脚
+  await openPanel(page)
+  await expect(page.locator(cardOf('data-miner')).locator('.xc-name')).toHaveText('data-miner')
+  await expect(page.locator(FOOTER)).toContainText('位专家 · 显示')
+  // 步骤3：搜索
+  await page.locator(SEARCH).fill('mining')
+  await expect(page.locator(cardOf('data-miner'))).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator(cardOf('test-reviewer'))).toHaveCount(0)
+  // 步骤4：状态筛选（搜索命中者仍启用 → AND 叠加保留）
+  await selectFilter(page, statusSelect, 'enabled')
+  await expect(page.locator(cardOf('data-miner')), 'AND 叠加（搜索×启用）保留').toBeVisible({ timeout: 10_000 })
+  // 步骤5：清除恢复
+  await page.locator(SEARCH).fill('')
+  await selectFilter(page, statusSelect, 'all')
+  await expect(page.locator(cardOf('test-reviewer')), '恢复全量').toBeVisible({ timeout: 10_000 })
+  // 不变量：页脚显示数 = 网格行数；renderer 零未捕获异常
+  const shown = (await page.locator(FOOTER).innerText()).match(/显示 (\d+)/)?.[1]
+  expect(Number(shown), '页脚显示数 = 网格行数').toBe(await page.locator(CARD_ANY).count())
+  expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })

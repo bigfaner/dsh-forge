@@ -7,13 +7,15 @@
 //      无 .git 祖先时以 workspace 本身为 project root——临时工作区等非 git 目录同径
 //      可用；user/plugin 层按 scan 模块正门解析）+ 服务键 experts provide
 //      （ctx.experts 正门，bug 7b1c9ed4）；
-//   ④ tool 面（fix-10）：registerExpertTools（5 管理工具）+ registerDelegateExpertTool
+//   ④ tool 面（fix-10）：registerExpertTools（recruit/update/rename + enable/disable
+//      + list_experts/list_tools/list_skills）+ registerDelegateExpertTool
 //      经官方 ctx.tools.register 正门接线（D1 注册面零改动）。工具面全组合可见可用
 //      （全局单实例注册即全局继承——HR preset 无专行，守卫微件态已撤销）。
 
 import { join, resolve, sep } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Domain } from "@deepseek-ai/dsh-storage-domain";
+import type { AgentPresetRegistry } from "@deepseek-ai/dsh-agent-preset-registry";
 import type { SkillRegistry } from "@deepseek-ai/dsh-skill";
 import type { SubagentRuntime } from "@deepseek-ai/dsh-subagent";
 import type { Volatile } from "@deepseek-ai/cordis";
@@ -108,9 +110,16 @@ interface StorageFace {
 
 /** dsh tools 服务窄面（官方 ToolRuntime.register 正门——D1 注册面零改动）。 */
 interface ExpertSquadToolsFace extends ToolRegisterFace {
-  /** 官方目录全视图（ToolRuntime.schemas()——无 scope 即全局视图；仅取 name 供候选）。 */
-  schemas?(): readonly { readonly name: string }[];
+  /** 官方目录视图（ToolRuntime.schemas(scope?)——无 scope 全局视图，携 preset
+   *  scope key = 该 preset 装配面视图；list_tools 全模式并集取数面，bug 6337a936）。 */
+  schemas?(scope?: unknown): readonly { readonly name: string; readonly description?: string }[];
 }
+
+/** 官方 agentPresets 服务窄面（ctx.agentPresets——@deepseek-ai/dsh-agent-preset-registry
+ *  AgentPresetRegistry type-only import Pick 派生（AGENTS 1.5，同 subagents/skills
+ *  先例——官方签名漂移由 tsc 兜底）：list() 枚举全部 preset + acquireScope() 取每模式
+ *  scope 租约（`{key: ScopeKey} & AsyncDisposable`，用后 dispose）；全模式并集枚举缝）。 */
+type ExpertSquadAgentPresetsFace = Pick<AgentPresetRegistry, "list" | "acquireScope">;
 
 /** 宿主 ctx 窄面（结构同型——本装配缝只消费 storage/connection/tools/subagents/effect/on）。
  *  subagents = 官方具名正门（bug 5a1e1132：@deepseek-ai/dsh-subagent 经 cordis Context
@@ -125,6 +134,10 @@ interface ExpertSquadCtx {
   /** 官方 skill 目录正门（inject: ["skills"]——dsh-skill 声明 `skills: SkillRegistry`
    *  非可选、宿主恒供；形状校验保留在取用点，同 subagents 先例）。 */
   readonly skills?: Pick<SkillRegistry, "list">;
+  /** 官方 agent preset 目录正门（inject: ["agentPresets"]——dsh-agent-preset-registry
+   *  声明 `agentPresets: AgentPresetRegistry` 非可选、宿主恒供；形状校验保留在取用点，
+   *  同 subagents 先例）。 */
+  readonly agentPresets?: ExpertSquadAgentPresetsFace;
   /** 宿主事件总线（fs/observed 通道二挂点；缺席 → 通道二降级跳过，通道一照常）。 */
   on?(event: string, listener: (...args: unknown[]) => unknown): unknown;
   /** 宿主事件总线 emit 面（diag/log 诊断事件域发射；缺席 → console 兜底）。 */
@@ -184,7 +197,8 @@ function readOptionalService(ctx: ExpertSquadCtx, name: string): unknown {
  *  静态 inject：cordis 守卫要求声明注入边方可读 ctx.storage / ctx.connection
  *  （缺声明 = apply 期 `cannot get property ... without inject`——client 侧同因）。
  *  inject：connection（宿主组合恒在场）+ subagents（官方具名正门，bug 5a1e1132——
- *  非可选声明，宿主恒供）+ skills（同先例，candidates 读口）；storage 宿主组合不供
+ *  非可选声明，宿主恒供）+ skills（同先例，candidates 读口）+ agentPresets（同先例，
+ *  list_tools/list_skills 全模式并集枚举缝，bug 6337a936）；storage 宿主组合不供
  *  （presence 探测降级——registry FMEA：state 缺席 = 启停内存态、重启回全启用，
  *  §AD2 降级语义）。 */
 async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPluginConfig): Promise<void> {
@@ -545,10 +559,18 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
     // 召唤 target="project" 落点：cwd 项目根（合理性校验同径——应用目录形态返 null，
     // tool 侧报错引导回落 user 层）
     projectRoot: () => resolveCwdProjectExpertsRoot(process.cwd()),
+    // list_tools / list_skills 取数面（调用点现查，不 memoize）：tools = ToolRuntime
+    // .schemas(scope?)——无 scope 全局视图、携 preset scope key = 该 preset 装配面视图
+    // （bug 6337a936 全模式并集）；skills = ctx.skills face 每次 execute 现取（缺席
+    // fail-soft）；agentPresets = 官方具名正门（每 preset acquireScope 租约枚举缝）。
+    toolsSchemas: (scope?: object) =>
+      scope === undefined ? toolsFace.schemas?.() : toolsFace.schemas?.(scope),
+    skills: () => ctx.skills,
+    agentPresets: () => ctx.agentPresets,
   });
 }
 
-expertSquadPlugin.inject = ['connection', 'subagents', 'skills'];
+expertSquadPlugin.inject = ['connection', 'subagents', 'skills', 'agentPresets'];
 // cordis Config schema（StandardSchemaV1 正门——loader 按此校验并解析 volatile 引用）。
 expertSquadPlugin.Config = expertSquadConfig;
 

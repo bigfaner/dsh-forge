@@ -151,10 +151,14 @@ export function forgeEventClockSeconds(time: number): string {
   }
 }
 
+/** 循环终态尾饰（结算/停止消息任务源行缀尾——组头只留来源标识，剥徽记前缀 + 括注 + 终态尾饰） */
+const SOURCE_TERMINAL_TAIL = /\s*—\s*(?:循环结束|已按你的指令停止)\s*$/
+
 /**
- * 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀与 `（…）` 修饰——原型 `[forge·调度] {slug}` 同语；
- * 消息任务源行缺席 = 回落取 progress 内条目 sourceSlug（首个非空——纯进度组同显任务源）；
- * 全组缺席 = ''）
+ * 组头来源标识（条目原文 `任务源: ` 行值，剥徽记前缀、`（…）` 修饰与循环终态尾饰
+ * （` — 循环结束（…）`/` — 已按你的指令停止`——上一轮结算消息居首时不把「循环结束」
+ * 带进组头，循环重开组不误导）；消息任务源行缺席 = 回落取 progress 内条目 sourceSlug
+ * （首个非空——纯进度组同显任务源）；全组缺席 = ''）
  */
 export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[], progress?: readonly ForgeProgressEntryData[]): string {
   for (const entry of entries) {
@@ -163,6 +167,7 @@ export function forgeEventGroupSource(entries: readonly ForgeEventEntryData[], p
     if (match !== null) {
       return match[1]!
         .replace(/（[^）]*）/g, '')
+        .replace(SOURCE_TERMINAL_TAIL, '')
         .trim()
     }
   }
@@ -264,4 +269,19 @@ export function forgeProgressRowItems(entries: readonly ForgeProgressEntryData[]
   }
   const rows = [...latest.values(), ...triage.values()].sort((a, b) => a.startAt - b.startAt)
   return loop === undefined ? rows : [loop, ...rows]
+}
+
+/** 循环终态徽记族（上一轮结束/停止/受阻消息——循环级 running 行在场 = 已被重开覆盖的陈旧事实） */
+const LOOP_SUPERSEDED_BADGES: ReadonlySet<string> = new Set(['循环结束', '循环停止', '循环受阻'])
+
+/**
+ * 组内可见消息条目（循环重开防误导——循环级最新态为 running 时，上一轮的终态/受阻
+ * 消息条目不再呈现（循环行「循环进行中」已是最新事实，陈旧终态行让用户误会循环已结束）；
+ * 无 running 循环行（终态组/旧缓存） = 原样全量保留）
+ */
+export function forgeEventVisibleEntries(
+  entries: readonly ForgeEventEntryData[],
+  loopRunning: boolean,
+): readonly ForgeEventEntryData[] {
+  return loopRunning ? entries.filter((entry) => !LOOP_SUPERSEDED_BADGES.has(entry.badge)) : entries
 }

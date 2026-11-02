@@ -3,7 +3,7 @@
 // 子集白名单），加行为面（recruit/update 写路径经 frontmatter 校验 fail-loud、
 // 启停工作区隔离语义经真 ExpertsRegistry + 临时目录）。
 
-import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -167,7 +167,7 @@ const RECRUIT_ARGS = {
 // ---------------------------------------------------------------------------
 
 describe("official dsh-tools register gate mirror", () => {
-  it("5 工具带 output { schema, render } 通过官方 register 门镜像", () => {
+  it("8 工具带 output { schema, render } 通过官方 register 门镜像", () => {
     const official = officialRegistry();
     expect(() => registerExpertTools(official, { registry, userRoot: () => userRoot })).not.toThrow();
     expect(official.registered.map((d) => d.name).sort()).toEqual([...EXPERT_TOOLS].sort());
@@ -175,7 +175,10 @@ describe("official dsh-tools register gate mirror", () => {
       "disable_expert",
       "enable_expert",
       "list_experts",
+      "list_skills",
+      "list_tools",
       "recruit_expert",
+      "rename_expert",
       "update_expert",
     ]);
   });
@@ -193,7 +196,16 @@ describe("official dsh-tools register gate mirror", () => {
     const tools = makeTools();
     for (const def of Object.values(tools)) {
       expect(typeof def.output.render).toBe("function");
-      const sample = def.name === "list_experts" ? { experts: [] } : { name: "x", path: "p", enabled: true };
+      const sample =
+        def.name === "list_experts"
+          ? { experts: [] }
+          : def.name === "list_tools"
+            ? { tools: [] }
+            : def.name === "list_skills"
+              ? { skills: [] }
+              : def.name === "rename_expert"
+                ? { name: "x", path: "p" }
+                : { name: "x", path: "p", enabled: true };
       const blocks = def.output.render({}, sample);
       expect(Array.isArray(blocks)).toBe(true);
       expect(blocks.length).toBeGreaterThan(0);
@@ -310,6 +322,148 @@ describe("update_expert — name 建档后不可改 + 不存在键 fail-loud", (
   });
 });
 
+describe("rename_expert — 同层原子迁移", () => {
+  beforeEach(async () => {
+    await refresh();
+    await makeTools().recruit_expert!.execute(RECRUIT_ARGS);
+    await refresh();
+  });
+
+  it("成功迁移：旧键文件消失、新键文件在场，frontmatter 字段原样继承且 name 同步新键", async () => {
+    const tools = makeTools();
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      name: string;
+      path: string;
+    };
+    expect(result.name).toBe("diff-keeper");
+    expect(result.path).toBe(join(userRoot, "diff-keeper.md"));
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(false);
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(true);
+    // registry 已 refresh：list 面新键可见、旧键消失（所见即所得）
+    expect(registry.list({ includeDisabled: true }).map((e) => e.name)).toContain("diff-keeper");
+    expect(registry.list({ includeDisabled: true }).map((e) => e.name)).not.toContain("code-reviewer");
+    // 字段原样继承 + name 同步
+    const fresh = registry.get("diff-keeper");
+    expect(fresh.title).toBe("资深评审");
+    expect(fresh.description).toBe("Runs code review on diffs and files.");
+    expect(fresh.tools).toEqual(["read", "grep"]);
+    expect(fresh.skills).toEqual(["review"]);
+    expect(fresh.personaMd).toContain("review code");
+  });
+
+  it("撞名（新键已有档案）→ fail-loud 且不留半迁移产物", async () => {
+    const tools = makeTools();
+    await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, name: "diff-keeper", title: "占位" });
+    await expect(tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })).rejects.toThrow(
+      /already exists/,
+    );
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(true);
+  });
+
+  it("新键非法（EXPERT_KEY 正则）→ 参数闸 fail-loud", async () => {
+    const tools = makeTools();
+    await expect(tools.rename_expert!.execute({ from: "code-reviewer", to: "Bad Key!" })).rejects.toThrow(
+      ExpertToolError,
+    );
+    expect(existsSync(join(userRoot, "code-reviewer.md"))).toBe(true);
+  });
+
+  it("旧键不存在 → fail-loud 且无新文件", async () => {
+    const tools = makeTools();
+    await expect(tools.rename_expert!.execute({ from: "ghost", to: "phantom" })).rejects.toThrow(/not found/);
+    expect(existsSync(join(userRoot, "phantom.md"))).toBe(false);
+  });
+
+  // bug 0a295590：plugin 层走真遮蔽迁移——plugin 原档案为内容源、新键写 user 层、
+  // 内置只读文件零触碰（对齐面板 update 来源保持裁决：plugin 层回落 user 层覆写）。
+  it("plugin 层：新键落 user 层、plugin 原文件未动、刷新后新键遮蔽生效", async () => {
+    const pluginDir = join(dir, "experts-plugin");
+    mkdirSync(pluginDir, { recursive: true });
+    // 清除 beforeEach 铺的 user 层同名档案——保证该键唯一定位 plugin 层
+    rmSync(join(userRoot, "code-reviewer.md"));
+    const pluginFile = join(pluginDir, "code-reviewer.md");
+    writeFileSync(
+      pluginFile,
+      [
+        "---",
+        "name: code-reviewer",
+        'title: "内置评审"',
+        'description: "Built-in reviewer."',
+        "tools:",
+        "  - read",
+        "---",
+        "## 职责\nbuilt-in review\n",
+      ].join("\n"),
+      "utf8",
+    );
+    const layeredRegistry = new ExpertsRegistry({
+      roots: () => [
+        { origin: "plugin", dir: pluginDir },
+        { origin: "user", dir: userRoot },
+      ],
+      workspace: dir,
+    });
+    await layeredRegistry.refresh();
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry: layeredRegistry,
+        userRoot: () => userRoot,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      name: string;
+      path: string;
+    };
+    // 新键落 user 层
+    expect(result.path).toBe(join(userRoot, "diff-keeper.md"));
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(true);
+    // plugin 层只读原文件零触碰
+    expect(existsSync(pluginFile)).toBe(true);
+    expect(readFileSync(pluginFile, "utf8")).toContain("name: code-reviewer");
+    // 字段继承 + name 同步新键
+    expect(readFileSync(join(userRoot, "diff-keeper.md"), "utf8")).toContain("name: diff-keeper");
+    expect(readFileSync(join(userRoot, "diff-keeper.md"), "utf8")).toContain("built-in review");
+    // 刷新后新键在场（user 层遮蔽落点生效）；plugin 旧键文件未删、仍在其层在场（遮蔽语义零删除）
+    await layeredRegistry.refresh();
+    const listed = layeredRegistry.list({ includeDisabled: true });
+    expect(listed.find((e) => e.name === "diff-keeper")?.origin).toBe("user");
+    expect(listed.find((e) => e.name === "code-reviewer")?.origin).toBe("plugin");
+    rmSync(pluginDir, { recursive: true, force: true });
+  });
+
+  it("迁移恒在原归属层内：project 层档案迁入 projectRoot 落点（不落 user 层）", async () => {
+    const projectDir = join(dir, "experts-project");
+    mkdirSync(projectDir, { recursive: true });
+    const layeredRegistry = new ExpertsRegistry({
+      roots: () => [
+        { origin: "project", dir: projectDir },
+        { origin: "user", dir: userRoot },
+      ],
+      workspace: dir,
+    });
+    await layeredRegistry.refresh();
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry: layeredRegistry,
+        userRoot: () => userRoot,
+        projectRoot: () => projectDir,
+      }).map((t) => [t.name, t]),
+    );
+    await tools.recruit_expert!.execute({ ...RECRUIT_ARGS, target: "project" });
+    await layeredRegistry.refresh();
+    const result = (await tools.rename_expert!.execute({ from: "code-reviewer", to: "diff-keeper" })) as {
+      path: string;
+    };
+    expect(result.path.startsWith(projectDir)).toBe(true);
+    expect(existsSync(join(projectDir, "code-reviewer.md"))).toBe(false);
+    expect(existsSync(join(projectDir, "diff-keeper.md"))).toBe(true);
+    expect(existsSync(join(userRoot, "diff-keeper.md"))).toBe(false);
+    await layeredRegistry.refresh();
+    const listed = layeredRegistry.list({ includeDisabled: true });
+    expect(listed.find((e) => e.name === "diff-keeper")?.origin).toBe("project");
+  });
+});
+
 describe("enable_expert / disable_expert / list_experts", () => {
   beforeEach(async () => {
     await refresh();
@@ -339,5 +493,293 @@ describe("enable_expert / disable_expert / list_experts", () => {
     const tools = makeTools();
     await expect(tools.disable_expert!.execute({ name: "ghost" })).rejects.toThrow(/not found/);
     await expect(tools.enable_expert!.execute({ name: "ghost" })).rejects.toThrow(/not found/);
+  });
+});
+
+describe("list_tools / list_skills — 白名单键名取数面", () => {
+  const SCHEMAS = [
+    { name: "recruit_expert", description: "Recruit a new expert." },
+    { name: "read", description: "Read a file." },
+  ];
+
+  it("list_tools 经注入 schemas face 现查返回 name+description（含 expert 管理工具自身）", async () => {
+    let calls = 0;
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => {
+          calls++;
+          return SCHEMAS;
+        },
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+    };
+    expect(result.tools).toEqual(SCHEMAS.map((s) => ({ name: s.name, description: s.description })));
+    // 每次调用现查（不 memoize）
+    await tools.list_tools!.execute({});
+    expect(calls).toBe(2);
+    const rendered = (tools.list_tools!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("- recruit_expert — Recruit a new expert.");
+  });
+
+  it("list_tools 取数面缺席 → fail-soft {tools:[]} 且 render 注记", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({ registry, userRoot: () => userRoot, toolsSchemas: () => undefined }).map((t) => [
+        t.name,
+        t,
+      ]),
+    );
+    const result = (await tools.list_tools!.execute({})) as { tools: unknown[]; note?: string };
+    expect(result.tools).toEqual([]);
+    const rendered = (tools.list_tools!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("absent");
+  });
+
+  it("list_skills 在场：经 skills face list({cwd}) 求值（调用点现查）", async () => {
+    const listed: { cwd: string }[] = [];
+    const face = {
+      list: async (opts: { cwd: string }) => {
+        listed.push(opts);
+        return [{ name: "review", description: "Review skill." }];
+      },
+    };
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as {
+      skills: { name: string; description: string }[];
+    };
+    expect(result.skills).toEqual([{ name: "review", description: "Review skill." }]);
+    expect(listed).toEqual([{ cwd: process.cwd() }]);
+  });
+
+  it("list_skills 缺席 → fail-soft {skills:[]} 且返回文本注明服务缺席，不抛错", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({ registry, userRoot: () => userRoot, skills: () => undefined }).map((t) => [
+        t.name,
+        t,
+      ]),
+    );
+    const result = (await tools.list_skills!.execute({})) as { skills: unknown[]; note?: string };
+    expect(result.skills).toEqual([]);
+    const rendered = (tools.list_skills!.output.render({}, result)[0] as { text: string }).text;
+    expect(rendered).toContain("absent");
+  });
+
+  it("list_skills 调用异常 → fail-soft {skills:[]} 注记 unavailable", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => ({
+          list: async () => {
+            throw new Error("boom");
+          },
+        }),
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as { skills: unknown[]; note?: string };
+    expect(result.skills).toEqual([]);
+    expect(result.note).toContain("unavailable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// list_tools / list_skills 全模式并集（bug 6337a936）：全局视图 + 逐 preset scope
+// 视图并集去重；agentPresets 租约 try/finally dispose；缺席/形状不符降级注明。
+// ---------------------------------------------------------------------------
+
+/** agentPresets face 伪造（bug 66e1bd5d 同步官方租约形状：`{key} & AsyncDisposable`，
+ *  仅 Symbol.asyncDispose、无 dispose()——记录租约 key 与 asyncDispose 释放次数）。 */
+const keyOf = (id: string): object => ({ preset: id });
+function makePresetFace(ids: string[], opts?: { releaseThrows?: (id: string) => boolean }) {
+  const events: { acquired: object[]; disposed: object[] } = { acquired: [], disposed: [] };
+  const keys = Object.fromEntries(ids.map((id) => [id, keyOf(id)]));
+  return {
+    events,
+    keys,
+    face: {
+      list: async () => ids.map((id) => ({ id })),
+      acquireScope: async (id?: string) => {
+        const presetId = id ?? "default";
+        const key = keys[presetId] ?? keyOf(presetId);
+        events.acquired.push(key);
+        return {
+          key,
+          [Symbol.asyncDispose]: async () => {
+            if (opts?.releaseThrows?.(presetId) === true) throw new Error("release boom");
+            events.disposed.push(key);
+          },
+        };
+      },
+    },
+  };
+}
+
+describe("list_tools / list_skills — 全模式并集视图（bug 6337a936）", () => {
+  it("list_tools 并集 = 全局视图 + 逐 preset scope 视图，按 name 去重（description 取先见者），租约用后 dispose", async () => {
+    const presets = makePresetFace(["hr", "dev"]);
+    const calls: (string | undefined)[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          calls.push(scope);
+          if (scope === undefined) return [{ name: "read", description: "global read" }];
+          if (scope === presets.keys.hr)
+            return [{ name: "read", description: "hr read" }, { name: "summon", description: "hr summon" }];
+          return [{ name: "shell", description: "dev shell" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+      note?: string;
+    };
+    // 并集去重：read 取全局（先见者）；hr 独有 summon、dev 独有 shell 均并入
+    expect(result.tools).toEqual([
+      { name: "read", description: "global read" },
+      { name: "summon", description: "hr summon" },
+      { name: "shell", description: "dev shell" },
+    ]);
+    expect(result.note).toBeUndefined();
+    // 每 preset 各取一次 scope 租约（schemas 携 scope key 现查）
+    expect(calls).toEqual([undefined, presets.keys.hr, presets.keys.dev]);
+    // 租约用后 dispose（try/finally）
+    expect(presets.events.disposed).toEqual([presets.keys.hr, presets.keys.dev]);
+  });
+
+  it("list_tools：scope 视图读取抛错不外溢，租约仍 dispose，结果降级为已得并集 + note", async () => {
+    const presets = makePresetFace(["broken"]);
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          if (scope !== undefined) throw new Error("boom");
+          return [{ name: "read", description: "global read" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string }[];
+      note?: string;
+    };
+    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.note).toContain("broken");
+    expect(presets.events.disposed).toEqual([presets.keys.broken]);
+  });
+
+  it("list_skills 并集 = 全局层 + 逐 preset scope 层（skills.list 携 cwd+scope），租约用后 dispose", async () => {
+    const presets = makePresetFace(["hr"]);
+    const calls: { cwd: string; scope?: string }[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        skills: () => ({
+          list: async (opts: { cwd: string; scope?: object }) => {
+            calls.push(opts);
+            if (opts.scope === undefined) return [{ name: "review", description: "global review" }];
+            return [{ name: "review", description: "hr review" }, { name: "roundtable", description: "hr roundtable" }];
+          },
+        }),
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_skills!.execute({})) as {
+      skills: { name: string; description: string }[];
+      note?: string;
+    };
+    expect(result.skills).toEqual([
+      { name: "review", description: "global review" },
+      { name: "roundtable", description: "hr roundtable" },
+    ]);
+    expect(result.note).toBeUndefined();
+    expect(calls).toEqual([
+      { cwd: process.cwd() },
+      { cwd: process.cwd(), scope: presets.keys.hr },
+    ]);
+    expect(presets.events.disposed).toEqual([presets.keys.hr]);
+  });
+
+  it("agentPresets 缺席 → 降级仅全局视图 + note 注明（list_tools 与 list_skills 同径），不抛错", async () => {
+    const skillCalls: unknown[] = [];
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => [{ name: "read", description: "global read" }],
+        skills: () => ({
+          list: async (opts: unknown) => {
+            skillCalls.push(opts);
+            return [{ name: "review", description: "global review" }];
+          },
+        }),
+      }).map((t) => [t.name, t]),
+    );
+    const toolsResult = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
+    expect(toolsResult.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(toolsResult.note).toContain("agentPresets");
+    const skillsResult = (await tools.list_skills!.execute({})) as { skills: { name: string }[]; note?: string };
+    expect(skillsResult.skills).toEqual([{ name: "review", description: "global review" }]);
+    expect(skillsResult.note).toContain("agentPresets");
+    expect(skillCalls).toEqual([{ cwd: process.cwd() }]);
+    const rendered = (tools.list_tools!.output.render({}, toolsResult)[0] as { text: string }).text;
+    expect(rendered).toContain("agentPresets");
+  });
+
+  it("agentPresets 形状不符（list/acquireScope 非函数）→ 同缺席降级", async () => {
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: () => [{ name: "read", description: "global read" }],
+        agentPresets: () => ({ list: "not-a-function", acquireScope: () => {} }) as never,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as { tools: { name: string; description?: string }[]; note?: string };
+    expect(result.tools).toEqual([{ name: "read", description: "global read" }]);
+    expect(result.note).toContain("agentPresets");
+  });
+
+  it("bug 66e1bd5d: asyncDispose 抛错不影响并集——释放失败记 note，不外溢不掩盖取数结果", async () => {
+    const presets = makePresetFace(["hr", "dev"], { releaseThrows: (id) => id === "hr" });
+    const tools = Object.fromEntries(
+      createExpertTools({
+        registry,
+        userRoot: () => userRoot,
+        toolsSchemas: (scope?: object) => {
+          if (scope === undefined) return [{ name: "read", description: "global read" }];
+          if (scope === presets.keys.hr) return [{ name: "summon", description: "hr summon" }];
+          return [{ name: "shell", description: "dev shell" }];
+        },
+        agentPresets: () => presets.face,
+      }).map((t) => [t.name, t]),
+    );
+    const result = (await tools.list_tools!.execute({})) as {
+      tools: { name: string; description: string }[];
+      note?: string;
+    };
+    // hr 释放抛错不影响其取数结果——并集完整
+    expect(result.tools).toEqual([
+      { name: "read", description: "global read" },
+      { name: "summon", description: "hr summon" },
+      { name: "shell", description: "dev shell" },
+    ]);
+    // 释放失败记 note（点名 hr），dev 正常释放不记
+    expect(result.note).toContain("release failed");
+    expect(result.note).toContain("hr");
+    expect(presets.events.disposed).toEqual([presets.keys.dev]);
   });
 });

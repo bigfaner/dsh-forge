@@ -4,8 +4,9 @@
 // 'forge/progress' 事件经 forgeProgressRowItems 聚合（每任务键最新态一行、后写覆盖
 // 原地更新；循环级事件收敛单行），任务行展示 标题/状态/开始/结束/耗时（事件时戳）；
 // 结算/异常消息条目只保留概要一行（明细归其自身 wakeup 卡，不重复展开）。
-// 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组（isLatest），
-// 前组默认收起（人类插话 = 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
+// 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组；任务进度卡
+// （progress 在场）默认展开——打开会话即见任务轨；纯消息组前组默认收起（人类插话 =
+// 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
 import { useEffect, useRef, useState } from 'react'
 import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -14,6 +15,7 @@ import {
   forgeEventClockSeconds,
   forgeEventGroupCount,
   forgeEventGroupSource,
+  forgeEventVisibleEntries,
   forgeProgressRowItems,
   forgeProgressStatusTone,
   forgeProgressStatusWord,
@@ -72,14 +74,18 @@ export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
   return <ForgeEventGroupBlock data={node.data} />
 }
 
-/** 进度行（任务轨单行——标题/状态/开始/结束/耗时） */
+/** 进度行（任务轨单行——标题/状态/开始/结束/耗时；triage 处置行加「处置」徽记胶囊） */
 function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   const statusWord = forgeProgressStatusWord(row.entry)
   const duration = forgeProgressDurationLabel(row)
   // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
   const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
+  // triage 处置行（triage-progress-row §2.2——verb 限定，同 taskKey 与任务行不撞）：徽记胶囊
+  // 区分处置轨（语义归徽记不进文本流——bug 35571877 行语言同裁决；「循环」徽记同构）
+  const isTriage = row.entry.verb === 'triage'
   return (
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
+      {isTriage ? <span className="dswf-event-entries-badge dswf-event-entries-loop-badge">处置</span> : null}
       <span className="dswf-event-entries-text">
         {localId !== undefined && localId !== '' ? <span className="dswf-event-entries-num">#{localId}</span> : null}
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
@@ -171,26 +177,33 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   // §2.6 贴底保持缝挂载（组卡根观察——增高阶跃补落底；卸载断开）
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => forgeEventTailKeepEffect(rootRef.current), [])
-  // 默认态 = 位置语义（最新组展开 / 前组收起）；用户切换后为本地微观态
-  const [open, setOpen] = useState(data.isLatest)
-  // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
-  // `N 条 · 今日 HH:mm–HH:mm`（计数经自包裹层绝对定位——官方 DisclosureRow 无尾部
-  // 插槽，零 fork）；来源缺席回落旧摘要串（计数并入标题，不叠贴）
-  const source = forgeEventGroupSource(data.entries, data.progress)
-  const title = source !== '' ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
+  // 默认态 = 最新组展开；任务进度卡（progress 在场）打开会话即默认展开（用户裁决
+  // 2026-11-01——进度卡收起让用户错过任务轨，纯消息组维持前组收起）；用户切换后为本地微观态
+  const [open, setOpen] = useState(data.isLatest || (data.progress?.length ?? 0) > 0)
   const rows = forgeProgressRowItems(data.progress ?? [])
   const loopRow = rows.find((row) => row.entry.taskKey === undefined)
   const taskRows = rows.filter((row) => row.entry.taskKey !== undefined)
+  // 循环重开防误导：循环级最新态 running 时，上一轮终态/受阻消息条目不呈现（含组头来源
+  // 提取——居首的上一轮「循环结束」任务源行不再把终态尾饰带进组头）
+  const loopRunning = loopRow !== undefined && loopRow.entry.status === 'running'
+  const visibleEntries = forgeEventVisibleEntries(data.entries, loopRunning)
+  // 组头信息结构（prototype evt-head 同位）：`[forge·调度] {source}` + 右贴计数
+  // `N 条 · 今日 HH:mm–HH:mm`（计数经自包裹层绝对定位——官方 DisclosureRow 无尾部
+  // 插槽，零 fork）；来源缺席回落旧摘要串（计数并入标题，不叠贴）
+  const source = forgeEventGroupSource(visibleEntries, data.progress)
+  const title = source !== '' ? `[forge·调度] ${source}` : forgeEventGroupSummary(data)
   // 头计数（进度卡口径）：任务行数 + 进度起止范围（首 startAt–末 endAt）；无 progress 回落条目窗口
   const count =
     taskRows.length > 0
       ? `${taskRows.length} 任务 · 今日 ${forgeEventClock(Math.min(...rows.map((row) => row.startAt)))}–${forgeEventClock(Math.max(...rows.map((row) => row.endAt)))}`
-      : `${data.entries.length} 条 · ${forgeEventGroupCount(data.entries)}`
+      : `${visibleEntries.length} 条 · ${forgeEventGroupCount(visibleEntries)}`
   return (
     <div ref={rootRef} className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
       {source !== '' ? (
-        <span className="dswf-event-entries-count" aria-hidden="true">
-          {count}
+        <span className="dswf-event-entries-head-meta" aria-hidden="true">
+          {/* 折叠态运行提示：循环进行中且组收起时，计数左侧补运行胶囊（展开态循环行已示，不重复） */}
+          {loopRunning && !open ? <span className="dswf-event-entries-running-flag">循环进行中</span> : null}
+          <span className="dswf-event-entries-count">{count}</span>
         </span>
       ) : null}
       <DisclosureRow
@@ -209,7 +222,7 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
             // 键 = verb 限定（triage:{taskKey} 独立聚合行与任务行同 taskKey 不撞键）
             <ForgeProgressRowView key={`${row.entry.verb}:${row.entry.taskKey}`} row={row} />
           ))}
-          {data.entries.map((entry) => {
+          {visibleEntries.map((entry) => {
             // §2.5（D 裁决 去重并换行）：title 与 detail 分行展示；summary 命中 title
             // 字面（taskTitle/taskKey/slug）时渲染层剥掉标题前缀，仅留徽记词+差异信息
             // bug 35571877：条目行与任务行同构（文本在前→徽标右置→右侧时间簇），
