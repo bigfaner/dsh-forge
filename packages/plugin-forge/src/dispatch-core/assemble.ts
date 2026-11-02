@@ -93,6 +93,32 @@ export function probeIsSubdomain(registeredTools: readonly string[]): boolean {
 }
 
 /**
+ * 全局工具注册名读取（bug 92d642c2 根因层）：装配期 `ctx.tools` 官方面直读——`schemas()`
+ * 无参调用 = 全局视图（官方契约 dsh-tools index.d.ts:711「omitted = the global view」），
+ * 无 parent 会话的作用域收窄。形状漂移/调用抛错 = undefined（调用方回落 parent 探针）。
+ */
+export function globalToolNamesOfToolsFace(tools: unknown): readonly string[] | undefined {
+  if (typeof tools !== 'object' || tools === null) return undefined
+  const schemas = (tools as { schemas?: unknown }).schemas
+  if (typeof schemas !== 'function') return undefined
+  let projected: unknown
+  try {
+    projected = (schemas as (this: unknown) => unknown).call(tools)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(projected)) return undefined
+  const names: string[] = []
+  for (const schema of projected) {
+    if (typeof schema !== 'object' || schema === null) return undefined
+    const name = (schema as { name?: unknown }).name
+    if (typeof name !== 'string') return undefined
+    names.push(name)
+  }
+  return names
+}
+
+/**
  * taskType → 收窄矩阵 → toolFilter（deny 面；expert-squad-forge 1.4 起 allow 面可选）。
  * 矩阵 = contracts WORKER_TOOL_MATRIX（族 × 工具族 ✓ 表）：族内拒绝的工具族名下已知工具名
  * 入 deny + 全局拒绝集 + forge 闭环。nameFamily 参数化（缺省 = WORKER_TOOL_NAME_FAMILY——

@@ -681,6 +681,11 @@ export interface LoopDriverDeps {
   /** 专家档案工具/模型取用面（expert-squad-forge 1.4——透传 dispatch-core spawn 组装；缺席 = 形态兼容） */
   readonly resolveWorkerProfile?: DispatchCoreDeps['resolveWorkerProfile']
   /**
+   * 全局工具注册名读取面（bug 92d642c2 根因层——透传 dispatch-core spawn 组装求交基准；
+   * 缺席 = 回落 parent 探针 + 金丝雀子域判定，行为零变化）
+   */
+  readonly globalToolNames?: DispatchCoreDeps['globalToolNames']
+  /**
    * 专家团服务在场探测（P8 评审指示组装期单选——true = architect/code-reviewer 双路措辞；
    * 缺席 = subagent 分域回落。装配面注入惰性探测，循环收口时求值）
    */
@@ -1388,6 +1393,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           ...(deps.modelingReportPresent !== undefined ? { modelingReportPresent: deps.modelingReportPresent } : {}),
           // AC7 结算旁挂回收缝透传结算核（loop-recurrence-hardening §2.4——fail-soft 后置钩子）
           ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
+          // 全局工具注册名读取面透传（bug 92d642c2 根因层——worker toolFilter 求交基准优先全局视图）
+          ...(deps.globalToolNames !== undefined ? { globalToolNames: deps.globalToolNames } : {}),
         },
         exec: {
           attribution: {},

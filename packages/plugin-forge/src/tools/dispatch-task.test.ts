@@ -9,7 +9,7 @@ import type { ForgePluginEvent, ForgeTasksService, TaskStats, TaskStatus } from 
 import { TASK_TYPES, WORKER_FORGE_TOOLS } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import type { ForgeEventSink } from '../events/sink.js'
-import { deriveTriageToolFilter, WORKER_PIPELINE_ESSENTIAL_TOOLS } from '../dispatch-core/assemble.js'
+import { deriveTriageToolFilter, globalToolNamesOfToolsFace, WORKER_PIPELINE_ESSENTIAL_TOOLS } from '../dispatch-core/assemble.js'
 import { createLoopRegistry } from '../loop/index.js'
 import type { LoopDriver, LoopEscalation, LoopRecord, LoopRegistry } from '../loop/index.js'
 import { payloadOf, renderP1 } from '../loop/injection.js'
@@ -703,6 +703,23 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
       const after = deriveWorkerToolFilter('coding-fix', undefined, ['ghost', 'pwsh'], undefined)
       expect(after.allow).toEqual(before.allow)
       expect(after.allow).toContain('pwsh')
+    })
+
+    it('bug 92d642c2：globalToolNamesOfToolsFace——官方面无作用域直读全局名表；形状漂移/抛错 = undefined 回落', () => {
+      const faceOk = { schemas: () => [{ name: 'read' }, { name: 'submitTask' }] }
+      expect(globalToolNamesOfToolsFace(faceOk)).toEqual(['read', 'submitTask'])
+      expect(globalToolNamesOfToolsFace({})).toBeUndefined() // schemas 缺席
+      expect(globalToolNamesOfToolsFace({ schemas: () => ({ nope: 1 }) })).toBeUndefined() // 非数组
+      expect(globalToolNamesOfToolsFace({ schemas: () => [{ noName: 1 }] })).toBeUndefined() // 条目无名
+      expect(
+        globalToolNamesOfToolsFace({
+          schemas: () => {
+            throw new Error('registry unavailable')
+          },
+        }),
+      ).toBeUndefined()
+      expect(globalToolNamesOfToolsFace(undefined)).toBeUndefined()
+      expect(globalToolNamesOfToolsFace('garbage')).toBeUndefined()
     })
   })
 })

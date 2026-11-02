@@ -28,6 +28,7 @@ import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
+import { globalToolNamesOfToolsFace } from './dispatch-core/index.js'
 import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
@@ -511,6 +512,10 @@ const forgePlugin: ForgePlugin = Object.assign(
     const loopDriverBase = createLoopDriver({
       registry: loopRegistry,
       expertsPresent: expertsServicePresent,
+      // 全局工具注册名读取面（bug 92d642c2 根因层——worker toolFilter 求交基准优先全局
+      // 视图：装配期 ctx.tools 无作用域面；parent 会话视图是作用域收窄面——专家委派会话
+      // restrict 后仅剩档案工具域，对其求交曾把管线必备静默剔除/守卫假阳性炸 spawn）
+      globalToolNames: () => globalToolNamesOfToolsFace(ctx.tools),
       ...(e2eBaseline !== undefined ? { e2eBaseline } : {}),
       tasks: ctx.forgeTasks,
       spawn,

@@ -125,6 +125,14 @@ export interface DispatchCoreDeps {
   /** 诊断发射缝（diag-face-consolidation——结算核 fail-soft 告警走 diag 面；透传 settleWorkerRun） */
   readonly diag?: ForgeDiagEmitFace
   /**
+   * 全局工具注册名读取面（bug 92d642c2 根因层——可选）：装配期捕获的插件 ctx.tools
+   * **无作用域全局视图**。worker toolFilter 求交基准 = 本面优先——parent 会话视图是
+   * 作用域收窄面（专家委派会话 restrict 后仅剩档案工具域），对其求交会把管线必备静默
+   * 剔除/守卫假阳性炸 spawn（真机 Mac/Win 实证）。缺席 = 回落 parent 探针（含金丝雀
+   * 子域判定——单测/旧装配形态兼容）。
+   */
+  readonly globalToolNames?: () => readonly string[] | undefined
+  /**
    * 台账 recurrence 候选只读检索面（loop-recurrence-hardening T3 同缝拦截——可选，跨容器
    * 口径归域层；缺席/异常 = 守卫降级放行，行为零变化）。结构兼容 core add.ts T2 注入形。
    */
@@ -463,14 +471,16 @@ export async function spawnClaimed(
   let agentOptions: Awaited<ReturnType<typeof reconcileWorkerReasoning>>
   try {
     const profile = await deps.resolveWorkerProfile?.(task.taskType)
-    // toolFilter 与真机注册面求交（bug 3cb118cf）：取数缝 = 父会话 ctx.tools.schemas()
-    // 现查（registeredToolNamesOf，缺席回落不裁剪）；档案 allow 携带平台禁用 shell 名
-    // （Mac 无 pwsh）时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
+    // toolFilter 与真机注册面求交（bug 3cb118cf）：求交基准 = 全局注册视图优先
+    // （bug 92d642c2 根因层——deps.globalToolNames 装配期捕获的无作用域面）；缺席回落
+    // parent 探针（含金丝雀子域判定）。档案 allow 携带平台禁用 shell 名（Mac 无 pwsh）
+    // 时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
+    const registered = deps.globalToolNames?.() ?? registeredToolNamesOf(exec.parent)
     toolFilter = deriveWorkerToolFilter(
       task.taskType,
       WORKER_TOOL_NAME_FAMILY,
       profile?.tools,
-      registeredToolNamesOf(exec.parent),
+      registered,
     )
     // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
     agentOptions = await reconcileWorkerReasoning(
