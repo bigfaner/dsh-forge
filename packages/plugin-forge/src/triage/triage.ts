@@ -26,7 +26,8 @@ import {
 import type { PoolSnapshot, SameSeamRecurrenceFace, SpawnWorker } from '../dispatch-core/index.js'
 import type { LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
 import { TRIAGE_EXPERT_KEY } from '../loop/index.js'
-import type { ExpertProfileResolver, ForgeExpertProfile } from '../faces.js'
+import type { ExpertProfileResolver, ForgeExpertProfile, ForgeDiagEmitFace } from '../faces.js'
+import { emitForgeDiag } from '../faces.js'
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
 import type { TriageRecurrenceSignal, TriageSignals } from './prompt.js'
@@ -86,6 +87,8 @@ export interface TriageHookDeps {
   /** 台账 recurrence 候选只读检索面（loop-recurrence-hardening §2.2.1 两信号之一——结构兼容
    *  claim 守卫 T3 注入形；缺席/故障 = 信号退化，fail-soft 不阻处置主链） */
   readonly findRecurrenceCandidates?: SameSeamRecurrenceFace
+  /** 诊断发射缝（AGENTS §7——降级径留痕：face 缺席 info / 台账读故障 warn；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }
 
 /**
@@ -116,7 +119,15 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         .find((entry) => entry.verb === 'submit' && entry.toStatus === 'blocked' && entry.blockClassification !== undefined)
         ?.blockClassification
       let recurrence: TriageRecurrenceSignal | undefined
-      if (deps.findRecurrenceCandidates !== undefined) {
+      if (deps.findRecurrenceCandidates === undefined) {
+        // AGENTS §7 降级留痕：face 缺席 = 处置两信号之一生产静默关停（bug 0db72bcb 教训）
+        emitForgeDiag(deps.diag, {
+          level: 'info',
+          event: 'recurrence-face-absent',
+          message: `triage 处置信号降级：findRecurrenceCandidates face 缺席（${input.task.slug}/${input.task.localId}）——recurrence 链信号缺席（核销装配面接线）`,
+          projectId: input.projectId,
+        })
+      } else {
         try {
           const candidates = await deps.findRecurrenceCandidates(input.projectId, {
             slug: input.task.slug,
@@ -127,8 +138,14 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
             const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
             recurrence = { chain: top.chain, count: recurrenceCountOf(top.chain) }
           }
-        } catch {
-          // fail-soft：台账读故障降级——两信号缺席，提示词照常组装
+        } catch (cause) {
+          // fail-soft：台账读故障降级——两信号缺席，提示词照常组装 + warn 留痕
+          emitForgeDiag(deps.diag, {
+            level: 'warn',
+            event: 'recurrence-face-error',
+            message: `triage 处置信号降级：台账候选检索故障（${input.task.slug}/${input.task.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
+            projectId: input.projectId,
+          })
         }
       }
       const signals: TriageSignals | undefined =

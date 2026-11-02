@@ -25,7 +25,7 @@ import type {
   FeatureRow,
   TransitionFeatureInput,
 } from '@dsh-forge/contracts'
-import type { BugCard, BugChainContext, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
+import type { BugCard, BugChainContext, BugRecurrenceCandidate, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
@@ -104,6 +104,15 @@ export interface ForgeBugsToolFace {
   listBugs(q: ListBugsQuery): Promise<readonly BugCard[]>
   /** 单条全卡 + 链上下文（getBug tool——主 + worker 面；core getBug 结构兼容） */
   getBug(q: { readonly projectId: string; readonly bugId: string }): Promise<GetBugResponse>
+  /**
+   * 台账 recurrence 候选只读检索（loop-recurrence-hardening——T2 交叉校验 / T3 同缝计数 /
+   * triage 两信号 / add-fix vars 共同消费 face；core createBugsService 结构兼容，链构建
+   * 与 scope 口径归 core bugs 域层定义）。
+   */
+  findRecurrenceCandidates(
+    projectId: string,
+    scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
+  ): Promise<readonly BugRecurrenceCandidate[]>
 }
 
 /**

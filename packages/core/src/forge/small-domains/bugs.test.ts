@@ -631,3 +631,42 @@ describe('T4 覆盖声明闸门：resolveBug fix_approach 协议（core 纯 DB �
     expect(card.fixApproach).toBe('普通一段话修法总结')
   })
 })
+
+// ─────────────────────────── findRecurrenceCandidates（loop-recurrence-hardening——台账域只读聚合） ───────────────────────────
+describe('findRecurrenceCandidates：链构建（前驱回溯 + 后继收齐）+ scope 口径', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  /** 种三员链（root → r1 → r2，root/r1 携 suspected 命中锚点，r2 零 suspected） */
+  async function seedChain() {
+    h = createHarness()
+    const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+    const root = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'packages/core/src/forge/tasks/submit.ts:78' })).card
+    const r1 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', suspected: 'packages/core/src/forge/tasks/submit.ts:96', recurrenceOf: root.bugId })).card
+    const r2 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })).card
+    return { s, root, r1, r2 }
+  }
+
+  it('files 空（派发径）→ 全链成员候选，chain = 链根→本条全链时间正序', async () => {
+    const { s, root, r1, r2 } = await seedChain()
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: '1', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    expect(candidates.every((c) => c.chain.join(' → ') === `${root.bugId} → ${r1.bugId} → ${r2.bugId}`)).toBe(true)
+  })
+
+  it('files 非空（结算径）→ 按 suspected 路径收窄；零 suspected 成员被滤除', async () => {
+    const { s, root, r1 } = await seedChain()
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'f', localId: '1',
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId])
+  })
+
+  it('孤条（无链）不入候选；空台账 = 空集', async () => {
+    h = createHarness()
+    const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'a.ts:1' })
+    expect(await s.findRecurrenceCandidates(h.projectId, { slug: 'f', localId: '1', files: [] })).toEqual([])
+  })
+})

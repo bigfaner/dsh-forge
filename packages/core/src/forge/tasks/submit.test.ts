@@ -27,6 +27,7 @@ import {
   seedTask,
   type TasksHarness,
 } from './harness.js'
+import { createBugsService } from '../small-domains/bugs.js'
 import { queryTask } from './query.js'
 import { submitTask } from './submit.js'
 
@@ -997,5 +998,104 @@ describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presen
     })
     expect(ok.status).toBe('completed')
     expect(ok.recurrenceAdvisories).toBeUndefined()
+  })
+})
+
+// ───────── bug 0db72bcb 生产装配径接线：face = bugs 域服务只读聚合（非手写桩）+ 降级 diag 留痕 ─────────
+describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = createBugsService 只读聚合 + 降级 diag 留痕', () => {
+  const seed = (localId = '1.1'): void => {
+    if (h!.db.prepare(`SELECT id FROM features WHERE slug = 'f'`).get() === undefined) {
+      seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    }
+    seedTask(h!.db, 'f', localId, { status: 'in_progress' })
+  }
+  const blockedBase = (localId = '1.1') => ({
+    projectId: P(),
+    taskRef: { slug: 'f', localId } as const,
+    result: 'blocked' as const,
+    reason: '受阻——根因待排查',
+    blockClassification: { kind: 'new-problem' } as const,
+    sessionId: 's-exec',
+  })
+  /** 受控 execFile 桩（bugs.test.ts 同形——git config 身份解析径受控） */
+  const gitExec = (): unknown => (_cmd: string, args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+    cb(null, args.join(' ') === 'config user.name' ? 'faner' : '')
+  }
+
+  /** 生产装配同构接线（core/src/index.ts 同径：bugs 域服务聚合 + 闭包注入消 import 边） */
+  function productionFace() {
+    const bugs = createBugsService({
+      store: h!.store,
+      events: h!.events,
+      resolveWsPath: () => h!.projectId,
+      execFile: gitExec() as never,
+    })
+    return {
+      bugs,
+      findRecurrenceCandidates: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] }) =>
+        bugs.findRecurrenceCandidates(projectId, scope),
+    }
+  }
+
+  async function seedChain(): Promise<void> {
+    seed()
+    const bugs = createBugsService({
+      store: h!.store,
+      events: h!.events,
+      resolveWsPath: () => h!.projectId,
+      execFile: gitExec() as never,
+    })
+    const root = (await bugs.registerBug({
+      projectId: P(),
+      summary: '写径拒写根',
+      bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a',
+      suspected: 'packages/core/src/forge/tasks/submit.ts:78',
+    })).card
+    await bugs.registerBug({
+      projectId: P(),
+      summary: '写径复发一',
+      bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a',
+      suspected: 'packages/core/src/forge/tasks/submit.ts:96',
+      recurrenceOf: root.bugId,
+    })
+  }
+
+  it('face 经 bugs 域服务聚合：新问题 ∧ scope 命中链上 suspected → suspected-family 警示（链结构 = 域层口径）', async () => {
+    await seedChain()
+    const { findRecurrenceCandidates } = productionFace()
+    const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(r.status).toBe('blocked') // 警示不硬拒
+    expect(r.recurrenceAdvisories).toHaveLength(1)
+    const advisory = r.recurrenceAdvisories![0]!
+    expect(advisory.kind).toBe('suspected-family')
+    expect(advisory.candidates).toHaveLength(2) // 链两员均候选
+    expect(advisory.candidates![0]!.chain).toHaveLength(2) // root → 复发一
+  })
+
+  it('face 缺席 → 降级留痕 recurrence-face-absent（onDiag 类型化 emit，info 级）', async () => {
+    seed()
+    const diags: { level: string; event: string }[] = []
+    const r = await submitTask({ store: h!.store, events: h!.events, onDiag: (p) => diags.push({ level: p.level, event: p.event }) }, blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(diags).toContainEqual({ level: 'info', event: 'recurrence-face-absent' })
+  })
+
+  it('face 读故障 → 降级留痕 recurrence-face-error（warn 级）+ 结算态不受影响', async () => {
+    seed()
+    const diags: { level: string; event: string }[] = []
+    const r = await submitTask({
+      store: h!.store,
+      events: h!.events,
+      findRecurrenceCandidates: () => {
+        throw new Error('台账读故障')
+      },
+      onDiag: (p) => diags.push({ level: p.level, event: p.event }),
+    }, blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(diags).toContainEqual({ level: 'warn', event: 'recurrence-face-error' })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'blocked' }])
   })
 })

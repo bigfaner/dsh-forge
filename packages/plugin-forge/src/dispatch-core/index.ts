@@ -66,4 +66,7 @@ export type {
   RecurrenceEscalationRejection,
   SameSeamRecurrenceFace,
 } from './claim.js'
+// recurrence 生产装配面工厂（loop-recurrence-hardening——bug 0db72bcb 断链修复：两只读 face 单一构造口）
+export { createRecurrenceFaces } from './recurrence-faces.js'
+export type { RecurrenceBugsFace, RecurrenceFaces, RecurrenceFacesDeps } from './recurrence-faces.js'
 export type { SpawnWorker, SpawnWorkerHandle, SpawnWorkerRequest } from './spawn.js'

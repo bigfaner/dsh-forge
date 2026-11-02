@@ -45,6 +45,7 @@ import type {
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
 import { addTask } from './add.js'
+import type { DiagEventPayload } from '../../telemetry/diag-events.js'
 import { claimTask } from './claim.js'
 import { taskDetail } from './detail.js'
 import type { GitExecFile } from './git-lookup.js'
@@ -93,6 +94,8 @@ export interface TasksServiceDeps {
     projectId: string,
     scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
   ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
+  /** 诊断发射缝（AGENTS §7——降级径留痕透传动词面；缺席 = console 按级兜底） */
+  readonly onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void
 }
 
 /** Interface 1：core · forge 任务域服务面（ctx.forgeTasks——十一法全接线） */

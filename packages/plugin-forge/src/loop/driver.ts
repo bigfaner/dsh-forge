@@ -2339,13 +2339,28 @@ async function onRecurrenceEscalation(
  */
 async function recurrenceChainVarsOf(loop: ActiveLoop, task: TaskSnapshot): Promise<Record<string, string> | undefined> {
   const find = loop.core.findRecurrenceCandidates
-  if (find === undefined) return undefined
+  if (find === undefined) {
+    // AGENTS §7 降级留痕：face 缺席 = 判例注入（T0 派生径）生产静默关停（bug 0db72bcb 教训）
+    emitForgeDiag(loop.deps.diag, {
+      level: 'info',
+      event: 'recurrence-face-absent',
+      message: `loop add-fix 判例注入降级：findRecurrenceCandidates face 缺席（${task.slug}/${task.localId}）——RECURRENCE_CHAIN/RECURRENCE_COUNT vars 关停（核销装配面接线）`,
+      projectId: loop.scope.projectId,
+    })
+    return undefined
+  }
   try {
     const candidates = await find(loop.scope.projectId, { slug: task.slug, localId: task.localId, files: [] })
     if (candidates.length === 0) return undefined
     const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
     return { RECURRENCE_CHAIN: top.chain.join(' → '), RECURRENCE_COUNT: String(recurrenceCountOf(top.chain)) }
-  } catch {
+  } catch (cause) {
+    emitForgeDiag(loop.deps.diag, {
+      level: 'warn',
+      event: 'recurrence-face-error',
+      message: `loop add-fix 判例注入降级：台账候选检索故障（${task.slug}/${task.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: loop.scope.projectId,
+    })
     return undefined
   }
 }

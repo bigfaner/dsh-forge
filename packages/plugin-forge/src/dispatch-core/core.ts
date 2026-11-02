@@ -399,6 +399,7 @@ export async function claimForDispatch(deps: DispatchCoreDeps, exec: DispatchCor
     task,
     findRecurrenceCandidates: deps.findRecurrenceCandidates,
     modelingReportPresent: deps.modelingReportPresent,
+    diag: deps.diag, // 降级径留痕（AGENTS §7——face 缺席/台账读故障 emit）
   })
   if (escalation !== undefined) {
     return { kind: 'escalation-required', task, failure: escalation.failure, chain: escalation.chain, count: escalation.count }

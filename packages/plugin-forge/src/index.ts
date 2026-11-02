@@ -34,7 +34,7 @@ import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
-import { createSettleReportRecovery, gitHeadCommit } from './dispatch-core/index.js'
+import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
@@ -410,6 +410,15 @@ const forgePlugin: ForgePlugin = Object.assign(
     // getProject→ws_path→deriveTaskStoreDir 单源）；未命中/失败 = 该次详情行省略（fail-soft
     // 不拖垮叙述，绝不落相对路径）。
     const projectDirs = createProjectContainerDirs(ctx.forgeProjects)
+    // loop-recurrence-hardening 生产装配接线（bug 0db72bcb 装配断链修复）：台账 recurrence
+    // 候选只读 face = ctx.forgeBugs 域服务只读聚合（四域互禁不破——结构化消费面）+ 卷宗建模
+    // 报告在场探测 = settle.ts resolveDir 同源 projects face 派生（提案卷宗 issues/<localId>/
+    // 顶层 .md 在场即 true；探测面只读、fail-soft 缺席 false）。T2 疑似同族警示 / T3 同缝
+    // 拦截与解除判据 / triage 两信号 / add-fix vars 四处机制生产生效的装配前提。
+    const recurrenceFaces = createRecurrenceFaces({
+      bugs: ctx.forgeBugs,
+      resolveProjectDir: (projectId) => projectDirs.resolve(projectId),
+    })
     const boundProjectIds = bindingProjectIds(config.projects ?? [], config.bindingsFile)
     projectDirs.warm(boundProjectIds)
     const narrator = createNarrator({
@@ -519,6 +528,10 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath +
       // .forge/docs/proposals/<slug>/issues/<localId>。fail-soft，缺席机制惰性不判）
       reportRecovery: createSettleReportRecovery({ projects: ctx.forgeProjects, ...(diag !== undefined ? { diag } : {}) }),
+      // T2/T3/T0 两 face 生产接线（loop-recurrence-hardening——bug 0db72bcb 断链修复：
+      // 缺席即四处机制生产静默关停，本注入是生产路径的装配前提；降级径 diag 留痕见消费点）
+      findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
+      modelingReportPresent: recurrenceFaces.modelingReportPresent,
       resolveProposalId: async (projectId, source) => {
         try {
           const rows = await ctx.forgeProposals.listProposals({ projectId })
@@ -541,6 +554,10 @@ const forgePlugin: ForgePlugin = Object.assign(
         // expert-squad-forge-2 纳入 2：triage persona 档案合成走同一专家取用缝
         // （ready 屏障/settings 兜底/fail-loud 语义与 claim 链单源）；缺席 = 形态兼容。
         ...(expertResolver !== undefined ? { resolveExpertProfile: expertResolver } : {}),
+        // loop-recurrence-hardening §2.2.1 两信号之一生产接线（bug 0db72bcb 断链修复）+
+        // 降级径诊断缝随载（AGENTS §7）
+        findRecurrenceCandidates: recurrenceFaces.findRecurrenceCandidates,
+        ...(diag !== undefined ? { diag } : {}),
       }),
       ...(askFace !== undefined
         ? {

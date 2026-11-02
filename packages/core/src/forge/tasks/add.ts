@@ -47,6 +47,7 @@ import {
   TasksProposalNotFoundError,
 } from './errors.js'
 import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
+import type { DiagEventPayload } from '../../telemetry/diag-events.js'
 import type { ExpertPersonaProfile } from './prompt/persona.js'
 
 /** 动词装配依赖（service.ts 装配面同形结构传入） */
@@ -90,6 +91,11 @@ export interface TasksVerbDeps {
     projectId: string,
     scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] },
   ) => Promise<readonly BugRecurrenceCandidate[]> | readonly BugRecurrenceCandidate[]
+  /**
+   * 诊断发射缝（AGENTS §7——降级径留痕：findRecurrenceCandidates face 缺席/台账读故障
+   * emit 点；缝缺席 = emitDiagOrFallback 按级 console 兜底——统一口径，订阅侧零改动）。
+   */
+  readonly onDiag?: (payload: Omit<DiagEventPayload, 'process'>) => void
 }
 
 /** 任务行最小定位形状（解析/去重/链计数消费；全列读面归 query/读动词）。

@@ -31,6 +31,7 @@ import type {
   BugCommitFile,
   BugCommitFilesQuery,
   BugFileDiffQuery,
+  BugRecurrenceCandidate,
   BugRecurrenceDanglingData,
   BugStatus,
   GetBugQuery,
@@ -445,6 +446,45 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 }
 
 /** Interface：core · forge bug 域服务面（装配注入——recordBug/resolveBug 工具消费 + listBugs RPC） */
+
+/**
+ * 台账 recurrence 候选检索 scope（loop-recurrence-hardening T2/T3——跨容器库域口径归本域
+ * 定义，tasks 域经只读 face 消费零 import）。files 口径：非空（结算径）→ 按 suspected
+ * 修复锚路径收窄（同缝提示性信号）；空（派发径）→ 项目全链成员候选（同缝拦截判据）。
+ */
+export interface BugRecurrenceScope {
+  readonly slug: string
+  readonly localId: string
+  readonly files: readonly string[]
+}
+
+/** 链成员映射（前驱回溯至链根 + 后继正向收齐——getBug 同口径提取；孤条不入） */
+function recurrenceChainsOf(rows: readonly BugStorageRow[]): Map<string, string[]> {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const childrenByParent = new Map<string, string[]>()
+  for (const r of rows) {
+    if (r.recurrence_of === null) continue
+    const bucket = childrenByParent.get(r.recurrence_of) ?? []
+    bucket.push(r.id)
+    childrenByParent.set(r.recurrence_of, bucket)
+  }
+  const chains = new Map<string, string[]>()
+  for (const r of rows) {
+    const chainIds: string[] = []
+    for (let cursor: BugStorageRow | undefined = r; cursor !== undefined; ) {
+      chainIds.unshift(cursor.id) // 反向回溯——链根推到队首
+      cursor = cursor.recurrence_of !== null ? byId.get(cursor.recurrence_of) : undefined
+    }
+    for (let frontier = childrenByParent.get(chainIds[chainIds.length - 1]!) ?? []; frontier.length > 0; ) {
+      chainIds.push(...frontier)
+      frontier = frontier.flatMap((id) => childrenByParent.get(id) ?? [])
+    }
+    const unique = [...new Set(chainIds)]
+    if (unique.length > 1) chains.set(r.id, unique)
+  }
+  return chains
+}
+
 export function createBugsService(deps: BugsServiceDeps) {
   const execFile = deps.execFile ?? defaultExecFile
   return {
@@ -615,6 +655,29 @@ export function createBugsService(deps: BugsServiceDeps) {
         createdAt: (c) => c.createdAt,
         id: (c) => c.bugId,
       }).slice(Math.max(q.offset ?? 0, 0), q.limit === undefined ? undefined : Math.max(q.offset ?? 0, 0) + q.limit)
+    },
+
+    /**
+     * 台账 recurrence 候选只读聚合（loop-recurrence-hardening T2 交叉校验 / T3 同缝计数 /
+     * triage 两信号 / add-fix vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经
+     * 闭包注入消费零 import，四域互禁不破）。候选 = 复发链成员（链长 ≥ 2）；scope.files
+     * 非空按 suspected 锚路径收窄，空 = 全链成员（口径见 BugRecurrenceScope 注）。
+     */
+    async findRecurrenceCandidates(projectId: string, scope: BugRecurrenceScope): Promise<readonly BugRecurrenceCandidate[]> {
+      const db = deps.store.ensureOpen(projectId)
+      const rows = db.prepare<unknown[], BugStorageRow>(`${SELECT_BUG}`).all() as BugStorageRow[]
+      const chains = recurrenceChainsOf(rows)
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
+      const candidates: BugRecurrenceCandidate[] = []
+      for (const [bugId, chain] of chains) {
+        if (files.length > 0) {
+          const suspected = byId.get(bugId)?.suspected ?? ''
+          if (!files.some((f) => suspected.includes(f))) continue
+        }
+        candidates.push({ bugId, summary: byId.get(bugId)?.summary ?? '', chain })
+      }
+      return candidates
     },
 
     /**

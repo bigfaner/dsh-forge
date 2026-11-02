@@ -50,6 +50,7 @@ import { assertPhaseInvariant, deriveFeaturePhase } from './phase-deriver.js'
 import { resolvePhaseGuardFeature, resolveTaskRef } from './query.js'
 import { SATISFYING_TASK_STATUSES, assertTransitionAllowed } from './state-machine.js'
 import { runRestoreHook } from './transition.js'
+import { emitDiagOrFallback } from '../../telemetry/diag-events.js'
 
 /** 归类 kind 合法集（T2 presence 校验——kind 非法同形拒绝；程序零语义判断） */
 const BLOCK_CLASSIFICATION_KINDS = new Set(['new-problem', 'same-family-recurrence'])
@@ -76,25 +77,44 @@ async function deriveRecurrenceAdvisories(
     })
   }
   const findCandidates = deps.findRecurrenceCandidates
-  if (classification.kind === 'new-problem' && findCandidates !== undefined) {
-    try {
-      const candidates = await findCandidates(input.projectId, {
-        slug: input.taskRef.slug,
-        localId: input.taskRef.localId,
-        files: input.files ?? [],
+  if (classification.kind === 'new-problem') {
+    if (findCandidates === undefined) {
+      // AGENTS §7 降级留痕：face 缺席 = 疑似同族警示机制生产静默关停（bug 0db72bcb 教训
+      // ——降级必须可观测），info 级一次性 emit（装配修复后归零）。
+      emitDiagOrFallback(deps.onDiag, {
+        level: 'info',
+        event: 'recurrence-face-absent',
+        message:
+          `forgeTasks submitTask 归类交叉校验降级：findRecurrenceCandidates face 缺席` +
+          `（${input.taskRef.slug}/${input.taskRef.localId}）——疑似同族警示机制惰性关停（核销装配面接线）`,
       })
-      if (candidates.length > 0) {
-        advisories.push({
-          kind: 'suspected-family',
+    } else {
+      try {
+        const candidates = await findCandidates(input.projectId, {
+          slug: input.taskRef.slug,
+          localId: input.taskRef.localId,
+          files: input.files ?? [],
+        })
+        if (candidates.length > 0) {
+          advisories.push({
+            kind: 'suspected-family',
+            message:
+              `疑似同族：台账按 scope 命中 ${candidates.length} 条 recurrence 候选` +
+              `（${candidates.map((c) => c.chain.join(' → ')).join('；')}）——` +
+              `归类自报「新问题」，请主会话复核家族归属`,
+            candidates,
+          })
+        }
+      } catch (cause) {
+        // fail-soft：候选检索失败降级跳过——交叉校验不阻载结算（不吞结算语义）+ warn 留痕
+        emitDiagOrFallback(deps.onDiag, {
+          level: 'warn',
+          event: 'recurrence-face-error',
           message:
-            `疑似同族：台账按 scope 命中 ${candidates.length} 条 recurrence 候选` +
-            `（${candidates.map((c) => c.chain.join(' → ')).join('；')}）——` +
-            `归类自报「新问题」，请主会话复核家族归属`,
-          candidates,
+            `forgeTasks submitTask 归类交叉校验降级：台账候选检索故障（${input.taskRef.slug}/` +
+            `${input.taskRef.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
         })
       }
-    } catch {
-      // fail-soft：候选检索失败降级跳过——交叉校验不阻载结算（不吞结算语义）
     }
   }
   return advisories

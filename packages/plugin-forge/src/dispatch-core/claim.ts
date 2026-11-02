@@ -11,6 +11,8 @@
 // 链须 block_source=true；同族复发径盲试 fix 派发被本守卫软拒绝转升级——两错误码指引文案
 // 互相指路（本面 violations 指向前者，core errors.ts BlockSourceRequiredError 消息指向本码）。
 import type { BugRecurrenceCandidate, TaskSnapshot } from '@dsh-forge/contracts'
+import { emitForgeDiag } from '../faces.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { DispatchCoreFailure } from './result.js'
 
 /** 同缝拦截阈值（提案 T3：同缝 ≥ 2 → 拒绝盲试 fix 派发，提示先升级排查） */
@@ -74,18 +76,47 @@ export async function recurrenceEscalationGuard(input: {
   readonly task: TaskSnapshot
   readonly findRecurrenceCandidates?: SameSeamRecurrenceFace
   readonly modelingReportPresent?: ModelingReportPresentFace
+  /** 诊断发射缝（AGENTS §7——降级径留痕：face 缺席 info / 台账读故障 warn；缺席 = console 兜底） */
+  readonly diag?: ForgeDiagEmitFace
 }): Promise<RecurrenceEscalationRejection | undefined> {
-  const { projectId, task, findRecurrenceCandidates, modelingReportPresent } = input
-  if (!isBlindFixDispatch(task) || findRecurrenceCandidates === undefined) return undefined
+  const { projectId, task, findRecurrenceCandidates, modelingReportPresent, diag } = input
+  if (!isBlindFixDispatch(task)) return undefined
+  if (findRecurrenceCandidates === undefined) {
+    // AGENTS §7 降级留痕：face 缺席 = 同缝拦截机制生产静默关停（bug 0db72bcb 教训——降级
+    // 必须可观测），info 级 emit（仅盲试 fix 派发径——非 fix 任务零拦截零噪声）。
+    emitForgeDiag(diag, {
+      level: 'info',
+      event: 'recurrence-face-absent',
+      message: `dispatch-core T3 同缝拦截降级：findRecurrenceCandidates face 缺席（${task.slug}/${task.localId}）——盲试 fix 守卫惰性放行（核销装配面接线）`,
+      projectId,
+    })
+    return undefined
+  }
   let candidates: readonly BugRecurrenceCandidate[]
   try {
     candidates = await findRecurrenceCandidates(projectId, { slug: task.slug, localId: task.localId, files: [] })
-  } catch {
+  } catch (cause) {
+    emitForgeDiag(diag, {
+      level: 'warn',
+      event: 'recurrence-face-error',
+      message: `dispatch-core T3 同缝拦截降级：台账候选检索故障（${task.slug}/${task.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId,
+    })
     return undefined // fail-soft：台账读故障降级放行——机制惰性不阻派发主链
   }
   if (candidates.length === 0) return undefined
   const count = sameSeamCountOf(candidates)
   const chain = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a)).chain
+  if (modelingReportPresent === undefined) {
+    // AGENTS §7 降级留痕：报告探测 face 缺席 = 「报告落卷即放行」解除判据恒不可满足
+    // （bug 0db72bcb 断链面）——降级为报告恒不在场（拦截保守成立）+ info 留痕。
+    emitForgeDiag(diag, {
+      level: 'info',
+      event: 'modeling-report-face-absent',
+      message: `dispatch-core T3 解除判据降级：modelingReportPresent face 缺席（${task.slug}/${task.localId}）——报告视为不在场，拦截保守成立（核销装配面接线）`,
+      projectId,
+    })
+  }
   const reportPresent = modelingReportPresent?.({ projectId, slug: task.slug, localId: task.localId }) === true
   if (!isModelingPending(count, reportPresent)) return undefined
   return {
