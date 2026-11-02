@@ -27,10 +27,16 @@ export interface ItemNavDoc {
 /** 官方组卡片「查看」钮（ItemCard onOpen——e2e data-plugin-item 同锚）。 */
 const ITEM_CARD_BUTTON_SEL = '[data-plugin-item="expert-squad"] button';
 
+/** 插件管理器面板 id（dsh-client-ui-plugin-manager PANEL_ID 同源字面量）。 */
+const PLUGINS_PANEL_ID = "plugins";
+
+/** 卡片等待轮间隔（16ms ≈ 逐帧——面板切换后的列表帧压到不可感知）。 */
+const CARD_POLL_MS = 16;
+
 /** 调度注入型（默认真机 setTimeout；单测同步驱动）。 */
 export type NavSchedule = (fn: () => void, ms: number) => void;
 
-/** 借道落列表后点官方组卡片「查看」钮（面板渲染等待 20×100ms 上限；标签漂移 = 静默停在列表页）。 */
+/** 借道落列表后点官方组卡片「查看」钮（面板渲染等待 20×16ms 轮询上限；标签漂移 = 静默停在列表页）。 */
 function clickItemCard(doc: ItemNavDoc | undefined, schedule: NavSchedule): void {
   if (doc === undefined) return;
   let tries = 0;
@@ -42,16 +48,18 @@ function clickItemCard(doc: ItemNavDoc | undefined, schedule: NavSchedule): void
     }
     if (tries < 20) {
       tries += 1;
-      schedule(click, 100);
+      schedule(click, CARD_POLL_MS);
     }
   };
-  schedule(click, 100);
+  schedule(click, CARD_POLL_MS);
 }
 
 /**
  * 「配置」跳转解析器：装配期返回「点击时点解析缝」的 thunk；缝在场 = 返回跳转闭包，
  * 缝缺席/形状漂移/异常 = undefined（调用方降级既有 DOM 导航先例，不炸）。
- * 优先级：官方 openItem 正门 > openBundle 借道 + DOM 卡片点击 > undefined。
+ * 优先级：官方 openItem 正门 > layout.selectPanel/openBundle 面板直切 + DOM 卡片点击
+ *（官方缝无 item view 正门——中间列表帧是面板渲染必经态，16ms 逐帧轮询压到不可感知）
+ * > undefined。
  */
 export function pluginConfigJumpOf(
   ctx: NavLazyCtx,
@@ -66,9 +74,18 @@ export function pluginConfigJumpOf(
       if (typeof nav?.openItem === "function") {
         return () => nav.openItem!.call(nav, EXPERT_SQUAD_ITEM_ID);
       }
-      if (typeof nav?.openBundle !== "function") return undefined;
+      // 面板直切缝：官方 layout.selectPanel（plugin-manager 同款消费）——跳过 openBundle
+      // 的 package view 双重渲染（bundle 退役后它落列表）；缺席 = openBundle 兼容径。
+      const layout = ctx.reflect?.get("layout") as { selectPanel?: (id: string) => void } | undefined;
+      if (typeof nav?.openBundle !== "function" && typeof layout?.selectPanel !== "function") {
+        return undefined;
+      }
       return () => {
-        nav.openBundle!.call(nav, EXPERT_SQUAD_PKG);
+        if (typeof layout?.selectPanel === "function") {
+          layout.selectPanel.call(layout, PLUGINS_PANEL_ID);
+        } else {
+          nav!.openBundle!.call(nav, EXPERT_SQUAD_PKG);
+        }
         clickItemCard(doc, schedule);
       };
     } catch {

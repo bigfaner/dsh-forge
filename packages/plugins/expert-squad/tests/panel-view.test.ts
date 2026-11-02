@@ -369,7 +369,36 @@ describe("pluginConfigJumpOf 官方导航缝", () => {
     expect(clicked).toEqual([]);
   });
 
-  it("仅 openBundle（bundle 退役态）：借道 selectPanel + 落列表 → DOM 点官方组卡片「查看」钮打开 item 详情", async () => {
+  it("layout.selectPanel 面板直切优先（跳过 package view 双渲染）：selectPanel(plugins) + DOM 点卡片，不调 openBundle", async () => {
+    const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
+    const calls: string[] = [];
+    const clicked: string[] = [];
+    const doc = {
+      querySelector: (sel: string) =>
+        sel === '[data-plugin-item="expert-squad"] button' ? { click: () => clicked.push(sel) } : null,
+    };
+    const scheduled: (() => void)[] = [];
+    const resolve = pluginConfigJumpOf(
+      {
+        reflect: {
+          get: (n: string) =>
+            n === "pluginNavigation"
+              ? { openBundle: (pkg: string) => { calls.push(`bundle:${pkg}`); } }
+              : n === "layout"
+                ? { selectPanel: (id: string) => { calls.push(`panel:${id}`); } }
+                : undefined,
+        },
+      },
+      doc,
+      (fn) => { scheduled.push(fn); },
+    );
+    resolve()!();
+    scheduled[0]!();
+    expect(calls).toEqual(["panel:plugins"]); // openBundle 未被调用
+    expect(clicked).toEqual(['[data-plugin-item="expert-squad"] button']);
+  });
+
+  it("仅 openBundle（layout 缺席兼容径）：借道 openBundle + 落列表 → DOM 点官方组卡片「查看」钮", async () => {
     const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
     const calls: string[] = [];
     const clicked: string[] = [];
@@ -391,7 +420,7 @@ describe("pluginConfigJumpOf 官方导航缝", () => {
     expect(clicked).toEqual(['[data-plugin-item="expert-squad"] button']);
   });
 
-  it("DOM 卡片缺席（面板未渲染完）：100ms 轮询重试 20 次上限（标签漂移 = 静默停在列表页）", async () => {
+  it("DOM 卡片缺席（面板未渲染完）：16ms 逐帧轮询重试 20 次上限（标签漂移 = 静默停在列表页）", async () => {
     const { pluginConfigJumpOf } = await import("../src-client/panel/config-jump.js");
     const doc = { querySelector: (): null => null };
     const scheduled: (() => void)[] = [];
