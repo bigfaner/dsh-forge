@@ -1343,6 +1343,9 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         }
       }
       // ⑥ LoopInstanceId（decisions #18）：crypto.randomUUID()——登记表键 + guard 粘性载体
+      // L2 防御性现读（bug 6d98a275 验证）：同源独占判据复用上方 bySource 判读——若未来独占
+      // 拒绝被移除/漂移，对账仍以登记表现值短路（不误真化他循环在飞任务）；可达路径恒 true
+      const sourceFreeAtStart = active === undefined
       const id = crypto.randomUUID()
       const source: LoopSourceRef = { kind: input.source.kind, slug: input.source.slug }
       const record: LoopRecord = {
@@ -1420,12 +1423,13 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
         // S3-scoped 启动对账（bug 6d98a275）：装配期对账只在进程重启后跑一次——claim↔spawn
         // 窗口死亡 / spawn 未成幂等重入径遗留的 loop-sourced in_progress 此后无人回收（恢复
         // 扫描只认 interrupted）。同源独占（S1c）+ 本实例尚未领取 ⇒ 登记时点本源 in_progress
-        // loop-sourced 任务恒为孤儿（registryEmpty=true 对本源结构成立）；scoped 真化
+        // loop-sourced 任务恒为孤儿（registryEmpty = sourceFreeAtStart 现读——对本源结构恒
+        // 真：S1c 同源独占 + 本实例尚未领取）；scoped 真化
         // interrupted 后交 runRound ① adopt 径重派。每枚回收任务追加 stop 进度事件进 owner
         // 会话（面板/进度卡同源投影渲染）。fail-soft：对账故障不阻启动（warn 留痕，孤儿留
         // 原态下次启动重试）。
         try {
-          const orphans = await deps.tasks.reconcileInterrupted({ projectId, registryEmpty: true, source })
+          const orphans = await deps.tasks.reconcileInterrupted({ projectId, registryEmpty: sourceFreeAtStart, source })
           for (const ref of orphans.reconciled) {
             emitProgress(loop, {
               verb: 'stop',

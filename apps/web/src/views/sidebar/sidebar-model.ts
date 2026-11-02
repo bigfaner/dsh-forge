@@ -196,7 +196,10 @@ export const FORGE_LOOP_SCENARIO_PHASE: Readonly<Record<ProgressScenarioMirror, 
   'loop/timeout': 'terminal',
   'loop/finish-all': 'terminal',
   'loop/stopped': 'terminal',
-  'loop/orphan-reconciled': 'terminal',
+  // bug 6d98a275 验证 M2：orphan-reconciled 是任务级事件（携 taskKey）且循环随即
+  // claim-resume 重派——映射 running（terminal 会让最近事件定相位的徽标在回收后到
+  // 首个 claim 前误显「循环已结束」）
+  'loop/orphan-reconciled': 'running',
   'suspend/spawn-rate-limited': 'suspended',
   'suspend/worker-rate-limited': 'suspended',
   'suspend/abort-over-limit': 'suspended',
