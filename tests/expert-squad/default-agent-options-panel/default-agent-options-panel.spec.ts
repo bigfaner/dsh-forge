@@ -40,6 +40,13 @@ const REASONING_BOX = '#dswf-cfg-reasoning'
 const REASONING_ROOT = '[data-select="dswf-cfg-reasoning"]'
 const PANEL_CARD = '[data-cfg-state="ready"]'
 
+/** 官方组 expert-squad 条目（plugins.item 登记 id——官方四件同款 item 卡片） */
+const ITEM_ID = 'expert-squad'
+/** item 详情页根（官方 plugin-manager ItemDetail keyed——client.js:2300） */
+const ITEM_DETAIL = `[data-plugin-item-detail="${ITEM_ID}"]`
+/** item 详情页配置 section（官方 ItemDetail 内 data-plugin-config——client.js:2329） */
+const ITEM_CONFIG_SECTION = `${ITEM_DETAIL} [data-plugin-config]`
+
 /** 夹具专家（无路由——provider/model/reasoning 全缺省 = 继承父Agent） */
 const FIXTURE_KEY = 'route-probe'
 
@@ -139,6 +146,19 @@ async function openDefaultAgentOptionsPanel(page: Page): Promise<void> {
   ).toHaveCount(0)
   await expect(page.locator(PROVIDER_BOX), '「默认 Agent 选项」面板挂载（detail.section 消费点，Provider select 形态）').toBeVisible()
   await expect(page.locator(PANEL_CARD), '面板 ready（configForms 写径就绪）').toBeVisible()
+}
+
+/**
+ * 导航到官方组 expert-squad item 详情页（plugins.item 呈现——官方四件同路径）：左栏
+ * 「插件」面板 → 官方组 item 卡片（data-plugin-item，官方组直渲染、无列表行点击差）
+ * → 卡片标题「查看 专家团」钮（locale openDetail）→ item 详情页（data-plugin-item-detail）。
+ */
+async function openOfficialItemDetail(page: Page): Promise<void> {
+  await page.locator('button[aria-label="插件"]').first().click()
+  const item = page.locator(`[data-plugin-item="${ITEM_ID}"]`)
+  await expect(item, '插件页官方组 expert-squad 条目在场（plugins.item 直渲染）').toBeVisible()
+  await item.getByRole('button', { name: '查看 专家团' }).click()
+  await expect(page.locator(ITEM_DETAIL), 'item 详情页挂载').toBeVisible()
 }
 
 /** 下拉选值（box 开菜单 → 按 value 点 option，选值即提交） */
@@ -276,5 +296,55 @@ test('AC2·面板形态锚：标题/分区/三字段 select 形态微文案（�
     await closeApp(app)
     rmSync(userData, { recursive: true, force: true })
     if (backup !== null && patchText() !== backup) writeFileSync(DEV_PATCH, backup, 'utf8')
+  }
+})
+
+test('AC1·官方组条目导航：插件页官方组 expert-squad 条目 → item 详情页配置 section（无卸载按钮形态锚）', async () => {
+  // plugins.item 呈现旅程（builtin-plugin-item-presentation AC1 可机检半）：官方组条目与
+  // 官方四件同路径（官方组直渲染、无列表行点击差）→ item 详情页（data-plugin-item-detail）
+  // 挂「默认 Agent 选项」表单（data-cfg-* 锚复用）+ data-plugin-config section 在场
+  //（官方 ItemDetail keyed——client.js:2329）。
+  // 实测呈现口径（1.2 落地实况）：表单体经 plugins.detail.section 缝渲染（subject.kind =
+  // "item" 门控——settings/index.tsx DefaultAgentOptionsSection）；plugins.item view:"page"
+  // 消费面真机为空壳（宿主 form 未达本插件条目组件——配置区 h=0 塌缩，探针取证
+  // task_logs 001-official-item-nav/probe2.txt）。本旅程断言用户可达面（表单在 item 详情页
+  // 呈现且 ready）+ 结构性形态锚（无卸载按钮），page-view 空壳归 product 侧跟进面。
+  // 只读旅程：零写径（不触 patch 文件，无备份/还原面）。
+  test.setTimeout(120_000)
+  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-dao-item-ud-'))
+  const { launchHost } = await import('../../../e2e/support/launch.js')
+  const launched = await launchHost({ userData })
+  const { app, page } = launched
+  try {
+    await openOfficialItemDetail(page)
+
+    // 配置面：默认 Agent 选项表单挂载即 ready（表单区锚 scoped 到 item 详情页根——
+    // 渲染缝 = detail.section subject item 门控；summary 一行简介同页呈现）
+    await expect(page.locator(`${ITEM_DETAIL} .dswf-cfg-panel-title`), '配置表单标题 = 默认 Agent 选项').toHaveText('默认 Agent 选项')
+    await expect(page.locator(`${ITEM_DETAIL} ${PROVIDER_BOX}`), 'Provider select 挂载（configForms 读写径同源）').toBeVisible()
+    await expect(page.locator(`${ITEM_DETAIL} ${PANEL_CARD}`), '面板 ready（configForms 写径就绪）').toBeVisible()
+    // 官方配置 section 锚在场（data-plugin-config = ItemDetail 配置区 keyed；空壳塌缩
+    // 属 product 侧 page-view 消费面现状——结构锚在场即可，不断可见性）
+    await expect(page.locator(ITEM_CONFIG_SECTION), 'item 详情页配置 section 在场').toHaveCount(1)
+
+    // 结构性形态锚：item 详情页无卸载按钮（ItemDetail 结构性无 delete 面——官方四件逐位
+    // 同构；uninstall 文案钮 / 危险 deleteButton 形态均不在）
+    await expect(
+      page.locator(`${ITEM_DETAIL} button`, { hasText: '卸载' }),
+      'item 详情页无卸载按钮（结构性形态锚）',
+    ).toHaveCount(0)
+    // 双缝并存边界：item 详情页不渲染 bundle 形态的「包含的组件」RowsSection（subject.kind
+    // = item——bundle rows 区不出现）
+    await expect(
+      page.locator(`${ITEM_DETAIL} [data-plugin-rows]`),
+      'item 详情页无 bundle rows 区（item 形态与 bundle 形态互斥）',
+    ).toHaveCount(0)
+
+    // 返回官方组：crumb「返回插件列表」回官方组卡片列表（条目仍在场——往返零丢失）
+    await page.getByRole('button', { name: '返回插件列表', exact: true }).click()
+    await expect(page.locator(`[data-plugin-item="${ITEM_ID}"]`), '回官方组后 expert-squad 条目仍在场').toBeVisible()
+  } finally {
+    await closeApp(app)
+    rmSync(userData, { recursive: true, force: true })
   }
 })
