@@ -71,4 +71,12 @@ describe("bundle 声明结构镜像（cordis Loader / plugin-manager 识别面�
     expect(expertSquadClient.apply).toBeTypeOf("function");
     expect(clientApply).toBeTypeOf("function");
   });
+
+  it("client apply 装配 plugins.item 缝（官方组卡片呈现——官方四件同款注册缝）", () => {
+    const clientSrc = readFileSync(resolve(pkgDir, "src-client", "index.ts"), "utf8");
+    expect(clientSrc).toContain("registerPluginsItemEntry");
+    const settingsSrc = readFileSync(resolve(pkgDir, "src-client", "settings", "index.tsx"), "utf8");
+    expect(settingsSrc).toContain('"plugins.item"');
+    expect(settingsSrc).toContain("plugins.detail.section");
+  });
 });

@@ -53,6 +53,20 @@ export const DETAIL_SECTION_ID = "expert-squad-default-agent-options";
 export const EXPERT_SQUAD_PKG = "@dsh-forge/expert-squad";
 /** 本插件 settings namespace 短名（候选一——行 id 恰为短名的部署直配）。 */
 export const SETTINGS_NAMESPACE = "expert-squad";
+/** 官方插件管理页 item list 槽键（官方四件同款注册缝——调研报告
+ *  2026-11-builtin-plugin-manageable-presentation §1：dsh-client-ui-settings-subagent
+ *  lib/client.js:839-846 同型；消费面 client.js:2330/2322 view page/summary、
+ *  client.js:3384 官方组卡片合成）。 */
+export const ITEM_SLOT = "plugins.item";
+/** 本插件 item 登记 id（官方组卡片 + item 详情页判同键；id 异于 detail.section 缝的
+ *  DETAIL_SECTION_ID——两缝并存零冲突）。 */
+export const ITEM_ID = "expert-squad";
+/** item 行排位（官方 subagent order 30 之后留序——同槽行序不挤官方四件）。 */
+const ITEM_ORDER = 40;
+/** item 行 label（locale NS 接入前的字面量——插件页官方组卡片标题）。 */
+const ITEM_LABEL = "专家团";
+/** item 卡片一行简介（view:"summary" 渲染面——ItemDetail one-liner client.js:2322）。 */
+const ITEM_DESCRIPTION = "专家团配置与默认 Agent 路由";
 /**
  * namespace 候选集（bug 9577a867）：官方 Host settings describe 的 ns = profile 行 id
  * （dsh-settings describe `ns: entry.options.id`），产品模板生成行 id = `dsh-forge-expert-squad`
@@ -180,6 +194,78 @@ export function registerDefaultAgentOptionsSection(
 }
 
 /**
+ * 注册官方插件管理页 item 条目（plugins.item list slot——官方四件同构呈现：官方组卡片 +
+ * item 详情页配置表单；ItemDetail 结构性无卸载按钮，调研报告 §5 落点 A）。id = ITEM_ID、
+ * order = 40（subagent 之后）、label = 专家团；inject 面携本插件 namespace 的 ConfigForm
+ *（读写径与 whileServed namespace 解析同 detail.section 缝不变）。configForms/slots 缺席 =
+ * 降级不注册（console.warn 留痕——registerDefaultAgentOptionsSection 同纪律）；
+ * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸）。两缝并存：本缝与
+ * plugins.detail.section 注册 id 异槽异键，零冲突。
+ */
+export function registerPluginsItemEntry(
+  ctx: {
+    configForms?: unknown;
+    reflect?: { get(name: string): unknown };
+    effect?(factory: () => (() => void) | undefined, name?: string): (() => void) | undefined;
+  },
+  slots: {
+    inject?(key: string, callback: () => (() => void) | undefined): (() => void) | undefined;
+    register?(options: Record<string, unknown>, component: unknown): (() => void) | undefined;
+  },
+): (() => void) | undefined {
+  const forms = configFormsFaceOf(ctx);
+  const inject = slots.inject;
+  if (forms === undefined || typeof inject !== "function") {
+    console.warn("[dsh-forge/expert-squad] ctx.configForms/slots absent; plugins.item entry not registered");
+    return undefined;
+  }
+  let namespace: string = SETTINGS_NAMESPACE;
+  const mount = (): (() => void) | undefined =>
+    slots.inject!(ITEM_SLOT, () =>
+      safeRegister(
+        slots,
+        {
+          name: ITEM_SLOT,
+          id: ITEM_ID,
+          order: ITEM_ORDER,
+          label: ITEM_LABEL,
+          inject: () => ({
+            form: forms.get(namespace),
+            modelCatalogLoader: modelCatalogLoaderOf(ctx),
+          }),
+        },
+        ExpertSquadItemEntry,
+      ),
+    );
+  if (typeof forms.whileServed === "function") {
+    const watch = (): (() => void) | undefined => {
+      const disposer = forms.whileServed!(NAMESPACE_CANDIDATES, (served) => {
+        namespace = NAMESPACE_CANDIDATES.find((candidate) => served.has(candidate)) ?? SETTINGS_NAMESPACE;
+        const registered = mount();
+        return () => registered?.();
+      });
+      return () => disposer();
+    };
+    return typeof ctx.effect === "function" ? ctx.effect(watch, "expert-squad: plugins.item watch") : watch();
+  }
+  return mount();
+}
+
+/**
+ * plugins.item 缝消费组件（官方四件同构——SubagentCard view 契约）：view:"summary" =
+ * 卡片一行简介（ItemDetail one-liner）；view:"page"（表单体区）/缺省（组卡片）= 默认
+ * Agent 选项表单（DefaultAgentOptionsTab 复用——configForms.get(namespace) 读写径不变）。
+ */
+export function ExpertSquadItemEntry(props: {
+  readonly view?: unknown;
+  readonly form?: ConfigFormMirror;
+  readonly modelCatalogLoader?: ModelCatalogLoader;
+}): ReactNode {
+  if (props.view === "summary") return ITEM_DESCRIPTION;
+  return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;
+}
+
+/**
  * experts.<实例ID> 条目写缝装配（bug 5cf9768e——detail-source DetailMutations.writeExpertsConfig
  * 的生产注入面，settings 服务 revisioned 正门）：现读快照 experts 映射 → 浅合并本条目
  * （disabled 位按补丁三态落位/摘除/保留；agentOptions/tools 整组替换——条目补丁缺键 = 位摘除，
@@ -239,21 +325,23 @@ export function expertsConfigWriteOf(
 }
 
 /**
- * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——仅本包 bundle 详情页
- * 渲染面板（subject.kind === "bundle" && subject.pkg.name === 本包名），其余 subject
- *（row/item/他包/缺席）render null；inject 面（form/modelCatalogLoader）由官方 slot
+ * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——本包 bundle 详情页与
+ * 本包 item 详情页（plugins.item 条目详情页，ItemDetail client.js:2334 renderSlot
+ * subject {kind:"item", id}，自判 id === ITEM_ID——调研报告 §4）渲染面板，其余 subject
+ *（row/item 他者/缺席）render null；inject 面（form/modelCatalogLoader）由官方 slot
  * runtime 与 ownerProps（subject）并合透传，读写径原样复用 DefaultAgentOptionsTab。
  */
 export function DefaultAgentOptionsSection(props: {
-  readonly subject?: { kind?: unknown; pkg?: { name?: unknown } };
+  readonly subject?: { kind?: unknown; id?: unknown; pkg?: { name?: unknown } };
   readonly form?: ConfigFormMirror;
   readonly modelCatalogLoader?: ModelCatalogLoader;
 }): ReactNode {
   const subject = props.subject;
   if (
     subject === undefined ||
-    subject.kind !== "bundle" ||
-    (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG
+    (subject.kind !== "bundle" ||
+      (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG) &&
+      (subject.kind !== "item" || subject.id !== ITEM_ID)
   ) {
     return null;
   }

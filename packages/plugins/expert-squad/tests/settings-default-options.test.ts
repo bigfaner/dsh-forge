@@ -11,11 +11,15 @@ import {
   DefaultAgentOptionsTab,
   DETAIL_SECTION_ID,
   DETAIL_SECTION_SLOT,
+  ExpertSquadItemEntry,
+  ITEM_ID,
+  ITEM_SLOT,
   EMPTY_DRAFT,
   SETTINGS_NAMESPACE,
   defaultOptionsDraftOf,
   defaultOptionsPatchOf,
   registerDefaultAgentOptionsSection,
+  registerPluginsItemEntry,
   REASONING_OPTIONS,
   draftFoldOnRevision,
   expertsConfigWriteOf,
@@ -239,6 +243,107 @@ describe("registerDefaultAgentOptionsSection（注册装配）", () => {
   });
 });
 
+// ── plugins.item 缝（官方组卡片 + item 详情页——官方四件同构） ──
+
+describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
+  it("slot 键 pin：plugins.item 槽 + id expert-squad；与 detail.section 缝 id 异键", () => {
+    expect(ITEM_SLOT).toBe("plugins.item");
+    expect(ITEM_ID).toBe("expert-squad");
+    expect(ITEM_ID).not.toBe(DETAIL_SECTION_ID);
+    expect(DETAIL_SECTION_SLOT).toBe("plugins.detail.section");
+  });
+
+  it("configForms 在场：以官方四件同款形态注册（name/id/order/label/inject form 面）", () => {
+    const slots = slotsFake();
+    const form = formMirrorOf(undefined);
+    const disposer = registerPluginsItemEntry(
+      ctxFake({ configForms: configFormsFake(form) }) as never,
+      slots as never,
+    );
+    expect(slots.injects).toEqual([ITEM_SLOT]);
+    expect(slots.registered).toHaveLength(1);
+    const { options, component } = slots.registered[0]!;
+    expect(options.name).toBe(ITEM_SLOT);
+    expect(options.id).toBe(ITEM_ID);
+    expect(options.order).toBe(40);
+    expect(options.label).toBe("专家团");
+    expect(component).toBe(ExpertSquadItemEntry);
+    expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect(typeof disposer).toBe("function");
+  });
+
+  it("whileServed namespace 解析与 detail.section 缝同源（读写同源）", () => {
+    const slots = slotsFake();
+    const form = formMirrorOf(undefined);
+    const getByNamespace = vi.fn((ns: string) => (ns === "dsh-forge-expert-squad" ? form : undefined));
+    const whileServed = vi.fn((_namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) => {
+      register(new Set(["dsh-forge-expert-squad"]));
+    });
+    const disposer = registerPluginsItemEntry(
+      ctxFake({ configForms: { whileServed, get: getByNamespace } }) as never,
+      slots as never,
+    );
+    expect(whileServed).toHaveBeenCalledWith(
+      expect.arrayContaining(["expert-squad", "dsh-forge-expert-squad"]),
+      expect.any(Function),
+    );
+    expect(slots.registered).toHaveLength(1);
+    const options = slots.registered[0]!.options;
+    expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect(getByNamespace).toHaveBeenCalledWith("dsh-forge-expert-squad");
+    expect(typeof disposer).toBe("function");
+  });
+
+  it("configForms/slots 缺席 = 降级不注册（console.warn 留痕，不外溢）", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const slots = slotsFake();
+    const disposer = registerPluginsItemEntry(ctxFake({}) as never, slots as never);
+    expect(slots.injects).toEqual([]);
+    expect(slots.registered).toHaveLength(0);
+    expect(disposer).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("双缝并存零冲突：detail.section 与 plugins.item 各自注册，id 异键、互不挤占", () => {
+    const slots = slotsFake();
+    const form = formMirrorOf(undefined);
+    const ctx = ctxFake({ configForms: configFormsFake(form) }) as never;
+    registerDefaultAgentOptionsSection(ctx, slots as never);
+    registerPluginsItemEntry(ctx, slots as never);
+    expect(slots.injects).toEqual([DETAIL_SECTION_SLOT, ITEM_SLOT]);
+    expect(slots.registered).toHaveLength(2);
+    const ids = slots.registered.map((entry) => entry.options.id);
+    expect(ids).toEqual([DETAIL_SECTION_ID, ITEM_ID]);
+    expect(new Set(ids).size).toBe(2);
+    for (const entry of slots.registered) {
+      expect((entry.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    }
+  });
+});
+
+describe("ExpertSquadItemEntry（view 契约）", () => {
+  it('view:"summary" = 卡片一行简介（ItemDetail one-liner）', () => {
+    const result = ExpertSquadItemEntry({ view: "summary" });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("专家团");
+  });
+
+  it('view:"page" = 挂默认 Agent 选项表单（DefaultAgentOptionsTab 复用）', () => {
+    const html = renderToStaticMarkup(
+      createElement(ExpertSquadItemEntry, { view: "page", form: formMirrorOf(undefined) }),
+    );
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
+  });
+
+  it("view 缺省（组卡片）= 表单形态（同 page）", () => {
+    const html = renderToStaticMarkup(
+      createElement(ExpertSquadItemEntry, { form: formMirrorOf(undefined) }),
+    );
+    expect(html).toContain("默认 Agent 选项");
+  });
+});
+
 // ── subject 门控（detail.section list slot 消费契约） ──────
 
 describe("DefaultAgentOptionsSection（subject 门控）", () => {
@@ -256,7 +361,13 @@ describe("DefaultAgentOptionsSection（subject 门控）", () => {
     expect(html).toContain('data-cfg-field="provider"');
   });
 
-  it("他包 bundle / row / item / subject 缺席：render null（非本包详情页零输出）", () => {
+  it("本包 item subject（id 同键）：渲染面板（item 详情页追加 section）", () => {
+    const html = renderSection({ kind: "item", id: ITEM_ID });
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
+  });
+
+  it("他包 bundle / row / item 他者 / subject 缺席：render null（非本包详情页零输出）", () => {
     expect(renderSection({ kind: "bundle", pkg: { name: "@dsh-forge/other" } })).toBe("");
     expect(renderSection({ kind: "row", pkg: { name: "@dsh-forge/expert-squad" }, row: {} })).toBe("");
     expect(renderSection({ kind: "item", id: "x" })).toBe("");
