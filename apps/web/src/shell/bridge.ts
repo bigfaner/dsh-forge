@@ -12,6 +12,9 @@ export interface BootManifestPayload {
   /** bug 2ffb0a82：宿主 knowledge 插件装载位（形状权威 host manifest.knowledgePlugin；
    *  可选：旧宿主/打包形态缺席 = false 口径） */
   readonly knowledgePlugin?: boolean
+  /** bug 4d55ba98：expert-squad 插件装载位（形状权威 host manifest.expertSquadPlugin；
+   *  可选：缺席/false = 壳掌舵让位不装载——所见即所得） */
+  readonly expertSquadPlugin?: boolean
 }
 
 /** apps/host ESM preload 暴露面（window.dshForge） */

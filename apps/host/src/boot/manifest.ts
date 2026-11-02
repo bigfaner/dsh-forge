@@ -42,6 +42,11 @@ export interface BootManifest {
    *  overlay 注行门同源单值）。renderer 侧知识 UI 面（左栏入口行/main 面板/召回页签）
    *  门控单源：true = 三面照常登记；缺席/false = 整组隐藏（打包形态插件缺席）。 */
   knowledgePlugin?: boolean
+  /** bug 4d55ba98：expert-squad 插件装载位（child 按 loader 实况读——官方 plugin-manager
+   *  同读法 ctx.loader.entries()；!disabled = 实际装载）。renderer 侧壳掌舵门控单源：
+   *  true = expert-squad client 半照常掌舵入图；缺席/false = 壳让位不掌舵（所见即所得——
+   *  插件页开关状态 = 实际装载状态）。 */
+  expertSquadPlugin?: boolean
 }
 
 /** 网卡读数窄面（node:os networkInterfaces 值元结构——纯函数零 node 依赖） */
@@ -119,6 +124,7 @@ export function buildBootManifest(
   remotePinExpiresAt?: number,
   remotePinDurable?: boolean,
   knowledgePlugin?: boolean,
+  expertSquadPlugin?: boolean,
 ): BootManifest {
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {
     throw new Error(`[host:boot] manifest.url 须为 http(s) URL，实得：${String(url)}`)
@@ -155,5 +161,7 @@ export function buildBootManifest(
     ...(remotePinDurable === true ? { remotePinDurable: true } : {}),
     // bug 2ffb0a82：knowledge 插件装载位透传（严格 === true 才携带——缺席/false = renderer 知识面隐藏）
     ...(knowledgePlugin === true ? { knowledgePlugin: true } : {}),
+    // bug 4d55ba98：expert-squad 装载位透传（严格 === true 才携带——与 knowledgePlugin 同律）
+    ...(expertSquadPlugin === true ? { expertSquadPlugin: true } : {}),
   })
 }

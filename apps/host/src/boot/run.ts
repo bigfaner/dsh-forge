@@ -421,6 +421,7 @@ export async function bootDshHost(
     ready.remotePinExpiresAt,
     ready.remotePinDurable === true, // fix-26：长效位入 manifest（UI hint 双态单源）
     ready.knowledgePlugin === true, // bug 2ffb0a82：knowledge 插件装载位入 manifest（renderer 知识面门控单源）
+    ready.expertSquadPlugin === true, // bug 4d55ba98：expert-squad 装载位入 manifest（壳掌舵门控单源）
   )
   child.on('message', (message: unknown) => {
     // fix-7：/pair 握手成功推送 → manifest 抬 remoteDeviceConnected（粘性 until 重启——
@@ -633,7 +634,8 @@ export function applyPairMessage(manifest: BootManifest, message: unknown): Boot
     pair.remotePin ?? manifest.remotePin, // fix-17 ③：PIN 随轮换换新（零 PIN 载荷 = 保留旧读数）
     pair.remotePinExpiresAt ?? manifest.remotePinExpiresAt,
     pinDurable,
-    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留（boot 期事实不随轮换漂移）
+    manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
+    manifest.expertSquadPlugin === true, // bug 4d55ba98：expert-squad 位保留（boot 期事实不随轮换漂移）
   )
 }
 
@@ -654,6 +656,7 @@ export function applyPairConnected(manifest: BootManifest): BootManifest {
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
     manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
+    manifest.expertSquadPlugin === true, // bug 4d55ba98：expert-squad 位保留
   )
 }
 
@@ -674,6 +677,7 @@ export function applyPairDisconnected(manifest: BootManifest): BootManifest {
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
     manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
+    manifest.expertSquadPlugin === true, // bug 4d55ba98：expert-squad 位保留
   )
 }
 
@@ -705,5 +709,6 @@ export function applyTunnelMessage(manifest: BootManifest, message: unknown): Bo
     manifest.remotePinExpiresAt,
     manifest.remotePinDurable === true, // fix-26：长效位保留
     manifest.knowledgePlugin === true, // bug 2ffb0a82：knowledge 位保留
+    manifest.expertSquadPlugin === true, // bug 4d55ba98：expert-squad 位保留
   )
 }

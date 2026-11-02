@@ -20,6 +20,12 @@ const inputHistory = (): ProductClientEntry => ({
   inject: ['@deepseek-ai/dsh-api-session-controller'],
 })
 
+const expertSquad = (): ProductClientEntry => ({
+  id: '@dsh-forge/expert-squad',
+  url: 'expert-squad-client.js?rev=b1',
+  rev: 'b1',
+})
+
 const graph = () => ({
   entries: [{ id: '@deepseek-ai/dsh-client-ui-theme', url: 'plugins/x?rev=r1', rev: 'r1', immediately: true }],
   batches: [{ phase: 'bootstrap' as const, url: 'plugins/b0?rev=r0', rev: 'r0', entries: ['@deepseek-ai/dsh-client-modules'] }],
@@ -130,8 +136,35 @@ describe('bootShell 宿主插件位发布（bug 2ffb0a82：manifest.knowledgePlu
       return bootShell([product()])
     }
     await boot({ knowledgePlugin: true })
-    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__).toEqual({ knowledge: true })
+    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: Record<string, boolean> }).__DSH_FORGE_HOST_PLUGINS__).toMatchObject({ knowledge: true })
     await boot({})
-    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__).toEqual({ knowledge: false })
+    expect((globalThis as { __DSH_FORGE_HOST_PLUGINS__?: Record<string, boolean> }).__DSH_FORGE_HOST_PLUGINS__).toMatchObject({ knowledge: false })
+  })
+  it('bug 4d55ba98：expert-squad 装载位发布 + 壳掌舵门控（位 true = 掌舵；缺席/false = 不掌舵——显示的状态 = 实际生效的状态）', async () => {
+    const boot = (manifestOver: Partial<BootManifestPayload>) => {
+      ;(globalThis as { __DSH_BOOT__?: unknown }).__DSH_BOOT__ = { entries: [], batches: [] }
+      ;(globalThis as { dshForge?: unknown }).dshForge = {
+        getBootManifest: () => Promise.resolve(manifest(manifestOver)),
+      }
+      return bootShell([product(), expertSquad()])
+    }
+    const ids = () =>
+      ((globalThis as { __DSH_BOOT__?: { entries: { id: string }[] } }).__DSH_BOOT__?.entries.map((r) => r.id) ?? [])
+    const warn: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((line) => void warn.push(String(line)))
+    try {
+      await boot({ expertSquadPlugin: true })
+      expect(ids()).toEqual(['@dsh-forge/web-client', '@dsh-forge/expert-squad'])
+      expect(
+        (globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean; expertSquad: boolean } }).__DSH_FORGE_HOST_PLUGINS__,
+      ).toEqual({ knowledge: false, expertSquad: true })
+      // 位缺席（旧宿主 / loader 行关）= 不掌舵——专家团 client 半真不装载（WYSIWYG）
+      await boot({})
+      expect(ids()).toEqual(['@dsh-forge/web-client'])
+      // 位 false 同口径；其它产品行不受累（web-client 两轮均掌舵）
+      expect(warn.some((line) => line.includes('@dsh-forge/expert-squad'))).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
