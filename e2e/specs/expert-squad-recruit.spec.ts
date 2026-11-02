@@ -4,8 +4,10 @@
 // contracts = 同目录 contracts/step-1..5。
 // 建档通道：recruit_expert 为模型驱动 tool 面（e2e 载体无模型通道）——建档动作走其同一
 // 写路径缝 POST /api/expert-squad/update（serializeExpertMd → parseExpertFile 全量门 →
-// 落盘 <workspace>/.dsh/experts/<key>.md → refresh 换新——src/index.ts update 装配，
-// 契约 anchor 即「[召唤] 对话建档同一 update 通道」）。观测面：面板卡片 + 取用 API。
+// refresh 换新——src/index.ts update 装配，契约 anchor 即「[召唤] 对话建档同一 update
+// 通道」）。落盘层（分层裁决 3b661384，2026-10-31）：新建档案唯一创建面 = 召唤链，恒写
+// user 层（{DSH_HOME}/experts/——e2e 隔离态 = {userData}/dsh-home/experts）；编辑才来源
+// 保持。观测面：面板卡片 + 取用 API（origin=user = 建档层）。
 // 不落脚本 Outcome（契约层保留，run-tests 台账注记）：step-1 指令转译与参数门（模型
 // 驱动 tool 面——tools.test.ts 单测承载）、step-2 already-exists / same-layer-duplicate
 // （recruit_expert 工具语义与扫描 warnings 面）、step-5 HR 代招双 Outcome（HR 预设会话
@@ -14,7 +16,8 @@
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp。
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
 // 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
-// 建档写径（RECRUIT_KEY 落盘）靠重播种复位；closed-panel 用例先经 workbench 桥导航回
+// 夹具既有档案（project 层 EXISTING_KEY）靠重播种复位；建档写径落 user 层（同键覆写
+// 幂等，跨用例零重复卡）；closed-panel 用例先经 workbench 桥导航回
 // 官方会话面板还原「面板未开」前置（共享会话 UI 残留收口）。
 // @feature expert-squad @web-e2e
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -150,7 +153,7 @@ async function openPanel(page: Page): Promise<void> {
 
 test('@feature expert-squad recruit step-3：建档通道落盘 → 面板卡片即时呈现，字段与载荷一致', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, udDir } = sharedLaunch
   await openPanel(page)
   const wsParam = await captureWorkspaceParam(page)
   const wrote = await postUpdate(page, wsParam, recruitPayload)
@@ -164,8 +167,9 @@ test('@feature expert-squad recruit step-3：建档通道落盘 → 面板卡片
   await expect(card.locator('.xc-tags .chip', { hasText: 'tsc' }).first(), '技能 chip ← skills').toBeVisible()
   await expect(card.locator('.xc-tags .chip.tool', { hasText: 'grep' }).first(), '白名单 chip ← tools').toBeVisible()
   expect(await page.locator(cardOf(RECRUIT_KEY)).count(), '零重复卡').toBe(1)
-  // 落盘正本存在（档案正本是唯一事实源）
-  expect(existsSync(join(wsDir, '.dsh', 'experts', `${RECRUIT_KEY}.md`)), '档案正本落盘').toBe(true)
+  // 落盘正本存在（档案正本是唯一事实源；新建档案恒写 user 层——分层裁决 3b661384，
+  // 召唤链为唯一新建面；e2e 隔离 DSH_HOME = {userData}/dsh-home）
+  expect(existsSync(join(udDir, 'dsh-home', 'experts', `${RECRUIT_KEY}.md`)), '档案正本落盘（user 层）').toBe(true)
 })
 
 // ── step-3 panel-closed-no-loss-window：建档时面板未开——打开即见，无丢失窗口 ──
@@ -213,7 +217,7 @@ test('@feature expert-squad recruit step-2 invalid：裸 {{ 与非法键形状 �
 
 // ── step-4 success（可机检半）：建档 ⇔ 立即可取用（原子成立） ──
 
-test('@feature expert-squad recruit step-4：建档完成立即可取用——get 返回完整档案（origin=project）', async ({ sharedLaunch }) => {
+test('@feature expert-squad recruit step-4：建档完成立即可取用——get 返回完整档案（origin=user）', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
   const { page } = sharedLaunch
   await openPanel(page)
@@ -233,7 +237,7 @@ test('@feature expert-squad recruit step-4：建档完成立即可取用——ge
   expect(entry.personaMd, 'personaMd 字段（人设原文）').toContain('招募建档人设正文')
   expect(entry.tools, 'tools 字段').toEqual(['read', 'grep'])
   expect(entry.skills, 'skills 字段').toEqual(['tsc'])
-  expect(entry.origin, 'origin=project（建档层）').toBe('project')
+  expect(entry.origin, 'origin=user（建档层——新建档案恒写 user 层，3b661384 分层裁决）').toBe('user')
   expect(entry.enabled, 'enabled 启用态').toBe(true)
 })
 
