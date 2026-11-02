@@ -192,6 +192,21 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('data-dswf-progress-status="blocked"') // 最新态（后写覆盖）
     expect(html).toContain('第 2/3 次 — worker crashed mid-run') // 重试计数（note）在行内
   })
+  it('triage 处置行加「处置」徽记胶囊（triage-progress-row——语义归徽记不进文本流，任务行无徽记）', () => {
+    const triaged: ForgeEventGroupData = {
+      ...DATA,
+      progress: [
+        { seq: 4, sourceSlug: 'feat-x', verb: 'claim', status: 'running', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', at: progAt(2) },
+        { seq: 5, sourceSlug: 'feat-x', verb: 'triage', status: 'completed', taskKey: 'feat-x/2.3', taskTitle: '折叠条目组', attempt: 1, note: '自动处理 · 修复任务已派发', at: progAt(4) },
+      ],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(triaged)} />)
+    expect(html).toContain('>处置</span>') // 处置徽记胶囊（中性——「循环」徽记同构）
+    expect(html).toContain('#2.3') // 任务归属前缀保留
+    // 任务行（verb=claim）无处置徽记：徽记只落处置轨
+    const taskOnly: ForgeEventGroupData = { ...DATA, progress: [triaged.progress![0]!] }
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(taskOnly)} />)).not.toContain('>处置</span>')
+  })
   it('bug 35571877：条目行与任务行同构——文本在前、徽标右置、时间入右侧簇（归一类）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
     const textIdx = html.indexOf('dswf-event-entries-msg-text')

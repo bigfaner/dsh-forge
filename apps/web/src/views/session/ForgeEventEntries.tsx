@@ -74,14 +74,18 @@ export function ForgeEventEntries({ node }: ForgeEventEntriesProps) {
   return <ForgeEventGroupBlock data={node.data} />
 }
 
-/** 进度行（任务轨单行——标题/状态/开始/结束/耗时） */
+/** 进度行（任务轨单行——标题/状态/开始/结束/耗时；triage 处置行加「处置」徽记胶囊） */
 function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   const statusWord = forgeProgressStatusWord(row.entry)
   const duration = forgeProgressDurationLabel(row)
   // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
   const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
+  // triage 处置行（triage-progress-row §2.2——verb 限定，同 taskKey 与任务行不撞）：徽记胶囊
+  // 区分处置轨（语义归徽记不进文本流——bug 35571877 行语言同裁决；「循环」徽记同构）
+  const isTriage = row.entry.verb === 'triage'
   return (
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
+      {isTriage ? <span className="dswf-event-entries-badge dswf-event-entries-loop-badge">处置</span> : null}
       <span className="dswf-event-entries-text">
         {localId !== undefined && localId !== '' ? <span className="dswf-event-entries-num">#{localId}</span> : null}
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
