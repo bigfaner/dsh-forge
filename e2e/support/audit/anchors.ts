@@ -74,8 +74,8 @@ const FORBIDDEN_MODULE_NAME_RE = /(watch|backflow|reflux|resync|snapshot[-_]?syn
  *   · boot/child.ts：宿主子进程日志轮转计时器——进程管理面，与 forge 状态无关；
  *   · boot/forge-stream.ts：SSE 心跳 setInterval——传输层 keep-alive ping（判活对齐
  *     mobile sse 引擎 15s 口径），非 forge 状态投影轮询（随连接销毁，无状态重扫）。
- *   · views/session/ForgeEventEntries.tsx：running 行实时计时器逐秒刷新（纯呈现层
- *     面板耗时标签——零 RPC 零状态重扫，卸载/终态切换即清理），非 forge 投影轮询。
+ *   · views/session/ForgeEventEntries.tsx：running 进度行实时耗时标签逐秒刷新——纯呈现层
+ *     UI 计时器（组件卸载/终态切换即清理，零 RPC 零状态重扫），非 forge 投影回流。
  */
 const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
   'apps/web/src/views/remote/ForgeRemoteEntry.tsx',

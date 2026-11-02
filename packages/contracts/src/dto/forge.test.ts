@@ -497,7 +497,7 @@ describe('AC3 ForgePluginEvent 两层事件联合（Interface 3：信封 × 八�
   })
 
   it('workerSessionId 缺席语义契约化：spawn 失败径 = 两事件载荷缺席该字段仍合法（台账行照记，失败原因走 outcome.failureReason）', () => {
-    const decided: TriageDecidedPayload = { taskKey: 'm3/1.1', attempt: 2, action: 'ask-user' }
+    const decided: TriageDecidedPayload = { taskKey: 'm3/1.1', attempt: 2, action: 'escalate' }
     expect(decided.workerSessionId).toBeUndefined()
     const failed: TriageOutcomePayload = { taskKey: 'm3/1.1', attempt: 2, outcome: 'failed', failureReason: '处置子会话 spawn 失败' }
     expect(failed.workerSessionId).toBeUndefined()

@@ -3,10 +3,26 @@
 // unresolved_reason→unresolvedReason；fix_session_id = 执行会话注入；worktree/branch/fixer
 // agent 不可提交——服务端 hash 锚定反查）+ 双友好返回面（✓ 终态/证据 / typed 错误 → 失败 DTO）。
 import { describe, expect, it } from 'vitest'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard, Project } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createResolveBugTool, parseResolveBugArgs } from './resolve-bug.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
+
+/** projects 行全量桩（Project DTO 形状——getProject 桩面契约同步） */
+function projectRow(wsPath: string): Project {
+  return {
+    id: 'p-1',
+    workspaceId: 'ws-1',
+    name: 'demo',
+    wsPath,
+    forgeDir: `${wsPath}/.forge`,
+    forgeDirExternal: false,
+    knowledgeDir: `${wsPath}/.knowledge`,
+    archived: false,
+    createdAt: '2026-11-02T00:00:00.000Z',
+    updatedAt: '2026-11-02T00:00:00.000Z',
+  }
+}
 
 const checkpoints: ForgeToolDeps['checkpoints'] = {
   appendCheckpoint: async () => {
@@ -188,5 +204,113 @@ describe('resolveBug execute（路由 + 服务端解析径）', () => {
     const rendered = tool.output?.render?.({}, value) as { type: string; text: string }[]
     expect(rendered[0]!.text).toContain('✓ Bug bug-1 resolved — fixed')
     expect(rendered[0]!.text).toContain('- commit: a1b2c3d')
+  })
+})
+
+// T4 锚有效性预检（loop-recurrence-hardening 提案 §2.2 T4 + AC4）——plugin-forge 旁挂侧：
+// 复发家族（recurrenceOf 在场）fixed 携 anchor: 行时，锚指向的卷宗正本必须以文件在场
+// （相对锚经项目根 wsPath 解析）；失效经拒绝路径退回失败 DTO，resolveBug 写径零触达——
+// core 零文件 IO（presence 门在 core bugs 域，另测）。
+function captureBugsFace(
+  captured: CapturedInput[],
+  resolve: (input: CapturedInput) => Promise<BugCard>,
+  getBugCard: BugCard,
+): ForgeBugsToolFace {
+  return {
+    registerBug: async () => {
+      throw new Error('not used')
+    },
+    resolveBug: async (input) => {
+      captured.push({
+        projectId: input.projectId,
+        bugId: input.bugId,
+        outcome: input.outcome,
+        commitHash: input.commitHash,
+        unresolvedReason: input.unresolvedReason,
+        fixApproach: input.fixApproach,
+        fixSessionId: input.fixSessionId,
+      })
+      return resolve(captured[captured.length - 1]!)
+    },
+    listBugs: async () => [],
+    getBug: async () => ({ card: getBugCard }),
+  }
+}
+
+describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径）', () => {
+  it('AC4-锚失效：复发家族 anchor 指向不在场文件 → ERR_BUG_COVERAGE_ANCHOR_INVALID 失败 DTO，写径零触达', async () => {
+    const captured: CapturedInput[] = []
+    const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
+    const t = createResolveBugTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals: {} as ForgeToolDeps['proposals'],
+      bugs: captureBugsFace(captured, async () => fixedCard(), card),
+      projects: {
+        getProject: async () => projectRow('Z:/ws/demo'),
+        deriveTaskStoreDir: async () => ({ dir: 'Z:/ws/store' }),
+      } as ForgeToolDeps['projects'],
+      resolveProjectId: () => 'p-1',
+      checkpoints,
+    })
+    const result = await t.execute(
+      {
+        bug_id: 'bug-1',
+        outcome: 'fixed',
+        commit_hash: 'a1b2c3d',
+        fix_approach: 'coverage: 覆盖整链共同根因\nanchor: .forge/docs/proposals/x/issues/1/verification-report.md',
+      },
+      EXEC,
+    )
+    expect(result).toMatchObject({ ok: false, code: 'ERR_BUG_COVERAGE_ANCHOR_INVALID' })
+    expect(captured).toEqual([]) // 写径零触达——失效经拒绝路径退回
+  })
+
+  it('AC4-双过：锚指向在场卷宗文件（绝对路径）→ 预检通过，fix_approach 原样透传写径', async () => {
+    const { mkdtemp, writeFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = await mkdtemp(join(tmpdir(), 't4-anchor-'))
+    const report = join(dir, 'verification-report.md')
+    await writeFile(report, '# 排查报告', 'utf8')
+    const captured: CapturedInput[] = []
+    const card = { ...fixedCard(), bugStatus: 'open' as const, recurrenceOf: 'root-1' }
+    const t = createResolveBugTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals: {} as ForgeToolDeps['proposals'],
+      bugs: captureBugsFace(captured, async () => fixedCard(), card),
+      projects: {
+        getProject: async () => projectRow(dir),
+        deriveTaskStoreDir: async () => ({ dir }),
+      } as ForgeToolDeps['projects'],
+      resolveProjectId: () => 'p-1',
+      checkpoints,
+    })
+    const approach = `coverage: 覆盖整链共同根因\nanchor: ${report}`
+    const result = await t.execute({ bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: approach }, EXEC)
+    expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'fixed' })
+    expect(captured[0]).toMatchObject({ fixApproach: approach }) // 原样透传——预检不改写
+  })
+
+  it('非复发家族：零文件 IO 预检（行为零变化——presence 门归 core）', async () => {
+    const captured: CapturedInput[] = []
+    const t = createResolveBugTool({
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals: {} as ForgeToolDeps['proposals'],
+      bugs: captureBugsFace(captured, async () => fixedCard(), fixedCard()), // 无 recurrenceOf
+      projects: {
+        getProject: async () => {
+          throw new Error('projects face must not be touched for non-recurrence bugs')
+        },
+        deriveTaskStoreDir: async () => ({ dir: 'Z:/ws/store' }),
+      } as ForgeToolDeps['projects'],
+      resolveProjectId: () => 'p-1',
+      checkpoints,
+    })
+    const result = await t.execute(
+      { bug_id: 'bug-1', outcome: 'fixed', commit_hash: 'a1b2c3d', fix_approach: '普通一段话修法' },
+      EXEC,
+    )
+    expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'fixed' })
+    expect(captured).toHaveLength(1)
   })
 })

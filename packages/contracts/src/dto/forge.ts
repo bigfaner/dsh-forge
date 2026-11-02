@@ -209,6 +209,8 @@ export interface TaskRecordFields {
   runtimeSurface?: string[]
   /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一） */
   runtimeEvidence?: TaskRuntimeEvidence
+  /** blocked 根因归类（T2——record_fields_json 解码形；旧行键缺席；triage 信号注入读面） */
+  blockClassification?: TaskBlockClassification
 }
 
 /**
@@ -324,6 +326,8 @@ export interface TaskRecordEntry {
   runtimeSurface?: string[]
   /** 真机取证证据声明（机械⑤证据路径——record_fields_json 解码形；旧行键缺席） */
   runtimeEvidence?: TaskRuntimeEvidence
+  /** blocked 根因归类（T2——record_fields_json 解码形；旧行键缺席；triage 信号注入读面） */
+  blockClassification?: TaskBlockClassification
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -565,6 +569,37 @@ export interface ClaimTaskResult {
   expertKey?: string
 }
 
+/**
+ * blocked 根因归类（T2 归类闸门——loop-recurrence-hardening 提案 §2.2）：worker 自报语义字段，
+ * 程序只做 presence 校验与落库，永不判断归类真伪（2.7 职责切分）。
+ */
+export interface TaskBlockClassification {
+  /** 归类：new-problem = 新问题｜same-family-recurrence = 同族复发 */
+  kind: 'new-problem' | 'same-family-recurrence'
+  /** 同族复发时建议携带：台账 recurrence 链前驱 bug_id（自报初判——链归属评审轮可纠） */
+  recurrenceOf?: string
+}
+
+/**
+ * 台账 recurrence 候选（T2 交叉校验——TasksVerbDeps 只读 face 返回形；tasks 域不 import
+ * bugs 域，四域互禁不破）。chain = 候选所属复发链（链根 → 本条，'slug/localId' 不适用——
+ * 呈现为 bug_id 链）。
+ */
+export interface BugRecurrenceCandidate {
+  bugId: string
+  summary: string
+  /** 候选所属复发链（时间正序，链根在前） */
+  chain: readonly string[]
+}
+
+/** T2 归类闸门应答增补（提示性负载——非拒绝；upgrade-hint = 同族复发升级提示，suspected-family = 疑似同族警示） */
+export interface TaskRecurrenceAdvisory {
+  kind: 'upgrade-hint' | 'suspected-family'
+  message: string
+  /** suspected-family 携带：命中的候选清单（含候选链） */
+  candidates?: readonly BugRecurrenceCandidate[]
+}
+
 /** submitTask 入参（S3 结构化提交——老 forge record.json 形制回归） */
 export interface SubmitTaskInput {
   projectId: string
@@ -597,6 +632,11 @@ export interface SubmitTaskInput {
   runtimeSurface?: string[]
   /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一；强制域无此二者即拒） */
   runtimeEvidence?: TaskRuntimeEvidence
+  /**
+   * blocked 根因归类（T2 归类闸门——blocked 必带 ERR_BLOCK_CLASSIFICATION_REQUIRED；
+   * → task_records.record_fields_json 结构化键 blockClassification，tasks 表零列改动）。
+   */
+  blockClassification?: TaskBlockClassification
   /** 执行会话（子会话——与 claim 的派发会话相异可判，SC6③） */
   sessionId: string
 }
@@ -607,6 +647,12 @@ export interface SubmitTaskResult {
   status: TaskStatus
   /** 恢复钩子反查自动恢复的前置（前置全满足才 auto-restore；边不删） */
   restored: TaskRef[]
+  /**
+   * T2 归类闸门应答增补（提示性负载，非拒绝）：归类=同族复发 → upgrade-hint 升级提示；
+   * 归类=新问题 ∧ scope 命中台账 recurrence 候选 → suspected-family「疑似同族」警示
+   * （候选链在场，不硬拒——主会话裁决）。空/face 缺席 = 键缺席。
+   */
+  recurrenceAdvisories?: readonly TaskRecurrenceAdvisory[]
 }
 
 /** unblockTask 入参（blocked→pending 薄壳出口——仅 reason 一个裁决负载；零 gate/AC 结算面） */
@@ -1295,8 +1341,9 @@ export interface NoReadyTaskPayload {
   contextSlug?: string
 }
 
-/** triage 决策封闭四动作（triage/decision.ts 解析器值域同源——越权动作在解析期拒） */
-export type TriageDecisionAction = 'add-fix' | 'wait-external' | 'ask-user' | 'split-remainder'
+/** triage 决策封闭四动作（triage/decision.ts 解析器值域同源——越权动作在解析期拒；
+ *  escalate = 上浮主会话（原 ask-user 改名——语义为上浮，非工具、不预设问用户）） */
+export type TriageDecisionAction = 'add-fix' | 'wait-external' | 'escalate' | 'split-remainder'
 
 /** triage-decided 载荷（triage-progress-row 处置台账——新决策产出点，执行前） */
 export interface TriageDecidedPayload {
@@ -1322,7 +1369,7 @@ export interface TriageDecidedPayload {
 export interface TriageOutcomePayload {
   taskKey: string
   attempt: number
-  /** 执行结果（封闭四动作落地 + 失败径——ask-user/wait-external 的 outcome = 挂起/记录等待动作本身） */
+  /** 执行结果（封闭四动作落地 + 失败径——escalate/wait-external 的 outcome = 上浮/记录等待动作本身） */
   outcome: TriageDecisionAction | 'failed'
   /**
    * 决策缓存重放标记（重放径不发 triage-decided、仅发 outcome——缺席 = 非重放，本次执行有

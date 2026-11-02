@@ -9,6 +9,7 @@ import { claimTask } from './claim.js'
 import {
   AcCriteriaMismatchError,
   AcNotMetError,
+  BlockClassificationRequiredError,
   FilesUnionMismatchError,
   GateSummaryRequiredError,
   InvalidTransitionError,
@@ -26,6 +27,7 @@ import {
   seedTask,
   type TasksHarness,
 } from './harness.js'
+import { createBugsService } from '../small-domains/bugs.js'
 import { queryTask } from './query.js'
 import { submitTask } from './submit.js'
 
@@ -115,6 +117,7 @@ describe('AC4 submitTask success：转移 + record files/gate/commit + 相位重
       taskRef: { slug: 'f', localId: '1.1' },
       result: 'blocked',
       reason: 'Complex failure: vitest 全量超时（3 次重试）——fix 链承接',
+      blockClassification: { kind: 'new-problem' },
       sessionId: 's-exec',
     })
     expect(r).toEqual({ taskId: 't-f-1.1', status: 'blocked', restored: [] })
@@ -181,7 +184,8 @@ describe('AC4 submitTask success：转移 + record files/gate/commit + 相位重
     }).catch((e: unknown) => e)
     expect(errP).toBeInstanceOf(InvalidTransitionError)
     const errB = await submit({
-      projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, result: 'blocked', reason: 'r', sessionId: 's',
+      projectId: P(), taskRef: { slug: 'f', localId: '1.2' }, result: 'blocked', reason: 'r',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     }).catch((e: unknown) => e)
     expect(errB).toBeInstanceOf(InvalidTransitionError)
     expect((errB as InvalidTransitionError).data).toMatchObject({ current: 'blocked', to: 'blocked', face: 'agent' })
@@ -259,13 +263,15 @@ describe('blocked verdict restore：blocked 卡 success 直达结算', () => {
     h!.db.prepare(`UPDATE features SET feature_status = 'in-progress' WHERE slug = 'f'`).run()
     const blk = await submit({
       projectId: P(), taskRef: { slug: 'f', localId: '1.2' },
-      result: 'blocked', reason: '受阻——fix 链承接', sessionId: 's',
+      result: 'blocked', reason: '受阻——fix 链承接',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     })
     expect(blk.status).toBe('blocked')
     seedTask(h!.db, 'f', '1.3', { status: 'blocked' })
     const errBB = await submit({
       projectId: P(), taskRef: { slug: 'f', localId: '1.3' },
-      result: 'blocked', reason: '再阻塞', sessionId: 's',
+      result: 'blocked', reason: '再阻塞',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     }).catch((e: unknown) => e)
     expect(errBB).toBeInstanceOf(InvalidTransitionError)
     expect((errBB as InvalidTransitionError).data).toMatchObject({ current: 'blocked', to: 'blocked', face: 'agent' })
@@ -280,7 +286,8 @@ describe('AC5 恢复钩子：反查 idx_edges_prerequisite + 前置全满足才 
     // ① executor 受阻 → blocked（fix 链承接）
     await submit({
       projectId: P(), taskRef: { slug: 'fix', localId: '1.1' },
-      result: 'blocked', reason: '测试基座崩坏', sessionId: 's-exec',
+      result: 'blocked', reason: '测试基座崩坏',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's-exec',
     })
     // ② dispatcher 建 fix 任务（block-source：源置 blocked + fix-chain 边 + auto-block 记录）
     const fixTask = await add({
@@ -355,7 +362,8 @@ describe('AC5 恢复钩子：反查 idx_edges_prerequisite + 前置全满足才 
     seedEdge(h!.db, 't-f-2.1', 't-f-1.1')
     const r = await submit({
       projectId: P(), taskRef: { slug: 'f', localId: '1.1' },
-      result: 'blocked', reason: '受阻', sessionId: 's',
+      result: 'blocked', reason: '受阻',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     })
     expect(r.restored).toEqual([])
     expect(rows(`SELECT task_status FROM tasks WHERE local_id = '2.1'`)).toEqual([{ task_status: 'blocked' }])
@@ -493,12 +501,14 @@ describe('2.6 双门（图 8）：gate 任务数字摘要门 + AC 测试证据�
     seedTask(h!.db, 'b', '2.gate', { status: 'in_progress', type: 'gate' })
     const r1 = await submit({
       projectId: P(), taskRef: { slug: 'b', localId: '1.1' },
-      result: 'blocked', reason: '测试基座崩坏——fix 链承接', sessionId: 's',
+      result: 'blocked', reason: '测试基座崩坏——fix 链承接',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     })
     expect(r1.status).toBe('blocked')
     const r2 = await submit({
       projectId: P(), taskRef: { slug: 'b', localId: '2.gate' },
-      result: 'blocked', reason: '环境缺依赖', sessionId: 's',
+      result: 'blocked', reason: '环境缺依赖',
+      blockClassification: { kind: 'new-problem' }, sessionId: 's',
     })
     expect(r2.status).toBe('blocked')
     expect(rows(`SELECT to_status, reason FROM task_records WHERE verb = 'submit'`)).toEqual([
@@ -682,6 +692,7 @@ describe('S3 结构化提交：AC 交叉校验 + 逐项闭环 + files 分组 + r
     const r = await submit({
       projectId: P(), taskRef: { slug: 'b', localId: '1.1' },
       result: 'blocked', reason: '受阻——fix 链承接',
+      blockClassification: { kind: 'new-problem' },
       acceptanceCriteria: [{ criterion: '漂移判据', met: false }],
       filesCreated: ['x.ts'],
       filesModified: ['y.ts'],
@@ -696,7 +707,10 @@ describe('S3 结构化提交：AC 交叉校验 + 逐项闭环 + files 分组 + r
     // blocked 结构化载荷原样落账（沿「不服务内判红」注记——R13 兼容面）
     expect(JSON.parse(rec.ac_json)).toEqual([{ criterion: '漂移判据', met: false }])
     expect(JSON.parse(rec.files_json)).toEqual({ created: ['x.ts'], modified: ['y.ts'] })
-    expect(JSON.parse(rec.record_fields_json)).toEqual({ keyDecisions: ['先 blocked'], testsFailed: 3 })
+    expect(JSON.parse(rec.record_fields_json)).toEqual({
+      keyDecisions: ['先 blocked'], testsFailed: 3,
+      blockClassification: { kind: 'new-problem' },
+    })
   })
 
   it('record_fields_json 缺省 = 列 NULL（无结构化字段不落空对象）', async () => {
@@ -854,9 +868,234 @@ describe('机械⑤ submitTask 强制域取证声明校验兜底（forge-verific
       taskRef: { slug: 'f', localId: '1.1' },
       result: 'blocked',
       reason: '真机取证环境不可用——显式环境缺口（提案 M1 三级顺序）',
+      blockClassification: { kind: 'new-problem' },
       runtimeSurface: ['ui'],
       sessionId: 's',
     })
     expect(r.status).toBe('blocked')
+  })
+})
+
+// ───────── loop-recurrence-hardening T2 归类闸门：presence 校验 + records 落库 + recurrence 交叉校验 ─────────
+describe('T2 归类闸门（loop-recurrence-hardening）：blocked 归类 presence + 落库 + 交叉校验', () => {
+  const seed = (localId = '1.1'): void => {
+    if (h!.db.prepare(`SELECT id FROM features WHERE slug = 'f'`).get() === undefined) {
+      seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    }
+    seedTask(h!.db, 'f', localId, { status: 'in_progress' })
+  }
+  const blockedBase = (localId = '1.1') => ({
+    projectId: P(),
+    taskRef: { slug: 'f', localId } as const,
+    result: 'blocked' as const,
+    reason: '受阻——根因待排查',
+    blockClassification: { kind: 'new-problem' } as const,
+    sessionId: 's-exec',
+  })
+
+  it('缺归类字段 / kind 非法 → ERR_BLOCK_CLASSIFICATION_REQUIRED（错误码 + 指引文案在场）+ 单事务零写入', async () => {
+    seed()
+    for (const blockClassification of [undefined, { kind: '随便' } as unknown as { kind: 'new-problem' }]) {
+      const err = await submit({ ...blockedBase(), blockClassification }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(BlockClassificationRequiredError)
+      const e = err as BlockClassificationRequiredError
+      expect(e.code).toBe('ERR_BLOCK_CLASSIFICATION_REQUIRED')
+      // 指引文案：字段形状 + 两 kind + recurrenceOf 指引在场（Hard Rule 禁裸错误码）
+      expect(e.message).toContain('blockClassification')
+      expect(e.message).toContain("'new-problem'")
+      expect(e.message).toContain("'same-family-recurrence'")
+      expect(e.message).toContain('recurrenceOf')
+    }
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'in_progress' }])
+    expect(rows(`SELECT * FROM task_records`)).toEqual([])
+  })
+
+  it('归类=同族复发：records payload 结构化键落库（tasks 零列改动）+ 应答携 upgrade-hint 升级提示', async () => {
+    seed()
+    const r = await submit({
+      ...blockedBase(),
+      blockClassification: { kind: 'same-family-recurrence', recurrenceOf: 'bug-前驱-id' },
+    })
+    expect(r.status).toBe('blocked')
+    expect(r.restored).toEqual([])
+    expect(r.recurrenceAdvisories).toEqual([
+      {
+        kind: 'upgrade-hint',
+        message: expect.stringContaining('同族复发'),
+      },
+    ])
+    expect(JSON.stringify(r.recurrenceAdvisories)).toContain('bug-前驱-id')
+    const rec = rows(`SELECT record_fields_json FROM task_records WHERE verb = 'submit'`)[0] as {
+      record_fields_json: string
+    }
+    expect(JSON.parse(rec.record_fields_json)).toEqual({
+      blockClassification: { kind: 'same-family-recurrence', recurrenceOf: 'bug-前驱-id' },
+    })
+    // tasks 表零列改动：无新增列承载（归类只在 record_fields_json）
+    const cols = h!.db.prepare(`PRAGMA table_info(tasks)`).all() as { name: string }[]
+    expect(cols.some((c) => c.name.includes('classification'))).toBe(false)
+  })
+
+  it('归类=新问题 ∧ scope 命中 recurrence 候选 → 应答携 suspected-family「疑似同族」警示（不硬拒，status=blocked）', async () => {
+    seed()
+    const candidates = [
+      { bugId: 'b-root', summary: '写径拒写', chain: ['b-root', 'b-mid', 'b-leaf'] },
+    ]
+    const depsWithFace = {
+      store: h!.store,
+      events: h!.events,
+      findRecurrenceCandidates: () => candidates,
+    }
+    const r = await submitTask(depsWithFace, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(r.status).toBe('blocked') // 警示不硬拒
+    expect(r.recurrenceAdvisories).toHaveLength(1)
+    const advisory = r.recurrenceAdvisories![0]!
+    expect(advisory.kind).toBe('suspected-family')
+    expect(advisory.message).toContain('疑似同族')
+    expect(advisory.candidates).toEqual(candidates)
+  })
+
+  it('TasksVerbDeps face 缺席 → 交叉校验降级跳过不阻载（新问题无警示照常 blocked）', async () => {
+    seed()
+    const r = await submit(blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(r.recurrenceAdvisories).toBeUndefined()
+  })
+
+  it('face 实现抛错 → fail-soft 降级跳过（结算态不受影响）', async () => {
+    seed()
+    const depsWithBrokenFace = {
+      store: h!.store,
+      events: h!.events,
+      findRecurrenceCandidates: () => {
+        throw new Error('台账检索面故障')
+      },
+    }
+    const r = await submitTask(depsWithBrokenFace, blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(r.recurrenceAdvisories).toBeUndefined()
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'blocked' }])
+  })
+
+  it('face 在场而零候选 → 新问题无警示；success 结算不经归类门（blocked verdict restore 直达不受影响）', async () => {
+    seed()
+    const depsEmptyFace = {
+      store: h!.store,
+      events: h!.events,
+      findRecurrenceCandidates: () => [],
+    }
+    const r = await submitTask(depsEmptyFace, blockedBase())
+    expect(r.recurrenceAdvisories).toBeUndefined()
+    // success 直达：无归类字段要求
+    seed('1.2')
+    h!.db.prepare(`UPDATE tasks SET task_status = 'blocked' WHERE local_id = '1.2'`).run()
+    const ok = await submit({
+      projectId: P(), taskRef: { slug: 'f', localId: '1.2' },
+      result: 'success', summary: '阻塞已解决', sessionId: 's-main',
+    })
+    expect(ok.status).toBe('completed')
+    expect(ok.recurrenceAdvisories).toBeUndefined()
+  })
+})
+
+// ───────── bug 0db72bcb 生产装配径接线：face = bugs 域服务只读聚合（非手写桩）+ 降级 diag 留痕 ─────────
+describe('T2 生产装配径（bug 0db72bcb）：findRecurrenceCandidates = createBugsService 只读聚合 + 降级 diag 留痕', () => {
+  const seed = (localId = '1.1'): void => {
+    if (h!.db.prepare(`SELECT id FROM features WHERE slug = 'f'`).get() === undefined) {
+      seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    }
+    seedTask(h!.db, 'f', localId, { status: 'in_progress' })
+  }
+  const blockedBase = (localId = '1.1') => ({
+    projectId: P(),
+    taskRef: { slug: 'f', localId } as const,
+    result: 'blocked' as const,
+    reason: '受阻——根因待排查',
+    blockClassification: { kind: 'new-problem' } as const,
+    sessionId: 's-exec',
+  })
+  /** 受控 execFile 桩（bugs.test.ts 同形——git config 身份解析径受控） */
+  const gitExec = (): unknown => (_cmd: string, args: string[], _opts: unknown, cb: (e: unknown, out: string) => void) => {
+    cb(null, args.join(' ') === 'config user.name' ? 'faner' : '')
+  }
+
+  /** 生产装配同构接线（core/src/index.ts 同径：bugs 域服务聚合 + 闭包注入消 import 边） */
+  function productionFace() {
+    const bugs = createBugsService({
+      store: h!.store,
+      events: h!.events,
+      resolveWsPath: () => h!.projectId,
+      execFile: gitExec() as never,
+    })
+    return {
+      bugs,
+      findRecurrenceCandidates: (projectId: string, scope: { readonly slug: string; readonly localId: string; readonly files: readonly string[] }) =>
+        bugs.findRecurrenceCandidates(projectId, scope),
+    }
+  }
+
+  async function seedChain(): Promise<void> {
+    seed()
+    const bugs = createBugsService({
+      store: h!.store,
+      events: h!.events,
+      resolveWsPath: () => h!.projectId,
+      execFile: gitExec() as never,
+    })
+    const root = (await bugs.registerBug({
+      projectId: P(),
+      summary: '写径拒写根',
+      bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a',
+      suspected: 'packages/core/src/forge/tasks/submit.ts:78',
+    })).card
+    await bugs.registerBug({
+      projectId: P(),
+      summary: '写径复发一',
+      bugDesc: 'd', triggerDesc: 't', expected: 'e', actual: 'a',
+      suspected: 'packages/core/src/forge/tasks/submit.ts:96',
+      recurrenceOf: root.bugId,
+    })
+  }
+
+  it('face 经 bugs 域服务聚合：新问题 ∧ scope 命中链上 suspected → suspected-family 警示（链结构 = 域层口径）', async () => {
+    await seedChain()
+    const { findRecurrenceCandidates } = productionFace()
+    const r = await submitTask({ store: h!.store, events: h!.events, findRecurrenceCandidates }, {
+      ...blockedBase(),
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(r.status).toBe('blocked') // 警示不硬拒
+    expect(r.recurrenceAdvisories).toHaveLength(1)
+    const advisory = r.recurrenceAdvisories![0]!
+    expect(advisory.kind).toBe('suspected-family')
+    expect(advisory.candidates).toHaveLength(2) // 链两员均候选
+    expect(advisory.candidates![0]!.chain).toHaveLength(2) // root → 复发一
+  })
+
+  it('face 缺席 → 降级留痕 recurrence-face-absent（onDiag 类型化 emit，info 级）', async () => {
+    seed()
+    const diags: { level: string; event: string }[] = []
+    const r = await submitTask({ store: h!.store, events: h!.events, onDiag: (p) => diags.push({ level: p.level, event: p.event }) }, blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(diags).toContainEqual({ level: 'info', event: 'recurrence-face-absent' })
+  })
+
+  it('face 读故障 → 降级留痕 recurrence-face-error（warn 级）+ 结算态不受影响', async () => {
+    seed()
+    const diags: { level: string; event: string }[] = []
+    const r = await submitTask({
+      store: h!.store,
+      events: h!.events,
+      findRecurrenceCandidates: () => {
+        throw new Error('台账读故障')
+      },
+      onDiag: (p) => diags.push({ level: p.level, event: p.event }),
+    }, blockedBase())
+    expect(r.status).toBe('blocked')
+    expect(diags).toContainEqual({ level: 'warn', event: 'recurrence-face-error' })
+    expect(rows(`SELECT task_status FROM tasks WHERE local_id = '1.1'`)).toEqual([{ task_status: 'blocked' }])
   })
 })

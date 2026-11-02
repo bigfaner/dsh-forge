@@ -83,6 +83,38 @@ describe('问询材料（renderEscalationAsk——纯函数，reason 原文 + �
     expect(material.options.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('escalate 升级载荷在场 = 四节建议随 detail 上浮；缺席 = 旧无载荷形态兼容', () => {
+    const withAdvice = renderEscalationAsk({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: task(),
+      reason: FULL_REASON,
+      history: ['第1次处置——决定上浮主会话处置'],
+      advice: {
+        classification: '可形式化形态——状态机无不变式',
+        disposition: '建议建模排查（判别实验清单逐条排除后再开修）',
+        delegateTarget: '具备形式化建模能力的专家',
+        evidencePointers: ['bug-root', 'bug-r1'],
+      },
+    })
+    expect(withAdvice.detail).toContain('处置分析建议（triage 升级载荷）：')
+    expect(withAdvice.detail).toContain('- 问题归类: 可形式化形态——状态机无不变式')
+    expect(withAdvice.detail).toContain('- 建议处置: 建议建模排查（判别实验清单逐条排除后再开修）')
+    expect(withAdvice.detail).toContain('- 建议委派目标: 具备形式化建模能力的专家')
+    expect(withAdvice.detail).toContain('- 证据指针: bug-root；bug-r1')
+    // 旧无载荷形态（advice 缺席）零回归：无建议块
+    const withoutAdvice = renderEscalationAsk({
+      kind: 'blocked-ask-user',
+      ownerSessionId: OWNER,
+      source: SOURCE,
+      task: task(),
+      reason: FULL_REASON,
+      history: [],
+    })
+    expect(withoutAdvice.detail).not.toContain('处置分析建议')
+  })
+
   it('disposition-over-limit：问题行带次数；fix-chain-over-limit：带深度与上限；halted：带原文 reason；deadlock：带阻塞清单', () => {
     const capped = renderEscalationAsk({
       kind: 'disposition-over-limit',

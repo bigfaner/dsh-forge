@@ -63,10 +63,10 @@ describe("isForgeProgressData（'forge/progress' 数据守卫）", () => {
   })
 })
 
-describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——25 值）', () => {
-  it('恰 25 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族', () => {
-    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(25)
-    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(25)
+describe('FORGE_PROGRESS_SCENARIOS（场景码单源常量表——26 值）', () => {
+  it('恰 26 值，值域 = 提案事件清单 {major}/{minor} 七族 + 1.16 池级族 + bug 3bd8b829 领取确认 + triage 处置族 + T3 同缝拦截挂起', () => {
+    expect(FORGE_PROGRESS_SCENARIOS).toHaveLength(26)
+    expect(new Set(FORGE_PROGRESS_SCENARIOS).size).toBe(26)
     expect([...FORGE_PROGRESS_SCENARIOS]).toEqual(Object.values(S))
   })
   it('编码格式：纯英文 + 中划线，{major}/{minor} 两段', () => {

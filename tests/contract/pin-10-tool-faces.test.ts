@@ -37,13 +37,14 @@ function toolNameLiterals(dir: string): Map<string, string> {
 describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写落定——drift #1）', () => {
   const coreLiterals = toolNameLiterals(CORE_TOOLS_DIR)
 
-  it('核心包常量面 = 十五员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + 3b stopTaskLoop + main pauseTask 暂停入口）', () => {
+  it('核心包常量面 = 二十员：dispatchTask 在场（Interface 4 列序 + 1.4 三新员 + fix-bug 两写径 + bug-recurrence-chain 两读径 + 3b stopTaskLoop 停止入口 + main pauseTask 暂停入口 + transitionFeature 相位转移入口（implicit-stage-approval §2.3）+ unblockTask blocked→pending 出口（blocked-verdict-restore-primitive））', () => {
     expect([...FORGE_TOOL_NAMES]).toEqual([
       'addTask',
       'submitTask',
       'queryTask',
       'createProposal',
       'transitionProposal',
+      'transitionFeature',
       'dispatchTask',
       'stopTaskLoop',
       'updateTask',
@@ -57,12 +58,13 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
       'queryImplCheckpoint',
       'listImplCheckpoints',
       'pauseTask',
+      'unblockTask',
     ])
     expect(FORGE_TOOL_NAMES).toContain('dispatchTask')
   })
 
-  it('缺席面（五名——claimTask 旧名 spawnWorker 并断）：两包常量与源码 TOOL 字面量均不含', () => {
-    const absent = ['claimTask', 'spawnWorker', 'transitionTask', 'transitionFeature', 'setProposalMode'] as const
+  it('缺席面（四名——claimTask 旧名 spawnWorker 并断；transitionFeature 已转正当主 agent 出口）：两包常量与源码 TOOL 字面量均不含', () => {
+    const absent = ['claimTask', 'spawnWorker', 'transitionTask', 'setProposalMode'] as const
     for (const name of absent) {
       expect(FORGE_TOOL_NAMES, `核心包 FORGE_TOOL_NAMES 不应含 ${name}`).not.toContain(name)
       expect(FORGE_SPEC_TOOL_NAMES, `spec 包 FORGE_SPEC_TOOL_NAMES 不应含 ${name}`).not.toContain(name)
@@ -73,7 +75,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     }
   })
 
-  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心十四 / spec 三）', () => {
+  it('源码枚举 ↔ 常量单源对账：TOOL 字面量集合恰 = 常量集合（核心二十 / spec 三）', () => {
     expect([...coreLiterals.values()].sort()).toEqual([...FORGE_TOOL_NAMES].sort())
     expect([...toolNameLiterals(SPEC_TOOLS_DIR).values()].sort()).toEqual([...FORGE_SPEC_TOOL_NAMES].sort())
   })
@@ -84,7 +86,7 @@ describe('pin ⑰ tool 面代码审计（G1-11「六在场/两缺席」M3 改写
     expect(files).not.toContain('spawn-worker.ts')
   })
 
-  it('注册块逐行对账：plugin index.ts 恰注册十三员（tools.<name> 形——名面 = FORGE_TOOL_NAMES）', () => {
+  it('注册块逐行对账：plugin index.ts 恰注册二十员（tools.<name> 形——名面 = FORGE_TOOL_NAMES）', () => {
     const index = readFileSync(join(ROOT, 'packages/plugin-forge/src/index.ts'), 'utf8')
     for (const name of FORGE_TOOL_NAMES) {
       expect(index, `index.ts 应含 ctx.tools.register(tools.${name})`).toContain(`ctx.tools.register(tools.${name})`)

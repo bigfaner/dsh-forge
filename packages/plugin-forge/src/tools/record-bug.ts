@@ -102,17 +102,42 @@ export const BUG_CARD_SUCCESS_SCHEMA = {
   required: ['bugId', 'summary', 'bugDesc', 'triggerDesc', 'expected', 'actual', 'bugStatus', 'reporter', 'createdAt', 'updatedAt'],
 }
 
-/** registerBug 返回（BugCard）的注册面输出 schema（+ 失败支） */
-const RECORD_BUG_OUTPUT_SCHEMA = withFailureVariant(BUG_CARD_SUCCESS_SCHEMA)
+/** registerBug 应答（工具面包装——card 全卡 + errorType 参考集合；BugCard 行 DTO 零改动） */
+export interface RegisterBugToolResult {
+  readonly card: BugCard
+  readonly errorTypeSuggestions: readonly string[]
+}
 
-/** BugCard → 模型可见文本（formatOk 双友好：✓ + bugId 键值行） */
+/** recordBug 成功支 schema（工具面包装：{ card, errorTypeSuggestions }——card = 全卡镜像） */
+const RECORD_BUG_SUCCESS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    card: BUG_CARD_SUCCESS_SCHEMA,
+    errorTypeSuggestions: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Distinct errorType labels already in the ledger (most frequent first, capped) — reference vocabulary only: reuse an existing close label; coin a new one only when none fits.',
+    },
+  },
+  required: ['card', 'errorTypeSuggestions'],
+}
+
+/** registerBug 返回的注册面输出 schema（+ 失败支） */
+const RECORD_BUG_OUTPUT_SCHEMA = withFailureVariant(RECORD_BUG_SUCCESS_SCHEMA)
+
+/** 应答 → 模型可见文本（formatOk 双友好：✓ + bugId 键值行 + 词表参考节——非空时附） */
 function renderRecordBugResult(_args: unknown, value: unknown): readonly { type: 'text'; text: string }[] {
   if (isForgeToolFailure(value)) return formatFailure(value)
-  const v = value as BugCard
-  return formatOk(`Bug registered (open) — ${v.summary}`, [
-    `- bugId: ${v.bugId}`,
-    `- reporter: ${v.reporter}`,
-  ])
+  const v = value as RegisterBugToolResult
+  const lines = [
+    `- bugId: ${v.card.bugId}`,
+    `- reporter: ${v.card.reporter}`,
+  ]
+  if (v.errorTypeSuggestions.length > 0) {
+    lines.push(`- errorTypeSuggestions (reuse first): ${v.errorTypeSuggestions.join(', ')}`)
+  }
+  return formatOk(`Bug registered (open) — ${v.card.summary}`, lines)
 }
 
 /** tool 定义工厂（deps.bugs 注入 core bug 域服务——装配必给） */
@@ -120,7 +145,7 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Register a bug in the forge bug ledger (lands an open record and returns its bug_id). Agent submits semantic fields only: a one-line summary (max 50 chars — longer is rejected), the five Bug Summary fields (bug_desc / trigger_desc / expected / actual; suspected location and error_type optional), and an optional recurrence_of predecessor bug_id when this is a recurrence of a known problem (omit on first occurrence; use listBugs to find candidates). Identity, session and repo state are resolved server-side: report_session_id comes from the executing session, reporter from git config, and source_task_id from the dispatch context (absent on standalone paths). Use at diagnosis time per the fix-bug flow; backfill the outcome later via resolveBug.',
+      'Register a bug in the forge bug ledger (lands an open record and returns its bug_id). Agent submits semantic fields only: a one-line summary (max 50 chars — longer is rejected), the five Bug Summary fields (bug_desc / trigger_desc / expected / actual; suspected location and error_type optional), and an optional recurrence_of predecessor bug_id when this is a recurrence of a known problem (omit on first occurrence; use listBugs to find candidates). error_type discipline: the response carries errorTypeSuggestions — the distinct errorType labels already in the ledger. Check that set first and reuse an existing semantically-close label; coin a new label only when no existing one fits; avoid synonym variants (e.g. race-condition vs concurrency-race). The set is reference vocabulary only — no mechanical matching, classification stays a semantic judgment. Identity, session and repo state are resolved server-side: report_session_id comes from the executing session, reporter from git config, and source_task_id from the dispatch context (absent on standalone paths). Use at diagnosis time per the fix-bug flow; backfill the outcome later via resolveBug.',
     parameters: {
       type: 'object',
       properties: {
@@ -130,7 +155,7 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
         expected: { type: 'string', description: 'Expected: correct behavior.' },
         actual: { type: 'string', description: 'Actual: observed behavior.' },
         suspected: { type: 'string', description: 'Suspected location (file:line) — optional repair lead for open records.' },
-        error_type: { type: 'string', description: 'Free-form error type label — optional, stats dimension.' },
+        error_type: { type: 'string', description: 'Free-form error type label — optional, stats dimension. Reuse an existing label from the ledger (see errorTypeSuggestions in the response) first; coin a new one only when none fits; avoid synonym variants (e.g. race-condition vs concurrency-race).' },
         recurrence_of: {
           type: 'string',
           description:
@@ -140,7 +165,7 @@ export function createRecordBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
       required: ['summary', 'bug_desc', 'trigger_desc', 'expected', 'actual'],
     },
     output: { schema: RECORD_BUG_OUTPUT_SCHEMA, render: renderRecordBugResult },
-    async execute(args: unknown, exec: ToolExecFace): Promise<BugCard | ForgeToolFailure> {
+    async execute(args: unknown, exec: ToolExecFace): Promise<RegisterBugToolResult | ForgeToolFailure> {
       const session = sessionContextOf(exec)
       return callToolFace(async () => {
         const parsed = parseRecordBugArgs(args)

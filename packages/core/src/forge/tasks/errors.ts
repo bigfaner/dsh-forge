@@ -517,9 +517,38 @@ export class BlockSourceRequiredError extends Error {
     super(
       `源任务已 blocked：${data.taskRef.slug}/${data.taskRef.localId}——不带 block_source 的派生（disc 径）` +
         `不会建等待边，fix 完成无法恢复源。请补 block_source=true 建 fix 链（等待边 + auto-block；` +
-        `fix 完成即恢复源）`,
+        `fix 完成即恢复源）。对偶守卫：同族复发（同缝计数 ≥2）的盲试 fix 派发另被 ` +
+        `ERR_RECURRENCE_ESCALATION_REQUIRED 软拒绝——先升级排查建模再派发（其指引文案同样指路本码）`,
     )
     this.name = 'BlockSourceRequiredError'
+    this.data = data
+  }
+}
+
+// ───────── loop-recurrence-hardening T2：submitTask blocked 归类闸门 ─────────
+
+/** ERR_BLOCK_CLASSIFICATION_REQUIRED 附载 */
+export interface BlockClassificationRequiredData {
+  readonly verb: 'submitTask'
+}
+
+/**
+ * blocked 结算缺根因归类（400）：result=blocked 而 blockClassification 缺席或 kind 非法
+ * （新问题 new-problem / 同族复发 same-family-recurrence 二选一必带——T2 归类闸门 presence
+ * 校验，程序零语义判断，归类真伪归主会话/T3 交叉校验）。指引文案带字段形状。
+ */
+export class BlockClassificationRequiredError extends Error {
+  readonly code = 'ERR_BLOCK_CLASSIFICATION_REQUIRED' as const
+  readonly data: BlockClassificationRequiredData
+
+  constructor(data: BlockClassificationRequiredData) {
+    super(
+      `${data.verb} result=blocked 必带根因归类 blockClassification：` +
+        `{ kind: 'new-problem' | 'same-family-recurrence'[, recurrenceOf: '<前驱 bug_id>'] }——` +
+        `新问题/同族复发二选一；同族复发请携带台账 recurrence 链前驱 bug_id（归类自报，` +
+        `闸门按任务 scope 交叉校验台账候选并携「疑似同族」警示）`,
+    )
+    this.name = 'BlockClassificationRequiredError'
     this.data = data
   }
 }

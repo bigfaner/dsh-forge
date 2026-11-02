@@ -47,10 +47,11 @@
 // Assertion depth: 26/28 behavioral（93%），其中 deep 10/26（38%）——两阈均过。
 
 import { expect, type Page } from '@playwright/test'
-import { createSharedLaunchFixture, openOverviewSubtab, retryTransientWindow } from '../../support/fixtures.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
+import { openOverviewDock } from '../../support/navigation.js'
 import { forgeInvoke } from '../../support/rpc.js'
 import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
@@ -66,21 +67,51 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-/** 概览子 tab 打开走支撑层单源 openOverviewSubtab（批次四a 四份 spec 内同语义 helper 收编
- *  ——挂载重试 ×3，轮内 30s/15s 门原样保留，e2e-fast-shared-launch/1.17）。
- *  芯片流工作区选定重试（共享 launch 序列态瞬态窗——hero picker 菜单重挂载致行 detached；
- *  整段重开菜单重选幂任。瞬态窗对策，非放宽断言：轮内门原样保留）走支撑层单源
- *  retryTransientWindow（收编单源，e2e-fast-shared-launch/1.17）。 */
+/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
+ *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
+ *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
+async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'tasks'): Promise<void> {
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf(subtab))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page
+        .getByRole('tab', { name: /项目概览/ })
+        .getByRole('button', { name: '关闭' })
+        .click()
+        .catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
+}
+
+/** 芯片流工作区选定重试（共享 launch 序列态瞬态窗——hero picker 菜单重挂载致行 detached；
+ *  整段重开菜单重选幂等。瞬态窗对策，非放宽断言：轮内门原样保留）。 */
 async function selectWorkspaceWithRetry(page: Page, name: string): Promise<void> {
-  await retryTransientWindow(page, {
-    attempt: () => selectWorkspaceViaChip(page, name),
-    recover: (p) => p.keyboard.press('Escape').catch(() => undefined),
-  })
+  let lastCause: unknown
+  for (let i = 0; i < 3; i++) {
+    try {
+      await selectWorkspaceViaChip(page, name)
+      return
+    } catch (cause) {
+      lastCause = cause
+      await page.keyboard.press('Escape').catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 3_000))
+    }
+  }
+  throw lastCause
 }
 
 test('@web-e2e @m3 模式选择·T1：座位在场默认突击 + 菜单双入口中文直出 + blank 点选远征 + 幂等点选零漂移', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const { app: _app, page, pageErrors, wsDir } = sharedLaunch
+  const { page, pageErrors, wsDir } = sharedLaunch
   try {
     await registerProject(page, wsDir, WS_NAME)
     await selectWorkspaceWithRetry(page, WS_NAME)

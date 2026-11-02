@@ -1,7 +1,8 @@
 // forge bug 域服务（fix-bug 第五小域）：registerBug/resolveBug/listBugs——两阶段落库
 // 单表（bugs：登记 open → fixed｜unresolved 终态回填；不可改史，无审计表——终态行自身
 // 即全史）。proposal「技术细节·持久化/工具面」两节为契约；contracts dto/bugs.ts（BugCard/
-// ListBugsQuery）+ labels BUG_STATUSES 为词汇单源。
+// ListBugsQuery）+ labels BUG_STATUSES 为词汇单源。registerBug 应答 = 工具面包装
+// { card, errorTypeSuggestions }（T1 词表收敛——distinct errorType 参考集合，零机械归类）。
 //
 // git 解析径在 core 内承载（先例 forge/tasks/git-lookup.ts——execFile 注入 + 恒数组参 +
 // 2s 超时 + ENOENT/失败同路 fail-soft；四域互禁 import 彼此，故本域自持注入面不引
@@ -30,13 +31,14 @@ import type {
   BugCommitFile,
   BugCommitFilesQuery,
   BugFileDiffQuery,
+  BugRecurrenceCandidate,
   BugRecurrenceDanglingData,
   BugStatus,
   GetBugQuery,
   GetBugResponse,
   ListBugsQuery,
 } from '@dsh-forge/contracts'
-import { BUG_STATUS_LABELS } from '@dsh-forge/contracts'
+import { BUG_COVERAGE_ANCHOR_PREFIX, BUG_COVERAGE_DECLARATION_PREFIX, BUG_STATUS_LABELS } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
@@ -241,10 +243,87 @@ export class BugRecurrenceDanglingError extends Error {
   }
 }
 
+// ── T4 覆盖声明协议（loop-recurrence-hardening 提案 §2.2 T4——行前缀常量单源 =
+// contracts dto/bugs.ts，本注释为协议语义正本）──
+// 存储载体 = fix_approach 既有字段（bug 台账 schema 零改动）。行式协议（大小写不敏感前缀
+// + 冒号 + 值；值 trim 后非空才算在场；首个命中行生效）：
+//   coverage: <为何本修复覆盖整条复发链共同根因的覆盖声明>
+//   anchor: <排查报告卷宗正本文件路径（相对项目根或绝对）>
+// 分层判定（双层）：core 纯 DB 面只判两段 presence + 锚字符串登记（零文件 IO、零语义——
+// 声明是否真答「为何覆盖全家族」由主会话结算复核裁）；锚有效性预检（文件 IO）归
+// plugin-forge resolveBug tool 旁挂侧（复用 1.4 resolveDir 同源 projects face 解析项目根），
+// 失效经拒绝路径退回失败 DTO（ERR_BUG_COVERAGE_ANCHOR_INVALID——写径零触达）。非复发家族
+// （recurrence_of 缺席）协议可选，fix_approach 仍为自由一段话——既有行为零变化。
+
+// 协议行前缀常量单源复用（contracts dto/bugs.ts——core presence 门与 plugin-forge 锚预检
+// 共享；此处 re-export 保持既有导出面）
+export { BUG_COVERAGE_DECLARATION_PREFIX, BUG_COVERAGE_ANCHOR_PREFIX }
+
+/** fix_approach 协议解析产物（段值 trim 后非空；缺席段键缺席） */
+export interface BugCoverageDeclaration {
+  readonly declaration?: string
+  readonly anchor?: string
+}
+
+/** fix_approach 覆盖声明协议解析（纯函数零 IO——core presence 门与 plugin-forge 锚预检共享语义） */
+export function parseBugCoverageDeclaration(fixApproach: string | undefined): BugCoverageDeclaration {
+  let declaration: string | undefined
+  let anchor: string | undefined
+  for (const line of (fixApproach ?? '').split(/\r?\n/)) {
+    const t = line.trim()
+    const lower = t.toLowerCase()
+    if (declaration === undefined && lower.startsWith(BUG_COVERAGE_DECLARATION_PREFIX)) {
+      const v = t.slice(BUG_COVERAGE_DECLARATION_PREFIX.length).trim()
+      if (v !== '') declaration = v
+    } else if (anchor === undefined && lower.startsWith(BUG_COVERAGE_ANCHOR_PREFIX)) {
+      const v = t.slice(BUG_COVERAGE_ANCHOR_PREFIX.length).trim()
+      if (v !== '') anchor = v
+    }
+  }
+  return {
+    ...(declaration !== undefined ? { declaration } : {}),
+    ...(anchor !== undefined ? { anchor } : {}),
+  }
+}
+
+/** ERR_BUG_COVERAGE_DECLARATION_REQUIRED 附载 */
+export interface BugCoverageDeclarationRequiredData {
+  readonly bugId: string
+  readonly missing: readonly ('declaration' | 'anchor')[]
+}
+
+/** 复发家族 resolveBug(fixed) 覆盖声明段/报告锚行缺席拒写（core 纯 DB 面——零文件 IO 零语义） */
+export class BugCoverageDeclarationRequiredError extends Error {
+  readonly code = 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED' as const
+  readonly data: BugCoverageDeclarationRequiredData
+
+  constructor(data: BugCoverageDeclarationRequiredData) {
+    super(
+      `复发家族覆盖声明闸门：resolveBug(fixed) 的 fix_approach 缺协议段（${data.missing.join('、')}）——` +
+        `须携 coverage: <为何覆盖整条复发链共同根因> 与 anchor: <排查报告卷宗文件路径> 两行，退回补证`,
+    )
+    this.name = 'BugCoverageDeclarationRequiredError'
+    this.data = data
+  }
+}
+
 // ── 服务面 ──
 
 /** summary 字数上限（字 = Unicode 码点——全角汉字一字一计） */
 export const BUG_SUMMARY_MAX_CHARS = 50
+
+/** errorType 参考集合限量（词表收敛供 LLM 参考——高频优先；零机械归类，参考提案 §2.5） */
+export const ERROR_TYPE_SUGGESTIONS_LIMIT = 20
+
+/**
+ * registerBug 应答（工具面包装——BugCard 行 DTO 单源零改动，不是给 BugCard 加字段）：
+ * card = 登记投影；errorTypeSuggestions = 台账 distinct errorType 集合（高频优先限量），
+ * 供登记方下一个缺陷参考复用——词表只作参考，归类始终是语义判断。
+ */
+export interface RegisterBugResult {
+  readonly card: BugCard
+  readonly errorTypeSuggestions: readonly string[]
+}
 
 export interface BugsServiceDeps {
   /** 每工作区任务库惰性句柄（projectId → ensureOpen） */
@@ -366,11 +445,50 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 }
 
 /** Interface：core · forge bug 域服务面（装配注入——recordBug/resolveBug 工具消费 + listBugs RPC） */
+
+/**
+ * 台账 recurrence 候选检索 scope（loop-recurrence-hardening T2/T3——跨容器库域口径归本域
+ * 定义，tasks 域经只读 face 消费零 import）。files 口径：非空（结算径）→ 按 suspected
+ * 修复锚路径收窄（同缝提示性信号）；空（派发径）→ 项目全链成员候选（同缝拦截判据）。
+ */
+export interface BugRecurrenceScope {
+  readonly slug: string
+  readonly localId: string
+  readonly files: readonly string[]
+}
+
+/** 链成员映射（前驱回溯至链根 + 后继正向收齐——getBug 同口径提取；孤条不入） */
+function recurrenceChainsOf(rows: readonly BugStorageRow[]): Map<string, string[]> {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const childrenByParent = new Map<string, string[]>()
+  for (const r of rows) {
+    if (r.recurrence_of === null) continue
+    const bucket = childrenByParent.get(r.recurrence_of) ?? []
+    bucket.push(r.id)
+    childrenByParent.set(r.recurrence_of, bucket)
+  }
+  const chains = new Map<string, string[]>()
+  for (const r of rows) {
+    const chainIds: string[] = []
+    for (let cursor: BugStorageRow | undefined = r; cursor !== undefined; ) {
+      chainIds.unshift(cursor.id) // 反向回溯——链根推到队首
+      cursor = cursor.recurrence_of !== null ? byId.get(cursor.recurrence_of) : undefined
+    }
+    for (let frontier = childrenByParent.get(chainIds[chainIds.length - 1]!) ?? []; frontier.length > 0; ) {
+      chainIds.push(...frontier)
+      frontier = frontier.flatMap((id) => childrenByParent.get(id) ?? [])
+    }
+    const unique = [...new Set(chainIds)]
+    if (unique.length > 1) chains.set(r.id, unique)
+  }
+  return chains
+}
+
 export function createBugsService(deps: BugsServiceDeps) {
   const execFile = deps.execFile ?? defaultExecFile
   return {
-    /** 登记 → open 行（summary ≤50 字超长拒写；reporter 经 git 解析——写前 await） */
-    async registerBug(input: RegisterBugInput): Promise<BugCard> {
+    /** 登记 → open 行 + errorType 参考集合（summary ≤50 字超长拒写；reporter 经 git 解析——写前 await） */
+    async registerBug(input: RegisterBugInput): Promise<RegisterBugResult> {
       const summary = input.summary.trim()
       if (Array.from(summary).length > BUG_SUMMARY_MAX_CHARS) {
         throw new BugSummaryTooLongError({ summary, max: BUG_SUMMARY_MAX_CHARS })
@@ -412,7 +530,16 @@ export function createBugsService(deps: BugsServiceDeps) {
       })
       deps.events.emitTasksChanged(input.projectId)
       const row = db.prepare<unknown[], BugStorageRow>(`${SELECT_BUG} WHERE id = ?`).get(bugId) as BugStorageRow
-      return toBugCard(row)
+      // 词表收敛（T1）：distinct errorType 集合——高频优先、同频词面升序、限量；空白词不计；
+      // 只读聚合零机械归类（能力类别判断留 triage 语义面，参考提案 §2.5）
+      const suggestionRows = db
+        .prepare<unknown[], { error_type: string; n: number }>(
+          `SELECT error_type, COUNT(*) AS n FROM bugs
+           WHERE error_type IS NOT NULL AND TRIM(error_type) <> ''
+           GROUP BY error_type ORDER BY n DESC, error_type ASC LIMIT ?`,
+        )
+        .all(ERROR_TYPE_SUGGESTIONS_LIMIT)
+      return { card: toBugCard(row), errorTypeSuggestions: suggestionRows.map((r) => r.error_type) }
     },
 
     /** 终态回填（open→fixed｜unresolved 单向；fixed 走 hash 锚定证据反查） */
@@ -460,6 +587,18 @@ export function createBugsService(deps: BugsServiceDeps) {
             bugId: input.bugId,
             current: current.bug_status,
           })
+        }
+        // T4 覆盖声明闸门（core 半）：复发家族（recurrence_of 在场）fixed 必携协议两段——
+        // presence + 锚字符串登记（零文件 IO；锚有效性预检归 plugin-forge 旁挂侧）。校验
+        // 先于证据反查与写事务——缺席拒写零副作用。
+        if (current.recurrence_of !== null) {
+          const parsed = parseBugCoverageDeclaration(input.fixApproach)
+          const missing: ('declaration' | 'anchor')[] = []
+          if (parsed.declaration === undefined) missing.push('declaration')
+          if (parsed.anchor === undefined) missing.push('anchor')
+          if (missing.length > 0) {
+            throw new BugCoverageDeclarationRequiredError({ bugId: input.bugId, missing })
+          }
         }
         const evidence = await resolveFixEvidence(execFile, {
           cwd: deps.resolveWsPath(input.projectId),
@@ -515,6 +654,29 @@ export function createBugsService(deps: BugsServiceDeps) {
         createdAt: (c) => c.createdAt,
         id: (c) => c.bugId,
       }).slice(Math.max(q.offset ?? 0, 0), q.limit === undefined ? undefined : Math.max(q.offset ?? 0, 0) + q.limit)
+    },
+
+    /**
+     * 台账 recurrence 候选只读聚合（loop-recurrence-hardening T2 交叉校验 / T3 同缝计数 /
+     * triage 两信号 / add-fix vars 共同消费 face——生产装配 = 本域服务聚合，tasks 域经
+     * 闭包注入消费零 import，四域互禁不破）。候选 = 复发链成员（链长 ≥ 2）；scope.files
+     * 非空按 suspected 锚路径收窄，空 = 全链成员（口径见 BugRecurrenceScope 注）。
+     */
+    async findRecurrenceCandidates(projectId: string, scope: BugRecurrenceScope): Promise<readonly BugRecurrenceCandidate[]> {
+      const db = deps.store.ensureOpen(projectId)
+      const rows = db.prepare<unknown[], BugStorageRow>(`${SELECT_BUG}`).all() as BugStorageRow[]
+      const chains = recurrenceChainsOf(rows)
+      const byId = new Map(rows.map((r) => [r.id, r]))
+      const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
+      const candidates: BugRecurrenceCandidate[] = []
+      for (const [bugId, chain] of chains) {
+        if (files.length > 0) {
+          const suspected = byId.get(bugId)?.suspected ?? ''
+          if (!files.some((f) => suspected.includes(f))) continue
+        }
+        candidates.push({ bugId, summary: byId.get(bugId)?.summary ?? '', chain })
+      }
+      return candidates
     },
 
     /**

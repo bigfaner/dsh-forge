@@ -42,7 +42,7 @@ import type {
   PoolSnapshot,
   SpawnWorker,
 } from '../dispatch-core/index.js'
-import { clearExclusiveLoopSource, ownerSingleActiveRejection, setExclusiveLoopSource } from '../dispatch-core/index.js'
+import { clearExclusiveLoopSource, ownerSingleActiveRejection, recurrenceCountOf, setExclusiveLoopSource } from '../dispatch-core/index.js'
 import { emitForgeDiag } from '../faces.js'
 import type { ForgeDiagEmitFace } from '../faces.js'
 import { renderNarrative, summarizeReason } from '../notify/index.js'
@@ -158,10 +158,25 @@ export interface LoopTriageFixChain {
  * 处置决策四动作枚举（S1c 三动作 + split-remainder 第四态，proposal blocked-salvage-split B；
  * 宿主忠实执行）：
  * add-fix = 宿主经 addTask 建 fix 链（blockSource 置源 blocked，fix 完成自动恢复）；
- * wait-external = 原因在其它任务源（记录等待 → 续领其它）；ask-user = 直达第三层；
+ * wait-external = 原因在其它任务源（记录等待 → 续领其它）；escalate = 上浮主会话处置
+ * （原 ask-user 改名——决策动作非工具、不预设问用户，主会话收建议后按 SOP 自行处置）；
  * split-remainder = 宿主经 addTask(blockSource:false) 建继任任务承接剩余范围——源任务保持
  * blocked 不恢复（不重头开始的结构保证；pending 继任路径在场，deadlock 判词不误报）。
  */
+/** escalate 升级载荷四节（proposal 2.2.1 上浮面——专业且充分的建议，非裸转交；各节限长
+ *  约定由 decision.ts 解析面强制：三文本节 ≤ 2000 字符、证据指针 ≤ 8 条。归类内容语义
+ *  质量不设机检——载荷完备性为结构断言） */
+export interface TriageEscalationPayload {
+  /** 问题归类（能力类别 + 判据——如可形式化形态/环境·机械形态） */
+  readonly classification?: string
+  /** 建议处置与理由（建模排查/深查/直接修复） */
+  readonly disposition?: string
+  /** 建议委派目标（描述性——派谁由主会话自行决定，配置零承担） */
+  readonly delegateTarget?: string
+  /** 证据指针（recurrence 链 bug_id、卷宗/报告路径——指针化引用，不搬运全文） */
+  readonly evidencePointers?: readonly string[]
+}
+
 export type LoopTriageDecision =
   | {
       readonly action: 'add-fix'
@@ -174,7 +189,7 @@ export type LoopTriageDecision =
       readonly note?: string
     }
   | { readonly action: 'wait-external'; readonly externalSlug: string }
-  | { readonly action: 'ask-user' }
+  | { readonly action: 'escalate'; readonly payload?: TriageEscalationPayload }
   | {
       readonly action: 'split-remainder'
       /** 继任任务标题（缺省 = `Split: <任务名>`） */
@@ -224,6 +239,8 @@ export type LoopEscalation =
         readonly reason: string
         /** 处置历史（处置阶梯逐次记录——含本次决策行） */
         readonly history: readonly string[]
+        /** escalate 升级载荷（triage 四节建议——在场即随问询 detail 上浮，缺席 = 旧无载荷形态兼容） */
+        readonly advice?: TriageEscalationPayload
       }
     | {
         readonly kind: 'worker-abort-over-limit'
@@ -292,6 +309,20 @@ export type LoopEscalation =
         readonly taskKey: string
         /** 暂停原因全文（pauseTask 必带——载荷全文承载） */
         readonly reason: string
+      }
+    | {
+        /** T3 同缝拦截挂起（loop-recurrence-hardening——盲试 fix 派发被 claim 守卫软拒绝，
+         *  被拒 fix 行转 escalation 问询/挂起处置，不留孤儿滞留） */
+        readonly kind: 'recurrence-escalation'
+        readonly ownerSessionId: string
+        readonly source: LoopSourceRef
+        readonly taskKey: string
+        /** 拒绝原因全文（守卫失败 DTO message——问询 detail） */
+        readonly reason: string
+        /** 命中家族链（bug_id 时间序，链根在前——证据指针） */
+        readonly chain: readonly string[]
+        /** 同缝计数（≥ RECURRENCE_ESCALATION_THRESHOLD） */
+        readonly count: number
       }
 
 export interface LoopEscalationHook {
@@ -717,6 +748,21 @@ export interface LoopDriverDeps {
    * fire-and-forget：诊断零循环正确性依赖）
    */
   readonly diag?: LoopDiagSink
+  /**
+   * 台账 recurrence 候选只读检索面（loop-recurrence-hardening——两消费点：① dispatch-core
+   * claim 守卫 T3 同缝拦截（随 loop.core 透传）；② add-fix 派生时现查 recurrence 链写入任务
+   * vars（先例 settle.ts E2E_DEBT_SOURCE；链事实结构化携带零语义，不落 task_desc）。
+   * 缺席/异常 = 两机制降级关闭，行为零变化）
+   */
+  readonly findRecurrenceCandidates?: DispatchCoreDeps['findRecurrenceCandidates']
+  /** 卷宗建模报告在场探测面（T3「待建模」解除判据——透传 loop.core 守卫；缺席 = 报告不在场） */
+  readonly modelingReportPresent?: DispatchCoreDeps['modelingReportPresent']
+  /**
+   * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——success 结算后置：运行时任务目录
+   * 顶层 .md 报告复制进提案卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 透传 loop.core 结算核；缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly reportRecovery?: DispatchCoreDeps['reportRecovery']
 }
 
 /** 诊断埋点载荷（diag-events DiagEventPayload 的驱动器窄投影——process/trace 由装配面补齐） */
@@ -876,7 +922,7 @@ function triageDecisionNote(decision: LoopTriageDecision): string {
   if (decision.action === 'add-fix') return `决定创建修复任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
   if (decision.action === 'wait-external') return `决定等待 ${decision.externalSlug} 先完成`
   if (decision.action === 'split-remainder') return `决定分割剩余范围为继任任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
-  return '决定请求人工裁决'
+  return '决定上浮主会话处置' // escalate（含/不含 payload 同一历史行——载荷随问询 detail 全文上浮）
 }
 
 // ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
@@ -986,7 +1032,7 @@ function suspendForVerdict(loop: ActiveLoop, escalation: LoopEscalation): RoundO
 }
 
 /** 静默挂起径 minor（loop-event-delivery ⑱-㉑——四径各自独立不合并；场景码经 progress 单源表取值） */
-const SUSPEND_MINORS = ['spawn-rate-limited', 'worker-rate-limited', 'abort-over-limit', 'landing-rejected'] as const
+const SUSPEND_MINORS = ['spawn-rate-limited', 'worker-rate-limited', 'abort-over-limit', 'landing-rejected', 'recurrence-escalation'] as const
 type SuspendMinor = (typeof SUSPEND_MINORS)[number]
 const suspendScenarioOf = (minor: SuspendMinor): ForgeProgressScenario =>
   FORGE_PROGRESS_SCENARIOS.find((code): code is `suspend/${SuspendMinor}` => code === `suspend/${minor}`)!
@@ -1333,6 +1379,12 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           // 诊断缝透传结算核（diag-face-consolidation——review-wave/e2e 欠账 fail-soft 告警
           // 走 diag 面；缺席 = emitForgeDiag console 兜底）
           ...(deps.diag !== undefined ? { diag: deps.diag } : {}),
+          // T3 同缝拦截守卫两依赖透传（loop-recurrence-hardening——claim 面软拒绝 + 卷宗
+          // 报告解除判据；缺席 = 守卫降级放行，行为零变化）
+          ...(deps.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: deps.findRecurrenceCandidates } : {}),
+          ...(deps.modelingReportPresent !== undefined ? { modelingReportPresent: deps.modelingReportPresent } : {}),
+          // AC7 结算旁挂回收缝透传结算核（loop-recurrence-hardening §2.4——fail-soft 后置钩子）
+          ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
         },
         exec: {
           attribution: {},
@@ -1807,6 +1859,9 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   if (loop.pause.signal.aborted) return 'suspend'
   if (claim.kind === 'halted') return haltLoop(loop) // spawn 连败 ×3 粘住（guard 入口检查兑现）
   if (claim.kind === 'no-task') return onNoTask(loop, claim.pool) // ③ no-task 三态判词
+  if (claim.kind === 'escalation-required') {
+    return onRecurrenceEscalation(loop, claim.task, claim.failure, claim.chain, claim.count) // T3 同缝拦截 → escalation
+  }
 
   const task = claim.task
   const taskKey = `${task.slug}/${task.localId}`
@@ -2064,6 +2119,95 @@ async function runRound(loop: ActiveLoop): Promise<RoundOutcome> {
   })
 }
 /**
+ * T3 同缝拦截处置（loop-recurrence-hardening——「claim 被拒 → 转 escalation」分支）：被拒
+ * fix 行由驱动器转 escalation 处置不留孤儿——任务真化 suspended（非终态可恢复；resume 序
+ * restorePausedCards 批量恢复 pending，建模报告落卷后守卫现算即放行）+ 静默挂起径补录
+ * （incident 落盘 + forge/progress suspend + 唤醒卡）+ escalation 问询载荷（triage 升级
+ * 面——归类/处置建议/证据指针由主会话裁决，本载荷只携结构化事实：拒绝全文 + 家族链 + 计数）。
+ */
+async function onRecurrenceEscalation(
+  loop: ActiveLoop,
+  task: TaskSnapshot,
+  failure: { readonly message: string },
+  chain: readonly string[],
+  count: number,
+): Promise<RoundOutcome> {
+  const { deps, record, scope } = loop
+  const taskKey = `${task.slug}/${task.localId}`
+  // 被拒 fix 行转挂起（fail-soft：转移故障只告警——挂起投影与升级载荷照发，re-entry 按容器实际状态收口）
+  try {
+    await deps.tasks.transitionTask({
+      projectId: scope.projectId,
+      taskId: task.taskId,
+      toStatus: 'suspended',
+      reason: failure.message,
+      actor: 'core',
+    })
+  } catch (cause) {
+    emitLoopDiag(
+      loop,
+      'warn',
+      'loop-recurrence',
+      `forge loop recurrence escalation transition failed (${task.taskId}): ${cause instanceof Error ? cause.message : String(cause)}`,
+    )
+  }
+  return await suspendWithWakeup(
+    loop,
+    {
+      kind: 'recurrence-escalation',
+      ownerSessionId: record.ownerSessionId,
+      source: record.source,
+      taskKey,
+      reason: failure.message,
+      chain,
+      count,
+    },
+    {
+      minor: 'recurrence-escalation',
+      eventType: 'recurrence-escalation',
+      reason: failure.message,
+      incidentTaskKey: task.localId,
+      progressTaskKey: taskKey,
+      taskTitle: task.title,
+      headline: '同缝复发链计数达阈值——盲试修复派发已软拒绝，建议先升级排查建模',
+    },
+  )
+}
+
+/**
+ * add-fix 派生判例事实现查（T0 派生径——loop-recurrence-hardening）：add-fix 建修时经只读
+ * face 现查台账 recurrence 链，链事实结构化写入任务 vars（先例 settle.ts E2E_DEBT_SOURCE；
+ * 不落 task_desc——那是 triage 语义产物）。fail-soft：face 缺席/异常/零命中 = 键缺席，行为零变化。
+ */
+async function recurrenceChainVarsOf(loop: ActiveLoop, task: TaskSnapshot): Promise<Record<string, string> | undefined> {
+  const find = loop.core.findRecurrenceCandidates
+  if (find === undefined) {
+    // AGENTS §7 降级留痕：face 缺席 = 判例注入（T0 派生径）生产静默关停（bug 0db72bcb 教训）
+    emitForgeDiag(loop.deps.diag, {
+      level: 'info',
+      event: 'recurrence-face-absent',
+      message: `loop add-fix 判例注入降级：findRecurrenceCandidates face 缺席（${task.slug}/${task.localId}）——RECURRENCE_CHAIN/RECURRENCE_COUNT vars 关停（核销装配面接线）`,
+      projectId: loop.scope.projectId,
+    })
+    return undefined
+  }
+  try {
+    const candidates = await find(loop.scope.projectId, { slug: task.slug, localId: task.localId, files: [] })
+    if (candidates.length === 0) return undefined
+    const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
+    return { RECURRENCE_CHAIN: top.chain.join(' → '), RECURRENCE_COUNT: String(recurrenceCountOf(top.chain)) }
+  } catch (cause) {
+    emitForgeDiag(loop.deps.diag, {
+      level: 'warn',
+      event: 'recurrence-face-error',
+      message: `loop add-fix 判例注入降级：台账候选检索故障（${task.slug}/${task.localId}）——${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: loop.scope.projectId,
+    })
+    return undefined
+  }
+}
+
+/**
  * claim 阶段 fail-loud 处置（FAIL-2 修正——expert-squad-forge-2 fix-4 径②）：claim 链抛出的
  * 错误（典型 = 专家档案缺失/禁用，消息含键名）作为处置输入而非循环终止——
  * ① core 附带 data.taskRef 且钩子在场 → 快照解析后入处置阶梯（错误全文 = reason，阶梯决策
@@ -2225,7 +2369,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
         // 宿主执行前置校验（拒绝 = 计处置失败并回灌，同无效输出径）
         if (candidate.action === 'add-fix' && fixChain !== undefined && fixChain.remaining < 1) {
           throw hostRejection(
-            `add-fix 被拒——fix 链余量不足（链深 ${fixChain.depth}/上限 ${fixChain.limit}，余量 ${fixChain.remaining}）；应选 split-remainder 或 ask-user`,
+            `add-fix 被拒——fix 链余量不足（链深 ${fixChain.depth}/上限 ${fixChain.limit}，余量 ${fixChain.remaining}）；应选 split-remainder 或 escalate`,
             JSON.stringify(candidate),
           )
         }
@@ -2327,6 +2471,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
 
   if (decision.action === 'add-fix') {
     try {
+      const recurrenceVars = await recurrenceChainVarsOf(loop, task)
       const added = await deps.tasks.addTask({
         projectId: scope.projectId,
         source,
@@ -2335,6 +2480,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
         ...(decision.taskDesc !== undefined ? { taskDesc: decision.taskDesc } : {}),
         sourceTask: { slug: task.slug, localId: task.localId },
         blockSource: true, // 单事务同置源 blocked + fix 完成自动恢复（addTask 机械面）
+        ...(recurrenceVars !== undefined ? { vars: recurrenceVars } : {}), // 判例事实结构化携带（T0 派生径——零语义）
       })
       book.decision = undefined // 执行成功——缓存清账（防陈旧决策跨结算重放）
       emitTriageOutcome('add-fix', { fixTaskKey: `${task.slug}/${added.localId}` })
@@ -2448,11 +2594,12 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/wait-external', taskKey, taskTitle: task.title, workerSessionId, note: `等待 ${decision.externalSlug} 先完成` })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
-  // ask-user → ⑩ 异常径 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行）
-  emitTriageOutcome('ask-user') // 挂起动作本身即执行回执（真实终局由后续 suspension 与任务事件承载）
+  // escalate → ⑩ 异常径 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行；
+  //  escalate = 上浮主会话——升级载荷四节建议随挂起载荷上浮，缺席 = 旧无载荷形态）
+  emitTriageOutcome('escalate') // 挂起动作本身即执行回执（真实终局由后续 suspension 与任务事件承载）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
   recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
-  // ⑩ 阻塞（循环无法自行处理——处置阶梯 ask-user）
+  // ⑩ 阻塞（循环无法自行处理——处置阶梯 escalate 上浮）
   emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
   return suspendForVerdict(loop, {
     kind: 'blocked-ask-user',
@@ -2461,6 +2608,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
     task,
     reason,
     history: [...book.history],
+    ...(decision.payload !== undefined ? { advice: decision.payload } : {}),
   })
 }
 

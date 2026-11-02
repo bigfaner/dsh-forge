@@ -222,12 +222,21 @@ const corePlugin: CorePlugin = Object.assign(
         }),
       })
       taskStore = store
+      // fix-bug 第五小域（bug 台账两写径 + listBugs）：recordBug/resolveBug 工具面 + RPC list 消费。
+      // 提前建单例：loop-recurrence-hardening 生产装配接线消费同源只读聚合（见 forgeTasks deps 注）
+      const bugsService = createBugsService({ store, events, resolveWsPath: routing.wsPath })
       ctx.reflect.provide(
         'forgeTasks',
         createTasksService({
           store,
           events,
           resolveWsPath: routing.wsPath, // 十一法全接线（2.6 读面收口）
+          // loop-recurrence-hardening T2 交叉校验生产装配（bug 0db72bcb 断链修复）：台账
+          // recurrence 候选只读 face = bugs 域服务聚合——四域互禁不破（tasks 域零 import
+          // bugs 域，装配层闭包注入消 import 边）。缺席即 T2 警示机制生产静默关停——本注入
+          // 是生产路径交叉校验的装配前提。
+          findRecurrenceCandidates: (projectId, scope) => bugsService.findRecurrenceCandidates(projectId, scope),
+          onDiag, // 降级径诊断缝（AGENTS §7——face 缺席/台账读故障留痕）
           // worker-exec-evidence-replay 1.3 + disc 效度戳：续跑指针探测 + 效度机械比对（claim
           // 领取瞬间证据位读取——容器库目录经 tasksHome + routing.wsPath 单源派生；checkoutRoot
           // = claim 入参检出根（循环/派发会话 worktree），缺席回落注册根，再缺席 = 机制惰性
@@ -313,11 +322,7 @@ const corePlugin: CorePlugin = Object.assign(
         }),
       )
       ctx.reflect.provide('forgeDocs', createDocsService({ store, resolveForgeDir: routing.forgeDir }))
-      // fix-bug 第五小域（bug 台账两写径 + listBugs）：recordBug/resolveBug 工具面 + RPC list 消费
-      ctx.reflect.provide(
-        'forgeBugs',
-        createBugsService({ store, events, resolveWsPath: routing.wsPath }),
-      )
+      ctx.reflect.provide('forgeBugs', bugsService)
       // 机械① 第六小域（forge-verification-hardening）：implementation_checkpoints 实现检查点
       // 流水三法（appendCheckpoint/ensureCheckpoint/listCheckpoints）——M5 标记域装配
       ctx.reflect.provide('forgeCheckpoints', createCheckpointsService({ store, events }))

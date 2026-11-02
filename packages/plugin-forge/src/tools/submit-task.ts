@@ -35,6 +35,12 @@ export interface SubmitTaskToolArgs {
   readonly local_id: string
   readonly result: 'success' | 'blocked'
   readonly reason?: string
+  /** blocked 根因归类 kind（T2 归类闸门——loop-recurrence-hardening §2.2；result=blocked 必带，
+   *  core ERR_BLOCK_CLASSIFICATION_REQUIRED presence 校验；归类真伪零机判——agent 自报语义字段。
+   *  嵌套负载平铺两参（gate_* 同型先例——注册面 schema 子集无嵌套 object） */
+  readonly block_classification_kind?: 'new-problem' | 'same-family-recurrence'
+  /** 同族复发时携带：台账 recurrence 链前驱 bug_id（与 block_classification_kind 成组） */
+  readonly block_classification_recurrence_of?: string
   readonly summary?: string
   /** 正斜杠路径清单（与 files_created/files_modified 并存时须 = 并集——core ERR_FILES_UNION_MISMATCH） */
   readonly files?: readonly string[]
@@ -105,6 +111,8 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
     local_id: string
     result: 'success' | 'blocked'
     reason?: string
+    block_classification_kind?: 'new-problem' | 'same-family-recurrence'
+    block_classification_recurrence_of?: string
     summary?: string
     files?: string[]
     files_created?: string[]
@@ -137,6 +145,30 @@ export function parseSubmitTaskArgs(args: unknown): SubmitTaskToolArgs {
   }
   const reason = optionalString(a, 'reason', TOOL)
   if (reason !== undefined) out.reason = reason
+  // T2 归类（blocked 根因归类——kind 单参 + recurrence_of 成组参；presence 必带性与 kind
+  // 枚举终判归 core ERR_BLOCK_CLASSIFICATION_REQUIRED——归属域单点，此处只做形状收窄）
+  const classificationKind = optionalString(a, 'block_classification_kind', TOOL)
+  if (classificationKind !== undefined) {
+    if (classificationKind !== 'new-problem' && classificationKind !== 'same-family-recurrence') {
+      throw new Error(
+        `${TOOL}: block_classification_kind must be 'new-problem' | 'same-family-recurrence'`,
+      )
+    }
+    out.block_classification_kind = classificationKind
+    const recurrenceOf = optionalString(a, 'block_classification_recurrence_of', TOOL)
+    if (recurrenceOf !== undefined) {
+      if (recurrenceOf === '') {
+        throw new Error(
+          `${TOOL}: block_classification_recurrence_of must be a non-empty string when given`,
+        )
+      }
+      out.block_classification_recurrence_of = recurrenceOf
+    }
+  } else if (a['block_classification_recurrence_of'] !== undefined) {
+    throw new Error(
+      `${TOOL}: block_classification_recurrence_of requires block_classification_kind`,
+    )
+  }
   const summary = optionalString(a, 'summary', TOOL)
   if (summary !== undefined) out.summary = summary
   const files = optionalStringArray(a, 'files', TOOL)
@@ -275,7 +307,9 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source. Completing a fix auto-restores its blocked source. Alternatively, a blocked card may settle directly via result=success (one-line summary required — it serves as the verdict audit trail) when no fix task is warranted. evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence. Mandatory-evidence-domain fallback (AGENTS 1.4): declaring runtime_surface with a runtime assembly face (ui/api/cli/tui/desktop/web-server/mq are examples, not a whitelist; SDK/library is exempt unless it carries its own subprocess/network side effects — mixed faces take the strictest) requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared) on result=success; without either, ERR_RUNTIME_EVIDENCE_REQUIRED rejects and guides you to one of the two paths.',
+      'Submit the outcome of a claimed task (located by its container slug + local_id): result=success requires a one-line summary and the quality-gate results (compile/fmt/lint/test booleans, optional coverage fraction); tasks created with acceptance_criteria also need gate.test passing (evidence gate), and structured ac_criteria/ac_met/ac_evidence parallel arrays verify each criterion one-for-one (same count and order as the task definition; any met=false rejects). Structured record fields: files_created/files_modified (grouped; plain files must equal their union), key_decisions, tests_passed/tests_failed, coverage, notes. ' +
+      "result=blocked requires the blocking reason and typically spawns a fix task via addTask with the blocked task as its source, plus block_classification_kind ('new-problem' | 'same-family-recurrence'[, block_classification_recurrence_of: predecessor bug_id]) — the T2 classification gate rejects a blocked submit without it (self-reported semantic classification). Completing a fix auto-restores its blocked source. Alternatively, a blocked card may settle directly via result=success (one-line summary required — it serves as the verdict audit trail) when no fix task is warranted. " +
+      'evidence_debt_suite+evidence_debt_specs (success only) declare owed real-machine e2e assertion evidence when implementation + unit tests are green: the card settles in the implementation phase and the loop auto-creates a dependent test-run debt task — never stay blocked on missing e2e evidence. Mandatory-evidence-domain fallback (AGENTS 1.4): declaring runtime_surface with a runtime assembly face (ui/api/cli/tui/desktop/web-server/mq are examples, not a whitelist; SDK/library is exempt unless it carries its own subprocess/network side effects — mixed faces take the strictest) requires either runtime_evidence_face+runtime_evidence_artifacts (evidence done) or evidence_debt (debt declared) on result=success; without either, ERR_RUNTIME_EVIDENCE_REQUIRED rejects and guides you to one of the two paths.',
     parameters: {
       type: 'object',
       properties: {
@@ -283,6 +317,16 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
         local_id: { type: 'string', description: 'Local id of the task being submitted.' },
         result: { type: 'string', description: "'success' or 'blocked'." },
         reason: { type: 'string', description: 'Why the task is blocked (required for result=blocked).' },
+        block_classification_kind: {
+          type: 'string',
+          description:
+            "Root-cause classification of the blocker (required for result=blocked — the T2 classification gate rejects a blocked submit without it): 'new-problem' (first occurrence) or 'same-family-recurrence' (recurrence of a known problem; self-reported semantic classification — no mechanical matching).",
+        },
+        block_classification_recurrence_of: {
+          type: 'string',
+          description:
+            'Predecessor bug_id from the ledger recurrence chain (same-family-recurrence only; self-reported initial judgment — the review round may correct chain membership).',
+        },
         summary: { type: 'string', description: 'One-line result sentence (required for result=success).' },
         files: {
           type: 'array',
@@ -373,6 +417,16 @@ export function createSubmitTaskTool(deps: ForgeToolDeps): ForgeToolDefinition {
           result: parsed.result,
           sessionId,
           ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+          ...(parsed.block_classification_kind !== undefined
+            ? {
+                blockClassification: {
+                  kind: parsed.block_classification_kind,
+                  ...(parsed.block_classification_recurrence_of !== undefined
+                    ? { recurrenceOf: parsed.block_classification_recurrence_of }
+                    : {}),
+                },
+              }
+            : {}),
           ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
           ...(parsed.files !== undefined ? { files: [...parsed.files] } : {}),
           ...(parsed.files_created !== undefined ? { filesCreated: [...parsed.files_created] } : {}),

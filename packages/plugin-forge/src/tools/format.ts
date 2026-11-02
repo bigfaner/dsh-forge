@@ -70,6 +70,18 @@ function violationLinesOf(code: ErrorCode, data: unknown): readonly string[] {
       const guidance = Array.isArray(d.guidance) ? (d.guidance as unknown[]) : []
       return guidance.map((g) => String(g))
     }
+    case 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED': {
+      // T4 覆盖声明闸门（core presence 半——缺席段清单逐行投影）
+      const missing = Array.isArray(d.missing) ? d.missing : []
+      return missing.map((m) => `missing coverage section: ${String(m)}`)
+    }
+    case 'ERR_BUG_COVERAGE_ANCHOR_INVALID': {
+      // T4 锚有效性预检（plugin-forge 旁挂半——锚字符串 + 解析路径逐行投影）
+      const lines: string[] = []
+      if (typeof d.anchor === 'string') lines.push(`anchor: ${d.anchor}`)
+      if (typeof d.resolved === 'string') lines.push(`resolved: ${d.resolved}`)
+      return lines
+    }
     default:
       return []
   }

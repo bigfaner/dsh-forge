@@ -113,7 +113,7 @@ export function createListBugsTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'List bug ledger cards (main agent only). Filters pass straight through to the core service: search (substring hit on any of the six text fields — summary / bugDesc / triggerDesc / expected / actual / errorType), status (subset of open/fixed/unresolved), sort (active = active-first, created = newest first), and offset/limit pagination (server slices after sorting; omit limit = full result). Use to survey the ledger, to find recurrence-chain candidates before recordBug (pass the found bug_id as recurrenceOf), and to answer "which bugs exist".',
+      'List bug ledger cards (main agent and the read-only triage agent). Filters pass straight through to the core service: search (substring hit on any of the six text fields — summary / bugDesc / triggerDesc / expected / actual / errorType), status (subset of open/fixed/unresolved), sort (active = active-first, created = newest first), and offset/limit pagination (server slices after sorting; omit limit = full result). Use to survey the ledger, to find recurrence-chain candidates before recordBug (pass the found bug_id as recurrenceOf), and to answer "which bugs exist".',
     parameters: {
       type: 'object',
       properties: {

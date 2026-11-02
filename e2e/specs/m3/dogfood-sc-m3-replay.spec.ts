@@ -224,7 +224,9 @@ function makeReplayPlan(ws: string): ReplayPlan {
         ],
       },
       // ③ 1.3 一轮 blocked（纯结算——fix 链派生不在 worker 面：d5c272c6 起 worker 会话
-      //    addTask 拒收，链由处置层 harness 代理建，见走查中段 1.3 阻塞处置轮）
+      //    addTask 拒收，链由处置层 harness 代理建，见走查中段 1.3 阻塞处置轮；
+      //    block_classification = T2 归类闸门契约（回放计划契约同步——录制面在 T2 落地前，
+      //    blocked 结算缺归类即被 ERR_BLOCK_CLASSIFICATION_REQUIRED 拒绝）
       {
         taskKey: `${FEATURE}/1.3`, occurrence: 1, behavior: 'script',
         actions: [
@@ -233,18 +235,19 @@ function makeReplayPlan(ws: string): ReplayPlan {
             args: {
               slug: FEATURE, local_id: '1.3', result: 'blocked',
               reason: 'freshness-checklist.md absent — fix: create docs/knowledge/freshness-checklist.md containing the single line: marker',
+              block_classification_kind: 'new-problem',
             },
           },
         ],
       },
       // ③ 1.3 blocked → triage 阶梯处置代理回放（fix-4 语义：blocked 恒入阶梯；fix-7：
       //    真实 spawn 经同一缝——独立键「 · 处置分析」，零动作 + output 承载决策）。
-      //    决策 = ask-user：与原无进展硬停挂起同终态——挂起投影后处置仍走 harness 代理
+      //    决策 = escalate：与原无进展硬停挂起同终态——挂起投影后处置仍走 harness 代理
       //    addTask 建 fix-1 → /stop-dag-tasks 收口（走查中段流程零漂移）。
       {
         taskKey: `${FEATURE}/1.3 · 处置分析`, occurrence: 1, behavior: 'script',
         actions: [],
-        output: '1.3 受阻成因明确（工件缺席、可机械修复），交由处置层按 fix 链协议派生修复任务。\n{"action":"ask-user"}',
+        output: '1.3 受阻成因明确（工件缺席、可机械修复），交由处置层按 fix 链协议派生修复任务。\n{"action":"escalate"}',
       },
       // ③ fix-1 修复完成
       {
@@ -325,7 +328,16 @@ test('@web-e2e @m3 5.3 SC-M3 门回放版：spawn 缝回放驱动器消费（四
     mkdirSync(join(ws, '.forge', 'docs', 'proposals', PROP), { recursive: true })
     writeFileSync(join(ws, '.forge', 'docs', 'proposals', PROP, 'proposal.md'), readFileSync(M35_REPO_PROPOSAL, 'utf8'), 'utf8')
 
-    // ── 评审接受（UI 人工裁决）→ 成链原子三行 ──
+    // ── 会话物化前置（fix-3）→ 评审接受（UI 人工裁决）→ 成链原子三行 ──
+    // 官方右栏展开钮以会话为承载（dsh-client-ui-sidebar-right ExpandButton 按
+    // bySession[sessionId] 渲染——「暂无会话」空白头恒缺席，bug cb695d4d/850d6a1c 链）。
+    // 首个 openOverviewDock 前经侧栏空态「新会话」钮（文本锚，区别于壳顶引导态钮）物化
+    // blank 会话并等转录绑定——零凭据开户（模型面由回放计划整替，零真实模型调用）。
+    await page.getByText('新会话', { exact: true }).first().click({ timeout: 30_000 })
+    await expect(
+      page.locator(CONVERSATION_CONTENT).first(),
+      'blank 会话物化（转录绑上会话）',
+    ).toHaveAttribute('data-conversation-session', /.+/, { timeout: 30_000 })
     await openOverviewDock(page)
     await page.locator(ovSubtabOf('proposals')).click()
     await expect(page.locator(ovSubtabOf('proposals'))).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })

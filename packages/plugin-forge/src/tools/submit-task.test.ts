@@ -202,6 +202,60 @@ describe('submitTask execute（路由 + 映射）', () => {
     expect(captured[0]?.gate).toBeUndefined()
   })
 
+  it('T2 归类映射：block_classification_kind(+recurrence_of) → core blockClassification（两 kind + 透传；kind 非法/recurrence_of 空串/孤儿 recurrence_of 拒）', async () => {
+    const { tool, captured } = toolWithCapture()
+    await tool.execute(
+      {
+        slug: 'f1',
+        local_id: '3.2',
+        result: 'blocked',
+        reason: '依赖缺失',
+        block_classification_kind: 'same-family-recurrence',
+        block_classification_recurrence_of: 'bug-前驱',
+      },
+      EXEC,
+    )
+    expect(captured[0]).toMatchObject({
+      result: 'blocked',
+      blockClassification: { kind: 'same-family-recurrence', recurrenceOf: 'bug-前驱' },
+    })
+    await tool.execute(
+      { slug: 'f1', local_id: '3.3', result: 'blocked', reason: '新问题', block_classification_kind: 'new-problem' },
+      EXEC,
+    )
+    expect(captured[1]).toMatchObject({ blockClassification: { kind: 'new-problem' } })
+    expect((captured[1] as { blockClassification?: { recurrenceOf?: string } }).blockClassification?.recurrenceOf).toBeUndefined()
+    // kind 非法 = 形状拒（原样抛——untyped 收窄，fail-loud 不转失败 DTO）
+    await expect(
+      tool.execute(
+        { slug: 'f1', local_id: '3.4', result: 'blocked', reason: 'x', block_classification_kind: 'other' },
+        EXEC,
+      ),
+    ).rejects.toThrow(/block_classification_kind/)
+    // 空串视为缺省（args 面惯例）→ 归类保留、recurrenceOf 缺席
+    const emptyRecurrence = await tool.execute(
+      {
+        slug: 'f1',
+        local_id: '3.5',
+        result: 'blocked',
+        reason: 'x',
+        block_classification_kind: 'new-problem',
+        block_classification_recurrence_of: '',
+      },
+      EXEC,
+    )
+    expect(emptyRecurrence).toBeDefined()
+    expect(captured[2]).toMatchObject({ blockClassification: { kind: 'new-problem' } })
+    expect((captured[2] as { blockClassification?: { recurrenceOf?: string } }).blockClassification?.recurrenceOf).toBeUndefined()
+    // 孤儿 recurrence_of（无 kind）= 形状拒（原样抛——untyped 收窄）
+    await expect(
+      tool.execute(
+        { slug: 'f1', local_id: '3.6', result: 'blocked', reason: 'x', block_classification_recurrence_of: 'b' },
+        EXEC,
+      ),
+    ).rejects.toThrow(/requires block_classification_kind/)
+  })
+
   it('空会话拒（untyped 防御收窄——原样抛，不走失败 DTO）', async () => {
     const { tool, captured } = toolWithCapture()
     await expect(

@@ -239,6 +239,10 @@ export function toTaskRecordEntry(row: TaskRecordStorageRow): TaskRecordEntry {
     ...(recordFields?.evidenceDebt !== undefined ? { evidenceDebt: recordFields.evidenceDebt } : {}),
     ...(recordFields?.runtimeSurface !== undefined ? { runtimeSurface: recordFields.runtimeSurface } : {}),
     ...(recordFields?.runtimeEvidence !== undefined ? { runtimeEvidence: recordFields.runtimeEvidence } : {}),
+    // T2 归类（loop-recurrence-hardening——triage 信号注入读面：records 取值）
+    ...(recordFields?.blockClassification !== undefined
+      ? { blockClassification: recordFields.blockClassification }
+      : {}),
     ...(row.gate_json !== null ? { gate: JSON.parse(row.gate_json) as TaskGateReport } : {}),
     ...(row.commit_hash !== null ? { commitHash: row.commit_hash } : {}),
     ...(row.dispatch_digest !== null ? { digest: row.dispatch_digest } : {}),

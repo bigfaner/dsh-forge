@@ -2,10 +2,12 @@
 // （身份 = git config user.name 缺席回退 user.email；证据 = worktree list --porcelain
 // HEAD==hash 反查未命中回退 branch --contains）。git 访问经 execFile 注入（git-lookup.ts
 // 同口径——受控成败桩同签名零特判），测试不依赖真实 git 二进制。
+// T1 词表收敛（提案 §2.5）：registerBug 应答 = { card, errorTypeSuggestions }——distinct
+// errorType 参考集合（高频优先限量）；零机械归类断言（集合只作参考）。
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import type { BugCard } from '@dsh-forge/contracts'
-import { createBugsService, type BugsServiceDeps, type GitExecFile } from './bugs.js'
+import { createBugsService, ERROR_TYPE_SUGGESTIONS_LIMIT, type BugsServiceDeps, type GitExecFile } from './bugs.js'
 import { ReasonRequiredError } from './errors.js'
 import { createHarness, type SmallDomainHarness } from './harness.js'
 
@@ -71,7 +73,7 @@ async function registerOpen(
   git?: Partial<Pick<BugsServiceDeps, 'execFile'>>,
   extra: Record<string, string> = {},
 ): Promise<BugCard> {
-  return makeService(h, git).registerBug({ projectId: h.projectId, ...REGISTER_BASE, ...extra })
+  return (await makeService(h, git).registerBug({ projectId: h.projectId, ...REGISTER_BASE, ...extra })).card
 }
 
 describe('registerBug：open 行写入 + 身份解析径', () => {
@@ -152,7 +154,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
       'worktree list --porcelain': PORCELAIN_HIT,
     })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, reportSessionId: 'sess-r' })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, reportSessionId: 'sess-r' })
     const fixed = await s.resolveBug({
       projectId: h.projectId,
       bugId: open.bugId,
@@ -178,7 +180,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     expect(open.fixApproach).toBeUndefined()
     const fixed = await s.resolveBug({
       projectId: h.projectId,
@@ -190,7 +192,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     expect(fixed.fixApproach).toBe('最小外科修复：反查加任务键前缀判别，回退 updatedAt 启发式') // trim 落库
     const absent = await s.resolveBug({
       projectId: h.projectId,
-      bugId: (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '另一登记' })).bugId,
+      bugId: (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '另一登记' })).card.bugId,
       outcome: 'fixed',
       commitHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
@@ -205,7 +207,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
       'branch --contains cccccccccccccccccccccccccccccccccccccccc': '* fix/after-advance\n',
     })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     const fixed = await s.resolveBug({
       projectId: h.projectId,
       bugId: open.bugId,
@@ -222,7 +224,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': null, 'config user.email': 'f@e.co' })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     const fixed = await s.resolveBug({
       projectId: h.projectId,
       bugId: open.bugId,
@@ -239,7 +241,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     await expect(
       s.resolveBug({ projectId: h.projectId, bugId: open.bugId, outcome: 'unresolved', unresolvedReason: '  ' }),
     ).rejects.toBeInstanceOf(ReasonRequiredError)
@@ -261,7 +263,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
       'worktree list --porcelain': PORCELAIN_HIT,
     })
     const s = makeService(h, { execFile })
-    const a = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: a } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     await s.resolveBug({ projectId: h.projectId, bugId: a.bugId, outcome: 'fixed', commitHash: 'b'.repeat(40) })
     await expect(
       s.resolveBug({ projectId: h.projectId, bugId: a.bugId, outcome: 'fixed', commitHash: 'b'.repeat(40) }),
@@ -269,7 +271,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     await expect(
       s.resolveBug({ projectId: h.projectId, bugId: a.bugId, outcome: 'unresolved', unresolvedReason: 'x' }),
     ).rejects.toMatchObject({ code: 'ERR_BUG_ALREADY_RESOLVED' })
-    const b = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: b } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     await s.resolveBug({ projectId: h.projectId, bugId: b.bugId, outcome: 'unresolved', unresolvedReason: 'y' })
     await expect(
       s.resolveBug({ projectId: h.projectId, bugId: b.bugId, outcome: 'fixed', commitHash: 'a'.repeat(40) }),
@@ -280,7 +282,7 @@ describe('resolveBug：终态回填 + hash 锚定反查径 + 状态机', () => {
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const open = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: open } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     await expect(
       s.resolveBug({ projectId: h.projectId, bugId: open.bugId, outcome: 'fixed' }),
     ).rejects.toMatchObject({ code: 'ERR_COMMIT_HASH_REQUIRED' })
@@ -302,9 +304,9 @@ describe('listBugs：search（summary/error_type/状态中文标签）+ status �
       'worktree list --porcelain': PORCELAIN_HIT,
     })
     const s = makeService(h, { execFile })
-    const b1 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '登录接口 500', errorType: 'api' })
-    const b2 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '空分页游标越界', errorType: 'paging' })
-    const b3 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '样式错位', errorType: 'css' })
+    const { card: b1 } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '登录接口 500', errorType: 'api' })
+    const { card: b2 } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '空分页游标越界', errorType: 'paging' })
+    const { card: b3 } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '样式错位', errorType: 'css' })
     await s.resolveBug({ projectId: h.projectId, bugId: b2.bugId, outcome: 'fixed', commitHash: 'b'.repeat(40) })
     await s.resolveBug({ projectId: h.projectId, bugId: b3.bugId, outcome: 'unresolved', unresolvedReason: '不可复现' })
     // 同毫秒注册的行拉开 created_at（排序断言确定性——同刻 id 决胜不在本测）
@@ -343,9 +345,9 @@ describe('registerBug recurrenceOf：挂链落库 + 悬空拒写 + 链根缺省'
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const root = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    const { card: root } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
     expect('recurrenceOf' in root).toBe(false) // 链根缺省
-    const relapse = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '又犯了', recurrenceOf: root.bugId })
+    const { card: relapse } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '又犯了', recurrenceOf: root.bugId })
     expect(relapse.recurrenceOf).toBe(root.bugId)
   })
 
@@ -362,6 +364,51 @@ describe('registerBug recurrenceOf：挂链落库 + 悬空拒写 + 链根缺省'
   })
 })
 
+describe('registerBug 应答：errorType 参考集合（T1 词表收敛——distinct 高频优先限量，零机械归类）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  it('应答形状 { card, errorTypeSuggestions }；集合来源 = 台账 distinct errorType（高频优先，同频词面升序）', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const result = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, errorType: 'api' })
+    expect(result.card.bugId).toBeDefined()
+    expect(result.errorTypeSuggestions).toEqual(['api']) // 本条已入集合
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '乙', errorType: 'paging' })
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '丙', errorType: 'paging' })
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '丁', errorType: 'css' })
+    const last = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '戊', errorType: 'css' })
+    // api×1 / paging×2 / css×2 → 高频在前，同频按词面升序
+    expect(last.errorTypeSuggestions).toEqual(['css', 'paging', 'api'])
+  })
+
+  it('限量：distinct 词数超 ERROR_TYPE_SUGGESTIONS_LIMIT 截断（高频优先保留）', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    for (let i = 0; i < ERROR_TYPE_SUGGESTIONS_LIMIT + 2; i++) {
+      await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: `bug-${i}`, errorType: `type-${String(i).padStart(2, '0')}` })
+    }
+    // 高频优先：首词 type-00 计 2 次（末轮重复登记一次），其余各 1 次
+    const extra = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '首词再登记', errorType: 'type-00' })
+    expect(extra.errorTypeSuggestions.length).toBe(ERROR_TYPE_SUGGESTIONS_LIMIT)
+    expect(extra.errorTypeSuggestions[0]).toBe('type-00')
+    expect(extra.errorTypeSuggestions).not.toContain('type-21') // 低频词面被限量截断
+  })
+
+  it('零 errorType 台账 → 空集；空白词不计入集合', async () => {
+    h = createHarness()
+    const { execFile } = stubExecFile({ 'config user.name': 'faner' })
+    const s = makeService(h, { execFile })
+    const first = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE })
+    expect(first.errorTypeSuggestions).toEqual([])
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '空白词', errorType: '   ' })
+    const last = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '仍空集' })
+    expect(last.errorTypeSuggestions).toEqual([]) // 空串/纯空白不进词表
+  })
+})
+
 describe('getBug：全卡 + 链上下文（沿前驱指针回溯全链，时间正序）', () => {
   let h: SmallDomainHarness | undefined
   afterEach(() => h?.dispose())
@@ -370,7 +417,7 @@ describe('getBug：全卡 + 链上下文（沿前驱指针回溯全链，时间�
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const bug = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, errorType: 'api' })
+    const { card: bug } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, errorType: 'api' })
     const got = await s.getBug({ projectId: h.projectId, bugId: bug.bugId })
     expect(got.card).toEqual(bug)
     expect(got.chain).toBeUndefined()
@@ -383,9 +430,9 @@ describe('getBug：全卡 + 链上下文（沿前驱指针回溯全链，时间�
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const root = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '链根' })
-    const r1 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', recurrenceOf: root.bugId })
-    const r2 = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })
+    const { card: root } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '链根' })
+    const { card: r1 } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', recurrenceOf: root.bugId })
+    const { card: r2 } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })
     // 同毫秒注册拉开 created_at（时间正序断言确定性）
     const stamp = (id: string, at: string): void => {
       h!.wsDb.prepare('UPDATE bugs SET created_at = ? WHERE id = ?').run(at, id)
@@ -414,7 +461,7 @@ describe('listBugs：六字段 search + offset/limit 分页（排序后切片，
     h = createHarness()
     const { execFile } = stubExecFile({ 'config user.name': 'faner' })
     const s = makeService(h, { execFile })
-    const b1 = await s.registerBug({
+    const { card: b1 } = await s.registerBug({
       projectId: h.projectId,
       summary: '甲',
       bugDesc: '游标越界偶发',
@@ -436,7 +483,7 @@ describe('listBugs：六字段 search + offset/limit 分页（排序后切片，
     const s = makeService(h, { execFile })
     const ids: string[] = []
     for (let i = 0; i < 5; i++) {
-      const b = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: `bug-${i}` })
+      const { card: b } = await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: `bug-${i}` })
       ids.push(b.bugId)
       h.wsDb.prepare('UPDATE bugs SET created_at = ? WHERE id = ?').run(`2026-01-0${i + 1}T00:00:00.000Z`, b.bugId)
     }
@@ -490,5 +537,136 @@ describe('commitFiles/fileDiff：fixed 证据变更内容读面（git show 只�
     expect(await s.fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: '/abs/path' })).toEqual({ diff: '' })
     const fail = stubExecFile({})
     expect(await makeService(h, { execFile: fail.execFile }).fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: 'x' })).toEqual({ diff: '' })
+  })
+})
+
+// T4 覆盖声明闸门（loop-recurrence-hardening 提案 §2.2 T4 + AC4）——core 纯 DB 面半：
+// 复发家族（recurrence_of 在场）resolveBug(fixed) 必携 fix_approach 协议两段
+// （coverage: 声明 + anchor: 报告锚），缺席拒写零副作用；锚只做字符串登记（零文件 IO）；
+// 非复发家族协议可选零行为变化。锚有效性预检（文件 IO）在 plugin-forge 旁挂侧（另测）。
+describe('T4 覆盖声明闸门：resolveBug fix_approach 协议（core 纯 DB 面）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  /** 种复发家族：root open + child（recurrenceOf 挂链）open */
+  async function seedFamily(s: ReturnType<typeof createBugsService>, projectId: string) {
+    const root = (await s.registerBug({ projectId, ...REGISTER_BASE, summary: '链根' })).card
+    const child = (
+      await s.registerBug({ projectId, ...REGISTER_BASE, summary: '复发节', recurrenceOf: root.bugId })
+    ).card
+    return { root, child }
+  }
+
+  const COMMIT = 'cccccccccccccccccccccccccccccccccccccccc'
+
+  it('AC4-缺席：复发家族 fixed 缺协议两段（fix_approach 缺席）→ ERR_BUG_COVERAGE_DECLARATION_REQUIRED，行留 open 零副作用', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    await expect(
+      s.resolveBug({ projectId: h.projectId, bugId: child.bugId, outcome: 'fixed', commitHash: COMMIT }),
+    ).rejects.toMatchObject({
+      code: 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
+      data: { bugId: child.bugId, missing: ['declaration', 'anchor'] },
+    })
+    // 拒写零副作用：行留 open、零 fixed 迁移
+    const after = await s.getBug({ projectId: h.projectId, bugId: child.bugId })
+    expect(after.card.bugStatus).toBe('open')
+  })
+
+  it('AC4-缺席：只有 coverage 行缺 anchor 行 → missing = [anchor]（两段 presence 独立判定）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    await expect(
+      s.resolveBug({
+        projectId: h.projectId,
+        bugId: child.bugId,
+        outcome: 'fixed',
+        commitHash: COMMIT,
+        fixApproach: '修法：原子守卫消除竞态\ncoverage: 消除 check-then-act 共同根因，覆盖整链',
+      }),
+    ).rejects.toMatchObject({
+      code: 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
+      data: { missing: ['anchor'] },
+    })
+  })
+
+  it('AC4-双过：coverage + anchor 两段齐备 → fixed 放行，fix_approach 含协议行原样登记（锚只做字符串登记零文件 IO）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    const approach =
+      '修法：原子守卫消除竞态（状态化写者）\n' +
+      'coverage: 消除 check-then-act 共同根因，覆盖整条链\n' +
+      'anchor: .forge/docs/proposals/x/issues/1/verification-report.md'
+    const card = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: child.bugId,
+      outcome: 'fixed',
+      commitHash: COMMIT,
+      fixApproach: approach,
+    })
+    expect(card.bugStatus).toBe('fixed')
+    expect(card.fixApproach).toBe(approach) // 原样登记——core 不改写不校验锚指向
+    expect(card.commitHash).toBe(COMMIT)
+  })
+
+  it('回归：非复发家族 fixed 无协议零行为变化（fix_approach 自由一段话照常落库）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const root = await seedFamily(s, h.projectId)
+    const card = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: root.root.bugId, // 无 recurrenceOf——协议可选
+      outcome: 'fixed',
+      commitHash: COMMIT,
+      fixApproach: '普通一段话修法总结',
+    })
+    expect(card.bugStatus).toBe('fixed')
+    expect(card.fixApproach).toBe('普通一段话修法总结')
+  })
+})
+
+// ─────────────────────────── findRecurrenceCandidates（loop-recurrence-hardening——台账域只读聚合） ───────────────────────────
+describe('findRecurrenceCandidates：链构建（前驱回溯 + 后继收齐）+ scope 口径', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  /** 种三员链（root → r1 → r2，root/r1 携 suspected 命中锚点，r2 零 suspected） */
+  async function seedChain() {
+    h = createHarness()
+    const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+    const root = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'packages/core/src/forge/tasks/submit.ts:78' })).card
+    const r1 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发一', suspected: 'packages/core/src/forge/tasks/submit.ts:96', recurrenceOf: root.bugId })).card
+    const r2 = (await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, summary: '复发二', recurrenceOf: r1.bugId })).card
+    return { s, root, r1, r2 }
+  }
+
+  it('files 空（派发径）→ 全链成员候选，chain = 链根→本条全链时间正序', async () => {
+    const { s, root, r1, r2 } = await seedChain()
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, { slug: 'f', localId: '1', files: [] })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId, r2.bugId])
+    expect(candidates.every((c) => c.chain.join(' → ') === `${root.bugId} → ${r1.bugId} → ${r2.bugId}`)).toBe(true)
+  })
+
+  it('files 非空（结算径）→ 按 suspected 路径收窄；零 suspected 成员被滤除', async () => {
+    const { s, root, r1 } = await seedChain()
+    const candidates = await s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'f', localId: '1',
+      files: ['packages/core/src/forge/tasks/submit.ts'],
+    })
+    expect(candidates.map((c) => c.bugId)).toEqual([root.bugId, r1.bugId])
+  })
+
+  it('孤条（无链）不入候选；空台账 = 空集', async () => {
+    h = createHarness()
+    const s = makeService(h, { execFile: stubExecFile({ 'config user.name': 'faner' }).execFile })
+    await s.registerBug({ projectId: h.projectId, ...REGISTER_BASE, suspected: 'a.ts:1' })
+    expect(await s.findRecurrenceCandidates(h.projectId, { slug: 'f', localId: '1', files: [] })).toEqual([])
   })
 })
