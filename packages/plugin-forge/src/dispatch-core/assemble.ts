@@ -81,6 +81,18 @@ export function forgetWorkerSourceTask(workerSessionId: string): void {
 export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = [...WORKER_FORGE_TOOLS, 'todo_write']
 
 /**
+ * 探针可信金丝雀（bug 92d642c2 真机定谳）：全局恒在的官方工具名。Mac/Win 全新构建实测，
+ * 循环运行时上下文的 parent.ctx.tools.schemas() 返回**子域投影**（仅 9 个 expert 域工具、
+ * 零官方工具）——探针在场 ≠ 投影可信。投影不含金丝雀 = 子域采样，不可作为裁剪/断言依据。
+ */
+export const PROBE_CANARY_TOOL = 'read'
+
+/** 子域投影判定（纯函数）：非空且不含金丝雀 = 子域采样（不可信——回落不裁剪不断言）。 */
+export function probeIsSubdomain(registeredTools: readonly string[]): boolean {
+  return registeredTools.length > 0 && !registeredTools.includes(PROBE_CANARY_TOOL)
+}
+
+/**
  * taskType → 收窄矩阵 → toolFilter（deny 面；expert-squad-forge 1.4 起 allow 面可选）。
  * 矩阵 = contracts WORKER_TOOL_MATRIX（族 × 工具族 ✓ 表）：族内拒绝的工具族名下已知工具名
  * 入 deny + 全局拒绝集 + forge 闭环。nameFamily 参数化（缺省 = WORKER_TOOL_NAME_FAMILY——
@@ -107,6 +119,12 @@ export function deriveWorkerToolFilter(
   profileTools?: readonly string[],
   registeredTools?: readonly string[],
 ): { allow?: string[]; deny: string[] } {
+  // 探针可信门（bug 92d642c2 真机定谳）：子域投影（非空但缺官方金丝雀 read）= 循环运行时
+  // 上下文的受限采样，不可作为裁剪/断言依据——回落 undefined（不裁剪不断言，e6669a50 前
+  // 形态）。真实注册缺损（探针含金丝雀而缺 essentials）仍走下方 fail-loud 断言。
+  if (registeredTools !== undefined && probeIsSubdomain(registeredTools)) {
+    registeredTools = undefined
+  }
   const family = WORKER_TASK_FAMILY_BY_TYPE[taskType]
   const deniedFamilies = new Set<WorkerToolFamily>(WORKER_TOOL_FAMILIES.filter((f) => !WORKER_TOOL_MATRIX[family][f]))
   const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)

@@ -148,4 +148,24 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     // deps.spawn 未被触达（组装拒绝先于 spawn——零资源留下）
     expect(upstreamRequests).toHaveLength(upstreamBefore)
   })
+
+  it('bug 92d642c2 真机定谳：探针为子域投影（缺官方金丝雀 read）= 不可信——不断言不裁剪，spawn 照常（Mac/Win 全新构建双双复现的假阳性根因）', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // 真机 child 投影实测形态（循环 halt 问询原文）：仅 9 个 expert 域工具，零官方工具
+    ;(exec.parent as { ctx?: unknown }).ctx = {
+      tools: {
+        schemas: () => [
+          { name: 'delegate_expert' }, { name: 'recruit_expert' }, { name: 'update_expert' },
+          { name: 'rename_expert' }, { name: 'enable_expert' }, { name: 'disable_expert' },
+          { name: 'list_experts' }, { name: 'list_tools' }, { name: 'list_skills' },
+        ],
+      },
+    }
+    const upstreamBefore = upstreamRequests.length
+    const stage = await spawnClaimed(deps, exec, claimed, { scope })
+    // 子域探针不可信 → 回落不裁剪不断言——spawn 正常发起（真链回归 e6669a50 前形态）
+    expect(stage.ok).toBe(true)
+    if (stage.ok) await stage.handle.dispose()
+    expect(upstreamRequests.length).toBeGreaterThan(upstreamBefore)
+  })
 })
