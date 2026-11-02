@@ -24,7 +24,7 @@ afterEach(() => {
 function svc() {
   h ??= createTasksHarness()
   return {
-    reconcile: (input: { registryEmpty: boolean }) =>
+    reconcile: (input: { registryEmpty: boolean; source?: { kind: 'feature' | 'proposal'; slug: string } }) =>
       reconcileInterrupted({ store: h!.store, events: h!.events }, { projectId: h!.projectId, ...input }),
     claim: (input: Parameters<typeof claimTask>[1]) => claimTask({ store: h!.store, events: h!.events }, input),
   }
@@ -203,5 +203,37 @@ describe('AC4 恢复数据面：中断序 + 相位不动点 + 容器双轨', () 
 
     expect(r.reconciled).toEqual([{ slug: 'pz', localId: '1' }])
     expect(statusOf('1')).toBe('interrupted')
+  })
+})
+
+describe('AC5 作用域对账（bug 6d98a275 循环启动径）：source 在场 → 只扫本容器', () => {
+  it('source 命中容器真化；他容器孤儿原态保持（活循环可能在飞——全域误伤禁入）', async () => {
+    const { reconcile } = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'in_progress' })
+    seedRecord(h!.db, 't-f-2.1', { verb: 'claim', loopSourced: true })
+    seedProposal(h!.db, { slug: 'pz' })
+    seedTask(h!.db, 'pz', '1', { status: 'in_progress', kind: 'proposal' })
+    seedRecord(h!.db, 't-pz-1', { verb: 'claim', loopSourced: true })
+
+    const r = await reconcile({ registryEmpty: true, source: { kind: 'proposal', slug: 'pz' } })
+
+    expect(r.reconciled).toEqual([{ slug: 'pz', localId: '1' }])
+    expect(statusOf('1')).toBe('interrupted')
+    expect(statusOf('2.1')).toBe('in_progress') // 他容器不被波及
+    // 事件单发（本容器写入闭包——零命中容器零写入不发射）
+    expect(h!.events.emitted).toEqual([{ projectId: P() }])
+  })
+  it('source 无命中（本容器无孤儿）= 空报告零写入零事件', async () => {
+    const { reconcile } = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'in_progress' })
+    seedRecord(h!.db, 't-f-2.1', { verb: 'claim', loopSourced: true })
+
+    const r = await reconcile({ registryEmpty: true, source: { kind: 'proposal', slug: 'pz' } })
+
+    expect(r.reconciled).toEqual([])
+    expect(statusOf('2.1')).toBe('in_progress')
+    expect(h!.events.emitted).toEqual([])
   })
 })

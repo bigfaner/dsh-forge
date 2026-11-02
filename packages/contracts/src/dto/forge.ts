@@ -675,10 +675,13 @@ export interface UnblockTaskResult {
  * reconcileInterrupted 入参（S3——启动对账动词，implementation-blueprint §2/图 D）。
  * registryEmpty = 进程内循环登记表空判据（三重判据之③）：插件装配时点恒真（重启即空——
  * 图 D）；活循环在场 = false（在飞任务可能被活循环持有——不对账，零写入）。
+ * source = 容器作用域（bug 6d98a275 循环启动径）：在场则只扫该容器（loop-start 时点他容器
+ * 活循环可能在飞——全域扫描会误伤）；缺席 = 装配期全域径（登记表进程级恒空，行为同前）。
  */
 export interface ReconcileInterruptedInput {
   projectId: string
   registryEmpty: boolean
+  source?: { readonly kind: 'feature' | 'proposal'; readonly slug: string }
 }
 
 /** reconcileInterrupted 返回体（reconciled = 被真化 interrupted 的任务自然键——中断序 ascending） */

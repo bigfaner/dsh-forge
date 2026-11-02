@@ -35,13 +35,13 @@ export type { TasksVerbDeps }
 
 /** 对账命中行解析（in_progress ∧ 最新 claim 行 loop_sourced=1；无 claim 行 = NULL 不命中——
  *  record-chain 不变量下不可达，防御面照旧）。中断序：updated_at 升序 + id 升序决胜
- *  （「最早中断优先」——循环逐个恢复的取数序同源）。 */
-const RECONCILE_TARGETS_SQL = `SELECT ${TASK_COLUMNS} FROM tasks t
+ *  （「最早中断优先」——循环逐个恢复的取数序同源）。WHERE 段单源，ORDER 段两径共用。 */
+const RECONCILE_TARGETS_WHERE_SQL = `FROM tasks t
  WHERE t.task_status = 'in_progress'
    AND (SELECT r.loop_sourced FROM task_records r
         WHERE r.task_id = t.id AND r.verb = 'claim'
-        ORDER BY r.id DESC LIMIT 1) = 1
- ORDER BY t.updated_at, t.id`
+        ORDER BY r.id DESC LIMIT 1) = 1`
+const RECONCILE_TARGETS_ORDER_SQL = ` ORDER BY t.updated_at, t.id`
 
 /** 相位守卫目标（resolvePhaseGuardFeature 返回形状——touchedFeatures 集合载体） */
 interface PhaseGuardFeature {
@@ -66,7 +66,18 @@ export async function reconcileInterrupted(
   if (!input.registryEmpty) return { reconciled: [] }
 
   const result = withTransaction(db, (): ReconcileInterruptedResult => {
-    const rows = db.prepare<unknown[], TaskStorageRow>(RECONCILE_TARGETS_SQL).all()
+    // 作用域分流（bug 6d98a275 循环启动径）：source 在场 = 只扫该容器（t.source_kind + t.slug
+    // 双列 pin——同 slug 异 kind 容器不串扫）；缺席 = 装配期全域径（行为同前）。
+    const rows =
+      input.source === undefined
+        ? db
+            .prepare<unknown[], TaskStorageRow>(`SELECT ${TASK_COLUMNS} ${RECONCILE_TARGETS_WHERE_SQL}${RECONCILE_TARGETS_ORDER_SQL}`)
+            .all()
+        : db
+            .prepare<string[], TaskStorageRow>(
+              `SELECT ${TASK_COLUMNS} ${RECONCILE_TARGETS_WHERE_SQL} AND t.source_kind = ? AND t.slug = ?${RECONCILE_TARGETS_ORDER_SQL}`,
+            )
+            .all(input.source.kind, input.source.slug)
     if (rows.length === 0) return { reconciled: [] }
 
     const flip = db.prepare(`UPDATE tasks SET task_status = 'interrupted', updated_at = ? WHERE id = ?`)

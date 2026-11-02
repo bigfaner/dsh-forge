@@ -50,7 +50,7 @@ import type { Narrator } from '../notify/index.js'
 import { renderEndOfLoop } from './injection.js'
 import type { InjectionPayload } from './injection.js'
 import type { ForgeProgressCounts, ForgeProgressEventData, ForgeProgressScenario, ProgressAppendFace } from '../progress/index.js'
-import { FORGE_PROGRESS_SCENARIOS } from '../progress/index.js'
+import { FORGE_PROGRESS_SCENARIO, FORGE_PROGRESS_SCENARIOS } from '../progress/index.js'
 import { createLoopRegistry } from './registry.js'
 import type { LoopInFlight, LoopInstanceId, LoopRecord, LoopRegistry, LoopSourceRef, SuspendedPayload } from './registry.js'
 import { attributionTaskInput, baselineForHead, loadPersistedBaseline, persistBaseline, type E2eBaselineCache } from './e2e-baseline.js'
@@ -1417,6 +1417,32 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
       setExclusiveLoopSource(source, id)
       live.set(id, loop)
       try {
+        // S3-scoped 启动对账（bug 6d98a275）：装配期对账只在进程重启后跑一次——claim↔spawn
+        // 窗口死亡 / spawn 未成幂等重入径遗留的 loop-sourced in_progress 此后无人回收（恢复
+        // 扫描只认 interrupted）。同源独占（S1c）+ 本实例尚未领取 ⇒ 登记时点本源 in_progress
+        // loop-sourced 任务恒为孤儿（registryEmpty=true 对本源结构成立）；scoped 真化
+        // interrupted 后交 runRound ① adopt 径重派。每枚回收任务追加 stop 进度事件进 owner
+        // 会话（面板/进度卡同源投影渲染）。fail-soft：对账故障不阻启动（warn 留痕，孤儿留
+        // 原态下次启动重试）。
+        try {
+          const orphans = await deps.tasks.reconcileInterrupted({ projectId, registryEmpty: true, source })
+          for (const ref of orphans.reconciled) {
+            emitProgress(loop, {
+              verb: 'stop',
+              status: 'interrupted',
+              scenario: FORGE_PROGRESS_SCENARIO.loopOrphanReconciled,
+              taskKey: `${ref.slug}/${ref.localId}`,
+              note: '检测到任务中断：宿主重启遗留执行态孤儿——已回收待重派',
+            })
+          }
+        } catch (cause) {
+          emitLoopDiag(
+            loop,
+            'warn',
+            'loop-start-reconcile',
+            `forge loop start orphan reconcile failed (${source.slug}): ${cause instanceof Error ? cause.message : String(cause)}`,
+          )
+        }
         await announceStartup(loop) // 启动模板叙述（①从头/②接续未完成/③接续在飞）
       } catch (cause) {
         clearExclusiveLoopSource(source, id)

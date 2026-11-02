@@ -66,12 +66,13 @@ export const FORGE_PROGRESS_SCENARIO = {
   // 重试族（⑪⑫）
   retrySpawnFailed: 'retry/spawn-failed',
   retryWorkerAborted: 'retry/worker-aborted',
-  // 循环族（⑬⑭⑮⑯⑰）
+  // 循环族（⑬⑭⑮⑯⑰ + bug 6d98a275 孤儿回收）
   loopHalt: 'loop/halt',
   loopBlockedPool: 'loop/blocked-pool',
   loopTimeout: 'loop/timeout',
   loopFinishAll: 'loop/finish-all',
   loopStopped: 'loop/stopped',
+  loopOrphanReconciled: 'loop/orphan-reconciled',
   // 处置族（triage-progress-row——blocked 任务的处置分析：running/终态两用）
   loopTriage: 'loop/triage',
   // 静默挂起族（⑱-㉑ + T3 同缝拦截挂起）

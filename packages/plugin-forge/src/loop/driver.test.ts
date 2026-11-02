@@ -176,6 +176,8 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
   let claimQueue: Array<ClaimTaskResult | Error> = [claimed()]
   let statsQueue: TaskStats[] = [statsOf({ pending: 1 })]
   let queryQueue: QueryTaskResult[] = [queryOf('completed')]
+  const reconcileInputs: unknown[] = []
+  let reconcileQueue: Array<{ reconciled: Array<{ slug: string; localId: string }> }> = [{ reconciled: [] }]
   const lists: Record<'interrupted' | 'in_progress' | 'blocked' | 'created' | 'suspended', TaskCard[]> = {
     interrupted: [],
     in_progress: [],
@@ -249,8 +251,10 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
     submitTask: async () => {
       throw new Error('loop must never submit (workers settle themselves)')
     },
-    reconcileInterrupted: async () => {
-      throw new Error('loop must never reconcile (plugin assembly owns it)')
+    reconcileInterrupted: async (input: unknown) => {
+      // bug 6d98a275 启动对账记录（原桩抛错——「只归装配」假设已被 scoped 径推翻）
+      reconcileInputs.push(input)
+      return shift(reconcileQueue)
     },
   } as unknown as ForgeTasksService
   return {
@@ -260,9 +264,13 @@ function tasksHarness(options?: { addTaskFailures?: number }) {
     listInputs,
     addTaskInputs,
     transitions,
+    reconcileInputs,
     lists,
     setClaim: (q: Array<ClaimTaskResult | Error>) => {
       claimQueue = q
+    },
+    setReconcile: (q: Array<{ reconciled: Array<{ slug: string; localId: string }> }>) => {
+      reconcileQueue = q
     },
     setStats: (q: TaskStats[]) => {
       statsQueue = q
@@ -1084,6 +1092,44 @@ describe('adopt 重入与启动分类（①②③）', () => {
     // ① 启动从头执行——零消息（进度事件投影；no-task done 收口 settle 恰一次）
     expect(built.calls.filter((c) => c.method !== 'settle')).toEqual([])
     expect(built.progressCalls.find((e) => e.verb === 'startup')).toMatchObject({ scenario: S.startupFromScratch })
+  })
+
+  it('bug 6d98a275 启动对账：scoped reconcile 真化孤儿 in_progress + stop 进度事件（owner 会话——面板/卡片同源）+ adopt 重派', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    // 装配期对账错过窗口的孤儿（claim↔spawn 窗口死亡/幂等重入遗留）：真化后进中断集
+    built.h.setReconcile([{ reconciled: [{ slug: 'feat-x', localId: '2.5' }] }])
+    built.h.lists.interrupted = [card('feat-x', '2.5', { taskStatus: 'interrupted' })]
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 对账携带 source 作用域（只扫本容器——他容器活循环在飞任务不被误伤）；
+    // registryEmpty=true 对本源结构成立（S1c 同源独占 + 本实例未领取）
+    expect(built.h.reconcileInputs).toEqual([{ projectId: PROJECT, registryEmpty: true, source: SOURCE }])
+    // 进度事件追加进 owner 会话（verb stop / status interrupted / 新场景码——面板与进度卡同源投影渲染）
+    expect(built.progressCalls.find((e) => e.verb === 'stop')).toMatchObject({
+      verb: 'stop',
+      status: 'interrupted',
+      scenario: S.loopOrphanReconciled,
+      taskKey: 'feat-x/2.5',
+    })
+    // 回收任务交 ① adopt 径重派（真化即进中断集——启动叙述接续）
+    expect(built.h.claimInputs[0]).toMatchObject({ adopt: { slug: 'feat-x', localId: '2.5' }, loopSourced: true })
+  })
+
+  it('bug 6d98a275 对账故障 fail-soft：reconcileInterrupted 抛错不阻启动（零孤儿回收，循环照常领取）', async () => {
+    const built = build({
+      claim: [claimed('2.5'), NO_TASK],
+      stats: [statsOf({ pending: 1 }), statsOf({ in_progress: 1 }), statsOf({ in_progress: 1 }), statsOf({ completed: 1 }), statsOf({ completed: 1 })],
+    })
+    built.h.tasks.reconcileInterrupted = async () => {
+      throw new Error('store unavailable')
+    }
+    await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
+    await untilSettled(built.driver)
+    // 启动与常规领取不受对账故障波及（孤儿留原态——下次启动重试）
+    expect(built.h.claimInputs[0]).toMatchObject({ loopSourced: true })
   })
 })
 
