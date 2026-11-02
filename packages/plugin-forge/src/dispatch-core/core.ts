@@ -39,7 +39,7 @@ import { WORKER_TOOL_NAME_FAMILY } from '@dsh-forge/contracts'
 import { emitToolError } from '../events/sink.js'
 import type { ForgeEventSink } from '../events/sink.js'
 import type { DispatchJobOutcome, DispatchJobsFace, ForgeDiagEmitFace, WorkerDispatchProfile } from '../faces.js'
-import { deriveWorkerToolFilter, reconcileWorkerReasoning, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
+import { deriveWorkerToolFilter, reconcileWorkerReasoning, registeredToolNamesOf, rememberWorkerSourceTask, workerAgentOptionsOf } from './assemble.js'
 import { bumpSpawnFailures, clearSpawnFailures, HALTED_REASON, spawnFailureStuck } from './guard.js'
 import {
   exclusiveScopedRejection,
@@ -417,7 +417,15 @@ export async function spawnClaimed(
   // experts.get（AGENTS 1.6 永不缓存）；expert-squad 缺席 = profile undefined → 父继承。
   // forgeSettings.worker 机械读取径退役——settings 注入面保留仅服务 resolver 映射键。）
   const profile = await deps.resolveWorkerProfile?.(task.taskType)
-  const toolFilter = deriveWorkerToolFilter(task.taskType, WORKER_TOOL_NAME_FAMILY, profile?.tools)
+  // toolFilter 与真机注册面求交（bug 3cb118cf）：取数缝 = 父会话 ctx.tools.schemas()
+  // 现查（registeredToolNamesOf，缺席回落不裁剪）；档案 allow 携带平台禁用 shell 名
+  // （Mac 无 pwsh）时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
+  const toolFilter = deriveWorkerToolFilter(
+    task.taskType,
+    WORKER_TOOL_NAME_FAMILY,
+    profile?.tools,
+    registeredToolNamesOf(exec.parent),
+  )
   // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
   const agentOptions = await reconcileWorkerReasoning(
     workerAgentOptionsOf({ entry: profile }),

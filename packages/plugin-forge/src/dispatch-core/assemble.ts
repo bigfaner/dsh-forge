@@ -86,13 +86,23 @@ export const WORKER_PIPELINE_ESSENTIAL_TOOLS: readonly string[] = [...WORKER_FOR
  * profileTools 参数化（1.4 组装公式）：档案 tools 白名单在场 → allow = 档案 tools ∪
  * 管线必备用具集（WORKER_PIPELINE_ESSENTIAL_TOOLS 并集保底——管线必备恒可见）；缺席
  * （experts 未装配/档案无 tools 键）= 不携带 allow（keep-only 不启用，行为与 1.4 前逐
- * 字节等价）。档案白名单含未知名不在本面过滤——上游 child 创建窗口 fail-closed loud
- * 校验兜底（提案 §2.7 核销）。
+ * 字节等价）。
+ * registeredTools 参数（bug 3cb118cf——989997bd 的 worker 面同族缺口）：真机已注册全局
+ * 工具名在场 = allow/deny 双面与其求交——官方 restrict 未知名 fail-closed loud 校验语义
+ * 正确，错在滤器产出真机不存在的名（Mac 域 dsh-tool-pwsh 平台 disabled，档案 allow 携带
+ * 'pwsh' 拆 worker spawn；此前本面对未知名原样放行给上游「兜底」，该兜底即炸点）：
+ * - deny：真机未知名不入（与 deriveTriageToolFilter 同法纯过滤——deny 不做 shell 同族
+ *   替换，win 域 deny pwsh 不得异化为 deny bash）；
+ * - allow：shell 同族名（SHELL_TOOL_CANDIDATES bash/pwsh）解析为在场候选者（档案写任一
+ *   名两平台互通），其余未知名 fail-soft 剔除（g-473 同口径）；解析空集 fail-loud（keep-only
+ *   空表 = 全拒，静默派发必瘫结算链——档案配置错误应显式炸）；
+ * - 缺席（取数缝失败/极简 profile）= 双面不裁剪（与既有 loud 行为逐字节等价）。
  */
 export function deriveWorkerToolFilter(
   taskType: TaskType,
   nameFamily: Readonly<Record<string, WorkerToolFamily>> = WORKER_TOOL_NAME_FAMILY,
   profileTools?: readonly string[],
+  registeredTools?: readonly string[],
 ): { allow?: string[]; deny: string[] } {
   const family = WORKER_TASK_FAMILY_BY_TYPE[taskType]
   const deniedFamilies = new Set<WorkerToolFamily>(WORKER_TOOL_FAMILIES.filter((f) => !WORKER_TOOL_MATRIX[family][f]))
@@ -101,11 +111,82 @@ export function deriveWorkerToolFilter(
     if (deniedFamilies.has(f)) deny.add(name)
   }
   for (const name of FORGE_DENY_IN_WORKER) deny.add(name)
-  const allow =
-    profileTools === undefined
-      ? undefined
-      : [...new Set<string>([...profileTools, ...WORKER_PIPELINE_ESSENTIAL_TOOLS])]
-  return { ...(allow !== undefined ? { allow } : {}), deny: [...deny] }
+  const intersectedDeny = [...deny].filter(
+    (name) => registeredTools === undefined || registeredTools.length === 0 || registeredTools.includes(name),
+  )
+  if (profileTools === undefined) return { deny: intersectedDeny }
+  const allow = intersectAllowNames(
+    [...new Set<string>([...profileTools, ...WORKER_PIPELINE_ESSENTIAL_TOOLS])],
+    registeredTools,
+  )
+  return { allow, deny: intersectedDeny }
+}
+
+/** shell 工具名候选（跨平台同族：win32 注册 pwsh、其余平台注册 bash——dsh-tool-pwsh /
+ *  dsh-tool-bash 平台 disabled 装配面；dsh-graph g-473 / expert-squad resolveToolAllow 同口径）。 */
+export const SHELL_TOOL_CANDIDATES = ['bash', 'pwsh'] as const
+
+/**
+ * 父会话真机已注册全局工具名读取位（bug 989997bd 起——toolFilter 与真机工具面求交的
+ * 取数缝，worker/triage 两面共用）：结构化读 parent.ctx.tools.schemas()（官方 dsh-tools
+ * 公开投影面，逐 schema 取 name——child restrictableNames 的父域投影）。任一环缺席/
+ * 形状不符/调用抛错 = undefined（取数失败回落不裁剪——与修复前 loud 行为一致，不静默
+ * 收窄成空表）。
+ */
+export function registeredToolNamesOf(parent: unknown): readonly string[] | undefined {
+  if (typeof parent !== 'object' || parent === null) return undefined
+  const ctx = (parent as { ctx?: unknown }).ctx
+  if (typeof ctx !== 'object' || ctx === null) return undefined
+  const tools = (ctx as { tools?: unknown }).tools
+  if (typeof tools !== 'object' || tools === null) return undefined
+  const schemas = (tools as { schemas?: unknown }).schemas
+  if (typeof schemas !== 'function') return undefined
+  let projected: unknown
+  try {
+    projected = (schemas as (this: unknown) => unknown).call(tools)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(projected)) return undefined
+  const names: string[] = []
+  for (const schema of projected) {
+    if (typeof schema !== 'object' || schema === null) return undefined
+    const name = (schema as { name?: unknown }).name
+    if (typeof name !== 'string') return undefined
+    names.push(name)
+  }
+  return names
+}
+
+/**
+ * allow 名表与真机注册面求交（bug 3cb118cf）：shell 同族名解析为在场的候选者、其余
+ * 未知名 fail-soft 剔除、已知名保序保留。registeredTools 缺席/空 = 不裁剪（无探针不收紧）。
+ * 抛错面：入表非空而解析全空 → Error fail-loud（keep-only 空表 = 全拒，必瘫 worker）。
+ */
+export function intersectAllowNames(
+  names: readonly string[],
+  registeredTools?: readonly string[],
+): string[] {
+  if (registeredTools === undefined || registeredTools.length === 0) return [...names]
+  const present = new Set(registeredTools)
+  const resolved: string[] = []
+  for (const name of names) {
+    if (present.has(name)) {
+      resolved.push(name)
+      continue
+    }
+    if ((SHELL_TOOL_CANDIDATES as readonly string[]).includes(name)) {
+      const sibling = SHELL_TOOL_CANDIDATES.find((c) => c !== name && present.has(c))
+      if (sibling !== undefined) resolved.push(sibling)
+    }
+  }
+  if (names.length > 0 && resolved.length === 0) {
+    throw new Error(
+      `worker allow-list resolves to empty against registered tools [${registeredTools.join(', ')}]; ` +
+        `filter input: [${names.join(', ')}]`,
+    )
+  }
+  return resolved
 }
 
 /**

@@ -653,4 +653,43 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
     const withGhost = deriveWorkerToolFilter('coding-fix', undefined, ['ghost-unknown-tool'])
     expect(withGhost.allow).toContain('ghost-unknown-tool')
   })
+
+  // ───────────────── bug 3cb118cf worker 面：allow/deny 与真机注册面求交 ─────────────────
+
+  describe('registeredTools 求交（bug 3cb118cf：档案 pwsh 落 Mac 拆 worker spawn——989997bd worker 面同族缺口）', () => {
+    const macRegistered = ['read', 'write', 'edit', 'glob', 'grep', 'bash', 'web_fetch', 'web_search', 'job_list', 'job_output', 'job_kill', 'read_image', 'todo_write', 'submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug', 'ask_user_question', 'subagent_fork', 'list_agents', 'send_message', 'interrupt_agent', 'workflow', 'present', 'create_goal', 'get_goal', 'update_goal']
+
+    it('bug: 档案 allow 含 pwsh 且真机未注册 pwsh 时，解析为在场的同族 shell（bash）', () => {
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read', 'pwsh'], macRegistered)
+      expect(allow).toContain('bash')
+      expect(allow).not.toContain('pwsh')
+    })
+
+    it('bug: allow 含真机不存在的非 shell 名 fail-soft 剔除；未知名不得入 allow（restrict loud 必拆 spawn）', () => {
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['ghost-unknown-tool', 'pwsh'], macRegistered)
+      expect(allow).not.toContain('ghost-unknown-tool')
+      expect(allow).toContain('bash')
+    })
+
+    it('bug: 管线必备恒并入 allow 后仍与注册面求交——未注册的必备名同样剔除（keep-only 下未知名 = loud 炸点）', () => {
+      const withoutTodo = macRegistered.filter((n) => n !== 'todo_write')
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read'], withoutTodo)
+      expect(allow).not.toContain('todo_write')
+      expect(allow).toContain('submitTask')
+    })
+
+    it('deny 与注册面求交：未注册名不入 deny（win 域 bash 同族先例 989997bd worker 面）', () => {
+      const { deny } = deriveWorkerToolFilter('doc', undefined, undefined, macRegistered)
+      // doc 族拒绝 jobs/read-image/web——诸名 Mac 在场仍 deny；shell 族放行故 pwsh/bash 本就不在 deny
+      expect(deny).toContain('job_list')
+      expect(deny.every((n) => macRegistered.includes(n))).toBe(true)
+    })
+
+    it('registeredTools 缺席 = 不裁剪（与既有 loud 行为逐字节等价）', () => {
+      const before = deriveWorkerToolFilter('coding-fix', undefined, ['ghost', 'pwsh'])
+      const after = deriveWorkerToolFilter('coding-fix', undefined, ['ghost', 'pwsh'], undefined)
+      expect(after.allow).toEqual(before.allow)
+      expect(after.allow).toContain('pwsh')
+    })
+  })
 })

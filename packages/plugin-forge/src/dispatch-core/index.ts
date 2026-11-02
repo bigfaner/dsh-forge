@@ -16,7 +16,7 @@ export type {
   SettleStageResult,
   SpawnStageResult,
 } from './core.js'
-export { deriveTriageToolFilter, deriveWorkerToolFilter, reconcileWorkerReasoning, workerAgentOptionsOf } from './assemble.js'
+export { deriveTriageToolFilter, deriveWorkerToolFilter, intersectAllowNames, reconcileWorkerReasoning, registeredToolNamesOf, workerAgentOptionsOf } from './assemble.js'
 // worker 来源任务注册表（fix-bug——recordBug 工具面 source_task_id 注入源；spawn 登记结算注销）
 export { forgetWorkerSourceTask, rememberWorkerSourceTask, workerSourceTaskOf } from './assemble.js'
 // S2 分层承载：worker persona 合成单源 = contracts composePersona（spawn 链接线——
