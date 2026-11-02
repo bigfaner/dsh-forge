@@ -51,7 +51,10 @@ import { expect, type Page } from '@playwright/test'
 const PANEL_ROW = 'button[aria-label="专家团"]'
 const PANEL_ROOT = '[data-dswf-expert-panel]'
 const CARD_ANY = '.dswf-card-grid .dswf-xcard'
-const SUMMON_BTN = 'button[aria-label="寻访（打开猎头模式会话）"]'
+// 召唤钮锚：aria-label 已随 4a9de514（0.20.0，§3.4 绑定面=显示面）改为目标绑定动态形态
+// （有目标 = 寻访（打开 <target> 工作区的猎头模式会话）／无目标 = 寻访（锚定当前打开的工作区…）），
+// 字面量不可对齐——重锚结构锚 .dswf-summon-btn（expert-panel.tsx 事实表），行为断言零放松。
+const SUMMON_BTN = 'button.dswf-summon-btn'
 const SUMMON_NOTICE = '[data-dswf-summon-notice]'
 /** 猎头预设显示名（apps/host/src/profile/presets/headhunter.patch.yml config.name——座位标签文本） */
 const HEADHUNTER_PRESET_LABEL = '猎头模式'
