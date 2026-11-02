@@ -145,6 +145,9 @@ export interface DelegateToolDeps {
   readonly panel: ExpertRunPanelState;
   /** 派发 provider 名（in-process 才落地 toolFilter——派发面由装配钉死）。 */
   readonly provider: string;
+  /** 全局注册工具名现查面（每派发现调，禁 memoize——装配取 ctx.tools.schemas()；
+   *  缺席 fail-soft：白名单不裁剪原样承载，见 compose.resolveToolAllow）。 */
+  readonly knownTools?: () => readonly string[];
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
@@ -161,7 +164,7 @@ export function delegateLabel(task: string): string {
  * 接受点即结算返回 childId。
  */
 export function createDelegateExpertTool(deps: DelegateToolDeps): ExpertToolDefinition {
-  const compose = createExpertComposer(deps.registry);
+  const compose = createExpertComposer(deps.registry, deps.knownTools);
 
   const tool: ExpertToolDefinition = {
     name: DELEGATE_EXPERT_TOOL_NAME,
