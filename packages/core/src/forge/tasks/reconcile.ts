@@ -66,6 +66,21 @@ export async function reconcileInterrupted(
   if (!input.registryEmpty) return { reconciled: [] }
 
   const result = withTransaction(db, (): ReconcileInterruptedResult => {
+    // 判定统计（bug 92d642c2 排查衍生——零命中不可判缺）：① 考察面 = in_progress 行数；
+    // ①+② = 其中最新 claim 行带循环来源标记的行数。作用域与命中行同参（scoped 径统计
+    // 同样只看本容器）。标量 COUNT 各一枚（prepared 同纪律）。
+    const scopeSql = input.source === undefined ? '' : ` AND t.source_kind = ? AND t.slug = ?`
+    const scopeParams: string[] = input.source === undefined ? [] : [input.source.kind, input.source.slug]
+    const inProgress = (
+      db
+        .prepare<string[], { n: number }>(`SELECT COUNT(*) AS n FROM tasks t WHERE t.task_status = 'in_progress'${scopeSql}`)
+        .get(...scopeParams) as { n: number }
+    ).n
+    const loopSourced = (
+      db
+        .prepare<string[], { n: number }>(`SELECT COUNT(*) AS n ${RECONCILE_TARGETS_WHERE_SQL}${scopeSql}`)
+        .get(...scopeParams) as { n: number }
+    ).n
     // 作用域分流（bug 6d98a275 循环启动径）：source 在场 = 只扫该容器（t.source_kind + t.slug
     // 双列 pin——同 slug 异 kind 容器不串扫）；缺席 = 装配期全域径（行为同前）。
     const rows =
@@ -78,7 +93,8 @@ export async function reconcileInterrupted(
               `SELECT ${TASK_COLUMNS} ${RECONCILE_TARGETS_WHERE_SQL} AND t.source_kind = ? AND t.slug = ?${RECONCILE_TARGETS_ORDER_SQL}`,
             )
             .all(input.source.kind, input.source.slug)
-    if (rows.length === 0) return { reconciled: [] }
+    // 零命中早退同携统计（诊断面——「有 in_progress 但零真化」正是判据②不命中的可读形态）
+    if (rows.length === 0) return { reconciled: [], stats: { inProgress, loopSourced } }
 
     const flip = db.prepare(`UPDATE tasks SET task_status = 'interrupted', updated_at = ? WHERE id = ?`)
     const insertRecord = db.prepare(
@@ -128,7 +144,7 @@ export async function reconcileInterrupted(
       }
     }
 
-    return { reconciled }
+    return { reconciled, stats: { inProgress, loopSourced } }
   })
 
   // 事务提交后 emitTasksChanged（写动词闭包尾部——零命中纯读不发射）

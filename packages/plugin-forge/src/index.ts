@@ -709,6 +709,18 @@ const forgePlugin: ForgePlugin = Object.assign(
       try {
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
+          .then((result) => {
+            // 对账埋点（bug 92d642c2 排查衍生——§7 成功里程碑）：命中/零命中均留痕。
+            // stats 判读：inProgress>0 而 loopSourced=0 = 判据②不命中（skill 路线领取或
+            // 注册缺损期 claim 无标记）；loopSourced>0 而 reconciled=0 不可能（③装配期恒真）。
+            const keys = result.reconciled.map((r) => `${r.slug}/${r.localId}`).join(',')
+            emitForgeDiag(diag, {
+              level: 'info',
+              event: 'forge-reconcile',
+              message: `重启对账 projectId=${projectId} reconciled=${result.reconciled.length} inProgress=${result.stats?.inProgress ?? '?'} loopSourced=${result.stats?.loopSourced ?? '?'}${keys !== '' ? ` keys=${keys}` : ''}`,
+              projectId,
+            })
+          })
           .catch((cause: unknown) => {
             warnReconcileDegraded(diag, projectId, cause)
           })

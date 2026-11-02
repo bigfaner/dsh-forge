@@ -549,9 +549,10 @@ describe('forgeSettings 可选消费（cordis 4.0.4 无 "?" 可选 inject——r
 
 describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true 装配期结构事实）', () => {
   /** 装配桩：reconcileInterrupted 调用记账（静态绑定表一枚 + bindingsFile 去重面） */
-  function reconcileCtx(config: { projects?: { wsPath: string; projectId: string }[]; bindingsFile?: string }) {
+  function reconcileCtx(config: { projects?: { wsPath: string; projectId: string }[]; bindingsFile?: string }, result?: { reconciled: unknown[]; stats?: { inProgress: number; loopSourced: number } }) {
     const rt = new TempRuntime()
     const calls: unknown[] = []
+    const diagEmits: { level: string; event: string; message: string }[] = []
     const tasks = {
       claimTask: async () => ({ task: null, dispatchPrompt: '', digest: '', reclaimed: false }),
       taskStats: async () => ({
@@ -561,17 +562,34 @@ describe('S3 启动对账装配（reconcileInterrupted——registryEmpty=true �
       }),
       reconcileInterrupted: async (input: unknown) => {
         calls.push(input)
-        return { reconciled: [] }
+        return result ?? { reconciled: [] }
       },
     } as unknown as ForgeTasksService
-    const dispose = forgePlugin({ ...rt.ctx(), forgeTasks: tasks }, config)
-    return { rt, dispose, calls }
+    const base = rt.ctx() as Record<string, unknown>
+    const dispose = forgePlugin({ ...base, forgeTasks: tasks, emit: (event: string, payload: { level: string; event: string; message: string }) => diagEmits.push(payload) }, config)
+    return { rt, dispose, calls, diagEmits }
   }
 
   it('装配即触发：逐绑定项目 reconcileInterrupted({projectId, registryEmpty: true})——三重判据之③装配期恒真', async () => {
     const h = reconcileCtx({ projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] })
     await new Promise((resolve) => setTimeout(resolve, 0)) // fire-and-forget 异步段
     expect(h.calls).toEqual([{ projectId: 'p-9', registryEmpty: true }])
+    h.dispose()
+  })
+
+  it('bug 92d642c2 排查衍生·对账埋点：命中/零命中均落 info 级 diag（计数 + 自然键——Mac 包零命中不可判缺收口）', async () => {
+    const h = reconcileCtx(
+      { projects: [{ wsPath: 'C:\\ws\\demo', projectId: 'p-9' }] },
+      { reconciled: [{ slug: 'f', localId: '2.1' }], stats: { inProgress: 2, loopSourced: 1 } },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const hit = h.diagEmits.find((e) => e.event === 'forge-reconcile')
+    expect(hit).toBeDefined()
+    expect(hit!.level).toBe('info')
+    expect(hit!.message).toContain('reconciled=1')
+    expect(hit!.message).toContain('inProgress=2')
+    expect(hit!.message).toContain('loopSourced=1')
+    expect(hit!.message).toContain('f/2.1')
     h.dispose()
   })
 

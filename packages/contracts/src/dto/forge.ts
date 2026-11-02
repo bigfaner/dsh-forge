@@ -687,6 +687,12 @@ export interface ReconcileInterruptedInput {
 /** reconcileInterrupted 返回体（reconciled = 被真化 interrupted 的任务自然键——中断序 ascending） */
 export interface ReconcileInterruptedResult {
   reconciled: TaskRef[]
+  /**
+   * 判定统计（bug 92d642c2 排查衍生——零命中不可判缺的可观测面）：inProgress = 判据①
+   * 考察面行数（in_progress）；loopSourced = ①+② 命中数（最新 claim 行带循环来源标记）。
+   * reconciled = loopSourced −（判据③ 短路）。缺席 = 旧实现兼容。
+   */
+  stats?: { readonly inProgress: number; readonly loopSourced: number }
 }
 
 /** transitionTask 入参（人工/机械共用转移面——UI/RPC 恒 taskId；提前校验 toStatus ∈ transitionTargets(current,'human')） */

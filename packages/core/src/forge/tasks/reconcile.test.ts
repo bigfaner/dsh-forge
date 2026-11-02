@@ -236,4 +236,18 @@ describe('AC5 作用域对账（bug 6d98a275 循环启动径）：source 在场 
     expect(statusOf('2.1')).toBe('in_progress')
     expect(h!.events.emitted).toEqual([])
   })
+
+  it('判定统计（bug 92d642c2 排查衍生——Mac 包零命中不可判缺）：stats 携带 ①/①+② 两级考察面计数', async () => {
+    const { reconcile } = svc()
+    seedFeature(h!.db, { slug: 'f', status: 'in-progress' })
+    seedTask(h!.db, 'f', '2.1', { status: 'in_progress' }) // ①+② 命中
+    seedTask(h!.db, 'f', '2.2', { status: 'in_progress' }) // 仅 ①（最新 claim 无标记）
+    seedTask(h!.db, 'f', '2.3', { status: 'blocked' }) // 不入考察面
+    seedRecord(h!.db, 't-f-2.1', { verb: 'claim', loopSourced: true })
+    seedRecord(h!.db, 't-f-2.2', { verb: 'claim', loopSourced: false })
+
+    const r = await reconcile({ registryEmpty: true, source: { kind: 'feature', slug: 'f' } })
+
+    expect(r.stats).toEqual({ inProgress: 2, loopSourced: 1 })
+  })
 })
