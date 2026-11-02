@@ -35,6 +35,20 @@ user-invocable: false
 - 唯一替代路径 = **evidence_debt 债务声明**：实现 + 单测绿、唯一缺口是真机取证时，以 `evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）声明欠账照常结算（实现态），欠账 test-run 任务由循环自动派生。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」。
 - 已取得取证证据的，在 `ac_evidence` 对应条目引用（截图/trace/走查记录的归档子目录路径）；取证方式与取证环境以任务 AC 条目为锚。
 
+### 三类测试任务的证据口径
+
+测试策略正本见 `docs/conventions/testing/core.md`——本节只谈结算口径，与正本一致、不分叉：
+
+- **旅程/契约任务（`test-gen-journeys` / `test-gen-contracts`）**：
+  - `ac_evidence` 引契约路径（`proposals/<slug>/testing/<旅程名>/` 下的 journey.md 与 contracts/）；
+  - 结算证据须列**覆盖的明确行为清单**并逐条标注**分层正当性**——每条旅程回答「为何值得一条 E2E、单元测试为何覆盖不了」（价值标准把门：空契约/恒真断言/单元测试可覆盖的旅程不可 success）。
+- **脚本任务（`test-gen-scripts`）**：
+  - `ac_evidence` 引落盘的 spec 路径；每条断言须带**断言-契约溯源标注**（来源契约条目 id）；
+  - 待实现锚已回填实锚并盖 `last_anchor_sync`；契约与实现不一致不上报调和、只走 fix/disc 链——就地调和不可 success。
+- **test-runner 收口任务**：
+  - 失败一律 `result=blocked`，归因三路——脚本产物 / 实现产物 / 契约文档；执行体不裁决分叉、不改任何一方产物。
+  - 提案交付准绳 = **最终一次收口 `success`**——中间收口失败不算失败终点，处置后由新收口任务重跑。
+
 ### e2e 取证债——实现态部分结算，不为欠账 blocked
 
 真机 e2e 断言取证是外部依赖装配面的结算门，但它不挂死实现卡：实现 + 单测绿、唯一缺口是真机 e2e 断言取证时，以 `evidence_debt_suite` + `evidence_debt_specs`（可选 `evidence_debt_note`）声明欠账并照常 `success` 结算（实现态）——欠账 test-run 任务由循环自动生成（依赖你的实现卡），取证在后继卡完成。前提如实：声明的只是「尚未取得的真机取证」，不是「不需要取证」；单测/门禁没绿就不许走这条路（那是 blocked）。
