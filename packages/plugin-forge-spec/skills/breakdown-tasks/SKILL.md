@@ -1,6 +1,6 @@
 ---
 name: breakdown-tasks
-description: 把定稿的技术设计拆解为可执行任务图（经 addTask）——分阶段业务任务带依赖、逐阶段摘要与 gate 任务、尾部测试管线链，最后经 validateFeatureTasks 校验容器。
+description: 把定稿的技术设计拆解为可执行任务图（经 addTask）——分阶段业务任务带依赖、逐阶段摘要与 gate 任务、旅程/契约先行任务与脚本后置 + run-tests 收口的测试链，最后经 validateFeatureTasks 校验容器。
 ---
 
 # 目标拆解（breakdown-tasks）
@@ -59,10 +59,24 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 3. **推导阶段与依赖**——阶段顺序编号（1.x、2.x…）；优先采用 PRD 声明的阶段结构，否则按依赖深度分组。同阶段 = 可并行（冲突除外）；跨阶段 = 依赖前一阶段的 gate。拆分规则按优先序：(1) 可独立核验的产出 → 各自成任务；(2) 多动词标题 → 按功能边界拆；(3) >8 个同模式文件 → 按文件组拆。纯文档特性（全部产出不可编译）跳过语言解析，全程用 `doc` 类型。
 4. **逐阶段创建业务任务**（经 `addTask`，协议见上）。创建期复杂度：`low` = ≤3 条 AC 且无硬约束；`high` = ≥5 条 AC 或有硬约束；其余 `medium`。
 5. **创建逐阶段摘要 + gate**——每阶段业务任务之后：一条 `doc-summary` 任务（依赖 =该阶段业务任务 localId），再一条 `gate` 任务（依赖 = 摘要的 localId）。gate 即阶段边界；下一阶段的首个任务依赖前一 gate。
-6. **创建测试管线链**——最后一个阶段 gate 之后按序接线：review-doc（`doc-review`）→ gen-journeys（`test-gen-journeys`）→ gen-contracts（`test-gen-contracts`）→ gen-scripts（`test-gen-scripts`）→ run-tests（`test-run`）。逐任务依赖前驱；首个（review-doc）依赖最终阶段 gate。每条标题点名其技能/用途——执行 worker 依标题与任务类型装载对应技能。
+6. **创建测试链**——涉运行期装配面的特性建链（**豁免正判据**：改动触及子进程 spawn / 网络通道 / 外部文件系统写径 / UI 装配面任一即建链，UI 装配面默认建链；纯逻辑/纯文档特性免建）。工作区测试策略文档在场则遵从其细则，缺席不破环——本技能正文自含判据，不硬编码任何仓内路径。
+   - **旅程/契约先行任务**（与业务任务并行建卡，不设业务任务对它们的依赖边）：
+     - 默认两任务：旅程叙事任务（type `test-gen-journeys`）→ 契约文档任务（type `test-gen-contracts`，`depends_on` 旅程任务）；产物落 `proposals/<slug>/testing/<旅程名>/`（journey.md + contracts/）。
+     - 小体量可合 1（单旅程 ≤3 步且契约 ≤5 个 Outcome → 单个 `test-gen-journeys` 任务，旅程作者主笔契约节）；多旅程提案一旅程一任务，不做跨旅程杂烩。
+     - 领取顺序：旅程/契约任务一律 P0 且建卡先于全部业务任务卡，业务任务默认 P1 起——串行派发下首个被领即旅程/契约，保证测试基准先于实现落盘。
+     - **旅程/契约任务 AC 模板**——`acceptance_criteria` 含价值标准条目：
+       1. 旅程针对明确行为：用户可见交互序列、状态变化与副作用，禁空洞叙事（「页面能打开」「功能正常」式）；
+       2. 契约条目可判定：Preconditions/Input/Output/State/Side-effect/Invariants 均可验证，Outcome 穷举有意义分支（成功/失败/边界），禁恒真断言；
+       3. 分层正当性：每条旅程答「为何值得一条 E2E、单元测试为何覆盖不了」；
+       4. 演进友好：断言锚定稳定行为（交互序列/状态语义/副作用），不锁文案字面、DOM 层级与实现路径——重构不红；
+       5. 宁少而精：服从回归时长预算，禁以数量堆砌安全感。
+   - **脚本任务（后置执行）**：type `test-gen-scripts`，`depends_on` 该特性全部业务任务 + 旅程/契约任务——实现落盘后撰写：核实/回填契约锚值、以真实锚落 spec、每条断言标注来源契约条目 id（断言-契约溯源）；契约与实现不一致经 fix/disc 链上报，禁脚本内就地调和。
+   - **run-tests 收口**：type `test-run`，`depends_on` 脚本任务 + 全部业务任务；派发前自查依赖闭包覆盖全部 coding/旅程/契约/脚本任务，缺失即 blocked 附清单。
+   - **review-doc**（`doc-review`）仍留最终 gate 之后，依赖最终阶段 gate。
+   - 旅程/契约/脚本/收口以**任务类型 + 任务简报 + 专家路由**承载（旅程 = `test-journey-author`、契约 = `test-contract-author`），任务简报写明产物落点与断言-契约溯源要求。
 7. **体量审计**——逐任务复查：多动词标题拆；AC 跨无关领域拆；守住操作上限；**每任务 ≤6 条验收标准**（更多 = 范围过大，继续拆）；任何 `task_desc` / AC 内零跨容器引用（确需外部排序就是合并或排序，不是等待任务）。
 8. **校验容器**——`validateFeatureTasks { feature_slug: "<slug>" }`：每条上报违规都点名违规任务键；修到子图健康为止（只经工具面允许的任务状态转移——绝不直写）。
 
 ## 产出
 
-呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试管线链。可派发执行（run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。
+呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试链（旅程/契约先行任务、脚本任务、run-tests 收口）。可派发执行（run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。

@@ -37,7 +37,7 @@ user-invocable: false
 
 ### 三类测试任务的证据口径
 
-测试策略正本见 `docs/conventions/testing/core.md`——本节只谈结算口径，与正本一致、不分叉：
+工作区测试策略文档（结算时探测常规约定目录）在场则遵从其细则，缺席不破环——本节正文自含结算判据，不硬编码任何仓内路径；项目特化由拆解期解析进任务简报。以下只谈结算口径，与工作区策略一致、不分叉：
 
 - **旅程/契约任务（`test-gen-journeys` / `test-gen-contracts`）**：
   - `ac_evidence` 引契约路径（`proposals/<slug>/testing/<旅程名>/` 下的 journey.md 与 contracts/）；
