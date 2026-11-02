@@ -46,6 +46,7 @@ export {
   type WorktreeEntry,
   type WorktreeStatus,
 } from './worktree-ops.js'
+import { registerWorktreeBindVocabulary } from './session-attach.js'
 export {
   appendWorktreeBind,
   latestWorktreeBindEvent,
@@ -173,6 +174,10 @@ export interface GitWorktreePlugin {
 
 const gitWorktreePlugin: GitWorktreePlugin = Object.assign(
   (ctx: unknown, config: GitWorktreePluginConfig = {}): (() => void) => {
+    // 词汇注册先行（bug 80a923ec——'forge/worktree-bind' 进已知事件集：此前注册只挂在
+    // append/read 消费点，会话恢复 observe 整本日志早于首次消费即拒解读历史日志；
+    // plugin-forge apply 首行注册 forge/progress 同款先例。幂等，毫秒级）。
+    registerWorktreeBindVocabulary()
     const face = ctx as PluginCtxFace
     const diag = config.diag ?? consoleDiagFallback
     const getExtensionPoints = (): GitWorktreeExtensionPoints => resolveExtensionPoints(face, config)

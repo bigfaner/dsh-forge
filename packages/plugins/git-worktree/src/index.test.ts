@@ -94,6 +94,16 @@ describe('插件激活（git 在场性门 + 能力服务 provide）', () => {
     dispose()
   })
 
+  it('激活即注册 forge/worktree-bind 词汇（bug 80a923ec）：会话恢复 observe 整本日志早于任何 append/read 消费——惰性注册缺席即拒解读历史日志', async () => {
+    const { KNOWN_SESSION_EVENT_TYPES } = await import('@deepseek-ai/dsh-session')
+    const { WORKTREE_BIND_EVENT_TYPE } = await import('./session-attach.js')
+    ;(KNOWN_SESSION_EVENT_TYPES as Set<string>).delete(WORKTREE_BIND_EVENT_TYPE) // 模拟未注册进程
+    expect(KNOWN_SESSION_EVENT_TYPES.has(WORKTREE_BIND_EVENT_TYPE)).toBe(false)
+    const { ctx } = ctxStub()
+    gitWorktreePlugin(ctx, { checkGit: async () => false })
+    expect(KNOWN_SESSION_EVENT_TYPES.has(WORKTREE_BIND_EVENT_TYPE)).toBe(true)
+  })
+
   it('git 缺席（stub）→ 零注入（provide 不被调用）——fail-soft 不生效', async () => {
     const { ctx, provided } = ctxStub()
     gitWorktreePlugin(ctx, { checkGit: async () => false })
