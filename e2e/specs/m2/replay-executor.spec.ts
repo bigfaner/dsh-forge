@@ -15,6 +15,12 @@
 // M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+// e2e-fast-shared-launch 存量迁移复核（1.16 补迁移）：裁定保留原形态。技术理由：两用例
+// launch env 语义互斥——首件被测语义 = DSH_FORGE_TEST_BRIDGE=1 门控钩子在位（回放主径
+// 全程经钩子写动词），次件被测语义 = env 缺席启动 → globalThis 挂点零注册（发布构建零
+// 痕迹审计）；共享 fixture 的 launch env 为 spec 级固定（无 per-test env 缝），任一形态
+// 迁移必牺牲其一的被测语义。首件单迁则冷启 2 → 2（次件独立 launch 保留）零削减，按批次
+// 六判据（零冷启削减不抵真机对账成本）整份保留。
 
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'

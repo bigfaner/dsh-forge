@@ -11,17 +11,19 @@
 // M3 drift 台账（5.2 落定）：featureSlug → source:ContainerRef 容器化（1.1/2.4）+ INSERT 列
 // source_kind/source_id（schema v1 直改）+ 4.6 v22 容器 pill/视图下拉锚随迁；claimTask 桥直调
 // = core 服务 API 保留面（3.5 tool 退役——drift #1 处置：回放主径零波及）。
+// e2e-fast-shared-launch 存量迁移（1.16 补迁移）：次件迁移共享 launch 形态——夹具播种进
+// seedWorkspace（首启/重播种/crash 重启三条路径统一；写入幂等保既有文件 mtime 不漂），
+// 树快照基线取种子时点（首启注册前——注册相位纳入零写入断言面，覆盖强于原始 launch 后
+// 快照）；首件源码面无 app（svc-key step-5 同径先例）不消费共享会话、原形态保留。
 
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { test, expect } from '@playwright/test'
 import { FEATURES_CHANNELS, PROPOSALS_CHANNELS, TASKS_CHANNELS, DOCS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { runAllSourceAuditAnchors } from '../../support/audit/anchors.js'
-import { closeApp, launchHost, type Launched } from '../../support/launch.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
 
 // ───────────────────────── ① 源码面审计锚（无 app——扫描即断言） ─────────────────────────
 
@@ -35,7 +37,7 @@ test('@web-e2e @m2 5.3 审计锚（源码面）：无 watch/回流 + 零迁移 +
   ).toEqual([])
 })
 
-// ───────────────────────── ② 运行面：SC3 零写入 + SC8 旧仓未动 ─────────────────────────
+// ───────────────────────── ② 运行面：SC3 零写入 + SC8 旧仓未动（共享 launch 形态） ─────────────────────────
 
 /** 产品注册链自建的工作区内状态目录（P1 口径——零写入断言的显式豁免根） */
 const APP_STATE_ROOTS = new Set(['.forge', '.knowledge'])
@@ -64,69 +66,75 @@ function snapshotTree(root: string): Map<string, FileSnapshot> {
   return out
 }
 
-test('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 + SC8 旧仓文件未动 + 白名单吸收在场', async () => {
+/** 种子期树快照（seedWorkspace 时点 = 首启注册前——零写入断言的完整基线，含注册相位；
+ *  次件为唯一共享会话消费者，重播种不重拍——写入幂等保既有文件 mtime 不漂） */
+let seedSnapshot: Map<string, FileSnapshot> | undefined
+
+// ── 共享 launch fixture：旧线目录结构夹具（发现面约定 + 旧仓任务文件 + 约定外文件——
+//    未动断言的完整面）经 seedWorkspace 播种进共享工作区。forge_dir = <ws>/.forge
+//   （projects 行口径）——发现面扫描 docs/features|proposals 于 forge_dir 之下
+//   （service-assembly 同构）；旧仓任务文件与约定外文件置同域。──
+const { test: testShared } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => {
+    const put = (rel: string, content: string): void => {
+      const abs = join(dir, rel)
+      if (existsSync(abs)) return // 写入幂等：重播种不触碰既有文件（mtime 不漂——零写入断言基线稳定）
+      mkdirSync(dirname(abs), { recursive: true })
+      writeFileSync(abs, content, 'utf8')
+    }
+    put('.forge/docs/features/legacy-demo/manifest.md', '---\ntitle: 遗留演示特性\nstatus: prd\n---\n\n旧线 manifest 正文（原地保留断言面）。\n')
+    put('.forge/docs/features/legacy-demo/prd/prd-spec.md', '# PRD\n\n旧线 PRD 正文——发现面文档索引与只读渲染的吸收断言面。\n')
+    put('.forge/docs/features/legacy-demo/design/tech-design.md', '# 技术设计\n\n旧线设计文档正文。\n')
+    put('.forge/docs/features/legacy-demo/tasks/1.1-impl.md', '---\nid: "1.1"\ntitle: 旧仓任务文件\n---\n\n旧仓任务文件——零迁移纪律：不吸收为任务行、原地未动。\n')
+    put('.forge/docs/features/legacy-demo/tasks/index.json', '{\n  "tasks": ["1.1-impl.md"]\n}\n')
+    put('.forge/docs/proposals/legacy-prop/proposal.md', '---\ntitle: 遗留提案\nstatus: draft\nauthor: e2e\n---\n\n旧线提案正文。\n')
+    put('README.md', '# 旧仓演示工作区\n\n代码仓文件——SC3 零写入断言面。\n')
+    put('src/app.ts', 'export const app = "legacy-workspace-file"\n')
+    if (seedSnapshot === undefined) seedSnapshot = snapshotTree(dir)
+  },
+  workspaceName: '旧仓零迁移演示',
+  launch: { expectPhase: 'hero' },
+})
+
+testShared('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 + SC8 旧仓文件未动 + 白名单吸收在场', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-audit-'))
-  const wsDir = join(fixtureRoot, 'ws-legacy')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-audit-ud-'))
+  const { page, pageErrors, wsDir } = sharedLaunch
 
-  // ── 旧线目录结构夹具（发现面约定 + 旧仓任务文件 + 约定外文件——未动断言的完整面）。
-  //    forge_dir = <ws>/.forge（projects 行口径）——发现面扫描 docs/features|proposals
-  //    于 forge_dir 之下（service-assembly 同构）；旧仓任务文件与约定外文件置同域。──
-  const put = (rel: string, content: string): void => {
-    mkdirSync(join(wsDir, rel, '..'), { recursive: true })
-    writeFileSync(join(wsDir, rel), content, 'utf8')
-  }
-  put('.forge/docs/features/legacy-demo/manifest.md', '---\ntitle: 遗留演示特性\nstatus: prd\n---\n\n旧线 manifest 正文（原地保留断言面）。\n')
-  put('.forge/docs/features/legacy-demo/prd/prd-spec.md', '# PRD\n\n旧线 PRD 正文——发现面文档索引与只读渲染的吸收断言面。\n')
-  put('.forge/docs/features/legacy-demo/design/tech-design.md', '# 技术设计\n\n旧线设计文档正文。\n')
-  put('.forge/docs/features/legacy-demo/tasks/1.1-impl.md', '---\nid: "1.1"\ntitle: 旧仓任务文件\n---\n\n旧仓任务文件——零迁移纪律：不吸收为任务行、原地未动。\n')
-  put('.forge/docs/features/legacy-demo/tasks/index.json', '{\n  "tasks": ["1.1-impl.md"]\n}\n')
-  put('.forge/docs/proposals/legacy-prop/proposal.md', '---\ntitle: 遗留提案\nstatus: draft\nauthor: e2e\n---\n\n旧线提案正文。\n')
-  put('README.md', '# 旧仓演示工作区\n\n代码仓文件——SC3 零写入断言面。\n')
-  put('src/app.ts', 'export const app = "legacy-workspace-file"\n')
+  // ── 全流程：注册（发现面扫描内聚）→ 四域读（features/proposals/docs/tasks）──
+  const project = await registerProject(page, wsDir, '旧仓零迁移演示')
+  const projectId = project.id
 
-  const before = snapshotTree(wsDir)
+  const features = await forgeInvoke<readonly { slug: string; title: string; docCount: number; proposalSlug?: string }[]>(
+    page,
+    FEATURES_CHANNELS.list,
+    { projectId },
+  )
+  const feature = features.find((f) => f.slug === 'legacy-demo')
+  expect(feature, '发现面吸收 feature 行（manifest title 初值）').toBeDefined()
+  expect(feature!.title).toBe('遗留演示特性')
+  expect(feature!.docCount, '目录约定文档索引（prd-spec + tech-design 两行）').toBe(2)
 
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    // ── 全流程：注册（发现面扫描内聚）→ 四域读（features/proposals/docs/tasks）──
-    const project = await registerProject(page, wsDir, '旧仓零迁移演示')
-    const projectId = project.id
+  const proposals = await forgeInvoke<readonly { slug: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
+  expect(proposals.map((p) => p.slug)).toContain('legacy-prop')
 
-    const features = await forgeInvoke<readonly { slug: string; title: string; docCount: number; proposalSlug?: string }[]>(
-      page,
-      FEATURES_CHANNELS.list,
-      { projectId },
-    )
-    const feature = features.find((f) => f.slug === 'legacy-demo')
-    expect(feature, '发现面吸收 feature 行（manifest title 初值）').toBeDefined()
-    expect(feature!.title).toBe('遗留演示特性')
-    expect(feature!.docCount, '目录约定文档索引（prd-spec + tech-design 两行）').toBe(2)
+  const doc = await forgeInvoke<{ content: string; dangling: boolean }>(page, DOCS_CHANNELS.read, {
+    projectId,
+    docRel: 'docs/features/legacy-demo/prd/prd-spec.md', // 相对 forge_dir（<ws>/.forge）
+  })
+  expect(doc.content).toContain('旧线 PRD 正文')
+  expect(doc.dangling).toBe(false)
 
-    const proposals = await forgeInvoke<readonly { slug: string }[]>(page, PROPOSALS_CHANNELS.list, { projectId })
-    expect(proposals.map((p) => p.slug)).toContain('legacy-prop')
+  const tasks = await forgeInvoke<readonly { localId: string }[]>(page, TASKS_CHANNELS.list, {
+    projectId,
+    source: { kind: 'feature', slug: 'legacy-demo' },
+  })
+  expect(tasks, 'SC8 零迁移：旧仓任务文件零吸收为任务行（发现面白名单无 tasks 面）').toEqual([])
 
-    const doc = await forgeInvoke<{ content: string; dangling: boolean }>(page, DOCS_CHANNELS.read, {
-      projectId,
-      docRel: 'docs/features/legacy-demo/prd/prd-spec.md', // 相对 forge_dir（<ws>/.forge）
-    })
-    expect(doc.content).toContain('旧线 PRD 正文')
-    expect(doc.dangling).toBe(false)
-
-    const tasks = await forgeInvoke<readonly { localId: string }[]>(page, TASKS_CHANNELS.list, {
-      projectId,
-      source: { kind: 'feature', slug: 'legacy-demo' },
-    })
-    expect(tasks, 'SC8 零迁移：旧仓任务文件零吸收为任务行（发现面白名单无 tasks 面）').toEqual([])
-
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-  }
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
 
   // ── 树快照对照（SC3 + SC8 运行面）：既有文件逐字节未动 + 新文件仅限产品状态自有根 ──
+  //    基线 = 种子时点（首启注册前）——注册 + 读两相位全部纳入零写入对照面
+  const before = seedSnapshot!
   const after = snapshotTree(wsDir)
   const mutated: string[] = []
   for (const [rel, snap] of before) {
@@ -150,7 +158,4 @@ test('@web-e2e @m2 5.3 审计锚（运行面）：SC3 全流程零写入 + SC8 �
     `SC3/SC8 运行面：全流程（注册→发现面→四域读）后旧仓/代码仓文件零改动（${before.size} 文件逐字节对照）`,
   ).toEqual([])
   expect(unexpectedNew, `新文件仅限产品状态自有目录（${[...APP_STATE_ROOTS].join('/')}）：${unexpectedNew.join(' | ')}`).toEqual([])
-
-  rmDirBestEffort(fixtureRoot)
-  rmDirBestEffort(userData)
 })

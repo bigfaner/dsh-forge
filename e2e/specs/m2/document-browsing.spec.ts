@@ -36,15 +36,25 @@
 // Assertion depth: 46/49 behavioral (94%)，其中 deep 17/46 (37%)——两阈均过。
 // M3 drift 台账（5.2 落定）：4.6 行头多动作迁移——提案/feature 父行整行点击退役，
 // 展开命中面 = [data-dswf-ov-parent-toggle]（v22 行语言——零嵌套按钮纪律）。
+// e2e-fast-shared-launch 存量迁移（1.16 补迁移）：T1–T4 迁共享 launch 形态，T5 保留原形态。
+// 适配点：①四用例共用 fixture 根项目世界——概览项目锚 = 主视图会话锚（主视图会话属
+// fixture 项目，不随新注册项目切换），被测发现面/文档库必须落在锚定项目上，故各 feature
+// 夹具文档（db-feat/dang-feat/bad-feat/ext-feat）经 seedWorkspace 全量播种进 forge_dir
+// （{ws}/.forge）之下，注册相位一次发现链建行；T2 悬空删除仍用例内即时（文件级，不波及
+// 他 feature 行）；②T5 零命中空态被测语义 = 锚定项目零发现行——共享 fixture 项目恒携带
+// T1–T4 文档行，结构性不相容（批次五 smoke-skeleton/knowledge-integration「零项目 fresh
+// boot」同裁定族），保留 per-test 独立 launch 原形态；③pageErrors 断言面：共享用例改
+// sharedLaunch 整 spec 累计（批次一同径，语义收紧），T5 维持 per-test 面。
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test, expect, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import type { ProjectSummary } from '../../../packages/contracts/src/dto/project.js'
 import { DOCS_CHANNELS, FEATURES_CHANNELS, PROPOSALS_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { closeApp, launchHost, type Launched } from '../../support/launch.js'
-import { forgeInvoke } from '../../support/rpc.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import {
@@ -57,6 +67,33 @@ import {
   ovDocRowOf,
   ovSubtabOf,
 } from '../../support/anchors.js'
+
+// ── 共享 launch fixture（T1–T4 共用 fixture 根项目世界——见头注适配点①）──
+const { test: testShared } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => {
+    const forgeDocs = join(dir, '.forge', 'docs')
+    writeRepo(join(forgeDocs, 'features'), join(forgeDocs, 'proposals'), {
+      feature: 'db-feat',
+      prdSpec: `---\ntitle: "浏览演示 PRD"\n---\n\n# PRD\n\n正文段——锚文本 DOC-PRD-BODY。\n\n${BAD_BLOCK}\n`,
+      techDesign: `---\ntitle: "浏览演示设计"\n---\n\n# 技术设计\n\n正文段——锚文本 DOC-DESIGN-BODY。\n\n${ER_BLOCK}\n`,
+      proposal: { slug: 'db-prop' },
+    })
+    writeRepo(join(forgeDocs, 'features'), join(forgeDocs, 'proposals'), {
+      feature: 'dang-feat',
+      techDesign: '---\ntitle: "悬空演示"\n---\n\n# 设计\n\n正文。\n',
+    })
+    writeRepo(join(forgeDocs, 'features'), join(forgeDocs, 'proposals'), {
+      feature: 'bad-feat',
+      prdSpec: `---\ntitle: "非法源演示"\n---\n\n# PRD\n\n正文段——锚文本 DOC-BAD-BODY。\n\n${BAD_BLOCK}\n`,
+    })
+    writeRepo(join(forgeDocs, 'features'), join(forgeDocs, 'proposals'), {
+      feature: 'ext-feat',
+      techDesign: '---\ntitle: "守卫演示"\n---\n\n# 设计\n\n正文。\n',
+    })
+  },
+  workspaceName: 'doc-browsing-shared',
+  launch: { expectPhase: 'hero' },
+})
 
 /** 合法 erDiagram 段（验收锚——SC4 同源内容形态） */
 const ER_BLOCK = ['```mermaid', 'erDiagram', '    PROJECT ||--o{ FEATURE : has', '    FEATURE ||--o{ TASK : contains', '```'].join('\n')
@@ -80,9 +117,11 @@ async function registerProjectAt(
   return row as ProjectSummary
 }
 
-/** 夹具仓（目录约定结构 + 指定文档内容——内容缺席即跳过该文件） */
+/** 夹具仓（目录约定结构 + 指定文档内容——内容缺席即跳过该文件；featuresRoot/proposalsRoot
+ *  由调用方给定——共享形态下 = forge_dir 之下的 docs/features|proposals） */
 function writeRepo(
-  wsDir: string,
+  featuresRoot: string,
+  proposalsRoot: string,
   o: {
     readonly feature?: string
     readonly prdSpec?: string
@@ -92,18 +131,18 @@ function writeRepo(
 ): void {
   if (o.feature !== undefined) {
     if (o.prdSpec !== undefined) {
-      const dir = join(wsDir, 'docs', 'features', o.feature, 'prd')
+      const dir = join(featuresRoot, o.feature, 'prd')
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'prd-spec.md'), o.prdSpec, 'utf8')
     }
     if (o.techDesign !== undefined) {
-      const dir = join(wsDir, 'docs', 'features', o.feature, 'design')
+      const dir = join(featuresRoot, o.feature, 'design')
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'tech-design.md'), o.techDesign, 'utf8')
     }
   }
   if (o.proposal !== undefined) {
-    const dir = join(wsDir, 'docs', 'proposals', o.proposal.slug)
+    const dir = join(proposalsRoot, o.proposal.slug)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'proposal.md'), o.proposal.content ?? '---\ntitle: "提案"\nstatus: draft\n---\n\n# 提案\n\n正文。\n', 'utf8')
   }
@@ -122,192 +161,135 @@ async function revealFeatureDocRow(page: Page, docRel: string): Promise<void> {
   await expect(docRow, `feature 文档行在场（${docRel}）`).toBeVisible({ timeout: 30_000 })
 }
 
-test('@web-e2e @m2 文档浏览·冒烟：发现链列表 → 文档 tab 只读渲染 → mermaid 图 → 去重（Step1-3 全链）', async () => {
+testShared('@web-e2e @m2 文档浏览·冒烟：发现链列表 → 文档 tab 只读渲染 → mermaid 图 → 去重（Step1-3 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(420_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-'))
-  const wsDir = join(fixtureRoot, 'ws-doc')
-  writeRepo(wsDir, {
-    feature: 'db-feat',
-    prdSpec: `---\ntitle: "浏览演示 PRD"\n---\n\n# PRD\n\n正文段——锚文本 DOC-PRD-BODY。\n\n${BAD_BLOCK}\n`,
-    techDesign: `---\ntitle: "浏览演示设计"\n---\n\n# 技术设计\n\n正文段——锚文本 DOC-DESIGN-BODY。\n\n${ER_BLOCK}\n`,
-    proposal: { slug: 'db-prop' },
-  })
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    const project = await registerProjectAt(page, {
-      workspaceDir: wsDir, name: '文档浏览演示', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
-    })
-    const projectId = project.id
-    const designRel = 'docs/features/db-feat/design/tech-design.md'
-    const prdRel = 'docs/features/db-feat/prd/prd-spec.md'
+  const { page, pageErrors, wsDir } = sharedLaunch
+  // fixture 根项目（forge_dir = {ws}/.forge——夹具文档经 seedWorkspace 播种，注册相位已建行；
+  // 幂等重取项目行）
+  const project = await registerProject(page, wsDir, '文档浏览演示')
+  const projectId = project.id
+  const designRel = 'docs/features/db-feat/design/tech-design.md'
+  const prdRel = 'docs/features/db-feat/prd/prd-spec.md'
 
-    // ── Step 1：真实发现链建行（feature 文档两类 + 提案一行）──
-    const features = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
-    expect(features.find((f) => f.slug === 'db-feat')?.docCount, 'feature 文档统计 = 2（多类在场，含 design 类）').toBe(2)
-    await revealFeatureDocRow(page, designRel)
-    await expect(page.locator(ovDocRowOf(prdRel)).first(), '同 feature 另一类文档行在场').toBeVisible()
+  // ── Step 1：真实发现链建行（feature 文档两类 + 提案一行）──
+  const features = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
+  expect(features.find((f) => f.slug === 'db-feat')?.docCount, 'feature 文档统计 = 2（多类在场，含 design 类）').toBe(2)
+  await revealFeatureDocRow(page, designRel)
+  await expect(page.locator(ovDocRowOf(prdRel)).first(), '同 feature 另一类文档行在场').toBeVisible()
 
-    // ── Step 2：点开 design 文档 → 独立文档 tab（docRel 去重）+ 只读渲染 + 单行头 canonical 路径 ──
-    await page.locator(ovDocRowOf(designRel)).first().click()
-    const designPanel = page.locator(docPanelOf(projectId, designRel)).first()
-    await expect(designPanel, '文档 tab 开出（docRel 去重键 = 地址）').toBeVisible({ timeout: 30_000 })
-    await expect(designPanel.locator('[data-dswf-doc-body]'), '正文只读渲染（MarkdownDoc）').toContainText('DOC-DESIGN-BODY')
-    // 1.6 载体适配：单行头路径 = 官方 PathLabel（[data-path-label]——目录段弱化/渐隐裁剪官方自带；
-    // textContent = 目录段+文件名拼接全值，原 .dswf-doc-path 断言语义不变）
-    const pathText = (await designPanel.locator(DOC_PATH_LABEL).textContent()) ?? ''
-    expect(pathText.toLowerCase().startsWith(wsDir.slice(0, 2).toLowerCase()), 'canonical 路径栏 = 绝对路径（盘符起）').toBe(true)
-    expect(pathText.endsWith(join('docs', 'features', 'db-feat', 'design', 'tech-design.md')), 'canonical 路径栏逐字承载 rel_path 解析').toBe(true)
+  // ── Step 2：点开 design 文档 → 独立文档 tab（docRel 去重）+ 只读渲染 + 单行头 canonical 路径 ──
+  await page.locator(ovDocRowOf(designRel)).first().click()
+  const designPanel = page.locator(docPanelOf(projectId, designRel)).first()
+  await expect(designPanel, '文档 tab 开出（docRel 去重键 = 地址）').toBeVisible({ timeout: 30_000 })
+  await expect(designPanel.locator('[data-dswf-doc-body]'), '正文只读渲染（MarkdownDoc）').toContainText('DOC-DESIGN-BODY')
+  // 1.6 载体适配：单行头路径 = 官方 PathLabel（[data-path-label]——目录段弱化/渐隐裁剪官方自带；
+  // textContent = 目录段+文件名拼接全值，原 .dswf-doc-path 断言语义不变）
+  const pathText = (await designPanel.locator(DOC_PATH_LABEL).textContent()) ?? ''
+  expect(pathText.toLowerCase().startsWith(wsDir.slice(0, 2).toLowerCase()), 'canonical 路径栏 = 绝对路径（盘符起）').toBe(true)
+  expect(pathText.endsWith(join('docs', 'features', 'db-feat', 'design', 'tech-design.md')), 'canonical 路径栏逐字承载 rel_path 解析').toBe(true)
 
-    // ── Step 3：mermaid 图渲染（erDiagram 验收锚——DOM 增强器单径出图在场）──
-    await expect(designPanel.locator(MD_MERMAID_FIGURE).locator('svg'), 'erDiagram 渲染为图（增强器 figure 出图在场——1.8/1.9 渲染链退役）').toBeVisible({ timeout: 30_000 })
-    await expect(designPanel.locator(`${DOC_CODE_BLOCK}[data-dswf-md-mermaid-enhanced]`), '合法源原代码块已增强接管（原块隐藏）').toBeHidden()
+  // ── Step 3：mermaid 图渲染（erDiagram 验收锚——DOM 增强器单径出图在场）──
+  await expect(designPanel.locator(MD_MERMAID_FIGURE).locator('svg'), 'erDiagram 渲染为图（增强器 figure 出图在场——1.8/1.9 渲染链退役）').toBeVisible({ timeout: 30_000 })
+  await expect(designPanel.locator(`${DOC_CODE_BLOCK}[data-dswf-md-mermaid-enhanced]`), '合法源原代码块已增强接管（原块隐藏）').toBeHidden()
 
-    // ── Step 2b（去重 + 并存）：第二文档另开新 tab；同地址重开 = reveal ──
-    await revealFeatureDocRow(page, prdRel)
-    await page.locator(ovDocRowOf(prdRel)).first().click()
-    const prdPanel = page.locator(docPanelOf(projectId, prdRel)).first()
-    await expect(prdPanel, '第二文档另开新 tab').toBeVisible({ timeout: 30_000 })
-    const docTabs = page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '.md' })
-    await expect(docTabs, '两文档 tab 并存（multiple + 异地址各自成 tab）').toHaveCount(2)
-    await revealFeatureDocRow(page, designRel)
-    await page.locator(ovDocRowOf(designRel)).first().click()
-    await expect(page.locator(docPanelOf(projectId, designRel)).first(), '同地址重开 = reveal 既有 tab（body 切回）').toBeVisible({ timeout: 30_000 })
-    await expect(docTabs, 'reveal 不新增 tab（去重）').toHaveCount(2)
+  // ── Step 2b（去重 + 并存）：第二文档另开新 tab；同地址重开 = reveal ──
+  await revealFeatureDocRow(page, prdRel)
+  await page.locator(ovDocRowOf(prdRel)).first().click()
+  const prdPanel = page.locator(docPanelOf(projectId, prdRel)).first()
+  await expect(prdPanel, '第二文档另开新 tab').toBeVisible({ timeout: 30_000 })
+  const docTabs = page.locator(DOCKKIT_STRIP_TAB).filter({ hasText: '.md' })
+  await expect(docTabs, '两文档 tab 并存（multiple + 异地址各自成 tab）').toHaveCount(2)
+  await revealFeatureDocRow(page, designRel)
+  await page.locator(ovDocRowOf(designRel)).first().click()
+  await expect(page.locator(docPanelOf(projectId, designRel)).first(), '同地址重开 = reveal 既有 tab（body 切回）').toBeVisible({ timeout: 30_000 })
+  await expect(docTabs, 'reveal 不新增 tab（去重）').toHaveCount(2)
 
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
-});
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+})
 
-test('@web-e2e @m2 文档浏览·悬空容错：占位面在场 + 不崩溃不写入不删行（SC-branch）', async () => {
+testShared('@web-e2e @m2 文档浏览·悬空容错：占位面在场 + 不崩溃不写入不删行（SC-branch）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-dang-'))
-  const wsDir = join(fixtureRoot, 'ws-dang')
-  writeRepo(wsDir, { feature: 'dang-feat', techDesign: '---\ntitle: "悬空演示"\n---\n\n# 设计\n\n正文。\n' })
-  const designPath = join(wsDir, 'docs', 'features', 'dang-feat', 'design', 'tech-design.md')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-dang-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    const project = await registerProjectAt(page, {
-      workspaceDir: wsDir, name: '悬空容错演示', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
-    })
-    const projectId = project.id
-    const docRel = 'docs/features/dang-feat/design/tech-design.md'
+  const { page, pageErrors, wsDir } = sharedLaunch
+  const designPath = join(wsDir, '.forge', 'docs', 'features', 'dang-feat', 'design', 'tech-design.md')
+  const project = await registerProject(page, wsDir, '悬空容错演示')
+  const projectId = project.id
+  const docRel = 'docs/features/dang-feat/design/tech-design.md'
 
-    // 发现链建行先行（惰性首开单径——onRegistered 协作者缝在场未接线，建库归 ensureOpen
-    // 首次 forge 域触达：record 5.summary §5.2 裁决）：文件在场时触达列举读面，索引行落库
-    const beforeDelete = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
-    expect(beforeDelete.find((f) => f.slug === 'dang-feat')?.docCount, '删除前文档行已入索引（惰性首开触达）').toBe(1)
+  // 发现链建行先行（惰性首开单径——onRegistered 协作者缝在场未接线，建库归 ensureOpen
+  // 首次 forge 域触达：record 5.summary §5.2 裁决）：文件在场时触达列举读面，索引行落库
+  const beforeDelete = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
+  expect(beforeDelete.find((f) => f.slug === 'dang-feat')?.docCount, '删除前文档行已入索引（惰性首开触达）').toBe(1)
 
-    // 分支切换模拟：文件移除（索引行在场、盘上缺席）
-    rmSync(designPath)
+  // 分支切换模拟：文件移除（索引行在场、盘上缺席）
+  rmSync(designPath)
 
-    // 行稳定（悬空 ≠ 缺行）→ 打开 → 只读缺省渲染 + 悬空标注
-    await revealFeatureDocRow(page, docRel)
-    const panel = page.locator(docPanelOf(projectId, docRel)).first()
-    await page.locator(ovDocRowOf(docRel)).first().click()
-    await expect(panel, '悬空文档 tab 可开').toBeVisible({ timeout: 30_000 })
-    await expect(panel, '悬空标记在场（panel 级属性——dangling 容错锚）').toHaveAttribute('data-dswf-doc-dangling', '')
-    await expect(panel, '悬空标注文案').toContainText('文档引用悬空')
-    await expect(panel.locator(DOC_PATH_LABEL), '单行头路径保留（库内 rel_path 原值——1.6 官方 PathLabel 载体）').toBeVisible()
+  // 行稳定（悬空 ≠ 缺行）→ 打开 → 只读缺省渲染 + 悬空标注
+  await revealFeatureDocRow(page, docRel)
+  const panel = page.locator(docPanelOf(projectId, docRel)).first()
+  await page.locator(ovDocRowOf(docRel)).first().click()
+  await expect(panel, '悬空文档 tab 可开').toBeVisible({ timeout: 30_000 })
+  await expect(panel, '悬空标记在场（panel 级属性——dangling 容错锚）').toHaveAttribute('data-dswf-doc-dangling', '')
+  await expect(panel, '悬空标注文案').toContainText('文档引用悬空')
+  await expect(panel.locator(DOC_PATH_LABEL), '单行头路径保留（库内 rel_path 原值——1.6 官方 PathLabel 载体）').toBeVisible()
 
-    // 不崩溃：renderer 零未捕获异常
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-    // 不写入：文件不被重建（应用对悬空只读）
-    expect(existsSync(designPath), '悬空文件不被重建（零写入）').toBe(false)
-    // 不删行：feature 文档行仍在（读面）
-    const features = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
-    expect(features.find((f) => f.slug === 'dang-feat')?.docCount, '悬空读后文档行仍在（行稳定）').toBe(1)
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
-});
+  // 不崩溃：renderer 零未捕获异常
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+  // 不写入：文件不被重建（应用对悬空只读）
+  expect(existsSync(designPath), '悬空文件不被重建（零写入）').toBe(false)
+  // 不删行：feature 文档行仍在（读面）
+  const features = await forgeInvoke<readonly { slug: string; docCount: number }[]>(page, FEATURES_CHANNELS.list, { projectId })
+  expect(features.find((f) => f.slug === 'dang-feat')?.docCount, '悬空读后文档行仍在（行稳定）').toBe(1)
+})
 
-test('@web-e2e @m2 文档浏览·非法 mermaid 源：官方代码块兜底（异常不外溢）', async () => {
+testShared('@web-e2e @m2 文档浏览·非法 mermaid 源：官方代码块兜底（异常不外溢）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-bad-'))
-  const wsDir = join(fixtureRoot, 'ws-bad')
-  writeRepo(wsDir, {
-    feature: 'bad-feat',
-    prdSpec: `---\ntitle: "非法源演示"\n---\n\n# PRD\n\n正文段——锚文本 DOC-BAD-BODY。\n\n${BAD_BLOCK}\n`,
-  })
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-bad-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    const project = await registerProjectAt(page, {
-      workspaceDir: wsDir, name: '非法源演示', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
-    })
-    const projectId = project.id
-    const docRel = 'docs/features/bad-feat/prd/prd-spec.md'
+  const { page, pageErrors, wsDir } = sharedLaunch
+  const project = await registerProject(page, wsDir, '非法源演示')
+  const projectId = project.id
+  const docRel = 'docs/features/bad-feat/prd/prd-spec.md'
 
-    await revealFeatureDocRow(page, docRel)
-    await page.locator(ovDocRowOf(docRel)).first().click()
-    const panel = page.locator(docPanelOf(projectId, docRel)).first()
-    await expect(panel).toBeVisible({ timeout: 30_000 })
+  await revealFeatureDocRow(page, docRel)
+  await page.locator(ovDocRowOf(docRel)).first().click()
+  const panel = page.locator(docPanelOf(projectId, docRel)).first()
+  await expect(panel).toBeVisible({ timeout: 30_000 })
 
-    // 官方代码块兜底（1.8/1.9 渲染链退役——非法源 = 源码原样进官方代码块，零占位卡）
-    const badBlock = panel.locator(DOC_CODE_BLOCK).first()
-    await expect(badBlock, '非法源 → 官方代码块兜底在场').toBeVisible({ timeout: 30_000 })
-    await expect(badBlock, '源码纯文本在场（not <valid mermaid> 逐字）').toContainText('valid mermaid')
-    await expect(badBlock, '「代码」标签（官方 CodeToolbar codeLabel）').toContainText('代码')
-    await expect(badBlock.locator('button[aria-label="复制"]'), '复制钮在场').toBeVisible()
-    await expect(panel.locator(MD_MERMAID_FIGURE), '非法源零增强 figure').toHaveCount(0)
-    await expect(panel.locator('[data-dswf-doc-body]'), '异常不外溢——文档其余部分照常渲染').toContainText('DOC-BAD-BODY')
+  // 官方代码块兜底（1.8/1.9 渲染链退役——非法源 = 源码原样进官方代码块，零占位卡）
+  const badBlock = panel.locator(DOC_CODE_BLOCK).first()
+  await expect(badBlock, '非法源 → 官方代码块兜底在场').toBeVisible({ timeout: 30_000 })
+  await expect(badBlock, '源码纯文本在场（not <valid mermaid> 逐字）').toContainText('valid mermaid')
+  await expect(badBlock, '「代码」标签（官方 CodeToolbar codeLabel）').toContainText('代码')
+  await expect(badBlock.locator('button[aria-label="复制"]'), '复制钮在场').toBeVisible()
+  await expect(panel.locator(MD_MERMAID_FIGURE), '非法源零增强 figure').toHaveCount(0)
+  await expect(panel.locator('[data-dswf-doc-body]'), '异常不外溢——文档其余部分照常渲染').toContainText('DOC-BAD-BODY')
 
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
-});
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+})
 
-test('@web-e2e @m2 文档浏览·Step4 守卫面：入口在场 + 越界路径拒绝（ERR_DOC_PATH_INVALID）', async () => {
+testShared('@web-e2e @m2 文档浏览·Step4 守卫面：入口在场 + 越界路径拒绝（ERR_DOC_PATH_INVALID）', async ({ sharedLaunch }) => {
   test.setTimeout(360_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-ext-'))
-  const wsDir = join(fixtureRoot, 'ws-ext')
-  writeRepo(wsDir, { feature: 'ext-feat', techDesign: '---\ntitle: "守卫演示"\n---\n\n# 设计\n\n正文。\n' })
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-ext-ud-'))
-  const launched: Launched = await launchHost({ userData, expectPhase: 'hero' })
-  const { app, page, pageErrors } = launched
-  try {
-    const project = await registerProjectAt(page, {
-      workspaceDir: wsDir, name: '守卫演示', forgeDir: wsDir, knowledgeDir: join(wsDir, '.knowledge'),
-    })
-    const projectId = project.id
-    const docRel = 'docs/features/ext-feat/design/tech-design.md'
+  const { page, pageErrors, wsDir } = sharedLaunch
+  const project = await registerProject(page, wsDir, '守卫演示')
+  const projectId = project.id
+  const docRel = 'docs/features/ext-feat/design/tech-design.md'
 
-    // 文档 tab 开出 →「在编辑器中打开」入口在场（e2e 不真启外部编辑器——sc4 口径）
-    await revealFeatureDocRow(page, docRel)
-    await page.locator(ovDocRowOf(docRel)).first().click()
-    const panel = page.locator(docPanelOf(projectId, docRel)).first()
-    await expect(panel).toBeVisible({ timeout: 30_000 })
-    await expect(panel.locator('button[aria-label="在编辑器中打开"]'), '在编辑器中打开入口在场').toBeVisible()
+  // 文档 tab 开出 →「在编辑器中打开」入口在场（e2e 不真启外部编辑器——sc4 口径）
+  await revealFeatureDocRow(page, docRel)
+  await page.locator(ovDocRowOf(docRel)).first().click()
+  const panel = page.locator(docPanelOf(projectId, docRel)).first()
+  await expect(panel).toBeVisible({ timeout: 30_000 })
+  await expect(panel.locator('button[aria-label="在编辑器中打开"]'), '在编辑器中打开入口在场').toBeVisible()
 
-    // 守卫面（deep）：openExternal 越界路径（在册文档之外）→ 桥校验拒绝
-    const rejection = await forgeInvoke(page, DOCS_CHANNELS.openExternal, { projectId, docRel: '../../../evil.md' }).then(
-      () => 'unexpectedly-resolved',
-      (cause: unknown) => String((cause as Error)?.message ?? cause),
-    )
-    expect(rejection, '越界路径拒绝（readDoc 路径守卫——resolve 后须 startsWith canonical(forge_dir))').toMatch(/ERR_DOC_PATH_INVALID|越界|失败/)
+  // 守卫面（deep）：openExternal 越界路径（在册文档之外）→ 桥校验拒绝
+  const rejection = await forgeInvoke(page, DOCS_CHANNELS.openExternal, { projectId, docRel: '../../../evil.md' }).then(
+    () => 'unexpectedly-resolved',
+    (cause: unknown) => String((cause as Error)?.message ?? cause),
+  )
+  expect(rejection, '越界路径拒绝（readDoc 路径守卫——resolve 后须 startsWith canonical(forge_dir))').toMatch(/ERR_DOC_PATH_INVALID|越界|失败/)
 
-    expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
-  } finally {
-    await closeApp(app)
-    rmDirBestEffort(fixtureRoot)
-    rmDirBestEffort(userData)
-  }
-});
+  expect(pageErrors, `renderer 未捕获异常面须为空：${pageErrors.join(' | ')}`).toEqual([])
+})
 
+// T5 保留原形态（零项目 fresh 世界 = 被测语义——见头注适配点②）
 test('@web-e2e @m2 文档浏览·零命中项目：提案/feature 子 tab 空态（一等展示非错误）', async () => {
   test.setTimeout(300_000)
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-m2-doc-zero-'))
@@ -345,4 +327,4 @@ test('@web-e2e @m2 文档浏览·零命中项目：提案/feature 子 tab 空态
     rmDirBestEffort(fixtureRoot)
     rmDirBestEffort(userData)
   }
-});
+})
