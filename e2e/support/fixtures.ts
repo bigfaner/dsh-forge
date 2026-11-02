@@ -164,8 +164,7 @@ export class SharedLaunchSession {
     await page.keyboard.press('Escape').catch(() => undefined)
     // ①′ 添加项目模态收口（重播种级复位扩展——批次四a mode T3 picker overlay 残留拦截）：
     // 上用例遗留的官方 Modal 壳（添加项目流，回退浏览器相位）其 picker 行（.dswf-fb-item）
-    // 与遮罩恒拦截 hero chip 菜单点击——Escape（官方 Modal requestClose 缝）优先关断，
-    // 未兑现补点模态关闭钮（closeLabel「关闭」），两轮有界。
+    // 与遮罩恒拦截 hero chip 菜单点击——closeAddProjectModal 单轮收口（1.20 单轮化）。
     await this.closeAddProjectModal(page)
     // ② 概览面板隔离：继承的展开右栏 + 概览 dock → 收起基准（幂等：已收起零操作）
     if ((await page.locator(OV_PANEL).first().isVisible().catch(() => false)) === true) {
@@ -186,22 +185,20 @@ export class SharedLaunchSession {
    * 添加项目官方 Modal 壳（回退浏览器相位）其 picker 行（.dswf-fb-item）与遮罩恒拦截
    * hero chip 菜单点击（批内恒红形态；触发链定谳见 archiveLegacyProjects 保活例外注）。
    * 关断走官方 Modal 自身缝隙：Escape → requestClose（三分守卫取消点）；未兑现（弹层未消）
-   * 补点模态关闭钮（closeLabel「关闭」）。两轮有界；模态缺席零操作（幂等）。各步 fail-soft
-   * （页面瞬态不阻塞用例）。
+   * 补点模态关闭钮（closeLabel「关闭」）。单轮有界（1.20 复位链单轮化——防线性膨胀吃共享
+   * 提速红利）；模态缺席零操作（幂等）。各步 fail-soft（页面瞬态不阻塞用例）。
    */
   private async closeAddProjectModal(page: Page): Promise<void> {
     const modal = page.locator(AP_ANY).first()
-    for (let round = 0; round < 2; round++) {
-      if ((await modal.isVisible().catch(() => false)) !== true) return
-      await page.keyboard.press('Escape').catch(() => undefined)
-      const closed = await modal
-        .waitFor({ state: 'hidden', timeout: 3_000 })
-        .then(() => true)
-        .catch(() => false)
-      if (closed) return
-      await page.getByRole('button', { name: '关闭' }).first().click().catch(() => undefined)
-      await modal.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
-    }
+    if ((await modal.isVisible().catch(() => false)) !== true) return
+    await page.keyboard.press('Escape').catch(() => undefined)
+    const closed = await modal
+      .waitFor({ state: 'hidden', timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (closed) return
+    await page.getByRole('button', { name: '关闭' }).first().click().catch(() => undefined)
+    await modal.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
   }
 
   /**
@@ -318,20 +315,23 @@ export function wsSegment(wsDir: string): string {
 }
 
 /**
- * 共享 launch userData 根内定位（找到即返 / 缺席 undefined 两态）：probe 对 ud 根求值，
- * 返回非 undefined 即命中即返。跨 worker 串扰面连根消除——判读恒锚本 worker 独立持有的
- * ud 根（SharedLaunchHandle.udDir 透传），不再扫 tmp 下 dsh-forge-shared-launch-ud-*
+ * 共享 launch userData 根内定位（缺席即报错——断言式缺席消费面直用 udDir 求值）：probe
+ * 对 ud 根求值，返回非 undefined 即命中。跨 worker 串扰面连根消除——判读恒锚本 worker
+ * 独立持有的 ud 根（SharedLaunchHandle.udDir 透传），不再扫 tmp 下 dsh-forge-shared-launch-ud-*
  * 魔法前缀（段锚 mkdtemp 随机后缀本就只存在于自身根，语义等价且零串扰）。
  */
-export function findInSharedUdRoot<T>(udDir: string, probe: (udDir: string) => T | undefined): T | undefined {
-  return probe(udDir)
-}
-
-/** 同 findInSharedUdRoot，缺席即报错（报错态——断言式缺席走 findInSharedUdRoot 两态） */
 export function requireInSharedUdRoot<T>(udDir: string, probe: (udDir: string) => T | undefined, absentMessage: string): T {
-  const hit = findInSharedUdRoot(udDir, probe)
+  const hit = probe(udDir)
   if (hit === undefined) throw new Error(absentMessage)
   return hit
+}
+
+/** boot-overlay.yml 文本（boot-overlay 判读单源——spec 侧薄封装退役；缺席即报错） */
+export function sharedOverlayText(udDir: string): string {
+  return requireInSharedUdRoot(udDir, (ud) => {
+    const file = join(ud, 'boot-overlay.yml')
+    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
 }
 
 // ─── 瞬态重试 helper（共享 launch 序列态瞬态窗对策——同语义三处收编单源） ───

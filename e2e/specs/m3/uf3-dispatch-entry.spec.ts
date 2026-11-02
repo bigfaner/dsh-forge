@@ -27,7 +27,7 @@ const FEATURE = 'uf3-feat'
 const MARKER = 'UF3-JUMP-MARKER 跳转目标会话夹具消息'
 
 // e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
-// 跳转目标会话判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传）内
+// 跳转目标会话判读经支撑层单源定位（SharedLaunchHandle.udDir 透传）内
 // dsh-home：段锚 = wsDir 末段（mkdtemp 随机后缀跨 worker 唯一——共享形态会话 cwd = 共享
 // wsDir 本体，原始形态的 ws-uf3 命名段不复存在；workers=2 下他 worker 无此后缀段零串扰）。
 const { test } = createSharedLaunchFixture({

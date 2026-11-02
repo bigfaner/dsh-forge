@@ -50,10 +50,8 @@
 //
 // Assertion depth: 41/44 behavioral（93%），其中 deep 17/41（41%）——两阈均过。
 
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { createSharedLaunchFixture, requireInSharedUdRoot } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, sharedOverlayText } from '../../support/fixtures.js'
 import { expect } from '@playwright/test'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
@@ -66,13 +64,7 @@ const WS_NAME = 'ws-jbdc'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
 // 夹具工作区 = 空白目录（本 spec 无夹具档案，任务账本 slug 隔离）；boot-overlay 判读经
-// 支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）。
-function sharedOverlayText(udDir: string): string {
-  return requireInSharedUdRoot(udDir, (ud) => {
-    const file = join(ud, 'boot-overlay.yml')
-    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
-  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
-}
+// 支撑层单源 sharedOverlayText（SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）。
 
 // ── 共享 launch fixture ──
 const { test } = createSharedLaunchFixture({

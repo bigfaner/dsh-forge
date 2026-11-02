@@ -6,11 +6,11 @@
 // role button「发送消息」。
 // e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即真·非 git 目录（seedWorkspace 播种基准态）；发送落盘判读经支撑层单源定位
-//（findInSharedUdRoot + SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）内
+//（SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）内
 // dsh-home/sessions，以夹具工作区全路径段唯一锚定。
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createSharedLaunchFixture, findInSharedUdRoot } from '../support/fixtures.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -79,40 +79,38 @@ async function sendUntilLanded(page: Page, udDir: string, wsDir: string, since: 
  *  取 cwd 分组目录含夹具工作区全路径段、mtime ≥ since 的日志。 */
 function findSessionDir(udDir: string, wsDir: string, since: number): string | undefined {
   const fragment = wsDir.replaceAll('\\', '/').toLowerCase()
-  return findInSharedUdRoot(udDir, (ud) => {
-    const root = join(ud, 'dsh-home', 'sessions')
-    if (!existsSync(root)) return undefined
-    let hit: string | undefined
-    const visit = (dir: string, depth: number): void => {
-      if (hit !== undefined || depth > 6) return
-      let rows: string[] = []
+  const root = join(udDir, 'dsh-home', 'sessions')
+  if (!existsSync(root)) return undefined
+  let hit: string | undefined
+  const visit = (dir: string, depth: number): void => {
+    if (hit !== undefined || depth > 6) return
+    let rows: string[] = []
+    try {
+      rows = readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const row of rows) {
+      const full = join(dir, row)
+      let stat
       try {
-        rows = readdirSync(dir)
+        stat = statSync(full)
       } catch {
+        continue
+      }
+      if (stat.isDirectory()) {
+        visit(full, depth + 1)
+        if (hit !== undefined) return
+        continue
+      }
+      if (row.endsWith('.jsonl.zstd') && stat.mtimeMs >= since && dir.replaceAll('\\', '/').toLowerCase().includes(fragment)) {
+        hit = dir
         return
       }
-      for (const row of rows) {
-        const full = join(dir, row)
-        let stat
-        try {
-          stat = statSync(full)
-        } catch {
-          continue
-        }
-        if (stat.isDirectory()) {
-          visit(full, depth + 1)
-          if (hit !== undefined) return
-          continue
-        }
-        if (row.endsWith('.jsonl.zstd') && stat.mtimeMs >= since && dir.replaceAll('\\', '/').toLowerCase().includes(fragment)) {
-          hit = dir
-          return
-        }
-      }
     }
-    visit(root, 0)
-    return hit
-  })
+  }
+  visit(root, 0)
+  return hit
 }
 
 /** 走查截图（失败不静默——打点留痕） */

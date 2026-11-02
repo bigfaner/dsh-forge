@@ -24,7 +24,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createSharedLaunchFixture, findInSharedUdRoot, wsSegment as wsSegmentOf } from '../support/fixtures.js'
+import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../support/fixtures.js'
 import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
@@ -155,7 +155,7 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
 /** 共享 launch 形态会话开户判读：支撑层单源定位（udDir 透传——本 worker 独立持有）内
  *  dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
 function sharedFindSession(udDir: string, fixtureSegment: string): { readonly sessionId: string } | undefined {
-  return findInSharedUdRoot(udDir, (ud) => findFixtureSession(join(ud, 'dsh-home'), fixtureSegment))
+  return findFixtureSession(join(udDir, 'dsh-home'), fixtureSegment)
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */

@@ -51,12 +51,12 @@
 //
 // Assertion depth: 52/56 behavioral（93%），其中 deep 22/52（42%）——两阈均过。
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ROOT } from '../../support/launch.js'
-import { createSharedLaunchFixture, openOverviewSubtab, requireInSharedUdRoot } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, openOverviewSubtab, sharedOverlayText } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
@@ -67,14 +67,8 @@ const WS_NAME = 'ws-jefc'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
 // 夹具工作区 = 空白目录（提案 slug 隔离：jefc-golden / jefc-revise / jefc-idem 各自作用域）；
-// boot-overlay 判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传
+// boot-overlay 判读经支撑层单源 sharedOverlayText（SharedLaunchHandle.udDir 透传
 // ——魔法前缀扫描退役）。
-function sharedOverlayText(udDir: string): string {
-  return requireInSharedUdRoot(udDir, (ud) => {
-    const file = join(ud, 'boot-overlay.yml')
-    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
-  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
-}
 
 const { test } = createSharedLaunchFixture({
   seedWorkspace: () => undefined,

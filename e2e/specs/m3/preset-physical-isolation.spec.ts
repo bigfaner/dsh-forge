@@ -43,7 +43,7 @@
 // Assertion depth: 18/19 behavioral（95%），其中 deep 7/18（39%）——两阈均过。
 //
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec
-// 一次；boot-overlay 判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir
+// 一次；boot-overlay 判读经支撑层单源（SharedLaunchHandle.udDir
 // 透传——魔法前缀扫描退役；内容由三底稿每启重写，与 userData 路径无关——语义等价）。
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

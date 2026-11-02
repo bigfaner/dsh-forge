@@ -13,7 +13,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createSharedLaunchFixture, findInSharedUdRoot } from '../support/fixtures.js'
+import { createSharedLaunchFixture } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -128,36 +128,34 @@ async function snap(page: Page, name: string): Promise<void> {
  *  日志 zstd 压缩——内容不可文本扫）——支撑层单源定位（udDir 透传——本 worker 独立持有）
  *  内 dsh-home/sessions，找「含 wt-a 的 cwd 分组目录」下新产会话日志即为落树内证据。 */
 function findWorktreeSessionDir(udDir: string): string | undefined {
-  return findInSharedUdRoot(udDir, (ud) => {
-    const root = join(ud, 'dsh-home', 'sessions')
-    if (!existsSync(root)) return undefined
-    let hit: string | undefined
-    const visit = (dir: string, depth: number): void => {
-      if (hit !== undefined || depth > 6) return
-      let rows: string[] = []
-      try {
-        rows = readdirSync(dir)
-      } catch {
+  const root = join(udDir, 'dsh-home', 'sessions')
+  if (!existsSync(root)) return undefined
+  let hit: string | undefined
+  const visit = (dir: string, depth: number): void => {
+    if (hit !== undefined || depth > 6) return
+    let rows: string[] = []
+    try {
+      rows = readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const row of rows) {
+      const full = join(dir, row)
+      let stat
+      try { stat = statSync(full) } catch { continue }
+      if (stat.isDirectory()) {
+        visit(full, depth + 1)
+        if (hit !== undefined) return
+        continue
+      }
+      if (row.endsWith('.jsonl.zstd') && dir.replaceAll('\\', '/').toLowerCase().includes('wt-a')) {
+        hit = dir
         return
       }
-      for (const row of rows) {
-        const full = join(dir, row)
-        let stat
-        try { stat = statSync(full) } catch { continue }
-        if (stat.isDirectory()) {
-          visit(full, depth + 1)
-          if (hit !== undefined) return
-          continue
-        }
-        if (row.endsWith('.jsonl.zstd') && dir.replaceAll('\\', '/').toLowerCase().includes('wt-a')) {
-          hit = dir
-          return
-        }
-      }
     }
-    visit(root, 0)
-    return hit
-  })
+  }
+  visit(root, 0)
+  return hit
 }
 
 test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名单可见）+ 首条消息落树内', async ({ sharedLaunch }) => {
