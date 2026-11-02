@@ -297,6 +297,22 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 - `pnpm lint:types`（tsc -b 全量）**绿**（exit 0）。
 - 定向 vitest（`e2e/support`）：**81/81 全绿**（12 文件，fix-3 断言对齐后存量红清零）。证据：`009-reclose/vitest-support-run1.log`。
 
+## 留痕介质注记（AC1/AC3/AC4/AC8 证据承载）
+
+- 本对账表各处引用的 `logs/e2e-fast-shared-launch/**`（run 日志 / elapsed / 隔离 run 留痕）为 **worker 会话过程产物，未留盘存档**（不进 git、运行日志目录已不保留完整历史）。
+- 归因结论（存量红逐例对照、零迁移回归、冷启点与批时对账）以 **本文档在案对照表 + git 历史**（各批迁移提交与 spec 逐版本 diff）为准。
+- 复现命令（可重演）：
+
+```bash
+# 全量迁移批（49 spec / 75 用例，workers=2）
+pnpm test:e2e -- --project=desktop --workers=2 e2e/specs/
+
+# 单 spec / 单用例（执行分层口径，见 docs/conventions/testing/core.md「e2e 执行分层」）
+pnpm test:e2e -- e2e/specs/<路径>.spec.ts --grep <用例名>
+```
+
+- 基线对照法：①取迁移前形态 spec（git 历史 `e2e/specs` 各批迁移提交的父版本）为临时副本；②同参数跑基线 run；③与迁移形态 run 逐用例比对失败集——本文档各批「真机对账」节的失败集一致性即由此法得出。
+
 ## 批次范围（旧文案存档）
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。

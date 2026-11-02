@@ -29,5 +29,5 @@ declare global {
   var __ModuleLoader__: ModuleLoaderFacade | undefined
   /** bug 2ffb0a82：宿主插件装载位（shell/boot.ts bootShell 于就绪门放行前发布——
    *  单源 = boot manifest.knowledgePlugin；client 插件 apply 期同步读，缺席 = 知识面隐藏） */
-  var __DSH_FORGE_HOST_PLUGINS__: { knowledge: boolean } | undefined
+  var __DSH_FORGE_HOST_PLUGINS__: { knowledge: boolean; expertSquad: boolean } | undefined
 }

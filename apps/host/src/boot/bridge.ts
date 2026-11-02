@@ -159,6 +159,9 @@ export interface BridgeReadyMessage {
   /** bug 2ffb0a82：宿主 knowledge 插件装载位（child 按 profile 树包在场探测——与 boot
    *  overlay 注行门同源单值；可选：旧 child 缺席 = false 口径降级，不阻 ready 守卫） */
   readonly knowledgePlugin?: boolean
+  /** bug 4d55ba98：expert-squad 插件装载位（child 按 loader 实况读——!disabled = 实际装载；
+   *  可选：旧 child 缺席 = false 口径降级，不阻 ready 守卫） */
+  readonly expertSquadPlugin?: boolean
 }
 
 /** 子 → 主：boot 致命失败（main 侧 catch → app.exit(1) 消费） */
@@ -560,6 +563,8 @@ export function asReadyMessage(message: unknown): BridgeReadyMessage | undefined
     ...(m.remotePinDurable === true ? { remotePinDurable: true as const } : {}),
     // bug 2ffb0a82：knowledge 插件装载位透传（严格 === true 才携带——畸形视为缺席降级）
     ...(m.knowledgePlugin === true ? { knowledgePlugin: true as const } : {}),
+    // bug 4d55ba98：expert-squad 装载位透传（严格 === true 才携带——畸形视为缺席降级）
+    ...(m.expertSquadPlugin === true ? { expertSquadPlugin: true as const } : {}),
   }
 }
 

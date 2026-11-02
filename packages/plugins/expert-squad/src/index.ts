@@ -550,6 +550,13 @@ async function expertSquadPlugin(ctx: ExpertSquadCtx, config?: ExpertSquadPlugin
       subagents,
       panel,
       provider: "spawn",
+      // 白名单平台求交探针（bug 3cb118cf）：每派发现调 schemas() 取全局注册名，
+      // 消费点现查禁 memoize（工作区约定 §1.6）；toolsFace.schemas 缺席 → undefined
+      // → compose 侧无探针不裁剪（fail-soft 同 dsh-graph g-473 口径）。
+      knownTools: () => {
+        const schemas = toolsFace.schemas?.();
+        return schemas === undefined ? undefined : schemas.map((schema) => schema.name);
+      },
     });
     delegateAssembly = { status: "registered" };
   }

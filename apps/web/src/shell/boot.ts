@@ -107,14 +107,23 @@ export async function bootShell(products: readonly ProductClientEntry[]): Promis
     const manifest = assertBootManifestShape(await preloadBridge().getBootManifest())
     // bug 2ffb0a82：宿主插件装载位发布（页内缝——与 __DSH_FORGE_VIEWS__ 同族装配↔插件
     // 两单元缝；先于就绪门放行 = client 插件 apply 期同步可读；缺席/false = 知识面隐藏）
-    ;(globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean } }).__DSH_FORGE_HOST_PLUGINS__ = {
+    ;(globalThis as { __DSH_FORGE_HOST_PLUGINS__?: { knowledge: boolean; expertSquad: boolean } }).__DSH_FORGE_HOST_PLUGINS__ = {
       knowledge: manifest.knowledgePlugin === true,
+      // bug 4d55ba98：expert-squad 装载位（loader 行实况——缺席/false = 壳掌舵让位）
+      expertSquad: manifest.expertSquadPlugin === true,
     }
     installTransportCarrier(transportCarrierFor(manifest.url))
     // 注入行形状归 dsh（IndexInjection）；host 只运输，壳按表执行（applyIndexInjections 校验行 kind）
     await applyIndexInjections(manifest.injections as Parameters<typeof applyIndexInjections>[0], loadScriptElement)
     const wire = (globalThis as BootGlobals).__DSH_BOOT__
-    for (const product of products) {
+    // bug 4d55ba98：expert-squad 掌舵门控——host loader 行未装载（开关关）时 client 半不掌舵
+    //（所见即所得：插件页显示的状态 = 实际生效的状态；其余产品行无开关面，照常掌舵）。
+    const steerable = products.filter((productItem) => {
+      if (productItem.id !== '@dsh-forge/expert-squad' || manifest.expertSquadPlugin === true) return true
+      console.warn(`[dsh-forge web] expert-squad 装载位关（loader 行 disabled/缺席），壳掌舵让位：${productItem.id}`)
+      return false
+    })
+    for (const product of steerable) {
       const steered = typeof wire === 'object' && wire !== null
         && Array.isArray((wire as BootGraphWire).entries)
         && (wire as BootGraphWire).entries.some((row) => row.id === product.id)

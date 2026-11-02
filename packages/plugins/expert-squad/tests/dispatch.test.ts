@@ -247,6 +247,67 @@ describe("delegate_expert 负向用例", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 白名单平台求交（bug 3cb118cf：档案 tools 硬编码 pwsh，Mac 无此工具拆委派）
+// ---------------------------------------------------------------------------
+
+describe("delegate_expert 白名单求交", () => {
+  const macTools = ["read", "grep", "edit", "bash"]; // Mac 真机注册面：无 pwsh，有 bash
+
+  function makeToolWithKnownTools(
+    entry: ExpertEntry,
+    knownTools?: () => readonly string[],
+  ) {
+    const subagents = makeSubagents();
+    const tool = createDelegateExpertTool({
+      registry: makeService([entry]),
+      subagents: subagents.face,
+      panel: new ExpertRunPanelState(),
+      provider: "spawn",
+      ...(knownTools !== undefined ? { knownTools } : {}),
+    });
+    return { tool, subagents };
+  }
+
+  it("bug: 档案白名单含 pwsh 且真机未注册 pwsh 时，解析为在场的同族 shell（bash）", async () => {
+    const { tool, subagents } = makeToolWithKnownTools(
+      { ...baseEntry, tools: ["read", "pwsh"] },
+      () => macTools,
+    );
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "bash"] });
+  });
+
+  it("bug: 白名单含真机不存在的非 shell 名时 fail-soft 剔除，不炸 restrict", async () => {
+    const { tool, subagents } = makeToolWithKnownTools(
+      { ...baseEntry, tools: ["read", "grep", "no-such-tool"] },
+      () => macTools,
+    );
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "grep"] });
+  });
+
+  it("bug: 白名单解析后为空集 fail-loud（全未知 = 档案配置错误，不派发空白名单）", async () => {
+    const { tool, subagents } = makeToolWithKnownTools(
+      { ...baseEntry, tools: ["no-such-tool", "another-missing"] },
+      () => macTools,
+    );
+    await expect(
+      tool.execute({ expert: "code-reviewer", task: "t" }, makeExec()),
+    ).rejects.toThrow(/empty tool allow-list/);
+    expect(subagents.specs).toHaveLength(0);
+  });
+
+  it("无 knownTools 面（探针缺席）不裁剪——白名单原样承载（兼容非宿主调用方）", async () => {
+    const { tool, subagents } = makeToolWithKnownTools({
+      ...baseEntry,
+      tools: ["read", "pwsh"],
+    });
+    await tool.execute({ expert: "code-reviewer", task: "t" }, makeExec());
+    expect(subagents.specs[0]!.request.toolFilter).toEqual({ allow: ["read", "pwsh"] });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // subagent/end 监听：仅驱动面板状态（不进会话流）
 // ---------------------------------------------------------------------------
 

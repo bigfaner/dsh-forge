@@ -40,6 +40,25 @@ domains: [testing, conventions]
 - **产物**：trace `retain-on-failure`，输出 `e2e/test-results/`（不入 git）；冒烟台账 `e2e/SMOKE-LEDGER.md`（条件跳过项的唯一留痕处）。
 - **写测试时**：断言锚用稳定 data 属性（`data-dswf-*` / 官方 `data-dockkit-*` 等），不断视觉坐标；故障注入优先走既有夹具通道，无通道时如实映射到单测并在文件头注记。
 
+## e2e 用例价值准则
+
+- **e2e 只保留真机才有增量价值的断言用例**：行为断言（保存落盘、来源翻转、启停语义）、语义断言（交互链路、状态机流转）、写径断言（失败路径、外部依赖装配面）。
+- **纯文案 / label / 静态渲染断言类用例一律不入 e2e**，转入单元测试（unit 渲染测试已持有语义等价覆盖，真机再验文案无增量价值）。
+- **退役用例若有断言 unit 层未覆盖者，先补 unit 再退役**——覆盖不出真空。
+- **新写 e2e 用例按此准则准入**；存量用例按用例价值审计节奏迁移（审计对账表逐用例裁定去留）。
+
+## e2e 执行分层
+
+```mermaid
+flowchart LR
+    A[开发迭代期] -->|"file + --grep<br/>pnpm test:e2e -- e2e/specs/&lt;路径&gt;.spec.ts --grep &lt;用例名&gt;"| C[指定用例子集]
+    B[回归收口] -->|整个 spec run| D["e2e/specs/*.spec.ts 全量"]
+```
+
+- **开发迭代期只跑指定用例**：定位到具体 spec 文件 + `--grep` 用例名（Playwright 原生能力，无新机械）；共享 launch 下子集运行 fixture 照样只启动一次。
+- **回归收口才执行整个 `*.spec.ts`**：AC 回归与全绿取证口径 = **spec 级整跑**（整个 spec 文件 run），不以内用例子集结果充当回归证据。
+- **单例隔离硬门槛**：每个保留用例必须可 `--grep` 单跑独立通过，防共享 launch 引入用例顺序耦合。
+
 ## 执行约束
 
 - **一律 run-once，禁 `--watch`**（孤儿进程耗尽 commit 判例见 AGENTS.md §2）。
