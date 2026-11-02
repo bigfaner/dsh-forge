@@ -158,10 +158,25 @@ export interface LoopTriageFixChain {
  * 处置决策四动作枚举（S1c 三动作 + split-remainder 第四态，proposal blocked-salvage-split B；
  * 宿主忠实执行）：
  * add-fix = 宿主经 addTask 建 fix 链（blockSource 置源 blocked，fix 完成自动恢复）；
- * wait-external = 原因在其它任务源（记录等待 → 续领其它）；ask-user = 直达第三层；
+ * wait-external = 原因在其它任务源（记录等待 → 续领其它）；escalate = 上浮主会话处置
+ * （原 ask-user 改名——决策动作非工具、不预设问用户，主会话收建议后按 SOP 自行处置）；
  * split-remainder = 宿主经 addTask(blockSource:false) 建继任任务承接剩余范围——源任务保持
  * blocked 不恢复（不重头开始的结构保证；pending 继任路径在场，deadlock 判词不误报）。
  */
+/** escalate 升级载荷四节（proposal 2.2.1 上浮面——专业且充分的建议，非裸转交；各节限长
+ *  约定由 decision.ts 解析面强制：三文本节 ≤ 2000 字符、证据指针 ≤ 8 条。归类内容语义
+ *  质量不设机检——载荷完备性为结构断言） */
+export interface TriageEscalationPayload {
+  /** 问题归类（能力类别 + 判据——如可形式化形态/环境·机械形态） */
+  readonly classification?: string
+  /** 建议处置与理由（建模排查/深查/直接修复） */
+  readonly disposition?: string
+  /** 建议委派目标（描述性——派谁由主会话自行决定，配置零承担） */
+  readonly delegateTarget?: string
+  /** 证据指针（recurrence 链 bug_id、卷宗/报告路径——指针化引用，不搬运全文） */
+  readonly evidencePointers?: readonly string[]
+}
+
 export type LoopTriageDecision =
   | {
       readonly action: 'add-fix'
@@ -174,7 +189,7 @@ export type LoopTriageDecision =
       readonly note?: string
     }
   | { readonly action: 'wait-external'; readonly externalSlug: string }
-  | { readonly action: 'ask-user' }
+  | { readonly action: 'escalate'; readonly payload?: TriageEscalationPayload }
   | {
       readonly action: 'split-remainder'
       /** 继任任务标题（缺省 = `Split: <任务名>`） */
@@ -224,6 +239,8 @@ export type LoopEscalation =
         readonly reason: string
         /** 处置历史（处置阶梯逐次记录——含本次决策行） */
         readonly history: readonly string[]
+        /** escalate 升级载荷（triage 四节建议——在场即随问询 detail 上浮，缺席 = 旧无载荷形态兼容） */
+        readonly advice?: TriageEscalationPayload
       }
     | {
         readonly kind: 'worker-abort-over-limit'
@@ -1059,7 +1076,7 @@ function triageDecisionNote(decision: LoopTriageDecision): string {
   if (decision.action === 'add-fix') return `决定创建修复任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
   if (decision.action === 'wait-external') return `决定等待 ${decision.externalSlug} 先完成`
   if (decision.action === 'split-remainder') return `决定分割剩余范围为继任任务${decision.note !== undefined ? `（${decision.note}）` : ''}`
-  return '决定请求人工裁决'
+  return '决定上浮主会话处置' // escalate（含/不含 payload 同一历史行——载荷随问询 detail 全文上浮）
 }
 
 // ─────────────────────────── 改进 6 · triage 错误处理信息闭环 ───────────────────────────
@@ -2487,7 +2504,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
         // 宿主执行前置校验（拒绝 = 计处置失败并回灌，同无效输出径）
         if (candidate.action === 'add-fix' && fixChain !== undefined && fixChain.remaining < 1) {
           throw hostRejection(
-            `add-fix 被拒——fix 链余量不足（链深 ${fixChain.depth}/上限 ${fixChain.limit}，余量 ${fixChain.remaining}）；应选 split-remainder 或 ask-user`,
+            `add-fix 被拒——fix 链余量不足（链深 ${fixChain.depth}/上限 ${fixChain.limit}，余量 ${fixChain.remaining}）；应选 split-remainder 或 escalate`,
             JSON.stringify(candidate),
           )
         }
@@ -2712,11 +2729,12 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
     emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/wait-external', taskKey, taskTitle: task.title, workerSessionId, note: `等待 ${decision.externalSlug} 先完成` })
     return 'continue' // 记录等待 → 续领其它（若整源无可领，池态判词收口）
   }
-  // ask-user → ⑩ 异常径 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行）
-  emitTriageOutcome('ask-user') // 挂起动作本身即执行回执（真实终局由后续 suspension 与任务事件承载）
+  // escalate → ⑩ 异常径 + 3b 裁决⑦：挂起待裁决（处置历史已由阶梯循环记录本决策行；
+  //  escalate = 上浮主会话——升级载荷四节建议随挂起载荷上浮，缺席 = 旧无载荷形态）
+  emitTriageOutcome('escalate') // 挂起动作本身即执行回执（真实终局由后续 suspension 与任务事件承载）
   await deps.narrator.blocked(owner, 'blocked-ask-user', { sourceSlug: slug, taskLabel: label }, meta)
   recordTaskEnd(loop, taskKey, '阻塞', summarizeReason(reason, 40))
-  // ⑩ 阻塞（循环无法自行处理——处置阶梯 ask-user）
+  // ⑩ 阻塞（循环无法自行处理——处置阶梯 escalate 上浮）
   emitProgress(loop, { verb: 'settle', status: 'blocked', scenario: 'blocked/ask-user', taskKey, taskTitle: task.title, workerSessionId, note: reason })
   return suspendForVerdict(loop, {
     kind: 'blocked-ask-user',
@@ -2725,6 +2743,7 @@ async function runTriageLadder(loop: ActiveLoop, input: TriageLadderInput): Prom
     task,
     reason,
     history: [...book.history],
+    ...(decision.payload !== undefined ? { advice: decision.payload } : {}),
   })
 }
 

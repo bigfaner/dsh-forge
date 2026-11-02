@@ -1183,7 +1183,7 @@ describe('blocked 结算分支（图 C）', () => {
     }
   }
 
-  it('FAIL-2 径①：blocked 无进展结算照常进处置阶梯（noProgress 信号随输入递达；ask-user 决策挂起载处置历史）', async () => {
+  it('FAIL-2 径①：blocked 无进展结算照常进处置阶梯（noProgress 信号随输入递达；escalate 决策挂起载处置历史）', async () => {
     const seen: LoopTriageInput[] = []
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
@@ -1195,7 +1195,7 @@ describe('blocked 结算分支（图 C）', () => {
       query: [queryOfBlocked()],
       triage: async (input) => {
         seen.push(input)
-        return { action: 'ask-user' }
+        return { action: 'escalate' }
       },
     })
     blockedScript(built)
@@ -1206,7 +1206,7 @@ describe('blocked 结算分支（图 C）', () => {
     expect(seen[0]?.noProgress).toBe(true)
     expect(seen[0]?.reason).toBe('tests hang on flaky selector')
     expect(seen[0]?.settlement).toBeDefined()
-    // 宿主零 addTask（ask-user 决策不建 fix）
+    // 宿主零 addTask（escalate 决策不建 fix）
     expect(built.h.addTaskInputs).toEqual([])
     // ⑩ followup 叙述在场（唤醒主 agent 分析——blocked-ask-user 挂起族通道）
     const ask = built.calls.find((c) => c.method === 'followup')
@@ -1222,7 +1222,7 @@ describe('blocked 结算分支（图 C）', () => {
       reason: 'tests hang on flaky selector',
       history: [
         '本次结算无进展信号（无提交、无文件改动）——已纳入处置输入',
-        '第1次处置——决定请求人工裁决',
+        '第1次处置——决定上浮主会话处置',
       ],
     })
     expect(suspended.since).toEqual(expect.any(Number))
@@ -1425,7 +1425,7 @@ describe('blocked 结算分支（图 C）', () => {
         statsOf({ in_progress: 1, blocked: 1 }),
       ],
       query: [queryOf('blocked')],
-      triage: async () => ({ action: 'ask-user' }),
+      triage: async () => ({ action: 'escalate' }),
     })
     built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'blocked' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -1468,7 +1468,7 @@ describe('blocked 结算分支（图 C）', () => {
         statsOf({ in_progress: 1, blocked: 1 }),
       ],
       query: [queryOf('blocked')],
-      triage: async () => ({ action: 'ask-user' }),
+      triage: async () => ({ action: 'escalate' }),
     })
     built.h.lists.created = [card('feat-x', 'fix-1', { sourceTask: { slug: 'feat-x', localId: '2.5' }, taskStatus: 'rejected' })]
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -1613,7 +1613,7 @@ describe('blocked 结算分支（图 C）', () => {
         statsOf({ in_progress: 1, blocked: 1 }),
       ],
       query: [queryOf('blocked')],
-      triage: async () => ({ action: 'ask-user' }),
+      triage: async () => ({ action: 'escalate' }),
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
@@ -1625,7 +1625,7 @@ describe('blocked 结算分支（图 C）', () => {
       source: SOURCE,
       task: expect.objectContaining({ localId: '2.5' }),
       reason: 'tests hang on flaky selector',
-      history: ['第1次处置——决定请求人工裁决'],
+      history: ['第1次处置——决定上浮主会话处置'],
     })
     expect(built.h.claimInputs).toHaveLength(1) // 挂起停驻——零续领
     await built.driver.stop({ ownerSessionId: OWNER })
@@ -2449,7 +2449,7 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
       ],
       triage: (input) => {
         expect(input.reason).toBe(fullReason) // 处置代理输入 = reason 全文
-        return Promise.resolve({ action: 'ask-user' })
+        return Promise.resolve({ action: 'escalate' })
       },
     })
     blockedScript(built)
@@ -2462,7 +2462,7 @@ describe('S1c 第二层处置阶梯（无效/越权计处置失败 + 同任务�
       source: SOURCE,
       task: expect.objectContaining({ localId: '2.5' }),
       reason: fullReason,
-      history: ['第1次处置——决定请求人工裁决'],
+      history: ['第1次处置——决定上浮主会话处置'],
     })
     // 主会话叙述 = 摘要（首行截断）——全文零出现（decisions #24 分级呈现）
     const notice = built.calls.find((c) => c.text.includes('无法自动处理——已向你发起问询'))
@@ -2884,7 +2884,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
       triage: async (input) => {
         inputs.push(input)
         if (inputs.length <= 2) throw new TriageDecisionInvalidError('输出不含 JSON 决策（封闭四动作契约）', 'RAW-MODEL-OUTPUT-SNIPPET')
-        return { action: 'ask-user' }
+        return { action: 'escalate' }
       },
     })
     blockedScript(built)
@@ -2898,7 +2898,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
     expect(suspended.escalation.kind).toBe('blocked-ask-user')
     expect(history[0]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
     expect(history[1]).toContain('RAW-MODEL-OUTPUT-SNIPPET')
-    expect(history[2]).toContain('决定请求人工裁决')
+    expect(history[2]).toContain('决定上浮主会话处置')
     expect(built.h.claimInputs).toHaveLength(1)
     await built.driver.stop({ ownerSessionId: OWNER })
   })
@@ -3042,7 +3042,7 @@ describe('改进 6 triage 错误处理信息闭环（回灌/分流/缓存重放/
       triage: async (input) => {
         inputs.push(input)
         if (inputs.length === 1) return { action: 'add-fix', title: 'Fix: flaky selector' }
-        return { action: 'ask-user' }
+        return { action: 'escalate' }
       },
     })
     // 六节点链（2.5→fix-1→…→fix-5）：remaining = 0——add-fix 结构性被拒
@@ -3943,23 +3943,41 @@ describe('triage 两发进度事件 + 台账 decided/outcome 发射（triage-pro
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 
-  it('ask-user 挂起动作：outcome = 挂起动作本身（ask-user），decided 在执行前照发', async () => {
+  it('escalate 挂起动作：outcome = 上浮动作本身（escalate），decided 在执行前照发；升级载荷随挂起上浮', async () => {
     const built = build({
       claim: [claimed('2.5'), claimed('should-not-claim')],
       stats: BASE_STATS,
       query: [queryOfBlocked()],
-      triage: async () => ({ decision: { action: 'ask-user' }, workerSessionId: 'triage-3' }),
+      triage: async () => ({
+        decision: {
+          action: 'escalate',
+          payload: {
+            classification: '可形式化形态——竞态',
+            disposition: '建议建模排查',
+            delegateTarget: '具备形式化建模能力的专家',
+            evidencePointers: ['bug-root', 'bug-r1'],
+          },
+        },
+        workerSessionId: 'triage-3',
+      }),
     })
     blockedScript(built)
     await built.driver.start({ source: SOURCE, ownerSessionId: OWNER, parent: {} })
-    await untilSuspended(built.driver)
+    const suspended = await untilSuspended(built.driver)
     const types = built.events.filter((e) => e.type === 'triage-decided' || e.type === 'triage-outcome').map((e) => e.type)
     expect(types).toEqual(['triage-decided', 'triage-outcome'])
-    expect(built.events.find((e) => e.type === 'triage-decided')!.payload).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'ask-user', workerSessionId: 'triage-3' })
+    expect(built.events.find((e) => e.type === 'triage-decided')!.payload).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, action: 'escalate', workerSessionId: 'triage-3' })
     const outcome = built.events.find((e) => e.type === 'triage-outcome')!.payload as TriageOutcomePayload
-    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'ask-user', workerSessionId: 'triage-3' })
+    expect(outcome).toMatchObject({ taskKey: 'feat-x/2.5', attempt: 1, outcome: 'escalate', workerSessionId: 'triage-3' })
     expect(outcome.fixTaskKey).toBeUndefined()
     expect(outcome.splitTaskKey).toBeUndefined()
+    // 升级载荷四节随挂起载荷上浮（主会话拿到即可决策，无需重做背景调查）
+    expect(suspended.escalation.kind === 'blocked-ask-user' ? suspended.escalation.advice : undefined).toEqual({
+      classification: '可形式化形态——竞态',
+      disposition: '建议建模排查',
+      delegateTarget: '具备形式化建模能力的专家',
+      evidencePointers: ['bug-root', 'bug-r1'],
+    })
     await built.driver.stop({ ownerSessionId: OWNER })
   })
 })

@@ -1,7 +1,8 @@
 // S1c · 处置代理单测（run-tasks-host-command/1.5 验收面）：一次性 subagent 被 spawn（与
 // worker 同款 in-process 形态——同一 SpawnWorker 面），提示词 = 任务简报/blocked reason 全文/
-// 池快照/最近记录四件套，工具面全收窄；终态 output 产出结构化三动作决策（add-fix/
-// wait-external/ask-user 各一）；无效/越权输出 → TriageDecisionInvalidError（计处置失败）。
+// 池快照/最近记录四件套 + 两信号（loop-recurrence-hardening §2.2.1），工具面只读放开
+// （getBug/listBugs 放行、写面恒 deny）；终态 output 产出结构化四动作决策（含 escalate
+// 升级载荷）；无效/越权输出 → TriageDecisionInvalidError（计处置失败）。
 import { describe, expect, it } from 'vitest'
 import type { ForgeSettingsService, ForgeTasksService, QueryTaskResult, TaskRecordEntry, TaskSnapshot, TaskStats, TaskStatus } from '@dsh-forge/contracts'
 import { composeTriagePrompt } from './prompt.js'
@@ -139,7 +140,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
   it('spawn 面收齐：提示词四件套全在 + 工具面全收窄 + label/parent 透传', async () => {
     const built = build()
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect(built.requests).toHaveLength(1)
     const req = built.requests[0] as SpawnWorkerRequest
@@ -149,10 +150,13 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     expect(req.prompt).toContain('[AC-1] 编译通过')
     expect(req.prompt).toContain('待执行 2 · 执行中 0 · 阻塞 1 · 前置未满足 1')
     expect(req.prompt).toContain('[submit] → blocked — pnpm 安装失败')
-    // 决策权与执行权分离：零工具（已知名全 deny——含 forge 动词与 shell/fs）
-    for (const name of ['bash', 'read', 'write', 'addTask', 'submitTask', 'dispatchTask', 'queryTask']) {
+    // 决策权与执行权分离：只读放开（getBug/listBugs 在场 = 不 deny——台账深挖面）+
+    // 写面/任务域动词/shell 恒 deny（结构性不可达断言保留）
+    for (const name of ['bash', 'read', 'write', 'addTask', 'submitTask', 'recordBug', 'resolveBug', 'dispatchTask', 'queryTask']) {
       expect(req.toolFilter.deny).toContain(name)
     }
+    expect(req.toolFilter.deny).not.toContain('getBug')
+    expect(req.toolFilter.deny).not.toContain('listBugs')
     expect(req.parent).toEqual({ agentTag: 'owner-root' })
     expect(req.label).toBe('feat-x/3.2 · 处置分析')
   })
@@ -164,7 +168,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     }
     const builtFace = build()
     const doneFace = createTriageHook(builtFace.hookDeps).run(triageInput({ parent: parentWithFace }))
-    builtFace.resolve('{"action":"ask-user"}')
+    builtFace.resolve('{"action":"escalate"}')
     await doneFace
     const denyFace = (builtFace.requests[0] as SpawnWorkerRequest).toolFilter.deny!
     expect(denyFace).not.toContain('bash')
@@ -176,7 +180,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     // 兼容形态：parent 无工具面（测试桩/极简 profile）= 全表 deny（既有 loud 语义不变）
     const builtPlain = build()
     const donePlain = createTriageHook(builtPlain.hookDeps).run(triageInput())
-    builtPlain.resolve('{"action":"ask-user"}')
+    builtPlain.resolve('{"action":"escalate"}')
     await donePlain
     expect((builtPlain.requests[0] as SpawnWorkerRequest).toolFilter.deny).toContain('bash')
   })
@@ -191,8 +195,8 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     const builtB = build()
     const doneA = createTriageHook(builtA.hookDeps).run(triageInput({ ownerSessionId: 'owner-a', parent: parentA, signal: first.signal }))
     const doneB = createTriageHook(builtB.hookDeps).run(triageInput({ ownerSessionId: 'owner-b', parent: parentB, signal: second.signal }))
-    builtA.resolve('{"action":"ask-user"}')
-    builtB.resolve('{"action":"ask-user"}')
+    builtA.resolve('{"action":"escalate"}')
+    builtB.resolve('{"action":"escalate"}')
     await Promise.all([doneA, doneB])
     const reqA = builtA.requests[0] as SpawnWorkerRequest
     const reqB = builtB.requests[0] as SpawnWorkerRequest
@@ -205,7 +209,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
   it('输入现读两调（taskStats + queryTask records）——处置瞬间取数', async () => {
     const built = build()
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect(built.tasksCalls.stats).toEqual([{ projectId: 'p-1', source: { kind: 'feature', slug: 'feat-x' } }])
     expect(built.tasksCalls.query).toEqual([
@@ -233,7 +237,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
   it('forgeSettings.worker 残值静默失效 + 档案缺席：agentOptions 键不携带（回退父继承——硬切退役回归）', async () => {
     const built = build({ settings: { get: async () => ({ worker: { provider: 'p', model: 'm', reasoning: 'high' } }) } as Pick<ForgeSettingsService, 'get'> })
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect('agentOptions' in (built.requests[0] as SpawnWorkerRequest)).toBe(false)
   })
@@ -244,7 +248,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
       resolveExpertProfile: async () => ({ name: 'triage-analyst', personaMd: '档案正文。', provider: 'deepseek-official', model: 'deepseek-flash' }),
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     const req = built.requests[0] as SpawnWorkerRequest
     expect(req.agentOptions).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
@@ -257,7 +261,7 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
       resolveExpertProfile: async () => ({ name: 'triage-analyst', personaMd: '档案正文。', model: 'only-model' }),
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect('agentOptions' in (built.requests[0] as SpawnWorkerRequest)).toBe(false)
   })
@@ -280,7 +284,7 @@ describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worke
       },
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect(seenKeys).toEqual(['my-triage'])
     const req = built.requests[0] as SpawnWorkerRequest
@@ -299,7 +303,7 @@ describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worke
       },
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect(seenKeys).toEqual(['triage-analyst'])
     expect((built.requests[0] as SpawnWorkerRequest).persona).toContain('你是 triage-analyst。')
@@ -318,7 +322,7 @@ describe('persona 档案合成（专家取用缝——缺档 fail-loud 同 worke
   it('取用缝缺席 = 形态兼容：spawn 请求不携带 persona 键（非显式 undefined 覆盖）', async () => {
     const built = build()
     const done = createTriageHook(built.hookDeps).run(triageInput())
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect('persona' in (built.requests[0] as SpawnWorkerRequest)).toBe(false)
   })
@@ -345,8 +349,8 @@ describe('结构化三动作决策（封闭枚举——宿主忠实执行的解�
     })
   })
 
-  it('ask-user：无字段', () => {
-    expect(parseTriageDecision('{"action":"ask-user"}')).toEqual({ action: 'ask-user' })
+  it('escalate：无载荷（旧无载荷形态——payload 键缺席）', () => {
+    expect(parseTriageDecision('{"action":"escalate"}')).toEqual({ action: 'escalate' })
   })
 })
 
@@ -355,8 +359,7 @@ describe('无效/越权输出 → TriageDecisionInvalidError（计处置失败�
     expect(() => parseTriageDecision('我建议人工介入。')).toThrowError(TriageDecisionInvalidError)
   })
   it('越权动作（封闭三动作枚举之外）', () => {
-    expect(() => parseTriageDecision('{"action":"dispatch","slug":"x"}')).toThrowError(/越权动作/)
-  })
+    expect(() => parseTriageDecision('{"action":"dispatch","slug":"x"}')).toThrowError(/越权动作/)  })
   it('wait-external 缺 externalSlug', () => {
     expect(() => parseTriageDecision('{"action":"wait-external"}')).toThrowError(/externalSlug/)
   })
@@ -368,14 +371,14 @@ describe('无效/越权输出 → TriageDecisionInvalidError（计处置失败�
   })
   it('决策非 JSON 对象（围栏数组→对象性拒绝；裸标量→无候选拒绝）', () => {
     expect(() => parseTriageDecision('```json\n["action"]\n```')).toThrowError(/JSON 对象/)
-    expect(() => parseTriageDecision('"ask-user"')).toThrowError(/不含 JSON 决策/)
+    expect(() => parseTriageDecision('"escalate"')).toThrowError(/不含 JSON 决策/)
   })
 })
 
 describe('决策 JSON 提取（围栏/裸对象/嵌套回溯，扫描窗口有界）', () => {
   it('围栏块优先（自尾向前）', () => {
-    const raw = '```json\n{"action":"ask-user"}\n```'
-    expect(extractDecisionJson(raw)).toBe('{"action":"ask-user"}')
+    const raw = '```json\n{"action":"escalate"}\n```'
+    expect(extractDecisionJson(raw)).toBe('{"action":"escalate"}')
   })
   it('裸对象：前后散文并存，命中最后一个平衡对象', () => {
     const raw = '注意 {"not":"decision"} 之类。结论：{"action":"wait-external","externalSlug":"feature-b"}'
@@ -391,14 +394,14 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     const text = composeTriagePrompt({ task: snapshot({ taskDesc: undefined, acceptanceCriteria: undefined }), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] })
     expect(text).toContain('"add-fix"')
     expect(text).toContain('"wait-external"')
-    expect(text).toContain('"ask-user"')
+    expect(text).toContain('"escalate"')
     expect(text).toContain('"split-remainder"')
     // 分界指引（split-remainder B）：窄因→add-fix；结构性剩余→split
     expect(text).toContain('窄因可解整个源任务')
     expect(text).toContain('add-fix（源任务恢复后续跑）')
     expect(text).toContain('结构性独立范围')
     expect(text).toContain('split-remainder')
-    expect(text).toContain('{"action":"ask-user"}')
+    expect(text).toContain('{"action":"escalate"}')
     expect(text).toContain('{"action":"split-remainder"')
     expect(text).toContain('（无记录）')
     expect(text).not.toContain('undefined')
@@ -420,7 +423,7 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     expect(withChain).not.toContain('禁止选择 add-fix')
     const exhausted = composeTriagePrompt({ ...base, fixChain: { depth: 6, limit: 6, remaining: 0 } })
     expect(exhausted).toContain('禁止选择 add-fix')
-    expect(exhausted).toContain('split-remainder 或 ask-user')
+    expect(exhausted).toContain('split-remainder 或 escalate')
     expect(composeTriagePrompt(base)).not.toContain('<fix-chain>')
   })
 
@@ -437,7 +440,7 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
     const done = createTriageHook(built.hookDeps).run(
       triageInput({ lastFailure: '输出摘要 RAW', fixChain: { depth: 5, limit: 6, remaining: 1 } }),
     )
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
     expect(prompt).toContain('RAW')
@@ -447,9 +450,104 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
   it('FAIL-2 修正 钩子透传：triage 输入的 noProgress 进提示词（缺席零节）', async () => {
     const built = build()
     const done = createTriageHook(built.hookDeps).run(triageInput({ noProgress: true }))
-    built.resolve('{"action":"ask-user"}')
+    built.resolve('{"action":"escalate"}')
     await done
     expect((built.requests[0] as SpawnWorkerRequest).prompt).toContain('<no-progress>')
+  })
+})
+
+// ─────────────────────────── 两信号 + 只读工具面（loop-recurrence-hardening §2.2.1 / AC11） ───────────────────────────
+
+describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节渲染）', () => {
+  it('钩子组装两信号：blocked submit 记录归类 + 只读 face 现查链 → 提示词 <signals> 节', async () => {
+    const recordsWithClassification: TaskRecordEntry[] = [
+      ...RECORDS,
+      {
+        verb: 'submit',
+        toStatus: 'blocked',
+        reason: '又炸了',
+        blockClassification: { kind: 'same-family-recurrence', recurrenceOf: 'bug-前驱' },
+        actor: 'plugin-tool',
+        createdAt: '2026-10-11T03:00:00.000Z',
+      },
+    ]
+    const built = build({
+      tasks: {
+        taskStats: async () => statsOf(),
+        queryTask: async () => ({ ...queryOf(), records: recordsWithClassification }),
+      } as unknown as ForgeTasksService,
+      findRecurrenceCandidates: async () => [{ bugId: 'bug-b2', summary: '复发②', chain: ['bug-root', 'bug-b1', 'bug-b2'] }],
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"escalate"}')
+    await done
+    const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
+    expect(prompt).toContain('<signals>')
+    expect(prompt).toContain('阻塞归类: same-family-recurrence（自报前驱 bug-前驱）')
+    expect(prompt).toContain('台账 recurrence 链: bug-root → bug-b1 → bug-b2（同缝计数 2）')
+    // 防盲试条款（程序径——同缝 ≥ 2 渲染禁 add-fix 指引）
+    expect(prompt).toContain('禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）；请选择 escalate 上浮排查')
+  })
+
+  it('同缝 < 2：链信号在场但零禁 add-fix 指引', async () => {
+    const built = build({
+      findRecurrenceCandidates: async () => [{ bugId: 'bug-b1', summary: '复发①', chain: ['bug-root', 'bug-b1'] }],
+    })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"escalate"}')
+    await done
+    const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
+    expect(prompt).toContain('<signals>')
+    expect(prompt).not.toContain('禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）')
+  })
+
+  it('face 缺席/故障 fail-soft：信号退化，提示词照常组装（零 <signals> 节）', async () => {
+    const builtAbsent = build()
+    const doneAbsent = createTriageHook(builtAbsent.hookDeps).run(triageInput())
+    builtAbsent.resolve('{"action":"escalate"}')
+    await doneAbsent
+    expect((builtAbsent.requests[0] as SpawnWorkerRequest).prompt).not.toContain('<signals>')
+    const builtFailing = build({
+      findRecurrenceCandidates: () => {
+        throw new Error('ledger down')
+      },
+    })
+    const doneFailing = createTriageHook(builtFailing.hookDeps).run(triageInput())
+    builtFailing.resolve('{"action":"escalate"}')
+    await doneFailing
+    expect((builtFailing.requests[0] as SpawnWorkerRequest).prompt).not.toContain('<signals>')
+  })
+
+  it('纯函数面：signals 渲染 + 防盲试 SOP 条款 + 台账查询指引恒在', () => {
+    const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
+    const withSignals = composeTriagePrompt({
+      ...base,
+      signals: { classification: { kind: 'new-problem' }, recurrence: { chain: ['a', 'b', 'c'], count: 2 } },
+    })
+    expect(withSignals).toContain('阻塞归类: new-problem')
+    expect(withSignals).toContain('台账 recurrence 链: a → b → c（同缝计数 2）')
+    const plain = composeTriagePrompt(base)
+    // 台账查询指引与防盲试 SOP 条款恒在（不随 signals 缺席退化）
+    for (const text of [withSignals, plain]) {
+      expect(text).toContain('<ledger-tools>')
+      expect(text).toContain('getBug(bug_id)')
+      expect(text).toContain('listBugs(search/status/sort/offset/limit)')
+      expect(text).toContain('防盲试条款')
+      expect(text).toContain('自判为可形式化形态')
+      // 「你没有任何工具」事实性矛盾断言清除
+      expect(text).not.toContain('你没有任何工具')
+    }
+    expect(plain).not.toContain('<signals>')
+  })
+
+  it('提示词升级载荷四节指引 + escalate 语义标注（上浮主会话非问用户）', () => {
+    const text = composeTriagePrompt({ task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] })
+    expect(text).toContain('"escalate" —— 上浮主会话处置')
+    expect(text).toContain('不是问用户的工具')
+    expect(text).toContain('classification')
+    expect(text).toContain('disposition')
+    expect(text).toContain('delegateTarget')
+    expect(text).toContain('evidencePointers')
   })
 })
 

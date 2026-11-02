@@ -255,12 +255,12 @@ function makeReplayPlan(ws: string): ReplayPlan {
       },
       // ③ 1.3 blocked → triage 阶梯处置代理回放（fix-4 语义：blocked 恒入阶梯；fix-7：
       //    真实 spawn 经同一缝——独立键「 · 处置分析」，零动作 + output 承载决策）。
-      //    决策 = ask-user：与原无进展硬停挂起同终态——挂起投影后处置仍走 harness 代理
+      //    决策 = escalate：与原无进展硬停挂起同终态——挂起投影后处置仍走 harness 代理
       //    addTask 建 fix-1 → /stop-dag-tasks 收口（走查中段流程零漂移）。
       {
         taskKey: `${FEATURE}/1.3 · 处置分析`, occurrence: 1, behavior: 'script',
         actions: [],
-        output: '1.3 受阻成因明确（工件缺席、可机械修复），交由处置层按 fix 链协议派生修复任务。\n{"action":"ask-user"}',
+        output: '1.3 受阻成因明确（工件缺席、可机械修复），交由处置层按 fix 链协议派生修复任务。\n{"action":"escalate"}',
       },
       // ③ fix-1 修复完成
       {

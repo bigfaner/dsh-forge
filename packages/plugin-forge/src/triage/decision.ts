@@ -1,8 +1,11 @@
 // triage · 结构化决策解析（S1c 第二层——处置代理输出契约的宿主侧收口）。
-// 输出契约（封闭四动作枚举，proposal blocked-salvage-split B——split-remainder 为第四态）：
+// 输出契约（封闭四动作枚举，proposal blocked-salvage-split B——split-remainder 为第四态；
+// escalate = 上浮主会话，loop-recurrence-hardening §2.2.1——原 ask-user 改名，语义为上浮
+// 非工具、不预设问用户；可选升级载荷四节向后兼容旧无载荷形态）：
 //   {"action":"add-fix","title":"...","type":"coding-fix","taskDesc":"...","note":"..."}
 //   {"action":"wait-external","externalSlug":"..."}
-//   {"action":"ask-user"}
+//   {"action":"escalate"}
+//   {"action":"escalate","classification":"...","disposition":"...","delegateTarget":"...","evidencePointers":[...]}
 //   {"action":"split-remainder","title":"...","type":"...","taskDesc":"...","note":"..."}
 // 解析纪律（decisions #8/#16/R2）：无效输出（非 JSON/结构错/字段型错）与越权输出（action
 // 越出封闭枚举）一律抛 TriageDecisionInvalidError——宿主计一次处置失败入重试上限，绝不
@@ -24,6 +27,12 @@ export class TriageDecisionInvalidError extends Error {
 
 /** 尾部截取窗口（决策行约定为输出末尾的 JSON 对象——扫描窗口有界防超长输出拖垮解析） */
 const TAIL_WINDOW = 4000
+
+/** escalate 升级载荷各文本节限长（提案 2.2.1 限长约定——指针化引用不搬运全文，超限即无效） */
+export const TRIAGE_ESCALATION_SECTION_MAX = 2000
+
+/** escalate 升级载荷证据指针条数上限（指针化纪律——数组刷量即无效） */
+export const TRIAGE_ESCALATION_POINTER_MAX = 8
 
 /** 平衡对象回溯尝试上限（防病态输出） */
 const MAX_CANDIDATES = 64
@@ -73,12 +82,53 @@ function optionalTaskType(record: Record<string, unknown>, action: string): Task
   return value as TaskType
 }
 
+/** escalate 载荷文本节（在场必须限内字符串——型错/超限即无效，不静默截断） */
+function escalationSection(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') throw new TriageDecisionInvalidError(`escalate.${key} 须为字符串`, JSON.stringify(record))
+  if (value.length > TRIAGE_ESCALATION_SECTION_MAX) {
+    throw new TriageDecisionInvalidError(
+      `escalate.${key} 超限（${value.length} > ${TRIAGE_ESCALATION_SECTION_MAX} 字符）——升级载荷须指针化引用，不整段搬运`,
+      JSON.stringify(record),
+    )
+  }
+  return value
+}
+
+/** escalate 载荷证据指针节（字符串数组，条数 ≤ 上限、逐条限长——指针化纪律） */
+function escalationPointers(record: Record<string, unknown>): readonly string[] | undefined {
+  const value = record.evidencePointers
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
+    throw new TriageDecisionInvalidError('escalate.evidencePointers 须为字符串数组', JSON.stringify(record))
+  }
+  const pointers = value as string[]
+  if (pointers.length > TRIAGE_ESCALATION_POINTER_MAX) {
+    throw new TriageDecisionInvalidError(
+      `escalate.evidencePointers 超限（${pointers.length} > ${TRIAGE_ESCALATION_POINTER_MAX} 条）`,
+      JSON.stringify(record),
+    )
+  }
+  for (const pointer of pointers) {
+    if (pointer.length > TRIAGE_ESCALATION_SECTION_MAX) {
+      throw new TriageDecisionInvalidError(
+        `escalate.evidencePointers 单条超限（> ${TRIAGE_ESCALATION_SECTION_MAX} 字符）`,
+        JSON.stringify(record),
+      )
+    }
+  }
+  return pointers
+}
+
 /**
  * 决策解析（triage 代理终态 output → 封闭四动作决策）：
  * - add-fix：宿主经 addTask 建 fix 链（title/type/taskDesc/note 全可选——缺省由宿主补，
  *   blockSource 挂接归宿主定，模型只定内容参数）；
  * - wait-external：externalSlug 必带非空（外部任务源键——记录等待续领其它）；
- * - ask-user：无字段（直达第三层人工裁决）；
+ * - escalate：上浮主会话（原 ask-user 改名——上浮非问询）；可选升级载荷四节
+ *   （classification/disposition/delegateTarget 文本各 ≤ 限长 + evidencePointers 指针数组），
+ *   旧无载荷形态解析零回归（载荷全缺省 = 纯动作）；
  * - split-remainder：宿主经 addTask(blockSource:false) 建继任任务承接剩余范围（字段形同
  *   add-fix——校验同款；源任务保持 blocked 不恢复）。
  * 越权动作（枚举外）/结构错/字段型错 → TriageDecisionInvalidError（计处置失败）。
@@ -132,11 +182,28 @@ export function parseTriageDecision(raw: string): LoopTriageDecision {
       }
       return { action: 'wait-external', externalSlug: externalSlug.trim() }
     }
-    case 'ask-user':
-      return { action: 'ask-user' }
+    case 'escalate': {
+      const classification = escalationSection(record, 'classification')
+      const disposition = escalationSection(record, 'disposition')
+      const delegateTarget = escalationSection(record, 'delegateTarget')
+      const evidencePointers = escalationPointers(record)
+      return {
+        action: 'escalate',
+        ...(classification !== undefined || disposition !== undefined || delegateTarget !== undefined || evidencePointers !== undefined
+          ? {
+              payload: {
+                ...(classification !== undefined ? { classification } : {}),
+                ...(disposition !== undefined ? { disposition } : {}),
+                ...(delegateTarget !== undefined ? { delegateTarget } : {}),
+                ...(evidencePointers !== undefined ? { evidencePointers } : {}),
+              },
+            }
+          : {}),
+      }
+    }
     default:
       throw new TriageDecisionInvalidError(
-        `越权动作——${String(record.action)}（封闭四动作枚举 add-fix/wait-external/ask-user/split-remainder 之外）`,
+        `越权动作——${String(record.action)}（封闭四动作枚举 add-fix/wait-external/escalate/split-remainder 之外）`,
         jsonText,
       )
   }

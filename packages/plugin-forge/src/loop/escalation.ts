@@ -172,6 +172,20 @@ function historyBlock(history: readonly string[]): readonly string[] {
   return history.length > 0 ? ['', '处理历史：', ...history.map((line) => `- ${line}`)] : []
 }
 
+/** escalate 升级载荷块（问询 detail 段——triage 四节建议全文上浮，缺席节略） */
+function adviceBlock(advice: NonNullable<Extract<LoopEscalation, { kind: 'blocked-ask-user' }>['advice']>): readonly string[] {
+  return [
+    '',
+    '处置分析建议（triage 升级载荷）：',
+    ...(advice.classification !== undefined ? [`- 问题归类: ${advice.classification}`] : []),
+    ...(advice.disposition !== undefined ? [`- 建议处置: ${advice.disposition}`] : []),
+    ...(advice.delegateTarget !== undefined ? [`- 建议委派目标: ${advice.delegateTarget}`] : []),
+    ...(advice.evidencePointers !== undefined && advice.evidencePointers.length > 0
+      ? [`- 证据指针: ${advice.evidencePointers.join('；')}`]
+      : []),
+  ]
+}
+
 /**
  * 升级事件 → 问询材料（纯函数——每类升级事件的 question/detail 组装；detail 恒含 reason
  * 原文与处置历史（在场者），裁决问询 = 分级呈现第三档全文档）。
@@ -193,6 +207,7 @@ export function renderEscalationAsk(escalation: LoopEscalation): EscalationAskMa
           '阻塞原因（全文）：',
           escalation.reason,
           ...historyBlock(escalation.history),
+          ...(!capped && escalation.advice !== undefined ? adviceBlock(escalation.advice) : []),
         ].join('\n'),
         options: ESCALATION_OPTIONS,
       }

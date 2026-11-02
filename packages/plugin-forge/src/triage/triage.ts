@@ -3,25 +3,33 @@
 // #16/#23：同进程、同一 SpawnWorker 真绑定、agentOptions 继承链一致），输入 = 任务简报/
 // blocked reason 全文/池快照/最近记录四件套，终态 output 经结构化决策解析交还宿主忠实执行。
 //
-// 决策权与执行权分离：处置代理零工具（deriveTriageToolFilter 全收窄——越权动作结构性
-// 不可达），只能以终态文本产出一行 JSON 决策；解析失败/越权动作 → TriageDecisionInvalidError
-// （宿主计处置失败入重试上限——R2 模型失误爆炸半径有界）。
+// 决策权与执行权分离：处置代理只持只读台账两工具（deriveTriageToolFilter——getBug/listBugs
+// 只读放开供台账深挖，loop-recurrence-hardening §2.2.1；缺陷写面/任务写面/shell/fs 恒 deny
+// ——越权动作结构性不可达），只能以终态文本产出一行 JSON 决策；解析失败/越权动作 →
+// TriageDecisionInvalidError（宿主计处置失败入重试上限——R2 模型失误爆炸半径有界）。
 //
 // 依赖方向：triage → loop（钩子接口/决策类型）/ dispatch-core（spawn 契约与组装面）/
 // contracts 单向；驱动器不 import 本面（装配方注入 deps.triage——可拆卸，缺席 = 仅落盘续领）。
-import type { ForgeSettingsService, ForgeTasksService, TaskRecordEntry } from '@dsh-forge/contracts'
+import type {
+  ForgeSettingsService,
+  ForgeTasksService,
+  TaskBlockClassification,
+  TaskRecordEntry,
+} from '@dsh-forge/contracts'
 import {
   deriveTriageToolFilter,
   poolOf,
   reconcileWorkerReasoning,
+  recurrenceCountOf,
   workerAgentOptionsOf,
 } from '../dispatch-core/index.js'
-import type { PoolSnapshot, SpawnWorker } from '../dispatch-core/index.js'
+import type { PoolSnapshot, SameSeamRecurrenceFace, SpawnWorker } from '../dispatch-core/index.js'
 import type { LoopTriageDecisionResult, LoopTriageHook, LoopTriageInput } from '../loop/index.js'
 import { TRIAGE_EXPERT_KEY } from '../loop/index.js'
 import type { ExpertProfileResolver, ForgeExpertProfile } from '../faces.js'
 import { parseTriageDecision } from './decision.js'
 import { composeTriagePrompt } from './prompt.js'
+import type { TriageRecurrenceSignal, TriageSignals } from './prompt.js'
 
 /** 档案人格段（与 core claim 链 renderExpertProfileSection 同构——身份头 + personaMd 正文；
  *  本包不依赖 core 包（类型出自 contracts），组装面就地同形承载，persona 单源纪律不变） */
@@ -75,6 +83,9 @@ export interface TriageHookDeps {
   /** 专家档案取用缝（可选——expert-squad-forge-2 纳入 2：triage persona 档案合成；
    *  缺席 = 形态兼容不携带 persona，与 worker 取用面降级同径） */
   readonly resolveExpertProfile?: ExpertProfileResolver
+  /** 台账 recurrence 候选只读检索面（loop-recurrence-hardening §2.2.1 两信号之一——结构兼容
+   *  claim 守卫 T3 注入形；缺席/故障 = 信号退化，fail-soft 不阻处置主链） */
+  readonly findRecurrenceCandidates?: SameSeamRecurrenceFace
 }
 
 /**
@@ -97,8 +108,33 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
       ])
       const pool: PoolSnapshot = poolOf(stats)
       const records: readonly TaskRecordEntry[] = detail.records ?? []
-      // ② 类型化提示词（任务简报 + reason 全文 + 池快照 + 最近记录 + 改进 6 增补件：
-      //    上次失败回灌摘要 / fix 链深余量——输入面在场才注入，缺席 = 退化现状提示词）
+      // ② 两信号（loop-recurrence-hardening §2.2.1——程序面现读结构化事实，语义判断留 agent）：
+      //    blocked 归类 = 最近 blocked submit 记录的结构化键；recurrence 链 = 只读 face 现查
+      //    （fail-soft 同 claim 守卫——数据源不洁不阻断处置主链）。
+      const classification: TaskBlockClassification | undefined = [...records]
+        .reverse()
+        .find((entry) => entry.verb === 'submit' && entry.toStatus === 'blocked' && entry.blockClassification !== undefined)
+        ?.blockClassification
+      let recurrence: TriageRecurrenceSignal | undefined
+      if (deps.findRecurrenceCandidates !== undefined) {
+        try {
+          const candidates = await deps.findRecurrenceCandidates(input.projectId, {
+            slug: input.task.slug,
+            localId: input.task.localId,
+            files: [],
+          })
+          if (candidates.length > 0) {
+            const top = candidates.reduce((a, b) => (recurrenceCountOf(b.chain) > recurrenceCountOf(a.chain) ? b : a))
+            recurrence = { chain: top.chain, count: recurrenceCountOf(top.chain) }
+          }
+        } catch {
+          // fail-soft：台账读故障降级——两信号缺席，提示词照常组装
+        }
+      }
+      const signals: TriageSignals | undefined =
+        classification !== undefined || recurrence !== undefined ? { ...(classification !== undefined ? { classification } : {}), ...(recurrence !== undefined ? { recurrence } : {}) } : undefined
+      // ③ 类型化提示词（任务简报 + reason 全文 + 池快照 + 最近记录 + 改进 6 增补件 +
+      //    两信号：输入面在场才注入，缺席 = 退化现状提示词）
       const prompt = composeTriagePrompt({
         task: input.task,
         reason: input.reason,
@@ -107,6 +143,7 @@ export function createTriageHook(deps: TriageHookDeps): LoopTriageHook {
         ...(input.lastFailure !== undefined ? { lastFailure: input.lastFailure } : {}),
         ...(input.fixChain !== undefined ? { fixChain: input.fixChain } : {}),
         ...(input.noProgress === true ? { noProgress: true } : {}),
+        ...(signals !== undefined ? { signals } : {}),
       })
       // ③ in-process spawn（与 worker 同款形态；agentOptions 继承链一致；parent/signal =
       //    每循环身份载体——输入面逐调用绑定，装配期烘焙无效）

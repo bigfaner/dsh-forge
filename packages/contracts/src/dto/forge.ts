@@ -209,6 +209,8 @@ export interface TaskRecordFields {
   runtimeSurface?: string[]
   /** 真机取证证据声明（机械⑤证据路径——与 evidenceDebt 二选一） */
   runtimeEvidence?: TaskRuntimeEvidence
+  /** blocked 根因归类（T2——record_fields_json 解码形；旧行键缺席；triage 信号注入读面） */
+  blockClassification?: TaskBlockClassification
 }
 
 /**
@@ -324,6 +326,8 @@ export interface TaskRecordEntry {
   runtimeSurface?: string[]
   /** 真机取证证据声明（机械⑤证据路径——record_fields_json 解码形；旧行键缺席） */
   runtimeEvidence?: TaskRuntimeEvidence
+  /** blocked 根因归类（T2——record_fields_json 解码形；旧行键缺席；triage 信号注入读面） */
+  blockClassification?: TaskBlockClassification
   /** claim 简报指纹 sha-256 前 12 hex（全文 = dsh 子会话日志，§6-11） */
   digest?: string
   actor: TaskActor
@@ -1337,8 +1341,9 @@ export interface NoReadyTaskPayload {
   contextSlug?: string
 }
 
-/** triage 决策封闭四动作（triage/decision.ts 解析器值域同源——越权动作在解析期拒） */
-export type TriageDecisionAction = 'add-fix' | 'wait-external' | 'ask-user' | 'split-remainder'
+/** triage 决策封闭四动作（triage/decision.ts 解析器值域同源——越权动作在解析期拒；
+ *  escalate = 上浮主会话（原 ask-user 改名——语义为上浮，非工具、不预设问用户）） */
+export type TriageDecisionAction = 'add-fix' | 'wait-external' | 'escalate' | 'split-remainder'
 
 /** triage-decided 载荷（triage-progress-row 处置台账——新决策产出点，执行前） */
 export interface TriageDecidedPayload {
@@ -1364,7 +1369,7 @@ export interface TriageDecidedPayload {
 export interface TriageOutcomePayload {
   taskKey: string
   attempt: number
-  /** 执行结果（封闭四动作落地 + 失败径——ask-user/wait-external 的 outcome = 挂起/记录等待动作本身） */
+  /** 执行结果（封闭四动作落地 + 失败径——escalate/wait-external 的 outcome = 上浮/记录等待动作本身） */
   outcome: TriageDecisionAction | 'failed'
   /**
    * 决策缓存重放标记（重放径不发 triage-decided、仅发 outcome——缺席 = 非重放，本次执行有

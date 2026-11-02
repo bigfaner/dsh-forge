@@ -217,14 +217,14 @@ describe('回放计划 · triage 处置代理 spawn（expert-squad-forge-2/fix-1
       entries: [
         { taskKey: 'f/1.3', occurrence: 1, behavior: 'script', actions: [{ kind: 'tool', name: 'submitTask', args: { result: 'blocked' } }] },
         { taskKey: 'f/1.3', occurrence: 2, behavior: 'script', actions: [{ kind: 'tool', name: 'submitTask', args: { result: 'success' } }] },
-        { taskKey: 'f/1.3 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '分析略。\n{"action":"ask-user"}' },
+        { taskKey: 'f/1.3 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '分析略。\n{"action":"escalate"}' },
       ],
     }
     const spawn = createPlanReplaySpawn(plan, noopRunner)
     const h1 = await spawn(requestOf('f/1.3 · 一轮结算'))
     await expect(h1.result).resolves.toMatchObject({ stopReason: 'completed' })
     const triage = await spawn(requestOf('f/1.3 · 处置分析'))
-    await expect(triage.result).resolves.toMatchObject({ stopReason: 'completed', output: '分析略。\n{"action":"ask-user"}' })
+    await expect(triage.result).resolves.toMatchObject({ stopReason: 'completed', output: '分析略。\n{"action":"escalate"}' })
     // worker 二轮不受 triage 键污染——occurrence 2 仍按 worker 序命中
     const h2 = await spawn(requestOf('f/1.3 · 二轮'))
     await expect(h2.result).resolves.toMatchObject({ stopReason: 'completed' })
@@ -246,7 +246,7 @@ describe('回放计划 · triage 处置代理 spawn（expert-squad-forge-2/fix-1
         JSON.stringify({
           version: 1,
           workspaceDir: 'w',
-          entries: [{ taskKey: 'f/1 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '{"action":"ask-user"}' }],
+          entries: [{ taskKey: 'f/1 · 处置分析', occurrence: 1, behavior: 'script', actions: [], output: '{"action":"escalate"}' }],
         }),
         'utf8',
       )

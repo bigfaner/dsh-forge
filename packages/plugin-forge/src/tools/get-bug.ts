@@ -89,7 +89,7 @@ export function createGetBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
   return {
     name: TOOL,
     description:
-      'Fetch one bug by bug_id: the full BugCard plus its recurrence-chain context (when the bug sits on a chain — chronological entries, this bug position, chain length, root bug_id). Available to main agent and workers: coding-fix workers use it for deep chain inspection before recordBug (to pick the correct recurrenceOf predecessor) and to read prior fix approaches. Unknown bug_id is rejected server-side.',
+      'Fetch one bug by bug_id: the full BugCard plus its recurrence-chain context (when the bug sits on a chain — chronological entries, this bug position, chain length, root bug_id). Available to main agent, coding-fix workers, and the read-only triage agent (ledger deep-dive face): coding-fix workers use it for deep chain inspection before recordBug (to pick the correct recurrenceOf predecessor) and to read prior fix approaches. Unknown bug_id is rejected server-side.',
     parameters: {
       type: 'object',
       properties: {
