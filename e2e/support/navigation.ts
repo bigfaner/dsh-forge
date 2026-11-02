@@ -7,7 +7,7 @@
 import { expect, type Page } from '@playwright/test'
 import { homedir } from 'node:os'
 import { isAbsolute, relative, resolve } from 'node:path'
-import { DOCKKIT_STRIP_TAB, OV_PANEL, RIGHTBAR_COLLAPSED, RIGHTBAR_COL } from './anchors.js'
+import { DOCKKIT_STRIP_TAB, OV_PANEL, RIGHTBAR_COLLAPSED, RIGHTBAR_COL, SIDEBAR_COLLAPSE_BUTTON } from './anchors.js'
 
 /**
  * 回退浏览器起始根（host listDir 缺省 = os.homedir() 的 spec 侧镜像）。
@@ -94,6 +94,10 @@ export async function ensureOfficialSessionBound(page: Page): Promise<boolean> {
  */
 export async function revealRightbar(page: Page): Promise<void> {
   if ((await page.locator(RIGHTBAR_COL).first().isVisible().catch(() => false)) === true) return
+  // fix-1 初始态漂移适配（m3 存量红同签名：dogfood-sc-m3-replay.spec 首次 openOverviewDock
+  // 30s 等休眠展开钮超时，快照实证工作台已就绪但右栏非休眠态）：「收起侧边栏」在场即视为
+  // 右栏已展开——直接返回，不再强断言休眠展开钮（修正休眠前置假设，dormant 并非唯一初态）。
+  if ((await page.locator(SIDEBAR_COLLAPSE_BUTTON).first().isVisible().catch(() => false)) === true) return
   await page
     .waitForFunction(
       () => document.querySelector('[data-dswf-workbench]')?.getAttribute('data-dswf-phase') === 'session',
