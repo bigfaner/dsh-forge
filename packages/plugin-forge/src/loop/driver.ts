@@ -389,7 +389,8 @@ export function flywheelMetricsOf(rows: readonly LoopCheckpointRowLite[], thresh
 /**
  * 收口复盘与知识沉淀指示（bug 4186a70c——机械③指示面：no-task done settle 文本追加段）：
  * 不派生任务卡（任务卡径先于交叉评审执行致时序倒挂），由主 agent 在交叉评审与结论处理完成后
- * 直接执行——顺序：评审 → 复盘 → 沉淀。注入飞轮硬指标计算值与越阈判定规则（阈值取机械⑦
+ * 直接执行——顺序：评审 → 复盘 → 沉淀，且段内带顺序硬门（复盘三项全部完成后才进入知识沉淀，
+ * 知识沉淀完成后才落收口标记）。注入飞轮硬指标计算值与越阈判定规则（阈值取机械⑦
  * settings 键）、多 agent 交叉核验要求、learn 技能调用要求与 retro-done 收口标记要求；
  * 越阈时硬门要求已注册改进提案。纯函数（指标由 rows 直算），零状态。
  */
@@ -398,26 +399,26 @@ export function renderRetroInstruction(slug: string, rows: readonly LoopCheckpoi
   const pct = (x: number): string => `${(x * 100).toFixed(1)}%`
   return [
     '【复盘与知识沉淀指示】（交叉评审与结论处理完成后执行——不派生任务卡，由你直接完成；评审发现的判例/翻车点须进入本次沉淀）',
+    '执行顺序硬门：「一、复盘」三项全部完成后，方可进行「二、知识沉淀」；知识沉淀完成后，方可落「三、收口标记」——不得跳步、不得并行。',
     '',
-    '一、复盘（飞轮硬指标——检查点标记快照直算）：',
-    `- 一次通过率：${m.passRate === 1 ? '1（尚无 merged 帧，基线即当前）' : pct(m.passRate)}`,
-    `- 返工增量比：${pct(m.reworkRatio)}`,
-    `- 修正波次：${String(m.waveCount)}（越阈判定：≥ 阈值即越阈；阈值 = settings flywheel.reviewWaveThreshold，` +
-      `缺席默认值 ${String(FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT)}）`,
-    `- fix 密度：${pct(m.fixDensity)}`,
-    '- 多 agent 交叉核验：各 agent 独立提取本特性验收经验/判例/翻车点，交叉比对后取共识入沉淀，' +
+    '一、复盘（三项依次完成，全部完成后才进入下一步）：',
+    `1. 飞轮硬指标解读（检查点标记快照直算）：一次通过率 ${m.passRate === 1 ? '1（尚无 merged 帧，基线即当前）' : pct(m.passRate)}；` +
+      `返工增量比 ${pct(m.reworkRatio)}；修正波次 ${String(m.waveCount)}；fix 密度 ${pct(m.fixDensity)}。`,
+    `2. 越阈判定与处置（阈值 = settings flywheel.reviewWaveThreshold，缺席默认值 ${String(FLYWHEEL_REVIEW_WAVE_THRESHOLD_DEFAULT)}）：` +
+      (m.overThreshold
+        ? `当前修正波次 ${String(m.waveCount)} ≥ ${String(threshold)} → 已越阈——硬门：${RETRO_PROPOSAL_GATE}。`
+        : `当前修正波次 ${String(m.waveCount)} < ${String(threshold)} → 未越阈——无注册硬门，仍须完成复盘。`),
+    '3. 多 agent 交叉核验：各 agent 独立提取本特性验收经验/判例/翻车点，交叉比对后取共识入沉淀，' +
       '分歧记录待裁决——单视角结论不直接入库。',
-    m.overThreshold
-      ? `- 当前判定：修正波次 ${String(m.waveCount)} ≥ ${String(threshold)} → 已越阈——硬门：${RETRO_PROPOSAL_GATE}。`
-      : `- 当前判定：修正波次 ${String(m.waveCount)} < ${String(threshold)} → 未越阈——无注册硬门，仍须完成复盘沉淀。`,
     '',
-    '二、知识沉淀：',
+    '二、知识沉淀（复盘三项全部完成后执行）：',
     '- 三类沉淀（conventions/lessons/examples）全量经 learn 技能提取，落 .knowledge/ 对应目录' +
-      '（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）。',
+      '（markdown 同构字段 title/summary/keywords/domainPath + 溯源字段：来源容器 slug / 来源任务 / bug id）；' +
+      '交叉核验取到的共识为沉淀输入。',
     '- 提炼态 conventions 晋升 docs/conventions 正本仍走提案管线裁决，不直改技能检查项。',
     '',
-    '三、收口标记：',
-    `- 复盘完成后用 recordImplCheckpoint 为 ${slug} 落 retro-done 标记` +
+    '三、收口标记（知识沉淀完成后执行）：',
+    `- 用 recordImplCheckpoint 为 ${slug} 落 retro-done 标记` +
       '（base_commit_hash = 容器分支 HEAD；merged lazy 兜底判据依赖该标记）。',
   ].join('\n')
 }

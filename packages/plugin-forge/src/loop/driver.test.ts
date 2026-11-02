@@ -846,6 +846,9 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(settle.text).toContain('【代码评审指示】')
     expect(settle.text).toContain('【复盘与知识沉淀指示】')
     expect(settle.text).toContain('交叉评审与结论处理完成后执行')
+    expect(settle.text).toContain('执行顺序硬门')
+    expect(settle.text).toContain('不得跳步、不得并行')
+    expect(settle.text).toContain('复盘三项全部完成后执行')
     expect(settle.text).not.toContain('代码 review 已收口')
     expect(settle.text).toContain('一次通过率')
     expect(settle.text).toContain('返工增量比')
@@ -913,7 +916,7 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
     // 真值：first 帧（tasks 1 / fixes 1）= current 帧 → fix 密度 = 1/1；兜底缺陷下恒 0.0%
     const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
-    expect(settle.text).toContain('fix 密度：100.0%')
+    expect(settle.text).toContain('fix 密度 100.0%')
   })
 
   it('收口指标真值：merged 帧在场——settle 文本返工增量比取 (current-baseline)/current 真值', async () => {
@@ -942,7 +945,7 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生
     // 真值：first 基线 commits 1（标记快照）、current = merged 帧 commits 3 → (3-1)/3
     const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
-    expect(settle.text).toContain('返工增量比：66.7%')
+    expect(settle.text).toContain('返工增量比 66.7%')
   })
 
   it('收口越阈硬门：修正波次 ≥ 阈值（默认 6）→ settle 文本含改进提案注册硬门（不落任务卡 AC）', async () => {
@@ -968,10 +971,10 @@ describe('机械③ · first-pass 标记 + 收口复盘沉淀指示 + merged laz
     await untilSettled(built.driver)
     expect(built.h.addTaskInputs).toHaveLength(0) // 零任务派生——硬门走收口指示文本
     const settle = built.calls.filter((c) => c.method === 'settle').at(-1)!
-    expect(settle.text).toContain('≥ 6 → 已越阈')
+    expect(settle.text).toContain('波次 6 ≥ 6 → 已越阈')
     expect(settle.text).toContain('已注册改进提案')
     expect(settle.text).toContain('parent_proposal_id')
-    expect(settle.text).toContain('修正波次：6')
+    expect(settle.text).toContain('修正波次 6')
   })
 
   it('merged 漏标记 lazy 兜底：循环启动时 first-pass + retro-done 在场、merged 缺席、池全终态 → 补 merged 标记', async () => {
