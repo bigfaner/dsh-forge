@@ -41,7 +41,7 @@ import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFF
 import { createLoopRegistry } from './loop/registry.js'
 import { createForgeDispatchEventsProjection, createForgeDispatchLoopProjection } from './projection/index.js'
 import { createTriageHook } from './triage/index.js'
-import { FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderCommanderSection, renderDocStyleSection, renderForgePipelineSection } from './prompt/index.js'
+import { commanderSectionText, FORGE_COMMANDER_SECTION_NAME, FORGE_COMMANDER_SECTION_ORDER, FORGE_DOC_STYLE_SECTION_NAME, FORGE_DOC_STYLE_SECTION_ORDER, forgePipelineSectionText, FORGE_SECTION_NAME, FORGE_SECTION_ORDER, modeOf, renderDocStyleSection } from './prompt/index.js'
 import { createInProcessDriverSpawn } from './spawn/in-process-driver.js'
 import { createPlanReplaySpawn, loadReplayPlanFromEnv, takeForgeSpawnOverride } from './spawn/seam.js'
 import { defaultWorkerTreeGuard, setJobTreeDiagSink } from './spawn/job-tree.js'
@@ -794,12 +794,16 @@ const forgePlugin: ForgePlugin = Object.assign(
       order: FORGE_DOC_STYLE_SECTION_ORDER,
       text: renderDocStyleSection(),
     })
+    // prompt-scoping-and-desc-trim/1.2：pipeline 段按会话角色分流——forgePipelineSectionText
+    // 内经 isSubagentAssembly 单点判据二选一模板（主会话全文 / 子会话裁剪版「Forge 工作
+    // 纪律（子会话）」），与 forge:commander 段同源判据；forgeDir/isGitRepo/mode 仍由
+    // 本装配方解析注入。
     const disposePipeline = ctx.systemPrompt.section({
       name: FORGE_SECTION_NAME,
       order: FORGE_SECTION_ORDER,
       text: (context) => {
         const forgeDir = context?.agent?.id === undefined ? undefined : sessionForgeDirs.get(context.agent.id)
-        return renderForgePipelineSection({
+        return forgePipelineSectionText(context, {
           forgeDir,
           isGitRepo: isGitRepoOfForgeDir(forgeDir),
           mode: pipelineMode,
@@ -817,16 +821,14 @@ const forgePlugin: ForgePlugin = Object.assign(
     // expert-squad-forge-2 纳入 10：forge:commander 指挥者段（条件注入——同构
     // forge:doc-style 等既有三段：段注册无条件，text 运行期求值）。条件 = ctx.experts
     // 服务在场（探测函数见 loopDriverBase 装配处上方定义，双消费面共用）且装配会话非
-    // subagent 子会话（header.origin 判定——指挥者话术只属于主会话，worker/subagent
-    // 提示词零污染）。缺席/异常/非函数面 = 空串（官方对空串 section 整体过滤，
-    // 与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
+    // subagent 子会话（prompt-scoping-and-desc-trim/1.2 起经 commanderSectionText 消费
+    // isSubagentAssembly 单点谓词——与 forge:pipeline 段同源，指挥者话术只属于主会话，
+    // worker/subagent 提示词零污染）。缺席/异常/非函数面 = 空串（官方对空串 section
+    // 整体过滤，与「从未注册」逐字节一致——非 expert-squad 环境零固定税）。
     const disposeCommander = ctx.systemPrompt.section({
       name: FORGE_COMMANDER_SECTION_NAME,
       order: FORGE_COMMANDER_SECTION_ORDER,
-      text: (context) =>
-        expertsServicePresent() && context?.agent?.session?.header?.origin !== 'subagent'
-          ? renderCommanderSection()
-          : '',
+      text: (context) => commanderSectionText(context, expertsServicePresent),
     })
     // 工具注册 loud 缝（bug 92d642c2 排查衍生——§7 可观测性）：单枚注册抛错不再静默截断
     // （真机实证：submitTask 注册中断 → 其后 forge 动词全缺席 → essentials 守卫连环拆循环，

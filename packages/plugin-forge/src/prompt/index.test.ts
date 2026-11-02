@@ -4,18 +4,23 @@
 // 执行协议与受限面零回渗）/ 双模式独立渲染（mode 键——目录树与流程图各自版本，缺省
 // 回退远征）/ 双 mermaid 含用户裁决节点与箭头固定产物、无 worker 内部节点 / doc-style
 // 独立段（XML_TAGS.docStyle 扩集）/ 标签包裹单源 / 不含 forge tool 说明 / 禁裸 {{ /
-// forgeDir 缺省回退不炸渲染。
+// forgeDir 缺省回退不炸渲染 / prompt-scoping-and-desc-trim/1.2 角色分流（isSubagentAssembly
+// 单点谓词 + 子会话裁剪版双模式 + 共享基底 fixture 守卫 + 两段横切断言）。
 import { describe, expect, it } from 'vitest'
 import { XML_TAGS } from '@dsh-forge/contracts'
 import {
+  commanderSectionText,
   FORGE_DOC_STYLE_SECTION_NAME,
   FORGE_DOC_STYLE_SECTION_ORDER,
+  forgePipelineSectionText,
   FORGE_SECTION_NAME,
   FORGE_SECTION_ORDER,
+  isSubagentAssembly,
   modeOf,
   renderDocStyleSection,
   renderForgePipelineSection,
 } from './index.js'
+import type { ForgeAssembleContext } from '../faces.js'
 import { FORGE_TOOL_NAMES } from '../tools/index.js'
 
 const text = renderForgePipelineSection()
@@ -285,5 +290,150 @@ describe('renderDocStyleSection——独立段（dual-mode-overhaul 拆段）', 
   it('内层无二级尖括号标签（mermaid 提法用代码栅栏措辞——非 XML 标签）', () => {
     const body = docStyle.slice(`<${XML_TAGS.docStyle}>`.length, -`</${XML_TAGS.docStyle}>`.length)
     expect(body).not.toMatch(/<\/?[a-z-]+>/)
+  })
+})
+
+// ═══ prompt-scoping-and-desc-trim/1.2：pipeline 段按会话角色分流 ═══
+
+/** 共享基底 fixture：产物管理公约前三条整块（prompt-scoping-and-desc-trim/1.2）。
+ *  改公约 = 四模板+fixture 同 commit：公约行是主/子 × 远征/突击四模板的共享基底，
+ *  改任何一行必须四处模板与本 fixture 同步修改、同 commit 落地；下方 bullet 计数断言
+ *  （main=4/sub=3）防公约新条 append-only 只落主版的静默语义漂移。 */
+const CONVENTIONS_SHARED_BASE =
+  [
+    '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `{forgeDir}/docs`，不散落仓库源码树与根目录。',
+    '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `{forgeDir}/tmp/`（或项目约定的临时区），用完即清，绝不入 git。',
+    '- **生命周期纪律**：过程文档按「交付 → 复盘 → 知识沉淀 → 提请批准清理」时序管理，批准后删除或归档；`probes/`、`walkthrough/` 等过程文档永不进 git。',
+  ].join('\n') + '\n'
+
+/** 共享基底 fixture：git 纪律句（同上同步规则——四模板字节相等）。 */
+const GIT_RULE_SHARED = '- 项目为 git 仓库：git 纪律——提交按逻辑单元分批，不混杂无关改动。'
+
+describe('isSubagentAssembly 单点谓词（官方 header.origin === subagent 唯一字面值锚）', () => {
+  it('subagent origin → true；主会话形状 / origin 缺席 / 其它值 / context 缺席 → false', () => {
+    expect(isSubagentAssembly({ agent: { id: 'c1', session: { header: { origin: 'subagent' } } } })).toBe(true)
+    expect(isSubagentAssembly({ agent: { id: 'm1' } })).toBe(false)
+    expect(isSubagentAssembly({ agent: { id: 'm2', session: { header: {} } } })).toBe(false)
+    expect(isSubagentAssembly({ agent: { session: { header: { origin: 'main' } } } })).toBe(false)
+    expect(isSubagentAssembly({})).toBe(false)
+    expect(isSubagentAssembly(undefined)).toBe(false)
+  })
+})
+
+describe('横切断言（forge:pipeline / forge:commander 两段 text 回调同源消费判据）', () => {
+  const SUB_CONTEXT: ForgeAssembleContext = { agent: { id: 'child-1', session: { header: { origin: 'subagent' } } } }
+  const MAIN_CONTEXT: ForgeAssembleContext = { agent: { id: 'main-1', session: { header: {} } } }
+
+  it('同一合成 subagent context：pipeline 出裁剪版 + commander 出空串（极性相反单点判据防错向）', () => {
+    const pipeline = forgePipelineSectionText(SUB_CONTEXT, { forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true, mode: 'blitz' })
+    expect(pipeline).toContain('## Forge 工作纪律（子会话）')
+    expect(pipeline).not.toContain('### 总纲与核心规则')
+    expect(commanderSectionText(SUB_CONTEXT, () => true)).toBe('')
+  })
+
+  it('主会话 context：pipeline 出全文 + commander 出指挥者话术（experts 在场前提；缺席仍空串）', () => {
+    expect(forgePipelineSectionText(MAIN_CONTEXT, { forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true, mode: 'blitz' })).toContain('## Forge 任务管线（突击模式）')
+    expect(commanderSectionText(MAIN_CONTEXT, () => true)).toContain('指挥者模式')
+    expect(commanderSectionText(MAIN_CONTEXT, () => false)).toBe('')
+  })
+})
+
+describe('子会话裁剪版（subagent 键——双模式「Forge 工作纪律（子会话）」）', () => {
+  const SUB_EXPEDITION = renderForgePipelineSection({ subagent: true, mode: 'expedition', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true })
+  const SUB_BLITZ = renderForgePipelineSection({ subagent: true, mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true })
+
+  it('段内标题 = Forge 工作纪律（子会话）；主会话管线标题零出现', () => {
+    for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
+      expect(v).toContain('## Forge 工作纪律（子会话）')
+      expect(v).not.toContain('## Forge 任务管线')
+    }
+  })
+
+  it('四类目录树 + 存储约束在场（双模式目录树差异保留——提案/特性/探针/圆桌纪要）', () => {
+    for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
+      expect(v).toContain('### 文档位置与存储约束')
+      expect(v).toContain('├─ proposals/{slug}/')
+      expect(v).toContain('├─ features/{slug}/')
+      expect(v).toContain('├─ probes/')
+      expect(v).toContain('└─ roundtables/{slug}/')
+      expect(v).toContain('入文档根仅四类')
+      expect(v).toContain('代码与测试不入文档根——进仓库源码树')
+      expect(v).toContain('过程产物只归档到对应 {slug} 子目录，不另设他处')
+    }
+    expect(SUB_EXPEDITION).toContain('入文档根仅四类：提案文档、特性阶段文档、探针产物、圆桌纪要。')
+    expect(SUB_EXPEDITION).toContain('特性阶段文档产出后经管线工具登记')
+    expect(SUB_BLITZ).toContain('入文档根仅四类：提案文档、探针产物、圆桌纪要、特性阶段文档；突击不产特性阶段文档')
+  })
+
+  it('产物管理公约前三条在场 + 标题计数自洽（三条——列几条写几条，不写「四条」）', () => {
+    for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
+      expect(v).toContain('产物管理公约（三条）：')
+      expect(v).not.toContain('产物管理公约（四条）')
+      expect(v).toContain(CONVENTIONS_SHARED_BASE)
+      expect(v).not.toContain('机制指引')
+      expect(v).not.toContain('forge-artifact-lifecycle')
+    }
+  })
+
+  it('git 句在场（isGitRepo=true 前提）；缺省/false 渲染零出现（非 git 项目零提示词差异）', () => {
+    expect(SUB_EXPEDITION).toContain(GIT_RULE_SHARED)
+    expect(SUB_BLITZ).toContain(GIT_RULE_SHARED)
+    for (const isGitRepo of [undefined, false] as const) {
+      for (const mode of ['expedition', 'blitz'] as const) {
+        expect(renderForgePipelineSection({ subagent: true, mode, forgeDir: 'Z:/ws/demo/.forge', isGitRepo })).not.toContain('git 纪律')
+      }
+    }
+  })
+
+  it('主会话职责面零渗入：六条总纲 / 阶段流转 / 提案裁决 / mermaid 流程图 / ### 流程 全不含', () => {
+    for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
+      expect(v).not.toContain('### 总纲与核心规则')
+      expect(v).not.toContain('状态存于 forge 管线的状态库')
+      expect(v).not.toContain('阶段流转确认两分')
+      expect(v).not.toContain('提案 accept/reject')
+      expect(v).not.toContain('不可判定边界兜底')
+      expect(v).not.toContain('隐式流转约定')
+      expect(v).not.toContain('```mermaid')
+      expect(v).not.toContain('### 流程')
+    }
+  })
+
+  it('段契约同主版：forge-pipeline 标签包裹（HTML 块空行边界）+ 禁裸 {{ + forgeDir 缺省回退（docs 段省略不炸渲染）', () => {
+    for (const v of [SUB_EXPEDITION, SUB_BLITZ]) {
+      expect(v.startsWith(`<${XML_TAGS.forgePipeline}>\n\n`)).toBe(true)
+      expect(v.endsWith(`\n\n</${XML_TAGS.forgePipeline}>`)).toBe(true)
+      expect(v).not.toContain('{{')
+    }
+    for (const mode of ['expedition', 'blitz'] as const) {
+      const fallback = renderForgePipelineSection({ subagent: true, mode })
+      expect(fallback).toContain('## Forge 工作纪律（子会话）')
+      expect(fallback).not.toContain('### 文档位置与存储约束')
+      expect(fallback).not.toContain('```text')
+    }
+  })
+})
+
+describe('共享基底 fixture 守卫（主/子 × 远征/突击四模板字节相等）', () => {
+  const FOUR_TEMPLATES = {
+    'main-expedition': renderForgePipelineSection({ mode: 'expedition', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true }),
+    'main-blitz': renderForgePipelineSection({ mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true }),
+    'sub-expedition': renderForgePipelineSection({ subagent: true, mode: 'expedition', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true }),
+    'sub-blitz': renderForgePipelineSection({ subagent: true, mode: 'blitz', forgeDir: 'Z:/ws/demo/.forge', isGitRepo: true }),
+  } as const
+
+  it.each(Object.entries(FOUR_TEMPLATES))('%s：公约前三条整块字节相等在场（fixture 单源）', (_label, v) => {
+    expect(v).toContain(CONVENTIONS_SHARED_BASE)
+  })
+
+  it.each(Object.entries(FOUR_TEMPLATES))('%s：git 句字节相等在场（isGitRepo=true 前提）', (_label, v) => {
+    expect(v).toContain(GIT_RULE_SHARED)
+  })
+
+  it('bullet 计数：main=4 / sub=3（公约新条 append-only 只落主版时在此显式失败）', () => {
+    const clauseCount = (v: string) => (v.match(/^- \*\*/gm) ?? []).length
+    expect(clauseCount(FOUR_TEMPLATES['main-expedition'])).toBe(4)
+    expect(clauseCount(FOUR_TEMPLATES['main-blitz'])).toBe(4)
+    expect(clauseCount(FOUR_TEMPLATES['sub-expedition'])).toBe(3)
+    expect(clauseCount(FOUR_TEMPLATES['sub-blitz'])).toBe(3)
   })
 })
