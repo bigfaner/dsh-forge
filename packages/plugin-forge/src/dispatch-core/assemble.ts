@@ -206,11 +206,15 @@ export function intersectAllowNames(
 }
 
 /**
- * 处置代理面禁入的 forge 动词（worker 名单剔除台账只读两工具——loop-recurrence-hardening
- * §2.2.1：getBug/listBugs 只读放开供台账深挖；写面（recordBug/resolveBug/submitTask/
- * addTask）与任务域动词恒 deny）。
+ * 处置代理面禁入的 forge 动词（worker 名单剔除台账只读两工具与 addTask——loop-recurrence-
+ * hardening §2.2.1：getBug/listBugs 只读放开供台账深挖；addTask 放开 = 处置派生径
+ * （用户裁决 2026-11-02——triage 分类后建 fix 卡与 execute 面 ERR_WORKER_ADDTASK_DENIED
+ * 的身份分流「main session and the loop triage layer 放行」对齐）；写面（recordBug/
+ * resolveBug/submitTask）与任务域动词恒 deny）。
  */
-const TRIAGE_FORGE_DENY: readonly string[] = FORGE_DENY_IN_WORKER.filter((name) => name !== 'listBugs')
+const TRIAGE_FORGE_DENY: readonly string[] = FORGE_DENY_IN_WORKER.filter(
+  (name) => name !== 'listBugs' && name !== 'addTask',
+)
 
 /**
  * 处置代理 toolFilter（S1c 第二层——「收窄工具面」的只读放开形，loop-recurrence-hardening
@@ -228,11 +232,12 @@ export function deriveTriageToolFilter(registeredTools?: readonly string[]): { d
   const deny = new Set<string>(WORKER_GLOBAL_DENY_TOOLS)
   for (const name of Object.keys(WORKER_TOOL_NAME_FAMILY)) deny.add(name)
   for (const name of TRIAGE_FORGE_DENY) deny.add(name)
-  // 只读放开（loop-recurrence-hardening §2.2.1）：getBug = 名表 forge 族成员，listBugs =
-  // FORGE_DENY_IN_WORKER 成员——两处剔除后写面恒不可达断言不变（recordBug/resolveBug/
-  // submitTask/addTask 仍在 deny）。
+  // 只读放开 + 处置派生径（loop-recurrence-hardening §2.2.1 + 用户裁决 2026-11-02）：
+  // getBug = 名表 forge 族成员，listBugs = FORGE_DENY_IN_WORKER 成员，addTask = 处置
+  // 分类后建 fix 卡派生径。其余写面不可达断言不变（recordBug/resolveBug/submitTask 仍在 deny）。
   deny.delete('getBug')
   deny.delete('listBugs')
+  deny.delete('addTask')
   return { deny: [...deny].filter((name) => registeredTools === undefined || registeredTools.includes(name)) }
 }
 

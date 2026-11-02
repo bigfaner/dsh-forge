@@ -151,12 +151,14 @@ describe('处置代理被 spawn（与 worker 同款 in-process 形态）', () =>
     expect(req.prompt).toContain('待执行 2 · 执行中 0 · 阻塞 1 · 前置未满足 1')
     expect(req.prompt).toContain('[submit] → blocked — pnpm 安装失败')
     // 决策权与执行权分离：只读放开（getBug/listBugs 在场 = 不 deny——台账深挖面）+
-    // 写面/任务域动词/shell 恒 deny（结构性不可达断言保留）
-    for (const name of ['bash', 'read', 'write', 'addTask', 'submitTask', 'recordBug', 'resolveBug', 'dispatchTask', 'queryTask']) {
+    // addTask 放开（处置派生径——用户裁决 2026-11-02，与 execute 面 caller 分流放行对齐）+
+    // 其余写面/任务域动词/shell 恒 deny（结构性不可达断言保留）
+    for (const name of ['bash', 'read', 'write', 'submitTask', 'recordBug', 'resolveBug', 'dispatchTask', 'queryTask']) {
       expect(req.toolFilter.deny).toContain(name)
     }
     expect(req.toolFilter.deny).not.toContain('getBug')
     expect(req.toolFilter.deny).not.toContain('listBugs')
+    expect(req.toolFilter.deny).not.toContain('addTask')
     expect(req.parent).toEqual({ agentTag: 'owner-root' })
     expect(req.label).toBe('feat-x/3.2 · 处置分析')
   })

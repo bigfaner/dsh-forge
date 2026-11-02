@@ -293,14 +293,14 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveWorkerToolFilter('validation-code', nameFamily).deny).not.toContain('web-search')
   })
 
-  it('forge 闭环同步守护：FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS 全覆盖入 deny（worker 与 triage 两面——含 3b stopTaskLoop）', () => {
+  it('forge 闭环同步守护：FORGE_TOOL_NAMES − WORKER_FORGE_TOOLS 全覆盖入 deny（worker 与 triage 两面——含 3b stopTaskLoop；addTask triage 放行为用户裁决 2026-11-02）', () => {
     const workerDeny = new Set(deriveWorkerToolFilter('doc').deny)
     const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
       expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
-      // 只读台账两面（§2.2.1）放行：getBug/listBugs 不入 triage deny
-      if (name !== 'getBug' && name !== 'listBugs') {
+      // triage 放行三面（§2.2.1 只读两具 + addTask 处置派生径）：getBug/listBugs/addTask 不入 triage deny
+      if (name !== 'getBug' && name !== 'listBugs' && name !== 'addTask') {
         expect(triageDeny.has(name), `${name} 应入 triage deny（写面/任务域动词仅主 agent）`).toBe(true)
       }
     }
@@ -314,9 +314,10 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(workerDeny.has('listBugs')).toBe(true)
     expect(triageDeny.has('recordBug')).toBe(true)
     expect(triageDeny.has('resolveBug')).toBe(true)
-    // triage 只读深挖两工具放行（§2.2.1）
+    // triage 放行三工具：只读深挖两具（§2.2.1）+ addTask（处置派生径——用户裁决 2026-11-02）
     expect(triageDeny.has('getBug')).toBe(false)
     expect(triageDeny.has('listBugs')).toBe(false)
+    expect(triageDeny.has('addTask')).toBe(false)
   })
 
   it('validateMermaid deny（md-mermaid 插件工具仅主 agent——全 taskType + triage 全收窄形）', () => {

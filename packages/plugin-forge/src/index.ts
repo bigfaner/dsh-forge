@@ -28,7 +28,7 @@ import { attachForgeLogListener } from './events/log-listener.js'
 import { createForgeEventBus } from './events/bus.js'
 import { createForgeEventSink } from './events/sink.js'
 import { adaptAgentNarrationChannel, adaptDispatchJobs, createDiagEmitter, createExpertProfileResolver, createWorkerProfileProjection, createProjectContainerDirs, emitForgeDiag, FORGE_EXPERTS_ROOT_DIR, FORGE_PACKAGE_NAME } from './faces.js'
-import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, SessionActivationFace } from './faces.js'
+import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJobsRegistryFace, ExpertProfileResolver, ExpertsServiceFace, ForgeDiagEmitFace, ForgeToolDefinition, SessionActivationFace } from './faces.js'
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
@@ -811,27 +811,42 @@ const forgePlugin: ForgePlugin = Object.assign(
           ? renderCommanderSection()
           : '',
     })
+    // 工具注册 loud 缝（bug 92d642c2 排查衍生——§7 可观测性）：单枚注册抛错不再静默截断
+    // （真机实证：submitTask 注册中断 → 其后 forge 动词全缺席 → essentials 守卫连环拆循环，
+    // diag 零痕迹只能考古）。失败枚举 error 级留痕（名称 + 原文），其余工具照常注册。
+    const registerToolLoud = (definition: ForgeToolDefinition): (() => void) => {
+      try {
+        return ctx.tools.register(definition)
+      } catch (cause) {
+        emitForgeDiag(diag, {
+          level: 'error',
+          event: 'forge-tool-register',
+          message: `forge tool register failed (${definition.name}): ${cause instanceof Error ? cause.message : String(cause)}`,
+        })
+        return () => {}
+      }
+    }
     const disposers = [
-      ctx.tools.register(tools.addTask),
-      ctx.tools.register(tools.submitTask),
-      ctx.tools.register(tools.queryTask),
-      ctx.tools.register(tools.createProposal),
-      ctx.tools.register(tools.transitionProposal),
-      ctx.tools.register(tools.transitionFeature),
-      ctx.tools.register(tools.dispatchTask),
-      ctx.tools.register(tools.stopTaskLoop),
-      ctx.tools.register(tools.updateTask),
-      ctx.tools.register(tools.taskStats),
-      ctx.tools.register(tools.listTasks),
-      ctx.tools.register(tools.recordBug),
-      ctx.tools.register(tools.resolveBug),
-      ctx.tools.register(tools.listBugs),
-      ctx.tools.register(tools.getBug),
-      ctx.tools.register(tools.recordImplCheckpoint),
-      ctx.tools.register(tools.queryImplCheckpoint),
-      ctx.tools.register(tools.listImplCheckpoints),
-      ctx.tools.register(tools.pauseTask),
-      ctx.tools.register(tools.unblockTask),
+      registerToolLoud(tools.addTask),
+      registerToolLoud(tools.submitTask),
+      registerToolLoud(tools.queryTask),
+      registerToolLoud(tools.createProposal),
+      registerToolLoud(tools.transitionProposal),
+      registerToolLoud(tools.transitionFeature),
+      registerToolLoud(tools.dispatchTask),
+      registerToolLoud(tools.stopTaskLoop),
+      registerToolLoud(tools.updateTask),
+      registerToolLoud(tools.taskStats),
+      registerToolLoud(tools.listTasks),
+      registerToolLoud(tools.recordBug),
+      registerToolLoud(tools.resolveBug),
+      registerToolLoud(tools.listBugs),
+      registerToolLoud(tools.getBug),
+      registerToolLoud(tools.recordImplCheckpoint),
+      registerToolLoud(tools.queryImplCheckpoint),
+      registerToolLoud(tools.listImplCheckpoints),
+      registerToolLoud(tools.pauseTask),
+      registerToolLoud(tools.unblockTask),
       attachForgeLogListener(bus, { resolveContainerDir: (event) => sink.dirOf(event.sessionId) }),
       // 段文本 = dual-mode-overhaul 三段结构（总纲/文档位置与存储约束/流程），
       // 不含 tool 说明——dsh tool 注册面自带（Interface 9 标签表行 1）；

@@ -456,21 +456,30 @@ export async function spawnClaimed(
   // ③defaultAgentOptions 已由 expert-squad 侧折叠）——resolveWorkerProfile 每次派发现查
   // experts.get（AGENTS 1.6 永不缓存）；expert-squad 缺席 = profile undefined → 父继承。
   // forgeSettings.worker 机械读取径退役——settings 注入面保留仅服务 resolver 映射键。）
-  const profile = await deps.resolveWorkerProfile?.(task.taskType)
-  // toolFilter 与真机注册面求交（bug 3cb118cf）：取数缝 = 父会话 ctx.tools.schemas()
-  // 现查（registeredToolNamesOf，缺席回落不裁剪）；档案 allow 携带平台禁用 shell 名
-  // （Mac 无 pwsh）时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
-  const toolFilter = deriveWorkerToolFilter(
-    task.taskType,
-    WORKER_TOOL_NAME_FAMILY,
-    profile?.tools,
-    registeredToolNamesOf(exec.parent),
-  )
-  // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
-  const agentOptions = await reconcileWorkerReasoning(
-    workerAgentOptionsOf({ entry: profile }),
-    deps.resolveModelReasoning,
-  )
+  // bug 92d642c2：组装段与 spawn 同折一线——守卫（essentials 断言 fail-loud）与投影缝
+  // 抛错折入 spawnFailed 防线 DTO（退避 ×3 → halt 问询 owner），不再穿透 spawnClaimed
+  // 调用方裸炸循环孤儿化 claim。
+  let toolFilter: ReturnType<typeof deriveWorkerToolFilter>
+  let agentOptions: Awaited<ReturnType<typeof reconcileWorkerReasoning>>
+  try {
+    const profile = await deps.resolveWorkerProfile?.(task.taskType)
+    // toolFilter 与真机注册面求交（bug 3cb118cf）：取数缝 = 父会话 ctx.tools.schemas()
+    // 现查（registeredToolNamesOf，缺席回落不裁剪）；档案 allow 携带平台禁用 shell 名
+    // （Mac 无 pwsh）时同族解析——keep-only allow 含未知名会在 child 创建窗口 loud 拆 spawn。
+    toolFilter = deriveWorkerToolFilter(
+      task.taskType,
+      WORKER_TOOL_NAME_FAMILY,
+      profile?.tools,
+      registeredToolNamesOf(exec.parent),
+    )
+    // persona 由 claim 阶段合成（S2a 组成矩阵）——此处仅透传
+    agentOptions = await reconcileWorkerReasoning(
+      workerAgentOptionsOf({ entry: profile }),
+      deps.resolveModelReasoning,
+    )
+  } catch (cause) {
+    return { ok: false, failure: spawnFailed(task.slug, taskKey, cause) }
+  }
 
   // driver in-process spawn（阻塞）——start 拒绝 = 基建故障（防线计数）
   const spawnStartedAt = Date.now()

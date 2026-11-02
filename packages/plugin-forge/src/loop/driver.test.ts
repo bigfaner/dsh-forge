@@ -1684,9 +1684,11 @@ describe('装配接线收口（SC4 端到端——真实 createTriageHook 注册
     expect(req.label).toBe('feat-x/2.5 · 处置分析')
     expect(req.prompt).toContain('feat-x/2.5 Implement the thing')
     expect(req.prompt).toContain('tests hang on flaky selector') // reason 全文进处置输入
-    for (const name of ['bash', 'read', 'write', 'addTask', 'submitTask', 'dispatchTask', 'queryTask']) {
+    // addTask triage 放行（用户裁决 2026-11-02——处置派生径，与 add-fix 链宿主忠实执行面一致）
+    for (const name of ['bash', 'read', 'write', 'submitTask', 'dispatchTask', 'queryTask']) {
       expect(req.toolFilter.deny).toContain(name)
     }
+    expect(req.toolFilter.deny).not.toContain('addTask')
     expect(req.parent).toBe(parent) // 每循环 parent 载体经输入面绑定（非装配期烘焙）
     expect(req.signal).toBeInstanceOf(AbortSignal)
     expect(req.signal.aborted).toBe(false)

@@ -132,4 +132,20 @@ describe('生产装配路径（真实 resolver → 投影 → spawnClaimed → �
     const req = upstreamRequests[upstreamRequests.length - 1] as { agentOptions?: unknown }
     expect('agentOptions' in req).toBe(false)
   })
+
+  it('bug 92d642c2：组装面守卫抛错（essentials 注册缺损）折入 spawnFailed 防线 DTO——不炸 spawnClaimed 调用方', async () => {
+    const { deps, exec, scope, claimed } = buildProductionChain({ provider: 'deepseek-official', model: 'deepseek-flash' })
+    // 父会话工具投影在场但缺管线必备（真机注册缺损形态——plugin-forge 工具注册中断后残留）
+    ;(exec.parent as { ctx?: unknown }).ctx = {
+      tools: { schemas: () => [{ name: 'addTask' }, { name: 'read' }] }, // submitTask 等五动词缺席
+    }
+    const upstreamBefore = upstreamRequests.length
+    const stage = await spawnClaimed(deps, exec, claimed, { scope })
+    expect(stage.ok).toBe(false)
+    if (stage.ok) return
+    expect((stage.failure as { code?: string }).code).toBe('ERR_SPAWN_FAILED')
+    expect((stage.failure as { message?: string }).message).toContain('pipeline essential tools not registered')
+    // deps.spawn 未被触达（组装拒绝先于 spawn——零资源留下）
+    expect(upstreamRequests).toHaveLength(upstreamBefore)
+  })
 })
