@@ -1,6 +1,6 @@
 ---
 name: breakdown-tasks
-description: 把定稿的技术设计拆解为可执行任务图（经 addTask）——分阶段业务任务带依赖、逐阶段摘要与 gate 任务、旅程/契约先行任务与脚本后置 + run-tests 收口的测试链，最后经 validateFeatureTasks 校验容器。
+description: 把定稿的技术设计拆解为可执行任务图（经 addTask）——分阶段业务任务带依赖、逐阶段摘要与 gate 任务、旅程/契约先行任务与脚本后置 + test-run 收口的测试链，最后经 validateFeatureTasks 校验容器。
 ---
 
 # 目标拆解（breakdown-tasks）
@@ -71,7 +71,7 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
        4. 演进友好：断言锚定稳定行为（交互序列/状态语义/副作用），不锁文案字面、DOM 层级与实现路径——重构不红；
        5. 宁少而精：服从回归时长预算，禁以数量堆砌安全感。
    - **脚本任务（后置执行）**：type `test-gen-scripts`，`depends_on` 该特性全部业务任务 + 旅程/契约任务——实现落盘后撰写：核实/回填契约锚值、以真实锚落 spec、每条断言标注来源契约条目 id（断言-契约溯源）；契约与实现不一致经 fix/disc 链上报，禁脚本内就地调和。
-   - **run-tests 收口**：type `test-run`，`depends_on` 脚本任务 + 全部业务任务；派发前自查依赖闭包覆盖全部 coding/旅程/契约/脚本任务，缺失即 blocked 附清单。
+   - **test-run 收口**：type `test-run`，`depends_on` 脚本任务 + 全部业务任务；派发前自查依赖闭包覆盖全部 coding/旅程/契约/脚本任务，缺失即 blocked 附清单。
    - **review-doc**（`doc-review`）仍留最终 gate 之后，依赖最终阶段 gate。
    - 旅程/契约/脚本/收口以**任务类型 + 任务简报 + 专家路由**承载（旅程 = `test-journey-author`、契约 = `test-contract-author`），任务简报写明产物落点与断言-契约溯源要求。
 7. **体量审计**——逐任务复查：多动词标题拆；AC 跨无关领域拆；守住操作上限；**每任务 ≤6 条验收标准**（更多 = 范围过大，继续拆）；任何 `task_desc` / AC 内零跨容器引用（确需外部排序就是合并或排序，不是等待任务）。
@@ -79,4 +79,4 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 
 ## 产出
 
-呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试链（旅程/契约先行任务、脚本任务、run-tests 收口）。可派发执行（run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。
+呈报创建好的图：阶段结构、逐阶段任务数带自然键、gate 链、测试链（旅程/契约先行任务、脚本任务、test-run 收口）。可派发执行（run-tasks）按 DAG 就绪度消费任务池——此处无需再接线。
