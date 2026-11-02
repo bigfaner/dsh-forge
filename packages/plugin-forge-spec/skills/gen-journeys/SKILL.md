@@ -1,6 +1,6 @@
 ---
 name: gen-journeys
-description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 风险分级）——每条 Journey 一份 journey.md 落 testing/ 下，是 gen-contracts 的输入。
+description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 风险分级）——每条 Journey 一份 journey.md 落所属容器目录的 testing/ 下，是 gen-contracts 的输入。
 ---
 
 # 生成旅程（gen-journeys）
@@ -11,7 +11,7 @@ description: 从 PRD 用户故事中提取 Journey 叙事（带 High/Medium/Low 
 
 ## State-Layer Discipline (boundary)
 
-Journey 文档是 feature 测试树下的磁盘工件——文档注册表词表（七种 phase kind）**没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由任务域承载：`test-gen-journeys` / `test-gen-contracts` 任务类型及其依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。存储布局（`<slug>` feature 目录树）见 forge-pipeline 系统提示段「文档位置」。
+Journey 文档是所属容器目录（远征 feature 树 / 突击 `proposals/<slug>/`）下 `testing/` 的磁盘工件——文档注册表词表（七种 phase kind）**没有 journey kind**，因此 journey **不**经 `upsertFeatureDoc` 注册。其管线位置由任务域承载：`test-gen-journeys` / `test-gen-contracts` 任务类型及其依赖。不写任务文件或索引——任务经 `addTask` 活在状态层（拆解期创建，不在此处）。存储布局（所属容器目录树）见 forge-pipeline 系统提示段「文档位置」。
 
 ## 管线位置
 
@@ -38,7 +38,7 @@ gen-journeys → gen-contracts → gen-test-scripts → run-tests
 1. **读输入源**（按判别出的模式）。不读源代码——提取仅限叙事。
 2. **识别工作流**（含 Golden Path）并逐条结构化：名称、happy path 步骤、边界用例（引用 happy path 步骤的分叉前置条件）、预期结果、搭建前置条件。
 3. **分级风险**（按上表）；提取产出的边界用例不足时补生成（非法输入、缺失前置条件、并发操作、边界值），强制 High 风险边界密度达标。
-4. **逐 Journey 生成文件**——每条 Journey 一个目录：`testing/<journey-name>/journey.md`（feature 目录下），frontmatter：
+4. **逐 Journey 生成文件**——每条 Journey 一个目录：`testing/<journey-name>/journey.md`（所属容器目录下），frontmatter：
 
    ```yaml
    ---
@@ -53,7 +53,7 @@ gen-journeys → gen-contracts → gen-test-scripts → run-tests
 
    正文：搭建前置条件 → 编号 happy path 步骤（每步：用户动作 + 预期结果）→ 边界用例（被引步骤 + 分叉前置条件 + 动作 + 结果）→ Journey Invariants。一条 Journey = 一份内聚文档；内容大时内部分批写，绝不拆文件。
 
-   产出目录树（feature 目录下）：
+   产出目录树（所属容器目录下）：
 
    ```text
    testing/

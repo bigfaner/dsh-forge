@@ -61,7 +61,7 @@ addTask { source_kind: "feature", source_slug: "<slug>", title: "...", type: "..
 5. **创建逐阶段摘要 + gate**——每阶段业务任务之后：一条 `doc-summary` 任务（依赖 =该阶段业务任务 localId），再一条 `gate` 任务（依赖 = 摘要的 localId）。gate 即阶段边界；下一阶段的首个任务依赖前一 gate。
 6. **创建测试链**——涉运行期装配面的特性建链（**豁免正判据**：改动触及子进程 spawn / 网络通道 / 外部文件系统写径 / UI 装配面任一即建链，UI 装配面默认建链；纯逻辑/纯文档特性免建）。工作区测试策略文档在场则遵从其细则，缺席不破环——本技能正文自含判据，不硬编码任何仓内路径。
    - **旅程/契约先行任务**（与业务任务并行建卡，不设业务任务对它们的依赖边）：
-     - 默认两任务：旅程叙事任务（type `test-gen-journeys`）→ 契约文档任务（type `test-gen-contracts`，`depends_on` 旅程任务）；产物落 `proposals/<slug>/testing/<旅程名>/`（journey.md + contracts/）。
+     - 默认两任务：旅程叙事任务（type `test-gen-journeys`）→ 契约文档任务（type `test-gen-contracts`，`depends_on` 旅程任务）；产物落所属容器目录（远征 feature 树 / 突击 `proposals/<slug>/`）下 `testing/<旅程名>/`（journey.md + contracts/）。
      - 小体量可合 1（单旅程 ≤3 步且契约 ≤5 个 Outcome → 单个 `test-gen-journeys` 任务，旅程作者主笔契约节）；多旅程提案一旅程一任务，不做跨旅程杂烩。
      - 领取顺序：旅程/契约任务一律 P0 且建卡先于全部业务任务卡，业务任务默认 P1 起——串行派发下首个被领即旅程/契约，保证测试基准先于实现落盘。
      - **旅程/契约任务 AC 模板**——`acceptance_criteria` 含价值标准条目：

@@ -18,7 +18,7 @@ domains: [testing, conventions]
 | 回放取证 | vitest | `plugin-forge-e2e` | `packages/plugin-forge/e2e/**` | 派发循环 dogfood 形态回放（真循环驱动器/注入投影/结算通道 + 域全桩、零模型参与）——名字带 e2e，实为 vitest 回放层 |
 | e2e | Playwright（`_electron` 基座） | — | `e2e/specs/`（唯一执行树，testDir 配置） | 真机旅程取证：交互链路、官方件实机形态对照、外部依赖装配面（AGENTS.md §1.4 的结算门） |
 
-- Journey 叙事与 Contract 文档落 feature 目录 `testing/`；测试脚本只落上表执行树，不设暂存区。
+- Journey 叙事与 Contract 文档落所属容器目录的 `testing/`（远征 feature 树 / 突击 `proposals/<slug>/testing/`）；测试脚本只落上表执行树，不设暂存区。
 - 新增测试一律进既有项目（vitest 项目清单 = `vitest.config.ts` projects——新增包须同步注册项目）。
 
 ## 契约先行任务化流程
