@@ -146,8 +146,9 @@ export interface DelegateToolDeps {
   /** 派发 provider 名（in-process 才落地 toolFilter——派发面由装配钉死）。 */
   readonly provider: string;
   /** 全局注册工具名现查面（每派发现调，禁 memoize——装配取 ctx.tools.schemas()；
-   *  缺席 fail-soft：白名单不裁剪原样承载，见 compose.resolveToolAllow）。 */
-  readonly knownTools?: () => readonly string[];
+   *  返回 undefined 或函数缺席均 fail-soft：白名单不裁剪原样承载，见
+   *  compose.resolveToolAllow）。 */
+  readonly knownTools?: () => readonly string[] | undefined;
 }
 
 const text = (t: string): TextContentBlock => ({ type: "text", text: t });
