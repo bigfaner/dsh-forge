@@ -33,7 +33,7 @@ import type { AgentLookupFace, CommandRegisterFace, DispatchJobsFace, DispatchJo
 import { attachBugMentionPrestep } from './agent/bug-mention-prestep.js'
 import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
-import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
+import { adaptSessionProgressAppend, FORGE_PROGRESS_SCENARIO, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
 import { createSettleReportRecovery, createRecurrenceFaces, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
@@ -714,7 +714,7 @@ const forgePlugin: ForgePlugin = Object.assign(
       try {
         void ctx.forgeTasks
           .reconcileInterrupted({ projectId, registryEmpty: true })
-          .then((result) => {
+          .then(async (result) => {
             // 对账埋点（bug 92d642c2 排查衍生——§7 成功里程碑）：命中/零命中均留痕。
             // stats 判读：inProgress>0 而 loopSourced=0 = 判据②不命中（skill 路线领取或
             // 注册缺损期 claim 无标记）；loopSourced>0 而 reconciled=0 不可能（③装配期恒真）。
@@ -725,6 +725,31 @@ const forgePlugin: ForgePlugin = Object.assign(
               message: `重启对账 projectId=${projectId} reconciled=${result.reconciled.length} inProgress=${result.stats?.inProgress ?? '?'} loopSourced=${result.stats?.loopSourced ?? '?'}${keys !== '' ? ` keys=${keys}` : ''}`,
               projectId,
             })
+            // 显示同步（bug 92d642c2 验证 M 面——进度面板/对话进度卡按 forge/progress 事件折叠，
+            // 状态真化不发声 = 旧 claim「执行中」行永驻——重启后截图实证）。逐枚回查最新 claim
+            // 的领取会话，向**该会话**追加 stop 事件（scenario=loop/orphan-reconciled）翻旧执行行。
+            // fail-soft：单枚查询/追加故障只损失该枚显示同步，不外溢不阻其余。
+            for (const ref of result.reconciled) {
+              try {
+                const snap = await ctx.forgeTasks.queryTask({ projectId, taskRef: ref, include: { records: true } })
+                const claimSession = snap.records
+                  ?.filter((record) => record.verb === 'claim')
+                  .at(-1)?.sessionId
+                if (claimSession === undefined || claimSession === '') continue
+                progressAppend?.append(claimSession, {
+                  sourceSlug: ref.slug,
+                  verb: 'stop',
+                  status: 'interrupted',
+                  scenario: FORGE_PROGRESS_SCENARIO.loopOrphanReconciled,
+                  taskKey: `${ref.slug}/${ref.localId}`,
+                  taskTitle: snap.task.title,
+                  note: '检测到任务中断：宿主重启遗留执行态孤儿——已对账回收，待循环重派',
+                  at: Date.now(),
+                })
+              } catch {
+                // 单枚失败继续其余（fail-soft 同径）
+              }
+            }
           })
           .catch((cause: unknown) => {
             warnReconcileDegraded(diag, projectId, cause)
