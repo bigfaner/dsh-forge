@@ -260,10 +260,20 @@ test('@feature expert-squad step-2 success：卡片字段集逐位（灯/名称/
   // 字段集逐位（ui-design F1 数据绑定）
   await expect(card.locator('.dot.on'), '启用状态灯 on').toBeVisible()
   await expect(card.locator('.xc-name'), '名称 ← name').toHaveText('test-reviewer')
-  // 路由 chip（xc-title-row 右侧二态标识——fixture 未配置路由 = 继承父Agent 弱化 chip）
+  // 路由 chip（xc-title-row 右侧二态标识——default-routing AC3）。二态判定链（registry
+  // buildEntry 折叠）：① experts 条目 > ② 档案成对 > ③ defaultAgentOptions 基座——夹具
+  // 档案未配置路由时，宿主 profile 若注册了 defaultAgentOptions 则解析出生效模型（kind=
+  // model，chip 显模型名 + data-tip 展 provider），否则继承父Agent（kind=inherit）。
+  // 断言锚二态一致性而非字面量（kind 与文本/tooltip 互证，宿主 profile 配置差异不翻红）
   const routeChip = card.locator('.xc-title-row .chip[data-xc-route]')
-  await expect(routeChip, '路由 chip·未配置 = 继承父Agent').toHaveText('继承父Agent')
-  await expect(routeChip, '路由 chip·kind 锚 inherit').toHaveAttribute('data-xc-route', 'inherit')
+  const routeKind = await routeChip.getAttribute('data-xc-route')
+  if (routeKind === 'inherit') {
+    await expect(routeChip, '路由 chip·inherit = 继承父Agent 弱化 chip').toHaveText('继承父Agent')
+  } else {
+    expect(routeKind, '路由 chip kind ∈ 二态锚').toBe('model')
+    expect((await routeChip.innerText()).trim().length, '路由 chip·model 显非空模型名').toBeGreaterThan(0)
+    await expect(routeChip, '路由 chip·model tooltip 展 provider').toHaveAttribute('data-tip', /.+/)
+  }
   await expect(card.locator('.xc-tags .chip.tool').first(), '工具 chip ← tools').toHaveText('read')
   await expect(card.locator('.xc-title'), '岗位 ← title').toHaveText('夹具评审')
   await expect(card.locator('.xc-creed'), '人设摘要（Markdown 剥离纯文本）').toContainText('夹具人设正文')
