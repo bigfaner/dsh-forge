@@ -4,11 +4,12 @@
 // 循环级（启动①-③）与任务级 notice 场景（领取④⑤/完成⑥/重试⑪⑫/自愈阻塞⑦⑧⑧b⑨）
 // 已退出消息面——对应信息仅经 forge/progress 事件投影（driver 侧 emitProgress 单源）。
 // 统一骨架（类型行/任务源/任务键/事实/系统动作/下一步动作）经 skeleton 机械拼装
-// （key: val 单冒号·值内零冒号·封闭两值·机制词零出现）；结算消息附「任务概要」段
+// （key: val 单冒号·值内零冒号·下一步动作封闭族·机制词零出现）；结算消息附「任务概要」段
 // （每任务一行：标题/终态/耗时——数据源 = 驱动侧与 progress 事件同源的起止记录）。
 import {
   line,
   nextActionLine,
+  NEXT_ACTION_FORBIDDEN,
   NEXT_ACTION_NONE,
   nextActionPromptUser,
   sanitizeValue,
@@ -71,7 +72,7 @@ export interface FinishedAllPayload {
   readonly taskSummaries?: readonly string[]
 }
 
-/** ⑰ 停止（/stop-dag-tasks）（followup·结算径）——用户主动停止，不引导续跑（下一步动作 = 无） */
+/** ⑰ 停止（/stop-dag-tasks）（followup·结算径）——用户主动停止，禁止 agent 再行动（下一步动作 = 禁止任何行动） */
 export interface StoppedByCommandPayload {
   readonly sourceSlug: string
   readonly completed: number
@@ -174,7 +175,7 @@ export function stoppedByCommand(p: StoppedByCommandPayload): string {
     typeLine('循环停止', '任务源', `${p.sourceSlug} — 已按你的指令停止`),
     line('状态', `完成 ${p.completed} · 执行中任务 ${p.inFlightTaskKey} 已标记为中断`),
     ...taskSummarySection(p.taskSummaries),
-    nextActionLine(NEXT_ACTION_NONE),
+    nextActionLine(NEXT_ACTION_FORBIDDEN),
   ].join('\n')
 }
 

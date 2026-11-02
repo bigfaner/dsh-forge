@@ -9,6 +9,7 @@ import {
   nextActionLine,
   nextActionPromptUser,
   NEXT_ACTION_NONE,
+  NEXT_ACTION_FORBIDDEN,
   NEXT_ACTION_PATTERN,
   sanitizeValue,
   summarizeReason,
@@ -31,9 +32,15 @@ describe('S4 · key: val 单冒号机械（decisions #27③）', () => {
   })
 })
 
-describe('S4 · 下一步动作封闭两值（decisions #27④）', () => {
+describe('S4 · 下一步动作封闭族（decisions #27④ + ⑰ 停止终局禁行值）', () => {
   it('无 值渲染', () => {
     expect(nextActionLine(NEXT_ACTION_NONE)).toBe('下一步动作: 无')
+  })
+
+  it('禁止任何行动 值渲染（⑰ 停止终局专属）', () => {
+    expect(nextActionLine(NEXT_ACTION_FORBIDDEN)).toBe(
+      '下一步动作: 禁止任何行动——不得派发任务、重开循环或执行其它操作',
+    )
   })
 
   it('提示用户"<指令文本>"值渲染（宾语定向用户侧）', () => {
@@ -48,8 +55,9 @@ describe('S4 · 下一步动作封闭两值（decisions #27④）', () => {
     )
   })
 
-  it('封闭模式：仅接受 无 / 提示用户"<文本>"（含可选问询后缀）', () => {
+  it('封闭模式：仅接受 无 / 禁止任何行动 / 提示用户"<文本>"（含可选问询后缀）', () => {
     expect(NEXT_ACTION_PATTERN.test('无')).toBe(true)
+    expect(NEXT_ACTION_PATTERN.test('禁止任何行动——不得派发任务、重开循环或执行其它操作')).toBe(true)
     expect(NEXT_ACTION_PATTERN.test('提示用户"执行 /run-dag-tasks"')).toBe(true)
     expect(NEXT_ACTION_PATTERN.test('提示用户"环境排查"，并在问询中决定')).toBe(true)
     expect(NEXT_ACTION_PATTERN.test('执行 /run-dag-tasks')).toBe(false)
@@ -128,9 +136,9 @@ describe('S4 · validateNarrative 骨架校验', () => {
     expect(validateNarrative(bad).some((p) => p.includes('末行'))).toBe(true)
   })
 
-  it('下一步动作值越出封闭两值', () => {
+  it('下一步动作值越出封闭族', () => {
     const bad = ['[forge·领取] 任务源: m2-pipeline', '下一步动作: 自行决定'].join('\n')
-    expect(validateNarrative(bad).some((p) => p.includes('封闭两值'))).toBe(true)
+    expect(validateNarrative(bad).some((p) => p.includes('封闭族'))).toBe(true)
   })
 
   it('机制词入文报问题', () => {

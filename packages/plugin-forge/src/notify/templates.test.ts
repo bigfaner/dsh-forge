@@ -120,7 +120,7 @@ const SAMPLES: readonly SampleCase[] = [
     expected: `[forge·循环停止] 任务源: m2-pipeline — 已按你的指令停止
 状态: 完成 5 · 执行中任务 2.9 已标记为中断
 任务概要: 2.7 会话装配 — 完成 · 5m
-下一步动作: 无`,
+下一步动作: 禁止任何行动——不得派发任务、重开循环或执行其它操作`,
   },
 ]
 
@@ -142,9 +142,9 @@ describe('S4 · 每条叙述的统一骨架不变式', () => {
       expect(validateNarrative(sample.render())).toEqual([])
     })
 
-    it(`${sample.no} 「下一步动作:」为末行且值取封闭两值`, () => {
+    it(`${sample.no} 「下一步动作:」为末行且值取封闭族`, () => {
       const last = sample.render().split('\n').at(-1) ?? ''
-      expect(last).toMatch(/^下一步动作: (无|提示用户"[^"]*"(，并在问询中决定)?)$/)
+      expect(last).toMatch(/^下一步动作: (无|禁止任何行动——不得派发任务、重开循环或执行其它操作|提示用户"[^"]*"(，并在问询中决定)?)$/)
     })
   }
 })

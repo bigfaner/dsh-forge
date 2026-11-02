@@ -2152,11 +2152,11 @@ describe('循环生命周期（⑧——供 S2 指令层调用）', () => {
     expect(built.h.transitions).toEqual([
       { projectId: PROJECT, taskId: 't-1', toStatus: 'interrupted', reason: '派发循环停止', actor: 'core' },
     ])
-    // ⑰ 停止终局叙述（用户主动停止 = 不引导续跑，下一步动作 = 无）
+    // ⑰ 停止终局叙述（用户主动停止 = 禁止 agent 再行动——防停止后循环被再次拉起）
     const stoppedNotice = built.calls.find((c) => c.method === 'settle')
     expect(stoppedNotice?.text).toContain('[forge·循环停止] 任务源: feat-x — 已按你的指令停止')
     expect(stoppedNotice?.text).toContain('执行中任务 feat-x/2.5 已标记为中断')
-    expect(stoppedNotice?.text).toContain('下一步动作: 无')
+    expect(stoppedNotice?.text).toContain('下一步动作: 禁止任何行动——不得派发任务、重开循环或执行其它操作')
     expect(stoppedNotice?.text).not.toContain('/run-dag-tasks')
     // ⑰ 结算单点唤醒（AC）：send(nextStep, true)
     expect(stoppedNotice?.form).toBe('settle')

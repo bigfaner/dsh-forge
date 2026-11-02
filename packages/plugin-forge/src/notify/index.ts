@@ -5,6 +5,8 @@ export {
   line,
   MECHANISM_WORDS,
   nextActionLine,
+  NEXT_ACTION_FORBIDDEN,
+  NEXT_ACTION_FORBID_ALL,
   NEXT_ACTION_NONE,
   NEXT_ACTION_PATTERN,
   nextActionPromptUser,
