@@ -243,6 +243,7 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
       'listTasks',
       'pauseTask',
       'present',
+      'addTask',
       'queryImplCheckpoint',
       'queryTask',
       'recordImplCheckpoint',
@@ -297,15 +298,15 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     const triageDeny = new Set(deriveTriageToolFilter().deny)
     for (const name of FORGE_TOOL_NAMES) {
       if ((WORKER_FORGE_TOOLS as readonly string[]).includes(name)) continue
-      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族五动词之外不可见）`).toBe(true)
+      expect(workerDeny.has(name), `${name} 应入 worker deny（forge 族四动词之外不可见）`).toBe(true)
       // 只读台账两面（§2.2.1）放行：getBug/listBugs 不入 triage deny
       if (name !== 'getBug' && name !== 'listBugs') {
         expect(triageDeny.has(name), `${name} 应入 triage deny（写面/任务域动词仅主 agent）`).toBe(true)
       }
     }
     expect(workerDeny.has('submitTask')).toBe(false)
-    expect(workerDeny.has('addTask')).toBe(false)
-    // fix-bug 两 bug 写径 + 链上下文读径：worker 面（forge 族五动词）+ triage 面（仅决策不执行）分治
+    expect(workerDeny.has('addTask')).toBe(true)
+    // fix-bug 两 bug 写径 + 链上下文读径：worker 面（forge 族四动词）+ triage 面（仅决策不执行）分治
     expect(workerDeny.has('recordBug')).toBe(false)
     expect(workerDeny.has('resolveBug')).toBe(false)
     expect(workerDeny.has('getBug')).toBe(false)
@@ -350,8 +351,8 @@ describe('deriveWorkerToolFilter（taskType → 收窄矩阵 → toolFilter）',
     expect(deriveTriageToolFilter().deny).toContain('bash')
   })
 
-  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 五动词（submitTask/addTask + 两 bug 写径 + getBug 读径）——bug-recurrence-chain worker 放行钉住', () => {
-    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug'])
+  it('contracts 矩阵单源：WORKER_FORGE_TOOLS 四动词（submitTask + 两 bug 写径 + getBug 读径；addTask 不入 worker 面）——bug-recurrence-chain worker 放行钉住', () => {
+    expect([...WORKER_FORGE_TOOLS]).toEqual(['submitTask', 'recordBug', 'resolveBug', 'getBug'])
   })
 })
 
@@ -635,7 +636,7 @@ describe('事件归属（tool-error——attribution 槽）', () => {
 // ─────────────────────────── expert-squad-forge 1.4：allow 并集公式 ───────────────────────────
 
 describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4——allow = 档案 tools ∪ 管线必备用具集）', () => {
-  it('必备用具集单源：forge 五动词（WORKER_FORGE_TOOLS 单源）+ todo_write', () => {
+  it('必备用具集单源：forge 四动词（WORKER_FORGE_TOOLS 单源；addTask 不保底）+ todo_write', () => {
     expect([...WORKER_PIPELINE_ESSENTIAL_TOOLS].sort()).toEqual([...WORKER_FORGE_TOOLS, 'todo_write'].sort())
   })
 

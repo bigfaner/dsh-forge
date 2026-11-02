@@ -1,5 +1,5 @@
 // getBug tool 定义（bug-recurrence-chain——按 bug_id 查全卡 + 链上下文）。
-// 面分治：主 + worker——worker forge 面第五动词（contracts WORKER_FORGE_TOOLS；fix-bug
+// 面分治：主 + worker——worker forge 面第四动词（contracts WORKER_FORGE_TOOLS；fix-bug
 // coding-fix worker 挂链深查，与派发简报注入的链候选发现两径互补）。
 // core getBug 承载（small-domains/bugs.ts——GetBugQuery/GetBugResponse，孤条 chain 缺席），
 // 本壳零 core 改动。参照 resolve-bug.ts 薄壳模式：参数执行点防御收窄（空 bug_id 拒）/

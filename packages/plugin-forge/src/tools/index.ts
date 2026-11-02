@@ -206,8 +206,9 @@ export interface ForgeTools {
  *  单任务暂停入口（task-pause-primitive）+ transitionFeature 相位转移入口
  *  （implicit-stage-approval §2.3——裁决②局部修订）+ unblockTask blocked→pending 出口
  *  （blocked-verdict-restore-primitive）；面分治：listBugs/transitionFeature
- *  仅主 agent，getBug 主 + worker，pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
- *  五动词，其余 worker deny） */
+ *  仅主 agent，getBug 主 + worker，addTask 仅主 agent（worker 面不注入——
+ *  execute 面 ERR_WORKER_ADDTASK_DENIED 双保险），pauseTask/unblockTask 仅主 agent——WORKER_FORGE_TOOLS
+ *  四动词，其余 worker deny） */
 export const FORGE_TOOL_NAMES = [
   'addTask',
   'submitTask',

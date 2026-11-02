@@ -534,10 +534,11 @@ describe('档案 tools/model spawn 组装消费（expert-squad-forge 1.4——re
     expect(profileCalls).toEqual(['coding-fix'])
     const req = h.spawnRequests[0]!
     expect(req.toolFilter.allow).toBeDefined()
-    // 并集保底：档案白名单（read/custom-lint）+ 管线必备（结算链 forge 五动词 + todo_write）
-    for (const name of ['read', 'custom-lint', 'submitTask', 'addTask', 'recordBug', 'resolveBug', 'getBug', 'todo_write']) {
+    // 并集保底：档案白名单（read/custom-lint）+ 管线必备（结算链 forge 四动词 + todo_write；addTask 不保底——worker 不派任务）
+    for (const name of ['read', 'custom-lint', 'submitTask', 'recordBug', 'resolveBug', 'getBug', 'todo_write']) {
       expect(req.toolFilter.allow, `allow 保底 ${name}`).toContain(name)
     }
+    expect(req.toolFilter.allow).not.toContain('addTask')
     // deny 收窄面照旧（矩阵派生不回退）
     expect(req.toolFilter.deny).toEqual(expect.arrayContaining(['ask_user_question', 'queryTask', 'dispatchTask']))
     // 路由消费：experts 折叠应答成对在场 → 整组进 agentOptions

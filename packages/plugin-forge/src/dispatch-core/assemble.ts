@@ -12,11 +12,12 @@ import {
 } from '@dsh-forge/contracts'
 
 /**
- * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 五动词——submitTask +
- * addTask 两既有动词 + recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径
- * （bug-recurrence-chain——fix-bug coding-fix worker 放行）。名单 = 本包
+ * worker 面禁入的 forge 动词（矩阵 forge 族 = WORKER_FORGE_TOOLS 四动词——submitTask +
+ * recordBug/resolveBug 两 bug 写径 + getBug 链上下文读径（bug-recurrence-chain——fix-bug
+ * coding-fix worker 放行）；addTask 不入 worker 面（任务派生权限归主会话与循环处置层——
+ * execute 面 ERR_WORKER_ADDTASK_DENIED 双保险）。名单 = 本包
  * FORGE_TOOL_NAMES ∪ dispatchTask − WORKER_FORGE_TOOLS（单测同步守护）——十六员全集中
- * worker 可见 = 五动词，其余八员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
+ * worker 可见 = 四动词，其余九员 deny（updateTask/taskStats/listTasks/listBugs 等仅主
  * agent 面——listBugs 台账查询面分治主 agent；transitionFeature 相位转移入口
  * （implicit-stage-approval §2.3——仅主 agent，worker 面无代转相位动词））。
  * validateMermaid = md-mermaid 插件工具单源锚（packages/plugins/md-mermaid/src/
@@ -26,6 +27,7 @@ import {
  * spec 面收口归 5.1 工具名映射 pin（OQ#2）。
  */
 const FORGE_DENY_IN_WORKER: readonly string[] = [
+  'addTask', // dispatch-loop-hardening 改进 5——任务派生权限归主会话/循环处置层（worker 面不注入）
   'queryTask',
   'createProposal',
   'transitionProposal',
@@ -69,8 +71,9 @@ export function forgetWorkerSourceTask(workerSessionId: string): void {
 
 /**
  * 管线必备用具集（expert-squad-forge 1.4——allow=keep-only 语义下的并集保底单源）：
- * allow=keep-only 会滤除白名单外的全部工具，故结算链/fix 链必备的 forge 五动词
- * （contracts WORKER_FORGE_TOOLS 单源——submitTask/addTask/recordBug/resolveBug/getBug）
+ * allow=keep-only 会滤除白名单外的全部工具，故结算链/fix 链必备的 forge 四动词
+ * （contracts WORKER_FORGE_TOOLS 单源——submitTask/recordBug/resolveBug/getBug；addTask
+ * 派生权限归主会话，不保底）
  * 与 todo_write（执行骨架清单——全局拒绝集刻意不拒的同一裁决面，allow 语义下须显式在
  * allow 内否则 keep-only 滤除）恒并入档案 tools 白名单。派发链组装公式见
  * deriveWorkerToolFilter；穷举 20 任务类型的保底单测锚定本集。

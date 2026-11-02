@@ -1,6 +1,6 @@
 // M3 worker 收窄矩阵常量（tech-design §Interface 2 收窄矩阵表逐格对照——G1-20 pin 对象）。
 // dispatchTask 按 claim 到的 task.taskType 查表得 toolFilter（childCtx.tools.restrict 面）：
-// 任务类型族 × 工具族 ✓ 表 + 全局拒绝集（一切 worker）+ forge 面 = submitTask + addTask。
+// 任务类型族 × 工具族 ✓ 表 + 全局拒绝集（一切 worker）+ forge 面 = submitTask 等四动词。
 // 定位铁律：纯常量与类型，零逻辑零依赖（派生组装归 plugin-forge dispatch-task）。
 import type { TaskType } from './labels.js'
 
@@ -46,7 +46,7 @@ export type WorkerToolFamily = (typeof WORKER_TOOL_FAMILIES)[number]
 /**
  * 收窄矩阵本体：任务类型族 × 工具族 ✓ 表（true = 放行；false = 该族工具对 worker 收窄拒绝）。
  * Interface 2 逐格：fs 全放；shell 全放（doc 亦仓库变更）；jobs gate/验证可长跑、doc 无；
- * read_image = coding（UI 断言截图）+ 验证；web 仅验证；forge 面（submitTask + addTask）全放。
+ * read_image = coding（UI 断言截图）+ 验证；web 仅验证；forge 面（WORKER_FORGE_TOOLS 四动词）全放。
  */
 export const WORKER_TOOL_MATRIX: Readonly<
   Record<WorkerTaskFamily, Readonly<Record<WorkerToolFamily, boolean>>>
@@ -85,13 +85,13 @@ export const WORKER_GLOBAL_DENY_TOOLS = [
 ] as const
 
 /**
- * forge 工具族的面 = 五动词（submitTask + addTask 两既有动词 + recordBug/resolveBug 两 bug
- * 写径 + getBug 单条全卡/链上下文读径——fix-bug coding-fix worker 挂链深查；面分治：
+ * forge 工具族的面 = 四动词（submitTask + recordBug/resolveBug 两 bug 写径 + getBug 单条
+ * 全卡/链上下文读径——fix-bug coding-fix worker 挂链深查；面分治：addTask 不入 worker 面
+ * （任务派生权限归主会话与循环处置层——worker 拒收 ERR_WORKER_ADDTASK_DENIED），
  * listBugs 查询仅主 agent，claimTask/queryTask/dispatchTask 不入 worker 面——SC7/SC2 断言）。
  */
 export const WORKER_FORGE_TOOLS = [
   'submitTask',
-  'addTask',
   'recordBug',
   'resolveBug',
   'getBug',
@@ -107,7 +107,7 @@ export const WORKER_FORGE_TOOLS = [
  *   jobs ← dsh-tool-jobs（job_list/job_output/job_kill）
  *   read-image ← dsh-tool-fs 的 read_image（独立族——矩阵单独收窄）
  *   web ← dsh-tool-web（web_fetch/web_search）
- *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/addTask/recordBug/resolveBug/getBug）
+ *   forge ← 我方 WORKER_FORGE_TOOLS（submitTask/recordBug/resolveBug/getBug）
  * 不入表（非六族矩阵收窄面）：skill（恒在场不拒）/ plan-mode exit_plan_mode /
  * todo_write（解禁——WORKER_GLOBAL_DENY_TOOLS 注释）/ goal 三命令与 delegation 族、
  * ask-user/present（= WORKER_GLOBAL_DENY_TOOLS 承载）/ subagent（惰性
@@ -115,9 +115,8 @@ export const WORKER_FORGE_TOOLS = [
  */
 export const WORKER_TOOL_NAME_FAMILY: Readonly<Record<string, WorkerToolFamily>> = {
   // forge 面（我方——WORKER_FORGE_TOOLS 单源子集；recordBug/resolveBug = fix-bug bug 写径两动词，
-  // getBug = bug 单条全卡/链上下文读径）
+  // getBug = bug 单条全卡/链上下文读径；addTask 不入表——仅主 agent，worker 面结构缺席）
   submitTask: 'forge',
-  addTask: 'forge',
   recordBug: 'forge',
   resolveBug: 'forge',
   getBug: 'forge',
