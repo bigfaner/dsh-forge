@@ -165,7 +165,41 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 
 - `e2e/specs/m3/mode-selection-alignment.spec.ts:114` oxlint no-unused-vars（`app`）在 HEAD 即存在（1.8 收口遗留）——非本批改动，只记录上报。
 
-## 批次范围
+## 批次五：p1mvp 族 11 份（本批次）
+
+3 份迁移共享 launch 形态 + 8 份特殊面保留原形态（理由见下表）。**零退役**（逐用例复核：全部为行为/写径/守卫断言，无 unit 等价覆盖的纯文案面；各 spec 头裁定注记含退役复核段）。
+
+### 迁移 3 份
+
+| spec | 用例数 | 冷启点 | 裁定与适配点 |
+|---|---|---|---|
+| brand-whale-sea | 1 | 1 → 1 | 保留（覆盖层 CSS 契约 + 主题跟随 + 指针穿透运行期行为）。夹具播种（brand-demo + sentinel）进 seedWorkspace 三路同参 |
+| sidebar-view-align | 4 | 4 → 1 | 全保留（rail 几何/官方 startSession 链/ellipsis 菜单真实链/Modal 改名链）。五组夹具目录统一 seedWorkspace；行尾新会话钮盘面判读改扫共享 ud 根（段锚 = wsDir 末段 mkdtemp 随机后缀、惰性求值、大小写归一——批次四b uf3 同径）；前置还原（面板未开/宽态侧栏）归 fixture 复位链；归档写径用例经「仅归档」只读收口 + 遗留项目归档（archiveLegacyProjects）逐用例复位 |
+| windows-titlebar-shell | 2 | 2 → 1 | 全保留（WCO 标记/frame 补偿/折叠钮几何 + 右栏展开钮 tooltip/点击链）。夹具播种进 seedWorkspace；pageErrors 断言改 sharedLaunch 整 spec 累计面；标记面用例原零项目 fresh boot，共享形态 beginTest 注册 ws-wtb 不触及被测壳级 DOM |
+
+### 保留原形态裁定（批次五，8 份）
+
+| spec | 冷启点 | 裁定理由 |
+|---|---|---|
+| hero-control | 2 | AC1 前置 openStateDb(userData) 写径篡改共享 state.db（删行构造假未绑定账本行）——共享 fixture userData 自管不外露（SharedLaunchHandle 无 userData 缝）；DB 预置/篡改无法按用例隔离（m2/task-session-linkage 同裁定族） |
+| installer-smoke | 4 | 安装器链（NSIS 静默安装 + 安装产物直启 + launchElectron 破坏启动面 + 机器复位纪律）与共享会话生命周期整体不相容——spec 级单 launch 冷启形态在本文件不成立 |
+| knowledge-browsing | 5 | state.db 预置面（seedUsageEvents/clearKnowledgeIndex）经 openStateDb(userData) launch 前预置——共享 ud 不外露无法定位；全文件单 boot 纪律与 fixture 用例间不 closeApp 语义冲突 |
+| knowledge-recall-flywheel | 6 | dogfood 真实凭据 seedDshHome 写自管 userData + 去模型化留痕 skip 门（m3/dogfood-sc-m3 同裁定族） |
+| project-registration | 9 | projects 全表计数断言 + hero 相位回归断言（cancel 系）依赖零项目 fresh boot——共享 beginTest 自动注册先落一行且跨用例持久；SharedLaunchHandle 不暴露 userData，deriveTaskStoreDir 期望值无法计算 |
+| project-registration-compensation | 7 | 对账注入本体全在 {userData}/state.db（INSERT ABORT 触发器/WAL 活删/悬空引用 UPDATE）+ fix-27 双 boot 专项 + registry 探针直读 dsh-home + providerOverlay/stablePhase:'probe' 启动形态差异——四条特殊面贯穿全部非 skip 用例，整份一致保留 |
+| session-workbench | 8 | dogfood 组真实凭据播种（同 recall-flywheel）+ 非 dogfood 组依赖 per-test 全新 userData fresh 态断言（零项目 hero 空态/账本零绑定行/单 boot 零凭据）——共享累积态无法复位 |
+| session-workbench-replay | 1 | 双 launchHost 形态（首启 → closeApp → 盘面播种 → 同 userData 复启）——共享 fixture 用例间不 closeApp、userData 自管，无「两次 launch 之间盘面播种」缝（m3/dogfood-sc-m3-replay 同裁定族） |
+
+### 真机对账（workers=2，3 份迁移 spec 7 用例）
+
+- 基线（原始形态，`006-baseline-rerun/baseline-run1.log`，2.3m）：**2 failed / 5 passed**——sidebar T2「行尾新会话钮」（hover 后 new-session rowaction resolved but not visible，click 30s 超时）+ T3「项目改名」（menu rowaction 同签名不可见 click 超时）。
+- 迁移形态（`007-migrated-rerun/migrated-run1.log`，1.9m）：**2 failed / 5 passed**，失败集与基线同两用例。逐例归因：
+  - T2：与基线**同断言同红**（locator resolved 可见性缺失、同 aria-label/同 rowaction 类名）——产品侧 hover rowaction 可见性竞速存量红，零迁移回归。
+  - T3：基线红在 menu rowaction click 超时；迁移形态批内红点漂移至更早的注册行可见断言（共享序列下前序红例沉降窗耦合——批次四a mode T3 同族）；迁移形态隔离 run **绿**（`isolated-t3-run.log`，17.6s，全链走通）——非迁移固有回归，两形态批内均不稳定红（存量抖动面），归因上报。
+- 冷启点：7 → 3（3 迁移 spec 各 1 + 重播种/crash 重启）；批时 2.3m → 1.9m。
+- 范围外上报（工具链解锁修复，随本批落盘）：HEAD 4d58e48d 提交的 packages/plugin-forge/package.json description 字段含损坏 UTF-8（闭合引号丢失）致 pnpm 全局 JSON parse 失败——按 HEAD blob 字节级修复仅该行（恢复 cc05e0a1 同款文案）。
+
+## 批次范围（旧文案存档）
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
 
