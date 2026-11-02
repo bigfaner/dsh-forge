@@ -72,6 +72,9 @@ export const ERROR_CODES = [
   'ERR_BLOCK_CLASSIFICATION_REQUIRED', // → BlockClassificationRequiredError：blocked 结算缺根因归类 blockClassification（新问题/同族复发二选一必带；400；指引文案含字段形状）
   // ── loop-recurrence-hardening T3（同缝拦截 + 待建模软拒绝） ──
   'ERR_RECURRENCE_ESCALATION_REQUIRED', // → dispatch-core claim 守卫软拒绝：recurrence 链同缝计数 ≥2 的盲试 fix 派发拒绝并提示升级排查（「待建模」派生态现算，报告落卷后重派放行；与 ERR_BLOCK_SOURCE_REQUIRED 文案互指）
+  // ── loop-recurrence-hardening T4（覆盖声明闸门——fix_approach 协议 + 锚有效性预检） ──
+  'ERR_BUG_COVERAGE_DECLARATION_REQUIRED', // → BugCoverageDeclarationRequiredError：复发家族（recurrence_of 在场）resolveBug(fixed) 的 fix_approach 缺覆盖声明段/报告锚行——core 纯 DB 面 presence 拒写（400；data 带缺席段清单）
+  'ERR_BUG_COVERAGE_ANCHOR_INVALID', // → plugin-forge resolveBug tool 锚有效性预检（旁挂侧文件 IO）：报告锚指向的卷宗正本不在场——失效经拒绝路径退回（400；data 带锚与解析路径）
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]
@@ -150,6 +153,26 @@ export interface FilesUnionMismatchData {
 export interface BugRecurrenceDanglingData {
   /** 指向不存在 bug 的 recurrenceOf 值 */
   recurrenceOf: string
+}
+
+// ── loop-recurrence-hardening T4：覆盖声明闸门 data 载荷 ──
+
+/** ERR_BUG_COVERAGE_DECLARATION_REQUIRED data 载荷：协议缺席段清单（declaration=覆盖声明段、anchor=报告锚行） */
+export interface BugCoverageDeclarationRequiredData {
+  /** 被拒回填的 bug */
+  bugId: string
+  /** 缺席段清单（protocol 段枚举——两段独立 presence 判定） */
+  missing: readonly ('declaration' | 'anchor')[]
+}
+
+/** ERR_BUG_COVERAGE_ANCHOR_INVALID data 载荷：登记的锚字符串 + 解析后的绝对路径（卷宗正本不在场） */
+export interface BugCoverageAnchorInvalidData {
+  /** 被拒回填的 bug */
+  bugId: string
+  /** fix_approach anchor: 行登记的锚字符串原样 */
+  anchor: string
+  /** 预检解析后的绝对路径（相对锚经项目根 wsPath 解析） */
+  resolved: string
 }
 
 // ── forge-verification-hardening 机械⑤：submitTask 强制域取证声明校验兜底 data 载荷 ──

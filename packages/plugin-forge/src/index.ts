@@ -620,6 +620,8 @@ const forgePlugin: ForgePlugin = Object.assign(
       ...(settingsService !== undefined ? { settings: settingsService } : {}),
       ...(resolveModelReasoning !== undefined ? { resolveModelReasoning } : {}),
       ...(jobsFace !== undefined ? { jobs: jobsFace } : {}),
+      // T4 锚有效性预检项目根解析缝（loop-recurrence-hardening——resolveDir 同源 projects face）
+      projects: ctx.forgeProjects,
       // 3b 循环工具装配缝：dispatchTask/stopTaskLoop 与 /run-dag-tasks 指令同源同一循环核心
       // （驱动器 + 登记表单例注入——守卫判活/接管集/单活门控双入口同 registry）。
       loop: { driver: loopDriver, registry: loopRegistry },

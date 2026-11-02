@@ -65,6 +65,9 @@ const EXPECTED: Record<(typeof ERROR_CODES)[number], RpcUiStateKind> = {
   ERR_BLOCK_CLASSIFICATION_REQUIRED: 'error-bar',
   // loop-recurrence-hardening T3——同缝 ≥2 盲试 fix 派发软拒绝错误条（指引升级排查 + 报告落卷放行）
   ERR_RECURRENCE_ESCALATION_REQUIRED: 'error-bar',
+  // loop-recurrence-hardening T4——覆盖声明段/报告锚缺席 + 锚失效错误条（指引补证重回填）
+  ERR_BUG_COVERAGE_DECLARATION_REQUIRED: 'error-bar',
+  ERR_BUG_COVERAGE_ANCHOR_INVALID: 'error-bar',
 }
 
 describe('rpcUiState（UI 按 code 映射状态的最简消费约定）', () => {

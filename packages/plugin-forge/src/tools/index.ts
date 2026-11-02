@@ -27,7 +27,7 @@ import type {
 } from '@dsh-forge/contracts'
 import type { BugCard, BugChainContext, GetBugResponse, ListBugsQuery } from '@dsh-forge/contracts'
 import type { ForgeEventSink } from '../events/sink.js'
-import type { DispatchJobsFace } from '../faces.js'
+import type { DispatchJobsFace, ProjectDirServiceFace } from '../faces.js'
 import type { ProjectIdResolver } from './session.js'
 import { createAddTaskTool } from './add-task.js'
 import { createCreateProposalTool } from './create-proposal.js'
@@ -161,6 +161,11 @@ export interface ForgeToolDeps {
    * 调用并提示（events/settings 同型可选降级模式——后台派发降级关闭，前台路径零变化）。
    */
   jobs?: DispatchJobsFace
+  /**
+   * 项目域服务收窄面（可选——loop-recurrence-hardening T4 resolveBug 锚有效性预检的
+   * 项目根解析缝，1.4 resolveDir 同源注入；缺席 = 预检机制惰性跳过，core presence 门仍在）。
+   */
+  projects?: ProjectDirServiceFace
 }
 
 /** tool 定义组（顺序 = Interface 4 列序扩展——十七员；注册面与断言面共消费） */

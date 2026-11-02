@@ -539,3 +539,95 @@ describe('commitFiles/fileDiff：fixed 证据变更内容读面（git show 只�
     expect(await makeService(h, { execFile: fail.execFile }).fileDiff({ projectId: h.projectId, commitHash: 'a1b2c3d', path: 'x' })).toEqual({ diff: '' })
   })
 })
+
+// T4 覆盖声明闸门（loop-recurrence-hardening 提案 §2.2 T4 + AC4）——core 纯 DB 面半：
+// 复发家族（recurrence_of 在场）resolveBug(fixed) 必携 fix_approach 协议两段
+// （coverage: 声明 + anchor: 报告锚），缺席拒写零副作用；锚只做字符串登记（零文件 IO）；
+// 非复发家族协议可选零行为变化。锚有效性预检（文件 IO）在 plugin-forge 旁挂侧（另测）。
+describe('T4 覆盖声明闸门：resolveBug fix_approach 协议（core 纯 DB 面）', () => {
+  let h: SmallDomainHarness | undefined
+  afterEach(() => h?.dispose())
+
+  /** 种复发家族：root open + child（recurrenceOf 挂链）open */
+  async function seedFamily(s: ReturnType<typeof createBugsService>, projectId: string) {
+    const root = (await s.registerBug({ projectId, ...REGISTER_BASE, summary: '链根' })).card
+    const child = (
+      await s.registerBug({ projectId, ...REGISTER_BASE, summary: '复发节', recurrenceOf: root.bugId })
+    ).card
+    return { root, child }
+  }
+
+  const COMMIT = 'cccccccccccccccccccccccccccccccccccccccc'
+
+  it('AC4-缺席：复发家族 fixed 缺协议两段（fix_approach 缺席）→ ERR_BUG_COVERAGE_DECLARATION_REQUIRED，行留 open 零副作用', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    await expect(
+      s.resolveBug({ projectId: h.projectId, bugId: child.bugId, outcome: 'fixed', commitHash: COMMIT }),
+    ).rejects.toMatchObject({
+      code: 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
+      data: { bugId: child.bugId, missing: ['declaration', 'anchor'] },
+    })
+    // 拒写零副作用：行留 open、零 fixed 迁移
+    const after = await s.getBug({ projectId: h.projectId, bugId: child.bugId })
+    expect(after.card.bugStatus).toBe('open')
+  })
+
+  it('AC4-缺席：只有 coverage 行缺 anchor 行 → missing = [anchor]（两段 presence 独立判定）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    await expect(
+      s.resolveBug({
+        projectId: h.projectId,
+        bugId: child.bugId,
+        outcome: 'fixed',
+        commitHash: COMMIT,
+        fixApproach: '修法：原子守卫消除竞态\ncoverage: 消除 check-then-act 共同根因，覆盖整链',
+      }),
+    ).rejects.toMatchObject({
+      code: 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED',
+      data: { missing: ['anchor'] },
+    })
+  })
+
+  it('AC4-双过：coverage + anchor 两段齐备 → fixed 放行，fix_approach 含协议行原样登记（锚只做字符串登记零文件 IO）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const { child } = await seedFamily(s, h.projectId)
+    const approach =
+      '修法：原子守卫消除竞态（状态化写者）\n' +
+      'coverage: 消除 check-then-act 共同根因，覆盖整条链\n' +
+      'anchor: .forge/docs/proposals/x/issues/1/verification-report.md'
+    const card = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: child.bugId,
+      outcome: 'fixed',
+      commitHash: COMMIT,
+      fixApproach: approach,
+    })
+    expect(card.bugStatus).toBe('fixed')
+    expect(card.fixApproach).toBe(approach) // 原样登记——core 不改写不校验锚指向
+    expect(card.commitHash).toBe(COMMIT)
+  })
+
+  it('回归：非复发家族 fixed 无协议零行为变化（fix_approach 自由一段话照常落库）', async () => {
+    h = createHarness()
+    const git = stubExecFile({ 'config user.name': 'faner', 'worktree list --porcelain': PORCELAIN_HIT })
+    const s = makeService(h, { execFile: git.execFile })
+    const root = await seedFamily(s, h.projectId)
+    const card = await s.resolveBug({
+      projectId: h.projectId,
+      bugId: root.root.bugId, // 无 recurrenceOf——协议可选
+      outcome: 'fixed',
+      commitHash: COMMIT,
+      fixApproach: '普通一段话修法总结',
+    })
+    expect(card.bugStatus).toBe('fixed')
+    expect(card.fixApproach).toBe('普通一段话修法总结')
+  })
+})

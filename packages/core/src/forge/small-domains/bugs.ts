@@ -242,6 +242,71 @@ export class BugRecurrenceDanglingError extends Error {
   }
 }
 
+// ── T4 覆盖声明协议（loop-recurrence-hardening 提案 §2.2 T4——本注释即协议单源） ──
+// 存储载体 = fix_approach 既有字段（bug 台账 schema 零改动）。行式协议（大小写不敏感前缀
+// + 冒号 + 值；值 trim 后非空才算在场；首个命中行生效）：
+//   coverage: <为何本修复覆盖整条复发链共同根因的覆盖声明>
+//   anchor: <排查报告卷宗正本文件路径（相对项目根或绝对）>
+// 分层判定（双层）：core 纯 DB 面只判两段 presence + 锚字符串登记（零文件 IO、零语义——
+// 声明是否真答「为何覆盖全家族」由主会话结算复核裁）；锚有效性预检（文件 IO）归
+// plugin-forge resolveBug tool 旁挂侧（复用 1.4 resolveDir 同源 projects face 解析项目根），
+// 失效经拒绝路径退回失败 DTO（ERR_BUG_COVERAGE_ANCHOR_INVALID——写径零触达）。非复发家族
+// （recurrence_of 缺席）协议可选，fix_approach 仍为自由一段话——既有行为零变化。
+
+/** 覆盖声明段行前缀（大小写不敏感） */
+export const BUG_COVERAGE_DECLARATION_PREFIX = 'coverage:'
+
+/** 报告锚行前缀（大小写不敏感） */
+export const BUG_COVERAGE_ANCHOR_PREFIX = 'anchor:'
+
+/** fix_approach 协议解析产物（段值 trim 后非空；缺席段键缺席） */
+export interface BugCoverageDeclaration {
+  readonly declaration?: string
+  readonly anchor?: string
+}
+
+/** fix_approach 覆盖声明协议解析（纯函数零 IO——core presence 门与 plugin-forge 锚预检共享语义） */
+export function parseBugCoverageDeclaration(fixApproach: string | undefined): BugCoverageDeclaration {
+  let declaration: string | undefined
+  let anchor: string | undefined
+  for (const line of (fixApproach ?? '').split(/\r?\n/)) {
+    const t = line.trim()
+    const lower = t.toLowerCase()
+    if (declaration === undefined && lower.startsWith(BUG_COVERAGE_DECLARATION_PREFIX)) {
+      const v = t.slice(BUG_COVERAGE_DECLARATION_PREFIX.length).trim()
+      if (v !== '') declaration = v
+    } else if (anchor === undefined && lower.startsWith(BUG_COVERAGE_ANCHOR_PREFIX)) {
+      const v = t.slice(BUG_COVERAGE_ANCHOR_PREFIX.length).trim()
+      if (v !== '') anchor = v
+    }
+  }
+  return {
+    ...(declaration !== undefined ? { declaration } : {}),
+    ...(anchor !== undefined ? { anchor } : {}),
+  }
+}
+
+/** ERR_BUG_COVERAGE_DECLARATION_REQUIRED 附载 */
+export interface BugCoverageDeclarationRequiredData {
+  readonly bugId: string
+  readonly missing: readonly ('declaration' | 'anchor')[]
+}
+
+/** 复发家族 resolveBug(fixed) 覆盖声明段/报告锚行缺席拒写（core 纯 DB 面——零文件 IO 零语义） */
+export class BugCoverageDeclarationRequiredError extends Error {
+  readonly code = 'ERR_BUG_COVERAGE_DECLARATION_REQUIRED' as const
+  readonly data: BugCoverageDeclarationRequiredData
+
+  constructor(data: BugCoverageDeclarationRequiredData) {
+    super(
+      `复发家族覆盖声明闸门：resolveBug(fixed) 的 fix_approach 缺协议段（${data.missing.join('、')}）——` +
+        `须携 coverage: <为何覆盖整条复发链共同根因> 与 anchor: <排查报告卷宗文件路径> 两行，退回补证`,
+    )
+    this.name = 'BugCoverageDeclarationRequiredError'
+    this.data = data
+  }
+}
+
 // ── 服务面 ──
 
 /** summary 字数上限（字 = Unicode 码点——全角汉字一字一计） */
@@ -483,6 +548,18 @@ export function createBugsService(deps: BugsServiceDeps) {
             bugId: input.bugId,
             current: current.bug_status,
           })
+        }
+        // T4 覆盖声明闸门（core 半）：复发家族（recurrence_of 在场）fixed 必携协议两段——
+        // presence + 锚字符串登记（零文件 IO；锚有效性预检归 plugin-forge 旁挂侧）。校验
+        // 先于证据反查与写事务——缺席拒写零副作用。
+        if (current.recurrence_of !== null) {
+          const parsed = parseBugCoverageDeclaration(input.fixApproach)
+          const missing: ('declaration' | 'anchor')[] = []
+          if (parsed.declaration === undefined) missing.push('declaration')
+          if (parsed.anchor === undefined) missing.push('anchor')
+          if (missing.length > 0) {
+            throw new BugCoverageDeclarationRequiredError({ bugId: input.bugId, missing })
+          }
         }
         const evidence = await resolveFixEvidence(execFile, {
           cwd: deps.resolveWsPath(input.projectId),
