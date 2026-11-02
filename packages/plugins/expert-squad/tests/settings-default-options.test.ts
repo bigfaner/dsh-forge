@@ -253,7 +253,7 @@ describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
     expect(DETAIL_SECTION_SLOT).toBe("plugins.detail.section");
   });
 
-  it("configForms 在场：以官方四件同款形态注册（name/id/order/label/inject form 面）", () => {
+  it("configForms 在场：以官方四件同款形态注册（name/id/order/label/inject configForm 面）", () => {
     const slots = slotsFake();
     const form = formMirrorOf(undefined);
     const disposer = registerPluginsItemEntry(
@@ -269,8 +269,18 @@ describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
     // dsh-forge 品牌标识（官方组内与官方四件可区分——条目名含 dsh-forge）
     expect(options.label).toBe("专家团（dsh-forge）");
     expect(component).toBe(ExpertSquadItemEntry);
-    expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect((options.inject as () => { configForm: ConfigFormMirror })().configForm).toBe(form);
     expect(typeof disposer).toBe("function");
+  });
+
+  it("inject face 禁用 `form` 键（bug cd4816a3）：plugins.item 页面 ownerProp form 为 {state,mutate} 契约形状会覆盖 inject face——本缝携 mirror 改走 configForm 键", () => {
+    const slots = slotsFake();
+    const form = formMirrorOf(undefined);
+    registerPluginsItemEntry(ctxFake({ configForms: configFormsFake(form) }) as never, slots as never);
+    expect(slots.registered).toHaveLength(1);
+    const face = (slots.registered[0]!.options.inject as () => Record<string, unknown>)();
+    expect(face.configForm).toBe(form);
+    expect(Object.hasOwn(face, "form")).toBe(false);
   });
 
   it("官方组条目与 item 详情页同源携 dsh-forge 品牌标识（summary 一行简介含 dsh-forge——itemArtwork 映射无本包 id，名称标识兜底）", () => {
@@ -299,7 +309,7 @@ describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
     );
     expect(slots.registered).toHaveLength(1);
     const options = slots.registered[0]!.options;
-    expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+    expect((options.inject as () => { configForm: ConfigFormMirror })().configForm).toBe(form);
     expect(getByNamespace).toHaveBeenCalledWith("dsh-forge-expert-squad");
     expect(typeof disposer).toBe("function");
   });
@@ -326,7 +336,12 @@ describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
     expect(ids).toEqual([DETAIL_SECTION_ID, ITEM_ID]);
     expect(new Set(ids).size).toBe(2);
     for (const entry of slots.registered) {
-      expect((entry.options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
+      // item 缝 mirror 走 configForm 键（bug cd4816a3 避撞页面 ownerProp）；detail.section 无撞键面保持 form。
+      expect((entry.options.inject as () => Record<string, unknown>)()).toEqual(
+        expect.objectContaining(
+          entry.options.id === ITEM_ID ? { configForm: form } : { form },
+        ),
+      );
     }
   });
 });
@@ -340,7 +355,7 @@ describe("ExpertSquadItemEntry（view 契约）", () => {
 
   it('view:"page" = 挂默认 Agent 选项表单（DefaultAgentOptionsTab 复用）', () => {
     const html = renderToStaticMarkup(
-      createElement(ExpertSquadItemEntry, { view: "page", form: formMirrorOf(undefined) }),
+      createElement(ExpertSquadItemEntry, { view: "page", configForm: formMirrorOf(undefined) }),
     );
     expect(html).toContain("默认 Agent 选项");
     expect(html).toContain('data-cfg-field="provider"');
@@ -348,9 +363,26 @@ describe("ExpertSquadItemEntry（view 契约）", () => {
 
   it("view 缺省（组卡片）= 表单形态（同 page）", () => {
     const html = renderToStaticMarkup(
-      createElement(ExpertSquadItemEntry, { form: formMirrorOf(undefined) }),
+      createElement(ExpertSquadItemEntry, { configForm: formMirrorOf(undefined) }),
     );
     expect(html).toContain("默认 Agent 选项");
+  });
+
+  it("页面 ownerProp form 撞键免疫（bug cd4816a3）：ItemDetail 注入 {state,mutate} 形状不读、mirror 走 configForm——渲染不崩", () => {
+    // 官方 plugins.item 页面契约：renderSlot("plugins.item", { view:"page", form: {state, mutate} })
+    const pageOwnerForm = {
+      state: { status: "ready" as const, value: {}, revision: 1, writable: true },
+      mutate: () => Promise.resolve(true),
+    };
+    const html = renderToStaticMarkup(
+      createElement(ExpertSquadItemEntry, {
+        view: "page",
+        form: pageOwnerForm,
+        configForm: formMirrorOf(undefined),
+      }),
+    );
+    expect(html).toContain("默认 Agent 选项");
+    expect(html).toContain('data-cfg-field="provider"');
   });
 });
 

@@ -233,7 +233,11 @@ export function registerPluginsItemEntry(
           order: ITEM_ORDER,
           label: ITEM_LABEL,
           inject: () => ({
-            form: forms.get(namespace),
+            // Root cause（bug cd4816a3）：plugins.item 页面以 ownerProp `form` 注入官方
+            // 契约形状 {state, mutate}（plugin-manager ItemDetail formFor），与 inject face
+            // 同名会被覆盖——本缝 mirror 改走 `configForm` 键避撞（官方四件同款不消费
+            // ownerProp form，键名无官方契约约束）。
+            configForm: forms.get(namespace),
             modelCatalogLoader: modelCatalogLoaderOf(ctx),
           }),
         },
@@ -258,14 +262,16 @@ export function registerPluginsItemEntry(
  * plugins.item 缝消费组件（官方四件同构——SubagentCard view 契约）：view:"summary" =
  * 卡片一行简介（ItemDetail one-liner）；view:"page"（表单体区）/缺省（组卡片）= 默认
  * Agent 选项表单（DefaultAgentOptionsTab 复用——configForms.get(namespace) 读写径不变）。
+ * mirror 从 `configForm` 键取（bug cd4816a3：页面 ownerProp `form` 为官方 {state,mutate}
+ * 契约形状，禁消费也不可撞键）。
  */
 export function ExpertSquadItemEntry(props: {
   readonly view?: unknown;
-  readonly form?: ConfigFormMirror;
+  readonly configForm?: ConfigFormMirror;
   readonly modelCatalogLoader?: ModelCatalogLoader;
 }): ReactNode {
   if (props.view === "summary") return ITEM_DESCRIPTION;
-  return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;
+  return <DefaultAgentOptionsTab form={props.configForm} modelCatalogLoader={props.modelCatalogLoader} />;
 }
 
 /**
