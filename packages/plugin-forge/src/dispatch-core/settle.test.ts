@@ -6,11 +6,27 @@ import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { ForgeTasksService, QueryTaskResult, TaskCard, TaskEvidenceDebt, TaskSnapshot } from '@dsh-forge/contracts'
+import type { ForgeTasksService, Project, QueryTaskResult, TaskCard, TaskEvidenceDebt, TaskSnapshot } from '@dsh-forge/contracts'
 import { settleWorkerRun } from './settle.js'
 import type { SettleCheckpointsFace, SettleReportRecoveryDeps, WaveSnapshot } from './settle.js'
 import type { ForgeDiagEmitFace } from '../faces.js'
 import type { SpawnWorkerHandle } from './spawn.js'
+
+/** projects 行全量桩（Project DTO 形状——getProject 桩面契约同步） */
+function projectRow(wsPath: string): Project {
+  return {
+    id: 'p-1',
+    workspaceId: 'ws-1',
+    name: 'demo',
+    wsPath,
+    forgeDir: `${wsPath}/.forge`,
+    forgeDirExternal: false,
+    knowledgeDir: `${wsPath}/.knowledge`,
+    archived: false,
+    createdAt: '2026-11-02T00:00:00.000Z',
+    updatedAt: '2026-11-02T00:00:00.000Z',
+  }
+}
 
 function snapshot(): TaskSnapshot {
   return {
@@ -428,7 +444,7 @@ describe('createSettleReportRecovery 工厂（resolveDir 闭包派生）', () =>
     const { createSettleReportRecovery } = await import('./settle.js')
     const recovery = createSettleReportRecovery({
       projects: {
-        getProject: async () => ({ wsPath: ws }),
+        getProject: async () => projectRow(ws),
         deriveTaskStoreDir: async () => ({ dir: containerDir }),
       },
     })

@@ -3,10 +3,26 @@
 // unresolved_reason→unresolvedReason；fix_session_id = 执行会话注入；worktree/branch/fixer
 // agent 不可提交——服务端 hash 锚定反查）+ 双友好返回面（✓ 终态/证据 / typed 错误 → 失败 DTO）。
 import { describe, expect, it } from 'vitest'
-import type { BugCard } from '@dsh-forge/contracts'
+import type { BugCard, Project } from '@dsh-forge/contracts'
 import type { ToolExecFace } from '../faces.js'
 import { createResolveBugTool, parseResolveBugArgs } from './resolve-bug.js'
 import type { ForgeBugsToolFace, ForgeToolDeps } from './index.js'
+
+/** projects 行全量桩（Project DTO 形状——getProject 桩面契约同步） */
+function projectRow(wsPath: string): Project {
+  return {
+    id: 'p-1',
+    workspaceId: 'ws-1',
+    name: 'demo',
+    wsPath,
+    forgeDir: `${wsPath}/.forge`,
+    forgeDirExternal: false,
+    knowledgeDir: `${wsPath}/.knowledge`,
+    archived: false,
+    createdAt: '2026-11-02T00:00:00.000Z',
+    updatedAt: '2026-11-02T00:00:00.000Z',
+  }
+}
 
 const checkpoints: ForgeToolDeps['checkpoints'] = {
   appendCheckpoint: async () => {
@@ -230,7 +246,7 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
       proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
-        getProject: async () => ({ wsPath: 'Z:/ws/demo' }),
+        getProject: async () => projectRow('Z:/ws/demo'),
         deriveTaskStoreDir: async () => ({ dir: 'Z:/ws/store' }),
       } as ForgeToolDeps['projects'],
       resolveProjectId: () => 'p-1',
@@ -263,7 +279,7 @@ describe('T4 锚有效性预检（旁挂侧文件 IO，失效退回拒绝路径�
       proposals: {} as ForgeToolDeps['proposals'],
       bugs: captureBugsFace(captured, async () => fixedCard(), card),
       projects: {
-        getProject: async () => ({ wsPath: dir }),
+        getProject: async () => projectRow(dir),
         deriveTaskStoreDir: async () => ({ dir }),
       } as ForgeToolDeps['projects'],
       resolveProjectId: () => 'p-1',
