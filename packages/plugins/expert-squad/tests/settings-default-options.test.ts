@@ -403,10 +403,8 @@ describe("DefaultAgentOptionsSection（subject 门控）", () => {
     expect(html).toContain('data-cfg-field="provider"');
   });
 
-  it("本包 item subject（id 同键）：渲染面板（item 详情页追加 section）", () => {
-    const html = renderSection({ kind: "item", id: ITEM_ID });
-    expect(html).toContain("默认 Agent 选项");
-    expect(html).toContain('data-cfg-field="provider"');
+  it("本包 item subject：render null（bug 83fe1393——item 详情页表单归 plugins.item page 缝单源，detail.section 不再重复渲染）", () => {
+    expect(renderSection({ kind: "item", id: ITEM_ID })).toBe("");
   });
 
   it("他包 bundle / row / item 他者 / subject 缺席：render null（非本包详情页零输出）", () => {

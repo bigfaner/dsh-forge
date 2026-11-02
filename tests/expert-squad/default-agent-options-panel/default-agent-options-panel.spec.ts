@@ -304,12 +304,11 @@ test('AC1·官方组条目导航：插件页官方组 expert-squad 条目 → it
   // 官方四件同路径（官方组直渲染、无列表行点击差）→ item 详情页（data-plugin-item-detail）
   // 挂「默认 Agent 选项」表单（data-cfg-* 锚复用）+ data-plugin-config section 在场
   //（官方 ItemDetail keyed——client.js:2329）。
-  // 实测呈现口径（1.2 落地实况）：表单体经 plugins.detail.section 缝渲染（subject.kind =
-  // "item" 门控——settings/index.tsx DefaultAgentOptionsSection）；plugins.item view:"page"
-  // 消费面真机为空壳（宿主 form 未达本插件条目组件——配置区 h=0 塌缩，探针取证
-  // task_logs 001-official-item-nav/probe2.txt）。本旅程断言用户可达面（表单在 item 详情页
-  // 呈现且 ready）+ 结构性形态锚（无卸载按钮），page-view 空壳归 product 侧跟进面。
-  // 只读旅程：零写径（不触 patch 文件，无备份/还原面）。
+  // 实测呈现口径（bug 83fe1393 收口后）：表单体经 plugins.item view:"page" 缝渲染
+  //（item 页官方契约位——configForm 键避撞页面 ownerProp，bug cd4816a3 同族）；
+  // plugins.detail.section 缝已收窄为 bundle-only（item subject render null——单源不重复）。
+  // 本旅程断言用户可达面（表单在 item 详情页呈现且 ready 且恰一份）+ 结构性形态锚
+  //（无卸载按钮）。只读旅程：零写径（不触 patch 文件，无备份/还原面）。
   test.setTimeout(120_000)
   const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-dao-item-ud-'))
   const { launchHost } = await import('../../../e2e/support/launch.js')
@@ -319,12 +318,13 @@ test('AC1·官方组条目导航：插件页官方组 expert-squad 条目 → it
     await openOfficialItemDetail(page)
 
     // 配置面：默认 Agent 选项表单挂载即 ready（表单区锚 scoped 到 item 详情页根——
-    // 渲染缝 = detail.section subject item 门控；summary 一行简介同页呈现）
+    // 渲染缝 = plugins.item view:"page" 单源（bug 83fe1393 收口后）；summary 一行简介同页呈现）
     await expect(page.locator(`${ITEM_DETAIL} .dswf-cfg-panel-title`), '配置表单标题 = 默认 Agent 选项').toHaveText('默认 Agent 选项')
     await expect(page.locator(`${ITEM_DETAIL} ${PROVIDER_BOX}`), 'Provider select 挂载（configForms 读写径同源）').toBeVisible()
     await expect(page.locator(`${ITEM_DETAIL} ${PANEL_CARD}`), '面板 ready（configForms 写径就绪）').toBeVisible()
-    // 官方配置 section 锚在场（data-plugin-config = ItemDetail 配置区 keyed；空壳塌缩
-    // 属 product 侧 page-view 消费面现状——结构锚在场即可，不断可见性）
+    // 官方配置 section 锚在场（data-plugin-config = ItemDetail 配置区 keyed）+ 恰一份
+    //（双缝重复渲染回归锚——bug 83fe1393）
+    await expect(page.locator(`${ITEM_DETAIL} ${PANEL_CARD}`), '面板单源不重复（bug 83fe1393 回归锚）').toHaveCount(1)
     await expect(page.locator(ITEM_CONFIG_SECTION), 'item 详情页配置 section 在场').toHaveCount(1)
 
     // 结构性形态锚：item 详情页无卸载按钮（ItemDetail 结构性无 delete 面——官方四件逐位

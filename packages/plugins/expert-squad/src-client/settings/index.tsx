@@ -334,11 +334,11 @@ export function expertsConfigWriteOf(
 }
 
 /**
- * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——本包 bundle 详情页与
- * 本包 item 详情页（plugins.item 条目详情页，ItemDetail client.js:2334 renderSlot
- * subject {kind:"item", id}，自判 id === ITEM_ID——调研报告 §4）渲染面板，其余 subject
- *（row/item 他者/缺席）render null；inject 面（form/modelCatalogLoader）由官方 slot
- * runtime 与 ownerProps（subject）并合透传，读写径原样复用 DefaultAgentOptionsTab。
+ * detail.section 缝消费组件（list slot 渲染入口）：subject 门控——仅本包 bundle 详情页
+ * 「包含的组件」下方渲染面板（bug 83fe1393：item 详情页表单归 plugins.item page 缝单源，
+ * item subject 不再渲染——双缝同页重复收口）；其余 subject（row/item 他者/缺席）render null；
+ * inject 面（form/modelCatalogLoader）由官方 slot runtime 与 ownerProps（subject）并合透传，
+ * 读写径原样复用 DefaultAgentOptionsTab。
  */
 export function DefaultAgentOptionsSection(props: {
   readonly subject?: { kind?: unknown; id?: unknown; pkg?: { name?: unknown } };
@@ -346,12 +346,7 @@ export function DefaultAgentOptionsSection(props: {
   readonly modelCatalogLoader?: ModelCatalogLoader;
 }): ReactNode {
   const subject = props.subject;
-  if (
-    subject === undefined ||
-    (subject.kind !== "bundle" ||
-      (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG) &&
-      (subject.kind !== "item" || subject.id !== ITEM_ID)
-  ) {
+  if (subject === undefined || subject.kind !== "bundle" || (subject.pkg as { name?: unknown } | undefined)?.name !== EXPERT_SQUAD_PKG) {
     return null;
   }
   return <DefaultAgentOptionsTab form={props.form} modelCatalogLoader={props.modelCatalogLoader} />;
