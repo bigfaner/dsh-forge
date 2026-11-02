@@ -111,6 +111,15 @@ docs/proposals/dsh-forge-redesign/redesign/
 docs/proposals/dsh-forge-redesign/prototype-v2/
 
 apps/host/userdata.dev/
+# 旧管线文档与 legacy 备份整体留盘不进 git（workspace-artifact-governance §2.2）
+.forge/docs/legacy/
+.forge/docs/**/*.md
+.forge/docs/**/*.html
+.forge/docs/**/*.cjs
+.forge/docs/**/*.js
+.forge/docs/**/*.css
+.forge/docs/**/*.sql
+.forge/docs/**/*.txt
 .forge/acl-recovery/acl-backup-ea0ff9ed0f114208a7db019a4635a78d.json
 .forge/acl-recovery/acl-backup-ea0ff9ed0f114208a7db019a4635a78d.json.ps1
 .forge/acl-recovery/acl-report-ca6e26835aa44308a4c8f3bd21b5ae20.jsonl
