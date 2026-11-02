@@ -671,10 +671,9 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
       expect(allow).toContain('bash')
     })
 
-    it('bug: 管线必备恒并入 allow 后仍与注册面求交——未注册的必备名同样剔除（keep-only 下未知名 = loud 炸点）', () => {
-      const withoutTodo = macRegistered.filter((n) => n !== 'todo_write')
-      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read'], withoutTodo)
-      expect(allow).not.toContain('todo_write')
+    it('bug e6669a50-G2 改判：管线必备在注册面在场时恒入 allow（求交不得剔除；未注册则走 fail-loud 断言用例）', () => {
+      const { allow } = deriveWorkerToolFilter('coding-fix', undefined, ['read'], macRegistered)
+      expect(allow).toContain('todo_write')
       expect(allow).toContain('submitTask')
     })
 
@@ -683,6 +682,13 @@ describe('deriveWorkerToolFilter allow 并集公式（expert-squad-forge 1.4—�
       // doc 族拒绝 jobs/read-image/web——诸名 Mac 在场仍 deny；shell 族放行故 pwsh/bash 本就不在 deny
       expect(deny).toContain('job_list')
       expect(deny.every((n) => macRegistered.includes(n))).toBe(true)
+    })
+
+    it('bug e6669a50-G2: essentials 未注册 fail-loud（静默剔除 = worker 结算链瘫——submitTask 缺席不允许放行）', () => {
+      const withoutSubmit = macRegistered.filter((n) => n !== 'submitTask' && n !== 'todo_write')
+      expect(() =>
+        deriveWorkerToolFilter('coding-fix', undefined, ['read'], withoutSubmit),
+      ).toThrow(/pipeline essential/)
     })
 
     it('registeredTools 缺席 = 不裁剪（与既有 loud 行为逐字节等价）', () => {

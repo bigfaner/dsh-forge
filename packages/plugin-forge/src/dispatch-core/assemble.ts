@@ -115,6 +115,19 @@ export function deriveWorkerToolFilter(
     (name) => registeredTools === undefined || registeredTools.length === 0 || registeredTools.includes(name),
   )
   if (profileTools === undefined) return { deny: intersectedDeny }
+  // essentials 在场断言（bug e6669a50-G2）：注册面探针在场但 forge 动词/todo_write 未注册
+  // 时，求交会把管线必备静默剔除——keep-only allow 缺 submitTask = worker 结算链静默瘫
+  // （比 loud 拆 spawn 更劣）。探针在即断言，缺一即 fail-loud。
+  if (registeredTools !== undefined && registeredTools.length > 0) {
+    const missingEssentials = WORKER_PIPELINE_ESSENTIAL_TOOLS.filter(
+      (name) => !registeredTools.includes(name),
+    )
+    if (missingEssentials.length > 0) {
+      throw new Error(
+        `pipeline essential tools not registered on this machine: [${missingEssentials.join(', ')}]`,
+      )
+    }
+  }
   const allow = intersectAllowNames(
     [...new Set<string>([...profileTools, ...WORKER_PIPELINE_ESSENTIAL_TOOLS])],
     registeredTools,
