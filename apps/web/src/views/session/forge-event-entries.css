@@ -196,3 +196,16 @@
   color: var(--dsw-alias-label-caption);
   font-variant-numeric: tabular-nums;
 }
+
+/* 处置徽标（triage 行 #N 后紧凑小胶囊——最小刻度 10px 字阶 + 4px 内距；单行不换行） */
+.dswf-event-entries-triage-flag {
+  display: inline-block;
+  margin-right: 4px; /* 同 #N 前缀列距刻度 */
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 14px;
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}

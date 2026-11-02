@@ -80,14 +80,14 @@ function ForgeProgressRowView({ row }: { row: ForgeProgressRowData }) {
   const duration = forgeProgressDurationLabel(row)
   // loop-card-task-context：任务行 #N 弱化前缀（N = taskKey 尾段）；循环级行（taskKey 缺席）不渲染
   const localId = row.entry.taskKey !== undefined ? (row.entry.taskKey.split('/').at(-1) ?? '') : undefined
-  // triage 处置行（triage-progress-row §2.2——verb 限定，同 taskKey 与任务行不撞）：徽记胶囊
-  // 区分处置轨（语义归徽记不进文本流——bug 35571877 行语言同裁决；「循环」徽记同构）
+  // triage 处置行（triage-progress-row §2.2——verb 限定，同 taskKey 与任务行不撞）：`#N [处置]`
+  // 紧凑徽标区分处置轨（语义归徽记不进文本流——bug 35571877 行语言同裁决）
   const isTriage = row.entry.verb === 'triage'
   return (
     <li className="dswf-event-entries-item dswf-event-entries-progress" data-dswf-progress-status={row.entry.status}>
-      {isTriage ? <span className="dswf-event-entries-badge dswf-event-entries-loop-badge">处置</span> : null}
       <span className="dswf-event-entries-text">
         {localId !== undefined && localId !== '' ? <span className="dswf-event-entries-num">#{localId}</span> : null}
+        {isTriage ? <span className="dswf-event-entries-triage-flag">处置</span> : null}
         <b>{row.entry.taskTitle ?? row.entry.taskKey}</b>
         {/* 重试计数等 note 随进度事件持久（bug 33728995③——组卡从投影/会话日志重建后仍可见） */}
         {row.entry.note !== undefined ? ` · ${row.entry.note}` : ''}

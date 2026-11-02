@@ -192,7 +192,7 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).toContain('data-dswf-progress-status="blocked"') // 最新态（后写覆盖）
     expect(html).toContain('第 2/3 次 — worker crashed mid-run') // 重试计数（note）在行内
   })
-  it('triage 处置行加「处置」徽记胶囊（triage-progress-row——语义归徽记不进文本流，任务行无徽记）', () => {
+  it('triage 处置行 `#N [处置]` 紧凑徽标（triage-progress-row——语义归徽记不进文本流，任务行无徽标）', () => {
     const triaged: ForgeEventGroupData = {
       ...DATA,
       progress: [
@@ -201,11 +201,18 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
       ],
     }
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(triaged)} />)
-    expect(html).toContain('>处置</span>') // 处置徽记胶囊（中性——「循环」徽记同构）
+    expect(html).toContain('dswf-event-entries-triage-flag') // 处置小胶囊（紧凑——10px 字阶）
+    expect(html).toContain('>处置</span>')
     expect(html).toContain('#2.3') // 任务归属前缀保留
-    // 任务行（verb=claim）无处置徽记：徽记只落处置轨
+    // 次序 = `#N` 前缀 → 处置徽标 → 标题
+    const numIdx = html.indexOf('#2.3')
+    const flagIdx = html.indexOf('dswf-event-entries-triage-flag')
+    const titleIdx = html.indexOf('>折叠条目组<', flagIdx)
+    expect(flagIdx).toBeGreaterThan(numIdx)
+    expect(titleIdx).toBeGreaterThan(flagIdx)
+    // 任务行（verb=claim）无处置徽标：徽标只落处置轨
     const taskOnly: ForgeEventGroupData = { ...DATA, progress: [triaged.progress![0]!] }
-    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(taskOnly)} />)).not.toContain('>处置</span>')
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(taskOnly)} />)).not.toContain('dswf-event-entries-triage-flag')
   })
   it('bug 35571877：条目行与任务行同构——文本在前、徽标右置、时间入右侧簇（归一类）', () => {
     const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(DATA)} />)
