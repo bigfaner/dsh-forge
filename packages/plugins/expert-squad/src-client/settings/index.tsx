@@ -63,10 +63,13 @@ export const ITEM_SLOT = "plugins.item";
 export const ITEM_ID = "expert-squad";
 /** item 行排位（官方 subagent order 30 之后留序——同槽行序不挤官方四件）。 */
 const ITEM_ORDER = 40;
-/** item 行 label（locale NS 接入前的字面量——插件页官方组卡片标题）。 */
-const ITEM_LABEL = "专家团";
-/** item 卡片一行简介（view:"summary" 渲染面——ItemDetail one-liner client.js:2322）。 */
-const ITEM_DESCRIPTION = "专家团配置与默认 Agent 路由";
+/** item 行 label（locale NS 接入前的字面量——插件页官方组卡片标题；dsh-forge 品牌标识
+ *  与官方四件可区分：官方 client.js ITEM_ARTWORK 映射无本包 id、注册面不收 icon 选项
+ *  → 无可达品牌资产，名称标识兜底；卡片与 item 详情页头部同读本 label，单源不双写）。 */
+const ITEM_LABEL = "专家团（dsh-forge）";
+/** item 卡片一行简介（view:"summary" 渲染面——ItemDetail one-liner client.js:2322；
+ *  携 dsh-forge 标识与条目名同源。 */
+const ITEM_DESCRIPTION = "dsh-forge 专家团配置与默认 Agent 路由";
 /**
  * namespace 候选集（bug 9577a867）：官方 Host settings describe 的 ns = profile 行 id
  * （dsh-settings describe `ns: entry.options.id`），产品模板生成行 id = `dsh-forge-expert-squad`
@@ -196,7 +199,7 @@ export function registerDefaultAgentOptionsSection(
 /**
  * 注册官方插件管理页 item 条目（plugins.item list slot——官方四件同构呈现：官方组卡片 +
  * item 详情页配置表单；ItemDetail 结构性无卸载按钮，调研报告 §5 落点 A）。id = ITEM_ID、
- * order = 40（subagent 之后）、label = 专家团；inject 面携本插件 namespace 的 ConfigForm
+ * order = 40（subagent 之后）、label = 专家团（dsh-forge）；inject 面携本插件 namespace 的 ConfigForm
  *（读写径与 whileServed namespace 解析同 detail.section 缝不变）。configForms/slots 缺席 =
  * 降级不注册（console.warn 留痕——registerDefaultAgentOptionsSection 同纪律）；
  * whileServed 在场 = 经官方在场门（namespace 未被服务即拆卸）。两缝并存：本缝与

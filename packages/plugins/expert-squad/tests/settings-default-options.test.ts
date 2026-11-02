@@ -266,10 +266,20 @@ describe("registerPluginsItemEntry（plugins.item 注册装配）", () => {
     expect(options.name).toBe(ITEM_SLOT);
     expect(options.id).toBe(ITEM_ID);
     expect(options.order).toBe(40);
-    expect(options.label).toBe("专家团");
+    // dsh-forge 品牌标识（官方组内与官方四件可区分——条目名含 dsh-forge）
+    expect(options.label).toBe("专家团（dsh-forge）");
     expect(component).toBe(ExpertSquadItemEntry);
     expect((options.inject as () => { form: ConfigFormMirror })().form).toBe(form);
     expect(typeof disposer).toBe("function");
+  });
+
+  it("官方组条目与 item 详情页同源携 dsh-forge 品牌标识（summary 一行简介含 dsh-forge——itemArtwork 映射无本包 id，名称标识兜底）", () => {
+    const summary = ExpertSquadItemEntry({ view: "summary" });
+    expect(typeof summary).toBe("string");
+    expect(summary).toContain("dsh-forge");
+    // 官方 client.js ITEM_ARTWORK 仅覆盖 shell/agent-loop/subagent/web-search——
+    // 本包 id 不在映射内，官方无可达 dsh-forge 品牌资产，icon 兜底归名称标识。
+    expect(["shell", "agent-loop", "subagent", "web-search"]).not.toContain(ITEM_ID);
   });
 
   it("whileServed namespace 解析与 detail.section 缝同源（读写同源）", () => {
