@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, type ElectronApplication, type Page } from '@playwright/test'
 import { allocatePort } from './ports.js'
-import { dismissOnboardingModals } from './modals.js'
+import { dismissOnboardingModals, READY_ANCHOR } from './modals.js'
 import { writeProviderOverlay } from './dogfood.js'
 import { WORKBENCH } from './anchors.js'
 
@@ -164,14 +164,12 @@ export async function waitShellReady(
 /** 相位稳定门返回形态 */
 export type WorkbenchPhase = 'hero' | 'session'
 
-/** 相位稳定门（settling 收敛——hero/session 二态；waitForFunction 30s 形态） */
+/** 相位稳定门（settling 收敛——hero/session 二态；waitForFunction 30s 形态；就绪锚选择器
+ *  与 modals READY_ANCHOR 单源——F8 相位就绪锚知识不双写） */
 export async function stablePhase(page: Page, timeoutMs = 30_000): Promise<WorkbenchPhase> {
   await page.waitForFunction(
-    () => {
-      const p = document.querySelector('[data-dswf-workbench]')?.getAttribute('data-dswf-phase')
-      return p === 'hero' || p === 'session'
-    },
-    undefined,
+    (anchor) => document.querySelector(anchor) !== null,
+    READY_ANCHOR,
     { timeout: timeoutMs },
   )
   return page.locator(WORKBENCH).first().getAttribute('data-dswf-phase') as Promise<WorkbenchPhase>

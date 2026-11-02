@@ -31,6 +31,7 @@ import { FEATURES_CHANNELS, TASKS_CHANNELS } from '../../../packages/contracts/s
 import { runAllSourceAuditAnchors } from '../../support/audit/anchors.js'
 import { rmDirBestEffort } from '../../support/cleanup.js'
 import { closeApp, launchHost, ROOT, type Launched } from '../../support/launch.js'
+import { openOverviewDockWithRetry } from '../../support/fixtures.js'
 import { openOverviewDock } from '../../support/navigation.js'
 import { forgeInvoke, registerProject } from '../../support/rpc.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
@@ -52,28 +53,11 @@ const ABORT_MESSAGE = 'worker run ended without a settlement (replay halt ladder
 
 /**
  * 概览 dock 挂载重试（002 复跑实证——阻塞问询 owner 模型轮 + 渲染层连接重试窗内 projects
- * 读失败，概览 body 退化为「未锚定项目」占位、OV_PANEL 不挂载）。每轮 = 整段 openOverviewDock
- * （reveal/幂等门自带）；失败后关掉概览 tab 再重开——keyed body 重挂载触发项目锚重解析。
- * 瞬态窗对策，非放宽断言：轮内 30s 挂载门原样保留。
+ * 读失败，概览 body 退化为「未锚定项目」占位、OV_PANEL 不挂载）：走支撑层单源
+ * openOverviewDockWithRetry（同语义三处收编——每轮 = 整段 openOverviewDock（reveal/幂等门
+ * 自带）；失败后关掉概览 tab 再重开，keyed body 重挂载触发项目锚重解析。瞬态窗对策，
+ * 非放宽断言：轮内 30s 挂载门原样保留。e2e-fast-shared-launch/1.17）。
  */
-async function openOverviewDockWithRetry(page: import('@playwright/test').Page, rounds: number): Promise<void> {
-  let lastCause: unknown
-  for (let i = 0; i < rounds; i++) {
-    try {
-      await openOverviewDock(page)
-      return
-    } catch (cause) {
-      lastCause = cause
-      await page
-        .getByRole('tab', { name: /项目概览/ })
-        .getByRole('button', { name: '关闭' })
-        .click()
-        .catch(() => undefined)
-      await new Promise((resolve) => setTimeout(resolve, 2_000))
-    }
-  }
-  throw lastCause
-}
 
 /**
  * 循环停止重试（fix-13 复跑实证——瞬态窗对策，非放宽断言）：blocked → triage 挂起投影 +

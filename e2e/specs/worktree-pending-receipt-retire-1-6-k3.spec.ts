@@ -9,13 +9,13 @@
 // data 锚：chip = [data-dswt-hero-trigger]；composer = [data-composer-input]；
 // 发送钮 = role button「发送消息」；落盘证据 = 会话日志 mtime（zstd 不可文本扫，1.29 同口径）。
 // e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
-// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；发送落盘判读改扫共享 userData 根
-//（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions，以夹具工作区全路径段唯一锚定。
+// 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；发送落盘判读经支撑层单源定位
+//（findInSharedUdRoot + SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）内
+// dsh-home/sessions，以夹具工作区全路径段唯一锚定。
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, findInSharedUdRoot, wsSegment } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -69,6 +69,7 @@ async function typeDraft(page: Page, text: string): Promise<void> {
  */
 async function sendUntilLanded(
   page: Page,
+  udDir: string,
   dirFragment: string,
   since: number,
 ): Promise<string> {
@@ -81,35 +82,31 @@ async function sendUntilLanded(
     else await page.keyboard.press('Enter')
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
-      const hit = findSessionDir(dirFragment, since)
+      const hit = findSessionDir(udDir, dirFragment, since)
       if (hit !== undefined) return hit
       await page.waitForTimeout(1_000)
     }
   }
-  throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席；实际分组目录：${listSessionGroups().join(' | ') || '<无>'}`)
+  throw new Error(`发送未落盘（dirFragment=${dirFragment}）——发送链路证据缺席；实际分组目录：${listSessionGroups(udDir).join(' | ') || '<无>'}`)
 }
 
 /** 诊断：枚举共享 userData 根下全部会话 cwd 分组目录名（落盘判读 miss 时对账） */
-function listSessionGroups(): string[] {
+function listSessionGroups(udDir: string): string[] {
   const groups: string[] = []
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
-    if (!existsSync(root)) continue
-    try {
-      for (const row of readdirSync(root, { withFileTypes: true })) if (row.isDirectory()) groups.push(row.name)
-    } catch { /* 尽力而为 */ }
-  }
+  const root = join(udDir, 'dsh-home', 'sessions')
+  if (!existsSync(root)) return groups
+  try {
+    for (const row of readdirSync(root, { withFileTypes: true })) if (row.isDirectory()) groups.push(row.name)
+  } catch { /* 尽力而为 */ }
   return groups
 }
 
-/** 会话日志落盘定位：扫描共享 launch userData 根（dsh-forge-shared-launch-ud-*——本 worker
- *  独立持有）下各 dsh-home/sessions，取 cwd 分组目录含 dirFragment 段、mtime ≥ since 的日志。 */
-function findSessionDir(dirFragment: string, since: number): string | undefined {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
-    if (!existsSync(root)) continue
+/** 会话日志落盘定位：支撑层单源定位（udDir 透传——本 worker 独立持有）下 dsh-home/sessions，
+ *  取 cwd 分组目录含 dirFragment 段、mtime ≥ since 的日志。 */
+function findSessionDir(udDir: string, dirFragment: string, since: number): string | undefined {
+  return findInSharedUdRoot(udDir, (ud) => {
+    const root = join(ud, 'dsh-home', 'sessions')
+    if (!existsSync(root)) return undefined
     let hit: string | undefined
     const visit = (dir: string, depth: number): void => {
       if (hit !== undefined || depth > 6) return
@@ -139,9 +136,8 @@ function findSessionDir(dirFragment: string, since: number): string | undefined 
       }
     }
     visit(root, 0)
-    if (hit !== undefined) return hit
-  }
-  return undefined
+    return hit
+  })
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -155,10 +151,10 @@ async function snap(page: Page, name: string): Promise<void> {
 
 test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer 清空）+ 零 pending 卡挂（第二条照常发送落盘）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, wsDir, udDir } = sharedLaunch
   // cwd 分组目录名 = cwd 路径扁平化（分隔符被替换，非原样斜杠路径）——片段用 wsDir 末段
   //（小写归一——mkdtemp 后缀随机大小写，比对两侧同口径）
-  const dirFragment = (wsDir.split(/[\\/]/).pop() ?? '').toLowerCase()
+  const dirFragment = wsSegment(wsDir).toLowerCase()
   const consoleLog: string[] = []
   page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
   try {
@@ -174,7 +170,7 @@ test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer
     await typeDraft(page, MARKER1)
     await snap(page, 'first-draft-typed.png')
     const sendStart1 = Date.now() - 5_000
-    const dir1 = await sendUntilLanded(page, dirFragment, sendStart1)
+    const dir1 = await sendUntilLanded(page, udDir, dirFragment, sendStart1)
     console.log('[k3] first message landed at', dir1)
 
     // ── 提交回执退役判读①：消息文本呈现且计数 5s 窗口稳定（退役后不重复不残留）──
@@ -205,7 +201,7 @@ test('1.6 口径 3 UI：提交回执正常退役（消息计数稳定 + composer
     const MARKER2 = '1-7-k3-second-message'
     await typeDraft(page, MARKER2)
     const sendStart2 = Date.now() - 5_000
-    await sendUntilLanded(page, dirFragment, sendStart2)
+    await sendUntilLanded(page, udDir, dirFragment, sendStart2)
     console.log('[k3] second message landed (zero pending stuck)')
     await snap(page, 'second-message-sent.png')
     // 第二条同样退役稳定（终态复检）

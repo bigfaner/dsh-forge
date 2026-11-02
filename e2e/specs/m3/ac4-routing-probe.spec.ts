@@ -23,6 +23,7 @@ import { seedDogfoodTaskRow } from '../../support/replay/dogfood-record.js'
 import { bestSessionLog, decodeSessionFile, sessionLogById } from '../../support/session-files.js'
 import { awaitPresetHeaderLabel } from '../../support/m3.js'
 import { ovSubtabOf } from '../../support/anchors.js'
+import { backupTrackedFile, restoreTrackedFile } from '../../support/fixtures.js'
 
 const FEATURE = 'ac4-routing-probe'
 const EVIDENCE_ROOT = process.env.AC4_EVIDENCE_DIR ?? join(tmpdir(), 'ac4-evidence')
@@ -82,14 +83,15 @@ function squadPatchRow(o: { readonly withOverride: boolean }): string {
   return lines.join('\n')
 }
 
-/** expert-squad 播种：dev profile 用户层 cordis.patch.yml 追加行（返回还原闭包） */
+/** expert-squad 播种：dev profile 用户层 cordis.patch.yml 追加行（返回还原闭包；写径复位
+ *  走支撑层单源 backupTrackedFile / restoreTrackedFile——e2e-fast-shared-launch/1.17 收编） */
 function seedProfilePatch(o: { readonly withOverride: boolean; readonly caseDir: string }): () => void {
-  const original = readFileSync(DEV_PATCH, 'utf8')
+  const original = backupTrackedFile(DEV_PATCH) as string
   writeFileSync(join(o.caseDir, 'profile-dev-patch.before.yml'), original, 'utf8')
   const seeded = `${original}\n# AC4 探针播种（expert-squad-default-routing/disc-1）——探针还原\n${squadPatchRow(o)}\n`
   writeFileSync(DEV_PATCH, seeded, 'utf8')
   writeFileSync(join(o.caseDir, 'profile-dev-patch.seeded.yml'), seeded, 'utf8')
-  return () => writeFileSync(DEV_PATCH, original, 'utf8')
+  return () => restoreTrackedFile(DEV_PATCH, original)
 }
 
 /** dogfood 模型叠层（不含 expert-squad 行——播种归 profile patch） */

@@ -14,13 +14,14 @@
 //  - 用例退出不做 closeApp（这是提速的本体：整 spec 只冷启一次/崩溃一次）；worker 收尾
 //    统一 closeApp + tmp 清理。
 // 复用核销：launchHost/closeApp/registerProject 全部取自既有单源（launch.js / rpc.js），零复制。
-import { mkdtempSync, readdirSync, rmSync, type Dirent } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { test as base, type ElectronApplication, type Page } from '@playwright/test'
+import { expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { bridgeDispatch, closeApp, launchHost, stablePhase, type LaunchHostOptions } from './launch.js'
 import { forgeInvoke, registerProject } from './rpc.js'
-import { COLLAPSE_RIGHTBAR_BUTTON, OV_PANEL, RIGHTBAR_COLLAPSED } from './anchors.js'
+import { COLLAPSE_RIGHTBAR_BUTTON, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
+import { openOverviewDock } from './navigation.js'
 import { PROJECTS_CHANNELS } from '../../packages/contracts/src/channels.js'
 
 /** 摘除 dir 子树内全部文件、保留全部目录（目录 inode 不变——watcher 句柄存续；dir
@@ -58,6 +59,8 @@ export interface SharedLaunchHandle {
   readonly pageErrors: string[]
   /** 夹具工作区目录（整 spec 共享路径，档案子树每用例重播种） */
   readonly wsDir: string
+  /** 共享 userData 根（本 worker 独立持有——盘面判读直接锚定自身根，tmp 魔法前缀扫描退役） */
+  readonly udDir: string
   /** launchHost 次数（AC 证据面：整份 spec = 1 + crash 重启次数） */
   readonly launchCount: number
   /** 重播种次数 */
@@ -181,6 +184,8 @@ export class SharedLaunchSession {
    * 都收敛到当前用例唯一活跃项目（会话锚只在活跃行内解析 + 兜底计活跃行——bug 1e761ada
    * 机制面），不再依赖芯片流会话是否成功创建。各步 fail-soft（list 失败静默跳过——
    * 非概览用例零影响，用例自持 setupWorld 注册不受影响）。
+   * 退场判据（F7）：概览项目锚（anchoredOverviewContext 主视图会话锚 / 唯一活跃项目
+   * 兜底）不再跨用例残留（锚定机制收敛或共享 fixture 形态退役）时，本步可整体移除。
    */
   private async archiveLegacyProjects(): Promise<void> {
     const page = this.launched?.page
@@ -207,6 +212,7 @@ export class SharedLaunchSession {
       app: this.launched.app,
       pageErrors: this.launched.pageErrors,
       wsDir: this.wsDirValue!,
+      udDir: this.userData!,
       launchCount: this.launchCountValue,
       reseedCount: this.reseedCountValue,
     }
@@ -264,4 +270,115 @@ export function createSharedLaunchFixture(config: SharedLaunchConfig) {
     },
   })
   return { test }
+}
+
+// ─── 共享 ud 根定位 / ws 段锚（1.17 支撑层收敛——spec 侧魔法前缀扫描退役） ───
+
+/** wsDir 末段锚（mkdtemp 随机后缀跨 worker 唯一——调用用时点求值；大小写归一由消费侧裁定） */
+export function wsSegment(wsDir: string): string {
+  return wsDir.split(/[\\/]/).pop() ?? ''
+}
+
+/**
+ * 共享 launch userData 根内定位（找到即返 / 缺席 undefined 两态）：probe 对 ud 根求值，
+ * 返回非 undefined 即命中即返。跨 worker 串扰面连根消除——判读恒锚本 worker 独立持有的
+ * ud 根（SharedLaunchHandle.udDir 透传），不再扫 tmp 下 dsh-forge-shared-launch-ud-*
+ * 魔法前缀（段锚 mkdtemp 随机后缀本就只存在于自身根，语义等价且零串扰）。
+ */
+export function findInSharedUdRoot<T>(udDir: string, probe: (udDir: string) => T | undefined): T | undefined {
+  return probe(udDir)
+}
+
+/** 同 findInSharedUdRoot，缺席即报错（报错态——断言式缺席走 findInSharedUdRoot 两态） */
+export function requireInSharedUdRoot<T>(udDir: string, probe: (udDir: string) => T | undefined, absentMessage: string): T {
+  const hit = findInSharedUdRoot(udDir, probe)
+  if (hit === undefined) throw new Error(absentMessage)
+  return hit
+}
+
+// ─── 瞬态重试 helper（共享 launch 序列态瞬态窗对策——同语义三处收编单源） ───
+
+export type OverviewSubtab = 'proposals' | 'features' | 'tasks' | 'bugs'
+
+export interface RetryTransientWindowOptions {
+  /** 单轮尝试（轮内既有超时门原样保留——瞬态窗对策，非放宽断言） */
+  readonly attempt: () => Promise<void>
+  /** 每轮失败后的收口（缺省零操作） */
+  readonly recover?: (page: Page) => Promise<void>
+  /** 轮数（缺省 3） */
+  readonly rounds?: number
+  /** 轮间静置 ms（缺省 3000） */
+  readonly backoffMs?: number
+}
+
+/**
+ * 瞬态窗重试（共享 launch 序列态——上用例会话面沉降窗内中心列拦截 / 菜单重挂载行
+ * detached 等；失败后 recover 收口再整段重试，keyed body 重挂载触发布局重解析）。
+ * 末轮仍失败抛最后捕获的 cause——原 spec 内三处同语义实现（openOverviewSubtab /
+ * selectWorkspaceWithRetry / openOverviewDockWithRetry）的收编单源。
+ */
+export async function retryTransientWindow(page: Page, opts: RetryTransientWindowOptions): Promise<void> {
+  const rounds = opts.rounds ?? 3
+  const backoffMs = opts.backoffMs ?? 3_000
+  let lastCause: unknown
+  for (let i = 0; i < rounds; i++) {
+    try {
+      await opts.attempt()
+      return
+    } catch (cause) {
+      lastCause = cause
+      if (opts.recover !== undefined) await opts.recover(page).catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, backoffMs))
+    }
+  }
+  throw lastCause
+}
+
+/** 概览 tab 关断收口（重开触发 keyed body 重挂载——openOverviewDockWithRetry 同径） */
+async function closeOverviewTab(page: Page): Promise<void> {
+  await page
+    .getByRole('tab', { name: /项目概览/ })
+    .getByRole('button', { name: '关闭' })
+    .click()
+    .catch(() => undefined)
+}
+
+/**
+ * 概览 dock 打开 + 子 tab 激活收敛（挂载重试 ×3，轮内 30s 挂载门 / 15s 激活门原样保留
+ * ——原批次四a 四份 spec 内同语义 helper 的收编单源）。
+ */
+export async function openOverviewSubtab(page: Page, subtab: OverviewSubtab): Promise<void> {
+  await retryTransientWindow(page, {
+    attempt: async () => {
+      await openOverviewDock(page)
+      const tab = page.locator(ovSubtabOf(subtab))
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    },
+    recover: closeOverviewTab,
+  })
+}
+
+/** 概览 dock 挂载重试（不带子 tab 激活——dogfood-sc-m3-replay 收编形态；rounds 轮 × 2s） */
+export async function openOverviewDockWithRetry(page: Page, rounds: number): Promise<void> {
+  await retryTransientWindow(page, { attempt: () => openOverviewDock(page), recover: closeOverviewTab, rounds, backoffMs: 2_000 })
+}
+
+// ─── tracked 文件写径复位（写前备份 + finally 逐字还原——panel-detail / ac4-routing-probe 收编单源） ───
+
+/** 写前备份：tracked 文件文本（缺席返回 null——原始缺席态随备份携带） */
+export function backupTrackedFile(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, 'utf8') : null
+}
+
+/**
+ * finally 逐字还原（零残留纪律）：原始缺席 → 清空文件内容（保文件在场——宿主对 tracked
+ * 文件缺省空态语义）；在案 → 内容与备份一致时零写（mtime 不漂）、不一致时逐字还原。
+ */
+export function restoreTrackedFile(path: string, backup: string | null): void {
+  if (backup === null) {
+    if (existsSync(path)) writeFileSync(path, '', 'utf8')
+  } else if (readFileSync(path, 'utf8') !== backup) {
+    writeFileSync(path, backup, 'utf8')
+  }
 }

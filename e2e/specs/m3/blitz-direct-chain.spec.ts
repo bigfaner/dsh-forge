@@ -50,12 +50,11 @@
 //
 // Assertion depth: 41/44 behavioral（93%），其中 deep 17/41（41%）——两阈均过。
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect } from '@playwright/test'
 import { TASKS_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, requireInSharedUdRoot } from '../../support/fixtures.js'
+import { expect } from '@playwright/test'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver, refetchOnce } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
@@ -66,15 +65,13 @@ import { switchTaskView, presetSkillDirs } from '../../support/m3.js'
 const WS_NAME = 'ws-jbdc'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
-// 夹具工作区 = 空白目录（本 spec 无夹具档案，任务账本 slug 隔离）；boot-overlay 判读改扫
-// 共享 userData 根（dsh-forge-shared-launch-ud-*，内容三底稿每启重写与路径无关）。
-function sharedOverlayText(): string {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const file = join(tmpdir(), name, 'boot-overlay.yml')
-    if (existsSync(file)) return readFileSync(file, 'utf8')
-  }
-  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+// 夹具工作区 = 空白目录（本 spec 无夹具档案，任务账本 slug 隔离）；boot-overlay 判读经
+// 支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）。
+function sharedOverlayText(udDir: string): string {
+  return requireInSharedUdRoot(udDir, (ud) => {
+    const file = join(ud, 'boot-overlay.yml')
+    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
 }
 
 // ── 共享 launch fixture ──
@@ -91,7 +88,7 @@ async function rejectMessage(promise: Promise<unknown>): Promise<string> {
 
 test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无 feature 行 → 直挂容器 → 全绿三视图（Step1-4 success 全链）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   const project = await registerProject(page, wsDir, WS_NAME)
   try {
     const projectId = project.id
@@ -209,7 +206,7 @@ test('@web-e2e @m3 突击直达链·冒烟：quick-tasks 产出 → accepted 无
     }
 
     // ── Step5：全程技能清单核查（L1 数据直证——SC2① 同源）──
-    const overlay = sharedOverlayText()
+    const overlay = sharedOverlayText(udDir)
     const blitzDirs = presetSkillDirs(overlay, 'blitz')
     expect(blitzDirs.length, `突击组合技能目录 core+blitz（dirs=${JSON.stringify(blitzDirs)}）`).toBe(2)
     expect(blitzDirs.every((d) => !d.toLowerCase().includes('plugin-forge-spec')), '规格技能目录物理缺席（七者零在场——枚举面即证）').toBe(true)

@@ -6,12 +6,12 @@
 // e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；非 git 折返项目为用例内临时 tmp 目录
 //（独立于夹具工作区，用例内注册/清理）；会话开户判读改扫共享 userData 根
-//（dsh-forge-shared-launch-ud-*）内 dsh-home，以夹具段唯一锚定。
+//（支撑层单源定位——SharedLaunchHandle.udDir 透传）内 dsh-home，以夹具段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, findInSharedUdRoot } from '../support/fixtures.js'
 import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
@@ -125,23 +125,17 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
   return raw?.data?.binding ?? raw?.binding ?? undefined
 }
 
-/** 共享 launch 形态会话开户判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
- *  ——本 worker 独立持有）内各 dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
-function sharedFindSession(fixtureSegment: string): { readonly sessionId: string } | undefined {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const dshHome = join(tmpdir(), name, 'dsh-home')
-    const found = findFixtureSession(dshHome, fixtureSegment)
-    if (found !== undefined) return found
-  }
-  return undefined
+/** 共享 launch 形态会话开户判读：支撑层单源定位（udDir 透传——本 worker 独立持有）内
+ *  dsh-home，按夹具段（fixtureSegment——唯一）定位夹具会话。 */
+function sharedFindSession(udDir: string, fixtureSegment: string): { readonly sessionId: string } | undefined {
+  return findInSharedUdRoot(udDir, (ud) => findFixtureSession(join(ud, 'dsh-home'), fixtureSegment))
 }
 
 const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceAll('\\', '/')
 
 test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → 发送落 Y（composer 闸 pending 翻转在场）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, wsDir, udDir } = sharedLaunch
   const plainDir = mkdtempSync(join(tmpdir(), 'dsh-forge-row-interlude-plain-'))
   const wtA = join(wsDir, '.forge', 'worktrees', 'wt-a')
   const wtB = join(wsDir, '.forge', 'worktrees', 'wt-b')
@@ -234,7 +228,7 @@ test('切换序列回归：选树 X → 非 git 项目折返 → 选树 Y → �
     let wtBSessionId = ''
     await expect
       .poll(async () => {
-        const found = sharedFindSession('wt-b')
+        const found = sharedFindSession(udDir, 'wt-b')
         if (found !== undefined) wtBSessionId = found.sessionId
         return wtBSessionId
       }, { timeout: 60_000, message: 'wt-b 会话应开户（盘侧 cwd 分组）' })

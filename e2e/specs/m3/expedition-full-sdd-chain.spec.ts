@@ -52,31 +52,28 @@
 // Assertion depth: 52/56 behavioral（93%），其中 deep 22/52（42%）——两阈均过。
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
 import { ROOT } from '../../support/launch.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, openOverviewSubtab, requireInSharedUdRoot } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { openOverviewDock } from '../../support/navigation.js'
-import { ovDocRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { ovDocRowOf, ttItemOf } from '../../support/anchors.js'
 import { presetSkillDirs } from '../../support/m3.js'
 
 const WS_NAME = 'ws-jefc'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
 // 夹具工作区 = 空白目录（提案 slug 隔离：jefc-golden / jefc-revise / jefc-idem 各自作用域）；
-// boot-overlay 判读改扫共享 userData 根（内容三底稿每启重写与路径无关）。
-function sharedOverlayText(): string {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const file = join(tmpdir(), name, 'boot-overlay.yml')
-    if (existsSync(file)) return readFileSync(file, 'utf8')
-  }
-  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+// boot-overlay 判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传
+// ——魔法前缀扫描退役）。
+function sharedOverlayText(udDir: string): string {
+  return requireInSharedUdRoot(udDir, (ud) => {
+    const file = join(ud, 'boot-overlay.yml')
+    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
 }
 
 const { test } = createSharedLaunchFixture({
@@ -85,30 +82,8 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
- *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
- *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
-async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'features' | 'tasks'): Promise<void> {
-  let lastCause: unknown
-  for (let i = 0; i < 3; i++) {
-    try {
-      await openOverviewDock(page)
-      const tab = page.locator(ovSubtabOf(subtab))
-      await tab.click()
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-      return
-    } catch (cause) {
-      lastCause = cause
-      await page
-        .getByRole('tab', { name: /项目概览/ })
-        .getByRole('button', { name: '关闭' })
-        .click()
-        .catch(() => undefined)
-      await new Promise((resolve) => setTimeout(resolve, 3_000))
-    }
-  }
-  throw lastCause
-}
+// 概览子 tab 打开走支撑层单源 openOverviewSubtab（批次四a 四份 spec 内同语义 helper 收编
+// ——挂载重试 ×3，轮内 30s/15s 门原样保留，e2e-fast-shared-launch/1.17）。
 
 /** 写动词拒绝面捕获（bridge 直调错误 message = core typed error 文案） */
 async function rejectMessage(promise: Promise<unknown>): Promise<string> {
@@ -133,7 +108,7 @@ async function uiVerdict(page: Page, title: string, to: string, reason: string):
 
 test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成链 → 三类规格文档 → 建任务 → 全绿 → 四域全景（Step1-8）', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -252,7 +227,7 @@ test('@web-e2e @m3 远征全链·冒烟：brainstorm → 评审 accepted → 成
     await expect(page.locator(ttItemOf(t2.taskId)).first(), '任务行乙 = 已完成').toContainText('已完成', { timeout: 30_000 })
 
     // ── Step1b：远征组合技能目录（数据直证——spec 全量挂载 + core 无退役技能）──
-    const overlay = sharedOverlayText()
+    const overlay = sharedOverlayText(udDir)
     const expDirs = presetSkillDirs(overlay, 'expedition')
     expect(expDirs.filter((d) => d.toLowerCase().includes('plugin-forge-spec')).length, '远征组合 spec 技能目录全量挂载').toBe(1)
     const coreEntries = readdirSync(join(ROOT, 'packages', 'plugin-forge', 'skills')).filter((e) => e !== 'README.md')

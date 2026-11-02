@@ -10,11 +10,10 @@
 //   ④ 任务行详情无单任务执行入口（Hard Rule v22 ㊳——抽屉面零「执行」动作）。
 // 载体：写动词经测试钩子直调（回放主径）；会话夹具 = 零凭据 composer 消息（M2 SC6③ 同径）。
 import { existsSync, readdirSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from '@playwright/test'
 import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, requireInSharedUdRoot, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
 import { findFixtureSession } from '../../support/session-files.js'
 import { openOverviewDock } from '../../support/navigation.js'
@@ -28,30 +27,29 @@ const FEATURE = 'uf3-feat'
 const MARKER = 'UF3-JUMP-MARKER 跳转目标会话夹具消息'
 
 // e2e-fast-shared-launch 存量迁移（批次四b）：共享 launch fixture——launchHost 整 spec 一次；
-// 跳转目标会话判读改扫共享 userData 根内 dsh-home：段锚 = wsDir 末段（mkdtemp 随机后缀
-// 跨 worker 唯一——共享形态会话 cwd = 共享 wsDir 本体，原始形态的 ws-uf3 命名段不复存在；
-// 根选择经段目录在场锚定，workers=2 下他 worker 无此后缀段零串扰）。
+// 跳转目标会话判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir 透传）内
+// dsh-home：段锚 = wsDir 末段（mkdtemp 随机后缀跨 worker 唯一——共享形态会话 cwd = 共享
+// wsDir 本体，原始形态的 ws-uf3 命名段不复存在；workers=2 下他 worker 无此后缀段零串扰）。
 const { test } = createSharedLaunchFixture({
   seedWorkspace: () => undefined,
   workspaceName: WS_NAME,
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-function sharedUf3DshHome(wsDir: string): string {
-  const segment = wsDir.split(/[\\/]/).pop() ?? ''
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const sessions = join(tmpdir(), name, 'dsh-home', 'sessions')
+function sharedUf3DshHome(udDir: string, wsDir: string): string {
+  const segment = wsSegmentOf(wsDir)
+  return requireInSharedUdRoot(udDir, (ud) => {
+    const sessions = join(ud, 'dsh-home', 'sessions')
     if (existsSync(sessions) && readdirSync(sessions).some((d) => d.includes(segment))) {
-      return join(tmpdir(), name, 'dsh-home')
+      return join(ud, 'dsh-home')
     }
-  }
-  throw new Error(`shared-launch: 段 ${segment} 会话目录未找到（共享 userData 根缺失）`)
+    return undefined
+  }, `shared-launch: 段 ${segment} 会话目录未找到（共享 userData 根缺失）`)
 }
 
 test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置灰 + 无单任务执行入口', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -78,8 +76,8 @@ test('@web-e2e @m3 UF-3·派发入口：执行中跳转不重发 + 全终态置�
     // dsh-home 根惰性求值（会话 A 此刻已开户——段目录在盘可锚定；过早求值会 miss）；
     // fixtureSegment 同取 wsDir 末段（findFixtureSession 按段过滤 flattened cwd——
     // 共享形态 cwd = 共享 wsDir 本体，原始形态 ws-uf3 段不复存在）
-    const wsSegment = wsDir.split(/[\\/]/).pop() ?? ''
-    const sessionA = findFixtureSession(sharedUf3DshHome(wsDir), wsSegment)
+    const wsSegment = wsSegmentOf(wsDir)
+    const sessionA = findFixtureSession(sharedUf3DshHome(udDir, wsDir), wsSegment)
     expect(sessionA, '跳转目标会话在盘').toBeDefined()
     const jumpSessionId = (sessionA as { sessionId: string }).sessionId
     await newBlankSession(page)

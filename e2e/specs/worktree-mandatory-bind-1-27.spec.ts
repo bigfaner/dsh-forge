@@ -16,12 +16,11 @@
 // data-dswt-branch-input / data-dswt-create-submit；风险框 = role dialog「跨分支风险确认」。
 // e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；会话开户判读改扫共享 userData 根
-//（dsh-forge-shared-launch-ud-*）内 dsh-home，以夹具工作区目录末段唯一锚定。
+//（支撑层单源定位——SharedLaunchHandle.udDir 透传）内 dsh-home，以夹具工作区目录末段唯一锚定。
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, findInSharedUdRoot, wsSegment as wsSegmentOf } from '../support/fixtures.js'
 import { findFixtureSession } from '../support/session-files.js'
 import { expect, type Page } from '@playwright/test'
 
@@ -145,16 +144,10 @@ async function sealBinding(page: Page, sessionId: string): Promise<{ worktreePat
   return seal?.binding === null || seal?.binding === undefined ? undefined : { ...seal.binding, sealed: seal?.sealed }
 }
 
-/** 共享 launch 形态会话开户判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
- *  ——本 worker 独立持有）内各 dsh-home，按夹具段（wsDir 末段——唯一）定位夹具会话。 */
-function sharedFindSession(fixtureSegment: string): { readonly sessionId: string } | undefined {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const dshHome = join(tmpdir(), name, 'dsh-home')
-    const found = findFixtureSession(dshHome, fixtureSegment)
-    if (found !== undefined) return found
-  }
-  return undefined
+/** 共享 launch 形态会话开户判读：支撑层单源定位（udDir 透传——本 worker 独立持有）内
+ *  dsh-home，按夹具段（wsDir 末段——唯一）定位夹具会话。 */
+function sharedFindSession(udDir: string, fixtureSegment: string): { readonly sessionId: string } | undefined {
+  return findInSharedUdRoot(udDir, (ud) => findFixtureSession(join(ud, 'dsh-home'), fixtureSegment))
 }
 
 /** 走查截图（非关键路径——失败不阻塞断言链） */
@@ -170,8 +163,8 @@ const norm = (p: string | undefined): string => (p ?? '').toLowerCase().replaceA
 
 test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 复用天然命中', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, wsDir } = sharedLaunch
-  const wsSegment = wsDir.split(/[\\/]/).pop() ?? ''
+  const { page, wsDir, udDir } = sharedLaunch
+  const wsSegment = wsSegmentOf(wsDir)
   const wtDir = join(wsDir, '.forge', 'worktrees', 'wt-a')
   await expect(chip(page), 'hero worktree chip 未注入').toBeVisible({ timeout: 30_000 })
   await expect.poll(async () => (await chip(page).count()) > 0 ? await chip(page).first().textContent() : '', {
@@ -188,7 +181,7 @@ test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 
   let rootSessionId = ''
   await expect
     .poll(async () => {
-      const found = sharedFindSession(wsSegment)
+      const found = sharedFindSession(udDir, wsSegment)
       if (found !== undefined) rootSessionId = found.sessionId
       return rootSessionId
     }, { timeout: 60_000, message: '主树会话应开户（盘侧 cwd 分组）' })
@@ -229,7 +222,7 @@ test('1.27 UI（推导制）：选树 → 会话 cwd = 所选树；官方 blank 
   let wtSessionId = ''
   await expect
     .poll(async () => {
-      const found = sharedFindSession('wt-a')
+      const found = sharedFindSession(udDir, 'wt-a')
       if (found !== undefined) wtSessionId = found.sessionId
       return wtSessionId
     }, { timeout: 60_000, message: 'wt-a 会话应开户（盘侧 cwd 分组 = 所选树）' })

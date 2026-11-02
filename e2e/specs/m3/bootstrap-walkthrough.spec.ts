@@ -47,13 +47,12 @@
 
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, openOverviewSubtab } from '../../support/fixtures.js'
 import { registerProject, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
-import { openOverviewDock } from '../../support/navigation.js'
 import { ovDocRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 
 const WS_NAME = 'ws-jbw'
@@ -67,30 +66,8 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
- *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
- *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
-async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'features' | 'tasks' | 'bugs'): Promise<void> {
-  let lastCause: unknown
-  for (let i = 0; i < 3; i++) {
-    try {
-      await openOverviewDock(page)
-      const tab = page.locator(ovSubtabOf(subtab))
-      await tab.click()
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-      return
-    } catch (cause) {
-      lastCause = cause
-      await page
-        .getByRole('tab', { name: /项目概览/ })
-        .getByRole('button', { name: '关闭' })
-        .click()
-        .catch(() => undefined)
-      await new Promise((resolve) => setTimeout(resolve, 3_000))
-    }
-  }
-  throw lastCause
-}
+/** 概览子 tab 打开走支撑层单源 openOverviewSubtab（批次四a 四份 spec 内同语义 helper 收编
+ *  ——挂载重试 ×3，轮内 30s/15s 门原样保留，e2e-fast-shared-launch/1.17）。 */
 
 /** 递归找 manifest.md（走查树零 manifest 纪律——库记账唯一通道的文件系统对账） */
 function findManifestMd(root: string): string[] {

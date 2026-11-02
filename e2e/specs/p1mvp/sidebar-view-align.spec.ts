@@ -31,11 +31,10 @@
 // 载体面（launch/close/RPC/清理）经 e2e/support（fix-37 ①）；共享 launch 后 boot 纪律由
 // fixture 层承载（crash 检测自动重启 + 用例间重播种）。
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, type Page } from '@playwright/test'
 import { registerProject } from '../../support/rpc.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, wsSegment as wsSegmentOf } from '../../support/fixtures.js'
 import {
   NAV_ADD_PROJECT,
   RAIL_PROJECT_ANY,
@@ -61,28 +60,25 @@ const { test } = createSharedLaunchFixture({
 })
 
 /** 共享 userData 根内 dsh-home 会话目录台账（盘侧——官方 startSession 增生断言面）：
- *  根选择经段目录在场锚定（段 = wsDir 末段 mkdtemp 随机后缀，跨 worker 唯一零串扰；
- *  共享形态会话 cwd = 共享 wsDir 本体——原始形态 ws-甲 等命名段不复存在；大小写归一
- *  比较）；根未锚定（本用例尚无会话落盘）返回空集——作 before 基线，after 轮询时锚必在。 */
-function sharedSessionDirIds(wsDir: string): readonly string[] {
-  const segment = (wsDir.split(/[\\/]/).pop() ?? '').toLowerCase()
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const base = join(tmpdir(), name, 'dsh-home', 'sessions')
-    let sanitized: string[]
-    try {
-      sanitized = readdirSync(base)
-    } catch {
-      continue
-    }
-    if (!sanitized.some((d) => d.toLowerCase().includes(segment))) continue
-    const out: string[] = []
-    for (const dir of sanitized) {
-      for (const entry of readdirSync(join(base, dir))) out.push(entry)
-    }
-    return out
+ *  支撑层单源定位（udDir 透传——本 worker 独立持有）+ 段目录在场锚定（段 = wsDir 末段
+ *  mkdtemp 随机后缀，跨 worker 唯一零串扰；共享形态会话 cwd = 共享 wsDir 本体——原始形态
+ *  ws-甲 等命名段不复存在；大小写归一比较）；根未锚定（本用例尚无会话落盘）返回空集
+ *  ——作 before 基线，after 轮询时锚必在。 */
+function sharedSessionDirIds(udDir: string, wsDir: string): readonly string[] {
+  const segment = wsSegmentOf(wsDir).toLowerCase()
+  const base = join(udDir, 'dsh-home', 'sessions')
+  let sanitized: string[]
+  try {
+    sanitized = readdirSync(base)
+  } catch {
+    return []
   }
-  return []
+  if (!sanitized.some((d) => d.toLowerCase().includes(segment))) return []
+  const out: string[] = []
+  for (const dir of sanitized) {
+    for (const entry of readdirSync(join(base, dir))) out.push(entry)
+  }
+  return out
 }
 
 /** 视图菜单项点击厂（portal 菜单 [role=menu] 内按文案过滤——selectWorkspaceViaChip 同径） */
@@ -134,17 +130,17 @@ test('@web-e2e @p1mvp sidebar-view-align·rail 图标列：搜索/＋在轨（�
 
 test('@web-e2e @p1mvp sidebar-view-align·行尾新会话钮：官方 startSession(workspaceId) 链（盘侧会话增生）', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, join(wsDir, '乙'), '乙项目')
     await expect(page.locator(projectRowOf(project.id))).toBeVisible({ timeout: 30_000 })
-    const before = sharedSessionDirIds(wsDir)
+    const before = sharedSessionDirIds(udDir, wsDir)
 
     // 行尾动作 = hover 呈现（官方 rowActions 同型），先悬停行再点钮
     await page.locator(projectRowOf(project.id)).hover()
     await page.locator(`${projectRowOf(project.id)} ${projectActionOf('new-session')}`).click()
     await expect
-      .poll(async () => sharedSessionDirIds(wsDir).length, { timeout: 30_000 })
+      .poll(async () => sharedSessionDirIds(udDir, wsDir).length, { timeout: 30_000 })
       .toBeGreaterThan(before.length)
     // blank 行入树需 workspace 成员传播 + 选中态（官方「仅选中 blank 可见」口径）——
     // 行显示面归 dogfood 台账（任务文件记边界），零凭据面以盘侧增生收口

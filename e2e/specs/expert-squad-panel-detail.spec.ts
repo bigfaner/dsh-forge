@@ -22,10 +22,10 @@
 // Hard Rules：零产品源码改动（断言失败 → 归因上报）；夹具 = 仓外 tmp；断言对齐
 // ui-design.md F2 与 tech-design §10.4 真机结算门，不编造断言。
 // @feature expert-squad @web-e2e
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ROOT } from '../support/launch.js'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { backupTrackedFile, createSharedLaunchFixture, restoreTrackedFile } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 // ── fetch 包装器（addInitScript 注入——页面加载前后幂等；scheme 无关拦截单源） ──
@@ -115,14 +115,8 @@ function patchText(): string {
   return readFileSync(DEV_PATCH, 'utf8')
 }
 
-/** patch 还原（写前备份在案才写——零残留纪律）。 */
-function restorePatch(backup: string | null): void {
-  if (backup === null) {
-    if (existsSync(DEV_PATCH)) writeFileSync(DEV_PATCH, '', 'utf8')
-  } else if (patchText() !== backup) {
-    writeFileSync(DEV_PATCH, backup, 'utf8')
-  }
-}
+// 写径复位（写前备份 + finally 逐字还原零残留）走支撑层单源
+// backupTrackedFile / restoreTrackedFile（e2e-fast-shared-launch/1.17 收编）。
 
 // ── 共享 launch fixture（spec 级单次 launchHost；夹具重播种 + crash 自动重启） ──
 
@@ -341,7 +335,7 @@ test('@feature expert-squad dlg step-3 cancel-discard：编辑修改后关闭重
 
 test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/换新回查看态/Toast/卡片即时同步', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page } = sharedLaunch
   try {
     await openPanel(page)
@@ -395,7 +389,7 @@ test('@feature expert-squad dlg step-4 success：保存落盘——update载荷/
     await page.locator(dlgBtn('保存')).click()
     await expect(page.locator(dlgBtn('编辑')), '复位保存回查看态').toBeVisible({ timeout: 10_000 })
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })
 
@@ -430,7 +424,7 @@ test('@feature expert-squad dlg step-4 validation-bare-mustache：人设裸 {{ �
 
 test('@feature expert-squad dlg step-4 update-failure：通道拒绝——停留编辑态/Toast保存失败/两侧不变', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page } = sharedLaunch
   try {
     await openPanel(page)
@@ -449,7 +443,7 @@ test('@feature expert-squad dlg step-4 update-failure：通道拒绝——停留
     await expect(page.locator(dlgBtn('编辑')), '修正后保存成功回查看态').toBeVisible({ timeout: 10_000 })
     await expect(page.locator(`${cardOf(KEY)} .xc-title`), '卡片同步新值').toHaveText('将失败的新岗位', { timeout: 10_000 })
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })
 
@@ -457,7 +451,7 @@ test('@feature expert-squad dlg step-4 update-failure：通道拒绝——停留
 
 test('@feature expert-squad dlg step-4 route-only-save：内置专家纯路由保存——来源chip保持「内置」+ 零 update 请求', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page } = sharedLaunch
   try {
     await openPanel(page)
@@ -508,7 +502,7 @@ test('@feature expert-squad dlg step-4 route-only-save：内置专家纯路由�
     await page.locator(dlgBtn('保存')).click()
     await expect(page.locator(dlgBtn('编辑')), '复位保存回查看态').toBeVisible({ timeout: 10_000 })
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })
 
@@ -517,7 +511,7 @@ test('@feature expert-squad dlg step-4 route-only-save：内置专家纯路由�
 
 test('@feature expert-squad dlg step-5 disable-success：禁用写 experts 配置位——灯/meta/按钮/卡片四位同步 + patch 落盘', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page } = sharedLaunch
   try {
     await openPanel(page)
@@ -546,13 +540,13 @@ test('@feature expert-squad dlg step-5 disable-success：禁用写 experts 配�
     await page.locator(dlgBtn('启用')).click()
     await expect(page.locator(dlgBtn('禁用')), '复位再启用').toBeVisible({ timeout: 10_000 })
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })
 
 test('@feature expert-squad dlg step-5 enable-success：再启用位摘除——四位归位 + patch 位摘除', async ({ sharedLaunch }) => {
   test.setTimeout(180_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page } = sharedLaunch
   try {
     await openPanel(page)
@@ -581,7 +575,7 @@ test('@feature expert-squad dlg step-5 enable-success：再启用位摘除——
     await expect(page.locator(TOAST), 'Toast 已启用').toContainText(`${KEY} 已启用`)
     await expect(page.locator(cardOf(KEY)), '背后卡片恢复常态').not.toHaveClass(/off/, { timeout: 10_000 })
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })
 
@@ -646,7 +640,7 @@ test('@feature expert-squad dlg step-6 close-overlay：遮罩点击关闭；Dial
 
 test('@feature expert-squad dlg 冒烟：开Dialog→查看分段→编辑保存→Toast+卡片同步→禁用→关闭恢复', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const backup = existsSync(DEV_PATCH) ? readFileSync(DEV_PATCH, 'utf8') : null
+  const backup = backupTrackedFile(DEV_PATCH)
   const { page, pageErrors } = sharedLaunch
   try {
     await openPanel(page)
@@ -690,6 +684,6 @@ test('@feature expert-squad dlg 冒烟：开Dialog→查看分段→编辑保存
     // 不变量：renderer 零未捕获异常（共享会话累计面——整 spec 期任何 pageerror 均记红）
     expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
   } finally {
-    restorePatch(backup)
+    restoreTrackedFile(DEV_PATCH, backup)
   }
 })

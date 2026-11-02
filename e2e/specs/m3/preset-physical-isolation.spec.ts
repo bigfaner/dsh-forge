@@ -43,13 +43,12 @@
 // Assertion depth: 18/19 behavioral（95%），其中 deep 7/18（39%）——两阈均过。
 //
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec
-// 一次；boot-overlay 判读改扫共享 userData 根（dsh-forge-shared-launch-ud-*）内
-// boot-overlay.yml（内容由三底稿每启重写，与 userData 路径无关——语义等价）。
+// 一次；boot-overlay 判读经支撑层单源定位（findInSharedUdRoot + SharedLaunchHandle.udDir
+// 透传——魔法前缀扫描退役；内容由三底稿每启重写，与 userData 路径无关——语义等价）。
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from '@playwright/test'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, requireInSharedUdRoot } from '../../support/fixtures.js'
 import { ROOT } from '../../support/launch.js'
 import { registerProject } from '../../support/rpc.js'
 import { presetSkillDirs } from '../../support/m3.js'
@@ -60,15 +59,13 @@ const WS_NAME = 'ws-jppi'
 const isAbsoluteMaterialized = (dir: string): boolean =>
   /^[A-Za-z]:[\\/]/.test(dir) || dir.startsWith('\\\\') || dir.startsWith('/')
 
-/** 共享 launch 形态 boot-overlay 判读：扫共享 userData 根（tmp 下 dsh-forge-shared-launch-ud-*
- *  ——本 worker 独立持有）内 boot-overlay.yml（三底稿每启重写，内容与 userData 路径无关）。 */
-function sharedOverlayText(): string {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const file = join(tmpdir(), name, 'boot-overlay.yml')
-    if (existsSync(file)) return readFileSync(file, 'utf8')
-  }
-  throw new Error('shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
+/** 共享 launch 形态 boot-overlay 判读：支撑层单源定位（udDir 透传）内 boot-overlay.yml
+ *  （三底稿每启重写，内容与 userData 路径无关）。 */
+function sharedOverlayText(udDir: string): string {
+  return requireInSharedUdRoot(udDir, (ud) => {
+    const file = join(ud, 'boot-overlay.yml')
+    return existsSync(file) ? readFileSync(file, 'utf8') : undefined
+  }, 'shared-launch: boot-overlay.yml 未找到（共享 userData 根缺失）')
 }
 
 // ── 共享 launch fixture（空白工作区；预设座位断言面零夹具档案依赖）──
@@ -80,11 +77,11 @@ const { test } = createSharedLaunchFixture({
 
 test('@web-e2e @m3 预设物理隔离·T1：突击组合 spec 物理缺席（枚举面即证）+ 远征对照 + customSkillDirs 恒物化绝对路径', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, pageErrors, wsDir } = sharedLaunch
+  const { page, pageErrors, wsDir, udDir } = sharedLaunch
   const project = await registerProject(page, wsDir, WS_NAME)
 
   // ── 物化产物在场（boot 每启重写——产品工件）──
-  const overlay = sharedOverlayText()
+  const overlay = sharedOverlayText(udDir)
   expect(overlay.includes('preset-expedition'), '远征预设行在场').toBe(true)
   expect(overlay.includes('preset-blitz'), '突击预设行在场').toBe(true)
   expect(/default:\s*blitz/.test(overlay), 'registry default = blitz（bug 2ba146d8 缺省=blitz）').toBe(true)

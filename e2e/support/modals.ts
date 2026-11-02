@@ -15,8 +15,8 @@
 // 「预览版说明」预免 = 产品 boot overlay 内置（fix-12），本面只收 API Key onboarding。
 import type { Page } from '@playwright/test'
 
-/** 就绪锚（B1 就绪信号单源）：主界面 phase 收敛二态任一在场 = 相位收敛起点 */
-const READY_ANCHOR = '[data-dswf-workbench][data-dswf-phase="hero"], [data-dswf-workbench][data-dswf-phase="session"]'
+/** 就绪锚（B1 就绪信号单源；F8 相位就绪锚知识单源——launch.ts stablePhase 同消费）：主界面 phase 收敛二态任一在场 = 相位收敛起点 */
+export const READY_ANCHOR = '[data-dswf-workbench][data-dswf-phase="hero"], [data-dswf-workbench][data-dswf-phase="session"]'
 
 /** 运行期模态收起（API Key onboarding「稍后配置」本地收起；B1 双模：就绪锚 + 晚挂载观测窗）*/
 export async function dismissOnboardingModals(

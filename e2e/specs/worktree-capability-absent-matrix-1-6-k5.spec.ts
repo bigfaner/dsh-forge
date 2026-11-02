@@ -5,12 +5,12 @@
 // data 锚：chip = [data-dswt-hero-trigger]；composer = [data-composer-input]；发送钮 =
 // role button「发送消息」。
 // e2e-fast-shared-launch 存量迁移（批次三a）：共享 launch fixture——launchHost 整 spec 一次，
-// 夹具工作区即真·非 git 目录（seedWorkspace 播种基准态）；发送落盘判读改扫共享 userData 根
-//（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions，以夹具工作区全路径段唯一锚定。
+// 夹具工作区即真·非 git 目录（seedWorkspace 播种基准态）；发送落盘判读经支撑层单源定位
+//（findInSharedUdRoot + SharedLaunchHandle.udDir 透传——魔法前缀扫描退役）内
+// dsh-home/sessions，以夹具工作区全路径段唯一锚定。
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, findInSharedUdRoot } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -57,7 +57,7 @@ async function typeDraft(page: Page, text: string): Promise<void> {
 }
 
 /** 发送重试环（1.29 同款）：以会话日志落盘为唯一发送成功证据 */
-async function sendUntilLanded(page: Page, wsDir: string, since: number): Promise<string> {
+async function sendUntilLanded(page: Page, udDir: string, wsDir: string, since: number): Promise<string> {
   const composer = page.locator('[data-composer-input]').first()
   const sendButton = page.getByRole('button', { name: '发送消息' })
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -67,7 +67,7 @@ async function sendUntilLanded(page: Page, wsDir: string, since: number): Promis
     else await page.keyboard.press('Enter')
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
-      const hit = findSessionDir(wsDir, since)
+      const hit = findSessionDir(udDir, wsDir, since)
       if (hit !== undefined) return hit
       await page.waitForTimeout(1_000)
     }
@@ -75,14 +75,13 @@ async function sendUntilLanded(page: Page, wsDir: string, since: number): Promis
   throw new Error(`发送未落盘（wsDir=${wsDir}）——发送链路证据缺席`)
 }
 
-/** 会话日志落盘定位：扫描共享 launch userData 根（dsh-forge-shared-launch-ud-*——本 worker
- *  独立持有）下各 dsh-home/sessions，取 cwd 分组目录含夹具工作区全路径段、mtime ≥ since 的日志。 */
-function findSessionDir(wsDir: string, since: number): string | undefined {
+/** 会话日志落盘定位：支撑层单源定位（udDir 透传——本 worker 独立持有）下 dsh-home/sessions，
+ *  取 cwd 分组目录含夹具工作区全路径段、mtime ≥ since 的日志。 */
+function findSessionDir(udDir: string, wsDir: string, since: number): string | undefined {
   const fragment = wsDir.replaceAll('\\', '/').toLowerCase()
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
-    if (!existsSync(root)) continue
+  return findInSharedUdRoot(udDir, (ud) => {
+    const root = join(ud, 'dsh-home', 'sessions')
+    if (!existsSync(root)) return undefined
     let hit: string | undefined
     const visit = (dir: string, depth: number): void => {
       if (hit !== undefined || depth > 6) return
@@ -112,9 +111,8 @@ function findSessionDir(wsDir: string, since: number): string | undefined {
       }
     }
     visit(root, 0)
-    if (hit !== undefined) return hit
-  }
-  return undefined
+    return hit
+  })
 }
 
 /** 走查截图（失败不静默——打点留痕） */
@@ -128,7 +126,7 @@ async function snap(page: Page, name: string): Promise<void> {
 
 test('真非 git UI：官方原流零拒绝（照常）', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, wsDir, udDir } = sharedLaunch
   const consoleLog: string[] = []
   page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
   try {
@@ -137,7 +135,7 @@ test('真非 git UI：官方原流零拒绝（照常）', async ({ sharedLaunch 
     const MARKER_A = '1-7-k5-plain-first-message'
     await typeDraft(page, MARKER_A)
     const sendStartA = Date.now() - 5_000
-    const dirA = await sendUntilLanded(page, wsDir, sendStartA)
+    const dirA = await sendUntilLanded(page, udDir, wsDir, sendStartA)
     console.log('[k5-scene-a] plain message landed at', dirA)
     // 非 git 零差异：零拒绝呈现（官方原路径不变，零 host 介入）
     await expect(page.getByText('能力缺席'), '非 git 项目零拒绝呈现（照常）').toHaveCount(0)

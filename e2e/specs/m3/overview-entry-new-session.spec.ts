@@ -65,24 +65,22 @@
 // Assertion depth: 44/48 behavioral（92%），其中 deep 18/44（41%）——两阈均过。
 
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
 import { FEATURES_CHANNELS } from '../../../packages/contracts/src/channels.js'
-import { createSharedLaunchFixture } from '../../support/fixtures.js'
+import { createSharedLaunchFixture, openOverviewSubtab } from '../../support/fixtures.js'
 import { registerProject, selectWorkspaceViaChip, forgeInvoke } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt, seedEdge, seedTask } from '../../support/replay/db-insert.js'
-import { openOverviewDock } from '../../support/navigation.js'
 import { ensureNoBlockingDialog } from '../../support/modals.js'
-import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ovSubtabOf, ttItemOf } from '../../support/anchors.js'
+import { COMPOSER_INPUT, CONVERSATION_CONTENT, projectRowOf, sessionRowOf, ttItemOf } from '../../support/anchors.js'
 import { awaitNoLateModals, awaitPresetHeaderLabel, seatPresent } from '../../support/m3.js'
 
 const WS_NAME = 'ws-joes'
 
 // e2e-fast-shared-launch 存量迁移（批次四a）：共享 launch fixture——launchHost 整 spec 一次；
 // 夹具工作区 = 空目录（提案/feature slug 隔离：joe-* 各自作用域）；会话开户判读改扫共享
-// userData 根（dsh-forge-shared-launch-ud-*）内 dsh-home，按夹具段（WS_NAME——本 spec 独有）
+// userData 根内 dsh-home（支撑层单源定位——udDir 透传），按夹具段（WS_NAME——本 spec 独有）
 // 锚定；T1 会话预设收口 = 突击（无溯源渠道落点），T2 远征 / T3 突击各自用例内显式导航。
 const { test } = createSharedLaunchFixture({
   seedWorkspace: (dir) => mkdirSync(dir, { recursive: true }),
@@ -90,30 +88,8 @@ const { test } = createSharedLaunchFixture({
   launch: { expectPhase: 'hero', env: { DSH_FORGE_TEST_BRIDGE: '1' } },
 })
 
-/** 概览 dock 挂载重试（共享 launch 序列态瞬态窗——上用例会话面沉降窗内中心列拦截子 tab
- *  点击；失败后关掉概览 tab 重开，keyed body 重挂载触发布局重解析——dogfood-sc-m3-replay
- *  openOverviewDockWithRetry 同径。瞬态窗对策，非放宽断言：轮内 30s/15s 门原样保留）。 */
-async function openOverviewSubtab(page: Page, subtab: 'proposals' | 'features' | 'tasks'): Promise<void> {
-  let lastCause: unknown
-  for (let i = 0; i < 3; i++) {
-    try {
-      await openOverviewDock(page)
-      const tab = page.locator(ovSubtabOf(subtab))
-      await tab.click()
-      await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
-      return
-    } catch (cause) {
-      lastCause = cause
-      await page
-        .getByRole('tab', { name: /项目概览/ })
-        .getByRole('button', { name: '关闭' })
-        .click()
-        .catch(() => undefined)
-      await new Promise((resolve) => setTimeout(resolve, 3_000))
-    }
-  }
-  throw lastCause
-}
+/** 概览子 tab 打开走支撑层单源 openOverviewSubtab（批次四a 四份 spec 内同语义 helper 收编
+ *  ——挂载重试 ×3，轮内 30s/15s 门原样保留，e2e-fast-shared-launch/1.17）。 */
 
 /** 提案文档夹具（forge_dir/docs/proposals/<slug>/——listDocs fs 扫描源） */
 function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[]): void {
@@ -125,23 +101,20 @@ function writeProposalDocs(wsDir: string, slug: string, docs: readonly string[])
 }
 
 /**
- * 共享 launch 形态夹具会话枚举（共享 userData 根 tmp 下 dsh-forge-shared-launch-ud-* 内各
- * dsh-home——夹具段 = WS_NAME 本 spec 独有零跨 spec 串扰；目录创建时间升序 = 发送先后序
+ * 共享 launch 形态夹具会话枚举（支撑层单源定位——udDir 透传本 worker 独立持有，魔法前缀
+ * 扫描退役；夹具段 = WS_NAME 本 spec 独有零跨 spec 串扰；目录创建时间升序 = 发送先后序
  * ——fix-3② Step1e 回访锚，birthtime 口径与原形态逐字保持）。
  */
-function fixtureSessionIds(fixtureSegment: string): string[] {
+function fixtureSessionIds(udDir: string, fixtureSegment: string): string[] {
   const found: { id: string; born: number }[] = []
-  for (const udName of readdirSync(tmpdir())) {
-    if (!udName.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const sessionsDir = join(tmpdir(), udName, 'dsh-home', 'sessions')
-    if (!existsSync(sessionsDir)) continue
-    for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
-      if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
-      for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
-        if (!sDir.isDirectory()) continue
-        const st = statSync(join(sessionsDir, wsDir.name, sDir.name))
-        found.push({ id: sDir.name, born: st.birthtimeMs !== 0 ? st.birthtimeMs : st.ctimeMs })
-      }
+  const sessionsDir = join(udDir, 'dsh-home', 'sessions')
+  if (!existsSync(sessionsDir)) return []
+  for (const wsDir of readdirSync(sessionsDir, { withFileTypes: true })) {
+    if (!wsDir.isDirectory() || !wsDir.name.includes(fixtureSegment)) continue
+    for (const sDir of readdirSync(join(sessionsDir, wsDir.name), { withFileTypes: true })) {
+      if (!sDir.isDirectory()) continue
+      const st = statSync(join(sessionsDir, wsDir.name, sDir.name))
+      found.push({ id: sDir.name, born: st.birthtimeMs !== 0 ? st.birthtimeMs : st.ctimeMs })
     }
   }
   return found.sort((a, b) => a.born - b.born).map((entry) => entry.id)
@@ -149,7 +122,7 @@ function fixtureSessionIds(fixtureSegment: string): string[] {
 
 test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突击/多文档/远征/无溯源）+ feature 恒远征 + 草稿独立 + 空意图发送', async ({ sharedLaunch }) => {
   test.setTimeout(480_000)
-  const { app, page, pageErrors, wsDir } = sharedLaunch
+  const { app, page, pageErrors, wsDir, udDir } = sharedLaunch
   try {
     const project = await registerProject(page, wsDir, WS_NAME)
     const projectId = project.id
@@ -272,7 +245,7 @@ test('@web-e2e @m3 概览入口·T1：行头「打开新会话」四渠道（突
     // blank 仅当前选中者可见——回访断言取非 blank 行（sc6「用户事件落地」同径）。
     // 行点回 → 转录恢复 = 中区会话面常驻（Page Composition）+ 既有会话内容不受新开影响。
     const projBlock = page.locator(projectRowOf(projectId))
-    const [firstId, secondId] = fixtureSessionIds(WS_NAME)
+    const [firstId, secondId] = fixtureSessionIds(udDir, WS_NAME)
     expect(firstId, '首会话目录在盘（发送落地开户）').toBeDefined()
     expect(secondId, '第二会话目录在盘（两会话各自开户）').toBeDefined()
     const rowFirst = projBlock.locator(sessionRowOf(firstId as string)).first()

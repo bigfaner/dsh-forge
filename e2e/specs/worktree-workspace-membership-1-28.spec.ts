@@ -9,12 +9,11 @@
 // data 锚：chip = [data-dswt-hero-trigger]；菜单 = .dswt-hero-menu；composer = [data-composer-input]。
 // e2e-fast-shared-launch 存量迁移（批次三b）：共享 launch fixture——launchHost 整 spec 一次，
 // 夹具工作区即隔离 git 仓（seedWorkspace 播种基准态）；首条消息落盘取证改扫共享 userData 根
-//（dsh-forge-shared-launch-ud-*）内 dsh-home/sessions，以夹具段（wt-a）唯一锚定。
+//（支撑层单源定位——SharedLaunchHandle.udDir 透传）内 dsh-home/sessions，以夹具段（wt-a）唯一锚定。
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSharedLaunchFixture } from '../support/fixtures.js'
+import { createSharedLaunchFixture, findInSharedUdRoot } from '../support/fixtures.js'
 import { expect, type Page } from '@playwright/test'
 
 const EVIDENCE_DIR =
@@ -126,14 +125,12 @@ async function snap(page: Page, name: string): Promise<void> {
 }
 
 /** 首条消息落盘取证（共享 launch 形态）：官方会话存储按 cwd 分组（目录名 = cwd 路径编码，
- *  日志 zstd 压缩——内容不可文本扫）——扫共享 launch userData 根（tmp 下
- *  dsh-forge-shared-launch-ud-*——本 worker 独立持有）内各 dsh-home/sessions，
- *  找「含 wt-a 的 cwd 分组目录」下新产会话日志即为落树内证据。 */
-function findWorktreeSessionDir(): string | undefined {
-  for (const name of readdirSync(tmpdir())) {
-    if (!name.startsWith('dsh-forge-shared-launch-ud-')) continue
-    const root = join(tmpdir(), name, 'dsh-home', 'sessions')
-    if (!existsSync(root)) continue
+ *  日志 zstd 压缩——内容不可文本扫）——支撑层单源定位（udDir 透传——本 worker 独立持有）
+ *  内 dsh-home/sessions，找「含 wt-a 的 cwd 分组目录」下新产会话日志即为落树内证据。 */
+function findWorktreeSessionDir(udDir: string): string | undefined {
+  return findInSharedUdRoot(udDir, (ud) => {
+    const root = join(ud, 'dsh-home', 'sessions')
+    if (!existsSync(root)) return undefined
     let hit: string | undefined
     const visit = (dir: string, depth: number): void => {
       if (hit !== undefined || depth > 6) return
@@ -159,14 +156,13 @@ function findWorktreeSessionDir(): string | undefined {
       }
     }
     visit(root, 0)
-    if (hit !== undefined) return hit
-  }
-  return undefined
+    return hit
+  })
 }
 
 test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名单可见）+ 首条消息落树内', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const { page, wsDir } = sharedLaunch
+  const { page, wsDir, udDir } = sharedLaunch
   const wtDir = join(wsDir, 'wt-a').replaceAll('\\', '/')
   const consoleLog: string[] = []
   page.on('console', (m) => consoleLog.push(`[${m.type()}] ${m.text()}`))
@@ -208,7 +204,7 @@ test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名�
       const deadline = Date.now() + 20_000
       let landed = false
       while (Date.now() < deadline) {
-        if (findWorktreeSessionDir() !== undefined) {
+        if (findWorktreeSessionDir(udDir) !== undefined) {
           landed = true
           break
         }
@@ -216,7 +212,7 @@ test('1.28 UI：点选确认切行 + 树内会话挂工作区（sessionIds 名�
       }
       if (landed) break
     }
-    const sessionDir = findWorktreeSessionDir()
+    const sessionDir = findWorktreeSessionDir(udDir)
     if (sessionDir === undefined) {
       await snap(page, 'send-failed-state.png')
       const leftover = await composer.evaluate((el) => (el as HTMLElement).textContent ?? '').catch(() => '<gone>')
