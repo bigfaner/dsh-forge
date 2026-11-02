@@ -199,6 +199,45 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 - 冷启点：7 → 3（3 迁移 spec 各 1 + 重播种/crash 重启）；批时 2.3m → 1.9m。
 - 范围外上报（工具链解锁修复，随本批落盘）：HEAD 4d58e48d 提交的 packages/plugin-forge/package.json description 字段含损坏 UTF-8（闭合引号丢失）致 pnpm 全局 JSON parse 失败——按 HEAD blob 字节级修复仅该行（恢复 cc05e0a1 同款文案）。
 
+## 批次六：根目录杂项 19 份（本批次，commit 见 git 历史）
+
+**19 份全部裁定保留原形态，零迁移、零退役**（逐份读源码裁定；本批为全迁移链特殊面最密集批次——壳级自证/安装打包形态/dogfood 凭据/双重启生命周期/自管 userData 播种贯穿）。裁定准则沿用试点 + 前五批沉淀：
+
+- 迁移收益判据 = 冷启点削减（≥2 用例且共享生命周期语义相容）；单用例 spec 迁移 1→1 零削减，不抵真机对账成本，一律保留。
+- 强依赖独立 app 生命周期（用例中段 closeApp/同 userData 复启/launch 前自管 userData 播种）与共享 fixture（用例间不 closeApp、userData 自管不外露）结构性不相容——session-workbench-replay / m3/dogfood-sc-m3 族同裁定。
+
+### 逐份裁定表
+
+| spec | 用例数 | 冷启点 | 裁定理由 |
+|---|---|---|---|
+| 000-canary | 1 | 0 | 保留。G2 runner 自检纯 Node 用例，零 electron 面——非共享 launch 消费者（无从迁移） |
+| bug-hero-project-switch-send | 1 | 1 | 保留。dogfood 真实凭据 seedDshHome 写自管 userData + 凭据缺席留痕 skip（批次五 knowledge-recall-flywheel 同裁定族）；单用例 1→1 零收益 |
+| bug-msel-dialog-clip | 1 | 1 | 保留。单用例 1→1 零收益；且注册真实仓工作区（Z:/project/dsh/dsh-forge）+ 芯片选定——与共享 fixture 自动注册/归档项目行并存引入非被测项目面干扰 |
+| dist-win-packaged-observability | 1 | 1 | 保留。打包观测特殊面：beforeAll 内 dist:win 重建 + 打包 exe 直启（便携 userData 被 {exe}/data 覆盖）+ 关停后重启 exe 日志追加断言——安装形态 spec 级单 launch 冷启形态不成立（批次五 installer-smoke 同裁定族） |
+| flywheel | 1 | 1 | 保留。dogfood 真实凭据 + 去模型化门显式 env（DSH_FORGE_DOGFOOD_RECORD=1）双 skip 门 + overlay 叠层（m3/dogfood-sc-m3 同裁定族） |
+| host-boot | 2 | 2 | 保留。每用例独立 userData 本身即被测面（DSH_FORGE_USER_DATA 隔离 + profile 幂等）；AC2 = 同 userData 双 boot 语义（launch → closeApp → 复启比对 mtime）——共享 fixture 用例间不 closeApp、无两次 launch 间窗（session-workbench-replay 同裁定族） |
+| host-telemetry-observability | 1 | 1 | 保留。单用例 1→1 零收益；且统一日志汇断言 = {userData}/logs 全量 readDiagLines 结构 pin（遍历全部行）——共享会话跨用例日志累积引入他源行污染结构断言面 + 中段 closeApp（quit flush 收口后终读）依赖独立生命周期 |
+| installer-pipeline | 3 | 3 | 保留。安装形态贯穿：staged resources（DSH_FORGE_RESOURCES_DIR）boot + MATERIALIZE_ONLY 双 boot（不开窗）+ --check 纯 Node 用例——三用例三形态各异，安装形态冷启形态在本文件不成立（installer-smoke / dist-win 同裁定族） |
+| knowledge-integration | 2 | 2 | 保留。T1 断言零项目 fresh boot 引导空态（data-dswf-kn-anchor=none「尚未锚定项目」）——共享 beginTest 自动注册先落项目行且跨用例持久（批次五 project-registration 同裁定族） |
+| loop-event-delivery-panel-walkthrough | 1 | 1 | 保留。单用例 1→1 零收益（900s 真实派发循环长走查）；迁移无冷启削减且真机对账成本高 |
+| loop-event-delivery-walk-112 | 1 | 1 | 保留。真实凭据 seedDshHome + forge-settings.json 预写（装配期读数）写自管 userData——fixture 层无 launch 前播种缝（m3/dogfood-sc-m3-replay 同裁定族） |
+| loop-msg-consol-walk14 | 3 | 3 | 保留。每用例独立 bootFixture（独立 userData + 主检出凭据同字节播种 + forge-settings 预写）——三用例三独立世界，per-test 全新凭据世界为被测语义（径①②③各自故障注入形态）；共享累积态无法复位（批次五 session-workbench 同裁定族） |
+| remote-approval-journey | 1 | 3 | 保留。旅程本体 = 三次 launchHost（首启 → closeApp 重启生效 → closeApp 收回重启）——中段 closeApp + 同 userData 复启双程贯穿被测语义（fix-3 重启生效形态），与共享 fixture 生命周期结构性不相容 |
+| remote-approval-negative | 2 | 5 | 保留。T2 = 四次 launch（开→重启监听→关→重启收回）同 userData 双重启旅程 + 真实 LAN 全卡绑定监听面——同 journey 裁定 |
+| remote-pair-cookie-chain | 1 | 1 | 保留。forge-settings.json 预写 launch 前落自管 userData（装配期读数全卡绑定）——fixture userData 自管不外露、无播种缝（walk-112 同裁定族）；单用例 1→1 零收益 |
+| sidebar-loop-tri-state-1-6 | 2 | 2 | 保留。每用例独立 bootFixture（凭据播种 + forge-settings 故障注入预写）——循环三态各自独立容器世界，共享累积态无法承载（loop-msg-consol-walk14 同裁定族） |
+| smoke-skeleton | 4 | 4 | 保留。T1 fresh 裸启动零遮罩（dismiss:false 零项目态）+ T4 hero 相位/已注册标记断言依赖零项目 fresh boot——共享 beginTest 自动注册 + 遗留归档态引入项目行（project-registration / knowledge-integration 同裁定族） |
+| tmp-probe-closehang | 1 | 1 | 保留。临时诊断探针（头注「不提交」形态）+ app.close 中段挂死取证本体——独立 app 生命周期即被测面 |
+| web-shell | 1 | 1 | 保留。壳级自证（自有壳 dist + dev profile launchElectron）单用例 1→1 零收益；共享 fixture 自动注册向壳级断言面注入非被测项目行（批次五 windows-titlebar-shell 壳级面同族顾虑，彼批迁移因 2 用例有削减收益） |
+
+### 退役复核
+
+零退役：19 份均为行为/装配/生命周期/取证断言（bug 回归守卫 ×2、观测取证 ×2、安装打包 ×2、远程审批链 ×3、循环旅程 ×4、壳级/boot 自证 ×3、dogfood ×2、骨架走查 ×1），无「unit 已持有等价覆盖」的纯文案/静态渲染断言用例——不满足退役前提。
+
+### 真机对账
+
+零迁移 = 零 spec 文件改动面 → 不存在迁移引入红例，基线对照归因以「改动集为空」承载（无对照对象）。轻量 sanity run（000-canary + host-boot + web-shell，workers=2，`logs/e2e-fast-shared-launch/1.11/001-sanity-run/run1.log`）确认保留原形态 spec 执行面无损。
+
 ## 批次范围（旧文案存档）
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
