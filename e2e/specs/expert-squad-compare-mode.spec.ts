@@ -1,11 +1,13 @@
 // expert-squad 1.64 评审修复 e2e：Dialog 对比态单一选择控件（pick-list）+ Esc 两段语义
 // 真机取证——bug f4020406（评审 bug 7ee8cff5 Major + 七项 Minor 收敛面）。
 // 打开动线：隔离 profile → 夹具工作区 code-reviewer.md（project 层覆盖随包
-// 内置同键档案 → 同键聚组 + 被遮蔽 shadow）→ 左栏「专家团」→ 聚组生效卡 → 详情 Dialog
+// 内置同键档案 → 同键聚组）→ 左栏「专家团」→ 聚组生效卡 → 详情 Dialog
 // → 「对比」进入对比态。
 // data 锚（detail-dialog.tsx / expert-panel.tsx 事实表）：Dialog .dswf-dlg[role=dialog]；
-// 对比态 pick-list .dswf-cmp-pick-list 行 [data-cmp-target]；chips（聚组语汇）
-// [data-cmp-chip] 不应在 Dialog 内；头部「返回」钮 aria-label=退出对比。
+// 对比态 pick-list .dswf-cmp-pick-list 行 [data-cmp-target]（951b1dd2：值 = sourcePath
+// 身份，非 origin 字面量）；chips（聚组语汇）[data-cmp-chip] 不应在 Dialog 内；
+// 头部「返回」钮 aria-label=退出对比。被遮蔽摘要行已退役（f0536f25 裁决——多来源
+// 承载 = 卡头「对比」钮）。
 // 拦截纪律：零拦截（纯 UI 面）；Hard Rules：零产品源码改动，断言失败 → 归因上报。
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
 // 形态——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
@@ -68,9 +70,13 @@ async function openPanel(page: import('@playwright/test').Page): Promise<void> {
   await expect(row, '左栏「专家团」行在场').toBeVisible({ timeout: 30_000 })
   await row.click()
   await expect(page.locator(PANEL_ROOT), '专家面板挂载').toBeVisible({ timeout: 30_000 })
-  // 同键聚组收敛：multi 组 + 被遮蔽 shadow 行
+  // 同键聚组收敛：multi 组 + 多来源对比钮（f0536f25 裁决：被遮蔽摘要行退役，
+  // 多来源承载 = 卡头「对比」钮——本组 anchor 随之重锚）
   await expect(page.locator(GROUP_MULTI), '同键聚组（project 覆盖内置）').toBeVisible({ timeout: 30_000 })
-  await expect(page.locator(`${GROUP_MULTI} .dswf-xshadow`), '被遮蔽 shadow 行在场').toBeVisible()
+  await expect(
+    page.locator(`${GROUP_MULTI} button[aria-label="对比 ${KEY} 其它来源"]`),
+    '多来源对比钮在场（shadow 行退役后多来源锚）',
+  ).toBeVisible()
 }
 
 async function openCompareMode(page: import('@playwright/test').Page): Promise<void> {
@@ -85,9 +91,13 @@ test('@feature expert-squad compare step-1：对比态单一选择控件——pi
   const { page } = sharedLaunch
   await openPanel(page)
   await openCompareMode(page)
-  // 单选候选 = 同键其它来源（内置 plugin 层）
+  // 单选候选 = 同键其它来源（内置 plugin 层）。951b1dd2 裁决：对比靶身份改 sourcePath
+  // （data-cmp-target = entryIdOf 值，非 origin 字面量）——origin 归属经行内来源徽标重锚。
   await expect(page.locator(CMP_TARGET), 'pick-list 候选行（内置来源）').toHaveCount(1)
-  await expect(page.locator(`${CMP_TARGET}[data-cmp-target="plugin"]`)).toHaveCount(1)
+  await expect(
+    page.locator(`${CMP_TARGET}[data-cmp-target] .origin-badge.origin-plugin`),
+    '候选行 origin=plugin（sourcePath 身份锚：属性值非空即守）',
+  ).toHaveCount(1)
   // bug f4020406 收敛：Dialog 内零 chips
   await expect(page.locator(DIALOG_CHIPS), 'Dialog 内无 CompareChips').toHaveCount(0)
   // 两列表（生效 vs target）
