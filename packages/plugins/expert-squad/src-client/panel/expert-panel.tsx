@@ -283,8 +283,9 @@ export interface ExpertPanelAppProps {
   /** delegate 装配探针（测试注入；缺省 = GET run-state 读口 fetch）。 */
   readonly delegateProbe?: () => Promise<DelegateAssemblySnapshot | undefined>
   /**
-   * 「配置」跳转官方导航缝解析器（pluginNavigation.openBundle——点击时点惰性解析，
-   * 不缓存；返回 undefined = 缝缺席，降级 openPluginConfigTab DOM 导航先例）。
+   * 「配置」跳转官方导航缝解析器（pluginNavigation openItem 正门 / openBundle 借道 +
+   * DOM 卡片点击——点击时点惰性解析，不缓存；返回 undefined = 缝缺席，降级
+   * openPluginConfigTab DOM 导航先例）。
    */
   readonly configJump?: () => (() => void) | undefined
   /** 候选目录探针（测试注入；缺省 = GET candidates 读口 fetch）。 */
@@ -475,9 +476,10 @@ export function ExpertPanelApp(props: ExpertPanelAppProps): ReactNode {
 
   const phase = state.phase.kind === "error" ? "error" : state.phase.kind
   const onRetry = useCallback(() => controller?.retry(), [controller])
-  // 「配置」跳转（D2）：官方缝优先——plugin-manager pluginNavigation.openBundle 定位本插件
-  // 详情页（plugins.detail.section「默认 Agent 选项」在屏）；缝缺席 = 降级既有设置壳 DOM
-  // 导航先例（旧装配容缺）。宿主未组任一缝 = 静默不动作。
+  // 「配置」跳转（D2）：官方缝优先——pluginNavigation.openItem 正门（前瞻）/
+  // openBundle 借道 + DOM 点官方组卡片「查看」钮打开 item 详情页（plugins.item
+  // view:"page"「默认 Agent 选项」在屏）；缝缺席 = 降级既有设置壳 DOM 导航先例。
+  // 宿主未组任一缝 = 静默不动作。
   const onOpenConfig = useCallback(() => {
     const jump = props.configJump?.();
     if (jump !== undefined) {
