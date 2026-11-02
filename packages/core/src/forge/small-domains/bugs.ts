@@ -1,7 +1,8 @@
 // forge bug 域服务（fix-bug 第五小域）：registerBug/resolveBug/listBugs——两阶段落库
 // 单表（bugs：登记 open → fixed｜unresolved 终态回填；不可改史，无审计表——终态行自身
 // 即全史）。proposal「技术细节·持久化/工具面」两节为契约；contracts dto/bugs.ts（BugCard/
-// ListBugsQuery）+ labels BUG_STATUSES 为词汇单源。
+// ListBugsQuery）+ labels BUG_STATUSES 为词汇单源。registerBug 应答 = 工具面包装
+// { card, errorTypeSuggestions }（T1 词表收敛——distinct errorType 参考集合，零机械归类）。
 //
 // git 解析径在 core 内承载（先例 forge/tasks/git-lookup.ts——execFile 注入 + 恒数组参 +
 // 2s 超时 + ENOENT/失败同路 fail-soft；四域互禁 import 彼此，故本域自持注入面不引
@@ -246,6 +247,19 @@ export class BugRecurrenceDanglingError extends Error {
 /** summary 字数上限（字 = Unicode 码点——全角汉字一字一计） */
 export const BUG_SUMMARY_MAX_CHARS = 50
 
+/** errorType 参考集合限量（词表收敛供 LLM 参考——高频优先；零机械归类，参考提案 §2.5） */
+export const ERROR_TYPE_SUGGESTIONS_LIMIT = 20
+
+/**
+ * registerBug 应答（工具面包装——BugCard 行 DTO 单源零改动，不是给 BugCard 加字段）：
+ * card = 登记投影；errorTypeSuggestions = 台账 distinct errorType 集合（高频优先限量），
+ * 供登记方下一个缺陷参考复用——词表只作参考，归类始终是语义判断。
+ */
+export interface RegisterBugResult {
+  readonly card: BugCard
+  readonly errorTypeSuggestions: readonly string[]
+}
+
 export interface BugsServiceDeps {
   /** 每工作区任务库惰性句柄（projectId → ensureOpen） */
   readonly store: ForgeWorkspaceStore
@@ -369,8 +383,8 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 export function createBugsService(deps: BugsServiceDeps) {
   const execFile = deps.execFile ?? defaultExecFile
   return {
-    /** 登记 → open 行（summary ≤50 字超长拒写；reporter 经 git 解析——写前 await） */
-    async registerBug(input: RegisterBugInput): Promise<BugCard> {
+    /** 登记 → open 行 + errorType 参考集合（summary ≤50 字超长拒写；reporter 经 git 解析——写前 await） */
+    async registerBug(input: RegisterBugInput): Promise<RegisterBugResult> {
       const summary = input.summary.trim()
       if (Array.from(summary).length > BUG_SUMMARY_MAX_CHARS) {
         throw new BugSummaryTooLongError({ summary, max: BUG_SUMMARY_MAX_CHARS })
@@ -412,7 +426,16 @@ export function createBugsService(deps: BugsServiceDeps) {
       })
       deps.events.emitTasksChanged(input.projectId)
       const row = db.prepare<unknown[], BugStorageRow>(`${SELECT_BUG} WHERE id = ?`).get(bugId) as BugStorageRow
-      return toBugCard(row)
+      // 词表收敛（T1）：distinct errorType 集合——高频优先、同频词面升序、限量；空白词不计；
+      // 只读聚合零机械归类（能力类别判断留 triage 语义面，参考提案 §2.5）
+      const suggestionRows = db
+        .prepare<unknown[], { error_type: string; n: number }>(
+          `SELECT error_type, COUNT(*) AS n FROM bugs
+           WHERE error_type IS NOT NULL AND TRIM(error_type) <> ''
+           GROUP BY error_type ORDER BY n DESC, error_type ASC LIMIT ?`,
+        )
+        .all(ERROR_TYPE_SUGGESTIONS_LIMIT)
+      return { card: toBugCard(row), errorTypeSuggestions: suggestionRows.map((r) => r.error_type) }
     },
 
     /** 终态回填（open→fixed｜unresolved 单向；fixed 走 hash 锚定证据反查） */

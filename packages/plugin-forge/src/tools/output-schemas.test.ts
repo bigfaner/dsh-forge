@@ -205,12 +205,18 @@ describe('注册面输出 schema ↔ 返回值形状对验（host oneOf 回执�
     })
   })
 
-  it('recordBug：BugCard 登记面全形', () => {
-    expectValid('recordBug', schemaOf(createRecordBugTool(DEPS)), BUG_CARD_OPEN)
+  it('recordBug：工具面包装 { card, errorTypeSuggestions }（card 登记面全形）', () => {
+    expectValid('recordBug', schemaOf(createRecordBugTool(DEPS)), {
+      card: BUG_CARD_OPEN,
+      errorTypeSuggestions: ['stale-anchor', 'race-condition'],
+    })
   })
 
-  it('recordBug：BugCard 登记面全形（挂链——含 recurrenceOf，bug 37693dfc）', () => {
-    expectValid('recordBug 挂链', schemaOf(createRecordBugTool(DEPS)), { ...BUG_CARD_OPEN, recurrenceOf: 'b-root' })
+  it('recordBug：挂链卡（含 recurrenceOf，bug 37693dfc）+ 空词表参考集合', () => {
+    expectValid('recordBug 挂链', schemaOf(createRecordBugTool(DEPS)), {
+      card: { ...BUG_CARD_OPEN, recurrenceOf: 'b-root' },
+      errorTypeSuggestions: [],
+    })
   })
 
   it('resolveBug：BugCard 回填面全形（fixed 证据）', () => {

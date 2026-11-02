@@ -87,7 +87,7 @@ export interface ForgeBugsToolFace {
     readonly recurrenceOf?: string
     readonly sourceTaskId?: string
     readonly reportSessionId?: string
-  }): Promise<BugCard>
+  }): Promise<{ readonly card: BugCard; readonly errorTypeSuggestions: readonly string[] }>
   resolveBug(input: {
     readonly projectId: string
     readonly bugId: string

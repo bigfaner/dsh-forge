@@ -60,8 +60,9 @@ interface CapturedInput {
   sourceTaskId?: string
 }
 
-function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; captured: CapturedInput[] } {
+function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; captured: CapturedInput[]; suggestions: string[] } {
   const captured: CapturedInput[] = []
+  const suggestions: string[] = []
   const bugs = stubBugsFace(async (input) => {
     captured.push({
       projectId: input.projectId,
@@ -70,7 +71,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; capt
       reportSessionId: input.reportSessionId,
       sourceTaskId: input.sourceTaskId,
     })
-    return openCard(input.summary)
+    return { card: openCard(input.summary), errorTypeSuggestions: suggestions }
   })
   const deps: ForgeToolDeps = {
     tasks: {} as ForgeToolDeps['tasks'],
@@ -79,7 +80,7 @@ function toolWithCapture(): { tool: ReturnType<typeof createRecordBugTool>; capt
     checkpoints,
     resolveProjectId: (cwd: string) => (cwd.toLowerCase().includes('demo') ? 'p-1' : undefined),
   }
-  return { tool: createRecordBugTool(deps), captured }
+  return { tool: createRecordBugTool(deps), captured, suggestions }
 }
 
 const BASE = {
@@ -152,9 +153,34 @@ describe('recordBug execute（路由 + 服务端注入径）', () => {
   it('cwd → projectId；report_session_id = 执行会话注入；standalone 路径 source_task_id 键缺席', async () => {
     const { tool, captured } = toolWithCapture()
     const result = await tool.execute(BASE, EXEC)
-    expect(result).toMatchObject({ bugId: 'bug-1', bugStatus: 'open' })
+    expect(result).toMatchObject({ card: { bugId: 'bug-1', bugStatus: 'open' } })
     expect(captured).toEqual([{ projectId: 'p-1', summary: '登录接口 500', reportSessionId: 'sess-1' }])
     expect(captured[0]!.sourceTaskId).toBeUndefined()
+  })
+
+  it('工具面包装应答透传：{ card, errorTypeSuggestions }（服务端词表参考集合零改写）', async () => {
+    const deps: ForgeToolDeps = {
+      tasks: {} as ForgeToolDeps['tasks'],
+      proposals: {} as ForgeToolDeps['proposals'],
+      bugs: stubBugsFace(async () => ({
+        card: openCard('登录接口 500'),
+        errorTypeSuggestions: ['api', 'paging'],
+      })),
+      resolveProjectId: () => 'p-1',
+      checkpoints,
+    }
+    const t = createRecordBugTool(deps)
+    const result = await t.execute(BASE, EXEC)
+    expect(result).toEqual({ card: openCard('登录接口 500'), errorTypeSuggestions: ['api', 'paging'] })
+  })
+
+  it('工具描述含 error_type 词表纪律文案（复用优先 / 仅无合适词才造新词 / 避免同义异词 / 零机械匹配）', () => {
+    const { tool } = toolWithCapture()
+    expect(tool.description).toContain('errorTypeSuggestions')
+    expect(tool.description).toContain('reuse an existing semantically-close label')
+    expect(tool.description).toContain('coin a new label only when no existing one fits')
+    expect(tool.description).toContain('race-condition vs concurrency-race')
+    expect(tool.description).toContain('no mechanical matching')
   })
 
   it('派发上下文注入：worker 来源任务注册表登记 → source_task_id 注入（registerBug 入参）', async () => {
