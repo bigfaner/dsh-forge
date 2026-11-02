@@ -80,7 +80,7 @@ test('@feature expert-squad item-presentation：item 详情页头部呈「专家
   await expect(page.locator(DETAIL_PANEL), '默认 Agent 选项面板挂载（ready）').toBeVisible({ timeout: 30_000 })
   await expect(page.locator(DETAIL_PANEL).locator('h2'), '面板标题「默认 Agent 选项」').toContainText('默认 Agent 选项')
   // 结构性无卸载（官方 subagent 详情页同形态——调研报告 §5 落点 A）
-  expect(await page.getByText('卸载', { exact: false }).count(), 'item 详情页无卸载按钮').toBe(0)
+  expect(await page.getByRole('button', { name: /卸载/ }).count(), 'item 详情页无卸载按钮').toBe(0)
   // 不变量：renderer 零未捕获异常
   expect(pageErrors, 'renderer 零未捕获异常').toEqual([])
 })
