@@ -323,10 +323,10 @@ describe('e2e dogfood · 终局 settlement + 零残留（AC 8/11）', () => {
     // 其余事件径投递一律写入不唤醒（next-step 积压整批消费形态——probe-1 口径 B）
     const wakeups = built.calls.filter((c) => c.wakeup === true)
     expect(wakeups).toEqual([settle])
-    // 整批消费形态（probe-1 A/B）：中段事件（领取/完成）零唤醒静默积压，仅结算唤醒一次整批消费
+    // 整批消费形态（loop-event-delivery §接口收窄）：中段事件零消息（仅 forge/progress 事件
+    // 投影），结算单点唤醒 settle 一次
     const notices = built.calls.filter((c) => c.method === 'notice')
-    expect(notices.length).toBeGreaterThan(0)
-    for (const n of notices) expect(n.wakeup).toBeUndefined()
+    expect(notices).toEqual([])
     expect(settle?.text).toContain('[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）')
     // P8 评审指示段追加（四重点逐字在文——机制断言）
     expect(settle?.text).toContain('【代码评审指示】')
@@ -367,12 +367,21 @@ describe('e2e dogfood · 挂起摘要可经重调获取（AC 8/9）', () => {
     await untilSuspended(built.driver)
 
     const tool = dispatchToolOf(built.driver, built.registry)
-    const result = (await tool.execute(ARGS, execOf(OWNER))) as DispatchLoopResult
+    // 冻结守卫（fix-17）：未携 resume:true 的触碰零副作用——仅回挂起摘要 + 续跑指引
+    const frozen = (await tool.execute(ARGS, execOf(OWNER))) as DispatchLoopResult
+    expect(frozen.kind).toBe('suspended')
+    if (frozen.kind === 'suspended') {
+      expect(frozen.summary).toContain('【任务循环挂起】')
+      expect(frozen.summary).toContain('feat-x/2.5 以 blocked 结束')
+      expect(frozen.summary).toContain('tests hang on flaky selector')
+      expect(frozen.resumed).toBe(false)
+      expect(frozen.resumeRejectedCode).toBe('resume-not-requested')
+    }
+    // 显式 re-entry：resume:true 续接挂起循环（幂等续接不重开）
+    const result = (await tool.execute({ ...ARGS, resume: true }, execOf(OWNER))) as DispatchLoopResult
     expect(result.kind).toBe('suspended')
     if (result.kind === 'suspended') {
       expect(result.summary).toContain('【任务循环挂起】')
-      expect(result.summary).toContain('feat-x/2.5 以 blocked 结束')
-      expect(result.summary).toContain('tests hang on flaky selector')
       expect(result.resumed).toBe(true)
     }
     await untilRegistryEmpty(built.registry) // re-entry 后循环自然收敛（超时收口）——终局 settlement 形态
@@ -385,15 +394,21 @@ describe('e2e dogfood · 挂起摘要可经重调获取（AC 8/9）', () => {
     await untilSuspended(built.driver)
 
     const tool = dispatchToolOf(built.driver, built.registry)
-    const result = (await tool.execute(ARGS, execOf(OTHER))) as DispatchLoopResult
+    // 非 owner 首触（冻结触碰）= 接管集写点 + 挂起摘要，不续接
+    const frozen = (await tool.execute(ARGS, execOf(OTHER))) as DispatchLoopResult
+    expect(frozen.kind).toBe('suspended')
+    if (frozen.kind === 'suspended') {
+      expect(frozen.summary).toContain('【任务循环挂起】')
+      expect(frozen.takenOver).toBe(true)
+      expect(frozen.resumed).toBe(false)
+    }
+    // 非 owner 显式 re-entry：挂起态任意会话可接管续跑
+    const result = (await tool.execute({ ...ARGS, resume: true }, execOf(OTHER))) as DispatchLoopResult
     expect(result.kind).toBe('suspended')
     if (result.kind === 'suspended') {
-      expect(result.summary).toContain('【任务循环挂起】')
       expect(result.takenOver).toBe(true)
+      expect(result.resumed).toBe(true)
     }
-    // 接管写点落登记行（takenOver=true 即接管集写点完成——挂起投影 P3+P9 对接管会话可见，
-    // 投影面由 injection 单测与挂起态守卫测试覆盖）
-    expect(result.kind === 'suspended' && result.takenOver).toBe(true)
     await untilRegistryEmpty(built.registry)
     // 挂起态任意会话可停语义（stopLoop 作用域）由 driver/工具单测承载——此处 re-entry 已收敛
   })
@@ -406,7 +421,7 @@ describe('e2e dogfood · owner 会话失活：不投死信 + 必达告警（AC 9
     const channel = adaptAgentNarrationChannel({ get: (id) => agents.get(id) })
     await channel.send('sess-gone', '【任务循环结束】\n- feat-x 没有可领取的任务。全部任务已完成。', { form: 'settle', wakeup: true })
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn.mock.calls[0]?.[0]).toContain('必达告警')
+    expect(warn.mock.calls[0]?.[0]).toContain('结算通知未送达')
     expect(warn.mock.calls[0]?.[0]).toContain('sess-gone')
     expect(warn.mock.calls[0]?.[0]).toContain('凭容器 slug 认领')
 

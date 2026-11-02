@@ -158,10 +158,10 @@ const EXEMPT_LEDGER: Readonly<Record<string, number>> = {
   Modal: 8,
   // 自绘 dialog 头标题文本 prop ×1（remote/ForgeRemoteEntry RemoteDialogHead——fix-19 ⑥
   // 标题读数，标题文本非悬浮提示位）
-  // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；1.17 扩记：
-  // ForgeProgressNode 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位；
-  // 1.16 扩记：DispatchEventsPanel 任务轨行摘要 title——同语义非悬浮提示位）
-  DisclosureRow: 3,
+  // 官方 Rows 行标题文本 prop ×2（ForgeWorkspacePanel 项目行名称；ForgeEventEntries
+  // 'forge/progress' 折叠行单行摘要 title——标题文本非悬浮提示位；
+  // DispatchEventsPanel 任务轨行面已由 ForgeEventEntries 折叠组替代——计数随现状收敛）
+  DisclosureRow: 2,
   // 抽屉分块折叠头标题 ×2（任务内容/时间线——drawer/index）
   DrawerSection: 2,
   // 自绘 dialog 头标题 prop（fix-19 ⑥——标题文本非悬浮提示位）

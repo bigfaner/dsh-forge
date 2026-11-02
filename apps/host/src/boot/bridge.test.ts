@@ -775,6 +775,8 @@ describe('createBridgeProxy（主侧代理）', () => {
       // M3（1.1 契约对齐）：两新面透传名（core 垫片 fail-loud；语义实现归 2.2/2.3）
       'setProposalMode',
       'listProposalDocs',
+      // 机械②承接链自联结读面（飞轮改进链闭包查询）
+      'listDerivedProposals',
     ])
     expect([...DOCS_SERVICE_METHODS]).toEqual(['read'])
     expect([...SETTINGS_SERVICE_METHODS]).toEqual(['get', 'set'])
@@ -940,7 +942,7 @@ describe('方法白名单类型锚（fix-33 ⑮——经测试类型门消费的
     expect(KNOWLEDGE_SERVICE_METHODS).toHaveLength(8)
     expect(TASKS_SERVICE_METHODS).toHaveLength(16) // S3 +reconcileInterrupted…；1.16 +taskSettlementserrupted；1.1 +updateTask；78b9227e +recordSpawn；blocked-verdict-restore-primitive +unblockTask
     expect(FEATURES_SERVICE_METHODS).toHaveLength(5)
-    expect(PROPOSALS_SERVICE_METHODS).toHaveLength(5)
+    expect(PROPOSALS_SERVICE_METHODS).toHaveLength(6) // +listDerivedProposals（承接链自联结读面）
     expect(DOCS_SERVICE_METHODS).toHaveLength(1)
     expect(SETTINGS_SERVICE_METHODS).toHaveLength(2)
     expect(BUGS_SERVICE_METHODS).toHaveLength(3) // fix-bug +listBugs/commitFiles/fileDiff

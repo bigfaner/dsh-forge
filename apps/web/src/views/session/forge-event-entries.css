@@ -25,7 +25,7 @@
   height: 24px; /* 官方 24px 过程行高——垂直居中同值 */
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px; /* dsw-raw 原型头簇内距刻度 */
   pointer-events: none;
 }
 
@@ -41,7 +41,7 @@
   flex: none;
   font: var(--dsw-font-xxxs-11); /* dsw-raw 官方 xxxs 字阶（11px 刻度） */
   line-height: 18px;
-  padding: 0 8px;
+  padding: 0 8px; /* dsw-raw 原型胶囊水平内距刻度 */
   border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
   border: 0.5px solid var(--dsw-alias-business-primary);
   color: var(--dsw-alias-business-primary);

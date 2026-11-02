@@ -22,6 +22,6 @@ describe('registerWorktreeChannels（main 侧 ipc 注册）', () => {
     // （bug 82e92933——web 残留消费即 not-found；host 会话创建中继收敛为
     // forge:proxy/session-create 一条腿，binding-derivation §2.3）
     expect(registered.sort()).toEqual(Object.values(WORKTREE_CHANNELS).sort())
-    expect(registered).toHaveLength(10)
+    expect(registered).toHaveLength(11) // +ensure-workspace（worktree → workspace 确保面）
   })
 })

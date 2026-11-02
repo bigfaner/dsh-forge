@@ -76,6 +76,8 @@ const FORBIDDEN_MODULE_NAME_RE = /(watch|backflow|reflux|resync|snapshot[-_]?syn
  *     mobile sse 引擎 15s 口径），非 forge 状态投影轮询（随连接销毁，无状态重扫）。
  *   · views/session/ForgeEventEntries.tsx：running 进度行实时耗时标签逐秒刷新——纯呈现层
  *     UI 计时器（组件卸载/终态切换即清理，零 RPC 零状态重扫），非 forge 投影回流。
+ *   · apps/host/src/telemetry/appender.ts：diag counters 周期自证定时器——诊断计数增量
+ *     上报（退订器清理 + unref，零 forge 状态读取），非状态投影轮询。
  */
 const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
   'apps/web/src/views/remote/ForgeRemoteEntry.tsx',
@@ -83,6 +85,7 @@ const WATCH_RULE_EXEMPT_FILES: readonly string[] = [
   'apps/web/src/views/session/ForgeEventEntries.tsx',
   'apps/host/src/boot/child.ts',
   'apps/host/src/boot/forge-stream.ts',
+  'apps/host/src/telemetry/appender.ts',
 ]
 
 const isExempt = (relFile: string): boolean => WATCH_RULE_EXEMPT_FILES.some((f) => relFile === f)
