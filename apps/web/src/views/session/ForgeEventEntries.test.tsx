@@ -208,6 +208,26 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     expect(html).not.toContain('dswf-event-entries-progress')
     expect(html).toContain('3 条 · 今日 14:02–14:02')
   })
+  it('循环重开防误导：循环级 running 在场时，上一轮「循环结束」消息条目与组头终态尾饰不呈现', () => {
+    const restarted: ForgeEventGroupData = {
+      ...DATA,
+      entries: [
+        { ...entryBase, id: 'm0', seq: 6, badge: '循环结束', title: 'feat-x', summary: 'feat-x — 循环结束 · 完成 3', text: '[forge·循环结束] 任务源: feat-x — 循环结束（全部任务已完成）' },
+        DATA.entries[0]!,
+      ],
+      progress: [
+        { seq: 7, sourceSlug: 'feat-x', verb: 'startup', status: 'running', at: progAt(1), note: '新一轮循环' },
+      ],
+    }
+    const html = renderToStaticMarkup(<ForgeEventEntries node={nodeOf(restarted)} />)
+    expect(html).toContain('循环进行中') // 循环行最新态（重开事实）
+    expect(html).not.toContain('循环结束') // 陈旧终态行 + 组头尾饰均不呈现
+    expect(html).not.toContain('已按你的指令停止')
+    expect(html).toContain('[forge·调度] loop-event-delivery') // 组头回落重开轮启动消息任务源行（终态行已滤除）
+    // 循环终态组（无 running 循环行）= 上一轮终态消息照常呈现
+    const finished: ForgeEventGroupData = { ...restarted, progress: [{ ...restarted.progress![0]!, status: 'completed' }] }
+    expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(finished)} />)).toContain('循环结束')
+  })
 })
 
 // ─────────────────── 2.5 条目行去重并换行 ───────────────────
