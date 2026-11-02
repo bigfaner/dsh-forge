@@ -1,5 +1,5 @@
 // 任务 2.1 测试 —— schema 蓝本对齐 pin（AC4：迁移函数与 DDL 单一来源对齐 design/schema.sql）。
-// 权威来源：docs/features/dsh-forge-p1-mvp/design/schema.sql（五表 + 七索引唯一蓝本）。
+// 权威来源：.forge/docs/legacy/features/dsh-forge-p1-mvp/design/schema.sql（五表 + 七索引唯一蓝本）。
 // project-manual-order 1.1 增补：v3 sort_order 列 pin + 迁移行为单测（存量首启一次迁移 /
 // 二次启动零迁移 / 失败回滚无半迁移 / 全新空库链路走完）。
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -12,7 +12,7 @@ import { openDatabase } from './index.js'
 import { MIGRATIONS, SCHEMA_VERSION, WORKTREE_DIR_BACKFILL_SQL } from './schema.js'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../')
-const BLUEPRINT = 'docs/features/dsh-forge-p1-mvp/design/schema.sql'
+const BLUEPRINT = '.forge/docs/legacy/features/dsh-forge-p1-mvp/design/schema.sql'
 
 /** 语句归一化（空白折叠）后比对——蓝本与代码的排版差异不应导致语义漂移。 */
 const norm = (s: string) =>

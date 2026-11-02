@@ -1,6 +1,6 @@
 // 任务 1.2 测试 —— 工作区库 schema 蓝本对齐 pin（AC1 / G1-12：每工作区 DB 布局
 // schema.sql ↔ WORKSPACE_MIGRATIONS 逐条，防漂移）。
-// 权威蓝本：docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql（M3 终态——
+// 权威蓝本：.forge/docs/legacy/features/dsh-forge-m3-bootstrap-presets/design/schema.sql（M3 终态——
 // 八域表 + schema_meta + app_key_logs 基建表 + 索引 ×7 + append-only 四触发器）。
 // fix-bug 增补：bugs 单表 + idx_bugs_status 为 v1 追加段（不在 M3 蓝本内）——单一来源 =
 // .forge/docs/proposals/fix-bug/proposal.md「技术细节·持久化」节，BUGS_DDL 逐条 pin 附加到
@@ -16,7 +16,7 @@ import { type MigrationStatement } from '../../db/schema.js'
 import { FORGE_DB_SCHEMA_VERSION, WORKSPACE_MIGRATIONS } from './migrations.js'
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../../../../../')
-const BLUEPRINT = 'docs/features/dsh-forge-m3-bootstrap-presets/design/schema.sql'
+const BLUEPRINT = '.forge/docs/legacy/features/dsh-forge-m3-bootstrap-presets/design/schema.sql'
 
 /**
  * fix-bug 提案 DDL（单一来源拷贝——proposal.md「技术细节·持久化」节 SQL，剔注释逐字照建；
