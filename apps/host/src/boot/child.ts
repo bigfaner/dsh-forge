@@ -49,6 +49,7 @@ import {
   type MainToChildMessage,
 } from './bridge.js'
 import { loadBootChain } from './boot-chain.js'
+import { expertSquadLoadedOf, type LoaderEntryPresenceFace } from './expert-squad-presence.js'
 import { writeBootOverlay } from './overlay.js'
 import { lanIpv4Of, remotePairUrlOf, tunnelPairUrlOf } from './manifest.js'
 import {
@@ -1238,15 +1239,14 @@ async function main(): Promise<void> {
   // bug 4d55ba98：expert-squad 装载位（loader 实况读——官方 dsh-host-plugin-inventory 同读法
   // ctx.loader.entries()；disabled 行仍在 entries，!disabled = 实际装载）。壳掌舵门控单源：
   // 开关关 = client 半不掌舵（所见即所得——显示的状态 = 实际生效的状态）。读取失败 = fail-open
-  //（缺省 true 位不携带——与旧行为一致，boot 本体不受阻）。
+  //（缺省 true 位不携带——与旧行为一致，boot 本体不受阻）。行形态全集见 expert-squad-presence.ts
+  //（bug d64473be：bundle 行短名形态漏判复发收口）。
   let expertSquadRow = true
   try {
     const loaderFace = (ctx as unknown as {
-      loader?: { entries?: () => readonly { disabled?: boolean; options?: { name?: unknown } }[] }
+      loader?: { entries?: () => readonly LoaderEntryPresenceFace[] }
     }).loader
-    expertSquadRow = [...(loaderFace?.entries?.() ?? [])].some(
-      (entry) => entry.options?.name === '@dsh-forge/expert-squad' && entry.disabled !== true,
-    )
+    expertSquadRow = expertSquadLoadedOf(loaderFace?.entries?.() ?? [])
   } catch (error) {
     diag(`[host:boot] expert-squad 装载位读取失败（fail-open）：${String(error)}`)
   }
