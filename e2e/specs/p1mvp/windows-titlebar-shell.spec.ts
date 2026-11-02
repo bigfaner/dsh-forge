@@ -1,4 +1,12 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】迁移共享 launch fixture：launchHost 整 spec 一次，
+// userData 由 fixture 自管；用例退出不 closeApp。适配点：① 夹具播种（wtb-demo 目录）统一
+// 进 seedWorkspace（首启/重播种/crash 重启三路同参）；② pageErrors 断言由 per-test 独立
+// 收集改 sharedLaunch.pageErrors（整 spec 累计面）；③ 标记面用例原为零项目 fresh boot——
+// 共享形态 beginTest 注册 ws 夹具项目（ws-wtb）不触及被测面（html 标记/frame 补偿/折叠钮
+// 几何均为壳级 DOM，与项目账本无关）。退役复核：两用例均为壳级运行期几何/交互面（WCO
+// 补偿、tooltip、点击展开链，unit 仅 preload-api 静态保证）——零退役。
+//
 // fix-40 验收面：Windows 壳标题栏模式激活——preload 标记 html[data-windows-titlebar] +
 // 内联 --dsh-windows-titlebar-height → 官方 web 壳补偿全套生效（ui-layout frame
 // padding-top/顶部拖拽条、ui-sidebar 折叠钮带区内居中）、会话头右上角图标钮（右栏展开钮）
@@ -19,15 +27,12 @@
 //     Tooltip「打开侧边栏」（delayMs 500）、动作 = setExpanded(true)
 // 平台门：本任务 Windows 主战场（WCO 标记/几何仅 win32 载体成立）；darwin 分支静态保证
 // （preload-api 单测），e2e 不在非 win32 载体跑。
-// 隔离：独立 userData + 端口分配器（e2e 单实例纪律）；载体面经 e2e/support（fix-37）。
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { test, expect } from '@playwright/test'
-import { closeApp, launchHost } from '../../support/launch.js'
+import { expect } from '@playwright/test'
 import { registerProject } from '../../support/rpc.js'
 import { ensureOfficialSessionBound } from '../../support/navigation.js'
-import { rmDirBestEffort } from '../../support/cleanup.js'
+import { createSharedLaunchFixture } from '../../support/fixtures.js'
 import {
   CONVERSATION_HEADER,
   RIGHTBAR_COLLAPSED,
@@ -35,6 +40,17 @@ import {
   SIDEBAR_RIGHT_EXPAND,
   WORKBENCH,
 } from '../../support/anchors.js'
+
+// e2e-fast-shared-launch 批次五：共享 launch fixture——launchHost 整 spec 一次（冷启点 =
+// 首用例 beginTest），userData/夹具 tmp 生命周期归 fixture 层；相位稳定门 = 缺省 'wait'
+// （标记面用例原缺省同参；会话面用例相位由用例内按项目态断言——语义保持）。
+const { test } = createSharedLaunchFixture({
+  seedWorkspace: (dir) => {
+    mkdirSync(join(dir, 'wtb-demo', '.knowledge'), { recursive: true })
+    writeFileSync(join(dir, 'wtb-demo', 'fixture-file.txt'), 'sentinel', 'utf8')
+  },
+  workspaceName: 'ws-wtb',
+})
 
 test.skip(process.platform !== 'win32', 'fix-40 Windows 主战场——WCO 标记/补偿几何断言仅 win32 载体成立')
 
@@ -44,10 +60,9 @@ const WCO_BAND_PX = 32
 // ─────────────────────────────────────────────────────────────────────────────
 // AC「标记 + 补偿面」：preload 标记在场 + 官方 frame padding/拖拽条 + 折叠钮带区内居中
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 + 折叠钮 D40 回流形态', async () => {
+test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 + 折叠钮 D40 回流形态', async ({ sharedLaunch }) => {
   test.setTimeout(240_000)
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-wtb-'))
-  const { app, page, pageErrors } = await launchHost({ userData })
+  const { page, pageErrors } = sharedLaunch
   try {
     // ① preload 标记（顶层即标——早于 React 渲染，直接读即得）
     const marks = await page.evaluate(() => ({
@@ -93,11 +108,10 @@ test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 +
     expect(toggleGeo?.height, '折叠钮命中区高 36px（官方 rail iconButton 家族刻度——D40）').toBe(36)
     expect(toggleGeo?.width, '折叠钮命中区宽 36px（同上）').toBe(36)
 
-    // 运行时元断言（台账 L824 口径：pageerror 面）
+    // 运行时元断言（台账 L824 口径：pageerror 面——共享形态 = 整 spec 累计面）
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })
 
@@ -105,17 +119,12 @@ test('@web-e2e @p1mvp windows-titlebar·标记面：html 标记 + frame 补偿 +
 // AC「会话头右上角图标钮」：会话相位会话头整行在位——右栏展开钮 y ≥ 32（原生钮带区之下）、
 // tooltip 正常、可点（点击 → 官方右栏展开）
 // ─────────────────────────────────────────────────────────────────────────────
-test('@web-e2e @p1mvp windows-titlebar·会话面：右栏展开钮位于 WCO 带区之下且 tooltip/点击正常', async () => {
+test('@web-e2e @p1mvp windows-titlebar·会话面：右栏展开钮位于 WCO 带区之下且 tooltip/点击正常', async ({ sharedLaunch }) => {
   test.setTimeout(300_000)
-  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-wtb2-'))
-  const wsDir = join(fixtureRoot, 'wtb-demo')
-  mkdirSync(join(wsDir, '.knowledge'), { recursive: true })
-  writeFileSync(join(wsDir, 'fixture-file.txt'), 'sentinel', 'utf8')
-  const userData = mkdtempSync(join(tmpdir(), 'dsh-forge-e2e-p1mvp-wtb2-ud-'))
-  const { app, page, pageErrors } = await launchHost({ userData, stablePhase: 'none' })
+  const { page, pageErrors, wsDir } = sharedLaunch
   try {
     // 前置：RPC 直注项目 → 会话相位（官方会话头/右栏展开钮渲染相位）
-    await registerProject(page, wsDir, 'wtb-demo')
+    await registerProject(page, join(wsDir, 'wtb-demo'), 'wtb-demo')
     await expect(page.locator(WORKBENCH)).toHaveAttribute('data-dswf-phase', 'session', { timeout: 30_000 })
     // fix-10 收敛门（探针实证——注册与官方会话物化竞速，败者 corner ExpandButton 恒缺席）：
     // 先等官方会话视图绑上会话（绑定期 + 新建会话兜底）再断言展开钮（navigation.ts 同源 helper）。
@@ -148,11 +157,9 @@ test('@web-e2e @p1mvp windows-titlebar·会话面：右栏展开钮位于 WCO �
     await expand.click()
     await expect(page.locator(RIGHTBAR_COLLAPSED), '点击展开钮 → 官方右栏展开（收起标记退场）').toHaveCount(0, { timeout: 15_000 })
 
-    // 运行时元断言（pageerror 面）
+    // 运行时元断言（pageerror 面——共享形态 = 整 spec 累计面）
     expect(pageErrors, '无页面 JS 错误（pageerror 面）').toEqual([])
   } finally {
-    await closeApp(app)
-    await rmDirBestEffort(userData)
-    await rmDirBestEffort(fixtureRoot)
+    // 共享 launch 形态：app/夹具生命周期归 fixture 层收尾（用例退出不 closeApp）
   }
 })

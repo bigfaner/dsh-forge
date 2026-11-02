@@ -1,5 +1,19 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
 // gen-test-scripts 产物 —— Journey: project-registration（T-test-gen-scripts）。
+//
+// 【共享 launch fixture 裁定（e2e-fast-shared-launch 批次五）：保留原形态，不迁移】
+// 断言本体锚定 per-test 独立 userData + 零项目 fresh boot，与共享 fixture 生命周期语义
+// 不相容（同族先例：m2/task-session-linkage、m3/dogfood-sc-m3-replay、m3/sc1-hero-projection）：
+//   1. projects 全表计数断言（cancel/listing-failure/formcancel/illegal-path 零行、
+//      冒烟/attach/double-confirm/second-project 1/2 行）——共享 fixture beginTest 自动
+//      registerProject 先落一行且跨用例注册持久（遗留行只归档不删），全表计数失效；
+//   2. hero 相位回归断言（cancel 系：data-dswf-phase=hero + CTA）——共享 userData 首用例
+//      注册后 hero 永久隐退，后续用例前置不可达；
+//   3. SharedLaunchHandle 不暴露 userData（自管）——冒烟/rederive 的
+//      deriveTaskStoreDir(join(userData,'forge-workspaces'),…) 期望值无法计算。
+// 裁定口径：可迁面（纯 UI 走查）与不可迁面（全表计数/hero 回归/userData 派生期望）混杂，
+// 整份裁定一致，不拆半迁移。退役复核：全部用例为行为走查（模态状态机/表单联动/落库核对），
+// 无纯文案/静态断言候选，无 unit 等价覆盖在案——零退役候选。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/project-registration/contracts/step-{1..5}-*.md
 // （eval-contract 993/1150 通过）。每条 test 对应一个 Contract Outcome（溯源注释标注），
 // 另含 1 条旅程冒烟（happy path 全步骤贯穿，skill 硬规则）。

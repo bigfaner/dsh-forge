@@ -1,4 +1,9 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：安装器链
+// （beforeAll NSIS 静默安装 + 安装产物 dsh-forge.exe 直启 + launchElectron 破坏启动面 +
+// contract 机器复位纪律/破坏-恢复测试序）与 launchHost 共享会话生命周期（dev profile、
+// fixture 自管 userData、用例间不 closeApp）整体不相容——同一 spec 级会话形态（单 launch
+// 冷启一次提速本体）在本文件不成立（四 Outcome 互斥环境态按测试序承载）。
 // gen-test-scripts 产物 —— Journey: installer-smoke（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/installer-smoke/contracts/step-{1..4}-*.md
 // （eval-contract 1072/1150 通过）。

@@ -1,4 +1,10 @@
 // @feature:dsh-forge-p1-mvp @web-e2e
+// 【批次五裁定（e2e-fast-shared-launch）】保留原形态，不迁共享 launch fixture：冒烟组
+// dogfood 真实凭据 seedDshHome 写自管 userData + 去模型化留痕 skip 门——与
+// m3/dogfood-sc-m3.spec.ts 同裁定族；非 dogfood 组（Step1b/1c/2b/2c/4b/4c/5/6）依赖
+// per-test 全新 userData 的 fresh 态断言（零项目首用 hero 空态 / 账本零绑定行双向断言 /
+// 单 boot 零凭据形态），共享会话跨用例累积注册态 + reseed 只清 wsDir/.dsh 无法复位
+// userData 侧 fresh 前提——从严裁定整文件保留。
 // gen-test-scripts 产物 —— Journey: session-workbench（T-test-gen-scripts）。
 // 断言源 = docs/features/dsh-forge-p1-mvp/testing/session-workbench/contracts/step-{1..6}-*.md
 // （eval-contract 1098/1150 通过）。
