@@ -116,11 +116,12 @@ describe('pin ⑧-4 实跑：loadProfileDirectory × profile.dev（真实已安�
     )
   }
 
-  it('bundle 层序 = package.json dsh.profile.bundles 声明序（dsh-base → dsh-web-app）', async () => {
+  it('bundle 层序 = package.json dsh.profile.bundles 声明序（dsh-base → dsh-web-app → @dsh-forge/expert-squad——1.22 plugins.bundle.config 单入口）', async () => {
     const profile = await load()
     expect(profile.layers.map((l) => l.packageName)).toEqual([
       '@deepseek-ai/dsh-base',
       '@deepseek-ai/dsh-web-app',
+      '@dsh-forge/expert-squad',
     ])
   })
 
