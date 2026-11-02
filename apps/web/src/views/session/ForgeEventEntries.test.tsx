@@ -228,6 +228,20 @@ describe('ForgeEventEntries 循环进度卡（1.2——任务行原地更新语�
     const finished: ForgeEventGroupData = { ...restarted, progress: [{ ...restarted.progress![0]!, status: 'completed' }] }
     expect(renderToStaticMarkup(<ForgeEventEntries node={nodeOf(finished)} />)).toContain('循环结束')
   })
+  it('进度卡默认展开：progress 在场（非最新组）= 挂载即展开（打开会话即见任务轨）；纯消息组前组维持收起', () => {
+    const running: ForgeEventGroupData = {
+      ...DATA,
+      entries: [{ ...DATA.entries[0]! }],
+      progress: [{ seq: 7, sourceSlug: 'feat-x', verb: 'startup', status: 'running', at: progAt(1) }],
+    }
+    // 进度组（非最新）→ 默认展开，运行胶囊不出现（展开态循环行已示）
+    const progressOpen = renderToStaticMarkup(<ForgeEventEntries node={nodeOf({ ...running, isLatest: false })} />)
+    expect(progressOpen).toContain('aria-expanded="true"')
+    expect(progressOpen).not.toContain('dswf-event-entries-running-flag')
+    // 纯消息组（非最新）→ 默认收起
+    const msgCollapsed = renderToStaticMarkup(<ForgeEventEntries node={nodeOf({ ...DATA, isLatest: false })} />)
+    expect(msgCollapsed).toContain('aria-expanded="false"')
+  })
 })
 
 // ─────────────────── 2.5 条目行去重并换行 ───────────────────

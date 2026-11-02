@@ -4,8 +4,9 @@
 // 'forge/progress' 事件经 forgeProgressRowItems 聚合（每任务键最新态一行、后写覆盖
 // 原地更新；循环级事件收敛单行），任务行展示 标题/状态/开始/结束/耗时（事件时戳）；
 // 结算/异常消息条目只保留概要一行（明细归其自身 wakeup 卡，不重复展开）。
-// 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组（isLatest），
-// 前组默认收起（人类插话 = 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
+// 组头（场景徽记 + 条数 + 时间范围 + 展开/收起）。默认展开 = 最新组；任务进度卡
+// （progress 在场）默认展开——打开会话即见任务轨；纯消息组前组默认收起（人类插话 =
+// 分组锚点——发射判定在节点定义面，组件纯呈现零 RPC）。
 import { useEffect, useRef, useState } from 'react'
 import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -172,8 +173,9 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   // §2.6 贴底保持缝挂载（组卡根观察——增高阶跃补落底；卸载断开）
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => forgeEventTailKeepEffect(rootRef.current), [])
-  // 默认态 = 位置语义（最新组展开 / 前组收起）；用户切换后为本地微观态
-  const [open, setOpen] = useState(data.isLatest)
+  // 默认态 = 最新组展开；任务进度卡（progress 在场）打开会话即默认展开（用户裁决
+  // 2026-11-01——进度卡收起让用户错过任务轨，纯消息组维持前组收起）；用户切换后为本地微观态
+  const [open, setOpen] = useState(data.isLatest || (data.progress?.length ?? 0) > 0)
   const rows = forgeProgressRowItems(data.progress ?? [])
   const loopRow = rows.find((row) => row.entry.taskKey === undefined)
   const taskRows = rows.filter((row) => row.entry.taskKey !== undefined)
@@ -194,8 +196,10 @@ function ForgeEventGroupBlock({ data }: { data: ForgeEventGroupData }) {
   return (
     <div ref={rootRef} className="dswf-event-entries" data-dswf-event-entries="" data-latest={data.isLatest || undefined}>
       {source !== '' ? (
-        <span className="dswf-event-entries-count" aria-hidden="true">
-          {count}
+        <span className="dswf-event-entries-head-meta" aria-hidden="true">
+          {/* 折叠态运行提示：循环进行中且组收起时，计数左侧补运行胶囊（展开态循环行已示，不重复） */}
+          {loopRunning && !open ? <span className="dswf-event-entries-running-flag">循环进行中</span> : null}
+          <span className="dswf-event-entries-count">{count}</span>
         </span>
       ) : null}
       <DisclosureRow

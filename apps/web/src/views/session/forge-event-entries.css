@@ -17,18 +17,35 @@
   background: transparent;
 }
 
-/* 右贴计数（`N 条 · 今日 HH:mm–HH:mm`——原型 evt-head .count 右对齐同位） */
-.dswf-event-entries-count {
+/* 组头右贴元信息簇（绝对定位胶水——官方 DisclosureRow 无尾部插槽；计数 + 折叠态运行胶囊） */
+.dswf-event-entries-head-meta {
   position: absolute;
   top: 0;
   right: 14px; /* dsw-raw 原型头内距刻度 */
   height: 24px; /* 官方 24px 过程行高——垂直居中同值 */
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   pointer-events: none;
+}
+
+/* 右贴计数（`N 条 · 今日 HH:mm–HH:mm`——原型 evt-head .count 右对齐同位） */
+.dswf-event-entries-count {
   font-size: 11px; /* dsw-raw 原型 count 11px 刻度 */
   color: var(--dsw-alias-label-caption);
   font-variant-numeric: tabular-nums;
+}
+
+/* 折叠态运行胶囊（run 族色章同形——循环进行中且组收起时的头行提示） */
+.dswf-event-entries-running-flag {
+  flex: none;
+  font: var(--dsw-font-xxxs-11); /* dsw-raw 官方 xxxs 字阶（11px 刻度） */
+  line-height: 18px;
+  padding: 0 8px;
+  border-radius: 999px; /* dsw-raw 官方胶囊刻度同值（Tag 先例） */
+  border: 0.5px solid var(--dsw-alias-business-primary);
+  color: var(--dsw-alias-business-primary);
+  background: var(--dsw-alias-state-business-tertiary);
 }
 
 /* forge 徽记点（组头图标位——远征蓝） */
