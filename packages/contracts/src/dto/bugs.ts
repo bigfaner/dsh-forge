@@ -9,6 +9,15 @@ import { BUG_STATUSES, type BugStatus } from '../labels.js'
 export { BUG_STATUSES }
 export type { BugStatus }
 
+// T4 覆盖声明协议行前缀（fix_approach 行式协议——单源常量：core bugs.ts presence 门与
+// plugin-forge resolve-bug 锚预检共享；值面常量随 Bug 域 DTO 落 contracts，「纯类型与纯
+// 常量，零逻辑零依赖」定位铁律内；core 侧 re-export 保持既有导出面）
+/** 覆盖声明段行前缀（大小写不敏感） */
+export const BUG_COVERAGE_DECLARATION_PREFIX = 'coverage:'
+
+/** 报告锚行前缀（大小写不敏感） */
+export const BUG_COVERAGE_ANCHOR_PREFIX = 'anchor:'
+
 /**
  * Bug 列表卡（概览 Bug 子 tab 行 + BugDialog 详情弹框共载体——单表行全量投影：
  * 列表主行 = summary/bugStatus/errorType/createdAt，弹框 kv 区 = 五字段 + 证据 + 人员 +

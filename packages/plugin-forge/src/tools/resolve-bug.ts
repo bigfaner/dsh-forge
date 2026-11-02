@@ -5,6 +5,7 @@
 // fix_session_id = 执行会话（ToolSessionContext）。会话/工作区绑定同 addTask 径。
 // 返回面双友好（裁决⑨）：成功 formatOk（✓ + 终态/证据键值行）；typed 服务错误 → 失败 DTO
 // formatErr（✗ code + 人话——format.ts 单源）。
+import { BUG_COVERAGE_ANCHOR_PREFIX } from '@dsh-forge/contracts'
 import type { BugCard } from '@dsh-forge/contracts'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
@@ -75,12 +76,12 @@ function renderResolveBugResult(_args: unknown, value: unknown): readonly { type
   return formatOk(lines[0]!, lines.slice(1))
 }
 
-/** 报告锚行提取（协议单源 = core bugs.ts T4 注释——本面只取锚值，声明段/锚 presence 门归 core） */
+/** 报告锚行提取（协议前缀单源 = contracts BUG_COVERAGE_ANCHOR_PREFIX——本面只取锚值，声明段/锚 presence 门归 core） */
 export function coverageAnchorLineOf(fixApproach: string): string | undefined {
   for (const line of fixApproach.split(/\r?\n/)) {
     const t = line.trim()
-    if (t.toLowerCase().startsWith('anchor:')) {
-      const v = t.slice('anchor:'.length).trim()
+    if (t.toLowerCase().startsWith(BUG_COVERAGE_ANCHOR_PREFIX)) {
+      const v = t.slice(BUG_COVERAGE_ANCHOR_PREFIX.length).trim()
       if (v !== '') return v
     }
   }
@@ -127,7 +128,7 @@ async function precheckCoverageAnchor(
     message:
       `报告锚失效：锚 ${anchor} 指向的卷宗正本不在场（解析 ${resolved}）——resolveBug(fixed) 拒绝退回补证；` +
       `排查报告落卷（提案 issues/<localId>/ 卷宗正本）后携同一锚行重新回填`,
-    violations: [`anchor: ${anchor}`, `resolved: ${resolved}`, `bug: ${bugId}`],
+    violations: [`${BUG_COVERAGE_ANCHOR_PREFIX} ${anchor}`, `resolved: ${resolved}`, `bug: ${bugId}`],
   }
 }
 
@@ -154,7 +155,9 @@ export function createResolveBugTool(deps: ForgeToolDeps): ForgeToolDefinition {
           type: 'string',
           description:
             "For outcome='fixed': one-paragraph summary of the adopted fix approach (what was changed and why this approach over alternatives) — the ledger review surface. " +
-            'For recurrence-family bugs (a recurrenceOf chain exists) the fixed backfill additionally requires two protocol lines inside fix_approach: `coverage: <why this fix covers the whole recurrence chain>` and `anchor: <file path of the archived verification report>` — a missing section or an anchor whose file is absent rejects the fixed backfill.',
+            'For recurrence-family bugs (a recurrenceOf chain exists) the fixed backfill additionally requires two protocol lines inside fix_approach: `coverage: <why this fix covers the whole recurrence chain>` and `' +
+            BUG_COVERAGE_ANCHOR_PREFIX +
+            ' <file path of the archived verification report>` — a missing section or an anchor whose file is absent rejects the fixed backfill.',
         },
       },
       required: ['bug_id', 'outcome'],

@@ -38,7 +38,7 @@ import type {
   GetBugResponse,
   ListBugsQuery,
 } from '@dsh-forge/contracts'
-import { BUG_STATUS_LABELS } from '@dsh-forge/contracts'
+import { BUG_COVERAGE_ANCHOR_PREFIX, BUG_COVERAGE_DECLARATION_PREFIX, BUG_STATUS_LABELS } from '@dsh-forge/contracts'
 import { withTransaction } from '../../db/transaction.js'
 import type { ForgeTaskEvents } from '../workspace/events.js'
 import type { ForgeWorkspaceStore } from '../workspace/store.js'
@@ -243,7 +243,8 @@ export class BugRecurrenceDanglingError extends Error {
   }
 }
 
-// ── T4 覆盖声明协议（loop-recurrence-hardening 提案 §2.2 T4——本注释即协议单源） ──
+// ── T4 覆盖声明协议（loop-recurrence-hardening 提案 §2.2 T4——行前缀常量单源 =
+// contracts dto/bugs.ts，本注释为协议语义正本）──
 // 存储载体 = fix_approach 既有字段（bug 台账 schema 零改动）。行式协议（大小写不敏感前缀
 // + 冒号 + 值；值 trim 后非空才算在场；首个命中行生效）：
 //   coverage: <为何本修复覆盖整条复发链共同根因的覆盖声明>
@@ -254,11 +255,9 @@ export class BugRecurrenceDanglingError extends Error {
 // 失效经拒绝路径退回失败 DTO（ERR_BUG_COVERAGE_ANCHOR_INVALID——写径零触达）。非复发家族
 // （recurrence_of 缺席）协议可选，fix_approach 仍为自由一段话——既有行为零变化。
 
-/** 覆盖声明段行前缀（大小写不敏感） */
-export const BUG_COVERAGE_DECLARATION_PREFIX = 'coverage:'
-
-/** 报告锚行前缀（大小写不敏感） */
-export const BUG_COVERAGE_ANCHOR_PREFIX = 'anchor:'
+// 协议行前缀常量单源复用（contracts dto/bugs.ts——core presence 门与 plugin-forge 锚预检
+// 共享；此处 re-export 保持既有导出面）
+export { BUG_COVERAGE_DECLARATION_PREFIX, BUG_COVERAGE_ANCHOR_PREFIX }
 
 /** fix_approach 协议解析产物（段值 trim 后非空；缺席段键缺席） */
 export interface BugCoverageDeclaration {

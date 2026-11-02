@@ -198,7 +198,7 @@ export async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
 }
 
 // ─────────────────────────── AC7 · 结算旁挂回收钩子（loop-recurrence-hardening 提案 §2.4） ───────────────────────────
-// 结算成功后异步后置钩子：探测运行时任务目录 logs/<slug>/<localId>/ 顶层 .md 报告文件（非
+// 结算返回前同步后置钩子（结算事务外 fail-soft）：settleWorkerRun 内 await 同步执行，探测运行时任务目录 logs/<slug>/<localId>/ 顶层 .md 报告文件（非
 // 递归——incident 等子目录不扫，零清单配置）复制进提案卷宗 .forge/docs/proposals/<slug>/
 // issues/<localId>/。硬规则：不进 core 结算事务（纯文件 IO 旁挂，先例 recordWaveCheckpoint
 // / stampEvidenceValidity 后置模式）、不新建状态机态、零清单配置；目录空/复制失败 fail-soft
@@ -215,10 +215,9 @@ export interface SettleReportRecoveryDeps {
     readonly slug: string
     readonly localId: string
   }): Promise<string | undefined>
-  /** projectId/proposalId/slug/localId → 提案卷宗 issues 目录绝对路径（缺席 = 惰性跳过） */
+  /** projectId/slug/localId → 提案卷宗 issues 目录绝对路径（缺席 = 惰性跳过） */
   resolveProposalIssuesDir(input: {
     readonly projectId: string
-    readonly proposalId: string
     readonly slug: string
     readonly localId: string
   }): Promise<string | undefined>
@@ -252,7 +251,7 @@ export function createSettleReportRecovery(deps: {
         return undefined
       }
     },
-    async resolveProposalIssuesDir({ projectId, proposalId: _proposalId, slug, localId }) {
+    async resolveProposalIssuesDir({ projectId, slug, localId }) {
       try {
         const ws = await workspaceOf(projectId)
         return ws !== undefined ? join(ws, '.forge', 'docs', 'proposals', slug, 'issues', localId) : undefined
@@ -268,7 +267,6 @@ export async function recoverSettleReports(
   deps: { readonly recovery: SettleReportRecoveryDeps; readonly diag?: ForgeDiagEmitFace },
   ctx: {
     readonly projectId: string
-    readonly proposalId: string
     readonly task: TaskSnapshot
   },
 ): Promise<readonly string[]> {
@@ -281,7 +279,6 @@ export async function recoverSettleReports(
     })
     const issuesDir = await deps.recovery.resolveProposalIssuesDir({
       projectId: ctx.projectId,
-      proposalId: ctx.proposalId,
       slug: ctx.task.slug,
       localId: ctx.task.localId,
     })
@@ -620,7 +617,7 @@ export async function settleWorkerRun(
   if (outcome === 'success' && deps.reportRecovery !== undefined && ctx.proposalId !== undefined && ctx.task.source.kind === 'proposal') {
     await recoverSettleReports(
       { recovery: deps.reportRecovery, diag: deps.diag },
-      { projectId: ctx.projectId, proposalId: ctx.proposalId, task: ctx.task },
+      { projectId: ctx.projectId, task: ctx.task },
     )
   }
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined

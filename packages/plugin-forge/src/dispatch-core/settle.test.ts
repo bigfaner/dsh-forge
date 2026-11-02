@@ -381,9 +381,9 @@ describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
     await settleWorkerRun({ tasks: completedHarness(), reportRecovery: b.deps }, ctx)
     expect(existsSync(join(issuesA, 'report.md'))).toBe(true)
     expect(existsSync(join(issuesB, 'report.md'))).toBe(true)
-    // 闭包入参 = 身份键组（projectId/slug/localId + proposalId），非路径
+    // 闭包入参 = 身份键组（projectId/slug/localId），非路径
     expect(a.runtimeCalls[0]).toEqual({ projectId: 'p-1', slug: 'feat-x', localId: '2.5' })
-    expect(b.issuesCalls[0]).toEqual({ projectId: 'p-1', proposalId: 'prop-1', slug: 'feat-x', localId: '2.5' })
+    expect(b.issuesCalls[0]).toEqual({ projectId: 'p-1', slug: 'feat-x', localId: '2.5' })
   })
 
   it('目录空 fail-soft：结算态不变 + diag 诊断在场', async () => {
@@ -452,7 +452,7 @@ describe('createSettleReportRecovery 工厂（resolveDir 闭包派生）', () =>
       join(containerDir, 'logs', PROPOSAL_SLUG, '2.4'),
     )
     await expect(
-      recovery.resolveProposalIssuesDir({ projectId: 'p-1', proposalId: 'prop-1', slug: PROPOSAL_SLUG, localId: '2.4' }),
+      recovery.resolveProposalIssuesDir({ projectId: 'p-1', slug: PROPOSAL_SLUG, localId: '2.4' }),
     ).resolves.toBe(join(ws, '.forge', 'docs', 'proposals', PROPOSAL_SLUG, 'issues', '2.4'))
   })
 
@@ -466,7 +466,7 @@ describe('createSettleReportRecovery 工厂（resolveDir 闭包派生）', () =>
     })
     await expect(recovery.resolveRuntimeTaskDir({ projectId: 'p-x', slug: 's', localId: '1' })).resolves.toBeUndefined()
     await expect(
-      recovery.resolveProposalIssuesDir({ projectId: 'p-x', proposalId: 'prop', slug: 's', localId: '1' }),
+      recovery.resolveProposalIssuesDir({ projectId: 'p-x', slug: 's', localId: '1' }),
     ).resolves.toBeUndefined()
   })
 })
