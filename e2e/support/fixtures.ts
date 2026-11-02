@@ -20,7 +20,7 @@ import { join } from 'node:path'
 import { expect, test as base, type ElectronApplication, type Page } from '@playwright/test'
 import { bridgeDispatch, closeApp, launchHost, stablePhase, type LaunchHostOptions } from './launch.js'
 import { forgeInvoke, registerProject } from './rpc.js'
-import { COLLAPSE_RIGHTBAR_BUTTON, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
+import { COLLAPSE_RIGHTBAR_BUTTON, AP_ANY, OV_PANEL, RIGHTBAR_COLLAPSED, ovSubtabOf } from './anchors.js'
 import { openOverviewDock } from './navigation.js'
 import { PROJECTS_CHANNELS } from '../../packages/contracts/src/channels.js'
 
@@ -162,6 +162,11 @@ export class SharedLaunchSession {
     const page = this.launched?.page
     if (page === undefined) return
     await page.keyboard.press('Escape').catch(() => undefined)
+    // ①′ 添加项目模态收口（重播种级复位扩展——批次四a mode T3 picker overlay 残留拦截）：
+    // 上用例遗留的官方 Modal 壳（添加项目流，回退浏览器相位）其 picker 行（.dswf-fb-item）
+    // 与遮罩恒拦截 hero chip 菜单点击——Escape（官方 Modal requestClose 缝）优先关断，
+    // 未兑现补点模态关闭钮（closeLabel「关闭」），两轮有界。
+    await this.closeAddProjectModal(page)
     // ② 概览面板隔离：继承的展开右栏 + 概览 dock → 收起基准（幂等：已收起零操作）
     if ((await page.locator(OV_PANEL).first().isVisible().catch(() => false)) === true) {
       const collapse = page.locator(COLLAPSE_RIGHTBAR_BUTTON).first()
@@ -177,6 +182,29 @@ export class SharedLaunchSession {
   }
 
   /**
+   * 添加项目模态收口（重播种级复位扩展——批次四a mode T3 picker overlay 拦截，1.18）：
+   * 添加项目官方 Modal 壳（回退浏览器相位）其 picker 行（.dswf-fb-item）与遮罩恒拦截
+   * hero chip 菜单点击（批内恒红形态；触发链定谳见 archiveLegacyProjects 保活例外注）。
+   * 关断走官方 Modal 自身缝隙：Escape → requestClose（三分守卫取消点）；未兑现（弹层未消）
+   * 补点模态关闭钮（closeLabel「关闭」）。两轮有界；模态缺席零操作（幂等）。各步 fail-soft
+   * （页面瞬态不阻塞用例）。
+   */
+  private async closeAddProjectModal(page: Page): Promise<void> {
+    const modal = page.locator(AP_ANY).first()
+    for (let round = 0; round < 2; round++) {
+      if ((await modal.isVisible().catch(() => false)) !== true) return
+      await page.keyboard.press('Escape').catch(() => undefined)
+      const closed = await modal
+        .waitFor({ state: 'hidden', timeout: 3_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (closed) return
+      await page.getByRole('button', { name: '关闭' }).first().click().catch(() => undefined)
+      await modal.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
+    }
+  }
+
+  /**
    * 遗留项目归档（fix-2 概览锚定隔离——本修复主径）：重播种时把账本面遗留注册项目全量
    * 归档。语义依据：概览项目锚 = anchoredOverviewContext（主视图会话锚优先 / 唯一活跃
    * 项目兜底）——共享序列下芯片流新会话入口间歇不切换主视图（快照实证：主视图停留上
@@ -186,20 +214,30 @@ export class SharedLaunchSession {
    * 非概览用例零影响，用例自持 setupWorld 注册不受影响）。
    * 退场判据（F7）：概览项目锚（anchoredOverviewContext 主视图会话锚 / 唯一活跃项目
    * 兜底）不再跨用例残留（锚定机制收敛或共享 fixture 形态退役）时，本步可整体移除。
+   * 夹具项目保活例外（1.18 mode T3 定谳）：workspaceName 同名行不归档。归档后 T3 芯片流
+   * （registerProject 幂等返回已归档行）点击 chip 时 picker 行集为零活跃行 → HeroWorkspace
+   * Picker 空集直达缝（addIsTheOnlyEntry——HeroWorkspacePicker.tsx addOnly 效应）径直
+   * openAddProductFlow，添加项目模态（回退浏览器 picker 行）即起并恒拦截后续点击——
+   * 「picker overlay 残留」实为此触发链（diag run2 点击探针定谳：chip click → +60ms 模态
+   * 入树，非上用例遗留）。同名行 = 本 fixture 当前唯一活跃项目本体，保活恰使概览锚两路
+   * （主视图会话锚 / 唯一活跃项目兜底）收敛于其上——与 fix-2 归档初衷同向。
    */
   private async archiveLegacyProjects(): Promise<void> {
     const page = this.launched?.page
     if (page === undefined) return
     try {
-      const projects = await forgeInvoke<readonly { id: string; archived: boolean }[]>(
+      const projects = await forgeInvoke<readonly { id: string; name: string; archived: boolean }[]>(
         page, PROJECTS_CHANNELS.list,
       )
+      let archivedCount = 0
       for (const row of projects) {
         if (row.archived === true) continue
+        if (row.name === this.config.workspaceName) continue
         await forgeInvoke(page, PROJECTS_CHANNELS.update, { id: row.id, patch: { archived: true } })
           .catch(() => undefined)
+        archivedCount++
       }
-      console.log(`[shared-launch] 遗留项目归档（${String(projects.length)} 行对账）`)
+      console.log(`[shared-launch] 遗留项目归档（${String(archivedCount)} 行归档 / ${String(projects.length)} 行对账）`)
     } catch {
       /* fail-soft：非概览用例/瞬态零影响 */
     }

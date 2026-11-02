@@ -52,7 +52,7 @@ import { registerProject, selectWorkspaceViaChip } from '../../support/rpc.js'
 import { createBridgeDriver } from '../../support/replay/executor.js'
 import { openForgeDbAt } from '../../support/replay/db-insert.js'
 import { forgeInvoke } from '../../support/rpc.js'
-import { ttItemOf } from '../../support/anchors.js'
+import { ovSubtabOf, ttItemOf } from '../../support/anchors.js'
 import { awaitSeatLabel, seatLabel, seatPresent, seatRoot, selectPreset } from '../../support/m3.js'
 
 const WS_NAME = 'ws-jmsa'
