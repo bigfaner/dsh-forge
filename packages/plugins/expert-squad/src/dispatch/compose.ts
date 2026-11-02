@@ -56,7 +56,8 @@ export function composePersonaText(entry: ExpertEntry): string {
 }
 
 /** 工厂：绑定取用服务的 compose(key, task)。knownTools = 全局注册名现查面
- *  （每派发现调、禁 memoize）；缺席（探针不在场）不裁剪，白名单原样承载。 */
+ *  （每派发现调、禁 memoize；返回 undefined 同探针缺席）；缺席（探针不在场）
+ *  不裁剪，白名单原样承载。 */
 export function createExpertComposer(
   experts: ExpertsService,
   knownTools?: () => readonly string[] | undefined,
