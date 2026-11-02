@@ -126,8 +126,11 @@ export function deriveWorkerToolFilter(
       (name) => !registeredTools.includes(name),
     )
     if (missingEssentials.length > 0) {
+      // 诊断面（bug 92d642c2 排查衍生）：报文携带探针实测注册名表——真机「投影里到底有
+      // 什么」一次运行即可定谳（缺席名表 = 探针命中子域投影，不再是考古题）。
       throw new Error(
-        `pipeline essential tools not registered on this machine: [${missingEssentials.join(', ')}]`,
+        `pipeline essential tools not registered on this machine: [${missingEssentials.join(', ')}] — ` +
+          `registered probe: [${(registeredTools ?? []).join(', ')}]`,
       )
     }
   }
