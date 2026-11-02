@@ -9,7 +9,8 @@
 // step-4 独立环境装载/插件启停（plugin-manager 通道在 e2e 载体不可驱动）。
 // step-5 源码/schema 纯净审计以词汇检索脚本承载（契约注明：审计型步骤——脚本检索样例
 // 档案与 schema 面；源码侧 console 日志命名空间前缀 [dsh-forge/expert-squad] 为 log 标签
-// 非领域词汇，显式排除并留痕）。
+// 非领域词汇，显式排除并留痕；`@dsh-forge/*` 包作用域与宿主名 `dsh-forge` 显示/命名
+// 空间标签为宿主产品身份标识（非能力耦合词汇），一并排除留痕（c4bc06f2 起包作用域命名）。
 // 拦截纪律（fix-3 判例）：页面上下文 fetch，禁 page.route。
 // Hard Rules：零产品源码改动；夹具 = 仓外 tmp。
 // e2e-fast-shared-launch 存量迁移（1.5）：共享 launch fixture（e2e/support/fixtures.js B2
@@ -35,6 +36,9 @@ const PLUGIN_PKG_DIR = fileURLToPath(new URL('../../packages/plugins/expert-squa
 const FORBIDDEN_VOCAB = /\b(forge|expedition|proposal|worktree|dispatch-loop|task-delegation)\b/i
 /** console 日志命名空间前缀（log 标签——显式排除项，非领域词汇） */
 const LOG_NAMESPACE = /\[dsh-forge\/expert-squad\]/g
+/** 宿主产品身份标识（`@dsh-forge/<pkg>` 包作用域字面量、裸 `@dsh-forge` 作用域比较、
+ *  宿主名 `dsh-forge` 显示/命名空间标签——身份标识非能力耦合词汇，与 log 标签同族排除） */
+const PRODUCT_IDENTITY = /@?dsh-forge\b/g
 
 function expertMd(name: string, title: string): string {
   return [
@@ -201,7 +205,7 @@ test('@feature expert-squad svc-key step-5 audit：随包样例档案与 schema 
     .split('\n')
     .map((line) => line.replace(/\/\/.*$/, ''))
     .join('\n')
-  const schemaHit = FORBIDDEN_VOCAB.exec(routesSrc.replace(LOG_NAMESPACE, ''))
+  const schemaHit = FORBIDDEN_VOCAB.exec(routesSrc.replace(LOG_NAMESPACE, '').replace(PRODUCT_IDENTITY, ''))
   expect(schemaHit, `schema 面零业务词汇${schemaHit ? `（命中：${schemaHit[0]}）` : ''}`).toBeNull()
   // 源码面：src/src-client 全量（注释与 log 命名空间标签显式排除——留痕于文件头注记）
   const srcDirs = [join(PLUGIN_PKG_DIR, 'src'), join(PLUGIN_PKG_DIR, 'src-client')]
@@ -220,6 +224,7 @@ test('@feature expert-squad svc-key step-5 audit：随包样例档案与 schema 
         .join('\n')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(LOG_NAMESPACE, '')
+        .replace(PRODUCT_IDENTITY, '')
       if (FORBIDDEN_VOCAB.test(stripped)) srcOffenders.push(full)
     }
   }
