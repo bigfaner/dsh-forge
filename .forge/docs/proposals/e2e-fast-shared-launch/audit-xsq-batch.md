@@ -238,6 +238,66 @@ uf3 会话判读初版：①dsh-home 根选择过早求值（用例开头时点�
 
 零迁移 = 零 spec 文件改动面 → 不存在迁移引入红例，基线对照归因以「改动集为空」承载（无对照对象）。轻量 sanity run（000-canary + host-boot + web-shell，workers=2，`logs/e2e-fast-shared-launch/1.11/001-sanity-run/run1.log`）确认保留原形态 spec 执行面无损。
 
+## 全量收口：存量迁移全覆盖核对（AC1/AC5）
+
+当前树盘点 `e2e/specs/**` 共 **103 份 spec**，全部对账归位：
+
+| 归位 | 份数 | 说明 |
+|---|---|---|
+| 迁移共享 launch 形态 | 49 | 试点 1（expert-squad-panel-detail）+ 批次一 9 + 批次二a 4 + 批次三a/b 15 + 批次四a/b 17 + 批次五 3（各批适配点与裁定见上文章节） |
+| 特殊面保留原形态（在案裁定） | 33 | 批次二a 2 + 批次四a 3 + 批次四b 1 + 批次五 8 + 批次六 19（逐份理由见各批裁定表） |
+| 单用例判据保留（本收口裁定） | 16 | 见下「未入批余量裁定」 |
+| 多用例未入批余量（上报） | 5 | 见下「未入批余量裁定」 |
+
+### 未入批余量裁定（本收口补记）
+
+批次清单（1.6–1.11）未覆盖两组共 21 份，本收口逐份读源码补记裁定：
+
+**blitz 子目录 10 份——口径外注明 + 单用例判据保留**：全为单用例 spec（input-history-plugin / md-mermaid-plugin / probe-installer-composer（留痕 skip）/ sc-fix19-hotzone-cursor / sc-fix26-quote-adjacent-blankline / sc-fix30-backspace-delete-chip / super-composer-draft-bidirectional / super-composer-focus-mutual-exclusion / super-composer-plugin / super-composer-walkthrough）。盘点结论：blitz 子目录为各 blitz 突击提案（super-composer / input-history 等）的产物，不在本提案「65+ desktop spec」口径内；且按批次六判据（单用例 1→1 零冷启削减不抵对账成本）一律保留原形态。
+
+**m2 目录未入批 11 份**：
+- 单用例 6 份，按批次六判据保留原形态：b5-anchors（1 例）/ dogfood-sc-m2（1 例，dogfood 凭据族）/ dogfood-sc-m2-replay（1 例，spawn 回放族）/ sc2-perf（1 例）/ sc6-session-links（1 例）/ sc7-tool-write（1 例）。
+- 多用例 5 份，标准 per-test 冷启形态、无自管 userData/双重启特殊面、机械可迁移但未入任何批次——**覆盖缺口如实上报**：audit-anchors（2）/ document-browsing（5）/ replay-executor（2）/ sc-branch-suspected-move（2）/ sc4-docs-mermaid（2）。是否迁移归后续裁决（预期收益：17 冷启 → 5）。
+
+### 口径对账结论
+
+提案「65+ desktop spec」为提案时点估算；当前实际盘点 103 份（含 blitz 子目录 10 份口径外）。口径内 93 份 = 迁移 49 + 在案保留裁定 33 + 单用例判据保留 6（m2）+ 未入批余量 5（上报）。
+
+## 全量收口：用例价值审计对账表（AC5）
+
+- **退役面**：全提案仅试点（1.3）退役 4 例，逐例 unit 等价覆盖映射在案（`audit-panel-detail.md` 裁定总览表），覆盖无真空、unit 补测清单为空。批次一至六逐用例复核均**零退役**（各批对账表附退役复核段：无「unit 已持有等价覆盖」的纯文案/静态渲染断言用例）。
+- **归属层**：存量保留用例全部为 e2e 层（行为/语义/写径/守卫/生命周期断言，真机增量在案）；unit 层等价面由既有 `*.test.ts` 持有（试点退役例的映射为准绳样本）。
+- **准入**：新 e2e 用例按 `docs/conventions/testing/core.md` 用例价值准则准入（AC6 已落）。
+
+## 全量收口：批计时对账（AC4）
+
+**统一收口真机 run（本收口）**：全量迁移批 49 份 spec / 107 用例（workers=2，--project=desktop），**1899.3s（31.6m）**，105 passed / 2 skipped / 43 failed。证据：`logs/e2e-fast-shared-launch/1.5/005-closeout/full-migrated-run2.log` + `full-elapsed2.txt` + `failed-set-run2.txt`。
+
+| 项 | 基线（原始形态） | 迁移后 | 备注 |
+|---|---|---|---|
+| 迁移族冷启点 | 154（20+40+39+8+7+18+15+7，逐批 grep 盘点） | **50**（每迁移 spec 1 + crash 重启） | 结构性削减 104 次整 app 冷启 |
+| 试点 spec（20 例） | ~15 分钟 | 3.7 分钟（workers=1） | `logs/.../1.3/001-full-run/run8.log` |
+| 批次二a（4 spec 35 例） | 3.2m（13 红快速失败情形） | 157s（run1，35 例） | `003-batch2a/run1.log` |
+| 批次三a（8 spec） | 228.3s | 315.2s | 红例重试/超时路径拉长批时 |
+| 批次三b（7 spec） | 4.0m | 4.3m | 同上 |
+| 批次四a（8 spec 18 例） | 4.6m | 4.7m | 单用例 spec 占比高 |
+| 批次四b（9 spec 14 例） | 12.5m | 3.7m | 基线含 4 红长超时 |
+| 批次五（3 spec 7 例） | 2.3m | 1.9m | — |
+| **全量迁移批（49 spec 107 例）** | 部分批基线合计 1824.3s（不含批次一/试点原始完整基线——未留档） | **1899.3s** | 43 例存量红（含超时/重试路径）主导批时 |
+
+对账结论：冷启点结构性下降（154→50）；墙钟批时在「存量红超时主导」下与部分批基线合计持平（批次一原始形态 40 冷启 ×~4min/冷启结构值未留档，无法给出完整基线合计值）——**形态收益以冷启点与全绿 spec 计，存量红归因与修复归产品侧 follow-up**（红例修复后批时收益将同步兑现）。
+
+## 全量收口：真机零回归核对（迁移耦合面）
+
+- 全量迁移批 43 红，逐例与各批在案归因对账：expert-squad 族 17（compare×2 / panel-grid×6 / summon×4 / builtin-shadow step-2/3+冒烟×2 / recruit×2 / svc-key step-5 audit×1——svc-key 与 builtin-shadow 两例在批次一 run1 即同红）、m2/ovr 11（批次二a 基线逐例同红）、worktree 族 7（批次三a 5 + 三b 2 同断言同红）、m3 族 6（批次四a 3 存量 + mode T3 序列耦合上报项 + 批次四b sc2/uf3 同断言存量红）、p1mvp/sidebar 2（批次五基线同两用例）。**零新增红、零迁移耦合新增**（`failed-set-run2.txt` 全集留档）。
+- delegate-visibility 本轮转绿（批次一存量红）——产品侧红例波动收敛方向，非迁移面。
+- AC3 crash 续跑证据在案：注入件 `logs/e2e-fast-shared-launch/1.2/001-shared-launch-evidence/run.log`（pilot-4 中途 kill 记红 + pilot-5 自动重启 + 重播种 + 基准态续绿）；本轮 run 零 crash（无重启留痕），fixture 检测面在 `e2e/support/fixtures.ts`（crash/页面关闭双面检测 → 重启 + 重播种 + 重注册）。
+
+## 全量收口：质量门
+
+- `pnpm lint:types`（tsc -b 全量）**绿**（exit 0）。
+- 定向 vitest（`e2e/support`）：74 passed / **7 failed**——七例均为存量红归因（e2e/support 自 fix-2 起 零改动，本收口零代码改动面）：worker-face deny 集计数 ×4（产品 `deriveWorkerToolFilter` 族收窄漂移）、db-insert schema ×2（产品库 schema 版本漂移）、audit/anchors 六锚全仓扫描 ×1（仓内容漂移）——断言对象全在产品源码，与迁移面无关，Hard Rules 归因上报（同前批「vitest 存量红建议单独开 follow-up」先例）。
+
 ## 批次范围（旧文案存档）
 
 expert-squad 族 9 份 spec 全部迁移共享 launch 形态（`createSharedLaunchFixture`——launchHost 整 spec 一次 + 用例间 tmp 夹具档案重播种 + crash 自动重启续跑）。
