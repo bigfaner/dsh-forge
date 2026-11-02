@@ -34,7 +34,7 @@ import { createIncidentStore, createNarrator } from './notify/index.js'
 import type { NarrationChannel } from './notify/index.js'
 import { adaptSessionProgressAppend, registerProgressEventVocabulary } from './progress/index.js'
 import { createLoopDriver, createE2eBaselineFace, createUserQuestionsEscalation } from './loop/index.js'
-import { gitHeadCommit } from './dispatch-core/index.js'
+import { createSettleReportRecovery, gitHeadCommit } from './dispatch-core/index.js'
 import type { EscalationAskFace } from './loop/index.js'
 import { FORGE_DISPATCH_LOOP_SECTION_NAME, FORGE_DISPATCH_LOOP_SECTION_ORDER_OFFSET, renderInjection } from './loop/injection.js'
 import { createLoopRegistry } from './loop/registry.js'
@@ -515,6 +515,10 @@ const forgePlugin: ForgePlugin = Object.assign(
       // 归属锚 = 提案域按容器 slug 现查；HEAD 解析 = git 真解析。三者缺席时四类标记机制为
       // 死代码——此注入是生产路径落标记的装配前提。
       checkpoints: ctx.forgeCheckpoints,
+      // AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——resolveDir 闭包注入派生：
+      // 运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath +
+      // .forge/docs/proposals/<slug>/issues/<localId>。fail-soft，缺席机制惰性不判）
+      reportRecovery: createSettleReportRecovery({ projects: ctx.forgeProjects, ...(diag !== undefined ? { diag } : {}) }),
       resolveProposalId: async (projectId, source) => {
         try {
           const rows = await ctx.forgeProposals.listProposals({ projectId })

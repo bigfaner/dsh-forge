@@ -46,6 +46,9 @@ export type { DispatchCoreFailure, DispatchSpawnedResult, DispatchTaskResult } f
 export { settleWorkerRun } from './settle.js'
 // 机械③（forge-verification-hardening）——循环侧标记消费：HEAD 真解析 + 计数快照现算
 export { gitHeadCommit, computeWaveSnapshot } from './settle.js'
+// AC7 结算旁挂回收（loop-recurrence-hardening §2.4——success 结算后置报告回收进提案卷宗）
+export { createSettleReportRecovery, recoverSettleReports } from './settle.js'
+export type { SettleReportRecoveryDeps } from './settle.js'
 export type { CommitLandingVerifier, WorkerSettlement } from './settle.js'
 // T3 同缝拦截守卫（loop-recurrence-hardening——claim 面软拒绝消费 + 驱动器 add-fix vars 现查）
 export {

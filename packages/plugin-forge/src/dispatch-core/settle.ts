@@ -6,11 +6,12 @@
 // 改进7（e2e 取证债）：success 结算 submit record 携带 evidenceDebt = 实现态部分结算——
 // 本核自动生成独立 test-run 欠账任务（dependsOn 实现卡），实现卡不再因取证欠账 blocked。
 import { execFile } from 'node:child_process'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { copyFile, mkdir, readdir } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { noteHostOwnedChild } from '../spawn/job-tree.js'
 import type { ContainerRef, ForgeTasksService, TaskRecordEntry, TaskSnapshot, TaskRef } from '@dsh-forge/contracts'
 import { emitForgeDiag } from '../faces.js'
-import type { ForgeDiagEmitFace } from '../faces.js'
+import type { ForgeDiagEmitFace, ProjectDirServiceFace } from '../faces.js'
 import { forgetWorkerSourceTask } from './assemble.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 import { poolOf, type PoolSnapshot } from './pool.js'
@@ -196,6 +197,160 @@ export async function disposeQuietly(handle: SpawnWorkerHandle): Promise<void> {
   }
 }
 
+// ─────────────────────────── AC7 · 结算旁挂回收钩子（loop-recurrence-hardening 提案 §2.4） ───────────────────────────
+// 结算成功后异步后置钩子：探测运行时任务目录 logs/<slug>/<localId>/ 顶层 .md 报告文件（非
+// 递归——incident 等子目录不扫，零清单配置）复制进提案卷宗 .forge/docs/proposals/<slug>/
+// issues/<localId>/。硬规则：不进 core 结算事务（纯文件 IO 旁挂，先例 recordWaveCheckpoint
+// / stampEvidenceValidity 后置模式）、不新建状态机态、零清单配置；目录空/复制失败 fail-soft
+// + emitDiag 诊断日志（AGENTS §7），不影响任务结算态。
+
+/**
+ * 回收钩子路径解析缝（resolveDir 闭包注入——先例 sink.ts deriveTaskStoreDir(workspaceDir)）：
+ * 运行时目录与卷宗路径根均经闭包注入派生，换注入即换落点；结算入参不携带路径。
+ */
+export interface SettleReportRecoveryDeps {
+  /** projectId/slug/localId → 运行时任务目录绝对路径（缺席 = 该次回收惰性跳过） */
+  resolveRuntimeTaskDir(input: {
+    readonly projectId: string
+    readonly slug: string
+    readonly localId: string
+  }): Promise<string | undefined>
+  /** projectId/proposalId/slug/localId → 提案卷宗 issues 目录绝对路径（缺席 = 惰性跳过） */
+  resolveProposalIssuesDir(input: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly slug: string
+    readonly localId: string
+  }): Promise<string | undefined>
+}
+
+/**
+ * 生产装配工厂：运行时目录 = core deriveTaskStoreDir 单源 + logs/<slug>/<localId>；
+ * 卷宗路径根 = getProject().wsPath + .forge/docs/proposals/<slug>/issues/<localId>。
+ * 两跳解析失败/项目未注册 = undefined（fail-soft，该次回收惰性跳过）。
+ */
+export function createSettleReportRecovery(deps: {
+  readonly projects: ProjectDirServiceFace
+  readonly diag?: ForgeDiagEmitFace
+}): SettleReportRecoveryDeps {
+  const workspaceOf = async (projectId: string): Promise<string | undefined> => {
+    try {
+      const project = await deps.projects.getProject(projectId)
+      return project !== null && project.wsPath.trim() !== '' ? project.wsPath : undefined
+    } catch {
+      return undefined
+    }
+  }
+  return {
+    async resolveRuntimeTaskDir({ projectId, slug, localId }) {
+      try {
+        const ws = await workspaceOf(projectId)
+        if (ws === undefined) return undefined
+        const derived = await deps.projects.deriveTaskStoreDir({ workspaceDir: ws })
+        return derived.dir !== '' ? join(derived.dir, 'logs', slug, localId) : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async resolveProposalIssuesDir({ projectId, proposalId: _proposalId, slug, localId }) {
+      try {
+        const ws = await workspaceOf(projectId)
+        return ws !== undefined ? join(ws, '.forge', 'docs', 'proposals', slug, 'issues', localId) : undefined
+      } catch {
+        return undefined
+      }
+    },
+  }
+}
+
+/** 顶层 .md 报告回收（探测 → 复制正本；逐文件 fail-soft + 诊断日志——空目录/失败均留痕） */
+export async function recoverSettleReports(
+  deps: { readonly recovery: SettleReportRecoveryDeps; readonly diag?: ForgeDiagEmitFace },
+  ctx: {
+    readonly projectId: string
+    readonly proposalId: string
+    readonly task: TaskSnapshot
+  },
+): Promise<readonly string[]> {
+  const taskKey = `${ctx.task.slug}/${ctx.task.localId}`
+  try {
+    const runtimeDir = await deps.recovery.resolveRuntimeTaskDir({
+      projectId: ctx.projectId,
+      slug: ctx.task.slug,
+      localId: ctx.task.localId,
+    })
+    const issuesDir = await deps.recovery.resolveProposalIssuesDir({
+      projectId: ctx.projectId,
+      proposalId: ctx.proposalId,
+      slug: ctx.task.slug,
+      localId: ctx.task.localId,
+    })
+    if (runtimeDir === undefined || issuesDir === undefined) {
+      emitForgeDiag(deps.diag, {
+        level: 'info',
+        event: 'forge-settle',
+        message: `forge settle: report recovery skipped (path resolution unavailable) for ${taskKey}`,
+        projectId: ctx.projectId,
+      })
+      return []
+    }
+    let entries: import('node:fs').Dirent[]
+    try {
+      entries = await readdir(runtimeDir, { withFileTypes: true })
+    } catch {
+      emitForgeDiag(deps.diag, {
+        level: 'info',
+        event: 'forge-settle',
+        message: `forge settle: report recovery skipped (runtime dir absent) for ${taskKey} at ${runtimeDir}`,
+        projectId: ctx.projectId,
+      })
+      return []
+    }
+    // 顶层 .md 非递归探测（零清单配置——目录内报告文件即清单）
+    const reports = entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name)
+    if (reports.length === 0) {
+      emitForgeDiag(deps.diag, {
+        level: 'info',
+        event: 'forge-settle',
+        message: `forge settle: report recovery found no top-level .md reports for ${taskKey}`,
+        projectId: ctx.projectId,
+      })
+      return []
+    }
+    await mkdir(issuesDir, { recursive: true })
+    const copied: string[] = []
+    for (const name of reports) {
+      try {
+        await copyFile(join(runtimeDir, name), join(issuesDir, name))
+        copied.push(name)
+      } catch (cause) {
+        emitForgeDiag(deps.diag, {
+          level: 'warn',
+          event: 'forge-settle',
+          message: `forge settle: report recovery copy failed for ${taskKey}/${name}: ${cause instanceof Error ? cause.message : String(cause)}`,
+          projectId: ctx.projectId,
+        })
+      }
+    }
+    emitForgeDiag(deps.diag, {
+      level: 'info',
+      event: 'forge-settle',
+      message: `forge settle: report recovery archived ${copied.length}/${reports.length} report(s) for ${taskKey} → ${issuesDir}`,
+      projectId: ctx.projectId,
+    })
+    return copied
+  } catch (cause) {
+    // fail-soft 兜底：回收任何异常不影响已定结算态
+    emitForgeDiag(deps.diag, {
+      level: 'warn',
+      event: 'forge-settle',
+      message: `forge settle: report recovery failed for ${taskKey}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      projectId: ctx.projectId,
+    })
+    return []
+  }
+}
+
 // ─────────────────────────── 提交落点核验（1.14 判例修复——cwd 钉定收口） ───────────────────────────
 
 /** 提交落点核验结论（判据：commit 所属分支集 ⊇ 容器检出分支） */
@@ -330,6 +485,12 @@ export async function settleWorkerRun(
     readonly resolveHeadCommit?: HeadCommitResolver
     /** 诊断发射缝（diag-face-consolidation——fail-soft 告警走 diag 面；缺席 = console 兜底） */
     readonly diag?: ForgeDiagEmitFace
+    /**
+     * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——可选；缺席 = 机制惰性不判，
+     * 行为零变化）。success 结算 + proposal 容器 + proposalId 在场时后置回收，fail-soft
+     * 不影响结算态。
+     */
+    readonly reportRecovery?: SettleReportRecoveryDeps
   },
   ctx: {
     readonly projectId: string
@@ -454,6 +615,14 @@ export async function settleWorkerRun(
       outcome,
     },
   )
+  // AC7 旁挂回收（结算成功后置——不进 core 结算事务）：proposal 容器 success 结算回收
+  // 运行时目录顶层 .md 报告进提案卷宗；fail-soft（内部全路径诊断留痕），结算态零影响
+  if (outcome === 'success' && deps.reportRecovery !== undefined && ctx.proposalId !== undefined && ctx.task.source.kind === 'proposal') {
+    await recoverSettleReports(
+      { recovery: deps.reportRecovery, diag: deps.diag },
+      { projectId: ctx.projectId, proposalId: ctx.proposalId, task: ctx.task },
+    )
+  }
   const followUp = outcome === 'blocked' ? await findFixTaskRef(deps.tasks, ctx.projectId, ctx.task) : undefined
   // 改进7：实现态部分结算（evidenceDebt 在场）→ 自动生成欠账 test-run 任务（fail-soft）
   const evidenceDebt =

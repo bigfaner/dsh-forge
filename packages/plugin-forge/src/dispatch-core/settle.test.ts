@@ -2,10 +2,14 @@
 // 流控分类的载体；缺输出 = 判词只有 stopReason，循环侧无法识别限流）。
 // 机械④（forge-verification-hardening）：review-wave-N 修正波标记——多波递增、快照口径、
 // 触发面（fix 链收口 / Blocker 返工批）与 fail-soft 缺席零变化。
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ForgeTasksService, QueryTaskResult, TaskCard, TaskEvidenceDebt, TaskSnapshot } from '@dsh-forge/contracts'
 import { settleWorkerRun } from './settle.js'
-import type { SettleCheckpointsFace, WaveSnapshot } from './settle.js'
+import type { SettleCheckpointsFace, SettleReportRecoveryDeps, WaveSnapshot } from './settle.js'
+import type { ForgeDiagEmitFace } from '../faces.js'
 import type { SpawnWorkerHandle } from './spawn.js'
 
 function snapshot(): TaskSnapshot {
@@ -263,5 +267,190 @@ describe('机械④ · review-wave-N 修正波标记（settleWorkerRun）', () =
     )
     expect(calls[0]?.['snapshots']).toEqual({ tasksTotal: 2, commitsTotal: 1, fixesTotal: 1, evidenceDebtsTotal: 0 })
     expect(ZERO_SNAPSHOT.tasksTotal).toBe(0)
+  })
+})
+
+// ─────────────────────────── AC7 · 结算旁挂回收钩子（loop-recurrence-hardening §2.4） ───────────────────────────
+
+const PROPOSAL_SLUG = 'loop-recurrence-hardening'
+
+/** proposal 容器任务快照（回收钩子触发面——feature 容器零回收） */
+function proposalSnapshot(): TaskSnapshot {
+  return { ...snapshot(), source: { kind: 'proposal', slug: PROPOSAL_SLUG } }
+}
+
+/** 结算成功（completed）任务域桩 */
+function completedHarness(task: TaskSnapshot = proposalSnapshot()): ForgeTasksService {
+  const query: QueryTaskResult = {
+    task: { ...task, taskStatus: 'completed' },
+    container: { kind: 'proposal', slug: task.slug, title: task.slug },
+    records: [],
+  }
+  return {
+    queryTask: async () => query,
+    taskStats: async () => ({ total: 1, byStatus: { completed: 1 }, unmetPending: 0 }),
+  } as unknown as ForgeTasksService
+}
+
+/** 注入式回收缝（记录调用入参——换注入即换落点断言载体） */
+function recordingRecovery(runtimeDir: string, issuesDir: string): {
+  deps: SettleReportRecoveryDeps
+  runtimeCalls: Array<Record<string, string>>
+  issuesCalls: Array<Record<string, string>>
+} {
+  const runtimeCalls: Array<Record<string, string>> = []
+  const issuesCalls: Array<Record<string, string>> = []
+  return {
+    runtimeCalls,
+    issuesCalls,
+    deps: {
+      resolveRuntimeTaskDir: async (input) => {
+        runtimeCalls.push(input)
+        return runtimeDir
+      },
+      resolveProposalIssuesDir: async (input) => {
+        issuesCalls.push(input)
+        return issuesDir
+      },
+    },
+  }
+}
+
+function captureDiags(): { diag: ForgeDiagEmitFace; entries: Array<{ level: string; event: string; message: string }> } {
+  const entries: Array<{ level: string; event: string; message: string }> = []
+  const diag: ForgeDiagEmitFace = (payload) => {
+    entries.push(payload as { level: string; event: string; message: string })
+  }
+  return { diag, entries }
+}
+
+describe('AC7 · 结算旁挂回收钩子（settleWorkerRun）', () => {
+  it('成功结算探测运行时目录顶层 .md 复制进卷宗——非递归（incident 子目录不扫）且非 .md 不收', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'forge-recover-'))
+    const runtimeDir = join(home, 'logs', PROPOSAL_SLUG, '2.4')
+    const issuesDir = join(home, 'docs', 'proposals', PROPOSAL_SLUG, 'issues', '2.4')
+    mkdirSync(runtimeDir, { recursive: true })
+    mkdirSync(join(runtimeDir, 'incident'), { recursive: true })
+    writeFileSync(join(runtimeDir, 'verification-report.md'), '# 判别实验清单\n\n- exp1', 'utf8')
+    writeFileSync(join(runtimeDir, 'raw-data.txt'), 'not a report', 'utf8')
+    writeFileSync(join(runtimeDir, 'incident', 'inner.md'), '# 子目录不收', 'utf8')
+    const recovery = recordingRecovery(runtimeDir, issuesDir)
+    const settlement = await settleWorkerRun(
+      { tasks: completedHarness(), reportRecovery: recovery.deps },
+      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+    )
+    expect(settlement.case).toBe('settled')
+    if (settlement.case !== 'settled') return
+    expect(settlement.result.outcome).toBe('success')
+    // 卷宗正本在场且内容一致；非 .md 与子目录文件不收
+    expect(readFileSync(join(issuesDir, 'verification-report.md'), 'utf8')).toBe('# 判别实验清单\n\n- exp1')
+    expect(existsSync(join(issuesDir, 'raw-data.txt'))).toBe(false)
+    expect(existsSync(join(issuesDir, 'incident'))).toBe(false)
+    // 运行时原件不动（复制非移动）
+    expect(existsSync(join(runtimeDir, 'verification-report.md'))).toBe(true)
+  })
+
+  it('路径解析 = resolveDir 闭包注入派生：换注入即换落点（结算入参不携带路径）', async () => {
+    const homeA = mkdtempSync(join(tmpdir(), 'forge-landing-a-'))
+    const homeB = mkdtempSync(join(tmpdir(), 'forge-landing-b-'))
+    const runtimeA = join(homeA, 'logs', PROPOSAL_SLUG, '2.4')
+    const issuesA = join(homeA, 'issues-a')
+    const issuesB = join(homeB, 'issues-b')
+    mkdirSync(runtimeA, { recursive: true })
+    writeFileSync(join(runtimeA, 'report.md'), 'landing proof', 'utf8')
+    const a = recordingRecovery(runtimeA, issuesA)
+    const b = recordingRecovery(runtimeA, issuesB)
+    const ctx = { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' }
+    await settleWorkerRun({ tasks: completedHarness(), reportRecovery: a.deps }, ctx)
+    await settleWorkerRun({ tasks: completedHarness(), reportRecovery: b.deps }, ctx)
+    expect(existsSync(join(issuesA, 'report.md'))).toBe(true)
+    expect(existsSync(join(issuesB, 'report.md'))).toBe(true)
+    // 闭包入参 = 身份键组（projectId/slug/localId + proposalId），非路径
+    expect(a.runtimeCalls[0]).toEqual({ projectId: 'p-1', slug: 'feat-x', localId: '2.5' })
+    expect(b.issuesCalls[0]).toEqual({ projectId: 'p-1', proposalId: 'prop-1', slug: 'feat-x', localId: '2.5' })
+  })
+
+  it('目录空 fail-soft：结算态不变 + diag 诊断在场', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'forge-empty-'))
+    const runtimeDir = join(home, 'logs', PROPOSAL_SLUG, '2.4')
+    mkdirSync(runtimeDir, { recursive: true })
+    const { deps } = recordingRecovery(runtimeDir, join(home, 'issues'))
+    const { diag, entries } = captureDiags()
+    const settlement = await settleWorkerRun(
+      { tasks: completedHarness(), reportRecovery: deps, diag },
+      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+    )
+    expect(settlement.case).toBe('settled')
+    if (settlement.case !== 'settled') return
+    expect(settlement.result.outcome).toBe('success')
+    expect(entries.some((e) => e.message.includes('recover'))).toBe(true)
+  })
+
+  it('复制失败 fail-soft：结算态不变 + diag 告警在场（不外抛）', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'forge-fail-'))
+    const runtimeDir = join(home, 'logs', PROPOSAL_SLUG, '2.4')
+    const issuesDir = join(home, 'issues-blocker') // 同名文件占位 → mkdir/copy 失败径
+    mkdirSync(runtimeDir, { recursive: true })
+    writeFileSync(join(runtimeDir, 'report.md'), 'boom', 'utf8')
+    writeFileSync(issuesDir, 'occupied', 'utf8')
+    const { deps } = recordingRecovery(runtimeDir, issuesDir)
+    const { diag, entries } = captureDiags()
+    const settlement = await settleWorkerRun(
+      { tasks: completedHarness(), reportRecovery: deps, diag },
+      { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' },
+    )
+    expect(settlement.case).toBe('settled')
+    if (settlement.case !== 'settled') return
+    expect(settlement.result.outcome).toBe('success')
+    expect(entries.some((e) => e.level === 'warn' && e.message.includes('recover'))).toBe(true)
+    expect(readFileSync(issuesDir, 'utf8')).toBe('occupied') // 原占位未被破坏
+  })
+
+  it('旁挂惰性：非 proposal 容器 / 无 proposalId / 钩子缺席 = 零探测零副作用', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'forge-inert-'))
+    const recovery = recordingRecovery(join(home, 'logs'), join(home, 'issues'))
+    const featureCtx = { ...RUN, proposalId: 'prop-1' } // feature 容器
+    await settleWorkerRun({ tasks: completedHarness(snapshot()), reportRecovery: recovery.deps }, featureCtx)
+    await settleWorkerRun(
+      { tasks: completedHarness(), reportRecovery: recovery.deps },
+      { ...RUN, task: proposalSnapshot() }, // 无 proposalId
+    )
+    await settleWorkerRun({ tasks: completedHarness() }, { ...RUN, task: proposalSnapshot(), proposalId: 'prop-1' }) // 钩子缺席
+    expect(recovery.runtimeCalls).toHaveLength(0)
+    expect(recovery.issuesCalls).toHaveLength(0)
+  })
+})
+
+describe('createSettleReportRecovery 工厂（resolveDir 闭包派生）', () => {
+  it('运行时目录 = deriveTaskStoreDir 单源 + logs/<slug>/<localId>；卷宗根 = wsPath/.forge/docs/proposals/<slug>/issues/<localId>', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'forge-factory-'))
+    const containerDir = join(ws, 'tasks-home', 'c@deadbeef')
+    const { createSettleReportRecovery } = await import('./settle.js')
+    const recovery = createSettleReportRecovery({
+      projects: {
+        getProject: async () => ({ wsPath: ws }),
+        deriveTaskStoreDir: async () => ({ dir: containerDir }),
+      },
+    })
+    await expect(recovery.resolveRuntimeTaskDir({ projectId: 'p-1', slug: PROPOSAL_SLUG, localId: '2.4' })).resolves.toBe(
+      join(containerDir, 'logs', PROPOSAL_SLUG, '2.4'),
+    )
+    await expect(
+      recovery.resolveProposalIssuesDir({ projectId: 'p-1', proposalId: 'prop-1', slug: PROPOSAL_SLUG, localId: '2.4' }),
+    ).resolves.toBe(join(ws, '.forge', 'docs', 'proposals', PROPOSAL_SLUG, 'issues', '2.4'))
+  })
+
+  it('解析失败 = undefined（fail-soft，不外抛）', async () => {
+    const { createSettleReportRecovery } = await import('./settle.js')
+    const recovery = createSettleReportRecovery({
+      projects: {
+        getProject: async () => null,
+        deriveTaskStoreDir: async () => ({ dir: 'Z:\\x' }),
+      },
+    })
+    await expect(recovery.resolveRuntimeTaskDir({ projectId: 'p-x', slug: 's', localId: '1' })).resolves.toBeUndefined()
+    await expect(
+      recovery.resolveProposalIssuesDir({ projectId: 'p-x', proposalId: 'prop', slug: 's', localId: '1' }),
+    ).resolves.toBeUndefined()
   })
 })

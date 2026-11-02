@@ -51,7 +51,7 @@ import {
 import { poolOf, type PoolSnapshot } from './pool.js'
 import type { DispatchCoreFailure, DispatchTaskResult } from './result.js'
 import { disposeQuietly, settleWorkerRun } from './settle.js'
-import type { HeadCommitResolver, SettleCheckpointsFace } from './settle.js'
+import type { HeadCommitResolver, SettleCheckpointsFace, SettleReportRecoveryDeps } from './settle.js'
 import type { CommitLandingVerifier } from './settle.js'
 import type { SpawnWorker, SpawnWorkerHandle } from './spawn.js'
 
@@ -134,6 +134,12 @@ export interface DispatchCoreDeps {
    * T4 旁挂回收落卷后守卫现算即放行）
    */
   readonly modelingReportPresent?: ModelingReportPresentFace
+  /**
+   * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——success 结算后置钩子：运行时任务
+   * 目录顶层 .md 报告复制进提案卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly reportRecovery?: SettleReportRecoveryDeps
 }
 
 /** 派发核心 per-call 执行上下文（工具壳 exec 面提取产物——核心面零触达 ToolExecFace） */
@@ -570,6 +576,7 @@ export async function settleClaimed(deps: DispatchCoreDeps, exec: DispatchCoreEx
     ...(input.docsRoot !== undefined ? { docsRoot: input.docsRoot } : {}),
     ...(input.e2eBaselineRedCases !== undefined ? { e2eBaselineRedCases: input.e2eBaselineRedCases } : {}),
     ...(input.proposalId !== undefined ? { proposalId: input.proposalId } : {}),
+    ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
   })
   if (settlement.case === 'settled') {
     // 成功即清零 + worker-done 事件 + spawned 分支（池快照附载）

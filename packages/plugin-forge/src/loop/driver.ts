@@ -917,6 +917,12 @@ export interface LoopDriverDeps {
   readonly findRecurrenceCandidates?: DispatchCoreDeps['findRecurrenceCandidates']
   /** 卷宗建模报告在场探测面（T3「待建模」解除判据——透传 loop.core 守卫；缺席 = 报告不在场） */
   readonly modelingReportPresent?: DispatchCoreDeps['modelingReportPresent']
+  /**
+   * AC7 结算旁挂回收缝（loop-recurrence-hardening §2.4——success 结算后置：运行时任务目录
+   * 顶层 .md 报告复制进提案卷宗 issues/<localId>/；resolveDir 闭包注入，fail-soft。
+   * 透传 loop.core 结算核；缺席 = 机制惰性不判，行为零变化）
+   */
+  readonly reportRecovery?: DispatchCoreDeps['reportRecovery']
 }
 
 /** 诊断埋点载荷（diag-events DiagEventPayload 的驱动器窄投影——process/trace 由装配面补齐） */
@@ -1537,6 +1543,8 @@ export function createLoopDriver(deps: LoopDriverDeps): LoopDriver {
           // 报告解除判据；缺席 = 守卫降级放行，行为零变化）
           ...(deps.findRecurrenceCandidates !== undefined ? { findRecurrenceCandidates: deps.findRecurrenceCandidates } : {}),
           ...(deps.modelingReportPresent !== undefined ? { modelingReportPresent: deps.modelingReportPresent } : {}),
+          // AC7 结算旁挂回收缝透传结算核（loop-recurrence-hardening §2.4——fail-soft 后置钩子）
+          ...(deps.reportRecovery !== undefined ? { reportRecovery: deps.reportRecovery } : {}),
         },
         exec: {
           attribution: {},
