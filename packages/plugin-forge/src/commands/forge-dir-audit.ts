@@ -200,7 +200,10 @@ export function createForgeDirAuditHandler(
       }
     }
     try {
-      followup(
+      // 接收者绑定调用（bug 25ecb14d / run-dag-tasks 1.21 同源定罪：先取方法再裸调把类
+      // 方法从接收者上剥离，内件 `this` = undefined 即抛 `undefined.send`）——恒以
+      // `target.followup(message)` 形态提交，与 commitDispatchLine 同形。
+      ;(target as { followup: (message: unknown) => void }).followup(
         forgeCommandLineMessage(formatAuditPayload(diff), {
           task: '',
           state: 'dir-audit',

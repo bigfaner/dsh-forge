@@ -23,7 +23,16 @@ afterEach(() => {
 })
 
 /** 敲指令会话桩（header.cwd = 工作区根——forge-dir-init.test invocationOf 同形） */
-function invocationOf(root: string, followup?: (message: unknown) => void): ForgeCommandInvocation {
+function invocationOf(root: string, followup?: (message: unknown) => void, agentOverride?: unknown): ForgeCommandInvocation {
+  if (agentOverride !== undefined) {
+    // 保留原型链（类方法 followup 在 prototype——脱原型展开即丢方法，非本测试靶）
+    const agent: Record<string, unknown> = Object.assign(
+      Object.create(Object.getPrototypeOf(agentOverride)),
+      agentOverride,
+      { session: { id: 's-main', header: { cwd: root } } },
+    )
+    return { agent: agent as never, rawInput: '' }
+  }
   return {
     agent: { session: { id: 's-main', header: { cwd: root } }, ...(followup !== undefined ? { followup } : {}) } as never,
     rawInput: '',
@@ -131,6 +140,27 @@ describe('forge-dir-audit handler（followup 同径——只建议不执行）',
     expect(payload).toContain('.forge/tmp')
     expect(payload).toContain('.forge/loose.txt')
     expect(payload).toContain('只') // 建议约束在载荷内
+  })
+
+  it('bug 25ecb14d：followup 为类方法（依赖绑定 this）——接收者绑定调用收件，不抛 undefined.send', async () => {
+    const root = workspaceOf('bound-this')
+    for (const dir of STORAGE_MAP_DIRS) mkdirSync(join(root, '.forge', ...dir.split('/')), { recursive: true })
+    writeFileSync(join(root, 'debug.log'), 'x')
+    const followups: unknown[] = []
+    // 真机形态模拟（run-dag-tasks 1.21 定罪同源）：followup 是依赖 this 内件的方法——
+    // 「先取方法再裸调」剥离接收者即抛 `Cannot read properties of undefined (reading 'send')`
+    class AgentStub {
+      send = (message: unknown): void => {
+        followups.push(message)
+      }
+      followup(message: unknown): void {
+        this.send(message)
+      }
+    }
+    const handler = createForgeDirAuditHandler()
+    const out = (await handler(invocationOf(root, undefined, new AgentStub()))) as { kind: string; text: string }
+    expect(out.kind).toBe('success')
+    expect(followups).toHaveLength(1)
   })
 
   it('audit 零文件系统变更：handler 前后全树快照逐位一致（不删除/不创建、零派发面）', async () => {
