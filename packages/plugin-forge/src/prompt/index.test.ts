@@ -134,17 +134,32 @@ describe('双模式独立渲染（mode 键——缺省回退远征）', () => {
     expect(EXPEDITION).not.toContain('docs/features/')
   })
 
-  it('突击目录树：提案/探针/圆桌纪要三类（无特性目录行）', () => {
+  it('突击目录树：提案/特性/探针/圆桌纪要四类终态（features/ 行补齐，口径与地图一致）', () => {
     expect(BLITZ).toContain('├─ proposals/{slug}/')
+    expect(BLITZ).toContain('├─ features/{slug}/')
     expect(BLITZ).toContain('├─ probes/')
     expect(BLITZ).toContain('└─ roundtables/{slug}/')
-    expect(BLITZ).not.toContain('features/{slug}/')
   })
 
-  it('存储约束显式清单：远征四类 / 突击三类', () => {
+  it('产物管理公约四条（放置/临时文件/生命周期/机制指引——提案 §2.1 逐字）双模式在场', () => {
+    const CONVENTIONS = [
+      '- **放置纪律**：产物按存储地图对号入座——git 内只放交付物与活正本，过程性产物一律进 `{forgeDir}/docs`，不散落仓库源码树与根目录。',
+      '- **临时文件纪律**：临时文件（调试脚本、一次性探针、中间转储、临时截图）禁止丢在工作目录任意位置——统一放 `{forgeDir}/tmp/`（或项目约定的临时区），用完即清，绝不入 git。',
+      '- **生命周期纪律**：过程文档按「交付 → 复盘 → 知识沉淀 → 提请批准清理」时序管理，批准后删除或归档；`probes/`、`walkthrough/` 等过程文档永不进 git。',
+      '- **机制指引**：保留/清理的运行时机制见 forge-artifact-lifecycle（索引、保留策略扫描、收口清单）。',
+    ]
+    for (const clause of CONVENTIONS) {
+      expect(EXPEDITION).toContain(clause)
+      expect(BLITZ).toContain(clause)
+    }
+    expect(EXPEDITION).toContain('产物管理公约（四条）')
+    expect(BLITZ).toContain('产物管理公约（四条）')
+  })
+
+  it('存储约束显式清单：远征四类 / 突击四类终态（突击不产特性阶段文档口径保留）', () => {
     expect(EXPEDITION).toContain('入文档根仅四类：提案文档、特性阶段文档、探针产物、圆桌纪要。')
     expect(EXPEDITION).toContain('特性阶段文档产出后经管线工具登记')
-    expect(BLITZ).toContain('入文档根仅三类：提案文档、探针产物、圆桌纪要；突击不产特性阶段文档。')
+    expect(BLITZ).toContain('入文档根仅四类：提案文档、探针产物、圆桌纪要、特性阶段文档；突击不产特性阶段文档')
     for (const v of [EXPEDITION, BLITZ]) {
       expect(v).toContain('代码与测试不入文档根——进仓库源码树')
       expect(v).toContain('过程产物只归档到对应 {slug} 子目录，不另设他处')

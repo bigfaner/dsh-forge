@@ -696,22 +696,28 @@ describe('S7 会话投影键注册（forge-dispatch-loop——sessionProjections
 
 // ─────────────────────────── S2 指令两枚注册（run-tasks-host-command——reflect.get 防御读取 fail-soft） ───────────────────────────
 describe('S2 指令注册（/run-dag-tasks 与 /stop-dag-tasks——UI command plane 零模型消息）', () => {
-  it('commands 面在场：两指令注册（FORGE_COMMAND_NAMES 名序 pin）+ run-dag-tasks 带 <slug> hint + stop 无 input 描述符', () => {
+  it('commands 面在场：四指令注册（FORGE_COMMAND_NAMES 名序 pin）+ run-dag-tasks 带 <slug> hint + stop/forge-dir-init/forge-dir-audit 无 input 描述符', () => {
     const rt = new TempRuntime()
     const dispose = forgePlugin(rt.withReflect({ commands: rt.commandsFace() }))
     expect(rt.registeredCommands.map((c) => c.name)).toEqual([...FORGE_COMMAND_NAMES])
-    expect([...FORGE_COMMAND_NAMES]).toEqual(['run-dag-tasks', 'stop-dag-tasks'])
+    expect([...FORGE_COMMAND_NAMES]).toEqual(['run-dag-tasks', 'stop-dag-tasks', 'forge-dir-init', 'forge-dir-audit'])
     const run = rt.registeredCommands.find((c) => c.name === 'run-dag-tasks')
     const stop = rt.registeredCommands.find((c) => c.name === 'stop-dag-tasks')
+    const dirInit = rt.registeredCommands.find((c) => c.name === 'forge-dir-init')
+    const dirAudit = rt.registeredCommands.find((c) => c.name === 'forge-dir-audit')
     expect(run?.input?.hint).toBe('[<slug>]')
     expect(run?.description.length).toBeGreaterThan(4)
     expect(stop?.input).toBeUndefined() // 无参指令——composer 零占位
+    expect(dirInit?.input).toBeUndefined()
+    expect(dirAudit?.input).toBeUndefined()
     expect(typeof run?.handler).toBe('function')
     expect(typeof stop?.handler).toBe('function')
+    expect(typeof dirInit?.handler).toBe('function')
+    expect(typeof dirAudit?.handler).toBe('function')
     // 六 tool 照常注册（指令面 additive——tool 面零波及）
     expect(rt.registeredTools).toHaveLength(20)
     dispose()
-    expect(rt.disposedCommands).toBe(2) // 注销器并入插件 disposer（两指令各恰一次）
+    expect(rt.disposedCommands).toBe(4) // 注销器并入插件 disposer（四指令各恰一次）
   })
 
   it('commands 面缺席（reflect 无该键）：零指令注册、六 tool 照常（fail-soft 不阻载——R3）', () => {
