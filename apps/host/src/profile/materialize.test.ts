@@ -256,11 +256,11 @@ describe('dev 形态文件同步 pin（apps/host/profile.dev ↔ 打包模板）
     for (const [name, version] of Object.entries(packaged.dependencies)) {
       expect(dev.dependencies[name], `dev profile 缺官方行 ${name}`).toBe(version)
     }
-    // dev bundles = 模板官方两行 + expert-squad 行（1.22 用户裁决：「默认 Agent 选项」迁移
-    // 插件详情页——plugins.bundle.config 单入口；expert-squad 不进 bundles 则 config face
-    // 与全局工具注册（delegate_expert 等）双双缺位）。旧「产品插件禁进 dev bundles」裁决
-    // （用户层 insert 行通道）已被 1.22 单入口设计取代——insert 重复 id 险象随通道退役消失。
-    expect(dev.dsh.profile.bundles).toEqual([...packaged.dsh.profile.bundles, '@dsh-forge/expert-squad'])
+    // dev bundles = 模板官方两行（2026-11-02 插件页单记录裁决：expert-squad 退役 bundle
+    // 形态——非 bundle = plugin-manager 已安装清单不收；dev 装载改走 profile.dev 用户层
+    // insert 行（git-worktree 同款模式），1.22「经自身 bundle 装载」径退役。config face
+    // 与全局工具注册不依赖 bundles 选择——settings describe ns 与 loader 行独立供给）。
+    expect(dev.dsh.profile.bundles).toEqual(packaged.dsh.profile.bundles)
     // dev 直链 workspace 构建产物（4.2：装载面 = loader 行 import 以 profileDir 为锚）
     expect(dev.dependencies['@dsh-forge/core']).toBe('link:../../../packages/core')
     expect(dev.dependencies['@dsh-forge/knowledge']).toBe('link:../../../packages/knowledge')
