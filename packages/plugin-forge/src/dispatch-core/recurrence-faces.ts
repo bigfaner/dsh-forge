@@ -6,8 +6,8 @@
 // · modelingReportPresent = 结算旁挂回收（settle.ts）同源的卷宗路径派生，探测双轨
 //   （recurrence-signal-tiering 落点双轨）：提案卷宗 .forge/docs/proposals/<slug>/issues/<localId>/
 //   顶层 或 probes 卷 .forge/docs/probes/<bugId>/ 顶层（命中链任一成员）存在报告 .md 即 true
-//   （非递归——incident 等子目录不扫，零清单配置）。探测面只读、三态：双轨目录可读缺席 =目录可读缺席 = false（真报告
-//   不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'（机制失能——消费侧
+//   （非递归——incident 等子目录不扫，零清单配置）。探测面只读、三态：双轨目录均可读
+//   但无报告 = false（真报告不在场，T3 拦截保守成立）；readdirSync 抛错（IO 故障）= 'error'（机制失能——消费侧
 //   claim 放行 + warn 留痕，用户裁决：fail-soft 统一向「放行 + 可观测」）。
 //
 // T2 疑似同族警示（core submitTask）/ T3 同缝拦截（claim 守卫）/ triage 两信号 / add-fix
