@@ -503,7 +503,7 @@ describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节�
     expect(prompt).not.toContain('禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）')
   })
 
-  it('无关链（归属过滤后零候选）：recurrence 信号缺席（1.1 收窄口径——链不落本任务卷宗容器不产候选）', async () => {
+  it('零候选（face 返回空集）：recurrence 信号缺席——归属过滤本体由 core bugs.test 承担，本用例只钉呈现径', async () => {
     const built = build({
       findRecurrenceCandidates: async () => [],
     })

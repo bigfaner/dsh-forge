@@ -448,15 +448,17 @@ export function bugSearchKeys(card: BugCard): readonly string[] {
 
 /**
  * 台账 recurrence 候选检索 scope（跨容器库域口径归本域定义，tasks 域经只读 face 消费零
- * import）。归属口径（recurrence-judgment-narrowing 启用）：slug = 归属容器——仅返回
- * 「链内任一成员 source_task_id 落在该容器」（任务 id 形制 `t-<slug>-<localId>`，容器成员
- * 以 `t-<slug>-` 前缀判定）的链；无关提案容器链不进候选集。files 口径：非空（结算径）→
+ * import）。归属口径（recurrence-judgment-narrowing 启用）：容器锚优先取 sourceTaskId
+ * 结构化解析（`t-<slug>-<localId>` 段边界剥离末段）——fix 链派生任务携源任务 id 时以
+ * 解析结果为归属键；缺席回退 slug。无关提案容器链不进候选集。files 口径：非空（结算径）→
  * 在归属过滤之上按 suspected 修复锚路径二次收窄（同缝提示性信号）；空（派发径）→ 容器
  * 内全链。拦截计数 = activeCount（open 成员最长祖先径边数），与 chain 呈现口径分离。
  */
 export interface BugRecurrenceScope {
   readonly slug: string
   readonly localId: string
+  /** fix 链派生源任务 id（`t-<slug>-<localId>` 形制）——在场时结构化解析结果优先作容器归属锚 */
+  readonly sourceTaskId?: string
   readonly files: readonly string[]
 }
 
@@ -688,7 +690,9 @@ export function createBugsService(deps: BugsServiceDeps) {
       const chains = recurrenceChainsOf(rows)
       const byId = new Map(rows.map((r) => [r.id, r]))
       const files = scope.files.map((f) => f.trim()).filter((f) => f !== '')
-      const containerSlug = scope.slug
+      // 容器归属锚：sourceTaskId 结构化解析优先（fix 链派生任务携源任务 id——按 id 本体
+      // 定归属，不信赖调用方自报 slug）；解析失败/缺席回退 slug。
+      const containerSlug = parseTaskContainerSlug(scope.sourceTaskId ?? '') ?? scope.slug
       const activeCountOf = (chain: readonly string[]): number => {
         let max = 0
         for (const id of chain) {

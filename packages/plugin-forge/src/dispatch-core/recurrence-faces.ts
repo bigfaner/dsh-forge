@@ -59,9 +59,15 @@ function modelingReportPresentOf(resolveProjectDir: RecurrenceFacesDeps['resolve
 export function createRecurrenceFaces(deps: RecurrenceFacesDeps): RecurrenceFaces {
   return {
     // SameSeamRecurrenceScope（归属标识）→ core bugs 域 BugRecurrenceScope 适配：files = []
-    // = 派发径容器内全链（域层口径——files 收窄归结算径），容器归属过滤由域层按 slug 前缀承担。
+    // = 派发径容器内全链（域层口径——files 收窄归结算径）；sourceTaskId 透传——域层按其
+    // 结构化解析容器段作归属锚（bug bdbe8218 消解：参数做实功，非装饰死参）。
     findRecurrenceCandidates: (projectId, scope) =>
-      deps.bugs.findRecurrenceCandidates(projectId, { slug: scope.slug, localId: scope.localId, files: [] }),
+      deps.bugs.findRecurrenceCandidates(projectId, {
+        slug: scope.slug,
+        localId: scope.localId,
+        ...(scope.sourceTaskId !== undefined ? { sourceTaskId: scope.sourceTaskId } : {}),
+        files: [],
+      }),
     modelingReportPresent: modelingReportPresentOf(deps.resolveProjectDir),
   }
 }

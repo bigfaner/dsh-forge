@@ -29,6 +29,24 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     ws = undefined
   })
 
+  it('findRecurrenceCandidates：sourceTaskId 透传 core scope（bug bdbe8218——参数做实功，域层结构化解析消费）', async () => {
+    const captured: Array<Record<string, unknown>> = []
+    const faces = createRecurrenceFaces({
+      bugs: {
+        findRecurrenceCandidates: async (_projectId, scope) => {
+          captured.push({ ...scope })
+          return []
+        },
+      },
+      resolveProjectDir: () => undefined,
+    })
+    await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-1.1' })
+    expect(captured[0]).toMatchObject({ slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-1.1', files: [] })
+    // 缺席 = 键缺席（core 回退 slug 锚）
+    await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1' })
+    expect('sourceTaskId' in captured[1]!).toBe(false)
+  })
+
   it('modelingReportPresent：卷宗 issues/<localId>/ 顶层 .md 在场 = true（同源路径派生）', () => {
     ws = mkdtempSync(join(tmpdir(), 'recurrence-faces-'))
     const issuesDir = join(ws, '.forge', 'docs', 'proposals', 'feat-x', 'issues', '2.1')
@@ -85,7 +103,7 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     expect(warn?.message).toContain('拦截未生效')
   })
 
-  it('findRecurrenceCandidates：台账域服务 face 委派（scope 原样透传）', async () => {
+  it('findRecurrenceCandidates：台账域服务 face 委派（scope 透传——sourceTaskId 随行，bug bdbe8218 消解）', async () => {
     const calls: unknown[] = []
     const faces = createRecurrenceFaces({
       bugs: {
@@ -98,7 +116,7 @@ describe('createRecurrenceFaces（bug 0db72bcb 生产装配工厂）', () => {
     })
     const out = await faces.findRecurrenceCandidates('p-1', { slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-2.1' })
     expect(out).toEqual(CHAIN3)
-    expect(calls).toEqual([{ projectId: 'p-1', scope: { slug: 'feat-x', localId: '2.1', files: [] } }])
+    expect(calls).toEqual([{ projectId: 'p-1', scope: { slug: 'feat-x', localId: '2.1', sourceTaskId: 't-feat-x-2.1', files: [] } }])
   })
 
   it('T3 解除判据生产可达：同缝 ≥2 且报告不在场 → 软拒绝；报告落卷 → 放行（同一生产 face 现算）', async () => {

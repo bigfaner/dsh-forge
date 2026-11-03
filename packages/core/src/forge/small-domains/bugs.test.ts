@@ -684,6 +684,35 @@ describe('findRecurrenceCandidates：归属链过滤 + 终态过滤 + 祖先径�
     expect(await s_find(h!, 'loop-recurrence-hardening')).toEqual([])
   })
 
+  it('归属锚：scope.sourceTaskId 结构化解析优先——chain 按 sourceTaskId 容器归属，slug 自报仅回退键（bug bdbe8218 消解）', async () => {
+    // 链成员落容器 A；scope 自报 slug=B 但 sourceTaskId 指向 A 任务——归属按 sourceTaskId 解析（A）命中
+    const seededA = await seedChain({ sourceTaskId: 't-owner-a-1.1' })
+    const viaSource = await seededA.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-b',
+      localId: 'fix-1',
+      sourceTaskId: 't-owner-a-9.9',
+      files: [],
+    })
+    expect(viaSource.map((c) => c.bugId)).toEqual([seededA.root.bugId, seededA.r1.bugId, seededA.r2.bugId])
+    // sourceTaskId 非任务 id 形制（解析 null）→ 回退 slug 自报
+    const viaFallback = await seededA.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-a',
+      localId: 'fix-1',
+      sourceTaskId: 'not-a-task-id',
+      files: [],
+    })
+    expect(viaFallback.map((c) => c.bugId)).toEqual([seededA.root.bugId, seededA.r1.bugId, seededA.r2.bugId])
+    // 新 harness：sourceTaskId 解析为他容器（B）→ 即便 slug=A 也不命中（锚优先，防 slug 漂移误挂）
+    const seededA2 = await seedChain({ sourceTaskId: 't-owner-a-1.2' })
+    const mismatch = await seededA2.s.findRecurrenceCandidates(h!.projectId, {
+      slug: 'owner-a',
+      localId: 'fix-1',
+      sourceTaskId: 't-owner-b-1.1',
+      files: [],
+    })
+    expect(mismatch).toEqual([])
+  })
+
   it('归属过滤：无关提案容器链（source_task_id 落他容器）不进候选集', async () => {
     await seedChain({ sourceTaskId: 't-unrelated-1.1' })
     const candidates = await s_find(h!, 'f')

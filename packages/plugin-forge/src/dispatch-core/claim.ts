@@ -26,8 +26,8 @@ export const ERR_RECURRENCE_ESCALATION_REQUIRED = 'ERR_RECURRENCE_ESCALATION_REQ
 
 /**
  * 台账 recurrence 候选检索归属 scope（跨容器库域口径归 core bugs 域定义，插件层只传任务
- * 归属标识）：slug = 归属容器标识（任务 id 形制 `t-<slug>-<localId>`，域层以 `t-<slug>-`
- * 前缀判容器成员）；sourceTaskId = fix 链派生源任务 id（归属取证面，域层过滤键为容器前缀）。
+ * 归属标识）：sourceTaskId = fix 链派生源任务 id——域层按其结构化解析容器段（`t-<slug>-<localId>`
+ * 末段剥离）作归属锚，解析失败/缺席回退 slug；slug 为调用方容器标识（回退键）。
  */
 export interface SameSeamRecurrenceScope {
   readonly slug: string
