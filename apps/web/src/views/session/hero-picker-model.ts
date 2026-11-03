@@ -197,6 +197,23 @@ export function riskDialogNeeded(path: string, latch: RiskConfirmLatch): boolean
   return latch !== path
 }
 
+// bug 8913a908：闩锁跨重挂记忆。确认 → applySelection 走官方 openWorkspace 切主视图
+// （选树即切该树 blank），ForgeHeroWorktreeMount 随主视图切换重挂——组件 useState 闩锁
+// 清零，同行重选重弹。闩锁落模块级记忆（单窗口单实例 = 「按窗口」语义，先例
+// state/selected-tree-window.ts），组件态只作记忆的镜像：初始化惰性读 + 每次变更写透。
+
+let riskLatchMemory: RiskConfirmLatch = null
+
+/** 跨重挂记忆读面（组件 useState 惰性初始化消费——重挂即水合） */
+export function riskLatchMemoryOf(): RiskConfirmLatch {
+  return riskLatchMemory
+}
+
+/** 跨重挂记忆写面（闩锁每次变更写透——置位/清退同一入口） */
+export function riskLatchMemorySync(next: RiskConfirmLatch): void {
+  riskLatchMemory = next
+}
+
 // ───────────── bug 4a30b193 陈旧选中自愈（纯判定单源）─────────────
 
 /** 自愈判定行（WorktreeEntryDto 行模型最小面——present = 盘上实存，host list 兑现） */

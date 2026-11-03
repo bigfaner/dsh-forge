@@ -177,7 +177,33 @@ export class SharedLaunchSession {
       }
     }
     await bridgeDispatch(page, 'show-session').catch(() => undefined)
+    // ④ 侧栏视图态复位（序列态轮转红：视图态机 useState 挂 ForgeWorkspacePanel——共享
+    //   launch 下面板跨用例存活，上用例遗留 archivedFilter=only / groupBy=flat 使下用例
+    //   项目行锚失配（项目改名用例锚不外——D2 triage 判例）。经视图菜单点回缺省基准
+    //   （SIDEBAR_VIEW_DEFAULT = 按项目树 + 不含归档）；测试侧序态泄漏，非产品红。
+    await this.resetSidebarView(page)
     await stablePhase(page).catch(() => undefined)
+  }
+
+  /**
+   * 侧栏视图态复位（④）：宽态侧栏段头视图菜单（[data-dswf-view-menu]）点回缺省两维
+   * （按项目树 + 不含归档）。菜单 onSelect 即收，两维各开一轮；幂等（已选中项再点
+   * zero-op）且全步 fail-soft（侧栏收起/菜单缺席 = 无遗留可复位，零操作）。
+   */
+  private async resetSidebarView(page: Page): Promise<void> {
+    for (const label of ['按项目树', '不含归档']) {
+      const trigger = page.locator('[data-dswf-view-menu]').first()
+      if ((await trigger.isVisible().catch(() => false)) !== true) return
+      await trigger.click().catch(() => undefined)
+      const menu = page.locator('[role="menu"]').first()
+      if ((await menu.isVisible().catch(() => false)) !== true) return
+      const item = menu
+        .locator('button, [role="menuitem"], [role="menuitemradio"], [role="option"]')
+        .filter({ hasText: label })
+        .first()
+      await item.click().catch(() => undefined)
+      await menu.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
+    }
   }
 
   /**
