@@ -2179,13 +2179,19 @@ async function onRecurrenceEscalation(
 ): Promise<RoundOutcome> {
   const { deps, record, scope } = loop
   const taskKey = `${task.slug}/${task.localId}`
+  // 挂起/升级叙述（recurrence-signal-tiering 定向核销）：拒绝载荷已改列表式（top-5 限幅），
+  // 挂起叙述不再复用全文——escalate 豁免口径 = 上浮主会话保留链串摘要（因果链证据），
+  // 甄别列表与解除指引以拒绝载荷全文为准（failure.message），叙述只携指针。
+  const narrative =
+    `同缝拦截（${taskKey}）：最长祖先径全边数 ${count} ≥ 2 ∧ 链内有 open 成员——盲试 fix 派发被软拒绝，` +
+    `建议先升级排查建模；链串摘要：${chain.join(' → ')}（候选甄别列表与双轨落卷解除指引见拒绝载荷）`
   // 被拒 fix 行转挂起（fail-soft：转移故障只告警——挂起投影与升级载荷照发，re-entry 按容器实际状态收口）
   try {
     await deps.tasks.transitionTask({
       projectId: scope.projectId,
       taskId: task.taskId,
       toStatus: 'suspended',
-      reason: failure.message,
+      reason: narrative,
       actor: 'core',
     })
   } catch (cause) {
@@ -2203,14 +2209,14 @@ async function onRecurrenceEscalation(
       ownerSessionId: record.ownerSessionId,
       source: record.source,
       taskKey,
-      reason: failure.message,
+      reason: `${narrative}\n${failure.message}`,
       chain,
       count,
     },
     {
       minor: 'recurrence-escalation',
       eventType: 'recurrence-escalation',
-      reason: failure.message,
+      reason: `${narrative}\n${failure.message}`,
       incidentTaskKey: task.localId,
       progressTaskKey: taskKey,
       taskTitle: task.title,
