@@ -5,9 +5,12 @@
 // 纯函数——零 I/O 零上游依赖；输出契约在文内自释（四动作封闭枚举 + 末行单行 JSON）。
 // 工具面（同提案）：getBug/listBugs 只读台账两工具放行——提示词携带台账查询指引与升级
 // 载荷纪律；写面（recordBug/resolveBug/submitTask/addTask）与 shell/fs 恒结构性不可达。
-import { RECURRENCE_ESCALATION_THRESHOLD } from '../dispatch-core/index.js'
+import {
+  RECURRENCE_ESCALATION_THRESHOLD,
+  recurrenceCandidateLines,
+} from '../dispatch-core/index.js'
 import type { PoolSnapshot } from '../dispatch-core/index.js'
-import type { TaskBlockClassification, TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
+import type { BugRecurrenceCandidate, TaskBlockClassification, TaskRecordEntry, TaskSnapshot } from '@dsh-forge/contracts'
 
 /** fix 链深余量（改进 6④——driver 沿 sourceTask 链现算；缺席 = 链数据不可得，退化现状） */
 export interface TriageFixChain {
@@ -16,11 +19,13 @@ export interface TriageFixChain {
   readonly remaining: number
 }
 
-/** 台账 recurrence 链信号（T2/T3 结构化事实——程序面现查，语义判断留 agent） */
+/** 台账 recurrence 候选信号（T2/T3 结构化事实——程序面现查，语义判断留 agent）。
+ *  recurrence-signal-tiering 渐进式披露：全史候选列表（含 fixed——软动作不被终态连坐），
+ *  行内 status 标注；呈现限幅（top-5 lastSeenAt 降序 + errorType 计数）归组装渲染。 */
 export interface TriageRecurrenceSignal {
-  /** 家族链（bug_id 时间序，链根在前） */
-  readonly chain: readonly string[]
-  /** 同缝计数（台账约定：recurrence count = chain length - 1） */
+  /** 本缝全史候选（scope 归属命中——每条八字段甄别口径，经 getBug 深挖） */
+  readonly candidates: readonly BugRecurrenceCandidate[]
+  /** 同缝计数（fullEdgeCount 最大值——单一计数源） */
   readonly count: number
 }
 
@@ -85,6 +90,8 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
     '同族候选，再 getBug 深挖前驱链与历史修复方案；errorType 归类遵循词表收敛纪律——先复用台账',
     '既有相近词，仅确无合适词才造新词（避免同义异词，如 race-condition vs concurrency-race）。',
     '结论纪律：台账内容不整段搬运——以指针化引用（bug_id / 卷宗路径）写进 escalate 升级载荷。',
+    '聚合判据（SOP）：同 errorType 分组计数后，total≥3 ∧ open≥1 = 「同族复发未根治」——作为 escalate 的量化佐证',
+    '（既往修复未根治的家族不宜再 add-fix 盲试）；total≥3 ∧ open=0 = 家族已收敛，按普通阻塞处置。',
     '</ledger-tools>',
     '',
     // FAIL-2 修正：无进展形态不再跳过处置——信号入提示词供决策参考
@@ -109,7 +116,8 @@ export function composeTriagePrompt(input: TriagePromptInput): string {
             : []),
           ...(signals.recurrence !== undefined
             ? [
-                `台账 recurrence 链: ${signals.recurrence.chain.join(' → ')}（同缝计数 ${signals.recurrence.count}）（限本任务卷宗归属）`,
+                `台账 recurrence 候选（本缝全史 ${signals.recurrence.candidates.length} 条，含 fixed——状态见行内标注；同缝计数 ${signals.recurrence.count}）（限本任务卷宗归属；甄别判据 = suspected 位置，自行甄别后经 getBug 深挖）：`,
+                ...recurrenceCandidateLines(signals.recurrence.candidates),
                 ...(signals.recurrence.count >= RECURRENCE_ESCALATION_THRESHOLD
                   ? [
                       `同缝计数 ≥ ${RECURRENCE_ESCALATION_THRESHOLD}——禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）；请选择 escalate 上浮排查。`,

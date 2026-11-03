@@ -27,6 +27,7 @@
 // 走 fix 链，C4）；blocked_reason 列不在本动词写面（reason 落 append-only 记录为审计单源——
 // 与 transitionTask 2.5 同裁决）；files/gate 缺省 = 列 NULL（files 回填归读面 git 查找）。
 import type {
+  BugRecurrenceCandidate,
   SubmitTaskInput,
   SubmitTaskResult,
   TaskRecurrenceAdvisory,
@@ -55,13 +56,51 @@ import { emitDiagOrFallback } from '../../telemetry/diag-events.js'
 /** 归类 kind 合法集（T2 presence 校验——kind 非法同形拒绝；程序零语义判断） */
 const BLOCK_CLASSIFICATION_KINDS = new Set(['new-problem', 'same-family-recurrence'])
 
+/** T2 advisory 候选列表限幅（recurrence-signal-tiering 渐进式披露：候选 >5 条时 top-5 + 计数） */
+const ADVISORY_LIST_LIMIT = 5
+
+/** 候选行渲染（渐进式披露八字段：bugId/summary/status/errorType/containerSlug/suspectedLocation/lastSeenAt/recurrenceOf） */
+function candidateLineOf(c: BugRecurrenceCandidate): string {
+  return (
+    `- ${c.bugId} [${c.status ?? 'unknown'}] ${c.summary}` +
+    ` | errorType=${c.errorType ?? '未归类'}` +
+    ` | container=${c.containerSlug ?? '—'}` +
+    ` | suspected=${c.suspectedLocation ?? '—'}` +
+    ` | lastSeen=${c.lastSeenAt ?? '—'}` +
+    ` | recurrenceOf=${c.recurrenceOf ?? '链根'}`
+  )
+}
+
+/** T2「疑似同族」advisory 消息（列表式 + top-5 限幅——与 T3 拒绝载荷/triage signals 同形呈现口径） */
+function suspectedFamilyMessageOf(candidates: readonly BugRecurrenceCandidate[]): string {
+  const ordered = [...candidates].sort((a, b) => (b.lastSeenAt ?? '').localeCompare(a.lastSeenAt ?? ''))
+  const top = ordered.slice(0, ADVISORY_LIST_LIMIT)
+  const rest = ordered.slice(ADVISORY_LIST_LIMIT)
+  const counts = new Map<string, number>()
+  for (const c of rest) {
+    const key = c.errorType ?? '未归类'
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const overflow =
+    rest.length > 0
+      ? `\n（其余 ${rest.length} 条按 errorType 计数：${[...counts.entries()].map(([type, n]) => `${type}×${n}`).join('、')}——经 getBug 深挖）`
+      : ''
+  return (
+    `疑似同族：台账按本缝归属命中 ${candidates.length} 条 recurrence 候选（全史含 fixed；` +
+    `甄别判据 = suspected 位置，自行甄别后经 getBug 深挖）：\n` +
+    top.map(candidateLineOf).join('\n') +
+    overflow +
+    `——归类自报「新问题」，请主会话复核家族归属`
+  )
+}
+
 /**
  * T2 归类闸门应答增补推导（事务提交后——只读 face 消费点，fail-soft 降级不阻载）：
  * 同族复发 → upgrade-hint 升级提示（face 无关恒挂）；新问题 ∧ face 在场 → 候选检索，
  * 命中即 suspected-family「疑似同族」警示（不硬拒——主会话裁决）。face 缺席/检索异常 =
  * 交叉校验降级跳过（先例 stampEvidenceValidity）。检索口径 = 台账域 face 的归属链收窄
- * （recurrence-judgment-narrowing 1.1：scope 容器归属 + 终态过滤——T2 与 T3/triage 同
- * face 同批生效，无关链不再触发「疑似同族」；本函数零独立计数/传参残留）。
+ * （recurrence-signal-tiering：scope 容器归属，全史含 fixed——软动作不被终态连坐；
+ * 呈现 = 列表式八字段 + top-5 限幅）。本函数零独立计数/传参残留。
  */
 async function deriveRecurrenceAdvisories(
   deps: TasksVerbDeps,
@@ -100,10 +139,7 @@ async function deriveRecurrenceAdvisories(
         if (candidates.length > 0) {
           advisories.push({
             kind: 'suspected-family',
-            message:
-              `疑似同族：台账按 scope 命中 ${candidates.length} 条 recurrence 候选` +
-              `（${candidates.map((c) => c.chain.join(' → ')).join('；')}）——` +
-              `归类自报「新问题」，请主会话复核家族归属`,
+            message: suspectedFamilyMessageOf(candidates),
             candidates,
           })
         }

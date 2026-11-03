@@ -318,6 +318,27 @@ describe('submitTask 返回面渲染（formatOk 快照）', () => {
       )[0]?.text,
     ).toBe('✓ Task f1/fix-1 submitted — completed\n- taskId: t-2\n- restored: f1/2.4 (source unblocked)')
   })
+
+  it('T2 advisory 渲染（recurrence-signal-tiering）：recurrenceAdvisories 逐条进文本（列表式消息原样可见——软信号进 worker 视野）', () => {
+    const { tool } = toolWithCapture()
+    const text = tool.output.render(
+      { slug: 'f1', local_id: '3.2' },
+      {
+        taskId: 't-3',
+        status: 'blocked',
+        restored: [],
+        recurrenceAdvisories: [
+          {
+            kind: 'suspected-family',
+            message: '疑似同族：台账按本缝归属命中 1 条 recurrence 候选（全史含 fixed…）：\n- b-1 [fixed] 候选 | errorType=type-a | container=f1 | suspected=src/a.ts:1 | lastSeen=2026-11-01 | recurrenceOf=链根——归类自报「新问题」，请主会话复核家族归属',
+            candidates: [{ bugId: 'b-1', summary: '候选', chain: ['b-1'] }],
+          },
+        ],
+      },
+    )[0]?.text
+    expect(text).toContain('- advisory[suspected-family]:')
+    expect(text).toContain('- b-1 [fixed] 候选')
+  })
 })
 
 // ─────────────────────────── 3.4 事件发射（task-submitted / tool-error） ───────────────────────────

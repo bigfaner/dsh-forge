@@ -460,8 +460,16 @@ describe('提示词组装（纯函数——决策规则与输出契约自释）'
 
 // ─────────────────────────── 两信号 + 只读工具面（loop-recurrence-hardening §2.2.1 / AC11） ───────────────────────────
 
-describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节渲染）', () => {
-  it('钩子组装两信号：blocked submit 记录归类 + 只读 face 现查链 → 提示词 <signals> 节', async () => {
+/** 候选行结构键（列表式八字段行——负断言 schema 化：缺席断言锚定结构键，非字面文案） */
+const CANDIDATE_LINE = /^- \S+ \[(open|fixed|unresolved|unknown)\] /m
+
+/** <signals> 节内文（结构化取块——节内条款缺席断言不锚定全文） */
+function signalsBlockOf(prompt: string): string {
+  return prompt.match(/<signals>\n([\s\S]*?)\n<\/signals>/)?.[1] ?? ''
+}
+
+describe('两信号注入（blocked 归类 + recurrence 候选列表——<signals> 节渲染）', () => {
+  it('钩子组装两信号：blocked submit 记录归类 + 只读 face 现查候选 → 提示词 <signals> 节（列表式八字段 + status 标注 + 同缝计数）', async () => {
     const recordsWithClassification: TaskRecordEntry[] = [
       ...RECORDS,
       {
@@ -478,7 +486,10 @@ describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节�
         taskStats: async () => statsOf(),
         queryTask: async () => ({ ...queryOf(), records: recordsWithClassification }),
       } as unknown as ForgeTasksService,
-      findRecurrenceCandidates: async () => [{ bugId: 'bug-b2', summary: '复发②', chain: ['bug-root', 'bug-b1', 'bug-b2'] }],
+      findRecurrenceCandidates: async () => [
+        { bugId: 'bug-b1', summary: '复发①', chain: ['bug-root', 'bug-b1'], fullEdgeCount: 1, hasOpen: true, status: 'fixed', errorType: 'type-a', containerSlug: 'feat-x', suspectedLocation: 'src/a.ts:1', lastSeenAt: '2026-11-01T00:00:00.000Z', recurrenceOf: 'bug-root' },
+        { bugId: 'bug-b2', summary: '复发②', chain: ['bug-root', 'bug-b1', 'bug-b2'], fullEdgeCount: 2, hasOpen: true, status: 'open', errorType: 'type-a', containerSlug: 'feat-x', suspectedLocation: 'src/a.ts:2', lastSeenAt: '2026-11-02T00:00:00.000Z', recurrenceOf: 'bug-b1' },
+      ],
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
     built.resolve('{"action":"escalate"}')
@@ -486,24 +497,50 @@ describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节�
     const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
     expect(prompt).toContain('<signals>')
     expect(prompt).toContain('阻塞归类: same-family-recurrence（自报前驱 bug-前驱）')
-    expect(prompt).toContain('台账 recurrence 链: bug-root → bug-b1 → bug-b2（同缝计数 2）（限本任务卷宗归属）')
+    // 列表式（recurrence-signal-tiering 渐进式披露）：全史条数 + 行内 status 标注 + 八字段 + 同缝计数（fullEdgeCount 最大值）
+    expect(prompt).toContain('台账 recurrence 候选（本缝全史 2 条，含 fixed——状态见行内标注；同缝计数 2）')
+    expect(prompt).toContain('- bug-b2 [open] 复发② | errorType=type-a | container=feat-x | suspected=src/a.ts:2 | lastSeen=2026-11-02T00:00:00.000Z | recurrenceOf=bug-b1')
+    expect(prompt).toContain('- bug-b1 [fixed] 复发①')
     // 防盲试条款（程序径——同缝 ≥ 2 渲染禁 add-fix 指引）
     expect(prompt).toContain('禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）；请选择 escalate 上浮排查')
   })
 
-  it('同缝 < 2：链信号在场但零禁 add-fix 指引', async () => {
+  it('同缝 < 2：候选信号在场但 <signals> 节内零禁 add-fix 条款（负断言 = 节内结构键缺席）', async () => {
     const built = build({
-      findRecurrenceCandidates: async () => [{ bugId: 'bug-b1', summary: '复发①', chain: ['bug-root', 'bug-b1'] }],
+      findRecurrenceCandidates: async () => [
+        { bugId: 'bug-b1', summary: '复发①', chain: ['bug-root', 'bug-b1'], fullEdgeCount: 1, status: 'open' },
+      ],
     })
     const done = createTriageHook(built.hookDeps).run(triageInput())
     built.resolve('{"action":"escalate"}')
     await done
     const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
     expect(prompt).toContain('<signals>')
-    expect(prompt).not.toContain('禁止选择 add-fix（盲试修复必被宿主守卫软拒绝）')
+    expect(signalsBlockOf(prompt)).not.toContain('禁止选择 add-fix')
   })
 
-  it('零候选（face 返回空集）：recurrence 信号缺席——归属过滤本体由 core bugs.test 承担，本用例只钉呈现径', async () => {
+  it('候选 >5 条：top-5 限幅（lastSeenAt 降序）+ 其余按 errorType 计数（控呈现不控召回）', async () => {
+    const candidates = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => ({
+      bugId: `bug-${i}`, summary: `候选 ${i}`, chain: ['b-root', `bug-${i}`], fullEdgeCount: 1,
+      status: i % 2 === 0 ? 'open' : 'fixed', errorType: i % 3 === 0 ? 'type-a' : 'type-b',
+      containerSlug: 'feat-x', suspectedLocation: `src/f${i}.ts:${i}`,
+      lastSeenAt: `2026-11-0${i + 1}T00:00:00.000Z`, recurrenceOf: 'b-root',
+    }))
+    const built = build({ findRecurrenceCandidates: async () => candidates })
+    const done = createTriageHook(built.hookDeps).run(triageInput())
+    built.resolve('{"action":"escalate"}')
+    await done
+    const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
+    const block = signalsBlockOf(prompt)
+    const entryLines = block.split('\n').filter((l) => l.startsWith('- '))
+    expect(entryLines).toHaveLength(5)
+    expect(entryLines[0]).toContain('bug-8') // lastSeenAt 降序首条
+    expect(block).toContain('其余 4 条按 errorType 计数')
+    expect(block).toContain('type-a×')
+    expect(block).toContain('type-b×')
+  })
+
+  it('零候选（face 返回空集）：recurrence 信号缺席——归属过滤本体由 core bugs.test 承担，本用例只钉呈现径（负断言 schema 化：结构键缺席）', async () => {
     const built = build({
       findRecurrenceCandidates: async () => [],
     })
@@ -512,15 +549,17 @@ describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节�
     await done
     const prompt = (built.requests[0] as SpawnWorkerRequest).prompt
     expect(prompt).not.toContain('<signals>')
-    expect(prompt).not.toContain('台账 recurrence 链')
+    expect(CANDIDATE_LINE.test(prompt)).toBe(false) // 候选行结构键缺席
   })
 
-  it('face 缺席/故障 fail-soft：信号退化，提示词照常组装（零 <signals> 节）', async () => {
+  it('face 缺席/故障 fail-soft：信号退化，提示词照常组装（零 <signals> 节 + 零候选行结构键）', async () => {
     const builtAbsent = build()
     const doneAbsent = createTriageHook(builtAbsent.hookDeps).run(triageInput())
     builtAbsent.resolve('{"action":"escalate"}')
     await doneAbsent
-    expect((builtAbsent.requests[0] as SpawnWorkerRequest).prompt).not.toContain('<signals>')
+    const absentPrompt = (builtAbsent.requests[0] as SpawnWorkerRequest).prompt
+    expect(absentPrompt).not.toContain('<signals>')
+    expect(CANDIDATE_LINE.test(absentPrompt)).toBe(false)
     const builtFailing = build({
       findRecurrenceCandidates: () => {
         throw new Error('ledger down')
@@ -529,29 +568,46 @@ describe('两信号注入（blocked 归类 + recurrence 链——<signals> 节�
     const doneFailing = createTriageHook(builtFailing.hookDeps).run(triageInput())
     builtFailing.resolve('{"action":"escalate"}')
     await doneFailing
-    expect((builtFailing.requests[0] as SpawnWorkerRequest).prompt).not.toContain('<signals>')
+    const failingPrompt = (builtFailing.requests[0] as SpawnWorkerRequest).prompt
+    expect(failingPrompt).not.toContain('<signals>')
+    expect(CANDIDATE_LINE.test(failingPrompt)).toBe(false)
   })
 
-  it('纯函数面：signals 渲染 + 防盲试 SOP 条款 + 台账查询指引恒在', () => {
+  it('纯函数面：signals 列表渲染 + 聚合判据 SOP + 防盲试条款 + 台账查询指引恒在', () => {
     const base = { task: snapshot(), reason: 'r', pool: { pending: 0, inProgress: 0, blocked: 1, unmetPending: 0 }, records: [] }
     const withSignals = composeTriagePrompt({
       ...base,
-      signals: { classification: { kind: 'new-problem' }, recurrence: { chain: ['a', 'b', 'c'], count: 2 } },
+      signals: {
+        classification: { kind: 'new-problem' },
+        recurrence: {
+          count: 2,
+          candidates: [
+            { bugId: 'a', summary: '根', chain: ['a'], fullEdgeCount: 2, status: 'fixed', lastSeenAt: '2026-11-01T00:00:00.000Z' },
+            { bugId: 'b', summary: '复发', chain: ['a', 'b', 'c'], fullEdgeCount: 2, status: 'open', recurrenceOf: 'a', lastSeenAt: '2026-11-02T00:00:00.000Z' },
+            { bugId: 'c', summary: '再发', chain: ['a', 'b', 'c'], fullEdgeCount: 2, status: 'open', recurrenceOf: 'b', lastSeenAt: '2026-11-03T00:00:00.000Z' },
+          ],
+        },
+      },
     })
     expect(withSignals).toContain('阻塞归类: new-problem')
-    expect(withSignals).toContain('台账 recurrence 链: a → b → c（同缝计数 2）（限本任务卷宗归属）')
+    expect(withSignals).toContain('台账 recurrence 候选（本缝全史 3 条，含 fixed——状态见行内标注；同缝计数 2）（限本任务卷宗归属')
+    expect(withSignals).toContain('- c [open] 再发')
+    expect(withSignals).toContain('recurrenceOf=链根')
     const plain = composeTriagePrompt(base)
-    // 台账查询指引与防盲试 SOP 条款恒在（不随 signals 缺席退化）
+    // 台账查询指引 + 聚合判据 SOP + 防盲试条款恒在（不随 signals 缺席退化）
     for (const text of [withSignals, plain]) {
       expect(text).toContain('<ledger-tools>')
       expect(text).toContain('getBug(bug_id)')
       expect(text).toContain('listBugs(search/status/sort/offset/limit)')
+      expect(text).toContain('聚合判据（SOP）：同 errorType 分组计数后，total≥3 ∧ open≥1 = 「同族复发未根治」')
+      expect(text).toContain('escalate 的量化佐证')
       expect(text).toContain('防盲试条款')
       expect(text).toContain('自判为可形式化形态')
       // 「你没有任何工具」事实性矛盾断言清除
       expect(text).not.toContain('你没有任何工具')
     }
     expect(plain).not.toContain('<signals>')
+    expect(CANDIDATE_LINE.test(plain)).toBe(false)
   })
 
   it('提示词升级载荷四节指引 + escalate 语义标注（上浮主会话非问用户）', () => {

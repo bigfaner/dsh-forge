@@ -213,6 +213,21 @@ function overflowLineOf(rest: readonly BugRecurrenceCandidate[]): string {
 }
 
 /**
+ * recurrence 候选列表式渲染（渐进式披露共享件——T3 拒绝载荷 / T2 advisory / triage
+ * <signals> 三处同形）：lastSeenAt 降序 top-N 限幅（默认 5），超出按 errorType 计数。
+ * 控呈现不控召回。
+ */
+export function recurrenceCandidateLines(
+  candidates: readonly BugRecurrenceCandidate[],
+  limit: number = REJECTION_LIST_LIMIT,
+): string[] {
+  const ordered = [...candidates].sort((a, b) => (b.lastSeenAt ?? '').localeCompare(a.lastSeenAt ?? ''))
+  const top = ordered.slice(0, limit)
+  const rest = ordered.slice(limit)
+  return [...top.map(candidateLineOf), ...(rest.length > 0 ? [overflowLineOf(rest)] : [])]
+}
+
+/**
  * 软拒绝 DTO（code + 升级提示 + 解除指引——Hard Rule：文案带指引不裸码）。载荷形态
  * （recurrence-signal-tiering 渐进式披露）：候选列表式（八字段/条，lastSeenAt 降序 top-5
  * 限幅，超出按 errorType 计数）——甄别判据 = suspected 位置，agent 自行甄别后经 getBug
@@ -226,18 +241,14 @@ export function rejectionFailureOf(
   count: number,
   chain: readonly string[],
 ): DispatchCoreFailure {
-  const ordered = [...candidates].sort((a, b) => (b.lastSeenAt ?? '').localeCompare(a.lastSeenAt ?? ''))
-  const top = ordered.slice(0, REJECTION_LIST_LIMIT)
-  const rest = ordered.slice(REJECTION_LIST_LIMIT)
-  const list = top.map(candidateLineOf).join('\n')
+  const list = recurrenceCandidateLines(candidates).join('\n')
   return {
     ok: false,
     code: ERR_RECURRENCE_ESCALATION_REQUIRED,
     message:
       `同缝拦截：任务 ${taskKey} 的 recurrence 链最长祖先径全边数 ${count} ≥ ${RECURRENCE_ESCALATION_THRESHOLD}` +
       ` ∧ 链内有 open 成员——盲试 fix 派发被软拒绝（「待建模」派生态现算，零持久标记）。` +
-      `候选清单（甄别判据 = suspected 位置，自行甄别后经 getBug 深挖）：\n${list}` +
-      (rest.length > 0 ? `\n${overflowLineOf(rest)}` : ''),
+      `候选清单（甄别判据 = suspected 位置，自行甄别后经 getBug 深挖）：\n${list}`,
     violations: [
       `escalate: 同缝全边 ≥2 ∧ 链内有 open——建议先升级排查建模（链串摘要（豁免呈现）：${chain.join(' → ')}；` +
         `判别实验清单逐条排除后再开修；委派目标由主会话自行决定，本提示零专家键）`,
