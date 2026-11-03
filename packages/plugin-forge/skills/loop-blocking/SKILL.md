@@ -63,7 +63,7 @@ triage 处置代理是问题分类器，工具面只读台账（`getBug`/`listBu
 请对缺陷 <bug_id 链> 做根因建模排查：
 - 背景：<一句话症状 + 已试修复为何未触达>
 - 产出：状态机/不变式模型 + 候选根因（按可能性排序）+ 判别实验清单（按成本升序）
-- 报告落点：<运行时任务日志目录>/<本地任务 id>/verification-report.md
+- 报告落点：forgeResolvePath（dest=dossier，入参 slug/localId）解析出的提案卷宗目录，文件名 modeling-report.md
   （判别实验原始数据一并落同目录；报告头部互引家族 bug_id）
 - 只读排查：不改产品代码，不派生任务
 ```
@@ -74,12 +74,12 @@ triage 处置代理是问题分类器，工具面只读台账（`getBug`/`listBu
 请对缺陷 <bug_id 链> 做环境根因深查：
 - 背景：<一句话症状 + 涉及的环境面>
 - 产出：file:line 级根因 + 最小复现步骤 + 环境前提断言清单
-- 报告落点：<运行时任务日志目录>/<本地任务 id>/verification-report.md
+- 报告落点：forgeResolvePath（dest=taskLogs，入参 slug/localId）解析出的任务日志目录，文件名 verification-report.md
   （取证原始输出一并落同目录；报告头部互引家族 bug_id）
 - 只读排查：不改产品代码，不派生任务
 ```
 
-占位约定：`<运行时任务日志目录>` = 当前循环为本任务解析出的运行时日志目录（容器 slug / 任务本地 id 寻址），以会话上下文中可得的解析值为准；`verification-report.md` 为**唯一指定文件名**——后续旁挂回收与覆盖声明锚均以它寻址。委派前按消费点现查目标能力是否在场（检测结果不缓存）；缺席走 §5。
+路径解析约定：报告落点路径一律经 forgeResolvePath 目的地解析现查（锚目录可经 forgeDirs 查 dirKey）——`dossier` = 提案卷宗域（建模报告落此），`taskLogs` = 任务日志域（处置验证 verification-report 落此），**两域显式区分不混落**；旧占位约定（`<运行时任务日志目录>` 文本占位）废弃。`verification-report.md` 与 `modeling-report.md` 为**唯一指定文件名**——后续旁挂回收与覆盖声明锚均以它寻址。委派前按消费点现查目标能力是否在场（检测结果不缓存）；缺席走 §5。
 
 ## 5. 降级径
 
